@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "playwright.env": {
+      "TEST_ENV": "test",
+      "PLAYWRIGHT_BROWSERS_PATH": "./.playwright-browsers"
+    }
+  }
+}

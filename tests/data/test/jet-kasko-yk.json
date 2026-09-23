@@ -1,0 +1,148 @@
+{
+  "jetKaskoYk": {
+    "aktif": true,
+    "_kabulEdilenOdemeSonuclari_NOT": "BRV-OVM-POLICE gerçek bir test koşusuyla doğrulandı. \"Hiçbir poliçe onaylanamadı.\" JetSeyahat'tan ödünç alınan, henüz JetKasko YK özelinde teyit edilmemiş bir yedek değerdir.",
+    "kabulEdilenOdemeSonuclari": ["Hiçbir poliçe onaylanamadı.", "BRV-OVM-POLICE"],
+    "araclar": {
+      "ozelOtomobil": {
+        "plakaIlKodu": "34",
+        "plakaNo": "YK",
+        "modelYili": "2026",
+        "markaKodu": "8001306",
+        "motorNo": "1111AAAA111122SSS",
+        "sasiNo": "1111AAAA111122SSS",
+        "aracTipi": { "deger": "1", "metin": "ÖZEL OTOMOBIL" },
+        "sinif": { "deger": "1", "metin": "Otomobil" },
+        "kullanim": { "deger": "1", "metin": "Özel" }
+      },
+      "kamyon": {
+        "plakaIlKodu": "34",
+        "plakaNo": "YK",
+        "modelYili": "2026",
+        "markaKodu": "5201705",
+        "motorNo": "1111AAAA111122SSS",
+        "sasiNo": "1111AAAA111122SSS",
+        "aracTipi": { "deger": "6", "metin": "KAMYONET" },
+        "sinif": { "deger": "1", "metin": "Kamyonet" },
+        "kullanim": { "deger": "1", "metin": "Özel" }
+      }
+    },
+    "senaryolar": [
+      {
+        "baslik": "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Kendisi",
+        "arac": "ozelOtomobil",
+        "sigortaliTipi": "ozel",
+        "sigortaliProfili": "tc1",
+        "ettiren": "ayni",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel",
+        "arac": "ozelOtomobil",
+        "sigortaliTipi": "ozel",
+        "sigortaliProfili": "tc1",
+        "ettiren": "farkliOzel",
+        "ettirenProfili": "tc2",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel",
+        "arac": "ozelOtomobil",
+        "sigortaliTipi": "ozel",
+        "sigortaliProfili": "tc1",
+        "ettiren": "farkliTuzel",
+        "ettirenProfili": "vkn1",
+        "urunAdi": "3"
+
+      },
+      {
+        "baslik": "YK Özel Otomobil / Sigortalı Tüzel / Sigorta Ettiren Kendisi",
+        "arac": "ozelOtomobil",
+        "sigortaliTipi": "tuzel",
+        "sigortaliProfili": "vkn1",
+        "ettiren": "ayni",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Özel Otomobil / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Özel",
+        "arac": "ozelOtomobil",
+        "sigortaliTipi": "tuzel",
+        "sigortaliProfili": "vkn1",
+        "ettiren": "farkliOzel",
+        "ettirenProfili": "tc3",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Özel Otomobil / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel",
+        "arac": "ozelOtomobil",
+        "sigortaliTipi": "tuzel",
+        "sigortaliProfili": "vkn1",
+        "ettiren": "farkliTuzel",
+        "ettirenProfili": "vkn2",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Kamyon / Sigortalı Özel / Sigorta Ettiren Kendisi",
+        "arac": "kamyon",
+        "sigortaliTipi": "ozel",
+        "sigortaliProfili": "tc1",
+        "ettiren": "ayni", 
+        "urunAdi": "3"
+
+      },
+      {
+        "baslik": "YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel",
+        "arac": "kamyon",
+        "sigortaliTipi": "ozel",
+        "sigortaliProfili": "tc1",
+        "ettiren": "farkliOzel",
+        "ettirenProfili": "tc2",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel",
+        "arac": "kamyon",
+        "sigortaliTipi": "ozel",
+        "sigortaliProfili": "tc1",
+        "ettiren": "farkliTuzel",
+        "ettirenProfili": "vkn2",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Kendisi",
+        "arac": "kamyon",
+        "sigortaliTipi": "tuzel",
+        "sigortaliProfili": "vkn2",
+        "ettiren": "ayni",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Özel",
+        "arac": "kamyon",
+        "sigortaliTipi": "tuzel",
+        "sigortaliProfili": "vkn2",
+        "ettiren": "farkliOzel",
+        "ettirenProfili": "tc3",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel",
+        "arac": "kamyon",
+        "sigortaliTipi": "tuzel",
+        "sigortaliProfili": "vkn2",
+        "ettiren": "farkliTuzel",
+        "ettirenProfili": "vkn1",
+        "urunAdi": "3"
+      },
+      {
+        "baslik": "Yetkili İndirimli Acente YK Teklif Alma",
+        "arac": "ozelOtomobil",
+        "sigortaliTipi": "ozel",
+        "sigortaliProfili": "tc1",
+        "ettiren": "ayni",
+        "urunAdi": "5",
+        "acenteProfili": "JetKaskoYetkiliİndirimli"
+      }
+    ]
+  }
+}

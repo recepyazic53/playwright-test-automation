@@ -1,0 +1,26 @@
+node_modules/
+.env
+
+# Playwright çıktıları
+playwright-report/
+test-results/
+playwright/.auth/
+
+# Allure çıktıları (TEST/CANLI ayrı klasörlerde tutulur)
+allure-results*/
+allure-report*/
+urun-hata-ozeti-*.md
+dashboard-*.html
+
+# Dashboard'daki Başlat butonlarının yerel test sunucusuyla konuşmak için kullandığı
+# gizli token — makineye özeldir, Git'e eklenmemeli.
+scripts/.test-sunucu-token
+
+# Playwright tarayıcı ikilileri, npm önbelleği ve yerel test/rapor çıktıları — büyük
+# ve makineye özeldir, Git'e eklenmemeli (ilk push'ta yanlışlıkla eklenip 300+ MB'a
+# çıkmasına ve push'un zaman aşımına uğramasına sebep oldu).
+.playwright-browsers/
+.npm-cache/
+test-data/
+test-report/
+Claude outputs/

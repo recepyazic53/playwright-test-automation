@@ -1,0 +1,17 @@
+{
+  "jetIlkAtesKonut": {
+    "aktif": false,
+    "adresKodu": "",
+    "binaInsaYili": "",
+    "alternatif": { "deger": "", "metin": "" },
+    "esyaYanginBedeli": "",
+    "ekTeminatBedeli": "",
+    "yapiTarzi": { "deger": "", "metin": "" },
+    "profiller": {
+      "sigortaliOzel": "tc1",
+      "sigortaliTuzel": "vkn1",
+      "farkliOzel": "tc2",
+      "farkliTuzel": "vkn2"
+    }
+  }
+}

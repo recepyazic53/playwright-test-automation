@@ -1,0 +1,16 @@
+{
+  "jetSeyahat": {
+    "aktif": false,
+    "urunKodu": "",
+    "seyahatSuresiGun": 7,
+    "ulke": { "deger": "", "metin": "" },
+    "seyahatIptalBedeli": { "deger": "", "metin": "" },
+    "plan": { "deger": "", "metin": "" },
+    "sigortaliSayisi": "1",
+    "sigortaliProfili": "",
+    "cokluSorguDosyasi": "tests/fixtures/jet-seyahat/fma-coklu-sorgu-10-kisi.xlsx",
+    "cokluSorguKisiSayisi": 10,
+    "kabulEdilenOdemeSonuclari": [],
+    "senaryolar": []
+  }
+}

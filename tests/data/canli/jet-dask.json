@@ -1,0 +1,35 @@
+{
+  "jetDask": {
+    "aktif": false,
+    "adresKodu": "",
+    "kabulEdilenOdemeSonuclari": [],
+    "sigortaEttirenSifatlari": {
+      "malSahibi": { "deger": "", "metin": "" },
+      "kiraci": { "deger": "", "metin": "" }
+    },
+    "tapu": {
+      "ada": "",
+      "sayfaNo": "",
+      "pafta": "",
+      "bagimsizBolum": "",
+      "parsel": ""
+    },
+    "brutYuzolcum": "",
+    "kullanimSekli": { "deger": "", "metin": "" },
+    "insaTarzi": { "deger": "", "metin": "" },
+    "insaYili": { "deger": "", "metin": "" },
+    "toplamKat": { "deger": "", "metin": "" },
+    "oncekiHasar": { "deger": "", "metin": "" },
+    "bulunduguKat": {
+      "deger": "",
+      "metin": "",
+      "testOrtamSecenekWorkaround": false
+    },
+    "dainiMurtehin": "yok",
+    "profiller": {
+      "sigortaliOzel": "tc1",
+      "sigortaliTuzel": "vkn1",
+      "sigortaliPasaport": "pasaport1"
+    }
+  }
+}

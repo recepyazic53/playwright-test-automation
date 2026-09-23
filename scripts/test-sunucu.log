@@ -1,0 +1,1870 @@
+[2026-09-23T17:33:10.470Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T17:33:10.471Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T17:36:01.384Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T17:36:01.385Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T17:36:57.096Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" başlatıldı...
+
+[2026-09-23T17:37:01.650Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T17:37:01.720Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T17:38:14.238Z]   ✓  1 [Chromium] › tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:54:7 › Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi (1.2m)
+[2026-09-23T17:38:14.363Z] 
+[2026-09-23T17:38:14.363Z]   1 passed (1.3m)
+[2026-09-23T17:38:14.401Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T17:38:14.410Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T17:38:15.648Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T17:38:15.711Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T17:38:47.169Z]   ✓  1 [Chromium] › tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:54:7 › Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi (31.1s)
+[2026-09-23T17:38:47.265Z] 
+[2026-09-23T17:38:47.266Z]   1 passed (32.5s)
+[2026-09-23T17:38:47.305Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T17:39:23.558Z] 
+▶ [TEST] "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel" başlatıldı...
+
+[2026-09-23T17:39:24.822Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T17:39:24.885Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T17:42:28.195Z]   ✘  1 [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel (3.0m)
+[2026-09-23T17:42:28.291Z] 
+[2026-09-23T17:42:28.292Z] 
+[2026-09-23T17:42:28.293Z]   1) [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel › Ürün seçimi 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: locator.scrollIntoViewIfNeeded: Test timeout of 180000ms exceeded.
+    Call log:
+      - waiting for getByRole('radio', { name: 'GÜLÜMSETEN KASKO(YOL YARD.)', exact: true })
+
+
+       at support\pages\jet-kasko.page.ts:293
+
+      291 |     const urunAdi = JETKASKO_URUN_KODLARI[urun] ?? urun;
+      292 |     const secenek = this.page.getByRole('radio', { name: urunAdi, exact: true });
+    > 293 |     await secenek.scrollIntoViewIfNeeded();
+          |                   ^
+      294 |     await secenek.click({ force: true });
+      295 |     await expect(secenek).toBeChecked();
+      296 |   }
+        at JetKaskoPage.urunSecYk (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-kasko.page.ts:293:19)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:129:22
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:128:5
+
+    attachment #12: screenshot (image/png) ─────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-0c9d4-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #14: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Test timeout of 180000ms exceeded.
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #15: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-0c9d4-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-kasko-yeni-k-0c9d4-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\error-context.md
+
+    attachment #17: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-0c9d4-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-kasko-yeni-k-0c9d4-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T17:42:28.293Z]   1 failed
+    [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel 
+[2026-09-23T17:42:28.325Z] 
+■ [TEST] "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T17:42:28.334Z] 
+▶ [TEST] "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel" başlatıldı...
+
+[2026-09-23T17:42:29.664Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T17:42:29.727Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T17:45:33.152Z]   ✘  1 [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel (3.0m)
+[2026-09-23T17:45:33.252Z] 
+[2026-09-23T17:45:33.253Z] 
+[2026-09-23T17:45:33.253Z]   1) [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel › Ürün seçimi 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: locator.scrollIntoViewIfNeeded: Test timeout of 180000ms exceeded.
+    Call log:
+      - waiting for getByRole('radio', { name: 'GÜLÜMSETEN KASKO(YOL YARD.)', exact: true })
+
+
+       at support\pages\jet-kasko.page.ts:293
+
+      291 |     const urunAdi = JETKASKO_URUN_KODLARI[urun] ?? urun;
+      292 |     const secenek = this.page.getByRole('radio', { name: urunAdi, exact: true });
+    > 293 |     await secenek.scrollIntoViewIfNeeded();
+          |                   ^
+      294 |     await secenek.click({ force: true });
+      295 |     await expect(secenek).toBeChecked();
+      296 |   }
+        at JetKaskoPage.urunSecYk (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-kasko.page.ts:293:19)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:129:22
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:128:5
+
+    attachment #12: screenshot (image/png) ─────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #14: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Test timeout of 180000ms exceeded.
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #15: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\error-context.md
+
+    attachment #17: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T17:45:33.254Z]   1 failed
+    [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel 
+[2026-09-23T17:45:33.291Z] 
+■ [TEST] "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T17:45:33.302Z] 
+▶ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Özel" başlatıldı...
+
+[2026-09-23T17:45:35.168Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T17:45:35.234Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T17:47:03.100Z] 
+■ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Özel" kullanıcı tarafından durduruldu.
+
+[2026-09-23T17:47:03.100Z] 
+▶ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel" başlatıldı...
+
+[2026-09-23T17:47:03.746Z] 
+■ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel" kullanıcı tarafından durduruldu.
+
+[2026-09-23T17:47:05.908Z] 
+▶ [TEST] "YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel" başlatıldı...
+
+[2026-09-23T17:47:07.129Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T17:47:07.195Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T17:47:11.172Z] 
+■ [TEST] "YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel" kullanıcı tarafından durduruldu.
+
+[2026-09-23T17:47:11.172Z] 
+▶ [TEST] "YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel" başlatıldı...
+
+[2026-09-23T17:47:12.942Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T17:47:13.006Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T17:48:19.714Z]   ✘  1 [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel (1.1m)
+[2026-09-23T17:48:19.805Z] 
+[2026-09-23T17:48:19.805Z] 
+[2026-09-23T17:48:19.806Z]   1) [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel › Poliçeleştirme süreci başlatılması 
+
+    Error: "Teklifi Kaydet tıklanır (#Policelestir)" adımından sonra beklenmeyen bir hata pop-up'ı görüntülendi, senaryo burada durduruldu:
+
+
+       at support\pages\kredi-karti-odeme.page.ts:193
+
+      191 |       .catch(() => '(hata mesajı metni okunamadı, ekran görüntüsüne bakınız)');
+      192 |
+    > 193 |     throw new Error(
+          |           ^
+      194 |       `"${adimAciklamasi}" adımından sonra beklenmeyen bir hata pop-up'ı görüntülendi, ` +
+      195 |         `senaryo burada durduruldu:\n${mesaj}`
+      196 |     );
+        at KrediKartiOdemePage.hataPopupVarsaDurdur (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\kredi-karti-odeme.page.ts:193:11)
+        at KrediKartiOdemePage.policelestirVeKrediKartiFormunuAc (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\kredi-karti-odeme.page.ts:47:5)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:136:7
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:135:5
+
+    attachment #12: screenshot (image/png) ─────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-5b1b9-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #14: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Error: "Teklifi Kaydet tıklanır (#Policelestir)" adımından sonra beklenmeyen bir hata pop-up'ı görüntülendi, senaryo burada durduruldu:
+    
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #15: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-5b1b9-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-kasko-yeni-k-5b1b9-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\error-context.md
+
+    attachment #17: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-5b1b9-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-kasko-yeni-k-5b1b9-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T17:48:19.806Z]   1 failed
+    [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel 
+[2026-09-23T17:48:19.842Z] 
+■ [TEST] "YK Kamyon / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Tüzel" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T17:59:05.545Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T17:59:05.546Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T17:59:05.546Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T17:59:05.547Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T17:59:06.198Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T17:59:42.200Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T17:59:42.201Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T17:59:42.202Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T17:59:42.202Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T17:59:42.807Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T18:00:14.238Z] 
+▶ [TEST] "[Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN)" başlatıldı...
+
+[2026-09-23T18:00:19.172Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:00:19.239Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:00:38.149Z]   ✓  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN) (18.5s)
+[2026-09-23T18:00:38.236Z] 
+[2026-09-23T18:00:38.237Z]   1 passed (23.7s)
+[2026-09-23T18:00:38.265Z] 
+■ [TEST] "[Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN)" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T18:00:38.274Z] 
+▶ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" başlatıldı...
+
+[2026-09-23T18:00:39.553Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:00:39.618Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:00:44.412Z] 
+■ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:10:39.672Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T18:10:39.673Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T18:10:39.673Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T18:10:39.674Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T18:10:40.292Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T18:11:41.104Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:11:45.208Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:11:45.279Z] 
+Running 1 test using 1 worker
+[2026-09-23T18:11:45.279Z] 
+[2026-09-23T18:12:12.833Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:12:16.105Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:12:17.349Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:12:17.415Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:12:24.246Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:12:24.247Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:12:25.002Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:15:03.711Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T18:15:03.712Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T18:15:03.712Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T18:15:03.713Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T18:15:04.307Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T18:15:29.863Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:15:31.121Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:15:31.190Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:16:04.781Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:16:04.782Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:16:06.189Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:16:06.259Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:16:08.914Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:16:28.920Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T18:16:28.920Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T18:16:28.921Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T18:16:28.921Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T18:16:29.555Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T18:16:35.022Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:16:36.290Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:16:36.377Z] 
+Running 1 test using 1 worker
+[2026-09-23T18:16:36.378Z] 
+[2026-09-23T18:17:41.181Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi (1.0m)
+[2026-09-23T18:17:41.294Z] 
+[2026-09-23T18:17:41.295Z] 
+[2026-09-23T18:17:41.295Z]   1) [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi › Ödeme tamamlanır ve beklenen sonuç doğrulanır 
+
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    expect(received).toBeTruthy()
+
+    Received: false
+
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+
+       at support\pages\kredi-karti-odeme.page.ts:157
+
+      155 |           }
+      156 |         )
+    > 157 |         .toBeTruthy();
+          |          ^
+      158 |     } finally {
+      159 |       this.page.off('dialog', dialogHandler);
+      160 |     }
+        at KrediKartiOdemePage.odemeyiTamamlaVeBeklenenHatayiDogrula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\kredi-karti-odeme.page.ts:157:10)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:103:7
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:102:5
+
+    attachment #9: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #11: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    expect(received).toBeTruthy()
+    
+    Received: false
+    
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #12: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\error-context.md
+
+    attachment #14: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:17:41.296Z]   1 failed
+    [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+[2026-09-23T18:17:41.334Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:17:41.342Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:17:42.850Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:17:42.913Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:18:02.233Z]   ✓  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi (18.9s)
+[2026-09-23T18:18:02.334Z] 
+[2026-09-23T18:18:02.335Z]   1 passed (20.7s)
+[2026-09-23T18:18:02.358Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T18:19:08.093Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T18:19:08.093Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T18:19:08.094Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T18:19:08.094Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T18:19:08.739Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T18:19:16.841Z] 
+▶ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" başlatıldı...
+
+[2026-09-23T18:19:18.080Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:19:18.158Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:19:38.036Z]   ✓  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.) (19.5s)
+[2026-09-23T18:19:38.136Z] 
+[2026-09-23T18:19:38.136Z]   1 passed (20.9s)
+[2026-09-23T18:19:38.171Z] 
+■ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T18:19:38.179Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:19:39.446Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:19:39.510Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:20:24.541Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Özel / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T18:20:25.593Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Özel / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:20:41.451Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi (1.0m)
+[2026-09-23T18:20:41.482Z] 
+[2026-09-23T18:20:41.483Z] 
+[2026-09-23T18:20:41.484Z]   1) [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    expect(received).toBeTruthy()
+
+    Received: false
+
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+
+       at support\pages\kredi-karti-odeme.page.ts:157
+
+      155 |           }
+      156 |         )
+    > 157 |         .toBeTruthy();
+          |          ^
+      158 |     } finally {
+      159 |       this.page.off('dialog', dialogHandler);
+      160 |     }
+        at KrediKartiOdemePage.odemeyiTamamlaVeBeklenenHatayiDogrula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\kredi-karti-odeme.page.ts:157:10)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:103:7
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:102:5
+
+    Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, copyfile 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\35f54fb731a5a0fe46ff-e942c2a94ff0c7b35357-recording1.network' -> 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\35f54fb731a5a0fe46ff-e942c2a94ff0c7b35357-recording1-pwnetcopy-1.network'
+
+    Error: browserContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\35f54fb731a5a0fe46ff-e942c2a94ff0c7b35357.trace'
+
+    attachment #9: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #11: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    expect(received).toBeTruthy()
+    
+    Received: false
+    
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #12: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-seyahat-prim-11b73-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:20:41.484Z]   1 failed
+    [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+[2026-09-23T18:20:41.520Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:20:41.528Z] 
+▶ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel" başlatıldı...
+
+[2026-09-23T18:20:42.837Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:20:42.909Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:20:43.153Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T18:20:45.117Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:20:45.187Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:20:46.460Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:21:03.707Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (20.3s)
+[2026-09-23T18:21:03.744Z] 
+[2026-09-23T18:21:03.744Z] 
+[2026-09-23T18:21:03.745Z]   1) [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel 
+
+    Error: browserContext.close: ENOENT: no such file or directory, open 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\35f54fb731a5a0fe46ff-9f2e9bb92cdc3f6ffd7e.network'
+
+    attachment #11: screenshot (image/png) ─────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-a3eb7-igorta-Ettiren-Farklı-Tüzel-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-seyahat-prim-a3eb7-igorta-Ettiren-Farklı-Tüzel-Chromium\error-context.md
+
+    attachment #13: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-a3eb7-igorta-Ettiren-Farklı-Tüzel-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-seyahat-prim-a3eb7-igorta-Ettiren-Farklı-Tüzel-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:21:03.745Z]   1 failed
+    [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel 
+[2026-09-23T18:21:03.768Z] 
+■ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:21:03.775Z] 
+▶ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Hayır / Çoklu Sorgu / Sigorta Ettiren Kendisi (İş Kuralı Hatası Beklenir)" başlatıldı...
+
+[2026-09-23T18:21:04.611Z] 
+▶ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" başlatıldı...
+
+[2026-09-23T18:21:05.155Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:21:05.232Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:21:05.917Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:21:05.994Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:21:15.123Z]   ✓  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Hayır / Çoklu Sorgu / Sigorta Ettiren Kendisi (İş Kuralı Hatası Beklenir) (9.5s)
+[2026-09-23T18:21:21.261Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:21:21.261Z] 
+▶ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T18:21:21.517Z] 
+[2026-09-23T18:21:21.518Z]   1 passed (17.4s)
+[2026-09-23T18:21:21.556Z] 
+■ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Hayır / Çoklu Sorgu / Sigorta Ettiren Kendisi (İş Kuralı Hatası Beklenir)" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T18:21:23.009Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:21:23.075Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:21:23.763Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:21:58.887Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:22:00.195Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:22:00.260Z] 
+Running 1 test using 1 worker
+[2026-09-23T18:22:00.261Z] 
+[2026-09-23T18:22:15.339Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:22:15.340Z] 
+▶ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" başlatıldı...
+
+[2026-09-23T18:22:16.611Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:22:16.687Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:22:36.733Z]   ✓  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı (19.6s)
+[2026-09-23T18:22:36.830Z] 
+[2026-09-23T18:22:36.830Z]   1 passed (21.1s)
+[2026-09-23T18:22:36.858Z] 
+■ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T18:23:49.157Z] 
+▶ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" başlatıldı...
+
+[2026-09-23T18:23:50.333Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:23:50.400Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:24:01.459Z] 
+■ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:24:05.747Z] 
+▶ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" başlatıldı...
+
+[2026-09-23T18:24:06.543Z] 
+■ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:24:06.543Z] 
+▶ [TEST] "30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:24:07.873Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:24:07.941Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:25:19.607Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi (1.2m)
+[2026-09-23T18:25:19.718Z] 
+[2026-09-23T18:25:19.719Z] 
+[2026-09-23T18:25:19.719Z]   1) [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi › Ödeme tamamlanır ve beklenen sonuç doğrulanır 
+
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    expect(received).toBeTruthy()
+
+    Received: false
+
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+
+       at support\pages\kredi-karti-odeme.page.ts:157
+
+      155 |           }
+      156 |         )
+    > 157 |         .toBeTruthy();
+          |          ^
+      158 |     } finally {
+      159 |       this.page.off('dialog', dialogHandler);
+      160 |     }
+        at KrediKartiOdemePage.odemeyiTamamlaVeBeklenenHatayiDogrula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\kredi-karti-odeme.page.ts:157:10)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:103:7
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:102:5
+
+    attachment #9: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #11: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    expect(received).toBeTruthy()
+    
+    Received: false
+    
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #12: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\error-context.md
+
+    attachment #14: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:25:19.720Z]   1 failed
+    [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+[2026-09-23T18:25:19.752Z] 
+■ [TEST] "30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:25:19.758Z] 
+▶ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:25:21.088Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:25:21.152Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:26:26.086Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi (1.1m)
+[2026-09-23T18:26:26.206Z] 
+[2026-09-23T18:26:26.206Z] 
+[2026-09-23T18:26:26.207Z]   1) [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi › Ödeme tamamlanır ve beklenen sonuç doğrulanır 
+
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    expect(received).toBeTruthy()
+
+    Received: false
+
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+
+       at support\pages\kredi-karti-odeme.page.ts:157
+
+      155 |           }
+      156 |         )
+    > 157 |         .toBeTruthy();
+          |          ^
+      158 |     } finally {
+      159 |       this.page.off('dialog', dialogHandler);
+      160 |     }
+        at KrediKartiOdemePage.odemeyiTamamlaVeBeklenenHatayiDogrula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\kredi-karti-odeme.page.ts:157:10)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:103:7
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:102:5
+
+    attachment #9: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #11: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    expect(received).toBeTruthy()
+    
+    Received: false
+    
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #12: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\error-context.md
+
+    attachment #14: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:26:26.208Z]   1 failed
+    [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+[2026-09-23T18:26:26.238Z] 
+■ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:27:23.996Z] 
+▶ [TEST] "başarılı giriş yapılmalı" başlatıldı...
+
+[2026-09-23T18:27:24.002Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" başlatıldı...
+
+[2026-09-23T18:27:25.453Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:27:25.500Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:27:25.527Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:27:25.565Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:27:59.546Z]   ✓  1 [Chromium] › tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:54:7 › Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi (33.6s)
+[2026-09-23T18:27:59.721Z] 
+[2026-09-23T18:27:59.722Z]   1 passed (35.3s)
+[2026-09-23T18:27:59.755Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T18:27:59.902Z]   ✘  1 [Chromium] › tests\scenarios\login\basarili-giris.spec.ts:18:5 › başarılı giriş yapılmalı (32.1s)
+[2026-09-23T18:27:59.938Z] 
+[2026-09-23T18:27:59.938Z] 
+[2026-09-23T18:27:59.939Z]   1) [Chromium] › tests\scenarios\login\basarili-giris.spec.ts:18:5 › başarılı giriş yapılmalı ─────
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.fill: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('input[type="text"]').first()
+
+
+       at support\pages\login.page.ts:32
+
+      30 |
+      31 |     await this.page.goto('/');
+    > 32 |     await this.page.locator('input[type="text"]').first().fill(credentials.username);
+         |                                                           ^
+      33 |     await this.page.locator('input[type="password"]').first().fill(credentials.password);
+      34 |     await this.submit();
+      35 |
+        at LoginPage.login (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\login.page.ts:32:59)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\login\basarili-giris.spec.ts:21:3
+
+    Error: ENOENT: no such file or directory, unlink 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\beb4e7827e41cdf0e8fc7d974ba60f34.zip'
+
+    attachment #4: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-login-basarili-giris-başarılı-giriş-yapılmalı-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #6: ❌ HATA ANI - Açıklama (text/plain) ──────────────────────────────────────────────
+    Test timeout of 30000ms exceeded.
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #7: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\scenarios-login-basarili-giris-başarılı-giriş-yapılmalı-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-login-basarili-giris-başarılı-giriş-yapılmalı-Chromium\error-context.md
+
+[2026-09-23T18:27:59.940Z]   1 failed
+    [Chromium] › tests\scenarios\login\basarili-giris.spec.ts:18:5 › başarılı giriş yapılmalı ──────
+[2026-09-23T18:27:59.956Z] 
+■ [TEST] "başarılı giriş yapılmalı" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:31:59.690Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T18:31:59.691Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T18:32:48.263Z] 
+▶ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel" başlatıldı...
+
+[2026-09-23T18:32:48.269Z] 
+▶ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" başlatıldı...
+
+[2026-09-23T18:32:50.142Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:32:50.189Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:32:50.212Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:32:50.263Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:33:36.526Z]   ✓  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı (45.9s)
+[2026-09-23T18:34:43.550Z] 
+[2026-09-23T18:34:43.550Z]   1 passed (1.9m)
+[2026-09-23T18:34:43.584Z] 
+■ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T18:34:43.593Z] 
+▶ [TEST] "30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:34:43.967Z] 
+■ [TEST] "30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:34:43.968Z] 
+■ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:34:43.970Z] 
+■ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:34:43.971Z] 
+■ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Kendisi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:34:43.971Z] 
+■ [TEST] "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:40:29.384Z] 
+▶ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel" başlatıldı...
+
+[2026-09-23T18:40:29.387Z] 
+■ [TEST] "30447 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:40:29.388Z] 
+▶ [TEST] "30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:40:30.816Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:40:30.891Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:40:31.309Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:40:31.394Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:40:46.737Z] 
+▶ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" başlatıldı...
+
+[2026-09-23T18:40:48.051Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:40:48.052Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:40:48.053Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:40:55.413Z] 
+▶ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" başlatıldı...
+
+[2026-09-23T18:41:32.661Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi (1.0m)
+[2026-09-23T18:42:39.896Z] 
+[2026-09-23T18:42:39.896Z] 
+[2026-09-23T18:42:39.897Z]   1) [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+
+    expect(received).toBeTruthy()
+
+    Received: false
+
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+
+       at support\pages\kredi-karti-odeme.page.ts:157
+
+      155 |           }
+      156 |         )
+    > 157 |         .toBeTruthy();
+          |          ^
+      158 |     } finally {
+      159 |       this.page.off('dialog', dialogHandler);
+      160 |     }
+        at KrediKartiOdemePage.odemeyiTamamlaVeBeklenenHatayiDogrula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\kredi-karti-odeme.page.ts:157:10)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:103:7
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:102:5
+
+    Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, copyfile 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\35f54fb731a5a0fe46ff-084c3b49c072b6d7343c-recording1.network' -> 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\35f54fb731a5a0fe46ff-084c3b49c072b6d7343c-recording1-pwnetcopy-1.network'
+
+    Error: browserContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\35f54fb731a5a0fe46ff-084c3b49c072b6d7343c.trace'
+
+    attachment #9: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #11: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Error: Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    Kabul edilen ödeme sonuçlarından biri görünmelidir: Hiçbir poliçe onaylanamadı.
+    
+    expect(received).toBeTruthy()
+    
+    Received: false
+    
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #12: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-seyahat-prim-775b3-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:42:39.897Z]   1 failed
+    [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+[2026-09-23T18:42:39.934Z] 
+■ [TEST] "30447 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:42:39.942Z] 
+▶ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:43:32.124Z]   ✘  1 [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel (3.0m)
+[2026-09-23T18:43:32.159Z] 
+[2026-09-23T18:43:32.159Z] 
+[2026-09-23T18:43:32.160Z]   1) [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, copyfile 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\8c8a6f23664c77553384-220c3afe00b67426bc8f-recording1.network' -> 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\8c8a6f23664c77553384-220c3afe00b67426bc8f-recording1-pwnetcopy-1.network'
+
+    Error: browserContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\8c8a6f23664c77553384-220c3afe00b67426bc8f.trace'
+
+    Error: locator.scrollIntoViewIfNeeded: Test ended.
+    Call log:
+      - waiting for getByRole('radio', { name: 'GÜLÜMSETEN KASKO(YOL YARD.)', exact: true })
+
+
+       at support\pages\jet-kasko.page.ts:293
+
+      291 |     const urunAdi = JETKASKO_URUN_KODLARI[urun] ?? urun;
+      292 |     const secenek = this.page.getByRole('radio', { name: urunAdi, exact: true });
+    > 293 |     await secenek.scrollIntoViewIfNeeded();
+          |                   ^
+      294 |     await secenek.click({ force: true });
+      295 |     await expect(secenek).toBeChecked();
+      296 |   }
+        at JetKaskoPage.urunSecYk (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-kasko.page.ts:293:19)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:129:22
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:128:5
+
+    attachment #12: screenshot (image/png) ─────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-2ecec-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #14: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Test timeout of 180000ms exceeded.
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #15: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-2ecec-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-kasko-yeni-k-2ecec-a-Ettiren-Farklı-Kişi-Tüzel-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:43:32.161Z]   1 failed
+    [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel 
+[2026-09-23T18:43:32.198Z] 
+■ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Farklı Kişi Tüzel" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:43:32.212Z] 
+▶ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T18:43:33.414Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:43:33.496Z] 
+Running 1 test using 1 worker
+[2026-09-23T18:43:33.497Z] 
+[2026-09-23T18:43:33.525Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:43:33.609Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:43:36.501Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:43:36.587Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:44:30.145Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi (55.4s)
+[2026-09-23T18:44:52.480Z]   ✘  1 [Chromium] › tests\scenarios\jet-dask\yeni-is-matrisi.spec.ts:31:9 › Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi (1.3m)
+[2026-09-23T18:45:18.712Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:45:18.713Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:45:18.713Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:45:18.714Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:45:22.648Z] 
+▶ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" başlatıldı...
+
+[2026-09-23T18:45:25.234Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T18:45:25.234Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:45:25.235Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:45:25.235Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T18:45:37.093Z] 
+[2026-09-23T18:45:37.094Z] 
+[2026-09-23T18:45:37.094Z]   1) [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi › Prim hesaplanır ve pozitif teklif doğrulanır 
+
+    Error: JetSeyahat primi sıfırdan büyük olmalıdır.
+
+    JetSeyahat primi sıfırdan büyük olmalıdır.
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 0
+    Received:   0
+
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+
+       at support\pages\jet-seyahat.page.ts:158
+
+      156 |         message: 'JetSeyahat primi sıfırdan büyük olmalıdır.'
+      157 |       })
+    > 158 |       .toBeGreaterThan(0);
+          |        ^
+      159 |   }
+      160 |
+      161 |   /** Prim hesaplar ve beklenen iş kuralı/hata mesajının diyalogda göründüğünü doğrular. */
+        at JetSeyahatPage.primHesapla (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-seyahat.page.ts:158:8)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:88:7
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:87:5
+
+    attachment #7: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #9: ❌ HATA ANI - Açıklama (text/plain) ──────────────────────────────────────────────
+    Error: JetSeyahat primi sıfırdan büyük olmalıdır.
+    
+    JetSeyahat primi sıfırdan büyük olmalıdır.
+    
+    expect(received).toBeGreaterThan(expected)
+    
+    Expected: > 0
+    Received:   0
+    
+    Call Log:
+    - Timeout 45000ms exceeded while waiting on the predicate
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #10: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\error-context.md
+
+    attachment #12: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-seyahat-prim-0ac6c-rgu-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:45:37.095Z]   1 failed
+    [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › 30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi 
+[2026-09-23T18:45:37.125Z] 
+■ [TEST] "30447 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:46:34.267Z]   ✘  1 [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Kendisi (3.0m)
+[2026-09-23T18:46:34.298Z] 
+[2026-09-23T18:46:34.299Z] 
+[2026-09-23T18:46:34.300Z]   1) [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Kendisi 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, copyfile 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\8c8a6f23664c77553384-8bcb4597b14dca1045ce-recording1.network' -> 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\8c8a6f23664c77553384-8bcb4597b14dca1045ce-recording1-pwnetcopy-1.network'
+
+    Error: browserContext._wrapApiCall: ENOENT: no such file or directory, open 'C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\test-results\.playwright-artifacts-0\traces\8c8a6f23664c77553384-8bcb4597b14dca1045ce.trace'
+
+    Error: locator.scrollIntoViewIfNeeded: Test ended.
+    Call log:
+      - waiting for getByRole('radio', { name: 'GÜLÜMSETEN KASKO(YOL YARD.)', exact: true })
+
+
+       at support\pages\jet-kasko.page.ts:293
+
+      291 |     const urunAdi = JETKASKO_URUN_KODLARI[urun] ?? urun;
+      292 |     const secenek = this.page.getByRole('radio', { name: urunAdi, exact: true });
+    > 293 |     await secenek.scrollIntoViewIfNeeded();
+          |                   ^
+      294 |     await secenek.click({ force: true });
+      295 |     await expect(secenek).toBeChecked();
+      296 |   }
+        at JetKaskoPage.urunSecYk (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-kasko.page.ts:293:19)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:129:22
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:128:5
+
+    attachment #12: screenshot (image/png) ─────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-8bf11-zel-Sigorta-Ettiren-Kendisi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #14: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Test timeout of 180000ms exceeded.
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #15: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-8bf11-zel-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-kasko-yeni-k-8bf11-zel-Sigorta-Ettiren-Kendisi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Kendisi 
+[2026-09-23T18:46:34.337Z] 
+■ [TEST] "YK Kamyon / Sigortalı Tüzel / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:46:34.348Z] 
+▶ [TEST] "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel" başlatıldı...
+
+[2026-09-23T18:46:35.606Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T18:46:35.671Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T18:49:39.069Z]   ✘  1 [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel (3.0m)
+[2026-09-23T18:49:39.165Z] 
+[2026-09-23T18:49:39.166Z] 
+[2026-09-23T18:49:39.167Z]   1) [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel › Ürün seçimi 
+
+    Test timeout of 180000ms exceeded.
+
+    Error: locator.scrollIntoViewIfNeeded: Test timeout of 180000ms exceeded.
+    Call log:
+      - waiting for getByRole('radio', { name: 'GÜLÜMSETEN KASKO(YOL YARD.)', exact: true })
+
+
+       at support\pages\jet-kasko.page.ts:293
+
+      291 |     const urunAdi = JETKASKO_URUN_KODLARI[urun] ?? urun;
+      292 |     const secenek = this.page.getByRole('radio', { name: urunAdi, exact: true });
+    > 293 |     await secenek.scrollIntoViewIfNeeded();
+          |                   ^
+      294 |     await secenek.click({ force: true });
+      295 |     await expect(secenek).toBeChecked();
+      296 |   }
+        at JetKaskoPage.urunSecYk (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-kasko.page.ts:293:19)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:129:22
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-kasko\yeni-kayit.spec.ts:128:5
+
+    attachment #12: screenshot (image/png) ─────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #14: ❌ HATA ANI - Açıklama (text/plain) ─────────────────────────────────────────────
+    Test timeout of 180000ms exceeded.
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #15: video (video/webm) ─────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\error-context.md
+
+    attachment #17: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-kasko-yeni-k-a0c13-ta-Ettiren-Farklı-Kişi-Özel-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T18:49:39.167Z]   1 failed
+    [Chromium] › tests\scenarios\jet-kasko\yeni-kayit.spec.ts:30:7 › YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel 
+[2026-09-23T18:49:39.202Z] 
+■ [TEST] "YK Özel Otomobil / Sigortalı Özel / Sigorta Ettiren Farklı Kişi Özel" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T18:53:51.843Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T18:53:51.844Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T19:20:45.822Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T19:20:45.822Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T19:20:45.823Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T19:20:45.824Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T19:20:46.497Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T19:21:13.104Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T19:21:18.218Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:21:18.296Z] 
+Running 1 test using 1 worker
+[2026-09-23T19:21:18.297Z] 
+[2026-09-23T19:21:19.085Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:21:19.085Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:21:19.086Z] 
+▶ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T19:21:20.350Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:21:20.413Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T19:21:21.326Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:21:24.239Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T19:21:25.470Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:21:25.540Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T19:21:29.976Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:21:29.977Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:21:29.977Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:21:33.275Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T19:21:34.715Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:21:34.716Z] 
+▶ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" başlatıldı...
+
+[2026-09-23T19:21:36.018Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:21:36.084Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T19:21:37.228Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:21:37.228Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:21:54.950Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T19:21:54.950Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T19:21:54.951Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T19:21:54.952Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T19:21:55.570Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T19:22:09.521Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T19:22:10.811Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:22:10.884Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T19:22:36.353Z]   ✘  1 [Chromium] › tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:54:7 › Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi (24.4s)
+[2026-09-23T19:22:36.410Z] 
+[2026-09-23T19:22:36.410Z] 
+[2026-09-23T19:22:36.411Z]   1) [Chromium] › tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:54:7 › Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi › Sigorta ettiren seçimi yapılır 
+
+    TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.
+
+       at support\pages\jet-ilk-ates-konut.page.ts:121
+
+      119 |   ): Promise<void> {
+      120 |     const sonuc = await this.page
+    > 121 |       .waitForFunction(
+          |        ^
+      122 |         ({ selector, label }) => {
+      123 |           const monitor = (window as typeof window & {
+      124 |             __jetFireErrorMonitor?: { errors: string[] };
+        at JetIlkAtesKonutPage.kimlikSorguSonucunuDogrula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-ilk-ates-konut.page.ts:121:8)
+        at JetIlkAtesKonutPage.farkliSigortaEttirenGir (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-ilk-ates-konut.page.ts:63:16)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:75:9
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:71:5
+
+    attachment #6: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-ilk-ates-kon-2d0a6-alı-Durumu-Mal-Sahibi-Testi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #8: ❌ HATA ANI - Açıklama (text/plain) ──────────────────────────────────────────────
+    TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #9: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-ilk-ates-kon-2d0a6-alı-Durumu-Mal-Sahibi-Testi-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-ilk-ates-kon-2d0a6-alı-Durumu-Mal-Sahibi-Testi-Chromium\error-context.md
+
+    attachment #11: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-ilk-ates-kon-2d0a6-alı-Durumu-Mal-Sahibi-Testi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-ilk-ates-kon-2d0a6-alı-Durumu-Mal-Sahibi-Testi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T19:22:36.412Z]   1 failed
+    [Chromium] › tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:54:7 › Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi 
+[2026-09-23T19:22:36.435Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Mal Sahibi Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:22:36.436Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Kiracı Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:22:36.436Z] 
+▶ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T19:22:37.699Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:22:37.769Z] 
+Running 1 test using 1 worker
+[2026-09-23T19:22:37.769Z] 
+[2026-09-23T19:23:18.273Z]   ✓  1 [Chromium] › tests\scenarios\jet-ilk-ates-konut\teklif-matrisi.spec.ts:54:7 › Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi (40.1s)
+[2026-09-23T19:23:18.379Z] 
+[2026-09-23T19:23:18.380Z]   1 passed (41.6s)
+[2026-09-23T19:23:18.411Z] 
+■ [TEST] "Sigortalı Tüzel / Sigorta Ettiren Aynı / Sigortalı Durumu Mal Sahibi Testi" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T19:31:36.780Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T19:31:36.781Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T19:32:42.217Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Özel / Sigortalı Durumu Mal Sahibi Testi" başlatıldı...
+
+[2026-09-23T19:32:42.223Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" başlatıldı...
+
+[2026-09-23T19:32:53.781Z] Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Oturumu Kapat', { exact: true })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByText('Oturumu Kapat', { exact: true }) with timeout 5000ms
+  - waiting for getByText('Oturumu Kapat', { exact: true })
+
+
+   at support\pages\login.page.ts:45
+
+  43 |     }
+  44 |
+> 45 |     await expect(this.page.getByText(successText, { exact: true })).toBeVisible();
+     |                                                                     ^
+  46 |   }
+  47 |
+  48 |   private async submit(): Promise<void> {
+    at LoginPage.login (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\login.page.ts:45:69)
+    at globalSetup (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\global-setup.ts:55:5)
+[2026-09-23T19:32:53.790Z] 
+[2026-09-23T19:32:53.804Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Özel / Sigortalı Durumu Mal Sahibi Testi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T19:32:53.805Z] 
+▶ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Özel / Sigortalı Durumu Kiracı Testi" başlatıldı...
+
+[2026-09-23T19:32:53.852Z] Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Oturumu Kapat', { exact: true })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByText('Oturumu Kapat', { exact: true }) with timeout 5000ms
+  - waiting for getByText('Oturumu Kapat', { exact: true })
+
+
+   at support\pages\login.page.ts:45
+
+  43 |     }
+  44 |
+> 45 |     await expect(this.page.getByText(successText, { exact: true })).toBeVisible();
+     |                                                                     ^
+  46 |   }
+  47 |
+  48 |   private async submit(): Promise<void> {
+    at LoginPage.login (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\login.page.ts:45:69)
+    at globalSetup (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\global-setup.ts:55:5)
+[2026-09-23T19:32:53.864Z] 
+[2026-09-23T19:32:53.881Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:32:53.881Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Kiracı / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:32:53.882Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Sıfatı Mal Sahibi / Yeni İş Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:32:53.976Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Özel / Sigortalı Durumu Kiracı Testi" kullanıcı tarafından durduruldu.
+
+[2026-09-23T19:32:53.977Z] 
+■ [TEST] "Sigortalı Özel / Sigorta Ettiren Farklı Tüzel / Sigortalı Durumu Kiracı Testi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:33:05.547Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T19:33:05.548Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T19:33:05.549Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T19:33:05.549Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T19:33:06.155Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T19:33:17.529Z] 
+▶ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" başlatıldı...
+
+[2026-09-23T19:33:26.315Z] Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Oturumu Kapat', { exact: true })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByText('Oturumu Kapat', { exact: true }) with timeout 5000ms
+  - waiting for getByText('Oturumu Kapat', { exact: true })
+
+
+   at support\pages\login.page.ts:45
+
+  43 |     }
+  44 |
+> 45 |     await expect(this.page.getByText(successText, { exact: true })).toBeVisible();
+     |                                                                     ^
+  46 |   }
+  47 |
+  48 |   private async submit(): Promise<void> {
+    at LoginPage.login (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\login.page.ts:45:69)
+    at globalSetup (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\global-setup.ts:55:5)
+[2026-09-23T19:33:26.325Z] 
+[2026-09-23T19:33:26.339Z] 
+■ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T19:33:26.340Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:33:26.341Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" sırada beklerken durduruldu, hiç başlatılmadı.
+
+[2026-09-23T19:33:31.817Z] 
+▶ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" başlatıldı...
+
+[2026-09-23T19:33:40.644Z] Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Oturumu Kapat', { exact: true })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByText('Oturumu Kapat', { exact: true }) with timeout 5000ms
+  - waiting for getByText('Oturumu Kapat', { exact: true })
+
+
+   at support\pages\login.page.ts:45
+
+  43 |     }
+  44 |
+> 45 |     await expect(this.page.getByText(successText, { exact: true })).toBeVisible();
+     |                                                                     ^
+  46 |   }
+  47 |
+  48 |   private async submit(): Promise<void> {
+    at LoginPage.login (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\login.page.ts:45:69)
+    at globalSetup (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\global-setup.ts:55:5)
+[2026-09-23T19:33:40.654Z] 
+[2026-09-23T19:33:40.666Z] 
+■ [TEST] "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T19:33:40.667Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T19:33:49.433Z] Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Oturumu Kapat', { exact: true })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByText('Oturumu Kapat', { exact: true }) with timeout 5000ms
+  - waiting for getByText('Oturumu Kapat', { exact: true })
+
+
+   at support\pages\login.page.ts:45
+
+  43 |     }
+  44 |
+> 45 |     await expect(this.page.getByText(successText, { exact: true })).toBeVisible();
+     |                                                                     ^
+  46 |   }
+  47 |
+  48 |   private async submit(): Promise<void> {
+    at LoginPage.login (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\login.page.ts:45:69)
+    at globalSetup (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\global-setup.ts:55:5)
+[2026-09-23T19:33:49.442Z] 
+[2026-09-23T19:33:49.455Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T19:33:49.457Z] 
+▶ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" başlatıldı...
+
+[2026-09-23T19:33:58.235Z] Error: expect(locator).toBeVisible() failed
+
+Locator: getByText('Oturumu Kapat', { exact: true })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" getByText('Oturumu Kapat', { exact: true }) with timeout 5000ms
+  - waiting for getByText('Oturumu Kapat', { exact: true })
+
+
+   at support\pages\login.page.ts:45
+
+  43 |     }
+  44 |
+> 45 |     await expect(this.page.getByText(successText, { exact: true })).toBeVisible();
+     |                                                                     ^
+  46 |   }
+  47 |
+  48 |   private async submit(): Promise<void> {
+    at LoginPage.login (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\login.page.ts:45:69)
+    at globalSetup (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\global-setup.ts:55:5)
+[2026-09-23T19:33:58.245Z] 
+[2026-09-23T19:33:58.259Z] 
+■ [TEST] "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T19:38:24.085Z] 
+▶ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Farklı Özel / Yeni İş Testi" başlatıldı...
+
+[2026-09-23T19:38:25.480Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:38:25.550Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T19:39:01.370Z]   ✘  1 [Chromium] › tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:37:9 › Sigortalı Pasaport / Sigorta Ettiren Farklı Özel / Yeni İş Testi (34.6s)
+[2026-09-23T19:39:01.431Z] 
+[2026-09-23T19:39:01.431Z] 
+[2026-09-23T19:39:01.432Z]   1) [Chromium] › tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:37:9 › Sigortalı Pasaport / Sigorta Ettiren Farklı Özel / Yeni İş Testi › Sigortalı bilgileri girilir ve sorgulanır 
+
+    TimeoutError: page.waitForResponse: Timeout 30000ms exceeded while waiting for event "response"
+
+       at support\pages\jet-saglik.page.ts:178
+
+      176 |   private async sorgula(endpoint: string, buttonSelector: string): Promise<Response> {
+      177 |     const [response] = await Promise.all([
+    > 178 |       this.page.waitForResponse(
+          |                 ^
+      179 |         (candidate) => new URL(candidate.url()).pathname.endsWith(endpoint),
+      180 |         { timeout: 30_000 }
+      181 |       ),
+        at JetSaglikPage.sorgula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-saglik.page.ts:178:17)
+        at JetSaglikPage.sigortaliBilgileriniGir (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-saglik.page.ts:55:35)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:49:9
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:48:7
+
+    attachment #6: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-saglik-yeni--8b383-n-Farklı-Özel-Yeni-İş-Testi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #8: ❌ HATA ANI - Açıklama (text/plain) ──────────────────────────────────────────────
+    TimeoutError: page.waitForResponse: Timeout 30000ms exceeded while waiting for event "response"
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #9: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-saglik-yeni--8b383-n-Farklı-Özel-Yeni-İş-Testi-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-saglik-yeni--8b383-n-Farklı-Özel-Yeni-İş-Testi-Chromium\error-context.md
+
+    attachment #11: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-saglik-yeni--8b383-n-Farklı-Özel-Yeni-İş-Testi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-saglik-yeni--8b383-n-Farklı-Özel-Yeni-İş-Testi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T19:39:01.433Z]   1 failed
+    [Chromium] › tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:37:9 › Sigortalı Pasaport / Sigorta Ettiren Farklı Özel / Yeni İş Testi 
+[2026-09-23T19:39:01.455Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Farklı Özel / Yeni İş Testi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T19:39:01.461Z] 
+▶ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Farklı Tüzel / Yeni İş Testi" başlatıldı...
+
+[2026-09-23T19:39:02.862Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T19:39:02.931Z] 
+Running 1 test using 1 worker
+
+[2026-09-23T19:39:37.581Z]   ✘  1 [Chromium] › tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:37:9 › Sigortalı Pasaport / Sigorta Ettiren Farklı Tüzel / Yeni İş Testi (33.4s)
+[2026-09-23T19:39:37.640Z] 
+[2026-09-23T19:39:37.641Z] 
+[2026-09-23T19:39:37.642Z]   1) [Chromium] › tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:37:9 › Sigortalı Pasaport / Sigorta Ettiren Farklı Tüzel / Yeni İş Testi › Sigortalı bilgileri girilir ve sorgulanır 
+
+    TimeoutError: page.waitForResponse: Timeout 30000ms exceeded while waiting for event "response"
+
+       at support\pages\jet-saglik.page.ts:178
+
+      176 |   private async sorgula(endpoint: string, buttonSelector: string): Promise<Response> {
+      177 |     const [response] = await Promise.all([
+    > 178 |       this.page.waitForResponse(
+          |                 ^
+      179 |         (candidate) => new URL(candidate.url()).pathname.endsWith(endpoint),
+      180 |         { timeout: 30_000 }
+      181 |       ),
+        at JetSaglikPage.sorgula (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-saglik.page.ts:178:17)
+        at JetSaglikPage.sigortaliBilgileriniGir (C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\support\pages\jet-saglik.page.ts:55:35)
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:49:9
+        at C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:48:7
+
+    attachment #6: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\scenarios-jet-saglik-yeni--ce995--Farklı-Tüzel-Yeni-İş-Testi-Chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #8: ❌ HATA ANI - Açıklama (text/plain) ──────────────────────────────────────────────
+    TimeoutError: page.waitForResponse: Timeout 30000ms exceeded while waiting for event "response"
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #9: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results\scenarios-jet-saglik-yeni--ce995--Farklı-Tüzel-Yeni-İş-Testi-Chromium\video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\scenarios-jet-saglik-yeni--ce995--Farklı-Tüzel-Yeni-İş-Testi-Chromium\error-context.md
+
+    attachment #11: trace (application/zip) ────────────────────────────────────────────────────────
+    test-results\scenarios-jet-saglik-yeni--ce995--Farklı-Tüzel-Yeni-İş-Testi-Chromium\trace.zip
+    Usage:
+
+        npx playwright show-trace test-results\scenarios-jet-saglik-yeni--ce995--Farklı-Tüzel-Yeni-İş-Testi-Chromium\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+[2026-09-23T19:39:37.642Z]   1 failed
+    [Chromium] › tests\scenarios\jet-saglik\yeni-is-matrisi.spec.ts:37:9 › Sigortalı Pasaport / Sigorta Ettiren Farklı Tüzel / Yeni İş Testi 
+[2026-09-23T19:39:37.661Z] 
+■ [TEST] "Sigortalı Pasaport / Sigorta Ettiren Farklı Tüzel / Yeni İş Testi" sonlandı (çıkış kodu: 1).
+
+[2026-09-23T19:44:10.936Z] 
+▶ [TEST] "[Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN)" başlatıldı...
+
+[2026-09-23T19:44:12.633Z] [global-setup] TEST için paylaşılan oturum hâlâ geçerli, yeniden login yapılmadı.
+[2026-09-23T19:44:12.694Z] 
+Running 1 test using 1 worker
+[2026-09-23T19:44:12.695Z] 
+[2026-09-23T19:44:49.630Z]   ✓  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › [Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN) (36.6s)
+[2026-09-23T19:44:49.739Z] 
+[2026-09-23T19:44:49.740Z]   1 passed (38.5s)
+[2026-09-23T19:44:49.780Z] 
+■ [TEST] "[Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN)" sonlandı (çıkış kodu: 0).
+
+[2026-09-23T20:09:02.450Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T20:09:02.451Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T20:11:11.616Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T20:11:11.617Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T20:11:11.618Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T20:11:11.618Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T20:11:12.214Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T20:17:33.813Z] 
+CANLI ortamı - son koşu: 23.09.2026 12:43 (kayıtlı koşu sayısı: 1)
+
+[2026-09-23T20:17:33.813Z] Toplam: 1 test | Başarılı: 0 | Başarısız: 0 | Atlanan: 1
+[2026-09-23T20:17:33.814Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'Bilinmiyor'[39m │ [33m0[39m        │ [33m0[39m         │ [33m1[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T20:17:33.814Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-canli.html dosyasını açın.
+[2026-09-23T20:17:34.299Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-canli.html
+[2026-09-23T20:18:01.612Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T20:18:01.612Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T20:18:01.613Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T20:18:01.614Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T20:18:02.245Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T20:28:40.245Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T20:28:40.245Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T20:29:26.364Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T20:29:26.364Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T20:29:26.365Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T20:29:26.366Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T20:29:27.019Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T20:50:44.232Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T20:50:44.233Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T20:51:05.149Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T20:51:05.149Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T20:51:05.150Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T20:51:05.150Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T20:51:05.775Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T21:02:18.193Z] 
+▶ [TEST] "__senaryo_olustur_deneme__ b52e1d0a" başlatıldı...
+
+[2026-09-23T21:02:27.817Z] [global-setup] TEST oturumu kaydedildi: playwright/.auth/test-acente.json
+[2026-09-23T21:02:27.886Z] 
+Running 1 test using 1 worker
+[2026-09-23T21:02:27.887Z] 
+[2026-09-23T21:02:54.837Z]   ✘  1 [Chromium] › tests\scenarios\jet-seyahat\prim-hesaplama.spec.ts:28:7 › __senaryo_olustur_deneme__ b52e1d0a (26.0s)
+[2026-09-23T21:33:58.302Z] Test tetikleme sunucusu hazır: http://127.0.0.1:5566 (yalnızca bu bilgisayardan erişilebilir)
+[2026-09-23T21:33:58.303Z] Dashboard'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.
+[2026-09-23T21:34:22.599Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T21:34:22.599Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T21:34:22.600Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T21:34:22.600Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T21:34:23.258Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
+[2026-09-23T21:49:40.126Z] 
+TEST ortamı - son koşu: 23.09.2026 19:49 (kayıtlı koşu sayısı: 8)
+
+[2026-09-23T21:49:40.127Z] Toplam: 1 test | Başarılı: 1 | Başarısız: 0 | Atlanan: 0
+[2026-09-23T21:49:40.128Z] ┌─────────┬──────────────┬──────────┬───────────┬─────────┐
+│ (index) │ Ürün         │ Başarılı │ Başarısız │ Atlanan │
+├─────────┼──────────────┼──────────┼───────────┼─────────┤
+│ 0       │ [32m'JetSeyahat'[39m │ [33m1[39m        │ [33m0[39m         │ [33m0[39m       │
+└─────────┴──────────────┴──────────┴───────────┴─────────┘
+[2026-09-23T21:49:40.128Z] 
+Detaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-test.html dosyasını açın.
+[2026-09-23T21:49:40.744Z] Dashboard sayfası yazıldı: C:\Users\PC\Documents\Codex\2026-09-19\im\outputs\playwright-test-automation\dashboard-test.html
