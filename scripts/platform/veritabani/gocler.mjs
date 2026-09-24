@@ -222,6 +222,23 @@ export const GOCLER = [
       INSERT INTO meta (anahtar, deger) VALUES ('sifreli_alan_gocu', 'bekliyor')
         ON CONFLICT(anahtar) DO UPDATE SET deger = 'bekliyor';
     `
+  },
+  {
+    // Sürüm 3 — degisiklik_gecmisi.yapan artık DÜZ METİN makine adı içermez: "kullanici@<makineId>"
+    // (makine adı makineler.ad'da şifreli durur; arayüz kasa açıkken kimliği ada çevirir).
+    // Eski kayıtlar ("kullanici@makine-adi") aynı satırdaki makine_id ile yeniden yazılır;
+    // makine_id yoksa "bilinmeyen-makine" kullanılır. "ice-aktarma:<makineId>" ve '@' içermeyen
+    // (çağıranın verdiği) değerlere dokunulmaz. Aynı kural eski yedeklerden içe aktarılan
+    // geçmiş kayıtlarına da uygulanır (depo.mjs > gecmisYapaniniNormallestir).
+    surum: 3,
+    ad: 'gecmis_yapan_makine_kimligi',
+    sql: `
+      UPDATE degisiklik_gecmisi
+         SET yapan = substr(yapan, 1, instr(yapan, '@')) || COALESCE(makine_id, 'bilinmeyen-makine')
+       WHERE instr(yapan, '@') > 0
+         AND yapan NOT LIKE 'ice-aktarma:%'
+         AND substr(yapan, instr(yapan, '@') + 1) <> COALESCE(makine_id, 'bilinmeyen-makine');
+    `
   }
 ];
 

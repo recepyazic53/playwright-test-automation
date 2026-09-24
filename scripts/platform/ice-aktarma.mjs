@@ -21,7 +21,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { veritabaniAc } from './veritabani/baglanti.mjs';
 import { SIFRELI_ALANLAR, TABLOLAR, gocleriUygula } from './veritabani/gocler.mjs';
-import { gecmisYaz, sayimlar, yerelMakine } from './veritabani/depo.mjs';
+import { gecmisYapaniniNormallestir, gecmisYaz, sayimlar, yerelMakine } from './veritabani/depo.mjs';
 import {
   KasaHatasi, acikAnahtar, gecmisAnligiSifrele, kasaDurumu, kasayiAnahtarlaAc, metindekiZarflariDonustur,
   satirSifreliAlanlariniTamamla, sifreliAlanlariTamamla, zarfCoz, zarfMi, zarfSifrele
@@ -309,6 +309,7 @@ export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
     const hedefAnahtar = Buffer.from(kasaVar ? acikAnahtar(yerel) : yedek.kasaAnahtari);
     const ayniAnahtar = anahtarlarAyni(hedefAnahtar, yedek.kasaAnahtari);
     ilerleme('yeniden şifreleniyor', 50);
+    const eskiYapanBicimi = Number(yedek.manifest.semaSurumu) < 3;
     /** @type {Record<string, Satir[]>} */
     const tablolar = {};
     for (const t of TABLOLAR) {
@@ -322,6 +323,8 @@ export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
         // Eski (v1) yedekten gelen düz metin şifreli sütunlar hazırlık alanında da şifrelenir.
         satir = satirSifreliAlanlariniTamamla(t.ad, satir, hedefAnahtar);
         if (t.ad === 'degisiklik_gecmisi') {
+          // Şema < 3 yedeği: "yapan" düz metin makine adı taşıyabilir → "kullanici@<makineId>".
+          if (eskiYapanBicimi) satir = gecmisYapaniniNormallestir(satir);
           const tur = String(satir.varlik_turu);
           const onceki = gecmisAnligiSifrele(tur, satir.onceki_json, hedefAnahtar);
           const sonraki = gecmisAnligiSifrele(tur, satir.sonraki_json, hedefAnahtar);

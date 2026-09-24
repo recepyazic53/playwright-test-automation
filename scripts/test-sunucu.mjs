@@ -8,11 +8,13 @@
 // GÜVENLİK NOTLARI (bkz. proje sohbetindeki açıklama):
 // 1) Sunucu YALNIZCA 127.0.0.1'e bağlanır — ağdaki başka hiçbir cihaz erişemez.
 // 2) CORS yalnızca dosya (file://) olarak açılan dashboard'un gönderdiği
-//    "Origin: null" değerine izin verir; başka hiçbir origin'e izin verilmez.
-// 3) Her istek, dashboard üretilirken oluşturulan ve yalnızca bu makinede
-//    (scripts/.test-sunucu-token dosyasında) duran bir token taşımak zorundadır.
-//    Token'ı bilmeyen bir sayfa (ör. başka bir sekmede açık kötü niyetli bir site)
-//    isteği kabul ettiremez.
+//    "Origin: null" değerine ve sunucunun kendi sunduğu platform arayüzünün aynı-köken
+//    isteklerine (http://127.0.0.1:<PORT>) izin verir; başka hiçbir origin'e izin verilmez.
+// 3) Her istek bir token taşımak zorundadır: platform arayüzü (GET /) için her sunucu
+//    başlangıcında üretilen ve YALNIZCA bellekte duran oturum token'ı (sayfaya yanıt
+//    içinde enjekte edilir, diske yazılmaz); geçici olarak file:// dashboard için
+//    scripts/.test-sunucu-token dosyasındaki eski token. Token'ı bilmeyen bir sayfa (ör.
+//    başka bir sekmede açık kötü niyetli bir site) isteği kabul ettiremez.
 // 4) Çalıştırılacak senaryo adı serbest metin olarak KABUL EDİLMEZ — gelen ad,
 //    "npx playwright test --list" ile o an gerçekten var olan senaryo başlıklarıyla
 //    birebir eşleşmek zorundadır (whitelist). Eşleşmeyen istekler reddedilir.
@@ -34,7 +36,7 @@ import {
   existsSync, readFileSync, writeFileSync, unlinkSync, statSync, createReadStream, appendFileSync, mkdirSync,
   renameSync, realpathSync, readdirSync
 } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve as resolvePath, extname, relative, isAbsolute, sep } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -102,6 +104,25 @@ export function tokenGetirYaOlustur() {
 }
 
 const TOKEN = tokenGetirYaOlustur();
+
+// OTURUM TOKEN'I — platform arayüzü (GET / ile sunulan kabuk ve "Mevcut görünüm") için.
+// Her sunucu başlangıcında rastgele üretilir, YALNIZCA bellekte durur ve HİÇBİR dosyaya
+// yazılmaz: sunucu her yanıtta sayfaya (HTML içine) enjekte eder; yanıt "no-store" ile
+// önbelleğe alınmaz. /platform/* uç noktaları (kasa, yedek, profiller) YALNIZCA bu token'ı
+// kabul eder. Diskteki eski token (TOKEN, .test-sunucu-token) GEÇİCİ olarak yalnızca dosya
+// (file://) olarak açılan eski dashboard'un /calistir vb. istekleri için geçerlidir.
+const OTURUM_TOKEN = randomBytes(32).toString('hex');
+
+/** Zamanlamadan bağımsız karşılaştırma. @param {unknown} a @param {string} b */
+function tokenEsit(a, b) {
+  if (typeof a !== 'string' || a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
+/** Eski dashboard token'ı veya bu sürecin oturum token'ı. @param {unknown} token */
+function tokenGecerli(token) {
+  return tokenEsit(token, OTURUM_TOKEN) || tokenEsit(token, TOKEN);
+}
 
 // "npx playwright ..." yerine kullanılıyor: node_modules/@playwright/test/cli.js
 // dosyasının tam yolu. Bu, npm'in kendi "playwright" komutunun da altta çalıştırdığı
@@ -209,10 +230,14 @@ function medyaUrlOlustur(dosyaYolu) {
   return `http://127.0.0.1:${PORT}/medya?token=${encodeURIComponent(TOKEN)}&yol=${encodeURIComponent(dosyaYolu)}`;
 }
 
-// Sadece file:// olarak açılan dashboard'un gönderdiği "Origin: null" kabul edilir.
-// Başka bir origin (http://başka-bir-site vb.) her zaman reddedilir.
+// file:// olarak açılan eski dashboard'un gönderdiği "Origin: null" (CORS başlıklarıyla) ve
+// sunucunun kendi sunduğu platform arayüzünün aynı-köken istekleri (http://127.0.0.1:<PORT>,
+// http://localhost:<PORT>; CORS başlığı gerekmez) kabul edilir. Başka bir origin
+// (http://başka-bir-site vb.) her zaman reddedilir.
+const AYNI_KOKENLER = new Set([`http://127.0.0.1:${PORT}`, `http://localhost:${PORT}`]);
 function corsBasliklariniUygula(req, res) {
   const origin = req.headers.origin;
+  if (typeof origin === 'string' && AYNI_KOKENLER.has(origin.toLowerCase())) return true;
   if (origin === 'null' || origin === undefined) {
     res.setHeader('Access-Control-Allow-Origin', 'null');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
@@ -461,6 +486,137 @@ const calisanSurecler = new Map();
 
 // ortam -> devam eden rapor üretimi (bkz. /rapor-uret).
 const raporUretimleri = new Map();
+
+// Dashboard'u (dashboard-<ortam>.html) mevcut üreticiyle (urun-hata-raporu.mjs) yeniden
+// üretir. Aynı ortam için aynı anda tek üretim yapılır.
+function raporuUret(ortam) {
+  if (!raporUretimleri.has(ortam)) {
+    raporUretimleri.set(
+      ortam,
+      new Promise((coz) => {
+        execFile(
+          process.execPath,
+          [join(projeKoku, 'scripts', 'urun-hata-raporu.mjs'), ortam],
+          { cwd: projeKoku, maxBuffer: 32 * 1024 * 1024, timeout: 5 * 60 * 1000, shell: false },
+          (hata, stdout, stderr) => coz(hata ? { basarili: false, mesaj: `Rapor üretilemedi: ${String(stderr || hata.message).slice(-500)}` } : { basarili: true })
+        );
+      }).finally(() => raporUretimleri.delete(ortam))
+    );
+  }
+  return raporUretimleri.get(ortam);
+}
+
+// ---- Platform arayüzü (scripts/platform/arayuz/) ----------------------------------------
+// GET /            → kabuk (index.html; oturum token'ı <meta> olarak enjekte edilir)
+// GET /arayuz/*    → kabuğun statik CSS/JS dosyaları (sır içermez)
+// GET /gorunum/<ortam>[?yenile=1] → mevcut dashboard (dashboard-<ortam>.html); yoksa veya
+//   yenile=1 ise mevcut üreticiyle üretilir. Diskteki dosyadaki eski token ve taban adres
+//   yanıtta oturum token'ı ve aynı-köken ('' taban) ile değiştirilir; dosyaya YAZILMAZ.
+// Tüm HTML yanıtları: Cache-Control: no-store (token tarayıcı önbelleğine düşmesin),
+// X-Frame-Options: SAMEORIGIN (başka sitelerin çerçevelemesi engellenir).
+const ARAYUZ_KLASORU = join(buDosyaninKlasoru, 'platform', 'arayuz');
+const ARAYUZ_DOSYALARI = new Map([
+  ['/arayuz/stil.css', { dosya: 'stil.css', tur: 'text/css; charset=utf-8' }],
+  ['/arayuz/uygulama.js', { dosya: 'uygulama.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ortak.js', { dosya: 'ortak.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }]
+]);
+const KABUK_GUVENLIK_BASLIKLARI = {
+  'Cache-Control': 'no-store',
+  'X-Frame-Options': 'SAMEORIGIN',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+  'Content-Security-Policy':
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; " +
+    "frame-src 'self'; frame-ancestors 'self'; form-action 'none'; base-uri 'none'; object-src 'none'"
+};
+
+function arayuzIsteginiIsle(req, res) {
+  const yol = req.url.split('?')[0];
+  if (yol === '/' || yol === '/index.html') {
+    const html = readFileSync(join(ARAYUZ_KLASORU, 'index.html'), 'utf-8').replace('__OTURUM_TOKENI__', OTURUM_TOKEN);
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...KABUK_GUVENLIK_BASLIKLARI });
+    res.end(html);
+    return true;
+  }
+  const dosya = ARAYUZ_DOSYALARI.get(yol);
+  if (!dosya) return false;
+  res.writeHead(200, { 'Content-Type': dosya.tur, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+  res.end(readFileSync(join(ARAYUZ_KLASORU, dosya.dosya)));
+  return true;
+}
+
+// Dashboard'un göreli bağlantı verdiği Allure ekleri (ekran görüntüsü vb.): dosya olarak açılınca
+// proje kökünden okunur; sunulan görünümde /gorunum/allure-results-<ortam>/<dosya> olarak gelir.
+// Yalnızca o klasördeki DÜZ dosya adları sunulur (alt klasör, "..", sembolik bağ dışarı çıkamaz).
+const EK_ICERIK_TURLERI = {
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webm': 'video/webm', '.mp4': 'video/mp4',
+  '.txt': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8', '.json': 'application/json; charset=utf-8'
+};
+function gorunumEkiniSun(res, ortam, hamAd) {
+  let ad;
+  try { ad = decodeURIComponent(hamAd); } catch { ad = ''; }
+  const kok = join(projeKoku, `allure-results-${ortam}`);
+  const hedef = join(kok, ad);
+  let gecerli = Boolean(ad) && !/[\\/]/.test(ad) && ad !== '..' && ad !== '.';
+  if (gecerli) {
+    try {
+      const gercekKok = realpathSync(kok);
+      const gercekHedef = realpathSync(hedef);
+      const goreli = relative(gercekKok, gercekHedef);
+      gecerli = Boolean(goreli) && !goreli.startsWith('..') && !isAbsolute(goreli) && statSync(gercekHedef).isFile();
+    } catch {
+      gecerli = false;
+    }
+  }
+  if (!gecerli) {
+    jsonGonder(res, 404, { basarili: false, mesaj: 'Dosya bulunamadı.' });
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Type': EK_ICERIK_TURLERI[extname(ad).toLowerCase()] || 'application/octet-stream',
+    'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'same-origin', 'Cache-Control': 'no-store',
+    'Content-Security-Policy': "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
+  });
+  createReadStream(hedef).pipe(res);
+}
+
+async function gorunumuSun(req, res) {
+  const url = new URL(req.url, 'http://127.0.0.1');
+  const ekEslesme = /^\/gorunum\/allure-results-(test|canli)\/([^/]+)$/.exec(url.pathname);
+  if (ekEslesme) {
+    gorunumEkiniSun(res, ekEslesme[1], ekEslesme[2]);
+    return;
+  }
+  const eslesme = /^\/gorunum\/(test|canli)$/.exec(url.pathname);
+  if (!eslesme) {
+    jsonGonder(res, 404, { basarili: false, mesaj: 'Görünüm bulunamadı (ortam: test veya canli).' });
+    return;
+  }
+  const ortam = eslesme[1];
+  const dosyaYolu = join(projeKoku, `dashboard-${ortam}.html`);
+  if (url.searchParams.get('yenile') === '1' || !existsSync(dosyaYolu)) {
+    const sonuc = await raporuUret(ortam);
+    if (!sonuc.basarili) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(sonuc.mesaj);
+      return;
+    }
+  }
+  let html = readFileSync(dosyaYolu, 'utf-8');
+  // Dosyadaki eski token (varsa) ve mutlak taban adres yalnızca YANITTA değiştirilir.
+  html = html.split(TOKEN).join(OTURUM_TOKEN).replace(
+    /var TEST_SUNUCU = \{[^\n]*\};/,
+    `var TEST_SUNUCU = { taban: "", token: ${JSON.stringify(OTURUM_TOKEN)} };`
+  );
+  res.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'X-Frame-Options': 'SAMEORIGIN',
+    'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cross-Origin-Resource-Policy': 'same-origin'
+  });
+  res.end(html);
+}
 
 // NOT (önemli, "Tümünü durdur"da bazı senaryoların durmaması kök nedeni): AYNI
 // DOSYADAKİ senaryolar dosyaSirasiIleCalistir ile SIRAYA konuyor (bkz. aşağıdaki
@@ -1256,6 +1412,13 @@ async function istegiIsle(req, res) {
     return;
   }
 
+  // Platform arayüzü (kabuk + "Mevcut görünüm"): oturum token'ı sayfaya enjekte edilir.
+  if (req.method === 'GET' && req.url && arayuzIsteginiIsle(req, res)) return;
+  if (req.method === 'GET' && req.url && req.url.split('?')[0].startsWith('/gorunum/')) {
+    await gorunumuSun(req, res);
+    return;
+  }
+
   if (req.method === 'GET' && req.url === '/saglik') {
     jsonGonder(res, 200, { basarili: true, mesaj: 'Test sunucusu çalışıyor.' });
     return;
@@ -1264,7 +1427,7 @@ async function istegiIsle(req, res) {
   // Platform (yerel veritabanı, kasa, yedek) uç noktaları: /platform/* — ayrıntı ve token
   // kuralları scripts/platform/sunucu-platform.mjs içinde.
   if (req.url && req.url.startsWith('/platform/')) {
-    await platformIsteginiIsle(req, res, { token: TOKEN, jsonGonder });
+    await platformIsteginiIsle(req, res, { token: OTURUM_TOKEN, jsonGonder });
     return;
   }
 
@@ -1303,7 +1466,7 @@ async function istegiIsle(req, res) {
       ? istek.kosuId.trim()
       : randomBytes(8).toString('hex');
 
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1422,7 +1585,7 @@ async function istegiIsle(req, res) {
       return;
     }
     const { ortam, token } = istek ?? {};
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1430,20 +1593,7 @@ async function istegiIsle(req, res) {
       jsonGonder(res, 400, { basarili: false, mesaj: 'ortam yalnızca "test" veya "canli" olabilir.' });
       return;
     }
-    if (!raporUretimleri.has(ortam)) {
-      raporUretimleri.set(
-        ortam,
-        new Promise((coz) => {
-          execFile(
-            process.execPath,
-            [join(projeKoku, 'scripts', 'urun-hata-raporu.mjs'), ortam],
-            { cwd: projeKoku, maxBuffer: 32 * 1024 * 1024, timeout: 5 * 60 * 1000, shell: false },
-            (hata, stdout, stderr) => coz(hata ? { basarili: false, mesaj: `Rapor üretilemedi: ${String(stderr || hata.message).slice(-500)}` } : { basarili: true })
-          );
-        }).finally(() => raporUretimleri.delete(ortam))
-      );
-    }
-    const sonuc = await raporUretimleri.get(ortam);
+    const sonuc = await raporuUret(ortam);
     console.log(sonuc.basarili ? `Dashboard yeniden üretildi (${ortam}).` : sonuc.mesaj);
     jsonGonder(res, sonuc.basarili ? 200 : 500, sonuc);
     return;
@@ -1468,7 +1618,7 @@ async function istegiIsle(req, res) {
     // kullanılacağı isteğe bağlıdır (varsayılan: test — canlıya özel dosyalar yalnızca
     // canli listesinde görünür).
     const ortam = istek?.ortam === 'canli' ? 'canli' : 'test';
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1523,7 +1673,7 @@ async function istegiIsle(req, res) {
 
     const { kosuId, token } = istek ?? {};
 
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1554,7 +1704,7 @@ async function istegiIsle(req, res) {
     const token = url.searchParams.get('token');
     const yol = url.searchParams.get('yol');
 
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1637,7 +1787,7 @@ async function istegiIsle(req, res) {
     const token = url.searchParams.get('token');
     const kosuId = url.searchParams.get('kosuId');
 
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1672,7 +1822,7 @@ async function istegiIsle(req, res) {
     }
 
     const { ortam, senaryo, token } = istek ?? {};
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1765,7 +1915,7 @@ async function istegiIsle(req, res) {
     }
 
     const { ortam, senaryo, baslik, token, kosuyaDahil } = istek ?? {};
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1852,7 +2002,7 @@ async function istegiIsle(req, res) {
       return;
     }
     const { token, ortam, baslik } = istek ?? {};
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -1901,7 +2051,7 @@ async function istegiIsle(req, res) {
       return;
     }
     const { token, ortam, eskiBaslik, senaryo, kosuyaDahil } = istek ?? {};
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -2021,7 +2171,7 @@ async function istegiIsle(req, res) {
     }
 
     const { ortam, token, dosyaAdi, veriBase64 } = istek ?? {};
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -2073,7 +2223,7 @@ async function istegiIsle(req, res) {
     const token = url.searchParams.get('token');
     const ortam = url.searchParams.get('ortam');
 
-    if (token !== TOKEN) {
+    if (!tokenGecerli(token)) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
     }
@@ -2214,6 +2364,7 @@ if (dogrudanCalistirildi) {
 
   sunucu.listen(PORT, '127.0.0.1', () => {
     console.log(`Test tetikleme sunucusu hazır: http://127.0.0.1:${PORT} (yalnızca bu bilgisayardan erişilebilir)`);
+    console.log(`Platform arayüzü: http://127.0.0.1:${PORT}/`);
     console.log('Dashboard\'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.');
   });
 

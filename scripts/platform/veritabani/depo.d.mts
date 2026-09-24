@@ -34,6 +34,8 @@ export interface TestVerisiProfili {
   /** Hassas alanlar yalnızca { coz: true } ile düz metin; aksi halde null. */
   degerler: Record<string, unknown>;
   hassasAlanlar: string[];
+  /** Değeri kayıtlı (boş olmayan) hassas alanlar. */
+  doluHassasAlanlar: string[];
   olusturulma: string; guncellenme: string;
 }
 export interface Ekran { id: string; projeId: string; anahtar: string; ad: string; aciklama: string | null; olusturulma: string; guncellenme: string }
@@ -60,6 +62,8 @@ export declare function jsonMetni(deger: unknown, alan: string, beklenen?: 'nesn
 export declare function gecmisYaz(vt: Veritabani, kayit: {
   varlikTuru: string; varlikId: string; islem: GecmisIslemi; yapan?: string; onceki?: unknown; sonraki?: unknown; aciklama?: string;
 }): void;
+
+export declare function gecmisYapaniniNormallestir(satir: Record<string, unknown>): Record<string, unknown>;
 
 export declare function veritabaniniHazirla(yol?: string | null): Promise<Veritabani>;
 export declare function yerelMakine(vt: Veritabani): { id: string; ad: string };
@@ -110,6 +114,7 @@ export declare function testVerisiTuruKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean }>;
 }): string;
 export declare function testVerisiTurleriniListele(vt: Veritabani, projeId: string): TestVerisiTuru[];
+export declare function testVerisiTuruSil(vt: Veritabani, id: string): boolean;
 export declare function testVerisiProfiliKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; turId: string; ad: string; degerler: Record<string, TestVerisiDegeri>; yapan?: string;
 }): string;

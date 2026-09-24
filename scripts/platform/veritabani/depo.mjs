@@ -31,12 +31,37 @@ export class DepoHatasi extends Error {
   }
 }
 
-function varsayilanYapan() {
+/**
+ * Değişiklik geçmişindeki varsayılan "yapan": "kullanici@<makineId>". Makine ADI (hostname)
+ * düz metin olarak YAZILMAZ — makineler.ad şifrelidir; arayüz kasa açıkken kimliği ada çevirir.
+ * @param {Veritabani} vt
+ */
+function varsayilanYapan(vt) {
+  const makine = vt.metaOku('yerel_makine_id') ?? 'bilinmeyen-makine';
+  let kullanici = 'kullanici';
   try {
-    return `${userInfo().username}@${hostname()}`;
+    kullanici = userInfo().username || kullanici;
   } catch {
-    return hostname();
+    // kullanıcı adı okunamazsa genel ad kullanılır
   }
+  return `${kullanici}@${makine}`;
+}
+
+/**
+ * Eski (şema < 3) geçmiş kaydındaki "kullanici@makine-adi" değerini "kullanici@<makineId>"
+ * biçimine çevirir (göç 3 ile aynı kural; eski yedeklerin içe aktarılmasında kullanılır).
+ * Değişiklik yoksa AYNI nesne döner.
+ * @param {Record<string, unknown>} satir degisiklik_gecmisi satırı
+ * @returns {Record<string, unknown>}
+ */
+export function gecmisYapaniniNormallestir(satir) {
+  const yapan = satir.yapan;
+  if (typeof yapan !== 'string' || yapan.startsWith('ice-aktarma:')) return satir;
+  const at = yapan.indexOf('@');
+  if (at < 0) return satir;
+  const makine = typeof satir.makine_id === 'string' && satir.makine_id ? satir.makine_id : 'bilinmeyen-makine';
+  if (yapan.slice(at + 1) === makine) return satir;
+  return { ...satir, yapan: `${yapan.slice(0, at + 1)}${makine}` };
 }
 
 /** @param {unknown} deger @param {string} alan */
@@ -111,7 +136,7 @@ export function gecmisYaz(vt, kayit) {
     `INSERT INTO degisiklik_gecmisi (id, varlik_turu, varlik_id, islem, yapan, makine_id, zaman, onceki_json, sonraki_json, aciklama)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      randomUUID(), kayit.varlikTuru, kayit.varlikId, kayit.islem, kayit.yapan || varsayilanYapan(),
+      randomUUID(), kayit.varlikTuru, kayit.varlikId, kayit.islem, kayit.yapan || varsayilanYapan(vt),
       vt.metaOku('yerel_makine_id') ?? null, simdi(),
       kayit.onceki === undefined || kayit.onceki === null ? null : JSON.stringify(kayit.onceki),
       kayit.sonraki === undefined || kayit.sonraki === null ? null : JSON.stringify(kayit.sonraki),
@@ -546,6 +571,11 @@ export function testVerisiTurleriniListele(vt, projeId) {
   return vt.tumu('SELECT * FROM test_verisi_turleri WHERE proje_id = ? ORDER BY ad', [projeId]).map(turCevir);
 }
 
+/** Türü ve (ON DELETE CASCADE ile) o türün tüm profillerini siler. @param {Veritabani} vt @param {string} id */
+export function testVerisiTuruSil(vt, id) {
+  return silGenel(vt, 'test_verisi_turleri', id);
+}
+
 /** @param {Veritabani} vt @param {string} turId */
 function turGetir(vt, turId) {
   const s = hamSatir(vt, 'test_verisi_turleri', turId);
@@ -566,9 +596,11 @@ function testVerisiProfiliCevir(vt, s, cozulsun) {
     if (hassasAlanlar.includes(ad)) degerler[ad] = cozulsun && zarfMi(deger) ? coz(vt, deger) : null;
     else degerler[ad] = deger;
   }
+  // Değeri kayıtlı (boş olmayan) hassas alanlar — arayüz "kayıtlı" maskesini buna göre gösterir.
+  const doluHassasAlanlar = hassasAlanlar.filter((ad) => hamDegerler[ad] !== undefined && hamDegerler[ad] !== null && hamDegerler[ad] !== '');
   return {
     id: String(s.id), projeId: String(s.proje_id), turId: String(s.tur_id), ad: String(s.ad), degerler,
-    hassasAlanlar, olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
+    hassasAlanlar, doluHassasAlanlar, olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
   };
 }
 

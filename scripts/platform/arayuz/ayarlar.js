@@ -1,0 +1,651 @@
+// Ayarlar bölümleri: Proje ve ortamlar, Giriş profilleri, Bağlam profilleri, Test verisi,
+// Yedekleme, Güvenlik. Tüm veriler /platform/* uç noktalarından gelir; gizli değerler
+// (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
+// döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
+import {
+  adresGecerliMi, alan, alanHatasi, api, bildir, boyutMetni, geriSayim, h, mesajKutusu, mesgulIken, onayliDugme,
+  parolaAlani, tarihMetni, TOKEN, yeniKimlik
+} from './ortak.js';
+import { iceAktarmaAkisi } from './ice-aktarma.js';
+
+export const AYAR_BOLUMLERI = [
+  { ad: 'proje', etiket: 'Proje ve ortamlar' },
+  { ad: 'giris', etiket: 'Giriş profilleri' },
+  { ad: 'baglam', etiket: 'Bağlam profilleri' },
+  { ad: 'test-verisi', etiket: 'Test verisi' },
+  { ad: 'yedekleme', etiket: 'Yedekleme' },
+  { ad: 'guvenlik', etiket: 'Güvenlik' }
+];
+
+const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
+const TIP_SECENEKLERI = [
+  ['metin', 'Metin'], ['sayi', 'Sayı'], ['tarih', 'Tarih'], ['eposta', 'E-posta'], ['mantiksal', 'Evet / hayır']
+];
+const ISLEM_ETIKETI = {
+  olustur: 'Oluşturuldu', guncelle: 'Güncellendi', sil: 'Silindi',
+  birlestirme_cakismasi: 'Birleştirme çakışması', ice_aktarma_uzerine_yazildi: 'Yedekten üzerine yazıldı'
+};
+
+/**
+ * @param {HTMLElement} kapsayici
+ * @param {string} bolum
+ * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void> }} baglam
+ */
+export function ayarlarBolumu(kapsayici, bolum, baglam) {
+  const etiket = (AYAR_BOLUMLERI.find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0]).etiket;
+  const baslik = h('h2', { id: 'bolum-basligi', tabindex: '-1' }, etiket);
+  const govde = h('div', {}, h('p', { class: 'soluk' }, 'Yükleniyor…'));
+  kapsayici.replaceChildren(baslik, govde);
+  const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
+  const ciz = {
+    proje: projeVeOrtamlar, giris: girisProfilleri, baglam: baglamProfilleri,
+    'test-verisi': testVerisi, yedekleme, guvenlik
+  }[bolum] || projeVeOrtamlar;
+  Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
+    if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
+    govde.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)));
+  });
+}
+
+// ---- küçük yardımcılar ------------------------------------------------------------------
+
+function formPaneli(baslik, ...icerik) {
+  return h('form', { class: 'kart form-paneli', novalidate: true }, h('h3', {}, baslik), ...icerik);
+}
+
+function kayitListesi(ogeler, bosMetin) {
+  if (!ogeler.length) return h('p', { class: 'bos-liste' }, bosMetin);
+  return h('ul', { class: 'kayit-listesi' }, ogeler);
+}
+
+function kayitSatiri(baslik, meta, eylemler) {
+  return h('li', {},
+    h('div', { class: 'kayit-ana' }, h('strong', {}, baslik), meta ? h('div', { class: 'kayit-meta' }, meta) : null),
+    h('div', { class: 'kayit-eylemleri' }, eylemler));
+}
+
+function formuGoster(formAlani, form) {
+  formAlani.replaceChildren(form);
+  const ilk = form.querySelector('input:not([type="hidden"]):not([disabled]), select, textarea');
+  if (ilk) ilk.focus();
+  form.scrollIntoView({ block: 'nearest' });
+}
+
+const duzenleDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${ad}: düzenle`, onclick: fn }, 'Düzenle');
+const silDugmesi = (ad, fn) => onayliDugme('Sil', 'Silmeyi onayla', fn, { kucuk: true, etiket: `${ad}: sil` });
+const gecmisDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${ad}: değişiklik geçmişi`, onclick: fn }, 'Geçmiş');
+
+/** "kullanici@<makineId>" → "kullanici · <makine adı>" (makine adları yalnızca kasa açıkken gelir). */
+function yapanMetni(yapan, makineler, yerelMakineId) {
+  if (typeof yapan !== 'string') return '—';
+  if (yapan.startsWith('ice-aktarma:')) {
+    const id = yapan.slice('ice-aktarma:'.length);
+    return `Yedekten içe aktarma (${makineler[id] || 'bilinmeyen bilgisayar'})`;
+  }
+  const at = yapan.lastIndexOf('@');
+  if (at < 0) return yapan;
+  const kullanici = yapan.slice(0, at);
+  const id = yapan.slice(at + 1);
+  const makine = makineler[id] || (id === 'bilinmeyen-makine' ? 'bilinmeyen bilgisayar' : 'başka bir bilgisayar');
+  return `${kullanici} · ${makine}${id === yerelMakineId ? ' (bu bilgisayar)' : ''}`;
+}
+
+async function gecmisGoster(varlikTuru, varlikId, baslik, baglam) {
+  const { kayitlar, makineler } = await api(`/platform/gecmis?varlikTuru=${encodeURIComponent(varlikTuru)}&varlikId=${encodeURIComponent(varlikId)}`);
+  const kapat = h('button', { type: 'button', class: 'birincil' }, 'Kapat');
+  const dialog = h('dialog', { 'aria-labelledby': 'gecmis-basligi' },
+    h('h2', { id: 'gecmis-basligi' }, `Değişiklik geçmişi: ${baslik}`),
+    kayitlar.length
+      ? h('ul', { class: 'gecmis-listesi' }, [...kayitlar].reverse().map((k) => h('li', {},
+        h('strong', {}, ISLEM_ETIKETI[k.islem] || k.islem), ' — ', tarihMetni(k.zaman),
+        h('div', { class: 'soluk kucuk' }, yapanMetni(k.yapan, makineler, baglam.durum.sunucu && baglam.durum.sunucu.makineId)),
+        k.aciklama ? h('div', { class: 'kucuk' }, k.aciklama) : null)))
+      : h('p', { class: 'soluk' }, 'Kayıt yok.'),
+    h('div', { class: 'dugmeler' }, kapat));
+  kapat.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+  kapat.focus();
+}
+
+// ---------------------------------------------------------------------------------------
+// Proje ve ortamlar
+// ---------------------------------------------------------------------------------------
+
+async function projeVeOrtamlar(govde, baglam, yenile) {
+  const proje = baglam.durum.proje;
+  const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`);
+
+  const projeSecimi = baglam.durum.projeler.length > 1
+    ? alan('Etkin proje', h('select', { onchange: (o) => { baglam.projeSec(o.target.value); location.reload(); } },
+      baglam.durum.projeler.map((p) => h('option', { value: p.id, selected: p.id === proje.id }, p.ad))))
+    : null;
+
+  const ad = h('input', { type: 'text', value: proje.ad, autocomplete: 'off', maxlength: '120' });
+  const aciklama = h('textarea', { rows: '2', maxlength: '1000' });
+  aciklama.value = proje.aciklama || '';
+  const projeMesaj = mesajKutusu();
+  const projeKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Projeyi kaydet');
+  const projeFormu = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Proje'), projeSecimi, projeMesaj.kutu,
+    alan('Proje adı', ad, { zorunlu: true }), alan('Açıklama', aciklama), h('div', { class: 'dugmeler' }, projeKaydet));
+  projeFormu.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    alanHatasi(ad, '');
+    if (!ad.value.trim()) { alanHatasi(ad, 'Proje adı boş olamaz.'); ad.focus(); return; }
+    try {
+      await mesgulIken(projeKaydet, 'Kaydediliyor…', () => api('/platform/proje/kaydet', { govde: { id: proje.id, ad: ad.value, aciklama: aciklama.value } }));
+      await baglam.projeleriYenile();
+      bildir('Proje kaydedildi.');
+    } catch (hata) { projeMesaj.goster(hata.message); }
+  });
+
+  const formAlani = h('div', {});
+  const ortamFormu = (ortam) => {
+    const oAd = h('input', { type: 'text', autocomplete: 'off', value: ortam ? ortam.ad : '' });
+    const oAdres = h('input', { type: 'url', autocomplete: 'off', inputmode: 'url', placeholder: 'https://', value: ortam ? ortam.tabanUrl : '' });
+    const oVarsayilan = h('input', { type: 'checkbox', id: yeniKimlik('vars'), checked: ortam ? ortam.varsayilan : false });
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(ortam ? `Ortamı düzenle: ${ortam.ad}` : 'Yeni ortam', mesaj.kutu,
+      alan('Ortam adı', oAd, { zorunlu: true }), alan('Adres (link)', oAdres, { zorunlu: true }),
+      h('label', { class: 'secenek', for: oVarsayilan.id }, oVarsayilan, 'Varsayılan ortam (koşular bu ortamda başlar)'),
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      alanHatasi(oAd, ''); alanHatasi(oAdres, '');
+      if (!oAd.value.trim()) { alanHatasi(oAd, 'Ortam adı boş olamaz.'); oAd.focus(); return; }
+      if (!adresGecerliMi(oAdres.value.trim())) { alanHatasi(oAdres, 'Geçerli bir http(s) adresi girin.'); oAdres.focus(); return; }
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ortam/kaydet', {
+          govde: { id: ortam ? ortam.id : undefined, projeId: proje.id, ad: oAd.value.trim(), tabanUrl: oAdres.value.trim(), varsayilan: oVarsayilan.checked }
+        }));
+        bildir('Ortam kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(formAlani, form);
+  };
+
+  const satirlar = ortamlar.map((o) => kayitSatiri(
+    [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null],
+    o.tabanUrl,
+    [duzenleDugmesi(o.ad, () => ortamFormu(o)),
+      o.varsayilan
+        ? h('button', { type: 'button', class: 'kucuk-dugme', disabled: true, title: 'Varsayılan ortam silinemez; önce başka bir ortamı varsayılan yapın.' }, 'Sil')
+        : silDugmesi(o.ad, async () => { await api('/platform/ortam/sil', { govde: { id: o.id } }); bildir('Ortam silindi.'); yenile(); })]));
+
+  govde.replaceChildren(
+    h('p', { class: 'soluk' }, 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.'),
+    projeFormu,
+    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Ortamlar'),
+      h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, '+ Ortam ekle')),
+    formAlani,
+    kayitListesi(satirlar, 'Henüz ortam yok.'));
+}
+
+// ---------------------------------------------------------------------------------------
+// Giriş profilleri
+// ---------------------------------------------------------------------------------------
+
+async function girisProfilleri(govde, baglam, yenile) {
+  const proje = baglam.durum.proje;
+  const [{ profiller }, { ortamlar }] = await Promise.all([
+    api(`/platform/giris-profilleri?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
+  ]);
+  const ortamAdi = (id) => (id ? (ortamlar.find((o) => o.id === id) || { ad: 'silinmiş ortam' }).ad : 'Tüm ortamlar');
+  const formAlani = h('div', {});
+
+  const profilFormu = (p) => {
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '' });
+    const ortam = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'),
+      ortamlar.map((o) => h('option', { value: o.id, selected: p ? p.ortamId === o.id : false }, o.ad)));
+    const kullanici = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: p ? p.kullaniciAdi : '' });
+    const parola = parolaAlani('Parola', {
+      kayitli: p ? p.parola : null, zorunlu: !p,
+      gosterFn: p ? async () => (await api('/platform/giris-profili/goster', { govde: { id: p.id, alan: 'parola' } })).deger : null
+    });
+    const tur = p ? p.ikiAsamaliTur : 'yok';
+    const radyo = (deger, metin) => {
+      const r = h('input', { type: 'radio', name: 'iki-asamali', value: deger, id: yeniKimlik('iki'), checked: tur === deger });
+      return { r, etiket: h('label', { class: 'secenek', for: r.id }, r, metin) };
+    };
+    const rYok = radyo('yok', 'Yok');
+    const rTotp = radyo('totp', 'Authenticator uygulaması (gizli anahtar)');
+    const rSms = radyo('sms', 'SMS');
+    const totp = parolaAlani('Authenticator gizli anahtarı', {
+      kayitli: p ? p.totpGizli : null,
+      yardim: 'Authenticator kurulumunda gösterilen gizli anahtar (base32). Kodlar koşu sırasında bu anahtardan üretilir.',
+      gosterFn: p ? async () => (await api('/platform/giris-profili/goster', { govde: { id: p.id, alan: 'totpGizli' } })).deger : null
+    });
+    const smsYontem = p && p.sms && p.sms.yontem === 'elle' ? 'elle' : 'sabit';
+    const smsSabit = h('input', { type: 'radio', name: 'sms-yontem', value: 'sabit', id: yeniKimlik('sms'), checked: smsYontem === 'sabit' });
+    const smsElle = h('input', { type: 'radio', name: 'sms-yontem', value: 'elle', id: yeniKimlik('sms'), checked: smsYontem === 'elle' });
+    const smsKod = h('input', { type: 'text', autocomplete: 'off', inputmode: 'numeric', value: p && p.sms ? p.sms.kod : '' });
+    const totpAlani = h('div', { class: 'ic-alanlar' }, totp.kapsayici);
+    const smsAlani = h('div', { class: 'ic-alanlar' },
+      h('label', { class: 'secenek', for: smsSabit.id }, smsSabit, 'Sabit test kodu'),
+      alan('Test kodu', smsKod, { yardim: 'Test ortamının her girişte kabul ettiği sabit kod.' }),
+      h('label', { class: 'secenek', for: smsElle.id }, smsElle, 'Koşu sırasında elle girilir'));
+    const gorunurluk = () => {
+      totpAlani.hidden = !rTotp.r.checked;
+      smsAlani.hidden = !rSms.r.checked;
+      smsKod.disabled = !smsSabit.checked;
+    };
+    [rYok.r, rTotp.r, rSms.r, smsSabit, smsElle].forEach((r) => r.addEventListener('change', gorunurluk));
+    gorunurluk();
+
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(p ? `Giriş profilini düzenle: ${p.ad}` : 'Yeni giriş profili', mesaj.kutu,
+      alan('Profil adı', ad, { zorunlu: true, yardim: 'Ör. "Yönetici kullanıcı" veya "Salt okunur kullanıcı".' }),
+      alan('Ortam', ortam),
+      alan('Kullanıcı adı', kullanici, { zorunlu: true }),
+      parola.kapsayici,
+      h('fieldset', {}, h('legend', {}, 'İki aşamalı doğrulama'), rYok.etiket, rTotp.etiket, totpAlani, rSms.etiket, smsAlani),
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      mesaj.temizle();
+      [ad, kullanici, parola.girdi, totp.girdi, smsKod].forEach((g) => alanHatasi(g, ''));
+      if (!ad.value.trim()) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
+      if (!kullanici.value.trim()) { alanHatasi(kullanici, 'Kullanıcı adı boş olamaz.'); kullanici.focus(); return; }
+      if (!p && !parola.girdi.value) { alanHatasi(parola.girdi, 'Parola girin.'); parola.girdi.focus(); return; }
+      const secilenTur = rTotp.r.checked ? 'totp' : rSms.r.checked ? 'sms' : 'yok';
+      if (secilenTur === 'totp' && !totp.girdi.value && !(p && p.totpGizli.dolu)) { alanHatasi(totp.girdi, 'Gizli anahtarı girin.'); totp.girdi.focus(); return; }
+      if (secilenTur === 'sms' && smsSabit.checked && !smsKod.value.trim()) { alanHatasi(smsKod, 'Test kodunu girin veya "koşu sırasında elle girilir" seçin.'); smsKod.focus(); return; }
+      const istek = {
+        id: p ? p.id : undefined, projeId: proje.id, ad: ad.value.trim(), ortamId: ortam.value || null,
+        kullaniciAdi: kullanici.value.trim(), ikiAsamaliTur: secilenTur,
+        sms: { yontem: smsElle.checked ? 'elle' : 'sabit', kod: smsKod.value.trim() }
+      };
+      if (parola.girdi.value) istek.parola = parola.girdi.value;
+      if (secilenTur === 'totp' && totp.girdi.value) istek.totpGizli = totp.girdi.value.replace(/\s+/g, '');
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/giris-profili/kaydet', { govde: istek }));
+        bildir('Giriş profili kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(formAlani, form);
+  };
+
+  const satirlar = profiller.map((p) => kayitSatiri(p.ad,
+    [`${ortamAdi(p.ortamId)} · ${p.kullaniciAdi} · Parola: ${p.parola.dolu ? `${p.parola.maske} kayıtlı` : 'yok'} · İki aşamalı: ${IKI_ASAMALI_ETIKET[p.ikiAsamaliTur] || p.ikiAsamaliTur}`,
+      p.ikiAsamaliTur === 'sms' ? (p.sms.yontem === 'elle' ? ' (elle girilir)' : ' (sabit test kodu)') : ''],
+    [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('giris_profili', p.id, p.ad, baglam)),
+      silDugmesi(p.ad, async () => { await api('/platform/giris-profili/sil', { govde: { id: p.id } }); bildir('Giriş profili silindi.'); yenile(); })]));
+
+  govde.replaceChildren(
+    h('p', { class: 'soluk' }, 'Testlerin sisteme giriş yaparken kullanacağı hesaplar. Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.'),
+    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Profiller'),
+      h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Giriş profili ekle')),
+    formAlani,
+    kayitListesi(satirlar, 'Henüz giriş profili yok.'));
+}
+
+// ---------------------------------------------------------------------------------------
+// Bağlam profilleri (tür adı projeye özgü serbest metin)
+// ---------------------------------------------------------------------------------------
+
+async function baglamProfilleri(govde, baglam, yenile) {
+  const proje = baglam.durum.proje;
+  const { profiller, turler } = await api(`/platform/baglam-profilleri?projeId=${encodeURIComponent(proje.id)}`);
+  const formAlani = h('div', {});
+  const turListesiId = yeniKimlik('turler');
+
+  const profilFormu = (p) => {
+    const tur = h('input', { type: 'text', autocomplete: 'off', list: turListesiId, value: p ? p.tur : '' });
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '' });
+    const satirlar = [];
+    const satirKutusu = h('div', {});
+    const satirEkle = (anahtar = '', deger = '') => {
+      const a = h('input', { type: 'text', autocomplete: 'off', value: anahtar });
+      const d = h('input', { type: 'text', autocomplete: 'off', value: deger });
+      const s = { a, d, el: null };
+      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
+      s.el = h('div', { class: 'anahtar-deger-satiri' }, alan('Alan adı', a), alan('Değer', d), kaldir);
+      satirlar.push(s);
+      satirKutusu.append(s.el);
+      return s;
+    };
+    for (const [k, v] of Object.entries((p && p.alanlar) || {})) satirEkle(k, typeof v === 'string' ? v : JSON.stringify(v));
+    if (!satirlar.length) satirEkle();
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(p ? `Bağlam profilini düzenle: ${p.ad}` : 'Yeni bağlam profili', mesaj.kutu,
+      alan('Tür', tur, { zorunlu: true, yardim: 'Projenize özgü bağlam türü; ör. Rol, Şube, Müşteri tipi. Var olan bir türü seçebilir ya da yenisini yazabilirsiniz.' }),
+      h('datalist', { id: turListesiId }, turler.map((t) => h('option', { value: t }))),
+      alan('Profil adı', ad, { zorunlu: true }),
+      h('fieldset', {}, h('legend', {}, 'Alanlar'), h('p', { class: 'soluk kucuk' }, 'Alan değerleri kasada şifreli saklanır.'), satirKutusu,
+        h('button', { type: 'button', onclick: () => satirEkle().a.focus() }, '+ Alan ekle')),
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      mesaj.temizle();
+      alanHatasi(tur, ''); alanHatasi(ad, '');
+      if (!tur.value.trim()) { alanHatasi(tur, 'Tür boş olamaz.'); tur.focus(); return; }
+      if (!ad.value.trim()) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
+      const alanlar = {};
+      for (const s of satirlar) {
+        alanHatasi(s.a, '');
+        const k = s.a.value.trim();
+        if (!k && !s.d.value.trim()) continue;
+        if (!k) { alanHatasi(s.a, 'Alan adı boş olamaz.'); s.a.focus(); return; }
+        if (k in alanlar) { alanHatasi(s.a, 'Bu alan adı tekrar ediyor.'); s.a.focus(); return; }
+        alanlar[k] = s.d.value;
+      }
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/baglam-profili/kaydet', {
+          govde: { id: p ? p.id : undefined, projeId: proje.id, tur: tur.value.trim(), ad: ad.value.trim(), alanlar }
+        }));
+        bildir('Bağlam profili kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(formAlani, form);
+  };
+
+  const gruplar = turler.map((t) => h('section', { 'aria-label': t },
+    h('h4', {}, t, ' ', h('span', { class: 'rozet' }, String(profiller.filter((p) => p.tur === t).length))),
+    kayitListesi(profiller.filter((p) => p.tur === t).map((p) => kayitSatiri(p.ad,
+      Object.keys(p.alanlar || {}).length ? `Alanlar: ${Object.keys(p.alanlar).join(', ')}` : 'Alan yok',
+      [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('baglam_profili', p.id, p.ad, baglam)),
+        silDugmesi(p.ad, async () => { await api('/platform/baglam-profili/sil', { govde: { id: p.id } }); bildir('Bağlam profili silindi.'); yenile(); })])), '')));
+
+  govde.replaceChildren(
+    h('p', { class: 'soluk' }, 'Testlerin hangi bağlamda (ör. rol, şube, müşteri tipi) çalışacağını tanımlayan profiller. Tür adlarını projeniz belirler.'),
+    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Profiller'),
+      h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Bağlam profili ekle')),
+    formAlani,
+    ...(gruplar.length ? gruplar : [h('p', { class: 'bos-liste' }, 'Henüz bağlam profili yok.')]));
+}
+
+// ---------------------------------------------------------------------------------------
+// Test verisi türleri ve profilleri
+// ---------------------------------------------------------------------------------------
+
+async function testVerisi(govde, baglam, yenile) {
+  const proje = baglam.durum.proje;
+  const [{ turler }, { profiller }] = await Promise.all([
+    api(`/platform/test-verisi-turleri?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`)
+  ]);
+  const turFormAlani = h('div', {});
+  const profilFormAlani = h('div', {});
+
+  const turFormu = (t) => {
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: t ? t.ad : '' });
+    const satirlar = [];
+    const kutu = h('div', {});
+    const profilVar = t ? profiller.some((p) => p.turId === t.id) : false;
+    const satirEkle = (a = { ad: '', etiket: '', tip: 'metin', hassas: false }, mevcut = false) => {
+      const adG = h('input', { type: 'text', autocomplete: 'off', value: a.ad, spellcheck: 'false' });
+      const etiketG = h('input', { type: 'text', autocomplete: 'off', value: a.etiket === a.ad ? '' : a.etiket });
+      const tipG = h('select', {}, TIP_SECENEKLERI.map(([d, m]) => h('option', { value: d, selected: a.tip === d }, m)));
+      const hassasG = h('input', { type: 'checkbox', id: yeniKimlik('hassas'), checked: a.hassas, disabled: mevcut && profilVar });
+      const s = { adG, etiketG, tipG, hassasG, el: null };
+      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
+      s.el = h('div', { class: 'tur-alan-satiri' }, alan('Alan adı', adG), alan('Etiket', etiketG), alan('Tip', tipG),
+        h('label', { class: 'secenek', for: hassasG.id, title: mevcut && profilVar ? 'Bu türde profil varken hassaslık değiştirilemez.' : null }, hassasG, 'Hassas'), kaldir);
+      satirlar.push(s);
+      kutu.append(s.el);
+      return s;
+    };
+    for (const a of (t && t.alanlar) || []) satirEkle(a, true);
+    if (!satirlar.length) satirEkle();
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(t ? `Türü düzenle: ${t.ad}` : 'Yeni test verisi türü', mesaj.kutu,
+      alan('Tür adı', ad, { zorunlu: true, yardim: 'Ör. Müşteri, Adres, Kart.' }),
+      h('fieldset', {}, h('legend', {}, 'Alanlar'),
+        h('p', { class: 'soluk kucuk' }, 'Hassas işaretli alanların değerleri kasada şifreli saklanır ve maskeli gösterilir.'),
+        kutu, h('button', { type: 'button', onclick: () => satirEkle().adG.focus() }, '+ Alan ekle')),
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => turFormAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      mesaj.temizle();
+      alanHatasi(ad, '');
+      if (!ad.value.trim()) { alanHatasi(ad, 'Tür adı boş olamaz.'); ad.focus(); return; }
+      const alanlar = [];
+      for (const s of satirlar) {
+        alanHatasi(s.adG, '');
+        const a = s.adG.value.trim();
+        if (!a) { if (s.etiketG.value.trim()) { alanHatasi(s.adG, 'Alan adı boş olamaz.'); s.adG.focus(); return; } continue; }
+        if (alanlar.some((x) => x.ad === a)) { alanHatasi(s.adG, 'Bu alan adı tekrar ediyor.'); s.adG.focus(); return; }
+        alanlar.push({ ad: a, etiket: s.etiketG.value.trim() || a, tip: s.tipG.value, hassas: s.hassasG.checked });
+      }
+      if (!alanlar.length) { mesaj.goster('En az bir alan ekleyin.'); return; }
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/test-verisi-turu/kaydet', {
+          govde: { id: t ? t.id : undefined, projeId: proje.id, ad: ad.value.trim(), alanlar }
+        }));
+        bildir('Test verisi türü kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(turFormAlani, form);
+  };
+
+  const profilFormu = (p, varsayilanTurId) => {
+    const turSecimi = h('select', { disabled: Boolean(p) }, turler.map((t) => h('option', { value: t.id, selected: (p ? p.turId : varsayilanTurId) === t.id }, t.ad)));
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '' });
+    const alanKutusu = h('div', {});
+    let girdiler = [];
+    const alanlariCiz = () => {
+      const tur = turler.find((t) => t.id === turSecimi.value);
+      girdiler = [];
+      alanKutusu.replaceChildren();
+      for (const a of (tur && tur.alanlar) || []) {
+        const mevcut = p ? p.degerler[a.ad] : undefined;
+        if (a.hassas) {
+          const pa = parolaAlani(a.etiket, {
+            kayitli: mevcut && typeof mevcut === 'object' ? mevcut : null,
+            gosterFn: p ? async () => (await api('/platform/test-verisi-profili/goster', { govde: { id: p.id, alan: a.ad } })).deger : null
+          });
+          girdiler.push({ alan: a, girdi: pa.girdi, hassas: true });
+          alanKutusu.append(pa.kapsayici);
+          continue;
+        }
+        let girdi;
+        if (a.tip === 'mantiksal') {
+          girdi = h('input', { type: 'checkbox', id: yeniKimlik('tv'), checked: mevcut === true });
+          alanKutusu.append(h('div', { class: 'alan' }, h('label', { class: 'secenek', for: girdi.id }, girdi, a.etiket)));
+        } else {
+          const tip = { sayi: 'number', tarih: 'date', eposta: 'email' }[a.tip] || 'text';
+          girdi = h('input', { type: tip, autocomplete: 'off', value: mevcut === undefined || mevcut === null ? '' : String(mevcut) });
+          alanKutusu.append(alan(a.etiket, girdi));
+        }
+        girdiler.push({ alan: a, girdi, hassas: false });
+      }
+      if (!girdiler.length) alanKutusu.append(h('p', { class: 'soluk' }, 'Bu türde alan yok.'));
+    };
+    turSecimi.addEventListener('change', alanlariCiz);
+    alanlariCiz();
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(p ? `Test verisi profilini düzenle: ${p.ad}` : 'Yeni test verisi profili', mesaj.kutu,
+      alan('Tür', turSecimi), alan('Profil adı', ad, { zorunlu: true }), alanKutusu,
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => profilFormAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      mesaj.temizle();
+      alanHatasi(ad, '');
+      if (!ad.value.trim()) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
+      const degerler = {};
+      for (const g of girdiler) {
+        if (g.hassas) { if (g.girdi.value) degerler[g.alan.ad] = g.girdi.value; continue; }
+        if (g.alan.tip === 'mantiksal') degerler[g.alan.ad] = g.girdi.checked;
+        else if (g.alan.tip === 'sayi') degerler[g.alan.ad] = g.girdi.value === '' ? null : Number(g.girdi.value);
+        else degerler[g.alan.ad] = g.girdi.value;
+      }
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/test-verisi-profili/kaydet', {
+          govde: { id: p ? p.id : undefined, projeId: proje.id, turId: turSecimi.value, ad: ad.value.trim(), degerler }
+        }));
+        bildir('Test verisi profili kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(profilFormAlani, form);
+  };
+
+  const turSatirlari = turler.map((t) => kayitSatiri(t.ad,
+    `${t.alanlar.length} alan: ${t.alanlar.map((a) => `${a.etiket}${a.hassas ? ' (hassas)' : ''}`).join(', ')}`,
+    [duzenleDugmesi(t.ad, () => turFormu(t)),
+      onayliDugme('Sil', 'Tür ve profilleri silinsin', async () => {
+        await api('/platform/test-verisi-turu/sil', { govde: { id: t.id } }); bildir('Test verisi türü silindi.'); yenile();
+      }, { kucuk: true, etiket: `${t.ad}: sil (bu türün tüm profilleri de silinir)` })]));
+  const turAdi = (id) => (turler.find((t) => t.id === id) || { ad: '?' }).ad;
+  const profilSatirlari = profiller.map((p) => kayitSatiri(p.ad,
+    [`Tür: ${turAdi(p.turId)} · `, Object.entries(p.degerler).map(([k, v]) => `${k}: ${v && typeof v === 'object' ? (v.dolu ? v.maske : '—') : v === null || v === '' ? '—' : String(v)}`).join(', ')],
+    [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('test_verisi_profili', p.id, p.ad, baglam)),
+      silDugmesi(p.ad, async () => { await api('/platform/test-verisi-profili/sil', { govde: { id: p.id } }); bildir('Test verisi profili silindi.'); yenile(); })]));
+
+  govde.replaceChildren(
+    h('p', { class: 'soluk' }, 'Testlerin kullanacağı veri kalıpları (türler) ve bu kalıplara göre doldurulmuş kayıtlar (profiller).'),
+    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Türler'),
+      h('button', { type: 'button', class: 'birincil', onclick: () => turFormu(null) }, '+ Tür ekle')),
+    turFormAlani,
+    kayitListesi(turSatirlari, 'Henüz test verisi türü yok.'),
+    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Profiller'),
+      h('button', { type: 'button', class: 'birincil', disabled: !turler.length, title: turler.length ? null : 'Önce bir tür ekleyin.', onclick: () => profilFormu(null, turler[0] && turler[0].id) }, '+ Profil ekle')),
+    profilFormAlani,
+    kayitListesi(profilSatirlari, turler.length ? 'Henüz test verisi profili yok.' : 'Profil eklemek için önce bir tür tanımlayın.'));
+}
+
+// ---------------------------------------------------------------------------------------
+// Yedekleme
+// ---------------------------------------------------------------------------------------
+
+async function yedekleme(govde, baglam, yenile) {
+  const { klasor, dosyalar } = await api('/platform/yedek/otomatik-liste');
+
+  // Dışa aktar
+  const parola = parolaAlani('Kasa parolası', { zorunlu: true, otomatik: 'current-password', yardim: 'Yedeği indirmeden önce parolayı yeniden girin. Yedek dosyası bu parolayla şifrelenir.' });
+  const disaMesaj = mesajKutusu();
+  const indir = h('button', { type: 'submit', class: 'birincil' }, 'Yedeği indir');
+  const disaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Dışa aktar'),
+    h('p', { class: 'soluk' }, 'Tüm proje verisini tek bir şifreli .tayedek dosyası olarak indirir. Dosyayı başka bir bilgisayarda "Yedek yükle" ile açabilirsiniz.'),
+    disaMesaj.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, indir));
+  let durdur = () => {};
+  disaForm.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    disaMesaj.temizle();
+    alanHatasi(parola.girdi, '');
+    if (!parola.girdi.value) { alanHatasi(parola.girdi, 'Parolayı girin.'); parola.girdi.focus(); return; }
+    await mesgulIken(indir, 'Hazırlanıyor…', async () => {
+      const yanit = await fetch('/platform/yedek/disa-aktar', {
+        method: 'POST', cache: 'no-store',
+        headers: { 'Content-Type': 'application/json', 'X-Test-Sunucu-Token': TOKEN },
+        body: JSON.stringify({ token: TOKEN, parola: parola.girdi.value })
+      });
+      if (!yanit.ok) {
+        const veri = await yanit.json().catch(() => ({}));
+        if (yanit.status === 423) { window.dispatchEvent(new CustomEvent('kasa-kilitli', { detail: veri.mesaj })); return; }
+        if (yanit.status === 429 && veri.bekleSaniye) {
+          durdur();
+          durdur = geriSayim(veri.bekleSaniye, (k) => disaMesaj.goster(k > 0 ? `Art arda yanlış parola girildi. ${k} saniye sonra tekrar deneyebilirsiniz.` : 'Şimdi tekrar deneyebilirsiniz.'));
+          return;
+        }
+        disaMesaj.goster(veri.mesaj || `Yedek alınamadı (${yanit.status}).`);
+        return;
+      }
+      const ad = /filename="([^"]+)"/.exec(yanit.headers.get('Content-Disposition') || '');
+      const blob = await yanit.blob();
+      const url = URL.createObjectURL(blob);
+      const a = h('a', { href: url, download: ad ? ad[1] : 'platform-yedek.tayedek', hidden: true });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      parola.girdi.value = '';
+      disaMesaj.goster(`Yedek indirildi (${boyutMetni(blob.size)}).`, 'basari');
+    });
+  });
+
+  // İçe aktar
+  const iceAlani = h('div', {});
+  const iceBaslat = h('button', { type: 'button', class: 'birincil' }, 'Yedek dosyası seç…');
+  const iceKart = h('div', { class: 'kart' }, h('h3', {}, 'İçe aktar'),
+    h('p', { class: 'soluk' }, 'Bir yedekteki kayıtları bu bilgisayardakilerle karşılaştırır; neyin ekleneceğini ve değişeceğini seçersiniz. Bu bilgisayardaki kayıtlar silinmez.'),
+    h('div', { class: 'dugmeler' }, iceBaslat));
+  const digerKartlar = () => [disaForm, otomatikKart];
+  iceBaslat.addEventListener('click', () => {
+    iceKart.hidden = true;
+    for (const k of digerKartlar()) k.hidden = true;
+    iceAktarmaAkisi(iceAlani, {
+      mod: 'ayarlar',
+      bitti: async () => { await baglam.projeleriYenile(); yenile(); },
+      vazgec: () => { iceAlani.replaceChildren(); iceKart.hidden = false; for (const k of digerKartlar()) k.hidden = false; iceBaslat.focus(); }
+    });
+  });
+
+  // Otomatik yedekler
+  const simdi = h('button', { type: 'button' }, 'Şimdi yedek al');
+  simdi.addEventListener('click', async () => {
+    try {
+      await mesgulIken(simdi, 'Yedek alınıyor…', () => api('/platform/yedek/otomatik', { govde: {} }));
+      bildir('Yedek alındı.');
+      yenile();
+    } catch (hata) { bildir(hata.message, 'hata'); }
+  });
+  const liste = kayitListesi(dosyalar.map((d) => kayitSatiri(d.ad, `${tarihMetni(d.zaman)} · ${boyutMetni(d.boyut)}${d.otomatik ? '' : ' · elle alınmış'}`, [])),
+    'Henüz yerel yedek yok.');
+
+  const otomatikKart = h('div', { class: 'kart' }, h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Otomatik yedekler'), simdi),
+    h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; en yeni 30 otomatik yedek saklanır.'),
+    h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
+    liste);
+  govde.replaceChildren(disaForm, iceKart, iceAlani, otomatikKart);
+}
+
+// ---------------------------------------------------------------------------------------
+// Güvenlik
+// ---------------------------------------------------------------------------------------
+
+async function guvenlik(govde, baglam) {
+  const kilitle = h('button', { type: 'button' }, 'Kasayı kilitle');
+  kilitle.addEventListener('click', async () => {
+    await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
+    bildir('Kasa kilitlendi.');
+    baglam.yonlendir();
+  });
+
+  const eski = parolaAlani('Mevcut parola', { zorunlu: true, otomatik: 'current-password' });
+  const yeni1 = parolaAlani('Yeni parola', { zorunlu: true, otomatik: 'new-password', yardim: 'En az 8 karakter. Tüm şifreli değerler yeni parolayla yeniden şifrelenir.' });
+  const yeni2 = parolaAlani('Yeni parola (tekrar)', { zorunlu: true, otomatik: 'new-password' });
+  const mesaj = mesajKutusu();
+  const degistir = h('button', { type: 'submit', class: 'birincil' }, 'Parolayı değiştir');
+  const form = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Parolayı değiştir'),
+    h('div', { class: 'not-kutusu uyari' }, h('p', {}, 'Yeni parolayı unutursanız veriler kurtarılamaz. Daha önce alınmış yedekler eski parolayla açılmaya devam eder.')),
+    mesaj.kutu, eski.kapsayici, yeni1.kapsayici, yeni2.kapsayici, h('div', { class: 'dugmeler' }, degistir));
+  let durdur = () => {};
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    [eski.girdi, yeni1.girdi, yeni2.girdi].forEach((g) => alanHatasi(g, ''));
+    if (!eski.girdi.value) { alanHatasi(eski.girdi, 'Mevcut parolayı girin.'); eski.girdi.focus(); return; }
+    if ([...yeni1.girdi.value].length < 8) { alanHatasi(yeni1.girdi, 'Yeni parola en az 8 karakter olmalıdır.'); yeni1.girdi.focus(); return; }
+    if (yeni1.girdi.value !== yeni2.girdi.value) { alanHatasi(yeni2.girdi, 'Parolalar aynı değil.'); yeni2.girdi.focus(); return; }
+    try {
+      await mesgulIken(degistir, 'Değiştiriliyor…', () => api('/platform/kasa/parola-degistir', { govde: { eskiParola: eski.girdi.value, yeniParola: yeni1.girdi.value } }));
+      [eski.girdi, yeni1.girdi, yeni2.girdi].forEach((g) => { g.value = ''; });
+      mesaj.goster('Parola değiştirildi.', 'basari');
+    } catch (hata) {
+      if (hata.durum === 429 && hata.bekleSaniye) {
+        durdur();
+        durdur = geriSayim(hata.bekleSaniye, (k) => mesaj.goster(k > 0 ? `Art arda yanlış parola girildi. ${k} saniye sonra tekrar deneyebilirsiniz.` : 'Şimdi tekrar deneyebilirsiniz.'));
+        return;
+      }
+      mesaj.goster(hata.message);
+    }
+  });
+
+  govde.replaceChildren(
+    h('div', { class: 'kart' }, h('h3', {}, 'Kasayı kilitle'),
+      h('p', { class: 'soluk' }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.'),
+      h('div', { class: 'dugmeler' }, kilitle)),
+    form);
+}

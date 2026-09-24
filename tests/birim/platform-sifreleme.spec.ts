@@ -129,7 +129,7 @@ async function ornekVeri(vt: Veritabani): Promise<{ proje: string; ortam: string
 
 test.describe('Genişletilmiş şifreleme (şema v2)', () => {
   test('SIFRELI_ALANLAR tek kaynak: beklenen sütunlar, gizli olanlar HASSAS_SUTUNLAR ile aynı', () => {
-    expect(GUNCEL_SEMA_SURUMU).toBe(2);
+    expect(GUNCEL_SEMA_SURUMU).toBe(3);
     expect(Object.fromEntries(Object.entries(SIFRELI_ALANLAR).map(([t, a]) => [t, Object.keys(a).sort()]))).toEqual({
       makineler: ['ad'],
       ayarlar: ['deger_json'],
@@ -210,8 +210,8 @@ test.describe('Genişletilmiş şifreleme (şema v2)', () => {
 
       // Yeni sürümle açılış: v2 göçü uygulanır; kasa kilitli olduğu için düz metin henüz duruyor.
       const vt = await veritabaniniHazirla(yol);
-      expect(mevcutSemaSurumu(vt)).toBe(2);
-      expect(platformDurumOzeti(vt)).toMatchObject({ semaSurumu: 2, sifreliAlanGocu: 'bekliyor', kasa: { olusturuldu: true, acik: false } });
+      expect(mevcutSemaSurumu(vt)).toBe(GUNCEL_SEMA_SURUMU);
+      expect(platformDurumOzeti(vt)).toMatchObject({ semaSurumu: GUNCEL_SEMA_SURUMU, sifreliAlanGocu: 'bekliyor', kasa: { olusturuldu: true, acik: false } });
       expect(await kasaHatasiKodu(() => ortamlariListele(vt, 'p1'))).toBe('KASA_KILITLI');
 
       await kasaAc(vt, PAROLA);

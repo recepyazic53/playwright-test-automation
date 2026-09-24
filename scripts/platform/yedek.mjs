@@ -35,7 +35,7 @@ import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { atomikIkiliYaz } from './veritabani/baglanti.mjs';
 import { GUNCEL_SEMA_SURUMU, TABLOLAR, mevcutSemaSurumu } from './veritabani/gocler.mjs';
-import { sayimlar, yerelMakine } from './veritabani/depo.mjs';
+import { gecmisYapaniniNormallestir, sayimlar, yerelMakine } from './veritabani/depo.mjs';
 import {
   KasaHatasi, acikAnahtar, anahtarDogrulayiciyaUyarMi, anahtarTuret, kasaDurumu, kasaKdfOku, kasayiAnahtarlaAc, zarfMi
 } from './kasa.mjs';
@@ -334,7 +334,11 @@ export async function yedekIceAktar(vt, dosya, parola, secenekler) {
       guvenlikYedegi = otomatikYedekAl(vt, { klasor: secenekler.guvenlikYedegiKlasoru }).dosya;
     }
     ilerleme('yazılıyor', 60);
-    tamYukleYaz(vt, yedek.tablolar, yedek.kasa, yedek.kasaAnahtari, ilerleme);
+    // Şema < 3 yedeği: geçmişteki "yapan" düz metin makine adı taşıyabilir (bkz. göç 3).
+    const tablolar = yedek.manifest.semaSurumu < 3 && yedek.tablolar.degisiklik_gecmisi
+      ? { ...yedek.tablolar, degisiklik_gecmisi: yedek.tablolar.degisiklik_gecmisi.map(gecmisYapaniniNormallestir) }
+      : yedek.tablolar;
+    tamYukleYaz(vt, tablolar, yedek.kasa, yedek.kasaAnahtari, ilerleme);
     ilerleme('tamamlandı', 100);
     return { mod: /** @type {'tamYukle'} */ ('tamYukle'), manifest: yedek.manifest, sayimlar: sayimlar(vt), guvenlikYedegi };
   } finally {

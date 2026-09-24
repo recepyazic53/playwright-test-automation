@@ -25,7 +25,8 @@
     "hata:ozet:canli": "node scripts/urun-hata-raporu.mjs canli",
     "rapor:test": "npm run allure:generate:test && node scripts/urun-hata-raporu.mjs test && node scripts/dosya-ac.mjs dashboard-test.html && npm run allure:open:test",
     "rapor:canli": "npm run allure:generate:canli && node scripts/urun-hata-raporu.mjs canli && node scripts/dosya-ac.mjs dashboard-canli.html && npm run allure:open:canli",
-    "test-sunucu": "node scripts/test-sunucu.mjs"
+    "test-sunucu": "node scripts/test-sunucu.mjs",
+    "baslat": "node scripts/baslat.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

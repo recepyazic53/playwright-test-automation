@@ -7,6 +7,20 @@
 //   GET  /platform/yedek/ice-aktar/<id>         ilerleme; hazır olunca önizleme (yeni/degisen/yalnizBurada)
 //   POST /platform/yedek/ice-aktar/<id>/uygula  { token, tumu: true } veya { token, secimler: { tablo: [id] } }
 //   POST /platform/yedek/ice-aktar/<id>/iptal   { token }
+// Ayarlar (proje/ortam/profil CRUD) uç noktaları — hepsi kasa AÇIK olmayı gerektirir
+// (kilitliyse 423 KASA_KILITLI, kasa yoksa 409 KASA_YOK):
+//   GET  /platform/projeler | ortamlar | giris-profilleri | baglam-profilleri |
+//        test-verisi-turleri | test-verisi-profilleri   (?projeId=...)
+//   GET  /platform/gecmis?varlikTuru=&varlikId=           (yapan + makine adları eşlemesi)
+//   GET  /platform/yedek/otomatik-liste
+//   POST /platform/<varlik>/kaydet | /sil                 (varlik: proje, ortam, giris-profili,
+//        baglam-profili, test-verisi-turu, test-verisi-profili)
+//   POST /platform/giris-profili/goster, /platform/test-verisi-profili/goster
+//        — AÇIK göster: tek bir gizli değeri düz metin döner (yalnızca kullanıcı isteyince).
+// Gizli değerler (giriş parolası, TOTP anahtarı, hassas test verisi alanları) listelerde ve
+// kaydet yanıtlarında ASLA dönmez: { dolu: true|false, maske: '••••••' } döner. Kaydederken
+// alan gönderilmezse (veya boşsa) mevcut değer korunur.
+//
 // Kasa kilitliyken şifreli sütunlar (ortam adresleri, ayarlar...) okunamaz; /platform/durum
 // yalnızca gizli olmayan durum bilgisini döner ve kasa kilitliyken de çalışır.
 // Kaba kuvvet koruması: art arda yanlış kasa/yedek parolasında artan bekleme (1,2,4...30 sn).
@@ -18,18 +32,25 @@
 // (encodeURIComponent ile) gelir; URL'de parola kabul edilmez. Parola/anahtar ASLA loglanmaz,
 // yanıtlarda dönmez.
 
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { hostname } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { veritabaniYolu as veritabaniYoluCoz } from './veritabani/baglanti.mjs';
 import { GUNCEL_SEMA_SURUMU } from './veritabani/gocler.mjs';
-import { DepoHatasi, platformDurumOzeti, veritabaniniHazirla, yerelMakine } from './veritabani/depo.mjs';
 import {
-  KasaHatasi, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, kasaAc, kasaAcikMi, kasaDurumu, kasaKilitle, kasaOlustur, parolaDegistir, parolayiDogrula
+  DepoHatasi, baglamProfiliKaydet, baglamProfiliSil, baglamProfilleriniListele, degisiklikGecmisiListele,
+  girisProfiliGetir, girisProfiliKaydet, girisProfiliSil, girisProfilleriniListele, makineleriListele, ortamGetir,
+  ortamKaydet, ortamSil, ortamlariListele, platformDurumOzeti, projeGetir, projeKaydet, projeleriListele,
+  testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiProfiliSil, testVerisiProfilleriniListele,
+  testVerisiTuruKaydet, testVerisiTuruSil, testVerisiTurleriniListele, veritabaniniHazirla, yerelMakine
+} from './veritabani/depo.mjs';
+import {
+  KasaHatasi, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, acikAnahtar, kasaAc, kasaAcikMi, kasaDurumu, kasaKilitle, kasaOlustur,
+  parolaDegistir, parolayiDogrula
 } from './kasa.mjs';
-import { YEDEK_UZANTISI, YedekHatasi, otomatikYedekAl, yedekOlustur } from './yedek.mjs';
-import { IceAktarmaYoneticisi } from './ice-aktarma.mjs';
+import { YEDEK_UZANTISI, YedekHatasi, otomatikYedekAl, varsayilanYedekKlasoru, yedekOlustur } from './yedek.mjs';
+import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 export const YEDEK_YUKLEME_SINIRI = 500 * 1024 * 1024;
@@ -112,6 +133,174 @@ function dosyaZamani(t) {
   return t.toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').replace('T', '-');
 }
 
+// ---------------------------------------------------------------------------------------
+// Ayarlar CRUD (kasa açık olmalı). Gizli değerler maskelenir.
+// ---------------------------------------------------------------------------------------
+
+/** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
+
+/** Kasa açık veritabanı; değilse KasaHatasi (KASA_YOK / KASA_KILITLI). */
+async function acikVeritabani() {
+  const db = await platformVeritabani();
+  if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
+  acikAnahtar(db);
+  return db;
+}
+
+/** @param {boolean} dolu */
+const maskeli = (dolu) => ({ dolu, maske: dolu ? MASKE : '' });
+/** @param {unknown} d */
+const metinAl = (d) => (typeof d === 'string' ? d : '');
+/** @param {unknown} d */
+const secimliMetin = (d) => (typeof d === 'string' && d !== '' ? d : undefined);
+/** @param {unknown} d @param {string} alan */
+function kimlikAl(d, alan = 'id') {
+  if (typeof d !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(d)) throw new DepoHatasi(`"${alan}" geçersiz.`);
+  return d;
+}
+/** @param {unknown} d */
+const secimliKimlik = (d) => (d === undefined || d === null || d === '' ? undefined : kimlikAl(d));
+
+/** @param {import('./veritabani/depo.mjs').GirisProfili} p */
+function girisProfiliGorunumu(p) {
+  const sms = /** @type {Record<string, unknown>} */ (p.smsAyari ?? {});
+  return {
+    id: p.id, projeId: p.projeId, ortamId: p.ortamId, ad: p.ad, kullaniciAdi: p.kullaniciAdi, ikiAsamaliTur: p.ikiAsamaliTur,
+    parola: maskeli(p.parolaVar), totpGizli: maskeli(p.totpGizliVar),
+    // SMS: "sabit" = sabit test kodu (şifreli sütunda, gizli değil), "elle" = koşu sırasında elle girilir.
+    sms: { yontem: sms.yontem === 'elle' ? 'elle' : sms.yontem === 'sabit' ? 'sabit' : null, kod: typeof sms.kod === 'string' ? sms.kod : '' },
+    guncellenme: p.guncellenme
+  };
+}
+
+/** @param {import('./veritabani/depo.mjs').TestVerisiProfili} p */
+function testVerisiProfiliGorunumu(p) {
+  /** @type {Record<string, unknown>} */
+  const degerler = {};
+  for (const [ad, deger] of Object.entries(p.degerler)) {
+    degerler[ad] = p.hassasAlanlar.includes(ad) ? maskeli(p.doluHassasAlanlar.includes(ad)) : deger;
+  }
+  for (const ad of p.doluHassasAlanlar) if (!(ad in degerler)) degerler[ad] = maskeli(true);
+  return { id: p.id, projeId: p.projeId, turId: p.turId, ad: p.ad, degerler, hassasAlanlar: p.hassasAlanlar, guncellenme: p.guncellenme };
+}
+
+/** @type {Map<string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>>} */
+const GET_UCLARI = new Map([
+  ['/platform/projeler', (db) => ({ projeler: projeleriListele(db).map((p) => ({ id: p.id, ad: p.ad, aciklama: p.aciklama })) })],
+  ['/platform/ortamlar', (db, q) => ({ ortamlar: ortamlariListele(db, kimlikAl(q.get('projeId'), 'projeId')) })],
+  ['/platform/giris-profilleri', (db, q) => ({
+    profiller: girisProfilleriniListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(girisProfiliGorunumu)
+  })],
+  ['/platform/baglam-profilleri', (db, q) => {
+    const profiller = baglamProfilleriniListele(db, kimlikAl(q.get('projeId'), 'projeId'));
+    return { profiller, turler: [...new Set(profiller.map((p) => p.tur))].sort((a, b) => a.localeCompare(b, 'tr')) };
+  }],
+  ['/platform/test-verisi-turleri', (db, q) => ({ turler: testVerisiTurleriniListele(db, kimlikAl(q.get('projeId'), 'projeId')) })],
+  ['/platform/test-verisi-profilleri', (db, q) => ({
+    profiller: testVerisiProfilleriniListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(testVerisiProfiliGorunumu)
+  })],
+  ['/platform/gecmis', (db, q) => {
+    const kayitlar = degisiklikGecmisiListele(db, metinAl(q.get('varlikTuru')), metinAl(q.get('varlikId')))
+      .map((k) => ({ id: k.id, zaman: k.zaman, islem: k.islem, yapan: k.yapan, makineId: k.makineId, aciklama: k.aciklama }));
+    // Makine adları şifrelidir; kasa açıkken arayüz "kullanici@<makineId>" değerini ada çevirir.
+    return { kayitlar, makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad])) };
+  }],
+  ['/platform/yedek/otomatik-liste', (db) => {
+    const klasor = varsayilanYedekKlasoru(db);
+    const dosyalar = existsSync(klasor)
+      ? readdirSync(klasor).filter((ad) => ad.endsWith(YEDEK_UZANTISI)).map((ad) => {
+        const s = statSync(join(klasor, ad));
+        return { ad, boyut: s.size, zaman: s.mtime.toISOString(), otomatik: ad.startsWith('otomatik-') };
+      }).sort((a, b) => b.zaman.localeCompare(a.zaman))
+      : [];
+    return { klasor, dosyalar };
+  }]
+]);
+
+/** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown>>} */
+const POST_UCLARI = new Map([
+  ['/platform/proje/kaydet', (db, g) => {
+    const aciklama = metinAl(g.aciklama).trim();
+    const id = projeKaydet(db, { id: secimliKimlik(g.id), ad: metinAl(g.ad), aciklama: aciklama || null });
+    return { proje: projeGetir(db, id) };
+  }],
+  ['/platform/ortam/kaydet', (db, g) => {
+    const id = ortamKaydet(db, {
+      id: secimliKimlik(g.id), projeId: kimlikAl(g.projeId, 'projeId'), ad: metinAl(g.ad), tabanUrl: metinAl(g.tabanUrl).trim(),
+      varsayilan: g.varsayilan === true
+    });
+    return { ortam: ortamGetir(db, id) };
+  }],
+  ['/platform/ortam/sil', (db, g) => ({ silindi: ortamSil(db, kimlikAl(g.id)) })],
+  ['/platform/giris-profili/kaydet', (db, g) => {
+    const id = secimliKimlik(g.id);
+    const mevcut = id ? girisProfiliGetir(db, id) : undefined;
+    const tur = g.ikiAsamaliTur === 'totp' || g.ikiAsamaliTur === 'sms' ? g.ikiAsamaliTur : 'yok';
+    const ortamId = secimliKimlik(g.ortamId) ?? null;
+    if (ortamId && !ortamGetir(db, ortamId)) throw new DepoHatasi('Seçilen ortam bulunamadı.');
+    /** @type {Record<string, unknown>} */
+    let smsAyari = {};
+    if (tur === 'sms') {
+      const sms = /** @type {Record<string, unknown>} */ (typeof g.sms === 'object' && g.sms !== null ? g.sms : {});
+      if (sms.yontem === 'elle') smsAyari = { yontem: 'elle' };
+      else {
+        const kod = metinAl(sms.kod).trim();
+        if (!kod) throw new DepoHatasi('Sabit SMS test kodu boş olamaz (ya da "koşu sırasında elle girilir" seçin).');
+        smsAyari = { yontem: 'sabit', kod };
+      }
+    }
+    const kayitId = girisProfiliKaydet(db, {
+      id, projeId: kimlikAl(g.projeId, 'projeId'), ortamId, ad: metinAl(g.ad), kullaniciAdi: metinAl(g.kullaniciAdi),
+      // Boş/gönderilmemiş = mevcut değeri koru; parolaSil: true = kaldır.
+      parola: g.parolaSil === true ? null : secimliMetin(g.parola),
+      ikiAsamaliTur: tur,
+      totpGizli: tur === 'totp' ? secimliMetin(g.totpGizli) ?? (mevcut?.totpGizliVar ? undefined : null) : null,
+      smsAyari
+    });
+    return { profil: girisProfiliGorunumu(/** @type {import('./veritabani/depo.mjs').GirisProfili} */ (girisProfiliGetir(db, kayitId))) };
+  }],
+  ['/platform/giris-profili/sil', (db, g) => ({ silindi: girisProfiliSil(db, kimlikAl(g.id)) })],
+  ['/platform/giris-profili/goster', (db, g) => {
+    const p = girisProfiliGetir(db, kimlikAl(g.id), { coz: true });
+    if (!p) throw new DepoHatasi('Giriş profili bulunamadı.');
+    if (g.alan === 'parola') return { deger: p.parola ?? '' };
+    if (g.alan === 'totpGizli') return { deger: p.totpGizli ?? '' };
+    throw new DepoHatasi('"alan" yalnızca parola veya totpGizli olabilir.');
+  }],
+  ['/platform/baglam-profili/kaydet', (db, g) => {
+    const alanlar = typeof g.alanlar === 'object' && g.alanlar !== null && !Array.isArray(g.alanlar) ? g.alanlar : {};
+    const id = baglamProfiliKaydet(db, {
+      id: secimliKimlik(g.id), projeId: kimlikAl(g.projeId, 'projeId'), tur: metinAl(g.tur), ad: metinAl(g.ad),
+      alanlar: /** @type {Record<string, unknown>} */ (alanlar)
+    });
+    return { id };
+  }],
+  ['/platform/baglam-profili/sil', (db, g) => ({ silindi: baglamProfiliSil(db, kimlikAl(g.id)) })],
+  ['/platform/test-verisi-turu/kaydet', (db, g) => {
+    if (!Array.isArray(g.alanlar)) throw new DepoHatasi('"alanlar" bir dizi olmalıdır.');
+    const id = testVerisiTuruKaydet(db, { id: secimliKimlik(g.id), projeId: kimlikAl(g.projeId, 'projeId'), ad: metinAl(g.ad), alanlar: g.alanlar });
+    return { id };
+  }],
+  ['/platform/test-verisi-turu/sil', (db, g) => ({ silindi: testVerisiTuruSil(db, kimlikAl(g.id)) })],
+  ['/platform/test-verisi-profili/kaydet', (db, g) => {
+    const degerler = typeof g.degerler === 'object' && g.degerler !== null && !Array.isArray(g.degerler) ? g.degerler : {};
+    const id = testVerisiProfiliKaydet(db, {
+      id: secimliKimlik(g.id), projeId: kimlikAl(g.projeId, 'projeId'), turId: kimlikAl(g.turId, 'turId'), ad: metinAl(g.ad),
+      degerler: /** @type {Record<string, string | number | boolean | null>} */ (degerler)
+    });
+    return { profil: testVerisiProfiliGorunumu(/** @type {import('./veritabani/depo.mjs').TestVerisiProfili} */ (testVerisiProfiliGetir(db, id))) };
+  }],
+  ['/platform/test-verisi-profili/sil', (db, g) => ({ silindi: testVerisiProfiliSil(db, kimlikAl(g.id)) })],
+  ['/platform/test-verisi-profili/goster', (db, g) => {
+    const p = testVerisiProfiliGetir(db, kimlikAl(g.id), { coz: true });
+    if (!p) throw new DepoHatasi('Test verisi profili bulunamadı.');
+    const alan = metinAl(g.alan);
+    if (!p.hassasAlanlar.includes(alan)) throw new DepoHatasi('Bu alan hassas bir alan değil.');
+    const deger = p.degerler[alan];
+    return { deger: deger === null || deger === undefined ? '' : String(deger) };
+  }]
+]);
+
 /**
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
@@ -180,6 +369,16 @@ export async function platformIsteginiIsle(req, res, baglam) {
       const is = iceAktarma.durum(isEslesme[1]);
       if (!is) { jsonGonder(res, 404, { basarili: false, kod: 'BULUNAMADI', mesaj: 'İçe aktarma bulunamadı (süresi dolmuş veya iptal edilmiş olabilir).' }); return true; }
       jsonGonder(res, 200, { basarili: is.durum !== 'hata', is });
+      return true;
+    }
+
+    // --- GET ayarlar uçları (kasa açık olmalı) -----------------------------------------------
+    const getIslemi = req.method === 'GET' ? GET_UCLARI.get(yol) : undefined;
+    if (getIslemi) {
+      if (!disTokenGecerli) { tokenYok(); return true; }
+      const db = await acikVeritabani();
+      res.setHeader('Cache-Control', 'no-store');
+      jsonGonder(res, 200, { basarili: true, ...getIslemi(db, url.searchParams) });
       return true;
     }
 
@@ -253,6 +452,14 @@ export async function platformIsteginiIsle(req, res, baglam) {
       jsonGonder(res, iptal ? 200 : 409, iptal
         ? { basarili: true, mesaj: 'İçe aktarma iptal edildi; hazırlık alanı silindi.' }
         : { basarili: false, mesaj: 'İçe aktarma bulunamadı veya artık iptal edilemez.' });
+      return true;
+    }
+
+    const postIslemi = POST_UCLARI.get(yol);
+    if (postIslemi) {
+      const db = await acikVeritabani();
+      res.setHeader('Cache-Control', 'no-store');
+      jsonGonder(res, 200, { basarili: true, ...postIslemi(db, govde) });
       return true;
     }
 
