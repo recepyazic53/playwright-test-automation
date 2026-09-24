@@ -20,4 +20,4 @@ export declare class Veritabani {
   kapat(): void;
 }
 
-export declare function veritabaniAc(yol: string | null, secenekler?: { olustur?: boolean }): Promise<Veritabani>;
+export declare function veritabaniAc(yol: string | null, secenekler?: { olustur?: boolean; saltOkunur?: boolean }): Promise<Veritabani>;

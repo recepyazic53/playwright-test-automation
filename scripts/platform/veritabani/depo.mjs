@@ -273,8 +273,9 @@ export function platformDurumOzeti(vt) {
 export function sayimlar(vt) {
   /** @type {Record<string, number>} */
   const sonuc = {};
+  const mevcut = new Set(vt.tumu("SELECT name FROM sqlite_master WHERE type = 'table'").map((s) => String(s.name)));
   for (const tablo of TABLOLAR) {
-    sonuc[tablo.ad] = Number(vt.tek(`SELECT COUNT(*) AS sayi FROM ${tablo.ad}`)?.sayi ?? 0);
+    sonuc[tablo.ad] = mevcut.has(tablo.ad) ? Number(vt.tek(`SELECT COUNT(*) AS sayi FROM ${tablo.ad}`)?.sayi ?? 0) : 0;
   }
   return sonuc;
 }
@@ -339,12 +340,14 @@ export function projeSil(vt, id) {
 /** @param {Veritabani} vt @param {Record<string, unknown>} s */
 const ortamCevir = (vt, s) => ({
   id: String(s.id), projeId: String(s.proje_id), ad: String(sifreliOku(vt, s.ad)), tabanUrl: String(sifreliOku(vt, s.taban_url)),
-  varsayilan: s.varsayilan === 1, olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
+  varsayilan: s.varsayilan === 1,
+  ayarlar: /** @type {Record<string, unknown>} */ (jsonOku(sifreliOku(vt, s.ayarlar_json ?? '{}')) ?? {}),
+  olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
 /**
- * Ortam adı ve adresi şifrelidir: kasa açık olmalıdır.
- * @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; tabanUrl: string; varsayilan?: boolean }} girdi
+ * Ortam adı, adresi ve ayarları şifrelidir: kasa açık olmalıdır. ayarlar verilmezse mevcut korunur.
+ * @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; tabanUrl: string; varsayilan?: boolean; ayarlar?: Record<string, unknown> }} girdi
  */
 export function ortamKaydet(vt, girdi) {
   const tabanUrl = zorunluMetin(girdi.tabanUrl, 'tabanUrl');
@@ -360,9 +363,23 @@ export function ortamKaydet(vt, girdi) {
     }
     return kaydetGenel(vt, 'ortamlar', {
       proje_id: kimlikKontrol(girdi.projeId, 'projeId'), ad: sifreliYaz(vt, zorunluMetin(girdi.ad, 'ad')),
-      taban_url: sifreliYaz(vt, tabanUrl), varsayilan: girdi.varsayilan ? 1 : 0
+      taban_url: sifreliYaz(vt, tabanUrl), varsayilan: girdi.varsayilan ? 1 : 0,
+      ayarlar_json: sifreliAyarMetni(vt, 'ortamlar', girdi.id, girdi.ayarlar)
     }, { id: girdi.id });
   });
+}
+
+/**
+ * Şifreli "ayarlar_json" sütununa yazılacak değer: ayarlar verildiyse şifrelenir (kasa açık
+ * olmalı); verilmediyse mevcut değer korunur; yeni kayıtta '{}' (kasa açıksa şifreli, değilse
+ * düz — kasa ilk açılışta sifreliAlanlariTamamla ile şifreler).
+ * @param {Veritabani} vt @param {string} tablo @param {string | undefined} id @param {Record<string, unknown> | undefined} ayarlar
+ */
+function sifreliAyarMetni(vt, tablo, id, ayarlar) {
+  if (ayarlar !== undefined) return sifreliYaz(vt, jsonMetni(ayarlar, 'ayarlar'));
+  const mevcut = id ? vt.tek(`SELECT ayarlar_json FROM ${tablo} WHERE id = ?`, [id]) : undefined;
+  if (mevcut) return mevcut.ayarlar_json;
+  return kasaAcikMi(vt) ? sifrele(vt, '{}') : '{}';
 }
 
 /** Kasa açık olmalıdır; sıralama çözülmüş ada göre yapılır. @param {Veritabani} vt @param {string} projeId */
@@ -473,17 +490,35 @@ export function girisProfiliSil(vt, id, yapan) {
 
 /** @param {Veritabani} vt @param {Record<string, unknown>} s @param {boolean} alanlarDahil */
 const baglamCevir = (vt, s, alanlarDahil) => ({
-  id: String(s.id), projeId: String(s.proje_id), tur: String(s.tur), ad: String(s.ad),
+  id: String(s.id), projeId: String(s.proje_id), ortamId: s.ortam_id == null ? null : String(s.ortam_id), tur: String(s.tur), ad: String(s.ad),
   alanlar: alanlarDahil ? /** @type {Record<string, unknown>} */ (jsonOku(sifreliOku(vt, s.alanlar_json))) : null,
   olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
-/** Kasa açık olmalıdır. @param {Veritabani} vt @param {{ id?: string; projeId: string; tur: string; ad: string; alanlar?: Record<string, unknown>; yapan?: string }} girdi */
+/**
+ * Kasa açık olmalıdır. ortamId: undefined = mevcut kapsamı koru (yeni kayıtta tüm ortamlar),
+ * null = tüm ortamlar, kimlik = yalnızca o ortam.
+ * @param {Veritabani} vt @param {{ id?: string; projeId: string; ortamId?: string | null; tur: string; ad: string; alanlar?: Record<string, unknown>; yapan?: string }} girdi
+ */
 export function baglamProfiliKaydet(vt, girdi) {
   return kaydetGenel(vt, 'baglam_profilleri', {
     proje_id: kimlikKontrol(girdi.projeId, 'projeId'), tur: zorunluMetin(girdi.tur, 'tur'),
-    ad: zorunluMetin(girdi.ad, 'ad'), alanlar_json: sifreliYaz(vt, jsonMetni(girdi.alanlar ?? {}, 'alanlar'))
+    ad: zorunluMetin(girdi.ad, 'ad'), alanlar_json: sifreliYaz(vt, jsonMetni(girdi.alanlar ?? {}, 'alanlar')),
+    ...ortamKapsami(vt, girdi.projeId, girdi.ortamId)
   }, { id: girdi.id, gecmisTuru: 'baglam_profili', yapan: girdi.yapan });
+}
+
+/**
+ * Profil kapsamı sütunu: undefined → sütun yazılmaz (mevcut korunur), null → tüm ortamlar.
+ * @param {Veritabani} vt @param {string} projeId @param {string | null | undefined} ortamId
+ * @returns {Record<string, unknown>}
+ */
+function ortamKapsami(vt, projeId, ortamId) {
+  if (ortamId === undefined) return {};
+  if (ortamId === null || ortamId === '') return { ortam_id: null };
+  const ortam = vt.tek('SELECT proje_id FROM ortamlar WHERE id = ?', [kimlikKontrol(ortamId, 'ortamId')]);
+  if (!ortam || ortam.proje_id !== projeId) throw new DepoHatasi('Seçilen ortam bu projede bulunamadı.');
+  return { ortam_id: ortamId };
 }
 
 /** Kasa açık olmalıdır. @param {Veritabani} vt @param {string} id */
@@ -599,7 +634,7 @@ function testVerisiProfiliCevir(vt, s, cozulsun) {
   // Değeri kayıtlı (boş olmayan) hassas alanlar — arayüz "kayıtlı" maskesini buna göre gösterir.
   const doluHassasAlanlar = hassasAlanlar.filter((ad) => hamDegerler[ad] !== undefined && hamDegerler[ad] !== null && hamDegerler[ad] !== '');
   return {
-    id: String(s.id), projeId: String(s.proje_id), turId: String(s.tur_id), ad: String(s.ad), degerler,
+    id: String(s.id), projeId: String(s.proje_id), turId: String(s.tur_id), ortamId: s.ortam_id == null ? null : String(s.ortam_id), ad: String(s.ad), degerler,
     hassasAlanlar, doluHassasAlanlar, olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
   };
 }
@@ -607,7 +642,8 @@ function testVerisiProfiliCevir(vt, s, cozulsun) {
 /**
  * degerler: hassas alanda undefined (anahtar yok) = mevcut şifreli değeri koru.
  * @param {Veritabani} vt
- * @param {{ id?: string; projeId: string; turId: string; ad: string; degerler: Record<string, string | number | boolean | null>; yapan?: string }} girdi
+ * ortamId: baglamProfiliKaydet ile aynı kural (undefined = koru, null = tüm ortamlar).
+ * @param {{ id?: string; projeId: string; turId: string; ortamId?: string | null; ad: string; degerler: Record<string, string | number | boolean | null>; yapan?: string }} girdi
  */
 export function testVerisiProfiliKaydet(vt, girdi) {
   return vt.islem(() => {
@@ -632,7 +668,7 @@ export function testVerisiProfiliKaydet(vt, girdi) {
     }
     return kaydetGenel(vt, 'test_verisi_profilleri', {
       proje_id: kimlikKontrol(girdi.projeId, 'projeId'), tur_id: girdi.turId, ad: zorunluMetin(girdi.ad, 'ad'),
-      degerler_json: JSON.stringify(yazilacak)
+      degerler_json: JSON.stringify(yazilacak), ...ortamKapsami(vt, girdi.projeId, girdi.ortamId)
     }, { id: girdi.id, gecmisTuru: 'test_verisi_profili', yapan: girdi.yapan });
   });
 }
@@ -666,17 +702,29 @@ const ekranCevir = (s) => ({
   aciklama: s.aciklama == null ? null : String(s.aciklama), olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
-/** @param {Veritabani} vt @param {{ id?: string; projeId: string; anahtar: string; ad: string; aciklama?: string | null }} girdi */
+/**
+ * ayarlar (şifreli) verilirse kasa açık olmalıdır; verilmezse mevcut ayarlar korunur.
+ * @param {Veritabani} vt @param {{ id?: string; projeId: string; anahtar: string; ad: string; aciklama?: string | null; ayarlar?: Record<string, unknown> }} girdi
+ */
 export function ekranKaydet(vt, girdi) {
   return kaydetGenel(vt, 'ekranlar', {
     proje_id: kimlikKontrol(girdi.projeId, 'projeId'), anahtar: zorunluMetin(girdi.anahtar, 'anahtar'),
-    ad: zorunluMetin(girdi.ad, 'ad'), aciklama: girdi.aciklama ?? null
+    ad: zorunluMetin(girdi.ad, 'ad'), aciklama: girdi.aciklama ?? null,
+    ayarlar_json: sifreliAyarMetni(vt, 'ekranlar', girdi.id, girdi.ayarlar)
   }, { id: girdi.id });
 }
 
-/** @param {Veritabani} vt @param {string} projeId */
+/** Ekranlar (ayarlar HARİÇ; kasa kilitliyken de çalışır). @param {Veritabani} vt @param {string} projeId */
 export function ekranlariListele(vt, projeId) {
   return vt.tumu('SELECT * FROM ekranlar WHERE proje_id = ? ORDER BY ad', [projeId]).map(ekranCevir);
+}
+
+/** Ekran ayarları şifrelidir: kasa açık olmalıdır. @param {Veritabani} vt @param {string} ekranId */
+export function ekranAyarlariniGetir(vt, ekranId) {
+  acikAnahtar(vt);
+  const s = vt.tek('SELECT ayarlar_json FROM ekranlar WHERE id = ?', [ekranId]);
+  if (!s) return undefined;
+  return /** @type {Record<string, unknown>} */ (jsonOku(sifreliOku(vt, s.ayarlar_json ?? '{}')) ?? {});
 }
 
 /** @param {Record<string, unknown>} s */
@@ -842,4 +890,55 @@ export function kosuSonuclariniListele(vt, kosuId) {
     ekler: /** @type {Record<string, unknown>} */ (jsonOku(s.ekler_json)),
     baslangic: s.baslangic == null ? null : String(s.baslangic), bitis: s.bitis == null ? null : String(s.bitis)
   }));
+}
+
+// ---------------------------------------------------------------------------------------
+// Kaynak eşlemeleri (dış kaynaktan aktarılan kayıtlar: kaynak anahtarı → varlık kimliği)
+// ---------------------------------------------------------------------------------------
+// kaynak_anahtari ve varlik_id AÇIKTIR (ör. senaryo için "<dosya>::<başlık>"; koşu listesi kasa
+// kilitliyken de çözülebilsin diye). kaynak_ozeti şifrelidir (kaynağın içeriğinden türetilen özet;
+// düz özet, düşük entropili değerlerde tahmin edilebilirdi).
+
+/** @param {Record<string, unknown>} s */
+const eslemeCevir = (s) => ({
+  id: String(s.id), projeId: String(s.proje_id), varlikTuru: String(s.varlik_turu), kaynakAnahtari: String(s.kaynak_anahtari),
+  varlikId: String(s.varlik_id), kaynakOzetiZarfi: s.kaynak_ozeti == null ? null : String(s.kaynak_ozeti),
+  olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
+});
+
+/** Kasa gerektirmez (özet zarfı çözülmeden döner). @param {Veritabani} vt @param {string} projeId @param {string} [varlikTuru] */
+export function kaynakEslemeleriniListele(vt, projeId, varlikTuru) {
+  const satirlar = varlikTuru
+    ? vt.tumu('SELECT * FROM kaynak_eslemeleri WHERE proje_id = ? AND varlik_turu = ? ORDER BY rowid', [projeId, varlikTuru])
+    : vt.tumu('SELECT * FROM kaynak_eslemeleri WHERE proje_id = ? ORDER BY rowid', [projeId]);
+  return satirlar.map(eslemeCevir);
+}
+
+/**
+ * Eşlemeyi ekler/günceller (kasa açık olmalı: özet şifrelenir).
+ * @param {Veritabani} vt
+ * @param {{ id: string; projeId: string; varlikTuru: string; kaynakAnahtari: string; varlikId: string; kaynakOzeti: string | null }} girdi
+ */
+export function kaynakEslemesiYaz(vt, girdi) {
+  const zaman = simdi();
+  vt.calistir(
+    `INSERT INTO kaynak_eslemeleri (id, proje_id, varlik_turu, kaynak_anahtari, varlik_id, kaynak_ozeti, olusturulma, guncellenme)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(proje_id, varlik_turu, kaynak_anahtari) DO UPDATE SET
+       varlik_id = excluded.varlik_id, kaynak_ozeti = excluded.kaynak_ozeti, guncellenme = excluded.guncellenme`,
+    [kimlikKontrol(girdi.id), kimlikKontrol(girdi.projeId, 'projeId'), zorunluMetin(girdi.varlikTuru, 'varlikTuru'),
+      zorunluMetin(girdi.kaynakAnahtari, 'kaynakAnahtari'), kimlikKontrol(girdi.varlikId, 'varlikId'),
+      girdi.kaynakOzeti === null ? null : sifrele(vt, girdi.kaynakOzeti), zaman, zaman]
+  );
+}
+
+/** @param {Veritabani} vt @param {string} projeId @param {string} varlikTuru @param {string} kaynakAnahtari */
+export function kaynakEslemesiSil(vt, projeId, varlikTuru, kaynakAnahtari) {
+  vt.calistir('DELETE FROM kaynak_eslemeleri WHERE proje_id = ? AND varlik_turu = ? AND kaynak_anahtari = ?', [projeId, varlikTuru, kaynakAnahtari]);
+}
+
+/** Şifreli özet zarfını çözer (kasa açık olmalı). @param {Veritabani} vt @param {string | null} zarf */
+export function kaynakOzetiniCoz(vt, zarf) {
+  if (!zarf) return null;
+  return zarfMi(zarf) ? coz(vt, zarf) : zarf;
 }

@@ -9,6 +9,9 @@
 import { test as base } from '@playwright/test';
 import { epic, feature, label, story } from 'allure-js-commons';
 import { writeFileSync, renameSync } from 'node:fs';
+import { relative, sep } from 'node:path';
+import { getEnvironmentName } from './environments';
+import { platformSenaryoKimligi } from './platform-veri';
 
 // Klasör adı -> Allure Epic (ürün) görünen adı.
 const EPIC_ADLARI: Record<string, string> = {
@@ -66,12 +69,25 @@ function epicVeFeatureAdlariniBul(dosyaYolu: string): { epicAdi: string; feature
 }
 
 type OrtakFixturelar = {
+  senaryoKimligi: void;
   allureGruplama: void;
   hataYakalayici: void;
   canliIzlemeYayini: void;
 };
 
 export const test = base.extend<OrtakFixturelar>({
+  // Veri platform veritabanından geliyorsa testin kalıcı senaryo kimliği (UUID) "senaryoId"
+  // annotation'ı olarak eklenir. Başlıklar DEĞİŞMEZ (geçmiş ve kosu-listesi anahtarları
+  // "<dosya>::<başlık>" aynen çalışır); veri dosyalardan geliyorsa hiçbir şey eklenmez.
+  senaryoKimligi: [
+    async ({}, use, testInfo) => {
+      const dosya = relative(testInfo.project.testDir, testInfo.file).split(sep).join('/');
+      const kimlik = platformSenaryoKimligi(getEnvironmentName(), `${dosya}::${testInfo.title}`);
+      if (kimlik) testInfo.annotations.push({ type: 'senaryoId', description: kimlik });
+      await use();
+    },
+    { auto: true }
+  ],
   allureGruplama: [
     async ({}, use, testInfo) => {
       const { epicAdi, featureAdi } = epicVeFeatureAdlariniBul(testInfo.file);

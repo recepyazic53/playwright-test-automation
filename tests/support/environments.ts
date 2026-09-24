@@ -1,3 +1,4 @@
+import { platformVerisi } from './platform-veri';
 import { totpKoduUret } from './totp';
 
 export type EnvironmentName = 'canli' | 'test';
@@ -12,18 +13,31 @@ type EnvironmentDefinition = {
   login: LoginDefinition;
 };
 
+// Taban adres: proje dosyaları platform veritabanına aktarıldıysa (ve kasa anahtarı varsa)
+// ortamın kayıtlı adresi, aksi halde eskisi gibi .env (TEST_BASE_URL / CANLI_BASE_URL).
+// Anahtar global-setup'ta sorulmadan önce (config değerlendirmesi) sessizce .env'e düşülür.
+function tabanAdresi(ortam: EnvironmentName): string | undefined {
+  const platform = platformVerisi(ortam, { sessizAnahtarYok: true });
+  if (platform) return platform.tabanUrl;
+  return ortam === 'canli' ? process.env.CANLI_BASE_URL : process.env.TEST_BASE_URL;
+}
+
 // Ortama göre değişen URL, alan seçicileri ve oturum dosyası sadece burada tutulur.
 // Test case'lerde kullanıcı adı/şifre alanının seçicisini tekrar yazmayın.
 export const environments: Record<EnvironmentName, EnvironmentDefinition> = {
   canli: {
-    baseURL: process.env.CANLI_BASE_URL,
+    get baseURL() {
+      return tabanAdresi('canli');
+    },
     login: {
       authenticatorRequired: true,
       storageState: 'playwright/.auth/canli-acente.json'
     }
   },
   test: {
-    baseURL: process.env.TEST_BASE_URL,
+    get baseURL() {
+      return tabanAdresi('test');
+    },
     login: {
       authenticatorRequired: false,
       storageState: 'playwright/.auth/test-acente.json'
@@ -58,6 +72,12 @@ export function getEnvironment(environment = getEnvironmentName()): EnvironmentD
 }
 
 export function hasCredentials(environment: EnvironmentName): boolean {
+  const platform = platformVerisi(environment, { sessizAnahtarYok: true });
+  if (platform) {
+    const giris = platform.giris;
+    const ikiFaktor = environment !== 'canli' || Boolean(giris?.totpGizli || giris?.sabitKod);
+    return Boolean(giris?.kullaniciAdi && giris.parola) && ikiFaktor;
+  }
   const username = process.env.LOGIN_USERNAME ?? process.env.TEST_USERNAME;
   const password =
     environment === 'canli' ? process.env.CANLI_PASSWORD : process.env.TEST_PASSWORD;
@@ -70,6 +90,22 @@ export function hasCredentials(environment: EnvironmentName): boolean {
 }
 
 export function credentialsFromEnvironment(environment: EnvironmentName): Credentials {
+  const platform = platformVerisi(environment, { sessizAnahtarYok: true });
+  if (platform) {
+    const giris = platform.giris;
+    if (!giris?.kullaniciAdi || !giris.parola) {
+      throw new Error(`Platformdaki ${environment.toUpperCase()} giriş profilinde kullanıcı adı ve parola tanımlı olmalı (Ayarlar > Giriş profilleri).`);
+    }
+    return {
+      username: giris.kullaniciAdi,
+      password: giris.parola,
+      // Eski davranışla aynı: 2FA kodu yalnızca CANLI için; TOTP anahtarı varsa anlık üretilir,
+      // yoksa sabit kod (eski CANLI_AUTH_CODE) kullanılır.
+      authenticatorCode: environment === 'canli'
+        ? (giris.totpGizli ? totpKoduUret(giris.totpGizli) : giris.sabitKod ?? undefined)
+        : undefined
+    };
+  }
   const username = process.env.LOGIN_USERNAME ?? process.env.TEST_USERNAME;
   const password =
     environment === 'canli' ? process.env.CANLI_PASSWORD : process.env.TEST_PASSWORD;

@@ -256,11 +256,17 @@ export class Veritabani {
 /**
  * Veritabanını açar (dosya yoksa ve olustur=true ise boş oluşturur). Göçleri UYGULAMAZ —
  * bunun için gocler.mjs > veritabaniniHazirla kullanılır.
+ * saltOkunur: dosya belleğe yüklenir ama bağlantı dosyaya HİÇ yazmaz (yol = null). Test
+ * süreçleri (tests/support/platform-veri.ts) sunucunun sahip olduğu dosyayı böyle okur.
  * @param {string | null} yol null = yalnızca bellek
- * @param {{ olustur?: boolean }} [secenekler]
+ * @param {{ olustur?: boolean; saltOkunur?: boolean }} [secenekler]
  */
 export async function veritabaniAc(yol, secenekler = {}) {
   const SQL = await sqlModulunuYukle();
+  if (secenekler.saltOkunur) {
+    if (!yol || !existsSync(yol)) throw new Error(`Veritabanı dosyası bulunamadı: ${yol}`);
+    return new Veritabani(new SQL.Database(new Uint8Array(readFileSync(yol))), null);
+  }
   if (yol && existsSync(yol)) {
     const vt = new Veritabani(new SQL.Database(new Uint8Array(readFileSync(yol))), yol);
     vt.diskIziniGuncelle();

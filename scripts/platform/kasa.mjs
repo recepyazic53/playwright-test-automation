@@ -449,7 +449,10 @@ export function sifreliAlanlariTamamla(vt) {
   for (const [tablo, alanlar] of Object.entries(SIFRELI_ALANLAR)) {
     const bilgi = TABLOLAR.find((t) => t.ad === tablo);
     if (!bilgi) continue;
-    const sutunlar = Object.keys(alanlar);
+    // Eski şema sürümündeki (henüz göç uygulanmamış) veritabanında tablo/sütun olmayabilir.
+    const mevcutSutunlar = new Set(vt.tumu(`PRAGMA table_info(${tablo})`).map((s) => String(s.name)));
+    const sutunlar = Object.keys(alanlar).filter((s) => mevcutSutunlar.has(s));
+    if (!sutunlar.length) continue;
     for (const satir of vt.tumu(`SELECT ${bilgi.birincilAnahtar}, ${sutunlar.join(', ')} FROM ${tablo}`)) {
       const yeni = satirSifreliAlanlariniTamamla(tablo, satir, anahtar);
       if (yeni === satir) continue;

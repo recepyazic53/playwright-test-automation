@@ -1,5 +1,6 @@
 // Platform kabuğu: /platform/durum'a göre yönlendirme.
-//   kasa yok            → Hoş geldiniz (Yedek yükle / Yeni proje başlat)
+//   kasa yok            → Hoş geldiniz (Yedek yükle / Yeni proje başlat / [eski dosyalar varsa]
+//                         Mevcut proje dosyalarını aktar)
 //   kasa var, kilitli   → Kilit ekranı (yanlış parolada bekleme geri sayımı)
 //   kasa açık, proje yok → Yeni proje sihirbazı (proje adımından)
 //   kasa açık           → Ana düzen: Mevcut görünüm | Ayarlar | Kilitle  (#/gorunum, #/ayarlar/<bölüm>)
@@ -7,6 +8,7 @@ import {
   adresGecerliMi, alan, alanHatasi, api, bildir, geriSayim, h, mesajKutusu, mesgulIken, parolaAlani
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
+import { aktarimAkisi } from './aktarim.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 
 const kok = document.getElementById('uygulama');
@@ -64,6 +66,7 @@ export async function projeleriYenile() {
 }
 
 window.addEventListener('kasa-kilitli', (olay) => {
+  // Otomatik kilitlenme sonrası gelen 423 de buraya düşer.
   durum.kilitMesaji = olay.detail || 'Kasa kilitli.';
   kilitEkrani(0);
 });
@@ -72,18 +75,37 @@ window.addEventListener('kasa-kilitli', (olay) => {
 // Hoş geldiniz
 // ---------------------------------------------------------------------------------------
 
-function hosgeldin() {
+async function hosgeldin() {
   history.replaceState(null, '', '/');
+  // Bu klasörde eski proje dosyaları (ör. tests/data, .env) varsa üçüncü kart gösterilir.
+  let aktarilabilir = null;
+  try {
+    const d = await api('/platform/aktarim/durum');
+    aktarilabilir = d.veritabaniBos ? (d.adaptorler || []).find((a) => a.dosyalarVar && !a.aktarildi) || null : null;
+  } catch { aktarilabilir = null; }
   ekran(anaAlan('ortali',
     h('h1', {}, 'Hoş geldiniz'),
     h('p', {}, 'Bu bilgisayarda henüz bir proje yok. Başlamak için bir seçenek belirleyin.'),
     h('div', { class: 'secim-kartlari' },
+      aktarilabilir ? h('button', { type: 'button', class: 'secim-karti', onclick: () => dosyaAktarimEkrani(aktarilabilir) },
+        h('strong', {}, 'Mevcut proje dosyalarını aktar'),
+        h('span', {}, `Bu klasördeki ${aktarilabilir.projeAdi} dosyalarını (test verileri, ortamlar, giriş bilgileri, senaryolar) şifreli platform veritabanına aktarın. Dosyalar değiştirilmez.`)) : null,
       h('button', { type: 'button', class: 'secim-karti', onclick: () => yedekYukleEkrani() },
         h('strong', {}, 'Yedek yükle'),
         h('span', {}, 'Başka bir bilgisayardan aldığınız .tayedek dosyasını yükleyin. Yedeğin parolası bu bilgisayarın kasa parolası olur.')),
       h('button', { type: 'button', class: 'secim-karti', onclick: () => sihirbaz('kasa') },
         h('strong', {}, 'Yeni proje başlat'),
         h('span', {}, 'Kasa parolası belirleyin, projenizi ve test ortamlarınızı tanımlayın.')))));
+}
+
+function dosyaAktarimEkrani(adaptor) {
+  const kapsayici = h('div', {});
+  ekran(anaAlan('ortali', h('h1', { class: 'gorunmez' }, 'Mevcut proje dosyalarını aktar'), kapsayici));
+  aktarimAkisi(kapsayici, {
+    mod: 'hosgeldin', adaptor,
+    bitti: () => { location.hash = '#/gorunum'; yonlendir(); },
+    vazgec: () => hosgeldin()
+  });
 }
 
 function yedekYukleEkrani() {
@@ -328,7 +350,20 @@ function anaDuzen() {
     }
   };
   window.addEventListener('hashchange', ciz);
-  ekranTemizle = () => window.removeEventListener('hashchange', ciz);
+  // Otomatik kilit: sunucu kasayı hareketsizlik sonrası kilitler; arayüz bunu periyodik durum
+  // sorgusuyla (etkinlik SAYILMAZ) fark edip kilit ekranına döner.
+  const kilitKontrolu = setInterval(async () => {
+    try {
+      const d = await api('/platform/durum');
+      if (d.kasa && d.kasa.olusturuldu && !d.kasa.acik) {
+        durum.kilitMesaji = d.otomatikKilit && d.otomatikKilit.sonKilitlenme
+          ? `Kasa ${d.otomatikKilit.dakika} dakika işlem yapılmadığı için otomatik olarak kilitlendi.`
+          : 'Kasa kilitlendi.';
+        kilitEkrani(d.parolaBeklemeSaniye || 0);
+      }
+    } catch { /* bağlantı hatası: bir sonraki denemede */ }
+  }, 15_000);
+  ekranTemizle = () => { window.removeEventListener('hashchange', ciz); clearInterval(kilitKontrolu); };
   ciz();
 }
 

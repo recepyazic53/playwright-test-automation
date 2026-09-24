@@ -54,7 +54,9 @@ import {
   senaryoyuDogrula
 } from './dogrulama/senaryo-dogrulayici.mjs';
 import { ekranModeliniOku } from './dogrulama/model-oku.mjs';
-import { platformIsteginiIsle, platformOtomatikYedekZamanla } from './platform/sunucu-platform.mjs';
+import {
+  platformEtkinligiBildir, platformIsteginiIsle, platformOtomatikYedekZamanla, platformTestOrtami, projeDosyalariniEsitle
+} from './platform/sunucu-platform.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
@@ -121,7 +123,10 @@ function tokenEsit(a, b) {
 
 /** Eski dashboard token'ı veya bu sürecin oturum token'ı. @param {unknown} token */
 function tokenGecerli(token) {
-  return tokenEsit(token, OTURUM_TOKEN) || tokenEsit(token, TOKEN);
+  const gecerli = tokenEsit(token, OTURUM_TOKEN) || tokenEsit(token, TOKEN);
+  // Kimliği doğrulanmış dashboard etkinliği platform kasasının otomatik kilit sayacını sıfırlar.
+  if (gecerli) platformEtkinligiBildir();
+  return gecerli;
 }
 
 // "npx playwright ..." yerine kullanılıyor: node_modules/@playwright/test/cli.js
@@ -315,6 +320,9 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
           ...process.env,
           TEST_ENV: ortam,
           TEST_SUNUCU_TUM_LISTE: '1',
+          // Kasa açıksa türetilmiş anahtar (yalnızca alt sürecin belleğinde): liste veritabanından
+          // kurulur; kilitliyse dosyalardan (bkz. tests/support/platform-veri.ts).
+          ...platformTestOrtami(),
           ...(grepDeseni ? { TEST_SUNUCU_GREP_DESENI: grepDeseni } : {}),
           ...ekOrtamDegiskenleri
         },
@@ -520,7 +528,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/uygulama.js', { dosya: 'uygulama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortak.js', { dosya: 'ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }]
+  ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/aktarim.js', { dosya: 'aktarim.js', tur: 'text/javascript; charset=utf-8' }]
 ]);
 const KABUK_GUVENLIK_BASLIKLARI = {
   'Cache-Control': 'no-store',
@@ -891,6 +900,9 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegis
         TEST_SUNUCU_GORUNUR: '1',
         TEST_SUNUCU_CANLI_YOLU: canliYolu,
         TEST_SUNUCU_GREP_DESENI: desen,
+        // Kasa açıksa türetilmiş anahtar: test verisi platform veritabanından okunur (terminalde
+        // parola sorulmaz). Kasa kilitliyse boş — alt süreç dosyalara düşer.
+        ...platformTestOrtami(),
         ...ekOrtamDegiskenleri
       },
       // NOT: 'inherit' yerine 'pipe' kullanılıyor — alt sürecin kendi stdout/stderr'ı
@@ -1655,6 +1667,7 @@ async function istegiIsle(req, res) {
     try {
       const haricTutulanlar = kosuListesiniGuncelle(normalAnahtarlar, dahil);
       console.log(`[test-sunucu] Koşu listesi güncellendi: ${normalAnahtarlar.length} senaryo ${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'} (hariç: ${haricTutulanlar.length}).`);
+      projeDosyalariniEsitle('Koşu listesi değişti');
       jsonGonder(res, 200, { basarili: true, haricTutulanlar });
     } catch (hata) {
       jsonGonder(res, 500, { basarili: false, mesaj: `Koşu listesi yazılamadı: ${hata.message}` });
@@ -1975,6 +1988,7 @@ async function istegiIsle(req, res) {
         }
         throw yazmaHatasi;
       }
+      projeDosyalariniEsitle('JetSeyahat senaryosu kaydedildi');
       jsonGonder(res, 200, {
         basarili: true,
         mesaj: kosuyaDahil ? 'Senaryo kaydedildi ve koşuya dahil edildi.' : 'Senaryo kaydedildi; koşuya dahil edilmedi.',
@@ -2138,6 +2152,7 @@ async function istegiIsle(req, res) {
         `[test-sunucu] JetSeyahat senaryosu güncellendi (${ortam}): "${eskiBaslik}"` +
           (baslikDegistiMi ? ` → "${yeniBaslik}"` : '') + ` (koşuya ${kosuyaDahil ? 'dahil' : 'dahil değil'}).`
       );
+      projeDosyalariniEsitle('JetSeyahat senaryosu güncellendi');
       jsonGonder(res, 200, {
         basarili: true,
         mesaj: 'Değişiklikler kaydedildi.',

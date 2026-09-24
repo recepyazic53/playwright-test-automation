@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { BeklenenSonucAlanlari } from './beklenen-sonuc';
 import type { EnvironmentName } from './environments';
+import { platformVerisi } from './platform-veri';
 
 export type SelectData = {
   deger: string;
@@ -414,7 +415,19 @@ export type JetSeyahatTestData = {
   };
 };
 
+// Veri, proje dosyaları platform veritabanına aktarıldıysa (ve kasa anahtarı varsa) oradan,
+// aksi halde eskisi gibi tests/data/<ortam>/<dosya>.json'dan gelir — şekil birebir aynıdır
+// (bkz. platform-veri.ts; eşdeğerlik npm run test:birim ile korunur).
 function loadData<T>(environment: EnvironmentName, fileName: string): T {
+  const platform = platformVerisi(environment);
+  if (platform) {
+    const veri = fileName === 'ortak' ? platform.ortak : platform.dosyalar[fileName];
+    if (veri === undefined) {
+      throw new Error(`Platform veritabanında "${environment}/${fileName}" verisi yok. Proje dosyalarını yeniden aktarın ` +
+        'ya da PLATFORM_VERI_KAYNAGI=dosya ile dosyalardan çalıştırın.');
+    }
+    return structuredClone(veri) as T;
+  }
   const filePath = resolve(process.cwd(), 'tests', 'data', environment, `${fileName}.json`);
   return JSON.parse(readFileSync(filePath, 'utf-8')) as T;
 }

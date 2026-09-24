@@ -11,6 +11,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
+  // Ana koşuların test-results/ klasörüne (dashboard videoları, trace'ler) dokunulmasın diye birim
+  // testleri kendi alt klasörüne yazar — Playwright koşu başında YALNIZCA bu klasörü temizler.
+  outputDir: 'test-results/birim',
   reporter: [['list']],
   // Testler "page"/"browser" fixture'ı kullanmaz; yine de yanlışlıkla kullanılırsa sessizce
   // tarayıcı açılmasın diye proje tanımlanmaz ve ağ adresi verilmez.

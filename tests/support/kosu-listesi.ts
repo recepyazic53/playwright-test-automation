@@ -14,6 +14,7 @@
 // scripts/kosu-listesi.mjs üzerinden okur/yazar — anahtar biçimi ikisinde AYNI TUTULMALI.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { platformHaricTutulanAnahtarlar } from './platform-veri';
 
 export const KOSU_LISTESI_DOSYASI = join(__dirname, '..', 'data', 'kosu-listesi.json');
 export const KOSU_LISTESI_ANAHTAR_AYRACI = '::';
@@ -57,9 +58,12 @@ export function anahtardanGrepDeseni(anahtar: string): RegExp | null {
 }
 
 // playwright.config.ts > grepInvert için: hariç tutulan her anahtarın deseni. Boşsa
-// undefined döner (grepInvert hiç verilmez).
+// undefined döner (grepInvert hiç verilmez). Proje dosyaları platform veritabanına aktarıldıysa
+// (ve kosu-listesi.json aktarımdan sonra değişmediyse) hariç liste veritabanındaki senaryoların
+// "kosuya_dahil" alanından gelir (anahtar biçimi aynı: "<dosya>::<ad>") — bkz. platform-veri.ts.
 export function kosuListesiHaricDesenleri(dosyaYolu: string = KOSU_LISTESI_DOSYASI): RegExp[] | undefined {
-  const desenler = haricTutulanAnahtarlariOku(dosyaYolu)
+  const platformdan = dosyaYolu === KOSU_LISTESI_DOSYASI ? platformHaricTutulanAnahtarlar() : null;
+  const desenler = (platformdan ?? haricTutulanAnahtarlariOku(dosyaYolu))
     .map(anahtardanGrepDeseni)
     .filter((desen): desen is RegExp => desen !== null);
   return desenler.length ? desenler : undefined;

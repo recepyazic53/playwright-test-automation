@@ -30,6 +30,17 @@ tests/
 
 `testBaslangiciniHazirla`, bütün ürün senaryolarında ortama göre giriş ve acente/kullanıcı değişimini yapar. TEST ortamında Authenticator kullanılmaz; CANLI ortamında `CANLI_AUTH_CODE` okunur.
 
+## Platform: mevcut proje dosyalarını aktarma
+
+`npm run baslat` ile açılan platformda, bu klasörde eski proje dosyaları varsa hoş geldiniz ekranında **"Mevcut proje dosyalarını aktar"** kartı çıkar: kasa parolası (iki kez) → önizleme (yalnızca sayılar) → aktar → özet. `.env` (ortam adresleri, kullanıcı/parola/2FA), `tests/data/<ortam>/*.json`, `kosu-listesi.json` ve `tests/ekran-modelleri/` şifreli yerel veritabanına (`veri/platform.db`, Git'e girmez) aktarılır; **dosyalar değiştirilmez**. Aynı işlem daha sonra **Ayarlar > Yedekleme > "Proje dosyalarından yeniden aktar"** ile tekrarlanabilir: kaynak anahtarına göre birleştirir, çift kayıt üretmez; dosyada değişmeyen kayıtlarda platformda yapılan düzenlemeler korunur.
+
+- Genel motor `scripts/platform/aktarim/`; projeye özgü okuma/eşleme `projeler/galaksi/aktarim.mjs` (kayıt: `projeler/index.mjs`).
+- Aktarımdan sonra testler veriyi (test verisi, taban adres, giriş bilgisi, koşu listesi) veritabanından okur; şekiller dosyalarla birebir aynıdır (`npm run test:birim` > `platform-esdegerlik` kontrol eder). Testlere `senaryoId` (UUID) annotation'ı eklenir, başlıklar değişmez.
+- **Terminalden koşarken** (`npm run test...`) kasa parolası gizli olarak sorulur (yazılanlar görünmez); anahtar yalnızca o koşunun belleğinde tutulur. Dashboard'dan başlatılan koşularda kasa açıksa sorulmaz.
+- Etkileşimsiz ortam (CI): parolayı `PLATFORM_KASA_PAROLASI` ortam değişkeniyle verin (gizli değişken olarak; önerilen yol etkileşimli terminaldir). Veritabanını kullanmadan eski dosyalardan koşmak için `PLATFORM_VERI_KAYNAGI=dosya`.
+- Dosyalar veya `.env` aktarımdan sonra değişirse (ör. eski dashboard'daki senaryo düzenleyicisi hâlâ dosyaya yazar) testler davranış değişmesin diye dosyaları kullanır ve uyarı yazar; sunucu kasa açıkken bu değişiklikleri otomatik olarak yeniden aktarır.
+- Kasa, Ayarlar > Güvenlik'te belirlenen süre (5–120 dk, varsayılan 15) boyunca işlem yapılmazsa otomatik kilitlenir.
+
 ## Komutlar
 
 ```powershell

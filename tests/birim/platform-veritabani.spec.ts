@@ -180,7 +180,8 @@ test.describe('Platform veritabanı — veri erişim katmanı', () => {
   });
 
   test('şema ve motor projeye özgü kavram içermez', () => {
-    const kaynaklar = ['veritabani/gocler.mjs', 'veritabani/depo.mjs', 'kasa.mjs', 'yedek.mjs', 'ice-aktarma.mjs', 'sunucu-platform.mjs']
+    const kaynaklar = ['veritabani/gocler.mjs', 'veritabani/depo.mjs', 'kasa.mjs', 'yedek.mjs', 'ice-aktarma.mjs', 'sunucu-platform.mjs',
+      'aktarim/motor.mjs', 'aktarim/playwright-liste.mjs', 'aktarim/veri-oku.mjs']
       .map((d) => readFileSync(join(__dirname, '..', '..', 'scripts', 'platform', d), 'utf-8').toLowerCase());
     for (const metin of kaynaklar) {
       for (const yasak of ['galaksi', 'jetseyahat', 'jet-seyahat', 'ödeme', 'odeme', 'poliçe', 'police']) {

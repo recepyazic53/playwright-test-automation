@@ -239,6 +239,43 @@ export const GOCLER = [
          AND yapan NOT LIKE 'ice-aktarma:%'
          AND substr(yapan, instr(yapan, '@') + 1) <> COALESCE(makine_id, 'bilinmeyen-makine');
     `
+  },
+  {
+    // Sürüm 4 — dış kaynaktan (mevcut proje dosyaları) aktarım + ortama göre veri:
+    // - baglam_profilleri / test_verisi_profilleri.ortam_id: NULL = tüm ortamlar; dolu = yalnızca
+    //   o ortam (aynı profil adı ortamlar arasında farklı değer taşıyabilir).
+    // - ortamlar.ayarlar_json ve ekranlar.ayarlar_json: ortama/ekrana ait ayarlar (ŞİFRELİ, 'ozel').
+    //   Ekran ayarlarında ortama göre değişen bölümler { "ortamlar": { "<ortamId>": {...} } } biçimindedir.
+    // - kaynak_eslemeleri: aktarılan her kaydın kararlı kaynak anahtarı (ör. senaryo için
+    //   "<dosya>::<başlık>") → varlık kimliği eşlemesi + kaynağın şifreli özeti (değişti mi?).
+    //   Kimlikler kaynak anahtarından türetilir (kararlı UUID): iki makinede ayrı ayrı yapılan
+    //   aktarımlar aynı kimlikleri üretir, yedek birleştirmede çift kayıt oluşmaz.
+    // - Yeni şifreli sütunlarda '{}' varsayılanı düz metin kalmasın diye sifreli_alan_gocu
+    //   'bekliyor'a çekilir (kasa ilk açıldığında şifrelenir).
+    surum: 4,
+    ad: 'kaynak_aktarimi_ve_ortam_kapsami',
+    sql: `
+      ALTER TABLE baglam_profilleri ADD COLUMN ortam_id TEXT REFERENCES ortamlar(id) ON DELETE CASCADE;
+      ALTER TABLE test_verisi_profilleri ADD COLUMN ortam_id TEXT REFERENCES ortamlar(id) ON DELETE CASCADE;
+      ALTER TABLE ortamlar ADD COLUMN ayarlar_json TEXT NOT NULL DEFAULT '{}';
+      ALTER TABLE ekranlar ADD COLUMN ayarlar_json TEXT NOT NULL DEFAULT '{}';
+
+      CREATE TABLE kaynak_eslemeleri (
+        id               TEXT PRIMARY KEY,
+        proje_id         TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        varlik_turu      TEXT NOT NULL,
+        kaynak_anahtari  TEXT NOT NULL,
+        varlik_id        TEXT NOT NULL,
+        kaynak_ozeti     TEXT,
+        olusturulma      TEXT NOT NULL,
+        guncellenme      TEXT NOT NULL,
+        UNIQUE (proje_id, varlik_turu, kaynak_anahtari)
+      );
+      CREATE INDEX ix_kaynak_eslemeleri_varlik ON kaynak_eslemeleri(varlik_turu, varlik_id);
+
+      INSERT INTO meta (anahtar, deger) VALUES ('sifreli_alan_gocu', 'bekliyor')
+        ON CONFLICT(anahtar) DO UPDATE SET deger = 'bekliyor';
+    `
   }
 ];
 
@@ -259,9 +296,11 @@ export const GOCLER = [
 export const SIFRELI_ALANLAR = Object.freeze({
   makineler: Object.freeze({ ad: 'ozel' }),
   ayarlar: Object.freeze({ deger_json: 'ozel' }),
-  ortamlar: Object.freeze({ ad: 'ozel', taban_url: 'ozel' }),
+  ortamlar: Object.freeze({ ad: 'ozel', taban_url: 'ozel', ayarlar_json: 'ozel' }),
   giris_profilleri: Object.freeze({ kullanici_adi: 'ozel', sms_ayari_json: 'ozel', parola: 'gizli', totp_gizli: 'gizli' }),
-  baglam_profilleri: Object.freeze({ alanlar_json: 'ozel' })
+  baglam_profilleri: Object.freeze({ alanlar_json: 'ozel' }),
+  ekranlar: Object.freeze({ ayarlar_json: 'ozel' }),
+  kaynak_eslemeleri: Object.freeze({ kaynak_ozeti: 'ozel' })
 });
 
 /** @param {string} tablo @returns {string[]} */
@@ -282,14 +321,15 @@ export const TABLOLAR = [
   { ad: 'makineler', birincilAnahtar: 'id', json: [], guncellenme: false, baslikAlani: 'ad' },
   { ad: 'ayarlar', birincilAnahtar: 'anahtar', json: ['deger_json'], guncellenme: true, baslikAlani: 'anahtar' },
   { ad: 'projeler', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, baslikAlani: 'ad' },
-  { ad: 'ortamlar', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'ad' },
+  { ad: 'ortamlar', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'giris_profilleri', birincilAnahtar: 'id', json: ['sms_ayari_json'], guncellenme: true, gecmisTuru: 'giris_profili', baslikAlani: 'ad' },
   { ad: 'baglam_profilleri', birincilAnahtar: 'id', json: ['alanlar_json'], guncellenme: true, gecmisTuru: 'baglam_profili', baslikAlani: 'ad' },
   { ad: 'test_verisi_turleri', birincilAnahtar: 'id', json: ['alanlar_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'test_verisi_profilleri', birincilAnahtar: 'id', json: ['degerler_json'], guncellenme: true, gecmisTuru: 'test_verisi_profili', baslikAlani: 'ad' },
-  { ad: 'ekranlar', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'ad' },
+  { ad: 'ekranlar', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'ekran_modelleri', birincilAnahtar: 'id', json: ['model_json'], guncellenme: false, baslikAlani: 'surum' },
   { ad: 'senaryolar', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'senaryo', baslikAlani: 'baslik' },
+  { ad: 'kaynak_eslemeleri', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'kaynak_anahtari' },
   { ad: 'degisiklik_gecmisi', birincilAnahtar: 'id', json: ['onceki_json', 'sonraki_json'], guncellenme: false },
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
   { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json'], guncellenme: false }

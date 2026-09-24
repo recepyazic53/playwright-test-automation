@@ -7,6 +7,7 @@ import {
   parolaAlani, tarihMetni, TOKEN, yeniKimlik
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
+import { aktarimAkisi } from './aktarim.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar' },
@@ -19,8 +20,16 @@ export const AYAR_BOLUMLERI = [
 
 const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
 const TIP_SECENEKLERI = [
-  ['metin', 'Metin'], ['sayi', 'Sayı'], ['tarih', 'Tarih'], ['eposta', 'E-posta'], ['mantiksal', 'Evet / hayır']
+  ['metin', 'Metin'], ['sayi', 'Sayı'], ['tarih', 'Tarih'], ['eposta', 'E-posta'], ['mantiksal', 'Evet / hayır'],
+  ['secim', 'Seçim (değer + metin, JSON)'], ['json', 'JSON']
 ];
+
+/** Profil kapsamı seçimi: "Tüm ortamlar" veya tek bir ortam. */
+function ortamSecimi(ortamlar, seciliId) {
+  return h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'),
+    ortamlar.map((o) => h('option', { value: o.id, selected: seciliId === o.id }, o.ad)));
+}
+const ortamAdiBul = (ortamlar, id) => (id ? (ortamlar.find((o) => o.id === id) || { ad: 'silinmiş ortam' }).ad : 'Tüm ortamlar');
 const ISLEM_ETIKETI = {
   olustur: 'Oluşturuldu', guncelle: 'Güncellendi', sil: 'Silindi',
   birlestirme_cakismasi: 'Birleştirme çakışması', ice_aktarma_uzerine_yazildi: 'Yedekten üzerine yazıldı'
@@ -222,11 +231,15 @@ async function girisProfilleri(govde, baglam, yenile) {
     const smsYontem = p && p.sms && p.sms.yontem === 'elle' ? 'elle' : 'sabit';
     const smsSabit = h('input', { type: 'radio', name: 'sms-yontem', value: 'sabit', id: yeniKimlik('sms'), checked: smsYontem === 'sabit' });
     const smsElle = h('input', { type: 'radio', name: 'sms-yontem', value: 'elle', id: yeniKimlik('sms'), checked: smsYontem === 'elle' });
-    const smsKod = h('input', { type: 'text', autocomplete: 'off', inputmode: 'numeric', value: p && p.sms ? p.sms.kod : '' });
+    // Sabit SMS test kodu da parola gibi maskelenir ("Göster" ile açılır).
+    const smsKodAlani = parolaAlani('Test kodu', { yardim: 'Test ortamının her girişte kabul ettiği sabit kod.' });
+    const smsKod = smsKodAlani.girdi;
+    smsKod.value = p && p.sms ? p.sms.kod : '';
+    smsKod.setAttribute('inputmode', 'numeric');
     const totpAlani = h('div', { class: 'ic-alanlar' }, totp.kapsayici);
     const smsAlani = h('div', { class: 'ic-alanlar' },
       h('label', { class: 'secenek', for: smsSabit.id }, smsSabit, 'Sabit test kodu'),
-      alan('Test kodu', smsKod, { yardim: 'Test ortamının her girişte kabul ettiği sabit kod.' }),
+      smsKodAlani.kapsayici,
       h('label', { class: 'secenek', for: smsElle.id }, smsElle, 'Koşu sırasında elle girilir'));
     const gorunurluk = () => {
       totpAlani.hidden = !rTotp.r.checked;
@@ -291,13 +304,17 @@ async function girisProfilleri(govde, baglam, yenile) {
 
 async function baglamProfilleri(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
-  const { profiller, turler } = await api(`/platform/baglam-profilleri?projeId=${encodeURIComponent(proje.id)}`);
+  const [{ profiller, turler }, { ortamlar }] = await Promise.all([
+    api(`/platform/baglam-profilleri?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
+  ]);
   const formAlani = h('div', {});
   const turListesiId = yeniKimlik('turler');
 
   const profilFormu = (p) => {
     const tur = h('input', { type: 'text', autocomplete: 'off', list: turListesiId, value: p ? p.tur : '' });
     const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '' });
+    const ortam = ortamSecimi(ortamlar, p ? p.ortamId : null);
     const satirlar = [];
     const satirKutusu = h('div', {});
     const satirEkle = (anahtar = '', deger = '') => {
@@ -318,6 +335,7 @@ async function baglamProfilleri(govde, baglam, yenile) {
       alan('Tür', tur, { zorunlu: true, yardim: 'Projenize özgü bağlam türü; ör. Rol, Şube, Müşteri tipi. Var olan bir türü seçebilir ya da yenisini yazabilirsiniz.' }),
       h('datalist', { id: turListesiId }, turler.map((t) => h('option', { value: t }))),
       alan('Profil adı', ad, { zorunlu: true }),
+      alan('Ortam', ortam, { yardim: 'Profil yalnızca seçilen ortamda mı, yoksa tüm ortamlarda mı geçerli?' }),
       h('fieldset', {}, h('legend', {}, 'Alanlar'), h('p', { class: 'soluk kucuk' }, 'Alan değerleri kasada şifreli saklanır.'), satirKutusu,
         h('button', { type: 'button', onclick: () => satirEkle().a.focus() }, '+ Alan ekle')),
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
@@ -338,7 +356,7 @@ async function baglamProfilleri(govde, baglam, yenile) {
       }
       try {
         await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/baglam-profili/kaydet', {
-          govde: { id: p ? p.id : undefined, projeId: proje.id, tur: tur.value.trim(), ad: ad.value.trim(), alanlar }
+          govde: { id: p ? p.id : undefined, projeId: proje.id, tur: tur.value.trim(), ad: ad.value.trim(), alanlar, ortamId: ortam.value || null }
         }));
         bildir('Bağlam profili kaydedildi.');
         yenile();
@@ -350,7 +368,7 @@ async function baglamProfilleri(govde, baglam, yenile) {
   const gruplar = turler.map((t) => h('section', { 'aria-label': t },
     h('h4', {}, t, ' ', h('span', { class: 'rozet' }, String(profiller.filter((p) => p.tur === t).length))),
     kayitListesi(profiller.filter((p) => p.tur === t).map((p) => kayitSatiri(p.ad,
-      Object.keys(p.alanlar || {}).length ? `Alanlar: ${Object.keys(p.alanlar).join(', ')}` : 'Alan yok',
+      `${ortamAdiBul(ortamlar, p.ortamId)} · ${Object.keys(p.alanlar || {}).length ? `Alanlar: ${Object.keys(p.alanlar).join(', ')}` : 'Alan yok'}`,
       [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('baglam_profili', p.id, p.ad, baglam)),
         silDugmesi(p.ad, async () => { await api('/platform/baglam-profili/sil', { govde: { id: p.id } }); bildir('Bağlam profili silindi.'); yenile(); })])), '')));
 
@@ -368,9 +386,10 @@ async function baglamProfilleri(govde, baglam, yenile) {
 
 async function testVerisi(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
-  const [{ turler }, { profiller }] = await Promise.all([
+  const [{ turler }, { profiller }, { ortamlar }] = await Promise.all([
     api(`/platform/test-verisi-turleri?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`)
+    api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
   ]);
   const turFormAlani = h('div', {});
   const profilFormAlani = h('div', {});
@@ -431,6 +450,7 @@ async function testVerisi(govde, baglam, yenile) {
   const profilFormu = (p, varsayilanTurId) => {
     const turSecimi = h('select', { disabled: Boolean(p) }, turler.map((t) => h('option', { value: t.id, selected: (p ? p.turId : varsayilanTurId) === t.id }, t.ad)));
     const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '' });
+    const ortam = ortamSecimi(ortamlar, p ? p.ortamId : null);
     const alanKutusu = h('div', {});
     let girdiler = [];
     const alanlariCiz = () => {
@@ -466,7 +486,7 @@ async function testVerisi(govde, baglam, yenile) {
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
     const form = formPaneli(p ? `Test verisi profilini düzenle: ${p.ad}` : 'Yeni test verisi profili', mesaj.kutu,
-      alan('Tür', turSecimi), alan('Profil adı', ad, { zorunlu: true }), alanKutusu,
+      alan('Tür', turSecimi), alan('Profil adı', ad, { zorunlu: true }), alan('Ortam', ortam), alanKutusu,
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => profilFormAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (o) => {
       o.preventDefault();
@@ -482,7 +502,7 @@ async function testVerisi(govde, baglam, yenile) {
       }
       try {
         await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/test-verisi-profili/kaydet', {
-          govde: { id: p ? p.id : undefined, projeId: proje.id, turId: turSecimi.value, ad: ad.value.trim(), degerler }
+          govde: { id: p ? p.id : undefined, projeId: proje.id, turId: turSecimi.value, ad: ad.value.trim(), degerler, ortamId: ortam.value || null }
         }));
         bildir('Test verisi profili kaydedildi.');
         yenile();
@@ -499,7 +519,7 @@ async function testVerisi(govde, baglam, yenile) {
       }, { kucuk: true, etiket: `${t.ad}: sil (bu türün tüm profilleri de silinir)` })]));
   const turAdi = (id) => (turler.find((t) => t.id === id) || { ad: '?' }).ad;
   const profilSatirlari = profiller.map((p) => kayitSatiri(p.ad,
-    [`Tür: ${turAdi(p.turId)} · `, Object.entries(p.degerler).map(([k, v]) => `${k}: ${v && typeof v === 'object' ? (v.dolu ? v.maske : '—') : v === null || v === '' ? '—' : String(v)}`).join(', ')],
+    [`Tür: ${turAdi(p.turId)} · ${ortamAdiBul(ortamlar, p.ortamId)} · `, Object.entries(p.degerler).map(([k, v]) => `${k}: ${v && typeof v === 'object' ? (v.dolu ? v.maske : '—') : v === null || v === '' ? '—' : String(v)}`).join(', ')],
     [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('test_verisi_profili', p.id, p.ad, baglam)),
       silDugmesi(p.ad, async () => { await api('/platform/test-verisi-profili/sil', { govde: { id: p.id } }); bildir('Test verisi profili silindi.'); yenile(); })]));
 
@@ -520,7 +540,10 @@ async function testVerisi(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 
 async function yedekleme(govde, baglam, yenile) {
-  const { klasor, dosyalar } = await api('/platform/yedek/otomatik-liste');
+  const [{ klasor, dosyalar }, aktarimDurumu] = await Promise.all([
+    api('/platform/yedek/otomatik-liste'),
+    api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] }))
+  ]);
 
   // Dışa aktar
   const parola = parolaAlani('Kasa parolası', { zorunlu: true, otomatik: 'current-password', yardim: 'Yedeği indirmeden önce parolayı yeniden girin. Yedek dosyası bu parolayla şifrelenir.' });
@@ -571,14 +594,34 @@ async function yedekleme(govde, baglam, yenile) {
   const iceKart = h('div', { class: 'kart' }, h('h3', {}, 'İçe aktar'),
     h('p', { class: 'soluk' }, 'Bir yedekteki kayıtları bu bilgisayardakilerle karşılaştırır; neyin ekleneceğini ve değişeceğini seçersiniz. Bu bilgisayardaki kayıtlar silinmez.'),
     h('div', { class: 'dugmeler' }, iceBaslat));
+  // Proje dosyalarından yeniden aktar (eski dosyalar bu klasörde varsa)
+  const aktarimAlani = h('div', {});
+  const aktarilabilir = (aktarimDurumu.adaptorler || []).find((a) => a.dosyalarVar);
+  let aktarimKart = null;
+  if (aktarilabilir) {
+    const baslat = h('button', { type: 'button', class: 'birincil' }, 'Önizle ve aktar…');
+    aktarimKart = h('div', { class: 'kart' }, h('h3', {}, 'Proje dosyalarından yeniden aktar'),
+      h('p', { class: 'soluk' }, `${aktarilabilir.etiket}. Kaynak anahtarına göre birleştirir: dosyada değişen kayıtlar güncellenir, yeni kayıtlar eklenir; önce önizleme gösterilir.`),
+      h('p', { class: 'soluk kucuk' }, aktarilabilir.sonAktarim ? `Son aktarım: ${tarihMetni(aktarilabilir.sonAktarim)}` : 'Bu proje henüz dosyalardan aktarılmadı.'),
+      h('div', { class: 'dugmeler' }, baslat));
+    baslat.addEventListener('click', () => {
+      for (const k of [aktarimKart, ...digerKartlar(), iceKart]) k.hidden = true;
+      aktarimAkisi(aktarimAlani, {
+        mod: 'ayarlar', adaptor: aktarilabilir,
+        bitti: async () => { await baglam.projeleriYenile(); yenile(); },
+        vazgec: () => { aktarimAlani.replaceChildren(); for (const k of [aktarimKart, ...digerKartlar(), iceKart]) k.hidden = false; baslat.focus(); }
+      });
+    });
+  }
   const digerKartlar = () => [disaForm, otomatikKart];
   iceBaslat.addEventListener('click', () => {
     iceKart.hidden = true;
     for (const k of digerKartlar()) k.hidden = true;
+    if (aktarimKart) aktarimKart.hidden = true;
     iceAktarmaAkisi(iceAlani, {
       mod: 'ayarlar',
       bitti: async () => { await baglam.projeleriYenile(); yenile(); },
-      vazgec: () => { iceAlani.replaceChildren(); iceKart.hidden = false; for (const k of digerKartlar()) k.hidden = false; iceBaslat.focus(); }
+      vazgec: () => { iceAlani.replaceChildren(); iceKart.hidden = false; for (const k of digerKartlar()) k.hidden = false; if (aktarimKart) aktarimKart.hidden = false; iceBaslat.focus(); }
     });
   });
 
@@ -598,7 +641,7 @@ async function yedekleme(govde, baglam, yenile) {
     h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; en yeni 30 otomatik yedek saklanır.'),
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     liste);
-  govde.replaceChildren(disaForm, iceKart, iceAlani, otomatikKart);
+  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -606,6 +649,26 @@ async function yedekleme(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 
 async function guvenlik(govde, baglam) {
+  const ayar = await api('/platform/guvenlik');
+  const dakika = h('input', { type: 'number', min: String(ayar.enAz), max: String(ayar.enCok), step: '1', value: String(ayar.otomatikKilitDakika), inputmode: 'numeric' });
+  const kilitMesaj = mesajKutusu();
+  const kilitKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const kilitForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Otomatik kilit'),
+    h('p', { class: 'soluk' }, 'Bu süre boyunca hiçbir işlem yapılmazsa kasa kendiliğinden kilitlenir; devam etmek için parola gerekir.'),
+    kilitMesaj.kutu,
+    alan('Süre (dakika)', dakika, { yardim: `${ayar.enAz}–${ayar.enCok} dakika; varsayılan ${ayar.varsayilan}.` }),
+    h('div', { class: 'dugmeler' }, kilitKaydet));
+  kilitForm.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    kilitMesaj.temizle();
+    alanHatasi(dakika, '');
+    const dk = Number(dakika.value);
+    if (!Number.isInteger(dk) || dk < ayar.enAz || dk > ayar.enCok) { alanHatasi(dakika, `${ayar.enAz} ile ${ayar.enCok} arasında bir tam sayı girin.`); dakika.focus(); return; }
+    try {
+      await mesgulIken(kilitKaydet, 'Kaydediliyor…', () => api('/platform/guvenlik/kaydet', { govde: { otomatikKilitDakika: dk } }));
+      kilitMesaj.goster(`Kasa ${dk} dakika hareketsizlikten sonra kilitlenecek.`, 'basari');
+    } catch (hata) { kilitMesaj.goster(hata.message); }
+  });
   const kilitle = h('button', { type: 'button' }, 'Kasayı kilitle');
   kilitle.addEventListener('click', async () => {
     await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
@@ -647,5 +710,6 @@ async function guvenlik(govde, baglam) {
     h('div', { class: 'kart' }, h('h3', {}, 'Kasayı kilitle'),
       h('p', { class: 'soluk' }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.'),
       h('div', { class: 'dugmeler' }, kilitle)),
+    kilitForm,
     form);
 }

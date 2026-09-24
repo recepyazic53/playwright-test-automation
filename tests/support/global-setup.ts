@@ -9,6 +9,7 @@ import {
   hasCredentials
 } from './environments';
 import { LoginPage } from './pages/login.page';
+import { kasaAnahtariniHazirla } from './platform-kasa';
 import { loadOrtakData } from './test-data';
 
 // Bütün senaryolar başlamadan ÖNCE, tek seferlik Galaksi login'i yapıp oturum çerezlerini
@@ -34,6 +35,12 @@ export default async function globalSetup(): Promise<void> {
   if (!process.env.KOSU_KIMLIGI) {
     process.env.KOSU_KIMLIGI = `${Date.now()}-${randomBytes(4).toString('hex')}`;
   }
+
+  // PLATFORM KASASI: proje dosyaları platform veritabanına aktarıldıysa test verisi/giriş
+  // bilgisi şifreli veritabanından okunur. Anahtar dashboard'dan gelmediyse parola burada
+  // (gizli girişle ya da CI'da PLATFORM_KASA_PAROLASI ile) istenir ve yalnızca bu koşunun
+  // worker'larına verilir — bkz. platform-kasa.ts. Spec'ler bu adımdan SONRA yüklenir.
+  await kasaAnahtariniHazirla();
 
   const environment = getEnvironmentName();
 

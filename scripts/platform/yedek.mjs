@@ -102,8 +102,10 @@ export function yedekOlustur(vt, secenekler = {}) {
   ilerleme('veri okunuyor', 5);
   /** @type {Record<string, Record<string, unknown>[]>} */
   const tablolar = {};
+  const mevcutTablolar = new Set(vt.tumu("SELECT name FROM sqlite_master WHERE type = 'table'").map((s) => String(s.name)));
   TABLOLAR.forEach((t, i) => {
-    tablolar[t.ad] = vt.tumu(`SELECT * FROM ${t.ad} ORDER BY rowid`);
+    // Eski şemada (göç uygulanmamış bellek içi veritabanı) henüz olmayan tablo boş yazılır.
+    tablolar[t.ad] = mevcutTablolar.has(t.ad) ? vt.tumu(`SELECT * FROM ${t.ad} ORDER BY rowid`) : [];
     ilerleme('veri okunuyor', 5 + Math.round((45 * (i + 1)) / TABLOLAR.length));
   });
   const icerik = {
