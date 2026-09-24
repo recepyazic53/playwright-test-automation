@@ -7,7 +7,7 @@
 //     kişi hangi ekranda takıldığını aramadan görür.
 // Senaryo dosyaları `test`'i '@playwright/test' yerine buradan import etmelidir.
 import { test as base } from '@playwright/test';
-import { epic, feature, story } from 'allure-js-commons';
+import { epic, feature, label, story } from 'allure-js-commons';
 import { writeFileSync, renameSync } from 'node:fs';
 
 // Klasör adı -> Allure Epic (ürün) görünen adı.
@@ -21,7 +21,6 @@ const EPIC_ADLARI: Record<string, string> = {
   'jet-ilk-ates-konut': 'İlk Ateş Konut',
   'jet-satis': 'Jet Satış',
   trafik: 'Trafik',
-  login: 'Giriş',
   portal: 'Portal'
 };
 
@@ -39,7 +38,6 @@ const FEATURE_ADLARI: Record<string, string> = {
   'jet-ilk-ates-konut/teklif-matrisi': 'Teklif Matrisi',
   'jet-satis/urun-ekranlari': 'Ürün Ekranları',
   'trafik/jet-trafik': 'Teklif Alma',
-  'login/basarili-giris': 'Başarılı Giriş',
   'portal/canli': 'Genel Kontrol'
 };
 
@@ -80,6 +78,26 @@ export const test = base.extend<OrtakFixturelar>({
       await epic(epicAdi);
       await feature(featureAdi);
       await story(testInfo.title);
+      // Koşu gruplama etiketleri (bkz. global-setup.ts > KOSU_KIMLIGI ve
+      // urun-hata-raporu.mjs): aynı "playwright test" çağrısındaki tüm sonuçlar aynı
+      // kosuKimligi'ni taşır. kosuTuru: dashboard'daki ▷ ile tetiklenen tekil koşular
+      // (TEST_SUNUCU_GORUNUR=1) 'tekil', normal npm run test / CI koşuları 'tam' — dashboard
+      // üst kartları ve "önceki koşu" karşılaştırması yalnızca 'tam' koşulara bakar.
+      const kosuKimligi = process.env.KOSU_KIMLIGI;
+      if (kosuKimligi) await label('kosuKimligi', kosuKimligi);
+      // Dashboard'daki "Koşuyu başlat" her senaryoyu ayrı süreçte koşsa da tam koşu
+      // sayılır: test-sunucu bu durumda ortak KOSU_KIMLIGI ve TEST_SUNUCU_KOSU_TURU=tam verir.
+      const dashboardKosusuMu = process.env.TEST_SUNUCU_GORUNUR === '1';
+      const tamKosuMu = !dashboardKosusuMu || process.env.TEST_SUNUCU_KOSU_TURU === 'tam';
+      await label('kosuTuru', tamKosuMu ? 'tam' : 'tekil');
+      // kosuKapsami (yalnızca 'tam' koşularda): dashboard'da bir ürün seçiliyken başlatılan
+      // "Koşuyu başlat" o ürünün görünen adını taşır (test-sunucu TEST_SUNUCU_KOSU_KAPSAMI
+      // ile verir); Genel görünümden başlatılan koşular ve terminal/CI koşuları 'Genel'dir.
+      // urun-hata-raporu.mjs, Genel trendini yalnızca 'Genel' kapsamlı koşulardan çizer.
+      if (tamKosuMu) {
+        const kosuKapsami = dashboardKosusuMu ? process.env.TEST_SUNUCU_KOSU_KAPSAMI || 'Genel' : 'Genel';
+        await label('kosuKapsami', kosuKapsami);
+      }
       await use();
     },
     { auto: true }

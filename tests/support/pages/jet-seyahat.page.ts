@@ -226,7 +226,7 @@ export class JetSeyahatPage {
   private async telefonGir(selector: string, cepTelefonu: string): Promise<void> {
     const telefon = this.page.locator(selector);
     await telefon.click();
-    await telefon.press('Control+A');
+    await telefon.press('ControlOrMeta+A');
     await telefon.press('Backspace');
     await telefon.pressSequentially(cepTelefonu, { delay: 20 });
     await expect.poll(() => telefon.inputValue().then((value) => value.replace(/\D/g, '')))

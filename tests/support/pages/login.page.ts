@@ -2,6 +2,12 @@ import { expect, type Page } from '@playwright/test';
 import type { Credentials, EnvironmentName } from '../environments';
 import { getEnvironment } from '../environments';
 
+// TEST portalı girişi zaman zaman yavaş yanıtlıyor (giriş butonundan sonra 15 sn'yi aşan
+// yüklemeler görüldü). Varsayılan 5 sn'lik bekleme bu durumda başarılı girişi de hata
+// sayıyordu, bu yüzden giriş sonrası ve oturum kontrolü için daha uzun süre beklenir.
+const GIRIS_BEKLEME_SURESI_MS = 45_000;
+const OTURUM_KONTROL_SURESI_MS = 15_000;
+
 export class LoginPage {
   constructor(
     private readonly page: Page,
@@ -20,7 +26,7 @@ export class LoginPage {
     return this.page
       .getByText(successText, { exact: true })
       .first()
-      .waitFor({ state: 'visible', timeout: 4_000 })
+      .waitFor({ state: 'visible', timeout: OTURUM_KONTROL_SURESI_MS })
       .then(() => true)
       .catch(() => false);
   }
@@ -42,7 +48,7 @@ export class LoginPage {
       await this.submit();
     }
 
-    await expect(this.page.getByText(successText, { exact: true })).toBeVisible();
+    await expect(this.page.getByText(successText, { exact: true })).toBeVisible({ timeout: GIRIS_BEKLEME_SURESI_MS });
   }
 
   private async submit(): Promise<void> {

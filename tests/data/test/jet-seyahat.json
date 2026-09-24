@@ -124,17 +124,6 @@
         "sorguTipi": "tekli",
         "ettiren": "farkliTuzel",
         "ettirenProfili": "vkn2"
-      },
-      {
-        "baslik": "__senaryo_olustur_deneme__ b52e1d0a",
-        "kapsam": "AVRUPA",
-        "alternatif": "SEYAHAT PAKET",
-        "covidTeminati": "E",
-        "sorguTipi": "coklu",
-        "ettiren": "farkliOzel",
-        "ettirenProfili": "tc1",
-        "sigortaliProfili": "tc1",
-        "acenteProfili": "Acente20147"
       }
     ]
   }
