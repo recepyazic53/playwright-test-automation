@@ -118,6 +118,7 @@ export declare function testVerisiTuruKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean }>;
 }): string;
 export declare function testVerisiTurleriniListele(vt: Veritabani, projeId: string): TestVerisiTuru[];
+export declare function profilHassasliginiDonustur(vt: Veritabani, turId: string, yeniHassaslik: Map<string, boolean>): number;
 export declare function testVerisiTuruSil(vt: Veritabani, id: string): boolean;
 export declare function testVerisiProfiliKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; turId: string; ortamId?: string | null; ad: string; degerler: Record<string, TestVerisiDegeri>; yapan?: string;

@@ -1,21 +1,18 @@
-// Koşu VİDEOLARI için saklama (retention) temizliği — urun-hata-raporu.mjs ve
-// test-sunucu.mjs'in PAYLAŞTIĞI küçük yardımcı.
+// ESKİ (platform öncesi) DÜZ METİN koşu çıktıları için saklama (retention) temizliği —
+// test-sunucu.mjs kullanır.
 //
-// Kural (kullanıcı kararı): videolar diskte en çok VIDEO_SAKLAMA_GUN gün (varsayılan 30)
-// tutulur; ekran görüntüleri (png) ve sonuç JSON'ları HİÇ silinmez (dashboard'daki hata
-// geçmişi/ekran görüntüleri kalıcı kalsın diye). Silinenler:
-//   1) allure-results-<ortam>/ içindeki, değiştirilme zamanı (mtime) eşikten eski .webm
-//      dosyaları (Allure'un kopyaladığı Playwright videoları). Dashboard bu dosyalara
-//      göreli yolla "▶ Videoyu izle" bağlantısı verir; dosya silinmişse bağlantı hiç
-//      gösterilmez (rapor üretilirken varlığı kontrol edilir).
-//   2) test-results/dashboard-kosulari/ altındaki, eşikten eski KOŞU KLASÖRLERİNİN
-//      tamamı (dashboard'dan tetiklenen her koşunun kendi Playwright çıktısı: video,
-//      trace, geçici ekran görüntüleri — bkz. test-sunucu.mjs > gercektenCalistir).
-//      Klasör adı "<Date.now()>-<rastgele>" biçimindedir; yaş önce addaki zaman
-//      damgasından, çözülemezse klasörün mtime'ından hesaplanır.
-// Süre .env'deki VIDEO_SAKLAMA_GUN ile değiştirilebilir (pozitif sayı değilse 30 kullanılır).
+// Platform sonuç kaydı açıkken koşu videoları/ekran görüntüleri/izleri şifreli medya deposuna
+// (veri/medya/) taşınır ve oradaki saklama kuralı scripts/platform/medya.mjs >
+// medyaSaklamaTemizligi ile uygulanır. Bu dosya yalnızca GERİYE DÖNÜK olarak, sonuç kaydı
+// kapalıyken (proje aktarılmamışken) dashboard'dan tetiklenen koşuların düz metin çıktı
+// klasörlerini temizler:
+//   test-results/dashboard-kosulari/<Date.now()>-<rastgele>/ — VIDEO_SAKLAMA_GUN'den (varsayılan 30)
+//   eski KOŞU KLASÖRLERİNİN tamamı (video, trace, geçici ekran görüntüleri). Yaş önce addaki zaman
+//   damgasından, çözülemezse klasörün mtime'ından hesaplanır.
+// NOT: Eski allure-results-<ortam>/ klasörlerine ARTIK DOKUNULMAZ — içe aktarıldıktan sonra ne
+// yapılacağına kullanıcı karar verecek.
 import 'dotenv/config';
-import { existsSync, readdirSync, rmSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const VARSAYILAN_SAKLAMA_GUN = 30;
@@ -26,38 +23,12 @@ export function videoSaklamaGunuGetir() {
   return Number.isFinite(deger) && deger > 0 ? deger : VARSAYILAN_SAKLAMA_GUN;
 }
 
-// kokKlasor: allure-results-<ortam>/ ve test-results/ klasörlerini içeren proje kökü
-// (rapor betiği için process.cwd(), test sunucusu için projeKoku).
-// ortamlar: hangi allure-results-<ortam>/ klasörlerine bakılacağı.
-// Dönüş: silinen dosya/klasör yolları (loglama/test için).
-export function eskiVideolariTemizle(kokKlasor, ortamlar = ['test', 'canli'], logOnEki = '[video-temizligi]') {
+// kokKlasor: test-results/ klasörünü içeren proje kökü.
+// Dönüş: silinen klasör yolları (loglama/test için).
+export function eskiVideolariTemizle(kokKlasor, logOnEki = '[video-temizligi]') {
   const gun = videoSaklamaGunuGetir();
   const esikMs = Date.now() - gun * GUN_MS;
   const silinenler = [];
-
-  for (const ortam of ortamlar) {
-    const klasor = join(kokKlasor, `allure-results-${ortam}`);
-    if (!existsSync(klasor)) continue;
-    let dosyalar = [];
-    try {
-      dosyalar = readdirSync(klasor);
-    } catch (hata) {
-      console.error(`${logOnEki} ${klasor} okunamadı: ${hata.message}`);
-      continue;
-    }
-    for (const ad of dosyalar) {
-      if (!ad.toLowerCase().endsWith('.webm')) continue;
-      const yol = join(klasor, ad);
-      try {
-        const bilgi = statSync(yol);
-        if (!bilgi.isFile() || bilgi.mtimeMs >= esikMs) continue;
-        unlinkSync(yol);
-        silinenler.push(yol);
-      } catch (hata) {
-        console.error(`${logOnEki} ${yol} silinemedi: ${hata.message}`);
-      }
-    }
-  }
 
   const kosuKlasorleriKoku = join(kokKlasor, 'test-results', 'dashboard-kosulari');
   if (existsSync(kosuKlasorleriKoku)) {
@@ -84,7 +55,7 @@ export function eskiVideolariTemizle(kokKlasor, ortamlar = ['test', 'canli'], lo
   }
 
   if (silinenler.length) {
-    console.log(`${logOnEki} ${gun} günden eski ${silinenler.length} video/koşu klasörü silindi:`);
+    console.log(`${logOnEki} ${gun} günden eski ${silinenler.length} koşu klasörü silindi:`);
     for (const yol of silinenler) console.log(`  - ${yol}`);
   }
   return silinenler;

@@ -28,9 +28,9 @@ import { loadOrtakData } from './test-data';
 export default async function globalSetup(): Promise<void> {
   // KOŞU KİMLİĞİ: tek bir "playwright test" çağrısının (bir koşunun) tüm worker'ları bu
   // değişkeni miras alır (globalSetup ana süreçte, worker'lar başlamadan önce çalışır).
-  // fixtures.ts bunu her sonuca "kosuKimligi" Allure etiketi olarak yazar;
-  // urun-hata-raporu.mjs de sonuçları bu etikete göre koşulara gruplar (eskiden yalnızca
-  // "10 dakikalık boşluk" tahminiyle gruplanıyordu). Dışarıdan verilmişse (ör. CI)
+  // fixtures.ts bunu her sonuca "kosuKimligi" annotation'ı olarak yazar; platform raporlayıcısı
+  // (scripts/platform/raporlayici.mjs) sonuçları bu kimlikle tek koşu olarak veritabanına yazar.
+  // Dışarıdan verilmişse (ör. CI ya da platform sunucusu)
   // dokunulmaz. Bu satır, aşağıdaki erken "return"lerden ÖNCE olmalı.
   if (!process.env.KOSU_KIMLIGI) {
     process.env.KOSU_KIMLIGI = `${Date.now()}-${randomBytes(4).toString('hex')}`;

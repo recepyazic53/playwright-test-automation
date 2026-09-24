@@ -1,7 +1,8 @@
 // TERMİNAL KOŞULARINDA KASA ANAHTARI — global-setup.ts çağırır (ana süreçte, spec'ler
 // yüklenmeden ve worker'lar başlamadan ÖNCE).
-// - Proje dosyaları platform veritabanına aktarılmamışsa ya da PLATFORM_VERI_KAYNAGI=dosya ise
-//   hiçbir şey yapılmaz (eski davranış).
+// - Proje dosyaları platform veritabanına aktarılmamışsa hiçbir şey yapılmaz (eski davranış).
+//   Aktarılmışsa PLATFORM_VERI_KAYNAGI=dosya olsa bile anahtar istenir: koşu sonuçları ve ekran
+//   görüntüsü/video/izler platform veritabanına ŞİFRELİ yazılır (scripts/platform/raporlayici.mjs).
 // - PLATFORM_KASA_ANAHTARI zaten verilmişse (dashboard koşuları) dokunulmaz.
 // - Aksi halde kasa parolası: PLATFORM_KASA_PAROLASI ortam değişkeninden (CI) ya da terminalde
 //   GİZLİ girişle (yazılanlar ekranda görünmez) sorulur; anahtar ayrı bir süreçte türetilip
@@ -9,8 +10,8 @@
 //   ve anahtar hiçbir yere yazılmaz/loglanmaz; parola değişkeni ortamdan silinir.
 // - TTY yoksa ve parola verilmemişse açık bir hata verilir.
 import {
-  KASA_ANAHTARI_DEGISKENI, KASA_PAROLASI_DEGISKENI, VERI_KAYNAGI_DEGISKENI, platformAktarimiVarMi,
-  platformOkuyucusunuCalistir, platformOnbelleginiSifirla
+  KASA_ANAHTARI_DEGISKENI, KASA_PAROLASI_DEGISKENI, platformOkuyucusunuCalistir, platformOnbelleginiSifirla,
+  platformSonucKaydiVarMi
 } from './platform-veri';
 
 const EN_FAZLA_DENEME = 3;
@@ -56,7 +57,7 @@ function anahtarTuret(parola: string): { anahtar?: string; hata?: string; kod?: 
 
 export async function kasaAnahtariniHazirla(): Promise<void> {
   if (process.env[KASA_ANAHTARI_DEGISKENI]) return;
-  if (!platformAktarimiVarMi()) return;
+  if (!platformSonucKaydiVarMi()) return;
 
   const ortamParolasi = process.env[KASA_PAROLASI_DEGISKENI];
   if (ortamParolasi) {
@@ -74,7 +75,7 @@ export async function kasaAnahtariniHazirla(): Promise<void> {
       'Proje verisi platform veritabanında ve şifreli; bu koşu için kasa parolası gerekiyor ama terminal etkileşimli değil (TTY yok).\n' +
         `  - Önerilen: testi etkileşimli bir terminalden çalıştırın (parola gizli olarak sorulur) ya da dashboard'dan başlatın.\n` +
         `  - CI/otomasyon: parolayı ${KASA_PAROLASI_DEGISKENI} ortam değişkeniyle verin (gizli değişken olarak; loglara yazmayın).\n` +
-        `  - Veritabanını kullanmadan eski dosyalardan çalıştırmak için: ${VERI_KAYNAGI_DEGISKENI}=dosya`
+        '  - Not: sonuçlar ve ekran görüntüleri/videolar platform veritabanına şifreli yazıldığı için veri kaynağı "dosya" olsa da parola gerekir.'
     );
   }
 

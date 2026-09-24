@@ -32,6 +32,8 @@ export interface AktarimAdaptoru {
   kosuListesiOzeti(projeKoku: string): string;
   kosudanHaricAnahtarlar(vt: Veritabani, projeId: string): string[];
   yenidenKur(vt: Veritabani, projeId: string, ortamAnahtari: string): YenidenKurulanVeri | null;
+  /** Eski koşu sonucu klasörleri (Allure ham sonuçları) — tek seferlik içe aktarım için. */
+  sonucKaynaklari?(projeKoku: string): Array<{ ortam: string; klasor: string }>;
 }
 
 export declare const AKTARIM_ADAPTORLERI: ReadonlyArray<AktarimAdaptoru>;

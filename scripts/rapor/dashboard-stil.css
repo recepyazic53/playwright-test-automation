@@ -668,3 +668,6 @@
   .gorsel-buyutme-kutu .modal-kapat {
     top: -16px; right: -16px; background: var(--surface-1);
   }
+
+/* Sonuç bölümleri platformun "Sonuçlar" sekmesine taşındı: gizli bölümler hiçbir kuralla görünür olmasın. */
+[hidden] { display: none !important; }

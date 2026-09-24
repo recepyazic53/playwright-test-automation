@@ -54,8 +54,10 @@ import {
   senaryoyuDogrula
 } from './dogrulama/senaryo-dogrulayici.mjs';
 import { ekranModeliniOku } from './dogrulama/model-oku.mjs';
+import { GORUNUM_SURUMU } from './rapor/dashboard-html.mjs';
 import {
-  platformEtkinligiBildir, platformIsteginiIsle, platformOtomatikYedekZamanla, platformTestOrtami, projeDosyalariniEsitle
+  platformEtkinligiBildir, platformIsteginiIsle, platformKasaAcikMi, platformKosuSonucu, platformKosusunuKapat,
+  platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformTestOrtami, projeDosyalariniEsitle
 } from './platform/sunucu-platform.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
@@ -229,10 +231,32 @@ function jsonGonder(res, durumKodu, govde) {
 }
 
 // Bir koşu videosunun disk yolunu, dashboard'un doğrudan <video src="..."> olarak
-// kullanabileceği bir /medya URL'sine çevirir (bkz. aşağıdaki /medya route'u).
+// kullanabileceği bir /medya URL'sine çevirir (bkz. aşağıdaki /medya route'u). YALNIZCA
+// platform sonuç kaydı kapalıyken (eski davranış: düz dosyalar test-results/ altında) kullanılır.
 function medyaUrlOlustur(dosyaYolu) {
   if (!dosyaYolu) return null;
   return `http://127.0.0.1:${PORT}/medya?token=${encodeURIComponent(TOKEN)}&yol=${encodeURIComponent(dosyaYolu)}`;
+}
+
+// Platform sonuç kaydı açıkken koşunun son ekran görüntüsü ve videosu ŞİFRELİ medya deposundadır;
+// panel bunları /platform/medya/<id> ile (kasa açık + oturum token'ı) gösterir. Oturum token'ı
+// yalnızca isteği zaten oturum token'ıyla yapan sayfaya (sunulan "Mevcut görünüm") verilir;
+// dosya (file://) olarak açılan eski dashboard'a verilmez (o zaman görsel/video bağlantısı yok).
+function platformMedyaUrl(medyaId, istekToken) {
+  if (!medyaId || !tokenEsit(istekToken, OTURUM_TOKEN)) return null;
+  return `http://127.0.0.1:${PORT}/platform/medya/${encodeURIComponent(medyaId)}?token=${encodeURIComponent(OTURUM_TOKEN)}`;
+}
+
+// Çalıştırma sonucunu panel yanıtının medya alanlarına çevirir (platform ya da eski JSON yolu).
+function panelMedyasi(sonuc, istekToken) {
+  if (sonuc.platform) {
+    return {
+      ekranGoruntusu: null,
+      ekranGoruntusuUrl: platformMedyaUrl(sonuc.ekranGoruntusuId, istekToken),
+      videoUrl: platformMedyaUrl(sonuc.videoId, istekToken)
+    };
+  }
+  return { ekranGoruntusu: sonuc.ekranGoruntusu, ekranGoruntusuUrl: null, videoUrl: medyaUrlOlustur(sonuc.videoYolu) };
 }
 
 // file:// olarak açılan eski dashboard'un gönderdiği "Origin: null" (CORS başlıklarıyla) ve
@@ -505,7 +529,7 @@ function raporuUret(ortam) {
         execFile(
           process.execPath,
           [join(projeKoku, 'scripts', 'urun-hata-raporu.mjs'), ortam],
-          { cwd: projeKoku, maxBuffer: 32 * 1024 * 1024, timeout: 5 * 60 * 1000, shell: false },
+          { cwd: projeKoku, env: { ...process.env, PLATFORM_GORUNUM_KLASORU: GORUNUM_KLASORU }, maxBuffer: 32 * 1024 * 1024, timeout: 5 * 60 * 1000, shell: false },
           (hata, stdout, stderr) => coz(hata ? { basarili: false, mesaj: `Rapor üretilemedi: ${String(stderr || hata.message).slice(-500)}` } : { basarili: true })
         );
       }).finally(() => raporUretimleri.delete(ortam))
@@ -523,13 +547,18 @@ function raporuUret(ortam) {
 // Tüm HTML yanıtları: Cache-Control: no-store (token tarayıcı önbelleğine düşmesin),
 // X-Frame-Options: SAMEORIGIN (başka sitelerin çerçevelemesi engellenir).
 const ARAYUZ_KLASORU = join(buDosyaninKlasoru, 'platform', 'arayuz');
+// "Mevcut görünüm" dosyalarının (dashboard-<ortam>.html) klasörü: varsayılan proje kökü.
+// PLATFORM_GORUNUM_KLASORU yalnızca ikinci bir sunucu örneğinin (ör. doğrulama) proje kökündeki
+// görünüm dosyalarının üzerine yazmaması içindir.
+const GORUNUM_KLASORU = process.env.PLATFORM_GORUNUM_KLASORU ? resolvePath(process.env.PLATFORM_GORUNUM_KLASORU) : projeKoku;
 const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/stil.css', { dosya: 'stil.css', tur: 'text/css; charset=utf-8' }],
   ['/arayuz/uygulama.js', { dosya: 'uygulama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortak.js', { dosya: 'ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/aktarim.js', { dosya: 'aktarim.js', tur: 'text/javascript; charset=utf-8' }]
+  ['/arayuz/aktarim.js', { dosya: 'aktarim.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }]
 ]);
 const KABUK_GUVENLIK_BASLIKLARI = {
   'Cache-Control': 'no-store',
@@ -557,56 +586,18 @@ function arayuzIsteginiIsle(req, res) {
   return true;
 }
 
-// Dashboard'un göreli bağlantı verdiği Allure ekleri (ekran görüntüsü vb.): dosya olarak açılınca
-// proje kökünden okunur; sunulan görünümde /gorunum/allure-results-<ortam>/<dosya> olarak gelir.
-// Yalnızca o klasördeki DÜZ dosya adları sunulur (alt klasör, "..", sembolik bağ dışarı çıkamaz).
-const EK_ICERIK_TURLERI = {
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webm': 'video/webm', '.mp4': 'video/mp4',
-  '.txt': 'text/plain; charset=utf-8', '.log': 'text/plain; charset=utf-8', '.json': 'application/json; charset=utf-8'
-};
-function gorunumEkiniSun(res, ortam, hamAd) {
-  let ad;
-  try { ad = decodeURIComponent(hamAd); } catch { ad = ''; }
-  const kok = join(projeKoku, `allure-results-${ortam}`);
-  const hedef = join(kok, ad);
-  let gecerli = Boolean(ad) && !/[\\/]/.test(ad) && ad !== '..' && ad !== '.';
-  if (gecerli) {
-    try {
-      const gercekKok = realpathSync(kok);
-      const gercekHedef = realpathSync(hedef);
-      const goreli = relative(gercekKok, gercekHedef);
-      gecerli = Boolean(goreli) && !goreli.startsWith('..') && !isAbsolute(goreli) && statSync(gercekHedef).isFile();
-    } catch {
-      gecerli = false;
-    }
-  }
-  if (!gecerli) {
-    jsonGonder(res, 404, { basarili: false, mesaj: 'Dosya bulunamadı.' });
-    return;
-  }
-  res.writeHead(200, {
-    'Content-Type': EK_ICERIK_TURLERI[extname(ad).toLowerCase()] || 'application/octet-stream',
-    'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'same-origin', 'Cache-Control': 'no-store',
-    'Content-Security-Policy': "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'"
-  });
-  createReadStream(hedef).pipe(res);
-}
-
 async function gorunumuSun(req, res) {
   const url = new URL(req.url, 'http://127.0.0.1');
-  const ekEslesme = /^\/gorunum\/allure-results-(test|canli)\/([^/]+)$/.exec(url.pathname);
-  if (ekEslesme) {
-    gorunumEkiniSun(res, ekEslesme[1], ekEslesme[2]);
-    return;
-  }
   const eslesme = /^\/gorunum\/(test|canli)$/.exec(url.pathname);
   if (!eslesme) {
     jsonGonder(res, 404, { basarili: false, mesaj: 'Görünüm bulunamadı (ortam: test veya canli).' });
     return;
   }
   const ortam = eslesme[1];
-  const dosyaYolu = join(projeKoku, `dashboard-${ortam}.html`);
-  if (url.searchParams.get('yenile') === '1' || !existsSync(dosyaYolu)) {
+  const dosyaYolu = join(GORUNUM_KLASORU, `dashboard-${ortam}.html`);
+  // Eski (Allure dönemi) üretim — sürüm işareti yok — sunulmaz, yeniden üretilir.
+  const eskiUretimMi = existsSync(dosyaYolu) && !readFileSync(dosyaYolu, 'utf-8').includes(`content="${GORUNUM_SURUMU}"`);
+  if (url.searchParams.get('yenile') === '1' || !existsSync(dosyaYolu) || eskiUretimMi) {
     const sonuc = await raporuUret(ortam);
     if (!sonuc.basarili) {
       res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -803,6 +794,15 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   // benzersiz olan bir senaryoyu "3 kez eşleşti" diyerek yanlışlıkla reddediyordu.
   // Çözüm: hem "ad" HEM "dosya" ile eşleştir — tekillik artık (dosya, başlık) ikilisi
   // için doğrulanıyor, ki zaten çalıştırılmak istenen kayıt da bu ikiliyle geliyor.
+  // Sonuçlar platform veritabanına yazılıyorsa (proje aktarılmış) medya şifrelenmek zorunda:
+  // kasa kilitliyken koşu BAŞLATILMAZ (anahtar olmadan ekran görüntüsü/video düz metin kalırdı).
+  if ((await platformSonucKaydiEtkinMi()) && !(await platformKasaAcikMi())) {
+    return {
+      calistiMi: false,
+      mesaj: 'Platform kasası kilitli. Sonuçlar ve ekran görüntüleri şifreli kaydedildiği için koşu başlatmadan önce platform arayüzünde kasayı açın.'
+    };
+  }
+
   const eslesenler = tumSenaryolar.filter((s) => s.ad === senaryoAdi && s.dosya === dosya);
   if (eslesenler.length === 0) {
     return {
@@ -849,7 +849,17 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   });
 }
 
-function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}) {
+// Platform sonuç kaydında aynı KOSU_KIMLIGI'ni paylaşan (ör. "Koşuyu başlat" ile her senaryo
+// ayrı süreçte) çalışan süreç sayısı — sonuncusu kapanınca koşu hâlâ "çalışıyor" görünüyorsa kapatılır.
+const aktifPlatformKosulari = new Map();
+
+async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}) {
+  // Proje platform veritabanına aktarılmışsa sonuçlar ve (şifreli) medya platform raporlayıcısı
+  // (scripts/platform/raporlayici.mjs) tarafından veritabanına yazılır; bu durumda JSON sonuç
+  // dosyası HİÇ yazdırılmaz (eklerin base64 kopyası geçici klasörde bile düz metin kalmasın) ve
+  // panelin sonucu veritabanından okunur. Aksi halde eski davranış (JSON + test-results).
+  const platformEtkin = await platformSonucKaydiEtkinMi().catch(() => false);
+  const kosuKimligi = ekOrtamDegiskenleri.KOSU_KIMLIGI || `panel-${Date.now()}-${randomBytes(4).toString('hex')}`;
   return new Promise((resolve) => {
     // Bu senaryo, dosya kuyruğunda beklerken (henüz hiç süreç başlatılmadan)
     // "Durdur" ile iptal edilmiş olabilir (bkz. calismaDurdur > baslamadanIptalEdilecekler
@@ -861,7 +871,7 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegis
       return;
     }
 
-    const jsonCiktiYolu = join(tmpdir(), `test-sunucu-sonuc-${randomBytes(6).toString('hex')}.json`);
+    const jsonCiktiYolu = platformEtkin ? null : join(tmpdir(), `test-sunucu-sonuc-${randomBytes(6).toString('hex')}.json`);
     // Koşu artık HEADLESS çalışır — masaüstünde ayrı bir Chrome penceresi açılmaz
     // (kullanıcı bunun yerine dashboard'daki "canlı izleme panelini" istedi). Canlı
     // izleme, bu koşuya özel geçici bir PNG dosyasına (canliYolu) saniyede bir yazılan
@@ -896,14 +906,20 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegis
       env: {
         ...process.env,
         TEST_ENV: ortam,
-        PLAYWRIGHT_JSON_OUTPUT_NAME: jsonCiktiYolu,
+        ...(jsonCiktiYolu ? { PLAYWRIGHT_JSON_OUTPUT_NAME: jsonCiktiYolu } : {}),
+        KOSU_KIMLIGI: kosuKimligi,
+        // Raporlayıcı sonuçları bu sunucuya gönderir (veritabanının tek sahibi sunucudur). Token:
+        // raporlayıcı token'ı (yalnızca /platform/sonuc/* yazma uçlarında geçerli).
+        PLATFORM_SONUC_ADRESI: `http://127.0.0.1:${PORT}`,
+        PLATFORM_SONUC_TOKENI: TOKEN,
         TEST_SUNUCU_GORUNUR: '1',
         TEST_SUNUCU_CANLI_YOLU: canliYolu,
         TEST_SUNUCU_GREP_DESENI: desen,
         // Kasa açıksa türetilmiş anahtar: test verisi platform veritabanından okunur (terminalde
         // parola sorulmaz). Kasa kilitliyse boş — alt süreç dosyalara düşer.
         ...platformTestOrtami(),
-        ...ekOrtamDegiskenleri
+        ...ekOrtamDegiskenleri,
+        KOSU_KIMLIGI: kosuKimligi
       },
       // NOT: 'inherit' yerine 'pipe' kullanılıyor — alt sürecin kendi stdout/stderr'ı
       // (ör. Playwright'ın "Error: No tests found" çıktısı) DOĞRUDAN terminale
@@ -939,6 +955,13 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegis
 
     const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu };
     calisanSurecler.set(kosuId, kayit);
+    aktifPlatformKosulari.set(kosuKimligi, (aktifPlatformKosulari.get(kosuKimligi) ?? 0) + 1);
+    const platformKosusunuBirak = async (durum) => {
+      const kalan = (aktifPlatformKosulari.get(kosuKimligi) ?? 1) - 1;
+      if (kalan > 0) { aktifPlatformKosulari.set(kosuKimligi, kalan); return; }
+      aktifPlatformKosulari.delete(kosuKimligi);
+      if (platformEtkin) await platformKosusunuKapat(kosuKimligi, durum).catch(() => {});
+    };
 
     // Süre limiti: takılan bir koşu (ör. hiç kapanmayan bir pop-up, donan tarayıcı)
     // dashboard'u sonsuza kadar "çalışıyor" durumunda bırakmasın diye, süreç
@@ -957,7 +980,7 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegis
       console.error(`Test süreci başlatılamadı: ${hata.message}`);
     });
 
-    alt.on('close', (kod) => {
+    alt.on('close', async (kod) => {
       clearTimeout(sureLimitiZamanlayici);
       const iptalEdildiMi = kayit.iptalEdiliyor && !kayit.zamanAsimi;
       calisanSurecler.delete(kosuId);
@@ -969,6 +992,8 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegis
       } catch {
         // yok sayılır
       }
+
+      await platformKosusunuBirak(kayit.zamanAsimi ? 'zaman_asimi' : iptalEdildiMi ? 'durduruldu' : 'tamamlandi');
 
       if (sureciBaslatmaHatasi) {
         resolve({ calistiMi: false, mesaj: `Test süreci başlatılamadı: ${sureciBaslatmaHatasi.message}` });
@@ -1000,8 +1025,21 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegis
       console.log(`\n■ [${ortam.toUpperCase()}] "${senaryoAdi}" sonlandı (çıkış kodu: ${kod}).\n`);
 
       let sonuc = null;
+      if (platformEtkin) {
+        try {
+          const p = await platformKosuSonucu(kosuKimligi, kosuListesiAnahtari(dosya, senaryoAdi));
+          if (p) {
+            sonuc = {
+              platform: true, durum: p.durum, sureMs: p.sureMs, hataMesaji: p.hataMesaji, basarisizAdim: p.basarisizAdim,
+              ekranGoruntusuId: p.ekranGoruntusuId, videoId: p.videoId, sonucId: p.sonucId
+            };
+          }
+        } catch (okumaHatasi) {
+          console.error(`Sonuç platform veritabanından okunamadı: ${okumaHatasi.message}`);
+        }
+      }
       try {
-        if (existsSync(jsonCiktiYolu)) {
+        if (jsonCiktiYolu && existsSync(jsonCiktiYolu)) {
           sonuc = sonucuOku(jsonCiktiYolu, senaryoAdi);
           unlinkSync(jsonCiktiYolu);
         }
@@ -1439,7 +1477,7 @@ async function istegiIsle(req, res) {
   // Platform (yerel veritabanı, kasa, yedek) uç noktaları: /platform/* — ayrıntı ve token
   // kuralları scripts/platform/sunucu-platform.mjs içinde.
   if (req.url && req.url.startsWith('/platform/')) {
-    await platformIsteginiIsle(req, res, { token: OTURUM_TOKEN, jsonGonder });
+    await platformIsteginiIsle(req, res, { token: OTURUM_TOKEN, raporlayiciTokeni: TOKEN, jsonGonder });
     return;
   }
 
@@ -1580,8 +1618,7 @@ async function istegiIsle(req, res) {
       durum: calistirmaSonucu.sonuc.durum,
       sureMs: calistirmaSonucu.sonuc.sureMs,
       hataMesaji: calistirmaSonucu.sonuc.hataMesaji,
-      ekranGoruntusu: calistirmaSonucu.sonuc.ekranGoruntusu,
-      videoUrl: medyaUrlOlustur(calistirmaSonucu.sonuc.videoYolu)
+      ...panelMedyasi(calistirmaSonucu.sonuc, token)
     });
     return;
   }
@@ -1901,8 +1938,7 @@ async function istegiIsle(req, res) {
         sureMs: calistirmaSonucu.sonuc.sureMs,
         hataMesaji: calistirmaSonucu.sonuc.hataMesaji,
         basarisizAdim: calistirmaSonucu.sonuc.basarisizAdim,
-        ekranGoruntusu: calistirmaSonucu.sonuc.ekranGoruntusu,
-        videoUrl: medyaUrlOlustur(calistirmaSonucu.sonuc.videoYolu)
+        ...panelMedyasi(calistirmaSonucu.sonuc, token)
       });
     } catch (hata) {
       jsonGonder(res, 400, hataGovdesi(hata));
@@ -2354,18 +2390,20 @@ if (dogrudanCalistirildi) {
   artikGeciciSenaryolariTemizle();
 
   // Video saklama kuralı (VIDEO_SAKLAMA_GUN, varsayılan 30 gün): açılışta ve sunucu uzun
-  // süre açık kalabildiği için günde bir kez, eski koşu videoları ve eski
-  // test-results/dashboard-kosulari/<koşu> klasörleri silinir (bkz. medya-temizligi.mjs).
-  // Ekran görüntüleri ve sonuç JSON'ları silinmez.
+  // süre açık kalabildiği için günde bir kez, eski test-results/dashboard-kosulari/<koşu>
+  // klasörleri (platform öncesi düz metin koşu çıktıları) silinir (bkz. medya-temizligi.mjs).
+  // Eski allure-results-<ortam>/ klasörlerine ARTIK DOKUNULMAZ (kullanıcı kararı bekleniyor).
   const videoTemizliginiCalistir = () => {
     try {
-      eskiVideolariTemizle(projeKoku, ['test', 'canli'], '[test-sunucu]');
+      eskiVideolariTemizle(projeKoku, '[test-sunucu]');
     } catch (hata) {
       console.error(`[test-sunucu] Video temizliği başarısız: ${hata.message}`);
     }
   };
   videoTemizliginiCalistir();
   setInterval(videoTemizliginiCalistir, 24 * 60 * 60 * 1000).unref();
+  // Şifreli medya deposu (veri/medya/): VIDEO_SAKLAMA_GUN'den eski videolar + sahipsiz dosyalar.
+  platformMedyaTemizligiZamanla();
 
   // Platform veritabanı: kasa açıkken günde bir yerel otomatik yedek (veri/yedekler/, son 30).
   platformOtomatikYedekZamanla();

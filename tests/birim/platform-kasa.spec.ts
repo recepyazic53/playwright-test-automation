@@ -119,7 +119,7 @@ test.describe('Platform kasası', () => {
         ikiAsamaliTur: 'totp', totpGizli: TOTP_GIZLI
       });
       const tur = testVerisiTuruKaydet(vt, {
-        projeId: proje, ad: 'Kart', alanlar: [{ ad: 'kartNo', hassas: true }, { ad: 'sahip' }]
+        projeId: proje, ad: 'Kart', alanlar: [{ ad: 'kartNo', hassas: true }, { ad: 'sahip', hassas: false }]
       });
       const veri = testVerisiProfiliKaydet(vt, { projeId: proje, turId: tur, ad: 'Kart 1', degerler: { kartNo: KART_NO, sahip: 'Ad Soyad' } });
       // Güncelleme: geçmişe önce/sonra yazılır — orada da şifreli kalmalı.
@@ -130,7 +130,7 @@ test.describe('Platform kasası', () => {
         expect(bayt.includes(Buffer.from(gizli, 'utf8')), 'düz metin DB dosyasında olmamalı').toBe(false);
       }
       expect(bayt.includes(Buffer.from('kasa:v1:', 'utf8'))).toBe(true);
-      expect(bayt.includes(Buffer.from('Ad Soyad', 'utf8'))).toBe(true); // hassas olmayan alan açık
+      expect(bayt.includes(Buffer.from('Ad Soyad', 'utf8'))).toBe(true); // açıkça hassas: false yapılan alan açık
 
       const gecmis = degisiklikGecmisiListele(vt, 'giris_profili', profil);
       expect(zarfMi(gecmis[1].onceki?.parola)).toBe(true);

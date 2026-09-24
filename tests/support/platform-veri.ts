@@ -121,6 +121,14 @@ export function platformDurumu(): DurumCiktisi {
   return (durumOnbellegi = sonuc as DurumCiktisi);
 }
 
+/**
+ * Koşu sonuçları platform veritabanına mı yazılacak? (Proje aktarılmışsa EVET — veri kaynağı tercihi
+ * PLATFORM_VERI_KAYNAGI=dosya olsa bile; sonuçlar ve şifreli medya için kasa anahtarı gerekir.)
+ */
+export function platformSonucKaydiVarMi(): boolean {
+  return platformDurumu().durum === 'aktarildi';
+}
+
 /** Aktarım yapılmış mı (kasa anahtarı istemeden)? global-setup parola sorup sormamaya buna göre karar verir. */
 export function platformAktarimiVarMi(): boolean {
   if (veriKaynagiTercihi() === 'dosya') return false;

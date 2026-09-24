@@ -1,8 +1,9 @@
-// Hata sınıflandırma ve durum eşleme (saf fonksiyonlar): kategori, hata kalıbı,
-// Allure durumu -> dashboard durumu, koşu etiketi.
-//
-// Kategori tanımları playwright.config.ts'teki allure-playwright "categories"
-// listesiyle aynı mantığı kullanır; ikisini birlikte güncelleyin.
+// SONUÇ SINIFLANDIRMA (genel, saf fonksiyonlar — yan etki yok): hata kategorisi, hata kalıbı,
+// Playwright/Allure durumu → platform durumu ('basarili' | 'basarisiz' | 'atlanan' | 'durduruldu'),
+// adım gürültüsü filtresi, beklenen/görülen ayrıştırma, koşu etiketi.
+// Kullananlar: Playwright raporlayıcısı (scripts/platform/raporlayici.mjs), eski Allure sonuçlarının
+// içe aktarımı (aktarim/allure-sonuclari.mjs), sonuç deposu ve eski görünüm üreticisi.
+// (Eskiden scripts/rapor/veri-siniflandirma.mjs idi; Allure kaldırıldığında buraya taşındı.)
 
 // Kategori ADLARI ve SIRASI (istemci tarafında renk eşlemesi bu sıraya göre yapılır —
 // bkz. KATEGORI_RENKLERI). Sınıflandırma MANTIĞI ise aşağıdaki kategoriBul()'dadır;
@@ -45,9 +46,6 @@ const SECICI_DESENI = /(element\(s\) not found|strict mode violation|resolved to
 //      "expect(received)..." / "Expected:" / "Received:" var.
 //   4) Seçici — element(s) not found / strict mode violation / "waiting for locator".
 //   5) Diğer.
-// playwright.config.ts'teki allure "categories" regex'leri aynı sırayı/mantığı taklit
-// eder (Allure bir sonucu eşleşen TÜM kategorilere koyduğundan orada karşılıklı
-// dışlayan regex'ler kullanıldı); ikisini birlikte güncelleyin.
 export function kategoriBul(mesaj) {
   if (!mesaj) return KATEGORI.diger;
   const ilkSatir = mesaj.split('\n')[0].trim();
@@ -97,9 +95,8 @@ export function kalipCikar(mesajTam) {
 }
 
 // --- Durum eşleme (TEK KAYNAK) ---
-// Bir Allure sonucunu dashboard durumuna çevirir: 'basarili' | 'basarisiz' | 'atlanan' |
-// 'durduruldu'. kosuOzetiCikar, kosuSenaryolariCikar ve tumKayitlar hep bunu kullanır
-// (eskiden 'unknown' bir yerde yok sayılıp diğerlerinde başarısız sayılıyordu).
+// Bir (eski) Allure sonucunu platform durumuna çevirir: 'basarili' | 'basarisiz' | 'atlanan' |
+// 'durduruldu'. Playwright sonuçları için aynı kural: playwrightDurumuEsle.
 // "Durduruldu" = kullanıcı durdurdu / koşu yarıda kesildi — BAŞARISIZ SAYILMAZ:
 //   - status 'unknown' ya da hiç yok (Allure sonucu tamamlanmamış),
 //   - failed/broken ama mesaj "Test was interrupted" (Playwright interrupted),
@@ -110,7 +107,7 @@ export function kalipCikar(mesajTam) {
 // NOT: "navigation ... is interrupted by another navigation" gibi GERÇEK hatalar
 // kasıtlı olarak eşleşmez (desen yalnızca "Test was interrupted").
 const KESINTI_DESENI = /\bTest (?:run )?was interrupted\b/i;
-export function durumEsle(icerik) {
+export function allureDurumuEsle(icerik) {
   const status = icerik.status;
   if (status === 'passed') return 'basarili';
   if (status === 'skipped') return 'atlanan';
@@ -137,3 +134,66 @@ export function kosuEtiketi(zamanDamgasiMs) {
 export function kacHesapla(icerikTuru) {
   return icerikTuru.basarili + icerikTuru.basarisiz + icerikTuru.atlanan;
 }
+
+/**
+ * Playwright TestResult durumunu platform durumuna çevirir (allureDurumuEsle ile AYNI anlam):
+ *  - passed → basarili (test.fail() ile beklenen başarısızlık da başarılıdır), skipped → atlanan,
+ *  - interrupted → durduruldu (Ctrl+C / Durdur / SIGTERM),
+ *  - failed / timedOut → basarisiz; ANCAK hata mesajı yoksa ya da "Test was interrupted" ise
+ *    durduruldu (Playwright kesilen testlere hata eklemez).
+ * @param {string} durum Playwright result.status
+ * @param {string | null | undefined} hataMesaji
+ * @param {string} [beklenenDurum] test.expectedStatus
+ * @returns {'basarili' | 'basarisiz' | 'atlanan' | 'durduruldu'}
+ */
+export function playwrightDurumuEsle(durum, hataMesaji, beklenenDurum = 'passed') {
+  if (durum === 'passed') return 'basarili';
+  if (durum === 'skipped') return 'atlanan';
+  if (durum === 'interrupted') return 'durduruldu';
+  if (durum === 'failed' || durum === 'timedOut') {
+    if (beklenenDurum === 'failed' && durum === 'failed') return 'basarili';
+    const mesaj = hataMesaji ?? '';
+    if (!mesaj.trim() || KESINTI_DESENI.test(mesaj)) return 'durduruldu';
+    return 'basarisiz';
+  }
+  return 'durduruldu';
+}
+
+/** ANSI renk kodlarını temizler. @param {string} metin */
+export function ansiTemizle(metin) {
+  // eslint-disable-next-line no-control-regex
+  return String(metin).replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+// Adım (test.step) gürültüsü: Playwright/raporlayıcı otomatik enstrümantasyonu (fixture kurulumu,
+// sayfa aksiyonları) kullanıcı adımı sayılmaz. (Eskiden rapor/veri-adimlar.mjs'teydi.)
+const ADIM_GURULTU_ADLARI = new Set([
+  'Before Hooks', 'After Hooks', 'Launch browser', 'Create context', 'Create page', 'Close context',
+  'Navigate', 'Click', 'Screenshot'
+]);
+
+/** @param {string} ad */
+export function adimGurultuMu(ad) {
+  if (ADIM_GURULTU_ADLARI.has(ad)) return true;
+  return /^(Fixture |Fill |Attach |Expect |Get by|Locator|Wait for|Type "|Press "|Check$|Uncheck$|Select option|Evaluate$)/.test(ad);
+}
+
+/**
+ * Playwright doğrulama mesajından beklenen/görülen değerleri çıkarır ("Expected: ..." /
+ * "Received: ..." satırları; string/value/pattern varyantları dahil). Yoksa null.
+ * @param {string | null | undefined} mesaj
+ * @returns {{ beklenen: string; gorulen: string } | null}
+ */
+export function beklenenGorulenCikar(mesaj) {
+  if (!mesaj) return null;
+  const temiz = ansiTemizle(mesaj);
+  const beklenen = /^\s*Expected(?: string| value| pattern| substring)?:\s*(.*)$/m.exec(temiz);
+  const gorulen = /^\s*Received(?: string| value)?:\s*(.*)$/m.exec(temiz);
+  if (!beklenen && !gorulen) return null;
+  return { beklenen: beklenen ? beklenen[1].trim() : '', gorulen: gorulen ? gorulen[1].trim() : '' };
+}
+
+/** Durum → kısa Türkçe etiket (arayüz ve dışa aktarma için). */
+export const DURUM_ETIKETLERI = Object.freeze({
+  basarili: 'Başarılı', basarisiz: 'Başarısız', atlanan: 'Atlanan', durduruldu: 'Durduruldu'
+});

@@ -129,7 +129,7 @@ async function ornekVeri(vt: Veritabani): Promise<{ proje: string; ortam: string
 
 test.describe('Genişletilmiş şifreleme (şema v2)', () => {
   test('SIFRELI_ALANLAR tek kaynak: beklenen sütunlar, gizli olanlar HASSAS_SUTUNLAR ile aynı', () => {
-    expect(GUNCEL_SEMA_SURUMU).toBe(4);
+    expect(GUNCEL_SEMA_SURUMU).toBe(5);
     expect(Object.fromEntries(Object.entries(SIFRELI_ALANLAR).map(([t, a]) => [t, Object.keys(a).sort()]))).toEqual({
       makineler: ['ad'],
       ayarlar: ['deger_json'],

@@ -233,6 +233,7 @@ export async function kasaOlustur(vt, parola, secenekler = {}) {
   });
   anahtariYerlestir(vt, anahtar);
   sifreliAlanlariTamamla(vt);
+  medyaAnahtariniHazirlaSessiz(vt);
   return kasaDurumu(vt);
 }
 
@@ -274,6 +275,7 @@ export async function kasaAc(vt, parola) {
   if (!anahtar) throw new KasaHatasi('PAROLA_YANLIS', 'Kasa parolası yanlış.');
   anahtariYerlestir(vt, anahtar);
   sifreliAlanlariTamamla(vt);
+  medyaAnahtariniHazirlaSessiz(vt);
   return kasaDurumu(vt);
 }
 
@@ -309,8 +311,12 @@ export function kasayiAnahtarlaAc(vt, anahtar) {
   if (!dogrulayici || !anahtarDogrulayiciyaUyarMi(anahtar, dogrulayici)) {
     throw new KasaHatasi('PAROLA_YANLIS', 'Kasa parolası yanlış.');
   }
+  // Kasa anahtarı değişiyorsa (yedekten tam yükleme / kasa benimseme) medya ana anahtarı yeni
+  // anahtarla yeniden sarılır — eski anahtar bellekten silinmeden ÖNCE.
+  medyaAnahtariniYenidenSar(vt, acikAnahtarlar.get(vt) ?? null, anahtar);
   anahtariYerlestir(vt, Buffer.from(anahtar));
   sifreliAlanlariTamamla(vt);
+  medyaAnahtariniHazirlaSessiz(vt);
 }
 
 /** @param {Veritabani} vt @param {string} duzMetin */
@@ -374,6 +380,9 @@ export async function parolaDegistir(vt, eskiParola, yeniParola, secenekler = {}
   const yeniAnahtar = await anahtarTuret(yeniParola, kdf, tuz);
   const sayi = vt.islem(() => {
     const donusen = tumZarflariDonustur(vt, (zarf) => zarfSifrele(yeniAnahtar, zarfCoz(eskiAnahtar, zarf)));
+    // Medya ana anahtarı meta tablosundadır (tumZarflariDonustur yalnızca veri tablolarını gezer).
+    const medyaZarfi = vt.metaOku(MEDYA_ANAHTARI_META);
+    if (medyaZarfi) vt.metaYaz(MEDYA_ANAHTARI_META, zarfSifrele(yeniAnahtar, zarfCoz(eskiAnahtar, medyaZarfi)));
     vt.metaYaz('kasa_kdf', JSON.stringify({ alg: 'scrypt', N: kdf.N, r: kdf.r, p: kdf.p, tuz: b64(tuz) }));
     vt.metaYaz('kasa_dogrulayici', zarfSifrele(yeniAnahtar, DOGRULAYICI_METNI));
     return donusen;
@@ -482,4 +491,73 @@ export function sifreliAlanlariTamamla(vt) {
     vt.metaYaz('sifreli_alan_gocu', 'tamam');
   });
   return sayi;
+}
+
+// ---------------------------------------------------------------------------------------
+// Medya ana anahtarı (şifreli ekran görüntüsü/video/iz deposu — bkz. medya.mjs)
+// ---------------------------------------------------------------------------------------
+// Medya dosyaları, kasa anahtarıyla DOĞRUDAN değil, rastgele üretilen bir "medya ana anahtarı"ndan
+// dosya başına HKDF ile türetilen anahtarlarla şifrelenir. Ana anahtar meta tablosunda kasa zarfı
+// olarak (kasa anahtarıyla sarılı) durur. Böylece kasa parolası değişince onlarca GB video yeniden
+// şifrelenmez; yalnızca bu zarf yeniden sarılır (parolaDegistir, kasayiAnahtarlaAc).
+
+export const MEDYA_ANAHTARI_META = 'medya_anahtari';
+
+/**
+ * Sarılı medya ana anahtarını verilen kasa anahtarıyla açar.
+ * @param {string} zarf @param {Buffer} kasaAnahtari @returns {Buffer}
+ */
+export function medyaAnahtariniAc(zarf, kasaAnahtari) {
+  const anahtar = Buffer.from(zarfCoz(kasaAnahtari, zarf), 'base64url');
+  if (anahtar.length !== ANAHTAR_UZUNLUGU) throw new KasaHatasi('ZARF_BOZUK', 'Medya anahtarı biçimi bozuk.');
+  return anahtar;
+}
+
+/** Yeni rastgele medya ana anahtarı ve onun kasa zarfı. @param {Buffer} kasaAnahtari */
+export function yeniMedyaAnahtari(kasaAnahtari) {
+  const anahtar = randomBytes(ANAHTAR_UZUNLUGU);
+  return { anahtar, zarf: zarfSifrele(kasaAnahtari, anahtar.toString('base64url')) };
+}
+
+/**
+ * Kasa AÇIK olmalı: medya ana anahtarını döner; yoksa üretip meta'ya (sarılı) yazar.
+ * @param {Veritabani} vt @returns {Buffer}
+ */
+export function medyaAnahtariniHazirla(vt) {
+  const kasaAnahtari = acikAnahtar(vt);
+  const zarf = vt.metaOku(MEDYA_ANAHTARI_META);
+  if (zarf) return medyaAnahtariniAc(zarf, kasaAnahtari);
+  const yeni = yeniMedyaAnahtari(kasaAnahtari);
+  vt.islem(() => vt.metaYaz(MEDYA_ANAHTARI_META, yeni.zarf));
+  return yeni.anahtar;
+}
+
+/** Kasa açılışlarında: hata kasanın açılmasını engellemez (medya yalnızca uyarıyla etkilenir). @param {Veritabani} vt */
+function medyaAnahtariniHazirlaSessiz(vt) {
+  try {
+    medyaAnahtariniHazirla(vt).fill(0);
+  } catch {
+    console.error('[kasa] Medya anahtarı bu kasa anahtarıyla açılamadı; şifreli medya dosyaları okunamayabilir.');
+  }
+}
+
+/**
+ * Kasa anahtarı değişirken medya zarfını yeni anahtarla yeniden sarar. Zarf zaten yeni anahtarla
+ * açılıyorsa (ör. aynı kasanın yedeği) dokunulmaz; eski anahtar yoksa/uymuyorsa zarf korunur.
+ * @param {Veritabani} vt @param {Buffer | null} eskiAnahtar @param {Buffer} yeniAnahtar
+ */
+function medyaAnahtariniYenidenSar(vt, eskiAnahtar, yeniAnahtar) {
+  const zarf = vt.metaOku(MEDYA_ANAHTARI_META);
+  if (!zarf) return;
+  try {
+    zarfCoz(yeniAnahtar, zarf);
+    return;
+  } catch { /* yeni anahtarla açılmıyor: eskisiyle dene */ }
+  if (!eskiAnahtar) return;
+  try {
+    const duz = zarfCoz(eskiAnahtar, zarf);
+    vt.islem(() => vt.metaYaz(MEDYA_ANAHTARI_META, zarfSifrele(yeniAnahtar, duz)));
+  } catch {
+    console.error('[kasa] Medya anahtarı yeniden sarılamadı; mevcut şifreli medya dosyaları okunamayabilir.');
+  }
 }

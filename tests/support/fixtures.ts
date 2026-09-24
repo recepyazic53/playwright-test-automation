@@ -1,19 +1,18 @@
 // Bütün senaryo dosyalarının import ettiği ortak `test` nesnesi.
-// Allure raporunu "anlaşılır" hale getirmek için iki otomatik (auto) fixture ekler:
-//  1) allureGruplama: Epic/Feature/Story etiketlerini dosya yoluna göre otomatik ayarlar
-//     (Behaviors sekmesinde ürün > akış > senaryo şeklinde gruplama sağlar).
-//  2) hataYakalayici: Test başarısız olduğunda, hatanın alındığı son ekran görüntüsünü ve
-//     okunabilir hata mesajını "❌ HATA ANI" etiketiyle rapora ekler; böylece raporu açan
-//     kişi hangi ekranda takıldığını aramadan görür.
+// Platform raporlayıcısının (scripts/platform/raporlayici.mjs) okuduğu bilgileri Playwright
+// ANNOTATION'ları olarak ekleyen otomatik (auto) fixture'lar:
+//  1) kosuEtiketleri: ürün (urun), akış (ozellik), koşu kimliği/türü/kapsamı — sonuçlar
+//     veritabanında koşulara ve ürünlere bunlarla bağlanır (eskiden Allure etiketleriydi).
+//  2) hataYakalayici: Test başarısız olduğunda (ve dashboard koşularında her zaman) son ekran
+//     görüntüsünü ek olarak ekler; raporlayıcı bunu ŞİFRELİ medya deposuna taşır.
 // Senaryo dosyaları `test`'i '@playwright/test' yerine buradan import etmelidir.
 import { test as base } from '@playwright/test';
-import { epic, feature, label, story } from 'allure-js-commons';
 import { writeFileSync, renameSync } from 'node:fs';
 import { relative, sep } from 'node:path';
 import { getEnvironmentName } from './environments';
 import { platformSenaryoKimligi } from './platform-veri';
 
-// Klasör adı -> Allure Epic (ürün) görünen adı.
+// Klasör adı -> ürün görünen adı (platformdaki ekran adıyla aynı; bkz. projeler/galaksi/aktarim.mjs > EKRAN_ADLARI).
 const EPIC_ADLARI: Record<string, string> = {
   'jet-kasko': 'JetKasko',
   'jet-seyahat': 'JetSeyahat',
@@ -27,7 +26,7 @@ const EPIC_ADLARI: Record<string, string> = {
   portal: 'Portal'
 };
 
-// "klasör/dosya" -> Allure Feature (akış/ekran) görünen adı.
+// "klasör/dosya" -> akış (özellik) görünen adı.
 const FEATURE_ADLARI: Record<string, string> = {
   'jet-kasko/yeni-kayit': 'Yeni Kayıt (YK)',
   'jet-kasko/teklif-olusturma': 'Teklif Oluşturma (Tescilli)',
@@ -70,7 +69,7 @@ function epicVeFeatureAdlariniBul(dosyaYolu: string): { epicAdi: string; feature
 
 type OrtakFixturelar = {
   senaryoKimligi: void;
-  allureGruplama: void;
+  kosuEtiketleri: void;
   hataYakalayici: void;
   canliIzlemeYayini: void;
 };
@@ -88,32 +87,27 @@ export const test = base.extend<OrtakFixturelar>({
     },
     { auto: true }
   ],
-  allureGruplama: [
+  kosuEtiketleri: [
     async ({}, use, testInfo) => {
       const { epicAdi, featureAdi } = epicVeFeatureAdlariniBul(testInfo.file);
-      await epic(epicAdi);
-      await feature(featureAdi);
-      await story(testInfo.title);
-      // Koşu gruplama etiketleri (bkz. global-setup.ts > KOSU_KIMLIGI ve
-      // urun-hata-raporu.mjs): aynı "playwright test" çağrısındaki tüm sonuçlar aynı
-      // kosuKimligi'ni taşır. kosuTuru: dashboard'daki ▷ ile tetiklenen tekil koşular
-      // (TEST_SUNUCU_GORUNUR=1) 'tekil', normal npm run test / CI koşuları 'tam' — dashboard
-      // üst kartları ve "önceki koşu" karşılaştırması yalnızca 'tam' koşulara bakar.
+      const ekle = (type: string, description: string): void => { testInfo.annotations.push({ type, description }); };
+      ekle('urun', epicAdi);
+      ekle('ozellik', featureAdi);
+      // Koşu gruplama (bkz. global-setup.ts > KOSU_KIMLIGI): aynı "playwright test" çağrısındaki
+      // tüm sonuçlar aynı kosuKimligi'ni taşır. kosuTuru: platformdaki ▷ ile tetiklenen tekil
+      // koşular (TEST_SUNUCU_GORUNUR=1) 'tekil', normal npm run test / CI koşuları 'tam' — Sonuçlar
+      // ekranındaki kartlar ve "önceki koşu" karşılaştırması yalnızca 'tam' koşulara bakar.
       const kosuKimligi = process.env.KOSU_KIMLIGI;
-      if (kosuKimligi) await label('kosuKimligi', kosuKimligi);
-      // Dashboard'daki "Koşuyu başlat" her senaryoyu ayrı süreçte koşsa da tam koşu
-      // sayılır: test-sunucu bu durumda ortak KOSU_KIMLIGI ve TEST_SUNUCU_KOSU_TURU=tam verir.
+      if (kosuKimligi) ekle('kosuKimligi', kosuKimligi);
+      // Platformdaki "Koşuyu başlat" her senaryoyu ayrı süreçte koşsa da tam koşu sayılır:
+      // test-sunucu bu durumda ortak KOSU_KIMLIGI ve TEST_SUNUCU_KOSU_TURU=tam verir.
       const dashboardKosusuMu = process.env.TEST_SUNUCU_GORUNUR === '1';
       const tamKosuMu = !dashboardKosusuMu || process.env.TEST_SUNUCU_KOSU_TURU === 'tam';
-      await label('kosuTuru', tamKosuMu ? 'tam' : 'tekil');
-      // kosuKapsami (yalnızca 'tam' koşularda): dashboard'da bir ürün seçiliyken başlatılan
-      // "Koşuyu başlat" o ürünün görünen adını taşır (test-sunucu TEST_SUNUCU_KOSU_KAPSAMI
-      // ile verir); Genel görünümden başlatılan koşular ve terminal/CI koşuları 'Genel'dir.
-      // urun-hata-raporu.mjs, Genel trendini yalnızca 'Genel' kapsamlı koşulardan çizer.
-      if (tamKosuMu) {
-        const kosuKapsami = dashboardKosusuMu ? process.env.TEST_SUNUCU_KOSU_KAPSAMI || 'Genel' : 'Genel';
-        await label('kosuKapsami', kosuKapsami);
-      }
+      ekle('kosuTuru', tamKosuMu ? 'tam' : 'tekil');
+      // kosuKapsami (yalnızca 'tam' koşularda): bir ürün seçiliyken başlatılan "Koşuyu başlat" o
+      // ürünün adını taşır; Genel görünümden başlatılanlar ve terminal/CI koşuları 'Genel'dir.
+      // Sonuçlar ekranı Genel trendini yalnızca 'Genel' kapsamlı koşulardan çizer.
+      if (tamKosuMu) ekle('kosuKapsami', dashboardKosusuMu ? process.env.TEST_SUNUCU_KOSU_KAPSAMI || 'Genel' : 'Genel');
       await use();
     },
     { auto: true }
@@ -141,15 +135,8 @@ export const test = base.extend<OrtakFixturelar>({
         }
       }
 
-      if (!basariliMi) {
-        const hataMesajiHam = testInfo.error?.message ?? 'Hata mesajı okunamadı, trace/video dosyalarına bakınız.';
-        // ANSI renk kodlarını temizle, rapor düz metin olarak göstersin.
-        const hataMesaji = hataMesajiHam.replace(/\x1b\[[0-9;]*m/g, '');
-        await testInfo.attach('❌ HATA ANI - Açıklama', {
-          body: hataMesaji,
-          contentType: 'text/plain'
-        });
-      }
+      // Hata mesajı ayrıca ek olarak EKLENMEZ: raporlayıcı testin hatasını doğrudan sonuç
+      // satırına (veritabanında) yazar.
     },
     { auto: true }
   ],

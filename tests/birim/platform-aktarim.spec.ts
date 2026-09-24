@@ -94,7 +94,7 @@ test.describe('Aktarım motoru (genel)', () => {
       const giris = girisProfiliGetir(vt, kararliKimlik(projeId, 'giris_profili', 'a'), { coz: true });
       expect(giris).toMatchObject({ ortamId: ortamA?.id, parola: GIRIS_PAROLASI, ikiAsamaliTur: 'totp', totpGizli: TOTP });
       expect(baglamProfilleriniListele(vt, projeId, 'Rol').map((b) => [b.ad, b.ortamId === null])).toEqual([['rol1', true], ['rol2', false]]);
-      expect(testVerisiProfilleriniListele(vt, projeId).find((p) => p.ad === 'k1')?.degerler).toEqual({ kimlikNo: null, sehir: 'Ankara' });
+      expect(testVerisiProfilleriniListele(vt, projeId).find((p) => p.ad === 'k1')?.degerler).toEqual({ kimlikNo: null, sehir: null }); // tüm test verisi alanları varsayılan olarak hassas
       const ekran = ekranlariListele(vt, projeId)[0];
       const ortamB = ortamlar.find((o) => o.ad === 'B');
       expect(ekranAyarlariniGetir(vt, ekran.id)).toEqual({ ortamlar: { [String(ortamA?.id)]: { alan: 1 }, [String(ortamB?.id)]: { alan: 2 } } });

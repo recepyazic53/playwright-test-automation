@@ -399,27 +399,28 @@ async function testVerisi(govde, baglam, yenile) {
     const satirlar = [];
     const kutu = h('div', {});
     const profilVar = t ? profiller.some((p) => p.turId === t.id) : false;
-    const satirEkle = (a = { ad: '', etiket: '', tip: 'metin', hassas: false }, mevcut = false) => {
+    // Yeni alanlar varsayılan olarak HASSAS (şifreli) gelir; kullanıcı alan bazında kaldırabilir.
+    const satirEkle = (a = { ad: '', etiket: '', tip: 'metin', hassas: true }) => {
       const adG = h('input', { type: 'text', autocomplete: 'off', value: a.ad, spellcheck: 'false' });
       const etiketG = h('input', { type: 'text', autocomplete: 'off', value: a.etiket === a.ad ? '' : a.etiket });
       const tipG = h('select', {}, TIP_SECENEKLERI.map(([d, m]) => h('option', { value: d, selected: a.tip === d }, m)));
-      const hassasG = h('input', { type: 'checkbox', id: yeniKimlik('hassas'), checked: a.hassas, disabled: mevcut && profilVar });
+      const hassasG = h('input', { type: 'checkbox', id: yeniKimlik('hassas'), checked: a.hassas !== false });
       const s = { adG, etiketG, tipG, hassasG, el: null };
       const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
       s.el = h('div', { class: 'tur-alan-satiri' }, alan('Alan adı', adG), alan('Etiket', etiketG), alan('Tip', tipG),
-        h('label', { class: 'secenek', for: hassasG.id, title: mevcut && profilVar ? 'Bu türde profil varken hassaslık değiştirilemez.' : null }, hassasG, 'Hassas'), kaldir);
+        h('label', { class: 'secenek', for: hassasG.id, title: profilVar ? 'Değiştirirseniz bu türdeki profillerin mevcut değerleri de buna göre şifrelenir/çözülür.' : null }, hassasG, 'Hassas'), kaldir);
       satirlar.push(s);
       kutu.append(s.el);
       return s;
     };
-    for (const a of (t && t.alanlar) || []) satirEkle(a, true);
+    for (const a of (t && t.alanlar) || []) satirEkle(a);
     if (!satirlar.length) satirEkle();
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
     const form = formPaneli(t ? `Türü düzenle: ${t.ad}` : 'Yeni test verisi türü', mesaj.kutu,
       alan('Tür adı', ad, { zorunlu: true, yardim: 'Ör. Müşteri, Adres, Kart.' }),
       h('fieldset', {}, h('legend', {}, 'Alanlar'),
-        h('p', { class: 'soluk kucuk' }, 'Hassas işaretli alanların değerleri kasada şifreli saklanır ve maskeli gösterilir.'),
+        h('p', { class: 'soluk kucuk' }, 'Hassas işaretli alanların değerleri kasada şifreli saklanır ve maskeli gösterilir. Yeni alanlar varsayılan olarak hassastır; yalnızca gerçekten gizli olmayan alanlarda işareti kaldırın.'),
         kutu, h('button', { type: 'button', onclick: () => satirEkle().adG.focus() }, '+ Alan ekle')),
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => turFormAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (o) => {
@@ -669,6 +670,27 @@ async function guvenlik(govde, baglam) {
       kilitMesaj.goster(`Kasa ${dk} dakika hareketsizlikten sonra kilitlenecek.`, 'basari');
     } catch (hata) { kilitMesaj.goster(hata.message); }
   });
+  // Video saklama süresi (şifreli medya deposu): bu süreden eski koşu videoları silinir;
+  // ekran görüntüleri ve sonuçlar saklanır.
+  const gun = h('input', { type: 'number', min: '1', max: '3650', step: '1', value: String(ayar.videoSaklamaGun), inputmode: 'numeric' });
+  const saklamaMesaj = mesajKutusu();
+  const saklamaKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const saklamaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Video saklama süresi'),
+    h('p', { class: 'soluk' }, 'Koşu videoları şifreli olarak saklanır; bu süreden eski videolar günlük temizlikte silinir. Ekran görüntüleri, izler ve sonuçlar silinmez.'),
+    saklamaMesaj.kutu,
+    alan('Süre (gün)', gun, { yardim: `1–3650 gün; varsayılan ${ayar.videoSaklamaVarsayilan}.` }),
+    h('div', { class: 'dugmeler' }, saklamaKaydet));
+  saklamaForm.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    saklamaMesaj.temizle();
+    alanHatasi(gun, '');
+    const g = Number(gun.value);
+    if (!Number.isInteger(g) || g < 1 || g > 3650) { alanHatasi(gun, '1 ile 3650 arasında bir tam sayı girin.'); gun.focus(); return; }
+    try {
+      await mesgulIken(saklamaKaydet, 'Kaydediliyor…', () => api('/platform/guvenlik/kaydet', { govde: { videoSaklamaGun: g } }));
+      saklamaMesaj.goster(`${g} günden eski videolar silinecek.`, 'basari');
+    } catch (hata) { saklamaMesaj.goster(hata.message); }
+  });
   const kilitle = h('button', { type: 'button' }, 'Kasayı kilitle');
   kilitle.addEventListener('click', async () => {
     await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
@@ -711,5 +733,6 @@ async function guvenlik(govde, baglam) {
       h('p', { class: 'soluk' }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.'),
       h('div', { class: 'dugmeler' }, kilitle)),
     kilitForm,
+    saklamaForm,
     form);
 }

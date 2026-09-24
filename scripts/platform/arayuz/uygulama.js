@@ -3,13 +3,15 @@
 //                         Mevcut proje dosyalarını aktar)
 //   kasa var, kilitli   → Kilit ekranı (yanlış parolada bekleme geri sayımı)
 //   kasa açık, proje yok → Yeni proje sihirbazı (proje adımından)
-//   kasa açık           → Ana düzen: Mevcut görünüm | Ayarlar | Kilitle  (#/gorunum, #/ayarlar/<bölüm>)
+//   kasa açık           → Ana düzen: Sonuçlar | Mevcut görünüm | Ayarlar | Kilitle
+//                         (#/sonuclar[/...], #/gorunum, #/ayarlar/<bölüm>)
 import {
   adresGecerliMi, alan, alanHatasi, api, bildir, geriSayim, h, mesajKutusu, mesgulIken, parolaAlani
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { aktarimAkisi } from './aktarim.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
+import { sonuclarEkrani } from './sonuclar.js';
 
 const kok = document.getElementById('uygulama');
 const durum = { sunucu: null, proje: null, projeler: [], kilitMesaji: '' };
@@ -319,6 +321,7 @@ function kilitEkrani(beklemeSaniye) {
 
 function anaDuzen() {
   const main = anaAlan('ana-icerik');
+  const navSonuclar = h('a', { href: '#/sonuclar' }, 'Sonuçlar');
   const navGorunum = h('a', { href: '#/gorunum' }, 'Mevcut görünüm');
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, 'Ayarlar');
   const kilitle = h('button', { type: 'button' }, 'Kilitle');
@@ -330,16 +333,19 @@ function anaDuzen() {
   const ust = h('header', { class: 'ust-cubuk' },
     h('span', { class: 'marka' }, 'Test otomasyon platformu'),
     h('span', { class: 'proje-rozeti', id: 'proje-rozeti', title: 'Etkin proje' }, durum.proje.ad),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navGorunum, navAyarlar),
+    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navGorunum, navAyarlar),
     kilitle);
   ekran(ust, main);
 
   const ciz = () => {
-    const hash = location.hash || '#/gorunum';
-    const [, bolum, alt] = hash.split('/');
-    navGorunum.removeAttribute('aria-current');
-    navAyarlar.removeAttribute('aria-current');
-    if (bolum === 'ayarlar') {
+    const hash = location.hash || '#/sonuclar';
+    const [, bolum, alt, ...kalan] = hash.split('/');
+    for (const n of [navSonuclar, navGorunum, navAyarlar]) n.removeAttribute('aria-current');
+    if (bolum === 'sonuclar' || !['ayarlar', 'gorunum'].includes(bolum)) {
+      navSonuclar.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sonuclarEkrani(main, alt ? [alt, ...kalan] : [], { durum });
+    } else if (bolum === 'ayarlar') {
       navAyarlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       ayarlarEkrani(main, AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje');

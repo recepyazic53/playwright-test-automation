@@ -565,7 +565,9 @@ function turAlanlariniDogrula(alanlar) {
       ad,
       etiket: typeof alan.etiket === 'string' ? alan.etiket : ad,
       tip: typeof alan.tip === 'string' ? alan.tip : 'metin',
-      hassas: alan.hassas === true
+      // Kullanıcı kararı: test verisindeki TÜM alanlar varsayılan olarak hassastır (şifreli);
+      // yalnızca açıkça hassas: false verilen alan düz metin saklanır.
+      hassas: alan.hassas !== false
     };
   });
 }
@@ -584,20 +586,70 @@ export function testVerisiTuruKaydet(vt, girdi) {
     if (girdi.id) {
       const mevcut = hamSatir(vt, 'test_verisi_turleri', girdi.id);
       if (mevcut) {
-        // Hassaslık değişirse mevcut profillerdeki değerler buna göre dönüştürülmeli; bu adımda
-        // sessiz tutarsızlık yerine açıkça reddediyoruz.
+        // Hassaslığı değişen alanların mevcut profillerdeki değerleri AYNI işlemde dönüştürülür
+        // (hassas olan şifrelenir, hassaslığı kaldırılan çözülür; kasa açık olmalı).
         const eski = new Map(turCevir(mevcut).alanlar.map((a) => [a.ad, a.hassas]));
-        const degisen = alanlar.find((a) => eski.has(a.ad) && eski.get(a.ad) !== a.hassas);
-        const profilVar = vt.tek('SELECT 1 AS var FROM test_verisi_profilleri WHERE tur_id = ? LIMIT 1', [girdi.id]);
-        if (degisen && profilVar) {
-          throw new DepoHatasi(`"${degisen.ad}" alanının hassaslığı, bu türde profil varken değiştirilemez.`);
-        }
+        const degisenler = alanlar.filter((a) => eski.has(a.ad) && eski.get(a.ad) !== a.hassas);
+        if (degisenler.length) profilHassasliginiDonustur(vt, girdi.id, new Map(degisenler.map((a) => [a.ad, a.hassas])));
       }
     }
     return kaydetGenel(vt, 'test_verisi_turleri', {
       proje_id: kimlikKontrol(girdi.projeId, 'projeId'), ad: zorunluMetin(girdi.ad, 'ad'),
       alanlar_json: JSON.stringify(alanlar)
     }, { id: girdi.id });
+  });
+}
+
+/**
+ * Bir türün profillerinde verilen alanların saklama biçimini değiştirir: hassas=true → düz değer
+ * kasa zarfına çevrilir; hassas=false → zarf çözülür. Profillerin değişiklik geçmişindeki anlık
+ * görüntüler de (onceki/sonraki degerler_json) aynı biçime getirilir; böylece hassas yapılan bir
+ * alanın eski düz metin değeri geçmişte de kalmaz (secure_delete eski sayfaları sıfırlar).
+ * Kasa açık olmalıdır (acikAnahtar). Profillerin kendisi için geçmiş kaydı yazılmaz (içerik değişmedi).
+ * @param {Veritabani} vt @param {string} turId @param {Map<string, boolean>} yeniHassaslik alan adı → yeni hassas değeri
+ * @returns {number} dönüştürülen değer sayısı
+ */
+export function profilHassasliginiDonustur(vt, turId, yeniHassaslik) {
+  acikAnahtar(vt);
+  let sayi = 0;
+  /** @param {Record<string, unknown>} degerler */
+  const donustur = (degerler) => {
+    let degisti = false;
+    /** @type {Record<string, unknown>} */
+    const yeni = { ...degerler };
+    for (const [ad, hassas] of yeniHassaslik) {
+      const v = yeni[ad];
+      if (v === undefined || v === null || v === '') continue;
+      if (hassas && !zarfMi(v)) { yeni[ad] = sifrele(vt, String(v)); degisti = true; sayi++; }
+      else if (!hassas && zarfMi(v)) { yeni[ad] = coz(vt, v); degisti = true; sayi++; }
+    }
+    return degisti ? yeni : null;
+  };
+  return vt.islem(() => {
+    const profiller = vt.tumu('SELECT id, degerler_json FROM test_verisi_profilleri WHERE tur_id = ?', [turId]);
+    for (const p of profiller) {
+      const yeni = donustur(/** @type {Record<string, unknown>} */ (jsonOku(p.degerler_json) ?? {}));
+      if (yeni) vt.calistir('UPDATE test_verisi_profilleri SET degerler_json = ? WHERE id = ?', [JSON.stringify(yeni), p.id]);
+    }
+    const kimlikler = profiller.map((p) => String(p.id));
+    for (const g of kimlikler.length ? vt.tumu(
+      `SELECT id, onceki_json, sonraki_json FROM degisiklik_gecmisi WHERE varlik_turu = 'test_verisi_profili' AND varlik_id IN (${kimlikler.map(() => '?').join(', ')})`,
+      kimlikler
+    ) : []) {
+      /** @type {Record<string, unknown>} */
+      const guncel = {};
+      for (const sutun of ['onceki_json', 'sonraki_json']) {
+        const anlik = /** @type {Record<string, unknown> | null} */ (jsonOku(g[sutun]));
+        if (!anlik || typeof anlik.degerler_json !== 'string') continue;
+        const yeni = donustur(/** @type {Record<string, unknown>} */ (JSON.parse(anlik.degerler_json)));
+        if (yeni) guncel[sutun] = JSON.stringify({ ...anlik, degerler_json: JSON.stringify(yeni) });
+      }
+      const sutunlar = Object.keys(guncel);
+      if (sutunlar.length) {
+        vt.calistir(`UPDATE degisiklik_gecmisi SET ${sutunlar.map((x) => `${x} = ?`).join(', ')} WHERE id = ?`, [...sutunlar.map((x) => guncel[x]), g.id]);
+      }
+    }
+    return sayi;
   });
 }
 

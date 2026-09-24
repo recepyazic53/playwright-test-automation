@@ -24,6 +24,16 @@
 //   POST /platform/aktarim/uygula    { adaptor, parola? } → kasa yoksa parola ile BU AKIŞTA oluşturulur;
 //                                    kasa kilitliyse 423. Tekrar çalıştırmak çift kayıt üretmez
 //                                    (kaynak anahtarıyla birleştirir; atlananlar raporlanır).
+// Koşu sonuçları (şema v5; Playwright raporlayıcısı: scripts/platform/raporlayici.mjs):
+//   GET  /platform/sonuclar/ozet?projeId=&urun=       ürün listesi, kartlar, trend, koşu geçmişi
+//   GET  /platform/sonuclar/kosu?id=                  koşu detayı (senaryo bazında sonuçlar)
+//   GET  /platform/sonuclar/sonuc?id=                 test detayı (hata, adımlar, medya listesi)
+//   GET  /platform/sonuclar/kaliplar?projeId=&urun=&baslangic=&bitis=   hata kalıpları
+//   GET  /platform/medya/<id>[?indir=1]               şifreli medyayı ÇÖZEREK akıtır (Range destekli;
+//        kasa açık + oturum token'ı gerekir; düz metin diske YAZILMAZ). indir=1 → Content-Disposition.
+//   POST /platform/sonuc/durum|medya-anahtari|kosu|kaydet|bitir — YALNIZCA raporlayıcı için: oturum
+//        token'ı ya da raporlayıcı token'ı (scripts/.test-sunucu-token) kabul edilir; kasa GEREKMEZ
+//        (sonuç metinleri düz, medya dosyaları raporlayıcı sürecinde şifrelenmiş olarak gelir).
 // Otomatik kilit: kasa, kimliği doğrulanmış API etkinliği olmadan ayarlanan süre (Ayarlar >
 // Güvenlik, 5–120 dk, varsayılan 15) geçince kilitlenir. GET /platform/durum etkinlik SAYILMAZ.
 //   GET /platform/guvenlik, POST /platform/guvenlik/kaydet { otomatikKilitDakika }
@@ -56,19 +66,28 @@ import {
   testVerisiTuruKaydet, testVerisiTuruSil, testVerisiTurleriniListele, veritabaniniHazirla, yerelMakine
 } from './veritabani/depo.mjs';
 import {
-  KasaHatasi, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, acikAnahtar, kasaAc, kasaAcikMi, kasaDurumu, kasaKilitle, kasaOlustur,
-  parolaDegistir, parolayiDogrula
+  KasaHatasi, MEDYA_ANAHTARI_META, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, acikAnahtar, kasaAc, kasaAcikMi, kasaDurumu, kasaKilitle,
+  kasaOlustur, medyaAnahtariniAc, medyaAnahtariniHazirla, parolaDegistir, parolayiDogrula, zarfMi
 } from './kasa.mjs';
+import {
+  hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
+} from './veritabani/sonuc-deposu.mjs';
+import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
+import { allureSonuclariniAktar } from './aktarim/allure-sonuclari.mjs';
 import { YEDEK_UZANTISI, YedekHatasi, otomatikYedekAl, varsayilanYedekKlasoru, yedekOlustur } from './yedek.mjs';
 import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
-import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula } from './aktarim/motor.mjs';
+import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
+/** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
+export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
 export const YEDEK_YUKLEME_SINIRI = 500 * 1024 * 1024;
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** PLATFORM_VERITABANI veya <proje kökü>/veri/platform.db */
 const veritabaniYolu = () => veritabaniYoluCoz(PROJE_KOKU);
+/** Şifreli medya klasörü: veritabanının yanındaki medya/ (varsayılan veri/medya/). */
+const medyaKlasoruYolu = () => medyaKlasoru(veritabaniYolu());
 
 /** @type {import('./veritabani/baglanti.mjs').Veritabani | null} */
 let vt = null;
@@ -140,6 +159,118 @@ export function platformTestOrtami() {
   } catch {
     return {};
   }
+}
+
+// ---------------------------------------------------------------------------------------
+// Koşu sonuçları ve şifreli medya
+// ---------------------------------------------------------------------------------------
+const MEDYA_AYAR_ANAHTARI = 'medya';
+export const VIDEO_SAKLAMA_VARSAYILAN_GUN = 30;
+
+/**
+ * Video saklama süresi (gün): Ayarlar > Güvenlik'te kaydedilen değer (kasa açıkken okunur),
+ * yoksa .env VIDEO_SAKLAMA_GUN, yoksa 30.
+ * @param {import('./veritabani/baglanti.mjs').Veritabani | null} db
+ */
+export function videoSaklamaGunu(db) {
+  if (db && kasaAcikMi(db)) {
+    try {
+      const ayar = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, MEDYA_AYAR_ANAHTARI));
+      const gun = Number(ayar?.videoSaklamaGun);
+      if (Number.isInteger(gun) && gun >= 1 && gun <= 3650) return gun;
+    } catch { /* varsayılana düşülür */ }
+  }
+  const ortam = Number(process.env.VIDEO_SAKLAMA_GUN);
+  return Number.isFinite(ortam) && ortam > 0 ? ortam : VIDEO_SAKLAMA_VARSAYILAN_GUN;
+}
+
+/**
+ * Sonuçlar veritabanına mı yazılıyor? (Veritabanı + kasa var ve bir adaptörün projesi aktarılmış.)
+ * Test sunucusu buna göre: kasa kilitliyse koşu başlatmaz, sonucu JSON dosyası yerine veritabanından okur.
+ */
+export async function platformSonucKaydiEtkinMi() {
+  const db = await platformVeritabani();
+  if (!db || !kasaDurumu(db).olusturuldu) return false;
+  return AKTARIM_ADAPTORLERI.some((a) => Boolean(aktarilmisProjeyiBul(db, a.ad)));
+}
+
+/** Kasa açık mı (sunucunun veritabanında)? */
+export async function platformKasaAcikMi() {
+  const db = await platformVeritabani();
+  return Boolean(db && kasaAcikMi(db));
+}
+
+/**
+ * Canlı panel için: koşudaki senaryonun sonucu (durum, hata, son ekran görüntüsü + video medya kimliği).
+ * @param {string} kosuId @param {string} senaryoAnahtari
+ */
+export async function platformKosuSonucu(kosuId, senaryoAnahtari) {
+  const db = await platformVeritabani();
+  if (!db) return null;
+  const bulunan = kosudakiSonucuBul(db, kosuId, { senaryoAnahtari });
+  if (!bulunan) return null;
+  const d = bulunan.detay;
+  return {
+    durum: d.hamDurum ?? d.durum, platformDurumu: d.durum, sureMs: d.sureMs, hataMesaji: d.hataMesaji,
+    basarisizAdim: bulunan.basarisizAdim, ekranGoruntusuId: bulunan.sonEkranGoruntusuId, videoId: bulunan.videoId, sonucId: d.id
+  };
+}
+
+/**
+ * Süreç kapandı ama koşu hâlâ "çalışıyor" görünüyorsa (ör. zorla kapatıldı, raporlayıcı onEnd'e
+ * ulaşamadı) koşuyu verilen durumla kapatır.
+ * @param {string} kosuId @param {'tamamlandi' | 'durduruldu' | 'zaman_asimi' | 'hata'} durum
+ */
+export async function platformKosusunuKapat(kosuId, durum) {
+  const db = await platformVeritabani();
+  if (!db) return;
+  const k = db.tek('SELECT durum FROM kosular WHERE id = ?', [kosuId]);
+  if (k && k.durum === 'calisiyor') kosuyuBitir(db, kosuId, { durum });
+}
+
+/** Günlük (ve açılışta) medya saklama temizliği: eski videolar + sahipsiz şifreli dosyalar. */
+export function platformMedyaTemizligiZamanla() {
+  const calistir = async () => {
+    try {
+      const db = await platformVeritabani();
+      if (!db) return;
+      const gun = videoSaklamaGunu(db);
+      const sonuc = medyaSaklamaTemizligi(db, medyaKlasoruYolu(), { videoGun: gun });
+      if (sonuc.silinenVideo || sonuc.silinenSahipsiz) {
+        console.log(`[platform] Medya temizliği: ${gun} günden eski ${sonuc.silinenVideo} video, ${sonuc.silinenSahipsiz} sahipsiz şifreli dosya silindi.`);
+      }
+    } catch (hata) {
+      console.error(`[platform] Medya temizliği yapılamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);
+    }
+  };
+  setTimeout(calistir, 5_000).unref();
+  setInterval(calistir, 24 * 60 * 60 * 1000).unref();
+}
+
+/**
+ * Adaptörün eski koşu sonucu klasörlerini (varsa) içe aktarır; kasa AÇIK olmalı. Tekrarlanabilir.
+ * @param {import('./veritabani/baglanti.mjs').Veritabani} db
+ * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor
+ * @param {string} projeId
+ * @param {string} [projeKoku]
+ */
+export async function eskiSonuclariAktar(db, adaptor, projeId, projeKoku = PROJE_KOKU) {
+  const kaynaklar = adaptor.sonucKaynaklari ? adaptor.sonucKaynaklari(projeKoku) : [];
+  const toplam = { kosu: 0, sonuc: 0, medya: 0, zatenVar: 0, eksikEk: 0 };
+  if (!kaynaklar.length) return toplam;
+  const anahtar = medyaAnahtariniHazirla(db);
+  try {
+    for (const k of kaynaklar) {
+      const s = await allureSonuclariniAktar(db, {
+        projeId, ortamAnahtari: k.ortam, ortamId: ortamKimligiBul(db, projeId, k.ortam) ?? null, klasor: k.klasor,
+        medyaAnahtari: anahtar, medyaKlasoru: medyaKlasoruYolu()
+      });
+      for (const a of /** @type {Array<keyof typeof toplam>} */ (Object.keys(toplam))) toplam[a] += s[a];
+    }
+  } finally {
+    anahtar.fill(0);
+  }
+  return toplam;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -302,6 +433,12 @@ function kimlikAl(d, alan = 'id') {
 }
 /** @param {unknown} d */
 const secimliKimlik = (d) => (d === undefined || d === null || d === '' ? undefined : kimlikAl(d));
+/** Sonuçlar ekranında ürün seçimi: ekran kimliği ya da ekransız ürün için "ad:<ürün adı>". @param {unknown} d */
+function urunSecimi(d) {
+  if (d === undefined || d === null || d === '') return null;
+  if (typeof d === 'string' && d.startsWith('ad:') && d.length <= 203) return d;
+  return kimlikAl(d, 'urun');
+}
 /** Profil ortam kapsamı: alan gönderilmezse undefined (mevcut korunur), '' / null = tüm ortamlar. @param {unknown} d */
 const ortamSecimi = (d) => (d === undefined ? undefined : d === null || d === '' ? null : kimlikAl(d, 'ortamId'));
 
@@ -350,8 +487,23 @@ const GET_UCLARI = new Map([
     // Makine adları şifrelidir; kasa açıkken arayüz "kullanici@<makineId>" değerini ada çevirir.
     return { kayitlar, makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad])) };
   }],
-  ['/platform/guvenlik', () => ({
-    otomatikKilitDakika, enAz: OTOMATIK_KILIT_EN_AZ_DK, enCok: OTOMATIK_KILIT_EN_COK_DK, varsayilan: OTOMATIK_KILIT_VARSAYILAN_DK
+  ['/platform/guvenlik', (db) => ({
+    otomatikKilitDakika, enAz: OTOMATIK_KILIT_EN_AZ_DK, enCok: OTOMATIK_KILIT_EN_COK_DK, varsayilan: OTOMATIK_KILIT_VARSAYILAN_DK,
+    videoSaklamaGun: videoSaklamaGunu(db), videoSaklamaVarsayilan: VIDEO_SAKLAMA_VARSAYILAN_GUN
+  })],
+  ['/platform/sonuclar/ozet', (db, q) => sonucOzeti(db, kimlikAl(q.get('projeId'), 'projeId'), { urun: urunSecimi(q.get('urun')) })],
+  ['/platform/sonuclar/kosu', (db, q) => {
+    const d = kosuDetayi(db, kimlikAl(q.get('id')));
+    if (!d) throw new DepoHatasi('Koşu bulunamadı.');
+    return d;
+  }],
+  ['/platform/sonuclar/sonuc', (db, q) => {
+    const d = sonucDetayi(db, kimlikAl(q.get('id')));
+    if (!d) throw new DepoHatasi('Sonuç bulunamadı.');
+    return { sonuc: d };
+  }],
+  ['/platform/sonuclar/kaliplar', (db, q) => hataKaliplari(db, kimlikAl(q.get('projeId'), 'projeId'), {
+    urun: urunSecimi(q.get('urun')), baslangic: q.get('baslangic') || null, bitis: q.get('bitis') || null
   })],
   ['/platform/yedek/otomatik-liste', (db) => {
     const klasor = varsayilanYedekKlasoru(db);
@@ -368,14 +520,26 @@ const GET_UCLARI = new Map([
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown>>} */
 const POST_UCLARI = new Map([
   ['/platform/guvenlik/kaydet', (db, g) => {
-    const dk = Number(g.otomatikKilitDakika);
-    if (!Number.isInteger(dk) || dk < OTOMATIK_KILIT_EN_AZ_DK || dk > OTOMATIK_KILIT_EN_COK_DK) {
-      throw new DepoHatasi(`Otomatik kilit süresi ${OTOMATIK_KILIT_EN_AZ_DK}–${OTOMATIK_KILIT_EN_COK_DK} dakika arasında bir tam sayı olmalıdır.`);
+    /** @type {Record<string, unknown>} */
+    const yanit = {};
+    if (g.otomatikKilitDakika !== undefined) {
+      const dk = Number(g.otomatikKilitDakika);
+      if (!Number.isInteger(dk) || dk < OTOMATIK_KILIT_EN_AZ_DK || dk > OTOMATIK_KILIT_EN_COK_DK) {
+        throw new DepoHatasi(`Otomatik kilit süresi ${OTOMATIK_KILIT_EN_AZ_DK}–${OTOMATIK_KILIT_EN_COK_DK} dakika arasında bir tam sayı olmalıdır.`);
+      }
+      const mevcut = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, GUVENLIK_AYAR_ANAHTARI));
+      ayarYaz(db, GUVENLIK_AYAR_ANAHTARI, { ...(mevcut ?? {}), otomatikKilitDakika: dk });
+      otomatikKilitDakika = dk;
+      yanit.otomatikKilitDakika = dk;
     }
-    const mevcut = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, GUVENLIK_AYAR_ANAHTARI));
-    ayarYaz(db, GUVENLIK_AYAR_ANAHTARI, { ...(mevcut ?? {}), otomatikKilitDakika: dk });
-    otomatikKilitDakika = dk;
-    return { otomatikKilitDakika: dk };
+    if (g.videoSaklamaGun !== undefined) {
+      const gun = Number(g.videoSaklamaGun);
+      if (!Number.isInteger(gun) || gun < 1 || gun > 3650) throw new DepoHatasi('Video saklama süresi 1–3650 gün arasında bir tam sayı olmalıdır.');
+      const mevcut = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, MEDYA_AYAR_ANAHTARI));
+      ayarYaz(db, MEDYA_AYAR_ANAHTARI, { ...(mevcut ?? {}), videoSaklamaGun: gun });
+      yanit.videoSaklamaGun = gun;
+    }
+    return yanit;
   }],
   ['/platform/proje/kaydet', (db, g) => {
     const aciklama = metinAl(g.aciklama).trim();
@@ -463,7 +627,8 @@ const POST_UCLARI = new Map([
 /**
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
- * @param {{ token: string; jsonGonder: (res: import('node:http').ServerResponse, durum: number, govde: unknown) => void }} baglam
+ * @param {{ token: string; raporlayiciTokeni?: string; jsonGonder: (res: import('node:http').ServerResponse, durum: number, govde: unknown) => void }} baglam
+ *   raporlayiciTokeni: YALNIZCA /platform/sonuc/* (raporlayıcı yazma) uçlarında oturum token'ına ek olarak kabul edilir.
  * @returns {Promise<boolean>} istek bir /platform uç noktasıyla eşleştiyse true
  */
 export async function platformIsteginiIsle(req, res, baglam) {
@@ -538,6 +703,21 @@ export async function platformIsteginiIsle(req, res, baglam) {
     if (req.method === 'GET' && yol === '/platform/aktarim/durum') {
       if (!disTokenGecerli) { tokenYok(); return true; }
       jsonGonder(res, 200, { basarili: true, aktarimSuruyor, ...(await aktarimDurumu(await platformVeritabani())) });
+      return true;
+    }
+
+    // --- GET /platform/medya/<id> — şifreli medyayı çözerek akıtır (kasa açık olmalı) ---------
+    const medyaEslesme = /^\/platform\/medya\/([A-Za-z0-9_-]{1,100})$/.exec(yol);
+    if (req.method === 'GET' && medyaEslesme) {
+      if (!disTokenGecerli) { tokenYok(); return true; }
+      await medyaSun(req, res, medyaEslesme[1], url.searchParams.get('indir') === '1', jsonGonder);
+      return true;
+    }
+
+    // --- POST /platform/sonuc/* — Playwright raporlayıcısının yazma uçları -------------------
+    const sonucEslesme = /^\/platform\/sonuc\/(durum|medya-anahtari|kosu|kaydet|bitir)$/.exec(yol);
+    if (req.method === 'POST' && sonucEslesme) {
+      await raporlayiciIsteginiIsle(req, res, sonucEslesme[1], baglam);
       return true;
     }
 
@@ -665,17 +845,30 @@ export async function platformIsteginiIsle(req, res, baglam) {
             throw new KasaHatasi('KASA_KILITLI', 'Aktarım için önce kasayı açın.');
           }
           const paket = await paketOlustur(adaptor);
-          return aktarimiUygula(db, paket);
+          const uygulanan = aktarimiUygula(db, paket);
+          // Eski (Allure dönemi) koşu sonuçları + png/webm ekleri: tek seferlik, tekrarlanabilir
+          // (var olan sonuç atlanır). Kaynak klasörlere dokunulmaz; medya şifrelenerek kopyalanır.
+          let sonucAktarimi = null;
+          try {
+            sonucAktarimi = await eskiSonuclariAktar(db, adaptor, uygulanan.projeId);
+          } catch (hata) {
+            uygulanan.uyarilar.push(`Eski koşu sonuçları aktarılamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);
+          }
+          return { ...uygulanan, sonucAktarimi };
         });
         const s = sonuc.sayimlar;
         const toplam = (/** @type {'yeni' | 'guncellenecek' | 'ayni'} */ k) => Object.values(s).reduce((t, x) => t + x[k], 0);
         console.log(`[platform] Proje dosyaları aktarıldı (${adaptor.ad}): yeni ${toplam('yeni')}, güncellenen ${toplam('guncellenecek')}, aynı (atlanan) ${toplam('ayni')}, kaldırılan ${sonuc.kaldirilanlar.length}.`);
+        if (sonuc.sonucAktarimi) {
+          const sa = sonuc.sonucAktarimi;
+          console.log(`[platform] Eski koşu sonuçları: ${sa.kosu} koşu, ${sa.sonuc} sonuç, ${sa.medya} şifreli medya aktarıldı (zaten var: ${sa.zatenVar}).`);
+        }
         jsonGonder(res, 200, {
           basarili: true,
           sonuc: {
             projeId: sonuc.projeId, sayimlar: sonuc.sayimlar, uyarilar: sonuc.uyarilar,
             atlanan: { ayni: sonuc.atlananlar.ayni.length, silinmis: sonuc.atlananlar.silinmis, ortamYok: sonuc.atlananlar.ortamYok },
-            kaldirilanlar: sonuc.kaldirilanlar, kaynaktaYok: sonuc.kaynaktaYok
+            kaldirilanlar: sonuc.kaldirilanlar, kaynaktaYok: sonuc.kaynaktaYok, sonucAktarimi: sonuc.sonucAktarimi
           }
         });
         return true;
@@ -751,6 +944,191 @@ export async function platformIsteginiIsle(req, res, baglam) {
     if (!yanit) throw hata;
     if (!res.headersSent) jsonGonder(res, yanit.durum, yanit.govde);
     return true;
+  }
+}
+
+// ---------------------------------------------------------------------------------------
+// Medya sunma ve raporlayıcı uçları
+// ---------------------------------------------------------------------------------------
+
+const MEDYA_UZANTILARI = Object.freeze({
+  'image/png': 'png', 'image/jpeg': 'jpg', 'video/webm': 'webm', 'video/mp4': 'mp4', 'application/zip': 'zip',
+  'text/markdown': 'md', 'text/plain': 'txt', 'application/json': 'json'
+});
+const MEDYA_TUR_ETIKETLERI = Object.freeze({ ekran_goruntusu: 'ekran-goruntusu', video: 'video', iz: 'iz', diger: 'ek' });
+const TR_ASCII = Object.freeze({ ç: 'c', Ç: 'C', ğ: 'g', Ğ: 'G', ı: 'i', İ: 'I', ö: 'o', Ö: 'O', ş: 's', Ş: 'S', ü: 'u', Ü: 'U' });
+
+/**
+ * İndirme adı: "<senaryo> - <yyyy-aa-gg_ss-dd> - <tür>.<uzantı>" (yerel saat; dosya sistemi güvenli).
+ * @param {NonNullable<ReturnType<typeof medyaGetir>>} m
+ */
+export function medyaIndirmeAdi(m) {
+  const t = new Date(m.sonucZamani ?? m.olusturulma);
+  const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
+  const tarih = Number.isNaN(t.getTime()) ? 'tarihsiz'
+    : `${t.getFullYear()}-${iki(t.getMonth() + 1)}-${iki(t.getDate())}_${iki(t.getHours())}-${iki(t.getMinutes())}`;
+  const uzanti = /** @type {Record<string, string>} */ (MEDYA_UZANTILARI)[m.icerikTuru.toLowerCase()]
+    ?? (m.tur === 'iz' ? 'zip' : 'bin');
+  const temel = `${m.senaryoBaslik ?? 'medya'} - ${tarih} - ${/** @type {Record<string, string>} */ (MEDYA_TUR_ETIKETLERI)[m.tur] ?? 'ek'}`
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').replace(/\s+/g, ' ').trim().slice(0, 150);
+  return `${temel}.${uzanti}`;
+}
+
+/** @param {string} ad */
+function asciiAd(ad) {
+  return ad.replace(/[çÇğĞıİöÖşŞüÜ]/g, (k) => /** @type {Record<string, string>} */ (TR_ASCII)[k] ?? '_').replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_');
+}
+
+/** "bytes=a-b" → { baslangic, bitis } | undefined (başlık yok) | null (karşılanamaz). @param {string | undefined} baslik @param {number} boyut */
+function aralikCoz(baslik, boyut) {
+  if (!baslik) return undefined;
+  const e = /^bytes=(\d*)-(\d*)$/.exec(baslik.trim());
+  if (!e || (e[1] === '' && e[2] === '')) return null;
+  let baslangic;
+  let bitis;
+  if (e[1] === '') {
+    const son = Number(e[2]);
+    if (son === 0) return null;
+    baslangic = Math.max(0, boyut - son);
+    bitis = boyut - 1;
+  } else {
+    baslangic = Number(e[1]);
+    bitis = e[2] === '' ? boyut - 1 : Math.min(Number(e[2]), boyut - 1);
+  }
+  if (!Number.isFinite(baslangic) || !Number.isFinite(bitis) || baslangic > bitis || baslangic >= boyut) return null;
+  return { baslangic, bitis };
+}
+
+/**
+ * GET /platform/medya/<id>: kasa açık olmalı (değilse 423). Dosya çözülerek parça parça akıtılır;
+ * Range (206) desteklenir. Düz metin diske yazılmaz, önbelleğe alınmaz.
+ * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res
+ * @param {string} id @param {boolean} indir
+ * @param {(res: import('node:http').ServerResponse, durum: number, govde: unknown) => void} jsonGonder
+ */
+async function medyaSun(req, res, id, indir, jsonGonder) {
+  const db = await acikVeritabani();
+  const m = medyaGetir(db, id);
+  if (!m) { jsonGonder(res, 404, { basarili: false, mesaj: 'Medya bulunamadı.' }); return; }
+  if (m.silinme) { jsonGonder(res, 410, { basarili: false, mesaj: 'Bu video saklama süresi dolduğu için silindi.' }); return; }
+  const klasor = medyaKlasoruYolu();
+  const yol = medyaDosyaAdiGecerliMi(m.dosya) ? join(klasor, m.dosya) : null;
+  if (!yol || !existsSync(yol)) { jsonGonder(res, 404, { basarili: false, mesaj: 'Medya dosyası bu bilgisayarda yok (başka bir makinede kaydedilmiş olabilir).' }); return; }
+  let boyut;
+  try {
+    ({ duzBoyut: boyut } = await medyaBoyutu(yol));
+  } catch {
+    jsonGonder(res, 500, { basarili: false, mesaj: 'Medya dosyası okunamadı (bozuk).' });
+    return;
+  }
+  const aralik = aralikCoz(typeof req.headers.range === 'string' ? req.headers.range : undefined, boyut);
+  if (aralik === null) {
+    res.writeHead(416, { 'Content-Range': `bytes */${boyut}`, 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ basarili: false, mesaj: 'İstenen bayt aralığı karşılanamıyor.' }));
+    return;
+  }
+  const ad = medyaIndirmeAdi(m);
+  /** @type {Record<string, string | number>} */
+  const basliklar = {
+    'Content-Type': m.icerikTuru || 'application/octet-stream', 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff', 'Cross-Origin-Resource-Policy': 'same-origin',
+    'Content-Security-Policy': "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'",
+    'Content-Disposition': `${indir ? 'attachment' : 'inline'}; filename="${asciiAd(ad)}"; filename*=UTF-8''${encodeURIComponent(ad)}`,
+    'Content-Length': aralik ? aralik.bitis - aralik.baslangic + 1 : boyut,
+    ...(aralik ? { 'Content-Range': `bytes ${aralik.baslangic}-${aralik.bitis}/${boyut}` } : {})
+  };
+  const anahtar = medyaAnahtariniHazirla(db);
+  let kapandi = false;
+  res.on('close', () => { kapandi = true; });
+  try {
+    res.writeHead(aralik ? 206 : 200, basliklar);
+    if (req.method === 'HEAD' || boyut === 0) { res.end(); return; }
+    for await (const parca of medyaCoz(anahtar, yol, aralik ?? {})) {
+      if (kapandi) break;
+      if (!res.write(parca)) await new Promise((coz) => { res.once('drain', coz); res.once('close', coz); });
+    }
+    res.end();
+  } catch (hata) {
+    console.error(`[platform] Medya akıtılamadı: ${hata instanceof MedyaHatasi ? hata.message : /** @type {Error} */ (hata)?.message}`);
+    res.destroy();
+  } finally {
+    anahtar.fill(0);
+  }
+}
+
+/**
+ * Raporlayıcı uçları. Oturum token'ı ya da raporlayıcı token'ı gerekir; kasa GEREKMEZ.
+ * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string} islem
+ * @param {{ token: string; raporlayiciTokeni?: string; jsonGonder: (res: import('node:http').ServerResponse, durum: number, govde: unknown) => void }} baglam
+ */
+async function raporlayiciIsteginiIsle(req, res, islem, baglam) {
+  const { jsonGonder } = baglam;
+  let govde;
+  try {
+    const metin = (await ikiliGovdeOku(req, SONUC_GOVDE_SINIRI)).toString('utf8');
+    govde = /** @type {Record<string, unknown>} */ (metin ? JSON.parse(metin) : {});
+    if (typeof govde !== 'object' || govde === null || Array.isArray(govde)) throw new Error('nesne değil');
+  } catch {
+    jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz istek gövdesi.' });
+    return;
+  }
+  const baslikToken = req.headers['x-test-sunucu-token'];
+  const token = typeof govde.token === 'string' ? govde.token : typeof baslikToken === 'string' ? baslikToken : '';
+  const gecerli = [baglam.token, baglam.raporlayiciTokeni].some((t) => typeof t === 'string' && t.length > 0 && t === token);
+  if (!gecerli) { jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' }); return; }
+  const db = await platformVeritabani();
+  if (!db) {
+    jsonGonder(res, 200, islem === 'durum' ? { basarili: true, etkin: false, veritabaniYolu: veritabaniYolu() } : { basarili: false, mesaj: 'Platform veritabanı yok.' });
+    return;
+  }
+  switch (islem) {
+    case 'durum': {
+      const projeId = typeof govde.projeId === 'string' && govde.projeId ? govde.projeId : null;
+      const proje = projeId
+        ? (db.tek('SELECT id FROM projeler WHERE id = ?', [projeId]) ? { id: projeId } : undefined)
+        : typeof govde.adaptor === 'string' ? aktarilmisProjeyiBul(db, govde.adaptor) : undefined;
+      const etkin = Boolean(proje) && kasaDurumu(db).olusturuldu;
+      jsonGonder(res, 200, {
+        basarili: true, etkin, veritabaniYolu: veritabaniYolu(), medyaKlasoru: medyaKlasoruYolu(),
+        projeId: proje?.id ?? null,
+        ortamId: proje && typeof govde.ortam === 'string' ? ortamKimligiBul(db, proje.id, govde.ortam) ?? null : null,
+        medyaZarfi: db.metaOku(MEDYA_ANAHTARI_META) ?? null
+      });
+      return;
+    }
+    case 'medya-anahtari': {
+      const mevcut = db.metaOku(MEDYA_ANAHTARI_META);
+      if (mevcut) { jsonGonder(res, 200, { basarili: true, zarf: mevcut }); return; }
+      if (!zarfMi(govde.zarf)) { jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz medya anahtarı zarfı.' }); return; }
+      if (kasaAcikMi(db)) {
+        try {
+          medyaAnahtariniAc(govde.zarf, acikAnahtar(db)).fill(0);
+        } catch {
+          jsonGonder(res, 400, { basarili: false, mesaj: 'Medya anahtarı bu kasanın anahtarıyla açılmıyor.' });
+          return;
+        }
+      }
+      const zarf = govde.zarf;
+      db.islem(() => db.metaYaz(MEDYA_ANAHTARI_META, zarf));
+      jsonGonder(res, 200, { basarili: true, zarf });
+      return;
+    }
+    case 'kosu':
+      kosuKaydet(db, /** @type {Parameters<typeof kosuKaydet>[1]} */ (govde.kosu));
+      jsonGonder(res, 200, { basarili: true });
+      return;
+    case 'kaydet': {
+      const { id, silinecekMedyaDosyalari } = sonucKaydet(db, /** @type {Parameters<typeof sonucKaydet>[1]} */ (govde.sonuc));
+      for (const d of silinecekMedyaDosyalari) medyaDosyasiniSil(medyaKlasoruYolu(), d);
+      jsonGonder(res, 200, { basarili: true, id });
+      return;
+    }
+    case 'bitir':
+      kosuyuBitir(db, kimlikAl(govde.kosuId, 'kosuId'), { durum: metinAl(govde.durum), bitis: typeof govde.bitis === 'string' ? govde.bitis : undefined });
+      jsonGonder(res, 200, { basarili: true });
+      return;
+    default:
+      jsonGonder(res, 404, { basarili: false, mesaj: 'Bilinmeyen uç nokta.' });
   }
 }
 

@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs';
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices, type ReporterDescription } from '@playwright/test';
 import 'dotenv/config';
 import { getEnvironment, getEnvironmentName } from './tests/support/environments';
 import { kosuListesiHaricDesenleri } from './tests/support/kosu-listesi';
+import { platformDurumu } from './tests/support/platform-veri';
 
 const environmentName = getEnvironmentName();
 const environment = getEnvironment(environmentName);
@@ -11,6 +12,20 @@ const environment = getEnvironment(environmentName);
 // tanımlı değilse globalSetup sessizce atlanır) storageState hiç verilmez — testler
 // testBaslangiciniHazirla() içindeki gerçek login'e düşer, davranış eskisi gibi kalır.
 const oturumDosyasi = environment.login.storageState;
+
+// SONUÇLAR: platform raporlayıcısı (scripts/platform/raporlayici.mjs) koşuları, test sonuçlarını
+// ve adımları platform veritabanına, ekran görüntüsü/video/izleri ŞİFRELİ medya deposuna yazar
+// (proje platform veritabanına aktarılmamışsa hiçbir şey yapmaz). Sonuçlar platform arayüzündeki
+// "Sonuçlar" sekmesinde görünür.
+// Proje aktarılmışken Playwright'ın HTML raporu ÜRETİLMEZ: HTML rapor ekleri (ekran görüntüsü,
+// video, iz) playwright-report/ altına DÜZ METİN kopyalardı; bu da şifreli medya kuralını delerdi.
+const sonuclarPlatformda = platformDurumu().durum === 'aktarildi';
+const platformRaporlayicisi: ReporterDescription = ['./scripts/platform/raporlayici.mjs', { adaptor: 'galaksi', ortam: environmentName }];
+/** Dashboard (test-sunucu) koşuları: "list" + (yalnızca sunucu JSON sonuç dosyası istediyse) "json". */
+const dashboardRaporlayicilari: ReporterDescription[] = process.env.PLAYWRIGHT_JSON_OUTPUT_NAME ? [['list'], ['json']] : [['list']];
+const terminalRaporlayicilari: ReporterDescription[] = sonuclarPlatformda
+  ? [['list']]
+  : [['html', { open: 'never', outputFolder: 'playwright-report' }], ['list']];
 
 export default defineConfig({
   testDir: './tests',
@@ -57,69 +72,12 @@ export default defineConfig({
   // kaydeder (CANLI'da authenticator kodu bu yüzden yalnızca burada, bir kere sorulur).
   globalSetup: './tests/support/global-setup.ts',
 
-  // Tüm testler bittikten sonra allure-results/environment.properties dosyasını yazar
-  // (Allure raporundaki "Environment" widget'ını doldurmak için).
-  globalTeardown: './tests/support/allure-environment.ts',
-
   reporter: [
-    // Dashboard'dan (test-sunucu) başlatılan koşular: HTML rapor yerine "json" yazılır
-    // (sunucu sonucu PLAYWRIGHT_JSON_OUTPUT_NAME dosyasından okur; paralel koşular aynı
-    // playwright-report/ klasörünü ezmesin diye HTML üretilmez). Allure HER ZAMAN yazılır —
-    // dashboard'daki adım/ürün tabloları, hata kalıpları ve kartlar bu sonuçlardan beslenir.
-    // (Eskiden sunucu "--reporter=list,json" veriyordu; bu, aşağıdaki Allure raporlayıcısını
-    // devre dışı bırakıyor ve dashboard koşuları hiçbir tabloya yansımıyordu.)
-    ...(process.env.TEST_SUNUCU_GORUNUR
-      ? ([['list'], ['json']] as const)
-      : ([['html', { open: 'never', outputFolder: 'playwright-report' }], ['list']] as const)),
-    // Kurumsal/paylaşılabilir rapor için ham sonuçları ortama özel klasöre yazar
-    // (allure-results-test / allure-results-canli) — TEST ve CANLI verileri
-    // birbirine karışmasın diye. HTML rapor haline getirmek için:
-    // npm run allure:report:test veya npm run allure:report:canli (Java 8+ gerektirir).
-    [
-      'allure-playwright',
-      {
-        detail: true,
-        resultsDir: `allure-results-${environmentName}`,
-        suiteTitle: false,
-        // Hataları anlaşılır Türkçe kategorilere ayırır (Categories widget'ı için).
-        // scripts/urun-hata-raporu.mjs'teki kategoriBul() ile AYNI mantık: karar öncelikle
-        // mesajın İLK satırına göre verilir (pop-up > zaman aşımı > doğrulama > seçici).
-        // Allure 2 regex'i tüm mesaja DOTALL + tam eşleşme ile uygular ve bir sonucu
-        // eşleşen TÜM kategorilere koyar; bu yüzden regex'ler negatif lookahead ile
-        // birbirini dışlar. Playwright doğrulama mesajları çağrı günlüğünde her zaman
-        // "waiting for locator/getBy..." içerdiğinden, doğrulama kontrolü seçiciden
-        // önce gelir (aksi hâlde toHaveText/toBeVisible hataları "Seçici" sayılırdı).
-        categories: [
-          {
-            name: 'İş Kuralı / Ekran Hatası (Beklenmeyen Pop-up)',
-            matchedStatuses: ['failed', 'broken'],
-            messageRegex: '.*beklenmeyen bir hata pop.?up.*'
-          },
-          {
-            name: 'Zaman Aşımı (Timeout)',
-            matchedStatuses: ['failed', 'broken'],
-            messageRegex: '(?!.*beklenmeyen bir hata pop.?up)[^\\n]*[Tt]imeout[^\\n]*exceeded.*'
-          },
-          {
-            name: 'Seçici / Elemana Ulaşılamadı',
-            matchedStatuses: ['failed', 'broken'],
-            messageRegex:
-              '(?!.*beklenmeyen bir hata pop.?up)(?![^\\n]*[Tt]imeout[^\\n]*exceeded)' +
-              '(?!\\s*(?:\\w*Error:\\s*)?expect(?:\\.\\w+)?\\([^\\n]*\\)[^\\n]*failed)' +
-              '(?!(?:.*\\n)?[ \\t]*(?:expect(?:\\.\\w+)?\\((?:received|locator|page)\\)|Expected(?: string| value| pattern)?:|Received(?: string| value)?:))' +
-              '.*(?:element\\(s\\) not found|strict mode violation|resolved to \\d+ elements|waiting for (?:locator|getBy\\w+|frameLocator)\\().*'
-          },
-          {
-            name: 'Doğrulama (Assertion) Hatası',
-            matchedStatuses: ['failed', 'broken'],
-            messageRegex:
-              '(?!.*beklenmeyen bir hata pop.?up)(?![^\\n]*[Tt]imeout[^\\n]*exceeded)' +
-              '(?:\\s*(?:\\w*Error:\\s*)?expect(?:\\.\\w+)?\\([^\\n]*\\)[^\\n]*failed' +
-              '|(?:.*\\n)?[ \\t]*(?:expect(?:\\.\\w+)?\\((?:received|locator|page)\\)|Expected(?: string| value| pattern)?:|Received(?: string| value)?:)).*'
-          }
-        ]
-      }
-    ]
+    // Dashboard'dan (test-sunucu) başlatılan koşular: HTML rapor yerine "list" (+ gerekirse "json";
+    // sunucu platform kapalıyken sonucu PLAYWRIGHT_JSON_OUTPUT_NAME dosyasından okur). "--reporter"
+    // CLI'dan VERİLMEZ; verilirse aşağıdaki platform raporlayıcısı devre dışı kalırdı.
+    ...(process.env.TEST_SUNUCU_GORUNUR ? dashboardRaporlayicilari : terminalRaporlayicilari),
+    platformRaporlayicisi
   ],
 
   use: {

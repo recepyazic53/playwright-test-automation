@@ -64,3 +64,4 @@ export declare function aktarilmisProjeyiBul(vt: Veritabani, adaptorAdi: string)
 export declare function ortamKimligiBul(vt: Veritabani, projeId: string, ortamAnahtari: string): string | undefined;
 export declare function aktarimiOnizle(vt: Veritabani | null, paket: AktarimPaketi): AktarimOnizlemesi;
 export declare function aktarimiUygula(vt: Veritabani, paket: AktarimPaketi, secenekler?: { yapan?: string }): AktarimSonucu;
+export declare function hassasAlanlariTamamla(vt: Veritabani, projeId: string, hassasAdlar: ReadonlySet<string>): number;

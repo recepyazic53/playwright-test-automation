@@ -32,16 +32,20 @@ function istemciBetiginiOku() {
   return metin.slice(konum + ISTEMCI_BASLANGIC_ISARETI.length);
 }
 
+// Görünüm üreticisinin sürümü: test sunucusu diskteki dashboard-<ortam>.html bu işareti
+// taşımıyorsa (eski, Allure dönemi üretimi) sayfayı sunmadan önce yeniden üretir.
+export const GORUNUM_SURUMU = '2-sonuclar-platformda';
+const SONUC_NOTU = 'Sonuçlar artık Sonuçlar sekmesinde';
+
 // veri: urun-hata-raporu.mjs'deki VERI nesnesi (başlıktaki etiket/üretim zamanı için);
 // veriJson: aynı nesnenin <script> içine gömülmeye hazır JSON'u ("<" kaçışlı).
-// sonKosuOzet/sonKosuToplam/sonKosuOran: kenar çubuğundaki genel başarı donutu.
+// Sonuç bölümleri (kartlar, trend, koşu geçmişi, hata kalıpları, ürün/adım tabloları) GİZLİDİR:
+// sonuçlar platformun "Sonuçlar" sekmesinde. Öğeler istemci betiği hatasız çalışsın diye
+// sayfada (hidden) kalır; yerlerinde not gösterilir.
 export function dashboardHtmlOlustur({
   ortam,
   veri,
   veriJson,
-  sonKosuOzet,
-  sonKosuToplam,
-  sonKosuOran,
   testSunucuTaban,
   testSunucuToken
 }) {
@@ -50,6 +54,7 @@ export function dashboardHtmlOlustur({
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="gorunum-surumu" content="${GORUNUM_SURUMU}" />
 <title>${ortam.toUpperCase()} Ortamı - Test Dashboard</title>
 <style>
 ${stilOku()}</style>
@@ -72,20 +77,8 @@ ${stilOku()}</style>
       </button>
     </div>
 
-    <div class="donut-kart kenar-daralinca-gizli">
-      <div class="donut-satir">
-        <div class="donut-sarma">
-          <div class="donut-halka${sonKosuToplam === 0 ? ' bos' : ''}" style="--oran:${sonKosuOran}"></div>
-          <div class="donut-oyuk">${sonKosuToplam === 0 ? '—' : '%' + sonKosuOran}</div>
-        </div>
-        <div class="donut-detay">
-          <div><span class="nokta nokta-iyi"></span>Başarılı ${sonKosuOzet.basarili}</div>
-          <div><span class="nokta nokta-kotu"></span>Başarısız ${sonKosuOzet.basarisiz}</div>
-          <div><span class="nokta nokta-notr"></span>Atlanan ${sonKosuOzet.atlanan}</div>
-          ${sonKosuOzet.durduruldu ? `<div><span class="nokta nokta-notr"></span>Durduruldu ${sonKosuOzet.durduruldu}</div>` : ''}
-        </div>
-      </div>
-      <div class="donut-etiket">Güncel durum: ${escapeHtml(veri.sonKosuEtiket)}</div>
+    <div class="donut-kart kenar-daralinca-gizli sonuc-tasindi-notu" role="note">
+      <div class="donut-etiket"><strong>${SONUC_NOTU}.</strong> Koşu sonuçları, hata kalıpları ve ekran görüntüleri platformun üst menüsündeki "Sonuçlar" sekmesindedir.</div>
     </div>
 
     <div class="kenar-daralinca-gizli kenar-urun-blok">
@@ -110,6 +103,13 @@ ${stilOku()}</style>
       <button type="button" id="senaryoOlusturButonu" class="senaryo-olustur-buton" style="display:none">+ Senaryo Oluştur</button>
     </div>
 
+    <div class="kart sonuc-tasindi-notu" role="note" style="margin-bottom:16px">
+      <strong>${SONUC_NOTU}.</strong> Koşu kartları, trend, koşu geçmişi, hata kalıpları ve ekran görüntüsü/video
+      kayıtları artık platform veritabanında tutulur ve platform arayüzünün üst menüsündeki <strong>Sonuçlar</strong> sekmesinde
+      gösterilir. Bu görünüm senaryoları çalıştırmak (▷), koşuya dahil etmek, düzenlemek ve yeni senaryo oluşturmak için kullanılmaya devam eder.
+    </div>
+
+    <div class="sonuclar-eski" hidden>
     <div class="stat-grid" id="statGrid"></div>
     <p class="stat-kaynak" id="statKaynak"></p>
 
@@ -182,8 +182,10 @@ ${stilOku()}</style>
       </section>
     </div>
 
-    <div class="yari-izgara">
-      <section>
+    </div>
+
+    <div class="yari-izgara" style="grid-template-columns:1fr">
+      <section hidden>
         <div class="bolum-baslik-satir"><h2 id="secilenUrunBasligi">Hata kalıpları</h2><span class="bolum-baslik-sayi" id="kalipBaslikSayisi"></span></div>
         <p class="bolum-alt">Tarih aralığını daraltın; aynı kalıptaki hatalar tek satırda toplanır.</p>
         <div class="tarih-filtre">
@@ -231,7 +233,7 @@ ${stilOku()}</style>
       </section>
     </div>
 
-    <footer>Bu sayfa her "npm run rapor:${ortam}" / "npm run hata:ozet:${ortam}" çalıştığında yeniden üretilir. Senaryo listesindeki ▷ Başlat ikonlarının çalışması için bir terminalde "npm run test-sunucu" açık olmalıdır.</footer>
+    <footer>Bu sayfa platformdaki "Mevcut görünüm" sekmesinden ("Yeniden üret") üretilir. ${SONUC_NOTU}. Senaryo listesindeki ▷ Başlat ikonlarının çalışması için platform sunucusu ("npm run baslat") açık olmalıdır.</footer>
   </main>
 
   <div class="modal-ortu" id="adimDetayModalOrtu">

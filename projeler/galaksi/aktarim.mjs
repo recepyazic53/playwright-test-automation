@@ -63,13 +63,13 @@ const VERI_BOLUMLERI = Object.freeze([
 const BAGLAM_BOLUMU = Object.freeze({ yol: ['kullaniciDegistir'], tur: 'Acente' });
 
 /**
- * HASSAS alanlar (değerleri kasada şifreli, arayüzde maskeli): kimlik numaraları, telefon, doğum
- * tarihi, pasaport sahibinin adı/soyadı/baba adı ve kart numarası/güvenlik kodu.
+ * HASSASLIK (kullanıcı kararı): test verisi profillerindeki TÜM alanlar hassastır — kimlik
+ * numaraları, telefon, doğum tarihi, adres (il/ilçe/cadde...), kart sahibi adı, kart bilgileri,
+ * taksit vb. Değerler kasada şifreli durur, arayüzde maskeli gösterilir; yalnızca profilin ADI
+ * (ör. "tc1", "adres1") açık kalır. Aynı alan adları senaryo içeriğinde geçerse onlar da şifrelenir
+ * (motor: türlerdeki hassas alan adları). Kullanıcı bir alanı Ayarlar'dan tek tek "hassas değil"
+ * yapabilir; aktarım bir sonraki çalıştırmada bu tercihi ezmez (tür kaynağı değişmedikçe).
  */
-export const HASSAS_ALANLAR = Object.freeze(new Set([
-  'tcKimlikNo', 'vergiKimlikNo', 'pasaportNo', 'yabanciKimlikNo', 'dogumTarihi', 'cepTelefonu', 'ad', 'soyad', 'babaAdi',
-  'kartNo', 'guvenlikKodu'
-]));
 const ALAN_ETIKETLERI = Object.freeze({
   tcKimlikNo: 'T.C. kimlik no', vergiKimlikNo: 'Vergi kimlik no', pasaportNo: 'Pasaport no', yabanciKimlikNo: 'Yabancı kimlik no',
   dogumTarihi: 'Doğum tarihi', cepTelefonu: 'Cep telefonu', ad: 'Ad', soyad: 'Soyad', babaAdi: 'Baba adı', dogumYeri: 'Doğum yeri',
@@ -210,7 +210,7 @@ function alanTanimlari(kayitlar) {
   return [...tipler].map(([ad, kume]) => {
     // Tek tip → o tip; nesne içeren karışık tip → 'json' (tüm değerler JSON metni olur); diğer karışık → 'metin'.
     const tip = kume.size === 1 ? [...kume][0] : kume.has('secim') || kume.has('json') ? 'json' : kume.size === 0 ? 'metin' : 'metin';
-    return { ad, etiket: /** @type {Record<string, string>} */ (ALAN_ETIKETLERI)[ad] ?? ad, tip, hassas: HASSAS_ALANLAR.has(ad) };
+    return { ad, etiket: /** @type {Record<string, string>} */ (ALAN_ETIKETLERI)[ad] ?? ad, tip, hassas: true };
   });
 }
 
@@ -515,7 +515,11 @@ export function yenidenKur(vt, projeId, ortamAnahtari) {
       for (const [alan, v] of Object.entries(ham)) {
         const acik = zarfMi(v) ? coz(vt, v) : v;
         const tip = tipler.get(alan);
-        kayit[alan] = (tip === 'secim' || tip === 'json') && typeof acik === 'string' ? JSON.parse(acik) : acik;
+        // Şifreli değer her zaman metin olarak döner; türün tipine göre asıl şekline çevrilir.
+        if ((tip === 'secim' || tip === 'json') && typeof acik === 'string') kayit[alan] = JSON.parse(acik);
+        else if (tip === 'sayi' && typeof acik === 'string' && acik !== '' && Number.isFinite(Number(acik))) kayit[alan] = Number(acik);
+        else if (tip === 'mantiksal' && (acik === 'true' || acik === 'false')) kayit[alan] = acik === 'true';
+        else kayit[alan] = acik;
       }
       degerler.set(ad, kayit);
     }
@@ -581,6 +585,16 @@ export function yenidenKur(vt, projeId, ortamAnahtari) {
   };
 }
 
+/**
+ * Eski (Allure dönemi) koşu sonucu klasörleri: allure-results-<ortam>/ — varsa tek seferlik içe
+ * aktarılır (scripts/platform/aktarim/allure-sonuclari.mjs). Klasörler SİLİNMEZ/değiştirilmez.
+ * @param {string} projeKoku
+ */
+export function sonucKaynaklari(projeKoku) {
+  return ORTAMLAR.map((o) => ({ ortam: o.anahtar, klasor: join(projeKoku, `allure-results-${o.anahtar}`) }))
+    .filter((k) => existsSync(k.klasor));
+}
+
 /** @type {import('../index.d.mts').AktarimAdaptoru} */
 export const galaksiAdaptoru = Object.freeze({
   ad: ADAPTOR_ADI,
@@ -591,5 +605,6 @@ export const galaksiAdaptoru = Object.freeze({
   parmakIzleri,
   kosuListesiOzeti,
   kosudanHaricAnahtarlar,
-  yenidenKur
+  yenidenKur,
+  sonucKaynaklari
 });

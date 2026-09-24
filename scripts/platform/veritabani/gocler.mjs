@@ -276,6 +276,65 @@ export const GOCLER = [
       INSERT INTO meta (anahtar, deger) VALUES ('sifreli_alan_gocu', 'bekliyor')
         ON CONFLICT(anahtar) DO UPDATE SET deger = 'bekliyor';
     `
+  },
+  {
+    // Sürüm 5 — koşu sonuçları doğrudan veritabanında (Playwright raporlayıcısı
+    // scripts/platform/raporlayici.mjs yazar; eski Allure sonuçları bir kez içe aktarılır):
+    // - kosular: kapsam ('Genel' ya da ürün/ekran adı; yalnızca 'tam' koşularda anlamlı) ve
+    //   kaynak ('raporlayici' | 'allure-aktarimi').
+    // - kosu_sonuclari: senaryo anahtarı ("<dosya>::<başlık>"), ürün/ekran, ham Playwright durumu,
+    //   hata kategorisi + kalıbı, beklenen sonuç, atlanan/doldurulamayan alanlar, deneme no, test kimliği.
+    //   hata_mesaji DÜZ METİNDİR (kullanıcı kararı); ekran görüntüsü/video/iz ise medya tablosundaki
+    //   ŞİFRELİ dosyalardır (veri/medya/, bkz. scripts/platform/medya.mjs).
+    // - adim_sonuclari: test.step adımları ve durumları.
+    // - medya: şifreli medya dosyalarının üst bilgisi (dosya adı rastgele; içerik AES-256-GCM).
+    //   silinme: saklama süresi dolup dosyası silinen videolar (satır, "silindi" bilgisi için kalır).
+    surum: 5,
+    ad: 'kosu_sonuclari_ve_sifreli_medya',
+    sql: `
+      ALTER TABLE kosular ADD COLUMN kapsam TEXT;
+      ALTER TABLE kosular ADD COLUMN kaynak TEXT NOT NULL DEFAULT 'raporlayici';
+
+      ALTER TABLE kosu_sonuclari ADD COLUMN test_kimligi TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN senaryo_anahtari TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN ekran_id TEXT REFERENCES ekranlar(id) ON DELETE SET NULL;
+      ALTER TABLE kosu_sonuclari ADD COLUMN urun_adi TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN ham_durum TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN hata_kategorisi TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN hata_kalibi TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN beklenen_sonuc TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN atlanan_alanlar_json TEXT NOT NULL DEFAULT '[]';
+      ALTER TABLE kosu_sonuclari ADD COLUMN deneme INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX ix_kosu_sonuclari_ekran ON kosu_sonuclari(ekran_id);
+      CREATE INDEX ix_kosu_sonuclari_durum ON kosu_sonuclari(durum, bitis);
+      CREATE INDEX ix_kosular_tur ON kosular(proje_id, tur, bitis);
+
+      CREATE TABLE adim_sonuclari (
+        id           TEXT PRIMARY KEY,
+        sonuc_id     TEXT NOT NULL REFERENCES kosu_sonuclari(id) ON DELETE CASCADE,
+        sira         INTEGER NOT NULL,
+        ad           TEXT NOT NULL,
+        durum        TEXT NOT NULL,
+        sure_ms      INTEGER,
+        hata_mesaji  TEXT
+      );
+      CREATE INDEX ix_adim_sonuclari_sonuc ON adim_sonuclari(sonuc_id, sira);
+
+      CREATE TABLE medya (
+        id           TEXT PRIMARY KEY,
+        sonuc_id     TEXT REFERENCES kosu_sonuclari(id) ON DELETE CASCADE,
+        sira         INTEGER NOT NULL DEFAULT 0,
+        tur          TEXT NOT NULL CHECK (tur IN ('ekran_goruntusu', 'video', 'iz', 'diger')),
+        ad           TEXT NOT NULL,
+        icerik_turu  TEXT NOT NULL,
+        boyut        INTEGER NOT NULL,
+        dosya        TEXT NOT NULL,
+        olusturulma  TEXT NOT NULL,
+        silinme      TEXT
+      );
+      CREATE INDEX ix_medya_sonuc ON medya(sonuc_id, sira);
+      CREATE INDEX ix_medya_tur ON medya(tur, olusturulma);
+    `
   }
 ];
 
@@ -332,7 +391,10 @@ export const TABLOLAR = [
   { ad: 'kaynak_eslemeleri', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'kaynak_anahtari' },
   { ad: 'degisiklik_gecmisi', birincilAnahtar: 'id', json: ['onceki_json', 'sonraki_json'], guncellenme: false },
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
-  { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json'], guncellenme: false }
+  { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json'], guncellenme: false },
+  { ad: 'adim_sonuclari', birincilAnahtar: 'id', json: [], guncellenme: false },
+  // Medya satırları yedeğe girer ama şifreli dosyalar GİRMEZ (yalnızca bu makinede durur).
+  { ad: 'medya', birincilAnahtar: 'id', json: [], guncellenme: false }
 ];
 
 /** Veri içeren tabloların adları (meta ve sema_surumu HARİÇ). */

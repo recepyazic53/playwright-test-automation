@@ -293,8 +293,9 @@ export function aktarimiUygula(vt, paket, secenekler = {}) {
   const makine = yerelMakine(vt);
   const yapan = secenekler.yapan ?? `dosya-aktarimi@${makine.id}`;
   const uyarilar = [...paket.uyarilar];
+  // Test verisi alanları varsayılan olarak hassastır (depo.mjs ile aynı kural: hassas !== false).
   const hassasAdlar = new Set([
-    ...paket.testVerisiTurleri.flatMap((t) => t.alanlar.filter((a) => a.hassas).map((a) => a.ad)),
+    ...paket.testVerisiTurleri.flatMap((t) => t.alanlar.filter((a) => a.hassas !== false).map((a) => a.ad)),
     ...(paket.ekHassasAlanAdlari ?? [])
   ]);
 
@@ -410,6 +411,60 @@ export function aktarimiUygula(vt, paket, secenekler = {}) {
       kaynakEslemesiSil(vt, projeId, k.tur, k.anahtar);
       kaldirilanlar.push(`${k.tur}:${k.anahtar}`);
     }
+    hassasAlanlariTamamla(vt, projeId, hassasAdlar);
     return { projeId, sayimlar, atlananlar, kaldirilanlar, kaynaktaYok, uyarilar };
+  });
+}
+
+/**
+ * Hassas alan kümesi genişlediğinde (ör. "tüm test verisi alanları hassas" kararı) kaynağı
+ * DEĞİŞMEDİĞİ için yeniden yazılmayan senaryolarda kalan düz metin hassas değerleri şifreler —
+ * senaryo satırında ve senaryonun değişiklik geçmişi anlık görüntülerinde. Veritabanında yapılmış
+ * düzenlemeler korunur (yalnızca değer biçimi değişir); geçmişe yeni kayıt yazılmaz.
+ * @param {Veritabani} vt @param {string} projeId @param {ReadonlySet<string>} hassasAdlar
+ * @returns {number} şifrelenen değer sayısı
+ */
+export function hassasAlanlariTamamla(vt, projeId, hassasAdlar) {
+  if (!hassasAdlar.size) return 0;
+  let sayi = 0;
+  const sifreliyse = (/** @type {string} */ m) => {
+    if (zarfMi(m)) return m;
+    sayi++;
+    return sifrele(vt, m);
+  };
+  /** @param {unknown} icerik @returns {unknown} */
+  const tamamla = (icerik) => {
+    if (typeof icerik !== 'object' || icerik === null || Array.isArray(icerik)) return icerik;
+    const { kaynak, ...govde } = /** @type {Record<string, unknown>} */ (icerik);
+    return { ...(kaynak === undefined ? {} : { kaynak }), .../** @type {Record<string, unknown>} */ (adliAlanlariDonustur(govde, hassasAdlar, sifreliyse)) };
+  };
+  return vt.islem(() => {
+    const senaryolar = vt.tumu('SELECT id, icerik_json FROM senaryolar WHERE proje_id = ?', [projeId]);
+    for (const s of senaryolar) {
+      const once = sayi;
+      const yeni = tamamla(JSON.parse(String(s.icerik_json)));
+      if (sayi !== once) vt.calistir('UPDATE senaryolar SET icerik_json = ? WHERE id = ?', [JSON.stringify(yeni), s.id]);
+    }
+    const kimlikler = senaryolar.map((s) => String(s.id));
+    for (let i = 0; i < kimlikler.length; i += 500) {
+      const parca = kimlikler.slice(i, i + 500);
+      for (const g of vt.tumu(
+        `SELECT id, onceki_json, sonraki_json FROM degisiklik_gecmisi WHERE varlik_turu = 'senaryo' AND varlik_id IN (${parca.map(() => '?').join(', ')})`, parca
+      )) {
+        /** @type {Record<string, string>} */
+        const guncel = {};
+        for (const sutun of ['onceki_json', 'sonraki_json']) {
+          if (typeof g[sutun] !== 'string') continue;
+          const anlik = JSON.parse(String(g[sutun]));
+          if (typeof anlik?.icerik_json !== 'string') continue;
+          const once = sayi;
+          const yeni = tamamla(JSON.parse(anlik.icerik_json));
+          if (sayi !== once) guncel[sutun] = JSON.stringify({ ...anlik, icerik_json: JSON.stringify(yeni) });
+        }
+        const sutunlar = Object.keys(guncel);
+        if (sutunlar.length) vt.calistir(`UPDATE degisiklik_gecmisi SET ${sutunlar.map((x) => `${x} = ?`).join(', ')} WHERE id = ?`, [...sutunlar.map((x) => guncel[x]), g.id]);
+      }
+    }
+    return sayi;
   });
 }

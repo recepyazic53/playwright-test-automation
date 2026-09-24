@@ -47,7 +47,8 @@ export const ONIZLEME_TABLOLARI = Object.freeze({
   ayarlar: 'Ayarlar'
 });
 /** Her zaman eklenen (kimlik üzerinden tekilleştirilen) ve yalnızca sayılan tablolar. */
-export const EKLEME_TABLOLARI = Object.freeze(['makineler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari']);
+// medya: yalnızca üst bilgi satırıdır; şifreli dosyalar yedeğe girmez (başka makinede "dosya yok").
+export const EKLEME_TABLOLARI = Object.freeze(['makineler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari', 'adim_sonuclari', 'medya']);
 export const MASKE = '••••••';
 export const HAZIRLIK_SAKLAMA_MS = 60 * 60 * 1000;
 const ZAMAN_SUTUNLARI = new Set(['olusturulma', 'guncellenme']);

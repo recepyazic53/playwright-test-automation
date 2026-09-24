@@ -59,3 +59,7 @@ export declare function gecmisTuruTablosu(varlikTuru: string): string | undefine
 export declare function satirSifreliAlanlariniTamamla(tablo: string, satir: Record<string, unknown>, anahtar: Buffer): Record<string, unknown>;
 export declare function gecmisAnligiSifrele(varlikTuru: string, anlikMetni: unknown, anahtar: Buffer): unknown;
 export declare function sifreliAlanlariTamamla(vt: Veritabani): number;
+export declare const MEDYA_ANAHTARI_META: 'medya_anahtari';
+export declare function medyaAnahtariniAc(zarf: string, kasaAnahtari: Buffer): Buffer;
+export declare function yeniMedyaAnahtari(kasaAnahtari: Buffer): { anahtar: Buffer; zarf: string };
+export declare function medyaAnahtariniHazirla(vt: Veritabani): Buffer;

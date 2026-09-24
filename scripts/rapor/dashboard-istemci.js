@@ -28,9 +28,17 @@
     });
   }
 
-  // "▶ Videoyu izle" bağlantısı (yeni sekmede açılır). yol: rapordaki göreli dosya yolu
-  // (allure-results-<ortam>/...webm) ya da canlı koşuda test sunucusunun /medya URL'si.
-  // Video yoksa (hiç kaydedilmemiş ya da saklama süresi dolup silinmiş) boş döner.
+  // "▶ Videoyu izle" bağlantısı (yeni sekmede açılır). yol: canlı koşuda test sunucusunun
+  // şifreli medya adresi (/platform/medya/<id>; kasa açıkken çözülerek akıtılır) ya da platform
+  // sonuç kaydı kapalıyken eski /medya URL'si. Video yoksa boş döner.
+  // Koşu sonucunun son ekran görüntüsü: platformda şifreli medya adresi (ekranGoruntusuUrl),
+  // eski yolda (sonuç kaydı kapalı) base64 gövde. Hiçbiri yoksa null.
+  function ekranGoruntusuKaynagi(veri) {
+    if (veri && veri.ekranGoruntusuUrl) return veri.ekranGoruntusuUrl;
+    if (veri && veri.ekranGoruntusu) return 'data:image/png;base64,' + veri.ekranGoruntusu;
+    return null;
+  }
+
   function videoBaglantisiHtml(yol) {
     if (!yol) return '';
     return '<div><a class="video-baglanti" href="' + escapeHtml(yol) + '" target="_blank" rel="noopener">▶ Videoyu izle</a></div>';
@@ -1755,8 +1763,8 @@
       } else if (veri.mesaj && veri.durum !== 'passed') {
         detayHtml += '<pre class="hata-mesaj">' + escapeHtml(veri.mesaj) + '</pre>';
       }
-      if (veri.ekranGoruntusu) {
-        detayHtml += '<img class="hata-goruntu" src="data:image/png;base64,' + veri.ekranGoruntusu + '" alt="' + escapeHtml(ad) + '" />';
+      if (ekranGoruntusuKaynagi(veri)) {
+        detayHtml += '<img class="hata-goruntu" src="' + escapeHtml(ekranGoruntusuKaynagi(veri)) + '" alt="' + escapeHtml(ad) + '" />';
       }
       detayHtml += videoBaglantisiHtml(veri.videoUrl);
     }
@@ -2015,10 +2023,10 @@
 
       // Başarılı koşularda da fixtures.ts'in çektiği son ekran görüntüsü — "hata-goruntu"
       // sınıfı sayesinde tıklanınca mevcut lightbox (gorselBuyutmeAc) ile büyütülebilir.
-      if (veri.ekranGoruntusu) {
+      if (ekranGoruntusuKaynagi(veri)) {
         var goruntuEtiketi = basariliMi ? 'Son ekran görüntüsü' : 'Hata anındaki ekran görüntüsü';
         govde += '<div class="hata-ornek-etiket">' + escapeHtml(goruntuEtiketi) + '</div>' +
-          '<img class="hata-goruntu" src="data:image/png;base64,' + veri.ekranGoruntusu + '" alt="' + escapeHtml(senaryoAdi) + ' — ' + escapeHtml(goruntuEtiketi) + '" />';
+          '<img class="hata-goruntu" src="' + escapeHtml(ekranGoruntusuKaynagi(veri)) + '" alt="' + escapeHtml(senaryoAdi) + ' — ' + escapeHtml(goruntuEtiketi) + '" />';
       }
 
       // Koşu videosu — playwright.config.ts'in "video: 'on'" (dashboard koşularına
@@ -2815,8 +2823,8 @@
         '<div id="sof_beklenenHataOlarakKullanBilgi"></div>';
       }
     }
-    if (sonuc && sonuc.ekranGoruntusu) {
-      govde += '<img class="hata-goruntu" src="data:image/png;base64,' + sonuc.ekranGoruntusu + '" alt="Senaryo deneme sonucu" />';
+    if (ekranGoruntusuKaynagi(sonuc)) {
+      govde += '<img class="hata-goruntu" src="' + escapeHtml(ekranGoruntusuKaynagi(sonuc)) + '" alt="Senaryo deneme sonucu" />';
     }
     if (SENARYO_DUZENLE) {
       // Düzenleme modunda ayrı bir "kaydedilsin mi?" sorusu yok — "Değişiklikleri Kaydet"

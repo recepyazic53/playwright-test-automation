@@ -5,12 +5,14 @@
 //     bilgisi) dosya yükleyicileriyle DERİN EŞİT olmalı,
 //   - "playwright test --list --reporter=json" çıktısı (başlıklar, sıra, annotation'lar) dosya ve
 //     veritabanı kaynağında AYNI olmalı (TEST_SUNUCU_TUM_LISTE=1 ile ve koşu listesi filtresiyle),
-//   - veritabanı dosyasında .env/ortak.json'daki gizli değerler düz metin olarak geçmemeli,
+//   - veritabanı dosyasında .env'deki gizli değerler ve ortak.json test verisi profillerindeki TÜM
+//     alan değerleri (kimlik, adres, kart sahibi... — kullanıcı kararı: hepsi hassas) düz metin
+//     olarak geçmemeli,
 //   - ikinci aktarım hiçbir şey eklememeli/değiştirmemeli.
 // Proje dosyaları yoksa (ör. başka bir projede) atlanır. Gerçek dosyalara YAZMAZ; siteye bağlanmaz.
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { parse as dotenvAyristir } from 'dotenv';
@@ -32,9 +34,8 @@ import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 const KOK = resolve(__dirname, '..', '..');
 const DOSYALAR_VAR = existsSync(join(KOK, 'tests', 'data', 'test', 'ortak.json'));
 const ORTAMLAR: EnvironmentName[] = ['test', 'canli'];
-const HASSAS_ORTAK_ALANLARI = new Set([
-  'tcKimlikNo', 'vergiKimlikNo', 'pasaportNo', 'yabanciKimlikNo', 'dogumTarihi', 'cepTelefonu', 'ad', 'soyad', 'babaAdi', 'kartNo', 'guvenlikKodu'
-]);
+/** Test verisi profili olarak aktarılan ortak.json bölümleri (projeler/galaksi/aktarim.mjs > VERI_BOLUMLERI). */
+const TEST_VERISI_BOLUMLERI: ReadonlyArray<readonly string[]> = [['kimlikBilgileri'], ['adresBilgileri'], ['odeme', 'krediKarti']];
 const GIZLI_ORTAM_DEGISKENLERI = ['TEST_BASE_URL', 'CANLI_BASE_URL', 'LOGIN_USERNAME', 'TEST_USERNAME', 'TEST_PASSWORD', 'CANLI_PASSWORD', 'CANLI_AUTH_SECRET', 'CANLI_AUTH_CODE'];
 
 /** İç içe Playwright (bu birim worker'ından) için temiz ortam. */
@@ -87,19 +88,39 @@ function tumYukleyiciler(ortam: EnvironmentName): Record<string, unknown> {
 }
 
 /**
- * ortak.json'daki HASSAS alan değerleri (kimlik no, telefon, doğum tarihi, kart...), en az 4 karakter.
+ * ortak.json test verisi profillerindeki TÜM alan değerleri (en az 4 karakterlik metinler; seçim
+ * alanlarının deger/metin kısımları dahil). Kullanıcı kararı: profillerin tamamı hassastır.
  * NOT: Acente kodları (kullaniciDegistir) veritabanında şifreli saklanır ama aynı kodlar Git'teki
- * ekran modelinde ve test başlıklarında da açıkça geçtiği için bu bayt kontrolüne katılmaz.
+ * ekran modelinde ve test başlıklarında da açıkça geçtiği için bu bayt kontrolüne katılmaz; aynı
+ * nedenle ekran modeli dosyalarında ya da test başlıklarında da geçen değerler (ör. il adları gibi
+ * seçenek listeleri) ayrıca sayılıp dışarıda bırakılır.
  */
 function ortakGizlileri(ortak: unknown): string[] {
   const sonuc: string[] = [];
-  const gez = (d: unknown, anahtar: string): void => {
-    if (Array.isArray(d)) d.forEach((x) => gez(x, anahtar));
-    else if (typeof d === 'object' && d !== null) for (const [k, v] of Object.entries(d)) gez(v, k);
-    else if (typeof d === 'string' && d.length >= 4 && HASSAS_ORTAK_ALANLARI.has(anahtar)) sonuc.push(d);
+  const gez = (d: unknown): void => {
+    if (Array.isArray(d)) d.forEach(gez);
+    else if (typeof d === 'object' && d !== null) Object.values(d).forEach(gez);
+    // 4 haneli sayılar (ör. kartın son kullanma yılı) her zaman damgasında da geçtiği için bayt
+    // taramasıyla ayırt edilemez; şifrelendikleri ayrıca zarf kontrolüyle doğrulanır.
+    else if (typeof d === 'string' && d.length >= 4 && !/^\d{4}$/.test(d)) sonuc.push(d);
   };
-  gez(ortak, '');
+  for (const yol of TEST_VERISI_BOLUMLERI) {
+    gez(yol.reduce<unknown>((n, k) => (typeof n === 'object' && n !== null ? (n as Record<string, unknown>)[k] : undefined), ortak));
+  }
   return sonuc;
+}
+
+/**
+ * Tasarım gereği düz metin kalan kaynakların metni — değer burada da geçiyorsa (ör. "Site" gibi bir
+ * seçenek metni alan etiketi "Site adı" içinde) bayt taramasıyla ayırt edilemez, gizli sayılmaz:
+ * ekran modelleri (Git'te) ve adaptörün alan etiketleri (türlerin alanlar_json'u açık saklanır).
+ */
+function acikKaynakMetni(): string {
+  const klasor = join(KOK, 'tests', 'ekran-modelleri');
+  const modeller = existsSync(klasor)
+    ? readdirSync(klasor).filter((d) => d.endsWith('.json')).map((d) => readFileSync(join(klasor, d), 'utf-8')).join('\n')
+    : '';
+  return `${modeller}\n${readFileSync(join(KOK, 'projeler', 'galaksi', 'aktarim.mjs'), 'utf-8')}`;
 }
 
 test.describe('Proje dosyası aktarımı — dosya ve veritabanı eşdeğerliği', () => {
@@ -171,14 +192,21 @@ test.describe('Proje dosyası aktarımı — dosya ve veritabanı eşdeğerliği
         const deger = process.env[ad];
         if (deger && deger.length >= 4) gizliler.add(deger);
       }
+      const acikMetin = `${acikKaynakMetni()}\n${testListesi({ TEST_ENV: 'test', TEST_SUNUCU_TUM_LISTE: '1', PLATFORM_VERI_KAYNAGI: 'dosya' }).join('\n')}`;
+      let acikKaynaktaGecen = 0;
       for (const ortam of ORTAMLAR) {
         const ortakYolu = join(KOK, 'tests', 'data', ortam, 'ortak.json');
-        if (existsSync(ortakYolu)) for (const g of ortakGizlileri(JSON.parse(readFileSync(ortakYolu, 'utf-8')))) gizliler.add(g);
+        if (!existsSync(ortakYolu)) continue;
+        for (const g of ortakGizlileri(JSON.parse(readFileSync(ortakYolu, 'utf-8')))) {
+          if (acikMetin.includes(g)) acikKaynaktaGecen++;
+          else gizliler.add(g);
+        }
       }
       const bayt = readFileSync(yol);
       const sizanlar = [...gizliler].filter((g) => bayt.includes(Buffer.from(g, 'utf8')));
       expect(sizanlar.length, `${sizanlar.length}/${gizliler.size} gizli değer veritabanında düz metin`).toBe(0);
-      test.info().annotations.push({ type: 'gizli-kontrol', description: `${gizliler.size} değer kontrol edildi` });
+      test.info().annotations.push({ type: 'gizli-kontrol', description: `${gizliler.size} değer kontrol edildi (açık kaynakta da geçen ${acikKaynaktaGecen} değer hariç)` });
+      expect(gizliler.size, 'test verisi profillerinden kontrol edilecek değer bulunmalı').toBeGreaterThan(10);
 
       // Terminal koşusu (global-setup): TTY yoksa ve parola verilmemişse açık hata; PLATFORM_KASA_PAROLASI
       // verilirse anahtar türetilip yalnızca süreç ortamına konur ve parola değişkeni silinir.

@@ -107,7 +107,8 @@ export function aktarimAkisi(kapsayici, secenekler) {
       h('p', {}, `Proje: `, h('strong', {}, onizleme.proje.ad), onizleme.proje.mevcut ? ' (mevcut projeyle birleştirilecek)' : ' (yeni proje)'),
       sayimTablosu(onizleme.sayimlar, sutunlar, 'Aktarım önizlemesi'),
       h('p', { class: 'soluk kucuk' }, `Koşudan hariç tutulan senaryo: ${onizleme.kosudanHaricSenaryo}. `,
-        'Hassas alanlar (T.C./vergi/pasaport/yabancı kimlik no, telefon, doğum tarihi, pasaport sahibinin adı-soyadı, kart no ve güvenlik kodu) kasada şifreli saklanır.'),
+        'Test verisi profillerinin TÜM alanları (kimlik bilgileri, adres, kart sahibi ve kart bilgileri…) kasada şifreli saklanır; yalnızca profil adları açıktır. ',
+        'Varsa eski koşu sonuçları (allure-results) ve ekran görüntüsü/videoları da şifrelenerek aktarılır; eski klasörler silinmez.'),
       mod === 'ayarlar' ? h('p', { class: 'soluk kucuk' }, 'Birleştirme kuralı: yalnızca dosyada DEĞİŞEN kayıtlar güncellenir; dosyada değişmeyen kayıtlarda burada yaptığınız düzenlemeler korunur. Dosyadan kalkan senaryo ve profiller kaldırılır.') : null,
       uyariListesi(onizleme.uyarilar), mesaj.kutu,
       h('div', { class: 'dugmeler' }, uygula, h('button', { type: 'button', onclick: () => geriDon() }, mod === 'hosgeldin' ? 'Geri' : 'Vazgeç')));
@@ -139,6 +140,10 @@ export function aktarimAkisi(kapsayici, secenekler) {
       sayimTablosu(sonuc.sayimlar, [['yeni', 'Eklendi'], ['guncellenecek', 'Güncellendi'], ['ayni', 'Aynı (atlandı)'], ['kaldirilacak', 'Kaldırıldı']], 'Aktarım özeti'),
       sonuc.atlanan.silinmis.length ? h('p', { class: 'kucuk' }, `Veritabanında silinmiş olduğu için yeniden eklenmeyen: ${sonuc.atlanan.silinmis.length}`) : null,
       sonuc.kaynaktaYok.length ? h('p', { class: 'kucuk' }, `Dosyalarda artık olmayan ama korunan kayıt: ${sonuc.kaynaktaYok.length}`) : null,
+      sonuc.sonucAktarimi && (sonuc.sonucAktarimi.sonuc || sonuc.sonucAktarimi.zatenVar)
+        ? h('p', { class: 'kucuk' }, `Eski koşu sonuçları: ${sonuc.sonucAktarimi.kosu} koşu, ${sonuc.sonucAktarimi.sonuc} sonuç ve ${sonuc.sonucAktarimi.medya} ekran görüntüsü/video aktarıldı`
+          + (sonuc.sonucAktarimi.zatenVar ? ` (daha önce aktarılmış ${sonuc.sonucAktarimi.zatenVar} sonuç atlandı)` : '') + '. Eski klasörler olduğu gibi duruyor.')
+        : null,
       uyariListesi(sonuc.uyarilar),
       h('p', { class: 'soluk kucuk' }, 'Testler artık veriyi bu veritabanından okur. Terminalden çalıştırırken kasa parolası gizli olarak sorulur; dashboard koşularında kasa açıksa sorulmaz.'),
       h('div', { class: 'dugmeler' }, devam)));
