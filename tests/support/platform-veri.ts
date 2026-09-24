@@ -20,6 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { EnvironmentName } from './environments';
+import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 
 export const KASA_ANAHTARI_DEGISKENI = 'PLATFORM_KASA_ANAHTARI';
 export const KASA_PAROLASI_DEGISKENI = 'PLATFORM_KASA_PAROLASI';
@@ -31,10 +32,22 @@ const PROJE_KOKU = resolve(__dirname, '..', '..');
 const OKUYUCU = join(PROJE_KOKU, 'scripts', 'platform', 'aktarim', 'veri-oku.mjs');
 
 export type PlatformGirisBilgisi = {
+  /** Giriş profilinin kimliği (oturum dosyası ortam + giriş profili başınadır). */
+  profilKimligi: string;
   kullaniciAdi: string;
   parola: string | null;
   totpGizli: string | null;
   sabitKod: string | null;
+  /** SMS 2FA'da kodun kaynağı (giriş profilindeki ayar); SMS değilse null. */
+  smsKipi: 'sabit' | 'elle' | null;
+};
+
+/** Etkin giriş tarifi: kaydedilmiş ya da projenin varsayılanı (bkz. scripts/platform/giris/tarif-deposu.mjs). */
+export type PlatformGirisTarifi = {
+  tarif: GirisTarifi;
+  kaynak: 'kayitli' | 'proje-varsayilani';
+  /** Doğrulama hataları (boş değilse giriş motoru açık hata verir). */
+  hatalar: string[];
 };
 
 export type PlatformVeriSeti = {
@@ -47,6 +60,8 @@ export type PlatformVeriSeti = {
   ekranModelleri: Record<string, unknown>;
   /** Senaryo anahtarı ("<dosya>::<başlık>") → senaryo UUID. */
   senaryoKimlikleri: Record<string, string>;
+  /** Giriş tarifi (yoksa null: ortam için Ayarlar > Giriş profilleri > Giriş tarifi tanımlanmalı). */
+  girisTarifi?: PlatformGirisTarifi | null;
 };
 
 type DurumCiktisi =

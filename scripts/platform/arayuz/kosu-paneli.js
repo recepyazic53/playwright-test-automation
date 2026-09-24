@@ -7,12 +7,15 @@
 //   ortak bir koşu kimliği taşır (tam koşu → kartlar/trend; kısmi → koşu geçmişinde tek "tekil" satır).
 // - Durum modül düzeyindedir: tablolar yeniden çizilse ya da sayfalar arasında gezinilse bile çalışan
 //   satırlar spinner/Durdur ile kalır; panel body'ye eklenir ve kalıcıdır.
+// - Elle doğrulama kodu (giriş tarifinde SMS "elle" kipi): çalışan satırlar için /kod-istegi yoklanır; kod
+//   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 const CANLI_ARALIK_MS = 1200;
+const KOD_YOKLAMA_MS = 1500;
 
 /** Satır durumları → görünüm. */
 export const KOSU_DURUMLARI = Object.freeze({
@@ -306,7 +309,8 @@ function paneliCiz() {
       const sure = x.baslangic ? sureMetni((x.bitis || Date.now()) - x.baslangic) : '';
       const li = h('li', { class: secili ? 'secili' : null, tabindex: '0', 'aria-current': secili ? 'true' : null, 'data-senaryo': x.senaryoId },
         durumSimgesi(x.durum),
-        h('span', { class: 'ad' }, h('span', { title: x.baslik }, x.baslik), h('small', {}, [x.ekranAdi, (KOSU_DURUMLARI[x.durum] || {}).etiket].filter(Boolean).join(' · '))),
+        h('span', { class: 'ad' }, h('span', { title: x.baslik }, x.baslik), h('small', {}, [x.ekranAdi, (KOSU_DURUMLARI[x.durum] || {}).etiket].filter(Boolean).join(' · '),
+          x.durum === 'calisiyor' && x.kodIstegi ? [' ', rozet('Kod bekleniyor', 'uyari')] : null)),
         h('span', { class: 'sag' }, x.durum === 'calisiyor' && x.sonuc === null ? sure : x.sonuc && x.sonuc.sureMs != null ? sureMetni(x.sonuc.sureMs) : '',
           x.durum === 'calisiyor' || x.durum === 'sirada'
             ? h('button', { type: 'button', class: 'kucuk-dugme durdur-dugmesi', disabled: Boolean(x.durduruluyor), 'aria-label': `Durdur: ${x.baslik}`, onclick: (o) => { o.stopPropagation(); durdur(x.senaryoId); } }, x.durduruluyor ? 'Durduruluyor…' : 'Durdur')
@@ -342,6 +346,7 @@ function izlemeAlani(oturum) {
   alan.append(h('div', { class: 'izleme-basligi' }, h('span', { title: satir.baslik }, satir.baslik),
     satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti' }, 'CANLI') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)));
   if (satir.durum === 'calisiyor') {
+    if (satir.kodIstegi) alan.append(kodFormu(satir));
     const img = h('img', { alt: `Canlı ekran görüntüsü: ${satir.baslik}` });
     const bos = h('div', { class: 'medya-bos' }, h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), 'Canlı görüntü bekleniyor…');
     const kap = h('div', { class: 'goruntuleyici' }, h('div', { class: 'tarayici-cubugu', 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {}), h('span', {}, 'canlı')), bos);
@@ -387,6 +392,81 @@ function izlemeAlani(oturum) {
   if (mesaj) alan.append(h('div', { class: `hata-ozeti ${satir.durum === 'durduruldu' ? 'notr' : ''}`.trim() }, h('b', {}, satir.durum === 'durduruldu' ? 'Not: ' : 'Hata: '), String(mesaj).split('\n').find((x) => x.trim()) || String(mesaj)));
   return alan;
 }
+
+// ---------------------------------------------------------------------------------------
+// Elle doğrulama kodu (SMS "elle" kipi)
+// ---------------------------------------------------------------------------------------
+
+/** Kullanıcının yazdığı ama henüz göndermediği kodlar (panel yeniden çizilince kaybolmasın). */
+const kodTaslaklari = new Map();
+
+function kodFormu(satir) {
+  const istek = satir.kodIstegi;
+  const girdi = h('input', {
+    type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '12', spellcheck: 'false',
+    id: `kod-${satir.kosuId}`, 'aria-describedby': `kod-${satir.kosuId}-aciklama`, value: kodTaslaklari.get(satir.kosuId) || ''
+  });
+  girdi.addEventListener('input', () => kodTaslaklari.set(satir.kosuId, girdi.value));
+  const gonder = h('button', { type: 'submit', class: 'birincil kucuk-dugme' }, 'Kodu gönder');
+  const hata = h('div', { class: 'alan-hatasi', role: 'alert' });
+  const kalan = h('span', { class: 'kod-kalan sayi', 'data-kosu': satir.kosuId }, `${istek.kalanSn} sn`);
+  const form = h('form', { class: 'kod-istemi', 'aria-labelledby': `kod-${satir.kosuId}-baslik` },
+    h('div', { class: 'kod-istemi-baslik' }, ikon('kilit'), h('strong', { id: `kod-${satir.kosuId}-baslik` }, 'Doğrulama kodu bekleniyor'), kalan),
+    h('p', { class: 'soluk kucuk', id: `kod-${satir.kosuId}-aciklama` }, `${istek.mesaj}. Koşu bu kodu girmeniz için bekliyor; süre dolarsa giriş başarısız sayılır.`),
+    h('div', { class: 'kod-istemi-satir' }, h('label', { class: 'gorunmez', for: girdi.id }, 'Doğrulama kodu'), girdi, gonder),
+    hata);
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    const kod = girdi.value.trim();
+    if (!/^[A-Za-z0-9]{3,12}$/.test(kod)) { hata.textContent = 'Kod yalnızca harf ve rakamdan oluşmalı (3–12 karakter).'; girdi.focus(); return; }
+    gonder.disabled = true;
+    try {
+      await api('/kod-gonder', { govde: { kosuId: satir.kosuId, kod } });
+      kodTaslaklari.delete(satir.kosuId);
+      satir.kodIstegi = null;
+      bildir('Doğrulama kodu koşuya iletildi.');
+      paneliCiz();
+    } catch (e) {
+      hata.textContent = e.message;
+      gonder.disabled = false;
+    }
+  });
+  // Yeni açılan formda odak koda gelsin (kullanıcı başka bir alana yazmıyorsa).
+  setTimeout(() => { if (girdi.isConnected && (!document.activeElement || document.activeElement === document.body)) girdi.focus(); }, 0);
+  return form;
+}
+
+let kodYoklamaSuruyor = false;
+async function kodIstekleriniYokla() {
+  const oturum = durum.oturum;
+  if (!oturum || oturum.bitti || kodYoklamaSuruyor) return;
+  const calisanlar = oturum.satirlar.filter((x) => x.durum === 'calisiyor');
+  if (!calisanlar.length) return;
+  kodYoklamaSuruyor = true;
+  let degisti = false;
+  try {
+    for (const x of calisanlar) {
+      let yanit = null;
+      try {
+        yanit = await api(`/kod-istegi?kosuId=${encodeURIComponent(x.kosuId)}&token=${encodeURIComponent(TOKEN)}`);
+      } catch { continue; }
+      const yeni = yanit && yanit.bekliyor ? { mesaj: yanit.mesaj, kalanSn: yanit.kalanSn } : null;
+      if (Boolean(yeni) !== Boolean(x.kodIstegi)) {
+        degisti = true;
+        if (yeni) { durum.secili = x.senaryoId; durum.kucuk = false; bildir(`"${x.baslik}" doğrulama kodu bekliyor.`, 'hata'); }
+      }
+      x.kodIstegi = yeni;
+    }
+  } finally {
+    kodYoklamaSuruyor = false;
+  }
+  if (degisti) paneliCiz();
+  else for (const el of document.querySelectorAll('.kod-kalan')) {
+    const x = oturum.satirlar.find((y) => y.kosuId === el.dataset.kosu);
+    if (x && x.kodIstegi) el.textContent = `${x.kodIstegi.kalanSn} sn`;
+  }
+}
+setInterval(kodIstekleriniYokla, KOD_YOKLAMA_MS);
 
 // Çalışan satırların süre sayacı (panel açıkken saniyede bir).
 setInterval(() => { if (durum.oturum && !durum.oturum.bitti && panelEl && !durum.kucuk) {

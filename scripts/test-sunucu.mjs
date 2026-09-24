@@ -2,7 +2,8 @@
 // NÖBETÇİ YEREL SUNUCUSU — "npm run baslat" (ya da "npm run test-sunucu") ile başlar; platform
 // arayüzünü (GET /) ve /platform/* uç noktalarını sunar, Nöbetçi'den başlatılan Playwright koşularını
 // bu makinede çalıştırır (/platform/senaryolar/calistir → senaryoyuCalistirVeYanitla), durdurur
-// (/durdur) ve canlı ekran görüntüsünü verir (/canli). Proje verisi YALNIZCA platform veritabanındadır
+// (/durdur), canlı ekran görüntüsünü verir (/canli) ve girişte SMS kodu "elle" girilecekse koşu
+// panelinin kod isteğini/yanıtını iletir (/kod-istegi, /kod-gonder). Proje verisi YALNIZCA platform veritabanındadır
 // (veri/platform.db); eski dosya tabanlı uçlar (dashboard, /calistir, /kosu-listesi, JetSeyahat
 // senaryo dosyası düzenleyicileri) kaldırıldı.
 //
@@ -36,6 +37,7 @@ import {
 } from './platform/sunucu-platform.mjs';
 import { veritabaniYolu } from './platform/veritabani/baglanti.mjs';
 import { sunucuBaglantisiniSil, sunucuBaglantisiniYaz } from './platform/sunucu-baglantisi.mjs';
+import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
@@ -53,7 +55,8 @@ const KOSU_KAPALI = process.env.TEST_SUNUCU_KOSU_KAPALI === '1';
 // yazıyoruz — terminali göremediğimizde bile "test-sunucu.log" dosyasını okuyarak son
 // koşunun tam çıktısını görebiliyoruz. Dosya sınırsız büyümesin diye 2MB'ı geçince baştan
 // kırpılır.
-const logDosyasi = join(buDosyaninKlasoru, 'test-sunucu.log');
+// TEST_SUNUCU_LOG_DOSYASI: ikinci bir örnek (ör. birim testlerinin geçici sunucusu) kendi log dosyasına yazar.
+const logDosyasi = process.env.TEST_SUNUCU_LOG_DOSYASI || join(buDosyaninKlasoru, 'test-sunucu.log');
 function logaYaz(satir) {
   try {
     if (existsSync(logDosyasi) && statSync(logDosyasi).size > 2 * 1024 * 1024) {
@@ -330,6 +333,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ortak.js', { dosya: 'ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/giris-tarifi.js', { dosya: 'giris-tarifi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/aktarim.js', { dosya: 'aktarim.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
@@ -626,6 +630,9 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     // ekran görüntüsü ile sağlanır (bkz. fixtures.ts > canliIzlemeYayini ve aşağıdaki
     // /canli ucu).
     const canliYolu = join(tmpdir(), `test-sunucu-canli-${randomBytes(6).toString('hex')}.png`);
+    // Elle doğrulama kodu (SMS "elle" kipi): giriş motoru bu yola istek yazar, panel kullanıcıdan kodu alıp
+    // yanıtı yazar (bkz. platform/giris/elle-kod.mjs; /kod-istegi ve /kod-gonder uçları).
+    const kodYolu = join(tmpdir(), `test-sunucu-kod-${randomBytes(8).toString('hex')}`);
     // NOT (önemli): "desen" BİLEREK "--grep" argümanı olarak DEĞİL, aşağıda
     // TEST_SUNUCU_GREP_DESENI ortam değişkeni ile aktarılıyor. Teşhis loglarıyla
     // doğrulandı: başlığında Türkçe büyük "İ" harfi geçen senaryolarda (ör.
@@ -661,6 +668,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
         PLATFORM_SONUC_TOKENI: RAPORLAYICI_TOKENI,
         TEST_SUNUCU_GORUNUR: '1',
         TEST_SUNUCU_CANLI_YOLU: canliYolu,
+        [KOD_YOLU_DEGISKENI]: kodYolu,
         TEST_SUNUCU_GREP_DESENI: desen,
         // Türetilmiş kasa anahtarı (yalnızca alt sürecin belleğinde): test verisi platform
         // veritabanından okunur (terminalde parola sorulmaz). Koşu yalnızca kasa açıkken başlar.
@@ -700,7 +708,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
       logaYaz('[stderr] ' + parca.toString('utf-8').replace(/\n$/, ''));
     });
 
-    const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu };
+    const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu, kodYolu };
     calisanSurecler.set(kosuId, kayit);
     aktifPlatformKosulari.set(kosuKimligi, (aktifPlatformKosulari.get(kosuKimligi) ?? 0) + 1);
     const platformKosusunuBirak = async (durum) => {
@@ -739,6 +747,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
       } catch {
         // yok sayılır
       }
+      kodIsteginiTemizle(kodYolu);
 
       await platformKosusunuBirak(kayit.zamanAsimi ? 'zaman_asimi' : iptalEdildiMi ? 'durduruldu' : 'tamamlandi');
 
@@ -1028,6 +1037,49 @@ async function istegiIsle(req, res) {
       res.end(veri);
     } catch {
       jsonGonder(res, 404, { basarili: false, mesaj: 'Canlı görüntü okunamadı.' });
+    }
+    return;
+  }
+
+  // Elle doğrulama kodu (SMS "elle" kipi): canlı koşu paneli çalışan satırlar için bekleyen kod isteğini
+  // sorar (/kod-istegi) ve kullanıcının girdiği kodu iletir (/kod-gonder). Kod loglanmaz, yanıtta dönmez.
+  if (req.method === 'GET' && req.url && req.url.startsWith('/kod-istegi')) {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    if (!tokenGecerli(url.searchParams.get('token'))) {
+      jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
+      return;
+    }
+    const kayit = calisanSurecler.get(url.searchParams.get('kosuId') ?? '');
+    const istek = kayit?.kodYolu ? kodIstegiOku(kayit.kodYolu) : null;
+    res.setHeader('Cache-Control', 'no-store');
+    jsonGonder(res, 200, { basarili: true, bekliyor: Boolean(istek), ...(istek ?? {}) });
+    return;
+  }
+  if (req.method === 'POST' && req.url === '/kod-gonder') {
+    let istek;
+    try {
+      istek = JSON.parse(await govdeOku(req));
+    } catch {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz istek gövdesi.' });
+      return;
+    }
+    const { kosuId, token, kod } = istek ?? {};
+    if (!tokenGecerli(token)) {
+      jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
+      return;
+    }
+    const kayit = typeof kosuId === 'string' ? calisanSurecler.get(kosuId) : undefined;
+    if (!kayit?.kodYolu) {
+      jsonGonder(res, 404, { basarili: false, mesaj: 'Bu koşu artık çalışmıyor.' });
+      return;
+    }
+    try {
+      const iletildi = koduYanitla(kayit.kodYolu, typeof kod === 'string' ? kod.trim() : '');
+      jsonGonder(res, iletildi ? 200 : 409, iletildi
+        ? { basarili: true, mesaj: 'Kod iletildi.' }
+        : { basarili: false, mesaj: 'Bekleyen bir kod isteği yok (süresi dolmuş olabilir).' });
+    } catch (hata) {
+      jsonGonder(res, 400, { basarili: false, mesaj: hata.message });
     }
     return;
   }

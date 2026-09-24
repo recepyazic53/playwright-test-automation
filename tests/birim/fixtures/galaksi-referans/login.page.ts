@@ -1,6 +1,10 @@
+// REFERANS — ESKİ Galaksi giriş kodu (a8bc63d: tests/support/pages/login.page.ts), YALNIZCA eşdeğerlik
+// testi için (tests/birim/giris-galaksi-esdegerlik.spec.ts). Artık projede kullanılmaz; giriş genel giriş
+// motoruyla ve Galaksi tarifiyle (projeler/galaksi/giris-tarifi.mjs) yapılır. Tek fark: ortam tanımı
+// (environments.ts) yerine "authenticatorRequired" doğrudan verilir. Davranış satırları DEĞİŞTİRİLMEDİ.
 import { expect, type Page } from '@playwright/test';
-import type { Credentials, EnvironmentName } from '../environments';
-import { getEnvironment } from '../environments';
+
+type Credentials = { username: string; password: string; authenticatorCode?: string };
 
 // TEST portalı girişi zaman zaman yavaş yanıtlıyor (giriş butonundan sonra 15 sn'yi aşan
 // yüklemeler görüldü). Varsayılan 5 sn'lik bekleme bu durumda başarılı girişi de hata
@@ -11,7 +15,7 @@ const OTURUM_KONTROL_SURESI_MS = 15_000;
 export class LoginPage {
   constructor(
     private readonly page: Page,
-    private readonly environment: EnvironmentName
+    private readonly authenticatorRequired: boolean
   ) {}
 
   /**
@@ -32,14 +36,12 @@ export class LoginPage {
   }
 
   async login(credentials: Credentials, successText: string): Promise<void> {
-    const definition = getEnvironment(this.environment);
-
     await this.page.goto('/');
     await this.page.locator('input[type="text"]').first().fill(credentials.username);
     await this.page.locator('input[type="password"]').first().fill(credentials.password);
     await this.submit();
 
-    if (definition.login.authenticatorRequired) {
+    if (this.authenticatorRequired) {
       if (!credentials.authenticatorCode) {
         throw new Error('CANLI giriş profilinde iki aşamalı doğrulama (TOTP anahtarı ya da sabit kod) tanımlı olmalı (Nöbetçi > Ayarlar > Giriş profilleri).');
       }

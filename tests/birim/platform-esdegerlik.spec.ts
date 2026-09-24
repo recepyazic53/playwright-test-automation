@@ -21,8 +21,10 @@ import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
 import { adaptorBul } from '../../projeler/index.mjs';
 import { ekranModeliniKur, ekranModeliniYukle } from '../support/ekran-modeli';
 import {
-  credentialsFromEnvironment, getEnvironment, hasCredentials, type EnvironmentName
+  getEnvironment, girisKimligi, girisTarifi, hasCredentials, type EnvironmentName
 } from '../support/environments';
+import { galaksiGirisTarifi } from '../../projeler/galaksi/giris-tarifi.mjs';
+import { girisTarifiniDogrula } from '../../scripts/platform/giris/tarif.mjs';
 import { kasaAnahtariniHazirla } from '../support/platform-kasa';
 import { VERITABANI_HAZIR_DEGIL, platformOnbelleginiSifirla, platformVerisi } from '../support/platform-veri';
 import {
@@ -144,11 +146,19 @@ test.describe('Eski proje dosyası aktarımı — veritabanı eşdeğerliği (ö
         const buyukAd = ortam.toUpperCase() as 'TEST' | 'CANLI';
         expect(getEnvironment(ortam).baseURL).toBe(SAHTE_ORTAM_DEGISKENLERI[`${buyukAd}_BASE_URL`]);
         expect(hasCredentials(ortam)).toBe(true);
-        const kimlik = credentialsFromEnvironment(ortam);
-        expect(kimlik.username).toBe(SAHTE_ORTAM_DEGISKENLERI.LOGIN_USERNAME);
-        expect(kimlik.password).toBe(SAHTE_ORTAM_DEGISKENLERI[`${buyukAd}_PASSWORD`]);
-        if (ortam === 'canli') expect(kimlik.authenticatorCode).toMatch(/^\d{6}$/);
-        else expect(kimlik.authenticatorCode).toBeUndefined();
+        const kimlik = girisKimligi(ortam);
+        expect(kimlik.kullaniciAdi).toBe(SAHTE_ORTAM_DEGISKENLERI.LOGIN_USERNAME);
+        expect(kimlik.parola).toBe(SAHTE_ORTAM_DEGISKENLERI[`${buyukAd}_PASSWORD`]);
+        if (ortam === 'canli') expect(kimlik.totpGizli).toBe(SAHTE_ORTAM_DEGISKENLERI.CANLI_AUTH_SECRET);
+        else expect(kimlik.totpGizli).toBeNull();
+        // Giriş tarifi: aktarımda ortam ayarlarına yazılan Galaksi tarifi (eski LoginPage davranışı).
+        const beklenenTarif = girisTarifiniDogrula(galaksiGirisTarifi({
+          ortamAnahtari: ortam, basariMetni: ornekVeri<{ login: { basariGostergeMetni: string } }>(ortam, 'ortak').login.basariGostergeMetni,
+          ikiAsamaliTur: ortam === 'canli' ? 'totp' : null
+        })).tarif;
+        expect(girisTarifi(ortam)).toEqual(beklenenTarif);
+        expect(platformVerisi(ortam).girisTarifi?.kaynak).toBe('kayitli');
+        expect(girisTarifi(ortam).ikinciAdim.tur).toBe(ortam === 'canli' ? 'totp' : 'yok');
         const modelVtden = ekranModeliniKur('jet-seyahat.model.json', platformVerisi(ortam).ekranModelleri);
         expect(modelVtden.model).toEqual(modelDosyadan.model);
         expect(modelVtden.altModeller).toEqual(modelDosyadan.altModeller);

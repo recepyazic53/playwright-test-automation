@@ -1208,3 +1208,52 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 body:has(.kosu-hapi) .bildirimler { bottom: 68px; }
 .hata-ozeti.notr { background: var(--durdu-zemin); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--durdu) 25%, transparent); }
 .hata-ozeti.notr b { color: var(--durdu); }
+
+/* 5.x Ayarlar > Giriş profilleri > Giriş tarifi (giris-tarifi.js) ve koşu panelindeki elle kod formu.
+   Yalnızca belirteçler kullanılır; açık/koyu tema otomatik. */
+.tarif-formu fieldset { display: grid; gap: 0; }
+.tarif-formu .mono, .tarif-adimlari .mono { font-family: var(--yazi-mono); font-size: 13px; }
+.iki-sutun { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--b4); }
+.oneri-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0 0 var(--b3); }
+.oneri-satiri .soluk { display: inline-flex; align-items: center; gap: 4px; }
+.oneri-satiri .soluk .ikon { width: 13px; height: 13px; color: var(--atlanan); }
+.tarif-formu [role="status"] > .not-kutusu { margin-bottom: var(--b3); }
+.gosterge-satiri { display: grid; grid-template-columns: minmax(8rem, .35fr) minmax(0, 1fr) auto; gap: var(--b2); margin: 6px 0; align-items: center; }
+.hata-metni { color: var(--hata); }
+.secenek-grubu { margin-bottom: var(--b2); }
+.yer-tutucu-cipleri { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -4px 0 var(--b3); }
+.yer-tutucu-cipleri code { color: var(--vurgu); }
+.tarif-adimlari { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--b2); counter-reset: none; }
+.tarif-adim { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel); padding: 10px 12px; }
+.tarif-adim-ust { display: grid; grid-template-columns: auto minmax(10rem, .6fr) minmax(0, 1fr) auto; gap: var(--b2); align-items: end; }
+.tarif-adim-no { font: 600 11px var(--yazi-mono); color: var(--vurgu); background: var(--vurgu-zemin); border-radius: 6px; padding: 3px 6px; align-self: center; }
+.tarif-adim-eylemleri { display: flex; gap: 2px; align-self: center; }
+.tarif-adim-eylemleri .ikon-dugme { min-width: 30px; min-height: 30px; }
+.tarif-adim-eylemleri .ikon.yukari { transform: rotate(180deg); }
+.tarif-adim-alanlari { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: var(--b2) var(--b3); margin-top: var(--b2); align-items: end; }
+.mini-alan { display: grid; gap: 3px; margin: 0; font-weight: 500; }
+.mini-alan > span { font: 600 10.5px var(--yazi-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--metin-3); }
+.mini-alan > small { font-size: 11.5px; line-height: 1.3; }
+.mini-alan.dar { max-width: 11rem; }
+.secenek.mini-secenek { margin: 0; min-height: 38px; font-size: 12.5px; }
+.kod-istemi { margin: 0 0 10px; padding: 10px 12px 12px; border-radius: var(--yaricap-m); background: var(--atlanan-zemin); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--atlanan) 34%, transparent); }
+.kod-istemi-baslik { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 4px; }
+.kod-istemi-baslik .ikon { width: 15px; height: 15px; color: var(--atlanan); }
+.kod-istemi-baslik .kod-kalan { margin-left: auto; font-size: 12px; color: var(--metin-2); }
+.kod-istemi p { margin-bottom: 8px; }
+.kod-istemi-satir { display: flex; gap: var(--b2); }
+.kod-istemi-satir input { font: 600 16px var(--yazi-mono); letter-spacing: .25em; max-width: 12rem; }
+.kod-istemi .alan-hatasi { font-size: 12.5px; color: var(--hata); margin-top: 5px; font-weight: 550; }
+.kod-istemi .alan-hatasi:empty { display: none; }
+@media (max-width: 860px) {
+  .iki-sutun { grid-template-columns: 1fr; }
+  .tarif-adim-ust { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .tarif-adim-ust > .mini-alan { grid-column: 1 / -1; }
+  .gosterge-satiri { grid-template-columns: 1fr auto; }
+  .gosterge-satiri > select { grid-column: 1 / -1; }
+}
+.tarif-adim-kutusu > summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--vurgu); margin: 0 0 var(--b2); list-style: none; display: flex; align-items: center; gap: 6px; }
+.tarif-adim-kutusu > summary::-webkit-details-marker { display: none; }
+.tarif-adim-kutusu > summary::before { content: "▸"; transition: transform .15s; display: inline-block; }
+.tarif-adim-kutusu[open] > summary::before { transform: rotate(90deg); }
+.tarif-formu { scroll-margin-top: calc(var(--ust-yukseklik) + 16px); }

@@ -50,6 +50,7 @@ export interface AktarimSonucu {
 }
 
 export declare const PAKET_SURUMU: 1;
+export declare const KULLANICI_ORTAM_AYARLARI: readonly string[];
 export declare const VARLIK_TURLERI: ReadonlyArray<{ tur: string; etiket: string; silinebilir: boolean }>;
 export declare class AktarimHatasi extends Error {
   constructor(mesaj: string);

@@ -3,10 +3,14 @@ import type { Veritabani } from '../scripts/platform/veritabani/baglanti.mjs';
 import type { AktarimPaketi } from '../scripts/platform/aktarim/motor.mjs';
 
 export interface EskiGirisBilgisi {
+  /** Giriş profilinin kimliği (oturum dosyası ortam + profil başınadır). */
+  profilKimligi: string;
   kullaniciAdi: string;
   parola: string | null;
   totpGizli: string | null;
   sabitKod: string | null;
+  /** SMS 2FA'da kodun kaynağı (giriş profilindeki ayar); SMS değilse null. */
+  smsKipi: 'sabit' | 'elle' | null;
 }
 /** yenidenKur çıktısı: testlerin veritabanından okuduğu şekiller (ortam başına). */
 export interface YenidenKurulanVeri {
@@ -19,6 +23,8 @@ export interface YenidenKurulanVeri {
   ekranModelleri: Record<string, Record<string, unknown>>;
   /** Eski senaryo anahtarı ("<dosya>::<başlık>") → senaryo UUID. */
   senaryoKimlikleri: Record<string, string>;
+  /** Etkin giriş tarifi (kaydedilmiş ya da adaptör varsayılanı; veri-oku.mjs ekler). Yoksa null. */
+  girisTarifi?: { tarif: unknown; kaynak: string; hatalar: string[] } | null;
 }
 
 export interface AktarimAdaptoru {
@@ -46,6 +52,8 @@ export interface AktarimAdaptoru {
   profilHavuzlari?(): Record<string, { tur: 'baglam' | 'testVerisi'; ad: string }>;
   /** Senaryolar ekranı: tek doğrulayıcının "ortak" bağlamı (kasa açık olmalı). */
   dogrulamaBaglami?(vt: Veritabani, projeId: string, ortamAnahtari: string): Record<string, unknown> | undefined;
+  /** Giriş motoru: kaydedilmiş giriş tarifi olmayan ortam için projenin varsayılan tarifi (kasa açık olmalı). */
+  varsayilanGirisTarifi?(vt: Veritabani, projeId: string, ortamId: string): unknown;
 }
 
 export declare const AKTARIM_ADAPTORLERI: ReadonlyArray<AktarimAdaptoru>;

@@ -21,6 +21,9 @@
 //   ortak.json diğer alanları (login…) → ortam ayarları (aktarim.ortakIskeleti; şifreli)
 //   tests/data/<ortam>/<ürün>.json     → ekran ayarları (ortamlar.<ortamId>.dosyalar.<dosya>; şifreli)
 //                                        — senaryo dizileri hariç (onlar senaryo satırı olur)
+//   giriş davranışı (eski LoginPage +   → ortam ayarları > girisTarifi (genel giriş motorunun tarifi; bkz.
+//   KullaniciDegistirPage)                projeler/galaksi/giris-tarifi.mjs). Kaydedilmiş tarif yoksa
+//                                        varsayilanGirisTarifi aynı tarifi üretir (eski aktarımlar için).
 //   tests/ekran-modelleri/*.model.json → ekran modeli (sürüm 1)
 //   playwright --list (TEST + CANLI)   → senaryolar (kararlı UUID, kaynak {dosya, ad}, kosuya_dahil).
 //                                        Liste, paketin uygulandığı GEÇİCİ bir veritabanı üzerinden alınır
@@ -37,6 +40,7 @@ import { AktarimHatasi, kanonik, zarflariCoz } from '../../scripts/platform/akta
 import { paketleTestleriListele } from '../../scripts/platform/aktarim/gecici-liste.mjs';
 import { senaryoKaynakAnahtari } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
 import { ortakBaglaminiOlustur } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
+import { galaksiGirisTarifi } from './giris-tarifi.mjs';
 
 /** @typedef {import('../../scripts/platform/veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('../../scripts/platform/aktarim/motor.d.mts').AktarimPaketi} AktarimPaketi */
@@ -126,6 +130,12 @@ function ekranAnahtariBul(dosya) {
   if (s) return s[1];
   const c = /^canli\/([^/]+)\.spec\.ts$/.exec(dosya);
   return c ? c[1] : null;
+}
+
+/** ortak.json > login.basariGostergeMetni (giriş tarifinin başarı göstergesi). @param {unknown} ortak */
+function basariMetni(ortak) {
+  const m = yolOku(ortak, ['login', 'basariGostergeMetni']);
+  return typeof m === 'string' && m.trim() ? m : null;
 }
 
 /** @param {string} kaynak eski dosyaların klasörü @param {string} ortam */
@@ -278,10 +288,13 @@ export async function paketOlustur(kaynak, secenekler = {}) {
       if (bolum === undefined) continue;
       yolYaz(iskelet, b.yol, 'tekil' in b ? { [ISARET]: 'profil', ad: b.tekil } : sozlukIsareti(/** @type {Nesne} */ (bolum)));
     }
-    paket.ortamlar.push({ anahtar: o.anahtar, ad: o.ad, tabanUrl, varsayilan: o.varsayilan, ayarlar: { aktarim: { ortakIskeleti: iskelet } } });
-    if (!kullanici) { uyarilar.push(`${o.ad}: LOGIN_USERNAME/TEST_USERNAME tanımlı değil, giriş profili aktarılmadı.`); continue; }
     const totp = 'totp' in o && o.totp ? env[o.totp] : undefined;
     const sabitKod = 'sabitKod' in o && o.sabitKod ? env[o.sabitKod] : undefined;
+    const girisTarifi = galaksiGirisTarifi({
+      ortamAnahtari: o.anahtar, basariMetni: basariMetni(ortaklar[o.anahtar]), ikiAsamaliTur: totp ? 'totp' : sabitKod ? 'sms' : null
+    });
+    paket.ortamlar.push({ anahtar: o.anahtar, ad: o.ad, tabanUrl, varsayilan: o.varsayilan, ayarlar: { aktarim: { ortakIskeleti: iskelet }, girisTarifi } });
+    if (!kullanici) { uyarilar.push(`${o.ad}: LOGIN_USERNAME/TEST_USERNAME tanımlı değil, giriş profili aktarılmadı.`); continue; }
     if (!env[o.parola]) uyarilar.push(`${o.ad}: ${o.parola} tanımlı değil, giriş profili parolasız aktarıldı.`);
     paket.girisProfilleri.push({
       anahtar: o.anahtar, ortam: o.anahtar, ad: `${o.ad} kullanıcısı`, kullaniciAdi: kullanici, parola: env[o.parola] || null,
@@ -596,16 +609,34 @@ export function yenidenKur(vt, projeId, ortamAnahtari) {
     ortam: ortamAnahtari,
     tabanUrl: ortam.tabanUrl,
     giris: giris ? {
+      profilKimligi: giris.id,
       kullaniciAdi: giris.kullaniciAdi,
       parola: giris.parola,
       totpGizli: giris.ikiAsamaliTur === 'totp' ? giris.totpGizli : null,
-      sabitKod: giris.ikiAsamaliTur === 'sms' && sms.yontem === 'sabit' && typeof sms.kod === 'string' ? sms.kod : null
+      sabitKod: giris.ikiAsamaliTur === 'sms' && sms.yontem === 'sabit' && typeof sms.kod === 'string' ? sms.kod : null,
+      smsKipi: giris.ikiAsamaliTur === 'sms' ? (sms.yontem === 'elle' ? 'elle' : 'sabit') : null
     } : null,
     ortak,
     dosyalar,
     ekranModelleri,
     senaryoKimlikleri
   };
+}
+
+/**
+ * Kaydedilmiş giriş tarifi olmayan ortamlar için (tarif özelliğinden ÖNCE yapılmış aktarımlar) eski
+ * davranışın tarifi: başarı metni ortam ayarlarındaki ortak iskeletten, 2FA türü ortamın giriş profilinden.
+ * Kasa açık olmalıdır. Ortam bu adaptörle aktarılmamışsa null.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamId
+ */
+export function varsayilanGirisTarifi(vt, projeId, ortamId) {
+  const ortamAnahtari = kaynakEslemeleriniListele(vt, projeId, 'ortam').find((e) => e.varlikId === ortamId)?.kaynakAnahtari;
+  const ortam = ortamGetir(vt, ortamId);
+  if (!ortamAnahtari || !ortam) return null;
+  const iskelet = yolOku(ortam.ayarlar, ['aktarim', 'ortakIskeleti']);
+  const girisId = kaynakEslemeleriniListele(vt, projeId, 'giris_profili').find((e) => e.kaynakAnahtari === ortamAnahtari)?.varlikId;
+  const giris = girisId ? girisProfiliGetir(vt, girisId) : undefined;
+  return galaksiGirisTarifi({ ortamAnahtari, basariMetni: basariMetni(iskelet), ikiAsamaliTur: giris?.ikiAsamaliTur ?? null });
 }
 
 /**
@@ -666,5 +697,6 @@ export const galaksiAdaptoru = Object.freeze({
   sonucKaynaklari,
   senaryoVeriKaynagi,
   profilHavuzlari,
-  dogrulamaBaglami
+  dogrulamaBaglami,
+  varsayilanGirisTarifi
 });

@@ -6,7 +6,8 @@
 //
 // Kullanım: node veri-oku.mjs <kip> --adaptor <ad> [--ortam <ortam>]
 //   durum   → veritabanı/aktarım durumu + koşudan hariç senaryo anahtarları (kasa GEREKMEZ)
-//   veri    → durum + adaptörün yenidenKur çıktısı (test verisi, ekran modelleri, taban adres, giriş)
+//   veri    → durum + adaptörün yenidenKur çıktısı (test verisi, ekran modelleri, taban adres, giriş) +
+//             etkin giriş tarifi (girisTarifi: { tarif, kaynak, hatalar } | null)
 //             (PLATFORM_KASA_ANAHTARI [base64url] ya da PLATFORM_KASA_PAROLASI gerekir)
 //   anahtar → PLATFORM_KASA_PAROLASI'ndan anahtarı türetip doğrular, base64url olarak döner
 // Çıktı her zaman tek satır JSON'dur; hata durumunda { hata, kod } (çıkış kodu 0). Gizli değerler
@@ -17,7 +18,8 @@ import { fileURLToPath } from 'node:url';
 import { veritabaniAc, veritabaniYolu } from '../veritabani/baglanti.mjs';
 import { gocleriUygula } from '../veritabani/gocler.mjs';
 import { KasaHatasi, kasaDurumu, kasayiAnahtarlaAc, parolayiDogrula } from '../kasa.mjs';
-import { aktarilmisProjeyiBul } from './motor.mjs';
+import { aktarilmisProjeyiBul, ortamKimligiBul } from './motor.mjs';
+import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { adaptorBul } from '../../../projeler/index.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -76,7 +78,15 @@ async function calistir() {
     }
     kasayiAnahtarlaAc(vt, anahtar);
     anahtar.fill(0);
-    return { ...temel, veri: adaptor.yenidenKur(vt, proje.id, ortam) };
+    const veri = adaptor.yenidenKur(vt, proje.id, ortam);
+    // Giriş tarifi (genel): kaydedilmiş tarif ya da adaptörün varsayılanı; geçersizse hatalarıyla birlikte
+    // (giriş motoru açık bir hata verir).
+    const ortamId = veri ? ortamKimligiBul(vt, proje.id, ortam) : undefined;
+    if (veri && ortamId) {
+      const t = etkinGirisTarifi(vt, proje.id, ortamId, adaptor);
+      veri.girisTarifi = t.tarif ? { tarif: t.tarif, kaynak: t.kaynak, hatalar: t.hatalar } : null;
+    }
+    return { ...temel, veri };
   } finally {
     vt.kapat();
   }

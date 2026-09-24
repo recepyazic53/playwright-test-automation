@@ -24,7 +24,7 @@
 import { createHash } from 'node:crypto';
 import {
   baglamProfiliKaydet, baglamProfiliSil, ekranKaydet, ekranModeliEkle, ekranModeliGetir, girisProfiliKaydet,
-  kaynakEslemeleriniListele, kaynakEslemesiSil, kaynakEslemesiYaz, kaynakOzetiniCoz, ortamKaydet, projeGetir, projeKaydet,
+  kaynakEslemeleriniListele, kaynakEslemesiSil, kaynakEslemesiYaz, kaynakOzetiniCoz, ortamGetir, ortamKaydet, projeGetir, projeKaydet,
   projeleriListele, senaryoKaydet, senaryoSil, testVerisiProfiliKaydet, testVerisiProfiliSil, testVerisiTuruKaydet, yerelMakine
 } from '../veritabani/depo.mjs';
 import { acikAnahtar, coz, sifrele, zarfMi } from '../kasa.mjs';
@@ -47,6 +47,9 @@ export const VARLIK_TURLERI = Object.freeze([
   { tur: 'ekran_modeli', etiket: 'Ekran modelleri', silinebilir: false },
   { tur: 'senaryo', etiket: 'Senaryolar', silinebilir: true }
 ]);
+
+/** Ortam ayarlarında kullanıcıya ait (platformda düzenlenen) anahtarlar: yeniden aktarım bunları ezmez. */
+export const KULLANICI_ORTAM_AYARLARI = Object.freeze(['girisTarifi']);
 
 export class AktarimHatasi extends Error {
   /** @param {string} mesaj */
@@ -341,9 +344,14 @@ export function aktarimiUygula(vt, paket, secenekler = {}) {
       const oid = ortamGerekli ? ortamId(g.ortam) : null;
       if (ortamGerekli && !oid) { atlananlar.ortamYok.push(`${o.tur}:${o.anahtar}`); uyarilar.push(`${o.tur} "${o.anahtar}": ortam "${g.ortam}" yok, atlandı.`); continue; }
       switch (o.tur) {
-        case 'ortam':
-          ortamKaydet(vt, { id: o.id, projeId, ad: g.ad, tabanUrl: g.tabanUrl, varsayilan: Boolean(g.varsayilan), ayarlar: g.ayarlar ?? {} });
+        case 'ortam': {
+          // Kullanıcının platformda düzenlediği ortam ayarları (ör. giriş tarifi) kaynak değişse de KORUNUR;
+          // paket bunları yalnızca ortamda henüz yoksa ekler.
+          const mevcutAyarlar = o.islem === 'guncelle' ? ortamGetir(vt, o.id)?.ayarlar ?? {} : {};
+          const korunan = Object.fromEntries(KULLANICI_ORTAM_AYARLARI.filter((k) => k in mevcutAyarlar).map((k) => [k, mevcutAyarlar[k]]));
+          ortamKaydet(vt, { id: o.id, projeId, ad: g.ad, tabanUrl: g.tabanUrl, varsayilan: Boolean(g.varsayilan), ayarlar: { ...(g.ayarlar ?? {}), ...korunan } });
           break;
+        }
         case 'giris_profili':
           girisProfiliKaydet(vt, {
             id: o.id, projeId, ortamId: oid, ad: g.ad, kullaniciAdi: g.kullaniciAdi, parola: g.parola ?? null,

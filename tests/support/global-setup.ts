@@ -1,19 +1,20 @@
 import { chromium } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { copyFileSync, existsSync } from 'node:fs';
 import {
-  credentialsFromEnvironment,
   getEnvironment,
   getEnvironmentName,
+  girisKimligi,
+  girisTarifi,
   hasCredentials
 } from './environments';
-import { LoginPage } from './pages/login.page';
+import { oturumuHazirla, oturumuKaydetmeyeHazirla } from './giris-motoru';
 import { kasaAnahtariniHazirla } from './platform-kasa';
-import { loadOrtakData } from './test-data';
 
-// Bütün senaryolar başlamadan ÖNCE, tek seferlik Galaksi login'i yapıp oturum çerezlerini
-// diske yazar (environments.ts > login.storageState). Böylece:
+// Bütün senaryolar başlamadan ÖNCE, tek seferlik giriş yapıp oturum çerezlerini diske yazar
+// (environments.ts > login.storageState — ortam + giriş profili başına). Giriş, ortamın GİRİŞ TARİFİYLE
+// genel giriş motoru tarafından yapılır (bkz. giris-motoru.ts; Galaksi'nin tarifi
+// projeler/galaksi/giris-tarifi.mjs). Böylece:
 //   - CANLI ortamda her testte authenticator (2FA) kodu tekrar tekrar sorulmaz — kod
 //     yalnızca burada, bir kere kullanılır.
 //   - TEST ortamında da her testin başındaki login adımı tekrarlanmaz, koşular hızlanır.
@@ -46,7 +47,7 @@ export default async function globalSetup(): Promise<void> {
 
   if (!hasCredentials(environment)) {
     console.log(
-      `[global-setup] ${environment.toUpperCase()} için kullanıcı bilgisi tanımlı değil, ` +
+      `[global-setup] ${environment.toUpperCase()} için giriş bilgisi (kullanıcı/parola/2FA kaynağı) ya da giriş tarifi eksik, ` +
         'paylaşılan oturum oluşturulmadı (testler kendi login\'ini yapacak).'
     );
     return;
@@ -54,9 +55,14 @@ export default async function globalSetup(): Promise<void> {
 
   const definition = getEnvironment(environment);
   const authFile = definition.login.storageState;
-  mkdirSync(dirname(authFile), { recursive: true });
-
-  const ortakData = loadOrtakData(environment);
+  const tarif = girisTarifi(environment);
+  // Geçiş: oturum dosyası artık ortam + giriş profili başına. Eski ortam başına dosya (…-acente.json) varsa
+  // bir kez başlangıç olarak kopyalanır — geçerliyse yeniden giriş yapılmaz (geçersizse normal giriş).
+  const eskiOturumDosyasi = `playwright/.auth/${environment}-acente.json`;
+  if (!existsSync(authFile) && existsSync(eskiOturumDosyasi)) {
+    oturumuKaydetmeyeHazirla(authFile);
+    copyFileSync(eskiOturumDosyasi, authFile);
+  }
   // globalSetup kendi tarayıcısını elle açtığı için --headed bayrağını GÖRMEZ — normalde
   // her zaman headless çalışır. Bu login adımını gözle takip etmek isterseniz
   // (ör. "PWDEBUG=1 npx cross-env TEST_ENV=test playwright test ...") headed + yavaş açılır.
@@ -67,46 +73,21 @@ export default async function globalSetup(): Promise<void> {
   const browser = await chromium.launch({ headless: !debugModu, slowMo: debugModu ? 400 : 0 });
 
   try {
-    // NOT (istek: "login olmuşsak bir daha login olmamalıyız"): Dashboard'dan tetiklenen
-    // HER senaryo, test-sunucu.mjs > gercektenCalistir içinde AYRI bir "playwright test
-    // <dosya>" süreci olarak spawn ediliyor — bu yüzden globalSetup, tek bir koşuda değil,
-    // HER senaryoda yeniden çalışıyordu. Önceki hâlde burada KOŞULSUZ her seferinde gerçek
-    // login yapılıyordu; art arda çok sayıda senaryo (özellikle "Seçilenleri çalıştır" ile
-    // eş zamanlı tetiklenenler ya da Durdur ile kesilip yeniden başlatılanlar) TEST ortamına
-    // kısa sürede onlarca gerçek login isteği gönderiyordu — bu da geçici kilitlenme/yavaşlama
-    // ile sonuçlanabiliyordu. Çözüm: test-baslangici.ts > testBaslangiciniHazirla'daki AYNI
-    // "oturumGecerliMi" kontrolü burada da yapılır — diskteki paylaşılan oturum dosyası (başka
-    // bir senaryonun sürecinde az önce yazılmış olabilir) hâlâ geçerliyse gerçek login HİÇ
-    // yapılmaz, dosyaya dokunulmaz.
-    if (existsSync(authFile)) {
-      const dogrulamaContext = await browser.newContext({
-        baseURL: definition.baseURL,
-        storageState: authFile
-      });
-      const dogrulamaPage = await dogrulamaContext.newPage();
-      const oturumGecerli = await new LoginPage(dogrulamaPage, environment).oturumGecerliMi(
-        ortakData.login.basariGostergeMetni
-      );
-      await dogrulamaContext.close();
-
-      if (oturumGecerli) {
-        console.log(
-          `[global-setup] ${environment.toUpperCase()} için paylaşılan oturum hâlâ geçerli, yeniden login yapılmadı.`
-        );
-        return;
-      }
-    }
-
-    const context = await browser.newContext({ baseURL: definition.baseURL });
-    const page = await context.newPage();
-    const loginPage = new LoginPage(page, environment);
-    await loginPage.login(
-      credentialsFromEnvironment(environment),
-      ortakData.login.basariGostergeMetni
-    );
-    await context.storageState({ path: authFile });
-    console.log(`[global-setup] ${environment.toUpperCase()} oturumu kaydedildi: ${authFile}`);
-    await context.close();
+    // NOT (istek: "login olmuşsak bir daha login olmamalıyız"): Dashboard'dan tetiklenen HER senaryo
+    // AYRI bir "playwright test <dosya>" sürecidir; globalSetup her senaryoda yeniden çalışır. Diskteki
+    // paylaşılan oturum dosyası (başka bir senaryonun sürecinde az önce yazılmış olabilir) hâlâ geçerliyse
+    // gerçek giriş HİÇ yapılmaz, dosyaya dokunulmaz (oturumuHazirla → 'gecerli'); art arda çok sayıda
+    // senaryo test ortamına kısa sürede onlarca gerçek giriş isteği göndermez.
+    const sonuc = await oturumuHazirla(browser, {
+      baseURL: definition.baseURL as string,
+      tarif,
+      kimlik: girisKimligi(environment),
+      oturumDosyasi: authFile,
+      secenekler: { log: (m) => console.log(`[global-setup] ${m}`) }
+    });
+    console.log(sonuc === 'gecerli'
+      ? `[global-setup] ${environment.toUpperCase()} için paylaşılan oturum hâlâ geçerli, yeniden giriş yapılmadı.`
+      : `[global-setup] ${environment.toUpperCase()} oturumu kaydedildi: ${authFile}`);
   } finally {
     await browser.close();
   }

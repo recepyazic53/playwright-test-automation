@@ -19,6 +19,12 @@
 //   POST /platform/yedek/disa-aktar              { token, parola, ekranGoruntuleriDahil?, videolarDahil?, izDosyalariDahil? } → { isId } (202)
 //   GET  /platform/yedek/disa-aktar/<id>         ilerleme (aşama, yüzde, medya baytı)
 //   GET  /platform/yedek/disa-aktar/<id>/indir?token=   hazır yedeği indirir (indirme bitince geçici dosya silinir)
+// Giriş tarifleri (ortam ayarlarında, şifreli; gizli değer içermez — bkz. giris/tarif.mjs):
+//   GET  /platform/giris-tarifleri?projeId=     ortam başına etkin tarif (kaydedilmiş | proje varsayılanı) +
+//                                               bağlam türlerinin alan ADLARI (değer yok)
+//   POST /platform/giris-tarifi/kaydet | dogrula | sifirla   { projeId, ortamId, tarif }
+//   POST /platform/giris-tarifi/oner { projeId, ortamId, girisAdresi? } → YALNIZCA kullanıcı isteyince ortamın
+//        giriş sayfasını başsız tarayıcıda açıp seçici önerir (alan doldurmaz, göndermez)
 //   POST /platform/<varlik>/kaydet | /sil                 (varlik: proje, ortam, giris-profili,
 //        baglam-profili, test-verisi-turu, test-verisi-profili)
 //   POST /platform/giris-profili/goster, /platform/test-verisi-profili/goster
@@ -106,6 +112,9 @@ import {
   senaryoKopyala, senaryoListesi, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
+import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
+import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
+import { girisSayfasiniOner } from './giris/algilama.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
@@ -642,8 +651,37 @@ function ortamSec(db, projeId, d) {
   return o.id;
 }
 
+/**
+ * Giriş tarifi görünümü (tarifte gizli değer yoktur). @param {Veritabani} db @param {string} projeId @param {import('./veritabani/depo.mjs').Ortam} o
+ */
+function girisTarifiGorunumu(db, projeId, o) {
+  const adaptor = projeAdaptoru(db, projeId);
+  const etkin = etkinGirisTarifi(db, projeId, o.id, adaptor);
+  return {
+    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar,
+    varsayilanVar: Boolean(adaptor?.varsayilanGirisTarifi?.(db, projeId, o.id))
+  };
+}
+/** "Varsayılanları öner" aynı anda tek bir tarayıcı açsın. */
+let girisOnerisiSuruyor = false;
+
 /** @type {Map<string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>>} */
 const GET_UCLARI = new Map([
+  // Giriş tarifleri (ortam başına; kaydedilmiş ya da projenin varsayılanı) + bağlam türlerinin ALAN ADLARI (değer yok).
+  ['/platform/giris-tarifleri', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    /** @type {Map<string, Set<string>>} */
+    const turler = new Map();
+    for (const b of baglamProfilleriniListele(db, projeId)) {
+      if (!turler.has(b.tur)) turler.set(b.tur, new Set());
+      for (const ad of Object.keys(b.alanlar ?? {})) /** @type {Set<string>} */ (turler.get(b.tur)).add(ad);
+    }
+    return {
+      ortamlar: ortamlariListele(db, projeId).map((o) => girisTarifiGorunumu(db, projeId, o)),
+      baglamTurleri: [...turler].map(([tur, alanlar]) => ({ tur, alanlar: [...alanlar] })),
+      adimIslemleri: ADIM_ISLEMLERI.map((islem) => ({ islem, etiket: ADIM_ETIKETLERI[islem] }))
+    };
+  }],
   ['/platform/senaryolar', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     const ortamId = ortamSec(db, projeId, q.get('ortamId'));
@@ -790,6 +828,22 @@ const POST_UCLARI = new Map([
     return { profil: girisProfiliGorunumu(/** @type {import('./veritabani/depo.mjs').GirisProfili} */ (girisProfiliGetir(db, kayitId))) };
   }],
   ['/platform/giris-profili/sil', (db, g) => ({ silindi: girisProfiliSil(db, kimlikAl(g.id)) })],
+  ['/platform/giris-tarifi/kaydet', (db, g) => {
+    const projeId = kimlikAl(g.projeId, 'projeId');
+    const ortamId = kimlikAl(g.ortamId, 'ortamId');
+    girisTarifiKaydet(db, projeId, ortamId, g.tarif);
+    return { tarif: girisTarifiGorunumu(db, projeId, /** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, ortamId))) };
+  }],
+  ['/platform/giris-tarifi/dogrula', (_db, g) => {
+    const d = girisTarifiniDogrula(g.tarif);
+    return { gecerli: d.gecerli, hatalar: d.hatalar };
+  }],
+  ['/platform/giris-tarifi/sifirla', (db, g) => {
+    const projeId = kimlikAl(g.projeId, 'projeId');
+    const ortamId = kimlikAl(g.ortamId, 'ortamId');
+    const kaldirildi = girisTarifiniSifirla(db, projeId, ortamId);
+    return { kaldirildi, tarif: girisTarifiGorunumu(db, projeId, /** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, ortamId))) };
+  }],
   ['/platform/giris-profili/goster', (db, g) => {
     const p = girisProfiliGetir(db, kimlikAl(g.id), { coz: true });
     if (!p) throw new DepoHatasi('Giriş profili bulunamadı.');
@@ -1116,6 +1170,28 @@ export async function platformIsteginiIsle(req, res, baglam) {
             kaldirilanlar: sonuc.kaldirilanlar, kaynaktaYok: sonuc.kaynaktaYok, sonucAktarimi: sonuc.sonucAktarimi
           }
         });
+        return true;
+      }
+      case '/platform/giris-tarifi/oner': {
+        // YALNIZCA kullanıcı "Varsayılanları öner"e açıkça basınca: ortamın giriş sayfası başsız tarayıcıda
+        // açılır, form ALGILANIR (hiçbir alan doldurulmaz/gönderilmez). Adres ortamın taban adresi + tarifteki
+        // (ya da formdaki) giriş yolu.
+        const db = await acikVeritabani();
+        const projeId = kimlikAl(govde.projeId, 'projeId');
+        const ortam = ortamGetir(db, kimlikAl(govde.ortamId, 'ortamId'));
+        if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
+        const yolHam = metin(govde.girisAdresi).trim() || '/';
+        if (!yolHam.startsWith('/') && !/^https?:\/\//i.test(yolHam)) throw new DepoHatasi('Giriş adresi "/" ile başlayan bir yol ya da http(s) adresi olmalıdır.');
+        const adres = new URL(yolHam, ortam.tabanUrl).toString();
+        if (girisOnerisiSuruyor) throw new DepoHatasi('Başka bir öneri sürüyor; bitmesini bekleyin.');
+        girisOnerisiSuruyor = true;
+        try {
+          console.log('[platform] Giriş sayfası algılanıyor (kullanıcı isteği; alanlar doldurulmaz).');
+          const oneri = await girisSayfasiniOner(adres);
+          jsonGonder(res, 200, { basarili: true, oneri: { ...oneri, sonAdres: oneri.sonAdres ? new URL(oneri.sonAdres).pathname : null } });
+        } finally {
+          girisOnerisiSuruyor = false;
+        }
         return true;
       }
       case '/platform/senaryolar/calistir': {

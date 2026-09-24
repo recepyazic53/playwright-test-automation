@@ -1,5 +1,8 @@
+// REFERANS — ESKİ "Kullanıcı Değiştir" kodu (a8bc63d: tests/support/pages/kullanici-degistir.page.ts),
+// YALNIZCA eşdeğerlik testi için. Artık Galaksi giriş tarifinin bağlam adımlarıdır
+// (projeler/galaksi/giris-tarifi.mjs). Davranış satırları DEĞİŞTİRİLMEDİ.
 import { expect, type Page } from '@playwright/test';
-import type { AcenteProfili } from '../test-data';
+import type { AcenteProfili } from '../../../support/test-data';
 
 // Tek bir acente profili (kullaniciDegistir map'inden çözülmüş hâli).
 type KullaniciDegistirData = AcenteProfili;
