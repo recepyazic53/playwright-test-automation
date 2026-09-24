@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 import 'dotenv/config';
 import { getEnvironment, getEnvironmentName } from './tests/support/environments';
+import { kosuListesiHaricDesenleri } from './tests/support/kosu-listesi';
 
 const environmentName = getEnvironmentName();
 const environment = getEnvironment(environmentName);
@@ -27,6 +28,20 @@ export default defineConfig({
   // normal davranış değişmez.
   grep: process.env.TEST_SUNUCU_GREP_DESENI ? new RegExp(process.env.TEST_SUNUCU_GREP_DESENI) : undefined,
 
+  // KOŞU LİSTESİ (tests/data/kosu-listesi.json): koşudan hariç tutulan senaryolar
+  // "npm run test" / CI koşularında hiç keşfedilmez. Desen dosya + başlık ikilisini
+  // eşleştirir (aynı başlık başka ürün dosyalarında da olabilir) — bkz.
+  // tests/support/kosu-listesi.ts > anahtardanGrepDeseni. İKİ İSTİSNA:
+  //  - Dashboard'ın tek senaryo koşusu (TEST_SUNUCU_GREP_DESENI set): hariç tutulan bir
+  //    senaryo da ▷ ile bilinçli olarak tek başına çalıştırılabilmeli.
+  //  - Dashboard'ın kendi listelemesi (TEST_SUNUCU_TUM_LISTE=1, test-sunucu.mjs >
+  //    senaryolariListele): "Senaryolar" tablosu ve whitelist hariç tutulanlar dahil TÜM
+  //    senaryoları görmeli.
+  grepInvert:
+    process.env.TEST_SUNUCU_GREP_DESENI || process.env.TEST_SUNUCU_TUM_LISTE === '1'
+      ? undefined
+      : kosuListesiHaricDesenleri(),
+
   // Testler aynı acente hesabında kullanıcı değiştirdiği için paralel koşular
   // sunucu tarafındaki oturumları birbirine karıştırabiliyor.
   fullyParallel: false,
@@ -46,14 +61,15 @@ export default defineConfig({
   globalTeardown: './tests/support/allure-environment.ts',
 
   reporter: [
-    [
-      'html',
-      {
-        open: 'never',
-        outputFolder: 'playwright-report'
-      }
-    ],
-    ['list'],
+    // Dashboard'dan (test-sunucu) başlatılan koşular: HTML rapor yerine "json" yazılır
+    // (sunucu sonucu PLAYWRIGHT_JSON_OUTPUT_NAME dosyasından okur; paralel koşular aynı
+    // playwright-report/ klasörünü ezmesin diye HTML üretilmez). Allure HER ZAMAN yazılır —
+    // dashboard'daki adım/ürün tabloları, hata kalıpları ve kartlar bu sonuçlardan beslenir.
+    // (Eskiden sunucu "--reporter=list,json" veriyordu; bu, aşağıdaki Allure raporlayıcısını
+    // devre dışı bırakıyor ve dashboard koşuları hiçbir tabloya yansımıyordu.)
+    ...(process.env.TEST_SUNUCU_GORUNUR
+      ? ([['list'], ['json']] as const)
+      : ([['html', { open: 'never', outputFolder: 'playwright-report' }], ['list']] as const)),
     // Kurumsal/paylaşılabilir rapor için ham sonuçları ortama özel klasöre yazar
     // (allure-results-test / allure-results-canli) — TEST ve CANLI verileri
     // birbirine karışmasın diye. HTML rapor haline getirmek için:
@@ -65,6 +81,13 @@ export default defineConfig({
         resultsDir: `allure-results-${environmentName}`,
         suiteTitle: false,
         // Hataları anlaşılır Türkçe kategorilere ayırır (Categories widget'ı için).
+        // scripts/urun-hata-raporu.mjs'teki kategoriBul() ile AYNI mantık: karar öncelikle
+        // mesajın İLK satırına göre verilir (pop-up > zaman aşımı > doğrulama > seçici).
+        // Allure 2 regex'i tüm mesaja DOTALL + tam eşleşme ile uygular ve bir sonucu
+        // eşleşen TÜM kategorilere koyar; bu yüzden regex'ler negatif lookahead ile
+        // birbirini dışlar. Playwright doğrulama mesajları çağrı günlüğünde her zaman
+        // "waiting for locator/getBy..." içerdiğinden, doğrulama kontrolü seçiciden
+        // önce gelir (aksi hâlde toHaveText/toBeVisible hataları "Seçici" sayılırdı).
         categories: [
           {
             name: 'İş Kuralı / Ekran Hatası (Beklenmeyen Pop-up)',
@@ -74,17 +97,24 @@ export default defineConfig({
           {
             name: 'Zaman Aşımı (Timeout)',
             matchedStatuses: ['failed', 'broken'],
-            messageRegex: '.*[Tt]imeout.*exceeded.*'
+            messageRegex: '(?!.*beklenmeyen bir hata pop.?up)[^\\n]*[Tt]imeout[^\\n]*exceeded.*'
           },
           {
             name: 'Seçici / Elemana Ulaşılamadı',
             matchedStatuses: ['failed', 'broken'],
-            messageRegex: '.*(element\\(s\\) not found|strict mode violation|waiting for locator).*'
+            messageRegex:
+              '(?!.*beklenmeyen bir hata pop.?up)(?![^\\n]*[Tt]imeout[^\\n]*exceeded)' +
+              '(?!\\s*(?:\\w*Error:\\s*)?expect(?:\\.\\w+)?\\([^\\n]*\\)[^\\n]*failed)' +
+              '(?!(?:.*\\n)?[ \\t]*(?:expect(?:\\.\\w+)?\\((?:received|locator|page)\\)|Expected(?: string| value| pattern)?:|Received(?: string| value)?:))' +
+              '.*(?:element\\(s\\) not found|strict mode violation|resolved to \\d+ elements|waiting for (?:locator|getBy\\w+|frameLocator)\\().*'
           },
           {
             name: 'Doğrulama (Assertion) Hatası',
             matchedStatuses: ['failed', 'broken'],
-            messageRegex: '.*(toBeVisible|toBeChecked|toHaveValue|toHaveText|Expected).*'
+            messageRegex:
+              '(?!.*beklenmeyen bir hata pop.?up)(?![^\\n]*[Tt]imeout[^\\n]*exceeded)' +
+              '(?:\\s*(?:\\w*Error:\\s*)?expect(?:\\.\\w+)?\\([^\\n]*\\)[^\\n]*failed' +
+              '|(?:.*\\n)?[ \\t]*(?:expect(?:\\.\\w+)?\\((?:received|locator|page)\\)|Expected(?: string| value| pattern)?:|Received(?: string| value)?:)).*'
           }
         ]
       }

@@ -314,7 +314,7 @@ export class JetKaskoPage {
 
     for (let deneme = 1; deneme <= maksimumDeneme; deneme++) {
       await alan.click();
-      await alan.press('Control+A');
+      await alan.press('ControlOrMeta+A');
       await alan.press('Backspace');
       await alan.pressSequentially(tarih, { delay: 120 });
       await alan.press('Tab');
@@ -340,7 +340,7 @@ export class JetKaskoPage {
       await alan.click();
       // Eski maske imleci focus sonrasında gecikmeli yerleştiriyor.
       await this.page.waitForTimeout(300);
-      await alan.press('Control+A');
+      await alan.press('ControlOrMeta+A');
       await alan.press('Backspace');
       await alan.pressSequentially(cepTelefonu, { delay: 150 });
       await alan.press('Tab');

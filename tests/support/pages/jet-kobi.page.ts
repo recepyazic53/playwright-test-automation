@@ -82,7 +82,7 @@ export class JetKobiPage {
     );
     const isciSayisi = this.page.locator('#numberOfWorkers');
     await isciSayisi.click();
-    await isciSayisi.press('Control+A');
+    await isciSayisi.press('ControlOrMeta+A');
     await isciSayisi.pressSequentially(data.isciSayisi);
     await isciSayisi.press('Tab');
     await expect

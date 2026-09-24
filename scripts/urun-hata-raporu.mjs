@@ -31,6 +31,8 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tokenGetirYaOlustur, tumSenaryolariGetir, PORT as TEST_SUNUCU_PORT } from './test-sunucu.mjs';
+import { eskiVideolariTemizle } from './medya-temizligi.mjs';
+import { haricTutulanlariOku, kosuListesiAnahtari } from './kosu-listesi.mjs';
 
 const ortam = process.argv[2];
 
@@ -39,38 +41,115 @@ if (!ortam || !['test', 'canli'].includes(ortam)) {
   process.exit(1);
 }
 
-const sonuclarKlasoru = join(process.cwd(), `allure-results-${ortam}`);
+// Dashboard'un "üretim anı" — sonuç dosyaları okunmaya BAŞLAMADAN alınır. İstemci
+// tarafında localStorage'da tutulan dashboard koşularından (bkz. anlikKosuDepoyuYukle)
+// zamanı bu değere eşit/küçük olanlar zaten aşağıda okunan Allure sonuçlarında yer
+// aldığı için atılır (çift sayılmasınlar). Okumadan ÖNCE alınması, okuma sırasında
+// biten bir koşunun hem rapordan hem depodan düşmesini engeller.
+const uretimBaslangicMs = Date.now();
 
-if (!existsSync(sonuclarKlasoru)) {
-  console.error(`"${sonuclarKlasoru}" bulunamadı. Önce testleri çalıştırın (örn. npm run test:${ortam === 'test' ? 'test-ortami' : 'canli'}).`);
-  process.exit(1);
+const sonuclarKlasoru = join(process.cwd(), `allure-results-${ortam}`);
+const sonuclarKlasoruGoreli = `allure-results-${ortam}`;
+
+// Video saklama kuralı: VIDEO_SAKLAMA_GUN'den (varsayılan 30) eski videolar rapor
+// üretilmeden ÖNCE silinir — böylece aşağıda artık var olmayan bir videoya bağlantı
+// verilmez (bkz. medya-temizligi.mjs). Ekran görüntüleri ve sonuç JSON'ları silinmez.
+eskiVideolariTemizle(process.cwd(), [ortam], '[urun-hata-raporu]');
+
+// Sonuç klasörü yoksa (ör. proje yeni kurulduysa ve hiç test koşulmadıysa) rapor
+// DURMAZ — dashboard yine üretilir; ürünler ve senaryolar projedeki spec
+// dosyalarından listelenir, sonuç tabloları boş görünür.
+const sonuclarKlasoruVar = existsSync(sonuclarKlasoru);
+if (!sonuclarKlasoruVar) {
+  console.warn(`"${sonuclarKlasoru}" bulunamadı — henüz koşu yok, dashboard yalnızca senaryo listesiyle üretilecek.`);
 }
 
-// "Son koşu" hızlı bakış için: iki sonuç arasında bu kadar boşluk varsa (ms)
-// aralarında yeni bir koşu (ayrı bir npm run test... çağrısı) başladığı kabul edilir.
+// YEDEK gruplama: "kosuKimligi" etiketi OLMAYAN (bu özellikten önce yazılmış) eski
+// sonuçlarda, iki sonuç arasında bu kadar boşluk varsa (ms) aralarında yeni bir koşu
+// (ayrı bir npm run test... çağrısı) başladığı kabul edilir. Etiketli sonuçlar doğrudan
+// kosuKimligi'ne göre gruplanır (bkz. aşağıdaki "2) ... KOŞULARA kümele").
 const KOSU_BOSLUGU_MS = 10 * 60 * 1000; // 10 dakika
 
-const KATEGORILER = [
-  { ad: 'İş Kuralı / Ekran Hatası (Pop-up)', desen: /beklenmeyen bir hata pop.?up/i },
-  { ad: 'Zaman Aşımı (Timeout)', desen: /timeout.*exceeded/i },
-  { ad: 'Seçici / Elemana Ulaşılamadı', desen: /(element\(s\) not found|strict mode violation|waiting for locator)/i },
-  { ad: 'Doğrulama (Assertion) Hatası', desen: /(toBeVisible|toBeChecked|toHaveValue|toHaveText|Expected)/i }
-];
+// Kategori ADLARI ve SIRASI (istemci tarafında renk eşlemesi bu sıraya göre yapılır —
+// bkz. KATEGORI_RENKLERI). Sınıflandırma MANTIĞI ise aşağıdaki kategoriBul()'dadır;
+// bu dizinin sırası artık "hangisi önce denenir" anlamına GELMEZ.
+const KATEGORI = {
+  popup: 'İş Kuralı / Ekran Hatası (Pop-up)',
+  zamanAsimi: 'Zaman Aşımı (Timeout)',
+  secici: 'Seçici / Elemana Ulaşılamadı',
+  dogrulama: 'Doğrulama (Assertion) Hatası',
+  diger: 'Diğer / Sınıflandırılamadı'
+};
+const KATEGORILER = [KATEGORI.popup, KATEGORI.zamanAsimi, KATEGORI.secici, KATEGORI.dogrulama].map((ad) => ({ ad }));
 
+const POPUP_DESENI = /beklenmeyen bir hata pop.?up/i;
+// "locator.click: Timeout 30000ms exceeded." / "Test timeout of 180000ms exceeded." /
+// "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded."
+const ZAMAN_ASIMI_DESENI = /\btimeout\b.*\bexceeded\b/i;
+// Playwright 1.5x doğrulama mesajının İLK satırı: "Error: expect(locator).toHaveText(expected) failed",
+// "expect.poll(...)..." vb. (başındaki "Error: " öneki Playwright'ın serializeError'ından gelir).
+const DOGRULAMA_ILK_SATIR_DESENI = /^(?:\w*Error:\s*)?expect(?:\.\w+)?\(.*\).*\bfailed\b/;
+// Özel mesajlı expect (expect(x, 'Açıklama').toBeTruthy()) ilk satırda açıklamayı taşır;
+// asıl matcher satırı ("expect(received).toBeTruthy()") ve "Expected:/Received:" satırları
+// mesajın devamında, SATIR BAŞINDA yer alır.
+const DOGRULAMA_GOVDE_DESENI = /^\s*(?:expect(?:\.\w+)?\((?:received|locator|page)\)|Expected(?: string| value| pattern)?:|Received(?: string| value)?:)/m;
+// Playwright 1.5x çağrı günlüğü artık "waiting for locator(...)" yerine çoğunlukla
+// "waiting for getByRole(...)" yazar — ikisi de kapsanır.
+const SECICI_DESENI = /(element\(s\) not found|strict mode violation|resolved to \d+ elements|waiting for (?:locator|getBy\w+|frameLocator)\()/i;
+
+// Hata kategorisini bulur. ÖNEMLİ: Playwright'ın locator doğrulama mesajları
+// (toHaveText/toHaveValue/toBeVisible...) HER ZAMAN çağrı günlüğünde
+// "waiting for locator(...)" ya da "element(s) not found" satırı içerir; tüm mesaj
+// üzerinde sırayla desen aransaydı (eski davranış) bunlar hep "Seçici" sayılır,
+// "Doğrulama" neredeyse hiç eşleşmezdi. Bu yüzden karar öncelikle mesajın İLK
+// satırına göre, şu sırayla verilir:
+//   1) Beklenmeyen hata pop-up'ı (iş kuralı) — tüm mesajda aranır, özel/uzun metin.
+//   2) Zaman aşımı — ilk satırda "timeout ... exceeded" (test/aksiyon zaman aşımı).
+//      (Çağrı günlüğündeki "Timeout 45000ms exceeded while waiting on the predicate"
+//      gibi satırlar ilk satırda olmadığından doğrulama olarak kalır.)
+//   3) Doğrulama — ilk satır "expect(...)... failed" ya da mesajda satır başında
+//      "expect(received)..." / "Expected:" / "Received:" var.
+//   4) Seçici — element(s) not found / strict mode violation / "waiting for locator".
+//   5) Diğer.
+// playwright.config.ts'teki allure "categories" regex'leri aynı sırayı/mantığı taklit
+// eder (Allure bir sonucu eşleşen TÜM kategorilere koyduğundan orada karşılıklı
+// dışlayan regex'ler kullanıldı); ikisini birlikte güncelleyin.
 function kategoriBul(mesaj) {
-  if (!mesaj) return 'Diğer / Sınıflandırılamadı';
-  const eslesen = KATEGORILER.find((k) => k.desen.test(mesaj));
-  return eslesen ? eslesen.ad : 'Diğer / Sınıflandırılamadı';
+  if (!mesaj) return KATEGORI.diger;
+  const ilkSatir = mesaj.split('\n')[0].trim();
+  if (POPUP_DESENI.test(mesaj)) return KATEGORI.popup;
+  if (ZAMAN_ASIMI_DESENI.test(ilkSatir)) return KATEGORI.zamanAsimi;
+  if (DOGRULAMA_ILK_SATIR_DESENI.test(ilkSatir) || DOGRULAMA_GOVDE_DESENI.test(mesaj)) return KATEGORI.dogrulama;
+  if (SECICI_DESENI.test(mesaj)) return KATEGORI.secici;
+  return KATEGORI.diger;
+}
+
+// Hata mesajındaki hedef locator'ı bulur. Playwright 1.5x doğrulama mesajlarında ayrı
+// bir "Locator: getByRole('button', { name: 'Prim Hesapla' })" satırı bulunur; yoksa
+// (ör. "locator.click: Timeout ... exceeded" gibi aksiyon hatalarında) çağrı
+// günlüğündeki ilk "waiting for <locator>" satırı kullanılır.
+function locatorBul(mesajTam) {
+  const locatorSatiri = mesajTam.match(/^\s*Locator:\s*(.+)$/m);
+  if (locatorSatiri) return locatorSatiri[1].trim();
+  const beklemeSatiri = mesajTam.match(/^\s*-\s*waiting for ((?:locator|getBy\w+|frameLocator)\(.+)$/m);
+  return beklemeSatiri ? beklemeSatiri[1].trim() : null;
 }
 
 // Hata mesajının SABİT KALIBINI çıkarır: değişken (sayısal) kısımlar "#" olur.
 // "250166487 numaralı teklif onaylanamadı" -> "# numaralı teklif onaylanamadı"
+// Mesajda bir locator varsa kalıba eklenir; böylece farklı ekranlardaki
+// "expect(locator).toBeVisible() failed" hataları tek satıra yığılmaz:
+// "Error: expect(locator).toBeVisible() failed · getByRole('button', { name: 'Prim Hesapla' })"
 function kalipCikar(mesajTam) {
   if (!mesajTam) return 'Mesaj yok / boş hata';
   let ilkSatir = mesajTam.split('\n')[0].trim();
   if (!ilkSatir) return 'Mesaj yok / boş hata';
 
-  let kalip = ilkSatir
+  const locator = locatorBul(mesajTam);
+  // İlk satır locator'ı zaten içeriyorsa (ör. strict mode violation) tekrar eklenmez.
+  const hamKalip = locator && !ilkSatir.includes(locator) ? `${ilkSatir} · ${locator}` : ilkSatir;
+
+  let kalip = hamKalip
     // UUID benzeri değerleri önce sil (sayı deseni bunları yarım bırakabilir)
     .replace(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, '#')
     // Her sayısal diziyi (teklif no, id, tarih, tutar vb.) tek karaktere indir
@@ -78,8 +157,35 @@ function kalipCikar(mesajTam) {
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (kalip.length > 180) kalip = kalip.slice(0, 177) + '...';
+  // Locator eklendiği için sınır 180'den 240'a çıkarıldı.
+  if (kalip.length > 240) kalip = kalip.slice(0, 237) + '...';
   return kalip;
+}
+
+// --- Durum eşleme (TEK KAYNAK) ---
+// Bir Allure sonucunu dashboard durumuna çevirir: 'basarili' | 'basarisiz' | 'atlanan' |
+// 'durduruldu'. kosuOzetiCikar, kosuSenaryolariCikar ve tumKayitlar hep bunu kullanır
+// (eskiden 'unknown' bir yerde yok sayılıp diğerlerinde başarısız sayılıyordu).
+// "Durduruldu" = kullanıcı durdurdu / koşu yarıda kesildi — BAŞARISIZ SAYILMAZ:
+//   - status 'unknown' ya da hiç yok (Allure sonucu tamamlanmamış),
+//   - failed/broken ama mesaj "Test was interrupted" (Playwright interrupted),
+//   - failed/broken ve HİÇ hata mesajı yok: Playwright, Ctrl+C/SIGTERM ile kesilen
+//     (status 'interrupted') testlere hata eklemez; allure-playwright bunu 'failed'
+//     olarak yazar. Kendi başına başarısız olan her test (zaman aşımı dahil — o
+//     'broken' + "Test timeout of ...ms exceeded." mesajıyla gelir) bir hata taşır.
+// NOT: "navigation ... is interrupted by another navigation" gibi GERÇEK hatalar
+// kasıtlı olarak eşleşmez (desen yalnızca "Test was interrupted").
+const KESINTI_DESENI = /\bTest (?:run )?was interrupted\b/i;
+function durumEsle(icerik) {
+  const status = icerik.status;
+  if (status === 'passed') return 'basarili';
+  if (status === 'skipped') return 'atlanan';
+  if (status === 'failed' || status === 'broken') {
+    const mesaj = icerik.statusDetails?.message ?? '';
+    if (!mesaj.trim() || KESINTI_DESENI.test(mesaj)) return 'durduruldu';
+    return 'basarisiz';
+  }
+  return 'durduruldu'; // 'unknown', undefined veya tanınmayan bir değer
 }
 
 function kosuEtiketi(zamanDamgasiMs) {
@@ -92,15 +198,26 @@ function kosuEtiketi(zamanDamgasiMs) {
   });
 }
 
-function gunAnahtari(zamanDamgasiMs) {
-  return new Date(zamanDamgasiMs).toLocaleDateString('sv-SE'); // YYYY-MM-DD (input[type=date] ile uyumlu)
-}
-
+// Başarı ORANI paydası: "Durduruldu" (kullanıcı durdurdu) testler bilinçli olarak
+// dahil edilmez — oranı düşürüp başarısızlık gibi görünmesinler.
 function kacHesapla(icerikTuru) {
   return icerikTuru.basarili + icerikTuru.basarisiz + icerikTuru.atlanan;
 }
 
-function ekranGoruntusuDataUriGetir(icerik, klasor) {
+// NOT (dosya boyutu): Ekran görüntüleri eskiden HTML'e base64 "data:" URI olarak
+// gömülüyordu (aynı görüntü 3 yere kadar) ve dashboard onlarca MB'a çıkıyordu. Allure
+// ekleri zaten dashboard'un yanındaki allure-results-<ortam>/ klasöründe dosya olarak
+// durduğu için artık yalnızca GÖRELİ YOL taşınır (ör. "allure-results-test/<uuid>-
+// attachment.png"); dashboard file:// olarak aynı klasörden açıldığından tarayıcı
+// dosyayı doğrudan bulur. Dosya diskte yoksa (silinmiş/taşınmış) null döner ve
+// arayüz "ekran görüntüsü bulunamadı"/video bağlantısı yok davranışına düşer.
+function ekGoreliYolu(ek) {
+  if (!ek?.source) return null;
+  if (!existsSync(join(sonuclarKlasoru, ek.source))) return null;
+  return `${sonuclarKlasoruGoreli}/${encodeURIComponent(ek.source)}`;
+}
+
+function ekranGoruntusuYoluGetir(icerik) {
   // Ekran görüntüsü eki iki farklı yerde olabilir: klasik icerik.attachments dizisinde,
   // ya da (allure-playwright "detail:true" ile) icerik.steps içinde ayrı bir "sözde adım"
   // olarak (o adımın kendi attachments alanında). Playwright'ın kendi "screenshot:
@@ -113,18 +230,26 @@ function ekranGoruntusuDataUriGetir(icerik, klasor) {
   const ekBulunan =
     tumEkler.find((ek) => ek.type === 'image/png' && ek.name === 'screenshot') ??
     tumEkler.find((ek) => ek.type === 'image/png' && /Ekran Görüntüsü/i.test(ek.name ?? ''));
-  if (!ekBulunan?.source) return null;
-  const ekYolu = join(klasor, ekBulunan.source);
-  if (!existsSync(ekYolu)) return null;
-  try {
-    return `data:image/png;base64,${readFileSync(ekYolu).toString('base64')}`;
-  } catch {
-    return null;
+  return ekGoreliYolu(ekBulunan);
+}
+
+// Playwright'ın koşu videosu (allure-playwright bunu "video/webm" türünde ek olarak
+// kopyalar; ek, sözde adımların içinde de olabildiği için adımlar derinlemesine gezilir).
+// VIDEO_SAKLAMA_GUN'den eski videolar silindiğinden dosya yoksa null döner — arayüz o
+// zaman "▶ Videoyu izle" bağlantısını hiç göstermez.
+function videoYoluGetir(icerik) {
+  const yigin = [icerik];
+  while (yigin.length) {
+    const dugum = yigin.pop();
+    const ek = (dugum.attachments ?? []).find((e) => e.type === 'video/webm');
+    if (ek) return ekGoreliYolu(ek);
+    for (const adim of dugum.steps ?? []) yigin.push(adim);
   }
+  return null;
 }
 
 // --- 1) Tüm ham sonuç dosyalarını oku ---
-const dosyalar = readdirSync(sonuclarKlasoru).filter((dosya) => dosya.endsWith('-result.json'));
+const dosyalar = (sonuclarKlasoruVar ? readdirSync(sonuclarKlasoru) : []).filter((dosya) => dosya.endsWith('-result.json'));
 const tumIcerikler = [];
 
 for (const dosya of dosyalar) {
@@ -142,49 +267,83 @@ for (const dosya of dosyalar) {
 tumIcerikler.sort((a, b) => a.zaman - b.zaman);
 
 if (tumIcerikler.length === 0) {
-  console.error('Sonuç dosyalarında zaman damgası bulunamadı, özet çıkarılamadı.');
-  process.exit(1);
+  console.warn('Henüz kayıtlı koşu sonucu yok — dashboard yalnızca senaryo listesiyle üretilecek.');
 }
 
 // --- 2) "Son koşu" hızlı bakış için sonuçları KOŞULARA kümele ---
-const kosular = [];
-for (const { icerik, zaman } of tumIcerikler) {
-  const sonKosu = kosular[kosular.length - 1];
-  if (!sonKosu || zaman - sonKosu.bitis > KOSU_BOSLUGU_MS) {
-    kosular.push({ bitis: zaman, testler: new Map() });
-  }
-  const guncelKosu = kosular[kosular.length - 1];
-  guncelKosu.bitis = Math.max(guncelKosu.bitis, zaman);
+// Öncelik "kosuKimligi" Allure etiketinde (global-setup.ts her "playwright test"
+// çağrısına benzersiz bir kimlik verir, fixtures.ts bunu her sonuca yazar): aynı
+// kimliği taşıyan sonuçlar — koşu ne kadar uzun sürerse sürsün — tek koşudur. Etiketi
+// olmayan ESKİ sonuçlar kendi aralarında eskisi gibi 10 dakikalık boşluk kuralıyla
+// gruplanır. Her koşunun bir türü vardır: 'tam' (npm run test / CI) ya da 'tekil'
+// (dashboard'daki ▷ ile tetiklenen tek senaryo, kosuTuru etiketi). Etiketsiz eski
+// koşular 'tam' kabul edilir (o dönemde tür bilgisi yoktu).
+function etiketDegeri(icerik, ad) {
+  return (icerik.labels ?? []).find((e) => e.name === ad)?.value ?? null;
+}
+
+function kosuyaEkle(kosu, icerik, zaman) {
+  kosu.bitis = Math.max(kosu.bitis, zaman);
   const anahtar = icerik.historyId ?? icerik.uuid;
-  const mevcut = guncelKosu.testler.get(anahtar);
+  const mevcut = kosu.testler.get(anahtar);
   if (!mevcut || zaman >= (mevcut._zaman ?? 0)) {
     icerik._zaman = zaman;
-    guncelKosu.testler.set(anahtar, icerik);
+    kosu.testler.set(anahtar, icerik);
   }
 }
+
+const kosular = [];
+const kimlikliKosular = new Map(); // kosuKimligi -> koşu
+let sonEtiketsizKosu = null;
+for (const { icerik, zaman } of tumIcerikler) {
+  const kimlik = etiketDegeri(icerik, 'kosuKimligi');
+  let kosu;
+  if (kimlik) {
+    kosu = kimlikliKosular.get(kimlik);
+    if (!kosu) {
+      kosu = { bitis: zaman, testler: new Map(), kimlik, tur: 'tam', kapsam: 'Genel' };
+      kimlikliKosular.set(kimlik, kosu);
+      kosular.push(kosu);
+    }
+    // Koşudaki TEK bir sonuç bile "tam" ise koşu tamdır; hepsi "tekil" ise tekildir.
+    if (etiketDegeri(icerik, 'kosuTuru') === 'tekil' && kosu.testler.size === 0) kosu.tur = 'tekil';
+    else if (etiketDegeri(icerik, 'kosuTuru') !== 'tekil') {
+      kosu.tur = 'tam';
+      // Kapsam: dashboard'da bir ürün seçiliyken başlatılan koşu o ürünün adını taşır;
+      // etiketsiz (eski) ya da terminal/CI koşuları 'Genel'dir (bkz. fixtures.ts).
+      kosu.kapsam = etiketDegeri(icerik, 'kosuKapsami') || kosu.kapsam || 'Genel';
+    }
+  } else {
+    if (!sonEtiketsizKosu || zaman - sonEtiketsizKosu.bitis > KOSU_BOSLUGU_MS) {
+      sonEtiketsizKosu = { bitis: zaman, testler: new Map(), kimlik: null, tur: 'tam', kapsam: 'Genel' };
+      kosular.push(sonEtiketsizKosu);
+    }
+    kosu = sonEtiketsizKosu;
+  }
+  kosuyaEkle(kosu, icerik, zaman);
+}
+// Kronolojik sıra (en eski önce) — koşunun BİTİŞ zamanına göre; "son koşu" en son biten.
+kosular.sort((a, b) => a.bitis - b.bitis);
 for (const kosu of kosular) kosu.etiket = kosuEtiketi(kosu.bitis);
 
 function kosuOzetiCikar(testMap) {
   let basarili = 0;
   let basarisiz = 0;
   let atlanan = 0;
+  let durduruldu = 0;
   const urunToplamlari = {};
   for (const icerik of testMap.values()) {
     const epicEtiketi = (icerik.labels ?? []).find((e) => e.name === 'epic');
     const urun = epicEtiketi?.value ?? 'Bilinmiyor';
-    urunToplamlari[urun] ??= { basarili: 0, basarisiz: 0, atlanan: 0 };
-    if (icerik.status === 'passed') {
-      basarili += 1;
-      urunToplamlari[urun].basarili += 1;
-    } else if (icerik.status === 'failed' || icerik.status === 'broken') {
-      basarisiz += 1;
-      urunToplamlari[urun].basarisiz += 1;
-    } else if (icerik.status === 'skipped') {
-      atlanan += 1;
-      urunToplamlari[urun].atlanan += 1;
-    }
+    urunToplamlari[urun] ??= { basarili: 0, basarisiz: 0, atlanan: 0, durduruldu: 0 };
+    const durum = durumEsle(icerik);
+    if (durum === 'basarili') basarili += 1;
+    else if (durum === 'basarisiz') basarisiz += 1;
+    else if (durum === 'atlanan') atlanan += 1;
+    else durduruldu += 1;
+    urunToplamlari[urun][durum] += 1;
   }
-  return { basarili, basarisiz, atlanan, urunToplamlari };
+  return { basarili, basarisiz, atlanan, durduruldu, urunToplamlari };
 }
 
 // Bir koşudaki her testin (senaryonun) adım adım (test.step) başarı/başarısız listesini,
@@ -192,24 +351,27 @@ function kosuOzetiCikar(testMap) {
 // Koşu > Ürün > Senaryo > Adım detay penceresinin veri kaynağıdır. Sadece BAŞARISIZ
 // adımlarda mesaj/ekran görüntüsü taşınır (dosya boyutu büyümesin diye) — başarılı
 // adımlarda zaten gösterilecek bir "açıklama" yok.
-function kosuSenaryolariCikar(testMap, klasor) {
+function kosuSenaryolariCikar(testMap) {
   const urunSenaryolari = {}; // urun -> [ { senaryoAdi, durum, genelMesaj, adimlar: [...] } ]
   for (const icerik of testMap.values()) {
     const epicEtiketi = (icerik.labels ?? []).find((e) => e.name === 'epic');
     const urun = epicEtiketi?.value ?? 'Bilinmiyor';
-    const durum = icerik.status === 'passed' ? 'basarili' : icerik.status === 'skipped' ? 'atlanan' : 'basarisiz';
+    const durum = durumEsle(icerik);
 
     const adimlar = [];
     for (const adim of icerik.steps ?? []) {
       const ad = adim.name ?? 'İsimsiz adım';
       if (adimGurultuMu(ad)) continue;
       if (adim.status !== 'passed' && adim.status !== 'failed' && adim.status !== 'broken') continue;
+      // Durdurulan testte yarıda kesilen adım "başarısız" gösterilmez (yalnızca geçenler listelenir).
+      if (durum === 'durduruldu' && adim.status !== 'passed') continue;
       const adimBasarisizMi = adim.status === 'failed' || adim.status === 'broken';
       adimlar.push({
         ad,
         basarili: !adimBasarisizMi,
         m: adimBasarisizMi ? adim.statusDetails?.message || icerik.statusDetails?.message || '' : '',
-        g: adimBasarisizMi ? ekranGoruntusuDataUriGetir(icerik, klasor) : null
+        g: adimBasarisizMi ? ekranGoruntusuYoluGetir(icerik) : null,
+        v: adimBasarisizMi ? videoYoluGetir(icerik) : null
       });
     }
 
@@ -233,24 +395,105 @@ function kosuSenaryolariCikar(testMap, klasor) {
   return urunSenaryolari;
 }
 
-const sonKosu = kosular[kosular.length - 1];
-const oncekiKosu = kosular[kosular.length - 2] ?? null;
-const sonKosuOzet = kosuOzetiCikar(sonKosu.testler);
-const oncekiKosuOzet = oncekiKosu ? kosuOzetiCikar(oncekiKosu.testler) : null;
+// --- Üst kartlar (ürün bazlı "koşu" mantığı) ---
+// Koşu türleri: 'tam' = "koşu" (dashboard'daki aramasız "Koşuyu başlat" ya da her
+// terminal/CI koşusu); 'tekil' = diğer her şey (Seçilenleri çalıştır, tek ▷, aramalı
+// koşular). Kartlar ve trend YALNIZCA 'tam' koşulara bakar — tekil koşular "Koşu
+// geçmişi"nde (rozetle), hata kalıplarında ve ürün/adım tablolarında sayılmaya devam eder.
+//
+// Ürün sayfası (P): P'nin sonuçlarını İÇEREN en son koşudaki (P kapsamlı ya da Genel)
+// yalnızca P'nin sayıları; "önceki" = P'yi içeren bir önceki koşu.
+// Genel sayfa: GÜNCEL DURUM = her ürünün kendi son koşusundaki sayıların toplamı (yalnızca
+// JetSeyahat koşulursa toplamın yalnızca JetSeyahat kısmı değişir); "önceki" = her ürünün
+// bir önceki koşusunun toplamı (önceki koşusu olmayan ürün, değişim üretmesin diye kendi
+// son koşusuyla sayılır). Hiçbir ürünün önceki koşusu yoksa fark gösterilmez.
+function durumToplami(s) {
+  return s ? s.basarili + s.basarisiz + s.atlanan + (s.durduruldu || 0) : 0;
+}
+function sayilariTopla(liste) {
+  const toplam = { basarili: 0, basarisiz: 0, atlanan: 0, durduruldu: 0 };
+  for (const s of liste) {
+    toplam.basarili += s.basarili;
+    toplam.basarisiz += s.basarisiz;
+    toplam.atlanan += s.atlanan;
+    toplam.durduruldu += s.durduruldu || 0;
+  }
+  return toplam;
+}
+
+for (const kosu of kosular) kosu.ozet = kosuOzetiCikar(kosu.testler);
+const tamKosular = kosular.filter((kosu) => kosu.tur === 'tam');
+
+// urun -> o ürünün sonucunu içeren tam koşular (kronolojik, en eski önce).
+const urunTamKosulari = {};
+for (const kosu of tamKosular) {
+  for (const [urun, sayilar] of Object.entries(kosu.ozet.urunToplamlari)) {
+    if (durumToplami(sayilar) > 0) (urunTamKosulari[urun] ??= []).push(kosu);
+  }
+}
+
+function urunKosuOzeti(kosu, urun) {
+  const s = kosu.ozet.urunToplamlari[urun];
+  return { etiket: kosu.etiket, z: kosu.bitis, kapsam: kosu.kapsam, basarili: s.basarili, basarisiz: s.basarisiz, atlanan: s.atlanan, durduruldu: s.durduruldu };
+}
+
+const urunKartlari = {};
+for (const [urun, liste] of Object.entries(urunTamKosulari)) {
+  urunKartlari[urun] = {
+    son: urunKosuOzeti(liste[liste.length - 1], urun),
+    onceki: liste.length > 1 ? urunKosuOzeti(liste[liste.length - 2], urun) : null
+  };
+}
+
+const urunKartListesi = Object.values(urunKartlari);
+const genelOncekiVarMi = urunKartListesi.some((k) => k.onceki);
+const genelKart = urunKartListesi.length
+  ? {
+      son: sayilariTopla(urunKartListesi.map((k) => k.son)),
+      onceki: genelOncekiVarMi ? sayilariTopla(urunKartListesi.map((k) => k.onceki ?? k.son)) : null,
+      // Kaynak açıklaması için: ürünlerin son koşularından en yenisi ve en eskisi.
+      enYeniZ: Math.max(...urunKartListesi.map((k) => k.son.z)),
+      enEskiZ: Math.min(...urunKartListesi.map((k) => k.son.z)),
+      urunSayisi: urunKartListesi.length
+    }
+  : null;
+if (genelKart) {
+  genelKart.enYeniEtiket = kosuEtiketi(genelKart.enYeniZ);
+  genelKart.enEskiEtiket = kosuEtiketi(genelKart.enEskiZ);
+}
+
+// Konsol/markdown özeti ve kenar çubuğu donutu Genel GÜNCEL DURUMU gösterir (kartlarla aynı).
+const sonKosuOzet = {
+  ...(genelKart?.son ?? { basarili: 0, basarisiz: 0, atlanan: 0, durduruldu: 0 }),
+  urunToplamlari: Object.fromEntries(Object.entries(urunKartlari).map(([urun, k]) => [urun, k.son]))
+};
+const oncekiKosuOzet = genelKart?.onceki ?? null;
+const sonKosuEtiketi = !genelKart
+  ? 'Henüz koşu yok'
+  : genelKart.enYeniZ === genelKart.enEskiZ
+    ? genelKart.enYeniEtiket
+    : `her ürünün son koşusu (en yenisi ${genelKart.enYeniEtiket})`;
 
 // "Koşu geçmişi" tablosu + "Koşu trendi" grafiği için: TÜM koşuların başarılı/
 // başarısız/atlanan sayıları, hem genel hem de ürün bazında (kronolojik sırayla,
 // en eski önce). Her ikisi de istemci tarafında aynı diziden (VERI.kosuGecmisi),
 // kendi tarih aralığı filtresine göre süzülür.
 const tumKosuOzetleri = kosular.map((kosu) => {
-  const ozet = kosuOzetiCikar(kosu.testler);
+  const ozet = kosu.ozet;
   return {
     etiket: kosu.etiket,
     etiketKisa: new Date(kosu.bitis).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }),
     z: kosu.bitis,
+    // 'tam' | 'tekil' — istemci trendi yalnızca 'tam' koşularla çizer, "Koşu geçmişi"nde
+    // tekil koşulara küçük bir rozet koyar.
+    tur: kosu.tur,
+    // 'Genel' ya da ürün adı (yalnızca tam koşularda anlamlı) — Genel trendi yalnızca
+    // 'Genel' kapsamlı koşulardan çizilir; ürün kapsamlı koşular geçmişte rozetle görünür.
+    kapsam: kosu.tur === 'tam' ? kosu.kapsam : null,
     basarili: ozet.basarili,
     basarisiz: ozet.basarisiz,
     atlanan: ozet.atlanan,
+    durduruldu: ozet.durduruldu,
     urunler: ozet.urunToplamlari
   };
 });
@@ -282,10 +525,10 @@ function adimGurultuMu(ad) {
   return /^(Fixture |Fill |Attach |Expect |Get by|Locator|Wait for)/.test(ad);
 }
 
-// icerik/zaman/klasor parametreleri; her adım geçişi/başarısızlığı için (dashboard'da
+// icerik/zaman parametreleri; her adım geçişi/başarısızlığı için (dashboard'da
 // adım satırına tıklanınca açılan detay/popup listesi için) tek tek KAYIT tutulur —
 // sadece sayaç değil. Başarısız kayıtlarda mesaj + varsa ekran görüntüsü de eklenir.
-function adimlariGezVeTopla(icerik, zaman, klasor, sayaclar) {
+function adimlariGezVeTopla(icerik, zaman, sayaclar) {
   for (const adim of icerik.steps ?? []) {
     const ad = adim.name ?? 'İsimsiz adım';
     if (adimGurultuMu(ad)) continue;
@@ -300,7 +543,8 @@ function adimlariGezVeTopla(icerik, zaman, klasor, sayaclar) {
       zaman,
       senaryoAdi: icerik.name ?? icerik.fullName ?? 'İsimsiz test',
       mesaj: basarisizMi ? (adim.statusDetails?.message || icerik.statusDetails?.message || '') : '',
-      ekranGoruntusu: basarisizMi ? ekranGoruntusuDataUriGetir(icerik, klasor) : null
+      ekranGoruntusu: basarisizMi ? ekranGoruntusuYoluGetir(icerik) : null,
+      video: basarisizMi ? videoYoluGetir(icerik) : null
     });
     // Kasıtlı olarak adim.steps içine inilmiyor — bizim test.step() bloklarımız kendi
     // içlerinde iç içe adım açmıyor, alt seviyedeki her şey Playwright'ın otomatik
@@ -324,10 +568,12 @@ for (const { icerik, zaman } of tumIcerikler) {
   const featureEtiketi = (icerik.labels ?? []).find((e) => e.name === 'feature');
   const urun = epicEtiketi?.value ?? 'Bilinmiyor';
   const ozellik = featureEtiketi?.value ?? '';
-  const durum = icerik.status === 'passed' ? 'basarili' : icerik.status === 'skipped' ? 'atlanan' : 'basarisiz';
+  const durum = durumEsle(icerik);
 
   urunAdimSayaclari[urun] ??= {};
-  adimlariGezVeTopla(icerik, zaman, sonuclarKlasoru, urunAdimSayaclari[urun]);
+  // Durdurulan testlerin adımları "Adım bazlı başarı" tablosuna hiç yansımaz —
+  // yarıda kesilen adım başarısız sayılmasın.
+  if (durum !== 'durduruldu') adimlariGezVeTopla(icerik, zaman, urunAdimSayaclari[urun]);
 
   let kategori = null;
   let kalip = null;
@@ -339,7 +585,7 @@ for (const { icerik, zaman } of tumIcerikler) {
 
     const anahtar = `${urun}|||${kategori}|||${kalip}`;
     const mevcutOrnek = ornekler.get(anahtar);
-    const adayEkranGoruntusu = ekranGoruntusuDataUriGetir(icerik, sonuclarKlasoru);
+    const adayEkranGoruntusu = ekranGoruntusuYoluGetir(icerik);
     // Ekran görüntüsü olan bir örneği tercih et; ikisi de var/yoksa en yeniyi tut.
     const adayDahaIyiMi =
       !mevcutOrnek ||
@@ -350,7 +596,8 @@ for (const { icerik, zaman } of tumIcerikler) {
         baslik: icerik.name ?? icerik.fullName ?? 'İsimsiz test',
         ozellik,
         mesaj: mesajTam,
-        ekranGoruntusu: adayEkranGoruntusu
+        ekranGoruntusu: adayEkranGoruntusu,
+        video: videoYoluGetir(icerik)
       });
     }
   }
@@ -389,7 +636,7 @@ const ORTAK_ADIMLAR = new Set(['Sisteme giriş yapılır', 'Acente ve kullanıc�
 // AYNI SIRADA/UZUNLUKTA, ama ayrı bir dizide tutulur (bu ağır veriyi (mesaj/ekran
 // görüntüsü içerir) veri.kosuGecmisi'ne gömseydik gereksiz yere şişerdi).
 // İstemci tarafında VERI.kosuDetaylari[i], VERI.kosuGecmisi[i] ile aynı koşuya karşılık gelir.
-const kosuDetaylari = kosular.map((kosu) => kosuSenaryolariCikar(kosu.testler, sonuclarKlasoru));
+const kosuDetaylari = kosular.map((kosu) => kosuSenaryolariCikar(kosu.testler));
 
 // Ürün başına adım listesi. ADIM_SIRASI'nda tanımlı ürünlerde ekran akışı sırası
 // kullanılır; diğer ürünlerde (henüz elle sıralama tanımlanmamış) en çok başarısız
@@ -415,7 +662,8 @@ for (const urun of urunler) {
           t: kosuEtiketi(k.zaman),
           ad: k.senaryoAdi,
           m: k.mesaj,
-          g: k.ekranGoruntusu
+          g: k.ekranGoruntusu,
+          v: k.video
         }))
     }));
 
@@ -438,16 +686,19 @@ for (const urun of urunler) {
 }
 
 // --- 4) Konsola kısa özet (hızlı bakış) ---
-console.log(`\n${ortam.toUpperCase()} ortamı - son koşu: ${sonKosu.etiket} (kayıtlı koşu sayısı: ${kosular.length})\n`);
 console.log(
-  `Toplam: ${kacHesapla(sonKosuOzet)} test | Başarılı: ${sonKosuOzet.basarili} | Başarısız: ${sonKosuOzet.basarisiz} | Atlanan: ${sonKosuOzet.atlanan}`
+  `\n${ortam.toUpperCase()} ortamı - güncel durum: ${sonKosuEtiketi} (kayıtlı koşu sayısı: ${kosular.length}, koşu: ${tamKosular.length}, tekil: ${kosular.length - tamKosular.length})\n`
+);
+console.log(
+  `Toplam: ${kacHesapla(sonKosuOzet) + sonKosuOzet.durduruldu} test | Başarılı: ${sonKosuOzet.basarili} | Başarısız: ${sonKosuOzet.basarisiz} | Atlanan: ${sonKosuOzet.atlanan} | Durduruldu: ${sonKosuOzet.durduruldu}`
 );
 console.table(
   Object.entries(sonKosuOzet.urunToplamlari).map(([urun, s]) => ({
     Ürün: urun,
     Başarılı: s.basarili,
     Başarısız: s.basarisiz,
-    Atlanan: s.atlanan
+    Atlanan: s.atlanan,
+    Durduruldu: s.durduruldu
   }))
 );
 console.log(`\nDetaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu için dashboard-${ortam}.html dosyasını açın.`);
@@ -456,14 +707,14 @@ console.log(`\nDetaylı, tarih aralığı filtrelenebilir hata kalıbı tablosu 
 const markdownSatirlari = [
   `# ${ortam.toUpperCase()} Ortamı - Hata ve Başarı Özeti`,
   '',
-  `Son koşu: ${sonKosu.etiket}`,
+  `Güncel durum: ${sonKosuEtiketi}`,
   '',
-  `Toplam: ${kacHesapla(sonKosuOzet)} test | Başarılı: ${sonKosuOzet.basarili} | Başarısız: ${sonKosuOzet.basarisiz} | Atlanan: ${sonKosuOzet.atlanan}`,
+  `Toplam: ${kacHesapla(sonKosuOzet) + sonKosuOzet.durduruldu} test | Başarılı: ${sonKosuOzet.basarili} | Başarısız: ${sonKosuOzet.basarisiz} | Atlanan: ${sonKosuOzet.atlanan} | Durduruldu: ${sonKosuOzet.durduruldu}`,
   ''
 ];
 if (oncekiKosuOzet) {
   markdownSatirlari.push(
-    `Önceki koşuya (${oncekiKosu.etiket}) göre değişim: Başarılı ${sonKosuOzet.basarili - oncekiKosuOzet.basarili >= 0 ? '+' : ''}${sonKosuOzet.basarili - oncekiKosuOzet.basarili}, ` +
+    `Her ürünün önceki koşusuna göre değişim: Başarılı ${sonKosuOzet.basarili - oncekiKosuOzet.basarili >= 0 ? '+' : ''}${sonKosuOzet.basarili - oncekiKosuOzet.basarili}, ` +
       `Başarısız ${sonKosuOzet.basarisiz - oncekiKosuOzet.basarisiz >= 0 ? '+' : ''}${sonKosuOzet.basarisiz - oncekiKosuOzet.basarisiz}`,
     ''
   );
@@ -496,25 +747,44 @@ const tumSenaryolarHam = await tumSenaryolariGetir(ortam).catch((hata) => {
   );
   return [];
 });
+// Koşu listesi (tests/data/kosu-listesi.json): her senaryo için "dahil" bayrağı —
+// "Senaryolar" tablosundaki "Koşuda" anahtarları ve "Koşuyu başlat" bunu kullanır.
+// Dosya bozuksa rapor durmaz, tüm senaryolar dahil görünür (uyarı yazılır).
+let haricTutulanAnahtarlar = new Set();
+try {
+  haricTutulanAnahtarlar = new Set(haricTutulanlariOku());
+} catch (hata) {
+  console.warn(`[urun-hata-raporu] tests/data/kosu-listesi.json okunamadı, tüm senaryolar koşuya dahil gösterilecek: ${hata.message}`);
+}
 const tumSenaryolar = tumSenaryolarHam
-  .map((s) => ({ ad: s.ad, urun: s.urun }))
+  .map((s) => ({ ad: s.ad, urun: s.urun, dosya: s.dosya, dahil: !haricTutulanAnahtarlar.has(kosuListesiAnahtari(s.dosya, s.ad)) }))
   .sort((a, b) => a.urun.localeCompare(b.urun, 'tr') || a.ad.localeCompare(b.ad, 'tr'));
+
+// Ürün listesi yalnızca koşu sonuçlarından değil, projede tanımlı senaryolardan da
+// beslenir — böylece hiç koşulmamış (veya sonuç klasörü boş olan) ürünler de
+// kenar çubuğunda görünür.
+const tumUrunler = [...new Set([...urunler, ...tumSenaryolar.map((s) => s.urun)])].sort((a, b) =>
+  a.localeCompare(b, 'tr')
+);
 
 const veri = {
   ortam,
   tumSenaryolar,
-  uretimZamani: new Date().toLocaleString('tr-TR'),
-  sonKosuEtiket: sonKosu.etiket,
-  urunler,
+  uretimZamani: new Date(uretimBaslangicMs).toLocaleString('tr-TR'),
+  // Sayısal üretim anı (bkz. uretimBaslangicMs) — istemci, localStorage'daki bundan eski
+  // dashboard koşularını atar (zaten bu rapordaki Allure sonuçlarında yer alıyorlar).
+  uretimMs: uretimBaslangicMs,
+  sonKosuEtiket: sonKosuEtiketi,
+  urunler: tumUrunler,
   // Sabit kategori sırası — istemci tarafında kategori-renk eşlemesi bu sıraya göre yapılır.
-  kategoriler: [...KATEGORILER.map((k) => k.ad), 'Diğer / Sınıflandırılamadı'],
+  kategoriler: [...KATEGORILER.map((k) => k.ad), KATEGORI.diger],
   kayitlar: tumKayitlar,
   // GENEL veya ürün seçimine göre üst istatistik kartları ve trend grafiğinin
   // kaynağı — hem toplam hem ürün bazlı kırılım burada.
-  sonKosu: { etiket: sonKosu.etiket, genel: { basarili: sonKosuOzet.basarili, basarisiz: sonKosuOzet.basarisiz, atlanan: sonKosuOzet.atlanan }, urunler: sonKosuOzet.urunToplamlari },
-  oncekiKosu: oncekiKosuOzet
-    ? { etiket: oncekiKosu.etiket, genel: { basarili: oncekiKosuOzet.basarili, basarisiz: oncekiKosuOzet.basarisiz, atlanan: oncekiKosuOzet.atlanan }, urunler: oncekiKosuOzet.urunToplamlari }
-    : null,
+  // Üst kartların kaynağı (bkz. yukarıdaki "Üst kartlar" açıklaması) — istemci yalnızca
+  // seçili görünüme göre birini okur: genel (null = henüz koşu yok) ya da urunler[P]
+  // ({ son, onceki } — P'yi içeren son / bir önceki koşu; ürün hiç koşulmadıysa yok).
+  kartlar: { genel: genelKart, urunler: urunKartlari },
   kosuGecmisi: tumKosuOzetleri,
   kosuDetaylari,
   adimOzeti,
@@ -526,7 +796,8 @@ const veri = {
         b: ornek.baslik,
         oz: ornek.ozellik,
         m: ornek.mesaj,
-        g: ornek.ekranGoruntusu
+        g: ornek.ekranGoruntusu,
+        v: ornek.video
       }
     ])
   )
@@ -549,7 +820,7 @@ const html = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>${ortam.toUpperCase()} Ortamı - Test Dashboard</title>
 <style>
-  .viz-root {
+  :root, .viz-root {
     color-scheme: light;
     --surface-1: #ffffff;
     --surface-2: #f3f2ee;
@@ -567,7 +838,7 @@ const html = `<!DOCTYPE html>
     --shadow: 0 1px 2px rgba(20,18,10,0.04), 0 8px 20px -12px rgba(20,18,10,0.18);
   }
   @media (prefers-color-scheme: dark) {
-    :root:where(:not([data-theme="light"])) .viz-root {
+    :root:where(:not([data-theme="light"])), :root:where(:not([data-theme="light"])) .viz-root {
       color-scheme: dark;
       --surface-1: #1c1c19; --surface-2: #222220; --page-plane: #131311; --text-primary: #f5f4ef;
       --text-secondary: #c3c2b7; --text-muted: #918f83; --gridline: #2f2f2b;
@@ -576,7 +847,7 @@ const html = `<!DOCTYPE html>
       --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.55);
     }
   }
-  :root[data-theme="dark"] .viz-root {
+  :root[data-theme="dark"], :root[data-theme="dark"] .viz-root {
     color-scheme: dark;
     --surface-1: #1c1c19; --surface-2: #222220; --page-plane: #131311; --text-primary: #f5f4ef;
     --text-secondary: #c3c2b7; --text-muted: #918f83; --gridline: #2f2f2b;
@@ -633,6 +904,7 @@ const html = `<!DOCTYPE html>
   .donut-satir { display: flex; align-items: center; gap: 16px; }
   .donut-sarma { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
   .donut-halka { width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(var(--good) calc(var(--oran) * 1%), var(--critical) 0); }
+  .donut-halka.bos { background: var(--gridline); }
   .donut-oyuk {
     position: absolute; inset: 9px; border-radius: 50%; background: var(--surface-2);
     display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700;
@@ -697,7 +969,7 @@ const html = `<!DOCTYPE html>
      eklenir, böylece kartlar/tablolar da orantılı biçimde genişler. */
   .kenar-kapali .icerik { max-width: 2412px; }
   .ikiz-izgara {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(620px, 1fr)); gap: 22px; align-items: start;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(620px, 100%), 1fr)); gap: 22px; align-items: start;
   }
   .ikiz-izgara > section { min-width: 0; }
   /* "Ürün bazlı özet" ve "Koşu geçmişi" yan yana: ikisinin kart yüksekliği eşit olsun
@@ -716,9 +988,13 @@ const html = `<!DOCTYPE html>
   #ikinciBolumAlani { display: flex; flex-direction: column; flex: 1; min-height: 0; }
   /* Hata kalıpları gibi tek panelli bölümler için: geniş ekranda %50 genişlik,
      diğer yarı ileride ikinci bir panel eklenebilsin diye bilinçli olarak boş bırakılır. */
-  .yari-izgara { display: grid; grid-template-columns: 1fr; gap: 22px; }
+  /* İki bölüm, her biri en az ~560px'e sığabiliyorsa yan yana; değilse alt alta
+     (ekran genişliğine değil, içeriğin gerçekten kullanabildiği alana göre). */
+  .yari-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(560px, 100%), 1fr)); gap: 22px; }
   .yari-izgara > section { min-width: 0; margin-bottom: 0; }
-  @media (min-width: 1000px) { .yari-izgara { grid-template-columns: 1fr 1fr; } }
+  /* Bölümler kendi genişliklerine göre sıkışabilsin diye "container" olarak işaretlenir
+     (bkz. aşağıdaki @container kuralları). */
+  .ikiz-izgara > section, .yari-izgara > section { container-type: inline-size; }
   .ust-baslik { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 22px; }
   h1 { font-size: 21px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   .alt-baslik { color: var(--text-secondary); font-size: 13.5px; margin-top: 4px; }
@@ -844,6 +1120,8 @@ const html = `<!DOCTYPE html>
   }
   .senaryo-form-buton-satir button.birincil { background: var(--accent); border-color: var(--accent); color: #fff; }
   .senaryo-form-buton-satir button:hover { opacity: 0.88; }
+  .toplu-onay-canli { color: var(--critical); font-weight: 700; }
+  .toplu-onay-not { color: var(--text-secondary); font-size: 12.5px; }
   .senaryo-form-buton-satir button:disabled { opacity: 0.5; cursor: default; }
   .senaryo-form-alt-blok.gizli, .senaryo-form-alan.gizli { display: none; }
 
@@ -873,14 +1151,51 @@ const html = `<!DOCTYPE html>
     font-variant-numeric: tabular-nums; font-weight: 800; min-width: 30px; text-align: center;
     background: color-mix(in srgb, var(--critical) 14%, transparent); color: var(--critical); border-radius: 7px; padding: 3px 8px; font-size: 12.5px;
   }
-  .hata-kalip { font-weight: 600; flex: 1; min-width: 220px; }
+  .hata-kalip { font-weight: 600; flex: 1; min-width: 0; overflow-wrap: anywhere; }
   .hata-govde { padding: 0 16px 16px 39px; border-top: 1px solid var(--gridline); }
   .hata-mesaj {
-    white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--border);
+    white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; max-width: 100%; background: var(--surface-2); border: 1px solid var(--border);
     border-radius: 9px; padding: 11px 13px; font-size: 12.5px; color: var(--text-secondary); margin: 12px 0;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   }
   .hata-goruntu { max-width: 100%; border-radius: 9px; border: 1px solid var(--border); display: block; cursor: zoom-in; }
+  /* Koşu videosu artık sayfaya gömülmez; yeni sekmede açılan küçük bir bağlantıdır. */
+  .video-baglanti { display: inline-flex; align-items: center; gap: 4px; margin-top: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent); text-decoration: none; }
+  .video-baglanti:hover { text-decoration: underline; }
+  .rozet-tekil { margin-left: 6px; padding: 1px 7px; font-size: 10.5px; vertical-align: middle; }
+  .rozet-kapsam { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+
+  /* Üst kartların kaynağını açıklayan satır ("Her ürünün son koşusu" / "Son koşu: ...") */
+  .stat-kaynak { margin: -18px 0 26px; font-size: 12.5px; color: var(--text-muted); }
+  .stat-value-bos { color: var(--text-muted); }
+
+  /* "Senaryolar" > "Koşuda" anahtarı (koşu listesi) */
+  .senaryo-tablosu-kosuda-hucre { width: 64px; text-align: center; }
+  .kosuda-anahtar { position: relative; display: inline-block; width: 32px; height: 18px; vertical-align: middle; }
+  .kosuda-anahtar input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
+  .kosuda-anahtar-iz {
+    position: absolute; inset: 0; border-radius: 999px; background: var(--gridline); border: 1px solid var(--border);
+    transition: background .15s ease;
+  }
+  .kosuda-anahtar-iz::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--surface-1); box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s ease;
+  }
+  .kosuda-anahtar input:checked + .kosuda-anahtar-iz { background: var(--good); border-color: var(--good); }
+  .kosuda-anahtar input:checked + .kosuda-anahtar-iz::after { transform: translateX(14px); }
+  .kosuda-anahtar input:focus-visible + .kosuda-anahtar-iz { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .kosuda-anahtar input:disabled { cursor: progress; }
+  .kosuda-anahtar input:disabled + .kosuda-anahtar-iz { opacity: .6; }
+  tr.senaryo-satir-haric td.senaryo-tablosu-urun,
+  tr.senaryo-satir-haric td.senaryo-tablosu-ad { opacity: .45; }
+  .kosuda-sayaci { font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
+  .kosu-listesi-bildirim {
+    position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 70; max-width: min(560px, calc(100vw - 32px));
+    padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 600; box-shadow: var(--shadow);
+    background: var(--surface-1); border: 1px solid var(--critical); color: var(--critical);
+  }
+  .kosu-listesi-bildirim.basarili { border-color: var(--good); color: var(--good); }
+  .kosuya-dahil-soru { margin: 12px 0 6px; font-weight: 700; font-size: 12.5px; }
   .senaryo-sonuc-video { max-width: 100%; border-radius: 9px; border: 1px solid var(--border); display: block; background: #000; }
   .hata-ornek-etiket { font-size: 12px; color: var(--text-muted); margin-top: 12px; margin-bottom: 2px; }
   .olasi-neden {
@@ -890,7 +1205,8 @@ const html = `<!DOCTYPE html>
   .olasi-neden b { color: var(--accent); }
 
   /* Hata kalıpları paneli: kategori donut + liste yan yana */
-  .hata-panel { display: grid; grid-template-columns: 250px 1fr; gap: 18px; align-items: start; }
+  .hata-panel { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+  .hata-panel > * { min-width: 0; }
   .kategori-kart {
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow);
     padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; position: sticky; top: 16px;
@@ -912,6 +1228,26 @@ const html = `<!DOCTYPE html>
   @media (max-width: 860px) {
     .hata-panel { grid-template-columns: 1fr; }
     .kategori-kart { position: static; }
+  }
+  /* Hata kalıpları bölümü daraldığında donut ve liste alt alta dizilir. */
+  @container (max-width: 700px) {
+    .hata-panel { grid-template-columns: 1fr; }
+    .kategori-kart { position: static; }
+    .hata-govde { padding-left: 16px; }
+  }
+  /* Tablolar dar bir bölümdeyken sıkışık görünüme geçer: daha az boşluk, küçük başlık,
+     kısa oran çubuğu — 8 sütunlu koşu geçmişi de yatay kaydırma olmadan sığar. */
+  @container (max-width: 900px) {
+    th, td { padding: 9px 8px; font-size: 12.5px; }
+    th { font-size: 10px; letter-spacing: 0; }
+    .oran-bar { width: 40px; }
+    .oran-hucre { gap: 6px; }
+  }
+  @container (max-width: 720px) {
+    th, td { padding: 8px 6px; font-size: 12px; }
+    /* Uzun başlıklar ("BAŞARI ORANI", "DURDURULDU") iki satıra inebilir. */
+    th.siralanabilir { white-space: normal; }
+    .oran-bar { display: none; }
   }
 
   @media (max-width: 860px) {
@@ -1035,7 +1371,7 @@ const html = `<!DOCTYPE html>
   }
   .senaryo-toplu-durum .senaryo-durdur-buton { margin-left: auto; }
 
-  /* "Canlı koşu paneli": toplu koşu (Tüm senaryoları koş / Seçilenleri çalıştır) başlayınca
+  /* "Canlı koşu paneli": toplu koşu (Koşuyu başlat / Seçilenleri çalıştır) başlayınca
      açılan, her senaryonun anlık durumunu listeleyen ve bittiğinde tıklanınca video/ekran
      görüntüsü gösteren panel. */
   /* Kosu paneli kapatilinca (X veya disariya tiklayinca) hala calisan/son biten bir
@@ -1131,16 +1467,17 @@ const html = `<!DOCTYPE html>
     <div class="donut-kart kenar-daralinca-gizli">
       <div class="donut-satir">
         <div class="donut-sarma">
-          <div class="donut-halka" style="--oran:${sonKosuOran}"></div>
-          <div class="donut-oyuk">%${sonKosuOran}</div>
+          <div class="donut-halka${sonKosuToplam === 0 ? ' bos' : ''}" style="--oran:${sonKosuOran}"></div>
+          <div class="donut-oyuk">${sonKosuToplam === 0 ? '—' : '%' + sonKosuOran}</div>
         </div>
         <div class="donut-detay">
           <div><span class="nokta nokta-iyi"></span>Başarılı ${sonKosuOzet.basarili}</div>
           <div><span class="nokta nokta-kotu"></span>Başarısız ${sonKosuOzet.basarisiz}</div>
           <div><span class="nokta nokta-notr"></span>Atlanan ${sonKosuOzet.atlanan}</div>
+          ${sonKosuOzet.durduruldu ? `<div><span class="nokta nokta-notr"></span>Durduruldu ${sonKosuOzet.durduruldu}</div>` : ''}
         </div>
       </div>
-      <div class="donut-etiket">Son koşu: ${escapeHtml(veri.sonKosuEtiket)}</div>
+      <div class="donut-etiket">Güncel durum: ${escapeHtml(veri.sonKosuEtiket)}</div>
     </div>
 
     <div class="kenar-daralinca-gizli kenar-urun-blok">
@@ -1166,6 +1503,7 @@ const html = `<!DOCTYPE html>
     </div>
 
     <div class="stat-grid" id="statGrid"></div>
+    <p class="stat-kaynak" id="statKaynak"></p>
 
     <div class="ikiz-izgara">
       <section>
@@ -1219,6 +1557,7 @@ const html = `<!DOCTYPE html>
                 <th class="num siralanabilir" data-tablo="kosuGecmisi" data-anahtar="basarili" data-tur="sayi">Başarılı<span class="siralama-ok"></span></th>
                 <th class="num siralanabilir" data-tablo="kosuGecmisi" data-anahtar="basarisiz" data-tur="sayi">Başarısız<span class="siralama-ok"></span></th>
                 <th class="num siralanabilir" data-tablo="kosuGecmisi" data-anahtar="atlanan" data-tur="sayi">Atlanan<span class="siralama-ok"></span></th>
+                <th class="num siralanabilir" data-tablo="kosuGecmisi" data-anahtar="durduruldu" data-tur="sayi">Durduruldu<span class="siralama-ok"></span></th>
                 <th class="num siralanabilir" data-tablo="kosuGecmisi" data-anahtar="oran" data-tur="sayi">Başarı oranı<span class="siralama-ok"></span></th>
               </tr>
             </thead>
@@ -1255,12 +1594,15 @@ const html = `<!DOCTYPE html>
       </section>
       <section>
         <div class="bolum-baslik-satir"><h2 id="senaryoTablosuBasligi">Senaryolar</h2><span class="bolum-baslik-sayi" id="senaryoTablosuBaslikSayisi"></span></div>
-        <p class="bolum-alt">Soldaki ürün listesinden birini seçtiğinizde sadece o ürünün senaryoları listelenir — ▷ ikonuna basarak doğrudan buradan çalıştırabilirsiniz. Çalışması için bir terminalde "npm run test-sunucu" açık olmalıdır.</p>
+        <p class="bolum-alt">Soldaki ürün listesinden birini seçtiğinizde sadece o ürünün senaryoları listelenir — ▷ ikonuna basarak doğrudan buradan çalıştırabilirsiniz. "Koşuda" anahtarı senaryonun koşuya (Koşuyu başlat, npm run test) dahil olup olmadığını belirler; hariç senaryolar soluk görünür ama ▷ ile yine çalıştırılabilir. Çalışması için bir terminalde "npm run test-sunucu" açık olmalıdır.</p>
         <div class="tarih-filtre">
           <label>Ara <input type="text" id="senaryoTablosuArama" placeholder="Senaryo veya ürün adı..." /></label>
           <span class="secim-ozeti" id="senaryoTablosuSecimOzeti"></span>
-          <button type="button" class="senaryo-toplu-buton" id="senaryoTumunuCalistirButonu">▷ Tüm senaryoları koş</button>
+          <span class="kosuda-sayaci" id="senaryoKosudaSayaci" title="Görünen senaryolardan kaçı koşu listesinde (tests/data/kosu-listesi.json)"></span>
+          <button type="button" class="senaryo-toplu-buton" id="senaryoTumunuCalistirButonu" title="Bu görünümdeki, koşuya dahil senaryoları sırayla koşar">▷ Koşuyu başlat</button>
           <button type="button" class="senaryo-toplu-buton senaryo-toplu-buton-vurgulu" id="senaryoSecilenleriCalistirButonu" style="display:none;">▷ Seçilenleri çalıştır (<span id="senaryoSecilenSayisi">0</span>)</button>
+          <button type="button" class="senaryo-toplu-buton" id="senaryoKosuyaEkleButonu" style="display:none;">+ Koşuya ekle (<span id="senaryoKosuyaEkleSayisi">0</span>)</button>
+          <button type="button" class="senaryo-toplu-buton" id="senaryoKosudanCikarButonu" style="display:none;">− Koşudan çıkar (<span id="senaryoKosudanCikarSayisi">0</span>)</button>
         </div>
         <div class="kart">
           <table class="veri-tablosu">
@@ -1269,6 +1611,7 @@ const html = `<!DOCTYPE html>
                 <th class="senaryo-tablosu-secim-hucre"><input type="checkbox" id="senaryoTumunuSecCheckbox" title="Görünen tüm senaryoları seç/kaldır" aria-label="Görünen tüm senaryoları seç/kaldır" /></th>
                 <th>Ürün</th>
                 <th>Senaryo</th>
+                <th class="senaryo-tablosu-kosuda-hucre" title="Koşuya dahil mi? (Koşuyu başlat ve npm run test yalnızca dahil senaryoları koşar)">Koşuda</th>
                 <th class="num">Çalıştır</th>
               </tr>
             </thead>
@@ -1284,28 +1627,28 @@ const html = `<!DOCTYPE html>
 
   <div class="modal-ortu" id="adimDetayModalOrtu">
     <div class="modal-kutu">
-      <button type="button" class="modal-kapat" id="adimDetayModalKapatButonu">×</button>
+      <button type="button" class="modal-kapat" id="adimDetayModalKapatButonu" aria-label="Kapat">×</button>
       <div id="adimDetayModalIcerik"></div>
     </div>
   </div>
 
   <div class="modal-ortu gorsel-buyutme-ortu" id="gorselBuyutmeOrtu">
     <div class="gorsel-buyutme-kutu">
-      <button type="button" class="modal-kapat" id="gorselBuyutmeKapatButonu">×</button>
+      <button type="button" class="modal-kapat" id="gorselBuyutmeKapatButonu" aria-label="Kapat">×</button>
       <img id="gorselBuyutmeResim" src="" alt="Büyütülmüş ekran görüntüsü" />
     </div>
   </div>
 
   <div class="modal-ortu" id="senaryoSonucModalOrtu">
     <div class="modal-kutu">
-      <button type="button" class="modal-kapat" id="senaryoSonucModalKapatButonu">×</button>
+      <button type="button" class="modal-kapat" id="senaryoSonucModalKapatButonu" aria-label="Kapat">×</button>
       <div id="senaryoSonucModalIcerik"></div>
     </div>
   </div>
 
   <div class="modal-ortu" id="senaryoCanliPanelOrtu">
     <div class="modal-kutu genis">
-      <button type="button" class="modal-kapat" id="senaryoCanliPanelKapatButonu">×</button>
+      <button type="button" class="modal-kapat" id="senaryoCanliPanelKapatButonu" aria-label="Kapat">×</button>
       <div class="canli-panel-baslik-satir">
         <div>
           <p class="modal-baslik" id="senaryoCanliPanelBaslik">Senaryolar çalışıyor...</p>
@@ -1319,12 +1662,26 @@ const html = `<!DOCTYPE html>
     </div>
   </div>
 
+  <div class="modal-ortu" id="topluKosuOnayOrtu">
+    <div class="modal-kutu" role="dialog" aria-modal="true" aria-labelledby="topluKosuOnayBaslik">
+      <button type="button" class="modal-kapat" id="topluKosuOnayKapatButonu" aria-label="Kapat">×</button>
+      <p class="modal-baslik" id="topluKosuOnayBaslik">Toplu koşuyu başlat?</p>
+      <p id="topluKosuOnayMetni"></p>
+      <div class="senaryo-form-buton-satir">
+        <button type="button" id="topluKosuOnayIptal">Vazgeç</button>
+        <button type="button" class="birincil" id="topluKosuOnayBaslat">▷ Başlat</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-ortu" id="senaryoOlusturModalOrtu">
     <div class="modal-kutu genis">
-      <button type="button" class="modal-kapat" id="senaryoOlusturModalKapatButonu">×</button>
+      <button type="button" class="modal-kapat" id="senaryoOlusturModalKapatButonu" aria-label="Kapat">×</button>
       <div id="senaryoOlusturModalIcerik"></div>
     </div>
   </div>
+
+  <div id="kosuListesiBildirim" class="kosu-listesi-bildirim" role="status" aria-live="polite" hidden></div>
 
   <div id="canliPanelKucukRozet" class="canli-panel-kucuk-rozet" role="button" tabindex="0" title="Koşu panelini yeniden aç" style="display:none;">
     <span class="senaryo-spinner" id="canliPanelKucukRozetSpinner" style="width:12px;height:12px;border-width:2px;"></span>
@@ -1343,11 +1700,22 @@ const html = `<!DOCTYPE html>
   // "Adım bazlı başarı" tablosunda o an açık olan ürünün adım listesi (satır tıklama
   // olay dinleyicilerinin büyük veriyi DOM'a yazmadan erişmesi için).
   var AKTIF_ADIM_LISTESI = [];
+  // "Adım bazlı başarı" tablosunda açık olan satırın adı — tablo yeniden çizildiğinde
+  // (ör. bir koşu bitince) satır kapanmasın diye tutulur; ürün değişince null olur.
+  var ACIK_ADIM_ADI = null;
 
   function escapeHtml(metin) {
     return String(metin).replace(/[&<>"']/g, function (k) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[k];
     });
+  }
+
+  // "▶ Videoyu izle" bağlantısı (yeni sekmede açılır). yol: rapordaki göreli dosya yolu
+  // (allure-results-<ortam>/...webm) ya da canlı koşuda test sunucusunun /medya URL'si.
+  // Video yoksa (hiç kaydedilmemiş ya da saklama süresi dolup silinmiş) boş döner.
+  function videoBaglantisiHtml(yol) {
+    if (!yol) return '';
+    return '<div><a class="video-baglanti" href="' + escapeHtml(yol) + '" target="_blank" rel="noopener">▶ Videoyu izle</a></div>';
   }
 
   // Ham (teknik) hata mesajını okuyup, tanınan kalıplardan biriyle eşleşiyorsa sade bir
@@ -1412,9 +1780,10 @@ const html = `<!DOCTYPE html>
   }
 
   // Ürün başına tüm-zamanlar başarısız sayısı (yan panel rozetleri için).
+  // "Durduruldu" (kullanıcı durdurdu) kayıtlar başarısız SAYILMAZ.
   var urunBasarisizSayilari = {};
   VERI.kayitlar.forEach(function (k) {
-    if (k.d !== 'basarili' && k.d !== 'atlanan') {
+    if (k.d === 'basarisiz') {
       urunBasarisizSayilari[k.u] = (urunBasarisizSayilari[k.u] || 0) + 1;
     }
   });
@@ -1463,13 +1832,24 @@ const html = `<!DOCTYPE html>
     Array.prototype.forEach.call(alan.querySelectorAll('.urun-oge'), function (dugme) {
       dugme.addEventListener('click', function () {
         var deger = dugme.getAttribute('data-urun');
-        secilenUrun = deger === '__genel__' ? GENEL : deger;
+        var yeniUrun = deger === '__genel__' ? GENEL : deger;
+        // Ürün değişince "Senaryolar" tablosundaki seçim temizlenir — gizlenen ürünün
+        // seçili senaryoları sonradan "Seçilenleri çalıştır" ile fark edilmeden koşmasın.
+        if (yeniUrun !== secilenUrun) SENARYO_TABLOSU_SECILI.clear();
+        secilenUrun = yeniUrun;
         // Ürün değişince "Senaryolar" listesi baştan değişir, bu yüzden sayfa 1'e
         // dönülür — ama secimGuncellendi() BAŞKA yerlerden de (ör. tek bir senaryo
         // koşusu bitince) çağrıldığından bu satır kasıtlı olarak SADECE burada, gerçek
         // ürün değişiminde duruyor; secimGuncellendi()'nin içine KONMADI — yoksa bir
         // koşu bitip listeyi tazelediğinde kullanıcı sayfa 3'teyken sayfa 1'e atılırdı.
         senaryoTablosuSayfa = 1;
+        // Aynı gerekçeyle "Koşu geçmişi" / "Hata kalıpları" sayfaları ve açık adım
+        // satırı da YALNIZCA burada (ürün değişince) sıfırlanır; koşu bitince çağrılan
+        // secimGuncellendi() mevcut sayfayı korur (sayfa artık yoksa çizim sırasında
+        // son sayfaya sıkıştırılır — bkz. kosuGecmisiniGuncelle/tabloyuGuncelle).
+        kosuGecmisiSayfa = 1;
+        kalipSayfa = 1;
+        ACIK_ADIM_ADI = null;
         secimGuncellendi();
       });
     });
@@ -1617,15 +1997,13 @@ const html = `<!DOCTYPE html>
     if (!govde || !ozetAlani) return; // İkinci bölüm şu an adım tablosunu gösteriyorsa bu elemanlar yok.
     var aralik = secilenTarihAraligi('baslangicTarihiUrun', 'bitisTarihiUrun');
 
-    var urunToplamlari = {}; // urun -> { basarili, basarisiz, atlanan }
+    var urunToplamlari = {}; // urun -> { basarili, basarisiz, atlanan, durduruldu }
     var toplamKayit = 0;
     VERI.kayitlar.forEach(function (k) {
       if (k.z < aralik.baslangicMs || k.z > aralik.bitisMs) return;
       toplamKayit++;
-      if (!urunToplamlari[k.u]) urunToplamlari[k.u] = { basarili: 0, basarisiz: 0, atlanan: 0 };
-      if (k.d === 'basarili') urunToplamlari[k.u].basarili++;
-      else if (k.d === 'atlanan') urunToplamlari[k.u].atlanan++;
-      else urunToplamlari[k.u].basarisiz++;
+      if (!urunToplamlari[k.u]) urunToplamlari[k.u] = { basarili: 0, basarisiz: 0, atlanan: 0, durduruldu: 0 };
+      if (urunToplamlari[k.u][k.d] !== undefined) urunToplamlari[k.u][k.d]++;
     });
 
     ozetAlani.textContent = toplamKayit + ' test kaydı';
@@ -1635,7 +2013,7 @@ const html = `<!DOCTYPE html>
       var s = urunToplamlari[urun];
       var toplam = s.basarili + s.basarisiz + s.atlanan;
       var oran = toplam > 0 ? Math.round((s.basarili / toplam) * 100) : 0;
-      return { urun: urun, basarili: s.basarili, basarisiz: s.basarisiz, atlanan: s.atlanan, oran: oran };
+      return { urun: urun, basarili: s.basarili, basarisiz: s.basarisiz, atlanan: s.atlanan, durduruldu: s.durduruldu, oran: oran };
     });
     document.getElementById('ikinciBaslikSayisi').textContent = satirDizisi.length + ' ürün';
 
@@ -1645,13 +2023,14 @@ const html = `<!DOCTYPE html>
       basarili: function (r) { return r.basarili; },
       basarisiz: function (r) { return r.basarisiz; },
       atlanan: function (r) { return r.atlanan; },
+      durduruldu: function (r) { return r.durduruldu; },
       oran: function (r) { return r.oran; }
     };
     satirDizisi = diziyiSirala(satirDizisi, durum.anahtar, durum.yon, DEGER_FN_URUN[durum.anahtar]);
     siralamaOklariniGuncelle();
 
     if (satirDizisi.length === 0) {
-      govde.innerHTML = '<tr><td colspan="5">Seçilen tarih aralığında veri yok</td></tr>';
+      govde.innerHTML = '<tr><td colspan="6">Seçilen tarih aralığında veri yok</td></tr>';
       ozetBarGrafiginiCiz('ozetGrafikAlani', []);
       ikizTablolarinYuksekliginiEsitle();
       return;
@@ -1670,6 +2049,7 @@ const html = `<!DOCTYPE html>
           '<td class="num">' + r.basarili + '</td>' +
           '<td class="num">' + r.basarisiz + '</td>' +
           '<td class="num">' + r.atlanan + '</td>' +
+          '<td class="num">' + r.durduruldu + '</td>' +
           '<td class="num"><div class="oran-hucre"><div class="oran-bar"><div class="oran-dolum" style="width:' + r.oran + '%;background:' + barRengi + '"></div></div><span>%' + r.oran + '</span></div></td>' +
           '</tr>'
         );
@@ -1699,6 +2079,7 @@ const html = `<!DOCTYPE html>
         '<th class="num siralanabilir" data-tablo="urunOzet" data-anahtar="basarili" data-tur="sayi">Başarılı<span class="siralama-ok"></span></th>' +
         '<th class="num siralanabilir" data-tablo="urunOzet" data-anahtar="basarisiz" data-tur="sayi">Başarısız<span class="siralama-ok"></span></th>' +
         '<th class="num siralanabilir" data-tablo="urunOzet" data-anahtar="atlanan" data-tur="sayi">Atlanan<span class="siralama-ok"></span></th>' +
+        '<th class="num siralanabilir" data-tablo="urunOzet" data-anahtar="durduruldu" data-tur="sayi">Durduruldu<span class="siralama-ok"></span></th>' +
         '<th class="num siralanabilir" data-tablo="urunOzet" data-anahtar="oran" data-tur="sayi">Başarı oranı<span class="siralama-ok"></span></th>' +
         '</tr></thead>' +
         '<tbody id="urunOzetGovdesi"></tbody></table></div>';
@@ -1799,12 +2180,22 @@ const html = `<!DOCTYPE html>
         // Aynı anda sadece bir satır açık kalsın (karışıklık olmasın diye).
         Array.prototype.forEach.call(alan.querySelectorAll('.adim-satir'), function (s) { s.classList.remove('acik'); });
         Array.prototype.forEach.call(alan.querySelectorAll('.adim-detay-satir'), function (d) { d.classList.add('gizli'); });
-        if (!aciliyorMu) return; // zaten açıktı, kapatıldı — yeniden açma
+        if (!aciliyorMu) { ACIK_ADIM_ADI = null; return; } // zaten açıktı, kapatıldı — yeniden açma
         satir.classList.add('acik');
         detaySatir.classList.remove('gizli');
+        ACIK_ADIM_ADI = AKTIF_ADIM_LISTESI[i].ad;
         adimKayitListesiniCiz(detaySatir.querySelector('td'), AKTIF_ADIM_LISTESI[i]);
       });
     });
+    // Yeniden çizimden önce açık olan adım hâlâ listedeyse tekrar aç.
+    var acikIndex = ACIK_ADIM_ADI === null ? -1 : adimSatirlari.findIndex(function (a) { return a.ad === ACIK_ADIM_ADI; });
+    if (acikIndex >= 0) {
+      var acikSatir = alan.querySelector('.adim-satir[data-index="' + acikIndex + '"]');
+      var acikDetay = alan.querySelector('.adim-detay-satir[data-detay-index="' + acikIndex + '"]');
+      acikSatir.classList.add('acik');
+      acikDetay.classList.remove('gizli');
+      adimKayitListesiniCiz(acikDetay.querySelector('td'), adimSatirlari[acikIndex]);
+    }
     ikizTablolarinYuksekliginiEsitle();
   }
 
@@ -1861,8 +2252,9 @@ const html = `<!DOCTYPE html>
         govde += '<div class="olasi-neden">' + escapeHtml(olasiNeden) + '</div>';
       }
       govde += kayit.g
-        ? '<img class="hata-goruntu" src="' + kayit.g + '" alt="Adım hata anı ekran görüntüsü" />'
+        ? '<img class="hata-goruntu" src="' + escapeHtml(kayit.g) + '" alt="Adım hata anı ekran görüntüsü" />'
         : '<div class="bos-durum">Bu kayıt için ekran görüntüsü bulunamadı.</div>';
+      govde += videoBaglantisiHtml(kayit.v);
     }
 
     icerikAlani.innerHTML = govde;
@@ -1976,13 +2368,13 @@ const html = `<!DOCTYPE html>
         govde += '<div class="bos-durum">Bu koşuda ' + escapeHtml(KOSU_DETAY.urun) + ' için senaryo çalıştırılmamış.</div>';
       } else {
         govde += '<div class="kosu-detay-liste">' + urunSenaryolari.map(function (s, i) {
-          var rozetSinif = s.durum === 'basarisiz' ? 'rozet-kritik' : s.durum === 'atlanan' ? 'rozet-notr' : 'rozet-iyi';
-          var rozetMetin = s.durum === 'basarisiz' ? 'Başarısız' : s.durum === 'atlanan' ? 'Atlandı' : 'Başarılı';
+          var rozetSinif = s.durum === 'basarisiz' ? 'rozet-kritik' : s.durum === 'atlanan' || s.durum === 'durduruldu' ? 'rozet-notr' : 'rozet-iyi';
+          var rozetMetin = s.durum === 'basarisiz' ? 'Başarısız' : s.durum === 'atlanan' ? 'Atlandı' : s.durum === 'durduruldu' ? 'Durduruldu' : 'Başarılı';
+          // ▷ / (çalışıyorsa) spinner + Durdur — "Senaryolar" tablosuyla AYNI global
+          // çalışma durumundan (CALISAN_SENARYOLAR) çizilir; bkz. kosuDetayBaslatHtml.
           return (
             '<div class="kosu-detay-oge" data-senaryo-index="' + i + '">' +
-            '<button type="button" class="senaryo-baslat-buton" data-senaryo-baslat data-senaryo-ad="' + escapeHtml(s.ad) + '" title="Bu senaryoyu şimdi çalıştır" aria-label="Bu senaryoyu şimdi çalıştır">' +
-            '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z"></path></svg>' +
-            '</button>' +
+            kosuDetayBaslatHtml(kosuDetaySenaryoAnahtari(s.ad, KOSU_DETAY.urun)) +
             '<span class="kosu-detay-oge-ad">' + escapeHtml(s.ad) + '</span>' +
             '<span class="rozet ' + rozetSinif + '">' + rozetMetin + '</span>' +
             '</div>'
@@ -1992,7 +2384,7 @@ const html = `<!DOCTYPE html>
       icerikAlani.innerHTML = govde;
       Array.prototype.forEach.call(icerikAlani.querySelectorAll('.kosu-detay-oge'), function (oge) {
         oge.addEventListener('click', function (olay) {
-          if (olay.target.closest('[data-senaryo-baslat]')) return;
+          if (olay.target.closest('[data-senaryo-baslat]') || olay.target.closest('[data-senaryo-durdur]')) return;
           KOSU_DETAY.senaryoIndex = Number(oge.getAttribute('data-senaryo-index'));
           kosuDetayCiz();
         });
@@ -2000,7 +2392,7 @@ const html = `<!DOCTYPE html>
       Array.prototype.forEach.call(icerikAlani.querySelectorAll('[data-senaryo-baslat]'), function (buton) {
         buton.addEventListener('click', function (olay) {
           olay.stopPropagation();
-          senaryoBaslat(buton.getAttribute('data-senaryo-ad'), buton);
+          senaryoBaslat(buton.getAttribute('data-senaryo-anahtar'), buton);
         });
       });
     } else {
@@ -2032,8 +2424,9 @@ const html = `<!DOCTYPE html>
               : '<div class="bos-durum">Bu adım için hata mesajı bulunamadı.</div>';
             if (olasiNeden) parca += '<div class="olasi-neden">' + escapeHtml(olasiNeden) + '</div>';
             parca += a.g
-              ? '<img class="hata-goruntu" src="' + a.g + '" alt="Adım hata anı ekran görüntüsü" />'
+              ? '<img class="hata-goruntu" src="' + escapeHtml(a.g) + '" alt="Adım hata anı ekran görüntüsü" />'
               : '';
+            parca += videoBaglantisiHtml(a.v);
           }
           parca += '</div>';
           parca += '</div>';
@@ -2076,19 +2469,49 @@ const html = `<!DOCTYPE html>
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
   }
 
-  function senaryoCalistirIstegiGonder(senaryoAdi, kosuId) {
+  // Aynı başlık birden fazla ürün dosyasında bulunabildiği için "Senaryolar" tablosu
+  // senaryoları "dosya::ad" anahtarıyla tanır. Anahtarsız (yalnızca ad) çağrılar da
+  // desteklenir; o durumda dosya gönderilmez ve sunucu adın tek dosyada olduğunu doğrular.
+  var SENARYO_ANAHTAR_AYRACI = '::';
+  function senaryoAnahtari(s) {
+    return s.dosya ? s.dosya + SENARYO_ANAHTAR_AYRACI + s.ad : s.ad;
+  }
+  function senaryoAnahtarCoz(anahtar) {
+    var i = anahtar.indexOf(SENARYO_ANAHTAR_AYRACI);
+    var bilinen = i > 0 && (VERI.tumSenaryolar || []).some(function (s) { return s.dosya === anahtar.slice(0, i); });
+    return bilinen
+      ? { dosya: anahtar.slice(0, i), ad: anahtar.slice(i + SENARYO_ANAHTAR_AYRACI.length) }
+      : { dosya: null, ad: anahtar };
+  }
+
+  // Sunucu tek bir koşuyu en fazla ~10 dk sonra kendisi durdurur (süre limiti). Bu
+  // istemci tarafı sınır yalnızca sunucu hiç yanıt vermezse (takılma, bağlantı kopması)
+  // satırın sonsuza kadar "çalışıyor" kalmaması için son güvencedir; sıra bekleme süresini
+  // de kapsayacak kadar uzun tutulur.
+  var SENARYO_ISTEK_ZAMAN_ASIMI_MS = 90 * 60 * 1000;
+
+  function senaryoCalistirIstegiGonder(senaryoAnahtarVeyaAdi, kosuId, ekAlanlar) {
+    var senaryo = senaryoAnahtarCoz(senaryoAnahtarVeyaAdi);
+    var iptalDenetleyici = typeof AbortController === 'function' ? new AbortController() : null;
+    var zamanlayici = iptalDenetleyici ? setTimeout(function () { iptalDenetleyici.abort(); }, SENARYO_ISTEK_ZAMAN_ASIMI_MS) : null;
     return fetch(TEST_SUNUCU.taban + '/calistir', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ortam: ORTAM, senaryoAdi: senaryoAdi, kosuId: kosuId, token: TEST_SUNUCU.token })
+      body: JSON.stringify(Object.assign({ ortam: ORTAM, senaryoAdi: senaryo.ad, dosya: senaryo.dosya, kosuId: kosuId, token: TEST_SUNUCU.token }, ekAlanlar || {})),
+      signal: iptalDenetleyici ? iptalDenetleyici.signal : undefined
     })
       .then(function (yanit) { return yanit.json(); })
-      .catch(function () {
+      .catch(function (hata) {
+        if (hata && hata.name === 'AbortError') {
+          senaryoDurdurIstegiGonder(kosuId);
+          return { basarili: false, mesaj: 'Test sunucusundan uzun süre yanıt alınamadı; koşu durduruldu.' };
+        }
         return {
           basarili: false,
           mesaj: 'Test sunucusuna ulaşılamadı. Bir terminalde "npm run test-sunucu" çalıştırıp tekrar deneyin.'
         };
-      });
+      })
+      .finally(function () { if (zamanlayici) clearTimeout(zamanlayici); });
   }
 
   // Sunucuda o an çalışan bir koşuyu (aynı senaryoAdi ile) durdurmasını ister.
@@ -2133,61 +2556,42 @@ const html = `<!DOCTYPE html>
     });
   }
 
-  function senaryoUrunuBul(senaryoAdi) {
-    var eslesme = (VERI.tumSenaryolar || []).find(function (s) { return s.ad === senaryoAdi; });
+  // senaryoAnahtarVeyaAdi: "dosya::ad" anahtarı (tercih edilen — aynı başlık birden
+  // fazla ürün dosyasında olabildiği için doğru ürünü bulur) ya da yalnızca ad (eski
+  // localStorage kayıtları / anahtarı bilinmeyen çağrılar — ada göre ilk eşleşme).
+  function senaryoUrunuBul(senaryoAnahtarVeyaAdi) {
+    var cozulen = senaryoAnahtarCoz(senaryoAnahtarVeyaAdi);
+    var eslesme = (VERI.tumSenaryolar || []).find(function (s) {
+      return s.ad === cozulen.ad && (!cozulen.dosya || s.dosya === cozulen.dosya);
+    });
     return eslesme ? eslesme.urun : 'Diğer';
   }
 
   // Dashboard'dan (▷ ikonuyla) tetiklenen tekil bir senaryo koşusu bittiğinde, raporu
-  // yeniden üretmeden/sayfayı yeniden açmadan "Koşu geçmişi" tablosuna ve trend
-  // grafiğine ANINDA yansısın diye VERI'ye sentetik bir "koşu" kaydı ekler. Bu kayıt
-  // TEK bir senaryoyu temsil eder (toplam=1); gerçek bir toplu koşu değildir — bu
-  // yüzden üst özet kartlarını (VERI.sonKosu/oncekiKosu) KASITLI OLARAK ETKİLEMEZ,
-  // sadece "Koşu geçmişi" tablosu ve trend grafiği (ikisi de VERI.kosuGecmisi'nden
-  // beslenir) güncellenir.
+  // yeniden üretmeden/sayfayı yeniden açmadan "Koşu geçmişi" tablosuna ANINDA yansısın
+  // diye VERI'ye sentetik bir "tekil" koşu kaydı ekler (toplam=1). Tekil kayıtlar üst
+  // özet kartlarını (VERI.kartlar — yalnızca TAM koşulardan, sunucuda hesaplanır) ve trend grafiğini
+  // (yalnızca TAM koşular) KASITLI OLARAK ETKİLEMEZ; "Koşu geçmişi"nde "tekil" rozetiyle
+  // görünür.
   //
   // NOT (kalıcılık): Bu kayıt AYRICA (varsayılan olarak, "depolaMi" false geçilmediği
   // sürece) tarayıcının localStorage'ına da yazılır — kullanıcı "Koşu geçmişi"nde
   // gördüğü bir sonucu sayfayı kapatıp/yenileyip tekrar bulamıyordu (rapor dosyası
   // statik olduğundan bir önceki "npm run rapor:*"teki veriyle yeniden yükleniyordu).
-  // Sayfa açılışında (bkz. aşağıdaki anlikKosuDepoyuYukle) bu depo okunup aynı
-  // fonksiyonla ("depolaMi=false" ile, tekrar depoya yazmadan) VERI'ye geri eklenir.
+  // Sayfa açılışında (bkz. aşağıdaki anlikKosuDepoyuYukle) bu depo okunur; raporun
+  // üretim anından (VERI.uretimMs) SONRA biten kayıtlar VERI'ye geri eklenir, öncekiler
+  // (zaten rapordaki Allure sonuçlarında yer aldıkları için) atılır.
   // Ekran görüntüsü/video KASITLI OLARAK depolanmaz (localStorage boyutu — birkaç MB —
   // hızla dolar); sadece durum/hata mesajı kalıcı olur.
-  function anlikKosuKaydiEkle(senaryoAdi, veri, depolaMi) {
-    if (!veri || !veri.basarili || !veri.durum || veri.durum === 'iptal') return;
-
-    var urun = senaryoUrunuBul(senaryoAdi);
-    var basariliMi = veri.durum === 'passed';
-    var atlandiMi = veri.durum === 'skipped';
-    var basarili = basariliMi ? 1 : 0;
-    var basarisiz = !basariliMi && !atlandiMi ? 1 : 0;
-    var atlanan = atlandiMi ? 1 : 0;
-    var simdi = Date.now();
-    var urunler = {};
-    urunler[urun] = { basarili: basarili, basarisiz: basarisiz, atlanan: atlanan };
-
-    VERI.kosuGecmisi.push({
-      etiket: kosuEtiketiClient(simdi) + ' (tekil)',
-      etiketKisa: new Date(simdi).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }),
-      z: simdi,
-      basarili: basarili,
-      basarisiz: basarisiz,
-      atlanan: atlanan,
-      urunler: urunler
-    });
-
-    var urunSenaryolari = {};
-    urunSenaryolari[urun] = [{
-      ad: senaryoAdi,
-      durum: basariliMi ? 'basarili' : atlandiMi ? 'atlanan' : 'basarisiz',
-      genelMesaj: veri.hataMesaji || '',
-      adimlar: []
-    }];
-    VERI.kosuDetaylari.push(urunSenaryolari);
+  // senaryoAnahtarVeyaAdi: "dosya::ad" anahtarı ya da yalnızca ad (bkz. senaryoUrunuBul).
+  // grup: { kimlik, tur } — birlikte başlatılan senaryoların ortak koşu kimliği. Aynı
+  // kimlikli sonuçlar "Koşu geçmişi"nde tek satırda toplanır.
+  function anlikKosuKaydiEkle(senaryoAnahtarVeyaAdi, veri, depolaMi, grup) {
+    var zamanMs = Date.now();
+    if (!anlikKosuVeriyeEkle(senaryoAnahtarVeyaAdi, veri, zamanMs, grup)) return;
 
     if (depolaMi !== false) {
-      anlikKosuDepoyaEkle(senaryoAdi, veri, simdi);
+      anlikKosuDepoyaEkle(senaryoAnahtarVeyaAdi, veri, zamanMs, grup);
     }
 
     // NOT (önemli, koşu geçmişi görünmeme kök nedeni): "Koşu geçmişi" ve "Koşu trendi"
@@ -2198,9 +2602,81 @@ const html = `<!DOCTYPE html>
     // sınırın DIŞINDA kaldığından, kayıt VERI.kosuGecmisi'ne eklenmiş olsa bile
     // filtreye takılıp hiç görünmüyordu. Çözüm: yeni kaydın zamanı, bu iki tarih
     // filtresinin bitişini aşıyorsa bitişi buna göre ileri çekiyoruz.
-    anlikKosuTarihSinirlariniGenisletGerekirse(simdi);
+    anlikKosuTarihSinirlariniGenisletGerekirse(zamanMs);
 
     secimGuncellendi();
+  }
+
+  // Kaydı yalnızca VERI'ye ekler (depolama/yeniden çizim YOK) — hem yeni biten koşu
+  // (anlikKosuKaydiEkle) hem sayfa açılışında depodan geri yükleme (anlikKosuDepoyuYukle,
+  // kaydın GERÇEK zamanıyla) bunu kullanır. Eklenmediyse (geçersiz sonuç) false döner.
+  function anlikKosuVeriyeEkle(senaryoAnahtarVeyaAdi, veri, zamanMs, grup) {
+    if (!veri || !veri.basarili || !veri.durum) return false;
+
+    var senaryoAdi = senaryoAnahtarCoz(senaryoAnahtarVeyaAdi).ad;
+    var urun = senaryoUrunuBul(senaryoAnahtarVeyaAdi);
+    var basariliMi = veri.durum === 'passed';
+    var atlandiMi = veri.durum === 'skipped';
+    // Kullanıcının "Durdur" ile kestiği koşu (sunucu durum: 'iptal') "Durduruldu"
+    // sayılır — başarısız DEĞİL. Sunucunun 10 dk süre limitiyle kestiği koşu
+    // ('timedOut') ise testin kendi sorunu olduğundan başarısız kalır.
+    var durdurulduMu = veri.durum === 'iptal';
+    var basarili = basariliMi ? 1 : 0;
+    var basarisiz = !basariliMi && !atlandiMi && !durdurulduMu ? 1 : 0;
+    var atlanan = atlandiMi ? 1 : 0;
+    var durduruldu = durdurulduMu ? 1 : 0;
+    var senaryoKaydi = {
+      ad: senaryoAdi,
+      durum: basariliMi ? 'basarili' : atlandiMi ? 'atlanan' : durdurulduMu ? 'durduruldu' : 'basarisiz',
+      genelMesaj: durdurulduMu ? '' : veri.hataMesaji || '',
+      adimlar: []
+    };
+
+    // Aynı gruptan (birlikte başlatılmış) bir satır zaten varsa sonuç ona eklenir.
+    var grupKimligi = grup && grup.kimlik;
+    var mevcutIndex = -1;
+    if (grupKimligi) {
+      for (var i = VERI.kosuGecmisi.length - 1; i >= 0; i--) {
+        if (VERI.kosuGecmisi[i].grup === grupKimligi) { mevcutIndex = i; break; }
+      }
+    }
+    if (mevcutIndex !== -1) {
+      var satir = VERI.kosuGecmisi[mevcutIndex];
+      satir.basarili += basarili;
+      satir.basarisiz += basarisiz;
+      satir.atlanan += atlanan;
+      satir.durduruldu = (satir.durduruldu || 0) + durduruldu;
+      var u = satir.urunler[urun] || (satir.urunler[urun] = { basarili: 0, basarisiz: 0, atlanan: 0, durduruldu: 0 });
+      u.basarili += basarili;
+      u.basarisiz += basarisiz;
+      u.atlanan += atlanan;
+      u.durduruldu = (u.durduruldu || 0) + durduruldu;
+      var detay = VERI.kosuDetaylari[mevcutIndex];
+      (detay[urun] || (detay[urun] = [])).push(senaryoKaydi);
+      return true;
+    }
+
+    var urunler = {};
+    urunler[urun] = { basarili: basarili, basarisiz: basarisiz, atlanan: atlanan, durduruldu: durduruldu };
+
+    VERI.kosuGecmisi.push({
+      grup: grupKimligi || null,
+      etiket: kosuEtiketiClient(zamanMs),
+      etiketKisa: new Date(zamanMs).toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }),
+      z: zamanMs,
+      tur: (grup && grup.tur) || 'tekil',
+      kapsam: grup && grup.tur === 'tam' ? grup.kapsam || 'Genel' : null,
+      basarili: basarili,
+      basarisiz: basarisiz,
+      atlanan: atlanan,
+      durduruldu: durduruldu,
+      urunler: urunler
+    });
+
+    var urunSenaryolari = {};
+    urunSenaryolari[urun] = [senaryoKaydi];
+    VERI.kosuDetaylari.push(urunSenaryolari);
+    return true;
   }
 
   function anlikKosuTarihSinirlariniGenisletGerekirse(zamanMs) {
@@ -2230,12 +2706,14 @@ const html = `<!DOCTYPE html>
     }
   }
 
-  function anlikKosuDepoyaEkle(senaryoAdi, veri, zamanMs) {
+  function anlikKosuDepoyaEkle(senaryoAnahtarVeyaAdi, veri, zamanMs, grup) {
     try {
       var liste = anlikKosuDepoyuOku();
       liste.push({
-        senaryoAdi: senaryoAdi,
+        // "dosya::ad" anahtarı (yalnızca ad olan eski kayıtlar da okunabilir).
+        senaryoAdi: senaryoAnahtarVeyaAdi,
         z: zamanMs,
+        grup: grup || null,
         // Ekran görüntüsü/video KASITLI OLARAK depolanmaz (bkz. yukarıdaki NOT).
         veri: { basarili: veri.basarili, durum: veri.durum, hataMesaji: veri.hataMesaji || null }
       });
@@ -2247,55 +2725,180 @@ const html = `<!DOCTYPE html>
   }
 
   // Sayfa açılışında localStorage'daki depoyu okuyup VERI'ye geri ekler — "Koşu
-  // geçmişi" tablosu ve trend grafiği, sayfa yenilense/kapatılıp açılsa bile en son
-  // "npm run rapor:*"ten SONRA dashboard'dan tetiklenen koşuları da göstermeye devam
-  // eder. "depolaMi=false" ile çağrılır ki depodan okunan kayıt tekrar depoya
-  // yazılmasın (sonsuz büyümeyi önler).
+  // geçmişi" tablosu, sayfa yenilense/kapatılıp açılsa bile en son "npm run rapor:*"ten
+  // SONRA dashboard'dan tetiklenen koşuları da göstermeye devam eder.
+  //  - Kayıtlar KENDİ (gerçek) zamanlarıyla eklenir (eskiden sayfa açılış anıyla
+  //    ekleniyordu; hepsi "şimdi" olmuş gibi görünüyordu).
+  //  - Zamanı raporun üretim anından (VERI.uretimMs) önce/eşit olan kayıtlar, o koşuların
+  //    Allure sonuçları zaten bu rapora dahil olduğundan ATILIR ve depodan da silinir
+  //    (aksi halde "Koşu geçmişi"nde iki kez sayılıyorlardı).
+  //  - Ekran burada ÇİZİLMEZ — çağıran (sayfa açılışı) en sonda tek bir secimGuncellendi()
+  //    yapar (eskiden her kayıt için tüm ekran yeniden çiziliyordu).
   function anlikKosuDepoyuYukle() {
     var liste = anlikKosuDepoyuOku();
-    liste.forEach(function (kayit) {
-      anlikKosuKaydiEkle(kayit.senaryoAdi, kayit.veri, false);
+    var uretimMs = Number(VERI.uretimMs) || 0;
+    var kalanlar = liste.filter(function (kayit) {
+      return kayit && typeof kayit.z === 'number' && kayit.z > uretimMs;
+    });
+    if (kalanlar.length !== liste.length) {
+      try {
+        if (kalanlar.length) localStorage.setItem(ANLIK_KOSU_DEPO_ANAHTARI, JSON.stringify(kalanlar));
+        else localStorage.removeItem(ANLIK_KOSU_DEPO_ANAHTARI);
+      } catch (e) {
+        // gizli sekme vb. — yoksay; bir sonraki açılışta yine süzülür.
+      }
+    }
+    var enGecZaman = -Infinity;
+    kalanlar
+      .slice()
+      .sort(function (a, b) { return a.z - b.z; })
+      .forEach(function (kayit) {
+        if (anlikKosuVeriyeEkle(kayit.senaryoAdi, kayit.veri, kayit.z, kayit.grup) && kayit.z > enGecZaman) enGecZaman = kayit.z;
+      });
+    if (enGecZaman > -Infinity) anlikKosuTarihSinirlariniGenisletGerekirse(enGecZaman);
+  }
+
+  // ---------- Global "çalışan senaryolar" durumu ----------
+  // anahtar ("dosya::ad", bkz. senaryoAnahtari) -> { kosuId, durduruluyor }.
+  // NOT (kök neden): Çalışan satırın spinner'ı + Durdur butonu eskiden yalnızca o anki
+  // DOM satırında tutuluyordu; tablo herhangi bir sebeple yeniden çizilince (başka bir
+  // koşunun bitmesi, arama, sayfa/ürün değişimi, tümünü seç) satır ▷'ye dönüyor, Durdur
+  // kayboluyor ve aynı senaryo ikinci kez başlatılabiliyordu. Artık "Senaryolar" tablosu
+  // ve "Koşu geçmişi" detay penceresindeki ▷'ler bu tek haritadan çizilir; sonuç, satırın
+  // DOM'u değişmiş olsa bile anahtar üzerinden uygulanır.
+  var CALISAN_SENARYOLAR = new Map();
+
+  function senaryoCalisiyorMu(anahtar) {
+    return CALISAN_SENARYOLAR.has(anahtar);
+  }
+
+  function calisanSenaryoEkle(anahtar, kosuId) {
+    CALISAN_SENARYOLAR.set(anahtar, { kosuId: kosuId, durduruluyor: false });
+    calisanSenaryoGorunumleriniGuncelle();
+  }
+
+  function calisanSenaryoCikar(anahtar, kosuId) {
+    var kayit = CALISAN_SENARYOLAR.get(anahtar);
+    // Aynı anahtarla sonradan başlatılmış BAŞKA bir koşunun kaydını silmemek için kosuId eşleşmeli.
+    if (kayit && kayit.kosuId === kosuId) CALISAN_SENARYOLAR.delete(anahtar);
+    calisanSenaryoGorunumleriniGuncelle();
+  }
+
+  // Global Durdur: hangi görünümdeki (tablo / koşu detay penceresi) Durdur'a basılırsa
+  // basılsın aynı koşu durdurulur; tüm kopyalar "Durduruluyor..." durumuna geçer.
+  function calisanSenaryoyuDurdur(anahtar) {
+    var kayit = CALISAN_SENARYOLAR.get(anahtar);
+    if (!kayit || kayit.durduruluyor) return;
+    kayit.durduruluyor = true;
+    senaryoDurdurIstegiGonder(kayit.kosuId);
+    calisanSenaryoGorunumleriniGuncelle();
+  }
+
+  function calisanDurdurButonuHtml(anahtar) {
+    var kayit = CALISAN_SENARYOLAR.get(anahtar);
+    var durduruluyor = kayit && kayit.durduruluyor;
+    return '<button type="button" class="senaryo-durdur-buton" data-senaryo-durdur="' + escapeHtml(anahtar) + '"' +
+      (durduruluyor ? ' disabled title="Durduruluyor..."' : ' title="Durdur"') + ' aria-label="Bu koşuyu durdur">' +
+      '<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14"></rect></svg>' +
+      '</button>';
+  }
+
+  var BASLAT_IKONU_SVG = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z"></path></svg>';
+
+  // "Senaryolar" tablosundaki çalıştır hücresinin içeriği: çalışıyorsa spinner + Durdur,
+  // değilse ▷.
+  function senaryoTablosuCalistirHucresiHtml(anahtar) {
+    if (senaryoCalisiyorMu(anahtar)) {
+      return '<span class="senaryo-calisan-kontroller"><span class="senaryo-spinner" title="Çalışıyor..."></span>' +
+        calisanDurdurButonuHtml(anahtar) + '</span>';
+    }
+    return '<button type="button" class="senaryo-baslat-buton" data-senaryo-tablosu-baslat title="Bu senaryoyu şimdi çalıştır" aria-label="Bu senaryoyu şimdi çalıştır">' +
+      BASLAT_IKONU_SVG + '</button>';
+  }
+
+  // Koşu detay penceresindeki ▷ (çalışıyorsa devre dışı + spinner, yanında Durdur).
+  function kosuDetayBaslatHtml(anahtar) {
+    var calisiyor = senaryoCalisiyorMu(anahtar);
+    return '<button type="button" class="senaryo-baslat-buton" data-senaryo-baslat data-senaryo-anahtar="' + escapeHtml(anahtar) + '"' +
+      (calisiyor ? ' disabled title="Çalışıyor..."' : ' title="Bu senaryoyu şimdi çalıştır"') + ' aria-label="Bu senaryoyu şimdi çalıştır">' +
+      (calisiyor ? '<span class="senaryo-spinner"></span>' : BASLAT_IKONU_SVG) +
+      '</button>' +
+      (calisiyor ? calisanDurdurButonuHtml(anahtar) : '');
+  }
+
+  // Koşu detayındaki senaryo yalnızca ADIYLA bilinir; aynı başlık birden fazla ürün
+  // dosyasında olabildiği için önce (ürün + ad) ile TEK eşleşme aranır, bulunursa
+  // tablodakiyle aynı "dosya::ad" anahtarı kullanılır (böylece iki görünüm aynı çalışma
+  // durumunu paylaşır ve sunucuya dosya da gönderilir). Bulunamazsa yalnızca ad.
+  function kosuDetaySenaryoAnahtari(ad, urun) {
+    var eslesenler = (VERI.tumSenaryolar || []).filter(function (s) { return s.ad === ad && (!urun || s.urun === urun); });
+    if (eslesenler.length !== 1) {
+      eslesenler = (VERI.tumSenaryolar || []).filter(function (s) { return s.ad === ad; });
+    }
+    return eslesenler.length === 1 ? senaryoAnahtari(eslesenler[0]) : ad;
+  }
+
+  // Tablo/pencere TAMAMEN yeniden çizilmeden, yalnızca ▷/Durdur hücrelerini global
+  // duruma göre günceller (açık durum mesajları, sayfa, seçim vb. bozulmasın diye).
+  function calisanSenaryoGorunumleriniGuncelle() {
+    Array.prototype.forEach.call(document.querySelectorAll('#senaryoTablosuGovdesi tr[data-senaryo-anahtar]'), function (satir) {
+      var anahtar = satir.getAttribute('data-senaryo-anahtar');
+      var hucre = satir.querySelector('.senaryo-tablosu-calistir-hucre');
+      if (!hucre) return;
+      var calisiyor = senaryoCalisiyorMu(anahtar);
+      var yeniHtml = senaryoTablosuCalistirHucresiHtml(anahtar);
+      if (hucre.innerHTML !== yeniHtml) hucre.innerHTML = yeniHtml;
+      satir.classList.toggle('senaryo-satir-calisiyor', calisiyor);
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('#adimDetayModalIcerik [data-senaryo-baslat]'), function (buton) {
+      var anahtar = buton.getAttribute('data-senaryo-anahtar');
+      var eskiDurdur = buton.nextElementSibling && buton.nextElementSibling.hasAttribute('data-senaryo-durdur') ? buton.nextElementSibling : null;
+      var sablon = document.createElement('span');
+      sablon.innerHTML = kosuDetayBaslatHtml(anahtar);
+      var yeniButon = sablon.firstChild;
+      buton.disabled = yeniButon.disabled;
+      buton.title = yeniButon.title;
+      buton.innerHTML = yeniButon.innerHTML;
+      if (eskiDurdur) eskiDurdur.remove();
+      if (sablon.childNodes.length > 1) buton.insertAdjacentElement('afterend', sablon.childNodes[1]);
     });
   }
 
+  // Durdur butonları (tablo + koşu detay penceresi) için tek, belge düzeyinde dinleyici —
+  // butonlar yeniden çizilse bile çalışır.
+  document.addEventListener('click', function (olay) {
+    var durdurButonu = olay.target.closest && olay.target.closest('[data-senaryo-durdur]');
+    if (!durdurButonu || durdurButonu.disabled) return;
+    calisanSenaryoyuDurdur(durdurButonu.getAttribute('data-senaryo-durdur'));
+  });
+
   // Koşu geçmişi > ürün > senaryo listesindeki ▷ ikonu: sonucu, satırın altına küçük
   // bir mesaj olarak yazar (bu görünümde popup açmaya gerek yok, zaten bir modal içinde).
-  // Çalışırken ▷ ikonunun hemen yanına, kullanıcının koşuyu iptal edebilmesi için bir
-  // "Durdur" ikonu eklenir ("buton" bir <button> olduğundan içine değil, YANINA eklenir —
-  // buton içinde buton HTML'de geçersizdir).
-  function senaryoBaslat(senaryoAdi, buton) {
-    var oncekiIcerik = buton.innerHTML;
-    buton.disabled = true;
-    buton.innerHTML = '<span class="senaryo-spinner"></span>';
+  // Çalışırken ▷ devre dışı kalır ve yanında "Durdur" ikonu görünür — ikisi de global
+  // CALISAN_SENARYOLAR durumundan çizildiği için pencere yeniden çizilse de korunur ve
+  // aynı senaryo "Senaryolar" tablosundan ikinci kez başlatılamaz.
+  function senaryoBaslat(anahtar, buton) {
+    if (!anahtar || senaryoCalisiyorMu(anahtar)) return;
     senaryoDurumGoster(buton, null);
 
     var kosuId = kosuIdOlustur();
-    var durdurButonu = senaryoDurdurButonuOlustur();
-    durdurButonu.addEventListener('click', function () {
-      durdurButonu.disabled = true;
-      durdurButonu.title = 'Durduruluyor...';
-      senaryoDurdurIstegiGonder(kosuId);
-    });
-    buton.insertAdjacentElement('afterend', durdurButonu);
+    calisanSenaryoEkle(anahtar, kosuId);
 
-    senaryoCalistirIstegiGonder(senaryoAdi, kosuId)
-      .then(function (veri) {
-        if (veri && veri.basarili) {
-          var sure = senaryoSureMetni(veri.sureMs);
-          senaryoDurumGoster(buton, {
-            basarili: veri.durum === 'passed',
-            mesaj: senaryoDurumEtiketi(veri.durum) + (sure ? ' (' + sure + ')' : '') + (veri.hataMesaji ? ' — ' + veri.hataMesaji : '')
-          });
-          anlikKosuKaydiEkle(senaryoAdi, veri);
-        } else {
-          senaryoDurumGoster(buton, { basarili: false, mesaj: (veri && veri.mesaj) || 'Başlatılamadı.' });
-        }
-      })
-      .finally(function () {
-        buton.disabled = false;
-        buton.innerHTML = oncekiIcerik;
-        durdurButonu.remove();
-      });
+    senaryoCalistirIstegiGonder(anahtar, kosuId).then(function (veri) {
+      calisanSenaryoCikar(anahtar, kosuId);
+      // Pencere bu arada yeniden çizilmiş olabilir — mesaj GÜNCEL butonun altına yazılır.
+      var guncelButon = document.querySelector('#adimDetayModalIcerik [data-senaryo-baslat][data-senaryo-anahtar="' + CSS.escape(anahtar) + '"]') || buton;
+      if (veri && veri.basarili) {
+        var sure = senaryoSureMetni(veri.sureMs);
+        senaryoDurumGoster(guncelButon, {
+          basarili: veri.durum === 'passed',
+          mesaj: senaryoDurumEtiketi(veri.durum) + (sure ? ' (' + sure + ')' : '') + (veri.hataMesaji ? ' — ' + veri.hataMesaji : '')
+        });
+        anlikKosuKaydiEkle(anahtar, veri);
+      } else {
+        senaryoDurumGoster(guncelButon, { basarili: false, mesaj: (veri && veri.mesaj) || 'Başlatılamadı.' });
+      }
+    });
   }
 
   // Buton ile aynı satırın hemen altına geçici bir durum mesajı ekler/günceller.
@@ -2321,14 +2924,118 @@ const html = `<!DOCTYPE html>
   // Seçili satırlar burada, checkbox'lardan BAĞIMSIZ olarak (senaryoAdi ile) tutulur —
   // filtre/arama değişip tablo yeniden çizilse bile seçim kaybolmaz.
   var SENARYO_TABLOSU_SECILI = new Set();
-  // "Tüm senaryoları koş" / "Seçilenleri çalıştır" toplu koşu durumu.
+  // "Koşuyu başlat" / "Seçilenleri çalıştır" toplu koşu durumu.
   // calisanlar: index -> kosuId (senaryoAdi DEĞİL — aynı başlık birden fazla ürün
   // dosyasında tekrarlanabildiği için, satır bazlı "Durdur" doğru süreci hedefleyebilsin
   // diye her koşuya benzersiz bir kosuId atanır; bkz. kosuIdOlustur).
   var TOPLU_KOSU = { calisiyor: false, iptal: false, calisanlar: new Map() };
 
-  // senaryoTablosuCiz (görünüm) VE "Tüm senaryoları koş" (hangi senaryoların
+  // senaryoTablosuCiz (görünüm) VE "Koşuyu başlat" (hangi senaryoların
   // çalıştırılacağını bilmek için) AYNI filtrelenmiş listeyi kullanır.
+  // Aramada Türkçe karakterler ve büyük/küçük harf fark etmesin: "ILK ATES",
+  // "ilk ateş" ve "İLK ATEŞ" aynı sonuçları verir.
+  function aramaIcinSadelestir(metin) {
+    return String(metin)
+      .toLocaleLowerCase('tr-TR')
+      .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g')
+      .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  // ---------- Koşu listesi ("Koşuda" anahtarları) ----------
+  // Hangi senaryoların koşuya dahil olduğu tests/data/kosu-listesi.json'da tutulur (rapor
+  // üretilirken VERI.tumSenaryolar[i].dahil olarak gömülür). Burada, "dosya::ad"
+  // anahtarlarıyla HARİÇ tutulanlar kümesi olarak izlenir. Değişiklikler iyimser (optimistic)
+  // uygulanır: anahtar hemen döner, sunucu (/kosu-listesi) reddederse ya da ulaşılamazsa
+  // eski değere geri alınır ve kısa bir bildirim gösterilir.
+  var KOSU_LISTESI_HARIC = new Set(
+    (VERI.tumSenaryolar || []).filter(function (s) { return s.dahil === false; }).map(senaryoAnahtari)
+  );
+  // Sunucuda sonucu beklenen istek sayısı — hepsi bitince küme sunucunun döndürdüğü
+  // (dosyadaki) GERÇEK listeyle eşitlenir (arada yapılan iyimser değişiklikler ezilmesin diye).
+  var KOSU_LISTESI_BEKLEYEN_ISTEK = 0;
+  var KOSU_LISTESI_BEKLEYEN_ANAHTARLAR = new Set();
+
+  function kosuyaDahilMi(anahtar) {
+    return !KOSU_LISTESI_HARIC.has(anahtar);
+  }
+
+  // Sunucu "/" ayracıyla normalize edilmiş anahtarlar döner; tablodaki anahtarlar ise
+  // "--list" çıktısındaki dosya yolunu (Windows'ta "\") kullanır — eşleştirmek için.
+  function kosuListesiAnahtarNormalize(anahtar) {
+    var i = anahtar.indexOf(SENARYO_ANAHTAR_AYRACI);
+    // NOT: Bu kod bir template literal içinde üretiliyor — "\\\\" çıktıda "\\" olur.
+    return i > 0 ? anahtar.slice(0, i).replace(/\\\\/g, '/') + anahtar.slice(i) : anahtar;
+  }
+
+  var KOSU_LISTESI_BILDIRIM_ZAMANLAYICI = null;
+  function kosuListesiBildirimGoster(mesaj, basariliMi) {
+    var el = document.getElementById('kosuListesiBildirim');
+    el.textContent = mesaj;
+    el.classList.toggle('basarili', !!basariliMi);
+    el.hidden = false;
+    if (KOSU_LISTESI_BILDIRIM_ZAMANLAYICI) clearTimeout(KOSU_LISTESI_BILDIRIM_ZAMANLAYICI);
+    KOSU_LISTESI_BILDIRIM_ZAMANLAYICI = setTimeout(function () { el.hidden = true; }, basariliMi ? 2500 : 6000);
+  }
+
+  function kosuListesiIstegiGonder(anahtarlar, dahil) {
+    return fetch(TEST_SUNUCU.taban + '/kosu-listesi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ortam: ORTAM, token: TEST_SUNUCU.token, anahtarlar: anahtarlar, dahil: dahil })
+    })
+      .then(function (yanit) { return yanit.json(); })
+      .catch(function () {
+        return { basarili: false, mesaj: 'Test sunucusuna ulaşılamadı. Bir terminalde "npm run test-sunucu" çalıştırıp tekrar deneyin.' };
+      });
+  }
+
+  // anahtarlar: "dosya::ad" listesi; dahil: true (koşuya ekle) / false (koşudan çıkar).
+  function kosuListesiniDegistir(anahtarlar, dahil) {
+    var degisecekler = anahtarlar.filter(function (a) { return kosuyaDahilMi(a) !== dahil; });
+    if (!degisecekler.length) return;
+    // İyimser güncelleme — önceki değerler geri alma için saklanır.
+    degisecekler.forEach(function (a) {
+      if (dahil) KOSU_LISTESI_HARIC.delete(a);
+      else KOSU_LISTESI_HARIC.add(a);
+      KOSU_LISTESI_BEKLEYEN_ANAHTARLAR.add(a);
+    });
+    KOSU_LISTESI_BEKLEYEN_ISTEK++;
+    senaryoTablosuCiz();
+    kosuListesiIstegiGonder(degisecekler, dahil).then(function (sonuc) {
+      KOSU_LISTESI_BEKLEYEN_ISTEK--;
+      degisecekler.forEach(function (a) { KOSU_LISTESI_BEKLEYEN_ANAHTARLAR.delete(a); });
+      if (!sonuc || !sonuc.basarili) {
+        // Geri al: yalnızca bu isteğin değiştirdiği anahtarlar eski hâline döner.
+        degisecekler.forEach(function (a) {
+          if (dahil) KOSU_LISTESI_HARIC.add(a);
+          else KOSU_LISTESI_HARIC.delete(a);
+        });
+        kosuListesiBildirimGoster('Koşu listesi güncellenemedi: ' + ((sonuc && sonuc.mesaj) || 'bilinmeyen hata.'), false);
+      } else {
+        if (KOSU_LISTESI_BEKLEYEN_ISTEK === 0 && Array.isArray(sonuc.haricTutulanlar)) {
+          var sunucuHaric = new Set(sonuc.haricTutulanlar);
+          KOSU_LISTESI_HARIC = new Set(
+            (VERI.tumSenaryolar || []).map(senaryoAnahtari).filter(function (a) { return sunucuHaric.has(kosuListesiAnahtarNormalize(a)); })
+          );
+        }
+        if (degisecekler.length > 1) {
+          kosuListesiBildirimGoster(degisecekler.length + ' senaryo ' + (dahil ? 'koşuya eklendi.' : 'koşudan çıkarıldı.'), true);
+        }
+      }
+      senaryoTablosuCiz();
+    });
+  }
+
+  function kosudaHucresiHtml(anahtar, ad) {
+    var dahilMi = kosuyaDahilMi(anahtar);
+    var bekliyor = KOSU_LISTESI_BEKLEYEN_ANAHTARLAR.has(anahtar);
+    return '<label class="kosuda-anahtar" title="' + (dahilMi ? 'Koşuya dahil — çıkarmak için tıklayın' : 'Koşudan hariç — eklemek için tıklayın') + '">' +
+      '<input type="checkbox" role="switch" class="senaryo-kosuda-anahtari"' + (dahilMi ? ' checked' : '') + (bekliyor ? ' disabled' : '') +
+      ' aria-checked="' + (dahilMi ? 'true' : 'false') + '" aria-label="Koşuya dahil: ' + escapeHtml(ad) + '" />' +
+      '<span class="kosuda-anahtar-iz" aria-hidden="true"></span></label>';
+  }
+
   function senaryoTablosuFiltrelenmisListeyiGetir() {
     var tumu = VERI.tumSenaryolar || [];
     var genelMi = secilenUrun === GENEL;
@@ -2336,19 +3043,31 @@ const html = `<!DOCTYPE html>
     // (Hata kalıpları, Koşu geçmişi vb.) tutarlı olsun diye bu tablo da SADECE o
     // ürünün senaryolarını gösterir — GENEL seçiliyken hepsi listelenir.
     var urunSuzulmus = genelMi ? tumu : tumu.filter(function (s) { return s.urun === secilenUrun; });
-    var arama = SENARYO_TABLOSU_ARAMA.toLocaleLowerCase('tr-TR').trim();
+    var arama = aramaIcinSadelestir(SENARYO_TABLOSU_ARAMA).trim();
     return !arama
       ? urunSuzulmus
       : urunSuzulmus.filter(function (s) {
-          return s.ad.toLocaleLowerCase('tr-TR').indexOf(arama) !== -1 ||
-            s.urun.toLocaleLowerCase('tr-TR').indexOf(arama) !== -1;
+          return aramaIcinSadelestir(s.ad).indexOf(arama) !== -1 ||
+            aramaIcinSadelestir(s.urun).indexOf(arama) !== -1;
         });
+  }
+
+  // "Seçilenleri çalıştır"ın GERÇEKTEN çalıştıracağı anahtarlar: yalnızca o an GÖRÜNEN
+  // (ürün + arama filtresinden geçen) listede seçili olanlar, halihazırda çalışanlar
+  // hariç. NOT (kök neden): eskiden tüm SENARYO_TABLOSU_SECILI çalıştırılıyordu — ürün/
+  // arama değişince gizlenen seçimler de koşuyor, butondaki sayı (2) ile koşan sayı (4)
+  // tutmuyordu. Buton sayısı, onay penceresi ve koşu artık hep bu listeyi kullanır.
+  function seciliCalistirilacakAnahtarlar() {
+    return senaryoTablosuFiltrelenmisListeyiGetir()
+      .map(senaryoAnahtari)
+      .filter(function (anahtar) { return SENARYO_TABLOSU_SECILI.has(anahtar) && !senaryoCalisiyorMu(anahtar); });
   }
 
   function senaryoTablosuSecimDurumunuGuncelle() {
     var liste = senaryoTablosuFiltrelenmisListeyiGetir();
     var seciliSayisi = 0;
-    liste.forEach(function (s) { if (SENARYO_TABLOSU_SECILI.has(s.ad)) seciliSayisi++; });
+    liste.forEach(function (s) { if (SENARYO_TABLOSU_SECILI.has(senaryoAnahtari(s))) seciliSayisi++; });
+    var calistirilacakSayisi = seciliCalistirilacakAnahtarlar().length;
 
     var tumunuSecCheckbox = document.getElementById('senaryoTumunuSecCheckbox');
     tumunuSecCheckbox.checked = liste.length > 0 && seciliSayisi === liste.length;
@@ -2357,8 +3076,33 @@ const html = `<!DOCTYPE html>
     var secilenleriCalistirButonu = document.getElementById('senaryoSecilenleriCalistirButonu');
     // Kullanıcının isteği: sadece BİRDEN FAZLA seçiliyken bu buton görünsün — tek
     // seçimde zaten satırdaki ▷ ikonu var.
-    secilenleriCalistirButonu.style.display = seciliSayisi > 1 ? '' : 'none';
-    document.getElementById('senaryoSecilenSayisi').textContent = seciliSayisi;
+    secilenleriCalistirButonu.style.display = calistirilacakSayisi > 1 ? '' : 'none';
+    document.getElementById('senaryoSecilenSayisi').textContent = calistirilacakSayisi;
+
+    // "Koşuya ekle / Koşudan çıkar": görünen listede seçili olanlardan durumu değişecek
+    // olanların sayısı gösterilir; değişecek bir şey yoksa buton gizlenir.
+    var eklenecekler = kosuListesiSeciliAnahtarlar(true).length;
+    var cikarilacaklar = kosuListesiSeciliAnahtarlar(false).length;
+    document.getElementById('senaryoKosuyaEkleButonu').style.display = eklenecekler ? '' : 'none';
+    document.getElementById('senaryoKosuyaEkleSayisi').textContent = eklenecekler;
+    document.getElementById('senaryoKosudanCikarButonu').style.display = cikarilacaklar ? '' : 'none';
+    document.getElementById('senaryoKosudanCikarSayisi').textContent = cikarilacaklar;
+  }
+
+  // Görünen (ürün + arama filtreli) listede seçili olup koşu listesi durumu "dahil"e
+  // (hedefDahil=true) ya da "hariç"e (false) göre DEĞİŞECEK olan anahtarlar.
+  function kosuListesiSeciliAnahtarlar(hedefDahil) {
+    return senaryoTablosuFiltrelenmisListeyiGetir()
+      .map(senaryoAnahtari)
+      .filter(function (anahtar) { return SENARYO_TABLOSU_SECILI.has(anahtar) && kosuyaDahilMi(anahtar) !== hedefDahil; });
+  }
+
+  // "Koşuyu başlat"ın koşacağı liste: görünen listedeki koşuya DAHİL senaryolar
+  // (halihazırda çalışanlar hariç).
+  function kosuyaDahilGorunenAnahtarlar() {
+    return senaryoTablosuFiltrelenmisListeyiGetir()
+      .map(senaryoAnahtari)
+      .filter(function (anahtar) { return kosuyaDahilMi(anahtar) && !senaryoCalisiyorMu(anahtar); });
   }
 
   function senaryoTablosuCiz() {
@@ -2372,13 +3116,16 @@ const html = `<!DOCTYPE html>
     document.getElementById('senaryoTablosuSecimOzeti').textContent =
       liste.length !== tumu.length ? liste.length + ' / ' + tumu.length + ' gösteriliyor' : '';
 
+    var dahilSayisi = liste.filter(function (s) { return kosuyaDahilMi(senaryoAnahtari(s)); }).length;
+    document.getElementById('senaryoKosudaSayaci').textContent = liste.length ? 'Koşuda: ' + dahilSayisi + ' / ' + liste.length : '';
+
     var tumunuCalistirButonu = document.getElementById('senaryoTumunuCalistirButonu');
-    tumunuCalistirButonu.disabled = liste.length === 0 || TOPLU_KOSU.calisiyor;
+    tumunuCalistirButonu.disabled = dahilSayisi === 0 || TOPLU_KOSU.calisiyor;
 
     var sayfalamaAlani = document.getElementById('senaryoTablosuSayfalama');
 
     if (liste.length === 0) {
-      govdeEl.innerHTML = '<tr><td colspan="4"><div class="bos-durum">' +
+      govdeEl.innerHTML = '<tr><td colspan="5"><div class="bos-durum">' +
         (tumu.length === 0
           ? 'Senaryo listesi alınamadı — rapor üretilirken "npx playwright test --list" çalıştırılamamış olabilir (terminaldeki "npm run rapor:' + ORTAM + '" çıktısına bakın).'
           : 'Eşleşen senaryo bulunamadı.') +
@@ -2398,38 +3145,50 @@ const html = `<!DOCTYPE html>
     var sayfaListesi = liste.slice(baslangicIdx, baslangicIdx + SENARYO_TABLOSU_SAYFA_BOYUTU);
 
     govdeEl.innerHTML = sayfaListesi.map(function (s) {
-      var seciliMi = SENARYO_TABLOSU_SECILI.has(s.ad);
+      var seciliMi = SENARYO_TABLOSU_SECILI.has(senaryoAnahtari(s));
+      var dahilMi = kosuyaDahilMi(senaryoAnahtari(s));
       return (
-        '<tr data-senaryo-ad="' + escapeHtml(s.ad) + '">' +
+        '<tr data-senaryo-ad="' + escapeHtml(s.ad) + '" data-senaryo-anahtar="' + escapeHtml(senaryoAnahtari(s)) + '"' + (dahilMi ? '' : ' class="senaryo-satir-haric"') + '>' +
         '<td class="senaryo-tablosu-secim-hucre"><input type="checkbox" class="senaryo-tablosu-secim-kutusu"' + (seciliMi ? ' checked' : '') + ' aria-label="Bu senaryoyu seç" /></td>' +
         '<td class="senaryo-tablosu-urun">' + escapeHtml(s.urun) + '</td>' +
-        '<td>' + escapeHtml(s.ad) + '</td>' +
-        '<td class="senaryo-tablosu-calistir-hucre">' +
-        '<button type="button" class="senaryo-baslat-buton" data-senaryo-tablosu-baslat title="Bu senaryoyu şimdi çalıştır" aria-label="Bu senaryoyu şimdi çalıştır">' +
-        '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z"></path></svg>' +
-        '</button>' +
-        '</td>' +
+        '<td class="senaryo-tablosu-ad">' + escapeHtml(s.ad) + (dahilMi ? '' : ' <span class="rozet rozet-notr rozet-tekil" title="Koşu listesinde değil — Koşuyu başlat ve npm run test bu senaryoyu koşmaz">hariç</span>') + '</td>' +
+        '<td class="senaryo-tablosu-kosuda-hucre">' + kosudaHucresiHtml(senaryoAnahtari(s), s.ad) + '</td>' +
+        // Çalışan satırlar (global CALISAN_SENARYOLAR) yeniden çizimde de spinner + Durdur gösterir.
+        '<td class="senaryo-tablosu-calistir-hucre">' + senaryoTablosuCalistirHucresiHtml(senaryoAnahtari(s)) + '</td>' +
         '</tr>'
       );
     }).join('');
+    Array.prototype.forEach.call(govdeEl.querySelectorAll('tr[data-senaryo-anahtar]'), function (satir) {
+      satir.classList.toggle('senaryo-satir-calisiyor', senaryoCalisiyorMu(satir.getAttribute('data-senaryo-anahtar')));
+    });
 
-    Array.prototype.forEach.call(govdeEl.querySelectorAll('[data-senaryo-tablosu-baslat]'), function (buton) {
-      buton.addEventListener('click', function () {
-        var satir = buton.closest('tr');
-        // Tek bir senaryoyu de "Seçilenleri çalıştır" ile AYNI canlı panel/popup
-        // deneyimiyle (durum ikonu, canlı ekran görüntüsü izleme, kendi Durdur
-        // ikonu, kapatınca sağ-altta rozet) çalıştırır — kullanıcı isteği: tek/çoklu
-        // koşu arasında fark olmasın.
-        topluKosuBaslat([satir.getAttribute('data-senaryo-ad')], true);
+    // ▷ tıklaması tbody üzerinde tek dinleyiciyle (delegation) yakalanır — hücreler
+    // calisanSenaryoGorunumleriniGuncelle ile yerinde değiştirildiğinde de çalışsın diye.
+    govdeEl.onclick = function (olay) {
+      var buton = olay.target.closest('[data-senaryo-tablosu-baslat]');
+      if (!buton || buton.disabled) return;
+      var anahtar = buton.closest('tr').getAttribute('data-senaryo-anahtar');
+      if (senaryoCalisiyorMu(anahtar)) return;
+      // Tek bir senaryoyu de "Seçilenleri çalıştır" ile AYNI canlı panel/popup
+      // deneyimiyle (durum ikonu, canlı ekran görüntüsü izleme, kendi Durdur
+      // ikonu, kapatınca sağ-altta rozet) çalıştırır — kullanıcı isteği: tek/çoklu
+      // koşu arasında fark olmasın.
+      topluKosuBaslat([anahtar], true);
+    };
+
+    Array.prototype.forEach.call(govdeEl.querySelectorAll('.senaryo-kosuda-anahtari'), function (anahtarKutusu) {
+      anahtarKutusu.addEventListener('change', function () {
+        var anahtar = anahtarKutusu.closest('tr').getAttribute('data-senaryo-anahtar');
+        kosuListesiniDegistir([anahtar], anahtarKutusu.checked);
       });
     });
 
     Array.prototype.forEach.call(govdeEl.querySelectorAll('.senaryo-tablosu-secim-kutusu'), function (kutu) {
       kutu.addEventListener('change', function () {
         var satir = kutu.closest('tr');
-        var ad = satir.getAttribute('data-senaryo-ad');
-        if (kutu.checked) SENARYO_TABLOSU_SECILI.add(ad);
-        else SENARYO_TABLOSU_SECILI.delete(ad);
+        var anahtar = satir.getAttribute('data-senaryo-anahtar');
+        if (kutu.checked) SENARYO_TABLOSU_SECILI.add(anahtar);
+        else SENARYO_TABLOSU_SECILI.delete(anahtar);
         senaryoTablosuSecimDurumunuGuncelle();
       });
     });
@@ -2446,59 +3205,32 @@ const html = `<!DOCTYPE html>
     senaryoTablosuSecimDurumunuGuncelle();
   }
 
-  // Satır "çalışıyor" görünümüne (nabız animasyonu + dönen ikon) geçer, sonuç gelince
-  // eski haline döner. "gosterPopup" true ise (tek satırdaki ▷ ikonuyla tetiklenmişse)
-  // sonuç popup'ı açılır; toplu koşularda (aşağıdaki topluKosuBaslat) bunu false
-  // geçiyoruz — 87 senaryo art arda 87 popup açmasın diye, onun yerine tek bir özet
-  // popup'ı gösteriliyor. Bir Promise döner ki toplu koşu fonksiyonları sırayla/aynı
-  // anda bekleyebilsin.
-  function senaryoTablosuCalistir(senaryoAdi, satirEl, secenekler, kosuId) {
+  // Senaryoyu çalıştırır; çalıştığı sürece global CALISAN_SENARYOLAR'a kaydedilir —
+  // "Senaryolar" tablosundaki satır (DOM'da olsun ya da olmasın, sonradan kaç kez
+  // yeniden çizilirse çizilsin) spinner + Durdur gösterir. Sonuç gelince kayıt silinir
+  // ve sonuç anahtar üzerinden uygulanır (satırın eski DOM düğümüne bağlı DEĞİL).
+  // "gosterPopup" true ise sonuç popup'ı açılır; toplu koşularda (topluKosuBaslat) false
+  // geçilir — 87 senaryo art arda 87 popup açmasın diye. Sonucu her zaman "Koşu
+  // geçmişi"ne ekler. Bir Promise döner ki toplu koşu fonksiyonları bekleyebilsin.
+  // kosuId çağıran (topluKosuBaslat > birTaneCalistir) tarafından üretilip geçirilir —
+  // canlı panelin kendi Durdur ikonuyla AYNI koşuyu hedeflesin diye.
+  function senaryoTablosuCalistir(anahtar, secenekler, kosuId) {
     var gosterPopup = !secenekler || secenekler.gosterPopup !== false;
-    var hucre = satirEl.querySelector('.senaryo-tablosu-calistir-hucre');
-    var eskiIcerik = hucre.innerHTML;
-    satirEl.classList.add('senaryo-satir-calisiyor');
-
-    var kontroller = document.createElement('span');
-    kontroller.className = 'senaryo-calisan-kontroller';
-    var spinner = document.createElement('span');
-    spinner.className = 'senaryo-spinner';
-    spinner.title = 'Çalışıyor...';
-    var durdurButonu = senaryoDurdurButonuOlustur();
-    durdurButonu.addEventListener('click', function () {
-      durdurButonu.disabled = true;
-      durdurButonu.title = 'Durduruluyor...';
-      senaryoDurdurIstegiGonder(kosuId);
-    });
-    kontroller.appendChild(spinner);
-    kontroller.appendChild(durdurButonu);
-    hucre.innerHTML = '';
-    hucre.appendChild(kontroller);
-
-    return senaryoCalistirIstegiGonder(senaryoAdi, kosuId)
-      .then(function (veri) {
-        if (gosterPopup) senaryoSonucPopupGoster(senaryoAdi, veri);
-        anlikKosuKaydiEkle(senaryoAdi, veri);
-        return veri;
-      })
-      .finally(function () {
-        satirEl.classList.remove('senaryo-satir-calisiyor');
-        hucre.innerHTML = eskiIcerik;
-      });
-  }
-
-  // Bir senaryoyu (satırı DOM'da olsun ya da olmasın — filtre/arama sonradan
-  // değişmiş olabilir) çalıştırır; sonucu daima "Koşu geçmişi"ne ekler, popup'ı ASLA
-  // tek tek açmaz (toplu koşularda kullanılır, tek satır popup'ı yalnızca kullanıcı
-  // doğrudan ▷ ikonuna tıkladığında açılır — bkz. senaryoTablosuCiz). kosuId çağıran
-  // (topluKosuBaslat > birTaneCalistir) tarafından üretilip geçirilir — canlı panelin
-  // kendi Durdur ikonuyla AYNI koşuyu hedeflesin diye.
-  function senaryoTabloDisindaCalistir(senaryoAdi, kosuId) {
-    var satirEl = document.querySelector('#senaryoTablosuGovdesi tr[data-senaryo-ad="' + CSS.escape(senaryoAdi) + '"]');
-    if (satirEl) return senaryoTablosuCalistir(senaryoAdi, satirEl, { gosterPopup: false }, kosuId);
-    return senaryoCalistirIstegiGonder(senaryoAdi, kosuId).then(function (veri) {
-      anlikKosuKaydiEkle(senaryoAdi, veri);
+    calisanSenaryoEkle(anahtar, kosuId);
+    var gorunenAd = senaryoAnahtarCoz(anahtar).ad;
+    return senaryoCalistirIstegiGonder(anahtar, kosuId, secenekler && secenekler.ekAlanlar).then(function (veri) {
+      // Önce çalışma kaydı silinir ki anlikKosuKaydiEkle'nin tetiklediği yeniden çizimde
+      // satır ▷'ye dönsün.
+      calisanSenaryoCikar(anahtar, kosuId);
+      if (gosterPopup) senaryoSonucPopupGoster(gorunenAd, veri);
+      var ek = secenekler && secenekler.ekAlanlar;
+      anlikKosuKaydiEkle(anahtar, veri, true, ek ? { kimlik: ek.kosuKimligi, tur: ek.kosuTuru, kapsam: ek.kosuKapsami || null } : null);
       return veri;
     });
+  }
+
+  function senaryoTabloDisindaCalistir(anahtar, kosuId, ekAlanlar) {
+    return senaryoTablosuCalistir(anahtar, { gosterPopup: false, ekAlanlar: ekAlanlar }, kosuId);
   }
 
   function canliPanelSatirIdGetir(index) {
@@ -2612,7 +3344,7 @@ const html = `<!DOCTYPE html>
     // Tek bir olay dinleyicisi (delegation) tüm satırları kapsar, her satır yeniden
     // çizilmeden hayatta kalır.
     listeEl.onclick = function (olay) {
-      if (olay.target.closest('video') || olay.target.closest('.hata-goruntu') || olay.target.closest('.canli-panel-canli-goruntu') || olay.target.closest('.senaryo-durdur-buton')) return;
+      if (olay.target.closest('video') || olay.target.closest('.video-baglanti') || olay.target.closest('.hata-goruntu') || olay.target.closest('.canli-panel-canli-goruntu') || olay.target.closest('.senaryo-durdur-buton')) return;
       var satir = olay.target.closest('.canli-panel-satir');
       if (!satir) return;
       satir.classList.toggle('acik');
@@ -2657,8 +3389,9 @@ const html = `<!DOCTYPE html>
   }
 
   // Bir senaryo bitince satırı yeşile/kırmızıya çevirir, süresini yazar ve — varsa —
-  // tıklanınca açılan bir detay alanına ekran görüntüsünü + koşu videosunu (native
-  // <video> kontrolleriyle doğrudan izlenebilir) ekler.
+  // tıklanınca açılan bir detay alanına son ekran görüntüsünü + koşu videosu için
+  // "▶ Videoyu izle" bağlantısını (yeni sekmede, test sunucusunun /medya ucundan) ekler.
+  // Video artık sayfaya <video> olarak gömülmüyor (kullanıcı kararı).
   function canliPanelSatirBitir(index, ad, veri) {
     canliPanelIzlemeyiDurdur(index);
     var satir = document.getElementById(canliPanelSatirIdGetir(index));
@@ -2681,13 +3414,13 @@ const html = `<!DOCTYPE html>
         detayHtml += '<div class="bos-durum">Bu koşu durduruldu.</div>';
       } else if (veri.hataMesaji) {
         detayHtml += '<pre class="hata-mesaj">' + escapeHtml(veri.hataMesaji) + '</pre>';
+      } else if (veri.mesaj && veri.durum !== 'passed') {
+        detayHtml += '<pre class="hata-mesaj">' + escapeHtml(veri.mesaj) + '</pre>';
       }
       if (veri.ekranGoruntusu) {
         detayHtml += '<img class="hata-goruntu" src="data:image/png;base64,' + veri.ekranGoruntusu + '" alt="' + escapeHtml(ad) + '" />';
       }
-      if (veri.videoUrl) {
-        detayHtml += '<video class="senaryo-sonuc-video" style="margin-top:8px;" controls preload="metadata" src="' + escapeHtml(veri.videoUrl) + '"></video>';
-      }
+      detayHtml += videoBaglantisiHtml(veri.videoUrl);
     }
 
     var detayEl = satir.querySelector('.canli-panel-detay');
@@ -2713,7 +3446,7 @@ const html = `<!DOCTYPE html>
   }
 
   // Panel kapatılınca (X ikonu, dışarı tıklama veya Escape) TAMAMEN kaybolmasın diye:
-  // en son "Tüm senaryoları koş"/"Seçilenleri çalıştır" ile en az bir koşu başlatıldıysa
+  // en son "Koşuyu başlat"/"Seçilenleri çalıştır" ile en az bir koşu başlatıldıysa
   // (CANLI_PANEL_ROZET_GORUNSUN), sağ altta küçük bir rozet belirir — üzerine tıklanınca
   // panel (o an çalışıyor olsun ya da bitmiş olsun) aynı içerikle tekrar açılır.
   var CANLI_PANEL_ROZET_GORUNSUN = false;
@@ -2745,33 +3478,48 @@ const html = `<!DOCTYPE html>
     Object.keys(CANLI_IZLEME_POLL).forEach(function (index) { canliPanelIzlemeyiDurdur(index); });
   }
 
-  // "Tüm senaryoları koş" SIRAYLA çalışır (bir bitmeden diğeri başlamaz) —
+  // "Koşuyu başlat" SIRAYLA çalışır (bir bitmeden diğeri başlamaz) —
   // düzinelerce senaryoyu (bazı ürünlerde 80'i aşkın) aynı anda paralel çalıştırmak
   // hem makineyi hem de testlerin paylaştığı acente/kullanıcı oturumunu (bkz.
   // playwright.config.ts'teki fullyParallel:false notu) karıştırır. "Seçilenleri
   // çalıştır" ise kullanıcının BİLİNÇLİ OLARAK seçtiği (genelde küçük) bir grup
   // olduğu için, kullanıcının isteği doğrultusunda AYNI ANDA (paralel) çalışır.
-  function topluKosuBaslat(senaryolar, esZamanliMi) {
+  // kapsam: 'Genel' ya da ürün adı — yalnızca tam koşularda sunucuya "kosuKapsami" olarak
+  // gönderilir (bkz. fixtures.ts > kosuKapsami etiketi, ürün kartları/trend hesabı).
+  function topluKosuBaslat(senaryolar, esZamanliMi, tamKosuMu, kapsam) {
+    // Onay penceresi açıkken başka bir yerden başlatılmış olabilecek senaryolar atlanır
+    // (aynı senaryo iki kez koşmasın).
+    senaryolar = senaryolar.filter(function (anahtar) { return !senaryoCalisiyorMu(anahtar); });
     if (TOPLU_KOSU.calisiyor || !senaryolar.length) return;
     TOPLU_KOSU.calisiyor = true;
     TOPLU_KOSU.iptal = false;
     TOPLU_KOSU.calisanlar = new Map();
+    // Tam koşu: tüm senaryolar aynı kosuKimligi ile 'tam' olarak etiketlenir; bitince rapor
+    // yeniden üretilir ve üst kartlar bu koşuyla güncellenir.
+    // Kısmi koşular (seçilenler, ürüne/aramaya daraltılmış liste, tek ▷) da ortak bir
+    // kimlik alır; koşu geçmişinde tek bir "tekil" satır olarak toplanırlar.
+    var ekAlanlar = { kosuTuru: tamKosuMu ? 'tam' : 'tekil', kosuKimligi: 'dashboard-' + kosuIdOlustur() };
+    if (tamKosuMu) ekAlanlar.kosuKapsami = kapsam || 'Genel';
 
     var toplam = senaryolar.length;
     var tamamlanan = 0;
     var basarili = 0, basarisiz = 0, atlanan = 0, calistirilamadi = 0;
 
-    canliPanelAc(senaryolar);
-    senaryoTablosuCiz(); // "Tüm senaryoları koş" butonunu devre dışı bırakmak için
+    // senaryolar "dosya::ad" anahtarlarıdır; panelde yalnızca ad gösterilir.
+    var gorunenAdlar = senaryolar.map(function (anahtar) { return senaryoAnahtarCoz(anahtar).ad; });
+    canliPanelAc(gorunenAdlar);
+    senaryoTablosuCiz(); // "Koşuyu başlat" butonunu devre dışı bırakmak için
 
     function birTaneCalistir(ad, index) {
       // kosuId: bu TEKİL koşuya özel benzersiz kimlik — aynı başlık (ad) başka bir
       // ürün dosyasında da seçilmiş olabileceğinden, satırın kendi Durdur ikonunun ve
       // canlı izlemenin doğru süreci hedeflemesi için "ad" yerine bu kullanılır.
       var kosuId = kosuIdOlustur();
+      var anahtar = ad;
+      ad = gorunenAdlar[index];
       TOPLU_KOSU.calisanlar.set(index, kosuId);
       canliPanelSatirCalisiyorGoster(index, ad, kosuId);
-      return senaryoTabloDisindaCalistir(ad, kosuId).then(function (veri) {
+      return senaryoTabloDisindaCalistir(anahtar, kosuId, ekAlanlar).then(function (veri) {
         TOPLU_KOSU.calisanlar.delete(index);
         tamamlanan++;
         canliPanelSatirBitir(index, ad, veri);
@@ -2785,21 +3533,32 @@ const html = `<!DOCTYPE html>
       });
     }
 
+    var bittiMi = false;
     function bitir() {
+      if (bittiMi) return;
+      bittiMi = true;
       TOPLU_KOSU.calisiyor = false;
       senaryoTablosuCiz();
       canliPanelBitir(basarili, basarisiz, atlanan, calistirilamadi, TOPLU_KOSU.iptal);
+      // Her koşudan sonra rapor yeniden üretilir: adım/ürün tabloları, hata kalıpları ve
+      // (tam koşuysa) kartlar ancak Allure sonuçlarından yeniden hesaplanınca güncellenir.
+      kosuSonrasiRaporuGuncelle();
     }
 
     if (esZamanliMi) {
-      Promise.all(senaryolar.map(function (ad, i) { return birTaneCalistir(ad, i); })).then(bitir);
+      // Bir koşuda beklenmeyen bir hata olsa bile toplu koşu kilitli kalmasın diye
+      // bitir() her durumda çağrılır.
+      Promise.all(senaryolar.map(function (ad, i) { return birTaneCalistir(ad, i); })).then(bitir, bitir);
     } else {
       (function siradaki(i) {
         if (i >= senaryolar.length || TOPLU_KOSU.iptal) {
           bitir();
           return;
         }
-        birTaneCalistir(senaryolar[i], i).then(function () { siradaki(i + 1); });
+        birTaneCalistir(senaryolar[i], i).then(
+          function () { siradaki(i + 1); },
+          function () { siradaki(i + 1); }
+        );
       })(0);
     }
   }
@@ -2807,6 +3566,86 @@ const html = `<!DOCTYPE html>
   // Toplu koşuyu durdurur: sıradaki senaryoların başlamasını engeller VE o an
   // fiilen çalışmakta olan her senaryo için sunucuya ayrı ayrı /durdur isteği yollar
   // (eş zamanlı modda birden fazla senaryo aynı anda çalışıyor olabilir).
+  // Birden fazla senaryoyu tek tıkla başlatmadan önce sayfa içi onay ister: kaç
+  // senaryonun, hangi ortamda ve nasıl (sırayla / aynı anda) koşacağı gösterilir.
+  var TOPLU_KOSU_ONAY_BEKLEYEN = null;
+  // secenekler (yalnızca "Koşuyu başlat" için): { kosuMu, tamKosuMu, kapsam, aramaVarMi,
+  // haricSayisi }. "Seçilenleri çalıştır" seçeneksiz çağırır (kısmi/tekil koşu).
+  function topluKosuOnayiIste(senaryolar, esZamanliMi, secenekler) {
+    if (TOPLU_KOSU.calisiyor || !senaryolar.length) return;
+    var sec = secenekler || {};
+    var tamKosuMu = !!sec.tamKosuMu;
+    TOPLU_KOSU_ONAY_BEKLEYEN = { senaryolar: senaryolar, esZamanliMi: esZamanliMi, tamKosuMu: tamKosuMu, kapsam: sec.kapsam || 'Genel' };
+    var canliMi = String(ORTAM) === 'canli';
+    var ortamHtml = '<strong' + (canliMi ? ' class="toplu-onay-canli"' : '') + '>' + escapeHtml(String(ORTAM).toUpperCase()) + '</strong>';
+    var metin;
+    var not;
+    if (sec.kosuMu) {
+      document.getElementById('topluKosuOnayBaslik').textContent = 'Koşuyu başlat?';
+      metin = '<strong>' + senaryolar.length + ' senaryo</strong> (' + escapeHtml(sec.kapsam || 'Genel') + ') koşusu, ' + ortamHtml + ' ortamında sırayla çalıştırılacak.';
+      if (sec.haricSayisi) {
+        metin += '<br><span class="toplu-onay-not">' + sec.haricSayisi + ' senaryo koşu listesinde olmadığı için dahil edilmedi.</span>';
+      }
+      if (sec.aramaVarMi) {
+        not = 'Arama filtresi etkin: yalnızca aramayla eşleşenler koşar. Bu yüzden kısmi (tekil) koşu olarak kaydedilir; üst kartları ve trendi DEĞİŞTİRMEZ, koşu geçmişinde "tekil" görünür.';
+      } else if ((sec.kapsam || 'Genel') === 'Genel') {
+        not = 'Koşu olarak kaydedilir; bitince Genel kartlar, Genel trend ve koşulan her ürünün kartları güncellenir.';
+      } else {
+        not = 'Koşu olarak kaydedilir; bitince ' + escapeHtml(sec.kapsam) + ' kartları ve trendi güncellenir (Genel kartlarda da ' + escapeHtml(sec.kapsam) + ' kısmı yenilenir; Genel trend değişmez).';
+      }
+    } else {
+      document.getElementById('topluKosuOnayBaslik').textContent = 'Toplu koşuyu başlat?';
+      metin = '<strong>' + senaryolar.length + ' senaryo</strong>, ' + ortamHtml + ' ortamında ' + (esZamanliMi ? 'aynı anda' : 'sırayla') + ' çalıştırılacak.';
+      not = tamKosuMu
+        ? 'Koşu olarak kaydedilir; bitince üst kartlar bu koşuyla güncellenir.'
+        : 'Kısmi koşu olarak kaydedilir; üst kartları değiştirmez, koşu geçmişinde "tekil" görünür.';
+    }
+    document.getElementById('topluKosuOnayMetni').innerHTML =
+      metin +
+      (canliMi ? '<br><span class="toplu-onay-canli">Dikkat: CANLI ortamda gerçek işlem oluşturabilir.</span>' : '') +
+      '<br><span class="toplu-onay-not">' + not + '</span>';
+    document.getElementById('topluKosuOnayOrtu').classList.add('acik');
+    document.getElementById('topluKosuOnayBaslat').focus();
+  }
+  function topluKosuOnayKapat() {
+    TOPLU_KOSU_ONAY_BEKLEYEN = null;
+    document.getElementById('topluKosuOnayOrtu').classList.remove('acik');
+  }
+
+  // Koşu bitince sunucudan raporu yeniden üretmesini ister; üretim bitince sayfayı
+  // yenilemek için panelde bir buton gösterir (panel kapalıysa sayfa doğrudan yenilenir).
+  function kosuSonrasiRaporuGuncelle() {
+    var altBaslik = document.getElementById('senaryoCanliPanelAltBaslik');
+    var ozet = altBaslik.textContent;
+    altBaslik.textContent = ozet + ' — tablolar güncelleniyor...';
+    fetch(TEST_SUNUCU.taban + '/rapor-uret', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ortam: ORTAM, token: TEST_SUNUCU.token })
+    })
+      .then(function (yanit) { return yanit.json(); })
+      .catch(function () { return { basarili: false, mesaj: 'Test sunucusuna ulaşılamadı.' }; })
+      .then(function (veri) {
+        if (!veri || !veri.basarili) {
+          altBaslik.textContent = ozet + ' — tablolar güncellenemedi (terminalde "npm run rapor:' + ORTAM + '" çalıştırın).';
+          canliPanelRozetDurumunuGuncelle();
+          return;
+        }
+        if (!document.getElementById('senaryoCanliPanelOrtu').classList.contains('acik')) {
+          location.reload();
+          return;
+        }
+        altBaslik.textContent = ozet + ' — tablolar güncellendi. ';
+        var yenile = document.createElement('button');
+        yenile.type = 'button';
+        yenile.className = 'senaryo-toplu-buton senaryo-toplu-buton-vurgulu';
+        yenile.textContent = '↻ Sayfayı yenile';
+        yenile.addEventListener('click', function () { location.reload(); });
+        altBaslik.appendChild(yenile);
+        canliPanelRozetDurumunuGuncelle();
+      });
+  }
+
   function topluKosuDurdur() {
     TOPLU_KOSU.iptal = true;
     TOPLU_KOSU.calisanlar.forEach(function (kosuId) { senaryoDurdurIstegiGonder(kosuId); });
@@ -2845,12 +3684,9 @@ const html = `<!DOCTYPE html>
       }
 
       // Koşu videosu — playwright.config.ts'in "video: 'on'" (dashboard koşularına
-      // özel) ayarı sayesinde başarılı/başarısız her koşuda mevcuttur. Native <video>
-      // kontrolleriyle (oynat/durdur/kaydır) doğrudan popup içinde izlenebilir.
-      if (veri.videoUrl) {
-        govde += '<div class="hata-ornek-etiket">Koşu videosu</div>' +
-          '<video class="senaryo-sonuc-video" controls preload="metadata" src="' + escapeHtml(veri.videoUrl) + '"></video>';
-      }
+      // özel) ayarı sayesinde başarılı/başarısız her koşuda mevcuttur. Sayfaya gömülmez;
+      // yeni sekmede açılan bir bağlantı olarak verilir.
+      govde += videoBaglantisiHtml(veri.videoUrl);
     }
 
     icerikAlani.innerHTML = govde;
@@ -3273,8 +4109,9 @@ const html = `<!DOCTYPE html>
   function senaryoOlusturSonucGoster(sonuc) {
     var sonucAlani = document.getElementById('sof_sonucAlani');
     var basariliMi = sonuc && sonuc.basarili && sonuc.durum === 'passed';
-    var rozetSinif = basariliMi ? 'rozet-iyi' : 'rozet-kritik';
-    var rozetMetin = basariliMi ? 'Başarılı' : (sonuc && sonuc.durum === 'iptal' ? 'İptal edildi' : 'Başarısız');
+    var durdurulduMu = !!(sonuc && sonuc.durum === 'iptal');
+    var rozetSinif = basariliMi ? 'rozet-iyi' : durdurulduMu ? 'rozet-notr' : 'rozet-kritik';
+    var rozetMetin = basariliMi ? 'Başarılı' : durdurulduMu ? 'Durduruldu' : 'Başarısız';
     var govde = '<div class="senaryo-sonuc-satir"><span class="rozet ' + rozetSinif + '">' + escapeHtml(rozetMetin) + '</span></div>';
     if (!basariliMi) {
       var mesaj = (sonuc && (sonuc.hataMesaji || sonuc.mesaj)) || 'Detaylı hata mesajı yok — test-sunucu terminalindeki çıktıya bakın.';
@@ -3303,38 +4140,66 @@ const html = `<!DOCTYPE html>
     kaydetAlani.innerHTML =
       '<div class="senaryo-form-alan"><label>Senaryo Başlığı</label><input type="text" id="sof_baslik" placeholder="örn. 30447 / DÜNYA / ... " /></div>' +
       '<div id="sof_kaydetHataAlani"></div>' +
-      '<div class="senaryo-form-buton-satir"><button type="button" id="sof_kaydetOnayButonu" class="birincil">Kaydet</button></div>';
+      '<div class="senaryo-form-buton-satir"><button type="button" id="sof_kaydetOnayButonu" class="birincil">Kaydet</button></div>' +
+      '<div id="sof_kosuyaDahilAlani"></div>';
     document.getElementById('sof_kaydetOnayButonu').addEventListener('click', senaryoOlusturKaydet);
   }
 
+  // "Kaydet"e her basıldığında AÇIKÇA sorulur: yeni senaryo koşuya (Koşuyu başlat,
+  // npm run test) dahil edilsin mi? Varsayılan yok — kullanıcı iki düğmeden birini seçmeden
+  // istek gönderilmez; sunucu da cevapsız isteği reddeder (bkz. test-sunucu.mjs > /kaydet).
   function senaryoOlusturKaydet() {
     var baslikEl = document.getElementById('sof_baslik');
     var hataAlani = document.getElementById('sof_kaydetHataAlani');
-    var onayButonu = document.getElementById('sof_kaydetOnayButonu');
+    var soruAlani = document.getElementById('sof_kosuyaDahilAlani');
     var baslik = baslikEl.value.trim();
     hataAlani.innerHTML = '';
+    soruAlani.innerHTML = '';
     if (!baslik) {
       hataAlani.innerHTML = '<p class="senaryo-form-hata">Başlık boş olamaz.</p>';
       return;
     }
     if (!SENARYO_OLUSTUR_SON_SONUC) return;
 
+    soruAlani.innerHTML =
+      '<p class="kosuya-dahil-soru" id="sof_kosuyaDahilSoru">Bu senaryo koşuya dahil edilsin mi?</p>' +
+      '<div class="senaryo-form-buton-satir" role="group" aria-labelledby="sof_kosuyaDahilSoru">' +
+        '<button type="button" id="sof_kosuyaDahilEvet" class="birincil">Evet, dahil et</button>' +
+        '<button type="button" id="sof_kosuyaDahilHayir">Hayır, dahil etme</button>' +
+      '</div>';
+    document.getElementById('sof_kosuyaDahilEvet').addEventListener('click', function () { senaryoOlusturKaydetGonder(baslik, true); });
+    document.getElementById('sof_kosuyaDahilHayir').addEventListener('click', function () { senaryoOlusturKaydetGonder(baslik, false); });
+    document.getElementById('sof_kosuyaDahilEvet').focus();
+  }
+
+  function senaryoOlusturKaydetGonder(baslik, kosuyaDahil) {
+    var hataAlani = document.getElementById('sof_kaydetHataAlani');
+    var onayButonu = document.getElementById('sof_kaydetOnayButonu');
+    var evetButonu = document.getElementById('sof_kosuyaDahilEvet');
+    var hayirButonu = document.getElementById('sof_kosuyaDahilHayir');
+    hataAlani.innerHTML = '';
     onayButonu.disabled = true;
+    evetButonu.disabled = true;
+    hayirButonu.disabled = true;
     onayButonu.textContent = 'Kaydediliyor...';
 
     fetch(TEST_SUNUCU.taban + '/jetseyahat-senaryo/kaydet', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ortam: ORTAM, senaryo: SENARYO_OLUSTUR_SON_SONUC.veri, baslik: baslik, token: TEST_SUNUCU.token })
+      body: JSON.stringify({ ortam: ORTAM, senaryo: SENARYO_OLUSTUR_SON_SONUC.veri, baslik: baslik, kosuyaDahil: kosuyaDahil, token: TEST_SUNUCU.token })
     })
       .then(function (yanit) { return yanit.json(); })
       .catch(function () { return { basarili: false, mesaj: 'Test sunucusuna ulaşılamadı.' }; })
       .then(function (sonuc) {
         onayButonu.disabled = false;
+        evetButonu.disabled = false;
+        hayirButonu.disabled = false;
         onayButonu.textContent = 'Kaydet';
         if (sonuc && sonuc.basarili) {
           document.getElementById('sof_kaydetAlani').innerHTML =
-            '<p style="color:var(--good);font-weight:700;font-size:12.5px;">Kaydedildi. "Senaryolar" listesinde görünmesi için dashboard sayfasını yeniden üretip (npm run rapor:test) tarayıcıyı yenileyin.</p>';
+            '<p style="color:var(--good);font-weight:700;font-size:12.5px;">Kaydedildi' +
+            (kosuyaDahil ? ' ve koşuya dahil edildi' : '; koşuya dahil edilmedi (Senaryolar tablosunda "Koşuda" anahtarıyla sonradan eklenebilir)') +
+            '. "Senaryolar" listesinde görünmesi için dashboard sayfasını yeniden üretip (npm run rapor:' + escapeHtml(ORTAM) + ') tarayıcıyı yenileyin.</p>';
         } else {
           hataAlani.innerHTML = '<p class="senaryo-form-hata">' + escapeHtml((sonuc && sonuc.mesaj) || 'Kaydedilemedi.') + '</p>';
         }
@@ -3348,37 +4213,95 @@ const html = `<!DOCTYPE html>
   var IKON_BASARISIZ = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
   var IKON_ATLANAN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="8" y1="12" x2="16" y2="12"></line></svg>';
 
-  function statTileClient(etiket, deger, delta, iyiYonAzalmaMi, ikon) {
+  // deger null ise (görünüm için henüz koşu yok) "—" gösterilir; delta null ise fark
+  // satırı hiç çizilmez. deltaEtiketi: farkın neye göre olduğu ("önceki koşu" tarihi vb.).
+  function statTileClient(etiket, deger, delta, iyiYonAzalmaMi, ikon, deltaEtiketi) {
     var deltaHtml = '';
-    if (delta !== null && VERI.oncekiKosu) {
+    if (delta !== null && deger !== null) {
       var isaret = delta > 0 ? '+' : '';
       var iyiMi = iyiYonAzalmaMi ? delta <= 0 : delta >= 0;
       var renkSinifi = delta === 0 ? 'delta-notr' : iyiMi ? 'delta-iyi' : 'delta-kotu';
-      deltaHtml = '<div class="stat-delta ' + renkSinifi + '">' + isaret + delta + ' <span class="stat-delta-etiket">(' + escapeHtml(VERI.oncekiKosu.etiket) + ')</span></div>';
+      deltaHtml = '<div class="stat-delta ' + renkSinifi + '">' + isaret + delta + (deltaEtiketi ? ' <span class="stat-delta-etiket">(' + escapeHtml(deltaEtiketi) + ')</span>' : '') + '</div>';
     }
     return (
       '<div class="stat-tile">' +
       '<div class="stat-tile-ust"><div class="stat-label">' + escapeHtml(etiket) + '</div><div class="stat-ikon">' + ikon + '</div></div>' +
-      '<div class="stat-value">' + deger + '</div>' +
+      '<div class="stat-value' + (deger === null ? ' stat-value-bos' : '') + '">' + (deger === null ? '—' : deger) + '</div>' +
       deltaHtml +
       '</div>'
     );
   }
 
-  var BOS_KOSU_TOPLAM = { basarili: 0, basarisiz: 0, atlanan: 0 };
+  var BOS_KOSU_TOPLAM = { basarili: 0, basarisiz: 0, atlanan: 0, durduruldu: 0 };
 
+  function kapsamMetni(kapsam) {
+    return !kapsam || kapsam === 'Genel' ? 'Genel koşu' : kapsam + ' koşusu';
+  }
+
+  // Üst kartlar (hesap sunucuda — bkz. urun-hata-raporu.mjs > "Üst kartlar"):
+  //  - Genel: her ürünün kendi son koşusundaki sayıların toplamı (güncel durum); fark,
+  //    her ürünün bir önceki koşusunun toplamına göre.
+  //  - Ürün P: P'yi içeren son koşudaki yalnızca P sayıları; fark, P'yi içeren bir önceki koşuya göre.
+  // Görünüm için hiç koşu yoksa kartlar "—", kaynak satırı "Henüz koşu yok" gösterir.
+  // Tekil koşular (Seçilenleri çalıştır, tek ▷, aramalı koşu) kartları değiştirmez.
   function istatKartlariniGuncelle() {
     var genelMi = secilenUrun === GENEL;
-    var son = genelMi ? VERI.sonKosu.genel : VERI.sonKosu.urunler[secilenUrun] || BOS_KOSU_TOPLAM;
-    var onceki = VERI.oncekiKosu ? (genelMi ? VERI.oncekiKosu.genel : VERI.oncekiKosu.urunler[secilenUrun] || BOS_KOSU_TOPLAM) : null;
-    var toplam = son.basarili + son.basarisiz + son.atlanan;
-    var toplamOnceki = onceki ? onceki.basarili + onceki.basarisiz + onceki.atlanan : null;
+    var kartlar = VERI.kartlar || { genel: null, urunler: {} };
+    var kaynakEl = document.getElementById('statKaynak');
+    var son = null;
+    var onceki = null;
+    var deltaEtiketi = '';
+    if (genelMi) {
+      var genel = kartlar.genel;
+      if (genel) {
+        son = genel.son;
+        onceki = genel.onceki;
+        deltaEtiketi = 'önceki koşulara göre';
+        kaynakEl.textContent = genel.urunSayisi > 1 && genel.enYeniZ !== genel.enEskiZ
+          ? 'Güncel durum: her ürünün son koşusu (' + genel.urunSayisi + ' ürün; ' + genel.enEskiEtiket + ' – ' + genel.enYeniEtiket + ')'
+          : 'Güncel durum — son koşu: ' + genel.enYeniEtiket;
+      } else {
+        kaynakEl.textContent = 'Henüz koşu yok — "▷ Koşuyu başlat" ile ya da terminalden bir koşu yapıldığında kartlar dolar.';
+      }
+    } else {
+      var urunKart = kartlar.urunler[secilenUrun];
+      if (urunKart) {
+        son = urunKart.son;
+        onceki = urunKart.onceki;
+        deltaEtiketi = onceki ? onceki.etiket : '';
+        kaynakEl.textContent = 'Son koşu: ' + son.etiket + ' (' + kapsamMetni(son.kapsam) + ')' +
+          (onceki ? ' · önceki: ' + onceki.etiket + ' (' + kapsamMetni(onceki.kapsam) + ')' : '');
+      } else {
+        kaynakEl.textContent = 'Henüz koşu yok — ' + secilenUrun + ' için bir koşu yapıldığında kartlar dolar.';
+      }
+    }
+
+    function sayi(n, alan) { return n ? n[alan] || 0 : null; }
+    function fark(alan) { return son && onceki ? (son[alan] || 0) - (onceki[alan] || 0) : null; }
+    var toplam = son ? son.basarili + son.basarisiz + son.atlanan + (son.durduruldu || 0) : null;
+    var toplamOnceki = onceki ? onceki.basarili + onceki.basarisiz + onceki.atlanan + (onceki.durduruldu || 0) : null;
+    var sonDurduruldu = son ? son.durduruldu || 0 : 0;
+    var oncekiDurduruldu = onceki ? onceki.durduruldu || 0 : 0;
 
     document.getElementById('statGrid').innerHTML =
-      statTileClient('Toplam test (son koşu)', toplam, onceki ? toplam - toplamOnceki : null, false, IKON_TOPLAM) +
-      statTileClient('Başarılı', son.basarili, onceki ? son.basarili - onceki.basarili : null, false, IKON_BASARILI) +
-      statTileClient('Başarısız', son.basarisiz, onceki ? son.basarisiz - onceki.basarisiz : null, true, IKON_BASARISIZ) +
-      statTileClient('Atlanan', son.atlanan, onceki ? son.atlanan - onceki.atlanan : null, true, IKON_ATLANAN);
+      statTileClient(genelMi ? 'Toplam test (güncel)' : 'Toplam test (son koşu)', toplam, son && onceki ? toplam - toplamOnceki : null, false, IKON_TOPLAM, deltaEtiketi) +
+      statTileClient('Başarılı', sayi(son, 'basarili'), fark('basarili'), false, IKON_BASARILI, deltaEtiketi) +
+      statTileClient('Başarısız', sayi(son, 'basarisiz'), fark('basarisiz'), true, IKON_BASARISIZ, deltaEtiketi) +
+      statTileClient('Atlanan', sayi(son, 'atlanan'), fark('atlanan'), true, IKON_ATLANAN, deltaEtiketi) +
+      // "Durduruldu" kartı yalnızca son/önceki koşuda durdurulan test varsa gösterilir (nötr, gri).
+      (sonDurduruldu || oncekiDurduruldu
+        ? statTileClient('Durduruldu', sonDurduruldu, null, true, IKON_ATLANAN, '') // delta renklendirilmez: nötr durum
+        : '');
+  }
+
+  // Trend serisi için koşu filtresi: Genel → yalnızca 'Genel' kapsamlı tam koşular (tüm
+  // ürünleri kapsayan, birbiriyle karşılaştırılabilir koşular); ürün P → P'nin sonucunu
+  // içeren TÜM tam koşular (P kapsamlı ya da Genel), yalnızca P'nin sayılarıyla.
+  function trendKosusuMu(k, genelMi) {
+    if (k.tur === 'tekil') return false;
+    if (genelMi) return (k.kapsam || 'Genel') === 'Genel';
+    var n = k.urunler[secilenUrun];
+    return !!n && n.basarili + n.basarisiz + n.atlanan + (n.durduruldu || 0) > 0;
   }
 
   // Koşu trendi grafiği: sunucu tarafında üretilen svg mantığının istemci karşılığı
@@ -3456,8 +4379,10 @@ const html = `<!DOCTYPE html>
   function trendGrafiginiGuncelle() {
     var genelMi = secilenUrun === GENEL;
     var aralik = secilenTarihAraligi('baslangicTarihiTrend', 'bitisTarihiTrend');
+    // Trend yalnızca TAM koşularla çizilir — dashboard'dan tek senaryo koşuları (tekil,
+    // toplam=1) çizgiyi anlamsızca 0-1'e çekmesin.
     var seriler = VERI.kosuGecmisi
-      .filter(function (k) { return k.z >= aralik.baslangicMs && k.z <= aralik.bitisMs; })
+      .filter(function (k) { return trendKosusuMu(k, genelMi) && k.z >= aralik.baslangicMs && k.z <= aralik.bitisMs; })
       .map(function (k) {
         var n = genelMi ? k : k.urunler[secilenUrun] || BOS_KOSU_TOPLAM;
         return { etiket: k.etiket, etiketKisa: k.etiketKisa, basarili: n.basarili, basarisiz: n.basarisiz };
@@ -3466,7 +4391,9 @@ const html = `<!DOCTYPE html>
     document.getElementById('secimOzetiTrend').textContent = seriler.length + ' koşu';
     document.getElementById('trendBaslikSayisi').textContent = seriler.length + ' koşu';
     document.getElementById('trendAltBaslik').textContent =
-      'Seçili tarih aralığındaki ' + seriler.length + ' koşuda ' + (genelMi ? 'tüm ürünlerde' : escapeHtml(secilenUrun) + ' ürününde') + ' başarılı/başarısız sayısı nasıl değişti';
+      genelMi
+        ? 'Seçili tarih aralığındaki ' + seriler.length + ' Genel koşuda (tüm ürünler) başarılı/başarısız sayısı nasıl değişti — ürün kapsamlı ve tekil koşular dahil değil'
+        : 'Seçili tarih aralığında ' + secilenUrun + ' ürününü içeren ' + seriler.length + ' koşuda (ürün ya da Genel kapsamlı) ' + secilenUrun + ' sayıları';
   }
 
   // "Koşu geçmişi" tablosu: seçilen tarih aralığındaki TÜM koşuları (en yeni önce)
@@ -3481,12 +4408,15 @@ const html = `<!DOCTYPE html>
       .map(function (x) {
         var k = x.k;
         var n = genelMi ? k : k.urunler[secilenUrun] || BOS_KOSU_TOPLAM;
-        var toplam = n.basarili + n.basarisiz + n.atlanan;
-        var oran = toplam > 0 ? Math.round((n.basarili / toplam) * 100) : 0;
+        var durduruldu = n.durduruldu || 0;
+        // Oran paydası "Durduruldu"yu içermez (başarısızlık gibi oranı düşürmesin).
+        var oranPaydasi = n.basarili + n.basarisiz + n.atlanan;
+        var toplam = oranPaydasi + durduruldu;
+        var oran = oranPaydasi > 0 ? Math.round((n.basarili / oranPaydasi) * 100) : 0;
         // GENEL görünümde, koşunun hangi ürünleri kapsadığını satırda rozet olarak
         // göstermek için ürün kırılımını da taşıyoruz (tek ürün seçiliyken gereksiz,
         // zaten o üründe olduğumuz belli).
-        return { orijinalIndex: x.i, etiket: k.etiket, z: k.z, basarili: n.basarili, basarisiz: n.basarisiz, atlanan: n.atlanan, toplam: toplam, oran: oran, urunler: genelMi ? k.urunler : null };
+        return { orijinalIndex: x.i, etiket: k.etiket, tekilMi: k.tur === 'tekil', kapsam: k.tur === 'tekil' ? null : k.kapsam || 'Genel', z: k.z, basarili: n.basarili, basarisiz: n.basarisiz, atlanan: n.atlanan, durduruldu: durduruldu, toplam: toplam, oran: oran, urunler: genelMi ? k.urunler : null };
       });
 
     var durumKosu = SIRALAMA_DURUMU.kosuGecmisi;
@@ -3496,6 +4426,7 @@ const html = `<!DOCTYPE html>
       basarili: function (r) { return r.basarili; },
       basarisiz: function (r) { return r.basarisiz; },
       atlanan: function (r) { return r.atlanan; },
+      durduruldu: function (r) { return r.durduruldu; },
       oran: function (r) { return r.oran; }
     };
     kosular = diziyiSirala(kosular, durumKosu.anahtar, durumKosu.yon, DEGER_FN_KOSU[durumKosu.anahtar]);
@@ -3509,7 +4440,7 @@ const html = `<!DOCTYPE html>
     var sayfalamaAlani = document.getElementById('kosuGecmisiSayfalama');
 
     if (kosular.length === 0) {
-      govde.innerHTML = '<tr><td colspan="7">Seçilen tarih aralığında koşu yok</td></tr>';
+      govde.innerHTML = '<tr><td colspan="8">Seçilen tarih aralığında koşu yok</td></tr>';
       sayfalamaAlani.innerHTML = '';
       ikizTablolarinYuksekliginiEsitle();
       return;
@@ -3524,8 +4455,8 @@ const html = `<!DOCTYPE html>
 
     govde.innerHTML = sayfaKosulari
       .map(function (k) {
-        var toplam = k.basarili + k.basarisiz + k.atlanan;
-        var oran = toplam > 0 ? Math.round((k.basarili / toplam) * 100) : 0;
+        var toplam = k.toplam;
+        var oran = k.oran;
         var barRengi = oran >= 80 ? 'var(--good)' : oran >= 50 ? 'var(--warning)' : 'var(--critical)';
 
         // Ürün rozetleri: GENEL görünümde bu koşuda hangi ürünlerin çalıştığını ve
@@ -3537,7 +4468,7 @@ const html = `<!DOCTYPE html>
             .sort(function (a, b) { return a.localeCompare(b, 'tr'); })
             .map(function (urunAdi) {
               var u = k.urunler[urunAdi];
-              var uToplam = u.basarili + u.basarisiz + u.atlanan;
+              var uToplam = u.basarili + u.basarisiz + u.atlanan + (u.durduruldu || 0);
               if (uToplam === 0) return '';
               var sinif = u.basarisiz > 0 ? 'rozet-kritik' : 'rozet-iyi';
               return '<span class="rozet ' + sinif + '">' + escapeHtml(urunAdi) + ' <b>' + u.basarisiz + '/' + uToplam + '</b></span>';
@@ -3547,12 +4478,16 @@ const html = `<!DOCTYPE html>
 
         return (
           '<tr class="kosu-satir" data-kosu-index="' + k.orijinalIndex + '">' +
-          '<td>' + escapeHtml(k.etiket) + '</td>' +
+          '<td>' + escapeHtml(k.etiket) +
+          (k.tekilMi ? '<span class="rozet rozet-notr rozet-tekil" title="Kısmi koşu (Seçilenleri çalıştır, tek ▷ ya da aramalı koşu) — üst kartları ve trendi değiştirmez">tekil</span>' : '') +
+          (k.kapsam && k.kapsam !== 'Genel' ? '<span class="rozet rozet-kapsam rozet-tekil" title="Yalnızca bu ürünü kapsayan koşu — ürün kartlarını ve trendini günceller, Genel trende girmez">' + escapeHtml(k.kapsam) + ' koşusu</span>' : '') +
+          '</td>' +
           '<td><div class="kosu-urun-rozetleri">' + (urunRozetleri || '<span class="bos-durum-mini">—</span>') + '</div></td>' +
           '<td class="num">' + toplam + '</td>' +
           '<td class="num">' + k.basarili + '</td>' +
           '<td class="num">' + k.basarisiz + '</td>' +
           '<td class="num">' + k.atlanan + '</td>' +
+          '<td class="num">' + k.durduruldu + '</td>' +
           '<td class="num"><div class="oran-hucre"><div class="oran-bar"><div class="oran-dolum" style="width:' + oran + '%;background:' + barRengi + '"></div></div><span>%' + oran + '</span></div></td>' +
           '</tr>'
         );
@@ -3587,10 +4522,11 @@ const html = `<!DOCTYPE html>
     document.getElementById('secilenUrunBasligi').textContent = secilenUrun === GENEL ? 'Hata kalıpları' : 'Hata kalıpları — ' + secilenUrun;
     istatKartlariniGuncelle();
     trendGrafiginiGuncelle();
-    kosuGecmisiSayfa = 1;
+    // NOT: kosuGecmisiSayfa/kalipSayfa burada SIFIRLANMAZ — bu fonksiyon her koşu
+    // bitişinde de çağrılıyor; sıfırlama ürün değişiminde (urunNavCiz) ve tarih
+    // filtresi değişiminde (kalipFiltresiDegisti/kosuGecmisiFiltresiDegisti) yapılır.
     kosuGecmisiniGuncelle();
     ikinciBolumuCiz();
-    kalipSayfa = 1;
     tabloyuGuncelle();
     senaryoTablosuCiz();
   }
@@ -3650,12 +4586,13 @@ const html = `<!DOCTYPE html>
       return (genelMi || k.u === secilenUrun) && k.z >= aralik.baslangicMs && k.z <= aralik.bitisMs;
     });
 
-    var basarili = 0, basarisiz = 0, atlanan = 0;
+    var basarili = 0, basarisiz = 0, atlanan = 0, durduruldu = 0;
     var kalipSayaclari = {}; // 'urun|||kategori|||kalip' -> { adet, urun, kategori, kalip }
     var kategoriSayaclari = {}; // kategori -> adet
     urunKayitlari.forEach(function (k) {
       if (k.d === 'basarili') basarili++;
       else if (k.d === 'atlanan') atlanan++;
+      else if (k.d === 'durduruldu') durduruldu++; // başarısız sayılmaz, kalıba/kategoriye girmez
       else {
         basarisiz++;
         var anahtar = k.u + '|||' + k.k + '|||' + k.p;
@@ -3665,7 +4602,7 @@ const html = `<!DOCTYPE html>
       }
     });
 
-    ozetAlani.textContent = urunKayitlari.length + ' kayıt (Başarılı ' + basarili + ' · Başarısız ' + basarisiz + ' · Atlanan ' + atlanan + ')';
+    ozetAlani.textContent = urunKayitlari.length + ' kayıt (Başarılı ' + basarili + ' · Başarısız ' + basarisiz + ' · Atlanan ' + atlanan + (durduruldu ? ' · Durduruldu ' + durduruldu : '') + ')';
     kategoriDonutunuCiz(kategoriSayaclari, basarisiz);
 
     var siraliKaliplar = Object.keys(kalipSayaclari)
@@ -3699,8 +4636,9 @@ const html = `<!DOCTYPE html>
             govdeIcerik += '<div class="hata-ornek-etiket">Olası neden</div>';
             govdeIcerik += '<div class="olasi-neden">' + escapeHtml(kalipOlasiNeden) + '</div>';
           }
-          if (ornek.g) govdeIcerik += '<img class="hata-goruntu" src="' + ornek.g + '" alt="Hata anı ekran görüntüsü" />';
+          if (ornek.g) govdeIcerik += '<img class="hata-goruntu" src="' + escapeHtml(ornek.g) + '" alt="Hata anı ekran görüntüsü" />';
           else govdeIcerik += '<div class="bos-durum">Bu kalıp için ekran görüntüsü bulunamadı.</div>';
+          govdeIcerik += videoBaglantisiHtml(ornek.v);
         }
         return (
           '<details class="hata-detay"' + (i === 0 ? ' open' : '') + '>' +
@@ -3784,16 +4722,51 @@ const html = `<!DOCTYPE html>
   });
   document.getElementById('senaryoTumunuSecCheckbox').addEventListener('change', function (olay) {
     var liste = senaryoTablosuFiltrelenmisListeyiGetir();
-    if (olay.target.checked) liste.forEach(function (s) { SENARYO_TABLOSU_SECILI.add(s.ad); });
-    else liste.forEach(function (s) { SENARYO_TABLOSU_SECILI.delete(s.ad); });
+    if (olay.target.checked) liste.forEach(function (s) { SENARYO_TABLOSU_SECILI.add(senaryoAnahtari(s)); });
+    else liste.forEach(function (s) { SENARYO_TABLOSU_SECILI.delete(senaryoAnahtari(s)); });
     senaryoTablosuCiz();
   });
+  // "▷ Koşuyu başlat": görünümdeki (Genel → tüm ürünler, ürün seçiliyse o ürün) koşuya
+  // DAHİL senaryoları sırayla koşar. Arama boşsa gerçek bir "koşu"dur (kosuTuru 'tam',
+  // kosuKapsami = 'Genel' ya da ürün adı) ve kartları/trendi günceller; arama varsa yalnızca
+  // eşleşenler koştuğu için kısmi (tekil) koşu sayılır. Zaten çalışan senaryolar (ör. koşu
+  // detay penceresinden başlatılmış) ikinci kez başlatılmaz.
   document.getElementById('senaryoTumunuCalistirButonu').addEventListener('click', function () {
-    var liste = senaryoTablosuFiltrelenmisListeyiGetir().map(function (s) { return s.ad; });
-    topluKosuBaslat(liste, false);
+    var liste = kosuyaDahilGorunenAnahtarlar();
+    var gorunen = senaryoTablosuFiltrelenmisListeyiGetir();
+    var haricSayisi = gorunen.filter(function (s) { return !kosuyaDahilMi(senaryoAnahtari(s)); }).length;
+    var aramaVarMi = !!SENARYO_TABLOSU_ARAMA.trim();
+    topluKosuOnayiIste(liste, false, {
+      kosuMu: true,
+      tamKosuMu: !aramaVarMi,
+      kapsam: secilenUrun === GENEL ? 'Genel' : secilenUrun,
+      aramaVarMi: aramaVarMi,
+      haricSayisi: haricSayisi
+    });
+  });
+  document.getElementById('senaryoKosuyaEkleButonu').addEventListener('click', function () {
+    kosuListesiniDegistir(kosuListesiSeciliAnahtarlar(true), true);
+  });
+  document.getElementById('senaryoKosudanCikarButonu').addEventListener('click', function () {
+    kosuListesiniDegistir(kosuListesiSeciliAnahtarlar(false), false);
   });
   document.getElementById('senaryoSecilenleriCalistirButonu').addEventListener('click', function () {
-    topluKosuBaslat(Array.from(SENARYO_TABLOSU_SECILI), true);
+    // Butondaki sayıyla birebir aynı liste (bkz. seciliCalistirilacakAnahtarlar).
+    topluKosuOnayiIste(seciliCalistirilacakAnahtarlar(), true);
+  });
+  document.getElementById('topluKosuOnayIptal').addEventListener('click', topluKosuOnayKapat);
+  document.getElementById('topluKosuOnayKapatButonu').addEventListener('click', topluKosuOnayKapat);
+  document.getElementById('topluKosuOnayOrtu').addEventListener('click', function (olay) {
+    if (olay.target.id === 'topluKosuOnayOrtu') topluKosuOnayKapat();
+  });
+  document.getElementById('topluKosuOnayBaslat').addEventListener('click', function () {
+    var bekleyen = TOPLU_KOSU_ONAY_BEKLEYEN;
+    topluKosuOnayKapat();
+    if (!bekleyen) return;
+    // Toplu koşu başlarken seçim temizlenir (topluKosuBaslat tabloyu yeniden çizer,
+    // kutucuklar da boşalır) — aynı seçim yanlışlıkla tekrar koşulmasın.
+    SENARYO_TABLOSU_SECILI.clear();
+    topluKosuBaslat(bekleyen.senaryolar, bekleyen.esZamanliMi, bekleyen.tamKosuMu, bekleyen.kapsam);
   });
   document.getElementById('senaryoCanliPanelDurdurButonu').addEventListener('click', function (olay) {
     olay.target.closest('button').disabled = true;
@@ -3852,7 +4825,7 @@ const html = `<!DOCTYPE html>
 
   // Toplu koşu "canlı panel"i — kapatılsa bile arka planda koşu devam eder (DOM'a
   // bağlı değil, Promise zincirleriyle yürür); kullanıcı istediğinde tekrar sonucu
-  // görmek isterse en son "Tüm senaryoları koş"/"Seçilenleri çalıştır" ile tekrar açar.
+  // görmek isterse en son "Koşuyu başlat"/"Seçilenleri çalıştır" ile tekrar açar.
   document.getElementById('senaryoCanliPanelKapatButonu').addEventListener('click', senaryoCanliPanelKapat);
   document.getElementById('senaryoCanliPanelOrtu').addEventListener('click', function (olay) {
     if (olay.target === olay.currentTarget) senaryoCanliPanelKapat();
@@ -3899,7 +4872,8 @@ const html = `<!DOCTYPE html>
 
   document.addEventListener('keydown', function (olay) {
     if (olay.key !== 'Escape') return;
-    if (document.getElementById('gorselBuyutmeOrtu').classList.contains('acik')) gorselBuyutmeKapat();
+    if (document.getElementById('topluKosuOnayOrtu').classList.contains('acik')) topluKosuOnayKapat();
+    else if (document.getElementById('gorselBuyutmeOrtu').classList.contains('acik')) gorselBuyutmeKapat();
     else if (document.getElementById('senaryoSonucModalOrtu').classList.contains('acik')) senaryoSonucModalKapat();
     else if (document.getElementById('senaryoCanliPanelOrtu').classList.contains('acik')) senaryoCanliPanelKapat();
     else if (document.getElementById('senaryoOlusturModalOrtu').classList.contains('acik')) senaryoOlusturModalKapat();

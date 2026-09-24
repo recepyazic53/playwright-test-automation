@@ -30,16 +30,25 @@
 import 'dotenv/config';
 import { createServer } from 'node:http';
 import { spawn, execFile } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, unlinkSync, statSync, createReadStream, appendFileSync, mkdirSync } from 'node:fs';
+import {
+  existsSync, readFileSync, writeFileSync, unlinkSync, statSync, createReadStream, appendFileSync, mkdirSync,
+  renameSync, realpathSync, readdirSync
+} from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve as resolvePath, extname } from 'node:path';
+import { dirname, join, resolve as resolvePath, extname, relative, isAbsolute, sep } from 'node:path';
 import { tmpdir } from 'node:os';
+import { eskiVideolariTemizle } from './medya-temizligi.mjs';
+import { haricTutulanlariOku, kosuListesiAnahtari, kosuListesiniGuncelle } from './kosu-listesi.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
 const tokenDosyasi = join(buDosyaninKlasoru, '.test-sunucu-token');
 const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
+// Dashboard'dan başlatılan tek bir koşunun (süreç başladıktan sonra) en fazla ne kadar
+// sürebileceği. En uzun senaryo zaman aşımı 3 dk + giriş; 10 dk güvenli bir üst sınır.
+// Gerekirse .env içinde TEST_SUNUCU_SURE_LIMITI_DK ile değiştirilebilir.
+const KOSU_SURE_LIMITI_MS = (Number(process.env.TEST_SUNUCU_SURE_LIMITI_DK) || 10) * 60 * 1000;
 
 // Terminal panelinin scrollback'i sınırlı/silinebilir olduğundan (ör. aynı panelde
 // başka bir komut çalıştırılırsa), TÜM konsol çıktısını AYRICA kalıcı bir dosyaya da
@@ -109,7 +118,6 @@ const EPIC_ADLARI = {
   'jet-ilk-ates-konut': 'İlk Ateş Konut',
   'jet-satis': 'Jet Satış',
   trafik: 'Trafik',
-  login: 'Giriş',
   portal: 'Portal'
 };
 
@@ -125,6 +133,54 @@ function urunAdiBul(dosyaYolu) {
   const canliEslesme = normalizeEdilmisYol.match(/(?:^|\/)canli\/([^/]+)\.spec\.ts$/);
   if (canliEslesme) return EPIC_ADLARI[canliEslesme[1]] ?? canliEslesme[1];
   return 'Diğer';
+}
+
+// Kalıcı veri dosyalarını (jet-seyahat.json, ortak.json) ATOMİK yazar: içerik önce aynı
+// klasörde geçici bir dosyaya yazılır, sonra rename ile hedefin üzerine taşınır. Böylece
+// yazma yarıda kesilse (sunucu çökse, disk dolsa) bile hedef dosya ya ESKİ ya YENİ haliyle
+// kalır — yarım/bozuk bir JSON asla oluşmaz (rename aynı dosya sisteminde atomiktir).
+function atomikYaz(hedefYol, icerik) {
+  const geciciYol = `${hedefYol}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
+  try {
+    writeFileSync(geciciYol, icerik, 'utf-8');
+    renameSync(geciciYol, hedefYol);
+  } catch (hata) {
+    try {
+      if (existsSync(geciciYol)) unlinkSync(geciciYol);
+    } catch {
+      // yok sayılır — asıl hata aşağıda fırlatılıyor
+    }
+    throw hata;
+  }
+}
+
+// /medya için HTTP "Range: bytes=..." başlığını çözer.
+//  - undefined döner: başlık yok ya da desteklenmeyen/bozuk biçim (ör. çoklu aralık) →
+//    RFC 9110'a göre başlık yok sayılır, dosyanın tamamı 200 ile gönderilir.
+//  - null döner: biçim geçerli ama karşılanamıyor (başlangıç >= boyut, boş dosya,
+//    "bytes=-0", başlangıç > bitiş) → çağıran 416 döner.
+//  - { baslangic, bitis } döner: bitis her zaman boyut-1'e kırpılmıştır.
+// "bytes=-500" (SON 500 bayt, "suffix range") ÖNCEDEN yanlışlıkla 0-500 olarak
+// yorumlanıyordu; artık doğru şekilde dosyanın son 500 baytı olarak çözülür.
+function byteAraligiCoz(baslik, boyut) {
+  if (typeof baslik !== 'string') return undefined;
+  const eslesme = /^bytes=(\d*)-(\d*)$/.exec(baslik.trim());
+  if (!eslesme || (eslesme[1] === '' && eslesme[2] === '')) return undefined;
+  const sayiMi = (metin) => metin === '' || Number.isSafeInteger(Number(metin));
+  if (!sayiMi(eslesme[1]) || !sayiMi(eslesme[2])) return null;
+
+  if (eslesme[1] === '') {
+    const sonBaytSayisi = Number(eslesme[2]);
+    if (sonBaytSayisi === 0 || boyut === 0) return null;
+    return { baslangic: Math.max(0, boyut - sonBaytSayisi), bitis: boyut - 1 };
+  }
+
+  const baslangic = Number(eslesme[1]);
+  if (baslangic >= boyut) return null;
+  if (eslesme[2] === '') return { baslangic, bitis: boyut - 1 };
+  const istenenBitis = Number(eslesme[2]);
+  if (istenenBitis < baslangic) return null;
+  return { baslangic, bitis: Math.min(istenenBitis, boyut - 1) };
 }
 
 function jsonGonder(res, durumKodu, govde) {
@@ -153,6 +209,22 @@ function corsBasliklariniUygula(req, res) {
   return false;
 }
 
+// Sunucu zaten yalnızca 127.0.0.1'e bağlanıyor; bu kontrol ek bir savunma katmanı:
+// (1) İsteğin KAYNAĞI gerçekten bu makine mi (loopback adresi)?
+// (2) Host başlığı bizim adresimiz mi? — "DNS rebinding" saldırısında kötü niyetli bir
+//     site kendi alan adını 127.0.0.1'e çözdürüp tarayıcıyı bu sunucuya yönlendirebilir;
+//     o durumda Host başlığı saldırganın alan adını (ör. evil.com) taşır ve burada reddedilir.
+// Dashboard her zaman "http://127.0.0.1:<PORT>" tabanını kullanır (bkz. urun-hata-raporu.mjs
+// > TEST_SUNUCU.taban), bu yüzden meşru istekler etkilenmez.
+const LOOPBACK_ADRESLERI = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+const IZINLI_HOST_BASLIKLARI = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
+
+function yerelIstekMi(req) {
+  const kaynak = req.socket?.remoteAddress;
+  const host = String(req.headers.host ?? '').toLowerCase();
+  return Boolean(kaynak && LOOPBACK_ADRESLERI.has(kaynak) && IZINLI_HOST_BASLIKLARI.has(host));
+}
+
 function govdeOku(req, maxBoyut = 1_000_000) {
   return new Promise((resolve, reject) => {
     let parcalar = '';
@@ -177,7 +249,10 @@ function regexIcinKac(metin) {
 // döner. tumSenaryolariGetir (aşağıda) bunu argümansız çağırır; testiCalistirVeBekle
 // ise bir senaryoyu ÇALIŞTIRMADAN ÖNCE dosya+grep ile daraltıp TAM OLARAK 1 sonuç
 // döndüğünü doğrulamak için kullanır (bkz. o fonksiyondaki NOT).
-function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined) {
+// ekOrtamDegiskenleri: /jetseyahat-senaryo/dene, geçici "ek senaryo" dosyasının yolunu
+// (TEST_SUNUCU_EK_SENARYO_DOSYASI) listeleme sürecine de vermek için kullanır — aksi halde
+// Playwright geçici senaryoyu listede göremez ve whitelist kontrolü onu reddeder.
+function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined, ekOrtamDegiskenleri = {}) {
   return new Promise((resolve, reject) => {
     if (!playwrightCliVarMi()) {
       reject(new Error(`"${PLAYWRIGHT_CLI_YOLU}" bulunamadı (npm install çalıştırılmamış olabilir).`));
@@ -192,7 +267,16 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
         // ortam değişkeni ile aktarılır (bkz. playwright.config.ts'teki "grep" ayarı ve
         // gercektenCalistir'deki açıklama) — Windows'ta argüman-satırı Unicode
         // bozulmasından kaçınmak için.
-        env: { ...process.env, TEST_ENV: ortam, ...(grepDeseni ? { TEST_SUNUCU_GREP_DESENI: grepDeseni } : {}) },
+        // TEST_SUNUCU_TUM_LISTE=1: playwright.config.ts'teki koşu listesi filtresi
+        // (grepInvert) bu listelemede UYGULANMAZ — "Senaryolar" tablosu, whitelist ve
+        // /kosu-listesi doğrulaması koşudan hariç tutulanlar dahil TÜM senaryoları görmeli.
+        env: {
+          ...process.env,
+          TEST_ENV: ortam,
+          TEST_SUNUCU_TUM_LISTE: '1',
+          ...(grepDeseni ? { TEST_SUNUCU_GREP_DESENI: grepDeseni } : {}),
+          ...ekOrtamDegiskenleri
+        },
         maxBuffer: 32 * 1024 * 1024,
         shell: false
       },
@@ -274,14 +358,28 @@ function sonucuOku(jsonYolu, senaryoAdi) {
         const ekranGoruntusuEki = (sonDeneme.attachments ?? []).find(
           (ek) => ek?.name === '✅ BAŞARILI - Son Ekran Görüntüsü' || ek?.name === '❌ HATA ANI - Ekran Görüntüsü'
         );
-        let ekranGoruntusuBase64 = null;
-        if (ekranGoruntusuEki?.path && existsSync(ekranGoruntusuEki.path)) {
+        // NOT: fixtures.ts görüntüyü testInfo.attach({ body }) ile BELLEKTEN eklediği için
+        // JSON raporunda bu ekin "path"i yok, görüntü "body" alanında base64 olarak gelir.
+        // Yalnızca path'e bakıldığında görüntü hiç bulunamıyor ve panelde gösterilmiyordu.
+        // Sıra: bizim ekimizin body'si → bizim ekimizin dosyası → Playwright'ın hata anında
+        // kendi çektiği "screenshot" eki (test-failed-*.png).
+        const pngDosyasiniOku = (yol) => {
+          if (!yol || !existsSync(yol)) return null;
           try {
-            ekranGoruntusuBase64 = readFileSync(ekranGoruntusuEki.path).toString('base64');
+            return readFileSync(yol).toString('base64');
           } catch (okumaHatasi) {
             console.error(`Ekran görüntüsü okunamadı: ${okumaHatasi.message}`);
+            return null;
           }
-        }
+        };
+        const playwrightEkranGoruntusu = (sonDeneme.attachments ?? [])
+          .filter((ek) => ek?.name === 'screenshot' && ek?.contentType === 'image/png')
+          .pop();
+        const ekranGoruntusuBase64 =
+          (typeof ekranGoruntusuEki?.body === 'string' && ekranGoruntusuEki.body) ||
+          pngDosyasiniOku(ekranGoruntusuEki?.path) ||
+          pngDosyasiniOku(playwrightEkranGoruntusu?.path) ||
+          null;
 
         // Video, playwright.config.ts'teki "video: TEST_SUNUCU_GORUNUR ? 'on' : ..."
         // ayarı sayesinde her dashboard koşusunda otomatik kaydedilir ve Playwright
@@ -327,6 +425,9 @@ function sonucuOku(jsonYolu, senaryoAdi) {
 // başlıklı iki koşu asla aynı anahtarı paylaşmaz.
 const calisanSurecler = new Map();
 
+// ortam -> devam eden rapor üretimi (bkz. /rapor-uret).
+const raporUretimleri = new Map();
+
 // NOT (önemli, "Tümünü durdur"da bazı senaryoların durmaması kök nedeni): AYNI
 // DOSYADAKİ senaryolar dosyaSirasiIleCalistir ile SIRAYA konuyor (bkz. aşağıdaki
 // açıklama) — yani "Seçilenleri çalıştır" ile aynı anda tetiklenen 3 senaryodan
@@ -362,22 +463,44 @@ const kuyruktaBekleyenler = new Map();
 // alındı); yalnızca koşu GERÇEKTEN ne çalışıyor ne kuyrukta değilse (zaten
 // bitmiş/hiç var olmamış) false döner — ama bu durumda bile işaretlemek zararsız
 // olduğundan, emin olunamayan her durumda true dönüp isteği kaydediyoruz.
+// Bir koşunun TÜM süreç ağacını (Playwright + worker'lar + tarayıcılar) kapatır.
+// macOS/Linux'ta önce SIGTERM gönderilir; süreç SURE_SONRA_ZORLA_MS içinde kapanmazsa
+// SIGKILL ile zorla kapatılır. Windows'ta taskkill /T /F zaten zorla ve ağaçla kapatır.
+const SURE_SONRA_ZORLA_MS = 5000;
+
+function sinyalGonder(kayit, sinyal) {
+  try {
+    // Negatif PID: tüm süreç grubuna sinyal gönderir (bkz. spawn'daki detached).
+    process.kill(-kayit.pid, sinyal);
+  } catch {
+    try {
+      kayit.surec.kill(sinyal);
+    } catch {
+      // Süreç zaten kapanmış — yok sayılır.
+    }
+  }
+}
+
+function surecAgaciniKapat(kayit) {
+  if (process.platform === 'win32') {
+    execFile('taskkill', ['/PID', String(kayit.pid), '/T', '/F'], () => {
+      // Süreç zaten kapanmış olabilir (yarış durumu) — hatayı yok sayıyoruz,
+      // asıl sonuç zaten alt.on('close') üzerinden gelecek.
+    });
+    return;
+  }
+  sinyalGonder(kayit, 'SIGTERM');
+  const zorla = setTimeout(() => {
+    if (kayit.surec.exitCode === null && kayit.surec.signalCode === null) sinyalGonder(kayit, 'SIGKILL');
+  }, SURE_SONRA_ZORLA_MS);
+  zorla.unref();
+}
+
 function calismaDurdur(kosuId) {
   const kayit = calisanSurecler.get(kosuId);
   if (kayit) {
     kayit.iptalEdiliyor = true;
-    if (process.platform === 'win32') {
-      execFile('taskkill', ['/PID', String(kayit.pid), '/T', '/F'], () => {
-        // Süreç zaten kapanmış olabilir (yarış durumu) — hatayı yok sayıyoruz,
-        // asıl sonuç zaten alt.on('close') üzerinden gelecek.
-      });
-    } else {
-      try {
-        kayit.surec.kill('SIGTERM');
-      } catch {
-        // yok sayılır
-      }
-    }
+    surecAgaciniKapat(kayit);
     return true;
   }
   // Şu an çalışmıyor — aynı dosyadaki başka bir senaryonun bitmesini bekleyen
@@ -444,7 +567,9 @@ function dosyaSirasiIleCalistir(dosya, gorev) {
   return buGorev;
 }
 
-async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId) {
+// ekOrtamDegiskenleri: yalnızca /jetseyahat-senaryo/dene tarafından doldurulur (geçici
+// ek senaryo dosyasının yolu); normal /calistir koşularında boştur.
+async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}) {
   if (!playwrightCliVarMi()) {
     return {
       calistiMi: false,
@@ -492,18 +617,26 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   // "Durdur" ile iptal edilirse yanıtı hemen dönebilsin.
   return new Promise((resolve) => {
     kuyruktaBekleyenler.set(kosuId, resolve);
-    dosyaSirasiIleCalistir(dosya, () => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId)).then((sonuc) => {
+    dosyaSirasiIleCalistir(dosya, () => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri)).then((sonuc) => {
       // Eğer calismaDurdur bu koşuyu ZATEN erken çözdüyse (Map'ten silinmiş olur),
       // ikinci kez resolve çağırmıyoruz — Promise'lerde ikinci resolve zaten yok
       // sayılır ama netlik için burada da kontrol ediyoruz.
       if (kuyruktaBekleyenler.delete(kosuId)) {
         resolve(sonuc);
       }
+    }, (hata) => {
+      // gercektenCalistir normalde hiç reddetmez; ama spawn eşzamanlı bir hata fırlatırsa
+      // (ör. EAGAIN) HTTP yanıtı sonsuza dek açık kalmasın ve işlenmemiş bir promise
+      // reddi oluşmasın diye burada da yakalanıp kullanıcıya dönülür.
+      console.error(`[test-sunucu] Koşu başlatılırken beklenmeyen hata: ${hata?.message ?? hata}`);
+      if (kuyruktaBekleyenler.delete(kosuId)) {
+        resolve({ calistiMi: false, mesaj: `Test süreci başlatılamadı: ${hata?.message ?? hata}` });
+      }
     });
   });
 }
 
-function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId) {
+function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}) {
   return new Promise((resolve) => {
     // Bu senaryo, dosya kuyruğunda beklerken (henüz hiç süreç başlatılmadan)
     // "Durdur" ile iptal edilmiş olabilir (bkz. calismaDurdur > baslamadanIptalEdilecekler
@@ -532,7 +665,16 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId) {
     // kendisindeydi. Çözüm: deseni CreateProcess'in ayrı "environment block"
     // mekanizmasıyla taşımak (bkz. playwright.config.ts > "grep" ayarı) — bu yol aynı
     // argüman-satırı bozulmasına uğramıyor.
-    const argumanlar = [PLAYWRIGHT_CLI_YOLU, 'test', dosya, '--reporter=list,json'];
+    // Her dashboard koşusu KENDİ çıktı klasörüne yazar. Aksi halde paralel koşular aynı
+    // test-results/ klasörünü paylaşıyor; Playwright her koşunun başında bu klasörü
+    // temizlediği için diğer koşuların trace/video dosyaları siliniyordu (ENOENT hataları,
+    // açılmayan videolar). Klasör test-results/ altında kaldığı için /medya ucu değişmeden
+    // çalışır.
+    const ciktiKlasoru = join(projeKoku, 'test-results', 'dashboard-kosulari', `${Date.now()}-${randomBytes(4).toString('hex')}`);
+    // Raporlayıcılar playwright.config.ts'ten gelir (list + json + Allure). "--reporter"
+    // VERİLMEZ: CLI'dan verilirse config'teki Allure raporlayıcısı devre dışı kalıyor ve
+    // dashboard koşuları rapora hiç yansımıyordu.
+    const argumanlar = [PLAYWRIGHT_CLI_YOLU, 'test', dosya, `--output=${ciktiKlasoru}`];
 
     console.log(`\n▶ [${ortam.toUpperCase()}] "${senaryoAdi}" başlatıldı...\n`);
 
@@ -544,7 +686,8 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId) {
         PLAYWRIGHT_JSON_OUTPUT_NAME: jsonCiktiYolu,
         TEST_SUNUCU_GORUNUR: '1',
         TEST_SUNUCU_CANLI_YOLU: canliYolu,
-        TEST_SUNUCU_GREP_DESENI: desen
+        TEST_SUNUCU_GREP_DESENI: desen,
+        ...ekOrtamDegiskenleri
       },
       // NOT: 'inherit' yerine 'pipe' kullanılıyor — alt sürecin kendi stdout/stderr'ı
       // (ör. Playwright'ın "Error: No tests found" çıktısı) DOĞRUDAN terminale
@@ -553,19 +696,44 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId) {
       // process.stdout/stderr'a AYNEN basıyoruz (terminaldeki canlı görünüm korunur) VE
       // ayrıca log dosyasına da yazıyoruz.
       stdio: ['ignore', 'pipe', 'pipe'],
+      // macOS/Linux'ta alt süreç kendi süreç grubunda başlatılır; böylece durdururken
+      // grubun tamamı (worker'lar ve tarayıcılar dahil) tek sinyalle kapatılabilir.
+      // Windows'ta bu gerekmez (taskkill /T zaten ağacı kapatıyor).
+      detached: process.platform !== 'win32',
       shell: false
     });
 
+    // Çıktının son kısmı bellekte tutulur: test hiç başlamadan düşerse (ör. giriş/hazırlık
+    // adımında portal açılmazsa) sonuç dosyası oluşmaz; hatanın sebebi yalnızca bu çıktıda
+    // olur ve dashboard'a buradan iletilir (bkz. hataOzetiCikar).
+    let ciktiKuyrugu = '';
+    const ciktiyaEkle = (metin) => {
+      ciktiKuyrugu = (ciktiKuyrugu + metin).slice(-CIKTI_KUYRUGU_MAKS);
+    };
     alt.stdout?.on('data', (parca) => {
       process.stdout.write(parca);
+      ciktiyaEkle(parca.toString('utf-8'));
       logaYaz(parca.toString('utf-8').replace(/\n$/, ''));
     });
     alt.stderr?.on('data', (parca) => {
       process.stderr.write(parca);
+      ciktiyaEkle(parca.toString('utf-8'));
       logaYaz('[stderr] ' + parca.toString('utf-8').replace(/\n$/, ''));
     });
 
-    calisanSurecler.set(kosuId, { surec: alt, pid: alt.pid, iptalEdiliyor: false, canliYolu });
+    const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu };
+    calisanSurecler.set(kosuId, kayit);
+
+    // Süre limiti: takılan bir koşu (ör. hiç kapanmayan bir pop-up, donan tarayıcı)
+    // dashboard'u sonsuza kadar "çalışıyor" durumunda bırakmasın diye, süreç
+    // KOSU_SURE_LIMITI_MS sonunda hâlâ çalışıyorsa zorla kapatılır. Süre, sıra beklerken
+    // değil süreç gerçekten başladığında işlemeye başlar.
+    const sureLimitiZamanlayici = setTimeout(() => {
+      if (!calisanSurecler.has(kosuId)) return;
+      kayit.zamanAsimi = true;
+      console.log(`\n⏱ [${ortam.toUpperCase()}] "${senaryoAdi}" ${Math.round(KOSU_SURE_LIMITI_MS / 60000)} dakikalık süre limitini aştı, durduruluyor...\n`);
+      surecAgaciniKapat(kayit);
+    }, KOSU_SURE_LIMITI_MS);
 
     let sureciBaslatmaHatasi = null;
     alt.on('error', (hata) => {
@@ -574,8 +742,8 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId) {
     });
 
     alt.on('close', (kod) => {
-      const kayit = calisanSurecler.get(kosuId);
-      const iptalEdildiMi = kayit?.iptalEdiliyor ?? false;
+      clearTimeout(sureLimitiZamanlayici);
+      const iptalEdildiMi = kayit.iptalEdiliyor && !kayit.zamanAsimi;
       calisanSurecler.delete(kosuId);
 
       // Koşu bitti, canlı izleme dosyasına artık gerek yok — temizle (yoksa/okunamıyorsa
@@ -588,6 +756,22 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId) {
 
       if (sureciBaslatmaHatasi) {
         resolve({ calistiMi: false, mesaj: `Test süreci başlatılamadı: ${sureciBaslatmaHatasi.message}` });
+        return;
+      }
+
+      if (kayit.zamanAsimi) {
+        resolve({
+          calistiMi: true,
+          cikisKodu: kod,
+          sonuc: {
+            durum: 'timedOut',
+            sureMs: KOSU_SURE_LIMITI_MS,
+            hataMesaji: `Koşu ${Math.round(KOSU_SURE_LIMITI_MS / 60000)} dakikalık süre limitini aştığı için durduruldu.`,
+            ekranGoruntusu: null,
+            videoYolu: null
+          },
+          iptalEdildiMi: false
+        });
         return;
       }
 
@@ -608,24 +792,78 @@ function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId) {
       } catch (okumaHatasi) {
         console.error(`Sonuç dosyası okunamadı/ayrıştırılamadı: ${okumaHatasi.message}`);
       }
-      resolve({ calistiMi: true, cikisKodu: kod, sonuc, iptalEdildiMi: false });
+      resolve({
+        calistiMi: true,
+        cikisKodu: kod,
+        sonuc,
+        iptalEdildiMi: false,
+        ciktiHataOzeti: sonuc ? null : hataOzetiCikar(ciktiKuyrugu)
+      });
     });
   });
 }
 
+// Süreç çıktısından okunabilir bir hata özeti çıkarır (sonuç dosyası yokken kullanılır).
+// Hata, testler başlamadan (globalSetup: giriş/oturum kontrolü) oluştuysa bunu başa yazar.
+const CIKTI_KUYRUGU_MAKS = 20000;
+function hataOzetiCikar(cikti) {
+  const temiz = String(cikti ?? '').replace(/\x1b\[[0-9;]*m/g, '');
+  if (!temiz.trim()) return null;
+  if (/No tests found/i.test(temiz)) return 'Bu senaryo çalıştırılacak testler arasında bulunamadı (No tests found).';
+  const satirlar = temiz.split(/\r?\n/);
+  const baslangic = satirlar.findIndex((s) => /^\s*(?:[A-Za-z]*Error|Error)\b[:\s]/.test(s));
+  let ozet;
+  if (baslangic === -1) {
+    ozet = satirlar.filter((s) => s.trim()).slice(-12).join('\n');
+  } else {
+    const parca = [];
+    for (let i = baslangic; i < satirlar.length && parca.length < 14; i++) {
+      // Kaynak kod alıntısı ("  23 |", "> 25 |") ve yığın izi ("at ...") gürültüsü atlanır.
+      if (/^\s*(?:>?\s*\d+\s*\||\|\s*\^|at\s)/.test(satirlar[i])) continue;
+      if (!satirlar[i].trim() && parca.length && !parca[parca.length - 1].trim()) continue;
+      parca.push(satirlar[i]);
+    }
+    ozet = parca.join('\n').trim();
+  }
+  const hazirliktaMi = /globalSetup|global-setup\.ts/.test(temiz);
+  return (hazirliktaMi ? 'Test başlamadan, giriş/hazırlık adımında (global-setup) hata oluştu:\n\n' : '') + ozet;
+}
+
 // ---- JetSeyahat "Senaryo Oluştur" özelliği (dashboard'daki "+ Senaryo Oluştur"
 // popup'ından tetiklenir) ----
-// Bu özellik yeni bir çalıştırma altyapısı KURMAZ; MEVCUT tumSenaryolariGetir +
-// testiCalistirVeBekle akışını OLDUĞU GİBİ kullanır: "dene" isteğinde, kullanıcının
-// doldurduğu alanlar GEÇİCİ ve belirgin bir başlıkla (SENARYO_OLUSTUR_GECICI_ON_EK
-// ile başlayan) jet-seyahat.json > senaryolar dizisine eklenir, normal akışla
-// çalıştırılır, sonuç ne olursa olsun (başarılı/başarısız/hata) geçici kayıt hemen
-// ardından dosyadan SİLİNİR — kullanıcı denemeyi hiç "kaydet" demeden kapatsa bile
-// dosyada iz kalmaz. "kaydet" isteğinde ise aynı senaryo nesnesi, kullanıcının
-// verdiği KALICI başlıkla eklenir ve silinmez; "Senaryolar" listesinde görünmesi
-// için dashboard'ın yeniden üretilmesi (npm run rapor:test) gerekir — mevcut "Koşu
-// geçmişi" statik anlık görüntü sınırlamasıyla aynı mimari kısıt.
+// Bu özellik yeni bir çalıştırma altyapısı KURMAZ; MEVCUT senaryolariListele +
+// testiCalistirVeBekle akışını kullanır.
+//
+// "dene" isteği KALICI HİÇBİR DOSYAYA YAZMAZ: kullanıcının doldurduğu alanlar GEÇİCİ ve
+// belirgin bir başlıkla (SENARYO_OLUSTUR_GECICI_ON_EK ile başlayan) işletim sisteminin
+// geçici klasöründeki ayrı bir "ek senaryo" JSON dosyasına yazılır (yeni girilen bir
+// acente profili de aynı dosyaya). Bu dosyanın yolu TEST_SUNUCU_EK_SENARYO_DOSYASI ortam
+// değişkeniyle hem "--list" hem de koşu sürecine verilir; tests/support/test-data.ts
+// yükleyicileri bu değişken tanımlıysa ek kayıtları kalıcı verinin üzerine birleştirir.
+// Deneme bitince geçici dosya silinir — silinemese bile (sunucu çökerse) kalıcı
+// jet-seyahat.json / ortak.json'da iz kalmaz.
+// ÖNCEDEN geçici senaryo doğrudan jet-seyahat.json'a eklenip finally'de siliniyordu;
+// sunucu arada kapanınca kayıt dosyada kalmıştı. Ayrıca yeni acente profili "dene"de
+// bile ortak.json'a kalıcı yazılıyordu. İkisi de artık yalnızca "kaydet"te yapılır.
+//
+// "kaydet" isteğinde aynı senaryo nesnesi, kullanıcının verdiği KALICI başlıkla
+// jet-seyahat.json'a (gerekirse yeni acente profili ortak.json'a) ATOMİK olarak yazılır;
+// "Senaryolar" listesinde görünmesi için dashboard'ın yeniden üretilmesi (npm run
+// rapor:test) gerekir — mevcut "Koşu geçmişi" statik anlık görüntü sınırlamasıyla aynı
+// mimari kısıt.
 const SENARYO_OLUSTUR_GECICI_ON_EK = '__senaryo_olustur_deneme__ ';
+// tests/support/test-data.ts > EK_SENARYO_DOSYASI_ORTAM_DEGISKENI ile AYNI TUTULMALI.
+const EK_SENARYO_ORTAM_DEGISKENI = 'TEST_SUNUCU_EK_SENARYO_DOSYASI';
+const EK_SENARYO_DOSYA_ON_EKI = 'test-sunucu-ek-senaryo-';
+// "dene" listelemesini yalnızca JetSeyahat senaryo dosyasına daraltan konumsal filtre
+// (Playwright bunu dosya yoluna karşı regex olarak eşleştirir) — hem hızlı hem de geçici
+// senaryonun yalnızca bu dosyada aranmasını garanti eder.
+const JET_SEYAHAT_SENARYO_FILTRESI = 'scenarios/jet-seyahat/';
+// "Kaydet" ile eklenen JetSeyahat senaryolarının üretildiği spec dosyası (testDir'e göre
+// göreli, "--list" çıktısındaki biçim). prim-hesaplama.spec.ts, jet-seyahat.json >
+// senaryolar dizisindeki her kayıt için test(senaryo.baslik, ...) açar — yani yeni
+// senaryonun koşu listesi anahtarı "<bu dosya>::<başlık>" olur.
+const JET_SEYAHAT_SPEC_DOSYASI = 'scenarios/jet-seyahat/prim-hesaplama.spec.ts';
 
 function jetSeyahatDosyaYolu(ortam) {
   return join(projeKoku, 'tests', 'data', ortam, 'jet-seyahat.json');
@@ -640,13 +878,17 @@ function jetSeyahatVerisiniOku(ortam) {
 }
 
 function jetSeyahatVerisiniYaz(ortam, veri) {
-  writeFileSync(jetSeyahatDosyaYolu(ortam), JSON.stringify(veri, null, 2) + '\n', 'utf-8');
+  atomikYaz(jetSeyahatDosyaYolu(ortam), JSON.stringify(veri, null, 2) + '\n');
 }
 
 // Dashboard popup'ından gelen ham gövdeyi, jet-seyahat.json > senaryolar dizisindeki
 // bir öğe şekline (bkz. tests/support/test-data.ts > JetSeyahatTestData) dönüştürür;
 // yalnızca dolu/tanımlı alanlar kopyalanır. Geçersiz/eksik veri varsa fırlatılan
 // Error mesajı doğrudan kullanıcıya (dashboard popup'ında) gösterilir.
+// HİÇBİR DOSYAYA YAZMAZ: { senaryo, yeniAcenteProfilleri } döner — yeniAcenteProfilleri,
+// ortak.json > kullaniciDegistir'de henüz OLMAYAN ve bu senaryo için oluşturulan acente
+// profilleridir (anahtar -> profil). Bunları "kaydet" ortak.json'a, "dene" ise yalnızca
+// geçici ek senaryo dosyasına yazar.
 function jetSeyahatSenaryoNesnesiOlustur(baslik, girdi, ortam) {
   if (!girdi || typeof girdi !== 'object') {
     throw new Error('Senaryo alanları eksik.');
@@ -717,6 +959,7 @@ function jetSeyahatSenaryoNesnesiOlustur(baslik, girdi, ortam) {
   // değiştir ekranındaki select2 sonucunu filtrelemek için kullanılan tam etiket) burada
   // bilinmiyor; kodun kendisiyle aynı verilir — arama kutusuna zaten aynı kod yazıldığından
   // (bkz. kullanici-degistir.page.ts) sonuç listesi o kodu içeren TEK satıra iner.
+  const yeniAcenteProfilleri = {};
   if (girdi.acenteKodu) {
     const acenteKodu = String(girdi.acenteKodu).trim();
     const acenteKullanicisi = girdi.acenteKullanicisi ? String(girdi.acenteKullanicisi).trim() : '';
@@ -724,18 +967,23 @@ function jetSeyahatSenaryoNesnesiOlustur(baslik, girdi, ortam) {
       throw new Error('Acente kodu girildiyse acente kullanıcı kodu da girilmelidir.');
     }
     const ortakVeri = ortakVerisiniOku(ortam);
+    const oncekiAnahtarlar = new Set(Object.keys(ortakVeri.kullaniciDegistir));
     const anahtar = ortakAcenteProfiliBulYaEkle(ortakVeri, {
       acentePartaji: acenteKodu,
       acentePartajiSecenegi: acenteKodu,
       acenteKullanicisi: acenteKullanicisi
     });
-    ortakVerisiniYaz(ortam, ortakVeri);
+    // Profil zaten varsa ortak.json'a dokunmaya gerek yok; yeni oluşturulduysa çağırana
+    // bildirilir (bkz. yukarıdaki açıklama) — burada diske YAZILMAZ.
+    if (!oncekiAnahtarlar.has(anahtar)) {
+      yeniAcenteProfilleri[anahtar] = ortakVeri.kullaniciDegistir[anahtar];
+    }
     senaryo.acenteProfili = anahtar;
   } else if (girdi.acenteProfili) {
     senaryo.acenteProfili = girdi.acenteProfili;
   }
 
-  return senaryo;
+  return { senaryo, yeniAcenteProfilleri };
 }
 
 // Popup'ın "hazır profil" dropdown'larını (ettiren/sigortalı) ve "Çoklu" sorgu tipi
@@ -769,7 +1017,7 @@ function ortakVerisiniOku(ortam) {
 }
 
 function ortakVerisiniYaz(ortam, veri) {
-  writeFileSync(ortakDosyaYolu(ortam), JSON.stringify(veri, null, 2) + '\n', 'utf-8');
+  atomikYaz(ortakDosyaYolu(ortam), JSON.stringify(veri, null, 2) + '\n');
 }
 
 // Manuel girilen acente kodu + kullanıcısıyla eşleşen bir profil ortak.json >
@@ -797,7 +1045,12 @@ function ortakAcenteProfiliBulYaEkle(veri, acente) {
   return yeniAnahtar;
 }
 
-const sunucu = createServer(async (req, res) => {
+async function istegiIsle(req, res) {
+  if (!yerelIstekMi(req)) {
+    jsonGonder(res, 403, { basarili: false, mesaj: 'Yalnızca bu bilgisayardan (127.0.0.1) gelen isteklere izin verilir.' });
+    return;
+  }
+
   const izinliOrigin = corsBasliklariniUygula(req, res);
 
   if (req.method === 'OPTIONS') {
@@ -825,7 +1078,24 @@ const sunucu = createServer(async (req, res) => {
       return;
     }
 
-    const { ortam, senaryoAdi, token } = istek ?? {};
+    const { ortam, senaryoAdi, dosya, token } = istek ?? {};
+    // Dashboard'daki "Koşuyu başlat": tüm senaryolar aynı kosuKimligi ile ve 'tam'
+    // koşu olarak etiketlenir ki rapor bunları tek bir tam koşu olarak gruplasın ve üst
+    // kartları güncellesin. Kimlik yalnızca güvenli karakterlerden oluşabilir.
+    // "Seçilenleri çalıştır" gibi birlikte başlatılan kısmi koşular da ortak bir kimlik
+    // taşır (kosuTuru 'tekil'); rapor bunları koşu geçmişinde TEK bir tekil koşu olarak
+    // gösterir, kartları etkilemez.
+    const kosuTuru = istek?.kosuTuru === 'tam' || istek?.kosuTuru === 'tekil' ? istek.kosuTuru : null;
+    const ortakKosuKimligi =
+      kosuTuru && typeof istek?.kosuKimligi === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(istek.kosuKimligi)
+        ? istek.kosuKimligi
+        : null;
+    // Koşu kapsamı (yalnızca 'tam' koşularda anlamlı): dashboard'da bir ürün seçiliyken
+    // başlatılan "Koşuyu başlat" o ürünün adını, Genel görünümde 'Genel' gönderir.
+    // fixtures.ts bunu "kosuKapsami" Allure etiketi olarak yazar; rapor ürün kartlarını ve
+    // Genel trendini buna göre hesaplar. Değer aşağıda senaryo listesindeki ürün adlarıyla
+    // doğrulanır.
+    const kosuKapsami = kosuTuru === 'tam' && typeof istek?.kosuKapsami === 'string' ? istek.kosuKapsami : 'Genel';
     // kosuId: dashboard'un HER TEKİL koşu isteği için ürettiği benzersiz kimlik (bkz.
     // calisanSurecler üstündeki NOT). Eski/uyumsuz bir istemciden gelirse (kosuId yoksa)
     // sunucu kendi üretir — koşu yine çalışır, sadece o istek için "Durdur" başka bir
@@ -858,19 +1128,54 @@ const sunucu = createServer(async (req, res) => {
       return;
     }
 
-    const eslesenSenaryo = tumSenaryolar.find((s) => s.ad === senaryoAdi);
-    if (!eslesenSenaryo) {
+    // Aynı başlık birden fazla ürün dosyasında bulunabildiği için senaryo (ad + dosya)
+    // ikilisiyle eşleştirilir. Dashboard'un "Senaryolar" tablosu dosyayı her zaman
+    // gönderir; dosyasız eski/diğer isteklerde ad birden fazla dosyada varsa yanlış testi
+    // koşmamak için istek reddedilir.
+    const adaGoreEslesenler = tumSenaryolar.filter((s) => s.ad === senaryoAdi);
+    const eslesenler =
+      typeof dosya === 'string' && dosya ? adaGoreEslesenler.filter((s) => s.dosya === dosya) : adaGoreEslesenler;
+    if (eslesenler.length === 0) {
       jsonGonder(res, 403, {
         basarili: false,
         mesaj: 'Bu ad, projedeki gerçek senaryolarla eşleşmiyor; güvenlik nedeniyle çalıştırılmadı.'
       });
       return;
     }
+    if (new Set(eslesenler.map((s) => s.dosya)).size > 1) {
+      jsonGonder(res, 409, {
+        basarili: false,
+        mesaj:
+          'Bu başlık birden fazla üründe var (' +
+          [...new Set(eslesenler.map((s) => s.urun))].join(', ') +
+          '). Yanlış testi koşmamak için lütfen senaryoyu "Senaryolar" tablosundan çalıştırın.'
+      });
+      return;
+    }
+    const eslesenSenaryo = eslesenler[0];
+
+    if (kosuKapsami !== 'Genel' && !tumSenaryolar.some((s) => s.urun === kosuKapsami)) {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'kosuKapsami "Genel" ya da projedeki bir ürün adı olmalıdır.' });
+      return;
+    }
 
     // Bu istek, test TAMAMEN bitene kadar (birkaç saniyeden birkaç dakikaya kadar
     // sürebilir) yanıt vermeden bekletilir — dashboard tarafı bu sürede satırı
     // "çalışıyor" gösterir, sonuç gelince popup açar.
-    const calistirmaSonucu = await testiCalistirVeBekle(ortam, senaryoAdi, eslesenSenaryo.dosya, tumSenaryolar, kosuId);
+    const calistirmaSonucu = await testiCalistirVeBekle(
+      ortam,
+      senaryoAdi,
+      eslesenSenaryo.dosya,
+      tumSenaryolar,
+      kosuId,
+      ortakKosuKimligi
+        ? {
+            KOSU_KIMLIGI: ortakKosuKimligi,
+            TEST_SUNUCU_KOSU_TURU: kosuTuru,
+            ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami } : {})
+          }
+        : {}
+    );
 
     if (!calistirmaSonucu.calistiMi) {
       jsonGonder(res, 500, { basarili: false, mesaj: calistirmaSonucu.mesaj });
@@ -890,7 +1195,8 @@ const sunucu = createServer(async (req, res) => {
       jsonGonder(res, 200, {
         basarili: true,
         durum: calistirmaSonucu.cikisKodu === 0 ? 'passed' : 'failed',
-        mesaj: `Test tamamlandı ama detaylı sonuç okunamadı (çıkış kodu: ${calistirmaSonucu.cikisKodu}). Terminaldeki çıktıya bakın.`
+        mesaj: `Test tamamlandı ama detaylı sonuç okunamadı (çıkış kodu: ${calistirmaSonucu.cikisKodu}). Terminaldeki çıktıya bakın.`,
+        hataMesaji: calistirmaSonucu.ciktiHataOzeti || null
       });
       return;
     }
@@ -903,6 +1209,107 @@ const sunucu = createServer(async (req, res) => {
       ekranGoruntusu: calistirmaSonucu.sonuc.ekranGoruntusu,
       videoUrl: medyaUrlOlustur(calistirmaSonucu.sonuc.videoYolu)
     });
+    return;
+  }
+
+  // Dashboard'daki "Koşuyu başlat" bitince raporu (dashboard-<ortam>.html) yeniden
+  // üretir; böylece üst kartlar yeni tam koşuyla güncellenir. Aynı anda tek üretim yapılır.
+  if (req.method === 'POST' && req.url === '/rapor-uret') {
+    let istek;
+    try {
+      istek = JSON.parse(await govdeOku(req));
+    } catch {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz istek gövdesi.' });
+      return;
+    }
+    const { ortam, token } = istek ?? {};
+    if (token !== TOKEN) {
+      jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
+      return;
+    }
+    if (ortam !== 'test' && ortam !== 'canli') {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'ortam yalnızca "test" veya "canli" olabilir.' });
+      return;
+    }
+    if (!raporUretimleri.has(ortam)) {
+      raporUretimleri.set(
+        ortam,
+        new Promise((coz) => {
+          execFile(
+            process.execPath,
+            [join(projeKoku, 'scripts', 'urun-hata-raporu.mjs'), ortam],
+            { cwd: projeKoku, maxBuffer: 32 * 1024 * 1024, timeout: 5 * 60 * 1000, shell: false },
+            (hata, stdout, stderr) => coz(hata ? { basarili: false, mesaj: `Rapor üretilemedi: ${String(stderr || hata.message).slice(-500)}` } : { basarili: true })
+          );
+        }).finally(() => raporUretimleri.delete(ortam))
+      );
+    }
+    const sonuc = await raporUretimleri.get(ortam);
+    console.log(sonuc.basarili ? `Dashboard yeniden üretildi (${ortam}).` : sonuc.mesaj);
+    jsonGonder(res, sonuc.basarili ? 200 : 500, sonuc);
+    return;
+  }
+
+  // Dashboard'daki "Koşuda" anahtarları ve "Koşuya ekle / Koşudan çıkar" düğmeleri:
+  // tests/data/kosu-listesi.json'daki hariç listesini günceller (bkz. kosu-listesi.mjs).
+  // Gövde: { token, anahtarlar: ["<dosya>::<ad>", ...], dahil: true|false }. Her anahtar
+  // projede GERÇEKTEN var olan bir senaryoya karşılık gelmek zorundadır (whitelist —
+  // hariç tutulanlar dahil tüm liste); tek bir geçersiz anahtar bile varsa dosyaya hiç
+  // dokunulmaz. Yanıt: { basarili, haricTutulanlar } (yeni hariç listesi).
+  if (req.method === 'POST' && req.url === '/kosu-listesi') {
+    let istek;
+    try {
+      istek = JSON.parse(await govdeOku(req));
+    } catch {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz istek gövdesi.' });
+      return;
+    }
+    const { token, anahtarlar, dahil } = istek ?? {};
+    // Liste ortamdan bağımsızdır; whitelist için hangi ortamın senaryo listesinin
+    // kullanılacağı isteğe bağlıdır (varsayılan: test — canlıya özel dosyalar yalnızca
+    // canli listesinde görünür).
+    const ortam = istek?.ortam === 'canli' ? 'canli' : 'test';
+    if (token !== TOKEN) {
+      jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
+      return;
+    }
+    if (typeof dahil !== 'boolean') {
+      jsonGonder(res, 400, { basarili: false, mesaj: '"dahil" true ya da false olmalıdır.' });
+      return;
+    }
+    if (!Array.isArray(anahtarlar) || anahtarlar.length === 0 || anahtarlar.length > 5000 || anahtarlar.some((a) => typeof a !== 'string')) {
+      jsonGonder(res, 400, { basarili: false, mesaj: '"anahtarlar" boş olmayan bir metin dizisi olmalıdır.' });
+      return;
+    }
+
+    let tumSenaryolar;
+    try {
+      tumSenaryolar = await tumSenaryolariGetir(ortam);
+    } catch (hata) {
+      jsonGonder(res, 500, { basarili: false, mesaj: `Senaryo listesi alınamadı: ${hata.message}` });
+      return;
+    }
+    const gecerliAnahtarlar = new Set(tumSenaryolar.map((s) => kosuListesiAnahtari(s.dosya, s.ad)));
+    const normalAnahtarlar = anahtarlar.map((a) => {
+      const i = a.indexOf('::');
+      return i > 0 ? kosuListesiAnahtari(a.slice(0, i), a.slice(i + 2)) : null;
+    });
+    const gecersizler = anahtarlar.filter((a, i) => !normalAnahtarlar[i] || !gecerliAnahtarlar.has(normalAnahtarlar[i]));
+    if (gecersizler.length) {
+      jsonGonder(res, 400, {
+        basarili: false,
+        mesaj: `Projede bulunmayan senaryo anahtarı: ${gecersizler.slice(0, 3).map((a) => `"${a}"`).join(', ')}${gecersizler.length > 3 ? ` (+${gecersizler.length - 3})` : ''}`
+      });
+      return;
+    }
+
+    try {
+      const haricTutulanlar = kosuListesiniGuncelle(normalAnahtarlar, dahil);
+      console.log(`[test-sunucu] Koşu listesi güncellendi: ${normalAnahtarlar.length} senaryo ${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'} (hariç: ${haricTutulanlar.length}).`);
+      jsonGonder(res, 200, { basarili: true, haricTutulanlar });
+    } catch (hata) {
+      jsonGonder(res, 500, { basarili: false, mesaj: `Koşu listesi yazılamadı: ${hata.message}` });
+    }
     return;
   }
 
@@ -957,9 +1364,24 @@ const sunucu = createServer(async (req, res) => {
       return;
     }
 
-    const testSonuclariKoku = resolvePath(projeKoku, 'test-results');
-    const cozulmusYol = resolvePath(yol);
-    if (!cozulmusYol.startsWith(testSonuclariKoku) || !existsSync(cozulmusYol)) {
+    // NOT: Önceki kontrol "startsWith(test-results)" idi — ayraç kontrolü olmadığından
+    // "test-results-baska/..." gibi KARDEŞ klasörleri de geçiriyordu ve sembolik bağlar
+    // (symlink) ile klasör dışına çıkılabiliyordu. Artık hem kök hem hedef realpath ile
+    // gerçek yollarına çözülür ve path.relative ile hedefin kökün GERÇEKTEN İÇİNDE olduğu
+    // doğrulanır. Ayrıca yalnızca normal DOSYALAR sunulur (klasör → EISDIR çökmesi).
+    let cozulmusYol;
+    let dosyaBilgisi;
+    try {
+      const testSonuclariKoku = realpathSync(resolvePath(projeKoku, 'test-results'));
+      cozulmusYol = realpathSync(resolvePath(yol));
+      const goreli = relative(testSonuclariKoku, cozulmusYol);
+      const kokunIcindeMi = goreli !== '' && goreli !== '..' && !goreli.startsWith('..' + sep) && !isAbsolute(goreli);
+      // statSync de try içinde: dosya kontrolle okuma arasında silinirse (ENOENT) çökmesin.
+      dosyaBilgisi = kokunIcindeMi ? statSync(cozulmusYol) : null;
+    } catch {
+      dosyaBilgisi = null;
+    }
+    if (!dosyaBilgisi || !dosyaBilgisi.isFile()) {
       jsonGonder(res, 404, { basarili: false, mesaj: 'Dosya bulunamadı.' });
       return;
     }
@@ -971,23 +1393,38 @@ const sunucu = createServer(async (req, res) => {
       uzanti === '.png' ? 'image/png' :
       'application/octet-stream';
 
-    const boyut = statSync(cozulmusYol).size;
-    const araligi = req.headers.range;
-    if (araligi) {
-      const eslesme = /^bytes=(\d*)-(\d*)$/.exec(araligi);
-      const baslangic = eslesme && eslesme[1] ? Number(eslesme[1]) : 0;
-      const bitis = eslesme && eslesme[2] ? Number(eslesme[2]) : boyut - 1;
-      res.writeHead(206, {
-        'Content-Type': icerikTuru,
-        'Content-Length': bitis - baslangic + 1,
-        'Content-Range': `bytes ${baslangic}-${bitis}/${boyut}`,
-        'Accept-Ranges': 'bytes'
-      });
-      createReadStream(cozulmusYol, { start: baslangic, end: bitis }).pipe(res);
-    } else {
-      res.writeHead(200, { 'Content-Type': icerikTuru, 'Content-Length': boyut, 'Accept-Ranges': 'bytes' });
-      createReadStream(cozulmusYol).pipe(res);
+    const boyut = dosyaBilgisi.size;
+    const aralik = byteAraligiCoz(req.headers.range, boyut);
+    if (aralik === null) {
+      // Karşılanamayan aralık (ör. dosya boyutunun ötesi, boş dosya) — RFC 9110'a göre 416.
+      res.writeHead(416, { 'Content-Range': `bytes */${boyut}`, 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ basarili: false, mesaj: 'İstenen bayt aralığı karşılanamıyor.' }));
+      return;
     }
+
+    const basliklar = aralik
+      ? {
+          'Content-Type': icerikTuru,
+          'Content-Length': aralik.bitis - aralik.baslangic + 1,
+          'Content-Range': `bytes ${aralik.baslangic}-${aralik.bitis}/${boyut}`,
+          'Accept-Ranges': 'bytes'
+        }
+      : { 'Content-Type': icerikTuru, 'Content-Length': boyut, 'Accept-Ranges': 'bytes' };
+    const akis = createReadStream(cozulmusYol, aralik ? { start: aralik.baslangic, end: aralik.bitis } : {});
+    // Başlıklar ancak dosya GERÇEKTEN açılınca gönderilir; açılamazsa (arada silindi vb.)
+    // hâlâ düzgün bir JSON hata yanıtı dönülebilir. Akış hatası HER ZAMAN dinlenir —
+    // dinleyicisiz bir 'error' olayı tüm sunucu sürecini çökertir.
+    akis.on('open', () => {
+      res.writeHead(aralik ? 206 : 200, basliklar);
+      akis.pipe(res);
+    });
+    akis.on('error', (hata) => {
+      console.error(`[test-sunucu] /medya okunamadı (${cozulmusYol}): ${hata.message}`);
+      if (!res.headersSent) jsonGonder(res, 500, { basarili: false, mesaj: 'Dosya okunamadı.' });
+      else res.destroy(hata);
+    });
+    // İstemci (video oynatıcı) bağlantıyı erken kapatırsa dosya tanıtıcısı açık kalmasın.
+    res.on('close', () => akis.destroy());
     return;
   }
 
@@ -1046,22 +1483,38 @@ const sunucu = createServer(async (req, res) => {
     }
 
     const geciciBaslik = SENARYO_OLUSTUR_GECICI_ON_EK + randomBytes(4).toString('hex');
-    let eklendiMi = false;
+    // Geçici ek senaryo dosyası (bkz. "Senaryo Oluştur" bölümündeki açıklama) — kalıcı
+    // jet-seyahat.json / ortak.json'a HİÇ yazılmaz.
+    const ekDosyaYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}${Date.now()}-${randomBytes(6).toString('hex')}.json`);
     try {
-      const veri = jetSeyahatVerisiniOku(ortam);
-      const yeniSenaryo = jetSeyahatSenaryoNesnesiOlustur(geciciBaslik, senaryo, ortam);
-      veri.jetSeyahat.senaryolar.push(yeniSenaryo);
-      jetSeyahatVerisiniYaz(ortam, veri);
-      eklendiMi = true;
+      const { senaryo: yeniSenaryo, yeniAcenteProfilleri } = jetSeyahatSenaryoNesnesiOlustur(geciciBaslik, senaryo, ortam);
+      writeFileSync(
+        ekDosyaYolu,
+        JSON.stringify({ ortam, jetSeyahatSenaryolari: [yeniSenaryo], kullaniciDegistir: yeniAcenteProfilleri }, null, 2),
+        'utf-8'
+      );
+      const ekOrtamDegiskenleri = { [EK_SENARYO_ORTAM_DEGISKENI]: ekDosyaYolu };
 
-      const tumSenaryolar = await tumSenaryolariGetir(ortam);
+      // NOT: Paylaşılan tumSenaryolariGetir önbelleği BİLEREK kullanılmaz — o liste ek
+      // senaryo dosyasını görmeyen (ve bu istekten ÖNCE başlamış olabilecek) bir "--list"
+      // sürecinin sonucudur; ayrıca geçici senaryo o önbelleğe sızarsa normal /calistir
+      // whitelist'ini kirletirdi. Bu yüzden aynı ortam değişkeniyle, JetSeyahat dosyasına
+      // daraltılmış AYRI bir listeleme yapılır.
+      const tumSenaryolar = await senaryolariListele(ortam, [JET_SEYAHAT_SENARYO_FILTRESI], undefined, ekOrtamDegiskenleri);
       const eslesenSenaryo = tumSenaryolar.find((s) => s.ad === geciciBaslik);
       if (!eslesenSenaryo) {
-        throw new Error('Geçici senaryo, senaryo listesinde bulunamadı (dosya değişikliği Playwright tarafından görülemedi).');
+        throw new Error('Geçici senaryo, senaryo listesinde bulunamadı (ek senaryo dosyası Playwright tarafından görülemedi).');
       }
 
       const kosuId = randomBytes(8).toString('hex');
-      const calistirmaSonucu = await testiCalistirVeBekle(ortam, geciciBaslik, eslesenSenaryo.dosya, tumSenaryolar, kosuId);
+      const calistirmaSonucu = await testiCalistirVeBekle(
+        ortam,
+        geciciBaslik,
+        eslesenSenaryo.dosya,
+        tumSenaryolar,
+        kosuId,
+        ekOrtamDegiskenleri
+      );
 
       if (!calistirmaSonucu.calistiMi) {
         jsonGonder(res, 500, { basarili: false, mesaj: calistirmaSonucu.mesaj });
@@ -1075,7 +1528,8 @@ const sunucu = createServer(async (req, res) => {
         jsonGonder(res, 200, {
           basarili: true,
           durum: calistirmaSonucu.cikisKodu === 0 ? 'passed' : 'failed',
-          mesaj: `Deneme tamamlandı ama detaylı sonuç okunamadı (çıkış kodu: ${calistirmaSonucu.cikisKodu}).`
+          mesaj: `Deneme tamamlandı ama detaylı sonuç okunamadı (çıkış kodu: ${calistirmaSonucu.cikisKodu}).`,
+          hataMesaji: calistirmaSonucu.ciktiHataOzeti || null
         });
         return;
       }
@@ -1090,18 +1544,12 @@ const sunucu = createServer(async (req, res) => {
     } catch (hata) {
       jsonGonder(res, 400, { basarili: false, mesaj: hata.message });
     } finally {
-      // Deneme sonucu ne olursa olsun (başarı/hata/erken hata), geçici kayıt kalıcı
-      // dosyada KALMAMALI. Yukarıda push ettiğimiz nesneyi değil, dosyanın O ANKİ
-      // halini tekrar okuyup içinden geçici başlığı filtreleyerek yazıyoruz — araya
-      // başka bir istek (ör. eşzamanlı bir "kaydet") girmiş olabileceğinden.
-      if (eklendiMi) {
-        try {
-          const temizVeri = jetSeyahatVerisiniOku(ortam);
-          temizVeri.jetSeyahat.senaryolar = temizVeri.jetSeyahat.senaryolar.filter((s) => s.baslik !== geciciBaslik);
-          jetSeyahatVerisiniYaz(ortam, temizVeri);
-        } catch (temizlemeHatasi) {
-          console.error('[jetseyahat-senaryo/dene] Geçici senaryo temizlenemedi:', temizlemeHatasi.message);
-        }
+      // Deneme sonucu ne olursa olsun geçici ek senaryo dosyası silinir. Kalıcı veri
+      // dosyalarına zaten hiç dokunulmadığı için temizlenecek başka bir şey yok.
+      try {
+        if (existsSync(ekDosyaYolu)) unlinkSync(ekDosyaYolu);
+      } catch (temizlemeHatasi) {
+        console.error('[jetseyahat-senaryo/dene] Geçici ek senaryo dosyası silinemedi:', temizlemeHatasi.message);
       }
     }
     return;
@@ -1116,7 +1564,7 @@ const sunucu = createServer(async (req, res) => {
       return;
     }
 
-    const { ortam, senaryo, baslik, token } = istek ?? {};
+    const { ortam, senaryo, baslik, token, kosuyaDahil } = istek ?? {};
     if (token !== TOKEN) {
       jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
       return;
@@ -1129,6 +1577,12 @@ const sunucu = createServer(async (req, res) => {
       jsonGonder(res, 400, { basarili: false, mesaj: 'Senaryo başlığı zorunludur.' });
       return;
     }
+    // Kullanıcıya her kayıtta AÇIKÇA sorulur ("Bu senaryo koşuya dahil edilsin mi?") —
+    // varsayılan yok; cevapsız (eski/uyumsuz istemci) istek reddedilir.
+    if (typeof kosuyaDahil !== 'boolean') {
+      jsonGonder(res, 400, { basarili: false, mesaj: '"kosuyaDahil" true ya da false olmalıdır (senaryonun koşuya dahil edilip edilmeyeceği).' });
+      return;
+    }
 
     try {
       const veri = jetSeyahatVerisiniOku(ortam);
@@ -1137,10 +1591,46 @@ const sunucu = createServer(async (req, res) => {
         jsonGonder(res, 409, { basarili: false, mesaj: 'Bu başlıkta bir senaryo zaten var, başka bir başlık seçin.' });
         return;
       }
-      const yeniSenaryo = jetSeyahatSenaryoNesnesiOlustur(temizBaslik, senaryo, ortam);
+      if (temizBaslik.startsWith(SENARYO_OLUSTUR_GECICI_ON_EK.trim())) {
+        jsonGonder(res, 400, { basarili: false, mesaj: 'Bu başlık önekine izin verilmiyor (geçici deneme senaryolarına ayrılmıştır).' });
+        return;
+      }
+      const { senaryo: yeniSenaryo, yeniAcenteProfilleri } = jetSeyahatSenaryoNesnesiOlustur(temizBaslik, senaryo, ortam);
+      // Yalnızca "kaydet" kalıcı dosyalara yazar (ikisi de atomik). Önce acente profili
+      // yazılır ki senaryo, ortak.json'da olmayan bir profile hiçbir an işaret etmesin.
+      if (Object.keys(yeniAcenteProfilleri).length) {
+        const ortakVeri = ortakVerisiniOku(ortam);
+        for (const [anahtar, profil] of Object.entries(yeniAcenteProfilleri)) {
+          if (!ortakVeri.kullaniciDegistir[anahtar]) ortakVeri.kullaniciDegistir[anahtar] = profil;
+        }
+        ortakVerisiniYaz(ortam, ortakVeri);
+      }
+      // Koşuya dahil EDİLMEYECEKSE anahtar, senaryo yazılmadan ÖNCE hariç listesine eklenir:
+      // arada bir sorun olursa en kötü ihtimalle var olmayan bir senaryonun anahtarı listede
+      // kalır (zararsız), kullanıcının "dahil etme" dediği senaryo hiçbir an koşuya girmez.
+      // Senaryo yazımı başarısız olursa eklenen anahtar geri alınır.
+      const kosuAnahtari = kosuListesiAnahtari(JET_SEYAHAT_SPEC_DOSYASI, temizBaslik);
+      // (Aynı başlıkta eski bir hariç kaydı kalmışsa ve kullanıcı "dahil et" dediyse o kayıt silinir.)
+      const oncedenHaricMi = haricTutulanlariOku().includes(kosuAnahtari);
+      const listeDegisecekMi = oncedenHaricMi === kosuyaDahil;
+      if (listeDegisecekMi) kosuListesiniGuncelle([kosuAnahtari], kosuyaDahil);
       veri.jetSeyahat.senaryolar.push(yeniSenaryo);
-      jetSeyahatVerisiniYaz(ortam, veri);
-      jsonGonder(res, 200, { basarili: true, mesaj: 'Senaryo kaydedildi.' });
+      try {
+        jetSeyahatVerisiniYaz(ortam, veri);
+      } catch (yazmaHatasi) {
+        try {
+          if (listeDegisecekMi) kosuListesiniGuncelle([kosuAnahtari], !kosuyaDahil);
+        } catch {
+          // geri alma başarısız — asıl hata aşağıda kullanıcıya dönülüyor
+        }
+        throw yazmaHatasi;
+      }
+      jsonGonder(res, 200, {
+        basarili: true,
+        mesaj: kosuyaDahil ? 'Senaryo kaydedildi ve koşuya dahil edildi.' : 'Senaryo kaydedildi; koşuya dahil edilmedi.',
+        kosuAnahtari,
+        kosuyaDahil
+      });
     } catch (hata) {
       jsonGonder(res, 400, { basarili: false, mesaj: hata.message });
     }
@@ -1236,6 +1726,23 @@ const sunucu = createServer(async (req, res) => {
   }
 
   jsonGonder(res, 404, { basarili: false, mesaj: 'Bulunamadı.' });
+}
+
+// Tüm istek işleme bu sarmalayıcıdan geçer: istegiIsle içinde BEKLENMEYEN bir hata
+// fırlarsa (ör. bozuk bir JSON veri dosyası, dosya sistemi hatası) bu artık işlenmemiş bir
+// promise reddine dönüşüp sunucu sürecini ÇÖKERTMEZ — loglanır ve istemciye 500 dönülür.
+const sunucu = createServer(async (req, res) => {
+  try {
+    await istegiIsle(req, res);
+  } catch (hata) {
+    console.error(`[test-sunucu] ${req.method} ${req.url} işlenirken beklenmeyen hata: ${hata?.stack ?? hata}`);
+    try {
+      if (!res.headersSent) jsonGonder(res, 500, { basarili: false, mesaj: `Sunucu hatası: ${hata?.message ?? hata}` });
+      else res.destroy();
+    } catch {
+      // yanıt zaten kapanmış olabilir — yok sayılır
+    }
+  }
 });
 
 // Bir senaryo çalıştırması birkaç dakika sürebilir — Node'un varsayılan istek/soket
@@ -1253,9 +1760,112 @@ export { PORT };
 // başlatılmış olur.
 const dogrudanCalistirildi = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 
+// Önceki bir sürümde "dene" geçici senaryoyu doğrudan jet-seyahat.json'a yazıyordu ve
+// sunucu arada kapanınca kayıt dosyada kalmıştı. Açılışta tests/data/*/jet-seyahat.json
+// içinde böyle artık kayıt varsa (atomik yazmayla) temizlenir ve loglanır. Ayrıca geçici
+// klasörde kalmış eski ek senaryo dosyaları da (başka bir sunucu örneğinin o an kullanıyor
+// olabileceği yenileri hariç) silinir.
+function artikGeciciSenaryolariTemizle() {
+  const veriKoku = join(projeKoku, 'tests', 'data');
+  let ortamlar = [];
+  try {
+    ortamlar = readdirSync(veriKoku, { withFileTypes: true }).filter((g) => g.isDirectory()).map((g) => g.name);
+  } catch (hata) {
+    console.error(`[test-sunucu] ${veriKoku} okunamadı: ${hata.message}`);
+  }
+  for (const ortam of ortamlar) {
+    const yol = join(veriKoku, ortam, 'jet-seyahat.json');
+    try {
+      if (!existsSync(yol)) continue;
+      const veri = JSON.parse(readFileSync(yol, 'utf-8'));
+      const senaryolar = veri?.jetSeyahat?.senaryolar;
+      if (!Array.isArray(senaryolar)) continue;
+      const artiklar = senaryolar.filter((s) => typeof s?.baslik === 'string' && s.baslik.startsWith(SENARYO_OLUSTUR_GECICI_ON_EK));
+      if (!artiklar.length) continue;
+      veri.jetSeyahat.senaryolar = senaryolar.filter((s) => !artiklar.includes(s));
+      atomikYaz(yol, JSON.stringify(veri, null, 2) + '\n');
+      console.log(
+        `[test-sunucu] ${ortam}/jet-seyahat.json içinden ${artiklar.length} artık geçici senaryo silindi: ` +
+          artiklar.map((s) => `"${s.baslik}"`).join(', ')
+      );
+    } catch (hata) {
+      console.error(`[test-sunucu] ${yol} artık geçici senaryo temizliği başarısız: ${hata.message}`);
+    }
+  }
+
+  try {
+    const esik = Date.now() - KOSU_SURE_LIMITI_MS - 60 * 60 * 1000;
+    for (const ad of readdirSync(tmpdir())) {
+      if (!ad.startsWith(EK_SENARYO_DOSYA_ON_EKI)) continue;
+      const tamYol = join(tmpdir(), ad);
+      try {
+        if (statSync(tamYol).mtimeMs < esik) unlinkSync(tamYol);
+      } catch {
+        // yok sayılır
+      }
+    }
+  } catch {
+    // geçici klasör okunamazsa önemli değil
+  }
+}
+
 if (dogrudanCalistirildi) {
+  // Son savunma hattı: gözden kaçan bir hata (ör. dinleyicisiz bir akış hatası) sunucuyu
+  // sessizce öldürmesin — loglanır, süreç ÇIKMAZ. (Yalnızca doğrudan çalıştırıldığında;
+  // rapor betiği bu dosyayı import ettiğinde onun hata davranışına karışmıyoruz.)
+  process.on('unhandledRejection', (neden) => {
+    console.error(`[test-sunucu] İşlenmemiş promise reddi (sunucu çalışmaya devam ediyor): ${neden?.stack ?? neden}`);
+  });
+  process.on('uncaughtException', (hata) => {
+    console.error(`[test-sunucu] Yakalanmamış hata (sunucu çalışmaya devam ediyor): ${hata?.stack ?? hata}`);
+  });
+
+  artikGeciciSenaryolariTemizle();
+
+  // Video saklama kuralı (VIDEO_SAKLAMA_GUN, varsayılan 30 gün): açılışta ve sunucu uzun
+  // süre açık kalabildiği için günde bir kez, eski koşu videoları ve eski
+  // test-results/dashboard-kosulari/<koşu> klasörleri silinir (bkz. medya-temizligi.mjs).
+  // Ekran görüntüleri ve sonuç JSON'ları silinmez.
+  const videoTemizliginiCalistir = () => {
+    try {
+      eskiVideolariTemizle(projeKoku, ['test', 'canli'], '[test-sunucu]');
+    } catch (hata) {
+      console.error(`[test-sunucu] Video temizliği başarısız: ${hata.message}`);
+    }
+  };
+  videoTemizliginiCalistir();
+  setInterval(videoTemizliginiCalistir, 24 * 60 * 60 * 1000).unref();
+
+  // Dinleme hatası (ör. port zaten kullanımda) yukarıdaki uncaughtException dinleyicisine
+  // düşüp sunucu "ayakta ama dinlemiyor" halde kalmasın diye açıkça ele alınır.
+  sunucu.on('error', (hata) => {
+    console.error(`[test-sunucu] Sunucu ${PORT} portunda başlatılamadı: ${hata.message}`);
+    process.exit(1);
+  });
+
   sunucu.listen(PORT, '127.0.0.1', () => {
     console.log(`Test tetikleme sunucusu hazır: http://127.0.0.1:${PORT} (yalnızca bu bilgisayardan erişilebilir)`);
     console.log('Dashboard\'daki ▷ Çalıştır ikonları bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.');
   });
+
+  // Koşular macOS/Linux'ta ayrı süreç grubunda çalıştığı için (bkz. spawn'daki
+  // detached), terminalde Ctrl+C artık onlara ulaşmaz. Sunucu kapanırken çalışan tüm
+  // koşuları biz kapatıyoruz; aksi halde arka planda sahipsiz tarayıcılar kalırdı.
+  let kapaniyor = false;
+  const kapat = (sinyal) => {
+    if (kapaniyor) return;
+    kapaniyor = true;
+    const calisanlar = [...calisanSurecler.values()];
+    if (calisanlar.length) console.log(`\n${calisanlar.length} çalışan koşu kapatılıyor...`);
+    for (const kayit of calisanlar) {
+      kayit.iptalEdiliyor = true;
+      if (process.platform === 'win32') surecAgaciniKapat(kayit);
+      else sinyalGonder(kayit, 'SIGKILL');
+    }
+    sunucu.close();
+    setTimeout(() => process.exit(sinyal === 'SIGINT' ? 130 : 0), 300).unref();
+  };
+  process.on('SIGINT', () => kapat('SIGINT'));
+  process.on('SIGTERM', () => kapat('SIGTERM'));
+  process.on('SIGHUP', () => kapat('SIGHUP'));
 }

@@ -406,8 +406,40 @@ function loadData<T>(environment: EnvironmentName, fileName: string): T {
   return JSON.parse(readFileSync(filePath, 'utf-8')) as T;
 }
 
+// Dashboard > "Senaryo Oluştur" > "Dene" akışı (bkz. scripts/test-sunucu.mjs >
+// /jetseyahat-senaryo/dene) denenen senaryoyu KALICI json dosyalarına YAZMAZ; onun yerine
+// geçici bir "ek senaryo" (overlay) dosyası oluşturup yolunu bu ortam değişkeniyle
+// Playwright alt sürecine verir. Değişken yoksa (normal koşular, CI, --list) hiçbir şey
+// değişmez — yükleyiciler yalnızca kalıcı dosyaları okur.
+export const EK_SENARYO_DOSYASI_ORTAM_DEGISKENI = 'TEST_SUNUCU_EK_SENARYO_DOSYASI';
+
+type JetSeyahatSenaryosu = JetSeyahatTestData['jetSeyahat']['senaryolar'][number];
+
+type EkSenaryoDosyasi = {
+  ortam: EnvironmentName;
+  jetSeyahatSenaryolari?: JetSeyahatSenaryosu[];
+  kullaniciDegistir?: Record<string, AcenteProfili>;
+};
+
+// Ek senaryo dosyası tanımlıysa ve BU ortama aitse okunur; aksi halde undefined döner.
+// Dosya tanımlı ama okunamıyorsa sessizce yok sayılmaz — deneme koşusu yanlış veriyle
+// (ör. geçici senaryo hiç görünmeden) devam etmesin diye hata fırlatılır.
+function ekSenaryoDosyasiniOku(environment: EnvironmentName): EkSenaryoDosyasi | undefined {
+  const dosyaYolu = process.env[EK_SENARYO_DOSYASI_ORTAM_DEGISKENI];
+  if (!dosyaYolu) return undefined;
+  const veri = JSON.parse(readFileSync(dosyaYolu, 'utf-8')) as EkSenaryoDosyasi;
+  return veri.ortam === environment ? veri : undefined;
+}
+
 export function loadOrtakData(environment: EnvironmentName): OrtakTestData {
-  return loadData<OrtakTestData>(environment, 'ortak');
+  const veri = loadData<OrtakTestData>(environment, 'ortak');
+  // "Dene" sırasında girilen ve ortak.json'da HENÜZ olmayan acente profili, kalıcı
+  // dosyaya yazılmadan yalnızca bu koşu için eklenir (mevcut anahtarlar ezilmez).
+  const ek = ekSenaryoDosyasiniOku(environment);
+  if (ek?.kullaniciDegistir) {
+    veri.kullaniciDegistir = { ...ek.kullaniciDegistir, ...veri.kullaniciDegistir };
+  }
+  return veri;
 }
 
 export function loadJetKaskoData(environment: EnvironmentName): JetKaskoTestData {
@@ -441,5 +473,12 @@ export function loadJetKobiData(environment: EnvironmentName): JetKobiTestData {
 }
 
 export function loadJetSeyahatData(environment: EnvironmentName): JetSeyahatTestData {
-  return loadData<JetSeyahatTestData>(environment, 'jet-seyahat');
+  const veri = loadData<JetSeyahatTestData>(environment, 'jet-seyahat');
+  // "Dene" ile gelen geçici senaryo(lar) listenin sonuna eklenir (bkz.
+  // ekSenaryoDosyasiniOku) — kalıcı jet-seyahat.json'a hiç dokunulmaz.
+  const ek = ekSenaryoDosyasiniOku(environment);
+  if (ek?.jetSeyahatSenaryolari?.length) {
+    veri.jetSeyahat.senaryolar = [...veri.jetSeyahat.senaryolar, ...ek.jetSeyahatSenaryolari];
+  }
+  return veri;
 }

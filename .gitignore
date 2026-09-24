@@ -24,3 +24,6 @@ scripts/.test-sunucu-token
 test-data/
 test-report/
 Claude outputs/
+
+# Yerel test sunucusunun log dosyası — makineye özeldir.
+scripts/test-sunucu.log

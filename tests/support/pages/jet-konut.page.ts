@@ -247,7 +247,7 @@ export class JetKonutPage {
   private async tarihGir(selector: string, tarih: string): Promise<void> {
     const alan = this.page.locator(selector);
     await alan.click();
-    await alan.press('Control+A');
+    await alan.press('ControlOrMeta+A');
     await alan.pressSequentially(tarih, { delay: 50 });
     await alan.press('Tab');
     await this.page.keyboard.press('Escape');
