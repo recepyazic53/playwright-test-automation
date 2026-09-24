@@ -8,7 +8,7 @@
 //    beklenen uyarı doğrulanır ve test biter.
 //  - Başarılı + ödeme adımı dahil DEĞİL: prim hesaplanır, pozitif teklif doğrulanır ve
 //    test biter (ödeme bilinçli olarak atlanır).
-//  - Ödeme adımı dahil (belirtilmemişse varsayılan — eski senaryolar): prim hesaplanır;
+//  - Ödeme adımı dahil (odemeAdimiDahil: true — her senaryoda zorunlu): prim hesaplanır;
 //    poliçeleştirmede hata bekleniyorsa orada doğrulanıp biter, değilse kart bilgileri
 //    girilip ödeme tamamlanır. Başarılı akışta "Hiçbir poliçe onaylanamadı." (ürünün
 //    kabulEdilenOdemeSonuclari listesi) başarı sayılır — test kartıyla gerçek poliçe

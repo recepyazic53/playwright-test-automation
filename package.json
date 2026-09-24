@@ -11,6 +11,7 @@
     "test:test-ortami": "cross-env TEST_ENV=test playwright test",
     "report": "playwright show-report",
     "typecheck": "tsc --noEmit",
+    "test:birim": "playwright test --config playwright.birim.config.ts",
     "allure:generate:test": "allure generate ./allure-results-test --clean -o ./allure-report-test && node scripts/allure-history-sync.mjs test",
     "allure:generate:canli": "allure generate ./allure-results-canli --clean -o ./allure-report-canli && node scripts/allure-history-sync.mjs canli",
     "allure:open:test": "allure open ./allure-report-test",

@@ -40,6 +40,7 @@ import { dirname, join, resolve as resolvePath, extname, relative, isAbsolute, s
 import { tmpdir } from 'node:os';
 import { eskiVideolariTemizle } from './medya-temizligi.mjs';
 import { haricTutulanlariOku, haricTutulanlariYaz, kosuListesiAnahtari, kosuListesiniGuncelle } from './kosu-listesi.mjs';
+import { JET_SEYAHAT_FORM_ALANLARI } from './jet-seyahat-alanlari.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
@@ -1224,50 +1225,52 @@ function ortakAcenteProfiliBulYaEkle(veri, acente) {
 
 // ---- "✎ Düzenle" (JetSeyahat) yardımcıları ----
 
-// "Senaryo Oluştur" formunun yönettiği alanlar. /senaryo-guncelle kayıttaki bu alanları
-// formdan gelen yeni değerlerle DEĞİŞTİRİR (formda artık olmayanlar — ör. ettiren "ayni"ye
-// çekildiyse ettirenProfili — silinir); listede OLMAYAN, elle eklenmiş başka alanlar
-// olduğu gibi korunur. Eski beklenenHataMesaji/beklenenHataAdimi da buradadır: güncellenen
-// kayıt her zaman yeni modelle (odemeAdimiDahil + beklenenSonuc) yazılır.
-const JET_SEYAHAT_FORM_ALANLARI = [
-  'baslik', 'kapsam', 'alternatif', 'covidTeminati', 'sorguTipi', 'ettiren',
-  'ettirenProfili', 'ettirenOzelKimligi', 'ettirenTuzelKimligi', 'sigortaliProfili', 'sigortaliKimligi',
-  'kayakTeminati', 'acenteProfili', 'cokluSorguDosyasi', 'cokluSorguKisiSayisi',
-  'odemeAdimiDahil', 'beklenenSonuc', 'beklenenHataMesaji', 'beklenenHataAdimi',
-  // Senaryoya özel ödeme kartı: formda ortak karttan farklı bir kart yoksa (ya da ödeme
-  // adımı kapatıldıysa) güncellemede kayıttan SİLİNİR.
-  'krediKarti'
-];
+// "Senaryo Oluştur" formunun yönettiği alanlar (JET_SEYAHAT_FORM_ALANLARI) yan etkisiz
+// ./jet-seyahat-alanlari.mjs modülündedir — koruma testleri (npm run test:birim) listeyi
+// ekran modeliyle (tests/ekran-modelleri/jet-seyahat.model.json) oradan karşılaştırır.
 
-// Kayıttaki (yeni ya da ESKİ biçimli) beklenen sonuç alanlarını formun kullandığı yeni
-// modele çevirir. Kurallar tests/support/beklenen-sonuc.ts > beklenenSonucuCoz'un
-// dönüştürme kısmıyla AYNI: odemeAdimiDahil yoksa true; beklenenSonuc yoksa
-// beklenenHataMesaji doluysa { isKuraliHatasi, adim: beklenenHataAdimi ?? primHesaplama }.
-// Doğrulama YAPMAZ (hatalı eski kayıt da forma açılabilsin; kaydederken
-// beklenenSonucuDogrula zaten kontrol eder).
-function beklenenSonucuFormaCevir(senaryo) {
-  const odemeAdimiDahil = typeof senaryo.odemeAdimiDahil === 'boolean' ? senaryo.odemeAdimiDahil : true;
-  let beklenenSonuc;
-  if (senaryo.beklenenSonuc && typeof senaryo.beklenenSonuc === 'object') {
-    beklenenSonuc = senaryo.beklenenSonuc.tip === 'isKuraliHatasi'
-      ? { tip: 'isKuraliHatasi', adim: senaryo.beklenenSonuc.adim, mesaj: senaryo.beklenenSonuc.mesaj ?? '' }
-      : { tip: 'basarili' };
-  } else if (senaryo.beklenenHataMesaji) {
-    beklenenSonuc = { tip: 'isKuraliHatasi', adim: senaryo.beklenenHataAdimi ?? 'primHesaplama', mesaj: senaryo.beklenenHataMesaji };
-  } else {
-    beklenenSonuc = { tip: 'basarili' };
+// Kayıttaki beklenen sonuç alanlarını formun kullandığı biçime getirir. Kural (TS >
+// beklenenSonucuCoz ile AYNI): odemeAdimiDahil HER senaryoda açıkça yazılmış olmalı
+// (varsayılan yok); beklenenSonuc yoksa { tip: 'basarili' }. Eski beklenenHataMesaji/
+// beklenenHataAdimi alanları artık desteklenmez (veri yeni modele çevrildi). Kayıt bu
+// kurallara uymuyorsa forma SESSİZCE yanlış bir değerle açılmasın diye 422 hatası fırlatılır
+// (kayıt jet-seyahat.json'da elle düzeltilmeli). Mesaj/adım içeriği burada doğrulanmaz
+// (kaydederken beklenenSonucuDogrula zaten kontrol eder).
+function kayitliSenaryoHatasi(mesaj) {
+  const hata = new Error(mesaj);
+  hata.durumKodu = 422;
+  return hata;
+}
+function eskiBeklenenSonucAlanlariniReddet(senaryo) {
+  if (senaryo.beklenenHataMesaji !== undefined || senaryo.beklenenHataAdimi !== undefined) {
+    throw kayitliSenaryoHatasi(
+      `"${senaryo.baslik}" senaryosu eski "beklenenHataMesaji"/"beklenenHataAdimi" alanlarını içeriyor; ` +
+        'bu alanlar artık desteklenmiyor. jet-seyahat.json\'da "beklenenSonuc": { "tip": "isKuraliHatasi", "adim", "mesaj" } biçimine çevirin.'
+    );
   }
-  return { odemeAdimiDahil, beklenenSonuc };
+}
+function beklenenSonucuFormaCevir(senaryo) {
+  eskiBeklenenSonucAlanlariniReddet(senaryo);
+  if (typeof senaryo.odemeAdimiDahil !== 'boolean') {
+    throw kayitliSenaryoHatasi(
+      `"${senaryo.baslik}" senaryosunda "odemeAdimiDahil" eksik ya da true/false değil. Bu alan her senaryoda ` +
+        'zorunludur — jet-seyahat.json\'da senaryoya "odemeAdimiDahil": true (ya da false) ekleyin.'
+    );
+  }
+  const beklenenSonuc = senaryo.beklenenSonuc && typeof senaryo.beklenenSonuc === 'object' && senaryo.beklenenSonuc.tip === 'isKuraliHatasi'
+    ? { tip: 'isKuraliHatasi', adim: senaryo.beklenenSonuc.adim, mesaj: senaryo.beklenenSonuc.mesaj ?? '' }
+    : { tip: 'basarili' };
+  return { odemeAdimiDahil: senaryo.odemeAdimiDahil, beklenenSonuc };
 }
 
-// Kayıttaki senaryoyu "Senaryo Oluştur" formunun doldurulabileceği biçime getirir: eski
-// beklenen sonuç alanları yeni modele çevrilir, acenteProfili anahtarı ortak.json'dan
+// Kayıttaki senaryoyu "Senaryo Oluştur" formunun doldurulabileceği biçime getirir: beklenen
+// sonuç alanları beklenenSonucuFormaCevir ile denetlenir (odemeAdimiDahil eksikse ya da eski
+// alanlar varsa 422), acenteProfili anahtarı ortak.json'dan
 // acente kodu + kullanıcı koduna çözülür (form bu ikisini metin olarak gösterir; kullanıcı
 // değiştirmezse istemci yine acenteProfili anahtarını gönderir — bkz. dashboard).
 function jetSeyahatSenaryosunuFormaCevir(senaryo, ortam) {
   const form = {};
   for (const alan of JET_SEYAHAT_FORM_ALANLARI) {
-    if (alan === 'beklenenHataMesaji' || alan === 'beklenenHataAdimi') continue;
     if (senaryo[alan] !== undefined) form[alan] = senaryo[alan];
   }
   Object.assign(form, beklenenSonucuFormaCevir(senaryo));
@@ -1916,8 +1919,8 @@ async function istegiIsle(req, res) {
   // "✎ Düzenle" (JetSeyahat): senaryonun jet-seyahat.json'daki GÜNCEL kaydını döner (dashboard
   // statik bir anlık görüntü olduğundan form her açılışta sunucudan beslenir).
   // Gövde: { token, ortam, baslik }. Yanıt: { basarili, senaryo (ham kayıt), formVerisi
-  // (eski alanlar yeni modele çevrilmiş, acente kodu çözülmüş), eskiAlanlarVardi,
-  // kosuyaDahil, kosuyor }.
+  // (beklenen sonuç alanları denetlenmiş, acente kodu çözülmüş), kosuyaDahil, kosuyor }.
+  // Kayıtta odemeAdimiDahil eksikse ya da eski beklenenHata* alanları varsa 422 döner.
   if (req.method === 'POST' && req.url === '/senaryo-getir') {
     let istek;
     try {
@@ -1947,7 +1950,6 @@ async function istegiIsle(req, res) {
         basarili: true,
         senaryo,
         formVerisi: jetSeyahatSenaryosunuFormaCevir(senaryo, ortam),
-        eskiAlanlarVardi: senaryo.beklenenHataMesaji !== undefined || senaryo.beklenenHataAdimi !== undefined,
         kosuyaDahil: !haricTutulanlariOku().includes(kosuAnahtari),
         kosuyor: senaryoKosuyorMu(JET_SEYAHAT_SPEC_DOSYASI, baslik)
       });
@@ -1962,7 +1964,8 @@ async function istegiIsle(req, res) {
   //  - Doğrulama /kaydet ile aynı (jetSeyahatSenaryoNesnesiOlustur > beklenenSonucuDogrula).
   //  - Yeni başlık dosyada (bu kayıt hariç) benzersiz olmalı.
   //  - Kayıt dizideki YERİNDE güncellenir; diğer kayıtlara ve sıraya dokunulmaz. Formun
-  //    yönetmediği ek alanlar korunur, eski beklenenHataMesaji/beklenenHataAdimi silinir.
+  //    yönetmediği ek alanlar korunur. Kayıtta eski beklenenHataMesaji/beklenenHataAdimi
+  //    varsa (elle eklenmiş) 422 döner — /senaryo-getir de aynı kaydı forma açmaz.
   //  - Yeni bir acente profili gerekiyorsa /kaydet gibi önce ortak.json'a yazılır.
   //  - kosu-listesi.json: başlık değiştiyse eski anahtar düşürülür, ardından yeni anahtar
   //    kosuyaDahil'e göre dahil/hariç yapılır (değişiklik yoksa dosyaya dokunulmaz).
@@ -2017,6 +2020,7 @@ async function istegiIsle(req, res) {
       const { senaryo: yeniAlanlar, yeniAcenteProfilleri } = jetSeyahatSenaryoNesnesiOlustur(yeniBaslik, senaryo, ortam);
 
       const eskiKayit = veri.jetSeyahat.senaryolar[index];
+      eskiBeklenenSonucAlanlariniReddet(eskiKayit);
       const korunanEkAlanlar = Object.fromEntries(
         Object.entries(eskiKayit).filter(([alan]) => !JET_SEYAHAT_FORM_ALANLARI.includes(alan))
       );

@@ -30,6 +30,7 @@
         "covidTeminati": "E",
         "sorguTipi": "tekli",
         "ettiren": "ayni",
+        "odemeAdimiDahil": true,
         "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
       },
       {
@@ -40,6 +41,7 @@
         "sorguTipi": "tekli",
         "ettiren": "farkliOzel",
         "ettirenProfili": "tc2",
+        "odemeAdimiDahil": true,
         "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
       },
       {
@@ -50,6 +52,7 @@
         "sorguTipi": "tekli",
         "ettiren": "farkliTuzel",
         "ettirenProfili": "vkn1",
+        "odemeAdimiDahil": true,
         "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
       },
       {
@@ -59,7 +62,12 @@
         "covidTeminati": "H",
         "sorguTipi": "coklu",
         "ettiren": "ayni",
-        "beklenenHataMesaji": "Covid Teminatı “Hayır” olması durumunda yalnızca “VİZE SCHENGEN” veya “VİZE TÜM DÜNYA” alternatifleri seçilebilir",
+        "odemeAdimiDahil": true,
+        "beklenenSonuc": {
+          "tip": "isKuraliHatasi",
+          "adim": "primHesaplama",
+          "mesaj": "Covid Teminatı “Hayır” olması durumunda yalnızca “VİZE SCHENGEN” veya “VİZE TÜM DÜNYA” alternatifleri seçilebilir"
+        },
         "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
       },
       {
@@ -69,6 +77,7 @@
         "covidTeminati": "E",
         "sorguTipi": "coklu",
         "ettiren": "ayni",
+        "odemeAdimiDahil": true,
         "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
       },
       {
@@ -78,6 +87,7 @@
         "covidTeminati": "E",
         "sorguTipi": "coklu",
         "ettiren": "ayni",
+        "odemeAdimiDahil": true,
         "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
       },
       {
@@ -89,6 +99,7 @@
         "ettiren": "farkliTuzel",
         "ettirenProfili": "vkn2",
         "kayakTeminati": true,
+        "odemeAdimiDahil": true,
         "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
       },
       {
@@ -97,7 +108,8 @@
         "alternatif": "VİZE TÜM DÜNYA",
         "covidTeminati": "E",
         "sorguTipi": "tekli",
-        "ettiren": "ayni"
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true
       },
       {
         "baslik": "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)",
@@ -106,7 +118,8 @@
         "covidTeminati": "E",
         "sorguTipi": "tekli",
         "ettiren": "farkliOzel",
-        "ettirenProfili": "tc3"
+        "ettirenProfili": "tc3",
+        "odemeAdimiDahil": true
       },
       {
         "baslik": "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi",
@@ -114,7 +127,8 @@
         "alternatif": "SEYAHAT PAKET",
         "covidTeminati": "E",
         "sorguTipi": "coklu",
-        "ettiren": "ayni"
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true
       },
       {
         "baslik": "[Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN)",
@@ -123,7 +137,8 @@
         "covidTeminati": "E",
         "sorguTipi": "tekli",
         "ettiren": "farkliTuzel",
-        "ettirenProfili": "vkn2"
+        "ettirenProfili": "vkn2",
+        "odemeAdimiDahil": true
       }
     ]
   }

@@ -379,11 +379,11 @@ export type JetSeyahatTestData = {
       // Bu senaryonun hangi acente profiliyle (ortak.json > kullaniciDegistir) çalışacağı.
       // Belirtilmezse testBaslangiciniHazirla "varsayilan" profili kullanır.
       acenteProfili?: string;
-      // Beklenen sonuç alanları (odemeAdimiDahil, beklenenSonuc ve eski
-      // beklenenHataMesaji/beklenenHataAdimi) — bkz. tests/support/beklenen-sonuc.ts >
-      // BeklenenSonucAlanlari. Eski alanlar JSON'daki mevcut kayıtlar için okunmaya devam
-      // eder; dashboard > "Senaryo Oluştur" yalnızca yeni alanları yazar. Spec, bu alanları
+      // Beklenen sonuç alanları (odemeAdimiDahil — ZORUNLU, beklenenSonuc) — bkz.
+      // tests/support/beklenen-sonuc.ts > BeklenenSonucAlanlari. Spec, bu alanları
       // beklenenSonucuCoz ile TEK biçime çevirip adimPlaniniOlustur ile akışı belirler.
+      // Alanların tamamı tests/ekran-modelleri/jet-seyahat.model.json ile eşleşmeli
+      // (npm run test:birim kontrol eder).
       // YENİ (dashboard > "Senaryo Oluştur"): sigortalı (poliçe sahibi) normalde ürün
       // seviyesinde SABİT tek bir TC kullanır (jetSeyahat.sigortaliProfili, tüm senaryolar
       // paylaşır). Bu alan doluysa SADECE bu senaryoda, o ortak sigortalı yerine burada

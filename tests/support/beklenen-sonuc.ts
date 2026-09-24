@@ -26,21 +26,22 @@ export type BeklenenSonuc =
   | { tip: 'isKuraliHatasi'; adim: BeklenenHataAdimi; mesaj: string };
 
 /**
- * Senaryo verisinde beklenen sonuçla ilgili alanlar. Yeni alanlar (odemeAdimiDahil,
- * beklenenSonuc) ile eski alanlar (beklenenHataMesaji, beklenenHataAdimi) birlikte
- * tanımlıdır — eski kayıtlar JSON'da olduğu gibi kalır, beklenenSonucuCoz onları yeni
- * biçime çevirir.
+ * Senaryo verisinde beklenen sonuçla ilgili alanlar (bkz. tests/ekran-modelleri/
+ * jet-seyahat.model.json > senaryoDuzeyi).
  */
 export type BeklenenSonucAlanlari = {
-  // Belirtilmezse TRUE kabul edilir (eski senaryolar ödeme adımına kadar gitmeye devam
-  // etsin diye). Dashboard > "Senaryo Oluştur" ile eklenen senaryolar bunu HER ZAMAN
-  // açıkça yazar.
-  odemeAdimiDahil?: boolean;
+  // ZORUNLU: her senaryoda açıkça yazılır (varsayılan yok). Dashboard > "Senaryo Oluştur"
+  // her zaman yazar; elle eklenen senaryoda eksikse beklenenSonucuCoz hata fırlatır.
+  odemeAdimiDahil: boolean;
+  // Yoksa { tip: 'basarili' } kabul edilir.
   beklenenSonuc?: BeklenenSonuc;
-  // ESKİ alanlar (yalnızca geriye uyumluluk için okunur, yeni kayıtlarda yazılmaz).
-  beklenenHataAdimi?: 'primHesaplama' | 'policelestirme';
-  beklenenHataMesaji?: string;
 };
+
+/**
+ * Artık desteklenmeyen eski alanlar (beklenenSonuc'tan önceki biçim). Veride kalmadı;
+ * elle yeniden eklenirse sessizce yok sayılmasın diye beklenenSonucuCoz reddeder.
+ */
+export const ESKI_BEKLENEN_SONUC_ALANLARI = ['beklenenHataMesaji', 'beklenenHataAdimi'] as const;
 
 export type CozulmusBeklenenSonuc = {
   odemeAdimiDahil: boolean;
@@ -59,38 +60,34 @@ export function adimAdi(adim: BeklenenHataAdimi): string {
 }
 
 /**
- * Senaryodaki (yeni ya da eski biçimli) beklenen sonuç alanlarını TEK bir biçime
- * çevirir ve kurallara uyduğunu doğrular; uymuyorsa açıklayıcı bir Türkçe hata fırlatır.
- * Kurallar (test-sunucu.mjs > beklenenSonucuDogrula ile AYNI tutulmalı):
- *  - odemeAdimiDahil yoksa true kabul edilir.
- *  - beklenenSonuc yoksa: beklenenHataMesaji doluysa
- *    { isKuraliHatasi, adim: beklenenHataAdimi ?? 'primHesaplama', mesaj } — değilse basarili.
+ * Senaryodaki beklenen sonuç alanlarını TEK bir biçime çevirir ve kurallara uyduğunu
+ * doğrular; uymuyorsa açıklayıcı bir Türkçe hata fırlatır.
+ * Kurallar (test-sunucu.mjs > beklenenSonucuDogrula / beklenenSonucuFormaCevir ile AYNI
+ * tutulmalı):
+ *  - odemeAdimiDahil ZORUNLU ve boolean (varsayılan yok).
+ *  - Eski beklenenHataMesaji/beklenenHataAdimi alanları kabul edilmez.
+ *  - beklenenSonuc yoksa basarili.
  *  - "policelestirme" / "odeme" adımında hata beklemek, ödeme adımının dahil olmasını gerektirir.
  *  - isKuraliHatasi için mesaj zorunludur (boş olamaz).
  */
 export function beklenenSonucuCoz(senaryo: BeklenenSonucAlanlari, senaryoAdi = 'Senaryo'): CozulmusBeklenenSonuc {
   const hata = (mesaj: string): Error => new Error(`${senaryoAdi}: ${mesaj}`);
 
-  if (senaryo.odemeAdimiDahil !== undefined && typeof senaryo.odemeAdimiDahil !== 'boolean') {
-    throw hata('"odemeAdimiDahil" true ya da false olmalıdır.');
+  const eskiAlanlar = ESKI_BEKLENEN_SONUC_ALANLARI.filter((alan) => alan in senaryo);
+  if (eskiAlanlar.length) {
+    throw hata(
+      `Eski ${eskiAlanlar.map((a) => `"${a}"`).join('/')} alanları artık desteklenmiyor; ` +
+        '"beklenenSonuc": { "tip": "isKuraliHatasi", "adim": "...", "mesaj": "..." } kullanın.'
+    );
   }
-  const odemeAdimiDahil = senaryo.odemeAdimiDahil ?? true;
-
-  let beklenenSonuc: BeklenenSonuc;
-  if (senaryo.beklenenSonuc !== undefined) {
-    if (senaryo.beklenenHataMesaji || senaryo.beklenenHataAdimi) {
-      throw hata('"beklenenSonuc" ile eski "beklenenHataMesaji"/"beklenenHataAdimi" alanları aynı anda kullanılamaz.');
-    }
-    beklenenSonuc = senaryo.beklenenSonuc;
-  } else if (senaryo.beklenenHataMesaji) {
-    beklenenSonuc = {
-      tip: 'isKuraliHatasi',
-      adim: senaryo.beklenenHataAdimi ?? 'primHesaplama',
-      mesaj: senaryo.beklenenHataMesaji
-    };
-  } else {
-    beklenenSonuc = { tip: 'basarili' };
+  if (typeof senaryo.odemeAdimiDahil !== 'boolean') {
+    throw hata(
+      '"odemeAdimiDahil" zorunludur ve true ya da false olmalıdır (ödeme adımının senaryoya dahil olup ' +
+        'olmadığı; varsayılan yoktur — senaryo verisine açıkça yazın).'
+    );
   }
+  const odemeAdimiDahil = senaryo.odemeAdimiDahil;
+  const beklenenSonuc: BeklenenSonuc = senaryo.beklenenSonuc ?? { tip: 'basarili' };
 
   if (!beklenenSonuc || typeof beklenenSonuc !== 'object') {
     throw hata('"beklenenSonuc" bir nesne olmalıdır.');

@@ -2433,9 +2433,6 @@
             (f.acenteVarsayilanMi ? ' (varsayılan acente)' : '')
           ) + '</dd>' +
         '</dl>' +
-        (duzenleme.getir.eskiAlanlarVardi
-          ? '<p class="senaryo-form-yardim beklenen-sonuc-yardim">Bu senaryo eski "beklenen hata" alanlarıyla kayıtlı; form yeni modele çevrilerek dolduruldu. Kaydederseniz yeni modelle yazılır.</p>'
-          : '') +
         '<div class="senaryo-form-alan"><label for="sof_duzenleBaslik">Başlık</label>' +
           '<input type="text" id="sof_duzenleBaslik" required aria-required="true" />' +
         '</div>' +
@@ -3090,7 +3087,7 @@
     });
   }
 
-  // /senaryo-getir > formVerisi (eski beklenen sonuç alanları yeni modele çevrilmiş,
+  // /senaryo-getir > formVerisi (beklenen sonuç alanları sunucuda denetlenmiş,
   // acente kodu çözülmüş) ile formu doldurur.
   function senaryoFormunuDoldur(f) {
     var el = function (id) { return document.getElementById(id); };

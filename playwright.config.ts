@@ -15,8 +15,9 @@ const oturumDosyasi = environment.login.storageState;
 export default defineConfig({
   testDir: './tests',
 
-  // TEST çalıştırmalarında canlıya özel kontroller keşfedilmez.
-  testIgnore: environmentName === 'test' ? ['canli/**'] : [],
+  // TEST çalıştırmalarında canlıya özel kontroller keşfedilmez. tests/birim/ (tarayıcısız
+  // koruma testleri) yalnızca playwright.birim.config.ts ile (npm run test:birim) koşar.
+  testIgnore: environmentName === 'test' ? ['canli/**', 'birim/**'] : ['birim/**'],
 
   // test-sunucu.mjs bir senaryoyu başlığına göre çalıştırırken "--grep" CLI argümanı
   // YERİNE bu ortam değişkenini kullanır (komut satırı argümanı yerine CreateProcess'in
