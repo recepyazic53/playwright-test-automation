@@ -282,7 +282,9 @@ export function kosuDetayi(vt, kosuId) {
 /** @param {Record<string, unknown>} m */
 const medyaGorunumu = (m) => ({
   id: String(m.id), tur: String(m.tur), ad: String(m.ad), icerikTuru: String(m.icerik_turu), boyut: Number(m.boyut),
-  olusturulma: String(m.olusturulma), silinme: m.silinme == null ? null : String(m.silinme)
+  olusturulma: String(m.olusturulma), silinme: m.silinme == null ? null : String(m.silinme),
+  // Başka makineden yedekle gelen ve dosyası yedeğe dahil edilmemiş medya (şema v6).
+  yedekDisi: Number(m.yedek_disi ?? 0) === 1
 });
 
 /** @param {Veritabani} vt @param {string} sonucId */

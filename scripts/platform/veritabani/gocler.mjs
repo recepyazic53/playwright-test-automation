@@ -335,6 +335,18 @@ export const GOCLER = [
       CREATE INDEX ix_medya_sonuc ON medya(sonuc_id, sira);
       CREATE INDEX ix_medya_tur ON medya(tur, olusturulma);
     `
+  },
+  {
+    // Sürüm 6 — yedekte medya dosyaları (bkz. yedek.mjs, biçim 2): kullanıcı dışa aktarırken
+    // ekran görüntüsü / video / iz dosyalarını dahil edip etmeyeceğini seçer. Dosyası yedeğe
+    // alınmayan medya satırı yedekte yedek_disi = 1 ile yazılır; içe aktaran makinede
+    // Sonuçlar ekranı "dosya yok" yerine "Bu medya yedeğe dahil edilmemişti" gösterir.
+    // Dosya sonradan (medyalı bir yedekten) gelirse ya da yerelde zaten varsa bayrak 0 olur.
+    surum: 6,
+    ad: 'medya_yedek_disi',
+    sql: `
+      ALTER TABLE medya ADD COLUMN yedek_disi INTEGER NOT NULL DEFAULT 0;
+    `
   }
 ];
 
@@ -393,7 +405,8 @@ export const TABLOLAR = [
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
   { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json'], guncellenme: false },
   { ad: 'adim_sonuclari', birincilAnahtar: 'id', json: [], guncellenme: false },
-  // Medya satırları yedeğe girer ama şifreli dosyalar GİRMEZ (yalnızca bu makinede durur).
+  // Medya satırları yedeğe her zaman girer; şifreli dosyalar kullanıcının dışa aktarma seçimine
+  // göre girer (yedek.mjs, biçim 2). Dahil edilmeyenler yedekte yedek_disi = 1 taşır.
   { ad: 'medya', birincilAnahtar: 'id', json: [], guncellenme: false }
 ];
 

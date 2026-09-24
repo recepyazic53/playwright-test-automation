@@ -16,7 +16,7 @@
 //   satırındadır. Yazma: geçici dosya + fsync + rename. Düz metin HİÇBİR ZAMAN diske yazılmaz.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirerek yükler).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
-import { createReadStream, existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { createReadStream, existsSync, readdirSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { mkdir, open, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
@@ -29,6 +29,8 @@ const ETIKET = 16;
 const BASLIK = MEDYA_SIHIRLI.length + 1 + 16 + 8;
 const HKDF_BILGISI = Buffer.from('platform-medya:v1:dosya', 'utf8');
 export const MEDYA_DOSYA_DESENI = /^[a-f0-9]{32}\.medya$/;
+/** Yedekten içe aktarmanın medya hazırlık klasörü (medya klasörünün içinde, bkz. yedek.mjs). */
+export const HAZIRLIK_KLASORU_DESENI = /^\.hazirlik-[a-f0-9]{16}$/;
 const GUN_MS = 24 * 60 * 60 * 1000;
 
 export class MedyaHatasi extends Error {
@@ -72,10 +74,15 @@ export function medyaDosyaAdiGecerliMi(ad) {
   return typeof ad === 'string' && MEDYA_DOSYA_DESENI.test(ad);
 }
 
-/** @param {Buffer | string} kaynak @returns {AsyncIterable<Buffer>} */
+/** @param {Buffer | string | AsyncIterable<Buffer>} kaynak @returns {AsyncIterable<Buffer>} */
 async function* kaynakParcalari(kaynak) {
   if (Buffer.isBuffer(kaynak)) {
     for (let i = 0; i < kaynak.length; i += PARCA_BOYUTU) yield kaynak.subarray(i, i + PARCA_BOYUTU);
+    return;
+  }
+  if (typeof kaynak !== 'string') {
+    // Akış (ör. yedekten içe aktarmada başka anahtarla çözülen medya): bellekte yalnızca parça tutulur.
+    for await (const parca of kaynak) yield parca;
     return;
   }
   for await (const parca of createReadStream(kaynak, { highWaterMark: PARCA_BOYUTU })) yield /** @type {Buffer} */ (parca);
@@ -86,7 +93,7 @@ async function* kaynakParcalari(kaynak) {
  * dosya olarak yazar. Kaynak dosyaya DOKUNMAZ (silmek çağıranın işidir).
  * @param {Buffer} anaAnahtar medya ana anahtarı (32 bayt)
  * @param {string} klasor medya klasörü
- * @param {Buffer | string} kaynak
+ * @param {Buffer | string | AsyncIterable<Buffer>} kaynak dosya yolu, Buffer ya da düz metin parça akışı
  * @returns {Promise<{ dosya: string; boyut: number }>} dosya: klasöre göre ad; boyut: düz metin bayt
  */
 export async function medyaSifrele(anaAnahtar, klasor, kaynak) {
@@ -273,6 +280,13 @@ export function medyaSaklamaTemizligi(vt, klasor, secenekler) {
   if (existsSync(klasor)) {
     const bilinen = new Set(vt.tumu('SELECT dosya FROM medya WHERE silinme IS NULL').map((s) => String(s.dosya)));
     for (const ad of readdirSync(klasor)) {
+      // Yarım kalmış içe aktarma hazırlık klasörleri (yalnızca şifreli dosyalar içerir; bkz. yedek.mjs).
+      if (HAZIRLIK_KLASORU_DESENI.test(ad)) {
+        try {
+          if (simdi - statSync(join(klasor, ad)).mtimeMs >= GUN_MS) rmSync(join(klasor, ad), { recursive: true, force: true });
+        } catch { /* yok sayılır */ }
+        continue;
+      }
       const geciciMi = /^[a-f0-9]{32}\.medya\.\d+\.gecici$/.test(ad);
       if (!geciciMi && (!MEDYA_DOSYA_DESENI.test(ad) || bilinen.has(ad))) continue;
       try {

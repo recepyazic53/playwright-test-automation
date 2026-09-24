@@ -540,52 +540,105 @@ async function testVerisi(govde, baglam, yenile) {
 // Yedekleme
 // ---------------------------------------------------------------------------------------
 
+// Dışa aktarma medya seçenekleri (sunucudaki yedek.mjs > VARSAYILAN_MEDYA_SECIMI ile aynı varsayılanlar).
+const MEDYA_SECENEKLERI = [
+  { ad: 'ekranGoruntuleriDahil', etiket: 'Ekran görüntüleri', aciklama: 'hata bağlamı gibi küçük ekler dahil' },
+  { ad: 'videolarDahil', etiket: 'Videolar', aciklama: 'büyük olabilir' },
+  { ad: 'izDosyalariDahil', etiket: 'İz (trace) dosyaları', aciklama: 'büyük olabilir' }
+];
+
 async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, aktarimDurumu] = await Promise.all([
+  const [{ klasor, dosyalar }, aktarimDurumu, tahmin] = await Promise.all([
     api('/platform/yedek/otomatik-liste'),
-    api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] }))
+    api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] })),
+    api('/platform/yedek/tahmin').catch(() => null)
   ]);
 
   // Dışa aktar
   const parola = parolaAlani('Kasa parolası', { zorunlu: true, otomatik: 'current-password', yardim: 'Yedeği indirmeden önce parolayı yeniden girin. Yedek dosyası bu parolayla şifrelenir.' });
   const disaMesaj = mesajKutusu();
   const indir = h('button', { type: 'submit', class: 'birincil' }, 'Yedeği indir');
+  const varsayilan = (tahmin && tahmin.varsayilan) || { ekranGoruntuleriDahil: true, videolarDahil: false, izDosyalariDahil: false };
+  const toplamSatiri = h('p', { class: 'soluk kucuk', 'aria-live': 'polite' });
+  const kutular = MEDYA_SECENEKLERI.map((s) => {
+    const t = tahmin && tahmin.secenekler ? tahmin.secenekler[s.ad] : null;
+    const kutu = h('input', { type: 'checkbox', id: yeniKimlik('medya'), name: s.ad, checked: Boolean(varsayilan[s.ad]) });
+    const tahminMetni = t ? (t.sayi ? `${t.sayi} dosya, yaklaşık ${boyutMetni(t.bayt)}` : 'bu bilgisayarda yok') : 'boyut hesaplanamadı';
+    return {
+      ad: s.ad, kutu, t,
+      oge: h('label', { class: 'secenek', for: kutu.id }, kutu,
+        h('span', {}, s.etiket, h('span', { class: 'soluk kucuk' }, ` — ${tahminMetni} (${s.aciklama})`)))
+    };
+  });
+  const toplamGuncelle = () => {
+    const secili = kutular.filter((k) => k.kutu.checked && k.t);
+    const bayt = secili.reduce((a, k) => a + k.t.bayt, 0);
+    toplamSatiri.textContent = secili.length
+      ? `Seçilen medya: yaklaşık ${boyutMetni(bayt)} (veriler buna ek olarak küçük bir yer tutar).`
+      : 'Medya dosyası eklenmeyecek; yedekteki sonuçlarda medya "yedeğe dahil edilmedi" olarak görünür.';
+  };
+  for (const k of kutular) k.kutu.addEventListener('change', toplamGuncelle);
+  toplamGuncelle();
+  const ilerlemeCubugu = h('progress', { max: '100', value: '0', hidden: true, 'aria-label': 'Yedek hazırlanıyor' });
+  const ilerlemeMetni = h('p', { class: 'soluk kucuk', 'aria-live': 'polite', hidden: true });
   const disaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Dışa aktar'),
     h('p', { class: 'soluk' }, 'Tüm proje verisini tek bir şifreli .tayedek dosyası olarak indirir. Dosyayı başka bir bilgisayarda "Yedek yükle" ile açabilirsiniz.'),
-    disaMesaj.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, indir));
+    disaMesaj.kutu,
+    h('fieldset', { class: 'medya-secimi' }, h('legend', {}, 'Yedeğe eklenecek medya dosyaları'),
+      kutular.map((k) => k.oge), toplamSatiri),
+    parola.kapsayici, ilerlemeMetni, ilerlemeCubugu, h('div', { class: 'dugmeler' }, indir));
   let durdur = () => {};
+  const ilerlemeGoster = (is) => {
+    ilerlemeCubugu.hidden = false;
+    ilerlemeMetni.hidden = false;
+    ilerlemeCubugu.value = is.yuzde || 0;
+    ilerlemeMetni.textContent = `${is.asama} — %${Math.round(is.yuzde || 0)}`;
+  };
+  const ilerlemeGizle = () => { ilerlemeCubugu.hidden = true; ilerlemeMetni.hidden = true; };
   disaForm.addEventListener('submit', async (o) => {
     o.preventDefault();
     disaMesaj.temizle();
     alanHatasi(parola.girdi, '');
     if (!parola.girdi.value) { alanHatasi(parola.girdi, 'Parolayı girin.'); parola.girdi.focus(); return; }
+    const secim = Object.fromEntries(kutular.map((k) => [k.ad, k.kutu.checked]));
     await mesgulIken(indir, 'Hazırlanıyor…', async () => {
-      const yanit = await fetch('/platform/yedek/disa-aktar', {
-        method: 'POST', cache: 'no-store',
-        headers: { 'Content-Type': 'application/json', 'X-Test-Sunucu-Token': TOKEN },
-        body: JSON.stringify({ token: TOKEN, parola: parola.girdi.value })
-      });
-      if (!yanit.ok) {
-        const veri = await yanit.json().catch(() => ({}));
-        if (yanit.status === 423) { window.dispatchEvent(new CustomEvent('kasa-kilitli', { detail: veri.mesaj })); return; }
-        if (yanit.status === 429 && veri.bekleSaniye) {
+      let isId;
+      try {
+        ({ isId } = await api('/platform/yedek/disa-aktar', { govde: { parola: parola.girdi.value, ...secim } }));
+      } catch (hata) {
+        if (hata.durum === 423) return;
+        if (hata.durum === 429 && hata.bekleSaniye) {
           durdur();
-          durdur = geriSayim(veri.bekleSaniye, (k) => disaMesaj.goster(k > 0 ? `Art arda yanlış parola girildi. ${k} saniye sonra tekrar deneyebilirsiniz.` : 'Şimdi tekrar deneyebilirsiniz.'));
+          durdur = geriSayim(hata.bekleSaniye, (k) => disaMesaj.goster(k > 0 ? `Art arda yanlış parola girildi. ${k} saniye sonra tekrar deneyebilirsiniz.` : 'Şimdi tekrar deneyebilirsiniz.'));
           return;
         }
-        disaMesaj.goster(veri.mesaj || `Yedek alınamadı (${yanit.status}).`);
+        disaMesaj.goster(hata.message || 'Yedek alınamadı.');
         return;
       }
-      const ad = /filename="([^"]+)"/.exec(yanit.headers.get('Content-Disposition') || '');
-      const blob = await yanit.blob();
-      const url = URL.createObjectURL(blob);
-      const a = h('a', { href: url, download: ad ? ad[1] : 'platform-yedek.tayedek', hidden: true });
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 10_000);
       parola.girdi.value = '';
-      disaMesaj.goster(`Yedek indirildi (${boyutMetni(blob.size)}).`, 'basari');
+      ilerlemeGoster({ asama: 'başlıyor', yuzde: 0 });
+      for (;;) {
+        await new Promise((coz) => setTimeout(coz, 400));
+        let is;
+        try {
+          ({ is } = await api(`/platform/yedek/disa-aktar/${isId}`));
+        } catch (hata) {
+          ilerlemeGizle();
+          disaMesaj.goster((hata.govde && hata.govde.is && hata.govde.is.mesaj) || hata.message);
+          return;
+        }
+        if (is.durum === 'hazirlaniyor') { ilerlemeGoster(is); continue; }
+        ilerlemeGizle();
+        if (is.durum !== 'hazir') { disaMesaj.goster(is.mesaj || 'Yedek alınamadı.'); return; }
+        // Tarayıcının kendi indirmesi (büyük dosya belleğe alınmaz).
+        const a = h('a', { href: `/platform/yedek/disa-aktar/${isId}/indir?token=${encodeURIComponent(TOKEN)}`, download: is.dosyaAdi, hidden: true });
+        document.body.append(a);
+        a.click();
+        a.remove();
+        const medya = is.medya && is.medya.dosyaSayisi ? `, ${is.medya.dosyaSayisi} medya dosyası` : ', medya dosyası yok';
+        disaMesaj.goster(`Yedek hazır ve indiriliyor: ${is.dosyaAdi} (${boyutMetni(is.boyut || 0)}${medya}).`, 'basari');
+        return;
+      }
     });
   });
 

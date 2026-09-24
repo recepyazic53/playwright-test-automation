@@ -11,7 +11,7 @@ export interface SonucGirdisi {
   adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }>;
   medya?: Array<{ id?: string; tur: string; ad: string; icerikTuru: string; boyut: number; dosya: string; olusturulma?: string }>;
 }
-export interface MedyaOgesi { id: string; tur: string; ad: string; icerikTuru: string; boyut: number; olusturulma: string; silinme: string | null }
+export interface MedyaOgesi { id: string; tur: string; ad: string; icerikTuru: string; boyut: number; olusturulma: string; silinme: string | null; yedekDisi: boolean }
 export interface SonucDetayi {
   id: string; kosuId: string; projeId: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; urun: string;
   durum: SonucDurumu; hamDurum: string | null; sureMs: number | null; hataMesaji: string | null; hataKategorisi: string | null;

@@ -4,6 +4,7 @@
 //
 // İçe aktarma uç noktaları:
 //   POST /platform/yedek/ice-aktar              ham .tayedek gövdesi + X-Kasa-Parola → { isId } (202)
+//                                               (gövde belleğe alınmaz: geçici dosyaya akıtılır, en fazla 20 GB)
 //   GET  /platform/yedek/ice-aktar/<id>         ilerleme; hazır olunca önizleme (yeni/degisen/yalnizBurada)
 //   POST /platform/yedek/ice-aktar/<id>/uygula  { token, tumu: true } veya { token, secimler: { tablo: [id] } }
 //   POST /platform/yedek/ice-aktar/<id>/iptal   { token }
@@ -13,6 +14,11 @@
 //        test-verisi-turleri | test-verisi-profilleri   (?projeId=...)
 //   GET  /platform/gecmis?varlikTuru=&varlikId=           (yapan + makine adları eşlemesi)
 //   GET  /platform/yedek/otomatik-liste
+//   GET  /platform/yedek/tahmin                    dışa aktarma seçenekleri için tahmini medya boyutları
+// Dışa aktarma (arka plan işi; büyük yedek belleğe alınmaz, geçici dosyaya akışla yazılır):
+//   POST /platform/yedek/disa-aktar              { token, parola, ekranGoruntuleriDahil?, videolarDahil?, izDosyalariDahil? } → { isId } (202)
+//   GET  /platform/yedek/disa-aktar/<id>         ilerleme (aşama, yüzde, medya baytı)
+//   GET  /platform/yedek/disa-aktar/<id>/indir?token=   hazır yedeği indirir (indirme bitince geçici dosya silinir)
 //   POST /platform/<varlik>/kaydet | /sil                 (varlik: proje, ortam, giris-profili,
 //        baglam-profili, test-verisi-turu, test-verisi-profili)
 //   POST /platform/giris-profili/goster, /platform/test-verisi-profili/goster
@@ -52,7 +58,8 @@
 // (encodeURIComponent ile) gelir; URL'de parola kabul edilmez. Parola/anahtar ASLA loglanmaz,
 // yanıtlarda dönmez.
 
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,7 +81,9 @@ import {
 } from './veritabani/sonuc-deposu.mjs';
 import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
 import { allureSonuclariniAktar } from './aktarim/allure-sonuclari.mjs';
-import { YEDEK_UZANTISI, YedekHatasi, otomatikYedekAl, varsayilanYedekKlasoru, yedekOlustur } from './yedek.mjs';
+import {
+  YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, varsayilanYedekKlasoru, yedekBoyutTahmini, yedekDosyasiYaz
+} from './yedek.mjs';
 import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
@@ -82,7 +91,8 @@ import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
 export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
-export const YEDEK_YUKLEME_SINIRI = 500 * 1024 * 1024;
+/** İçe aktarılacak yedeğin üst sınırı (videolu yedekler büyük olabilir; gövde diske akıtılır). */
+export const YEDEK_YUKLEME_SINIRI = 20 * 1024 * 1024 * 1024;
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** PLATFORM_VERITABANI veya <proje kökü>/veri/platform.db */
 const veritabaniYolu = () => veritabaniYoluCoz(PROJE_KOKU);
@@ -351,9 +361,54 @@ export function projeDosyalariniEsitle(neden) {
 const denemeSiniri = new ParolaDenemeSiniri();
 const iceAktarma = new IceAktarmaYoneticisi({
   veritabani: (olustur) => platformVeritabani({ olustur }),
+  medyaKlasoru: medyaKlasoruYolu,
   denemeSiniri
 });
-setInterval(() => iceAktarma.temizle(), 5 * 60 * 1000).unref();
+setInterval(() => { iceAktarma.temizle(); disaAktarmaTemizle(); }, 5 * 60 * 1000).unref();
+
+/** Yüklenen yedeklerin geçici klasörü (veritabanının yanında; dosyalar zaten şifreli). */
+const yuklemeKlasoru = () => join(dirname(veritabaniYolu()), '.gecici-yukleme');
+/** Bir günden eski (çöken bir yüklemeden kalan) geçici yükleme dosyalarını siler. */
+function eskiYuklemeleriTemizle() {
+  const klasor = yuklemeKlasoru();
+  if (!existsSync(klasor)) return;
+  for (const ad of readdirSync(klasor)) {
+    if (!/^yukleme-[a-f0-9]{16}\.tayedek$/.test(ad)) continue;
+    try {
+      if (Date.now() - statSync(join(klasor, ad)).mtimeMs > 24 * 60 * 60 * 1000) unlinkSync(join(klasor, ad));
+    } catch { /* yok sayılır */ }
+  }
+}
+
+// ---------------------------------------------------------------------------------------
+// Dışa aktarma işleri (arka planda geçici dosyaya yazılır, sonra indirilir)
+// ---------------------------------------------------------------------------------------
+const DISA_AKTARMA_SAKLAMA_MS = 60 * 60 * 1000;
+/**
+ * @typedef {{
+ *   id: string; durum: 'hazirlaniyor' | 'hazir' | 'hata'; asama: string; yuzde: number;
+ *   bayt: { islenen: number; toplam: number } | null; mesaj: string | null; dosya: string; dosyaAdi: string;
+ *   boyut: number | null; medya: import('./yedek.mjs').YedekMedyaOzeti | null; sonKullanma: number;
+ * }} DisaAktarmaIsi
+ */
+/** @type {Map<string, DisaAktarmaIsi>} */
+const disaAktarmaIsleri = new Map();
+
+/** Süresi dolan (indirilmemiş) dışa aktarma dosyalarını siler. @param {boolean} [hepsi] */
+function disaAktarmaTemizle(hepsi = false) {
+  for (const [id, is] of disaAktarmaIsleri) {
+    if (is.durum === 'hazirlaniyor' && !hepsi) continue;
+    if (!hepsi && is.sonKullanma > Date.now()) continue;
+    try { unlinkSync(is.dosya); } catch { /* zaten yok */ }
+    disaAktarmaIsleri.delete(id);
+  }
+}
+
+/** @param {DisaAktarmaIsi} is */
+const disaAktarmaGorunumu = (is) => ({
+  id: is.id, durum: is.durum, asama: is.asama, yuzde: is.yuzde, bayt: is.bayt, mesaj: is.mesaj,
+  dosyaAdi: is.dosyaAdi, boyut: is.boyut, medya: is.medya
+});
 
 /** Hata → HTTP durum kodu + güvenli (gizli bilgi içermeyen) mesaj. @param {unknown} hata */
 function hataYaniti(hata) {
@@ -398,6 +453,45 @@ function ikiliGovdeOku(req, sinir) {
     });
     req.on('end', () => { if (!bitti) { bitti = true; coz(Buffer.concat(parcalar)); } });
     req.on('error', (h) => { if (!bitti) { bitti = true; reddet(h); } });
+  });
+}
+
+/**
+ * İstek gövdesini (belleğe almadan) dosyaya akıtır. Sınır aşılırsa dosya silinir.
+ * @param {import('node:http').IncomingMessage} req @param {string} yol @param {number} sinir
+ * @returns {Promise<number>} yazılan bayt
+ */
+function govdeyiDosyayaYaz(req, yol, sinir) {
+  return new Promise((coz, reddet) => {
+    const uzunluk = Number(req.headers['content-length'] ?? NaN);
+    if (Number.isFinite(uzunluk) && uzunluk > sinir) {
+      req.resume();
+      reddet(Object.assign(new Error('Yüklenen dosya çok büyük.'), { cokBuyuk: true }));
+      return;
+    }
+    mkdirSync(dirname(yol), { recursive: true });
+    const cikis = createWriteStream(yol, { flags: 'wx', mode: 0o600 });
+    let toplam = 0;
+    let bitti = false;
+    /** @param {Error} hata */
+    const basarisiz = (hata) => {
+      if (bitti) return;
+      bitti = true;
+      req.unpipe(cikis);
+      cikis.destroy();
+      try { unlinkSync(yol); } catch { /* zaten yok */ }
+      req.resume();
+      reddet(hata);
+    };
+    req.on('data', (/** @type {Buffer} */ parca) => {
+      toplam += parca.length;
+      if (toplam > sinir) basarisiz(Object.assign(new Error('Yüklenen dosya çok büyük.'), { cokBuyuk: true }));
+    });
+    req.on('error', basarisiz);
+    req.on('aborted', () => basarisiz(new Error('Yükleme yarıda kesildi.')));
+    cikis.on('error', basarisiz);
+    cikis.on('finish', () => { if (!bitti) { bitti = true; coz(toplam); } });
+    req.pipe(cikis);
   });
 }
 
@@ -505,6 +599,7 @@ const GET_UCLARI = new Map([
   ['/platform/sonuclar/kaliplar', (db, q) => hataKaliplari(db, kimlikAl(q.get('projeId'), 'projeId'), {
     urun: urunSecimi(q.get('urun')), baslangic: q.get('baslangic') || null, bitis: q.get('bitis') || null
   })],
+  ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
   ['/platform/yedek/otomatik-liste', (db) => {
     const klasor = varsayilanYedekKlasoru(db);
     const dosyalar = existsSync(klasor)
@@ -699,6 +794,38 @@ export async function platformIsteginiIsle(req, res, baglam) {
       return true;
     }
 
+    // --- GET /platform/yedek/disa-aktar/<id>[/indir] — dışa aktarma ilerlemesi / indirme ------
+    const disaEslesme = /^\/platform\/yedek\/disa-aktar\/([a-f0-9]{16})(\/indir)?$/.exec(yol);
+    if (req.method === 'GET' && disaEslesme) {
+      if (!disTokenGecerli) { tokenYok(); return true; }
+      disaAktarmaTemizle();
+      const is = disaAktarmaIsleri.get(disaEslesme[1]);
+      if (!is) { jsonGonder(res, 404, { basarili: false, kod: 'BULUNAMADI', mesaj: 'Dışa aktarma bulunamadı (süresi dolmuş veya indirilmiş olabilir).' }); return true; }
+      if (!disaEslesme[2]) {
+        res.setHeader('Cache-Control', 'no-store');
+        jsonGonder(res, 200, { basarili: is.durum !== 'hata', is: disaAktarmaGorunumu(is) });
+        return true;
+      }
+      if (is.durum !== 'hazir' || !existsSync(is.dosya)) { jsonGonder(res, 409, { basarili: false, mesaj: 'Yedek henüz hazır değil.' }); return true; }
+      const boyut = statSync(is.dosya).size;
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': boyut,
+        'Content-Disposition': `attachment; filename="${is.dosyaAdi}"`,
+        'Cache-Control': 'no-store'
+      });
+      const akis = createReadStream(is.dosya);
+      akis.pipe(res);
+      res.on('finish', () => {
+        // Tamamı gönderildi: geçici dosya silinir (yarıda kalırsa süre dolana kadar tekrar indirilebilir).
+        try { unlinkSync(is.dosya); } catch { /* zaten yok */ }
+        disaAktarmaIsleri.delete(is.id);
+        console.log(`[platform] Yedek indirildi (${boyut} bayt).`);
+      });
+      res.on('close', () => akis.destroy());
+      return true;
+    }
+
     // --- GET /platform/aktarim/durum (kasa kilitliyken de çalışır; gizli bilgi yok) -----------
     if (req.method === 'GET' && yol === '/platform/aktarim/durum') {
       if (!disTokenGecerli) { tokenYok(); return true; }
@@ -758,20 +885,26 @@ export async function platformIsteginiIsle(req, res, baglam) {
         res.setHeader('Connection', 'close');
         throw hata;
       }
-      let dosya;
+      eskiYuklemeleriTemizle();
+      const dosya = join(yuklemeKlasoru(), `yukleme-${randomBytes(8).toString('hex')}.tayedek`);
+      let boyut = 0;
       try {
-        dosya = await ikiliGovdeOku(req, YEDEK_YUKLEME_SINIRI);
+        boyut = await govdeyiDosyayaYaz(req, dosya, YEDEK_YUKLEME_SINIRI);
       } catch (hata) {
         const cokBuyuk = Boolean(/** @type {{ cokBuyuk?: boolean }} */ (hata).cokBuyuk);
-        if (cokBuyuk) res.setHeader('Connection', 'close');
+        res.setHeader('Connection', 'close');
         jsonGonder(res, cokBuyuk ? 413 : 400, {
           basarili: false,
-          mesaj: cokBuyuk ? `Yedek dosyası en fazla ${YEDEK_YUKLEME_SINIRI / 1024 / 1024} MB olabilir.` : 'Dosya okunamadı.'
+          mesaj: cokBuyuk ? `Yedek dosyası en fazla ${YEDEK_YUKLEME_SINIRI / 1024 / 1024 / 1024} GB olabilir.` : 'Dosya okunamadı.'
         });
         return true;
       }
-      if (!dosya.length) { jsonGonder(res, 400, { basarili: false, mesaj: 'Boş dosya gönderildi.' }); return true; }
-      const isId = iceAktarma.baslat(dosya, parola);
+      if (!boyut) {
+        try { unlinkSync(dosya); } catch { /* zaten yok */ }
+        jsonGonder(res, 400, { basarili: false, mesaj: 'Boş dosya gönderildi.' });
+        return true;
+      }
+      const isId = iceAktarma.baslat(dosya, parola, { geciciDosya: true });
       parola = '';
       jsonGonder(res, 202, { basarili: true, isId });
       return true;
@@ -907,24 +1040,60 @@ export async function platformIsteginiIsle(req, res, baglam) {
         const db = await platformVeritabani();
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
         if (!kasaAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.');
+        const secim = medyaSeciminiCoz({
+          ekranGoruntuleriDahil: /** @type {boolean | undefined} */ (govde.ekranGoruntuleriDahil),
+          videolarDahil: /** @type {boolean | undefined} */ (govde.videolarDahil),
+          izDosyalariDahil: /** @type {boolean | undefined} */ (govde.izDosyalariDahil)
+        });
+        disaAktarmaTemizle();
+        // Önceki bir sunucu oturumundan kalan (indirilmemiş) geçici yedekler.
+        const disaKlasor = join(varsayilanYedekKlasoru(db), '.disa-aktarma');
+        if (existsSync(disaKlasor)) {
+          const bilinen = new Set([...disaAktarmaIsleri.values()].map((i) => i.dosya));
+          for (const ad of readdirSync(disaKlasor)) {
+            const tam = join(disaKlasor, ad);
+            try {
+              if (!bilinen.has(tam) && Date.now() - statSync(tam).mtimeMs > DISA_AKTARMA_SAKLAMA_MS) unlinkSync(tam);
+            } catch { /* yok sayılır */ }
+          }
+        }
+        if ([...disaAktarmaIsleri.values()].some((i) => i.durum === 'hazirlaniyor')) {
+          throw new YedekHatasi('MESGUL', 'Başka bir dışa aktarma sürüyor; bitmesini bekleyin.');
+        }
         const anahtar = await denemeSiniri.dene(async () => {
           const a = await parolayiDogrula(db, metin(govde.parola));
           if (!a) throw new KasaHatasi('PAROLA_YANLIS', 'Kasa parolası yanlış.');
           return a;
         });
         anahtar.fill(0);
-        const { veri, manifest } = yedekOlustur(db);
         const makineAdi = hostname().replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40) || 'makine';
-        const dosyaAdi = `platform-yedek-${makineAdi}-${dosyaZamani(new Date())}${YEDEK_UZANTISI}`;
-        res.writeHead(200, {
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': veri.length,
-          'Content-Disposition': `attachment; filename="${dosyaAdi}"`,
-          'Cache-Control': 'no-store',
-          'X-Yedek-Sayimlari': encodeURIComponent(JSON.stringify(manifest.sayimlar))
+        const id = randomBytes(8).toString('hex');
+        /** @type {DisaAktarmaIsi} */
+        const is = {
+          id, durum: 'hazirlaniyor', asama: 'başlıyor', yuzde: 0, bayt: null, mesaj: null,
+          dosya: join(varsayilanYedekKlasoru(db), '.disa-aktarma', `${id}${YEDEK_UZANTISI}`),
+          dosyaAdi: `platform-yedek-${makineAdi}-${dosyaZamani(new Date())}${YEDEK_UZANTISI}`,
+          boyut: null, medya: null, sonKullanma: Date.now() + DISA_AKTARMA_SAKLAMA_MS
+        };
+        disaAktarmaIsleri.set(id, is);
+        yedekDosyasiYaz(db, is.dosya, {
+          ...secim, medyaKlasoru: medyaKlasoruYolu(),
+          ilerleme: (asama, yuzde, bayt) => { is.asama = asama; is.yuzde = yuzde; if (bayt) is.bayt = bayt; }
+        }).then((sonuc) => {
+          is.durum = 'hazir';
+          is.asama = 'hazır';
+          is.yuzde = 100;
+          is.boyut = sonuc.boyut;
+          is.medya = sonuc.manifest.medya ?? null;
+          is.sonKullanma = Date.now() + DISA_AKTARMA_SAKLAMA_MS;
+          console.log(`[platform] Yedek hazırlandı (${sonuc.boyut} bayt, ${is.medya?.dosyaSayisi ?? 0} medya dosyası).`);
+        }).catch((/** @type {unknown} */ hata) => {
+          is.durum = 'hata';
+          is.mesaj = hata instanceof YedekHatasi || hata instanceof KasaHatasi
+            ? hata.message : `Yedek alınamadı: ${/** @type {Error} */ (hata)?.message ?? String(hata)}`;
+          console.error(`[platform] Dışa aktarma başarısız: ${is.mesaj}`);
         });
-        res.end(veri);
-        console.log(`[platform] Yedek dışa aktarıldı (${veri.length} bayt).`);
+        jsonGonder(res, 202, { basarili: true, isId: id, secim });
         return true;
       }
       case '/platform/yedek/otomatik': {
@@ -1013,7 +1182,16 @@ async function medyaSun(req, res, id, indir, jsonGonder) {
   if (m.silinme) { jsonGonder(res, 410, { basarili: false, mesaj: 'Bu video saklama süresi dolduğu için silindi.' }); return; }
   const klasor = medyaKlasoruYolu();
   const yol = medyaDosyaAdiGecerliMi(m.dosya) ? join(klasor, m.dosya) : null;
-  if (!yol || !existsSync(yol)) { jsonGonder(res, 404, { basarili: false, mesaj: 'Medya dosyası bu bilgisayarda yok (başka bir makinede kaydedilmiş olabilir).' }); return; }
+  if (!yol || !existsSync(yol)) {
+    jsonGonder(res, 404, {
+      basarili: false,
+      kod: m.yedekDisi ? 'YEDEGE_DAHIL_DEGIL' : 'DOSYA_YOK',
+      mesaj: m.yedekDisi
+        ? 'Bu medya yedeğe dahil edilmemişti (dışa aktarırken bu medya türü seçilmemiş).'
+        : 'Medya dosyası bu bilgisayarda yok (başka bir makinede kaydedilmiş olabilir).'
+    });
+    return;
+  }
   let boyut;
   try {
     ({ duzBoyut: boyut } = await medyaBoyutu(yol));

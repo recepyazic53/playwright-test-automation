@@ -15,10 +15,18 @@
 //    duyduğu üst kayıt (ör. yeni senaryonun yeni projesi) yerelde yoksa otomatik eklenir ve
 //    raporlanır. Boş veritabanına "tümü" uygulanırsa tam yükleme (kasa dahil) yapılır.
 // 3) Hazırlık alanı uygulamadan sonra, iptalde veya 1 saat sonra atılır (anahtar sıfırlanır).
+// MEDYA: biçim 2 yedekteki (şifreli) medya dosyaları hazırlıkta medya klasörünün içindeki
+//    .hazirlik-<kimlik>/ klasörüne OLDUĞU GİBİ çıkarılır (düz metin yazılmaz); önizleme tür
+//    başına eklenecek medya sayısı/boyutunu gösterir. Uygulamada (iceAktarmaMedyasiniYaz) yalnızca
+//    veritabanına YAZILAN medya satırlarının dosyaları yerleştirilir (sonucu içe aktarılmayan
+//    medya atlanır; kimlik üzerinden tekilleştirilir). Kaynak medya anahtarı yerelden farklıysa
+//    dosyalar yerel anahtarla yeniden şifrelenir (bkz. yedek.mjs > medyalariYerlestir).
 //
 // Bu modül import.meta KULLANMAZ (birim testleri CommonJS'e çevirerek yükler).
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { existsSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import { veritabaniAc } from './veritabani/baglanti.mjs';
 import { SIFRELI_ALANLAR, TABLOLAR, gocleriUygula } from './veritabani/gocler.mjs';
 import { gecmisYapaniniNormallestir, gecmisYaz, sayimlar, yerelMakine } from './veritabani/depo.mjs';
@@ -26,10 +34,14 @@ import {
   KasaHatasi, acikAnahtar, gecmisAnligiSifrele, kasaDurumu, kasayiAnahtarlaAc, metindekiZarflariDonustur,
   satirSifreliAlanlariniTamamla, sifreliAlanlariTamamla, zarfCoz, zarfMi, zarfSifrele
 } from './kasa.mjs';
-import { YedekHatasi, satirEkle, sutunlariDogrula, tamYukleYaz, veritabaniBosMu, yedekAc } from './yedek.mjs';
+import {
+  YedekHatasi, hazirlikKlasoruYolu, hazirlikKlasorunuSil, medyaAnahtariniBenimse, medyalariYerlestir,
+  satirEkle, sutunlariDogrula, tamYukleYaz, veritabaniBosMu, yedekAc
+} from './yedek.mjs';
+import { medyaDosyaAdiGecerliMi, medyaKlasoru as medyaKlasoruBul } from './medya.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
-/** @typedef {(asama: string, yuzde: number) => void} IlerlemeFn */
+/** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
 /** @typedef {Record<string, unknown>} Satir */
 
 /** Önizlemede gösterilen ve seçilebilen varlık türleri (tablo adı → Türkçe etiket). */
@@ -47,7 +59,8 @@ export const ONIZLEME_TABLOLARI = Object.freeze({
   ayarlar: 'Ayarlar'
 });
 /** Her zaman eklenen (kimlik üzerinden tekilleştirilen) ve yalnızca sayılan tablolar. */
-// medya: yalnızca üst bilgi satırıdır; şifreli dosyalar yedeğe girmez (başka makinede "dosya yok").
+// medya: üst bilgi satırı; dosyası yedekte varsa uygulamada ayrıca yerleştirilir. Sonucu bu
+// makinede olmayan (içe aktarılmayan) medya satırı ATLANIR (bağlantısı kaldırılarak eklenmez).
 export const EKLEME_TABLOLARI = Object.freeze(['makineler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari', 'adim_sonuclari', 'medya']);
 export const MASKE = '••••••';
 export const HAZIRLIK_SAKLAMA_MS = 60 * 60 * 1000;
@@ -181,11 +194,15 @@ function yerelHarita(vt, tablo) {
 
 /**
  * @typedef {{
- *   manifest: { olusturulma: string; semaSurumu: number; makine: { id: string; ad: string } };
+ *   manifest: { bicimSurumu: number; olusturulma: string; semaSurumu: number; makine: { id: string; ad: string }; medya?: { secim?: Record<string, boolean> } };
  *   hedefAnahtar: Buffer;
- *   benimsenecekKasa: { kdf: object; dogrulayici: string } | null;
+ *   benimsenecekKasa: { kdf: object; dogrulayici: string; medyaAnahtari?: string } | null;
  *   tablolar: Record<string, Satir[]>;
  *   onizleme: Onizleme;
+ *   medyaKlasoru: string | null;
+ *   hazirlikKlasoru: string | null;
+ *   kaynakMedyaAnahtari: Buffer | null;
+ *   medyaDosyalari: Map<string, { yol: string | null; boyut: number }>;
  * }} Hazirlik
  * @typedef {{
  *   yedek: { olusturulma: string; makine: string | null; semaSurumu: number };
@@ -193,8 +210,15 @@ function yerelHarita(vt, tablo) {
  *   kasaBenimsenecek: boolean;
  *   varliklar: Record<string, VarlikOnizlemesi>;
  *   eklenecekler: Record<string, { dosyada: number; yeni: number }>;
+ *   medya: MedyaOnizlemesi;
  *   toplam: { yeni: number; degisen: number; yalnizBurada: number; ayni: number };
  * }} Onizleme
+ * @typedef {{
+ *   bicimSurumu: number;
+ *   secim: Record<string, boolean> | null;
+ *   turler: Record<string, { dosyada: number; dosyasiYedekte: number; eklenecek: number; eklenecekBayt: number; dahilDegil: number; zatenVar: number }>;
+ *   toplam: { eklenecek: number; eklenecekBayt: number; dahilDegil: number };
+ * }} MedyaOnizlemesi
  * @typedef {{
  *   etiket: string;
  *   yeni: Array<{ id: string; baslik: string; dosya: Satir; uygulanamaz?: string }>;
@@ -205,11 +229,49 @@ function yerelHarita(vt, tablo) {
  */
 
 /**
+ * Tür başına medya önizlemesi: dosyada kaç satır var, kaçının dosyası yedekte, kaçı eklenecek
+ * (satır bu makinede yok ya da var ama dosyası yok) ve ne kadar yer tutacak.
+ * @param {Veritabani} vt @param {Satir[]} satirlar
+ * @param {Map<string, { yol: string | null; boyut: number }>} dosyalar @param {string | null} klasor
+ * @param {{ bicimSurumu: number; medya?: { secim?: Record<string, boolean> } }} manifest
+ * @returns {MedyaOnizlemesi}
+ */
+function medyaOnizlemesi(vt, satirlar, dosyalar, klasor, manifest) {
+  /** @type {MedyaOnizlemesi['turler']} */
+  const turler = {};
+  const toplam = { eklenecek: 0, eklenecekBayt: 0, dahilDegil: 0 };
+  for (const satir of satirlar) {
+    if (satir.silinme != null) continue;
+    const tur = String(satir.tur);
+    const t = (turler[tur] ??= { dosyada: 0, dosyasiYedekte: 0, eklenecek: 0, eklenecekBayt: 0, dahilDegil: 0, zatenVar: 0 });
+    t.dosyada++;
+    const dosya = dosyalar.get(String(satir.id));
+    if (dosya) t.dosyasiYedekte++;
+    const yerel = vt.tek('SELECT dosya FROM medya WHERE id = ?', [satir.id]);
+    const yerelDosyaVar = Boolean(yerel && klasor && medyaDosyaAdiGecerliMi(yerel.dosya) && existsSync(join(klasor, String(yerel.dosya))));
+    if (yerelDosyaVar) { t.zatenVar++; continue; }
+    if (dosya) {
+      t.eklenecek++;
+      // Kullanıcıya gösterilen boyut: düz metin boyutu (dışa aktarma tahminiyle aynı ölçü).
+      t.eklenecekBayt += Number.isFinite(Number(satir.boyut)) ? Number(satir.boyut) : dosya.boyut;
+    } else {
+      t.dahilDegil++;
+    }
+  }
+  for (const t of Object.values(turler)) {
+    toplam.eklenecek += t.eklenecek;
+    toplam.eklenecekBayt += t.eklenecekBayt;
+    toplam.dahilDegil += t.dahilDegil;
+  }
+  return { bicimSurumu: manifest.bicimSurumu, secim: manifest.medya?.secim ?? null, turler, toplam };
+}
+
+/**
  * @param {Veritabani} vt @param {Record<string, Satir[]>} tablolar @param {Buffer} anahtar
- * @param {Hazirlik['manifest']} manifest @param {boolean} kasaBenimsenecek
+ * @param {Hazirlik['manifest']} manifest @param {boolean} kasaBenimsenecek @param {MedyaOnizlemesi} medya
  * @returns {Onizleme}
  */
-function onizlemeOlustur(vt, tablolar, anahtar, manifest, kasaBenimsenecek) {
+function onizlemeOlustur(vt, tablolar, anahtar, manifest, kasaBenimsenecek, medya) {
   /** @type {Record<string, VarlikOnizlemesi>} */
   const varliklar = {};
   const toplam = { yeni: 0, degisen: 0, yalnizBurada: 0, ayni: 0 };
@@ -275,6 +337,7 @@ function onizlemeOlustur(vt, tablolar, anahtar, manifest, kasaBenimsenecek) {
     kasaBenimsenecek,
     varliklar,
     eklenecekler,
+    medya,
     toplam
   };
 }
@@ -284,10 +347,12 @@ function onizlemeOlustur(vt, tablolar, anahtar, manifest, kasaBenimsenecek) {
  * - vt null ise (veritabanı dosyası henüz yok) boş bir bellek veritabanıyla karşılaştırılır.
  * - Yerelde kasa varsa AÇIK olmalıdır (KASA_KILITLI); yoksa yedeğin kasası benimsenecektir.
  * - Parola yanlışsa KasaHatasi(PAROLA_YANLIS) — hiçbir şey hazırlanmaz.
+ * - Yedekteki medya dosyaları medyaKlasoru içindeki bir hazırlık klasörüne (şifreli) çıkarılır;
+ *   medyaKlasoru verilmez ve vt'nin dosya yolu da yoksa medya dosyaları okunup atılır.
  * @param {Veritabani | null} vt
- * @param {Buffer} dosya
+ * @param {Buffer | string} dosya Buffer ya da dosya yolu (büyük yedekler akışla okunur)
  * @param {string} parola
- * @param {{ ilerleme?: IlerlemeFn }} [secenekler]
+ * @param {{ ilerleme?: IlerlemeFn; medyaKlasoru?: string | null }} [secenekler]
  * @returns {Promise<Hazirlik>}
  */
 export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
@@ -296,9 +361,19 @@ export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
     const k = kasaDurumu(vt);
     if (k.olusturuldu && !k.acik) throw new KasaHatasi('KASA_KILITLI', 'İçe aktarma için önce bu makinedeki kasayı açın.');
   }
-  const yedek = await yedekAc(dosya, parola, { ilerleme });
+  const klasor = secenekler.medyaKlasoru !== undefined ? secenekler.medyaKlasoru : (vt?.yol ? medyaKlasoruBul(vt.yol) : null);
+  const hazirlikKlasoru = klasor ? hazirlikKlasoruYolu(klasor) : null;
+  /** @type {Awaited<ReturnType<typeof yedekAc>>} */
+  let yedek;
+  try {
+    yedek = await yedekAc(dosya, parola, { ilerleme, hazirlikKlasoru });
+  } catch (hata) {
+    hazirlikKlasorunuSil(hazirlikKlasoru);
+    throw hata;
+  }
   /** @type {Veritabani | null} */
   let geciciVt = null;
+  let basarili = false;
   try {
     let yerel = vt;
     if (!yerel) {
@@ -336,19 +411,47 @@ export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
       });
     }
     ilerleme('önizleme hazırlanıyor', 75);
-    const onizleme = onizlemeOlustur(yerel, tablolar, hedefAnahtar, yedek.manifest, !kasaVar);
+    const medya = medyaOnizlemesi(yerel, tablolar.medya ?? [], yedek.medyaDosyalari, klasor, yedek.manifest);
+    const onizleme = onizlemeOlustur(yerel, tablolar, hedefAnahtar, yedek.manifest, !kasaVar, medya);
     ilerleme('önizleme hazır', 100);
-    return { manifest: yedek.manifest, hedefAnahtar, benimsenecekKasa: kasaVar ? null : yedek.kasa, tablolar, onizleme };
+    basarili = true;
+    return {
+      manifest: yedek.manifest, hedefAnahtar, benimsenecekKasa: kasaVar ? null : yedek.kasa, tablolar, onizleme,
+      medyaKlasoru: klasor, hazirlikKlasoru, kaynakMedyaAnahtari: yedek.medyaAnahtari, medyaDosyalari: yedek.medyaDosyalari
+    };
   } finally {
     yedek.kasaAnahtari.fill(0);
     geciciVt?.kapat();
+    if (!basarili) {
+      yedek.medyaAnahtari?.fill(0);
+      hazirlikKlasorunuSil(hazirlikKlasoru);
+    }
   }
 }
 
-/** Hazırlık alanını atar (anahtar sıfırlanır). @param {Hazirlik} hazirlik */
+/** Hazırlık alanını atar (anahtarlar sıfırlanır, hazırlık klasörü silinir). @param {Hazirlik} hazirlik */
 export function hazirligiAt(hazirlik) {
   hazirlik.hedefAnahtar.fill(0);
+  hazirlik.kaynakMedyaAnahtari?.fill(0);
   hazirlik.tablolar = {};
+  hazirlik.medyaDosyalari = new Map();
+  hazirlikKlasorunuSil(hazirlik.hazirlikKlasoru);
+}
+
+/**
+ * Uygulamadan SONRA: veritabanına yazılmış medya satırlarının dosyalarını yerel depoya yerleştirir
+ * (yeniden şifreleme gerekiyorsa akışla). Kasa açık olmalı.
+ * @param {Veritabani} vt @param {Hazirlik} hazirlik @param {{ ilerleme?: IlerlemeFn }} [secenekler]
+ */
+export async function iceAktarmaMedyasiniYaz(vt, hazirlik, secenekler = {}) {
+  const idler = (hazirlik.tablolar.medya ?? []).map((m) => String(m.id));
+  if (!hazirlik.medyaKlasoru) {
+    return { eklenen: 0, bayt: 0, zatenVardi: 0, atlanan: 0, dahilDegil: idler.length, yenidenSifrelenen: 0 };
+  }
+  return medyalariYerlestir(vt, {
+    klasor: hazirlik.medyaKlasoru, kaynakAnahtar: hazirlik.kaynakMedyaAnahtari, dosyalar: hazirlik.medyaDosyalari, idler,
+    ilerleme: secenekler.ilerleme
+  });
 }
 
 /** @type {Map<string, Array<{ ust: string; sutun: string; ustSutun: string; bosOlabilir: boolean }>>} */
@@ -376,6 +479,8 @@ function yabanciAnahtarlar(vt, tablo) {
  *   atlananlar: Array<{ tablo: string; id: string; neden: string }>;
  *   gecmiseYazilan: number;
  *   sayimlar: Record<string, number>;
+ *   medya?: import('./yedek.mjs').MedyaYerlestirmeSonucu;
+ *   medyaHatasi?: string;
  * }} UygulamaSonucu
  */
 
@@ -496,6 +601,7 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
 
   vt.islem(() => {
     if (hazirlik.benimsenecekKasa) {
+      medyaAnahtariniBenimse(vt, hazirlik.benimsenecekKasa.medyaAnahtari, [hedefAnahtar]);
       vt.metaYaz('kasa_surum', '1');
       vt.metaYaz('kasa_kdf', JSON.stringify(hazirlik.benimsenecekKasa.kdf));
       vt.metaYaz('kasa_dogrulayici', hazirlik.benimsenecekKasa.dogrulayici);
@@ -554,6 +660,12 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
             o.mevcut++;
             continue;
           }
+          // Sonucu bu makinede olmayan (içe aktarılmayan) medya eklenmez; dosyası da yazılmaz.
+          if (t.ad === 'medya' && gelenHam.sonuc_id != null
+            && !vt.tek('SELECT 1 AS var FROM kosu_sonuclari WHERE id = ?', [gelenHam.sonuc_id])) {
+            o.atlanan++;
+            continue;
+          }
           const { satir, atla, kaldirilan } = ustKayitlariDuzelt(t.ad, gelenHam);
           if (atla) {
             o.atlanan++;
@@ -589,6 +701,7 @@ export class IceAktarmaYoneticisi {
   /**
    * @param {{
    *   veritabani: (olustur: boolean) => Promise<Veritabani | null>;
+   *   medyaKlasoru?: () => string | null;
    *   denemeSiniri?: import('./kasa.mjs').ParolaDenemeSiniri;
    *   saklamaMs?: number;
    *   simdi?: () => number;
@@ -596,6 +709,7 @@ export class IceAktarmaYoneticisi {
    */
   constructor(secenekler) {
     this.veritabani = secenekler.veritabani;
+    this.medyaKlasoru = secenekler.medyaKlasoru ?? null;
     this.denemeSiniri = secenekler.denemeSiniri ?? null;
     this.saklamaMs = secenekler.saklamaMs ?? HAZIRLIK_SAKLAMA_MS;
     this.simdi = secenekler.simdi ?? (() => Date.now());
@@ -626,13 +740,24 @@ export class IceAktarmaYoneticisi {
   /**
    * Yüklenen dosya için hazırlığı başlatır (arka planda). Kaba kuvvet beklemesi sürüyorsa
    * COK_DENEME; başka iş sürüyorsa MESGUL. Bekleyen (hazır) eski önizlemeler atılır.
-   * @param {Buffer} dosya @param {string} parola
+   * dosya bir yol ve geciciDosya: true ise hazırlık bitince (başarılı/başarısız) dosya silinir.
+   * @param {Buffer | string} dosya @param {string} parola @param {{ geciciDosya?: boolean }} [secenekler]
    * @returns {string} iş kimliği
    */
-  baslat(dosya, parola) {
+  baslat(dosya, parola, secenekler = {}) {
+    const geciciSil = () => {
+      if (secenekler.geciciDosya && typeof dosya === 'string') {
+        try { unlinkSync(dosya); } catch { /* zaten yok */ }
+      }
+    };
     this.temizle();
-    this.denemeSiniri?.kontrolEt();
-    if (this.aktifIs()) throw new YedekHatasi('MESGUL', 'Başka bir içe aktarma sürüyor; bitmesini bekleyin.');
+    try {
+      this.denemeSiniri?.kontrolEt();
+      if (this.aktifIs()) throw new YedekHatasi('MESGUL', 'Başka bir içe aktarma sürüyor; bitmesini bekleyin.');
+    } catch (hata) {
+      geciciSil();
+      throw hata;
+    }
     for (const [eskiId, is] of this.isler) if (is.gorunum.durum === 'hazir') this.iptal(eskiId);
     const id = randomBytes(8).toString('hex');
     const baslangic = this.simdi();
@@ -647,7 +772,8 @@ export class IceAktarmaYoneticisi {
       try {
         const vt = await this.veritabani(false);
         const hazirlik = await iceAktarmaHazirla(vt, dosya, parola, {
-          ilerleme: (asama, yuzde) => { gorunum.asama = asama; gorunum.yuzde = yuzde; }
+          ilerleme: (asama, yuzde) => { gorunum.asama = asama; gorunum.yuzde = yuzde; },
+          ...(this.medyaKlasoru ? { medyaKlasoru: this.medyaKlasoru() } : {})
         });
         this.denemeSiniri?.basarili();
         if (gorunum.durum === 'iptal') {
@@ -663,6 +789,8 @@ export class IceAktarmaYoneticisi {
       } catch (hata) {
         if (hata instanceof KasaHatasi && hata.kod === 'PAROLA_YANLIS') this.denemeSiniri?.basarisiz();
         this.hataYaz(gorunum, hata);
+      } finally {
+        geciciSil();
       }
     })();
     return id;
@@ -708,7 +836,18 @@ export class IceAktarmaYoneticisi {
     is.gorunum.asama = 'uygulanıyor';
     try {
       const vt = /** @type {Veritabani} */ (await this.veritabani(true));
-      const sonuc = iceAktarmaUygula(vt, is.hazirlik, secim, secenekler);
+      const hazirlik = is.hazirlik;
+      const sonuc = iceAktarmaUygula(vt, hazirlik, secim, secenekler);
+      // Satırlar yazıldı (geri alınamaz): medya hatası artık önizlemeye döndürmez, sonuçta raporlanır
+      // (dosyası yazılamayan medya "dosya yok" olarak kalır; aynı yedek yeniden içe aktarılarak tamamlanabilir).
+      is.gorunum.asama = 'medya yazılıyor';
+      try {
+        sonuc.medya = await iceAktarmaMedyasiniYaz(vt, hazirlik, {
+          ilerleme: (asama, yuzde) => { is.gorunum.asama = asama; is.gorunum.yuzde = yuzde; }
+        });
+      } catch (hata) {
+        sonuc.medyaHatasi = `Veriler içe aktarıldı ancak medya dosyaları yazılamadı: ${/** @type {Error} */ (hata)?.message ?? String(hata)}`;
+      }
       is.gorunum.durum = 'uygulandi';
       is.gorunum.asama = 'tamamlandı';
       is.gorunum.sonuc = sonuc;

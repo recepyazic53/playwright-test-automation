@@ -272,6 +272,14 @@ async function kosuDetayi(icerik, id, proje) {
 // Test (sonuç) detayı
 // ---------------------------------------------------------------------------------------
 
+/** Başka bir bilgisayardan yedekle gelen ve dosyası yedeğe alınmamış medya. */
+function yedekDisiNotu(m) {
+  const tur = { ekran_goruntusu: 'Ekran görüntüsü', video: 'Video', iz: 'İz (trace) dosyası', diger: 'Ek' }[m.tur] || 'Medya';
+  return h('p', { class: 'medya-yedek-disi soluk kucuk', role: 'note' },
+    `${tur}: Bu medya yedeğe dahil edilmemişti. `,
+    h('span', {}, 'Dosya, kaydedildiği bilgisayarda; medyalı bir yedekle yeniden içe aktarılabilir.'));
+}
+
 function indirBaglantisi(m, metin) {
   return h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(m.id, true), download: '' }, metin);
 }
@@ -315,9 +323,11 @@ async function sonucDetayi(icerik, id) {
   bolumler.push(h('div', { class: 'kart' }, h('h3', {}, `Ekran görüntüleri (${gorseller.length})`),
     gorseller.length
       ? h('ul', { class: 'gorsel-izgarasi' }, ...gorseller.map((m) => h('li', {},
-        h('button', { type: 'button', class: 'gorsel-dugmesi', onclick: () => gorselAc(m), 'aria-label': `${m.ad} — büyüt` },
-          h('img', { src: medyaUrl(m.id), alt: '', loading: 'lazy' })),
-        h('div', { class: 'kucuk' }, m.ad), indirBaglantisi(m, '⬇ İndir'))))
+        m.yedekDisi
+          ? yedekDisiNotu(m)
+          : h('button', { type: 'button', class: 'gorsel-dugmesi', onclick: () => gorselAc(m), 'aria-label': `${m.ad} — büyüt` },
+            h('img', { src: medyaUrl(m.id), alt: '', loading: 'lazy' })),
+        h('div', { class: 'kucuk' }, m.ad), m.yedekDisi ? null : indirBaglantisi(m, '⬇ İndir'))))
       : h('p', { class: 'bos-liste' }, 'Bu sonuçta ekran görüntüsü yok.'),
     diyalog));
 
@@ -325,16 +335,18 @@ async function sonucDetayi(icerik, id) {
   bolumler.push(h('div', { class: 'kart' }, h('h3', {}, 'Video ve iz'),
     videolar.length ? videolar.map((v) => v.silinme
       ? h('p', { class: 'soluk' }, `Video saklama süresi dolduğu için ${tarihMetni(v.silinme)} tarihinde silindi.`)
-      : h('div', { class: 'dugmeler' },
+      : v.yedekDisi ? yedekDisiNotu(v) : h('div', { class: 'dugmeler' },
         h('button', { type: 'button', onclick: (o) => {
           videoAlani.replaceChildren(h('video', { controls: true, autoplay: true, src: medyaUrl(v.id), class: 'sonuc-videosu' }));
           o.currentTarget.disabled = true;
         } }, '▶ Videoyu izle'),
         indirBaglantisi(v, '⬇ Videoyu indir'))) : h('p', { class: 'soluk' }, 'Video yok.'),
     videoAlani,
-    izler.length ? h('div', { class: 'dugmeler' }, ...izler.map((z) => indirBaglantisi(z, '⬇ İzi (trace) indir')),
+    izler.filter((z) => z.yedekDisi).map(yedekDisiNotu),
+    izler.some((z) => !z.yedekDisi) ? h('div', { class: 'dugmeler' }, ...izler.filter((z) => !z.yedekDisi).map((z) => indirBaglantisi(z, '⬇ İzi (trace) indir')),
       h('span', { class: 'soluk kucuk' }, 'İz dosyası "npx playwright show-trace <dosya>" ile açılır.')) : null,
-    digerleri.length ? h('div', { class: 'dugmeler' }, ...digerleri.map((d) => indirBaglantisi(d, `⬇ ${d.ad}`))) : null));
+    digerleri.filter((d) => d.yedekDisi).map(yedekDisiNotu),
+    digerleri.some((d) => !d.yedekDisi) ? h('div', { class: 'dugmeler' }, ...digerleri.filter((d) => !d.yedekDisi).map((d) => indirBaglantisi(d, `⬇ ${d.ad}`))) : null));
 
   bolumler.push(h('div', { class: 'kart' }, h('h3', {}, 'Atlanan / doldurulamayan alanlar'),
     s.atlananAlanlar.length

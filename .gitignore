@@ -32,3 +32,5 @@ scripts/test-sunucu.log
 # ve yerel yedekleri: YALNIZCA bu makinede durur, Git'e/buluta ASLA gitmez.
 veri/
 *.tayedek
+# Birim testlerinin eski biçim (1) yedek fixture'ı (test parolasıyla, gerçek veri içermez)
+!tests/birim/fixtures/*.tayedek

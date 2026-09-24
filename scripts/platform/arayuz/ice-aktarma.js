@@ -2,7 +2,7 @@
 // Yalnızca bu bilgisayarda) → seçim → uygulama → özet. Hoş geldiniz ekranında (boş veritabanı:
 // yedeğin parolası bu bilgisayarın kasa parolası olur) ve Ayarlar > Yedekleme'de kullanılır.
 import {
-  ApiHatasi, TOKEN, alan, alanHatasi, api, geriSayim, h, mesajKutusu, parolaAlani, tarihMetni, yeniKimlik
+  ApiHatasi, TOKEN, alan, alanHatasi, api, boyutMetni, geriSayim, h, mesajKutusu, parolaAlani, tarihMetni, yeniKimlik
 } from './ortak.js';
 
 const ALAN_ETIKETLERI = {
@@ -14,8 +14,33 @@ const ALAN_ETIKETLERI = {
   kosuya_dahil: 'Koşuya dahil', deger_json: 'Değer'
 };
 const EKLEME_ETIKETLERI = {
-  kosular: 'Koşular', kosu_sonuclari: 'Koşu sonuçları', degisiklik_gecmisi: 'Değişiklik geçmişi kayıtları', makineler: 'Bilgisayar kayıtları'
+  kosular: 'Koşular', kosu_sonuclari: 'Koşu sonuçları', degisiklik_gecmisi: 'Değişiklik geçmişi kayıtları', makineler: 'Bilgisayar kayıtları',
+  adim_sonuclari: 'Adım sonuçları', medya: 'Medya kayıtları'
 };
+const MEDYA_TUR_ETIKETLERI = { ekran_goruntusu: 'Ekran görüntüleri', video: 'Videolar', iz: 'İz (trace) dosyaları', diger: 'Diğer ekler' };
+
+/** Önizlemedeki medya bölümü: tür başına eklenecek dosya sayısı/boyutu. */
+function medyaBolumu(medya) {
+  if (!medya) return null;
+  const turler = Object.entries(medya.turler || {}).filter(([, t]) => t.dosyada > 0);
+  if (!turler.length) return null;
+  const satirlar = turler.map(([tur, t]) => h('tr', {},
+    h('th', { scope: 'row' }, MEDYA_TUR_ETIKETLERI[tur] || tur),
+    h('td', {}, String(t.eklenecek)),
+    h('td', {}, t.eklenecek ? boyutMetni(t.eklenecekBayt) : '—'),
+    h('td', {}, String(t.zatenVar)),
+    h('td', {}, String(t.dahilDegil))));
+  return h('section', { class: 'grup', 'aria-label': 'Medya dosyaları' },
+    h('h4', {}, 'Medya dosyaları'),
+    medya.bicimSurumu < 2
+      ? h('p', { class: 'soluk kucuk' }, 'Bu yedek eski biçimde: medya dosyası içermez. Sonuçlarda medya "yedeğe dahil edilmemişti" olarak görünür.')
+      : h('p', { class: 'soluk kucuk' }, 'Uygulanan sonuçların medya dosyaları eklenir; seçmediğiniz projelerin sonuçlarındaki medya atlanır.'),
+    h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
+      h('caption', { class: 'gorunmez' }, 'Medya türüne göre eklenecek dosyalar'),
+      h('thead', {}, h('tr', {}, ...['Tür', 'Eklenecek', 'Boyut', 'Bu bilgisayarda zaten var', 'Yedeğe dahil değil'].map((b) => h('th', { scope: 'col' }, b)))),
+      h('tbody', {}, satirlar))),
+    medya.toplam.eklenecek ? h('p', { class: 'kucuk' }, `Toplam: ${medya.toplam.eklenecek} medya dosyası, ${boyutMetni(medya.toplam.eklenecekBayt)}.`) : null);
+}
 const GIZLI_ALANLAR = new Set(['id', 'olusturulma', 'guncellenme']);
 const MASKE = '••••••';
 
@@ -299,6 +324,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
         h('h4', {}, 'Koşular ve geçmiş kayıtları'),
         h('p', { class: 'soluk kucuk' }, 'Bu kayıtlar seçilmez; bu bilgisayarda olmayanlar her zaman eklenir.'),
         h('ul', {}, eklenecekSatirlari)) : null,
+      medyaBolumu(onizleme.medya),
       h('div', { class: 'sabit-alt' }, mesaj.kutu, h('div', { class: 'dugmeler' }, uygulaDugmesi, h('button', { type: 'button', onclick: iptalEt }, 'İptal')))));
     secimiGuncelle();
   }
@@ -353,6 +379,11 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
         h('ul', {}, sonuc.atlananlar.map((a) => h('li', {}, `${(onizleme.varliklar[a.tablo] || {}).etiket || a.tablo}: ${baslikBul(a.tablo, a.id)} — ${a.neden}`)))
       ] : null,
       sonuc.gecmiseYazilan ? h('p', { class: 'soluk' }, `Üzerine yazılan ${sonuc.gecmiseYazilan} yerel sürüm değişiklik geçmişinde saklandı.`) : null,
+      sonuc.medya && (sonuc.medya.eklenen || sonuc.medya.dahilDegil)
+        ? h('p', {}, `Medya: ${sonuc.medya.eklenen} dosya eklendi (${boyutMetni(sonuc.medya.bayt)})`,
+          sonuc.medya.dahilDegil ? `; ${sonuc.medya.dahilDegil} medya yedeğe dahil edilmemişti` : '', '.')
+        : null,
+      sonuc.medyaHatasi ? h('div', { class: 'not-kutusu hata' }, sonuc.medyaHatasi) : null,
       h('div', { class: 'dugmeler' }, devam)));
   }
 

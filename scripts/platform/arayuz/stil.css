@@ -289,3 +289,4 @@ a.dugme.kucuk-dugme { padding: .25rem .6rem; min-height: 32px; font-size: .875re
   .ortali { padding-top: 1.5rem; }
   .gorunum-cercevesi { height: calc(100vh - 11rem); }
 }
+.medya-yedek-disi { border: 1px dashed var(--cizgi); border-radius: var(--yaricap); padding: .5rem .75rem; margin: 0 0 .5rem; max-width: 36rem; }

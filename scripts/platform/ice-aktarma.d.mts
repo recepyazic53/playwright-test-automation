@@ -1,7 +1,7 @@
 // scripts/platform/ice-aktarma.mjs için tip bildirimi.
 import type { Veritabani } from './veritabani/baglanti.mjs';
 import type { ParolaDenemeSiniri } from './kasa.mjs';
-import type { IlerlemeFn, YedekManifesti } from './yedek.mjs';
+import type { IlerlemeFn, MedyaYerlestirmeSonucu, YedekKasaBilgisi, YedekManifesti } from './yedek.mjs';
 
 export type Satir = Record<string, unknown>;
 
@@ -33,14 +33,38 @@ export interface Onizleme {
   kasaBenimsenecek: boolean;
   varliklar: Record<string, VarlikOnizlemesi>;
   eklenecekler: Record<string, { dosyada: number; yeni: number }>;
+  medya: MedyaOnizlemesi;
   toplam: { yeni: number; degisen: number; yalnizBurada: number; ayni: number };
+}
+export interface MedyaTuruOnizlemesi {
+  /** Yedekteki medya satırı (saklama süresi dolmuşlar hariç). */
+  dosyada: number;
+  /** Dosyası yedekte olan. */
+  dosyasiYedekte: number;
+  /** Uygulanınca dosyası bu makineye eklenecek (satır yeni ya da yerelde dosyası yok). */
+  eklenecek: number;
+  eklenecekBayt: number;
+  /** Dosyası yedeğe dahil edilmemiş ve bu makinede de olmayan. */
+  dahilDegil: number;
+  /** Dosyası bu makinede zaten var. */
+  zatenVar: number;
+}
+export interface MedyaOnizlemesi {
+  bicimSurumu: number;
+  secim: Record<string, boolean> | null;
+  turler: Record<string, MedyaTuruOnizlemesi>;
+  toplam: { eklenecek: number; eklenecekBayt: number; dahilDegil: number };
 }
 export interface Hazirlik {
   manifest: YedekManifesti;
   hedefAnahtar: Buffer;
-  benimsenecekKasa: { kdf: object; dogrulayici: string } | null;
+  benimsenecekKasa: YedekKasaBilgisi | null;
   tablolar: Record<string, Satir[]>;
   onizleme: Onizleme;
+  medyaKlasoru: string | null;
+  hazirlikKlasoru: string | null;
+  kaynakMedyaAnahtari: Buffer | null;
+  medyaDosyalari: Map<string, { yol: string | null; boyut: number }>;
 }
 export interface Secim {
   tumu?: boolean;
@@ -54,6 +78,9 @@ export interface UygulamaSonucu {
   atlananlar: Array<{ tablo: string; id: string; neden: string }>;
   gecmiseYazilan: number;
   sayimlar: Record<string, number>;
+  /** Yalnızca yönetici (IceAktarmaYoneticisi.uygula) ya da iceAktarmaMedyasiniYaz sonrası. */
+  medya?: MedyaYerlestirmeSonucu;
+  medyaHatasi?: string;
 }
 export type IsDurumu = 'hazirlaniyor' | 'hazir' | 'uygulaniyor' | 'uygulandi' | 'hata' | 'iptal';
 export interface IsGorunumu {
@@ -71,21 +98,23 @@ export interface IsGorunumu {
 }
 
 export declare function iceAktarmaHazirla(
-  vt: Veritabani | null, dosya: Buffer, parola: string, secenekler?: { ilerleme?: IlerlemeFn }
+  vt: Veritabani | null, dosya: Buffer | string, parola: string, secenekler?: { ilerleme?: IlerlemeFn; medyaKlasoru?: string | null }
 ): Promise<Hazirlik>;
 export declare function hazirligiAt(hazirlik: Hazirlik): void;
+export declare function iceAktarmaMedyasiniYaz(vt: Veritabani, hazirlik: Hazirlik, secenekler?: { ilerleme?: IlerlemeFn }): Promise<MedyaYerlestirmeSonucu>;
 export declare function iceAktarmaUygula(vt: Veritabani, hazirlik: Hazirlik, secim: Secim, secenekler?: { yapan?: string }): UygulamaSonucu;
 
 export declare class IceAktarmaYoneticisi {
   constructor(secenekler: {
     veritabani: (olustur: boolean) => Promise<Veritabani | null>;
+    medyaKlasoru?: () => string | null;
     denemeSiniri?: ParolaDenemeSiniri;
     saklamaMs?: number;
     simdi?: () => number;
   });
   temizle(): void;
   aktifIs(): string | null;
-  baslat(dosya: Buffer, parola: string): string;
+  baslat(dosya: Buffer | string, parola: string, secenekler?: { geciciDosya?: boolean }): string;
   bekle(id: string): Promise<IsGorunumu | undefined>;
   durum(id: string): IsGorunumu | undefined;
   uygula(id: string, secim: Secim, secenekler?: { yapan?: string }): Promise<UygulamaSonucu>;

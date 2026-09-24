@@ -208,7 +208,8 @@ export const tarihMetni = (iso) => {
 export const boyutMetni = (bayt) => {
   if (bayt < 1024) return `${bayt} B`;
   if (bayt < 1024 * 1024) return `${(bayt / 1024).toFixed(1)} KB`;
-  return `${(bayt / 1024 / 1024).toFixed(1)} MB`;
+  if (bayt < 1024 * 1024 * 1024) return `${(bayt / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bayt / 1024 / 1024 / 1024).toFixed(2)} GB`;
 };
 
 /** http(s) adres kontrolü. */
