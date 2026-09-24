@@ -1,5 +1,15 @@
 // Test sunucusunun (scripts/test-sunucu.mjs) /platform/* uç noktaları: platform veritabanı
-// durumu, kasa (oluştur/aç/kilitle/parola değiştir) ve yedek (dışa/içe aktar, otomatik yedek).
+// durumu, kasa (oluştur/aç/kilitle/parola değiştir) ve yedek (dışa aktar, otomatik yedek,
+// içe aktarma: ÖNİZLEME → SEÇİM → UYGULAMA — bkz. ice-aktarma.mjs).
+//
+// İçe aktarma uç noktaları:
+//   POST /platform/yedek/ice-aktar              ham .tayedek gövdesi + X-Kasa-Parola → { isId } (202)
+//   GET  /platform/yedek/ice-aktar/<id>         ilerleme; hazır olunca önizleme (yeni/degisen/yalnizBurada)
+//   POST /platform/yedek/ice-aktar/<id>/uygula  { token, tumu: true } veya { token, secimler: { tablo: [id] } }
+//   POST /platform/yedek/ice-aktar/<id>/iptal   { token }
+// Kasa kilitliyken şifreli sütunlar (ortam adresleri, ayarlar...) okunamaz; /platform/durum
+// yalnızca gizli olmayan durum bilgisini döner ve kasa kilitliyken de çalışır.
+// Kaba kuvvet koruması: art arda yanlış kasa/yedek parolasında artan bekleme (1,2,4...30 sn).
 //
 // Güvenlik: test-sunucu.mjs'deki yerel istek (loopback + Host) ve origin kontrolleri bu
 // fonksiyon çağrılmadan ÖNCE yapılır. Burada ayrıca her istek aynı token'ı taşımak zorundadır
@@ -10,18 +20,19 @@
 
 import { existsSync } from 'node:fs';
 import { hostname } from 'node:os';
-import { randomBytes } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { veritabaniYolu as veritabaniYoluCoz } from './veritabani/baglanti.mjs';
-import { GUNCEL_SEMA_SURUMU, mevcutSemaSurumu } from './veritabani/gocler.mjs';
-import { DepoHatasi, sayimlar, veritabaniniHazirla, yerelMakine } from './veritabani/depo.mjs';
-import { KasaHatasi, kasaAc, kasaAcikMi, kasaDurumu, kasaKilitle, kasaOlustur, parolaDegistir, parolayiDogrula } from './kasa.mjs';
-import { YEDEK_UZANTISI, YedekHatasi, otomatikYedekAl, yedekAc, yedekIceAktar, yedekOlustur } from './yedek.mjs';
+import { GUNCEL_SEMA_SURUMU } from './veritabani/gocler.mjs';
+import { DepoHatasi, platformDurumOzeti, veritabaniniHazirla, yerelMakine } from './veritabani/depo.mjs';
+import {
+  KasaHatasi, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, kasaAc, kasaAcikMi, kasaDurumu, kasaKilitle, kasaOlustur, parolaDegistir, parolayiDogrula
+} from './kasa.mjs';
+import { YEDEK_UZANTISI, YedekHatasi, otomatikYedekAl, yedekOlustur } from './yedek.mjs';
+import { IceAktarmaYoneticisi } from './ice-aktarma.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 export const YEDEK_YUKLEME_SINIRI = 500 * 1024 * 1024;
-const IS_SAKLAMA_MS = 60 * 60 * 1000;
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** PLATFORM_VERITABANI veya <proje kökü>/veri/platform.db */
 const veritabaniYolu = () => veritabaniYoluCoz(PROJE_KOKU);
@@ -43,24 +54,26 @@ async function platformVeritabani(secenekler = {}) {
   return vtSozu;
 }
 
-/** @type {Map<string, { id: string; durum: 'calisiyor' | 'tamamlandi' | 'hata'; asama: string; yuzde: number; mesaj: string | null; kod: string | null; sonuc: unknown; baslangic: number; bitis: number | null }>} */
-const iceAktarmaIsleri = new Map();
-
-function eskiIsleriTemizle() {
-  const esik = Date.now() - IS_SAKLAMA_MS;
-  for (const [id, is] of iceAktarmaIsleri) {
-    if (is.bitis && is.bitis < esik) iceAktarmaIsleri.delete(id);
-  }
-}
+/** Süreç başına tek sayaç: kasa açma, parola değiştirme, dışa aktarma ve yedek parolası. */
+const denemeSiniri = new ParolaDenemeSiniri();
+const iceAktarma = new IceAktarmaYoneticisi({
+  veritabani: (olustur) => platformVeritabani({ olustur }),
+  denemeSiniri
+});
+setInterval(() => iceAktarma.temizle(), 5 * 60 * 1000).unref();
 
 /** Hata → HTTP durum kodu + güvenli (gizli bilgi içermeyen) mesaj. @param {unknown} hata */
 function hataYaniti(hata) {
   if (hata instanceof KasaHatasi) {
-    const kodlar = { PAROLA_KISA: 400, PAROLA_YANLIS: 403, KASA_KILITLI: 423, KASA_YOK: 409, KASA_VAR: 409, ZARF_BOZUK: 400 };
-    return { durum: kodlar[hata.kod] ?? 400, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
+    const kodlar = { PAROLA_KISA: 400, PAROLA_YANLIS: 403, KASA_KILITLI: 423, KASA_YOK: 409, KASA_VAR: 409, ZARF_BOZUK: 400, COK_DENEME: 429 };
+    return {
+      durum: kodlar[hata.kod] ?? 400,
+      govde: { basarili: false, kod: hata.kod, mesaj: hata.message, ...(hata.bekleSaniye ? { bekleSaniye: hata.bekleSaniye } : {}) }
+    };
   }
   if (hata instanceof YedekHatasi) {
-    return { durum: hata.kod === 'ONAY_GEREKLI' ? 409 : 400, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
+    const kodlar = { ONAY_GEREKLI: 409, DEGISTI: 409, MESGUL: 409, BULUNAMADI: 404 };
+    return { durum: kodlar[hata.kod] ?? 400, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
   }
   if (hata instanceof DepoHatasi) return { durum: 400, govde: { basarili: false, kod: 'VERI', mesaj: hata.message } };
   return null;
@@ -139,43 +152,40 @@ export async function platformIsteginiIsle(req, res, baglam) {
   const tokenYok = () => jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
 
   try {
-    // --- GET /platform/durum --------------------------------------------------------------
+    // --- GET /platform/durum (kasa kilitliyken de çalışır; YALNIZCA gizli olmayan bilgi) -----
     if (req.method === 'GET' && yol === '/platform/durum') {
       if (!disTokenGecerli) { tokenYok(); return true; }
       const db = await platformVeritabani();
+      const ozet = db ? platformDurumOzeti(db) : null;
       jsonGonder(res, 200, {
         basarili: true,
         veritabaniVar: Boolean(db),
         veritabaniYolu: veritabaniYolu(),
-        semaSurumu: db ? mevcutSemaSurumu(db) : 0,
+        semaSurumu: ozet?.semaSurumu ?? 0,
         desteklenenSemaSurumu: GUNCEL_SEMA_SURUMU,
-        makine: db ? yerelMakine(db) : { id: null, ad: hostname() },
-        kasa: db ? kasaDurumu(db) : { olusturuldu: false, acik: false, minParolaUzunlugu: 8, kdf: null },
-        sayimlar: db ? sayimlar(db) : {},
-        aktifIceAktarma: [...iceAktarmaIsleri.values()].find((i) => i.durum === 'calisiyor')?.id ?? null
+        makineId: ozet?.makineId ?? null,
+        kasa: ozet?.kasa ?? { olusturuldu: false, acik: false, minParolaUzunlugu: MIN_PAROLA_UZUNLUGU, kdf: null },
+        sifreliAlanGocu: ozet?.sifreliAlanGocu ?? 'tamam',
+        sayimlar: ozet?.sayimlar ?? {},
+        parolaBeklemeSaniye: Math.ceil(denemeSiniri.kalanMs() / 1000),
+        aktifIceAktarma: iceAktarma.aktifIs()
       });
       return true;
     }
 
-    // --- GET /platform/yedek/ice-aktar/<id> ---------------------------------------------------
-    const isEslesme = /^\/platform\/yedek\/ice-aktar\/([a-f0-9]{16})$/.exec(yol);
-    if (req.method === 'GET' && isEslesme) {
+    // --- GET /platform/yedek/ice-aktar/<id> — ilerleme + (hazırsa) önizleme ------------------
+    const isEslesme = /^\/platform\/yedek\/ice-aktar\/([a-f0-9]{16})(?:\/(uygula|iptal))?$/.exec(yol);
+    if (req.method === 'GET' && isEslesme && !isEslesme[2]) {
       if (!disTokenGecerli) { tokenYok(); return true; }
-      const is = iceAktarmaIsleri.get(isEslesme[1]);
-      if (!is) { jsonGonder(res, 404, { basarili: false, mesaj: 'İçe aktarma işi bulunamadı (süresi dolmuş olabilir).' }); return true; }
+      const is = iceAktarma.durum(isEslesme[1]);
+      if (!is) { jsonGonder(res, 404, { basarili: false, kod: 'BULUNAMADI', mesaj: 'İçe aktarma bulunamadı (süresi dolmuş veya iptal edilmiş olabilir).' }); return true; }
       jsonGonder(res, 200, { basarili: is.durum !== 'hata', is });
       return true;
     }
 
-    // --- POST /platform/yedek/ice-aktar (ham dosya gövdesi) -----------------------------------
+    // --- POST /platform/yedek/ice-aktar (ham dosya gövdesi) → önizleme hazırlığı --------------
     if (req.method === 'POST' && yol === '/platform/yedek/ice-aktar') {
       if (!disTokenGecerli) { tokenYok(); return true; }
-      const mod = url.searchParams.get('mod') ?? 'birlestir';
-      if (mod !== 'tamYukle' && mod !== 'birlestir') {
-        jsonGonder(res, 400, { basarili: false, mesaj: 'mod yalnızca "tamYukle" veya "birlestir" olabilir.' });
-        return true;
-      }
-      const onay = url.searchParams.get('onay') === '1' || url.searchParams.get('onay') === 'true';
       const hamParola = req.headers['x-kasa-parola'];
       let parola = '';
       try {
@@ -184,13 +194,21 @@ export async function platformIsteginiIsle(req, res, baglam) {
         parola = '';
       }
       if (!parola) {
+        res.setHeader('Connection', 'close');
         jsonGonder(res, 400, { basarili: false, mesaj: 'Yedeğin kasa parolası X-Kasa-Parola başlığında (encodeURIComponent ile) gönderilmelidir.' });
         return true;
       }
-      eskiIsleriTemizle();
-      if ([...iceAktarmaIsleri.values()].some((i) => i.durum === 'calisiyor')) {
-        jsonGonder(res, 409, { basarili: false, mesaj: 'Başka bir içe aktarma sürüyor; bitmesini bekleyin.' });
-        return true;
+      // Bekleme süresi / meşgul kontrolü dosya okunmadan önce yapılır.
+      try {
+        denemeSiniri.kontrolEt();
+        if (iceAktarma.aktifIs()) throw new YedekHatasi('MESGUL', 'Başka bir içe aktarma sürüyor; bitmesini bekleyin.');
+        const mevcutDb = await platformVeritabani();
+        if (mevcutDb && kasaDurumu(mevcutDb).olusturuldu && !kasaAcikMi(mevcutDb)) {
+          throw new KasaHatasi('KASA_KILITLI', 'İçe aktarma için önce bu makinedeki kasayı açın.');
+        }
+      } catch (hata) {
+        res.setHeader('Connection', 'close');
+        throw hata;
       }
       let dosya;
       try {
@@ -205,42 +223,9 @@ export async function platformIsteginiIsle(req, res, baglam) {
         return true;
       }
       if (!dosya.length) { jsonGonder(res, 400, { basarili: false, mesaj: 'Boş dosya gönderildi.' }); return true; }
-      const id = randomBytes(8).toString('hex');
-      const is = { id, durum: /** @type {'calisiyor' | 'tamamlandi' | 'hata'} */ ('calisiyor'), asama: 'sırada', yuzde: 0, mesaj: null, kod: null, sonuc: null, baslangic: Date.now(), bitis: null };
-      iceAktarmaIsleri.set(id, is);
-      jsonGonder(res, 202, { basarili: true, isId: id });
-      (async () => {
-        try {
-          // Veritabanı dosyası henüz yoksa, yanlış parolada boş bir dosya bile oluşmasın diye
-          // önce yedek parolayla doğrulanır (hiçbir şey yazmaz).
-          if (!(await platformVeritabani())) {
-            const onKontrol = await yedekAc(dosya, parola, { ilerleme: (asama, yuzde) => { is.asama = asama; is.yuzde = Math.min(yuzde, 5); } });
-            onKontrol.kasaAnahtari.fill(0);
-          }
-          const db = /** @type {import('./veritabani/baglanti.mjs').Veritabani} */ (await platformVeritabani({ olustur: true }));
-          const sonuc = await yedekIceAktar(db, dosya, parola, {
-            mod, onay,
-            ilerleme: (asama, yuzde) => { is.asama = asama; is.yuzde = yuzde; }
-          });
-          is.sonuc = {
-            ...sonuc,
-            cakismaSayisi: sonuc.cakismalar.length,
-            cakismalar: sonuc.cakismalar.slice(0, 500)
-          };
-          is.durum = 'tamamlandi';
-          is.yuzde = 100;
-          console.log(`[platform] Yedek içe aktarıldı (${mod}), çakışma: ${sonuc.cakismalar.length}.`);
-        } catch (hata) {
-          const yanit = hataYaniti(hata);
-          is.durum = 'hata';
-          is.kod = yanit ? String(yanit.govde.kod) : 'SUNUCU';
-          is.mesaj = yanit ? yanit.govde.mesaj : `Beklenmeyen hata: ${/** @type {Error} */ (hata)?.message ?? hata}`;
-          if (!yanit) console.error(`[platform] İçe aktarma hatası: ${/** @type {Error} */ (hata)?.stack ?? hata}`);
-        } finally {
-          is.bitis = Date.now();
-          parola = '';
-        }
-      })();
+      const isId = iceAktarma.baslat(dosya, parola);
+      parola = '';
+      jsonGonder(res, 202, { basarili: true, isId });
       return true;
     }
 
@@ -254,6 +239,23 @@ export async function platformIsteginiIsle(req, res, baglam) {
     if (govde.token !== baglam.token && !disTokenGecerli) { tokenYok(); return true; }
     const metin = (/** @type {unknown} */ d) => (typeof d === 'string' ? d : '');
 
+    if (isEslesme && isEslesme[2] === 'uygula') {
+      const secim = govde.tumu === true
+        ? { tumu: true }
+        : { secimler: /** @type {Record<string, string[]>} */ (govde.secimler) };
+      const sonuc = await iceAktarma.uygula(isEslesme[1], secim);
+      console.log(`[platform] Yedek içe aktarıldı (${sonuc.tamYukleme ? 'tam yükleme' : 'seçmeli'}), üzerine yazılan sürüm geçmişe: ${sonuc.gecmiseYazilan}.`);
+      jsonGonder(res, 200, { basarili: true, sonuc });
+      return true;
+    }
+    if (isEslesme && isEslesme[2] === 'iptal') {
+      const iptal = iceAktarma.iptal(isEslesme[1]);
+      jsonGonder(res, iptal ? 200 : 409, iptal
+        ? { basarili: true, mesaj: 'İçe aktarma iptal edildi; hazırlık alanı silindi.' }
+        : { basarili: false, mesaj: 'İçe aktarma bulunamadı veya artık iptal edilemez.' });
+      return true;
+    }
+
     switch (yol) {
       case '/platform/kasa/olustur': {
         const db = /** @type {import('./veritabani/baglanti.mjs').Veritabani} */ (await platformVeritabani({ olustur: true }));
@@ -265,7 +267,8 @@ export async function platformIsteginiIsle(req, res, baglam) {
       case '/platform/kasa/ac': {
         const db = await platformVeritabani();
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
-        const kasa = await kasaAc(db, metin(govde.parola));
+        const kasa = await denemeSiniri.dene(() => kasaAc(db, metin(govde.parola)));
+        yerelMakine(db);
         jsonGonder(res, 200, { basarili: true, kasa });
         return true;
       }
@@ -277,7 +280,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
       case '/platform/kasa/parola-degistir': {
         const db = await platformVeritabani();
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
-        const kasa = await parolaDegistir(db, metin(govde.eskiParola), metin(govde.yeniParola));
+        const kasa = await denemeSiniri.dene(() => parolaDegistir(db, metin(govde.eskiParola), metin(govde.yeniParola)));
         console.log(`[platform] Kasa parolası değiştirildi (${kasa.yenidenSifrelenen} değer yeniden şifrelendi).`);
         jsonGonder(res, 200, { basarili: true, kasa });
         return true;
@@ -286,8 +289,11 @@ export async function platformIsteginiIsle(req, res, baglam) {
         const db = await platformVeritabani();
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
         if (!kasaAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.');
-        const anahtar = await parolayiDogrula(db, metin(govde.parola));
-        if (!anahtar) throw new KasaHatasi('PAROLA_YANLIS', 'Kasa parolası yanlış.');
+        const anahtar = await denemeSiniri.dene(async () => {
+          const a = await parolayiDogrula(db, metin(govde.parola));
+          if (!a) throw new KasaHatasi('PAROLA_YANLIS', 'Kasa parolası yanlış.');
+          return a;
+        });
         anahtar.fill(0);
         const { veri, manifest } = yedekOlustur(db);
         const makineAdi = hostname().replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 40) || 'makine';

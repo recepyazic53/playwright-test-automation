@@ -33,7 +33,8 @@ import {
   veritabaniniHazirla,
   yerelMakine
 } from '../../scripts/platform/veritabani/depo.mjs';
-import { geciciKlasor } from './platform-ortak';
+import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
+import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 test.describe('Platform veritabanı — göçler', () => {
   test('boş veritabanına tüm göçler uygulanır, tekrar açınca yeniden uygulanmaz', async () => {
@@ -75,6 +76,7 @@ test.describe('Platform veritabanı — göçler', () => {
     const klasor = geciciKlasor('fk');
     try {
       const vt = await veritabaniniHazirla(join(klasor.yol, 'p.db'));
+      await kasaOlustur(vt, 'Birim-Kasa-Parolasi-1', { kdf: HIZLI_KDF }); // ortam adı/adresi şifreli
       const proje = projeKaydet(vt, { ad: 'Proje' }); // bir yazma = export + yeniden açma
       expect(() => ortamKaydet(vt, { projeId: 'olmayan-proje', ad: 'x', tabanUrl: 'https://ornek.test' })).toThrow();
       ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://ornek.test' });
@@ -127,6 +129,7 @@ test.describe('Platform veritabanı — göçler', () => {
 test.describe('Platform veritabanı — veri erişim katmanı', () => {
   test('CRUD + JSON doğrulama + değişiklik geçmişi', async () => {
     const vt = await veritabaniniHazirla(null);
+    await kasaOlustur(vt, 'Birim-Kasa-Parolasi-1', { kdf: HIZLI_KDF });
     const makine = yerelMakine(vt);
     expect(makine.id).toMatch(/^[0-9a-f-]{36}$/);
 
@@ -177,7 +180,7 @@ test.describe('Platform veritabanı — veri erişim katmanı', () => {
   });
 
   test('şema ve motor projeye özgü kavram içermez', () => {
-    const kaynaklar = ['veritabani/gocler.mjs', 'veritabani/depo.mjs', 'kasa.mjs', 'yedek.mjs', 'sunucu-platform.mjs']
+    const kaynaklar = ['veritabani/gocler.mjs', 'veritabani/depo.mjs', 'kasa.mjs', 'yedek.mjs', 'ice-aktarma.mjs', 'sunucu-platform.mjs']
       .map((d) => readFileSync(join(__dirname, '..', '..', 'scripts', 'platform', d), 'utf-8').toLowerCase());
     for (const metin of kaynaklar) {
       for (const yasak of ['galaksi', 'jetseyahat', 'jet-seyahat', 'ödeme', 'odeme', 'poliçe', 'police']) {

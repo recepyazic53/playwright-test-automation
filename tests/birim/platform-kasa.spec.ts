@@ -145,8 +145,9 @@ test.describe('Platform kasası', () => {
       expect(await kasaHatasiKodu(() =>
         girisProfiliKaydet(vt, { projeId: proje, ad: 'x', kullaniciAdi: 'y', parola: 'baska-parola-1' }))).toBe('KASA_KILITLI');
       expect(await kasaHatasiKodu(() => girisProfiliGetir(vt, profil, { coz: true }))).toBe('KASA_KILITLI');
-      // Hassas alan içermeyen güncelleme kilitliyken de yapılabilir; şifreli değer korunur.
-      girisProfiliKaydet(vt, { id: profil, projeId: proje, ad: 'Ana kullanıcı 3', kullaniciAdi: 'kullanici1' });
+      // Kullanıcı adı da şifreli bir sütun olduğundan kilitliyken hiçbir giriş profili güncellemesi yapılamaz.
+      expect(await kasaHatasiKodu(() =>
+        girisProfiliKaydet(vt, { id: profil, projeId: proje, ad: 'Ana kullanıcı 3', kullaniciAdi: 'kullanici1' }))).toBe('KASA_KILITLI');
       await kasaAc(vt, PAROLA);
       expect(girisProfiliGetir(vt, profil, { coz: true })?.parola).toBe(GIRIS_PAROLASI);
       vt.kapat();

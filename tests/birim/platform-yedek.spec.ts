@@ -1,6 +1,7 @@
-// KORUMA TESTLERİ — platform yedeği (scripts/platform/yedek.mjs): dışa→içe aktarma
-// gidiş-dönüşü (birebir aynı veri), yanlış parolada hiçbir şey yazılmaması, birleştirme
-// çakışma kuralı, otomatik yedek saklama sınırı (30) ve gizli değerlerin loglara sızmaması.
+// KORUMA TESTLERİ — platform yedeği (scripts/platform/yedek.mjs): dışa→içe aktarma (tam
+// yükleme) gidiş-dönüşü (birebir aynı veri), yanlış parolada hiçbir şey yazılmaması, otomatik
+// yedek saklama sınırı (30) ve gizli değerlerin loglara sızmaması. Seçmeli içe aktarma
+// (önizleme → seçim → uygulama): platform-ice-aktarma.spec.ts.
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -143,8 +144,8 @@ test.describe('Platform yedeği', () => {
       const hedef = await veritabaniniHazirla(hedefYol);
       const onceBayt = readFileSync(hedefYol);
 
-      for (const mod of ['tamYukle', 'birlestir'] as const) {
-        const hata = await yedekIceAktar(hedef, veri, 'yanlis-parola-000', { mod }).catch((h: unknown) => h);
+      {
+        const hata = await yedekIceAktar(hedef, veri, 'yanlis-parola-000', { mod: 'tamYukle' }).catch((h: unknown) => h);
         expect(hata).toBeInstanceOf(KasaHatasi);
         expect((hata as KasaHatasi).kod).toBe('PAROLA_YANLIS');
         expect((hata as Error).message).toMatch(/parola.*yanlış/i);
@@ -192,58 +193,6 @@ test.describe('Platform yedeği', () => {
     } finally {
       klasor.temizle();
     }
-  });
-
-  test('birleştirme: yeni kayıtlar eklenir, aynı id + farklı içerikte yeni olan kazanır, eski sürüm geçmişe yazılır ve raporlanır', async () => {
-    // A makinesi: kaynak veri; yedeği B'ye (farklı kasa parolası!) birleştirilir.
-    const { vt: a, ids } = await ornekVeritabani(null);
-    const { vt: b } = await ornekVeritabani(null, BASKA_PAROLA);
-    const bIlk = await yedekIceAktar(b, yedekOlustur(a).veri, PAROLA, { mod: 'birlestir' });
-    expect(bIlk.cakismalar).toEqual([]);
-    expect(bIlk.ozet?.senaryolar.eklenen).toBe(1);
-    // A'nın hassas değerleri B'nin kasa anahtarıyla yeniden şifrelenmiş olmalı.
-    expect(girisProfiliGetir(b, ids.profil, { coz: true })?.parola).toBe(GIRIS_PAROLASI);
-    expect(testVerisiProfiliGetir(b, ids.veriProfili, { coz: true })?.degerler.iban).toBe(HASSAS_VERI);
-
-    // Aynı yedeği tekrar birleştirmek hiçbir şeyi değiştirmez (zarflar farklı IV'li olsa da).
-    const tekrar = await yedekIceAktar(b, yedekOlustur(a).veri, PAROLA, { mod: 'birlestir' });
-    expect(tekrar.cakismalar).toEqual([]);
-    expect(tekrar.ozet?.senaryolar).toEqual({ eklenen: 0, guncellenen: 0, ayni: 1, atlanan: 0 });
-    expect(tekrar.ozet?.giris_profilleri.ayni).toBe(1);
-
-    // İki makinede aynı senaryo farklı değişti: A daha yeni → A kazanır.
-    senaryoKaydet(a, { id: ids.senaryo, projeId: ids.proje, baslik: 'Senaryo 1', icerik: { adim: 'A' } });
-    senaryoKaydet(b, { id: ids.senaryo, projeId: ids.proje, baslik: 'Senaryo 1', icerik: { adim: 'B' } });
-    zamaniAyarla(a, 'senaryolar', ids.senaryo, '2030-01-02T00:00:00.000Z');
-    zamaniAyarla(b, 'senaryolar', ids.senaryo, '2030-01-01T00:00:00.000Z');
-    // Profil: B daha yeni → B (yerel) kazanır.
-    girisProfiliKaydet(a, { id: ids.profil, projeId: ids.proje, ad: 'A adı', kullaniciAdi: 'kullanici' });
-    girisProfiliKaydet(b, { id: ids.profil, projeId: ids.proje, ad: 'B adı', kullaniciAdi: 'kullanici' });
-    zamaniAyarla(a, 'giris_profilleri', ids.profil, '2030-01-01T00:00:00.000Z');
-    zamaniAyarla(b, 'giris_profilleri', ids.profil, '2030-01-03T00:00:00.000Z');
-
-    const sonuc = await yedekIceAktar(b, yedekOlustur(a).veri, PAROLA, { mod: 'birlestir', yapan: 'birim-test' });
-    const senaryoCakismasi = sonuc.cakismalar.find((c) => c.tablo === 'senaryolar');
-    const profilCakismasi = sonuc.cakismalar.find((c) => c.tablo === 'giris_profilleri');
-    expect(senaryoCakismasi).toMatchObject({ id: ids.senaryo, kazanan: 'yedek', baslik: 'Senaryo 1' });
-    expect(profilCakismasi).toMatchObject({ id: ids.profil, kazanan: 'yerel' });
-    expect(senaryoGetir(b, ids.senaryo)?.icerik).toEqual({ adim: 'A' });
-    expect(girisProfiliGetir(b, ids.profil)?.ad).toBe('B adı');
-
-    const senaryoGecmisi = degisiklikGecmisiListele(b, 'senaryo', ids.senaryo).filter((g) => g.islem === 'birlestirme_cakismasi');
-    expect(senaryoGecmisi).toHaveLength(1);
-    expect(senaryoGecmisi[0].onceki?.icerik_json).toBe('{"adim":"B"}'); // kaybeden B sürümü saklandı
-    expect(senaryoGecmisi[0].yapan).toBe('birim-test');
-    const profilGecmisi = degisiklikGecmisiListele(b, 'giris_profili', ids.profil).filter((g) => g.islem === 'birlestirme_cakismasi');
-    expect(profilGecmisi[0].onceki?.ad).toBe('A adı'); // kaybeden yedek sürümü saklandı
-    // Kaybeden sürümdeki hassas alan da yerel kasayla açılabilir (yeniden şifrelenmiş).
-    expect(coz(b, String(profilGecmisi[0].onceki?.parola))).toBe(GIRIS_PAROLASI);
-
-    // Birleştirme için yerel kasa açık olmalı.
-    kasaKilitle(b);
-    expect(await yedekIceAktar(b, yedekOlustur(a).veri, PAROLA, { mod: 'birlestir' }).catch((h: unknown) => (h as KasaHatasi).kod)).toBe('KASA_KILITLI');
-    a.kapat();
-    b.kapat();
   });
 
   test('otomatik yedek: zaman damgalı dosya, yalnızca son 30 otomatik yedek tutulur', async () => {

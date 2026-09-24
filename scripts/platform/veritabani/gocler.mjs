@@ -191,8 +191,66 @@ export const GOCLER = [
       CREATE INDEX ix_kosu_sonuclari_kosu ON kosu_sonuclari(kosu_id);
       CREATE INDEX ix_kosu_sonuclari_senaryo ON kosu_sonuclari(senaryo_id);
     `
+  },
+  {
+    // Sürüm 2 — genişletilmiş şifreleme + içe aktarma geçmişi:
+    // - degisiklik_gecmisi.islem'e 'ice_aktarma_uzerine_yazildi' eklenir (SQLite CHECK kısıtı
+    //   ALTER ile değişmediği için tablo yeniden kurulur; secure_delete eski sayfaları sıfırlar).
+    // - SIFRELI_ALANLAR'daki sütunlarda v1'den kalan DÜZ METİN değerler, anahtar olmadan
+    //   şifrelenemeyeceği için burada değil kasa İLK açıldığında şifrelenir
+    //   (kasa.mjs > sifreliAlanlariTamamla); tamamlanınca meta.sifreli_alan_gocu = 'tamam'.
+    surum: 2,
+    ad: 'genisletilmis_sifreleme',
+    sql: `
+      CREATE TABLE degisiklik_gecmisi_yeni (
+        id            TEXT PRIMARY KEY,
+        varlik_turu   TEXT NOT NULL,
+        varlik_id     TEXT NOT NULL,
+        islem         TEXT NOT NULL CHECK (islem IN ('olustur', 'guncelle', 'sil', 'birlestirme_cakismasi', 'ice_aktarma_uzerine_yazildi')),
+        yapan         TEXT NOT NULL,
+        makine_id     TEXT,
+        zaman         TEXT NOT NULL,
+        onceki_json   TEXT,
+        sonraki_json  TEXT,
+        aciklama      TEXT
+      );
+      INSERT INTO degisiklik_gecmisi_yeni (id, varlik_turu, varlik_id, islem, yapan, makine_id, zaman, onceki_json, sonraki_json, aciklama)
+        SELECT id, varlik_turu, varlik_id, islem, yapan, makine_id, zaman, onceki_json, sonraki_json, aciklama FROM degisiklik_gecmisi ORDER BY rowid;
+      DROP TABLE degisiklik_gecmisi;
+      ALTER TABLE degisiklik_gecmisi_yeni RENAME TO degisiklik_gecmisi;
+      CREATE INDEX ix_degisiklik_gecmisi_varlik ON degisiklik_gecmisi(varlik_turu, varlik_id, zaman);
+      INSERT INTO meta (anahtar, deger) VALUES ('sifreli_alan_gocu', 'bekliyor')
+        ON CONFLICT(anahtar) DO UPDATE SET deger = 'bekliyor';
+    `
   }
 ];
+
+/**
+ * ŞİFRELİ SÜTUNLAR — tek bildirim noktası. depo (yazma/okuma), kasa (ilk açılışta düz metin
+ * göçü, parola değişimi), içe aktarma (yeniden şifreleme, önizlemede maskeleme) ve testler
+ * bu listeyi kullanır. Buradaki her sütun veritabanında YALNIZCA kasa zarfı ("kasa:v1:...")
+ * olarak durur; yazmak ve okumak için kasa AÇIK olmalıdır.
+ * - 'gizli': sır niteliğinde (parola, TOTP). Hiçbir yanıtta/önizlemede gösterilmez (maskelenir);
+ *   yalnızca açıkça { coz: true } istenirse çözülür.
+ * - 'ozel': gizli değil ama özel (ortam adı/adresi, kullanıcı adı, bağlam kodları, ayarlar).
+ *   Diskte şifreli; kasa açıkken normal okumada ve içe aktarma önizlemesinde çözülür.
+ * Test verisi profillerindeki alanlar sütun bazında değil, TÜRDEKİ "hassas" işaretine göre
+ * değer bazında şifrelenir (degerler_json içinde zarf) ve önizlemede her zaman maskelenir.
+ * Boş metin ('') şifrelenmez: makineler.ad, kasa yokken/kilitliyken yer tutucu olarak '' olabilir.
+ * @type {Readonly<Record<string, Readonly<Record<string, 'gizli' | 'ozel'>>>>}
+ */
+export const SIFRELI_ALANLAR = Object.freeze({
+  makineler: Object.freeze({ ad: 'ozel' }),
+  ayarlar: Object.freeze({ deger_json: 'ozel' }),
+  ortamlar: Object.freeze({ ad: 'ozel', taban_url: 'ozel' }),
+  giris_profilleri: Object.freeze({ kullanici_adi: 'ozel', sms_ayari_json: 'ozel', parola: 'gizli', totp_gizli: 'gizli' }),
+  baglam_profilleri: Object.freeze({ alanlar_json: 'ozel' })
+});
+
+/** @param {string} tablo @returns {string[]} */
+export function sifreliSutunlar(tablo) {
+  return Object.keys(SIFRELI_ALANLAR[tablo] ?? {});
+}
 
 /**
  * Tablo üst bilgileri — yedek/birleştirme ve parola değişimi bu listeyi kullanır.
@@ -237,9 +295,10 @@ export const GUNCEL_SEMA_SURUMU = GOCLER[GOCLER.length - 1].surum;
  * Eksik göçleri sırayla uygular. Veritabanı uygulamanın bildiğinden YENİ bir şemadaysa
  * (başka makinede daha yeni sürümle oluşturulmuş) hata verir — eski kod yeni şemayı bozmasın.
  * @param {Veritabani} vt
+ * @param {{ hedefSurum?: number }} [secenekler] hedefSurum: yalnızca bu sürüme kadar uygula (testlerde eski şemayı kurmak için)
  * @returns {{ onceki: number; simdiki: number; uygulananlar: number[] }}
  */
-export function gocleriUygula(vt) {
+export function gocleriUygula(vt, secenekler = {}) {
   vt.islem(() => {
     vt.calistir(
       'CREATE TABLE IF NOT EXISTS sema_surumu (surum INTEGER PRIMARY KEY, ad TEXT NOT NULL, uygulanma TEXT NOT NULL)'
@@ -255,6 +314,7 @@ export function gocleriUygula(vt) {
   const uygulananlar = [];
   for (const goc of GOCLER) {
     if (goc.surum <= onceki) continue;
+    if (secenekler.hedefSurum !== undefined && goc.surum > secenekler.hedefSurum) break;
     vt.islem(() => {
       vt.db.run(goc.sql);
       vt.calistir('INSERT INTO sema_surumu (surum, ad, uygulanma) VALUES (?, ?, ?)', [

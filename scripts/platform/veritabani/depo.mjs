@@ -4,17 +4,20 @@
 // Kurallar:
 // - Tüm yazmalar tek bir transaction içinde yapılır (vt.islem); hata = hiçbir şey yazılmaz.
 // - JSON sütunları burada doğrulanır (nesne/dizi beklenir; bozuk JSON reddedilir).
-// - HASSAS değerler (giriş parolası, TOTP gizli anahtarı, türünde "hassas" işaretli test
-//   verisi alanları) YALNIZCA kasa zarfı olarak yazılır. Kasa kilitliyken hassas değer
-//   yazılmak istenirse hata verilir; okumada "coz: true" istenmedikçe düz metin dönmez.
+// - ŞİFRELİ sütunlar (gocler.mjs > SIFRELI_ALANLAR: ortam adı/adresi, kullanıcı adı, SMS
+//   ayarı, bağlam alanları, ayarlar, makine adı, giriş parolası, TOTP) ve türünde "hassas"
+//   işaretli test verisi alanları YALNIZCA kasa zarfı olarak yazılır. Bu sütunlara yazmak ve
+//   onları okumak kasa AÇIK olmayı gerektirir (kilitliyse KASA_KILITLI, kasa yoksa KASA_YOK).
+//   'gizli' sütunlar (parola, TOTP) ve hassas test verisi alanları ise okumada da "coz: true"
+//   istenmedikçe düz metin dönmez.
 // - Senaryo ve profil değişiklikleri degisiklik_gecmisi'ne (önce/sonra) yazılır; önce/sonra
 //   satırın veritabanındaki halidir (hassas alanlar şifreli kalır).
 
 import { randomUUID } from 'node:crypto';
 import { hostname, userInfo } from 'node:os';
 import { veritabaniAc, veritabaniYolu } from './baglanti.mjs';
-import { TABLOLAR, gocleriUygula } from './gocler.mjs';
-import { coz, sifrele, zarfMi } from '../kasa.mjs';
+import { GUNCEL_SEMA_SURUMU, TABLOLAR, gocleriUygula, mevcutSemaSurumu } from './gocler.mjs';
+import { acikAnahtar, coz, kasaAcikMi, kasaDurumu, sifrele, zarfMi } from '../kasa.mjs';
 
 /** @typedef {import('./baglanti.mjs').Veritabani} Veritabani */
 
@@ -80,8 +83,28 @@ function jsonOku(metin) {
 }
 
 /**
+ * Şifreli sütuna yazılacak değer: null/undefined → null, metin → zarf (kasa açık olmalı).
+ * @param {Veritabani} vt @param {string | null | undefined} deger
+ */
+function sifreliYaz(vt, deger) {
+  if (deger === null || deger === undefined) return null;
+  return sifrele(vt, String(deger));
+}
+
+/**
+ * Şifreli sütunu okur. Kasa kilitliyse/yoksa KasaHatasi (açık mesaj). v1'den kalmış ve henüz
+ * şifrelenmemiş değer (normalde kasa açılınca şifrelenir) olduğu gibi döner.
+ * @param {Veritabani} vt @param {unknown} deger @returns {string | null}
+ */
+function sifreliOku(vt, deger) {
+  acikAnahtar(vt);
+  if (deger === null || deger === undefined) return null;
+  return zarfMi(deger) ? coz(vt, deger) : String(deger);
+}
+
+/**
  * @param {Veritabani} vt
- * @param {{ varlikTuru: string; varlikId: string; islem: 'olustur' | 'guncelle' | 'sil' | 'birlestirme_cakismasi'; yapan?: string; onceki?: unknown; sonraki?: unknown; aciklama?: string }} kayit
+ * @param {{ varlikTuru: string; varlikId: string; islem: 'olustur' | 'guncelle' | 'sil' | 'birlestirme_cakismasi' | 'ice_aktarma_uzerine_yazildi'; yapan?: string; onceki?: unknown; sonraki?: unknown; aciklama?: string }} kayit
  */
 export function gecmisYaz(vt, kayit) {
   vt.calistir(
@@ -170,7 +193,12 @@ export async function veritabaniniHazirla(yol = veritabaniYolu()) {
   return vt;
 }
 
-/** @param {Veritabani} vt */
+/**
+ * Bu makinenin kimliği. makineler.ad şifreli bir sütundur: kasa kilitliyken/yokken satır
+ * ad = '' (yer tutucu, gizli bilgi değil) ile oluşturulur; kasa açıkken çağrılınca şifreli
+ * makine adıyla güncellenir. Dönen "ad" diskten değil, işletim sisteminden okunur.
+ * @param {Veritabani} vt
+ */
 export function yerelMakine(vt) {
   let id = vt.metaOku('yerel_makine_id');
   if (!id) {
@@ -179,20 +207,41 @@ export function yerelMakine(vt) {
     vt.islem(() => vt.metaYaz('yerel_makine_id', kimlik));
   }
   const ad = hostname();
+  const acik = kasaAcikMi(vt);
   const satir = vt.tek('SELECT id, ad, olusturulma FROM makineler WHERE id = ?', [id]);
   if (!satir) {
-    vt.calistir('INSERT INTO makineler (id, ad, olusturulma) VALUES (?, ?, ?)', [id, ad, simdi()]);
-  } else if (satir.ad !== ad) {
-    vt.calistir('UPDATE makineler SET ad = ? WHERE id = ?', [ad, id]);
+    vt.calistir('INSERT INTO makineler (id, ad, olusturulma) VALUES (?, ?, ?)', [id, acik ? sifrele(vt, ad) : '', simdi()]);
+  } else if (acik) {
+    const mevcut = satir.ad === '' ? '' : sifreliOku(vt, satir.ad);
+    if (mevcut !== ad || !zarfMi(satir.ad)) vt.calistir('UPDATE makineler SET ad = ? WHERE id = ?', [sifrele(vt, ad), id]);
   }
   return { id, ad };
 }
 
-/** @param {Veritabani} vt */
+/** Kasa açık olmalıdır (makine adları şifreli). @param {Veritabani} vt */
 export function makineleriListele(vt) {
+  acikAnahtar(vt);
   return vt.tumu('SELECT id, ad, olusturulma FROM makineler ORDER BY olusturulma').map((s) => ({
-    id: String(s.id), ad: String(s.ad), olusturulma: String(s.olusturulma)
+    id: String(s.id), ad: s.ad === '' ? '' : String(sifreliOku(vt, s.ad)), olusturulma: String(s.olusturulma)
   }));
+}
+
+/**
+ * Kasa kilitliyken de güvenle döndürülebilecek durum özeti: YALNIZCA gizli olmayan bilgi
+ * (şema sürümü, kasa durumu, satır sayıları, makine kimliği). Şifreli sütunlara dokunmaz.
+ * @param {Veritabani} vt
+ */
+export function platformDurumOzeti(vt) {
+  const gocDurumu = vt.metaOku('sifreli_alan_gocu');
+  return {
+    semaSurumu: mevcutSemaSurumu(vt),
+    desteklenenSemaSurumu: GUNCEL_SEMA_SURUMU,
+    makineId: vt.metaOku('yerel_makine_id') ?? null,
+    kasa: kasaDurumu(vt),
+    /** 'bekliyor': v1'den kalan düz metin değerler kasa ilk açıldığında şifrelenecek. */
+    sifreliAlanGocu: gocDurumu === 'tamam' ? 'tamam' : 'bekliyor',
+    sayimlar: sayimlar(vt)
+  };
 }
 
 /** Tablo başına satır sayıları (gizli bilgi içermez). @param {Veritabani} vt */
@@ -209,19 +258,20 @@ export function sayimlar(vt) {
 // Ayarlar
 // ---------------------------------------------------------------------------------------
 
-/** @param {Veritabani} vt @param {string} anahtar */
+/** Ayar değerleri şifrelidir: kasa açık olmalıdır. @param {Veritabani} vt @param {string} anahtar */
 export function ayarGetir(vt, anahtar) {
+  acikAnahtar(vt);
   const satir = vt.tek('SELECT deger_json FROM ayarlar WHERE anahtar = ?', [anahtar]);
-  return satir ? jsonOku(satir.deger_json) : undefined;
+  return satir ? jsonOku(sifreliOku(vt, satir.deger_json)) : undefined;
 }
 
-/** @param {Veritabani} vt @param {string} anahtar @param {unknown} deger */
+/** Kasa açık olmalıdır. @param {Veritabani} vt @param {string} anahtar @param {unknown} deger */
 export function ayarYaz(vt, anahtar, deger) {
   zorunluMetin(anahtar, 'anahtar');
   vt.calistir(
     `INSERT INTO ayarlar (anahtar, deger_json, guncellenme) VALUES (?, ?, ?)
      ON CONFLICT(anahtar) DO UPDATE SET deger_json = excluded.deger_json, guncellenme = excluded.guncellenme`,
-    [anahtar, jsonMetni(JSON.stringify(deger ?? null), 'deger', 'herhangi'), simdi()]
+    [anahtar, sifreliYaz(vt, jsonMetni(JSON.stringify(deger ?? null), 'deger', 'herhangi')), simdi()]
   );
 }
 
@@ -261,13 +311,16 @@ export function projeSil(vt, id) {
   return silGenel(vt, 'projeler', id);
 }
 
-/** @param {Record<string, unknown>} s */
-const ortamCevir = (s) => ({
-  id: String(s.id), projeId: String(s.proje_id), ad: String(s.ad), tabanUrl: String(s.taban_url),
+/** @param {Veritabani} vt @param {Record<string, unknown>} s */
+const ortamCevir = (vt, s) => ({
+  id: String(s.id), projeId: String(s.proje_id), ad: String(sifreliOku(vt, s.ad)), tabanUrl: String(sifreliOku(vt, s.taban_url)),
   varsayilan: s.varsayilan === 1, olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
-/** @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; tabanUrl: string; varsayilan?: boolean }} girdi */
+/**
+ * Ortam adı ve adresi şifrelidir: kasa açık olmalıdır.
+ * @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; tabanUrl: string; varsayilan?: boolean }} girdi
+ */
 export function ortamKaydet(vt, girdi) {
   const tabanUrl = zorunluMetin(girdi.tabanUrl, 'tabanUrl');
   try {
@@ -281,15 +334,25 @@ export function ortamKaydet(vt, girdi) {
       vt.calistir('UPDATE ortamlar SET varsayilan = 0 WHERE proje_id = ? AND id <> ?', [girdi.projeId, girdi.id ?? '']);
     }
     return kaydetGenel(vt, 'ortamlar', {
-      proje_id: kimlikKontrol(girdi.projeId, 'projeId'), ad: zorunluMetin(girdi.ad, 'ad'), taban_url: tabanUrl,
-      varsayilan: girdi.varsayilan ? 1 : 0
+      proje_id: kimlikKontrol(girdi.projeId, 'projeId'), ad: sifreliYaz(vt, zorunluMetin(girdi.ad, 'ad')),
+      taban_url: sifreliYaz(vt, tabanUrl), varsayilan: girdi.varsayilan ? 1 : 0
     }, { id: girdi.id });
   });
 }
 
-/** @param {Veritabani} vt @param {string} projeId */
+/** Kasa açık olmalıdır; sıralama çözülmüş ada göre yapılır. @param {Veritabani} vt @param {string} projeId */
 export function ortamlariListele(vt, projeId) {
-  return vt.tumu('SELECT * FROM ortamlar WHERE proje_id = ? ORDER BY ad', [projeId]).map(ortamCevir);
+  acikAnahtar(vt);
+  return vt.tumu('SELECT * FROM ortamlar WHERE proje_id = ?', [projeId])
+    .map((s) => ortamCevir(vt, s))
+    .sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+}
+
+/** Kasa açık olmalıdır. @param {Veritabani} vt @param {string} id */
+export function ortamGetir(vt, id) {
+  acikAnahtar(vt);
+  const s = hamSatir(vt, 'ortamlar', id);
+  return s ? ortamCevir(vt, s) : undefined;
 }
 
 /** @param {Veritabani} vt @param {string} id */
@@ -298,7 +361,7 @@ export function ortamSil(vt, id) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Giriş profilleri (hassas: parola, totp_gizli)
+// Giriş profilleri (şifreli: kullanici_adi, sms_ayari_json; gizli: parola, totp_gizli)
 // ---------------------------------------------------------------------------------------
 
 /**
@@ -311,9 +374,9 @@ function girisProfiliCevir(vt, s, cozulsun) {
   const totpZarfi = typeof s.totp_gizli === 'string' ? s.totp_gizli : null;
   return {
     id: String(s.id), projeId: String(s.proje_id), ortamId: s.ortam_id == null ? null : String(s.ortam_id),
-    ad: String(s.ad), kullaniciAdi: String(s.kullanici_adi),
+    ad: String(s.ad), kullaniciAdi: String(sifreliOku(vt, s.kullanici_adi)),
     ikiAsamaliTur: /** @type {'yok' | 'totp' | 'sms'} */ (String(s.iki_asamali_tur)),
-    smsAyari: jsonOku(s.sms_ayari_json),
+    smsAyari: jsonOku(sifreliOku(vt, s.sms_ayari_json)),
     parolaVar: parolaZarfi !== null, totpGizliVar: totpZarfi !== null,
     parola: cozulsun && parolaZarfi ? coz(vt, parolaZarfi) : null,
     totpGizli: cozulsun && totpZarfi ? coz(vt, totpZarfi) : null,
@@ -333,6 +396,7 @@ function hassasDeger(vt, deger, mevcut) {
 }
 
 /**
+ * Kasa açık olmalıdır (kullanıcı adı ve SMS ayarı da şifreli yazılır).
  * @param {Veritabani} vt
  * @param {{ id?: string; projeId: string; ortamId?: string | null; ad: string; kullaniciAdi: string; parola?: string | null; ikiAsamaliTur?: 'yok' | 'totp' | 'sms'; totpGizli?: string | null; smsAyari?: Record<string, unknown>; yapan?: string }} girdi
  */
@@ -348,11 +412,11 @@ export function girisProfiliKaydet(vt, girdi) {
       proje_id: kimlikKontrol(girdi.projeId, 'projeId'),
       ortam_id: girdi.ortamId ?? null,
       ad: zorunluMetin(girdi.ad, 'ad'),
-      kullanici_adi: zorunluMetin(girdi.kullaniciAdi, 'kullaniciAdi'),
+      kullanici_adi: sifreliYaz(vt, zorunluMetin(girdi.kullaniciAdi, 'kullaniciAdi')),
       parola: hassasDeger(vt, girdi.parola, mevcut?.parola),
       iki_asamali_tur: tur,
       totp_gizli: tur === 'totp' ? totp : null,
-      sms_ayari_json: jsonMetni(girdi.smsAyari ?? jsonOku(mevcut?.sms_ayari_json) ?? {}, 'smsAyari')
+      sms_ayari_json: sifreliYaz(vt, jsonMetni(girdi.smsAyari ?? jsonOku(sifreliOku(vt, mevcut?.sms_ayari_json)) ?? {}, 'smsAyari'))
     }, { id: girdi.id, gecmisTuru: 'giris_profili', yapan: girdi.yapan });
   });
 }
@@ -363,8 +427,9 @@ export function girisProfiliGetir(vt, id, secenekler = {}) {
   return s ? girisProfiliCevir(vt, s, Boolean(secenekler.coz)) : undefined;
 }
 
-/** @param {Veritabani} vt @param {string} projeId */
+/** Kasa açık olmalıdır. @param {Veritabani} vt @param {string} projeId */
 export function girisProfilleriniListele(vt, projeId) {
+  acikAnahtar(vt);
   return vt.tumu('SELECT * FROM giris_profilleri WHERE proje_id = ? ORDER BY ad', [projeId])
     .map((s) => girisProfiliCevir(vt, s, false));
 }
@@ -378,32 +443,43 @@ export function girisProfiliSil(vt, id, yapan) {
 // Bağlam profilleri (rol/şirket/şube... — tür adını proje belirler)
 // ---------------------------------------------------------------------------------------
 
-/** @param {Record<string, unknown>} s */
-const baglamCevir = (s) => ({
+// tur ve ad bilinçli olarak AÇIK tutulur (kasa kilitliyken de listede görünen ad); alanlar_json
+// (kodlar/değerler) şifrelidir.
+
+/** @param {Veritabani} vt @param {Record<string, unknown>} s @param {boolean} alanlarDahil */
+const baglamCevir = (vt, s, alanlarDahil) => ({
   id: String(s.id), projeId: String(s.proje_id), tur: String(s.tur), ad: String(s.ad),
-  alanlar: jsonOku(s.alanlar_json), olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
+  alanlar: alanlarDahil ? /** @type {Record<string, unknown>} */ (jsonOku(sifreliOku(vt, s.alanlar_json))) : null,
+  olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
-/** @param {Veritabani} vt @param {{ id?: string; projeId: string; tur: string; ad: string; alanlar?: Record<string, unknown>; yapan?: string }} girdi */
+/** Kasa açık olmalıdır. @param {Veritabani} vt @param {{ id?: string; projeId: string; tur: string; ad: string; alanlar?: Record<string, unknown>; yapan?: string }} girdi */
 export function baglamProfiliKaydet(vt, girdi) {
   return kaydetGenel(vt, 'baglam_profilleri', {
     proje_id: kimlikKontrol(girdi.projeId, 'projeId'), tur: zorunluMetin(girdi.tur, 'tur'),
-    ad: zorunluMetin(girdi.ad, 'ad'), alanlar_json: jsonMetni(girdi.alanlar ?? {}, 'alanlar')
+    ad: zorunluMetin(girdi.ad, 'ad'), alanlar_json: sifreliYaz(vt, jsonMetni(girdi.alanlar ?? {}, 'alanlar'))
   }, { id: girdi.id, gecmisTuru: 'baglam_profili', yapan: girdi.yapan });
 }
 
-/** @param {Veritabani} vt @param {string} id */
+/** Kasa açık olmalıdır. @param {Veritabani} vt @param {string} id */
 export function baglamProfiliGetir(vt, id) {
+  acikAnahtar(vt);
   const s = hamSatir(vt, 'baglam_profilleri', id);
-  return s ? baglamCevir(s) : undefined;
+  return s ? baglamCevir(vt, s, true) : undefined;
 }
 
-/** @param {Veritabani} vt @param {string} projeId @param {string} [tur] */
-export function baglamProfilleriniListele(vt, projeId, tur) {
+/**
+ * Varsayılan: kasa açık olmalıdır (alanlar çözülür). { yalnizAd: true } ile kasa kilitliyken de
+ * yalnızca tür/ad listelenir (alanlar: null).
+ * @param {Veritabani} vt @param {string} projeId @param {string} [tur] @param {{ yalnizAd?: boolean }} [secenekler]
+ */
+export function baglamProfilleriniListele(vt, projeId, tur, secenekler = {}) {
+  const alanlarDahil = !secenekler.yalnizAd;
+  if (alanlarDahil) acikAnahtar(vt);
   const satirlar = tur
     ? vt.tumu('SELECT * FROM baglam_profilleri WHERE proje_id = ? AND tur = ? ORDER BY ad', [projeId, tur])
     : vt.tumu('SELECT * FROM baglam_profilleri WHERE proje_id = ? ORDER BY tur, ad', [projeId]);
-  return satirlar.map(baglamCevir);
+  return satirlar.map((s) => baglamCevir(vt, s, alanlarDahil));
 }
 
 /** @param {Veritabani} vt @param {string} id @param {string} [yapan] */
@@ -663,7 +739,7 @@ export function degisiklikGecmisiListele(vt, varlikTuru, varlikId) {
     [varlikTuru, varlikId]
   ).map((s) => ({
     id: String(s.id), varlikTuru: String(s.varlik_turu), varlikId: String(s.varlik_id),
-    islem: /** @type {'olustur' | 'guncelle' | 'sil' | 'birlestirme_cakismasi'} */ (String(s.islem)),
+    islem: /** @type {'olustur' | 'guncelle' | 'sil' | 'birlestirme_cakismasi' | 'ice_aktarma_uzerine_yazildi'} */ (String(s.islem)),
     yapan: String(s.yapan), makineId: s.makine_id == null ? null : String(s.makine_id), zaman: String(s.zaman),
     onceki: /** @type {Record<string, unknown> | null} */ (jsonOku(s.onceki_json)),
     sonraki: /** @type {Record<string, unknown> | null} */ (jsonOku(s.sonraki_json)),

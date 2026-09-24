@@ -22,18 +22,22 @@
 // yüklerken parola + başlıktaki kasa tuzu ile aynı anahtar yeniden türetilir. Parola sonradan
 // değişse bile eski yedek, eski parolayla açılır.
 //
-// Hassas alanlar yedekte de kasa zarfı olarak (çift şifreli) kalır.
+// Şifreli sütunlar (SIFRELI_ALANLAR) ve hassas test verisi alanları yedekte de kasa zarfı
+// olarak (çift şifreli) kalır.
+//
+// İçe aktarma: dashboard/API akışı ÖNİZLEME → SEÇİM → UYGULAMA'dır (bkz. ice-aktarma.mjs).
+// Bu dosyadaki yedekIceAktar yalnızca TAM YÜKLEME (tüm veriyi yedektekiyle değiştirme) yapar;
+// ice-aktarma.mjs boş veritabanına "tümü seçili" uygulamada aynı yolu (tamYukleYaz) kullanır.
 
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { existsSync, mkdirSync, readdirSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { atomikIkiliYaz } from './veritabani/baglanti.mjs';
 import { GUNCEL_SEMA_SURUMU, TABLOLAR, mevcutSemaSurumu } from './veritabani/gocler.mjs';
-import { gecmisYaz, sayimlar, yerelMakine } from './veritabani/depo.mjs';
+import { sayimlar, yerelMakine } from './veritabani/depo.mjs';
 import {
-  KasaHatasi, acikAnahtar, anahtarDogrulayiciyaUyarMi, anahtarTuret, kasaDurumu, kasaKdfOku, kasayiAnahtarlaAc,
-  metindekiZarflariDonustur, zarfCoz, zarfSifrele
+  KasaHatasi, acikAnahtar, anahtarDogrulayiciyaUyarMi, anahtarTuret, kasaDurumu, kasaKdfOku, kasayiAnahtarlaAc, zarfMi
 } from './kasa.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -50,7 +54,7 @@ const OTOMATIK_DESEN = /^otomatik-\d{8}-\d{6}-\d{3}\.tayedek$/;
 
 export class YedekHatasi extends Error {
   /**
-   * @param {'BICIM' | 'SURUM' | 'ONAY_GEREKLI' | 'KASA_UYUSMAZ' | 'VERI'} kod
+   * @param {'BICIM' | 'SURUM' | 'ONAY_GEREKLI' | 'KASA_UYUSMAZ' | 'VERI' | 'DEGISTI' | 'MESGUL' | 'BULUNAMADI'} kod
    * @param {string} mesaj
    */
   constructor(kod, mesaj) {
@@ -80,7 +84,7 @@ function log2Tam(n) {
 }
 
 /** @param {Veritabani} vt @param {string} tablo */
-function tabloSutunlari(vt, tablo) {
+export function tabloSutunlari(vt, tablo) {
   return vt.tumu(`PRAGMA table_info(${tablo})`).map((s) => String(s.name));
 }
 
@@ -223,7 +227,8 @@ function icerikDogrula(icerik) {
       if (!nesne(satir) || typeof /** @type {Record<string, unknown>} */ (satir)[tablo.birincilAnahtar] !== 'string') throw new YedekHatasi('VERI', `"${ad}" tablosunda geçersiz satır.`);
       for (const [sutun, deger] of Object.entries(/** @type {Record<string, unknown>} */ (satir))) {
         if (deger !== null && !['string', 'number'].includes(typeof deger)) throw new YedekHatasi('VERI', `"${ad}.${sutun}" değeri geçersiz.`);
-        if (tablo.json.includes(sutun) && typeof deger === 'string') {
+        // Şifreli JSON sütunu (ör. ayarlar.deger_json) bütünüyle zarf olabilir.
+        if (tablo.json.includes(sutun) && typeof deger === 'string' && !zarfMi(deger)) {
           try { JSON.parse(deger); } catch { throw new YedekHatasi('VERI', `"${ad}.${sutun}" geçerli JSON değil.`); }
         }
       }
@@ -232,15 +237,15 @@ function icerikDogrula(icerik) {
   return /** @type {ReturnType<typeof icerikDogrula>} */ (/** @type {unknown} */ (i));
 }
 
-/** @param {Veritabani} vt */
-function veritabaniBosMu(vt) {
+/** Veri yoksa (makine kaydı hariç) ve kasa oluşturulmamışsa boştur. @param {Veritabani} vt */
+export function veritabaniBosMu(vt) {
   const s = sayimlar(vt);
   const veriVar = Object.entries(s).some(([tablo, sayi]) => tablo !== 'makineler' && sayi > 0);
   return !veriVar && !kasaDurumu(vt).olusturuldu;
 }
 
 /** @param {Veritabani} vt @param {string} tablo @param {Record<string, unknown>} satir @param {string[]} sutunlar */
-function satirEkle(vt, tablo, satir, sutunlar) {
+export function satirEkle(vt, tablo, satir, sutunlar) {
   const kullan = sutunlar.filter((s) => s in satir);
   vt.calistir(
     `INSERT INTO ${tablo} (${kullan.join(', ')}) VALUES (${kullan.map(() => '?').join(', ')})`,
@@ -249,188 +254,89 @@ function satirEkle(vt, tablo, satir, sutunlar) {
 }
 
 /**
- * Karşılaştırma biçimi: zaman damgaları hariç, zarflar düz metne açılmış, JSON'lar kanonik.
- * @param {Record<string, unknown>} satir @param {readonly string[]} jsonSutunlar @param {Buffer} anahtar
+ * Yedek satırlarının sütunları bu şemada var mı? (Yoksa VERI hatası.)
+ * @param {Veritabani} vt @param {Record<string, Record<string, unknown>[]>} tablolar
+ * @returns {Map<string, string[]>} tablo → sütunlar
  */
-function kanonik(satir, jsonSutunlar, anahtar) {
-  /** @param {unknown} d @returns {unknown} */
-  const sirala = (d) => {
-    if (Array.isArray(d)) return d.map(sirala);
-    if (typeof d === 'object' && d !== null) {
-      return Object.fromEntries(Object.keys(d).sort().map((k) => [k, sirala(/** @type {Record<string, unknown>} */ (d)[k])]));
+export function sutunlariDogrula(vt, tablolar) {
+  const sutunlar = new Map(TABLOLAR.map((t) => [t.ad, tabloSutunlari(vt, t.ad)]));
+  for (const [ad, satirlar] of Object.entries(tablolar)) {
+    const bilinen = new Set(sutunlar.get(ad));
+    for (const satir of satirlar) {
+      const fazla = Object.keys(satir).find((s) => !bilinen.has(s));
+      if (fazla) throw new YedekHatasi('VERI', `Yedekteki "${ad}.${fazla}" sütunu bu şemada yok.`);
     }
-    return d;
-  };
-  /** @type {Record<string, unknown>} */
-  const sonuc = {};
-  for (const sutun of Object.keys(satir).sort()) {
-    if (sutun === 'olusturulma' || sutun === 'guncellenme') continue;
-    let deger = satir[sutun];
-    if (typeof deger === 'string') {
-      deger = metindekiZarflariDonustur(deger, (z) => `«${zarfCoz(anahtar, z)}»`);
-      if (jsonSutunlar.includes(sutun)) deger = sirala(JSON.parse(/** @type {string} */ (deger)));
-    }
-    sonuc[sutun] = deger;
   }
-  return JSON.stringify(sonuc);
+  return sutunlar;
 }
 
 /**
- * Yedeği içe aktarır. Parola yanlışsa / dosya bozuksa HİÇBİR ŞEY yazılmaz; yazma aşaması tek
- * transaction'dır (hata = geri alınır).
- * - tamYukle: tüm veriyi (kasa dahil) yedektekiyle değiştirir. Veritabanı boş değilse
- *   onay: true gerekir; kasa açıksa önce otomatik bir güvenlik yedeği alınır.
- * - birlestir: kimlik (id) üzerinden birleştirir. Aynı id + farklı içerik → güncellenme'si yeni
- *   olan kazanır; kaybeden sürüm (senaryo/profil) degisiklik_gecmisi'ne yazılır ve çakışma
- *   listesinde raporlanır. Kasa zaten varsa AÇIK olmalıdır; yedeğin hassas değerleri yerel
- *   kasa anahtarıyla yeniden şifrelenir.
+ * TAM YÜKLEME yazma adımı (tek transaction): tüm tabloları boşaltır, yedeğin satırlarını ve
+ * kasa bilgisini yazar, ardından kasayı verilen anahtarla açar (açılışta şifreli sütunlarda
+ * kalan düz metin — ör. v1 yedeği — şifrelenir).
+ * @param {Veritabani} vt
+ * @param {Record<string, Record<string, unknown>[]>} tablolar
+ * @param {{ kdf: object; dogrulayici: string }} kasa
+ * @param {Buffer} kasaAnahtari
+ * @param {IlerlemeFn} [ilerleme]
+ */
+export function tamYukleYaz(vt, tablolar, kasa, kasaAnahtari, ilerleme = () => {}) {
+  const sutunlar = sutunlariDogrula(vt, tablolar);
+  const toplam = Object.values(tablolar).reduce((a, s) => a + s.length, 0) || 1;
+  let yazilan = 0;
+  vt.islem(() => {
+    for (const t of [...TABLOLAR].reverse()) vt.calistir(`DELETE FROM ${t.ad}`);
+    for (const t of TABLOLAR) {
+      const tSutun = /** @type {string[]} */ (sutunlar.get(t.ad));
+      for (const satir of tablolar[t.ad] ?? []) {
+        satirEkle(vt, t.ad, satir, tSutun);
+        if (++yazilan % 500 === 0) ilerleme('yazılıyor', 60 + Math.round((35 * yazilan) / toplam));
+      }
+    }
+    vt.metaYaz('kasa_surum', '1');
+    vt.metaYaz('kasa_kdf', JSON.stringify(kasa.kdf));
+    vt.metaYaz('kasa_dogrulayici', kasa.dogrulayici);
+  });
+  // Yerel makine kaydı kasa YENİ anahtarla açıldıktan sonra yazılır (makine adı şifreli bir
+  // sütundur; eski anahtarla şifrelenmesin).
+  kasayiAnahtarlaAc(vt, kasaAnahtari);
+  yerelMakine(vt);
+}
+
+/**
+ * TAM YÜKLEME: tüm veriyi (kasa dahil) yedektekiyle değiştirir. Parola yanlışsa / dosya
+ * bozuksa HİÇBİR ŞEY yazılmaz; yazma tek transaction'dır. Veritabanı boş değilse onay: true
+ * gerekir; kasa açıksa önce otomatik bir güvenlik yedeği alınır.
+ * (Seçmeli birleştirme için ice-aktarma.mjs > önizleme/uygulama akışı kullanılır.)
  * @param {Veritabani} vt
  * @param {Buffer} dosya
  * @param {string} parola
- * @param {{ mod: 'tamYukle' | 'birlestir'; onay?: boolean; ilerleme?: IlerlemeFn; yapan?: string; guvenlikYedegiKlasoru?: string }} secenekler
+ * @param {{ mod: 'tamYukle'; onay?: boolean; ilerleme?: IlerlemeFn; guvenlikYedegiKlasoru?: string }} secenekler
  */
 export async function yedekIceAktar(vt, dosya, parola, secenekler) {
   const ilerleme = secenekler.ilerleme ?? (() => {});
-  if (secenekler.mod !== 'tamYukle' && secenekler.mod !== 'birlestir') {
-    throw new YedekHatasi('VERI', 'İçe aktarma modu "tamYukle" veya "birlestir" olmalıdır.');
+  if (secenekler.mod !== 'tamYukle') {
+    throw new YedekHatasi('VERI', 'Bu fonksiyon yalnızca "tamYukle" yapar; seçmeli içe aktarma için önizleme akışını kullanın.');
   }
   // Ön koşullar parola sorulmadan (pahalı scrypt'ten önce) kontrol edilir.
   const bos = veritabaniBosMu(vt);
-  if (secenekler.mod === 'tamYukle' && !bos && !secenekler.onay) {
+  if (!bos && !secenekler.onay) {
     throw new YedekHatasi('ONAY_GEREKLI',
       'Veritabanı boş değil: tam yükleme mevcut TÜM veriyi (kasa dahil) yedektekiyle değiştirir. Emin iseniz onaylayarak tekrar deneyin.');
   }
   const yerelKasa = kasaDurumu(vt);
-  if (secenekler.mod === 'birlestir' && yerelKasa.olusturuldu && !yerelKasa.acik) {
-    throw new KasaHatasi('KASA_KILITLI', 'Birleştirme için önce bu makinedeki kasayı açın.');
-  }
-
   const yedek = await yedekAc(dosya, parola, { ilerleme });
   try {
-    /** @type {Map<string, string[]>} */
-    const sutunlar = new Map(TABLOLAR.map((t) => [t.ad, tabloSutunlari(vt, t.ad)]));
-    for (const [ad, satirlar] of Object.entries(yedek.tablolar)) {
-      const bilinen = new Set(sutunlar.get(ad));
-      for (const satir of satirlar) {
-        const fazla = Object.keys(satir).find((s) => !bilinen.has(s));
-        if (fazla) throw new YedekHatasi('VERI', `Yedekteki "${ad}.${fazla}" sütunu bu şemada yok.`);
-      }
+    sutunlariDogrula(vt, yedek.tablolar);
+    let guvenlikYedegi = null;
+    if (!bos && yerelKasa.acik) {
+      ilerleme('güvenlik yedeği alınıyor', 50);
+      guvenlikYedegi = otomatikYedekAl(vt, { klasor: secenekler.guvenlikYedegiKlasoru }).dosya;
     }
-
-    if (secenekler.mod === 'tamYukle') {
-      let guvenlikYedegi = null;
-      if (!bos && yerelKasa.acik) {
-        ilerleme('güvenlik yedeği alınıyor', 50);
-        guvenlikYedegi = otomatikYedekAl(vt, { klasor: secenekler.guvenlikYedegiKlasoru }).dosya;
-      }
-      ilerleme('yazılıyor', 60);
-      const toplam = Object.values(yedek.tablolar).reduce((a, s) => a + s.length, 0) || 1;
-      let yazilan = 0;
-      vt.islem(() => {
-        for (const t of [...TABLOLAR].reverse()) vt.calistir(`DELETE FROM ${t.ad}`);
-        for (const t of TABLOLAR) {
-          const tSutun = /** @type {string[]} */ (sutunlar.get(t.ad));
-          for (const satir of yedek.tablolar[t.ad] ?? []) {
-            satirEkle(vt, t.ad, satir, tSutun);
-            if (++yazilan % 500 === 0) ilerleme('yazılıyor', 60 + Math.round((35 * yazilan) / toplam));
-          }
-        }
-        vt.metaYaz('kasa_surum', '1');
-        vt.metaYaz('kasa_kdf', JSON.stringify(yedek.kasa.kdf));
-        vt.metaYaz('kasa_dogrulayici', yedek.kasa.dogrulayici);
-        yerelMakine(vt);
-      });
-      kasayiAnahtarlaAc(vt, yedek.kasaAnahtari);
-      ilerleme('tamamlandı', 100);
-      return { mod: 'tamYukle', manifest: yedek.manifest, sayimlar: sayimlar(vt), guvenlikYedegi, cakismalar: [] };
-    }
-
-    // --- birlestir ---
-    const kasaVardi = yerelKasa.olusturuldu;
-    const hedefAnahtar = kasaVardi ? acikAnahtar(vt) : yedek.kasaAnahtari;
-    const ayniAnahtar = hedefAnahtar.length === yedek.kasaAnahtari.length && timingSafeEqual(hedefAnahtar, yedek.kasaAnahtari);
-    /** @param {Record<string, unknown>} satir */
-    const yenidenSifrele = (satir) => {
-      if (ayniAnahtar) return satir;
-      /** @type {Record<string, unknown>} */
-      const yeni = {};
-      for (const [k, d] of Object.entries(satir)) {
-        yeni[k] = typeof d === 'string'
-          ? metindekiZarflariDonustur(d, (z) => zarfSifrele(hedefAnahtar, zarfCoz(yedek.kasaAnahtari, z)))
-          : d;
-      }
-      return yeni;
-    };
-    /** @type {Record<string, { eklenen: number; guncellenen: number; ayni: number; atlanan: number }>} */
-    const ozet = {};
-    /** @type {Array<{ tablo: string; id: string; baslik: string | null; kazanan: 'yerel' | 'yedek'; yerelGuncellenme: string | null; yedekGuncellenme: string | null; aciklama: string }>} */
-    const cakismalar = [];
-    ilerleme('birleştiriliyor', 55);
-    vt.islem(() => {
-      if (!kasaVardi) {
-        vt.metaYaz('kasa_surum', '1');
-        vt.metaYaz('kasa_kdf', JSON.stringify(yedek.kasa.kdf));
-        vt.metaYaz('kasa_dogrulayici', yedek.kasa.dogrulayici);
-      }
-      TABLOLAR.forEach((t, sira) => {
-        const o = (ozet[t.ad] = { eklenen: 0, guncellenen: 0, ayni: 0, atlanan: 0 });
-        const tSutun = /** @type {string[]} */ (sutunlar.get(t.ad));
-        for (const hamSatir of yedek.tablolar[t.ad] ?? []) {
-          const gelen = yenidenSifrele(hamSatir);
-          const id = String(gelen[t.birincilAnahtar]);
-          const yerel = vt.tek(`SELECT * FROM ${t.ad} WHERE ${t.birincilAnahtar} = ?`, [id]);
-          const baslik = t.baslikAlani && gelen[t.baslikAlani] != null ? String(gelen[t.baslikAlani]) : null;
-          if (!yerel) {
-            if (t.ad === 'ekran_modelleri') {
-              const cakisan = vt.tek('SELECT id FROM ekran_modelleri WHERE ekran_id = ? AND surum = ?', [gelen.ekran_id, gelen.surum]);
-              if (cakisan) {
-                o.atlanan++;
-                cakismalar.push({ tablo: t.ad, id, baslik, kazanan: 'yerel', yerelGuncellenme: null, yedekGuncellenme: null,
-                  aciklama: 'Aynı ekran için aynı model sürüm numarası iki makinede farklı kayıtla oluşturulmuş; yerel sürüm korundu.' });
-                continue;
-              }
-            }
-            satirEkle(vt, t.ad, gelen, tSutun);
-            o.eklenen++;
-            continue;
-          }
-          if (kanonik(yerel, t.json, hedefAnahtar) === kanonik(gelen, t.json, hedefAnahtar)) {
-            o.ayni++;
-            continue;
-          }
-          const yerelZaman = t.guncellenme ? String(yerel.guncellenme ?? '') : null;
-          const yedekZaman = t.guncellenme ? String(gelen.guncellenme ?? '') : null;
-          const yedekKazanir = Boolean(t.guncellenme && yedekZaman && yerelZaman !== null && yedekZaman > yerelZaman);
-          const kazanan = yedekKazanir ? 'yedek' : 'yerel';
-          if (yedekKazanir) {
-            const guncel = tSutun.filter((s) => s in gelen && s !== t.birincilAnahtar);
-            vt.calistir(
-              `UPDATE ${t.ad} SET ${guncel.map((s) => `${s} = ?`).join(', ')} WHERE ${t.birincilAnahtar} = ?`,
-              [...guncel.map((s) => gelen[s]), id]
-            );
-            o.guncellenen++;
-          } else {
-            o.atlanan++;
-          }
-          const aciklama = t.guncellenme
-            ? `Birleştirmede iki farklı sürüm bulundu; daha yeni olan (${kazanan}) korundu, diğeri geçmişe kaydedildi.`
-            : 'Birleştirmede aynı kimlikli farklı kayıt bulundu; yerel kayıt korundu.';
-          if (t.gecmisTuru) {
-            gecmisYaz(vt, {
-              varlikTuru: t.gecmisTuru, varlikId: id, islem: 'birlestirme_cakismasi',
-              yapan: secenekler.yapan ?? `birlestirme:${yedek.manifest.makine?.ad ?? 'bilinmeyen'}`,
-              onceki: yedekKazanir ? yerel : gelen, sonraki: yedekKazanir ? gelen : yerel, aciklama
-            });
-          }
-          cakismalar.push({ tablo: t.ad, id, baslik, kazanan, yerelGuncellenme: yerelZaman, yedekGuncellenme: yedekZaman, aciklama });
-        }
-        ilerleme('birleştiriliyor', 55 + Math.round((40 * (sira + 1)) / TABLOLAR.length));
-      });
-      yerelMakine(vt);
-    });
-    if (!kasaVardi) kasayiAnahtarlaAc(vt, yedek.kasaAnahtari);
+    ilerleme('yazılıyor', 60);
+    tamYukleYaz(vt, yedek.tablolar, yedek.kasa, yedek.kasaAnahtari, ilerleme);
     ilerleme('tamamlandı', 100);
-    return { mod: 'birlestir', manifest: yedek.manifest, sayimlar: sayimlar(vt), ozet, cakismalar, guvenlikYedegi: null };
+    return { mod: /** @type {'tamYukle'} */ ('tamYukle'), manifest: yedek.manifest, sayimlar: sayimlar(vt), guvenlikYedegi };
   } finally {
     yedek.kasaAnahtari.fill(0);
   }

@@ -1,11 +1,12 @@
 // scripts/platform/veritabani/depo.mjs için tip bildirimi (sonraki adımlar ve TS testleri import eder).
 import type { Veritabani } from './baglanti.mjs';
+import type { KasaDurumu } from '../kasa.mjs';
 
 export declare class DepoHatasi extends Error {
   constructor(mesaj: string);
 }
 
-export type GecmisIslemi = 'olustur' | 'guncelle' | 'sil' | 'birlestirme_cakismasi';
+export type GecmisIslemi = 'olustur' | 'guncelle' | 'sil' | 'birlestirme_cakismasi' | 'ice_aktarma_uzerine_yazildi';
 export type IkiAsamaliTur = 'yok' | 'totp' | 'sms';
 export type TestVerisiDegeri = string | number | boolean | null;
 
@@ -20,7 +21,12 @@ export interface GirisProfili {
   totpGizli: string | null;
   olusturulma: string; guncellenme: string;
 }
-export interface BaglamProfili { id: string; projeId: string; tur: string; ad: string; alanlar: Record<string, unknown>; olusturulma: string; guncellenme: string }
+export interface BaglamProfili {
+  id: string; projeId: string; tur: string; ad: string;
+  /** { yalnizAd: true } ile listelenirse null. */
+  alanlar: Record<string, unknown> | null;
+  olusturulma: string; guncellenme: string;
+}
 export interface TestVerisiAlani { ad: string; etiket: string; tip: string; hassas: boolean }
 export interface TestVerisiTuru { id: string; projeId: string; ad: string; alanlar: TestVerisiAlani[]; olusturulma: string; guncellenme: string }
 export interface TestVerisiProfili {
@@ -59,6 +65,15 @@ export declare function veritabaniniHazirla(yol?: string | null): Promise<Verita
 export declare function yerelMakine(vt: Veritabani): { id: string; ad: string };
 export declare function makineleriListele(vt: Veritabani): Makine[];
 export declare function sayimlar(vt: Veritabani): Record<string, number>;
+export interface PlatformDurumOzeti {
+  semaSurumu: number;
+  desteklenenSemaSurumu: number;
+  makineId: string | null;
+  kasa: KasaDurumu;
+  sifreliAlanGocu: 'bekliyor' | 'tamam';
+  sayimlar: Record<string, number>;
+}
+export declare function platformDurumOzeti(vt: Veritabani): PlatformDurumOzeti;
 
 export declare function ayarGetir(vt: Veritabani, anahtar: string): unknown;
 export declare function ayarYaz(vt: Veritabani, anahtar: string, deger: unknown): void;
@@ -70,6 +85,7 @@ export declare function projeSil(vt: Veritabani, id: string): boolean;
 
 export declare function ortamKaydet(vt: Veritabani, girdi: { id?: string; projeId: string; ad: string; tabanUrl: string; varsayilan?: boolean }): string;
 export declare function ortamlariListele(vt: Veritabani, projeId: string): Ortam[];
+export declare function ortamGetir(vt: Veritabani, id: string): Ortam | undefined;
 export declare function ortamSil(vt: Veritabani, id: string): boolean;
 
 export declare function girisProfiliKaydet(vt: Veritabani, girdi: {
@@ -87,7 +103,7 @@ export declare function girisProfiliSil(vt: Veritabani, id: string, yapan?: stri
 
 export declare function baglamProfiliKaydet(vt: Veritabani, girdi: { id?: string; projeId: string; tur: string; ad: string; alanlar?: Record<string, unknown>; yapan?: string }): string;
 export declare function baglamProfiliGetir(vt: Veritabani, id: string): BaglamProfili | undefined;
-export declare function baglamProfilleriniListele(vt: Veritabani, projeId: string, tur?: string): BaglamProfili[];
+export declare function baglamProfilleriniListele(vt: Veritabani, projeId: string, tur?: string, secenekler?: { yalnizAd?: boolean }): BaglamProfili[];
 export declare function baglamProfiliSil(vt: Veritabani, id: string, yapan?: string): boolean;
 
 export declare function testVerisiTuruKaydet(vt: Veritabani, girdi: {

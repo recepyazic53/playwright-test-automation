@@ -1,10 +1,22 @@
 // scripts/platform/kasa.mjs için tip bildirimi.
 import type { Veritabani } from './veritabani/baglanti.mjs';
 
-export type KasaHataKodu = 'PAROLA_KISA' | 'PAROLA_YANLIS' | 'KASA_KILITLI' | 'KASA_YOK' | 'KASA_VAR' | 'ZARF_BOZUK';
+export type KasaHataKodu = 'PAROLA_KISA' | 'PAROLA_YANLIS' | 'KASA_KILITLI' | 'KASA_YOK' | 'KASA_VAR' | 'ZARF_BOZUK' | 'COK_DENEME';
 export declare class KasaHatasi extends Error {
-  constructor(kod: KasaHataKodu, mesaj: string);
+  constructor(kod: KasaHataKodu, mesaj: string, ek?: { bekleSaniye?: number });
   readonly kod: KasaHataKodu;
+  /** Yalnızca COK_DENEME'de dolu. */
+  readonly bekleSaniye: number | null;
+}
+export declare class ParolaDenemeSiniri {
+  constructor(secenekler?: { tabanMs?: number; ustSinirMs?: number; simdi?: () => number });
+  readonly ardisikHata: number;
+  kalanMs(): number;
+  kontrolEt(): void;
+  /** @returns uygulanan bekleme (ms) */
+  basarisiz(): number;
+  basarili(): void;
+  dene<T>(fn: () => Promise<T>): Promise<T>;
 }
 export interface ScryptMaliyeti { N: number; r: number; p: number }
 export interface KdfParametreleri extends ScryptMaliyeti { alg: 'scrypt'; tuz: string }
@@ -43,3 +55,7 @@ export declare function tumZarflariDonustur(vt: Veritabani, donustur: (zarf: str
 export declare function parolaDegistir(
   vt: Veritabani, eskiParola: string, yeniParola: string, secenekler?: { kdf?: ScryptMaliyeti }
 ): Promise<KasaDurumu & { yenidenSifrelenen: number }>;
+export declare function gecmisTuruTablosu(varlikTuru: string): string | undefined;
+export declare function satirSifreliAlanlariniTamamla(tablo: string, satir: Record<string, unknown>, anahtar: Buffer): Record<string, unknown>;
+export declare function gecmisAnligiSifrele(varlikTuru: string, anlikMetni: unknown, anahtar: Buffer): unknown;
+export declare function sifreliAlanlariTamamla(vt: Veritabani): number;

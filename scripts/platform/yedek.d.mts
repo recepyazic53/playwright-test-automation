@@ -3,7 +3,7 @@ import type { Veritabani } from './veritabani/baglanti.mjs';
 import type { KdfParametreleri } from './kasa.mjs';
 
 export type IlerlemeFn = (asama: string, yuzde: number) => void;
-export type YedekHataKodu = 'BICIM' | 'SURUM' | 'ONAY_GEREKLI' | 'KASA_UYUSMAZ' | 'VERI';
+export type YedekHataKodu = 'BICIM' | 'SURUM' | 'ONAY_GEREKLI' | 'KASA_UYUSMAZ' | 'VERI' | 'DEGISTI' | 'MESGUL' | 'BULUNAMADI';
 export declare class YedekHatasi extends Error {
   constructor(kod: YedekHataKodu, mesaj: string);
   readonly kod: YedekHataKodu;
@@ -15,22 +15,11 @@ export interface YedekManifesti {
   makine: { id: string; ad: string };
   sayimlar: Record<string, number>;
 }
-export interface BirlestirmeCakismasi {
-  tablo: string;
-  id: string;
-  baslik: string | null;
-  kazanan: 'yerel' | 'yedek';
-  yerelGuncellenme: string | null;
-  yedekGuncellenme: string | null;
-  aciklama: string;
-}
 export interface IceAktarmaSonucu {
-  mod: 'tamYukle' | 'birlestir';
+  mod: 'tamYukle';
   manifest: YedekManifesti;
   sayimlar: Record<string, number>;
   guvenlikYedegi: string | null;
-  cakismalar: BirlestirmeCakismasi[];
-  ozet?: Record<string, { eklenen: number; guncellenen: number; ayni: number; atlanan: number }>;
 }
 
 export declare const YEDEK_UZANTISI: string;
@@ -48,8 +37,19 @@ export declare function yedekIceAktar(
   vt: Veritabani,
   dosya: Buffer,
   parola: string,
-  secenekler: { mod: 'tamYukle' | 'birlestir'; onay?: boolean; ilerleme?: IlerlemeFn; yapan?: string; guvenlikYedegiKlasoru?: string }
+  secenekler: { mod: 'tamYukle'; onay?: boolean; ilerleme?: IlerlemeFn; guvenlikYedegiKlasoru?: string }
 ): Promise<IceAktarmaSonucu>;
+export declare function veritabaniBosMu(vt: Veritabani): boolean;
+export declare function tabloSutunlari(vt: Veritabani, tablo: string): string[];
+export declare function satirEkle(vt: Veritabani, tablo: string, satir: Record<string, unknown>, sutunlar: string[]): void;
+export declare function sutunlariDogrula(vt: Veritabani, tablolar: Record<string, Record<string, unknown>[]>): Map<string, string[]>;
+export declare function tamYukleYaz(
+  vt: Veritabani,
+  tablolar: Record<string, Record<string, unknown>[]>,
+  kasa: { kdf: object; dogrulayici: string },
+  kasaAnahtari: Buffer,
+  ilerleme?: IlerlemeFn
+): void;
 export declare function otomatikYedekAl(
   vt: Veritabani,
   secenekler?: { klasor?: string; saklanacak?: number; simdi?: Date }
