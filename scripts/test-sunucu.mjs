@@ -52,6 +52,7 @@ import {
   senaryoyuDogrula
 } from './dogrulama/senaryo-dogrulayici.mjs';
 import { ekranModeliniOku } from './dogrulama/model-oku.mjs';
+import { platformIsteginiIsle, platformOtomatikYedekZamanla } from './platform/sunucu-platform.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
@@ -215,7 +216,10 @@ function corsBasliklariniUygula(req, res) {
   if (origin === 'null' || origin === undefined) {
     res.setHeader('Access-Control-Allow-Origin', 'null');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    // X-Test-Sunucu-Token / X-Kasa-Parola: /platform/yedek/ice-aktar ham dosya yüklemesi
+    // (JSON gövdesi olmadığı için token ve parola başlıkta gelir).
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Test-Sunucu-Token, X-Kasa-Parola');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Yedek-Sayimlari');
     return true;
   }
   return false;
@@ -1257,6 +1261,13 @@ async function istegiIsle(req, res) {
     return;
   }
 
+  // Platform (yerel veritabanı, kasa, yedek) uç noktaları: /platform/* — ayrıntı ve token
+  // kuralları scripts/platform/sunucu-platform.mjs içinde.
+  if (req.url && req.url.startsWith('/platform/')) {
+    await platformIsteginiIsle(req, res, { token: TOKEN, jsonGonder });
+    return;
+  }
+
   if (req.method === 'POST' && req.url === '/calistir') {
     let istek;
     try {
@@ -2190,6 +2201,9 @@ if (dogrudanCalistirildi) {
   };
   videoTemizliginiCalistir();
   setInterval(videoTemizliginiCalistir, 24 * 60 * 60 * 1000).unref();
+
+  // Platform veritabanı: kasa açıkken günde bir yerel otomatik yedek (veri/yedekler/, son 30).
+  platformOtomatikYedekZamanla();
 
   // Dinleme hatası (ör. port zaten kullanımda) yukarıdaki uncaughtException dinleyicisine
   // düşüp sunucu "ayakta ama dinlemiyor" halde kalmasın diye açıkça ele alınır.

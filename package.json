@@ -36,5 +36,8 @@
     "cross-env": "^10.1.0",
     "dotenv": "^16.6.1",
     "typescript": "^5.9.0"
+  },
+  "dependencies": {
+    "sql.js": "1.14.2"
   }
 }

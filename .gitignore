@@ -27,3 +27,8 @@ Claude outputs/
 
 # Yerel test sunucusunun log dosyası — makineye özeldir.
 scripts/test-sunucu.log
+
+# Platform veritabanı (projeler, profiller, senaryolar, koşular — hassas alanlar şifreli)
+# ve yerel yedekleri: YALNIZCA bu makinede durur, Git'e/buluta ASLA gitmez.
+veri/
+*.tayedek
