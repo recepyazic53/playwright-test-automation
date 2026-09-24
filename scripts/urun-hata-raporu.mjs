@@ -43,6 +43,7 @@ import { adimOzetiCikar } from './rapor/veri-adimlar.mjs';
 import { senaryolariHazirla, jetSeyahatKabulEdilenOdemeSonuclariniOku } from './rapor/veri-senaryolar.mjs';
 import { konsolOzetiYaz, markdownOzetiOlustur } from './rapor/ozet-cikti.mjs';
 import { dashboardHtmlOlustur } from './rapor/dashboard-html.mjs';
+import { ekranModeliniOku } from './dogrulama/model-oku.mjs';
 
 const ortam = process.argv[2];
 
@@ -102,11 +103,20 @@ writeFileSync(markdownDosyaYolu, markdownOzetiOlustur({ ortam, sonKosuEtiketi, s
 // --- 6) Tek ekranlık, etkileşimli HTML dashboard ---
 const { tumSenaryolar, tumUrunler } = await senaryolariHazirla(ortam, urunler);
 const jetSeyahatKabulEdilenOdemeSonuclari = jetSeyahatKabulEdilenOdemeSonuclariniOku(ortam);
+// "Senaryo Oluştur/Düzenle" formunun tek doğrulayıcısı (sayfaya gömülü SenaryoDogrulayici) bu
+// modelle çalışır. Okunamazsa rapor durmaz; form yalnızca sunucu doğrulamasına kalır.
+let jetSeyahatEkranModeli = null;
+try {
+  jetSeyahatEkranModeli = ekranModeliniOku(process.cwd());
+} catch (hata) {
+  console.warn(`[urun-hata-raporu] JetSeyahat ekran modeli okunamadı, form istemci doğrulaması kapalı: ${hata.message}`);
+}
 
 const veri = {
   ortam,
   tumSenaryolar,
   jetSeyahatKabulEdilenOdemeSonuclari,
+  jetSeyahatEkranModeli,
   uretimZamani: new Date(uretimBaslangicMs).toLocaleString('tr-TR'),
   // Sayısal üretim anı (bkz. uretimBaslangicMs) — istemci, localStorage'daki bundan eski
   // dashboard koşularını atar (zaten bu rapordaki Allure sonuçlarında yer alıyorlar).

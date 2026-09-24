@@ -291,6 +291,12 @@
   .senaryo-form-radio-grup label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
   .senaryo-form-alt-blok { border: 1px dashed var(--border); border-radius: 9px; padding: 10px 12px; margin-top: 6px; }
   .senaryo-form-hata { color: var(--critical); font-size: 12.5px; margin: 6px 0; }
+  .senaryo-form-uyari { color: var(--warning); font-size: 12.5px; margin: 6px 0; }
+  /* Tek doğrulayıcının alan bazlı bulguları (dashboard-istemci.js > formBulgulariniGoster). */
+  .senaryo-form-alan-bulgu { font-size: 12px; line-height: 1.4; margin: 4px 0 0; font-weight: 600; }
+  .senaryo-form-alan-bulgu.hata { color: var(--critical); }
+  .senaryo-form-alan-bulgu.uyari { color: var(--warning); font-weight: 500; }
+  .senaryo-form-alan [aria-invalid="true"] { border-color: var(--critical); outline: 1px solid var(--critical); }
   .beklenen-sonuc-yardim { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); line-height: 1.45; }
   .beklenen-gorulen { display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; margin: 10px 0 6px; font-size: 12.5px; }
   .beklenen-gorulen dt { font-weight: 700; color: var(--text-secondary); }

@@ -3,11 +3,16 @@
 //
 // Şu an yalnızca JetSeyahat (prim-hesaplama.spec.ts) kullanıyor; ama hiçbir fonksiyon
 // JetSeyahat'e özel değildir — başka bir ürün de aynı "odemeAdimiDahil + beklenenSonuc"
-// alanlarını senaryo verisine ekleyip beklenenSonucuCoz / adimPlaniniOlustur /
-// mesajIceriyorMu yardımcılarını doğrudan kullanabilir.
+// alanlarını senaryo verisine ekleyip beklenenSonucuCoz (kendi ekran modeliyle) /
+// adimPlaniniOlustur / mesajIceriyorMu yardımcılarını doğrudan kullanabilir.
 //
-// NOT: Bu dosya bilerek hiçbir modül import etmez (yalnızca tip ve saf fonksiyonlar) —
-// böylece Playwright olmadan da (ör. küçük bir Node betiğiyle) birim olarak denenebilir.
+// Beklenen sonuç KURALLARI ve mesajları burada değil, tek doğrulayıcıdadır
+// (scripts/dogrulama/senaryo-dogrulayici.mjs; sunucu ve dashboard formu da aynısını kullanır).
+//
+// NOT: Playwright'a bağımlı hiçbir modül import edilmez (yalnızca saf doğrulayıcı ve
+// node:fs/path kullanan model yükleyicisi) — Playwright'sız birim olarak denenebilir.
+import { beklenenSonucuCozumle, hatalariMetneCevir } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
+import { jetSeyahatModeliniYukle, type YuklenmisEkranModeli } from './ekran-modeli';
 
 /** Bir iş kuralı hatasının beklenebileceği adımlar (pipeline sırasıyla). */
 export type BeklenenHataAdimi = 'primHesaplama' | 'policelestirme' | 'odeme';
@@ -37,12 +42,6 @@ export type BeklenenSonucAlanlari = {
   beklenenSonuc?: BeklenenSonuc;
 };
 
-/**
- * Artık desteklenmeyen eski alanlar (beklenenSonuc'tan önceki biçim). Veride kalmadı;
- * elle yeniden eklenirse sessizce yok sayılmasın diye beklenenSonucuCoz reddeder.
- */
-export const ESKI_BEKLENEN_SONUC_ALANLARI = ['beklenenHataMesaji', 'beklenenHataAdimi'] as const;
-
 export type CozulmusBeklenenSonuc = {
   odemeAdimiDahil: boolean;
   beklenenSonuc: BeklenenSonuc;
@@ -61,59 +60,30 @@ export function adimAdi(adim: BeklenenHataAdimi): string {
 
 /**
  * Senaryodaki beklenen sonuç alanlarını TEK bir biçime çevirir ve kurallara uyduğunu
- * doğrular; uymuyorsa açıklayıcı bir Türkçe hata fırlatır.
- * Kurallar (test-sunucu.mjs > beklenenSonucuDogrula / beklenenSonucuFormaCevir ile AYNI
- * tutulmalı):
+ * doğrular; uymuyorsa açıklayıcı bir Türkçe hata fırlatır. Kurallar ve mesajlar tek
+ * doğrulayıcıdan (senaryo-dogrulayici.mjs > beklenenSonucuCozumle) ve ekran modelinden
+ * (senaryoDuzeyi > odemeAdimiDahil / beklenenSonuc varyantları, adım seçeneklerinin koşulları)
+ * gelir:
  *  - odemeAdimiDahil ZORUNLU ve boolean (varsayılan yok).
  *  - Eski beklenenHataMesaji/beklenenHataAdimi alanları kabul edilmez.
  *  - beklenenSonuc yoksa basarili.
  *  - "policelestirme" / "odeme" adımında hata beklemek, ödeme adımının dahil olmasını gerektirir.
  *  - isKuraliHatasi için mesaj zorunludur (boş olamaz).
+ * model: ürünün ekran modeli (varsayılan JetSeyahat).
  */
-export function beklenenSonucuCoz(senaryo: BeklenenSonucAlanlari, senaryoAdi = 'Senaryo'): CozulmusBeklenenSonuc {
-  const hata = (mesaj: string): Error => new Error(`${senaryoAdi}: ${mesaj}`);
-
-  const eskiAlanlar = ESKI_BEKLENEN_SONUC_ALANLARI.filter((alan) => alan in senaryo);
-  if (eskiAlanlar.length) {
-    throw hata(
-      `Eski ${eskiAlanlar.map((a) => `"${a}"`).join('/')} alanları artık desteklenmiyor; ` +
-        '"beklenenSonuc": { "tip": "isKuraliHatasi", "adim": "...", "mesaj": "..." } kullanın.'
-    );
-  }
-  if (typeof senaryo.odemeAdimiDahil !== 'boolean') {
-    throw hata(
-      '"odemeAdimiDahil" zorunludur ve true ya da false olmalıdır (ödeme adımının senaryoya dahil olup ' +
-        'olmadığı; varsayılan yoktur — senaryo verisine açıkça yazın).'
-    );
-  }
-  const odemeAdimiDahil = senaryo.odemeAdimiDahil;
-  const beklenenSonuc: BeklenenSonuc = senaryo.beklenenSonuc ?? { tip: 'basarili' };
-
-  if (!beklenenSonuc || typeof beklenenSonuc !== 'object') {
-    throw hata('"beklenenSonuc" bir nesne olmalıdır.');
-  }
-  if (beklenenSonuc.tip === 'basarili') {
-    return { odemeAdimiDahil, beklenenSonuc: { tip: 'basarili' } };
-  }
-  if (beklenenSonuc.tip !== 'isKuraliHatasi') {
-    throw hata('"beklenenSonuc.tip" "basarili" ya da "isKuraliHatasi" olmalıdır.');
-  }
-  if (!BEKLENEN_HATA_ADIMLARI.includes(beklenenSonuc.adim)) {
-    throw hata('"beklenenSonuc.adim" "primHesaplama", "policelestirme" ya da "odeme" olmalıdır.');
-  }
-  if (typeof beklenenSonuc.mesaj !== 'string' || !beklenenSonuc.mesaj.trim()) {
-    throw hata('İş kuralı hatası bekleniyorsa beklenen mesaj boş olamaz.');
-  }
-  if (beklenenSonuc.adim !== 'primHesaplama' && !odemeAdimiDahil) {
-    throw hata(
-      `"${adimAdi(beklenenSonuc.adim)}" adımında hata beklemek için ödeme adımının dahil olması ` +
-        '(odemeAdimiDahil: true) gerekir.'
-    );
-  }
-  return {
-    odemeAdimiDahil,
-    beklenenSonuc: { tip: 'isKuraliHatasi', adim: beklenenSonuc.adim, mesaj: beklenenSonuc.mesaj.trim() }
-  };
+export function beklenenSonucuCoz(
+  senaryo: BeklenenSonucAlanlari,
+  senaryoAdi = 'Senaryo',
+  model: YuklenmisEkranModeli = jetSeyahatModeliniYukle()
+): CozulmusBeklenenSonuc {
+  const { hatalar, cozulmus } = beklenenSonucuCozumle(senaryo, { model: model.model, altModeller: model.altModeller });
+  if (hatalar.length || !cozulmus) throw new Error(`${senaryoAdi}: ${hatalariMetneCevir(hatalar)}`);
+  const { odemeAdimiDahil, beklenenSonuc } = cozulmus;
+  if (beklenenSonuc.tip === 'basarili') return { odemeAdimiDahil, beklenenSonuc: { tip: 'basarili' } };
+  const adim = BEKLENEN_HATA_ADIMLARI.find((a) => a === beklenenSonuc.adim);
+  // (Modelin adım seçenekleri BEKLENEN_HATA_ADIMLARI ile aynıdır — koruma testi a.)
+  if (!adim) throw new Error(`${senaryoAdi}: beklenenSonuc.adim "${beklenenSonuc.adim}" bu akışta desteklenmiyor.`);
+  return { odemeAdimiDahil, beklenenSonuc: { tip: 'isKuraliHatasi', adim, mesaj: beklenenSonuc.mesaj } };
 }
 
 /**

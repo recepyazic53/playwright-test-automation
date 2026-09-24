@@ -78,7 +78,8 @@ export type AdlandirilmisKosul = {
   ifade: KosulIfadesi;
   aciklama?: string;
   hedefIfade?: KosulIfadesi;
-  bilinenDurumlar?: Array<{ acente: string; gorunur: boolean | null; kaynak: string }>;
+  /** Acente bazında bilinen görünürlük; doğrulayıcı acentePartaji ile eşleştirir. */
+  bilinenDurumlar?: Array<{ acente: string; acentePartaji?: string; gorunur: boolean | null; kaynak: string }>;
   not?: string;
 };
 
@@ -122,7 +123,7 @@ export type AltModelBasvurusu = { dosya: string; bolum: string };
 export type BeklenenSonucVaryanti = {
   tip: string;
   anlam: string;
-  alanlar?: Record<string, { secenekler?: Secenek[]; tip?: AlanTipi; zorunlu?: boolean; eslesmeKurali?: string }>;
+  alanlar?: Record<string, { etiket?: string; secenekler?: Secenek[]; tip?: AlanTipi; zorunlu?: boolean; eslesmeKurali?: string }>;
 };
 
 export type Alan = {
@@ -793,4 +794,14 @@ export function modelFormKontrolleri(yuklenmis: YuklenmisEkranModeli): Map<strin
     if (bolum) ekle(tumAlanlar(bolum.alanlar), `${altModel?.id}.`);
   }
   return harita;
+}
+
+// ---- JetSeyahat modeli (önbellekli) ----
+
+let jetSeyahatOnbellegi: YuklenmisEkranModeli | undefined;
+
+/** tests/ekran-modelleri/jet-seyahat.model.json — bir kez yüklenip doğrulanır, sonra önbellekten. */
+export function jetSeyahatModeliniYukle(): YuklenmisEkranModeli {
+  jetSeyahatOnbellegi ??= ekranModeliniYukle(join(EKRAN_MODELLERI_KLASORU, 'jet-seyahat.model.json'));
+  return jetSeyahatOnbellegi;
 }

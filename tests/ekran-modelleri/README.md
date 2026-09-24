@@ -17,7 +17,7 @@ Yükleyici ve tipler `tests/support/ekran-modeli.ts` içinde (`ekranModeliniYukl
    - sunucunun `JET_SEYAHAT_FORM_ALANLARI` listesi ve TS senaryo tipinin modelle aynı olması,
    - dashboard formundaki `sof_*` kontrollerinin modelle birebir eşleşmesi.
 2. **Tip üretimi**: senaryo tipi (`test-data.ts`) modelden üretilecek.
-3. **Tek doğrulayıcı**: sunucu, spec ve istemci aynı model tabanlı kuralları kullanacak (`dogrulama` alanındaki bugünkü farklar kapanacak).
+3. **Tek doğrulayıcı** (yapıldı): `scripts/dogrulama/senaryo-dogrulayici.mjs` (+ `.d.mts`). Spec (`tests/support/senaryo-dogrulama.ts`, `beklenen-sonuc.ts > beklenenSonucuCoz`), test sunucusu (`/jetseyahat-senaryo/dene`, `/kaydet`, `/senaryo-guncelle` → geçersizse 400 + `hatalar: [{ alan, mesaj }]`) ve dashboard formu (sayfaya `SenaryoDogrulayici` olarak gömülür, hatalar alanın altında) AYNI kodu ve AYNI Türkçe mesajları kullanır. `senaryoyuDogrula(senaryo, { model, altModeller, ortak, ortam, simdi, kaynak: 'kayit' | 'girdi' }) → { gecerli, hatalar, uyarilar }`. Kurallar modelden okunur: `zorunlu`, `secenekler` / `bagimlilik.secenekHaritasi`, `gorunurluk` (+ `kosullar.*.bilinenDurumlar[].acentePartaji` ile acenteye göre), `eslesme.profilHavuzu`, alt model kart alanları, `beklenenSonuc` varyantları ve seçenek `kosul`'u, tarih `bicim`'i. Modelde ifade edilemeyenler (TC kontrol haneleri, VKN/telefon biçimi, kartın son kullanma ay+yıl kontrolü, "ikisi birlikte" kuralları) yalnızca o dosyada. Birim testleri: `tests/birim/senaryo-dogrulayici.spec.ts`.
 4. **Form**: dashboard formu bölüm bölüm modelden çizilecek. `form.id` değerleri (`sof_*`) korunacak.
 5. **Genel doldurucu**: POM'daki `alanDoldur(alan, deger)`, alanın `tip` + `doldurucu` + `konum` bilgisiyle çalışacak.
 6. **Crawler**: canlı ekranın anlık görüntüsü modelle karşılaştırılacak ve farklar raporlanacak (yeni alan, yeni seçenek, kalkan alan, etiket değişikliği). Crawler'ın bulduğu ama testin dokunmadığı alanlar `yapilandirma: "dokunulmuyor"` ile eklenecek.
@@ -99,6 +99,10 @@ Genel doldurucunun `tip` + `doldurucu` ile seçeceği adlandırılmış işleyic
 ## Senaryo verisi kuralları (modelle birlikte gelenler)
 
 - `odemeAdimiDahil` **her senaryoda zorunludur** ve varsayılanı yoktur. Eksikse `beklenenSonucuCoz` (TS) hata fırlatır. Sunucu `/senaryo-getir` ve `/senaryo-guncelle` isteklerinde 422 döner.
+- `kapsam` / `alternatif` modelin seçeneklerinden biri olmalı (alternatif kapsama göre). Ekranda yeni bir değer çıkarsa önce modele eklenir.
+- `covidTeminati` yalnızca acentenin ekranında görünüyorsa (ya da acente `bilinenDurumlar`'da yoksa) zorunludur; 30856'da verilmezse hata yok, verilirse uyarı.
+- Serbest kimlik: TC 11 hane + resmi kontrol haneleri, VKN 10 hane, cep telefonu `5XXXXXXXXX`, doğum tarihi `gg.aa.yyyy` ve bugünden ileri değil. Hazır profil ile serbest kimlik aynı anda verilemez.
+- Senaryoya özel kartın son kullanma tarihi (ay + yıl) bu ay ya da sonrası olmalı. Ortak kartın (`ortak.json`) süresi geçmişse yalnızca **uyarı** verilir.
 - `beklenenSonuc` yoksa `{ "tip": "basarili" }` kabul edilir.
 - Eski `beklenenHataMesaji` / `beklenenHataAdimi` alanları artık desteklenmiyor. TS ve sunucu bu alanları reddeder.
 

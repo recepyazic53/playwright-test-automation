@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { tarayiciBetiginiOlustur } from '../dogrulama/tarayici-paketi.mjs';
 
 const buKlasor = dirname(fileURLToPath(import.meta.url));
 const ISTEMCI_BASLANGIC_ISARETI = '// --- İSTEMCİ KODU BAŞLANGICI ---\n';
@@ -313,6 +314,8 @@ ${stilOku()}</style>
   // okur; başka bir origin bu isteği asla tetikleyemez.
   var ORTAM = ${JSON.stringify(ortam)};
   var TEST_SUNUCU = { taban: ${JSON.stringify(testSunucuTaban)}, token: ${JSON.stringify(testSunucuToken)} };
+  // TEK senaryo doğrulayıcısı (scripts/dogrulama/senaryo-dogrulayici.mjs) — sunucu ve spec ile aynı kod.
+${tarayiciBetiginiOlustur().replace(/<\/(script)/gi, '<\\/$1')}
 ${istemciBetiginiOku()}</script>
 </body>
 </html>`;

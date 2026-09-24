@@ -31,7 +31,7 @@ import {
   beklenenSonucuCoz,
   type AkisAdimi
 } from '../../support/beklenen-sonuc';
-import { senaryoKrediKartiniDogrula } from '../../support/senaryo-kredi-karti';
+import { jetSeyahatSenaryosunuDogrulaVeyaFirlat } from '../../support/senaryo-dogrulama';
 import { loadJetSeyahatData, loadOrtakData } from '../../support/test-data';
 
 const environment = getEnvironmentName();
@@ -49,10 +49,11 @@ for (const senaryo of urunData.senaryolar) {
   let beklenenSonucAciklamasi: string;
   let gecersizVeriHatasi: Error | undefined;
   try {
+    // Tüm senaryo (seçenekler, acenteye göre zorunlu alanlar, kimlik biçimleri, senaryoya
+    // özel kart...) TEK doğrulayıcıyla (scripts/dogrulama/senaryo-dogrulayici.mjs — sunucu ve
+    // dashboard formu da aynısını kullanır) doğrulanır; geçersizse yalnızca bu test düşer.
+    jetSeyahatSenaryosunuDogrulaVeyaFirlat(senaryo, ortakData, environment, `"${senaryo.baslik}" senaryosu`);
     const cozulmus = beklenenSonucuCoz(senaryo, `"${senaryo.baslik}" senaryosu`);
-    // Senaryoya özel kart (varsa) da burada doğrulanır: ödeme dahil değilken kart
-    // verilmişse ya da kart geçersizse yalnızca bu test açıklayıcı hatayla düşer.
-    senaryoKrediKartiniDogrula(senaryo.krediKarti, cozulmus.odemeAdimiDahil, `"${senaryo.baslik}" senaryosu`);
     adimPlani = adimPlaniniOlustur(cozulmus, urunData.kabulEdilenOdemeSonuclari);
     beklenenSonucAciklamasi = beklenenSonucEtiketi(cozulmus);
   } catch (hata) {

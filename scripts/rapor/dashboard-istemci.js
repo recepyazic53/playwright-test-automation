@@ -11,7 +11,9 @@
 //   VERI        — urun-hata-raporu.mjs'nin hesapladığı tüm rapor verisi
 //   ORTAM       — 'test' | 'canli'
 //   TEST_SUNUCU — { taban, token } (scripts/test-sunucu.mjs)
-/* global VERI, ORTAM, TEST_SUNUCU */
+//   SenaryoDogrulayici — TEK senaryo doğrulayıcısı (scripts/dogrulama/senaryo-dogrulayici.mjs,
+//                 tarayici-paketi.mjs ile sarılıp gömülür; sunucu ve spec aynı dosyayı kullanır)
+/* global VERI, ORTAM, TEST_SUNUCU, SenaryoDogrulayici */
 // --- İSTEMCİ KODU BAŞLANGICI ---
   // "Adım bazlı başarı" tablosunda o an açık olan ürünün adım listesi (satır tıklama
   // olay dinleyicilerinin büyük veriyi DOM'a yazmadan erişmesi için).
@@ -2053,6 +2055,10 @@
   // "Çoklu" sorgu tipinde kullanılacak sabit Excel bilgisi. Modal her açıldığında tazelenir;
   // fetch tamamlanana kadar boş listelerle başlar.
   var SENARYO_OLUSTUR_KIMLIK_PROFILLERI = { ozel: {}, tuzel: {} };
+  // Doğrulayıcının ortak veri bağlamı (hazır profiller, acente profili → acente kodu, ortak
+  // kart). Yardımcı veri gelene kadar null: o zaman profil varlığı / acenteye bağlı
+  // görünürlük kontrolleri atlanır (sunucu aynı kuralları ayrıca uygular).
+  var SENARYO_OLUSTUR_ORTAK_BAGLAMI = null;
   var SENARYO_OLUSTUR_COKLU_SORGU_BILGISI = {};
   // Popup'ta "Çoklu" sorgu için özel bir Excel yüklendiyse (bkz. cokluSorguDosyasiSecildi),
   // sunucunun döndüğü { dosyaYolu, dosyaAdi } burada tutulur; senaryoOlusturFormundanVeriTopla
@@ -2116,6 +2122,11 @@
           beklenenSonucAlaniniGuncelle();
         }
         SENARYO_OLUSTUR_VARSAYILAN_KART = sonuc.varsayilanKrediKarti || null;
+        SENARYO_OLUSTUR_ORTAK_BAGLAMI = {
+          kimlikProfilleri: SENARYO_OLUSTUR_KIMLIK_PROFILLERI,
+          acenteProfilleri: sonuc.acenteProfilleri || undefined,
+          varsayilanKrediKarti: SENARYO_OLUSTUR_VARSAYILAN_KART
+        };
         // Yeni senaryoda alanlar henüz boşsa (ve kullanıcı dokunmadıysa) ortak kartla doldurulur.
         if (!SENARYO_OLUSTUR_KART_DOLDURULDU && document.getElementById('sof_kartNo')) {
           odemeKartiniDoldur(SENARYO_OLUSTUR_VARSAYILAN_KART);
@@ -2251,10 +2262,8 @@
   }
 
   // ---- "Ödeme bilgileri" (senaryoya özel kart) ----
-  // Taksit seçenekleri: sunucu (test-sunucu.mjs > senaryoKrediKartiniDogrula) 1-12 kabul eder;
-  // metin, ortak karttaki "Tek Çekim" kalıbıyla aynı üretilir.
-  var ODEME_TAKSIT_UST_SINIRI = 12;
-  function odemeTaksitMetni(n) { return n === 1 ? 'Tek Çekim' : n + ' Taksit'; }
+  // Taksit seçenekleri ve metinleri tek doğrulayıcıdan (SenaryoDogrulayici.TAKSIT_UST_SINIRI /
+  // taksitMetni — ortak karttaki "Tek Çekim" kalıbı); kart kuralları da orada.
 
   function odemeBilgileriBlokHtml() {
     var ayHtml = '';
@@ -2267,8 +2276,8 @@
       yilHtml += '<option value="' + yil + '">' + yil + '</option>';
     }
     var taksitHtml = '';
-    for (var t = 1; t <= ODEME_TAKSIT_UST_SINIRI; t++) {
-      taksitHtml += '<option value="' + t + '">' + escapeHtml(odemeTaksitMetni(t)) + '</option>';
+    for (var t = 1; t <= SenaryoDogrulayici.TAKSIT_UST_SINIRI; t++) {
+      taksitHtml += '<option value="' + t + '">' + escapeHtml(SenaryoDogrulayici.taksitMetni(t)) + '</option>';
     }
     // Kart no / CVV: tarayıcı kaydetmesin/otomatik doldurmasın diye autocomplete kapalı,
     // ekranda maskeli (type=password); "göster" ile geçici olarak açılır.
@@ -2356,16 +2365,6 @@
     };
   }
 
-  // Yalnızca teste giden değerler karşılaştırılır (metinler görüntü amaçlı).
-  function odemeKartlariAyniMi(a, b) {
-    if (!a || !b) return false;
-    return a.isim === b.isim && a.soyisim === b.soyisim && a.kartNo === b.kartNo &&
-      a.guvenlikKodu === b.guvenlikKodu &&
-      String((a.sonKullanmaAyi || {}).deger) === String((b.sonKullanmaAyi || {}).deger) &&
-      String((a.sonKullanmaYili || {}).deger) === String((b.sonKullanmaYili || {}).deger) &&
-      String((a.taksit || {}).deger) === String((b.taksit || {}).deger);
-  }
-
   // Senaryoya yazılacak kart: ödeme dahil değilse ya da kart ortak kartla AYNIYSA undefined
   // (senaryo ortak kartı kullanır). Ortak kart alınamadıysa ve alanlar tamamen boşsa da
   // gönderilmez; bir şey yazılmışsa gönderilir (sunucu ayrıca ortak kartla karşılaştırır).
@@ -2374,26 +2373,10 @@
     if (!odemeKutusu || !odemeKutusu.checked || !document.getElementById('sof_kartNo')) return undefined;
     var kart = odemeKartiniFormdanOku();
     if (SENARYO_OLUSTUR_VARSAYILAN_KART) {
-      return odemeKartlariAyniMi(kart, SENARYO_OLUSTUR_VARSAYILAN_KART) ? undefined : kart;
+      return SenaryoDogrulayici.krediKartlariAyniMi(kart, SENARYO_OLUSTUR_VARSAYILAN_KART) ? undefined : kart;
     }
     var bosMu = !kart.isim && !kart.soyisim && !kart.kartNo && !kart.guvenlikKodu;
     return bosMu ? undefined : kart;
-  }
-
-  // İstemci tarafı kart kontrolleri (sunucu aynılarını ayrıca uygular). Mesajlar kart
-  // numarasını/CVV'yi içermez.
-  function odemeKartiDogrula(kart) {
-    if (!kart) return null;
-    if (!kart.isim || !kart.soyisim) return 'Kart üzerindeki ad ve soyad boş olamaz.';
-    if (!/^\d{16}$/.test(kart.kartNo)) return 'Kart numarası 16 haneli olmalıdır (yalnızca rakam; boşluk bırakabilirsiniz).';
-    if (!/^\d{3,4}$/.test(kart.guvenlikKodu)) return 'CVV 3 ya da 4 haneli olmalıdır.';
-    var ay = parseInt(kart.sonKullanmaAyi.deger, 10);
-    if (!(ay >= 1 && ay <= 12)) return 'Son kullanma ayı 01-12 arasında olmalıdır.';
-    if (!/^\d{4}$/.test(String(kart.sonKullanmaYili.deger))) return 'Son kullanma yılı seçilmelidir.';
-    if (parseInt(kart.sonKullanmaYili.deger, 10) < new Date().getFullYear()) return 'Son kullanma yılı geçmişte olamaz.';
-    var taksit = parseInt(kart.taksit.deger, 10);
-    if (!(taksit >= 1 && taksit <= ODEME_TAKSIT_UST_SINIRI)) return 'Taksit 1-' + ODEME_TAKSIT_UST_SINIRI + ' arasında olmalıdır.';
-    return null;
   }
 
   // duzenleme: null → "+ Senaryo Oluştur" (yeni senaryo). Dolu → "✎ Düzenle" (bkz.
@@ -2695,11 +2678,7 @@
     sonucAlani.innerHTML = '';
 
     var veri = senaryoOlusturFormundanVeriTopla();
-    var dogrulamaHatasi = senaryoFormuDogrula(veri);
-    if (dogrulamaHatasi) {
-      hataAlani.innerHTML = '<p class="senaryo-form-hata">' + escapeHtml(dogrulamaHatasi) + '</p>';
-      return;
-    }
+    if (!formBulgulariniGoster(senaryoFormuDogrula(veri), hataAlani)) return;
 
     kosButonu.disabled = true;
     kosButonu.textContent = 'Koşuluyor...';
@@ -2717,27 +2696,97 @@
       .then(function (sonuc) {
         kosButonu.disabled = false;
         kosButonu.textContent = 'Senaryoyu Koş';
+        // Sunucu doğrulaması reddettiyse (400 + hatalar) koşu hiç başlamadı: alanlarda gösterilir.
+        if (sonuc && !sonuc.basarili && Array.isArray(sonuc.hatalar)) {
+          sonucAlani.innerHTML = '';
+          SENARYO_OLUSTUR_SON_SONUC = null;
+          formBulgulariniGoster(sonuc, hataAlani);
+          return;
+        }
         SENARYO_OLUSTUR_SON_SONUC = { veri: veri, sonuc: sonuc };
         senaryoOlusturSonucGoster(sonuc);
       });
   }
 
-  // "Senaryoyu Koş" ve "Değişiklikleri Kaydet"in ORTAK istemci tarafı kontrolleri (sunucu
-  // aynı kuralları ayrıca uygular). Hata yoksa null, varsa kullanıcıya gösterilecek metin.
+  // "Senaryoyu Koş" ve "Değişiklikleri Kaydet"in ORTAK istemci tarafı kontrolü: TEK doğrulayıcı
+  // (SenaryoDogrulayici — sunucu ve Playwright spec'i AYNI kodu ve mesajları kullanır), ekran
+  // modeli (VERI.jetSeyahatEkranModeli) ve sunucudan gelen ortak veri bağlamıyla çalışır.
+  // Dönüş: { gecerli, hatalar: [{ alan, mesaj }], uyarilar }.
+  function senaryoDogrulamaBaglami() {
+    var m = VERI.jetSeyahatEkranModeli || {};
+    return {
+      model: m.model,
+      altModeller: m.altModeller,
+      ortak: SENARYO_OLUSTUR_ORTAK_BAGLAMI || undefined,
+      ortam: ORTAM,
+      kaynak: 'girdi'
+    };
+  }
+
   function senaryoFormuDogrula(veri) {
-    if (!veri.kapsam || !veri.alternatif) return 'Kapsam ve alternatif alanları zorunludur (seçenekler yüklenene kadar bekleyin).';
-    if (veri.sorguTipi === 'coklu' && SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME && !veri.cokluSorguKisiSayisi) {
-      return 'Özel bir Excel yüklediniz — Exceldeki kişi sayısını da girmelisiniz.';
+    // Model gömülmemişse (eski/bozuk rapor) istemci kontrolü atlanır; sunucu yine doğrular.
+    if (!VERI.jetSeyahatEkranModeli || !VERI.jetSeyahatEkranModeli.model) return { gecerli: true, hatalar: [], uyarilar: [] };
+    return SenaryoDogrulayici.senaryoyuDogrula(veri, senaryoDogrulamaBaglami());
+  }
+
+  // Bulgunun (alan yolu, ör. "sigortaliKimligi.tcKimlikNo") formdaki kontrolü: modelin form
+  // karşılıklarından türetilen adaylardan sayfada VAR olan ilki (radyo grubunda name).
+  function formKontrolunuBul(alan) {
+    if (!alan || !VERI.jetSeyahatEkranModeli) return null;
+    var adaylar = SenaryoDogrulayici.alanFormKimlikleri(alan, senaryoDogrulamaBaglami());
+    for (var i = 0; i < adaylar.length; i++) {
+      var el = document.getElementById(adaylar[i]) || document.querySelector('[name="' + adaylar[i] + '"]');
+      if (el) return el;
     }
-    if (veri.acenteKodu && !veri.acenteKullanicisi) return 'Acente kodu girildiyse acente kullanıcı kodu da girilmelidir.';
-    if (veri.beklenenSonuc.tip === 'isKuraliHatasi' && !veri.beklenenSonuc.mesaj) return 'İş kuralı hatası bekleniyorsa beklenen mesaj boş olamaz.';
-    if (veri.beklenenSonuc.tip === 'isKuraliHatasi' && veri.beklenenSonuc.adim !== 'primHesaplama' && !veri.odemeAdimiDahil) {
-      return 'Poliçeleştirme/Ödeme adımında hata beklemek için "Ödeme adımını dahil et" işaretlenmelidir.';
-    }
-    if (veri.krediKarti && !veri.odemeAdimiDahil) return 'Ödeme adımı dahil değilken kart bilgisi gönderilemez.';
-    var kartHatasi = odemeKartiDogrula(veri.krediKarti);
-    if (kartHatasi) return 'Ödeme bilgileri: ' + kartHatasi;
     return null;
+  }
+
+  function formBulgulariniTemizle() {
+    var form = document.getElementById('senaryoOlusturForm');
+    if (!form) return;
+    Array.prototype.forEach.call(form.querySelectorAll('.senaryo-form-alan-bulgu'), function (p) { p.remove(); });
+    Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid="true"]'), function (k) { k.removeAttribute('aria-invalid'); });
+  }
+
+  // Hataları/uyarıları ilgili alanın ALTINA yazar; alanı görünmeyen (ör. gizli alt blok) ya da
+  // formda karşılığı olmayan bulgular özet alanında listelenir. Hata yoksa true döner.
+  function formBulgulariniGoster(sonuc, ozetAlani) {
+    formBulgulariniTemizle();
+    var hatalar = (sonuc && sonuc.hatalar) || [];
+    var uyarilar = (sonuc && sonuc.uyarilar) || [];
+    var ozettekiler = [];
+    var ilkHataliKontrol = null;
+    var yerlestir = function (bulgu, tur) {
+      var kontrol = formKontrolunuBul(bulgu.alan);
+      var kap = kontrol && kontrol.closest('.senaryo-form-alan');
+      if (!kap || kap.offsetParent === null) {
+        ozettekiler.push({ bulgu: bulgu, tur: tur });
+        return;
+      }
+      var p = document.createElement('p');
+      p.className = 'senaryo-form-alan-bulgu ' + tur;
+      p.setAttribute('data-alan', bulgu.alan);
+      p.textContent = bulgu.mesaj;
+      kap.appendChild(p);
+      if (tur === 'hata') {
+        kontrol.setAttribute('aria-invalid', 'true');
+        if (!ilkHataliKontrol) ilkHataliKontrol = kontrol;
+      }
+    };
+    hatalar.forEach(function (h) { yerlestir(h, 'hata'); });
+    uyarilar.forEach(function (u) { yerlestir(u, 'uyari'); });
+    if (ozetAlani) {
+      ozetAlani.innerHTML =
+        (hatalar.length
+          ? '<p class="senaryo-form-hata" role="alert">Formda ' + hatalar.length + ' hata var; işaretli alanları düzeltin.</p>'
+          : '') +
+        ozettekiler.map(function (o) {
+          return '<p class="' + (o.tur === 'hata' ? 'senaryo-form-hata' : 'senaryo-form-uyari') + '">' +
+            escapeHtml((o.bulgu.alan ? o.bulgu.alan + ': ' : '') + o.bulgu.mesaj) + '</p>';
+        }).join('');
+    }
+    if (ilkHataliKontrol && typeof ilkHataliKontrol.focus === 'function') ilkHataliKontrol.focus();
+    return hatalar.length === 0;
   }
 
   function senaryoOlusturSonucGoster(sonuc) {
@@ -2986,6 +3035,10 @@
             '<p style="color:var(--good);font-weight:700;font-size:12.5px;">Kaydedildi' +
             (kosuyaDahil ? ' ve koşuya dahil edildi' : '; koşuya dahil edilmedi (Senaryolar tablosunda "Koşuda" anahtarıyla sonradan eklenebilir)') +
             '. "Senaryolar" listesinde görünmesi için dashboard sayfasını yeniden üretip (npm run rapor:' + escapeHtml(ORTAM) + ') tarayıcıyı yenileyin.</p>';
+        } else if (sonuc && Array.isArray(sonuc.hatalar)) {
+          // Sunucu doğrulaması (tek doğrulayıcı) reddetti: alanlarda + formun özet alanında.
+          formBulgulariniGoster(sonuc, document.getElementById('sof_hataAlani'));
+          hataAlani.innerHTML = '<p class="senaryo-form-hata">Kaydedilemedi: formdaki işaretli alanları düzeltin.</p>';
         } else {
           hataAlani.innerHTML = '<p class="senaryo-form-hata">' + escapeHtml((sonuc && sonuc.mesaj) || 'Kaydedilemedi.') + '</p>';
         }
@@ -3170,12 +3223,10 @@
     kaydetAlani.innerHTML = '';
     var yeniBaslik = document.getElementById('sof_duzenleBaslik').value.trim();
     var veri = senaryoOlusturFormundanVeriTopla();
-    var dogrulamaHatasi = !yeniBaslik ? 'Başlık boş olamaz.' : senaryoFormuDogrula(veri);
-    if (!dogrulamaHatasi && senaryoCalisiyorMu(SENARYO_DUZENLE.anahtar)) {
-      dogrulamaHatasi = 'Bu senaryo şu an koşuyor. Koşu bitince ya da durdurulunca tekrar kaydedin.';
-    }
-    if (dogrulamaHatasi) {
-      hataAlani.innerHTML = '<p class="senaryo-form-hata">' + escapeHtml(dogrulamaHatasi) + '</p>';
+    // Başlık da doğrulanır (düzenleme formunda sof_duzenleBaslik alanına yazılır).
+    if (!formBulgulariniGoster(senaryoFormuDogrula(Object.assign({}, veri, { baslik: yeniBaslik })), hataAlani)) return;
+    if (senaryoCalisiyorMu(SENARYO_DUZENLE.anahtar)) {
+      hataAlani.innerHTML = '<p class="senaryo-form-hata">Bu senaryo şu an koşuyor. Koşu bitince ya da durdurulunca tekrar kaydedin.</p>';
       return;
     }
     // Başlık değiştiyse önce sayfa içi bir uyarı gösterilir; kullanıcı AÇIKÇA onaylamadan
@@ -3225,6 +3276,10 @@
       .then(function (sonuc) {
         kaydetButonu.disabled = false;
         kaydetButonu.textContent = 'Değişiklikleri Kaydet';
+        if (sonuc && !sonuc.basarili && Array.isArray(sonuc.hatalar)) {
+          formBulgulariniGoster(sonuc, hataAlani);
+          return;
+        }
         if (!sonuc || !sonuc.basarili) {
           hataAlani.innerHTML = '<p class="senaryo-form-hata">Kaydedilemedi: ' + escapeHtml((sonuc && sonuc.mesaj) || 'bilinmeyen hata') + '</p>';
           return;

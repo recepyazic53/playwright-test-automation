@@ -20,17 +20,17 @@
       "ifade": { "calismaZamani": "gorunurse" },
       "hedefIfade": { "acente": { "alanSeti": "tam" } },
       "bilinenDurumlar": [
-        { "acente": "30856 (ortak.kullaniciDegistir.varsayilan)", "gorunur": false, "kaynak": "jet-seyahat.page.ts yorumu" },
-        { "acente": "30447 (ortak.kullaniciDegistir.JetSeyahatÖzelTanımlıAcente)", "gorunur": true, "kaynak": "senaryo başlıkları + kayak senaryosu; canlıda doğrulanmadı" }
+        { "acente": "30856 (ortak.kullaniciDegistir.varsayilan)", "acentePartaji": "30856", "gorunur": false, "kaynak": "jet-seyahat.page.ts yorumu" },
+        { "acente": "30447 (ortak.kullaniciDegistir.JetSeyahatÖzelTanımlıAcente)", "acentePartaji": "30447", "gorunur": true, "kaynak": "senaryo başlıkları + kayak senaryosu; canlıda doğrulanmadı" }
       ],
-      "not": "POM bugün acenteye göre değil, her alanın isVisible() sonucuna göre karar veriyor. Hedef: acente profiline 'jetSeyahatAlanSeti' gibi bir özellik eklemek ve crawler ile her acentenin görünürlük matrisini çıkarmak. Dört alanın birlikte mi yoksa ayrı ayrı mı gizlendiği bilinmiyor."
+      "not": "Doğrulayıcı (scripts/dogrulama/senaryo-dogrulayici.mjs) bilinenDurumlar > acentePartaji ile karar veriyor: listede olmayan acentede görünürlük BİLİNMİYOR sayılır ve alan zorunlu kalır. POM bugün acenteye göre değil, her alanın isVisible() sonucuna göre karar veriyor. Hedef: acente profiline 'jetSeyahatAlanSeti' gibi bir özellik eklemek ve crawler ile her acentenin görünürlük matrisini çıkarmak. Dört alanın birlikte mi yoksa ayrı ayrı mı gizlendiği bilinmiyor."
     },
     "tekliSorgu": { "ifade": { "alan": "sorguTipi", "esit": "tekli" } },
     "cokluSorgu": { "ifade": { "alan": "sorguTipi", "esit": "coklu" } },
     "ettirenFarkli": { "ifade": { "alan": "ettiren", "icinde": ["farkliOzel", "farkliTuzel"] } },
     "ettirenFarkliOzel": { "ifade": { "alan": "ettiren", "esit": "farkliOzel" } },
     "ettirenFarkliTuzel": { "ifade": { "alan": "ettiren", "esit": "farkliTuzel" } },
-    "odemeDahil": { "ifade": { "senaryoAyari": "odemeAdimiDahil", "esit": true } }
+    "odemeDahil": { "aciklama": "ödeme adımı dahil (odemeAdimiDahil: true)", "ifade": { "senaryoAyari": "odemeAdimiDahil", "esit": true } }
   },
 
   "adimlar": [
@@ -83,7 +83,7 @@
                 { "deger": "AVRUPA", "metin": "AVRUPA" }
               ],
               "seceneklerDurumu": "kismi",
-              "seceneklerKaynagi": "dashboard-istemci.js > JETSEYAHAT_KAPSAM_ALTERNATIF (elle tutulan sabit) + senaryo verisi. Halkanın sırası ve eleman sayısı bilinmiyor.",
+              "seceneklerKaynagi": "dashboard sabiti (dashboard-istemci.js > JETSEYAHAT_KAPSAM_ALTERNATIF, elle tutulur) + senaryo verisi. Halkanın sırası ve eleman sayısı bilinmiyor; ekranda yeni bir kapsam varsa önce buraya eklenmeli (doğrulayıcı listede olmayanı reddeder).",
               "zorunlu": true,
               "varsayilan": { "deger": null, "not": "Ekran açılınca gelen değer bilinmiyor." },
               "yapilandirma": "senaryo",
@@ -103,7 +103,7 @@
               "doldurucuParametreleri": { "maksDeneme": 6, "yonSezgisi": "hedef 'SEYAHAT PAKET' ise Decrease, değilse Increase; değer değişmezse ters yön" },
               "gorunurluk": null,
               "form": { "id": "sof_kapsam", "kontrol": "select", "etiket": "Kapsam" },
-              "dogrulama": { "istemci": "listeden seçilir", "sunucu": "boş olmayan metin (değer listesi kontrolü yok)", "ts": "string" }
+              "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): secenekler listesinden biri", "sunucu": "aynı", "ts": "aynı" }
             },
             {
               "id": "alternatif",
@@ -124,7 +124,7 @@
                 }
               },
               "seceneklerDurumu": "kismi",
-              "seceneklerKaynagi": "dashboard-istemci.js > JETSEYAHAT_KAPSAM_ALTERNATIF; ekranda acenteye göre değişip değişmediği bilinmiyor.",
+              "seceneklerKaynagi": "dashboard sabiti (dashboard-istemci.js > JETSEYAHAT_KAPSAM_ALTERNATIF); ekranda acenteye göre değişip değişmediği bilinmiyor. Doğrulayıcı listede olmayanı reddeder.",
               "zorunlu": true,
               "yapilandirma": "senaryo",
               "eslesme": { "senaryo": "alternatif", "donusum": "Görünen metin olarak saklanıyor (value yok)." },
@@ -141,7 +141,7 @@
               "doldurucu": "okluSecim",
               "doldurucuParametreleri": { "maksDeneme": 6 },
               "form": { "id": "sof_alternatif", "kontrol": "select", "etiket": "Alternatif", "not": "Kapsam değişince seçenekler yeniden doldurulur." },
-              "dogrulama": { "istemci": "listeden seçilir", "sunucu": "boş olmayan metin; kapsamla uyumu kontrol edilmiyor", "ts": "string" }
+              "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): bagimlilik.secenekHaritasi[kapsam] listesinden biri", "sunucu": "aynı", "ts": "aynı" }
             }
           ]
         },
@@ -196,8 +196,8 @@
               "doldurucu": "secimGerekirse",
               "gorunurluk": { "kosul": "acenteAlanSetiTam" },
               "form": { "id": "sof_covid", "kontrol": "select", "etiket": "COVID Teminatı" },
-              "dogrulama": { "istemci": "listeden seçilir", "sunucu": "'E' | 'H'", "ts": "'E' | 'H' (zorunlu)" },
-              "notlar": ["Alan gizliyken bile senaryo/form/sunucu değeri zorunlu tutuyor; varsayılan acente (30856) senaryolarında değer hiç kullanılmıyor."]
+              "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): 'E' | 'H'; yalnızca acenteAlanSetiTam koşulu false DEĞİLSE zorunlu", "sunucu": "aynı", "ts": "aynı (tip: 'E' | 'H' | undefined)" },
+              "notlar": ["Görünürlük acenteye göre: 30856'da gizli → zorunlu değil (verilirse uyarı: değer kullanılmaz); 30447'de görünür → zorunlu; bilinmeyen acentede zorunlu. Form her zaman E/H gönderir."]
             },
             {
               "id": "kayakTeminati",
@@ -420,9 +420,9 @@
                 }
               ],
               "dogrulama": {
-                "istemci": "yok (serbest kimlik biçimi kontrol edilmiyor)",
-                "sunucu": "yok; profil önce, kimlik sonra",
-                "ts": "OzelKimlikData yapısı; biçim kontrolü yok"
+                "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): profil YA DA kimlik (ikisi birden değil), zorunlu değil (yoksa ürün varsayılanı); profil havuzda olmalı; serbest kimlikte TC 11 hane + kontrol haneleri, telefon 5XXXXXXXXX, doğum tarihi gg.aa.yyyy ve gelecekte değil",
+                "sunucu": "aynı",
+                "ts": "aynı"
               },
               "notlar": [
                 "Sıra zorunlu: doğum tarihi → telefon → TC.",
@@ -479,7 +479,8 @@
               "id": "ettirenKimlik",
               "tip": "kimlikProfili",
               "kimlikTuru": { "farkliOzel": "ozel", "farkliTuzel": "tuzel" },
-              "etiket": { "ekran": null },
+              "bagimlilik": { "alan": "ettiren", "not": "Kimlik türü ve profil havuzu ettiren değerine göre seçilir." },
+              "etiket": { "ekran": null, "form": "Sigorta ettiren kimliği" },
               "zorunlu": true,
               "yapilandirma": "senaryo",
               "gorunurluk": { "kosul": "ettirenFarkli" },
@@ -546,9 +547,9 @@
                 }
               ],
               "dogrulama": {
-                "istemci": "yok",
-                "sunucu": "ettiren≠ayni ise profil ya da kimlik zorunlu; profil anahtarının varlığı ve kimlik biçimi kontrol edilmiyor",
-                "ts": "tip seviyesinde opsiyonel; spec '!' ile varsayıyor"
+                "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): ettiren≠ayni ise profil YA DA kimlik (ikisi birden değil); profil havuzda olmalı; serbest kimlikte TC (11 hane + kontrol haneleri) / VKN (10 hane), telefon 5XXXXXXXXX, doğum tarihi gg.aa.yyyy ve gelecekte değil (tüzelde doğum tarihi yok)",
+                "sunucu": "aynı",
+                "ts": "aynı"
               },
               "notlar": [
                 "Vergi Dairesi: form yorumuna göre ekranda kullanılmıyor; ekranda alan olup olmadığı bilinmiyor.",
@@ -620,7 +621,7 @@
         "varsayilan": { "deger": "varsayilan", "kaynak": "testBaslangiciniHazirla" },
         "zorunlu": false,
         "yapilandirma": "senaryo",
-        "eslesme": { "senaryo": "acenteProfili" },
+        "eslesme": { "senaryo": "acenteProfili", "profilHavuzu": "ortak.kullaniciDegistir" },
         "form": {
           "id": "sof_acenteKodu",
           "kontrol": "text",
@@ -628,7 +629,7 @@
           "yardimciKontroller": [{ "id": "sof_acenteKullanicisi", "kontrol": "text", "amac": "Acente Kullanıcı Kodu" }],
           "not": "Form anahtar değil ham kod+kullanıcı alıyor; sunucu eşleşen profili buluyor ya da 'Acente<kod>' anahtarıyla ortak.json'a ekliyor."
         },
-        "dogrulama": { "istemci": "kod varsa kullanıcı zorunlu", "sunucu": "aynı", "ts": "string | undefined; anahtarın varlığı test anında kontrol ediliyor" }
+        "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): girdide kod ↔ kullanıcı birlikte; kayıttaki profil anahtarı ortak.kullaniciDegistir içinde olmalı", "sunucu": "aynı", "ts": "aynı" }
       },
       {
         "id": "odemeAdimiDahil",
@@ -653,13 +654,14 @@
             "anlam": "Belirtilen adımda, belirtilen mesajı içeren uyarı beklenir; uyarı çıkmazsa senaryo başarısız.",
             "alanlar": {
               "adim": {
+                "etiket": "Hatanın Beklendiği Adım",
                 "secenekler": [
                   { "deger": "primHesaplama", "metin": "Prim hesaplama" },
                   { "deger": "policelestirme", "metin": "Poliçeleştirme", "kosul": "odemeDahil" },
                   { "deger": "odeme", "metin": "Ödeme", "kosul": "odemeDahil" }
                 ]
               },
-              "mesaj": { "tip": "metin", "zorunlu": true, "eslesmeKurali": "toleranslı içerir (beklenen-sonuc.ts > mesajIceriyorMu)" }
+              "mesaj": { "etiket": "Beklenen Mesaj", "tip": "metin", "zorunlu": true, "eslesmeKurali": "toleranslı içerir (beklenen-sonuc.ts > mesajIceriyorMu)" }
             }
           }
         ],
@@ -678,6 +680,7 @@
       {
         "id": "krediKarti",
         "tip": "altModelGecersizKilma",
+        "etiket": { "ekran": null, "form": "Ödeme kartı" },
         "zorunlu": false,
         "yapilandirma": "senaryo",
         "altModel": { "dosya": "odeme-kredi-karti.model.json", "bolum": "kartFormu" },

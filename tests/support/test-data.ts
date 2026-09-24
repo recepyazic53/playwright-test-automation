@@ -362,7 +362,9 @@ export type JetSeyahatTestData = {
       baslik: string;
       kapsam: string;
       alternatif: string;
-      covidTeminati: 'E' | 'H';
+      // Acentenin ekranında görünmüyorsa (ör. 30856) zorunlu değildir — bkz. ekran modeli
+      // kosullar.acenteAlanSetiTam ve scripts/dogrulama/senaryo-dogrulayici.mjs.
+      covidTeminati?: 'E' | 'H';
       sorguTipi: 'tekli' | 'coklu';
       ettiren: 'ayni' | 'farkliOzel' | 'farkliTuzel';
       // Hazır bir profil (ortak.json > kimlikBilgileri.ozel/tuzel altındaki anahtar,
@@ -406,7 +408,7 @@ export type JetSeyahatTestData = {
       // kartı. Yalnızca kullanıcı ortak test kartından (ortak.json > odeme.krediKarti) FARKLI
       // bir kart girdiyse yazılır; yoksa senaryo ortak kartı kullanır (ve ortak kart
       // değişirse onu izler). Ödeme adımı dahil değilken (odemeAdimiDahil: false) dolu
-      // olamaz — bkz. tests/support/senaryo-kredi-karti.ts > senaryoKrediKartiniDogrula.
+      // olamaz — kurallar: scripts/dogrulama/senaryo-dogrulayici.mjs (kart alanları + son kullanma ay/yıl).
       krediKarti?: SenaryoKrediKartiData;
     }>;
   };

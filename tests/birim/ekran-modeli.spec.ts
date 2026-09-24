@@ -4,7 +4,8 @@
 // Kontroller:
 //  a) Model dosyası (ve alt modeli) şemaya uyuyor.
 //  b) Senaryo verisindeki (test + canli) her özellik ve değer modelde biliniyor.
-//  c) Her senaryo mevcut TS doğrulayıcılarından geçiyor (beklenenSonucuCoz, senaryoKrediKartiniDogrula).
+//  c) Her senaryo TEK doğrulayıcıdan (scripts/dogrulama/senaryo-dogrulayici.mjs) HATASIZ geçiyor
+//     (ayrıntılı kural testleri: tests/birim/senaryo-dogrulayici.spec.ts).
 //  d) Sunucunun JET_SEYAHAT_FORM_ALANLARI listesi ve TS senaryo tipi = modelin senaryoda
 //     ayarlanabilir alanları.
 //  e) Dashboard formunun sof_* kontrolleri = modelde kayıtlı form karşılıkları (+ seçenekler).
@@ -30,8 +31,8 @@ import {
   type Secenek,
   type YuklenmisEkranModeli
 } from '../support/ekran-modeli';
-import { senaryoKrediKartiniDogrula } from '../support/senaryo-kredi-karti';
-import type { JetSeyahatTestData } from '../support/test-data';
+import { jetSeyahatSenaryosunuDogrula } from '../support/senaryo-dogrulama';
+import type { JetSeyahatTestData, OrtakTestData } from '../support/test-data';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
 const MODEL_DOSYASI = join(EKRAN_MODELLERI_KLASORU, 'jet-seyahat.model.json');
@@ -169,25 +170,31 @@ test.describe('JetSeyahat ekran modeli — koruma testleri', () => {
     expect(sorunlar, `Modelde karşılığı olmayan senaryo özellikleri/değerleri:\n${sorunlar.join('\n')}`).toEqual([]);
   });
 
-  test('c) her senaryo TS doğrulayıcılarından geçiyor (beklenenSonucuCoz, senaryoKrediKartiniDogrula)', () => {
+  test('c) mevcut her senaryo tek doğrulayıcıdan HATASIZ geçiyor (uyarılar serbest) ve beklenenSonucuCoz çözüyor', () => {
     const sorunlar: string[] = [];
+    let senaryoSayisi = 0;
     for (const ortam of ORTAMLAR) {
+      const ortak = JSON.parse(readFileSync(join(PROJE_KOKU, 'tests', 'data', ortam, 'ortak.json'), 'utf-8')) as OrtakTestData;
       for (const senaryo of urunVerisiniOku(ortam).senaryolar) {
+        senaryoSayisi++;
         const ad = `${ortam} > "${senaryo.baslik}"`;
+        // Gerçek "şimdi" ile: ortak kartın süresi geçse bile (uyarı) mevcut veri hata vermemeli.
+        const sonuc = jetSeyahatSenaryosunuDogrula(senaryo, ortak, ortam, new Date());
+        for (const h of sonuc.hatalar) sorunlar.push(`${ad} > ${h.alan}: ${h.mesaj}`);
         try {
-          const cozulmus = beklenenSonucuCoz(senaryo, ad);
-          senaryoKrediKartiniDogrula(senaryo.krediKarti, cozulmus.odemeAdimiDahil, ad);
+          beklenenSonucuCoz(senaryo, ad);
         } catch (hata) {
           sorunlar.push(hata instanceof Error ? hata.message : String(hata));
         }
       }
     }
+    expect(senaryoSayisi).toBeGreaterThan(0);
     expect(sorunlar, sorunlar.join('\n')).toEqual([]);
   });
 
   test('c2) kural sıkı: odemeAdimiDahil zorunlu, eski beklenenHata* alanları reddedilir', () => {
     const eksik = { baslik: 'x' } as unknown as JetSeyahatSenaryosu;
-    expect(() => beklenenSonucuCoz(eksik, 'x')).toThrow(/"odemeAdimiDahil" zorunludur/);
+    expect(() => beklenenSonucuCoz(eksik, 'x')).toThrow(/odemeAdimiDahil: "Ödeme adımını dahil et" zorunludur/);
     const eski = { odemeAdimiDahil: true, beklenenHataMesaji: 'm' } as unknown as JetSeyahatSenaryosu;
     expect(() => beklenenSonucuCoz(eski, 'x')).toThrow(/artık desteklenmiyor/);
     expect(beklenenSonucuCoz({ odemeAdimiDahil: false }, 'x')).toEqual({ odemeAdimiDahil: false, beklenenSonuc: { tip: 'basarili' } });

@@ -71,7 +71,7 @@
           "konum": { "secici": "#isim", "kirilganlik": "dusuk" },
           "doldurucu": "metinDoldur",
           "form": { "id": "sof_kartIsim", "kontrol": "text", "etiket": "Kart üzerindeki ad" },
-          "dogrulama": { "istemci": "boş olamaz", "sunucu": "trim sonrası boş olamaz", "ts": "trim sonrası boş olamaz" }
+          "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): boş olamaz", "sunucu": "aynı", "ts": "aynı" }
         },
         {
           "id": "soyisim",
@@ -83,7 +83,7 @@
           "konum": { "secici": "#soyisim", "kirilganlik": "dusuk" },
           "doldurucu": "metinDoldur",
           "form": { "id": "sof_kartSoyisim", "kontrol": "text", "etiket": "Kart üzerindeki soyad" },
-          "dogrulama": { "istemci": "boş olamaz", "sunucu": "trim sonrası boş olamaz", "ts": "trim sonrası boş olamaz" }
+          "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): boş olamaz", "sunucu": "aynı", "ts": "aynı" }
         },
         {
           "id": "kartNo",
@@ -96,7 +96,7 @@
           "konum": { "secici": "#kartno", "kirilganlik": "dusuk", "not": "Ekran biçimlendirme ekliyor olabilir; yalnızca rakamlar karşılaştırılıyor." },
           "doldurucu": "tuslayarakYaz",
           "form": { "id": "sof_kartNo", "kontrol": "password", "etiket": "Kart numarası", "not": "Maskeli; 'göster' düğmesiyle açılır." },
-          "dogrulama": { "istemci": "16 rakam (boşluklar silinir)", "sunucu": "16 rakam (boşluklar silinir)", "ts": "16 rakam (boşluk silinmez)" }
+          "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): 16 rakam (boşluklar silinir)", "sunucu": "aynı", "ts": "aynı" }
         },
         {
           "id": "guvenlikKodu",
@@ -109,7 +109,7 @@
           "konum": { "secici": "#cvv", "kirilganlik": "dusuk" },
           "doldurucu": "metinDoldur",
           "form": { "id": "sof_kartCvv", "kontrol": "password", "etiket": "CVV" },
-          "dogrulama": { "istemci": "3-4 rakam", "sunucu": "3-4 rakam", "ts": "3-4 rakam" }
+          "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): 3-4 rakam", "sunucu": "aynı", "ts": "aynı" }
         },
         {
           "id": "sonKullanmaAyi",
@@ -124,7 +124,7 @@
           "konum": { "secici": "#ay", "kirilganlik": "dusuk" },
           "doldurucu": "secim",
           "form": { "id": "sof_kartAy", "kontrol": "select", "etiket": "Son kullanma ayı" },
-          "dogrulama": { "istemci": "1-12", "sunucu": "1-12", "ts": "1-12" }
+          "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): 1-12", "sunucu": "aynı", "ts": "aynı" }
         },
         {
           "id": "sonKullanmaYili",
@@ -139,8 +139,8 @@
           "konum": { "secici": "#yil", "kirilganlik": "dusuk" },
           "doldurucu": "secim",
           "form": { "id": "sof_kartYil", "kontrol": "select", "etiket": "Son kullanma yılı" },
-          "dogrulama": { "istemci": "bu yıl..+15 (listeden)", "sunucu": "4 hane, geçmişte değil", "ts": "4 hane, geçmişte değil" },
-          "notlar": ["Ortak kartın yılı 2026: 2027'de ortak kartı kullanan tüm kayıtlar 'geçmişte' hatasına düşer."]
+          "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): 4 hane; ay ile birlikte bu ay ya da sonrası", "sunucu": "aynı", "ts": "aynı" },
+          "notlar": ["Son kullanma tarihi AY + YIL ile kontrol edilir (bu ay geçerli). Senaryoya özel kartta geçmiş tarih HATA; ortak kartın (ortak.json) süresi geçmişse yalnızca UYARI (senaryolar bozulmasın diye). Kural: scripts/dogrulama/senaryo-dogrulayici.mjs."]
         },
         {
           "id": "taksit",
@@ -156,7 +156,7 @@
           "doldurucu": "secim",
           "gorunurluk": { "ifade": { "calismaZamani": "gorunurse" }, "not": "Bazı ürünlerde hiç çizilmiyor; POM görünürse dolduruyor. JetSeyahat'te görünüp görünmediği bilinmiyor." },
           "form": { "id": "sof_kartTaksit", "kontrol": "select", "etiket": "Taksit" },
-          "dogrulama": { "istemci": "1-12 (listeden)", "sunucu": "1-12", "ts": "1-12" }
+          "dogrulama": { "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): 1-12", "sunucu": "aynı", "ts": "aynı" }
         },
         {
           "id": "odemeyiTamamla",

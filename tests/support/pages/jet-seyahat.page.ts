@@ -44,6 +44,14 @@ export class JetSeyahatPage {
     // kontrol yerine, her alan için önce görünürlük kontrol edilir; görünmüyorsa işlem atlanır.
     const covid = this.page.locator('#covid-teminati');
     if (await covid.isVisible()) {
+      // Doğrulayıcı COVID'i yalnızca modelde "bu acentede görünür/bilinmiyor" ise zorunlu tutar;
+      // alan görünüyor ama senaryoda değer yoksa model (acenteAlanSetiTam) eksik/yanlıştır.
+      if (!senaryo.covidTeminati) {
+        throw new Error(
+          'COVID teminatı ekranda görünüyor ama senaryoda "covidTeminati" yok. Senaryoya değer ekleyin ve ' +
+            'ekran modelindeki kosullar.acenteAlanSetiTam > bilinenDurumlar listesini bu acente için düzeltin.'
+        );
+      }
       await this.selectGerekirseSec('#covid-teminati', senaryo.covidTeminati);
     }
 
