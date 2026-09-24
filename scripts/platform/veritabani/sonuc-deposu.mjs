@@ -225,13 +225,21 @@ export function sonucOzeti(vt, projeId, secim = {}) {
   const ekranlar = vt.tumu(
     `SELECT e.id, e.ad, (SELECT COUNT(*) FROM senaryolar s WHERE s.ekran_id = e.id) AS senaryo_sayisi
        FROM ekranlar e WHERE e.proje_id = ? ORDER BY e.ad`, [projeId]
-  ).map((e) => ({ anahtar: String(e.id), ad: String(e.ad), senaryoSayisi: Number(e.senaryo_sayisi) }));
+  ).map((e) => ({
+    anahtar: String(e.id), ad: String(e.ad), senaryoSayisi: Number(e.senaryo_sayisi),
+    son: /** @type {import('../sonuclar/hesaplama.mjs').Sayilar | null} */ (null)
+  }));
   // Ekranı olmayan sonuç ürünleri (ör. eşleşmeyen eski sonuçlar) de listede görünür.
   const bilinen = new Set(ekranlar.map((e) => e.anahtar));
   for (const k of kosular) {
     for (const a of Object.keys(k.urunler)) {
-      if (!bilinen.has(a)) { bilinen.add(a); ekranlar.push({ anahtar: a, ad: a.slice(3), senaryoSayisi: 0 }); }
+      if (!bilinen.has(a)) { bilinen.add(a); ekranlar.push({ anahtar: a, ad: a.slice(3), senaryoSayisi: 0, son: null }); }
     }
+  }
+  // Sol listedeki sağlık noktası için: her ürünün son tam koşusundaki sayılar (yoksa null).
+  for (const e of ekranlar) {
+    const k = kartlar.urunler[e.anahtar];
+    e.son = k ? sayilariTopla([k.son]) : null;
   }
   const secilenKosular = urun ? kosular.filter((k) => k.urunler[urun]) : kosular;
   const gecmis = secilenKosular.slice().reverse().map((k) => ({

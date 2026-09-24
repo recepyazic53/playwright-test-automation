@@ -2,8 +2,16 @@
 // Yalnızca bu bilgisayarda) → seçim → uygulama → özet. Hoş geldiniz ekranında (boş veritabanı:
 // yedeğin parolası bu bilgisayarın kasa parolası olur) ve Ayarlar > Yedekleme'de kullanılır.
 import {
-  ApiHatasi, TOKEN, alan, alanHatasi, api, boyutMetni, geriSayim, h, mesajKutusu, parolaAlani, tarihMetni, yeniKimlik
+  ApiHatasi, TOKEN, alan, alanHatasi, api, bosDurum, boyutMetni, geriSayim, h, ikon, mesajKutusu, parolaAlani, rozet, tarihMetni, yeniKimlik
 } from './ortak.js';
+
+const ADIMLAR = [['dosya', 'Dosya ve parola'], ['hazirlik', 'Hazırlık'], ['onizleme', 'Önizleme ve seçim'], ['ozet', 'Özet']];
+function adimListesi(aktif) {
+  const sira = ADIMLAR.findIndex(([a]) => a === aktif);
+  return h('ol', { class: 'adimlar', 'aria-label': 'İçe aktarma adımları' },
+    ADIMLAR.map(([a, etiket], i) => h('li', { class: i < sira ? 'tamam' : '', 'aria-current': a === aktif ? 'step' : null },
+      etiket, i < sira ? h('span', { class: 'gorunmez' }, ' (tamamlandı)') : null)));
+}
 
 const ALAN_ETIKETLERI = {
   ad: 'Ad', aciklama: 'Açıklama', ayarlar_json: 'Ayarlar', taban_url: 'Adres', varsayilan: 'Varsayılan',
@@ -31,7 +39,7 @@ function medyaBolumu(medya) {
     h('td', {}, String(t.zatenVar)),
     h('td', {}, String(t.dahilDegil))));
   return h('section', { class: 'grup', 'aria-label': 'Medya dosyaları' },
-    h('h4', {}, 'Medya dosyaları'),
+    h('h4', {}, ikon('ekran'), 'Medya dosyaları'),
     medya.bicimSurumu < 2
       ? h('p', { class: 'soluk kucuk' }, 'Bu yedek eski biçimde: medya dosyası içermez. Sonuçlarda medya "yedeğe dahil edilmemişti" olarak görünür.')
       : h('p', { class: 'soluk kucuk' }, 'Uygulanan sonuçların medya dosyaları eklenir; seçmediğiniz projelerin sonuçlarındaki medya atlanır.'),
@@ -62,8 +70,8 @@ const degerMetni = (d) => {
 export function iceAktarmaAkisi(kapsayici, secenekler) {
   let isId = null;
   let durdurGeriSayim = () => {};
-  const goster = (...icerik) => {
-    kapsayici.replaceChildren(...icerik);
+  const goster = (adim, ...icerik) => {
+    kapsayici.replaceChildren(adimListesi(adim), ...icerik);
     const baslik = kapsayici.querySelector('h2');
     if (baslik) { baslik.tabIndex = -1; baslik.focus(); }
   };
@@ -88,12 +96,12 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     const mesaj = mesajKutusu();
     const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Yükle ve önizle');
     const form = h('form', { class: 'kart', novalidate: true },
-      h('h2', {}, 'Yedek yükle'),
+      h('h2', {}, ikon('yukle'), 'Yedek yükle'),
       h('p', { class: 'soluk' }, 'Bir .tayedek dosyası seçin. Uygulamadan önce neyin ekleneceğini ve neyin değişeceğini göreceksiniz; bu bilgisayardaki hiçbir kayıt silinmez.'),
       mesaj.kutu,
       alan('Yedek dosyası', dosyaGirdisi, { zorunlu: true, yardim: 'Yalnızca bu platformun ürettiği .tayedek dosyaları.' }),
       parola.kapsayici,
-      h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', onclick: iptalEt }, 'Vazgeç')));
+      h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: iptalEt }, 'Vazgeç')));
     if (onMesaj) mesaj.goster(onMesaj.metin, onMesaj.tur);
     form.addEventListener('submit', (olay) => {
       olay.preventDefault();
@@ -107,18 +115,22 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       if (hata) { form.querySelector('[aria-invalid="true"]')?.focus(); return; }
       yukle(dosya, parola.girdi.value);
     });
-    goster(form);
+    goster('dosya', form);
   }
 
   // --- 2) Yükleme + hazırlık ilerlemesi -----------------------------------------------
   function ilerlemeEkrani() {
     const cubuk = h('progress', { max: '100', value: '0', 'aria-labelledby': 'ilerleme-metni' });
-    const metin = h('p', { id: 'ilerleme-metni', 'aria-live': 'polite' }, 'Dosya yükleniyor… %0');
-    goster(h('div', { class: 'kart' }, h('h2', {}, 'Yedek hazırlanıyor'), metin, cubuk,
-      h('div', { class: 'dugmeler' }, h('button', { type: 'button', onclick: iptalEt }, 'İptal'))));
+    const metin = h('p', { id: 'ilerleme-metni', class: 'secim-sayaci', 'aria-live': 'polite' }, 'Dosya yükleniyor… %0');
+    const yuzdeEl = h('span', { class: 'yuzde', 'aria-hidden': 'true' }, '%0');
+    goster('hazirlik', h('div', { class: 'kart' }, h('h2', {}, ikon('arsiv'), 'Yedek hazırlanıyor'),
+      h('p', { class: 'soluk' }, 'Dosya yükleniyor, açılıyor ve bu bilgisayardaki kayıtlarla karşılaştırılıyor.'),
+      h('div', { class: 'ilerleme' }, h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), metin, yuzdeEl), cubuk),
+      h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'hayalet', onclick: iptalEt }, 'İptal'))));
     return (asama, yuzde) => {
       cubuk.value = yuzde;
       metin.textContent = `${asama} %${Math.round(yuzde)}`;
+      yuzdeEl.textContent = `%${Math.round(yuzde)}`;
     };
   }
 
@@ -193,7 +205,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     /** @type {Array<{ tablo: string; id: string; kutu: HTMLInputElement }>} */
     const tumKutular = [];
     const grupGuncelleyiciler = [];
-    const secimSayaci = h('p', { 'aria-live': 'polite', class: 'soluk' });
+    const secimSayaci = h('p', { 'aria-live': 'polite', class: 'secim-sayaci' });
     const secimiGuncelle = () => {
       let toplam = 0;
       for (const s of secilen.values()) toplam += s.size;
@@ -267,8 +279,8 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
         const ogeler = v.yeni.map((o) => h('li', {}, h('div', { class: 'oge-satiri' }, ogeKutusu(tablo, o, 'yeni'),
           o.uygulanamaz ? h('span', { class: 'rozet uyari' }, o.uygulanamaz) : null)));
         const kutular = tumKutular.slice(baslangic);
-        gruplar.push(h('section', { class: 'grup', 'aria-label': `${v.etiket} — Yeni` },
-          h('div', { class: 'grup-basligi' }, h('h4', {}, `Yeni (${v.yeni.length})`), grupSecimi(`${v.etiket}, yeni`, kutular)),
+        gruplar.push(h('section', { class: 'grup yeni', 'aria-label': `${v.etiket} — Yeni` },
+          h('div', { class: 'grup-basligi' }, h('h4', {}, ikon('artiYalin'), `Yeni (${v.yeni.length})`), grupSecimi(`${v.etiket}, yeni`, kutular)),
           h('ul', {}, ogeler)));
       }
       if (v.degisen.length) {
@@ -278,19 +290,19 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
             h('span', { class: 'rozet uyari' }, `${o.farklar.length} alan farklı`)),
           h('details', { class: 'fark' }, h('summary', {}, 'Farkları göster'), farkTablosu(o))));
         const kutular = tumKutular.slice(baslangic);
-        gruplar.push(h('section', { class: 'grup', 'aria-label': `${v.etiket} — Değişen` },
-          h('div', { class: 'grup-basligi' }, h('h4', {}, `Değişen (${v.degisen.length})`), grupSecimi(`${v.etiket}, değişen`, kutular)),
+        gruplar.push(h('section', { class: 'grup degisen', 'aria-label': `${v.etiket} — Değişen` },
+          h('div', { class: 'grup-basligi' }, h('h4', {}, ikon('duzenle'), `Değişen (${v.degisen.length})`), grupSecimi(`${v.etiket}, değişen`, kutular)),
           h('p', { class: 'soluk kucuk' }, 'Seçilirse yedekteki sürüm bu bilgisayardakinin yerine geçer; bu bilgisayardaki sürüm değişiklik geçmişinde saklanır.'),
           h('ul', {}, ogeler)));
       }
       if (v.yalnizBurada.length) {
-        gruplar.push(h('section', { class: 'grup', 'aria-label': `${v.etiket} — Yalnızca bu bilgisayarda` },
-          h('div', { class: 'grup-basligi' }, h('h4', {}, `Yalnızca bu bilgisayarda (${v.yalnizBurada.length})`)),
+        gruplar.push(h('section', { class: 'grup yalniz-burada', 'aria-label': `${v.etiket} — Yalnızca bu bilgisayarda` },
+          h('div', { class: 'grup-basligi' }, h('h4', {}, ikon('bilgisayar'), `Yalnızca bu bilgisayarda (${v.yalnizBurada.length})`)),
           h('p', { class: 'soluk kucuk' }, 'Bilgi amaçlıdır: içe aktarma bu kayıtları silmez veya değiştirmez.'),
           h('ul', {}, v.yalnizBurada.map((o) => h('li', {}, o.baslik)))));
       }
       bolumler.push(h('section', { class: 'varlik-bolumu', 'data-tablo': tablo },
-        h('h3', {}, v.etiket, v.ayniSayisi ? h('span', { class: 'soluk kucuk' }, `${v.ayniSayisi} aynı`) : null), gruplar));
+        h('h3', {}, v.etiket, v.ayniSayisi ? rozet(`${v.ayniSayisi} aynı`) : null), gruplar));
     }
 
     const eklenecekSatirlari = Object.entries(onizleme.eklenecekler).filter(([, e]) => e.dosyada > 0)
@@ -305,27 +317,29 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     const uygulaDugmesi = h('button', { type: 'button', class: 'birincil' }, 'Seçilenleri uygula');
     uygulaDugmesi.addEventListener('click', () => uygula(onizleme, secilen, uygulaDugmesi, mesaj));
     const t = onizleme.toplam;
-    goster(h('div', {},
-      h('h2', {}, 'Yedek önizlemesi'),
-      h('p', { class: 'soluk' }, `Yedek tarihi: ${tarihMetni(onizleme.yedek.olusturulma)}`,
-        onizleme.yedek.makine ? ` · Kaynak bilgisayar: ${onizleme.yedek.makine}` : ''),
+    goster('onizleme', h('div', {},
+      h('div', { class: 'sayfa-basligi' }, h('div', {},
+        h('div', { class: 'kirinti' }, h('span', {}, 'Yedek'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Önizleme')),
+        h('h2', {}, 'Yedek önizlemesi'),
+        h('div', { class: 'meta' }, h('span', {}, ikon('takvim'), `Yedek tarihi: ${tarihMetni(onizleme.yedek.olusturulma)}`),
+          onizleme.yedek.makine ? h('span', {}, ikon('bilgisayar'), `Kaynak bilgisayar: ${onizleme.yedek.makine}`) : null))),
       h('div', { class: 'sayac-cipleri' },
-        h('span', { class: 'rozet vurgu' }, `Yeni: ${t.yeni}`), h('span', { class: 'rozet uyari' }, `Değişen: ${t.degisen}`),
-        h('span', { class: 'rozet' }, `Yalnızca bu bilgisayarda: ${t.yalnizBurada}`), h('span', { class: 'rozet basari' }, `Aynı: ${t.ayni}`)),
+        h('span', { class: 'rozet hap basari' }, 'Yeni', h('b', {}, String(t.yeni))), h('span', { class: 'rozet hap uyari' }, 'Değişen', h('b', {}, String(t.degisen))),
+        h('span', { class: 'rozet hap vurgu' }, 'Yalnızca bu bilgisayarda', h('b', {}, String(t.yalnizBurada))), h('span', { class: 'rozet hap' }, 'Aynı', h('b', {}, String(t.ayni))),
+        h('span', { class: 'gorunmez' }, `Yeni: ${t.yeni}, Değişen: ${t.degisen}, Yalnızca bu bilgisayarda: ${t.yalnizBurada}, Aynı: ${t.ayni}`)),
       onizleme.kasaBenimsenecek
         ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Bu bilgisayarda henüz kasa yok. Uyguladığınızda yedeğin parolası bu bilgisayarın kasa parolası olur.'))
         : null,
-      h('div', { class: 'dugmeler' },
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => tumunuSec(true) }, 'Tümünü seç'),
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => tumunuSec(false) }, 'Hiçbirini seçme')),
-      secimSayaci,
-      bolumler.length ? bolumler : h('p', { class: 'bos-liste' }, 'Yedekte bu bilgisayardan farklı bir ayar veya profil yok.'),
+      bolumler.length ? bolumler : bosDurum('Yedekte bu bilgisayardan farklı bir ayar veya profil yok.', null, { ikon: 'onay' }),
       eklenecekSatirlari.length ? h('section', { class: 'grup', 'aria-label': 'Koşular ve geçmiş' },
-        h('h4', {}, 'Koşular ve geçmiş kayıtları'),
+        h('h4', {}, ikon('liste'), 'Koşular ve geçmiş kayıtları'),
         h('p', { class: 'soluk kucuk' }, 'Bu kayıtlar seçilmez; bu bilgisayarda olmayanlar her zaman eklenir.'),
         h('ul', {}, eklenecekSatirlari)) : null,
       medyaBolumu(onizleme.medya),
-      h('div', { class: 'sabit-alt' }, mesaj.kutu, h('div', { class: 'dugmeler' }, uygulaDugmesi, h('button', { type: 'button', onclick: iptalEt }, 'İptal')))));
+      h('div', { class: 'sabit-alt' }, mesaj.kutu, h('div', { class: 'dugmeler' }, uygulaDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: iptalEt }, 'İptal'),
+        h('span', { class: 'bosluk' }), secimSayaci,
+        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => tumunuSec(true) }, 'Tümünü seç'),
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => tumunuSec(false) }, 'Hiçbirini seçme')))));
     secimiGuncelle();
   }
 
@@ -361,26 +375,26 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       .map(([tablo, s]) => h('li', {}, `${EKLEME_ETIKETLERI[tablo] || tablo}: ${s.eklenen} eklendi`,
         s.mevcut ? `, ${s.mevcut} zaten vardı` : '', s.atlanan ? `, ${s.atlanan} atlandı` : ''));
     const devam = h('button', { type: 'button', class: 'birincil', onclick: () => secenekler.bitti() }, 'Devam');
-    goster(h('div', { class: 'kart' },
-      h('h2', {}, 'İçe aktarma tamamlandı'),
+    goster('ozet', h('div', { class: 'kart' },
+      h('h2', {}, ikon('onay'), 'İçe aktarma tamamlandı'),
       sonuc.tamYukleme ? h('p', {}, 'Yedeğin tamamı bu bilgisayara yüklendi.') : null,
       varlikSatirlari.length ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
         h('caption', { class: 'gorunmez' }, 'Varlık türüne göre uygulanan değişiklikler'),
         h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Tür'), h('th', { scope: 'col' }, 'Eklenen'), h('th', { scope: 'col' }, 'Güncellenen'), h('th', { scope: 'col' }, 'Atlanan'))),
         h('tbody', {}, varlikSatirlari))) : h('p', { class: 'soluk' }, 'Ayar veya profil değişikliği uygulanmadı.'),
-      eklemeSatirlari.length ? [h('h3', {}, 'Koşular ve geçmiş'), h('ul', {}, eklemeSatirlari)] : null,
+      eklemeSatirlari.length ? [h('h3', { class: 'ara-baslik' }, 'Koşular ve geçmiş'), h('ul', { class: 'duz-liste' }, eklemeSatirlari)] : null,
       sonuc.otomatikEklenenUstKayitlar.length ? [
-        h('h3', {}, 'Otomatik eklenen üst kayıtlar'),
+        h('h3', { class: 'ara-baslik' }, 'Otomatik eklenen üst kayıtlar'),
         h('p', { class: 'soluk' }, 'Seçtiğiniz kayıtların ihtiyaç duyduğu şu kayıtlar bu bilgisayarda olmadığı için otomatik eklendi:'),
         h('ul', {}, sonuc.otomatikEklenenUstKayitlar.map((u) => h('li', {}, `${(onizleme.varliklar[u.tablo] || {}).etiket || u.tablo}: ${baslikBul(u.tablo, u.id)}`)))
       ] : null,
       sonuc.atlananlar.length ? [
-        h('h3', {}, 'Atlanan kayıtlar'),
+        h('h3', { class: 'ara-baslik' }, 'Atlanan kayıtlar'),
         h('ul', {}, sonuc.atlananlar.map((a) => h('li', {}, `${(onizleme.varliklar[a.tablo] || {}).etiket || a.tablo}: ${baslikBul(a.tablo, a.id)} — ${a.neden}`)))
       ] : null,
       sonuc.gecmiseYazilan ? h('p', { class: 'soluk' }, `Üzerine yazılan ${sonuc.gecmiseYazilan} yerel sürüm değişiklik geçmişinde saklandı.`) : null,
       sonuc.medya && (sonuc.medya.eklenen || sonuc.medya.dahilDegil)
-        ? h('p', {}, `Medya: ${sonuc.medya.eklenen} dosya eklendi (${boyutMetni(sonuc.medya.bayt)})`,
+        ? h('p', { class: 'medya-ozeti' }, `Medya: ${sonuc.medya.eklenen} dosya eklendi (${boyutMetni(sonuc.medya.bayt)})`,
           sonuc.medya.dahilDegil ? `; ${sonuc.medya.dahilDegil} medya yedeğe dahil edilmemişti` : '', '.')
         : null,
       sonuc.medyaHatasi ? h('div', { class: 'not-kutusu hata' }, sonuc.medyaHatasi) : null,

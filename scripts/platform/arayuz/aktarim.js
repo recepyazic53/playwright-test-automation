@@ -3,7 +3,7 @@
 //   mod 'ayarlar'  : (kasa açık) önizleme → uygula → özet  — "Proje dosyalarından yeniden aktar"
 // Önizleme ve özet YALNIZCA sayılar/uyarılar içerir; gizli değer gösterilmez. Parola yalnızca bu
 // akışın belleğinde durur ve uygulama isteğinden hemen sonra silinir.
-import { alanHatasi, api, h, mesajKutusu, mesgulIken, parolaAlani } from './ortak.js';
+import { alanHatasi, api, h, ikon, iskelet, mesajKutusu, mesgulIken, parolaAlani } from './ortak.js';
 
 const ADIMLAR_HOSGELDIN = [
   { ad: 'kasa', etiket: 'Kasa parolası' },
@@ -49,7 +49,8 @@ export function aktarimAkisi(kapsayici, secenekler) {
 
   const ciz = (adim, ...icerik) => {
     kapsayici.replaceChildren(
-      h('h2', { tabindex: '-1', id: 'aktarim-basligi' }, mod === 'hosgeldin' ? 'Mevcut proje dosyalarını aktar' : 'Proje dosyalarından yeniden aktar'),
+      h('div', { class: 'sihirbaz-baslik' }, h('div', { class: 'kirinti' }, h('span', {}, adaptor.etiket)),
+        h('h2', { tabindex: '-1', id: 'aktarim-basligi' }, mod === 'hosgeldin' ? 'Mevcut proje dosyalarını aktar' : 'Proje dosyalarından yeniden aktar')),
       adimListesi(adimlar, adim), ...icerik);
     const baslik = kapsayici.querySelector('#aktarim-basligi');
     if (baslik) baslik.focus({ preventScroll: false });
@@ -67,7 +68,7 @@ export function aktarimAkisi(kapsayici, secenekler) {
       h('div', { class: 'not-kutusu uyari' }, h('p', {}, h('strong', {}, 'Bu parolayı unutmayın. '), 'Parola unutulursa veriler kurtarılamaz. Testleri terminalden çalıştırırken de bu parola sorulacak.')),
       mesaj.kutu, p1.kapsayici, p2.kapsayici,
       h('label', { class: 'secenek', for: anladim.id }, anladim, 'Parolayı unutursam verilerin kurtarılamayacağını anladım.'),
-      h('div', { class: 'dugmeler' }, devam, h('button', { type: 'button', onclick: () => secenekler.vazgec() }, 'Geri')));
+      h('div', { class: 'dugmeler' }, devam, h('button', { type: 'button', class: 'hayalet', onclick: () => secenekler.vazgec() }, 'Geri')));
     form.addEventListener('submit', (o) => {
       o.preventDefault();
       mesaj.temizle();
@@ -86,8 +87,8 @@ export function aktarimAkisi(kapsayici, secenekler) {
 
   // --- 2) Önizleme -----------------------------------------------------------------------
   const onizlemeAdimi = async () => {
-    const durumMetni = h('p', { class: 'soluk', role: 'status' }, 'Dosyalar okunuyor ve test listesi çıkarılıyor… (birkaç saniye sürebilir)');
-    ciz('onizleme', h('div', { class: 'kart' }, durumMetni));
+    const durumMetni = h('p', { class: 'secim-sayaci', role: 'status' }, 'Dosyalar okunuyor ve test listesi çıkarılıyor… (birkaç saniye sürebilir)');
+    ciz('onizleme', h('div', { class: 'kart' }, h('div', { class: 'ilerleme' }, h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), durumMetni)), iskelet('liste')));
     let onizleme;
     try {
       ({ onizleme } = await api('/platform/aktarim/onizle', { govde: { adaptor: adaptor.ad } }));
@@ -104,14 +105,15 @@ export function aktarimAkisi(kapsayici, secenekler) {
       ? [['toplam', 'Aktarılacak']]
       : [['toplam', 'Kaynakta'], ['yeni', 'Yeni'], ['guncellenecek', 'Güncellenecek'], ['ayni', 'Aynı (atlanacak)'], ['kaldirilacak', 'Kaldırılacak'], ['silinmisAtlanacak', 'Silinmiş (atlanacak)']];
     const kart = h('div', { class: 'kart' },
-      h('p', {}, `Proje: `, h('strong', {}, onizleme.proje.ad), onizleme.proje.mevcut ? ' (mevcut projeyle birleştirilecek)' : ' (yeni proje)'),
+      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('klasor'), `Proje: `, h('strong', {}, onizleme.proje.ad)),
+        h('span', { class: 'alt' }, onizleme.proje.mevcut ? 'mevcut projeyle birleştirilecek' : 'yeni proje')),
       sayimTablosu(onizleme.sayimlar, sutunlar, 'Aktarım önizlemesi'),
       h('p', { class: 'soluk kucuk' }, `Koşudan hariç tutulan senaryo: ${onizleme.kosudanHaricSenaryo}. `,
         'Test verisi profillerinin TÜM alanları (kimlik bilgileri, adres, kart sahibi ve kart bilgileri…) kasada şifreli saklanır; yalnızca profil adları açıktır. ',
         'Varsa eski koşu sonuçları (allure-results) ve ekran görüntüsü/videoları da şifrelenerek aktarılır; eski klasörler silinmez.'),
       mod === 'ayarlar' ? h('p', { class: 'soluk kucuk' }, 'Birleştirme kuralı: yalnızca dosyada DEĞİŞEN kayıtlar güncellenir; dosyada değişmeyen kayıtlarda burada yaptığınız düzenlemeler korunur. Dosyadan kalkan senaryo ve profiller kaldırılır.') : null,
       uyariListesi(onizleme.uyarilar), mesaj.kutu,
-      h('div', { class: 'dugmeler' }, uygula, h('button', { type: 'button', onclick: () => geriDon() }, mod === 'hosgeldin' ? 'Geri' : 'Vazgeç')));
+      h('div', { class: 'dugmeler' }, uygula, h('button', { type: 'button', class: 'hayalet', onclick: () => geriDon() }, mod === 'hosgeldin' ? 'Geri' : 'Vazgeç')));
     uygula.addEventListener('click', async () => {
       mesaj.temizle();
       try {

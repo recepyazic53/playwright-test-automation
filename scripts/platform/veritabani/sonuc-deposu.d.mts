@@ -37,7 +37,7 @@ export declare function kosulariHesapIcinOku(vt: Veritabani, projeId: string): A
   z: number; urunler: Record<string, Sayilar>;
 }>;
 export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { urun?: string | null }): {
-  ekranlar: Array<{ anahtar: string; ad: string; senaryoSayisi: number }>;
+  ekranlar: Array<{ anahtar: string; ad: string; senaryoSayisi: number; son: { basarili: number; basarisiz: number; atlanan: number; durduruldu: number } | null }>;
   kart: { son: KartOzeti; onceki: KartOzeti | null; enYeniZ?: number; enEskiZ?: number; urunSayisi?: number } | null;
   trend: Array<Sayilar & { kosuId: string; z: number; kapsam: string | null }>;
   kosuGecmisi: KosuGecmisiSatiri[];

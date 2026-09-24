@@ -3,19 +3,19 @@
 // (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
-  adresGecerliMi, alan, alanHatasi, api, bildir, boyutMetni, geriSayim, h, mesajKutusu, mesgulIken, onayliDugme,
-  parolaAlani, tarihMetni, TOKEN, yeniKimlik
+  adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, mesajKutusu, mesgulIken,
+  onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { aktarimAkisi } from './aktarim.js';
 
 export const AYAR_BOLUMLERI = [
-  { ad: 'proje', etiket: 'Proje ve ortamlar' },
-  { ad: 'giris', etiket: 'Giriş profilleri' },
-  { ad: 'baglam', etiket: 'Bağlam profilleri' },
-  { ad: 'test-verisi', etiket: 'Test verisi' },
-  { ad: 'yedekleme', etiket: 'Yedekleme' },
-  { ad: 'guvenlik', etiket: 'Güvenlik' }
+  { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
+  { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar. Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
+  { ad: 'baglam', etiket: 'Bağlam profilleri', ikon: 'hedef', aciklama: 'Testlerin hangi bağlamda (ör. rol, şube, müşteri tipi) çalışacağını tanımlayan profiller. Tür adlarını projeniz belirler.' },
+  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Testlerin kullanacağı veri kalıpları (türler) ve bu kalıplara göre doldurulmuş kayıtlar (profiller).' },
+  { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
+  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi ve kasa parolası.' }
 ];
 
 const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
@@ -41,9 +41,13 @@ const ISLEM_ETIKETI = {
  * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void> }} baglam
  */
 export function ayarlarBolumu(kapsayici, bolum, baglam) {
-  const etiket = (AYAR_BOLUMLERI.find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0]).etiket;
-  const baslik = h('h2', { id: 'bolum-basligi', tabindex: '-1' }, etiket);
-  const govde = h('div', {}, h('p', { class: 'soluk' }, 'Yükleniyor…'));
+  const tanim = AYAR_BOLUMLERI.find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0];
+  const baslik = h('div', { class: 'sayfa-basligi' }, h('div', {},
+    h('div', { class: 'kirinti' }, h('span', {}, baglam.durum.proje ? baglam.durum.proje.ad : ''), h('span', { 'aria-hidden': 'true' }, '/'),
+      h('span', {}, 'Ayarlar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, tanim.etiket)),
+    h('h2', { id: 'bolum-basligi', tabindex: '-1' }, tanim.etiket),
+    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, tanim.aciklama)));
+  const govde = h('div', {}, iskelet('sayfa'));
   kapsayici.replaceChildren(baslik, govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
@@ -62,16 +66,21 @@ function formPaneli(baslik, ...icerik) {
   return h('form', { class: 'kart form-paneli', novalidate: true }, h('h3', {}, baslik), ...icerik);
 }
 
-function kayitListesi(ogeler, bosMetin) {
-  if (!ogeler.length) return h('p', { class: 'bos-liste' }, bosMetin);
+function kayitListesi(ogeler, bosMetin, ikonAd = 'pusula') {
+  if (!ogeler.length) return bosDurum(bosMetin, null, { ikon: ikonAd, rol: 'status' });
   return h('ul', { class: 'kayit-listesi' }, ogeler);
 }
 
-function kayitSatiri(baslik, meta, eylemler) {
+function kayitSatiri(baslik, meta, eylemler, ikonAd = null) {
   return h('li', {},
+    ikonAd ? h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon(ikonAd)) : null,
     h('div', { class: 'kayit-ana' }, h('strong', {}, baslik), meta ? h('div', { class: 'kayit-meta' }, meta) : null),
     h('div', { class: 'kayit-eylemleri' }, eylemler));
 }
+
+/** Bölüm başlığı (h3 + adet rozeti + sağda eylem düğmesi). */
+const bolumBasligi = (metin, adet, dugme) => h('div', { class: 'bolum-basligi' },
+  h('h3', {}, metin, adet === null || adet === undefined ? null : rozet(String(adet))), dugme || null);
 
 function formuGoster(formAlani, form) {
   formAlani.replaceChildren(form);
@@ -80,9 +89,9 @@ function formuGoster(formAlani, form) {
   form.scrollIntoView({ block: 'nearest' });
 }
 
-const duzenleDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${ad}: düzenle`, onclick: fn }, 'Düzenle');
+const duzenleDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${ad}: düzenle`, onclick: fn }, ikon('duzenle'), 'Düzenle');
 const silDugmesi = (ad, fn) => onayliDugme('Sil', 'Silmeyi onayla', fn, { kucuk: true, etiket: `${ad}: sil` });
-const gecmisDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${ad}: değişiklik geçmişi`, onclick: fn }, 'Geçmiş');
+const gecmisDugmesi = (ad, fn) => h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${ad}: değişiklik geçmişi`, onclick: fn }, ikon('tarih'), 'Geçmiş');
 
 /** "kullanici@<makineId>" → "kullanici · <makine adı>" (makine adları yalnızca kasa açıkken gelir). */
 function yapanMetni(yapan, makineler, yerelMakineId) {
@@ -102,7 +111,8 @@ function yapanMetni(yapan, makineler, yerelMakineId) {
 async function gecmisGoster(varlikTuru, varlikId, baslik, baglam) {
   const { kayitlar, makineler } = await api(`/platform/gecmis?varlikTuru=${encodeURIComponent(varlikTuru)}&varlikId=${encodeURIComponent(varlikId)}`);
   const kapat = h('button', { type: 'button', class: 'birincil' }, 'Kapat');
-  const dialog = h('dialog', { 'aria-labelledby': 'gecmis-basligi' },
+  const dialog = h('dialog', { class: 'cekmece', 'aria-labelledby': 'gecmis-basligi' },
+    h('div', { class: 'kirinti' }, h('span', {}, 'Değişiklik geçmişi')),
     h('h2', { id: 'gecmis-basligi' }, `Değişiklik geçmişi: ${baslik}`),
     kayitlar.length
       ? h('ul', { class: 'gecmis-listesi' }, [...kayitlar].reverse().map((k) => h('li', {},
@@ -136,7 +146,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
   aciklama.value = proje.aciklama || '';
   const projeMesaj = mesajKutusu();
   const projeKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Projeyi kaydet');
-  const projeFormu = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Proje'), projeSecimi, projeMesaj.kutu,
+  const projeFormu = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('katman'), 'Proje'), projeSecimi, projeMesaj.kutu,
     alan('Proje adı', ad, { zorunlu: true }), alan('Açıklama', aciklama), h('div', { class: 'dugmeler' }, projeKaydet));
   projeFormu.addEventListener('submit', async (o) => {
     o.preventDefault();
@@ -178,19 +188,17 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
 
   const satirlar = ortamlar.map((o) => kayitSatiri(
     [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null],
-    o.tabanUrl,
+    h('span', { class: 'mono' }, o.tabanUrl),
     [duzenleDugmesi(o.ad, () => ortamFormu(o)),
       o.varsayilan
         ? h('button', { type: 'button', class: 'kucuk-dugme', disabled: true, title: 'Varsayılan ortam silinemez; önce başka bir ortamı varsayılan yapın.' }, 'Sil')
-        : silDugmesi(o.ad, async () => { await api('/platform/ortam/sil', { govde: { id: o.id } }); bildir('Ortam silindi.'); yenile(); })]));
+        : silDugmesi(o.ad, async () => { await api('/platform/ortam/sil', { govde: { id: o.id } }); bildir('Ortam silindi.'); yenile(); })], 'ag'));
 
   govde.replaceChildren(
-    h('p', { class: 'soluk' }, 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.'),
     projeFormu,
-    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Ortamlar'),
-      h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, '+ Ortam ekle')),
+    bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, '+ Ortam ekle')),
     formAlani,
-    kayitListesi(satirlar, 'Henüz ortam yok.'));
+    kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -288,14 +296,12 @@ async function girisProfilleri(govde, baglam, yenile) {
     [`${ortamAdi(p.ortamId)} · ${p.kullaniciAdi} · Parola: ${p.parola.dolu ? `${p.parola.maske} kayıtlı` : 'yok'} · İki aşamalı: ${IKI_ASAMALI_ETIKET[p.ikiAsamaliTur] || p.ikiAsamaliTur}`,
       p.ikiAsamaliTur === 'sms' ? (p.sms.yontem === 'elle' ? ' (elle girilir)' : ' (sabit test kodu)') : ''],
     [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('giris_profili', p.id, p.ad, baglam)),
-      silDugmesi(p.ad, async () => { await api('/platform/giris-profili/sil', { govde: { id: p.id } }); bildir('Giriş profili silindi.'); yenile(); })]));
+      silDugmesi(p.ad, async () => { await api('/platform/giris-profili/sil', { govde: { id: p.id } }); bildir('Giriş profili silindi.'); yenile(); })], 'kullanici'));
 
   govde.replaceChildren(
-    h('p', { class: 'soluk' }, 'Testlerin sisteme giriş yaparken kullanacağı hesaplar. Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.'),
-    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Profiller'),
-      h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Giriş profili ekle')),
+    bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Giriş profili ekle')),
     formAlani,
-    kayitListesi(satirlar, 'Henüz giriş profili yok.'));
+    kayitListesi(satirlar, 'Henüz giriş profili yok.', 'kullanici'));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -366,18 +372,16 @@ async function baglamProfilleri(govde, baglam, yenile) {
   };
 
   const gruplar = turler.map((t) => h('section', { 'aria-label': t },
-    h('h4', {}, t, ' ', h('span', { class: 'rozet' }, String(profiller.filter((p) => p.tur === t).length))),
+    h('h4', { class: 'grup-basligi-h4' }, ikon('hedef'), t, ' ', h('span', { class: 'rozet' }, String(profiller.filter((p) => p.tur === t).length))),
     kayitListesi(profiller.filter((p) => p.tur === t).map((p) => kayitSatiri(p.ad,
       `${ortamAdiBul(ortamlar, p.ortamId)} · ${Object.keys(p.alanlar || {}).length ? `Alanlar: ${Object.keys(p.alanlar).join(', ')}` : 'Alan yok'}`,
       [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('baglam_profili', p.id, p.ad, baglam)),
         silDugmesi(p.ad, async () => { await api('/platform/baglam-profili/sil', { govde: { id: p.id } }); bildir('Bağlam profili silindi.'); yenile(); })])), '')));
 
   govde.replaceChildren(
-    h('p', { class: 'soluk' }, 'Testlerin hangi bağlamda (ör. rol, şube, müşteri tipi) çalışacağını tanımlayan profiller. Tür adlarını projeniz belirler.'),
-    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Profiller'),
-      h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Bağlam profili ekle')),
+    bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Bağlam profili ekle')),
     formAlani,
-    ...(gruplar.length ? gruplar : [h('p', { class: 'bos-liste' }, 'Henüz bağlam profili yok.')]));
+    ...(gruplar.length ? gruplar : [bosDurum('Henüz bağlam profili yok.', 'Rol, şube ya da müşteri tipi gibi bir tür yazarak ilk profili ekleyin.', { ikon: 'hedef', rol: 'status' })]));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -407,6 +411,7 @@ async function testVerisi(govde, baglam, yenile) {
       const hassasG = h('input', { type: 'checkbox', id: yeniKimlik('hassas'), checked: a.hassas !== false });
       const s = { adG, etiketG, tipG, hassasG, el: null };
       const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
+      hassasG.classList.add('anahtar');
       s.el = h('div', { class: 'tur-alan-satiri' }, alan('Alan adı', adG), alan('Etiket', etiketG), alan('Tip', tipG),
         h('label', { class: 'secenek', for: hassasG.id, title: profilVar ? 'Değiştirirseniz bu türdeki profillerin mevcut değerleri de buna göre şifrelenir/çözülür.' : null }, hassasG, 'Hassas'), kaldir);
       satirlar.push(s);
@@ -517,23 +522,21 @@ async function testVerisi(govde, baglam, yenile) {
     [duzenleDugmesi(t.ad, () => turFormu(t)),
       onayliDugme('Sil', 'Tür ve profilleri silinsin', async () => {
         await api('/platform/test-verisi-turu/sil', { govde: { id: t.id } }); bildir('Test verisi türü silindi.'); yenile();
-      }, { kucuk: true, etiket: `${t.ad}: sil (bu türün tüm profilleri de silinir)` })]));
+      }, { kucuk: true, etiket: `${t.ad}: sil (bu türün tüm profilleri de silinir)` })], 'veri'));
   const turAdi = (id) => (turler.find((t) => t.id === id) || { ad: '?' }).ad;
   const profilSatirlari = profiller.map((p) => kayitSatiri(p.ad,
     [`Tür: ${turAdi(p.turId)} · ${ortamAdiBul(ortamlar, p.ortamId)} · `, Object.entries(p.degerler).map(([k, v]) => `${k}: ${v && typeof v === 'object' ? (v.dolu ? v.maske : '—') : v === null || v === '' ? '—' : String(v)}`).join(', ')],
     [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('test_verisi_profili', p.id, p.ad, baglam)),
-      silDugmesi(p.ad, async () => { await api('/platform/test-verisi-profili/sil', { govde: { id: p.id } }); bildir('Test verisi profili silindi.'); yenile(); })]));
+      silDugmesi(p.ad, async () => { await api('/platform/test-verisi-profili/sil', { govde: { id: p.id } }); bildir('Test verisi profili silindi.'); yenile(); })], 'dosya'));
 
   govde.replaceChildren(
-    h('p', { class: 'soluk' }, 'Testlerin kullanacağı veri kalıpları (türler) ve bu kalıplara göre doldurulmuş kayıtlar (profiller).'),
-    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Türler'),
-      h('button', { type: 'button', class: 'birincil', onclick: () => turFormu(null) }, '+ Tür ekle')),
+    bolumBasligi('Türler', turler.length, h('button', { type: 'button', class: 'birincil', onclick: () => turFormu(null) }, '+ Tür ekle')),
     turFormAlani,
-    kayitListesi(turSatirlari, 'Henüz test verisi türü yok.'),
-    h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Profiller'),
+    kayitListesi(turSatirlari, 'Henüz test verisi türü yok.', 'veri'),
+    bolumBasligi('Profiller', profiller.length,
       h('button', { type: 'button', class: 'birincil', disabled: !turler.length, title: turler.length ? null : 'Önce bir tür ekleyin.', onclick: () => profilFormu(null, turler[0] && turler[0].id) }, '+ Profil ekle')),
     profilFormAlani,
-    kayitListesi(profilSatirlari, turler.length ? 'Henüz test verisi profili yok.' : 'Profil eklemek için önce bir tür tanımlayın.'));
+    kayitListesi(profilSatirlari, turler.length ? 'Henüz test verisi profili yok.' : 'Profil eklemek için önce bir tür tanımlayın.', 'dosya'));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -567,7 +570,8 @@ async function yedekleme(govde, baglam, yenile) {
     return {
       ad: s.ad, kutu, t,
       oge: h('label', { class: 'secenek', for: kutu.id }, kutu,
-        h('span', {}, s.etiket, h('span', { class: 'soluk kucuk' }, ` — ${tahminMetni} (${s.aciklama})`)))
+        h('span', { class: 'secenek-metni' }, h('b', {}, s.etiket), h('span', { class: 'tahmin' }, `${tahminMetni} (${s.aciklama})`)),
+        h('span', { class: 'boyut-rozeti', 'aria-hidden': 'true' }, t && t.sayi ? boyutMetni(t.bayt) : '—'))
     };
   });
   const toplamGuncelle = () => {
@@ -579,22 +583,26 @@ async function yedekleme(govde, baglam, yenile) {
   };
   for (const k of kutular) k.kutu.addEventListener('change', toplamGuncelle);
   toplamGuncelle();
-  const ilerlemeCubugu = h('progress', { max: '100', value: '0', hidden: true, 'aria-label': 'Yedek hazırlanıyor' });
-  const ilerlemeMetni = h('p', { class: 'soluk kucuk', 'aria-live': 'polite', hidden: true });
-  const disaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Dışa aktar'),
+  const ilerlemeCubugu = h('progress', { max: '100', value: '0', 'aria-label': 'Yedek hazırlanıyor' });
+  const ilerlemeMetni = h('p', { class: 'soluk kucuk', 'aria-live': 'polite' });
+  const ilerlemeYuzdesi = h('span', { class: 'yuzde', 'aria-hidden': 'true' }, '%0');
+  const ilerlemeKutusu = h('div', { class: 'ilerleme', hidden: true },
+    h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), ilerlemeMetni, ilerlemeYuzdesi), ilerlemeCubugu);
+  ilerlemeMetni.classList.add('secim-sayaci');
+  const disaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('indir'), 'Dışa aktar'),
     h('p', { class: 'soluk' }, 'Tüm proje verisini tek bir şifreli .tayedek dosyası olarak indirir. Dosyayı başka bir bilgisayarda "Yedek yükle" ile açabilirsiniz.'),
     disaMesaj.kutu,
     h('fieldset', { class: 'medya-secimi' }, h('legend', {}, 'Yedeğe eklenecek medya dosyaları'),
       kutular.map((k) => k.oge), toplamSatiri),
-    parola.kapsayici, ilerlemeMetni, ilerlemeCubugu, h('div', { class: 'dugmeler' }, indir));
+    parola.kapsayici, ilerlemeKutusu, h('div', { class: 'dugmeler' }, indir));
   let durdur = () => {};
   const ilerlemeGoster = (is) => {
-    ilerlemeCubugu.hidden = false;
-    ilerlemeMetni.hidden = false;
+    ilerlemeKutusu.hidden = false;
     ilerlemeCubugu.value = is.yuzde || 0;
-    ilerlemeMetni.textContent = `${is.asama} — %${Math.round(is.yuzde || 0)}`;
+    ilerlemeMetni.textContent = is.asama;
+    ilerlemeYuzdesi.textContent = `%${Math.round(is.yuzde || 0)}`;
   };
-  const ilerlemeGizle = () => { ilerlemeCubugu.hidden = true; ilerlemeMetni.hidden = true; };
+  const ilerlemeGizle = () => { ilerlemeKutusu.hidden = true; };
   disaForm.addEventListener('submit', async (o) => {
     o.preventDefault();
     disaMesaj.temizle();
@@ -645,7 +653,7 @@ async function yedekleme(govde, baglam, yenile) {
   // İçe aktar
   const iceAlani = h('div', {});
   const iceBaslat = h('button', { type: 'button', class: 'birincil' }, 'Yedek dosyası seç…');
-  const iceKart = h('div', { class: 'kart' }, h('h3', {}, 'İçe aktar'),
+  const iceKart = h('div', { class: 'kart' }, h('h3', {}, ikon('yukle'), 'İçe aktar'),
     h('p', { class: 'soluk' }, 'Bir yedekteki kayıtları bu bilgisayardakilerle karşılaştırır; neyin ekleneceğini ve değişeceğini seçersiniz. Bu bilgisayardaki kayıtlar silinmez.'),
     h('div', { class: 'dugmeler' }, iceBaslat));
   // Proje dosyalarından yeniden aktar (eski dosyalar bu klasörde varsa)
@@ -654,7 +662,7 @@ async function yedekleme(govde, baglam, yenile) {
   let aktarimKart = null;
   if (aktarilabilir) {
     const baslat = h('button', { type: 'button', class: 'birincil' }, 'Önizle ve aktar…');
-    aktarimKart = h('div', { class: 'kart' }, h('h3', {}, 'Proje dosyalarından yeniden aktar'),
+    aktarimKart = h('div', { class: 'kart' }, h('h3', {}, ikon('klasor'), 'Proje dosyalarından yeniden aktar'),
       h('p', { class: 'soluk' }, `${aktarilabilir.etiket}. Kaynak anahtarına göre birleştirir: dosyada değişen kayıtlar güncellenir, yeni kayıtlar eklenir; önce önizleme gösterilir.`),
       h('p', { class: 'soluk kucuk' }, aktarilabilir.sonAktarim ? `Son aktarım: ${tarihMetni(aktarilabilir.sonAktarim)}` : 'Bu proje henüz dosyalardan aktarılmadı.'),
       h('div', { class: 'dugmeler' }, baslat));
@@ -680,7 +688,7 @@ async function yedekleme(govde, baglam, yenile) {
   });
 
   // Otomatik yedekler
-  const simdi = h('button', { type: 'button' }, 'Şimdi yedek al');
+  const simdi = h('button', { type: 'button' }, ikon('arsiv'), 'Şimdi yedek al');
   simdi.addEventListener('click', async () => {
     try {
       await mesgulIken(simdi, 'Yedek alınıyor…', () => api('/platform/yedek/otomatik', { govde: {} }));
@@ -688,10 +696,10 @@ async function yedekleme(govde, baglam, yenile) {
       yenile();
     } catch (hata) { bildir(hata.message, 'hata'); }
   });
-  const liste = kayitListesi(dosyalar.map((d) => kayitSatiri(d.ad, `${tarihMetni(d.zaman)} · ${boyutMetni(d.boyut)}${d.otomatik ? '' : ' · elle alınmış'}`, [])),
-    'Henüz yerel yedek yok.');
+  const liste = kayitListesi(dosyalar.map((d) => kayitSatiri(h('span', { class: 'mono' }, d.ad), `${tarihMetni(d.zaman)} · ${boyutMetni(d.boyut)}${d.otomatik ? '' : ' · elle alınmış'}`, [], 'arsiv')),
+    'Henüz yerel yedek yok.', 'arsiv');
 
-  const otomatikKart = h('div', { class: 'kart' }, h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Otomatik yedekler'), simdi),
+  const otomatikKart = h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('saat'), 'Otomatik yedekler'), h('div', { class: 'sag' }, simdi)),
     h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; en yeni 30 otomatik yedek saklanır.'),
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     liste);
@@ -707,7 +715,7 @@ async function guvenlik(govde, baglam) {
   const dakika = h('input', { type: 'number', min: String(ayar.enAz), max: String(ayar.enCok), step: '1', value: String(ayar.otomatikKilitDakika), inputmode: 'numeric' });
   const kilitMesaj = mesajKutusu();
   const kilitKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-  const kilitForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Otomatik kilit'),
+  const kilitForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('saat'), 'Otomatik kilit'),
     h('p', { class: 'soluk' }, 'Bu süre boyunca hiçbir işlem yapılmazsa kasa kendiliğinden kilitlenir; devam etmek için parola gerekir.'),
     kilitMesaj.kutu,
     alan('Süre (dakika)', dakika, { yardim: `${ayar.enAz}–${ayar.enCok} dakika; varsayılan ${ayar.varsayilan}.` }),
@@ -728,7 +736,7 @@ async function guvenlik(govde, baglam) {
   const gun = h('input', { type: 'number', min: '1', max: '3650', step: '1', value: String(ayar.videoSaklamaGun), inputmode: 'numeric' });
   const saklamaMesaj = mesajKutusu();
   const saklamaKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-  const saklamaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Video saklama süresi'),
+  const saklamaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('video'), 'Video saklama süresi'),
     h('p', { class: 'soluk' }, 'Koşu videoları şifreli olarak saklanır; bu süreden eski videolar günlük temizlikte silinir. Ekran görüntüleri, izler ve sonuçlar silinmez.'),
     saklamaMesaj.kutu,
     alan('Süre (gün)', gun, { yardim: `1–3650 gün; varsayılan ${ayar.videoSaklamaVarsayilan}.` }),
@@ -744,7 +752,7 @@ async function guvenlik(govde, baglam) {
       saklamaMesaj.goster(`${g} günden eski videolar silinecek.`, 'basari');
     } catch (hata) { saklamaMesaj.goster(hata.message); }
   });
-  const kilitle = h('button', { type: 'button' }, 'Kasayı kilitle');
+  const kilitle = h('button', { type: 'button' }, ikon('kilit'), 'Kasayı kilitle');
   kilitle.addEventListener('click', async () => {
     await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
     bildir('Kasa kilitlendi.');
@@ -756,7 +764,7 @@ async function guvenlik(govde, baglam) {
   const yeni2 = parolaAlani('Yeni parola (tekrar)', { zorunlu: true, otomatik: 'new-password' });
   const mesaj = mesajKutusu();
   const degistir = h('button', { type: 'submit', class: 'birincil' }, 'Parolayı değiştir');
-  const form = h('form', { class: 'kart', novalidate: true }, h('h3', {}, 'Parolayı değiştir'),
+  const form = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('anahtar'), 'Parolayı değiştir'),
     h('div', { class: 'not-kutusu uyari' }, h('p', {}, 'Yeni parolayı unutursanız veriler kurtarılamaz. Daha önce alınmış yedekler eski parolayla açılmaya devam eder.')),
     mesaj.kutu, eski.kapsayici, yeni1.kapsayici, yeni2.kapsayici, h('div', { class: 'dugmeler' }, degistir));
   let durdur = () => {};
@@ -782,10 +790,9 @@ async function guvenlik(govde, baglam) {
   });
 
   govde.replaceChildren(
-    h('div', { class: 'kart' }, h('h3', {}, 'Kasayı kilitle'),
-      h('p', { class: 'soluk' }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.'),
-      h('div', { class: 'dugmeler' }, kilitle)),
-    kilitForm,
-    saklamaForm,
+    h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('kalkan'), 'Kasayı kilitle'),
+      h('span', { class: 'alt' }, rozet([h('span', { class: 'nokta basari', 'aria-hidden': 'true' }), 'kasa açık'], 'basari')), h('div', { class: 'sag' }, kilitle)),
+    h('p', { class: 'soluk', style: { margin: '0' } }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.')),
+    h('div', { class: 'ayar-izgarasi' }, kilitForm, saklamaForm),
     form);
 }
