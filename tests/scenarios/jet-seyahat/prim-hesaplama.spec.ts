@@ -17,7 +17,7 @@
 // Mesaj eşleşmeleri toleranslıdır (harf büyüklüğü, kıvrık/düz tırnak, boşluk farkları yok
 // sayılır; görülen metnin beklenen mesajı içermesi yeterlidir). Her testin beklenen sonucu
 // "beklenenSonuc" annotation'ı olarak da eklenir (dashboard > Senaryolar tablosu gösterir).
-// Bazı senaryolar farklı bir acente profiliyle (örn. 30856) çalışır; bu acentede COVID
+// Bazı senaryolar farklı bir acente profiliyle çalışır; bazı acentelerde COVID
 // teminatı, kayak teminatı, Plan Kodu ve Seyahat İptal Bedeli alanları hiç gösterilmez.
 import { test } from '../../support/fixtures';
 import { getEnvironmentName, hasCredentials } from '../../support/environments';

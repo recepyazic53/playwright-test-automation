@@ -7,6 +7,21 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
+ * Alt süreç ortamı: bu süreçten gelen Playwright worker değişkenleri (iç içe çalışmada), platform
+ * veritabanı/kasa ve sunucu koşu değişkenleri çıkarılır — liste yalnızca ekOrtam'daki değerlerle kurulur.
+ * @returns {NodeJS.ProcessEnv}
+ */
+function temizOrtam() {
+  /** @type {NodeJS.ProcessEnv} */
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (/^(TEST_WORKER_INDEX|TEST_PARALLEL_INDEX|PW_|PLAYWRIGHT_(?!BROWSERS_PATH)|PLATFORM_|TEST_SUNUCU_)/.test(k)) continue;
+    env[k] = v;
+  }
+  return env;
+}
+
+/**
  * @param {string} projeKoku
  * @param {Record<string, string>} ekOrtam alt sürece eklenecek ortam değişkenleri
  * @returns {Promise<Array<{ dosya: string; ad: string }>>} dosya: testDir'e göre göreli, "/" ayraçlı
@@ -16,7 +31,7 @@ export function playwrightTestleriniListele(projeKoku, ekOrtam = {}) {
   return new Promise((coz, reddet) => {
     if (!existsSync(cli)) { reddet(new Error('Playwright bulunamadı (npm install çalıştırılmamış olabilir).')); return; }
     execFile(process.execPath, [cli, 'test', '--list', '--reporter=json'], {
-      cwd: projeKoku, env: { ...process.env, ...ekOrtam }, maxBuffer: 64 * 1024 * 1024, shell: false, windowsHide: true
+      cwd: projeKoku, env: { ...temizOrtam(), ...ekOrtam }, maxBuffer: 64 * 1024 * 1024, shell: false, windowsHide: true
     }, (hata, stdout, stderr) => {
       let veri;
       try {

@@ -41,7 +41,7 @@ export class LoginPage {
 
     if (definition.login.authenticatorRequired) {
       if (!credentials.authenticatorCode) {
-        throw new Error('CANLI_AUTH_CODE .env dosyasında tanımlı olmalı.');
+        throw new Error('CANLI giriş profilinde iki aşamalı doğrulama (TOTP anahtarı ya da sabit kod) tanımlı olmalı (Nöbetçi > Ayarlar > Giriş profilleri).');
       }
 
       await this.page.locator('#Gauthcode').fill(credentials.authenticatorCode);

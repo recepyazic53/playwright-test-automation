@@ -1,10 +1,10 @@
-// TEK SENARYO DOĞRULAYICISI — ekran modeli (tests/ekran-modelleri/*.model.json) tabanlı.
+// TEK SENARYO DOĞRULAYICISI — ekran modeli tabanlı (modeller platform veritabanında; şema:
+// tests/birim/fixtures/ornek-eski-dosyalar/tests/ekran-modelleri/README.md).
 //
 // Aynı kod üç yerde çalışır (kurallar ve Türkçe mesajlar TEK kaynaktan gelir):
 //  - Playwright spec'i (TS): tests/support/senaryo-dogrulama.ts + beklenen-sonuc.ts
-//  - Test sunucusu: scripts/test-sunucu.mjs (/jetseyahat-senaryo/dene, /kaydet, /senaryo-guncelle)
-//  - Dashboard formu (tarayıcı): scripts/rapor/dashboard-html.mjs bu dosyayı
-//    scripts/dogrulama/tarayici-paketi.mjs ile sarıp sayfaya gömer (window.SenaryoDogrulayici).
+//  - Platform sunucusu: Senaryolar > kaydet/dene (scripts/platform/senaryolar/senaryo-servisi.mjs)
+//  - Senaryolar formu (tarayıcı): sunucu bu dosyayı /arayuz/senaryo-dogrulayici.mjs olarak sunar (ESM).
 //
 // KURALLAR:
 //  - Bu dosya HİÇBİR modül import etmez, Node'a/DOM'a özgü API kullanmaz (tarayıcıya olduğu
@@ -163,7 +163,7 @@ const KIMLIK_ALANI_KURALLARI = {
   },
   cepTelefonu: {
     etiket: 'Cep Telefonu',
-    // Veride kullanılan biçim: 10 hane, 5 ile başlar, başında 0/+90 yok (ör. 5426502153).
+    // Veride kullanılan biçim: 10 hane, 5 ile başlar, başında 0/+90 yok (ör. 5XXXXXXXXX).
     dogrula: (d) => (/^5\d{9}$/.test(d) ? null : MESAJLAR.telefonBicim())
   },
   dogumTarihi: {

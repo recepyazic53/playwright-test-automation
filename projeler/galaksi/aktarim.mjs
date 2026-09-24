@@ -1,14 +1,18 @@
 // GALAKSİ AKTARIM ADAPTÖRÜ — PROJEYE ÖZGÜ. Platform motoru (scripts/platform/aktarim/motor.mjs)
-// genel kalır; Galaksi'nin eski dosya düzenini (tests/data/<ortam>/*.json, tests/data/kosu-listesi.json,
-// tests/ekran-modelleri/*.json, .env) bilen tek yer burasıdır. İki yönlü çalışır:
-//   1) paketOlustur: eski dosyalar → motorun anladığı nötr paket (ortam, giriş/bağlam/test verisi
-//      profilleri, ekranlar + ayarları, senaryolar).
-//   2) yenidenKur: veritabanı → testlerin bugün kullandığı AYNI şekiller (ortak.json, ürün dosyaları,
+// genel kalır; Galaksi'nin ESKİ dosya düzenini (tests/data/<ortam>/*.json, tests/data/kosu-listesi.json,
+// tests/ekran-modelleri/*.json, .env) bilen tek yer burasıdır. Proje verisi artık Git'te DEĞİL, yalnızca
+// platform veritabanındadır; eski dosyalar bir KAYNAK KLASÖRDEN okunur (varsayılan: en yeni
+// veri/eski-dosyalar/<zaman> yedeği; kullanıcı başka bir klasör seçebilir — ör. eski dosyaları olan
+// başka bir makinede). İki yönlü çalışır:
+//   1) paketOlustur: kaynak klasördeki eski dosyalar → motorun anladığı nötr paket (ortam, giriş/bağlam/
+//      test verisi profilleri, ekranlar + ayarları + modelleri, senaryolar).
+//   2) yenidenKur: veritabanı → testlerin kullandığı şekiller (ortak, ürün verileri, ekran modelleri,
 //      taban adres, giriş bilgisi). tests/support/platform-veri.ts bunu scripts/platform/aktarim/
-//      veri-oku.mjs üzerinden (ayrı süreçte) çağırır; testlerin davranışı değişmez.
+//      veri-oku.mjs üzerinden (ayrı süreçte) çağırır.
 //
 // Eşleme özeti:
-//   .env TEST_/CANLI_BASE_URL          → ortamlar "TEST" / "CANLI" (şifreli ad + adres)
+//   .env TEST_/CANLI_BASE_URL          → ortamlar "TEST" / "CANLI" (şifreli ad + adres). Değişkenler
+//                                        kaynak klasördeki .env'den (varsa), yoksa sunucunun ortamından.
 //   .env kullanıcı/parola/2FA          → giriş profili (ortam başına; CANLI'da CANLI_AUTH_SECRET → TOTP)
 //   ortak.json kullaniciDegistir       → bağlam profilleri, tür "Acente" (alanlar şifreli)
 //   ortak.json kimlikBilgileri.*       → test verisi türleri "Özel kişi", "Tüzel kişi", "Pasaport",
@@ -18,16 +22,19 @@
 //   tests/data/<ortam>/<ürün>.json     → ekran ayarları (ortamlar.<ortamId>.dosyalar.<dosya>; şifreli)
 //                                        — senaryo dizileri hariç (onlar senaryo satırı olur)
 //   tests/ekran-modelleri/*.model.json → ekran modeli (sürüm 1)
-//   playwright --list (TEST + CANLI)   → senaryolar (kararlı UUID, kaynak {dosya, ad}, kosuya_dahil)
+//   playwright --list (TEST + CANLI)   → senaryolar (kararlı UUID, kaynak {dosya, ad}, kosuya_dahil).
+//                                        Liste, paketin uygulandığı GEÇİCİ bir veritabanı üzerinden alınır
+//                                        (aktarim/gecici-liste.mjs) — testler dosya okumaz.
 // Aynı profil iki ortamda AYNIYSA tek satır (tüm ortamlar), farklıysa ortam başına ayrı satır.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir); proje kökü parametredir.
 
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { kaynakEslemeleriniListele, girisProfiliGetir, ortamGetir, ekranAyarlariniGetir } from '../../scripts/platform/veritabani/depo.mjs';
+import { parse as dotenvAyristir } from 'dotenv';
+import { kaynakEslemeleriniListele, girisProfiliGetir, ortamGetir, ekranAyarlariniGetir, ekranModeliGetir } from '../../scripts/platform/veritabani/depo.mjs';
 import { coz, zarfMi } from '../../scripts/platform/kasa.mjs';
-import { AktarimHatasi, icerikOzeti, kanonik, zarflariCoz } from '../../scripts/platform/aktarim/motor.mjs';
-import { playwrightTestleriniListele } from '../../scripts/platform/aktarim/playwright-liste.mjs';
+import { AktarimHatasi, kanonik, zarflariCoz } from '../../scripts/platform/aktarim/motor.mjs';
+import { paketleTestleriListele } from '../../scripts/platform/aktarim/gecici-liste.mjs';
 import { senaryoKaynakAnahtari } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
 import { ortakBaglaminiOlustur } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
 
@@ -47,10 +54,6 @@ const ISARET = '__platform__';
 export const ORTAMLAR = Object.freeze([
   { anahtar: 'test', ad: 'TEST', url: 'TEST_BASE_URL', parola: 'TEST_PASSWORD', varsayilan: true },
   { anahtar: 'canli', ad: 'CANLI', url: 'CANLI_BASE_URL', parola: 'CANLI_PASSWORD', totp: 'CANLI_AUTH_SECRET', sabitKod: 'CANLI_AUTH_CODE', varsayilan: false }
-]);
-/** Parmak izine giren .env değişkenleri (değer değil, şifreli özetleri saklanır). */
-export const ORTAM_DEGISKENLERI = Object.freeze([
-  'TEST_BASE_URL', 'CANLI_BASE_URL', 'LOGIN_USERNAME', 'TEST_USERNAME', 'TEST_PASSWORD', 'CANLI_PASSWORD', 'CANLI_AUTH_SECRET', 'CANLI_AUTH_CODE'
 ]);
 
 /** ortak.json bölümleri → test verisi türleri. tekil: bölüm tek bir kayıttır (sözlük değil). */
@@ -125,58 +128,39 @@ function ekranAnahtariBul(dosya) {
   return c ? c[1] : null;
 }
 
-/** @param {string} projeKoku @param {string} ortam */
-function veriDosyalari(projeKoku, ortam) {
-  const klasor = join(projeKoku, VERI_KLASORU, ortam);
+/** @param {string} kaynak eski dosyaların klasörü @param {string} ortam */
+function veriDosyalari(kaynak, ortam) {
+  const klasor = join(kaynak, VERI_KLASORU, ortam);
   if (!existsSync(klasor)) return [];
   return readdirSync(klasor).filter((ad) => ad.endsWith('.json')).map((ad) => ad.slice(0, -5)).sort();
 }
 
-/** @param {string} projeKoku @param {string} ortam @param {string} ad @returns {Nesne} */
-function jsonOku(projeKoku, ortam, ad) {
-  return JSON.parse(readFileSync(join(projeKoku, VERI_KLASORU, ortam, `${ad}.json`), 'utf-8'));
+/** @param {string} kaynak @param {string} ortam @param {string} ad @returns {Nesne} */
+function jsonOku(kaynak, ortam, ad) {
+  return JSON.parse(readFileSync(join(kaynak, VERI_KLASORU, ortam, `${ad}.json`), 'utf-8'));
+}
+
+/**
+ * Aktarımın göreceği ortam değişkenleri: verilen (ya da sunucunun) değişkenler + kaynak klasörde
+ * .env varsa onun değerleri (öncelikli). Değerler hiçbir yere yazılmaz/loglanmaz.
+ * @param {string} kaynak @param {NodeJS.ProcessEnv} temel @returns {NodeJS.ProcessEnv}
+ */
+function kaynakOrtamDegiskenleri(kaynak, temel) {
+  const yol = join(kaynak, '.env');
+  return existsSync(yol) ? { ...temel, ...dotenvAyristir(readFileSync(yol)) } : { ...temel };
 }
 
 // ---------------------------------------------------------------------------------------
-// Algılama ve parmak izleri
+// Algılama
 // ---------------------------------------------------------------------------------------
 
 /**
- * Eski proje dosyaları var mı? (ortak.json en az bir ortamda)
- * @param {string} projeKoku
+ * Klasörde eski proje dosyaları var mı? (tests/data/<ortam>/ortak.json en az bir ortamda)
+ * @param {string} kaynak
  */
-export function algila(projeKoku) {
-  const ortamlar = ORTAMLAR.filter((o) => existsSync(join(projeKoku, VERI_KLASORU, o.anahtar, 'ortak.json'))).map((o) => o.anahtar);
+export function algila(kaynak) {
+  const ortamlar = ORTAMLAR.filter((o) => existsSync(join(kaynak, VERI_KLASORU, o.anahtar, 'ortak.json'))).map((o) => o.anahtar);
   return { var: ortamlar.length > 0, ortamlar };
-}
-
-/** Koşu listesi dosyasının (yalnızca test başlıkları içerir) açık özeti. @param {string} projeKoku */
-export function kosuListesiOzeti(projeKoku) {
-  const yol = join(projeKoku, KOSU_LISTESI);
-  return existsSync(yol) ? icerikOzeti(readFileSync(yol)) : 'yok';
-}
-
-/**
- * Eski dosyaların parmak izleri (aktarımdan sonra dosyalar değişti mi?). "dosyalar" tüm veri
- * dosyalarını kapsar; ortam değişkenlerinin yalnızca TANIMLI olanlarının özeti alınır.
- * @param {string} projeKoku @param {NodeJS.ProcessEnv} ortamDegiskenleri
- */
-export function parmakIzleri(projeKoku, ortamDegiskenleri) {
-  const parcalar = [];
-  for (const o of ORTAMLAR) {
-    for (const ad of veriDosyalari(projeKoku, o.anahtar)) {
-      parcalar.push(`${o.anahtar}/${ad}\u0000`, readFileSync(join(projeKoku, VERI_KLASORU, o.anahtar, `${ad}.json`), 'utf-8'), '\u0000');
-    }
-  }
-  const kl = join(projeKoku, KOSU_LISTESI);
-  parcalar.push('kosu-listesi\u0000', existsSync(kl) ? readFileSync(kl, 'utf-8') : '');
-  /** @type {Record<string, string>} */
-  const degiskenler = {};
-  for (const ad of ORTAM_DEGISKENLERI) {
-    const deger = ortamDegiskenleri[ad];
-    if (deger) degiskenler[ad] = icerikOzeti(`${ad}=${deger}`);
-  }
-  return { dosyalar: icerikOzeti(parcalar.join('')), ortamDegiskenleri: degiskenler };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -258,17 +242,16 @@ function kapsamlariBelirle(ortamaGore) {
 const sozlukIsareti = (sozluk) => ({ [ISARET]: 'profiller', sira: Object.keys(sozluk) });
 
 /**
- * Eski dosyalardan motor paketi üretir. Test listesi (TEST + CANLI) Playwright'tan DOSYA
- * kaynağıyla alınır (PLATFORM_VERI_KAYNAGI=dosya).
- * @param {string} projeKoku
- * @param {{ ortamDegiskenleri?: NodeJS.ProcessEnv; testListesi?: (ortam: string) => Promise<Array<{ dosya: string; ad: string }>> }} [secenekler]
+ * Kaynak klasördeki eski dosyalardan motor paketi üretir. Test listesi (TEST + CANLI) verilmezse,
+ * paket (senaryo listesi olmadan) geçici bir veritabanına uygulanıp Playwright listesi oradan alınır.
+ * @param {string} kaynak eski dosyaların klasörü (tests/data, tests/ekran-modelleri, isteğe bağlı .env)
+ * @param {{ projeKoku?: string; ortamDegiskenleri?: NodeJS.ProcessEnv; testListesi?: (ortam: string) => Promise<Array<{ dosya: string; ad: string }>> }} [secenekler]
+ *   projeKoku: spec dosyalarının bulunduğu kök (varsayılan: kaynak)
  * @returns {Promise<AktarimPaketi>}
  */
-export async function paketOlustur(projeKoku, secenekler = {}) {
-  const env = secenekler.ortamDegiskenleri ?? process.env;
-  const listele = secenekler.testListesi ?? ((ortam) => playwrightTestleriniListele(projeKoku, {
-    TEST_ENV: ortam, TEST_SUNUCU_TUM_LISTE: '1', PLATFORM_VERI_KAYNAGI: 'dosya'
-  }));
+export async function paketOlustur(kaynak, secenekler = {}) {
+  const projeKoku = secenekler.projeKoku ?? kaynak;
+  const env = kaynakOrtamDegiskenleri(kaynak, secenekler.ortamDegiskenleri ?? process.env);
   /** @type {string[]} */
   const uyarilar = [];
   /** @type {AktarimPaketi} */
@@ -278,10 +261,10 @@ export async function paketOlustur(projeKoku, secenekler = {}) {
     senaryolar: [], uyarilar
   };
 
-  const varOlanOrtamlar = ORTAMLAR.filter((o) => existsSync(join(projeKoku, VERI_KLASORU, o.anahtar, 'ortak.json')));
-  if (!varOlanOrtamlar.length) throw new AktarimHatasi('Aktarılacak proje dosyası bulunamadı (tests/data/<ortam>/ortak.json).');
+  const varOlanOrtamlar = ORTAMLAR.filter((o) => existsSync(join(kaynak, VERI_KLASORU, o.anahtar, 'ortak.json')));
+  if (!varOlanOrtamlar.length) throw new AktarimHatasi('Seçilen klasörde aktarılacak proje dosyası bulunamadı (tests/data/<ortam>/ortak.json).');
   /** @type {Record<string, Nesne>} */
-  const ortaklar = Object.fromEntries(varOlanOrtamlar.map((o) => [o.anahtar, jsonOku(projeKoku, o.anahtar, 'ortak')]));
+  const ortaklar = Object.fromEntries(varOlanOrtamlar.map((o) => [o.anahtar, jsonOku(kaynak, o.anahtar, 'ortak')]));
 
   // --- Ortamlar ve giriş profilleri (.env) ---------------------------------------------
   const kullanici = env.LOGIN_USERNAME ?? env.TEST_USERNAME;
@@ -352,9 +335,9 @@ export async function paketOlustur(projeKoku, secenekler = {}) {
     for (const g of readdirSync(senaryoKlasoru, { withFileTypes: true })) if (g.isDirectory()) ekranAl(g.name);
   }
   for (const o of ortamAnahtarlari) {
-    for (const dosya of veriDosyalari(projeKoku, o)) {
+    for (const dosya of veriDosyalari(kaynak, o)) {
       if (dosya === 'ortak') continue;
-      const icerik = jsonOku(projeKoku, o, dosya);
+      const icerik = jsonOku(kaynak, o, dosya);
       for (const k of SENARYO_VERI_KAYNAKLARI) {
         if (k.dosya === dosya && Array.isArray(yolOku(icerik, k.yol))) yolYaz(icerik, k.yol, { [ISARET]: 'senaryolar', spec: k.spec });
       }
@@ -363,7 +346,7 @@ export async function paketOlustur(projeKoku, secenekler = {}) {
       e.ayarlar.ortamlar[o].dosyalar[dosya] = icerik;
     }
   }
-  const modelKlasoru = join(projeKoku, MODEL_KLASORU);
+  const modelKlasoru = join(kaynak, MODEL_KLASORU);
   if (existsSync(modelKlasoru)) {
     for (const ad of readdirSync(modelKlasoru).filter((d) => d.endsWith('.model.json')).sort()) {
       const model = JSON.parse(readFileSync(join(modelKlasoru, ad), 'utf-8'));
@@ -375,64 +358,91 @@ export async function paketOlustur(projeKoku, secenekler = {}) {
   }
 
   // --- Senaryolar ---------------------------------------------------------------------
-  const kosuListesiYolu = join(projeKoku, KOSU_LISTESI);
+  const kosuListesiYolu = join(kaynak, KOSU_LISTESI);
   /** @type {Set<string>} */
   const haric = new Set();
   if (existsSync(kosuListesiYolu)) {
     const kl = JSON.parse(readFileSync(kosuListesiYolu, 'utf-8'));
     for (const a of Array.isArray(kl.haricTutulanlar) ? kl.haricTutulanlar : []) if (typeof a === 'string') haric.add(a.replace(/\\/g, '/'));
   }
-  /** @type {Map<string, { dosya: string; ad: string; ortamlar: Record<string, Nesne>; veri?: { dosya: string; yol: string } }>} */
-  const senaryolar = new Map();
-  const senaryoAl = (/** @type {string} */ dosya, /** @type {string} */ ad) => {
-    const anahtar = `${dosya}::${ad}`;
-    let s = senaryolar.get(anahtar);
-    if (!s) { s = { dosya, ad, ortamlar: {} }; senaryolar.set(anahtar, s); }
-    return s;
-  };
-  for (const o of ortamAnahtarlari) {
-    let liste = [];
-    try {
-      liste = await listele(o);
-    } catch (hata) {
-      uyarilar.push(`${o.toUpperCase()} test listesi alınamadı (${/** @type {Error} */ (hata).message}); bu ortamın senaryoları yalnızca veri dosyalarından aktarıldı.`);
+  /**
+   * Senaryo satırları: önce test listesindekiler, sonra veri güdümlü senaryolar (veri dosyalarından).
+   * @param {Record<string, Array<{ dosya: string; ad: string }>>} listeler ortam → test listesi
+   * @param {boolean} uyarVe uyarılar (tekrar eden başlık, eşleşmeyen hariç anahtarı) pakete yazılsın mı
+   */
+  const senaryolariKur = (listeler, uyarVe) => {
+    /** @type {Map<string, { dosya: string; ad: string; ortamlar: Record<string, Nesne>; veri?: { dosya: string; yol: string } }>} */
+    const senaryolar = new Map();
+    const senaryoAl = (/** @type {string} */ dosya, /** @type {string} */ ad) => {
+      const anahtar = `${dosya}::${ad}`;
+      let s = senaryolar.get(anahtar);
+      if (!s) { s = { dosya, ad, ortamlar: {} }; senaryolar.set(anahtar, s); }
+      return s;
+    };
+    for (const o of ortamAnahtarlari) {
+      for (const t of listeler[o] ?? []) senaryoAl(t.dosya, t.ad).ortamlar[o] ??= {};
+      for (const k of SENARYO_VERI_KAYNAKLARI) {
+        const dizi = existsSync(join(kaynak, VERI_KLASORU, o, `${k.dosya}.json`)) ? yolOku(jsonOku(kaynak, o, k.dosya), k.yol) : undefined;
+        if (!Array.isArray(dizi)) continue;
+        /** @type {Set<string>} */
+        const gorulen = new Set();
+        dizi.forEach((oge, sira) => {
+          let ad = nesneMi(oge) && typeof oge.baslik === 'string' ? oge.baslik : `#${sira + 1}`;
+          if (gorulen.has(ad)) {
+            if (uyarVe) uyarilar.push(`${k.dosya} (${o}): "${ad}" başlığı tekrar ediyor; sıra numarasıyla ayrıldı.`);
+            ad = `${ad} #${sira + 1}`;
+          }
+          gorulen.add(ad);
+          const s = senaryoAl(k.spec, ad);
+          s.veri = { dosya: k.dosya, yol: k.yol.join('.') };
+          s.ortamlar[o] = { sira, veri: oge };
+        });
+      }
     }
-    for (const t of liste) senaryoAl(t.dosya, t.ad).ortamlar[o] ??= {};
-    for (const k of SENARYO_VERI_KAYNAKLARI) {
-      const dizi = existsSync(join(projeKoku, VERI_KLASORU, o, `${k.dosya}.json`)) ? yolOku(jsonOku(projeKoku, o, k.dosya), k.yol) : undefined;
-      if (!Array.isArray(dizi)) continue;
-      /** @type {Set<string>} */
-      const gorulen = new Set();
-      dizi.forEach((oge, sira) => {
-        let ad = nesneMi(oge) && typeof oge.baslik === 'string' ? oge.baslik : `#${sira + 1}`;
-        if (gorulen.has(ad)) { uyarilar.push(`${k.dosya} (${o}): "${ad}" başlığı tekrar ediyor; sıra numarasıyla ayrıldı.`); ad = `${ad} #${sira + 1}`; }
-        gorulen.add(ad);
-        const s = senaryoAl(k.spec, ad);
-        s.veri = { dosya: k.dosya, yol: k.yol.join('.') };
-        s.ortamlar[o] = { sira, veri: oge };
+    const eslesenHaric = new Set();
+    /** @type {AktarimPaketi['senaryolar']} */
+    const satirlar = [];
+    for (const [anahtar, s] of senaryolar) {
+      const ekran = ekranAnahtariBul(s.dosya);
+      if (ekran) ekranAl(ekran);
+      if (haric.has(anahtar)) eslesenHaric.add(anahtar);
+      satirlar.push({
+        anahtar, ekran, baslik: s.ad, kosuyaDahil: !haric.has(anahtar),
+        icerik: { kaynak: { dosya: s.dosya, ad: s.ad }, ...(s.veri ? { veri: s.veri } : {}), ortamlar: s.ortamlar }
       });
     }
-  }
-  const eslesenHaric = new Set();
-  for (const [anahtar, s] of senaryolar) {
-    const ekran = ekranAnahtariBul(s.dosya);
-    if (ekran) ekranAl(ekran);
-    if (haric.has(anahtar)) eslesenHaric.add(anahtar);
-    paket.senaryolar.push({
-      anahtar, ekran, baslik: s.ad, kosuyaDahil: !haric.has(anahtar),
-      icerik: { kaynak: { dosya: s.dosya, ad: s.ad }, ...(s.veri ? { veri: s.veri } : {}), ortamlar: s.ortamlar }
-    });
-  }
-  const eslesmeyen = [...haric].filter((a) => !eslesenHaric.has(a)).length;
-  if (eslesmeyen) uyarilar.push(`kosu-listesi.json'daki ${eslesmeyen} hariç tutma anahtarı hiçbir teste eşleşmedi (etkisizdi; aktarılmadı).`);
+    const eslesmeyen = [...haric].filter((a) => !eslesenHaric.has(a)).length;
+    if (uyarVe && eslesmeyen) uyarilar.push(`kosu-listesi.json'daki ${eslesmeyen} hariç tutma anahtarı hiçbir teste eşleşmedi (etkisizdi; aktarılmadı).`);
+    return satirlar;
+  };
+  const ekranListesi = () => [...ekranlar].map(([anahtar, e]) => ({
+    anahtar, ekranAnahtari: anahtar, ad: e.ad, aciklama: e.aciklama ?? null, ayarlar: e.ayarlar, ...(e.model ? { model: e.model } : {})
+  }));
 
-  for (const [anahtar, e] of ekranlar) {
-    paket.ekranlar.push({ anahtar, ekranAnahtari: anahtar, ad: e.ad, aciklama: e.aciklama ?? null, ayarlar: e.ayarlar, ...(e.model ? { model: e.model } : {}) });
+  // Test listesi: verilmişse ondan; yoksa paket (liste olmadan) geçici bir veritabanına uygulanıp
+  // Playwright listesi oradan alınır (testler veriyi yalnızca veritabanından okur).
+  /** @type {Record<string, Array<{ dosya: string; ad: string }>>} */
+  const listeler = {};
+  /** @param {string} o @param {unknown} hata */
+  const listeHatasi = (o, hata) => uyarilar.push(`${o.toUpperCase()} test listesi alınamadı (${/** @type {Error} */ (hata)?.message ?? hata}); bu ortamın senaryoları yalnızca veri dosyalarından aktarıldı.`);
+  if (secenekler.testListesi) {
+    for (const o of ortamAnahtarlari) {
+      try { listeler[o] = await secenekler.testListesi(o); } catch (hata) { listeHatasi(o, hata); }
+    }
+  } else if (ortamAnahtarlari.length) {
+    const gecici = { ...paket, uyarilar: [], ekranlar: ekranListesi(), senaryolar: senaryolariKur({}, false) };
+    try {
+      const sonuc = await paketleTestleriListele(projeKoku, gecici, ortamAnahtarlari);
+      for (const o of ortamAnahtarlari) {
+        const l = sonuc[o];
+        if (l instanceof Error || !l) listeHatasi(o, l ?? 'boş'); else listeler[o] = l;
+      }
+    } catch (hata) {
+      for (const o of ortamAnahtarlari) listeHatasi(o, hata);
+    }
   }
-
-  const izler = parmakIzleri(projeKoku, env);
-  paket.projeAyarlari = { kosuListesiOzeti: kosuListesiOzeti(projeKoku) };
-  paket.gizliOzetler = { dosyalar: izler.dosyalar, ortamDegiskenleri: izler.ortamDegiskenleri };
+  paket.senaryolar = senaryolariKur(listeler, true);
+  paket.ekranlar = ekranListesi();
   return paket;
 }
 
@@ -538,10 +548,14 @@ export function yenidenKur(vt, projeId, ortamAnahtari) {
     }
   }
 
-  // Ürün veri dosyaları (ekran ayarları) + veri güdümlü senaryolar
+  // Ürün veri dosyaları (ekran ayarları) + ekran modelleri + veri güdümlü senaryolar
   /** @type {Record<string, Nesne>} */
   const dosyalar = {};
-  for (const e of vt.tumu('SELECT id FROM ekranlar WHERE proje_id = ? ORDER BY rowid', [projeId])) {
+  /** @type {Record<string, Nesne>} ekran modelleri, eski dosya adıyla ("<ekran anahtarı>.model.json") */
+  const ekranModelleri = {};
+  for (const e of vt.tumu('SELECT id, anahtar FROM ekranlar WHERE proje_id = ? ORDER BY rowid', [projeId])) {
+    const model = ekranModeliGetir(vt, String(e.id));
+    if (model && nesneMi(model.model) && typeof e.anahtar === 'string' && e.anahtar) ekranModelleri[`${e.anahtar}.model.json`] = kopya(model.model);
     const ayarlar = ekranAyarlariniGetir(vt, String(e.id)) ?? {};
     const ortamlar = /** @type {Nesne} */ (ayarlar.ortamlar ?? {});
     const buOrtam = /** @type {Nesne | undefined} */ (ortamlar[ortamId]);
@@ -589,17 +603,18 @@ export function yenidenKur(vt, projeId, ortamAnahtari) {
     } : null,
     ortak,
     dosyalar,
+    ekranModelleri,
     senaryoKimlikleri
   };
 }
 
 /**
- * Eski (Allure dönemi) koşu sonucu klasörleri: allure-results-<ortam>/ — varsa tek seferlik içe
- * aktarılır (scripts/platform/aktarim/allure-sonuclari.mjs). Klasörler SİLİNMEZ/değiştirilmez.
- * @param {string} projeKoku
+ * Eski (Allure dönemi) koşu sonucu klasörleri: <kaynak>/allure-results-<ortam>/ — varsa tek seferlik
+ * içe aktarılır (scripts/platform/aktarim/allure-sonuclari.mjs). Klasörler SİLİNMEZ/değiştirilmez.
+ * @param {string} kaynak
  */
-export function sonucKaynaklari(projeKoku) {
-  return ORTAMLAR.map((o) => ({ ortam: o.anahtar, klasor: join(projeKoku, `allure-results-${o.anahtar}`) }))
+export function sonucKaynaklari(kaynak) {
+  return ORTAMLAR.map((o) => ({ ortam: o.anahtar, klasor: join(kaynak, `allure-results-${o.anahtar}`) }))
     .filter((k) => existsSync(k.klasor));
 }
 
@@ -643,11 +658,9 @@ export function dogrulamaBaglami(vt, projeId, ortamAnahtari) {
 export const galaksiAdaptoru = Object.freeze({
   ad: ADAPTOR_ADI,
   projeAdi: PROJE_ADI,
-  etiket: 'Galaksi — mevcut proje dosyaları (tests/data, kosu-listesi, ekran modelleri, .env)',
+  etiket: 'Galaksi — eski proje dosyaları (tests/data, kosu-listesi, ekran modelleri, .env)',
   algila,
   paketOlustur,
-  parmakIzleri,
-  kosuListesiOzeti,
   kosudanHaricAnahtarlar,
   yenidenKur,
   sonucKaynaklari,

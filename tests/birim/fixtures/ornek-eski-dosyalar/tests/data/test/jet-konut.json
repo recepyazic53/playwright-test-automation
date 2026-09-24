@@ -1,0 +1,67 @@
+{
+  "jetKonut": {
+    "aktif": true,
+    "adresKodu": "1000000002",
+    "binaTipi": {
+      "deger": "9",
+      "metin": "APARTMAN DAİRESİ"
+    },
+    "brutYuzolcum": "100",
+    "daskaBagli": "hayir",
+    "dainiMurtehin": "yok",
+    "alternatifPlus": {
+      "deger": "E",
+      "metin": "E"
+    },
+    "alternatif": {
+      "deger": "1",
+      "metin": "1"
+    },
+    "yapiTarzi": {
+      "deger": "1",
+      "metin": "TAM KAGİR"
+    },
+    "toplamKat": {
+      "deger": "1",
+      "metin": "1-4 ARASI"
+    },
+    "rizikonunBulunduguKat": {
+      "deger": "3",
+      "metin": "1.KAT"
+    },
+    "catiTipi": {
+      "deger": "1",
+      "metin": "AHŞAP ÜSTÜ KİREMİT"
+    },
+    "altmisGundenFazlaBos": "hayir",
+    "binaInsaYili": "2025",
+    "teminatlar": {
+      "binaYangin": "3000000",
+      "esyaYangin": "1000000",
+      "dahiliDekorasyonYangin": "100000",
+      "camKirilmasi": "1000",
+      "esyaDeprem": true,
+      "dahiliDekorasyonDeprem": true,
+      "hirsizlik": true,
+      "binaSabitKiymetHirsizlik": true,
+      "ferdiKazaTekLimit": {
+        "deger": "1",
+        "metin": "10.000 TL"
+      },
+      "hukuksalKoruma": {
+        "deger": "0",
+        "metin": "2.500 TL"
+      },
+      "enflasyonOrani": {
+        "deger": "30",
+        "metin": "%30"
+      }
+    },
+    "profiller": {
+      "sigortaliOzel": "tc1",
+      "sigortaliTuzel": "vkn1",
+      "farkliOzel": "tc2",
+      "farkliTuzel": "vkn2"
+    }
+  }
+}

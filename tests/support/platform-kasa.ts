@@ -1,17 +1,16 @@
 // TERMİNAL KOŞULARINDA KASA ANAHTARI — global-setup.ts çağırır (ana süreçte, spec'ler
 // yüklenmeden ve worker'lar başlamadan ÖNCE).
-// - Proje dosyaları platform veritabanına aktarılmamışsa hiçbir şey yapılmaz (eski davranış).
-//   Aktarılmışsa PLATFORM_VERI_KAYNAGI=dosya olsa bile anahtar istenir: koşu sonuçları ve ekran
-//   görüntüsü/video/izler platform veritabanına ŞİFRELİ yazılır (scripts/platform/raporlayici.mjs).
-// - PLATFORM_KASA_ANAHTARI zaten verilmişse (dashboard koşuları) dokunulmaz.
+// - Test verisi YALNIZCA platform veritabanındadır (şifreli); veritabanı hazır değilse açık hata
+//   verilir. Koşu sonuçları ve ekran görüntüsü/video/izler de veritabanına ŞİFRELİ yazılır
+//   (scripts/platform/raporlayici.mjs).
+// - PLATFORM_KASA_ANAHTARI zaten verilmişse (Nöbetçi koşuları) dokunulmaz.
 // - Aksi halde kasa parolası: PLATFORM_KASA_PAROLASI ortam değişkeninden (CI) ya da terminalde
 //   GİZLİ girişle (yazılanlar ekranda görünmez) sorulur; anahtar ayrı bir süreçte türetilip
 //   doğrulanır ve YALNIZCA bu koşunun süreç belleğine (process.env → worker'lar) konur. Parola
 //   ve anahtar hiçbir yere yazılmaz/loglanmaz; parola değişkeni ortamdan silinir.
 // - TTY yoksa ve parola verilmemişse açık bir hata verilir.
 import {
-  KASA_ANAHTARI_DEGISKENI, KASA_PAROLASI_DEGISKENI, platformOkuyucusunuCalistir, platformOnbelleginiSifirla,
-  platformSonucKaydiVarMi
+  KASA_ANAHTARI_DEGISKENI, KASA_PAROLASI_DEGISKENI, platformHazirOlmali, platformOkuyucusunuCalistir, platformOnbelleginiSifirla
 } from './platform-veri';
 
 const EN_FAZLA_DENEME = 3;
@@ -57,7 +56,7 @@ function anahtarTuret(parola: string): { anahtar?: string; hata?: string; kod?: 
 
 export async function kasaAnahtariniHazirla(): Promise<void> {
   if (process.env[KASA_ANAHTARI_DEGISKENI]) return;
-  if (!platformSonucKaydiVarMi()) return;
+  platformHazirOlmali();
 
   const ortamParolasi = process.env[KASA_PAROLASI_DEGISKENI];
   if (ortamParolasi) {
@@ -73,9 +72,8 @@ export async function kasaAnahtariniHazirla(): Promise<void> {
   if (!process.stdin.isTTY) {
     throw new Error(
       'Proje verisi platform veritabanında ve şifreli; bu koşu için kasa parolası gerekiyor ama terminal etkileşimli değil (TTY yok).\n' +
-        `  - Önerilen: testi etkileşimli bir terminalden çalıştırın (parola gizli olarak sorulur) ya da dashboard'dan başlatın.\n` +
-        `  - CI/otomasyon: parolayı ${KASA_PAROLASI_DEGISKENI} ortam değişkeniyle verin (gizli değişken olarak; loglara yazmayın).\n` +
-        '  - Not: sonuçlar ve ekran görüntüleri/videolar platform veritabanına şifreli yazıldığı için veri kaynağı "dosya" olsa da parola gerekir.'
+        `  - Önerilen: testi etkileşimli bir terminalden çalıştırın (parola gizli olarak sorulur) ya da Nöbetçi'den başlatın.\n` +
+        `  - CI/otomasyon: parolayı ${KASA_PAROLASI_DEGISKENI} ortam değişkeniyle verin (gizli değişken olarak; loglara yazmayın).`
     );
   }
 

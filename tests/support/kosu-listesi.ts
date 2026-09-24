@@ -1,38 +1,15 @@
 // KOŞU LİSTESİ (hangi senaryolar "koşu"ya dahil) — playwright.config.ts tarafı.
 //
-// tests/data/kosu-listesi.json dosyası, koşudan HARİÇ TUTULAN senaryoların anahtarlarını
-// tutar: { "haricTutulanlar": ["<dosya>::<ad>", ...] }. Listede OLMAYAN her senaryo
-// (kodla yeni eklenen senaryolar dahil) varsayılan olarak koşuya DAHİLDİR.
+// Koşudan HARİÇ TUTULAN senaryolar platform veritabanındaki senaryoların "kosuya_dahil" alanından
+// gelir (Nöbetçi > Senaryolar > "Koşuda"); anahtar biçimi "<dosya>::<ad>":
 //   - <dosya>: "playwright test --list --reporter=json" çıktısındaki, testDir'e (tests/)
 //     GÖRE GÖRELİ yol, her zaman "/" ayracıyla (ör. "scenarios/jet-konut/teklif-matrisi.spec.ts").
 //   - <ad>: senaryonun (test) başlığı. Aynı başlık birden fazla ürün dosyasında
 //     tekrarlanabildiği için anahtar dosya + başlık ikilisidir.
-// Dosyayı dashboard'daki "Koşuda" anahtarları (test-sunucu.mjs > /kosu-listesi) yazar;
-// elle de düzenlenebilir.
-//
-// Node betikleri (test-sunucu.mjs, urun-hata-raporu.mjs) aynı dosyayı
-// scripts/kosu-listesi.mjs üzerinden okur/yazar — anahtar biçimi ikisinde AYNI TUTULMALI.
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+// Veritabanında olmayan her test (kodla yeni eklenenler dahil) varsayılan olarak koşuya DAHİLDİR.
 import { platformHaricTutulanAnahtarlar } from './platform-veri';
 
-export const KOSU_LISTESI_DOSYASI = join(__dirname, '..', 'data', 'kosu-listesi.json');
 export const KOSU_LISTESI_ANAHTAR_AYRACI = '::';
-
-// Dosya yoksa ya da bozuksa boş liste döner (hiçbir senaryo hariç tutulmaz) — bozuk bir
-// JSON, "npm run test" koşularını tamamen durdurmasın; uyarı terminale yazılır.
-export function haricTutulanAnahtarlariOku(dosyaYolu: string = KOSU_LISTESI_DOSYASI): string[] {
-  if (!existsSync(dosyaYolu)) return [];
-  try {
-    const veri: unknown = JSON.parse(readFileSync(dosyaYolu, 'utf-8'));
-    const liste = (veri as { haricTutulanlar?: unknown })?.haricTutulanlar;
-    if (!Array.isArray(liste)) return [];
-    return liste.filter((anahtar): anahtar is string => typeof anahtar === 'string' && anahtar.includes(KOSU_LISTESI_ANAHTAR_AYRACI));
-  } catch (hata) {
-    console.warn(`[kosu-listesi] ${dosyaYolu} okunamadı, hiçbir senaryo hariç tutulmadı: ${(hata as Error).message}`);
-    return [];
-  }
-}
 
 function regexIcinKac(metin: string): string {
   return metin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -58,12 +35,9 @@ export function anahtardanGrepDeseni(anahtar: string): RegExp | null {
 }
 
 // playwright.config.ts > grepInvert için: hariç tutulan her anahtarın deseni. Boşsa
-// undefined döner (grepInvert hiç verilmez). Proje dosyaları platform veritabanına aktarıldıysa
-// (ve kosu-listesi.json aktarımdan sonra değişmediyse) hariç liste veritabanındaki senaryoların
-// "kosuya_dahil" alanından gelir (anahtar biçimi aynı: "<dosya>::<ad>") — bkz. platform-veri.ts.
-export function kosuListesiHaricDesenleri(dosyaYolu: string = KOSU_LISTESI_DOSYASI): RegExp[] | undefined {
-  const platformdan = dosyaYolu === KOSU_LISTESI_DOSYASI ? platformHaricTutulanAnahtarlar() : null;
-  const desenler = (platformdan ?? haricTutulanAnahtarlariOku(dosyaYolu))
+// undefined döner (grepInvert hiç verilmez). Liste veritabanından gelir (bkz. platform-veri.ts).
+export function kosuListesiHaricDesenleri(anahtarlar: readonly string[] = platformHaricTutulanAnahtarlar()): RegExp[] | undefined {
+  const desenler = anahtarlar
     .map(anahtardanGrepDeseni)
     .filter((desen): desen is RegExp => desen !== null);
   return desenler.length ? desenler : undefined;

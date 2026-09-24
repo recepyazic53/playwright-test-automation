@@ -6,7 +6,7 @@
 //
 // Kullanım: node veri-oku.mjs <kip> --adaptor <ad> [--ortam <ortam>]
 //   durum   → veritabanı/aktarım durumu + koşudan hariç senaryo anahtarları (kasa GEREKMEZ)
-//   veri    → durum + adaptörün yenidenKur çıktısı + "dosyalar aktarımdan sonra değişti mi?"
+//   veri    → durum + adaptörün yenidenKur çıktısı (test verisi, ekran modelleri, taban adres, giriş)
 //             (PLATFORM_KASA_ANAHTARI [base64url] ya da PLATFORM_KASA_PAROLASI gerekir)
 //   anahtar → PLATFORM_KASA_PAROLASI'ndan anahtarı türetip doğrular, base64url olarak döner
 // Çıktı her zaman tek satır JSON'dur; hata durumunda { hata, kod } (çıkış kodu 0). Gizli değerler
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { veritabaniAc, veritabaniYolu } from '../veritabani/baglanti.mjs';
 import { gocleriUygula } from '../veritabani/gocler.mjs';
 import { KasaHatasi, kasaDurumu, kasayiAnahtarlaAc, parolayiDogrula } from '../kasa.mjs';
-import { aktarilmisProjeyiBul, zarflariCoz } from './motor.mjs';
+import { aktarilmisProjeyiBul } from './motor.mjs';
 import { adaptorBul } from '../../../projeler/index.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -59,8 +59,7 @@ async function calistir() {
       kasaVar,
       projeId: proje.id,
       sonAktarim: aktarim.sonAktarim ?? null,
-      haricTutulanlar: adaptor.kosudanHaricAnahtarlar(vt, proje.id),
-      kosuListesiGuncel: aktarim.kosuListesiOzeti === adaptor.kosuListesiOzeti(PROJE_KOKU)
+      haricTutulanlar: adaptor.kosudanHaricAnahtarlar(vt, proje.id)
     };
     if (kip === 'durum') return temel;
     if (kip !== 'veri') return { hata: 'Bilinmeyen kip.', kod: 'KIP' };
@@ -77,18 +76,7 @@ async function calistir() {
     }
     kasayiAnahtarlaAc(vt, anahtar);
     anahtar.fill(0);
-
-    // Aktarımdan sonra eski dosyalar/.env değişti mi? (özetler kasada şifreli)
-    const gizli = /** @type {Record<string, unknown>} */ (zarflariCoz(vt, aktarim.gizliOzetler ?? {}));
-    const simdiki = adaptor.parmakIzleri(PROJE_KOKU, process.env);
-    const eskiDegiskenler = /** @type {Record<string, string>} */ (gizli.ortamDegiskenleri ?? {});
-    const degisenOrtamDegiskenleri = Object.entries(simdiki.ortamDegiskenleri)
-      .filter(([ad, ozet]) => eskiDegiskenler[ad] !== ozet).map(([ad]) => ad);
-    return {
-      ...temel,
-      guncel: { dosyalar: gizli.dosyalar === simdiki.dosyalar, degisenOrtamDegiskenleri },
-      veri: adaptor.yenidenKur(vt, proje.id, ortam)
-    };
+    return { ...temel, veri: adaptor.yenidenKur(vt, proje.id, ortam) };
   } finally {
     vt.kapat();
   }

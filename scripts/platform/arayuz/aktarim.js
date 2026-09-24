@@ -1,9 +1,11 @@
-// "Mevcut proje dosyalarını aktar" akışı (genel; projeye özgü okuma sunucudaki adaptördedir).
+// "Eski proje dosyalarını aktar" akışı (genel; projeye özgü okuma sunucudaki adaptördedir).
 //   mod 'hosgeldin': kasa parolası (iki kez) → önizleme (sayılar) → uygula → özet
-//   mod 'ayarlar'  : (kasa açık) önizleme → uygula → özet  — "Proje dosyalarından yeniden aktar"
+//   mod 'ayarlar'  : (kasa açık) önizleme → uygula → özet  — "Eski proje dosyalarından yeniden aktar"
+// Eski dosyalar bir KAYNAK KLASÖRDEN okunur (varsayılan: en yeni veri/eski-dosyalar/<zaman> yedeği);
+// kullanıcı önizleme adımında başka bir klasör seçebilir (ör. eski dosyaları olan başka bir makinede).
 // Önizleme ve özet YALNIZCA sayılar/uyarılar içerir; gizli değer gösterilmez. Parola yalnızca bu
 // akışın belleğinde durur ve uygulama isteğinden hemen sonra silinir.
-import { alanHatasi, api, h, ikon, iskelet, mesajKutusu, mesgulIken, parolaAlani } from './ortak.js';
+import { alan, alanHatasi, api, h, ikon, iskelet, mesajKutusu, mesgulIken, parolaAlani } from './ortak.js';
 
 const ADIMLAR_HOSGELDIN = [
   { ad: 'kasa', etiket: 'Kasa parolası' },
@@ -38,19 +40,51 @@ function uyariListesi(uyarilar) {
 }
 
 /**
+ * Kaynak klasör seçimi: metin alanı + "Klasörü kontrol et". Klasörde eski dosyalar bulunursa
+ * secildi(yol) çağrılır; bulunamazsa sunucunun Türkçe açıklaması alanın altında gösterilir.
+ * @param {{ ad: string }} adaptor @param {string} mevcut @param {(yol: string) => void} secildi
+ */
+function kaynakKlasoruSecimi(adaptor, mevcut, secildi) {
+  const girdi = h('input', { type: 'text', value: mevcut, autocomplete: 'off', spellcheck: 'false' });
+  const kontrol = h('button', { type: 'submit' }, ikon('ara'), 'Klasörü kontrol et');
+  const form = h('form', { class: 'kaynak-klasoru', novalidate: true },
+    alan('Eski dosyaların klasörü', girdi, {
+      yardim: 'İçinde tests/data/<ortam>/ortak.json olan klasör (varsayılan: en yeni veri/eski-dosyalar/<zaman> yedeği). Göreli yol proje köküne göredir. Klasördeki .env varsa taban adresler ve giriş bilgileri oradan okunur. Dosyalar DEĞİŞTİRİLMEZ; yalnızca okunur.'
+    }),
+    h('div', { class: 'dugmeler' }, kontrol));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    alanHatasi(girdi, '');
+    const yol = girdi.value.trim();
+    if (!yol) { alanHatasi(girdi, 'Klasör yolunu yazın.'); girdi.focus(); return; }
+    try {
+      const d = await mesgulIken(kontrol, 'Kontrol ediliyor…', () => api(`/platform/aktarim/durum?kaynakKlasoru=${encodeURIComponent(yol)}`));
+      const a = (d.adaptorler || []).find((x) => x.ad === adaptor.ad);
+      if (!a || !a.dosyalarVar || !a.kaynakKlasoru) { alanHatasi(girdi, (a && a.kaynakHatasi) || 'Bu klasörde eski proje dosyaları bulunamadı.'); girdi.focus(); return; }
+      secildi(a.kaynakKlasoru);
+    } catch (hata) {
+      alanHatasi(girdi, hata.message);
+    }
+  });
+  return form;
+}
+
+/**
  * @param {HTMLElement} kapsayici
- * @param {{ mod: 'hosgeldin' | 'ayarlar'; adaptor: { ad: string; etiket: string; projeAdi: string }; bitti: () => void; vazgec: () => void }} secenekler
+ * @param {{ mod: 'hosgeldin' | 'ayarlar'; adaptor: { ad: string; etiket: string; projeAdi: string; kaynakKlasoru?: string | null }; bitti: () => void; vazgec: () => void }} secenekler
  */
 export function aktarimAkisi(kapsayici, secenekler) {
   const { mod, adaptor } = secenekler;
   const adimlar = mod === 'hosgeldin' ? ADIMLAR_HOSGELDIN : ADIMLAR_AYARLAR;
   let parola = '';
   let parolaTekrar = '';
+  let kaynakKlasoru = adaptor.kaynakKlasoru || '';
+  const kaynakSecimi = () => kaynakKlasoruSecimi(adaptor, kaynakKlasoru, (yol) => { kaynakKlasoru = yol; onizlemeAdimi(); });
 
   const ciz = (adim, ...icerik) => {
     kapsayici.replaceChildren(
       h('div', { class: 'sihirbaz-baslik' }, h('div', { class: 'kirinti' }, h('span', {}, adaptor.etiket)),
-        h('h2', { tabindex: '-1', id: 'aktarim-basligi' }, mod === 'hosgeldin' ? 'Mevcut proje dosyalarını aktar' : 'Proje dosyalarından yeniden aktar')),
+        h('h2', { tabindex: '-1', id: 'aktarim-basligi' }, mod === 'hosgeldin' ? 'Eski proje dosyalarını aktar' : 'Eski proje dosyalarından yeniden aktar')),
       adimListesi(adimlar, adim), ...icerik);
     const baslik = kapsayici.querySelector('#aktarim-basligi');
     if (baslik) baslik.focus({ preventScroll: false });
@@ -65,6 +99,7 @@ export function aktarimAkisi(kapsayici, secenekler) {
     const devam = h('button', { type: 'submit', class: 'birincil' }, 'Devam: önizleme');
     const form = h('form', { class: 'kart', novalidate: true },
       h('p', { class: 'soluk' }, `${adaptor.etiket}. Dosyalarınız DEĞİŞTİRİLMEZ; yalnızca okunur.`),
+      kaynakKlasoru ? h('p', { class: 'kucuk' }, 'Kaynak klasör: ', h('code', {}, kaynakKlasoru), ' (bir sonraki adımda değiştirebilirsiniz)') : null,
       h('div', { class: 'not-kutusu uyari' }, h('p', {}, h('strong', {}, 'Bu parolayı unutmayın. '), 'Parola unutulursa veriler kurtarılamaz. Testleri terminalden çalıştırırken de bu parola sorulacak.')),
       mesaj.kutu, p1.kapsayici, p2.kapsayici,
       h('label', { class: 'secenek', for: anladim.id }, anladim, 'Parolayı unutursam verilerin kurtarılamayacağını anladım.'),
@@ -91,11 +126,14 @@ export function aktarimAkisi(kapsayici, secenekler) {
     ciz('onizleme', h('div', { class: 'kart' }, h('div', { class: 'ilerleme' }, h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), durumMetni)), iskelet('liste')));
     let onizleme;
     try {
-      ({ onizleme } = await api('/platform/aktarim/onizle', { govde: { adaptor: adaptor.ad } }));
+      let yanit;
+      ({ onizleme, ...yanit } = await api('/platform/aktarim/onizle', { govde: { adaptor: adaptor.ad, kaynakKlasoru: kaynakKlasoru || undefined } }));
+      if (yanit.kaynakKlasoru) kaynakKlasoru = yanit.kaynakKlasoru;
     } catch (hata) {
       if (hata.durum === 423) return;
       const tekrar = h('button', { type: 'button', onclick: () => onizlemeAdimi() }, 'Tekrar dene');
       ciz('onizleme', h('div', { class: 'kart' }, h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message),
+        kaynakSecimi(),
         h('div', { class: 'dugmeler' }, tekrar, h('button', { type: 'button', onclick: () => geriDon() }, 'Vazgeç'))));
       return;
     }
@@ -107,6 +145,7 @@ export function aktarimAkisi(kapsayici, secenekler) {
     const kart = h('div', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('klasor'), `Proje: `, h('strong', {}, onizleme.proje.ad)),
         h('span', { class: 'alt' }, onizleme.proje.mevcut ? 'mevcut projeyle birleştirilecek' : 'yeni proje')),
+      kaynakSecimi(),
       sayimTablosu(onizleme.sayimlar, sutunlar, 'Aktarım önizlemesi'),
       h('p', { class: 'soluk kucuk' }, `Koşudan hariç tutulan senaryo: ${onizleme.kosudanHaricSenaryo}. `,
         'Test verisi profillerinin TÜM alanları (kimlik bilgileri, adres, kart sahibi ve kart bilgileri…) kasada şifreli saklanır; yalnızca profil adları açıktır. ',
@@ -117,7 +156,7 @@ export function aktarimAkisi(kapsayici, secenekler) {
     uygula.addEventListener('click', async () => {
       mesaj.temizle();
       try {
-        const govde = { adaptor: adaptor.ad };
+        const govde = { adaptor: adaptor.ad, kaynakKlasoru };
         if (mod === 'hosgeldin') { govde.parola = parola; govde.parolaTekrar = parolaTekrar; }
         const { sonuc } = await mesgulIken(uygula, 'Aktarılıyor…', () => api('/platform/aktarim/uygula', { govde }));
         parola = ''; parolaTekrar = '';
@@ -147,7 +186,7 @@ export function aktarimAkisi(kapsayici, secenekler) {
           + (sonuc.sonucAktarimi.zatenVar ? ` (daha önce aktarılmış ${sonuc.sonucAktarimi.zatenVar} sonuç atlandı)` : '') + '. Eski klasörler olduğu gibi duruyor.')
         : null,
       uyariListesi(sonuc.uyarilar),
-      h('p', { class: 'soluk kucuk' }, 'Testler artık veriyi bu veritabanından okur. Terminalden çalıştırırken kasa parolası gizli olarak sorulur; dashboard koşularında kasa açıksa sorulmaz.'),
+      h('p', { class: 'soluk kucuk' }, 'Testler artık veriyi bu veritabanından okur. Terminalden çalıştırırken kasa parolası gizli olarak sorulur; Nöbetçi\'den başlatılan koşularda kasa açıksa sorulmaz.'),
       h('div', { class: 'dugmeler' }, devam)));
     devam.focus();
   };

@@ -1,5 +1,5 @@
-// MODEL TABANLI SENARYO FORMU (genel, saf fonksiyonlar) — ekran modelinden (tests/ekran-modelleri
-// şeması; platformda ekran_modelleri.model_json) oluşturma/düzenleme formunun ŞEMASINI kurar,
+// MODEL TABANLI SENARYO FORMU (genel, saf fonksiyonlar) — ekran modelinden (platformda
+// ekran_modelleri.model_json; şema: tests/birim/fixtures/ornek-eski-dosyalar/tests/ekran-modelleri/README.md) oluşturma/düzenleme formunun ŞEMASINI kurar,
 // form değerlerini modelin senaryo biçimine çevirir, tek doğrulayıcının (senaryo-dogrulayici.mjs)
 // alan bazlı hatalarını form kontrollerine dağıtır ve beklenen sonuç rozetini üretir.
 //

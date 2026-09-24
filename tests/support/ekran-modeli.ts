@@ -1,17 +1,15 @@
-// EKRAN MODELİ: bir ürün ekranının tek doğruluk kaynağı (tests/ekran-modelleri/*.model.json).
-// Şema açıklaması: tests/ekran-modelleri/README.md.
+// EKRAN MODELİ: bir ürün ekranının tek doğruluk kaynağı. Modeller platform veritabanında durur
+// (Nöbetçi > ekran modeli; eski dosya adıyla "<ekran anahtarı>.model.json"); Git'te yalnızca birim
+// testlerinin SAHTE değerli örnekleri vardır (tests/birim/fixtures/ornek-eski-dosyalar/).
 //
-// Bu dosya modelin TypeScript tiplerini ve model dosyasının KENDİSİNİ doğrulayan yükleyiciyi
-// içerir (yapısal kontroller: bilinen anahtarlar/tipler, benzersiz alan id'leri, adım/koşul/
-// alan/alt model başvurularının varlığı). Senaryo verisinin modele uygunluğu burada değil,
-// koruma testlerinde (tests/birim/) kontrol edilir.
-//
-// NOT: Yalnızca node:fs / node:path import eder — Playwright'sız (birim testlerde, Node
-// betiklerinde) kullanılabilir.
+// Bu dosya modelin TypeScript tiplerini ve modelin KENDİSİNİ doğrulayan kurucuyu içerir (yapısal
+// kontroller: bilinen anahtarlar/tipler, benzersiz alan id'leri, adım/koşul/alan/alt model
+// başvurularının varlığı). Senaryo verisinin modele uygunluğu koruma testlerinde (tests/birim/)
+// kontrol edilir.
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-
-export const EKRAN_MODELLERI_KLASORU = resolve(__dirname, '..', 'ekran-modelleri');
+import { dirname, join } from 'node:path';
+import { getEnvironmentName } from './environments';
+import { platformVerisi } from './platform-veri';
 
 /** Bu yükleyicinin anladığı şema sürümü. Şema değişirse artırılır, modeller güncellenir. */
 export const DESTEKLENEN_SEMA_SURUMU = 1;
@@ -240,9 +238,13 @@ export type EkranModeli = {
 /** Yüklenmiş ve doğrulanmış model + başvurduğu alt modeller (dosya adı → alt model). */
 export type YuklenmisEkranModeli = {
   model: EkranModeli;
+  /** Modelin adı (eski dosya adı, ör. "jet-seyahat.model.json") ya da fixture dosyasının yolu. */
   dosyaYolu: string;
   altModeller: Record<string, AltModel>;
 };
+
+/** Alt model kaynağı: alt model dosya adı → ham JSON (yoksa undefined). */
+type AltModelKaynagi = (dosyaAdi: string) => unknown;
 
 // ---- Doğrulama yardımcıları ----
 
@@ -534,7 +536,11 @@ function semaSurumunuDogrula(h: HataToplayici, yer: string, ham: Nesne, beklenen
 
 /** Alt model dosyasını okuyup doğrular; hatalıysa tüm sorunları listeleyen bir Error fırlatır. */
 export function altModeliYukle(dosyaYolu: string): AltModel {
-  const ham: unknown = JSON.parse(readFileSync(dosyaYolu, 'utf-8'));
+  return altModeliDogrula(dosyaYolu, JSON.parse(readFileSync(dosyaYolu, 'utf-8')));
+}
+
+/** Ham alt modeli doğrular (dosya okumaz). */
+export function altModeliDogrula(dosyaYolu: string, ham: unknown): AltModel {
   const h = new HataToplayici();
   const yer = dosyaYolu.split(/[\\/]/).pop() ?? dosyaYolu;
   if (!nesneMi(ham)) throw new Error(`${yer}: model bir JSON nesnesi olmalı.`);
@@ -568,7 +574,24 @@ export function altModeliYukle(dosyaYolu: string): AltModel {
  * iş kurallarının adımları, ürün düzeyi "kullanan" başvuruları, adım sıralarının 1..n olması.
  */
 export function ekranModeliniYukle(dosyaYolu: string): YuklenmisEkranModeli {
-  const ham: unknown = JSON.parse(readFileSync(dosyaYolu, 'utf-8'));
+  return ekranModeliniDogrula(dosyaYolu, JSON.parse(readFileSync(dosyaYolu, 'utf-8')),
+    (dosyaAdi) => JSON.parse(readFileSync(join(dirname(dosyaYolu), dosyaAdi), 'utf-8')));
+}
+
+/**
+ * Bellekteki modeller kümesinden (eski dosya adı → ham model; ör. platform veritabanından) modeli ve
+ * alt modellerini doğrulayarak kurar.
+ */
+export function ekranModeliniKur(dosyaAdi: string, modeller: Readonly<Record<string, unknown>>): YuklenmisEkranModeli {
+  if (!(dosyaAdi in modeller)) throw new Error(`Ekran modeli "${dosyaAdi}" platform veritabanında yok.`);
+  return ekranModeliniDogrula(dosyaAdi, modeller[dosyaAdi], (alt) => {
+    if (!(alt in modeller)) throw new Error(`"${alt}" platform veritabanında yok`);
+    return modeller[alt];
+  });
+}
+
+/** Ham ekran modelini (ve kaynaktan alınan alt modelleri) doğrular (dosya okumaz). */
+function ekranModeliniDogrula(dosyaYolu: string, ham: unknown, altModelKaynagi: AltModelKaynagi): YuklenmisEkranModeli {
   const h = new HataToplayici();
   const yer = dosyaYolu.split(/[\\/]/).pop() ?? dosyaYolu;
   if (!nesneMi(ham)) throw new Error(`${yer}: model bir JSON nesnesi olmalı.`);
@@ -655,7 +678,7 @@ export function ekranModeliniYukle(dosyaYolu: string): YuklenmisEkranModeli {
   for (const [bYer, basvuru] of b.altModeller) {
     if (!(basvuru.dosya in altModeller)) {
       try {
-        altModeller[basvuru.dosya] = altModeliYukle(join(dirname(dosyaYolu), basvuru.dosya));
+        altModeller[basvuru.dosya] = altModeliDogrula(basvuru.dosya, altModelKaynagi(basvuru.dosya));
       } catch (hata) {
         h.ekle(bYer, `alt model "${basvuru.dosya}" yüklenemedi: ${hata instanceof Error ? hata.message : String(hata)}`);
         continue;
@@ -800,8 +823,8 @@ export function modelFormKontrolleri(yuklenmis: YuklenmisEkranModeli): Map<strin
 
 let jetSeyahatOnbellegi: YuklenmisEkranModeli | undefined;
 
-/** tests/ekran-modelleri/jet-seyahat.model.json — bir kez yüklenip doğrulanır, sonra önbellekten. */
+/** JetSeyahat ekran modeli — platform veritabanından (bu koşunun ortamı); bir kez doğrulanır, sonra önbellekten. */
 export function jetSeyahatModeliniYukle(): YuklenmisEkranModeli {
-  jetSeyahatOnbellegi ??= ekranModeliniYukle(join(EKRAN_MODELLERI_KLASORU, 'jet-seyahat.model.json'));
+  jetSeyahatOnbellegi ??= ekranModeliniKur('jet-seyahat.model.json', platformVerisi(getEnvironmentName()).ekranModelleri);
   return jetSeyahatOnbellegi;
 }

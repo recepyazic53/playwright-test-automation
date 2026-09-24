@@ -3,17 +3,18 @@
 // playwright.config.ts: reporter: [['./scripts/platform/raporlayici.mjs', { adaptor: '<ad>', ortam: '<ortam>' }]]
 //
 // Etkinlik: platform veritabanı var VE adaptörün projesi aktarılmışsa etkindir; aksi halde HİÇBİR
-// ŞEY yapmaz (eski davranış: çıktılar test-results/ altında kalır). "--list" koşularında da
-// hiçbir şey yazmaz (koşu kaydı ilk test sonucu geldiğinde oluşturulur).
+// ŞEY yapmaz (testler de veritabanı olmadan çalışmaz). "--list" koşularında da hiçbir şey yazmaz
+// (koşu kaydı ilk test sonucu geldiğinde oluşturulur).
 //
 // Yazma yolu (veritabanı dosyasının TEK sahibi kuralı — bkz. veritabani/baglanti.mjs):
 //   1) Sunucu bu koşuyu başlattıysa (PLATFORM_SONUC_ADRESI + PLATFORM_SONUC_TOKENI) ya da aynı
-//      veritabanını kullanan bir test sunucusu çalışıyorsa (TEST_SUNUCU_PORT, varsayılan 5566;
-//      scripts/.test-sunucu-token) sonuçlar sunucuya gönderilir (/platform/sonuc/*); sunucu yazar.
+//      veritabanını kullanan bir Nöbetçi sunucusu çalışıyorsa (veritabanının yanındaki
+//      .sunucu-baglantisi.json — bkz. sunucu-baglantisi.mjs) sonuçlar sunucuya gönderilir
+//      (/platform/sonuc/*); sunucu yazar.
 //   2) Aksi halde veritabanı dosyası bu süreçte açılıp doğrudan yazılır.
 // Medya dosyalarını her iki durumda da bu süreç şifreler ve medya klasörüne yazar.
 //
-// Kasa anahtarı: PLATFORM_KASA_ANAHTARI (dashboard koşularında sunucu verir; terminalde
+// Kasa anahtarı: PLATFORM_KASA_ANAHTARI (Nöbetçi koşularında sunucu verir; terminalde
 // global-setup parolayı gizli girişle sorar). Anahtar yoksa sonuçlar yine yazılır ama medya
 // ŞİFRELENEMEDİĞİ için kayda alınmaz ve düz metin dosyalara dokunulmaz (açık uyarı yazılır).
 //
@@ -25,6 +26,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { veritabaniAc, veritabaniYolu } from './veritabani/baglanti.mjs';
+import { sunucuBaglantisiniOku } from './sunucu-baglantisi.mjs';
 import { gocleriUygula } from './veritabani/gocler.mjs';
 import { veritabaniniHazirla } from './veritabani/depo.mjs';
 import { kosuKaydet, kosuyuBitir, sonucKaydet } from './veritabani/sonuc-deposu.mjs';
@@ -241,10 +243,9 @@ export default class PlatformRaporlayici {
       sunucu = new SunucuYazici(verilenAdres, verilenToken);
       durum = await sunucu.durum(secim);
     } else {
-      const tokenYolu = join(this.projeKoku, 'scripts', '.test-sunucu-token');
-      const token = existsSync(tokenYolu) ? readFileSync(tokenYolu, 'utf8').trim() : '';
-      if (token && existsSync(dbYolu)) {
-        const aday = new SunucuYazici(`http://127.0.0.1:${Number(process.env.TEST_SUNUCU_PORT) || 5566}`, token);
+      const baglanti = existsSync(dbYolu) ? sunucuBaglantisiniOku(dbYolu) : null;
+      if (baglanti) {
+        const aday = new SunucuYazici(baglanti.adres, baglanti.token);
         try {
           const d = await aday.durum(secim, 1500);
           if (typeof d.veritabaniYolu === 'string' && resolve(d.veritabaniYolu) === dbYolu) { sunucu = aday; durum = d; }

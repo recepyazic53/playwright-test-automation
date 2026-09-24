@@ -1,11 +1,12 @@
 import { defineConfig } from '@playwright/test';
 
 // KORUMA (birim) TESTLERİ: tarayıcı AÇMAZ, şirket ortamına BAĞLANMAZ.
-// Ekran modeli (tests/ekran-modelleri/), senaryo verisi, sunucu alan listesi ve dashboard
-// formu arasındaki tutarlılığı saniyeler içinde kontrol eder. Çalıştırma: npm run test:birim
+// Platform (veritabanı, kasa, yedek, aktarım, senaryolar, sonuçlar), ekran modeli ve tek doğrulayıcı
+// tutarlılığını saniyeler içinde kontrol eder; gerçek proje verisi yerine SAHTE değerli örnekler
+// kullanılır (tests/birim/fixtures/). Çalıştırma: npm run test:birim
 // Ana playwright.config.ts'den bilerek AYRIDIR: globalSetup (Galaksi login), globalTeardown,
 // Allure raporlayıcısı ve koşu listesi filtresi burada yoktur. Ana yapılandırma da tests/birim/
-// klasörünü testIgnore ile dışarıda bırakır (dashboard'daki senaryo listesi değişmesin diye).
+// klasörünü testIgnore ile dışarıda bırakır (Nöbetçi'deki senaryo listesi değişmesin diye).
 export default defineConfig({
   testDir: './tests/birim',
   fullyParallel: true,

@@ -10,7 +10,7 @@ import type { JetSeyahatTestData, OzelKimlikData, TuzelKimlikData } from '../tes
 // JetSeyahat (seyahat sigortası) ekranının Page Object'i.
 // Kapsam/alternatif seçimi, COVID ve kayak teminatı (acenteye göre görünür/gizli),
 // tekli/çoklu sorgu ile sigortalı/ettiren bilgilerinin girilmesi ve prim hesaplama
-// adımlarını içerir. Bazı acentelerde (örn. 30856) COVID teminatı, kayak teminatı,
+// adımlarını içerir. Bazı acentelerde COVID teminatı, kayak teminatı,
 // Plan Kodu ve Seyahat İptal Bedeli alanları hiç gösterilmez; bu yüzden bu alanlara
 // dokunan her metot önce alanın görünür olup olmadığını kontrol eder.
 type SeyahatData = JetSeyahatTestData['jetSeyahat'];
@@ -40,7 +40,7 @@ export class JetSeyahatPage {
     await this.tarihGerekirseAyarla('#to', gunEkle(data.seyahatSuresiGun));
 
     // COVID teminatı, kayak teminatı, Plan Kodu ve Seyahat İptal Bedeli alanları her acentede
-    // gösterilmiyor (örn. 30856 acentesinde bu alanların hiçbiri yok). Acenteye özel sabit bir
+    // gösterilmiyor (bazı acentelerde bu alanların hiçbiri yok). Acenteye özel sabit bir
     // kontrol yerine, her alan için önce görünürlük kontrol edilir; görünmüyorsa işlem atlanır.
     const covid = this.page.locator('#covid-teminati');
     if (await covid.isVisible()) {

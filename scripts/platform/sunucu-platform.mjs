@@ -23,13 +23,17 @@
 //        baglam-profili, test-verisi-turu, test-verisi-profili)
 //   POST /platform/giris-profili/goster, /platform/test-verisi-profili/goster
 //        — AÇIK göster: tek bir gizli değeri düz metin döner (yalnızca kullanıcı isteyince).
-// Mevcut proje dosyalarını aktarma (genel motor: aktarim/motor.mjs; projeye özgü adaptörler:
-// projeler/index.mjs):
-//   GET  /platform/aktarim/durum     eski dosyalar var mı, veritabanı boş mu, daha önce aktarıldı mı
-//   POST /platform/aktarim/onizle    { adaptor } → varlık başına sayılar (GİZLİ DEĞER YOK)
-//   POST /platform/aktarim/uygula    { adaptor, parola? } → kasa yoksa parola ile BU AKIŞTA oluşturulur;
-//                                    kasa kilitliyse 423. Tekrar çalıştırmak çift kayıt üretmez
-//                                    (kaynak anahtarıyla birleştirir; atlananlar raporlanır).
+// Eski proje dosyalarını aktarma (genel motor: aktarim/motor.mjs; projeye özgü adaptörler:
+// projeler/index.mjs). Proje verisi Git'te değil, yalnızca veritabanındadır; eski dosyalar bir KAYNAK
+// KLASÖRDEN okunur: varsayılan en yeni veri/eski-dosyalar/<zaman>/ yedeği (içinde aktarılacak dosya
+// varsa), yoksa proje kökü (tests/data hâlâ duruyorsa). Kullanıcı başka bir klasör seçebilir.
+//   GET  /platform/aktarim/durum[?kaynakKlasoru=]   eski dosyalar (varsayılan ya da seçilen klasörde) var
+//                                    mı, veritabanı boş mu, daha önce aktarıldı mı
+//   POST /platform/aktarim/onizle    { adaptor, kaynakKlasoru? } → varlık başına sayılar (GİZLİ DEĞER YOK)
+//   POST /platform/aktarim/uygula    { adaptor, kaynakKlasoru?, parola? } → kasa yoksa parola ile BU AKIŞTA
+//                                    oluşturulur; kasa kilitliyse 423. Tekrar çalıştırmak çift kayıt
+//                                    üretmez (kaynak anahtarıyla birleştirir; atlananlar raporlanır).
+//   Dosyalardan veritabanına OTOMATİK yeniden aktarım YOKTUR (yalnızca kullanıcı başlatır).
 // Koşu sonuçları (şema v5; Playwright raporlayıcısı: scripts/platform/raporlayici.mjs):
 //   GET  /platform/sonuclar/ozet?projeId=&urun=       ürün listesi, kartlar, trend, koşu geçmişi
 //   GET  /platform/sonuclar/kosu?id=                  koşu detayı (senaryo bazında sonuçlar)
@@ -38,7 +42,7 @@
 //   GET  /platform/medya/<id>[?indir=1]               şifreli medyayı ÇÖZEREK akıtır (Range destekli;
 //        kasa açık + oturum token'ı gerekir; düz metin diske YAZILMAZ). indir=1 → Content-Disposition.
 //   POST /platform/sonuc/durum|medya-anahtari|kosu|kaydet|bitir — YALNIZCA raporlayıcı için: oturum
-//        token'ı ya da raporlayıcı token'ı (scripts/.test-sunucu-token) kabul edilir; kasa GEREKMEZ
+//        token'ı ya da raporlayıcı token'ı (sunucu belleğinde; koşu alt sürecine verilir) kabul edilir; kasa GEREKMEZ
 //        (sonuç metinleri düz, medya dosyaları raporlayıcı sürecinde şifrelenmiş olarak gelir).
 // Senaryolar (genel; kimlik = senaryo UUID'si; kasa açık olmalı — bkz. senaryolar/senaryo-servisi.mjs):
 //   GET  /platform/senaryolar?projeId=&ortamId=        liste (son sonuç, bağlam profili, beklenen sonuç) + ekranlar
@@ -70,7 +74,7 @@
 
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { hostname } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { veritabaniYolu as veritabaniYoluCoz } from './veritabani/baglanti.mjs';
@@ -186,9 +190,9 @@ export function platformKosucusunuAyarla(yeni) {
 const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
 
 /**
- * Dashboard'ın başlattığı test süreçlerine verilecek ortam değişkenleri: kasa AÇIKSA türetilmiş
+ * Nöbetçi'nin başlattığı test süreçlerine verilecek ortam değişkenleri: kasa AÇIKSA türetilmiş
  * anahtar (base64url) — yalnızca alt sürecin belleğinde durur, hiçbir dosyaya yazılmaz. Kasa
- * kilitliyse boş döner (testler dosyalardan okur; bkz. tests/support/platform-veri.ts).
+ * kilitliyse boş döner (testler veriyi okuyamaz; koşular kasa açıkken başlatılır).
  * @returns {Record<string, string>}
  */
 export function platformTestOrtami() {
@@ -287,14 +291,18 @@ export function platformMedyaTemizligiZamanla() {
 }
 
 /**
- * Adaptörün eski koşu sonucu klasörlerini (varsa) içe aktarır; kasa AÇIK olmalı. Tekrarlanabilir.
+ * Adaptörün eski koşu sonucu klasörlerini (varsa; kaynak klasörde ve proje kökünde) içe aktarır; kasa
+ * AÇIK olmalı. Tekrarlanabilir.
  * @param {import('./veritabani/baglanti.mjs').Veritabani} db
  * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor
  * @param {string} projeId
- * @param {string} [projeKoku]
+ * @param {string} [kaynak] eski dosyaların klasörü
  */
-export async function eskiSonuclariAktar(db, adaptor, projeId, projeKoku = PROJE_KOKU) {
-  const kaynaklar = adaptor.sonucKaynaklari ? adaptor.sonucKaynaklari(projeKoku) : [];
+export async function eskiSonuclariAktar(db, adaptor, projeId, kaynak = PROJE_KOKU) {
+  const klasorler = [...new Set([resolve(kaynak), PROJE_KOKU])];
+  const gorulen = new Set();
+  const kaynaklar = (adaptor.sonucKaynaklari ? klasorler.flatMap((k) => adaptor.sonucKaynaklari?.(k) ?? []) : [])
+    .filter((k) => !gorulen.has(k.klasor) && gorulen.add(k.klasor));
   const toplam = { kosu: 0, sonuc: 0, medya: 0, zatenVar: 0, eksikEk: 0 };
   if (!kaynaklar.length) return toplam;
   const anahtar = medyaAnahtariniHazirla(db);
@@ -331,60 +339,83 @@ async function aktarimKilidi(fn) {
   try { return await fn(); } finally { aktarimSuruyor = false; }
 }
 
-/** @param {import('./veritabani/baglanti.mjs').Veritabani | null} db */
-async function aktarimDurumu(db) {
+/** Eski proje dosyası yedekleri: <proje kökü>/veri/eski-dosyalar/<YYYYMMDD-HHMM>/ (Git'e girmez). */
+export const ESKI_DOSYALAR_KLASORU = join(PROJE_KOKU, 'veri', 'eski-dosyalar');
+
+/** Kaynak klasör adayları: en yeni yedek önce, sonra proje kökü. */
+function kaynakAdaylari() {
+  /** @type {string[]} */
+  const adaylar = [];
+  try {
+    const yedekler = readdirSync(ESKI_DOSYALAR_KLASORU, { withFileTypes: true }).filter((g) => g.isDirectory()).map((g) => g.name).sort().reverse();
+    for (const ad of yedekler) adaylar.push(join(ESKI_DOSYALAR_KLASORU, ad));
+  } catch { /* yedek klasörü yok */ }
+  adaylar.push(PROJE_KOKU);
+  return adaylar;
+}
+
+/**
+ * Adaptörün varsayılan kaynak klasörü: aktarılacak dosyaları olan en yeni yedek, yoksa proje kökü
+ * (eski dosyalar hâlâ oradaysa); hiçbiri yoksa null.
+ * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor
+ */
+function varsayilanKaynak(adaptor) {
+  return kaynakAdaylari().find((k) => adaptor.algila(k).var) ?? null;
+}
+
+/**
+ * İstekteki kaynak klasörü doğrular (yoksa varsayılan). Göreli yollar proje köküne göre çözülür, "~"
+ * ev klasörüdür. Klasörde aktarılacak dosya yoksa AktarimHatasi.
+ * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor @param {unknown} istenen
+ */
+function kaynakKlasoruCoz(adaptor, istenen) {
+  if (istenen === undefined || istenen === null || (typeof istenen === 'string' && !istenen.trim())) {
+    const k = varsayilanKaynak(adaptor);
+    if (!k) throw new AktarimHatasi('Eski proje dosyalarının bulunduğu bir klasör bulunamadı (veri/eski-dosyalar/<zaman>/). Klasörü seçin.');
+    return k;
+  }
+  if (typeof istenen !== 'string' || istenen.length > 1000 || istenen.includes('\0')) throw new AktarimHatasi('Geçersiz klasör yolu.');
+  const yol = resolve(PROJE_KOKU, istenen.trim().replace(/^~(?=$|[\\/])/, homedir()));
+  let klasorMu = false;
+  try { klasorMu = statSync(yol).isDirectory(); } catch { klasorMu = false; }
+  if (!klasorMu) throw new AktarimHatasi('Seçilen klasör bulunamadı.');
+  if (!adaptor.algila(yol).var) throw new AktarimHatasi('Seçilen klasörde eski proje dosyaları yok (beklenen: tests/data/<ortam>/ortak.json).');
+  return yol;
+}
+
+/**
+ * @param {import('./veritabani/baglanti.mjs').Veritabani | null} db
+ * @param {unknown} [istenenKlasor] kullanıcının seçtiği kaynak klasör (yoksa varsayılan)
+ */
+async function aktarimDurumu(db, istenenKlasor) {
   const projeSayisi = db ? Number(db.tek('SELECT COUNT(*) AS n FROM projeler')?.n ?? 0) : 0;
   return {
     veritabaniBos: projeSayisi === 0,
     kasaVar: db ? kasaDurumu(db).olusturuldu : false,
     adaptorler: AKTARIM_ADAPTORLERI.map((a) => {
-      const algi = a.algila(PROJE_KOKU);
+      /** @type {string | null} */
+      let kaynakKlasoru = null;
+      /** @type {string | null} */
+      let kaynakHatasi = null;
+      try { kaynakKlasoru = kaynakKlasoruCoz(a, istenenKlasor); } catch (hata) { kaynakHatasi = /** @type {Error} */ (hata).message; }
+      const algi = kaynakKlasoru ? a.algila(kaynakKlasoru) : { var: false, ortamlar: [] };
       const proje = db ? aktarilmisProjeyiBul(db, a.ad) : undefined;
       const aktarim = /** @type {Record<string, unknown> | undefined} */ (proje?.ayarlar?.aktarim);
       return {
         ad: a.ad, etiket: a.etiket, projeAdi: a.projeAdi, dosyalarVar: algi.var, ortamlar: algi.ortamlar,
+        kaynakKlasoru, kaynakHatasi, yedekKlasoru: ESKI_DOSYALAR_KLASORU,
         aktarildi: Boolean(proje), projeId: proje?.id ?? null, sonAktarim: typeof aktarim?.sonAktarim === 'string' ? aktarim.sonAktarim : null
       };
     })
   };
 }
 
-/** Test sürecinin dosya listelemesi için ortam: dotenv'i yüklenmiş bu sürecin değişkenleri. */
-const paketOlustur = (/** @type {import('../../projeler/index.d.mts').AktarimAdaptoru} */ adaptor) => adaptor.paketOlustur(PROJE_KOKU, { ortamDegiskenleri: process.env });
-
-let esitlemeZamanlayici = /** @type {NodeJS.Timeout | null} */ (null);
 /**
- * Eski dashboard düzenleyicileri (senaryo kaydet/güncelle, koşu listesi) hâlâ
- * DOSYALARA yazar. Proje daha önce aktarıldıysa ve kasa açıksa, değişiklikten kısa süre sonra
- * dosyalar veritabanına yeniden aktarılır (birleştirme: yalnızca kaynağı değişen kayıtlar).
- * Kasa kilitliyse yapılmaz; testler o durumda dosyalardan okur (davranış değişmez).
- * @param {string} neden
+ * Paket: kaynak klasördeki eski dosyalar; ortam değişkenleri (taban adres, giriş bilgisi) kaynak
+ * klasördeki .env'den (varsa), yoksa bu sürecin (dotenv'i yüklenmiş) değişkenlerinden.
+ * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor @param {string} kaynak
  */
-export function projeDosyalariniEsitle(neden) {
-  if (esitlemeZamanlayici) clearTimeout(esitlemeZamanlayici);
-  esitlemeZamanlayici = setTimeout(async () => {
-    esitlemeZamanlayici = null;
-    const db = vt;
-    if (!db) return;
-    for (const adaptor of AKTARIM_ADAPTORLERI) {
-      if (!aktarilmisProjeyiBul(db, adaptor.ad)) continue;
-      if (!kasaAcikMi(db)) {
-        console.log(`[platform] ${neden}: proje dosyaları değişti ama kasa kilitli; veritabanı güncellenmedi (testler dosyaları kullanır).`);
-        continue;
-      }
-      try {
-        await aktarimKilidi(async () => {
-          const sonuc = aktarimiUygula(db, await paketOlustur(adaptor));
-          const degisen = Object.values(sonuc.sayimlar).reduce((t, x) => t + x.yeni + x.guncellenecek + x.kaldirilacak, 0);
-          console.log(`[platform] ${neden}: proje dosyaları veritabanına yeniden aktarıldı (${degisen} kayıt değişti).`);
-        });
-      } catch (hata) {
-        console.error(`[platform] ${neden}: otomatik yeniden aktarım yapılamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);
-      }
-    }
-  }, 1500);
-  esitlemeZamanlayici.unref();
-}
+const paketOlustur = (adaptor, kaynak) => adaptor.paketOlustur(kaynak, { projeKoku: PROJE_KOKU, ortamDegiskenleri: process.env });
 
 /** Süreç başına tek sayaç: kasa açma, parola değiştirme, dışa aktarma ve yedek parolası. */
 const denemeSiniri = new ParolaDenemeSiniri();
@@ -910,7 +941,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
     // --- GET /platform/aktarim/durum (kasa kilitliyken de çalışır; gizli bilgi yok) -----------
     if (req.method === 'GET' && yol === '/platform/aktarim/durum') {
       if (!disTokenGecerli) { tokenYok(); return true; }
-      jsonGonder(res, 200, { basarili: true, aktarimSuruyor, ...(await aktarimDurumu(await platformVeritabani())) });
+      jsonGonder(res, 200, { basarili: true, aktarimSuruyor, ...(await aktarimDurumu(await platformVeritabani(), url.searchParams.get('kaynakKlasoru'))) });
       return true;
     }
 
@@ -1030,19 +1061,19 @@ export async function platformIsteginiIsle(req, res, baglam) {
     switch (yol) {
       case '/platform/aktarim/onizle': {
         const adaptor = adaptorAl(govde.adaptor);
-        if (!adaptor.algila(PROJE_KOKU).var) throw new AktarimHatasi('Bu projenin aktarılacak dosyaları bulunamadı.');
+        const kaynak = kaynakKlasoruCoz(adaptor, govde.kaynakKlasoru);
         const onizleme = await aktarimKilidi(async () => {
           const db = await platformVeritabani();
           if (db && kasaDurumu(db).olusturuldu && !kasaAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Önizleme için önce kasayı açın.');
-          return aktarimiOnizle(db, await paketOlustur(adaptor));
+          return aktarimiOnizle(db, await paketOlustur(adaptor, kaynak));
         });
         res.setHeader('Cache-Control', 'no-store');
-        jsonGonder(res, 200, { basarili: true, onizleme });
+        jsonGonder(res, 200, { basarili: true, onizleme, kaynakKlasoru: kaynak });
         return true;
       }
       case '/platform/aktarim/uygula': {
         const adaptor = adaptorAl(govde.adaptor);
-        if (!adaptor.algila(PROJE_KOKU).var) throw new AktarimHatasi('Bu projenin aktarılacak dosyaları bulunamadı.');
+        const kaynak = kaynakKlasoruCoz(adaptor, govde.kaynakKlasoru);
         const sonuc = await aktarimKilidi(async () => {
           let db = await platformVeritabani();
           if (!db || !kasaDurumu(db).olusturuldu) {
@@ -1058,13 +1089,13 @@ export async function platformIsteginiIsle(req, res, baglam) {
           } else if (!kasaAcikMi(db)) {
             throw new KasaHatasi('KASA_KILITLI', 'Aktarım için önce kasayı açın.');
           }
-          const paket = await paketOlustur(adaptor);
+          const paket = await paketOlustur(adaptor, kaynak);
           const uygulanan = aktarimiUygula(db, paket);
           // Eski (Allure dönemi) koşu sonuçları + png/webm ekleri: tek seferlik, tekrarlanabilir
           // (var olan sonuç atlanır). Kaynak klasörlere dokunulmaz; medya şifrelenerek kopyalanır.
           let sonucAktarimi = null;
           try {
-            sonucAktarimi = await eskiSonuclariAktar(db, adaptor, uygulanan.projeId);
+            sonucAktarimi = await eskiSonuclariAktar(db, adaptor, uygulanan.projeId, kaynak);
           } catch (hata) {
             uygulanan.uyarilar.push(`Eski koşu sonuçları aktarılamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);
           }
@@ -1072,7 +1103,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
         });
         const s = sonuc.sayimlar;
         const toplam = (/** @type {'yeni' | 'guncellenecek' | 'ayni'} */ k) => Object.values(s).reduce((t, x) => t + x[k], 0);
-        console.log(`[platform] Proje dosyaları aktarıldı (${adaptor.ad}): yeni ${toplam('yeni')}, güncellenen ${toplam('guncellenecek')}, aynı (atlanan) ${toplam('ayni')}, kaldırılan ${sonuc.kaldirilanlar.length}.`);
+        console.log(`[platform] Eski proje dosyaları aktarıldı (${adaptor.ad}): yeni ${toplam('yeni')}, güncellenen ${toplam('guncellenecek')}, aynı (atlanan) ${toplam('ayni')}, kaldırılan ${sonuc.kaldirilanlar.length}.`);
         if (sonuc.sonucAktarimi) {
           const sa = sonuc.sonucAktarimi;
           console.log(`[platform] Eski koşu sonuçları: ${sa.kosu} koşu, ${sa.sonuc} sonuç, ${sa.medya} şifreli medya aktarıldı (zaten var: ${sa.zatenVar}).`);

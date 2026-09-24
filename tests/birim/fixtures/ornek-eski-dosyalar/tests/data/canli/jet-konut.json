@@ -1,0 +1,67 @@
+{
+  "jetKonut": {
+    "aktif": false,
+    "adresKodu": "",
+    "binaTipi": {
+      "deger": "",
+      "metin": ""
+    },
+    "brutYuzolcum": "",
+    "daskaBagli": "hayir",
+    "dainiMurtehin": "yok",
+    "alternatifPlus": {
+      "deger": "",
+      "metin": ""
+    },
+    "alternatif": {
+      "deger": "",
+      "metin": ""
+    },
+    "yapiTarzi": {
+      "deger": "",
+      "metin": ""
+    },
+    "toplamKat": {
+      "deger": "",
+      "metin": ""
+    },
+    "rizikonunBulunduguKat": {
+      "deger": "",
+      "metin": ""
+    },
+    "catiTipi": {
+      "deger": "",
+      "metin": ""
+    },
+    "altmisGundenFazlaBos": "hayir",
+    "binaInsaYili": "",
+    "teminatlar": {
+      "binaYangin": "",
+      "esyaYangin": "",
+      "dahiliDekorasyonYangin": "",
+      "camKirilmasi": "",
+      "esyaDeprem": false,
+      "dahiliDekorasyonDeprem": false,
+      "hirsizlik": false,
+      "binaSabitKiymetHirsizlik": false,
+      "ferdiKazaTekLimit": {
+        "deger": "",
+        "metin": ""
+      },
+      "hukuksalKoruma": {
+        "deger": "",
+        "metin": ""
+      },
+      "enflasyonOrani": {
+        "deger": "",
+        "metin": ""
+      }
+    },
+    "profiller": {
+      "sigortaliOzel": "tc1",
+      "sigortaliTuzel": "vkn1",
+      "farkliOzel": "tc2",
+      "farkliTuzel": "vkn2"
+    }
+  }
+}

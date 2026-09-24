@@ -31,8 +31,8 @@ export type BeklenenSonuc =
   | { tip: 'isKuraliHatasi'; adim: BeklenenHataAdimi; mesaj: string };
 
 /**
- * Senaryo verisinde beklenen sonuçla ilgili alanlar (bkz. tests/ekran-modelleri/
- * jet-seyahat.model.json > senaryoDuzeyi).
+ * Senaryo verisinde beklenen sonuçla ilgili alanlar (bkz. JetSeyahat ekran modeli
+ * > senaryoDuzeyi; modeller platform veritabanında).
  */
 export type BeklenenSonucAlanlari = {
   // ZORUNLU: her senaryoda açıkça yazılır (varsayılan yok). Dashboard > "Senaryo Oluştur"
@@ -173,8 +173,8 @@ export function eslesenMesajiBul(gorulen: string, beklenenler: readonly string[]
 export const UYARI_CIKMADI_METNI = 'uyarı çıkmadı, akış devam etti';
 
 /**
- * Beklenen sonuç doğrulanamadığında fırlatılan hatanın metni. Biçim sabittir — dashboard
- * (urun-hata-raporu.mjs > senaryoOlusturGorulenMesajiCikar) "Görülen:" kısmını bu
+ * Beklenen sonuç doğrulanamadığında fırlatılan hatanın metni. Biçim sabittir — Nöbetçi
+ * (scripts/platform/senaryolar/model-formu.mjs > beklenen hata önerisi) "Görülen:" kısmını bu
  * biçimden ayrıştırır; değiştirilirse orası da güncellenmelidir:
  *   <adım> adımında beklenen sonuç doğrulanamadı.
  *   Beklenen: "<...>" — Görülen: "<...>"

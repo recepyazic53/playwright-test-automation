@@ -426,7 +426,6 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 .tema-dugmesi { min-width: 34px; min-height: 34px; padding: 0; color: var(--metin-2); }
 
 .ana-icerik { min-height: calc(100vh - var(--ust-yukseklik)); }
-.ana-icerik.tam-genislik { padding: 0; }
 .kabuk-duzen { --yan: 236px; display: grid; grid-template-columns: var(--yan) minmax(0, 1fr); min-height: calc(100vh - var(--ust-yukseklik));
   background: linear-gradient(var(--cizgi), var(--cizgi)) calc(var(--yan) - 1px) 0 / 1px 100% no-repeat, linear-gradient(color-mix(in srgb, var(--zemin) 35%, transparent), color-mix(in srgb, var(--zemin) 35%, transparent)) 0 0 / var(--yan) 100% no-repeat; }
 .yan-panel {
@@ -616,13 +615,6 @@ table.fark-tablosu { table-layout: fixed; border-radius: var(--yaricap-m); overf
 .sabit-alt .dugmeler { margin-top: 0; }
 .sabit-alt .not-kutusu { margin-bottom: 10px; }
 .secim-sayaci { font: 12.5px var(--yazi-mono); color: var(--metin-2); margin: 0; }
-
-/* 5.5 Mevcut görünüm */
-.gorunum-cubugu { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; padding: 10px 16px; background: color-mix(in srgb, var(--zemin) 50%, transparent); border-bottom: 1px solid var(--cizgi); }
-.gorunum-cubugu .alan { margin: 0; min-width: 9rem; }
-.gorunum-cubugu .alan label { font: 600 10.5px var(--yazi-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--metin-3); margin-bottom: 4px; }
-.gorunum-cubugu .alan select { min-height: 34px; padding-top: 5px; padding-bottom: 5px; }
-.gorunum-cercevesi { width: 100%; border: 0; display: block; height: calc(100vh - var(--ust-yukseklik) - 64px); background: #fff; }
 
 /* 5.6 Sonuçlar — KPI kartları */
 .sonuc-kartlari { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 6px; }
@@ -904,7 +896,6 @@ a.kucuk .ikon { width: 12px; height: 12px; }
   .karsilama h1 { font-size: 32px; }
   .radar { width: 420px; height: 420px; }
   .karsilastirma { grid-template-columns: 1fr; }
-  .gorunum-cercevesi { height: calc(100vh - 11rem); }
 }
 @media (max-width: 480px) {
   .proje-secici b { max-width: 90px; }

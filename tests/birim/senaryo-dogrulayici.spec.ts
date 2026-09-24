@@ -6,10 +6,8 @@
 //    havuzları, beklenen sonuç, "ikisi birlikte" kuralları, girdi ↔ kayıt farkları).
 //  - Mesaj şablonları birbirinden farklı; hiçbir mesaj kart numarası/CVV içermiyor.
 //  - Her hata alanı dashboard formunda bir kontrole eşleniyor (modelin form karşılıkları).
-//  - Tarayıcıya gömülen paket (tarayici-paketi.mjs) ESM modülüyle AYNI sonucu veriyor.
-//  - Mevcut tüm senaryolar hatasız (bkz. ayrıca ekran-modeli.spec.ts > c).
-import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+//  - Örnek (sahte değerli) veri dosyalarındaki tüm senaryolar hatasız (bkz. ayrıca ekran-modeli.spec.ts > c).
+// Model ve ortak veri: tests/birim/fixtures/ornek-eski-dosyalar/ (gerçek veri platform veritabanında).
 import { expect, test } from '@playwright/test';
 import {
   MESAJLAR,
@@ -26,16 +24,18 @@ import {
   type DogrulamaKarti,
   type DogrulamaSonucu
 } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
-import { jetSeyahatModeliniYukle, modelFormKontrolleri } from '../support/ekran-modeli';
+import { ekranModeliniYukle, modelFormKontrolleri, type YuklenmisEkranModeli } from '../support/ekran-modeli';
 import type { JetSeyahatTestData, OrtakTestData } from '../support/test-data';
+import { ORNEK_MODEL_DOSYASI, ornekVeri } from './platform-ortak';
 
-const PROJE_KOKU = resolve(__dirname, '..', '..');
 const ORTAMLAR = ['test', 'canli'] as const;
+let modelOnbellegi: YuklenmisEkranModeli | undefined;
+const jetSeyahatModeliniYukle = (): YuklenmisEkranModeli => (modelOnbellegi ??= ekranModeliniYukle(ORNEK_MODEL_DOSYASI));
 /** Sabit "şimdi": 24.09.2026 (tarih kuralları buna göre). */
 const SIMDI = new Date(2026, 8, 24, 12, 0, 0);
 
 function ortakOku(ortam: (typeof ORTAMLAR)[number]): OrtakTestData {
-  return JSON.parse(readFileSync(join(PROJE_KOKU, 'tests', 'data', ortam, 'ortak.json'), 'utf-8')) as OrtakTestData;
+  return ornekVeri<OrtakTestData>(ortam, 'ortak');
 }
 
 function baglam(ek: Partial<DogrulamaBaglami> = {}): DogrulamaBaglami {
@@ -43,7 +43,7 @@ function baglam(ek: Partial<DogrulamaBaglami> = {}): DogrulamaBaglami {
   return { model, altModeller, ortak: ortakBaglaminiOlustur(ortakOku('test')), ortam: 'test', simdi: SIMDI, kaynak: 'kayit', ...ek };
 }
 
-/** Geçerli bir 30447 (COVID görünür) kaydı; vakalar bunun üzerine değişiklik yapar. */
+/** Geçerli bir 90002 (COVID görünür) kaydı; vakalar bunun üzerine değişiklik yapar. */
 const TEMEL: Readonly<Record<string, unknown>> = Object.freeze({
   baslik: 'Birim testi senaryosu',
   kapsam: 'DÜNYA',
@@ -95,15 +95,15 @@ const VAKALAR: Vaka[] = [
   { ad: 'AVRUPA + VİZE SCHENGEN geçerli', senaryo: senaryo({ kapsam: 'AVRUPA', alternatif: 'VİZE SCHENGEN' }), hatalar: [] },
   { ad: 'sorguTipi listede değil', senaryo: senaryo({ sorguTipi: 'toplu' }), hatalar: [{ alan: 'sorguTipi', mesaj: MESAJLAR.secenekDisi('Sorgu Tipi', 'toplu', ['tekli', 'coklu']) }] },
   // COVID: yalnızca acentede görünürse (ya da bilinmiyorsa) zorunlu
-  { ad: 'COVID eksik, 30447 (görünür) → hata', senaryo: senaryo({}, ['covidTeminati']), hatalar: [{ alan: 'covidTeminati', mesaj: MESAJLAR.zorunlu('COVID Teminatı') }] },
-  { ad: 'COVID eksik, varsayılan acente 30856 (gizli) → geçerli', senaryo: senaryo({}, ['covidTeminati', 'acenteProfili']), hatalar: [] },
+  { ad: 'COVID eksik, 90002 (görünür) → hata', senaryo: senaryo({}, ['covidTeminati']), hatalar: [{ alan: 'covidTeminati', mesaj: MESAJLAR.zorunlu('COVID Teminatı') }] },
+  { ad: 'COVID eksik, varsayılan acente 90001 (gizli) → geçerli', senaryo: senaryo({}, ['covidTeminati', 'acenteProfili']), hatalar: [] },
   {
-    ad: 'COVID verilmiş, 30856 → uyarı (değer kullanılmaz)',
+    ad: 'COVID verilmiş, 90001 → uyarı (değer kullanılmaz)',
     senaryo: senaryo({}, ['acenteProfili']),
     hatalar: [],
     uyarilar: [{ alan: 'covidTeminati', mesaj: MESAJLAR.gorunmeyenAlan('COVID Teminatı') }]
   },
-  { ad: 'COVID eksik, girdide acenteKodu 30856 → geçerli', senaryo: senaryo({ acenteKodu: '30856', acenteKullanicisi: '30856001' }, ['covidTeminati', 'acenteProfili']), baglam: { kaynak: 'girdi' }, hatalar: [] },
+  { ad: 'COVID eksik, girdide acenteKodu 90001 → geçerli', senaryo: senaryo({ acenteKodu: '90001', acenteKullanicisi: '90000001' }, ['covidTeminati', 'acenteProfili']), baglam: { kaynak: 'girdi' }, hatalar: [] },
   {
     ad: 'COVID eksik, bilinmeyen acente → zorunlu kalır',
     senaryo: senaryo({ acenteKodu: '99999', acenteKullanicisi: '1' }, ['covidTeminati', 'acenteProfili']),
@@ -114,35 +114,35 @@ const VAKALAR: Vaka[] = [
   // Serbest kimlik: TC (11 hane + kontrol haneleri), telefon, doğum tarihi
   {
     ad: 'serbest sigortalı geçerli',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '45520772518', dogumTarihi: '24.09.2026', cepTelefonu: '5426502153' } }),
+    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '24.09.2026', cepTelefonu: '5550000001' } }),
     hatalar: []
   },
   {
     ad: 'TC kontrol hanesi yanlış',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '45520772519', dogumTarihi: '13.04.1998', cepTelefonu: '5426502153' } }),
+    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000147', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' } }),
     hatalar: [{ alan: 'sigortaliKimligi.tcKimlikNo', mesaj: MESAJLAR.tcKontrolHanesi() }]
   },
   {
     ad: 'TC 0 ile başlıyor / 10 hane',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '0552077251', dogumTarihi: '13.04.1998', cepTelefonu: '5426502153' } }),
+    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '0100000001', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' } }),
     hatalar: [{ alan: 'sigortaliKimligi.tcKimlikNo', mesaj: MESAJLAR.tcBicim() }]
   },
   {
     ad: 'telefon başında 0',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '45520772518', dogumTarihi: '13.04.1998', cepTelefonu: '05426502153' } }),
+    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '01.02.1985', cepTelefonu: '05550000001' } }),
     hatalar: [{ alan: 'sigortaliKimligi.cepTelefonu', mesaj: MESAJLAR.telefonBicim() }]
   },
   {
     ad: 'doğum tarihi gelecekte (yarın)',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '45520772518', dogumTarihi: '25.09.2026', cepTelefonu: '5426502153' } }),
+    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '25.09.2026', cepTelefonu: '5550000001' } }),
     hatalar: [{ alan: 'sigortaliKimligi.dogumTarihi', mesaj: MESAJLAR.tarihGelecekte('Doğum Tarihi') }]
   },
   {
     ad: 'doğum tarihi takvimde yok / yanlış biçim',
     senaryo: senaryo({
       ettiren: 'farkliOzel',
-      ettirenOzelKimligi: { tcKimlikNo: '45553280080', dogumTarihi: '31.02.2000', cepTelefonu: '5426215214' },
-      sigortaliKimligi: { tcKimlikNo: '45520772518', dogumTarihi: '1998-04-13', cepTelefonu: '5426502153' }
+      ettirenOzelKimligi: { tcKimlikNo: '10000000214', dogumTarihi: '31.02.2000', cepTelefonu: '5550000002' },
+      sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '1985-02-01', cepTelefonu: '5550000001' }
     }),
     hatalar: [
       { alan: 'sigortaliKimligi.dogumTarihi', mesaj: MESAJLAR.tarihBicim('Doğum Tarihi', 'gg.aa.yyyy') },
@@ -151,15 +151,15 @@ const VAKALAR: Vaka[] = [
   },
   {
     ad: 'serbest kimlikte alan eksik',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '45520772518', dogumTarihi: '', cepTelefonu: '5426502153' } }),
+    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '', cepTelefonu: '5550000001' } }),
     hatalar: [{ alan: 'sigortaliKimligi.dogumTarihi', mesaj: MESAJLAR.zorunlu('Doğum Tarihi') }]
   },
   {
     ad: 'tüzel ettiren: VKN 10 hane, doğum tarihi istenmez',
-    senaryo: senaryo({ ettiren: 'farkliTuzel', ettirenTuzelKimligi: { vergiKimlikNo: '123', cepTelefonu: '5428512463' } }),
+    senaryo: senaryo({ ettiren: 'farkliTuzel', ettirenTuzelKimligi: { vergiKimlikNo: '123', cepTelefonu: '5550000005' } }),
     hatalar: [{ alan: 'ettirenTuzelKimligi.vergiKimlikNo', mesaj: MESAJLAR.vknBicim() }]
   },
-  { ad: 'tüzel ettiren geçerli', senaryo: senaryo({ ettiren: 'farkliTuzel', ettirenTuzelKimligi: { vergiKimlikNo: '8590401741', cepTelefonu: '5428512463' } }), hatalar: [] },
+  { ad: 'tüzel ettiren geçerli', senaryo: senaryo({ ettiren: 'farkliTuzel', ettirenTuzelKimligi: { vergiKimlikNo: '1000000001', cepTelefonu: '5550000005' } }), hatalar: [] },
   // Profiller (modeldeki profilHavuzu)
   {
     ad: 'farklı ettiren, profil de kimlik de yok',
@@ -173,13 +173,13 @@ const VAKALAR: Vaka[] = [
   },
   {
     ad: 'sigortalı profil + kimlik birlikte',
-    senaryo: senaryo({ sigortaliProfili: 'tc2', sigortaliKimligi: { tcKimlikNo: '45520772518', dogumTarihi: '13.04.1998', cepTelefonu: '5426502153' } }),
+    senaryo: senaryo({ sigortaliProfili: 'tc2', sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' } }),
     hatalar: [{ alan: 'sigortaliProfili', mesaj: MESAJLAR.profilVeKimlikBirlikte('Sigortalı') }]
   },
   { ad: 'acente profili ortak veride yok', senaryo: senaryo({ acenteProfili: 'YokBoyleAcente' }), hatalar: [{ alan: 'acenteProfili', mesaj: MESAJLAR.profilYok('Acente Kodu', 'YokBoyleAcente') }] },
   {
     ad: 'girdide acente kodu var, kullanıcı yok',
-    senaryo: senaryo({ acenteKodu: '30447' }, ['acenteProfili']),
+    senaryo: senaryo({ acenteKodu: '90002' }, ['acenteProfili']),
     baglam: { kaynak: 'girdi' },
     hatalar: [{ alan: 'acenteKullanicisi', mesaj: MESAJLAR.birlikteZorunlu('Acente Kodu', 'Acente Kullanıcı Kodu') }]
   },
@@ -362,21 +362,11 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
     expect(alanFormKimlikleri('beklenenSonuc.mesaj', yuklenmis)).toEqual(['sof_beklenenHata']);
   });
 
-  test('tarayıcı paketi ESM modülüyle aynı sonucu veriyor', async () => {
-    // (Dinamik import: modül node:fs/import.meta kullanır, statik require ile yüklenemez.)
-    const { tarayiciBetiginiOlustur } = await import('../../scripts/dogrulama/tarayici-paketi.mjs');
-    const betik = tarayiciBetiginiOlustur();
-    const paket = new Function(`${betik}\nreturn SenaryoDogrulayici;`)() as { senaryoyuDogrula: typeof senaryoyuDogrula };
-    for (const vaka of VAKALAR) {
-      expect(paket.senaryoyuDogrula(vaka.senaryo, baglam(vaka.baglam)), vaka.ad).toEqual(dogrula(vaka));
-    }
-  });
-
-  test('mevcut tüm senaryolar hatasız (gerçek tarih; ortak kart uyarısı serbest)', () => {
+  test('örnek veri dosyalarındaki tüm senaryolar hatasız (gerçek tarih; ortak kart uyarısı serbest)', () => {
     const { model, altModeller } = jetSeyahatModeliniYukle();
     const sorunlar: string[] = [];
     for (const ortam of ORTAMLAR) {
-      const urun = (JSON.parse(readFileSync(join(PROJE_KOKU, 'tests', 'data', ortam, 'jet-seyahat.json'), 'utf-8')) as JetSeyahatTestData).jetSeyahat;
+      const urun = ornekVeri<JetSeyahatTestData>(ortam, 'jet-seyahat').jetSeyahat;
       const ortak = ortakBaglaminiOlustur(ortakOku(ortam));
       for (const s of urun.senaryolar) {
         const sonuc = senaryoyuDogrula(s, { model, altModeller, ortak, ortam, simdi: new Date() });

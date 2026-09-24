@@ -1,20 +1,17 @@
-// PLATFORM VERİ ERİŞİM KATMANI (spec'ler için) — test verisini, taban adresleri ve giriş
-// bilgisini platform veritabanından (mevcut proje dosyaları "aktarıldıysa") ya da eskisi gibi
-// dosyalardan (tests/data, .env) sağlar. Döndürülen şekiller dosya yükleyicileriyle BİREBİR
-// aynıdır (npm run test:birim > platform-esdegerlik kontrol eder); testlerin davranışı değişmez.
+// PLATFORM VERİ ERİŞİM KATMANI (spec'ler için) — test verisi, ekran modelleri, taban adresler ve
+// giriş bilgisi YALNIZCA platform veritabanından gelir (Nöbetçi: veri/platform.db). Dosyaya
+// (tests/data, .env) geri düşülmez; veritabanı yoksa, proje aktarılmamışsa ya da kasa anahtarı
+// yoksa açık bir Türkçe hata verilir (VERITABANI_HAZIR_DEGIL).
 //
-// Kaynak seçimi (süreç başına bir kez, stderr'e — gizli değer YAZILMAZ — loglanır):
-//   PLATFORM_VERI_KAYNAGI=dosya        → her zaman dosyalar (kaçış yolu).
-//   veritabanı yok / aktarım yapılmamış → dosyalar.
-//   aktarım yapılmış + kasa anahtarı var → VERİTABANI. Anahtar:
-//       - dashboard koşularında sunucu türetilmiş anahtarı PLATFORM_KASA_ANAHTARI ile verir
-//         (yalnızca alt sürecin belleğinde; diske yazılmaz),
-//       - terminal koşularında global-setup.ts kasa parolasını GİZLİ girişle sorar
-//         (TTY yoksa PLATFORM_KASA_PAROLASI gerekir) ve anahtarı bu koşunun worker'larına verir.
-//   aktarım yapılmış ama anahtar yok (ör. "--list" veya kasası kilitli dashboard) → dosyalar.
-//   Dosyalar/.env aktarımdan SONRA değiştiyse (eski dashboard düzenleyicileri hâlâ dosyaya yazar)
-//   → dosyalar + uyarı ("Proje dosyalarından yeniden aktar" önerilir).
-//   PLATFORM_VERI_KAYNAGI=veritabani   → veritabanı zorunlu; kullanılamıyorsa hata.
+// Kasa anahtarı:
+//   - Nöbetçi koşularında sunucu türetilmiş anahtarı PLATFORM_KASA_ANAHTARI ile verir (yalnızca alt
+//     sürecin belleğinde; diske yazılmaz),
+//   - terminal koşularında global-setup.ts kasa parolasını GİZLİ girişle sorar (TTY yoksa
+//     PLATFORM_KASA_PAROLASI gerekir) ve anahtarı bu koşunun worker'larına verir,
+//   - "--list" global-setup çalıştırmaz: PLATFORM_KASA_ANAHTARI ya da PLATFORM_KASA_PAROLASI gerekir.
+// Playwright yapılandırması (playwright.config.ts) parola sorulmadan ÖNCE değerlendirilir; orada
+// taban adres anahtarsız okunamaz (platformVerisiVarsa → null) ve worker'lar yapılandırmayı anahtarla
+// yeniden yükler.
 //
 // Veritabanı, spec'ler veriyi modül yüklenirken EŞZAMANLI istediği için ayrı bir Node sürecinde
 // (scripts/platform/aktarim/veri-oku.mjs) salt okunur açılır; sonuç yalnızca boru üzerinden
@@ -24,9 +21,10 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { EnvironmentName } from './environments';
 
-export const VERI_KAYNAGI_DEGISKENI = 'PLATFORM_VERI_KAYNAGI';
 export const KASA_ANAHTARI_DEGISKENI = 'PLATFORM_KASA_ANAHTARI';
 export const KASA_PAROLASI_DEGISKENI = 'PLATFORM_KASA_PAROLASI';
+/** Veritabanı kullanılamadığında her hata mesajının başı. */
+export const VERITABANI_HAZIR_DEGIL = "Veritabanı hazır değil — Nöbetçi'yi açıp projeyi aktarın/yedek yükleyin";
 /** Bu projenin aktarım adaptörü (projeler/galaksi/aktarim.mjs). */
 const ADAPTOR = 'galaksi';
 const PROJE_KOKU = resolve(__dirname, '..', '..');
@@ -45,27 +43,32 @@ export type PlatformVeriSeti = {
   giris: PlatformGirisBilgisi | null;
   ortak: unknown;
   dosyalar: Record<string, unknown>;
-  /** Eski senaryo anahtarı ("<dosya>::<başlık>") → senaryo UUID. */
+  /** Ekran modelleri, eski dosya adıyla ("<ekran anahtarı>.model.json"). */
+  ekranModelleri: Record<string, unknown>;
+  /** Senaryo anahtarı ("<dosya>::<başlık>") → senaryo UUID. */
   senaryoKimlikleri: Record<string, string>;
 };
 
 type DurumCiktisi =
   | { durum: 'veritabani-yok' }
   | { durum: 'aktarilmamis' }
-  | { durum: 'aktarildi'; sonAktarim: string | null; haricTutulanlar: string[]; kosuListesiGuncel: boolean };
+  | { durum: 'aktarildi'; sonAktarim: string | null; haricTutulanlar: string[] };
 
 type VeriCiktisi = Extract<DurumCiktisi, { durum: 'aktarildi' }> & {
   anahtarYok?: boolean;
-  guncel?: { dosyalar: boolean; degisenOrtamDegiskenleri: string[] };
   veri?: PlatformVeriSeti | null;
 };
 
 type HataCiktisi = { hata: string; kod: string };
 
-function veriKaynagiTercihi(): 'dosya' | 'veritabani' | 'otomatik' {
-  const deger = (process.env[VERI_KAYNAGI_DEGISKENI] ?? '').trim().toLocaleLowerCase('tr-TR');
-  if (deger === 'dosya' || deger === 'veritabani') return deger;
-  return 'otomatik';
+/** Veritabanı kullanılamadığında fırlatılan hata (mesaj her zaman VERITABANI_HAZIR_DEGIL ile başlar). */
+export class PlatformVeriHatasi extends Error {
+  constructor(neden: string) {
+    super(`${VERITABANI_HAZIR_DEGIL} (${neden}).`);
+    this.name = 'PlatformVeriHatasi';
+    // Kullanıcıya yalnızca açıklama gösterilsin (yığın izi/kod alıntısı gürültü yapmasın).
+    this.stack = `${this.name}: ${this.message}`;
+  }
 }
 
 /** scripts/platform/veritabani/baglanti.mjs > veritabaniYolu ile aynı kural. */
@@ -113,29 +116,24 @@ export function platformDurumu(): DurumCiktisi {
   if (durumOnbellegi) return durumOnbellegi;
   if (!existsSync(platformVeritabaniYolu())) return (durumOnbellegi = { durum: 'veritabani-yok' });
   const sonuc = platformOkuyucusunuCalistir(['durum']);
-  if (hataMi(sonuc)) {
-    if (veriKaynagiTercihi() === 'veritabani') throw new Error(`Platform veritabanı okunamadı: ${sonuc.hata}`);
-    birKezLogla(`Platform veritabanı okunamadı (${sonuc.hata}); dosyalar kullanılıyor.`);
-    return (durumOnbellegi = { durum: 'aktarilmamis' });
-  }
+  if (hataMi(sonuc)) throw new PlatformVeriHatasi(`platform veritabanı okunamadı: ${sonuc.hata}`);
   return (durumOnbellegi = sonuc as DurumCiktisi);
 }
 
-/**
- * Koşu sonuçları platform veritabanına mı yazılacak? (Proje aktarılmışsa EVET — veri kaynağı tercihi
- * PLATFORM_VERI_KAYNAGI=dosya olsa bile; sonuçlar ve şifreli medya için kasa anahtarı gerekir.)
- */
-export function platformSonucKaydiVarMi(): boolean {
+/** Proje platform veritabanına aktarılmış (ya da yedekten yüklenmiş) mı? Kasa gerektirmez. */
+export function platformHazirMi(): boolean {
   return platformDurumu().durum === 'aktarildi';
 }
 
-/** Aktarım yapılmış mı (kasa anahtarı istemeden)? global-setup parola sorup sormamaya buna göre karar verir. */
-export function platformAktarimiVarMi(): boolean {
-  if (veriKaynagiTercihi() === 'dosya') return false;
-  return platformDurumu().durum === 'aktarildi';
+/** Veritabanı hazır değilse açık bir hata fırlatır (playwright.config.ts ilk iş olarak çağırır). */
+export function platformHazirOlmali(): Extract<DurumCiktisi, { durum: 'aktarildi' }> {
+  const durum = platformDurumu();
+  if (durum.durum === 'veritabani-yok') throw new PlatformVeriHatasi(`veritabanı bulunamadı: ${platformVeritabaniYolu()}`);
+  if (durum.durum !== 'aktarildi') throw new PlatformVeriHatasi('proje henüz aktarılmamış ya da kasa oluşturulmamış');
+  return durum;
 }
 
-const veriOnbellegi = new Map<EnvironmentName, PlatformVeriSeti | null>();
+const veriOnbellegi = new Map<EnvironmentName, PlatformVeriSeti>();
 
 /** Önbellekleri boşaltır (global-setup anahtarı yerleştirdikten sonra çağırır). */
 export function platformOnbelleginiSifirla(): void {
@@ -143,84 +141,54 @@ export function platformOnbelleginiSifirla(): void {
   veriOnbellegi.clear();
 }
 
+function anahtarVarMi(): boolean {
+  return Boolean(process.env[KASA_ANAHTARI_DEGISKENI] || process.env[KASA_PAROLASI_DEGISKENI]);
+}
+
 /**
- * Bu ortam için veritabanından kurulmuş veri seti; dosyalar kullanılacaksa null.
- * sessizAnahtarYok: anahtar yokken "dosyalar kullanılıyor" logu yazılmaz (playwright.config.ts,
- * global-setup parolayı sormadan ÖNCE taban adresi için çağırır).
+ * Bu ortamın veritabanından kurulmuş veri seti. Veritabanı hazır değilse, kasa anahtarı yoksa ya da
+ * ortam veritabanında yoksa açık bir hata fırlatır (dosyaya geri düşülmez).
  */
-export function platformVerisi(ortam: EnvironmentName, secenekler: { sessizAnahtarYok?: boolean } = {}): PlatformVeriSeti | null {
-  const tercih = veriKaynagiTercihi();
-  if (tercih === 'dosya') {
-    birKezLogla('Veri kaynağı: dosyalar (PLATFORM_VERI_KAYNAGI=dosya).');
-    return null;
-  }
-  if (veriOnbellegi.has(ortam)) return veriOnbellegi.get(ortam) ?? null;
-  const zorunlu = tercih === 'veritabani';
-  const durum = platformDurumu();
-  if (durum.durum !== 'aktarildi') {
-    if (zorunlu) throw new Error('PLATFORM_VERI_KAYNAGI=veritabani ama proje dosyaları platform veritabanına aktarılmamış.');
-    birKezLogla(`Veri kaynağı: dosyalar (${durum.durum === 'veritabani-yok' ? 'platform veritabanı yok' : 'proje dosyaları henüz aktarılmamış'}).`);
-    veriOnbellegi.set(ortam, null);
-    return null;
-  }
-  if (!process.env[KASA_ANAHTARI_DEGISKENI] && !process.env[KASA_PAROLASI_DEGISKENI]) {
-    if (zorunlu && !secenekler.sessizAnahtarYok) {
-      throw new Error(`PLATFORM_VERI_KAYNAGI=veritabani ama kasa anahtarı yok (${KASA_PAROLASI_DEGISKENI} verin).`);
-    }
-    // Anahtar sonradan (global-setup) gelebilir: sonuç önbelleğe ALINMAZ.
-    if (!secenekler.sessizAnahtarYok) birKezLogla('Veri kaynağı: dosyalar (platform veritabanı aktarılmış ama kasa anahtarı bu süreçte yok).');
-    return null;
+export function platformVerisi(ortam: EnvironmentName): PlatformVeriSeti {
+  const onbellekte = veriOnbellegi.get(ortam);
+  if (onbellekte) return onbellekte;
+  platformHazirOlmali();
+  if (!anahtarVarMi()) {
+    throw new PlatformVeriHatasi(
+      'kasa anahtarı yok: testleri terminalden çalıştırın (kasa parolası gizli olarak sorulur) ya da ' +
+        `etkileşimsiz ortamda ${KASA_PAROLASI_DEGISKENI} verin; "--list" için de ${KASA_PAROLASI_DEGISKENI} gerekir`
+    );
   }
   const sonuc = platformOkuyucusunuCalistir(['veri', '--ortam', ortam]);
   if (hataMi(sonuc)) {
     if (sonuc.kod === 'PAROLA_YANLIS') throw new Error(`Platform kasası açılamadı: ${sonuc.hata}`);
-    if (zorunlu) throw new Error(`Platform veritabanı okunamadı: ${sonuc.hata}`);
-    birKezLogla(`Platform veritabanı okunamadı (${sonuc.hata}); dosyalar kullanılıyor.`);
-    veriOnbellegi.set(ortam, null);
-    return null;
+    throw new PlatformVeriHatasi(`platform veritabanı okunamadı: ${sonuc.hata}`);
   }
   const cikti = sonuc as VeriCiktisi;
-  let veri: PlatformVeriSeti | null = cikti.veri ?? null;
-  if (!veri) {
-    if (zorunlu) throw new Error(`Platform veritabanında "${ortam}" ortamı yok.`);
-    birKezLogla(`Platform veritabanında "${ortam}" ortamı yok; dosyalar kullanılıyor.`);
-  } else if (cikti.guncel && (!cikti.guncel.dosyalar || cikti.guncel.degisenOrtamDegiskenleri.length)) {
-    const neler = [
-      ...(cikti.guncel.dosyalar ? [] : ['tests/data dosyaları']),
-      ...(cikti.guncel.degisenOrtamDegiskenleri.length ? [`.env (${cikti.guncel.degisenOrtamDegiskenleri.join(', ')})`] : [])
-    ].join(' ve ');
-    if (zorunlu) {
-      birKezLogla(`UYARI: ${neler} son aktarımdan sonra değişmiş; PLATFORM_VERI_KAYNAGI=veritabani olduğu için veritabanı kullanılıyor.`);
-    } else {
-      birKezLogla(`UYARI: ${neler} son aktarımdan sonra değişmiş — davranış değişmesin diye DOSYALAR kullanılıyor. ` +
-        'Platformda Ayarlar > Yedekleme > "Proje dosyalarından yeniden aktar" ile veritabanını güncelleyin.');
-      veri = null;
-    }
-  }
-  if (veri) birKezLogla(`Veri kaynağı: platform veritabanı (${ortam}; son aktarım ${cikti.sonAktarim ?? 'bilinmiyor'}).`);
-  veriOnbellegi.set(ortam, veri);
-  return veri;
+  if (!cikti.veri) throw new PlatformVeriHatasi(`"${ortam}" ortamı platform veritabanında yok`);
+  birKezLogla(`Veri kaynağı: platform veritabanı (${ortam}; son aktarım ${cikti.sonAktarim ?? 'bilinmiyor'}).`);
+  veriOnbellegi.set(ortam, cikti.veri);
+  return cikti.veri;
 }
 
 /**
- * Koşudan hariç tutulan senaryo anahtarları ("<dosya>::<ad>") — aktarım yapılmışsa ve
- * kosu-listesi.json aktarımdan sonra değişmediyse VERİTABANINDAN (kosuya_dahil), aksi halde null
- * (çağıran dosyayı okur). Kasa gerektirmez (bu bilgiler gizli değildir).
+ * platformVerisi ile aynı; yalnızca kasa anahtarı HENÜZ yoksa null döner (hata yerine). Yalnızca
+ * playwright.config.ts değerlendirilirken (global-setup parolayı sormadan önce) kullanılır.
  */
-export function platformHaricTutulanAnahtarlar(): string[] | null {
-  if (veriKaynagiTercihi() === 'dosya') return null;
-  const durum = platformDurumu();
-  if (durum.durum !== 'aktarildi') return null;
-  if (!durum.kosuListesiGuncel) {
-    birKezLogla('kosu-listesi.json son aktarımdan sonra değişmiş; koşu listesi dosyadan okunuyor.');
+export function platformVerisiVarsa(ortam: EnvironmentName): PlatformVeriSeti | null {
+  if (!veriOnbellegi.has(ortam) && !anahtarVarMi()) {
+    platformHazirOlmali();
     return null;
   }
-  return durum.haricTutulanlar;
+  return platformVerisi(ortam);
 }
 
-/** Senaryonun platform kimliği (UUID) — yalnızca veri veritabanından geliyorsa. */
+/** Koşudan hariç tutulan senaryo anahtarları ("<dosya>::<ad>") — veritabanından (kasa gerektirmez). */
+export function platformHaricTutulanAnahtarlar(): string[] {
+  return platformHazirOlmali().haricTutulanlar;
+}
+
+/** Senaryonun platform kimliği (UUID) — kasa anahtarı bu süreçte varsa. */
 export function platformSenaryoKimligi(ortam: EnvironmentName, anahtar: string): string | undefined {
-  return veriOnbellegi.has(ortam) || process.env[KASA_ANAHTARI_DEGISKENI] || process.env[KASA_PAROLASI_DEGISKENI]
-    ? platformVerisi(ortam, { sessizAnahtarYok: true })?.senaryoKimlikleri[anahtar]
-    : undefined;
+  return platformVerisiVarsa(ortam)?.senaryoKimlikleri[anahtar];
 }

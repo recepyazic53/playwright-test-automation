@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import type { BeklenenSonucAlanlari } from './beklenen-sonuc';
 import type { EnvironmentName } from './environments';
 import { platformVerisi } from './platform-veri';
@@ -74,7 +73,7 @@ export type SenaryoKrediKartiData = Omit<KrediKartiOdemeData, 'beklenenHataMesaj
 
 // Tek bir acente/kullanıcı profili (Acente Partajı + Acente Kullanıcısı).
 // Ürün ekranları arasında ortak kullanılır; her acentede görünen alan seti farklı olabilir
-// (örn. 30856 acentesinde COVID teminatı, kayak teminatı, plan kodu, seyahat iptal bedeli yok).
+// (bazı acentelerde COVID teminatı, kayak teminatı, plan kodu, seyahat iptal bedeli yok).
 export type AcenteProfili = {
   acentePartaji: string;
   acentePartajiSecenegi: string;
@@ -363,7 +362,7 @@ export type JetSeyahatTestData = {
       baslik: string;
       kapsam: string;
       alternatif: string;
-      // Acentenin ekranında görünmüyorsa (ör. 30856) zorunlu değildir — bkz. ekran modeli
+      // Acentenin ekranında görünmüyorsa (acenteye göre değişir) zorunlu değildir — bkz. ekran modeli
       // kosullar.acenteAlanSetiTam ve scripts/dogrulama/senaryo-dogrulayici.mjs.
       covidTeminati?: 'E' | 'H';
       sorguTipi: 'tekli' | 'coklu';
@@ -385,8 +384,8 @@ export type JetSeyahatTestData = {
       // Beklenen sonuç alanları (odemeAdimiDahil — ZORUNLU, beklenenSonuc) — bkz.
       // tests/support/beklenen-sonuc.ts > BeklenenSonucAlanlari. Spec, bu alanları
       // beklenenSonucuCoz ile TEK biçime çevirip adimPlaniniOlustur ile akışı belirler.
-      // Alanların tamamı tests/ekran-modelleri/jet-seyahat.model.json ile eşleşmeli
-      // (npm run test:birim kontrol eder).
+      // Alanların tamamı JetSeyahat ekran modeliyle eşleşmeli (npm run test:birim, örnek
+      // modelle kontrol eder).
       // YENİ (dashboard > "Senaryo Oluştur"): sigortalı (poliçe sahibi) normalde ürün
       // seviyesinde SABİT tek bir TC kullanır (jetSeyahat.sigortaliProfili, tüm senaryolar
       // paylaşır). Bu alan doluysa SADECE bu senaryoda, o ortak sigortalı yerine burada
@@ -415,21 +414,15 @@ export type JetSeyahatTestData = {
   };
 };
 
-// Veri, proje dosyaları platform veritabanına aktarıldıysa (ve kasa anahtarı varsa) oradan,
-// aksi halde eskisi gibi tests/data/<ortam>/<dosya>.json'dan gelir — şekil birebir aynıdır
-// (bkz. platform-veri.ts; eşdeğerlik npm run test:birim ile korunur).
+// Veri YALNIZCA platform veritabanından gelir (bkz. platform-veri.ts; dosyaya geri düşülmez). Şekil,
+// eski tests/data/<ortam>/<dosya>.json dosyalarıyla aynıdır (ürün anahtarı = eski dosya adı).
 function loadData<T>(environment: EnvironmentName, fileName: string): T {
   const platform = platformVerisi(environment);
-  if (platform) {
-    const veri = fileName === 'ortak' ? platform.ortak : platform.dosyalar[fileName];
-    if (veri === undefined) {
-      throw new Error(`Platform veritabanında "${environment}/${fileName}" verisi yok. Proje dosyalarını yeniden aktarın ` +
-        'ya da PLATFORM_VERI_KAYNAGI=dosya ile dosyalardan çalıştırın.');
-    }
-    return ekVerileriUygula(environment, fileName, structuredClone(veri)) as T;
+  const veri = fileName === 'ortak' ? platform.ortak : platform.dosyalar[fileName];
+  if (veri === undefined) {
+    throw new Error(`Platform veritabanında "${environment}/${fileName}" verisi yok (Nöbetçi > Ayarlar > Yedekleme > "Eski proje dosyalarından yeniden aktar").`);
   }
-  const filePath = resolve(process.cwd(), 'tests', 'data', environment, `${fileName}.json`);
-  return ekVerileriUygula(environment, fileName, JSON.parse(readFileSync(filePath, 'utf-8'))) as T;
+  return ekVerileriUygula(environment, fileName, structuredClone(veri)) as T;
 }
 
 // Platform > Senaryolar > "Dene" (genel): ek veri dosyasındaki "ekVeriler" girdileri, ilgili veri
@@ -448,20 +441,15 @@ function ekVerileriUygula(environment: EnvironmentName, fileName: string, veri: 
   return veri;
 }
 
-// Dashboard > "Senaryo Oluştur" > "Dene" akışı (bkz. scripts/test-sunucu.mjs >
-// /jetseyahat-senaryo/dene) denenen senaryoyu KALICI json dosyalarına YAZMAZ; onun yerine
-// geçici bir "ek senaryo" (overlay) dosyası oluşturup yolunu bu ortam değişkeniyle
-// Playwright alt sürecine verir. Değişken yoksa (normal koşular, CI, --list) hiçbir şey
-// değişmez — yükleyiciler yalnızca kalıcı dosyaları okur.
+// Nöbetçi > Senaryolar > "Dene" (bkz. scripts/test-sunucu.mjs > platformKosucusunuAyarla > dene)
+// denenen taslak senaryoyu veritabanına YAZMAZ; geçici bir "ek veri" dosyası oluşturup yolunu bu ortam
+// değişkeniyle Playwright alt sürecine verir. Değişken yoksa (normal koşular, CI, --list) hiçbir şey
+// değişmez.
 export const EK_SENARYO_DOSYASI_ORTAM_DEGISKENI = 'TEST_SUNUCU_EK_SENARYO_DOSYASI';
-
-type JetSeyahatSenaryosu = JetSeyahatTestData['jetSeyahat']['senaryolar'][number];
 
 type EkSenaryoDosyasi = {
   ortam: EnvironmentName;
-  jetSeyahatSenaryolari?: JetSeyahatSenaryosu[];
-  kullaniciDegistir?: Record<string, AcenteProfili>;
-  // Genel biçim (platform > Senaryolar > "Dene"): veri dosyası + dizi yolu + eklenecek öğeler.
+  // Veri dosyası (ürün anahtarı) + dizi yolu + eklenecek öğeler.
   ekVeriler?: Array<{ dosya: string; yol: string[]; ogeler: unknown[] }>;
 };
 
@@ -476,14 +464,7 @@ function ekSenaryoDosyasiniOku(environment: EnvironmentName): EkSenaryoDosyasi |
 }
 
 export function loadOrtakData(environment: EnvironmentName): OrtakTestData {
-  const veri = loadData<OrtakTestData>(environment, 'ortak');
-  // "Dene" sırasında girilen ve ortak.json'da HENÜZ olmayan acente profili, kalıcı
-  // dosyaya yazılmadan yalnızca bu koşu için eklenir (mevcut anahtarlar ezilmez).
-  const ek = ekSenaryoDosyasiniOku(environment);
-  if (ek?.kullaniciDegistir) {
-    veri.kullaniciDegistir = { ...ek.kullaniciDegistir, ...veri.kullaniciDegistir };
-  }
-  return veri;
+  return loadData<OrtakTestData>(environment, 'ortak');
 }
 
 export function loadJetKaskoData(environment: EnvironmentName): JetKaskoTestData {
@@ -517,12 +498,5 @@ export function loadJetKobiData(environment: EnvironmentName): JetKobiTestData {
 }
 
 export function loadJetSeyahatData(environment: EnvironmentName): JetSeyahatTestData {
-  const veri = loadData<JetSeyahatTestData>(environment, 'jet-seyahat');
-  // "Dene" ile gelen geçici senaryo(lar) listenin sonuna eklenir (bkz.
-  // ekSenaryoDosyasiniOku) — kalıcı jet-seyahat.json'a hiç dokunulmaz.
-  const ek = ekSenaryoDosyasiniOku(environment);
-  if (ek?.jetSeyahatSenaryolari?.length) {
-    veri.jetSeyahat.senaryolar = [...veri.jetSeyahat.senaryolar, ...ek.jetSeyahatSenaryolari];
-  }
-  return veri;
+  return loadData<JetSeyahatTestData>(environment, 'jet-seyahat');
 }

@@ -1,5 +1,5 @@
 // JetSeyahat senaryosunun spec tarafındaki doğrulaması: TEK doğrulayıcıyı
-// (scripts/dogrulama/senaryo-dogrulayici.mjs — test sunucusu ve dashboard formu da aynısını
+// (scripts/dogrulama/senaryo-dogrulayici.mjs — platform sunucusu ve Senaryolar formu da aynısını
 // kullanır) ekran modeli + ortak veri bağlamıyla çağırır. Kurallar ve Türkçe mesajlar
 // yalnızca o dosyadadır; burada kopya kural YOKTUR.
 //
@@ -10,17 +10,21 @@ import {
   senaryoyuDogrula,
   type DogrulamaSonucu
 } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
-import { jetSeyahatModeliniYukle } from './ekran-modeli';
+import { jetSeyahatModeliniYukle, type YuklenmisEkranModeli } from './ekran-modeli';
 import type { OrtakTestData } from './test-data';
 
-/** Kayıttaki (jet-seyahat.json) bir JetSeyahat senaryosunu doğrular; hiçbir şey fırlatmaz. */
+/**
+ * Kayıttaki (veritabanındaki jet-seyahat verisi) bir JetSeyahat senaryosunu doğrular; hiçbir şey
+ * fırlatmaz. yuklenmis: ekran modeli (varsayılan: platform veritabanındaki JetSeyahat modeli).
+ */
 export function jetSeyahatSenaryosunuDogrula(
   senaryo: unknown,
   ortakData: OrtakTestData,
   ortam: string,
-  simdi: Date = new Date()
+  simdi: Date = new Date(),
+  yuklenmis: YuklenmisEkranModeli = jetSeyahatModeliniYukle()
 ): DogrulamaSonucu {
-  const { model, altModeller } = jetSeyahatModeliniYukle();
+  const { model, altModeller } = yuklenmis;
   return senaryoyuDogrula(senaryo, {
     model,
     altModeller,

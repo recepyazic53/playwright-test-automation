@@ -1,12 +1,12 @@
 // Platform kabuğu: /platform/durum'a göre yönlendirme.
-//   kasa yok            → Hoş geldiniz (Yedek yükle / Yeni proje başlat / [eski dosyalar varsa]
-//                         Mevcut proje dosyalarını aktar)
+//   kasa yok            → Hoş geldiniz (Yedek yükle / Yeni proje başlat / [eski dosya klasörü varsa —
+//                         veri/eski-dosyalar/<zaman>/ yedeği] Eski proje dosyalarını aktar)
 //   kasa var, kilitli   → Kilit ekranı (yanlış parolada bekleme geri sayımı)
 //   kasa açık, proje yok → Yeni proje sihirbazı (proje adımından)
 //   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici, Sonuçlar | Senaryolar |
-//                         Ekranlar* | Mevcut görünüm | Ayarlar, hızlı arama*, sunucu durumu, tema,
-//                         Kilitle) + sol panel + içerik. (* = yakında; bağlantı değildir.)
-//                         (#/sonuclar[/...], #/senaryolar[/...], #/gorunum, #/ayarlar/<bölüm>)
+//                         Ekranlar* | Ayarlar, hızlı arama*, sunucu durumu, tema, Kilitle) + sol
+//                         panel + içerik. (* = yakında; bağlantı değildir.)
+//                         (#/sonuclar[/...], #/senaryolar[/...], #/ayarlar/<bölüm>)
 // Senaryolar ekranı ayrı modüllerde (senaryolar.js, senaryo-formu.js, kosu-paneli.js) ve DİNAMİK
 // yüklenir: sunucu bu dosyaları henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
@@ -148,7 +148,8 @@ function secimKarti({ sinif = '', ikonAd, no, baslik, aciklama, altIkon, altMeti
 async function hosgeldin() {
   history.replaceState(null, '', '/');
   sayfaBasligi('Hoş geldiniz');
-  // Bu klasörde eski proje dosyaları (ör. tests/data, .env) varsa üçüncü kart gösterilir.
+  // Eski proje dosyalarının olduğu bir klasör varsa (en yeni veri/eski-dosyalar/<zaman>/ yedeği ya da
+  // proje kökünde hâlâ duran tests/data) üçüncü kart gösterilir.
   let aktarilabilir = null;
   try {
     const d = await api('/platform/aktarim/durum');
@@ -166,9 +167,9 @@ async function hosgeldin() {
       altIkon: 'saat', altMetin: 'yaklaşık 3 dakika', git: 'Başla'
     }),
     aktarilabilir ? secimKarti({
-      sinif: 'k-mor', ikonAd: 'klasor', no: 3, baslik: 'Mevcut proje dosyalarını aktar', onerilen: true, onclick: () => dosyaAktarimEkrani(aktarilabilir),
-      aciklama: `Bu klasördeki ${aktarilabilir.projeAdi} dosyalarını (test verileri, ortamlar, giriş bilgileri, senaryolar) şifreli platform veritabanına aktarın. Dosyalar değiştirilmez.`,
-      altIkon: 'ara', altMetin: 'proje dosyaları bulundu', altSinif: 'bulundu', git: 'Aktar'
+      sinif: 'k-mor', ikonAd: 'klasor', no: 3, baslik: 'Eski proje dosyalarını aktar', onerilen: true, onclick: () => dosyaAktarimEkrani(aktarilabilir),
+      aciklama: `Eski ${aktarilabilir.projeAdi} dosyalarını (test verileri, ortamlar, giriş bilgileri, senaryolar) şifreli platform veritabanına aktarın. Klasör: ${aktarilabilir.kaynakKlasoru}. Dosyalar değiştirilmez.`,
+      altIkon: 'ara', altMetin: 'eski dosyalar bulundu', altSinif: 'bulundu', git: 'Aktar'
     }) : null
   ].filter(Boolean);
   const kisayol = (olay) => {
@@ -189,11 +190,11 @@ async function hosgeldin() {
 
 function dosyaAktarimEkrani(adaptor) {
   const kapsayici = h('div', {});
-  sayfaBasligi('Mevcut proje dosyalarını aktar');
-  ekran(odakSayfa({ ustMetin: 'dosyalardan aktarım' }, anaAlan('ortali', h('h1', { class: 'gorunmez' }, 'Mevcut proje dosyalarını aktar'), kapsayici)));
+  sayfaBasligi('Eski proje dosyalarını aktar');
+  ekran(odakSayfa({ ustMetin: 'dosyalardan aktarım' }, anaAlan('ortali', h('h1', { class: 'gorunmez' }, 'Eski proje dosyalarını aktar'), kapsayici)));
   aktarimAkisi(kapsayici, {
     mod: 'hosgeldin', adaptor,
-    bitti: () => { location.hash = '#/gorunum'; yonlendir(); },
+    bitti: () => { location.hash = '#/senaryolar'; yonlendir(); },
     vazgec: () => hosgeldin()
   });
 }
@@ -485,7 +486,6 @@ function anaDuzen() {
   const main = anaAlan('ana-icerik');
   const navSonuclar = h('a', { href: '#/sonuclar' }, ikon('grafik'), 'Sonuçlar');
   const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar');
-  const navGorunum = h('a', { href: '#/gorunum' }, ikon('gorunum'), 'Mevcut görünüm');
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
   const yakinda = (ikonAd, metin) => h('span', { class: 'nav-pasif', 'aria-disabled': 'true', title: `${metin}: yakında` },
     ikon(ikonAd), h('span', { class: 'nav-metni' }, metin), h('span', { class: 'yakinda-etiketi' }, 'yakında'));
@@ -502,7 +502,7 @@ function anaDuzen() {
   const ust = h('header', { class: 'ust-cubuk' },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, yakinda('ekran', 'Ekranlar'), navGorunum, navAyarlar),
+    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, yakinda('ekran', 'Ekranlar'), navAyarlar),
     h('span', { class: 'bosluk' }),
     arama, sunucu, temaDugmesi(), kilitle);
   ekran(ust, main);
@@ -510,28 +510,24 @@ function anaDuzen() {
   const ciz = () => {
     const hash = location.hash || '#/sonuclar';
     const [, bolum, alt, ...kalan] = hash.split('/');
-    for (const n of [navSonuclar, navSenaryolar, navGorunum, navAyarlar]) n.removeAttribute('aria-current');
+    for (const n of [navSonuclar, navSenaryolar, navAyarlar]) n.removeAttribute('aria-current');
     if (bolum === 'senaryolar') {
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Senaryolar');
       senaryolarModulu().then((m) => m.senaryolarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
         .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Senaryolar ekranı yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
-    } else if (bolum === 'sonuclar' || !['ayarlar', 'gorunum'].includes(bolum)) {
-      navSonuclar.setAttribute('aria-current', 'page');
-      main.className = 'ana-icerik';
-      sayfaBasligi('Sonuçlar');
-      sonuclarEkrani(main, alt ? [alt, ...kalan] : [], { durum });
     } else if (bolum === 'ayarlar') {
       navAyarlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Ayarlar');
       ayarlarEkrani(main, AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje');
     } else {
-      navGorunum.setAttribute('aria-current', 'page');
-      main.className = 'ana-icerik tam-genislik';
-      sayfaBasligi('Mevcut görünüm');
-      mevcutGorunum(main);
+      // #/sonuclar ve bilinmeyen adresler (ör. eski #/gorunum yer imleri) → Sonuçlar.
+      navSonuclar.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sayfaBasligi('Sonuçlar');
+      sonuclarEkrani(main, bolum === 'sonuclar' && alt ? [alt, ...kalan] : [], { durum });
     }
   };
   window.addEventListener('hashchange', ciz);
@@ -557,34 +553,6 @@ function anaDuzen() {
 let senaryolarSozu = null;
 const senaryolarModulu = () => (senaryolarSozu ??= import('./senaryolar.js').catch((e) => { senaryolarSozu = null; throw e; }));
 const mesajKutusuHata = (metin) => h('div', { class: 'not-kutusu hata', role: 'alert' }, metin);
-
-function mevcutGorunum(main) {
-  let ortam = 'test';
-  try { ortam = localStorage.getItem('platform.gorunumOrtami') === 'canli' ? 'canli' : 'test'; } catch { /* yok sayılır */ }
-  const secim = h('select', { id: 'gorunum-ortami' },
-    h('option', { value: 'test', selected: ortam === 'test' }, 'test'),
-    h('option', { value: 'canli', selected: ortam === 'canli' }, 'canli'));
-  const durumMetni = h('span', { class: 'soluk kucuk', 'aria-live': 'polite' });
-  const cerceve = h('iframe', { class: 'gorunum-cercevesi', title: 'Mevcut görünüm (dashboard)' });
-  const yukle = (yenile) => {
-    durumMetni.textContent = yenile ? 'Görünüm yeniden üretiliyor… (bu biraz sürebilir)' : 'Yükleniyor…';
-    cerceve.src = `/gorunum/${secim.value}${yenile ? '?yenile=1' : ''}`;
-  };
-  cerceve.addEventListener('load', () => { durumMetni.textContent = ''; });
-  secim.addEventListener('change', () => {
-    try { localStorage.setItem('platform.gorunumOrtami', secim.value); } catch { /* yok sayılır */ }
-    yukle(false);
-  });
-  const yenile = h('button', { type: 'button', onclick: () => yukle(true) }, ikon('yenile'), 'Yeniden üret');
-  const yeniSekme = h('a', { class: 'dugme', target: '_blank', rel: 'noopener', href: `/gorunum/${ortam}` }, ikon('genislet'), 'Yeni sekmede aç');
-  secim.addEventListener('change', () => { yeniSekme.href = `/gorunum/${secim.value}`; });
-  main.replaceChildren(
-    h('h1', { class: 'gorunmez' }, 'Mevcut görünüm'),
-    h('div', { class: 'gorunum-cubugu' }, alan('Ortam', secim), yenile, yeniSekme,
-      h('span', { class: 'cok-soluk kucuk' }, 'Eski görünüm (kaldırılacak): senaryolar artık Senaryolar sekmesinde; buradaki oluştur/düzenle eski dosyalara yazar.'), durumMetni),
-    cerceve);
-  yukle(false);
-}
 
 function ayarlarEkrani(main, bolum) {
   const icerik = h('section', { class: 'icerik-alani dar-icerik', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));

@@ -1,0 +1,15 @@
+{
+  "_aciklama": "Koşudan HARİÇ tutulan senaryolar (\"<dosya>::<ad>\"; dosya tests/ klasörüne göre göreli, '/' ayraçlı). Listede olmayan her senaryo koşuya dahildir. Dashboard'daki 'Koşuda' anahtarları bu dosyayı günceller; npm run test / CI koşuları da bu listeye uyar (bkz. tests/support/kosu-listesi.ts).",
+  "haricTutulanlar": [
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::90002 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::90002 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::90002 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::90002 /DÜNYA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::90002 /DÜNYA / SEYAHAT PAKET / COVID Hayır / Çoklu Sorgu / Sigorta Ettiren Kendisi (İş Kuralı Hatası Beklenir)",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::90002 /DÜNYA / VİZE TÜM DÜNYA / COVID Evet / Tekli Sorgu / Sigorta Ettiren Kendisi",
+    "scenarios/jet-seyahat/prim-hesaplama.spec.ts::90002 /DÜNYA / VİZE TÜM DÜNYA / COVID Hayır / Tekli Sorgu / Sigorta Ettiren Farklı Özel"
+  ]
+}

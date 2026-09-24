@@ -39,7 +39,7 @@ test.describe.configure({ mode: 'default' });
 
 test.skip(
   !hasCredentials(environment),
-  `${environment.toUpperCase()} kullanıcı bilgilerini yerel .env dosyasına ekleyin.`
+  `${environment.toUpperCase()} giriş profilini Nöbetçi > Ayarlar > Giriş profilleri'nde tanımlayın.`
 );
 test.skip(!urunData.aktif, `${environment.toUpperCase()} Jet İlk Ateş datası aktif değil.`);
 

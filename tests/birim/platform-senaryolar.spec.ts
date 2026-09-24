@@ -2,13 +2,13 @@
 // doğrulama eşlemesi), senaryo servisi (UUID kimlik, kaydet/kopyala/sil/geçmiş, şifreli veri),
 // koşu hedefi çözümü (UUID → güncel test başlığı) ve çalıştırma uçlarının doğrulaması (SAHTE
 // koşucuyla — gerçek koşu başlatılmaz), ayrıca testlerin veritabanındaki senaryolardan üretilmesi
-// (yenidenKur + koşu listesi + "playwright test --list"). Tarayıcı açmaz, siteye bağlanmaz; her test
-// kendi geçici klasöründe çalışır.
+// (yenidenKur + koşu listesi + "playwright test --list"). Model ve veri: SAHTE değerli örnekler
+// (tests/birim/fixtures/ornek-eski-dosyalar/). Tarayıcı açmaz, siteye bağlanmaz; her test kendi geçici
+// klasöründe çalışır.
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { parse as dotenvAyristir } from 'dotenv';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { kasaOlustur, parolayiDogrula, zarfMi } from '../../scripts/platform/kasa.mjs';
 import {
@@ -29,13 +29,13 @@ import {
 import { senaryoCalistir, senaryoDene, type KosuIstegi, type Kosucu } from '../../scripts/platform/senaryolar/calistirma.mjs';
 import { adaptorBul } from '../../projeler/index.mjs';
 import type { AktarimAdaptoru } from '../../projeler/index.d.mts';
-import { jetSeyahatModeliniYukle } from '../support/ekran-modeli';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { ekranModeliniYukle } from '../support/ekran-modeli';
+import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, ORNEK_MODEL_DOSYASI, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor, ornekVeri } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
 const PAROLA = 'Senaryolar-Kasa-Parolasi-7';
 const SPEC = 'scenarios/ornek/akis.spec.ts';
-const yuklu = jetSeyahatModeliniYukle();
+const yuklu = ekranModeliniYukle(ORNEK_MODEL_DOSYASI);
 const MODEL = yuklu.model as unknown as Record<string, unknown>;
 const ALT_MODELLER = yuklu.altModeller as unknown as Record<string, Record<string, unknown>>;
 const sema = formSemasiOlustur(MODEL, ALT_MODELLER);
@@ -94,25 +94,24 @@ test.describe('Model tabanlı form — şema', () => {
     expect(s).toMatchObject({ sorguTipi: 'coklu', cokluSorguDosyasi: 'x.xlsx', cokluSorguKisiSayisi: 3, odemeAdimiDahil: false });
     expect(s).not.toHaveProperty('sigortaliKimligi');
     expect(s).not.toHaveProperty('krediKarti');
-    // Bağlam profiline göre görünürlük (bilinen durum): 30856 acentesinde COVID görünmez → zorunlu değil.
-    const ortak = { acenteProfilleri: { varsayilan: { acentePartaji: '30856' }, ozel: { acentePartaji: '30447' } } };
+    // Bağlam profiline göre görünürlük (bilinen durum): 90001 acentesinde COVID görünmez → zorunlu değil.
+    const ortak = { acenteProfilleri: { varsayilan: { acentePartaji: '90001' }, ozel: { acentePartaji: '90002' } } };
     const b = { ...dogrulamaBaglami, ortak } as Parameters<typeof gorunurlukleriHesapla>[1];
     expect(gorunurlukleriHesapla({ ...TEMEL }, b).alanlar.covidTeminati).toBe(false);
     expect(gorunurlukleriHesapla({ ...TEMEL, acenteProfili: 'ozel' }, b).alanlar.covidTeminati).toBe(true);
     expect(gorunurlukleriHesapla({ ...TEMEL, acenteProfili: 'bilinmeyen' }, { ...dogrulamaBaglami }).alanlar.covidTeminati).toBeNull();
   });
 
-  test('mevcut tüm veri dosyası senaryoları formdan geri aynı JSON olarak çıkar (gidiş-dönüş)', () => {
+  test('örnek veri dosyası senaryoları formdan geri aynı JSON olarak çıkar (gidiş-dönüş)', () => {
     let sayi = 0;
-    for (const ortam of ['test', 'canli']) {
-      const yol = join(KOK, 'tests', 'data', ortam, 'jet-seyahat.json');
-      if (!existsSync(yol)) continue;
-      for (const s of (JSON.parse(readFileSync(yol, 'utf-8')) as { jetSeyahat: { senaryolar: Array<Record<string, unknown>> } }).jetSeyahat.senaryolar) {
+    for (const ortam of ['test', 'canli'] as const) {
+      for (const s of ornekVeri<{ jetSeyahat: { senaryolar: Array<Record<string, unknown>> } }>(ortam, 'jet-seyahat').jetSeyahat.senaryolar) {
         const geri = senaryoNesnesiOlustur(sema, formDegerleriniKur(sema, s), { gorunurlukHesapla, onceki: s });
         expect(JSON.stringify(geri), String(s.baslik)).toBe(JSON.stringify(s));
         sayi++;
       }
     }
+    expect(sayi).toBeGreaterThan(0);
     test.info().annotations.push({ type: 'gidis-donus', description: `${sayi} senaryo` });
   });
 
@@ -160,7 +159,7 @@ async function ortamKur(): Promise<Ortam> {
   const kodEkranId = ekranKaydet(vt, { projeId, anahtar: 'kod', ad: 'Kod ekranı' });
   const tur = testVerisiTuruKaydet(vt, { projeId, ad: 'Özel kişi', alanlar: [{ ad: 'tcKimlikNo' }, { ad: 'dogumTarihi' }, { ad: 'cepTelefonu' }] });
   testVerisiProfiliKaydet(vt, { projeId, turId: tur, ad: 'tc1', degerler: { tcKimlikNo: '10000000146', dogumTarihi: '01.01.1990', cepTelefonu: '5321234567' } });
-  baglamProfiliKaydet(vt, { projeId, tur: 'Acente', ad: 'ozel', alanlar: { acentePartaji: '30447' } });
+  baglamProfiliKaydet(vt, { projeId, tur: 'Acente', ad: 'ozel', alanlar: { acentePartaji: '90002' } });
   const veriSenaryo = depoSenaryoKaydet(vt, {
     projeId, ekranId, baslik: 'Mevcut veri senaryosu',
     icerik: { kaynak: { dosya: SPEC, ad: 'Mevcut veri senaryosu' }, veri: { dosya: 'ornek', yol: 'ornek.senaryolar' }, ortamlar: { [ortamId]: { sira: 0, veri: { baslik: 'Mevcut veri senaryosu', ...TEMEL } } } }
@@ -175,7 +174,7 @@ const sahteAdaptor = {
   ad: 'sahte', projeAdi: 'Örnek', etiket: 'sahte',
   senaryoVeriKaynagi: (e: string) => (e === 'ornek' ? { spec: SPEC, dosya: 'ornek', yol: 'ornek.senaryolar' } : null),
   profilHavuzlari: () => ({ 'ortak.kullaniciDegistir': { tur: 'baglam' as const, ad: 'Acente' }, 'ortak.kimlikBilgileri.ozel': { tur: 'testVerisi' as const, ad: 'Özel kişi' } }),
-  dogrulamaBaglami: () => ortakBaglaminiOlustur({ kimlikBilgileri: { ozel: { tc1: {} }, tuzel: {} }, kullaniciDegistir: { varsayilan: { acentePartaji: '30856' }, ozel: { acentePartaji: '30447' } } }) as Record<string, unknown>
+  dogrulamaBaglami: () => ortakBaglaminiOlustur({ kimlikBilgileri: { ozel: { tc1: {} }, tuzel: {} }, kullaniciDegistir: { varsayilan: { acentePartaji: '90001' }, ozel: { acentePartaji: '90002' } } }) as Record<string, unknown>
 } as unknown as AktarimAdaptoru;
 
 test.describe('Senaryo servisi (genel proje)', () => {
@@ -249,7 +248,7 @@ test.describe('Senaryo servisi (genel proje)', () => {
       const fb = formBaglami(vt, projeId, ekranId, ortamId, sahteAdaptor);
       expect(fb.profiller['ortak.kimlikBilgileri.ozel']).toEqual([{ ad: 'tc1', tur: 'testVerisi', kapsam: 'tum', alanlar: expect.arrayContaining([{ etiket: 'tcKimlikNo', dolu: true }]) }]);
       expect(JSON.stringify(fb)).not.toContain('10000000146');
-      expect(fb.ortak).toMatchObject({ kimlikProfilleri: { ozel: { tc1: {} } }, acenteProfilleri: { ozel: { acentePartaji: '30447' } } });
+      expect(fb.ortak).toMatchObject({ kimlikProfilleri: { ozel: { tc1: {} } }, acenteProfilleri: { ozel: { acentePartaji: '90002' } } });
     } finally { o.temizle(); }
   });
 
@@ -291,10 +290,8 @@ test.describe('Senaryo servisi (genel proje)', () => {
 });
 
 // ---------------------------------------------------------------------------------------
-// Testler veritabanındaki senaryolardan üretilir (gerçek proje dosyaları, geçici veritabanı)
+// Testler veritabanındaki senaryolardan üretilir (örnek eski dosyalar, geçici veritabanı)
 // ---------------------------------------------------------------------------------------
-
-const DOSYALAR_VAR = existsSync(join(KOK, 'tests', 'data', 'test', 'jet-seyahat.json')) && existsSync(join(KOK, '.env'));
 
 function altSurecOrtami(ek: Record<string, string>): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
@@ -319,18 +316,16 @@ function testListesi(ek: Record<string, string>): string[] {
 }
 
 test.describe('Testler veritabanındaki senaryolardan üretilir', () => {
-  test.skip(!DOSYALAR_VAR, 'Proje veri dosyaları / .env yok.');
   test('oluşturulan senaryo listede, yeni başlık listede, silinen yok; Koşuda varsayılan listeyi etkiler', async () => {
     test.setTimeout(120_000);
     const k = geciciKlasor('senaryo-uretim');
     try {
-      const env = { ...process.env, ...dotenvAyristir(readFileSync(join(KOK, '.env'))) };
       const yol = join(k.yol, 'platform.db');
       const vt = await veritabaniniHazirla(yol);
       await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
       const adaptor = adaptorBul('galaksi');
       if (!adaptor) throw new Error('galaksi adaptörü yok');
-      const { projeId } = aktarimiUygula(vt, await adaptor.paketOlustur(KOK, { ortamDegiskenleri: env, testListesi: async () => [] }));
+      const { projeId } = aktarimiUygula(vt, await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, { projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI }, testListesi: async () => [] }));
       const ortamId = String(vt.tek("SELECT varlik_id FROM kaynak_eslemeleri WHERE varlik_turu = 'ortam' AND kaynak_anahtari = 'test'")?.varlik_id);
       const ekranId = String(vt.tek("SELECT id FROM ekranlar WHERE anahtar = 'jet-seyahat'")?.id);
       const dizi = () => ((adaptor.yenidenKur(vt, projeId, 'test')?.dosyalar['jet-seyahat'] as { jetSeyahat: { senaryolar: Array<{ baslik: string }> } }).jetSeyahat.senaryolar);

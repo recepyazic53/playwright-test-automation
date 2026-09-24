@@ -21,8 +21,8 @@ import { loadOrtakData } from './test-data';
 // ihtiyaç duyduğu profille (varsayilan / JetSeyahatÖzelTanımlıAcente / ...) ayrı ayrı
 // çalışmaya devam eder (bkz. flows/test-baslangici.ts). Sadece Galaksi'ye giriş paylaşılır.
 //
-// .env'de kullanıcı bilgileri henüz tanımlı değilse (örn. sadece TEST ortamı için çalışan
-// bir makinede CANLI kimlik bilgisi yoksa) sessizce atlanır — spec dosyalarındaki
+// Platformdaki giriş profilinde kullanıcı bilgileri tanımlı değilse (örn. CANLI giriş profili
+// yoksa) sessizce atlanır — spec dosyalarındaki
 // test.skip(!hasCredentials(...)) zaten o durumu ele alıyor; storageState dosyası
 // oluşmazsa testBaslangiciniHazirla() her testte olduğu gibi gerçek login'e düşer.
 export default async function globalSetup(): Promise<void> {
@@ -36,8 +36,8 @@ export default async function globalSetup(): Promise<void> {
     process.env.KOSU_KIMLIGI = `${Date.now()}-${randomBytes(4).toString('hex')}`;
   }
 
-  // PLATFORM KASASI: proje dosyaları platform veritabanına aktarıldıysa test verisi/giriş
-  // bilgisi şifreli veritabanından okunur. Anahtar dashboard'dan gelmediyse parola burada
+  // PLATFORM KASASI: test verisi/giriş bilgisi YALNIZCA şifreli platform veritabanından okunur
+  // (veritabanı hazır değilse açık hata). Anahtar Nöbetçi'den gelmediyse parola burada
   // (gizli girişle ya da CI'da PLATFORM_KASA_PAROLASI ile) istenir ve yalnızca bu koşunun
   // worker'larına verilir — bkz. platform-kasa.ts. Spec'ler bu adımdan SONRA yüklenir.
   await kasaAnahtariniHazirla();

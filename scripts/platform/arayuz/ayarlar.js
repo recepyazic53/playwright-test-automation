@@ -656,14 +656,15 @@ async function yedekleme(govde, baglam, yenile) {
   const iceKart = h('div', { class: 'kart' }, h('h3', {}, ikon('yukle'), 'İçe aktar'),
     h('p', { class: 'soluk' }, 'Bir yedekteki kayıtları bu bilgisayardakilerle karşılaştırır; neyin ekleneceğini ve değişeceğini seçersiniz. Bu bilgisayardaki kayıtlar silinmez.'),
     h('div', { class: 'dugmeler' }, iceBaslat));
-  // Proje dosyalarından yeniden aktar (eski dosyalar bu klasörde varsa)
+  // Eski proje dosyalarından yeniden aktar (eski dosya klasörü — ör. veri/eski-dosyalar/<zaman> — varsa)
   const aktarimAlani = h('div', {});
   const aktarilabilir = (aktarimDurumu.adaptorler || []).find((a) => a.dosyalarVar);
   let aktarimKart = null;
   if (aktarilabilir) {
     const baslat = h('button', { type: 'button', class: 'birincil' }, 'Önizle ve aktar…');
-    aktarimKart = h('div', { class: 'kart' }, h('h3', {}, ikon('klasor'), 'Proje dosyalarından yeniden aktar'),
-      h('p', { class: 'soluk' }, `${aktarilabilir.etiket}. Kaynak anahtarına göre birleştirir: dosyada değişen kayıtlar güncellenir, yeni kayıtlar eklenir; önce önizleme gösterilir.`),
+    aktarimKart = h('div', { class: 'kart' }, h('h3', {}, ikon('klasor'), 'Eski proje dosyalarından yeniden aktar'),
+      h('p', { class: 'soluk' }, `${aktarilabilir.etiket}. Kaynak anahtarına göre birleştirir: dosyada değişen kayıtlar güncellenir, yeni kayıtlar eklenir; önce önizleme gösterilir. Dosyalardan veritabanına otomatik aktarım yapılmaz.`),
+      h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, aktarilabilir.kaynakKlasoru || '')),
       h('p', { class: 'soluk kucuk' }, aktarilabilir.sonAktarim ? `Son aktarım: ${tarihMetni(aktarilabilir.sonAktarim)}` : 'Bu proje henüz dosyalardan aktarılmadı.'),
       h('div', { class: 'dugmeler' }, baslat));
     baslat.addEventListener('click', () => {
