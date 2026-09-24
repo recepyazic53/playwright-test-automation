@@ -744,6 +744,32 @@ export function senaryoyuDogrula(senaryo, baglam) {
 }
 
 /**
+ * Görünürlükler (üç değerli: true / false / null = bilinmiyor) — senaryoyuDogrula ile AYNI koşul
+ * değerlendirmesi. Model tabanlı form (platform arayüzü) alanları buna göre gösterir/gizler:
+ *  - adimlar[adimId], bolumler[bolumId]: adımın (ve bölümün) kendi görünürlüğü,
+ *  - alanlar[alanId]: adım + bölüm + alan görünürlüklerinin birleşimi (senaryo düzeyi alanlar dahil),
+ *  - altAlanlar["<alanId>.<altAlanId>"]: bileşik alanın (kimlik) parçalarının kendi görünürlüğü.
+ */
+export function gorunurlukleriHesapla(senaryo, baglam) {
+  if (!baglam || !nesneMi(baglam.model)) throw new Error('gorunurlukleriHesapla: baglam.model (ekran modeli) zorunludur.');
+  const b = ic(baglam, nesneMi(senaryo) ? senaryo : {});
+  const sonuc = { adimlar: {}, bolumler: {}, alanlar: {}, altAlanlar: {} };
+  for (const adim of b.model.adimlar || []) {
+    sonuc.adimlar[adim.id] = gorunurlukDegerlendir(adim.gorunurluk, b);
+    for (const bolum of adim.bolumler || []) {
+      sonuc.bolumler[bolum.id] = gorunurlukleriBirlestir([adim.gorunurluk, bolum.gorunurluk].filter(Boolean), b);
+    }
+  }
+  for (const { alan, gorunurlukler } of b.alanlar) {
+    sonuc.alanlar[alan.id] = gorunurlukleriBirlestir(gorunurlukler, b);
+    for (const alt of alan.altAlanlar || []) {
+      if (alt.gorunurluk) sonuc.altAlanlar[`${alan.id}.${alt.id}`] = gorunurlukDegerlendir(alt.gorunurluk, b);
+    }
+  }
+  return sonuc;
+}
+
+/**
  * Yalnızca beklenen sonuç kuralları (odemeAdimiDahil, beklenenSonuc, eski alanlar): hatalar
  * ve — hata yoksa — tek biçime çevrilmiş sonuç. senaryoyuDogrula ile AYNI kuralları kullanır.
  */

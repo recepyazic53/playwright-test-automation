@@ -57,7 +57,8 @@ import { ekranModeliniOku } from './dogrulama/model-oku.mjs';
 import { GORUNUM_SURUMU } from './rapor/dashboard-html.mjs';
 import {
   platformEtkinligiBildir, platformIsteginiIsle, platformKasaAcikMi, platformKosuSonucu, platformKosusunuKapat,
-  platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformTestOrtami, projeDosyalariniEsitle
+  platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformTestOrtami,
+  projeDosyalariniEsitle
 } from './platform/sunucu-platform.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
@@ -68,6 +69,9 @@ const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
 // sürebileceği. En uzun senaryo zaman aşımı 3 dk + giriş; 10 dk güvenli bir üst sınır.
 // Gerekirse .env içinde TEST_SUNUCU_SURE_LIMITI_DK ile değiştirilebilir.
 const KOSU_SURE_LIMITI_MS = (Number(process.env.TEST_SUNUCU_SURE_LIMITI_DK) || 10) * 60 * 1000;
+// YALNIZCA doğrulama/geliştirme örnekleri için: TEST_SUNUCU_KOSU_KAPALI=1 ise bu sunucu hiçbir
+// Playwright koşusu başlatmaz (▷, Koşuyu başlat, Dene); istek açık bir hatayla reddedilir.
+const KOSU_KAPALI = process.env.TEST_SUNUCU_KOSU_KAPALI === '1';
 
 // Terminal panelinin scrollback'i sınırlı/silinebilir olduğundan (ör. aynı panelde
 // başka bir komut çalıştırılırsa), TÜM konsol çıktısını AYRICA kalıcı bir dosyaya da
@@ -558,7 +562,13 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/aktarim.js', { dosya: 'aktarim.js', tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }]
+  ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/kosu-paneli.js', { dosya: 'kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
+  // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
+  ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/senaryo-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'senaryo-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }]
 ]);
 const KABUK_GUVENLIK_BASLIKLARI = {
   'Cache-Control': 'no-store',
@@ -582,7 +592,7 @@ function arayuzIsteginiIsle(req, res) {
   const dosya = ARAYUZ_DOSYALARI.get(yol);
   if (!dosya) return false;
   res.writeHead(200, { 'Content-Type': dosya.tur, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
-  res.end(readFileSync(join(ARAYUZ_KLASORU, dosya.dosya)));
+  res.end(readFileSync(dosya.yol ?? join(ARAYUZ_KLASORU, dosya.dosya)));
   return true;
 }
 
@@ -768,6 +778,9 @@ function dosyaSirasiIleCalistir(dosya, gorev) {
 // ekOrtamDegiskenleri: yalnızca /jetseyahat-senaryo/dene tarafından doldurulur (geçici
 // ek senaryo dosyasının yolu); normal /calistir koşularında boştur.
 async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}) {
+  if (KOSU_KAPALI) {
+    return { calistiMi: false, mesaj: 'Bu sunucu örneğinde test koşuları kapalı (TEST_SUNUCU_KOSU_KAPALI=1).' };
+  }
   if (!playwrightCliVarMi()) {
     return {
       calistiMi: false,
@@ -1434,6 +1447,116 @@ function jetSeyahatSenaryoIndexiBul(veri, baslik) {
   return indexler[0];
 }
 
+// ---- Tek senaryo çalıştırma çekirdeği ------------------------------------------------------
+// /calistir (eski görünüm; başlık + dosya ile) ve platform "Senaryolar" (/platform/senaryolar/calistir;
+// senaryo UUID'si sunucuda güncel başlık + dosyaya çözülür) AYNI yolu kullanır: --list beyaz listesi
+// (istemcinin gönderdiği ada güvenilmez), dosya sırası, süre limiti, durdurma, canlı görüntü, platform
+// raporlayıcısı. Dönen { httpDurum, govde }, /calistir yanıtının aynısıdır.
+async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, token, kapsamiDenetle }) {
+  let tumSenaryolar;
+  try {
+    tumSenaryolar = await tumSenaryolariGetir(ortam);
+  } catch (hata) {
+    return { httpDurum: 500, govde: { basarili: false, mesaj: `Senaryo listesi alınamadı (npx playwright test --list başarısız oldu): ${hata.message}` } };
+  }
+
+  // Aynı başlık birden fazla ürün dosyasında bulunabildiği için senaryo (ad + dosya)
+  // ikilisiyle eşleştirilir. Dosyasız eski isteklerde ad birden fazla dosyada varsa yanlış testi
+  // koşmamak için istek reddedilir.
+  const adaGoreEslesenler = tumSenaryolar.filter((s) => s.ad === senaryoAdi);
+  const eslesenler = dosya ? adaGoreEslesenler.filter((s) => s.dosya === dosya) : adaGoreEslesenler;
+  if (eslesenler.length === 0) {
+    return { httpDurum: 403, govde: { basarili: false, mesaj: 'Bu ad, projedeki gerçek senaryolarla eşleşmiyor; güvenlik nedeniyle çalıştırılmadı.' } };
+  }
+  if (new Set(eslesenler.map((s) => s.dosya)).size > 1) {
+    return {
+      httpDurum: 409,
+      govde: {
+        basarili: false,
+        mesaj: 'Bu başlık birden fazla üründe var (' + [...new Set(eslesenler.map((s) => s.urun))].join(', ') +
+          '). Yanlış testi koşmamak için lütfen senaryoyu "Senaryolar" tablosundan çalıştırın.'
+      }
+    };
+  }
+  const eslesenSenaryo = eslesenler[0];
+  if (kapsamiDenetle && kosuKapsami !== 'Genel' && !tumSenaryolar.some((s) => s.urun === kosuKapsami)) {
+    return { httpDurum: 400, govde: { basarili: false, mesaj: 'kosuKapsami "Genel" ya da projedeki bir ürün adı olmalıdır.' } };
+  }
+
+  // Bu istek, test TAMAMEN bitene kadar bekletilir — arayüz bu sürede satırı "çalışıyor" gösterir.
+  const calistirmaSonucu = await testiCalistirVeBekle(
+    ortam, senaryoAdi, eslesenSenaryo.dosya, tumSenaryolar, kosuId,
+    kosuTuru && kosuKimligi
+      ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
+      : {}
+  );
+  return calistirmaYaniti(calistirmaSonucu, token, 'Test');
+}
+
+// testiCalistirVeBekle sonucunu HTTP yanıtına çevirir (/calistir, /jetseyahat-senaryo/dene ve platform uçları).
+function calistirmaYaniti(calistirmaSonucu, token, ad) {
+  if (!calistirmaSonucu.calistiMi) return { httpDurum: 500, govde: { basarili: false, mesaj: calistirmaSonucu.mesaj } };
+  if (calistirmaSonucu.iptalEdildiMi) {
+    return { httpDurum: 200, govde: { basarili: true, durum: 'iptal', mesaj: `${ad}, kullanıcı tarafından durduruldu.` } };
+  }
+  if (!calistirmaSonucu.sonuc) {
+    return {
+      httpDurum: 200,
+      govde: {
+        basarili: true,
+        durum: calistirmaSonucu.cikisKodu === 0 ? 'passed' : 'failed',
+        mesaj: `${ad} tamamlandı ama detaylı sonuç okunamadı (çıkış kodu: ${calistirmaSonucu.cikisKodu}). Terminaldeki çıktıya bakın.`,
+        hataMesaji: calistirmaSonucu.ciktiHataOzeti || null
+      }
+    };
+  }
+  return {
+    httpDurum: 200,
+    govde: {
+      basarili: true,
+      durum: calistirmaSonucu.sonuc.durum,
+      sureMs: calistirmaSonucu.sonuc.sureMs,
+      hataMesaji: calistirmaSonucu.sonuc.hataMesaji,
+      basarisizAdim: calistirmaSonucu.sonuc.basarisizAdim ?? null,
+      sonucId: calistirmaSonucu.sonuc.sonucId ?? null,
+      // Platform arayüzü medyayı kendi (aynı köken) /platform/medya/<id> adresinden gösterir.
+      ...(calistirmaSonucu.sonuc.platform ? { ekranGoruntusuId: calistirmaSonucu.sonuc.ekranGoruntusuId ?? null, videoId: calistirmaSonucu.sonuc.videoId ?? null } : {}),
+      ...panelMedyasi(calistirmaSonucu.sonuc, token)
+    }
+  };
+}
+
+// Platform "Senaryolar" ekranının koşucusu (bkz. scripts/platform/senaryolar/calistirma.mjs): senaryo
+// UUID'si platformda güncel dosya + başlığa çözülmüş olarak gelir; burada yukarıdaki AYNI yol kullanılır.
+// "Dene": taslak senaryo geçici bir ek veri dosyasıyla (TEST_SUNUCU_EK_SENARYO_DOSYASI; kalıcı veriye
+// yazılmaz) spec dosyasına daraltılmış ayrı bir listelemeyle bulunur ve çalıştırılır; dosya sonra silinir.
+platformKosucusunuAyarla({
+  calistir: (istek) => senaryoyuCalistirVeYanitla({
+    ortam: istek.ortam, senaryoAdi: istek.ad, dosya: istek.dosya, kosuId: istek.kosuId, kosuTuru: istek.kosuTuru ?? null,
+    kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel', token: OTURUM_TOKEN, kapsamiDenetle: false
+  }),
+  dene: async (istek) => {
+    const ekDosyaYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}${Date.now()}-${randomBytes(6).toString('hex')}.json`);
+    try {
+      writeFileSync(ekDosyaYolu, JSON.stringify(istek.ekVeri), { encoding: 'utf-8', mode: 0o600 });
+      const ekOrtamDegiskenleri = { [EK_SENARYO_ORTAM_DEGISKENI]: ekDosyaYolu };
+      const tumSenaryolar = await senaryolariListele(istek.ortam, [istek.dosya], undefined, ekOrtamDegiskenleri);
+      if (!tumSenaryolar.some((s) => s.ad === istek.ad && s.dosya === istek.dosya)) {
+        return { httpDurum: 500, govde: { basarili: false, mesaj: 'Deneme senaryosu test listesinde bulunamadı (ek veri dosyası Playwright tarafından görülemedi).' } };
+      }
+      const sonuc = await testiCalistirVeBekle(istek.ortam, istek.ad, istek.dosya, tumSenaryolar, istek.kosuId, ekOrtamDegiskenleri);
+      return calistirmaYaniti(sonuc, OTURUM_TOKEN, 'Deneme');
+    } finally {
+      try {
+        if (existsSync(ekDosyaYolu)) unlinkSync(ekDosyaYolu);
+      } catch (temizlemeHatasi) {
+        console.error('[platform/dene] Geçici ek veri dosyası silinemedi:', temizlemeHatasi.message);
+      }
+    }
+  },
+  kosuyorMu: (dosya, ad) => senaryoKosuyorMu(dosya, ad)
+});
+
 // Senaryo o an (kuyrukta bekleyerek ya da gerçekten) koşuyor mu? (bkz. aktifKosuAnahtarlari)
 function senaryoKosuyorMu(dosya, ad) {
   const anahtar = kosuListesiAnahtari(dosya, ad);
@@ -1529,97 +1652,11 @@ async function istegiIsle(req, res) {
       return;
     }
 
-    let tumSenaryolar;
-    try {
-      tumSenaryolar = await tumSenaryolariGetir(ortam);
-    } catch (hata) {
-      jsonGonder(res, 500, {
-        basarili: false,
-        mesaj: `Senaryo listesi alınamadı (npx playwright test --list başarısız oldu): ${hata.message}`
-      });
-      return;
-    }
-
-    // Aynı başlık birden fazla ürün dosyasında bulunabildiği için senaryo (ad + dosya)
-    // ikilisiyle eşleştirilir. Dashboard'un "Senaryolar" tablosu dosyayı her zaman
-    // gönderir; dosyasız eski/diğer isteklerde ad birden fazla dosyada varsa yanlış testi
-    // koşmamak için istek reddedilir.
-    const adaGoreEslesenler = tumSenaryolar.filter((s) => s.ad === senaryoAdi);
-    const eslesenler =
-      typeof dosya === 'string' && dosya ? adaGoreEslesenler.filter((s) => s.dosya === dosya) : adaGoreEslesenler;
-    if (eslesenler.length === 0) {
-      jsonGonder(res, 403, {
-        basarili: false,
-        mesaj: 'Bu ad, projedeki gerçek senaryolarla eşleşmiyor; güvenlik nedeniyle çalıştırılmadı.'
-      });
-      return;
-    }
-    if (new Set(eslesenler.map((s) => s.dosya)).size > 1) {
-      jsonGonder(res, 409, {
-        basarili: false,
-        mesaj:
-          'Bu başlık birden fazla üründe var (' +
-          [...new Set(eslesenler.map((s) => s.urun))].join(', ') +
-          '). Yanlış testi koşmamak için lütfen senaryoyu "Senaryolar" tablosundan çalıştırın.'
-      });
-      return;
-    }
-    const eslesenSenaryo = eslesenler[0];
-
-    if (kosuKapsami !== 'Genel' && !tumSenaryolar.some((s) => s.urun === kosuKapsami)) {
-      jsonGonder(res, 400, { basarili: false, mesaj: 'kosuKapsami "Genel" ya da projedeki bir ürün adı olmalıdır.' });
-      return;
-    }
-
-    // Bu istek, test TAMAMEN bitene kadar (birkaç saniyeden birkaç dakikaya kadar
-    // sürebilir) yanıt vermeden bekletilir — dashboard tarafı bu sürede satırı
-    // "çalışıyor" gösterir, sonuç gelince popup açar.
-    const calistirmaSonucu = await testiCalistirVeBekle(
-      ortam,
-      senaryoAdi,
-      eslesenSenaryo.dosya,
-      tumSenaryolar,
-      kosuId,
-      ortakKosuKimligi
-        ? {
-            KOSU_KIMLIGI: ortakKosuKimligi,
-            TEST_SUNUCU_KOSU_TURU: kosuTuru,
-            ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami } : {})
-          }
-        : {}
-    );
-
-    if (!calistirmaSonucu.calistiMi) {
-      jsonGonder(res, 500, { basarili: false, mesaj: calistirmaSonucu.mesaj });
-      return;
-    }
-
-    if (calistirmaSonucu.iptalEdildiMi) {
-      jsonGonder(res, 200, {
-        basarili: true,
-        durum: 'iptal',
-        mesaj: 'Test, kullanıcı tarafından durduruldu.'
-      });
-      return;
-    }
-
-    if (!calistirmaSonucu.sonuc) {
-      jsonGonder(res, 200, {
-        basarili: true,
-        durum: calistirmaSonucu.cikisKodu === 0 ? 'passed' : 'failed',
-        mesaj: `Test tamamlandı ama detaylı sonuç okunamadı (çıkış kodu: ${calistirmaSonucu.cikisKodu}). Terminaldeki çıktıya bakın.`,
-        hataMesaji: calistirmaSonucu.ciktiHataOzeti || null
-      });
-      return;
-    }
-
-    jsonGonder(res, 200, {
-      basarili: true,
-      durum: calistirmaSonucu.sonuc.durum,
-      sureMs: calistirmaSonucu.sonuc.sureMs,
-      hataMesaji: calistirmaSonucu.sonuc.hataMesaji,
-      ...panelMedyasi(calistirmaSonucu.sonuc, token)
+    const yanit = await senaryoyuCalistirVeYanitla({
+      ortam, senaryoAdi, dosya: typeof dosya === 'string' && dosya ? dosya : null, kosuId, kosuTuru, kosuKimligi: ortakKosuKimligi,
+      kosuKapsami, token, kapsamiDenetle: true
     });
+    jsonGonder(res, yanit.httpDurum, yanit.govde);
     return;
   }
 

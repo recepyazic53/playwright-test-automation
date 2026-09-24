@@ -160,6 +160,16 @@ export declare function kartiNormallestir(ham: DogrulamaKarti, varsayilanKart?: 
 export declare function krediKartlariAyniMi(a: unknown, b: unknown): boolean;
 export declare function ortakBaglaminiOlustur(ortak: unknown): OrtakDogrulamaBaglami;
 export declare function senaryoyuDogrula(senaryo: unknown, baglam: DogrulamaBaglami): DogrulamaSonucu;
+/** Üç değerli görünürlük: true / false / null (bilinmiyor). */
+export type UcDegerli = boolean | null;
+export interface Gorunurlukler {
+  adimlar: Record<string, UcDegerli>;
+  bolumler: Record<string, UcDegerli>;
+  alanlar: Record<string, UcDegerli>;
+  /** "<alanId>.<altAlanId>" → bileşik alan parçasının görünürlüğü. */
+  altAlanlar: Record<string, UcDegerli>;
+}
+export declare function gorunurlukleriHesapla(senaryo: unknown, baglam: DogrulamaBaglami): Gorunurlukler;
 export declare function beklenenSonucuCozumle(
   senaryo: unknown,
   baglam: DogrulamaBaglami

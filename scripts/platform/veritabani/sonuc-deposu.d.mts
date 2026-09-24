@@ -45,7 +45,7 @@ export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { ur
 export declare function kosuDetayi(vt: Veritabani, kosuId: string): {
   kosu: Sayilar & { id: string; projeId: string | null; ortamId: string | null; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string };
   sonuclar: Array<{
-    id: string; senaryoBaslik: string; senaryoAnahtari: string | null; durum: string; hamDurum: string | null; sureMs: number | null;
+    id: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; durum: string; hamDurum: string | null; sureMs: number | null;
     hataKategorisi: string | null; hataKalibi: string | null; urun: string; urunAnahtari: string; baslangic: string | null; bitis: string | null;
     deneme: number; ekranGoruntusuSayisi: number; videoSayisi: number;
   }>;

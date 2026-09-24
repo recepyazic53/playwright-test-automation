@@ -40,6 +40,16 @@
 //   POST /platform/sonuc/durum|medya-anahtari|kosu|kaydet|bitir — YALNIZCA raporlayıcı için: oturum
 //        token'ı ya da raporlayıcı token'ı (scripts/.test-sunucu-token) kabul edilir; kasa GEREKMEZ
 //        (sonuç metinleri düz, medya dosyaları raporlayıcı sürecinde şifrelenmiş olarak gelir).
+// Senaryolar (genel; kimlik = senaryo UUID'si; kasa açık olmalı — bkz. senaryolar/senaryo-servisi.mjs):
+//   GET  /platform/senaryolar?projeId=&ortamId=        liste (son sonuç, bağlam profili, beklenen sonuç) + ekranlar
+//   GET  /platform/senaryo?id=&ortamId=                 ayrıntı (verinin hassas alanları çözülmüş — düzenleme formu)
+//   GET  /platform/senaryo/form?projeId=&ekranId=&ortamId=   model + alt modeller + profil seçenekleri (maskeli)
+//   GET  /platform/senaryo/gecmis?id=                   değişiklik geçmişi (değişen alan ADLARI; değer yok)
+//   POST /platform/senaryo/kaydet | kosuya-dahil | sil | kopyala
+//   POST /platform/senaryolar/calistir { projeId, ortamId, senaryoId, kosuId, kosuTuru?, kosuKimligi?, kosuKapsami? }
+//        → sunucu UUID'yi güncel test dosyası + başlığına çözer ve mevcut koşu altyapısıyla çalıştırır
+//          (koşucu test-sunucu.mjs tarafından platformKosucusunuAyarla ile verilir); koşu bitince yanıt döner.
+//   POST /platform/senaryo/dene { projeId, ekranId, ortamId, veri, kosuId, id? } → taslak, geçici ek veriyle denenir.
 // Otomatik kilit: kasa, kimliği doğrulanmış API etkinliği olmadan ayarlanan süre (Ayarlar >
 // Güvenlik, 5–120 dk, varsayılan 15) geçince kilitlenir. GET /platform/durum etkinlik SAYILMAZ.
 //   GET /platform/guvenlik, POST /platform/guvenlik/kaydet { otomatikKilitDakika }
@@ -87,6 +97,11 @@ import {
 import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
+import {
+  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, formBaglami, kosuyaDahilAyarla, senaryoDetayi, senaryoGecmisi, senaryoKaydet,
+  senaryoKopyala, senaryoListesi, senaryolariSil
+} from './senaryolar/senaryo-servisi.mjs';
+import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
@@ -155,6 +170,20 @@ setInterval(() => {
   otomatikKilitZamani = new Date().toISOString();
   console.log(`[platform] Kasa ${otomatikKilitDakika} dakika işlem yapılmadığı için otomatik kilitlendi.`);
 }, Math.min(5_000, DAKIKA_MS)).unref();
+
+/** @type {import('./senaryolar/calistirma.d.mts').Kosucu | null} */
+let kosucu = null;
+/**
+ * Test sunucusu, senaryo çalıştırma altyapısını (Playwright süreci, dosya sırası, canlı görüntü,
+ * durdurma) buradan platform uçlarına verir. Verilmezse /platform/senaryolar/calistir ve
+ * /platform/senaryo/dene "çalıştırıcı etkin değil" hatası döner.
+ * @param {import('./senaryolar/calistirma.d.mts').Kosucu | null} yeni
+ */
+export function platformKosucusunuAyarla(yeni) {
+  kosucu = yeni;
+}
+/** @param {string} dosya @param {string} ad */
+const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
 
 /**
  * Dashboard'ın başlattığı test süreçlerine verilecek ortam değişkenleri: kasa AÇIKSA türetilmiş
@@ -423,6 +452,10 @@ function hataYaniti(hata) {
     const kodlar = { ONAY_GEREKLI: 409, DEGISTI: 409, MESGUL: 409, BULUNAMADI: 404 };
     return { durum: kodlar[hata.kod] ?? 400, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
   }
+  if (hata instanceof SenaryoDogrulamaHatasi) {
+    return { durum: 400, govde: { basarili: false, kod: 'DOGRULAMA', mesaj: hata.message, hatalar: hata.hatalar, uyarilar: hata.uyarilar } };
+  }
+  if (hata instanceof SenaryoCakismaHatasi) return { durum: 409, govde: { basarili: false, kod: 'CAKISMA', mesaj: hata.message } };
   if (hata instanceof DepoHatasi) return { durum: 400, govde: { basarili: false, kod: 'VERI', mesaj: hata.message } };
   if (hata instanceof AktarimHatasi) return { durum: 400, govde: { basarili: false, kod: 'AKTARIM', mesaj: hata.message } };
   return null;
@@ -559,8 +592,45 @@ function testVerisiProfiliGorunumu(p) {
   return { id: p.id, projeId: p.projeId, turId: p.turId, ortamId: p.ortamId, ad: p.ad, degerler, hassasAlanlar: p.hassasAlanlar, guncellenme: p.guncellenme };
 }
 
+/** Projenin aktarım adaptörü (proje ayarlarından; yoksa null — genel davranış). @param {Veritabani} db @param {string} projeId */
+function projeAdaptoru(db, projeId) {
+  const proje = projeGetir(db, projeId);
+  const aktarim = /** @type {Record<string, unknown> | undefined} */ (proje?.ayarlar?.aktarim);
+  return typeof aktarim?.adaptor === 'string' ? adaptorBul(aktarim.adaptor) ?? null : null;
+}
+/** Ortam seçimi: verilen kimlik (projede olmalı) ya da projenin varsayılan ortamı. @param {Veritabani} db @param {string} projeId @param {unknown} d */
+function ortamSec(db, projeId, d) {
+  const ortamlar = ortamlariListele(db, projeId);
+  if (d !== undefined && d !== null && d !== '') {
+    const id = kimlikAl(d, 'ortamId');
+    if (!ortamlar.some((o) => o.id === id)) throw new DepoHatasi('Ortam bulunamadı.');
+    return id;
+  }
+  const o = ortamlar.find((x) => x.varsayilan) ?? ortamlar[0];
+  if (!o) throw new DepoHatasi('Projede ortam yok.');
+  return o.id;
+}
+
 /** @type {Map<string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>>} */
 const GET_UCLARI = new Map([
+  ['/platform/senaryolar', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    const ortamId = ortamSec(db, projeId, q.get('ortamId'));
+    return { ortamId, ...senaryoListesi(db, projeId, ortamId, projeAdaptoru(db, projeId)) };
+  }],
+  ['/platform/senaryo', (db, q) => {
+    const id = kimlikAl(q.get('id'));
+    const ortamId = q.get('ortamId') ? kimlikAl(q.get('ortamId'), 'ortamId') : null;
+    return { senaryo: senaryoDetayi(db, id, ortamId) };
+  }],
+  ['/platform/senaryo/form', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    return formBaglami(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')), projeAdaptoru(db, projeId));
+  }],
+  ['/platform/senaryo/gecmis', (db, q) => ({
+    kayitlar: senaryoGecmisi(db, kimlikAl(q.get('id'))),
+    makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad]))
+  })],
   ['/platform/projeler', (db) => ({ projeler: projeleriListele(db).map((p) => ({ id: p.id, ad: p.ad, aciklama: p.aciklama })) })],
   // Ortam ayarları (aktarımda eski dosya iskeleti vb.) arayüze gönderilmez.
   ['/platform/ortamlar', (db, q) => ({ ortamlar: ortamlariListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(({ ayarlar: _a, ...o }) => o) })],
@@ -614,6 +684,17 @@ const GET_UCLARI = new Map([
 
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown>>} */
 const POST_UCLARI = new Map([
+  ['/platform/senaryo/kaydet', (db, g) => {
+    const projeId = kimlikAl(g.projeId, 'projeId');
+    const sonuc = senaryoKaydet(db, {
+      id: secimliKimlik(g.id) ?? null, projeId, ekranId: secimliKimlik(g.ekranId) ?? null, baslik: g.baslik,
+      ...(g.veri !== undefined ? { veri: g.veri } : {}), ortamIdleri: g.ortamIdleri, kosuyaDahil: g.kosuyaDahil, mutlakaGorunmeli: g.mutlakaGorunmeli
+    }, { adaptor: projeAdaptoru(db, projeId), kosuyorMu });
+    return { id: sonuc.id, uyarilar: sonuc.uyarilar };
+  }],
+  ['/platform/senaryo/kosuya-dahil', (db, g) => kosuyaDahilAyarla(db, kimlikAl(g.projeId, 'projeId'), g.idler, g.dahil === true)],
+  ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
+  ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],
   ['/platform/guvenlik/kaydet', (db, g) => {
     /** @type {Record<string, unknown>} */
     const yanit = {};
@@ -1004,6 +1085,19 @@ export async function platformIsteginiIsle(req, res, baglam) {
             kaldirilanlar: sonuc.kaldirilanlar, kaynaktaYok: sonuc.kaynaktaYok, sonucAktarimi: sonuc.sonucAktarimi
           }
         });
+        return true;
+      }
+      case '/platform/senaryolar/calistir': {
+        // Koşu bitene kadar yanıt bekletilir (satır "çalışıyor" görünür); durdurma /durdur, canlı görüntü /canli ile.
+        const db = await acikVeritabani();
+        const sonuc = await senaryoCalistir(db, govde, kosucu);
+        jsonGonder(res, sonuc.httpDurum, sonuc.govde);
+        return true;
+      }
+      case '/platform/senaryo/dene': {
+        const db = await acikVeritabani();
+        const sonuc = await senaryoDene(db, govde, kosucu, projeAdaptoru(db, kimlikAl(govde.projeId, 'projeId')));
+        jsonGonder(res, sonuc.httpDurum, sonuc.govde);
         return true;
       }
       case '/platform/kasa/olustur': {

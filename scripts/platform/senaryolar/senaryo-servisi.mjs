@@ -1,0 +1,721 @@
+// SENARYO SERVİSİ (genel) — platform "Senaryolar" ekranının veritabanı işlemleri: liste (son sonuç,
+// bağlam profili, beklenen sonuç rozeti), ayrıntı, model tabanlı form bağlamı, kaydet (tek
+// doğrulayıcı + değişiklik geçmişi), kopyala, sil, koşuya dahil et, geçmiş, koşu hedefi çözümü
+// (senaryo UUID → Playwright dosyası + güncel test başlığı) ve "Dene" (geçici ek veri) paketi.
+//
+// Senaryo KİMLİĞİ veritabanı UUID'sidir. Senaryo içeriği (senaryolar.icerik_json):
+//   { kaynak: { dosya, ad },                 → Playwright spec dosyası + GÜNCEL test başlığı
+//     veri?: { dosya, yol },                 → veri güdümlü senaryolarda testlerin okuduğu veri dizisi
+//     ortamlar: { <ortamId>: { sira?, veri? } },   → senaryonun var olduğu ortamlar (+ ortama göre veri)
+//     alanKurallari?: { mutlakaGorunmeli: [alanId] } }
+// "veri" olan (veri güdümlü) senaryoların sahibi veritabanıdır: testler bu satırlardan üretilir
+// (projeler/<proje>/aktarim.mjs > yenidenKur); oluşturma/düzenleme/silme yalnızca bunlarda yapılır.
+// Kodda tanımlı senaryolarda (veri yok) yalnızca görünen başlık ve "Koşuda" değişir.
+// Senaryo verisindeki hassas adlı alanlar (test verisi türlerinde hassas işaretli alan adları)
+// aktarım motoruyla aynı kuralla kasa zarfı olarak yazılır.
+// NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: senaryo-servisi.d.mts.
+
+import {
+  DepoHatasi, baglamProfilleriniListele, degisiklikGecmisiListele, ekranModeliGetir, ekranlariListele, kaynakEslemeleriniListele,
+  ortamlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet, senaryoSil, testVerisiProfilleriniListele, testVerisiTurleriniListele
+} from '../veritabani/depo.mjs';
+import { acikAnahtar, sifrele } from '../kasa.mjs';
+import { adliAlanlariDonustur, zarflariCoz } from '../aktarim/motor.mjs';
+import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari } from './model-formu.mjs';
+import { kartiNormallestir, krediKartlariAyniMi, senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
+
+/** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
+/** @typedef {import('../../../projeler/index.d.mts').AktarimAdaptoru} AktarimAdaptoru */
+/** @typedef {Record<string, unknown>} Nesne */
+
+/** "Dene" denemelerinin geçici başlık öneki (kalıcı başlık bununla başlayamaz). */
+export const DENEME_BASLIK_ON_EKI = '__senaryo_deneme__ ';
+export const BASLIK_EN_UZUN = 300;
+
+/** Doğrulayıcı hataları (alan bazında) — HTTP 400 + hatalar. */
+export class SenaryoDogrulamaHatasi extends DepoHatasi {
+  /** @param {string} mesaj @param {Array<{ alan: string; mesaj: string }>} hatalar @param {Array<{ alan: string; mesaj: string }>} [uyarilar] */
+  constructor(mesaj, hatalar, uyarilar = []) {
+    super(mesaj);
+    this.name = 'SenaryoDogrulamaHatasi';
+    this.hatalar = hatalar;
+    this.uyarilar = uyarilar;
+  }
+}
+
+/** Çakışma (o an koşan senaryo, aynı başlık) — HTTP 409. */
+export class SenaryoCakismaHatasi extends DepoHatasi {
+  /** @param {string} mesaj */
+  constructor(mesaj) {
+    super(mesaj);
+    this.name = 'SenaryoCakismaHatasi';
+  }
+}
+
+// ---------------------------------------------------------------------------------------
+// Yardımcılar
+// ---------------------------------------------------------------------------------------
+
+/** @param {unknown} d @returns {d is Nesne} */
+const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
+/** @template T @param {T} d @returns {T} */
+const kopya = (d) => JSON.parse(JSON.stringify(d));
+
+/** İçerikteki Playwright kaynağı (dosya + güncel test başlığı). @param {unknown} icerik */
+export function senaryoKaynagi(icerik) {
+  const k = nesneMi(icerik) && nesneMi(icerik.kaynak) ? icerik.kaynak : null;
+  return k && typeof k.dosya === 'string' && typeof k.ad === 'string' && k.dosya && k.ad ? { dosya: k.dosya, ad: k.ad } : null;
+}
+
+/** Koşu listesi / sonuç anahtarı "<dosya>::<başlık>" (kaynak yoksa null). @param {unknown} icerik */
+export function senaryoKaynakAnahtari(icerik) {
+  const k = senaryoKaynagi(icerik);
+  return k ? `${k.dosya}::${k.ad}` : null;
+}
+
+/** Veri güdümlü mü (testler bu satırın verisinden üretilir)? @param {unknown} icerik */
+export function veriGudumluMu(icerik) {
+  return nesneMi(icerik) && nesneMi(icerik.veri) && typeof icerik.veri.dosya === 'string' && typeof icerik.veri.yol === 'string';
+}
+
+/** @param {unknown} icerik @returns {string[]} */
+const ortamKimlikleri = (icerik) => (nesneMi(icerik) && nesneMi(icerik.ortamlar) ? Object.keys(icerik.ortamlar) : []);
+
+/** Ortam kimliği → test çalıştırıcısının ortam anahtarı (aktarım eşlemesi; ör. "test"). */
+export function ortamAnahtariBul(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {string} */ ortamId) {
+  return kaynakEslemeleriniListele(vt, projeId, 'ortam').find((e) => e.varlikId === ortamId)?.kaynakAnahtari ?? null;
+}
+
+/** Test verisi türlerinde hassas işaretli alan adları (aktarım motoruyla aynı kural: hassas !== false). */
+function hassasAdlar(/** @type {Veritabani} */ vt, /** @type {string} */ projeId) {
+  return new Set(testVerisiTurleriniListele(vt, projeId).flatMap((t) => t.alanlar.filter((a) => a.hassas !== false).map((a) => a.ad)));
+}
+
+/** @param {Veritabani} vt @param {string} projeId @param {unknown} veri */
+function veriyiSifrele(vt, projeId, veri) {
+  return adliAlanlariDonustur(veri, hassasAdlar(vt, projeId), (m) => sifrele(vt, m));
+}
+
+/**
+ * Ekranın en son model sürümü + başvurduğu alt modeller (aynı projede, anahtarı alt model dosya
+ * adından ".model.json" atılarak bulunan ekranların modelleri). Model yoksa null.
+ * @param {Veritabani} vt @param {string} ekranId
+ */
+export function modelBaglami(vt, ekranId) {
+  const kayit = ekranModeliGetir(vt, ekranId);
+  if (!kayit || !nesneMi(kayit.model) || kayit.model.tur === 'altModel' || !Array.isArray(kayit.model.adimlar)) return null;
+  const model = kayit.model;
+  const ekran = vt.tek('SELECT proje_id FROM ekranlar WHERE id = ?', [ekranId]);
+  /** @type {Set<string>} */
+  const dosyalar = new Set();
+  for (const adim of /** @type {Nesne[]} */ (model.adimlar)) if (nesneMi(adim.altModel) && typeof adim.altModel.dosya === 'string') dosyalar.add(adim.altModel.dosya);
+  const sd = nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? /** @type {Nesne[]} */ (model.senaryoDuzeyi.alanlar) : [];
+  for (const a of sd) if (nesneMi(a.altModel) && typeof a.altModel.dosya === 'string') dosyalar.add(a.altModel.dosya);
+  /** @type {Record<string, Nesne>} */
+  const altModeller = {};
+  for (const dosya of dosyalar) {
+    const anahtar = dosya.replace(/\.model\.json$/, '');
+    const e = vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND anahtar = ?', [ekran?.proje_id ?? '', anahtar]);
+    const alt = e ? ekranModeliGetir(vt, String(e.id)) : undefined;
+    if (alt && nesneMi(alt.model)) altModeller[dosya] = alt.model;
+  }
+  return { model, altModeller, surum: kayit.surum };
+}
+
+/** @param {Veritabani} vt @param {string} projeId @param {string} ekranId */
+function ekranGetir(vt, projeId, ekranId) {
+  const e = ekranlariListele(vt, projeId).find((x) => x.id === ekranId);
+  if (!e) throw new DepoHatasi('Ekran bulunamadı.');
+  return e;
+}
+
+/**
+ * Yeni senaryonun veri kaynağı (spec + veri dosyası/yolu): adaptör biliyorsa ondan, yoksa aynı
+ * ekranın mevcut veri güdümlü bir senaryosundan. Bulunamazsa null (bu ekranda senaryo oluşturulamaz).
+ * @param {Veritabani} vt @param {string} projeId @param {{ id: string; anahtar: string }} ekran @param {AktarimAdaptoru | null | undefined} adaptor
+ */
+export function ekranVeriKaynagi(vt, projeId, ekran, adaptor) {
+  const a = adaptor?.senaryoVeriKaynagi?.(ekran.anahtar);
+  if (a) return { spec: a.spec, dosya: a.dosya, yol: a.yol };
+  for (const s of vt.tumu('SELECT icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ? ORDER BY rowid', [projeId, ekran.id])) {
+    const icerik = JSON.parse(String(s.icerik_json));
+    const kaynak = senaryoKaynagi(icerik);
+    if (kaynak && veriGudumluMu(icerik)) return { spec: kaynak.dosya, dosya: String(icerik.veri.dosya), yol: String(icerik.veri.yol) };
+  }
+  return null;
+}
+
+/** Senaryonun (ortamdaki) verisi — hassas alanlar çözülmüş (kasa açık olmalı). */
+function ortamVerisi(/** @type {Veritabani} */ vt, /** @type {Nesne} */ icerik, /** @type {string | null} */ ortamId) {
+  if (!veriGudumluMu(icerik) || !nesneMi(icerik.ortamlar)) return null;
+  const kimlik = ortamId && nesneMi(icerik.ortamlar[ortamId]) ? ortamId : ortamKimlikleri(icerik).find((o) => nesneMi(/** @type {Nesne} */ (icerik.ortamlar)[o]));
+  const o = kimlik ? /** @type {Nesne} */ (/** @type {Nesne} */ (icerik.ortamlar)[kimlik]) : null;
+  return o && nesneMi(o.veri) ? /** @type {Nesne} */ (zarflariCoz(vt, o.veri)) : null;
+}
+
+/** Bağlam profili alanı (model şemasında havuzu bağlam türü olan "profil" alanı). */
+function baglamAlani(/** @type {ReturnType<typeof formSemasiOlustur>} */ sema) {
+  return tumFormAlanlari(sema).find((a) => a.tip === 'profil') ?? null;
+}
+
+// ---------------------------------------------------------------------------------------
+// Liste
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Senaryolar ekranının listesi (seçili ortamda var olan senaryolar) + sol ekran listesi.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamId @param {AktarimAdaptoru | null} [adaptor]
+ */
+export function senaryoListesi(vt, projeId, ortamId, adaptor = null) {
+  acikAnahtar(vt);
+  /** @type {Map<string, { sema: ReturnType<typeof formSemasiOlustur> | null; model: boolean }>} */
+  const semalar = new Map();
+  const ekranlar = ekranlariListele(vt, projeId);
+  const altModelEkranlari = new Set();
+  for (const e of ekranlar) {
+    const k = ekranModeliGetir(vt, e.id);
+    if (k && nesneMi(k.model) && k.model.tur === 'altModel') altModelEkranlari.add(e.id);
+    const mb = modelBaglami(vt, e.id);
+    let sema = null;
+    try { sema = mb ? formSemasiOlustur(mb.model, mb.altModeller) : null; } catch { sema = null; }
+    semalar.set(e.id, { sema, model: Boolean(mb) });
+  }
+  // Son sonuçlar: seçili ortamın (ya da ortamı bilinmeyen) koşularından, senaryo kimliğine; kimliği
+  // olmayan eski sonuçlar için "<dosya>::<başlık>" anahtarına göre en yenisi.
+  /** @type {Map<string, { durum: string; zaman: string; sonucId: string; kosuId: string }>} */
+  const sonKimlik = new Map();
+  /** @type {Map<string, { durum: string; zaman: string; sonucId: string; kosuId: string }>} */
+  const sonAnahtar = new Map();
+  for (const r of vt.tumu(
+    `SELECT r.id, r.kosu_id, r.senaryo_id, r.senaryo_anahtari, r.durum, COALESCE(r.bitis, k.bitis, k.baslangic) AS zaman
+       FROM kosu_sonuclari r JOIN kosular k ON k.id = r.kosu_id
+      WHERE k.proje_id = ? AND (k.ortam_id = ? OR k.ortam_id IS NULL) ORDER BY zaman`, [projeId, ortamId]
+  )) {
+    const s = { durum: String(r.durum), zaman: String(r.zaman), sonucId: String(r.id), kosuId: String(r.kosu_id) };
+    if (r.senaryo_id) sonKimlik.set(String(r.senaryo_id), s);
+    if (r.senaryo_anahtari) sonAnahtar.set(String(r.senaryo_anahtari), s);
+  }
+  const ekranAdi = new Map(ekranlar.map((e) => [e.id, e.ad]));
+  const satirlar = [];
+  /** @type {Map<string, number>} */
+  const sayilar = new Map();
+  for (const s of vt.tumu('SELECT * FROM senaryolar WHERE proje_id = ? ORDER BY baslik', [projeId])) {
+    const icerik = /** @type {Nesne} */ (JSON.parse(String(s.icerik_json)));
+    if (!ortamKimlikleri(icerik).includes(ortamId)) continue;
+    const ekranId = s.ekran_id == null ? null : String(s.ekran_id);
+    const bilgi = ekranId ? semalar.get(ekranId) : undefined;
+    const veri = ortamVerisi(vt, icerik, ortamId);
+    const sema = bilgi?.sema ?? null;
+    const profilAlani = sema ? baglamAlani(sema) : null;
+    const profilDegeri = profilAlani && veri && typeof veri[profilAlani.anahtar] === 'string' ? String(veri[profilAlani.anahtar]) : null;
+    const anahtar = senaryoKaynakAnahtari(icerik);
+    const sonuc = sonKimlik.get(String(s.id)) ?? (anahtar ? sonAnahtar.get(anahtar) : undefined) ?? null;
+    const kurallar = nesneMi(icerik.alanKurallari) && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli) ? icerik.alanKurallari.mutlakaGorunmeli : [];
+    sayilar.set(ekranId ?? '', (sayilar.get(ekranId ?? '') ?? 0) + 1);
+    satirlar.push({
+      id: String(s.id), baslik: String(s.baslik), ekranId, ekranAdi: ekranId ? ekranAdi.get(ekranId) ?? null : null,
+      kosuyaDahil: s.kosuya_dahil === 1, veriGudumlu: veriGudumluMu(icerik), modelVar: Boolean(bilgi?.model),
+      kaynak: senaryoKaynagi(icerik),
+      baglamProfili: profilAlani ? { deger: profilDegeri, varsayilan: profilDegeri ? false : true, ad: profilDegeri ?? profilAlani.varsayilanProfil } : null,
+      beklenenSonuc: sema && veri ? beklenenSonucEtiketi(sema, veri) : null,
+      sonSonuc: sonuc, mutlakaGorunmeliSayisi: kurallar.length,
+      guncellenme: String(s.guncellenme)
+    });
+  }
+  return {
+    ekranlar: ekranlar.filter((e) => !altModelEkranlari.has(e.id)).map((e) => ({
+      id: e.id, anahtar: e.anahtar, ad: e.ad, senaryoSayisi: sayilar.get(e.id) ?? 0,
+      modelVar: Boolean(semalar.get(e.id)?.model), olusturulabilir: Boolean(semalar.get(e.id)?.sema) && Boolean(ekranVeriKaynagi(vt, projeId, e, adaptor))
+    })),
+    senaryolar: satirlar
+  };
+}
+
+// ---------------------------------------------------------------------------------------
+// Ayrıntı ve form bağlamı
+// ---------------------------------------------------------------------------------------
+
+/** @param {Veritabani} vt @param {string} id @param {string | null} ortamId */
+export function senaryoDetayi(vt, id, ortamId) {
+  acikAnahtar(vt);
+  const s = senaryoGetir(vt, id);
+  if (!s) throw new DepoHatasi('Senaryo bulunamadı.');
+  const icerik = s.icerik;
+  const kurallar = nesneMi(icerik.alanKurallari) && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli)
+    ? icerik.alanKurallari.mutlakaGorunmeli.filter((x) => typeof x === 'string') : [];
+  return {
+    id: s.id, projeId: s.projeId, ekranId: s.ekranId, baslik: s.baslik, kosuyaDahil: s.kosuyaDahil,
+    veriGudumlu: veriGudumluMu(icerik), kaynak: senaryoKaynagi(icerik), ortamlar: ortamKimlikleri(icerik),
+    veri: ortamVerisi(vt, icerik, ortamId), mutlakaGorunmeli: kurallar, olusturulma: s.olusturulma, guncellenme: s.guncellenme
+  };
+}
+
+/**
+ * Doğrulayıcının "ortak" bağlamı (tam; YALNIZCA sunucuda kullanılır). Adaptör sağlamıyorsa
+ * undefined (profil varlığı / bağlama göre görünürlük kontrolleri atlanır).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamId @param {AktarimAdaptoru | null | undefined} adaptor
+ */
+function dogrulamaOrtagi(vt, projeId, ortamId, adaptor) {
+  const anahtar = ortamAnahtariBul(vt, projeId, ortamId);
+  if (!anahtar || !adaptor?.dogrulamaBaglami) return undefined;
+  return adaptor.dogrulamaBaglami(vt, projeId, anahtar) ?? undefined;
+}
+
+/**
+ * Tarayıcıya gidecek doğrulama bağlamı: profil ANAHTARLARI (değerler değil), bağlam profillerinin
+ * görünürlüğü belirleyen kodları ve ortak kartın yalnızca son kullanma tarihi (süre uyarısı için).
+ * @param {Nesne | undefined} ortak
+ */
+function tarayiciOrtagi(ortak) {
+  if (!ortak) return null;
+  /** @type {Nesne} */
+  const sonuc = {};
+  if (nesneMi(ortak.kimlikProfilleri)) {
+    sonuc.kimlikProfilleri = Object.fromEntries(Object.entries(ortak.kimlikProfilleri).map(([tur, havuz]) =>
+      [tur, nesneMi(havuz) ? Object.fromEntries(Object.keys(havuz).map((k) => [k, {}])) : {}]));
+  }
+  if (nesneMi(ortak.acenteProfilleri)) sonuc.acenteProfilleri = kopya(ortak.acenteProfilleri);
+  const kart = nesneMi(ortak.varsayilanKrediKarti) ? ortak.varsayilanKrediKarti : null;
+  if (kart) sonuc.varsayilanKrediKarti = { sonKullanmaAyi: kart.sonKullanmaAyi ?? null, sonKullanmaYili: kart.sonKullanmaYili ?? null };
+  return sonuc;
+}
+
+/**
+ * Model tabanlı formun bağlamı: model + alt modeller, profil havuzlarının seçenekleri (bağlam
+ * profilleri: ad + alanlar; test verisi profilleri: ad + MASKELİ önizleme), tarayıcı doğrulama
+ * bağlamı ve ekranın veri kaynağı. Modeli olmayan ekranda model: null.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string} ortamId @param {AktarimAdaptoru | null | undefined} adaptor
+ */
+export function formBaglami(vt, projeId, ekranId, ortamId, adaptor) {
+  acikAnahtar(vt);
+  const ekran = ekranGetir(vt, projeId, ekranId);
+  const ortamlar = ortamlariListele(vt, projeId).map((o) => ({ id: o.id, ad: o.ad, varsayilan: o.varsayilan }));
+  if (!ortamlar.some((o) => o.id === ortamId)) throw new DepoHatasi('Ortam bulunamadı.');
+  const mb = modelBaglami(vt, ekranId);
+  const veriKaynagi = ekranVeriKaynagi(vt, projeId, ekran, adaptor);
+  if (!mb) return { ekran, ortamlar, model: null, altModeller: {}, profiller: {}, ortak: null, veriKaynagi, olusturulabilir: false };
+  const sema = formSemasiOlustur(mb.model, mb.altModeller);
+  /** @type {Set<string>} */
+  const havuzlar = new Set();
+  for (const a of tumFormAlanlari(sema)) {
+    if (a.tip === 'profil') havuzlar.add(a.profilHavuzu);
+    if (a.tip === 'kimlik' && a.profilHavuzu) {
+      if (typeof a.profilHavuzu === 'string') havuzlar.add(a.profilHavuzu);
+      else Object.values(a.profilHavuzu).forEach((h) => havuzlar.add(h));
+    }
+  }
+  const tanimlar = adaptor?.profilHavuzlari?.() ?? {};
+  const turler = testVerisiTurleriniListele(vt, projeId);
+  const ortamdaMi = (/** @type {string | null} */ o) => o === null || o === ortamId;
+  /** @type {Record<string, Array<{ ad: string; tur: 'baglam' | 'testVerisi'; kapsam: 'tum' | 'ortam'; alanlar: Array<{ etiket: string; deger?: string; dolu: boolean }> }>>} */
+  const profiller = {};
+  for (const havuz of havuzlar) {
+    const t = tanimlar[havuz];
+    if (!t) continue;
+    /** @type {Map<string, (typeof profiller)[string][number]>} */
+    const liste = new Map();
+    if (t.tur === 'baglam') {
+      for (const p of baglamProfilleriniListele(vt, projeId, t.ad).filter((x) => ortamdaMi(x.ortamId)).sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
+        liste.set(p.ad, {
+          ad: p.ad, tur: 'baglam', kapsam: p.ortamId ? 'ortam' : 'tum',
+          alanlar: Object.entries(p.alanlar ?? {}).slice(0, 4).map(([k, v]) => ({ etiket: k, deger: typeof v === 'string' ? v : JSON.stringify(v), dolu: v !== '' && v != null }))
+        });
+      }
+    } else {
+      const tur = turler.find((x) => x.ad === t.ad);
+      if (!tur) continue;
+      for (const p of testVerisiProfilleriniListele(vt, projeId, tur.id).filter((x) => ortamdaMi(x.ortamId)).sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
+        liste.set(p.ad, {
+          ad: p.ad, tur: 'testVerisi', kapsam: p.ortamId ? 'ortam' : 'tum',
+          // Maskeli önizleme: hassas alanların DEĞERİ gönderilmez, yalnızca dolu olup olmadığı.
+          alanlar: tur.alanlar.map((a) => ({
+            etiket: a.etiket, dolu: a.hassas ? p.doluHassasAlanlar.includes(a.ad) : p.degerler[a.ad] !== undefined && p.degerler[a.ad] !== null && p.degerler[a.ad] !== '',
+            ...(a.hassas ? {} : { deger: p.degerler[a.ad] == null ? '' : String(p.degerler[a.ad]) })
+          }))
+        });
+      }
+    }
+    profiller[havuz] = [...liste.values()].sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+  }
+  return {
+    ekran, ortamlar, model: mb.model, altModeller: mb.altModeller, modelSurumu: mb.surum, profiller,
+    ortak: tarayiciOrtagi(dogrulamaOrtagi(vt, projeId, ortamId, adaptor)), veriKaynagi,
+    olusturulabilir: Boolean(veriKaynagi)
+  };
+}
+
+// ---------------------------------------------------------------------------------------
+// Doğrulama + kaydet
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Senaryo verisini seçilen HER ortamın bağlamıyla doğrular; alt model (kart) alanlarını tek biçime
+ * getirir ve ortak değerle aynıysa kaldırır. Hata varsa SenaryoDogrulamaHatasi.
+ * @returns {{ veri: Nesne; uyarilar: Array<{ alan: string; mesaj: string }> }}
+ */
+function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {{ model: Nesne; altModeller: Record<string, Nesne> }} */ mb,
+  /** @type {Nesne} */ veri, /** @type {string[]} */ ortamIdleri, /** @type {AktarimAdaptoru | null | undefined} */ adaptor, /** @type {Map<string, string>} */ ortamAdlari) {
+  const sema = formSemasiOlustur(mb.model, mb.altModeller);
+  let sonuc = kopya(veri);
+  /** @type {Array<{ alan: string; mesaj: string }>} */
+  const hatalar = [];
+  /** @type {Array<{ alan: string; mesaj: string }>} */
+  const uyarilar = [];
+  const birden = ortamIdleri.length > 1;
+  for (const ortamId of ortamIdleri) {
+    const ortak = dogrulamaOrtagi(vt, projeId, ortamId, adaptor);
+    // Alt model ezme (ör. senaryoya özel kart): tek biçim + ortak değerle aynıysa yazılmaz.
+    for (const alan of tumFormAlanlari(sema)) {
+      if (alan.tip !== 'altModel' || !nesneMi(sonuc[alan.anahtar])) continue;
+      // Alt model alanları modelde "eslesme.kart" ile tanımlıdır (kart şeması doğrulayıcıdadır).
+      if (!alan.alanlar.length) continue;
+      const on = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, ortak, kaynak: 'kayit' });
+      if (on.hatalar.some((h) => h.alan.startsWith(`${alan.anahtar}.`) || h.alan === alan.anahtar)) continue;
+      const varsayilan = ortak && nesneMi(ortak.varsayilanKrediKarti) ? ortak.varsayilanKrediKarti : null;
+      const kart = kartiNormallestir(/** @type {Nesne} */ (sonuc[alan.anahtar]), varsayilan);
+      if (varsayilan && krediKartlariAyniMi(kart, varsayilan)) delete sonuc[alan.anahtar];
+      else sonuc[alan.anahtar] = kart;
+    }
+    const d = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, ortak, kaynak: 'kayit' });
+    const onEk = birden ? `[${ortamAdlari.get(ortamId) ?? ortamId}] ` : '';
+    for (const h of d.hatalar) if (!hatalar.some((x) => x.alan === h.alan && x.mesaj.endsWith(h.mesaj))) hatalar.push({ alan: h.alan, mesaj: `${onEk}${h.mesaj}` });
+    for (const u of d.uyarilar) if (!uyarilar.some((x) => x.alan === u.alan && x.mesaj.endsWith(u.mesaj))) uyarilar.push({ alan: u.alan, mesaj: `${onEk}${u.mesaj}` });
+  }
+  if (hatalar.length) {
+    throw new SenaryoDogrulamaHatasi(hatalar.length === 1 ? hatalar[0].mesaj : `${hatalar.length} alan düzeltilmeli.`, hatalar, uyarilar);
+  }
+  sonuc = kopya(sonuc);
+  return { veri: sonuc, uyarilar };
+}
+
+/** @param {unknown} d */
+function baslikKontrol(d) {
+  if (typeof d !== 'string' || !d.trim()) throw new SenaryoDogrulamaHatasi('Senaryo başlığı zorunludur.', [{ alan: 'baslik', mesaj: 'Senaryo başlığı zorunludur.' }]);
+  const b = d.trim().replace(/\s+/g, ' ');
+  if (b.length > BASLIK_EN_UZUN) throw new SenaryoDogrulamaHatasi(`Başlık en fazla ${BASLIK_EN_UZUN} karakter olabilir.`, [{ alan: 'baslik', mesaj: `Başlık en fazla ${BASLIK_EN_UZUN} karakter olabilir.` }]);
+  if (b.startsWith(DENEME_BASLIK_ON_EKI.trim())) throw new SenaryoDogrulamaHatasi('Bu başlık önekine izin verilmiyor.', [{ alan: 'baslik', mesaj: 'Bu başlık önekine izin verilmiyor (deneme koşularına ayrılmıştır).' }]);
+  return b;
+}
+
+/**
+ * Aynı spec dosyasında aynı başlıklı başka senaryo var mı? (Playwright aynı dosyada aynı başlığa izin
+ * vermez; koşu listesi ve sonuç anahtarları "<dosya>::<başlık>" olduğu için tekil olmalı.)
+ */
+function baslikCakisiyorMu(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {string} */ dosya, /** @type {string} */ baslik, /** @type {string | null} */ haricId) {
+  return vt.tumu('SELECT id, icerik_json FROM senaryolar WHERE proje_id = ?', [projeId]).some((s) => {
+    if (haricId && String(s.id) === haricId) return false;
+    const k = senaryoKaynagi(JSON.parse(String(s.icerik_json)));
+    return k !== null && k.dosya === dosya && k.ad === baslik;
+  });
+}
+
+/** Ortamdaki veri dizisinde sıradaki "sira". */
+function sonrakiSira(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {{ dosya: string; yol: string }} */ veri, /** @type {string} */ ortamId) {
+  let enBuyuk = -1;
+  for (const s of vt.tumu('SELECT icerik_json FROM senaryolar WHERE proje_id = ?', [projeId])) {
+    const icerik = JSON.parse(String(s.icerik_json));
+    if (!veriGudumluMu(icerik) || icerik.veri.dosya !== veri.dosya || icerik.veri.yol !== veri.yol) continue;
+    const o = nesneMi(icerik.ortamlar) ? icerik.ortamlar[ortamId] : null;
+    if (nesneMi(o) && typeof o.sira === 'number') enBuyuk = Math.max(enBuyuk, o.sira);
+  }
+  return enBuyuk + 1;
+}
+
+/**
+ * Senaryoyu kaydeder (yeni ya da mevcut). Kurallar:
+ *  - Veri güdümlü + model: veri seçilen her ortam için tek doğrulayıcıyla doğrulanır; kaynak.ad ve
+ *    verideki başlık yeni başlıkla eşitlenir (test başlığı = senaryo başlığı); ortam kapsamı
+ *    ortamIdleri ile belirlenir (en az bir ortam).
+ *  - Veri güdümlü, modelsiz: yalnızca başlık (+ verideki başlık) ve Koşuda.
+ *  - Kodda tanımlı: yalnızca görünen başlık ve Koşuda (testin koddaki adı değişmez).
+ *  - O an koşan senaryo (kosuyorMu) değiştirilemez.
+ * @param {Veritabani} vt
+ * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; yapan?: string }} girdi
+ * @param {{ adaptor?: AktarimAdaptoru | null; kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
+ * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }> }}
+ */
+export function senaryoKaydet(vt, girdi, secenekler = {}) {
+  acikAnahtar(vt);
+  const baslik = baslikKontrol(girdi.baslik);
+  const mevcut = girdi.id ? senaryoGetir(vt, girdi.id) : undefined;
+  if (girdi.id && (!mevcut || mevcut.projeId !== girdi.projeId)) throw new DepoHatasi('Senaryo bulunamadı.');
+  const kosuyaDahil = girdi.kosuyaDahil === undefined ? mevcut?.kosuyaDahil ?? true : girdi.kosuyaDahil === true;
+  const eskiKaynak = mevcut ? senaryoKaynagi(mevcut.icerik) : null;
+  if (eskiKaynak && secenekler.kosuyorMu?.(eskiKaynak.dosya, eskiKaynak.ad)) {
+    throw new SenaryoCakismaHatasi('Bu senaryo şu anda koşuyor (ya da sırada); bitmesini bekleyin veya durdurun.');
+  }
+
+  // Kodda tanımlı senaryo: yalnızca görünen başlık + Koşuda.
+  if (mevcut && !veriGudumluMu(mevcut.icerik)) {
+    depoSenaryoKaydet(vt, { ...mevcut, baslik, kosuyaDahil, yapan: girdi.yapan });
+    return { id: mevcut.id, uyarilar: [] };
+  }
+
+  const ekranId = mevcut ? mevcut.ekranId : typeof girdi.ekranId === 'string' ? girdi.ekranId : null;
+  if (!ekranId) throw new DepoHatasi('Ekran seçilmedi.');
+  const ekran = ekranGetir(vt, girdi.projeId, ekranId);
+  const ortamlar = ortamlariListele(vt, girdi.projeId);
+  const ortamAdlari = new Map(ortamlar.map((o) => [o.id, o.ad]));
+  const ortamIdleri = Array.isArray(girdi.ortamIdleri)
+    ? [...new Set(girdi.ortamIdleri.filter((o) => typeof o === 'string'))]
+    : mevcut ? ortamKimlikleri(mevcut.icerik) : [];
+  if (!ortamIdleri.length) throw new SenaryoDogrulamaHatasi('En az bir ortam seçin.', [{ alan: 'ortamlar', mesaj: 'En az bir ortam seçin.' }]);
+  for (const o of ortamIdleri) if (!ortamAdlari.has(o)) throw new DepoHatasi('Seçilen ortam bu projede yok.');
+
+  const kaynakVeri = mevcut ? { spec: /** @type {{ dosya: string }} */ (eskiKaynak).dosya, dosya: String(/** @type {Nesne} */ (mevcut.icerik.veri).dosya), yol: String(/** @type {Nesne} */ (mevcut.icerik.veri).yol) }
+    : ekranVeriKaynagi(vt, girdi.projeId, ekran, secenekler.adaptor);
+  if (!kaynakVeri) throw new DepoHatasi('Bu ekran için senaryo verisi kaynağı bilinmiyor; yeni senaryo oluşturulamaz.');
+  if (baslikCakisiyorMu(vt, girdi.projeId, kaynakVeri.spec, baslik, mevcut?.id ?? null)) {
+    throw new SenaryoDogrulamaHatasi('Bu başlıkta bir senaryo zaten var.', [{ alan: 'baslik', mesaj: 'Bu ekranda bu başlıkta bir senaryo zaten var; başka bir başlık seçin.' }]);
+  }
+
+  const mb = modelBaglami(vt, ekranId);
+  /** @type {Array<{ alan: string; mesaj: string }>} */
+  let uyarilar = [];
+  /** @type {Record<string, Nesne>} ortamId → çözülmüş veri */
+  const ortamVerileri = {};
+  if (girdi.veri !== undefined) {
+    if (!mb) throw new DepoHatasi('Bu ekranın modeli yok; senaryo verisi yalnızca ekran modeliyle düzenlenebilir.');
+    if (!nesneMi(girdi.veri)) throw new DepoHatasi('"veri" bir nesne olmalıdır.');
+    const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
+    const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: baslik }, ortamIdleri, secenekler.adaptor, ortamAdlari);
+    uyarilar = d.uyarilar;
+    for (const o of ortamIdleri) ortamVerileri[o] = d.veri;
+  } else {
+    if (!mevcut) throw new DepoHatasi('Yeni senaryo için "veri" zorunludur.');
+    // Veri değişmez: yalnızca başlık (ve verideki başlık alanı) güncellenir.
+    for (const o of ortamIdleri) {
+      const v = ortamVerisi(vt, mevcut.icerik, o) ?? ortamVerisi(vt, mevcut.icerik, null);
+      if (!v) continue;
+      ortamVerileri[o] = { ...v, ...(typeof v.baslik === 'string' ? { baslik } : {}) };
+    }
+  }
+
+  const mutlaka = Array.isArray(girdi.mutlakaGorunmeli)
+    ? [...new Set(girdi.mutlakaGorunmeli.filter((x) => typeof x === 'string' && /^[A-Za-z0-9_.-]{1,100}$/.test(x)))]
+    : nesneMi(mevcut?.icerik.alanKurallari) && Array.isArray(/** @type {Nesne} */ (mevcut?.icerik.alanKurallari).mutlakaGorunmeli)
+      ? /** @type {string[]} */ (/** @type {Nesne} */ (mevcut?.icerik.alanKurallari).mutlakaGorunmeli) : [];
+  const eskiOrtamlar = mevcut && nesneMi(mevcut.icerik.ortamlar) ? /** @type {Record<string, Nesne>} */ (mevcut.icerik.ortamlar) : {};
+  /** @type {Record<string, Nesne>} */
+  const yeniOrtamlar = {};
+  for (const o of ortamIdleri) {
+    const eski = nesneMi(eskiOrtamlar[o]) ? eskiOrtamlar[o] : null;
+    const sira = eski && typeof eski.sira === 'number' ? eski.sira : sonrakiSira(vt, girdi.projeId, kaynakVeri, o);
+    yeniOrtamlar[o] = ortamVerileri[o] ? { sira, veri: veriyiSifrele(vt, girdi.projeId, ortamVerileri[o]) } : { sira };
+  }
+  /** @type {Nesne} */
+  const icerik = {
+    ...(mevcut ? kopya(mevcut.icerik) : {}),
+    kaynak: { dosya: kaynakVeri.spec, ad: baslik },
+    veri: { dosya: kaynakVeri.dosya, yol: kaynakVeri.yol },
+    ortamlar: yeniOrtamlar
+  };
+  if (mutlaka.length) icerik.alanKurallari = { mutlakaGorunmeli: mutlaka };
+  else delete icerik.alanKurallari;
+  const id = depoSenaryoKaydet(vt, {
+    ...(mevcut ? { id: mevcut.id } : {}), projeId: girdi.projeId, ekranId, baslik, icerik, kosuyaDahil, yapan: girdi.yapan
+  });
+  return { id, uyarilar };
+}
+
+/**
+ * Koşuda anahtarı (toplu).
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} idler @param {boolean} dahil @param {string} [yapan]
+ */
+export function kosuyaDahilAyarla(vt, projeId, idler, dahil, yapan) {
+  const liste = kimlikListesi(idler);
+  let degisen = 0;
+  vt.islem(() => {
+    for (const id of liste) {
+      const s = senaryoGetir(vt, id);
+      if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+      if (s.kosuyaDahil === dahil) continue;
+      depoSenaryoKaydet(vt, { ...s, kosuyaDahil: dahil, yapan });
+      degisen++;
+    }
+  });
+  return { degisen };
+}
+
+/** @param {unknown} idler @returns {string[]} */
+function kimlikListesi(idler) {
+  if (!Array.isArray(idler) || !idler.length || idler.length > 5000) throw new DepoHatasi('"idler" boş olmayan bir kimlik dizisi olmalıdır.');
+  return [...new Set(idler.map((d) => {
+    if (typeof d !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(d)) throw new DepoHatasi('Geçersiz senaryo kimliği.');
+    return d;
+  }))];
+}
+
+/**
+ * Senaryoları siler — yalnızca veri güdümlü (sahibi veritabanı olan) senaryolar. Kodda tanımlı bir
+ * senaryo listede varsa HİÇBİRİ silinmez. Koşan senaryo silinmez.
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} idler
+ * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string }} [secenekler]
+ */
+export function senaryolariSil(vt, projeId, idler, secenekler = {}) {
+  const liste = kimlikListesi(idler);
+  const senaryolar = liste.map((id) => {
+    const s = senaryoGetir(vt, id);
+    if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+    return s;
+  });
+  const kodda = senaryolar.filter((s) => !veriGudumluMu(s.icerik));
+  if (kodda.length) {
+    throw new DepoHatasi(`${kodda.length} senaryo kodda tanımlı (ör. "${kodda[0].baslik}"); bunlar silinemez, koşudan çıkarmak için Koşuda anahtarını kapatın.`);
+  }
+  for (const s of senaryolar) {
+    const k = senaryoKaynagi(s.icerik);
+    if (k && secenekler.kosuyorMu?.(k.dosya, k.ad)) throw new SenaryoCakismaHatasi(`"${s.baslik}" şu anda koşuyor; bitmesini bekleyin veya durdurun.`);
+  }
+  vt.islem(() => { for (const s of senaryolar) senaryoSil(vt, s.id, secenekler.yapan); });
+  return { silinen: senaryolar.length };
+}
+
+/**
+ * Veri güdümlü senaryonun kopyası: "<başlık> (kopya[ N])", aynı ortamlar, verinin kopyası, sıranın
+ * sonuna eklenir. Kopya Koşuda KAPALI başlar (aynı testin çift koşmaması için).
+ * @param {Veritabani} vt @param {string} projeId @param {string} id @param {string} [yapan]
+ */
+export function senaryoKopyala(vt, projeId, id, yapan) {
+  acikAnahtar(vt);
+  const s = senaryoGetir(vt, id);
+  if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+  if (!veriGudumluMu(s.icerik)) throw new DepoHatasi('Kodda tanımlı senaryolar kopyalanamaz.');
+  const kaynak = /** @type {{ dosya: string; ad: string }} */ (senaryoKaynagi(s.icerik));
+  let baslik = '';
+  for (let n = 1; n < 1000; n++) {
+    const aday = `${s.baslik} (kopya${n > 1 ? ` ${n}` : ''})`.slice(0, BASLIK_EN_UZUN);
+    if (!baslikCakisiyorMu(vt, projeId, kaynak.dosya, aday, null)) { baslik = aday; break; }
+  }
+  if (!baslik) throw new DepoHatasi('Kopya için boş bir başlık bulunamadı.');
+  const veri = /** @type {{ dosya: string; yol: string }} */ (s.icerik.veri);
+  /** @type {Record<string, Nesne>} */
+  const ortamlar = {};
+  for (const o of ortamKimlikleri(s.icerik)) {
+    const v = ortamVerisi(vt, s.icerik, o);
+    ortamlar[o] = { sira: sonrakiSira(vt, projeId, veri, o), ...(v ? { veri: veriyiSifrele(vt, projeId, { ...v, ...(typeof v.baslik === 'string' ? { baslik } : {}) }) } : {}) };
+  }
+  const yeniId = depoSenaryoKaydet(vt, {
+    projeId, ekranId: s.ekranId, baslik, kosuyaDahil: false, yapan,
+    icerik: { ...kopya(s.icerik), kaynak: { dosya: kaynak.dosya, ad: baslik }, ortamlar }
+  });
+  return { id: yeniId, baslik };
+}
+
+// ---------------------------------------------------------------------------------------
+// Geçmiş
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Senaryonun değişiklik geçmişi (yeniden eskiye). Değişiklikler insan-okur özetlenir: başlık ve
+ * Koşuda değerleri; veride yalnızca DEĞİŞEN ALAN ADLARI (değerler gösterilmez — hassas olabilir);
+ * ortam kapsamı değişikliği.
+ * @param {Veritabani} vt @param {string} id
+ */
+export function senaryoGecmisi(vt, id) {
+  acikAnahtar(vt);
+  const ortamAdlari = new Map();
+  const kayitlar = degisiklikGecmisiListele(vt, 'senaryo', id);
+  const projeId = kayitlar.map((k) => k.sonraki?.proje_id ?? k.onceki?.proje_id).find((x) => typeof x === 'string');
+  if (typeof projeId === 'string') for (const o of ortamlariListele(vt, projeId)) ortamAdlari.set(o.id, o.ad);
+  /** @param {Nesne | null} satir */
+  const icerikOku = (satir) => {
+    if (!satir || typeof satir.icerik_json !== 'string') return null;
+    try { return /** @type {Nesne} */ (JSON.parse(satir.icerik_json)); } catch { return null; }
+  };
+  return kayitlar.map((k) => {
+    /** @type {string[]} */
+    const degisenler = [];
+    const once = k.onceki;
+    const sonra = k.sonraki;
+    if (once && sonra) {
+      if (once.baslik !== sonra.baslik) degisenler.push(`Başlık: "${once.baslik}" → "${sonra.baslik}"`);
+      if (once.kosuya_dahil !== sonra.kosuya_dahil) degisenler.push(`Koşuda: ${once.kosuya_dahil === 1 ? 'açık' : 'kapalı'} → ${sonra.kosuya_dahil === 1 ? 'açık' : 'kapalı'}`);
+      const a = icerikOku(once);
+      const b = icerikOku(sonra);
+      if (a && b) {
+        const oa = ortamKimlikleri(a);
+        const ob = ortamKimlikleri(b);
+        const eklenen = ob.filter((o) => !oa.includes(o)).map((o) => ortamAdlari.get(o) ?? o);
+        const cikan = oa.filter((o) => !ob.includes(o)).map((o) => ortamAdlari.get(o) ?? o);
+        if (eklenen.length) degisenler.push(`Ortam eklendi: ${eklenen.join(', ')}`);
+        if (cikan.length) degisenler.push(`Ortamdan çıkarıldı: ${cikan.join(', ')}`);
+        /** @type {Set<string>} */
+        const alanlar = new Set();
+        for (const o of ob.filter((x) => oa.includes(x))) {
+          const va = ortamVerisi(vt, a, o) ?? {};
+          const vb = ortamVerisi(vt, b, o) ?? {};
+          for (const ad of new Set([...Object.keys(va), ...Object.keys(vb)])) {
+            if (ad === 'baslik') continue;
+            if (JSON.stringify(va[ad]) !== JSON.stringify(vb[ad])) alanlar.add(ad);
+          }
+        }
+        if (alanlar.size) degisenler.push(`Değişen alanlar: ${[...alanlar].join(', ')}`);
+        if (JSON.stringify(a.alanKurallari ?? null) !== JSON.stringify(b.alanKurallari ?? null)) degisenler.push('"Mutlaka görünmeli" alanları değişti');
+      }
+    }
+    return {
+      id: k.id, zaman: k.zaman, islem: k.islem, yapan: k.yapan, makineId: k.makineId, aciklama: k.aciklama,
+      baslik: String((sonra ?? once)?.baslik ?? ''), degisenler
+    };
+  }).reverse();
+}
+
+// ---------------------------------------------------------------------------------------
+// Koşu hedefi (UUID → dosya + güncel başlık) ve "Dene" paketi
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Senaryo kimliğini çalıştırılacak Playwright testine çözer: içerikteki kaynak (dosya + GÜNCEL
+ * test başlığı; yoksa aktarım eşlemesindeki "<dosya>::<başlık>") ve ortamın çalıştırıcı anahtarı.
+ * Kasa gerekmez (kaynak ve eşlemeler açık metindir).
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} senaryoId @param {unknown} ortamId
+ */
+export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId) {
+  if (typeof senaryoId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(senaryoId)) throw new DepoHatasi('Geçersiz senaryo kimliği.');
+  if (typeof ortamId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(ortamId)) throw new DepoHatasi('Geçersiz ortam.');
+  const s = senaryoGetir(vt, senaryoId);
+  if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+  let kaynak = senaryoKaynagi(s.icerik);
+  if (!kaynak) {
+    const e = kaynakEslemeleriniListele(vt, projeId, 'senaryo').find((x) => x.varlikId === s.id);
+    const i = e ? e.kaynakAnahtari.indexOf('::') : -1;
+    if (e && i > 0) kaynak = { dosya: e.kaynakAnahtari.slice(0, i), ad: e.kaynakAnahtari.slice(i + 2) };
+  }
+  if (!kaynak) throw new DepoHatasi(`"${s.baslik}" senaryosunun test dosyası bilinmiyor; çalıştırılamaz.`);
+  if (!ortamKimlikleri(s.icerik).includes(ortamId)) throw new DepoHatasi(`"${s.baslik}" seçilen ortamda tanımlı değil.`);
+  const ortamAnahtari = ortamAnahtariBul(vt, projeId, ortamId);
+  if (!ortamAnahtari) throw new DepoHatasi('Seçilen ortam test çalıştırıcısına eşlenmemiş (proje dosyalarından aktarılmış bir ortam olmalı).');
+  return { senaryoId: s.id, baslik: s.baslik, dosya: kaynak.dosya, ad: kaynak.ad, ortamAnahtari, ekranId: s.ekranId };
+}
+
+/**
+ * "Dene" (deneme koşusu) paketi: taslak senaryo modelle doğrulanır ve GEÇİCİ bir başlıkla, testlerin
+ * kalıcı veriye eklediği bir "ek veri" (overlay) nesnesi olarak döner. Veritabanına YAZILMAZ.
+ * @param {Veritabani} vt
+ * @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null }} girdi
+ * @param {{ adaptor?: AktarimAdaptoru | null; geciciEk: string }} secenekler geciciEk: geçici başlığın rastgele son eki
+ */
+export function denemePaketiOlustur(vt, girdi, secenekler) {
+  acikAnahtar(vt);
+  const ekran = ekranGetir(vt, girdi.projeId, girdi.ekranId);
+  const mb = modelBaglami(vt, ekran.id);
+  if (!mb) throw new DepoHatasi('Bu ekranın modeli yok; deneme yapılamaz.');
+  if (!nesneMi(girdi.veri)) throw new DepoHatasi('"veri" bir nesne olmalıdır.');
+  const mevcut = girdi.id ? senaryoGetir(vt, girdi.id) : undefined;
+  const kaynakVeri = mevcut && veriGudumluMu(mevcut.icerik) && senaryoKaynagi(mevcut.icerik)
+    ? { spec: /** @type {{ dosya: string }} */ (senaryoKaynagi(mevcut.icerik)).dosya, dosya: String(/** @type {Nesne} */ (mevcut.icerik.veri).dosya), yol: String(/** @type {Nesne} */ (mevcut.icerik.veri).yol) }
+    : ekranVeriKaynagi(vt, girdi.projeId, ekran, secenekler.adaptor);
+  if (!kaynakVeri) throw new DepoHatasi('Bu ekran için senaryo verisi kaynağı bilinmiyor; deneme yapılamaz.');
+  const ortamAnahtari = ortamAnahtariBul(vt, girdi.projeId, girdi.ortamId);
+  if (!ortamAnahtari) throw new DepoHatasi('Seçilen ortam test çalıştırıcısına eşlenmemiş.');
+  const ortamlar = ortamlariListele(vt, girdi.projeId);
+  const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
+  const geciciBaslik = `${DENEME_BASLIK_ON_EKI}${secenekler.geciciEk}`;
+  const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: geciciBaslik }, [girdi.ortamId], secenekler.adaptor,
+    new Map(ortamlar.map((o) => [o.id, o.ad])));
+  return {
+    ortamAnahtari, spec: kaynakVeri.spec, geciciBaslik, uyarilar: d.uyarilar,
+    ekVeri: { ortam: ortamAnahtari, ekVeriler: [{ dosya: kaynakVeri.dosya, yol: kaynakVeri.yol.split('.'), ogeler: [d.veri] }] }
+  };
+}

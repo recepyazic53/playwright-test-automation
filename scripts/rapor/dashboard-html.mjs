@@ -34,7 +34,7 @@ function istemciBetiginiOku() {
 
 // Görünüm üreticisinin sürümü: test sunucusu diskteki dashboard-<ortam>.html bu işareti
 // taşımıyorsa (eski, Allure dönemi üretimi) sayfayı sunmadan önce yeniden üretir.
-export const GORUNUM_SURUMU = '2-sonuclar-platformda';
+export const GORUNUM_SURUMU = '3-senaryolar-platformda';
 const SONUC_NOTU = 'Sonuçlar artık Sonuçlar sekmesinde';
 
 // veri: urun-hata-raporu.mjs'deki VERI nesnesi (başlıktaki etiket/üretim zamanı için);
@@ -100,7 +100,7 @@ ${stilOku()}</style>
         <h1 id="anaBaslik">Genel Bakış</h1>
         <div class="alt-baslik">Üretim: ${escapeHtml(veri.uretimZamani)}</div>
       </div>
-      <button type="button" id="senaryoOlusturButonu" class="senaryo-olustur-buton" style="display:none">+ Senaryo Oluştur</button>
+      <button type="button" id="senaryoOlusturButonu" class="senaryo-olustur-buton" style="display:none" title="Eski düzenleyici (dosyalara yazar; kaldırılacak) — platformdaki Senaryolar sekmesini kullanın">+ Senaryo Oluştur (eski)</button>
     </div>
 
     <div class="kart sonuc-tasindi-notu" role="note" style="margin-bottom:16px">

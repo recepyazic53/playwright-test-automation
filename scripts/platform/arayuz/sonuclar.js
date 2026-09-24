@@ -167,12 +167,12 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
           basarisizSayisi ? rozet([ikon('uyari'), `${basarisizSayisi} başarısız`], 'hata') : kart ? rozet([ikon('onay'), 'hepsi geçti'], 'basari') : null),
         h('div', { class: 'meta' }, meta)),
       h('div', { class: 'eylemler' }, aralikSegmenti,
-        h('a', { class: 'dugme birincil', href: '#/gorunum', title: 'Koşular şimdilik Mevcut görünümden başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),
+        h('a', { class: 'dugme birincil', href: urun && !urun.startsWith('ad:') ? `#/senaryolar/u/${encodeURIComponent(urun)}` : '#/senaryolar', title: 'Senaryolar ekranında onayla başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),
     kartAlani, izgara,
     h('div', { class: 'sonuc-sutunu alt-bolumler' }, kosuGecmisi(ozet.kosuGecmisi, urun), kalipAlani));
   ciz();
   hataKaliplariBolumu(kalipAlani, proje, urun, (id) => panel.ac(id, true));
-  if (sonKosuId) basarisizTestler(degisimAlani, ozet.kosuGecmisi, sonKosuId, urun, panel);
+  if (sonKosuId) basarisizTestler(degisimAlani, ozet.kosuGecmisi, sonKosuId, urun, panel, proje);
 }
 
 /** Segment denetimi (aria-pressed düğmeler). */
@@ -351,7 +351,7 @@ function trendGrafigi(noktalar, kap) {
 
 const senaryoKimligi = (x) => x.senaryoAnahtari || `${x.urunAnahtari || x.urun}::${x.senaryoBaslik}`;
 
-async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel) {
+async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel, proje) {
   const tamlar = kosuGecmisi.filter((k) => k.tur === 'tam');
   const sira = tamlar.findIndex((k) => k.id === sonKosuId);
   const hedefler = (sira >= 0 ? tamlar.slice(sira, sira + 9) : [kosuGecmisi.find((k) => k.id === sonKosuId)]).filter(Boolean);
@@ -379,10 +379,33 @@ async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel) {
   const siralama = { yeni: 0, tekrar: 1, duzeldi: 2 };
   satirlar.sort((a, b) => siralama[a.tur] - siralama[b.tur] || b.seri - a.seri);
   const basarisizlar = satirlar.filter((r) => r.tur !== 'duzeldi');
-  const yenidenCalistir = h('button', {
-    type: 'button', class: 'kucuk-dugme', 'aria-disabled': 'true', title: 'Senaryolar ekranıyla gelecek',
-    onclick: () => bildir('Yalnızca başarısızları tekrar çalıştırma Senaryolar ekranıyla gelecek. Şimdilik Mevcut görünümdeki ▷ düğmelerini kullanın.')
-  }, ikon('yenile'), 'Yalnızca başarısızları tekrar çalıştır');
+  // "Yalnızca başarısızları tekrar çalıştır": başarısız sonuçların senaryo KİMLİKLERİ (UUID) son koşunun
+  // ortamında, Senaryolar ekranıyla aynı onay penceresi ve canlı panel üzerinden (kısmi koşu) çalışır.
+  const yenidenCalistir = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('yenile'), 'Yalnızca başarısızları tekrar çalıştır');
+  yenidenCalistir.addEventListener('click', async () => {
+    const gorulen = new Set();
+    const hedefler = satirlar.filter((r) => r.tur !== 'duzeldi' && r.x.senaryoId && !gorulen.has(r.x.senaryoId) && gorulen.add(r.x.senaryoId))
+      .map((r) => ({ id: r.x.senaryoId, baslik: r.x.senaryoBaslik, ekranAdi: r.x.urun }));
+    const baglanamayan = satirlar.filter((r) => r.tur !== 'duzeldi' && !r.x.senaryoId).length;
+    if (!hedefler.length) { bildir('Başarısız sonuçlar platformdaki bir senaryoya bağlı değil; Senaryolar ekranından çalıştırın.', 'hata'); return; }
+    try {
+      const [{ kosuOnayi, kosuBaslat }, { ortamlar }] = await Promise.all([
+        import('./kosu-paneli.js'), api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
+      ]);
+      const ortamId = detaylar[0] && detaylar[0].kosu ? detaylar[0].kosu.ortamId : null;
+      const ortam = ortamlar.find((o) => o.id === ortamId) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
+      if (!ortam) { bildir('Projede ortam yok.', 'hata'); return; }
+      const onay = await kosuOnayi({
+        baslik: 'Başarısızları tekrar çalıştır?', senaryolar: hedefler, ortam, tur: 'tekil', esZamanli: false,
+        not: `Son koşuda başarısız olan senaryolar ${ortam.ad} ortamında sırayla, kısmi (tekil) koşu olarak çalışır.${baglanamayan ? ` ${baglanamayan} sonuç bir senaryoya bağlı olmadığı için dahil edilmedi.` : ''}`
+      });
+      if (!onay) return;
+      kosuBaslat({ projeId: proje.id, ortam, senaryolar: hedefler, tur: 'tekil', esZamanli: false, baslik: 'Başarısızlar (tekrar)' });
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      bildir(e.message, 'hata');
+    }
+  });
   const liste = h('ul', { class: 'degisim-listesi' });
   const fazlasi = [];
   const ogeler = new Map();

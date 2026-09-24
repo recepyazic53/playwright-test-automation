@@ -260,13 +260,14 @@ export function kosuDetayi(vt, kosuId) {
   const k = vt.tek('SELECT id, proje_id, ortam_id, tur, kapsam, durum, baslangic, bitis, kaynak FROM kosular WHERE id = ?', [kosuId]);
   if (!k) return null;
   const sonuclar = vt.tumu(
-    `SELECT r.id, r.senaryo_baslik, r.senaryo_anahtari, r.durum, r.ham_durum, r.sure_ms, r.hata_kategorisi, r.hata_kalibi,
+    `SELECT r.id, r.senaryo_id, r.senaryo_baslik, r.senaryo_anahtari, r.durum, r.ham_durum, r.sure_ms, r.hata_kategorisi, r.hata_kalibi,
             r.ekran_id, r.urun_adi, e.ad AS ekran_adi, r.baslangic, r.bitis, r.deneme,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu') AS ekran_goruntusu_sayisi,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'video' AND m.silinme IS NULL) AS video_sayisi
        FROM kosu_sonuclari r LEFT JOIN ekranlar e ON e.id = r.ekran_id WHERE r.kosu_id = ? ORDER BY r.rowid`, [kosuId]
   ).map((s) => ({
-    id: String(s.id), senaryoBaslik: String(s.senaryo_baslik), senaryoAnahtari: s.senaryo_anahtari == null ? null : String(s.senaryo_anahtari),
+    id: String(s.id), senaryoId: s.senaryo_id == null ? null : String(s.senaryo_id),
+    senaryoBaslik: String(s.senaryo_baslik), senaryoAnahtari: s.senaryo_anahtari == null ? null : String(s.senaryo_anahtari),
     durum: String(s.durum), hamDurum: s.ham_durum == null ? null : String(s.ham_durum), sureMs: s.sure_ms == null ? null : Number(s.sure_ms),
     hataKategorisi: s.hata_kategorisi == null ? null : String(s.hata_kategorisi), hataKalibi: s.hata_kalibi == null ? null : String(s.hata_kalibi),
     urun: s.ekran_adi != null ? String(s.ekran_adi) : s.urun_adi != null ? String(s.urun_adi) : 'Diğer', urunAnahtari: urunAnahtari(s),

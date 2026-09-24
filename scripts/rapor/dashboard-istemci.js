@@ -2430,6 +2430,7 @@
         '<div class="senaryo-form-alan"><label class="senaryo-form-checkbox"><input type="checkbox" id="sof_duzenleKosuyaDahil" /> Koşuya dahil</label></div>';
     }
     icerikAlani.innerHTML =
+      '<p class="modal-alt eski-duzenleyici-notu" role="note"><strong>Eski düzenleyici</strong> — yalnızca proje DOSYALARINA yazar ve kaldırılacak. Senaryoları platformdaki <strong>Senaryolar</strong> sekmesinden oluşturup düzenleyin (veritabanı).</p>' +
       (duzenlemeMi
         ? '<p class="modal-baslik">JetSeyahat — Senaryoyu Düzenle</p>' +
           '<p class="modal-alt">Değiştirmek istediğiniz alanları düzenleyin. "Senaryoyu Koş" ile deneyebilir ya da doğrudan "Değişiklikleri Kaydet" diyebilirsiniz.</p>'
@@ -3334,6 +3335,7 @@
     var icerikAlani = document.getElementById('senaryoDuzenleModalIcerik');
     icerikAlani.innerHTML =
       '<p class="modal-baslik" id="senaryoDuzenleModalBaslik">' + escapeHtml(senaryo.urun) + ' — Senaryoyu Düzenle</p>' +
+      '<p class="modal-alt eski-duzenleyici-notu" role="note"><strong>Eski düzenleyici</strong> — yalnızca proje DOSYALARINA yazar ve kaldırılacak. Senaryoları platformdaki <strong>Senaryolar</strong> sekmesinden oluşturup düzenleyin (veritabanı).</p>' +
       '<dl class="senaryo-duzenle-ozet">' +
         '<dt>Ürün</dt><dd>' + escapeHtml(senaryo.urun) + '</dd>' +
         '<dt>Dosya</dt><dd>' + escapeHtml(senaryo.dosya) + '</dd>' +

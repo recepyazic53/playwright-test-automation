@@ -426,10 +426,26 @@ function loadData<T>(environment: EnvironmentName, fileName: string): T {
       throw new Error(`Platform veritabanında "${environment}/${fileName}" verisi yok. Proje dosyalarını yeniden aktarın ` +
         'ya da PLATFORM_VERI_KAYNAGI=dosya ile dosyalardan çalıştırın.');
     }
-    return structuredClone(veri) as T;
+    return ekVerileriUygula(environment, fileName, structuredClone(veri)) as T;
   }
   const filePath = resolve(process.cwd(), 'tests', 'data', environment, `${fileName}.json`);
-  return JSON.parse(readFileSync(filePath, 'utf-8')) as T;
+  return ekVerileriUygula(environment, fileName, JSON.parse(readFileSync(filePath, 'utf-8'))) as T;
+}
+
+// Platform > Senaryolar > "Dene" (genel): ek veri dosyasındaki "ekVeriler" girdileri, ilgili veri
+// dosyasındaki dizinin (yol) SONUNA eklenir — deneme senaryosu kalıcı veriye hiç yazılmaz.
+function ekVerileriUygula(environment: EnvironmentName, fileName: string, veri: unknown): unknown {
+  const ek = ekSenaryoDosyasiniOku(environment);
+  for (const e of ek?.ekVeriler ?? []) {
+    if (e.dosya !== fileName || !Array.isArray(e.yol) || !e.yol.length || !Array.isArray(e.ogeler)) continue;
+    let hedef: unknown = veri;
+    for (const k of e.yol.slice(0, -1)) hedef = typeof hedef === 'object' && hedef !== null ? (hedef as Record<string, unknown>)[k] : undefined;
+    const son = e.yol[e.yol.length - 1];
+    const dizi = typeof hedef === 'object' && hedef !== null ? (hedef as Record<string, unknown>)[son] : undefined;
+    if (!Array.isArray(dizi)) throw new Error(`Ek veri yolu bulunamadı: ${fileName} > ${e.yol.join('.')}`);
+    (hedef as Record<string, unknown>)[son] = [...dizi, ...e.ogeler];
+  }
+  return veri;
 }
 
 // Dashboard > "Senaryo Oluştur" > "Dene" akışı (bkz. scripts/test-sunucu.mjs >
@@ -445,6 +461,8 @@ type EkSenaryoDosyasi = {
   ortam: EnvironmentName;
   jetSeyahatSenaryolari?: JetSeyahatSenaryosu[];
   kullaniciDegistir?: Record<string, AcenteProfili>;
+  // Genel biçim (platform > Senaryolar > "Dene"): veri dosyası + dizi yolu + eklenecek öğeler.
+  ekVeriler?: Array<{ dosya: string; yol: string[]; ogeler: unknown[] }>;
 };
 
 // Ek senaryo dosyası tanımlıysa ve BU ortama aitse okunur; aksi halde undefined döner.

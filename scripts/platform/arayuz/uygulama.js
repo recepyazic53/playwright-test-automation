@@ -3,10 +3,12 @@
 //                         Mevcut proje dosyalarını aktar)
 //   kasa var, kilitli   → Kilit ekranı (yanlış parolada bekleme geri sayımı)
 //   kasa açık, proje yok → Yeni proje sihirbazı (proje adımından)
-//   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici, Sonuçlar | Senaryolar* |
+//   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici, Sonuçlar | Senaryolar |
 //                         Ekranlar* | Mevcut görünüm | Ayarlar, hızlı arama*, sunucu durumu, tema,
 //                         Kilitle) + sol panel + içerik. (* = yakında; bağlantı değildir.)
-//                         (#/sonuclar[/...], #/gorunum, #/ayarlar/<bölüm>)
+//                         (#/sonuclar[/...], #/senaryolar[/...], #/gorunum, #/ayarlar/<bölüm>)
+// Senaryolar ekranı ayrı modüllerde (senaryolar.js, senaryo-formu.js, kosu-paneli.js) ve DİNAMİK
+// yüklenir: sunucu bu dosyaları henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
   MARKA, adresGecerliMi, alan, alanHatasi, api, bildir, geriSayim, h, ikon, iskelet, logo, mesajKutusu, mesgulIken,
   parolaAlani, s, temaDugmesi
@@ -482,6 +484,7 @@ function projeSecici() {
 function anaDuzen() {
   const main = anaAlan('ana-icerik');
   const navSonuclar = h('a', { href: '#/sonuclar' }, ikon('grafik'), 'Sonuçlar');
+  const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar');
   const navGorunum = h('a', { href: '#/gorunum' }, ikon('gorunum'), 'Mevcut görünüm');
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
   const yakinda = (ikonAd, metin) => h('span', { class: 'nav-pasif', 'aria-disabled': 'true', title: `${metin}: yakında` },
@@ -499,7 +502,7 @@ function anaDuzen() {
   const ust = h('header', { class: 'ust-cubuk' },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, yakinda('liste', 'Senaryolar'), yakinda('ekran', 'Ekranlar'), navGorunum, navAyarlar),
+    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, yakinda('ekran', 'Ekranlar'), navGorunum, navAyarlar),
     h('span', { class: 'bosluk' }),
     arama, sunucu, temaDugmesi(), kilitle);
   ekran(ust, main);
@@ -507,8 +510,14 @@ function anaDuzen() {
   const ciz = () => {
     const hash = location.hash || '#/sonuclar';
     const [, bolum, alt, ...kalan] = hash.split('/');
-    for (const n of [navSonuclar, navGorunum, navAyarlar]) n.removeAttribute('aria-current');
-    if (bolum === 'sonuclar' || !['ayarlar', 'gorunum'].includes(bolum)) {
+    for (const n of [navSonuclar, navSenaryolar, navGorunum, navAyarlar]) n.removeAttribute('aria-current');
+    if (bolum === 'senaryolar') {
+      navSenaryolar.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sayfaBasligi('Senaryolar');
+      senaryolarModulu().then((m) => m.senaryolarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
+        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Senaryolar ekranı yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+    } else if (bolum === 'sonuclar' || !['ayarlar', 'gorunum'].includes(bolum)) {
       navSonuclar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Sonuçlar');
@@ -544,6 +553,11 @@ function anaDuzen() {
   ciz();
 }
 
+/** Senaryolar modülü (bir kez yüklenir). */
+let senaryolarSozu = null;
+const senaryolarModulu = () => (senaryolarSozu ??= import('./senaryolar.js').catch((e) => { senaryolarSozu = null; throw e; }));
+const mesajKutusuHata = (metin) => h('div', { class: 'not-kutusu hata', role: 'alert' }, metin);
+
 function mevcutGorunum(main) {
   let ortam = 'test';
   try { ortam = localStorage.getItem('platform.gorunumOrtami') === 'canli' ? 'canli' : 'test'; } catch { /* yok sayılır */ }
@@ -567,7 +581,7 @@ function mevcutGorunum(main) {
   main.replaceChildren(
     h('h1', { class: 'gorunmez' }, 'Mevcut görünüm'),
     h('div', { class: 'gorunum-cubugu' }, alan('Ortam', secim), yenile, yeniSekme,
-      h('span', { class: 'cok-soluk kucuk' }, 'Eski dashboard: senaryo listesi ve ▷ çalıştırma buradan sürer.'), durumMetni),
+      h('span', { class: 'cok-soluk kucuk' }, 'Eski görünüm (kaldırılacak): senaryolar artık Senaryolar sekmesinde; buradaki oluştur/düzenle eski dosyalara yazar.'), durumMetni),
     cerceve);
   yukle(false);
 }

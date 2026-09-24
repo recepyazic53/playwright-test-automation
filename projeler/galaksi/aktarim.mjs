@@ -28,6 +28,8 @@ import { kaynakEslemeleriniListele, girisProfiliGetir, ortamGetir, ekranAyarlari
 import { coz, zarfMi } from '../../scripts/platform/kasa.mjs';
 import { AktarimHatasi, icerikOzeti, kanonik, zarflariCoz } from '../../scripts/platform/aktarim/motor.mjs';
 import { playwrightTestleriniListele } from '../../scripts/platform/aktarim/playwright-liste.mjs';
+import { senaryoKaynakAnahtari } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
+import { ortakBaglaminiOlustur } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
 
 /** @typedef {import('../../scripts/platform/veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('../../scripts/platform/aktarim/motor.d.mts').AktarimPaketi} AktarimPaketi */
@@ -443,8 +445,13 @@ export async function paketOlustur(projeKoku, secenekler = {}) {
  * @param {Veritabani} vt @param {string} projeId
  */
 export function kosudanHaricAnahtarlar(vt, projeId) {
-  const haric = new Set(vt.tumu('SELECT id FROM senaryolar WHERE proje_id = ? AND kosuya_dahil = 0', [projeId]).map((s) => String(s.id)));
-  return kaynakEslemeleriniListele(vt, projeId, 'senaryo').filter((e) => haric.has(e.varlikId)).map((e) => e.kaynakAnahtari);
+  // Anahtar senaryonun GÜNCEL kaynağından (dosya + test başlığı) gelir — platformda oluşturulan ya da
+  // başlığı değiştirilen veri güdümlü senaryolar da doğru anahtarla hariç tutulur; kaynağı olmayan
+  // eski satırlarda aktarım eşlemesindeki anahtar kullanılır.
+  const eslemeler = new Map(kaynakEslemeleriniListele(vt, projeId, 'senaryo').map((e) => [e.varlikId, e.kaynakAnahtari]));
+  return vt.tumu('SELECT id, icerik_json FROM senaryolar WHERE proje_id = ? AND kosuya_dahil = 0', [projeId])
+    .map((s) => senaryoKaynakAnahtari(JSON.parse(String(s.icerik_json))) ?? eslemeler.get(String(s.id)) ?? null)
+    .filter((a) => typeof a === 'string');
 }
 
 /**
@@ -549,8 +556,9 @@ export function yenidenKur(vt, projeId, ortamAnahtari) {
     const icerik = /** @type {Nesne} */ (JSON.parse(String(s.icerik_json)));
     const buOrtam = nesneMi(icerik.ortamlar) ? icerik.ortamlar[ortamId] : undefined;
     if (!nesneMi(buOrtam)) continue;
-    const kaynak = nesneMi(icerik.kaynak) ? icerik.kaynak : undefined;
-    const eskiAnahtar = senaryoEslemesi.get(String(s.id)) ?? (kaynak ? `${kaynak.dosya}::${kaynak.ad}` : undefined);
+    // Güncel kaynak (dosya + test başlığı) önceliklidir: platformda başlığı değişen senaryonun
+    // kimliği yeni başlıkla eşleşir. Kaynağı olmayan eski satırlarda aktarım eşlemesi kullanılır.
+    const eskiAnahtar = senaryoKaynakAnahtari(icerik) ?? senaryoEslemesi.get(String(s.id));
     if (eskiAnahtar) senaryoKimlikleri[eskiAnahtar] = String(s.id);
     const veri = nesneMi(icerik.veri) ? icerik.veri : undefined;
     if (veri && 'veri' in buOrtam) {
@@ -595,6 +603,42 @@ export function sonucKaynaklari(projeKoku) {
     .filter((k) => existsSync(k.klasor));
 }
 
+// ---------------------------------------------------------------------------------------
+// 3) Platform "Senaryolar" ekranı için proje bilgisi
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Ekranın veri güdümlü senaryolarının kaynağı (yeni senaryo bu diziye eklenir): spec dosyası +
+ * veri dosyası + dizi yolu. Veri güdümlü olmayan ekranlarda null.
+ * @param {string} ekranAnahtari
+ */
+export function senaryoVeriKaynagi(ekranAnahtari) {
+  const k = SENARYO_VERI_KAYNAKLARI.find((x) => (/** @type {Record<string, string>} */ (DOSYA_EKRANI)[x.dosya] ?? x.dosya) === ekranAnahtari);
+  return k ? { spec: k.spec, dosya: k.dosya, yol: k.yol.join('.') } : null;
+}
+
+/**
+ * Ekran modellerindeki profil havuzu yolları ("eslesme.profilHavuzu") → platform profilleri:
+ * bağlam profili türü ya da test verisi türü (ortak.json bölümlerinin aktarıldığı yerler).
+ * @returns {Record<string, { tur: 'baglam' | 'testVerisi'; ad: string }>}
+ */
+export function profilHavuzlari() {
+  /** @type {Record<string, { tur: 'baglam' | 'testVerisi'; ad: string }>} */
+  const sonuc = { [`ortak.${BAGLAM_BOLUMU.yol.join('.')}`]: { tur: 'baglam', ad: BAGLAM_BOLUMU.tur } };
+  for (const b of VERI_BOLUMLERI) if (!('tekil' in b)) sonuc[`ortak.${b.yol.join('.')}`] = { tur: 'testVerisi', ad: b.tur };
+  return sonuc;
+}
+
+/**
+ * Tek doğrulayıcının "ortak" bağlamı (profil havuzları, bağlam kodları, ortak kart) — veritabanından,
+ * testlerin gördüğü ortak.json ile AYNI şekilde kurulur. Kasa açık olmalıdır. Ortam yoksa undefined.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamAnahtari
+ */
+export function dogrulamaBaglami(vt, projeId, ortamAnahtari) {
+  const veri = yenidenKur(vt, projeId, ortamAnahtari);
+  return veri ? /** @type {Nesne} */ (ortakBaglaminiOlustur(veri.ortak)) : undefined;
+}
+
 /** @type {import('../index.d.mts').AktarimAdaptoru} */
 export const galaksiAdaptoru = Object.freeze({
   ad: ADAPTOR_ADI,
@@ -606,5 +650,8 @@ export const galaksiAdaptoru = Object.freeze({
   kosuListesiOzeti,
   kosudanHaricAnahtarlar,
   yenidenKur,
-  sonucKaynaklari
+  sonucKaynaklari,
+  senaryoVeriKaynagi,
+  profilHavuzlari,
+  dogrulamaBaglami
 });

@@ -186,6 +186,13 @@ export function h(etiket, ozellikler, ...cocuklar) {
   return el;
 }
 
+/** replaceChildren'ın null/false/dizi güvenli karşılığı (h() ile aynı kurallar). */
+export function yerlestir(el, ...cocuklar) {
+  el.replaceChildren();
+  ekle(el, cocuklar);
+  return el;
+}
+
 function ekle(el, cocuklar) {
   for (const c of cocuklar) {
     if (c === null || c === undefined || c === false) continue;

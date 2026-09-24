@@ -656,6 +656,7 @@
   .modal-kapat:hover { border-color: var(--accent); color: var(--accent); }
   .modal-baslik { font-size: 14.5px; font-weight: 700; margin: 0 0 4px; padding-right: 30px; }
   .modal-alt { font-size: 12.5px; color: var(--text-muted); margin: 0 0 14px; }
+  .eski-duzenleyici-notu { color: var(--text-primary); background: rgba(245, 184, 61, .14); border: 1px solid rgba(245, 184, 61, .45); border-radius: 8px; padding: 8px 10px; margin: 0 30px 12px 0; }
 
   /* Ekran görüntüsü büyütme (lightbox): "Bu kalıp/adım için ekran görüntüsü" küçük resimlerine
      tıklanınca resmi ortalayıp büyük gösteren ayrı bir modal. */

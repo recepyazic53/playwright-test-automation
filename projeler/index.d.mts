@@ -34,6 +34,12 @@ export interface AktarimAdaptoru {
   yenidenKur(vt: Veritabani, projeId: string, ortamAnahtari: string): YenidenKurulanVeri | null;
   /** Eski koşu sonucu klasörleri (Allure ham sonuçları) — tek seferlik içe aktarım için. */
   sonucKaynaklari?(projeKoku: string): Array<{ ortam: string; klasor: string }>;
+  /** Senaryolar ekranı: ekranın veri güdümlü senaryo kaynağı (yeni senaryo bu diziye eklenir). */
+  senaryoVeriKaynagi?(ekranAnahtari: string): { spec: string; dosya: string; yol: string } | null;
+  /** Senaryolar ekranı: model "profilHavuzu" yolu → platform profil türü. */
+  profilHavuzlari?(): Record<string, { tur: 'baglam' | 'testVerisi'; ad: string }>;
+  /** Senaryolar ekranı: tek doğrulayıcının "ortak" bağlamı (kasa açık olmalı). */
+  dogrulamaBaglami?(vt: Veritabani, projeId: string, ortamAnahtari: string): Record<string, unknown> | undefined;
 }
 
 export declare const AKTARIM_ADAPTORLERI: ReadonlyArray<AktarimAdaptoru>;
