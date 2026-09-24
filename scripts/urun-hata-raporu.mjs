@@ -757,7 +757,15 @@ try {
   console.warn(`[urun-hata-raporu] tests/data/kosu-listesi.json okunamadı, tüm senaryolar koşuya dahil gösterilecek: ${hata.message}`);
 }
 const tumSenaryolar = tumSenaryolarHam
-  .map((s) => ({ ad: s.ad, urun: s.urun, dosya: s.dosya, dahil: !haricTutulanAnahtarlar.has(kosuListesiAnahtari(s.dosya, s.ad)) }))
+  .map((s) => ({
+    ad: s.ad,
+    urun: s.urun,
+    dosya: s.dosya,
+    dahil: !haricTutulanAnahtarlar.has(kosuListesiAnahtari(s.dosya, s.ad)),
+    // Spec'in "beklenenSonuc" annotation'ı (ör. "Ödeme", "Teklif", "Hata: Prim") — yalnızca
+    // bunu tanımlayan senaryolarda (şu an JetSeyahat) dolu; tabloda rozet olarak gösterilir.
+    ...(s.beklenenSonuc ? { beklenenSonuc: s.beklenenSonuc } : {})
+  }))
   .sort((a, b) => a.urun.localeCompare(b.urun, 'tr') || a.ad.localeCompare(b.ad, 'tr'));
 
 // Ürün listesi yalnızca koşu sonuçlarından değil, projede tanımlı senaryolardan da
@@ -767,9 +775,24 @@ const tumUrunler = [...new Set([...urunler, ...tumSenaryolar.map((s) => s.urun)]
   a.localeCompare(b, 'tr')
 );
 
+// "Senaryo Oluştur" > "Beklenen Sonuç > Başarılı akış" açıklaması, ödeme sonrası başarı
+// sayılan mesajları (jet-seyahat.json > kabulEdilenOdemeSonuclari) gösterir. Popup
+// açılınca /jetseyahat-yardimci-veri daha güncel listeyi getirir; bu değer, sunucu
+// kapalıyken de açıklamanın boş kalmaması içindir. Dosya okunamazsa rapor durmaz.
+let jetSeyahatKabulEdilenOdemeSonuclari = [];
+try {
+  const jetSeyahatVerisi = JSON.parse(
+    readFileSync(join(process.cwd(), 'tests', 'data', ortam, 'jet-seyahat.json'), 'utf-8')
+  );
+  jetSeyahatKabulEdilenOdemeSonuclari = jetSeyahatVerisi.jetSeyahat?.kabulEdilenOdemeSonuclari || [];
+} catch (hata) {
+  console.warn(`[urun-hata-raporu] jet-seyahat.json okunamadı, kabul edilen ödeme sonuçları gösterilmeyecek: ${hata.message}`);
+}
+
 const veri = {
   ortam,
   tumSenaryolar,
+  jetSeyahatKabulEdilenOdemeSonuclari,
   uretimZamani: new Date(uretimBaslangicMs).toLocaleString('tr-TR'),
   // Sayısal üretim anı (bkz. uretimBaslangicMs) — istemci, localStorage'daki bundan eski
   // dashboard koşularını atar (zaten bu rapordaki Allure sonuçlarında yer alıyorlar).
@@ -1113,6 +1136,12 @@ const html = `<!DOCTYPE html>
   .senaryo-form-radio-grup label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
   .senaryo-form-alt-blok { border: 1px dashed var(--border); border-radius: 9px; padding: 10px 12px; margin-top: 6px; }
   .senaryo-form-hata { color: var(--critical); font-size: 12.5px; margin: 6px 0; }
+  .beklenen-sonuc-yardim { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+  .beklenen-gorulen { display: grid; grid-template-columns: max-content 1fr; gap: 4px 10px; margin: 10px 0 6px; font-size: 12.5px; }
+  .beklenen-gorulen dt { font-weight: 700; color: var(--text-secondary); }
+  .beklenen-gorulen dd { margin: 0; overflow-wrap: anywhere; }
+  .rozet-beklenen { background: var(--accent-soft); color: var(--accent); }
+  .rozet-beklenen-hata { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
   .senaryo-form-buton-satir { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
   .senaryo-form-buton-satir button {
     font: inherit; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
@@ -1124,6 +1153,19 @@ const html = `<!DOCTYPE html>
   .toplu-onay-not { color: var(--text-secondary); font-size: 12.5px; }
   .senaryo-form-buton-satir button:disabled { opacity: 0.5; cursor: default; }
   .senaryo-form-alt-blok.gizli, .senaryo-form-alan.gizli { display: none; }
+  /* "Ödeme bilgileri" (kart numarası/CVV maskeli; "göster" ile açılır) */
+  .senaryo-form-alan input[type="password"] {
+    font: inherit; font-size: 12.5px; width: 100%; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--page-plane); color: var(--text-primary); box-sizing: border-box;
+  }
+  .odeme-bilgileri-baslik { margin: 0 0 4px; font-size: 12.5px; font-weight: 700; color: var(--text-secondary); }
+  .odeme-maskeli-satir { display: flex; gap: 6px; align-items: center; }
+  .odeme-maskeli-satir input { flex: 1; min-width: 0; }
+  .odeme-goster-buton {
+    font: inherit; font-size: 11.5px; font-weight: 700; padding: 6px 9px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--page-plane); color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+  }
+  .odeme-canli-uyari { margin: 4px 0 8px; font-size: 12px; color: var(--critical); font-weight: 700; }
 
   /* Koşu geçmişi tablosu sayfalama */
   .sayfalama { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 12px 16px; background: var(--surface-2); border-top: 1px solid var(--gridline); font-size: 12.5px; color: var(--text-secondary); }
@@ -1196,6 +1238,27 @@ const html = `<!DOCTYPE html>
   }
   .kosu-listesi-bildirim.basarili { border-color: var(--good); color: var(--good); }
   .kosuya-dahil-soru { margin: 12px 0 6px; font-weight: 700; font-size: 12.5px; }
+
+  /* "Senaryolar" > "✎ Düzenle" düğmesi ve düzenleme popup'larındaki özet / uyarı alanları */
+  .senaryo-tablosu-duzenle-hucre { width: 84px; text-align: center; white-space: nowrap; }
+  .senaryo-duzenle-buton {
+    font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--page-plane); color: var(--text-secondary); cursor: pointer; white-space: nowrap;
+  }
+  .senaryo-duzenle-buton:hover, .senaryo-duzenle-buton:focus-visible { border-color: var(--accent); color: var(--accent); }
+  .senaryo-duzenle-ozet {
+    display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 8px 0 14px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 12.5px;
+  }
+  .senaryo-duzenle-ozet dt { font-weight: 700; color: var(--text-secondary); }
+  .senaryo-duzenle-ozet dd { margin: 0; overflow-wrap: anywhere; }
+  .senaryo-duzenle-uyari {
+    margin: 12px 0 0; padding: 10px 12px; border-radius: 9px; font-size: 12.5px; line-height: 1.45;
+    border: 1px solid var(--warning); background: color-mix(in srgb, var(--warning) 10%, transparent); color: var(--text-primary);
+  }
+  .senaryo-duzenle-uyari .senaryo-form-buton-satir { margin-top: 10px; }
+  .senaryo-duzenle-basarili { color: var(--good); font-weight: 700; font-size: 12.5px; margin: 10px 0 0; }
+  .senaryo-duzenle-basarili button { margin-left: 8px; }
   .senaryo-sonuc-video { max-width: 100%; border-radius: 9px; border: 1px solid var(--border); display: block; background: #000; }
   .hata-ornek-etiket { font-size: 12px; color: var(--text-muted); margin-top: 12px; margin-bottom: 2px; }
   .olasi-neden {
@@ -1613,6 +1676,7 @@ const html = `<!DOCTYPE html>
                 <th>Senaryo</th>
                 <th class="senaryo-tablosu-kosuda-hucre" title="Koşuya dahil mi? (Koşuyu başlat ve npm run test yalnızca dahil senaryoları koşar)">Koşuda</th>
                 <th class="num">Çalıştır</th>
+                <th class="senaryo-tablosu-duzenle-hucre">Düzenle</th>
               </tr>
             </thead>
             <tbody id="senaryoTablosuGovdesi"></tbody>
@@ -1678,6 +1742,14 @@ const html = `<!DOCTYPE html>
     <div class="modal-kutu genis">
       <button type="button" class="modal-kapat" id="senaryoOlusturModalKapatButonu" aria-label="Kapat">×</button>
       <div id="senaryoOlusturModalIcerik"></div>
+    </div>
+  </div>
+
+  <!-- "✎ Düzenle" — JetSeyahat dışındaki ürünler: salt okunur özet + "Koşuya dahil" -->
+  <div class="modal-ortu" id="senaryoDuzenleModalOrtu">
+    <div class="modal-kutu" role="dialog" aria-modal="true" aria-labelledby="senaryoDuzenleModalBaslik">
+      <button type="button" class="modal-kapat" id="senaryoDuzenleModalKapatButonu" aria-label="Kapat">×</button>
+      <div id="senaryoDuzenleModalIcerik"></div>
     </div>
   </div>
 
@@ -3105,6 +3177,20 @@ const html = `<!DOCTYPE html>
       .filter(function (anahtar) { return kosuyaDahilMi(anahtar) && !senaryoCalisiyorMu(anahtar); });
   }
 
+  // Senaryonun beklenen sonuç rozeti ("Ödeme", "Teklif", "Hata: Prim" ...) — kaynak,
+  // spec'in "beklenenSonuc" annotation'ı (bkz. test-sunucu.mjs > senaryolariListele).
+  // Annotation'ı olmayan ürünlerde rozet çizilmez.
+  function beklenenSonucRozetiHtml(etiket) {
+    if (!etiket) return '';
+    var hataMi = /^(Hata|Geçersiz)/.test(etiket);
+    var aciklama = hataMi
+      ? 'Beklenen sonuç: iş kuralı hatası (uyarı görünürse başarılı sayılır)'
+      : etiket === 'Teklif'
+        ? 'Beklenen sonuç: teklif oluşur, ödeme adımı koşulmaz'
+        : 'Beklenen sonuç: ödeme adımına kadar başarılı akış';
+    return ' <span class="rozet rozet-tekil ' + (hataMi ? 'rozet-beklenen-hata' : 'rozet-beklenen') + '" title="' + escapeHtml(aciklama) + '">' + escapeHtml(etiket) + '</span>';
+  }
+
   function senaryoTablosuCiz() {
     var govdeEl = document.getElementById('senaryoTablosuGovdesi');
     var tumu = VERI.tumSenaryolar || [];
@@ -3125,7 +3211,7 @@ const html = `<!DOCTYPE html>
     var sayfalamaAlani = document.getElementById('senaryoTablosuSayfalama');
 
     if (liste.length === 0) {
-      govdeEl.innerHTML = '<tr><td colspan="5"><div class="bos-durum">' +
+      govdeEl.innerHTML = '<tr><td colspan="6"><div class="bos-durum">' +
         (tumu.length === 0
           ? 'Senaryo listesi alınamadı — rapor üretilirken "npx playwright test --list" çalıştırılamamış olabilir (terminaldeki "npm run rapor:' + ORTAM + '" çıktısına bakın).'
           : 'Eşleşen senaryo bulunamadı.') +
@@ -3151,10 +3237,11 @@ const html = `<!DOCTYPE html>
         '<tr data-senaryo-ad="' + escapeHtml(s.ad) + '" data-senaryo-anahtar="' + escapeHtml(senaryoAnahtari(s)) + '"' + (dahilMi ? '' : ' class="senaryo-satir-haric"') + '>' +
         '<td class="senaryo-tablosu-secim-hucre"><input type="checkbox" class="senaryo-tablosu-secim-kutusu"' + (seciliMi ? ' checked' : '') + ' aria-label="Bu senaryoyu seç" /></td>' +
         '<td class="senaryo-tablosu-urun">' + escapeHtml(s.urun) + '</td>' +
-        '<td class="senaryo-tablosu-ad">' + escapeHtml(s.ad) + (dahilMi ? '' : ' <span class="rozet rozet-notr rozet-tekil" title="Koşu listesinde değil — Koşuyu başlat ve npm run test bu senaryoyu koşmaz">hariç</span>') + '</td>' +
+        '<td class="senaryo-tablosu-ad">' + escapeHtml(s.ad) + beklenenSonucRozetiHtml(s.beklenenSonuc) + (dahilMi ? '' : ' <span class="rozet rozet-notr rozet-tekil" title="Koşu listesinde değil — Koşuyu başlat ve npm run test bu senaryoyu koşmaz">hariç</span>') + '</td>' +
         '<td class="senaryo-tablosu-kosuda-hucre">' + kosudaHucresiHtml(senaryoAnahtari(s), s.ad) + '</td>' +
         // Çalışan satırlar (global CALISAN_SENARYOLAR) yeniden çizimde de spinner + Durdur gösterir.
         '<td class="senaryo-tablosu-calistir-hucre">' + senaryoTablosuCalistirHucresiHtml(senaryoAnahtari(s)) + '</td>' +
+        '<td class="senaryo-tablosu-duzenle-hucre"><button type="button" class="senaryo-duzenle-buton" data-senaryo-duzenle aria-label="Senaryoyu düzenle: ' + escapeHtml(s.ad) + '" title="Senaryoyu düzenle">✎ Düzenle</button></td>' +
         '</tr>'
       );
     }).join('');
@@ -3165,6 +3252,11 @@ const html = `<!DOCTYPE html>
     // ▷ tıklaması tbody üzerinde tek dinleyiciyle (delegation) yakalanır — hücreler
     // calisanSenaryoGorunumleriniGuncelle ile yerinde değiştirildiğinde de çalışsın diye.
     govdeEl.onclick = function (olay) {
+      var duzenleButonu = olay.target.closest('[data-senaryo-duzenle]');
+      if (duzenleButonu) {
+        senaryoDuzenleAc(duzenleButonu.closest('tr').getAttribute('data-senaryo-anahtar'));
+        return;
+      }
       var buton = olay.target.closest('[data-senaryo-tablosu-baslat]');
       if (!buton || buton.disabled) return;
       var anahtar = buton.closest('tr').getAttribute('data-senaryo-anahtar');
@@ -3708,6 +3800,10 @@ const html = `<!DOCTYPE html>
   // "Koşu geçmişi" statik anlık görüntü sınırlamasıyla aynı mimari kısıt.
   // ------------------------------------------------------------------------------
   var SENARYO_OLUSTUR_SON_SONUC = null; // Son "Senaryoyu Koş" denemesinin sonucu (kaydet adımında kullanılır).
+  // "✎ Düzenle" ile açıldıysa düzenleme durumu, "+ Senaryo Oluştur" ile açıldıysa null:
+  // { anahtar, eskiBaslik, getir (/senaryo-getir yanıtı), acente: { profil, kod, kullanici },
+  //   onaylananBaslik (başlık değişikliği uyarısının onaylandığı başlık) }.
+  var SENARYO_DUZENLE = null;
   // /jetseyahat-yardimci-veri'den gelen hazır profil listeleri (ettiren/sigortalı
   // dropdown'larını "tc1 (45520772518, 13.04.1998)" gibi etiketlerle doldurmak için) ve
   // "Çoklu" sorgu tipinde kullanılacak sabit Excel bilgisi. Modal her açıldığında tazelenir;
@@ -3718,6 +3814,17 @@ const html = `<!DOCTYPE html>
   // sunucunun döndüğü { dosyaYolu, dosyaAdi } burada tutulur; senaryoOlusturFormundanVeriTopla
   // bunu senaryo.cokluSorguDosyasi olarak gönderir. Modal her açıldığında sıfırlanır.
   var SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME = null;
+  // "Beklenen Sonuç > Başarılı akış" açıklamasındaki, ödeme sonrası başarı sayılan
+  // mesajlar: rapor üretilirken jet-seyahat.json'dan VERI'ye gömülür, popup açılınca
+  // /jetseyahat-yardimci-veri'den gelen güncel liste varsa onunla değiştirilir.
+  var SENARYO_OLUSTUR_KABUL_EDILEN_ODEME_SONUCLARI = VERI.jetSeyahatKabulEdilenOdemeSonuclari || [];
+  // Ortak test kartı (ortak.json > odeme.krediKarti) — "Ödeme bilgileri" alanlarının ön
+  // değeri ve "kart değiştirildi mi?" karşılaştırmasının referansı. Dashboard HTML'ine
+  // GÖMÜLMEZ; popup açılınca /jetseyahat-yardimci-veri'den alınır (gelene kadar null).
+  var SENARYO_OLUSTUR_VARSAYILAN_KART = null;
+  // "Ödeme bilgileri" alanları bu popup açılışında dolduruldu mu? (Yeni senaryoda varsayılan
+  // kart fetch'ten SONRA gelir; kullanıcı o arada yazmaya başladıysa üzerine yazılmaz.)
+  var SENARYO_OLUSTUR_KART_DOLDURULDU = false;
 
   // Kapsam/alternatif eşleşmesi GALAKSİ ekranında sabit — her popup açılışında ekrandan
   // okumaya gerek yok (bu daha önce canlı bir tarayıcı açıp birkaç saniye sürüyordu).
@@ -3754,12 +3861,21 @@ const html = `<!DOCTYPE html>
   // açıksa (ettiren/sigortalı bloğu "farklı" konumundaysa) o bloğu güncel etiketlerle
   // yeniden çizer.
   function senaryoOlusturYardimciVeriYukle() {
-    fetch(TEST_SUNUCU.taban + '/jetseyahat-yardimci-veri?ortam=' + encodeURIComponent(ORTAM) + '&token=' + encodeURIComponent(TEST_SUNUCU.token))
+    return fetch(TEST_SUNUCU.taban + '/jetseyahat-yardimci-veri?ortam=' + encodeURIComponent(ORTAM) + '&token=' + encodeURIComponent(TEST_SUNUCU.token))
       .then(function (yanit) { return yanit.json(); })
       .then(function (sonuc) {
         if (!sonuc || !sonuc.basarili) return;
         SENARYO_OLUSTUR_KIMLIK_PROFILLERI = sonuc.kimlikProfilleri || { ozel: {}, tuzel: {} };
         SENARYO_OLUSTUR_COKLU_SORGU_BILGISI = sonuc.cokluSorgu || {};
+        if (Array.isArray(sonuc.kabulEdilenOdemeSonuclari)) {
+          SENARYO_OLUSTUR_KABUL_EDILEN_ODEME_SONUCLARI = sonuc.kabulEdilenOdemeSonuclari;
+          beklenenSonucAlaniniGuncelle();
+        }
+        SENARYO_OLUSTUR_VARSAYILAN_KART = sonuc.varsayilanKrediKarti || null;
+        // Yeni senaryoda alanlar henüz boşsa (ve kullanıcı dokunmadıysa) ortak kartla doldurulur.
+        if (!SENARYO_OLUSTUR_KART_DOLDURULDU && document.getElementById('sof_kartNo')) {
+          odemeKartiniDoldur(SENARYO_OLUSTUR_VARSAYILAN_KART);
+        }
         var ettirenSelect = document.getElementById('sof_ettiren');
         if (ettirenSelect && ettirenSelect.value !== 'ayni') ettirenAltBlokCiz();
         var sigortaliSelect = document.getElementById('sof_sigortaliTipi');
@@ -3808,7 +3924,10 @@ const html = `<!DOCTYPE html>
     SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME = null;
     cokluSorguVarsayilanGuncelle();
     if (!dosya) { durumEl.innerHTML = ''; return; }
-    if (!/\.xlsx$/i.test(dosya.name)) {
+    // NOT: Bu kod bir template literal içinde üretiliyor — kaynaktaki çift ters eğik çizgi
+    // HTML'e tek olarak çıkar. Tek yazılırsa template literal onu yutar ve desen "nokta"
+    // yerine "herhangi bir karakter + xlsx" anlamına gelir (ör. "raporxlsx" kabul edilirdi).
+    if (!/\\.xlsx$/i.test(dosya.name)) {
       durumEl.innerHTML = '<p class="senaryo-form-hata">Yalnızca .xlsx dosyaları desteklenir.</p>';
       olay.target.value = '';
       return;
@@ -3887,13 +4006,205 @@ const html = `<!DOCTYPE html>
     });
   }
 
-  function senaryoOlusturModalAc() {
+  // ---- "Ödeme bilgileri" (senaryoya özel kart) ----
+  // Taksit seçenekleri: sunucu (test-sunucu.mjs > senaryoKrediKartiniDogrula) 1-12 kabul eder;
+  // metin, ortak karttaki "Tek Çekim" kalıbıyla aynı üretilir.
+  var ODEME_TAKSIT_UST_SINIRI = 12;
+  function odemeTaksitMetni(n) { return n === 1 ? 'Tek Çekim' : n + ' Taksit'; }
+
+  function odemeBilgileriBlokHtml() {
+    var ayHtml = '';
+    for (var ay = 1; ay <= 12; ay++) {
+      ayHtml += '<option value="' + ay + '">' + (ay < 10 ? '0' + ay : String(ay)) + '</option>';
+    }
+    var buYil = new Date().getFullYear();
+    var yilHtml = '';
+    for (var yil = buYil; yil <= buYil + 15; yil++) {
+      yilHtml += '<option value="' + yil + '">' + yil + '</option>';
+    }
+    var taksitHtml = '';
+    for (var t = 1; t <= ODEME_TAKSIT_UST_SINIRI; t++) {
+      taksitHtml += '<option value="' + t + '">' + escapeHtml(odemeTaksitMetni(t)) + '</option>';
+    }
+    // Kart no / CVV: tarayıcı kaydetmesin/otomatik doldurmasın diye autocomplete kapalı,
+    // ekranda maskeli (type=password); "göster" ile geçici olarak açılır.
+    var maskeliAlan = function (id, etiket, ekOzellikler) {
+      return '<div class="senaryo-form-alan"><label for="' + id + '">' + etiket + '</label>' +
+        '<div class="odeme-maskeli-satir">' +
+          '<input type="password" id="' + id + '" autocomplete="off" inputmode="numeric" spellcheck="false" data-lpignore="true" ' + ekOzellikler + ' />' +
+          '<button type="button" class="odeme-goster-buton" data-hedef="' + id + '" aria-pressed="false" aria-label="' + etiket + ' göster">göster</button>' +
+        '</div></div>';
+    };
+    return '<div id="sof_odemeBilgileri" class="senaryo-form-alt-blok gizli" role="group" aria-labelledby="sof_odemeBilgileriBaslik">' +
+      '<p class="odeme-bilgileri-baslik" id="sof_odemeBilgileriBaslik">Ödeme bilgileri</p>' +
+      (String(ORTAM) === 'canli'
+        ? '<p class="odeme-canli-uyari" role="alert" id="sof_odemeCanliUyari">CANLI ortam: buraya yalnızca test kartı girin; kart bilgisi senaryo dosyasına (git) yazılır.</p>'
+        : '') +
+      '<p class="senaryo-form-yardim beklenen-sonuc-yardim" id="sof_odemeVarsayilanNotu">Değiştirmezseniz ortak test kartı kullanılır.</p>' +
+      '<div class="senaryo-form-satir">' +
+        '<div class="senaryo-form-alan"><label for="sof_kartIsim">Kart üzerindeki ad</label><input type="text" id="sof_kartIsim" autocomplete="off" /></div>' +
+        '<div class="senaryo-form-alan"><label for="sof_kartSoyisim">Kart üzerindeki soyad</label><input type="text" id="sof_kartSoyisim" autocomplete="off" /></div>' +
+      '</div>' +
+      '<div class="senaryo-form-satir">' +
+        maskeliAlan('sof_kartNo', 'Kart numarası', 'maxlength="19" placeholder="16 hane"') +
+        maskeliAlan('sof_kartCvv', 'CVV', 'maxlength="4" placeholder="3-4 hane"') +
+      '</div>' +
+      '<div class="senaryo-form-satir">' +
+        '<div class="senaryo-form-alan"><label for="sof_kartAy">Son kullanma ayı</label><select id="sof_kartAy">' + ayHtml + '</select></div>' +
+        '<div class="senaryo-form-alan"><label for="sof_kartYil">Son kullanma yılı</label><select id="sof_kartYil">' + yilHtml + '</select></div>' +
+        '<div class="senaryo-form-alan"><label for="sof_kartTaksit">Taksit</label><select id="sof_kartTaksit">' + taksitHtml + '</select></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // Blok çizildikten sonra bir kez bağlanır: "göster/gizle" düğmeleri ve kullanıcı bir alana
+  // dokununca, geç gelen varsayılan kartın yazdıklarını ezmemesi için işaret.
+  function odemeBilgileriOlaylariniBagla() {
+    var blok = document.getElementById('sof_odemeBilgileri');
+    if (!blok) return;
+    Array.prototype.forEach.call(blok.querySelectorAll('.odeme-goster-buton'), function (buton) {
+      buton.addEventListener('click', function () {
+        var hedef = document.getElementById(buton.getAttribute('data-hedef'));
+        if (!hedef) return;
+        var gosteriliyor = hedef.type === 'text';
+        hedef.type = gosteriliyor ? 'password' : 'text';
+        buton.textContent = gosteriliyor ? 'göster' : 'gizle';
+        buton.setAttribute('aria-pressed', gosteriliyor ? 'false' : 'true');
+      });
+    });
+    blok.addEventListener('input', function () { SENARYO_OLUSTUR_KART_DOLDURULDU = true; });
+    blok.addEventListener('change', function () { SENARYO_OLUSTUR_KART_DOLDURULDU = true; });
+  }
+
+  // Alanları bir kart nesnesiyle (senaryonun kendi kartı ya da ortak kart) doldurur; kart
+  // yoksa (sunucuya ulaşılamadı) alanlar boş kalır.
+  function odemeKartiniDoldur(kart) {
+    var el = function (id) { return document.getElementById(id); };
+    if (!el('sof_kartNo')) return;
+    var k = kart || {};
+    el('sof_kartIsim').value = k.isim || '';
+    el('sof_kartSoyisim').value = k.soyisim || '';
+    el('sof_kartNo').value = k.kartNo || '';
+    el('sof_kartCvv').value = k.guvenlikKodu || '';
+    secimDegeriniAyarla(el('sof_kartAy'), k.sonKullanmaAyi && k.sonKullanmaAyi.deger, '');
+    secimDegeriniAyarla(el('sof_kartYil'), k.sonKullanmaYili && k.sonKullanmaYili.deger, '');
+    secimDegeriniAyarla(el('sof_kartTaksit'), k.taksit && k.taksit.deger, '');
+  }
+
+  // Formdaki kartı ortak.json > odeme.krediKarti biçiminde döner (kart no boşluksuz).
+  function odemeKartiniFormdanOku() {
+    var el = function (id) { return document.getElementById(id); };
+    var secim = function (id) {
+      var s = el(id);
+      var secenek = s && s.selectedOptions && s.selectedOptions[0];
+      return { deger: s ? s.value : '', metin: secenek ? secenek.textContent : '' };
+    };
+    var ay = secim('sof_kartAy');
+    var ayNo = parseInt(ay.deger, 10);
+    return {
+      isim: el('sof_kartIsim').value.trim(),
+      soyisim: el('sof_kartSoyisim').value.trim(),
+      kartNo: el('sof_kartNo').value.replace(/\\s+/g, ''),
+      guvenlikKodu: el('sof_kartCvv').value.trim(),
+      sonKullanmaAyi: { deger: ay.deger, metin: ayNo > 0 && ayNo < 10 ? '0' + ayNo : ay.deger },
+      sonKullanmaYili: { deger: secim('sof_kartYil').deger, metin: secim('sof_kartYil').deger },
+      taksit: secim('sof_kartTaksit')
+    };
+  }
+
+  // Yalnızca teste giden değerler karşılaştırılır (metinler görüntü amaçlı).
+  function odemeKartlariAyniMi(a, b) {
+    if (!a || !b) return false;
+    return a.isim === b.isim && a.soyisim === b.soyisim && a.kartNo === b.kartNo &&
+      a.guvenlikKodu === b.guvenlikKodu &&
+      String((a.sonKullanmaAyi || {}).deger) === String((b.sonKullanmaAyi || {}).deger) &&
+      String((a.sonKullanmaYili || {}).deger) === String((b.sonKullanmaYili || {}).deger) &&
+      String((a.taksit || {}).deger) === String((b.taksit || {}).deger);
+  }
+
+  // Senaryoya yazılacak kart: ödeme dahil değilse ya da kart ortak kartla AYNIYSA undefined
+  // (senaryo ortak kartı kullanır). Ortak kart alınamadıysa ve alanlar tamamen boşsa da
+  // gönderilmez; bir şey yazılmışsa gönderilir (sunucu ayrıca ortak kartla karşılaştırır).
+  function odemeKartiniTopla() {
+    var odemeKutusu = document.getElementById('sof_odemeAdimiDahil');
+    if (!odemeKutusu || !odemeKutusu.checked || !document.getElementById('sof_kartNo')) return undefined;
+    var kart = odemeKartiniFormdanOku();
+    if (SENARYO_OLUSTUR_VARSAYILAN_KART) {
+      return odemeKartlariAyniMi(kart, SENARYO_OLUSTUR_VARSAYILAN_KART) ? undefined : kart;
+    }
+    var bosMu = !kart.isim && !kart.soyisim && !kart.kartNo && !kart.guvenlikKodu;
+    return bosMu ? undefined : kart;
+  }
+
+  // İstemci tarafı kart kontrolleri (sunucu aynılarını ayrıca uygular). Mesajlar kart
+  // numarasını/CVV'yi içermez.
+  function odemeKartiDogrula(kart) {
+    if (!kart) return null;
+    if (!kart.isim || !kart.soyisim) return 'Kart üzerindeki ad ve soyad boş olamaz.';
+    if (!/^\\d{16}$/.test(kart.kartNo)) return 'Kart numarası 16 haneli olmalıdır (yalnızca rakam; boşluk bırakabilirsiniz).';
+    if (!/^\\d{3,4}$/.test(kart.guvenlikKodu)) return 'CVV 3 ya da 4 haneli olmalıdır.';
+    var ay = parseInt(kart.sonKullanmaAyi.deger, 10);
+    if (!(ay >= 1 && ay <= 12)) return 'Son kullanma ayı 01-12 arasında olmalıdır.';
+    if (!/^\\d{4}$/.test(String(kart.sonKullanmaYili.deger))) return 'Son kullanma yılı seçilmelidir.';
+    if (parseInt(kart.sonKullanmaYili.deger, 10) < new Date().getFullYear()) return 'Son kullanma yılı geçmişte olamaz.';
+    var taksit = parseInt(kart.taksit.deger, 10);
+    if (!(taksit >= 1 && taksit <= ODEME_TAKSIT_UST_SINIRI)) return 'Taksit 1-' + ODEME_TAKSIT_UST_SINIRI + ' arasında olmalıdır.';
+    return null;
+  }
+
+  // duzenleme: null → "+ Senaryo Oluştur" (yeni senaryo). Dolu → "✎ Düzenle" (bkz.
+  // jetSeyahatDuzenleAc): { anahtar, getir } — aynı form düzenleme modunda açılır, üstte
+  // özet + Başlık + Koşuya dahil alanları çıkar, form getir.formVerisi ile doldurulur.
+  function senaryoOlusturModalAc(duzenleme) {
     var icerikAlani = document.getElementById('senaryoOlusturModalIcerik');
+    var duzenlemeMi = !!(duzenleme && duzenleme.getir);
     SENARYO_OLUSTUR_SON_SONUC = null;
+    SENARYO_DUZENLE = null;
+    var duzenlemeUstHtml = '';
+    if (duzenlemeMi) {
+      var f = duzenleme.getir.formVerisi || {};
+      SENARYO_DUZENLE = {
+        anahtar: duzenleme.anahtar,
+        eskiBaslik: duzenleme.getir.senaryo.baslik,
+        getir: duzenleme.getir,
+        acente: { profil: f.acenteProfili || '', kod: f.acenteKodu || '', kullanici: f.acenteKullanicisi || '', varsayilanMi: !!f.acenteVarsayilanMi },
+        onaylananBaslik: null
+      };
+      duzenlemeUstHtml =
+        '<dl class="senaryo-duzenle-ozet" aria-label="Senaryonun kayıtlı hâli">' +
+          '<dt>Ürün</dt><dd>JetSeyahat</dd>' +
+          '<dt>Başlık</dt><dd>' + escapeHtml(SENARYO_DUZENLE.eskiBaslik) + '</dd>' +
+          '<dt>Beklenen sonuç</dt><dd>' + escapeHtml(beklenenSonucEtiketiClient(f)) + '</dd>' +
+          '<dt>Ödeme dahil</dt><dd>' + (f.odemeAdimiDahil ? 'Evet' : 'Hayır') + '</dd>' +
+          // Kart numarasının yalnızca son 4 hanesi gösterilir.
+          (f.odemeAdimiDahil
+            ? '<dt>Ödeme kartı</dt><dd>' + (f.krediKarti
+                ? 'Senaryoya özel (**** ' + escapeHtml(String(f.krediKarti.kartNo || '').slice(-4)) + ')'
+                : 'Ortak test kartı') + '</dd>'
+            : '') +
+          '<dt>Koşuda</dt><dd>' + (duzenleme.getir.kosuyaDahil ? 'Evet' : 'Hayır') + '</dd>' +
+          '<dt>Acente</dt><dd>' + escapeHtml(
+            (f.acenteAciklamasi || f.acenteKodu || '—') +
+            (f.acenteKullanicisi ? ' · kullanıcı ' + f.acenteKullanicisi : '') +
+            (f.acenteVarsayilanMi ? ' (varsayılan acente)' : '')
+          ) + '</dd>' +
+        '</dl>' +
+        (duzenleme.getir.eskiAlanlarVardi
+          ? '<p class="senaryo-form-yardim beklenen-sonuc-yardim">Bu senaryo eski "beklenen hata" alanlarıyla kayıtlı; form yeni modele çevrilerek dolduruldu. Kaydederseniz yeni modelle yazılır.</p>'
+          : '') +
+        '<div class="senaryo-form-alan"><label for="sof_duzenleBaslik">Başlık</label>' +
+          '<input type="text" id="sof_duzenleBaslik" required aria-required="true" />' +
+        '</div>' +
+        '<div class="senaryo-form-alan"><label class="senaryo-form-checkbox"><input type="checkbox" id="sof_duzenleKosuyaDahil" /> Koşuya dahil</label></div>';
+    }
     icerikAlani.innerHTML =
-      '<p class="modal-baslik">JetSeyahat — Senaryo Oluştur</p>' +
-      '<p class="modal-alt">Ekranda normalde doldurduğunuz alanları girin, "Senaryoyu Koş" ile önce deneyin.</p>' +
+      (duzenlemeMi
+        ? '<p class="modal-baslik">JetSeyahat — Senaryoyu Düzenle</p>' +
+          '<p class="modal-alt">Değiştirmek istediğiniz alanları düzenleyin. "Senaryoyu Koş" ile deneyebilir ya da doğrudan "Değişiklikleri Kaydet" diyebilirsiniz.</p>'
+        : '<p class="modal-baslik">JetSeyahat — Senaryo Oluştur</p>' +
+          '<p class="modal-alt">Ekranda normalde doldurduğunuz alanları girin, "Senaryoyu Koş" ile önce deneyin.</p>') +
       '<form id="senaryoOlusturForm">' +
+        duzenlemeUstHtml +
         '<div class="senaryo-form-satir">' +
           '<div class="senaryo-form-alan"><label>Kapsam</label>' +
             '<select id="sof_kapsam"></select>' +
@@ -3932,23 +4243,53 @@ const html = `<!DOCTYPE html>
           '<select id="sof_sigortaliTipi"><option value="varsayilan">Ürün varsayılanı</option><option value="farkli">Farklı özel (T.C.)</option></select>' +
         '</div>' +
         '<div id="sof_sigortaliAltBlok"></div>' +
-        '<div class="senaryo-form-alan"><label>Beklenen İş Kuralı Hatası <span class="senaryo-form-yardim">(doluysa: seçilen adımda bu hata beklenir, sonraki adımlara geçilmez)</span></label>' +
-          '<div class="senaryo-form-satir" style="align-items:flex-end">' +
-            '<div class="senaryo-form-alan" style="flex:0 0 220px"><label>Hatanın Beklendiği Adım</label>' +
-              '<select id="sof_beklenenHataAdimi">' +
-                '<option value="primHesaplama">Prim hesaplanır</option>' +
-                '<option value="policelestirme">Poliçeleştirme açılır</option>' +
-              '</select>' +
+        // Beklenen sonuç (bkz. tests/support/beklenen-sonuc.ts): ödeme adımı dahil mi +
+        // "Başarılı akış" ya da belirli bir adımda "İş kuralı hatası". Açıklama metinleri ve
+        // adım seçeneklerinin açık/kapalı durumu beklenenSonucAlaniniGuncelle ile canlı tutulur.
+        '<div class="senaryo-form-alan"><label class="senaryo-form-checkbox"><input type="checkbox" id="sof_odemeAdimiDahil" /> Ödeme adımını dahil et</label>' +
+          '<p class="senaryo-form-yardim beklenen-sonuc-yardim">İşaretli değilse prim hesaplanıp teklif oluşunca test biter (poliçeleştirme ve ödemeye geçilmez). İşaretliyse kart bilgileri girilip ödeme de tamamlanır.</p>' +
+        '</div>' +
+        // "Ödeme bilgileri": yalnızca "Ödeme adımını dahil et" işaretliyken görünür (bkz.
+        // beklenenSonucAlaniniGuncelle). Alanlar ortak test kartıyla (ortak.json >
+        // odeme.krediKarti, /jetseyahat-yardimci-veri'den CANLI alınır — HTML'e gömülmez)
+        // doldurulur; kullanıcı değiştirmezse senaryoya kart yazılmaz (bkz. odemeKartiniTopla).
+        odemeBilgileriBlokHtml() +
+        '<div class="senaryo-form-alan"><label>Beklenen Sonuç</label>' +
+          '<div class="senaryo-form-radio-grup" role="radiogroup" aria-label="Beklenen Sonuç">' +
+            '<label><input type="radio" name="sof_beklenenSonucTipi" value="basarili" checked /> Başarılı akış</label>' +
+            '<label><input type="radio" name="sof_beklenenSonucTipi" value="isKuraliHatasi" /> İş kuralı hatası beklenir</label>' +
+          '</div>' +
+          '<div id="sof_basariliAlani" class="senaryo-form-alt-blok">' +
+            '<p class="senaryo-form-yardim beklenen-sonuc-yardim" id="sof_basariKriteri" aria-live="polite"></p>' +
+          '</div>' +
+          '<div id="sof_isKuraliAlani" class="senaryo-form-alt-blok gizli">' +
+            '<div class="senaryo-form-satir" style="align-items:flex-end">' +
+              '<div class="senaryo-form-alan" style="flex:0 0 220px"><label for="sof_beklenenHataAdimi">Hatanın Beklendiği Adım</label>' +
+                '<select id="sof_beklenenHataAdimi">' +
+                  '<option value="primHesaplama">Prim hesaplama</option>' +
+                  '<option value="policelestirme">Poliçeleştirme</option>' +
+                  '<option value="odeme">Ödeme</option>' +
+                '</select>' +
+              '</div>' +
+              '<div class="senaryo-form-alan" style="flex:2 1 200px"><label for="sof_beklenenHata">Beklenen Mesaj <span class="senaryo-form-yardim">(görülen uyarının bu metni içermesi yeterli; büyük/küçük harf, tırnak ve boşluk farkları önemsenmez)</span></label>' +
+                '<textarea id="sof_beklenenHata" placeholder="örn. Covid Teminatı &quot;Hayır&quot; olması durumunda..."></textarea>' +
+              '</div>' +
             '</div>' +
-            '<div class="senaryo-form-alan" style="flex:2 1 200px"><textarea id="sof_beklenenHata" placeholder="Boş bırakılırsa normal akış (prim + ödeme) denenir"></textarea></div>' +
+            '<p class="senaryo-form-yardim beklenen-sonuc-yardim" id="sof_adimIpucu"></p>' +
+            '<p class="senaryo-form-yardim beklenen-sonuc-yardim">Başarılı sayılır: seçilen adımda bu mesajı içeren uyarı görünürse (test orada biter). Başarısız sayılır: uyarı çıkmaz ve akış devam ederse ya da farklı bir mesaj görünürse.</p>' +
           '</div>' +
         '</div>' +
         '<div id="sof_hataAlani"></div>' +
         '<div id="sof_sonucAlani"></div>' +
         '<div class="senaryo-form-buton-satir">' +
           '<button type="button" id="sof_kosButonu" class="birincil">Senaryoyu Koş</button>' +
+          (duzenlemeMi ? '<button type="button" id="sof_degisiklikleriKaydetButonu" class="birincil">Değişiklikleri Kaydet</button>' : '') +
           '<button type="button" id="sof_vazgecButonu">Vazgeç</button>' +
         '</div>' +
+        (duzenlemeMi
+          ? '<p class="senaryo-form-yardim beklenen-sonuc-yardim" id="sof_denemeNotu" aria-live="polite"></p>' +
+            '<div id="sof_duzenleKaydetAlani" aria-live="polite"></div>'
+          : '') +
       '</form>';
 
     ettirenAltBlokCiz();
@@ -3965,9 +4306,34 @@ const html = `<!DOCTYPE html>
     document.getElementById('sof_vazgecButonu').addEventListener('click', senaryoOlusturModalKapat);
     document.getElementById('sof_kosButonu').addEventListener('click', senaryoOlusturDene);
 
+    document.getElementById('sof_odemeAdimiDahil').addEventListener('change', beklenenSonucAlaniniGuncelle);
+    // "Ödeme bilgileri": yeni senaryoda ortak kart daha önce alındıysa hemen doldurulur;
+    // yardımcı veri gelince (kullanıcı dokunmadıysa) güncel hâliyle tekrar doldurulur.
+    SENARYO_OLUSTUR_KART_DOLDURULDU = false;
+    odemeBilgileriOlaylariniBagla();
+    if (!duzenlemeMi) odemeKartiniDoldur(SENARYO_OLUSTUR_VARSAYILAN_KART);
+    Array.prototype.forEach.call(document.querySelectorAll('[name="sof_beklenenSonucTipi"]'), function (radio) {
+      radio.addEventListener('change', beklenenSonucAlaniniGuncelle);
+    });
+    beklenenSonucAlaniniGuncelle();
+
     document.getElementById('sof_kapsam').addEventListener('change', senaryoOlusturAlternatifleriGuncelle);
     senaryoOlusturSecenekleriYukle();
-    senaryoOlusturYardimciVeriYukle();
+
+    if (duzenlemeMi) {
+      // Yardımcı veri (hazır profiller) jetSeyahatDuzenleAc'ta ZATEN yüklendi — burada
+      // tekrar yüklenirse kimlik blokları yeniden çizilip doldurulan değerler silinirdi.
+      senaryoFormunuDoldur(duzenleme.getir.formVerisi || {});
+      document.getElementById('sof_duzenleBaslik').value = SENARYO_DUZENLE.eskiBaslik;
+      document.getElementById('sof_duzenleKosuyaDahil').checked = !!duzenleme.getir.kosuyaDahil;
+      document.getElementById('sof_degisiklikleriKaydetButonu').addEventListener('click', senaryoDuzenleKaydet);
+      var form = document.getElementById('senaryoOlusturForm');
+      form.addEventListener('input', senaryoDuzenleDenemeNotunuGuncelle);
+      form.addEventListener('change', senaryoDuzenleDenemeNotunuGuncelle);
+      senaryoDuzenleDenemeNotunuGuncelle();
+    } else {
+      senaryoOlusturYardimciVeriYukle();
+    }
 
     document.getElementById('senaryoOlusturModalOrtu').classList.add('acik');
   }
@@ -4007,16 +4373,28 @@ const html = `<!DOCTYPE html>
       sorguTipi: el('sof_sorguTipi').value,
       ettiren: el('sof_ettiren').value,
       kayakTeminati: el('sof_kayak').checked,
-      beklenenHataMesaji: el('sof_beklenenHata').value.trim() || undefined,
-      beklenenHataAdimi: el('sof_beklenenHataAdimi').value
+      // Yeni senaryolar her zaman AÇIKÇA yazar (bkz. tests/support/beklenen-sonuc.ts);
+      // eski beklenenHataMesaji/beklenenHataAdimi alanları artık gönderilmez.
+      odemeAdimiDahil: el('sof_odemeAdimiDahil').checked,
+      beklenenSonuc: beklenenSonucTipiGetir() === 'isKuraliHatasi'
+        ? { tip: 'isKuraliHatasi', adim: el('sof_beklenenHataAdimi').value, mesaj: el('sof_beklenenHata').value.trim() }
+        : { tip: 'basarili' }
     };
 
     // Acente kodu ve kullanıcı kodu doğrudan elle yazılır — canlı bir sorgu/doğrulama
     // YAPILMAZ, kullanıcı doğru değerleri zaten bildiğini belirtti.
     var acenteKoduDeger = el('sof_acenteKodu').value.trim();
-    if (acenteKoduDeger) {
+    var acenteKullanicisiDeger = el('sof_acenteKullanicisi').value.trim();
+    var mevcutAcente = SENARYO_DUZENLE && SENARYO_DUZENLE.acente;
+    if (mevcutAcente && (mevcutAcente.profil || mevcutAcente.varsayilanMi) &&
+        acenteKoduDeger === mevcutAcente.kod && acenteKullanicisiDeger === mevcutAcente.kullanici) {
+      // Düzenlemede acente alanlarına dokunulmadıysa kayıttaki profil ANAHTARI aynen
+      // korunur (aynı kod+kullanıcıya sahip başka bir profile kaymasın diye). Senaryo
+      // varsayılan acenteyle kayıtlıysa (formda o acente gösterilir) kayda acente yazılmaz.
+      if (mevcutAcente.profil) veri.acenteProfili = mevcutAcente.profil;
+    } else if (acenteKoduDeger) {
       veri.acenteKodu = acenteKoduDeger;
-      veri.acenteKullanicisi = el('sof_acenteKullanicisi').value.trim();
+      veri.acenteKullanicisi = acenteKullanicisiDeger;
     }
 
     if (veri.ettiren !== 'ayni') {
@@ -4052,6 +4430,10 @@ const html = `<!DOCTYPE html>
       }
     }
 
+    // Senaryoya özel kart: yalnızca ödeme dahilken VE ortak karttan farklıysa gönderilir.
+    var krediKarti = odemeKartiniTopla();
+    if (krediKarti) veri.krediKarti = krediKarti;
+
     // Çoklu sorguda özel bir Excel yüklendiyse (bkz. cokluSorguDosyasiSecildi), o dosyanın
     // sunucudaki göreli yolu ve kullanıcının girdiği kişi sayısı gönderilir; yüklenmediyse
     // hiçbir alan set edilmez ve ürünün sabit dosyası kullanılmaya devam eder.
@@ -4072,16 +4454,9 @@ const html = `<!DOCTYPE html>
     sonucAlani.innerHTML = '';
 
     var veri = senaryoOlusturFormundanVeriTopla();
-    if (!veri.kapsam || !veri.alternatif) {
-      hataAlani.innerHTML = '<p class="senaryo-form-hata">Kapsam ve alternatif alanları zorunludur (seçenekler yüklenene kadar bekleyin).</p>';
-      return;
-    }
-    if (veri.sorguTipi === 'coklu' && SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME && !veri.cokluSorguKisiSayisi) {
-      hataAlani.innerHTML = '<p class="senaryo-form-hata">Özel bir Excel yüklediniz — Exceldeki kişi sayısını da girmelisiniz.</p>';
-      return;
-    }
-    if (veri.acenteKodu && !veri.acenteKullanicisi) {
-      hataAlani.innerHTML = '<p class="senaryo-form-hata">Acente kodu girildiyse acente kullanıcı kodu da girilmelidir.</p>';
+    var dogrulamaHatasi = senaryoFormuDogrula(veri);
+    if (dogrulamaHatasi) {
+      hataAlani.innerHTML = '<p class="senaryo-form-hata">' + escapeHtml(dogrulamaHatasi) + '</p>';
       return;
     }
 
@@ -4106,6 +4481,24 @@ const html = `<!DOCTYPE html>
       });
   }
 
+  // "Senaryoyu Koş" ve "Değişiklikleri Kaydet"in ORTAK istemci tarafı kontrolleri (sunucu
+  // aynı kuralları ayrıca uygular). Hata yoksa null, varsa kullanıcıya gösterilecek metin.
+  function senaryoFormuDogrula(veri) {
+    if (!veri.kapsam || !veri.alternatif) return 'Kapsam ve alternatif alanları zorunludur (seçenekler yüklenene kadar bekleyin).';
+    if (veri.sorguTipi === 'coklu' && SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME && !veri.cokluSorguKisiSayisi) {
+      return 'Özel bir Excel yüklediniz — Exceldeki kişi sayısını da girmelisiniz.';
+    }
+    if (veri.acenteKodu && !veri.acenteKullanicisi) return 'Acente kodu girildiyse acente kullanıcı kodu da girilmelidir.';
+    if (veri.beklenenSonuc.tip === 'isKuraliHatasi' && !veri.beklenenSonuc.mesaj) return 'İş kuralı hatası bekleniyorsa beklenen mesaj boş olamaz.';
+    if (veri.beklenenSonuc.tip === 'isKuraliHatasi' && veri.beklenenSonuc.adim !== 'primHesaplama' && !veri.odemeAdimiDahil) {
+      return 'Poliçeleştirme/Ödeme adımında hata beklemek için "Ödeme adımını dahil et" işaretlenmelidir.';
+    }
+    if (veri.krediKarti && !veri.odemeAdimiDahil) return 'Ödeme adımı dahil değilken kart bilgisi gönderilemez.';
+    var kartHatasi = odemeKartiDogrula(veri.krediKarti);
+    if (kartHatasi) return 'Ödeme bilgileri: ' + kartHatasi;
+    return null;
+  }
+
   function senaryoOlusturSonucGoster(sonuc) {
     var sonucAlani = document.getElementById('sof_sonucAlani');
     var basariliMi = sonuc && sonuc.basarili && sonuc.durum === 'passed';
@@ -4113,12 +4506,39 @@ const html = `<!DOCTYPE html>
     var rozetSinif = basariliMi ? 'rozet-iyi' : durdurulduMu ? 'rozet-notr' : 'rozet-kritik';
     var rozetMetin = basariliMi ? 'Başarılı' : durdurulduMu ? 'Durduruldu' : 'Başarısız';
     var govde = '<div class="senaryo-sonuc-satir"><span class="rozet ' + rozetSinif + '">' + escapeHtml(rozetMetin) + '</span></div>';
+    var gorulenOnerisi = null;
     if (!basariliMi) {
       var mesaj = (sonuc && (sonuc.hataMesaji || sonuc.mesaj)) || 'Detaylı hata mesajı yok — test-sunucu terminalindeki çıktıya bakın.';
+      var beklenenGorulen = beklenenGorulenAyristir(mesaj);
+      if (beklenenGorulen) {
+        govde += '<dl class="beklenen-gorulen">' +
+          '<dt>Beklenen</dt><dd>' + escapeHtml(beklenenGorulen.beklenen) + '</dd>' +
+          '<dt>Görülen</dt><dd>' + escapeHtml(beklenenGorulen.gorulen) + '</dd>' +
+        '</dl>';
+      }
       govde += '<pre class="hata-mesaj">' + escapeHtml(mesaj) + '</pre>';
+      gorulenOnerisi = durdurulduMu ? null : senaryoOlusturGorulenMesajiCikar(sonuc);
+      if (gorulenOnerisi) {
+        govde += '<div class="senaryo-form-buton-satir">' +
+          '<button type="button" id="sof_beklenenHataOlarakKullan">Bu mesajı beklenen hata olarak kullan</button>' +
+        '</div>' +
+        '<div id="sof_beklenenHataOlarakKullanBilgi"></div>';
+      }
     }
     if (sonuc && sonuc.ekranGoruntusu) {
       govde += '<img class="hata-goruntu" src="data:image/png;base64,' + sonuc.ekranGoruntusu + '" alt="Senaryo deneme sonucu" />';
+    }
+    if (SENARYO_DUZENLE) {
+      // Düzenleme modunda ayrı bir "kaydedilsin mi?" sorusu yok — "Değişiklikleri Kaydet"
+      // düğmesi formun o anki hâlini kaydeder (deneme şart değil).
+      sonucAlani.innerHTML = govde;
+      if (gorulenOnerisi) {
+        document.getElementById('sof_beklenenHataOlarakKullan').addEventListener('click', function () {
+          gorulenMesajiBeklenenHataYap(gorulenOnerisi);
+        });
+      }
+      senaryoDuzenleDenemeNotunuGuncelle();
+      return;
     }
     govde +=
       '<p style="margin:14px 0 6px;font-weight:700;font-size:12.5px;">Bu senaryo kalıcı olarak kaydedilsin mi?</p>' +
@@ -4133,6 +4553,131 @@ const html = `<!DOCTYPE html>
       document.getElementById('sof_kaydetButonu').closest('.senaryo-form-buton-satir').remove();
     });
     document.getElementById('sof_kaydetButonu').addEventListener('click', senaryoOlusturBaslikSor);
+    if (gorulenOnerisi) {
+      document.getElementById('sof_beklenenHataOlarakKullan').addEventListener('click', function () {
+        gorulenMesajiBeklenenHataYap(gorulenOnerisi);
+      });
+    }
+  }
+
+  function beklenenSonucTipiGetir() {
+    var secili = document.querySelector('[name="sof_beklenenSonucTipi"]:checked');
+    return secili ? secili.value : 'basarili';
+  }
+
+  // "Ödeme adımını dahil et" ve "Beklenen Sonuç" seçimine göre alt blokları gösterir/gizler,
+  // başarı kriteri açıklamasını yazar ve ödeme dahil değilken Poliçeleştirme/Ödeme
+  // adımlarını kapatır (seçiliyse Prim hesaplama'ya döner).
+  function beklenenSonucAlaniniGuncelle() {
+    var odemeKutusu = document.getElementById('sof_odemeAdimiDahil');
+    if (!odemeKutusu) return;
+    var odemeDahil = odemeKutusu.checked;
+    var hataMi = beklenenSonucTipiGetir() === 'isKuraliHatasi';
+    document.getElementById('sof_basariliAlani').classList.toggle('gizli', hataMi);
+    // Kart alanları yalnızca ödeme adımı dahilken görünür (kapalıyken kart gönderilmez —
+    // bkz. odemeKartiniTopla).
+    var odemeBilgileri = document.getElementById('sof_odemeBilgileri');
+    if (odemeBilgileri) odemeBilgileri.classList.toggle('gizli', !odemeDahil);
+    document.getElementById('sof_isKuraliAlani').classList.toggle('gizli', !hataMi);
+
+    var kabulListesi = (SENARYO_OLUSTUR_KABUL_EDILEN_ODEME_SONUCLARI || []).map(function (m) { return '“' + m + '”'; }).join(', ');
+    document.getElementById('sof_basariKriteri').textContent = odemeDahil
+      ? 'Başarılı sayılır: prim hesaplanır, poliçeleştirme ve kart adımları hatasız geçer ve ödeme sonrası şu mesajlardan biri görünürse: ' +
+        (kabulListesi || '(liste yüklenemedi)') + '.'
+      : 'Başarılı sayılır: prim hesaplanıp teklif tutarı 0’dan büyük görünürse. Ödeme adımına geçilmez, test burada biter.';
+
+    var adimSelect = document.getElementById('sof_beklenenHataAdimi');
+    Array.prototype.forEach.call(adimSelect.options, function (secenek) {
+      if (secenek.value !== 'primHesaplama') secenek.disabled = !odemeDahil;
+    });
+    if (!odemeDahil && adimSelect.value !== 'primHesaplama') adimSelect.value = 'primHesaplama';
+    document.getElementById('sof_adimIpucu').textContent = odemeDahil
+      ? ''
+      : 'Poliçeleştirme ve Ödeme adımları yalnızca "Ödeme adımını dahil et" işaretliyken seçilebilir.';
+  }
+
+  // tests/support/beklenen-sonuc.ts > beklenenGorulenMetni biçimini ayrıştırır:
+  //   <adım> adımında beklenen sonuç doğrulanamadı.
+  //   Beklenen: "<...>" — Görülen: "<...>"
+  // Biçim eşleşmezse null döner.
+  function beklenenGorulenAyristir(hataMesaji) {
+    var eslesme = /Beklenen: (.*) — Görülen: "(.*)"/.exec(String(hataMesaji || ''));
+    if (!eslesme) return null;
+    var adimEslesme = /(Prim hesaplama|Poliçeleştirme|Ödeme) adımında beklenen sonuç doğrulanamadı/.exec(String(hataMesaji));
+    return {
+      beklenen: eslesme[1],
+      gorulen: eslesme[2],
+      adim: adimEslesme ? { 'Prim hesaplama': 'primHesaplama', 'Poliçeleştirme': 'policelestirme', 'Ödeme': 'odeme' }[adimEslesme[1]] : null
+    };
+  }
+
+  // Başarısız bir "Senaryoyu Koş" sonucundan, beklenen hata olarak kullanılabilecek
+  // GÖRÜLEN mesajı ve (çıkarılabiliyorsa) adımı bulur:
+  //  - kredi-karti-odeme.page.ts > hataPopupVarsaDurdur: "... beklenmeyen bir hata pop-up'ı
+  //    görüntülendi, senaryo burada durduruldu:" satırından sonraki pop-up metni,
+  //  - beklenen sonuç doğrulanamadığında: "Görülen:" kısmı ("uyarı çıkmadı..." ve servis
+  //    cevabı özetleri kullanılamaz, atlanır).
+  // Adım önce sunucunun döndüğü başarısız test.step başlığından, yoksa hata metninden
+  // çıkarılır; çıkarılamazsa null (formdaki seçim değiştirilmez).
+  function senaryoOlusturGorulenMesajiCikar(sonuc) {
+    var hataMesaji = String((sonuc && sonuc.hataMesaji) || '');
+    if (!hataMesaji) return null;
+    var mesaj = null;
+    var adim = null;
+
+    var popupEslesme = /beklenmeyen bir hata pop-up'ı görüntülendi, senaryo burada durduruldu:\\s*([\\s\\S]*)$/.exec(hataMesaji);
+    if (popupEslesme) {
+      mesaj = popupEslesme[1].split(/\\n\\s*(?:Call log:|at )/)[0].replace(/\\s*Tamam\\s*$/, '').trim();
+      var popupAdimi = /"([^"]*)" adımından sonra beklenmeyen/.exec(hataMesaji);
+      if (popupAdimi && /Policelestir|Kredi kartı formu/i.test(popupAdimi[1])) adim = 'policelestirme';
+    } else {
+      var ayrisan = beklenenGorulenAyristir(hataMesaji);
+      if (ayrisan && !/^(uyarı çıkmadı|servis cevabı:)/.test(ayrisan.gorulen)) {
+        mesaj = ayrisan.gorulen.trim();
+        adim = ayrisan.adim;
+      }
+    }
+    if (!mesaj) return null;
+
+    var adimBasligi = String((sonuc && sonuc.basarisizAdim) || '');
+    if (/^Prim hesaplanır/.test(adimBasligi)) adim = 'primHesaplama';
+    else if (/^Poliçeleştirme/.test(adimBasligi)) adim = 'policelestirme';
+    else if (/^Ödeme/.test(adimBasligi)) adim = 'odeme';
+    return { mesaj: mesaj, adim: adim };
+  }
+
+  // "Bu mesajı beklenen hata olarak kullan": formu "İş kuralı hatası beklenir"e çevirir,
+  // mesajı doldurur, adımı (biliniyorsa) seçer. Poliçeleştirme/Ödeme adımı ödeme dahil
+  // olmadan seçilemediğinden gerekirse "Ödeme adımını dahil et" de işaretlenir. Kaydetme
+  // sorusu kaldırılır: kaydet, SON DENENEN veriyi gönderir — güncellenen form önce tekrar
+  // koşulmalıdır.
+  function gorulenMesajiBeklenenHataYap(oneri) {
+    var hataRadyo = document.querySelector('[name="sof_beklenenSonucTipi"][value="isKuraliHatasi"]');
+    hataRadyo.checked = true;
+    if (oneri.adim && oneri.adim !== 'primHesaplama') document.getElementById('sof_odemeAdimiDahil').checked = true;
+    beklenenSonucAlaniniGuncelle();
+    if (oneri.adim) document.getElementById('sof_beklenenHataAdimi').value = oneri.adim;
+    document.getElementById('sof_beklenenHata').value = oneri.mesaj;
+
+    SENARYO_OLUSTUR_SON_SONUC = null;
+    var kaydetButonu = document.getElementById('sof_kaydetButonu');
+    if (kaydetButonu) {
+      var kaydetSatiri = kaydetButonu.closest('.senaryo-form-buton-satir');
+      if (kaydetSatiri && kaydetSatiri.previousElementSibling) kaydetSatiri.previousElementSibling.remove();
+      if (kaydetSatiri) kaydetSatiri.remove();
+    }
+    var kaydetAlani = document.getElementById('sof_kaydetAlani');
+    if (kaydetAlani) kaydetAlani.innerHTML = '';
+    var kullanButonu = document.getElementById('sof_beklenenHataOlarakKullan');
+    if (kullanButonu) kullanButonu.disabled = true;
+    document.getElementById('sof_beklenenHataOlarakKullanBilgi').innerHTML =
+      '<p class="senaryo-form-yardim beklenen-sonuc-yardim">Form güncellendi: “İş kuralı hatası beklenir”' +
+      (oneri.adim ? ' — ' + escapeHtml(document.getElementById('sof_beklenenHataAdimi').selectedOptions[0].textContent) + ' adımı' : ' (adım çıkarılamadı, seçimi kontrol edin)') +
+      (SENARYO_DUZENLE
+        ? '. İsterseniz "Senaryoyu Koş" ile tekrar deneyin ya da "Değişiklikleri Kaydet" ile kaydedin.</p>'
+        : '. Kaydetmeden önce "Senaryoyu Koş" ile tekrar deneyin.</p>');
+    if (SENARYO_DUZENLE) senaryoDuzenleDenemeNotunuGuncelle();
+    document.getElementById('sof_beklenenHata').focus();
   }
 
   function senaryoOlusturBaslikSor() {
@@ -4204,6 +4749,330 @@ const html = `<!DOCTYPE html>
           hataAlani.innerHTML = '<p class="senaryo-form-hata">' + escapeHtml((sonuc && sonuc.mesaj) || 'Kaydedilemedi.') + '</p>';
         }
       });
+  }
+
+  // ------------------------------------------------------------------------------
+  // "✎ Düzenle" (Senaryolar tablosundaki her satır)
+  //  - JetSeyahat (prim-hesaplama.spec.ts): senaryonun GÜNCEL kaydı sunucudan
+  //    (/senaryo-getir) alınır ve AYNI "Senaryo Oluştur" formu düzenleme modunda,
+  //    doldurulmuş olarak açılır. "Değişiklikleri Kaydet" → /senaryo-guncelle (kayıt
+  //    jet-seyahat.json'da yerinde güncellenir), ardından dashboard yeniden üretilir.
+  //  - Diğer ürünler: senaryolar kodda/ürün verisinde tanımlı olduğundan yalnızca salt
+  //    okunur bir özet ve "Koşuya dahil" anahtarı (/kosu-listesi) gösterilir.
+  // ------------------------------------------------------------------------------
+  var JETSEYAHAT_SPEC_DOSYASI = 'scenarios/jet-seyahat/prim-hesaplama.spec.ts';
+
+  function senaryoDuzenleAc(anahtar) {
+    var senaryo = (VERI.tumSenaryolar || []).find(function (s) { return senaryoAnahtari(s) === anahtar; });
+    if (!senaryo) return;
+    if (kosuListesiAnahtarNormalize(anahtar).indexOf(JETSEYAHAT_SPEC_DOSYASI + SENARYO_ANAHTAR_AYRACI) === 0) {
+      jetSeyahatDuzenleAc(anahtar, senaryo.ad);
+    } else {
+      senaryoDuzenleBasitModalAc(senaryo);
+    }
+  }
+
+  // Tablo rozetiyle AYNI etiket (bkz. tests/support/beklenen-sonuc.ts > beklenenSonucEtiketi).
+  function beklenenSonucEtiketiClient(f) {
+    var bs = (f && f.beklenenSonuc) || { tip: 'basarili' };
+    if (bs.tip !== 'isKuraliHatasi') return f && f.odemeAdimiDahil ? 'Ödeme' : 'Teklif';
+    var adimAdlari = { primHesaplama: 'Prim', policelestirme: 'Poliçeleştirme', odeme: 'Ödeme' };
+    return 'Hata: ' + (adimAdlari[bs.adim] || bs.adim || '?');
+  }
+
+  // Formu önce "yükleniyor" durumunda açar; /senaryo-getir ve hazır profil listesi
+  // (/jetseyahat-yardimci-veri) İKİSİ de gelince formu düzenleme modunda çizer — profil
+  // listesi önce gelmezse ettiren/sigortalı profil seçimleri doldurulamazdı.
+  function jetSeyahatDuzenleAc(anahtar, baslik) {
+    var icerikAlani = document.getElementById('senaryoOlusturModalIcerik');
+    SENARYO_DUZENLE = null;
+    icerikAlani.innerHTML =
+      '<p class="modal-baslik">JetSeyahat — Senaryoyu Düzenle</p>' +
+      '<p class="modal-alt">Senaryonun güncel kaydı yükleniyor...</p>';
+    document.getElementById('senaryoOlusturModalOrtu').classList.add('acik');
+
+    var getirIstegi = fetch(TEST_SUNUCU.taban + '/senaryo-getir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ortam: ORTAM, token: TEST_SUNUCU.token, baslik: baslik })
+    })
+      .then(function (yanit) { return yanit.json(); })
+      .catch(function () {
+        return { basarili: false, mesaj: 'Test sunucusuna ulaşılamadı. Bir terminalde "npm run test-sunucu" çalıştırıp tekrar deneyin.' };
+      });
+    Promise.all([getirIstegi, senaryoOlusturYardimciVeriYukle()]).then(function (sonuclar) {
+      var getir = sonuclar[0];
+      if (!document.getElementById('senaryoOlusturModalOrtu').classList.contains('acik')) return;
+      if (!getir || !getir.basarili || !getir.senaryo) {
+        icerikAlani.innerHTML =
+          '<p class="modal-baslik">JetSeyahat — Senaryoyu Düzenle</p>' +
+          '<p class="senaryo-form-hata">Senaryo yüklenemedi: ' + escapeHtml((getir && getir.mesaj) || 'bilinmeyen hata') + '</p>';
+        return;
+      }
+      senaryoOlusturModalAc({ anahtar: anahtar, getir: getir });
+    });
+  }
+
+  // Select'te değer yoksa (ör. elle yazılmış eski bir değer) kaybolmasın diye seçenek eklenir.
+  function secimDegeriniAyarla(select, deger, ekEtiket) {
+    if (!select || deger === undefined || deger === null || deger === '') return;
+    var varMi = Array.prototype.some.call(select.options, function (o) { return o.value === String(deger); });
+    if (!varMi) {
+      var secenek = document.createElement('option');
+      secenek.value = String(deger);
+      secenek.textContent = String(deger) + (ekEtiket || '');
+      select.appendChild(secenek);
+    }
+    select.value = String(deger);
+  }
+
+  // kimlikAltBlokCiz ile çizilmiş bir ettiren/sigortalı bloğunu kayıttaki profil anahtarı
+  // ya da serbest kimlik nesnesiyle doldurur.
+  function kimlikBlokDoldur(alanOnEki, profil, kimlik) {
+    var el = function (id) { return document.getElementById(id); };
+    if (profil) {
+      secimDegeriniAyarla(el(alanOnEki + 'Profili'), profil, ' (profil listesinde yok)');
+      return;
+    }
+    if (!kimlik) return;
+    var serbestRadyo = document.querySelector('[name="' + alanOnEki + 'Kaynak"][value="serbest"]');
+    if (serbestRadyo) {
+      serbestRadyo.checked = true;
+      serbestRadyo.dispatchEvent(new Event('change'));
+    }
+    var alanlar = { Tc: kimlik.tcKimlikNo, Dogum: kimlik.dogumTarihi, Telefon: kimlik.cepTelefonu, Vkn: kimlik.vergiKimlikNo };
+    Object.keys(alanlar).forEach(function (ek) {
+      if (el(alanOnEki + ek) && alanlar[ek] !== undefined) el(alanOnEki + ek).value = alanlar[ek];
+    });
+  }
+
+  // /senaryo-getir > formVerisi (eski beklenen sonuç alanları yeni modele çevrilmiş,
+  // acente kodu çözülmüş) ile formu doldurur.
+  function senaryoFormunuDoldur(f) {
+    var el = function (id) { return document.getElementById(id); };
+    secimDegeriniAyarla(el('sof_kapsam'), f.kapsam);
+    senaryoOlusturAlternatifleriGuncelle();
+    secimDegeriniAyarla(el('sof_alternatif'), f.alternatif);
+    secimDegeriniAyarla(el('sof_covid'), f.covidTeminati);
+    secimDegeriniAyarla(el('sof_sorguTipi'), f.sorguTipi);
+
+    // Senaryoya özel yüklenmiş Excel: yeni bir yükleme yapılmış gibi tutulur ki kaydederken
+    // aynen geri gönderilsin; "Özel dosyayı kaldır" ile ürünün sabit dosyasına dönülür.
+    SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME = null;
+    if (f.cokluSorguDosyasi) {
+      var dosyaAdi = String(f.cokluSorguDosyasi).split('/').pop();
+      SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME = { dosyaYolu: f.cokluSorguDosyasi, dosyaAdi: dosyaAdi };
+      if (f.cokluSorguKisiSayisi) el('sof_cokluSorguKisiSayisi').value = f.cokluSorguKisiSayisi;
+      el('sof_cokluSorguDurum').innerHTML =
+        '<p class="senaryo-form-yardim">Bu senaryoya özel dosya: ' + escapeHtml(dosyaAdi) +
+        ' <button type="button" class="senaryo-duzenle-buton" id="sof_cokluSorguKaldir">Özel dosyayı kaldır</button></p>';
+      el('sof_cokluSorguKaldir').addEventListener('click', function () {
+        SENARYO_OLUSTUR_COKLU_SORGU_YUKLEME = null;
+        el('sof_cokluSorguDurum').innerHTML = '';
+        el('sof_cokluSorguKisiSayisi').value = '';
+        cokluSorguVarsayilanGuncelle();
+        senaryoDuzenleDenemeNotunuGuncelle();
+      });
+    }
+    cokluSorguAlaniGuncelle();
+
+    el('sof_acenteKodu').value = f.acenteKodu || '';
+    el('sof_acenteKullanicisi').value = f.acenteKullanicisi || '';
+    el('sof_kayak').checked = !!f.kayakTeminati;
+
+    secimDegeriniAyarla(el('sof_ettiren'), f.ettiren);
+    ettirenAltBlokCiz();
+    if (f.ettiren && f.ettiren !== 'ayni') {
+      kimlikBlokDoldur('sof_ettiren', f.ettirenProfili, f.ettiren === 'farkliTuzel' ? f.ettirenTuzelKimligi : f.ettirenOzelKimligi);
+    }
+
+    el('sof_sigortaliTipi').value = f.sigortaliProfili || f.sigortaliKimligi ? 'farkli' : 'varsayilan';
+    sigortaliAltBlokGuncelle();
+    if (f.sigortaliProfili || f.sigortaliKimligi) kimlikBlokDoldur('sof_sigortali', f.sigortaliProfili, f.sigortaliKimligi);
+
+    el('sof_odemeAdimiDahil').checked = !!f.odemeAdimiDahil;
+    // Kart: senaryonun kendi kartı varsa o, yoksa ortak test kartı (yardımcı veri düzenleme
+    // formu açılmadan ÖNCE yüklendi — bkz. jetSeyahatDuzenleAc).
+    odemeKartiniDoldur(f.krediKarti || SENARYO_OLUSTUR_VARSAYILAN_KART);
+    SENARYO_OLUSTUR_KART_DOLDURULDU = true;
+    if (f.krediKarti) {
+      el('sof_odemeVarsayilanNotu').textContent = 'Bu senaryoya özel bir kart kayıtlı. Alanları ortak test kartıyla aynı yaparsanız özel kart kaldırılır ve ortak kart kullanılır.';
+    }
+    var bs = f.beklenenSonuc || { tip: 'basarili' };
+    var radyo = document.querySelector('[name="sof_beklenenSonucTipi"][value="' + (bs.tip === 'isKuraliHatasi' ? 'isKuraliHatasi' : 'basarili') + '"]');
+    if (radyo) radyo.checked = true;
+    beklenenSonucAlaniniGuncelle();
+    if (bs.tip === 'isKuraliHatasi') {
+      if (bs.adim) el('sof_beklenenHataAdimi').value = bs.adim;
+      el('sof_beklenenHata').value = bs.mesaj || '';
+    }
+  }
+
+  // Kaydet düğmesinin altındaki küçük not: formun o anki hâli "Senaryoyu Koş" ile denendi mi?
+  function senaryoDuzenleDenemeNotunuGuncelle() {
+    var notEl = document.getElementById('sof_denemeNotu');
+    if (!notEl || !SENARYO_DUZENLE) return;
+    var guncel = JSON.stringify(senaryoOlusturFormundanVeriTopla());
+    var son = SENARYO_OLUSTUR_SON_SONUC;
+    if (son && JSON.stringify(son.veri) === guncel) {
+      var basariliMi = son.sonuc && son.sonuc.basarili && son.sonuc.durum === 'passed';
+      notEl.textContent = 'Bu hâliyle denendi: ' + (basariliMi ? 'Başarılı.' : 'Başarısız — yine de kaydedebilirsiniz.');
+    } else {
+      notEl.textContent = 'Bu değişiklikler henüz denenmedi (kaydetmek için deneme şart değil).';
+    }
+  }
+
+  function senaryoDuzenleKaydet() {
+    var hataAlani = document.getElementById('sof_hataAlani');
+    var kaydetAlani = document.getElementById('sof_duzenleKaydetAlani');
+    hataAlani.innerHTML = '';
+    kaydetAlani.innerHTML = '';
+    var yeniBaslik = document.getElementById('sof_duzenleBaslik').value.trim();
+    var veri = senaryoOlusturFormundanVeriTopla();
+    var dogrulamaHatasi = !yeniBaslik ? 'Başlık boş olamaz.' : senaryoFormuDogrula(veri);
+    if (!dogrulamaHatasi && senaryoCalisiyorMu(SENARYO_DUZENLE.anahtar)) {
+      dogrulamaHatasi = 'Bu senaryo şu an koşuyor. Koşu bitince ya da durdurulunca tekrar kaydedin.';
+    }
+    if (dogrulamaHatasi) {
+      hataAlani.innerHTML = '<p class="senaryo-form-hata">' + escapeHtml(dogrulamaHatasi) + '</p>';
+      return;
+    }
+    // Başlık değiştiyse önce sayfa içi bir uyarı gösterilir; kullanıcı AÇIKÇA onaylamadan
+    // istek gönderilmez (onaydan sonra başlık yine değişirse tekrar sorulur).
+    if (yeniBaslik !== SENARYO_DUZENLE.eskiBaslik && SENARYO_DUZENLE.onaylananBaslik !== yeniBaslik) {
+      kaydetAlani.innerHTML =
+        '<div class="senaryo-duzenle-uyari" role="alert">' +
+          '<strong>Başlık değişiyor.</strong> Başlık değişirse bu senaryonun önceki koşu geçmişi yeni başlığa bağlanmaz; eski koşular eski adıyla görünmeye devam eder.' +
+          '<div class="senaryo-form-buton-satir">' +
+            '<button type="button" id="sof_baslikOnayButonu" class="birincil">Anladım, kaydet</button>' +
+            '<button type="button" id="sof_baslikVazgecButonu">Vazgeç</button>' +
+          '</div>' +
+        '</div>';
+      document.getElementById('sof_baslikOnayButonu').addEventListener('click', function () {
+        SENARYO_DUZENLE.onaylananBaslik = yeniBaslik;
+        senaryoDuzenleKaydet();
+      });
+      document.getElementById('sof_baslikVazgecButonu').addEventListener('click', function () {
+        kaydetAlani.innerHTML = '';
+      });
+      document.getElementById('sof_baslikOnayButonu').focus();
+      return;
+    }
+    senaryoDuzenleKaydetGonder(yeniBaslik, veri, document.getElementById('sof_duzenleKosuyaDahil').checked);
+  }
+
+  function senaryoDuzenleKaydetGonder(yeniBaslik, veri, kosuyaDahil) {
+    var kaydetButonu = document.getElementById('sof_degisiklikleriKaydetButonu');
+    var kaydetAlani = document.getElementById('sof_duzenleKaydetAlani');
+    var hataAlani = document.getElementById('sof_hataAlani');
+    kaydetButonu.disabled = true;
+    kaydetButonu.textContent = 'Kaydediliyor...';
+    var govde = {
+      ortam: ORTAM,
+      token: TEST_SUNUCU.token,
+      eskiBaslik: SENARYO_DUZENLE.eskiBaslik,
+      senaryo: Object.assign({}, veri, { baslik: yeniBaslik }),
+      kosuyaDahil: kosuyaDahil
+    };
+    fetch(TEST_SUNUCU.taban + '/senaryo-guncelle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(govde)
+    })
+      .then(function (yanit) { return yanit.json(); })
+      .catch(function () { return { basarili: false, mesaj: 'Test sunucusuna ulaşılamadı.' }; })
+      .then(function (sonuc) {
+        kaydetButonu.disabled = false;
+        kaydetButonu.textContent = 'Değişiklikleri Kaydet';
+        if (!sonuc || !sonuc.basarili) {
+          hataAlani.innerHTML = '<p class="senaryo-form-hata">Kaydedilemedi: ' + escapeHtml((sonuc && sonuc.mesaj) || 'bilinmeyen hata') + '</p>';
+          return;
+        }
+        // Sonraki kayıtlar artık yeni başlığı hedefler.
+        SENARYO_DUZENLE.eskiBaslik = (sonuc.senaryo && sonuc.senaryo.baslik) || yeniBaslik;
+        SENARYO_DUZENLE.onaylananBaslik = null;
+        kaydetAlani.innerHTML = '<p class="senaryo-duzenle-basarili" id="sof_duzenleBasariMesaji">Değişiklikler kaydedildi — tablolar güncelleniyor...</p>';
+        senaryoDuzenleSonrasiRaporuGuncelle();
+      });
+  }
+
+  // Kayıttan sonra dashboard'u yeniden ürettirir (/rapor-uret) ve "↻ Sayfayı yenile"
+  // düğmesi gösterir (toplu koşu sonrasındaki akışla aynı; bkz. kosuSonrasiRaporuGuncelle).
+  function senaryoDuzenleSonrasiRaporuGuncelle() {
+    var mesajEl = document.getElementById('sof_duzenleBasariMesaji');
+    fetch(TEST_SUNUCU.taban + '/rapor-uret', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ortam: ORTAM, token: TEST_SUNUCU.token })
+    })
+      .then(function (yanit) { return yanit.json(); })
+      .catch(function () { return { basarili: false, mesaj: 'Test sunucusuna ulaşılamadı.' }; })
+      .then(function (veri) {
+        if (!mesajEl) return;
+        if (!veri || !veri.basarili) {
+          mesajEl.textContent = 'Değişiklikler kaydedildi, ancak tablolar güncellenemedi — terminalde "npm run rapor:' + ORTAM + '" çalıştırıp sayfayı yenileyin.';
+          return;
+        }
+        mesajEl.textContent = 'Değişiklikler kaydedildi, tablolar güncellendi.';
+        var yenile = document.createElement('button');
+        yenile.type = 'button';
+        yenile.className = 'senaryo-toplu-buton senaryo-toplu-buton-vurgulu';
+        yenile.textContent = '↻ Sayfayı yenile';
+        yenile.addEventListener('click', function () { location.reload(); });
+        mesajEl.appendChild(yenile);
+        yenile.focus();
+      });
+  }
+
+  // JetSeyahat dışındaki ürünler: salt okunur özet + "Koşuya dahil".
+  function senaryoDuzenleBasitModalAc(senaryo) {
+    var anahtar = senaryoAnahtari(senaryo);
+    var icerikAlani = document.getElementById('senaryoDuzenleModalIcerik');
+    icerikAlani.innerHTML =
+      '<p class="modal-baslik" id="senaryoDuzenleModalBaslik">' + escapeHtml(senaryo.urun) + ' — Senaryoyu Düzenle</p>' +
+      '<dl class="senaryo-duzenle-ozet">' +
+        '<dt>Ürün</dt><dd>' + escapeHtml(senaryo.urun) + '</dd>' +
+        '<dt>Dosya</dt><dd>' + escapeHtml(senaryo.dosya) + '</dd>' +
+        '<dt>Başlık</dt><dd>' + escapeHtml(senaryo.ad) + '</dd>' +
+        (senaryo.beklenenSonuc ? '<dt>Beklenen sonuç</dt><dd>' + escapeHtml(senaryo.beklenenSonuc) + '</dd>' : '') +
+      '</dl>' +
+      '<div class="senaryo-form-alan"><label class="senaryo-form-checkbox"><input type="checkbox" id="sdm_kosuyaDahil"' + (kosuyaDahilMi(anahtar) ? ' checked' : '') + ' /> Koşuya dahil</label></div>' +
+      '<p class="senaryo-form-yardim beklenen-sonuc-yardim">Bu ürünün diğer senaryo alanları kodda / ürün veri dosyasında tanımlıdır; tam düzenleme şu an yalnızca JetSeyahat için mevcut.</p>' +
+      '<div id="sdm_mesajAlani" aria-live="polite"></div>' +
+      '<div class="senaryo-form-buton-satir">' +
+        '<button type="button" id="sdm_kaydetButonu" class="birincil">Kaydet</button>' +
+        '<button type="button" id="sdm_vazgecButonu">Vazgeç</button>' +
+      '</div>';
+    document.getElementById('sdm_vazgecButonu').addEventListener('click', senaryoDuzenleBasitModalKapat);
+    document.getElementById('sdm_kaydetButonu').addEventListener('click', function () {
+      var kaydetButonu = document.getElementById('sdm_kaydetButonu');
+      var mesajAlani = document.getElementById('sdm_mesajAlani');
+      var dahil = document.getElementById('sdm_kosuyaDahil').checked;
+      if (dahil === kosuyaDahilMi(anahtar)) {
+        mesajAlani.innerHTML = '<p class="senaryo-form-yardim beklenen-sonuc-yardim">Değişiklik yok.</p>';
+        return;
+      }
+      kaydetButonu.disabled = true;
+      kaydetButonu.textContent = 'Kaydediliyor...';
+      kosuListesiIstegiGonder([anahtar], dahil).then(function (sonuc) {
+        kaydetButonu.disabled = false;
+        kaydetButonu.textContent = 'Kaydet';
+        if (!sonuc || !sonuc.basarili) {
+          mesajAlani.innerHTML = '<p class="senaryo-form-hata">Kaydedilemedi: ' + escapeHtml((sonuc && sonuc.mesaj) || 'bilinmeyen hata') + '</p>';
+          return;
+        }
+        if (dahil) KOSU_LISTESI_HARIC.delete(anahtar);
+        else KOSU_LISTESI_HARIC.add(anahtar);
+        senaryoTablosuCiz();
+        mesajAlani.innerHTML = '<p class="senaryo-duzenle-basarili">Kaydedildi: senaryo ' + (dahil ? 'koşuya dahil edildi.' : 'koşudan çıkarıldı.') + '</p>';
+      });
+    });
+    document.getElementById('senaryoDuzenleModalOrtu').classList.add('acik');
+    document.getElementById('sdm_kosuyaDahil').focus();
+  }
+
+  function senaryoDuzenleBasitModalKapat() {
+    document.getElementById('senaryoDuzenleModalOrtu').classList.remove('acik');
   }
 
   // Üst istatistik kartları: GENEL seçiliyken tüm ürünlerin son koşusu, bir ürün
@@ -4847,7 +5716,14 @@ const html = `<!DOCTYPE html>
   document.getElementById('senaryoOlusturModalOrtu').addEventListener('click', function (olay) {
     if (olay.target === olay.currentTarget) senaryoOlusturModalKapat();
   });
-  document.getElementById('senaryoOlusturButonu').addEventListener('click', senaryoOlusturModalAc);
+  // (Olay nesnesi senaryoOlusturModalAc'a "duzenleme" parametresi olarak gitmesin diye sarılır.)
+  document.getElementById('senaryoOlusturButonu').addEventListener('click', function () { senaryoOlusturModalAc(null); });
+
+  // "✎ Düzenle" (JetSeyahat dışı) küçük popup'ı.
+  document.getElementById('senaryoDuzenleModalKapatButonu').addEventListener('click', senaryoDuzenleBasitModalKapat);
+  document.getElementById('senaryoDuzenleModalOrtu').addEventListener('click', function (olay) {
+    if (olay.target === olay.currentTarget) senaryoDuzenleBasitModalKapat();
+  });
 
   // Ekran görüntüsü büyütme: sayfadaki (veya başka bir modal içindeki) herhangi bir
   // ".hata-goruntu" küçük resmine tıklanınca resmi ortalanmış/büyük halde gösterir.
@@ -4877,6 +5753,7 @@ const html = `<!DOCTYPE html>
     else if (document.getElementById('senaryoSonucModalOrtu').classList.contains('acik')) senaryoSonucModalKapat();
     else if (document.getElementById('senaryoCanliPanelOrtu').classList.contains('acik')) senaryoCanliPanelKapat();
     else if (document.getElementById('senaryoOlusturModalOrtu').classList.contains('acik')) senaryoOlusturModalKapat();
+    else if (document.getElementById('senaryoDuzenleModalOrtu').classList.contains('acik')) senaryoDuzenleBasitModalKapat();
     else adimDetayModalKapat();
   });
 </script>

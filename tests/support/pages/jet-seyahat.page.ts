@@ -1,5 +1,10 @@
 import { resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
+import {
+  beklenenGorulenMetni,
+  beklenenMesajiBekle,
+  UYARI_CIKMADI_METNI
+} from '../beklenen-sonuc';
 import type { JetSeyahatTestData, OzelKimlikData, TuzelKimlikData } from '../test-data';
 
 // JetSeyahat (seyahat sigortası) ekranının Page Object'i.
@@ -166,12 +171,40 @@ export class JetSeyahatPage {
       .toBeGreaterThan(0);
   }
 
-  /** Prim hesaplar ve beklenen iş kuralı/hata mesajının diyalogda göründüğünü doğrular. */
+  /**
+   * Prim hesaplar ve beklenen iş kuralı/hata mesajının diyalogda (#dialog-content)
+   * göründüğünü doğrular. Eşleşme toleranslıdır (bkz. beklenen-sonuc.ts >
+   * mesajIceriyorMu): büyük/küçük harf, kıvrık/düz tırnak ve boşluk farkları yok sayılır,
+   * diyalog metninin beklenen mesajı İÇERMESİ yeterlidir. Doğrulanamazsa hata metninde
+   * hem beklenen hem de görülen (diyalog metni ya da "uyarı çıkmadı, akış devam etti")
+   * yer alır.
+   */
   async primHesaplaVeHataDogrula(beklenenMesaj: string): Promise<void> {
     await this.page.locator('#Refresh').click();
     const hata = this.page.locator('#dialog-content');
-    await expect(hata).toBeVisible({ timeout: 30_000 });
-    await expect(hata).toHaveText(beklenenMesaj);
+    const gorundu = await hata
+      .waitFor({ state: 'visible', timeout: 30_000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!gorundu) {
+      const prim = await this.page.locator('#premium-total-eur').innerText().catch(() => '');
+      throw new Error(
+        beklenenGorulenMetni(
+          'Prim hesaplama',
+          beklenenMesaj,
+          `${UYARI_CIKMADI_METNI}${prim.trim() ? ` (prim: ${prim.trim()} EUR)` : ''}`
+        )
+      );
+    }
+
+    // Diyalog metni AJAX ile sonradan dolabildiği için kısa bir süre tekrar tekrar okunur.
+    const { eslesen, sonGorulen } = await beklenenMesajiBekle(() => hata.innerText(), [beklenenMesaj], {
+      zamanAsimiMs: 5_000
+    });
+    if (!eslesen) {
+      throw new Error(beklenenGorulenMetni('Prim hesaplama', beklenenMesaj, sonGorulen));
+    }
   }
 
   // Tarih alanları salt-okunur datepicker ile çalışıyor; doğrudan klavye girişi kabul etmiyor.

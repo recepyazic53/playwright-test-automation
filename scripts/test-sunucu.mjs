@@ -39,7 +39,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve as resolvePath, extname, relative, isAbsolute, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { eskiVideolariTemizle } from './medya-temizligi.mjs';
-import { haricTutulanlariOku, kosuListesiAnahtari, kosuListesiniGuncelle } from './kosu-listesi.mjs';
+import { haricTutulanlariOku, haricTutulanlariYaz, kosuListesiAnahtari, kosuListesiniGuncelle } from './kosu-listesi.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
@@ -294,7 +294,19 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
             for (const spec of suite.specs ?? []) {
               const specDosya = spec.file ?? buDosya;
               if (spec.title) {
-                liste.push({ ad: spec.title, urun: urunAdiBul(specDosya), dosya: specDosya, satir: spec.line });
+                // Spec'in test tanımında verdiği "beklenenSonuc" annotation'ı (şu an JetSeyahat
+                // — bkz. prim-hesaplama.spec.ts) "--list" çıktısında da gelir; dashboard'daki
+                // Senaryolar tablosu bunu rozet olarak gösterir. Yoksa alan hiç eklenmez.
+                const beklenenSonuc = (spec.tests ?? [])
+                  .flatMap((t) => t.annotations ?? [])
+                  .find((a) => a?.type === 'beklenenSonuc' && typeof a.description === 'string')?.description;
+                liste.push({
+                  ad: spec.title,
+                  urun: urunAdiBul(specDosya),
+                  dosya: specDosya,
+                  satir: spec.line,
+                  ...(beklenenSonuc ? { beklenenSonuc } : {})
+                });
               }
             }
           })(veri, undefined);
@@ -390,9 +402,15 @@ function sonucuOku(jsonYolu, senaryoAdi) {
         const videoEki = (sonDeneme.attachments ?? []).find((ek) => ek?.name === 'video');
         const videoYolu = videoEki?.path && existsSync(videoEki.path) ? videoEki.path : null;
 
+        // Hatanın düştüğü EN ÜST seviye test.step başlığı (ör. "Poliçeleştirme açılır ve
+        // kart bilgileri girilir") — dashboard > "Senaryo Oluştur", "Bu mesajı beklenen hata
+        // olarak kullan" derken hatanın hangi adımda çıktığını buradan çıkarır.
+        const basarisizAdim = (sonDeneme.steps ?? []).find((adim) => adim?.error)?.title ?? null;
+
         bulunan = {
           durum: sonDeneme.status,
           sureMs: sonDeneme.duration,
+          basarisizAdim,
           hataMesaji: hataMesajiHam ? String(hataMesajiHam).replace(/\x1b\[[0-9;]*m/g, '') : null,
           ekranGoruntusu: ekranGoruntusuBase64,
           videoYolu
@@ -456,6 +474,14 @@ const baslamadanIptalEdilecekler = new Set();
 // hiç başlatmaz (bu Map'teki erken-çözülmüş giriş o noktada zaten silinmiş olduğundan
 // ikinci bir yanıt gönderilmez, güvenlidir).
 const kuyruktaBekleyenler = new Map();
+
+// kosuId -> "<dosya>::<ad>" (kosuListesiAnahtari biçiminde). testiCalistirVeBekle'ye giren
+// her koşu (kuyrukta bekleyen ya da gerçekten çalışan) burada durur; dosya sırasındaki
+// görevi bitince silinir. /senaryo-guncelle, o an koşan bir senaryonun verisini (ör.
+// başlığını) altından değiştirmemek için buna bakar — calisanSurecler yalnızca süreci
+// BAŞLAMIŞ koşuları, kuyruktaBekleyenler ise yalnızca HTTP yanıtını bekleyenleri tuttuğu
+// için ikisi de tek başına yeterli değil.
+const aktifKosuAnahtarlari = new Map();
 
 // Dashboard'daki "Durdur" ikonu tarafından çağrılır. Süreç zaten çalışıyorsa
 // öldürür; henüz kuyrukta bekliyorsa (bkz. yukarıdaki NOT) sırası geldiğinde hiç
@@ -612,6 +638,10 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
     };
   }
 
+  // bkz. aktifKosuAnahtarlari NOTU: kuyrukta bekleme dahil, koşu bitene kadar bu senaryo
+  // "koşuyor" sayılır (Düzenle > Değişiklikleri Kaydet bu sürede reddedilir).
+  aktifKosuAnahtarlari.set(kosuId, kosuListesiAnahtari(dosya, senaryoAdi));
+
   // bkz. kuyruktaBekleyenler NOTU: kuyruğa girmeden ÖNCE bu koşunun HTTP yanıtını
   // çözecek fonksiyonu kaydediyoruz ki calismaDurdur, koşu daha sırası gelmeden
   // "Durdur" ile iptal edilirse yanıtı hemen dönebilsin.
@@ -621,6 +651,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
       // Eğer calismaDurdur bu koşuyu ZATEN erken çözdüyse (Map'ten silinmiş olur),
       // ikinci kez resolve çağırmıyoruz — Promise'lerde ikinci resolve zaten yok
       // sayılır ama netlik için burada da kontrol ediyoruz.
+      aktifKosuAnahtarlari.delete(kosuId);
       if (kuyruktaBekleyenler.delete(kosuId)) {
         resolve(sonuc);
       }
@@ -629,6 +660,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
       // (ör. EAGAIN) HTTP yanıtı sonsuza dek açık kalmasın ve işlenmemiş bir promise
       // reddi oluşmasın diye burada da yakalanıp kullanıcıya dönülür.
       console.error(`[test-sunucu] Koşu başlatılırken beklenmeyen hata: ${hata?.message ?? hata}`);
+      aktifKosuAnahtarlari.delete(kosuId);
       if (kuyruktaBekleyenler.delete(kosuId)) {
         resolve({ calistiMi: false, mesaj: `Test süreci başlatılamadı: ${hata?.message ?? hata}` });
       }
@@ -945,10 +977,14 @@ function jetSeyahatSenaryoNesnesiOlustur(baslik, girdi, ortam) {
     senaryo.sigortaliKimligi = girdi.sigortaliKimligi;
   }
   if (girdi.kayakTeminati) senaryo.kayakTeminati = true;
-  if (girdi.beklenenHataMesaji) {
-    senaryo.beklenenHataMesaji = girdi.beklenenHataMesaji;
-    senaryo.beklenenHataAdimi = girdi.beklenenHataAdimi === 'policelestirme' ? 'policelestirme' : 'primHesaplama';
-  }
+  // Beklenen sonuç: yeni senaryolar her zaman odemeAdimiDahil + beklenenSonuc ile yazılır
+  // (eski beklenenHataMesaji/beklenenHataAdimi alanları artık kabul edilmez).
+  Object.assign(senaryo, beklenenSonucuDogrula(girdi));
+  // Ödeme kartı (dashboard > "Ödeme bilgileri"): yalnızca ortak test kartından FARKLIYSA
+  // senaryoya yazılır (bkz. senaryoKrediKartiniDogrula). Aynıysa hiç yazılmaz — senaryo
+  // ortak kartı kullanır ve ortak kart ileride değişirse onu izler.
+  const krediKarti = senaryoKrediKartiniDogrula(girdi.krediKarti, senaryo.odemeAdimiDahil, ortam);
+  if (krediKarti) senaryo.krediKarti = krediKarti;
 
   // Acente: kullanıcı popup'ta acente KODUNU ve o acentedeki kullanıcı KODUNU elle
   // yazar (canlı bir sorgu YAPILMAZ — kullanıcı doğru değerleri zaten biliyor). Bu ikili,
@@ -986,6 +1022,141 @@ function jetSeyahatSenaryoNesnesiOlustur(baslik, girdi, ortam) {
   return { senaryo, yeniAcenteProfilleri };
 }
 
+// Dashboard popup'ından gelen odemeAdimiDahil + beklenenSonuc alanlarını doğrular ve
+// jet-seyahat.json'a yazılacak temiz biçimini döner; kurala uymayan girdide Türkçe bir
+// Error fırlatır (çağıranlar 400 döner — /dene'de geçici dosya yazılmadan ve koşu
+// başlamadan, /kaydet'te hiçbir dosyaya yazılmadan ÖNCE).
+// Kurallar tests/support/beklenen-sonuc.ts > beklenenSonucuCoz ile AYNI tutulmalı:
+//  - odemeAdimiDahil zorunlu ve boolean.
+//  - beklenenSonuc.tip "basarili" ya da "isKuraliHatasi".
+//  - isKuraliHatasi: adim "primHesaplama" | "policelestirme" | "odeme", mesaj boş olamaz;
+//    "policelestirme"/"odeme" için odemeAdimiDahil true olmalı.
+const BEKLENEN_HATA_ADIMLARI = ['primHesaplama', 'policelestirme', 'odeme'];
+const BEKLENEN_HATA_ADIM_ADLARI = { primHesaplama: 'Prim hesaplama', policelestirme: 'Poliçeleştirme', odeme: 'Ödeme' };
+function beklenenSonucuDogrula(girdi) {
+  if (girdi.beklenenHataMesaji !== undefined || girdi.beklenenHataAdimi !== undefined) {
+    throw new Error('Eski "beklenenHataMesaji"/"beklenenHataAdimi" alanları artık desteklenmiyor — dashboard sayfasını yeniden üretip (npm run rapor:<ortam>) tarayıcıyı yenileyin.');
+  }
+  const { odemeAdimiDahil, beklenenSonuc } = girdi;
+  if (typeof odemeAdimiDahil !== 'boolean') {
+    throw new Error('"odemeAdimiDahil" true ya da false olmalıdır (ödeme adımının senaryoya dahil olup olmadığı).');
+  }
+  if (!beklenenSonuc || typeof beklenenSonuc !== 'object') {
+    throw new Error('"beklenenSonuc" zorunludur ({ tip: "basarili" } ya da { tip: "isKuraliHatasi", adim, mesaj }).');
+  }
+  if (beklenenSonuc.tip === 'basarili') {
+    return { odemeAdimiDahil, beklenenSonuc: { tip: 'basarili' } };
+  }
+  if (beklenenSonuc.tip !== 'isKuraliHatasi') {
+    throw new Error('"beklenenSonuc.tip" "basarili" ya da "isKuraliHatasi" olmalıdır.');
+  }
+  if (!BEKLENEN_HATA_ADIMLARI.includes(beklenenSonuc.adim)) {
+    throw new Error('"beklenenSonuc.adim" "primHesaplama", "policelestirme" ya da "odeme" olmalıdır.');
+  }
+  if (typeof beklenenSonuc.mesaj !== 'string' || !beklenenSonuc.mesaj.trim()) {
+    throw new Error('İş kuralı hatası bekleniyorsa beklenen mesaj boş olamaz.');
+  }
+  if (beklenenSonuc.adim !== 'primHesaplama' && !odemeAdimiDahil) {
+    throw new Error(`"${BEKLENEN_HATA_ADIM_ADLARI[beklenenSonuc.adim]}" adımında hata beklemek için ödeme adımının dahil olması (odemeAdimiDahil: true) gerekir.`);
+  }
+  return {
+    odemeAdimiDahil,
+    beklenenSonuc: { tip: 'isKuraliHatasi', adim: beklenenSonuc.adim, mesaj: beklenenSonuc.mesaj.trim() }
+  };
+}
+
+// ---- Senaryoya özel ödeme kartı (JetSeyahat > "Ödeme bilgileri") ----
+// Kurallar tests/support/senaryo-kredi-karti.ts > senaryoKrediKartiniDogrula ve dashboard'daki
+// senaryoFormuDogrula ile AYNI tutulmalı. Hata mesajları kart numarasını/CVV'yi ASLA
+// içermez (jsonGonder ile popup'a, istek hatası olursa sunucu loguna düşebilir).
+const TAKSIT_UST_SINIRI = 12;
+
+// ortak.json > odeme.krediKarti — popup'taki "Ödeme bilgileri" alanlarının ön değeri ve
+// "kullanıcı kartı değiştirdi mi?" karşılaştırmasının referansı. beklenenHataMesaji
+// (bazı ürünlerin ödeme sonucu kontrolü) kart girişine ait olmadığından döndürülmez.
+// Kart tanımlı değilse null.
+function varsayilanKrediKartiGetir(ortam) {
+  const kart = ortakVerisiniOku(ortam).odeme?.krediKarti;
+  if (!kart || typeof kart !== 'object') return null;
+  return {
+    isim: String(kart.isim ?? ''),
+    soyisim: String(kart.soyisim ?? ''),
+    kartNo: String(kart.kartNo ?? '').replace(/\s+/g, ''),
+    guvenlikKodu: String(kart.guvenlikKodu ?? ''),
+    sonKullanmaAyi: { deger: String(kart.sonKullanmaAyi?.deger ?? ''), metin: String(kart.sonKullanmaAyi?.metin ?? '') },
+    sonKullanmaYili: { deger: String(kart.sonKullanmaYili?.deger ?? ''), metin: String(kart.sonKullanmaYili?.metin ?? '') },
+    taksit: { deger: String(kart.taksit?.deger ?? ''), metin: String(kart.taksit?.metin ?? '') }
+  };
+}
+
+// Select alanı (ay/yıl/taksit) { deger, metin } nesnesi ya da yalnızca değer olarak gelebilir.
+function secimDegeriOku(secim) {
+  if (secim && typeof secim === 'object') return String(secim.deger ?? '').trim();
+  return secim === undefined || secim === null ? '' : String(secim).trim();
+}
+
+function kartTamSayisi(deger, alt, ust) {
+  if (!/^\d{1,2}$/.test(deger)) return null;
+  const sayi = Number(deger);
+  return sayi >= alt && sayi <= ust ? sayi : null;
+}
+
+// İki kart (normalize edilmiş) aynı mı? Karşılaştırma yalnızca teste giden DEĞERLERLE
+// yapılır (metin yalnızca görüntü amaçlı).
+function krediKartlariAyniMi(a, b) {
+  if (!a || !b) return false;
+  return a.isim === b.isim && a.soyisim === b.soyisim && a.kartNo === b.kartNo &&
+    a.guvenlikKodu === b.guvenlikKodu && a.sonKullanmaAyi.deger === b.sonKullanmaAyi.deger &&
+    a.sonKullanmaYili.deger === b.sonKullanmaYili.deger && a.taksit.deger === b.taksit.deger;
+}
+
+// Popup'tan gelen kartı doğrular ve ortak.json > odeme.krediKarti ile AYNI biçime getirir
+// (beklenenHataMesaji hariç): kart no boşluksuz, ay { deger: "1", metin: "01" }, yıl
+// { deger: "2031", metin: "2031" }, taksit { deger: "1", metin: "Tek Çekim" | "N Taksit" }.
+// Dönüş: senaryoya yazılacak kart ya da (kart gelmediyse / ortak kartla aynıysa) undefined.
+function senaryoKrediKartiniDogrula(ham, odemeAdimiDahil, ortam) {
+  if (ham === undefined || ham === null) return undefined;
+  if (!odemeAdimiDahil) {
+    throw new Error('Ödeme adımı dahil değilken (odemeAdimiDahil: false) kart bilgisi gönderilemez.');
+  }
+  if (typeof ham !== 'object' || Array.isArray(ham)) throw new Error('"krediKarti" bir nesne olmalıdır.');
+
+  const isim = typeof ham.isim === 'string' ? ham.isim.trim() : '';
+  const soyisim = typeof ham.soyisim === 'string' ? ham.soyisim.trim() : '';
+  if (!isim) throw new Error('Kart üzerindeki ad boş olamaz.');
+  if (!soyisim) throw new Error('Kart üzerindeki soyad boş olamaz.');
+  // Kart numarası girişte boşluklu yazılabilir ("5555 5555 ..."), boşluksuz saklanır.
+  const kartNo = typeof ham.kartNo === 'string' ? ham.kartNo.replace(/\s+/g, '') : '';
+  if (!/^\d{16}$/.test(kartNo)) throw new Error('Kart numarası 16 haneli olmalıdır (yalnızca rakam).');
+  const guvenlikKodu = typeof ham.guvenlikKodu === 'string' ? ham.guvenlikKodu.trim() : '';
+  if (!/^\d{3,4}$/.test(guvenlikKodu)) throw new Error('Güvenlik kodu (CVV) 3 ya da 4 haneli olmalıdır.');
+
+  const ay = kartTamSayisi(secimDegeriOku(ham.sonKullanmaAyi), 1, 12);
+  if (ay === null) throw new Error('Son kullanma ayı 01-12 arasında olmalıdır.');
+  const yil = secimDegeriOku(ham.sonKullanmaYili);
+  if (!/^\d{4}$/.test(yil)) throw new Error('Son kullanma yılı 4 haneli olmalıdır.');
+  if (Number(yil) < new Date().getFullYear()) throw new Error(`Son kullanma yılı (${yil}) geçmişte olamaz.`);
+  const taksit = kartTamSayisi(secimDegeriOku(ham.taksit), 1, TAKSIT_UST_SINIRI);
+  if (taksit === null) throw new Error(`Taksit 1-${TAKSIT_UST_SINIRI} arasında olmalıdır.`);
+
+  const varsayilan = varsayilanKrediKartiGetir(ortam);
+  // Taksit metni: ortak karttaki aynı değerin metni (ör. "Tek Çekim") korunur; farklı bir
+  // değerse aynı kalıpla üretilir.
+  const taksitMetni = varsayilan && varsayilan.taksit.deger === String(taksit) && varsayilan.taksit.metin
+    ? varsayilan.taksit.metin
+    : taksit === 1 ? 'Tek Çekim' : `${taksit} Taksit`;
+  const kart = {
+    isim,
+    soyisim,
+    kartNo,
+    guvenlikKodu,
+    sonKullanmaAyi: { deger: String(ay), metin: String(ay).padStart(2, '0') },
+    sonKullanmaYili: { deger: yil, metin: yil },
+    taksit: { deger: String(taksit), metin: taksitMetni }
+  };
+  return krediKartlariAyniMi(kart, varsayilan) ? undefined : kart;
+}
+
 // Popup'ın "hazır profil" dropdown'larını (ettiren/sigortalı) ve "Çoklu" sorgu tipi
 // seçildiğinde kullanılacak sabit Excel dosyası bilgisini döner — ikisi de sadece
 // yerel JSON dosyalarını okur, canlı tarayıcı gerekmez.
@@ -1000,7 +1171,13 @@ function jetSeyahatYardimciVeriGetir(ortam) {
     cokluSorgu: {
       dosya: jetSeyahatVeri.jetSeyahat?.cokluSorguDosyasi,
       kisiSayisi: jetSeyahatVeri.jetSeyahat?.cokluSorguKisiSayisi
-    }
+    },
+    // "Beklenen Sonuç > Başarılı akış" açıklamasında gösterilen, ödeme sonrası başarı
+    // sayılan mesajlar (rapor üretilirken VERI'ye de gömülür; bu değer daha günceldir).
+    kabulEdilenOdemeSonuclari: jetSeyahatVeri.jetSeyahat?.kabulEdilenOdemeSonuclari || [],
+    // "Ödeme bilgileri" alanlarının ön değeri (ortak test kartı). Dashboard HTML'ine
+    // GÖMÜLMEZ; yalnızca popup açılınca bu uçtan canlı alınır.
+    varsayilanKrediKarti: varsayilanKrediKartiGetir(ortam)
   };
 }
 
@@ -1043,6 +1220,104 @@ function ortakAcenteProfiliBulYaEkle(veri, acente) {
     acenteKullanicisi: acente.acenteKullanicisi
   };
   return yeniAnahtar;
+}
+
+// ---- "✎ Düzenle" (JetSeyahat) yardımcıları ----
+
+// "Senaryo Oluştur" formunun yönettiği alanlar. /senaryo-guncelle kayıttaki bu alanları
+// formdan gelen yeni değerlerle DEĞİŞTİRİR (formda artık olmayanlar — ör. ettiren "ayni"ye
+// çekildiyse ettirenProfili — silinir); listede OLMAYAN, elle eklenmiş başka alanlar
+// olduğu gibi korunur. Eski beklenenHataMesaji/beklenenHataAdimi da buradadır: güncellenen
+// kayıt her zaman yeni modelle (odemeAdimiDahil + beklenenSonuc) yazılır.
+const JET_SEYAHAT_FORM_ALANLARI = [
+  'baslik', 'kapsam', 'alternatif', 'covidTeminati', 'sorguTipi', 'ettiren',
+  'ettirenProfili', 'ettirenOzelKimligi', 'ettirenTuzelKimligi', 'sigortaliProfili', 'sigortaliKimligi',
+  'kayakTeminati', 'acenteProfili', 'cokluSorguDosyasi', 'cokluSorguKisiSayisi',
+  'odemeAdimiDahil', 'beklenenSonuc', 'beklenenHataMesaji', 'beklenenHataAdimi',
+  // Senaryoya özel ödeme kartı: formda ortak karttan farklı bir kart yoksa (ya da ödeme
+  // adımı kapatıldıysa) güncellemede kayıttan SİLİNİR.
+  'krediKarti'
+];
+
+// Kayıttaki (yeni ya da ESKİ biçimli) beklenen sonuç alanlarını formun kullandığı yeni
+// modele çevirir. Kurallar tests/support/beklenen-sonuc.ts > beklenenSonucuCoz'un
+// dönüştürme kısmıyla AYNI: odemeAdimiDahil yoksa true; beklenenSonuc yoksa
+// beklenenHataMesaji doluysa { isKuraliHatasi, adim: beklenenHataAdimi ?? primHesaplama }.
+// Doğrulama YAPMAZ (hatalı eski kayıt da forma açılabilsin; kaydederken
+// beklenenSonucuDogrula zaten kontrol eder).
+function beklenenSonucuFormaCevir(senaryo) {
+  const odemeAdimiDahil = typeof senaryo.odemeAdimiDahil === 'boolean' ? senaryo.odemeAdimiDahil : true;
+  let beklenenSonuc;
+  if (senaryo.beklenenSonuc && typeof senaryo.beklenenSonuc === 'object') {
+    beklenenSonuc = senaryo.beklenenSonuc.tip === 'isKuraliHatasi'
+      ? { tip: 'isKuraliHatasi', adim: senaryo.beklenenSonuc.adim, mesaj: senaryo.beklenenSonuc.mesaj ?? '' }
+      : { tip: 'basarili' };
+  } else if (senaryo.beklenenHataMesaji) {
+    beklenenSonuc = { tip: 'isKuraliHatasi', adim: senaryo.beklenenHataAdimi ?? 'primHesaplama', mesaj: senaryo.beklenenHataMesaji };
+  } else {
+    beklenenSonuc = { tip: 'basarili' };
+  }
+  return { odemeAdimiDahil, beklenenSonuc };
+}
+
+// Kayıttaki senaryoyu "Senaryo Oluştur" formunun doldurulabileceği biçime getirir: eski
+// beklenen sonuç alanları yeni modele çevrilir, acenteProfili anahtarı ortak.json'dan
+// acente kodu + kullanıcı koduna çözülür (form bu ikisini metin olarak gösterir; kullanıcı
+// değiştirmezse istemci yine acenteProfili anahtarını gönderir — bkz. dashboard).
+function jetSeyahatSenaryosunuFormaCevir(senaryo, ortam) {
+  const form = {};
+  for (const alan of JET_SEYAHAT_FORM_ALANLARI) {
+    if (alan === 'beklenenHataMesaji' || alan === 'beklenenHataAdimi') continue;
+    if (senaryo[alan] !== undefined) form[alan] = senaryo[alan];
+  }
+  Object.assign(form, beklenenSonucuFormaCevir(senaryo));
+  // Kayıtta acente yoksa test "varsayilan" profiliyle koşar (testBaslangiciniHazirla);
+  // form da boş göstermek yerine GERÇEKTE kullanılan bu acenteyi gösterir.
+  // acenteVarsayilanMi: istemci, alanlara dokunulmadıysa kayda acente yazmaz (senaryo
+  // varsayılan profile bağlı kalır, varsayılan değişirse onu izler).
+  const profilAnahtari = senaryo.acenteProfili || 'varsayilan';
+  let profil;
+  try {
+    profil = ortakVerisiniOku(ortam).kullaniciDegistir?.[profilAnahtari];
+  } catch {
+    profil = undefined;
+  }
+  if (profil) {
+    form.acenteKodu = profil.acentePartaji ?? '';
+    form.acenteKullanicisi = profil.acenteKullanicisi ?? '';
+    form.acenteAciklamasi = profil.acentePartajiSecenegi ?? profil.acentePartaji ?? '';
+  }
+  form.acenteVarsayilanMi = !senaryo.acenteProfili;
+  return form;
+}
+
+// Başlığa göre JetSeyahat senaryosunu bulur; yoksa ya da aynı başlıkta birden fazla kayıt
+// varsa (elle düzenlenmiş dosya) açıklayıcı bir hata fırlatır.
+function jetSeyahatSenaryoIndexiBul(veri, baslik) {
+  const senaryolar = veri?.jetSeyahat?.senaryolar;
+  if (!Array.isArray(senaryolar)) throw new Error('jet-seyahat.json > jetSeyahat.senaryolar bulunamadı.');
+  const indexler = [];
+  senaryolar.forEach((s, i) => { if (s?.baslik === baslik) indexler.push(i); });
+  if (indexler.length === 0) {
+    const hata = new Error('Bu başlıkta bir JetSeyahat senaryosu bulunamadı — dosya değişmiş olabilir, dashboard\'u yenileyin.');
+    hata.durumKodu = 404;
+    throw hata;
+  }
+  if (indexler.length > 1) {
+    const hata = new Error(`jet-seyahat.json'da bu başlıkta ${indexler.length} senaryo var; düzenlemeden önce dosyayı elle düzeltin.`);
+    hata.durumKodu = 409;
+    throw hata;
+  }
+  return indexler[0];
+}
+
+// Senaryo o an (kuyrukta bekleyerek ya da gerçekten) koşuyor mu? (bkz. aktifKosuAnahtarlari)
+function senaryoKosuyorMu(dosya, ad) {
+  const anahtar = kosuListesiAnahtari(dosya, ad);
+  for (const aktif of aktifKosuAnahtarlari.values()) {
+    if (aktif === anahtar) return true;
+  }
+  return false;
 }
 
 async function istegiIsle(req, res) {
@@ -1538,6 +1813,7 @@ async function istegiIsle(req, res) {
         durum: calistirmaSonucu.sonuc.durum,
         sureMs: calistirmaSonucu.sonuc.sureMs,
         hataMesaji: calistirmaSonucu.sonuc.hataMesaji,
+        basarisizAdim: calistirmaSonucu.sonuc.basarisizAdim,
         ekranGoruntusu: calistirmaSonucu.sonuc.ekranGoruntusu,
         videoUrl: medyaUrlOlustur(calistirmaSonucu.sonuc.videoYolu)
       });
@@ -1633,6 +1909,169 @@ async function istegiIsle(req, res) {
       });
     } catch (hata) {
       jsonGonder(res, 400, { basarili: false, mesaj: hata.message });
+    }
+    return;
+  }
+
+  // "✎ Düzenle" (JetSeyahat): senaryonun jet-seyahat.json'daki GÜNCEL kaydını döner (dashboard
+  // statik bir anlık görüntü olduğundan form her açılışta sunucudan beslenir).
+  // Gövde: { token, ortam, baslik }. Yanıt: { basarili, senaryo (ham kayıt), formVerisi
+  // (eski alanlar yeni modele çevrilmiş, acente kodu çözülmüş), eskiAlanlarVardi,
+  // kosuyaDahil, kosuyor }.
+  if (req.method === 'POST' && req.url === '/senaryo-getir') {
+    let istek;
+    try {
+      istek = JSON.parse(await govdeOku(req));
+    } catch {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz istek gövdesi.' });
+      return;
+    }
+    const { token, ortam, baslik } = istek ?? {};
+    if (token !== TOKEN) {
+      jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
+      return;
+    }
+    if (ortam !== 'test' && ortam !== 'canli') {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'ortam yalnızca "test" veya "canli" olabilir.' });
+      return;
+    }
+    if (typeof baslik !== 'string' || !baslik) {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'Senaryo başlığı zorunludur.' });
+      return;
+    }
+    try {
+      const veri = jetSeyahatVerisiniOku(ortam);
+      const senaryo = veri.jetSeyahat.senaryolar[jetSeyahatSenaryoIndexiBul(veri, baslik)];
+      const kosuAnahtari = kosuListesiAnahtari(JET_SEYAHAT_SPEC_DOSYASI, baslik);
+      jsonGonder(res, 200, {
+        basarili: true,
+        senaryo,
+        formVerisi: jetSeyahatSenaryosunuFormaCevir(senaryo, ortam),
+        eskiAlanlarVardi: senaryo.beklenenHataMesaji !== undefined || senaryo.beklenenHataAdimi !== undefined,
+        kosuyaDahil: !haricTutulanlariOku().includes(kosuAnahtari),
+        kosuyor: senaryoKosuyorMu(JET_SEYAHAT_SPEC_DOSYASI, baslik)
+      });
+    } catch (hata) {
+      jsonGonder(res, hata.durumKodu || 500, { basarili: false, mesaj: hata.message });
+    }
+    return;
+  }
+
+  // "✎ Düzenle" > "Değişiklikleri Kaydet" (JetSeyahat). Gövde: { token, ortam, eskiBaslik,
+  // senaryo (form alanları + YENİ başlık senaryo.baslik'ta), kosuyaDahil }.
+  //  - Doğrulama /kaydet ile aynı (jetSeyahatSenaryoNesnesiOlustur > beklenenSonucuDogrula).
+  //  - Yeni başlık dosyada (bu kayıt hariç) benzersiz olmalı.
+  //  - Kayıt dizideki YERİNDE güncellenir; diğer kayıtlara ve sıraya dokunulmaz. Formun
+  //    yönetmediği ek alanlar korunur, eski beklenenHataMesaji/beklenenHataAdimi silinir.
+  //  - Yeni bir acente profili gerekiyorsa /kaydet gibi önce ortak.json'a yazılır.
+  //  - kosu-listesi.json: başlık değiştiyse eski anahtar düşürülür, ardından yeni anahtar
+  //    kosuyaDahil'e göre dahil/hariç yapılır (değişiklik yoksa dosyaya dokunulmaz).
+  //  - Senaryo o an koşuyorsa (kuyrukta dahil) reddedilir.
+  if (req.method === 'POST' && req.url === '/senaryo-guncelle') {
+    let istek;
+    try {
+      istek = JSON.parse(await govdeOku(req));
+    } catch {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'Geçersiz istek gövdesi.' });
+      return;
+    }
+    const { token, ortam, eskiBaslik, senaryo, kosuyaDahil } = istek ?? {};
+    if (token !== TOKEN) {
+      jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' });
+      return;
+    }
+    if (ortam !== 'test' && ortam !== 'canli') {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'ortam yalnızca "test" veya "canli" olabilir.' });
+      return;
+    }
+    if (typeof eskiBaslik !== 'string' || !eskiBaslik) {
+      jsonGonder(res, 400, { basarili: false, mesaj: '"eskiBaslik" (düzenlenen senaryonun mevcut başlığı) zorunludur.' });
+      return;
+    }
+    if (!senaryo || typeof senaryo !== 'object' || typeof senaryo.baslik !== 'string' || !senaryo.baslik.trim()) {
+      jsonGonder(res, 400, { basarili: false, mesaj: 'Senaryo başlığı zorunludur.' });
+      return;
+    }
+    if (typeof kosuyaDahil !== 'boolean') {
+      jsonGonder(res, 400, { basarili: false, mesaj: '"kosuyaDahil" true ya da false olmalıdır (senaryonun koşuya dahil edilip edilmeyeceği).' });
+      return;
+    }
+    if (senaryoKosuyorMu(JET_SEYAHAT_SPEC_DOSYASI, eskiBaslik)) {
+      jsonGonder(res, 409, { basarili: false, mesaj: 'Bu senaryo şu an koşuyor (ya da koşu sırasında bekliyor). Koşu bitince ya da durdurulunca tekrar kaydedin.' });
+      return;
+    }
+
+    try {
+      const veri = jetSeyahatVerisiniOku(ortam);
+      const index = jetSeyahatSenaryoIndexiBul(veri, eskiBaslik);
+      const yeniBaslik = senaryo.baslik.trim();
+      if (yeniBaslik.startsWith(SENARYO_OLUSTUR_GECICI_ON_EK.trim())) {
+        jsonGonder(res, 400, { basarili: false, mesaj: 'Bu başlık önekine izin verilmiyor (geçici deneme senaryolarına ayrılmıştır).' });
+        return;
+      }
+      if (veri.jetSeyahat.senaryolar.some((s, i) => i !== index && s?.baslik === yeniBaslik)) {
+        jsonGonder(res, 400, { basarili: false, mesaj: 'Bu başlıkta başka bir senaryo zaten var, başka bir başlık seçin.' });
+        return;
+      }
+      // Doğrulama + temiz nesne (hiçbir dosyaya yazmaz); hata varsa aşağıdaki catch 400 döner.
+      const { senaryo: yeniAlanlar, yeniAcenteProfilleri } = jetSeyahatSenaryoNesnesiOlustur(yeniBaslik, senaryo, ortam);
+
+      const eskiKayit = veri.jetSeyahat.senaryolar[index];
+      const korunanEkAlanlar = Object.fromEntries(
+        Object.entries(eskiKayit).filter(([alan]) => !JET_SEYAHAT_FORM_ALANLARI.includes(alan))
+      );
+      const guncelKayit = { ...yeniAlanlar, ...korunanEkAlanlar };
+      veri.jetSeyahat.senaryolar[index] = guncelKayit;
+
+      // 1) Yeni acente profili (varsa) — /kaydet ile aynı sıra: senaryo, ortak.json'da
+      //    olmayan bir profile hiçbir an işaret etmesin.
+      if (Object.keys(yeniAcenteProfilleri).length) {
+        const ortakVeri = ortakVerisiniOku(ortam);
+        for (const [anahtar, profil] of Object.entries(yeniAcenteProfilleri)) {
+          if (!ortakVeri.kullaniciDegistir[anahtar]) ortakVeri.kullaniciDegistir[anahtar] = profil;
+        }
+        ortakVerisiniYaz(ortam, ortakVeri);
+      }
+
+      // 2) Koşu listesi — senaryo yazımı başarısız olursa önceki listeye geri dönülür.
+      const eskiAnahtar = kosuListesiAnahtari(JET_SEYAHAT_SPEC_DOSYASI, eskiBaslik);
+      const yeniAnahtar = kosuListesiAnahtari(JET_SEYAHAT_SPEC_DOSYASI, yeniBaslik);
+      const oncekiHaricler = haricTutulanlariOku();
+      const yeniHaricler = new Set(oncekiHaricler);
+      if (eskiAnahtar !== yeniAnahtar) yeniHaricler.delete(eskiAnahtar);
+      if (kosuyaDahil) yeniHaricler.delete(yeniAnahtar);
+      else yeniHaricler.add(yeniAnahtar);
+      const listeDegisecekMi =
+        yeniHaricler.size !== oncekiHaricler.length || oncekiHaricler.some((a) => !yeniHaricler.has(a));
+      if (listeDegisecekMi) haricTutulanlariYaz([...yeniHaricler]);
+
+      // 3) Senaryo (atomik).
+      try {
+        jetSeyahatVerisiniYaz(ortam, veri);
+      } catch (yazmaHatasi) {
+        try {
+          if (listeDegisecekMi) haricTutulanlariYaz(oncekiHaricler);
+        } catch {
+          // geri alma başarısız — asıl hata aşağıda kullanıcıya dönülüyor
+        }
+        throw yazmaHatasi;
+      }
+
+      const baslikDegistiMi = eskiBaslik !== yeniBaslik;
+      console.log(
+        `[test-sunucu] JetSeyahat senaryosu güncellendi (${ortam}): "${eskiBaslik}"` +
+          (baslikDegistiMi ? ` → "${yeniBaslik}"` : '') + ` (koşuya ${kosuyaDahil ? 'dahil' : 'dahil değil'}).`
+      );
+      jsonGonder(res, 200, {
+        basarili: true,
+        mesaj: 'Değişiklikler kaydedildi.',
+        senaryo: guncelKayit,
+        kosuAnahtari: yeniAnahtar,
+        kosuyaDahil,
+        baslikDegistiMi
+      });
+    } catch (hata) {
+      jsonGonder(res, hata.durumKodu || 400, { basarili: false, mesaj: hata.message });
     }
     return;
   }

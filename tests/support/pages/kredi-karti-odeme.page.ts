@@ -1,5 +1,10 @@
 import { expect, type Page } from '@playwright/test';
-import type { KrediKartiOdemeData } from '../test-data';
+import {
+  beklenenGorulenMetni,
+  beklenenMesajiBekle,
+  UYARI_CIKMADI_METNI
+} from '../beklenen-sonuc';
+import type { SenaryoKrediKartiData } from '../test-data';
 
 export class KrediKartiOdemePage {
   constructor(private readonly page: Page) {}
@@ -83,42 +88,74 @@ export class KrediKartiOdemePage {
 
   /**
    * Teklifi Kaydet (#Policelestir) tıklanır ve kart formuna hiç geçilmeden, AÇILAN hata
-   * pop-up'ının mesajının senaryoda beklenen iş kuralı mesajını İÇERDİĞİ doğrulanır.
-   * Pop-up hiç görünmezse ya da mesaj eşleşmezse test başarısız olur (bkz.
-   * beklenenHataAdimi === 'policelestirme', prim-hesaplama.spec.ts).
+   * pop-up'ının mesajının senaryoda beklenen iş kuralı mesajını İÇERDİĞİ (toleranslı —
+   * bkz. beklenen-sonuc.ts > mesajIceriyorMu) doğrulanır. Pop-up yerine kart formu/
+   * seçeneği açılırsa (akış devam ettiyse) ya da mesaj eşleşmezse test, beklenen ve
+   * görülen metinle birlikte başarısız olur (bkz. prim-hesaplama.spec.ts).
    */
   async policelestirVeBeklenenHatayiDogrula(beklenenMesaj: string): Promise<void> {
     const policelestir = this.page.locator('#Policelestir');
     await expect(policelestir).toBeVisible();
     await policelestir.click();
 
+    // Pop-up ile "akış devam etti" işaretleri (kart formu / kredi kartı seçeneği) aynı
+    // poll'da beklenir — pop-up hiç çıkmazsa 15 sn boşuna beklenmez ve hata metni
+    // akışın devam ettiğini söyleyebilir.
+    const kartFormu = this.page.locator('#isim');
+    const krediKartiSecenegi = this.page.getByRole('link', {
+      name: 'KREDİ KARTI İLE POLİÇELEŞTİR',
+      exact: true
+    });
     await expect
-      .poll(() => this.hataPopupGoruluyorMu(), {
-        timeout: 15_000,
-        message: 'Beklenen iş kuralı hatası pop-up\'ı görünmelidir.'
-      })
-      .toBeTruthy();
+      .poll(
+        async () =>
+          (await this.hataPopupGoruluyorMu()) ||
+          (await kartFormu.isVisible()) ||
+          (await krediKartiSecenegi.isVisible()),
+        { timeout: 15_000 }
+      )
+      .toBeTruthy()
+      .catch(() => undefined);
 
-    const mesaj = await this.page
-      .locator('#fancybox-wrap, .fancybox-content, .ui-dialog')
-      .first()
-      .innerText();
-    expect(mesaj).toContain(beklenenMesaj);
+    if (!(await this.hataPopupGoruluyorMu())) {
+      const akisDurumu = (await kartFormu.isVisible()) || (await krediKartiSecenegi.isVisible())
+        ? ' (ödeme seçeneği/kart formu açıldı)'
+        : '';
+      throw new Error(
+        beklenenGorulenMetni('Poliçeleştirme', beklenenMesaj, `${UYARI_CIKMADI_METNI}${akisDurumu}`)
+      );
+    }
+
+    const { eslesen, sonGorulen } = await beklenenMesajiBekle(
+      () => this.hataPopupMetniniOku(),
+      [beklenenMesaj],
+      { zamanAsimiMs: 5_000 }
+    );
+    if (!eslesen) {
+      throw new Error(beklenenGorulenMetni('Poliçeleştirme', beklenenMesaj, sonGorulen));
+    }
   }
 
-  async kartBilgileriniGir(data: KrediKartiOdemeData): Promise<void> {
+  // Ortak kart (KrediKartiOdemeData) da senaryoya özel kart (SenaryoKrediKartiData) da
+  // kabul edilir — beklenenHataMesaji burada kullanılmaz.
+  async kartBilgileriniGir(data: SenaryoKrediKartiData): Promise<void> {
     await this.page.locator('#isim').fill(data.isim);
     await this.page.locator('#soyisim').fill(data.soyisim);
     const kartNo = this.page.locator('#kartno');
     await kartNo.fill('');
     await kartNo.pressSequentially(data.kartNo, { delay: 25 });
+    // Karşılaştırma boolean üzerinden yapılır: .toBe(data.kartNo) başarısız olursa
+    // Playwright hata mesajına TAM kart numarasını yazıyor ve bu metin rapora/test sunucusu
+    // loguna düşüyordu. Mesajda yalnızca son 4 hane gösterilir.
     await expect
-      .poll(() =>
-        kartNo.evaluate((element) =>
-          (element as HTMLInputElement).value.replace(/\D/g, '')
-        )
+      .poll(
+        async () =>
+          (await kartNo.evaluate((element) =>
+            (element as HTMLInputElement).value.replace(/\D/g, '')
+          )) === data.kartNo,
+        { message: `Kart numarası alana eksiksiz yazılamadı (kart: **** ${data.kartNo.slice(-4)})` }
       )
-      .toBe(data.kartNo);
+      .toBe(true);
     await this.page.locator('#cvv').fill(data.guvenlikKodu);
     await this.page.locator('#ay').selectOption(data.sonKullanmaAyi.deger);
     await this.page.locator('#yil').selectOption(data.sonKullanmaYili.deger);
@@ -143,7 +180,6 @@ export class KrediKartiOdemePage {
     const kabulEdilenMesajlar = Array.isArray(beklenenHataMesaji)
       ? beklenenHataMesaji
       : [beklenenHataMesaji];
-    const beklentiAciklamasi = kabulEdilenMesajlar.join(' veya ');
     let dialogMesaji = '';
     let servisCevabi = '';
     const dialogHandler = async (dialog: import('@playwright/test').Dialog) => {
@@ -167,19 +203,29 @@ export class KrediKartiOdemePage {
         servisCevabi = await response.text();
       }
 
-      await expect
-        .poll(
-          async () => {
-            const sayfaMetni = await this.page.locator('body').innerText();
-            const sonuc = [dialogMesaji, servisCevabi, sayfaMetni].join('\n');
-            return kabulEdilenMesajlar.some((mesaj) => sonuc.includes(mesaj));
-          },
-          {
-            message: `Kabul edilen ödeme sonuçlarından biri görünmelidir: ${beklentiAciklamasi}`,
-            timeout: 45_000
-          }
-        )
-        .toBeTruthy();
+      // Dialog (alert), servis cevabı ve sayfa metni birlikte, toleranslı eşleşmeyle
+      // (bkz. beklenen-sonuc.ts > mesajIceriyorMu) aranır. Görülen son hata pop-up'ı da
+      // saklanır ki beklenen mesaj hiç görünmezse hata metni "Görülen"i söyleyebilsin.
+      let sonPopupMetni = '';
+      const { eslesen } = await beklenenMesajiBekle(
+        async () => {
+          const popupMetni = await this.hataPopupMetniniOku();
+          if (popupMetni) sonPopupMetni = popupMetni;
+          const sayfaMetni = await this.page.locator('body').innerText().catch(() => '');
+          return [dialogMesaji, servisCevabi, sayfaMetni].join('\n');
+        },
+        kabulEdilenMesajlar,
+        { zamanAsimiMs: 45_000 }
+      );
+
+      if (!eslesen) {
+        const servisOzeti = servisCevabi.replace(/\s+/g, ' ').trim().slice(0, 300);
+        const gorulen =
+          dialogMesaji ||
+          sonPopupMetni ||
+          (servisOzeti ? `servis cevabı: ${servisOzeti}` : UYARI_CIKMADI_METNI);
+        throw new Error(beklenenGorulenMetni('Ödeme', kabulEdilenMesajlar, gorulen));
+      }
     } finally {
       this.page.off('dialog', dialogHandler);
     }
@@ -199,6 +245,20 @@ export class KrediKartiOdemePage {
   }
 
   /**
+   * Hata pop-up'ı görünüyorsa metnini döner (sondaki "Tamam" bağlantı metni ayıklanır);
+   * görünmüyorsa ya da okunamıyorsa boş metin döner.
+   */
+  private async hataPopupMetniniOku(): Promise<string> {
+    if (!(await this.hataPopupGoruluyorMu())) return '';
+    const metin = await this.page
+      .locator('#fancybox-wrap, .fancybox-content, .ui-dialog')
+      .first()
+      .innerText()
+      .catch(() => '');
+    return metin.replace(/\s*\bTamam\s*$/u, '').trim();
+  }
+
+  /**
    * Ekranda bu hata pop-up'ı görülürse, senaryoyu bir sonraki adıma geçmeye
    * ÇALIŞMADAN, o anda ve mesajın içeriğiyle birlikte durdurur. Böylece Playwright'ın
    * otomatik aldığı hata ekran görüntüsü tam olarak pop-up'ın göründüğü ana ait olur
@@ -209,11 +269,8 @@ export class KrediKartiOdemePage {
   private async hataPopupVarsaDurdur(adimAciklamasi: string): Promise<void> {
     if (!(await this.hataPopupGoruluyorMu())) return;
 
-    const mesaj = await this.page
-      .locator('#fancybox-wrap, .fancybox-content, .ui-dialog')
-      .first()
-      .innerText()
-      .catch(() => '(hata mesajı metni okunamadı, ekran görüntüsüne bakınız)');
+    const mesaj =
+      (await this.hataPopupMetniniOku()) || '(hata mesajı metni okunamadı, ekran görüntüsüne bakınız)';
 
     throw new Error(
       `"${adimAciklamasi}" adımından sonra beklenmeyen bir hata pop-up'ı görüntülendi, ` +

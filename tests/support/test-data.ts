@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { BeklenenSonucAlanlari } from './beklenen-sonuc';
 import type { EnvironmentName } from './environments';
 
 export type SelectData = {
@@ -63,6 +64,12 @@ export type KrediKartiOdemeData = {
   taksit: SelectData;
   beklenenHataMesaji: string;
 };
+
+// Senaryoya özel ödeme kartı (dashboard > "Senaryo Oluştur" > "Ödeme bilgileri"). Ortak
+// karttan (ortak.json > odeme.krediKarti) farkı yalnızca beklenenHataMesaji'nin olmaması:
+// o alan bazı ürünlerin (konut/ilk ateş) ödeme sonucu kontrolünde kullanılır, kartı forma
+// girmek için gerekmez. kartBilgileriniGir bu tipi kabul eder — ortak kart da buna uyar.
+export type SenaryoKrediKartiData = Omit<KrediKartiOdemeData, 'beklenenHataMesaji'>;
 
 // Tek bir acente/kullanıcı profili (Acente Partajı + Acente Kullanıcısı).
 // Ürün ekranları arasında ortak kullanılır; her acentede görünen alan seti farklı olabilir
@@ -351,7 +358,7 @@ export type JetSeyahatTestData = {
     cokluSorguDosyasi: string;
     cokluSorguKisiSayisi: number;
     kabulEdilenOdemeSonuclari: string[];
-    senaryolar: Array<{
+    senaryolar: Array<BeklenenSonucAlanlari & {
       baslik: string;
       kapsam: string;
       alternatif: string;
@@ -372,13 +379,11 @@ export type JetSeyahatTestData = {
       // Bu senaryonun hangi acente profiliyle (ortak.json > kullaniciDegistir) çalışacağı.
       // Belirtilmezse testBaslangiciniHazirla "varsayilan" profili kullanır.
       acenteProfili?: string;
-      // YENİ (dashboard > "Senaryo Oluştur"): beklenenHataMesaji doluysa, bu hatanın
-      // pipeline'ın HANGİ adımında beklendiğini belirtir. "primHesaplama" (varsayılan,
-      // eski senaryolarla uyum için de kullanılır) prim hesaplanınca #dialog-content'te
-      // görünen mesajı; "policelestirme" ise Teklifi Kaydet (#Policelestir) sonrası
-      // açılan hata pop-up'ının mesajını doğrular (bkz. prim-hesaplama.spec.ts).
-      beklenenHataAdimi?: 'primHesaplama' | 'policelestirme';
-      beklenenHataMesaji?: string;
+      // Beklenen sonuç alanları (odemeAdimiDahil, beklenenSonuc ve eski
+      // beklenenHataMesaji/beklenenHataAdimi) — bkz. tests/support/beklenen-sonuc.ts >
+      // BeklenenSonucAlanlari. Eski alanlar JSON'daki mevcut kayıtlar için okunmaya devam
+      // eder; dashboard > "Senaryo Oluştur" yalnızca yeni alanları yazar. Spec, bu alanları
+      // beklenenSonucuCoz ile TEK biçime çevirip adimPlaniniOlustur ile akışı belirler.
       // YENİ (dashboard > "Senaryo Oluştur"): sigortalı (poliçe sahibi) normalde ürün
       // seviyesinde SABİT tek bir TC kullanır (jetSeyahat.sigortaliProfili, tüm senaryolar
       // paylaşır). Bu alan doluysa SADECE bu senaryoda, o ortak sigortalı yerine burada
@@ -397,6 +402,12 @@ export type JetSeyahatTestData = {
       // sorguTipiniHazirla). İkisi birlikte dolu ya da birlikte boş olmalıdır.
       cokluSorguDosyasi?: string;
       cokluSorguKisiSayisi?: number;
+      // YENİ (dashboard > "Senaryo Oluştur" > "Ödeme bilgileri"): bu senaryoya özel ödeme
+      // kartı. Yalnızca kullanıcı ortak test kartından (ortak.json > odeme.krediKarti) FARKLI
+      // bir kart girdiyse yazılır; yoksa senaryo ortak kartı kullanır (ve ortak kart
+      // değişirse onu izler). Ödeme adımı dahil değilken (odemeAdimiDahil: false) dolu
+      // olamaz — bkz. tests/support/senaryo-kredi-karti.ts > senaryoKrediKartiniDogrula.
+      krediKarti?: SenaryoKrediKartiData;
     }>;
   };
 };
