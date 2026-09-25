@@ -4,11 +4,12 @@
 //   kasa var, kilitli   → Kilit ekranı (yanlış parolada bekleme geri sayımı)
 //   kasa açık, proje yok → Yeni proje sihirbazı (proje adımından)
 //   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici, Sonuçlar | Senaryolar |
-//                         Ekranlar* | Ayarlar, hızlı arama*, sunucu durumu, tema, Kilitle) + sol
+//                         Ekranlar | Ayarlar, hızlı arama*, sunucu durumu, tema, Kilitle) + sol
 //                         panel + içerik. (* = yakında; bağlantı değildir.)
-//                         (#/sonuclar[/...], #/senaryolar[/...], #/ayarlar/<bölüm>)
-// Senaryolar ekranı ayrı modüllerde (senaryolar.js, senaryo-formu.js, kosu-paneli.js) ve DİNAMİK
-// yüklenir: sunucu bu dosyaları henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
+//                         (#/sonuclar[/...], #/senaryolar[/...], #/ekranlar[/...], #/ayarlar/<bölüm>)
+// Senaryolar ekranı (senaryolar.js, senaryo-formu.js, kosu-paneli.js) ve Ekranlar ekranı (ekranlar.js,
+// ekran-ortak.js, sayfa-paketi.js, bulgular.js) ayrı modüllerde ve DİNAMİK yüklenir: sunucu bu dosyaları
+// henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
   MARKA, adresGecerliMi, alan, alanHatasi, api, bildir, geriSayim, h, ikon, iskelet, logo, mesajKutusu, mesgulIken,
   parolaAlani, s, temaDugmesi
@@ -214,7 +215,6 @@ const SIHIRBAZ_ADIMLARI = [
   { ad: 'kasa', etiket: 'Kasa parolası' },
   { ad: 'proje', etiket: 'Proje' },
   { ad: 'ortamlar', etiket: 'Ortamlar' },
-  { ad: 'sayfa', etiket: 'Sayfa ekle (yakında)', yakinda: true },
   { ad: 'tamam', etiket: 'Tamam' }
 ];
 
@@ -362,10 +362,10 @@ function sihirbazTamam() {
     h('div', { class: 'sihirbaz-baslik' }, h('div', { class: 'kirinti' }, h('span', {}, 'Kurulum tamamlandı')),
       h('h1', {}, 'Proje hazır'), h('p', { class: 'soluk' }, 'Kasa, proje ve ortamlar oluşturuldu.')),
     adimListesi('tamam'),
-    h('div', { class: 'kart pasif-kart', 'aria-disabled': 'true' },
-      h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ekran'), 'Sayfa ekle (yakında)')),
-      h('p', { class: 'soluk' }, 'Test edilecek sayfaları ve senaryoları tanımlama adımı bir sonraki sürümde eklenecek.'),
-      h('button', { type: 'button', disabled: true }, 'Sayfa ekle')),
+    h('div', { class: 'kart' },
+      h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ekran'), 'Sayfa ekle')),
+      h('p', { class: 'soluk' }, 'Test edilecek sayfanın bağlantısını Claude Code\'a verin: sayfayı yalnızca okuyarak inceler ve bir sayfa paketi (model + senaryo önerileri) üretir. Paketi Ekranlar > Sayfa ekle ile yükleyin.'),
+      h('div', { class: 'dugmeler' }, h('button', { type: 'button', onclick: () => { location.hash = '#/ekranlar/yeni'; yonlendir(); } }, ikon('artiYalin'), 'Sayfa ekle'))),
     h('div', { class: 'kart vurgulu' },
       h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sırada ne var?')),
       h('p', {}, 'Giriş profillerini, bağlam profillerini ve test verilerini Ayarlar\'dan ekleyebilirsiniz.'),
@@ -486,9 +486,8 @@ function anaDuzen() {
   const main = anaAlan('ana-icerik');
   const navSonuclar = h('a', { href: '#/sonuclar' }, ikon('grafik'), 'Sonuçlar');
   const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar');
+  const navEkranlar = h('a', { href: '#/ekranlar' }, ikon('ekran'), 'Ekranlar');
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
-  const yakinda = (ikonAd, metin) => h('span', { class: 'nav-pasif', 'aria-disabled': 'true', title: `${metin}: yakında` },
-    ikon(ikonAd), h('span', { class: 'nav-metni' }, metin), h('span', { class: 'yakinda-etiketi' }, 'yakında'));
   const kilitle = h('button', { type: 'button', class: 'kilitle-dugmesi', 'aria-label': 'Kilitle' }, ikon('kilit'), h('span', { class: 'dugme-metni' }, 'Kilitle'));
   kilitle.addEventListener('click', async () => {
     await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
@@ -502,7 +501,7 @@ function anaDuzen() {
   const ust = h('header', { class: 'ust-cubuk' },
     markaOgesi(),
     projeSecici(),
-    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, yakinda('ekran', 'Ekranlar'), navAyarlar),
+    h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navAyarlar),
     h('span', { class: 'bosluk' }),
     arama, sunucu, temaDugmesi(), kilitle);
   ekran(ust, main);
@@ -510,13 +509,19 @@ function anaDuzen() {
   const ciz = () => {
     const hash = location.hash || '#/sonuclar';
     const [, bolum, alt, ...kalan] = hash.split('/');
-    for (const n of [navSonuclar, navSenaryolar, navAyarlar]) n.removeAttribute('aria-current');
+    for (const n of [navSonuclar, navSenaryolar, navEkranlar, navAyarlar]) n.removeAttribute('aria-current');
     if (bolum === 'senaryolar') {
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Senaryolar');
       senaryolarModulu().then((m) => m.senaryolarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
         .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Senaryolar ekranı yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+    } else if (bolum === 'ekranlar') {
+      navEkranlar.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sayfaBasligi('Ekranlar');
+      ekranlarModulu().then((m) => m.ekranlarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
+        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Ekranlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'ayarlar') {
       navAyarlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
@@ -552,6 +557,9 @@ function anaDuzen() {
 /** Senaryolar modülü (bir kez yüklenir). */
 let senaryolarSozu = null;
 const senaryolarModulu = () => (senaryolarSozu ??= import('./senaryolar.js').catch((e) => { senaryolarSozu = null; throw e; }));
+/** Ekranlar modülü (bir kez yüklenir). */
+let ekranlarSozu = null;
+const ekranlarModulu = () => (ekranlarSozu ??= import('./ekranlar.js').catch((e) => { ekranlarSozu = null; throw e; }));
 const mesajKutusuHata = (metin) => h('div', { class: 'not-kutusu hata', role: 'alert' }, metin);
 
 function ayarlarEkrani(main, bolum) {

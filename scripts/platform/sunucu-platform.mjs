@@ -60,6 +60,18 @@
 //        → sunucu UUID'yi güncel test dosyası + başlığına çözer ve mevcut koşu altyapısıyla çalıştırır
 //          (koşucu test-sunucu.mjs tarafından platformKosucusunuAyarla ile verilir); koşu bitince yanıt döner.
 //   POST /platform/senaryo/dene { projeId, ekranId, ortamId, veri, kosuId, id? } → taslak, geçici ek veriyle denenir.
+// Ekranlar (genel; kasa açık olmalı — bkz. ekranlar/ekran-servisi.mjs, sayfa paketi biçimi: docs/sayfa-paketi.md):
+//   GET  /platform/ekranlar?projeId=                    ekran listesi (model sürümü, alan/senaryo sayısı, bekleyen analiz)
+//   GET  /platform/ekran?projeId=&id=                   ayrıntı: güncel model ağacı, sürüm geçmişi, analiz durumu, kanıtlar
+//   GET  /platform/ekran/surum?projeId=&id=&surum=      sürümün ağacı + bir önceki sürüme göre fark
+//   GET  /platform/ekran/analiz?projeId=&id=            bekleyen (yoksa son) analiz: bulgular + etki paneli
+//   POST /platform/sayfa-paketi/onizle { projeId, paket, ekranId?, mod? }   doğrulama + önizleme (gövde en fazla 16 MB)
+//   POST /platform/sayfa-paketi/ekle   { projeId, paket, senaryoIndeksleri, ortamIdleri }  ekran + model v1 + öneriler
+//   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
+//   POST /platform/ekran/analiz/uygula { projeId, ekranId, analizId, kabul, red } yalnızca kabul edilenlerle yeni sürüm
+//   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
+//   POST /platform/ekran/claude-dosyasi { projeId, ekranId, tur, baglamProfilleri? } → <veritabanı klasörü>/analiz/*.json
+//        (gizli değer içermez; Claude API KULLANILMAZ — dosya kullanıcı tarafından Claude Code'a verilir)
 // Otomatik kilit: kasa, kimliği doğrulanmış API etkinliği olmadan ayarlanan süre (Ayarlar >
 // Güvenlik, 5–120 dk, varsayılan 15) geçince kilitlenir. GET /platform/durum etkinlik SAYILMAZ.
 //   GET /platform/guvenlik, POST /platform/guvenlik/kaydet { otomatikKilitDakika }
@@ -115,8 +127,15 @@ import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
 import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
 import { girisSayfasiniOner } from './giris/algilama.mjs';
+import {
+  EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
+  reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta
+} from './ekranlar/ekran-servisi.mjs';
+import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
+/** Sayfa paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
+const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle']);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
 export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
 /** İçe aktarılacak yedeğin üst sınırı (videolu yedekler büyük olabilir; gövde diske akıtılır). */
@@ -126,6 +145,8 @@ const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const veritabaniYolu = () => veritabaniYoluCoz(PROJE_KOKU);
 /** Şifreli medya klasörü: veritabanının yanındaki medya/ (varsayılan veri/medya/). */
 const medyaKlasoruYolu = () => medyaKlasoru(veritabaniYolu());
+/** Claude analiz/istek dosyaları: veritabanının yanındaki analiz/ (varsayılan veri/analiz/; Git'e girmez). */
+const analizKlasoruYolu = () => join(dirname(veritabaniYolu()), 'analiz');
 
 /** @type {import('./veritabani/baglanti.mjs').Veritabani | null} */
 let vt = null;
@@ -496,6 +517,7 @@ function hataYaniti(hata) {
     return { durum: 400, govde: { basarili: false, kod: 'DOGRULAMA', mesaj: hata.message, hatalar: hata.hatalar, uyarilar: hata.uyarilar } };
   }
   if (hata instanceof SenaryoCakismaHatasi) return { durum: 409, govde: { basarili: false, kod: 'CAKISMA', mesaj: hata.message } };
+  if (hata instanceof EkranDogrulamaHatasi) return { durum: 400, govde: { basarili: false, kod: 'DOGRULAMA', mesaj: hata.message, hatalar: hata.hatalar } };
   if (hata instanceof DepoHatasi) return { durum: 400, govde: { basarili: false, kod: 'VERI', mesaj: hata.message } };
   if (hata instanceof AktarimHatasi) return { durum: 400, govde: { basarili: false, kod: 'AKTARIM', mesaj: hata.message } };
   return null;
@@ -700,6 +722,14 @@ const GET_UCLARI = new Map([
     kayitlar: senaryoGecmisi(db, kimlikAl(q.get('id'))),
     makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad]))
   })],
+  ['/platform/ekranlar', (db, q) => ekranListesi(db, kimlikAl(q.get('projeId'), 'projeId'))],
+  ['/platform/ekran', (db, q) => ekranDetayi(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
+  ['/platform/ekran/surum', (db, q) => {
+    const surum = Number(q.get('surum'));
+    if (!Number.isInteger(surum) || surum < 1) throw new DepoHatasi('"surum" geçersiz.');
+    return surumAyrintisi(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')), surum);
+  }],
+  ['/platform/ekran/analiz', (db, q) => analizGetir(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
   ['/platform/projeler', (db) => ({ projeler: projeleriListele(db).map((p) => ({ id: p.id, ad: p.ad, aciklama: p.aciklama })) })],
   // Ortam ayarları (aktarımda eski dosya iskeleti vb.) arayüze gönderilmez.
   ['/platform/ortamlar', (db, q) => ({ ortamlar: ortamlariListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(({ ayarlar: _a, ...o }) => o) })],
@@ -751,8 +781,26 @@ const GET_UCLARI = new Map([
   }]
 ]);
 
-/** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown>>} */
+/** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const POST_UCLARI = new Map([
+  ['/platform/sayfa-paketi/onizle', (db, g) => paketOnizle(db, kimlikAl(g.projeId, 'projeId'), g.paket, {
+    ekranId: secimliKimlik(g.ekranId) ?? null, mod: g.mod === 'analiz' ? 'analiz' : 'yeni'
+  })],
+  ['/platform/sayfa-paketi/ekle', (db, g) => sayfaEkle(db, kimlikAl(g.projeId, 'projeId'), g.paket, {
+    senaryoIndeksleri: g.senaryoIndeksleri, ortamIdleri: g.ortamIdleri, medyaKlasoru: medyaKlasoruYolu()
+  })],
+  ['/platform/ekran/analiz/yukle', (db, g) => analizYukle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, { medyaKlasoru: medyaKlasoruYolu() })],
+  ['/platform/ekran/analiz/uygula', (db, g) => analizUygula(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { analizId: g.analizId, kabul: g.kabul, red: g.red })],
+  ['/platform/ekran/analiz/iptal', (db, g) => analizIptal(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.analizId)],
+  ['/platform/ekran/reddedilenleri-unut', (db, g) => reddedilenleriUnut(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'))],
+  ['/platform/ekran/toplu-ata', (db, g) => topluDegerAta(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { anahtar: g.anahtar, deger: g.deger, senaryoIdler: g.senaryoIdler })],
+  ['/platform/ekran/claude-dosyasi', (db, g) => {
+    const s = claudeDosyasiYaz(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
+      tur: g.tur, baglamProfilleri: g.baglamProfilleri, bulguId: g.bulguId, klasor: analizKlasoruYolu(), projeKoku: PROJE_KOKU
+    });
+    console.log(`[platform] Claude analiz dosyası yazıldı: ${s.yol}`);
+    return { yol: s.yol, cumle: s.cumle };
+  }],
   ['/platform/senaryo/kaydet', (db, g) => {
     const projeId = kimlikAl(g.projeId, 'projeId');
     const sonuc = senaryoKaydet(db, {
@@ -901,16 +949,18 @@ export async function platformIsteginiIsle(req, res, baglam) {
   const disTokenGecerli = (typeof baslikToken === 'string' && baslikToken === baglam.token) || url.searchParams.get('token') === baglam.token;
 
   /** @returns {Promise<Record<string, unknown> | null>} */
-  const jsonGovde = async () => {
+  const jsonGovde = async (sinir = JSON_GOVDE_SINIRI) => {
     let metin;
     try {
-      metin = (await ikiliGovdeOku(req, JSON_GOVDE_SINIRI)).toString('utf8');
+      metin = (await ikiliGovdeOku(req, sinir)).toString('utf8');
     } catch (hata) {
       const cokBuyuk = Boolean(/** @type {{ cokBuyuk?: boolean }} */ (hata).cokBuyuk);
       if (cokBuyuk) res.setHeader('Connection', 'close');
       jsonGonder(res, cokBuyuk ? 413 : 400, {
         basarili: false,
-        mesaj: cokBuyuk ? `İstek gövdesi en fazla ${JSON_GOVDE_SINIRI / 1024} KB olabilir.` : 'İstek gövdesi okunamadı.'
+        mesaj: cokBuyuk
+          ? (sinir >= 1024 * 1024 ? `İstek gövdesi en fazla ${sinir / 1024 / 1024} MB olabilir.` : `İstek gövdesi en fazla ${sinir / 1024} KB olabilir.`)
+          : 'İstek gövdesi okunamadı.'
       });
       return null;
     }
@@ -1081,7 +1131,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
       return true;
     }
 
-    const govde = await jsonGovde();
+    const govde = await jsonGovde(PAKET_UCLARI.has(yol) ? PAKET_BOYUT_SINIRI : JSON_GOVDE_SINIRI);
     if (!govde) return true;
     if (govde.token !== baglam.token && !disTokenGecerli) { tokenYok(); return true; }
     platformEtkinligiBildir();
@@ -1108,7 +1158,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
     if (postIslemi) {
       const db = await acikVeritabani();
       res.setHeader('Cache-Control', 'no-store');
-      jsonGonder(res, 200, { basarili: true, ...postIslemi(db, govde) });
+      jsonGonder(res, 200, { basarili: true, ...(await postIslemi(db, govde)) });
       return true;
     }
 

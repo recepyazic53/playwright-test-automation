@@ -339,6 +339,10 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/kosu-paneli.js', { dosya: 'kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ekranlar.js', { dosya: 'ekranlar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ekran-ortak.js', { dosya: 'ekran-ortak.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/sayfa-paketi.js', { dosya: 'sayfa-paketi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/bulgular.js', { dosya: 'bulgular.js', tur: 'text/javascript; charset=utf-8' }],
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'senaryo-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }]

@@ -218,7 +218,7 @@ export function senaryoListesi(vt, projeId, ortamId, adaptor = null) {
       kaynak: senaryoKaynagi(icerik),
       baglamProfili: profilAlani ? { deger: profilDegeri, varsayilan: profilDegeri ? false : true, ad: profilDegeri ?? profilAlani.varsayilanProfil } : null,
       beklenenSonuc: sema && veri ? beklenenSonucEtiketi(sema, veri) : null,
-      sonSonuc: sonuc, mutlakaGorunmeliSayisi: kurallar.length,
+      sonSonuc: sonuc, mutlakaGorunmeliSayisi: kurallar.length, paketten: nesneMi(icerik.paket),
       guncellenme: String(s.guncellenme)
     });
   }
