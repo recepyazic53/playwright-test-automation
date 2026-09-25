@@ -162,8 +162,8 @@ test.describe('Model senaryosu tespiti, başlıklar, yasaklı adresler', () => {
   test('yasaklı host kalıpları (*nippon* ve tam host)', () => {
     const d = yasakDesenleri('*nippon*, galaksi-test.ornek.local ;  ');
     expect(d.map((x) => x.kalip)).toEqual(['*nippon*', 'galaksi-test.ornek.local']);
-    expect(adresYasakliMi('https://galaksi.turknippon.com/a', d)).toBe('*nippon*');
-    expect(adresYasakliMi('http://galaksi-test.nippon.local/', d)).toBe('*nippon*');
+    expect(adresYasakliMi('https://portal.ornek-sirket-nippon.invalid/a', d)).toBe('*nippon*');
+    expect(adresYasakliMi('http://test.ornek-sirket-nippon.local/', d)).toBe('*nippon*');
     expect(adresYasakliMi('http://GALAKSI-TEST.ornek.local:8080/x', d)).toBe('galaksi-test.ornek.local');
     expect(adresYasakliMi('http://127.0.0.1:5581/', d)).toBeNull();
     expect(adresYasakliMi('/goreli/yol', d)).toBeNull();
@@ -231,7 +231,7 @@ test.describe('Tarayıcıda yasaklı adres koruması (yerel fikstür, DNS kapal�
       baglam.on('request', (r) => { istekler.push(r.url()); });
       const page = await baglam.newPage();
       const desenler = yasakDesenleri('*nippon*');
-      await expect(yasakliAdresKorumasi(page, ['https://galaksi-test.nippon.local/'], desenler)).rejects.toThrow(/Tarayıcı hiçbir yere gitmedi/);
+      await expect(yasakliAdresKorumasi(page, ['https://test.ornek-sirket-nippon.local/'], desenler)).rejects.toThrow(/Tarayıcı hiçbir yere gitmedi/);
       expect(istekler).toEqual([]);
 
       const engellenen = await yasakliAdresKorumasi(page, [uygulama.adres], desenler);
