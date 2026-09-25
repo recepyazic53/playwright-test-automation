@@ -6,6 +6,11 @@ import {
 } from '../beklenen-sonuc';
 import type { SenaryoKrediKartiData } from '../test-data';
 
+// Ödeme sonrası sonucun (poliçe onayı / "onaylanamadı" mesajı) en fazla ne kadar bekleneceği.
+// Çoklu sorguda sigortalı sayısı arttıkça onay süresi uzuyor (10 kişilik çoklu sorguda 45 sn
+// yetmedi, 6. kişide süre doldu); bu yüzden 90 sn.
+const ODEME_SONUCU_BEKLEME_MS = 90_000;
+
 export class KrediKartiOdemePage {
   constructor(private readonly page: Page) {}
 
@@ -192,7 +197,7 @@ export class KrediKartiOdemePage {
       const odemeCevabi = odemeEndpoint
         ? this.page.waitForResponse(
             (response) => new URL(response.url()).pathname.endsWith(odemeEndpoint),
-            { timeout: 45_000 }
+            { timeout: ODEME_SONUCU_BEKLEME_MS }
           )
         : undefined;
 
@@ -215,7 +220,7 @@ export class KrediKartiOdemePage {
           return [dialogMesaji, servisCevabi, sayfaMetni].join('\n');
         },
         kabulEdilenMesajlar,
-        { zamanAsimiMs: 45_000 }
+        { zamanAsimiMs: ODEME_SONUCU_BEKLEME_MS }
       );
 
       if (!eslesen) {
