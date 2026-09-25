@@ -14,6 +14,12 @@ import { calistirmaHedefiCoz, denemePaketiOlustur } from './senaryo-servisi.mjs'
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./calistirma.d.mts').Kosucu} Kosucu */
 
+/**
+ * Genel yol koşularında (elle oluşturulan proje/ortam) "ortam" alanının değeri: yalnızca loglarda ve koşu
+ * kuyruğunda görünür. Ortamın ADI kullanılmaz — ad şifreli saklanır ve sunucu logu düz metindir.
+ */
+export const GENEL_ORTAM_ETIKETI = 'genel';
+
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
 const KOSU_KIMLIGI = /^[A-Za-z0-9-]{1,64}$/;
 
@@ -75,9 +81,10 @@ export async function senaryoCalistir(vt, govde, kosucu, secenekler = {}) {
   const h = calistirmaIsteginiHazirla(vt, govde, secenekler);
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
   const sonuc = await kosucu.calistir({
-    ortam: h.hedef.ortamAnahtari, dosya: h.hedef.dosya, ad: h.hedef.ad, kosuId: h.kosuId,
+    ortam: h.hedef.ortamAnahtari ?? GENEL_ORTAM_ETIKETI, dosya: h.hedef.dosya, ad: h.hedef.ad, kosuId: h.kosuId,
     kosuTuru: h.kosuTuru, kosuKimligi: h.kosuKimligi, kosuKapsami: h.kosuKapsami, senaryoId: h.hedef.senaryoId,
-    ...(h.hedef.model ? { etiket: h.hedef.etiket, grepDeseni: h.hedef.grepDeseni } : {})
+    ...(h.hedef.model ? { etiket: h.hedef.etiket, grepDeseni: h.hedef.grepDeseni } : {}),
+    ...(h.hedef.genel ? { genel: h.hedef.genel } : {})
   });
   return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, senaryoId: h.hedef.senaryoId, baslik: h.hedef.baslik } };
 }

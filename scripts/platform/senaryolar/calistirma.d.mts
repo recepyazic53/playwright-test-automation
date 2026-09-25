@@ -5,9 +5,17 @@ import type { CalistirmaHedefi, ModelSecenekleri } from './senaryo-servisi.mjs';
 
 export type CalistirmaSecenekleri = ModelSecenekleri & { yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> };
 
+/** Genel yol koşularında "ortam" alanının değeri (yalnızca log/kuyruk etiketi; ortamın adı değil). */
+export declare const GENEL_ORTAM_ETIKETI: 'genel';
+
 export interface KosuIstegi {
-  /** Test çalıştırıcısının ortam anahtarı (TEST_ENV; ör. "test"). */
+  /** Test çalıştırıcısının ortam anahtarı (TEST_ENV; ör. "test"); genel yolda GENEL_ORTAM_ETIKETI. */
   ortam: string;
+  /**
+   * Genel yol (elle oluşturulan proje/ortam; model senaryosu): koşu playwright.model.config.ts ile, proje ve
+   * ortam kimlikleriyle yapılır (TEST_ENV kullanılmaz).
+   */
+  genel?: { projeId: string; ortamId: string } | null;
   /** Playwright spec dosyası (testDir'e göre, "/" ayraçlı). */
   dosya: string;
   /** Güncel test başlığı (veritabanından çözülmüş); model senaryosunda null (etiketle bulunur). */

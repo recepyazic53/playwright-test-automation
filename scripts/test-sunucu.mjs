@@ -215,15 +215,18 @@ function regexIcinKac(metin) {
 // ekOrtamDegiskenleri: Senaryolar > "Dene", geçici "ek veri" dosyasının yolunu
 // (TEST_SUNUCU_EK_SENARYO_DOSYASI) listeleme sürecine de vermek için kullanır — aksi halde
 // Playwright geçici senaryoyu listede göremez ve whitelist kontrolü onu reddeder.
-function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined, ekOrtamDegiskenleri = {}) {
+// genel: { projeId, ortamId } verilirse (elle oluşturulan proje/ortam) liste genel model yapılandırmasından alınır
+// (bkz. genelKosuAyarlari).
+function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined, ekOrtamDegiskenleri = {}, genel = null) {
   return new Promise((resolve, reject) => {
     if (!playwrightCliVarMi()) {
       reject(new Error(`"${PLAYWRIGHT_CLI_YOLU}" bulunamadı (npm install çalıştırılmamış olabilir).`));
       return;
     }
+    const g = genelKosuAyarlari(genel, ortam);
     execFile(
       process.execPath,
-      [PLAYWRIGHT_CLI_YOLU, 'test', '--list', '--reporter=json', ...ekstraArgumanlar],
+      [PLAYWRIGHT_CLI_YOLU, 'test', '--list', '--reporter=json', ...g.argumanlar, ...ekstraArgumanlar],
       {
         cwd: projeKoku,
         // NOT: grep deseni artık "--grep" CLI argümanı DEĞİL, TEST_SUNUCU_GREP_DESENI
@@ -235,7 +238,7 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
         // /kosu-listesi doğrulaması koşudan hariç tutulanlar dahil TÜM senaryoları görmeli.
         env: {
           ...process.env,
-          TEST_ENV: ortam,
+          ...g.ortamDegiskenleri,
           TEST_SUNUCU_TUM_LISTE: '1',
           // Kasa açıksa türetilmiş anahtar (yalnızca alt sürecin belleğinde): liste veritabanından
           // kurulur. Kasa kilitliyse liste alınamaz (testler veriyi yalnızca veritabanından okur).
@@ -298,16 +301,29 @@ const devamEdenListelemeler = new Map();
 
 // O an gerçekten var olan TÜM senaryoları (ad + ürün + dosya) Playwright'ın kendisinden
 // alır — koşu isteklerindeki whitelist kontrolünün kaynağı budur (istemcinin gönderdiği veriye
-// asla güvenilmez).
-function tumSenaryolariGetir(ortam) {
-  const devamEden = devamEdenListelemeler.get(ortam);
+// asla güvenilmez). genel: elle oluşturulan proje/ortam (listeleme anahtarı proje + ortam kimliği).
+function tumSenaryolariGetir(ortam, genel = null) {
+  const anahtar = genel ? `genel:${genel.projeId}:${genel.ortamId}` : ortam;
+  const devamEden = devamEdenListelemeler.get(anahtar);
   if (devamEden) return devamEden;
 
-  const istek = senaryolariListele(ortam).finally(() => {
-    devamEdenListelemeler.delete(ortam);
+  const istek = senaryolariListele(ortam, [], undefined, {}, genel).finally(() => {
+    devamEdenListelemeler.delete(anahtar);
   });
-  devamEdenListelemeler.set(ortam, istek);
+  devamEdenListelemeler.set(anahtar, istek);
   return istek;
+}
+
+// GENEL YOL (elle oluşturulan proje/ortam; aktarımla "test"/"canli" anahtarına eşlenmemiş ortamdaki model senaryosu):
+// Playwright genel model yapılandırmasıyla (playwright.model.config.ts) ve proje + ortam KİMLİKLERİYLE başlatılır;
+// TEST_ENV verilmez. Aksi halde eski yol: asıl yapılandırma + TEST_ENV (ortam anahtarı).
+const MODEL_YAPILANDIRMASI = 'playwright.model.config.ts';
+function genelKosuAyarlari(genel, ortam) {
+  if (!genel) return { argumanlar: [], ortamDegiskenleri: { TEST_ENV: ortam } };
+  return {
+    argumanlar: ['--config', MODEL_YAPILANDIRMASI],
+    ortamDegiskenleri: { NOBETCI_PROJE_ID: genel.projeId, NOBETCI_ORTAM_ID: genel.ortamId }
+  };
 }
 
 // Şu an çalışmakta olan süreçleri kosuId -> { surec, pid, iptalEdiliyor } şeklinde
@@ -531,7 +547,8 @@ function dosyaSirasiIleCalistir(dosya, gorev) {
 
 // ekOrtamDegiskenleri: koşu kimliği/türü ve (Senaryolar > "Dene"de) geçici
 // ek veri dosyasının yolu; tekil koşularda boştur.
-async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}, grepDeseni = null) {
+// genel: elle oluşturulan proje/ortamın model senaryosu (bkz. genelKosuAyarlari).
+async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}, grepDeseni = null, genel = null) {
   if (KOSU_KAPALI) {
     return { calistiMi: false, mesaj: 'Bu sunucu örneğinde test koşuları kapalı (TEST_SUNUCU_KOSU_KAPALI=1).' };
   }
@@ -564,7 +581,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   // için doğrulanıyor, ki zaten çalıştırılmak istenen kayıt da bu ikiliyle geliyor.
   // Test verisi ve sonuçlar YALNIZCA platform veritabanında: proje aktarılmamışsa koşu başlatılmaz.
   // Medya şifrelenmek zorunda: kasa kilitliyken de koşu BAŞLATILMAZ.
-  if (!(await platformSonucKaydiEtkinMi())) {
+  if (!(await platformSonucKaydiEtkinMi(genel?.projeId ?? null))) {
     return { calistiMi: false, mesaj: "Veritabanı hazır değil — Nöbetçi'yi açıp projeyi aktarın/yedek yükleyin." };
   }
   if (!(await platformKasaAcikMi())) {
@@ -599,7 +616,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   // "Durdur" ile iptal edilirse yanıtı hemen dönebilsin.
   return new Promise((resolve) => {
     kuyruktaBekleyenler.set(kosuId, resolve);
-    dosyaSirasiIleCalistir(dosya, () => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri)).then((sonuc) => {
+    dosyaSirasiIleCalistir(dosya, () => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri, genel)).then((sonuc) => {
       // Eğer calismaDurdur bu koşuyu ZATEN erken çözdüyse (Map'ten silinmiş olur),
       // ikinci kez resolve çağırmıyoruz — Promise'lerde ikinci resolve zaten yok
       // sayılır ama netlik için burada da kontrol ediyoruz.
@@ -624,7 +641,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
 // ayrı süreçte) çalışan süreç sayısı — sonuncusu kapanınca koşu hâlâ "çalışıyor" görünüyorsa kapatılır.
 const aktifPlatformKosulari = new Map();
 
-async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}) {
+async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}, genel = null) {
   // Sonuçlar ve (şifreli) medya platform raporlayıcısı (scripts/platform/raporlayici.mjs) tarafından
   // veritabanına yazılır; panelin sonucu veritabanından okunur (JSON sonuç dosyası yazdırılmaz).
   const kosuKimligi = ekOrtamDegiskenleri.KOSU_KIMLIGI || `panel-${Date.now()}-${randomBytes(4).toString('hex')}`;
@@ -672,7 +689,8 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     // Raporlayıcılar playwright.config.ts'ten gelir (list + json + Allure). "--reporter"
     // VERİLMEZ: CLI'dan verilirse config'teki Allure raporlayıcısı devre dışı kalıyor ve
     // dashboard koşuları rapora hiç yansımıyordu.
-    const argumanlar = [PLAYWRIGHT_CLI_YOLU, 'test', dosya, `--output=${ciktiKlasoru}`];
+    const genelAyarlar = genelKosuAyarlari(genel, ortam);
+    const argumanlar = [PLAYWRIGHT_CLI_YOLU, 'test', ...genelAyarlar.argumanlar, dosya, `--output=${ciktiKlasoru}`];
 
     console.log(`\n▶ [${ortam.toUpperCase()}] "${senaryoAdi}" başlatıldı...\n`);
 
@@ -680,7 +698,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
       cwd: projeKoku,
       env: {
         ...process.env,
-        TEST_ENV: ortam,
+        ...genelAyarlar.ortamDegiskenleri,
         KOSU_KIMLIGI: kosuKimligi,
         // Raporlayıcı sonuçları bu sunucuya gönderir (veritabanının tek sahibi sunucudur). Token:
         // raporlayıcı token'ı (yalnızca /platform/sonuc/* yazma uçlarında geçerli).
@@ -861,10 +879,10 @@ const EK_SENARYO_DOSYA_ON_EKI = 'test-sunucu-ek-senaryo-';
 // Platform "Senaryolar" (/platform/senaryolar/calistir; senaryo UUID'si sunucuda güncel başlık +
 // dosyaya çözülür) bu yolu kullanır: --list beyaz listesi (istemcinin gönderdiği ada güvenilmez),
 // dosya sırası, süre limiti, durdurma, canlı görüntü, platform raporlayıcısı. Dönen { httpDurum, govde }.
-async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null }) {
+async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null }) {
   let tumSenaryolar;
   try {
-    tumSenaryolar = await tumSenaryolariGetir(ortam);
+    tumSenaryolar = await tumSenaryolariGetir(ortam, genel);
   } catch (hata) {
     return { httpDurum: 500, govde: { basarili: false, mesaj: `Senaryo listesi alınamadı (npx playwright test --list başarısız oldu): ${hata.message}` } };
   }
@@ -889,7 +907,8 @@ async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, ko
       kosuTuru && kosuKimligi
         ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
         : {},
-      grepDeseni
+      grepDeseni,
+      genel
     );
     return calistirmaYaniti(calistirmaSonucu, 'Test');
   }
@@ -967,7 +986,7 @@ platformKosucusunuAyarla({
   calistir: (istek) => senaryoyuCalistirVeYanitla({
     ortam: istek.ortam, senaryoAdi: istek.ad, dosya: istek.dosya, kosuId: istek.kosuId, kosuTuru: istek.kosuTuru ?? null,
     kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel',
-    etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null
+    etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null, genel: istek.genel ?? null
   }),
   dene: async (istek) => {
     const ekDosyaYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}${Date.now()}-${randomBytes(6).toString('hex')}.json`);

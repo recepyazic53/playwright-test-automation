@@ -125,14 +125,17 @@ export function platformVeritabaniYolu(): string {
   return ortam && ortam.trim() ? resolve(ortam.trim()) : resolve(veriKoku(PROJE_KOKU), 'platform.db');
 }
 
-function hataMi(d: unknown): d is HataCiktisi {
+export function hataMi(d: unknown): d is HataCiktisi {
   return typeof d === 'object' && d !== null && typeof (d as { hata?: unknown }).hata === 'string';
 }
 
-/** veri-oku.mjs'yi eşzamanlı çalıştırır. ekOrtam yalnızca alt sürece verilir. */
-export function platformOkuyucusunuCalistir(argumanlar: string[], ekOrtam: Record<string, string> = {}): unknown {
+/**
+ * veri-oku.mjs'yi eşzamanlı çalıştırır. ekOrtam yalnızca alt sürece verilir. adaptorlu: false → "--adaptor" verilmez
+ * (genel kip; bkz. genel-veri.ts).
+ */
+export function platformOkuyucusunuCalistir(argumanlar: string[], ekOrtam: Record<string, string> = {}, adaptorlu = true): unknown {
   try {
-    const cikti = execFileSync(process.execPath, [OKUYUCU, ...argumanlar, '--adaptor', ADAPTOR], {
+    const cikti = execFileSync(process.execPath, [OKUYUCU, ...argumanlar, ...(adaptorlu ? ['--adaptor', ADAPTOR] : [])], {
       cwd: PROJE_KOKU,
       env: { ...process.env, ...ekOrtam },
       encoding: 'utf8',
@@ -225,7 +228,7 @@ export function platformVerisi(ortam: EnvironmentName): PlatformVeriSeti {
  * global-setup ana süreçte çağrıldığında worker'lar birleşik listeyi miras alır; koşu koruması (global-setup,
  * model koşucusu) bu değişkeni okur.
  */
-function yasakAdresleriniBirlestir(liste: PlatformYasakAdresleri | undefined): void {
+export function yasakAdresleriniBirlestir(liste: PlatformYasakAdresleri | undefined): void {
   if (!Array.isArray(liste) || !liste.length) return;
   const mevcut = (process.env[YASAK_ADRES_DEGISKENI] ?? '').split(/[\s,;]+/).map((k) => k.trim().toLowerCase()).filter(Boolean);
   const birlesik = [...new Set([...mevcut, ...liste.map((k) => k.trim().toLowerCase()).filter(Boolean)])];

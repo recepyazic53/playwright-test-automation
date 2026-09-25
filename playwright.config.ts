@@ -27,7 +27,7 @@ const oturumDosyasi = environment.login.storageState;
 // rapor ekleri (ekran görüntüsü, video, iz) playwright-report/ altına DÜZ METİN kopyalardı.
 // Raporlayıcı .mjs dosyası DOĞRUDAN verilmez; TypeScript giriş noktası üzerinden yüklenir (neden:
 // tests/support/platform-raporlayici.ts).
-const platformRaporlayicisi: ReporterDescription = ['./tests/support/platform-raporlayici.ts',{ adaptor: 'galaksi', ortam: environmentName }];
+const platformRaporlayicisi: ReporterDescription = ['./tests/support/platform-raporlayici.ts', { adaptor: 'galaksi', ortam: environmentName }];
 
 export default defineConfig({
   testDir: './tests',

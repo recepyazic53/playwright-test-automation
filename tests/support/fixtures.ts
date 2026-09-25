@@ -10,6 +10,7 @@ import { test as base } from '@playwright/test';
 import { writeFileSync, renameSync } from 'node:fs';
 import { relative, sep } from 'node:path';
 import { getEnvironmentName } from './environments';
+import { genelKosuMu } from './genel-veri';
 import { platformSenaryoKimligi } from './platform-veri';
 
 // Klasör adı -> ürün görünen adı (platformdaki ekran adıyla aynı; bkz. projeler/galaksi/aktarim.mjs > EKRAN_ADLARI).
@@ -80,6 +81,12 @@ export const test = base.extend<OrtakFixturelar>({
   // "<dosya>::<başlık>" aynen çalışır); veri dosyalardan geliyorsa hiçbir şey eklenmez.
   senaryoKimligi: [
     async ({}, use, testInfo) => {
+      // Genel yol (elle oluşturulan proje; playwright.model.config.ts): aktarılmış proje verisi yoktur; model testleri
+      // "senaryoId" annotation'ını kendileri ekler (tests/model-kosucu/model-senaryolari.spec.ts).
+      if (genelKosuMu()) {
+        await use();
+        return;
+      }
       const dosya = relative(testInfo.project.testDir, testInfo.file).split(sep).join('/');
       const kimlik = platformSenaryoKimligi(getEnvironmentName(), `${dosya}::${testInfo.title}`);
       if (kimlik) testInfo.annotations.push({ type: 'senaryoId', description: kimlik });
