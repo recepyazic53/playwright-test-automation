@@ -167,11 +167,13 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     const oAd = h('input', { type: 'text', autocomplete: 'off', value: ortam ? ortam.ad : '' });
     const oAdres = h('input', { type: 'url', autocomplete: 'off', inputmode: 'url', placeholder: 'https://', value: ortam ? ortam.tabanUrl : '' });
     const oVarsayilan = h('input', { type: 'checkbox', id: yeniKimlik('vars'), checked: ortam ? ortam.varsayilan : false });
+    const oCanli = h('input', { type: 'checkbox', id: yeniKimlik('canli'), checked: ortam ? ortam.canli === true : false });
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
     const form = formPaneli(ortam ? `Ortamı düzenle: ${ortam.ad}` : 'Yeni ortam', mesaj.kutu,
       alan('Ortam adı', oAd, { zorunlu: true }), alan('Adres (link)', oAdres, { zorunlu: true }),
       h('label', { class: 'secenek', for: oVarsayilan.id }, oVarsayilan, 'Varsayılan ortam (koşular bu ortamda başlar)'),
+      h('label', { class: 'secenek', for: oCanli.id }, oCanli, 'Bu ortam canlı: akış kaydı kapalı ("Akışı kaydet" sırasında bastığınız düğmeler siteye gerçek istek gönderir)'),
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (o) => {
       o.preventDefault();
@@ -180,7 +182,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
       if (!adresGecerliMi(oAdres.value.trim())) { alanHatasi(oAdres, 'Geçerli bir http(s) adresi girin.'); oAdres.focus(); return; }
       try {
         await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ortam/kaydet', {
-          govde: { id: ortam ? ortam.id : undefined, projeId: proje.id, ad: oAd.value.trim(), tabanUrl: oAdres.value.trim(), varsayilan: oVarsayilan.checked }
+          govde: { id: ortam ? ortam.id : undefined, projeId: proje.id, ad: oAd.value.trim(), tabanUrl: oAdres.value.trim(), varsayilan: oVarsayilan.checked, canli: oCanli.checked }
         }));
         bildir('Ortam kaydedildi.');
         yenile();
@@ -190,7 +192,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
   };
 
   const satirlar = ortamlar.map((o) => kayitSatiri(
-    [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null],
+    [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null, o.canli ? [' ', h('span', { class: 'rozet uyari', title: 'Akış kaydı bu ortamda kapalı' }, 'Canlı')] : null],
     h('span', { class: 'mono' }, o.tabanUrl),
     [duzenleDugmesi(o.ad, () => ortamFormu(o)),
       o.varsayilan

@@ -6,7 +6,9 @@
 //   istekKarari           tarayıcıdaki her isteğin kararı: yasaklı host → her zaman iptal; izinli köken listesi
 //                         verilmişse (testler) dışındaki köken → iptal; TARAMA aşamasında GET/HEAD dışı her istek
 //                         (form gönderimi, XHR POST, sendBeacon…) → iptal. Giriş ve bağlam değiştirme aşamaları
-//                         tarif güdümlüdür (izinli).
+//                         tarif güdümlüdür (izinli). KAYIT aşamasında ("Akışı kaydet") akışı kullanıcı yürütür:
+//                         yazma istekleri izinlidir (kullanıcı bunu başlatırken onaylar); yasaklı host ve izinli köken
+//                         engeli bu aşamada da geçerlidir.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: koruma.d.mts.
 
 import { adresYasakliMi } from '../senaryolar/model-kosusu.mjs';
@@ -109,7 +111,7 @@ export function adresOzeti(adres) {
 
 /**
  * Tarayıcıdaki bir isteğin kararı.
- * @param {{ yontem: string; adres: string; asama: 'hazirlik' | 'giris' | 'baglam' | 'tarama';
+ * @param {{ yontem: string; adres: string; asama: 'hazirlik' | 'giris' | 'baglam' | 'tarama' | 'kayit';
  *   yasakDesenleri: Array<{ kalip: string; desen: RegExp }>; izinliKokenler?: string[] | null }} i
  * @returns {{ izin: true } | { izin: false; neden: 'yazma' | 'yasakli' | 'izinsiz-koken'; kalip?: string }}
  */

@@ -36,6 +36,7 @@ Proje, bir sigorta acente portalının (ilk proje: "Galaksi") Playwright testler
 | Senaryolar (UUID, model güdümlü form, çalıştırma) | `scripts/platform/senaryolar/*` |
 | Ekranlar, sayfa paketi, fark motoru, Bulgular | `scripts/platform/ekranlar/*`, biçim: `docs/sayfa-paketi.md` |
 | Ekranı otomatik tara (salt okunur) | `scripts/platform/tarama/*` |
+| Akışı kaydet (kullanıcı yürütür; görünür tarayıcı + toplayan sayfa paneli) + akış diyagramı oluştur | `scripts/platform/tarama/kayit-motoru.ts`, `kayit-paneli.ts`, `akis-tasarimi.mjs` (taslak, doğrulama, çeviri), `paket-olusturucu.mjs > kayitPaketiOlustur`, arayüz `arayuz/akis-tasarimi.js` |
 | Genel giriş motoru (tarif, TOTP/SMS, bağlam adımları) | `tests/support/giris-motoru.ts`, `scripts/platform/giris/*` |
 | Ortak doğrulayıcı (sunucu + test + form) | `scripts/dogrulama/*` |
 | Model koşucusu (test kodu olmayan senaryolar) | `tests/support/model-kosucu.ts`, `tests/model-kosucu/*` |
@@ -70,6 +71,18 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
   iş kuralı hatası (toleranslı mesaj eşleşmesi, "Beklenen / Görülen").
 - Bağlama göre değişen alanlar: form tüm alanları gösterir; koşuda **görünüyorsa doldur, görünmüyorsa atla**; atlananlar
   sonuçta "Atlanan / doldurulamayan alanlar" başlığında; kritik alanlar için "mutlaka görünmeli".
+- **Akışı kaydet** (düğmeyle açılan adımlar için; kullanıcı kararı): akışı kullanıcı görünür tarayıcıda yürütür. **Topla →
+  tasarla** (kullanıcı kararı, 2026-09-25): sayfadaki panel yalnızca TOPLAR (görülen alanlar listesi — kullanıcı işaretler,
+  "Ekranı yeniden oku", basılan düğmeler, "Mesaj seç"); "Bitir"den sonra Nöbetçi'de **kayıttan hazırlanan taslak** akış
+  diyagramı açılır (Alan grubu / Aksiyon / Beklenen mesaj / Bitir blokları, "+" ile ekleme, sağda yakalananlar; sürükle-bırak)
+  ve kaydedilince sayfa paketine çevrilir. Eski "Bu adımı al" paneli kaldırıldı. Bastığı düğmeler siteye gerçek istek gönderir
+  (başlatırken onay), **canlı işaretli ortamda kapalı** (Ayarlar > Ortamlar), en fazla bir bağlam profili; alan değerleri ve
+  ekran görüntüleri kaydedilmez. Otomatik tarama salt okunur kalır. Kullanıcı kararlarıyla eklenenler: **Giriş yapmadan
+  aç** (giriş gerektirmeyen sayfa; koşular da girişsiz), **alan açan düğme** sorusu (varsayılan: her senaryoda basılır;
+  istisnaları kullanıcı işaretler → senaryoda "… dahil"), başarı göstergesinde **aranacak metni kullanıcı belirler**,
+  **seçime göre değişen alanlar** (ekran okumalarından koşul otomatik). JetTrafik gerçek denemesinde: standart açılır listeler seçenekleriyle geldi, özel liste çıkmadı
+  (özel açılır liste işi gerekmedi).
+  (Ayrıntı: `docs/sayfa-paketi.md`.)
 - Ekran keşfi iki yol: **Ekranı otomatik tara** (Playwright, hiçbir düğmeye basmaz/kaydetmez) veya **sayfa paketi**
   (Claude sohbette link üzerinden salt okunur inceler, paket üretir, kullanıcı yükler). Taramadan önce hangi bağlam
   profilleriyle taranacağı **her zaman kullanıcıya sorulur**.
@@ -117,9 +130,43 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
    Test kodu olmayan ekranda formdan yeni senaryo da oluşturulabilir (`icerik.kosucu = 'model'`). Koruma testi:
    `tests/birim/genel-model-kosusu.spec.ts`. Bilinçli sınırlar (kullanıcı kararı): yalnızca Nöbetçi'den başlatılır
    (terminal `npm run test` yok); model senaryolarında "Dene" henüz yok (açık mesaj verir).
-3. **İlk gerçek tarama:** örn. JetKasko'da "Ekranı otomatik tara" + Claude'un sayfa paketi (kullanıcıyla birlikte).
+3. **İlk gerçek tarama:** kullanıcı JetTrafik'te "Ekranı otomatik tara"yı denedi — düğmeyle açılan 2. adımın alanları
+   görülemedi. Bunun için **Akışı kaydet** eklendi, sonra kullanıcı isteğiyle **topla → tasarla** biçimine çevrildi (panel
+   toplar, diyagram Nöbetçi'de taslaktan kurulur; yerel fikstürle doğrulandı). Sıradaki: JetTrafik'te gerçek bir akış
+   kaydı + kayıttan çıkan modelle bir senaryo koşusu (kullanıcıyla birlikte; **denenmedi**).
+   **Senaryo akış diyagramı** (kullanıcı onaylı, 3 aşama; Nöbetçi görünümünde, dış kütüphane yok, dikey):
+   Diyagramdan akış kurma (3c'nin çekirdeği) kayıt sonrasına taşındı ve yapıldı. ~~3a salt okunur~~ yapıldı — senaryo sayfasında "Akış diyagramı" sekmesi: akış modelden + formdaki GÜNCEL seçimlerden
+   (`scripts/platform/senaryolar/akis-diyagrami.mjs`, arayüz `senaryo-diyagrami.js`), renkler seçili ortamdaki son
+   koşudan (`GET /platform/senaryo/son-sonuc`; adımlar test.step başlığıyla eşlenir). Sırada 3b (diyagramdan o senaryonun
+   adım verisini düzenleme), 3c (sürükle/ekle ile akış değişikliği = EKRAN düzeyinde: yeni model sürümü + etki uyarısı +
+   onay; senaryoya özel akış yok).
+   **Çoklu akış** (kullanıcı kararı, 2026-09-25; "ekran başına tek akış" kararının yerine): ekranın Akışlar sekmesi, varsayılan
+   akış, yeni akış (boş / kopya), düzenle / varsayılan yap / sil, senaryo formunda akış seçimi, kayıttan "yeni akış / şu akışı
+   güncelle". Bireysel/Tüzel gibi farklar TEK akışta (seçimi senaryo yapar, koşul otomatik; "Yol A") — seçimi akışa sabitleme
+   YOK. Diyagramda alan başına Zorunlu / Görünürse doldur, Koşul düzenleme, Bekleme süresi bloğu. Yapıldı, yerel fikstürle
+   doğrulandı; gerçek sitede **denenmedi**. Sonraki: mevcut ürünlerin senaryoları için akışları oluşturmak (kullanıcı istedi).
+   Bilinen kararsız durum: model koşusunda ekran görüntüsü alma ara sıra donuyor (koşu takılıyor) — ayrı iş olarak önerildi.
 4. **Galaksi ürünlerini model koşucusuna taşımak** (ürün ürün, JetSeyahat'ten başla; eski test ile yan yana
-   karşılaştır, sonuçlar aynıysa eski kodu kaldır). Bitince git'te Galaksi'ye özgü kod neredeyse kalmaz
+   karşılaştır, sonuçlar aynıysa eski kodu kaldır).
+   **JetSeyahat (akış) — 1. aşama yapıldı** (kullanıcı kararı: JetTrafik yerine JetSeyahat; mevcut JetSeyahat ekranı ve
+   kodlu testi DEĞİŞMEZ, ayrı ekran). Paket koddan üretilir: `projeler/galaksi/jetseyahat-akis.mjs`, çıktı
+   `node scripts/jetseyahat-akis-paketi.mjs` → `Claude outputs/jetseyahat-akis.paket.json` (kullanıcı Sayfa ekle > Paket
+   yükle ile yükler). Koşucuya eklenen genel özellikler: sabit / göreli değer (`sabitDeger`, tarihte `bugun+7`), kimlik
+   profili açılımı (hazır profil ya da senaryoya özel kimlik → doğum tarihi / telefon / T.C.-VKN alt alanları), alan sonrası
+   `tus` / `tikla` / `bekle {durum: dolu}`, gizli çizimli radyo / onay kutusu (`radyoZorla`, `onayKutusuZorla`),
+   `secimGerekirse`, başarı göstergesi `desen`; boş bırakılan alan modelin varsayılanını alır (koşullar da). Doğrulayıcıda
+   "dosya + kişi sayısı birlikte" kuralı yalnız iki alanı taşıyan modelde; mesaj eşleşmesinde ı→i (ekrandaki "COVID" ile
+   yazılan "covid" eşleşir — kodlu testleri de etkiler). Koruma testi: `tests/birim/jetseyahat-akis.spec.ts` (JetSeyahat
+   benzeri yerel fikstür). Sınırlar: ÖDEME YOK (2. aşama: ortak akış olarak); kayak seçicisi ve acenteye göre görünen
+   alanlar TEST'te doğrulanmalı; ülke / plan / iptal bedeli seçenekleri kısmi. Gerçek TEST'te **denenmedi**.
+   **2026-09-25 güncelleme:** kullanıcı TEST'te ilk senaryoyu başarıyla koştu. Sonra Claude TEST ekranını (kullanıcının
+   oturumuyla) inceledi. Listeler `projeler/galaksi/jetseyahat-secenekler.mjs`'e alındı; alternatif ve ülke kapsama bağlı.
+   İptal bedeli `#Bedel_Select` (yalnız SEYAHAT PAKET), kayak `#kayak`. Hesapla'nın doğrulama mesajları tarayıcı uyarısı
+   (alert) çıkıyor; koşucu artık bunları yakalıyor ve akışa "Uyarı" olarak eklendiler. Ekran silinip paket yeniden
+   yüklendi (kullanıcı onayıyla). Akışta Başarı/Uyarı mesajları, VEYA grubu ve senaryonun akıştaki uyarılardan seçmesi
+   eklendi. Tekrar analiz artık bağlı listeye dönen seçenekleri "kaldırıldı" saymıyor; ama seçici ve bağımlılık
+   değişikliklerini hâlâ taşımıyor. Kodlu JetSeyahat ekranında akış düzenlenemez (seçicisiz alanlar); akışlar
+   "JetSeyahat (akış)"ta. Bitince git'te Galaksi'ye özgü kod neredeyse kalmaz
    (alternatif: Galaksi kodunu ayrı gizli depoya taşımak — kullanıcı projeyi başkasına vermeden önce).
 5. **CANLI ortamda authenticator ile giriş** denemesi (kullanıcıyla).
 6. **`.env` silinmesi** (Mac ve Windows) — 5 başarılı olunca (1 tamam), onayla.

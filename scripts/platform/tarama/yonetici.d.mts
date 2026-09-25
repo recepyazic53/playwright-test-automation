@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 
 export declare const IS_SAKLAMA_MS: number;
+export declare const TASARIM_SAKLAMA_KATI: number;
 export declare class TaramaHatasi extends Error {
   readonly kod: string;
   readonly durum: number;
@@ -32,6 +33,8 @@ export type IsGorunumu = {
   paketHazir: boolean;
   ozet: import('./paket-olusturucu.mjs').PaketOzeti | null;
   uyarilar: Array<{ yer: string; mesaj: string }>;
+  /** Akış kaydı: diyagramı kurulacak (topla → tasarla). */
+  tasarim: boolean;
 };
 
 export type TaramaYoneticisi = {
@@ -40,6 +43,12 @@ export type TaramaYoneticisi = {
   baslat(vt: Veritabani, govde: Record<string, unknown>, s: { adaptor: unknown; sunucuAdresi: string }): { isId: string };
   durum(id: string): IsGorunumu;
   paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
+  akis(id: string): {
+    bloklar: import('./akis-tasarimi.mjs').AkisBlogu[]; palet: import('./akis-tasarimi.mjs').AkisPaleti; ekran: IsGorunumu['ekran']; mod: 'yeni' | 'analiz'; paketHazir: boolean;
+    projeId: string; akisaYazildi: { akisId: string; surum: number } | null;
+  };
+  akisaYaz(vt: Veritabani, id: string, govde: Record<string, unknown>): { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }> }; akisId: string } | { akisId: string; surum: number };
+  akisKaydet(id: string, govde: Record<string, unknown>): { kaydedildi: boolean; palet: import('./akis-tasarimi.mjs').AkisPaleti } | { ozet: IsGorunumu['ozet'] };
   aktif(): { id: string; ekran: IsGorunumu['ekran']; projeId: string } | null;
   iptal(id: string): { iptal: true };
   kodGonder(id: string, kod: unknown): { iletildi: true };

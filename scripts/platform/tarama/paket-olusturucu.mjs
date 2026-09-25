@@ -157,60 +157,14 @@ function kosullariHesapla(p, hamlar, notlar) {
 }
 
 /**
- * Tarama envanterinden sayfa paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
- * @param {import('./paket-olusturucu.d.mts').PaketMetasi} meta
- * @param {import('./paket-olusturucu.d.mts').TaramaEnvanteri} envanter
- * @returns {import('./paket-olusturucu.d.mts').PaketSonucu}
+ * Ham alan → model alanı dönüştürücüsü (otomatik tarama ve akış kaydı ortak). Etiketsiz ve çoklu seçimli alanları
+ * bilinmeyenler için toplar; gizli veri kalıbına benzeyen metinleri atar (sayac.gizlenen artar).
+ * @param {{ gizlenen: number }} sayac
  */
-export function taramaPaketiOlustur(meta, envanter) {
-  const sayac = { gizlenen: 0 };
+function alanDonusturucu(sayac) {
   /** @type {string[]} */
-  const bilinmeyenler = [AKSIYON_BILINMEYENI];
-  /** @type {string[]} */
-  const notlar = [];
-  const profiller = envanter.profiller;
-  const profilAdlari = profiller.map((p) => p.profil).filter((p) => typeof p === 'string' && p !== '');
-
-  // 1) Tüm profillerin alanları (temel + keşifte belirenler) — anahtara göre birleşik; profil başına görülme.
-  /** @type {Map<string, import('./paket-olusturucu.d.mts').HamAlan>} */
-  const hamlar = new Map();
-  /** @type {Map<string, Set<string | null>>} */
-  const gorulme = new Map();
-  /** @type {Map<string, { baslik: string; anahtarlar: string[] }>} */
-  const bolumler = new Map();
-  /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string | null} profil */
-  const ekle = (a, profil) => {
-    if (!hamlar.has(a.anahtar)) {
-      hamlar.set(a.anahtar, a);
-      const b = bolumler.get(a.bolum.anahtar) ?? bolumler.set(a.bolum.anahtar, { baslik: a.bolum.baslik, anahtarlar: [] }).get(a.bolum.anahtar);
-      b?.anahtarlar.push(a.anahtar);
-    }
-    (gorulme.get(a.anahtar) ?? gorulme.set(a.anahtar, new Set()).get(a.anahtar))?.add(profil);
-  };
-  for (const p of profiller) {
-    for (const a of p.alanlar) ekle(a, p.profil);
-    for (const k of p.kesifler) for (const d of k.degerler) for (const a of d.gorunenler) ekle(a, p.profil);
-  }
-
-  // 2) Görünürlük koşulları (ilk keşif verisi olan profilden; profiller arasında farklıysa not).
-  /** @type {Map<string, { secim: string; degerler: string[] }>} */
-  const kosullar = new Map();
-  for (const p of profiller) {
-    for (const [anahtar, k] of kosullariHesapla(p, hamlar, notlar)) {
-      const onceki = kosullar.get(anahtar);
-      if (!onceki) kosullar.set(anahtar, k);
-      else if (onceki.secim !== k.secim || onceki.degerler.join('\u0000') !== k.degerler.join('\u0000')) {
-        notlar.push(`"${hamlar.get(anahtar)?.etiket || anahtar}" alanının görünürlük koşulu bağlam profillerine göre farklı; ilk profildeki koşul yazıldı.`);
-      }
-    }
-  }
-
-  // 3) Taslak alanlar (kimlikler üretilir; mevcut modelle birleştirmede yeniden adlandırılabilir).
-  const kullanilan = new Set();
-  /** @type {Map<string, string>} ham anahtar → alan kimliği */
-  const kimlikler = new Map();
-  for (const [anahtar, a] of hamlar) kimlikler.set(anahtar, benzersiz(temelKimlik(a), kullanilan));
   const etiketsizler = [];
+  /** @type {string[]} */
   const cokluDegerliler = [];
   /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string} id @returns {Record<string, unknown>} */
   const taslakAlan = (a, id) => {
@@ -264,6 +218,64 @@ export function taramaPaketiOlustur(meta, envanter) {
     if (alanNotlari.length) alan.notlar = alanNotlari;
     return alan;
   };
+  return { taslakAlan, etiketsizler, cokluDegerliler };
+}
+
+/**
+ * Tarama envanterinden sayfa paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
+ * @param {import('./paket-olusturucu.d.mts').PaketMetasi} meta
+ * @param {import('./paket-olusturucu.d.mts').TaramaEnvanteri} envanter
+ * @returns {import('./paket-olusturucu.d.mts').PaketSonucu}
+ */
+export function taramaPaketiOlustur(meta, envanter) {
+  const sayac = { gizlenen: 0 };
+  /** @type {string[]} */
+  const bilinmeyenler = [AKSIYON_BILINMEYENI];
+  /** @type {string[]} */
+  const notlar = [];
+  const profiller = envanter.profiller;
+  const profilAdlari = profiller.map((p) => p.profil).filter((p) => typeof p === 'string' && p !== '');
+
+  // 1) Tüm profillerin alanları (temel + keşifte belirenler) — anahtara göre birleşik; profil başına görülme.
+  /** @type {Map<string, import('./paket-olusturucu.d.mts').HamAlan>} */
+  const hamlar = new Map();
+  /** @type {Map<string, Set<string | null>>} */
+  const gorulme = new Map();
+  /** @type {Map<string, { baslik: string; anahtarlar: string[] }>} */
+  const bolumler = new Map();
+  /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string | null} profil */
+  const ekle = (a, profil) => {
+    if (!hamlar.has(a.anahtar)) {
+      hamlar.set(a.anahtar, a);
+      const b = bolumler.get(a.bolum.anahtar) ?? bolumler.set(a.bolum.anahtar, { baslik: a.bolum.baslik, anahtarlar: [] }).get(a.bolum.anahtar);
+      b?.anahtarlar.push(a.anahtar);
+    }
+    (gorulme.get(a.anahtar) ?? gorulme.set(a.anahtar, new Set()).get(a.anahtar))?.add(profil);
+  };
+  for (const p of profiller) {
+    for (const a of p.alanlar) ekle(a, p.profil);
+    for (const k of p.kesifler) for (const d of k.degerler) for (const a of d.gorunenler) ekle(a, p.profil);
+  }
+
+  // 2) Görünürlük koşulları (ilk keşif verisi olan profilden; profiller arasında farklıysa not).
+  /** @type {Map<string, { secim: string; degerler: string[] }>} */
+  const kosullar = new Map();
+  for (const p of profiller) {
+    for (const [anahtar, k] of kosullariHesapla(p, hamlar, notlar)) {
+      const onceki = kosullar.get(anahtar);
+      if (!onceki) kosullar.set(anahtar, k);
+      else if (onceki.secim !== k.secim || onceki.degerler.join('\u0000') !== k.degerler.join('\u0000')) {
+        notlar.push(`"${hamlar.get(anahtar)?.etiket || anahtar}" alanının görünürlük koşulu bağlam profillerine göre farklı; ilk profildeki koşul yazıldı.`);
+      }
+    }
+  }
+
+  // 3) Taslak alanlar (kimlikler üretilir; mevcut modelle birleştirmede yeniden adlandırılabilir).
+  const kullanilan = new Set();
+  /** @type {Map<string, string>} ham anahtar → alan kimliği */
+  const kimlikler = new Map();
+  for (const [anahtar, a] of hamlar) kimlikler.set(anahtar, benzersiz(temelKimlik(a), kullanilan));
+  const { taslakAlan, etiketsizler, cokluDegerliler } = alanDonusturucu(sayac);
 
   // 4) Adlandırılmış koşullar.
   /** @type {Record<string, Record<string, unknown>>} */
@@ -308,6 +320,8 @@ export function taramaPaketiOlustur(meta, envanter) {
   if (meta.mevcutModel && nesneMi(meta.mevcutModel) && Array.isArray(meta.mevcutModel.adimlar)) {
     // ---- Tekrar analiz: mevcut modeli taban al.
     model = kopya(meta.mevcutModel);
+    if (meta.girissiz) model.girisGerekmez = true;
+    else delete model.girisGerekmez;
     const adimlar = /** @type {Array<Record<string, any>>} */ (model.adimlar);
     if (!nesneMi(model.kosullar)) model.kosullar = {};
     const kosulAdKumesi = new Set(Object.keys(/** @type {object} */ (model.kosullar)));
@@ -436,7 +450,7 @@ export function taramaPaketiOlustur(meta, envanter) {
     yeniAlanSayisi = hamlar.size;
     const sayfaBasligi = temizMetin(profiller.find((p) => p.baslik)?.baslik, sayac, 120);
     model = {
-      semaSurumu: 1, tur: 'ekran', id: meta.ekranAnahtari, ad: meta.ekranAdi,
+      semaSurumu: 1, tur: 'ekran', id: meta.ekranAnahtari, ad: meta.ekranAdi, ...(meta.girissiz ? { girisGerekmez: true } : {}),
       aciklama: `"${meta.ekranAdi}" ekranının otomatik taramayla çıkarılan TASLAK modeli (${hamlar.size} alan). Adım/aksiyon tanımları ve iş kuralları Claude ile tamamlanmalı.`,
       ekranUrl: urlYolu,
       specDosyasi: `tests/scenarios/${meta.ekranAnahtari}/${meta.ekranAnahtari}.spec.ts`,
@@ -499,6 +513,7 @@ export function taramaPaketiOlustur(meta, envanter) {
 
   const olusturulma = meta.olusturulma ?? new Date().toISOString();
   const yazmaSayisi = yazma.length;
+  varsayilanAkisiEsitle(model);
   const paket = {
     tur: SAYFA_PAKETI_TURU,
     surum: SAYFA_PAKETI_SURUMU,
@@ -526,4 +541,545 @@ export function taramaPaketiOlustur(meta, envanter) {
       eslesmeyenSayisi: eslesmeyenler.length, engellenenYazma: yazmaSayisi, kanitSayisi: kanitlar.length
     }
   };
+}
+
+// ---------------------------------------------------------------------------------------
+// AKIŞ KAYDI → SAYFA PAKETİ ("Akışı kaydet")
+// ---------------------------------------------------------------------------------------
+
+export const KAYIT_OLUSTURANI = 'Nöbetçi akış kaydı';
+
+/** Çoklu akış: tarama / kayıt varsayılan akışı (model.adimlar) günceller; akislar içindeki kopyası eşitlenir. @param {Record<string, any>} model */
+function varsayilanAkisiEsitle(model) {
+  if (nesneMi(model) && Array.isArray(model.akislar)) model.akislar = model.akislar.map((/** @type {unknown} */ a) => (nesneMi(a) && a.varsayilan === true ? { ...a, adimlar: model.adimlar } : a));
+}
+
+/**
+ * Seçime göre görünürlük: hedef alan okumaların bazılarında görünüp bazılarında görünmüyorsa ve bu okumalar arasında değeri
+ * AYRIŞAN tek bir seçim alanı varsa { secim, degerler } (hedef, seçimin bu değerlerinde görünür). Seçimin görünmediği / boş
+ * olduğu okumalar o aday için yok sayılır. Birden çok aday: 'coklu'; aday yoksa null.
+ * @param {Array<{ gorunen: string[]; secimler: Record<string, string> }>} okumalar @param {string} hedef
+ * @param {string[]} adaylar seçim alanlarının anahtarları @param {(anahtar: string) => Set<string>} gecerliDegerler
+ * @returns {{ secim: string; degerler: string[] } | 'coklu' | null}
+ */
+export function secimKosuluCikar(okumalar, hedef, adaylar, gecerliDegerler) {
+  const gorulen = okumalar.filter((o) => o.gorunen.includes(hedef));
+  const gorulmeyen = okumalar.filter((o) => !o.gorunen.includes(hedef));
+  if (!gorulen.length || !gorulmeyen.length) return null;
+  const bulunan = adaylar.filter((c) => c !== hedef).flatMap((c) => {
+    const gecerli = gecerliDegerler(c);
+    const degerler = (/** @type {typeof okumalar} */ liste) => liste.map((o) => o.secimler[c]).filter((x) => typeof x === 'string' && gecerli.has(x));
+    const v = degerler(gorulen);
+    const n = degerler(gorulmeyen);
+    if (!v.length || !n.length) return [];
+    const vk = new Set(v);
+    return n.some((x) => vk.has(x)) ? [] : [{ secim: c, degerler: [...vk] }];
+  });
+  return bulunan.length === 1 ? bulunan[0] : bulunan.length > 1 ? 'coklu' : null;
+}
+
+/**
+ * Başarı göstergesinin SABİT kısmı: rakam içeren ilk kelimeden öncesi (poliçe/başvuru numarası, tarih, tutar her koşuda değişir),
+ * sondaki noktalama atılır. 3 karakterden kısa kalırsa null (gösterge "öğe görünür" olur).
+ * @param {string | null} m
+ */
+export function sabitGostergeMetni(m) {
+  if (!m) return null;
+  // Rakam içeren ilk kelimeden itibaren (ör. "No: TK-1003", "12.05.2026") değişken kabul edilir.
+  const i = m.search(/[^\s:;,()]*\d/);
+  const s = (i >= 0 ? m.slice(0, i) : m).replace(/[\s:;,.#№(\-–—]+$/u, '').trim();
+  return s.length >= 3 ? s : null;
+}
+
+/**
+ * Akış kaydından sayfa paketi (model şema sürümü 2: adım koşu tanımlarıyla). Adımlar kullanıcının kaydettiği sırayla ve
+ * adlarıyla gelir; her adımın alanları kullanıcının seçtikleridir. Adımın koşu tanımı:
+ *   aksiyonlar       ilerleme düğmesine tıkla (kaydedildiyse),
+ *   basariGostergesi sonraki adımın ilk alanı (yoksa ilerleme düğmesi) görünür; son adımda kullanıcının seçtiği
+ *                    başarı göstergesi (metin ya da öğe).
+ * Mevcut ekran: aynı seçicili alanların KİMLİĞİ ve eklenmiş bilgileri (seçenekler, görünürlük, eşleşme, notlar) korunur
+ * — senaryo verileri bozulmaz; kayıtta olmayan alanlar yeni modelde yer almaz (Bulgular'da "kaldırıldı" görünür, kullanıcı
+ * reddedebilir). Artık var olmayan alan/adımlara başvuran koşullar ve iş kuralları çıkarılır (bilinmeyenlere yazılır).
+ * Alan DEĞERİ ve ekran görüntüsü YOKTUR.
+ * @param {import('./paket-olusturucu.d.mts').PaketMetasi} meta
+ * @param {import('./paket-olusturucu.d.mts').KayitEnvanteri} envanter
+ * @returns {import('./paket-olusturucu.d.mts').PaketSonucu}
+ */
+export function kayitPaketiOlustur(meta, envanter) {
+  const sayac = { gizlenen: 0 };
+  const { taslakAlan, etiketsizler, cokluDegerliler } = alanDonusturucu(sayac);
+  /** @type {string[]} */
+  const bilinmeyenler = [];
+  const mevcut = meta.mevcutModel && nesneMi(meta.mevcutModel) && Array.isArray(meta.mevcutModel.adimlar) ? kopya(meta.mevcutModel) : null;
+
+  // Mevcut modelin alanları (seçiciyle eşleştirme için). Çoklu akışta DİĞER akışların adımları da (kimliğe göre tekil):
+  // ortak alanlar yeniden kullanılır, kimlikleri çakışmaz, onların koşulları / iş kuralları silinmez.
+  /** @param {Array<Record<string, any>>} adimlar */
+  const adimAlanlari = (adimlar) => adimlar.filter(nesneMi).flatMap((adim) => (Array.isArray(adim.bolumler) ? adim.bolumler : [])
+    .flatMap((/** @type {Record<string, any>} */ b) => (Array.isArray(b.alanlar) ? b.alanlar : []).filter((/** @type {unknown} */ a) => nesneMi(a) && typeof a.id === 'string')));
+  /** @type {Array<Record<string, any>>} */
+  const anaAlanlar = mevcut ? adimAlanlari(/** @type {Array<Record<string, any>>} */ (mevcut.adimlar)) : [];
+  const anaAdimIdleri = new Set(mevcut ? /** @type {Array<Record<string, any>>} */ (mevcut.adimlar).filter(nesneMi).map((a) => String(a.id)) : []);
+  /** @type {Array<Record<string, any>>} */
+  const digerAdimlar = mevcut && Array.isArray(mevcut.akislar)
+    ? mevcut.akislar.filter(nesneMi).flatMap((/** @type {Record<string, any>} */ a) => (Array.isArray(a.adimlar) ? a.adimlar : []))
+      .filter((/** @type {unknown} */ a) => nesneMi(a) && !anaAdimIdleri.has(String(/** @type {Record<string, any>} */ (a).id)))
+    : [];
+  const anaAlanIdleri = new Set(anaAlanlar.map((a) => String(a.id)));
+  const digerAlanlar = adimAlanlari(digerAdimlar).filter((a, i, l) => !anaAlanIdleri.has(String(a.id)) && l.findIndex((x) => x.id === a.id) === i);
+  /** @type {Array<Record<string, any>>} */
+  const mevcutAlanlar = [...anaAlanlar, ...digerAlanlar];
+  // Mevcut kimlikler ayrılır: yeni alan/düğme kimlikleri eşleşmeyen eski bir alanın kimliğini almaz.
+  const kullanilanIdler = new Set([
+    ...mevcutAlanlar.map((a) => String(a.id)),
+    ...(mevcut && nesneMi(mevcut.senaryoDuzeyi) && Array.isArray(mevcut.senaryoDuzeyi.alanlar)
+      ? mevcut.senaryoDuzeyi.alanlar.filter(nesneMi).map((/** @type {Record<string, any>} */ a) => String(a.id)) : [])
+  ]);
+  // Giriş tarifi bağlam değiştiriyorsa senaryonun bağlam profili seçilebilmeli (model koşucusu profili bu alandan alır);
+  // varsayılanı kaydın yapıldığı profildir. Mevcut modelde profil havuzlu bir alan varsa o korunur.
+  const profilAlaniVar = mevcut && nesneMi(mevcut.senaryoDuzeyi) && Array.isArray(mevcut.senaryoDuzeyi.alanlar)
+    && mevcut.senaryoDuzeyi.alanlar.some((/** @type {unknown} */ a) => nesneMi(a) && nesneMi(a.eslesme) && typeof a.eslesme.profilHavuzu === 'string');
+  /** @type {Record<string, unknown> | null} */
+  const baglamAlani = meta.baglamTuru && !profilAlaniVar ? {
+    id: benzersiz('baglamProfili', kullanilanIdler), tip: 'secim', etiket: { ekran: null, form: meta.baglamTuru }, zorunlu: false, yapilandirma: 'senaryo',
+    eslesme: { senaryo: 'baglamProfili', profilHavuzu: meta.baglamTuru },
+    ...(envanter.profil ? { varsayilan: { deger: envanter.profil } } : {})
+  } : null;
+  const eslesenMevcut = new Set();
+  /** İşlemler öğesi (düğme / sonuç): mevcut modelde aynı tip + seçicili öğe varsa kimliği korunur. @param {string} tip @param {string} secici @param {string} temel */
+  const islemKimligi = (tip, secici, temel) => {
+    const e = mevcutAlanlar.find((a) => !eslesenMevcut.has(a) && a.tip === tip && nesneMi(a.konum) && a.konum.secici === secici);
+    if (e) { eslesenMevcut.add(e); return String(e.id); }
+    return benzersiz(temel, kullanilanIdler);
+  };
+  let yeniAlanSayisi = 0;
+  let eslesenSayisi = 0;
+  /** Ham alan anahtarı → modeldeki alan nesnesi (seçime göre görünürlük koşulları için). @type {Map<string, Record<string, any>>} */
+  const hamdanModel = new Map();
+  /** @param {import('./paket-olusturucu.d.mts').HamAlan} h @returns {Record<string, unknown>} */
+  const modelAlani = (h) => {
+    const alan = modelAlaniKur(h);
+    // Akışta "zorunlu": senaryoda değer şart ve koşuda ekranda görünmezse test başarısız (koşullu alanda koşul sağlanınca).
+    if (h.zorunlu) alan.mutlakaGorunmeli = true;
+    else delete alan.mutlakaGorunmeli;
+    hamdanModel.set(h.anahtar, alan);
+    return alan;
+  };
+  /** @param {import('./paket-olusturucu.d.mts').HamAlan} h @returns {Record<string, unknown>} */
+  const modelAlaniKur = (h) => {
+    // Kimlik bloğu (diyagramda "kimlik:<id>"): mevcut modeldeki tanımı olduğu gibi (alt alanlar, profil havuzu…).
+    if (h.tur === 'kimlik' && h.anahtar.startsWith('kimlik:')) {
+      const e = mevcutAlanlar.find((a) => !eslesenMevcut.has(a) && a.tip === 'kimlikProfili' && `kimlik:${a.id}` === h.anahtar);
+      if (e) { eslesenMevcut.add(e); eslesenSayisi++; kullanilanIdler.add(String(e.id)); return { ...e }; }
+    }
+    const adaylar = new Set([h.secici, ...h.adaySeciciler].map(seciciNormal));
+    const e = mevcutAlanlar.find((a) => !eslesenMevcut.has(a) && (TARANABILIR_TIPLER.has(a.tip) || a.tip === 'okluSecim') && nesneMi(a.konum) && typeof a.konum.secici === 'string' && adaylar.has(seciciNormal(a.konum.secici)));
+    if (e) {
+      eslesenMevcut.add(e);
+      eslesenSayisi++;
+      kullanilanIdler.add(String(e.id));
+      const t = taslakAlan(h, String(e.id));
+      const yeniEtiket = /** @type {{ ekran: string | null }} */ (t.etiket).ekran;
+      // Ekrandaki etiket yalnızca mevcut tanımda ekran etiketi varsa güncellenir (yalnızca form etiketi olan alan değişmez).
+      const etiketGuncelle = yeniEtiket && (!nesneMi(e.etiket) || typeof e.etiket.ekran === 'string');
+      /** @type {Record<string, unknown>} */
+      const sonuc = { ...e, ...(etiketGuncelle ? { etiket: { ...(nesneMi(e.etiket) ? e.etiket : {}), ekran: yeniEtiket } } : {}) };
+      // Senaryoda zorunluluk mevcut tanımdan (modelden gelen akışta sayfa "required" bilgisi yok); senaryo alanında yoksa sayfanınki.
+      if (typeof e.zorunlu !== 'boolean' && e.yapilandirma === 'senaryo') sonuc.zorunlu = t.zorunlu;
+      return sonuc;
+    }
+    yeniAlanSayisi++;
+    return taslakAlan(h, benzersiz(temelKimlik(h), kullanilanIdler));
+  };
+
+  // Adımlar. Hiçbir şey kaydedilmemiş adım (alan, ilerleme/alan açan düğme, son adımda gösterge yok) atlanır.
+  const kayitlar = envanter.adimlar.filter((k, i, tum) => {
+    const dolu = Boolean(k.ortakAkis) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi));
+    if (!dolu) bilinmeyenler.push(`"${temizMetin(k.ad, sayac, 120) || `${i + 1}. adım`}" adımında alan, ilerleme düğmesi ya da gösterge kaydedilmediği için modele eklenmedi.`);
+    return dolu;
+  });
+
+  // Alt adımlar. Model koşucusu bir adımda önce alanları doldurur, sonra düğmelere basar; bu yüzden alan AÇAN düğmesi olan
+  // adım parçalara bölünür: [ilk alanlar] → [düğme] → [açılan alanlar] … → [ilerleme]. "Her senaryoda basılmaz" işaretli
+  // düğmenin parçaları senaryo ayarına ("“<düğme>” dahil") bağlı isteğe bağlı adımlardır (senaryo formunda onay kutusu).
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; once?: number; sonra?: number; ortakAkis?: string }} AltAdim */
+  const kosulAdlari = new Set(mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar) : []);
+  /** @type {Record<string, Record<string, unknown>>} */
+  const yeniKosullar = {};
+  /** @type {Array<Record<string, unknown>>} */
+  const ayarAlanlari = [];
+  /** @type {AltAdim[]} */
+  const altAdimlar = [];
+  /**
+   * "“<ad>” dahil" senaryo ayarı ve koşulu (isteğe bağlı düğme / ortak akış). Mevcut modelde aynı etiketli ayar ve koşulu
+   * varsa yeniden kullanılır (akış kopyası / yeniden kayıt: senaryoların ayar değeri korunur, formda iki kez görünmez).
+   * @param {string} etiket @param {string} temel kimlik öneki @returns {string} koşul adı
+   */
+  const dahilKosulu = (etiket, temel) => {
+    const form = `“${etiket}” dahil`;
+    const sdMevcut = mevcut && nesneMi(mevcut.senaryoDuzeyi) && Array.isArray(mevcut.senaryoDuzeyi.alanlar) ? mevcut.senaryoDuzeyi.alanlar : [];
+    const eskiAyar = sdMevcut.find((/** @type {Record<string, any>} */ x) => nesneMi(x) && x.tip === 'onayKutusu' && nesneMi(x.etiket) && x.etiket.form === form);
+    const eskiKosul = eskiAyar && mevcut && nesneMi(mevcut.kosullar)
+      ? Object.keys(mevcut.kosullar).find((k) => nesneMi(mevcut.kosullar[k]?.ifade) && mevcut.kosullar[k].ifade.senaryoAyari === eskiAyar.id && mevcut.kosullar[k].ifade.esit === true)
+      : undefined;
+    if (eskiAyar && eskiKosul) {
+      yeniKosullar[eskiKosul] = mevcut.kosullar[eskiKosul];
+      return eskiKosul;
+    }
+    const ayar = benzersiz(`${kimlikUret(etiket, temel)}Dahil`, kullanilanIdler);
+    const kosul = benzersiz(`${ayar}Kosulu`, kosulAdlari);
+    yeniKosullar[kosul] = { aciklama: `“${etiket}” senaryoda seçildiyse (akış kaydı).`, ifade: { senaryoAyari: ayar, esit: true } };
+    ayarAlanlari.push({ id: ayar, tip: 'onayKutusu', etiket: { ekran: null, form }, zorunlu: false, yapilandirma: 'senaryo', eslesme: { senaryo: ayar } });
+    return kosul;
+  };
+  for (const [i, k] of kayitlar.entries()) {
+    const ad = temizMetin(k.ad, sayac, 120) || `${i + 1}. adım`;
+    if (k.ortakAkis) {
+      // Ortak akış adımı: alanı yok; koşuda ortak akışın adımlarıyla açılır.
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: k.ortakAkis.istegeBagli ? dahilKosulu(ad, 'ortakAkis') : null, ortakAkis: k.ortakAkis.dosya });
+      continue;
+    }
+    const parca = (/** @type {number} */ j) => k.alanlar.filter((_, x) => (k.parcalar?.[x] ?? 0) === j);
+    /** @type {AltAdim[]} */
+    const parcalar = [{ ad, alanlar: parca(0), tikla: null, kosul: null }];
+    for (const [j, a] of (k.acicilar ?? []).entries()) {
+      const dugme = temizMetin(a.metin, sayac, 80) || 'alan açan düğme';
+      /** @type {string | null} */
+      let kosul = null;
+      if (a.secimli) {
+        kosul = dahilKosulu(dugme, 'ekAdim');
+      }
+      parcalar.push({ ad: `${ad}: ${dugme}`, alanlar: [], tikla: a, kosul, once: a.onceBekle, sonra: a.sonraBekle });
+      parcalar.push({ ad: `${ad}: ${dugme} sonrası`, alanlar: parca(j + 1), tikla: null, kosul });
+    }
+    if (k.ilerleme) {
+      const son = parcalar[parcalar.length - 1];
+      // İlerleme, isteğe bağlı olmayan son parçaya eklenir; isteğe bağlıysa (atlanabilir) ayrı bir adım olur.
+      const sure = k.zamanAsimiSn ? { zamanAsimiSn: k.zamanAsimiSn } : {};
+      if (!son.tikla && !son.kosul && (son.alanlar.length || parcalar.length === 1)) Object.assign(son, { tikla: k.ilerleme, gosterge: k.gosterge ?? null, once: k.onceBekle, sonra: k.sonraBekle, ...sure });
+      else parcalar.push({ ad: `${ad}: ${temizMetin(k.ilerleme.metin, sayac, 80) || 'ilerle'}`, alanlar: [], tikla: k.ilerleme, kosul: null, gosterge: k.gosterge ?? null, once: k.onceBekle, sonra: k.sonraBekle, ...sure });
+    } else if (k.onceBekle) {
+      // Düğmesiz adımda bekleme: alanlar doldurulduktan (son parçanın düğmesi varsa ona basıldıktan) sonra.
+      const son = [...parcalar].reverse().find((p) => p.alanlar.length || p.tikla) ?? parcalar[0];
+      if (son.tikla) son.sonra = (son.sonra ?? 0) + k.onceBekle;
+      else son.once = (son.once ?? 0) + k.onceBekle;
+    }
+    if (!k.ilerleme && i < kayitlar.length - 1) {
+      bilinmeyenler.push(`"${ad}" adımının ilerleme düğmesi kaydedilmedi; model koşucusu bu adımdan sonrakine geçemez (modelde "kosu.aksiyonlar" ekleyin ya da akışı yeniden kaydedin).`);
+    }
+    // Boş parçalar (alan da düğme de yok) atılır; adımın hiç parçası kalmazsa (yalnızca gösterge) ilk parça kalır.
+    const dolu = parcalar.filter((p) => p.alanlar.length || p.tikla || p.once);
+    const eklenen = dolu.length ? dolu : [parcalar[0]];
+    // Kabul edilen uyarılar: ilerleme düğmesinin parçasına (düğme yoksa son parçaya).
+    if (k.uyarilar?.length) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).uyarilar = k.uyarilar;
+    altAdimlar.push(...eklenen);
+  }
+
+  // Başarı göstergesinde aranan metin: kullanıcının belirlediği (null: yalnızca öğe görünür); belirlemediyse öneri
+  // (metnin sabit kısmı — ilk rakamdan öncesi).
+  const g = envanter.basariGostergesi;
+  /** @param {import('./paket-olusturucu.d.mts').KayitGostergesi} x */
+  const sonMetni = (x) => x.aranan === null ? null
+    : typeof x.aranan === 'string' ? temizMetin(x.aranan, sayac, 200) : sabitGostergeMetni(temizMetin(x.metin, sayac, 200));
+  const gostergeMetni = g ? sonMetni(g) : null;
+  /** Gösterge + "veya" seçenekleri → tek gösterge ya da { tur: 'veya', secenekler }. @param {import('./paket-olusturucu.d.mts').KayitGostergesi} x @param {(y: import('./paket-olusturucu.d.mts').KayitGostergesi) => Record<string, unknown> | null} tek */
+  const basariTanimi = (x, tek) => {
+    const liste = [x, ...(x.veya ?? [])].map(tek).filter((y) => y !== null);
+    return liste.length > 1 ? { tur: 'veya', secenekler: liste } : liste[0] ?? null;
+  };
+
+  /** Bölüm kimlikleri modelin tamamında tekildir. */
+  const bolumIdleri = new Set();
+  const adimIdleri = new Set();
+  /** Adım kimliği: mevcut modelde aynı başlıklı adımın kimliği (senaryoların beklenen hata adımı bozulmasın), yoksa yeni. @param {string} baslik */
+  const adimKimligi = (baslik) => {
+    const eski = mevcut ? /** @type {Array<Record<string, any>>} */ (mevcut.adimlar).find((a) => nesneMi(a) && a.baslik === baslik && typeof a.id === 'string' && !adimIdleri.has(a.id)) : undefined;
+    if (eski) { adimIdleri.add(eski.id); return String(eski.id); }
+    return benzersiz(kimlikUret(baslik, 'adim'), adimIdleri);
+  };
+  /** @type {Array<Record<string, any>>} */
+  const adimlar = altAdimlar.map((p, i) => {
+    if (p.ortakAkis) {
+      return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}), ortakAkis: { dosya: p.ortakAkis } };
+    }
+    /** @type {Map<string, { baslik: string; alanlar: Array<Record<string, unknown>> }>} */
+    const bolumler = new Map();
+    for (const h of p.alanlar) {
+      const b = bolumler.get(h.bolum.anahtar) ?? bolumler.set(h.bolum.anahtar, { baslik: temizMetin(h.bolum.baslik, sayac, 120) || 'Genel', alanlar: [] }).get(h.bolum.anahtar);
+      b?.alanlar.push(modelAlani(h));
+    }
+    const sonAdimMi = i === altAdimlar.length - 1;
+    // "İşlemler" bölümü: adımın düğmesi (buton/aksiyon) ve son adımda sonucu gösteren öğe (cikti) — model koşucusu bunları
+    // doldurmaz (koşu tanımı ayrıca aşağıda); modelde adımın ne yaptığı görünür, alansız adım geçerli olur.
+    /** @type {Array<Record<string, unknown>>} */
+    const islemler = [];
+    if (p.tikla) {
+      const m = temizMetin(p.tikla.metin, sayac, 120);
+      islemler.push({ id: islemKimligi('buton', p.tikla.secici, kimlikUret(m ?? '', 'dugme')), tip: 'buton', yapilandirma: 'aksiyon', etiket: { ekran: m }, konum: { secici: p.tikla.secici, kirilganlik: 'orta' } });
+    }
+    if (sonAdimMi && g && g.secici) {
+      const eskiCikti = mevcutAlanlar.find((a) => a.tip === 'cikti' && nesneMi(a.konum) && a.konum.secici === g.secici);
+      const ciktiEtiketi = eskiCikti && nesneMi(eskiCikti.etiket) ? eskiCikti.etiket : { ekran: g.desen ? 'Sonuç' : gostergeMetni };
+      islemler.push({ id: islemKimligi('cikti', g.secici, 'sonucMesaji'), tip: 'cikti', yapilandirma: 'cikti', etiket: ciktiEtiketi, konum: { secici: g.secici, kirilganlik: 'orta' } });
+    }
+    if (islemler.length) bolumler.set('\u0000islemler', { baslik: 'İşlemler', alanlar: islemler });
+    /** @type {Record<string, unknown>} */
+    const kosu = {};
+    // Aksiyonlar: [süreli bekleme] → düğmeye tıkla → [süreli bekleme] (alanlar doldurulduktan sonra, sırayla).
+    /** @type {Array<Record<string, unknown>>} */
+    const aksiyonlar = [];
+    if (p.once) aksiyonlar.push({ tur: 'bekle', sureSn: p.once });
+    if (p.tikla) {
+      const aciklama = temizMetin(p.tikla.metin, sayac, 120);
+      aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}) });
+    }
+    if (p.sonra) aksiyonlar.push({ tur: 'bekle', sureSn: p.sonra });
+    if (aksiyonlar.length) kosu.aksiyonlar = aksiyonlar;
+    if (p.tikla) {
+      // Başarı: sonraki (atlanmayacak) adımın ilk alanı ya da düğmesi görünür.
+      const sonraki = altAdimlar.slice(i + 1).find((x) => x.kosul === null || x.kosul === p.kosul);
+      const hedef = sonraki ? sonraki.alanlar[0]?.secici ?? sonraki.tikla?.secici ?? null : null;
+      if (hedef) kosu.basariGostergesi = { tur: 'eleman', deger: hedef };
+      // Akış tasarımında düğmeden sonra beklenen mesaj verildiyse: o metin görünür.
+      const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
+        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici } : {}) } : null;
+        const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
+        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici } : {}) } : null;
+      }) : null;
+      if (ara) kosu.basariGostergesi = ara;
+    }
+    const uyarilar = (p.uyarilar ?? []).map((x) => {
+      const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
+      return m ? { metin: m, ...(x.secici ? { secici: x.secici } : {}) } : null;
+    }).filter((x) => x !== null);
+    if (uyarilar.length) {
+      kosu.uyarilar = uyarilar;
+      // Uyarının göründüğü öğe (ilk seçicili uyarı): beklenen / beklenmeyen uyarı metni buradan da okunur.
+      const secicili = uyarilar.find((u) => u.secici);
+      if (secicili) kosu.hataGostergesi = { secici: secicili.secici };
+    }
+    if (p.zamanAsimiSn) kosu.zamanAsimiSn = p.zamanAsimiSn;
+    if (sonAdimMi && g) {
+      const son = basariTanimi(g, (x) => {
+        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici } : {}) } : null;
+        const m = sonMetni(x);
+        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici } : {}) } : x.secici ? { tur: 'eleman', deger: x.secici } : null;
+      });
+      if (son) kosu.basariGostergesi = son;
+    }
+    return {
+      id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad,
+      ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}),
+      bolumler: [...bolumler.values()].map((b) => ({ id: benzersiz(kimlikUret(b.baslik, 'bolum'), bolumIdleri), baslik: b.baslik, alanlar: b.alanlar })),
+      ...(Object.keys(kosu).length ? { kosu } : {})
+    };
+  });
+  // Seçime göre görünen alanlar (akış kaydının ekran okumaları): alan adımın bazı okumalarında görünüp
+  // bazılarında görünmüyorsa ve bu okumalar arasında değeri AYRIŞAN tek bir seçim alanı (select/radyo) varsa, alan o seçimin
+  // görüldüğü değerlerde görünür — adlandırılmış koşul (otomatik taramanın seçim keşfiyle aynı biçim). Birden çok aday varsa
+  // koşul yazılmaz, bilinmeyenlere not düşülür.
+  const tumHamlar = new Map(kayitlar.flatMap((x) => x.alanlar).map((h) => [h.anahtar, h]));
+  /** @param {string} anahtar */
+  const secenekDegerleri = (anahtar) => {
+    const h = tumHamlar.get(anahtar);
+    return new Set([...(h?.secenekler ?? []).map((s) => s.deger), ...(h?.radyolar ?? []).map((r) => r.deger)].filter((x) => x !== ''));
+  };
+  /** Seçim alanı c'nin değerlerine görünürlük koşulu yazar. @param {Record<string, any>} alan @param {string} c @param {string[]} degerler @param {string} kaynak */
+  const kosulYaz = (alan, c, degerler, kaynak) => {
+    const secim = tumHamlar.get(c);
+    const secimAlani = hamdanModel.get(c);
+    if (!secim || !secimAlani) return false;
+    const metinler = degerler.map((dg) => temizMetin([...(secim.secenekler ?? []), ...(secim.radyolar ?? [])].find((s) => s.deger === dg)?.metin, sayac, 80) ?? dg);
+    // Aynı ifadeli koşul (mevcut modelde ya da bu kayıtta) varsa o kullanılır (her kayıtta yeni koşul adı birikmesin).
+    const ayniMi = (/** @type {unknown} */ k) => {
+      const i = nesneMi(k) && nesneMi(k.ifade) ? k.ifade : null;
+      const l = i ? (Array.isArray(i.icinde) ? i.icinde : [i.esit]) : null;
+      return Boolean(i && l && i.alan === String(secimAlani.id) && l.length === degerler.length && degerler.every((x) => l.includes(x)));
+    };
+    const ayni = Object.keys(yeniKosullar).find((ad) => ayniMi(yeniKosullar[ad]))
+      ?? (mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar).find((ad) => ayniMi(mevcut.kosullar[ad])) : undefined);
+    if (ayni) {
+      if (!(ayni in yeniKosullar) && mevcut) yeniKosullar[ayni] = mevcut.kosullar[ayni];
+      alan.gorunurluk = { kosul: ayni };
+      return true;
+    }
+    const ad = benzersiz(`${String(alan.id)}Gorunur`, kosulAdlari);
+    yeniKosullar[ad] = {
+      aciklama: `${temizMetin(secim.etiket, sayac, 120) || String(secimAlani.id)} = ${metinler.join(' / ')} seçilince görünür (${kaynak}).`,
+      ifade: degerler.length === 1 ? { alan: String(secimAlani.id), esit: degerler[0] } : { alan: String(secimAlani.id), icinde: degerler }
+    };
+    alan.gorunurluk = { kosul: ad };
+    return true;
+  };
+  const secimAdaylari = [...hamdanModel.keys()].filter((c) => ['select', 'radio'].includes(tumHamlar.get(c)?.tur ?? ''));
+  for (const k of kayitlar) {
+    const okumalar = k.okumalar ?? [];
+    for (const h of k.alanlar) {
+      const alan = hamdanModel.get(h.anahtar);
+      if (!alan) continue;
+      const etiket = temizMetin(h.etiket, sayac, 120) || String(alan.id);
+      // Akış tasarımında elle belirlenen koşul (null: koşulsuz — mevcut koşul da kaldırılır) otomatik çıkarımın yerine geçer.
+      if (k.kosullar && Object.prototype.hasOwnProperty.call(k.kosullar, h.anahtar)) {
+        const elle = k.kosullar[h.anahtar];
+        // Modeldeki koşulla aynıysa korunur (her kayıtta yeni koşul adı birikmesin).
+        if (elle && nesneMi(alan.gorunurluk) && typeof alan.gorunurluk.kosul === 'string' && mevcut && nesneMi(mevcut.kosullar)) {
+          const ifade = mevcut.kosullar[alan.gorunurluk.kosul]?.ifade;
+          const eski = nesneMi(ifade) ? (Array.isArray(ifade.icinde) ? ifade.icinde : [ifade.esit]) : null;
+          if (eski && ifade.alan === hamdanModel.get(elle.secim)?.id && eski.length === elle.degerler.length && elle.degerler.every((x) => eski.includes(x))) continue;
+        }
+        delete alan.gorunurluk;
+        if (elle && !kosulYaz(alan, elle.secim, elle.degerler, 'akış tasarımı')) bilinmeyenler.push(`"${etiket}" alanının koşulundaki seçim alanı akışta yok; koşul yazılmadı.`);
+        continue;
+      }
+      if (alan.gorunurluk || okumalar.length < 2) continue;
+      const bulunan = secimKosuluCikar(okumalar, h.anahtar, secimAdaylari, secenekDegerleri);
+      if (bulunan === 'coklu') bilinmeyenler.push(`"${etiket}" alanının görünürlüğü birden çok seçime bağlı görünüyor; koşul yazılmadı (gözden geçirin).`);
+      else if (bulunan) kosulYaz(alan, bulunan.secim, bulunan.degerler, 'akış kaydı');
+    }
+  }
+
+  if (!envanter.basariGostergesi) bilinmeyenler.push('Başarı göstergesi seçilmedi: son adımın sonucu doğrulanmaz (modelde son adıma "kosu.basariGostergesi" ekleyin).');
+  bilinmeyenler.push('Hata göstergesi (iş kuralı uyarılarının çıktığı öğe) kayıtta seçilmez; iş kuralı hatası beklenen senaryolarda sayfanın metni aranır.');
+
+  const urlYolu = kayitlar[0]?.yol || meta.urlYolu;
+  const alanSayisi = kayitlar.reduce((t, k) => t + k.alanlar.length, 0);
+  /** @type {Record<string, any>} */
+  let model;
+  if (mevcut) {
+    model = { ...mevcut, semaSurumu: 2, ekranUrl: urlYolu, adimlar };
+    if (meta.girissiz) model.girisGerekmez = true;
+    else delete model.girisGerekmez;
+    const ekAlanlar = [...(baglamAlani ? [baglamAlani] : []), ...ayarAlanlari];
+    if (ekAlanlar.length) {
+      const sd = nesneMi(model.senaryoDuzeyi) ? model.senaryoDuzeyi : { alanlar: [] };
+      model.senaryoDuzeyi = { ...sd, alanlar: [...(Array.isArray(sd.alanlar) ? sd.alanlar : []), ...ekAlanlar] };
+    }
+    // Artık var olmayan alan/adımlara başvuran koşullar, görünürlükler ve iş kuralları çıkarılır.
+    const alanIdleri = new Set(adimlar.flatMap((a) => /** @type {Array<{ alanlar: Array<Record<string, unknown>> }>} */ (a.bolumler ?? []).flatMap((b) => b.alanlar.map((x) => String(x.id)))));
+    for (const a of digerAlanlar) alanIdleri.add(String(a.id));
+    for (const a of nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? model.senaryoDuzeyi.alanlar : []) {
+      if (nesneMi(a) && typeof a.id === 'string') alanIdleri.add(a.id);
+    }
+    const yeniAdimIdleri = new Set([...adimlar.map((a) => String(a.id)), ...digerAdimlar.map((a) => String(a.id))]);
+    const kosullar = nesneMi(model.kosullar) ? model.kosullar : {};
+    const cikanKosullar = Object.keys(kosullar).filter((ad) => {
+      const alanlar = JSON.stringify(kosullar[ad]?.ifade ?? {}).match(/"alan":"([^"]+)"/g) ?? [];
+      return alanlar.some((m) => !alanIdleri.has(m.slice(8, -1)));
+    });
+    for (const ad of cikanKosullar) delete kosullar[ad];
+    model.kosullar = { ...kosullar, ...yeniKosullar };
+    for (const adim of adimlar) {
+      if (nesneMi(adim.gorunurluk) && typeof adim.gorunurluk.kosul === 'string' && !(adim.gorunurluk.kosul in model.kosullar)) delete adim.gorunurluk;
+      for (const b of /** @type {Array<{ alanlar: Array<Record<string, any>> }>} */ (adim.bolumler ?? [])) {
+        for (const a of b.alanlar) if (nesneMi(a.gorunurluk) && typeof a.gorunurluk.kosul === 'string' && !(a.gorunurluk.kosul in model.kosullar)) delete a.gorunurluk;
+      }
+    }
+    if (cikanKosullar.length) bilinmeyenler.push(`Kayıtta olmayan alanlara bağlı ${cikanKosullar.length} görünürlük koşulu modelden çıkarıldı: ${cikanKosullar.slice(0, 10).join(', ')}.`);
+    if (Array.isArray(model.isKurallari)) {
+      const once = model.isKurallari.length;
+      model.isKurallari = model.isKurallari.filter((/** @type {Record<string, any>} */ k) => !nesneMi(k) || typeof k.adim !== 'string' || yeniAdimIdleri.has(k.adim));
+      if (model.isKurallari.length !== once) bilinmeyenler.push(`Kayıttaki adımlarla eşleşmeyen ${once - model.isKurallari.length} iş kuralı modelden çıkarıldı (adımı yeniden atanarak eklenebilir).`);
+    }
+    if (nesneMi(model.baglamGorunurlugu) && nesneMi(model.baglamGorunurlugu.alanlar)) {
+      for (const id of Object.keys(model.baglamGorunurlugu.alanlar)) if (!alanIdleri.has(id)) delete model.baglamGorunurlugu.alanlar[id];
+    }
+    const kaybolan = anaAlanlar.filter((a) => !eslesenMevcut.has(a)).map((a) => String((nesneMi(a.etiket) && (a.etiket.ekran || a.etiket.form)) || a.id));
+    if (kaybolan.length) {
+      bilinmeyenler.push(`Mevcut modeldeki ${kaybolan.length} alan kayıtta seçilmedi ve yeni modelde yok (Bulgular'da "kaldırıldı" görünür; istemiyorsanız reddedin): ${kaybolan.slice(0, 15).join(', ')}${kaybolan.length > 15 ? '…' : ''}.`);
+    }
+    model.bilinmeyenler = [...new Set([...(Array.isArray(model.bilinmeyenler) ? model.bilinmeyenler : []).filter((b) => b !== AKSIYON_BILINMEYENI), ...bilinmeyenler])];
+  } else {
+    model = {
+      semaSurumu: 2, tur: 'ekran', id: meta.ekranAnahtari, ad: meta.ekranAdi,
+      aciklama: `"${meta.ekranAdi}" ekranının akış kaydıyla çıkarılan modeli (${adimlar.length} adım, ${alanSayisi} alan).`,
+      ekranUrl: urlYolu,
+      specDosyasi: `tests/scenarios/${meta.ekranAnahtari}/${meta.ekranAnahtari}.spec.ts`,
+      pageObject: 'yok (model koşucusu)',
+      veriKaynaklari: { senaryo: `Nöbetçi > Senaryolar (${meta.ekranAnahtari})` },
+      ...(meta.girissiz ? { girisGerekmez: true } : {}),
+      kosullar: yeniKosullar,
+      adimlar,
+      senaryoDuzeyi: { alanlar: [...(baglamAlani ? [baglamAlani] : []), ...ayarAlanlari] },
+      urunDuzeyi: {},
+      isKurallari: [],
+      bilinmeyenler: [...bilinmeyenler]
+    };
+  }
+
+  beklenenSonucuEsitle(model);
+  for (const n of envanter.notlar) bilinmeyenler.push(n);
+  const yasakli = envanter.engellenenler.filter((e) => e.neden === 'yasakli');
+  if (yasakli.length) bilinmeyenler.push(`Yasaklı adres kalıbına uyan ${yasakli.length} istek engellendi (${[...new Set(yasakli.map((e) => e.adres))].slice(0, 3).join(', ')}).`);
+  if (etiketsizler.length) bilinmeyenler.push(`Etiketi bulunamayan ${etiketsizler.length} alan: ${etiketsizler.slice(0, 10).join(', ')} (etiketi ekrandan kontrol edin).`);
+  if (cokluDegerliler.length) bilinmeyenler.push(`Çoklu seçim listeleri: ${cokluDegerliler.join(', ')} — model tek değer bekler.`);
+  if (sayac.gizlenen) bilinmeyenler.push(`${sayac.gizlenen} metin gizli/kişisel veri kalıbına (kart, kimlik no, IBAN…) benzediği için pakete yazılmadı.`);
+
+  varsayilanAkisiEsitle(model);
+  const paket = {
+    tur: SAYFA_PAKETI_TURU,
+    surum: SAYFA_PAKETI_SURUMU,
+    meta: {
+      ...(meta.proje ? { proje: meta.proje } : {}),
+      ekran: { anahtar: meta.ekranAnahtari, ad: meta.ekranAdi, urlYolu },
+      olusturan: KAYIT_OLUSTURANI,
+      olusturulma: meta.olusturulma ?? new Date().toISOString(),
+      baglamProfilleri: envanter.profil ? [envanter.profil] : [],
+      not: `Akış Nöbetçi'de kullanıcı tarafından kaydedildi (${adimlar.length} adım, ${alanSayisi} alan). Alan değerleri ve ekran görüntüleri kaydedilmedi.`
+    },
+    model,
+    senaryoOnerileri: [],
+    gerekenAyarlar: {
+      girisGerekli: meta.girisGerekli, ikiAsamaliDogrulama: meta.ikiAsamali, captchaGoruldu: false, testVerisiTurleri: [],
+      ...(meta.baglamTuru && envanter.profil ? { baglamTurleri: [meta.baglamTuru] } : {})
+    },
+    bilinmeyenler: [...new Set(bilinmeyenler)]
+  };
+  return {
+    paket,
+    ozet: {
+      alanSayisi, kosulSayisi: nesneMi(model.kosullar) ? Object.keys(model.kosullar).length : 0, yeniAlanSayisi, eslesenSayisi,
+      eslesmeyenSayisi: mevcutAlanlar.length - eslesenMevcut.size, engellenenYazma: 0, kanitSayisi: 0, adimSayisi: adimlar.length
+    }
+  };
+}
+
+/**
+ * Kabul edilen uyarıları olan adımlar varsa senaryo düzeyinde "Beklenen sonuç" (birleşim) alanı: başarılı ya da iş kuralı
+ * uyarısı (adım: uyarısı olan adımlar). Alan varsa uyarılı adımlar adım seçeneklerine eklenir (başka akışların adımları kalır).
+ * @param {Record<string, any>} model
+ */
+export function beklenenSonucuEsitle(model) {
+  const uyarili = (Array.isArray(model.adimlar) ? model.adimlar : [])
+    .filter((a) => nesneMi(a) && nesneMi(a.kosu) && Array.isArray(a.kosu.uyarilar) && a.kosu.uyarilar.length);
+  if (!uyarili.length) return;
+  const sd = nesneMi(model.senaryoDuzeyi) ? model.senaryoDuzeyi : { alanlar: [] };
+  const alanlar = Array.isArray(sd.alanlar) ? [...sd.alanlar] : [];
+  const secenekler = uyarili.map((a) => ({ deger: String(a.id), metin: String(a.baslik || a.id) }));
+  const mevcutIndeks = alanlar.findIndex((a) => nesneMi(a) && a.tip === 'birlesim' && a.yapilandirma === 'senaryo');
+  if (mevcutIndeks < 0) {
+    const idler = new Set(alanlar.filter(nesneMi).map((a) => a.id));
+    alanlar.push({
+      id: idler.has('beklenenSonuc') ? 'beklenenSonucAkis' : 'beklenenSonuc', tip: 'birlesim', etiket: { ekran: null, form: 'Beklenen sonuç' },
+      zorunlu: false, yapilandirma: 'senaryo', eslesme: { senaryo: 'beklenenSonuc' },
+      varyantlar: [
+        { tip: 'basarili', anlam: 'Akıştaki başarı mesajı görünür.' },
+        { tip: 'isKuraliHatasi', anlam: 'Akışta kabul edilen uyarılardan biri görünür.', alanlar: {
+          adim: { etiket: 'Uyarının beklendiği adım', secenekler },
+          mesaj: { etiket: 'Beklenen uyarı', tip: 'metin', zorunlu: true }
+        } }
+      ]
+    });
+  } else {
+    const alan = { ...alanlar[mevcutIndeks] };
+    alan.varyantlar = (Array.isArray(alan.varyantlar) ? alan.varyantlar : []).map((/** @type {any} */ v) => {
+      if (!nesneMi(v) || !nesneMi(v.alanlar)) return v;
+      const adimAdi = Object.keys(v.alanlar).find((ad) => Array.isArray(v.alanlar[ad]?.secenekler));
+      if (!adimAdi) return v;
+      const eski = v.alanlar[adimAdi].secenekler;
+      const ekler = secenekler.filter((s) => !eski.some((/** @type {any} */ x) => nesneMi(x) && String(x.deger) === s.deger));
+      return ekler.length ? { ...v, alanlar: { ...v.alanlar, [adimAdi]: { ...v.alanlar[adimAdi], secenekler: [...eski, ...ekler] } } } : v;
+    });
+    alanlar[mevcutIndeks] = alan;
+  }
+  model.senaryoDuzeyi = { ...sd, alanlar };
 }

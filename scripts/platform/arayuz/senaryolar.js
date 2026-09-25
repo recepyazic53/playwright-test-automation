@@ -372,6 +372,7 @@ function listeGorunumu(icerik, s) {
     const altBilgi = [
       neden ? rozet([ikon('uyari'), 'kodu kaldırılmış'], 'hata', { title: `${KOD_NEDENI[neden] || 'Kodu yok'}${x.kaynak ? ` (${x.kaynak.dosya})` : ''}. Menüden "Kaldır" ile silebilirsiniz.` }) : null,
       x.veriGudumlu ? null : rozet('kodda', '', { title: 'Kodda tanımlı test: veri yok; yalnızca görünen ad ve Koşuda düzenlenir' }),
+      x.akis ? rozet(`akış: ${x.akis.ad}`, '', { title: 'Senaryonun koştuğu akış (ekranın birden çok akışı var)' }) : null,
       x.modelKosusu
         ? rozet('model', 'vurgu', { title: 'Test kodu yok: ekran modeliyle koşar (model koşucusu). Koşuda açıksa "Koşuyu başlat" ve npm run test dahil eder.' })
         : x.paketten ? rozet('paketten', 'vurgu', { title: 'Sayfa paketindeki öneriden eklendi; test kodu (spec dosyası) olduğu için kodla koşar' }) : null,

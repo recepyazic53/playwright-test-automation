@@ -67,6 +67,20 @@ function etiketMetni(alan) {
 }
 const alanAdi = (alan) => etiketMetni(alan) || (alan && alan.id) || '?';
 const secenekKimligi = (s) => String(s.senaryoDegeri !== undefined ? s.senaryoDegeri : s.deger);
+/**
+ * Alanın tüm seçenekleri: düz liste + bağlı listeler (bagimlilik.secenekHaritasi), tekrarsız. Liste bağlı listeye
+ * dönüştüğünde (ör. alternatif kapsama bağlandı) seçenekler "kaldırıldı" sayılmaz.
+ */
+const tumSecenekler = (a) => {
+  const harita = a.bagimlilik && nesneMi(a.bagimlilik.secenekHaritasi) ? Object.values(a.bagimlilik.secenekHaritasi).flat() : [];
+  const gorulen = new Set();
+  return [...(Array.isArray(a.secenekler) ? a.secenekler : []), ...harita].filter(nesneMi).filter((s) => {
+    const k = secenekKimligi(s);
+    if (gorulen.has(k)) return false;
+    gorulen.add(k);
+    return true;
+  });
+};
 const secenekMetni = (s) => String(s.metin || s.formMetni || s.deger);
 const zorunluluk = (a) => (a.zorunlu === true ? true : a.zorunlu === false ? false : null);
 function senaryoAnahtarlari(alan) {
@@ -82,7 +96,11 @@ export function kosuTanimiMetni(k) {
   for (const a of Array.isArray(k.aksiyonlar) ? k.aksiyonlar : []) {
     if (nesneMi(a)) parcalar.push(`${a.tur === 'bekle' ? 'bekle' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}`);
   }
-  if (nesneMi(k.basariGostergesi)) parcalar.push(`başarı: ${k.basariGostergesi.tur} "${k.basariGostergesi.deger}"`);
+  const bg = k.basariGostergesi;
+  if (nesneMi(bg)) {
+    const tek = (/** @type {any} */ g) => `${g.tur} "${g.deger}"`;
+    parcalar.push(`başarı: ${bg.tur === 'veya' && Array.isArray(bg.secenekler) ? bg.secenekler.filter(nesneMi).map(tek).join(' veya ') : tek(bg)}`);
+  }
   if (nesneMi(k.hataGostergesi)) parcalar.push(`hata: ${k.hataGostergesi.secici}`);
   return parcalar.join(' · ') || 'boş';
 }
@@ -289,8 +307,8 @@ export function modelFarki(eski, yeni) {
     if (zorunluluk(ea) !== zorunluluk(ya)) {
       bulgular.push(bulguYap({ tur: 'zorunlulukDegisikligi', hedef: id, alanId: id, baslik: `Zorunluluk: ${alanAdi(ya)}`, konum, eski: zorunluluk(ea), yeni: zorunluluk(ya) }));
     }
-    const es = Array.isArray(ea.secenekler) ? ea.secenekler.filter(nesneMi) : [];
-    const ys = Array.isArray(ya.secenekler) ? ya.secenekler.filter(nesneMi) : [];
+    const es = tumSecenekler(ea);
+    const ys = tumSecenekler(ya);
     const esK = new Set(es.map(secenekKimligi));
     const ysK = new Set(ys.map(secenekKimligi));
     for (const s of ys) {

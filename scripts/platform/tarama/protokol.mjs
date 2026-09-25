@@ -29,6 +29,25 @@ export const TARAMA_ZAMAN_ASIMI_DEGISKENI = 'NOBETCI_TARAMA_ZAMAN_ASIMI_SN';
 export const TARAMA_TOKEN_BASLIGI = 'x-nobetci-tarama-tokeni';
 /** Varsayılan toplam süre sınırı. */
 export const VARSAYILAN_ZAMAN_ASIMI_SN = 300;
+
+// ---- AKIŞ KAYDI ("Akışı kaydet"; aynı iş altyapısı, girdi.kip = 'kayit') ----
+// Kullanıcı görünür bir tarayıcıda akışı KENDİSİ yürütür; sayfadaki Nöbetçi paneliyle adımları adlandırıp alır.
+// Kayıt aşamasında kullanıcının bastığı düğmeler siteye GERÇEK istek gönderir (yazma engeli yok); yasaklı adres ve
+// izinli köken engeli sürer. Alan DEĞERLERİ hiçbir zaman okunmaz/kaydedilmez.
+/** Sunucu tarafı: kaydın toplam süre sınırı (sn; varsayılan 1800). */
+export const KAYIT_ZAMAN_ASIMI_DEGISKENI = 'NOBETCI_KAYIT_ZAMAN_ASIMI_SN';
+/** Varsayılan kayıt süre sınırı (kullanıcı akışı elle yürütür). */
+export const VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN = 1800;
+/** Alt sürece verilen: "1" ise tarayıcı GÖRÜNÜR açılır (akış kaydı). */
+export const TARAMA_GORUNUR_DEGISKENI = 'NOBETCI_TARAMA_GORUNUR';
+/** Sunucu tarafı, YALNIZCA testler: "1" ise kayıt tarayıcısı başsız açılır. */
+export const KAYIT_BASSIZ_DEGISKENI = 'NOBETCI_KAYIT_BASSIZ';
+/** Sunucu tarafı, YALNIZCA testler: kayıt tarayıcısının uzaktan hata ayıklama portu (test paneli sürer). */
+export const KAYIT_CDP_PORTU_DEGISKENI = 'NOBETCI_KAYIT_CDP_PORTU';
+/** Sayfaya açılan köprü (panel → kayıt motoru). */
+export const KAYIT_KOPRUSU = '__nobetciKayit';
+/** Sayfadaki panelin kök öğesinin kimliği (taramaya ve ekran görüntülerine girmez). */
+export const KAYIT_PANELI_KIMLIGI = 'nobetci-kayit-paneli';
 /** Sonuç gövdesi sınırı (envanter + en fazla 12 × 4 MB ekran görüntüsünün base64'ü). */
 export const SONUC_GOVDE_SINIRI = 72 * 1024 * 1024;
 /** Olay gövdesi sınırı. */

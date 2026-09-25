@@ -3,10 +3,22 @@
 Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **sayfa paketi** ile yapılır:
 
 1. Kullanıcı sayfanın bağlantısını bir Claude Code sohbetine verir.
-2. Claude sayfayı **yalnızca okuyarak** inceler (form göndermez, kayıt oluşturmaz, "kaydet/öde/onayla"
-   türü düğmelere basmaz) ve bu belgedeki biçimde bir JSON dosyası üretir.
+2. Claude sayfayı aşağıdaki **düğme gruplarına** göre inceler ve bu belgedeki biçimde bir JSON dosyası üretir.
 3. Kullanıcı dosyayı Nöbetçi > **Ekranlar > Sayfa ekle** (yeni ekran) ya da ekranın **Paket yükle**
    düğmesiyle (tekrar analiz) yükler. Önizleyip kabul edene kadar hiçbir şey kaydedilmez.
+
+### Düğme grupları (Claude'un incelemesi)
+
+| Grup | Örnek | Kural |
+|---|---|---|
+| Açan / ilerleten (kayıt yok) | Devam, Ek sürücü ekle, sekmeler, oklar, seçim değiştirme | Serbestçe basılır; koşullu alanlar, bağımlı listeler ve sonraki ekranın alanları böyle çıkarılır. |
+| Hesaplayan / sorgulayan | Prim hesapla, Kimlik sorgula | Basılır; sonuç alanları ve uyarılar (tarayıcı uyarıları — alert — dahil) toplanır. Kimlik sorgusunda yalnızca kullanıcının verdiği test profili kullanılır. |
+| Kayıt oluşturan / onaylayan / ödeme yapan | Teklif kaydet, Poliçeleştir, Onayla, Ödemeyi tamamla | Claude durur ve sorar; yalnızca TEST ortamında, kullanıcının onayıyla basılır. CANLI'da basılmaz. |
+
+Ne yaptığından emin olunamayan düğme üçüncü gruptan sayılır (önce sorulur). Kart, şifre gibi bilgiler hiçbir zaman
+girilmez; ödeme ekranında alanlar okunur. Onay verilmezse o noktadan sonrası pakete "bilinmiyor" olarak yazılır.
+Çok ekranlı ve kayıt oluşturan akışlarda **Akışı kaydet** (düğmelere kullanıcı basar, panel toplar) daha güvenli yoldur.
+Nöbetçi'nin kendi "Ekranı otomatik tara" özelliği bu kuralları kullanmaz: yalnızca okur.
 
 Claude API kullanılmaz. Nöbetçi'nin "Claude ile yorumla" / "Tekrar analiz et" düğmeleri, Claude Code'a
 verilecek **gizli değer içermeyen** bir analiz/istek dosyası yazar (`veri/analiz/<ekran>-<tarih>.json`).
@@ -73,6 +85,55 @@ koşuda alan **görünüyorsa doldurulur, görünmüyorsa atlanır**; senaryoda 
 alan görünmezse test başarısız olur; atlanan alanlar sonuçlarda listelenir. Bağlam ↔ alan eşlemesi elle
 tutulmaz.
 
+### Ortak akışlar (ör. ödeme)
+
+Tek yerde tanımlanıp ekran akışlarına **adım olarak** eklenen akış. Model `"tur": "ortakAkis"`, `"semaSurumu": 2` olur.
+Adımları ekran modeliyle aynı biçimdedir; ekran adresi, spec ya da page object içermez. İçinde alt model ya da başka ortak
+akış olmaz. Nasıl çalışır:
+- **Yükleme:** sayfa paketiyle yüklenir; `meta.ekran.urlYolu` verilmeyebilir. Ekranlar'da "Ortak akışlar" grubunda görünür;
+  senaryo listelerinde ekran olarak görünmez, taranmaz.
+- **Ekrana ekleme:** ekran akışında `{ "id", "sira", "baslik", "ortakAkis": { "dosya": "<anahtar>.model.json" }, "gorunurluk"? }`
+  adımı olarak yer alır. Akış tasarımında **"+ > Ortak akış"** ile eklenir. "Her senaryoda koşulmaz" seçilirse senaryoda
+  "“<ad>” dahil" ayarıyla seçilir.
+- **Koşuda açılma:** form, doğrulama ve koşu açılmış modeli görür (`model-formu.mjs > ortakAkislariAc`), ortak akış hep son
+  sürümüyle kullanılır.
+  - Açılan adımların kimliği `<başvuru adımı>_<ortak adım>` olur.
+  - Başvuru adımının koşulu her açılan adıma eklenir.
+  - Ortak akışın koşulları `<ortak id>_<ad>` olarak taşınır.
+  - Ortak akış projede yoksa koşu açık bir hatayla durur.
+- **Yalnızca test ortamı:** `"yalnizTestOrtami": true` ise adımları canlı işaretli ortamda koşulmaz, raporda
+  "(canlı ortam: atlandı)" yazar.
+- **Kart:** kimlik bloğu gibi bir profil bloğudur (`kimlikProfili`, `kimlikTuru: "kart"`). Değer, "Kredi kartı" test verisi
+  profilinden (varsayılan `ortak`) ya da senaryoya özel karttan gelir ve koşu anında çözülür. `{deger, metin}` biçimli
+  değerler `deger` ile seçilir.
+- **Galaksi:** `projeler/galaksi/odeme-akis.mjs` ödeme ortak akışını üretir: Poliçeleştir → kart formu → kart + "Ödemeyi
+  tamamla". Başarı TEST'te "Hiçbir poliçe onaylanamadı." olur.
+
+### Akışlar (bir ekranda birden çok akış)
+
+`akislar` (isteğe bağlı): `[{ id, ad, varsayilan?: true, adimlar }]`. Varsayılan akışın `adimlar`ı modelin `adimlar`ıyla
+AYNIDIR (yazılırken eşitlenir; akış bilmeyen okuyucular — kodlu testler, eski modeller — `adimlar`ı okur). `akislar` yoksa
+tek, örtük "Ana akış" (`id: "ana"`) vardır. Alanlar, koşullar ve senaryo düzeyi ayarlar ekranın ORTAK havuzundadır; aynı alan
+(aynı kimlik) birden çok akışta olabilir. Her akış, `adimlar`ı o akışın adımlarıyla değiştirilmiş model olarak doğrulanır
+(`model-formu.mjs > akisModeli`: o akışta olmayan adımlara bağlı iş kuralları, alanlara bağlı bağlam görünürlükleri ve başka
+akışların isteğe bağlı adım ayarları/koşulları çıkarılır). Senaryo akışını içeriğinde tutar (`icerik.akis`; yoksa varsayılan).
+Ekranlar > ekran > **Akışlar** sekmesi (Model geçmişi düzeni): akış listesi (adım / senaryo sayısı), "Yeni akış oluştur" (ad; boş
+ya da bir akıştan kopya), seçilen akışın diyagramı; **Düzenle** / **Kopyala** / **Varsayılan yap** / **Sil** (senaryosu olan ya da
+varsayılan akış silinemez; varsayılan değişince akışı yazılı olmayan senaryolara eski varsayılan yazılır). Düzenleme diyagram
+düzenleyicisiyle yapılır (sağ liste YALNIZCA bu ekranın modelindeki alanlar); kaydetmeden önce etkilenen senaryolar gösterilir,
+kaydedince yeni model sürümü (`ekranlar/akis-servisi.mjs`, `/platform/ekran/akis/*`). Diyagramda taşınanlar:
+- **Sabit değerli alanlar** (`sabit` / `turetilmis` + `sabitDeger`, ör. "bugün + 7" tarih). Paletteki notları "sabit değer: …" olur.
+- **Kimlik blokları** (`kimlikProfili`). Anahtarları `kimlik:<id>` olur; alt alanlarıyla aynen korunur.
+- **Kalıp göstergesi** ("Metin bir kalıp", `desen`).
+- **Uyarılar.**
+- **Sonucu bekleme süresi** (aksiyon bloğunda, `kosu.zamanAsimiSn`).
+- **Düğmesiz adımın görünürlük koşulu.** Alanların koşuluna taşınır.
+
+Alanlar mevcut tanımlarıyla (seçici ya da kimlik bloğu kimliği) eşleşir; bağımlı listeler, doldurucu parametreleri ve
+varsayılanlar korunur. Adım kimlikleri başlıkla korunur, aynı ifadeli koşullar yeniden kullanılır. Alt model adımı,
+düğmeli adımın koşulu ya da seçicisi olmayan başka alan içeren modeller diyagramdan düzenlenmez, yalnızca görüntülenir. Senaryo formunda önce **Akış** seçilir (varsayılan önde); akış
+değişince form o akışa göre yeniden çizilir.
+
 ### Adım koşu tanımı (semaSurumu 2)
 
 Her adıma isteğe bağlı `kosu` nesnesi yazılabilir; model koşucusu adımın alanlarını doldurduktan sonra
@@ -90,14 +151,25 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 
 | Alan | Açıklama |
 |---|---|
-| `aksiyonlar[]` | `tur`: `tikla` (düğme/bağlantı) ya da `bekle` (`durum`: `gorunur` varsayılan \| `gizli`); `secici` zorunlu; `metin` (birden çok öğe eşleşirse bu metni içeren), `aciklama`, `zamanAsimiSn` isteğe bağlı. **Kaydet/öde/onayla** gibi kalıcı işlem yapan düğmeler yalnızca test ortamında koşulacak adımlara yazılır. |
-| `basariGostergesi` | `tur`: `metin` (sayfada ya da `secici` öğesinde toleranslı içerir), `eleman` (`deger` seçicisi görünür), `url` (`deger` düzenli ifadesi). |
+| `aksiyonlar[]` | `tur`: `tikla` (düğme/bağlantı) ya da `bekle` (`durum`: `gorunur` varsayılan \| `gizli` \| `dolu` — öğenin metni/değeri boş değil; `secici` yoksa `sureSn` kadar beklenir); `secici` zorunlu; `metin` (birden çok öğe eşleşirse bu metni içeren), `aciklama`, `zamanAsimiSn` isteğe bağlı. **Kaydet/öde/onayla** gibi kalıcı işlem yapan düğmeler yalnızca test ortamında koşulacak adımlara yazılır. |
+| `basariGostergesi` | `tur`: `metin` (sayfada ya da `secici` öğesinde toleranslı içerir), `eleman` (`deger` seçicisi görünür), `url` (`deger` düzenli ifadesi), `desen` (sayfanın ya da `secici` öğesinin metni `deger` düzenli ifadesine uyar; ör. prim sıfırdan farklı: `[1-9]`), `veya` (`secenekler`: 2–5 gösterge; herhangi biri görünürse başarılı). |
+| `uyarilar` | Adımda kabul edilen iş kuralı uyarıları `[{ metin, secici? }]` (en çok 10): senaryo "iş kuralı hatası" beklerken bunlardan seçer; başarı beklenen senaryoda biri görünürse test hemen düşer. |
 | `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
 
 Sürüm 2'de `okluSecim` doldurucusu (ok düğmeleriyle değer değiştiren özel bileşen) değeri gösteren öğeyi
 (`konum.secici`) ve düğmeleri (`konum.yardimci.ileri` ve `konum.yardimci.geri`; eski adlarla `arttir`/`azalt`)
 bildirmek zorundadır; `doldurucuParametreleri.maksDeneme` yön başına en fazla tıklamadır.
+
+Koşucunun diğer alan olanakları (JetSeyahat (akış) ile eklendi; hepsi genel):
+
+| Olanak | Açıklama |
+|---|---|
+| `sabitDeger` | Senaryo alanı olmayan (`yapilandirma` `sabit`/`turetilmis`) alan her koşuda bu değerle doldurulur. Tarihte `bugun`, `bugun+7`, `bugun-3` (İstanbul günü, alanın `bicim`iyle). |
+| Varsayılan | Senaryoda boş bırakılan alan modelin `varsayilan.deger`ini alır; görünürlük koşulları da bu değerle hesaplanır (dosya hariç). |
+| `kimlikProfili` | Senaryoya özel kimlik ya da seçilen (yoksa varsayılan) hazır profil (Ayarlar > Test verisi profilleri; havuz = aynı adlı test verisi türü ya da aktarım tanımı) `altAlanlar`a `sira` ile açılır; `eslesme.kimlikAlani` metin ya da kimlik türüne göre harita (türde karşılığı yoksa alt alan atlanır). |
+| `doldurucuParametreleri` | Alan doldurulduktan sonra: `tus` (ör. `Tab`), `tikla` (seçici; ör. kimlik sorgula), `bekle {secici, durum: dolu \| gorunur \| gizli, zamanAsimiSn}`. |
+| Doldurucular | `radyoZorla` / `onayKutusuZorla` (gizli çizimli girdiler; görünürlük yerine sayfada varlık), `secimGerekirse` (değer zaten seçiliyse dokunulmaz). |
 
 Tekrar analizde koşu tanımı değişikliği **"Adım koşu tanımı"** bulgusu olur; sürüm 1 bir model bu bulgu kabul
 edilince sürüm 2'ye yükselir.
@@ -177,6 +249,82 @@ Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Sayfa ek
 * Alan **değerleri** pakete hiç yazılmaz; sayfadan gelen metinlerde gizli veri kalıbı varsa metin atılır.
 
 Uçlar ve protokol: `scripts/platform/tarama/yonetici.mjs` (`/platform/tarama/*`) ve `protokol.mjs`.
+
+### Akışı kaydet (kullanıcı yürütür)
+
+Alanları bir düğmeyle açılan ekranlarda (çok adımlı formlar) otomatik tarama sonraki adımları göremez. **Akışı kaydet**
+(Ekranlar > ekran > "Akışı kaydet", ya da "Sayfa ekle"deki seçenek) aynı iş altyapısını kullanır (`/platform/tarama/baslat`
+`{ kip: "kayit", … }`), ama:
+
+1. **Görünür bir tarayıcı** açılır; giriş ve bağlam değiştirme tarifle otomatik yapılır, sonra başlangıç sayfası açılır.
+   En fazla **bir** bağlam profili; süre sınırı 30 dk (`NOBETCI_KAYIT_ZAMAN_ASIMI_SN`). **Giriş yapmadan aç**
+   (`girissiz: true`; otomatik taramada da var): giriş ve bağlam değiştirme yapılmaz, model `girisGerekmez: true` olur ve
+   model koşucusu da girişsiz koşar.
+2. Akışı **kullanıcı** yürütür; sayfanın köşesindeki Nöbetçi paneli (`tarama/kayit-paneli.ts`; ayrı shadow kökünde) yalnızca
+   **toplar** (topla → tasarla):
+   - **Görülen alanlar:** ekranda görülen form alanlarının YAPISI (etiket, tür; değer yok). Ekran kendiliğinden okunur
+     (açılışta, seçim / onay kutusu değişince, düğmeye basılmadan hemen önce ve basıldıktan sonra); yeni alanlar açılınca
+     kullanıcı **Ekranı yeniden oku**ya basar. Kullanıcının **dokunduğu** alanlar listede işaretli gelir; kullanıcı
+     işaretleri değiştirebilir ("şu an görünmüyor" / "yeni" işaretleri görünür).
+   - **Basılan düğmeler** (seçici + görünen metni) kendiliğinden listeye girer.
+   - **Mesaj seç:** sayfada beklenen mesajın yazdığı yere tıklanır (bu tıklama siteye gitmez).
+   - **Bitir** (özet + "Bitir ve Nöbetçi’ye gönder"), **Sıfırla** (iki adımlı onay; toplananlar silinir), **İptal**.
+   Her okumada seçim alanlarının (select / radyo) SEÇİLİ SEÇENEĞİ kaydedilir (yalnızca kayıtlı seçeneklerden biriyse; metin
+   değerleri okunmaz) — seçime göre değişen alanların koşulu bundan çıkarılır (aşağıda).
+3. **Akış diyagramı oluştur** (Nöbetçi'de, iş ekranı; `arayuz/akis-tasarimi.js`, saf kurallar `tarama/akis-tasarimi.mjs`):
+   kayıttan hazırlanan **taslak** açılır — her düğme basışı bir **Aksiyon**, aradaki dokunulan (listede işaretli) alanlar bir
+   **Alan grubu** (adı bölüm başlığından önerilir), seçilen mesajlar **Beklenen mesaj** (öneri: metnin sabit kısmı), sonunda
+   **Bitir**. Kullanıcı blokları adlandırır, ↑/↓ ile taşır, siler; blokların arasındaki **+** ile Alan grubu / Aksiyon /
+   Beklenen mesaj / Bekleme süresi / Bitir ekler. Alan grubundaki her alan **Zorunlu** (senaryoda değer şart; koşuda ekranda
+   görünmezse test başarısız — koşullu alanda koşul sağlandığında; model: alanın `mutlakaGorunmeli: true`, senaryo formunda
+   "Akışta zorunlu") ya da **Görünürse doldur** (boş bırakılabilir; görünmüyorsa atlanır); varsayılan sayfanın zorunluluğu.
+   **Koşul:** alan grubundaki her alanın yanında koşulu yazar ("Müşteri tipi = Bireysel ise"; kayıt okumalarından otomatik
+   bulunur, taslakta hazır gelir); "Koşul" ile seçim alanı + görünür olduğu seçenekler seçilerek düzeltilir ya da kaldırılır
+   (`kosullar: { [alan]: { secim, degerler } | null }`; koşuldaki seçim alanı akışta olmalı; modeldeki koşulla aynıysa korunur).
+   **Mevcut ekranın kaydı:** "Kayıt nereye yazılsın?" — varsayılan akışı güncelle (önizleme → Bulgular), yeni akış olarak ekle
+   ya da seçilen akışı güncelle (etki onayı → yeni model sürümü; kaydın gerçek okumalarıyla).
+   **Bekleme süresi** (1–120 sn) önceki düğmeden sonra (düğme yoksa alanlardan sonra) beklenir: `kosu.aksiyonlar` içinde
+   `{ tur: "bekle", sureSn }`. Bekleme konmasa da koşucu sonraki alan / beklenen mesaj görünene kadar bekler. Sağda **Kayıtta yakalananlar**: alanlar (bir gruba sürüklenir ya da "Ekle" ile etkin gruba
+   eklenir; alan tek grupta olur, başka gruba bırakılınca taşınır; listeye alınmamışlar isteğe bağlı gösterilir), düğmeler
+   ("Aksiyon ekle"), mesajlar ("Mesaj ekle"). Değişiklikler taslak olarak saklanır (`POST /platform/tarama/akis
+   { taslak: true }`); **Kaydet ve önizle** doğrular (hatalar bloğun altında) ve sayfa paketine çevirir; önizlemede
+   **Diyagrama dön** ile düzenlemeye dönülür. Tasarım bekleyen iş sunucu belleğinde 12 saat saklanır (sunucu yeniden
+   başlarsa kayıt kaybolur).
+   Kurallar: **Bitir** zorunlu ve sonda; alan grubunun adı tekil; alan tek grupta; boş alan grubu yalnızca ardından aksiyon
+   gelirse olur (alansız adımı adlandırmak için, ör. "Onay"); **zorunlu aksiyon** önceki grubun ilerleme düğmesidir (grup yoksa
+   düğmenin adıyla bir adım olur); **"her senaryoda basılmaz" aksiyon** ve HEMEN ardından gelen alan grubu o düğmeyle açılan
+   parçadır — senaryo formunda **"“<düğme>” dahil"** onay kutusu olur (isteğe bağlı adım kapsamı); aksiyondan sonraki
+   **beklenen mesaj** o düğmeden sonra aranır, son mesaj akışın başarı göstergesidir (öğe seçilmediyse metin sayfanın
+   tamamında aranır). **Art arda** konan beklenen mesajlar bir **VEYA** grubudur (en çok 5; mesaj bloğundaki "Veya mesaj
+   ekle"): herhangi biri görünürse adım başarılıdır, görünen seçenek ekran görüntüsünün adında yazar; modelde
+   `basariGostergesi: { tur: "veya", secenekler: [...] }`. Her beklenen mesaj **Başarı** ya da **Uyarı** işaretlenir: Uyarı
+   işaretliler o adımın **kabul edilen iş kuralı uyarılarıdır** (`kosu.uyarilar: [{ metin, secici? }]`, en çok 10; VEYA
+   grubuna girmez). Akışta uyarı varsa modele senaryo düzeyinde "Beklenen sonuç" (birleşim) alanı eklenir (adım seçenekleri:
+   uyarılı adımlar). Senaryo formunda "İş kuralı hatası" seçilince uyarı yazılmaz, akıştakilerden seçilir (birden çoksa
+   VEYA, senaryoda `beklenenSonuc.mesajlar`; adım uyarının adımıdır; listede yoksa elle yazılabilir). "Başarılı" senaryoda
+   akışın başarı mesajları bilgi olarak görünür; koşuda kabul edilen uyarılardan biri çıkarsa test zaman aşımını beklemeden
+   düşer. Diyagram **ekranın** akışıdır; senaryolar değerleri ve isteğe bağlı aksiyonları senaryo formunda seçer.
+   **Seçime göre değişen alanlar** (ör. Bireysel → TC kimlik no, Tüzel → Vergi kimlik no): adımın alanlarının en az yarısının
+   göründüğü okumalarda bir alan bazen görünüp bazen görünmüyorsa ve bu okumalar arasında değeri ayrışan TEK bir seçim varsa
+   (seçimin boş / görünmediği okumalar yok sayılır) alana `gorunurluk: { kosul: "<alan>Gorunur" }` yazılır
+   (`ifade: { alan: <seçim>, esit | icinde }`); birden çok aday varsa koşul yazılmaz, bilinmeyenlere not düşülür.
+4. **Güvenlik:** kullanıcının bastığı düğmeler siteye **gerçek istek** gönderir (kayıt aşamasında yazma engeli yok;
+   başlatırken açık onay istenir). Ortam **canlı** olarak işaretliyse (Ayarlar > Ortamlar) kayıt reddedilir. Yasaklı
+   host ve izinli köken engeli her aşamada sürer.
+5. **Gizlilik:** alan **değerleri** hiçbir zaman okunmaz; kayıtta **ekran görüntüsü alınmaz** (kullanıcının girdiği bilgileri
+   içerirdi). Gösterge metninin değişken kısmı (ilk rakamdan sonrası: numara, tarih, tutar) atılır; gizli veri kalıbına
+   benzeyen metin yazılmaz.
+
+Üretilen paket (diyagram adım biçimine çevrilir: `akis-tasarimi.mjs > akistanKayitEnvanteri`, sonra
+`paket-olusturucu.mjs > kayitPaketiOlustur`): `meta.olusturan: "Nöbetçi akış kaydı"`, model
+`semaSurumu: 2` — adımlar kaydın sırası ve adlarıyla (alan açan düğmesi olan adım alt adımlara bölünür:
+[ilk alanlar] → [“düğme”] → [“düğme” sonrası alanlar] → [ilerleme]; "her senaryoda basılmaz" düğmenin alt adımları
+`gorunurluk: { kosul }` + `senaryoDuzeyi`'nde `<düğme>Dahil` onay kutusu); her adımda seçilen alanlar + **İşlemler** bölümü (ilerleme düğmesi
+`buton`/`aksiyon`, son adımda gösterge `cikti`); `kosu.aksiyonlar` = ilerleme düğmesine tıkla, `kosu.basariGostergesi` =
+sonraki adımın ilk alanı (yoksa ilerleme düğmesi) görünür / o düğmeden sonraki beklenen mesaj / son adımda son beklenen mesaj. Tarif bağlam değiştiriyorsa
+`senaryoDuzeyi`'ne bağlam profili alanı eklenir (varsayılan: kaydın profili). **Mevcut ekranda** seçiciyle eşleşen alanların
+kimliği ve ek bilgileri korunur; kayıtta olmayan alanlar yeni modelde yoktur (Bulgular'da "kaldırıldı", reddedilebilir);
+artık var olmayan alan/adımlara bağlı koşullar ve iş kuralları çıkarılıp bilinmeyenlere yazılır.
 
 ## senaryoOnerileri
 

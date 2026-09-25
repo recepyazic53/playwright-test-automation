@@ -653,7 +653,7 @@ function beklenenSonucAlaniniDogrula(alan, b, rapor) {
   }
 }
 
-/** Modelde ifade edilemeyen "ikisi birlikte" kuralları: [a, b] → a verildiyse b de (ve tersi). */
+/** Modelde ifade edilemeyen "ikisi birlikte" kuralları: [a, b] → a verildiyse b de (ve tersi); model iki alanı da taşıyorsa. */
 const BIRLIKTE_VERILENLER = [['cokluSorguDosyasi', 'cokluSorguKisiSayisi']];
 
 // ---- Ana giriş ----
@@ -720,11 +720,14 @@ export function senaryoyuDogrula(senaryo, baglam) {
     if (gorunur === false && (alan.tip !== 'onayKutusu' || deger === true)) rapor.uyari(anahtar, MESAJLAR.gorunmeyenAlan(etiketi(alan)));
   }
 
+  const alanKaydi = (anahtar) => b.alanlar.find(({ alan }) => senaryoAnahtarlari(alan).includes(anahtar));
   const alanEtiketi = (anahtar) => {
-    const kayit = b.alanlar.find(({ alan }) => senaryoAnahtarlari(alan).includes(anahtar));
+    const kayit = alanKaydi(anahtar);
     return kayit ? etiketi(kayit.alan) : anahtar;
   };
   for (const [a, c] of BIRLIKTE_VERILENLER) {
+    // Yalnızca iki alanı da taşıyan modellerde (ör. kişi sayısı alanı olmayan bir akışta kural uygulanmaz).
+    if (!alanKaydi(a) || !alanKaydi(c)) continue;
     if (!bosMu(senaryo[a]) && bosMu(senaryo[c])) rapor.hata(c, MESAJLAR.birlikteZorunlu(alanEtiketi(a), alanEtiketi(c)));
     if (!bosMu(senaryo[c]) && bosMu(senaryo[a])) rapor.hata(a, MESAJLAR.birlikteZorunlu(alanEtiketi(c), alanEtiketi(a)));
   }

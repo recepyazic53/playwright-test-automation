@@ -2,7 +2,7 @@
 import type { GirisTarifi } from '../giris/tarif.mjs';
 import type { YasakDeseni } from '../senaryolar/model-kosusu.mjs';
 
-export type TaramaAsamasi = 'hazirlik' | 'giris' | 'baglam' | 'tarama';
+export type TaramaAsamasi = 'hazirlik' | 'giris' | 'baglam' | 'tarama' | 'kayit';
 
 export declare const OKUMA_YONTEMLERI: readonly string[];
 export declare class HedefHatasi extends Error {}

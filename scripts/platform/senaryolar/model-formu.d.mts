@@ -10,6 +10,8 @@ interface OrtakFormAlani {
   adimId: string | null;
   bolumId: string | null;
   gorunurlukVar: boolean;
+  /** Akışta zorunlu (model: mutlakaGorunmeli): her senaryoda koşuda görünmeli. */
+  akistaZorunlu?: true;
   hassas?: true;
   anahtar: string;
 }
@@ -61,6 +63,9 @@ export interface FormSemasi {
     anahtar: string; etiket: string; varyantlar: string[]; basariTipi: string; hataTipi: string | null;
     adimAnahtari: string | null; adimEtiketi: string | null; adimlar: FormSecenegi[];
     mesajAnahtari: string | null; mesajEtiketi: string | null;
+    /** Akışta kabul edilen uyarılar (senaryo bunlardan seçer) ve son adımın başarı mesajları (bilgi). */
+    uyarilar: Array<{ adim: string; adimBasligi: string; metin: string }>;
+    basariMesajlari: string[];
   } | null;
 }
 
@@ -68,6 +73,14 @@ export type FormDegerleri = Record<string, unknown>;
 
 export declare function aramaIcinSadelestir(metin: unknown): string;
 export declare function aramaEslesiyorMu(arama: string, ...metinler: Array<string | null | undefined>): boolean;
+export declare const ANA_AKIS_ID: string;
+export interface AkisOzeti { id: string; ad: string; varsayilan: boolean; adimSayisi: number }
+export declare function akisListesi(model: unknown): AkisOzeti[];
+export declare function varsayilanAkisId(model: unknown): string;
+export declare function akisModeli<T>(model: T, akisId?: string | null): T;
+/** Ortak akış adımlarını (adim.ortakAkis) ortak akışın adımlarıyla açar; bulunamayan dosyalar eksikler. */
+export declare function ortakAkislariAc(model: any, ortakAkislar: Record<string, any>): { model: any; eksikler: string[] };
+export declare function akislariEsitle<T>(model: T): T;
 export declare function formSemasiOlustur(model: unknown, altModeller?: Record<string, unknown>): FormSemasi;
 export declare function tumFormAlanlari(sema: FormSemasi): FormAlani[];
 export declare function yonetilenAnahtarlar(sema: FormSemasi): string[];
@@ -83,6 +96,7 @@ export declare function senaryoNesnesiOlustur(
 ): Record<string, unknown>;
 export declare function hataKontrolu(alanYolu: string, sema: FormSemasi): string | null;
 export declare function hatalariDagit(bulgular: readonly DogrulamaBulgusu[], sema: FormSemasi): { alanlar: Record<string, string[]>; genel: string[] };
+export declare function akisMesajlari(model: unknown): { uyarilar: Array<{ adim: string; adimBasligi: string; metin: string }>; basariMesajlari: string[] };
 export declare function beklenenSonucEtiketi(sema: FormSemasi, veri: unknown): { tur: 'basari' | 'hata'; metin: string; aciklama: string } | null;
 export declare function beklenenHataOnerisi(
   sonuc: { hataMesaji?: string | null; basarisizAdim?: string | null } | null,

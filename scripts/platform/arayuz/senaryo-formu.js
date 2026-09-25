@@ -6,6 +6,10 @@
 // Kayıt veritabanına yazılır (POST /platform/senaryo/kaydet; değişiklik geçmişiyle). "Dene", taslağı
 // kaydetmeden geçici ek veriyle koşar (POST /platform/senaryo/dene).
 // Modeli olmayan ekranlarda ve kodda tanımlı senaryolarda yalnızca özet + başlık + Koşuda düzenlenir.
+// "Akış diyagramı" sekmesi (salt okunur): formdaki güncel seçimlerle akış + seçili ortamdaki son koşunun adım renkleri
+// (senaryo-diyagrami.js). Kayıt paneli (sağ sütun) iki sekmede de görünür.
+// Çoklu akış: ekranın birden çok akışı varsa senaryo kartında "Akış" seçilir (yeni senaryoda varsayılan akış önde); akış
+// değişince form o akışın modeliyle yeniden çizilir, girilen değerler korunur (yeni akışta olmayanlar uyarıyla kaldırılır).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, yerlestir, bildir, boyutMetni, h, ikon, iskelet, rozet, TOKEN } from './ortak.js';
 import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle, kabulListesi } from './dosya-yukleme.js';
@@ -15,6 +19,8 @@ import {
 } from './model-formu.mjs';
 import { gorunurlukleriHesapla, senaryoyuDogrula } from './senaryo-dogrulayici.mjs';
 import { onayIste } from './kosu-paneli.js';
+import { akisDiyagrami } from './akis-diyagrami.mjs';
+import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -36,8 +42,9 @@ export async function senaryoFormu(icerik, s) {
       ({ senaryo, dosyalar: dosyaBilgileri = {} } = await api(`/platform/senaryo?id=${encodeURIComponent(s.senaryoId || '')}&ortamId=${encodeURIComponent(s.ortam.id)}`));
     }
     const ekranId = s.ekranId || senaryo?.ekranId || null;
+    const akisId = s.akisId || senaryo?.akis || '';
     const baglam = ekranId
-      ? await api(`/platform/senaryo/form?projeId=${encodeURIComponent(s.proje.id)}&ekranId=${encodeURIComponent(ekranId)}&ortamId=${encodeURIComponent(s.ortam.id)}`)
+      ? await api(`/platform/senaryo/form?projeId=${encodeURIComponent(s.proje.id)}&ekranId=${encodeURIComponent(ekranId)}&ortamId=${encodeURIComponent(s.ortam.id)}${akisId ? `&akisId=${encodeURIComponent(akisId)}` : ''}`)
       : null;
     if (!baglam || !baglam.model || (senaryo && !senaryo.veriGudumlu)) {
       if (s.mod === 'yeni') {
@@ -118,13 +125,15 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
 
 function modelFormu(icerik, s, senaryo, baglam) {
   const sema = formSemasiOlustur(baglam.model, baglam.altModeller);
-  const onceki = senaryo?.veri || undefined;
+  // Akış değişince (s.taslak) formdaki değerler yeni akışın formuna taşınır.
+  const onceki = s.taslak?.veri || senaryo?.veri || undefined;
   const degerler = formDegerleriniKur(sema, onceki || {});
-  let baslikDegeri = senaryo ? senaryo.baslik : '';
-  const ortamSecimi = new Set(senaryo ? senaryo.ortamlar.filter((o) => s.ortamlar.some((x) => x.id === o)) : [s.ortam.id]);
+  let baslikDegeri = s.taslak ? s.taslak.baslik : senaryo ? senaryo.baslik : '';
+  // Akış değişince (s.taslak) kaydedilmemiş ortam / koşuda / mutlaka görünmeli seçimleri de taşınır.
+  const ortamSecimi = new Set(s.taslak?.ortamlar ?? (senaryo ? senaryo.ortamlar.filter((o) => s.ortamlar.some((x) => x.id === o)) : [s.ortam.id]));
   if (!ortamSecimi.size) ortamSecimi.add(s.ortam.id);
-  let kosuyaDahil = senaryo ? senaryo.kosuyaDahil : true;
-  const mutlaka = new Set(senaryo?.mutlakaGorunmeli || []);
+  let kosuyaDahil = s.taslak?.kosuyaDahil ?? (senaryo ? senaryo.kosuyaDahil : true);
+  const mutlaka = new Set(s.taslak?.mutlaka ?? senaryo?.mutlakaGorunmeli ?? []);
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, ...(baglam.ortak ? { ortak: baglam.ortak } : {}), kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
   /** kontrol anahtarı → { el, hata, uyari, odak } */
@@ -203,6 +212,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     genelHatalar.hidden = !(gonderildi && dagit.genel.length);
     ozetiCiz(d);
     beklenenAdimSecenekleriniGuncelle(g);
+    if (!diyagramAlani.hidden) diyagramiCiz();
   }
 
   // --- Bağımlılıklar (seçenekler / kimlik türü değişince yeniden çizim) ---------------------
@@ -233,7 +243,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
 
   function alanUst(alan, id, ekler = []) {
     const cip = alan.gorunurlukVar ? h('span', { class: 'kosullu-cip', title: '' }, ikon('isaret'), 'koşullu') : null;
-    const mutlakaKutu = alan.gorunurlukVar
+    const mutlakaKutu = alan.akistaZorunlu
+      // Akışta zorunlu: her senaryoda mutlaka görünmeli (değiştirilemez; akıştan değişir).
+      ? h('label', { class: 'mutlaka-gorunmeli', title: 'Akışta zorunlu: ekranda görünmezse test başarısız olur (ekranın Akış’ından değişir).' },
+        h('input', { type: 'checkbox', checked: true, disabled: true, 'aria-label': `${alan.etiket}: akışta zorunlu` }), h('span', {}, 'Akışta zorunlu'))
+      : alan.gorunurlukVar
       ? h('label', { class: 'mutlaka-gorunmeli', title: 'İşaretliyse bu alan ekranda görünmediğinde test başarısız sayılmalıdır (kural senaryoda saklanır).' },
         h('input', { type: 'checkbox', checked: mutlaka.has(alan.id), 'aria-label': `${alan.etiket}: mutlaka görünmeli`,
           onchange: (o) => { if (o.currentTarget.checked) mutlaka.add(alan.id); else mutlaka.delete(alan.id); degisti = true; } }),
@@ -535,10 +549,22 @@ function modelFormu(icerik, s, senaryo, baglam) {
   baslikGirdisi.addEventListener('change', () => { dokunulan.add(sema.baslik); planla(); });
   const baslikHata = hataKutusuOlustur(baslikId);
   kontrolKaydet(sema.baslik, [baslikGirdisi], baslikHata, uyariKutusuOlustur(baslikId));
+  // Akış seçimi (birden çok akışlı ekranda).
+  const akislar = Array.isArray(baglam.akislar) ? baglam.akislar : [];
+  const akisSecimi = akislar.length > 1 ? h('select', { id: yeniId('akis') },
+    akislar.map((a) => h('option', { value: a.id, selected: a.id === baglam.akisId }, `${a.ad}${a.varsayilan ? ' (varsayılan)' : ''}`))) : null;
+  if (akisSecimi) {
+    akisSecimi.addEventListener('change', () => {
+      const d = hesapla();
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka] } });
+    });
+  }
   const senaryoKarti = h('section', { class: 'kart', 'aria-labelledby': 'senaryo-karti-baslik' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-karti-baslik' }, ikon('liste'), 'Senaryo'),
       h('span', { class: 'alt' }, 'Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.')),
     h('div', { class: 'alan-izgarasi' },
+      akisSecimi ? h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: akisSecimi.id }, 'Akış')), akisSecimi,
+        h('div', { class: 'alan-notu' }, 'Senaryo bu akışın adımlarıyla koşar; form seçilen akışa göre değişir.')) : null,
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: baslikId }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslikGirdisi, baslikHata),
       sema.senaryoAlanlari.map(alanCiz)));
 
@@ -546,6 +572,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const bs = sema.beklenenSonuc;
   const beklenenKarti = h('section', { class: 'kart beklenen-karti', 'aria-labelledby': 'beklenen-baslik' });
   let adimSecimi = null;
+  /** Beklenen uyarı elle mi yazılıyor (null: kayıtlı mesaja göre ilk çizimde belirlenir). */
+  let beklenenElle = null;
   function beklenenCiz() {
     if (!bs) { beklenenKarti.hidden = true; return; }
     const tipAnahtari = `${bs.anahtar}.tip`;
@@ -557,7 +585,49 @@ function modelFormu(icerik, s, senaryo, baglam) {
     kontrolKaydet(tipAnahtari, radyolar, tipHata, null);
     const govde = [h('div', { class: 'radyo-grubu', role: 'radiogroup', 'aria-label': bs.etiket }, radyolar.map((r, i) => h('label', {}, r, secenekler[i][1]))), tipHata];
     adimSecimi = null;
-    if (degerler[tipAnahtari] === bs.hataTipi) {
+    const uyarilar = bs.uyarilar || [];
+    if (degerler[tipAnahtari] !== bs.hataTipi && (bs.basariMesajlari || []).length) {
+      govde.push(h('p', { class: 'eslesme-notu' }, ikon('hedef'), `Bu akışta başarı: ${bs.basariMesajlari.map((m) => `“${m}”`).join(' veya ')} (akışta tanımlı).`));
+    }
+    if (degerler[tipAnahtari] === bs.hataTipi && beklenenElle === null) {
+      // Kayıtlı mesaj akıştaki uyarılardan biri değilse elle yazılmış hâliyle açılır.
+      const m = String(degerler[`${bs.anahtar}.mesaj`] || '');
+      beklenenElle = !uyarilar.length || (m !== '' && !uyarilar.some((u) => u.metin === m));
+    }
+    if (degerler[tipAnahtari] === bs.hataTipi && !beklenenElle) {
+      // Akışta kabul edilen uyarılardan seçim: adım uyarının adımıdır; birden çok seçilirse (aynı adımda) VEYA.
+      const adimAnahtari = `${bs.anahtar}.adim`;
+      const listeAnahtari = `${bs.anahtar}.mesajlar`;
+      const secili = Array.isArray(degerler[listeAnahtari]) ? degerler[listeAnahtari] : [];
+      const gruplar = new Map();
+      for (const u of uyarilar) (gruplar.get(u.adim) || gruplar.set(u.adim, { baslik: u.adimBasligi, liste: [] }).get(u.adim)).liste.push(u);
+      const kutular = [];
+      const lid = yeniId('bs-uyari');
+      const listeEl = h('div', { class: 'uyari-secimi', id: lid, role: 'group', 'aria-labelledby': `${lid}-etiket`, 'aria-required': 'true' }, [...gruplar.entries()].map(([adimId, gr]) =>
+        h('fieldset', {}, h('legend', {}, `${gr.baslik} adımında`), gr.liste.map((u) => {
+          const k = h('input', { type: 'checkbox', checked: degerler[adimAnahtari] === adimId && secili.includes(u.metin) });
+          kutular.push(k);
+          k.addEventListener('change', () => {
+            let yeni = degerler[adimAnahtari] === adimId ? secili.filter((m) => m !== u.metin) : [];
+            if (k.checked) yeni = [...yeni, u.metin];
+            degerYaz(adimAnahtari, yeni.length ? adimId : '');
+            degerYaz(listeAnahtari, yeni);
+            degerYaz(`${bs.anahtar}.mesaj`, yeni[0] || '');
+            beklenenCiz();
+          });
+          return h('label', {}, k, u.metin);
+        }))));
+      const ah = hataKutusuOlustur(`${lid}-adim`);
+      const mh = hataKutusuOlustur(lid);
+      kontrolKaydet(adimAnahtari, kutular, ah, null);
+      kontrolKaydet(`${bs.anahtar}.mesaj`, kutular, mh, null);
+      govde.push(h('div', { class: 'hata-ayrintisi' },
+        h('div', { class: 'model-alani genis' },
+          h('div', { class: 'alan-ust' }, h('span', { class: 'etiket', id: `${lid}-etiket` }, 'Beklenen uyarı', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))),
+          listeEl, ah, mh,
+          h('div', { class: 'alan-notu' }, 'Birden fazla seçerseniz herhangi biri görünürse beklenen sonuç sağlanır. Uyarılar akışta tanımlanır (ekranın Akışlar sekmesi).'),
+          h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { beklenenElle = true; degerYaz(listeAnahtari, []); beklenenCiz(); } }, 'Listede yok, elle yaz'))));
+    } else if (degerler[tipAnahtari] === bs.hataTipi) {
       const aid = yeniId('bs-adim');
       adimSecimi = bagla(secimGirdisi(bs.adimlar, String(degerler[`${bs.anahtar}.adim`] || ''), 'Adım seçin…'), aid);
       adimSecimi.addEventListener('change', () => degerYaz(`${bs.anahtar}.adim`, adimSecimi.value));
@@ -566,16 +636,20 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const mid = yeniId('bs-mesaj');
       const mesaj = bagla(h('textarea', { rows: '3', placeholder: 'Ekranda beklenen uyarı metni (ya da bir parçası)' }), mid);
       mesaj.value = String(degerler[`${bs.anahtar}.mesaj`] || '');
-      mesaj.addEventListener('input', () => degerYaz(`${bs.anahtar}.mesaj`, mesaj.value, { dokun: false }));
+      mesaj.addEventListener('input', () => { degerler[`${bs.anahtar}.mesajlar`] = []; degerYaz(`${bs.anahtar}.mesaj`, mesaj.value, { dokun: false }); });
       mesaj.addEventListener('change', () => { dokunulan.add(`${bs.anahtar}.mesaj`); planla(); });
       const mh = hataKutusuOlustur(mid);
       kontrolKaydet(`${bs.anahtar}.mesaj`, [mesaj], mh, null);
       govde.push(h('div', { class: 'hata-ayrintisi' },
         h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', { for: aid }, bs.adimEtiketi || 'Adım', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), adimSecimi, ah),
         h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', { for: mid }, bs.mesajEtiketi || 'Mesaj', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), mesaj, mh),
-        h('p', { class: 'eslesme-notu' }, ikon('hedef'), 'Eşleşme toleranslıdır: büyük/küçük harf, kıvrık/düz tırnak ve boşluk farkları yok sayılır; ekranda görülen metnin beklenen mesajı içermesi yeterlidir.')));
+        h('p', { class: 'eslesme-notu' }, ikon('hedef'), 'Eşleşme toleranslıdır: büyük/küçük harf, kıvrık/düz tırnak ve boşluk farkları yok sayılır; ekranda görülen metnin beklenen mesajı içermesi yeterlidir.'),
+        uyarilar.length ? h('div', { class: 'alan-notu' },
+          String(degerler[`${bs.anahtar}.mesaj`] || '') && !uyarilar.some((u) => u.metin === degerler[`${bs.anahtar}.mesaj`])
+            ? 'Bu mesaj akıştaki uyarılar arasında yok; elle yazılmış hâliyle kullanılır. ' : '',
+          h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { beklenenElle = false; beklenenCiz(); } }, 'Akıştaki uyarılardan seç')) : null));
     }
-    yerlestir(beklenenKarti, 
+    yerlestir(beklenenKarti,
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'beklenen-baslik' }, ikon('hedef'), 'Beklenen sonuç'),
         h('span', { class: 'alt' }, 'Test bu sonuca ulaşırsa başarılı sayılır')),
       ...govde);
@@ -670,6 +744,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const yanit = await api('/platform/senaryo/kaydet', {
         govde: {
           ...(senaryo ? { id: senaryo.id } : { ekranId: baglam.ekran.id }), projeId: s.proje.id, baslik: baslikDegeri, veri,
+          ...(baglam.akisId ? { akisId: baglam.akisId } : {}),
           ortamIdleri: [...ortamSecimi], kosuyaDahil, mutlakaGorunmeli: [...mutlaka]
         }
       });
@@ -758,6 +833,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       kullan.addEventListener('click', () => {
         degerler[`${bs.anahtar}.tip`] = bs.hataTipi;
         degerler[`${bs.anahtar}.mesaj`] = oneri.mesaj;
+        degerler[`${bs.anahtar}.mesajlar`] = [oneri.mesaj];
+        beklenenElle = null;
         if (oneri.adim) {
           degerler[`${bs.anahtar}.adim`] = oneri.adim;
           const grup = sema.adimKapsami.find((k) => k.adimlar.includes(oneri.adim));
@@ -784,6 +861,54 @@ function modelFormu(icerik, s, senaryo, baglam) {
         oneri ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, `Görülen mesaj: “${oneri.mesaj}”`), kullan) : null));
   }
 
+  // --- Akış diyagramı (sekme) -------------------------------------------------------------------
+  const diyagramAlani = h('section', { class: 'kart akis-diyagrami', role: 'tabpanel', hidden: true, id: yeniId('diyagram'), 'aria-label': 'Akış diyagramı' });
+  const formAlani = h('div', { class: 'form-sekmesi', role: 'tabpanel', id: yeniId('form'), 'aria-label': 'Form' });
+  /** @type {{ durum: 'yeni' | 'yukleniyor' | 'hazir' | 'hata'; sonuc?: any; hata?: string }} */
+  let sonKosu = { durum: senaryo ? 'yukleniyor' : 'yeni' };
+  let sonKosuIstendi = false;
+  function diyagramiCiz() {
+    const d = sonDurum.gorunurluk ? sonDurum : hesapla();
+    const tip = bs ? degerler[`${bs.anahtar}.tip`] : null;
+    const hataAdimi = bs && tip === bs.hataTipi ? String(degerler[`${bs.anahtar}.adim`] || '') || null : null;
+    let diyagram;
+    try {
+      diyagram = akisDiyagrami(baglam.model, {
+        gorunurluk: d.gorunurluk,
+        beklenen: hataAdimi ? { hataAdimi, mesaj: String(degerler[`${bs.anahtar}.mesaj`] || '') || null } : null,
+        sonuc: sonKosu.durum === 'hazir' ? sonKosu.sonuc : null
+      });
+    } catch (e) {
+      yerlestir(diyagramAlani, hataKutusu(e));
+      return;
+    }
+    akisDiyagramiCiz(diyagramAlani, diyagram, { ...sonKosu, ortamAdi: s.ortam.ad });
+  }
+  async function sonKosuyuOku() {
+    if (!senaryo || sonKosuIstendi) return;
+    sonKosuIstendi = true;
+    try {
+      const y = await api(`/platform/senaryo/son-sonuc?id=${encodeURIComponent(senaryo.id)}&ortamId=${encodeURIComponent(s.ortam.id)}`);
+      sonKosu = { durum: 'hazir', sonuc: y.sonuc };
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      sonKosu = { durum: 'hata', hata: e.message };
+    }
+    if (!diyagramAlani.hidden) diyagramiCiz();
+  }
+  const sekmeler = [['form', 'Form', formAlani], ['akis', 'Akış diyagramı', diyagramAlani]];
+  const sekmeDugmeleri = sekmeler.map(([ad, etiket, panel]) => h('button', {
+    type: 'button', role: 'tab', 'aria-selected': ad === 'form' ? 'true' : 'false', 'aria-controls': panel.id, 'data-sekme': ad,
+    onclick: () => sekmeSec(ad)
+  }, ikon(ad === 'form' ? 'liste' : 'katman'), etiket));
+  function sekmeSec(ad) {
+    for (const b of sekmeDugmeleri) b.setAttribute('aria-selected', b.dataset.sekme === ad ? 'true' : 'false');
+    formAlani.hidden = ad !== 'form';
+    diyagramAlani.hidden = ad !== 'akis';
+    if (ad === 'akis') { diyagramiCiz(); sonKosuyuOku(); }
+  }
+  const sekmeCubugu = h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Senaryo görünümü' }, sekmeDugmeleri);
+
   // --- Yerleşim --------------------------------------------------------------------------------
   const meta = [
     h('span', {}, ikon('katman'), `${sema.modelAdi || baglam.ekran.ad} modeli${baglam.modelSurumu ? ` · sürüm ${baglam.modelSurumu}` : ''}`),
@@ -793,7 +918,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   yerlestir(icerik, 
     sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), 'Listeye dön')),
     h('div', { class: 'form-duzeni' },
-      h('div', { class: 'form-sutunu' }, senaryoKarti, adimAkisi, beklenenKarti),
+      h('div', { class: 'form-sutunu' }, sekmeCubugu, formAlani, diyagramAlani),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıt' },
         h('section', { class: 'kart form-paneli', 'aria-labelledby': 'kayit-baslik' },
           h('h3', { id: 'kayit-baslik' }, 'Kayıt'),
@@ -803,7 +928,16 @@ function modelFormu(icerik, s, senaryo, baglam) {
           dogrulamaOzeti, genelHatalar,
           h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, vazgecDugmesi)),
         denemeAlani)));
+  formAlani.append(senaryoKarti, adimAkisi, beklenenKarti);
   beklenenCiz();
   guncelle();
+  if (s.taslak) {
+    // Akış değişti: yeni akışta olmayan değerler kaldırıldı mı?
+    degisti = true;
+    const yeni = hesapla().senaryo;
+    const doluMu = (d) => d !== undefined && d !== null && d !== '' && d !== false && !(Array.isArray(d) && !d.length);
+    const kayip = Object.keys(s.taslak.veri || {}).filter((k) => !(k in yeni) && !/^baslik$/.test(k) && doluMu(s.taslak.veri[k]));
+    bildir(kayip.length ? `Akış değişti; yeni akışta olmayan ${kayip.length} alanın değeri kaldırıldı.` : 'Akış değişti; form yeni akışa göre güncellendi.', kayip.length ? 'hata' : 'basari');
+  }
   (s.mod === 'yeni' ? baslikGirdisi : icerik.querySelector('h2'))?.focus();
 }

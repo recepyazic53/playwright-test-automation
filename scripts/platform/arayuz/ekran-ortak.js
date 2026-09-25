@@ -223,7 +223,7 @@ export function tekrarAnalizDiyalogu(s) {
         govde: { projeId: s.proje.id, ekranId: s.ekran.id, tur: 'tekrar-analiz', baglamProfilleri: [...secili] }
       }));
       const yukle = h('button', { type: 'button', class: 'birincil', onclick: () => { diyalog.close(); s.paketYukle(); } }, ikon('yukle'), 'Paketi yükle');
-      yerlestir(govde, h('p', { class: 'kucuk soluk' }, 'Claude Code sayfayı yalnızca okuyarak inceleyip yeni bir sayfa paketi üretir; paketi yükleyince bulgular hesaplanır.'),
+      yerlestir(govde, h('p', { class: 'kucuk soluk' }, 'Claude Code sayfayı inceleyip (seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan düğmeden önce sorar) yeni bir sayfa paketi üretir; paketi yükleyince bulgular hesaplanır.'),
         claudeSonucu(sonuc, yukle));
     } catch (e) {
       if (e.durum === 423) { diyalog.close(); return; }
