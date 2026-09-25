@@ -94,9 +94,28 @@ export async function akisTasarimi(icerik, s) {
 
   // ---- Blok işlemleri -------------------------------------------------------------------------
   const alanGrubu = (anahtar) => bloklar.findIndex((b) => b.tur === 'alanlar' && b.alanlar.includes(anahtar));
-  function alanEkle(anahtar, hedef) {
+  /** Alanı grubun içinde bir yukarı / aşağı taşır (gruptaki sıra = koşuda doldurma sırası). */
+  function alanSirala(i, anahtar, yon) {
+    const l = bloklar[i].alanlar;
+    const j = l.indexOf(anahtar);
+    const k = j + yon;
+    if (j < 0 || k < 0 || k >= l.length) return;
+    [l[j], l[k]] = [l[k], l[j]];
+    degisti();
+    akis.querySelector(`[data-blok="${i}"] [data-alan="${CSS.escape(anahtar)}"] .sira-${yon < 0 ? 'yukari' : 'asagi'}:not(:disabled)`)?.focus();
+  }
+  /** Alanı hedef gruba koyar: onune verilirse o alanın önüne, yoksa sona; aynı gruptaysa yalnızca yerini değiştirir. */
+  function alanEkle(anahtar, hedef, onune) {
     const b = bloklar[hedef];
-    if (!b || b.tur !== 'alanlar' || b.alanlar.includes(anahtar)) return;
+    if (!b || b.tur !== 'alanlar') return;
+    if (b.alanlar.includes(anahtar)) {
+      if (!onune || onune === anahtar) return;
+      b.alanlar = b.alanlar.filter((x) => x !== anahtar);
+      b.alanlar.splice(b.alanlar.indexOf(onune), 0, anahtar);
+      etkin = hedef;
+      degisti();
+      return;
+    }
     const kaynak = bloklar.find((x) => x.tur === 'alanlar' && x.alanlar.includes(anahtar));
     const zorunluydu = Boolean(kaynak && kaynak.zorunlu.includes(anahtar));
     const baska = Boolean(kaynak);
@@ -108,7 +127,8 @@ export async function akisTasarimi(icerik, s) {
       x.zorunlu = x.zorunlu.filter((a) => a !== anahtar);
       if (x.kosullar) delete x.kosullar[anahtar];
     }
-    b.alanlar.push(anahtar);
+    const yer = onune ? b.alanlar.indexOf(onune) : -1;
+    if (yer >= 0) b.alanlar.splice(yer, 0, anahtar); else b.alanlar.push(anahtar);
     // Taşınan alan koşulunu da götürür.
     if (kosulVar) b.kosullar = { ...(b.kosullar || {}), [anahtar]: kosul };
     // Taşınan alan ayarını korur; yeni eklenen, sayfanın zorunluluğuyla gelir.
@@ -185,8 +205,15 @@ export async function akisTasarimi(icerik, s) {
     const a = alanBilgisi.get(anahtar);
     const etiket = a ? a.etiket : anahtar;
     const zorunlu = bloklar[i].zorunlu.includes(anahtar);
-    const cip = h('li', { class: `tasarim-alani${zorunlu ? ' zorunlu' : ''}`, draggable: 'true', title: a ? [a.not, a.bolum ? `Bölüm: ${a.bolum}` : null].filter(Boolean).join(' · ') || null : null },
+    const sira = bloklar[i].alanlar.indexOf(anahtar);
+    const adet = bloklar[i].alanlar.length;
+    const cip = h('li', { class: `tasarim-alani${zorunlu ? ' zorunlu' : ''}`, draggable: 'true', 'data-alan': anahtar, title: a ? [a.not, a.bolum ? `Bölüm: ${a.bolum}` : null].filter(Boolean).join(' · ') || null : null },
+      // Doldurma sırası (gruptaki yeri).
+      h('span', { class: 'alan-sirasi', title: `Doldurma sırası: ${sira + 1}` }, String(sira + 1)),
       h('span', { class: 'ad' }, etiket), a ? h('span', { class: 'tur' }, a.tur) : null,
+      h('span', { class: 'sira-dugmeleri' },
+        h('button', { type: 'button', class: 'sira-yukari', 'aria-label': `${etiket}: yukarı taşı`, title: 'Önce doldurulsun', disabled: sira === 0, onclick: () => alanSirala(i, anahtar, -1) }, '↑'),
+        h('button', { type: 'button', class: 'sira-asagi', 'aria-label': `${etiket}: aşağı taşı`, title: 'Sonra doldurulsun', disabled: sira === adet - 1, onclick: () => alanSirala(i, anahtar, 1) }, '↓')),
       h('button', {
         type: 'button', class: 'zorunluluk', 'aria-pressed': zorunlu ? 'true' : 'false', 'aria-label': `${etiket}: zorunlu`,
         title: zorunlu ? 'Zorunlu: senaryoda değer şart; koşuda ekranda görünmezse test başarısız. Tıklayınca “görünürse doldur” olur.'
@@ -215,6 +242,18 @@ export async function akisTasarimi(icerik, s) {
       onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; ciz(); }
     }, ikon('isaret'), kosulYazisi || 'Koşul'), cip.querySelector('.zorunluluk'));
     cip.addEventListener('dragstart', (o) => { o.dataTransfer.setData(SURUKLEME_TURU, anahtar); o.dataTransfer.effectAllowed = 'move'; });
+    // Başka bir alanın üstüne bırakılan alan onun önüne yerleşir (grubun "sona ekle" bırakmasından önce yakalanır).
+    cip.addEventListener('dragover', (o) => { if (o.dataTransfer.types.includes(SURUKLEME_TURU)) { o.preventDefault(); cip.classList.add('onune-birak'); } });
+    cip.addEventListener('dragleave', () => cip.classList.remove('onune-birak'));
+    cip.addEventListener('drop', (o) => {
+      const tasinan = o.dataTransfer.getData(SURUKLEME_TURU);
+      cip.classList.remove('onune-birak');
+      if (!tasinan) return;
+      o.preventDefault();
+      o.stopPropagation();
+      cip.closest('.birakilabilir')?.classList.remove('birakilabilir');
+      alanEkle(tasinan, i, anahtar);
+    });
     return cip;
   }
 

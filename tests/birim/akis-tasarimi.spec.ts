@@ -347,3 +347,17 @@ test('elle koşul: otomatik bulunanın yerine geçer, null koşulsuz yapar; seç
   // Sağ liste seçim alanlarının seçeneklerini verir (koşul düzenleyicisi için).
   expect(akisPaleti(env, t).alanlar.find((a) => a.anahtar === '@tip')?.secenekler).toEqual([{ deger: 'b', metin: 'Bireysel' }, { deger: 'k', metin: 'Kurumsal' }]);
 });
+
+test('sıra: gruptaki alan sırası modelde doldurma sırasıdır (farklı bölümlerin alanları karışık sırada olsa da)', () => {
+  const env = envanter();
+  const k = akistanKayitEnvanteri(env, [
+    { tur: 'alanlar', ad: 'Karışık', alanlar: ['#teminat', '#ad', '#cam'], zorunlu: [] }, { tur: 'aksiyon', dugme: 2, istegeBagli: false }, { tur: 'bitir' }
+  ]);
+  expect(k.hatalar).toEqual([]);
+  const model = kayitPaketiOlustur(META, k.envanter as NonNullable<typeof k.envanter>).paket.model as Nesne;
+  const sira = (model.adimlar[0].bolumler as Nesne[]).flatMap((b) => (b.alanlar as Nesne[]).filter((a) => a.tip !== 'buton' && a.tip !== 'cikti').map((a) => a.konum.secici));
+  expect(sira).toEqual(['#teminat', '#ad', '#cam']);
+  // Diyagrama geri: aynı sıra.
+  const geri = adimlardanBloklar(model, model.adimlar as Nesne[], modeldenAkisEnvanteri(model));
+  expect((geri.find((b) => b.tur === 'alanlar') as Nesne).alanlar).toEqual(['teminat', 'ad', 'cam']);
+});

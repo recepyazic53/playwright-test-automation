@@ -20,6 +20,8 @@ export const GALAKSI_HAVUZLARI = Object.freeze({
   ozel: 'ortak.kimlikBilgileri.ozel', tuzel: 'ortak.kimlikBilgileri.tuzel', acente: 'ortak.kullaniciDegistir'
 });
 
+/** Kapsam / alternatif değişince ülke listesini yeniden yükleyen istek (POM: okluSecimYap bunu bekler). */
+export const ULKE_LISTESI_ISTEGI = '/jet-satis/jet-seyahat/ulke-listesi/';
 const secim = (deger, metin, ek = {}) => ({ deger, metin, ...ek });
 const liste = (/** @type {string[][]} */ l) => l.map(([d, m]) => secim(d, m));
 // Varsayılanı olan alanlar senaryoda zorunlu değildir (boş bırakılırsa koşucu varsayılanı kullanır).
@@ -64,7 +66,8 @@ export function jetSeyahatAkisPaketi(s = {}) {
                 secici: '#kapsam-text', kirilganlik: 'yuksek',
                 yardimci: { arttir: '#syh-kapsam-tb img[onclick*="Increase"]', azalt: '#syh-kapsam-tb img[onclick*="Decrease"]' }
               },
-              doldurucuParametreleri: { maksDeneme: 6 }
+              // Her değişiklikte ülke listesi AJAX ile yeniden yüklenir (POM gibi beklenir; yoksa sonra seçilen ülke sıfırlanır).
+              doldurucuParametreleri: { maksDeneme: 6, yanitBekle: ULKE_LISTESI_ISTEGI }
             }),
             alan('alternatif', 'okluSecim', 'Alternatif', '#alternatif-text', {
               zorunlu: true, doldurucu: 'okluSecim', seceneklerDurumu: 'tam', secenekler: null,
@@ -75,7 +78,7 @@ export function jetSeyahatAkisPaketi(s = {}) {
                 // Halka: koşucu önce "arttır" yönünde döner; değer değişmez ya da başa dönerse "azalt" yönünü dener.
                 yardimci: { arttir: '#syh-alternatif-tb img[onclick*="Increase"]', azalt: '#syh-alternatif-tb img[onclick*="Decrease"]' }
               },
-              doldurucuParametreleri: { maksDeneme: 6 }
+              doldurucuParametreleri: { maksDeneme: 6, yanitBekle: ULKE_LISTESI_ISTEGI }
             }),
             { ...alan('baslangicTarihi', 'tarih', 'Başlangıç tarihi', '#from', { doldurucu: 'tarihJs', bicim: 'gg.aa.yyyy' }), yapilandirma: 'turetilmis', sabitDeger: 'bugun', eslesme: {} },
             { ...alan('bitisTarihi', 'tarih', 'Bitiş tarihi', '#to', { doldurucu: 'tarihJs', bicim: 'gg.aa.yyyy' }), yapilandirma: 'turetilmis', sabitDeger: 'bugun+7', eslesme: {} },

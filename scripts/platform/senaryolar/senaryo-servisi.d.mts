@@ -78,6 +78,7 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   akislar: AkisOzeti[];
   akisId: string | null;
 };
+export declare function modelHassasAnahtarlari(model: unknown): string[];
 export declare function senaryoKaydet(
   vt: Veritabani,
   girdi: {

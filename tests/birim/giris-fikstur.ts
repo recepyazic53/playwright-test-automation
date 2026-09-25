@@ -14,7 +14,7 @@ import { chromium, type Browser, type BrowserContext } from '@playwright/test';
 import { totpUret, base32Coz } from '../support/totp';
 
 export type FiksturIstegi = { yontem: string; yol: string; sorgu: URLSearchParams; govde: string; cerezler: Record<string, string> };
-export type FiksturYaniti = { durum?: number; tur?: string; govde: string; basliklar?: Record<string, string> };
+export type FiksturYaniti = { durum?: number; tur?: string; govde: string; basliklar?: Record<string, string>; gecikmeMs?: number };
 export type FiksturUygulamasi = (istek: FiksturIstegi) => FiksturYaniti;
 
 /** Şirket alan adı deseni: hiçbir testte bu desene istek GİTMEMELİ. */
@@ -387,6 +387,7 @@ export async function yerelSunucu(uygulama: FiksturUygulamasi): Promise<{ adres:
       yontem: req.method ?? 'GET', yol: url.pathname, sorgu: url.searchParams, govde: await govdeOku(req),
       cerezler: cerezleriAyristir(req.headers.cookie)
     });
+    if (y.gecikmeMs) await new Promise((coz) => setTimeout(coz, y.gecikmeMs));
     res.writeHead(y.durum ?? 200, { 'content-type': y.tur ?? 'text/plain', ...(y.basliklar ?? {}) });
     res.end(y.govde);
   });

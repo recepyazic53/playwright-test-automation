@@ -112,6 +112,16 @@ akış olmaz. Nasıl çalışır:
 - **Galaksi:** `projeler/galaksi/odeme-akis.mjs` ödeme ortak akışını üretir: Poliçeleştir → kart formu → kart + "Ödemeyi
   tamamla". Başarı TEST'te "Hiçbir poliçe onaylanamadı." olur.
 
+### Kodlu senaryoları akışa taşıma
+
+Kodlu (POM'lu) bir ürünün senaryoları, aynı ürünün akış ekranına senaryo olarak kurulabilir: akış ekranında **"Kodlu
+senaryoları taşı…"** (yalnızca projenin adaptörü o ekran için taşıma tanımlıysa görünür; `akisTasimaEkranlari`).
+- Değerler adaptörün `akisSenaryoTaslaklari` kancasından gelir: ürün verisi sunucuda okunur, kodlu testin senaryo matrisi akış
+  ekranının senaryo anahtarlarına çevrilir (kimlikler profil adıyla, başlıklar kodlu testinkiyle aynı).
+- Önizleme her taslağı senaryo kaydıyla aynı doğrulamadan geçirir (yazıp geri alır): yeni / zaten var / hata (nedeniyle) + notlar.
+- Seçilen yeni taslaklar tek işlemde yazılır; yalnızca seçilen ortamda ve "Koşuda" kapalı oluşur.
+- Uçlar: `GET /platform/akis-tasima?projeId=&ekranId=&ortamId=`, `POST /platform/akis-tasima/uygula`.
+
 ### Akışlar (bir ekranda birden çok akış)
 
 `akislar` (isteğe bağlı): `[{ id, ad, varsayilan?: true, adimlar }]`. Varsayılan akışın `adimlar`ı modelin `adimlar`ıyla
@@ -171,7 +181,7 @@ Koşucunun diğer alan olanakları (JetSeyahat (akış) ile eklendi; hepsi genel
 | `sabitDeger` | Senaryo alanı olmayan (`yapilandirma` `sabit`/`turetilmis`) alan her koşuda bu değerle doldurulur. Tarihte `bugun`, `bugun+7`, `bugun-3` (İstanbul günü, alanın `bicim`iyle). |
 | Varsayılan | Senaryoda boş bırakılan alan modelin `varsayilan.deger`ini alır; görünürlük koşulları da bu değerle hesaplanır (dosya hariç). |
 | `kimlikProfili` | Senaryoya özel kimlik ya da seçilen (yoksa varsayılan) hazır profil (Ayarlar > Test verisi profilleri; havuz = aynı adlı test verisi türü ya da aktarım tanımı) `altAlanlar`a `sira` ile açılır; `eslesme.kimlikAlani` metin ya da kimlik türüne göre harita (türde karşılığı yoksa alt alan atlanır). |
-| `doldurucuParametreleri` | Alan doldurulduktan sonra: `tus` (ör. `Tab`), `tikla` (seçici; ör. kimlik sorgula), `bekle {secici, durum: dolu \| gorunur \| gizli, zamanAsimiSn}`. |
+| `doldurucuParametreleri` | Alan doldurulduktan sonra: `tus` (ör. `Tab`), `tikla` (seçici; ör. kimlik sorgula), `bekle {secici, durum: dolu \| gorunur \| gizli, zamanAsimiSn, icermez?}` (`icermez`: dolu sayılmayan geçici metin, ör. sorgu sürerken "Aranıyor"). Oklu seçimde `yanitBekle`: her tıklamadan sonra adresi bu metni içeren isteğin bitmesi beklenir (ör. seçim değişince yeniden yüklenen bağımlı liste). |
 | Doldurucular | `radyoZorla` / `onayKutusuZorla` (gizli çizimli girdiler; görünürlük yerine sayfada varlık), `secimGerekirse` (değer zaten seçiliyse dokunulmaz). |
 
 Tekrar analizde koşu tanımı değişikliği **"Adım koşu tanımı"** bulgusu olur; sürüm 1 bir model bu bulgu kabul

@@ -818,8 +818,14 @@ export function kayitPaketiOlustur(meta, envanter) {
     }
     /** @type {Map<string, { baslik: string; alanlar: Array<Record<string, unknown>> }>} */
     const bolumler = new Map();
+    // Diyagramdaki sıra = doldurma sırası: bölüm değişince yeni bölüm parçası açılır (ardışık olmayan aynı bölümün alanları
+    // birleştirilmez; birleştirilseydi sıra bölüme göre değişirdi).
+    let sonBolum = null;
+    let parca = 0;
     for (const h of p.alanlar) {
-      const b = bolumler.get(h.bolum.anahtar) ?? bolumler.set(h.bolum.anahtar, { baslik: temizMetin(h.bolum.baslik, sayac, 120) || 'Genel', alanlar: [] }).get(h.bolum.anahtar);
+      if (h.bolum.anahtar !== sonBolum) { sonBolum = h.bolum.anahtar; parca++; }
+      const k = `${parca}\u0001${h.bolum.anahtar}`;
+      const b = bolumler.get(k) ?? bolumler.set(k, { baslik: temizMetin(h.bolum.baslik, sayac, 120) || 'Genel', alanlar: [] }).get(k);
       b?.alanlar.push(modelAlani(h));
     }
     const sonAdimMi = i === altAdimlar.length - 1;
