@@ -114,11 +114,14 @@ export declare function calistirmaHedefiCoz(
 ): CalistirmaHedefi;
 export declare function denemePaketiOlustur(
   vt: Veritabani,
-  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null },
+  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown },
   secenekler: { adaptor?: AktarimAdaptoru | null; geciciEk: string }
 ): {
   ortamAnahtari: string; spec: string; geciciBaslik: string; uyarilar: Bulgu[];
   ekVeri: { ortam: string; ekVeriler: Array<{ dosya: string; yol: string[]; ogeler: unknown[] }> };
+} | {
+  model: true; ortamAnahtari: string | null; genel: { projeId: string; ortamId: string } | null; spec: string; geciciBaslik: string;
+  etiket: string; grepDeseni: string; uyarilar: Bulgu[]; denemeSenaryosu: Record<string, unknown>;
 };
 
 export type KodKaldirilmaNedeni = 'dosya-yok' | 'baslik-yok';

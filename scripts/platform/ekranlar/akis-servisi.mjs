@@ -8,6 +8,9 @@
 //    dönüşür; alanlar seçiciyle modeldeki mevcut tanımlarıyla (kimlik, seçenekler, koşul) eşleşir.
 //  - Düzenlenemeyen modeller (ör. alt model adımı ya da seçicisi olmayan kimlik alanları içeren kodlu projeler): akış
 //    görüntülenir, düzenlenmez (neden döner).
+//  - Ortak akış (tur "ortakAkis"): tek akışı vardır; içeriği aynı diyagramla düzenlenir (içine ortak akış
+//    eklenmez). Kaydedince onu kullanan ekranlar etki olarak gösterilir (ekranlar ortak akışın hep son sürümüyle koşar).
+//    ortakAkisEkranlaraEkle: ortak akışı seçilen ekranların varsayılan akışının sonuna ekler (her ekran için yeni sürüm).
 //  - Varsayılan akış model.adimlar'dır; varsayılan değişince akışı yazılı olmayan senaryolara eski varsayılan yazılır (akışları
 //    değişmesin). Senaryosu olan ya da varsayılan akış silinemez.
 // NOT: import.meta KULLANILMAZ. Tipler: akis-servisi.d.mts.
@@ -62,7 +65,6 @@ const temsilEdilir = (alan) => (alan.yapilandirma === 'senaryo' && seciciliMi(al
 
 /** Akış diyagramda düzenlenebilir mi? (neden: düzenlenemezse Türkçe açıklama) @param {Nesne} model */
 export function akisDuzenlenebilirMi(model) {
-  if (model.tur === 'ortakAkis') return { duzenlenebilir: false, neden: 'Ortak akışın içeriği henüz diyagramdan düzenlenmez (sayfa paketiyle güncellenir); ekranların akışına “+ > Ortak akış” ile eklenir.' };
   const env = modeldenAkisEnvanteri(model);
   const adimlar = tumAdimlar(model);
   for (const [i, adim] of adimlar.entries()) {
@@ -100,10 +102,7 @@ function diyagramdaKaybolan(model, adimlar, i, env) {
   if (secenekler.some((s) => s.tur === 'url')) return 'adres (url) başarı göstergesi';
   const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis));
   if (sonAdim && secenekler.some((s) => s.tur === 'eleman')) return 'öğe (eleman) başarı göstergesi';
-  if (nesneMi(kosu.hataGostergesi)) {
-    const ilkSecicili = (Array.isArray(kosu.uyarilar) ? kosu.uyarilar : []).find((u) => nesneMi(u) && typeof u.secici === 'string');
-    if (!ilkSecicili || ilkSecicili.secici !== kosu.hataGostergesi.secici) return 'hata göstergesi (uyarısız)';
-  }
+  // Hata göstergesi (uyarısız da olsa) ve öğe "veya" göstergesi kaydederken adımın mevcut tanımından korunur (paket-olusturucu).
   // İsteğe bağlı adım: diyagramda yalnızca "her senaryoda basılmaz" düğmenin açtığı alanlar olarak (önceki adım o düğme).
   if (kapsamAyari(model, adim)) {
     const alanli = (Array.isArray(adim.bolumler) ? adim.bolumler : []).some((b) => nesneMi(b) && Array.isArray(b.alanlar) && b.alanlar.some((x) => nesneMi(x) && !['buton', 'cikti'].includes(x.tip)));
@@ -328,7 +327,100 @@ export function akislariListele(vt, projeId, ekranId) {
     const k = id && id in sayilar ? id : varsayilan;
     sayilar[k] = (sayilar[k] ?? 0) + 1;
   }
-  return { akislar: liste.map((a) => ({ ...a, senaryoSayisi: sayilar[a.id] ?? 0 })), ...akisDuzenlenebilirMi(model) };
+  const ortakAkis = model.tur === 'ortakAkis';
+  return {
+    akislar: liste.map((a) => ({ ...a, senaryoSayisi: sayilar[a.id] ?? 0 })), ...akisDuzenlenebilirMi(model), ortakAkis,
+    ...(ortakAkis ? { kullananlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {})
+  };
+}
+
+/** Ortak akış ekranının model dosyası adı ("<anahtar>.model.json"; adımlardaki başvuru). @param {Veritabani} vt @param {string} projeId @param {string} ekranId */
+function ortakAkisDosyasi(vt, projeId, ekranId) {
+  const { ekran, model } = ekranModeli(vt, projeId, ekranId);
+  if (model.tur !== 'ortakAkis') throw new DepoHatasi('Bu ekran bir ortak akış değil.');
+  return { ekran, dosya: `${ekran.anahtar}.model.json` };
+}
+
+/** Modelin (tüm akışları) bu ortak akışı kullanan akışlarının adları. @param {Nesne} model @param {string} dosya */
+function ortakAkisiKullanan(model, dosya) {
+  return akisListesi(model).filter((a) => {
+    const m = akisModeli(model, a.id);
+    return Boolean(m && Array.isArray(m.adimlar) && m.adimlar.some((/** @type {Nesne} */ x) => nesneMi(x) && nesneMi(x.ortakAkis) && x.ortakAkis.dosya === dosya));
+  }).map((a) => a.ad);
+}
+
+/** Projenin ekranları (ortak akış ve alt modeller hariç), modelleri ve senaryo sayılarıyla. @param {Veritabani} vt @param {string} projeId */
+function projeEkranlari(vt, projeId) {
+  /** @type {Array<{ id: string; ad: string; model: Nesne; senaryoSayisi: number }>} */
+  const liste = [];
+  for (const e of vt.tumu("SELECT id, ad FROM ekranlar WHERE proje_id = ? AND durum <> 'silindi' ORDER BY ad", [projeId])) {
+    const k = ekranModeliGetir(vt, String(e.id));
+    if (!k || !nesneMi(k.model) || ['ortakAkis', 'altModel'].includes(k.model.tur) || !Array.isArray(k.model.adimlar)) continue;
+    const sayi = vt.tek('SELECT COUNT(*) AS n FROM senaryolar WHERE ekran_id = ?', [String(e.id)]);
+    liste.push({ id: String(e.id), ad: String(e.ad), model: /** @type {Nesne} */ (k.model), senaryoSayisi: Number(sayi?.n ?? 0) });
+  }
+  return liste;
+}
+
+/** Ortak akışı kullanan ekranlar (akış adları + senaryo sayısı). @param {Veritabani} vt @param {string} projeId @param {string} ortakEkranId */
+function ortakAkisKullananlari(vt, projeId, ortakEkranId) {
+  const { dosya } = ortakAkisDosyasi(vt, projeId, ortakEkranId);
+  return projeEkranlari(vt, projeId).map((e) => ({ id: e.id, ad: e.ad, akislar: ortakAkisiKullanan(e.model, dosya), senaryoSayisi: e.senaryoSayisi }))
+    .filter((e) => e.akislar.length);
+}
+
+/**
+ * "Ekranlara ekle" listesi: projenin ekranları; her biri eklenebilir mi (zaten varsayılan akışında var / akışı diyagramdan
+ * düzenlenemiyor ise hayır, nedeniyle). @param {Veritabani} vt @param {string} projeId @param {string} ortakEkranId
+ */
+export function ortakAkisAdaylari(vt, projeId, ortakEkranId) {
+  const { ekran, dosya } = ortakAkisDosyasi(vt, projeId, ortakEkranId);
+  const ekranlar = projeEkranlari(vt, projeId).map((e) => {
+    const varsayilan = akisListesi(e.model)[0];
+    const kullanan = ortakAkisiKullanan(e.model, dosya);
+    const d = akisDuzenlenebilirMi(e.model);
+    const neden = kullanan.includes(varsayilan.ad) ? `Varsayılan akışında (${varsayilan.ad}) zaten var.` : d.neden;
+    return { id: e.id, ad: e.ad, varsayilanAkis: varsayilan.ad, senaryoSayisi: e.senaryoSayisi, kullananAkislar: kullanan, eklenebilir: !neden, neden };
+  });
+  return { ortakAkis: { id: ekran.id, ad: ekran.ad, dosya }, ekranlar };
+}
+
+/**
+ * Ortak akışı seçilen ekranların VARSAYILAN akışının sonuna ekler (diyagramdaki "+ > Ortak akış" ile aynı çeviri; her ekran
+ * için yeni model sürümü). istegeBagli: senaryoda “… dahil” işaretlenince koşar (mevcut senaryolar etkilenmez); değilse
+ * varsayılan akıştaki tüm senaryolar koşar. onay: false → yalnızca etki (ekran, akış, senaryo sayısı); true → yazar.
+ * Eklenemeyen ekran seçilirse hiçbiri yazılmaz (DepoHatasi).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortakEkranId
+ * @param {{ ekranIdleri: unknown; istegeBagli?: boolean; onay?: boolean }} g
+ */
+export function ortakAkisEkranlaraEkle(vt, projeId, ortakEkranId, g) {
+  const { ortakAkis, ekranlar } = ortakAkisAdaylari(vt, projeId, ortakEkranId);
+  const idler = Array.isArray(g.ekranIdleri) ? [...new Set(g.ekranIdleri.filter((x) => typeof x === 'string'))] : [];
+  if (!idler.length) throw new DepoHatasi('En az bir ekran seçin.');
+  const secilen = idler.map((id) => {
+    const e = ekranlar.find((x) => x.id === id);
+    if (!e) throw new DepoHatasi('Seçilen ekranlardan biri bulunamadı.');
+    if (!e.eklenebilir) throw new DepoHatasi(`“${e.ad}”: ${e.neden}`);
+    return e;
+  });
+  const etki = secilen.map((e) => ({ id: e.id, ad: e.ad, akis: e.varsayilanAkis, senaryoSayisi: e.senaryoSayisi }));
+  // Önce hepsi doğrulanır (onaysız kayıt: yalnızca doğrulama); biri hatalıysa hiçbiri yazılmaz.
+  const hazirlik = secilen.map((e) => {
+    const { model } = ekranModeli(vt, projeId, e.id);
+    const akis = akisListesi(model)[0];
+    const bloklar = adimlardanBloklar(model, /** @type {Nesne} */ (akisModeli(model, akis.id)).adimlar, modeldenAkisEnvanteri(model));
+    bloklar.splice(bloklar.length - 1, 0, { tur: 'ortak', dosya: ortakAkis.dosya, ad: ortakAkis.ad, istegeBagli: g.istegeBagli === true });
+    const girdi = { akisId: akis.id, ad: akis.ad, bloklar };
+    try { akisKaydet(vt, projeId, e.id, { ...girdi, onay: false }); } catch (hataNesnesi) {
+      const mesaj = hataNesnesi instanceof EkranDogrulamaHatasi && hataNesnesi.hatalar.length ? hataNesnesi.hatalar.map((/** @type {Nesne} */ x) => x.mesaj).join(' ') : /** @type {Error} */ (hataNesnesi).message;
+      throw new DepoHatasi(`“${e.ad}” akışına eklenemedi: ${mesaj}`);
+    }
+    return { e, girdi };
+  });
+  if (g.onay !== true) return { etki: { ortakAkis: ortakAkis.ad, istegeBagli: g.istegeBagli === true, ekranlar: etki } };
+  return vt.islem(() => ({
+    eklenen: hazirlik.map(({ e, girdi }) => ({ id: e.id, ad: e.ad, surum: /** @type {{ surum: number }} */ (akisKaydet(vt, projeId, e.id, { ...girdi, onay: true })).surum }))
+  }));
 }
 
 /**
@@ -339,6 +431,8 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
   const { ekran, model } = ekranModeli(vt, projeId, ekranId);
   const d = akisDuzenlenebilirMi(model);
   if (!d.duzenlenebilir) throw new DepoHatasi(/** @type {string} */ (d.neden));
+  const ortakAkis = model.tur === 'ortakAkis';
+  if (ortakAkis && !s.akisId) throw new DepoHatasi('Ortak akışın tek akışı vardır; yeni akış eklenmez, mevcut akış düzenlenir.');
   const env = modeldenAkisEnvanteri(model);
   const liste = akisListesi(model);
   const kaynakId = s.akisId || s.kopya || null;
@@ -346,7 +440,8 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
   if (kaynakId && !kaynak) throw new DepoHatasi('Akış bulunamadı.');
   const bloklar = kaynak ? adimlardanBloklar(model, /** @type {Nesne} */ (akisModeli(model, kaynak.id)).adimlar, env) : [{ tur: /** @type {const} */ ('bitir') }];
   return {
-    ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar: ortakAkislariListele(vt, projeId),
+    ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar: ortakAkis ? [] : ortakAkislariListele(vt, projeId), ortakAkis,
+    ...(ortakAkis ? { kullananlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}),
     akis: s.akisId && kaynak ? { id: kaynak.id, ad: kaynak.ad, varsayilan: kaynak.varsayilan } : null,
     kopyaKaynagi: s.kopya && kaynak ? kaynak.ad : null
   };
@@ -405,6 +500,8 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const liste = akisListesi(tam);
   const mevcutAkis = g.akisId ? liste.find((a) => a.id === g.akisId) : null;
   if (g.akisId && !mevcutAkis) throw new DepoHatasi('Akış bulunamadı.');
+  const ortakAkis = tam.tur === 'ortakAkis';
+  if (ortakAkis && !mevcutAkis) throw new DepoHatasi('Ortak akışın tek akışı vardır; yeni akış eklenmez, mevcut akış düzenlenir.');
   /** @type {Array<{ blok: number | null; mesaj: string }>} */
   const hatalar = [];
   if (!ad) hatalar.push({ blok: null, mesaj: 'Akışın adını yazın.' });
@@ -412,6 +509,7 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const env = g.kayitEnvanteri ?? modeldenAkisEnvanteri(tam);
   const ayik = bloklariAyikla(g.bloklar);
   hatalar.push(...ayik.hatalar);
+  if (ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak') hatalar.push({ blok: i, mesaj: 'Ortak akışın içine ortak akış eklenemez.' }); });
   const cevrim = ayik.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar);
   hatalar.push(...cevrim.hatalar);
   if (hatalar.length || !cevrim.envanter) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, hatalar);
@@ -432,6 +530,8 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const sd = nesneMi(yeni.senaryoDuzeyi) && Array.isArray(yeni.senaryoDuzeyi.alanlar) ? yeni.senaryoDuzeyi.alanlar : [];
   const sdIdleri = new Set(sd.map((/** @type {Nesne} */ a) => a.id));
   for (const a of nesneMi(parca.senaryoDuzeyi) && Array.isArray(parca.senaryoDuzeyi.alanlar) ? parca.senaryoDuzeyi.alanlar : []) {
+    // Ortak akışta "Beklenen sonuç" alanı yazılmaz: uyarılı adımları kullanan ekranın beklenen sonucuna eklenir (model-formu).
+    if (ortakAkis && nesneMi(a) && a.tip === 'birlesim') continue;
     if (!sdIdleri.has(a.id)) { sd.push(a); sdIdleri.add(a.id); continue; }
     // Beklenen sonuç alanı güncellenir (bu akıştaki uyarılı adımlar adım seçeneklerine eklenmiş olabilir).
     if (nesneMi(a) && a.tip === 'birlesim') sd[sd.findIndex((x) => nesneMi(x) && x.id === a.id)] = a;
@@ -450,11 +550,13 @@ export function akisKaydet(vt, projeId, ekranId, g) {
     akislar.push({ id: akisId, ad, adimlar: akisAdimlari });
   }
   yeni.akislar = akislar;
+  // Ortak akış tek akışlıdır (örtük "Ana akış").
+  if (ortakAkis) delete yeni.akislar;
   modeliDogrula(vt, projeId, yeni, `${ekran.anahtar}.model.json`);
 
   const varsayilan = liste[0]?.id ?? ANA_AKIS_ID;
   const etkilenen = mevcutAkis ? akisSenaryolari(vt, ekranId, akisId, varsayilan) : [];
-  if (g.onay !== true) return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen }, akisId };
+  if (g.onay !== true) return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen, ...(ortakAkis ? { ekranlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}) }, akisId };
   const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Akış ${mevcutAkis ? 'düzenlendi' : 'eklendi'}: ${ad}` });
   return { akisId, surum };
 }

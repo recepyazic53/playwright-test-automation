@@ -140,7 +140,7 @@ test.describe('Ekran yönetimi — ad, yol, sıra, durum', () => {
     } finally { o.temizle(); }
   });
 
-  test('devre dışı: ekranın dosyaları + paylaşılan dosyadaki testleri koşudan hariç, ▷ reddedilir, kasa olmadan okunur; etkinleştirince geri döner', async () => {
+  test('devre dışı: ekranın dosyaları + paylaşılan dosyadaki testleri toplu koşudan hariç (▷ tek başına çalışır), kasa olmadan okunur; etkinleştirince geri döner', async () => {
     const o = await kur();
     try {
       const satis = ekranBul(o, 'jet-satis');
@@ -165,13 +165,16 @@ test.describe('Ekran yönetimi — ad, yol, sıra, durum', () => {
       expect(dosyadanGrepDeseni('../x.spec.ts')).toBeNull();
       expect(anahtardanGrepDeseni(`${KASKO_SPEC}::Satış paylaşılan`)?.test(baslik(KASKO_SPEC, 'Satış paylaşılan'))).toBe(true);
 
-      // Senaryolar ekranı: satırlar "ekranEtkin: false"; ▷ / Koşuyu başlat sunucuda reddedilir.
+      // Senaryolar ekranı: satırlar "ekranEtkin: false"; Koşuyu başlat (tam) sunucuda reddedilir, tek senaryo (▷) çalışır.
       const liste = senaryoListesi(o.vt, o.projeId, o.ortamId, null, { kodDosyasiVar: kodDosyasiVar(o) });
       expect(liste.ekranlar.find((e) => e.id === satis.id)?.durum).toBe('devre_disi');
       expect(liste.senaryolar.filter((s) => s.ekranId === satis.id).every((s) => s.ekranEtkin === false)).toBe(true);
       expect(liste.senaryolar.filter((s) => s.ekranId === kasko.id).every((s) => s.ekranEtkin)).toBe(true);
-      const govde = (senaryoId: string) => ({ projeId: o.projeId, ortamId: o.ortamId, senaryoId, kosuId: 'k1' });
+      const govde = (senaryoId: string) => ({ projeId: o.projeId, ortamId: o.ortamId, senaryoId, kosuId: 'k1', kosuTuru: 'tam', kosuKimligi: 'toplu-1' });
       expect(() => calistirmaIsteginiHazirla(o.vt, govde(paylasilan))).toThrow(/devre dışı/);
+      expect(() => calistirmaIsteginiHazirla(o.vt, { ...govde(paylasilan), kosuTuru: 'tekil' })).toThrow(/devre dışı/);
+      expect(() => calistirmaIsteginiHazirla(o.vt, { ...govde(paylasilan), kosuTuru: 'tekil', tekBasina: true })).not.toThrow(/devre dışı/);
+      expect(() => calistirmaIsteginiHazirla(o.vt, { ...govde(paylasilan), tekBasina: true })).toThrow(/devre dışı/);
 
       // veri-oku "durum" kipi (playwright.config.ts > grepInvert kaynağı) kasa parolası OLMADAN okur.
       const cikti = spawnSync(process.execPath, [join(KOK, 'scripts', 'platform', 'aktarim', 'veri-oku.mjs'), 'durum', '--adaptor', 'galaksi'], {

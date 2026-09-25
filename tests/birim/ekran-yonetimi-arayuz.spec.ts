@@ -233,7 +233,7 @@ test('⋯ menüsü: yeniden adlandır, düzenle (URL yolu), yukarı taşı', asy
   agKontrol(istekler);
 });
 
-test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Senaryolar\'da koşulamaz, etkinleştirince geri gelir', async () => {
+test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Senaryolar\'da toplu koşuya girmez (▷ tek başına açık), etkinleştirince geri gelir', async () => {
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
   await (await menuAc(page, 'JetKasko')).getByRole('menuitem', { name: 'Devre dışı bırak' }).click();
@@ -252,7 +252,7 @@ test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Sen
   await expect(page.getByRole('button', { name: 'Ekran işlemleri: JetKasko' })).toBeVisible();
   await ekranGoruntusu(page, '06-devre-disi-ayrinti', page.locator('.sayfa-basligi').locator('..'));
 
-  // Senaryolar: ekran ve senaryoları gizli; anahtarla görünür, ▷ kapalı, Koşuyu başlat onları saymaz.
+  // Senaryolar: ekran ve senaryoları gizli; anahtarla görünür, ▷ açık (tek başına), Koşuyu başlat onları saymaz.
   await page.goto('/#/senaryolar');
   const sNav = page.getByRole('navigation', { name: 'Ürünler / ekranlar' });
   await expect(sNav.getByRole('link', { name: /JetKasko/ })).toHaveCount(0);
@@ -261,15 +261,15 @@ test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Sen
   await sNav.getByRole('link', { name: /JetKasko/ }).click();
   const satir = page.locator('tbody tr').first();
   await expect(satir.getByText('ekran devre dışı')).toBeVisible();
-  await expect(satir.getByRole('button', { name: /^Çalıştır:/ })).toBeDisabled();
+  await expect(satir.getByRole('button', { name: /^Çalıştır:/ })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Koşuyu başlat' })).toBeDisabled();
   await ekranGoruntusu(page, '07-senaryolar-devre-disi');
   await sNav.getByText('Devre dışı ekranları göster').click();
 
-  // Sunucu da reddeder (▷ API).
+  // Sunucu toplu koşuda (tam) reddeder.
   const liste = await api(nobetci, `/platform/senaryolar?projeId=${projeId}`) as { ortamId: string; senaryolar: Array<{ id: string; ekranAdi: string }> };
   const kasko = liste.senaryolar.find((s) => s.ekranAdi === 'JetKasko');
-  const red = await api(nobetci, '/platform/senaryolar/calistir', { projeId, ortamId: liste.ortamId, senaryoId: kasko?.id, kosuId: 'k1' });
+  const red = await api(nobetci, '/platform/senaryolar/calistir', { projeId, ortamId: liste.ortamId, senaryoId: kasko?.id, kosuId: 'k1', kosuTuru: 'tam', kosuKimligi: 'toplu-1' });
   expect(String(red.mesaj)).toMatch(/devre dışı/);
 
   // Sonuçlar: "devre dışı" etiketiyle görünür kalır.

@@ -30,14 +30,16 @@ function kimlik(d, alan) {
 }
 
 /**
- * Devre dışı (ya da silinmiş) ekranın senaryosu çalıştırılamaz / denenemez (ekran düzeyinde "Koşuda kapalı").
+ * Silinmiş ekranın senaryosu çalıştırılamaz / denenemez. Devre dışı ekranın senaryosu toplu koşuya ("Koşuyu başlat")
+ * girmez; tek başına çalıştırma (▷) ve Dene'ye izin verilir (kullanıcı kararı, 2026-09-25).
  * @param {Veritabani} vt @param {string} senaryoId @param {string | null} [ekranId] verilirse doğrudan bu ekran denetlenir
+ * @param {{ devreDisiIzinli?: boolean }} [s]
  */
-function ekranEtkinOlmali(vt, senaryoId, ekranId) {
+function ekranEtkinOlmali(vt, senaryoId, ekranId, s = {}) {
   const id = ekranId ?? /** @type {string | null} */ (vt.tek('SELECT ekran_id FROM senaryolar WHERE id = ?', [senaryoId])?.ekran_id ?? null);
   if (!id) return;
   const e = vt.tek('SELECT ad, durum FROM ekranlar WHERE id = ?', [id]);
-  if (e && e.durum === 'devre_disi') throw new DepoHatasi(`"${e.ad}" ekranı devre dışı; senaryoları çalıştırılamaz. Ekranlar > ⋯ > Etkinleştir.`);
+  if (e && e.durum === 'devre_disi' && !s.devreDisiIzinli) throw new DepoHatasi(`"${e.ad}" ekranı devre dışı; senaryoları toplu koşuya girmez (tek başına ▷ ile çalıştırılabilir). Ekranlar > ⋯ > Etkinleştir.`);
   if (e && e.durum === 'silindi') throw new DepoHatasi(`"${e.ad}" ekranı silinmiş; senaryoları çalıştırılamaz.`);
 }
 
@@ -46,6 +48,7 @@ function ekranEtkinOlmali(vt, senaryoId, ekranId) {
  *  - kosuId: bu tekil koşu isteğinin kimliği (durdurma / canlı görüntü bununla yapılır) — zorunlu.
  *  - kosuTuru 'tam' | 'tekil' (isteğe bağlı): birlikte başlatılan senaryolar ortak kosuKimligi taşır.
  *  - kosuKapsami yalnızca 'tam' koşuda: 'Genel' ya da projedeki bir ekranın adı.
+ *  - tekBasina: true yalnızca tek senaryo (▷) çalıştırmasında; devre dışı ekranın senaryosu yalnızca böyle çalışır.
  * secenekler: kodDosyasiVar (model senaryosu tespiti), yasakDesenleri (yasaklı adres koruması).
  * @param {Veritabani} vt @param {Record<string, unknown>} govde @param {import('./calistirma.d.mts').CalistirmaSecenekleri} [secenekler]
  */
@@ -68,7 +71,7 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
     kosuKapsami = kapsam;
   }
   const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
-  ekranEtkinOlmali(vt, hedef.senaryoId);
+  ekranEtkinOlmali(vt, hedef.senaryoId, null, { devreDisiIzinli: kosuTuru !== 'tam' && govde.tekBasina === true });
   return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef };
 }
 
@@ -98,12 +101,22 @@ export async function senaryoCalistir(vt, govde, kosucu, secenekler = {}) {
 export async function senaryoDene(vt, govde, kosucu, adaptor) {
   const projeId = kimlik(govde.projeId, 'projeId');
   const kosuId = kimlik(govde.kosuId, 'kosuId');
-  ekranEtkinOlmali(vt, '', kimlik(govde.ekranId, 'ekranId'));
+  ekranEtkinOlmali(vt, '', kimlik(govde.ekranId, 'ekranId'), { devreDisiIzinli: true });
   const paket = denemePaketiOlustur(vt, {
     projeId, ekranId: kimlik(govde.ekranId, 'ekranId'), ortamId: kimlik(govde.ortamId, 'ortamId'), veri: govde.veri,
-    id: typeof govde.id === 'string' && KIMLIK.test(govde.id) ? govde.id : null
+    id: typeof govde.id === 'string' && KIMLIK.test(govde.id) ? govde.id : null,
+    akisId: typeof govde.akisId === 'string' && KIMLIK.test(govde.akisId) ? govde.akisId : null, mutlakaGorunmeli: govde.mutlakaGorunmeli
   }, { adaptor, geciciEk: randomBytes(4).toString('hex') });
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
+  if ('model' in paket && paket.model) {
+    // Model senaryosu: geçici deneme senaryosu model spec'inde etiketle üretilir (veritabanına senaryo yazılmaz).
+    if (!kosucu.modelDene) throw new DepoHatasi('Bu sunucuda model senaryosu denemesi desteklenmiyor.');
+    const sonuc = await kosucu.modelDene({
+      ortam: paket.ortamAnahtari ?? GENEL_ORTAM_ETIKETI, dosya: paket.spec, kosuId, etiket: paket.etiket, grepDeseni: paket.grepDeseni,
+      genel: paket.genel, denemeSenaryosu: paket.denemeSenaryosu
+    });
+    return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, uyarilar: paket.uyarilar } };
+  }
   const sonuc = await kosucu.dene({ ortam: paket.ortamAnahtari, dosya: paket.spec, ad: paket.geciciBaslik, kosuId, ekVeri: paket.ekVeri });
   return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, uyarilar: paket.uyarilar } };
 }

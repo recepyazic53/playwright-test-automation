@@ -580,6 +580,14 @@ test('çoklu akış: Akışlar sekmesinde kopyadan yeni akış; senaryo akışı
     await expect(grup1.getByRole('button', { name: 'Ad Soyad: zorunlu' })).toHaveText('Zorunlu');
     await grup1.getByRole('button', { name: 'TC kimlik no: gruptan çıkar' }).click();
     await expect(grup1).not.toContainText('TC kimlik no');
+    // Kaydedilmemiş değişiklikle sayfadan çıkılırken uyarı; vazgeçilince düzenleyicide kalınır.
+    await page.locator('.kirinti').getByRole('link', { name: 'Ekranlar' }).click();
+    const cikisOnayi = page.locator('dialog.onay-diyalogu');
+    await expect(cikisOnayi.getByRole('heading', { name: 'Değişiklikler kaydedilmedi' })).toBeVisible();
+    await cikisOnayi.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(cikisOnayi).toBeHidden();
+    await expect(page.getByRole('heading', { name: 'Yeni akış' })).toBeVisible();
+    await expect(grup1).not.toContainText('TC kimlik no');
     await goruntu(page.locator('main'), '11-yeni-akis-duzenleyici.png');
     await page.getByRole('button', { name: 'Akışı oluştur' }).click();
     const onay = page.locator('dialog.onay-diyalogu');

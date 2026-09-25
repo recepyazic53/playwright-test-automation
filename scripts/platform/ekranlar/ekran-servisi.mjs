@@ -297,9 +297,10 @@ function bulguGorunumu(b) {
 
 /**
  * Paketin önizlemesi (doğrulama + arayüz özeti). mod: 'yeni' (Sayfa ekle; anahtar projede olmamalı,
- * ya da modeli olmayan mevcut ekran seçilmişse o) | 'analiz' (mevcut ekran için tekrar analiz).
+ * ya da modeli olmayan mevcut ekran seçilmişse o) | 'analiz' (mevcut ekran için tekrar analiz) | 'degistir' (mevcut ekranın
+ * modeli paketle değiştirilir: yeni sürüm; senaryolar korunur, etki olarak listelenir).
  * @param {Veritabani} vt @param {string} projeId @param {unknown} paket
- * @param {{ ekranId?: string | null; mod?: 'yeni' | 'analiz' }} [secenekler]
+ * @param {{ ekranId?: string | null; mod?: 'yeni' | 'analiz' | 'degistir' }} [secenekler]
  */
 export function paketOnizle(vt, projeId, paket, secenekler = {}) {
   acikAnahtar(vt);
@@ -320,7 +321,9 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
       hatalar.push({ yer: 'meta.ekran.anahtar', mesaj: `Paket başka bir ekrana ait ("${ekranMeta.anahtar}"); bu ekranın anahtarı "${e.anahtar}".` });
     }
     if (mod === 'yeni' && hedef.modelVar) hatalar.push({ yer: 'meta.ekran.anahtar', mesaj: `"${e.ad}" ekranının zaten modeli var; değişiklikler için "Tekrar analiz et / Paket yükle" kullanın.` });
-    if (mod === 'analiz' && !hedef.modelVar) hatalar.push({ yer: 'model', mesaj: `"${e.ad}" ekranının henüz modeli yok; paketi "Sayfa ekle" ile yükleyin.` });
+    if ((mod === 'analiz' || mod === 'degistir') && !hedef.modelVar) hatalar.push({ yer: 'model', mesaj: `"${e.ad}" ekranının henüz modeli yok; paketi "Sayfa ekle" ile yükleyin.` });
+  } else if (mod === 'degistir') {
+    hatalar.push({ yer: 'ekranId', mesaj: 'Modeli değiştirilecek ekran seçilmedi.' });
   } else if (mod === 'yeni' && ayniAnahtar) {
     const modelVar = Boolean(ekranModeliGetir(vt, ayniAnahtar.id));
     if (modelVar) {
@@ -397,8 +400,15 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
   }
   const incelenen = /** @type {string[]} */ (Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : []);
   const ortamlar = ortamlariListele(vt, projeId).map((o) => ({ id: o.id, ad: o.ad, varsayilan: o.varsayilan }));
+  // Modeli değiştir: ekranın senaryoları (korunur; yeni modele uymayan değerleri formda / koşuda hata olarak görünür) ve
+  // korunacak diğer akışlar (yeni modelle birlikte doğrulanır).
+  const degistirmeEtkisi = mod === 'degistir' && hedef ? degistirmeEtkisiHesapla(vt, projeId, hedef.id, model) : null;
+  if (degistirmeEtkisi && degistirmeEtkisi.hatalar.length) {
+    return { gecerli: false, hatalar: degistirmeEtkisi.hatalar, uyarilar: d.uyarilar, onizleme: null, hedef };
+  }
   return {
     gecerli: true, hatalar: [], uyarilar: d.uyarilar, hedef,
+    ...(degistirmeEtkisi ? { etki: { senaryolar: degistirmeEtkisi.senaryolar, korunanAkislar: degistirmeEtkisi.korunanAkislar, mevcutSurum: degistirmeEtkisi.mevcutSurum } } : {}),
     onizleme: {
       meta: {
         ekran: { anahtar: ekranMeta.anahtar, ad: ekranMeta.ad, urlYolu: ekranMeta.urlYolu }, proje: meta.proje ?? null,
@@ -409,6 +419,106 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
       kanitSayisi: Array.isArray(p.kanitlar) ? p.kanitlar.length : 0, ortamlar
     }
   };
+}
+
+/**
+ * Paketle değiştirilecek modelin son hâli: paketin modeli varsayılan akış olur; mevcut modelin DİĞER akışları korunur.
+ * @param {Nesne} mevcut @param {Nesne} paketModeli @returns {Nesne}
+ */
+function degistirilenModel(mevcut, paketModeli) {
+  const yeni = kopya(paketModeli);
+  const digerleri = Array.isArray(mevcut.akislar) ? mevcut.akislar.filter((a) => nesneMi(a) && a.varsayilan !== true) : [];
+  if (digerleri.length) {
+    const eskiVarsayilan = mevcut.akislar.find((a) => nesneMi(a) && a.varsayilan === true);
+    yeni.akislar = [{ id: eskiVarsayilan ? eskiVarsayilan.id : 'ana', ad: eskiVarsayilan ? eskiVarsayilan.ad : 'Ana akış', varsayilan: true, adimlar: yeni.adimlar }, ...kopya(digerleri)];
+    // Korunan akışların kullandığı koşullar ve senaryo ayarları (ör. "“Ek adım” dahil") pakette yoksa eski modelden taşınır.
+    const eskiKosullar = nesneMi(mevcut.kosullar) ? mevcut.kosullar : {};
+    yeni.kosullar = nesneMi(yeni.kosullar) ? yeni.kosullar : {};
+    /** @type {Set<string>} */
+    const ayarlar = new Set();
+    const tara = (/** @type {unknown} */ d) => {
+      if (Array.isArray(d)) { d.forEach(tara); return; }
+      if (!nesneMi(d)) return;
+      for (const [k, v] of Object.entries(d)) {
+        if (k === 'kosul' && typeof v === 'string' && !(v in yeni.kosullar) && v in eskiKosullar) {
+          yeni.kosullar[v] = kopya(eskiKosullar[v]);
+          tara(yeni.kosullar[v]);
+        } else if (k === 'senaryoAyari' && typeof v === 'string') ayarlar.add(v);
+        else tara(v);
+      }
+    };
+    tara(digerleri);
+    const sd = nesneMi(yeni.senaryoDuzeyi) && Array.isArray(yeni.senaryoDuzeyi.alanlar) ? yeni.senaryoDuzeyi.alanlar : [];
+    const eskiSd = nesneMi(mevcut.senaryoDuzeyi) && Array.isArray(mevcut.senaryoDuzeyi.alanlar) ? mevcut.senaryoDuzeyi.alanlar : [];
+    for (const a of eskiSd) if (nesneMi(a) && ayarlar.has(a.id) && !sd.some((x) => nesneMi(x) && x.id === a.id)) sd.push(kopya(a));
+    yeni.senaryoDuzeyi = { ...(nesneMi(yeni.senaryoDuzeyi) ? yeni.senaryoDuzeyi : {}), alanlar: sd };
+  }
+  return yeni;
+}
+
+/**
+ * Modeli değiştir etkisi: senaryolar, korunan akışlar; yeni model (korunan akışlarla) doğrulanamazsa hatalar.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {Nesne} paketModeli
+ */
+function degistirmeEtkisiHesapla(vt, projeId, ekranId, paketModeli) {
+  const kayit = ekranModeliGetir(vt, ekranId);
+  const mevcut = kayit && nesneMi(kayit.model) ? /** @type {Nesne} */ (kayit.model) : {};
+  const yeni = degistirilenModel(mevcut, paketModeli);
+  /** @type {Array<{ yer: string; mesaj: string }>} */
+  const hatalar = [];
+  try {
+    modeliDogrula(vt, projeId, yeni, 'model');
+  } catch (h) {
+    const maddeler = h instanceof EkranDogrulamaHatasi && Array.isArray(h.hatalar) ? h.hatalar : [{ yer: 'model', mesaj: h instanceof Error ? h.message : String(h) }];
+    for (const m of maddeler) hatalar.push({ yer: 'korunanAkislar', mesaj: `Ekranın diğer akışları yeni modelle birlikte doğrulanamadı: ${typeof m === 'string' ? m : `${m.yer ?? ''} ${m.mesaj ?? ''}`.trim()}` });
+  }
+  const senaryolar = vt.tumu('SELECT id, baslik FROM senaryolar WHERE proje_id = ? AND ekran_id = ? ORDER BY baslik', [projeId, ekranId])
+    .map((s) => ({ id: String(s.id), baslik: String(s.baslik) }));
+  const korunanAkislar = Array.isArray(yeni.akislar) ? yeni.akislar.filter((a) => a.varsayilan !== true).map((a) => String(a.ad)) : [];
+  return { hatalar, senaryolar, korunanAkislar, mevcutSurum: kayit ? kayit.surum : null };
+}
+
+/**
+ * "Modeli değiştir": mevcut ekranın modeli paketle yeni sürüm olarak değiştirilir (tekrar analizin taşıyamadığı seçici,
+ * bağlı liste, koşu değişiklikleri için). Senaryolar korunur; diğer akışlar korunur; isteğe bağlı olarak paketin senaryo
+ * önerileri eklenir. onay yoksa yalnızca etki döner.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} paket
+ * @param {{ onay?: boolean; senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string }} secenekler
+ */
+export async function modeliPaketleDegistir(vt, projeId, ekranId, paket, secenekler) {
+  const o = paketOnizle(vt, projeId, paket, { ekranId, mod: 'degistir' });
+  if (!o.gecerli || !o.onizleme) throw new EkranDogrulamaHatasi(`Paket geçersiz (${o.hatalar.length} sorun).`, o.hatalar);
+  if (secenekler.onay !== true) return { etki: o.etki ?? null };
+  const p = /** @type {Nesne} */ (paket);
+  const meta = /** @type {Nesne} */ (p.meta);
+  const kayit = ekranModeliGetir(vt, ekranId);
+  const yeni = degistirilenModel(kayit && nesneMi(kayit.model) ? /** @type {Nesne} */ (kayit.model) : {}, /** @type {Nesne} */ (p.model));
+  modeliDogrula(vt, projeId, yeni, 'model');
+  const ortamlar = ortamlariListele(vt, projeId);
+  const ortamIdleri = Array.isArray(secenekler.ortamIdleri) ? [...new Set(secenekler.ortamIdleri.filter((x) => typeof x === 'string'))] : [];
+  for (const id of ortamIdleri) if (!ortamlar.some((x) => x.id === id)) throw new DepoHatasi('Seçilen ortam bu projede yok.');
+  const indeksler = Array.isArray(secenekler.senaryoIndeksleri)
+    ? [...new Set(secenekler.senaryoIndeksleri.filter((x) => Number.isInteger(x) && x >= 0 && x < o.onizleme.senaryolar.length))] : [];
+  if (indeksler.length && !ortamIdleri.length) throw new DepoHatasi('Senaryolar için en az bir ortam seçin.');
+  for (const i of indeksler) {
+    const s = o.onizleme.senaryolar[/** @type {number} */ (i)];
+    if (s.sorunlar.length) throw new DepoHatasi(`"${s.baslik}" önerisi modele uymuyor; seçimden çıkarın ya da paketi düzeltin.`);
+  }
+  const kanitlar = Array.isArray(p.kanitlar) ? /** @type {Nesne[]} */ (p.kanitlar) : [];
+  const kaynak = paketKaynagi(meta);
+  const kanitDosyalari = await kanitDosyalariniYaz(vt, kanitlar, secenekler.medyaKlasoru);
+  return vt.islem(() => {
+    const kanitKayitlari = kanitSatirlariniEkle(vt, kanitDosyalari, `Sayfa paketi (${kaynak})`);
+    const ekran = ekranGetir(vt, projeId, ekranId);
+    const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Model paketle değiştirildi (${kaynak})` });
+    const { ayarlar, analiz } = analizDurumu(vt, ekranId);
+    analizYaz(vt, ekran, ayarlar, {
+      ...analiz, sonBaglamProfilleri: Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : analiz.sonBaglamProfilleri,
+      kanitlar: [...analiz.kanitlar, ...kanitKayitlari]
+    });
+    const senaryoIdleri = senaryoOnerileriniEkle(vt, projeId, ekranId, yeni, /** @type {Nesne[]} */ (p.senaryoOnerileri ?? []), /** @type {number[]} */ (indeksler), ortamIdleri, meta, secenekler.yapan);
+    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length };
+  });
 }
 
 /**

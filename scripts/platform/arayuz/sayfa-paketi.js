@@ -9,6 +9,7 @@
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
 import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { gorselDiyalogu, kopyalaDugmesi, modelAgaciCiz } from './ekran-ortak.js';
+import { onayIste } from './kosu-paneli.js';
 
 const PAKET_EN_BUYUK = 16 * 1024 * 1024;
 // Claude'un inceleme kuralları: ekranlar.js > INCELEME_KURALLARI ile aynı metin (docs/sayfa-paketi.md > "Düğme grupları").
@@ -83,6 +84,17 @@ function yuklemeAdimi(govde, s, onceki = null) {
     h('span', { class: 'soluk kucuk' }, '.json · en fazla 16 MB (ekran görüntüleri dahil)'),
     h('span', { class: 'dugme kucuk-dugme' }, ikon('klasor'), 'Dosya seç'));
   const durumAlani = h('div', { 'aria-live': 'polite' });
+  // Mevcut ekran: paket ya tekrar analize girer (bulgular tek tek onaylanır) ya da modeli değiştirir (yeni sürüm; seçici,
+  // bağlı liste, koşu değişiklikleri dahil; senaryolar korunur).
+  let yuklemeModu = s.mod === 'analiz' ? 'analiz' : s.mod;
+  const modSecimi = s.mod === 'analiz' ? h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': 'Paket ne yapsın?' },
+    [['analiz', 'Tekrar analiz', 'Farklar bulgu olarak gelir, tek tek kabul / red edilir.'],
+      ['degistir', 'Modeli değiştir', 'Paket yeni model sürümü olur (seçici, bağlı liste, koşu değişiklikleri dahil); senaryolar ve diğer akışlar korunur.']]
+      .map(([deger, ad, aciklama]) => {
+        const r = h('input', { type: 'radio', name: 'paket-modu', value: deger, checked: yuklemeModu === deger });
+        r.addEventListener('change', () => { yuklemeModu = deger; });
+        return h('label', {}, r, h('span', {}, h('b', {}, ad), ' — ', h('span', { class: 'soluk kucuk' }, aciklama)));
+      })) : null;
   const isle = async (dosya) => {
     if (!dosya) return;
     if (dosya.size > PAKET_EN_BUYUK) { yerlestir(durumAlani, hataListesi('Dosya çok büyük', [{ yer: dosya.name, mesaj: 'Paket en fazla 16 MB olabilir.' }])); return; }
@@ -95,12 +107,12 @@ function yuklemeAdimi(govde, s, onceki = null) {
       return;
     }
     try {
-      const o = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: s.mod } });
+      const o = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: yuklemeModu } });
       if (!o.gecerli) {
         yerlestir(durumAlani, hataListesi(`Paket geçersiz — ${o.hatalar.length} sorun`, o.hatalar, dosya.name));
         return;
       }
-      onizlemeAdimi(govde, s, paket, o, dosya.name);
+      onizlemeAdimi(govde, { ...s, mod: yuklemeModu }, paket, o, dosya.name);
     } catch (e) {
       if (e.durum === 423) return;
       yerlestir(durumAlani, hataListesi('Paket gönderilemedi', e.govde && e.govde.hatalar ? e.govde.hatalar : [{ yer: dosya.name, mesaj: e.message }]));
@@ -117,7 +129,7 @@ function yuklemeAdimi(govde, s, onceki = null) {
       s.kaydet ? h('button', { type: 'button', onclick: () => s.kaydet(), title: 'Düğmeyle açılan adımlar için: akışı tarayıcıda siz yürütürsünüz, Nöbetçi adımları kaydeder' }, ikon('video'), 'Akışı kaydet') : null),
     s.kaydet ? h('p', { class: 'kucuk soluk' }, 'Alanlar bir düğmeyle açılıyorsa (çok adımlı formlar) tarama onları göremez: "Akışı kaydet" ile akışı kendiniz yürütün; adımları ve alanları siz seçersiniz, girdiğiniz değerler kaydedilmez.') : null) : null;
   yerlestir(govde, h('div', { class: 'yukleme-duzeni' },
-    h('div', { class: 'tarama-yukleme-sutunu' }, h('section', { class: 'kart' }, girdi, alan, durumAlani, onceki), taramaSecenegi),
+    h('div', { class: 'tarama-yukleme-sutunu' }, h('section', { class: 'kart' }, modSecimi, girdi, alan, durumAlani, onceki), taramaSecenegi),
     h('aside', { class: 'kart nasil-karti', 'aria-label': 'Paket nasıl üretilir' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('simsek'), 'Paket nasıl üretilir?')),
       h('ol', { class: 'kesif-adimlari dikey' },
@@ -149,7 +161,9 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
   const ortamSecimi = new Set(varsayilanOrtam ? [varsayilanOrtam.id] : []);
   const ozetAlani = h('div', {});
   const kanitlar = Array.isArray(paket.kanitlar) ? paket.kanitlar : [];
-  const kabulDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon(analiz ? 'yenile' : 'onay'), analiz ? 'Bulguları hesapla' : o.hedef ? 'Modeli ekle' : 'Ekranı oluştur');
+  const degistir = s.mod === 'degistir';
+  const kabulDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon(analiz ? 'yenile' : 'onay'),
+    analiz ? 'Bulguları hesapla' : degistir ? 'Modeli değiştir' : o.hedef ? 'Modeli ekle' : 'Ekranı oluştur');
   const hataAlani = h('div', {});
 
   const ozetCiz = () => {
@@ -231,6 +245,20 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         }
         bildir(`${r.bulguSayisi} bulgu bulundu${r.gizlenenSayisi ? ` (${r.gizlenenSayisi} reddedilen gizlendi)` : ''}.`);
         s.bitti(s.ekran.id, true);
+        return;
+      }
+      if (degistir) {
+        const e = o.etki || { senaryolar: [], korunanAkislar: [] };
+        if (!(await onayIste({
+          baslik: `${s.ekran.ad} modeli değiştirilsin mi?`,
+          metin: `Paket yeni model sürümü olur. ${e.senaryolar.length} senaryo korunur; yeni modele uymayan değerleri formda ve koşuda hata olarak görünür.${e.korunanAkislar.length ? ` Korunan akışlar: ${e.korunanAkislar.join(', ')}.` : ''}`,
+          dugme: 'Modeli değiştir', ikonAd: 'uyari'
+        }))) return;
+        const r = await mesgulIken(kabulDugmesi, 'Değiştiriliyor…', () => api('/platform/ekran/model/degistir', {
+          govde: { projeId: s.proje.id, ekranId: s.ekran.id, paket, onay: true, senaryoIndeksleri: [...secim].sort((a, b) => a - b), ortamIdleri: [...ortamSecimi] }
+        }));
+        bildir(`${s.ekran.ad}: model v${r.surum} yazıldı${r.senaryoIdleri.length ? `, ${r.senaryoIdleri.length} yeni senaryo (Koşuda kapalı)` : ''}.`);
+        s.bitti(s.ekran.id, false);
         return;
       }
       const r = await mesgulIken(kabulDugmesi, 'Ekleniyor…', () => api('/platform/sayfa-paketi/ekle', {

@@ -31,6 +31,7 @@ export declare function paketOnizle(vt: Veritabani, projeId: string, paket: unkn
   onizleme: (Nesne & { senaryolar: Array<{ indeks: number; baslik: string; sorunlar: unknown[]; varsayilanSecili: boolean } & Nesne>; gerekenAyarlar: Array<{ anahtar: string; durum: string } & Nesne> }) | null;
 };
 export declare function sayfaEkle(vt: Veritabani, projeId: string, paket: unknown, secenekler: { senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string }): Promise<{ ekranId: string; surum: number; senaryoIdleri: string[]; kanitSayisi: number }>;
+export declare function modeliPaketleDegistir(vt: Veritabani, projeId: string, ekranId: string, paket: unknown, secenekler: { onay?: boolean; senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string }): Promise<{ etki: { senaryolar: Array<{ id: string; baslik: string }>; korunanAkislar: string[]; mevcutSurum: number | null } | null } | { ekranId: string; surum: number; senaryoIdleri: string[]; kanitSayisi: number }>;
 export declare function analizYukle(vt: Veritabani, projeId: string, ekranId: string, paket: unknown, secenekler: { medyaKlasoru: string }): Promise<{ analizId: string | null; bulguSayisi: number; gizlenenSayisi: number; uyarilar: Array<{ yer: string; mesaj: string }> }>;
 export declare function analizGetir(vt: Veritabani, projeId: string, ekranId: string): Nesne & {
   guncelSurum: number | null;

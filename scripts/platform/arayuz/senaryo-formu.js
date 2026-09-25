@@ -781,7 +781,10 @@ function modelFormu(icerik, s, senaryo, baglam) {
     denemeCiz({ durum: 'calisiyor', kosuId, ortam });
     try {
       const yanit = await api('/platform/senaryo/dene', {
-        govde: { projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}) }
+        govde: {
+          projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}),
+          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka]
+        }
       });
       deneme.bitti = true;
       denemeCiz({ durum: 'bitti', yanit, ortam });

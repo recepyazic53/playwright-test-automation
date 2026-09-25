@@ -282,6 +282,8 @@ export type PlatformModelSenaryosu = {
   /** Senaryonun bu ortamdaki verisi (hassas alanlar çözülmüş; yalnızca bellekte). */
   veri: Record<string, unknown>;
   mutlakaGorunmeli: string[];
+  /** Nöbetçi "Dene" taslağı (veritabanında yok; sonucu senaryosuz kaydedilir). */
+  deneme?: boolean;
 };
 
 export type PlatformModelVerisi = {

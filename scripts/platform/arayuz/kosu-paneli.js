@@ -134,7 +134,8 @@ export function onayIste(s) {
  * Koşuları başlatır. senaryolar: [{ id, baslik, ekranAdi }]. Zaten çalışan/sıradaki senaryolar atlanır.
  * Sürmekte olan bir toplu koşu varken yeni bir TOPLU koşu başlatılmaz; tek senaryo (▷) ise mevcut
  * panele eklenip hemen çalışır.
- * @param {{ projeId: string; ortam: { id: string; ad: string }; senaryolar: Array<{ id: string; baslik: string; ekranAdi?: string | null }>; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli: boolean; baslik: string }} s
+ * tekBasina: tek senaryo (▷) çalıştırması (devre dışı ekranın senaryosu yalnızca böyle çalışır).
+ * @param {{ projeId: string; ortam: { id: string; ad: string }; senaryolar: Array<{ id: string; baslik: string; ekranAdi?: string | null }>; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli: boolean; baslik: string; tekBasina?: boolean }} s
  */
 export function kosuBaslat(s) {
   const yeniler = s.senaryolar.filter((x) => !kosuDurumu(x.id));
@@ -147,7 +148,7 @@ export function kosuBaslat(s) {
     durum.oturum.bitti = false;
     durum.secili = satir.senaryoId;
     durum.kucuk = false;
-    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}` }).then(() => oturumuBitirGerekirse(durum.oturum));
+    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}`, ...(s.tekBasina ? { tekBasina: true } : {}) }).then(() => oturumuBitirGerekirse(durum.oturum));
     yay();
     return true;
   }
@@ -158,7 +159,7 @@ export function kosuBaslat(s) {
   durum.oturum = oturum;
   durum.secili = oturum.satirlar[0].senaryoId;
   durum.kucuk = false;
-  const ek = { kosuTuru: s.tur, kosuKimligi: oturum.kosuKimligi, ...(s.tur === 'tam' ? { kosuKapsami: oturum.kapsam } : {}) };
+  const ek = { kosuTuru: s.tur, kosuKimligi: oturum.kosuKimligi, ...(s.tur === 'tam' ? { kosuKapsami: oturum.kapsam } : {}), ...(tekMi && s.tekBasina ? { tekBasina: true } : {}) };
   yay('basladi');
   if (s.esZamanli) {
     Promise.all(oturum.satirlar.map((x) => birTaneCalistir(oturum, x, ek))).then(() => oturumuBitirGerekirse(oturum), () => oturumuBitirGerekirse(oturum));

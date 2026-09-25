@@ -21,7 +21,7 @@ import { akisModeli } from './model-formu.mjs';
 import { onayIste } from './kosu-paneli.js';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { bulgularEkrani } from './bulgular.js';
-import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
+import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
 
 /** Otomatik tarama modülü isteğe bağlı yüklenir (yüklenemezse yalnızca tarama çalışmaz). */
 let taramaSozu = null;
@@ -311,6 +311,7 @@ async function ekranAyrintisi(icerik, s) {
  * "Akışlar" sekmesi (Model geçmişi düzeninde): solda ekranın akışları (varsayılan önce; adım ve senaryo sayısı), "Yeni akış
  * oluştur" (ad + boş / bir akıştan kopya); sağda seçilen akışın diyagramı ve işlemleri (Düzenle, Kopyala, Varsayılan yap, Sil).
  * Düzenleme / yeni akış aynı sayfada diyagram düzenleyicisini açar (akis-tasarimi.js, kaynak 'ekran'); kaydedince yeni sürüm.
+ * Ortak akışta: tek akış (yeni / kopya / varsayılan / sil yok); onu kullanan ekranlar ve "Ekranlara ekle…".
  */
 async function akisSekmesi(kap, s, d, icerik) {
   const e = d.ekran;
@@ -329,7 +330,8 @@ async function akisSekmesi(kap, s, d, icerik) {
 
   // Yeni akış formu (sol kartta açılır).
   const yeniForm = h('form', { class: 'yeni-akis-formu', hidden: true, 'aria-label': 'Yeni akış' });
-  if (liste.duzenlenebilir) {
+  const cokluAkis = liste.duzenlenebilir && !liste.ortakAkis;
+  if (cokluAkis) {
     const ad = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Tüzel teklif', 'aria-label': 'Yeni akışın adı', required: true });
     const bos = h('input', { type: 'radio', name: 'yeni-akis-baslangic', value: '', checked: true });
     const kopyala = h('input', { type: 'radio', name: 'yeni-akis-baslangic', value: 'kopya' });
@@ -380,23 +382,77 @@ async function akisSekmesi(kap, s, d, icerik) {
   yerlestir(kap, h('div', { class: 'gecmis-duzeni' },
     h('section', { class: 'kart surum-listesi-karti akis-listesi-karti' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('pusula'), 'Akışlar'),
-        liste.duzenlenebilir ? h('button', { type: 'button', class: 'kucuk-dugme sag', onclick: () => { yeniForm.hidden = false; yeniForm.querySelector('input')?.focus(); } }, ikon('artiYalin'), 'Yeni akış oluştur') : null),
+        cokluAkis ? h('button', { type: 'button', class: 'kucuk-dugme sag', onclick: () => { yeniForm.hidden = false; yeniForm.querySelector('input')?.focus(); } }, ikon('artiYalin'), 'Yeni akış oluştur') : null),
       yeniForm,
       h('ol', { class: 'surum-listesi', 'aria-label': 'Akışlar' }, liste.akislar.map((a, i) => h('li', { class: a.id === secili.id ? 'secili' : null },
         h('a', { href: `${adres}/${encodeURIComponent(a.id)}`, 'aria-current': a.id === secili.id ? 'true' : null },
           h('span', { class: 'surum-no' }, String(i + 1)),
           h('span', { class: 'surum-bilgisi' }, h('b', {}, a.ad), h('small', {}, `${a.adimSayisi} adım · ${a.senaryoSayisi} senaryo`)),
           a.varsayilan ? rozet('varsayılan', 'vurgu') : null)))),
-      liste.duzenlenebilir ? null : h('p', { class: 'kucuk soluk ust-bosluk' }, liste.neden)),
+      liste.duzenlenebilir ? null : h('p', { class: 'kucuk soluk ust-bosluk' }, liste.neden),
+      liste.ortakAkis ? ortakAkisKullananlar(liste.kullananlar || []) : null),
     h('div', { class: 'form-sutunu' },
       h('div', { class: 'akis-eylemleri' },
         h('h3', {}, secili.ad, secili.varsayilan ? rozet('varsayılan', 'vurgu') : null),
         liste.duzenlenebilir ? h('div', { class: 'dugmeler' },
           h('button', { type: 'button', class: 'birincil', onclick: () => tasarimiAc({ akisId: secili.id }) }, ikon('duzenle'), 'Düzenle'),
-          h('button', { type: 'button', onclick: () => tasarimiAc({ kopya: secili.id }) }, ikon('kopya'), 'Kopyala'),
-          secili.varsayilan ? null : varsayilanYap,
-          secili.varsayilan ? null : sil) : null),
+          liste.ortakAkis ? h('button', { type: 'button', onclick: () => ortakAkisiEkranlaraEkle(s.proje, e, yeniden) }, ikon('artiYalin'), 'Ekranlara ekle…') : null,
+          liste.ortakAkis ? null : h('button', { type: 'button', onclick: () => tasarimiAc({ kopya: secili.id }) }, ikon('kopya'), 'Kopyala'),
+          secili.varsayilan || liste.ortakAkis ? null : varsayilanYap,
+          secili.varsayilan || liste.ortakAkis ? null : sil) : null),
       diyagram)));
+}
+
+/** Ortak akışı kullanan ekranlar (Akışlar sekmesinin sol kartında). */
+function ortakAkisKullananlar(liste) {
+  return h('div', { class: 'ust-bosluk' },
+    h('h4', { class: 'kucuk' }, 'Kullanan ekranlar'),
+    liste.length
+      ? h('ul', { class: 'duz-liste kucuk', 'aria-label': 'Kullanan ekranlar' }, liste.map((k) => h('li', {},
+        h('a', { href: `#/ekranlar/e/${encodeURIComponent(k.id)}/akis` }, k.ad), h('span', { class: 'cok-soluk' }, ` · ${k.akislar.join(', ')} · ${k.senaryoSayisi} senaryo`))))
+      : h('p', { class: 'kucuk cok-soluk' }, 'Henüz hiçbir ekranın akışında yok.'));
+}
+
+/**
+ * "Ekranlara ekle…": ortak akış seçilen ekranların varsayılan akışının sonuna eklenir (her ekran için yeni model sürümü).
+ * Önce etki (ekran, akış, senaryo sayısı) gösterilir, onaylanınca yazılır.
+ */
+async function ortakAkisiEkranlaraEkle(proje, ortak, yeniden) {
+  let aday;
+  try {
+    aday = await api(`/platform/ortak-akis/ekranlar?projeId=${encodeURIComponent(proje.id)}&ekranId=${encodeURIComponent(ortak.id)}`);
+  } catch (hataNesnesi) { bildir(hataNesnesi.message, 'hata'); return; }
+  const kutular = aday.ekranlar.map((x) => ({ x, kutu: h('input', { type: 'checkbox', value: x.id, disabled: !x.eklenebilir }) }));
+  const istegeBagli = h('input', { type: 'checkbox', checked: true });
+  formDiyalogu({
+    baslik: `“${aday.ortakAkis.ad}” ekranlara eklensin`, ikonAd: 'pusula', dugme: 'Devam',
+    aciklama: 'Seçilen ekranların varsayılan akışının sonuna eklenir. Ekranlar ortak akışın hep son sürümüyle koşar.',
+    govde: [
+      kutular.length
+        ? h('ul', { class: 'duz-liste ortak-ekran-listesi', 'aria-label': 'Ekranlar' }, kutular.map(({ x, kutu }) => h('li', {},
+          h('label', {}, kutu, h('b', {}, x.ad), h('span', { class: 'kucuk cok-soluk' }, ` · ${x.varsayilanAkis} · ${x.senaryoSayisi} senaryo`)),
+          x.eklenebilir ? null : h('div', { class: 'kucuk cok-soluk' }, x.neden))))
+        : h('p', { class: 'soluk' }, 'Projede ekran yok.'),
+      h('label', { class: 'onay-satiri' }, istegeBagli, h('span', {}, 'İsteğe bağlı: yalnızca senaryoda “… dahil” işaretlenirse koşar (mevcut senaryolar etkilenmez)'))
+    ],
+    gonder: async () => {
+      const ekranIdleri = kutular.filter(({ kutu }) => kutu.checked).map(({ x }) => x.id);
+      if (!ekranIdleri.length) throw new Error('En az bir ekran seçin.');
+      const govde = { projeId: proje.id, ekranId: ortak.id, ekranIdleri, istegeBagli: istegeBagli.checked };
+      const on = await api('/platform/ortak-akis/ekle', { govde });
+      const toplam = on.etki.ekranlar.reduce((n, x) => n + x.senaryoSayisi, 0);
+      const onay = await onayIste({
+        baslik: `“${on.etki.ortakAkis}” ${on.etki.ekranlar.length} ekrana eklensin mi?`,
+        metin: `${on.etki.istegeBagli ? 'İsteğe bağlı eklenir: mevcut senaryolar değişmez; koşması için senaryoda işaretlenir.' : `Varsayılan akıştaki senaryolar (${toplam}) sonraki koşularında ortak akışı da koşar.`} Her ekranın yeni model sürümü açılır.`,
+        liste: on.etki.ekranlar.map((x) => `${x.ad} · ${x.akis} · ${x.senaryoSayisi} senaryo`), dugme: 'Ekle', tehlikeli: false, ikonAd: 'uyari'
+      });
+      if (!onay) return false;
+      const y = await api('/platform/ortak-akis/ekle', { govde: { ...govde, onay: true } });
+      bildir(`Ortak akış ${y.eklenen.length} ekrana eklendi.`);
+      yeniden();
+      return true;
+    }
+  });
 }
 
 function modelOzetKarti(agac, d) {

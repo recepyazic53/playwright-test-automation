@@ -1010,6 +1010,28 @@ platformKosucusunuAyarla({
       }
     }
   },
+  // Model senaryosu "Dene": deneme senaryosu geçici dosyayla (TEST_SUNUCU_MODEL_DENEME_DOSYASI) veri okuyucuya verilir; model
+  // spec'i onu etiketle tek test olarak üretir; listeleme ve koşu aynı dosyayla yapılır, dosya sonra silinir.
+  modelDene: async (istek) => {
+    const denemeYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}model-${Date.now()}-${randomBytes(6).toString('hex')}.json`);
+    try {
+      writeFileSync(denemeYolu, JSON.stringify(istek.denemeSenaryosu), { encoding: 'utf-8', mode: 0o600 });
+      const ekOrtamDegiskenleri = { TEST_SUNUCU_MODEL_DENEME_DOSYASI: denemeYolu };
+      const liste = await senaryolariListele(istek.ortam, [], undefined, ekOrtamDegiskenleri, istek.genel);
+      const eslesen = liste.filter((s) => s.dosya === istek.dosya && Array.isArray(s.etiketler) && s.etiketler.includes(istek.etiket));
+      if (eslesen.length !== 1) {
+        return { httpDurum: 500, govde: { basarili: false, mesaj: 'Deneme senaryosu model koşucusunun test listesinde bulunamadı (deneme dosyası okunamadı).' } };
+      }
+      const sonuc = await testiCalistirVeBekle(istek.ortam, eslesen[0].ad, istek.dosya, liste, istek.kosuId, ekOrtamDegiskenleri, istek.grepDeseni, istek.genel);
+      return calistirmaYaniti(sonuc, 'Deneme');
+    } finally {
+      try {
+        if (existsSync(denemeYolu)) unlinkSync(denemeYolu);
+      } catch (temizlemeHatasi) {
+        console.error('[platform/dene] Geçici deneme dosyası silinemedi:', temizlemeHatasi.message);
+      }
+    }
+  },
   kosuyorMu: (dosya, ad) => senaryoKosuyorMu(dosya, ad),
   // Çalışma alanı kapatma/değiştirme ve proje silme, koşu sürerken (kuyrukta bekleyen dahil) reddedilir.
   mesgulMu: () => calisanSurecler.size > 0 || kuyruktaBekleyenler.size > 0 || aktifKosuAnahtarlari.size > 0

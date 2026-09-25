@@ -101,6 +101,9 @@ akış olmaz. Nasıl çalışır:
   - Başvuru adımının koşulu her açılan adıma eklenir.
   - Ortak akışın koşulları `<ortak id>_<ad>` olarak taşınır.
   - Ortak akış projede yoksa koşu açık bir hatayla durur.
+- **Düzenleme:** ortak akışın Akışlar sekmesinde "Düzenle" ile aynı diyagram düzenleyicisinde değiştirilir (tek akış;
+  içine ortak akış eklenmez). Kaydederken onu kullanan ekranlar gösterilir. "Ekranlara ekle…" ortak akışı seçilen
+  ekranların varsayılan akışının sonuna ekler (isteğe bağlı seçilirse senaryoda "“<ad>” dahil" ile koşar).
 - **Yalnızca test ortamı:** `"yalnizTestOrtami": true` ise adımları canlı işaretli ortamda koşulmaz, raporda
   "(canlı ortam: atlandı)" yazar.
 - **Kart:** kimlik bloğu gibi bir profil bloğudur (`kimlikProfili`, `kimlikTuru: "kart"`). Değer, "Kredi kartı" test verisi

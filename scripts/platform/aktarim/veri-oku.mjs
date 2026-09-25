@@ -269,6 +269,20 @@ function ortamModelSenaryolari(vt, projeId, ortamId, ortamEtiketi) {
       veri: 'veri' in buOrtam ? zarflariCoz(vt, buOrtam.veri) : {}, mutlakaGorunmeli: kurallar
     });
   }
+  // Model senaryosu "Dene": taslak, geçici dosyadan (veritabanında yok) tek deneme senaryosu olarak eklenir.
+  const deneme = modelDenemeSenaryosu(ortamId);
+  if (deneme) {
+    const mb = modelBaglami(vt, deneme.ekranId, deneme.akisId);
+    const ekran = ekranlar.get(deneme.ekranId);
+    if (mb) {
+      modeller.set(`${deneme.ekranId}\u0000deneme`, mb);
+      senaryolar.push({
+        id: deneme.id, baslik: deneme.baslik, kosuyaDahil: true, ekranEtkin: true,
+        ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: deneme.ekranId, anahtar: '', ad: '' },
+        model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: deneme.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true
+      });
+    }
+  }
   /** @type {Record<string, Record<string, unknown>>} tür → ad → alanlar (ortama özgü profil tüm-ortam profilini ezer) */
   const baglamProfilleri = {};
   for (const p of baglamProfilleriniListele(vt, projeId).filter((x) => x.ortamId === null || x.ortamId === ortamId)
@@ -295,6 +309,26 @@ function ortamModelSenaryolari(vt, projeId, ortamId, ortamEtiketi) {
   const ayarlar = ortam.ayarlar && typeof ortam.ayarlar === 'object' ? /** @type {Record<string, unknown>} */ (ortam.ayarlar) : {};
   const canli = ayarlar.canli === true || ortamEtiketi === 'canli';
   return { ortam: ortamEtiketi, ortamId, tabanUrl: ortam.tabanUrl, canli, senaryolar, baglamProfilleri, kimlikProfilleri: kimlikProfilleriniCoz(vt, projeId, ortamId, havuzlar) };
+}
+
+/**
+ * "Dene" deneme senaryosu (TEST_SUNUCU_MODEL_DENEME_DOSYASI; test sunucusu yazar, koşudan sonra siler). Bu ortam için değilse
+ * ya da biçimi bozuksa null. @param {string} ortamId
+ */
+function modelDenemeSenaryosu(ortamId) {
+  const yol = process.env.TEST_SUNUCU_MODEL_DENEME_DOSYASI;
+  if (!yol || !existsSync(yol)) return null;
+  try {
+    const d = JSON.parse(readFileSync(yol, 'utf8'));
+    if (!d || typeof d !== 'object' || d.ortamId !== ortamId || typeof d.id !== 'string' || !/^deneme-[a-f0-9]{1,32}$/.test(d.id)) return null;
+    if (typeof d.ekranId !== 'string' || typeof d.baslik !== 'string' || !d.veri || typeof d.veri !== 'object') return null;
+    return {
+      id: d.id, ekranId: d.ekranId, akisId: typeof d.akisId === 'string' ? d.akisId : null, baslik: d.baslik, veri: d.veri,
+      mutlakaGorunmeli: Array.isArray(d.mutlakaGorunmeli) ? d.mutlakaGorunmeli.filter((/** @type {unknown} */ x) => typeof x === 'string') : []
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**
