@@ -32,11 +32,10 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
-  platformEtkinligiBildir, platformIsteginiIsle, platformKasaAcikMi, platformKosuSonucu, platformKosusunuKapat,
-  platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformTestOrtami
+  platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
+  platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi,
+  platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu
 } from './platform/sunucu-platform.mjs';
-import { veritabaniYolu } from './platform/veritabani/baglanti.mjs';
-import { sunucuBaglantisiniSil, sunucuBaglantisiniYaz } from './platform/sunucu-baglantisi.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
 import {
@@ -348,6 +347,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ekranlar.js', { dosya: 'ekranlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekran-ortak.js', { dosya: 'ekran-ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekran-yonetimi.js', { dosya: 'ekran-yonetimi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/calisma-alani.js', { dosya: 'calisma-alani.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/proje-islemleri.js', { dosya: 'proje-islemleri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sayfa-paketi.js', { dosya: 'sayfa-paketi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/bulgular.js', { dosya: 'bulgular.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/dosya-yukleme.js', { dosya: 'dosya-yukleme.js', tur: 'text/javascript; charset=utf-8' }],
@@ -649,7 +650,8 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     const kodYolu = join(tmpdir(), `test-sunucu-kod-${randomBytes(8).toString('hex')}`);
     // Şifreli senaryo dosyaları (ör. çoklu sorgu Excel'i) bu sürece özel, yalnızca kullanıcının okuyabildiği geçici
     // klasöre çözülür (veri okuyucu; bkz. platform/dosyalar/) — süreç kapanınca klasör ezilip silinir.
-    const dosyaKoku = geciciDosyaKoku(veritabaniYolu(projeKoku));
+    // Açık çalışma alanının veritabanına özgü geçici kök (veri okuyucu aynı yolu PLATFORM_VERITABANI ile doğrular).
+    const dosyaKoku = geciciDosyaKoku(platformVeritabaniYolu());
     const dosyaKlasoru = kosuKlasoruOlustur(dosyaKoku, `sunucu-${kosuKimligi}`);
     // NOT (önemli): "desen" BİLEREK "--grep" argümanı olarak DEĞİL, aşağıda
     // TEST_SUNUCU_GREP_DESENI ortam değişkeni ile aktarılıyor. Teşhis loglarıyla
@@ -986,7 +988,9 @@ platformKosucusunuAyarla({
       }
     }
   },
-  kosuyorMu: (dosya, ad) => senaryoKosuyorMu(dosya, ad)
+  kosuyorMu: (dosya, ad) => senaryoKosuyorMu(dosya, ad),
+  // Çalışma alanı kapatma/değiştirme ve proje silme, koşu sürerken (kuyrukta bekleyen dahil) reddedilir.
+  mesgulMu: () => calisanSurecler.size > 0 || kuyruktaBekleyenler.size > 0 || aktifKosuAnahtarlari.size > 0
 });
 
 // Senaryo o an (kuyrukta bekleyerek ya da gerçekten) koşuyor mu? (bkz. aktifKosuAnahtarlari)
@@ -1196,10 +1200,18 @@ if (dogrudanCalistirildi) {
 
   artikGeciciSenaryolariTemizle();
 
-  // Önceki (çöken/kapatılan) oturumlardan kalan, sahibi artık çalışmayan geçici senaryo dosyası klasörleri
-  // (şifreli dosyaların koşu anında çözüldüğü yer) açılışta ezilip silinir.
+  // Çalışma alanı kayıt defteri (yoksa oluşturulur; mevcut veri/platform.db YERİNDE ilk çalışma alanı olur — taşınmaz).
   try {
-    const silinen = artikKlasorleriTemizle(geciciDosyaKoku(veritabaniYolu(projeKoku)));
+    platformCalismaAlanlariniHazirla();
+  } catch (hata) {
+    console.error(`[test-sunucu] Çalışma alanı kayıt defteri hazırlanamadı: ${hata.message}`);
+  }
+
+  // Önceki (çöken/kapatılan) oturumlardan kalan, sahibi artık çalışmayan geçici senaryo dosyası klasörleri
+  // (şifreli dosyaların koşu anında çözüldüğü yer) açılışta ezilip silinir — tüm çalışma alanları için.
+  try {
+    let silinen = 0;
+    for (const yol of platformTumVeritabaniYollari()) silinen += artikKlasorleriTemizle(geciciDosyaKoku(yol));
     if (silinen) console.log(`[test-sunucu] Önceki koşulardan kalan ${silinen} geçici dosya klasörü silindi.`);
   } catch (hata) {
     console.error(`[test-sunucu] Geçici dosya klasörleri temizlenemedi: ${hata.message}`);
@@ -1219,11 +1231,9 @@ if (dogrudanCalistirildi) {
   });
 
   sunucu.listen(PORT, '127.0.0.1', () => {
-    try {
-      sunucuBaglantisiniYaz(veritabaniYolu(projeKoku), { adres: `http://127.0.0.1:${PORT}`, token: RAPORLAYICI_TOKENI });
-    } catch (hata) {
-      console.error(`[test-sunucu] Sunucu bağlantı dosyası yazılamadı (terminal koşuları sonuçları doğrudan yazar): ${hata.message}`);
-    }
+    // Terminal koşularının raporlayıcısı sunucuyu bu dosyadan bulur (açık çalışma alanının yanına yazılır; çalışma
+    // alanı değişince taşınır).
+    platformSunucuBaglantisiniAyarla({ adres: `http://127.0.0.1:${PORT}`, token: RAPORLAYICI_TOKENI });
     console.log(`Nöbetçi hazır: http://127.0.0.1:${PORT}/ (yalnızca bu bilgisayardan erişilebilir)`);
     console.log('Koşular bu pencere açık kaldığı sürece çalışır. Kapatmak için Ctrl+C.');
   });
@@ -1244,7 +1254,7 @@ if (dogrudanCalistirildi) {
     }
     // Otomatik ekran taraması ayrı süreç grubunda çalışır (Ctrl+C ona ulaşmaz): burada kapatılır.
     try { taramalariKapat(); } catch { /* yok sayılır */ }
-    sunucuBaglantisiniSil(veritabaniYolu(projeKoku));
+    try { platformKapanirken(); } catch { /* yok sayılır */ }
     sunucu.close();
     setTimeout(() => process.exit(sinyal === 'SIGINT' ? 130 : 0), 300).unref();
   };

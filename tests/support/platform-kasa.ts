@@ -10,7 +10,8 @@
 //   ve anahtar hiçbir yere yazılmaz/loglanmaz; parola değişkeni ortamdan silinir.
 // - TTY yoksa ve parola verilmemişse açık bir hata verilir.
 import {
-  KASA_ANAHTARI_DEGISKENI, KASA_PAROLASI_DEGISKENI, platformHazirOlmali, platformOkuyucusunuCalistir, platformOnbelleginiSifirla
+  CALISMA_ALANI_DEGISKENI, KASA_ANAHTARI_DEGISKENI, KASA_PAROLASI_DEGISKENI, kosununCalismaAlani, platformHazirOlmali,
+  platformOkuyucusunuCalistir, platformOnbelleginiSifirla
 } from './platform-veri';
 
 const EN_FAZLA_DENEME = 3;
@@ -56,6 +57,12 @@ function anahtarTuret(parola: string): { anahtar?: string; hata?: string; kod?: 
 
 export async function kasaAnahtariniHazirla(): Promise<void> {
   if (process.env[KASA_ANAHTARI_DEGISKENI]) return;
+  // Hangi çalışma alanı (yalnızca görünen ad — gizli bilgi değil): NOBETCI_CALISMA_ALANI ya da son açılan.
+  const alan = kosununCalismaAlani();
+  if (alan) {
+    const neden = alan.kaynak === 'degisken' ? `${CALISMA_ALANI_DEGISKENI} ile seçildi` : alan.kaynak === 'tek' ? 'tek çalışma alanı' : 'son açılan';
+    console.log(`[global-setup] Çalışma alanı: "${alan.ad}" (${neden}). Başka biri için: ${CALISMA_ALANI_DEGISKENI}=<ad ya da kimlik>.`);
+  }
   platformHazirOlmali();
 
   const ortamParolasi = process.env[KASA_PAROLASI_DEGISKENI];
@@ -78,7 +85,7 @@ export async function kasaAnahtariniHazirla(): Promise<void> {
   }
 
   for (let deneme = 1; deneme <= EN_FAZLA_DENEME; deneme++) {
-    const parola = await gizliSatirOku('Platform kasa parolası (yazdıklarınız görünmez): ');
+    const parola = await gizliSatirOku(alan ? `"${alan.ad}" kasa parolası (yazdıklarınız görünmez): ` : 'Platform kasa parolası (yazdıklarınız görünmez): ');
     if (!parola) {
       console.log('[global-setup] Boş parola girildi.');
       continue;

@@ -1,5 +1,6 @@
-// PLATFORM VERİTABANI BAĞLANTISI — tek bir YEREL SQLite dosyası (varsayılan veri/platform.db,
-// PLATFORM_VERITABANI ortam değişkeniyle değiştirilebilir). Bulut YOKTUR; dosya Git'e girmez.
+// PLATFORM VERİTABANI BAĞLANTISI — tek bir YEREL SQLite dosyası (çalışma alanının veritabanı: kayıt defterindeki
+// son açılan / NOBETCI_CALISMA_ALANI; kayıt defteri yoksa veri/platform.db — bkz. ../calisma-alanlari.mjs;
+// PLATFORM_VERITABANI ortam değişkeni her şeyi ezer). Bulut YOKTUR; dosya Git'e girmez.
 //
 // Motor: sql.js (SQLite'ın WebAssembly derlemesi). Neden: yerel (native) derleme gerektirmez;
 // macOS arm64 ve Windows x64'te düz "npm install" ile, derleme araçları ve ağdan ikili indirme
@@ -24,6 +25,7 @@ import {
   closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { VERITABANI_DOSYASI, calismaAlaniniCoz, veriKoku } from '../calisma-alanlari.mjs';
 
 /** @type {(yapilandirma?: object) => Promise<{ Database: new (veri?: Uint8Array) => SqlJsVeritabani }>} */
 const initSqlJs = /** @type {never} */ (initSqlJsHam);
@@ -49,13 +51,21 @@ const initSqlJs = /** @type {never} */ (initSqlJsHam);
 export const VARSAYILAN_VERITABANI_GORELI_YOLU = join('veri', 'platform.db');
 
 /**
- * Ortam değişkeni (PLATFORM_VERITABANI) varsa onu, yoksa <projeKoku>/veri/platform.db'yi döner.
+ * Veritabanı yolu: PLATFORM_VERITABANI varsa o; yoksa çalışma alanı kayıt defterine göre (NOBETCI_CALISMA_ALANI ya da
+ * son açılan çalışma alanı); kayıt defteri yoksa <veri kökü>/platform.db (veri kökü: NOBETCI_VERI_KOKU ya da
+ * <projeKoku>/veri). Kayıt defterini DEĞİŞTİRMEZ.
  * @param {string} [projeKoku] verilmezse çalışma klasörü (npm betikleri proje kökünde çalışır)
  */
 export function veritabaniYolu(projeKoku = process.cwd()) {
   const ortam = process.env.PLATFORM_VERITABANI;
-  return ortam && ortam.trim() ? resolve(ortam.trim()) : resolve(projeKoku, VARSAYILAN_VERITABANI_GORELI_YOLU);
+  if (ortam && ortam.trim()) return resolve(ortam.trim());
+  const kok = veriKoku(projeKoku);
+  const secim = calismaAlaniniCoz(kok);
+  return secim ? secim.yollar.veritabani : resolve(kok, VERITABANI_DOSYASI);
 }
+
+/** Değişiklik sayacı (meta): her kalıcı değişiklikte artar; "son dışa aktarımdan beri değişti mi?" için. */
+export const DEGISIKLIK_SAYACI_META = 'degisiklik_sayaci';
 
 /** @type {Promise<{ Database: new (veri?: Uint8Array) => SqlJsVeritabani }> | undefined} */
 let sqlModulu;
@@ -116,6 +126,7 @@ export class Veritabani {
     /** @type {{ mtimeMs: number; size: number } | null} */
     this.diskIzi = null;
     this.kapali = false;
+    this.sayacAtla = false;
     this.pragmalariUygula();
   }
 
@@ -202,7 +213,10 @@ export class Veritabani {
     this.islemDerinligi = 1;
     let sonuc;
     try {
+      const oncekiDegisiklik = this.toplamDegisiklik();
       sonuc = fn();
+      // Satır değiştiren her işlem değişiklik sayacını artırır (sayacAtla: yalnızca işaret yazan işlemler).
+      if (!this.sayacAtla && this.toplamDegisiklik() !== oncekiDegisiklik) this.degisiklikSayaciniArtir();
       this.islemDerinligi = 0;
       this.db.run('COMMIT');
     } catch (hata) {
@@ -212,6 +226,36 @@ export class Veritabani {
     }
     this.kaydet();
     return sonuc;
+  }
+
+  /** Bağlantının açılışından beri değişen satır sayısı (sqlite total_changes). */
+  toplamDegisiklik() {
+    try {
+      return Number(this.tek('SELECT total_changes() AS n')?.n ?? 0);
+    } catch {
+      return 0;
+    }
+  }
+
+  /** meta.degisiklik_sayaci += 1 (meta tablosu henüz yoksa — ilk göç öncesi — atlanır). */
+  degisiklikSayaciniArtir() {
+    try {
+      this.db.run(
+        `INSERT INTO meta (anahtar, deger) VALUES ('${DEGISIKLIK_SAYACI_META}', '1')
+         ON CONFLICT(anahtar) DO UPDATE SET deger = CAST(CAST(deger AS INTEGER) + 1 AS TEXT)`
+      );
+    } catch { /* meta tablosu yok */ }
+  }
+
+  /** Değişiklik sayacını artırmadan (ör. "son dışa aktarma" işaretini yazarken) işlem yapar. @template T @param {() => T} fn @returns {T} */
+  sayacsizIslem(fn) {
+    const onceki = this.sayacAtla;
+    this.sayacAtla = true;
+    try {
+      return this.islem(fn);
+    } finally {
+      this.sayacAtla = onceki;
+    }
   }
 
   /** Belleği diske yazar (atomik). Başka süreç dosyayı değiştirdiyse reddeder. */

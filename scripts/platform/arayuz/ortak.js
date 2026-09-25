@@ -102,7 +102,10 @@ const IKONLAR = {
   cop: ['M4 7h16M10 11v6M14 11v6', 'M6 7l1 13h10l1-13M9 7V4h6v3'],
   isaret: ['M12 3l8 4.5v9L12 21l-8-4.5v-9z', 'c:12,12,2.4'],
   pusula: ['c:12,12,9', 'M15.5 8.5l-2 5-5 2 2-5z'],
-  simsek: ['M13 2L4 14h7l-1 8 9-12h-7z']
+  simsek: ['M13 2L4 14h7l-1 8 9-12h-7z'],
+  cikis: ['M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3', 'M10 17l5-5-5-5M15 12H3'],
+  yildiz: ['M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z'],
+  cekmece: ['M3 13l3-8h12l3 8v6a2 2 0 01-2 2H5a2 2 0 01-2-2z', 'M3 13h5l1 3h6l1-3h5']
 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** SVG öğesi oluşturur (özellikler setAttribute ile). */

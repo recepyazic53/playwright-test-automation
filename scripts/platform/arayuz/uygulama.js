@@ -1,11 +1,14 @@
 // Platform kabuğu: /platform/durum'a göre yönlendirme.
-//   kasa yok            → Hoş geldiniz (Yedek yükle / Yeni proje başlat / [eski dosya klasörü varsa —
-//                         veri/eski-dosyalar/<zaman>/ yedeği] Eski proje dosyalarını aktar)
-//   kasa var, kilitli   → Kilit ekranı (yanlış parolada bekleme geri sayımı)
+//   çalışma alanı açık değil → Başlangıç ekranı: çalışma alanı listesi (Aç · ⋯ Yeniden adlandır / Bu bilgisayardan
+//                         kaldır) + "Yeni çalışma alanı" (ad adımı → Yedek yükle / Yeni proje başlat / [eski dosya
+//                         klasörü varsa ve hiç çalışma alanı yoksa] Mevcut proje dosyalarını aktar)
+//   kasa yok            → Hoş geldiniz (açık — henüz kurulmamış — çalışma alanı için aynı seçenekler)
+//   kasa var, kilitli   → Kilit ekranı (çalışma alanının adı, "Başka çalışma alanı"; yanlış parolada bekleme)
 //   kasa açık, proje yok → Yeni proje sihirbazı (proje adımından)
-//   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici, Sonuçlar | Senaryolar |
-//                         Ekranlar | Ayarlar, hızlı arama*, sunucu durumu, tema, Kilitle) + sol
-//                         panel + içerik. (* = yakında; bağlantı değildir.)
+//   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici [projeler, ⋯ Yeniden adlandır / Varsayılan yap /
+//                         Sil, + Yeni proje], Sonuçlar | Senaryolar | Ekranlar | Ayarlar, hızlı arama*, sunucu durumu,
+//                         tema, Kilitle, çalışma alanı menüsü [Kilitle · Yeniden adlandır · Çalışma alanını kapat]) +
+//                         sol panel + içerik. (* = yakında; bağlantı değildir.)
 //                         (#/sonuclar[/...], #/senaryolar[/...], #/ekranlar[/...], #/ayarlar/<bölüm>)
 // Senaryolar ekranı (senaryolar.js, senaryo-formu.js, kosu-paneli.js) ve Ekranlar ekranı (ekranlar.js,
 // ekran-ortak.js, sayfa-paketi.js, bulgular.js) ayrı modüllerde ve DİNAMİK yüklenir: sunucu bu dosyaları
@@ -19,8 +22,19 @@ import { aktarimAkisi } from './aktarim.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
 
+// Çalışma alanı ve proje ⋯ modülleri DİNAMİK yüklenir: eski sürüm bir sunucu (yeniden başlatılmamış) bu dosyaları sunmuyorsa
+// kabuk yine açılır, yalnızca bu özellikler görünmez. (Eski sunucunun /platform/durum yanıtında "calismaAlani" alanı yoktur.)
+/** @type {null | typeof import('./calisma-alani.js')} */
+let alanMod = null;
+/** @type {null | typeof import('./proje-islemleri.js')} */
+let projeMod = null;
+async function modulleriYukle() {
+  if (!alanMod) alanMod = await import('./calisma-alani.js').catch(() => null);
+  if (!projeMod) projeMod = await import('./proje-islemleri.js').catch(() => null);
+}
+
 const kok = document.getElementById('uygulama');
-const durum = { sunucu: null, proje: null, projeler: [], kilitMesaji: '' };
+const durum = { sunucu: null, proje: null, projeler: [], varsayilanProjeId: null, kilitMesaji: '' };
 let ekranTemizle = () => {};
 
 function ekran(...icerik) {
@@ -80,27 +94,47 @@ export async function yonlendir() {
     return;
   }
   durum.sunucu = d;
+  await modulleriYukle();
+  // Açık çalışma alanı yok (kapatıldı / ilk kurulum) → başlangıç ekranı. Sabit veritabanıyla (PLATFORM_VERITABANI)
+  // başlatılan sunucuda çalışma alanı her zaman açıktır. (undefined = eski sunucu: tek veritabanı gibi davranılır.)
+  if (d.calismaAlani === null && alanMod) { baslangicEkrani(); return; }
   if (!d.kasa.olusturuldu) { hosgeldin(); return; }
   if (!d.kasa.acik) { kilitEkrani(d.parolaBeklemeSaniye); return; }
-  const { projeler } = await api('/platform/projeler');
+  const { projeler, varsayilanId } = await api('/platform/projeler');
   durum.projeler = projeler;
+  durum.varsayilanProjeId = varsayilanId || null;
   if (!projeler.length) { sihirbaz('proje'); return; }
   let secili = null;
-  try { secili = localStorage.getItem('platform.seciliProje'); } catch { secili = null; }
-  durum.proje = projeler.find((p) => p.id === secili) || projeler[0];
+  try { secili = localStorage.getItem(seciliProjeAnahtari()); } catch { secili = null; }
+  durum.proje = projeler.find((p) => p.id === secili) || projeler.find((p) => p.id === durum.varsayilanProjeId) || projeler[0];
   anaDuzen();
 }
+
+/** Seçili proje çalışma alanı başına hatırlanır (başka çalışma alanının proje kimliği karışmasın). */
+const seciliProjeAnahtari = () => `platform.seciliProje.${durum.sunucu && durum.sunucu.calismaAlani ? durum.sunucu.calismaAlani.id : '-'}`;
 
 export function projeSec(id) {
   const p = durum.projeler.find((x) => x.id === id);
   if (!p) return;
   durum.proje = p;
-  try { localStorage.setItem('platform.seciliProje', id); } catch { /* yok sayılır */ }
+  try { localStorage.setItem(seciliProjeAnahtari(), id); } catch { /* yok sayılır */ }
+}
+
+/**
+ * Başka projeye geç: Sonuçlar / Senaryolar / Ekranlar / Ayarlar yeni projeyle yeniden yüklenir. Açık ayrıntı adresi (ör. bir
+ * koşu ya da senaryo) önceki projeye ait olduğundan bölümün köküne dönülür.
+ */
+export function projeyeGec(id) {
+  projeSec(id);
+  const bolum = (location.hash || '#/sonuclar').split('/')[1] || 'sonuclar';
+  location.hash = bolum === 'ayarlar' ? `#/ayarlar/${(location.hash.split('/')[2] || 'proje')}` : `#/${bolum}`;
+  location.reload();
 }
 
 export async function projeleriYenile() {
-  const { projeler } = await api('/platform/projeler');
+  const { projeler, varsayilanId } = await api('/platform/projeler');
   durum.projeler = projeler;
+  durum.varsayilanProjeId = varsayilanId || null;
   durum.proje = projeler.find((p) => durum.proje && p.id === durum.proje.id) || projeler[0] || null;
   const rozet = document.getElementById('proje-rozeti');
   if (rozet && durum.proje) {
@@ -146,47 +180,115 @@ function secimKarti({ sinif = '', ikonAd, no, baslik, aciklama, altIkon, altMeti
     h('span', { class: 'kart-alt' }, ikon(altIkon), h('span', { class: altSinif || null }, altMetin), h('span', { class: 'git', 'aria-hidden': 'true' }, git, ikon('ok'))));
 }
 
-async function hosgeldin() {
-  history.replaceState(null, '', '/');
-  sayfaBasligi('Hoş geldiniz');
-  // Eski proje dosyalarının olduğu bir klasör varsa (en yeni veri/eski-dosyalar/<zaman>/ yedeği ya da
-  // proje kökünde hâlâ duran tests/data) üçüncü kart gösterilir.
-  let aktarilabilir = null;
-  try {
-    const d = await api('/platform/aktarim/durum');
-    aktarilabilir = d.veritabaniBos ? (d.adaptorler || []).find((a) => a.dosyalarVar && !a.aktarildi) || null : null;
-  } catch { aktarilabilir = null; }
-  const kartlar = [
+/** Yedek yükle / Yeni proje başlat / [Mevcut proje dosyalarını aktar] kartları. yeniAlan: önce çalışma alanı adı sorulur. */
+function baslangicKartlari(aktarilabilir, yeniAlan) {
+  const once = (amac, fn) => (yeniAlan && alanMod ? () => alanMod.yeniAlanDiyalogu({
+    amac,
+    devam: (alan) => {
+      // Yeni (boş) çalışma alanı açıldı: kabuk durumu güncellenir (sihirbaz/yedek ekranı adını gösterir).
+      if (durum.sunucu) durum.sunucu = { ...durum.sunucu, calismaAlani: { id: alan.id, ad: alan.ad, sabit: false } };
+      durum.projeler = [];
+      durum.proje = null;
+      fn();
+    }
+  }) : fn);
+  return [
     secimKarti({
-      ikonAd: 'yukle', no: 1, baslik: 'Yedek yükle', onclick: () => yedekYukleEkrani(),
-      aciklama: 'Başka bir bilgisayardan aldığınız .tayedek dosyasını yükleyin. Yedeğin parolası bu bilgisayarın kasa parolası olur.',
+      ikonAd: 'yukle', no: 1, baslik: 'Yedek yükle', onclick: once('yedek dosyasını seçmek', () => yedekYukleEkrani()),
+      aciklama: yeniAlan
+        ? 'Bir .tayedek dosyasını YENİ bir çalışma alanına yükleyin. Yedeğin parolası bu çalışma alanının kasa parolası olur.'
+        : 'Başka bir bilgisayardan aldığınız .tayedek dosyasını yükleyin. Yedeğin parolası bu bilgisayarın kasa parolası olur.',
       altIkon: 'dosya', altMetin: '.tayedek · şifreli', git: 'Seç'
     }),
     secimKarti({
-      sinif: 'k-basari', ikonAd: 'arti', no: 2, baslik: 'Yeni proje başlat', onerilen: !aktarilabilir, onclick: () => sihirbaz('kasa'),
+      sinif: 'k-basari', ikonAd: 'arti', no: 2, baslik: 'Yeni proje başlat', onerilen: !aktarilabilir && !yeniAlan, onclick: once('kasa parolası ve proje', () => sihirbaz('kasa')),
       aciklama: 'Kasa parolası belirleyin, projenizi ve test ortamlarınızı tanımlayın.',
       altIkon: 'saat', altMetin: 'yaklaşık 3 dakika', git: 'Başla'
     }),
     aktarilabilir ? secimKarti({
-      sinif: 'k-mor', ikonAd: 'klasor', no: 3, baslik: 'Eski proje dosyalarını aktar', onerilen: true, onclick: () => dosyaAktarimEkrani(aktarilabilir),
+      sinif: 'k-mor', ikonAd: 'klasor', no: 3, baslik: 'Mevcut proje dosyalarını aktar', onerilen: true,
+      onclick: once('eski dosyaları aktarmak', () => dosyaAktarimEkrani(aktarilabilir)),
       aciklama: `Eski ${aktarilabilir.projeAdi} dosyalarını (test verileri, ortamlar, giriş bilgileri, senaryolar) şifreli platform veritabanına aktarın. Klasör: ${aktarilabilir.kaynakKlasoru}. Dosyalar değiştirilmez.`,
       altIkon: 'ara', altMetin: 'eski dosyalar bulundu', altSinif: 'bulundu', git: 'Aktar'
     }) : null
   ].filter(Boolean);
+}
+
+/** 1/2/3 kısayolları (yazı alanında değilken). */
+function kartKisayollari() {
   const kisayol = (olay) => {
-    if (olay.altKey || olay.ctrlKey || olay.metaKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
+    if (olay.altKey || olay.ctrlKey || olay.metaKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || document.querySelector('dialog[open]')) return;
     const kart = kok.querySelector(`.secim-karti[data-kisayol="${olay.key}"]`);
     if (kart) { olay.preventDefault(); kart.click(); }
   };
-  ekran(odakSayfa({ ustMetin: 'ilk kurulum' }, anaAlan('karsilama',
-    radar(),
-    h('span', { class: 'buyuk-logo', 'aria-hidden': 'true' }, s('svg', { viewBox: '0 0 24 24' }, s('path', { d: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z' }), s('circle', { cx: 12, cy: 12, r: 2.6 }))),
-    h('span', { class: 'ust-hap' }, h('span', { class: 'nokta vurgu', 'aria-hidden': 'true' }), 'Bu bilgisayarda henüz bir proje yok'),
-    h('h1', {}, `${MARKA.yonelme} `, h('span', { class: 'parlak' }, 'hoş geldiniz')),
-    h('p', { class: 'giris' }, 'Test senaryolarınızı çalıştırın, sonuçları izleyin, hataları kalıplara ayırın. Her şey bu bilgisayarda, şifreli bir kasada kalır. Başlamak için bir seçenek belirleyin.'),
-    h('div', { class: 'secim-kartlari' }, kartlar))));
   document.addEventListener('keydown', kisayol);
   ekranTemizle = () => document.removeEventListener('keydown', kisayol);
+}
+
+/** Eski proje dosyaları (en yeni veri/eski-dosyalar/<zaman>/ ya da proje kökündeki tests/data) aktarılabilir mi? */
+async function aktarilabilirAdaptor() {
+  try {
+    const d = await api('/platform/aktarim/durum');
+    return d.veritabaniBos ? (d.adaptorler || []).find((a) => a.dosyalarVar && !a.aktarildi) || null : null;
+  } catch { return null; }
+}
+
+/**
+ * BAŞLANGIÇ EKRANI (açık çalışma alanı yok): üstte bu bilgisayardaki çalışma alanları, altta "Yeni çalışma alanı".
+ * "Mevcut proje dosyalarını aktar" kartı yalnızca eski dosyalar varsa ve henüz hiç çalışma alanı yoksa görünür.
+ */
+async function baslangicEkrani() {
+  history.replaceState(null, '', '/');
+  sayfaBasligi('Hoş geldiniz');
+  let liste = { alanlar: [] };
+  try { liste = await api('/platform/calisma-alanlari'); } catch (hata) { bildir(hata.message, 'hata'); }
+  const alanlar = liste.alanlar || [];
+  const aktarilabilir = alanlar.length ? null : await aktarilabilirAdaptor();
+  const listeBolumu = alanMod.alanListesi(alanlar, { acildi: () => { location.hash = ''; yonlendir(); }, yenile: () => baslangicEkrani() });
+  ekran(odakSayfa({ ustMetin: alanlar.length ? 'çalışma alanları' : 'ilk kurulum' }, anaAlan('karsilama baslangic',
+    radar(),
+    h('span', { class: 'buyuk-logo', 'aria-hidden': 'true' }, s('svg', { viewBox: '0 0 24 24' }, s('path', { d: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z' }), s('circle', { cx: 12, cy: 12, r: 2.6 }))),
+    h('span', { class: 'ust-hap' }, h('span', { class: 'nokta vurgu', 'aria-hidden': 'true' }),
+      alanlar.length ? `Bu bilgisayarda ${alanlar.length} çalışma alanı var` : 'Bu bilgisayarda henüz bir çalışma alanı yok'),
+    h('h1', {}, `${MARKA.yonelme} `, h('span', { class: 'parlak' }, 'hoş geldiniz')),
+    h('p', { class: 'giris' }, alanlar.length
+      ? 'Bir çalışma alanını kendi kasa parolasıyla açın ya da yeni bir çalışma alanı oluşturun. Her çalışma alanının verisi ayrı ve şifreli kalır.'
+      : 'Test senaryolarınızı çalıştırın, sonuçları izleyin, hataları kalıplara ayırın. Her şey bu bilgisayarda, şifreli bir kasada kalır. Başlamak için bir seçenek belirleyin.'),
+    listeBolumu,
+    h('div', { class: 'yeni-alan-baslik' }, h('h2', {}, alanlar.length ? 'Yeni çalışma alanı' : 'Başlayın'),
+      h('span', { class: 'kucuk cok-soluk' }, 'Önce çalışma alanına bir ad verirsiniz (kilit açılmadan önce görünür).')),
+    h('div', { class: 'secim-kartlari' }, baslangicKartlari(aktarilabilir, true)))));
+  kartKisayollari();
+}
+
+/** Başlangıç ekranına dön: açık (henüz kurulmamış ya da kilitli) çalışma alanı kapatılır. */
+async function baskaCalismaAlani(dugme) {
+  try {
+    await mesgulIken(dugme, 'Kapatılıyor…', () => api('/platform/calisma-alani/kapat', { govde: {}, kilitOlayiYok: true }));
+  } catch (hata) { bildir(hata.message, 'hata'); return; }
+  location.hash = '';
+  yonlendir();
+}
+
+/** HOŞ GELDİNİZ: çalışma alanı açık ama kasası yok (yeni çalışma alanı ya da tek veritabanı kurulumu). */
+async function hosgeldin() {
+  history.replaceState(null, '', '/');
+  sayfaBasligi('Hoş geldiniz');
+  const alan = durum.sunucu && durum.sunucu.calismaAlani;
+  const cokluAlan = alan && !alan.sabit;
+  // Eski proje dosyalarının olduğu bir klasör varsa (en yeni veri/eski-dosyalar/<zaman>/ yedeği ya da
+  // proje kökünde hâlâ duran tests/data) üçüncü kart gösterilir.
+  const aktarilabilir = await aktarilabilirAdaptor();
+  const geri = cokluAlan ? h('button', { type: 'button', class: 'hayalet baska-alan', onclick: (o) => baskaCalismaAlani(o.currentTarget) }, ikon('geri'), 'Başlangıç ekranı') : null;
+  ekran(odakSayfa({ ustMetin: cokluAlan ? `çalışma alanı: ${alan.ad}` : 'ilk kurulum' }, anaAlan('karsilama',
+    radar(),
+    h('span', { class: 'buyuk-logo', 'aria-hidden': 'true' }, s('svg', { viewBox: '0 0 24 24' }, s('path', { d: 'M12 3l8 4.5v9L12 21l-8-4.5v-9z' }), s('circle', { cx: 12, cy: 12, r: 2.6 }))),
+    h('span', { class: 'ust-hap' }, h('span', { class: 'nokta vurgu', 'aria-hidden': 'true' }), cokluAlan ? `"${alan.ad}" çalışma alanında henüz proje yok` : 'Bu bilgisayarda henüz bir proje yok'),
+    h('h1', {}, `${MARKA.yonelme} `, h('span', { class: 'parlak' }, 'hoş geldiniz')),
+    h('p', { class: 'giris' }, 'Test senaryolarınızı çalıştırın, sonuçları izleyin, hataları kalıplara ayırın. Her şey bu bilgisayarda, şifreli bir kasada kalır. Başlamak için bir seçenek belirleyin.'),
+    h('div', { class: 'secim-kartlari' }, baslangicKartlari(aktarilabilir, false)),
+    geri ? h('div', { class: 'dugmeler ortala ust-bosluk' }, geri) : null)));
+  kartKisayollari();
 }
 
 function dosyaAktarimEkrani(adaptor) {
@@ -211,38 +313,56 @@ function yedekYukleEkrani() {
 // Yeni proje sihirbazı
 // ---------------------------------------------------------------------------------------
 
-const SIHIRBAZ_ADIMLARI = [
+// İki kip: 'ilk' (kasa parolası → proje → ortamlar → giriş profili → tamam; yeni çalışma alanı) ve 'ek' (AYNI kasada yeni
+// proje: proje → ortamlar → giriş profili → tamam; üst çubuktaki proje seçici > "+ Yeni proje").
+const ILK_ADIMLAR = [
   { ad: 'kasa', etiket: 'Kasa parolası' },
   { ad: 'proje', etiket: 'Proje' },
   { ad: 'ortamlar', etiket: 'Ortamlar' },
+  { ad: 'giris', etiket: 'Giriş profili' },
   { ad: 'tamam', etiket: 'Tamam' }
 ];
+const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa');
+let sihirbazModu = 'ilk';
+const sihirbazAdimlari = () => (sihirbazModu === 'ek' ? EK_ADIMLAR : ILK_ADIMLAR);
 
 function adimListesi(aktif) {
-  const aktifSira = SIHIRBAZ_ADIMLARI.findIndex((a) => a.ad === aktif);
+  const adimlar = sihirbazAdimlari();
+  const aktifSira = adimlar.findIndex((a) => a.ad === aktif);
   return h('ol', { class: 'adimlar', 'aria-label': 'Sihirbaz adımları' },
-    SIHIRBAZ_ADIMLARI.map((a, i) => h('li', {
+    adimlar.map((a, i) => h('li', {
       class: [a.yakinda ? 'yakinda' : '', i < aktifSira && !a.yakinda ? 'tamam' : ''].join(' ').trim(),
       'aria-current': a.ad === aktif ? 'step' : null,
       'aria-disabled': a.yakinda ? 'true' : null
     }, a.etiket, i < aktifSira && !a.yakinda ? h('span', { class: 'gorunmez' }, ' (tamamlandı)') : null)));
 }
 
+const sihirbazBasligi = () => (sihirbazModu === 'ek' ? 'Yeni proje' : 'Yeni proje başlat');
+const sihirbazUstMetni = () => {
+  const alan = durum.sunucu && durum.sunucu.calismaAlani;
+  return alan && !alan.sabit ? `yeni proje · ${alan.ad}` : 'yeni proje';
+};
+
 function sihirbazEkrani(adim, baslik, altMetin, ...icerik) {
-  const sira = SIHIRBAZ_ADIMLARI.findIndex((a) => a.ad === adim) + 1;
+  const adimlar = sihirbazAdimlari();
+  const sira = adimlar.findIndex((a) => a.ad === adim) + 1;
   sayfaBasligi(baslik);
-  ekran(odakSayfa({ ustMetin: 'yeni proje' }, anaAlan('ortali',
+  ekran(odakSayfa({ ustMetin: sihirbazUstMetni() }, anaAlan('ortali',
     h('div', { class: 'sihirbaz-baslik' },
-      h('div', { class: 'kirinti' }, h('span', {}, `Adım ${sira} / ${SIHIRBAZ_ADIMLARI.length}`)),
+      h('div', { class: 'kirinti' }, h('span', {}, `Adım ${sira} / ${adimlar.length}`)),
       h('h1', {}, baslik), altMetin ? h('p', { class: 'soluk' }, altMetin) : null),
     adimListesi(adim), ...icerik)));
 }
 
-function sihirbaz(adim) {
+/** @param {string} adim @param {'ilk' | 'ek'} [mod] */
+export function sihirbaz(adim, mod) {
   history.replaceState(null, '', '/');
+  if (mod) sihirbazModu = mod;
+  else if (adim === 'kasa' || !durum.projeler.length) sihirbazModu = 'ilk';
   if (adim === 'kasa') return sihirbazKasa();
   if (adim === 'proje') return sihirbazProje();
   if (adim === 'ortamlar') return sihirbazOrtamlar();
+  if (adim === 'giris') return sihirbazGiris();
   return sihirbazTamam();
 }
 
@@ -274,7 +394,10 @@ function sihirbazKasa() {
       mesaj.goster(hata.message);
     }
   });
-  sihirbazEkrani('kasa', 'Yeni proje başlat', 'Önce bu bilgisayardaki şifreli kasanın parolasını belirleyin.', form);
+  const alan = durum.sunucu && durum.sunucu.calismaAlani;
+  sihirbazEkrani('kasa', 'Yeni proje başlat', alan && !alan.sabit
+    ? `Önce "${alan.ad}" çalışma alanının şifreli kasası için bir parola belirleyin (her çalışma alanının kendi parolası vardır).`
+    : 'Önce bu bilgisayardaki şifreli kasanın parolasını belirleyin.', form);
 }
 
 function sihirbazProje() {
@@ -282,11 +405,13 @@ function sihirbazProje() {
   const aciklama = h('textarea', { rows: '3', maxlength: '1000' });
   const mesaj = mesajKutusu();
   const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Devam', ikon('ok'));
+  const vazgec = sihirbazModu === 'ek' && durum.projeler.length
+    ? h('button', { type: 'button', class: 'hayalet', onclick: () => { location.hash = '#/sonuclar'; yonlendir(); } }, 'Vazgeç') : null;
   const form = h('form', { class: 'kart', novalidate: true },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('katman'), 'Proje bilgileri')), mesaj.kutu,
     alan('Proje adı', ad, { zorunlu: true }),
     alan('Açıklama', aciklama, { yardim: 'İsteğe bağlı.' }),
-    h('div', { class: 'dugmeler' }, gonder));
+    h('div', { class: 'dugmeler' }, gonder, vazgec));
   form.addEventListener('submit', async (olay) => {
     olay.preventDefault();
     alanHatasi(ad, '');
@@ -294,14 +419,17 @@ function sihirbazProje() {
     try {
       const { proje } = await mesgulIken(gonder, 'Kaydediliyor…', () => api('/platform/proje/kaydet', { govde: { ad: ad.value, aciklama: aciklama.value } }));
       durum.proje = proje;
-      durum.projeler = [proje];
+      durum.projeler = [...durum.projeler.filter((p) => p.id !== proje.id), proje];
       projeSec(proje.id);
       sihirbazOrtamlar();
     } catch (hata) {
       mesaj.goster(hata.message);
     }
   });
-  sihirbazEkrani('proje', 'Yeni proje başlat', 'Projenize bir ad verin; açıklama isteğe bağlıdır.', form);
+  sihirbazEkrani('proje', sihirbazBasligi(), sihirbazModu === 'ek'
+    ? 'Bu çalışma alanında (aynı kasa parolasıyla) yeni bir proje oluşturun. Projenize bir ad verin; açıklama isteğe bağlıdır.'
+    : 'Projenize bir ad verin; açıklama isteğe bağlıdır.', form);
+  ad.focus();
 }
 
 function sihirbazOrtamlar() {
@@ -326,7 +454,7 @@ function sihirbazOrtamlar() {
   ortamSatiri(true);
   const ekleDugmesi = h('button', { type: 'button', onclick: () => ortamSatiri(false).ad.focus() }, '+ Ortam ekle');
   const mesaj = mesajKutusu();
-  const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve bitir', ikon('onay'));
+  const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve devam', ikon('ok'));
   const form = h('form', { class: 'kart', novalidate: true },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ag'), 'Ortamlar')),
     h('p', { class: 'soluk' }, 'TEST ortamı zorunludur. Diğer ortamları (ör. hazırlık, canlı) şimdi veya daha sonra Ayarlar\'dan ekleyebilirsiniz.'),
@@ -348,28 +476,66 @@ function sihirbazOrtamlar() {
           await api('/platform/ortam/kaydet', { govde: { projeId: durum.proje.id, ad: s2.ad.value.trim(), tabanUrl: s2.adres.value.trim(), varsayilan: s2.zorunlu } });
         }
       });
+      sihirbazGiris();
+    } catch (hata) {
+      mesaj.goster(hata.message);
+    }
+  });
+  sihirbazEkrani('ortamlar', sihirbazBasligi(), 'Testlerin çalışacağı adresleri tanımlayın.', form);
+}
+
+/** İsteğe bağlı: giriş profili (kullanıcı adı + parola; 2 aşamalı doğrulama ve giriş tarifi sonra Ayarlar'dan). */
+function sihirbazGiris() {
+  const ad = h('input', { type: 'text', autocomplete: 'off', maxlength: '120', value: 'Varsayılan' });
+  const kullanici = h('input', { type: 'text', autocomplete: 'off', maxlength: '200', spellcheck: 'false' });
+  const parola = parolaAlani('Parola', { otomatik: 'new-password', yardim: 'İsteğe bağlı. Kasada şifreli saklanır.' });
+  const mesaj = mesajKutusu();
+  const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve devam', ikon('ok'));
+  const atla = h('button', { type: 'button', class: 'hayalet', onclick: () => sihirbazTamam() }, 'Şimdilik atla');
+  const form = h('form', { class: 'kart', novalidate: true },
+    h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('kullanici'), 'Giriş profili'), h('span', { class: 'rozet' }, 'İsteğe bağlı')),
+    h('p', { class: 'soluk' }, 'Testlerin uygulamaya hangi kullanıcıyla gireceği. İki aşamalı doğrulama ve giriş tarifi Ayarlar > Giriş profilleri\'nden tanımlanır.'),
+    mesaj.kutu, alan('Profil adı', ad, { zorunlu: true }), alan('Kullanıcı adı', kullanici, { zorunlu: true }), parola.kapsayici,
+    h('div', { class: 'dugmeler' }, gonder, atla));
+  form.addEventListener('submit', async (olay) => {
+    olay.preventDefault();
+    mesaj.temizle();
+    alanHatasi(ad, ''); alanHatasi(kullanici, '');
+    if (!ad.value.trim()) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
+    if (!kullanici.value.trim()) { alanHatasi(kullanici, 'Kullanıcı adı boş olamaz (ya da "Şimdilik atla").'); kullanici.focus(); return; }
+    try {
+      await mesgulIken(gonder, 'Kaydediliyor…', () => api('/platform/giris-profili/kaydet', {
+        govde: { projeId: durum.proje.id, ad: ad.value.trim(), kullaniciAdi: kullanici.value.trim(), parola: parola.girdi.value || undefined, ikiAsamaliTur: 'yok' }
+      }));
+      parola.girdi.value = '';
       sihirbazTamam();
     } catch (hata) {
       mesaj.goster(hata.message);
     }
   });
-  sihirbazEkrani('ortamlar', 'Yeni proje başlat', 'Testlerin çalışacağı adresleri tanımlayın.', form);
+  sihirbazEkrani('giris', sihirbazBasligi(), 'Giriş bilgilerini şimdi girebilir ya da bu adımı atlayabilirsiniz.', form);
+  kullanici.focus();
 }
 
 function sihirbazTamam() {
   sayfaBasligi('Proje hazır');
-  ekran(odakSayfa({ ustMetin: 'yeni proje' }, anaAlan('ortali',
+  const git = (adres) => () => { location.hash = adres; yonlendir(); };
+  ekran(odakSayfa({ ustMetin: sihirbazUstMetni() }, anaAlan('ortali',
     h('div', { class: 'sihirbaz-baslik' }, h('div', { class: 'kirinti' }, h('span', {}, 'Kurulum tamamlandı')),
-      h('h1', {}, 'Proje hazır'), h('p', { class: 'soluk' }, 'Kasa, proje ve ortamlar oluşturuldu.')),
+      h('h1', {}, 'Proje hazır'), h('p', { class: 'soluk' }, sihirbazModu === 'ek'
+        ? `"${durum.proje ? durum.proje.ad : ''}" projesi ve ortamları oluşturuldu. Proje seçiciden projeler arasında geçebilirsiniz.`
+        : 'Kasa, proje ve ortamlar oluşturuldu.')),
     adimListesi('tamam'),
     h('div', { class: 'kart' },
-      h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ekran'), 'Sayfa ekle')),
-      h('p', { class: 'soluk' }, 'Test edilecek sayfanın bağlantısını Claude Code\'a verin: sayfayı yalnızca okuyarak inceler ve bir sayfa paketi (model + senaryo önerileri) üretir. Paketi Ekranlar > Sayfa ekle ile yükleyin.'),
-      h('div', { class: 'dugmeler' }, h('button', { type: 'button', onclick: () => { location.hash = '#/ekranlar/yeni'; yonlendir(); } }, ikon('artiYalin'), 'Sayfa ekle'))),
+      h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ekran'), 'Sırada: ekranlar')),
+      h('p', { class: 'soluk' }, 'Test edilecek sayfayı ekleyin: Claude Code\'un ürettiği sayfa paketini yükleyin ("Sayfa ekle") ya da Nöbetçi sayfayı seçilen ortamda yalnızca okuyarak kendisi tarasın ("Ekranı otomatik tara").'),
+      h('div', { class: 'dugmeler' },
+        h('button', { type: 'button', class: 'birincil', onclick: git('#/ekranlar/yeni') }, ikon('artiYalin'), 'Sayfa ekle'),
+        h('button', { type: 'button', onclick: git('#/ekranlar/yeni/tara') }, ikon('ara'), 'Ekranı otomatik tara'))),
     h('div', { class: 'kart vurgulu' },
       h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sırada ne var?')),
       h('p', {}, 'Giriş profillerini, bağlam profillerini ve test verilerini Ayarlar\'dan ekleyebilirsiniz.'),
-      h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'birincil', onclick: () => { location.hash = '#/ayarlar/proje'; yonlendir(); } }, 'Ayarlara git', ikon('ok')))))));
+      h('div', { class: 'dugmeler' }, h('button', { type: 'button', onclick: git('#/ayarlar/proje') }, 'Ayarlara git', ikon('ok')))))));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -402,10 +568,18 @@ function kilitEkrani(beklemeSaniye) {
   const mesaj = mesajKutusu();
   const halka = geriSayimHalkasi();
   const gonder = h('button', { type: 'submit', class: 'birincil' }, ikon('kilit'), 'Kilidi aç');
+  // Kilitle çalışma alanını KAPATMAZ: kilit ekranı açık çalışma alanının adını gösterir; "Başka çalışma alanı" onu kapatıp
+  // başlangıç ekranına döner (kilitliyken dışa aktarma sorulmaz — veriler bu bilgisayarda kalır).
+  const alan = durum.sunucu && durum.sunucu.calismaAlani;
+  const cokluAlan = alan && !alan.sabit;
+  const baska = cokluAlan ? h('button', { type: 'button', class: 'bag-dugme baska-alan', onclick: (o) => { durdur(); baskaCalismaAlani(o.currentTarget); } }, ikon('cekmece'), 'Başka çalışma alanı') : null;
   const form = h('form', { class: 'kart kilit-kart', novalidate: true },
     h('div', { class: 'kilit-baslik' }, h('span', { class: 'kilit-ikon' }, ikon('kilit')),
-      h('h1', {}, 'Kasa kilitli'), h('p', { class: 'soluk' }, 'Devam etmek için kasa parolasını girin.')),
-    mesaj.kutu, halka.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder));
+      h('h1', {}, 'Kasa kilitli'),
+      cokluAlan ? h('p', { class: 'kilit-alan-adi' }, h('span', { class: 'ca-avatar kucuk', 'aria-hidden': 'true' }, basHarf(alan.ad)), h('span', {}, alan.ad)) : null,
+      h('p', { class: 'soluk' }, cokluAlan ? 'Devam etmek için bu çalışma alanının kasa parolasını girin.' : 'Devam etmek için kasa parolasını girin.')),
+    mesaj.kutu, halka.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder),
+    baska ? h('div', { class: 'kilit-alt' }, baska) : null);
   let durdur = () => {};
   const bekle = (saniye, onMetin) => {
     durdur();
@@ -440,7 +614,7 @@ function kilitEkrani(beklemeSaniye) {
       mesaj.goster(hata.message);
     }
   });
-  ekran(odakSayfa({ ustMetin: 'kilitli' }, anaAlan('ortali dar', form)));
+  ekran(odakSayfa({ ustMetin: cokluAlan ? `kilitli · ${alan.ad}` : 'kilitli' }, anaAlan('ortali dar', form)));
   ekranTemizle = () => durdur();
   parola.girdi.focus();
 }
@@ -457,13 +631,21 @@ function projeSecici() {
     durum.proje.aciklama ? h('span', { class: 'aciklama' }, durum.proje.aciklama) : null,
     ikon('asagi'));
   const kapat = () => { menu.hidden = true; dugme.setAttribute('aria-expanded', 'false'); };
-  const menu = h('div', { class: 'acilir-menu', role: 'menu', hidden: true, 'aria-label': 'Projeler' },
-    h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, 'Projeler'),
-    durum.projeler.map((p) => h('button', {
-      type: 'button', role: 'menuitemradio', 'aria-checked': p.id === durum.proje.id ? 'true' : 'false',
-      onclick: () => { kapat(); if (p.id !== durum.proje.id) { projeSec(p.id); location.reload(); } }
-    }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, basHarf(p.ad)), p.ad, p.id === durum.proje.id ? ikon('onay') : null)),
+  const alan = durum.sunucu && durum.sunucu.calismaAlani;
+  // Her projenin satırı: seç (radyo) + ⋯ (Yeniden adlandır · Varsayılan yap · Sil). "+ Yeni proje" aynı kasada sihirbazı açar.
+  const satir = (p) => h('div', { class: 'proje-satiri' },
+    h('button', {
+      type: 'button', role: 'menuitemradio', class: 'proje-sec', 'aria-checked': p.id === durum.proje.id ? 'true' : 'false',
+      onclick: () => { kapat(); if (p.id !== durum.proje.id) projeyeGec(p.id); }
+    }, h('span', { class: 'avatar', 'aria-hidden': 'true' }, basHarf(p.ad)), h('span', { class: 'proje-adi' }, p.ad),
+    p.id === durum.varsayilanProjeId ? h('span', { class: 'rozet vurgu varsayilan-rozeti', title: 'Varsayılan proje' }, 'varsayılan') : null,
+    p.id === durum.proje.id ? ikon('onay') : null),
+    projeMod ? projeMod.projeMenusu({ proje: p, durum, kapat, yonlendir, projeleriYenile, projeyeGec }) : null);
+  const menu = h('div', { class: 'acilir-menu proje-menusu', role: 'menu', hidden: true, 'aria-label': 'Projeler' },
+    h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, alan && !alan.sabit ? `Projeler · ${alan.ad}` : 'Projeler'),
+    durum.projeler.map(satir),
     h('hr', {}),
+    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('proje', 'ek'); } }, ikon('artiYalin'), 'Yeni proje'),
     h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); location.hash = '#/ayarlar/proje'; } }, ikon('duzenle'), 'Projeyi düzenle'));
   dugme.addEventListener('click', () => {
     if (acik()) { kapat(); return; }
@@ -471,13 +653,16 @@ function projeSecici() {
     menu.querySelector('button')?.focus();
   });
   menu.addEventListener('keydown', (o) => {
-    const ogeler = [...menu.querySelectorAll('button')];
+    if (o.target.closest('.satir-menusu-kap .acilir-menu')) return;
+    const ogeler = [...menu.querySelectorAll(':scope > button, :scope > .proje-satiri > button, :scope > .proje-satiri > .satir-menusu-kap > button')];
     const i = ogeler.indexOf(/** @type {HTMLButtonElement} */ (document.activeElement));
     if (o.key === 'Escape') { kapat(); dugme.focus(); }
     else if (o.key === 'ArrowDown') { o.preventDefault(); ogeler[(i + 1) % ogeler.length].focus(); }
     else if (o.key === 'ArrowUp') { o.preventDefault(); ogeler[(i - 1 + ogeler.length) % ogeler.length].focus(); }
   });
-  document.addEventListener('click', (o) => { if (acik() && !kap.contains(/** @type {Node} */ (o.target))) kapat(); });
+  document.addEventListener('click', (o) => {
+    if (acik() && !kap.contains(/** @type {Node} */ (o.target)) && !document.querySelector('dialog[open]')) kapat();
+  });
   const kap = h('div', { class: 'proje-secici-kap' }, dugme, menu);
   return kap;
 }
@@ -489,11 +674,19 @@ function anaDuzen() {
   const navEkranlar = h('a', { href: '#/ekranlar' }, ikon('ekran'), 'Ekranlar');
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
   const kilitle = h('button', { type: 'button', class: 'kilitle-dugmesi', 'aria-label': 'Kilitle' }, ikon('kilit'), h('span', { class: 'dugme-metni' }, 'Kilitle'));
-  kilitle.addEventListener('click', async () => {
+  const kilitleVeDon = async () => {
     await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
     bildir('Kasa kilitlendi.');
     yonlendir();
-  });
+  };
+  kilitle.addEventListener('click', kilitleVeDon);
+  // Sağ üst çalışma alanı (hesap) menüsü: Kilitle · Yeniden adlandır · Çalışma alanını kapat (dışa aktarma sorusu).
+  const hesap = alanMod && durum.sunucu && durum.sunucu.calismaAlani !== undefined ? alanMod.hesapMenusu({
+    calismaAlani: durum.sunucu ? durum.sunucu.calismaAlani : null,
+    kilitle: kilitleVeDon,
+    kapandi: () => { location.hash = ''; yonlendir(); },
+    yenile: async () => { durum.sunucu = await api('/platform/durum').catch(() => durum.sunucu); anaDuzen(); }
+  }) : null;
   const arama = h('button', { type: 'button', class: 'hizli-arama', 'aria-disabled': 'true', title: 'Hızlı arama yakında', 'aria-label': 'Hızlı arama (yakında)' },
     ikon('ara'), h('span', { class: 'arama-metni' }, 'Hızlı ara…'), h('kbd', {}, '⌘K'));
   arama.addEventListener('click', () => bildir('Hızlı arama bir sonraki sürümde gelecek.'));
@@ -503,7 +696,7 @@ function anaDuzen() {
     projeSecici(),
     h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navAyarlar),
     h('span', { class: 'bosluk' }),
-    arama, sunucu, temaDugmesi(), kilitle);
+    arama, sunucu, temaDugmesi(), kilitle, hesap);
   ekran(ust, main);
 
   const ciz = () => {
@@ -542,6 +735,9 @@ function anaDuzen() {
     try {
       const d = await api('/platform/durum');
       sunucu.durumAyarla(true);
+      // Çalışma alanı başka bir sekmeden kapatıldı/değiştirildi → yeniden yönlendir (başlangıç ya da diğer alan).
+      const acikAlan = durum.sunucu && durum.sunucu.calismaAlani;
+      if (acikAlan && (!d.calismaAlani || d.calismaAlani.id !== acikAlan.id)) { location.hash = ''; yonlendir(); return; }
       if (d.kasa && d.kasa.olusturuldu && !d.kasa.acik) {
         durum.kilitMesaji = d.otomatikKilit && d.otomatikKilit.sonKilitlenme
           ? `Kasa ${d.otomatikKilit.dakika} dakika işlem yapılmadığı için otomatik olarak kilitlendi.`

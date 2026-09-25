@@ -1707,3 +1707,63 @@ dialog.ekran-yonetim-diyalogu { width: min(38rem, calc(100vw - 2rem)); overflow:
   .silinmis-listesi > li { grid-template-columns: minmax(0, 1fr); }
   .silinmis-listesi .dugmeler { grid-row: auto; grid-column: 1; }
 }
+
+/* ---- Çalışma alanları (başlangıç ekranı listesi, hesap menüsü, kilit ekranı) ve proje ⋯ menüsü ------------------- */
+.karsilama.baslangic { justify-content: flex-start; padding-top: 24px; }
+.ca-avatar {
+  width: 36px; height: 36px; border-radius: 10px; flex: none; display: grid; place-items: center; font: 700 15px var(--yazi); color: #fff;
+  background: linear-gradient(135deg, var(--vurgu-2), var(--vurgu)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .14) inset;
+}
+.ca-avatar.kucuk { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; }
+.ca-listesi { position: relative; z-index: 2; margin-top: 32px; width: 100%; max-width: 760px; }
+.ca-listesi-baslik, .yeni-alan-baslik { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.ca-listesi-baslik h2, .yeni-alan-baslik h2 { margin: 0; font: 650 11px var(--yazi-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--metin-2); }
+.yeni-alan-baslik { position: relative; z-index: 2; margin: 34px 0 -22px; width: 100%; max-width: 960px; justify-content: center; }
+.ca-kartlari { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ca-karti {
+  display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--yaricap-l); background: var(--panel);
+  box-shadow: var(--golge); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); min-width: 0;
+}
+.ca-karti { position: relative; }
+/* Açık ⋯ menüsü sonraki kartların (backdrop-filter → ayrı yığın bağlamı) üstünde kalsın. */
+.ca-karti:has(.acilir-menu:not([hidden])) { z-index: 6; }
+.ca-karti:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--vurgu) 40%, transparent), 0 12px 40px -18px rgba(0, 0, 0, .6); }
+.ca-bilgi { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ca-adi { font-size: 15px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ca-meta { font: 11.5px var(--yazi-mono); color: var(--metin-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ca-eylemler { display: flex; align-items: center; gap: 6px; flex: none; }
+.ca-eylemler .birincil { min-height: 34px; }
+.ad-gorunur-uyarisi { margin-top: 10px; }
+.hesap-menusu .acilir-menu { min-width: 230px; top: calc(100% + 8px); }
+.hesap-dugmesi { height: 34px; min-height: 34px; padding: 0 8px 0 6px; gap: 8px; max-width: 220px; font-weight: 550; }
+.hesap-adi { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.kilit-alan-adi {
+  display: inline-flex; align-items: center; gap: 8px; margin: 2px 0 8px !important; padding: 4px 12px 4px 5px; border-radius: 16px;
+  background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); font-weight: 600; max-width: 100%;
+}
+.kilit-alan-adi > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kilit-alt { display: flex; justify-content: center; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--cizgi-2); }
+button.bag-dugme { border: 0; background: none; color: var(--vurgu); min-height: 30px; padding: 0 6px; font-weight: 550; }
+button.bag-dugme:hover:not(:disabled) { background: var(--vurgu-zemin); border: 0; }
+.dugmeler.ortala { justify-content: center; position: relative; z-index: 2; }
+.kapat-diyalogu .diyalog-govde p { margin: 0 0 8px; }
+.kapat-diyalogu .disa-aktarma-formu .dugmeler { justify-content: flex-end; }
+.kapat-diyalogu .medya-secimi { margin-top: 6px; }
+dialog.kapat-diyalogu { width: min(38rem, calc(100vw - 2rem)); overflow: auto; }
+.proje-menusu { min-width: 300px; max-height: min(70vh, 560px); overflow: auto; }
+.proje-satiri { display: flex; align-items: center; gap: 2px; }
+.proje-satiri > .proje-sec { flex: 1; min-width: 0; gap: 8px; }
+.proje-satiri .proje-adi { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.proje-satiri .avatar { width: 20px; height: 20px; border-radius: 6px; background: linear-gradient(135deg, #f472b6, #fb923c); display: grid; place-items: center; font: 700 10.5px var(--yazi); color: #fff; flex: none; }
+.proje-satiri .varsayilan-rozeti { margin-left: auto; font-size: 10px; }
+.proje-satiri > .proje-sec > .ikon:last-child { margin-left: 4px; color: var(--vurgu); }
+.proje-satiri .satir-menusu-kap .acilir-menu { top: calc(100% + 2px); z-index: 45; }
+.acilir-menu .yeni-proje { color: var(--vurgu); }
+@media (max-width: 1180px) {
+  .hesap-adi { display: none; }
+  .hesap-dugmesi { padding: 0 6px; }
+}
+@media (max-width: 640px) {
+  .ca-karti { flex-wrap: wrap; }
+  .ca-eylemler { width: 100%; justify-content: flex-end; }
+}

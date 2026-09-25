@@ -85,10 +85,14 @@ export function atlananAlanlariAyristir(metin) {
 
 /** Sunucu üzerinden yazma (veritabanının sahibi sunucudur). */
 class SunucuYazici {
-  /** @param {string} adres @param {string} token */
-  constructor(adres, token) {
+  /**
+   * @param {string} adres @param {string} token
+   * @param {string} [veritabaniYolu] koşunun veritabanı: sunucu başka bir çalışma alanı açmışsa yazmayı reddeder
+   */
+  constructor(adres, token, veritabaniYolu) {
     this.adres = adres.replace(/\/+$/, '');
     this.token = token;
+    this.veritabaniYolu = veritabaniYolu;
   }
 
   /** @param {string} yol @param {Record<string, unknown>} govde @param {number} [zamanAsimi] */
@@ -96,7 +100,7 @@ class SunucuYazici {
     const yanit = await fetch(`${this.adres}${yol}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Test-Sunucu-Token': this.token },
-      body: JSON.stringify({ ...govde, token: this.token }),
+      body: JSON.stringify({ ...govde, token: this.token, ...(this.veritabaniYolu ? { veritabaniYolu: this.veritabaniYolu } : {}) }),
       signal: AbortSignal.timeout(zamanAsimi)
     });
     const veri = /** @type {Record<string, unknown>} */ (await yanit.json().catch(() => ({})));
@@ -240,12 +244,12 @@ export default class PlatformRaporlayici {
     /** @type {Record<string, unknown> | null} */
     let durum = null;
     if (verilenAdres && verilenToken) {
-      sunucu = new SunucuYazici(verilenAdres, verilenToken);
+      sunucu = new SunucuYazici(verilenAdres, verilenToken, dbYolu);
       durum = await sunucu.durum(secim);
     } else {
       const baglanti = existsSync(dbYolu) ? sunucuBaglantisiniOku(dbYolu) : null;
       if (baglanti) {
-        const aday = new SunucuYazici(baglanti.adres, baglanti.token);
+        const aday = new SunucuYazici(baglanti.adres, baglanti.token, dbYolu);
         try {
           const d = await aday.durum(secim, 1500);
           if (typeof d.veritabaniYolu === 'string' && resolve(d.veritabaniYolu) === dbYolu) { sunucu = aday; durum = d; }

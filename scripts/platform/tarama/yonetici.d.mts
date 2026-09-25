@@ -69,3 +69,4 @@ export type TaramaIstekBaglami = {
 
 export declare function taramaIsteginiIsle(req: IncomingMessage, res: ServerResponse, b: TaramaIstekBaglami): Promise<boolean>;
 export declare function taramalariKapat(): void;
+export declare function taramaSuruyorMu(): boolean;

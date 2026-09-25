@@ -229,16 +229,17 @@ export function yerelMakine(vt) {
   if (!id) {
     id = randomUUID();
     const kimlik = id;
-    vt.islem(() => vt.metaYaz('yerel_makine_id', kimlik));
+    vt.sayacsizIslem(() => vt.metaYaz('yerel_makine_id', kimlik));
   }
   const ad = hostname();
   const acik = kasaAcikMi(vt);
   const satir = vt.tek('SELECT id, ad, olusturulma FROM makineler WHERE id = ?', [id]);
+  // Makine kaydı kullanıcı değişikliği sayılmaz (değişiklik sayacı artmaz — "son dışa aktarımdan beri değişti mi?").
   if (!satir) {
-    vt.calistir('INSERT INTO makineler (id, ad, olusturulma) VALUES (?, ?, ?)', [id, acik ? sifrele(vt, ad) : '', simdi()]);
+    vt.sayacsizIslem(() => vt.calistir('INSERT INTO makineler (id, ad, olusturulma) VALUES (?, ?, ?)', [id, acik ? sifrele(vt, ad) : '', simdi()]));
   } else if (acik) {
     const mevcut = satir.ad === '' ? '' : sifreliOku(vt, satir.ad);
-    if (mevcut !== ad || !zarfMi(satir.ad)) vt.calistir('UPDATE makineler SET ad = ? WHERE id = ?', [sifrele(vt, ad), id]);
+    if (mevcut !== ad || !zarfMi(satir.ad)) vt.sayacsizIslem(() => vt.calistir('UPDATE makineler SET ad = ? WHERE id = ?', [sifrele(vt, ad), id]));
   }
   return { id, ad };
 }

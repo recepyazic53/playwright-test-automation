@@ -552,24 +552,25 @@ async function testVerisi(govde, baglam, yenile) {
 // Yedekleme
 // ---------------------------------------------------------------------------------------
 
-// Dışa aktarma medya seçenekleri (sunucudaki yedek.mjs > VARSAYILAN_MEDYA_SECIMI ile aynı varsayılanlar).
+// Dışa aktarma formu (ortak): Ayarlar > Yedekleme > "Dışa aktar" ve "Çalışma alanını kapat" > "Dışa aktar ve kapat"
+// (calisma-alani.js) AYNI akışı kullanır — medya seçimi (tahmini boyutlarla), kasa parolası, arka plan işi (ilerleme) ve
+// tarayıcının kendi indirmesi (büyük dosya belleğe alınmaz). Medya varsayılanları sunucudaki yedek.mjs > VARSAYILAN_MEDYA_SECIMI.
 const MEDYA_SECENEKLERI = [
   { ad: 'ekranGoruntuleriDahil', etiket: 'Ekran görüntüleri', aciklama: 'hata bağlamı gibi küçük ekler dahil' },
   { ad: 'videolarDahil', etiket: 'Videolar', aciklama: 'büyük olabilir' },
   { ad: 'izDosyalariDahil', etiket: 'İz (trace) dosyaları', aciklama: 'büyük olabilir' }
 ];
 
-async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, aktarimDurumu, tahmin] = await Promise.all([
-    api('/platform/yedek/otomatik-liste'),
-    api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] })),
-    api('/platform/yedek/tahmin').catch(() => null)
-  ]);
-
-  // Dışa aktar
+/**
+ * @param {{ secenekler?: Record<string, { sayi: number; bayt: number }>; varsayilan?: Record<string, boolean> } | null} tahmin GET /platform/yedek/tahmin
+ * @param {{ baslik?: string | null; aciklama?: string | null; dugmeMetni?: string; kart?: boolean; ekDugmeler?: Node[];
+ *   bitti?: (is: { dosyaAdi: string; boyut: number | null; medya: { dosyaSayisi?: number } | null }) => void | Promise<void> }} [ayar]
+ *   bitti: indirme başlatıldıktan sonra çağrılır (ör. çalışma alanını kapatmak için).
+ */
+export function disaAktarmaFormu(tahmin, ayar = {}) {
   const parola = parolaAlani('Kasa parolası', { zorunlu: true, otomatik: 'current-password', yardim: 'Yedeği indirmeden önce parolayı yeniden girin. Yedek dosyası bu parolayla şifrelenir.' });
   const disaMesaj = mesajKutusu();
-  const indir = h('button', { type: 'submit', class: 'birincil' }, 'Yedeği indir');
+  const indir = h('button', { type: 'submit', class: 'birincil' }, ayar.dugmeMetni || 'Yedeği indir');
   const varsayilan = (tahmin && tahmin.varsayilan) || { ekranGoruntuleriDahil: true, videolarDahil: false, izDosyalariDahil: false };
   const toplamSatiri = h('p', { class: 'soluk kucuk', 'aria-live': 'polite' });
   const kutular = MEDYA_SECENEKLERI.map((s) => {
@@ -593,17 +594,17 @@ async function yedekleme(govde, baglam, yenile) {
   for (const k of kutular) k.kutu.addEventListener('change', toplamGuncelle);
   toplamGuncelle();
   const ilerlemeCubugu = h('progress', { max: '100', value: '0', 'aria-label': 'Yedek hazırlanıyor' });
-  const ilerlemeMetni = h('p', { class: 'soluk kucuk', 'aria-live': 'polite' });
+  const ilerlemeMetni = h('p', { class: 'soluk kucuk secim-sayaci', 'aria-live': 'polite' });
   const ilerlemeYuzdesi = h('span', { class: 'yuzde', 'aria-hidden': 'true' }, '%0');
   const ilerlemeKutusu = h('div', { class: 'ilerleme', hidden: true },
     h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), ilerlemeMetni, ilerlemeYuzdesi), ilerlemeCubugu);
-  ilerlemeMetni.classList.add('secim-sayaci');
-  const disaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('indir'), 'Dışa aktar'),
-    h('p', { class: 'soluk' }, 'Tüm proje verisini tek bir şifreli .tayedek dosyası olarak indirir. Dosyayı başka bir bilgisayarda "Yedek yükle" ile açabilirsiniz.'),
+  const baslik = ayar.baslik === null ? null : h('h3', {}, ikon('indir'), ayar.baslik || 'Dışa aktar');
+  const aciklama = ayar.aciklama === null ? null
+    : h('p', { class: 'soluk' }, ayar.aciklama || 'Tüm proje verisini tek bir şifreli .tayedek dosyası olarak indirir. Dosyayı başka bir bilgisayarda "Yedek yükle" ile açabilirsiniz.');
+  const form = h('form', { class: ayar.kart === false ? 'disa-aktarma-formu' : 'kart', novalidate: true }, baslik, aciklama,
     disaMesaj.kutu,
-    h('fieldset', { class: 'medya-secimi' }, h('legend', {}, 'Yedeğe eklenecek medya dosyaları'),
-      kutular.map((k) => k.oge), toplamSatiri),
-    parola.kapsayici, ilerlemeKutusu, h('div', { class: 'dugmeler' }, indir));
+    h('fieldset', { class: 'medya-secimi' }, h('legend', {}, 'Yedeğe eklenecek medya dosyaları'), kutular.map((k) => k.oge), toplamSatiri),
+    parola.kapsayici, ilerlemeKutusu, h('div', { class: 'dugmeler' }, ...(ayar.ekDugmeler || []), indir));
   let durdur = () => {};
   const ilerlemeGoster = (is) => {
     ilerlemeKutusu.hidden = false;
@@ -612,7 +613,7 @@ async function yedekleme(govde, baglam, yenile) {
     ilerlemeYuzdesi.textContent = `%${Math.round(is.yuzde || 0)}`;
   };
   const ilerlemeGizle = () => { ilerlemeKutusu.hidden = true; };
-  disaForm.addEventListener('submit', async (o) => {
+  form.addEventListener('submit', async (o) => {
     o.preventDefault();
     disaMesaj.temizle();
     alanHatasi(parola.girdi, '');
@@ -654,10 +655,25 @@ async function yedekleme(govde, baglam, yenile) {
         a.remove();
         const medya = is.medya && is.medya.dosyaSayisi ? `, ${is.medya.dosyaSayisi} medya dosyası` : ', medya dosyası yok';
         disaMesaj.goster(`Yedek hazır ve indiriliyor: ${is.dosyaAdi} (${boyutMetni(is.boyut || 0)}${medya}).`, 'basari');
+        if (ayar.bitti) {
+          try { await ayar.bitti(is); } catch (hata) { disaMesaj.goster(hata.message || String(hata)); }
+        }
         return;
       }
     });
   });
+  return { form, parola };
+}
+
+async function yedekleme(govde, baglam, yenile) {
+  const [{ klasor, dosyalar }, aktarimDurumu, tahmin] = await Promise.all([
+    api('/platform/yedek/otomatik-liste'),
+    api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] })),
+    api('/platform/yedek/tahmin').catch(() => null)
+  ]);
+
+  // Dışa aktar (ortak form — "Çalışma alanını kapat" > "Dışa aktar ve kapat" da bunu kullanır)
+  const { form: disaForm } = disaAktarmaFormu(tahmin);
 
   // İçe aktar
   const iceAlani = h('div', {});

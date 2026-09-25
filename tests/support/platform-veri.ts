@@ -22,6 +22,7 @@ import { join, resolve } from 'node:path';
 import type { EnvironmentName } from './environments';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { YASAK_ADRES_DEGISKENI } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
+import { CALISMA_ALANI_DEGISKENI, calismaAlaniniCoz, veriKoku } from '../../scripts/platform/calisma-alanlari.mjs';
 
 export const KASA_ANAHTARI_DEGISKENI = 'PLATFORM_KASA_ANAHTARI';
 export const KASA_PAROLASI_DEGISKENI = 'PLATFORM_KASA_PAROLASI';
@@ -93,10 +94,35 @@ export class PlatformVeriHatasi extends Error {
   }
 }
 
-/** scripts/platform/veritabani/baglanti.mjs > veritabaniYolu ile aynı kural. */
+/** Bu koşunun çalışma alanı (terminal koşusu; gizli bilgi değildir — ad seçim ekranında da görünür). */
+export type KosuCalismaAlani = { ad: string; kaynak: 'degisken' | 'son-acilan' | 'tek' } | null;
+let kosuCalismaAlani: KosuCalismaAlani = null;
+
+/**
+ * ÇALIŞMA ALANI SABİTLEME (ana süreçte, modül ilk yüklenirken): PLATFORM_VERITABANI verilmemişse kayıt defterinden
+ * (NOBETCI_CALISMA_ALANI → son açılan) çözülür ve PLATFORM_VERITABANI'ye yazılır — worker'lar, veri okuyucu ve
+ * raporlayıcı AYNI veritabanını kullanır (koşu ortasında çalışma alanı değişse de). Nöbetçi koşularında sunucu
+ * açık çalışma alanının yolunu zaten verir.
+ */
+function calismaAlaniniSabitle(): void {
+  if (process.env.PLATFORM_VERITABANI && process.env.PLATFORM_VERITABANI.trim()) return;
+  const secim = calismaAlaniniCoz(veriKoku(PROJE_KOKU));
+  if (!secim) return;
+  process.env.PLATFORM_VERITABANI = secim.yollar.veritabani;
+  kosuCalismaAlani = { ad: secim.alan.ad, kaynak: secim.kaynak };
+}
+calismaAlaniniSabitle();
+
+/** Terminal koşusunun kayıt defterinden seçilen çalışma alanı (Nöbetçi koşularında ve PLATFORM_VERITABANI ile null). */
+export function kosununCalismaAlani(): KosuCalismaAlani {
+  return kosuCalismaAlani;
+}
+export { CALISMA_ALANI_DEGISKENI };
+
+/** scripts/platform/veritabani/baglanti.mjs > veritabaniYolu ile aynı kural (çalışma alanı yukarıda sabitlenir). */
 export function platformVeritabaniYolu(): string {
   const ortam = process.env.PLATFORM_VERITABANI;
-  return ortam && ortam.trim() ? resolve(ortam.trim()) : resolve(PROJE_KOKU, 'veri', 'platform.db');
+  return ortam && ortam.trim() ? resolve(ortam.trim()) : resolve(veriKoku(PROJE_KOKU), 'platform.db');
 }
 
 function hataMi(d: unknown): d is HataCiktisi {

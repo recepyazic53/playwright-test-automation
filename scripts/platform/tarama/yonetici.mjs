@@ -604,6 +604,11 @@ export async function taramaIsteginiIsle(req, res, b) {
   }
 }
 
+/** Şu an süren bir ekran taraması var mı? (Çalışma alanı değiştirilirken denetlenir.) */
+export function taramaSuruyorMu() {
+  return Boolean(varsayilanYonetici?.aktif());
+}
+
 /** Sunucu kapanırken çalışan taramaları kapatır. */
 export function taramalariKapat() {
   varsayilanYonetici?.kapat();

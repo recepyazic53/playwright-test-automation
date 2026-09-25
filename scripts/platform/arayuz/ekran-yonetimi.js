@@ -32,7 +32,7 @@ const hata = (e) => { if (e && e.durum !== 423) bildir(e.message, 'hata'); };
  * Modal form diyaloğu (Enter = birincil; Escape = vazgeç). Döner: { diyalog, hataGoster, kapat }.
  * @param {{ baslik: string; aciklama?: string; ikonAd: string; govde: Node[]; dugme: string; tehlikeli?: boolean; gonder: (dugme: HTMLButtonElement) => Promise<boolean | void> }} s
  */
-function formDiyalogu(s) {
+export function formDiyalogu(s) {
   const baslikId = yeniKimlik('ekran-diyalog');
   const hataKutusu = h('div', { class: 'not-kutusu hata', role: 'alert', hidden: true });
   const tamam = h('button', { type: 'submit', class: s.tehlikeli ? 'tehlike' : 'birincil' }, s.tehlikeli ? ikon('cop') : null, s.dugme);
@@ -64,7 +64,7 @@ function formDiyalogu(s) {
   return { diyalog, hataGoster, tamam };
 }
 
-const etiketliAlan = (etiket, girdi, yardim) => {
+export const etiketliAlan = (etiket, girdi, yardim) => {
   girdi.id = girdi.id || yeniKimlik('alan');
   return h('div', { class: 'alan' }, h('label', { for: girdi.id }, etiket), girdi, yardim ? h('div', { class: 'yardim' }, yardim) : null);
 };
