@@ -431,7 +431,7 @@ function degistirilenModel(mevcut, paketModeli) {
   if (digerleri.length) {
     const eskiVarsayilan = mevcut.akislar.find((a) => nesneMi(a) && a.varsayilan === true);
     yeni.akislar = [{ id: eskiVarsayilan ? eskiVarsayilan.id : 'ana', ad: eskiVarsayilan ? eskiVarsayilan.ad : 'Ana akış', varsayilan: true, adimlar: yeni.adimlar }, ...kopya(digerleri)];
-    // Korunan akışların kullandığı koşullar ve senaryo ayarları (ör. "“Ödeme” dahil") pakette yoksa eski modelden taşınır.
+    // Korunan akışların kullandığı koşullar ve senaryo ayarları (ör. "“Ek adım” dahil") pakette yoksa eski modelden taşınır.
     const eskiKosullar = nesneMi(mevcut.kosullar) ? mevcut.kosullar : {};
     yeni.kosullar = nesneMi(yeni.kosullar) ? yeni.kosullar : {};
     /** @type {Set<string>} */

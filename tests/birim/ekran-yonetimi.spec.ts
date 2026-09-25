@@ -172,8 +172,9 @@ test.describe('Ekran yönetimi — ad, yol, sıra, durum', () => {
       expect(liste.senaryolar.filter((s) => s.ekranId === kasko.id).every((s) => s.ekranEtkin)).toBe(true);
       const govde = (senaryoId: string) => ({ projeId: o.projeId, ortamId: o.ortamId, senaryoId, kosuId: 'k1', kosuTuru: 'tam', kosuKimligi: 'toplu-1' });
       expect(() => calistirmaIsteginiHazirla(o.vt, govde(paylasilan))).toThrow(/devre dışı/);
-      expect(() => calistirmaIsteginiHazirla(o.vt, { ...govde(paylasilan), kosuTuru: 'tekil' })).not.toThrow(/devre dışı/);
-      expect(() => calistirmaIsteginiHazirla(o.vt, { projeId: o.projeId, ortamId: o.ortamId, senaryoId: paylasilan, kosuId: 'k1' })).not.toThrow(/devre dışı/);
+      expect(() => calistirmaIsteginiHazirla(o.vt, { ...govde(paylasilan), kosuTuru: 'tekil' })).toThrow(/devre dışı/);
+      expect(() => calistirmaIsteginiHazirla(o.vt, { ...govde(paylasilan), kosuTuru: 'tekil', tekBasina: true })).not.toThrow(/devre dışı/);
+      expect(() => calistirmaIsteginiHazirla(o.vt, { ...govde(paylasilan), tekBasina: true })).toThrow(/devre dışı/);
 
       // veri-oku "durum" kipi (playwright.config.ts > grepInvert kaynağı) kasa parolası OLMADAN okur.
       const cikti = spawnSync(process.execPath, [join(KOK, 'scripts', 'platform', 'aktarim', 'veri-oku.mjs'), 'durum', '--adaptor', 'galaksi'], {

@@ -449,7 +449,7 @@ function listeGorunumu(icerik, s) {
   // --- İşlemler ---
   async function tekCalistir(x) {
     if (riskliOrtamMi(ortam) && !(await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', senaryolar: [x], ortam, tur: 'tekil', esZamanli: true, dugme: 'Çalıştır' }))) return;
-    kosuBaslat({ projeId: proje.id, ortam, senaryolar: [x], tur: 'tekil', esZamanli: true, baslik: x.baslik });
+    kosuBaslat({ projeId: proje.id, ortam, senaryolar: [x], tur: 'tekil', esZamanli: true, baslik: x.baslik, tekBasina: true });
   }
 
   async function seciliCalistir(secilenler) {

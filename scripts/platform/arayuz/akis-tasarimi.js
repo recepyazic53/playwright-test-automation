@@ -529,6 +529,7 @@ export async function akisTasarimi(icerik, s) {
         if (!onay) return;
         const y = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ekran/akis/kaydet', { govde: { ...govde, onay: true } }));
         degisiklik = false;
+        cikisKorumasiniKaldir();
         bildir(`Akış kaydedildi (model v${y.surum}).`);
         s.bitti?.(y.akisId);
         return;
@@ -551,8 +552,12 @@ export async function akisTasarimi(icerik, s) {
   const vazgec = h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Vazgeç');
   vazgec.addEventListener('click', async () => {
     if (degisiklik && !(await onayIste({ baslik: 'Değişiklikler kaydedilmedi', metin: 'Diyagramdaki kaydedilmemiş değişiklikler kaybolacak.', dugme: 'Çık', tehlikeli: false, ikonAd: 'uyari' }))) return;
+    degisiklik = false;
+    cikisKorumasiniKaldir();
     s.vazgec?.();
   });
+  /** Çıkış korumasının dinleyicilerini kaldırır (Vazgeç / kayıt aynı adrese dönebilir: hashchange olmaz). */
+  let cikisKorumasiniKaldir = () => {};
   // Ekran kipinde (değişiklikler otomatik saklanmaz) sayfadan ayrılırken kaydedilmemiş değişiklik uyarısı: uygulama içi
   // bağlantılar (kırıntı, yan menü) onayla; sekme kapatma / yenileme tarayıcının uyarısıyla. Sayfadan çıkınca kaldırılır.
   if (ekranKipi) {
@@ -567,12 +572,12 @@ export async function akisTasarimi(icerik, s) {
         .then((tamam) => { if (tamam) { degisiklik = false; location.hash = hedef; } });
     };
     const sekmeKapaniyor = (/** @type {BeforeUnloadEvent} */ o) => { if (degisiklik) { o.preventDefault(); o.returnValue = ''; } };
-    const birak = () => {
-      if (location.hash === tasarimSayfasi) return;
+    cikisKorumasiniKaldir = () => {
       document.removeEventListener('click', baglantiTiklandi, true);
       window.removeEventListener('beforeunload', sekmeKapaniyor);
       window.removeEventListener('hashchange', birak);
     };
+    const birak = () => { if (location.hash !== tasarimSayfasi) cikisKorumasiniKaldir(); };
     document.addEventListener('click', baglantiTiklandi, true);
     window.addEventListener('beforeunload', sekmeKapaniyor);
     window.addEventListener('hashchange', birak);

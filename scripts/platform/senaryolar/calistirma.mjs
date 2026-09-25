@@ -48,6 +48,7 @@ function ekranEtkinOlmali(vt, senaryoId, ekranId, s = {}) {
  *  - kosuId: bu tekil koşu isteğinin kimliği (durdurma / canlı görüntü bununla yapılır) — zorunlu.
  *  - kosuTuru 'tam' | 'tekil' (isteğe bağlı): birlikte başlatılan senaryolar ortak kosuKimligi taşır.
  *  - kosuKapsami yalnızca 'tam' koşuda: 'Genel' ya da projedeki bir ekranın adı.
+ *  - tekBasina: true yalnızca tek senaryo (▷) çalıştırmasında; devre dışı ekranın senaryosu yalnızca böyle çalışır.
  * secenekler: kodDosyasiVar (model senaryosu tespiti), yasakDesenleri (yasaklı adres koruması).
  * @param {Veritabani} vt @param {Record<string, unknown>} govde @param {import('./calistirma.d.mts').CalistirmaSecenekleri} [secenekler]
  */
@@ -70,7 +71,7 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
     kosuKapsami = kapsam;
   }
   const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
-  ekranEtkinOlmali(vt, hedef.senaryoId, null, { devreDisiIzinli: kosuTuru !== 'tam' });
+  ekranEtkinOlmali(vt, hedef.senaryoId, null, { devreDisiIzinli: kosuTuru !== 'tam' && govde.tekBasina === true });
   return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef };
 }
 

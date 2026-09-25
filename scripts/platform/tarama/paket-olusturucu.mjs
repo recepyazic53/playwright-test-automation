@@ -886,7 +886,9 @@ export function kayitPaketiOlustur(meta, envanter) {
       return benzersiz(kimlikUret(baslik, 'bolum'), bolumIdleri);
     };
     if (eskiKosu) {
-      if (!kosu.hataGostergesi && nesneMi(eskiKosu.hataGostergesi)) kosu.hataGostergesi = kopya(eskiKosu.hataGostergesi);
+      const eskiH = eskiKosu.hataGostergesi;
+      const uyaridan = nesneMi(eskiH) && Array.isArray(eskiKosu.uyarilar) && eskiKosu.uyarilar.some((/** @type {any} */ u) => nesneMi(u) && u.secici === eskiH.secici);
+      if (!kosu.hataGostergesi && nesneMi(eskiH) && !uyaridan) kosu.hataGostergesi = kopya(eskiH);
       const yeniG = /** @type {Record<string, any> | undefined} */ (kosu.basariGostergesi);
       const eskiG = eskiKosu.basariGostergesi;
       const ogeVeya = nesneMi(eskiG) && eskiG.tur === 'veya' && Array.isArray(eskiG.secenekler) && eskiG.secenekler.every((/** @type {any} */ s) => nesneMi(s) && s.tur === 'eleman');
