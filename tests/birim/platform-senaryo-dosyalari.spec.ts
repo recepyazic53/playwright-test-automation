@@ -8,7 +8,7 @@ import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { kasaOlustur, parolayiDogrula } from '../../scripts/platform/kasa.mjs';
@@ -29,7 +29,7 @@ import { yedekDosyasiYaz } from '../../scripts/platform/yedek.mjs';
 import { adaptorBul } from '../../projeler/index.mjs';
 import type { AktarimAdaptoru } from '../../projeler/index.d.mts';
 import globalTeardown from '../support/global-teardown';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, POSIX_IZINLERI, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
 const PAROLA = 'Senaryo-Dosyasi-Kasa-Parolasi-5';
@@ -113,9 +113,11 @@ test.describe('Şifreli senaryo dosyaları', () => {
       expect(deger.a.b).toBe(join(kosu, d.id, 'liste.xlsx'));
       expect(deger.a.c).toEqual([deger.a.b, 'düz metin']);
       expect(readFileSync(deger.a.b).equals(icerik)).toBe(true);
-      expect(statSync(deger.a.b).mode & 0o777).toBe(0o600);
-      expect(statSync(join(kosu, d.id)).mode & 0o777).toBe(0o700);
-      expect(statSync(kosu).mode & 0o777).toBe(0o700);
+      if (POSIX_IZINLERI) {
+        expect(statSync(deger.a.b).mode & 0o777).toBe(0o600);
+        expect(statSync(join(kosu, d.id)).mode & 0o777).toBe(0o700);
+        expect(statSync(kosu).mode & 0o777).toBe(0o700);
+      }
       expect(r.eksikler).toEqual(['yok.xlsx']);
       expect(deger.eksik).toMatch(/EKSIK-yok\.xlsx$/);
       expect(existsSync(deger.eksik)).toBe(false);
@@ -175,7 +177,7 @@ test.describe('Şifreli senaryo dosyaları', () => {
       const kosu = kosuKlasoruOlustur(kok, 'terminal-deneme');
       const yolDegeri = oku({ [DOSYA_KLASORU_DEGISKENI]: kosu }).veri.dosyalar['jet-seyahat'].jetSeyahat.cokluSorguDosyasi;
       expect(yolDegeri.startsWith(kosu)).toBe(true);
-      expect(yolDegeri.endsWith('/fma-coklu-sorgu-10-kisi.xlsx')).toBe(true);
+      expect(yolDegeri.endsWith(`${sep}fma-coklu-sorgu-10-kisi.xlsx`)).toBe(true);
       expect(readFileSync(yolDegeri).equals(sahteExcel('URUN'))).toBe(true);
       expect(tmpdir().length && kosu.startsWith(tmpdir())).toBe(true);
 

@@ -22,7 +22,7 @@ import { kodKaldirilmisSenaryolar, senaryoListesi } from '../../scripts/platform
 import { projeSilmeOnizlemesi, projeyiSil, varsayilanProjeAyarla, varsayilanProjeKimligi } from '../../scripts/platform/proje-yonetimi.mjs';
 import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
 import { adaptorBul } from '../../projeler/index.mjs';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, POSIX_IZINLERI, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
 const PAROLA_A = 'Alan-A-Kasa-Parolasi-1';
@@ -76,7 +76,7 @@ test.describe('Kayıt defteri', () => {
       const metin = readFileSync(join(k.yol, 'calisma-alanlari.json'), 'utf8');
       expect(metin).not.toContain(PAROLA_A);
       expect(Object.keys(JSON.parse(metin).alanlar[0]).sort()).toEqual(['ad', 'id', 'medya', 'olusturulma', 'projeSayisi', 'sonAcilma', 'veritabani', 'yedekler']);
-      expect((statSync(join(k.yol, 'calisma-alanlari.json')).mode & 0o777).toString(8)).toBe('600');
+      if (POSIX_IZINLERI) expect((statSync(join(k.yol, 'calisma-alanlari.json')).mode & 0o777).toString(8)).toBe('600');
       // İkinci çağrı hiçbir şeyi değiştirmez.
       expect(kayitDefteriniHazirla(k.yol).yerindeKaydedildi).toBe(false);
       expect(dosyaIzi(k.yol)).toEqual(sonra);

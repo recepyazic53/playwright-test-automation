@@ -25,7 +25,9 @@ const oturumDosyasi = environment.login.storageState;
 // ve adımları platform veritabanına, ekran görüntüsü/video/izleri ŞİFRELİ medya deposuna yazar.
 // Sonuçlar Nöbetçi'nin "Sonuçlar" sekmesinde görünür. Playwright'ın HTML raporu ÜRETİLMEZ: HTML
 // rapor ekleri (ekran görüntüsü, video, iz) playwright-report/ altına DÜZ METİN kopyalardı.
-const platformRaporlayicisi: ReporterDescription = ['./scripts/platform/raporlayici.mjs', { adaptor: 'galaksi', ortam: environmentName }];
+// Raporlayıcı .mjs dosyası DOĞRUDAN verilmez; TypeScript giriş noktası üzerinden yüklenir (neden:
+// tests/support/platform-raporlayici.ts).
+const platformRaporlayicisi: ReporterDescription = ['./tests/support/platform-raporlayici.ts',{ adaptor: 'galaksi', ortam: environmentName }];
 
 export default defineConfig({
   testDir: './tests',

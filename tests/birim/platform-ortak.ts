@@ -30,6 +30,12 @@ export function ornekVeri<T>(ortam: 'test' | 'canli', dosya: string): T {
   return JSON.parse(readFileSync(join(ORNEK_ESKI_DOSYALAR, 'tests', 'data', ortam, `${dosya}.json`), 'utf-8')) as T;
 }
 
+/**
+ * POSIX dosya izinleri (0600/0700) yalnız macOS/Linux'ta anlamlıdır; Windows mode bitlerini uygulamaz (her zaman
+ * 0666/0777 döner) — orada dosyalar kullanıcı profilinin ACL'siyle korunur (bkz. gecici-dosyalar.mjs).
+ */
+export const POSIX_IZINLERI = process.platform !== 'win32';
+
 /** Testleri hızlandırmak için düşük scrypt maliyeti (üretim: N=2^17). */
 export const HIZLI_KDF = { N: 2 ** 14, r: 8, p: 1 } as const;
 

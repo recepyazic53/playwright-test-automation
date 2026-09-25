@@ -196,7 +196,8 @@ test.describe('Ekran yönetimi — kalıcı sil', () => {
       const disari = join(o.kod, '..', 'disari');
       mkdirSync(disari, { recursive: true });
       writeFileSync(join(disari, 'x.spec.ts'), '// dışarıda\n');
-      symlinkSync(disari, join(o.kod, 'tests', 'scenarios', 'bag'));
+      // 'junction': Windows'ta yönetici izni istemeyen klasör bağı (macOS/Linux'ta tür yok sayılır, sembolik bağ olur).
+      symlinkSync(disari, join(o.kod, 'tests', 'scenarios', 'bag'), 'junction');
       for (const [yol, neden] of [
         ['../x.spec.ts', /geçersiz yol parçası/], ['scenarios/../../x.spec.ts', /geçersiz yol parçası/], ['scenarios/./x.spec.ts', /geçersiz yol parçası/],
         ['/etc/passwd', /mutlak yol/], ['canli/jet-kasko.spec.ts', /tests\/scenarios dışında/], ['scenarios', /tests\/scenarios dışında/],
