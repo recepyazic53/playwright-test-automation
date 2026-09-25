@@ -21,6 +21,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { EnvironmentName } from './environments';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
+import { YASAK_ADRES_DEGISKENI } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 
 export const KASA_ANAHTARI_DEGISKENI = 'PLATFORM_KASA_ANAHTARI';
 export const KASA_PAROLASI_DEGISKENI = 'PLATFORM_KASA_PAROLASI';
@@ -62,7 +63,12 @@ export type PlatformVeriSeti = {
   senaryoKimlikleri: Record<string, string>;
   /** Giriş tarifi (yoksa null: ortam için Ayarlar > Giriş profilleri > Giriş tarifi tanımlanmalı). */
   girisTarifi?: PlatformGirisTarifi | null;
+  /** "Dene" ek verisindeki şifreli dosya referansları → bu koşu için çözülmüş geçici dosya yolları. */
+  ekDosyaYollari?: Record<string, string>;
 };
+
+/** Ayarlar > Güvenlik > "Yasak adresler" (host kalıpları; NOBETCI_YASAK_ADRESLER ortam değişkeniyle birleşir). */
+export type PlatformYasakAdresleri = string[];
 
 type DurumCiktisi =
   | { durum: 'veritabani-yok' }
@@ -72,6 +78,7 @@ type DurumCiktisi =
 type VeriCiktisi = Extract<DurumCiktisi, { durum: 'aktarildi' }> & {
   anahtarYok?: boolean;
   veri?: PlatformVeriSeti | null;
+  yasakAdresler?: PlatformYasakAdresleri;
 };
 
 type HataCiktisi = { hata: string; kod: string };
@@ -182,8 +189,21 @@ export function platformVerisi(ortam: EnvironmentName): PlatformVeriSeti {
   const cikti = sonuc as VeriCiktisi;
   if (!cikti.veri) throw new PlatformVeriHatasi(`"${ortam}" ortamı platform veritabanında yok`);
   birKezLogla(`Veri kaynağı: platform veritabanı (${ortam}; son aktarım ${cikti.sonAktarim ?? 'bilinmiyor'}).`);
+  yasakAdresleriniBirlestir(cikti.yasakAdresler);
   veriOnbellegi.set(ortam, cikti.veri);
   return cikti.veri;
+}
+
+/**
+ * Ayarlardaki yasak adresleri bu sürecin NOBETCI_YASAK_ADRESLER değişkenine EKLER (varsa ortamdakilerle birlikte).
+ * global-setup ana süreçte çağrıldığında worker'lar birleşik listeyi miras alır; koşu koruması (global-setup,
+ * model koşucusu) bu değişkeni okur.
+ */
+function yasakAdresleriniBirlestir(liste: PlatformYasakAdresleri | undefined): void {
+  if (!Array.isArray(liste) || !liste.length) return;
+  const mevcut = (process.env[YASAK_ADRES_DEGISKENI] ?? '').split(/[\s,;]+/).map((k) => k.trim().toLowerCase()).filter(Boolean);
+  const birlesik = [...new Set([...mevcut, ...liste.map((k) => k.trim().toLowerCase()).filter(Boolean)])];
+  process.env[YASAK_ADRES_DEGISKENI] = birlesik.join(',');
 }
 
 /**
@@ -252,6 +272,7 @@ export function platformModelVerisi(ortam: EnvironmentName): PlatformModelVerisi
     throw new PlatformVeriHatasi(`platform veritabanı okunamadı: ${sonuc.hata}`);
   }
   const veri = (sonuc as { model?: PlatformModelVerisi | null }).model ?? null;
+  yasakAdresleriniBirlestir((sonuc as { yasakAdresler?: PlatformYasakAdresleri }).yasakAdresler);
   modelOnbellegi.set(ortam, veri);
   return veri;
 }

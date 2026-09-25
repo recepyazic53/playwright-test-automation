@@ -183,7 +183,9 @@ function baglamAlani(/** @type {ReturnType<typeof formSemasiOlustur>} */ sema) {
  */
 export function senaryoListesi(vt, projeId, ortamId, adaptor = null, secenekler = {}) {
   acikAnahtar(vt);
-  const eslemeliler = new Set(kaynakEslemeleriniListele(vt, projeId, 'senaryo').map((e) => e.varlikId));
+  const senaryoEslemeleri = kaynakEslemeleriniListele(vt, projeId, 'senaryo');
+  const eslemeliler = new Set(senaryoEslemeleri.map((e) => e.varlikId));
+  const eslemeAnahtarlari = new Map(senaryoEslemeleri.map((e) => [e.varlikId, e.kaynakAnahtari]));
   /** @type {Map<string, { sema: ReturnType<typeof formSemasiOlustur> | null; model: boolean }>} */
   const semalar = new Map();
   const ekranlar = ekranlariListele(vt, projeId);
@@ -236,6 +238,8 @@ export function senaryoListesi(vt, projeId, ortamId, adaptor = null, secenekler 
       beklenenSonuc: sema && veri ? beklenenSonucEtiketi(sema, veri) : null,
       sonSonuc: sonuc, mutlakaGorunmeliSayisi: kurallar.length, paketten: nesneMi(icerik.paket),
       modelKosusu: modelSenaryosuMu(icerik, { kodEslemesiVar: eslemeliler.has(String(s.id)), kodDosyasiVar: secenekler.kodDosyasiVar }),
+      // "Kodu kaldırılmış": spec dosyası diskte yok (hızlı denetim; başlık denetimi kodKaldirilmisSenaryolar ile).
+      kodDurumu: kodKaldirilmaNedeni({ id: String(s.id), icerik }, { eslemeliler, eslemeAnahtarlari, kodDosyasiVar: secenekler.kodDosyasiVar }),
       guncellenme: String(s.guncellenme)
     });
   }
@@ -586,6 +590,95 @@ export function senaryolariSil(vt, projeId, idler, secenekler = {}) {
   }
   vt.islem(() => { for (const s of senaryolar) senaryoSil(vt, s.id, secenekler.yapan); });
   return { silinen: senaryolar.length };
+}
+
+// ---------------------------------------------------------------------------------------
+// Kodu kaldırılmış senaryolar (spec dosyası ya da test başlığı artık yok)
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Senaryonun Playwright kaynağı: içerikteki (dosya + güncel başlık) ya da aktarım eşlemesindeki "<dosya>::<başlık>".
+ * @param {{ id: string; icerik: unknown }} s @param {Map<string, string>} eslemeAnahtarlari
+ */
+function kodKaynagi(s, eslemeAnahtarlari) {
+  const k = senaryoKaynagi(s.icerik);
+  if (k) return k;
+  const a = eslemeAnahtarlari.get(s.id);
+  const i = a ? a.indexOf('::') : -1;
+  return a && i > 0 ? { dosya: a.slice(0, i), ad: a.slice(i + 2) } : null;
+}
+
+/**
+ * Kodla çalışan (model koşucusu senaryosu OLMAYAN) senaryonun kodu kaldırılmış mı?
+ *  - 'dosya-yok'  : kaynaktaki spec dosyası diskte yok,
+ *  - 'baslik-yok' : spec dosyası var ama kodda tanımlı (veri güdümlü olmayan) testin başlığı güncel Playwright
+ *                   listesinde yok (yalnızca testVar verildiyse denetlenir; veri güdümlü testler veritabanından
+ *                   üretildiği için dosya varsa her zaman vardır).
+ * Model senaryoları (sayfa paketinden; kodu hiç olmayan) hiçbir zaman "kodu kaldırılmış" sayılmaz.
+ * @param {{ id: string; icerik: unknown }} s
+ * @param {{ eslemeliler: Set<string>; eslemeAnahtarlari: Map<string, string>; kodDosyasiVar?: (dosya: string) => boolean; testVar?: (dosya: string, ad: string) => boolean }} b
+ * @returns {'dosya-yok' | 'baslik-yok' | null}
+ */
+export function kodKaldirilmaNedeni(s, b) {
+  if (!b.kodDosyasiVar) return null;
+  if (modelSenaryosuMu(s.icerik, { kodEslemesiVar: b.eslemeliler.has(s.id), kodDosyasiVar: b.kodDosyasiVar })) return null;
+  const k = kodKaynagi(s, b.eslemeAnahtarlari);
+  if (!k || k.dosya === MODEL_SPEC_DOSYASI) return null;
+  if (!b.kodDosyasiVar(k.dosya)) return 'dosya-yok';
+  if (b.testVar && !veriGudumluMu(s.icerik) && !b.testVar(k.dosya, k.ad)) return 'baslik-yok';
+  return null;
+}
+
+/**
+ * Ortamdaki "kodu kaldırılmış" senaryolar. testListesi verilirse (Playwright'ın güncel listesi) başlığı listede
+ * olmayan kodlu testler de bulunur; alınamazsa yalnızca dosya denetimi yapılır (baslikDenetlendi: false).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamId
+ * @param {{ kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null }} secenekler
+ */
+export function kodKaldirilmisSenaryolar(vt, projeId, ortamId, secenekler) {
+  const senaryoEslemeleri = kaynakEslemeleriniListele(vt, projeId, 'senaryo');
+  const b = {
+    eslemeliler: new Set(senaryoEslemeleri.map((e) => e.varlikId)),
+    eslemeAnahtarlari: new Map(senaryoEslemeleri.map((e) => [e.varlikId, e.kaynakAnahtari])),
+    kodDosyasiVar: secenekler.kodDosyasiVar,
+    ...(secenekler.testListesi ? { testVar: ((liste) => (/** @type {string} */ d, /** @type {string} */ a) => liste.has(`${d}::${a}`))(new Set(secenekler.testListesi.map((t) => `${t.dosya}::${t.ad}`))) } : {})
+  };
+  /** @type {Array<{ id: string; baslik: string; neden: 'dosya-yok' | 'baslik-yok'; dosya: string | null; ad: string | null }>} */
+  const sonuc = [];
+  for (const r of vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? ORDER BY baslik', [projeId])) {
+    const s = { id: String(r.id), icerik: JSON.parse(String(r.icerik_json)) };
+    if (!ortamKimlikleri(s.icerik).includes(ortamId)) continue;
+    const neden = kodKaldirilmaNedeni(s, b);
+    if (!neden) continue;
+    const k = kodKaynagi(s, b.eslemeAnahtarlari);
+    sonuc.push({ id: s.id, baslik: String(r.baslik), neden, dosya: k?.dosya ?? null, ad: k?.ad ?? null });
+  }
+  return { senaryolar: sonuc, baslikDenetlendi: Boolean(secenekler.testListesi) };
+}
+
+/**
+ * Kodu kaldırılmış senaryoları veritabanından siler (değişiklik geçmişi KORUNUR: silinen kaydın son hali geçmişe
+ * yazılır; eski koşu sonuçları kalır). Her kimlik SUNUCUDA yeniden denetlenir: kodu hâlâ duran bir senaryo
+ * listedeyse HİÇBİRİ silinmez. Koşan senaryo silinmez.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamId @param {unknown} idler
+ * @param {{ kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null; kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string }} secenekler
+ */
+export function kodKaldirilmisSenaryolariSil(vt, projeId, ortamId, idler, secenekler) {
+  const liste = kimlikListesi(idler);
+  const denetim = kodKaldirilmisSenaryolar(vt, projeId, ortamId, secenekler);
+  const kaldirilmis = new Map(denetim.senaryolar.map((x) => [x.id, x]));
+  const kodu = liste.filter((id) => !kaldirilmis.has(id));
+  if (kodu.length) {
+    const s = senaryoGetir(vt, kodu[0]);
+    if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+    throw new DepoHatasi(`"${s.baslik}" senaryosunun kodu hâlâ duruyor (ya da bu ortamda denetlenemedi); kaldırılmadı. Yalnızca "kodu kaldırılmış" senaryolar silinebilir.`);
+  }
+  for (const id of liste) {
+    const x = /** @type {{ dosya: string | null; ad: string | null; baslik: string }} */ (kaldirilmis.get(id));
+    if (x.dosya && x.ad && secenekler.kosuyorMu?.(x.dosya, x.ad)) throw new SenaryoCakismaHatasi(`"${x.baslik}" şu anda koşuyor; bitmesini bekleyin veya durdurun.`);
+  }
+  vt.islem(() => { for (const id of liste) senaryoSil(vt, id, secenekler.yapan); });
+  return { silinen: liste.length };
 }
 
 /**

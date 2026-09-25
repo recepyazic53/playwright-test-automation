@@ -48,8 +48,30 @@ Kasa parolasını unutmayın: parola unutulursa veriler kurtarılamaz.
   "Koşuda" seçimi, **Dene** (taslak, kaydetmeden) ve **Çalıştır** (canlı ekran görüntüsü, durdurma).
 - **Sonuçlar** — koşular, kartlar, trend, hata kalıpları, test detayı (ekran görüntüsü, video, iz).
   Medya şifrelidir ve yalnızca kasa açıkken gösterilir.
-- **Ayarlar** — proje, ortamlar, giriş profilleri, bağlam/test verisi profilleri, güvenlik (otomatik
-  kilit, video saklama), yedekleme (dışa/içe aktar, otomatik yedek).
+- **Ayarlar** — proje, ortamlar, giriş profilleri, bağlam/test verisi profilleri, **dosyalar** (ekranların
+  varsayılan dosyaları, ör. ürünün çoklu sorgu Excel'i), güvenlik (otomatik kilit, video saklama, **yasak
+  adresler**, **açık dosyaları şifreli depoya taşı**), yedekleme (dışa/içe aktar, otomatik yedek).
+
+### Senaryo dosyaları (ör. çoklu sorgu Excel'i)
+
+Senaryonun dosya alanında **Dosya yükle** ile seçilen dosya bellekte şifrelenip şifreli medya deposuna
+(`veri/medya/`) yazılır; diskte düz metin olarak durmaz, arayüzden indirilemez (yalnızca ad ve boyut görünür).
+Senaryo verisinde yalnızca bir referans (`nobetci-dosya://<kimlik>/<ad>`) saklanır. Koşu anında test süreci
+dosyayı **yalnızca o koşuya özel**, yalnızca kullanıcının okuyabildiği geçici bir klasöre çözer (işletim
+sisteminin kullanıcı geçici klasöründe `nobetci-dosyalar/…`; klasör 0700, dosya 0600) ve koşu bitince klasörü
+ezip siler; çöken koşulardan kalanlar Nöbetçi açılırken silinir. Senaryoda dosya yoksa ekranın varsayılan
+dosyası (Ayarlar > Dosyalar) kullanılır. Senaryo dosyaları yedeğe her zaman (şifreli haliyle) girer.
+
+Eski proje düzenindeki düz metin dosyalar (`tests/fixtures/**`) aktarımda şifreli depoya **kopyalanır** ve
+yol değerleri referansa çevrilir. Düz metin kopyaları silmek için bir kez **Ayarlar > Güvenlik > "Açık
+dosyaları şifreli depoya taşı"** kullanın: önce liste gösterilir; onaylanınca her dosya şifreli depoya alınır,
+şifreli kopyası doğrulanır ve düz metin dosya ezilip silinir (doğrulanamayan dosya silinmez).
+
+### Yasak adresler
+
+**Ayarlar > Güvenlik > Yasak adresler**: Nöbetçi'nin hiçbir zaman bağlanmayacağı host kalıpları (`*` joker).
+Listedeki bir host'a giden koşu ve ekran taraması hiç başlamaz; koşu sırasında bu host'lara istek iptal edilir.
+Varsayılan boştur. `NOBETCI_YASAK_ADRESLER` ortam değişkeni ek kaynak olarak desteklenir (ikisi birleşir).
 
 Kasa, Ayarlar > Güvenlik'te belirlenen süre (5–120 dk, varsayılan 15) işlem yapılmazsa otomatik kilitlenir;
 kasa kilitliyken koşu başlatılmaz.

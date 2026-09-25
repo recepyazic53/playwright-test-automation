@@ -185,6 +185,11 @@ export function aktarimAkisi(kapsayici, secenekler) {
         ? h('p', { class: 'kucuk' }, `Eski koşu sonuçları: ${sonuc.sonucAktarimi.kosu} koşu, ${sonuc.sonucAktarimi.sonuc} sonuç ve ${sonuc.sonucAktarimi.medya} ekran görüntüsü/video aktarıldı`
           + (sonuc.sonucAktarimi.zatenVar ? ` (daha önce aktarılmış ${sonuc.sonucAktarimi.zatenVar} sonuç atlandı)` : '') + '. Eski klasörler olduğu gibi duruyor.')
         : null,
+      sonuc.dosyaAktarimi && (sonuc.dosyaAktarimi.aktarilan || sonuc.dosyaAktarimi.zatenVardi)
+        ? h('p', { class: 'kucuk' }, `Senaryo dosyaları: ${sonuc.dosyaAktarimi.aktarilan} dosya şifreli depoya alındı`
+          + (sonuc.dosyaAktarimi.zatenVardi ? ` (${sonuc.dosyaAktarimi.zatenVardi} dosyanın şifreli kopyası zaten vardı)` : '')
+          + '. Düz metin kopyaları silmek için Ayarlar > Güvenlik > "Açık dosyaları şifreli depoya taşı".')
+        : null,
       uyariListesi(sonuc.uyarilar),
       h('p', { class: 'soluk kucuk' }, 'Testler artık veriyi bu veritabanından okur. Terminalden çalıştırırken kasa parolası gizli olarak sorulur; Nöbetçi\'den başlatılan koşularda kasa açıksa sorulmaz.'),
       h('div', { class: 'dugmeler' }, devam)));

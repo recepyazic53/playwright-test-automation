@@ -54,6 +54,11 @@ export interface AktarimAdaptoru {
   dogrulamaBaglami?(vt: Veritabani, projeId: string, ortamAnahtari: string): Record<string, unknown> | undefined;
   /** Giriş motoru: kaydedilmiş giriş tarifi olmayan ortam için projenin varsayılan tarifi (kasa açık olmalı). */
   varsayilanGirisTarifi?(vt: Veritabani, projeId: string, ortamId: string): unknown;
+  /**
+   * Senaryoların kullandığı düz metin dosyalar (klasör: proje kökü ya da eski dosya yedeği). Aktarımdan sonra ve
+   * Ayarlar > Güvenlik > "Açık dosyaları şifreli depoya taşı" ile şifreli depoya alınır (bkz. scripts/platform/dosyalar/).
+   */
+  dosyaKaynaklari?(kok: string): Array<{ goreliYol: string; yol: string }>;
 }
 
 export declare const AKTARIM_ADAPTORLERI: ReadonlyArray<AktarimAdaptoru>;

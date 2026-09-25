@@ -38,6 +38,10 @@ import {
 import { veritabaniYolu } from './platform/veritabani/baglanti.mjs';
 import { sunucuBaglantisiniSil, sunucuBaglantisiniYaz } from './platform/sunucu-baglantisi.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
+import { taramalariKapat } from './platform/tarama/yonetici.mjs';
+import {
+  DOSYA_KLASORU_DEGISKENI, artikKlasorleriTemizle, geciciDosyaKoku, kosuKlasoruOlustur, kosuKlasorunuSil, sahipYaz
+} from './platform/dosyalar/gecici-dosyalar.mjs';
 
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
@@ -345,6 +349,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ekran-ortak.js', { dosya: 'ekran-ortak.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sayfa-paketi.js', { dosya: 'sayfa-paketi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/bulgular.js', { dosya: 'bulgular.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/dosya-yukleme.js', { dosya: 'dosya-yukleme.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/tarama.js', { dosya: 'tarama.js', tur: 'text/javascript; charset=utf-8' }],
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'senaryo-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }]
@@ -640,6 +646,10 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     // Elle doğrulama kodu (SMS "elle" kipi): giriş motoru bu yola istek yazar, panel kullanıcıdan kodu alıp
     // yanıtı yazar (bkz. platform/giris/elle-kod.mjs; /kod-istegi ve /kod-gonder uçları).
     const kodYolu = join(tmpdir(), `test-sunucu-kod-${randomBytes(8).toString('hex')}`);
+    // Şifreli senaryo dosyaları (ör. çoklu sorgu Excel'i) bu sürece özel, yalnızca kullanıcının okuyabildiği geçici
+    // klasöre çözülür (veri okuyucu; bkz. platform/dosyalar/) — süreç kapanınca klasör ezilip silinir.
+    const dosyaKoku = geciciDosyaKoku(veritabaniYolu(projeKoku));
+    const dosyaKlasoru = kosuKlasoruOlustur(dosyaKoku, `sunucu-${kosuKimligi}`);
     // NOT (önemli): "desen" BİLEREK "--grep" argümanı olarak DEĞİL, aşağıda
     // TEST_SUNUCU_GREP_DESENI ortam değişkeni ile aktarılıyor. Teşhis loglarıyla
     // doğrulandı: başlığında Türkçe büyük "İ" harfi geçen senaryolarda (ör.
@@ -681,7 +691,8 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
         // veritabanından okunur (terminalde parola sorulmaz). Koşu yalnızca kasa açıkken başlar.
         ...platformTestOrtami(),
         ...ekOrtamDegiskenleri,
-        KOSU_KIMLIGI: kosuKimligi
+        KOSU_KIMLIGI: kosuKimligi,
+        [DOSYA_KLASORU_DEGISKENI]: dosyaKlasoru
       },
       // NOT: 'inherit' yerine 'pipe' kullanılıyor — alt sürecin kendi stdout/stderr'ı
       // (ör. Playwright'ın "Error: No tests found" çıktısı) DOĞRUDAN terminale
@@ -715,6 +726,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
       logaYaz('[stderr] ' + parca.toString('utf-8').replace(/\n$/, ''));
     });
 
+    if (alt.pid) sahipYaz(dosyaKlasoru, alt.pid);
     const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu, kodYolu };
     calisanSurecler.set(kosuId, kayit);
     aktifPlatformKosulari.set(kosuKimligi, (aktifPlatformKosulari.get(kosuKimligi) ?? 0) + 1);
@@ -755,6 +767,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
         // yok sayılır
       }
       kodIsteginiTemizle(kodYolu);
+      kosuKlasorunuSil(dosyaKlasoru, dosyaKoku);
 
       await platformKosusunuBirak(kayit.zamanAsimi ? 'zaman_asimi' : iptalEdildiMi ? 'durduruldu' : 'tamamlandi');
 
@@ -946,6 +959,8 @@ function calistirmaYaniti(calistirmaSonucu, ad) {
 // "Dene": taslak senaryo geçici bir ek veri dosyasıyla (TEST_SUNUCU_EK_SENARYO_DOSYASI; kalıcı veriye
 // yazılmaz) spec dosyasına daraltılmış ayrı bir listelemeyle bulunur ve çalıştırılır; dosya sonra silinir.
 platformKosucusunuAyarla({
+  // Senaryolar ekranı "kodu kaldırılmış" denetimi: Playwright'ın güncel test listesi (dosya + başlık).
+  testListesi: async (ortam) => (await tumSenaryolariGetir(ortam)).map((t) => ({ dosya: t.dosya, ad: t.ad })),
   calistir: (istek) => senaryoyuCalistirVeYanitla({
     ortam: istek.ortam, senaryoAdi: istek.ad, dosya: istek.dosya, kosuId: istek.kosuId, kosuTuru: istek.kosuTuru ?? null,
     kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel',
@@ -1180,6 +1195,15 @@ if (dogrudanCalistirildi) {
 
   artikGeciciSenaryolariTemizle();
 
+  // Önceki (çöken/kapatılan) oturumlardan kalan, sahibi artık çalışmayan geçici senaryo dosyası klasörleri
+  // (şifreli dosyaların koşu anında çözüldüğü yer) açılışta ezilip silinir.
+  try {
+    const silinen = artikKlasorleriTemizle(geciciDosyaKoku(veritabaniYolu(projeKoku)));
+    if (silinen) console.log(`[test-sunucu] Önceki koşulardan kalan ${silinen} geçici dosya klasörü silindi.`);
+  } catch (hata) {
+    console.error(`[test-sunucu] Geçici dosya klasörleri temizlenemedi: ${hata.message}`);
+  }
+
   // Şifreli medya deposu (veri/medya/): VIDEO_SAKLAMA_GUN'den eski videolar + sahipsiz dosyalar.
   platformMedyaTemizligiZamanla();
 
@@ -1217,6 +1241,8 @@ if (dogrudanCalistirildi) {
       if (process.platform === 'win32') surecAgaciniKapat(kayit);
       else sinyalGonder(kayit, 'SIGKILL');
     }
+    // Otomatik ekran taraması ayrı süreç grubunda çalışır (Ctrl+C ona ulaşmaz): burada kapatılır.
+    try { taramalariKapat(); } catch { /* yok sayılır */ }
     sunucuBaglantisiniSil(veritabaniYolu(projeKoku));
     sunucu.close();
     setTimeout(() => process.exit(sinyal === 'SIGINT' ? 130 : 0), 300).unref();

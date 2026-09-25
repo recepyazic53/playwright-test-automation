@@ -7,7 +7,8 @@
 // kaydetmeden geçici ek veriyle koşar (POST /platform/senaryo/dene).
 // Modeli olmayan ekranlarda ve kodda tanımlı senaryolarda yalnızca özet + başlık + Koşuda düzenlenir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, yerlestir, bildir, h, ikon, iskelet, rozet, TOKEN } from './ortak.js';
+import { api, yerlestir, bildir, boyutMetni, h, ikon, iskelet, rozet, TOKEN } from './ortak.js';
+import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle, kabulListesi } from './dosya-yukleme.js';
 import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
@@ -30,8 +31,9 @@ export async function senaryoFormu(icerik, s) {
   yerlestir(icerik, iskelet('sayfa'));
   try {
     let senaryo = null;
+    let dosyaBilgileri = {};
     if (s.mod === 'duzenle') {
-      ({ senaryo } = await api(`/platform/senaryo?id=${encodeURIComponent(s.senaryoId || '')}&ortamId=${encodeURIComponent(s.ortam.id)}`));
+      ({ senaryo, dosyalar: dosyaBilgileri = {} } = await api(`/platform/senaryo?id=${encodeURIComponent(s.senaryoId || '')}&ortamId=${encodeURIComponent(s.ortam.id)}`));
     }
     const ekranId = s.ekranId || senaryo?.ekranId || null;
     const baglam = ekranId
@@ -49,7 +51,7 @@ export async function senaryoFormu(icerik, s) {
       yerlestir(icerik, sayfaBasligi(s, 'Yeni senaryo', null), hataKutusu(new Error('Bu ekran için senaryo verisi kaynağı bilinmiyor; yeni senaryo oluşturulamaz.')));
       return;
     }
-    modelFormu(icerik, s, senaryo, baglam);
+    modelFormu(icerik, s, senaryo, { ...baglam, dosyaBilgileri });
   } catch (hata) {
     if (hata && hata.durum === 423) return;
     yerlestir(icerik, sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : 'Senaryoyu düzenle', null), hataKutusu(hata));
@@ -307,6 +309,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
           kontrolKaydet(alan.anahtar, [sel], hata, uyari);
           break;
         }
+        case 'dosya':
+          ({ govde, ust } = dosyaCiz(alan, id, hata, uyari));
+          break;
         case 'kimlik':
           ({ govde, ust } = kimlikCiz(alan, id, hata, uyari));
           break;
@@ -328,13 +333,77 @@ function modelFormu(icerik, s, senaryo, baglam) {
         }
       }
       kayit.gorunurlukCipi = ust.cip;
-      yerlestir(kap, ust.el, govde,
-        alan.tip === 'dosya' ? h('div', { class: 'alan-notu' }, 'Dosya proje klasöründe olmalıdır; yol proje köküne göre yazılır.') : null,
-        hata, uyari);
+      yerlestir(kap, ust.el, govde, hata, uyari);
     };
     kayit.ciz = () => { ciz(); planla(); };
     ciz();
     return kap;
+  }
+
+  // Dosya alanı: dosya ŞİFRELİ depoya yüklenir (düz metin diske yazılmaz); senaryo verisinde yalnızca referans durur.
+  // Koşuda dosya yalnızca kullanıcının okuyabildiği geçici bir klasöre çözülür ve koşu bitince silinir.
+  const dosyaBilgileri = baglam.dosyaBilgileri || {};
+  function dosyaCiz(alan, id, hata, uyari) {
+    const deger = String(degerler[alan.anahtar] ?? '');
+    const ref = dosyaReferansiCoz(deger);
+    const kabul = kabulListesi(alan.kabul);
+    const secici = h('input', { type: 'file', id, class: 'gorunmez-dosya', ...(kabul ? { accept: kabul.join(',') } : {}), 'aria-describedby': `${id}-hata ${id}-uyari ${id}-not` });
+    const durum = h('div', { class: 'dosya-durumu', 'aria-live': 'polite' });
+    const sec = () => secici.click();
+    secici.addEventListener('change', async () => {
+      const dosya = secici.files && secici.files[0];
+      secici.value = '';
+      if (!dosya) return;
+      const sorun = dosyaOnDenetimi(dosya, alan.kabul);
+      if (sorun) { hata.textContent = sorun; return; }
+      hata.textContent = '';
+      const cubuk = h('span', { class: 'dosya-ilerleme-cubugu', style: { width: '0%' } });
+      yerlestir(durum, h('div', { class: 'dosya-ilerleme' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), h('span', {}, `${dosya.name} şifrelenip yükleniyor…`), h('span', { class: 'dosya-ilerleme-yolu' }, cubuk)));
+      try {
+        const adres = `/platform/senaryo-dosyasi/yukle?projeId=${encodeURIComponent(s.proje.id)}&ekranId=${encodeURIComponent(baglam.ekran.id)}&alan=${encodeURIComponent(alan.anahtar)}`;
+        const d = await dosyaYukle(adres, dosya, (y) => { cubuk.style.width = `${y}%`; });
+        dosyaBilgileri[d.referans] = { id: d.id, ad: d.ad, boyut: d.boyut };
+        degerYaz(alan.anahtar, d.referans);
+        bildir(`${d.ad} şifreli olarak yüklendi; senaryoyu kaydedince bağlanır.`, 'basari');
+        alanlar.get(alan.id)?.ciz();
+      } catch (e) {
+        if (e.durum === 423) return;
+        yerlestir(durum);
+        hata.textContent = e.message;
+      }
+    });
+    const kaldir = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${alan.etiket}: dosyayı kaldır` }, ikon('carpi'), 'Kaldır');
+    kaldir.addEventListener('click', () => { degerYaz(alan.anahtar, ''); alanlar.get(alan.id)?.ciz(); });
+    let icerikEl;
+    if (ref) {
+      const b = dosyaBilgileri[deger];
+      icerikEl = h('div', { class: `dosya-karti ${b && b.eksik ? 'eksik' : ''}`.trim() },
+        h('span', { class: 'dosya-karti-ikon', 'aria-hidden': 'true' }, ikon('dosya')),
+        h('div', { class: 'dosya-karti-ana' },
+          h('strong', { class: 'dosya-adi' }, b ? b.ad : ref.ad),
+          h('small', { class: 'soluk' }, b && b.eksik ? 'şifreli depoda bulunamadı — yeniden yükleyin' : b && b.boyut !== null && b.boyut !== undefined ? boyutMetni(b.boyut) : 'şifreli depoda')),
+        rozet([ikon('kilit'), 'şifreli'], 'basari', { title: 'Dosya diskte yalnızca şifreli durur; koşuda geçici olarak çözülür.' }),
+        h('span', { class: 'dosya-karti-eylemler' },
+          h('button', { type: 'button', class: 'kucuk-dugme', onclick: sec, 'aria-label': `${alan.etiket}: dosyayı değiştir` }, ikon('yukle'), 'Değiştir'), kaldir));
+    } else if (deger) {
+      icerikEl = h('div', { class: 'dosya-karti eski' },
+        h('span', { class: 'dosya-karti-ikon', 'aria-hidden': 'true' }, ikon('uyari')),
+        h('div', { class: 'dosya-karti-ana' },
+          h('code', { class: 'dosya-adi' }, deger),
+          h('small', { class: 'soluk' }, 'eski düz metin dosya yolu — şifreli depoya almak için dosyayı yükleyin (ya da Ayarlar > Güvenlik > "Açık dosyaları şifreli depoya taşı")')),
+        h('span', { class: 'dosya-karti-eylemler' },
+          h('button', { type: 'button', class: 'kucuk-dugme', onclick: sec, 'aria-label': `${alan.etiket}: dosya yükle` }, ikon('yukle'), 'Dosya yükle'), kaldir));
+    } else {
+      icerikEl = h('button', { type: 'button', class: 'dosya-sec-dugmesi', onclick: sec, 'aria-label': `${alan.etiket}: dosya yükle` },
+        ikon('yukle'), h('span', {}, h('strong', {}, 'Dosya yükle'), h('small', { class: 'soluk' }, `${kabul ? kabul.join(', ') : 'dosya'} · en fazla 20 MB · şifreli saklanır`)));
+    }
+    const govde = h('div', { class: 'dosya-alani' }, secici, icerikEl, durum,
+      h('div', { class: 'alan-notu', id: `${id}-not` }, alan.varsayilan !== undefined
+        ? 'Boş bırakılırsa ekranın varsayılan dosyası kullanılır (Ayarlar > Dosyalar).'
+        : 'Dosya diskte yalnızca şifreli durur; koşuda geçici olarak çözülür ve koşu bitince silinir.'));
+    const ust = alanUst(alan, id);
+    kontrolKaydet(alan.anahtar, [secici], hata, uyari);
+    return { govde, ust };
   }
 
   function profilOnizlemesi(kap, profil) {

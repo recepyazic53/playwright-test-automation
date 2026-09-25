@@ -9,7 +9,6 @@
     "test:debug": "playwright test --debug",
     "test:canli": "cross-env TEST_ENV=canli playwright test",
     "test:test-ortami": "cross-env TEST_ENV=test playwright test",
-    "report": "playwright show-report",
     "typecheck": "tsc --noEmit",
     "test:birim": "playwright test --config playwright.birim.config.ts",
     "test-sunucu": "node scripts/test-sunucu.mjs",

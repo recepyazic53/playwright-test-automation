@@ -36,6 +36,8 @@ export interface SenaryoSatiri {
   paketten: boolean;
   /** Test kodu olmadan model koşucusuyla çalışır mı (bkz. model-kosusu.mjs). */
   modelKosusu: boolean;
+  /** Kodu kaldırılmış mı (spec dosyası diskte yok)? Başlık denetimi kodKaldirilmisSenaryolar ile yapılır. */
+  kodDurumu: 'dosya-yok' | 'baslik-yok' | null;
   guncellenme: string;
 }
 export type ModelSecenekleri = { kodDosyasiVar?: (dosya: string) => boolean };
@@ -100,3 +102,16 @@ export declare function denemePaketiOlustur(
   ortamAnahtari: string; spec: string; geciciBaslik: string; uyarilar: Bulgu[];
   ekVeri: { ortam: string; ekVeriler: Array<{ dosya: string; yol: string[]; ogeler: unknown[] }> };
 };
+
+export type KodKaldirilmaNedeni = 'dosya-yok' | 'baslik-yok';
+export declare function kodKaldirilmaNedeni(
+  s: { id: string; icerik: unknown },
+  b: { eslemeliler: Set<string>; eslemeAnahtarlari: Map<string, string>; kodDosyasiVar?: (dosya: string) => boolean; testVar?: (dosya: string, ad: string) => boolean }
+): KodKaldirilmaNedeni | null;
+export declare function kodKaldirilmisSenaryolar(vt: Veritabani, projeId: string, ortamId: string, secenekler: {
+  kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null;
+}): { senaryolar: Array<{ id: string; baslik: string; neden: KodKaldirilmaNedeni; dosya: string | null; ad: string | null }>; baslikDenetlendi: boolean };
+export declare function kodKaldirilmisSenaryolariSil(vt: Veritabani, projeId: string, ortamId: string, idler: unknown, secenekler: {
+  kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null;
+  kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string;
+}): { silinen: number };

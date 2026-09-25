@@ -347,6 +347,43 @@ export const GOCLER = [
     sql: `
       ALTER TABLE medya ADD COLUMN yedek_disi INTEGER NOT NULL DEFAULT 0;
     `
+  },
+  {
+    // Sürüm 7 — senaryo dosyaları (ör. çoklu sorgu Excel'i) ŞİFRELİ medya deposunda (bkz.
+    // scripts/platform/dosyalar/senaryo-dosyalari.mjs). medya.tur'a 'senaryo-dosyasi' eklenir (CHECK
+    // kısıtı değiştirilemediği için tablo yeniden kurulur; satırlar aynen taşınır) ve:
+    // - sahip_turu / sahip_id: dosyanın bağlı olduğu varlık ('senaryo' | 'ekran'; yüklenip henüz
+    //   kaydedilmemişse NULL — sahipsiz ve 1 günden eski dosyalar temizlikte silinir),
+    // - kaynak: eski düz metin dosyasından taşındıysa proje köküne göre yolu (ör. "tests/fixtures/…";
+    //   aynı dosya ikinci kez taşınmaz, eski yol değerleri bu kayda çevrilir).
+    surum: 7,
+    ad: 'senaryo_dosyalari',
+    sql: `
+      CREATE TABLE medya_yeni (
+        id           TEXT PRIMARY KEY,
+        sonuc_id     TEXT REFERENCES kosu_sonuclari(id) ON DELETE CASCADE,
+        sira         INTEGER NOT NULL DEFAULT 0,
+        tur          TEXT NOT NULL CHECK (tur IN ('ekran_goruntusu', 'video', 'iz', 'diger', 'senaryo-dosyasi')),
+        ad           TEXT NOT NULL,
+        icerik_turu  TEXT NOT NULL,
+        boyut        INTEGER NOT NULL,
+        dosya        TEXT NOT NULL,
+        olusturulma  TEXT NOT NULL,
+        silinme      TEXT,
+        yedek_disi   INTEGER NOT NULL DEFAULT 0,
+        sahip_turu   TEXT,
+        sahip_id     TEXT,
+        kaynak       TEXT
+      );
+      INSERT INTO medya_yeni (id, sonuc_id, sira, tur, ad, icerik_turu, boyut, dosya, olusturulma, silinme, yedek_disi)
+        SELECT id, sonuc_id, sira, tur, ad, icerik_turu, boyut, dosya, olusturulma, silinme, yedek_disi FROM medya;
+      DROP TABLE medya;
+      ALTER TABLE medya_yeni RENAME TO medya;
+      CREATE INDEX ix_medya_sonuc ON medya(sonuc_id, sira);
+      CREATE INDEX ix_medya_tur ON medya(tur, olusturulma);
+      CREATE INDEX ix_medya_sahip ON medya(sahip_turu, sahip_id);
+      CREATE INDEX ix_medya_kaynak ON medya(kaynak);
+    `
   }
 ];
 

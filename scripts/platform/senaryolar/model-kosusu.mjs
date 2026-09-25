@@ -9,7 +9,8 @@
 //    dosyası diskte yok. Böylece Galaksi'nin kodlu testleri model koşucusunda ASLA tekrarlanmaz.
 //  - Model senaryoları TEK bir spec dosyasında (MODEL_SPEC_DOSYASI) üretilir; her testin etiketi
 //    "@model-<senaryo UUID>" olur ve koşu bu etiketle daraltılır (grep).
-//  - Yasaklı adres koruması: NOBETCI_YASAK_ADRESLER (virgül/boşlukla ayrılmış host kalıpları, "*" joker)
+//  - Yasaklı adres koruması: Ayarlar > Güvenlik > "Yasak adresler" (guvenlik/yasak-adresler.mjs; alt süreçlere bu
+//    değişkenle verilir) + NOBETCI_YASAK_ADRESLER (virgül/boşlukla ayrılmış host kalıpları, "*" joker)
 //    ortam değişkeniyle verilen bir host'a giden koşu, tarayıcı hiçbir yere gitmeden reddedilir.
 //  - Koşu planı: adım kapsamı (isteğe bağlı adımlar), doldurulacak alanlar (değer, tip, konum, doldurucu),
 //    beklenen sonuç ve bağlam profili modelden ve senaryo verisinden SAF olarak çıkarılır (birim testli).
@@ -123,7 +124,7 @@ export function adresYasakliMi(adres, desenler) {
 export function yasakliAdresMesaji(adres, kalip) {
   let host = '?';
   try { host = new URL(adres).hostname; } catch { /* yok */ }
-  return `Koşu reddedildi: ortamın adresi (${host}) yasaklı adres kalıbına ("${kalip}") uyuyor (${YASAK_ADRES_DEGISKENI}). Tarayıcı hiçbir yere gitmedi.`;
+  return `Koşu reddedildi: ortamın adresi (${host}) yasaklı adres kalıbına ("${kalip}") uyuyor (Ayarlar > Güvenlik > Yasak adresler ya da ${YASAK_ADRES_DEGISKENI}). Tarayıcı hiçbir yere gitmedi.`;
 }
 
 // ---------------------------------------------------------------------------------------

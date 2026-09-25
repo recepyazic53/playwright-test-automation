@@ -429,6 +429,11 @@ function loadData<T>(environment: EnvironmentName, fileName: string): T {
 // dosyasındaki dizinin (yol) SONUNA eklenir — deneme senaryosu kalıcı veriye hiç yazılmaz.
 function ekVerileriUygula(environment: EnvironmentName, fileName: string, veri: unknown): unknown {
   const ek = ekSenaryoDosyasiniOku(environment);
+  // Taslaktaki şifreli dosya referansları ("nobetci-dosya://…") bu koşu için çözülmüş geçici dosya yollarıyla değişir.
+  const yollar = ek ? platformVerisi(environment).ekDosyaYollari ?? {} : {};
+  const yolaCevir = (d: unknown): unknown => (Array.isArray(d) ? d.map(yolaCevir)
+    : typeof d === 'object' && d !== null ? Object.fromEntries(Object.entries(d).map(([k, v]) => [k, yolaCevir(v)]))
+      : typeof d === 'string' && yollar[d] ? yollar[d] : d);
   for (const e of ek?.ekVeriler ?? []) {
     if (e.dosya !== fileName || !Array.isArray(e.yol) || !e.yol.length || !Array.isArray(e.ogeler)) continue;
     let hedef: unknown = veri;
@@ -436,7 +441,7 @@ function ekVerileriUygula(environment: EnvironmentName, fileName: string, veri: 
     const son = e.yol[e.yol.length - 1];
     const dizi = typeof hedef === 'object' && hedef !== null ? (hedef as Record<string, unknown>)[son] : undefined;
     if (!Array.isArray(dizi)) throw new Error(`Ek veri yolu bulunamadı: ${fileName} > ${e.yol.join('.')}`);
-    (hedef as Record<string, unknown>)[son] = [...dizi, ...e.ogeler];
+    (hedef as Record<string, unknown>)[son] = [...dizi, ...e.ogeler.map(yolaCevir)];
   }
   return veri;
 }

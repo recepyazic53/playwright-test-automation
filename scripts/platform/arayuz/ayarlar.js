@@ -9,14 +9,16 @@ import {
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { aktarimAkisi } from './aktarim.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
+import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'baglam', etiket: 'Bağlam profilleri', ikon: 'hedef', aciklama: 'Testlerin hangi bağlamda (ör. rol, şube, müşteri tipi) çalışacağını tanımlayan profiller. Tür adlarını projeniz belirler.' },
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Testlerin kullanacağı veri kalıpları (türler) ve bu kalıplara göre doldurulmuş kayıtlar (profiller).' },
+  { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
-  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi ve kasa parolası.' }
+  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
 ];
 
 const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
@@ -53,7 +55,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri, baglam: baglamProfilleri,
-    'test-verisi': testVerisi, yedekleme, guvenlik
+    'test-verisi': testVerisi, dosyalar, yedekleme, guvenlik
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
@@ -715,6 +717,57 @@ async function yedekleme(govde, baglam, yenile) {
 }
 
 // ---------------------------------------------------------------------------------------
+// Dosyalar (ekranların varsayılan dosyaları — şifreli)
+// ---------------------------------------------------------------------------------------
+
+async function dosyalar(govde, baglam, yenile) {
+  const proje = baglam.durum.proje;
+  const { ekranlar } = await api(`/platform/ekran-dosyalari?projeId=${encodeURIComponent(proje.id)}`);
+  const satirlar = [];
+  for (const e of ekranlar) {
+    for (const d of e.dosyalar) {
+      const secici = h('input', { type: 'file', class: 'gorunmez-dosya', 'aria-label': `${e.ad}: ${d.anahtar} dosyasını değiştir` });
+      const mesaj = h('div', { class: 'kucuk', 'aria-live': 'polite' });
+      const eskiUzanti = (d.dosya ? d.dosya.ad : d.eskiYol || '').split('.').pop();
+      secici.accept = eskiUzanti ? `.${eskiUzanti}` : '';
+      const degistir = h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => secici.click() }, ikon('yukle'), d.dosya ? 'Değiştir' : 'Yükle ve şifrele');
+      secici.addEventListener('change', async () => {
+        const dosya = secici.files && secici.files[0];
+        secici.value = '';
+        if (!dosya) return;
+        const sorun = dosyaOnDenetimi(dosya, secici.accept);
+        if (sorun) { mesaj.className = 'kucuk hata-metni'; mesaj.textContent = sorun; return; }
+        mesaj.className = 'kucuk soluk';
+        mesaj.textContent = `${dosya.name} şifrelenip yükleniyor…`;
+        degistir.disabled = true;
+        try {
+          const adres = `/platform/ekran-dosyasi/yukle?projeId=${encodeURIComponent(proje.id)}&ekranId=${encodeURIComponent(e.id)}&yol=${encodeURIComponent(JSON.stringify(d.yol))}`;
+          const y = await dosyaYukle(adres, dosya, (p) => { mesaj.textContent = `${dosya.name} şifrelenip yükleniyor… %${p}`; });
+          bildir(`${e.ad}: ${y.ad} şifreli olarak kaydedildi.`, 'basari');
+          yenile();
+        } catch (hata) {
+          degistir.disabled = false;
+          if (hata.durum === 423) return;
+          mesaj.className = 'kucuk hata-metni';
+          mesaj.textContent = hata.message;
+        }
+      });
+      const dosyaMetni = d.dosya
+        ? [h('strong', {}, d.dosya.ad), ' ', rozet([ikon('kilit'), 'şifreli'], 'basari'), d.dosya.eksik ? rozet('şifreli depoda yok', 'hata') : null]
+        : [h('code', {}, d.eskiYol), ' ', rozet([ikon('uyari'), 'düz metin yol'], 'uyari', { title: 'Eski düz metin dosya yolu: dosyayı yükleyin ya da Güvenlik > "Açık dosyaları şifreli depoya taşı"yı kullanın.' })];
+      satirlar.push(kayitSatiri(
+        h('span', {}, e.ad, h('span', { class: 'soluk kucuk' }, ` · ${d.anahtar}`)),
+        [h('span', {}, ...dosyaMetni), h('br', {}), h('span', {}, `${d.ortamAd || 'tüm ortamlar'}${d.dosya && d.dosya.boyut !== null ? ` · ${boyutMetni(d.dosya.boyut)}` : ''}`), mesaj],
+        [secici, degistir], 'dosya'));
+    }
+  }
+  govde.replaceChildren(
+    h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Senaryoda dosya seçilmemişse ekranın varsayılan dosyası kullanılır. Dosyalar diskte yalnızca şifreli durur ve indirilemez; koşuda yalnızca sizin okuyabildiğiniz geçici bir klasöre çözülür, koşu bitince silinir. Senaryoya özel dosyalar senaryo formundan yüklenir.')),
+    bolumBasligi('Ekran dosyaları', satirlar.length),
+    kayitListesi(satirlar, 'Ekran ayarlarında dosya yok.', 'dosya'));
+}
+
+// ---------------------------------------------------------------------------------------
 // Güvenlik
 // ---------------------------------------------------------------------------------------
 
@@ -760,6 +813,31 @@ async function guvenlik(govde, baglam) {
       saklamaMesaj.goster(`${g} günden eski videolar silinecek.`, 'basari');
     } catch (hata) { saklamaMesaj.goster(hata.message); }
   });
+  // Yasak adresler: Nöbetçi'nin HİÇBİR ZAMAN bağlanmayacağı host kalıpları (koşular ve ekran taraması reddedilir).
+  const yasakMetni = h('textarea', { rows: '4', spellcheck: 'false', autocomplete: 'off', placeholder: 'ör. *.sirket-ici.local\nuretim.ornek.com', value: (ayar.yasakAdresler || []).join('\n') });
+  const yasakMesaj = mesajKutusu();
+  const yasakKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const yasakForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('kalkan'), 'Yasak adresler'),
+    h('p', { class: 'soluk' }, 'Bu listedeki bir host\'a bağlanan koşu ve ekran taraması hiç başlamaz; koşu sırasında bu host\'lara giden istekler iptal edilir. Her satıra bir host kalıbı yazın; "*" herhangi bir karakter dizisi yerine geçer. Liste boşsa kısıtlama yoktur.'),
+    yasakMesaj.kutu,
+    alan('Host kalıpları', yasakMetni, { yardim: `Satır başına bir kalıp (en fazla ${ayar.yasakAdresEnCok || 100}). Adres yapıştırırsanız yalnızca host'u alınır.` }),
+    (ayar.ortamYasakAdresleri || []).length ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Ortam değişkeninden (NOBETCI_YASAK_ADRESLER) gelen ek kalıplar da uygulanır: ',
+      h('span', { class: 'etiketler' }, ayar.ortamYasakAdresleri.map((k) => rozet(k, ''))))) : null,
+    h('div', { class: 'dugmeler' }, yasakKaydet));
+  yasakForm.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    yasakMesaj.temizle();
+    alanHatasi(yasakMetni, '');
+    try {
+      const r = await mesgulIken(yasakKaydet, 'Kaydediliyor…', () => api('/platform/guvenlik/kaydet', { govde: { yasakAdresler: yasakMetni.value.split(/\n/) } }));
+      yasakMetni.value = r.yasakAdresler.join('\n');
+      yasakMesaj.goster(r.yasakAdresler.length ? `${r.yasakAdresler.length} kalıp kaydedildi.` : 'Liste boş: adres kısıtlaması yok.', 'basari');
+    } catch (hata) { alanHatasi(yasakMetni, hata.message); }
+  });
+
+  // Açık (düz metin) dosyaları şifreli depoya taşıma — TEK SEFERLİK, önce önizleme.
+  const tasimaKarti = acikDosyaTasimaKarti(baglam);
+
   const kilitle = h('button', { type: 'button' }, ikon('kilit'), 'Kasayı kilitle');
   kilitle.addEventListener('click', async () => {
     await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
@@ -802,5 +880,73 @@ async function guvenlik(govde, baglam) {
       h('span', { class: 'alt' }, rozet([h('span', { class: 'nokta basari', 'aria-hidden': 'true' }), 'kasa açık'], 'basari')), h('div', { class: 'sag' }, kilitle)),
     h('p', { class: 'soluk', style: { margin: '0' } }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.')),
     h('div', { class: 'ayar-izgarasi' }, kilitForm, saklamaForm),
+    yasakForm,
+    tasimaKarti,
     form);
+}
+
+/**
+ * "Açık dosyaları şifreli depoya taşı": proje adaptörünün bildiği düz metin dosyalar (ör. tests/fixtures/**.xlsx ve
+ * eski dosya yedeklerindeki kopyaları) listelenir; kullanıcı seçip onaylayınca dosyalar şifreli depoya alınır, senaryo
+ * ve ekran ayarlarındaki yollar referansa çevrilir, şifreli kopya doğrulanınca düz metin ezilip silinir.
+ */
+function acikDosyaTasimaKarti(baglam) {
+  const proje = baglam.durum.proje;
+  const govde = h('div', {});
+  const onizle = h('button', { type: 'button' }, ikon('ara'), 'Dosyaları listele');
+  const kart = h('section', { class: 'kart acik-dosya-karti' },
+    h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('dosya'), 'Açık dosyaları şifreli depoya taşı'), h('div', { class: 'sag' }, onizle)),
+    h('p', { class: 'soluk' }, 'Eski proje düzeninde senaryoların kullandığı dosyalar (ör. çoklu sorgu Excel\'leri) diskte düz metin durur. Bu işlem onları şifreli depoya alır, senaryo ve ekran ayarlarındaki yolları şifreli dosyaya bağlar ve şifreli kopya doğrulanınca düz metin dosyaları ezip siler. Önce liste gösterilir; hiçbir şey onayınız olmadan değişmez.'),
+    govde);
+  onizle.addEventListener('click', async () => {
+    try {
+      const { dosyalar } = await mesgulIken(onizle, 'Listeleniyor…', () => api('/platform/acik-dosyalar/onizle', { govde: { projeId: proje.id } }));
+      listeCiz(dosyalar);
+    } catch (hata) { if (hata.durum !== 423) yerlestirHata(hata); }
+  });
+  function yerlestirHata(hata) { govde.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); }
+  function listeCiz(dosyalar) {
+    if (!dosyalar.length) {
+      govde.replaceChildren(h('div', { class: 'not-kutusu basari' }, h('p', {}, 'Düz metin dosya bulunamadı: taşınacak bir şey yok.')));
+      return;
+    }
+    const secim = new Set(dosyalar.map((d) => d.kimlik));
+    const tasi = h('button', { type: 'button', class: 'tehlike' }, ikon('kilit'), 'Şifreli depoya taşı ve düz metinleri sil');
+    const ozet = h('span', { class: 'kucuk soluk' });
+    const guncelle = () => { ozet.textContent = `${secim.size} / ${dosyalar.length} dosya seçili`; tasi.disabled = !secim.size; };
+    const satirlar = dosyalar.map((d) => {
+      const kutu = h('input', { type: 'checkbox', checked: true, 'aria-label': `Seç: ${d.goreliYol} (${d.konum})` });
+      kutu.addEventListener('change', () => { if (kutu.checked) secim.add(d.kimlik); else secim.delete(d.kimlik); guncelle(); });
+      return h('li', {}, h('label', { class: 'acik-dosya-satiri' }, kutu,
+        h('span', { class: 'acik-dosya-ana' }, h('code', {}, d.goreliYol),
+          h('small', { class: 'soluk' }, `${d.konum === 'proje' ? 'proje klasörü' : d.konum.replace('eski-dosyalar/', 'eski dosya yedeği ')} · ${boyutMetni(d.boyut)}`)),
+        d.sifreliKopyaVar ? rozet([ikon('kilit'), 'şifreli kopyası var'], 'basari') : rozet('yalnızca düz metin', 'uyari')));
+    });
+    const onayAlani = h('div', {});
+    tasi.addEventListener('click', () => {
+      const secilenler = dosyalar.filter((d) => secim.has(d.kimlik));
+      const evet = h('button', { type: 'button', class: 'tehlike' }, ikon('cop'), `Evet, ${secilenler.length} dosyayı taşı`);
+      const vazgec = h('button', { type: 'button', class: 'hayalet', onclick: () => onayAlani.replaceChildren() }, 'Vazgeç');
+      onayAlani.replaceChildren(h('div', { class: 'not-kutusu uyari', role: 'alertdialog', 'aria-label': 'Taşımayı onayla' },
+        h('p', {}, h('b', {}, 'Düz metin dosyalar silinecek. '), 'Her dosya önce şifreli depoya alınır ve şifreli kopyası doğrulanır; doğrulanamayan dosya silinmez. Silme en iyi çabayla yapılır (dosya ezilip kaldırılır; SSD\'lerde eski bloklar fiziksel olarak kalabilir). Yedeğiniz yoksa önce Yedekleme\'den şifreli yedek alın.'),
+        h('div', { class: 'dugmeler' }, vazgec, evet)));
+      evet.focus();
+      evet.addEventListener('click', async () => {
+        try {
+          const { sonuc } = await mesgulIken(evet, 'Taşınıyor…', () => api('/platform/acik-dosyalar/tasi', { govde: { projeId: proje.id, kimlikler: [...secim], onay: true } }));
+          govde.replaceChildren(h('div', { class: `not-kutusu ${sonuc.atlanan.length ? 'uyari' : 'basari'}` },
+            h('p', {}, h('b', {}, `${sonuc.silinen} düz metin dosya silindi. `),
+              `${sonuc.aktarilan} dosya şifreli depoya alındı${sonuc.zatenVardi ? `, ${sonuc.zatenVardi} dosyanın şifreli kopyası zaten vardı` : ''}; ${sonuc.referans.senaryo} senaryo ve ${sonuc.referans.ekran} ekran ayarı şifreli dosyaya bağlandı.`),
+            sonuc.atlanan.length ? h('ul', {}, sonuc.atlanan.map((a) => h('li', {}, h('code', {}, a.goreliYol), ` (${a.konum}): ${a.neden}`))) : null));
+          bildir('Açık dosyalar şifreli depoya taşındı.', 'basari');
+        } catch (hata) { if (hata.durum !== 423) yerlestirHata(hata); }
+      });
+    });
+    govde.replaceChildren(
+      h('ul', { class: 'acik-dosya-listesi' }, satirlar),
+      h('div', { class: 'dugmeler' }, ozet, tasi),
+      onayAlani);
+    guncelle();
+  }
+  return kart;
 }

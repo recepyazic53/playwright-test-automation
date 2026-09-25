@@ -3,6 +3,9 @@
 //   filtreler (ekran, Koşuda, beklenen sonuç, son durum), seçim + toplu işlemler (Seçilenleri
 //   çalıştır, Koşuya ekle/çıkar, Sil), satır eylemleri (▷ / Düzenle / ⋯: Kopyala, Geçmiş, Sil),
 //   "Koşuyu başlat" (tam: Genel ya da ürün, filtresiz; aksi halde kısmi) ve canlı koşu paneli.
+//   KODU KALDIRILMIŞ senaryolar (spec dosyası ya da kodda tanımlı testin başlığı artık yok): liste açılınca arka
+//   planda denetlenir (POST /platform/senaryolar/kod-denetimi), satırda "kodu kaldırılmış" rozeti + üstte uyarı
+//   şeridi; "Kaldır" (sayfa içi onay) senaryoyu veritabanından siler — değişiklik geçmişi ve eski sonuçlar kalır.
 //   Oluşturma/düzenleme: model tabanlı form (senaryo-formu.js).
 // Adresler: #/senaryolar, #/senaryolar/u/<ekranId>, #/senaryolar/yeni/<ekranId>, #/senaryolar/duzenle/<id>
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
@@ -24,7 +27,11 @@ const kisaTarih = (d) => { const t = new Date(d); return Number.isNaN(t.getTime(
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
 
 /** Oturum boyunca korunan liste durumu (filtreler, sayfa). Seçim ekran değişince temizlenir. */
-const liste = { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', sayfa: 0, secim: new Set(), secimEkrani: null };
+const liste = { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kod: '', sayfa: 0, secim: new Set(), secimEkrani: null };
+const KOD_NEDENI = {
+  'dosya-yok': 'Test dosyası (spec) artık yok',
+  'baslik-yok': 'Test dosyası duruyor ama bu başlıkta bir test artık yok'
+};
 
 export function seciliOrtamOku() {
   try { return localStorage.getItem(ORTAM_ANAHTARI) || null; } catch { return null; }
@@ -118,7 +125,7 @@ function listeGorunumu(icerik, s) {
   const beklenenSecimi = secimKutusu('Beklenen', 'beklenen', [['', 'Tümü'], ['basari', 'Başarılı akış'], ['hata', 'İş kuralı hatası'], ['yok', 'Tanımsız']]);
   const sonSecimi = secimKutusu('Son durum', 'son', [['', 'Tümü'], ['basarili', 'Başarılı'], ['basarisiz', 'Başarısız'], ['atlanan', 'Atlandı'], ['durduruldu', 'Durduruldu'], ['yok', 'Koşulmadı']]);
   const temizle = h('button', { type: 'button', class: 'kucuk-dugme hayalet filtre-temizle', onclick: () => {
-    Object.assign(liste, { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', sayfa: 0 });
+    Object.assign(liste, { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kod: '', sayfa: 0 });
     arama.value = '';
     for (const x of [ekranSecimi, kosudaSecimi, beklenenSecimi, sonSecimi]) if (x) { x.sel.value = ''; x.kap.classList.remove('etkin'); }
     ciz();
@@ -129,8 +136,27 @@ function listeGorunumu(icerik, s) {
     aramaZamanlayici = setTimeout(() => { liste.arama = arama.value; liste.sayfa = 0; ciz(); }, 120);
   });
 
-  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.beklenen || liste.son || (!ekran && liste.ekran));
+  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.beklenen || liste.son || liste.kod || (!ekran && liste.ekran));
+  // Kodu kaldırılmış senaryolar: listedeki hızlı denetim (dosya yok) + arka plandaki başlık denetimi.
+  /** @type {Map<string, string>} senaryo kimliği → neden */
+  let kodKaldirilanlar = new Map();
+  let kodDenetimi = 'bekliyor';
+  const kodNedeni = (x) => kodKaldirilanlar.get(x.id) || x.kodDurumu || null;
+  const kodAlani = h('div', {});
+  async function kodDenetle() {
+    kodDenetimi = 'suruyor';
+    try {
+      const d = await api('/platform/senaryolar/kod-denetimi', { govde: { projeId: proje.id, ortamId: ortam.id } });
+      kodKaldirilanlar = new Map(d.senaryolar.map((y) => [y.id, y.neden]));
+      kodDenetimi = d.baslikDenetlendi ? 'tamam' : 'dosya';
+    } catch (e) {
+      kodDenetimi = 'hata';
+      if (e && e.durum === 423) return;
+    }
+    if (icerik.isConnected) ciz();
+  }
   const gorunenler = () => veri.senaryolar.filter((x) => {
+    if (liste.kod === 'kaldirilmis' && !kodNedeni(x)) return false;
     if (ekran && x.ekranId !== ekran.id) return false;
     if (!ekran && liste.ekran && x.ekranId !== liste.ekran) return false;
     if (liste.kosuda === 'evet' && !x.kosuyaDahil) return false;
@@ -152,7 +178,9 @@ function listeGorunumu(icerik, s) {
         seciliOrtamYaz(o.id);
         ortam = o;
         for (const b of ortamSegmenti.children) b.setAttribute('aria-pressed', b.textContent === o.ad ? 'true' : 'false');
+        kodKaldirilanlar = new Map();
         await yenile();
+        kodDenetle();
       }
     }, o.ad))) : null;
   const olusturulabilirler = veri.ekranlar.filter((e) => e.olusturulabilir);
@@ -174,6 +202,7 @@ function listeGorunumu(icerik, s) {
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama, h('kbd', { 'aria-hidden': 'true' }, '/')),
       ekranSecimi ? ekranSecimi.kap : null, kosudaSecimi.kap, beklenenSecimi.kap, sonSecimi.kap, temizle, ozetAlani),
+    kodAlani,
     topluAlani,
     tabloAlani);
   const kisayol = (o) => {
@@ -186,6 +215,7 @@ function listeGorunumu(icerik, s) {
       veri = await api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`);
       const gecerli = new Set(veri.senaryolar.map((x) => x.id));
       for (const id of [...liste.secim]) if (!gecerli.has(id)) liste.secim.delete(id);
+      for (const id of [...kodKaldirilanlar.keys()]) if (!gecerli.has(id)) kodKaldirilanlar.delete(id);
       ciz();
     } catch (e) {
       if (e && e.durum === 423) return;
@@ -212,10 +242,31 @@ function listeGorunumu(icerik, s) {
       ekran ? h('span', {}, ikon(ekran.modelVar ? 'katman' : 'ekran'), ekran.modelVar ? 'ekran modeli var' : 'ekran modeli yok') : h('span', {}, ikon('ekran'), `${veri.ekranlar.filter((e) => e.senaryoSayisi).length} ürün / ekran`));
     yerlestir(ozetAlani, liste2.length !== kapsam.length ? h('span', {}, h('b', {}, String(liste2.length)), ` / ${kapsam.length} gösteriliyor`) : '');
     temizle.hidden = !filtreliMi();
+    kodSeridiCiz(kapsam);
     kosuDugmesi.disabled = kosuSuruyorMu() || !liste2.some((x) => x.kosuyaDahil && !kosuDurumu(x.id));
     kosuDugmesi.title = kosuSuruyorMu() ? 'Sürmekte olan bir koşu var' : '';
     topluCubukCiz(liste2);
     tabloCiz(liste2);
+  }
+
+  function kodSeridiCiz(kapsam) {
+    const kaldirilmis = kapsam.filter((x) => kodNedeni(x));
+    if (!kaldirilmis.length) {
+      if (liste.kod) liste.kod = '';
+      yerlestir(kodAlani, kodDenetimi === 'suruyor'
+        ? h('p', { class: 'kod-denetimi-notu kucuk cok-soluk', 'aria-live': 'polite' }, h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), 'Test kodu denetleniyor (Playwright listesi)…')
+        : null);
+      return;
+    }
+    const goster = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-pressed': liste.kod ? 'true' : 'false',
+      onclick: () => { liste.kod = liste.kod ? '' : 'kaldirilmis'; liste.sayfa = 0; ciz(); } }, ikon('ara'), liste.kod ? 'Tümünü göster' : 'Yalnızca bunları göster');
+    const kaldir = h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => koduKaldirilmislariSil(kaldirilmis) }, ikon('cop'), `Kaldır (${kaldirilmis.length})`);
+    yerlestir(kodAlani, h('div', { class: 'not-kutusu uyari kod-seridi', role: 'status' },
+      h('div', { class: 'kod-seridi-metin' },
+        h('b', {}, `${kaldirilmis.length} senaryonun kodu kaldırılmış`),
+        h('span', { class: 'kucuk' }, 'Spec dosyası ya da testin başlığı artık yok; bu senaryolar koşturulamaz. Kaldırmak veritabanındaki senaryoyu siler (değişiklik geçmişi ve eski sonuçlar korunur).',
+          kodDenetimi === 'dosya' || kodDenetimi === 'hata' ? ' Test listesi alınamadı: yalnızca dosyası olmayanlar gösteriliyor.' : kodDenetimi === 'suruyor' ? ' Başlık denetimi sürüyor…' : '')),
+      h('span', { class: 'kod-seridi-eylemler' }, goster, kaldir)));
   }
 
   function topluCubukCiz(gorunen) {
@@ -299,7 +350,9 @@ function listeGorunumu(icerik, s) {
       }
     });
     const bs = x.beklenenSonuc;
+    const neden = kodNedeni(x);
     const altBilgi = [
+      neden ? rozet([ikon('uyari'), 'kodu kaldırılmış'], 'hata', { title: `${KOD_NEDENI[neden] || 'Kodu yok'}${x.kaynak ? ` (${x.kaynak.dosya})` : ''}. Menüden "Kaldır" ile silebilirsiniz.` }) : null,
       x.veriGudumlu ? null : rozet('kodda', '', { title: 'Kodda tanımlı test: veri yok; yalnızca görünen ad ve Koşuda düzenlenir' }),
       x.modelKosusu
         ? rozet('model', 'vurgu', { title: 'Test kodu yok: ekran modeliyle koşar (model koşucusu). Koşuda açıksa "Koşuyu başlat" ve npm run test dahil eder.' })
@@ -324,8 +377,11 @@ function listeGorunumu(icerik, s) {
         type: 'button', class: 'ikon-dugme durdur-dugmesi', disabled: Boolean(kosu.durduruluyor), title: kosu.durduruluyor ? 'Durduruluyor…' : 'Durdur',
         'aria-label': `Durdur: ${x.baslik}`, onclick: () => durdur(x.id)
       }, h('span', { class: 'kare', 'aria-hidden': 'true' }))
-      : h('button', { type: 'button', class: 'ikon-dugme oynat-dugmesi', title: 'Çalıştır', 'aria-label': `Çalıştır: ${x.baslik}`, onclick: () => tekCalistir(x) }, ikon('oynat'));
-    return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', kosu ? 'calisiyor' : '', x.kosuyaDahil ? '' : 'haric'].join(' ').trim() || null, 'data-senaryo': x.id },
+      : h('button', {
+        type: 'button', class: 'ikon-dugme oynat-dugmesi', disabled: Boolean(neden), title: neden ? 'Kodu kaldırılmış senaryo çalıştırılamaz' : 'Çalıştır',
+        'aria-label': `Çalıştır: ${x.baslik}`, onclick: () => tekCalistir(x)
+      }, ikon('oynat'));
+    return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', kosu ? 'calisiyor' : '', x.kosuyaDahil ? '' : 'haric', neden ? 'kodu-kaldirilmis' : ''].join(' ').trim() || null, 'data-senaryo': x.id },
       h('td', { class: 'secim' }, secim),
       h('td', {}, h('div', { class: 'senaryo-adi' }, h('strong', {}, x.baslik), altBilgi.length ? h('small', {}, altBilgi) : null)),
       ekran ? null : h('td', { class: 'ekran-hucresi' }, x.ekranAdi || '—'),
@@ -347,7 +403,9 @@ function listeGorunumu(icerik, s) {
       h('button', { type: 'button', role: 'menuitem', disabled: !x.veriGudumlu, title: x.veriGudumlu ? null : 'Kodda tanımlı senaryolar kopyalanamaz', onclick: () => { kapat(); kopyala(x); } }, ikon('kopya'), 'Kopyala'),
       h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); gecmisCekmecesi(x); } }, ikon('tarih'), 'Geçmiş'),
       h('hr', {}),
-      h('button', { type: 'button', role: 'menuitem', class: 'tehlikeli', disabled: !x.veriGudumlu, title: x.veriGudumlu ? null : 'Kodda tanımlı senaryolar silinemez', onclick: () => { kapat(); sil([x]); } }, ikon('cop'), 'Sil'));
+      kodNedeni(x)
+        ? h('button', { type: 'button', role: 'menuitem', class: 'tehlikeli', onclick: () => { kapat(); koduKaldirilmislariSil([x]); } }, ikon('cop'), 'Kaldır (kodu yok)')
+        : h('button', { type: 'button', role: 'menuitem', class: 'tehlikeli', disabled: !x.veriGudumlu, title: x.veriGudumlu ? null : 'Kodda tanımlı senaryolar silinemez', onclick: () => { kapat(); sil([x]); } }, ikon('cop'), 'Sil'));
     const kap = h('span', { class: 'satir-menusu-kap' }, dugme, menu);
     const disTik = (o) => { if (!kap.contains(o.target)) kapat(); };
     function kapat() { menu.hidden = true; dugme.setAttribute('aria-expanded', 'false'); document.removeEventListener('click', disTik); }
@@ -425,6 +483,21 @@ function listeGorunumu(icerik, s) {
     } catch (e) { bildir(e.message, 'hata'); }
   }
 
+  async function koduKaldirilmislariSil(secilenler) {
+    const tamam = await onayIste({
+      baslik: secilenler.length === 1 ? 'Kodu kaldırılmış senaryo kaldırılsın mı?' : `Kodu kaldırılmış ${secilenler.length} senaryo kaldırılsın mı?`,
+      metin: 'Test kodu artık olmayan senaryolar veritabanından silinir. Değişiklik geçmişi ve eski koşu sonuçları korunur.',
+      liste: secilenler.map((x) => `${x.baslik}${x.kaynak ? ` — ${x.kaynak.dosya}` : ''}`), dugme: 'Kaldır', tehlikeli: true
+    });
+    if (!tamam) return;
+    try {
+      const { silinen } = await api('/platform/senaryo/kodu-kaldirilmis-sil', { govde: { projeId: proje.id, ortamId: ortam.id, idler: secilenler.map((x) => x.id) } });
+      for (const x of secilenler) { liste.secim.delete(x.id); kodKaldirilanlar.delete(x.id); }
+      bildir(`${silinen} senaryo kaldırıldı (geçmiş korunur).`, 'basari');
+      await yenile();
+    } catch (e) { if (e && e.durum !== 423) bildir(e.message, 'hata'); }
+  }
+
   async function kopyala(x) {
     try {
       const k = await api('/platform/senaryo/kopyala', { govde: { projeId: proje.id, id: x.id } });
@@ -436,6 +509,7 @@ function listeGorunumu(icerik, s) {
   }
 
   ciz();
+  kodDenetle();
 }
 
 function yeniMenusu(ekranlar) {

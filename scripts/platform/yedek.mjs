@@ -148,8 +148,15 @@ export function medyaSeciminiCoz(secim = {}) {
   return sonuc;
 }
 
+/**
+ * Dosyası HER ZAMAN yedeğe giren medya türleri: senaryo dosyaları (ör. çoklu sorgu Excel'i) koşu sonucu değil proje
+ * verisidir — yedekten kurulan makinede senaryolar bunlarsız koşamaz (dosya yine şifreli, olduğu gibi girer).
+ */
+export const HER_ZAMAN_YEDEKLENEN_TURLER = Object.freeze(['senaryo-dosyasi']);
+
 /** Dosyası yedeğe alınabilecek medya türü seçildi mi? @param {Record<string, boolean>} secim @param {unknown} tur */
 function turSecili(secim, tur) {
+  if (HER_ZAMAN_YEDEKLENEN_TURLER.includes(String(tur))) return true;
   const secenek = MEDYA_TURU_SECENEGI[String(tur)];
   return Boolean(secenek && secim[secenek]);
 }

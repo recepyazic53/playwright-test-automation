@@ -71,6 +71,8 @@ export default defineConfig({
   // Tüm testlerden ÖNCE bir kez Galaksi login'i yapıp oturumu playwright/.auth/ altına
   // kaydeder (CANLI'da authenticator kodu bu yüzden yalnızca burada, bir kere sorulur).
   globalSetup: './tests/support/global-setup.ts',
+  // Koşuya özel geçici senaryo dosyası klasörünü siler (şifreli dosyalar koşu anında buraya çözülür).
+  globalTeardown: './tests/support/global-teardown.ts',
 
   reporter: [
     // Terminal ve Nöbetçi koşuları: "list" + platform raporlayıcısı. "--reporter" CLI'dan VERİLMEZ;

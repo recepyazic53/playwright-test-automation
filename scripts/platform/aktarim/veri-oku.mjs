@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // TEST SÜREÇLERİ İÇİN VERİ OKUYUCU (genel) — tests/support/platform-veri.ts bunu ayrı bir süreçte
 // (execFileSync) çalıştırır; çünkü spec dosyaları veriyi modül yüklenirken EŞZAMANLI ister, sql.js
-// ise yalnızca eşzamansız başlatılabilir. Veritabanı SALT OKUNUR açılır (diske hiç yazılmaz);
+// ise yalnızca eşzamansız başlatılabilir. Veritabanı SALT OKUNUR açılır (veritabanına hiç yazılmaz);
 // sonuç yalnızca stdout borusundan (bellekte) üst sürece döner, hiçbir dosyaya yazılmaz.
 //
 // Kullanım: node veri-oku.mjs <kip> --adaptor <ad> [--ortam <ortam>]
@@ -13,9 +13,12 @@
 //             senaryo verisi (hassas alanlar çözülmüş), ekran modeli + alt modeller, "mutlaka görünmeli"
 //             alanları ve bağlam profilleri (tür → ad → alanlar). Kasa anahtarı gerekir (veri kipiyle aynı).
 //   anahtar → PLATFORM_KASA_PAROLASI'ndan anahtarı türetip doğrular, base64url olarak döner
+// "veri"/"model" kipleri ayrıca Ayarlar > Güvenlik'teki yasak adresleri (yasakAdresler) döner ve şifreli senaryo
+// dosyalarını (dosyalar/senaryo-dosyalari.mjs) koşunun geçici klasörüne (NOBETCI_DOSYA_KLASORU; yalnızca kullanıcı
+// okuyabilir, koşu bitince silinir) çözer — BU, okuyucunun diske yazdığı TEK şeydir.
 // Çıktı her zaman tek satır JSON'dur; hata durumunda { hata, kod } (çıkış kodu 0). Gizli değerler
 // yalnızca "veri"/"anahtar" kiplerinin stdout'unda bulunur; loglara ASLA yazılmaz.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { veritabaniAc, veritabaniYolu } from '../veritabani/baglanti.mjs';
@@ -27,6 +30,10 @@ import { modelBaglami } from '../senaryolar/senaryo-servisi.mjs';
 import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { adaptorBul } from '../../../projeler/index.mjs';
+import { medyaKlasoru } from '../medya.mjs';
+import { referanslariBul, referanslariCoz } from '../dosyalar/senaryo-dosyalari.mjs';
+import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from '../dosyalar/gecici-dosyalar.mjs';
+import { ayarlardakiYasakAdresler } from '../guvenlik/yasak-adresler.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -84,8 +91,31 @@ async function calistir() {
     }
     kasayiAnahtarlaAc(vt, anahtar);
     anahtar.fill(0);
-    if (kip === 'model') return { ...temel, model: modelSenaryolari(vt, proje.id, ortam) };
+    // Yasak adresler (Ayarlar > Güvenlik): koşu koruması ortam değişkeniyle birleştirir.
+    const yasakAdresler = ayarlardakiYasakAdresler(vt);
+    const dosyaHedefi = dosyaKlasoru(yol);
+    if (kip === 'model') {
+      const model = modelSenaryolari(vt, proje.id, ortam);
+      if (model && dosyaHedefi) {
+        for (const s of model.senaryolar) s.veri = /** @type {Record<string, unknown>} */ ((await referanslariCoz(vt, s.veri, { medyaKlasoru: medyaKlasoru(yol), hedefKlasor: dosyaHedefi })).deger);
+      }
+      return { ...temel, yasakAdresler, model };
+    }
     const veri = adaptor.yenidenKur(vt, proje.id, ortam);
+    // Şifreli senaryo dosyaları (ürün/ekran ayarları ve senaryo verisindeki "nobetci-dosya://" referansları) bu
+    // koşunun geçici klasörüne çözülür; referans, dosyanın mutlak yoluyla değiştirilir (veri şekli değişmez).
+    if (veri && dosyaHedefi) {
+      veri.dosyalar = /** @type {typeof veri.dosyalar} */ ((await referanslariCoz(vt, veri.dosyalar, { medyaKlasoru: medyaKlasoru(yol), hedefKlasor: dosyaHedefi })).deger);
+      // "Dene" (taslak senaryo, ek veri dosyası): taslaktaki referanslar da çözülür; test-data.ts eşlemeyi uygular.
+      const ekDosya = process.env.TEST_SUNUCU_EK_SENARYO_DOSYASI;
+      if (ekDosya && existsSync(ekDosya)) {
+        const refler = referanslariBul(JSON.parse(readFileSync(ekDosya, 'utf8')));
+        if (refler.length) {
+          const eslesme = Object.fromEntries(refler.map((r) => [r.referans, r.referans]));
+          veri.ekDosyaYollari = /** @type {Record<string, string>} */ ((await referanslariCoz(vt, eslesme, { medyaKlasoru: medyaKlasoru(yol), hedefKlasor: dosyaHedefi })).deger);
+        }
+      }
+    }
     // Giriş tarifi (genel): kaydedilmiş tarif ya da adaptörün varsayılanı; geçersizse hatalarıyla birlikte
     // (giriş motoru açık bir hata verir).
     const ortamId = veri ? ortamKimligiBul(vt, proje.id, ortam) : undefined;
@@ -93,10 +123,22 @@ async function calistir() {
       const t = etkinGirisTarifi(vt, proje.id, ortamId, adaptor);
       veri.girisTarifi = t.tarif ? { tarif: t.tarif, kaynak: t.kaynak, hatalar: t.hatalar } : null;
     }
-    return { ...temel, veri };
+    return { ...temel, yasakAdresler, veri };
   } finally {
     vt.kapat();
   }
+}
+
+/**
+ * Bu koşunun geçici dosya klasörü (NOBETCI_DOSYA_KLASORU): yalnızca bu veritabanına özgü geçici kökün DOĞRUDAN
+ * altındaki, bu kullanıcıya ait 0700 bir klasör kabul edilir (başka bir yere düz metin yazılmaz). Yoksa null — dosya referansları
+ * çözülmez (ör. "--list"; testler dosyayı yalnızca koşarken kullanır).
+ * @param {string} vtYolu
+ */
+function dosyaKlasoru(vtYolu) {
+  const klasor = process.env[DOSYA_KLASORU_DEGISKENI];
+  if (!klasor || !existsSync(klasor)) return null;
+  return kosuKlasoruDogrula(klasor, vtYolu) ? klasor : null;
 }
 
 /**

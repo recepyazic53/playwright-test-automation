@@ -1,6 +1,7 @@
 // "Ekranlar" bölümünün ortak arayüz parçaları: model ağacı (adım › bölüm › alan), bulgu türü rozetleri
 // ve fark gösterimi, bağlam profili görünürlük matrisi, kopyala düğmesi, Claude dosyası diyalogları
-// ("Claude ile yorumla", "Tekrar analiz et" — bağlam profili seçimi her seferinde sorulur).
+// ("Claude ile yorumla", "Tekrar analiz et" — bağlam profili seçimi her seferinde sorulur), bağlam profili seçimi
+// (tekrar analiz ve "Ekranı otomatik tara" diyaloglarında ortak).
 // Genel: projeye özgü hiçbir ad içermez. Kullanıcı verisi DOM'a yalnızca metin olarak yazılır.
 import { api, bildir, h, ikon, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 
@@ -145,7 +146,8 @@ function claudeSonucu(sonuc, ekEylem) {
     h('div', { class: 'dugmeler' }, kopyalaDugmesi(sonuc.cumle, 'Cümleyi kopyala'), ekEylem || null));
 }
 
-function diyalogAc(baslik, altMetin, govde, ikonAd = 'simsek') {
+/** Başlıklı, kapatılabilir modal diyalog (kapanınca DOM'dan kaldırılır). */
+export function diyalogAc(baslik, altMetin, govde, ikonAd = 'simsek') {
   const kapat = h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Kapat' }, ikon('carpi'));
   const diyalog = h('dialog', { class: 'onay-diyalogu claude-diyalogu', 'aria-labelledby': 'claude-diyalog-basligi' },
     h('div', { class: 'diyalog-govde' },
@@ -181,23 +183,32 @@ export async function claudeDosyasiOlustur(s, dugme) {
  * gelir); onaylanınca istek dosyası yazılır, seçim ekran için saklanır.
  * @param {{ proje: { id: string }; ekran: { id: string; ad: string }; baglamProfilleri: Array<{ tur: string; ad: string }>; sonSecim: string[]; paketYukle: () => void }} s
  */
+/**
+ * Bağlam profili seçimi (türlere göre gruplu onay kutuları). secili: seçilen profil ADLARI (yerinde güncellenir).
+ * @param {{ baglamProfilleri: Array<{ tur: string; ad: string }>; secili: Set<string>; degisti?: () => void; bosMetin?: string }} s
+ */
+export function baglamProfiliSecimi(s) {
+  const turler = [...new Set(s.baglamProfilleri.map((b) => b.tur))];
+  if (!s.baglamProfilleri.length) {
+    return h('div', { class: 'bos-liste' }, s.bosMetin || 'Projede bağlam profili yok (Ayarlar > Bağlam profilleri). Sayfa tek bağlamla incelenecek.');
+  }
+  return h('div', { class: 'profil-secimi' }, turler.map((tur) => h('fieldset', {},
+    h('legend', {}, tur),
+    h('div', { class: 'ortam-secimleri' }, s.baglamProfilleri.filter((b) => b.tur === tur).map((b) => {
+      const kutu = h('input', { type: 'checkbox', checked: s.secili.has(b.ad), 'aria-label': `${tur}: ${b.ad}` });
+      kutu.addEventListener('change', () => { if (kutu.checked) s.secili.add(b.ad); else s.secili.delete(b.ad); if (s.degisti) s.degisti(); });
+      return h('label', {}, kutu, b.ad);
+    })))));
+}
+
 export function tekrarAnalizDiyalogu(s) {
   const secili = new Set(s.sonSecim.filter((ad) => s.baglamProfilleri.some((b) => b.ad === ad)));
-  const turler = [...new Set(s.baglamProfilleri.map((b) => b.tur))];
   const hataKutusu = h('div', { class: 'not-kutusu hata', role: 'alert', hidden: true });
   const sayac = h('span', { class: 'secim-sayaci' });
   const profilVar = s.baglamProfilleri.length > 0;
   const guncelle = () => { sayac.textContent = profilVar ? `${secili.size} profil seçili` : 'bağlam profili yok'; olustur.disabled = profilVar && !secili.size; };
   const olustur = h('button', { type: 'button', class: 'birincil' }, ikon('dosya'), 'İstek dosyasını oluştur');
-  const liste = s.baglamProfilleri.length
-    ? h('div', { class: 'profil-secimi' }, turler.map((tur) => h('fieldset', {},
-      h('legend', {}, tur),
-      h('div', { class: 'ortam-secimleri' }, s.baglamProfilleri.filter((b) => b.tur === tur).map((b) => {
-        const kutu = h('input', { type: 'checkbox', checked: secili.has(b.ad), 'aria-label': `${tur}: ${b.ad}` });
-        kutu.addEventListener('change', () => { if (kutu.checked) secili.add(b.ad); else secili.delete(b.ad); guncelle(); });
-        return h('label', {}, kutu, b.ad);
-      })))))
-    : h('div', { class: 'bos-liste' }, 'Projede bağlam profili yok (Ayarlar > Bağlam profilleri). Sayfa tek bağlamla incelenecek.');
+  const liste = baglamProfiliSecimi({ baglamProfilleri: s.baglamProfilleri, secili, degisti: guncelle });
   const govde = h('div', {},
     h('p', { class: 'kucuk soluk' }, s.sonSecim.length ? 'Bu ekran için son seçiminiz işaretli geldi; değiştirebilirsiniz.' : 'Bu ekran için daha önce seçim yapılmadı.'),
     liste, hataKutusu,

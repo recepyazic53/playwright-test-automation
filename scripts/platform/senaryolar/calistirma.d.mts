@@ -32,6 +32,8 @@ export interface Kosucu {
   dene(istek: { ortam: string; dosya: string; ad: string; kosuId: string; ekVeri: Record<string, unknown> }): Promise<KosuYaniti>;
   /** Senaryo o an koşuyor mu (kuyrukta bekleme dahil)? Koşan senaryo düzenlenemez/silinemez. */
   kosuyorMu?(dosya: string, ad: string): boolean;
+  /** Ortamın güncel Playwright test listesi (koşu listesi filtresi uygulanmadan; "kodu kaldırılmış" denetimi). */
+  testListesi?(ortam: string): Promise<Array<{ dosya: string; ad: string }>>;
 }
 
 export declare function calistirmaIsteginiHazirla(vt: Veritabani, govde: Record<string, unknown>, secenekler?: CalistirmaSecenekleri): {

@@ -1586,3 +1586,76 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 .alan-satiri .baglam-cipi { max-width: 12.5rem; }
 @media (max-width: 1280px) { .alan-satiri { grid-template-columns: minmax(10rem, 1fr) 12rem minmax(0, 12.5rem); } }
 @media (max-width: 860px) { .alan-satiri { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- Şifreli senaryo dosyaları, yasak adresler, kodu kaldırılmış senaryolar ----------------------------------- */
+.dosya-alani { display: grid; gap: 6px; min-width: 0; }
+.dosya-sec-dugmesi {
+  display: flex; align-items: center; gap: 10px; justify-content: flex-start; text-align: left; width: 100%; min-height: 48px; padding: 8px 12px;
+  border-radius: var(--yaricap-m); border: 1.5px dashed color-mix(in srgb, var(--vurgu) 45%, var(--cizgi-2)); background: color-mix(in srgb, var(--vurgu) 4%, var(--panel-2));
+}
+.dosya-sec-dugmesi:hover { border-color: var(--vurgu); background: var(--vurgu-zemin); }
+.dosya-sec-dugmesi > .ikon { color: var(--vurgu); flex: none; }
+.dosya-sec-dugmesi > span { display: grid; gap: 1px; min-width: 0; }
+.dosya-sec-dugmesi small { font-weight: 400; }
+.dosya-karti {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; padding: 8px 10px; border-radius: var(--yaricap-m);
+  background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); min-width: 0;
+}
+.dosya-karti.eski { background: var(--atlanan-zemin); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--atlanan) 32%, transparent); }
+.dosya-karti.eksik { background: var(--hata-zemin); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hata) 32%, transparent); }
+.dosya-karti-ikon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none; color: var(--vurgu); background: var(--vurgu-zemin); }
+.dosya-karti.eski .dosya-karti-ikon { color: var(--atlanan); background: transparent; }
+.dosya-karti-ana { display: grid; gap: 1px; flex: 1 1 10rem; min-width: 0; }
+.dosya-karti .dosya-adi { overflow-wrap: anywhere; font-weight: 620; }
+.dosya-karti code.dosya-adi { font-size: 12px; font-weight: 500; }
+.dosya-karti-eylemler { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.dosya-ilerleme { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: var(--metin-2); }
+.dosya-ilerleme .donen { width: 12px; height: 12px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--vurgu) 30%, transparent); border-top-color: var(--vurgu); animation: don .8s linear infinite; }
+.dosya-ilerleme-yolu { flex: 1 1 8rem; height: 4px; border-radius: 999px; background: var(--cizgi); overflow: hidden; }
+.dosya-ilerleme-cubugu { display: block; height: 100%; background: linear-gradient(90deg, var(--vurgu), var(--vurgu-2)); transition: width .15s; }
+.kod-seridi { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin: 0 0 var(--b3); }
+.kod-seridi-metin { display: grid; gap: 2px; flex: 1 1 22rem; min-width: 0; }
+.kod-seridi-eylemler { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.kod-denetimi-notu { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--b2); }
+.senaryo-tablosu tbody tr.kodu-kaldirilmis .senaryo-adi strong { color: var(--metin-2); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--hata) 60%, transparent); }
+.acik-dosya-listesi { list-style: none; margin: 0 0 var(--b3); padding: 0; display: grid; gap: 6px; max-height: 24rem; overflow: auto; }
+.acik-dosya-satiri { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); cursor: pointer; }
+.acik-dosya-satiri:hover { box-shadow: inset 0 0 0 1px var(--cizgi-2); }
+.acik-dosya-ana { display: grid; gap: 2px; flex: 1 1 14rem; min-width: 0; }
+.acik-dosya-ana code { overflow-wrap: anywhere; justify-self: start; max-width: 100%; }
+.acik-dosya-karti .dugmeler { align-items: center; }
+
+/* ---- Otomatik tarama ---- */
+/* "Ekranı otomatik tara": başlatma diyaloğu, Sayfa ekle'deki ikinci seçenek, ilerleme ekranı (tarama.js). */
+dialog.claude-diyalogu:has(.tarama-diyalogu) { width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; }
+.tarama-diyalogu { display: grid; gap: 10px; }
+.tarama-diyalogu .alan { margin-bottom: 0; }
+.tarama-diyalogu select, .tarama-diyalogu input[type="text"] { width: 100%; }
+.tarama-ikili { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; align-items: start; }
+.tarama-ortam-bilgisi { display: grid; gap: 4px; margin: 0; padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
+.tarama-ortam-bilgisi li { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.tarama-ortam-bilgisi .ikon { width: 14px; height: 14px; flex: none; color: var(--metin-3); }
+.onay-satiri { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.onay-satiri input { margin-top: 3px; flex: none; }
+.tarama-uyarisi b { display: block; margin-bottom: 4px; }
+.tarama-uyarisi .onay-satiri { margin-top: 8px; font-weight: 600; }
+.tarama-yukleme-sutunu { display: grid; gap: 14px; min-width: 0; }
+.tarama-secenegi .form-eylemleri { margin-top: 4px; }
+.tarama-duzeni .kart + .kart, .tarama-duzeni .not-kutusu + .kart { margin-top: 14px; }
+.adim-listesi > li.suruyor { --k: var(--vurgu); }
+.adim-listesi > li.bekliyor { --k: var(--metin-3); }
+.adim-listesi > li.bekliyor .adim-metni { color: var(--metin-3); }
+.adim-listesi .adim-metni small { display: block; margin-top: 2px; }
+.tarama-profilleri { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tarama-profili { padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); display: grid; gap: 3px; }
+.tarama-profili.hata { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--hata) 40%, transparent); }
+.tarama-profili-ust { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tarama-profili-ust .sag { margin-left: auto; font-family: var(--yazi-mono); color: var(--metin-2); }
+.engellenen-listesi { list-style: none; margin: 8px 0 0; padding: 0; font: 12px var(--yazi-mono); }
+.engellenen-listesi li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--cizgi); }
+.engellenen-listesi .adres { flex: 1; min-width: 0; overflow-wrap: anywhere; color: var(--metin-2); }
+.tarama-olaylari { margin: 8px 0 0; display: grid; gap: 2px; }
+.tarama-ozeti { margin-bottom: 12px; flex-wrap: nowrap; align-items: flex-start; }
+.tarama-ozeti .ikon { flex: none; margin-top: 2px; }
+.tarama-ozeti > span { flex: 1; min-width: 0; }
+@media (max-width: 860px) { .tarama-ikili { grid-template-columns: minmax(0, 1fr); } }

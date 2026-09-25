@@ -23,6 +23,8 @@ import { kasaOlustur, parolayiDogrula } from '../../scripts/platform/kasa.mjs';
 import { veritabaniAc } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { MODEL_SPEC_DOSYASI, modelGrepDeseni } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
+import { geciciDosyaKoku } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
+import { readdirSync } from 'node:fs';
 import { SIRKET_DESENI, korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import {
   IS_KURALI_MESAJI, ORNEK_KULLANICI, ORNEK_PAROLA, ORNEK_TOTP_ANAHTARI, OrnekBasvuruUygulamasi, ornekBasvuruPaketi, ornekGirisTarifi
@@ -39,6 +41,8 @@ const EKRAN_KLASORU = process.env.MODEL_EKRAN_KLASORU;
 const YASAKLI_SAHTE_ADRES = 'https://galaksi-deneme.nippon.invalid';
 const PAROLA = `Gecici-Model-${randomBytes(6).toString('hex')}`;
 const BELGE = 'Sahte belge içeriği.\n';
+/** Şifreli depoya yüklenen (senaryo dosyası) sahte belge: koşuda geçici klasöre çözülür, koşu bitince silinir. */
+const SIFRELI_BELGE = 'SAHTE-SIFRELI-BELGE-ICERIGI\n'.repeat(5);
 
 /** "*nippon*" + yerel .env'deki gerçek ortam host'ları (değerler dosyaya/loga yazılmaz). */
 function yasakliKaliplar(): string {
@@ -164,6 +168,22 @@ test.beforeAll(async () => {
   // "Mutlaka görünmeli" (senaryo kuralı) + Koşuda açık.
   const mutlaka = senaryolar.get('Merkez / indirim mutlaka görünmeli') as string;
   expect((await api('/platform/senaryo/kaydet', { projeId, id: mutlaka, baslik: 'Merkez / indirim mutlaka görünmeli', mutlakaGorunmeli: ['indirimOrani'] })).basarili).toBe(true);
+  // Şifreli senaryo dosyası: "onay adımı hariç" senaryosunun belgesi arayüzün yükleme ucuyla ŞİFRELİ depoya yüklenir
+  // (düz metin diske yazılmaz); senaryo verisinde yalnızca referans durur. Koşuda geçici klasöre çözülür.
+  const hedefBaslik = 'Yetkili / onay adımı hariç';
+  const hedefId = senaryolar.get(hedefBaslik) as string;
+  const detay = (await api(`/platform/senaryo?id=${hedefId}&ortamId=${testOrtami}`)).senaryo as { veri: Nesne; ekranId: string; ortamlar: string[] };
+  const yuklemeYaniti = await fetch(`${nobetci.adres}/platform/senaryo-dosyasi/yukle?projeId=${projeId}&ekranId=${detay.ekranId}&alan=belge`, {
+    method: 'POST', headers: { 'x-test-sunucu-token': nobetci.token, 'x-dosya-adi': encodeURIComponent('sifreli-belge.txt'), 'content-type': 'application/octet-stream' },
+    body: new Uint8Array(Buffer.from(SIFRELI_BELGE))
+  });
+  const yuklenen = (await yuklemeYaniti.json()) as { dosya?: { referans: string } };
+  expect(yuklenen.dosya?.referans).toMatch(/^nobetci-dosya:\/\/[0-9a-f-]{36}\/sifreli-belge\.txt$/);
+  const kayit = await api('/platform/senaryo/kaydet', {
+    projeId, id: hedefId, ekranId: detay.ekranId, baslik: hedefBaslik, veri: { ...detay.veri, belge: yuklenen.dosya?.referans }, ortamIdleri: detay.ortamlar
+  });
+  expect(kayit.basarili, kayit.mesaj).toBe(true);
+  expect(readdirSync(join(klasor, 'medya')).map((ad) => readFileSync(join(klasor, 'medya', ad)).includes('SAHTE-SIFRELI-BELGE')).some(Boolean)).toBe(false);
   expect((await api('/platform/senaryo/kosuya-dahil', { projeId, idler: [...senaryolar.values()], dahil: true })).basarili).toBe(true);
 });
 
@@ -243,9 +263,13 @@ test('görünmeyen alan atlanır ve "atlanan alanlar"a yazılır; "mutlaka gör�
   expect((dusen.medya as Array<{ ad: string }>).some((m) => m.ad.startsWith('❌ HATA ANI'))).toBe(true);
 });
 
-test('isteğe bağlı adım hariç: prim hesaplanınca biter, onay isteği gitmez', () => {
+test('isteğe bağlı adım hariç: prim hesaplanınca biter, onay isteği gitmez; şifreli belge çözülüp yüklendi, geçici klasör silindi', () => {
   const d = sonuclar.get('Yetkili / onay adımı hariç') as Nesne;
   expect(d.durum).toBe('basarili');
+  // Şifreli senaryo dosyası koşuda çözüldü ve sayfaya yüklendi (ad + boyut); koşu bitince geçici klasör kalmadı.
+  expect(uygulama.hesaplamalar.find((x) => x.sube === 'S02' && x.kapsam === 'AVRUPA')).toMatchObject({ belge: `sifreli-belge.txt:${Buffer.byteLength(SIFRELI_BELGE)}` });
+  const kok = geciciDosyaKoku(vtYolu);
+  expect(existsSync(kok) ? readdirSync(kok) : []).toEqual([]);
   expect((d.adimlar as Array<{ ad: string }>).map((a) => a.ad)).not.toContain('Başvuru onaylanır');
   expect(uygulama.onaylar).toHaveLength(1); // yalnızca mutlu yolun onayı
   expect(uygulama.hesaplamalar).toHaveLength(4); // "mutlaka görünmeli" senaryosu hesaplamaya ulaşmadı

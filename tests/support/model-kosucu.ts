@@ -16,7 +16,9 @@
 // Planın kendisi (hangi adımlar, hangi alanlar, beklenen sonuç) saftır: scripts/platform/senaryolar/model-kosusu.mjs.
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import { existsSync, realpathSync } from 'node:fs';
-import { join, relative, resolve, isAbsolute } from 'node:path';
+import { basename, join, relative, resolve, isAbsolute } from 'node:path';
+import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
+import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
   YASAK_ADRES_DEGISKENI, YUKLEME_KLASORU_DEGISKENI, adresYasakliMi, modelKosuPlani, secenekBul, yasakDesenleri, yasakliAdresMesaji,
   yuklemeDosyasiYolu, type ModelKosuPlani, type PlanAdimi, type PlanAlani, type PlanKosuTanimi
@@ -123,8 +125,22 @@ async function okluSec(page: Page, alan: PlanAlani, gosterge: Locator, hedefMeti
   throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${hedefMetin}"`, `seçilebilen değerler: ${[...gorulenler].join(', ')}`));
 }
 
-/** Dosya alanı: değer izinli klasördeki dosyanın ADIDIR; klasör dışı/olmayan dosya açık hata verir. */
+/**
+ * Dosya alanı: değer ya (a) şifreli senaryo dosyasının bu koşu için çözülmüş MUTLAK yolu (veri okuyucu
+ * "nobetci-dosya://" referansını koşunun geçici klasöründeki dosyayla değiştirir; bkz. scripts/platform/dosyalar/)
+ * ya da (b) izinli klasördeki bir dosyanın ADIDIR. Klasör dışı/olmayan dosya açık hata verir.
+ */
 function yuklenecekDosya(deger: unknown): string {
+  const kosuKlasoru = process.env[DOSYA_KLASORU_DEGISKENI];
+  if (typeof deger === 'string' && referansCoz(deger)) {
+    throw new Error('Dosya alanı: şifreli senaryo dosyası bu koşu için çözülemedi (koşuya özel geçici klasör yok). Koşuyu Nöbetçi\'den ya da "npx playwright test" ile başlatın.');
+  }
+  if (typeof deger === 'string' && isAbsolute(deger) && kosuKlasoru) {
+    if (!existsSync(deger)) throw new Error(`Dosya alanı: "${basename(deger).replace(/^EKSIK-/, '')}" şifreli depoda bulunamadı (silinmiş ya da bu makineye aktarılmamış olabilir).`);
+    const g = relative(realpathSync(kosuKlasoru), realpathSync(deger));
+    if (!g || g.startsWith('..') || isAbsolute(g)) throw new Error('Dosya alanı: koşunun geçici dosya klasörü dışındaki dosya yüklenemez.');
+    return realpathSync(deger);
+  }
   const klasor = resolve(process.env[YUKLEME_KLASORU_DEGISKENI] || join(PROJE_KOKU, 'veri', 'yuklenecek-dosyalar'));
   const r = yuklemeDosyasiYolu(deger, klasor, join);
   if ('hata' in r) throw new Error(`Dosya alanı: ${r.hata}.`);

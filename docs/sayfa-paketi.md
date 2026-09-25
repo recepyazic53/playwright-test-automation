@@ -113,15 +113,70 @@ Koşu: giriş tarifiyle giriş → senaryonun bağlam profiliyle (modelde `esles
 giriş tarifinin bağlam türüdür) bağlam değiştirme → `ekranUrl` → modelin adımları sırayla. Senaryoda değeri olan her
 alan ekranda **görünüyorsa** tipine göre doldurulur (`secim`: değer ya da görünen metin; `okluSecim`; `metin`/`sayi`;
 `tarih` (`tarihJs` doldurucusuyla betikle); `onayKutusu`; `radyo` (seçeneğin `secici`'si ya da `value`); `dosya`:
-yalnızca izinli klasördeki dosyanın ADI — `NOBETCI_YUKLEME_KLASORU` ya da `veri/yuklenecek-dosyalar/`),
+senaryo formunda **Dosya yükle** ile yüklenen ŞİFRELİ senaryo dosyası — veride `nobetci-dosya://<kimlik>/<ad>`
+referansı durur, koşuda yalnızca o koşuya özel, yalnızca kullanıcının okuyabildiği geçici bir klasöre çözülür ve koşu
+bitince silinir; eski biçimde izinli klasördeki bir dosyanın ADI da kabul edilir — `NOBETCI_YUKLEME_KLASORU` ya da
+`veri/yuklenecek-dosyalar/`),
 görünmüyorsa atlanır ve sonuçta **atlanan alanlar**a yazılır; "mutlaka görünmeli" alan görünmezse test düşer.
 İsteğe bağlı adımlar senaryonun adım kapsamına göre koşulur; koşu beklenen hata adımında ya da kapsamdaki son adımda
 durur. Her adım bir `test.step` ve bir ekran görüntüsüdür.
 
-**Yasaklı adres koruması:** `NOBETCI_YASAK_ADRESLER` (virgülle ayrılmış host kalıpları, `*` joker; ör.
-`*nippon*`) verilirse, ortamın adresi (ya da giriş tarifindeki tam bir adres) bir kalıba uyan koşu sunucuda,
+**Yasaklı adres koruması:** Ayarlar > Güvenlik > **Yasak adresler** (host kalıpları, `*` joker; varsayılan boş) ve
+ek kaynak olarak `NOBETCI_YASAK_ADRESLER` ortam değişkeni (virgülle ayrılmış; ikisi birleşir) doluysa, ortamın adresi
+(ya da giriş tarifindeki tam bir adres) bir kalıba uyan koşu sunucuda,
 `global-setup`'ta ve model koşucusunda **tarayıcı hiçbir yere gitmeden** reddedilir; koşu sırasında yasaklı host'a
 giden her istek iptal edilir ve test başarısız sayılır.
+
+## Otomatik tarama
+
+Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Sayfa ekle** (yükleme alanının altındaki
+"Ya da: Ekranı otomatik tara") ve ekran sayfasındaki **Ekranı tara** düğmesi. Akış:
+
+1. **Seçim (her seferinde onaylanır):** ortam, bağlam profilleri (tekrar analiz diyaloğuyla aynı seçim; ekran için son
+   seçim işaretli gelir), taranacak sayfa (ortam adresine göre yol; tam adres yalnızca ortamla aynı kökende), seçim
+   keşfi (varsayılan açık) ve yeni ekranın adı/anahtarı. Diyalog açıkça uyarır: *"Bu işlem seçilen ortama bağlanır;
+   hiçbir şey kaydedilmez/gönderilmez"* — kullanıcı onay kutusunu işaretlemeden başlatılamaz. Kasa açık olmalıdır.
+2. **İş:** sunucu ayrı bir süreç grubunda başsız bir Playwright işi başlatır (`scripts/platform/tarama/tarama.config.ts`
+   + `tarama.spec.ts`; iptal edilebilir, varsayılan süre sınırı 5 dk — `NOBETCI_TARAMA_ZAMAN_ASIMI_SN`). Aynı anda tek
+   tarama çalışır. Parola, TOTP anahtarı ve bağlam profili değerleri **diske yazılmaz**, ortam değişkeniyle verilmez:
+   iş girdisini sunucudan işe özel tek kullanımlık token'la bir kez HTTP ile alır, ilerlemeyi ve sonucu aynı token'la
+   geri gönderir. SMS "elle" kodu iş ekranında istenir.
+3. **Tarama:** giriş tarifiyle giriş (CAPTCHA, hatalı kimlik, zaman aşımı açık hata verir) → her bağlam profili için
+   tarifin bağlam adımları → hedef sayfa → görünür alanların envanteri (etiket, tür, name/id, seçici önerisi,
+   zorunluluk, seçenekler, radyo/onay kutusu grupları, dosya `accept`, tarih, devre dışı/salt okunur, fieldset/legend ve
+   başlıklara göre bölümler) → profil başına ekran görüntüsü → isteğe bağlı **seçim keşfi**: en fazla 8 seçenekli her
+   açılır listede seçenekler tek tek seçilir, beliren/kaybolan alanlar kaydedilir, ilk değer geri yüklenir; seçim sayfayı
+   başka adrese götürürse bilinmeyenlere yazılır ve hedefe dönülür.
+4. **Güvenlik:** düğmelere/bağlantılara tıklanmaz, form gönderilmez, alanlara yazılmaz, Enter'a basılmaz. Tarama
+   aşamasında GET/HEAD dışındaki **her istek** (form gönderimi, otomatik kaydetme XHR'ı, `sendBeacon`, WebSocket)
+   ağ katmanında iptal edilir ve raporlanır; sayfada ayrıca `submit`/`requestSubmit` etkisizleştirilir. Yalnızca giriş
+   ve bağlam değiştirme adımları (tarif güdümlü) istek gönderebilir. **Yasak adresler** (Ayarlar > Güvenlik +
+   `NOBETCI_YASAK_ADRESLER`): ortam adresi, hedef ya da tarifteki bir adres kalıba uyuyorsa tarama **tarayıcı
+   açılmadan** reddedilir; tarama sırasında yasaklı host'a giden her istek iptal edilir.
+5. **Sonuç:** sayfa paketi (sürüm 1, model `semaSurumu: 1`), yüklenen paketle **aynı** önizleme → kabul (yeni ekran)
+   ya da bulgular (mevcut ekran) akışına girer. İşler ~1 saat sonra sunucu belleğinden silinir; ekran görüntüleri
+   kabul edilene kadar yalnızca bellekte durur.
+
+Üretilen paket:
+
+* `meta.olusturan`: `"Nöbetçi otomatik tarama"`, `meta.baglamProfilleri`: taranan profil adları.
+* Model taslağı: tek adım, bölümler, alanlar — tip eşlemesi `select→secim`, `text/email/textarea→metin`,
+  `number→sayi`, `date→tarih`, `tel→telefon`, `checkbox→onayKutusu`, radyo grubu → `radyo` (seçeneğin `secici`'si ile),
+  `file→dosya` (tek uzantılı `accept` → `kabul`); `etiket.ekran`, `secenekler` (değer + metin; boş değerli "Seçiniz"
+  yazılmaz, `seceneklerDurumu: "tam"`), `zorunlu`, `konum { secici, kirilganlik }` (`#id` → `[name=…]` →
+  `role=…[name=…]` → CSS yolu), `yapilandirma: "senaryo"` + `eslesme.senaryo` (devre dışı/salt okunur alanlar
+  `"dokunulmuyor"`), keşifte bulunan bağımlı alanlar için adlandırılmış koşul (`<alan>Gorunur`) + `gorunurluk`,
+  `baglamGorunurlugu` (`kaynak: "otomatik tarama"`).
+* **Mevcut ekranda** (tekrar analiz) güncel model TABAN alınır: alanlar seçiciyle eşleşir (kimlik/senaryo anahtarı
+  korunur), etiket/zorunluluk/seçenek güncellenir, yeni alanlar en yakın eşleşen alanın bölümüne eklenir; taramada
+  görülmeyen alanlar **kaldırılmaz** (başka adımda/koşulda olabilir) ve bilinmeyenlere yazılır.
+* `senaryoOnerileri: []`, `gerekenAyarlar` (giriş, iki aşamalı tür, bağlam türü), `bilinmeyenler` (her zaman
+  *"Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — Claude ile tamamlayın."* + gezinmeler,
+  engellenen yazma istekleri, keşfedilmeyen uzun listeler, etiketsiz alanlar, özel bileşenler/çerçeveler…),
+  `kanitlar` (profil başına görünür alan ekran görüntüsü).
+* Alan **değerleri** pakete hiç yazılmaz; sayfadan gelen metinlerde gizli veri kalıbı varsa metin atılır.
+
+Uçlar ve protokol: `scripts/platform/tarama/yonetici.mjs` (`/platform/tarama/*`) ve `protokol.mjs`.
 
 ## senaryoOnerileri
 

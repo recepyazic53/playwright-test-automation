@@ -11,10 +11,13 @@ import {
 } from './environments';
 import { oturumuHazirla, oturumuKaydetmeyeHazirla } from './giris-motoru';
 import { kasaAnahtariniHazirla } from './platform-kasa';
+import { platformVeritabaniYolu } from './platform-veri';
+import { DOSYA_KLASORU_DEGISKENI, geciciDosyaKoku, kosuKlasoruOlustur } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { YASAK_ADRES_DEGISKENI, adresYasakliMi, yasakDesenleri, yasakliAdresMesaji } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 
 /**
- * Yasaklı adres koruması (NOBETCI_YASAK_ADRESLER verilmişse; verilmemişse hiçbir şey yapmaz): ortamın adresi ya da
+ * Yasaklı adres koruması (Ayarlar > Güvenlik > "Yasak adresler" + NOBETCI_YASAK_ADRESLER; ikisi de boşsa hiçbir şey
+ * yapmaz — ayarlardaki liste platform verisi okunurken bu değişkene eklenir, bkz. platform-veri.ts): ortamın adresi ya da
  * tarifteki tam bir adres yasaklı kalıba uyuyorsa koşu tarayıcı AÇILMADAN durdurulur.
  */
 function yasakliAdresleriDenetle(adresler: Array<string | undefined>): void {
@@ -50,6 +53,14 @@ export default async function globalSetup(): Promise<void> {
   // dokunulmaz. Bu satır, aşağıdaki erken "return"lerden ÖNCE olmalı.
   if (!process.env.KOSU_KIMLIGI) {
     process.env.KOSU_KIMLIGI = `${Date.now()}-${randomBytes(4).toString('hex')}`;
+  }
+
+  // ŞİFRELİ SENARYO DOSYALARI (ör. çoklu sorgu Excel'i): koşu anında yalnızca bu koşuya özel, yalnızca kullanıcının
+  // okuyabildiği geçici klasöre çözülür (bkz. scripts/platform/dosyalar/). Nöbetçi koşularında klasörü sunucu açar ve
+  // süreç kapanınca siler; terminal koşusunda burada açılır, global-teardown.ts siler (çökme: Nöbetçi açılışta temizler).
+  if (!process.env[DOSYA_KLASORU_DEGISKENI]) {
+    process.env[DOSYA_KLASORU_DEGISKENI] = kosuKlasoruOlustur(geciciDosyaKoku(platformVeritabaniYolu()), `terminal-${process.env.KOSU_KIMLIGI}`);
+    process.env.NOBETCI_DOSYA_KLASORU_SAHIBI = 'global-setup';
   }
 
   // PLATFORM KASASI: test verisi/giriş bilgisi YALNIZCA şifreli platform veritabanından okunur

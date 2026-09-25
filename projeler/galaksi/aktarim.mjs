@@ -25,6 +25,8 @@
 //   KullaniciDegistirPage)                projeler/galaksi/giris-tarifi.mjs). Kaydedilmiş tarif yoksa
 //                                        varsayilanGirisTarifi aynı tarifi üretir (eski aktarımlar için).
 //   tests/ekran-modelleri/*.model.json → ekran modeli (sürüm 1)
+//   tests/fixtures/** (düz metin Excel…) → ŞİFRELİ senaryo dosyaları (aktarımdan sonra; yol değerleri dosya
+//                                        referansına çevrilir — bkz. dosyaKaynaklari ve scripts/platform/dosyalar/)
 //   playwright --list (TEST + CANLI)   → senaryolar (kararlı UUID, kaynak {dosya, ad}, kosuya_dahil).
 //                                        Liste, paketin uygulandığı GEÇİCİ bir veritabanı üzerinden alınır
 //                                        (aktarim/gecici-liste.mjs) — testler dosya okumaz.
@@ -685,6 +687,37 @@ export function dogrulamaBaglami(vt, projeId, ortamAnahtari) {
   return veri ? /** @type {Nesne} */ (ortakBaglaminiOlustur(veri.ortak)) : undefined;
 }
 
+// ---------------------------------------------------------------------------------------
+// 4) Düz metin proje dosyaları (şifreli depoya taşınır)
+// ---------------------------------------------------------------------------------------
+
+/** Senaryoların kullandığı eski dosyalar (ör. çoklu sorgu Excel'leri, eski panelden yüklenenler). */
+const DOSYA_KLASORU = join('tests', 'fixtures');
+
+/**
+ * Klasördeki (proje kökü ya da eski dosya yedeği) düz metin senaryo dosyaları: tests/fixtures/** (gizli dosyalar
+ * ve sembolik bağlar hariç). goreliYol, senaryo verisinde/ekran ayarlarında geçen biçimdir ("tests/fixtures/…").
+ * Genel taşıma işi scripts/platform/dosyalar/acik-dosyalar.mjs'dedir.
+ * @param {string} kok
+ * @returns {Array<{ goreliYol: string; yol: string }>}
+ */
+export function dosyaKaynaklari(kok) {
+  /** @type {Array<{ goreliYol: string; yol: string }>} */
+  const sonuc = [];
+  const gez = (/** @type {string} */ goreli) => {
+    let girdiler;
+    try { girdiler = readdirSync(join(kok, goreli), { withFileTypes: true }); } catch { return; }
+    for (const g of girdiler.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (g.name.startsWith('.')) continue;
+      const alt = join(goreli, g.name);
+      if (g.isDirectory()) gez(alt);
+      else if (g.isFile()) sonuc.push({ goreliYol: alt.split(/[\\/]/).join('/'), yol: join(kok, alt) });
+    }
+  };
+  gez(DOSYA_KLASORU);
+  return sonuc;
+}
+
 /** @type {import('../index.d.mts').AktarimAdaptoru} */
 export const galaksiAdaptoru = Object.freeze({
   ad: ADAPTOR_ADI,
@@ -698,5 +731,6 @@ export const galaksiAdaptoru = Object.freeze({
   senaryoVeriKaynagi,
   profilHavuzlari,
   dogrulamaBaglami,
-  varsayilanGirisTarifi
+  varsayilanGirisTarifi,
+  dosyaKaynaklari
 });
