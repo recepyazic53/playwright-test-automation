@@ -6,15 +6,35 @@
 //  - Etiket: "@model-<senaryo UUID>" — Nöbetçi tek senaryo koşusunu bu etiketle daraltır (grep).
 //  - Koşuda kapalı senaryolar "npm run test"te üretilmez; Nöbetçi'nin listesi (TEST_SUNUCU_TUM_LISTE=1) ve
 //    tek senaryo koşusu (TEST_SUNUCU_GREP_DESENI) hepsini görür (playwright.config.ts > grepInvert ile aynı kural).
+//  - Veri kaynağı iki yoldan biri:
+//      aktarılmış ortam (TEST_ENV "test"/"canli"; playwright.config.ts) → platform-veri.ts + environments.ts,
+//      GENEL YOL (elle oluşturulan proje/ortam; playwright.model.config.ts, NOBETCI_PROJE_ID + NOBETCI_ORTAM_ID)
+//      → genel-veri.ts (adaptörsüz; proje ve ortam kimlikleriyle).
 import { test } from '../support/fixtures';
-import { getEnvironmentName } from '../support/environments';
-import { modelSenaryosunuKos } from '../support/model-kosucu';
-import { platformModelVerisi } from '../support/platform-veri';
+import { getEnvironment, getEnvironmentName, girisKimligi, girisTarifi } from '../support/environments';
+import { genelGirisKimligi, genelGirisTarifi, genelKosuMu, genelOturumDosyasi, genelVeri } from '../support/genel-veri';
+import { modelSenaryosunuKos, type ModelKosuOrtami } from '../support/model-kosucu';
+import { platformModelVerisi, type PlatformModelVerisi } from '../support/platform-veri';
 import { modelEtiketi, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
 
-const ortam = getEnvironmentName();
-const modelVerisi = platformModelVerisi(ortam);
+/** Bu sürecin model verisi ve (yalnızca test koşarken istenen) giriş kaynakları. */
+function kosuOrtami(): { veri: PlatformModelVerisi | null; ortam: (veri: PlatformModelVerisi) => ModelKosuOrtami } {
+  if (genelKosuMu()) {
+    return {
+      veri: genelVeri().model,
+      ortam: (veri) => ({ veri, tarif: genelGirisTarifi, kimlik: genelGirisKimligi, oturumDosyasi: genelOturumDosyasi })
+    };
+  }
+  const ad = getEnvironmentName();
+  return {
+    veri: platformModelVerisi(ad),
+    ortam: (veri) => ({ veri, tarif: () => girisTarifi(ad), kimlik: () => girisKimligi(ad), oturumDosyasi: () => getEnvironment(ad).login.storageState })
+  };
+}
+
+const kaynak = kosuOrtami();
+const modelVerisi = kaynak.veri;
 const hepsi = process.env.TEST_SUNUCU_TUM_LISTE === '1' || Boolean(process.env.TEST_SUNUCU_GREP_DESENI);
 // Ekranı devre dışı olan senaryolar da (ekran düzeyinde "Koşuda kapalı") yalnızca tam listede/tek koşuda üretilir.
 const senaryolar = (modelVerisi?.senaryolar ?? []).filter((s) => hepsi || (s.kosuyaDahil && s.ekranEtkin !== false));
@@ -43,6 +63,6 @@ for (const senaryo of senaryolar) {
     // Giriş + bağlam + adım başına en fazla 30 sn bekleme; adım sayısıyla ölçeklenir.
     const adimSayisi = Array.isArray(senaryo.model?.adimlar) ? (senaryo.model?.adimlar as unknown[]).length : 1;
     test.setTimeout(120_000 + adimSayisi * 30_000);
-    await modelSenaryosunuKos(page, testInfo, senaryo, { ad: ortam, veri: modelVerisi as NonNullable<typeof modelVerisi> });
+    await modelSenaryosunuKos(page, testInfo, senaryo, kaynak.ortam(modelVerisi as PlatformModelVerisi));
   });
 }

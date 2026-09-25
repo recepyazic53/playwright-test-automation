@@ -23,7 +23,7 @@ export declare function ortamAnahtariBul(vt: Veritabani, projeId: string, ortamI
 export declare function modelBaglami(vt: Veritabani, ekranId: string): { model: Record<string, unknown>; altModeller: Record<string, Record<string, unknown>>; surum: number } | null;
 export declare function ekranVeriKaynagi(
   vt: Veritabani, projeId: string, ekran: { id: string; anahtar: string }, adaptor: AktarimAdaptoru | null | undefined
-): { spec: string; dosya: string; yol: string } | null;
+): { spec: string; dosya: string; yol: string; /** Test kodu yok: yeni senaryo model koşucusuyla çalışır. */ model: boolean } | null;
 
 export interface SenaryoSatiri {
   id: string; baslik: string; ekranId: string | null; ekranAdi: string | null; kosuyaDahil: boolean; veriGudumlu: boolean;
@@ -63,7 +63,7 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   modelSurumu?: number;
   profiller: Record<string, Array<{ ad: string; tur: 'baglam' | 'testVerisi'; kapsam: 'tum' | 'ortam'; alanlar: Array<{ etiket: string; deger?: string; dolu: boolean }> }>>;
   ortak: Record<string, unknown> | null;
-  veriKaynagi: { spec: string; dosya: string; yol: string } | null;
+  veriKaynagi: { spec: string; dosya: string; yol: string; model: boolean } | null;
   olusturulabilir: boolean;
 };
 export declare function senaryoKaydet(
@@ -86,11 +86,14 @@ export type CalistirmaHedefi = {
   senaryoId: string; baslik: string; dosya: string;
   /** Kodlu testin güncel başlığı; model senaryosunda null (test etiketle bulunur). */
   ad: string | null;
-  ortamAnahtari: string; ekranId: string | null;
+  /** Çalıştırıcı ortam anahtarı (aktarım eşlemesi; ör. "test"); genel yolda null. */
+  ortamAnahtari: string | null; ekranId: string | null;
   /** Model koşucusuyla mı (model spec'i + etiket)? */
   model: boolean;
   etiket: string | null;
   grepDeseni: string | null;
+  /** Genel yol (eşlenmemiş ortamda model senaryosu): koşu proje + ortam kimlikleriyle (playwright.model.config.ts). */
+  genel: { projeId: string; ortamId: string } | null;
 };
 export declare function calistirmaHedefiCoz(
   vt: Veritabani, projeId: string, senaryoId: unknown, ortamId: unknown,

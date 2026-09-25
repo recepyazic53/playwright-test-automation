@@ -39,6 +39,7 @@ Proje, bir sigorta acente portalının (ilk proje: "Galaksi") Playwright testler
 | Genel giriş motoru (tarif, TOTP/SMS, bağlam adımları) | `tests/support/giris-motoru.ts`, `scripts/platform/giris/*` |
 | Ortak doğrulayıcı (sunucu + test + form) | `scripts/dogrulama/*` |
 | Model koşucusu (test kodu olmayan senaryolar) | `tests/support/model-kosucu.ts`, `tests/model-kosucu/*` |
+| Genel model koşusu (elle oluşturulan proje/ortam; adaptörsüz) | `playwright.model.config.ts`, `tests/support/genel-veri.ts` |
 | Testlerin veri erişimi (yalnız DB) | `tests/support/platform-veri.ts` |
 | Galaksi'ye özgü kod ("proje eklentisi") | `projeler/galaksi/*`, `tests/scenarios/**`, `tests/support/pages/**` |
 | Birim/koruma testleri (tarayıcısız + yerel fikstürler) | `tests/birim/*`, `npm run test:birim` |
@@ -96,22 +97,32 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
 
 - `main` = platformun son hâli (PR #2). Mac'te gerçek Galaksi TEST üzerinde doğrulananlar: yeni giriş tarifi,
   sonuçların DB'ye ve şifreli medyaya yazılması, çoklu sorgu (ödeme bekleme süresi 90 sn yapıldı).
-- **Windows'ta hiç denenmedi** — ilk iş budur.
+- **Windows doğrulandı (PR #4):** kurulum, birim testleri, yedek yükleme, gerçek TEST koşusu (sonuç + şifreli
+  medya) ve Durdur çalışıyor. Bulunan hata: Node 22.12+ ile raporlayıcı açılışta yüklenemiyordu; raporlayıcı artık
+  TypeScript giriş noktasından yüklenir (`tests/support/platform-raporlayici.ts`, koruma testi
+  `tests/birim/raporlayici-yukleme.spec.ts`). **Node sürümü farkı:** Mac 22.11, Windows 24 — raporlayıcıyı yeniden
+  doğrudan `.mjs` olarak verme; Mac'te Node güncellenirse de sorun çıkmaz.
+- Windows notları: dosya izinleri (0600/0700) Windows'ta uygulanmaz (birim testlerinde `POSIX_IZINLERI`); VS Code'un
+  Playwright eklentisi arka planda kendi `test-server` sürecini açık tutar, Nöbetçi'ye ait değildir.
 - Açık dosyalar (eski veri klasörü, Excel) şifreli depoya taşındı ve silindi. `.env` hâlâ duruyor (artık kod kullanmıyor).
 - Jet Satış ekranı kullanıcı tarafından devre dışı bırakıldı / silinecek (gereksiz test).
 
 ## 6. Kalan işler (kullanıcıyla kararlaştırılan sıra)
 
-1. **Windows doğrulaması:** `npm install`, `npm run baslat`, "Yedek yükle" (.tayedek), bir TEST senaryosu koşusu,
-   sonuç + görüntü + video; Windows'a özgü sorunları düzelt (süreç kapatma, yollar, dosya izinleri).
-2. **Yeni projelerde senaryoların koşması:** elle oluşturulan projelerin (aktarımla gelmemiş) senaryoları henüz
-   koşturulamıyor — model koşucusuna bağla. Platformun genel kullanımı için en kritik eksik.
+1. ~~**Windows doğrulaması**~~ — tamamlandı (PR #4; bkz. §5).
+2. ~~**Yeni projelerde senaryoların koşması**~~ — yapıldı (yerel fikstürle doğrulandı; gerçek bir uygulamayla
+   **denenmedi**, 3. işte birlikte denenecek). Aktarımla "test"/"canli" anahtarına eşlenmemiş ortamdaki model
+   senaryoları Nöbetçi'den **genel yolla** koşar: `playwright.model.config.ts` + `tests/support/genel-veri.ts` +
+   `veri-oku.mjs genel` (proje/ortam KİMLİKLERİYLE, adaptörsüz; giriş profili ve kayıtlı giriş tarifi ortamın kendisinden).
+   Test kodu olmayan ekranda formdan yeni senaryo da oluşturulabilir (`icerik.kosucu = 'model'`). Koruma testi:
+   `tests/birim/genel-model-kosusu.spec.ts`. Bilinçli sınırlar (kullanıcı kararı): yalnızca Nöbetçi'den başlatılır
+   (terminal `npm run test` yok); model senaryolarında "Dene" henüz yok (açık mesaj verir).
 3. **İlk gerçek tarama:** örn. JetKasko'da "Ekranı otomatik tara" + Claude'un sayfa paketi (kullanıcıyla birlikte).
 4. **Galaksi ürünlerini model koşucusuna taşımak** (ürün ürün, JetSeyahat'ten başla; eski test ile yan yana
    karşılaştır, sonuçlar aynıysa eski kodu kaldır). Bitince git'te Galaksi'ye özgü kod neredeyse kalmaz
    (alternatif: Galaksi kodunu ayrı gizli depoya taşımak — kullanıcı projeyi başkasına vermeden önce).
 5. **CANLI ortamda authenticator ile giriş** denemesi (kullanıcıyla).
-6. **`.env` silinmesi** (Mac ve Windows) — 1 ve 5 başarılı olunca, onayla.
+6. **`.env` silinmesi** (Mac ve Windows) — 5 başarılı olunca (1 tamam), onayla.
 7. **Küçük kararlar (kullanıcıya sorulacak):** kilit ekranında çalışma alanının proje sayısı gizlensin mi (öneri:
    evet); devre dışı ekranda tek ▷ / Dene'ye izin verilsin mi.
 8. Kullanım geri bildirimleri: görsel ve akış ince ayarları.

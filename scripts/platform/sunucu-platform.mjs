@@ -381,10 +381,13 @@ export function videoSaklamaGunu(db) {
 /**
  * Sonuçlar veritabanına mı yazılıyor? (Veritabanı + kasa var ve bir adaptörün projesi aktarılmış.)
  * Test sunucusu buna göre: kasa kilitliyse koşu başlatmaz, sonucu JSON dosyası yerine veritabanından okur.
+ * projeId verilirse (genel yol: elle oluşturulan proje) aktarım aranmaz — o projenin veritabanında olması yeter.
+ * @param {string | null} [projeId]
  */
-export async function platformSonucKaydiEtkinMi() {
+export async function platformSonucKaydiEtkinMi(projeId = null) {
   const db = await platformVeritabani();
   if (!db || !kasaDurumu(db).olusturuldu) return false;
+  if (projeId) return Boolean(db.tek('SELECT id FROM projeler WHERE id = ?', [projeId]));
   return AKTARIM_ADAPTORLERI.some((a) => Boolean(aktarilmisProjeyiBul(db, a.ad)));
 }
 
@@ -2261,10 +2264,13 @@ async function raporlayiciIsteginiIsle(req, res, islem, baglam) {
         ? (db.tek('SELECT id FROM projeler WHERE id = ?', [projeId]) ? { id: projeId } : undefined)
         : typeof govde.adaptor === 'string' ? aktarilmisProjeyiBul(db, govde.adaptor) : undefined;
       const etkin = Boolean(proje) && kasaDurumu(db).olusturuldu;
+      // Genel yol (playwright.model.config.ts): ortam kimliği doğrudan gelir — yalnızca bu projenin ortamıysa kabul edilir.
+      const verilenOrtamId = proje && typeof govde.ortamId === 'string' && govde.ortamId
+        && db.tek('SELECT id FROM ortamlar WHERE id = ? AND proje_id = ?', [govde.ortamId, proje.id]) ? govde.ortamId : null;
       jsonGonder(res, 200, {
         basarili: true, etkin, veritabaniYolu: veritabaniYolu(), medyaKlasoru: medyaKlasoruYolu(),
         projeId: proje?.id ?? null,
-        ortamId: proje && typeof govde.ortam === 'string' ? ortamKimligiBul(db, proje.id, govde.ortam) ?? null : null,
+        ortamId: verilenOrtamId ?? (proje && typeof govde.ortam === 'string' ? ortamKimligiBul(db, proje.id, govde.ortam) ?? null : null),
         medyaZarfi: db.metaOku(MEDYA_ANAHTARI_META) ?? null
       });
       return;

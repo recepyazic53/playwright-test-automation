@@ -188,10 +188,15 @@ class DogrudanYazici {
 // ---------------------------------------------------------------------------------------
 
 export default class PlatformRaporlayici {
-  /** @param {{ adaptor?: string; projeId?: string; ortam?: string; projeKoku?: string }} [secenekler] */
+  /**
+   * ortamId: genel yol (playwright.model.config.ts) — ortam aktarımla bir anahtara eşlenmediği için doğrudan kimlikle
+   * verilir (ortam anahtarından çözülmez).
+   * @param {{ adaptor?: string; projeId?: string; ortam?: string; ortamId?: string; projeKoku?: string }} [secenekler]
+   */
   constructor(secenekler = {}) {
     this.adaptor = secenekler.adaptor ?? null;
     this.projeIdSecimi = secenekler.projeId ?? null;
+    this.ortamIdSecimi = secenekler.ortamId ?? null;
     this.ortam = secenekler.ortam ?? process.env.TEST_ENV ?? 'test';
     this.projeKoku = secenekler.projeKoku ? resolve(secenekler.projeKoku) : process.cwd();
     /** @type {Promise<void>} */
@@ -235,7 +240,7 @@ export default class PlatformRaporlayici {
   /** @returns {Promise<Baglam | null>} */
   async hazirla() {
     const dbYolu = veritabaniYolu(this.projeKoku);
-    const secim = { adaptor: this.adaptor, projeId: this.projeIdSecimi, ortam: this.ortam };
+    const secim = { adaptor: this.adaptor, projeId: this.projeIdSecimi, ortam: this.ortam, ortamId: this.ortamIdSecimi };
     // 1) Sunucu (verildiyse ya da aynı veritabanıyla çalışıyorsa).
     const verilenAdres = process.env.PLATFORM_SONUC_ADRESI;
     const verilenToken = process.env.PLATFORM_SONUC_TOKENI;
@@ -279,7 +284,7 @@ export default class PlatformRaporlayici {
     if (!proje) { vt.kapat(); return null; }
     return {
       yazici: new DogrudanYazici(vt, medyaKlasoru(dbYolu)), projeId: proje.id,
-      ortamId: ortamKimligiBul(vt, proje.id, this.ortam) ?? null, medyaKlasoru: medyaKlasoru(dbYolu),
+      ortamId: this.ortamIdSecimi ?? ortamKimligiBul(vt, proje.id, this.ortam) ?? null, medyaKlasoru: medyaKlasoru(dbYolu),
       medyaZarfi: vt.metaOku(MEDYA_ANAHTARI_META) ?? null
     };
   }

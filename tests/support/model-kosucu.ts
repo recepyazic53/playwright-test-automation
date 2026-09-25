@@ -25,8 +25,7 @@ import {
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { beklenenGorulenMetni, beklenenMesajiBekle, mesajIceriyorMu, mesajiNormallestir } from './beklenen-sonuc';
-import { getEnvironment, girisKimligi, girisTarifi, type EnvironmentName } from './environments';
-import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKaydetmeyeHazirla } from './giris-motoru';
+import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKaydetmeyeHazirla, type GirisKimligi } from './giris-motoru';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
 
@@ -278,12 +277,22 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
 }
 
 /**
+ * Koşunun ortamı: model verisi + giriş tarifi, kimlik ve paylaşılan oturum dosyası. Kaynağı çağırana aittir —
+ * aktarılmış (Galaksi) ortamlarda environments.ts, genel yolda genel-veri.ts. Kimlik ve oturum dosyası yalnızca
+ * gerektiğinde (giriş yapılırken) istenir.
+ */
+export type ModelKosuOrtami = {
+  veri: PlatformModelVerisi;
+  tarif: () => GirisTarifi;
+  kimlik: () => GirisKimligi;
+  oturumDosyasi: () => string;
+};
+
+/**
  * Model senaryosunu koşturur. Atlanan alanlar "atlananAlanlar" annotation'ı olarak eklenir (raporlayıcı
  * sonuç satırına yazar); yasaklı host'a istek denenmişse test başarısız olur.
  */
-export async function modelSenaryosunuKos(
-  page: Page, testInfo: TestInfo, s: PlatformModelSenaryosu, ortam: { ad: EnvironmentName; veri: PlatformModelVerisi }
-): Promise<void> {
+export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
   if (!s.model) throw new Error(`"${s.baslik}": "${s.ekran.ad || s.ekran.id}" ekranının modeli yok; model koşucusu çalışamaz.`);
   const plan = modelKosuPlani(s.model, s.veri, { altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli });
   if (plan.hatalar.length) throw new Error(`"${s.baslik}" model koşu planı kurulamadı: ${plan.hatalar.join(' ')}`);
@@ -291,7 +300,7 @@ export async function modelSenaryosunuKos(
 
   // 1) Yasaklı adres koruması: ortamın taban adresi + tarifteki/modeldeki tam adresler (tarayıcı henüz hiçbir
   //    yere gitmedi), sonra yasaklı host'a her isteği iptal eden yakalayıcı.
-  const tarif = girisTarifi(ortam.ad);
+  const tarif = ortam.tarif();
   const engellenen = await yasakliAdresKorumasi(page, denetlenecekAdresler(ortam.veri.tabanUrl, tarif, plan.ekranUrl));
 
   const atlanan: AtlananAlan[] = [];
@@ -300,8 +309,8 @@ export async function modelSenaryosunuKos(
   try {
     await test.step('Sisteme giriş yapılır', async () => {
       if (!(await oturumGecerliMi(page, tarif))) {
-        await girisYap(page, tarif, girisKimligi(ortam.ad));
-        const oturumDosyasi = getEnvironment(ortam.ad).login.storageState;
+        await girisYap(page, tarif, ortam.kimlik());
+        const oturumDosyasi = ortam.oturumDosyasi();
         oturumuKaydetmeyeHazirla(oturumDosyasi);
         await page.context().storageState({ path: oturumDosyasi });
       }

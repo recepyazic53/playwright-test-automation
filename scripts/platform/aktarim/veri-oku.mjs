@@ -14,6 +14,10 @@
 //             senaryo verisi (hassas alanlar çözülmüş), ekran modeli + alt modeller, "mutlaka görünmeli"
 //             alanları ve bağlam profilleri (tür → ad → alanlar). Kasa anahtarı gerekir (veri kipiyle aynı).
 //   anahtar → PLATFORM_KASA_PAROLASI'ndan anahtarı türetip doğrular, base64url olarak döner
+//   genel   → ADAPTÖRSÜZ (elle oluşturulan proje/ortam; Nöbetçi'nin genel model koşusu, playwright.model.config.ts):
+//             node veri-oku.mjs genel --proje <id> --ortam-id <id> — "model" kipinin çıktısı ortam KİMLİĞİYLE +
+//             ortamın giriş bilgisi (giris; ortama özel profil, yoksa tüm ortamlar için olan) ve KAYITLI giriş
+//             tarifi (girisTarifi; adaptör varsayılanı yok). Kasa anahtarı gerekir.
 // "veri"/"model" kipleri ayrıca Ayarlar > Güvenlik'teki yasak adresleri (yasakAdresler) döner ve şifreli senaryo
 // dosyalarını (dosyalar/senaryo-dosyalari.mjs) koşunun geçici klasörüne (NOBETCI_DOSYA_KLASORU; yalnızca kullanıcı
 // okuyabilir, koşu bitince silinir) çözer — BU, okuyucunun diske yazdığı TEK şeydir.
@@ -26,8 +30,9 @@ import { veritabaniAc, veritabaniYolu } from '../veritabani/baglanti.mjs';
 import { gocleriUygula } from '../veritabani/gocler.mjs';
 import { KasaHatasi, kasaDurumu, kasayiAnahtarlaAc, parolayiDogrula } from '../kasa.mjs';
 import { aktarilmisProjeyiBul, ortamKimligiBul, zarflariCoz } from './motor.mjs';
-import { baglamProfilleriniListele, ekranlariListele, kaynakEslemeleriniListele, ortamGetir } from '../veritabani/depo.mjs';
+import { baglamProfilleriniListele, ekranlariListele, girisProfiliGetir, kaynakEslemeleriniListele, ortamGetir } from '../veritabani/depo.mjs';
 import { modelBaglami } from '../senaryolar/senaryo-servisi.mjs';
+import { GENEL_ORTAM_ETIKETI } from '../senaryolar/calistirma.mjs';
 import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { adaptorBul } from '../../../projeler/index.mjs';
@@ -50,8 +55,16 @@ function arguman(ad) {
   return i > 0 ? process.argv[i + 1] : undefined;
 }
 
+/** @param {import('../veritabani/baglanti.mjs').Veritabani} vt @returns {Promise<Buffer | null>} */
+async function kasaAnahtari(vt) {
+  if (process.env.PLATFORM_KASA_ANAHTARI) return Buffer.from(process.env.PLATFORM_KASA_ANAHTARI, 'base64url');
+  if (process.env.PLATFORM_KASA_PAROLASI) return parolayiDogrula(vt, process.env.PLATFORM_KASA_PAROLASI);
+  return null;
+}
+
 async function calistir() {
   const kip = process.argv[2];
+  if (kip === 'genel') return genelKip();
   const adaptor = adaptorBul(arguman('adaptor') ?? '');
   if (!adaptor) return { hata: 'Bilinmeyen adaptör.', kod: 'ADAPTOR' };
   const yol = veritabaniYolu(PROJE_KOKU);
@@ -87,9 +100,7 @@ async function calistir() {
 
     const ortam = arguman('ortam');
     if (!ortam) return { hata: '--ortam gerekli.', kod: 'KIP' };
-    let anahtar;
-    if (process.env.PLATFORM_KASA_ANAHTARI) anahtar = Buffer.from(process.env.PLATFORM_KASA_ANAHTARI, 'base64url');
-    else if (process.env.PLATFORM_KASA_PAROLASI) anahtar = await parolayiDogrula(vt, process.env.PLATFORM_KASA_PAROLASI);
+    const anahtar = await kasaAnahtari(vt);
     if (!anahtar) {
       return process.env.PLATFORM_KASA_PAROLASI
         ? { hata: 'PLATFORM_KASA_PAROLASI yanlış.', kod: 'PAROLA_YANLIS' }
@@ -148,13 +159,85 @@ function dosyaKlasoru(vtYolu) {
 }
 
 /**
+ * GENEL KİP (adaptörsüz): proje + ortam kimlikleriyle model senaryoları, giriş bilgisi ve kayıtlı giriş tarifi.
+ * Proje/ortam bulunamazsa ya da kasa anahtarı yoksa { hata, kod }.
+ */
+async function genelKip() {
+  const projeId = arguman('proje');
+  const ortamId = arguman('ortam-id');
+  const kimlikDeseni = /^[A-Za-z0-9_-]{1,100}$/;
+  if (!projeId || !ortamId || !kimlikDeseni.test(projeId) || !kimlikDeseni.test(ortamId)) return { hata: '--proje ve --ortam-id gerekli.', kod: 'KIP' };
+  const yol = veritabaniYolu(PROJE_KOKU);
+  if (!existsSync(yol)) return { durum: 'veritabani-yok' };
+  const vt = await veritabaniAc(yol, { saltOkunur: true });
+  try {
+    gocleriUygula(vt); // yalnızca bellekte
+    if (!kasaDurumu(vt).olusturuldu) return { hata: 'Kasa henüz oluşturulmamış.', kod: 'KASA_YOK' };
+    if (!vt.tek('SELECT id FROM projeler WHERE id = ?', [projeId])) return { hata: 'Proje bulunamadı.', kod: 'PROJE_YOK' };
+    const anahtar = await kasaAnahtari(vt);
+    if (!anahtar) {
+      return process.env.PLATFORM_KASA_PAROLASI
+        ? { hata: 'PLATFORM_KASA_PAROLASI yanlış.', kod: 'PAROLA_YANLIS' }
+        : { hata: 'Kasa anahtarı yok (PLATFORM_KASA_ANAHTARI ya da PLATFORM_KASA_PAROLASI gerekir).', kod: 'ANAHTAR_YOK' };
+    }
+    kasayiAnahtarlaAc(vt, anahtar);
+    anahtar.fill(0);
+    const ortam = ortamGetir(vt, ortamId);
+    if (!ortam || ortam.projeId !== projeId) return { hata: 'Ortam bu projede bulunamadı.', kod: 'ORTAM_YOK' };
+    const model = ortamModelSenaryolari(vt, projeId, ortamId, GENEL_ORTAM_ETIKETI);
+    const dosyaHedefi = dosyaKlasoru(yol);
+    if (model && dosyaHedefi) {
+      for (const s of model.senaryolar) s.veri = /** @type {Record<string, unknown>} */ ((await referanslariCoz(vt, s.veri, { medyaKlasoru: medyaKlasoru(yol), hedefKlasor: dosyaHedefi })).deger);
+    }
+    const t = etkinGirisTarifi(vt, projeId, ortamId, null);
+    return {
+      durum: 'hazir', projeId, ortamId, yasakAdresler: ayarlardakiYasakAdresler(vt), model,
+      giris: ortamGirisBilgisi(vt, projeId, ortamId),
+      girisTarifi: t.tarif ? { tarif: t.tarif, kaynak: t.kaynak, hatalar: t.hatalar } : null
+    };
+  } finally {
+    vt.kapat();
+  }
+}
+
+/**
+ * Ortamın giriş bilgisi (kasa açık olmalı; şifreler yalnızca bu sürecin çıktısında). Seçim, aktarım adaptörünün
+ * eşlemesi olmayan projeler için: önce ortama özel giriş profili, yoksa tüm ortamlar için olanı (aktarım
+ * adaptörlerinin yenidenKur'undaki yedek kuralla aynı). Profil yoksa null.
+ * @param {import('../veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ortamId
+ */
+function ortamGirisBilgisi(vt, projeId, ortamId) {
+  const satir = vt.tek('SELECT id FROM giris_profilleri WHERE proje_id = ? AND (ortam_id = ? OR ortam_id IS NULL) ORDER BY (ortam_id IS NULL), rowid LIMIT 1', [projeId, ortamId]);
+  const giris = satir ? girisProfiliGetir(vt, String(satir.id), { coz: true }) : undefined;
+  if (!giris) return null;
+  const sms = /** @type {Record<string, unknown>} */ (giris.smsAyari ?? {});
+  return {
+    profilKimligi: giris.id,
+    kullaniciAdi: giris.kullaniciAdi,
+    parola: giris.parola,
+    totpGizli: giris.ikiAsamaliTur === 'totp' ? giris.totpGizli : null,
+    sabitKod: giris.ikiAsamaliTur === 'sms' && sms.yontem === 'sabit' && typeof sms.kod === 'string' ? sms.kod : null,
+    smsKipi: giris.ikiAsamaliTur === 'sms' ? (sms.yontem === 'elle' ? 'elle' : 'sabit') : null
+  };
+}
+
+/**
  * Ortamdaki model senaryoları (kasa açık olmalı). Ortam eşlenmemişse null.
  * @param {import('../veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ortamAnahtari
  */
 function modelSenaryolari(vt, projeId, ortamAnahtari) {
   const ortamId = ortamKimligiBul(vt, projeId, ortamAnahtari);
-  const ortam = ortamId ? ortamGetir(vt, ortamId) : undefined;
-  if (!ortamId || !ortam) return null;
+  return ortamId ? ortamModelSenaryolari(vt, projeId, ortamId, ortamAnahtari) : null;
+}
+
+/**
+ * Ortamdaki (kimliğiyle) model senaryoları + bağlam profilleri (kasa açık olmalı). Ortam yoksa null.
+ * @param {import('../veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ortamId
+ * @param {string} ortamEtiketi çıktıdaki "ortam" alanı (aktarımda çalıştırıcı anahtarı; genel kipte GENEL_ORTAM_ETIKETI)
+ */
+function ortamModelSenaryolari(vt, projeId, ortamId, ortamEtiketi) {
+  const ortam = ortamGetir(vt, ortamId);
+  if (!ortam) return null;
   const eslemeliler = new Set(kaynakEslemeleriniListele(vt, projeId, 'senaryo').map((e) => e.varlikId));
   const kodDosyasiVar = (/** @type {string} */ dosya) => existsSync(join(PROJE_KOKU, 'tests', dosya));
   const ekranlar = new Map(ekranlariListele(vt, projeId).map((e) => [e.id, e]));
@@ -186,7 +269,7 @@ function modelSenaryolari(vt, projeId, ortamAnahtari) {
     .sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
     (baglamProfilleri[p.tur] ??= {})[p.ad] = p.alanlar ?? {};
   }
-  return { ortam: ortamAnahtari, ortamId, tabanUrl: ortam.tabanUrl, senaryolar, baglamProfilleri };
+  return { ortam: ortamEtiketi, ortamId, tabanUrl: ortam.tabanUrl, senaryolar, baglamProfilleri };
 }
 
 calistir().then(yaz, (hata) => {
