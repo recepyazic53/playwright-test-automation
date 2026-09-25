@@ -6,7 +6,7 @@
 //   yeniAlan · kaldirilanAlan · yeniSecenek · kaldirilanSecenek · etiketDegisikligi ·
 //   zorunlulukDegisikligi · tipDegisikligi · gorunurlukDegisikligi (profil: bağlam profili adı; null =
 //   görünürlük KOŞULU değişti) · adimDegisikligi (altTur: yeniAdim | kaldirilanAdim | baslik | gorunurluk |
-//   sira | yeniBolum | kaldirilanBolum | alanTasindi)
+//   sira | yeniBolum | kaldirilanBolum | alanTasindi | kosuTanimi — sürüm 2 adım koşu tanımı)
 // Her bulgunun "imza"sı (tür + hedef + yeni değer) kararlıdır: aynı değişiklik tekrar gelirse aynı imza
 // üretilir (reddedilen bulgular bu imzayla hatırlanır; değişiklik farklıysa imza da farklıdır).
 //
@@ -73,6 +73,18 @@ function senaryoAnahtarlari(alan) {
   const s = alan && alan.eslesme && alan.eslesme.senaryo;
   if (s === undefined || s === null) return [];
   return Array.isArray(s) ? s : [s];
+}
+
+/** Adımın koşu tanımının (sürüm 2: aksiyonlar, başarı/hata göstergesi) kısa, insan-okur özeti. */
+export function kosuTanimiMetni(k) {
+  if (!nesneMi(k)) return 'yok';
+  const parcalar = [];
+  for (const a of Array.isArray(k.aksiyonlar) ? k.aksiyonlar : []) {
+    if (nesneMi(a)) parcalar.push(`${a.tur === 'bekle' ? 'bekle' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}`);
+  }
+  if (nesneMi(k.basariGostergesi)) parcalar.push(`başarı: ${k.basariGostergesi.tur} "${k.basariGostergesi.deger}"`);
+  if (nesneMi(k.hataGostergesi)) parcalar.push(`hata: ${k.hataGostergesi.secici}`);
+  return parcalar.join(' · ') || 'boş';
 }
 
 /** Görünürlüğün kısa, insan-okur açıklaması. */
@@ -195,6 +207,14 @@ export function modelFarki(eski, yeni) {
         eski: gorunurlukMetni(ea.gorunurluk), yeni: gorunurlukMetni(ya.gorunurluk), imzaDegeri: ya.gorunurluk || null
       }));
     }
+  }
+  for (const [id, { adim: ya }] of y.adimlar) {
+    const ek = e.adimlar.get(id);
+    if (!ek || esit(ek.adim.kosu || null, ya.kosu || null)) continue;
+    bulgular.push(bulguYap({
+      tur: 'adimDegisikligi', altTur: 'kosuTanimi', hedef: id, adimId: id, baslik: `Adım koşu tanımı: ${ya.baslik || id}`, konum: `${ek.sira + 1}. adım`,
+      eski: kosuTanimiMetni(ek.adim.kosu), yeni: kosuTanimiMetni(ya.kosu), imzaDegeri: ya.kosu || null
+    }));
   }
   const ortakEski = [...e.adimlar.keys()].filter((id) => y.adimlar.has(id));
   const ortakYeni = [...y.adimlar.keys()].filter((id) => e.adimlar.has(id));
@@ -461,6 +481,11 @@ export function bulgulariUygula(eski, yeni, kabulIdleri) {
           if (!adim) { neden = 'adım mevcut modelde yok'; break; }
           const g = y.adimlar.get(b.adimId).adim.gorunurluk;
           if (g) adim.gorunurluk = kopya(g); else delete adim.gorunurluk;
+        } else if (b.altTur === 'kosuTanimi') {
+          const adim = adimBul(b.adimId);
+          if (!adim) { neden = 'adım mevcut modelde yok'; break; }
+          const k = y.adimlar.get(b.adimId).adim.kosu;
+          if (k) adim.kosu = kopya(k); else delete adim.kosu;
         } else if (b.altTur === 'sira') {
           const hedefSira = yeni.adimlar.map((a) => a.id);
           const konum = (id) => { const i = hedefSira.indexOf(id); return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
@@ -540,6 +565,8 @@ export function bulgulariUygula(eski, yeni, kabulIdleri) {
 
   // Sıra numaraları, eksik başvurular (koşul/senaryo ayarı), bağlam görünürlüğü temizliği
   r.adimlar.forEach((a, i) => { a.sira = i + 1; });
+  // Yeni modelden gelen sürüm 2 içeriği (adım koşu tanımı) şema sürümünü yükseltir (geriye uyumlu).
+  if (r.adimlar.some((a) => nesneMi(a) && a.kosu !== undefined) && Number(yeni.semaSurumu) > Number(r.semaSurumu || 1)) r.semaSurumu = yeni.semaSurumu;
   const kosullar = new Set();
   const ayarlar = new Set();
   basvurulariTopla(r.adimlar, kosullar, ayarlar);

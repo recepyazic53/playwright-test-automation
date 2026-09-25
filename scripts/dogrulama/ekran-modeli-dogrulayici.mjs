@@ -8,8 +8,18 @@
 //  - Hata varsa TÜM sorunlar toplanır ve TEK bir Türkçe Error'da listelenir.
 // Tipler: ekran-modeli-dogrulayici.d.mts (modelin TypeScript tipleri: tests/support/ekran-modeli.ts).
 
-/** Bu doğrulayıcının anladığı model şema sürümü. */
-export const DESTEKLENEN_SEMA_SURUMU = 1;
+/**
+ * Bu doğrulayıcının anladığı EN YENİ model şema sürümü. Sürüm 1 modeller aynen geçerlidir (geriye uyumlu).
+ * Sürüm 2: adımların koşu tanımı ("kosu": aksiyonlar, başarı/hata göstergesi — model koşucusu kullanır) ve
+ * okluSecim doldurucusunun ok düğmeleri (konum.yardimci.ileri/geri) zorunluluğu.
+ */
+export const DESTEKLENEN_SEMA_SURUMU = 2;
+/** Kabul edilen şema sürümleri. */
+export const SEMA_SURUMLERI = Object.freeze([1, 2]);
+/** Adım koşu tanımındaki aksiyon türleri: tikla (düğme/bağlantı), bekle (öğe görünür/gizli olana kadar). */
+export const AKSIYON_TURLERI = Object.freeze(['tikla', 'bekle']);
+/** Adımın başarı göstergesi türleri: metin (sayfada/öğede metin), eleman (öğe görünür), url (adres deseni). */
+export const BASARI_GOSTERGESI_TURLERI = Object.freeze(['metin', 'eleman', 'url']);
 
 export const ALAN_TIPLERI = Object.freeze([
   'secim', 'okluSecim', 'metin', 'sayi', 'tarih', 'telefon', 'onayKutusu', 'radyo', 'dosya',
@@ -46,7 +56,9 @@ const ALAN_ANAHTARLARI = new Set([
 const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kart', 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
 const FORM_ANAHTARLARI = new Set(['id', 'kontrol', 'etiket', 'secenekler', 'yardimciKontroller', 'not']);
 const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDegeri', 'ekranDegerleri', 'secici', 'kosul']);
-const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel']);
+const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'kosu']);
+const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'zamanAsimiSn', 'not']);
+const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklama', 'zamanAsimiSn']);
 const BOLUM_ANAHTARLARI = new Set(['id', 'baslik', 'pomMetodu', 'gorunurluk', 'alanlar']);
 const EKRAN_ANAHTARLARI = new Set([
   'semaSurumu', 'tur', 'id', 'ad', 'aciklama', 'ekranUrl', 'specDosyasi', 'pageObject', 'veriKaynaklari',
@@ -222,6 +234,13 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
       h.ekle(aYer, '"konum" { secici, kirilganlik: dusuk|orta|yuksek } içermeli');
     }
   }
+  // Sürüm 2: okluSecim doldurucusu (ok düğmeleriyle değer değiştiren özel bileşen) değeri gösteren öğeyi
+  // (konum.secici) ve ileri/geri düğmelerini (konum.yardimci.ileri|arttir ve geri|azalt) bildirmeli.
+  if (b.semaSurumu >= 2 && alan.doldurucu === 'okluSecim' && alan.yapilandirma === 'senaryo') {
+    const y = nesneMi(alan.konum) && nesneMi(alan.konum.yardimci) ? alan.konum.yardimci : {};
+    if (!metinMi(y.ileri) && !metinMi(y.arttir)) h.ekle(aYer, 'okluSecim: "konum.yardimci.ileri" (ya da "arttir") seçicisi zorunlu');
+    if (!metinMi(y.geri) && !metinMi(y.azalt)) h.ekle(aYer, 'okluSecim: "konum.yardimci.geri" (ya da "azalt") seçicisi zorunlu');
+  }
   formDogrula(h, `${aYer}.form`, alan.form);
   gorunurlukDogrula(h, `${aYer}.gorunurluk`, alan.gorunurluk, b);
   if (alan.bagimlilik !== undefined) {
@@ -283,13 +302,64 @@ function tekrarlananlar(kimlikler) {
   return [...gruplar.entries()].filter(([, yerler]) => yerler.length > 1);
 }
 
-function yeniBasvurular() {
-  return { alanlar: [], senaryoAyarlari: [], kosullar: [], altModeller: [] };
+function yeniBasvurular(semaSurumu = 1) {
+  return { alanlar: [], senaryoAyarlari: [], kosullar: [], altModeller: [], semaSurumu: typeof semaSurumu === 'number' ? semaSurumu : 1 };
+}
+
+/**
+ * Adımın koşu tanımı (sürüm 2) — model koşucusu (tests/support/model-kosucu.ts) adımın alanlarını
+ * doldurduktan sonra aksiyonları sırayla uygular, sonra başarı göstergesini bekler; hata göstergesi
+ * iş kuralı uyarısının göründüğü öğedir (beklenen/beklenmeyen hata mesajı buradan okunur).
+ *   { aksiyonlar?: [{ tur: tikla|bekle, secici, metin?, durum?: gorunur|gizli, aciklama?, zamanAsimiSn? }],
+ *     basariGostergesi?: { tur: metin|eleman|url, deger, secici? }, hataGostergesi?: { secici }, zamanAsimiSn?, not? }
+ */
+function kosuTanimiDogrula(h, yer, kosu) {
+  if (!nesneMi(kosu)) {
+    h.ekle(yer, '"kosu" nesne olmalı');
+    return;
+  }
+  h.bilinmeyenAnahtarlar(yer, kosu, KOSU_ANAHTARLARI);
+  const sure = (d, sYer) => {
+    if (d !== undefined && !(Number.isInteger(d) && d >= 1 && d <= 600)) h.ekle(sYer, '"zamanAsimiSn" 1–600 arasında tam sayı olmalı');
+  };
+  sure(kosu.zamanAsimiSn, yer);
+  if (kosu.aksiyonlar !== undefined) {
+    if (!Array.isArray(kosu.aksiyonlar)) h.ekle(yer, '"aksiyonlar" dizi olmalı');
+    else kosu.aksiyonlar.forEach((a, i) => {
+      const aYer = `${yer}.aksiyonlar[${i}]`;
+      if (!nesneMi(a)) { h.ekle(aYer, 'aksiyon bir nesne olmalı'); return; }
+      h.bilinmeyenAnahtarlar(aYer, a, AKSIYON_ANAHTARLARI);
+      if (!listedeMi(AKSIYON_TURLERI, a.tur)) h.ekle(aYer, `"tur" ${AKSIYON_TURLERI.join(' | ')} olmalı`);
+      if (!metinMi(a.secici)) h.ekle(aYer, '"secici" zorunlu');
+      if (a.metin !== undefined && !metinMi(a.metin)) h.ekle(aYer, '"metin" boş olmayan metin olmalı');
+      if (a.durum !== undefined && (a.tur !== 'bekle' || !['gorunur', 'gizli'].includes(a.durum))) h.ekle(aYer, '"durum" yalnızca "bekle" aksiyonunda gorunur | gizli olabilir');
+      if (a.aciklama !== undefined && typeof a.aciklama !== 'string') h.ekle(aYer, '"aciklama" metin olmalı');
+      sure(a.zamanAsimiSn, aYer);
+    });
+  }
+  if (kosu.basariGostergesi !== undefined) {
+    const g = kosu.basariGostergesi;
+    const gYer = `${yer}.basariGostergesi`;
+    if (!nesneMi(g) || !listedeMi(BASARI_GOSTERGESI_TURLERI, g.tur) || !metinMi(g.deger)) {
+      h.ekle(gYer, `{ tur: ${BASARI_GOSTERGESI_TURLERI.join(' | ')}, deger, secici? } olmalı`);
+    } else {
+      h.bilinmeyenAnahtarlar(gYer, g, new Set(['tur', 'deger', 'secici']));
+      if (g.secici !== undefined && (!metinMi(g.secici) || g.tur !== 'metin')) h.ekle(gYer, '"secici" yalnızca "metin" türünde (metnin arandığı öğe) kullanılır');
+      if (g.tur === 'url') {
+        try { new RegExp(g.deger); } catch { h.ekle(gYer, '"deger" geçerli bir düzenli ifade değil'); }
+      }
+    }
+  }
+  if (kosu.hataGostergesi !== undefined) {
+    const g = kosu.hataGostergesi;
+    if (!nesneMi(g) || !metinMi(g.secici) || Object.keys(g).some((k) => k !== 'secici')) h.ekle(`${yer}.hataGostergesi`, '{ secici } olmalı');
+  }
+  if (kosu.not !== undefined && typeof kosu.not !== 'string') h.ekle(yer, '"not" metin olmalı');
 }
 
 function semaSurumunuDogrula(h, yer, ham, beklenenTur) {
-  if (ham.semaSurumu !== DESTEKLENEN_SEMA_SURUMU) {
-    h.ekle(yer, `"semaSurumu" ${DESTEKLENEN_SEMA_SURUMU} olmalı (bulunan: ${String(ham.semaSurumu)})`);
+  if (!SEMA_SURUMLERI.includes(ham.semaSurumu)) {
+    h.ekle(yer, `"semaSurumu" ${SEMA_SURUMLERI.join(' ya da ')} olmalı (bulunan: ${String(ham.semaSurumu)})`);
   }
   if (ham.tur !== beklenenTur) h.ekle(yer, `"tur" "${beklenenTur}" olmalı`);
   if (!metinMi(ham.id)) h.ekle(yer, '"id" zorunlu');
@@ -337,7 +407,7 @@ export function altModeliDogrula(dosyaYolu, ham) {
   if (!nesneMi(ham)) throw new Error(`${yer}: model bir JSON nesnesi olmalı.`);
   h.bilinmeyenAnahtarlar(yer, ham, ALT_MODEL_ANAHTARLARI);
   semaSurumunuDogrula(h, yer, ham, 'altModel');
-  const b = yeniBasvurular();
+  const b = yeniBasvurular(ham.semaSurumu);
   const kimlikler = [];
   const bolumKimlikleri = [];
   if (!Array.isArray(ham.bolumler) || ham.bolumler.length === 0) h.ekle(yer, '"bolumler" boş olmayan dizi olmalı');
@@ -377,7 +447,7 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
     if (!metinMi(ham[anahtar])) h.ekle(yer, `"${anahtar}" zorunlu`);
   }
 
-  const b = yeniBasvurular();
+  const b = yeniBasvurular(ham.semaSurumu);
   const kimlikler = [];
   const bolumKimlikleri = [];
   const adimKimlikleri = [];
@@ -424,6 +494,10 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
         else adim.bolumler.forEach((bolum, j) => bolumDogrula(h, `${adYer}.bolumler[${j}]`, bolum, bolumKimlikleri, kimlikler, b));
       }
       if (altModelVar) altModelBasvurusuDogrula(h, `${adYer}.altModel`, adim.altModel, b);
+      if (adim.kosu !== undefined) {
+        if (b.semaSurumu < 2) h.ekle(adYer, 'adımın koşu tanımı ("kosu") "semaSurumu": 2 gerektirir');
+        kosuTanimiDogrula(h, `${adYer}.kosu`, adim.kosu);
+      }
     });
   }
 

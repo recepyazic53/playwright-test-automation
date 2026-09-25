@@ -301,7 +301,9 @@ function listeGorunumu(icerik, s) {
     const bs = x.beklenenSonuc;
     const altBilgi = [
       x.veriGudumlu ? null : rozet('kodda', '', { title: 'Kodda tanımlı test: veri yok; yalnızca görünen ad ve Koşuda düzenlenir' }),
-      x.paketten ? rozet('paketten', 'vurgu', { title: 'Sayfa paketindeki öneriden eklendi (Koşuda kapalı başlar); test kodu yazılıp gözden geçirilince koşuya ekleyin' }) : null,
+      x.modelKosusu
+        ? rozet('model', 'vurgu', { title: 'Test kodu yok: ekran modeliyle koşar (model koşucusu). Koşuda açıksa "Koşuyu başlat" ve npm run test dahil eder.' })
+        : x.paketten ? rozet('paketten', 'vurgu', { title: 'Sayfa paketindeki öneriden eklendi; test kodu (spec dosyası) olduğu için kodla koşar' }) : null,
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Koşu listesinde değil — Koşuyu başlat ve npm run test bu senaryoyu koşmaz' }) : null,
       x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null,
       x.kaynak && x.kaynak.ad !== x.baslik ? h('span', { title: 'Koddaki test adı' }, x.kaynak.ad) : null

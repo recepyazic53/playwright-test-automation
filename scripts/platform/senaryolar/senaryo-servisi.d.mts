@@ -34,9 +34,15 @@ export interface SenaryoSatiri {
   mutlakaGorunmeliSayisi: number;
   /** Sayfa paketindeki bir öneriden eklendi mi (icerik.paket). */
   paketten: boolean;
+  /** Test kodu olmadan model koşucusuyla çalışır mı (bkz. model-kosusu.mjs). */
+  modelKosusu: boolean;
   guncellenme: string;
 }
-export declare function senaryoListesi(vt: Veritabani, projeId: string, ortamId: string, adaptor?: AktarimAdaptoru | null): {
+export type ModelSecenekleri = { kodDosyasiVar?: (dosya: string) => boolean };
+export declare function modelKosusuMu(
+  vt: Veritabani, projeId: string, s: { id: string; icerik: unknown }, secenekler?: ModelSecenekleri & { eslemeliler?: Set<string> }
+): boolean;
+export declare function senaryoListesi(vt: Veritabani, projeId: string, ortamId: string, adaptor?: AktarimAdaptoru | null, secenekler?: ModelSecenekleri): {
   ekranlar: Array<{ id: string; anahtar: string; ad: string; senaryoSayisi: number; modelVar: boolean; olusturulabilir: boolean }>;
   senaryolar: SenaryoSatiri[];
 };
@@ -72,9 +78,20 @@ export declare function senaryoKopyala(vt: Veritabani, projeId: string, id: stri
 export declare function senaryoGecmisi(vt: Veritabani, id: string): Array<{
   id: string; zaman: string; islem: string; yapan: string; makineId: string | null; aciklama: string | null; baslik: string; degisenler: string[];
 }>;
-export declare function calistirmaHedefiCoz(vt: Veritabani, projeId: string, senaryoId: unknown, ortamId: unknown): {
-  senaryoId: string; baslik: string; dosya: string; ad: string; ortamAnahtari: string; ekranId: string | null;
+export type CalistirmaHedefi = {
+  senaryoId: string; baslik: string; dosya: string;
+  /** Kodlu testin güncel başlığı; model senaryosunda null (test etiketle bulunur). */
+  ad: string | null;
+  ortamAnahtari: string; ekranId: string | null;
+  /** Model koşucusuyla mı (model spec'i + etiket)? */
+  model: boolean;
+  etiket: string | null;
+  grepDeseni: string | null;
 };
+export declare function calistirmaHedefiCoz(
+  vt: Veritabani, projeId: string, senaryoId: unknown, ortamId: unknown,
+  secenekler?: ModelSecenekleri & { yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> }
+): CalistirmaHedefi;
 export declare function denemePaketiOlustur(
   vt: Veritabani,
   girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null },

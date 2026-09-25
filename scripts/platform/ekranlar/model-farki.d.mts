@@ -3,7 +3,7 @@
 export type BulguTuru =
   | 'yeniAlan' | 'kaldirilanAlan' | 'yeniSecenek' | 'kaldirilanSecenek' | 'etiketDegisikligi'
   | 'zorunlulukDegisikligi' | 'tipDegisikligi' | 'gorunurlukDegisikligi' | 'adimDegisikligi';
-export type AdimAltTuru = 'yeniAdim' | 'kaldirilanAdim' | 'baslik' | 'gorunurluk' | 'sira' | 'yeniBolum' | 'kaldirilanBolum' | 'alanTasindi';
+export type AdimAltTuru = 'yeniAdim' | 'kaldirilanAdim' | 'baslik' | 'gorunurluk' | 'sira' | 'yeniBolum' | 'kaldirilanBolum' | 'alanTasindi' | 'kosuTanimi';
 
 export interface Bulgu {
   /** İmzanın kısa özeti (kararlı). */
@@ -50,6 +50,8 @@ export declare const BULGU_TURLERI: readonly BulguTuru[];
 export declare const BULGU_TUR_ETIKETLERI: Readonly<Record<BulguTuru, string>>;
 export declare function kanonikJson(d: unknown): string;
 export declare function gorunurlukMetni(g: unknown): string;
+/** Adım koşu tanımının (sürüm 2) kısa özeti. */
+export declare function kosuTanimiMetni(k: unknown): string;
 export declare function modelEnvanteri(model: unknown): {
   adimlar: Map<string, { adim: Model; sira: number }>;
   bolumler: Map<string, { bolum: Model; adimId: string; sira: number }>;

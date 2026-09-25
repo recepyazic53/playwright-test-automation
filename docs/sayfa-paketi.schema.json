@@ -37,7 +37,7 @@
       "description": "Ekran modeli (tests/support/ekran-modeli.ts > EkranModeli). Kendi kendine yetmeli ya da projede var olan alt modellere başvurmalı. İsteğe bağlı baglamGorunurlugu: { profiller: [ad], alanlar: { alanId: { profil: true | false | null } } }.",
       "required": ["semaSurumu", "tur", "id", "ad", "aciklama", "ekranUrl", "specDosyasi", "pageObject", "veriKaynaklari", "kosullar", "adimlar", "senaryoDuzeyi", "urunDuzeyi", "isKurallari", "bilinmeyenler"],
       "properties": {
-        "semaSurumu": { "const": 1 },
+        "semaSurumu": { "enum": [1, 2], "description": "2: adımlarda koşu tanımı (kosu: aksiyonlar, basariGostergesi, hataGostergesi, zamanAsimiSn) — model koşucusu." },
         "tur": { "const": "ekran" },
         "baglamGorunurlugu": {
           "type": "object",

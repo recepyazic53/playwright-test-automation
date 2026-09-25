@@ -2,6 +2,7 @@ import { chromium } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { copyFileSync, existsSync } from 'node:fs';
 import {
+  environments,
   getEnvironment,
   getEnvironmentName,
   girisKimligi,
@@ -10,6 +11,20 @@ import {
 } from './environments';
 import { oturumuHazirla, oturumuKaydetmeyeHazirla } from './giris-motoru';
 import { kasaAnahtariniHazirla } from './platform-kasa';
+import { YASAK_ADRES_DEGISKENI, adresYasakliMi, yasakDesenleri, yasakliAdresMesaji } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
+
+/**
+ * Yasaklı adres koruması (NOBETCI_YASAK_ADRESLER verilmişse; verilmemişse hiçbir şey yapmaz): ortamın adresi ya da
+ * tarifteki tam bir adres yasaklı kalıba uyuyorsa koşu tarayıcı AÇILMADAN durdurulur.
+ */
+function yasakliAdresleriDenetle(adresler: Array<string | undefined>): void {
+  const desenler = yasakDesenleri(process.env[YASAK_ADRES_DEGISKENI]);
+  if (!desenler.length) return;
+  for (const adres of adresler) {
+    const kalip = adresYasakliMi(adres, desenler);
+    if (adres && kalip) throw new Error(yasakliAdresMesaji(adres, kalip));
+  }
+}
 
 // Bütün senaryolar başlamadan ÖNCE, tek seferlik giriş yapıp oturum çerezlerini diske yazar
 // (environments.ts > login.storageState — ortam + giriş profili başına). Giriş, ortamın GİRİŞ TARİFİYLE
@@ -44,6 +59,7 @@ export default async function globalSetup(): Promise<void> {
   await kasaAnahtariniHazirla();
 
   const environment = getEnvironmentName();
+  yasakliAdresleriDenetle([environments[environment].baseURL]);
 
   if (!hasCredentials(environment)) {
     console.log(
@@ -56,6 +72,7 @@ export default async function globalSetup(): Promise<void> {
   const definition = getEnvironment(environment);
   const authFile = definition.login.storageState;
   const tarif = girisTarifi(environment);
+  yasakliAdresleriDenetle([tarif.girisAdresi, tarif.oturumKontrolAdresi].filter((a) => /^https?:\/\//i.test(a)));
   // Geçiş: oturum dosyası artık ortam + giriş profili başına. Eski ortam başına dosya (…-acente.json) varsa
   // bir kez başlangıç olarak kopyalanır — geçerliyse yeniden giriş yapılmaz (geçersizse normal giriş).
   const eskiOturumDosyasi = `playwright/.auth/${environment}-acente.json`;

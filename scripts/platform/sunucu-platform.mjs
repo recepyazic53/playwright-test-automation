@@ -124,6 +124,7 @@ import {
   senaryoKopyala, senaryoListesi, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
+import { YASAK_ADRES_DEGISKENI, yasakDesenleri } from './senaryolar/model-kosusu.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
 import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
 import { girisSayfasiniOner } from './giris/algilama.mjs';
@@ -143,6 +144,10 @@ export const YEDEK_YUKLEME_SINIRI = 20 * 1024 * 1024 * 1024;
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** PLATFORM_VERITABANI veya <proje kökü>/veri/platform.db */
 const veritabaniYolu = () => veritabaniYoluCoz(PROJE_KOKU);
+/** Senaryonun kaynağındaki spec dosyası (testDir = tests/) diskte var mı? Yoksa senaryo model koşucusuyla çalışır. */
+const kodDosyasiVar = (/** @type {string} */ dosya) => existsSync(join(PROJE_KOKU, 'tests', dosya));
+/** Model/senaryo koşularının seçenekleri: yasaklı adres kalıpları (NOBETCI_YASAK_ADRESLER) her istekte okunur. */
+const calistirmaSecenekleri = () => ({ kodDosyasiVar, yasakDesenleri: yasakDesenleri(process.env[YASAK_ADRES_DEGISKENI]) });
 /** Şifreli medya klasörü: veritabanının yanındaki medya/ (varsayılan veri/medya/). */
 const medyaKlasoruYolu = () => medyaKlasoru(veritabaniYolu());
 /** Claude analiz/istek dosyaları: veritabanının yanındaki analiz/ (varsayılan veri/analiz/; Git'e girmez). */
@@ -707,7 +712,7 @@ const GET_UCLARI = new Map([
   ['/platform/senaryolar', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     const ortamId = ortamSec(db, projeId, q.get('ortamId'));
-    return { ortamId, ...senaryoListesi(db, projeId, ortamId, projeAdaptoru(db, projeId)) };
+    return { ortamId, ...senaryoListesi(db, projeId, ortamId, projeAdaptoru(db, projeId), { kodDosyasiVar }) };
   }],
   ['/platform/senaryo', (db, q) => {
     const id = kimlikAl(q.get('id'));
@@ -1247,7 +1252,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
       case '/platform/senaryolar/calistir': {
         // Koşu bitene kadar yanıt bekletilir (satır "çalışıyor" görünür); durdurma /durdur, canlı görüntü /canli ile.
         const db = await acikVeritabani();
-        const sonuc = await senaryoCalistir(db, govde, kosucu);
+        const sonuc = await senaryoCalistir(db, govde, kosucu, calistirmaSecenekleri());
         jsonGonder(res, sonuc.httpDurum, sonuc.govde);
         return true;
       }

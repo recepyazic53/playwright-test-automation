@@ -10,14 +10,14 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  ALAN_TIPLERI, DESTEKLENEN_SEMA_SURUMU, DOLDURUCULAR, FORM_KONTROLLERI, KIRILGANLIK_DUZEYLERI, SECENEK_DURUMLARI,
+  AKSIYON_TURLERI, ALAN_TIPLERI, BASARI_GOSTERGESI_TURLERI, DESTEKLENEN_SEMA_SURUMU, SEMA_SURUMLERI, DOLDURUCULAR, FORM_KONTROLLERI, KIRILGANLIK_DUZEYLERI, SECENEK_DURUMLARI,
   YAPILANDIRMA_TURLERI, altModeliDogrula as dogrulayiciAltModel, ekranModeliniDogrula as dogrulayiciEkranModeli
 } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
 import { getEnvironmentName } from './environments';
 import { platformVerisi } from './platform-veri';
 
-/** Bu yükleyicinin anladığı şema sürümü (doğrulayıcıyla aynı). */
-export { DESTEKLENEN_SEMA_SURUMU };
+/** Bu yükleyicinin anladığı en yeni şema sürümü ve kabul edilen sürümler (doğrulayıcıyla aynı). */
+export { DESTEKLENEN_SEMA_SURUMU, SEMA_SURUMLERI, AKSIYON_TURLERI, BASARI_GOSTERGESI_TURLERI };
 export { ALAN_TIPLERI, YAPILANDIRMA_TURLERI, DOLDURUCULAR, FORM_KONTROLLERI, SECENEK_DURUMLARI, KIRILGANLIK_DUZEYLERI };
 
 // ---- Tipler ----
@@ -162,6 +162,32 @@ export type Bolum = {
   alanlar: Alan[];
 };
 
+/** Adım koşu tanımındaki aksiyon (sürüm 2). */
+export type AdimAksiyonu = {
+  tur: (typeof AKSIYON_TURLERI)[number];
+  /** Playwright seçicisi (CSS, "text=…", "role=button[name=…]"). */
+  secici: string;
+  /** Birden çok öğe eşleşirse bu metni içeren öğe. */
+  metin?: string;
+  /** Yalnızca "bekle": öğe görünür (varsayılan) ya da gizli olana kadar. */
+  durum?: 'gorunur' | 'gizli';
+  aciklama?: string;
+  zamanAsimiSn?: number;
+};
+
+/** Adımın başarı göstergesi (sürüm 2): metin (secici verilirse o öğede), eleman (görünür), url (desen). */
+export type BasariGostergesi = { tur: (typeof BASARI_GOSTERGESI_TURLERI)[number]; deger: string; secici?: string };
+
+/** Adımın koşu tanımı (sürüm 2) — model koşucusu kullanır (tests/support/model-kosucu.ts). */
+export type AdimKosuTanimi = {
+  aksiyonlar?: AdimAksiyonu[];
+  basariGostergesi?: BasariGostergesi;
+  /** İş kuralı uyarısının göründüğü öğe. */
+  hataGostergesi?: { secici: string };
+  zamanAsimiSn?: number;
+  not?: string;
+};
+
 export type Adim = {
   id: string;
   sira: number;
@@ -170,6 +196,8 @@ export type Adim = {
   gorunurluk?: Gorunurluk | null;
   bolumler?: Bolum[];
   altModel?: AltModelBasvurusu;
+  /** Sürüm 2: aksiyonlar ve başarı/hata göstergesi. */
+  kosu?: AdimKosuTanimi;
 };
 
 export type IsKurali = {

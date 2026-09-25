@@ -207,3 +207,51 @@ export function platformHaricTutulanAnahtarlar(): string[] {
 export function platformSenaryoKimligi(ortam: EnvironmentName, anahtar: string): string | undefined {
   return platformVerisiVarsa(ortam)?.senaryoKimlikleri[anahtar];
 }
+
+// ---- Model senaryoları (test kodu olmayan; model koşucusu) ----
+
+/** Model koşucusunun senaryosu (veri-oku.mjs > model kipi). */
+export type PlatformModelSenaryosu = {
+  id: string;
+  baslik: string;
+  kosuyaDahil: boolean;
+  ekran: { id: string; anahtar: string; ad: string };
+  /** Ekranın en son model sürümü (yoksa null — test açık bir hatayla başarısız olur). */
+  model: Record<string, unknown> | null;
+  modelSurumu: number | null;
+  altModeller: Record<string, Record<string, unknown>>;
+  /** Senaryonun bu ortamdaki verisi (hassas alanlar çözülmüş; yalnızca bellekte). */
+  veri: Record<string, unknown>;
+  mutlakaGorunmeli: string[];
+};
+
+export type PlatformModelVerisi = {
+  ortam: string;
+  ortamId: string;
+  tabanUrl: string;
+  senaryolar: PlatformModelSenaryosu[];
+  /** Bağlam profilleri: tür → profil adı → alanlar (giriş tarifinin bağlam adımları bu alanlarla dolar). */
+  baglamProfilleri: Record<string, Record<string, Record<string, unknown>>>;
+};
+
+const modelOnbellegi = new Map<EnvironmentName, PlatformModelVerisi | null>();
+
+/**
+ * Bu ortamın model senaryoları (platform veritabanından). Ortam veritabanında yoksa null. Veritabanı/kasa
+ * hazır değilse platformVerisi ile aynı açık hatalar.
+ */
+export function platformModelVerisi(ortam: EnvironmentName): PlatformModelVerisi | null {
+  if (modelOnbellegi.has(ortam)) return modelOnbellegi.get(ortam) ?? null;
+  platformHazirOlmali();
+  if (!anahtarVarMi()) {
+    throw new PlatformVeriHatasi(`kasa anahtarı yok: model senaryoları okunamadı (${KASA_PAROLASI_DEGISKENI} ya da ${KASA_ANAHTARI_DEGISKENI} gerekir)`);
+  }
+  const sonuc = platformOkuyucusunuCalistir(['model', '--ortam', ortam]);
+  if (hataMi(sonuc)) {
+    if (sonuc.kod === 'PAROLA_YANLIS') throw new Error(`Platform kasası açılamadı: ${sonuc.hata}`);
+    throw new PlatformVeriHatasi(`platform veritabanı okunamadı: ${sonuc.hata}`);
+  }
+  const veri = (sonuc as { model?: PlatformModelVerisi | null }).model ?? null;
+  modelOnbellegi.set(ortam, veri);
+  return veri;
+}

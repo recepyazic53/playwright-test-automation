@@ -115,7 +115,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi) {
       h('div', { class: 'mini-sayilar' }, [['Adım', a.adim], ['Alan', a.alan], ['Öneri', p.senaryolar.length]].map(([e, v]) => h('div', {}, h('b', {}, String(v)), h('span', {}, e)))),
       analiz ? null : h('dl', { class: 'ozet-satirlari' },
         h('dt', {}, 'Ekran'), h('dd', {}, o.hedef ? `mevcut: ${o.hedef.ad}` : `yeni: ${p.meta.ekran.ad}`),
-        h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir)`),
+        h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`),
         h('dt', {}, 'Kanıt'), h('dd', {}, `${kanitlar.length} ekran görüntüsü (şifreli saklanır)`)));
     kabulDugmesi.disabled = !analiz && secim.size > 0 && ortamSecimi.size === 0;
   };

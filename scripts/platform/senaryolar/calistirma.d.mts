@@ -1,14 +1,20 @@
 // scripts/platform/senaryolar/calistirma.mjs için tip bildirimi.
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 import type { AktarimAdaptoru } from '../../../projeler/index.d.mts';
+import type { CalistirmaHedefi, ModelSecenekleri } from './senaryo-servisi.mjs';
+
+export type CalistirmaSecenekleri = ModelSecenekleri & { yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> };
 
 export interface KosuIstegi {
   /** Test çalıştırıcısının ortam anahtarı (TEST_ENV; ör. "test"). */
   ortam: string;
   /** Playwright spec dosyası (testDir'e göre, "/" ayraçlı). */
   dosya: string;
-  /** Güncel test başlığı (veritabanından çözülmüş). */
-  ad: string;
+  /** Güncel test başlığı (veritabanından çözülmüş); model senaryosunda null (etiketle bulunur). */
+  ad: string | null;
+  /** Model senaryosu: testin etiketi ("@model-<UUID>") ve koşuyu daraltan grep deseni. */
+  etiket?: string | null;
+  grepDeseni?: string | null;
   kosuId: string;
   kosuTuru?: 'tam' | 'tekil' | null;
   kosuKimligi?: string | null;
@@ -28,11 +34,13 @@ export interface Kosucu {
   kosuyorMu?(dosya: string, ad: string): boolean;
 }
 
-export declare function calistirmaIsteginiHazirla(vt: Veritabani, govde: Record<string, unknown>): {
+export declare function calistirmaIsteginiHazirla(vt: Veritabani, govde: Record<string, unknown>, secenekler?: CalistirmaSecenekleri): {
   projeId: string; kosuId: string; kosuTuru: 'tam' | 'tekil' | null; kosuKimligi: string | null; kosuKapsami: string | null;
-  hedef: { senaryoId: string; baslik: string; dosya: string; ad: string; ortamAnahtari: string; ekranId: string | null };
+  hedef: CalistirmaHedefi;
 };
-export declare function senaryoCalistir(vt: Veritabani, govde: Record<string, unknown>, kosucu: Kosucu | null): Promise<{ httpDurum: number; govde: Record<string, unknown> }>;
+export declare function senaryoCalistir(
+  vt: Veritabani, govde: Record<string, unknown>, kosucu: Kosucu | null, secenekler?: CalistirmaSecenekleri
+): Promise<{ httpDurum: number; govde: Record<string, unknown> }>;
 export declare function senaryoDene(
   vt: Veritabani, govde: Record<string, unknown>, kosucu: Kosucu | null, adaptor: AktarimAdaptoru | null
 ): Promise<{ httpDurum: number; govde: Record<string, unknown> }>;

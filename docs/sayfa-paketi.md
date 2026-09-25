@@ -48,7 +48,8 @@ yoksa boş dizi yazılır — "bilinmeyen yok" açıkça söylenmiş olur).
 
 ## model
 
-Platformdaki ekran modelleriyle **aynı şema** (`tests/support/ekran-modeli.ts > EkranModeli`): adımlar →
+`semaSurumu`: `1` ya da `2` (sürüm 1 modeller aynen geçerlidir). Sürüm 2, model koşucusunun ihtiyaç duyduğu
+**adım koşu tanımını** ekler (aşağıda). Platformdaki ekran modelleriyle **aynı şema** (`tests/support/ekran-modeli.ts > EkranModeli`): adımlar →
 bölümler → alanlar (tip, etiket, seçenekler, zorunluluk, görünürlük koşulu, senaryo eşleşmesi…),
 adlandırılmış koşullar, senaryo düzeyi ayarlar (başlık, adım kapsamı, beklenen sonuç), iş kuralları,
 bilinmeyenler. Model kendi kendine yetmeli; alt model başvurusu (`altModel`) yalnızca projede zaten
@@ -72,6 +73,56 @@ koşuda alan **görünüyorsa doldurulur, görünmüyorsa atlanır**; senaryoda 
 alan görünmezse test başarısız olur; atlanan alanlar sonuçlarda listelenir. Bağlam ↔ alan eşlemesi elle
 tutulmaz.
 
+### Adım koşu tanımı (semaSurumu 2)
+
+Her adıma isteğe bağlı `kosu` nesnesi yazılabilir; model koşucusu adımın alanlarını doldurduktan sonra
+aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
+
+```json
+"kosu": {
+  "aksiyonlar": [ { "tur": "tikla", "secici": "#hesapla", "aciklama": "Hesapla" },
+                  { "tur": "bekle", "secici": "#yukleniyor", "durum": "gizli" } ],
+  "basariGostergesi": { "tur": "metin", "deger": "Prim:", "secici": "#sonuc" },
+  "hataGostergesi": { "secici": "#uyari" },
+  "zamanAsimiSn": 30
+}
+```
+
+| Alan | Açıklama |
+|---|---|
+| `aksiyonlar[]` | `tur`: `tikla` (düğme/bağlantı) ya da `bekle` (`durum`: `gorunur` varsayılan \| `gizli`); `secici` zorunlu; `metin` (birden çok öğe eşleşirse bu metni içeren), `aciklama`, `zamanAsimiSn` isteğe bağlı. **Kaydet/öde/onayla** gibi kalıcı işlem yapan düğmeler yalnızca test ortamında koşulacak adımlara yazılır. |
+| `basariGostergesi` | `tur`: `metin` (sayfada ya da `secici` öğesinde toleranslı içerir), `eleman` (`deger` seçicisi görünür), `url` (`deger` düzenli ifadesi). |
+| `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |
+| `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
+
+Sürüm 2'de `okluSecim` doldurucusu (ok düğmeleriyle değer değiştiren özel bileşen) değeri gösteren öğeyi
+(`konum.secici`) ve düğmeleri (`konum.yardimci.ileri` ve `konum.yardimci.geri`; eski adlarla `arttir`/`azalt`)
+bildirmek zorundadır; `doldurucuParametreleri.maksDeneme` yön başına en fazla tıklamadır.
+
+Tekrar analizde koşu tanımı değişikliği **"Adım koşu tanımı"** bulgusu olur; sürüm 1 bir model bu bulgu kabul
+edilince sürüm 2'ye yükselir.
+
+## Model koşucusu
+
+Test kodu **olmayan** senaryolar (sayfa paketinden eklenmiş, kodlu bir teste eşlenmemiş ve kaynaktaki spec dosyası
+diskte olmayan) `tests/model-kosucu/model-senaryolari.spec.ts` tarafından üretilen testlerle koşar; kodlu (Galaksi)
+testler burada üretilmez. Her test `@model-<senaryo kimliği>` etiketini taşır; Nöbetçi tek senaryo koşusunu bu
+etiketle daraltır, "Koşuyu başlat" Koşuda açık model senaryolarını da dahil eder.
+
+Koşu: giriş tarifiyle giriş → senaryonun bağlam profiliyle (modelde `eslesme.profilHavuzu` olan alan; havuz adı
+giriş tarifinin bağlam türüdür) bağlam değiştirme → `ekranUrl` → modelin adımları sırayla. Senaryoda değeri olan her
+alan ekranda **görünüyorsa** tipine göre doldurulur (`secim`: değer ya da görünen metin; `okluSecim`; `metin`/`sayi`;
+`tarih` (`tarihJs` doldurucusuyla betikle); `onayKutusu`; `radyo` (seçeneğin `secici`'si ya da `value`); `dosya`:
+yalnızca izinli klasördeki dosyanın ADI — `NOBETCI_YUKLEME_KLASORU` ya da `veri/yuklenecek-dosyalar/`),
+görünmüyorsa atlanır ve sonuçta **atlanan alanlar**a yazılır; "mutlaka görünmeli" alan görünmezse test düşer.
+İsteğe bağlı adımlar senaryonun adım kapsamına göre koşulur; koşu beklenen hata adımında ya da kapsamdaki son adımda
+durur. Her adım bir `test.step` ve bir ekran görüntüsüdür.
+
+**Yasaklı adres koruması:** `NOBETCI_YASAK_ADRESLER` (virgülle ayrılmış host kalıpları, `*` joker; ör.
+`*nippon*`) verilirse, ortamın adresi (ya da giriş tarifindeki tam bir adres) bir kalıba uyan koşu sunucuda,
+`global-setup`'ta ve model koşucusunda **tarayıcı hiçbir yere gitmeden** reddedilir; koşu sırasında yasaklı host'a
+giden her istek iptal edilir ve test başarısız sayılır.
+
 ## senaryoOnerileri
 
 ```json
@@ -89,8 +140,9 @@ tutulmaz.
 * `adimKapsami`: dahil edilen isteğe bağlı adımların kimlikleri (modelin adım kapsamı ayarlarına çevrilir).
 * `beklenenSonuc.tur`: `basari` | `hata` (iş kuralı hatası beklenir — ayrıntısı `veri`deki beklenen sonuç alanında).
 * Öneriler tek senaryo doğrulayıcısından geçirilir; modele uymayan öneri önizlemede sorunlarıyla
-  gösterilir ve seçilemez. Kabul edilen öneriler **Koşuda kapalı** eklenir (test kodu yazılıp gözden
-  geçirilince koşuya alınır).
+  gösterilir ve seçilemez. Kabul edilen öneriler **Koşuda kapalı** eklenir: test kodu gerekmez, **model
+  koşucusuyla** çalışırlar (Senaryolar'da "model" rozeti; bkz. [Model koşucusu](#model-koşucusu)). Koşuya
+  almak kullanıcının kararıdır (Koşuda anahtarı).
 
 ## gerekenAyarlar
 

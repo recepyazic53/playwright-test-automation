@@ -9,16 +9,22 @@
 //   veri    → durum + adaptörün yenidenKur çıktısı (test verisi, ekran modelleri, taban adres, giriş) +
 //             etkin giriş tarifi (girisTarifi: { tarif, kaynak, hatalar } | null)
 //             (PLATFORM_KASA_ANAHTARI [base64url] ya da PLATFORM_KASA_PAROLASI gerekir)
+//   model   → durum + bu ortamdaki MODEL senaryoları (test kodu olmayan; bkz. senaryolar/model-kosusu.mjs):
+//             senaryo verisi (hassas alanlar çözülmüş), ekran modeli + alt modeller, "mutlaka görünmeli"
+//             alanları ve bağlam profilleri (tür → ad → alanlar). Kasa anahtarı gerekir (veri kipiyle aynı).
 //   anahtar → PLATFORM_KASA_PAROLASI'ndan anahtarı türetip doğrular, base64url olarak döner
 // Çıktı her zaman tek satır JSON'dur; hata durumunda { hata, kod } (çıkış kodu 0). Gizli değerler
 // yalnızca "veri"/"anahtar" kiplerinin stdout'unda bulunur; loglara ASLA yazılmaz.
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { veritabaniAc, veritabaniYolu } from '../veritabani/baglanti.mjs';
 import { gocleriUygula } from '../veritabani/gocler.mjs';
 import { KasaHatasi, kasaDurumu, kasayiAnahtarlaAc, parolayiDogrula } from '../kasa.mjs';
-import { aktarilmisProjeyiBul, ortamKimligiBul } from './motor.mjs';
+import { aktarilmisProjeyiBul, ortamKimligiBul, zarflariCoz } from './motor.mjs';
+import { baglamProfilleriniListele, ekranlariListele, kaynakEslemeleriniListele, ortamGetir } from '../veritabani/depo.mjs';
+import { modelBaglami } from '../senaryolar/senaryo-servisi.mjs';
+import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { adaptorBul } from '../../../projeler/index.mjs';
 
@@ -64,7 +70,7 @@ async function calistir() {
       haricTutulanlar: adaptor.kosudanHaricAnahtarlar(vt, proje.id)
     };
     if (kip === 'durum') return temel;
-    if (kip !== 'veri') return { hata: 'Bilinmeyen kip.', kod: 'KIP' };
+    if (kip !== 'veri' && kip !== 'model') return { hata: 'Bilinmeyen kip.', kod: 'KIP' };
 
     const ortam = arguman('ortam');
     if (!ortam) return { hata: '--ortam gerekli.', kod: 'KIP' };
@@ -78,6 +84,7 @@ async function calistir() {
     }
     kasayiAnahtarlaAc(vt, anahtar);
     anahtar.fill(0);
+    if (kip === 'model') return { ...temel, model: modelSenaryolari(vt, proje.id, ortam) };
     const veri = adaptor.yenidenKur(vt, proje.id, ortam);
     // Giriş tarifi (genel): kaydedilmiş tarif ya da adaptörün varsayılanı; geçersizse hatalarıyla birlikte
     // (giriş motoru açık bir hata verir).
@@ -90,6 +97,46 @@ async function calistir() {
   } finally {
     vt.kapat();
   }
+}
+
+/**
+ * Ortamdaki model senaryoları (kasa açık olmalı). Ortam eşlenmemişse null.
+ * @param {import('../veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ortamAnahtari
+ */
+function modelSenaryolari(vt, projeId, ortamAnahtari) {
+  const ortamId = ortamKimligiBul(vt, projeId, ortamAnahtari);
+  const ortam = ortamId ? ortamGetir(vt, ortamId) : undefined;
+  if (!ortamId || !ortam) return null;
+  const eslemeliler = new Set(kaynakEslemeleriniListele(vt, projeId, 'senaryo').map((e) => e.varlikId));
+  const kodDosyasiVar = (/** @type {string} */ dosya) => existsSync(join(PROJE_KOKU, 'tests', dosya));
+  const ekranlar = new Map(ekranlariListele(vt, projeId).map((e) => [e.id, e]));
+  /** @type {Map<string, ReturnType<typeof modelBaglami>>} */
+  const modeller = new Map();
+  const senaryolar = [];
+  for (const s of vt.tumu('SELECT id, ekran_id, baslik, icerik_json, kosuya_dahil FROM senaryolar WHERE proje_id = ? ORDER BY rowid', [projeId])) {
+    const icerik = JSON.parse(String(s.icerik_json));
+    if (!modelSenaryosuMu(icerik, { kodEslemesiVar: eslemeliler.has(String(s.id)), kodDosyasiVar })) continue;
+    const buOrtam = icerik.ortamlar && typeof icerik.ortamlar === 'object' ? icerik.ortamlar[ortamId] : undefined;
+    if (!buOrtam || typeof buOrtam !== 'object' || s.ekran_id == null) continue;
+    const ekranId = String(s.ekran_id);
+    if (!modeller.has(ekranId)) modeller.set(ekranId, modelBaglami(vt, ekranId));
+    const mb = modeller.get(ekranId);
+    const ekran = ekranlar.get(ekranId);
+    const kurallar = icerik.alanKurallari && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli) ? icerik.alanKurallari.mutlakaGorunmeli.filter((x) => typeof x === 'string') : [];
+    senaryolar.push({
+      id: String(s.id), baslik: String(s.baslik), kosuyaDahil: s.kosuya_dahil === 1,
+      ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: ekranId, anahtar: '', ad: '' },
+      model: mb ? mb.model : null, modelSurumu: mb ? mb.surum : null, altModeller: mb ? mb.altModeller : {},
+      veri: 'veri' in buOrtam ? zarflariCoz(vt, buOrtam.veri) : {}, mutlakaGorunmeli: kurallar
+    });
+  }
+  /** @type {Record<string, Record<string, unknown>>} tür → ad → alanlar (ortama özgü profil tüm-ortam profilini ezer) */
+  const baglamProfilleri = {};
+  for (const p of baglamProfilleriniListele(vt, projeId).filter((x) => x.ortamId === null || x.ortamId === ortamId)
+    .sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
+    (baglamProfilleri[p.tur] ??= {})[p.ad] = p.alanlar ?? {};
+  }
+  return { ortam: ortamAnahtari, ortamId, tabanUrl: ortam.tabanUrl, senaryolar, baglamProfilleri };
 }
 
 calistir().then(yaz, (hata) => {

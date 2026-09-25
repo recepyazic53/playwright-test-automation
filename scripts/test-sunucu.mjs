@@ -268,6 +268,8 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
                   urun: urunAdiBul(specDosya),
                   dosya: specDosya,
                   satir: spec.line,
+                  // Etiketler (ör. model koşucusunun "@model-<UUID>" etiketi — model senaryosu etiketle bulunur).
+                  etiketler: Array.isArray(spec.tags) ? spec.tags.map((t) => (String(t).startsWith('@') ? String(t) : `@${t}`)) : [],
                   ...(beklenenSonuc ? { beklenenSonuc } : {})
                 });
               }
@@ -521,7 +523,7 @@ function dosyaSirasiIleCalistir(dosya, gorev) {
 
 // ekOrtamDegiskenleri: koşu kimliği/türü ve (Senaryolar > "Dene"de) geçici
 // ek veri dosyasının yolu; tekil koşularda boştur.
-async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}) {
+async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}, grepDeseni = null) {
   if (KOSU_KAPALI) {
     return { calistiMi: false, mesaj: 'Bu sunucu örneğinde test koşuları kapalı (TEST_SUNUCU_KOSU_KAPALI=1).' };
   }
@@ -542,7 +544,8 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   // BAŞKA bir senaryoyla eşleşme riski, senaryoAdi+dosya ikilisinin PROJEDEKİ TÜM
   // senaryolar arasında TEK/BENZERSİZ olduğunu doğrulayan aşağıdaki "eslesenler"
   // kontrolüyle zaten güvenceye alınmış durumda.
-  const desen = `${regexIcinKac(senaryoAdi)}$`;
+  // Model senaryosu: desen senaryonun etiketidir ("@model-<UUID>"; bkz. platform/senaryolar/model-kosusu.mjs).
+  const desen = grepDeseni || `${regexIcinKac(senaryoAdi)}$`;
 
   // NOT (3. kök neden): Bu kontrol ÖNCEDEN yalnızca "ad"a (başlığa) bakıyordu — ama
   // aynı senaryo başlığı ("...Kiracı Testi", "...Mal Sahibi Testi" gibi) BİRDEN FAZLA
@@ -842,12 +845,37 @@ const EK_SENARYO_DOSYA_ON_EKI = 'test-sunucu-ek-senaryo-';
 // Platform "Senaryolar" (/platform/senaryolar/calistir; senaryo UUID'si sunucuda güncel başlık +
 // dosyaya çözülür) bu yolu kullanır: --list beyaz listesi (istemcinin gönderdiği ada güvenilmez),
 // dosya sırası, süre limiti, durdurma, canlı görüntü, platform raporlayıcısı. Dönen { httpDurum, govde }.
-async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami }) {
+async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null }) {
   let tumSenaryolar;
   try {
     tumSenaryolar = await tumSenaryolariGetir(ortam);
   } catch (hata) {
     return { httpDurum: 500, govde: { basarili: false, mesaj: `Senaryo listesi alınamadı (npx playwright test --list başarısız oldu): ${hata.message}` } };
+  }
+
+  // Model senaryosu (test kodu yok; model spec'i senaryoyu "@model-<UUID>" etiketiyle üretir): test, listede
+  // model dosyası + etiketle TEK olarak bulunmalı; başlığı listedekinden alınır, koşu etiketle daraltılır.
+  if (etiket) {
+    const modelEslesenler = tumSenaryolar.filter((s) => s.dosya === dosya && Array.isArray(s.etiketler) && s.etiketler.includes(etiket));
+    if (modelEslesenler.length !== 1) {
+      return {
+        httpDurum: modelEslesenler.length ? 409 : 403,
+        govde: {
+          basarili: false,
+          mesaj: modelEslesenler.length
+            ? `Model senaryosu listede ${modelEslesenler.length} kez eşleşti; güvenlik nedeniyle çalıştırılmadı.`
+            : 'Model senaryosu model koşucusunun test listesinde bulunamadı (senaryo bu ortamda değil ya da modeli geçersiz); çalıştırılmadı.'
+        }
+      };
+    }
+    const calistirmaSonucu = await testiCalistirVeBekle(
+      ortam, modelEslesenler[0].ad, dosya, tumSenaryolar, kosuId,
+      kosuTuru && kosuKimligi
+        ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
+        : {},
+      grepDeseni
+    );
+    return calistirmaYaniti(calistirmaSonucu, 'Test');
   }
 
   // Aynı başlık birden fazla ürün dosyasında bulunabildiği için senaryo (ad + dosya)
@@ -920,7 +948,8 @@ function calistirmaYaniti(calistirmaSonucu, ad) {
 platformKosucusunuAyarla({
   calistir: (istek) => senaryoyuCalistirVeYanitla({
     ortam: istek.ortam, senaryoAdi: istek.ad, dosya: istek.dosya, kosuId: istek.kosuId, kosuTuru: istek.kosuTuru ?? null,
-    kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel'
+    kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel',
+    etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null
   }),
   dene: async (istek) => {
     const ekDosyaYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}${Date.now()}-${randomBytes(6).toString('hex')}.json`);

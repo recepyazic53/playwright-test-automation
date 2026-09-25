@@ -28,9 +28,10 @@ function kimlik(d, alan) {
  *  - kosuId: bu tekil koşu isteğinin kimliği (durdurma / canlı görüntü bununla yapılır) — zorunlu.
  *  - kosuTuru 'tam' | 'tekil' (isteğe bağlı): birlikte başlatılan senaryolar ortak kosuKimligi taşır.
  *  - kosuKapsami yalnızca 'tam' koşuda: 'Genel' ya da projedeki bir ekranın adı.
- * @param {Veritabani} vt @param {Record<string, unknown>} govde
+ * secenekler: kodDosyasiVar (model senaryosu tespiti), yasakDesenleri (yasaklı adres koruması).
+ * @param {Veritabani} vt @param {Record<string, unknown>} govde @param {import('./calistirma.d.mts').CalistirmaSecenekleri} [secenekler]
  */
-export function calistirmaIsteginiHazirla(vt, govde) {
+export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
   const projeId = kimlik(govde.projeId, 'projeId');
   const kosuId = kimlik(govde.kosuId, 'kosuId');
   const kosuTuru = govde.kosuTuru === undefined || govde.kosuTuru === null ? null : govde.kosuTuru;
@@ -48,20 +49,22 @@ export function calistirmaIsteginiHazirla(vt, govde) {
     }
     kosuKapsami = kapsam;
   }
-  const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId);
+  const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
   return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef };
 }
 
 /**
  * Senaryoyu koşucu ile çalıştırır ve (koşu bitene kadar bekleyip) sonucu döner.
  * @param {Veritabani} vt @param {Record<string, unknown>} govde @param {Kosucu | null} kosucu
+ * @param {import('./calistirma.d.mts').CalistirmaSecenekleri} [secenekler]
  */
-export async function senaryoCalistir(vt, govde, kosucu) {
-  const h = calistirmaIsteginiHazirla(vt, govde);
+export async function senaryoCalistir(vt, govde, kosucu, secenekler = {}) {
+  const h = calistirmaIsteginiHazirla(vt, govde, secenekler);
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
   const sonuc = await kosucu.calistir({
     ortam: h.hedef.ortamAnahtari, dosya: h.hedef.dosya, ad: h.hedef.ad, kosuId: h.kosuId,
-    kosuTuru: h.kosuTuru, kosuKimligi: h.kosuKimligi, kosuKapsami: h.kosuKapsami, senaryoId: h.hedef.senaryoId
+    kosuTuru: h.kosuTuru, kosuKimligi: h.kosuKimligi, kosuKapsami: h.kosuKapsami, senaryoId: h.hedef.senaryoId,
+    ...(h.hedef.model ? { etiket: h.hedef.etiket, grepDeseni: h.hedef.grepDeseni } : {})
   });
   return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, senaryoId: h.hedef.senaryoId, baslik: h.hedef.baslik } };
 }
