@@ -20,7 +20,7 @@ const sifatlar: DaskSigortaEttirenSifati[] = ['malSahibi', 'kiraci'];
 test.describe.configure({ mode: 'default' });
 test.skip(
   !hasCredentials(environment),
-  `${environment.toUpperCase()} kullanıcı bilgilerini yerel .env dosyasına ekleyin.`
+  `${environment.toUpperCase()} giriş profilini Nöbetçi > Ayarlar > Giriş profilleri'nde tanımlayın.`
 );
 test.skip(!urunData.aktif, `${environment.toUpperCase()} JetDASK datası aktif değil.`);
 

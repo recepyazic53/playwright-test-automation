@@ -1,11 +1,16 @@
 import { resolve } from 'node:path';
 import { expect, type Page } from '@playwright/test';
+import {
+  beklenenGorulenMetni,
+  beklenenMesajiBekle,
+  UYARI_CIKMADI_METNI
+} from '../beklenen-sonuc';
 import type { JetSeyahatTestData, OzelKimlikData, TuzelKimlikData } from '../test-data';
 
 // JetSeyahat (seyahat sigortası) ekranının Page Object'i.
 // Kapsam/alternatif seçimi, COVID ve kayak teminatı (acenteye göre görünür/gizli),
 // tekli/çoklu sorgu ile sigortalı/ettiren bilgilerinin girilmesi ve prim hesaplama
-// adımlarını içerir. Bazı acentelerde (örn. 30856) COVID teminatı, kayak teminatı,
+// adımlarını içerir. Bazı acentelerde COVID teminatı, kayak teminatı,
 // Plan Kodu ve Seyahat İptal Bedeli alanları hiç gösterilmez; bu yüzden bu alanlara
 // dokunan her metot önce alanın görünür olup olmadığını kontrol eder.
 type SeyahatData = JetSeyahatTestData['jetSeyahat'];
@@ -35,10 +40,18 @@ export class JetSeyahatPage {
     await this.tarihGerekirseAyarla('#to', gunEkle(data.seyahatSuresiGun));
 
     // COVID teminatı, kayak teminatı, Plan Kodu ve Seyahat İptal Bedeli alanları her acentede
-    // gösterilmiyor (örn. 30856 acentesinde bu alanların hiçbiri yok). Acenteye özel sabit bir
+    // gösterilmiyor (bazı acentelerde bu alanların hiçbiri yok). Acenteye özel sabit bir
     // kontrol yerine, her alan için önce görünürlük kontrol edilir; görünmüyorsa işlem atlanır.
     const covid = this.page.locator('#covid-teminati');
     if (await covid.isVisible()) {
+      // Doğrulayıcı COVID'i yalnızca modelde "bu acentede görünür/bilinmiyor" ise zorunlu tutar;
+      // alan görünüyor ama senaryoda değer yoksa model (acenteAlanSetiTam) eksik/yanlıştır.
+      if (!senaryo.covidTeminati) {
+        throw new Error(
+          'COVID teminatı ekranda görünüyor ama senaryoda "covidTeminati" yok. Senaryoya değer ekleyin ve ' +
+            'ekran modelindeki kosullar.acenteAlanSetiTam > bilinenDurumlar listesini bu acente için düzeltin.'
+        );
+      }
       await this.selectGerekirseSec('#covid-teminati', senaryo.covidTeminati);
     }
 
@@ -166,12 +179,40 @@ export class JetSeyahatPage {
       .toBeGreaterThan(0);
   }
 
-  /** Prim hesaplar ve beklenen iş kuralı/hata mesajının diyalogda göründüğünü doğrular. */
+  /**
+   * Prim hesaplar ve beklenen iş kuralı/hata mesajının diyalogda (#dialog-content)
+   * göründüğünü doğrular. Eşleşme toleranslıdır (bkz. beklenen-sonuc.ts >
+   * mesajIceriyorMu): büyük/küçük harf, kıvrık/düz tırnak ve boşluk farkları yok sayılır,
+   * diyalog metninin beklenen mesajı İÇERMESİ yeterlidir. Doğrulanamazsa hata metninde
+   * hem beklenen hem de görülen (diyalog metni ya da "uyarı çıkmadı, akış devam etti")
+   * yer alır.
+   */
   async primHesaplaVeHataDogrula(beklenenMesaj: string): Promise<void> {
     await this.page.locator('#Refresh').click();
     const hata = this.page.locator('#dialog-content');
-    await expect(hata).toBeVisible({ timeout: 30_000 });
-    await expect(hata).toHaveText(beklenenMesaj);
+    const gorundu = await hata
+      .waitFor({ state: 'visible', timeout: 30_000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!gorundu) {
+      const prim = await this.page.locator('#premium-total-eur').innerText().catch(() => '');
+      throw new Error(
+        beklenenGorulenMetni(
+          'Prim hesaplama',
+          beklenenMesaj,
+          `${UYARI_CIKMADI_METNI}${prim.trim() ? ` (prim: ${prim.trim()} EUR)` : ''}`
+        )
+      );
+    }
+
+    // Diyalog metni AJAX ile sonradan dolabildiği için kısa bir süre tekrar tekrar okunur.
+    const { eslesen, sonGorulen } = await beklenenMesajiBekle(() => hata.innerText(), [beklenenMesaj], {
+      zamanAsimiMs: 5_000
+    });
+    if (!eslesen) {
+      throw new Error(beklenenGorulenMetni('Prim hesaplama', beklenenMesaj, sonGorulen));
+    }
   }
 
   // Tarih alanları salt-okunur datepicker ile çalışıyor; doğrudan klavye girişi kabul etmiyor.

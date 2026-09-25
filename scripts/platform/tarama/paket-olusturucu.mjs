@@ -1,0 +1,529 @@
+// OTOMATİK TARAMA → SAYFA PAKETİ (genel, saf fonksiyonlar). Tarama işinin (tarama.spec.ts) sayfadan topladığı
+// YAPISAL envanteri (alanlar, etiketler, seçenekler, bölümler, bağlam profiline göre görünürlük, seçim keşfi)
+// docs/sayfa-paketi.md biçiminde bir sayfa paketine (sürüm 1, model şema sürümü 1) çevirir.
+//
+//  - Alan DEĞERLERİ pakete hiçbir zaman yazılmaz (envanter de değer taşımaz); sayfadan gelen metinlerde gizli
+//    veri kalıbı (kart no, T.C. kimlik no, IBAN, JWT…) varsa metin atılır ve bilinmeyenlere yazılır.
+//  - Yeni ekran: tek adımlı taslak model (bölümler = fieldset/legend ve başlıklar). Mevcut ekran (tekrar analiz):
+//    mevcut model TABAN alınır; taranan alanlar seçiciyle eşleştirilip etiket/zorunluluk/seçenek/görünürlük
+//    güncellenir, yeni alanlar en yakın eşleşen alanın bölümüne eklenir, taramada görülmeyen alanlar
+//    KALDIRILMAZ (başka adımda/koşulda olabilir) — bilinmeyenlere yazılır. Böylece fark (bulgular) anlamlı kalır.
+//  - Seçim keşfi (≤ 8 seçenekli açılır listeler): bir seçenekte beliren/kaybolan alanlar adlandırılmış koşul +
+//    gorunurluk olur.
+// Hiçbir proje/ürün adı içermez. NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir).
+// Tipler: paket-olusturucu.d.mts.
+
+import { KANIT_BOYUT_SINIRI, KANIT_EN_COK, SAYFA_PAKETI_SURUMU, SAYFA_PAKETI_TURU, gizliKalipBul, kanitVerisiniCoz } from '../ekranlar/sayfa-paketi.mjs';
+
+export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
+/** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
+export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — Claude ile tamamlayın.';
+/** Keşfedilen açılır listelerin en fazla seçenek sayısı. */
+export const KESIF_SECENEK_SINIRI = 8;
+/** Mevcut modelde taramayla eşleştirilebilen alan tipleri. */
+const TARANABILIR_TIPLER = new Set(['secim', 'metin', 'sayi', 'tarih', 'telefon', 'onayKutusu', 'radyo', 'dosya']);
+
+/** @param {unknown} d @returns {d is Record<string, any>} */
+const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
+/** @template T @param {T} d @returns {T} */
+const kopya = (d) => JSON.parse(JSON.stringify(d));
+
+const TR_ASCII = /** @type {Record<string, string>} */ ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', Ç: 'C', Ğ: 'G', İ: 'I', Ö: 'O', Ş: 'S', Ü: 'U' });
+/** @param {string} m */
+const asciiye = (m) => String(m).replace(/[çğıöşüÇĞİÖŞÜ]/g, (c) => TR_ASCII[c] ?? c).normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+
+/**
+ * Metinden model kimliği (camelCase, harf/rakam, harfle başlar; ör. "Ad Soyad" → "adSoyad", "user_name" → "userName").
+ * @param {string} metin @param {string} [yedek]
+ */
+export function kimlikUret(metin, yedek = 'alan') {
+  const parcalar = asciiye(metin).replace(/([a-z0-9])([A-Z])/g, '$1 $2').split(/[^A-Za-z0-9]+/).filter(Boolean);
+  if (!parcalar.length) return yedek;
+  let id = parcalar.map((p, i) => (i === 0 ? p.charAt(0).toLowerCase() + p.slice(1) : p.charAt(0).toUpperCase() + p.slice(1))).join('');
+  if (!/^[a-zA-Z]/.test(id)) id = `${yedek}${id.charAt(0).toUpperCase()}${id.slice(1)}`;
+  return id.slice(0, 60);
+}
+
+/** Ekran anahtarı önerisi (küçük harf, rakam, "-"; ör. "Ödeme Formu" → "odeme-formu"). @param {string} metin */
+export function ekranAnahtariOner(metin) {
+  const a = asciiye(metin).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64).replace(/-+$/, '');
+  return a || 'ekran';
+}
+
+/** Kümede olmayan kimlik (çakışırsa 2, 3… eklenir). @param {string} temel @param {Set<string>} kullanilan */
+function benzersiz(temel, kullanilan) {
+  let aday = temel;
+  for (let i = 2; kullanilan.has(aday); i++) aday = `${temel}${i}`;
+  kullanilan.add(aday);
+  return aday;
+}
+
+/**
+ * Sayfadan gelen metni temizler: boşlukları sadeleştirir, kısaltır; gizli veri kalıbı içeriyorsa null döner
+ * (sayac.gizlenen artar).
+ * @param {unknown} m @param {{ gizlenen: number }} sayac @param {number} [uzunluk]
+ */
+function temizMetin(m, sayac, uzunluk = 200) {
+  if (typeof m !== 'string') return null;
+  const t = m.replace(/\s+/g, ' ').trim().slice(0, uzunluk);
+  if (!t) return null;
+  if (gizliKalipBul(t)) { sayac.gizlenen++; return null; }
+  return t;
+}
+
+/** Seçicileri karşılaştırmak için sadeleştirme (tırnak ve boşluk farkları yok sayılır). @param {string} s */
+const seciciNormal = (s) => String(s).replace(/\s+/g, '').replace(/'/g, '"');
+
+/**
+ * Ham alan tipi → model tipi. @param {import('./paket-olusturucu.d.mts').HamAlan} a
+ * @returns {{ tip: string; not: string | null }}
+ */
+export function modelTipi(a) {
+  switch (a.tur) {
+    case 'select': return { tip: 'secim', not: a.coklu ? 'Çoklu seçim listesi (model tek değer bekler; gözden geçirin).' : null };
+    case 'number': case 'range': return { tip: 'sayi', not: null };
+    case 'date': return { tip: 'tarih', not: null };
+    case 'tel': return { tip: 'telefon', not: null };
+    case 'checkbox': return { tip: 'onayKutusu', not: null };
+    case 'radio': return { tip: 'radyo', not: null };
+    case 'file': return { tip: 'dosya', not: null };
+    case 'datetime-local': case 'month': case 'week': case 'time':
+      return { tip: 'metin', not: `Sayfada "${a.tur}" türünde tarih/saat alanı; model metin olarak doldurur (biçimi gözden geçirin).` };
+    default: return { tip: 'metin', not: null };
+  }
+}
+
+/** accept → modelin tek uzantılı "kabul" alanı (birden çok ya da MIME türüyse null). @param {string | null | undefined} accept */
+function kabulUzantisi(accept) {
+  if (!accept) return null;
+  const parcalar = accept.split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+  return parcalar.length === 1 && /^\.[a-z0-9]{1,10}$/.test(parcalar[0]) ? parcalar[0] : null;
+}
+
+/**
+ * Alanın temel model kimliği: id → (onay kutusu grubunda ad + değer) → name → etiket → tür.
+ * @param {import('./paket-olusturucu.d.mts').HamAlan} a
+ */
+function temelKimlik(a) {
+  if (a.kimlik) return kimlikUret(a.kimlik);
+  const grupDegeri = a.grup && a.anahtar.includes('=') ? a.anahtar.slice(a.anahtar.indexOf('=') + 1) : '';
+  return kimlikUret(grupDegeri ? `${a.ad} ${grupDegeri}` : a.ad || a.etiket || a.tur, a.tur === 'radio' ? 'secenek' : 'alan');
+}
+
+/**
+ * Bir profilin keşif verisinden alan görünürlük koşulları: alan anahtarı → { secim, degerler } (alan yalnızca
+ * seçim bu değerlerden biri olunca görünür). Birden çok seçime bağlı görünen alanlar notlara yazılır.
+ * @param {import('./paket-olusturucu.d.mts').ProfilEnvanteri} p @param {Map<string, import('./paket-olusturucu.d.mts').HamAlan>} hamlar
+ * @param {string[]} notlar
+ */
+function kosullariHesapla(p, hamlar, notlar) {
+  /** @type {Map<string, { secim: string; degerler: string[] }>} */
+  const sonuc = new Map();
+  const temel = new Set(p.alanlar.map((a) => a.anahtar));
+  for (const k of p.kesifler) {
+    const secim = hamlar.get(k.secim);
+    if (!secim || !Array.isArray(secim.secenekler)) continue;
+    const tumDegerler = secim.secenekler.map((s) => s.deger).filter((d) => d !== '');
+    const denenen = k.degerler.filter((d) => !d.gezinme && !d.hata);
+    /** @type {Map<string, Set<string>>} */
+    const gorunen = new Map();
+    /** @type {Map<string, Set<string>>} */
+    const kaybolan = new Map();
+    for (const d of denenen) {
+      for (const a of d.gorunenler) if (!temel.has(a.anahtar)) (gorunen.get(a.anahtar) ?? gorunen.set(a.anahtar, new Set()).get(a.anahtar))?.add(d.deger);
+      for (const anahtar of d.kaybolanlar) if (anahtar !== k.secim) (kaybolan.get(anahtar) ?? kaybolan.set(anahtar, new Set()).get(anahtar))?.add(d.deger);
+    }
+    const ilk = k.ilkDeger ?? null;
+    /** @param {string} anahtar @param {string[]} degerler */
+    const yaz = (anahtar, degerler) => {
+      const temizDegerler = [...new Set(degerler.filter((d) => d !== ''))];
+      if (!temizDegerler.length || temizDegerler.length >= tumDegerler.length) return;
+      const onceki = sonuc.get(anahtar);
+      if (onceki && onceki.secim !== k.secim) {
+        const ad = hamlar.get(anahtar)?.etiket || anahtar;
+        notlar.push(`"${ad}" alanının görünürlüğü birden çok seçime bağlı görünüyor; yalnızca ilk seçime ("${hamlar.get(onceki.secim)?.etiket || onceki.secim}") göre koşul yazıldı.`);
+        return;
+      }
+      sonuc.set(anahtar, { secim: k.secim, degerler: temizDegerler });
+    };
+    for (const [anahtar, degerler] of gorunen) yaz(anahtar, [...degerler]);
+    for (const [anahtar, degerler] of kaybolan) {
+      const gizli = degerler;
+      const gorunurOlduklari = tumDegerler.filter((d) => !gizli.has(d) && (d === ilk || denenen.some((x) => x.deger === d)));
+      yaz(anahtar, gorunurOlduklari);
+    }
+  }
+  return sonuc;
+}
+
+/**
+ * Tarama envanterinden sayfa paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
+ * @param {import('./paket-olusturucu.d.mts').PaketMetasi} meta
+ * @param {import('./paket-olusturucu.d.mts').TaramaEnvanteri} envanter
+ * @returns {import('./paket-olusturucu.d.mts').PaketSonucu}
+ */
+export function taramaPaketiOlustur(meta, envanter) {
+  const sayac = { gizlenen: 0 };
+  /** @type {string[]} */
+  const bilinmeyenler = [AKSIYON_BILINMEYENI];
+  /** @type {string[]} */
+  const notlar = [];
+  const profiller = envanter.profiller;
+  const profilAdlari = profiller.map((p) => p.profil).filter((p) => typeof p === 'string' && p !== '');
+
+  // 1) Tüm profillerin alanları (temel + keşifte belirenler) — anahtara göre birleşik; profil başına görülme.
+  /** @type {Map<string, import('./paket-olusturucu.d.mts').HamAlan>} */
+  const hamlar = new Map();
+  /** @type {Map<string, Set<string | null>>} */
+  const gorulme = new Map();
+  /** @type {Map<string, { baslik: string; anahtarlar: string[] }>} */
+  const bolumler = new Map();
+  /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string | null} profil */
+  const ekle = (a, profil) => {
+    if (!hamlar.has(a.anahtar)) {
+      hamlar.set(a.anahtar, a);
+      const b = bolumler.get(a.bolum.anahtar) ?? bolumler.set(a.bolum.anahtar, { baslik: a.bolum.baslik, anahtarlar: [] }).get(a.bolum.anahtar);
+      b?.anahtarlar.push(a.anahtar);
+    }
+    (gorulme.get(a.anahtar) ?? gorulme.set(a.anahtar, new Set()).get(a.anahtar))?.add(profil);
+  };
+  for (const p of profiller) {
+    for (const a of p.alanlar) ekle(a, p.profil);
+    for (const k of p.kesifler) for (const d of k.degerler) for (const a of d.gorunenler) ekle(a, p.profil);
+  }
+
+  // 2) Görünürlük koşulları (ilk keşif verisi olan profilden; profiller arasında farklıysa not).
+  /** @type {Map<string, { secim: string; degerler: string[] }>} */
+  const kosullar = new Map();
+  for (const p of profiller) {
+    for (const [anahtar, k] of kosullariHesapla(p, hamlar, notlar)) {
+      const onceki = kosullar.get(anahtar);
+      if (!onceki) kosullar.set(anahtar, k);
+      else if (onceki.secim !== k.secim || onceki.degerler.join('\u0000') !== k.degerler.join('\u0000')) {
+        notlar.push(`"${hamlar.get(anahtar)?.etiket || anahtar}" alanının görünürlük koşulu bağlam profillerine göre farklı; ilk profildeki koşul yazıldı.`);
+      }
+    }
+  }
+
+  // 3) Taslak alanlar (kimlikler üretilir; mevcut modelle birleştirmede yeniden adlandırılabilir).
+  const kullanilan = new Set();
+  /** @type {Map<string, string>} ham anahtar → alan kimliği */
+  const kimlikler = new Map();
+  for (const [anahtar, a] of hamlar) kimlikler.set(anahtar, benzersiz(temelKimlik(a), kullanilan));
+  const etiketsizler = [];
+  const cokluDegerliler = [];
+  /** @param {import('./paket-olusturucu.d.mts').HamAlan} a @param {string} id @returns {Record<string, unknown>} */
+  const taslakAlan = (a, id) => {
+    const { tip, not } = modelTipi(a);
+    const etiket = temizMetin(a.etiket, sayac, 120);
+    if (!etiket) etiketsizler.push(id);
+    const dokunulmaz = a.devreDisi || a.saltOkunur;
+    /** @type {string[]} */
+    const alanNotlari = [];
+    if (not) alanNotlari.push(not);
+    if (a.devreDisi) alanNotlari.push('Taramada devre dışıydı.');
+    if (a.saltOkunur) alanNotlari.push('Taramada salt okunurdu.');
+    if (a.grup) alanNotlari.push(`"${a.grup}" onay kutusu grubunun parçası.`);
+    /** @type {Record<string, unknown>} */
+    const alan = { id, tip, etiket: { ekran: etiket } };
+    if (tip === 'secim') {
+      const secenekler = (a.secenekler ?? []).filter((s) => s.deger !== '').map((s) => ({ deger: String(s.deger).slice(0, 200), metin: temizMetin(s.metin, sayac) ?? String(s.deger).slice(0, 200) }))
+        .filter((s) => !gizliKalipBul(s.deger));
+      if (a.secenekler && a.secenekler.some((s) => s.deger === '')) alanNotlari.push('Boş değerli ilk seçenek (ör. "Seçiniz") modele yazılmadı.');
+      alan.secenekler = secenekler.length ? secenekler : null;
+      alan.seceneklerDurumu = secenekler.length ? 'tam' : 'bilinmiyor';
+      alan.seceneklerKaynagi = 'otomatik tarama (sayfadaki seçenekler)';
+      if (a.coklu) cokluDegerliler.push(etiket || id);
+    }
+    if (tip === 'radyo') {
+      const secenekler = (a.radyolar ?? []).filter((r) => r.deger !== '').map((r) => {
+        /** @type {Record<string, unknown>} */
+        const s = { deger: String(r.deger).slice(0, 200), metin: temizMetin(r.metin, sayac) ?? String(r.deger).slice(0, 200) };
+        if (r.secici) s.secici = r.secici;
+        return s;
+      }).filter((s) => !gizliKalipBul(String(s.deger)));
+      alan.secenekler = secenekler.length ? secenekler : null;
+      alan.seceneklerDurumu = secenekler.length ? 'tam' : 'bilinmiyor';
+      alan.seceneklerKaynagi = 'otomatik tarama (radyo düğmeleri)';
+    }
+    alan.zorunlu = a.zorunlu;
+    if (dokunulmaz) {
+      alan.yapilandirma = 'dokunulmuyor';
+    } else {
+      alan.yapilandirma = 'senaryo';
+      alan.eslesme = { senaryo: id };
+    }
+    alan.konum = { secici: a.secici, kirilganlik: a.kirilganlik };
+    if (tip === 'tarih') alan.bicim = 'YYYY-AA-GG';
+    if (tip === 'dosya') {
+      const kabul = kabulUzantisi(a.kabul);
+      if (kabul) alan.kabul = kabul;
+      else if (a.kabul) alanNotlari.push(`Kabul edilen dosyalar: ${String(a.kabul).slice(0, 120)}.`);
+    }
+    if (a.tur === 'password') alan.hassas = true;
+    if (alanNotlari.length) alan.notlar = alanNotlari;
+    return alan;
+  };
+
+  // 4) Adlandırılmış koşullar.
+  /** @type {Record<string, Record<string, unknown>>} */
+  const kosulTanimlari = {};
+  /** @type {Map<string, string>} ham anahtar → koşul adı */
+  const kosulAdlari = new Map();
+  /** @param {Set<string>} mevcutAdlar @param {string} alanId @param {string} anahtar */
+  const kosulYaz = (mevcutAdlar, alanId, anahtar) => {
+    const k = kosullar.get(anahtar);
+    if (!k) return null;
+    const secimId = kimlikler.get(k.secim);
+    if (!secimId) return null;
+    const ad = benzersiz(`${alanId}Gorunur`, mevcutAdlar);
+    const secimHam = hamlar.get(k.secim);
+    const metinler = k.degerler.map((d) => secimHam?.secenekler?.find((s) => s.deger === d)?.metin || d);
+    kosulTanimlari[ad] = {
+      aciklama: `${temizMetin(secimHam?.etiket, sayac) || secimId} = ${metinler.map((m) => temizMetin(m, sayac) ?? '?').join(' / ')} seçilince görünür (otomatik tarama keşfi).`,
+      ifade: k.degerler.length === 1 ? { alan: secimId, esit: k.degerler[0] } : { alan: secimId, icinde: k.degerler }
+    };
+    kosulAdlari.set(anahtar, ad);
+    return ad;
+  };
+
+  // 5) Bağlam profiline göre görünürlük (gözlem).
+  /** @param {string} anahtar @returns {Record<string, boolean>} */
+  const profilHaritasi = (anahtar) => {
+    /** @type {Record<string, boolean>} */
+    const h = {};
+    const g = gorulme.get(anahtar) ?? new Set();
+    for (const p of profilAdlari) h[/** @type {string} */ (p)] = g.has(p);
+    return h;
+  };
+
+  const urlYolu = meta.urlYolu;
+  /** @type {Record<string, unknown>} */
+  let model;
+  /** @type {string[]} */
+  const eslesmeyenler = [];
+  let yeniAlanSayisi = 0;
+  let eslesenSayisi = 0;
+
+  if (meta.mevcutModel && nesneMi(meta.mevcutModel) && Array.isArray(meta.mevcutModel.adimlar)) {
+    // ---- Tekrar analiz: mevcut modeli taban al.
+    model = kopya(meta.mevcutModel);
+    const adimlar = /** @type {Array<Record<string, any>>} */ (model.adimlar);
+    if (!nesneMi(model.kosullar)) model.kosullar = {};
+    const kosulAdKumesi = new Set(Object.keys(/** @type {object} */ (model.kosullar)));
+    const tumIdler = new Set();
+    /** @param {unknown} liste */
+    const idTopla = (liste) => {
+      for (const a of Array.isArray(liste) ? liste : []) {
+        if (!nesneMi(a)) continue;
+        if (typeof a.id === 'string') tumIdler.add(a.id);
+        idTopla(a.altAlanlar);
+        idTopla(a.ekranAlanlari);
+      }
+    };
+    for (const ad of adimlar) for (const b of Array.isArray(ad.bolumler) ? ad.bolumler : []) idTopla(b.alanlar);
+    if (nesneMi(model.senaryoDuzeyi)) idTopla(model.senaryoDuzeyi.alanlar);
+    // Eşleştirme: mevcut alanın seçicisi taranan alanın aday seçicilerinden biri.
+    /** @type {Map<string, { alan: Record<string, any>; bolum: Record<string, any> }>} ham anahtar → mevcut */
+    const eslesen = new Map();
+    for (const adim of adimlar) {
+      for (const bolum of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+        for (const alan of Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
+          if (!nesneMi(alan) || !TARANABILIR_TIPLER.has(alan.tip) || !nesneMi(alan.konum) || typeof alan.konum.secici !== 'string') continue;
+          const hedef = seciciNormal(alan.konum.secici);
+          const bulunan = [...hamlar.values()].find((h) => !eslesen.has(h.anahtar) && [h.secici, ...h.adaySeciciler].some((s) => seciciNormal(s) === hedef));
+          if (bulunan) eslesen.set(bulunan.anahtar, { alan, bolum });
+          else eslesmeyenler.push(String((nesneMi(alan.etiket) && (alan.etiket.ekran || alan.etiket.form)) || alan.id));
+        }
+      }
+    }
+    /** @type {Map<string, string>} modeldeki alan kimliği → ham anahtar (eşleşen ya da yeni eklenen) */
+    const modeldekiler = new Map();
+    // Eşleşen alanları güncelle.
+    for (const [anahtar, { alan }] of eslesen) {
+      eslesenSayisi++;
+      modeldekiler.set(String(alan.id), anahtar);
+      const t = taslakAlan(/** @type {import('./paket-olusturucu.d.mts').HamAlan} */ (hamlar.get(anahtar)), alan.id);
+      kimlikler.set(anahtar, alan.id);
+      const yeniEtiket = /** @type {{ ekran: string | null }} */ (t.etiket).ekran;
+      if (yeniEtiket) alan.etiket = { ...(nesneMi(alan.etiket) ? alan.etiket : {}), ekran: yeniEtiket };
+      alan.zorunlu = t.zorunlu;
+      if ((alan.tip === 'secim' || alan.tip === 'radyo') && alan.seceneklerDurumu !== 'dinamik' && Array.isArray(t.secenekler)) {
+        const eski = Array.isArray(alan.secenekler) ? alan.secenekler.filter(nesneMi) : [];
+        alan.secenekler = /** @type {Array<Record<string, unknown>>} */ (t.secenekler).map((s) => {
+          const e = eski.find((x) => String(x.deger) === String(s.deger));
+          return e ? { ...e, ...(e.metin === null || e.metin === undefined ? {} : { metin: s.metin }) } : s;
+        });
+      }
+    }
+    // Koşullar (mevcut alanda görünürlük yoksa) ve yeni alanlar.
+    const ilkBolum = adimlar.flatMap((a) => (Array.isArray(a.bolumler) ? a.bolumler : []))[0];
+    /** @type {Record<string, any> | null} */
+    let sonEslesenBolum = null;
+    /** @type {Record<string, any> | null} */
+    let sonEslesenAlan = null;
+    const sirali = [...bolumler.values()].flatMap((b) => b.anahtarlar);
+    for (const anahtar of sirali) {
+      const e = eslesen.get(anahtar);
+      if (e) {
+        sonEslesenBolum = e.bolum;
+        sonEslesenAlan = e.alan;
+        continue;
+      }
+      if (!ilkBolum) break;
+      const ham = /** @type {import('./paket-olusturucu.d.mts').HamAlan} */ (hamlar.get(anahtar));
+      const id = benzersiz(temelKimlik(ham), tumIdler);
+      kimlikler.set(anahtar, id);
+      modeldekiler.set(id, anahtar);
+      const yeni = taslakAlan(ham, id);
+      const bolum = sonEslesenBolum ?? ilkBolum;
+      const liste = /** @type {Array<Record<string, unknown>>} */ (bolum.alanlar);
+      const i = sonEslesenAlan && sonEslesenBolum === bolum ? liste.indexOf(sonEslesenAlan) : -1;
+      liste.splice(i >= 0 ? i + 1 : liste.length, 0, yeni);
+      sonEslesenAlan = yeni;
+      sonEslesenBolum = bolum;
+      yeniAlanSayisi++;
+    }
+    // Görünürlük koşulları (yalnızca görünürlüğü tanımsız alanlara).
+    for (const adim of adimlar) {
+      for (const bolum of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+        for (const alan of Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
+          if (!nesneMi(alan) || alan.gorunurluk) continue;
+          const anahtar = modeldekiler.get(String(alan.id));
+          if (!anahtar || !kosullar.has(anahtar)) continue;
+          const ad = kosulYaz(kosulAdKumesi, String(alan.id), anahtar);
+          if (ad) alan.gorunurluk = { kosul: ad };
+        }
+      }
+    }
+    Object.assign(/** @type {object} */ (model.kosullar), kosulTanimlari);
+    // Bağlam profiline göre görünürlük: mevcut gözlemle birleşir.
+    if (profilAdlari.length) {
+      const bg = nesneMi(model.baglamGorunurlugu) ? /** @type {Record<string, any>} */ (model.baglamGorunurlugu) : { profiller: [], alanlar: {} };
+      bg.profiller = [...new Set([...(Array.isArray(bg.profiller) ? bg.profiller : []), ...profilAdlari])];
+      if (!nesneMi(bg.alanlar)) bg.alanlar = {};
+      for (const [id, anahtar] of modeldekiler) {
+        bg.alanlar[id] = { ...(nesneMi(bg.alanlar[id]) ? bg.alanlar[id] : {}), ...profilHaritasi(anahtar) };
+      }
+      bg.kaynak = 'otomatik tarama';
+      model.baglamGorunurlugu = bg;
+    }
+    if (eslesmeyenler.length) {
+      bilinmeyenler.push(`Mevcut modeldeki ${eslesmeyenler.length} alan taramada görülmedi (başka adımda, koşula bağlı ya da seçicisi değişmiş olabilir; modelden kaldırılmadı): ${eslesmeyenler.slice(0, 15).join(', ')}${eslesmeyenler.length > 15 ? '…' : ''}.`);
+    }
+  } else {
+    // ---- Yeni ekran: tek adımlı taslak model.
+    const kosulAdKumesi = new Set();
+    const bolumIdleri = new Set();
+    /** @type {Array<Record<string, unknown>>} */
+    const bolumListesi = [];
+    /** @type {Record<string, Record<string, boolean>>} */
+    const bgAlanlar = {};
+    for (const [, b] of bolumler) {
+      const baslik = temizMetin(b.baslik, sayac, 120) || 'Genel';
+      const alanlar = b.anahtarlar.map((anahtar) => {
+        const a = /** @type {import('./paket-olusturucu.d.mts').HamAlan} */ (hamlar.get(anahtar));
+        const id = /** @type {string} */ (kimlikler.get(anahtar));
+        const alan = taslakAlan(a, id);
+        const ad = kosullar.has(anahtar) ? kosulYaz(kosulAdKumesi, id, anahtar) : null;
+        if (ad) alan.gorunurluk = { kosul: ad };
+        if (profilAdlari.length) bgAlanlar[id] = profilHaritasi(anahtar);
+        return alan;
+      });
+      if (!alanlar.length) continue;
+      bolumListesi.push({ id: benzersiz(kimlikUret(baslik, 'bolum'), bolumIdleri), baslik, alanlar });
+    }
+    yeniAlanSayisi = hamlar.size;
+    const sayfaBasligi = temizMetin(profiller.find((p) => p.baslik)?.baslik, sayac, 120);
+    model = {
+      semaSurumu: 1, tur: 'ekran', id: meta.ekranAnahtari, ad: meta.ekranAdi,
+      aciklama: `"${meta.ekranAdi}" ekranının otomatik taramayla çıkarılan TASLAK modeli (${hamlar.size} alan). Adım/aksiyon tanımları ve iş kuralları Claude ile tamamlanmalı.`,
+      ekranUrl: urlYolu,
+      specDosyasi: `tests/scenarios/${meta.ekranAnahtari}/${meta.ekranAnahtari}.spec.ts`,
+      pageObject: 'yok (model koşucusu)',
+      veriKaynaklari: { senaryo: `Nöbetçi > Senaryolar (${meta.ekranAnahtari})` },
+      kosullar: kosulTanimlari,
+      adimlar: bolumListesi.length ? [{ id: 'form', sira: 1, baslik: sayfaBasligi ? `${sayfaBasligi} formu doldurulur` : `${meta.ekranAdi} formu doldurulur`, bolumler: bolumListesi }] : [],
+      senaryoDuzeyi: { alanlar: [] },
+      urunDuzeyi: {},
+      isKurallari: [],
+      bilinmeyenler: [AKSIYON_BILINMEYENI]
+    };
+    if (profilAdlari.length) model.baglamGorunurlugu = { profiller: profilAdlari, alanlar: bgAlanlar, kaynak: 'otomatik tarama' };
+  }
+
+  // 6) Bilinmeyenler.
+  for (const p of profiller) {
+    const ad = p.profil ? `"${p.profil}" profili` : 'Tarama';
+    for (const n of p.notlar) bilinmeyenler.push(`${ad}: ${n}`);
+    for (const k of p.kesifler) {
+      const secimAdi = hamlar.get(k.secim)?.etiket || k.secim;
+      if (k.atlandi) bilinmeyenler.push(`${ad}: "${secimAdi}" keşfedilemedi (${k.atlandi}).`);
+      for (const d of k.degerler) {
+        if (d.gezinme) bilinmeyenler.push(`${ad}: "${secimAdi}" = "${temizMetin(d.metin, sayac) ?? d.deger}" seçilince sayfa başka bir adrese gitti (${d.gezinme}); bu seçenek için alan keşfi yapılmadı, hedef sayfaya dönüldü.`);
+        if (d.hata) bilinmeyenler.push(`${ad}: "${secimAdi}" = "${temizMetin(d.metin, sayac) ?? d.deger}" denenemedi (${d.hata}).`);
+      }
+      if (!k.atlandi && !k.geriAlindi) bilinmeyenler.push(`${ad}: "${secimAdi}" keşiften sonra ilk değerine geri alınamadı; sonraki gözlemler etkilenmiş olabilir.`);
+    }
+  }
+  for (const h of envanter.hataliProfiller ?? []) bilinmeyenler.push(`"${h.profil ?? '—'}" bağlam profili taranamadı: ${h.mesaj}`);
+  const yazma = envanter.engellenenler.filter((e) => e.neden === 'yazma');
+  if (yazma.length) {
+    const ornekler = [...new Set(yazma.map((e) => `${e.yontem} ${e.adres}`))].slice(0, 5);
+    bilinmeyenler.push(`Tarama sırasında ${yazma.length} yazma isteği engellendi (${ornekler.join(', ')}); sayfa alan değişikliklerinde sunucuya veri gönderiyor olabilir (ör. otomatik kaydetme).`);
+  }
+  const yasakli = envanter.engellenenler.filter((e) => e.neden === 'yasakli');
+  if (yasakli.length) bilinmeyenler.push(`Yasaklı adres kalıbına uyan ${yasakli.length} istek engellendi (${[...new Set(yasakli.map((e) => e.adres))].slice(0, 3).join(', ')}).`);
+  if (!envanter.kesifYapildi) bilinmeyenler.push('Seçim keşfi kapalıydı: açılır listelere bağlı olarak beliren alanlar ve görünürlük koşulları çıkarılmadı.');
+  const buyukListeler = [...hamlar.values()].filter((a) => a.tur === 'select' && !a.coklu && (a.secenekler?.length ?? 0) > KESIF_SECENEK_SINIRI);
+  if (envanter.kesifYapildi && buyukListeler.length) {
+    bilinmeyenler.push(`${KESIF_SECENEK_SINIRI}'den fazla seçenekli ${buyukListeler.length} liste keşfedilmedi (${buyukListeler.slice(0, 5).map((a) => temizMetin(a.etiket, sayac) ?? a.anahtar).join(', ')}); bu listelere bağlı alanlar olabilir.`);
+  }
+  if (etiketsizler.length) bilinmeyenler.push(`Etiketi bulunamayan ${etiketsizler.length} alan: ${etiketsizler.slice(0, 10).join(', ')} (etiketi ekrandan kontrol edin).`);
+  if (cokluDegerliler.length) bilinmeyenler.push(`Çoklu seçim listeleri: ${cokluDegerliler.join(', ')} — model tek değer bekler.`);
+  if (sayac.gizlenen) bilinmeyenler.push(`${sayac.gizlenen} metin gizli/kişisel veri kalıbına (kart, kimlik no, IBAN…) benzediği için pakete yazılmadı.`);
+  bilinmeyenler.push(...notlar);
+
+  // 7) Kanıtlar (profil başına görünür alan ekran görüntüsü; en fazla 12, her biri ≤ 4 MB).
+  /** @type {Array<{ ad: string; aciklama: string; icerikTuru: 'image/png'; veri: string }>} */
+  const kanitlar = [];
+  for (const p of profiller) {
+    if (!p.ekranGoruntusu || kanitlar.length >= KANIT_EN_COK) continue;
+    const tampon = kanitVerisiniCoz(p.ekranGoruntusu);
+    if (!tampon || tampon.length > KANIT_BOYUT_SINIRI) { bilinmeyenler.push(`${p.profil ?? 'Tarama'} ekran görüntüsü 4 MB sınırını aştığı için eklenmedi.`); continue; }
+    kanitlar.push({
+      ad: `${p.profil ? `${p.profil} — ` : ''}${meta.ekranAdi}`.slice(0, 120), icerikTuru: 'image/png', veri: p.ekranGoruntusu,
+      aciklama: `Otomatik tarama${p.profil ? `, "${p.profil}" bağlam profili` : ''}, ${p.yol}`.slice(0, 500)
+    });
+  }
+
+  const olusturulma = meta.olusturulma ?? new Date().toISOString();
+  const yazmaSayisi = yazma.length;
+  const paket = {
+    tur: SAYFA_PAKETI_TURU,
+    surum: SAYFA_PAKETI_SURUMU,
+    meta: {
+      ...(meta.proje ? { proje: meta.proje } : {}),
+      ekran: { anahtar: meta.ekranAnahtari, ad: meta.ekranAdi, urlYolu },
+      olusturan: TARAMA_OLUSTURANI,
+      olusturulma,
+      baglamProfilleri: profilAdlari,
+      not: `Sayfa Nöbetçi tarafından otomatik tarandı: yalnızca okundu, hiçbir form gönderilmedi, düğme/bağlantıya tıklanmadı; tarama sırasında yazma istekleri engellendi (${yazmaSayisi}).`
+    },
+    model,
+    senaryoOnerileri: [],
+    gerekenAyarlar: {
+      girisGerekli: meta.girisGerekli, ikiAsamaliDogrulama: meta.ikiAsamali, captchaGoruldu: false, testVerisiTurleri: [],
+      ...(meta.baglamTuru && profilAdlari.length ? { baglamTurleri: [meta.baglamTuru] } : {})
+    },
+    bilinmeyenler: [...new Set(bilinmeyenler)],
+    ...(kanitlar.length ? { kanitlar } : {})
+  };
+  return {
+    paket,
+    ozet: {
+      alanSayisi: hamlar.size, kosulSayisi: Object.keys(kosulTanimlari).length, yeniAlanSayisi, eslesenSayisi,
+      eslesmeyenSayisi: eslesmeyenler.length, engellenenYazma: yazmaSayisi, kanitSayisi: kanitlar.length
+    }
+  };
+}

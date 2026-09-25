@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import type { BeklenenSonucAlanlari } from './beklenen-sonuc';
 import type { EnvironmentName } from './environments';
+import { platformVerisi } from './platform-veri';
 
 export type SelectData = {
   deger: string;
@@ -64,9 +65,15 @@ export type KrediKartiOdemeData = {
   beklenenHataMesaji: string;
 };
 
+// Senaryoya özel ödeme kartı (dashboard > "Senaryo Oluştur" > "Ödeme bilgileri"). Ortak
+// karttan (ortak.json > odeme.krediKarti) farkı yalnızca beklenenHataMesaji'nin olmaması:
+// o alan bazı ürünlerin (konut/ilk ateş) ödeme sonucu kontrolünde kullanılır, kartı forma
+// girmek için gerekmez. kartBilgileriniGir bu tipi kabul eder — ortak kart da buna uyar.
+export type SenaryoKrediKartiData = Omit<KrediKartiOdemeData, 'beklenenHataMesaji'>;
+
 // Tek bir acente/kullanıcı profili (Acente Partajı + Acente Kullanıcısı).
 // Ürün ekranları arasında ortak kullanılır; her acentede görünen alan seti farklı olabilir
-// (örn. 30856 acentesinde COVID teminatı, kayak teminatı, plan kodu, seyahat iptal bedeli yok).
+// (bazı acentelerde COVID teminatı, kayak teminatı, plan kodu, seyahat iptal bedeli yok).
 export type AcenteProfili = {
   acentePartaji: string;
   acentePartajiSecenegi: string;
@@ -351,11 +358,13 @@ export type JetSeyahatTestData = {
     cokluSorguDosyasi: string;
     cokluSorguKisiSayisi: number;
     kabulEdilenOdemeSonuclari: string[];
-    senaryolar: Array<{
+    senaryolar: Array<BeklenenSonucAlanlari & {
       baslik: string;
       kapsam: string;
       alternatif: string;
-      covidTeminati: 'E' | 'H';
+      // Acentenin ekranında görünmüyorsa (acenteye göre değişir) zorunlu değildir — bkz. ekran modeli
+      // kosullar.acenteAlanSetiTam ve scripts/dogrulama/senaryo-dogrulayici.mjs.
+      covidTeminati?: 'E' | 'H';
       sorguTipi: 'tekli' | 'coklu';
       ettiren: 'ayni' | 'farkliOzel' | 'farkliTuzel';
       // Hazır bir profil (ortak.json > kimlikBilgileri.ozel/tuzel altındaki anahtar,
@@ -372,13 +381,11 @@ export type JetSeyahatTestData = {
       // Bu senaryonun hangi acente profiliyle (ortak.json > kullaniciDegistir) çalışacağı.
       // Belirtilmezse testBaslangiciniHazirla "varsayilan" profili kullanır.
       acenteProfili?: string;
-      // YENİ (dashboard > "Senaryo Oluştur"): beklenenHataMesaji doluysa, bu hatanın
-      // pipeline'ın HANGİ adımında beklendiğini belirtir. "primHesaplama" (varsayılan,
-      // eski senaryolarla uyum için de kullanılır) prim hesaplanınca #dialog-content'te
-      // görünen mesajı; "policelestirme" ise Teklifi Kaydet (#Policelestir) sonrası
-      // açılan hata pop-up'ının mesajını doğrular (bkz. prim-hesaplama.spec.ts).
-      beklenenHataAdimi?: 'primHesaplama' | 'policelestirme';
-      beklenenHataMesaji?: string;
+      // Beklenen sonuç alanları (odemeAdimiDahil — ZORUNLU, beklenenSonuc) — bkz.
+      // tests/support/beklenen-sonuc.ts > BeklenenSonucAlanlari. Spec, bu alanları
+      // beklenenSonucuCoz ile TEK biçime çevirip adimPlaniniOlustur ile akışı belirler.
+      // Alanların tamamı JetSeyahat ekran modeliyle eşleşmeli (npm run test:birim, örnek
+      // modelle kontrol eder).
       // YENİ (dashboard > "Senaryo Oluştur"): sigortalı (poliçe sahibi) normalde ürün
       // seviyesinde SABİT tek bir TC kullanır (jetSeyahat.sigortaliProfili, tüm senaryolar
       // paylaşır). Bu alan doluysa SADECE bu senaryoda, o ortak sigortalı yerine burada
@@ -397,28 +404,58 @@ export type JetSeyahatTestData = {
       // sorguTipiniHazirla). İkisi birlikte dolu ya da birlikte boş olmalıdır.
       cokluSorguDosyasi?: string;
       cokluSorguKisiSayisi?: number;
+      // YENİ (dashboard > "Senaryo Oluştur" > "Ödeme bilgileri"): bu senaryoya özel ödeme
+      // kartı. Yalnızca kullanıcı ortak test kartından (ortak.json > odeme.krediKarti) FARKLI
+      // bir kart girdiyse yazılır; yoksa senaryo ortak kartı kullanır (ve ortak kart
+      // değişirse onu izler). Ödeme adımı dahil değilken (odemeAdimiDahil: false) dolu
+      // olamaz — kurallar: scripts/dogrulama/senaryo-dogrulayici.mjs (kart alanları + son kullanma ay/yıl).
+      krediKarti?: SenaryoKrediKartiData;
     }>;
   };
 };
 
+// Veri YALNIZCA platform veritabanından gelir (bkz. platform-veri.ts; dosyaya geri düşülmez). Şekil,
+// eski tests/data/<ortam>/<dosya>.json dosyalarıyla aynıdır (ürün anahtarı = eski dosya adı).
 function loadData<T>(environment: EnvironmentName, fileName: string): T {
-  const filePath = resolve(process.cwd(), 'tests', 'data', environment, `${fileName}.json`);
-  return JSON.parse(readFileSync(filePath, 'utf-8')) as T;
+  const platform = platformVerisi(environment);
+  const veri = fileName === 'ortak' ? platform.ortak : platform.dosyalar[fileName];
+  if (veri === undefined) {
+    throw new Error(`Platform veritabanında "${environment}/${fileName}" verisi yok (Nöbetçi > Ayarlar > Yedekleme > "Eski proje dosyalarından yeniden aktar").`);
+  }
+  return ekVerileriUygula(environment, fileName, structuredClone(veri)) as T;
 }
 
-// Dashboard > "Senaryo Oluştur" > "Dene" akışı (bkz. scripts/test-sunucu.mjs >
-// /jetseyahat-senaryo/dene) denenen senaryoyu KALICI json dosyalarına YAZMAZ; onun yerine
-// geçici bir "ek senaryo" (overlay) dosyası oluşturup yolunu bu ortam değişkeniyle
-// Playwright alt sürecine verir. Değişken yoksa (normal koşular, CI, --list) hiçbir şey
-// değişmez — yükleyiciler yalnızca kalıcı dosyaları okur.
-export const EK_SENARYO_DOSYASI_ORTAM_DEGISKENI = 'TEST_SUNUCU_EK_SENARYO_DOSYASI';
+// Platform > Senaryolar > "Dene" (genel): ek veri dosyasındaki "ekVeriler" girdileri, ilgili veri
+// dosyasındaki dizinin (yol) SONUNA eklenir — deneme senaryosu kalıcı veriye hiç yazılmaz.
+function ekVerileriUygula(environment: EnvironmentName, fileName: string, veri: unknown): unknown {
+  const ek = ekSenaryoDosyasiniOku(environment);
+  // Taslaktaki şifreli dosya referansları ("nobetci-dosya://…") bu koşu için çözülmüş geçici dosya yollarıyla değişir.
+  const yollar = ek ? platformVerisi(environment).ekDosyaYollari ?? {} : {};
+  const yolaCevir = (d: unknown): unknown => (Array.isArray(d) ? d.map(yolaCevir)
+    : typeof d === 'object' && d !== null ? Object.fromEntries(Object.entries(d).map(([k, v]) => [k, yolaCevir(v)]))
+      : typeof d === 'string' && yollar[d] ? yollar[d] : d);
+  for (const e of ek?.ekVeriler ?? []) {
+    if (e.dosya !== fileName || !Array.isArray(e.yol) || !e.yol.length || !Array.isArray(e.ogeler)) continue;
+    let hedef: unknown = veri;
+    for (const k of e.yol.slice(0, -1)) hedef = typeof hedef === 'object' && hedef !== null ? (hedef as Record<string, unknown>)[k] : undefined;
+    const son = e.yol[e.yol.length - 1];
+    const dizi = typeof hedef === 'object' && hedef !== null ? (hedef as Record<string, unknown>)[son] : undefined;
+    if (!Array.isArray(dizi)) throw new Error(`Ek veri yolu bulunamadı: ${fileName} > ${e.yol.join('.')}`);
+    (hedef as Record<string, unknown>)[son] = [...dizi, ...e.ogeler.map(yolaCevir)];
+  }
+  return veri;
+}
 
-type JetSeyahatSenaryosu = JetSeyahatTestData['jetSeyahat']['senaryolar'][number];
+// Nöbetçi > Senaryolar > "Dene" (bkz. scripts/test-sunucu.mjs > platformKosucusunuAyarla > dene)
+// denenen taslak senaryoyu veritabanına YAZMAZ; geçici bir "ek veri" dosyası oluşturup yolunu bu ortam
+// değişkeniyle Playwright alt sürecine verir. Değişken yoksa (normal koşular, CI, --list) hiçbir şey
+// değişmez.
+export const EK_SENARYO_DOSYASI_ORTAM_DEGISKENI = 'TEST_SUNUCU_EK_SENARYO_DOSYASI';
 
 type EkSenaryoDosyasi = {
   ortam: EnvironmentName;
-  jetSeyahatSenaryolari?: JetSeyahatSenaryosu[];
-  kullaniciDegistir?: Record<string, AcenteProfili>;
+  // Veri dosyası (ürün anahtarı) + dizi yolu + eklenecek öğeler.
+  ekVeriler?: Array<{ dosya: string; yol: string[]; ogeler: unknown[] }>;
 };
 
 // Ek senaryo dosyası tanımlıysa ve BU ortama aitse okunur; aksi halde undefined döner.
@@ -432,14 +469,7 @@ function ekSenaryoDosyasiniOku(environment: EnvironmentName): EkSenaryoDosyasi |
 }
 
 export function loadOrtakData(environment: EnvironmentName): OrtakTestData {
-  const veri = loadData<OrtakTestData>(environment, 'ortak');
-  // "Dene" sırasında girilen ve ortak.json'da HENÜZ olmayan acente profili, kalıcı
-  // dosyaya yazılmadan yalnızca bu koşu için eklenir (mevcut anahtarlar ezilmez).
-  const ek = ekSenaryoDosyasiniOku(environment);
-  if (ek?.kullaniciDegistir) {
-    veri.kullaniciDegistir = { ...ek.kullaniciDegistir, ...veri.kullaniciDegistir };
-  }
-  return veri;
+  return loadData<OrtakTestData>(environment, 'ortak');
 }
 
 export function loadJetKaskoData(environment: EnvironmentName): JetKaskoTestData {
@@ -473,12 +503,5 @@ export function loadJetKobiData(environment: EnvironmentName): JetKobiTestData {
 }
 
 export function loadJetSeyahatData(environment: EnvironmentName): JetSeyahatTestData {
-  const veri = loadData<JetSeyahatTestData>(environment, 'jet-seyahat');
-  // "Dene" ile gelen geçici senaryo(lar) listenin sonuna eklenir (bkz.
-  // ekSenaryoDosyasiniOku) — kalıcı jet-seyahat.json'a hiç dokunulmaz.
-  const ek = ekSenaryoDosyasiniOku(environment);
-  if (ek?.jetSeyahatSenaryolari?.length) {
-    veri.jetSeyahat.senaryolar = [...veri.jetSeyahat.senaryolar, ...ek.jetSeyahatSenaryolari];
-  }
-  return veri;
+  return loadData<JetSeyahatTestData>(environment, 'jet-seyahat');
 }

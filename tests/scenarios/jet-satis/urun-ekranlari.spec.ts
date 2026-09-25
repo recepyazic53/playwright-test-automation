@@ -14,7 +14,7 @@ const ortakData = loadOrtakData(environment);
 
 test.skip(
   !hasCredentials(environment),
-  `${environment.toUpperCase()} kullanıcı bilgilerini yerel .env dosyasına ekleyin.`
+  `${environment.toUpperCase()} giriş profilini Nöbetçi > Ayarlar > Giriş profilleri'nde tanımlayın.`
 );
 
 for (const [urun, tanim] of Object.entries(jetSatisUrunleri)) {

@@ -1,0 +1,145 @@
+{
+  "jetSeyahat": {
+    "aktif": true,
+    "urunKodu": "903",
+    "seyahatSuresiGun": 7,
+    "ulke": {
+      "deger": "15",
+      "metin": "ALMANYA"
+    },
+    "seyahatIptalBedeli": {
+      "deger": "1",
+      "metin": "2.000"
+    },
+    "plan": {
+      "deger": "1",
+      "metin": "Plan 1"
+    },
+    "sigortaliSayisi": "1",
+    "sigortaliProfili": "tc1",
+    "cokluSorguDosyasi": "tests/fixtures/jet-seyahat/fma-coklu-sorgu-10-kisi.xlsx",
+    "cokluSorguKisiSayisi": 10,
+    "kabulEdilenOdemeSonuclari": [
+      "Hiçbir poliçe onaylanamadı."
+    ],
+    "senaryolar": [
+      {
+        "baslik": "90002 /DÜNYA / VİZE TÜM DÜNYA / COVID Evet / Tekli Sorgu / Sigorta Ettiren Kendisi",
+        "kapsam": "DÜNYA",
+        "alternatif": "VİZE TÜM DÜNYA",
+        "covidTeminati": "E",
+        "sorguTipi": "tekli",
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true,
+        "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
+      },
+      {
+        "baslik": "90002 /DÜNYA / VİZE TÜM DÜNYA / COVID Hayır / Tekli Sorgu / Sigorta Ettiren Farklı Özel",
+        "kapsam": "DÜNYA",
+        "alternatif": "VİZE TÜM DÜNYA",
+        "covidTeminati": "H",
+        "sorguTipi": "tekli",
+        "ettiren": "farkliOzel",
+        "ettirenProfili": "tc2",
+        "odemeAdimiDahil": true,
+        "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
+      },
+      {
+        "baslik": "90002 /DÜNYA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel",
+        "kapsam": "DÜNYA",
+        "alternatif": "SEYAHAT PAKET",
+        "covidTeminati": "E",
+        "sorguTipi": "tekli",
+        "ettiren": "farkliTuzel",
+        "ettirenProfili": "vkn1",
+        "odemeAdimiDahil": true,
+        "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
+      },
+      {
+        "baslik": "90002 /DÜNYA / SEYAHAT PAKET / COVID Hayır / Çoklu Sorgu / Sigorta Ettiren Kendisi (İş Kuralı Hatası Beklenir)",
+        "kapsam": "DÜNYA",
+        "alternatif": "SEYAHAT PAKET",
+        "covidTeminati": "H",
+        "sorguTipi": "coklu",
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true,
+        "beklenenSonuc": {
+          "tip": "isKuraliHatasi",
+          "adim": "primHesaplama",
+          "mesaj": "Covid Teminatı “Hayır” olması durumunda yalnızca “VİZE SCHENGEN” veya “VİZE TÜM DÜNYA” alternatifleri seçilebilir"
+        },
+        "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
+      },
+      {
+        "baslik": "90002 /DÜNYA / SEYAHAT PAKET / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi",
+        "kapsam": "DÜNYA",
+        "alternatif": "SEYAHAT PAKET",
+        "covidTeminati": "E",
+        "sorguTipi": "coklu",
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true,
+        "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
+      },
+      {
+        "baslik": "90002 /AVRUPA / VİZE SCHENGEN / COVID Evet / Çoklu Sorgu / Sigorta Ettiren Kendisi",
+        "kapsam": "AVRUPA",
+        "alternatif": "VİZE SCHENGEN",
+        "covidTeminati": "E",
+        "sorguTipi": "coklu",
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true,
+        "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
+      },
+      {
+        "baslik": "90002 /AVRUPA / SEYAHAT PAKET / COVID Evet / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel / Kayak Teminatı",
+        "kapsam": "AVRUPA",
+        "alternatif": "SEYAHAT PAKET",
+        "covidTeminati": "E",
+        "sorguTipi": "tekli",
+        "ettiren": "farkliTuzel",
+        "ettirenProfili": "vkn2",
+        "kayakTeminati": true,
+        "odemeAdimiDahil": true,
+        "acenteProfili": "JetSeyahatÖzelTanımlıAcente"
+      },
+      {
+        "baslik": "[Acente Varsayılan] DÜNYA / VİZE TÜM DÜNYA / Tekli Sorgu / Sigorta Ettiren Kendisi",
+        "kapsam": "DÜNYA",
+        "alternatif": "VİZE TÜM DÜNYA",
+        "covidTeminati": "E",
+        "sorguTipi": "tekli",
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true
+      },
+      {
+        "baslik": "[Acente Varsayılan] AVRUPA / VİZE SCHENGEN / Tekli Sorgu / Sigorta Ettiren Farklı Özel (T.C.)",
+        "kapsam": "AVRUPA",
+        "alternatif": "VİZE SCHENGEN",
+        "covidTeminati": "E",
+        "sorguTipi": "tekli",
+        "ettiren": "farkliOzel",
+        "ettirenProfili": "tc3",
+        "odemeAdimiDahil": true
+      },
+      {
+        "baslik": "[Acente Varsayılan] DÜNYA / SEYAHAT PAKET / Çoklu Sorgu / Sigorta Ettiren Kendisi",
+        "kapsam": "DÜNYA",
+        "alternatif": "SEYAHAT PAKET",
+        "covidTeminati": "E",
+        "sorguTipi": "coklu",
+        "ettiren": "ayni",
+        "odemeAdimiDahil": true
+      },
+      {
+        "baslik": "[Acente Varsayılan] AVRUPA / SEYAHAT PAKET / Tekli Sorgu / Sigorta Ettiren Farklı Tüzel (VKN)",
+        "kapsam": "AVRUPA",
+        "alternatif": "SEYAHAT PAKET",
+        "covidTeminati": "E",
+        "sorguTipi": "tekli",
+        "ettiren": "farkliTuzel",
+        "ettirenProfili": "vkn2",
+        "odemeAdimiDahil": true
+      }
+    ]
+  }
+}

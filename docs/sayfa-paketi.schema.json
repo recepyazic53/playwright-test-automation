@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "nobetci:sayfa-paketi:1",
+  "title": "Nöbetçi sayfa paketi (sürüm 1)",
+  "description": "Bir sayfanın yalnızca okunarak incelenmesiyle üretilen paket: ekran modeli, senaryo önerileri, gereken ayarlar, bilinmeyenler, isteğe bağlı ekran görüntüleri. Ayrıntılar ve kurallar: docs/sayfa-paketi.md. Model içeriği ortak model doğrulayıcısıyla (scripts/dogrulama/ekran-modeli-dogrulayici.mjs) denetlenir; bu şema yalnızca paket zarfını tanımlar. GİZLİ/KİŞİSEL veri içeren paket reddedilir.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tur", "surum", "meta", "model", "senaryoOnerileri", "gerekenAyarlar", "bilinmeyenler"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "tur": { "const": "sayfa-paketi" },
+    "surum": { "const": 1 },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ekran", "olusturan", "olusturulma", "baglamProfilleri"],
+      "properties": {
+        "proje": { "type": "string", "description": "Bilgi amaçlı proje adı." },
+        "ekran": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["anahtar", "ad", "urlYolu"],
+          "properties": {
+            "anahtar": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$", "description": "Ekranın kalıcı anahtarı; model.id ile aynı olmalı." },
+            "ad": { "type": "string", "minLength": 1, "maxLength": 120 },
+            "urlYolu": { "type": "string", "pattern": "^/(?!/)", "description": "Tam adres değil YOL; ortam adresi Ayarlar'dan gelir." }
+          }
+        },
+        "olusturan": { "type": "string", "minLength": 1 },
+        "olusturulma": { "type": "string", "format": "date-time" },
+        "baglamProfilleri": { "type": "array", "items": { "type": "string" }, "description": "İncelemede kullanılan bağlam profillerinin ADLARI (değer yok)." },
+        "not": { "type": "string" }
+      }
+    },
+    "model": {
+      "type": "object",
+      "description": "Ekran modeli (tests/support/ekran-modeli.ts > EkranModeli). Kendi kendine yetmeli ya da projede var olan alt modellere başvurmalı. İsteğe bağlı baglamGorunurlugu: { profiller: [ad], alanlar: { alanId: { profil: true | false | null } } }.",
+      "required": ["semaSurumu", "tur", "id", "ad", "aciklama", "ekranUrl", "specDosyasi", "pageObject", "veriKaynaklari", "kosullar", "adimlar", "senaryoDuzeyi", "urunDuzeyi", "isKurallari", "bilinmeyenler"],
+      "properties": {
+        "semaSurumu": { "enum": [1, 2], "description": "2: adımlarda koşu tanımı (kosu: aksiyonlar, basariGostergesi, hataGostergesi, zamanAsimiSn) — model koşucusu." },
+        "tur": { "const": "ekran" },
+        "baglamGorunurlugu": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["profiller", "alanlar"],
+          "properties": {
+            "profiller": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+            "alanlar": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": { "type": ["boolean", "null"] } } },
+            "kaynak": { "type": "string" },
+            "not": { "type": "string" }
+          }
+        }
+      }
+    },
+    "senaryoOnerileri": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["baslik", "veri", "beklenenSonuc", "gerekce"],
+        "properties": {
+          "baslik": { "type": "string", "minLength": 1, "maxLength": 300 },
+          "veri": { "type": "object", "description": "Modelin senaryo biçimi (alan.eslesme.senaryo anahtarları). Kişi/kart verisi yerine profil ADI." },
+          "adimKapsami": { "type": "array", "items": { "type": "string" }, "description": "Dahil edilen isteğe bağlı adımların kimlikleri." },
+          "beklenenSonuc": {
+            "type": "object",
+            "required": ["tur", "aciklama"],
+            "properties": { "tur": { "enum": ["basari", "hata"] }, "aciklama": { "type": "string" } }
+          },
+          "gerekce": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "gerekenAyarlar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["girisGerekli", "ikiAsamaliDogrulama", "captchaGoruldu", "testVerisiTurleri"],
+      "properties": {
+        "girisGerekli": { "type": "boolean" },
+        "ikiAsamaliDogrulama": { "enum": ["yok", "totp", "sms", "bilinmiyor"] },
+        "captchaGoruldu": { "type": "boolean" },
+        "testVerisiTurleri": { "type": "array", "items": { "type": "string" } },
+        "baglamTurleri": { "type": "array", "items": { "type": "string" } },
+        "not": { "type": "string" }
+      }
+    },
+    "bilinmeyenler": { "type": "array", "items": { "type": "string" } },
+    "kanitlar": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ad", "icerikTuru", "veri"],
+        "properties": {
+          "ad": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "aciklama": { "type": "string" },
+          "icerikTuru": { "const": "image/png" },
+          "veri": { "type": "string", "contentEncoding": "base64", "contentMediaType": "image/png", "description": "En fazla 4 MB (çözülmüş)." }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,871 @@
+// "Sonuçlar" ekranı (genel, veritabanı kaynaklı): solda ürün/ekran listesi (Genel + ekranlar,
+// son tam koşuya göre sağlık noktası); sağda KPI kartları (kıvılcım grafiği + önceki koşuya göre
+// fark), yığılmış çubuk trend grafiği (Adet / Oran), son koşunun başarısız testleri ("Yeni
+// başarısız / Tekrar eden / Düzeldi"), koşu geçmişi, hata kalıpları ve sağda başarısız test paneli
+// (ekran görüntüsü, video, hata, adımlar, atlanan alanlar). Koşu detayı ve test detayı aynı
+// ekranda açılır.
+// Adresler: #/sonuclar, #/sonuclar/u/<ürün>, #/sonuclar/kosu/<id>, #/sonuclar/sonuc/<id>
+// Medya (ekran görüntüsü/video/iz) şifrelidir; sunucu /platform/medya/<id> ile kasa açıkken
+// çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
+// Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
+import { api, bildir, bosDurum, h, ikon, iskelet, rozet, s, TOKEN, tarihMetni } from './ortak.js';
+
+const SAYFA_BOYU = 15;
+const DURUM = {
+  basarili: { etiket: 'Başarılı', sinif: 'basari', ikon: 'onay' },
+  basarisiz: { etiket: 'Başarısız', sinif: 'hata', ikon: 'carpi' },
+  atlanan: { etiket: 'Atlanan', sinif: 'atlanan', ikon: 'eksi' },
+  durduruldu: { etiket: 'Durduruldu', sinif: 'durdu', ikon: 'eksi' }
+};
+const KOSU_DURUMU = { calisiyor: 'Çalışıyor', tamamlandi: 'Tamamlandı', durduruldu: 'Durduruldu', zaman_asimi: 'Zaman aşımı', hata: 'Hata' };
+const KART_SIRASI = ['basarili', 'basarisiz', 'atlanan', 'durduruldu'];
+const KART_SINIFI = { basarili: 'basarili', basarisiz: 'basarisiz', atlanan: 'atlanan', durduruldu: 'durduruldu' };
+const DEGISIM = {
+  yeni: { etiket: 'Yeni başarısız', sinif: 'hata' },
+  tekrar: { etiket: 'Tekrar eden', sinif: 'atlanan' },
+  duzeldi: { etiket: 'Düzeldi', sinif: 'basari' }
+};
+const ARALIKLAR = [['14', 'Son 14'], ['30', 'Son 30'], ['tumu', 'Tümü']];
+
+const medyaUrl = (id, indir = false) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}${indir ? '&indir=1' : ''}`;
+const durumRozeti = (d) => rozet((DURUM[d] || { etiket: d }).etiket, (DURUM[d] || {}).sinif || '');
+const sureMetni = (ms) => (ms === null || ms === undefined ? '—' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
+const toplam = (x) => (x ? x.basarili + x.basarisiz + x.atlanan + (x.durduruldu || 0) : 0);
+const oran = (x) => {
+  const payda = x.basarili + x.basarisiz + x.atlanan;
+  return payda ? Math.round((x.basarili / payda) * 100) : null;
+};
+const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
+const iki = (n) => String(n).padStart(2, '0');
+const tarihNesnesi = (d) => (d instanceof Date ? d : new Date(typeof d === 'number' ? d : String(d)));
+/** "24.09" */
+const gunAy = (d) => { const t = tarihNesnesi(d); return Number.isNaN(t.getTime()) ? '—' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
+/** "24.09.2026 17:12" */
+const kisaTarih = (d) => { const t = tarihNesnesi(d); return d == null || Number.isNaN(t.getTime()) ? '—' : `${gunAy(t)}.${t.getFullYear()} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
+const saatMetni = (d) => { const t = tarihNesnesi(d); return d == null || Number.isNaN(t.getTime()) ? '—' : `${iki(t.getHours())}:${iki(t.getMinutes())}:${iki(t.getSeconds())}`; };
+const kategoriSinifi = (k) => {
+  const m = String(k || '').toLocaleLowerCase('tr');
+  if (m.includes('zaman')) return 'k-zaman';
+  if (m.includes('seçici') || m.includes('secici')) return 'k-secici';
+  if (m.includes('pop-up') || m.includes('iş kuralı')) return 'k-popup';
+  if (m.includes('doğrulama')) return 'k-dogrulama';
+  return 'k-diger';
+};
+const KATEGORI_IKONU = { 'k-zaman': 'zamanlayici', 'k-secici': 'ara', 'k-popup': 'uyari', 'k-dogrulama': 'hedef', 'k-diger': 'ag' };
+const kisaKategori = (k) => String(k || 'Diğer').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+Hatası$/, '').trim();
+
+let aralikSecimi = '14';
+try { aralikSecimi = localStorage.getItem('platform.trendAraligi') || '14'; } catch { /* yok sayılır */ }
+
+/**
+ * @param {HTMLElement} main
+ * @param {string[]} parcalar hash parçaları (#/sonuclar/... sonrası)
+ * @param {{ durum: { proje: { id: string; ad: string } } }} baglam
+ */
+export function sonuclarEkrani(main, parcalar, baglam) {
+  const proje = baglam.durum.proje;
+  const [tur, kimlik] = parcalar;
+  const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('kartlar'), iskelet('sayfa'));
+  const liste = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
+  main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Sonuçlar'),
+    h('div', { class: 'kabuk-duzen' },
+      h('aside', { class: 'yan-panel' }, liste,
+        h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}),
+          'Son tam koşunun başarı oranı: yeşil ≥ %90, sarı ≥ %75, kırmızı altı.')),
+      icerik));
+  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur ? null : '';
+  const hata = (e) => { if (e && e.durum === 423) return; icerik.replaceChildren(hataKutusu(e)); };
+
+  // Sol liste her görünümde aynı özetten gelir (koşu/sonuç detayında seçili ürün yok).
+  api(`/platform/sonuclar/ozet?projeId=${encodeURIComponent(proje.id)}${secili ? `&urun=${encodeURIComponent(secili)}` : ''}`)
+    .then((ozet) => {
+      urunListesi(liste, ozet.ekranlar, secili);
+      if (tur === 'kosu' && kimlik) return kosuDetayi(icerik, decodeURIComponent(kimlik), proje);
+      if (tur === 'sonuc' && kimlik) return sonucDetayi(icerik, decodeURIComponent(kimlik), proje);
+      const ekran = secili ? ozet.ekranlar.find((e) => e.anahtar === secili) : null;
+      return genelBakis(icerik, ozet, proje, secili || null, ekran ? ekran.ad : secili ? secili.replace(/^ad:/, '') : null, ekran);
+    })
+    .catch(hata);
+}
+
+function saglikSinifi(son) {
+  if (!son) return '';
+  const o = oran(son);
+  if (o === null) return '';
+  return o >= 90 ? 'basari' : o >= 75 ? 'uyari' : 'hata';
+}
+
+/** Ekranı devre dışı / silinmiş ürünün rozeti (sonuçlar görünür kalır). */
+function ekranDurumRozeti(durum) {
+  if (durum === 'devre_disi') return rozet('devre dışı', 'atlanan', { title: 'Ekran devre dışı: yeni koşulara girmez; geçmiş sonuçlar görünür' });
+  if (durum === 'silindi') return rozet('silinmiş ekran', 'hata', { title: 'Ekran silindi; geçmiş sonuçları korunuyor' });
+  return null;
+}
+
+function urunListesi(nav, ekranlar, secili) {
+  const toplamSenaryo = ekranlar.reduce((a, e) => a + (e.senaryoSayisi || 0), 0);
+  const baglanti = (anahtar, ad, adet, son, ikonAd, durum) => {
+    const o = son ? oran(son) : null;
+    return h('a', {
+      href: anahtar ? `#/sonuclar/u/${encodeURIComponent(anahtar)}` : '#/sonuclar',
+      'aria-current': (secili || '') === (anahtar || '') && secili !== null ? 'page' : null,
+      class: durum === 'devre_disi' || durum === 'silindi' ? 'devre-disi' : null,
+      title: durum === 'devre_disi' ? `${ad} — devre dışı` : durum === 'silindi' ? `${ad} — silinmiş ekran` : null
+    }, ikonAd ? ikon(ikonAd) : h('span', { class: `saglik ${saglikSinifi(son)}`, 'aria-hidden': 'true' }), h('span', { class: 'nav-metni' }, ad),
+    durum === 'silindi' ? h('span', { class: 'nav-etiketi', 'aria-hidden': 'true' }, 'silinmiş') : durum === 'devre_disi' ? h('span', { class: 'nav-etiketi', 'aria-hidden': 'true' }, 'kapalı') : null,
+    durum === 'silindi' || durum === 'devre_disi' ? h('span', { class: 'gorunmez' }, durum === 'silindi' ? ' (silinmiş ekran)' : ' (devre dışı)') : null,
+    adet ? h('span', { class: 'adet' }, String(adet)) : null,
+    o !== null ? h('span', { class: 'gorunmez' }, ` — son koşu başarı oranı %${o}`) : null);
+  };
+  nav.replaceChildren(
+    baglanti('', 'Genel', toplamSenaryo, null, 'izgara'),
+    h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ürünler / ekranlar'),
+    ...ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)));
+}
+
+// ---------------------------------------------------------------------------------------
+// Genel bakış / ürün sayfası
+// ---------------------------------------------------------------------------------------
+
+function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
+  const kart = ozet.kart;
+  const sonKosuId = urun ? kart && kart.son && kart.son.kosuId : (ozet.trend.length ? ozet.trend[ozet.trend.length - 1].kosuId : null);
+  const sonKosu = sonKosuId ? ozet.kosuGecmisi.find((k) => k.id === sonKosuId) : null;
+  const panelAlani = h('aside', { class: 'kart test-paneli', 'aria-label': 'Başarısız test detayı', hidden: true });
+  const izgara = h('div', { class: 'sonuc-izgarasi panelsiz' });
+  const panel = {
+    ac: (sonucId, odakla = false) => {
+      panelAlani.hidden = false;
+      izgara.classList.remove('panelsiz');
+      testPaneli(panelAlani, sonucId, () => { panelAlani.hidden = true; izgara.classList.add('panelsiz'); panel.secili(null); });
+      panel.secili(sonucId);
+      if (odakla) panelAlani.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    },
+    secili: () => {}
+  };
+  const trendAlani = h('div', {});
+  const kartAlani = h('div', {});
+  const ciz = () => {
+    kartAlani.replaceChildren(kartlar(kart, ozet.trend, urun));
+    trendAlani.replaceChildren(trendKarti(ozet.trend, urun));
+  };
+  const aralikSegmenti = segment(ARALIKLAR, aralikSecimi, (d) => {
+    aralikSecimi = d;
+    try { localStorage.setItem('platform.trendAraligi', d); } catch { /* yok sayılır */ }
+    ciz();
+  }, 'Trend aralığı (tam koşu sayısı)');
+  const basarisizSayisi = kart ? kart.son.basarisiz : 0;
+  const meta = [];
+  if (kart) {
+    meta.push(h('span', {}, ikon('takvim'), urun ? 'Son tam koşu ' : 'En yeni tam koşu ', h('b', { class: 'mono' }, kisaTarih(urun ? kart.son.z : kart.enYeniZ))));
+    if (sonKosu && sonKosu.bitis) meta.push(h('span', {}, ikon('saat'), h('span', { class: 'mono' }, sureMetni(new Date(sonKosu.bitis).getTime() - new Date(sonKosu.baslangic).getTime()))));
+  }
+  meta.push(h('span', {}, ikon('liste'), `${urun ? (ekran ? ekran.senaryoSayisi : 0) : ozet.ekranlar.reduce((a, e) => a + (e.senaryoSayisi || 0), 0)} senaryo`));
+  if (!urun) meta.push(h('span', {}, ikon('ekran'), `${ozet.ekranlar.length} ürün / ekran`));
+  if (urun && kart && kart.son.kapsam) meta.push(h('span', {}, ikon('hedef'), `kapsam: ${kart.son.kapsam}`));
+  if (ekran && ekranDurumRozeti(ekran.ekranDurumu)) meta.push(h('span', {}, ekranDurumRozeti(ekran.ekranDurumu)));
+
+  const degisimAlani = h('div', {});
+  const solSutun = h('div', { class: 'sonuc-sutunu' }, trendAlani, degisimAlani);
+  izgara.append(solSutun, panelAlani);
+  const kalipAlani = h('div', {});
+  icerik.replaceChildren(
+    h('div', { class: 'sayfa-basligi' },
+      h('div', {},
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar' }, 'Sonuçlar'),
+          h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, urunAdi || 'Genel')),
+        h('div', { class: 'baslik-satiri' },
+          h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Sonuçlar — '), urunAdi || 'Genel'),
+          basarisizSayisi ? rozet([ikon('uyari'), `${basarisizSayisi} başarısız`], 'hata') : kart ? rozet([ikon('onay'), 'hepsi geçti'], 'basari') : null),
+        h('div', { class: 'meta' }, meta)),
+      h('div', { class: 'eylemler' }, aralikSegmenti,
+        // Silinmiş / devre dışı ekranın koşusu başlatılamaz (sonuçları yalnızca görüntülenir).
+        ekran && (ekran.ekranDurumu === 'silindi' || ekran.ekranDurumu === 'devre_disi') ? null
+          : h('a', { class: 'dugme birincil', href: urun && !urun.startsWith('ad:') ? `#/senaryolar/u/${encodeURIComponent(urun)}` : '#/senaryolar', title: 'Senaryolar ekranında onayla başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),
+    kartAlani, izgara,
+    h('div', { class: 'sonuc-sutunu alt-bolumler' }, kosuGecmisi(ozet.kosuGecmisi, urun), kalipAlani));
+  ciz();
+  hataKaliplariBolumu(kalipAlani, proje, urun, (id) => panel.ac(id, true));
+  if (sonKosuId) basarisizTestler(degisimAlani, ozet.kosuGecmisi, sonKosuId, urun, panel, proje);
+}
+
+/** Segment denetimi (aria-pressed düğmeler). */
+function segment(secenekler, secili, degisti, etiket) {
+  const kap = h('div', { class: 'segment', role: 'group', 'aria-label': etiket });
+  const ciz = (d) => kap.replaceChildren(...secenekler.map(([deger, metin]) => h('button', {
+    type: 'button', 'aria-pressed': deger === d ? 'true' : 'false',
+    onclick: () => { ciz(deger); degisti(deger); }
+  }, metin)));
+  ciz(secili);
+  return kap;
+}
+
+const aralikUygula = (noktalar) => (aralikSecimi === 'tumu' ? noktalar : noktalar.slice(-Number(aralikSecimi)));
+
+let kivilcimSayaci = 0;
+/** Kıvılcım (sparkline): alan + çizgi; renk kartın --k değişkeninden. */
+function kivilcim(degerler) {
+  if (degerler.length < 2) return null;
+  const G = 120; const Y = 40; const en = Math.max(...degerler, 1);
+  const noktalar = degerler.map((v, i) => [(i * G) / (degerler.length - 1), Y - 4 - (v / en) * (Y - 12)]);
+  const d = noktalar.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const id = `kivilcim-${++kivilcimSayaci}`;
+  return s('svg', { class: 'kivilcim', viewBox: `0 0 ${G} ${Y}`, preserveAspectRatio: 'none', 'aria-hidden': 'true' },
+    s('defs', {}, s('linearGradient', { id, x1: 0, x2: 0, y1: 0, y2: 1 }, s('stop', { offset: 0, class: 'ust' }), s('stop', { offset: 1, class: 'alt' }))),
+    s('path', { class: 'alan', d: `${d} L${G} ${Y} L0 ${Y}Z`, fill: `url(#${id})` }),
+    s('path', { class: 'cizgi', d, fill: 'none', 'vector-effect': 'non-scaling-stroke' }));
+}
+
+function farkHapi(fark, iyiMi, birim = '') {
+  if (fark === 0) return h('span', { class: 'fark notr' }, '= 0', h('span', { class: 'gorunmez' }, ' değişim yok'));
+  return h('span', { class: `fark ${iyiMi ? 'iyi' : 'kotu'}` }, `${fark > 0 ? '▲' : '▼'} ${Math.abs(fark)}${birim}`,
+    h('span', { class: 'gorunmez' }, fark > 0 ? ' arttı' : ' azaldı'));
+}
+
+function kartlar(kart, trend, urun) {
+  if (!kart) {
+    return h('div', { class: 'sonuc-kartlari-bos' },
+      bosDurum('Henüz koşu yok.', 'Kartlar yalnızca tam koşulardan hesaplanır (Koşuyu başlat, terminal/CI koşuları). Tekil ▷ koşuları koşu geçmişinde görünür.', { ikon: 'grafik' }));
+  }
+  const son = kart.son;
+  const onceki = kart.onceki;
+  const noktalar = aralikUygula(trend);
+  const topl = toplam(son);
+  const kartlarDizisi = KART_SIRASI.map((a) => {
+    const fark = onceki ? son[a] - onceki[a] : null;
+    const iyi = a === 'basarili' ? fark > 0 : fark < 0;
+    return h('div', { class: `sonuc-karti ${KART_SINIFI[a]}` },
+      h('span', { class: 'kart-etiket' }, DURUM[a].etiket),
+      h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, String(son[a] || 0)), h('small', {}, `/ ${topl}`)),
+      h('div', { class: 'kart-alt' }, fark === null ? h('span', { class: 'fark notr' }, 'ilk koşu') : farkHapi(fark, iyi), h('span', {}, 'önceki koşuya göre')),
+      kivilcim(noktalar.map((n) => n[a] || 0)));
+  });
+  const oranSimdi = oran(son);
+  const oranOnce = onceki ? oran(onceki) : null;
+  const yuzde = (v) => `${topl ? ((v / topl) * 100).toFixed(1) : 0}%`;
+  kartlarDizisi.push(h('div', { class: 'sonuc-karti oran' },
+    h('span', { class: 'kart-etiket' }, 'Başarı oranı'),
+    h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, oranSimdi === null ? '—' : `%${oranSimdi}`)),
+    h('div', { class: 'kart-alt' },
+      oranSimdi !== null && oranOnce !== null ? farkHapi(oranSimdi - oranOnce, oranSimdi > oranOnce, ' puan') : h('span', { class: 'fark notr' }, '—'),
+      h('span', {}, oranOnce !== null ? `önceki %${oranOnce}` : 'önceki yok')),
+    h('div', { class: 'dagilim-seridi', 'aria-hidden': 'true' },
+      h('span', { class: 'd-basari', style: { width: yuzde(son.basarili) } }), h('span', { class: 'd-hata', style: { width: yuzde(son.basarisiz) } }),
+      h('span', { class: 'd-atlanan', style: { width: yuzde(son.atlanan) } }), h('span', { class: 'd-durdu', style: { width: yuzde(son.durduruldu || 0) } }))));
+  const kaynak = urun
+    ? ['Son tam koşu: ', h('span', { class: 'mono' }, kisaTarih(son.z)), son.kapsam ? rozet(`kapsam: ${son.kapsam}`, 'vurgu') : null]
+    : [`Her ürünün son tam koşusunun toplamı (${kart.urunSayisi} ürün; en yenisi ${kisaTarih(kart.enYeniZ)}).`];
+  return h('div', {},
+    h('div', { class: 'sonuc-kartlari' }, kartlarDizisi),
+    h('p', { class: 'kart-kaynak' }, ...kaynak, onceki ? '' : ' Önceki koşu olmadığı için fark gösterilmiyor.'));
+}
+
+// ---------------------------------------------------------------------------------------
+// Trend: yığılmış çubuk (Adet / Oran), üzerine gelince koşu ayrıntısı
+// ---------------------------------------------------------------------------------------
+
+let trendKipi = 'adet';
+function trendKarti(tumNoktalar, urun) {
+  const kap = h('div', { class: 'trend-kapsayici' });
+  const kipSegmenti = segment([['adet', 'Adet'], ['oran', 'Oran']], trendKipi, (d) => { trendKipi = d; ciz(); }, 'Grafik birimi');
+  const noktalar = aralikUygula(tumNoktalar);
+  const ciz = () => kap.replaceChildren(...trendGrafigi(noktalar, kap));
+  const kart = h('section', { class: 'kart', 'aria-labelledby': 'trend-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'trend-basligi' }, ikon('grafik'), 'Koşu trendi'),
+      h('span', { class: 'alt' }, urun ? `Bu ürünü içeren tam koşular · son ${noktalar.length}` : `Genel kapsamlı tam koşular · son ${noktalar.length}`),
+      noktalar.length ? h('div', { class: 'sag' }, kipSegmenti) : null),
+    h('p', { class: 'gorunmez' }, urun ? 'Bu ürünü içeren tam koşular (yalnızca bu ürünün sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.'),
+    kap);
+  if (!noktalar.length) { kap.append(bosDurum('Henüz tam koşu yok.', 'Tam koşular (Koşuyu başlat, terminal/CI) burada günlük çubuklar olarak görünür.', { ikon: 'grafik' })); return kart; }
+  // Genişlik kapsayıcıya göre; boyut değişince yeniden çizilir.
+  requestAnimationFrame(ciz);
+  if (window.ResizeObserver) {
+    let son = 0;
+    new ResizeObserver(() => { const g = kap.clientWidth; if (Math.abs(g - son) > 8) { son = g; ciz(); } }).observe(kap);
+  }
+  return kart;
+}
+
+let trendSayaci = 0;
+function trendGrafigi(noktalar, kap) {
+  const W = Math.max(320, kap.clientWidth || 640); const H = 232;
+  const L = 36; const R = 10; const T = 14; const B = 28;
+  const ih = H - T - B; const iw = W - L - R; const n = noktalar.length;
+  const slot = iw / n; const bw = Math.max(4, Math.min(28, slot * 0.58));
+  const oranKipi = trendKipi === 'oran';
+  const enCok = Math.max(1, ...noktalar.map(toplam));
+  const adim = oranKipi ? 25 : Math.max(1, Math.ceil(enCok / 4 / (enCok > 20 ? 5 : 1)) * (enCok > 20 ? 5 : 1));
+  const ustSinir = oranKipi ? 100 : adim * Math.ceil(enCok / adim);
+  const y = (v) => (ih * v) / ustSinir;
+  const filtreId = `trend-parilti-${++trendSayaci}`;
+  const svg = s('svg', { class: 'trend-grafigi', viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': `Son ${n} tam koşunun durum dağılımı (${oranKipi ? 'yüzde' : 'adet'})` },
+    s('defs', {}, s('filter', { id: filtreId, x: '-50%', y: '-20%', width: '200%', height: '140%' },
+      s('feGaussianBlur', { stdDeviation: '4', result: 'b' }), s('feMerge', {}, s('feMergeNode', { in: 'b' }), s('feMergeNode', { in: 'SourceGraphic' })))));
+  for (let t = 0; t <= ustSinir; t += adim) {
+    const yy = T + ih - y(t);
+    svg.append(s('line', { class: t ? 'izgara-cizgisi kesikli' : 'izgara-cizgisi', x1: L, x2: W - R, y1: yy, y2: yy }),
+      s('text', { class: 'eksen-yazisi', x: L - 8, y: yy + 4, 'text-anchor': 'end' }, oranKipi ? `${t}%` : String(t)));
+  }
+  const etiketAdimi = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(iw / 64))));
+  const ipucu = h('div', { class: 'trend-ipucu', hidden: true, role: 'presentation' });
+  const ipucuGoster = (nk, x) => {
+    const o = oran(nk);
+    ipucu.replaceChildren(
+      h('b', {}, `${kisaTarih(nk.z)} · ${nk.kapsam && nk.kapsam !== 'Genel' ? nk.kapsam : 'tam'}`),
+      h('div', { class: 'satirlar' }, ...KART_SIRASI.flatMap((a) => [h('span', { class: `lejant ${DURUM[a].sinif}` }, DURUM[a].etiket), h('span', {}, String(nk[a] || 0))])),
+      h('div', { class: 'oran-satiri' }, `Başarı oranı ${o === null ? '—' : `%${o}`} · ${toplam(nk)} test`));
+    ipucu.hidden = false;
+    const oranX = (x / W) * kap.clientWidth;
+    const solda = oranX > kap.clientWidth / 2;
+    ipucu.classList.toggle('solda', solda);
+    ipucu.style.setProperty('left', `${solda ? oranX - bw / 2 - 12 : oranX + bw / 2 + 12}px`);
+    ipucu.style.setProperty('top', `${T}px`);
+  };
+  noktalar.forEach((nk, i) => {
+    const x = L + slot * i + (slot - bw) / 2;
+    const son = i === n - 1;
+    const topl = toplam(nk) || 1;
+    const o = oran(nk);
+    const grup = s('g', {
+      class: `cubuk-grubu${son ? ' son' : ''}`, tabindex: '0', role: 'link',
+      'aria-label': `${kisaTarih(nk.z)}: ${nk.basarili} başarılı, ${nk.basarisiz} başarısız, ${nk.atlanan} atlanan, ${nk.durduruldu || 0} durduruldu; başarı oranı ${o === null ? 'yok' : `%${o}`}. Koşuyu aç.`
+    });
+    grup.append(s('rect', { class: 'vurgu-cercevesi', x: x - 4, y: T - 4, width: bw + 8, height: ih + 8, rx: 7 }));
+    let yy = T + ih;
+    const dilimler = [['basarili', 'c-basari'], ['atlanan', 'c-atlanan'], ['basarisiz', 'c-hata'], ['durduruldu', 'c-durdu']].filter(([a]) => nk[a]);
+    dilimler.forEach(([a, sinif], j) => {
+      const deger = oranKipi ? ((nk[a] || 0) / topl) * 100 : nk[a] || 0;
+      const yuk = Math.max(1.5, y(deger) - 1.5);
+      yy -= yuk + 1.5;
+      grup.append(s('rect', { class: sinif, x, y: yy, width: bw, height: yuk, rx: j === dilimler.length - 1 ? Math.min(4, bw / 3) : 1.5, filter: son ? `url(#${filtreId})` : null }));
+    });
+    grup.append(s('rect', { class: 'dokunma', x: L + slot * i, y: T, width: slot, height: ih, fill: 'transparent' }));
+    const ac = () => { location.hash = `#/sonuclar/kosu/${encodeURIComponent(nk.kosuId)}`; };
+    grup.addEventListener('mouseenter', () => ipucuGoster(nk, x + bw / 2));
+    grup.addEventListener('focus', () => ipucuGoster(nk, x + bw / 2));
+    grup.addEventListener('mouseleave', () => { ipucu.hidden = true; });
+    grup.addEventListener('blur', () => { ipucu.hidden = true; });
+    grup.addEventListener('click', ac);
+    grup.addEventListener('keydown', (o2) => { if (o2.key === 'Enter' || o2.key === ' ') { o2.preventDefault(); ac(); } });
+    svg.append(grup);
+    if (i % etiketAdimi === (n - 1) % etiketAdimi || son) {
+      svg.append(s('text', { class: `eksen-yazisi${son ? ' son' : ''}`, x: x + bw / 2, y: H - 8, 'text-anchor': 'middle' }, gunAy(nk.z)));
+    }
+  });
+  const lejant = h('div', { class: 'trend-lejant' },
+    h('span', { class: 'lejant basari' }, 'Başarılı'), h('span', { class: 'lejant hata' }, 'Başarısız'),
+    h('span', { class: 'lejant atlanan' }, 'Atlanan'), h('span', { class: 'lejant durdu' }, 'Durduruldu'),
+    h('span', { class: 'aralik' }, `${gunAy(noktalar[0].z)} → ${kisaTarih(noktalar[n - 1].z).slice(0, 10)}`));
+  return [svg, ipucu, lejant];
+}
+
+// ---------------------------------------------------------------------------------------
+// Son koşunun başarısız testleri: Yeni başarısız / Tekrar eden / Düzeldi
+// ---------------------------------------------------------------------------------------
+
+const senaryoKimligi = (x) => x.senaryoAnahtari || `${x.urunAnahtari || x.urun}::${x.senaryoBaslik}`;
+
+async function basarisizTestler(alan, kosuGecmisi, sonKosuId, urun, panel, proje) {
+  const tamlar = kosuGecmisi.filter((k) => k.tur === 'tam');
+  const sira = tamlar.findIndex((k) => k.id === sonKosuId);
+  const hedefler = (sira >= 0 ? tamlar.slice(sira, sira + 9) : [kosuGecmisi.find((k) => k.id === sonKosuId)]).filter(Boolean);
+  alan.replaceChildren(h('section', { class: 'kart' }, iskelet('liste')));
+  let detaylar;
+  try {
+    detaylar = await Promise.all(hedefler.map((k) => api(`/platform/sonuclar/kosu?id=${encodeURIComponent(k.id)}`).catch(() => null)));
+  } catch { alan.replaceChildren(); return; }
+  const filtre = (d) => (d ? d.sonuclar.filter((x) => !urun || x.urunAnahtari === urun) : []);
+  const son = filtre(detaylar[0]);
+  const gecmis = detaylar.slice(1).map(filtre);
+  const satirlar = [];
+  for (const x of son) {
+    const kimlik = senaryoKimligi(x);
+    const onceki = gecmis.map((g) => g.find((y) => senaryoKimligi(y) === kimlik)).filter(Boolean);
+    const oncekiDurum = onceki.length ? onceki[0].durum : null;
+    if (x.durum === 'basarisiz') {
+      let seri = 1;
+      for (const o of onceki) { if (o.durum === 'basarisiz') seri++; else break; }
+      satirlar.push({ x, tur: oncekiDurum === 'basarisiz' ? 'tekrar' : 'yeni', seri });
+    } else if (x.durum === 'basarili' && oncekiDurum === 'basarisiz') {
+      satirlar.push({ x, tur: 'duzeldi', seri: 0 });
+    }
+  }
+  const siralama = { yeni: 0, tekrar: 1, duzeldi: 2 };
+  satirlar.sort((a, b) => siralama[a.tur] - siralama[b.tur] || b.seri - a.seri);
+  const basarisizlar = satirlar.filter((r) => r.tur !== 'duzeldi');
+  // "Yalnızca başarısızları tekrar çalıştır": başarısız sonuçların senaryo KİMLİKLERİ (UUID) son koşunun
+  // ortamında, Senaryolar ekranıyla aynı onay penceresi ve canlı panel üzerinden (kısmi koşu) çalışır.
+  const yenidenCalistir = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('yenile'), 'Yalnızca başarısızları tekrar çalıştır');
+  yenidenCalistir.addEventListener('click', async () => {
+    const gorulen = new Set();
+    const hedefler = satirlar.filter((r) => r.tur !== 'duzeldi' && r.x.senaryoId && !gorulen.has(r.x.senaryoId) && gorulen.add(r.x.senaryoId))
+      .map((r) => ({ id: r.x.senaryoId, baslik: r.x.senaryoBaslik, ekranAdi: r.x.urun }));
+    const baglanamayan = satirlar.filter((r) => r.tur !== 'duzeldi' && !r.x.senaryoId).length;
+    if (!hedefler.length) { bildir('Başarısız sonuçlar platformdaki bir senaryoya bağlı değil; Senaryolar ekranından çalıştırın.', 'hata'); return; }
+    try {
+      const [{ kosuOnayi, kosuBaslat }, { ortamlar }] = await Promise.all([
+        import('./kosu-paneli.js'), api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
+      ]);
+      const ortamId = detaylar[0] && detaylar[0].kosu ? detaylar[0].kosu.ortamId : null;
+      const ortam = ortamlar.find((o) => o.id === ortamId) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
+      if (!ortam) { bildir('Projede ortam yok.', 'hata'); return; }
+      const onay = await kosuOnayi({
+        baslik: 'Başarısızları tekrar çalıştır?', senaryolar: hedefler, ortam, tur: 'tekil', esZamanli: false,
+        not: `Son koşuda başarısız olan senaryolar ${ortam.ad} ortamında sırayla, kısmi (tekil) koşu olarak çalışır.${baglanamayan ? ` ${baglanamayan} sonuç bir senaryoya bağlı olmadığı için dahil edilmedi.` : ''}`
+      });
+      if (!onay) return;
+      kosuBaslat({ projeId: proje.id, ortam, senaryolar: hedefler, tur: 'tekil', esZamanli: false, baslik: 'Başarısızlar (tekrar)' });
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      bildir(e.message, 'hata');
+    }
+  });
+  const liste = h('ul', { class: 'degisim-listesi' });
+  const fazlasi = [];
+  const ogeler = new Map();
+  for (const r of satirlar) {
+    const li = h('li', {},
+      h('span', { class: 'etiket-hucresi' }, rozet(DEGISIM[r.tur].etiket, DEGISIM[r.tur].sinif)),
+      h('span', { class: 'ad' },
+        h('button', { type: 'button', onclick: () => panel.ac(r.x.id, true), title: r.x.senaryoBaslik }, r.x.senaryoBaslik),
+        h('small', {}, [r.x.urun, r.x.hataKategorisi ? kisaKategori(r.x.hataKategorisi) : null, r.tur === 'tekrar' ? `${r.seri} koşudur başarısız` : null].filter(Boolean).join(' · '))),
+      h('span', { class: 'sag-hucre' },
+        r.x.ekranGoruntusuSayisi ? h('span', { title: 'Ekran görüntüsü var' }, ikon('ekran'), h('span', { class: 'gorunmez' }, 'ekran görüntüsü')) : null,
+        r.x.videoSayisi ? h('span', { title: 'Video var' }, ikon('video'), h('span', { class: 'gorunmez' }, 'video')) : null,
+        sureMetni(r.x.sureMs)));
+    ogeler.set(r.x.id, li);
+    if (ogeler.size <= 8) liste.append(li); else fazlasi.push(li);
+  }
+  const tumunuGoster = fazlasi.length ? h('div', { class: 'liste-alti' }, h('button', {
+    type: 'button', class: 'kucuk-dugme hayalet tumunu-goster', onclick: (o) => { liste.append(...fazlasi); o.currentTarget.parentElement.remove(); }
+  }, `Tümünü göster (${satirlar.length})`)) : null;
+  panel.secili = (id) => { for (const [k, li] of ogeler) li.classList.toggle('secili', k === id); };
+  const kosu = hedefler[0];
+  alan.replaceChildren(h('section', { class: 'kart', 'aria-labelledby': 'basarisiz-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'basarisiz-basligi' }, ikon('uyari'), 'Başarısız testler'),
+      h('span', { class: 'alt' }, `son koşu · ${kisaTarih(kosu.bitis || kosu.baslangic)}${gecmis.length ? ` · önceki ${gecmis.length} tam koşuyla karşılaştırıldı` : ''}`),
+      basarisizlar.length ? h('div', { class: 'sag' }, yenidenCalistir) : null),
+    satirlar.length ? [liste, tumunuGoster] : bosDurum('Son koşuda başarısız test yok', gecmis.length ? 'Önceki koşuya göre düzelen test de yok.' : 'Karşılaştırılacak önceki koşu bulunmuyor.', { ikon: 'onay' })));
+  if (basarisizlar.length) panel.ac(basarisizlar[0].x.id);
+}
+
+// ---------------------------------------------------------------------------------------
+// Koşu geçmişi
+// ---------------------------------------------------------------------------------------
+
+function kosuNoktasi(k) {
+  const sinif = k.durum === 'durduruldu' ? 'durdu' : k.durum === 'calisiyor' ? 'vurgu' : k.basarisiz ? 'hata' : k.durum === 'tamamlandi' ? 'basari' : 'atlanan';
+  return h('span', { class: `nokta ${sinif}`, 'aria-hidden': 'true', title: KOSU_DURUMU[k.durum] || k.durum });
+}
+
+function dagilimCubugu(x, genislik = null) {
+  const t = toplam(x) || 1;
+  const w = (v) => `${((v / t) * 100).toFixed(1)}%`;
+  return h('span', { class: 'dagilim', 'aria-hidden': 'true', style: genislik ? { width: genislik } : null },
+    h('span', { class: 'd-basari', style: { width: w(x.basarili) } }), h('span', { class: 'd-hata', style: { width: w(x.basarisiz) } }),
+    h('span', { class: 'd-atlanan', style: { width: w(x.atlanan) } }), h('span', { class: 'd-durdu', style: { width: w(x.durduruldu || 0) } }));
+}
+
+function kosuGecmisi(kosular, urun) {
+  const govde = h('tbody', {});
+  const sayfalama = h('div', { class: 'sayfalama' });
+  let sayfa = 0;
+  let filtre = 'tumu';
+  const sayiHucresi = (v, ek = '') => h('td', { class: `sayi ${v ? ek : 'sifir'}`.trim() }, String(v));
+  const ciz = () => {
+    const secilen = filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre);
+    const dilim = secilen.slice(sayfa * SAYFA_BOYU, (sayfa + 1) * SAYFA_BOYU);
+    govde.replaceChildren(...dilim.map((k) => {
+      const o = oran(k);
+      return h('tr', {},
+        h('td', {}, h('a', { class: 'kosu-baglantisi', href: `#/sonuclar/kosu/${encodeURIComponent(k.id)}` }, kosuNoktasi(k), kisaTarih(k.bitis || k.baslangic)),
+          h('span', { class: 'gorunmez' }, ` (${KOSU_DURUMU[k.durum] || k.durum})`)),
+        h('td', {}, h('span', { class: 'etiketler' }, rozet(k.tur === 'tam' ? 'tam' : 'tekil', k.tur === 'tam' ? 'vurgu' : ''), ' ',
+          k.kapsam ? rozet(k.kapsam) : null, k.kaynak === 'allure-aktarimi' ? rozet('aktarıldı', '', { title: 'Eski Allure sonuçlarından aktarıldı' }) : null)),
+        h('td', {}, dagilimCubugu(k)),
+        h('td', { class: 'sayi' }, String(toplam(k))), sayiHucresi(k.basarili, 'basarili-renk'),
+        sayiHucresi(k.basarisiz, 'basarisiz-renk'), sayiHucresi(k.atlanan),
+        sayiHucresi(k.durduruldu), h('td', { class: 'sayi oran' }, o === null ? '—' : `%${o}`));
+    }));
+    const sayfaSayisi = Math.max(1, Math.ceil(secilen.length / SAYFA_BOYU));
+    sayfalama.replaceChildren(
+      h('span', {}, `Sayfa ${sayfa + 1} / ${sayfaSayisi} · ${secilen.length} koşu`),
+      h('span', { class: 'sag' },
+        h('button', { type: 'button', class: 'kucuk-dugme', disabled: sayfa === 0, onclick: () => { sayfa--; ciz(); } }, '‹ Önceki'),
+        h('button', { type: 'button', class: 'kucuk-dugme', disabled: sayfa + 1 >= sayfaSayisi, onclick: () => { sayfa++; ciz(); } }, 'Sonraki ›')));
+  };
+  ciz();
+  const filtreSegmenti = segment([['tumu', 'Tümü'], ['tam', 'Tam'], ['tekil', 'Tekil']], filtre, (d) => { filtre = d; sayfa = 0; ciz(); }, 'Koşu türü');
+  return h('section', { class: 'kart', 'aria-labelledby': 'gecmis-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'gecmis-basligi' }, ikon('liste'), 'Koşu geçmişi'),
+      h('span', { class: 'alt' }, urun ? 'Bu ürünü içeren tüm koşular; sayılar yalnızca bu ürün için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
+      kosular.length ? h('div', { class: 'sag' }, filtreSegmenti) : null),
+    kosular.length
+      ? [h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu gecmis-tablosu' },
+        h('caption', { class: 'gorunmez' }, 'Koşu geçmişi'),
+        h('thead', {}, h('tr', {}, ...[['Koşu'], ['Tür / kapsam'], ['Dağılım'], ['Top.', 1], ['Başarılı', 1], ['Başarısız', 1], ['Atlanan', 1], ['Durd.', 1], ['Oran', 1]]
+          .map(([b, sag]) => h('th', { scope: 'col', class: sag ? 'sayi' : null }, b)))),
+        govde)), sayfalama]
+      : h('p', { class: 'bos-liste' }, 'Henüz koşu yok.'));
+}
+
+// ---------------------------------------------------------------------------------------
+// Hata kalıpları
+// ---------------------------------------------------------------------------------------
+
+function yerelDegerdenIso(deger) {
+  if (!deger) return '';
+  const t = new Date(deger);
+  return Number.isNaN(t.getTime()) ? '' : t.toISOString();
+}
+
+/** Kalıp metnindeki "#" yer tutucularını vurgular (metin düğümleriyle). */
+function kalipMetni(kalip) {
+  const parcalar = String(kalip).split('#');
+  const cikti = [];
+  parcalar.forEach((p, i) => { if (p) cikti.push(p); if (i < parcalar.length - 1) cikti.push(h('em', {}, '#')); });
+  return h('code', { title: kalip }, cikti);
+}
+
+/** Uzun listeler: ilk "sinir" öğe + "Tümünü göster (N)". */
+function sinirliListe(ogeler, sinir, sinif, ekOzellik = {}) {
+  const liste = h('div', { class: sinif, ...ekOzellik }, ...ogeler.slice(0, sinir));
+  if (ogeler.length <= sinir) return liste;
+  const dugme = h('button', { type: 'button', class: 'kucuk-dugme hayalet tumunu-goster' }, `Tümünü göster (${ogeler.length})`);
+  dugme.addEventListener('click', () => { liste.append(...ogeler.slice(sinir)); dugme.remove(); });
+  return h('div', {}, liste, h('div', { class: 'liste-alti' }, dugme));
+}
+const kalipListesi = (ogeler) => sinirliListe(ogeler, 8, 'kalip-listesi', { role: 'list', 'aria-label': 'Hata kalıpları' });
+
+function hataKaliplariBolumu(alan, proje, urun, ornekAc) {
+  const baslangic = h('input', { type: 'datetime-local', id: 'kalip-baslangic' });
+  const bitis = h('input', { type: 'datetime-local', id: 'kalip-bitis' });
+  const sonucAlani = h('div', {}, iskelet('liste'));
+  const yukle = async () => {
+    const q = new URLSearchParams({ projeId: proje.id });
+    if (urun) q.set('urun', urun);
+    if (baslangic.value) q.set('baslangic', yerelDegerdenIso(baslangic.value));
+    if (bitis.value) q.set('bitis', yerelDegerdenIso(bitis.value));
+    sonucAlani.replaceChildren(iskelet('liste'));
+    try {
+      const v = await api(`/platform/sonuclar/kaliplar?${q}`);
+      if (!v.kaliplar.length) { sonucAlani.replaceChildren(h('p', { class: 'bos-liste' }, 'Bu aralıkta başarısız sonuç yok.')); return; }
+      sonucAlani.replaceChildren(
+        h('div', { class: 'kategori-cipleri' }, h('span', { class: 'rozet hap hata' }, h('b', {}, String(v.toplam)), 'başarısız sonuç'),
+          ...Object.entries(v.kategoriler).map(([k, n]) => h('span', { class: 'rozet hap' }, kisaKategori(k), h('b', {}, String(n))))),
+        kalipListesi(v.kaliplar.map((k) => {
+          const sinif = kategoriSinifi(k.kategori);
+          return h('div', { class: `kalip-satiri ${sinif}`, role: 'listitem' },
+            h('span', { class: 'kalip-ikon', 'aria-hidden': 'true' }, ikon(KATEGORI_IKONU[sinif])),
+            h('div', { class: 'kalip-baslik' }, kisaKategori(k.kategori), rozet(`${k.senaryoSayisi} senaryo`), urun ? null : rozet(k.urun, 'vurgu'),
+              h('span', { class: 'cok-soluk' }, `ilk ${gunAy(k.ilk)} · son ${kisaTarih(k.son)}`)),
+            h('div', { class: 'kalip-sayi' }, h('span', {}, String(k.sayi), h('small', {}, ' adet')),
+              h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => ornekAc(k.ornekSonucId), 'aria-label': `Örnek sonucu aç: ${kisaKategori(k.kategori)}, ${k.urun}` }, 'Örnek')),
+            kalipMetni(k.kalip));
+        })));
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      sonucAlani.replaceChildren(hataKutusu(e));
+    }
+  };
+  const uygula = h('button', { type: 'button', class: 'kucuk-dugme', onclick: yukle }, 'Uygula');
+  const tumu = h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { baslangic.value = ''; bitis.value = ''; yukle(); } }, ikon('takvim'), 'Tüm zamanlar');
+  alan.replaceChildren(h('section', { class: 'kart', 'aria-labelledby': 'kalip-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'kalip-basligi' }, ikon('uyari'), 'Hata kalıpları'),
+      h('span', { class: 'alt' }, 'Değişken sayılar # ile tek satırda toplanır')),
+    h('div', { class: 'filtre-satiri' },
+      h('div', { class: 'alan' }, h('label', { for: baslangic.id }, 'Başlangıç'), baslangic),
+      h('div', { class: 'alan' }, h('label', { for: bitis.id }, 'Bitiş'), bitis), uygula, tumu),
+    sonucAlani));
+  yukle();
+}
+
+// ---------------------------------------------------------------------------------------
+// Ortak test sonucu parçaları (sağ panel ve detay sayfası)
+// ---------------------------------------------------------------------------------------
+
+/** Başka bir bilgisayardan yedekle gelen ve dosyası yedeğe alınmamış medya. */
+function yedekDisiNotu(m) {
+  const tur = { ekran_goruntusu: 'Ekran görüntüsü', video: 'Video', iz: 'İz (trace) dosyası', diger: 'Ek' }[m.tur] || 'Medya';
+  return h('p', { class: 'medya-yedek-disi soluk kucuk', role: 'note' }, ikon('arsiv'),
+    h('span', {}, `${tur}: Bu medya yedeğe dahil edilmemişti. `,
+      h('span', {}, 'Dosya, kaydedildiği bilgisayarda; medyalı bir yedekle yeniden içe aktarılabilir.')));
+}
+
+function indirBaglantisi(m, metin, sinif = 'dugme kucuk-dugme') {
+  return h('a', { class: sinif, href: medyaUrl(m.id, true), download: '' }, ikon('indir'), metin);
+}
+
+/** Büyük görünüm diyaloğu: önceki/sonraki, indir, tam ekran, kapat. */
+function gorselDiyalogu(gorseller) {
+  const diyalog = h('dialog', { class: 'gorsel-diyalog', 'aria-label': 'Ekran görüntüsü' });
+  let sira = 0;
+  const ciz = () => {
+    const m = gorseller[sira];
+    const img = h('img', { src: medyaUrl(m.id), alt: m.ad, class: 'buyuk-gorsel' });
+    const tamEkran = h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { img.requestFullscreen?.().catch(() => {}); } }, ikon('genislet'), 'Tam ekran');
+    diyalog.replaceChildren(
+      h('div', { class: 'diyalog-ust' }, h('strong', {}, m.ad), gorseller.length > 1 ? h('span', { class: 'cok-soluk mono kucuk' }, `${sira + 1} / ${gorseller.length}`) : null,
+        h('div', { class: 'dugmeler' },
+          gorseller.length > 1 ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Önceki görüntü', onclick: () => { sira = (sira - 1 + gorseller.length) % gorseller.length; ciz(); } }, '‹') : null,
+          gorseller.length > 1 ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Sonraki görüntü', onclick: () => { sira = (sira + 1) % gorseller.length; ciz(); } }, '›') : null,
+          indirBaglantisi(m, 'İndir'), tamEkran,
+          h('button', { type: 'button', class: 'kucuk-dugme birincil', onclick: () => diyalog.close() }, 'Kapat'))),
+      img);
+  };
+  return {
+    diyalog,
+    ac(m, tamEkran = false) {
+      sira = Math.max(0, gorseller.indexOf(m));
+      ciz();
+      diyalog.showModal();
+      if (tamEkran) diyalog.querySelector('img')?.requestFullscreen?.().catch(() => {});
+    }
+  };
+}
+
+/** Ekran görüntüsü görüntüleyici (tarayıcı çerçevesi + hata anı vurgusu). */
+function goruntuleyici(s2, gorseller, buyut, secenekler = {}) {
+  const gosterilebilir = gorseller.filter((m) => !m.yedekDisi);
+  const m = gosterilebilir.length ? gosterilebilir[gosterilebilir.length - 1] : null;
+  const kap = h('div', { class: `goruntuleyici ${s2.durum === 'basarisiz' ? 'hata-ani' : ''}` },
+    h('div', { class: 'tarayici-cubugu', 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {}), h('span', {}, m ? m.ad : s2.urun)),
+    m ? h('span', { class: 'zaman-damgasi', 'aria-hidden': 'true' }, saatMetni(s2.bitis)) : null);
+  const icerikAlani = h('div', {});
+  kap.append(icerikAlani);
+  const onizleme = () => {
+    if (m) {
+      icerikAlani.replaceChildren(h('button', { type: 'button', class: 'onizleme-dugmesi', onclick: () => buyut(m), 'aria-label': `${m.ad} — büyüt` },
+        h('img', { src: medyaUrl(m.id), alt: '', loading: secenekler.tembel ? 'lazy' : null })));
+    } else if (gorseller.some((g) => g.yedekDisi)) {
+      icerikAlani.replaceChildren(yedekDisiNotu(gorseller.find((g) => g.yedekDisi)));
+    } else {
+      icerikAlani.replaceChildren(h('div', { class: 'medya-bos' }, ikon('ekran'), 'Bu sonuçta ekran görüntüsü yok.'));
+    }
+  };
+  onizleme();
+  return {
+    kap, gorsel: m,
+    videoOynat(v) {
+      icerikAlani.replaceChildren(h('video', { controls: true, autoplay: true, src: medyaUrl(v.id), class: 'sonuc-videosu' }));
+    },
+    onizleme
+  };
+}
+
+function hataOzeti(s2) {
+  if (!s2.hataMesaji) return null;
+  const ilk = s2.hataMesaji.split('\n').find((x) => x.trim()) || s2.hataMesaji;
+  const bg = s2.beklenenGorulen;
+  return h('div', {},
+    h('div', { class: 'hata-ozeti' }, h('b', {}, 'Hata: '), ilk.replace(/^\w*Error:\s*/, '')),
+    bg ? h('dl', { class: 'karsilastirma' },
+      h('div', { class: 'beklenen' }, h('dt', {}, 'Beklenen'), h('dd', {}, bg.beklenen || '—')),
+      h('div', { class: 'gorulen' }, h('dt', {}, 'Görülen'), h('dd', {}, bg.gorulen || '—'))) : null);
+}
+
+function adimCizelgesi(adimlar) {
+  if (!adimlar.length) return h('p', { class: 'bos-liste' }, 'Adım bilgisi yok.');
+  return h('ol', { class: 'adim-listesi' }, ...adimlar.map((a) => h('li', { class: `adim ${a.durum}` },
+    h('span', { class: 'adim-isareti', 'aria-hidden': 'true' }, ikon((DURUM[a.durum] || DURUM.atlanan).ikon)),
+    h('span', { class: 'adim-metni' }, h('span', {}, a.ad), h('span', { class: 'gorunmez' }, ` — ${(DURUM[a.durum] || { etiket: a.durum }).etiket}`),
+      a.hataMesaji ? h('pre', { class: 'hata-mesaji kucuk' }, a.hataMesaji) : null),
+    h('span', { class: 'adim-suresi' }, a.sureMs === null ? '—' : sureMetni(a.sureMs)))));
+}
+
+function alanCipleri(alanlar) {
+  if (!alanlar.length) return h('p', { class: 'soluk kucuk' }, 'Yok (bu testte atlanan ya da doldurulamayan alan bildirilmedi).');
+  return h('ul', { class: 'alan-cipleri' }, ...alanlar.map((a) => h('li', { class: 'alan-cipi' }, h('strong', {}, a.alan), a.neden ? h('small', {}, a.neden) : null)));
+}
+
+const adimOzeti = (adimlar) => (adimlar.length ? `${adimlar.filter((a) => a.durum === 'basarili').length} / ${adimlar.length} başarılı` : '');
+
+// ---------------------------------------------------------------------------------------
+// Sağ panel: başarısız test (A tasarımı)
+// ---------------------------------------------------------------------------------------
+
+async function testPaneli(alan, id, kapat) {
+  alan.replaceChildren(h('div', { class: 'bolum' }, iskelet('sayfa')));
+  let s2;
+  try {
+    ({ sonuc: s2 } = await api(`/platform/sonuclar/sonuc?id=${encodeURIComponent(id)}`));
+  } catch (e) {
+    if (e && e.durum === 423) return;
+    alan.replaceChildren(h('div', { class: 'bolum' }, hataKutusu(e)));
+    return;
+  }
+  const gorseller = s2.medya.filter((m) => m.tur === 'ekran_goruntusu');
+  const video = s2.medya.find((m) => m.tur === 'video' && !m.silinme && !m.yedekDisi);
+  const silinenVideo = s2.medya.find((m) => m.tur === 'video' && m.silinme);
+  const dg = gorselDiyalogu(gorseller.filter((m) => !m.yedekDisi));
+  const gv = goruntuleyici(s2, gorseller, (m) => dg.ac(m));
+  alan.classList.toggle('basarili', s2.durum !== 'basarisiz');
+  const izle = h('button', {
+    type: 'button', class: 'birincil', disabled: !video,
+    title: video ? null : silinenVideo ? `Video saklama süresi dolduğu için ${tarihMetni(silinenVideo.silinme)} tarihinde silindi` : 'Bu sonuçta video yok'
+  }, ikon('oynat'), 'Videoyu izle');
+  let oynuyor = false;
+  izle.addEventListener('click', () => {
+    if (!video) return;
+    if (oynuyor) { gv.onizleme(); izle.replaceChildren(ikon('oynat'), 'Videoyu izle'); oynuyor = false; return; }
+    gv.videoOynat(video); oynuyor = true; izle.replaceChildren(ikon('gorunum'), 'Görüntüye dön');
+  });
+  alan.replaceChildren(
+    h('div', { class: 'panel-ust' },
+      h('div', { class: 'satir' }, durumRozeti(s2.durum), s2.hataKategorisi ? rozet(kisaKategori(s2.hataKategorisi)) : null, rozet(sureMetni(s2.sureMs)),
+        h('button', { type: 'button', class: 'ikon-dugme hayalet kapat', 'aria-label': 'Paneli kapat', onclick: kapat }, ikon('carpi'))),
+      h('h3', {}, s2.senaryoBaslik),
+      h('div', { class: 'm' }, h('span', {}, s2.urun, ' ', ekranDurumRozeti(s2.ekranDurumu)), s2.deneme ? h('span', {}, `${s2.deneme}. yeniden deneme`) : null,
+        h('span', {}, `${saatMetni(s2.baslangic)} → ${saatMetni(s2.bitis)}`))),
+    h('div', { class: 'bolum' }, gv.kap),
+    h('div', { class: 'panel-eylemleri' }, izle,
+      gv.gorsel ? indirBaglantisi(gv.gorsel, 'İndir', 'dugme') : null,
+      gv.gorsel ? h('button', { type: 'button', class: 'ikon-dugme', 'aria-label': 'Tam ekran', title: 'Tam ekran', onclick: () => dg.ac(gv.gorsel, true) }, ikon('genislet')) : null),
+    s2.hataMesaji ? h('div', { class: 'bolum' }, hataOzeti(s2)) : null,
+    h('div', { class: 'bolum' }, h('h4', { class: 'bolum-etiketi' }, 'Adımlar', h('span', { class: 'mono' }, adimOzeti(s2.adimlar))), adimCizelgesi(s2.adimlar)),
+    h('div', { class: 'bolum' }, h('h4', { class: 'bolum-etiketi' }, 'Atlanan / doldurulamayan alanlar', h('span', { class: 'mono' }, String(s2.atlananAlanlar.length))), alanCipleri(s2.atlananAlanlar)),
+    h('div', { class: 'bolum' }, h('a', { class: 'dugme hayalet kucuk-dugme', href: `#/sonuclar/sonuc/${encodeURIComponent(s2.id)}` }, 'Tüm ayrıntılar', ikon('ok'))),
+    dg.diyalog);
+}
+
+// ---------------------------------------------------------------------------------------
+// Koşu detayı
+// ---------------------------------------------------------------------------------------
+
+async function kosuDetayi(icerik, id, proje) {
+  const [{ kosu, sonuclar }, ortamlar] = await Promise.all([
+    api(`/platform/sonuclar/kosu?id=${encodeURIComponent(id)}`),
+    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`).then((v) => v.ortamlar).catch(() => [])
+  ]);
+  const ortam = kosu.ortamId ? (ortamlar.find((o) => o.id === kosu.ortamId) || {}).ad : null;
+  const satir = (x) => h('tr', {},
+    h('td', {}, durumRozeti(x.durum)),
+    h('td', {}, x.urun, x.ekranDurumu === 'silindi' || x.ekranDurumu === 'devre_disi' ? [' ', ekranDurumRozeti(x.ekranDurumu)] : null),
+    h('td', {}, h('a', { href: `#/sonuclar/sonuc/${encodeURIComponent(x.id)}` }, x.senaryoBaslik)),
+    h('td', { class: 'sayi' }, sureMetni(x.sureMs)),
+    h('td', { class: 'kalip' }, x.hataKalibi || ''),
+    h('td', {}, h('span', { class: 'etiketler' },
+      x.ekranGoruntusuSayisi ? rozet([ikon('ekran'), `${x.ekranGoruntusuSayisi} görsel`], '', { title: 'Ekran görüntüsü' }) : null, ' ',
+      x.videoSayisi ? rozet([ikon('video'), 'video'], '', { title: 'Video' }) : null)));
+  const sure = kosu.bitis ? new Date(kosu.bitis).getTime() - new Date(kosu.baslangic).getTime() : null;
+  const o = oran(kosu);
+  const ozetKarti = (etiket, deger, sinif) => h('div', { class: `sonuc-karti ${sinif}` },
+    h('span', { class: 'kart-etiket' }, etiket), h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, String(deger))));
+  icerik.replaceChildren(
+    h('div', { class: 'sayfa-basligi' },
+      h('div', {},
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar' }, 'Sonuçlar'),
+          h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Koşu')),
+        h('h2', { tabindex: '-1' }, `Koşu — ${tarihMetni(kosu.bitis || kosu.baslangic)}`),
+        h('div', { class: 'meta' },
+          h('span', {}, rozet(kosu.tur === 'tam' ? 'tam koşu' : 'tekil koşu', kosu.tur === 'tam' ? 'vurgu' : '')),
+          kosu.kapsam ? h('span', {}, rozet(`kapsam: ${kosu.kapsam}`)) : null,
+          ortam ? h('span', {}, ikon('ag'), `ortam: ${ortam}`) : null,
+          h('span', {}, kosuNoktasi(kosu), KOSU_DURUMU[kosu.durum] || kosu.durum),
+          h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} → ${kosu.bitis ? saatMetni(kosu.bitis) : '—'}`)),
+          sure !== null ? h('span', {}, h('span', { class: 'mono' }, sureMetni(sure))) : null,
+          kosu.kaynak === 'allure-aktarimi' ? h('span', {}, rozet('eski sonuçlardan aktarıldı')) : null)),
+      h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: '#/sonuclar' }, ikon('geri'), 'Sonuçlar'))),
+    h('div', { class: 'sonuc-kartlari mini' },
+      ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Başarısız', kosu.basarisiz, 'basarisiz'),
+      ozetKarti('Atlanan', kosu.atlanan, 'atlanan'), ozetKarti('Durduruldu', kosu.durduruldu, 'durduruldu'),
+      h('div', { class: 'sonuc-karti oran' }, h('span', { class: 'kart-etiket' }, 'Başarı oranı'),
+        h('div', { class: 'kart-deger' }, h('strong', { class: 'kart-sayi' }, o === null ? '—' : `%${o}`)), dagilimCubugu(kosu, '100%'))),
+    h('p', { class: 'kart-kaynak' }, `${kosu.basarili} başarılı, ${kosu.basarisiz} başarısız, ${kosu.atlanan} atlanan, ${kosu.durduruldu} durduruldu`),
+    h('section', { class: 'kart', 'aria-labelledby': 'senaryo-basligi' },
+      h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-basligi' }, ikon('liste'), `Senaryolar (${sonuclar.length})`),
+        h('span', { class: 'alt' }, 'Başarısızlar önce; bir senaryoya tıklayınca test ayrıntısı açılır')),
+      sonuclar.length
+        ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
+          h('caption', { class: 'gorunmez' }, 'Senaryo sonuçları'),
+          h('thead', {}, h('tr', {}, ...['Durum', 'Ürün', 'Senaryo', 'Süre', 'Hata kalıbı', 'Medya'].map((b, i) => h('th', { scope: 'col', class: i === 3 ? 'sayi' : null }, b)))),
+          h('tbody', {}, ...sonuclar.map(satir))))
+        : h('p', { class: 'bos-liste' }, 'Bu koşuda sonuç yok.')));
+}
+
+// ---------------------------------------------------------------------------------------
+// Test (sonuç) detayı
+// ---------------------------------------------------------------------------------------
+
+async function sonucDetayi(icerik, id, proje) {
+  const { sonuc: s2 } = await api(`/platform/sonuclar/sonuc?id=${encodeURIComponent(id)}`);
+  const gorseller = s2.medya.filter((m) => m.tur === 'ekran_goruntusu');
+  const videolar = s2.medya.filter((m) => m.tur === 'video');
+  const izler = s2.medya.filter((m) => m.tur === 'iz');
+  const digerleri = s2.medya.filter((m) => m.tur === 'diger');
+  const dg = gorselDiyalogu(gorseller.filter((m) => !m.yedekDisi));
+  const gv = goruntuleyici(s2, gorseller, (m) => dg.ac(m));
+
+  const sol = [];
+  const sag = [];
+  // Ekran görüntüleri: büyük önizleme (son görüntü = hata anı) + küçük resimler; tıklayınca büyük görünüm.
+  sol.push(h('section', { class: 'kart', 'aria-labelledby': 'gorsel-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'gorsel-basligi' }, ikon('ekran'), `Ekran görüntüleri (${gorseller.length})`),
+      gv.gorsel ? h('div', { class: 'sag' }, indirBaglantisi(gv.gorsel, 'İndir'),
+        h('button', { type: 'button', class: 'kucuk-dugme ikon-dugme', 'aria-label': 'Tam ekran', title: 'Tam ekran', onclick: () => dg.ac(gv.gorsel, true) }, ikon('genislet'))) : null),
+    gv.kap,
+    gorseller.length
+      ? h('ul', { class: 'gorsel-izgarasi' }, ...gorseller.map((m) => h('li', {},
+        m.yedekDisi
+          ? h('div', { class: 'gorsel-yok', title: 'Bu medya yedeğe dahil edilmemişti' }, ikon('arsiv'), 'Yedeğe dahil değil')
+          : h('button', { type: 'button', class: `gorsel-dugmesi${m === gv.gorsel ? ' secili' : ''}`, onclick: () => dg.ac(m), 'aria-label': `${m.ad} — büyüt` },
+            h('img', { src: medyaUrl(m.id), alt: '', loading: 'lazy' })),
+        h('div', { class: 'gorsel-adi' }, h('span', {}, m.ad), m.yedekDisi ? null : indirBaglantisi(m, 'İndir', 'kucuk')))))
+      : null,
+    dg.diyalog));
+
+  const videoAlani = h('div', { class: 'video-alani' });
+  sol.push(h('section', { class: 'kart', 'aria-labelledby': 'video-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'video-basligi' }, ikon('video'), 'Video ve iz')),
+    videolar.length ? videolar.map((v) => v.silinme
+      ? h('p', { class: 'soluk' }, `Video saklama süresi dolduğu için ${tarihMetni(v.silinme)} tarihinde silindi.`)
+      : v.yedekDisi ? yedekDisiNotu(v) : h('div', { class: 'dugmeler' },
+        h('button', { type: 'button', class: 'birincil', onclick: (o) => {
+          videoAlani.replaceChildren(h('video', { controls: true, autoplay: true, src: medyaUrl(v.id), class: 'sonuc-videosu' }));
+          o.currentTarget.disabled = true;
+        } }, '▶ Videoyu izle'),
+        h('a', { class: 'dugme', href: medyaUrl(v.id, true), download: '' }, '⬇ Videoyu indir'))) : h('p', { class: 'soluk' }, 'Video yok.'),
+    videoAlani,
+    izler.filter((z) => z.yedekDisi).map(yedekDisiNotu),
+    izler.some((z) => !z.yedekDisi) ? h('div', { class: 'dugmeler' }, ...izler.filter((z) => !z.yedekDisi).map((z) => h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(z.id, true), download: '' }, '⬇ İzi (trace) indir')),
+      h('span', { class: 'soluk kucuk' }, 'İz dosyası ', h('code', {}, 'npx playwright show-trace <dosya>'), ' ile açılır.')) : null,
+    digerleri.filter((d) => d.yedekDisi).map(yedekDisiNotu),
+    digerleri.some((d) => !d.yedekDisi) ? h('div', { class: 'dugmeler' }, ...digerleri.filter((d) => !d.yedekDisi).map((d) => h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(d.id, true), download: '' }, `⬇ ${d.ad}`))) : null));
+
+  if (s2.hataMesaji) {
+    sol.push(h('section', { class: 'kart', 'aria-labelledby': 'hata-basligi' },
+      h('div', { class: 'kart-basligi' }, h('h3', { id: 'hata-basligi' }, ikon('uyari'), 'Hata'),
+        s2.hataKategorisi ? h('div', { class: 'sag' }, rozet(s2.hataKategorisi, 'hata')) : null),
+      h('pre', { class: 'hata-mesaji' }, s2.hataMesaji)));
+  }
+  if (s2.beklenenGorulen || s2.beklenenSonuc) {
+    sol.push(h('section', { class: 'kart', 'aria-labelledby': 'bg-basligi' },
+      h('div', { class: 'kart-basligi' }, h('h3', { id: 'bg-basligi' }, ikon('hedef'), 'Beklenen / görülen')),
+      s2.beklenenSonuc ? h('dl', { class: 'beklenen-gorulen' }, h('dt', {}, 'Senaryonun beklenen sonucu'), h('dd', {}, s2.beklenenSonuc)) : null,
+      s2.beklenenGorulen ? h('dl', { class: 'karsilastirma' },
+        h('div', { class: 'beklenen' }, h('dt', {}, 'Beklenen'), h('dd', {}, h('code', {}, s2.beklenenGorulen.beklenen || '—'))),
+        h('div', { class: 'gorulen' }, h('dt', {}, 'Görülen'), h('dd', {}, h('code', {}, s2.beklenenGorulen.gorulen || '—')))) : null));
+  }
+  sag.push(h('section', { class: 'kart', 'aria-labelledby': 'adim-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'adim-basligi' }, ikon('liste'), 'Adımlar'), h('span', { class: 'alt mono' }, adimOzeti(s2.adimlar))),
+    adimCizelgesi(s2.adimlar)));
+  sag.push(h('section', { class: 'kart', 'aria-labelledby': 'atlanan-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'atlanan-basligi' }, ikon('eksi'), 'Atlanan / doldurulamayan alanlar'), h('span', { class: 'alt mono' }, String(s2.atlananAlanlar.length))),
+    alanCipleri(s2.atlananAlanlar)));
+
+  icerik.replaceChildren(
+    h('div', { class: 'sayfa-basligi' },
+      h('div', {},
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/sonuclar' }, 'Sonuçlar'),
+          h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: `#/sonuclar/kosu/${encodeURIComponent(s2.kosuId)}` }, 'Koşu'),
+          h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Test')),
+        h('h2', { tabindex: '-1' }, s2.senaryoBaslik),
+        h('div', { class: 'meta' },
+          h('span', {}, durumRozeti(s2.durum)), h('span', {}, rozet(s2.urun, 'vurgu')), ekranDurumRozeti(s2.ekranDurumu) ? h('span', {}, ekranDurumRozeti(s2.ekranDurumu)) : null,
+          h('span', {}, ikon('saat'), h('span', { class: 'mono' }, sureMetni(s2.sureMs))),
+          s2.deneme ? h('span', {}, rozet(`${s2.deneme}. yeniden deneme`, 'atlanan')) : null,
+          h('span', {}, ikon('takvim'), h('span', { class: 'mono' }, `${kisaTarih(s2.baslangic)} → ${saatMetni(s2.bitis)}`)),
+          s2.senaryoAnahtari ? h('span', { class: 'mono cok-soluk' }, s2.senaryoAnahtari) : null)),
+      h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: `#/sonuclar/kosu/${encodeURIComponent(s2.kosuId)}` }, ikon('geri'), 'Koşuya dön'))),
+    h('div', { class: 'detay-izgarasi' }, h('div', {}, sol), h('div', {}, sag)));
+}

@@ -1,9 +1,11 @@
-import { totpKoduUret } from './totp';
+import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
+import { girisHazirMi, tarifiHazirla, type GirisKimligi } from './giris-motoru';
+import { platformVerisi, platformVerisiVarsa } from './platform-veri';
 
 export type EnvironmentName = 'canli' | 'test';
 
 type LoginDefinition = {
-  authenticatorRequired: boolean;
+  /** Paylaşılan oturum dosyası: ortam + giriş profili başına (bkz. oturumDosyasi). */
   storageState: string;
 };
 
@@ -12,29 +14,47 @@ type EnvironmentDefinition = {
   login: LoginDefinition;
 };
 
-// Ortama göre değişen URL, alan seçicileri ve oturum dosyası sadece burada tutulur.
-// Test case'lerde kullanıcı adı/şifre alanının seçicisini tekrar yazmayın.
+// Taban adres YALNIZCA platform veritabanından (ortamın kayıtlı adresi). Kasa anahtarı henüz yokken
+// (playwright.config.ts, global-setup parolayı sormadan önce değerlendirilir) undefined döner; worker'lar
+// yapılandırmayı anahtarla yeniden yükler.
+function tabanAdresi(ortam: EnvironmentName): string | undefined {
+  return platformVerisiVarsa(ortam)?.tabanUrl;
+}
+
+/**
+ * Paylaşılan oturum dosyası (storageState): ortam + giriş profili başına — profil değişince eski
+ * profilin oturumu kullanılmaz. Anahtar henüz yokken (yapılandırmanın ilk değerlendirmesi) profil
+ * bilinemez; worker'lar anahtarla doğru yolu görür.
+ */
+function oturumDosyasi(ortam: EnvironmentName): string {
+  const profil = platformVerisiVarsa(ortam)?.giris?.profilKimligi;
+  return `playwright/.auth/${ortam}-${profil ? profil.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36) : 'profil-yok'}.json`;
+}
+
+// Ortama göre değişen tek şey veritabanındaki taban adres ve oturum dosyasıdır; giriş sayfasının
+// seçicileri, başarı/hata göstergeleri, iki aşamalı doğrulama ve bağlam (acente) değiştirme adımları
+// ortamın GİRİŞ TARİFİNDEDİR (Nöbetçi > Ayarlar > Giriş profilleri > Giriş tarifi; bkz. giris-motoru.ts).
 export const environments: Record<EnvironmentName, EnvironmentDefinition> = {
   canli: {
-    baseURL: process.env.CANLI_BASE_URL,
+    get baseURL() {
+      return tabanAdresi('canli');
+    },
     login: {
-      authenticatorRequired: true,
-      storageState: 'playwright/.auth/canli-acente.json'
+      get storageState() {
+        return oturumDosyasi('canli');
+      }
     }
   },
   test: {
-    baseURL: process.env.TEST_BASE_URL,
+    get baseURL() {
+      return tabanAdresi('test');
+    },
     login: {
-      authenticatorRequired: false,
-      storageState: 'playwright/.auth/test-acente.json'
+      get storageState() {
+        return oturumDosyasi('test');
+      }
     }
   }
-};
-
-export type Credentials = {
-  username: string;
-  password: string;
-  authenticatorCode?: string;
 };
 
 export function getEnvironmentName(value = process.env.TEST_ENV): EnvironmentName {
@@ -51,50 +71,40 @@ export function getEnvironment(environment = getEnvironmentName()): EnvironmentD
   const definition = environments[environment];
 
   if (!definition.baseURL) {
-    throw new Error(`${environment.toUpperCase()}_BASE_URL .env dosyasında tanımlı olmalı.`);
+    throw new Error(`${environment.toUpperCase()} ortamının taban adresi platform veritabanında yok (Nöbetçi > Ayarlar > Ortamlar).`);
   }
 
   return definition;
 }
 
+/** Ortamın etkin giriş tarifi (doğrulanmış). Tanımlı değil ya da geçersizse açık hata (GirisHatasi). */
+export function girisTarifi(environment: EnvironmentName): GirisTarifi {
+  const t = platformVerisi(environment).girisTarifi;
+  return tarifiHazirla(t?.tarif ?? null, `${environment.toUpperCase()} ortamı`);
+}
+
+/**
+ * Giriş yapılabilir mi? Kullanıcı adı + parola ve tarifin ikinci adımının istediği kod kaynağı (TOTP
+ * anahtarı / sabit kod / elle) hazırsa true. Spec'ler test.skip kararında kullanır.
+ */
 export function hasCredentials(environment: EnvironmentName): boolean {
-  const username = process.env.LOGIN_USERNAME ?? process.env.TEST_USERNAME;
-  const password =
-    environment === 'canli' ? process.env.CANLI_PASSWORD : process.env.TEST_PASSWORD;
-  // CANLI'da 2FA zorunlu — TOTP secret'ı ya da (yedek olarak) sabit bir kod tanımlı
-  // değilse, şifre doğru olsa bile login tamamlanamaz; bu yüzden burada da aranıyor.
-  const ikiFaktorVarMi =
-    environment !== 'canli' || Boolean(process.env.CANLI_AUTH_SECRET || process.env.CANLI_AUTH_CODE);
-
-  return Boolean(username && password) && ikiFaktorVarMi;
+  const veri = platformVerisi(environment);
+  const tarif = veri.girisTarifi?.tarif ?? null;
+  const giris = veri.giris;
+  return girisHazirMi(tarif as GirisTarifi | null, giris ? { ...giris, parola: giris.parola ?? '' } : null).hazir;
 }
 
-export function credentialsFromEnvironment(environment: EnvironmentName): Credentials {
-  const username = process.env.LOGIN_USERNAME ?? process.env.TEST_USERNAME;
-  const password =
-    environment === 'canli' ? process.env.CANLI_PASSWORD : process.env.TEST_PASSWORD;
-
-  if (!username || !password) {
-    const passwordKey = environment === 'canli' ? 'CANLI_PASSWORD' : 'TEST_PASSWORD';
-    throw new Error(`LOGIN_USERNAME ve ${passwordKey} .env dosyasında tanımlı olmalı.`);
+/** Giriş motoru için kimlik (şifreler yalnızca bellekte). Eksikse açık hata. */
+export function girisKimligi(environment: EnvironmentName): GirisKimligi {
+  const giris = platformVerisi(environment).giris;
+  if (!giris?.kullaniciAdi || !giris.parola) {
+    throw new Error(`Platformdaki ${environment.toUpperCase()} giriş profilinde kullanıcı adı ve parola tanımlı olmalı (Ayarlar > Giriş profilleri).`);
   }
-
   return {
-    username,
-    password,
-    authenticatorCode: environment === 'canli' ? canliAuthKoduUret() : undefined
+    kullaniciAdi: giris.kullaniciAdi,
+    parola: giris.parola,
+    totpGizli: giris.totpGizli,
+    sabitKod: giris.sabitKod,
+    smsKipi: giris.smsKipi ?? null
   };
-}
-
-// CANLI'daki 2FA kodu tercihen CANLI_AUTH_SECRET'tan (authenticator uygulamasına QR ile
-// eklenen aynı base32 seed) ANLIK olarak üretilir — böylece kod hiçbir zaman eskimez ve
-// her koşu öncesi .env'e elle kod girmeye gerek kalmaz. CANLI_AUTH_SECRET tanımlı değilse
-// (ör. seed henüz temin edilmediyse) CANLI_AUTH_CODE'daki sabit değer, tek seferlik/elle
-// girilen bir yedek olarak kullanılır.
-function canliAuthKoduUret(): string | undefined {
-  const secret = process.env.CANLI_AUTH_SECRET;
-  if (secret) {
-    return totpKoduUret(secret);
-  }
-  return process.env.CANLI_AUTH_CODE;
 }

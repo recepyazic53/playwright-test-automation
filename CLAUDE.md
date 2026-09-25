@@ -18,7 +18,6 @@
 - Debug modunda çalıştırma: `npm run test:debug`
 - **Canlı ortamda test çalıştırma:** `npm run test:canli`
 - **Test ortamında çalıştırma:** `npm run test:test-ortami`
-- HTML Raporunu açma: `npm run report`
 - TypeScript tip kontrolü: `npm run typecheck`
 
 ## 4. Test Yazım ve Kodlama Standartları

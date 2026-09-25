@@ -1,0 +1,134 @@
+{
+  "login": {
+    "basariliGirisSonrasiUrl": "/",
+    "basariGostergeMetni": "Oturumu Kapat"
+  },
+  "kullaniciDegistir": {
+    "varsayilan": {
+      "acentePartaji": "90001",
+      "acentePartajiSecenegi": "90001 - ORNEK ACENTE 1",
+      "acenteKullanicisi": "90000001"
+    },
+    "JetSeyahatÖzelTanımlıAcente": {
+      "acentePartaji": "90002",
+      "acentePartajiSecenegi": "90002 - ORNEK ACENTE 2",
+      "acenteKullanicisi": "90000002"
+    },
+    "JetKaskoYetkiliİndirimli": {
+      "acentePartaji": "90003",
+      "acentePartajiSecenegi": "90003 - ORNEK ACENTE 3",
+      "acenteKullanicisi": "90000003",
+      "yetkiliIndirimi": "15"
+    },
+    "Acente90004": {
+      "acentePartaji": "90004",
+      "acentePartajiSecenegi": "90004",
+      "acenteKullanicisi": "90000004"
+    }
+  },
+  "kimlikBilgileri": {
+    "ozel": {
+      "tc1": {
+        "tcKimlikNo": "10000000146",
+        "dogumTarihi": "01.02.1985",
+        "cepTelefonu": "5550000001"
+      },
+      "tc2": {
+        "tcKimlikNo": "10000000214",
+        "dogumTarihi": "01.03.1985",
+        "cepTelefonu": "5550000002"
+      },
+      "tc3": {
+        "tcKimlikNo": "10000000382",
+        "dogumTarihi": "01.04.1985",
+        "cepTelefonu": "5550000003"
+      },
+      "tc4": {
+        "tcKimlikNo": "10000000450",
+        "dogumTarihi": "01.05.1985",
+        "cepTelefonu": "5550000004"
+      }
+    },
+    "tuzel": {
+      "vkn1": {
+        "vergiKimlikNo": "1000000001",
+        "cepTelefonu": "5550000005"
+      },
+      "vkn2": {
+        "vergiKimlikNo": "1000000002",
+        "cepTelefonu": "5550000006"
+      }
+    },
+    "pasaport": {
+      "pasaport1": {
+        "pasaportNo": "U00000001",
+        "dogumTarihi": "01.03.1985",
+        "uyruk": "DİĞER",
+        "cepTelefonu": "5550000007",
+        "ad": "ORNEK",
+        "soyad": "KISI",
+        "babaAdi": "BABA",
+        "dogumYeri": "ORNEKSEHIR",
+        "cinsiyet": "erkek"
+      }
+    },
+    "yabanciKimlik": {
+      "ybn1": {
+        "yabanciKimlikNo": "99000000110",
+        "dogumTarihi": "01.06.1985",
+        "uyruk": "AZERBAYCAN",
+        "cepTelefonu": "5550000008"
+      }
+    }
+  },
+  "adresBilgileri": {
+    "adres1": {
+      "il": {
+        "deger": "34",
+        "metin": "İSTANBUL"
+      },
+      "ilce": {
+        "deger": "1022",
+        "metin": "BEYLİKDÜZÜ"
+      },
+      "belde": {
+        "deger": "3616",
+        "metin": "ARNAVUTKÖY"
+      },
+      "cadde": "ORNEK CD.",
+      "sokak": "ORNEK SK.",
+      "adresTipi": {
+        "deger": "ST",
+        "metin": "Site"
+      },
+      "adresParcasi": "-",
+      "mahalle": "ORNEK MAH.",
+      "binaNo": "1",
+      "blokKodu": "000001",
+      "siteAdi": "",
+      "daireNo": "1",
+      "kat": ""
+    }
+  },
+  "odeme": {
+    "krediKarti": {
+      "isim": "ORNEK",
+      "soyisim": "ORNEK",
+      "kartNo": "4111111111111111",
+      "guvenlikKodu": "123",
+      "sonKullanmaAyi": {
+        "deger": "1",
+        "metin": "01"
+      },
+      "sonKullanmaYili": {
+        "deger": "2026",
+        "metin": "2026"
+      },
+      "taksit": {
+        "deger": "1",
+        "metin": "Tek Çekim"
+      },
+      "beklenenHataMesaji": "0:XML dodururken hata !!!0:XML dodururken hata !!!"
+    }
+  }
+}

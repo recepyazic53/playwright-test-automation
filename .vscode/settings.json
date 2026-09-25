@@ -1,7 +1,5 @@
 {
   "playwright.env": {
-    "CANLI_BASE_URL": "https://galaksi.turknippon.com",
-    "TEST_BASE_URL": "http://galaksi-test.nippon.local/",
     "PLAYWRIGHT_BROWSERS_PATH": "./.playwright-browsers"
   },
 }

@@ -1,95 +1,125 @@
-# Playwright test otomasyonu
+# Playwright test otomasyonu — Nöbetçi
 
-TEST ve CANLI ortamlarında aynı Playwright senaryolarını çalıştıran TypeScript projesidir.
+TEST ve CANLI ortamlarında aynı Playwright senaryolarını çalıştıran TypeScript projesidir. Senaryolar,
+test verisi, ortam adresleri, giriş bilgileri ve sonuçlar yerel test otomasyon platformu **Nöbetçi**
+üzerinden yönetilir.
+
+> **Proje verisi Git'te DEĞİLDİR.** Test verisi, ekran modelleri, koşu listesi, ortam adresleri, giriş
+> bilgileri ve sonuçlar yalnızca bu bilgisayardaki şifreli platform veritabanında durur (`veri/`:
+> `veri/platform.db`, şifreli medya `veri/medya/`, yerel yedekler `veri/yedekler/`). `veri/` Git'e/buluta
+> gitmez. Git'te yalnızca motor, spec'ler/page object'ler (kod) ve birim testlerinin **sahte değerli**
+> örnekleri (`tests/birim/fixtures/`) vardır.
 
 ## Kurulum
 
 ```powershell
 npm install
 npx playwright install chromium
-Copy-Item .env.example .env
+npm run baslat
 ```
 
-Kullanıcı adı, şifre ve Authenticator kodu yalnızca yerel `.env` dosyasında tutulur. İş verileri `tests/data/test` ve `tests/data/canli` altında birbirinden ayrı tutulur.
+`npm run baslat` yerel sunucuyu başlatır ve Nöbetçi'yi tarayıcıda açar (`http://127.0.0.1:5566/`;
+port `TEST_SUNUCU_PORT` ile değişir).
+
+## İlk kurulum (bu bilgisayarda henüz veritabanı yoksa)
+
+Hoş geldiniz ekranında üç seçenek vardır:
+
+1. **Yedek yükle** — başka bir bilgisayardan alınmış `.tayedek` dosyası (yedeğin parolası bu
+   bilgisayarın kasa parolası olur).
+2. **Yeni proje başlat** — kasa parolası, proje ve ortamları sıfırdan tanımlayın.
+3. **Eski proje dosyalarını aktar** — yalnızca eski dosyaların bulunduğu bir klasör varsa görünür:
+   varsayılan olarak en yeni `veri/eski-dosyalar/<YYYYMMDD-HHMM>/` yedeği (geçişte eski `tests/data/**`,
+   `tests/ekran-modelleri/**`, `kosu-listesi.json` ve eski proje dosyaları buraya yedeklendi; içinde
+   `MANIFEST.sha256` vardır). Akış: kasa parolası (iki kez) → önizleme (yalnızca sayılar; burada **başka
+   bir klasör seçebilirsiniz**) → aktar → özet. Eski dosyalar değiştirilmez.
+   - Eski dosyaları olan **başka bir makinede**: eski klasörü (içinde `tests/data/<ortam>/ortak.json`
+     olan) önizleme adımında seçin. Klasörde bir `.env` varsa taban adresler ve giriş bilgileri oradan,
+     yoksa proje kökündeki `.env`'den okunur (yalnızca bu aktarım için).
+   - Aynı işlem sonradan **Ayarlar > Yedekleme > "Eski proje dosyalarından yeniden aktar"** ile
+     tekrarlanabilir (kaynak anahtarına göre birleştirir, çift kayıt üretmez). Dosyalardan veritabanına
+     **otomatik** aktarım yoktur.
+
+Kasa parolasını unutmayın: parola unutulursa veriler kurtarılamaz.
+
+## Günlük kullanım
+
+- **Senaryolar** — senaryoları görüntüleme, oluşturma/düzenleme (ekran modelinden üretilen form),
+  "Koşuda" seçimi, **Dene** (taslak, kaydetmeden) ve **Çalıştır** (canlı ekran görüntüsü, durdurma).
+- **Sonuçlar** — koşular, kartlar, trend, hata kalıpları, test detayı (ekran görüntüsü, video, iz).
+  Medya şifrelidir ve yalnızca kasa açıkken gösterilir.
+- **Ayarlar** — proje, ortamlar, giriş profilleri, bağlam/test verisi profilleri, **dosyalar** (ekranların
+  varsayılan dosyaları, ör. ürünün çoklu sorgu Excel'i), güvenlik (otomatik kilit, video saklama, **yasak
+  adresler**, **açık dosyaları şifreli depoya taşı**), yedekleme (dışa/içe aktar, otomatik yedek).
+
+### Senaryo dosyaları (ör. çoklu sorgu Excel'i)
+
+Senaryonun dosya alanında **Dosya yükle** ile seçilen dosya bellekte şifrelenip şifreli medya deposuna
+(`veri/medya/`) yazılır; diskte düz metin olarak durmaz, arayüzden indirilemez (yalnızca ad ve boyut görünür).
+Senaryo verisinde yalnızca bir referans (`nobetci-dosya://<kimlik>/<ad>`) saklanır. Koşu anında test süreci
+dosyayı **yalnızca o koşuya özel**, yalnızca kullanıcının okuyabildiği geçici bir klasöre çözer (işletim
+sisteminin kullanıcı geçici klasöründe `nobetci-dosyalar/…`; klasör 0700, dosya 0600) ve koşu bitince klasörü
+ezip siler; çöken koşulardan kalanlar Nöbetçi açılırken silinir. Senaryoda dosya yoksa ekranın varsayılan
+dosyası (Ayarlar > Dosyalar) kullanılır. Senaryo dosyaları yedeğe her zaman (şifreli haliyle) girer.
+
+Eski proje düzenindeki düz metin dosyalar (`tests/fixtures/**`) aktarımda şifreli depoya **kopyalanır** ve
+yol değerleri referansa çevrilir. Düz metin kopyaları silmek için bir kez **Ayarlar > Güvenlik > "Açık
+dosyaları şifreli depoya taşı"** kullanın: önce liste gösterilir; onaylanınca her dosya şifreli depoya alınır,
+şifreli kopyası doğrulanır ve düz metin dosya ezilip silinir (doğrulanamayan dosya silinmez).
+
+### Yasak adresler
+
+**Ayarlar > Güvenlik > Yasak adresler**: Nöbetçi'nin hiçbir zaman bağlanmayacağı host kalıpları (`*` joker).
+Listedeki bir host'a giden koşu ve ekran taraması hiç başlamaz; koşu sırasında bu host'lara istek iptal edilir.
+Varsayılan boştur. `NOBETCI_YASAK_ADRESLER` ortam değişkeni ek kaynak olarak desteklenir (ikisi birleşir).
+
+Kasa, Ayarlar > Güvenlik'te belirlenen süre (5–120 dk, varsayılan 15) işlem yapılmazsa otomatik kilitlenir;
+kasa kilitliyken koşu başlatılmaz.
+
+## Terminalden koşu
+
+```powershell
+npx playwright test                  # varsayılan ortam TEST (TEST_ENV)
+npm run test:test-ortami             # TEST
+npm run test:canli                   # CANLI
+npm run test:headed | test:ui | test:debug
+```
+
+- Testler veriyi **yalnızca** platform veritabanından okur. Veritabanı yoksa ya da proje aktarılmamışsa
+  koşu açık bir hatayla durur: *"Veritabanı hazır değil — Nöbetçi'yi açıp projeyi aktarın/yedek yükleyin"*.
+- Koşu başında **kasa parolası gizli olarak sorulur** (yazılanlar görünmez); türetilen anahtar yalnızca o
+  koşunun belleğinde tutulur. Nöbetçi'den başlatılan koşularda kasa açıksa sorulmaz.
+- Etkileşimsiz ortam (CI) ve `npx playwright test --list` (VS Code eklentisi dahil): parolayı
+  `PLATFORM_KASA_PAROLASI` ortam değişkeniyle verin (gizli değişken olarak; dosyaya yazmayın).
+- Sonuçlar ve ekran görüntüsü/video/izler koşu biter bitmez veritabanına ve şifreli medya deposuna yazılır
+  (`scripts/platform/raporlayici.mjs`); Nöbetçi açıksa sonuçlar sunucu üzerinden yazılır. Playwright HTML
+  raporu üretilmez.
 
 ## Yapı
 
 ```text
+scripts/
+├── baslat.mjs, test-sunucu.mjs     # Nöbetçi yerel sunucusu (yalnızca 127.0.0.1)
+├── platform/                       # Veritabanı, kasa, yedek, aktarım motoru, raporlayıcı, arayüz
+└── dogrulama/senaryo-dogrulayici.mjs  # Tek senaryo doğrulayıcısı (spec + sunucu + form)
+projeler/galaksi/aktarim.mjs        # Galaksi'ye özgü eski dosya → veritabanı eşlemesi
 tests/
-├── scenarios/                 # Ortak TEST/CANLI senaryoları
-├── support/
-│   ├── flows/test-baslangici.ts
-│   ├── pages/
-│   ├── environments.ts
-│   ├── screenshots.ts
-│   └── test-data.ts
-└── data/
-    ├── test/
-    └── canli/
+├── scenarios/, canli/              # Ortak TEST/CANLI senaryoları (kod)
+├── support/                        # Page object'ler, akışlar, veritabanı erişim katmanı (platform-veri.ts)
+└── birim/                          # Tarayıcısız koruma testleri + sahte değerli örnekler (fixtures/)
 ```
 
-`testBaslangiciniHazirla`, bütün ürün senaryolarında ortama göre giriş ve acente/kullanıcı değişimini yapar. TEST ortamında Authenticator kullanılmaz; CANLI ortamında `CANLI_AUTH_CODE` okunur.
+`testBaslangiciniHazirla`, bütün ürün senaryolarında ortama göre giriş ve acente/kullanıcı değişimini
+yapar. CANLI'da iki aşamalı doğrulama kodu giriş profilindeki TOTP anahtarından anlık üretilir.
 
 ## Komutlar
 
 ```powershell
-npm run typecheck          # TypeScript kontrolü
-npm run test:test-ortami   # Ortak senaryoları TEST datasıyla çalıştırır
-npm run test:canli         # Ortak senaryoları CANLI datasıyla çalıştırır
-npm run test:headed        # Seçili ortamı görünür tarayıcıyla çalıştırır
-npm run test:ui            # Playwright UI modu
-npm run test:debug         # Debug modu
-npm run report              # Son (Playwright) HTML raporunu açar
-npm run rapor:test          # TEK KOMUT: TEST raporunu (dashboard + Allure) üretir ve açar
-npm run rapor:canli         # TEK KOMUT: CANLI raporunu (dashboard + Allure) üretir ve açar
-npm run allure:report:test  # Sadece Allure raporunu üretir ve açar (TEST)
-npm run allure:report:canli # Sadece Allure raporunu üretir ve açar (CANLI)
-npm run hata:ozet:test       # Sadece dashboard/özet dosyalarını üretir, açmaz (TEST)
-npm run hata:ozet:canli      # Sadece dashboard/özet dosyalarını üretir, açmaz (CANLI)
+npm run baslat        # Nöbetçi (sunucu + tarayıcı)
+npm run test-sunucu   # Yalnızca sunucu
+npm run typecheck     # TypeScript kontrolü
+npm run test:birim    # Tarayıcısız koruma testleri (sahte örnek verilerle; siteye bağlanmaz)
 ```
 
-## Tek komutla rapor: `npm run rapor:test` / `npm run rapor:canli`
-
-Testler bittikten sonra tüm raporlama tek komutla yapılır:
-
-```powershell
-npm run rapor:test     # veya: npm run rapor:canli
-```
-
-Bu komut sırayla: Allure raporunu üretir, ürün bazlı özeti/gün-gün karşılaştırmayı hesaplar, kendi **dashboard sayfasını** (`dashboard-<ortam>.html`) tarayıcıda açar ve ardından Allure raporunu ayrı bir sekmede açar. Yani tek komutla iki sekme açılır:
-
-- **Dashboard sekmesi** (bizim ürettiğimiz, tek ekran): toplam/başarılı/başarısız/atlanan sayıları (önceki koşuya göre değişimiyle birlikte), ürün bazlı başarı tablosu, **hata kategorisi değişim tablosu** (hangi ürünün hangi hatası arttı/azaldı/yeni çıktı/giderildi) ve en altta **"Başarısız testler - detay"** bölümü: o günün her başarısız senaryosu satır satır listelenir, üstüne tıklayınca (ürün/akış/kategori etiketleriyle birlikte) hata mesajı ve **"❌ HATA ANI" ekran görüntüsü doğrudan bu sayfada açılır** — Allure'a hiç geçmeden hangi testin nerede takıldığını görürsünüz.
-- **Allure sekmesi**: bir senaryonun TÜM adımlarının (01, 02, 03...) ekran görüntüleri, trend grafiği, Behaviors/Categories gibi daha derin/adım-adım inceleme gerektiğinde.
-
-İkisini ayrı sekmeler olarak açmamızın sebebi teknik bir kısıt: Allure'ın raporu kendi yerel sunucusuyla servis ediliyor (dosya olarak açılınca çalışmıyor), bu yüzden Allure'ın kendi arayüzünü dashboard'a gömemiyoruz — ama başarısız testlerin hata anı ekran görüntüsünü ve mesajını, Allure'ın ham verisinden (`allure-results-<ortam>/`) doğrudan kendi dashboard'umuza çektik; asıl aradığın "hatanın nerede alındığını görmek" ihtiyacı artık Allure'a hiç girmeden, tek ekranda karşılanıyor.
-
-## Allure raporu (kurumsal/paylaşılabilir rapor)
-
-Her test koşusunda ham sonuçlar, ortama özel bir klasöre yazılır: TEST için `allure-results-test/`, CANLI için `allure-results-canli/` (`playwright.config.ts`'deki `allure-playwright` reporter'ı, `TEST_ENV`'e göre klasörü otomatik seçer). Bu ikisi **kasıtlı olarak ayrı tutulur** — TEST ortamının verileri CANLI'nın gerçek/yetkili verileriyle karışmasın diye. Okunabilir bir HTML raporuna dönüştürmek için:
-
-```powershell
-npm run allure:report:test    # veya: npm run allure:report:canli
-```
-
-Bu komut önce raporu üretir (`allure:generate:test` / `:canli`, çıktı: `allure-report-test/` veya `allure-report-canli/`), sonra tarayıcıda açar (`allure:open:test` / `:canli`). Argümansız `npm run allure:report` (ve `allure:generate`/`allure:open`) geriye dönük uyumluluk için TEST ortamına eş değerdir.
-
-**Önkoşul:** Allure komut satırı aracı Java (JRE 8+) gerektirir. Bilgisayarınızda Java kurulu değilse "java bulunamadı" hatası verir — [Eclipse Temurin](https://adoptium.net/) üzerinden bir JRE kurmanız yeterlidir.
-
-Rapor; senaryoları ürün bazında (Epic: JetKasko, JetSeyahat, Trafik...) ve akış bazında (Feature: Yeni Kayıt, Teklif Matrisi...) otomatik gruplar (Behaviors sekmesi), hata kategorilerini (İş Kuralı/Pop-up, Zaman Aşımı, Seçici Hatası, Doğrulama Hatası) sınıflandırır, ortam bilgisini (TEST/CANLI, taban URL, koşu tarihi) gösterir ve her senaryonun adım ekran görüntülerini gömülü gösterir. Bir senaryo başarısız olursa, hatanın alındığı son ekran görüntüsü ve okunabilir hata mesajı "❌ HATA ANI" etiketiyle testin sonuna eklenir — raporu açan kişi hatayı aramadan görür.
-
-Her `allure:generate:*` çalıştığında, bir önceki raporun trend geçmişi (`scripts/allure-history-sync.mjs` ile) otomatik olarak sonuç klasörüne geri kopyalanır; böylece Allure'ın "Trend" grafiği koşular arasında kesintisiz birikir, elle bir şey yapmanız gerekmez.
-
-`npm run hata:ozet:test` / `hata:ozet:canli`, o ortamın son koşusundaki başarısız/bozuk testleri ürün (epic) ve hata kategorisi kırılımında bir tabloya döker (konsola ve `urun-hata-ozeti-<ortam>.md` dosyasına) — "hangi üründen hangi hata sıklıkla geliyor" sorusunun cevabı budur; Allure'ın kendi Categories widget'ı bunu ürün bazında kırmadığı için ayrı bir script olarak eklendi.
-
-Bu script ayrıca **gün-gün karşılaştırma** yapar: `allure-results-<ortam>/` klasörü hiç temizlenmediği için içinde geçmiş koşuların hepsi birikir; script bunları kendi zaman damgalarına göre günlere ayırıp en son iki koşu gününü otomatik kıyaslar — genel başarılı/başarısız sayılarındaki değişim ile birlikte, hangi ürünün hangi hata kategorisinin **arttığını**, **azaldığını**, **yeni çıktığını** ("dün yoktu, bugün çıktı") veya **tamamen giderildiğini** satır satır gösterir. Belirli bir günü baz almak için tarihi elle de verebilirsiniz: `node scripts/urun-hata-raporu.mjs test 2026-09-20`. Bu kıyas için ekstra bir geçmiş dosyası tutmuyoruz — kaynak doğrudan `allure-results-<ortam>/` klasörünün kendisi; bu yüzden o klasörü periyodik olarak silmeyin (disk yer sorunu olursa, eski günlerin detaylı dosyalarını atıp sadece özet sayıları koruyan bir temizlik script'i ayrıca eklenebilir).
-
-Varsayılan ortam TEST’tir. Elle seçim için PowerShell’de:
-
-```powershell
-$env:TEST_ENV = "test"   # veya "canli"
-npx playwright test
-```
-
-CANLI Jet Kasko senaryosu, `tests/data/canli/jet-kasko.json` içindeki güvenli ve yetkili data tamamlanıp `aktif` değeri `true` yapılana kadar atlanır.
-
-HTML report, her testin videosu, hata screenshot’ı ve hata trace’i `playwright.config.ts` üzerinden korunur. Senaryo adımlarının screenshot’ları rapora ayrıca eklenir.
+CANLI Jet Kasko senaryosu, veritabanındaki `jet-kasko` verisinde (CANLI) güvenli ve yetkili data
+tamamlanıp `aktif` değeri `true` yapılana kadar atlanır.

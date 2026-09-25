@@ -2,12 +2,22 @@
 // jet-seyahat.json > senaryolar altında tanımlanan her senaryo için: ekran açılır,
 // kapsam/alternatif/COVID/kayak teminatı gibi poliçe bilgileri girilir, sigortalı ve
 // sigorta ettiren (kendisi / farklı özel-T.C. / farklı tüzel-VKN) bilgileri girilir,
-// prim hesaplanır ve ödeme adımına geçilir. Bazı senaryolar (örn. COVID Hayır +
-// SEYAHAT PAKET kombinasyonu) kasıtlı olarak bir iş kuralı hatası tetikler; bu durumda
-// test o hatayı görüp başarıyla sonlanır ve ödeme adımına hiç geçmez. Ödeme adımına
-// geçen tüm senaryolarda "Hiçbir poliçe onaylanamadı." mesajı beklenir ve bu mesaj
-// başarı olarak kabul edilir (test kartıyla gerçek poliçe kesilmemesi beklenen davranıştır).
-// Bazı senaryolar farklı bir acente profiliyle (örn. 30856) çalışır; bu acentede COVID
+// ardından senaryonun BEKLENEN SONUCUNA göre (bkz. tests/support/beklenen-sonuc.ts >
+// beklenenSonucuCoz / adimPlaniniOlustur) şu akışlardan biri koşar:
+//  - İş kuralı hatası @ prim hesaplama (örn. COVID Hayır + SEYAHAT PAKET): prim hesaplanır,
+//    beklenen uyarı doğrulanır ve test biter.
+//  - Başarılı + ödeme adımı dahil DEĞİL: prim hesaplanır, pozitif teklif doğrulanır ve
+//    test biter (ödeme bilinçli olarak atlanır).
+//  - Ödeme adımı dahil (odemeAdimiDahil: true — her senaryoda zorunlu): prim hesaplanır;
+//    poliçeleştirmede hata bekleniyorsa orada doğrulanıp biter, değilse kart bilgileri
+//    girilip ödeme tamamlanır. Başarılı akışta "Hiçbir poliçe onaylanamadı." (ürünün
+//    kabulEdilenOdemeSonuclari listesi) başarı sayılır — test kartıyla gerçek poliçe
+//    kesilmemesi beklenen davranıştır; ödemede iş kuralı hatası bekleniyorsa senaryonun
+//    kendi mesajı aranır.
+// Mesaj eşleşmeleri toleranslıdır (harf büyüklüğü, kıvrık/düz tırnak, boşluk farkları yok
+// sayılır; görülen metnin beklenen mesajı içermesi yeterlidir). Her testin beklenen sonucu
+// "beklenenSonuc" annotation'ı olarak da eklenir (dashboard > Senaryolar tablosu gösterir).
+// Bazı senaryolar farklı bir acente profiliyle çalışır; bazı acentelerde COVID
 // teminatı, kayak teminatı, Plan Kodu ve Seyahat İptal Bedeli alanları hiç gösterilmez.
 import { test } from '../../support/fixtures';
 import { getEnvironmentName, hasCredentials } from '../../support/environments';
@@ -15,6 +25,13 @@ import { testBaslangiciniHazirla } from '../../support/flows/test-baslangici';
 import { JetSeyahatPage } from '../../support/pages/jet-seyahat.page';
 import { KrediKartiOdemePage } from '../../support/pages/kredi-karti-odeme.page';
 import { attachStepScreenshot } from '../../support/screenshots';
+import {
+  adimPlaniniOlustur,
+  beklenenSonucEtiketi,
+  beklenenSonucuCoz,
+  type AkisAdimi
+} from '../../support/beklenen-sonuc';
+import { jetSeyahatSenaryosunuDogrulaVeyaFirlat } from '../../support/senaryo-dogrulama';
 import { loadJetSeyahatData, loadOrtakData } from '../../support/test-data';
 
 const environment = getEnvironmentName();
@@ -25,8 +42,33 @@ test.skip(!hasCredentials(environment), `${environment.toUpperCase()} kullanıc�
 test.skip(!urunData.aktif, `${environment.toUpperCase()} JetSeyahat datası aktif değil.`);
 
 for (const senaryo of urunData.senaryolar) {
-  test(senaryo.baslik, async ({ page }, testInfo) => {
+  // Beklenen sonuç, test TANIMLANIRKEN çözülür: planlanan adımlar ve annotation buradan
+  // gelir. Senaryo verisi geçersizse (ör. ödeme dahil değilken ödemede hata beklemek)
+  // dosyanın tüm testlerini düşürmemek için yalnızca O test, açıklayıcı hatayla başarısız olur.
+  let adimPlani: AkisAdimi[] | undefined;
+  let beklenenSonucAciklamasi: string;
+  let gecersizVeriHatasi: Error | undefined;
+  try {
+    // Tüm senaryo (seçenekler, acenteye göre zorunlu alanlar, kimlik biçimleri, senaryoya
+    // özel kart...) TEK doğrulayıcıyla (scripts/dogrulama/senaryo-dogrulayici.mjs — sunucu ve
+    // dashboard formu da aynısını kullanır) doğrulanır; geçersizse yalnızca bu test düşer.
+    jetSeyahatSenaryosunuDogrulaVeyaFirlat(senaryo, ortakData, environment, `"${senaryo.baslik}" senaryosu`);
+    const cozulmus = beklenenSonucuCoz(senaryo, `"${senaryo.baslik}" senaryosu`);
+    adimPlani = adimPlaniniOlustur(cozulmus, urunData.kabulEdilenOdemeSonuclari);
+    beklenenSonucAciklamasi = beklenenSonucEtiketi(cozulmus);
+  } catch (hata) {
+    gecersizVeriHatasi = hata instanceof Error ? hata : new Error(String(hata));
+    beklenenSonucAciklamasi = 'Geçersiz';
+  }
+
+  test(senaryo.baslik, {
+    annotation: { type: 'beklenenSonuc', description: beklenenSonucAciklamasi }
+  }, async ({ page }, testInfo) => {
     test.setTimeout(180_000);
+    if (gecersizVeriHatasi || !adimPlani) {
+      throw gecersizVeriHatasi ?? new Error('Senaryonun adım planı oluşturulamadı.');
+    }
+    const plan = adimPlani;
 
     // Giriş yapılır ve senaryonun acente profili (belirtilmemişse "varsayilan") seçilir.
     await testBaslangiciniHazirla({
@@ -82,49 +124,71 @@ for (const senaryo of urunData.senaryolar) {
       await attachStepScreenshot(page, testInfo, '03 - JetSeyahat bilgileri tamamlandı');
     });
 
-    // Senaryo kasıtlı olarak bir iş kuralı hatası (örn. COVID Hayır + SEYAHAT PAKET)
-    // bekliyorsa, bu hata HANGİ ADIMDA bekleniyorsa (dashboard > "Senaryo Oluştur" >
-    // "Hatanın Beklendiği Adım") o adımda doğrulanır ve test burada başarıyla sonlanır;
-    // sonraki adımlara hiç geçilmez. Adım belirtilmemişse (eski senaryolarla uyum için)
-    // "primHesaplama" varsayılır.
-    const beklenenHataAdimi = senaryo.beklenenHataMesaji
-      ? senaryo.beklenenHataAdimi ?? 'primHesaplama'
-      : undefined;
-
-    if (beklenenHataAdimi === 'primHesaplama') {
-      await test.step('Prim hesaplanır ve beklenen iş kuralı mesajı doğrulanır', async () => {
-        await seyahat.primHesaplaVeHataDogrula(senaryo.beklenenHataMesaji!);
-        await attachStepScreenshot(page, testInfo, '04 - JetSeyahat beklenen hata sonucu');
-      });
-      return;
-    }
-
-    await test.step('Prim hesaplanır ve pozitif teklif doğrulanır', async () => {
-      await seyahat.primHesapla();
-      await attachStepScreenshot(page, testInfo, '04 - JetSeyahat prim sonucu');
-    });
-
+    // Kalan adımlar senaryonun beklenen sonucuna göre planlanmıştır (bkz. yukarıdaki
+    // adimPlaniniOlustur): plan hangi adımda bitiyorsa test orada başarıyla sonlanır.
     const odeme = new KrediKartiOdemePage(page);
+    for (const adim of plan) {
+      switch (adim.tip) {
+        case 'primHesaplaVeHataDogrula':
+          await test.step('Prim hesaplanır ve beklenen iş kuralı mesajı doğrulanır', async () => {
+            await seyahat.primHesaplaVeHataDogrula(adim.mesaj);
+            await attachStepScreenshot(page, testInfo, '04 - JetSeyahat beklenen hata sonucu');
+          });
+          break;
 
-    if (beklenenHataAdimi === 'policelestirme') {
-      await test.step('Poliçeleştirme açılır ve beklenen iş kuralı mesajı doğrulanır', async () => {
-        await odeme.policelestirVeBeklenenHatayiDogrula(senaryo.beklenenHataMesaji!);
-        await attachStepScreenshot(page, testInfo, '05 - JetSeyahat beklenen hata sonucu');
-      });
-      return;
+        case 'primHesapla':
+          // primHesapla, prim tutarının 0'dan büyük olduğunu (pozitif teklif) zaten doğrular.
+          await test.step(
+            adim.sonAdimMi ? 'Prim hesaplanır ve teklif oluşturulur' : 'Prim hesaplanır ve pozitif teklif doğrulanır',
+            async () => {
+              await seyahat.primHesapla();
+              await attachStepScreenshot(page, testInfo, '04 - JetSeyahat prim sonucu');
+            }
+          );
+          break;
+
+        case 'odemeAtlandi':
+          // Senaryo "ödeme adımı dahil değil" olarak tanımlandı — teklif oluştuğu için
+          // başarılıdır; ödemeye BİLİNÇLİ olarak geçilmez (raporda görünsün diye ayrı adım).
+          await test.step('Ödeme adımı senaryo gereği atlanır (teklif oluştu, test tamamlandı)', async () => {
+            testInfo.annotations.push({
+              type: 'bilgi',
+              description: 'Ödeme adımı bu senaryoya dahil değil; teklif oluştuğu için test başarılı sayıldı.'
+            });
+          });
+          break;
+
+        case 'policelestirVeHataDogrula':
+          await test.step('Poliçeleştirme açılır ve beklenen iş kuralı mesajı doğrulanır', async () => {
+            await odeme.policelestirVeBeklenenHatayiDogrula(adim.mesaj);
+            await attachStepScreenshot(page, testInfo, '05 - JetSeyahat beklenen hata sonucu');
+          });
+          break;
+
+        case 'policelestirVeKartGir':
+          await test.step('Poliçeleştirme açılır ve kart bilgileri girilir', async () => {
+            await odeme.policelestirVeKrediKartiFormunuAc();
+            // Senaryoya özel kart (dashboard > "Ödeme bilgileri") varsa o, yoksa ortak test kartı.
+            await odeme.kartBilgileriniGir(senaryo.krediKarti ?? ortakData.odeme.krediKarti);
+            await attachStepScreenshot(page, testInfo, '05 - JetSeyahat kart formu');
+          });
+          break;
+
+        case 'odemeyiTamamlaVeDogrula':
+          // Başarılı akışta ürünün kabul edilen ödeme sonuçlarından biri ("Hiçbir poliçe
+          // onaylanamadı." gibi), ödemede iş kuralı hatası bekleniyorsa senaryonun kendi
+          // mesajı aranır.
+          await test.step(
+            adim.isKuraliHatasiMi
+              ? 'Ödeme tamamlanır ve beklenen iş kuralı mesajı doğrulanır'
+              : 'Ödeme tamamlanır ve beklenen sonuç doğrulanır',
+            async () => {
+              await odeme.odemeyiTamamlaVeBeklenenHatayiDogrula(adim.kabulEdilenMesajlar);
+              await attachStepScreenshot(page, testInfo, '06 - JetSeyahat ödeme sonucu');
+            }
+          );
+          break;
+      }
     }
-
-    await test.step('Poliçeleştirme açılır ve kart bilgileri girilir', async () => {
-      await odeme.policelestirVeKrediKartiFormunuAc();
-      await odeme.kartBilgileriniGir(ortakData.odeme.krediKarti);
-      await attachStepScreenshot(page, testInfo, '05 - JetSeyahat kart formu');
-    });
-
-    // Ödeme tamamlanır: "Hiçbir poliçe onaylanamadı." mesajı beklenen (ve başarı sayılan)
-    // sonuçtur.
-    await test.step('Ödeme tamamlanır ve beklenen sonuç doğrulanır', async () => {
-      await odeme.odemeyiTamamlaVeBeklenenHatayiDogrula(urunData.kabulEdilenOdemeSonuclari);
-      await attachStepScreenshot(page, testInfo, '06 - JetSeyahat ödeme sonucu');
-    });
   });
 }

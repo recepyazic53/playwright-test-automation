@@ -1,0 +1,62 @@
+{
+  "jetKasko": {
+    "proposal2026Package1SigortaliEttirenAyni": {
+      "aktif": false,
+      "senaryoBasligi": "PROPOSAL/2026 MODEL / PACKAGE 1 / T.C SİGORTALI-ETTİREN AYNI",
+      "sigortaliTipi": "Ozel",
+      "plakaIlKodu": "",
+      "plakaNo": "",
+      "sigortaEttiren": "Sigortali",
+      "tescilBelgeSeriNo": "",
+      "markaKodu": "",
+      "aracMarkasi": {
+        "deger": "",
+        "metin": ""
+      },
+      "aracModeli": {
+        "deger": "",
+        "metin": ""
+      },
+      "yolcuSayisi": "",
+      "sinif": {
+        "deger": "",
+        "metin": ""
+      },
+      "kullanim": {
+        "deger": "",
+        "metin": ""
+      },
+      "baslangicTarihi": "",
+      "dainIMurtehin": "",
+      "lpg": "",
+      "digerAksesuarlar": "",
+      "immKademesi": {
+        "deger": "",
+        "metin": ""
+      },
+      "immManeviTazminat": "",
+      "ferdiKazaKoltuk": {
+        "deger": "",
+        "metin": ""
+      },
+      "tedaviMasraflari": "",
+      "hukuksalKoruma": {
+        "deger": "",
+        "metin": ""
+      },
+      "camMuafiyetiKaldirilsin": {
+        "deger": "",
+        "metin": ""
+      },
+      "meslek": {
+        "deger": "",
+        "metin": ""
+      },
+      "urun": {
+        "deger": "",
+        "metin": ""
+      },
+      "beklenenMesaj": ""
+    }
+  }
+}
