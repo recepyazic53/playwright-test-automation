@@ -5,7 +5,7 @@
 // - boş veritabanı yedeğin kasasını + medya anahtarını benimser (dosyalar olduğu gibi taşınır);
 //   dolu ve FARKLI kasa parolalı veritabanında dosyalar yerel medya anahtarıyla yeniden şifrelenir;
 // - sonucu içe aktarılmayan medya atlanır, kimlik üzerinden tekilleştirilir;
-// - 50 MB sahte video akışla yazılır/okunur (bellek sınırı), yedekte düz medya baytı yoktur;
+// - 200 MB sahte video akışla yazılır/okunur (bellek sınırı dosyadan küçük: tamamı belleğe alınsa aşılır), yedekte düz medya baytı yoktur;
 // - eski biçim (1) yedek dosyası hâlâ açılır ve içe aktarılır.
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync, truncateSync, copyFileSync } from 'node:fs';
@@ -279,12 +279,15 @@ test.describe('Yedekte medya dosyaları', () => {
     }
   });
 
-  test('büyük dosya (50 MB sahte video) akışla yazılır ve okunur; bellekte toplanmaz, hedefte birebir çözülür', async () => {
-    test.setTimeout(120_000);
+  test('büyük dosya (200 MB sahte video) akışla yazılır ve okunur; bellekte toplanmaz, hedefte birebir çözülür', async () => {
+    test.setTimeout(300_000);
     const k = geciciKlasor('medya-buyuk');
     try {
       const kaynak = await kaynakKur(join(k.yol, 'kaynak'));
-      const BOYUT = 50 * 1024 * 1024;
+      const BOYUT = 200 * 1024 * 1024;
+      // Sınır dosya boyutunun altında ama çöp toplayıcı payı bırakır: Windows'ta serbest kalan parçalar geç
+      // toplandığı için 50 MB'lık dosyada bile ~80 MB tepe ölçülüyordu (sızıntı değil — boyutla büyümez).
+      const BELLEK_SINIRI = 120 * 1024 * 1024;
       const ozet = createHash('sha256');
       // Kaynak videonun kendisi de akışla (1 MiB'lık parçalar) şifrelenir; test belleğinde tutulmaz.
       async function* sahteVideo(): AsyncGenerator<Buffer> {
@@ -315,7 +318,7 @@ test.describe('Yedekte medya dosyaları', () => {
       });
       expect(statSync(yedekYolu).size).toBeGreaterThan(BOYUT);
       expect(baytlar.length, 'medya baytı ilerlemesi parça parça bildirilir').toBeGreaterThan(10);
-      expect(tepe - once, 'dışa aktarmada video belleğe alınmamalı').toBeLessThan(40 * 1024 * 1024);
+      expect(tepe - once, 'dışa aktarmada video belleğe alınmamalı').toBeLessThan(BELLEK_SINIRI);
 
       const hedefVt = await veritabaniniHazirla(join(k.yol, 'hedef', 'platform.db'));
       await kasaOlustur(hedefVt, BASKA_PAROLA, { kdf: HIZLI_KDF });
@@ -327,7 +330,7 @@ test.describe('Yedekte medya dosyaları', () => {
       iceAktarmaUygula(hedefVt, hazirlik, { tumu: true });
       const sonuc = await iceAktarmaMedyasiniYaz(hedefVt, hazirlik, { ilerleme: () => { tepe2 = Math.max(tepe2, bellek()); } });
       expect(sonuc.yenidenSifrelenen).toBeGreaterThanOrEqual(3);
-      expect(tepe2 - once2, 'içe aktarmada video belleğe alınmamalı').toBeLessThan(40 * 1024 * 1024);
+      expect(tepe2 - once2, 'içe aktarmada video belleğe alınmamalı').toBeLessThan(BELLEK_SINIRI);
       hazirligiAt(hazirlik);
 
       const satir = medyaSatiri(hedefVt, 'buyuk-video');
