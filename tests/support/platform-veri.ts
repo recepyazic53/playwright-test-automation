@@ -291,6 +291,10 @@ export type PlatformModelVerisi = {
   senaryolar: PlatformModelSenaryosu[];
   /** Bağlam profilleri: tür → profil adı → alanlar (giriş tarifinin bağlam adımları bu alanlarla dolar). */
   baglamProfilleri: Record<string, Record<string, Record<string, unknown>>>;
+  /** Canlı ortam: ortak akışların "yalnızca test ortamı" adımları atlanır. */
+  canli?: boolean;
+  /** Kimlik alanlarının hazır profilleri: profil havuzu → profil adı → değerler (çözülmüş; yalnızca koşu belleğinde). */
+  kimlikProfilleri?: Record<string, Record<string, Record<string, unknown>>>;
 };
 
 const modelOnbellegi = new Map<EnvironmentName, PlatformModelVerisi | null>();

@@ -21,12 +21,15 @@ import {
 import { acikAnahtar, medyaAnahtariniHazirla, sifrele } from '../kasa.mjs';
 import { medyaSifrele } from '../medya.mjs';
 import { adliAlanlariDonustur, zarflariCoz } from '../aktarim/motor.mjs';
-import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari } from '../senaryolar/model-formu.mjs';
+import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
+
+/** Claude'un inceleme kuralları (düğme grupları; arayüz ekranlar.js > INCELEME_KURALLARI ve docs/sayfa-paketi.md ile aynı metin). */
+const INCELEME_KURALLARI = 'Seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere basıp sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, onaylayan ya da ödeme yapan bir düğmeye gelince dur ve bana sor (yalnızca TEST ortamında, onayımla basılır). Kart, şifre gibi bilgileri girme. Bir düğmenin ne yaptığından emin değilsen basmadan önce sor.';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, unknown>} Nesne */
@@ -93,6 +96,8 @@ function altModelKaynagi(/** @type {Veritabani} */ vt, /** @type {string} */ pro
 
 /** Modeli ortak doğrulayıcıdan geçirir; hatalıysa EkranDogrulamaHatasi. */
 export function modeliDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {unknown} */ model, /** @type {string} */ ad) {
+  // Varsayılan akışın kopyası model.adimlar ile eşitlenir (bulgular / adres değişikliği model.adimlar'ı değiştirir).
+  akislariEsitle(model);
   const kaynak = altModelKaynagi(vt, projeId);
   try {
     return ekranModeliniDogrula(ad, model, (dosya) => {
@@ -197,7 +202,7 @@ export function ekranListesi(vt, projeId) {
     const bekleyen = analiz.bekleyen;
     return {
       id: e.id, anahtar: e.anahtar, ad: e.ad, aciklama: e.aciklama,
-      modelTuru: model ? (model.tur === 'altModel' ? 'altModel' : 'ekran') : null, modelSurumu: m ? m.surum : null,
+      modelTuru: model ? (['altModel', 'ortakAkis'].includes(model.tur) ? model.tur : 'ekran') : null, modelSurumu: m ? m.surum : null,
       modelTarihi: m ? m.olusturulma : null, urlYolu: model && typeof model.ekranUrl === 'string' ? model.ekranUrl : null,
       adimSayisi: env ? env.adimlar.size : 0, alanSayisi: env ? env.alanlar.size : model && model.tur === 'altModel' ? modelEnvanteri({ adimlar: [{ id: 'x', bolumler: model.bolumler }] }).alanlar.size : 0,
       senaryoSayisi: sayilar.get(e.id) ?? 0,
@@ -243,8 +248,10 @@ export function ekranDetayi(vt, projeId, ekranId) {
   return {
     ekran: { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad, aciklama: ekran.aciklama, guncellenme: ekran.guncellenme, durum: ekran.durum, sira: ekran.sira },
     surum: son ? son.surum : null,
-    modelTuru: model ? (model.tur === 'altModel' ? 'altModel' : 'ekran') : null,
+    modelTuru: model ? (['altModel', 'ortakAkis'].includes(model.tur) ? model.tur : 'ekran') : null,
     agac: model && model.tur !== 'altModel' ? modelAgaci(model, mb ? mb.altModeller : {}) : null,
+    // Ekranın "Akış" sekmesi (akış diyagramı modelden çizilir; model değer içermez).
+    model: model && model.tur !== 'altModel' ? model : null,
     altModel: model && model.tur === 'altModel' ? { ad: model.ad, aciklama: model.aciklama, kullananlar: model.kullananlar, agac: modelAgaci({ ...model, adimlar: [{ id: 'bolumler', sira: 1, baslik: String(model.ad), bolumler: model.bolumler }] }) } : null,
     gecmis: gecmis.reverse(),
     senaryoSayisi,
@@ -824,7 +831,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
     tur: 'nobetci-analiz-dosyasi', surum: 1, olusturulma: zaman.toISOString(),
     istek: { tur, aciklama: DOSYA_TURLERI[tur], baglamProfilleri: secilen ?? analiz.sonBaglamProfilleri },
     talimat: tur === 'tekrar-analiz'
-      ? 'Sayfayı YALNIZCA OKUYARAK (form göndermeden, kayıt oluşturmadan) listelenen bağlam profilleriyle yeniden incele ve docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi üret. Paket gizli/kişisel veri içermemeli.'
+      ? `Sayfayı listelenen bağlam profilleriyle yeniden incele ve docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi üret. ${INCELEME_KURALLARI} Paket gizli/kişisel veri içermemeli.`
       : tur === 'eksik-kombinasyon'
         ? 'Modeldeki seçenek/koşul kombinasyonlarını mevcut senaryolarla karşılaştır; kapsanmayan anlamlı kombinasyonlar için docs/sayfa-paketi.md > senaryoOnerileri biçiminde öneriler üret (yalnızca öneri; gizli değer yok).'
         : 'Bulguları ve etkilerini değerlendir: hangileri gerçek ekran değişikliği, hangileri inceleme hatası olabilir; kabul/red ve senaryo güncellemesi için öneri yaz.',
@@ -847,7 +854,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const goreli = relative(girdi.projeKoku, yol);
   const gosterilen = goreli.startsWith('..') ? yol : goreli.split(sep).join('/');
   const cumle = tur === 'tekrar-analiz'
-    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yalnızca okuyarak yeniden incele: ${(secilen ?? []).join(', ')}. docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi JSON dosyası üret.`
+    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI}`
     : tur === 'eksik-kombinasyon'
       ? `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının modelini ve mevcut senaryolarını karşılaştırıp eksik kombinasyonlar için docs/sayfa-paketi.md biçiminde senaryo önerileri üret.`
       : `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının bulgularını, etkilerini ve senaryo özetlerini yorumla; kabul/red ve senaryo güncellemesi için önerilerini yaz.`;

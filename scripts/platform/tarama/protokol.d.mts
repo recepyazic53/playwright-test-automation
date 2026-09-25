@@ -1,6 +1,7 @@
 // scripts/platform/tarama/protokol.mjs için tip bildirimi + sunucu ↔ tarama alt süreci mesajları.
 import type { GirisTarifi } from '../giris/tarif.mjs';
-import type { TaramaEnvanteri } from './paket-olusturucu.mjs';
+import type { KayitEnvanteri, TaramaEnvanteri } from './paket-olusturucu.mjs';
+import type { AkisEnvanteri } from './akis-tasarimi.mjs';
 
 export declare const TARAMA_ADRES_DEGISKENI: string;
 export declare const TARAMA_TOKEN_DEGISKENI: string;
@@ -13,6 +14,13 @@ export declare const TARAMA_TOKEN_BASLIGI: string;
 export declare const VARSAYILAN_ZAMAN_ASIMI_SN: number;
 export declare const SONUC_GOVDE_SINIRI: number;
 export declare const OLAY_GOVDE_SINIRI: number;
+export declare const KAYIT_ZAMAN_ASIMI_DEGISKENI: string;
+export declare const VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN: number;
+export declare const TARAMA_GORUNUR_DEGISKENI: string;
+export declare const KAYIT_BASSIZ_DEGISKENI: string;
+export declare const KAYIT_CDP_PORTU_DEGISKENI: string;
+export declare const KAYIT_KOPRUSU: string;
+export declare const KAYIT_PANELI_KIMLIGI: string;
 
 /** Giriş kimliği (şifresi çözülmüş; YALNIZCA bellekte — giris-motoru.ts > GirisKimligi ile aynı biçim). */
 export type TaramaKimligi = {
@@ -25,6 +33,8 @@ export type TaramaKimligi = {
 
 /** Alt sürecin sunucudan BİR KEZ aldığı girdi (gizli değer içerir; diske yazılmaz). */
 export type TaramaGirdisi = {
+  /** 'tarama' (salt okuma, otomatik) ya da 'kayit' (kullanıcı akışı görünür tarayıcıda yürütür; en fazla bir profil). */
+  kip?: 'tarama' | 'kayit';
   tabanUrl: string;
   /** Hedefin tam adresi (ortamın kökeninde). */
   hedefAdres: string;
@@ -39,7 +49,7 @@ export type TaramaGirdisi = {
   zamanAsimiMs: number;
 };
 
-export type TaramaAdimi = 'hazirlik' | 'giris' | 'profiller' | 'paket';
+export type TaramaAdimi = 'hazirlik' | 'giris' | 'profiller' | 'kayit' | 'paket';
 export type AdimDurumu = 'bekliyor' | 'suruyor' | 'tamam' | 'hata' | 'atlandi';
 export type ProfilAdimi = 'baglam' | 'tarama' | 'kesif';
 
@@ -51,8 +61,8 @@ export type TaramaOlayi =
 
 export type TaramaHataKodu =
   | 'YASAKLI_ADRES' | 'SITE_ERISILEMEDI' | 'KIMLIK_HATALI' | 'IKI_ASAMALI_HATALI' | 'KOD_GEREKLI' | 'CAPTCHA' | 'ALAN_BULUNAMADI'
-  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'TARIF_GECERSIZ' | 'OTURUM_GECERSIZ' | 'ALAN_YOK' | 'SUREC' | 'BEKLENMEYEN';
+  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'TARIF_GECERSIZ' | 'OTURUM_GECERSIZ' | 'ALAN_YOK' | 'SUREC' | 'IPTAL' | 'BEKLENMEYEN';
 
 export type TaramaSonucu =
-  | { basarili: true; envanter: TaramaEnvanteri }
+  | { basarili: true; envanter: TaramaEnvanteri | KayitEnvanteri | AkisEnvanteri }
   | { basarili: false; hata: { kod: TaramaHataKodu; mesaj: string } };

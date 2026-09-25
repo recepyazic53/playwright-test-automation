@@ -176,7 +176,9 @@ export type AdimAksiyonu = {
 };
 
 /** Adımın başarı göstergesi (sürüm 2): metin (secici verilirse o öğede), eleman (görünür), url (desen). */
-export type BasariGostergesi = { tur: (typeof BASARI_GOSTERGESI_TURLERI)[number]; deger: string; secici?: string };
+export type TekBasariGostergesi = { tur: (typeof BASARI_GOSTERGESI_TURLERI)[number]; deger: string; secici?: string };
+/** "veya": seçeneklerden herhangi biri görünürse adım başarılı (2–5 seçenek). */
+export type BasariGostergesi = TekBasariGostergesi | { tur: 'veya'; secenekler: TekBasariGostergesi[] };
 
 /** Adımın koşu tanımı (sürüm 2) — model koşucusu kullanır (tests/support/model-kosucu.ts). */
 export type AdimKosuTanimi = {

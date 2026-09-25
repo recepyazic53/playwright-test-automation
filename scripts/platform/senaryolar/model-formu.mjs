@@ -40,6 +40,188 @@ function secenekCevir(s) {
 }
 const secenekListesi = (liste) => (Array.isArray(liste) ? liste.map(secenekCevir) : null);
 
+// ---- Akışlar (ekran başına birden çok akış) -------------------------------------------------
+// model.akislar: [{ id, ad, varsayilan?: true, adimlar }]. Varsayılan akışın adımları model.adimlar'dır (ikisi aynı tutulur;
+// akış bilmeyen okuyucular — kodlu testler, eski modeller — model.adimlar'ı okumaya devam eder). akislar yoksa tek, örtük
+// "Ana akış" vardır. Senaryo akışını içeriğinde tutar (icerik.akis); yoksa ya da akış silinmişse varsayılan akış.
+
+/** Örtük (akislar yokken) tek akışın kimliği. */
+export const ANA_AKIS_ID = 'ana';
+
+// ---- Ortak akışlar ---------------------------------------------------------------------------
+// Ekran akışındaki { ortakAkis: { dosya } } adımı, ortak akışın ("tur": "ortakAkis", ör. ödeme) adımlarıyla yer değiştirir.
+// Form, doğrulama ve koşu bu AÇILMIŞ (düz) modeli görür. Açılan adımın kimliği "<başvuru adımı>_<ortak adım>"; başvuru
+// adımının görünürlüğü (ör. "ödeme dahil") her açılan adıma eklenir (ortak adımın kendi koşuluyla "ve"). Ortak akışın
+// koşulları çakışmasın diye "<ortak akış id>_<ad>" adıyla taşınır. Ortak akış "yalnizTestOrtami" ise açılan adımlar
+// "yalnizTest" işaretlenir (koşucu canlı ortamda atlar).
+
+/**
+ * @param {any} model ekran modeli (bir akışın) @param {Record<string, any>} ortakAkislar dosya → ortak akış modeli
+ * @returns {{ model: any; eksikler: string[] }} açılmış model (girdi değişmez) ve bulunamayan ortak akış dosyaları
+ */
+export function ortakAkislariAc(model, ortakAkislar) {
+  const adimlar = nesneMi(model) && Array.isArray(model.adimlar) ? model.adimlar : [];
+  if (!adimlar.some((a) => nesneMi(a) && nesneMi(a.ortakAkis))) return { model, eksikler: [] };
+  const yeni = kopya(model);
+  yeni.kosullar = nesneMi(yeni.kosullar) ? yeni.kosullar : {};
+  const sdAlanlar = nesneMi(yeni.senaryoDuzeyi) && Array.isArray(yeni.senaryoDuzeyi.alanlar) ? yeni.senaryoDuzeyi.alanlar : [];
+  /** @type {string[]} */
+  const eksikler = [];
+  /** @type {any[]} */
+  const sonuc = [];
+  /** Görünürlüğün ifadesi (adlandırılmış koşul çözülür). @param {any} g @param {Record<string, any>} kosullar */
+  const ifadesi = (g, kosullar) => (!nesneMi(g) ? null : typeof g.kosul === 'string' ? (nesneMi(kosullar[g.kosul]) ? kosullar[g.kosul].ifade : null) : g.ifade ?? null);
+  for (const adim of yeni.adimlar) {
+    if (!nesneMi(adim) || !nesneMi(adim.ortakAkis)) { sonuc.push(adim); continue; }
+    const ortak = ortakAkislar ? ortakAkislar[adim.ortakAkis.dosya] : undefined;
+    if (!nesneMi(ortak) || ortak.tur !== 'ortakAkis' || !Array.isArray(ortak.adimlar)) {
+      // Bulunamayan ortak akış: yer tutucu adım kalır (koşu planı açık hatayla durur; sessizce atlanmaz).
+      eksikler.push(String(adim.ortakAkis.dosya));
+      sonuc.push({ id: adim.id, sira: 0, baslik: adim.baslik || 'Ortak akış', eksikOrtakAkis: String(adim.ortakAkis.dosya), ...(adim.gorunurluk ? { gorunurluk: adim.gorunurluk } : {}), bolumler: [] });
+      continue;
+    }
+    const on = String(ortak.id || 'ortak');
+    // Ortak akışın koşulları ön ekle taşınır; açılan adım/alanlardaki "kosul" başvuruları yeniden adlandırılır.
+    const adlar = new Map(Object.keys(nesneMi(ortak.kosullar) ? ortak.kosullar : {}).map((ad) => [ad, `${on}_${ad}`]));
+    for (const [ad, yeniAd] of adlar) yeni.kosullar[yeniAd] = kopya(ortak.kosullar[ad]);
+    const yenidenAdlandir = (/** @type {any} */ d) => {
+      if (Array.isArray(d)) { d.forEach(yenidenAdlandir); return; }
+      if (!nesneMi(d)) return;
+      for (const [k, v] of Object.entries(d)) {
+        if (k === 'kosul' && typeof v === 'string' && adlar.has(v)) d[k] = adlar.get(v);
+        else yenidenAdlandir(v);
+      }
+    };
+    const basvuruIfadesi = ifadesi(adim.gorunurluk, yeni.kosullar);
+    for (const a of ortak.adimlar) {
+      if (!nesneMi(a)) continue;
+      const kopyaAdim = kopya(a);
+      yenidenAdlandir(kopyaAdim);
+      kopyaAdim.id = `${adim.id}_${a.id}`;
+      if (basvuruIfadesi) {
+        const kendi = ifadesi(kopyaAdim.gorunurluk, yeni.kosullar);
+        kopyaAdim.gorunurluk = { ifade: kendi ? { ve: [kopya(basvuruIfadesi), kendi] } : kopya(basvuruIfadesi) };
+      }
+      if (ortak.yalnizTestOrtami === true) kopyaAdim.yalnizTest = true;
+      kopyaAdim.ortakAkisAdi = String(ortak.ad || on);
+      sonuc.push(kopyaAdim);
+    }
+    // Ortak akışın senaryo düzeyi alanları (ör. kart profili) eklenir (aynı kimlikli alan varsa ekranınki geçerli).
+    const sd = nesneMi(ortak.senaryoDuzeyi) && Array.isArray(ortak.senaryoDuzeyi.alanlar) ? ortak.senaryoDuzeyi.alanlar : [];
+    for (const alan of sd) {
+      if (!nesneMi(alan) || sdAlanlar.some((x) => nesneMi(x) && x.id === alan.id)) continue;
+      const k = kopya(alan);
+      yenidenAdlandir(k);
+      sdAlanlar.push(k);
+    }
+  }
+  sonuc.forEach((a, i) => { if (nesneMi(a)) a.sira = i + 1; });
+  yeni.adimlar = sonuc;
+  // Ortak akışın kabul edilen uyarıları olan adımları, ekranın "Beklenen sonuç" alanında hata adımı olarak seçilebilir.
+  const bsAlani = sdAlanlar.find((a) => nesneMi(a) && a.tip === 'birlesim' && a.yapilandirma === 'senaryo');
+  const uyarili = sonuc.filter((a) => nesneMi(a) && typeof a.ortakAkisAdi === 'string' && nesneMi(a.kosu) && Array.isArray(a.kosu.uyarilar) && a.kosu.uyarilar.length);
+  if (bsAlani && uyarili.length) {
+    for (const v of Array.isArray(bsAlani.varyantlar) ? bsAlani.varyantlar : []) {
+      if (!nesneMi(v) || !nesneMi(v.alanlar)) continue;
+      const adimAdi = Object.keys(v.alanlar).find((ad) => nesneMi(v.alanlar[ad]) && Array.isArray(v.alanlar[ad].secenekler));
+      if (!adimAdi) continue;
+      const liste = v.alanlar[adimAdi].secenekler;
+      for (const a of uyarili) if (!liste.some((s) => nesneMi(s) && s.deger === a.id)) liste.push({ deger: a.id, metin: `${a.ortakAkisAdi}: ${a.baslik || a.id}` });
+    }
+  }
+  yeni.senaryoDuzeyi = { ...(nesneMi(yeni.senaryoDuzeyi) ? yeni.senaryoDuzeyi : {}), alanlar: sdAlanlar };
+  return { model: yeni, eksikler };
+}
+
+/** Ekranın akışları: [{ id, ad, varsayilan, adimSayisi }] (varsayılan önce). */
+export function akisListesi(model) {
+  if (!nesneMi(model)) return [];
+  if (!Array.isArray(model.akislar) || !model.akislar.length) {
+    return [{ id: ANA_AKIS_ID, ad: 'Ana akış', varsayilan: true, adimSayisi: Array.isArray(model.adimlar) ? model.adimlar.length : 0 }];
+  }
+  const liste = model.akislar.filter(nesneMi).map((a) => ({
+    id: String(a.id), ad: String(a.ad || a.id), varsayilan: a.varsayilan === true, adimSayisi: Array.isArray(a.adimlar) ? a.adimlar.length : 0
+  }));
+  return [...liste.filter((a) => a.varsayilan), ...liste.filter((a) => !a.varsayilan)];
+}
+
+/** Varsayılan akışın kimliği. */
+export function varsayilanAkisId(model) {
+  const liste = akisListesi(model);
+  return liste.length ? liste[0].id : ANA_AKIS_ID;
+}
+
+/**
+ * Seçilen akışın modeli: model, adımları o akışın adımlarıyla (akislar alanı olmadan). O akışta olmayan adımlara bağlı iş
+ * kuralları ve olmayan alanlara bağlı bağlam görünürlükleri çıkarılır. Bilinmeyen / boş akış kimliği: varsayılan akış.
+ * Akış bilmeyen okuyucular (form şeması, doğrulayıcı, koşu planı, diyagram) bu modelle aynen çalışır.
+ */
+export function akisModeli(model, akisId) {
+  if (!nesneMi(model) || !Array.isArray(model.akislar) || !model.akislar.length) return model;
+  const akislar = model.akislar.filter(nesneMi);
+  const akis = (akisId && akislar.find((a) => a.id === akisId)) || akislar.find((a) => a.varsayilan === true) || akislar[0];
+  const kopyaModel = { ...model };
+  delete kopyaModel.akislar;
+  const adimlar = Array.isArray(akis && akis.adimlar) ? akis.adimlar : [];
+  const adimIdleri = new Set(adimlar.map((a) => nesneMi(a) ? a.id : null));
+  const alanIdleri = new Set();
+  const topla = (liste) => { for (const a of Array.isArray(liste) ? liste : []) if (nesneMi(a) && typeof a.id === 'string') alanIdleri.add(a.id); };
+  for (const adim of adimlar) for (const b of nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []) topla(nesneMi(b) ? b.alanlar : null);
+  topla(nesneMi(model.senaryoDuzeyi) ? model.senaryoDuzeyi.alanlar : null);
+  const sonuc = { ...kopyaModel, adimlar };
+  if (Array.isArray(model.isKurallari)) sonuc.isKurallari = model.isKurallari.filter((k) => !nesneMi(k) || typeof k.adim !== 'string' || adimIdleri.has(k.adim));
+  if (nesneMi(model.baglamGorunurlugu) && nesneMi(model.baglamGorunurlugu.alanlar)) {
+    sonuc.baglamGorunurlugu = {
+      ...model.baglamGorunurlugu,
+      alanlar: Object.fromEntries(Object.entries(model.baglamGorunurlugu.alanlar).filter(([id]) => alanIdleri.has(id)))
+    };
+  }
+  if (nesneMi(model.urunDuzeyi)) {
+    sonuc.urunDuzeyi = Object.fromEntries(Object.entries(model.urunDuzeyi).map(([ad, d]) => (
+      nesneMi(d) && typeof d.kullanan === 'string' && !alanIdleri.has(d.kullanan) ? [ad, Object.fromEntries(Object.entries(d).filter(([k]) => k !== 'kullanan'))] : [ad, d]
+    )));
+  }
+  // Başka akışların adım kapsamı ayarları (senaryoAyari) bu akışın senaryo düzeyinde görünmez.
+  const kosulIfadesi = (g) => (nesneMi(g) ? (typeof g.kosul === 'string' ? (nesneMi(model.kosullar) && nesneMi(model.kosullar[g.kosul]) ? model.kosullar[g.kosul].ifade : null) : g.ifade) : null);
+  const ayarlar = (ifade, kume) => {
+    if (!nesneMi(ifade)) return kume;
+    if (typeof ifade.senaryoAyari === 'string') kume.add(ifade.senaryoAyari);
+    for (const alt of [...(Array.isArray(ifade.ve) ? ifade.ve : []), ...(Array.isArray(ifade.veya) ? ifade.veya : []), ...(ifade.degil ? [ifade.degil] : [])]) ayarlar(alt, kume);
+    return kume;
+  };
+  const tumAyarlar = new Set();
+  for (const k of nesneMi(model.kosullar) ? Object.values(model.kosullar) : []) ayarlar(nesneMi(k) ? k.ifade : null, tumAyarlar);
+  const buAkis = new Set();
+  for (const adim of adimlar) {
+    if (!nesneMi(adim)) continue;
+    ayarlar(kosulIfadesi(adim.gorunurluk), buAkis);
+    for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+      if (!nesneMi(b)) continue;
+      ayarlar(kosulIfadesi(b.gorunurluk), buAkis);
+      for (const a of Array.isArray(b.alanlar) ? b.alanlar : []) if (nesneMi(a)) ayarlar(kosulIfadesi(a.gorunurluk), buAkis);
+    }
+  }
+  if (nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar)) {
+    sonuc.senaryoDuzeyi = { ...model.senaryoDuzeyi, alanlar: model.senaryoDuzeyi.alanlar.filter((a) => !nesneMi(a) || !tumAyarlar.has(a.id) || buAkis.has(a.id)) };
+  }
+  // Bu akışta olmayan ayarlara bağlı koşullar (başka akışın isteğe bağlı adımları) da çıkarılır.
+  if (nesneMi(model.kosullar)) {
+    sonuc.kosullar = Object.fromEntries(Object.entries(model.kosullar).filter(([, k]) => ![...ayarlar(nesneMi(k) ? k.ifade : null, new Set())].some((a) => !buAkis.has(a))));
+  }
+  return sonuc;
+}
+
+/**
+ * Varsayılan akışın adımlarını model.adimlar ile eşitler (model.adimlar'ı değiştiren eski yazıcılar — tekrar analiz,
+ * bulgular, adres değişikliği — sonrasında; kaynak model.adimlar'dır). Modeli yerinde değiştirir ve döner.
+ */
+export function akislariEsitle(model) {
+  if (nesneMi(model) && Array.isArray(model.akislar)) {
+    model.akislar = model.akislar.map((a) => (nesneMi(a) && a.varsayilan === true ? { ...a, adimlar: model.adimlar } : a));
+  }
+  return model;
+}
+
 /** Türkçe duyarsız arama için sadeleştirme ("İLK ATEŞ" = "ilk ates"). */
 export function aramaIcinSadelestir(metin) {
   return String(metin == null ? '' : metin)
@@ -92,6 +274,7 @@ function alanCevir(alan, konum, altModeller) {
   const ortak = {
     id: alan.id, etiket: etiketi(alan), zorunlu: alan.zorunlu === true ? true : alan.zorunlu === false ? false : null,
     adimId: konum.adimId, bolumId: konum.bolumId, gorunurlukVar: Boolean(alan.gorunurluk),
+    ...(alan.mutlakaGorunmeli === true ? { akistaZorunlu: true } : {}),
     ...(alan.hassas === true ? { hassas: true } : {})
   };
   const anahtarlar = senaryoAnahtarlari(alan);
@@ -228,7 +411,8 @@ export function formSemasiOlustur(model, altModeller = {}) {
       adimEtiketi: adimTanimi ? adimTanimi[1].etiket || adimTanimi[0] : null,
       adimlar: adimTanimi ? secenekListesi(adimTanimi[1].secenekler) : [],
       mesajAnahtari: mesajTanimi ? mesajTanimi[0] : null,
-      mesajEtiketi: mesajTanimi ? mesajTanimi[1].etiket || mesajTanimi[0] : null
+      mesajEtiketi: mesajTanimi ? mesajTanimi[1].etiket || mesajTanimi[0] : null,
+      ...akisMesajlari(model)
     };
   }
   const baslikAlani = senaryoDuzeyi.find((a) => a.id === 'baslik') || senaryoDuzeyi.find((a) => senaryoAnahtarlari(a)[0] === 'baslik');
@@ -348,6 +532,9 @@ export function formDegerleriniKur(sema, veri = {}) {
     d[`${bs.anahtar}.tip`] = typeof kayit.tip === 'string' ? kayit.tip : bs.basariTipi;
     if (bs.adimAnahtari) d[`${bs.anahtar}.adim`] = typeof kayit[bs.adimAnahtari] === 'string' ? kayit[bs.adimAnahtari] : '';
     if (bs.mesajAnahtari) d[`${bs.anahtar}.mesaj`] = typeof kayit[bs.mesajAnahtari] === 'string' ? kayit[bs.mesajAnahtari] : '';
+    // Akıştaki uyarılardan seçilenler (birden çoksa VEYA).
+    const liste = Array.isArray(kayit.mesajlar) ? kayit.mesajlar.filter((m) => typeof m === 'string' && m) : [];
+    d[`${bs.anahtar}.mesajlar`] = liste.length ? liste : d[`${bs.anahtar}.mesaj`] ? [d[`${bs.anahtar}.mesaj`]] : [];
   }
   return d;
 }
@@ -432,6 +619,8 @@ function taslakOlustur(sema, d, onceki, gorunurluk) {
       const nesne = { tip };
       if (bs.adimAnahtari) nesne[bs.adimAnahtari] = metin(d[`${bs.anahtar}.adim`]);
       if (bs.mesajAnahtari) nesne[bs.mesajAnahtari] = metin(d[`${bs.anahtar}.mesaj`]);
+      const liste = Array.isArray(d[`${bs.anahtar}.mesajlar`]) ? d[`${bs.anahtar}.mesajlar`].filter((m) => typeof m === 'string' && m) : [];
+      if (liste.length > 1) nesne.mesajlar = liste;
       sonuc[bs.anahtar] = nesne;
     }
   }
@@ -483,6 +672,24 @@ export function hatalariDagit(bulgular, sema) {
     else genel.push(b.alan ? `${b.alan}: ${b.mesaj}` : b.mesaj);
   }
   return { alanlar, genel };
+}
+
+/**
+ * Akışın beklenen mesajları (senaryo formu için): adımlarda kabul edilen uyarılar (kosu.uyarilar; senaryo "uyarı bekleniyor"
+ * derken bunlardan seçer) ve son adımın başarı mesajları (bilgi: "Bu akışta başarı: A veya B").
+ * @param {any} model @returns {{ uyarilar: Array<{ adim: string; adimBasligi: string; metin: string }>; basariMesajlari: string[] }}
+ */
+export function akisMesajlari(model) {
+  const adimlar = (Array.isArray(model.adimlar) ? model.adimlar : []).filter(nesneMi).slice().sort((a, b) => (a.sira || 0) - (b.sira || 0));
+  const uyarilar = adimlar.flatMap((a) => (nesneMi(a.kosu) && Array.isArray(a.kosu.uyarilar) ? a.kosu.uyarilar : [])
+    .filter((u) => nesneMi(u) && typeof u.metin === 'string' && u.metin)
+    .map((u) => ({ adim: String(a.id), adimBasligi: String(a.baslik || a.id), metin: String(u.metin) })));
+  const son = [...adimlar].reverse().find((a) => nesneMi(a.kosu) && nesneMi(a.kosu.basariGostergesi));
+  const g = son ? son.kosu.basariGostergesi : null;
+  const secenekler = !g ? [] : g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
+  const basariMesajlari = secenekler.filter((s) => nesneMi(s) && typeof s.deger === 'string' && s.deger)
+    .map((s) => (s.tur === 'metin' ? s.deger : s.tur === 'desen' ? `${s.secici || 'sayfa'} /${s.deger}/` : s.tur === 'url' ? `adres /${s.deger}/` : `${s.deger} görünür`));
+  return { uyarilar, basariMesajlari };
 }
 
 /**

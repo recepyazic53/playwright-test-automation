@@ -113,7 +113,7 @@ test.describe('Koşu planı (saf)', () => {
 
   test('iş kuralı hatası: hesaplama adımında durur; isteğe bağlı adım kapsam dışı', () => {
     const p = plan(1);
-    expect(p.beklenen).toEqual({ tur: 'hata', adim: 'hesaplama', mesaj: 'türkiye kapsamında "taksitli" ödeme seçilemez' });
+    expect(p.beklenen).toEqual({ tur: 'hata', adim: 'hesaplama', mesaj: 'türkiye kapsamında "taksitli" ödeme seçilemez', mesajlar: ['türkiye kapsamında "taksitli" ödeme seçilemez'] });
     expect(dahil(p)).toEqual(['bilgiler', 'hesaplama']);
     expect(p.baglamProfili).toBe('Merkez');
   });

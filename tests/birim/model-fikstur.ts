@@ -8,7 +8,11 @@
 //   /basvuru/     form: ürün (select), ad soyad, başlangıç tarihi, kapsam (ok düğmeli özel seçici; uçlarda
 //                 durur), ödeme (radyo), kampanya (onay kutusu), İNDİRİM ORANI (yalnızca "Yetkili" şubede S02
 //                 görünür), belge (dosya) · "Hesapla" → prim ya da iş kuralı uyarısı · isteğe bağlı "Onayla"
-// Uygulama gelen her hesaplama/onay isteğini kaydeder (testler alanların gerçekten gönderildiğini doğrular).
+//   /acik-teklif/ GİRİŞ GEREKTİRMEYEN iki adımlı form (akış kaydı testleri): ad soyad, müşteri tipi (radyo: Bireysel →
+//                 TC kimlik no, Kurumsal → Vergi kimlik no görünür) ve "Ek sürücü ekle" düğmesiyle AÇILAN ek sürücü alanı ·
+//                 "Devam" → teminat (select; "Geniş" seçilince "Cam kırılması" kutusu görünür) · "Teklifi kaydet" → "Teklif
+//                 oluşturuldu. No: TK-<n>"
+// Uygulama gelen her hesaplama/onay/teklif isteğini kaydeder (testler alanların gerçekten gönderildiğini doğrular).
 import { totpKoduUret } from '../support/totp';
 import type { FiksturIstegi, FiksturUygulamasi, FiksturYaniti } from './giris-fikstur';
 
@@ -38,6 +42,8 @@ const yonlendir = (adres: string, basliklar: Record<string, string> = {}): Fikst
 export class OrnekBasvuruUygulamasi {
   readonly hesaplamalar: Hesaplama[] = [];
   readonly onaylar: string[] = [];
+  /** /acik-teklif/ kayıtları (girişsiz sayfa). */
+  readonly acikTeklifler: Array<Record<string, unknown>> = [];
   readonly olaylar: string[] = [];
   private noSayaci = 1000;
   private readonly ayar: { totp: boolean };
@@ -78,6 +84,12 @@ export class OrnekBasvuruUygulamasi {
       return html('Doğrulama', `<form method="post" action="/dogrulama"><label>Doğrulama kodu
         <input id="kod" name="kod" inputmode="numeric" autocomplete="one-time-code"></label><button id="dogrula" type="submit">Doğrula</button></form>`);
     }
+    // Girişsiz sayfa (oturum gerekmez).
+    if (yol === '/acik-teklif' || yol === '/acik-teklif/') return this.acikTeklifSayfasi();
+    if (yol === '/acik-teklif/kaydet' && i.yontem === 'POST') {
+      this.acikTeklifler.push(JSON.parse(i.govde || '{}') as Record<string, unknown>);
+      return json({ no: `TK-${++this.noSayaci}` });
+    }
     if (!oturum) return yonlendir('/giris');
     if (yol === '/panel') {
       return html('Panel', `<nav><a href="/sube">Şube değiştir</a> · <a href="/basvuru/">Başvuru</a></nav>
@@ -110,6 +122,48 @@ export class OrnekBasvuruUygulamasi {
     }
     return { durum: 404, tur: 'text/plain', govde: 'yok' };
   };
+
+  private acikTeklifSayfasi(): FiksturYaniti {
+    return html('Açık teklif', `<h1>Açık teklif</h1>
+      <section id="adim-musteri">
+        <label>Ad Soyad <input id="musteriAd"></label>
+        <fieldset><legend>Müşteri tipi</legend>
+          <label><input type="radio" name="tip" value="bireysel" checked> Bireysel</label>
+          <label><input type="radio" name="tip" value="kurumsal"> Kurumsal</label></fieldset>
+        <div id="bireyselAlanlar"><label>TC kimlik no <input id="tcKimlik"></label></div>
+        <div id="kurumsalAlanlar" hidden><label>Vergi kimlik no <input id="vergiNo"></label></div>
+        <button id="ekSurucuEkle" type="button">Ek sürücü ekle</button>
+        <div id="ekSurucu" hidden><label>Ek sürücü adı <input id="ekSurucuAd"></label></div>
+        <button id="devam" type="button">Devam</button>
+      </section>
+      <section id="adim-teminat" hidden>
+        <label>Teminat <select id="teminat"><option value="">Seçiniz</option><option value="dar">Dar</option><option value="genis">Geniş</option></select></label>
+        <div id="ekTeminatKutu" hidden><label><input type="checkbox" id="ekTeminat"> Cam kırılması</label></div>
+        <button id="kaydet" type="button">Teklifi kaydet</button>
+        <p id="teklif-sonuc"></p>
+      </section>
+      <script>
+        document.getElementById('ekSurucuEkle').onclick = () => { document.getElementById('ekSurucu').hidden = false; };
+        document.querySelectorAll('input[name=tip]').forEach((r) => r.addEventListener('change', () => {
+          const kurumsal = document.querySelector('input[name=tip]:checked').value === 'kurumsal';
+          document.getElementById('bireyselAlanlar').hidden = kurumsal; document.getElementById('kurumsalAlanlar').hidden = !kurumsal;
+        }));
+        document.getElementById('teminat').onchange = () => { document.getElementById('ekTeminatKutu').hidden = document.getElementById('teminat').value !== 'genis'; };
+        document.getElementById('devam').onclick = () => {
+          document.getElementById('adim-musteri').hidden = true; document.getElementById('adim-teminat').hidden = false;
+        };
+        document.getElementById('kaydet').onclick = async () => {
+          const ek = document.getElementById('ekSurucu');
+          const gorunurse = (kutu, id, oz) => (document.getElementById(kutu).hidden ? null : document.getElementById(id)[oz]);
+          const govde = { musteriAd: document.getElementById('musteriAd').value, tip: document.querySelector('input[name=tip]:checked').value,
+            tcKimlik: gorunurse('bireyselAlanlar', 'tcKimlik', 'value'), vergiNo: gorunurse('kurumsalAlanlar', 'vergiNo', 'value'),
+            ekSurucuAd: ek.hidden ? null : document.getElementById('ekSurucuAd').value, teminat: document.getElementById('teminat').value,
+            ekTeminat: gorunurse('ekTeminatKutu', 'ekTeminat', 'checked') };
+          const r = await (await fetch('/acik-teklif/kaydet', { method: 'POST', body: JSON.stringify(govde) })).json();
+          document.getElementById('teklif-sonuc').textContent = 'Teklif oluşturuldu. No: ' + r.no;
+        };
+      </script>`);
+  }
 
   private basvuruSayfasi(sube: string): FiksturYaniti {
     const yetkili = sube === 'S02';

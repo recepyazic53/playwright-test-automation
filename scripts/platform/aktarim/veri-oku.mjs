@@ -30,8 +30,11 @@ import { veritabaniAc, veritabaniYolu } from '../veritabani/baglanti.mjs';
 import { gocleriUygula } from '../veritabani/gocler.mjs';
 import { KasaHatasi, kasaDurumu, kasayiAnahtarlaAc, parolayiDogrula } from '../kasa.mjs';
 import { aktarilmisProjeyiBul, ortamKimligiBul, zarflariCoz } from './motor.mjs';
-import { baglamProfilleriniListele, ekranlariListele, girisProfiliGetir, kaynakEslemeleriniListele, ortamGetir } from '../veritabani/depo.mjs';
-import { modelBaglami } from '../senaryolar/senaryo-servisi.mjs';
+import {
+  baglamProfilleriniListele, ekranlariListele, girisProfiliGetir, kaynakEslemeleriniListele, ortamGetir, projeGetir,
+  testVerisiProfiliGetir, testVerisiProfilleriniListele, testVerisiTurleriniListele
+} from '../veritabani/depo.mjs';
+import { modelBaglami, senaryoAkisi } from '../senaryolar/senaryo-servisi.mjs';
 import { GENEL_ORTAM_ETIKETI } from '../senaryolar/calistirma.mjs';
 import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
@@ -250,8 +253,11 @@ function ortamModelSenaryolari(vt, projeId, ortamId, ortamEtiketi) {
     const buOrtam = icerik.ortamlar && typeof icerik.ortamlar === 'object' ? icerik.ortamlar[ortamId] : undefined;
     if (!buOrtam || typeof buOrtam !== 'object' || s.ekran_id == null) continue;
     const ekranId = String(s.ekran_id);
-    if (!modeller.has(ekranId)) modeller.set(ekranId, modelBaglami(vt, ekranId));
-    const mb = modeller.get(ekranId);
+    // Çoklu akış: senaryonun akışının modeli (ekran + akış başına önbellek).
+    const akis = senaryoAkisi(icerik);
+    const modelAnahtari = `${ekranId}\u0000${akis ?? ''}`;
+    if (!modeller.has(modelAnahtari)) modeller.set(modelAnahtari, modelBaglami(vt, ekranId, akis));
+    const mb = modeller.get(modelAnahtari);
     const ekran = ekranlar.get(ekranId);
     const kurallar = icerik.alanKurallari && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli) ? icerik.alanKurallari.mutlakaGorunmeli.filter((x) => typeof x === 'string') : [];
     senaryolar.push({
@@ -269,7 +275,55 @@ function ortamModelSenaryolari(vt, projeId, ortamId, ortamEtiketi) {
     .sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
     (baglamProfilleri[p.tur] ??= {})[p.ad] = p.alanlar ?? {};
   }
-  return { ortam: ortamEtiketi, ortamId, tabanUrl: ortam.tabanUrl, senaryolar, baglamProfilleri };
+  // Kimlik alanlarının hazır profilleri: senaryoların modellerindeki kimlik alanlarının profil havuzları → test verisi
+  // profilleri (değerler çözülmüş; yalnızca koşu belleğinde). Havuz: projenin aktarım tanımı ya da aynı adlı test verisi türü.
+  /** @type {Set<string>} */
+  const havuzlar = new Set();
+  for (const mb of modeller.values()) {
+    if (!mb) continue;
+    const alanlar = [
+      ...mb.model.adimlar.flatMap((/** @type {any} */ a) => (Array.isArray(a.bolumler) ? a.bolumler : []).flatMap((/** @type {any} */ b) => (Array.isArray(b.alanlar) ? b.alanlar : []))),
+      ...(mb.model.senaryoDuzeyi && Array.isArray(mb.model.senaryoDuzeyi.alanlar) ? mb.model.senaryoDuzeyi.alanlar : [])
+    ];
+    for (const a of alanlar) {
+      if (!a || a.tip !== 'kimlikProfili' || !a.eslesme) continue;
+      const h = a.eslesme.profilHavuzu;
+      for (const x of typeof h === 'string' ? [h] : h && typeof h === 'object' ? Object.values(h) : []) if (typeof x === 'string') havuzlar.add(x);
+    }
+  }
+  // Canlı ortam (Ayarlar > ortam "canlı" ya da aktarımın "canli" anahtarı): "yalnızca test ortamı" ortak akış adımları atlanır.
+  const ayarlar = ortam.ayarlar && typeof ortam.ayarlar === 'object' ? /** @type {Record<string, unknown>} */ (ortam.ayarlar) : {};
+  const canli = ayarlar.canli === true || ortamEtiketi === 'canli';
+  return { ortam: ortamEtiketi, ortamId, tabanUrl: ortam.tabanUrl, canli, senaryolar, baglamProfilleri, kimlikProfilleri: kimlikProfilleriniCoz(vt, projeId, ortamId, havuzlar) };
+}
+
+/**
+ * Profil havuzları → { havuz: { profil adı: değerler } } (ortama özgü profil tüm-ortam profilini ezer; değerler çözülmüş).
+ * @param {import('../veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ortamId @param {Set<string>} havuzlar
+ */
+function kimlikProfilleriniCoz(vt, projeId, ortamId, havuzlar) {
+  /** @type {Record<string, Record<string, Record<string, unknown>>>} */
+  const sonuc = {};
+  if (!havuzlar.size) return sonuc;
+  const proje = projeGetir(vt, projeId);
+  const aktarim = /** @type {Record<string, unknown> | undefined} */ (proje?.ayarlar?.aktarim);
+  const adaptor = typeof aktarim?.adaptor === 'string' ? adaptorBul(aktarim.adaptor) : undefined;
+  const tanimlar = /** @type {Record<string, { tur: string; ad: string }>} */ (adaptor?.profilHavuzlari?.() ?? {});
+  const turler = testVerisiTurleriniListele(vt, projeId);
+  for (const havuz of havuzlar) {
+    const ad = tanimlar[havuz] ? (tanimlar[havuz].tur === 'testVerisi' ? tanimlar[havuz].ad : null) : havuz;
+    const tur = ad ? turler.find((t) => t.ad === ad) : undefined;
+    if (!tur) continue;
+    /** @type {Record<string, Record<string, unknown>>} */
+    const profiller = {};
+    for (const p of testVerisiProfilleriniListele(vt, projeId, tur.id).filter((x) => x.ortamId === null || x.ortamId === ortamId)
+      .sort((a, b) => Number(a.ortamId !== null) - Number(b.ortamId !== null))) {
+      const cozulmus = testVerisiProfiliGetir(vt, p.id, { coz: true });
+      if (cozulmus) profiller[p.ad] = cozulmus.degerler;
+    }
+    sonuc[havuz] = profiller;
+  }
+  return sonuc;
 }
 
 calistir().then(yaz, (hata) => {

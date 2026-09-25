@@ -18,6 +18,8 @@ export type HamAlan = {
   kirilganlik: Kirilganlik;
   /** Mevcut modelle eşleştirmede kullanılan eşdeğer seçiciler (#id, [name=…] …). */
   adaySeciciler: string[];
+  /** Diyagram paletinde gösterilen kısa not (ör. "sabit değer: bugun+7", "kimlik bloğu: …"). */
+  not?: string;
   zorunlu: boolean;
   devreDisi: boolean;
   saltOkunur: boolean;
@@ -68,6 +70,54 @@ export type TaramaEnvanteri = {
   kesifYapildi: boolean;
 };
 
+/** Akış kaydında bir öğe: adımın ilerleme düğmesi ya da başarı göstergesi (seçici + ekrandaki metni; değer değil). */
+export type KayitOgesi = { secici: string; metin: string | null };
+/**
+ * Başarı göstergesi: aranan metni kullanıcı belirler (undefined: öneri — metnin sabit kısmı; null: yalnızca öğe görünür).
+ * secici null: öğe seçilmedi, metin sayfanın tamamında aranır (akış tasarımında elle yazılan beklenen mesaj).
+ */
+/** veya: art arda seçilen diğer beklenen mesajlar (herhangi biri görünürse başarılı). */
+/** desen: aranan bir düzenli ifadedir (öğenin / sayfanın metni ona uymalı). */
+export type KayitGostergesi = { secici: string | null; metin: string | null; aranan?: string | null; veya?: KayitGostergesi[]; desen?: boolean };
+/** Kullanıcının adlandırıp aldığı adım: seçtiği alanların YAPISI (değer yok) + ilerleme düğmesi. */
+/** Adımın içinde yeni alanlar açan düğme ("Ek sürücü ekle"); secimli: her senaryoda basılmaz, senaryoda seçilir. */
+export type KayitAcicisi = KayitOgesi & { secimli: boolean; onceBekle?: number; sonraBekle?: number };
+export type KayitAdimi = {
+  ad: string; yol: string; baslik: string; alanlar: HamAlan[]; ilerleme: KayitOgesi | null;
+  /** Alan açan düğmeler (basılış sırasıyla). */
+  acicilar?: KayitAcicisi[];
+  /** alanlar ile aynı sırada: alanın göründüğü parça (0: ilk düğmeden önce, k: k. alan açan düğmeden sonra). */
+  parcalar?: number[];
+  /**
+   * Adıma ait ekran okumaları (akış kaydında panelin okumaları; akis-tasarimi.mjs seçer): görünen alanların
+   * anahtarları ve seçim alanlarının (select/radyo) o anki SEÇENEK değeri (yalnızca alanın kayıtlı seçeneklerinden biriyse;
+   * serbest metin değeri okunmaz). Seçime göre görünen alanların koşulu bunlardan çıkarılır.
+   */
+  okumalar?: Array<{ gorunen: string[]; secimler: Record<string, string> }>;
+  /** Süreli beklemeler (akış tasarımı, saniye): ilerleme düğmesinden önce (düğme yoksa alanlardan sonra) / sonra. */
+  onceBekle?: number;
+  sonraBekle?: number;
+  /** Akış tasarımında elle belirlenen görünürlük koşulları (alan anahtarı → seçim + değerler; null: koşulsuz). */
+  kosullar?: Record<string, { secim: string; degerler: string[] } | null>;
+  /** Adımın ilerleme düğmesine basıldıktan sonra beklenen mesaj (akış tasarımı; yoksa sonraki adımın ilk alanı görünür). */
+  gosterge?: KayitGostergesi | null;
+  /** Adımda kabul edilen iş kuralı uyarıları (akış tasarımında "Uyarı" işaretli mesajlar). */
+  uyarilar?: KayitGostergesi[];
+  /** İlerleme düğmesinden sonra sonucu en çok bekleme süresi (sn; kosu.zamanAsimiSn). */
+  zamanAsimiSn?: number;
+  /** Ortak akış adımı (akış tasarımında "+ > Ortak akış"): alanı yoktur; istegeBagli ise senaryoda "“ad” dahil" ile seçilir. */
+  ortakAkis?: { dosya: string; istegeBagli: boolean };
+};
+/** "Akışı kaydet" sonucu (ekran görüntüsü YOKTUR: kullanıcının girdiği bilgileri içerirdi). */
+export type KayitEnvanteri = {
+  kip: 'kayit';
+  profil: string | null;
+  adimlar: KayitAdimi[];
+  basariGostergesi: KayitGostergesi | null;
+  engellenenler: EngellenenIstek[];
+  notlar: string[];
+};
+
 export type PaketMetasi = {
   ekranAnahtari: string;
   ekranAdi: string;
@@ -75,6 +125,8 @@ export type PaketMetasi = {
   proje?: string;
   olusturulma?: string;
   girisGerekli: boolean;
+  /** "Giriş yapmadan aç" ile tarandı/kaydedildi: model "girisGerekmez" olur (koşucu giriş/bağlam adımlarını atlar). */
+  girissiz?: boolean;
   ikiAsamali: 'yok' | 'totp' | 'sms' | 'bilinmiyor';
   baglamTuru: string | null;
   /** Tekrar analizde ekranın güncel modeli (taban alınır). */
@@ -89,10 +141,19 @@ export type PaketOzeti = {
   eslesmeyenSayisi: number;
   engellenenYazma: number;
   kanitSayisi: number;
+  /** Yalnızca akış kaydında: adım sayısı. */
+  adimSayisi?: number;
 };
 export type PaketSonucu = { paket: Record<string, unknown>; ozet: PaketOzeti };
 
 export declare const TARAMA_OLUSTURANI: string;
+export declare const KAYIT_OLUSTURANI: string;
+/** Başarı göstergesinin sabit kısmı (ilk rakamdan öncesi; değişken numara/tarih atılır). */
+export declare function sabitGostergeMetni(m: string | null): string | null;
+export declare function secimKosuluCikar(
+  okumalar: Array<{ gorunen: string[]; secimler: Record<string, string> }>, hedef: string, adaylar: string[], gecerliDegerler: (anahtar: string) => Set<string>
+): { secim: string; degerler: string[] } | 'coklu' | null;
+export declare function kayitPaketiOlustur(meta: PaketMetasi, envanter: KayitEnvanteri): PaketSonucu;
 export declare const AKSIYON_BILINMEYENI: string;
 export declare const KESIF_SECENEK_SINIRI: number;
 export declare function kimlikUret(metin: string, yedek?: string): string;

@@ -184,7 +184,9 @@ export function sayfaPaketiniDogrula(ham, secenekler = {}) {
       for (const k of Object.keys(e)) if (!EKRAN_ANAHTARLARI.has(k)) hata(`meta.ekran.${k}`, `bilinmeyen anahtar "${k}"`);
       if (typeof e.anahtar !== 'string' || !EKRAN_ANAHTARI_DESENI.test(e.anahtar)) hata('meta.ekran.anahtar', 'küçük harf, rakam ve "-" içeren kısa bir anahtar olmalı (ör. "odeme-formu").');
       if (!metinMi(e.ad) || e.ad.length > 120) hata('meta.ekran.ad', 'boş olmayan, en fazla 120 karakterlik bir ad olmalı.');
-      if (typeof e.urlYolu !== 'string' || !e.urlYolu.startsWith('/') || e.urlYolu.startsWith('//')) {
+      // Ortak akışın kendi sayfası yoktur (eklendiği ekranın sayfasında koşar): yol verilmeyebilir.
+      const yolsuzOlabilir = nesneMi(ham.model) && ham.model.tur === 'ortakAkis' && e.urlYolu === undefined;
+      if (!yolsuzOlabilir && (typeof e.urlYolu !== 'string' || !e.urlYolu.startsWith('/') || e.urlYolu.startsWith('//'))) {
         hata('meta.ekran.urlYolu', '"/" ile başlayan bir YOL olmalı (ör. "/satis/odeme/"); tam adres yazılmaz — ortam adresi Ayarlar > Ortamlar\'dan gelir.');
       }
     }

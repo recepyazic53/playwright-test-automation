@@ -53,8 +53,10 @@
 // Senaryolar (genel; kimlik = senaryo UUID'si; kasa açık olmalı — bkz. senaryolar/senaryo-servisi.mjs):
 //   GET  /platform/senaryolar?projeId=&ortamId=        liste (son sonuç, bağlam profili, beklenen sonuç) + ekranlar
 //   GET  /platform/senaryo?id=&ortamId=                 ayrıntı (verinin hassas alanları çözülmüş — düzenleme formu)
-//   GET  /platform/senaryo/form?projeId=&ekranId=&ortamId=   model + alt modeller + profil seçenekleri (maskeli)
+//   GET  /platform/senaryo/form?projeId=&ekranId=&ortamId=&akisId=   seçilen akışın modeli (yoksa varsayılan) + akış listesi +
+//        alt modeller + profil seçenekleri (maskeli)
 //   GET  /platform/senaryo/gecmis?id=                   değişiklik geçmişi (değişen alan ADLARI; değer yok)
+//   GET  /platform/senaryo/son-sonuc?id=&ortamId=       seçili ortamdaki son sonuç + adım sonuçları (akış diyagramı renkleri)
 //   POST /platform/senaryo/kaydet | kosuya-dahil | sil | kopyala
 //   POST /platform/senaryolar/calistir { projeId, ortamId, senaryoId, kosuId, kosuTuru?, kosuKimligi?, kosuKapsami? }
 //        → sunucu UUID'yi güncel test dosyası + başlığına çözer ve mevcut koşu altyapısıyla çalıştırır
@@ -65,6 +67,10 @@
 //   GET  /platform/ekran?projeId=&id=                   ayrıntı: güncel model ağacı, sürüm geçmişi, analiz durumu, kanıtlar
 //   GET  /platform/ekran/surum?projeId=&id=&surum=      sürümün ağacı + bir önceki sürüme göre fark
 //   GET  /platform/ekran/analiz?projeId=&id=            bekleyen (yoksa son) analiz: bulgular + etki paneli
+//   GET  /platform/ekran/akislar?projeId=&ekranId=       ekranın akışları (+ senaryo sayıları, düzenlenebilir mi) — ekranlar/akis-servisi.mjs
+//   GET  /platform/ekran/akis/tasarim?projeId=&ekranId=&akisId=|kopya=   akış diyagramı (bloklar + sağ liste; boş: yeni akış)
+//   POST /platform/ekran/akis/kaydet { projeId, ekranId, akisId?, ad, bloklar, onay }  onay yoksa etki (etkilenen senaryolar),
+//        varsa yeni model sürümü · POST /platform/ekran/akis/varsayilan | sil { projeId, ekranId, akisId }
 //   POST /platform/sayfa-paketi/onizle { projeId, paket, ekranId?, mod? }   doğrulama + önizleme (gövde en fazla 16 MB)
 //   POST /platform/sayfa-paketi/ekle   { projeId, paket, senaryoIndeksleri, ortamIdleri }  ekran + model v1 + öneriler
 //   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
@@ -149,7 +155,7 @@ import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, or
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 import {
   SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, formBaglami, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
-  modelBaglami, ortamAnahtariBul, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryolariSil
+  modelBaglami, ortamAnahtariBul, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
 import { YASAK_ADRES_DEGISKENI } from './senaryolar/model-kosusu.mjs';
@@ -169,6 +175,7 @@ import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta
 } from './ekranlar/ekran-servisi.mjs';
+import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele } from './ekranlar/akis-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
 import {
   ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
@@ -953,6 +960,15 @@ function urunSecimi(d) {
 /** Profil ortam kapsamı: alan gönderilmezse undefined (mevcut korunur), '' / null = tüm ortamlar. @param {unknown} d */
 const ortamSecimi = (d) => (d === undefined ? undefined : d === null || d === '' ? null : kimlikAl(d, 'ortamId'));
 
+/**
+ * Ortamın arayüze giden görünümü: ayarlar (giriş tarifi vb.) gönderilmez; yalnızca "canli" işareti.
+ * @param {import('./veritabani/depo.mjs').Ortam} o
+ */
+function ortamGorunumu(o) {
+  const { ayarlar, ...gorunum } = o;
+  return { ...gorunum, canli: ayarlar.canli === true };
+}
+
 /** @param {import('./veritabani/depo.mjs').GirisProfili} p */
 function girisProfiliGorunumu(p) {
   const sms = /** @type {Record<string, unknown>} */ (p.smsAyari ?? {});
@@ -1098,9 +1114,14 @@ function ekranDosyasiniDegistir(db, projeId, ekranId, yolHam, referans) {
 function dosyaAlaniKabulu(db, ekranId, alan) {
   const mb = modelBaglami(db, ekranId);
   if (!mb) throw new DepoHatasi('Ekranın modeli yok.');
-  const a = tumFormAlanlari(formSemasiOlustur(mb.model, mb.altModeller)).find((x) => x.anahtar === alan && x.tip === 'dosya');
-  if (!a) throw new DepoHatasi('Modelde bu adla bir dosya alanı yok.');
-  return a.kabul ?? null;
+  // Çoklu akış: alan herhangi bir akışta olabilir.
+  for (const akis of mb.akislar) {
+    const m = akis.id === mb.akisId ? mb : modelBaglami(db, ekranId, akis.id);
+    if (!m) continue;
+    const a = tumFormAlanlari(formSemasiOlustur(m.model, m.altModeller)).find((x) => x.anahtar === alan && x.tip === 'dosya');
+    if (a) return a.kabul ?? null;
+  }
+  throw new DepoHatasi('Modelde bu adla bir dosya alanı yok.');
 }
 
 /** Açık dosya taraması için kökler: proje kökü + eski dosya yedekleri (veri/eski-dosyalar/<zaman>/). */
@@ -1187,7 +1208,21 @@ const GET_UCLARI = new Map([
   ['/platform/ekran-dosyalari', (db, q) => ekranDosyalari(db, kimlikAl(q.get('projeId'), 'projeId'))],
   ['/platform/senaryo/form', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
-    return formBaglami(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')), projeAdaptoru(db, projeId));
+    const akisId = q.get('akisId');
+    return formBaglami(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')), projeAdaptoru(db, projeId),
+      akisId && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(akisId) ? akisId : null);
+  }],
+  ['/platform/senaryo/son-sonuc', (db, q) => {
+    const id = kimlikAl(q.get('id'));
+    const son = senaryoSonSonucu(db, id, kimlikAl(q.get('ortamId'), 'ortamId'));
+    const d = son ? sonucDetayi(db, son.sonucId) : null;
+    // Yalnızca diyagramın gereksindiği özet: adım adları/durumları ve hata metni (medya ve veri yok).
+    return {
+      sonuc: son && d ? {
+        id: son.sonucId, kosuId: son.kosuId, durum: son.durum, zaman: son.zaman, sureMs: d.sureMs, hataMesaji: d.hataMesaji,
+        adimlar: d.adimlar, atlananAlanlar: d.atlananAlanlar
+      } : null
+    };
   }],
   ['/platform/senaryo/gecmis', (db, q) => ({
     kayitlar: senaryoGecmisi(db, kimlikAl(q.get('id'))),
@@ -1201,12 +1236,17 @@ const GET_UCLARI = new Map([
     return surumAyrintisi(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')), surum);
   }],
   ['/platform/ekran/analiz', (db, q) => analizGetir(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
+  ['/platform/ekran/akislar', (db, q) => akislariListele(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
+  ['/platform/ekran/akis/tasarim', (db, q) => {
+    const akisKimligi = (/** @type {string | null} */ d) => (d && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(d) ? d : null);
+    return akisTasarimi(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'), { akisId: akisKimligi(q.get('akisId')), kopya: akisKimligi(q.get('kopya')) });
+  }],
   ['/platform/projeler', (db) => ({
     projeler: projeleriListele(db).map((p) => ({ id: p.id, ad: p.ad, aciklama: p.aciklama })),
     varsayilanId: varsayilanProjeKimligi(db)
   })],
   // Ortam ayarları (aktarımda eski dosya iskeleti vb.) arayüze gönderilmez.
-  ['/platform/ortamlar', (db, q) => ({ ortamlar: ortamlariListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(({ ayarlar: _a, ...o }) => o) })],
+  ['/platform/ortamlar', (db, q) => ({ ortamlar: ortamlariListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(ortamGorunumu) })],
   ['/platform/giris-profilleri', (db, q) => ({
     profiller: girisProfilleriniListele(db, kimlikAl(q.get('projeId'), 'projeId')).map(girisProfiliGorunumu)
   })],
@@ -1268,6 +1308,11 @@ const POST_UCLARI = new Map([
   ['/platform/ekran/analiz/yukle', (db, g) => analizYukle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, { medyaKlasoru: medyaKlasoruYolu() })],
   ['/platform/ekran/analiz/uygula', (db, g) => analizUygula(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { analizId: g.analizId, kabul: g.kabul, red: g.red })],
   ['/platform/ekran/analiz/iptal', (db, g) => analizIptal(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.analizId)],
+  ['/platform/ekran/akis/kaydet', (db, g) => akisKaydet(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
+    akisId: typeof g.akisId === 'string' && g.akisId ? g.akisId : null, ad: g.ad, bloklar: g.bloklar, onay: g.onay === true
+  })],
+  ['/platform/ekran/akis/varsayilan', (db, g) => akisVarsayilanYap(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
+  ['/platform/ekran/akis/sil', (db, g) => akisSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
   ['/platform/ekran/reddedilenleri-unut', (db, g) => reddedilenleriUnut(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'))],
   ['/platform/ekran/toplu-ata', (db, g) => topluDegerAta(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { anahtar: g.anahtar, deger: g.deger, senaryoIdler: g.senaryoIdler })],
   ['/platform/ekran/claude-dosyasi', (db, g) => {
@@ -1311,7 +1356,8 @@ const POST_UCLARI = new Map([
     const projeId = kimlikAl(g.projeId, 'projeId');
     const sonuc = senaryoKaydet(db, {
       id: secimliKimlik(g.id) ?? null, projeId, ekranId: secimliKimlik(g.ekranId) ?? null, baslik: g.baslik,
-      ...(g.veri !== undefined ? { veri: g.veri } : {}), ortamIdleri: g.ortamIdleri, kosuyaDahil: g.kosuyaDahil, mutlakaGorunmeli: g.mutlakaGorunmeli
+      ...(g.veri !== undefined ? { veri: g.veri } : {}), ortamIdleri: g.ortamIdleri, kosuyaDahil: g.kosuyaDahil, mutlakaGorunmeli: g.mutlakaGorunmeli,
+      ...(typeof g.akisId === 'string' ? { akisId: g.akisId } : {})
     }, { adaptor: projeAdaptoru(db, projeId), kosuyorMu });
     // Formda yüklenen (henüz sahipsiz) şifreli dosyalar bu senaryoya bağlanır (sahipsiz temizliği silmesin).
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
@@ -1380,12 +1426,15 @@ const POST_UCLARI = new Map([
     return { ...sonuc, yedek: { dosya: yedek.dosya } };
   }],
   ['/platform/ortam/kaydet', (db, g) => {
+    const mevcutId = secimliKimlik(g.id);
+    // "canli": ortam CANLI (üretim) ortamıdır → "Akışı kaydet" bu ortamda başlatılamaz (ayarlar.canli; diğer ayarlar korunur).
+    const mevcutAyarlar = mevcutId ? ortamGetir(db, mevcutId)?.ayarlar : undefined;
+    const ayarlar = typeof g.canli === 'boolean' ? { ...(mevcutAyarlar ?? {}), canli: g.canli } : undefined;
     const id = ortamKaydet(db, {
-      id: secimliKimlik(g.id), projeId: kimlikAl(g.projeId, 'projeId'), ad: metinAl(g.ad), tabanUrl: metinAl(g.tabanUrl).trim(),
-      varsayilan: g.varsayilan === true
+      id: mevcutId, projeId: kimlikAl(g.projeId, 'projeId'), ad: metinAl(g.ad), tabanUrl: metinAl(g.tabanUrl).trim(),
+      varsayilan: g.varsayilan === true, ...(ayarlar ? { ayarlar } : {})
     });
-    const { ayarlar: _a, ...ortam } = /** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, id));
-    return { ortam };
+    return { ortam: ortamGorunumu(/** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, id))) };
   }],
   ['/platform/ortam/sil', (db, g) => ({ silindi: ortamSil(db, kimlikAl(g.id)) })],
   ['/platform/giris-profili/kaydet', (db, g) => {

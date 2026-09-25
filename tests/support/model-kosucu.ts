@@ -21,7 +21,7 @@ import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
   YASAK_ADRES_DEGISKENI, YUKLEME_KLASORU_DEGISKENI, adresYasakliMi, modelKosuPlani, secenekBul, yasakDesenleri, yasakliAdresMesaji,
-  yuklemeDosyasiYolu, type ModelKosuPlani, type PlanAdimi, type PlanAlani, type PlanKosuTanimi
+  yuklemeDosyasiYolu, type ModelKosuPlani, type PlanAdimi, type PlanAlani, type PlanBasariGostergesi, type PlanKosuTanimi
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { beklenenGorulenMetni, beklenenMesajiBekle, mesajIceriyorMu, mesajiNormallestir } from './beklenen-sonuc';
@@ -151,6 +151,45 @@ function yuklenecekDosya(deger: unknown): string {
 }
 
 /** Görünen alanı tipine/doldurucusuna göre doldurur. */
+/** Gizli olabilen (özel çizimli radyo / onay kutusu) öğe: sayfada varsa ilki. */
+async function sayfadakiOge(page: Page, secici: string, sureMs = GORUNURLUK_BEKLEME_MS): Promise<Locator | null> {
+  const l = page.locator(secici).first();
+  try {
+    await l.waitFor({ state: 'attached', timeout: sureMs });
+    return l;
+  } catch {
+    return null;
+  }
+}
+
+/** Öğe dolana kadar (metni ya da değeri boş değil) bekler. */
+async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi: string): Promise<void> {
+  const oge = page.locator(secici).first();
+  const oku = async (): Promise<string> => (await degerOku(oge).catch(() => '')).trim();
+  try {
+    await expect.poll(oku, { timeout: sureMs }).not.toBe('');
+  } catch {
+    throw new Error(beklenenGorulenMetni(adimBasligi, `"${secici}" dolar`, `${Math.round(sureMs / 1000)} sn içinde boş kaldı`));
+  }
+}
+
+/**
+ * Alan doldurulduktan sonra (doldurucu parametreleri): tus (ör. "Tab"), tikla (seçici; ör. kimlik sorgula düğmesi),
+ * bekle { secici, durum: dolu | gorunur | gizli, zamanAsimiSn } (ör. sorgulanan ad-soyadın gelmesi).
+ */
+async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
+  const p = alan.parametreler;
+  if (typeof p.tus === 'string' && p.tus) await l.press(p.tus);
+  if (typeof p.tikla === 'string' && p.tikla) await page.locator(p.tikla).filter({ visible: true }).first().click();
+  const b = p.bekle;
+  if (b && typeof b === 'object' && typeof (b as Record<string, unknown>).secici === 'string') {
+    const k = b as { secici: string; durum?: string; zamanAsimiSn?: number };
+    const sureMs = (Number(k.zamanAsimiSn) > 0 ? Number(k.zamanAsimiSn) : 20) * 1000;
+    if (k.durum === 'gorunur' || k.durum === 'gizli') await page.locator(k.secici).first().waitFor({ state: k.durum === 'gizli' ? 'hidden' : 'visible', timeout: sureMs });
+    else await doluBekle(page, k.secici, sureMs, adimBasligi);
+  }
+}
+
 async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
   const deger = alan.deger;
   switch (alan.tip) {
@@ -161,6 +200,8 @@ async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
       const s = secenekBul(alan.secenekler, deger);
       const etiket = await l.evaluate((e) => e.tagName);
       if (etiket === 'SELECT') {
+        // "Gerekirse seç": değer zaten seçiliyse dokunulmaz (yeniden seçmek sayfada bağımlı alanları sıfırlayabilir).
+        if (alan.doldurucu === 'secimGerekirse' && (await l.inputValue()) === s.deger) return;
         try {
           await l.selectOption({ value: s.deger }, { timeout: 5_000 });
         } catch {
@@ -178,11 +219,11 @@ async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
       const hedef = s.secici
         ? page.locator(s.secici)
         : page.locator(alan.secici as string).and(page.locator(`[value="${cssKacis(s.deger)}"]`));
-      await hedef.first().check();
+      await hedef.first().check({ force: alan.doldurucu === 'radyoZorla' });
       return;
     }
     case 'onayKutusu':
-      await l.setChecked(deger === true || deger === 'true');
+      await l.setChecked(deger === true || deger === 'true', { force: alan.doldurucu === 'onayKutusuZorla' });
       return;
     case 'tarih':
       if (alan.doldurucu === 'tarihJs') {
@@ -200,6 +241,7 @@ async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
       return;
     default: {
       const metin = String(deger);
+      if (alan.doldurucu === 'secimGerekirse' && (await l.inputValue().catch(() => null)) === metin) return;
       if (alan.doldurucu === 'tuslayarakYaz' || alan.doldurucu === 'telefonTuslama') {
         await l.fill('');
         await l.pressSequentially(metin, { delay: 25 });
@@ -212,63 +254,143 @@ async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
 
 /** Hata göstergesinin (yoksa sayfanın) görünen metni; görünmüyorsa boş. */
 async function hataMetni(page: Page, kosu: PlanKosuTanimi | null): Promise<string> {
+  return (await hataMesajlari(page, kosu)).join(' ').trim();
+}
+
+/** Hata göstergesinin görünen metinleri ve adım başladığından beri çıkan tarayıcı uyarıları (alert/confirm), ayrı ayrı. */
+async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Promise<string[]> {
   const secici = kosu?.hataGostergesi?.secici;
-  if (!secici) return '';
-  const l = page.locator(secici).filter({ visible: true });
-  const n = await l.count().catch(() => 0);
   const metinler: string[] = [];
-  for (let i = 0; i < n; i++) metinler.push(await l.nth(i).innerText().catch(() => ''));
-  return metinler.join(' ').trim();
+  if (secici) {
+    const l = page.locator(secici).filter({ visible: true });
+    const n = await l.count().catch(() => 0);
+    for (let i = 0; i < n; i++) metinler.push(await l.nth(i).innerText().catch(() => ''));
+  }
+  metinler.push(...(tarayiciUyarilari.get(page) ?? []));
+  return metinler.map((m) => m.trim()).filter(Boolean);
+}
+
+/**
+ * Sayfanın tarayıcı uyarıları (alert / confirm / prompt): mesajı adım boyunca saklanır, uyarı kapatılır (dismiss —
+ * Playwright'ın dinleyicisiz varsayılanıyla aynı; confirm onaylanmaz). Hata göstergesi ve beklenen mesaj bunları da okur.
+ */
+const tarayiciUyarilari = new WeakMap<Page, string[]>();
+function tarayiciUyarilariniDinle(page: Page): void {
+  if (tarayiciUyarilari.has(page)) return;
+  const liste: string[] = [];
+  tarayiciUyarilari.set(page, liste);
+  page.on('dialog', (d) => {
+    liste.push(d.message());
+    void d.dismiss().catch(() => undefined);
+  });
+}
+
+/** Sayfa metni + adım boyunca çıkan tarayıcı uyarıları (öğesiz metin aramaları için). */
+async function sayfaMetni(page: Page): Promise<string> {
+  const govde = await page.locator('body').innerText().catch(() => '');
+  return [govde, ...(tarayiciUyarilari.get(page) ?? [])].join('\n');
+}
+
+/** Başarı göstergesinin seçenekleri ("veya" grubunda her biri; tek göstergede kendisi). */
+function basariSecenekleri(kosu: PlanKosuTanimi): PlanBasariGostergesi[] {
+  const g = kosu.basariGostergesi;
+  if (!g) return [];
+  return g.tur === 'veya' ? g.secenekler : [g];
 }
 
 function basariAciklamasi(kosu: PlanKosuTanimi): string {
-  const g = kosu.basariGostergesi;
-  if (!g) return 'adım tamamlanır';
+  const secenekler = basariSecenekleri(kosu);
+  return secenekler.length ? secenekler.map(gostergeAciklamasi).join(' veya ') : 'adım tamamlanır';
+}
+
+function gostergeAciklamasi(g: PlanBasariGostergesi): string {
+  if (g.tur === 'desen') return `${g.secici ?? "sayfanın"} metni /${g.deger}/ kalıbına uyar`;
   return g.tur === 'metin' ? `"${g.deger}" metni görünür` : g.tur === 'url' ? `adres /${g.deger}/ desenine uyar` : `${g.deger} öğesi görünür`;
 }
 
+/** Akışta bu adım için kabul edilen uyarılardan görünen (başarı beklenen senaryoda görünürse test başarısız); yoksa ''. */
+async function kabulEdilenUyari(page: Page, kosu: PlanKosuTanimi): Promise<string> {
+  if (!kosu.uyarilar?.length) return '';
+  let sayfa: string | null = null;
+  for (const u of kosu.uyarilar) {
+    const metin = u.secici
+      ? (await Promise.all((await page.locator(u.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
+      : (sayfa ??= await sayfaMetni(page));
+    if (mesajIceriyorMu(metin, u.metin)) return `uyarı: "${u.metin}"`;
+  }
+  return '';
+}
+
+/** Görünen ilk başarı seçeneği ("veya": herhangi biri); gösterge yoksa null. */
+async function gorunenBasari(page: Page, kosu: PlanKosuTanimi): Promise<PlanBasariGostergesi | null> {
+  for (const g of basariSecenekleri(kosu)) if (await gostergeVarMi(page, g)) return g;
+  return null;
+}
+
 async function basariVarMi(page: Page, kosu: PlanKosuTanimi): Promise<boolean> {
-  const g = kosu.basariGostergesi;
-  if (!g) return true;
+  return !kosu.basariGostergesi || (await gorunenBasari(page, kosu)) !== null;
+}
+
+async function gostergeVarMi(page: Page, g: PlanBasariGostergesi): Promise<boolean> {
   if (g.tur === 'url') return new RegExp(g.deger).test(page.url());
   if (g.tur === 'eleman') return (await page.locator(g.deger).filter({ visible: true }).count().catch(() => 0)) > 0;
+  if (g.tur === 'desen') {
+    const metin = g.secici
+      ? (await Promise.all((await page.locator(g.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
+      : await sayfaMetni(page);
+    return new RegExp(g.deger).test(metin);
+  }
   const metin = g.secici
     ? (await Promise.all((await page.locator(g.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
-    : await page.locator('body').innerText().catch(() => '');
+    : await sayfaMetni(page);
   return mesajIceriyorMu(metin, g.deger);
 }
 
 async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn: number): Promise<void> {
   for (const a of kosu?.aksiyonlar ?? []) {
+    // Süreli bekleme (akış diyagramındaki "Bekleme süresi").
+    if (a.tur === 'bekle' && a.sureSn && !a.secici) { await page.waitForTimeout(a.sureSn * 1000); continue; }
+    if (!a.secici) continue;
     let l = page.locator(a.secici);
     if (a.metin) l = l.filter({ hasText: a.metin });
     const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
     if (a.tur === 'tikla') await l.filter({ visible: true }).first().click({ timeout: zaman });
+    else if (a.durum === 'dolu') await doluBekle(page, a.secici, zaman, 'Aksiyon');
     else await l.first().waitFor({ state: a.durum === 'gizli' ? 'hidden' : 'visible', timeout: zaman });
   }
 }
 
-/** Adımın sonucunu doğrular: beklenen hata adımında mesaj, aksi halde başarı göstergesi (beklenmeyen uyarı = hata). */
-async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuPlani): Promise<void> {
+/**
+ * Adımın sonucunu doğrular: beklenen hata adımında mesaj, aksi halde başarı göstergesi (beklenmeyen uyarı = hata).
+ * "veya" göstergesinde görünen seçeneğin açıklamasını döndürür (raporda hangi mesajın göründüğü), diğerlerinde null.
+ */
+async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuPlani): Promise<string | null> {
   const kosu = adim.kosu;
   const sureMs = (kosu?.zamanAsimiSn ?? ADIM_SURESI_SN) * 1000;
   if (plan.beklenen.tur === 'hata' && plan.beklenen.adim === adim.id) {
-    const beklenen = plan.beklenen.mesaj;
-    const oku = async (): Promise<string> => (kosu?.hataGostergesi ? hataMetni(page, kosu) : page.locator('body').innerText());
-    const r = await beklenenMesajiBekle(oku, [beklenen], { zamanAsimiMs: sureMs });
+    const beklenenler = plan.beklenen.mesajlar.length ? plan.beklenen.mesajlar : [plan.beklenen.mesaj];
+    const oku = async (): Promise<string> => (kosu?.hataGostergesi ? hataMetni(page, kosu) : sayfaMetni(page));
+    const r = await beklenenMesajiBekle(oku, beklenenler, { zamanAsimiMs: sureMs });
+    if (r.eslesen && beklenenler.length > 1) return `uyarı "${r.eslesen}"`;
     if (!r.eslesen) {
       const gorulen = r.sonGorulen || (kosu && kosu.basariGostergesi && (await basariVarMi(page, kosu)) ? `uyarı çıkmadı, ${basariAciklamasi(kosu).replace(/r$/, 'dü')}` : '');
-      throw new Error(beklenenGorulenMetni(adim.baslik, beklenen, gorulen));
+      throw new Error(beklenenGorulenMetni(adim.baslik, beklenenler, gorulen));
     }
-    return;
+    return null;
   }
-  if (!kosu || (!kosu.basariGostergesi && !kosu.hataGostergesi)) return;
+  if (!kosu || (!kosu.basariGostergesi && !kosu.hataGostergesi && !kosu.uyarilar?.length)) return null;
   const son = Date.now() + sureMs;
   for (;;) {
-    if (kosu.basariGostergesi && (await basariVarMi(page, kosu))) return;
-    const uyari = await hataMetni(page, kosu);
-    if (uyari) throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), uyari));
-    if (!kosu.basariGostergesi) return;
+    const gorunen = kosu.basariGostergesi ? await gorunenBasari(page, kosu) : null;
+    // Başarı ve hata birlikte görünürse hata kazanır. Her mesaj ayrı değerlendirilir: başarı mesajının KENDİSİNİ gösteren
+    // pencere / uyarı (ör. ödemede kabul edilen sonuç bir uyarıda çıkar) hata sayılmaz; akışın kabul ettiği uyarılar her zaman.
+    const basariMetni = gorunen && gorunen.tur === 'metin' ? gorunen.deger : null;
+    const hatalar = (await hataMesajlari(page, kosu)).filter((m) => !(basariMetni && mesajIceriyorMu(m, basariMetni)));
+    const kabul = await kabulEdilenUyari(page, kosu);
+    if (kabul) hatalar.push(kabul);
+    if (hatalar.length) throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), hatalar.join(' | ')));
+    if (gorunen) return kosu.basariGostergesi?.tur === 'veya' ? gostergeAciklamasi(gorunen) : null;
+    if (!kosu.basariGostergesi) return null;
     if (Date.now() >= son) {
       throw new Error(beklenenGorulenMetni(adim.baslik, basariAciklamasi(kosu), `${Math.round(sureMs / 1000)} sn içinde başarı göstergesi görünmedi (sayfa: ${new URL(page.url()).pathname})`));
     }
@@ -294,20 +416,24 @@ export type ModelKosuOrtami = {
  */
 export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
   if (!s.model) throw new Error(`"${s.baslik}": "${s.ekran.ad || s.ekran.id}" ekranının modeli yok; model koşucusu çalışamaz.`);
-  const plan = modelKosuPlani(s.model, s.veri, { altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli });
+  const plan = modelKosuPlani(s.model, s.veri, { altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli, kimlikProfilleri: ortam.veri.kimlikProfilleri ?? {} });
   if (plan.hatalar.length) throw new Error(`"${s.baslik}" model koşu planı kurulamadı: ${plan.hatalar.join(' ')}`);
   testInfo.annotations.push({ type: 'urun', description: s.ekran.ad || 'Diğer' });
 
+  // Model "giriş gerekmez" diyorsa (ekran girişsiz açılır; akış kaydı/tarama "Giriş yapmadan aç") giriş ve bağlam
+  // değiştirme adımları atlanır; tarif istenmez.
+  const girissiz = s.model.girisGerekmez === true;
   // 1) Yasaklı adres koruması: ortamın taban adresi + tarifteki/modeldeki tam adresler (tarayıcı henüz hiçbir
   //    yere gitmedi), sonra yasaklı host'a her isteği iptal eden yakalayıcı.
-  const tarif = ortam.tarif();
+  const tarif = girissiz ? null : ortam.tarif();
   const engellenen = await yasakliAdresKorumasi(page, denetlenecekAdresler(ortam.veri.tabanUrl, tarif, plan.ekranUrl));
+  tarayiciUyarilariniDinle(page);
 
   const atlanan: AtlananAlan[] = [];
   let sira = 1;
   const ekranGoruntusu = (ad: string): Promise<void> => attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${ad}`);
   try {
-    await test.step('Sisteme giriş yapılır', async () => {
+    if (tarif) await test.step('Sisteme giriş yapılır', async () => {
       if (!(await oturumGecerliMi(page, tarif))) {
         await girisYap(page, tarif, ortam.kimlik());
         const oturumDosyasi = ortam.oturumDosyasi();
@@ -317,7 +443,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
       await ekranGoruntusu('Sisteme giriş yapıldı');
     });
 
-    if (tarif.baglamDegistirme) {
+    if (tarif?.baglamDegistirme) {
       const tur = tarif.baglamDegistirme.baglamTuru;
       const profil = plan.baglamProfili;
       await test.step(`Bağlam değiştirilir (${profil ?? '—'})`, async () => {
@@ -334,9 +460,22 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
       await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
     });
 
+    let canlidaDurdu = false;
     for (const adim of plan.adimlar) {
       if (!adim.dahil) continue;
+      if ((adim.yalnizTest || canlidaDurdu) && ortam.veri.canli === true) {
+        // Ortak akışın "yalnızca test ortamı" adımı (ör. ödeme): canlı ortamda koşulmaz; ondan sonraki adımlar da (ona
+        // bağlıdır). Beklenen iş kuralı hatası bu adımlardaysa test doğrulanamaz: açıkça atlanır (yeşil sayılmaz).
+        const beklenenSira = plan.beklenen.tur === 'hata' ? plan.adimlar.findIndex((x) => x.id === (plan.beklenen as { adim: string }).adim) : -1;
+        if (beklenenSira >= plan.adimlar.indexOf(adim)) {
+          test.skip(true, `Beklenen iş kuralı hatası “${adim.baslik}” ya da sonraki bir adımda; bu adım yalnızca test ortamında koşar (canlıda doğrulanamaz).`);
+        }
+        canlidaDurdu = true;
+        await test.step(`${adim.baslik} (canlı ortam: atlandı)`, async () => undefined);
+        continue;
+      }
       await test.step(adim.baslik, async () => {
+        tarayiciUyarilari.get(page)?.splice(0);
         const sureSn = adim.kosu?.zamanAsimiSn ?? ADIM_SURESI_SN;
         for (const alan of adim.alanlar) {
           if (alan.atla) {
@@ -344,7 +483,9 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             atlanan.push({ alan: alan.etiket, neden: alan.atla });
             continue;
           }
-          const l = await gorunurOge(page, alan.secici as string);
+          // "Zorla" doldurucular gizli (özel çizimli) girdilere yazar: görünürlük yerine sayfada varlığı yeter.
+          const zorla = alan.doldurucu === 'radyoZorla' || alan.doldurucu === 'onayKutusuZorla';
+          const l = zorla ? await sayfadakiOge(page, alan.secici as string) : await gorunurOge(page, alan.secici as string);
           if (!l) {
             const profil = plan.baglamProfili ? ` (bağlam profili: ${plan.baglamProfili})` : '';
             if (alan.mutlakaGorunmeli) {
@@ -355,10 +496,12 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           }
           if (alan.yalnizGorunurluk) continue;
           await alaniDoldur(page, alan, l, adim.baslik);
+          await alanSonrasi(page, alan, l, adim.baslik);
         }
         await aksiyonlariUygula(page, adim.kosu, sureSn);
-        await adimSonucunuDogrula(page, adim, plan);
-        await ekranGoruntusu(adim.baslik);
+        const gorulen = await adimSonucunuDogrula(page, adim, plan);
+        // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
+        await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik);
       });
       if (adim.sonAdim) break;
     }

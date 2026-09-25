@@ -7,13 +7,10 @@
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez. Ortamın adresi 127.0.0.1'deki örnek başvuru fikstürüdür
 // (model-fikstur.ts); yasaklı adres koruması açıktır ("*nippon*" + yerel .env'deki gerçek ortam host'ları). Ayrı bir
 // Nöbetçi örneği boş bir portta, geçici veritabanıyla çalışır (gerçek Nöbetçi'ye ve veri/ klasörüne dokunulmaz).
-import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { parse as envAyristir } from 'dotenv';
 import { expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
@@ -22,6 +19,7 @@ import { SIRKET_DESENI, yerelSunucu } from './giris-fikstur';
 import {
   ORNEK_KULLANICI, ORNEK_PAROLA, ORNEK_TOTP_ANAHTARI, OrnekBasvuruUygulamasi, ornekBasvuruPaketi, ornekGirisTarifi
 } from './model-fikstur';
+import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF } from './platform-ortak';
 
 type Nesne = Record<string, unknown>;
@@ -33,66 +31,6 @@ const ORTAM_ADI = 'Deneme Ortamı Gizli-Ad';
 const BELGE = 'Sahte belge içeriği.\n';
 const FORM_BASLIGI = 'Formdan / Yetkili / Avrupa / peşin';
 
-/** "*nippon*" + yerel .env'deki gerçek ortam host'ları (değerler dosyaya/loga yazılmaz). */
-function yasakliKaliplar(): string {
-  const kaliplar = ['*nippon*'];
-  const env = join(KOK, '.env');
-  if (existsSync(env)) {
-    const d = envAyristir(readFileSync(env));
-    for (const a of [d.TEST_BASE_URL, d.CANLI_BASE_URL]) {
-      try { if (a) kaliplar.push(new URL(/^https?:\/\//.test(a) ? a : `http://${a}`).hostname); } catch { /* yok */ }
-    }
-  }
-  return kaliplar.join(',');
-}
-
-function bosPort(): Promise<number> {
-  return new Promise((coz, reddet) => {
-    const s = createServer();
-    s.once('error', reddet);
-    s.listen(0, '127.0.0.1', () => {
-      const adres = s.address();
-      const port = typeof adres === 'object' && adres ? adres.port : 0;
-      s.close(() => coz(port));
-    });
-  });
-}
-
-type Nobetci = { adres: string; token: string; surec: ChildProcess };
-
-async function nobetciBaslat(klasor: string, vtYolu: string, yuklemeKlasoru: string): Promise<Nobetci> {
-  const env: NodeJS.ProcessEnv = {};
-  for (const [k, v] of Object.entries(process.env)) {
-    if (/^(TEST_WORKER_INDEX|TEST_PARALLEL_INDEX|PW_|PLATFORM_|TEST_SUNUCU_|TEST_ENV$|KOSU_KIMLIGI|NOBETCI_)/.test(k)) continue;
-    env[k] = v;
-  }
-  const port = await bosPort();
-  const surec = spawn(process.execPath, [join(KOK, 'scripts', 'test-sunucu.mjs')], {
-    cwd: KOK,
-    env: {
-      ...env, TEST_SUNUCU_PORT: String(port), PLATFORM_VERITABANI: vtYolu, PLATFORM_YEDEK_KLASORU: join(klasor, 'yedekler'),
-      TEST_SUNUCU_LOG_DOSYASI: join(klasor, 'sunucu.log'), NOBETCI_YASAK_ADRESLER: yasakliKaliplar(), NOBETCI_YUKLEME_KLASORU: yuklemeKlasoru
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  const cikti: string[] = [];
-  await new Promise<void>((coz, reddet) => {
-    const zaman = setTimeout(() => reddet(new Error(`Nöbetçi başlamadı:\n${cikti.join('')}`)), 30_000);
-    const dinle = (p: Buffer): void => {
-      cikti.push(p.toString('utf8'));
-      if (cikti.join('').includes('Nöbetçi hazır')) { clearTimeout(zaman); coz(); }
-    };
-    surec.stdout?.on('data', dinle);
-    surec.stderr?.on('data', dinle);
-    surec.once('exit', (kod) => { clearTimeout(zaman); reddet(new Error(`Nöbetçi kapandı (${kod}):\n${cikti.join('')}`)); });
-  });
-  const adres = `http://127.0.0.1:${port}`;
-  const html = await (await fetch(`${adres}/`)).text();
-  const token = /name="oturum-tokeni" content="([^"]+)"/.exec(html)?.[1] ?? '';
-  expect(token, 'oturum token').not.toBe('');
-  return { adres, token, surec };
-}
-
 let nobetci: Nobetci;
 let uygulama: OrnekBasvuruUygulamasi;
 let fikstur: Awaited<ReturnType<typeof yerelSunucu>>;
@@ -103,12 +41,7 @@ let oturumDosyasi = '';
 const senaryolar = new Map<string, string>(); // başlık → id
 const sonuclar = new Map<string, Nesne>(); // başlık → sonuç ayrıntısı
 
-async function api(yol: string, govde?: Nesne): Promise<Yanit> {
-  const r = await fetch(`${nobetci.adres}${yol}`, govde
-    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...govde, token: nobetci.token }) }
-    : { headers: { 'x-test-sunucu-token': nobetci.token } });
-  return (await r.json()) as Yanit;
-}
+const api = (yol: string, govde?: Nesne): Promise<Yanit> => nobetciApi(nobetci, yol, govde);
 
 async function basarili(yol: string, govde: Nesne): Promise<Yanit> {
   const y = await api(yol, govde);
@@ -133,7 +66,7 @@ test.beforeAll(async () => {
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
   vt.kapat();
 
-  nobetci = await nobetciBaslat(klasor, vtYolu, yukleme);
+  nobetci = await nobetciBaslat(klasor, vtYolu, { NOBETCI_YUKLEME_KLASORU: yukleme });
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Elle Proje' })).proje as Nesne).id);
   ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: ORTAM_ADI, tabanUrl: fikstur.adres, varsayilan: true })).ortam as Nesne).id);

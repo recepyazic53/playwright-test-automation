@@ -798,6 +798,9 @@ const ekranModeliCevir = (s) => ({
  * @param {Veritabani} vt @param {{ ekranId: string; model: Record<string, unknown>; aciklama?: string | null }} girdi
  */
 export function ekranModeliEkle(vt, girdi) {
+  // Çoklu akış: varsayılan akışın kopyası her zaman model.adimlar ile aynı yazılır (bkz. model-formu.mjs > akislariEsitle).
+  const m = girdi.model;
+  if (m && Array.isArray(m.akislar)) m.akislar = m.akislar.map((a) => (a && typeof a === 'object' && a.varsayilan === true ? { ...a, adimlar: m.adimlar } : a));
   return vt.islem(() => {
     if (!hamSatir(vt, 'ekranlar', girdi.ekranId)) throw new DepoHatasi('Ekran bulunamadı.');
     const surum = Number(vt.tek('SELECT COALESCE(MAX(surum), 0) AS s FROM ekran_modelleri WHERE ekran_id = ?', [girdi.ekranId])?.s ?? 0) + 1;

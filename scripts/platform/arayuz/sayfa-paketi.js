@@ -11,15 +11,21 @@ import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { gorselDiyalogu, kopyalaDugmesi, modelAgaciCiz } from './ekran-ortak.js';
 
 const PAKET_EN_BUYUK = 16 * 1024 * 1024;
-const CUMLE = '<sayfa bağlantısı> sayfasını yalnızca okuyarak (form göndermeden) incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret.';
+// Claude'un inceleme kuralları: ekranlar.js > INCELEME_KURALLARI ile aynı metin (docs/sayfa-paketi.md > "Düğme grupları").
+const CUMLE = '<sayfa bağlantısı> sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. Seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere basıp sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, onaylayan ya da ödeme yapan bir düğmeye gelince dur ve bana sor (yalnızca TEST ortamında, onayımla basılır). Kart, şifre gibi bilgileri girme. Bir düğmenin ne yaptığından emin değilsen basmadan önce sor.';
 
 /**
  * @typedef {{ mod: 'yeni' | 'analiz'; proje: { id: string; ad: string }; ekran?: { id: string; ad: string; anahtar: string } | null;
  *   bitti: (ekranId: string, analiz?: boolean) => void; tara?: () => void }} AkisSecenekleri
  */
 
-/** Sayfa başlığı + gövde alanı. @param {HTMLElement} icerik @param {AkisSecenekleri} s @param {boolean} [taramadan] */
-function akisCercevesi(icerik, s, taramadan = false) {
+/**
+ * Sayfa başlığı + gövde alanı. kaynak: 'tarama' (otomatik tarama) | 'kayit' (akış kaydı) | null (yüklenen paket).
+ * @param {HTMLElement} icerik @param {AkisSecenekleri} s @param {'tarama' | 'kayit' | null} [kaynak]
+ */
+function akisCercevesi(icerik, s, kaynak = null) {
+  const taramadan = Boolean(kaynak);
+  const kaynakAdi = kaynak === 'kayit' ? 'Akış kaydı' : 'Otomatik tarama';
   const analiz = s.mod === 'analiz';
   const baslik = analiz ? `Tekrar analiz: ${s.ekran.ad}` : s.ekran ? `Model ekle: ${s.ekran.ad}` : 'Sayfa ekle';
   const govde = h('div', {});
@@ -28,10 +34,10 @@ function akisCercevesi(icerik, s, taramadan = false) {
       h('div', {},
         h('div', { class: 'kirinti' }, h('span', {}, s.proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/ekranlar' }, 'Ekranlar'),
           s.ekran ? [h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` }, s.ekran.ad)] : null,
-          h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, taramadan ? 'Otomatik tarama' : analiz ? 'Paket yükle' : 'Sayfa ekle')),
+          h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, taramadan ? kaynakAdi : analiz ? 'Paket yükle' : 'Sayfa ekle')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, baslik)),
         h('div', { class: 'meta' },
-          h('span', {}, ikon(taramadan ? 'ara' : 'dosya'), taramadan ? 'otomatik tarama sonucu (sayfa paketi, sürüm 1)' : 'sayfa paketi (JSON, sürüm 1)'),
+          h('span', {}, ikon(kaynak === 'kayit' ? 'video' : taramadan ? 'ara' : 'dosya'), taramadan ? `${kaynakAdi.toLocaleLowerCase('tr-TR')} sonucu (sayfa paketi, sürüm 1)` : 'sayfa paketi (JSON, sürüm 1)'),
           h('span', {}, ikon('kalkan'), taramadan ? 'alan değerleri pakete yazılmadı' : 'gizli değer içeren paket reddedilir'))),
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: s.ekran ? `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` : '#/ekranlar' }, ikon('geri'), 'Vazgeç'))),
     govde);
@@ -44,22 +50,24 @@ export function sayfaPaketiAkisi(icerik, s) {
 }
 
 /**
- * Otomatik taramanın ürettiği paket: yüklenen paketle AYNI doğrulama ve önizleme/kabul adımı.
- * @param {HTMLElement} icerik @param {AkisSecenekleri} s @param {object} paket @param {{ ust?: Node | null }} [ek]
+ * Otomatik taramanın ya da akış kaydının ürettiği paket: yüklenen paketle AYNI doğrulama ve önizleme/kabul adımı.
+ * @param {HTMLElement} icerik @param {AkisSecenekleri} s @param {object} paket @param {{ ust?: Node | null; kayit?: boolean }} [ek]
  */
 export async function taranmisPaketAkisi(icerik, s, paket, ek = {}) {
-  const govde = akisCercevesi(icerik, s, true);
-  yerlestir(govde, h('div', { class: 'ilerleme' }, h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), 'Tarama sonucu doğrulanıyor…')));
+  const govde = akisCercevesi(icerik, s, ek.kayit ? 'kayit' : 'tarama');
+  const ad = ek.kayit ? 'Kayıt' : 'Tarama';
+  const yer = ek.kayit ? 'akış kaydı' : 'otomatik tarama';
+  yerlestir(govde, h('div', { class: 'ilerleme' }, h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), `${ad} sonucu doğrulanıyor…`)));
   try {
     const o = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: s.mod } });
     if (!o.gecerli) {
-      yerlestir(govde, ek.ust || null, hataListesi(`Tarama sonucu kabul edilemiyor — ${o.hatalar.length} sorun`, o.hatalar, 'otomatik tarama'));
+      yerlestir(govde, ek.ust || null, hataListesi(`${ad} sonucu kabul edilemiyor — ${o.hatalar.length} sorun`, o.hatalar, yer));
       return;
     }
-    onizlemeAdimi(govde, s, paket, o, 'otomatik tarama', ek.ust || null);
+    onizlemeAdimi(govde, s, paket, o, yer, ek.ust || null);
   } catch (e) {
     if (e.durum === 423) return;
-    yerlestir(govde, hataListesi('Tarama sonucu gönderilemedi', e.govde && e.govde.hatalar ? e.govde.hatalar : [{ yer: 'otomatik tarama', mesaj: e.message }]));
+    yerlestir(govde, hataListesi(`${ad} sonucu gönderilemedi`, e.govde && e.govde.hatalar ? e.govde.hatalar : [{ yer, mesaj: e.message }]));
   }
 }
 
@@ -105,14 +113,16 @@ function yuklemeAdimi(govde, s, onceki = null) {
   const taramaSecenegi = s.tara ? h('section', { class: 'kart tarama-secenegi', 'aria-label': 'Ekranı otomatik tara' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('ara'), 'Ya da: Ekranı otomatik tara'), h('span', { class: 'sag' }, rozet('Nöbetçi', 'vurgu'))),
     h('p', { class: 'kucuk soluk' }, 'Nöbetçi seçtiğiniz ortama giriş tarifiyle bağlanır, sayfayı bağlam profilleriyle YALNIZCA OKUYARAK tarar ve paketi kendisi üretir: düğmelere tıklanmaz, form gönderilmez, yazma istekleri engellenir. Sonuç bu sayfadaki önizleme adımına gelir.'),
-    h('div', { class: 'form-eylemleri' }, h('button', { type: 'button', class: 'birincil', onclick: () => s.tara() }, ikon('ara'), 'Ekranı tara'))) : null;
+    h('div', { class: 'form-eylemleri' }, h('button', { type: 'button', class: 'birincil', onclick: () => s.tara() }, ikon('ara'), 'Ekranı tara'),
+      s.kaydet ? h('button', { type: 'button', onclick: () => s.kaydet(), title: 'Düğmeyle açılan adımlar için: akışı tarayıcıda siz yürütürsünüz, Nöbetçi adımları kaydeder' }, ikon('video'), 'Akışı kaydet') : null),
+    s.kaydet ? h('p', { class: 'kucuk soluk' }, 'Alanlar bir düğmeyle açılıyorsa (çok adımlı formlar) tarama onları göremez: "Akışı kaydet" ile akışı kendiniz yürütün; adımları ve alanları siz seçersiniz, girdiğiniz değerler kaydedilmez.') : null) : null;
   yerlestir(govde, h('div', { class: 'yukleme-duzeni' },
     h('div', { class: 'tarama-yukleme-sutunu' }, h('section', { class: 'kart' }, girdi, alan, durumAlani, onceki), taramaSecenegi),
     h('aside', { class: 'kart nasil-karti', 'aria-label': 'Paket nasıl üretilir' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('simsek'), 'Paket nasıl üretilir?')),
       h('ol', { class: 'kesif-adimlari dikey' },
         h('li', {}, h('b', {}, 'Claude Code sohbetini açın'), h('span', {}, 'Bu projenin klasöründe (docs/sayfa-paketi.md okunabilsin).')),
-        h('li', {}, h('b', {}, 'Bağlantıyı ve isteği yazın'), h('span', {}, s.mod === 'analiz' ? 'Ekran sayfasındaki "Tekrar analiz et" hangi bağlam profilleriyle inceleneceğini sorar ve hazır bir istek dosyası yazar.' : 'Claude sayfayı yalnızca okur; form göndermez, kayıt oluşturmaz.')),
+        h('li', {}, h('b', {}, 'Bağlantıyı ve isteği yazın'), h('span', {}, s.mod === 'analiz' ? 'Ekran sayfasındaki "Tekrar analiz et" hangi bağlam profilleriyle inceleneceğini sorar ve hazır bir istek dosyası yazar.' : 'Claude seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan ya da ödeme yapan düğmeden önce durup size sorar (yalnızca TEST\'te, onayınızla). Kart ve şifre girmez.')),
         h('li', {}, h('b', {}, 'Üretilen JSON\'u buraya yükleyin'), h('span', {}, 'Önizleyip kabul edene kadar hiçbir şey kaydedilmez.'))),
       h('div', { class: 'kesif-cumlesi dikey' }, h('code', {}, CUMLE), kopyalaDugmesi(CUMLE, 'Cümleyi kopyala')))));
 }
@@ -174,8 +184,34 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
       h('span', { class: `durum-simgesi ${d.sinif === 'uyari' ? 'atlanan' : d.sinif}`, 'aria-hidden': 'true' }, ikon(d.ikon)),
       h('div', { class: 'ayar-ana' }, h('strong', {}, g.etiket, h('span', { class: 'ayar-degeri' }, g.deger)), h('small', {}, g.aciklama)),
       h('span', { class: 'ayar-durumu' }, rozet(d.metin, d.sinif === 'uyari' ? 'uyari' : d.sinif)),
-      g.baglanti ? h('a', { class: 'dugme kucuk-dugme', href: g.baglanti }, 'Ayarlar', ikon('ok')) : h('span', {}));
+      // Yeni sekmede: yüklenen paket ve seçimler bu sayfada kalır; sekmeye dönülünce durumlar yenilenir.
+      g.baglanti ? h('a', { class: 'dugme kucuk-dugme', href: g.baglanti, target: '_blank', rel: 'noopener', title: 'Yeni sekmede açılır', onclick: ayarlarAcildi }, 'Ayarlar', ikon('ok')) : h('span', {}));
   };
+  const ayarListesi = h('ul', { class: 'ayar-listesi kart' }, p.gerekenAyarlar.map(ayarSatiri));
+  let yenileniyor = false;
+  const ayarlariYenile = async () => {
+    if (!ayarListesi.isConnected) { birak(); return; }
+    if (yenileniyor) return;
+    yenileniyor = true;
+    try {
+      const y = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: s.mod } });
+      if (y.gecerli && ayarListesi.isConnected) yerlestir(ayarListesi, y.onizleme.gerekenAyarlar.map(ayarSatiri));
+    } catch {
+      // Yenilenemezse eski durumlar kalır (ör. kasa kilitlendi).
+    } finally {
+      yenileniyor = false;
+    }
+  };
+  // Yenileme yalnızca bir "Ayarlar" bağlantısı açıldıktan sonra sekmeye dönülünce (paket her odakta yeniden gönderilmez);
+  // sayfadan çıkınca dinleyiciler kaldırılır.
+  let dinleniyor = false;
+  const birak = () => { window.removeEventListener('focus', ayarlariYenile); window.removeEventListener('hashchange', birak); dinleniyor = false; };
+  function ayarlarAcildi() {
+    if (dinleniyor) return;
+    dinleniyor = true;
+    window.addEventListener('focus', ayarlariYenile);
+    window.addEventListener('hashchange', birak);
+  }
 
   const ortamSecimleri = p.ortamlar.length ? h('div', { class: 'ortam-secimleri' }, p.ortamlar.map((ortam) => {
     const k = h('input', { type: 'checkbox', checked: ortamSecimi.has(ortam.id), 'aria-label': `Ortam: ${ortam.ad}` });
@@ -233,7 +269,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
       ],
       analiz && p.senaryolar.length ? h('div', { class: 'not-kutusu bilgi' }, `Pakette ${p.senaryolar.length} senaryo önerisi var; tekrar analizde yalnızca model farkları değerlendirilir.`) : null,
       h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('ayar'), 'Gereken ayarlar')),
-      h('ul', { class: 'ayar-listesi kart' }, p.gerekenAyarlar.map(ayarSatiri)),
+      ayarListesi,
       kanitlar.length ? [
         h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('ekran'), 'Kanıtlar', rozet(String(kanitlar.length), 'vurgu')), h('span', { class: 'kucuk cok-soluk' }, 'kabul edilince şifreli saklanır')),
         h('ul', { class: 'gorsel-izgarasi genis-gorseller kart' }, kanitlar.map((k) => {

@@ -20,7 +20,13 @@ export declare function senaryoKaynagi(icerik: unknown): { dosya: string; ad: st
 export declare function senaryoKaynakAnahtari(icerik: unknown): string | null;
 export declare function veriGudumluMu(icerik: unknown): boolean;
 export declare function ortamAnahtariBul(vt: Veritabani, projeId: string, ortamId: string): string | null;
-export declare function modelBaglami(vt: Veritabani, ekranId: string): { model: Record<string, unknown>; altModeller: Record<string, Record<string, unknown>>; surum: number } | null;
+export type AkisOzeti = { id: string; ad: string; varsayilan: boolean; adimSayisi: number };
+export declare function senaryoAkisi(icerik: unknown): string | null;
+export declare function modelBaglami(vt: Veritabani, ekranId: string, akisId?: string | null): {
+  model: Record<string, unknown>; altModeller: Record<string, Record<string, unknown>>; surum: number;
+  /** Akışlarla birlikte ham model. */ tamModel: Record<string, unknown>; akislar: AkisOzeti[]; akisId: string;
+  /** Bulunamayan ortak akış dosyaları (açılamayan adımlar modelden düşer). */ eksikOrtakAkislar: string[];
+} | null;
 export declare function ekranVeriKaynagi(
   vt: Veritabani, projeId: string, ekran: { id: string; anahtar: string }, adaptor: AktarimAdaptoru | null | undefined
 ): { spec: string; dosya: string; yol: string; /** Test kodu yok: yeni senaryo model koşucusuyla çalışır. */ model: boolean } | null;
@@ -38,6 +44,8 @@ export interface SenaryoSatiri {
   modelKosusu: boolean;
   /** Kodu kaldırılmış mı (spec dosyası diskte yok)? Başlık denetimi kodKaldirilmisSenaryolar ile yapılır. */
   kodDurumu: 'dosya-yok' | 'baslik-yok' | null;
+  /** Birden çok akışlı ekranda senaryonun akışı (tek akışta null). */
+  akis: { id: string; ad: string } | null;
   /** Ekranı devre dışıysa false: senaryo hiçbir koşuya girmez. */
   ekranEtkin: boolean;
   guncellenme: string;
@@ -54,8 +62,10 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   id: string; projeId: string; ekranId: string | null; baslik: string; kosuyaDahil: boolean; veriGudumlu: boolean;
   kaynak: { dosya: string; ad: string } | null; ortamlar: string[]; veri: Record<string, unknown> | null; mutlakaGorunmeli: string[];
   olusturulma: string; guncellenme: string;
+  /** Senaryonun akışı (null: ekranın varsayılan akışı). */
+  akis: string | null;
 };
-export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, adaptor: AktarimAdaptoru | null | undefined): {
+export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, adaptor: AktarimAdaptoru | null | undefined, akisId?: string | null): {
   ekran: { id: string; anahtar: string; ad: string };
   ortamlar: Array<{ id: string; ad: string; varsayilan: boolean }>;
   model: Record<string, unknown> | null;
@@ -65,12 +75,14 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   ortak: Record<string, unknown> | null;
   veriKaynagi: { spec: string; dosya: string; yol: string; model: boolean } | null;
   olusturulabilir: boolean;
+  akislar: AkisOzeti[];
+  akisId: string | null;
 };
 export declare function senaryoKaydet(
   vt: Veritabani,
   girdi: {
     id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown;
-    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; yapan?: string;
+    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; yapan?: string;
   },
   secenekler?: { adaptor?: AktarimAdaptoru | null; kosuyorMu?: (dosya: string, ad: string) => boolean }
 ): { id: string; uyarilar: Bulgu[] };
@@ -79,6 +91,7 @@ export declare function senaryolariSil(
   vt: Veritabani, projeId: string, idler: unknown, secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string }
 ): { silinen: number };
 export declare function senaryoKopyala(vt: Veritabani, projeId: string, id: string, yapan?: string): { id: string; baslik: string };
+export declare function senaryoSonSonucu(vt: Veritabani, id: string, ortamId: string): { sonucId: string; kosuId: string; durum: string; zaman: string } | null;
 export declare function senaryoGecmisi(vt: Veritabani, id: string): Array<{
   id: string; zaman: string; islem: string; yapan: string; makineId: string | null; aciklama: string | null; baslik: string; degisenler: string[];
 }>;

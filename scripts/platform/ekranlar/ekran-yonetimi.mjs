@@ -214,6 +214,7 @@ export function ekranDuzenle(vt, projeId, ekranId, girdi) {
   if (!mevcut || !nesneMi(mevcut.model)) throw new DepoHatasi('Bu ekranın modeli yok; URL yolu modelle birlikte gelir (Sayfa paketi yükleyin ya da ekranı tarayın).');
   const model = /** @type {Nesne} */ (mevcut.model);
   if (model.tur === 'altModel') throw new DepoHatasi('Alt modellerin URL yolu yoktur.');
+  if (model.tur === 'ortakAkis') throw new DepoHatasi('Ortak akışların URL yolu yoktur (eklendikleri ekranın sayfasında koşarlar).');
   const yol = urlYoluDogrula(girdi.urlYolu);
   if (model.ekranUrl === yol) return { degisti: false, surum: mevcut.surum, urlYolu: yol };
   const yeni = { ...model, ekranUrl: yol };

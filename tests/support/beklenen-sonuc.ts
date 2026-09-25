@@ -142,8 +142,8 @@ export function adimPlaniniOlustur(
 // ---- Toleranslı mesaj eşleştirme ----
 
 /**
- * Mesaj karşılaştırması için metni sadeleştirir: Türkçe'ye uygun küçük harf (İ→i, I→ı),
- * kıvrık/açılı tırnaklar (“ ” ‘ ’ « » „ ‹ › ′ ″) → düz tırnak, tüm boşluklar (satır
+ * Mesaj karşılaştırması için metni sadeleştirir: Türkçe'ye uygun küçük harf (İ→i, I→ı), ardından ı→i
+ * (büyük harfli Latin sözcükler: ekrandaki "COVID" ile yazılan "covid" eşleşir), kıvrık/açılı tırnaklar (“ ” ‘ ’ « » „ ‹ › ′ ″) → düz tırnak, tüm boşluklar (satır
  * sonu, NBSP dahil) tek boşluk, baş/son boşluk kırpılır.
  */
 export function mesajiNormallestir(metin: string): string {
@@ -152,7 +152,8 @@ export function mesajiNormallestir(metin: string): string {
     .replace(/[‘’‚‹›′`´]/g, "'")
     .replace(/\s+/g, ' ')
     .trim()
-    .toLocaleLowerCase('tr-TR');
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i');
 }
 
 /** Görülen metin, beklenen mesajı (iki taraf da normalleştirilerek) İÇERİYOR mu? */

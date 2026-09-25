@@ -40,17 +40,29 @@ export type PlanAlani = {
   yalnizGorunurluk?: boolean;
 };
 
-export type PlanAksiyonu = { tur: 'tikla' | 'bekle'; secici: string; metin?: string; durum?: 'gorunur' | 'gizli'; aciklama?: string; zamanAsimiSn?: number };
+/** secici yoksa ve sureSn varsa süreli bekleme (koşucu sureSn saniye bekler). */
+/** durum 'dolu': öğenin metni / değeri boş olmayana kadar (ör. kimlik sorgusunun ad-soyadı). */
+export type PlanAksiyonu = { tur: 'tikla' | 'bekle'; secici?: string; metin?: string; durum?: 'gorunur' | 'gizli' | 'dolu'; aciklama?: string; zamanAsimiSn?: number; sureSn?: number };
+
+export type PlanBasariGostergesi = { tur: 'metin' | 'eleman' | 'url' | 'desen'; deger: string; secici?: string };
 
 export type PlanKosuTanimi = {
   aksiyonlar?: PlanAksiyonu[];
-  basariGostergesi?: { tur: 'metin' | 'eleman' | 'url'; deger: string; secici?: string };
+  /** desen: öğenin (yoksa sayfanın) metni bu düzenli ifadeye uyar (ör. "[1-9]" — sıfırdan farklı prim). */
+  /** veya: seçeneklerden herhangi biri görünürse başarılı. */
+  basariGostergesi?: PlanBasariGostergesi | { tur: 'veya'; secenekler: PlanBasariGostergesi[] };
   hataGostergesi?: { secici: string };
+  /** Adımda kabul edilen iş kuralı uyarıları: başarı beklenirken biri görünürse test hemen başarısız. */
+  uyarilar?: Array<{ metin: string; secici?: string }>;
   zamanAsimiSn?: number;
   not?: string;
 };
 
 export type PlanAdimi = {
+  /** Ortak akıştan açılan adım yalnızca test ortamında koşar (canlıda atlanır). */
+  yalnizTest?: boolean;
+  /** Ortak akıştan açılan adımın ortak akış adı. */
+  ortakAkisAdi?: string;
   id: string;
   baslik: string;
   sira: number;
@@ -60,7 +72,8 @@ export type PlanAdimi = {
   sonAdim: boolean;
 };
 
-export type BeklenenModelSonucu = { tur: 'basari' } | { tur: 'hata'; adim: string; mesaj: string };
+/** mesajlar: beklenen uyarılar (herhangi biri; tek mesajda [mesaj]). */
+export type BeklenenModelSonucu = { tur: 'basari' } | { tur: 'hata'; adim: string; mesaj: string; mesajlar: string[] };
 
 export type ModelKosuPlani = {
   ekranUrl: string;
@@ -70,10 +83,12 @@ export type ModelKosuPlani = {
   hatalar: string[];
 };
 
+/** "bugun", "bugun+7" → biçimli tarih (Europe/Istanbul); göreli değilse null. */
+export declare function goreliTarih(ifade: string, bicim?: string, simdi?: Date): string | null;
 export declare function modelKosuPlani(
   model: unknown,
   veri: Record<string, unknown>,
-  secenekler?: { altModeller?: Record<string, unknown>; mutlakaGorunmeli?: string[] }
+  secenekler?: { altModeller?: Record<string, unknown>; mutlakaGorunmeli?: string[]; kimlikProfilleri?: Record<string, Record<string, Record<string, unknown>>>; simdi?: Date }
 ): ModelKosuPlani;
 
 export declare function secenekBul(secenekler: PlanSecenegi[], deger: unknown): { deger: string; metin: string; secici: string | null };
