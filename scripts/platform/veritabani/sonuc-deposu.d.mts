@@ -13,7 +13,7 @@ export interface SonucGirdisi {
 }
 export interface MedyaOgesi { id: string; tur: string; ad: string; icerikTuru: string; boyut: number; olusturulma: string; silinme: string | null; yedekDisi: boolean }
 export interface SonucDetayi {
-  id: string; kosuId: string; projeId: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; urun: string;
+  id: string; kosuId: string; projeId: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; urun: string; ekranDurumu: string | null;
   durum: SonucDurumu; hamDurum: string | null; sureMs: number | null; hataMesaji: string | null; hataKategorisi: string | null;
   hataKalibi: string | null; beklenenSonuc: string | null; beklenenGorulen: { beklenen: string; gorulen: string } | null;
   atlananAlanlar: Array<{ alan: string; neden?: string }>; deneme: number; baslangic: string | null; bitis: string | null;
@@ -37,7 +37,7 @@ export declare function kosulariHesapIcinOku(vt: Veritabani, projeId: string): A
   z: number; urunler: Record<string, Sayilar>;
 }>;
 export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { urun?: string | null }): {
-  ekranlar: Array<{ anahtar: string; ad: string; senaryoSayisi: number; son: { basarili: number; basarisiz: number; atlanan: number; durduruldu: number } | null }>;
+  ekranlar: Array<{ anahtar: string; ad: string; senaryoSayisi: number; ekranDurumu: string | null; son: { basarili: number; basarisiz: number; atlanan: number; durduruldu: number } | null }>;
   kart: { son: KartOzeti; onceki: KartOzeti | null; enYeniZ?: number; enEskiZ?: number; urunSayisi?: number } | null;
   trend: Array<Sayilar & { kosuId: string; z: number; kapsam: string | null }>;
   kosuGecmisi: KosuGecmisiSatiri[];
@@ -46,7 +46,7 @@ export declare function kosuDetayi(vt: Veritabani, kosuId: string): {
   kosu: Sayilar & { id: string; projeId: string | null; ortamId: string | null; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string };
   sonuclar: Array<{
     id: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; durum: string; hamDurum: string | null; sureMs: number | null;
-    hataKategorisi: string | null; hataKalibi: string | null; urun: string; urunAnahtari: string; baslangic: string | null; bitis: string | null;
+    hataKategorisi: string | null; hataKalibi: string | null; urun: string; urunAnahtari: string; ekranDurumu: string | null; baslangic: string | null; bitis: string | null;
     deneme: number; ekranGoruntusuSayisi: number; videoSayisi: number;
   }>;
 } | null;

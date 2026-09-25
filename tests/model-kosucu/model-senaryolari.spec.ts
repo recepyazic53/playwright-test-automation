@@ -16,7 +16,8 @@ import { beklenenSonucEtiketi, formSemasiOlustur } from '../../scripts/platform/
 const ortam = getEnvironmentName();
 const modelVerisi = platformModelVerisi(ortam);
 const hepsi = process.env.TEST_SUNUCU_TUM_LISTE === '1' || Boolean(process.env.TEST_SUNUCU_GREP_DESENI);
-const senaryolar = (modelVerisi?.senaryolar ?? []).filter((s) => hepsi || s.kosuyaDahil);
+// Ekranı devre dışı olan senaryolar da (ekran düzeyinde "Koşuda kapalı") yalnızca tam listede/tek koşuda üretilir.
+const senaryolar = (modelVerisi?.senaryolar ?? []).filter((s) => hepsi || (s.kosuyaDahil && s.ekranEtkin !== false));
 const basliklar = modelTestBasliklari(senaryolar);
 
 /** Senaryolar tablosundaki beklenen sonuç rozeti (model yoksa annotation eklenmez). */

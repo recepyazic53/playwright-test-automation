@@ -384,6 +384,23 @@ export const GOCLER = [
       CREATE INDEX ix_medya_sahip ON medya(sahip_turu, sahip_id);
       CREATE INDEX ix_medya_kaynak ON medya(kaynak);
     `
+  },
+  {
+    // Sürüm 8 — ekran yönetimi (Ekranlar > ⋯; bkz. ekranlar/ekran-yonetimi.mjs). Sütunlar AÇIKTIR (şifresiz): koşu listesi
+    // filtresi (veri-oku.mjs "durum" kipi) kasa kilitliyken de devre dışı/silinmiş ekranların testlerini hariç tutabilmeli.
+    // - durum: 'etkin' | 'devre_disi' (senaryoları koşulara girmez, sol listelerde gizli) | 'silindi' (MEZAR TAŞI: ekranın
+    //   modeli/senaryoları silinmiş; satır, geçmiş sonuçlar "silinmiş ekran" diye görünsün ve koddaki testleri — kod
+    //   kaldırılmadıysa — koşulara girmesin diye kalır).
+    // - sira: sol listelerdeki elle sıra (NULL = ada göre, sona).
+    // - silinme_json: mezar taşı bilgisi { zaman, kod: { dosyalar, anahtarlar }, kaldirilanDosyalar, sonuclarSilindi }
+    //   (dosya yolları testDir'e — tests/ — göre; gizli değer içermez).
+    surum: 8,
+    ad: 'ekran_yonetimi',
+    sql: `
+      ALTER TABLE ekranlar ADD COLUMN durum TEXT NOT NULL DEFAULT 'etkin' CHECK (durum IN ('etkin', 'devre_disi', 'silindi'));
+      ALTER TABLE ekranlar ADD COLUMN sira INTEGER;
+      ALTER TABLE ekranlar ADD COLUMN silinme_json TEXT;
+    `
   }
 ];
 
@@ -434,7 +451,7 @@ export const TABLOLAR = [
   { ad: 'baglam_profilleri', birincilAnahtar: 'id', json: ['alanlar_json'], guncellenme: true, gecmisTuru: 'baglam_profili', baslikAlani: 'ad' },
   { ad: 'test_verisi_turleri', birincilAnahtar: 'id', json: ['alanlar_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'test_verisi_profilleri', birincilAnahtar: 'id', json: ['degerler_json'], guncellenme: true, gecmisTuru: 'test_verisi_profili', baslikAlani: 'ad' },
-  { ad: 'ekranlar', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, baslikAlani: 'ad' },
+  { ad: 'ekranlar', birincilAnahtar: 'id', json: ['ayarlar_json', 'silinme_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'ekran_modelleri', birincilAnahtar: 'id', json: ['model_json'], guncellenme: false, baslikAlani: 'surum' },
   { ad: 'senaryolar', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'senaryo', baslikAlani: 'baslik' },
   { ad: 'kaynak_eslemeleri', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'kaynak_anahtari' },

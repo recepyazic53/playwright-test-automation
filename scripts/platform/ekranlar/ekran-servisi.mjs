@@ -25,6 +25,7 @@ import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari } from '../sen
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
+import { mezarTasiOku } from './mezar-tasi.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -84,14 +85,14 @@ function analizYaz(vt, ekran, ayarlar, analiz) {
 function altModelKaynagi(/** @type {Veritabani} */ vt, /** @type {string} */ projeId) {
   return (/** @type {string} */ dosya) => {
     const anahtar = dosya.replace(/\.model\.json$/, '');
-    const e = vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND anahtar = ?', [projeId, anahtar]);
+    const e = vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND anahtar = ? AND durum <> ? ORDER BY rowid', [projeId, anahtar, 'silindi']);
     const m = e ? ekranModeliGetir(vt, String(e.id)) : undefined;
     return m && nesneMi(m.model) ? m.model : undefined;
   };
 }
 
 /** Modeli ortak doğrulayıcıdan geçirir; hatalıysa EkranDogrulamaHatasi. */
-function modeliDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {unknown} */ model, /** @type {string} */ ad) {
+export function modeliDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {unknown} */ model, /** @type {string} */ ad) {
   const kaynak = altModelKaynagi(vt, projeId);
   try {
     return ekranModeliniDogrula(ad, model, (dosya) => {
@@ -201,10 +202,19 @@ export function ekranListesi(vt, projeId) {
       adimSayisi: env ? env.adimlar.size : 0, alanSayisi: env ? env.alanlar.size : model && model.tur === 'altModel' ? modelEnvanteri({ adimlar: [{ id: 'x', bolumler: model.bolumler }] }).alanlar.size : 0,
       senaryoSayisi: sayilar.get(e.id) ?? 0,
       bekleyenAnaliz: bekleyen ? { id: bekleyen.id, bulguSayisi: Array.isArray(bekleyen.bulgular) ? bekleyen.bulgular.length : 0, zaman: bekleyen.zaman } : null,
-      guncellenme: e.guncellenme
+      guncellenme: e.guncellenme, durum: e.durum, sira: e.sira
     };
   });
-  return { ekranlar, baglamProfilleri: baglamProfilAdlari(vt, projeId) };
+  // Silinmiş ekranlar (mezar taşı): geçmiş sonuçları ya da kodu duran testleri için tutulur; geri yüklenebilir.
+  const silinmisler = ekranlariListele(vt, projeId, { silinenlerDahil: true }).filter((e) => e.durum === 'silindi').map((e) => {
+    const m = mezarTasiOku(vt.tek('SELECT silinme_json FROM ekranlar WHERE id = ?', [e.id])?.silinme_json);
+    return {
+      id: e.id, anahtar: e.anahtar, ad: e.ad, silinme: m?.zaman ?? e.guncellenme,
+      sonucSayisi: Number(vt.tek('SELECT COUNT(*) AS n FROM kosu_sonuclari WHERE ekran_id = ?', [e.id])?.n ?? 0),
+      haricKodDosyasi: m ? m.kod.dosyalar.length : 0, haricTest: m ? m.kod.anahtarlar.length : 0, kaldirilanDosya: m ? m.kaldirilanDosyalar.length : 0
+    };
+  });
+  return { ekranlar, silinmisEkranlar: silinmisler, baglamProfilleri: baglamProfilAdlari(vt, projeId) };
 }
 
 /** @param {Veritabani} vt @param {string} projeId @param {string} ekranId */
@@ -231,7 +241,7 @@ export function ekranDetayi(vt, projeId, ekranId) {
   const senaryoSayisi = Number(vt.tek('SELECT COUNT(*) AS n FROM senaryolar WHERE ekran_id = ?', [ekranId])?.n ?? 0);
   const model = son && nesneMi(son.model) ? /** @type {Nesne} */ (son.model) : null;
   return {
-    ekran: { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad, aciklama: ekran.aciklama, guncellenme: ekran.guncellenme },
+    ekran: { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad, aciklama: ekran.aciklama, guncellenme: ekran.guncellenme, durum: ekran.durum, sira: ekran.sira },
     surum: son ? son.surum : null,
     modelTuru: model ? (model.tur === 'altModel' ? 'altModel' : 'ekran') : null,
     agac: model && model.tur !== 'altModel' ? modelAgaci(model, mb ? mb.altModeller : {}) : null,
@@ -312,6 +322,10 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
       // Modeli olmayan mevcut ekran: paket o ekrana ilk model olarak eklenir.
       hedef = { id: ayniAnahtar.id, ad: ayniAnahtar.ad, anahtar: ayniAnahtar.anahtar, modelVar: false };
     }
+  }
+  if (mod === 'yeni' && !hedef && typeof ekranMeta.anahtar === 'string'
+    && ekranlariListele(vt, projeId, { silinenlerDahil: true }).some((e) => e.durum === 'silindi' && e.anahtar === ekranMeta.anahtar)) {
+    d.uyarilar.push({ yer: 'meta.ekran.anahtar', mesaj: `Bu anahtarla ("${ekranMeta.anahtar}") silinmiş bir ekran var; paket YENİ bir ekran olarak eklenir (silinmiş ekranın geçmiş sonuçları ayrı kalır). Eski ekranı geri getirmek için Ekranlar > Silinmiş ekranlar > Geri yükle.` });
   }
   if (hatalar.length || !nesneMi(p.model)) {
     return { gecerli: false, hatalar, uyarilar: d.uyarilar, onizleme: null, hedef };

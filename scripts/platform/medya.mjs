@@ -16,7 +16,7 @@
 //   satırındadır. Yazma: geçici dosya + fsync + rename. Düz metin HİÇBİR ZAMAN diske yazılmaz.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirerek yükler).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
-import { createReadStream, existsSync, readdirSync, rmSync, statSync, unlinkSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, fsyncSync, lstatSync, openSync, readdirSync, rmSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { mkdir, open, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
@@ -243,6 +243,37 @@ export function medyaDosyasiniSil(klasor, dosya) {
   if (!medyaDosyaAdiGecerliMi(dosya)) return false;
   try {
     unlinkSync(join(klasor, dosya));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Şifreli medya dosyasını GÜVENLİ siler: içerik önce rastgele baytlarla ezilir (fsync), sonra dosya silinir (en iyi
+ * çaba — SSD/kopya-yazmalı dosya sistemlerinde eski bloklar fiziksel olarak kalabilir; içerik zaten şifrelidir).
+ * Yalnızca bu deponun adlandırma desenine uyan dosyalara dokunulur; sembolik bağ ezilmez (yalnızca bağ silinir).
+ * @param {string} klasor @param {string} dosya @returns {boolean} silindi mi
+ */
+export function medyaDosyasiniGuvenliSil(klasor, dosya) {
+  if (!medyaDosyaAdiGecerliMi(dosya)) return false;
+  const yol = join(klasor, dosya);
+  try {
+    const bilgi = lstatSync(yol);
+    if (bilgi.isFile()) {
+      const fd = openSync(yol, 'r+');
+      try {
+        const parca = 1024 * 1024;
+        for (let konum = 0; konum < bilgi.size; konum += parca) {
+          const rastgele = randomBytes(Math.min(parca, bilgi.size - konum));
+          writeSync(fd, rastgele, 0, rastgele.length, konum);
+        }
+        fsyncSync(fd);
+      } finally {
+        closeSync(fd);
+      }
+    }
+    unlinkSync(yol);
     return true;
   } catch {
     return false;

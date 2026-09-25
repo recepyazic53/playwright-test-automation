@@ -751,7 +751,9 @@ export function testVerisiProfiliSil(vt, id, yapan) {
 /** @param {Record<string, unknown>} s */
 const ekranCevir = (s) => ({
   id: String(s.id), projeId: String(s.proje_id), anahtar: String(s.anahtar), ad: String(s.ad),
-  aciklama: s.aciklama == null ? null : String(s.aciklama), olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
+  aciklama: s.aciklama == null ? null : String(s.aciklama), olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme),
+  durum: /** @type {'etkin' | 'devre_disi' | 'silindi'} */ (s.durum === 'devre_disi' || s.durum === 'silindi' ? s.durum : 'etkin'),
+  sira: s.sira == null ? null : Number(s.sira)
 });
 
 /**
@@ -766,9 +768,14 @@ export function ekranKaydet(vt, girdi) {
   }, { id: girdi.id });
 }
 
-/** Ekranlar (ayarlar HARİÇ; kasa kilitliyken de çalışır). @param {Veritabani} vt @param {string} projeId */
-export function ekranlariListele(vt, projeId) {
-  return vt.tumu('SELECT * FROM ekranlar WHERE proje_id = ? ORDER BY ad', [projeId]).map(ekranCevir);
+/**
+ * Ekranlar (ayarlar HARİÇ; kasa kilitliyken de çalışır). Sıra: elle verilen sıra (ekranlar.sira), sonra ad.
+ * SİLİNMİŞ ekranlar (mezar taşı; durum 'silindi') yalnızca silinenlerDahil ile döner.
+ * @param {Veritabani} vt @param {string} projeId @param {{ silinenlerDahil?: boolean }} [secenekler]
+ */
+export function ekranlariListele(vt, projeId, secenekler = {}) {
+  const kosul = secenekler.silinenlerDahil ? '' : " AND durum <> 'silindi'";
+  return vt.tumu(`SELECT * FROM ekranlar WHERE proje_id = ?${kosul} ORDER BY (sira IS NULL), sira, ad`, [projeId]).map(ekranCevir);
 }
 
 /** Ekran ayarları şifrelidir: kasa açık olmalıdır. @param {Veritabani} vt @param {string} ekranId */

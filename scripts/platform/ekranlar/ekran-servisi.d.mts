@@ -12,9 +12,13 @@ export declare class EkranDogrulamaHatasi extends DepoHatasi {
 
 export declare function modelAgaci(model: Nesne, altModeller?: Record<string, Nesne>): Nesne & { sayilar: Record<string, number>; profiller: string[] };
 export declare function ekranListesi(vt: Veritabani, projeId: string): {
-  ekranlar: Array<{ id: string; anahtar: string; ad: string; modelTuru: 'ekran' | 'altModel' | null; modelSurumu: number | null; adimSayisi: number; alanSayisi: number; senaryoSayisi: number; bekleyenAnaliz: { id: string; bulguSayisi: number; zaman: string } | null } & Nesne>;
+  ekranlar: Array<{ id: string; anahtar: string; ad: string; modelTuru: 'ekran' | 'altModel' | null; modelSurumu: number | null; adimSayisi: number; alanSayisi: number; senaryoSayisi: number; bekleyenAnaliz: { id: string; bulguSayisi: number; zaman: string } | null; durum: 'etkin' | 'devre_disi'; sira: number | null } & Nesne>;
+  /** Silinmiş ekranlar (mezar taşı; bkz. ekran-yonetimi.mjs). */
+  silinmisEkranlar: Array<{ id: string; anahtar: string; ad: string; silinme: string; sonucSayisi: number; haricKodDosyasi: number; haricTest: number; kaldirilanDosya: number }>;
   baglamProfilleri: Array<{ tur: string; ad: string }>;
 };
+/** Modeli ortak doğrulayıcıdan geçirir; hatalıysa EkranDogrulamaHatasi. */
+export declare function modeliDogrula(vt: Veritabani, projeId: string, model: unknown, ad: string): unknown;
 export declare function ekranDetayi(vt: Veritabani, projeId: string, ekranId: string): Nesne & {
   surum: number | null;
   gecmis: Array<{ surum: number; aciklama: string | null; olusturulma: string; degisiklikSayisi: number | null }>;

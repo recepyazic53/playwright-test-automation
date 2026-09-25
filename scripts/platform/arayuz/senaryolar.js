@@ -7,12 +7,15 @@
 //   planda denetlenir (POST /platform/senaryolar/kod-denetimi), satırda "kodu kaldırılmış" rozeti + üstte uyarı
 //   şeridi; "Kaldır" (sayfa içi onay) senaryoyu veritabanından siler — değişiklik geçmişi ve eski sonuçlar kalır.
 //   Oluşturma/düzenleme: model tabanlı form (senaryo-formu.js).
+//   DEVRE DIŞI EKRANLAR (Ekranlar > ⋯): sol listede ve Genel listede varsayılan olarak gizli ("Devre dışı ekranları göster");
+//   senaryoları "Koşuyu başlat"a / ▷'ye girmez (sunucu da reddeder), satırda "ekran devre dışı" rozeti.
 // Adresler: #/senaryolar, #/senaryolar/u/<ekranId>, #/senaryolar/yeni/<ekranId>, #/senaryolar/duzenle/<id>
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, yerlestir, bildir, bosDurum, h, ikon, iskelet, rozet } from './ortak.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuSuruyorMu, onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { senaryoFormu } from './senaryo-formu.js';
+import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
 
 const ORTAM_ANAHTARI = 'platform.senaryoOrtami';
 const SAYFA_BOYU = 50;
@@ -65,7 +68,9 @@ export function senaryolarEkrani(main, parcalar, baglam) {
     const kayitli = seciliOrtamOku();
     const ortam = ortamlar.find((o) => o.id === kayitli) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
     const veri = await api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`);
-    ekranListesi(nav, veri, tur === 'u' || tur === undefined ? secili : null, tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || ''))?.ekranId : tur === 'yeni' ? decodeURIComponent(kimlik || '') : null);
+    const navCiz = () => ekranListesi(nav, veri, tur === 'u' || tur === undefined ? secili : null, tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || ''))?.ekranId : tur === 'yeni' ? decodeURIComponent(kimlik || '') : null,
+      () => { navCiz(); if (tur !== 'yeni' && tur !== 'duzenle') window.dispatchEvent(new HashChangeEvent('hashchange')); });
+    navCiz();
     if (tur === 'yeni' || tur === 'duzenle') {
       const senaryo = tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || '')) : null;
       const ekranId = tur === 'yeni' ? decodeURIComponent(kimlik || '') : senaryo?.ekranId ?? null;
@@ -80,17 +85,28 @@ export function senaryolarEkrani(main, parcalar, baglam) {
   })().catch(hata);
 }
 
-function ekranListesi(nav, veri, secili, formEkrani) {
-  const toplam = veri.senaryolar.length;
+function ekranListesi(nav, veri, secili, formEkrani, degisti) {
+  const goster = devreDisiGoster();
+  const pasif = new Set(veri.ekranlar.filter((e) => e.durum === 'devre_disi').map((e) => e.id));
+  const toplam = veri.senaryolar.filter((x) => goster || !pasif.has(x.ekranId)).length;
   const baglanti = (id, ad, adet, ikonAd) => h('a', {
     href: id ? `#/senaryolar/u/${encodeURIComponent(id)}` : '#/senaryolar',
     'aria-current': (secili !== null && (secili || '') === (id || '')) || (formEkrani && formEkrani === id) ? 'page' : null
   }, ikonAd ? ikon(ikonAd) : h('span', { class: 'saglik', 'aria-hidden': 'true' }), ad, adet ? h('span', { class: 'adet' }, String(adet)) : null);
-  const ekranlar = veri.ekranlar.filter((e) => e.senaryoSayisi || e.olusturulabilir);
+  const ekranlar = veri.ekranlar.filter((e) => (e.senaryoSayisi || e.olusturulabilir) && (goster || !pasif.has(e.id) || e.id === secili || e.id === formEkrani));
   yerlestir(nav, 
     baglanti('', 'Genel', toplam, 'izgara'),
     h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ürünler / ekranlar'),
-    ...ekranlar.map((e) => baglanti(e.id, e.ad, e.senaryoSayisi, e.modelVar ? 'katman' : null)));
+    ...ekranlar.map((e) => {
+      const a = baglanti(e.id, e.ad, e.senaryoSayisi, e.modelVar ? 'katman' : null);
+      if (pasif.has(e.id)) {
+        a.classList.add('devre-disi');
+        a.title = `${e.ad} — devre dışı (senaryoları koşulara girmez)`;
+        a.insertBefore(h('span', { class: 'nav-etiketi' }, 'kapalı'), a.querySelector('.adet'));
+      }
+      return a;
+    }),
+    devreDisiAnahtari(veri.ekranlar.filter((e) => pasif.has(e.id) && e.senaryoSayisi).length, degisti));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -156,6 +172,8 @@ function listeGorunumu(icerik, s) {
     if (icerik.isConnected) ciz();
   }
   const gorunenler = () => veri.senaryolar.filter((x) => {
+    // Devre dışı ekranın senaryoları Genel listede gizli (anahtar açıksa ya da o ekran seçiliyse görünür).
+    if (!ekran && x.ekranEtkin === false && !devreDisiGoster()) return false;
     if (liste.kod === 'kaldirilmis' && !kodNedeni(x)) return false;
     if (ekran && x.ekranId !== ekran.id) return false;
     if (!ekran && liste.ekran && x.ekranId !== liste.ekran) return false;
@@ -233,8 +251,8 @@ function listeGorunumu(icerik, s) {
 
   function ciz() {
     const liste2 = gorunenler();
-    const kapsam = ekran ? veri.senaryolar.filter((x) => x.ekranId === ekran.id) : veri.senaryolar;
-    const dahil = kapsam.filter((x) => x.kosuyaDahil).length;
+    const kapsam = ekran ? veri.senaryolar.filter((x) => x.ekranId === ekran.id) : veri.senaryolar.filter((x) => x.ekranEtkin !== false || devreDisiGoster());
+    const dahil = kapsam.filter((x) => x.kosuyaDahil && x.ekranEtkin !== false).length;
     yerlestir(baslikRozeti, rozet(`${kapsam.length} senaryo`, 'vurgu'));
     yerlestir(metaAlani, 
       h('span', {}, ikon('liste'), `${dahil} / ${kapsam.length} koşuda`),
@@ -243,8 +261,8 @@ function listeGorunumu(icerik, s) {
     yerlestir(ozetAlani, liste2.length !== kapsam.length ? h('span', {}, h('b', {}, String(liste2.length)), ` / ${kapsam.length} gösteriliyor`) : '');
     temizle.hidden = !filtreliMi();
     kodSeridiCiz(kapsam);
-    kosuDugmesi.disabled = kosuSuruyorMu() || !liste2.some((x) => x.kosuyaDahil && !kosuDurumu(x.id));
-    kosuDugmesi.title = kosuSuruyorMu() ? 'Sürmekte olan bir koşu var' : '';
+    kosuDugmesi.disabled = kosuSuruyorMu() || !liste2.some((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id));
+    kosuDugmesi.title = kosuSuruyorMu() ? 'Sürmekte olan bir koşu var' : ekran && ekran.durum === 'devre_disi' ? 'Ekran devre dışı: senaryoları koşulara girmez (Ekranlar > ⋯ > Etkinleştir)' : '';
     topluCubukCiz(liste2);
     tabloCiz(liste2);
   }
@@ -358,6 +376,7 @@ function listeGorunumu(icerik, s) {
         ? rozet('model', 'vurgu', { title: 'Test kodu yok: ekran modeliyle koşar (model koşucusu). Koşuda açıksa "Koşuyu başlat" ve npm run test dahil eder.' })
         : x.paketten ? rozet('paketten', 'vurgu', { title: 'Sayfa paketindeki öneriden eklendi; test kodu (spec dosyası) olduğu için kodla koşar' }) : null,
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Koşu listesinde değil — Koşuyu başlat ve npm run test bu senaryoyu koşmaz' }) : null,
+      x.ekranEtkin === false ? rozet('ekran devre dışı', 'atlanan', { title: 'Ekran devre dışı: senaryo hiçbir koşuya girmez (Ekranlar > ⋯ > Etkinleştir)' }) : null,
       x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null,
       x.kaynak && x.kaynak.ad !== x.baslik ? h('span', { title: 'Koddaki test adı' }, x.kaynak.ad) : null
     ].filter(Boolean);
@@ -378,7 +397,8 @@ function listeGorunumu(icerik, s) {
         'aria-label': `Durdur: ${x.baslik}`, onclick: () => durdur(x.id)
       }, h('span', { class: 'kare', 'aria-hidden': 'true' }))
       : h('button', {
-        type: 'button', class: 'ikon-dugme oynat-dugmesi', disabled: Boolean(neden), title: neden ? 'Kodu kaldırılmış senaryo çalıştırılamaz' : 'Çalıştır',
+        type: 'button', class: 'ikon-dugme oynat-dugmesi', disabled: Boolean(neden) || x.ekranEtkin === false,
+        title: neden ? 'Kodu kaldırılmış senaryo çalıştırılamaz' : x.ekranEtkin === false ? 'Ekran devre dışı: çalıştırılamaz' : 'Çalıştır',
         'aria-label': `Çalıştır: ${x.baslik}`, onclick: () => tekCalistir(x)
       }, ikon('oynat'));
     return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', kosu ? 'calisiyor' : '', x.kosuyaDahil ? '' : 'haric', neden ? 'kodu-kaldirilmis' : ''].join(' ').trim() || null, 'data-senaryo': x.id },
@@ -432,7 +452,7 @@ function listeGorunumu(icerik, s) {
   }
 
   async function seciliCalistir(secilenler) {
-    const calisabilir = secilenler.filter((x) => !kosuDurumu(x.id));
+    const calisabilir = secilenler.filter((x) => !kosuDurumu(x.id) && x.ekranEtkin !== false);
     if (!calisabilir.length) return;
     const onay = await kosuOnayi({ baslik: 'Seçilenleri çalıştır?', senaryolar: calisabilir, ortam, tur: 'tekil', esZamanli: true });
     if (!onay) return;
@@ -441,13 +461,13 @@ function listeGorunumu(icerik, s) {
 
   async function kosuyuBaslat() {
     const gorunen = gorunenler();
-    const kosacaklar = gorunen.filter((x) => x.kosuyaDahil && !kosuDurumu(x.id));
+    const kosacaklar = gorunen.filter((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id));
     if (!kosacaklar.length) return;
     const tam = !filtreliMi();
     const kapsam = ekran ? ekran.ad : 'Genel';
     const onay = await kosuOnayi({
       baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', senaryolar: kosacaklar, ortam, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false,
-      haricSayisi: gorunen.filter((x) => !x.kosuyaDahil).length,
+      haricSayisi: gorunen.filter((x) => !x.kosuyaDahil || x.ekranEtkin === false).length,
       not: tam
         ? (kapsam === 'Genel'
           ? 'Tam koşu olarak kaydedilir; bitince Genel kartlar, Genel trend ve koşulan her ürünün kartları güncellenir.'

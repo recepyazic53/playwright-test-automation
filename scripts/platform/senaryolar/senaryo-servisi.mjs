@@ -21,6 +21,7 @@ import {
 } from '../veritabani/depo.mjs';
 import { acikAnahtar, sifrele } from '../kasa.mjs';
 import { adliAlanlariDonustur, zarflariCoz } from '../aktarim/motor.mjs';
+import { mezarTasiOku } from '../ekranlar/mezar-tasi.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari } from './model-formu.mjs';
 import { kartiNormallestir, krediKartlariAyniMi, senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import {
@@ -128,7 +129,7 @@ export function modelBaglami(vt, ekranId) {
   const altModeller = {};
   for (const dosya of dosyalar) {
     const anahtar = dosya.replace(/\.model\.json$/, '');
-    const e = vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND anahtar = ?', [ekran?.proje_id ?? '', anahtar]);
+    const e = vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND anahtar = ? AND durum <> ? ORDER BY rowid', [ekran?.proje_id ?? '', anahtar, 'silindi']);
     const alt = e ? ekranModeliGetir(vt, String(e.id)) : undefined;
     if (alt && nesneMi(alt.model)) altModeller[dosya] = alt.model;
   }
@@ -214,6 +215,7 @@ export function senaryoListesi(vt, projeId, ortamId, adaptor = null, secenekler 
     if (r.senaryo_anahtari) sonAnahtar.set(String(r.senaryo_anahtari), s);
   }
   const ekranAdi = new Map(ekranlar.map((e) => [e.id, e.ad]));
+  const ekranDurumu = new Map(ekranlar.map((e) => [e.id, e.durum]));
   const satirlar = [];
   /** @type {Map<string, number>} */
   const sayilar = new Map();
@@ -232,6 +234,8 @@ export function senaryoListesi(vt, projeId, ortamId, adaptor = null, secenekler 
     sayilar.set(ekranId ?? '', (sayilar.get(ekranId ?? '') ?? 0) + 1);
     satirlar.push({
       id: String(s.id), baslik: String(s.baslik), ekranId, ekranAdi: ekranId ? ekranAdi.get(ekranId) ?? null : null,
+      // Ekran devre dışıysa senaryo hiçbir koşuya girmez (Koşuyu başlat, ▷, npm run test; bkz. ekran-yonetimi.mjs).
+      ekranEtkin: ekranId ? ekranDurumu.get(ekranId) !== 'devre_disi' : true,
       kosuyaDahil: s.kosuya_dahil === 1, veriGudumlu: veriGudumluMu(icerik), modelVar: Boolean(bilgi?.model),
       kaynak: senaryoKaynagi(icerik),
       baglamProfili: profilAlani ? { deger: profilDegeri, varsayilan: profilDegeri ? false : true, ad: profilDegeri ?? profilAlani.varsayilanProfil } : null,
@@ -245,7 +249,7 @@ export function senaryoListesi(vt, projeId, ortamId, adaptor = null, secenekler 
   }
   return {
     ekranlar: ekranlar.filter((e) => !altModelEkranlari.has(e.id)).map((e) => ({
-      id: e.id, anahtar: e.anahtar, ad: e.ad, senaryoSayisi: sayilar.get(e.id) ?? 0,
+      id: e.id, anahtar: e.anahtar, ad: e.ad, senaryoSayisi: sayilar.get(e.id) ?? 0, durum: e.durum,
       modelVar: Boolean(semalar.get(e.id)?.model), olusturulabilir: Boolean(semalar.get(e.id)?.sema) && Boolean(ekranVeriKaynagi(vt, projeId, e, adaptor))
     })),
     senaryolar: satirlar
@@ -643,14 +647,26 @@ export function kodKaldirilmisSenaryolar(vt, projeId, ortamId, secenekler) {
     kodDosyasiVar: secenekler.kodDosyasiVar,
     ...(secenekler.testListesi ? { testVar: ((liste) => (/** @type {string} */ d, /** @type {string} */ a) => liste.has(`${d}::${a}`))(new Set(secenekler.testListesi.map((t) => `${t.dosya}::${t.ad}`))) } : {})
   };
+  // Silinmiş ekranların (mezar taşı) kodu kaldırılan / hariç tutulan dosyaları: bu dosyalara bağlı (ör. yedekten ya da
+  // aktarımdan gelen) kalıntı satırlar "kodu kaldırılmış" uyarısı üretmez — ekran bilerek silindi.
+  /** @type {Set<string>} */
+  const silinmisDosyalar = new Set();
+  for (const e of vt.tumu("SELECT silinme_json FROM ekranlar WHERE proje_id = ? AND durum = 'silindi'", [projeId])) {
+    const m = mezarTasiOku(e.silinme_json);
+    if (m) for (const d of [...m.kaldirilanDosyalar, ...m.kod.dosyalar]) silinmisDosyalar.add(d);
+  }
   /** @type {Array<{ id: string; baslik: string; neden: 'dosya-yok' | 'baslik-yok'; dosya: string | null; ad: string | null }>} */
   const sonuc = [];
-  for (const r of vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? ORDER BY baslik', [projeId])) {
+  for (const r of vt.tumu(
+    "SELECT s.id, s.baslik, s.icerik_json FROM senaryolar s LEFT JOIN ekranlar e ON e.id = s.ekran_id WHERE s.proje_id = ? AND (e.durum IS NULL OR e.durum <> 'silindi') ORDER BY s.baslik",
+    [projeId]
+  )) {
     const s = { id: String(r.id), icerik: JSON.parse(String(r.icerik_json)) };
     if (!ortamKimlikleri(s.icerik).includes(ortamId)) continue;
     const neden = kodKaldirilmaNedeni(s, b);
     if (!neden) continue;
     const k = kodKaynagi(s, b.eslemeAnahtarlari);
+    if (k && silinmisDosyalar.has(k.dosya)) continue;
     sonuc.push({ id: s.id, baslik: String(r.baslik), neden, dosya: k?.dosya ?? null, ad: k?.ad ?? null });
   }
   return { senaryolar: sonuc, baslikDenetlendi: Boolean(secenekler.testListesi) };

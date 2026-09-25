@@ -95,21 +95,32 @@ function saglikSinifi(son) {
   return o >= 90 ? 'basari' : o >= 75 ? 'uyari' : 'hata';
 }
 
+/** Ekranı devre dışı / silinmiş ürünün rozeti (sonuçlar görünür kalır). */
+function ekranDurumRozeti(durum) {
+  if (durum === 'devre_disi') return rozet('devre dışı', 'atlanan', { title: 'Ekran devre dışı: yeni koşulara girmez; geçmiş sonuçlar görünür' });
+  if (durum === 'silindi') return rozet('silinmiş ekran', 'hata', { title: 'Ekran silindi; geçmiş sonuçları korunuyor' });
+  return null;
+}
+
 function urunListesi(nav, ekranlar, secili) {
   const toplamSenaryo = ekranlar.reduce((a, e) => a + (e.senaryoSayisi || 0), 0);
-  const baglanti = (anahtar, ad, adet, son, ikonAd) => {
+  const baglanti = (anahtar, ad, adet, son, ikonAd, durum) => {
     const o = son ? oran(son) : null;
     return h('a', {
       href: anahtar ? `#/sonuclar/u/${encodeURIComponent(anahtar)}` : '#/sonuclar',
-      'aria-current': (secili || '') === (anahtar || '') && secili !== null ? 'page' : null
-    }, ikonAd ? ikon(ikonAd) : h('span', { class: `saglik ${saglikSinifi(son)}`, 'aria-hidden': 'true' }), ad,
+      'aria-current': (secili || '') === (anahtar || '') && secili !== null ? 'page' : null,
+      class: durum === 'devre_disi' || durum === 'silindi' ? 'devre-disi' : null,
+      title: durum === 'devre_disi' ? `${ad} — devre dışı` : durum === 'silindi' ? `${ad} — silinmiş ekran` : null
+    }, ikonAd ? ikon(ikonAd) : h('span', { class: `saglik ${saglikSinifi(son)}`, 'aria-hidden': 'true' }), h('span', { class: 'nav-metni' }, ad),
+    durum === 'silindi' ? h('span', { class: 'nav-etiketi', 'aria-hidden': 'true' }, 'silinmiş') : durum === 'devre_disi' ? h('span', { class: 'nav-etiketi', 'aria-hidden': 'true' }, 'kapalı') : null,
+    durum === 'silindi' || durum === 'devre_disi' ? h('span', { class: 'gorunmez' }, durum === 'silindi' ? ' (silinmiş ekran)' : ' (devre dışı)') : null,
     adet ? h('span', { class: 'adet' }, String(adet)) : null,
     o !== null ? h('span', { class: 'gorunmez' }, ` — son koşu başarı oranı %${o}`) : null);
   };
   nav.replaceChildren(
     baglanti('', 'Genel', toplamSenaryo, null, 'izgara'),
     h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ürünler / ekranlar'),
-    ...ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son)));
+    ...ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -152,6 +163,7 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
   meta.push(h('span', {}, ikon('liste'), `${urun ? (ekran ? ekran.senaryoSayisi : 0) : ozet.ekranlar.reduce((a, e) => a + (e.senaryoSayisi || 0), 0)} senaryo`));
   if (!urun) meta.push(h('span', {}, ikon('ekran'), `${ozet.ekranlar.length} ürün / ekran`));
   if (urun && kart && kart.son.kapsam) meta.push(h('span', {}, ikon('hedef'), `kapsam: ${kart.son.kapsam}`));
+  if (ekran && ekranDurumRozeti(ekran.ekranDurumu)) meta.push(h('span', {}, ekranDurumRozeti(ekran.ekranDurumu)));
 
   const degisimAlani = h('div', {});
   const solSutun = h('div', { class: 'sonuc-sutunu' }, trendAlani, degisimAlani);
@@ -167,7 +179,9 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
           basarisizSayisi ? rozet([ikon('uyari'), `${basarisizSayisi} başarısız`], 'hata') : kart ? rozet([ikon('onay'), 'hepsi geçti'], 'basari') : null),
         h('div', { class: 'meta' }, meta)),
       h('div', { class: 'eylemler' }, aralikSegmenti,
-        h('a', { class: 'dugme birincil', href: urun && !urun.startsWith('ad:') ? `#/senaryolar/u/${encodeURIComponent(urun)}` : '#/senaryolar', title: 'Senaryolar ekranında onayla başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),
+        // Silinmiş / devre dışı ekranın koşusu başlatılamaz (sonuçları yalnızca görüntülenir).
+        ekran && (ekran.ekranDurumu === 'silindi' || ekran.ekranDurumu === 'devre_disi') ? null
+          : h('a', { class: 'dugme birincil', href: urun && !urun.startsWith('ad:') ? `#/senaryolar/u/${encodeURIComponent(urun)}` : '#/senaryolar', title: 'Senaryolar ekranında onayla başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),
     kartAlani, izgara,
     h('div', { class: 'sonuc-sutunu alt-bolumler' }, kosuGecmisi(ozet.kosuGecmisi, urun), kalipAlani));
   ciz();
@@ -701,7 +715,7 @@ async function testPaneli(alan, id, kapat) {
       h('div', { class: 'satir' }, durumRozeti(s2.durum), s2.hataKategorisi ? rozet(kisaKategori(s2.hataKategorisi)) : null, rozet(sureMetni(s2.sureMs)),
         h('button', { type: 'button', class: 'ikon-dugme hayalet kapat', 'aria-label': 'Paneli kapat', onclick: kapat }, ikon('carpi'))),
       h('h3', {}, s2.senaryoBaslik),
-      h('div', { class: 'm' }, h('span', {}, s2.urun), s2.deneme ? h('span', {}, `${s2.deneme}. yeniden deneme`) : null,
+      h('div', { class: 'm' }, h('span', {}, s2.urun, ' ', ekranDurumRozeti(s2.ekranDurumu)), s2.deneme ? h('span', {}, `${s2.deneme}. yeniden deneme`) : null,
         h('span', {}, `${saatMetni(s2.baslangic)} → ${saatMetni(s2.bitis)}`))),
     h('div', { class: 'bolum' }, gv.kap),
     h('div', { class: 'panel-eylemleri' }, izle,
@@ -726,7 +740,7 @@ async function kosuDetayi(icerik, id, proje) {
   const ortam = kosu.ortamId ? (ortamlar.find((o) => o.id === kosu.ortamId) || {}).ad : null;
   const satir = (x) => h('tr', {},
     h('td', {}, durumRozeti(x.durum)),
-    h('td', {}, x.urun),
+    h('td', {}, x.urun, x.ekranDurumu === 'silindi' || x.ekranDurumu === 'devre_disi' ? [' ', ekranDurumRozeti(x.ekranDurumu)] : null),
     h('td', {}, h('a', { href: `#/sonuclar/sonuc/${encodeURIComponent(x.id)}` }, x.senaryoBaslik)),
     h('td', { class: 'sayi' }, sureMetni(x.sureMs)),
     h('td', { class: 'kalip' }, x.hataKalibi || ''),
@@ -847,7 +861,7 @@ async function sonucDetayi(icerik, id, proje) {
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Test')),
         h('h2', { tabindex: '-1' }, s2.senaryoBaslik),
         h('div', { class: 'meta' },
-          h('span', {}, durumRozeti(s2.durum)), h('span', {}, rozet(s2.urun, 'vurgu')),
+          h('span', {}, durumRozeti(s2.durum)), h('span', {}, rozet(s2.urun, 'vurgu')), ekranDurumRozeti(s2.ekranDurumu) ? h('span', {}, ekranDurumRozeti(s2.ekranDurumu)) : null,
           h('span', {}, ikon('saat'), h('span', { class: 'mono' }, sureMetni(s2.sureMs))),
           s2.deneme ? h('span', {}, rozet(`${s2.deneme}. yeniden deneme`, 'atlanan')) : null,
           h('span', {}, ikon('takvim'), h('span', { class: 'mono' }, `${kisaTarih(s2.baslangic)} → ${saatMetni(s2.bitis)}`)),

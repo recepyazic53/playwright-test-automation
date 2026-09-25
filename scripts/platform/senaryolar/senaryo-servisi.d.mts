@@ -38,6 +38,8 @@ export interface SenaryoSatiri {
   modelKosusu: boolean;
   /** Kodu kaldırılmış mı (spec dosyası diskte yok)? Başlık denetimi kodKaldirilmisSenaryolar ile yapılır. */
   kodDurumu: 'dosya-yok' | 'baslik-yok' | null;
+  /** Ekranı devre dışıysa false: senaryo hiçbir koşuya girmez. */
+  ekranEtkin: boolean;
   guncellenme: string;
 }
 export type ModelSecenekleri = { kodDosyasiVar?: (dosya: string) => boolean };
@@ -45,7 +47,7 @@ export declare function modelKosusuMu(
   vt: Veritabani, projeId: string, s: { id: string; icerik: unknown }, secenekler?: ModelSecenekleri & { eslemeliler?: Set<string> }
 ): boolean;
 export declare function senaryoListesi(vt: Veritabani, projeId: string, ortamId: string, adaptor?: AktarimAdaptoru | null, secenekler?: ModelSecenekleri): {
-  ekranlar: Array<{ id: string; anahtar: string; ad: string; senaryoSayisi: number; modelVar: boolean; olusturulabilir: boolean }>;
+  ekranlar: Array<{ id: string; anahtar: string; ad: string; senaryoSayisi: number; durum: 'etkin' | 'devre_disi' | 'silindi'; modelVar: boolean; olusturulabilir: boolean }>;
   senaryolar: SenaryoSatiri[];
 };
 export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: string | null): {

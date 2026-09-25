@@ -336,9 +336,20 @@ export function aktarimiUygula(vt, paket, secenekler = {}) {
 
     /** @type {Record<string, string[]>} */
     const atlananlar = { ayni: [], silinmis: [], ortamYok: [] };
+    // Kullanıcının Ekranlar'dan SİLDİĞİ ekranlar (mezar taşı; bkz. ekranlar/ekran-yonetimi.mjs): kaynak değişmiş olsa da
+    // ekran, modeli ve senaryoları yeniden eklenmez/güncellenmez (ekran önce geri yüklenmelidir).
+    const silinmisEkranlar = new Set(vt.tumu("SELECT id FROM ekranlar WHERE proje_id = ? AND durum = 'silindi'", [projeId]).map((e) => String(e.id)));
+    const silinmisEkranaAit = (/** @type {PlanOgesi} */ o) => {
+      if (!silinmisEkranlar.size) return false;
+      const g = /** @type {Record<string, unknown>} */ (o.oge);
+      if (o.tur === 'ekran') return silinmisEkranlar.has(o.id);
+      if (o.tur === 'ekran_modeli') return silinmisEkranlar.has(String(g.ekranId ?? ''));
+      if (o.tur === 'senaryo' && typeof g.ekran === 'string') return silinmisEkranlar.has(kimlik('ekran', g.ekran) ?? '');
+      return false;
+    };
     for (const o of plan.ogeler) {
       if (o.islem === 'ayni') { atlananlar.ayni.push(`${o.tur}:${o.anahtar}`); continue; }
-      if (o.islem === 'silinmis') { atlananlar.silinmis.push(`${o.tur}:${o.anahtar}`); continue; }
+      if (o.islem === 'silinmis' || silinmisEkranaAit(o)) { atlananlar.silinmis.push(`${o.tur}:${o.anahtar}`); continue; }
       const g = /** @type {Record<string, *>} */ (o.oge);
       const ortamGerekli = 'ortam' in g && g.ortam !== null && g.ortam !== undefined;
       const oid = ortamGerekli ? ortamId(g.ortam) : null;

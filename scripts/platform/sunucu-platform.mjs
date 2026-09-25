@@ -72,6 +72,15 @@
 //   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
 //   POST /platform/ekran/claude-dosyasi { projeId, ekranId, tur, baglamProfilleri? } → <veritabanı klasörü>/analiz/*.json
 //        (gizli değer içermez; Claude API KULLANILMAZ — dosya kullanıcı tarafından Claude Code'a verilir)
+// Ekran yönetimi (Ekranlar > ⋯; bkz. ekranlar/ekran-yonetimi.mjs; geçmiş: GET /platform/gecmis?varlikTuru=ekran&varlikId=):
+//   POST /platform/ekran/yeniden-adlandir { projeId, ekranId, ad, aciklama? }   görünen ad (anahtar değişmez)
+//   POST /platform/ekran/duzenle { projeId, ekranId, urlYolu }                   yeni model sürümü (yalnızca ekranUrl)
+//   POST /platform/ekran/sirala { projeId, idler }                               sol listelerdeki sıra
+//   POST /platform/ekran/durum { projeId, ekranId, etkin }                       devre dışı bırak / etkinleştir
+//   POST /platform/ekran/sil/onizle { projeId, ekranId }                         KURU ÇALIŞTIRMA: sayılar + kaldırılacak dosyalar
+//   POST /platform/ekran/sil { projeId, ekranId, onayAdi, sonuclariSil?, koduKaldir?, beklenenDosyalar? }
+//        kalıcı sil; kod yalnızca <kod kökü>/tests/scenarios altından ve önizlemedeki listeyle AYNIYSA kaldırılır
+//   POST /platform/ekran/geri-yukle { projeId, ekranId }                         silinmiş ekranı (mezar taşı) geri getirir
 // Senaryo dosyaları (ŞİFRELİ medya deposunda, tür 'senaryo-dosyasi'; bkz. dosyalar/senaryo-dosyalari.mjs):
 //   POST /platform/senaryo-dosyasi/yukle?projeId=&ekranId=&alan=   ham dosya gövdesi + X-Dosya-Adi → { dosya: { id, ad,
 //        boyut, referans } } (bellekte şifrelenir; düz metin diske yazılmaz; uzantı modeldeki alanın "kabul"ünden)
@@ -155,6 +164,9 @@ import {
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta
 } from './ekranlar/ekran-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
+import {
+  ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
+} from './ekranlar/ekran-yonetimi.mjs';
 import { taramaIsteginiIsle } from './tarama/yonetici.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
@@ -167,8 +179,14 @@ export const YEDEK_YUKLEME_SINIRI = 20 * 1024 * 1024 * 1024;
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 /** PLATFORM_VERITABANI veya <proje kökü>/veri/platform.db */
 const veritabaniYolu = () => veritabaniYoluCoz(PROJE_KOKU);
+/**
+ * Test KODUNUN kökü (tests/ bunun altında): "kodu kaldırılmış" denetimi ve Ekranlar > Sil > "test kodu da kaldırılsın".
+ * Varsayılan proje köküdür; NOBETCI_KOD_KOKU yalnızca testler içindir (geçici bir kopya üzerinde kod kaldırma denenir,
+ * gerçek tests/scenarios'a dokunulmaz).
+ */
+const KOD_KOKU = process.env.NOBETCI_KOD_KOKU && process.env.NOBETCI_KOD_KOKU.trim() ? resolve(process.env.NOBETCI_KOD_KOKU.trim()) : PROJE_KOKU;
 /** Senaryonun kaynağındaki spec dosyası (testDir = tests/) diskte var mı? Yoksa senaryo model koşucusuyla çalışır. */
-const kodDosyasiVar = (/** @type {string} */ dosya) => existsSync(join(PROJE_KOKU, 'tests', dosya));
+const kodDosyasiVar = (/** @type {string} */ dosya) => existsSync(join(KOD_KOKU, 'tests', dosya));
 /**
  * Model/senaryo koşularının seçenekleri: yasaklı adres kalıpları (Ayarlar > Güvenlik > "Yasak adresler" +
  * NOBETCI_YASAK_ADRESLER) her istekte okunur.
@@ -991,6 +1009,36 @@ const POST_UCLARI = new Map([
     });
     console.log(`[platform] Claude analiz dosyası yazıldı: ${s.yol}`);
     return { yol: s.yol, cumle: s.cumle };
+  }],
+  // Ekran yönetimi (Ekranlar > ⋯; bkz. ekranlar/ekran-yonetimi.mjs). Her işlem degisiklik_gecmisi'ne yazılır.
+  ['/platform/ekran/yeniden-adlandir', (db, g) => ekranYenidenAdlandir(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { ad: g.ad, aciklama: g.aciklama })],
+  ['/platform/ekran/duzenle', (db, g) => ekranDuzenle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { urlYolu: g.urlYolu })],
+  ['/platform/ekran/sirala', (db, g) => {
+    if (!Array.isArray(g.idler) || g.idler.length > 1000) throw new DepoHatasi('"idler" bir kimlik dizisi olmalıdır.');
+    return ekranlariSirala(db, kimlikAl(g.projeId, 'projeId'), g.idler.map((x) => kimlikAl(x, 'idler')));
+  }],
+  ['/platform/ekran/durum', (db, g) => {
+    if (typeof g.etkin !== 'boolean') throw new DepoHatasi('"etkin" true ya da false olmalıdır.');
+    const sonuc = ekranDurumunuAyarla(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.etkin);
+    if (sonuc.degisti) console.log(`[platform] Ekran ${g.etkin ? 'etkinleştirildi' : 'devre dışı bırakıldı'}.`);
+    return sonuc;
+  }],
+  ['/platform/ekran/geri-yukle', (db, g) => {
+    const sonuc = ekranGeriYukle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'));
+    console.log('[platform] Silinmiş ekran geri yüklendi.');
+    return sonuc;
+  }],
+  // KURU ÇALIŞTIRMA: silinecek sayılar + kaldırılacak test dosyalarının tam listesi (hiçbir şey değişmez).
+  ['/platform/ekran/sil/onizle', (db, g) => ({ onizleme: ekranSilmeOnizlemesi(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { kodKoku: KOD_KOKU }) })],
+  ['/platform/ekran/sil', (db, g) => {
+    if (g.sonuclariSil !== undefined && typeof g.sonuclariSil !== 'boolean') throw new DepoHatasi('"sonuclariSil" true ya da false olmalıdır.');
+    if (g.koduKaldir !== undefined && typeof g.koduKaldir !== 'boolean') throw new DepoHatasi('"koduKaldir" true ya da false olmalıdır.');
+    const sonuc = ekranSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
+      onayAdi: g.onayAdi, sonuclariSil: g.sonuclariSil === true, koduKaldir: g.koduKaldir === true, beklenenDosyalar: g.beklenenDosyalar,
+      kodKoku: KOD_KOKU, medyaKlasoru: medyaKlasoruYolu(), kosuyorMu
+    });
+    console.log(`[platform] Ekran silindi (${sonuc.silinen.senaryo} senaryo, ${sonuc.silinen.modelSurumu} model sürümü, ${sonuc.silinen.sonuc} sonuç, ${sonuc.kod.kaldirilanlar.length} kod dosyası kaldırıldı${sonuc.mezarTasi ? '; mezar taşı kaldı' : ''}).`);
+    return sonuc;
   }],
   ['/platform/senaryo/kaydet', (db, g) => {
     const projeId = kimlikAl(g.projeId, 'projeId');

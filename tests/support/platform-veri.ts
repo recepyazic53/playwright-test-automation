@@ -73,7 +73,7 @@ export type PlatformYasakAdresleri = string[];
 type DurumCiktisi =
   | { durum: 'veritabani-yok' }
   | { durum: 'aktarilmamis' }
-  | { durum: 'aktarildi'; sonAktarim: string | null; haricTutulanlar: string[] };
+  | { durum: 'aktarildi'; sonAktarim: string | null; haricTutulanlar: string[]; haricTutulanDosyalar?: string[] };
 
 type VeriCiktisi = Extract<DurumCiktisi, { durum: 'aktarildi' }> & {
   anahtarYok?: boolean;
@@ -223,6 +223,14 @@ export function platformHaricTutulanAnahtarlar(): string[] {
   return platformHazirOlmali().haricTutulanlar;
 }
 
+/**
+ * Devre dışı / silinmiş ekranların TÜM testleri koşudan hariç tutulan spec dosyaları (testDir'e göre, "/" ayraçlı) —
+ * veritabanından (kasa gerektirmez; bkz. scripts/platform/ekranlar/ekran-yonetimi.mjs > ekranHaricKapsami).
+ */
+export function platformHaricTutulanDosyalar(): string[] {
+  return platformHazirOlmali().haricTutulanDosyalar ?? [];
+}
+
 /** Senaryonun platform kimliği (UUID) — kasa anahtarı bu süreçte varsa. */
 export function platformSenaryoKimligi(ortam: EnvironmentName, anahtar: string): string | undefined {
   return platformVerisiVarsa(ortam)?.senaryoKimlikleri[anahtar];
@@ -235,6 +243,8 @@ export type PlatformModelSenaryosu = {
   id: string;
   baslik: string;
   kosuyaDahil: boolean;
+  /** Ekran devre dışıysa false (senaryo koşuya girmez; Nöbetçi'nin tam listesi yine görür). */
+  ekranEtkin?: boolean;
   ekran: { id: string; anahtar: string; ad: string };
   /** Ekranın en son model sürümü (yoksa null — test açık bir hatayla başarısız olur). */
   model: Record<string, unknown> | null;

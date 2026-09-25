@@ -7,7 +7,9 @@
 //   - <ad>: senaryonun (test) başlığı. Aynı başlık birden fazla ürün dosyasında
 //     tekrarlanabildiği için anahtar dosya + başlık ikilisidir.
 // Veritabanında olmayan her test (kodla yeni eklenenler dahil) varsayılan olarak koşuya DAHİLDİR.
-import { platformHaricTutulanAnahtarlar } from './platform-veri';
+// EKRAN DÜZEYİ: Nöbetçi > Ekranlar'da devre dışı bırakılan ya da silinen (kodu kaldırılmamış) ekranların spec dosyalarının
+// TÜM testleri dosya deseniyle hariç tutulur (kodla sonradan eklenen testler dahil) — bkz. platformHaricTutulanDosyalar.
+import { platformHaricTutulanAnahtarlar, platformHaricTutulanDosyalar } from './platform-veri';
 
 export const KOSU_LISTESI_ANAHTAR_AYRACI = '::';
 
@@ -34,11 +36,21 @@ export function anahtardanGrepDeseni(anahtar: string): RegExp | null {
   return new RegExp(`(?:^|\\s)${dosyaDeseni}\\s(?:.*\\s)?${regexIcinKac(ad)}(?:\\s@\\S+)*$`);
 }
 
-// playwright.config.ts > grepInvert için: hariç tutulan her anahtarın deseni. Boşsa
-// undefined döner (grepInvert hiç verilmez). Liste veritabanından gelir (bkz. platform-veri.ts).
-export function kosuListesiHaricDesenleri(anahtarlar: readonly string[] = platformHaricTutulanAnahtarlar()): RegExp[] | undefined {
-  const desenler = anahtarlar
-    .map(anahtardanGrepDeseni)
+// Bir spec dosyasının (testDir'e göre, "/" ayraçlı) TÜM testlerini eşleştiren desen: dosya suite başlığı + boşluk.
+// Dosya yolu ".." / mutlak yol içeremez (veritabanından gelen yol yine de kaçışlanır).
+export function dosyadanGrepDeseni(dosya: string): RegExp | null {
+  const d = dosya.replace(/\\/g, '/');
+  if (!d || d.startsWith('/') || d.split('/').some((p) => p === '' || p === '..')) return null;
+  return new RegExp(`(?:^|\\s)${d.split('/').map(regexIcinKac).join('[\\\\/]')}\\s`);
+}
+
+// playwright.config.ts > grepInvert için: hariç tutulan her anahtarın ve (ekran düzeyinde) her dosyanın deseni.
+// Boşsa undefined döner (grepInvert hiç verilmez). Listeler veritabanından gelir (bkz. platform-veri.ts).
+export function kosuListesiHaricDesenleri(
+  anahtarlar: readonly string[] = platformHaricTutulanAnahtarlar(),
+  dosyalar: readonly string[] = platformHaricTutulanDosyalar()
+): RegExp[] | undefined {
+  const desenler = [...anahtarlar.map(anahtardanGrepDeseni), ...dosyalar.map(dosyadanGrepDeseni)]
     .filter((desen): desen is RegExp => desen !== null);
   return desenler.length ? desenler : undefined;
 }

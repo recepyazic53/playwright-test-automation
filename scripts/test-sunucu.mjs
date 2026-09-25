@@ -347,6 +347,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/kosu-paneli.js', { dosya: 'kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekranlar.js', { dosya: 'ekranlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekran-ortak.js', { dosya: 'ekran-ortak.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ekran-yonetimi.js', { dosya: 'ekran-yonetimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sayfa-paketi.js', { dosya: 'sayfa-paketi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/bulgular.js', { dosya: 'bulgular.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/dosya-yukleme.js', { dosya: 'dosya-yukleme.js', tur: 'text/javascript; charset=utf-8' }],

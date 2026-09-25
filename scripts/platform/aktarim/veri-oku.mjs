@@ -5,7 +5,8 @@
 // sonuç yalnızca stdout borusundan (bellekte) üst sürece döner, hiçbir dosyaya yazılmaz.
 //
 // Kullanım: node veri-oku.mjs <kip> --adaptor <ad> [--ortam <ortam>]
-//   durum   → veritabanı/aktarım durumu + koşudan hariç senaryo anahtarları (kasa GEREKMEZ)
+//   durum   → veritabanı/aktarım durumu + koşudan hariç senaryo anahtarları ve (devre dışı/silinmiş ekranların)
+//             spec dosyaları (kasa GEREKMEZ)
 //   veri    → durum + adaptörün yenidenKur çıktısı (test verisi, ekran modelleri, taban adres, giriş) +
 //             etkin giriş tarifi (girisTarifi: { tarif, kaynak, hatalar } | null)
 //             (PLATFORM_KASA_ANAHTARI [base64url] ya da PLATFORM_KASA_PAROLASI gerekir)
@@ -34,6 +35,7 @@ import { medyaKlasoru } from '../medya.mjs';
 import { referanslariBul, referanslariCoz } from '../dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from '../dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from '../guvenlik/yasak-adresler.mjs';
+import { ekranHaricKapsami } from '../ekranlar/ekran-yonetimi.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
@@ -69,12 +71,16 @@ async function calistir() {
     const proje = aktarilmisProjeyiBul(vt, adaptor.ad);
     if (!proje || !kasaVar) return { durum: 'aktarilmamis', kasaVar };
     const aktarim = /** @type {Record<string, unknown>} */ (proje.ayarlar.aktarim ?? {});
+    // Koşu listesi: senaryo düzeyinde "Koşuda" kapalı olanlar + devre dışı / silinmiş ekranların testleri (ekran düzeyi;
+    // bkz. ekranlar/ekran-yonetimi.mjs). Dosya düzeyi hariç tutma, kodla sonradan eklenen testleri de kapsar.
+    const ekranKapsami = ekranHaricKapsami(vt, proje.id);
     const temel = {
       durum: 'aktarildi',
       kasaVar,
       projeId: proje.id,
       sonAktarim: aktarim.sonAktarim ?? null,
-      haricTutulanlar: adaptor.kosudanHaricAnahtarlar(vt, proje.id)
+      haricTutulanlar: [...new Set([...adaptor.kosudanHaricAnahtarlar(vt, proje.id), ...ekranKapsami.anahtarlar])],
+      haricTutulanDosyalar: ekranKapsami.dosyalar
     };
     if (kip === 'durum') return temel;
     if (kip !== 'veri' && kip !== 'model') return { hata: 'Bilinmeyen kip.', kod: 'KIP' };
@@ -167,6 +173,8 @@ function modelSenaryolari(vt, projeId, ortamAnahtari) {
     const kurallar = icerik.alanKurallari && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli) ? icerik.alanKurallari.mutlakaGorunmeli.filter((x) => typeof x === 'string') : [];
     senaryolar.push({
       id: String(s.id), baslik: String(s.baslik), kosuyaDahil: s.kosuya_dahil === 1,
+      // Devre dışı ekranın senaryosu koşuya girmez (model spec'i süzer; Nöbetçi'nin tam listesi yine görür).
+      ekranEtkin: ekran ? ekran.durum === 'etkin' : false,
       ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: ekranId, anahtar: '', ad: '' },
       model: mb ? mb.model : null, modelSurumu: mb ? mb.surum : null, altModeller: mb ? mb.altModeller : {},
       veri: 'veri' in buOrtam ? zarflariCoz(vt, buOrtam.veri) : {}, mutlakaGorunmeli: kurallar

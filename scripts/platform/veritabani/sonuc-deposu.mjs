@@ -143,7 +143,7 @@ export function sonucKaydet(vt, g) {
     let ekranId = senaryoId ? /** @type {string | null} */ (vt.tek('SELECT ekran_id FROM senaryolar WHERE id = ?', [senaryoId])?.ekran_id ?? null) : null;
     const urunAdi = metin(g.urunAdi, 200);
     if (!ekranId && urunAdi) {
-      ekranId = /** @type {string | null} */ (vt.tek('SELECT id FROM ekranlar WHERE proje_id = ? AND ad = ?', [projeId, urunAdi])?.id ?? null);
+      ekranId = /** @type {string | null} */ (vt.tek("SELECT id FROM ekranlar WHERE proje_id = ? AND ad = ? ORDER BY (durum = 'silindi'), rowid", [projeId, urunAdi])?.id ?? null);
     }
     const hata = metin(g.hataMesaji);
     const basarisiz = g.durum === 'basarisiz';
@@ -223,17 +223,19 @@ export function sonucOzeti(vt, projeId, secim = {}) {
   const kosular = kosulariHesapIcinOku(vt, projeId);
   const kartlar = kartlariHesapla(kosular);
   const ekranlar = vt.tumu(
-    `SELECT e.id, e.ad, (SELECT COUNT(*) FROM senaryolar s WHERE s.ekran_id = e.id) AS senaryo_sayisi
-       FROM ekranlar e WHERE e.proje_id = ? ORDER BY e.ad`, [projeId]
+    `SELECT e.id, e.ad, e.durum, (SELECT COUNT(*) FROM senaryolar s WHERE s.ekran_id = e.id) AS senaryo_sayisi
+       FROM ekranlar e WHERE e.proje_id = ? ORDER BY (e.sira IS NULL), e.sira, e.ad`, [projeId]
   ).map((e) => ({
     anahtar: String(e.id), ad: String(e.ad), senaryoSayisi: Number(e.senaryo_sayisi),
+    // 'devre_disi' / 'silindi' (mezar taşı): sonuçlar görünür kalır, arayüz rozet gösterir.
+    ekranDurumu: /** @type {string | null} */ (e.durum == null ? null : String(e.durum)),
     son: /** @type {import('../sonuclar/hesaplama.mjs').Sayilar | null} */ (null)
   }));
   // Ekranı olmayan sonuç ürünleri (ör. eşleşmeyen eski sonuçlar) de listede görünür.
   const bilinen = new Set(ekranlar.map((e) => e.anahtar));
   for (const k of kosular) {
     for (const a of Object.keys(k.urunler)) {
-      if (!bilinen.has(a)) { bilinen.add(a); ekranlar.push({ anahtar: a, ad: a.slice(3), senaryoSayisi: 0, son: null }); }
+      if (!bilinen.has(a)) { bilinen.add(a); ekranlar.push({ anahtar: a, ad: a.slice(3), senaryoSayisi: 0, ekranDurumu: null, son: null }); }
     }
   }
   // Sol listedeki sağlık noktası için: her ürünün son tam koşusundaki sayılar (yoksa null).
@@ -248,7 +250,8 @@ export function sonucOzeti(vt, projeId, secim = {}) {
     urunSayisi: Object.keys(k.urunler).length
   }));
   return {
-    ekranlar,
+    // Silinmiş ekran (mezar taşı) yalnızca sonucu varsa listelenir.
+    ekranlar: ekranlar.filter((e) => e.ekranDurumu !== 'silindi' || kosular.some((k) => k.urunler[e.anahtar])),
     kart: urun ? kartlar.urunler[urun] ?? null : kartlar.genel,
     trend: trendHesapla(kosular, urun),
     kosuGecmisi: gecmis
@@ -261,7 +264,7 @@ export function kosuDetayi(vt, kosuId) {
   if (!k) return null;
   const sonuclar = vt.tumu(
     `SELECT r.id, r.senaryo_id, r.senaryo_baslik, r.senaryo_anahtari, r.durum, r.ham_durum, r.sure_ms, r.hata_kategorisi, r.hata_kalibi,
-            r.ekran_id, r.urun_adi, e.ad AS ekran_adi, r.baslangic, r.bitis, r.deneme,
+            r.ekran_id, r.urun_adi, e.ad AS ekran_adi, e.durum AS ekran_durumu, r.baslangic, r.bitis, r.deneme,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu') AS ekran_goruntusu_sayisi,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'video' AND m.silinme IS NULL) AS video_sayisi
        FROM kosu_sonuclari r LEFT JOIN ekranlar e ON e.id = r.ekran_id WHERE r.kosu_id = ? ORDER BY r.rowid`, [kosuId]
@@ -271,6 +274,7 @@ export function kosuDetayi(vt, kosuId) {
     durum: String(s.durum), hamDurum: s.ham_durum == null ? null : String(s.ham_durum), sureMs: s.sure_ms == null ? null : Number(s.sure_ms),
     hataKategorisi: s.hata_kategorisi == null ? null : String(s.hata_kategorisi), hataKalibi: s.hata_kalibi == null ? null : String(s.hata_kalibi),
     urun: s.ekran_adi != null ? String(s.ekran_adi) : s.urun_adi != null ? String(s.urun_adi) : 'Diğer', urunAnahtari: urunAnahtari(s),
+    ekranDurumu: s.ekran_durumu == null ? null : String(s.ekran_durumu),
     baslangic: s.baslangic == null ? null : String(s.baslangic), bitis: s.bitis == null ? null : String(s.bitis), deneme: Number(s.deneme ?? 0),
     ekranGoruntusuSayisi: Number(s.ekran_goruntusu_sayisi), videoSayisi: Number(s.video_sayisi)
   }));
@@ -299,7 +303,7 @@ const medyaGorunumu = (m) => ({
 /** @param {Veritabani} vt @param {string} sonucId */
 export function sonucDetayi(vt, sonucId) {
   const s = vt.tek(
-    `SELECT r.*, e.ad AS ekran_adi, k.tur AS kosu_turu, k.kapsam AS kosu_kapsami, k.proje_id AS proje_id
+    `SELECT r.*, e.ad AS ekran_adi, e.durum AS ekran_durumu, k.tur AS kosu_turu, k.kapsam AS kosu_kapsami, k.proje_id AS proje_id
        FROM kosu_sonuclari r JOIN kosular k ON k.id = r.kosu_id LEFT JOIN ekranlar e ON e.id = r.ekran_id WHERE r.id = ?`, [sonucId]
   );
   if (!s) return null;
@@ -310,6 +314,7 @@ export function sonucDetayi(vt, sonucId) {
     id: String(s.id), kosuId: String(s.kosu_id), projeId: String(s.proje_id), senaryoId: s.senaryo_id == null ? null : String(s.senaryo_id),
     senaryoBaslik: String(s.senaryo_baslik), senaryoAnahtari: s.senaryo_anahtari == null ? null : String(s.senaryo_anahtari),
     urun: s.ekran_adi != null ? String(s.ekran_adi) : s.urun_adi != null ? String(s.urun_adi) : 'Diğer',
+    ekranDurumu: s.ekran_durumu == null ? null : String(s.ekran_durumu),
     durum: String(s.durum), hamDurum: s.ham_durum == null ? null : String(s.ham_durum), sureMs: s.sure_ms == null ? null : Number(s.sure_ms),
     hataMesaji: s.hata_mesaji == null ? null : String(s.hata_mesaji), hataKategorisi: s.hata_kategorisi == null ? null : String(s.hata_kategorisi),
     hataKalibi: s.hata_kalibi == null ? null : String(s.hata_kalibi), beklenenSonuc: s.beklenen_sonuc == null ? null : String(s.beklenen_sonuc),

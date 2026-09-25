@@ -24,6 +24,18 @@ function kimlik(d, alan) {
 }
 
 /**
+ * Devre dışı (ya da silinmiş) ekranın senaryosu çalıştırılamaz / denenemez (ekran düzeyinde "Koşuda kapalı").
+ * @param {Veritabani} vt @param {string} senaryoId @param {string | null} [ekranId] verilirse doğrudan bu ekran denetlenir
+ */
+function ekranEtkinOlmali(vt, senaryoId, ekranId) {
+  const id = ekranId ?? /** @type {string | null} */ (vt.tek('SELECT ekran_id FROM senaryolar WHERE id = ?', [senaryoId])?.ekran_id ?? null);
+  if (!id) return;
+  const e = vt.tek('SELECT ad, durum FROM ekranlar WHERE id = ?', [id]);
+  if (e && e.durum === 'devre_disi') throw new DepoHatasi(`"${e.ad}" ekranı devre dışı; senaryoları çalıştırılamaz. Ekranlar > ⋯ > Etkinleştir.`);
+  if (e && e.durum === 'silindi') throw new DepoHatasi(`"${e.ad}" ekranı silinmiş; senaryoları çalıştırılamaz.`);
+}
+
+/**
  * Çalıştırma gövdesini doğrular ve senaryoyu çözer (hiçbir şey başlatmaz).
  *  - kosuId: bu tekil koşu isteğinin kimliği (durdurma / canlı görüntü bununla yapılır) — zorunlu.
  *  - kosuTuru 'tam' | 'tekil' (isteğe bağlı): birlikte başlatılan senaryolar ortak kosuKimligi taşır.
@@ -50,6 +62,7 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
     kosuKapsami = kapsam;
   }
   const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
+  ekranEtkinOlmali(vt, hedef.senaryoId);
   return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef };
 }
 
@@ -78,6 +91,7 @@ export async function senaryoCalistir(vt, govde, kosucu, secenekler = {}) {
 export async function senaryoDene(vt, govde, kosucu, adaptor) {
   const projeId = kimlik(govde.projeId, 'projeId');
   const kosuId = kimlik(govde.kosuId, 'kosuId');
+  ekranEtkinOlmali(vt, '', kimlik(govde.ekranId, 'ekranId'));
   const paket = denemePaketiOlustur(vt, {
     projeId, ekranId: kimlik(govde.ekranId, 'ekranId'), ortamId: kimlik(govde.ortamId, 'ortamId'), veri: govde.veri,
     id: typeof govde.id === 'string' && KIMLIK.test(govde.id) ? govde.id : null

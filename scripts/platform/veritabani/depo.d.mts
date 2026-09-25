@@ -42,7 +42,14 @@ export interface TestVerisiProfili {
   doluHassasAlanlar: string[];
   olusturulma: string; guncellenme: string;
 }
-export interface Ekran { id: string; projeId: string; anahtar: string; ad: string; aciklama: string | null; olusturulma: string; guncellenme: string }
+export type EkranDurumu = 'etkin' | 'devre_disi' | 'silindi';
+export interface Ekran {
+  id: string; projeId: string; anahtar: string; ad: string; aciklama: string | null; olusturulma: string; guncellenme: string;
+  /** 'devre_disi': senaryoları koşulara girmez · 'silindi': mezar taşı (yalnızca silinenlerDahil ile listelenir). */
+  durum: EkranDurumu;
+  /** Sol listelerdeki elle sıra (null = ada göre, sona). */
+  sira: number | null;
+}
 export interface EkranModeli { id: string; ekranId: string; surum: number; model: Record<string, unknown>; aciklama: string | null; olusturulma: string }
 export interface Senaryo {
   id: string; projeId: string; ekranId: string | null; baslik: string; icerik: Record<string, unknown>;
@@ -128,7 +135,7 @@ export declare function testVerisiProfilleriniListele(vt: Veritabani, projeId: s
 export declare function testVerisiProfiliSil(vt: Veritabani, id: string, yapan?: string): boolean;
 
 export declare function ekranKaydet(vt: Veritabani, girdi: { id?: string; projeId: string; anahtar: string; ad: string; aciklama?: string | null; ayarlar?: Record<string, unknown> }): string;
-export declare function ekranlariListele(vt: Veritabani, projeId: string): Ekran[];
+export declare function ekranlariListele(vt: Veritabani, projeId: string, secenekler?: { silinenlerDahil?: boolean }): Ekran[];
 export declare function ekranAyarlariniGetir(vt: Veritabani, ekranId: string): Record<string, unknown> | undefined;
 export declare function ekranModeliEkle(vt: Veritabani, girdi: { ekranId: string; model: Record<string, unknown>; aciklama?: string | null }): { id: string; surum: number };
 export declare function ekranModeliGetir(vt: Veritabani, ekranId: string, surum?: number): EkranModeli | undefined;

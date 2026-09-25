@@ -17,4 +17,6 @@ export declare function medyaBoyutu(yol: string): Promise<{ duzBoyut: number; pa
 export declare function medyaCoz(anaAnahtar: Buffer, yol: string, aralik?: { baslangic?: number; bitis?: number }): AsyncGenerator<Buffer>;
 export declare function medyaTamamenCoz(anaAnahtar: Buffer, yol: string): Promise<Buffer>;
 export declare function medyaDosyasiniSil(klasor: string, dosya: string): boolean;
+/** İçeriği rastgele baytlarla ezip siler (en iyi çaba). */
+export declare function medyaDosyasiniGuvenliSil(klasor: string, dosya: string): boolean;
 export declare function medyaSaklamaTemizligi(vt: Veritabani, klasor: string, secenekler: { videoGun: number; simdi?: number }): { silinenVideo: number; silinenSahipsiz: number };
