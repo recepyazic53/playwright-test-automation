@@ -55,7 +55,8 @@ for (const senaryo of senaryolar) {
   test(basliklar.get(senaryo.id) ?? senaryo.baslik, {
     tag: modelEtiketi(senaryo.id),
     annotation: [
-      { type: 'senaryoId', description: senaryo.id },
+      // "Dene" senaryosu veritabanında yok: sonucu senaryosuz kaydedilir (kodlu Dene gibi).
+      ...(senaryo.deneme ? [] : [{ type: 'senaryoId', description: senaryo.id }]),
       { type: 'kosucu', description: 'model' },
       ...(rozet ? [{ type: 'beklenenSonuc', description: rozet }] : [])
     ]

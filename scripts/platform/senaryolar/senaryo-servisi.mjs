@@ -912,26 +912,51 @@ export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId, secenekler 
 }
 
 /**
+ * Model senaryosunun "Dene" paketi: taslak (akışın modeliyle doğrulanmış) GEÇİCİ bir deneme senaryosu olarak döner; koşucu
+ * bunu geçici bir dosyayla veri okuyucuya verir (TEST_SUNUCU_MODEL_DENEME_DOSYASI), model spec'i onu "@model-deneme-…"
+ * etiketiyle tek test olarak üretir. Veritabanına senaryo YAZILMAZ (koşu sonucu, kodlu Dene gibi senaryosuz kaydedilir).
+ * @param {Veritabani} vt @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; akisId?: string | null; mutlakaGorunmeli?: unknown }} girdi
+ * @param {NonNullable<ReturnType<typeof modelBaglami>>} mb @param {{ adaptor?: AktarimAdaptoru | null; geciciEk: string }} secenekler
+ */
+function modelDenemePaketi(vt, girdi, mb, secenekler) {
+  const ortamlar = ortamlariListele(vt, girdi.projeId);
+  if (!ortamlar.some((o) => o.id === girdi.ortamId)) throw new DepoHatasi('Seçilen ortam bu projede yok.');
+  const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
+  const geciciBaslik = `${DENEME_BASLIK_ON_EKI}${secenekler.geciciEk}`;
+  const d = veriyiDogrula(vt, girdi.projeId, mb, { .../** @type {Nesne} */ (girdi.veri), [baslikAnahtari]: geciciBaslik }, [girdi.ortamId], secenekler.adaptor,
+    new Map(ortamlar.map((o) => [o.id, o.ad])));
+  const ortamAnahtari = ortamAnahtariBul(vt, girdi.projeId, girdi.ortamId);
+  const denemeId = `deneme-${secenekler.geciciEk}`;
+  const mutlaka = Array.isArray(girdi.mutlakaGorunmeli) ? girdi.mutlakaGorunmeli.filter((x) => typeof x === 'string').slice(0, 500) : [];
+  return {
+    model: /** @type {const} */ (true), ortamAnahtari, genel: ortamAnahtari ? null : { projeId: girdi.projeId, ortamId: girdi.ortamId },
+    spec: MODEL_SPEC_DOSYASI, geciciBaslik, etiket: modelEtiketi(denemeId), grepDeseni: modelGrepDeseni(denemeId), uyarilar: d.uyarilar,
+    denemeSenaryosu: { id: denemeId, ekranId: girdi.ekranId, akisId: mb.akisId, ortamId: girdi.ortamId, baslik: geciciBaslik, veri: d.veri, mutlakaGorunmeli: mutlaka }
+  };
+}
+
+/**
  * "Dene" (deneme koşusu) paketi: taslak senaryo modelle doğrulanır ve GEÇİCİ bir başlıkla, testlerin
  * kalıcı veriye eklediği bir "ek veri" (overlay) nesnesi olarak döner. Veritabanına YAZILMAZ.
  * @param {Veritabani} vt
- * @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null }} girdi
+ * @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown }} girdi
  * @param {{ adaptor?: AktarimAdaptoru | null; geciciEk: string }} secenekler geciciEk: geçici başlığın rastgele son eki
  */
 export function denemePaketiOlustur(vt, girdi, secenekler) {
   acikAnahtar(vt);
   const ekran = ekranGetir(vt, girdi.projeId, girdi.ekranId);
-  const mb = modelBaglami(vt, ekran.id);
+  const mb = modelBaglami(vt, ekran.id, girdi.akisId ?? null);
   if (!mb) throw new DepoHatasi('Bu ekranın modeli yok; deneme yapılamaz.');
   if (!nesneMi(girdi.veri)) throw new DepoHatasi('"veri" bir nesne olmalıdır.');
   const mevcut = girdi.id ? senaryoGetir(vt, girdi.id) : undefined;
+  const modelSenaryosu = mevcut
+    ? modelKosusuMu(vt, girdi.projeId, mevcut, {})
+    : Boolean(ekranVeriKaynagi(vt, girdi.projeId, ekran, secenekler.adaptor)?.model);
+  if (modelSenaryosu) return modelDenemePaketi(vt, girdi, mb, secenekler);
   const kaynakVeri = mevcut && veriGudumluMu(mevcut.icerik) && senaryoKaynagi(mevcut.icerik)
     ? { spec: /** @type {{ dosya: string }} */ (senaryoKaynagi(mevcut.icerik)).dosya, dosya: String(/** @type {Nesne} */ (mevcut.icerik.veri).dosya), yol: String(/** @type {Nesne} */ (mevcut.icerik.veri).yol) }
     : ekranVeriKaynagi(vt, girdi.projeId, ekran, secenekler.adaptor);
   if (!kaynakVeri) throw new DepoHatasi('Bu ekran için senaryo verisi kaynağı bilinmiyor; deneme yapılamaz.');
-  // "Dene" ek veriyi kodlu (veri güdümlü) teste ekler; model senaryosunda koşacak kodlu test yoktur.
-  const modelMi = mevcut ? nesneMi(mevcut.icerik.paket) || mevcut.icerik.kosucu === 'model' : 'model' in kaynakVeri && kaynakVeri.model;
-  if (modelMi) throw new DepoHatasi('Model koşucusuyla çalışan senaryolarda "Dene" henüz desteklenmiyor; senaryoyu kaydedip ▷ ile çalıştırın.');
   const ortamAnahtari = ortamAnahtariBul(vt, girdi.projeId, girdi.ortamId);
   if (!ortamAnahtari) throw new DepoHatasi('Seçilen ortam test çalıştırıcısına eşlenmemiş.');
   const ortamlar = ortamlariListele(vt, girdi.projeId);

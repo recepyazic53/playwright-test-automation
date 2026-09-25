@@ -71,6 +71,9 @@
 //   GET  /platform/ekran/akis/tasarim?projeId=&ekranId=&akisId=|kopya=   akış diyagramı (bloklar + sağ liste; boş: yeni akış)
 //   POST /platform/ekran/akis/kaydet { projeId, ekranId, akisId?, ad, bloklar, onay }  onay yoksa etki (etkilenen senaryolar),
 //        varsa yeni model sürümü · POST /platform/ekran/akis/varsayilan | sil { projeId, ekranId, akisId }
+//   GET  /platform/ortak-akis/ekranlar?projeId=&ekranId=  ortak akışın eklenebileceği ekranlar (ekranId: ortak akış)
+//   POST /platform/ortak-akis/ekle { projeId, ekranId, ekranIdleri, istegeBagli, onay }  ortak akışı seçilen ekranların
+//        varsayılan akışının sonuna ekler; onay yoksa etki
 //   POST /platform/sayfa-paketi/onizle { projeId, paket, ekranId?, mod? }   doğrulama + önizleme (gövde en fazla 16 MB)
 //   POST /platform/sayfa-paketi/ekle   { projeId, paket, senaryoIndeksleri, ortamIdleri }  ekran + model v1 + öneriler
 //   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
@@ -173,9 +176,9 @@ import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/t
 import { girisSayfasiniOner } from './giris/algilama.mjs';
 import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
-  reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta
+  reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta, modeliPaketleDegistir
 } from './ekranlar/ekran-servisi.mjs';
-import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele } from './ekranlar/akis-servisi.mjs';
+import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele, ortakAkisAdaylari, ortakAkisEkranlaraEkle } from './ekranlar/akis-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
 import {
   ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
@@ -184,7 +187,7 @@ import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Sayfa paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
-const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle']);
+const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir']);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
 export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
 /** İçe aktarılacak yedeğin üst sınırı (videolu yedekler büyük olabilir; gövde diske akıtılır). */
@@ -1237,6 +1240,7 @@ const GET_UCLARI = new Map([
   }],
   ['/platform/ekran/analiz', (db, q) => analizGetir(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
   ['/platform/ekran/akislar', (db, q) => akislariListele(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
+  ['/platform/ortak-akis/ekranlar', (db, q) => ortakAkisAdaylari(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
   ['/platform/ekran/akis/tasarim', (db, q) => {
     const akisKimligi = (/** @type {string | null} */ d) => (d && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(d) ? d : null);
     return akisTasarimi(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'), { akisId: akisKimligi(q.get('akisId')), kopya: akisKimligi(q.get('kopya')) });
@@ -1300,7 +1304,10 @@ const GET_UCLARI = new Map([
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const POST_UCLARI = new Map([
   ['/platform/sayfa-paketi/onizle', (db, g) => paketOnizle(db, kimlikAl(g.projeId, 'projeId'), g.paket, {
-    ekranId: secimliKimlik(g.ekranId) ?? null, mod: g.mod === 'analiz' ? 'analiz' : 'yeni'
+    ekranId: secimliKimlik(g.ekranId) ?? null, mod: g.mod === 'analiz' ? 'analiz' : g.mod === 'degistir' ? 'degistir' : 'yeni'
+  })],
+  ['/platform/ekran/model/degistir', (db, g) => modeliPaketleDegistir(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, {
+    onay: g.onay === true, senaryoIndeksleri: g.senaryoIndeksleri, ortamIdleri: g.ortamIdleri, medyaKlasoru: medyaKlasoruYolu()
   })],
   ['/platform/sayfa-paketi/ekle', (db, g) => sayfaEkle(db, kimlikAl(g.projeId, 'projeId'), g.paket, {
     senaryoIndeksleri: g.senaryoIndeksleri, ortamIdleri: g.ortamIdleri, medyaKlasoru: medyaKlasoruYolu()
@@ -1312,6 +1319,9 @@ const POST_UCLARI = new Map([
     akisId: typeof g.akisId === 'string' && g.akisId ? g.akisId : null, ad: g.ad, bloklar: g.bloklar, onay: g.onay === true
   })],
   ['/platform/ekran/akis/varsayilan', (db, g) => akisVarsayilanYap(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
+  ['/platform/ortak-akis/ekle', (db, g) => ortakAkisEkranlaraEkle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
+    ekranIdleri: g.ekranIdleri, istegeBagli: g.istegeBagli === true, onay: g.onay === true
+  })],
   ['/platform/ekran/akis/sil', (db, g) => akisSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
   ['/platform/ekran/reddedilenleri-unut', (db, g) => reddedilenleriUnut(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'))],
   ['/platform/ekran/toplu-ata', (db, g) => topluDegerAta(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { anahtar: g.anahtar, deger: g.deger, senaryoIdler: g.senaryoIdler })],

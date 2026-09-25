@@ -129,7 +129,7 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
    `veri-oku.mjs genel` (proje/ortam KİMLİKLERİYLE, adaptörsüz; giriş profili ve kayıtlı giriş tarifi ortamın kendisinden).
    Test kodu olmayan ekranda formdan yeni senaryo da oluşturulabilir (`icerik.kosucu = 'model'`). Koruma testi:
    `tests/birim/genel-model-kosusu.spec.ts`. Bilinçli sınırlar (kullanıcı kararı): yalnızca Nöbetçi'den başlatılır
-   (terminal `npm run test` yok); model senaryolarında "Dene" henüz yok (açık mesaj verir).
+   (terminal `npm run test` yok). Model senaryolarında "Dene" 2026-09-25'te eklendi (bkz. aşağıda "Nöbetçi geliştirmeleri").
 3. **İlk gerçek tarama:** kullanıcı JetTrafik'te "Ekranı otomatik tara"yı denedi — düğmeyle açılan 2. adımın alanları
    görülemedi. Bunun için **Akışı kaydet** eklendi, sonra kullanıcı isteğiyle **topla → tasarla** biçimine çevrildi (panel
    toplar, diyagram Nöbetçi'de taslaktan kurulur; yerel fikstürle doğrulandı). Sıradaki: JetTrafik'te gerçek bir akış
@@ -145,7 +145,7 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
    güncelle". Bireysel/Tüzel gibi farklar TEK akışta (seçimi senaryo yapar, koşul otomatik; "Yol A") — seçimi akışa sabitleme
    YOK. Diyagramda alan başına Zorunlu / Görünürse doldur, Koşul düzenleme, Bekleme süresi bloğu. Yapıldı, yerel fikstürle
    doğrulandı; gerçek sitede **denenmedi**. Sonraki: mevcut ürünlerin senaryoları için akışları oluşturmak (kullanıcı istedi).
-   Bilinen kararsız durum: model koşusunda ekran görüntüsü alma ara sıra donuyor (koşu takılıyor) — ayrı iş olarak önerildi.
+   ~~Ekran görüntüsü alma ara sıra donuyor~~ — düzeltildi (2026-09-25; bkz. "Nöbetçi geliştirmeleri").
 4. **Galaksi ürünlerini model koşucusuna taşımak** (ürün ürün, JetSeyahat'ten başla; eski test ile yan yana
    karşılaştır, sonuçlar aynıysa eski kodu kaldır).
    **JetSeyahat (akış) — 1. aşama yapıldı** (kullanıcı kararı: JetTrafik yerine JetSeyahat; mevcut JetSeyahat ekranı ve
@@ -168,10 +168,29 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
    değişikliklerini hâlâ taşımıyor. Kodlu JetSeyahat ekranında akış düzenlenemez (seçicisiz alanlar); akışlar
    "JetSeyahat (akış)"ta. Bitince git'te Galaksi'ye özgü kod neredeyse kalmaz
    (alternatif: Galaksi kodunu ayrı gizli depoya taşımak — kullanıcı projeyi başkasına vermeden önce).
+   **Nöbetçi geliştirmeleri (dal `nobetci-gelistirmeler`, 2026-09-25; kullanıcı onaylı liste; yerel fikstürle doğrulandı,
+   gerçek sitede denenmedi):**
+   - Ekran görüntüsü donması: görüntüler sayfa başına sırayla ve süre sınırıyla alınır (`tests/support/screenshots.ts`);
+     tam sayfa alınamazsa görünen alan, o da olmazsa rapora "(ekran görüntüsü alınamadı)" yazılır; koşu takılmaz.
+   - **Modeli değiştir:** ekranın "Paket yükle" sayfasında "Tekrar analiz / Modeli değiştir" seçimi. Değiştir: paket yeni
+     model sürümü olur; senaryolar ve varsayılan dışı akışlar (kullandıkları koşul / ayarlarla) korunur; önce etki gösterilir
+     (`ekran-servisi.mjs > modeliPaketleDegistir`, `POST /platform/ekran/model/degistir`).
+   - **Dene (model senaryoları):** kaydedilmemiş taslak geçici dosyayla koşar, senaryo yazılmaz (`senaryo-servisi.mjs >
+     modelDenemePaketi`, `test-sunucu.mjs > modelDene`).
+   - **Ortak akışı düzenleme:** ortak akışın Akışlar sekmesinde "Düzenle" (tek akış; yeni akış / kopya / içine ortak akış
+     yok). Kaydederken onu kullanan ekranlar etki olarak gösterilir. Diyagramda görünmeyen adım ayarları (hata penceresi,
+     öğe "veya" göstergesi, bölüm kimlikleri) mevcut adımdan korunur. "Ekranlara ekle…": seçilen ekranların varsayılan
+     akışının sonuna eklenir (varsayılan: isteğe bağlı, mevcut senaryolar etkilenmez).
+   - Akış tasarımında kaydedilmemiş değişiklikle sayfadan çıkarken onay istenir.
+   - Kararlar: CANLI'da gerçek kart işareti gerekmiyor ("hiç bir zaman gerçek kart kullanılmayacak"); diyagramdan senaryo
+     düzenleme (3b) ertelendi.
 5. **CANLI ortamda authenticator ile giriş** denemesi (kullanıcıyla).
 6. **`.env` silinmesi** (Mac ve Windows) — 5 başarılı olunca (1 tamam), onayla.
-7. **Küçük kararlar (kullanıcıya sorulacak):** kilit ekranında çalışma alanının proje sayısı gizlensin mi (öneri:
-   evet); devre dışı ekranda tek ▷ / Dene'ye izin verilsin mi.
+7. ~~**Küçük kararlar**~~ (2026-09-25): kilit ekranında proje sayısı GİZLENMEYECEK (kullanıcı: hayır); devre dışı
+   ekranda tek senaryo (▷) ve Dene ÇALIŞIR — yapıldı (calistirma.mjs; toplu koşular yine almaz).
+   **Giriş kurgusu** (tarifte giriş adımları / "Girişi kaydet"): kullanıcı kararıyla BEKLİYOR — girişi farklı (ek alan, iki
+   sayfalı, ön adım) bir uygulama gelince yalnızca gereken kadarı eklenecek (büyük olasılıkla tarife "girişten önce
+   adımlar" + "parola ayrı sayfadaysa Devam düğmesi").
 8. Kullanım geri bildirimleri: görsel ve akış ince ayarları.
 
 İleriye bırakılanlar: Claude Code CLI ile dashboard'dan otomatik yorum (Max planı içinde, `ANTHROPIC_API_KEY`

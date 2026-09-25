@@ -21,7 +21,7 @@ import { adimlardanBloklar, akisDuzenlenebilirMi, modeldenAkisEnvanteri } from '
 import { akistanKayitEnvanteri, bloklariAyikla } from '../../scripts/platform/tarama/akis-tasarimi.mjs';
 import { kayitPaketiOlustur } from '../../scripts/platform/tarama/paket-olusturucu.mjs';
 import { AVRUPA_ULKELERI, DUNYA_ULKELERI } from '../../projeler/galaksi/jetseyahat-secenekler.mjs';
-import { SIRKET_DESENI, yerelSunucu } from './giris-fikstur';
+import { SIRKET_DESENI, korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { KIMLIK_UYARISI, ODEME_SONUCU, SEYAHAT_IS_KURALI, SeyahatUygulamasi } from './jetseyahat-akis-fikstur';
 import { odemeAkisPaketi } from '../../projeler/galaksi/odeme-akis.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
@@ -341,6 +341,62 @@ test('ortak akış (ödeme): "+ > Ortak akış" bloğuyla akışa eklenir; "Öde
   expect(uygulama.odemeler).toHaveLength(1);
 });
 
+test('Dene (model senaryosu): kaydedilmemiş taslak koşar; senaryo yazılmaz; akış seçilebilir; hata varsa açık mesaj', async () => {
+  test.setTimeout(180_000);
+  const say = async (): Promise<number> => ((await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`)) as { senaryolar: Nesne[] }).senaryolar.length;
+  const once = await say();
+  const hesapOnce = uygulama.hesaplamalar.length;
+  const d = await api('/platform/senaryo/dene', {
+    projeId, ekranId, ortamId, kosuId: `kosu-${randomUUID()}`,
+    veri: { kapsam: 'AVRUPA', alternatif: 'VİZE SCHENGEN', covidTeminati: 'E', farkliMusteri: 'farkli', musteriTipi: 'tuzel', ettirenProfili: 'vkn1' }
+  });
+  expect(d.basarili, JSON.stringify(d)).toBe(true);
+  expect(d.durum, JSON.stringify(d.hataMesaji)).toBe('passed');
+  expect(uygulama.hesaplamalar.length).toBe(hesapOnce + 1);
+  expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ kapsam: 'AVRUPA', alternatif: 'VİZE SCHENGEN', ettiren: { tip: 'T', no: VKN1.vergiKimlikNo } });
+  expect(await say()).toBe(once);
+  // Geçersiz taslak: koşmadan doğrulama hatası.
+  const hatali = await api('/platform/senaryo/dene', { projeId, ekranId, ortamId, kosuId: `kosu-${randomUUID()}`, veri: { kapsam: 'DÜNYA', alternatif: 'VİZE SCHENGEN' } });
+  expect(hatali.basarili).toBe(false);
+  expect(uygulama.hesaplamalar.length).toBe(hesapOnce + 1);
+});
+
+test('modeli değiştir: mevcut ekrana paket yeni sürüm olarak yazılır; senaryolar ve diğer akışlar korunur, önce etki gösterilir', async () => {
+  test.setTimeout(120_000);
+  const oncekiListe = await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`) as { senaryolar: Nesne[] };
+  const senaryoSayisi = oncekiListe.senaryolar.filter((s) => s.ekranId === ekranId).length;
+  const oncekiAkislar = ((await api(`/platform/ekran/akislar?projeId=${projeId}&ekranId=${ekranId}`)).akislar as Nesne[]).map((a) => a.ad);
+  expect(oncekiAkislar.length).toBeGreaterThan(1);
+  // Yeni paket: kayak alanının seçicisi değişmiş (tekrar analizin taşıyamadığı değişiklik).
+  const paket = jetSeyahatAkisPaketi({ havuzlar: HAVUZLAR, girissiz: true }) as unknown as { model: Record<string, any> };
+  const kayak = (paket.model.adimlar[0].bolumler[0].alanlar as Nesne[]).find((a) => a.id === 'kayakTeminati') as Record<string, any>;
+  kayak.konum = { ...kayak.konum, secici: 'input#kayak' };
+  // Yeni ekran modunda reddedilir; değiştir modunda önizleme etkiyi verir.
+  expect(await api('/platform/sayfa-paketi/onizle', { projeId, paket, ekranId, mod: 'yeni' })).toMatchObject({ gecerli: false });
+  const onizleme = await api('/platform/sayfa-paketi/onizle', { projeId, paket, ekranId, mod: 'degistir' }) as Nesne & { etki: { senaryolar: Nesne[]; korunanAkislar: string[] } };
+  expect(onizleme.gecerli, JSON.stringify(onizleme.hatalar)).toBe(true);
+  // Etki tüm ortamlardaki senaryoları listeler (liste ucu tek ortamınkileri verir).
+  expect(onizleme.etki.senaryolar.length).toBeGreaterThanOrEqual(senaryoSayisi);
+  expect(onizleme.etki.korunanAkislar).toEqual(oncekiAkislar.slice(1));
+  // Onaysız: yalnızca etki; model değişmez.
+  const onaysiz = await basarili('/platform/ekran/model/degistir', { projeId, ekranId, paket });
+  expect(onaysiz.etki).toBeTruthy();
+  const r = await basarili('/platform/ekran/model/degistir', { projeId, ekranId, paket, onay: true });
+  expect(r.surum).toBeGreaterThan(1);
+  const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`) as Nesne & { model: Record<string, any> };
+  expect((form.model.adimlar[0].bolumler[0].alanlar as Nesne[]).find((a) => a.id === 'kayakTeminati')).toMatchObject({ konum: { secici: 'input#kayak' } });
+  const sonraListe = await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`) as { senaryolar: Nesne[] };
+  expect(sonraListe.senaryolar.filter((s) => s.ekranId === ekranId)).toHaveLength(senaryoSayisi);
+  expect(((await api(`/platform/ekran/akislar?projeId=${projeId}&ekranId=${ekranId}`)).akislar as Nesne[]).map((a) => a.ad)).toEqual(oncekiAkislar);
+  // Değişen modelle senaryo koşar (kayak yeni seçiciyle işaretlenir).
+  const baslik = 'Modeli değiştir sonrası';
+  const yeni = await basarili('/platform/senaryo/kaydet', { projeId, ekranId, baslik, ortamIdleri: [ortamId], veri: { baslik, kapsam: 'DÜNYA', alternatif: 'VİZE TÜM DÜNYA', covidTeminati: 'E', kayakTeminati: true } });
+  const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: yeni.id, ortamId });
+  const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
+  expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
+  expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ kayak: true });
+});
+
 test('iş kuralı: COVID "Hayır" + vize dışı alternatif → prim hesaplamada beklenen uyarı (senaryo başarılı)', async () => {
   test.setTimeout(120_000);
   const sonuc = await kaydetVeKos('COVID yok / paket → iş kuralı', {
@@ -351,4 +407,79 @@ test('iş kuralı: COVID "Hayır" + vize dışı alternatif → prim hesaplamada
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ covid: 'H', alternatif: 'SEYAHAT PAKET' });
   expect(SEYAHAT_IS_KURALI).toContain('vize alternatifleri');
   expect(uygulama.olaylar.filter((o) => SIRKET_DESENI.test(o))).toEqual([]);
+});
+
+test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar korunur), kullanan ekranlar etki olarak gösterilir; "Ekranlara ekle" varsayılan akışa ekler', async () => {
+  test.setTimeout(180_000);
+  const ekranlar = (await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Nesne[];
+  const ortakId = String((ekranlar.find((e) => e.modelTuru === 'ortakAkis') as Nesne).id);
+  const model = async (id: string): Promise<Record<string, any>> => (await api(`/platform/ekran?projeId=${projeId}&id=${id}`)).model as Record<string, any>;
+  const once = await model(ortakId);
+  // Liste: tek akış, düzenlenebilir; kullanan ekran (Ödemeli akış).
+  const liste = await api(`/platform/ekran/akislar?projeId=${projeId}&ekranId=${ortakId}`) as Nesne & { akislar: Nesne[]; kullananlar: Nesne[] };
+  expect(liste).toMatchObject({ duzenlenebilir: true, ortakAkis: true });
+  expect(liste.akislar).toHaveLength(1);
+  expect(liste.kullananlar).toEqual([expect.objectContaining({ id: ekranId, akislar: ['Ödemeli akış'] })]);
+  // Yeni akış / kopya yok; içine ortak akış eklenmez.
+  expect(await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ortakId}&kopya=ana`)).toMatchObject({ basarili: false });
+  const tasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ortakId}&akisId=ana`) as Nesne & { bloklar: Nesne[]; ortakAkislar: Nesne[] };
+  expect(tasarim.ortakAkislar).toEqual([]);
+  const ortakli = [...tasarim.bloklar.slice(0, -1), { tur: 'ortak', dosya: 'odeme-kredi-karti-akis.model.json', ad: 'Ödeme', istegeBagli: false }, { tur: 'bitir' }];
+  expect(await api('/platform/ekran/akis/kaydet', { projeId, ekranId: ortakId, akisId: 'ana', ad: 'Ana akış', bloklar: ortakli })).toMatchObject({ basarili: false });
+  // Değiştirmeden kaydet: adımlar aynen kalır (hata penceresi, "veya" öğe göstergesi, kart profili, yalnızca test).
+  const etki = await basarili('/platform/ekran/akis/kaydet', { projeId, ekranId: ortakId, akisId: 'ana', ad: 'Ana akış', bloklar: tasarim.bloklar });
+  expect((etki.etki as Nesne).ekranlar).toEqual([expect.objectContaining({ id: ekranId })]);
+  await basarili('/platform/ekran/akis/kaydet', { projeId, ekranId: ortakId, akisId: 'ana', ad: 'Ana akış', bloklar: tasarim.bloklar, onay: true });
+  const sonra = await model(ortakId);
+  expect(sonra.adimlar).toEqual(once.adimlar);
+  expect(sonra).toMatchObject({ tur: 'ortakAkis', yalnizTestOrtami: true });
+  expect(sonra.akislar).toBeUndefined();
+  // Düzenle: kart formundan önceki bekleme 2 sn.
+  const bloklar = tasarim.bloklar.map((b) => (b.tur === 'bekle' ? { ...b, saniye: 2 } : b));
+  await basarili('/platform/ekran/akis/kaydet', { projeId, ekranId: ortakId, akisId: 'ana', ad: 'Ana akış', bloklar, onay: true });
+  expect(((await model(ortakId)).adimlar[1].kosu.aksiyonlar as Nesne[])[0]).toEqual({ tur: 'bekle', sureSn: 2 });
+
+  // Ekranlara ekle: ekranın varsayılan akışında yok → eklenebilir; önce etki, onayla eklenir; sonra "zaten var".
+  const aday = await api(`/platform/ortak-akis/ekranlar?projeId=${projeId}&ekranId=${ortakId}`) as Nesne & { ekranlar: Nesne[] };
+  expect(aday.ekranlar.find((x) => x.id === ekranId)).toMatchObject({ eklenebilir: true, kullananAkislar: ['Ödemeli akış'] });
+  expect(await api('/platform/ortak-akis/ekle', { projeId, ekranId: ortakId, ekranIdleri: [] })).toMatchObject({ basarili: false });
+  const on = await basarili('/platform/ortak-akis/ekle', { projeId, ekranId: ortakId, ekranIdleri: [ekranId], istegeBagli: true });
+  expect(on.etki).toMatchObject({ istegeBagli: true, ekranlar: [expect.objectContaining({ id: ekranId })] });
+  const surumOnce = Number((await api(`/platform/ekran?projeId=${projeId}&id=${ekranId}`)).surum);
+  expect(Number((await model(ekranId)).adimlar.length)).toBeGreaterThan(0);
+  const y = await basarili('/platform/ortak-akis/ekle', { projeId, ekranId: ortakId, ekranIdleri: [ekranId], istegeBagli: true, onay: true });
+  expect((y.eklenen as Nesne[])[0].surum).toBe(surumOnce + 1);
+  const ekranModeli = await model(ekranId);
+  expect((ekranModeli.adimlar as Nesne[]).at(-1)).toMatchObject({ ortakAkis: { dosya: 'odeme-kredi-karti-akis.model.json' } });
+  expect(((await api(`/platform/ortak-akis/ekranlar?projeId=${projeId}&ekranId=${ortakId}`)).ekranlar as Nesne[]).find((x) => x.id === ekranId)).toMatchObject({ eklenebilir: false });
+  // Varsayılan akışta "dahil" işaretli senaryo düzenlenen ortak akışla öder.
+  const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`) as Nesne & { model: Record<string, any> };
+  const dahil = (form.model.senaryoDuzeyi.alanlar as Nesne[]).find((a) => (a.etiket as Nesne)?.form === '“Ödeme (kredi kartı)” dahil') as Nesne;
+  expect(dahil).toBeTruthy();
+  const odemeSayisi = uygulama.odemeler.length;
+  const sonuc = await kaydetVeKos('Varsayılan akış / ödemeli', { kapsam: 'DÜNYA', alternatif: 'VİZE TÜM DÜNYA', covidTeminati: 'E', [String(dahil.id)]: true });
+  expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
+  expect(uygulama.odemeler).toHaveLength(odemeSayisi + 1);
+
+  // Arayüz: ortak akışın Akışlar sekmesi (yeni akış yok; kullanan ekranlar; Ekranlara ekle… listesi; Düzenle'de ortak akış bloğu yok).
+  const tarayici = await korumaliTarayici();
+  try {
+    const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1200 } })).newPage();
+    await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortakId)}/akis`);
+    await expect(page.getByRole('list', { name: 'Kullanan ekranlar' })).toContainText('Ana akış, Ödemeli akış');
+    await expect(page.getByRole('button', { name: 'Yeni akış oluştur' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Kopyala' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ekranlara ekle…' }).click();
+    const diyalog = page.locator('dialog.ekran-yonetim-diyalogu');
+    const satir = diyalog.getByRole('listitem').filter({ hasText: 'zaten var' });
+    await expect(satir.getByRole('checkbox')).toBeDisabled();
+    await expect(diyalog.getByRole('checkbox', { name: /İsteğe bağlı/ })).toBeChecked();
+    await diyalog.getByRole('button', { name: 'Vazgeç' }).click();
+    await page.getByRole('button', { name: 'Düzenle' }).click();
+    await expect(page.getByRole('heading', { name: 'Akışı düzenle: Ana akış' })).toBeVisible();
+    await page.getByRole('button', { name: 'Buraya blok ekle' }).first().click();
+    await expect(page.getByRole('group', { name: 'Eklenecek blok' }).getByRole('button', { name: 'Ortak akış' })).toHaveCount(0);
+  } finally {
+    await tarayici.close();
+  }
 });

@@ -246,8 +246,9 @@ test('akış düzenleyici: diyagramın gösteremediği adım özellikleri varsa 
   const bozuk = (d: (m: Nesne) => void) => { const m = JSON.parse(JSON.stringify(model)) as Nesne; d(m); return akisDuzenlenebilirMi(m); };
   expect(bozuk((m) => { m.adimlar[0].kosu.aksiyonlar[0].metin = 'Devam'; }).neden).toContain('metinle süzülen düğme tıklaması');
   expect(bozuk((m) => { m.adimlar[0].kosu.basariGostergesi = { tur: 'url', deger: '/tamam' }; }).neden).toContain('adres (url)');
-  expect(bozuk((m) => { m.adimlar[0].kosu.hataGostergesi = { secici: '#hata' }; }).neden).toContain('hata göstergesi');
-  expect(bozuk((m) => { m.tur = 'ortakAkis'; }).neden).toContain('Ortak akışın içeriği');
+  // Hata göstergesi (uyarısız) kaydederken adımdan korunur; ortak akış da düzenlenebilir.
+  expect(bozuk((m) => { m.adimlar[0].kosu.hataGostergesi = { secici: '#hata' }; }).duzenlenebilir).toBe(true);
+  expect(bozuk((m) => { m.tur = 'ortakAkis'; }).duzenlenebilir).toBe(true);
 });
 
 test('doğrulama: Bitir zorunlu ve sonda; boş/tekrarlı grup, aynı alan iki grupta, düğmesiz aksiyon, yersiz mesaj — bloğun sırasıyla', () => {

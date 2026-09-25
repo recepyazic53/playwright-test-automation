@@ -797,6 +797,20 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (eski) { adimIdleri.add(eski.id); return String(eski.id); }
     return benzersiz(kimlikUret(baslik, 'adim'), adimIdleri);
   };
+  /**
+   * Adımın sayfadaki ilk öğesinin seçicisi (önceki adımın başarı göstergesi): ilk alan; kimlik bloğunda (diyagram anahtarı
+   * "kimlik:<id>" seçici değildir) ilk alt alanın seçicisi; alan yoksa düğme.
+   * @param {AltAdim} x @returns {string | null}
+   */
+  const ilkSecici = (x) => {
+    for (const h of x.alanlar) {
+      if (!(h.tur === 'kimlik' && h.anahtar.startsWith('kimlik:'))) return h.secici;
+      const e = mevcutAlanlar.find((a) => a.tip === 'kimlikProfili' && `kimlik:${a.id}` === h.anahtar);
+      const alt = e && Array.isArray(e.altAlanlar) ? e.altAlanlar.find((/** @type {any} */ y) => nesneMi(y) && nesneMi(y.konum) && typeof y.konum.secici === 'string' && y.konum.secici) : undefined;
+      if (alt) return String(alt.konum.secici);
+    }
+    return x.tikla?.secici ?? null;
+  };
   /** @type {Array<Record<string, any>>} */
   const adimlar = altAdimlar.map((p, i) => {
     if (p.ortakAkis) {
@@ -838,7 +852,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (p.tikla) {
       // Başarı: sonraki (atlanmayacak) adımın ilk alanı ya da düğmesi görünür.
       const sonraki = altAdimlar.slice(i + 1).find((x) => x.kosul === null || x.kosul === p.kosul);
-      const hedef = sonraki ? sonraki.alanlar[0]?.secici ?? sonraki.tikla?.secici ?? null : null;
+      const hedef = sonraki ? ilkSecici(sonraki) : null;
       if (hedef) kosu.basariGostergesi = { tur: 'eleman', deger: hedef };
       // Akış tasarımında düğmeden sonra beklenen mesaj verildiyse: o metin görünür.
       const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
@@ -859,6 +873,25 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (secicili) kosu.hataGostergesi = { secici: secicili.secici };
     }
     if (p.zamanAsimiSn) kosu.zamanAsimiSn = p.zamanAsimiSn;
+    const id = adimKimligi(p.ad);
+    // Mevcut modeldeki aynı adımın diyagramda gösterilmeyen koşu ayarları korunur: hata penceresi (uyarısız) ve öğe
+    // "veya" göstergesi (diyagramın yazdığı öğeyi içeriyorsa; ör. "kart seçeneği YA DA doğrudan kart formu açılır").
+    const eskiAdim = mevcut ? /** @type {Array<Record<string, any>>} */ (mevcut.adimlar).find((a) => nesneMi(a) && a.id === id) : undefined;
+    const eskiKosu = eskiAdim && nesneMi(eskiAdim.kosu) ? eskiAdim.kosu : undefined;
+    // Bölüm kimliği: aynı adımın aynı başlıklı bölümününki (model geçmişinde gereksiz fark çıkmasın), yoksa yeni.
+    const bolumKimligi = (/** @type {string} */ baslik) => {
+      const eski = eskiAdim && Array.isArray(eskiAdim.bolumler)
+        ? eskiAdim.bolumler.find((/** @type {any} */ b) => nesneMi(b) && b.baslik === baslik && typeof b.id === 'string' && !bolumIdleri.has(b.id)) : undefined;
+      if (eski) { bolumIdleri.add(eski.id); return String(eski.id); }
+      return benzersiz(kimlikUret(baslik, 'bolum'), bolumIdleri);
+    };
+    if (eskiKosu) {
+      if (!kosu.hataGostergesi && nesneMi(eskiKosu.hataGostergesi)) kosu.hataGostergesi = kopya(eskiKosu.hataGostergesi);
+      const yeniG = /** @type {Record<string, any> | undefined} */ (kosu.basariGostergesi);
+      const eskiG = eskiKosu.basariGostergesi;
+      const ogeVeya = nesneMi(eskiG) && eskiG.tur === 'veya' && Array.isArray(eskiG.secenekler) && eskiG.secenekler.every((/** @type {any} */ s) => nesneMi(s) && s.tur === 'eleman');
+      if (ogeVeya && yeniG?.tur === 'eleman' && eskiG.secenekler.some((/** @type {any} */ s) => s.deger === yeniG.deger)) kosu.basariGostergesi = kopya(eskiG);
+    }
     if (sonAdimMi && g) {
       const son = basariTanimi(g, (x) => {
         if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici } : {}) } : null;
@@ -868,9 +901,9 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (son) kosu.basariGostergesi = son;
     }
     return {
-      id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad,
+      id, sira: i + 1, baslik: p.ad,
       ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}),
-      bolumler: [...bolumler.values()].map((b) => ({ id: benzersiz(kimlikUret(b.baslik, 'bolum'), bolumIdleri), baslik: b.baslik, alanlar: b.alanlar })),
+      bolumler: [...bolumler.values()].map((b) => ({ id: bolumKimligi(b.baslik), baslik: b.baslik, alanlar: b.alanlar })),
       ...(Object.keys(kosu).length ? { kosu } : {})
     };
   });

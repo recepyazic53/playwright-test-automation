@@ -284,7 +284,7 @@ test.describe('Senaryo servisi (genel proje)', () => {
       expect(String(denemeler[0].ad)).toMatch(/^__senaryo_deneme__ [a-f0-9]{8}$/);
       expect(vt.tek('SELECT COUNT(*) AS n, MAX(guncellenme) AS g FROM senaryolar')).toEqual(once);
       const paket = denemePaketiOlustur(vt, { projeId, ekranId, ortamId, veri: TEMEL }, { adaptor: sahteAdaptor, geciciEk: 'abcd1234' });
-      expect(paket.ekVeri.ekVeriler[0].ogeler).toEqual([{ ...TEMEL, baslik: '__senaryo_deneme__ abcd1234' }]);
+      expect("ekVeri" in paket && paket.ekVeri.ekVeriler[0].ogeler).toEqual([{ ...TEMEL, baslik: '__senaryo_deneme__ abcd1234' }]);
     } finally { o.temizle(); }
   });
 });

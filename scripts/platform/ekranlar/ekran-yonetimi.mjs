@@ -3,8 +3,9 @@
 //
 // Durum (ekranlar.durum, şema v8 — AÇIK sütunlar; koşu listesi filtresi kasa kilitliyken de okuyabilsin):
 //   'etkin'      — normal.
-//   'devre_disi' — geri alınabilir: sol listelerde varsayılan olarak gizli; senaryoları "Koşuyu başlat"a, ▷ / Dene'ye,
-//                  model koşucusuna ve varsayılan Playwright listesine (playwright.config.ts > grepInvert) girmez.
+//   'devre_disi' — geri alınabilir: sol listelerde varsayılan olarak gizli; senaryoları "Koşuyu başlat"a, seçilenlerin
+//                  toplu koşusuna ve varsayılan Playwright listesine (playwright.config.ts > grepInvert) girmez. Tek
+//                  senaryo (▷) ve Dene ise çalışır (kullanıcı kararı, 2026-09-25).
 //                  Geçmiş sonuçlar Sonuçlar'da "devre dışı" rozetiyle görünür.
 //   'silindi'    — MEZAR TAŞI: ekranın model sürümleri, senaryoları (değişiklik geçmişi KORUNUR), şifreli senaryo/kanıt
 //                  dosyaları silinmiştir; satır yalnızca (a) korunan geçmiş sonuçlar "silinmiş ekran" diye görünsün ve

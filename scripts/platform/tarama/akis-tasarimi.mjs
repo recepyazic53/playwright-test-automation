@@ -271,7 +271,8 @@ export function akistanKayitEnvanteri(env, bloklar) {
       if (!b.ad) hata(i, 'Alan grubunun adını yazın.');
       else if (adlar.has(b.ad)) hata(i, `“${b.ad}” adı başka bir alan grubunda da var; adlar tekil olmalı.`);
       adlar.add(b.ad);
-      if (!b.alanlar.length && etkin[i + 1]?.tur !== 'aksiyon') hata(i, 'Alan grubu boş: alan ekleyin (alansız bir adımı adlandırmak için ardından bir aksiyon gelmeli).');
+      // Alansız grup bir aksiyonun adıdır (aradaki bekleme süreleri o aksiyondan öncedir).
+      if (!b.alanlar.length && etkin.slice(i + 1).find((x) => x.tur !== 'bekle')?.tur !== 'aksiyon') hata(i, 'Alan grubu boş: alan ekleyin (alansız bir adımı adlandırmak için ardından bir aksiyon gelmeli).');
       /** @type {import('./paket-olusturucu.d.mts').HamAlan[]} */
       const hamlar = [];
       for (const a of b.alanlar) {

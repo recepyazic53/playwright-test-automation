@@ -38,6 +38,11 @@ export interface KosuYaniti {
 export interface Kosucu {
   calistir(istek: KosuIstegi): Promise<KosuYaniti>;
   dene(istek: { ortam: string; dosya: string; ad: string; kosuId: string; ekVeri: Record<string, unknown> }): Promise<KosuYaniti>;
+  /** Model senaryosu "Dene": geçici deneme senaryosu (veri okuyucuya dosyayla) etiketle koşar; veritabanına senaryo yazılmaz. */
+  modelDene?(istek: {
+    ortam: string; dosya: string; kosuId: string; etiket: string; grepDeseni: string; genel: { projeId: string; ortamId: string } | null;
+    denemeSenaryosu: Record<string, unknown>;
+  }): Promise<KosuYaniti>;
   /** Senaryo o an koşuyor mu (kuyrukta bekleme dahil)? Koşan senaryo düzenlenemez/silinemez. */
   kosuyorMu?(dosya: string, ad: string): boolean;
   /** Şu an (kuyrukta bekleyen dahil) bir koşu sürüyor mu? Çalışma alanı değiştirme / proje silme bunu denetler. */

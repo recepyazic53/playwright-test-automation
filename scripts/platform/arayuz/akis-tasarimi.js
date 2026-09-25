@@ -516,10 +516,14 @@ export async function akisTasarimi(icerik, s) {
         ciz();
         const sen = on.etki.senaryolar;
         const ad = akisAdi.value.trim();
+        // Ortak akış: onu kullanan ekranlar etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar).
+        const ekr = Array.isArray(on.etki.ekranlar) ? on.etki.ekranlar : null;
         const onay = await onayIste({
           baslik: on.etki.yeni ? `“${ad}” akışı oluşturulsun mu?` : `“${ad}” akışı kaydedilsin mi?`,
-          metin: `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : on.etki.yeni ? '' : 'Bu akışı kullanan senaryo yok. '}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`,
-          liste: sen.map((x) => x.baslik),
+          metin: ekr
+            ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
+            : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : on.etki.yeni ? '' : 'Bu akışı kullanan senaryo yok. '}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`,
+          liste: ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik),
           dugme: on.etki.yeni ? 'Oluştur' : 'Kaydet', tehlikeli: false, ikonAd: 'uyari'
         });
         if (!onay) return;
@@ -549,6 +553,30 @@ export async function akisTasarimi(icerik, s) {
     if (degisiklik && !(await onayIste({ baslik: 'Değişiklikler kaydedilmedi', metin: 'Diyagramdaki kaydedilmemiş değişiklikler kaybolacak.', dugme: 'Çık', tehlikeli: false, ikonAd: 'uyari' }))) return;
     s.vazgec?.();
   });
+  // Ekran kipinde (değişiklikler otomatik saklanmaz) sayfadan ayrılırken kaydedilmemiş değişiklik uyarısı: uygulama içi
+  // bağlantılar (kırıntı, yan menü) onayla; sekme kapatma / yenileme tarayıcının uyarısıyla. Sayfadan çıkınca kaldırılır.
+  if (ekranKipi) {
+    const tasarimSayfasi = location.hash;
+    const baglantiTiklandi = (/** @type {MouseEvent} */ o) => {
+      const a = o.target instanceof Element ? o.target.closest('a[href^="#"]') : null;
+      if (!a || !degisiklik || location.hash !== tasarimSayfasi || a.getAttribute('target') === '_blank') return;
+      o.preventDefault();
+      o.stopImmediatePropagation();
+      const hedef = a.getAttribute('href');
+      void onayIste({ baslik: 'Değişiklikler kaydedilmedi', metin: 'Diyagramdaki kaydedilmemiş değişiklikler kaybolacak.', dugme: 'Çık', tehlikeli: false, ikonAd: 'uyari' })
+        .then((tamam) => { if (tamam) { degisiklik = false; location.hash = hedef; } });
+    };
+    const sekmeKapaniyor = (/** @type {BeforeUnloadEvent} */ o) => { if (degisiklik) { o.preventDefault(); o.returnValue = ''; } };
+    const birak = () => {
+      if (location.hash === tasarimSayfasi) return;
+      document.removeEventListener('click', baglantiTiklandi, true);
+      window.removeEventListener('beforeunload', sekmeKapaniyor);
+      window.removeEventListener('hashchange', birak);
+    };
+    document.addEventListener('click', baglantiTiklandi, true);
+    window.addEventListener('beforeunload', sekmeKapaniyor);
+    window.addEventListener('hashchange', birak);
+  }
   const baslikMetni = ekranKipi ? (veri.akis ? `Akışı düzenle: ${veri.akis.ad}` : 'Yeni akış') : `Akış diyagramı: ${veri.ekran.ad}`;
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },

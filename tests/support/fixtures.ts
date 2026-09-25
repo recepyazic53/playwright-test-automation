@@ -12,6 +12,7 @@ import { relative, sep } from 'node:path';
 import { getEnvironmentName } from './environments';
 import { genelKosuMu } from './genel-veri';
 import { platformSenaryoKimligi } from './platform-veri';
+import { ekranGoruntusuAl } from './screenshots';
 
 // Klasör adı -> ürün görünen adı (platformdaki ekran adıyla aynı; bkz. projeler/galaksi/aktarim.mjs > EKRAN_ADLARI).
 const EPIC_ADLARI: Record<string, string> = {
@@ -163,10 +164,15 @@ export const test = base.extend<OrtakFixturelar>({
         return;
       }
 
+      // Bir önceki yakalama bitmediyse bu tik atlanır; yakalamalar adım görüntüleriyle aynı sırada ve süre sınırlıdır
+      // (screenshots.ts > ekranGoruntusuAl — üst üste binen yakalamalar koşuyu takıyordu).
+      let calisiyor = false;
       const araVer = setInterval(() => {
-        page
-          .screenshot()
+        if (calisiyor) return;
+        calisiyor = true;
+        ekranGoruntusuAl(page, { fullPage: false, sureMs: 5_000 })
           .then((tamponVerisi) => {
+            if (!tamponVerisi) return;
             try {
               // Yarım yazılmış bir dosya okunmasın diye geçici bir dosyaya yazıp
               // ardından asıl isme "rename" ediyoruz (atomik değişim).
@@ -179,8 +185,9 @@ export const test = base.extend<OrtakFixturelar>({
             }
           })
           .catch(() => {
-            // page.screenshot() navigasyon sırasında reddedebilir — yok sayılır.
-          });
+            // Yakalama navigasyon sırasında reddedebilir — yok sayılır.
+          })
+          .finally(() => { calisiyor = false; });
       }, 1000);
 
       await use();
