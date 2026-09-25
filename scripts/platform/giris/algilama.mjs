@@ -135,18 +135,28 @@ function sayfadaKodAlani(haric) {
  * @returns {string[]}
  */
 function sayfadaCaptcha() {
+  // NOT: Yalnızca EKRANDA GÖRÜNEN CAPTCHA engel sayılır. Bazı uygulamalar (ör. birkaç hatalı
+  // denemeden sonra açılan) CAPTCHA alanını sayfada gizli tutar; gizli öğe ya da yalnızca yüklenmiş
+  // bir betik (görünmez reCAPTCHA v3 gibi) girişi engellemez, o yüzden kanıt sayılmaz.
+  const gorunur = (/** @type {Element} */ el) => {
+    const r = el.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    for (let e = /** @type {Element | null} */ (el); e; e = e.parentElement) {
+      const s = getComputedStyle(e);
+      if (s.display === 'none' || s.visibility === 'hidden' || Number(s.opacity) === 0) return false;
+    }
+    return true;
+  };
   const kanit = [];
   const desen = /recaptcha|hcaptcha|challenges\.cloudflare\.com|turnstile|captcha/i;
   for (const f of document.querySelectorAll('iframe')) {
     const kaynak = `${f.getAttribute('src') ?? ''} ${f.getAttribute('title') ?? ''}`;
-    if (desen.test(kaynak)) kanit.push(`iframe: ${kaynak.trim().slice(0, 80)}`);
-  }
-  for (const s of document.querySelectorAll('script[src]')) {
-    const kaynak = s.getAttribute('src') ?? '';
-    if (/recaptcha|hcaptcha\.com|challenges\.cloudflare\.com\/turnstile/i.test(kaynak)) kanit.push(`betik: ${kaynak.slice(0, 80)}`);
+    if (desen.test(kaynak) && gorunur(f)) kanit.push(`iframe: ${kaynak.trim().slice(0, 80)}`);
   }
   const seciciler = ['.g-recaptcha', '.h-captcha', '.cf-turnstile', '[data-sitekey]', '#captcha', '.captcha', 'img[src*="captcha" i]', 'input[name*="captcha" i]', 'textarea[name="g-recaptcha-response"]'];
-  for (const s of seciciler) if (document.querySelector(s)) kanit.push(`öğe: ${s}`);
+  for (const s of seciciler) {
+    if ([...document.querySelectorAll(s)].some(gorunur)) kanit.push(`öğe: ${s}`);
+  }
   return kanit;
 }
 

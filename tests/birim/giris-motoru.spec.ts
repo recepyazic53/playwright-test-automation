@@ -72,6 +72,20 @@ test.describe('Otomatik algılama (yerel fikstür sayfaları)', () => {
     expect(kanit).toContain('öğe: .g-recaptcha');
   });
 
+  test('gizli CAPTCHA alanı (hatalı denemeden sonra açılan) engel sayılmaz; görünür olunca algılanır', async () => {
+    // Gerçek bir uygulamada görüldü: giriş sayfasında CAPTCHA alanı ve görseli baştan DOM'da ama
+    // gizli bir kapsayıcıda duruyor; yalnızca birkaç hatalı girişten sonra görünür oluyor.
+    const page = await baglam.newPage();
+    await page.setContent(
+      '<form><input type="text" name="Username"><input type="password" name="Password">' +
+        '<div id="CaptchaContainer" style="display:none"><img src="/captcha.png" width="120" height="40">' +
+        '<input type="text" name="Captcha" id="Captcha"></div><input type="submit" value="Giriş"></form>'
+    );
+    expect(await captchaAlgila(page)).toEqual([]);
+    await page.evaluate(() => { (document.getElementById('CaptchaContainer') as HTMLElement).style.display = 'block'; });
+    expect((await captchaAlgila(page)).join(' ')).toMatch(/captcha/i);
+  });
+
   test('gönderimden sonra OTP alanı algılanır (kullanıcı/parola alanları hariç)', async () => {
     const page = await baglam.newPage();
     await page.goto('/otp');
