@@ -55,8 +55,8 @@ export function jetSaglikTasiyici(v) {
   const notlar = [
     'Kodlu testteki gibi her senaryoda ödeme dahil ("Ödeme (doğrudan kart formu)" ortak akışı; yalnızca test ortamında koşar).',
     'Yabancı kimlikli sigortalıda kodlu test (POM) eksik adres seçimlerini koşullu tamamlıyordu (belde "-1" ise ilk geçerli seçenek, boş mahalle / cadde için "Test Mahallesi" / "Test Caddesi"); akış bunu yapamadığı için "eksikBelde / eksikMahalle / eksikCadde" boş bırakıldı — adres sorgudan eksik gelirse adım düşebilir.',
-    '"Yenileme" (#Yenileme) gizli liste: kodlu test betikle seçiyordu; akış koşucusu görünmeyen alanı atlar, senaryodaki değer uygulanmayabilir.',
-    'Farklı pasaportlu sigorta ettirende telefon satırı gizli (POM betikle yazıyordu); koşucu atlar — bu senaryolar TEST\'te prim hesaplamada düşebilir.',
+    '"Yenileme" (#Yenileme) gizli liste: kodlu test gibi betikle seçilir (degerJs).',
+    'Farklı pasaportlu sigorta ettirende telefon satırı gizli: kodlu test gibi betikle yazılır (degerJs).',
     'Kodlu test ödeme sonucunu "/jet-satis/jet-saglik/policelestir" servis cevabında da arıyordu; ortak akış yalnızca sayfa metnini okur.'
   ];
   if (!/^\d+$/.test(ortak.indirimOrani.trim())) {

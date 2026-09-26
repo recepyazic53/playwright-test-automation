@@ -88,7 +88,8 @@ export function jetSaglikAkisPaketi(s = {}) {
               ]
             }),
             // Kimlik sorgu servisi telefonu istek sırasında zorunlu tutuyor (POM: ekran açılır açılmaz yazılır; ülke kodu 90).
-            sabit('telefonUlkeKodu', 'Telefon ülke kodu', '#MobilePhoneCountry', '90'),
+            // POM ülke kodlarını betikle yazar (görünür olmayabilir): degerJs.
+            sabit('telefonUlkeKodu', 'Telefon ülke kodu', '#MobilePhoneCountry', '90', { doldurucu: 'degerJs' }),
             {
               id: 'sigortaliKimlik', tip: 'kimlikProfili', kimlikTuru: { yabanciKimlik: 'yabanciKimlik', pasaport: 'pasaport' }, bagimlilik: { alan: 'sigortaliTipi' },
               etiket: { ekran: null, form: 'Sigortalı kimliği' }, zorunlu: true, yapilandirma: 'senaryo',
@@ -138,7 +139,7 @@ export function jetSaglikAkisPaketi(s = {}) {
                 secim('P', 'Pasaport', { senaryoDegeri: 'pasaport', formMetni: 'Pasaport', secici: '#ClientType-P' })
               ]
             }),
-            sabit('ettirenTelefonUlkeKodu', 'Sigorta ettiren telefon ülke kodu', '#ClientMobilePhoneCountry', '90', { gorunurluk: { kosul: 'ettirenFarkli' } }),
+            sabit('ettirenTelefonUlkeKodu', 'Sigorta ettiren telefon ülke kodu', '#ClientMobilePhoneCountry', '90', { doldurucu: 'degerJs', gorunurluk: { kosul: 'ettirenFarkli' } }),
             {
               id: 'ettirenKimlik', tip: 'kimlikProfili', kimlikTuru: { ozel: 'ozel', tuzel: 'tuzel', pasaport: 'pasaport' }, bagimlilik: { alan: 'musteriTipi' },
               etiket: { ekran: null, form: 'Sigorta ettiren kimliği' }, zorunlu: true, yapilandirma: 'senaryo', gorunurluk: { kosul: 'ettirenFarkli' },
@@ -150,7 +151,8 @@ export function jetSaglikAkisPaketi(s = {}) {
                 // Salt okunur tarih: betikle yazılır, takvim Escape ile kapanır (POM).
                 alt('ettirenDogumTarihi', 1, 'tarih', 'Doğum tarihi', '#BirthDateCL', { ozel: 'dogumTarihi' }, { bicim: 'gg.aa.yyyy', doldurucu: 'tarihJs', doldurucuParametreleri: { tus: 'Escape' } }),
                 // Uygulama kimlik sorgusundan önce telefonu zorunlu tutuyor (POM).
-                alt('ettirenTelefon', 2, 'telefon', 'Cep telefonu', '#ClientMobilePhone', { ozel: 'cepTelefonu', tuzel: 'cepTelefonu' }, { doldurucu: 'metinDoldur' }),
+                // Pasaportlu ettirende satır gizli, hesaplama servisi telefonu yine de ister (POM betikle yazar): degerJs.
+                alt('ettirenTelefon', 2, 'telefon', 'Cep telefonu', '#ClientMobilePhone', { ozel: 'cepTelefonu', tuzel: 'cepTelefonu' }, { doldurucu: 'degerJs' }),
                 alt('ettirenKimlikNo', 3, 'metin', 'Kimlik no (T.C. / VKN)', '#ClientIdentityNo', { ozel: 'tcKimlikNo', tuzel: 'vergiKimlikNo' }, {
                   doldurucuParametreleri: sorgu('#QueryClientIdentity', '#ClientIdentityDetail')
                 }),
@@ -161,7 +163,7 @@ export function jetSaglikAkisPaketi(s = {}) {
                 ...pasaportAyrintilari('Client', 'ettiren', 6),
                 // Özel / tüzel: sorgu eski telefonu yazabiliyor, yeniden girilir. Pasaport: telefon sorgudan sonra girilir — satır
                 // gizli olduğundan koşucu bunu ATLAR (bkz. bilinmeyenler).
-                alt('ettirenTelefonSonra', 12, 'telefon', 'Cep telefonu (sorgudan sonra)', '#ClientMobilePhone', 'cepTelefonu', { doldurucu: 'metinDoldur' })
+                alt('ettirenTelefonSonra', 12, 'telefon', 'Cep telefonu (sorgudan sonra)', '#ClientMobilePhone', 'cepTelefonu', { doldurucu: 'degerJs' })
               ]
             }
           ]
@@ -208,7 +210,8 @@ export function jetSaglikAkisPaketi(s = {}) {
               liste('hastalik', 'Hastalık beyanı', '#slHaveDisease'),
               liste('kvkkOnayi', 'KVKK onayı', '#KVKKOnay'),
               // Gizli liste (POM betikle seçer): koşucu görünmeyen alanı ATLAR — ekranın varsayılanı kalır (bkz. bilinmeyenler).
-              liste('yenileme', 'Yenileme', '#Yenileme', { zorunlu: false }),
+              // Gizli liste (POM betikle seçer): degerJs.
+              liste('yenileme', 'Yenileme', '#Yenileme', { zorunlu: false, doldurucu: 'degerJs' }),
               // 0 olabilir (kodlu verideki değer); "sayi" tipi yalnızca pozitif kabul ettiği için metin.
               alan('indirimOrani', 'metin', 'İndirim oranı (%)', '#DiscountRate', { zorunlu: true })
             ]
@@ -263,7 +266,7 @@ export function jetSaglikAkisPaketi(s = {}) {
         : ['Ödeme (poliçeleştirme + kredi kartı) bu pakette yok; "Ödeme (doğrudan kart formu)" ortak akışı eklenebilir ("Ödeme (kredi kartı)" JetSağlık\'a uymaz: kart formu doğrudan açılır).']),
       'Kodlu test ödeme sonucunu "/jet-satis/jet-saglik/policelestir" servis cevabında da arıyor; ortak akış yalnızca sayfa metnini ve tarayıcı uyarılarını okur. Sonucun ekranda görünüp görünmediği TEST\'te doğrulanmalı.',
       'Açılır listelerin seçenekleri (poliçe süresi, hastalık, KVKK, yenileme, uyruk, il / ilçe / belde, adres tipi) kodda yok; TEST ekranından okunacak. Senaryodaki değer önce "value", olmazsa görünen metinle seçilir.',
-      'Gizli alanlar: #Yenileme (POM betikle seçer) ve pasaportlu sigorta ettirende #ClientMobilePhone / #ClientMobilePhoneCountry (satır gizli ama hesaplama servisi telefonu zorunlu tutuyor — POM) koşucu tarafından ATLANIR. Telefon ülke kodu alanlarının (#MobilePhoneCountry) görünür olup olmadığı da bilinmiyor (POM betikle yazar). Farklı pasaportlu sigorta ettiren senaryosu TEST\'te büyük olasılıkla prim hesaplamada düşer.',
+      'Gizli alanlar (#Yenileme, #ClientMobilePhone, telefon ülke kodları) POM gibi betikle yazılır (degerJs; görünmeseler de). Maskeli telefon alanının betikle yazılan değeri kabul ettiği TEST\'te doğrulanmalı.',
       'Yabancı kimlikli sigortalıda POM eksik adres seçimlerini koşullu tamamlar (belde "-1" ise ilk geçerli seçenek, mahalle / cadde boşsa "Test Mahallesi" / "Test Caddesi"); koşucu "boşsa doldur" ve "ilk geçerli seçenek" yapamaz: senaryoda verilen değer her zaman yazılır, verilmezse dokunulmaz.',
       'Telefon maskeli alan: POM değeri "(5xx) xxx xx xx" biçiminde betikle atar (tuşlamak rakamları kaydırıyor); koşucu değeri doğrudan yazar (fill). Maskenin bunu kabul ettiği TEST\'te doğrulanmalı.',
       'Sorgu düğmeleri (#QueryIdentity, #QueryPassportNumber, #QueryClient…) POM\'da betikle tıklanıyor (görünür olmayabilir); koşucu görünür düğmeye basar. Doğum tarihi girişinde POM açık kalan takvimi (#ui-datepicker-div) gizler; koşucu yalnızca Tab / Escape\'e basar.',
