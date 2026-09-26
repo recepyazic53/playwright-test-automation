@@ -55,6 +55,15 @@ test('SoapUI: parametreler sade yazımla kalır; giriş bilgisi / tarih / test v
   expect(baska.uyarilar.join(' ')).toContain('kendi');
 });
 
+test('SoapUI: gövdedeki satır sonu kalıntısı (düz metin "\\r") atılır; gövdenin içindeki diğer ters bölüler kalır', () => {
+  const kirli = SOAPUI.replace(/<Input>/g, '<Input>\\r\n   ').replace(/<\/Input>/g, '<Note>a\\rb</Note>\\r\n</Input>');
+  const t = servisTaslaklari(soapuiCozumle(kirli), { takim: 'Takim', durum: 'OrnekDurum' });
+  for (const x of t.servisler[0].senaryolar) {
+    expect(x.govde).not.toMatch(/\\r(?=\r?\n|$)/);
+    expect(x.govde).toContain('<Note>a\\rb</Note>');
+  }
+});
+
 test('yer tutucular: tarih kuralı, değer (XML kaçışlı), doğrudan tarih; eksikler nedenleriyle', () => {
   const simdi = new Date(2026, 8, 26, 10, 5, 7);
   const g = yerTutuculariDoldur('<a>${BEGIN_DATE}</a><b>${END}</b><c>${AD}</c><d>${tarih:bugun-30g|dd.MM.yyyy}</d>', {

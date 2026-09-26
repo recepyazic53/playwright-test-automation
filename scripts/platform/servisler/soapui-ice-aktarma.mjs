@@ -24,6 +24,12 @@ const icMetin = (s, etiket) => {
   const m = s.match(new RegExp(`<con:${etiket}>(?:<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>|([^<]*))</con:${etiket}>`));
   return m ? (m[1] ?? xmlKacisCoz(m[2] ?? '')) : '';
 };
+/**
+ * İstek gövdesi. Bazı SoapUI dosyalarında satır sonlarında DÜZ METİN "\r" (ters bölü + r) kalıntısı bulunur; zarfın içinde
+ * metin olarak kaldığında sunucu gövdeyi okuyamaz ("Missing required soap:Body element"). Satır sonundaki kalıntı atılır.
+ * @param {string} s
+ */
+const istekGovdesi = (s) => icMetin(s, 'request').replace(/\\r(?=\r?\n|$)/g, '');
 
 /**
  * @typedef {{ ad: string; eylem?: string }} Operasyon
@@ -217,7 +223,7 @@ export function soapuiCozumle(xml) {
       /** @type {Set<string>} */
       const kullanilan = new Set();
       const istekAdimlari = adimlar.filter((a) => oznitelik(a[1], 'type') === 'request')
-        .map((a) => ({ a, adimUyarilari: /** @type {string[]} */ ([]), govde: ozellikleriSadelestir(icMetin(a[2], 'request'), kullanilan) }));
+        .map((a) => ({ a, adimUyarilari: /** @type {string[]} */ ([]), govde: ozellikleriSadelestir(istekGovdesi(a[2]), kullanilan) }));
       // Düz yazılmış giriş bilgileri: her parametre için adımlarda EN ÇOK geçen değer profil değeri olur.
       /** @type {Record<string, Map<string, number>>} */
       const sayac = {};
