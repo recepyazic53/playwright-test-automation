@@ -568,7 +568,9 @@ function turAlanlariniDogrula(alanlar) {
       tip: typeof alan.tip === 'string' ? alan.tip : 'metin',
       // Kullanıcı kararı: test verisindeki TÜM alanlar varsayılan olarak hassastır (şifreli);
       // yalnızca açıkça hassas: false verilen alan düz metin saklanır.
-      hassas: alan.hassas !== false,
+      // gizli: tablo sütunu ekranda hiç gösterilmez (parola vb.); gizli olan her zaman hassastır (şifreli).
+      hassas: alan.hassas !== false || alan.gizli === true,
+      ...(alan.gizli === true ? { gizli: true } : {}),
       // Verilmezse (undefined) kayıtta mevcut eşleme korunur (bkz. testVerisiTuruKaydet).
       ...(alan.servisParametreleri !== undefined ? { servisParametreleri: servisParametreleriniDogrula(alan.servisParametreleri, ad) } : {})
     };
@@ -603,7 +605,7 @@ const turCevir = (s) => ({
   olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
-/** @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean }> }} girdi */
+/** @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean; gizli?: boolean }> }} girdi */
 export function testVerisiTuruKaydet(vt, girdi) {
   const alanlar = turAlanlariniDogrula(girdi.alanlar);
   return vt.islem(() => {

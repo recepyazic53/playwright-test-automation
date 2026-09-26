@@ -130,7 +130,7 @@ test.describe('alan formu uçtan uca', () => {
     expect(bozuk.basarili).toBe(false);
   });
 
-  test('arayüz: yeni senaryo alan formundan oluşturulur (parametre, evet/hayır, liste); ★ varsayılan sonraki senaryoda dolu gelir; XML sekmesi', async () => {
+  test('arayüz: yeni senaryo alan formundan oluşturulur (tablodan, evet/hayır, liste); ★ varsayılan sonraki senaryoda dolu gelir; XML sekmesi', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
@@ -141,8 +141,9 @@ test.describe('alan formu uçtan uca', () => {
     await expect(form).toBeVisible();
     const satir = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
     await expect(satir('CitizenshipNumber')).toBeVisible();
-    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı').selectOption('parametre');
-    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber parametresi').selectOption('SIGORTALI_TC');
+    // Bağlı olmayan alan da "Tablodan" seçilebilir: sütun seçilir (test verisi türü "Kişi" bir tablodur).
+    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı').selectOption('tablo');
+    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber tablo sütunu').selectOption('Kişi.tcKimlikNo');
     await satir('IsSkiing').getByLabel('IsSkiing değer kaynağı').selectOption('sabit');
     await satir('IsSkiing').getByLabel('IsSkiing', { exact: true }).selectOption('true');
     await satir('ClientType').getByLabel('ClientType değer kaynağı').selectOption('sabit');
@@ -154,7 +155,7 @@ test.describe('alan formu uçtan uca', () => {
     await expect(satir('CitizenshipNumber').getByRole('button', { name: 'CitizenshipNumber için servis varsayılanı' })).toHaveText('★');
     // XML sekmesine geçip dönünce değerler korunur.
     await page.getByRole('tab', { name: 'Gövde (XML)' }).click();
-    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<CitizenshipNumber>\$\{SIGORTALI_TC\}<\/CitizenshipNumber>/);
+    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<CitizenshipNumber>\$\{Kişi\.tcKimlikNo\}<\/CitizenshipNumber>/);
     await page.getByRole('tab', { name: 'Alanlar' }).click();
     await expect(satir('IsSkiing').getByLabel('IsSkiing', { exact: true })).toHaveValue('true');
     await page.getByLabel('Başlık').fill('Formdan senaryo');
@@ -163,22 +164,23 @@ test.describe('alan formu uçtan uca', () => {
 
     const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
     const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'Formdan senaryo');
-    expect(kayit.icerik.govde).toContain('<CitizenshipNumber>${SIGORTALI_TC}</CitizenshipNumber>');
+    expect(kayit.icerik.govde).toContain('<CitizenshipNumber>${Kişi.tcKimlikNo}</CitizenshipNumber>');
     expect(kayit.icerik.govde).toContain('<IsSkiing>true</IsSkiing>');
     expect(kayit.icerik.govde).toContain('<ClientType>O</ClientType>');
     expect(kayit.icerik.govde).toContain('<BeginDate>2026-01-02T03:04:05</BeginDate>');
-    expect(d.servis.ayarlar.alanVarsayilanlari).toEqual({ Teklif: { 'Input/CitizenshipNumber': { kaynak: 'parametre', deger: 'SIGORTALI_TC' } } });
+    expect(d.servis.ayarlar.alanVarsayilanlari).toEqual({ Teklif: { 'Input/CitizenshipNumber': { kaynak: 'tablo', deger: 'Kişi.tcKimlikNo' } } });
 
     // Kayıtlı senaryo formda açılır; yeni senaryoda varsayılan dolu gelir.
     await page.reload();
     await expect(satir('ClientType').getByLabel('ClientType', { exact: true })).toHaveValue('O');
     await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
-    await expect(satir('CitizenshipNumber').getByLabel('CitizenshipNumber parametresi')).toHaveValue('SIGORTALI_TC');
+    await expect(satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı')).toHaveValue('tablo');
+    await expect(satir('CitizenshipNumber')).toContainText('Kişi → tcKimlikNo');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
 
-  test('arayüz: tuş tuş yazarken odak kaybolmaz (sabit değer, alan arama); parametrenin yanında test verisi profili seçilir', async () => {
+  test('arayüz: tuş tuş yazarken odak kaybolmaz (sabit değer, alan arama); tablodan seçilen değer senaryoya yazılır', async () => {
     test.setTimeout(60_000);
     const turler = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
     const turId = String(turler.turler.find((t: Nesne) => t.ad === 'Kişi').id);
@@ -209,22 +211,22 @@ test.describe('alan formu uçtan uca', () => {
     await expect(form.locator('.alan-satiri')).toHaveCount(1);
     await ara.fill('');
 
-    // Parametre + değer listesi: SIGORTALI_TC → profiller (hassas alan değeri gösterilmez, yalnız ad).
-    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı').selectOption('parametre');
-    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber parametresi').selectOption('SIGORTALI_TC');
-    const deger = satir('CitizenshipNumber').getByLabel('SIGORTALI_TC değeri');
-    await expect(deger.locator('option')).toHaveText(['Servis varsayılanı (seçilmedi)', 'k1', 'k2']);
-    await deger.selectOption({ label: 'k2' });
+    // Tablodan: "Kişi" tablosunun satırlarındaki kimlik numaraları listelenir; seçilen değer senaryoya yazılır.
+    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı').selectOption('tablo');
+    const deger = satir('CitizenshipNumber').getByLabel('CitizenshipNumber', { exact: true });
+    await expect(deger.locator('option')).toHaveText(['— seçilmedi (2 seçenek) —', '11111111110', '22222222220']);
+    await deger.selectOption('22222222220');
     await page.getByLabel('Başlık').fill('Profil seçili senaryo');
     await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
     await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
     const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
     const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'Profil seçili senaryo');
-    expect(kayit.icerik.veriProfilleri).toEqual({ [`${turId}:sigortali`]: k2 });
+    expect(kayit.icerik.tabloSecimleri).toEqual({ [`${turId}|`]: { tcKimlikNo: '22222222220' } });
+    expect(k2).toBeTruthy();
     expect(kayit.icerik.govde).toContain('<Channel>30447</Channel>');
     // Kayıtlı senaryo açılınca seçim görünür.
     await page.reload();
-    await expect(satir('CitizenshipNumber').getByLabel('SIGORTALI_TC değeri')).toHaveValue(k2);
+    await expect(satir('CitizenshipNumber').getByLabel('CitizenshipNumber', { exact: true })).toHaveValue('22222222220');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
@@ -312,6 +314,102 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
+  test('arayüz: düzenleyicideki "Dene (TEST)" onaydan sonra aynı canlı paneli açar; taslak kaydedilmez', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    const sayi = async () => ((await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar as Nesne[]).length;
+    const once = await sayi();
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    await page.getByLabel('Başlık').fill('Kaydedilmemiş deneme');
+    await page.getByRole('button', { name: 'Dene (TEST)' }).click();
+    const onay = page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' });
+    await onay.getByRole('button', { name: 'Dene' }).click();
+    const panel = page.getByRole('region', { name: 'Servis koşu paneli' });
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.kosu-listesi li')).toHaveCount(1);
+    await expect(panel).toContainText('Kaydedilmemiş deneme');
+    await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
+    await expect(panel.locator('.servis-adimlari')).toContainText('Cevap geldi (HTTP 200');
+    expect(await sayi()).toBe(once);
+    // CANLI ortamda taslak koşusu reddedilir.
+    const red = await api('/platform/servis/is/baslat', { projeId, servisId, ortamId: canli, taslak: { baslik: 'x', icerik: { operasyon: 'Teklif', govde: '<a/>', kontroller: [] } } });
+    expect(red.basarili).toBe(false);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('arayüz: veri girilip kaydetmeden sayfa değiştirilince "Değişiklikleriniz kaydedilmeyecek" sorulur; arama sayılmaz', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    // Listede arama: veri değildir, uyarı sorulmaz.
+    await page.goto(`/#/servisler/s/${servisId}`);
+    await page.getByLabel('Senaryo ara').fill('xyz');
+    await page.getByRole('link', { name: 'Ayarlar' }).click();
+    await expect(page).toHaveURL(/#\/ayarlar\/proje$/);
+    // Yeni senaryo formunda başlık girildi → menüden çıkış onay ister.
+    await page.evaluate((id) => { location.hash = `#/servisler/s/${id}/senaryo/yeni`; }, servisId);
+    await page.getByLabel('Başlık').fill('Yarım kalan');
+    await page.getByRole('link', { name: 'Ayarlar' }).click();
+    const onay = page.getByRole('dialog', { name: 'Değişiklikleriniz kaydedilmeyecek' });
+    await expect(onay).toBeVisible();
+    await onay.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(page).toHaveURL(/\/senaryo\/yeni$/);
+    await expect(page.getByLabel('Başlık')).toHaveValue('Yarım kalan');
+    // Kaydetmeden çık → sayfa değişir.
+    await page.getByRole('link', { name: 'Ayarlar' }).click();
+    await onay.getByRole('button', { name: 'Kaydetmeden çık' }).click();
+    await expect(page).toHaveURL(/#\/ayarlar\/proje$/);
+    // Kaydedince uyarı sorulmaz.
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    await page.getByLabel('Başlık').fill('Kaydedilen');
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
+    await page.getByRole('link', { name: 'Ayarlar' }).click();
+    await expect(page).toHaveURL(/#\/ayarlar\/proje$/);
+    await expect(onay).toHaveCount(0);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('arayüz: senaryo tablosunda İstek sütunu (metot + adres) ve Metot filtresi; ⋯ menüsünden Kopyala', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Onay senaryosu', icerik: { operasyon: 'Onayla', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] } });
+    await page.goto(`/#/servisler/s/${servisId}`);
+    const satir = (baslik: string) => page.locator('.servis-senaryo-tablosu tbody tr').filter({ has: page.getByRole('link', { name: baslik, exact: true }) });
+    const istek = satir('Hızlı').locator('td.istek-hucresi');
+    await expect(istek).toContainText('Teklif');
+    await expect(istek.locator('.istek-adresi')).toHaveText(`${soap.adres.replace(/\/+$/, '')}/Servis/ornek.asmx`);
+    // Metot filtresi.
+    await page.getByLabel('Metot', { exact: true }).selectOption('Onayla');
+    await expect(page.locator('.servis-senaryo-tablosu tbody tr')).toHaveCount(1);
+    await expect(satir('Onay senaryosu')).toBeVisible();
+    await page.getByRole('button', { name: 'Filtreleri temizle' }).first().click();
+    // Adresle arama.
+    await page.getByLabel('Senaryo ara').fill('ornek.asmx');
+    await expect(satir('Hızlı')).toBeVisible();
+    await page.getByLabel('Senaryo ara').fill('');
+    // ⋯ → Kopyala.
+    await satir('Onay senaryosu').getByRole('button', { name: 'Diğer işlemler: Onay senaryosu' }).click();
+    await page.getByRole('menuitem', { name: 'Kopyala' }).click();
+    await expect(satir('Onay senaryosu (kopya)')).toBeVisible();
+    const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
+    const kopya = d.senaryolar.find((x: Nesne) => x.baslik === 'Onay senaryosu (kopya)');
+    expect(kopya).toMatchObject({ kosuyaDahil: false, icerik: { operasyon: 'Onayla', govde: '<a/>' } });
+    for (const x of d.senaryolar.filter((y: Nesne) => String(y.baslik).startsWith('Onay senaryosu'))) await basarili('/platform/servis/senaryo/sil', { projeId, id: x.id });
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
   test('arayüz: senaryolar tablosunda "Koşuda" anahtarı (tek tek ve seçilenler için toplu)', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
@@ -342,29 +440,4 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
-  test('arayüz: test verisi alanında servis → parametre seçilerek eşleme eklenir (rol addan tahmin edilir)', async () => {
-    test.setTimeout(60_000);
-    // Serviste eşlenmemiş bir parametre olsun.
-    await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Ettiren', icerik: { operasyon: 'Teklif', govde: '<a>${SIGORTA_ETTIREN_TC}</a>', kontroller: [{ tur: 'soapYaniti' }] } });
-    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
-    const page = await baglam.newPage();
-    const hatalar: string[] = [];
-    page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/test-verisi');
-    await page.getByRole('button', { name: 'Alanları düzenle' }).click();
-    const editor = page.locator('.servis-parametre-editoru').first();
-    await expect(editor.locator('.parametre-cipleri')).toContainText('SIGORTALI_TC');
-    await editor.getByLabel('Servis', { exact: true }).selectOption({ label: 'Ornek' });
-    await expect(editor.getByLabel('Parametre', { exact: true })).toBeEnabled();
-    await editor.getByLabel('Parametre', { exact: true }).selectOption('SIGORTA_ETTIREN_TC');
-    await expect(editor.getByLabel('Rol')).toHaveValue('ettiren');
-    await editor.getByRole('button', { name: '+ Ekle' }).click();
-    await expect(editor.locator('.parametre-cipleri')).toContainText('SIGORTA_ETTIREN_TC');
-    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
-    await expect(page.getByText('Test verisi türü kaydedildi.')).toBeVisible();
-    const turler = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
-    expect(turler.turler[0].alanlar[0].servisParametreleri).toEqual([{ ad: 'SIGORTALI_TC', rol: 'sigortali' }, { ad: 'SIGORTA_ETTIREN_TC', rol: 'ettiren' }]);
-    expect(hatalar).toEqual([]);
-    await baglam.close();
-  });
 });

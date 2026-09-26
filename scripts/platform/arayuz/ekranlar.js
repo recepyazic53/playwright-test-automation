@@ -21,6 +21,7 @@ import { akisModeli } from './model-formu.mjs';
 import { onayIste } from './kosu-paneli.js';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { bulgularEkrani } from './bulgular.js';
+import { ekranBaglariSekmesi } from './ekran-baglari.js';
 import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
 
@@ -256,7 +257,8 @@ async function ekranAyrintisi(icerik, s) {
   const agac = d.agac || (d.altModel ? d.altModel.agac : null);
   const sekmeler = [
     ['model', 'Model', null], ['gecmis', 'Model geçmişi', d.gecmis.length], ['kanitlar', 'Kanıtlar', d.analiz.kanitlar.length],
-    ...(d.model ? [['akis', 'Akışlar', Array.isArray(d.model.akislar) && d.model.akislar.length ? d.model.akislar.length : 1]] : [])
+    ...(d.model ? [['akis', 'Akışlar', Array.isArray(d.model.akislar) && d.model.akislar.length ? d.model.akislar.length : 1]] : []),
+    ...(d.model && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? [['veri', 'Test verisi', null]] : [])
   ];
   const sekmeAlani = h('div', {});
   yerlestir(icerik,
@@ -296,6 +298,7 @@ async function ekranAyrintisi(icerik, s) {
   if (s.sekme === 'gecmis') { await gecmisSekmesi(sekmeAlani, s, d); return; }
   if (s.sekme === 'kanitlar') { kanitSekmesi(sekmeAlani, d); return; }
   if (s.sekme === 'akis' && d.model) { await akisSekmesi(sekmeAlani, s, d, icerik); return; }
+  if (s.sekme === 'veri' && d.model) { await ekranBaglariSekmesi(sekmeAlani, s, e); return; }
   if (!agac) {
     yerlestir(sekmeAlani, bosDurum('Bu ekranın modeli yok.', 'Claude Code ile üretilen bir sayfa paketini yükleyerek ya da ekranı otomatik tarayarak model oluşturun. Mevcut senaryolar korunur.', {
       ikon: 'katman', eylem: h('div', { class: 'dugmeler' },

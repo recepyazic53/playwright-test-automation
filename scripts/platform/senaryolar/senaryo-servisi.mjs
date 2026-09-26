@@ -23,12 +23,22 @@ import { acikAnahtar, sifrele } from '../kasa.mjs';
 import { adliAlanlariDonustur, zarflariCoz } from '../aktarim/motor.mjs';
 import { mezarTasiOku } from '../ekranlar/mezar-tasi.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari } from './model-formu.mjs';
-import { servisParametreTanimiKaydet, servisParametreTanimlariniListele } from '../servisler/servis-deposu.mjs';
-import { listeDegeri, modelSecimAlanlari, modeldenListeTaslaklari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
+import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
+import { ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 
-/** Ekranın değer listeleri (kullanım yeri "ekran"). @param {Veritabani} vt @param {string} projeId @param {string} ekranId */
-function ekranDegerListeleri(vt, projeId, ekranId) {
-  return servisParametreTanimlariniListele(vt, projeId).filter((t) => t.kullanim === 'ekran' && t.hedef?.ekranId === ekranId);
+/**
+ * Ekranın seçim listeleri: tablo sütununa bağlı alanlar tablodan (Test verisi > Tablolar; aynı tablodaki alanlar birbirini
+ * süzer; formdaki sıraya göre yukarıdan aşağı). Bağlı olmayan alanlar modeldeki seçenekleri kullanır. ortamId verilirse yalnız o
+ * ortamda geçerli satırlar.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string | null} [ortamId] @param {string[]} [sira] formdaki alan sırası
+ */
+function ekranListeleri(vt, projeId, ekranId, ortamId = null, sira = undefined) {
+  const baglar = ekranAlanBaglari(vt, ekranId);
+  if (!Object.keys(baglar).length) return [];
+  const tablolar = tablolariListele(vt, projeId).map((t) => (ortamId ? { ...t, satirlar: t.satirlar.filter((r) => !r.ortamId || r.ortamId === ortamId) } : t));
+  return tabloDegerListeleri(baglar, tablolar, ekranId, sira);
 }
 import { kartiNormallestir, krediKartlariAyniMi, senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import {
@@ -178,9 +188,14 @@ export function modelBaglami(vt, ekranId, akisId = null, secenekler = {}) {
   }
   // Ortak akış adımları açılır (form, doğrulama ve koşu düz modeli görür; ortak akış hep son sürümüyle).
   const acik = ortakAkislariAc(model, altModeller);
-  // Değer listeleri (Test verisi) modelin seçeneklerinin önüne geçer; model yalnız yedektir. listesiz: modelin kendisi (içe alma).
-  const sonModel = secenekler.listesiz || !ekran ? acik.model : modeleListeleriUygula(acik.model, ekranDegerListeleri(vt, String(ekran.proje_id), ekranId));
+  // Tablo bağlantıları (Test verisi > Tablolar) modelin seçeneklerinin önüne geçer; model yalnız yedektir. listesiz: modelin kendisi.
+  const sonModel = secenekler.listesiz || !ekran ? acik.model : modeleListeleriUygula(acik.model, /** @type {any} */ (ekranListeleri(vt, String(ekran.proje_id), ekranId, null, alanSirasi(acik.model, altModeller))));
   return { model: sonModel, altModeller, surum: kayit.surum, tamModel, akislar, akisId: akis.id, eksikOrtakAkislar: acik.eksikler };
+}
+
+/** Formdaki alan sırası (tablo bağlantılarında yukarıdan aşağı süzme). @param {Nesne} model @param {Record<string, Nesne>} altModeller */
+function alanSirasi(model, altModeller) {
+  try { return tumFormAlanlari(formSemasiOlustur(model, altModeller)).map((a) => String(a.id)); } catch { return undefined; }
 }
 
 /** @param {Veritabani} vt @param {string} projeId @param {string} ekranId */
@@ -461,8 +476,8 @@ export function formBaglami(vt, projeId, ekranId, ortamId, adaptor, akisId = nul
     ekran, ortamlar, model: mb.model, altModeller: mb.altModeller, modelSurumu: mb.surum, profiller, akislar: mb.akislar, akisId: mb.akisId,
     ortak: tarayiciOrtagi(dogrulamaOrtagi(vt, projeId, ortamId, adaptor)), veriKaynagi,
     olusturulabilir: Boolean(veriKaynagi),
-    // Bu ekranın koşullu değer listeleri (Ayarlar > Test verisi): seçim alanlarının seçeneklerini süzer.
-    degerListeleri: servisParametreTanimlariniListele(vt, projeId).filter((t) => t.kullanim === 'ekran' && t.hedef?.ekranId === ekranId)
+    // Bu ekranın seçim listeleri (tablo bağlantıları + değer listeleri): seçim alanlarının seçeneklerini süzer.
+    degerListeleri: ekranListeleri(vt, projeId, ekranId, ortamId, tumFormAlanlari(sema).map((a) => String(a.id)))
   };
 }
 
@@ -488,47 +503,6 @@ export function ekranGirdileri(vt, projeId, ekranId) {
     return { id: a.id, etiket: a.etiket, tip: a.tip, secenekler: [...s.values()] };
   });
   return { girdiler };
-}
-
-/**
- * Ekran modellerindeki seçenek listelerini değer listesi olarak test verisine alır (bağımlılar koşullu liste). onay: false →
- * yalnız önizleme. Aynı ekran + input + koşullarla liste zaten varsa atlanır (kullanıcının düzenlemesi korunur). Silinmiş
- * ekranlar ve alt modeller / ortak akışlar alınmaz. Model değişmez; listeler modelin önüne geçer.
- * @param {Veritabani} vt @param {string} projeId @param {{ onay?: boolean; ekranIdleri?: string[] }} [girdi]
- */
-export function modellerdenDegerListeleri(vt, projeId, girdi = {}) {
-  acikAnahtar(vt);
-  const mevcut = servisParametreTanimlariniListele(vt, projeId);
-  const imza = (/** @type {any} */ h, /** @type {any[]} */ k) => JSON.stringify([h?.ekranId, h?.alan, (k || []).map((x) => [x.alan, x.deger]).sort()]);
-  const varOlan = new Set(mevcut.filter((t) => t.kullanim === 'ekran').map((t) => imza(t.hedef, t.kosullar || [])));
-  const adlar = new Set(mevcut.map((t) => t.ad.toLocaleLowerCase('en')));
-  const ekranlar = ekranlariListele(vt, projeId).filter((e) => e.durum !== 'silindi' && (!girdi.ekranIdleri || girdi.ekranIdleri.includes(e.id)));
-  /** @type {Array<{ ekran: string; eklenecek: number; atlanan: number }>} */
-  const ozet = [];
-  /** @type {any[]} */
-  const eklenecekler = [];
-  for (const e of ekranlar) {
-    const mb = modelBaglami(vt, e.id, null, { listesiz: true });
-    if (!mb) continue;
-    const taslaklar = modeldenListeTaslaklari(mb.model, { id: e.id, ad: e.ad });
-    let atlanan = 0;
-    for (const t of taslaklar) {
-      if (varOlan.has(imza(t.hedef, t.kosullar))) { atlanan++; continue; }
-      let ad = t.ad.length > 80 ? `${t.ad.slice(0, 77)}…` : t.ad;
-      for (let n = 2; adlar.has(ad.toLocaleLowerCase('en')); n++) ad = `${t.ad.slice(0, 74)} (${n})`;
-      adlar.add(ad.toLocaleLowerCase('en'));
-      eklenecekler.push({ ...t, ad });
-    }
-    if (taslaklar.length) ozet.push({ ekran: e.ad, eklenecek: taslaklar.length - atlanan, atlanan });
-  }
-  const sonuc = { ekranlar: ozet, toplam: eklenecekler.length, kosullu: eklenecekler.filter((t) => t.kosullar.length).length };
-  if (!girdi.onay) return { onizleme: sonuc };
-  vt.islem(() => {
-    for (const t of eklenecekler) {
-      servisParametreTanimiKaydet(vt, { projeId, ad: t.ad, tur: 'liste', degerler: t.degerler, elleYazilabilir: true, kullanim: 'ekran', hedef: t.hedef, kosullar: t.kosullar });
-    }
-  });
-  return { eklendi: sonuc };
 }
 
 // ---------------------------------------------------------------------------------------

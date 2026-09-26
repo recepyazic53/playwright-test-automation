@@ -144,6 +144,13 @@ export class ApiHatasi extends Error {
   }
 }
 
+/** Kaydedilmemiş değişiklik izi (cikis-korumasi.js kurar ve işaretler). */
+export const kayitIzi = { kirli: false };
+/** Kaydedildi / bilerek vazgeçildi: sayfadan çıkarken uyarı sorulmaz. */
+export const degisiklikleriBirak = () => { kayitIzi.kirli = false; };
+/** Başarılı olunca veriyi saklayan uçlar (önizleme, deneme, denetim gibi uçlar izi temizlemez). */
+const KAYIT_UCU = /(?:\/|-)(kaydet|sil|uygula|ekle|olustur|degistir|duzenle|tasi|aktar|kosuya-dahil|varsayilan|yeniden-adlandir|sirala|toplu-ata|tasarim|geri-yukle|kopyala|modellerden|sifirla|unut|kaldir|test-verisine-tasi)(?:$|[/?])/;
+
 /**
  * JSON API çağrısı (aynı köken). govde verilirse POST. 423 (kasa kilitli) olursa
  * "kasa-kilitli" olayı yayınlanır; kabuk kilit ekranına döner.
@@ -169,6 +176,7 @@ export async function api(yol, secenekler = {}) {
     if (yanit.status === 401) window.dispatchEvent(new CustomEvent('sunucu-yenilendi'));
     throw hata;
   }
+  if (secenekler.govde && KAYIT_UCU.test(yol)) degisiklikleriBirak();
   return veri || {};
 }
 
@@ -208,6 +216,99 @@ function ekle(el, cocuklar) {
 
 let kimlikSayaci = 0;
 export const yeniKimlik = (onEk = 'k') => `${onEk}-${++kimlikSayaci}`;
+
+/**
+ * Temaya uygun öneri listesi (tarayıcının beyaz datalist'i yerine): odaklanınca / tıklayınca tümü, yazdıkça süzülür
+ * (Türkçe, içerir); ↑ / ↓ gezer, Enter seçer, Esc kapatır (diyaloğu kapatmaz). Seçim girdiye yazılır, input + change
+ * olayları yayınlanır. Liste diyalog içindeyse diyaloğa, değilse gövdeye eklenir ve girdinin altına sabitlenir
+ * (kaydırılan kaplarda kırpılmaz).
+ * @param {HTMLInputElement} girdi @param {() => string[]} secenekler
+ */
+export function oneriListesi(girdi, secenekler) {
+  const liste = h('div', { class: 'secim-onerileri', role: 'listbox', id: yeniKimlik('oneri'), hidden: true });
+  girdi.setAttribute('role', 'combobox');
+  girdi.setAttribute('aria-autocomplete', 'list');
+  girdi.setAttribute('aria-controls', liste.id);
+  girdi.setAttribute('aria-expanded', 'false');
+  girdi.setAttribute('autocomplete', 'off');
+  /** @type {string[]} */
+  let gorunen = [];
+  let aktif = -1;
+  let seciliyor = false;
+  const kucuk = (/** @type {string} */ x) => x.toLocaleLowerCase('tr');
+  const konumla = () => {
+    const r = girdi.getBoundingClientRect();
+    Object.assign(liste.style, { left: `${r.left}px`, top: `${r.bottom + 4}px`, width: `${Math.max(r.width, 180)}px` });
+  };
+  const kaydirinca = () => { if (!girdi.isConnected) kapat(); else konumla(); };
+  function kapat() {
+    liste.hidden = true;
+    aktif = -1;
+    girdi.setAttribute('aria-expanded', 'false');
+    girdi.removeAttribute('aria-activedescendant');
+    window.removeEventListener('scroll', kaydirinca, true);
+    window.removeEventListener('resize', kaydirinca);
+  }
+  const sec = (/** @type {string} */ x) => {
+    girdi.value = x;
+    kapat();
+    seciliyor = true;
+    girdi.dispatchEvent(new Event('input', { bubbles: true }));
+    girdi.dispatchEvent(new Event('change', { bubbles: true }));
+    seciliyor = false;
+    secilenDeger = x;
+  };
+  const ciz = (/** @type {boolean} */ tumu) => {
+    const ara = kucuk(girdi.value.trim());
+    const hepsi = secenekler();
+    gorunen = (tumu || !ara ? hepsi : hepsi.filter((x) => kucuk(x).includes(ara))).slice(0, 300);
+    if (!gorunen.length) { kapat(); return; }
+    if (aktif >= gorunen.length) aktif = gorunen.length - 1;
+    const kap = girdi.closest('dialog') || document.body;
+    if (liste.parentElement !== kap) kap.append(liste);
+    yerlestir(liste, gorunen.map((x, i) => h('div', {
+      class: `secim-onerisi${i === aktif ? ' aktif' : ''}${x === girdi.value ? ' secili' : ''}`, role: 'option', id: `${liste.id}-${i}`,
+      'aria-selected': i === aktif ? 'true' : 'false', onmousedown: (/** @type {MouseEvent} */ o) => { o.preventDefault(); sec(x); }
+    }, x)));
+    if (aktif >= 0) { girdi.setAttribute('aria-activedescendant', `${liste.id}-${aktif}`); liste.children[aktif]?.scrollIntoView({ block: 'nearest' }); }
+    if (liste.hidden) {
+      liste.hidden = false;
+      girdi.setAttribute('aria-expanded', 'true');
+      window.addEventListener('scroll', kaydirinca, true);
+      window.addEventListener('resize', kaydirinca);
+    }
+    konumla();
+  };
+  let tumuAcik = false;
+  // Seçimden sonra tarayıcı, alan odağı kaybedince (yazılmış metin değiştiği için) bir change daha yayınlar; değer aynıysa
+  // yutulur. Yutulmazsa dinleyen form yeniden çizilir ve tıklanan düğme (ör. "Koşul ekle") tıklamayı kaçırır.
+  let secilenDeger = /** @type {string | null} */ (null);
+  girdi.addEventListener('change', (o) => {
+    if (seciliyor) return;
+    if (secilenDeger !== null && girdi.value === secilenDeger) o.stopImmediatePropagation();
+    secilenDeger = null;
+  }, true);
+  girdi.addEventListener('input', () => { if (!seciliyor) { aktif = -1; tumuAcik = false; ciz(false); } });
+  girdi.addEventListener('focus', () => { tumuAcik = true; ciz(true); });
+  girdi.addEventListener('click', () => { if (liste.hidden) { tumuAcik = true; ciz(true); } });
+  girdi.addEventListener('blur', () => kapat());
+  girdi.addEventListener('keydown', (o) => {
+    if (o.key === 'ArrowDown' || o.key === 'ArrowUp') {
+      o.preventDefault();
+      if (liste.hidden) { tumuAcik = true; ciz(true); return; }
+      aktif = o.key === 'ArrowDown' ? Math.min(aktif + 1, gorunen.length - 1) : Math.max(aktif - 1, 0);
+      ciz(tumuAcik);
+    } else if (o.key === 'Enter' && !liste.hidden && aktif >= 0) {
+      o.preventDefault();
+      sec(gorunen[aktif]);
+    } else if (o.key === 'Escape' && !liste.hidden) {
+      o.preventDefault();
+      o.stopPropagation();
+      kapat();
+    }
+  });
+  return girdi;
+}
 
 /** Kısa bildirim (ekran okuyucu için role=status bölgesinde). */
 export function bildir(mesaj, tur = 'basari') {

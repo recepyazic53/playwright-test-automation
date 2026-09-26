@@ -1,60 +1,81 @@
 // Metot alan tablosu (ORTAK: Servis ekle sihirbazı 3. adım ve servisin Parametreler sekmesi).
-// Satır: Alan (tip) | Değer kaynağı (değer listesi ya da koşuda dolan parametre; + Yeni / ✎; altında listenin değerleri) | Zorunlu. İsteğe bağlı: "Alan ekle (WSDL'de yok)" — elle eklenen alanlar
-// ek listesinde tutulur (servis ayarı ekAlanlar), şemaya semaBirlestir ile katılır ve kaldırılabilir.
+// Satır: Alan (tip) | Tablo sütunu (test verisi tablosu → sütun; isteğe bağlı etiket; altında sütunun ilk değerleri) | Zorunlu.
+// Aynı tabloya bağlı alanlar senaryoda aynı satırdan dolar; etiket, aynı tablonun ikinci satırıdır. İsteğe bağlı: "Alan ekle
+// (WSDL'de yok)" — elle eklenen alanlar ek listesinde tutulur (servis ayarı ekAlanlar), şemaya semaBirlestir ile katılır ve kaldırılabilir.
 // Yazma kutusu yoktur (seçim kutuları); alan ekleme formu "+ Alan ekle" ile açılır, tablo yalnız ekleme / kaldırma olunca yeniden çizilir.
 // metotKutulari: her metot bir kutucuk; tıklanan metodun tablosu altta çerçeve içinde açılır (iç içe açılır bölümler yok).
 import { h, ikon, rozet, yeniKimlik } from './ortak.js';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
-import { alanListesi, tanimDegerleri, wsdlOnerisi } from './parametre-tanimlari.mjs';
 import { degerCipleri } from './parametre-tanimi-formu.js';
 
 const TIP = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
-const YOL = /^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/;
+const YOL = /^[\p{L}_][\p{L}\p{N}_.-]*(\/[\p{L}_][\p{L}\p{N}_.-]*)*$/u;
 
-/**
- * Alanın seçili değer kaynağı: koşuda dolan parametre ("SIGORTALI_TC") | "liste:<id>" | "__sabit" (korunan diğer varsayılan) | "".
- * @param {Parameters<typeof metotAlanTablosu>[0]} s @param {string} yol @param {string} alanAdi
- */
-export function kaynakSecimi(s, yol, alanAdi) {
-  const p = s.varsayilan[yol];
-  if (p) return p;
-  const l = s.baglantilar ? alanListesi(s.listeler || [], s.baglantilar, yol, alanAdi) : null;
-  if (l) return `liste:${l.id}`;
-  return s.sabitler?.[yol] ? '__sabit' : '';
+/** Alan tabloya bağlı mı ('tablo' | ''). @param {Parameters<typeof metotAlanTablosu>[0]} s @param {string} yol */
+export function kaynakSecimi(s, yol) {
+  return s.baglar[yol] ? 'tablo' : '';
 }
 
 /**
  * @param {{
  *   ad: string;                                   // metot adı (etiketlerde)
  *   sema: import('./servis-govdesi.mjs').OperasyonSemasi;   // WSDL şeması (ekler hariç)
- *   varsayilan: Record<string, string>;           // yol → koşuda dolan parametre adı ('' = yok); DEĞİŞTİRİLİR
- *   sabitler?: Record<string, string>;            // diğer varsayılanların etiketi (ör. "Sabit: 12", "Boş gönder"): seçimde korunur
  *   zorunlu: Set<string>;                         // zorunlu yollar; DEĞİŞTİRİLİR
  *   ekler?: Array<{ yol: string; tip?: string }>; // elle eklenen alanlar; verilirse "Alan ekle" gösterilir; DEĞİŞTİRİLİR
- *   secenekler: Array<[string, Array<[string, string]>]>;   // koşuda dolan parametreler: [grup, [[parametre, etiket]]]
- *   baglantilar?: Record<string, string>;         // yol → değer listesi id ('' = bilerek yok); verilirse listeler seçilebilir; DEĞİŞTİRİLİR
- *   listeler?: import('./parametre-tanimlari.mjs').ParametreTanimi[];   // değer listeleri (Ayarlar > Test verisi > Servis parametreleri)
- *   profiller?: Array<{ turId: string; ad: string; degerler: Record<string, unknown> }>;   // "test verisinden" listelerin değerleri için
- *   listeAc?: (tanim: any, alan: { ad: string; tip?: string; secenekler?: string[] }, sonra: (id: string) => void) => void;  // + Yeni / ✎
  *   degisti?: () => void;
+ *   baglar: Record<string, { tablo: string; sutun: string; etiket?: string }>;   // yol → tablo sütunu; DEĞİŞTİRİLİR
+ *   tablolar?: Array<{ id: string; ad: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satirlar: Array<{ degerler: Record<string, string | null> }> }>;
  * }} s
  */
 export function metotAlanTablosu(s) {
   const kap = h('div', { class: 'metot-alanlari' });
   const sayac = h('span', { class: 'soluk' });
   const sayacGuncelle = () => { sayac.textContent = ` · ${s.zorunlu.size} zorunlu${s.ekler && s.ekler.length ? ` · ${s.ekler.length} elle eklenen` : ''}`; };
-  const listeli = Boolean(s.baglantilar);
-  const tablo = h('div', { class: `alan-formu sihirbaz-alanlari${listeli ? ' listeli' : ''}` });
+  const tablo = h('div', { class: 'alan-formu sihirbaz-alanlari listeli' });
   // Arama ve süzgeçler: yalnız tablo yeniden çizilir (seçimler s üzerinde durduğu için kaybolmaz).
   const ara = h('input', { type: 'search', placeholder: 'Alan ara…', 'aria-label': `${s.ad} alan ara` });
   const yalnizZorunlu = h('input', { type: 'checkbox', id: yeniKimlik('yz'), 'aria-label': `${s.ad} yalnız zorunlular` });
-  const yalnizBos = h('input', { type: 'checkbox', id: yeniKimlik('yb'), 'aria-label': `${s.ad} yalnız değer kaynağı olmayanlar` });
+  const bosEtiket = 'Yalnız tabloya bağlı olmayanlar';
+  const yalnizBos = h('input', { type: 'checkbox', id: yeniKimlik('yb'), 'aria-label': `${s.ad} ${bosEtiket.toLocaleLowerCase('tr')}` });
   const ust = h('div', { class: 'alan-formu-ust' }, ara,
     h('label', { class: 'secenek', for: yalnizZorunlu.id }, yalnizZorunlu, 'Yalnız zorunlular'),
-    h('label', { class: 'secenek', for: yalnizBos.id }, yalnizBos, 'Yalnız değer kaynağı olmayanlar'));
-  const listeEtiketi = (t) => {
-    const d = tanimDegerleri(t, s.profiller || []);
-    return `${t.ad}${d.length ? ` (${d.slice(0, 3).map((x) => x.deger).join(', ')}${d.length > 3 ? '…' : ''})` : ''}`;
+    h('label', { class: 'secenek', for: yalnizBos.id }, yalnizBos, bosEtiket));
+  /** Alanın tablo sütunu seçimi + etiket + sütunun ilk değerleri. */
+  const bagHucresi = (st) => {
+    const b = s.baglar[st.yol];
+    const tablo = b ? (s.tablolar || []).find((t) => t.id === b.tablo) : null;
+    const sutun = tablo ? tablo.sutunlar.find((c) => c.ad === b.sutun) : null;
+    const sec = h('select', { 'aria-label': `${s.ad} ${st.yol} tablo sütunu` }, h('option', { value: '' }, '— bağlı değil (senaryoda yazılır) —'),
+      (s.tablolar || []).map((t) => h('optgroup', { label: t.ad }, t.sutunlar.map((c) => h('option', {
+        value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
+      }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))),
+      b && !sutun ? h('option', { value: '__yok', selected: true }, 'Bulunamadı (tablo ya da sütun silinmiş)') : null);
+    sec.addEventListener('change', () => {
+      if (sec.value === '__yok') return;
+      if (!sec.value) delete s.baglar[st.yol];
+      else {
+        const [tabloId, sutunAdi] = sec.value.split('\u0001');
+        s.baglar[st.yol] = { tablo: tabloId, sutun: sutunAdi, ...(b && b.etiket ? { etiket: b.etiket } : {}) };
+      }
+      ciz();
+      s.degisti?.();
+    });
+    const etiket = b ? h('input', {
+      type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${s.ad} ${st.yol} etiketi`,
+      title: 'Aynı tablo bu istekte iki kez gerekiyorsa (ör. sigortalı / ettiren) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.'
+    }) : null;
+    etiket?.addEventListener('change', () => {
+      const e = etiket.value.trim();
+      if (e) b.etiket = e; else delete b.etiket;
+      s.degisti?.();
+    });
+    let alt = null;
+    if (sutun && sutun.gizli) alt = h('span', { class: 'soluk kucuk' }, 'gizli sütun — değer koşuda satırdan gelir');
+    else if (sutun) {
+      const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
+      alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
+    }
+    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), alt);
   };
   const ciz = () => {
     const birlesik = semaBirlestir(s.sema, s.ekler || []);
@@ -62,59 +83,30 @@ export function metotAlanTablosu(s) {
     const suzgecli = Boolean(a || yalnizZorunlu.checked || yalnizBos.checked);
     const satirlar = alanSatirlari(birlesik.alanlar).map((st) => {
       if (st.grup) return suzgecli ? null : h('div', { class: `alan-grubu derinlik-${Math.min(st.derinlik, 6)}` }, st.alan.ad);
-      const secili = kaynakSecimi(s, st.yol, st.alan.ad);
+      const secili = kaynakSecimi(s, st.yol);
       if (a && !st.yol.toLocaleLowerCase('tr').includes(a)) return null;
       if (yalnizZorunlu.checked && !s.zorunlu.has(st.yol)) return null;
       if (yalnizBos.checked && secili) return null;
-      const sabit = s.sabitler?.[st.yol];
-      const liste = secili.startsWith('liste:') ? (s.listeler || []).find((t) => `liste:${t.id}` === secili) ?? null : null;
-      const sec = h('select', { 'aria-label': `${s.ad} ${st.yol} değer kaynağı` }, h('option', { value: '' }, '— yok (senaryoda doldurulur) —'),
-        sabit ? h('option', { value: '__sabit', selected: secili === '__sabit' }, sabit) : null,
-        listeli && (s.listeler || []).length ? h('optgroup', { label: 'Değer listeleri (senaryoda listeden seçilir)' },
-          (s.listeler || []).map((t) => h('option', { value: `liste:${t.id}`, selected: secili === `liste:${t.id}` }, listeEtiketi(t)))) : null,
-        ...s.secenekler.map(([g, l]) => h('optgroup', { label: `Koşuda dolan — ${g}` }, l.map(([p, m]) => h('option', { value: p, selected: secili === p }, m)))),
-        s.varsayilan[st.yol] && !s.secenekler.some(([, l]) => l.some(([p]) => p === s.varsayilan[st.yol])) ? h('option', { value: s.varsayilan[st.yol], selected: true }, s.varsayilan[st.yol]) : null);
-      // Bağlantı: liste seçilince parametre kalkar; parametre / "yok" seçilince ad eşleşmesi de kapanır ('' = bilerek yok).
-      const baglaListe = (id) => { delete s.varsayilan[st.yol]; if (s.sabitler) delete s.sabitler[st.yol]; if (s.baglantilar) s.baglantilar[st.yol] = id; ciz(); s.degisti?.(); };
-      sec.addEventListener('change', () => {
-        const v = sec.value;
-        if (v === '__sabit') return;
-        if (v.startsWith('liste:')) { baglaListe(v.slice('liste:'.length)); return; }
-        delete s.varsayilan[st.yol];
-        if (s.sabitler) delete s.sabitler[st.yol];
-        if (v) s.varsayilan[st.yol] = v;
-        if (s.baglantilar) s.baglantilar[st.yol] = '';
-        ciz();
-        s.degisti?.();
-      });
-      const oneri = liste ? null : wsdlOnerisi(st.alan);
-      const altBilgi = liste
-        ? degerCipleri(tanimDegerleri(liste, s.profiller || []), 5)
-        : oneri && listeli ? h('span', { class: 'oneri-degerleri', title: 'WSDL\'den öneri: "+ Yeni" ile değer listesi olarak kaydedilir' }, degerCipleri(oneri.tur === 'mantiksal' ? [{ deger: 'true' }, { deger: 'false' }] : oneri.degerler, 5)) : null;
-      const kaynakHucresi = h('span', { class: 'kaynak-hucresi' },
-        h('span', { class: 'kaynak-secimi' }, sec,
-          listeli && s.listeAc && liste ? h('button', { type: 'button', class: 'kucuk-dugme hayalet', title: 'Listeyi düzenle', 'aria-label': `Listeyi düzenle: ${st.alan.ad}`, onclick: () => s.listeAc?.(liste, st.alan, () => ciz()) }, ikon('duzenle')) : null,
-          listeli && s.listeAc ? h('button', { type: 'button', class: 'kucuk-dugme', title: 'Yeni değer listesi oluştur ve bu alana bağla', 'aria-label': `Yeni değer listesi: ${st.alan.ad}`, onclick: () => s.listeAc?.(null, st.alan, baglaListe) }, ikon('arti'), 'Yeni') : null),
-        altBilgi);
-      const zk = h('input', { type: 'checkbox', checked: s.zorunlu.has(st.yol), 'aria-label': `${s.ad} ${st.yol} zorunlu`,
-        title: st.alan.ek ? 'Elle eklenen alan' : st.alan.zorunlu ? 'WSDL\'de zorunlu (minOccurs=1)' : 'WSDL\'de isteğe bağlı' });
-      const satir = h('div', { class: `alan-satiri derinlik-${suzgecli ? 0 : Math.min(st.derinlik, 6)} ${secili ? '' : 'gonderilmez'} ${s.zorunlu.has(st.yol) ? 'zorunlu' : ''}` },
-        h('span', { class: 'alan-adi', title: st.yol }, st.alan.ad, h('span', { class: 'alan-tipi' }, st.alan.secenekler ? 'liste' : TIP[st.alan.tip] || 'metin'),
-          st.alan.ek ? rozet('WSDL\'de yok', 'durdu') : null,
-          st.alan.ek && s.ekler ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${st.yol} alanını kaldır`, onclick: () => {
-            s.ekler.splice(s.ekler.findIndex((x) => x.yol === st.yol), 1);
-            delete s.varsayilan[st.yol];
-            if (s.baglantilar) delete s.baglantilar[st.yol];
-            s.zorunlu.delete(st.yol);
-            ciz();
-            s.degisti?.();
-          } }, '×') : null),
-        kaynakHucresi, h('span', { class: 'zorunlu-hucre' }, zk));
-      zk.addEventListener('change', () => { zk.checked ? s.zorunlu.add(st.yol) : s.zorunlu.delete(st.yol); satir.classList.toggle('zorunlu', zk.checked); sayacGuncelle(); s.degisti?.(); });
-      return satir;
+      {
+        const zk = h('input', { type: 'checkbox', checked: s.zorunlu.has(st.yol), 'aria-label': `${s.ad} ${st.yol} zorunlu`,
+          title: st.alan.ek ? 'Elle eklenen alan' : st.alan.zorunlu ? 'WSDL\'de zorunlu (minOccurs=1)' : 'WSDL\'de isteğe bağlı' });
+        const satir = h('div', { class: `alan-satiri derinlik-${suzgecli ? 0 : Math.min(st.derinlik, 6)} ${secili ? '' : 'gonderilmez'} ${s.zorunlu.has(st.yol) ? 'zorunlu' : ''}` },
+          h('span', { class: 'alan-adi', title: st.yol }, st.alan.ad, h('span', { class: 'alan-tipi' }, st.alan.secenekler ? 'liste' : TIP[st.alan.tip] || 'metin'),
+            st.alan.ek ? rozet('WSDL\'de yok', 'durdu') : null,
+            st.alan.ek && s.ekler ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${st.yol} alanını kaldır`, onclick: () => {
+              s.ekler.splice(s.ekler.findIndex((x) => x.yol === st.yol), 1);
+              delete s.baglar[st.yol];
+              s.zorunlu.delete(st.yol);
+              ciz();
+              s.degisti?.();
+            } }, '×') : null),
+          bagHucresi(st), h('span', { class: 'zorunlu-hucre' }, zk));
+        zk.addEventListener('change', () => { zk.checked ? s.zorunlu.add(st.yol) : s.zorunlu.delete(st.yol); satir.classList.toggle('zorunlu', zk.checked); sayacGuncelle(); s.degisti?.(); });
+        return satir;
+      }
     }).filter(Boolean);
     tablo.replaceChildren(h('div', { class: 'alan-satiri baslik' }, h('span', {}, 'Alan'),
-      h('span', { title: 'Değer listesi: senaryoda bu alanın değeri listeden seçilir. Koşuda dolan: gövdeye ${AD} yazılır, değer koşuda test verisinden / tarih kuralından gelir.' }, 'Değer kaynağı'),
+      h('span', { title: 'Test verisi tablosunun sütunu: senaryoda değer bu sütundan seçilir (aynı tablodaki diğer alanlara göre süzülür). Bağlı olmayan alan senaryoda elle yazılır ya da gönderilmez.' }, 'Tablo sütunu'),
       h('span', { class: 'zorunlu-hucre' }, 'Zorunlu')),
     ...(satirlar.length ? satirlar : [h('p', { class: 'soluk kucuk' }, 'Süzgeçle eşleşen alan yok.')]));
     sayacGuncelle();
@@ -176,8 +168,8 @@ export function metotKutulari(tanimlar, secim = {}) {
   const bilgi = (s) => {
     const el = h('span', { class: 'metot-kutusu-bilgi' });
     const g = () => {
-      const bos = alanSatirlari(semaBirlestir(s.sema, s.ekler || []).alanlar).filter((x) => !x.grup && !kaynakSecimi(s, x.yol, x.alan.ad)).length;
-      el.textContent = `${alanSayisi(s)} alan · ${s.zorunlu.size} zorunlu${s.ekler && s.ekler.length ? ` · ${s.ekler.length} elle eklenen` : ''}${bos ? ` · ${bos} alanın değer kaynağı yok` : ''}`;
+      const bos = alanSatirlari(semaBirlestir(s.sema, s.ekler || []).alanlar).filter((x) => !x.grup && !kaynakSecimi(s, x.yol)).length;
+      el.textContent = `${alanSayisi(s)} alan · ${s.zorunlu.size} zorunlu${s.ekler && s.ekler.length ? ` · ${s.ekler.length} elle eklenen` : ''}${bos ? ` · ${bos} alan tabloya bağlı değil` : ''}`;
     };
     g();
     guncelleyiciler.get(s.ad)?.push(g);

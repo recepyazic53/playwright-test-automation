@@ -31,7 +31,7 @@ export interface BaglamProfili {
 }
 /** Servis parametresi eşlemesi: servis gövdesindeki ${ad} bu alandan, verilen rolün profilinden dolar. */
 export interface ServisParametresiEslemesi { ad: string; rol: string }
-export interface TestVerisiAlani { ad: string; etiket: string; tip: string; hassas: boolean; servisParametreleri?: ServisParametresiEslemesi[] }
+export interface TestVerisiAlani { ad: string; etiket: string; tip: string; hassas: boolean; gizli?: boolean; servisParametreleri?: ServisParametresiEslemesi[] }
 export declare const SERVIS_PARAMETRESI_ADI: RegExp;
 export interface TestVerisiTuru { id: string; projeId: string; ad: string; alanlar: TestVerisiAlani[]; olusturulma: string; guncellenme: string }
 export interface TestVerisiProfili {
@@ -125,7 +125,7 @@ export declare function baglamProfilleriniListele(vt: Veritabani, projeId: strin
 export declare function baglamProfiliSil(vt: Veritabani, id: string, yapan?: string): boolean;
 
 export declare function testVerisiTuruKaydet(vt: Veritabani, girdi: {
-  id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean; servisParametreleri?: ReadonlyArray<{ ad: string; rol?: string }> }>;
+  id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean; gizli?: boolean; servisParametreleri?: ReadonlyArray<{ ad: string; rol?: string }> }>;
 }): string;
 export declare function testVerisiTurleriniListele(vt: Veritabani, projeId: string): TestVerisiTuru[];
 export declare function profilHassasliginiDonustur(vt: Veritabani, turId: string, yeniHassaslik: Map<string, boolean>): number;

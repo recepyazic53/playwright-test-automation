@@ -1,6 +1,5 @@
 // scripts/platform/servisler/servis-deposu.mjs için tip bildirimi.
 import type { Veritabani } from '../veritabani/baglanti.mjs';
-import type { ParametreTanimi } from './parametre-tanimlari.mjs';
 
 export declare const SERVIS_TURLERI: readonly ['soap', 'rest'];
 export declare const SENARYO_KAPSAMLARI: readonly ['test', 'canli', 'ikisi'];
@@ -18,6 +17,7 @@ export interface ServisAyarlari {
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
   alanListeleri?: Record<string, Record<string, string>>;
+  alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
   erisim?: { ortamId: string; zaman: string; durumKodu: number };
 }
 export interface Servis {
@@ -29,7 +29,7 @@ export interface ServisKontrolu {
 }
 export interface ServisSenaryoIcerigi {
   operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
-  aciklama?: string; kaynak?: Record<string, unknown>;
+  tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>;
 }
 export interface ServisSenaryosu {
   id: string; projeId: string; servisId: string; baslik: string; kapsam: ServisKapsami; kosuyaDahil: boolean;
@@ -67,10 +67,3 @@ export declare function servisKosusuKaydet(vt: Veritabani, girdi: {
 export declare function servisKosulariniListele(vt: Veritabani, filtre: { servisId: string; senaryoId?: string; sinir?: number }): ServisKosusu[];
 export declare function servisKosusuGetir(vt: Veritabani, id: string): ServisKosusu | undefined;
 
-export declare function servisParametreTanimlariniListele(vt: Veritabani, projeId: string): ParametreTanimi[];
-export declare function servisParametreTanimiKaydet(vt: Veritabani, girdi: {
-  id?: string; projeId: string; ad: string; aciklama?: string; tur: string; degerler?: Array<{ deger: unknown; aciklama?: unknown; ekranDegeri?: unknown; ekranMetni?: unknown }>;
-  kaynak?: { turId: string; alan: string } | null; varsayilan?: string; elleYazilabilir?: boolean;
-  kullanim?: string; hedef?: { servisId?: string; parametre?: string; ekranId?: string; alan?: string; alanEtiketi?: string } | null; kosullar?: Array<{ alan?: unknown; deger?: unknown; etiket?: unknown }>;
-}): string;
-export declare function servisParametreTanimiSil(vt: Veritabani, projeId: string, id: string): boolean;

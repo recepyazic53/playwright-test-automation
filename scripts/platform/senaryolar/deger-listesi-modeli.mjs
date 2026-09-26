@@ -1,12 +1,11 @@
-// EKRAN MODELİ ↔ DEĞER LİSTELERİ (Ayarlar > Test verisi > Değer listeleri, kullanım yeri "ekran").
-// 1) modeleListeleriUygula: model yüklenirken (modelBaglami) ekranın değer listeleri modelin seçim alanlarına uygulanır; form,
+// EKRAN MODELİ ↔ TABLO LİSTELERİ: ekran alanlarının tablo bağlantılarından üretilen koşullu listeler (tablo-secimi.mjs
+// tabloDegerListeleri). modeleListeleriUygula: model yüklenirken (modelBaglami) bu listeler modelin seçim alanlarına uygulanır; form,
 //    senaryo doğrulayıcı ve koşu aynı modeli görür. Öncelik test verisindedir; model yalnız yedektir:
 //    - koşulsuz liste → alanın seçenekleri listenin değerleri olur;
 //    - tek koşullu ve koşulu modeldeki bağımlılığa uyan liste → bağımlılık haritasının o değeri listenin değerleri olur;
 //    - diğer koşullu listeler (birden çok koşul, başka alan) → değerleri geçerli seçeneklere eklenir (daraltmayı form yapar).
 //    Liste değeri: { deger (senaryoya yazılan), aciklama (formda görünen), ekranDegeri?, ekranMetni? (sayfadaki value / metin;
 //    yoksa modeldeki aynı değerli seçenekten, o da yoksa deger / aciklama) }.
-// 2) modeldenListeTaslaklari: modeldeki seçenek listeleri → değer listesi taslakları (içe alma; bağımlılar koşullu liste).
 // Saf modül (vt yok).
 
 /** @typedef {Record<string, any>} Nesne */
@@ -98,37 +97,4 @@ export function modeleListeleriUygula(model, listeler) {
     }
   }
   return yeni;
-}
-
-const etiketi = (/** @type {Nesne} */ a) => (nesneMi(a.etiket) ? a.etiket.form || a.etiket.ekran : a.etiket) || a.form?.etiket || a.id;
-
-/**
- * Modeldeki seçenek listeleri → değer listesi taslakları. Bağımlı alanda (bagimlilik.secenekHaritasi) bağlı alanın her değeri
- * için bir koşullu liste; bağlı değerin metni bağlı alanın seçeneklerinden.
- * @param {Nesne} model @param {{ id: string; ad: string }} ekran
- * @returns {Array<{ ad: string; hedef: { ekranId: string; alan: string; alanEtiketi: string }; kosullar: Array<{ alan: string; deger: string; etiket: string }>; degerler: ListeDegeri[] }>}
- */
-export function modeldenListeTaslaklari(model, ekran) {
-  const alanlar = modelSecimAlanlari(model);
-  const sonuc = [];
-  for (const a of alanlar) {
-    const hedef = { ekranId: ekran.id, alan: a.id, alanEtiketi: String(etiketi(a)) };
-    if (Array.isArray(a.secenekler) && a.secenekler.length) {
-      sonuc.push({ ad: `${ekran.ad} › ${hedef.alanEtiketi}`, hedef, kosullar: [], degerler: a.secenekler.filter(nesneMi).map(listeDegeri) });
-    }
-    const bag = nesneMi(a.bagimlilik) && nesneMi(a.bagimlilik.secenekHaritasi) && typeof a.bagimlilik.alan === 'string' ? a.bagimlilik : null;
-    if (bag) {
-      const bagli = alanlar.find((x) => x.id === bag.alan);
-      const bagliEtiket = bagli ? String(etiketi(bagli)) : bag.alan;
-      for (const [k, liste] of Object.entries(bag.secenekHaritasi)) {
-        if (!Array.isArray(liste) || !liste.length) continue;
-        const bs = bagli && Array.isArray(bagli.secenekler) ? bagli.secenekler.find((/** @type {Nesne} */ s) => senaryoDegeri(s) === k) : null;
-        sonuc.push({
-          ad: `${ekran.ad} › ${hedef.alanEtiketi} (${bagliEtiket} = ${bs ? formMetni(bs) : k})`, hedef,
-          kosullar: [{ alan: bag.alan, deger: k, etiket: bagliEtiket }], degerler: liste.filter(nesneMi).map(listeDegeri)
-        });
-      }
-    }
-  }
-  return sonuc;
 }

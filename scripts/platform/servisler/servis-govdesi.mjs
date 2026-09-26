@@ -1,8 +1,9 @@
 // SERVİS TESTLERİ — istek gövdesi ↔ alan formu (ORTAK: sunucu ve arayüz kullanır; /arayuz/servis-govdesi.mjs olarak sunulur).
 // Tarayıcıda da çalışır: Node modülü İÇE AKTARMAZ.
 // - Operasyon şeması (WSDL'den; bkz. wsdl-semasi.mjs): { ad, eylem?, kok, ns, alanlar: Alan[] }.
-// - Alan değeri: { kaynak: 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme', deger? }
-//     sabit → <A>değer</A> (XML kaçışlı; ${…} yer tutucusu yazılabilir) · parametre → <A>${AD}</A> · bos → <A/>
+// - Alan değeri: { kaynak: 'tablo' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme', deger? }
+//     tablo → <A>${Tablo.Sütun}</A> (değer koşuda seçilen tablo satırından) · parametre (eski) → <A>${AD}</A>
+//     sabit → <A>değer</A> (XML kaçışlı; ${…} yer tutucusu yazılabilir) · bos → <A/>
 //     nil → <A xsi:nil="true"/> · gonderme → alan hiç yazılmaz. Grup alanı, altında yazılan bir alan varsa yazılır.
 // - Yol: kök öğenin altındaki yerel adlar "/" ile (ör. "Input/CreditCard/CardNumber").
 // Gövdede şemada olmayan öğe, tekrar eden öğe ya da özellik (xsi:nil dışında) varsa form bu gövdeyi temsil edemez:
@@ -12,11 +13,14 @@
  * @typedef {'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat'} AlanTipi
  * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }} Alan
  * @typedef {{ ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[] }} OperasyonSemasi
- * @typedef {{ kaynak: 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri
+ * @typedef {{ kaynak: 'tablo' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri
  * @typedef {{ ad: string; yerel: string; oz: Record<string, string>; cocuklar: XmlOgesi[]; metin: string }} XmlOgesi
  */
 
-export const KAYNAKLAR = /** @type {const} */ (['parametre', 'sabit', 'bos', 'nil', 'gonderme']);
+export const KAYNAKLAR = /** @type {const} */ (['tablo', 'parametre', 'sabit', 'bos', 'nil', 'gonderme']);
+/** Eski parametre adı (SIGORTALI_TC) ve tablo başvurusu (Servis girişi.Kanal / Kişi[ettiren].TC). */
+const ESKI_PARAMETRE = /^[A-Za-z_][A-Za-z0-9_-]{0,79}$/;
+const TABLO_BASVURUSU = /^[^.[\]{}$<>&]{1,60}(?:\[[^\]{}$<>&]{1,40}\])?\.[^.[\]{}$<>&]{1,60}$/u;
 const ZARF_NS = { '1.1': 'http://schemas.xmlsoap.org/soap/envelope/', '1.2': 'http://www.w3.org/2003/05/soap-envelope' };
 const XSI = 'http://www.w3.org/2001/XMLSchema-instance';
 
@@ -141,7 +145,7 @@ export function govdeUret(sema, degerler, secenekler = {}) {
       if (v.kaynak === 'gonderme') continue;
       if (v.kaynak === 'bos') satirlar.push(`${girinti(d)}<${a.ad}/>`);
       else if (v.kaynak === 'nil') satirlar.push(`${girinti(d)}<${a.ad} xsi:nil="true"/>`);
-      else if (v.kaynak === 'parametre') satirlar.push(`${girinti(d)}<${a.ad}>\${${v.deger ?? ''}}</${a.ad}>`);
+      else if (v.kaynak === 'parametre' || v.kaynak === 'tablo') satirlar.push(`${girinti(d)}<${a.ad}>\${${v.deger ?? ''}}</${a.ad}>`);
       else satirlar.push(`${girinti(d)}<${a.ad}>${xmlKacis(v.deger ?? '')}</${a.ad}>`);
     }
     return satirlar;
@@ -197,8 +201,10 @@ export function govdeCoz(govde, sema) {
       if (nil && nil[1] === 'true') degerler[yol] = { kaynak: 'nil' };
       else if (c.metin === '') degerler[yol] = { kaynak: 'bos' };
       else {
-        const p = /^\$\{([A-Za-z_][A-Za-z0-9_.-]{0,79})\}$/.exec(c.metin.trim());
-        degerler[yol] = p ? { kaynak: 'parametre', deger: p[1] } : { kaynak: 'sabit', deger: c.metin };
+        const p = /^\$\{\s*([^{}$]{1,200}?)\s*\}$/u.exec(c.metin.trim());
+        const ic = p ? p[1] : '';
+        degerler[yol] = p && ESKI_PARAMETRE.test(ic) ? { kaynak: 'parametre', deger: ic }
+          : p && TABLO_BASVURUSU.test(ic) ? { kaynak: 'tablo', deger: ic } : { kaynak: 'sabit', deger: c.metin };
       }
     }
   };

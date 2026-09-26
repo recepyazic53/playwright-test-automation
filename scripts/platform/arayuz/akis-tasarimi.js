@@ -17,7 +17,7 @@
 // Mevcut ekranın kaydında "Kayıt nereye yazılsın?": varsayılan akışı güncelle (sayfa paketi → Bulgular), yeni akış olarak ekle
 // ya da seçilen akışı güncelle (etki onayı → yeni model sürümü; POST /platform/tarama/akis { hedef: { tur: 'akis' } }).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 
 const TURLER = {
@@ -592,6 +592,7 @@ export async function akisTasarimi(icerik, s) {
   vazgec.addEventListener('click', async () => {
     if (degisiklik && !(await onayIste({ baslik: 'Değişiklikler kaydedilmedi', metin: 'Diyagramdaki kaydedilmemiş değişiklikler kaybolacak.', dugme: 'Çık', tehlikeli: false, ikonAd: 'uyari' }))) return;
     degisiklik = false;
+    degisiklikleriBirak();
     cikisKorumasiniKaldir();
     s.vazgec?.();
   });
@@ -608,7 +609,7 @@ export async function akisTasarimi(icerik, s) {
       o.stopImmediatePropagation();
       const hedef = a.getAttribute('href');
       void onayIste({ baslik: 'Değişiklikler kaydedilmedi', metin: 'Diyagramdaki kaydedilmemiş değişiklikler kaybolacak.', dugme: 'Çık', tehlikeli: false, ikonAd: 'uyari' })
-        .then((tamam) => { if (tamam) { degisiklik = false; location.hash = hedef; } });
+        .then((tamam) => { if (tamam) { degisiklik = false; degisiklikleriBirak(); location.hash = hedef; } });
     };
     const sekmeKapaniyor = (/** @type {BeforeUnloadEvent} */ o) => { if (degisiklik) { o.preventDefault(); o.returnValue = ''; } };
     cikisKorumasiniKaldir = () => {
