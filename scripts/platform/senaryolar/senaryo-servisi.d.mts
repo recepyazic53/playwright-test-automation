@@ -65,10 +65,6 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   /** Senaryonun akışı (null: ekranın varsayılan akışı). */
   akis: string | null;
 };
-export declare function modellerdenDegerListeleri(vt: Veritabani, projeId: string, girdi?: { onay?: boolean; ekranIdleri?: string[] }): {
-  onizleme?: { ekranlar: Array<{ ekran: string; eklenecek: number; atlanan: number }>; toplam: number; kosullu: number };
-  eklendi?: { ekranlar: Array<{ ekran: string; eklenecek: number; atlanan: number }>; toplam: number; kosullu: number };
-};
 export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
 export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, adaptor: AktarimAdaptoru | null | undefined, akisId?: string | null): {
   ekran: { id: string; anahtar: string; ad: string };

@@ -531,7 +531,9 @@ test('akış diyagramı: senaryonun akışı formdaki seçimlerle çizilir, adı
     // Ekran sayfasının "Akış" sekmesi: ekranın güncel akışı (tüm senaryolar; senaryo seçimi ve koşu rengi yok).
     const ekranlar = (await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`)).ekranlar as Nesne[];
     const acikEkran = ekranlar.find((e) => e.ad === 'Açık Teklif') as Nesne;
+    // Form kaydedilmeden sayfadan çıkılıyor: "Değişiklikleriniz kaydedilmeyecek" onayı.
     await page.goto(`/#/ekranlar/e/${encodeURIComponent(String(acikEkran.id))}/akis`);
+    await page.getByRole('dialog', { name: 'Değişiklikleriniz kaydedilmeyecek' }).getByRole('button', { name: 'Kaydetmeden çık' }).click();
     await expect(page.getByRole('tab', { name: /^Akış/ })).toHaveAttribute('aria-selected', 'true');
     const ea = page.getByRole('region', { name: 'Ekranın akışı' });
     await expect(ea.getByText('Ekranın akışı (tüm senaryolar).', { exact: false })).toBeVisible();

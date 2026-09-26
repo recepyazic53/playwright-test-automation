@@ -4,7 +4,7 @@
 import { DepoHatasi } from '../veritabani/depo.mjs';
 import {
   servisGetir, servisKimligiKaydet, servisKimligiSil, servisKimlikOzeti, servisKosulariniListele, servisKosusuGetir, servisleriListele,
-  servisParametreTanimiKaydet, servisParametreTanimiSil, servisParametreTanimlariniListele, servisSenaryolariniListele, servisSenaryosuGetir,
+  servisSenaryolariniListele, servisSenaryosuGetir,
   servisSenaryosuKaydet, servisSenaryosuSil, servisSil
 } from './servis-deposu.mjs';
 import {
@@ -77,7 +77,6 @@ export const SERVIS_GET_UCLARI = [
     const projeId = kimlik(q.get('projeId'), 'projeId');
     return servisParametreleri(db, projeId, servisAl(db, projeId, q.get('id')).id);
   }],
-  ['/platform/servis-parametre-tanimlari', (db, q) => ({ tanimlar: servisParametreTanimlariniListele(db, kimlik(q.get('projeId'), 'projeId')) })],
   ['/platform/servis/kosular', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const s = servisAl(db, projeId, q.get('servisId'));
@@ -119,6 +118,7 @@ export const SERVIS_POST_UCLARI = [
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
       ...(g.ekAlanlar !== undefined ? { ekAlanlar: g.ekAlanlar } : {}),
       ...(g.alanListeleri !== undefined ? { alanListeleri: g.alanListeleri } : {}),
+      ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
       erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
     });
     return { id };
@@ -175,6 +175,9 @@ export const SERVIS_POST_UCLARI = [
   ['/platform/servis/is/baslat', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     const s = servisAl(db, projeId, g.servisId);
+    if (g.taslak && typeof g.taslak === 'object') {
+      return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), taslak: { baslik: metin(g.taslak.baslik) || 'Taslak', icerik: g.taslak.icerik } }) };
+    }
     if (!Array.isArray(g.senaryoIdleri)) throw new DepoHatasi('"senaryoIdleri" bir dizi olmalıdır.');
     return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), senaryoIdleri: g.senaryoIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'senaryoId')) }) };
   }],
@@ -192,18 +195,6 @@ export const SERVIS_POST_UCLARI = [
   }],
   // Eski servis giriş profilini test verisine taşı (onay: false → yalnız önizleme).
   ['/platform/servis-kimligi/test-verisine-tasi', (db, g) => girisProfiliniTestVerisineTasi(db, kimlik(g.projeId, 'projeId'), { ad: metin(g.ad), onay: g.onay === true })],
-  ['/platform/servis-parametre-tanimi/kaydet', (db, g) => {
-    const projeId = kimlik(g.projeId, 'projeId');
-    const k = g.kaynak && typeof g.kaynak === 'object' ? { turId: kimlik(g.kaynak.turId, 'turId'), alan: metin(g.kaynak.alan) } : null;
-    return { id: servisParametreTanimiKaydet(db, {
-      id: secimli(g.id), projeId, ad: metin(g.ad), aciklama: metin(g.aciklama), tur: metin(g.tur),
-      degerler: Array.isArray(g.degerler) ? g.degerler.slice(0, 2000) : [], kaynak: k, varsayilan: metin(g.varsayilan),
-      elleYazilabilir: g.elleYazilabilir !== false, kullanim: metin(g.kullanim),
-      hedef: g.hedef && typeof g.hedef === 'object' ? { servisId: metin(g.hedef.servisId), parametre: metin(g.hedef.parametre), ekranId: metin(g.hedef.ekranId), alan: metin(g.hedef.alan), alanEtiketi: metin(g.hedef.alanEtiketi) } : null,
-      kosullar: Array.isArray(g.kosullar) ? g.kosullar.slice(0, 10).map((/** @type {any} */ k) => ({ alan: metin(k?.alan), deger: typeof k?.deger === 'number' ? String(k.deger) : metin(k?.deger), etiket: metin(k?.etiket) })) : []
-    }) };
-  }],
-  ['/platform/servis-parametre-tanimi/sil', (db, g) => ({ silindi: servisParametreTanimiSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })],
   ['/platform/servis-kimligi/sil', (db, g) => ({ silindi: servisKimligiSil(db, kimlik(g.projeId, 'projeId'), metin(g.ad)) })],
   ['/platform/servis/soapui/onizle', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');

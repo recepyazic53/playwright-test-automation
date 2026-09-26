@@ -26,11 +26,11 @@ export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
 
 /**
  * Koşuyu başlatır ve paneli açar. bitti(): koşu bitince (tabloyu yenilemek için) çağrılır.
- * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri: string[]; bitti?: () => void }} s
+ * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; bitti?: () => void }} s
  */
 export async function servisKosusuBaslat(s) {
   if (servisKosusuSuruyorMu()) throw new Error('Süren bir servis koşusu var; bitmesini bekleyin ya da durdurun.');
-  const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, senaryoIdleri: s.senaryoIdleri } });
+  const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...(s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }) } });
   durum = { projeId: s.proje.id, is, secili: is.satirlar.find((x) => x.durum !== 'atlandi')?.senaryoId ?? is.satirlar[0]?.senaryoId, kucuk: false, bitti: s.bitti };
   acikKutular.clear();
   ciz();

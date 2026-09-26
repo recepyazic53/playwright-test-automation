@@ -2,25 +2,19 @@
 //   1 · Adresler   — servis adı; her ortam için taban adres (ortamın listesinden seç ya da yeni yaz; CANLI boş bırakılabilir).
 //                    Tam adres yapıştırılırsa taban + yol kendiliğinden ayrılır.
 //   2 · Metotlar   — yol + "Denetle" (TEST'e WSDL isteği, onayla) → metotlar; seçim + "CANLI'da çağrılmasın" işareti.
-//   3 · Parametreler — seçilen metotların alanları; her alan için varsayılan değer kaynağı (öneriler hazır gelir).
-//   4 · Giriş bilgisi — kullanılan giriş parametreleri için profil seç / oluştur / yok.
-//   5 · Özet → Kaydet. Yeni yazılan taban adresler ortamlara kaydedilir (sonraki servislerde listede hazır olur).
+//   3 · Alanlar    — seçilen metotların alanları; her alan bir test verisi tablosunun sütununa bağlanır (öneriler: başka
+//                    serviste aynı adlı alanın bağlantısı, yoksa adı aynı sütun). Giriş bilgisi de bir tablodur (Servis girişi).
+//   4 · Özet → Kaydet. Yeni yazılan taban adresler ortamlara kaydedilir (sonraki servislerde listede hazır olur).
 // Hiçbir ağ isteği kullanıcı onayı olmadan atılmaz; kaydetmeden önce hiçbir şey veritabanına yazılmaz.
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
-import { tanimDiyalogu } from './parametre-tanimi-formu.js';
-import { wsdlOnerisi } from './parametre-tanimlari.mjs';
 
-const ADIMLAR = ['Adresler', 'Metotlar', 'Parametreler', 'Giriş bilgisi', 'Özet'];
+const ADIMLAR = ['Adresler', 'Metotlar', 'Alanlar', 'Özet'];
 /** Kayıt oluşturan / belge üreten metot adları: "CANLI'da çağrılmasın" işaretli gelir (kullanıcı değiştirebilir). */
 const YALNIZ_TEST_DESENI = /approve|onay|print|basim|cancel|iptal|delete|sil|create|kaydet|save|pay|odeme|purchase|policy|police/i;
-/** Giriş bilgisi sayılan alan adları → parametre. */
-const KIMLIK_ALANLARI = { username: 'USERNAME', user: 'USERNAME', kullaniciadi: 'USERNAME', password: 'PASSWORD', pass: 'PASSWORD', parola: 'PASSWORD', sifre: 'PASSWORD', channel: 'CHANNEL', kanal: 'CHANNEL' };
 const TARIH_BICIMI = { tarih: 'yyyy-MM-dd', tarihSaat: "yyyy-MM-dd'T'HH:mm:ss" };
-const GIRIS_PARAMETRELERI = ['USERNAME', 'PASSWORD', 'CHANNEL'];
-const SERVIS_GIRISI_TURU = 'Servis girişi';
 
 const temizTaban = (a) => a.trim().replace(/\/+$/, '');
 const birlestir = (taban, yol) => `${temizTaban(taban)}/${yol.replace(/^\/+/, '')}`;
@@ -39,44 +33,42 @@ function anahtarUret(ad) {
 export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   // TEST ortamları önce (denetleme ve ilk adres oradan), CANLI sonra.
   const ortamlar = [...tumOrtamlar].sort((a, b) => Number(a.canli) - Number(b.canli));
-  const [{ servisler }, { turler }, { profiller: veriProfilleri }, tanimYaniti] = await Promise.all([
+  const [{ servisler }, { tablolar }] = await Promise.all([
     api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/test-verisi-turleri?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/servis-parametre-tanimlari?projeId=${encodeURIComponent(proje.id)}`)
+    api(`/platform/tablolar?projeId=${encodeURIComponent(proje.id)}`)
   ]);
-  /** Değer listeleri (Ayarlar > Test verisi > Servis parametreleri); 3. adımda alanlara bağlanır. */
-  const tanimlar = tanimYaniti.tanimlar;
-  /** Parametre → test verisi türü / alanı / rolü / hassaslığı. */
-  const eslemeler = new Map(turler.flatMap((t) => t.alanlar.flatMap((a) => (a.servisParametreleri || []).map((sp) => [sp.ad, { turId: t.id, turAd: t.ad, alan: a.ad, rol: sp.rol, hassas: a.hassas }]))));
   const testOrtamlari = ortamlar.filter((o) => !o.canli);
-  /** Sihirbaz durumu (kaydedene kadar yalnız tarayıcıda). */
+  /** Sihirbaz durumu (kaydedene kadar yalnız tarayıcıda). varsayilanlar: yalnız tarih kuralı önerileri (BEGIN_DATE / END_DATE). */
   const d = {
     adim: 0, ad: '', anahtar: '', anahtarElle: false, soapSurumu: '1.1', tls: true,
     tabanlar: Object.fromEntries(ortamlar.map((o) => [o.id, o.canli ? '' : o.tabanUrl])),
     yol: '', kontrolOrtami: (testOrtamlari.find((o) => o.varsayilan) || testOrtamlari[0])?.id ?? '',
-    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, alanListeleri: {}, zorunlu: {}, ekAlanlar: {}, profil: { tur: 'yok', ad: '', degerler: {}, profilId: '', secildi: false }
+    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, baglar: {}, zorunlu: {}, ekAlanlar: {}
   };
 
-  // Parametre seçenekleri (3. adım): giriş bilgisi, tarih kuralı (sihirbaz önerir), test verisi eşlemeleri.
-  const veriParametreleri = turler.flatMap((t) => t.alanlar.flatMap((a) => (a.servisParametreleri || []).map((sp) => [sp.ad, `${sp.ad} — ${t.ad}.${a.etiket || a.ad} (${sp.rol})`])));
-  // Giriş parametreleri test verisinde henüz eşli değilse de önerilir (4. adımda "Servis girişi" türü oluşturulur).
-  const kimlikParametreleri = GIRIS_PARAMETRELERI.filter((p) => !eslemeler.has(p));
-  // Diğer servislerde ★ yapılmış alan → parametre eşlemeleri (ör. CitizenshipNumber → SIGORTALI_TC): öneri olarak kullanılır.
+  // Öneriler (3. adım): başka serviste aynı adlı alanın tablo bağlantısı; yoksa adı aynı (gizli olmayan) sütun.
+  const kucuk = (x) => String(x ?? '').toLocaleLowerCase('tr');
+  /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
   const ogrenilen = {};
   for (const s of servisler) {
-    for (const alanlar of Object.values(s.ayarlar.alanVarsayilanlari || {})) {
-      for (const [yol, v] of Object.entries(alanlar)) if (v.kaynak === 'parametre' && v.deger) ogrenilen[yol.split('/').pop()] ??= v.deger;
+    for (const alanlar of Object.values(s.ayarlar.alanBaglari || {})) {
+      for (const [yol, b] of Object.entries(alanlar)) if (b && tablolar.some((x) => x.id === b.tablo)) ogrenilen[kucuk(yol.split('/').pop())] ??= b;
     }
   }
-  const oneri = (alanT) => {
-    const ad = alanT.ad.toLowerCase().replace(/[^a-z]/g, '');
-    if (KIMLIK_ALANLARI[ad]) return KIMLIK_ALANLARI[ad];
-    if (alanT.tip === 'tarih' || alanT.tip === 'tarihSaat') {
-      if (/begin|start|baslangic/.test(ad)) return 'BEGIN_DATE';
-      if (/end|bitis/.test(ad)) return 'END_DATE';
+  const bagOnerisi = (alanT) => {
+    const b = ogrenilen[kucuk(alanT.ad)];
+    if (b) return { ...b };
+    for (const tb of tablolar) {
+      const c = tb.sutunlar.find((x) => kucuk(x.ad) === kucuk(alanT.ad));
+      if (c) return { tablo: tb.id, sutun: c.ad };
     }
-    return ogrenilen[alanT.ad] ?? '';
+    return null;
+  };
+  /** Tarih alanı önerisi: başlangıç / bitiş tarihi → tarih kuralı (bugün / bugün + 1 yıl). */
+  const tarihOnerisi = (alanT) => {
+    if (alanT.tip !== 'tarih' && alanT.tip !== 'tarihSaat') return '';
+    const ad = alanT.ad.toLowerCase().replace(/[^a-z]/g, '');
+    return /begin|start|baslangic/.test(ad) ? 'BEGIN_DATE' : /end|bitis/.test(ad) ? 'END_DATE' : '';
   };
 
   const mesaj = mesajKutusu();
@@ -186,7 +178,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
           d.secilen = new Set(e.operasyonlar.map((x) => x.ad));
           d.yalnizTest = new Set(e.operasyonlar.filter((x) => YALNIZ_TEST_DESENI.test(x.ad)).map((x) => x.ad));
           d.varsayilanlar = {};
-          d.alanListeleri = {};
+          d.baglar = {};
           d.zorunlu = {};
           d.ekAlanlar = {};
           metotAlani();
@@ -204,135 +196,38 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   };
 
   const adim3 = () => {
-    const secenekler = [
-      ['Giriş bilgisi (4. adımda test verisine eklenir)', kimlikParametreleri.map((a) => [a, `${a} — giriş bilgisi`])],
-      ['Tarih kuralı', [['BEGIN_DATE', 'BEGIN_DATE — bugün'], ['END_DATE', 'END_DATE — bugün + 1 yıl']]],
-      ['Test verisi', veriParametreleri]
-    ].filter(([, l]) => l.length);
     const bolumler = [];
     const metotTanimlari = [];
-    // "+ Yeni" / ✎: değer listesi hemen Ayarlar > Test verisi'ne kaydedilir (servis kaydını beklemez); bağlantı servisle kaydedilir.
-    const listeAc = (tanim, alanT, sonra) => {
-      const oneri = tanim ? null : wsdlOnerisi(alanT);
-      tanimDiyalogu({
-        proje, turler, profiller: veriProfilleri,
-        ...(tanim ? { tanim } : { on: { ad: alanT.ad, tur: oneri ? oneri.tur : 'liste', degerler: oneri ? oneri.degerler : [], kullanim: 'servis', hedef: { servisId: '', parametre: alanT.ad } } }),
-        bitti: async (id) => {
-          const { tanimlar: yeni } = await api(`/platform/servis-parametre-tanimlari?projeId=${encodeURIComponent(proje.id)}`);
-          tanimlar.splice(0, tanimlar.length, ...yeni);
-          sonra(id);
-        }
-      });
-    };
     for (const ad of d.secilen) {
       const sema = d.erisim.semalar?.[ad];
       if (!sema || !sema.alanlar.length) { bolumler.push(h('p', { class: 'soluk' }, h('code', { class: 'duz' }, ad), ': alan listesi yok (senaryoları XML olarak düzenlenir).')); continue; }
-      const v = (d.varsayilanlar[ad] ??= Object.fromEntries(alanSatirlari(sema.alanlar).filter((x) => !x.grup).map((x) => [x.yol, oneri(x.alan)])));
+      const alanlar = alanSatirlari(sema.alanlar).filter((x) => !x.grup);
+      d.varsayilanlar[ad] ??= Object.fromEntries(alanlar.map((x) => [x.yol, tarihOnerisi(x.alan)]).filter(([, p]) => p));
+      const baglar = (d.baglar[ad] ??= Object.fromEntries(alanlar.filter((x) => !d.varsayilanlar[ad][x.yol]).map((x) => [x.yol, bagOnerisi(x.alan)]).filter(([, b]) => b)));
       // Zorunluluk: WSDL'e göre işaretli gelir (şemada zorunlu), kullanıcı iş kuralına göre düzeltir.
-      const z = (d.zorunlu[ad] ??= new Set(alanSatirlari(sema.alanlar).filter((x) => !x.grup && x.alan.zorunlu).map((x) => x.yol)));
+      const z = (d.zorunlu[ad] ??= new Set(alanlar.filter((x) => x.alan.zorunlu).map((x) => x.yol)));
       const ekler = (d.ekAlanlar[ad] ??= []);
-      const baglantilar = (d.alanListeleri[ad] ??= {});
-      metotTanimlari.push({ ad, sema, varsayilan: v, zorunlu: z, ekler, secenekler, baglantilar, listeler: tanimlar, profiller: veriProfilleri, listeAc });
+      metotTanimlari.push({ ad, sema, zorunlu: z, ekler, baglar, tablolar });
     }
     if (metotTanimlari.length) bolumler.unshift(metotKutulari(metotTanimlari, { anahtar: 'sihirbaz' }));
     return [
-      h('p', { class: 'soluk' }, 'Seçilen metotların alanları. Her alan için varsayılan değer kaynağı seçebilirsiniz; yeni senaryolar bu alanlar dolu açılır (★ servis varsayılanı). Öneriler hazır geldi: giriş bilgisi, tarih ve daha önce başka serviste eşlenmiş alanlar. Boş bırakılanlar senaryoda doldurulur.'),
-      h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin (WSDL\'de sayı ve evet/hayır alanları hep zorunlu, metinler hep isteğe bağlı görünebilir). WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz. Değer kaynağı olarak bir değer listesi seçilirse senaryoda o alanın değeri listeden seçilir; uygun liste yoksa "+ Yeni" ile oluşturun (Ayarlar > Test verisi\'ne kaydedilir). Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
+      h('p', { class: 'soluk' }, 'Seçilen metotların alanları. Her alanı bir test verisi tablosunun sütununa bağlayın (ör. Channel → Servis girişi → kanal); senaryoda değer o sütundan seçilir, aynı tablodaki alanlar birbirini süzer. Öneriler hazır geldi: başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun. Bağlanmayan alanlar senaryoda elle yazılır ya da gönderilmez.'),
+      h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin. WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz. Başlangıç / bitiş tarihleri tarih kuralıyla (bugün, bugün + 1 yıl) dolar. Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
+      tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok; alanları sonra Parametreler sekmesinden bağlayabilirsiniz (Ayarlar > Test verisi > Tablolar).'),
       ...bolumler
     ];
   };
 
-  // --- 4 · Giriş bilgisi: test verisinden (Ayarlar > Test verisi). ---
-  // Kullanılan giriş parametreleri test verisinde bir türe eşliyse o türün profilinden seçilir; eşli değilse
-  // "Servis girişi" türü (kanal açık, kullanıcı / parola hassas) ve ilk profil burada oluşturulur.
-  const GIRIS_ALANLARI = { CHANNEL: ['kanal', 'Kanal', false], USERNAME: ['kullanici', 'Kullanıcı adı', true], PASSWORD: ['parola', 'Parola', true] };
-  const kullanilanKimlikler = () => [...new Set(Object.values(d.varsayilanlar).flatMap((v) => Object.values(v)).filter((p) => GIRIS_PARAMETRELERI.includes(p) || girisTurleri().some((g) => g.parametreler.includes(p))))];
-  /** Kullanılan giriş parametrelerinin eşli olduğu tür + rol (tek olmalı). */
-  const girisTurleri = () => {
-    const m = new Map();
-    for (const [p, e] of eslemeler) {
-      if (!GIRIS_PARAMETRELERI.includes(p) && !(d.varsayilanlar && Object.values(d.varsayilanlar).some((v) => Object.values(v).includes(p) && e.rol === 'giris'))) continue;
-      const k = `${e.turId}:${e.rol}`;
-      if (!m.has(k)) m.set(k, { anahtar: k, turId: e.turId, turAd: e.turAd, rol: e.rol, parametreler: [] });
-      m.get(k).parametreler.push(p);
-    }
-    return [...m.values()];
-  };
   const adim4 = () => {
-    const kullanilan = kullanilanKimlikler();
-    const hedef = girisTurleri().find((g) => kullanilan.some((p) => g.parametreler.includes(p)));
-    const eslenmemis = kullanilan.filter((p) => !eslemeler.has(p));
-    if (!kullanilan.length) d.profil.tur = 'yok';
-    else if (d.profil.tur === 'yok' && !d.profil.secildi) d.profil.tur = hedef ? 'mevcut' : 'yeni';
-    const profiller = hedef ? veriProfilleri.filter((p) => p.turId === hedef.turId) : [];
-    const tur = h('select', { 'aria-label': 'Giriş bilgisi' },
-      h('option', { value: 'yok', selected: d.profil.tur === 'yok' }, 'Giriş bilgisi yok'),
-      profiller.length ? h('option', { value: 'mevcut', selected: d.profil.tur === 'mevcut' }, 'Test verisindeki bir profili kullan') : null,
-      h('option', { value: 'yeni', selected: d.profil.tur === 'yeni' }, 'Yeni profil oluştur'));
-    const alanlar = h('div', {});
-    const kanalAlani = hedef ? eslemeler.get('CHANNEL') : null;
-    const etiket = (p) => { const v = kanalAlani ? p.degerler[kanalAlani.alan] : null; return typeof v === 'string' && v ? `${v} — ${p.ad}` : p.ad; };
-    const alanCiz = () => {
-      if (d.profil.tur === 'mevcut') {
-        if (!profiller.some((p) => p.id === d.profil.profilId)) d.profil.profilId = profiller[0]?.id ?? '';
-        const sec = h('select', { 'aria-label': 'Profil' }, profiller.map((p) => h('option', { value: p.id, selected: d.profil.profilId === p.id }, etiket(p))));
-        sec.addEventListener('change', () => { d.profil.profilId = sec.value; durumGuncelle(); });
-        yerlestir(alanlar, alan('Profil', sec, { yardim: `"${hedef.turAd}" türünün profilleri (Ayarlar > Test verisi). Senaryoda başka profil seçilebilir.` }),
-          eslenmemis.length ? h('div', { class: 'not-kutusu uyari' }, `${eslenmemis.join(', ')} test verisinde eşli değil; bu alanlar değer bulamaz. Ayarlar > Test verisi > "${hedef.turAd}" türüne ekleyin.`) : null);
-      } else if (d.profil.tur === 'yeni') {
-        const ad = h('input', { type: 'text', autocomplete: 'off', value: d.profil.ad, placeholder: 'ör. Acente 30447' });
-        ad.addEventListener('input', () => { d.profil.ad = ad.value.trim(); durumGuncelle(); });
-        const girdiler = (kullanilan.length ? kullanilan : Object.keys(GIRIS_ALANLARI)).map((p) => {
-          const hassas = hedef ? (eslemeler.get(p)?.hassas ?? true) : (GIRIS_ALANLARI[p]?.[2] ?? true);
-          const g = h('input', { type: hassas ? 'password' : 'text', autocomplete: hassas ? 'new-password' : 'off', spellcheck: 'false', 'aria-label': p, value: d.profil.degerler[p] || '' });
-          g.addEventListener('input', () => { d.profil.degerler[p] = g.value; });
-          return alan(p, g);
-        });
-        yerlestir(alanlar, alan('Profil adı', ad, { zorunlu: true }), ...girdiler,
-          h('p', { class: 'soluk kucuk' }, hedef
-            ? `Profil "${hedef.turAd}" türüne eklenir (Ayarlar > Test verisi). Hassas alanlar kasada şifreli saklanır.`
-            : `Test verisinde "${SERVIS_GIRISI_TURU}" türü oluşturulur (kanal açık; kullanıcı ve parola hassas, kasada şifreli) ve bu profil eklenir. Sonra Ayarlar > Test verisi'nden yeni profiller eklenebilir.`));
-      } else yerlestir(alanlar);
-    };
-    tur.addEventListener('change', () => { d.profil.tur = tur.value; d.profil.secildi = true; alanCiz(); durumGuncelle(); });
-    alanCiz();
-    return [
-      h('p', { class: 'soluk' }, kullanilan.length ? `Bu servis şu giriş parametrelerini kullanıyor: ${kullanilan.join(', ')}. Değerleri test verisinden gelir (Ayarlar > Test verisi).` : 'Parametre adımında giriş bilgisi seçilmedi; gerekmiyorsa "Giriş bilgisi yok" kalabilir.'),
-      alan('Giriş bilgisi', tur), alanlar
-    ];
-  };
-
-  /** Kaydetmeden önce: gerekiyorsa "Servis girişi" türü ve yeni profil oluşturulur; servisin veriProfilleri seçimi döner. */
-  const girisKaydet = async () => {
-    const kullanilan = kullanilanKimlikler();
-    if (d.profil.tur === 'yok' || !kullanilan.length) return {};
-    let hedef = girisTurleri().find((g) => kullanilan.some((p) => g.parametreler.includes(p)));
-    if (d.profil.tur === 'mevcut') return { [hedef.anahtar]: d.profil.profilId };
-    if (!hedef) {
-      const tur = await api('/platform/test-verisi-turu/kaydet', { govde: { projeId: proje.id, ad: SERVIS_GIRISI_TURU, alanlar: kullanilan.map((p) => {
-        const [alanAdi, etiketi, hassas] = GIRIS_ALANLARI[p] ?? [p.toLowerCase(), p, true];
-        return { ad: alanAdi, etiket: etiketi, tip: 'metin', hassas, servisParametreleri: [{ ad: p, rol: 'giris' }] };
-      }) } });
-      hedef = { anahtar: `${tur.id}:giris`, turId: tur.id, rol: 'giris' };
-    }
-    const alanAdi = (p) => eslemeler.get(p)?.alan ?? (GIRIS_ALANLARI[p]?.[0] ?? p.toLowerCase());
-    const degerler = Object.fromEntries(Object.entries(d.profil.degerler).filter(([, v]) => v !== '').map(([p, v]) => [alanAdi(p), v]));
-    const r = await api('/platform/test-verisi-profili/kaydet', { govde: { projeId: proje.id, turId: hedef.turId, ad: d.profil.ad, degerler } });
-    return { [hedef.anahtar]: r.profil.id };
-  };
-
-  const adim5 = () => {
     const tarihKurallari = tarihKuraliOnerileri();
+    const bagli = Object.values(d.baglar).reduce((n, v) => n + Object.keys(v).length, 0);
     return [h('dl', { class: 'ozet-listesi' },
       h('dt', {}, 'Servis'), h('dd', {}, `${d.ad} (${d.anahtar})`),
       h('dt', {}, 'Adresler'), h('dd', {}, h('ul', {}, ortamlar.map((o) => h('li', {}, `${o.ad}: `, d.tabanlar[o.id] ? h('code', { class: 'duz' }, birlestir(d.tabanlar[o.id], d.yol)) : h('span', { class: 'soluk' }, 'yok (bu ortamda koşmaz)'))))),
       h('dt', {}, 'Metotlar'), h('dd', {}, [...d.secilen].map((m) => `${m}${d.yalnizTest.has(m) ? ' (CANLI\'da çağrılmaz)' : ''}`).join(', ')),
-      h('dt', {}, 'Varsayılan alanlar'), h('dd', {}, `${Object.values(d.varsayilanlar).reduce((n, v) => n + Object.values(v).filter(Boolean).length, 0)} alan`), h('dt', {}, 'Değer listesi bağlı'), h('dd', {}, `${Object.values(d.alanListeleri).reduce((n, v) => n + Object.values(v).filter(Boolean).length, 0)} alan (adı aynı listeler kendiliğinden)`),
+      h('dt', {}, 'Tabloya bağlı alanlar'), h('dd', {}, `${bagli} alan`),
       h('dt', {}, 'Zorunlu alanlar'), h('dd', {}, [...d.secilen].filter((m) => d.zorunlu[m]).map((m) => `${m}: ${d.zorunlu[m].size}`).join(' · ') || '—'),
-      h('dt', {}, 'Tarih kuralları'), h('dd', {}, Object.entries(tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'),
-      h('dt', {}, 'Giriş bilgisi'), h('dd', {}, d.profil.tur === 'yok' ? 'yok'
-        : d.profil.tur === 'mevcut' ? `test verisi profili: ${veriProfilleri.find((p) => p.id === d.profil.profilId)?.ad ?? '—'}`
-          : `yeni test verisi profili: ${d.profil.ad}`))];
+      h('dt', {}, 'Tarih kuralları'), h('dd', {}, Object.entries(tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'))];
   };
 
   /** 3. adımda seçilen BEGIN_DATE / END_DATE için tarih kuralı (alan tipine göre biçim). */
@@ -364,9 +259,6 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       if (!d.erisim) return 'Yolu yazıp "Denetle" ile erişimi kontrol edin.';
       if (!d.secilen.size) return 'En az bir metot seçin.';
     }
-    if (d.adim === 3 && d.profil.tur === 'yeni' && !d.profil.ad) return 'Profil adı gerekli.';
-    if (d.adim === 3 && d.profil.tur === 'yeni' && veriProfilleri.some((p) => p.ad === d.profil.ad)) return `"${d.profil.ad}" adlı bir test verisi profili zaten var.`;
-    if (d.adim === 3 && d.profil.tur === 'mevcut' && !d.profil.profilId) return 'Profil seçin.';
     return null;
   };
   const durumGuncelle = () => {
@@ -381,15 +273,16 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     mesaj.temizle();
     try {
       await mesgulIken(ileri, 'Kaydediliyor…', async () => {
-        const veriSecimi = await girisKaydet();
         const alanVarsayilanlari = Object.fromEntries(Object.entries(d.varsayilanlar)
           .map(([op, v]) => [op, Object.fromEntries(Object.entries(v).filter(([, p]) => p).map(([yol, p]) => [yol, { kaynak: 'parametre', deger: p }]))])
-          .filter(([, v]) => Object.keys(v).length));
+          .filter(([op, v]) => d.secilen.has(op) && Object.keys(v).length));
+        const secilenler = (kaynak) => Object.fromEntries([...d.secilen].filter((m) => kaynak[m] && Object.keys(kaynak[m]).length).map((m) => [m, kaynak[m]]));
         const r = await api('/platform/servis/kaydet', { govde: {
           projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), yol: d.yol, soapSurumu: d.soapSurumu, tlsDogrulama: d.tls,
           tabanlar: d.tabanlar, secilenOperasyonlar: [...d.secilen], yalnizTestOperasyonlari: [...d.yalnizTest].filter((x) => d.secilen.has(x)),
-          alanVarsayilanlari, alanListeleri: Object.fromEntries([...d.secilen].filter((m) => d.alanListeleri[m]).map((m) => [m, d.alanListeleri[m]])), ekAlanlar: Object.fromEntries([...d.secilen].filter((m) => d.ekAlanlar[m]?.length).map((m) => [m, d.ekAlanlar[m]])), alanZorunluluklari: Object.fromEntries([...d.secilen].filter((m) => d.zorunlu[m]).map((m) => [m, [...d.zorunlu[m]]])),
-          tarihKurallari: tarihKuraliOnerileri(), veriProfilleri: veriSecimi, erisimKimligi: d.erisim.erisimKimligi
+          alanVarsayilanlari, alanBaglari: secilenler(d.baglar), ekAlanlar: Object.fromEntries([...d.secilen].filter((m) => d.ekAlanlar[m]?.length).map((m) => [m, d.ekAlanlar[m]])),
+          alanZorunluluklari: Object.fromEntries([...d.secilen].filter((m) => d.zorunlu[m]).map((m) => [m, [...d.zorunlu[m]]])),
+          tarihKurallari: tarihKuraliOnerileri(), erisimKimligi: d.erisim.erisimKimligi
         } });
         bildir('Servis eklendi.');
         location.hash = `#/servisler/s/${encodeURIComponent(r.id)}`;
@@ -399,7 +292,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
 
   const ciz = () => {
     yerlestir(adimCubugu, ...ADIMLAR.map((a, i) => h('li', { class: i === d.adim ? 'simdiki' : i < d.adim ? 'bitti' : '', 'aria-current': i === d.adim ? 'step' : null }, h('span', { class: 'adim-no' }, String(i + 1)), a)));
-    yerlestir(govde, ...[adim1, adim2, adim3, adim4, adim5][d.adim]());
+    yerlestir(govde, ...[adim1, adim2, adim3, adim4][d.adim]());
     geri.disabled = d.adim === 0;
     ileri.textContent = d.adim === ADIMLAR.length - 1 ? 'Kaydet' : 'İleri';
     durumGuncelle();

@@ -10,6 +10,6 @@ export interface ServisIsiGorunumu {
   id: string; projeId: string; servisId: string; servisAd: string; ortam: string; ortamTuru: string; baslangic: number; bitis: number | null;
   bitti: boolean; durdur: boolean; satirlar: IsSatiri[]; calisanSenaryo: string | null;
 }
-export declare function servisIsiBaslat(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string; senaryoIdleri: string[] }): ServisIsiGorunumu;
+export declare function servisIsiBaslat(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown } }): ServisIsiGorunumu;
 export declare function servisIsiDurumu(projeId: string, id: string): ServisIsiGorunumu;
 export declare function servisIsiDurdur(projeId: string, id: string, senaryoId?: string): { durduruldu: true };

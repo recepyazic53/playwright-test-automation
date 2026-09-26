@@ -94,6 +94,7 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>; alanZorunluluklari?: Record<string, string[]>;
  *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
  *   alanListeleri?: Record<string, Record<string, string>>;
+ *   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
  *   erisim?: { ortamId: string; zaman: string; durumKodu: number } }} ServisAyarlari
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
@@ -170,7 +171,7 @@ export function servisSil(vt, id, yapan) {
  * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'veya';
  *   deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[] }} ServisKontrolu
  * @typedef {{ operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
- *   aciklama?: string; kaynak?: Record<string, unknown> }} ServisSenaryoIcerigi
+ *   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown> }} ServisSenaryoIcerigi
  * @typedef {{ id: string; projeId: string; servisId: string; baslik: string; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
  *   sira: number | null; icerik: ServisSenaryoIcerigi; olusturulma: string; guncellenme: string }} ServisSenaryosu
  */
@@ -207,7 +208,29 @@ export function senaryoIceriginiDogrula(icerik) {
   const govde = zorunluMetin(i.govde, 'govde');
   if (!Array.isArray(i.kontroller)) throw new DepoHatasi('"kontroller" bir dizi olmalıdır.');
   const kontroller = i.kontroller.map((k, n) => kontrolDogrula(k, `${n + 1}.`, false));
-  return { ...i, operasyon, govde, kontroller };
+  const tabloSecimleri = tabloSecimleriniDogrula(i.tabloSecimleri);
+  const { tabloSecimleri: _eski, ...kalan } = i;
+  return { ...kalan, operasyon, govde, kontroller, ...(tabloSecimleri ? { tabloSecimleri } : {}) };
+}
+
+/**
+ * Senaryonun tablo seçimleri: { "<tabloId>|<etiket>": { Sütun: değer } } (boş gruplar atılır).
+ * @param {unknown} v @returns {Record<string, Record<string, string>> | undefined}
+ */
+function tabloSecimleriniDogrula(v) {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"tabloSecimleri" bir nesne olmalıdır.');
+  /** @type {Record<string, Record<string, string>>} */
+  const s = {};
+  const gruplar = Object.entries(v);
+  if (gruplar.length > 50) throw new DepoHatasi('Bir senaryoda en çok 50 tablo seçimi olabilir.');
+  for (const [anahtar, secim] of gruplar) {
+    if (!/^[A-Za-z0-9_-]{1,100}\|[\p{L}\p{N} _-]{0,40}$/u.test(anahtar)) throw new DepoHatasi(`Geçersiz tablo seçimi: "${anahtar}".`);
+    if (!secim || typeof secim !== 'object' || Array.isArray(secim)) throw new DepoHatasi('Tablo seçimi bir nesne olmalıdır.');
+    const temiz = Object.fromEntries(Object.entries(secim).filter(([k, d]) => typeof d === 'string' && d !== '' && k.length <= 60).map(([k, d]) => [k, d.slice(0, 500)]));
+    if (Object.keys(temiz).length) s[anahtar] = temiz;
+  }
+  return Object.keys(s).length ? s : undefined;
 }
 
 /** @param {Veritabani} vt @param {Record<string, unknown>} s @returns {ServisSenaryosu} */
@@ -395,134 +418,4 @@ export function servisKosulariniListele(vt, filtre) {
 export function servisKosusuGetir(vt, id) {
   const s = vt.tek('SELECT * FROM servis_kosulari WHERE id = ?', [id]);
   return s ? kosuCevir(vt, s, true) : undefined;
-}
-
-// ---------------------------------------------------------------------------------------
-// Servis parametre tanımları (bir alanın alabileceği değerler; bkz. parametre-tanimlari.mjs)
-// ---------------------------------------------------------------------------------------
-
-/** @param {Veritabani} vt @param {Record<string, unknown>} s @returns {import('./parametre-tanimlari.mjs').ParametreTanimi} */
-function tanimCevir(vt, s) {
-  const i = sifreliJsonOku(vt, s.icerik_json);
-  return {
-    id: String(s.id), projeId: String(s.proje_id), ad: String(s.ad), aciklama: i.aciklama || '', tur: i.tur || 'serbest',
-    degerler: Array.isArray(i.degerler) ? i.degerler : [], kaynak: i.kaynak || null, varsayilan: i.varsayilan || '',
-    elleYazilabilir: i.elleYazilabilir !== false, kullanim: i.kullanim === 'ekran' ? 'ekran' : 'servis',
-    hedef: i.hedef && typeof i.hedef === 'object' ? i.hedef : null, kosullar: Array.isArray(i.kosullar) ? i.kosullar : []
-  };
-}
-
-/** Kasa açık olmalıdır. Ada göre sıralı. @param {Veritabani} vt @param {string} projeId */
-export function servisParametreTanimlariniListele(vt, projeId) {
-  acikAnahtar(vt);
-  return vt.tumu('SELECT * FROM servis_parametre_tanimlari WHERE proje_id = ? ORDER BY ad COLLATE NOCASE, olusturulma', [kimlik(projeId, 'projeId')])
-    .map((s) => tanimCevir(vt, s));
-}
-
-/**
- * Kaydeder (id varsa günceller). Kurallar: ad geçerli XML alan adı; liste türünde en az bir değer, değerler tekrarsız;
- * test_verisi türünde kaynak tür / alan var ve hassas değil; varsayılan (liste / evet-hayır) listede olmalı; ad projede tekil
- * (harf duyarsız). Kullanım yeri:
- * - servis: hedef { servisId ('' = tüm servisler), parametre (alan adı; '' = yalnız metot tablosunda bağlanır) }
- * - ekran : hedef { ekranId, alan (model alan kimliği) } — zorunlu
- * Koşullar ("ve"): [{ alan, deger }] — servis için parametre adı, ekran için aynı ekranın alan kimliği; en fazla 5.
- * @param {Veritabani} vt
- * @param {{ id?: string; projeId: string; ad: string; aciklama?: string; tur: string; degerler?: Array<{ deger: unknown; aciklama?: unknown; ekranDegeri?: unknown; ekranMetni?: unknown }>;
- *   kaynak?: { turId: string; alan: string } | null; varsayilan?: string; elleYazilabilir?: boolean;
- *   kullanim?: string; (degerler öğeleri ayrıca ekranDegeri?, ekranMetni? taşıyabilir: sayfadaki value / görünen metin) hedef?: { servisId?: string; parametre?: string; ekranId?: string; alan?: string; alanEtiketi?: string } | null; kosullar?: Array<{ alan?: unknown; deger?: unknown; etiket?: unknown }> }} girdi
- */
-export function servisParametreTanimiKaydet(vt, girdi) {
-  acikAnahtar(vt);
-  return vt.islem(() => {
-    const projeId = kimlik(girdi.projeId, 'projeId');
-    const ad = zorunluMetin(girdi.ad, 'Parametre adı');
-    if (ad.length > 80 || /[\u0000-\u001f<>]/.test(ad)) throw new DepoHatasi(`Liste adı geçersiz: en fazla 80 karakter; < > ve kontrol karakteri içeremez.`);
-    const tur = secenek(girdi.tur, TANIM_TURLERI, 'Değer türü');
-    const aciklama = typeof girdi.aciklama === 'string' ? girdi.aciklama.trim().slice(0, 500) : '';
-    /** @type {Array<{ deger: string; aciklama?: string }>} */
-    let degerler = [];
-    if (tur === 'liste' || tur === 'mantiksal') {
-      for (const x of girdi.degerler || []) {
-        const deger = String(x?.deger ?? '').trim();
-        if (!deger) continue;
-        if (deger.length > 200) throw new DepoHatasi('Bir değer en fazla 200 karakter olabilir.');
-        if (degerler.some((y) => y.deger === deger)) throw new DepoHatasi(`"${deger}" değeri iki kez yazılmış.`);
-        const a = typeof x.aciklama === 'string' ? x.aciklama.trim().slice(0, 200) : '';
-        const ed = typeof x.ekranDegeri === 'string' ? x.ekranDegeri.trim().slice(0, 200) : '';
-        const em = typeof x.ekranMetni === 'string' ? x.ekranMetni.trim().slice(0, 200) : '';
-        degerler.push({ deger, ...(a ? { aciklama: a } : {}), ...(ed && ed !== deger ? { ekranDegeri: ed } : {}), ...(em ? { ekranMetni: em } : {}) });
-      }
-      if (tur === 'mantiksal') degerler = degerler.filter((x) => x.deger === 'true' || x.deger === 'false');
-      if (tur === 'liste' && !degerler.length) throw new DepoHatasi('Liste türünde en az bir değer girin.');
-      if (degerler.length > 2000) throw new DepoHatasi('Bir listede en fazla 2000 değer olabilir.');
-    }
-    /** @type {{ turId: string; alan: string } | null} */
-    let kaynak = null;
-    if (tur === 'test_verisi') {
-      const k = girdi.kaynak;
-      const t = k ? testVerisiTurleriniListele(vt, projeId).find((x) => x.id === k.turId) : undefined;
-      if (!t) throw new DepoHatasi('Değerlerin geleceği test verisi türünü seçin.');
-      const a = t.alanlar.find((x) => x.ad === k?.alan);
-      if (!a) throw new DepoHatasi(`"${t.ad}" türünde "${k?.alan ?? ''}" alanı yok.`);
-      if (a.hassas) throw new DepoHatasi(`"${t.ad}.${a.etiket || a.ad}" hassas bir alan; değerleri listelenemez. Hassas olmayan bir alan seçin.`);
-      kaynak = { turId: t.id, alan: a.ad };
-    }
-    const varsayilan = typeof girdi.varsayilan === 'string' ? girdi.varsayilan.trim().slice(0, 200) : '';
-    const elleYazilabilir = girdi.elleYazilabilir !== false;
-    if (varsayilan && tur === 'mantiksal' && !['true', 'false'].includes(varsayilan)) throw new DepoHatasi('Evet / Hayır türünde varsayılan "true" ya da "false" olabilir.');
-    if (varsayilan && tur === 'liste' && !elleYazilabilir && !degerler.some((x) => x.deger === varsayilan)) throw new DepoHatasi(`Varsayılan değer (${varsayilan}) listede yok.`);
-    // Kullanım yeri, hedef ve koşullar.
-    const kullanim = girdi.kullanim === 'ekran' ? 'ekran' : 'servis';
-    const h = girdi.hedef && typeof girdi.hedef === 'object' ? girdi.hedef : {};
-    const alanAdi = (/** @type {unknown} */ x, /** @type {string} */ ne) => {
-      const s = typeof x === 'string' ? x.trim() : '';
-      if (s.length > 200 || /[\u0000-\u001f]/.test(s)) throw new DepoHatasi(`${ne} geçersiz.`);
-      return s;
-    };
-    /** @type {Record<string, string>} */
-    let hedef;
-    if (kullanim === 'ekran') {
-      const ekranId = typeof h.ekranId === 'string' ? h.ekranId : '';
-      if (!ekranId || !vt.tek('SELECT id FROM ekranlar WHERE id = ? AND proje_id = ?', [ekranId, projeId])) throw new DepoHatasi('Listenin kullanılacağı ekranı seçin.');
-      const alan = alanAdi(h.alan, 'Input');
-      if (!alan) throw new DepoHatasi('Listenin kullanılacağı input\'u seçin.');
-      const alanEtiketi = alanAdi(h.alanEtiketi, 'Input etiketi');
-      hedef = { ekranId, alan, ...(alanEtiketi ? { alanEtiketi } : {}) };
-    } else {
-      const servisId = typeof h.servisId === 'string' ? h.servisId : '';
-      if (servisId && !vt.tek('SELECT id FROM servisler WHERE id = ? AND proje_id = ?', [servisId, projeId])) throw new DepoHatasi('Seçilen servis bu projede yok.');
-      hedef = { servisId, parametre: alanAdi(h.parametre, 'Parametre') };
-    }
-    const kosullar = [];
-    for (const k of girdi.kosullar || []) {
-      const alan = alanAdi(k?.alan, 'Bağlı olduğu parametre');
-      const deger = typeof k?.deger === 'string' ? k.deger.trim().slice(0, 200) : String(k?.deger ?? '').trim().slice(0, 200);
-      if (!alan && !deger) continue;
-      if (!alan || !deger) throw new DepoHatasi('Her koşulda bağlı olduğu parametreyi ve değerini seçin.');
-      if (alan === (hedef.alan ?? hedef.parametre)) throw new DepoHatasi('Liste kendi parametresine bağlanamaz.');
-      if (kosullar.some((x) => x.alan === alan)) throw new DepoHatasi(`"${alan}" iki kez koşul olarak seçilmiş.`);
-      const etiket = alanAdi(k?.etiket, 'Koşul etiketi');
-      kosullar.push({ alan, deger, ...(etiket && etiket !== alan ? { etiket } : {}) });
-    }
-    if (kosullar.length > 5) throw new DepoHatasi('En fazla 5 koşul olabilir.');
-    if (kosullar.length && kullanim === 'servis' && !hedef.parametre) throw new DepoHatasi('Koşullu listede parametreyi seçin.');
-    if (servisParametreTanimlariniListele(vt, projeId).some((t) => t.id !== girdi.id && t.ad.toLocaleLowerCase('en') === ad.toLocaleLowerCase('en'))) {
-      throw new DepoHatasi(`"${ad}" adlı bir değer listesi zaten var; onu düzenleyin ya da başka bir ad verin (ör. "${ad} (Travel)").`);
-    }
-    if (girdi.id) {
-      const mevcut = vt.tek('SELECT proje_id FROM servis_parametre_tanimlari WHERE id = ?', [kimlik(girdi.id)]);
-      if (mevcut && mevcut.proje_id !== projeId) throw new DepoHatasi('Tanım bu projeye ait değil.');
-    }
-    return kaydet(vt, 'servis_parametre_tanimlari', {
-      proje_id: projeId, ad,
-      icerik_json: sifreliJson(vt, { aciklama, tur, degerler, kaynak, varsayilan, elleYazilabilir, kullanim, hedef, kosullar }, 'icerik')
-    }, { id: girdi.id });
-  });
-}
-
-/** @param {Veritabani} vt @param {string} projeId @param {string} id */
-export function servisParametreTanimiSil(vt, projeId, id) {
-  const s = vt.tek('SELECT proje_id FROM servis_parametre_tanimlari WHERE id = ?', [kimlik(id)]);
-  if (!s || s.proje_id !== projeId) return false;
-  return sil(vt, 'servis_parametre_tanimlari', id);
 }

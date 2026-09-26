@@ -37,6 +37,8 @@ test.describe('sihirbaz uçtan uca', () => {
   let projeId = '';
   let testOrtami = '';
   let canli = '';
+  let girisId = '';
+  let kisiId = '';
   const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
   const basarili = async (yol: string, govde?: Nesne) => { const y = await api(yol, govde); expect(y.basarili, `${yol}: ${String(y.mesaj ?? '')}`).toBe(true); return y; };
 
@@ -54,7 +56,10 @@ test.describe('sihirbaz uçtan uca', () => {
     // TEST ortamının asıl adresi servisin makinesi DEĞİL: servis yeni taban adresle eklenecek.
     testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true })).ortam.id);
     canli = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid/', canli: true })).ortam.id);
-    await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'SIGORTALI_TC', rol: 'sigortali' }] }] });
+    // Test verisi tabloları: sütun adı alan adıyla aynıysa sihirbaz kendiliğinden bağlar (Channel / Username / Password).
+    girisId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Servis girişi', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }],
+      satirlar: [{ degerler: { Channel: '77', Username: 'sihirbaz-kullanici', Password: 'sihirbaz-parola-1' } }] })).tablo.id;
+    kisiId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Kişi', sutunlar: [{ ad: 'tcKimlikNo' }], satirlar: [{ degerler: { tcKimlikNo: '10000000146' } }] })).tablo.id;
     tarayici = await chromium.launch();
   });
 
@@ -65,7 +70,7 @@ test.describe('sihirbaz uçtan uca', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('arayüz: adresler → denetle + metotlar → parametre önerileri → giriş profili → özet → kaydet', async () => {
+  test('arayüz: adresler → denetle + metotlar → alanlar tablo sütunlarına (öneriler) → özet → kaydet', async () => {
     test.setTimeout(90_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
@@ -99,20 +104,18 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.getByLabel('Teklif CANLI\'da çağrılmasın')).not.toBeChecked();
     await ileri.click();
 
-    // 3 · Parametreler: her metot bir kutucuk; tıklanan metodun alanları çerçevede açılır.
+    // 3 · Alanlar: her metot bir kutucuk; tıklanan metodun alanları çerçevede açılır.
+    await expect(page.locator('.sihirbaz-adimlari li.simdiki')).toContainText('Alanlar');
     await expect(page.getByRole('button', { name: 'Onayla metodu' })).toBeVisible();
     await page.getByRole('button', { name: 'Teklif metodu' }).click();
     await expect(page.getByRole('button', { name: 'Teklif metodu' })).toHaveAttribute('aria-pressed', 'true');
-    // "Alabileceği değerler" sütunu sihirbazda da var: tanım yoksa WSDL önerisi + "Ekle".
-    const clientType = page.locator('.metot-cercevesi .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^ClientType/ }) });
-    await expect(clientType.locator('.oneri-degerleri')).toContainText('T');
-    await expect(clientType.getByRole('button', { name: 'Yeni değer listesi: ClientType' })).toBeVisible();
-    // Giriş bilgisi ve tarih önerileri hazır; CitizenshipNumber test verisine bağlanır.
-    await expect(page.getByLabel('Teklif Input/Channel değer kaynağı')).toHaveValue('CHANNEL');
-    await expect(page.getByLabel('Teklif Input/Password değer kaynağı')).toHaveValue('PASSWORD');
-    await expect(page.getByLabel('Teklif Input/BeginDate değer kaynağı')).toHaveValue('BEGIN_DATE');
-    await expect(page.getByLabel('Teklif Input/EndDate değer kaynağı')).toHaveValue('END_DATE');
-    await page.getByLabel('Teklif Input/CitizenshipNumber değer kaynağı').selectOption('SIGORTALI_TC');
+    // Adı aynı sütunlar önerilir; kimlik numarası elle bağlanır (etiketle).
+    await expect(page.getByLabel('Teklif Input/Channel tablo sütunu')).toHaveValue(`${girisId}\u0001Channel`);
+    await expect(page.getByLabel('Teklif Input/Password tablo sütunu')).toHaveValue(`${girisId}\u0001Password`);
+    await expect(page.getByLabel('Teklif Input/BeginDate tablo sütunu')).toHaveValue('');
+    await page.getByLabel('Teklif Input/CitizenshipNumber tablo sütunu').selectOption(`${kisiId}\u0001tcKimlikNo`);
+    await page.getByLabel('Teklif Input/CitizenshipNumber etiketi').fill('sigortalı');
+    await page.getByLabel('Teklif Input/CitizenshipNumber etiketi').blur();
     // Zorunluluk: WSDL'e göre gelir (BeginDate minOccurs=1 → işaretli, CitizenshipNumber minOccurs=0 → boş); iş kuralına göre düzeltilir.
     await expect(page.getByLabel('Teklif Input/BeginDate zorunlu')).toBeChecked();
     await expect(page.getByLabel('Teklif Input/CitizenshipNumber zorunlu')).not.toBeChecked();
@@ -120,19 +123,10 @@ test.describe('sihirbaz uçtan uca', () => {
     await page.getByLabel('Teklif Input/IsSkiing zorunlu').uncheck();
     await ileri.click();
 
-    // 4 · Giriş bilgisi: yeni profil.
-    await expect(page.getByText('Bu servis şu giriş parametrelerini kullanıyor')).toContainText('CHANNEL');
-    await page.getByLabel('Giriş bilgisi', { exact: true }).selectOption('yeni');
-    await expect(ileri).toBeDisabled();
-    await page.getByLabel('Profil adı').fill('Sihirbaz giriş');
-    await page.getByLabel('USERNAME', { exact: true }).fill('sihirbaz-kullanici');
-    await page.getByLabel('PASSWORD', { exact: true }).fill('sihirbaz-parola-1');
-    await page.getByLabel('CHANNEL', { exact: true }).fill('77');
-    await ileri.click();
-
-    // 5 · Özet → Kaydet
+    // 4 · Özet → Kaydet (giriş bilgisi adımı yok: Servis girişi bir tablodur).
     await expect(page.locator('.ozet-listesi')).toContainText('Onayla (CANLI\'da çağrılmaz)');
     await expect(page.locator('.ozet-listesi')).toContainText('BEGIN_DATE = bugun|yyyy-MM-dd\'T\'HH:mm:ss');
+    await expect(page.locator('.ozet-listesi')).toContainText('4 alan');
     await page.getByRole('button', { name: 'Kaydet' }).click();
     await expect(page).toHaveURL(/#\/servisler\/s\/[0-9a-f-]{36}$/);
     expect(hatalar).toEqual([]);
@@ -146,27 +140,24 @@ test.describe('sihirbaz uçtan uca', () => {
     expect(s.ayarlar.operasyonlar.map((o: Nesne) => o.ad)).toEqual(['Teklif', 'Onayla']);
     expect([...s.ayarlar.alanZorunluluklari.Teklif].sort()).toEqual(['Input/BeginDate', 'Input/ClientType', 'Input/CitizenshipNumber', 'Input/CreditCard/Installment', 'Input/EndDate'].sort());
     expect(s.ayarlar.alanZorunluluklari.Onayla).toEqual(['TeklifNo']);
-    expect(s.ayarlar.alanVarsayilanlari.Teklif).toMatchObject({
-      'Input/Channel': { kaynak: 'parametre', deger: 'CHANNEL' }, 'Input/CitizenshipNumber': { kaynak: 'parametre', deger: 'SIGORTALI_TC' }
+    expect(s.ayarlar.alanVarsayilanlari.Teklif).toEqual({
+      'Input/BeginDate': { kaynak: 'parametre', deger: 'BEGIN_DATE' }, 'Input/EndDate': { kaynak: 'parametre', deger: 'END_DATE' }
+    });
+    expect(s.ayarlar.alanBaglari.Teklif).toEqual({
+      'Input/Channel': { tablo: girisId, sutun: 'Channel' }, 'Input/Username': { tablo: girisId, sutun: 'Username' }, 'Input/Password': { tablo: girisId, sutun: 'Password' },
+      'Input/CitizenshipNumber': { tablo: kisiId, sutun: 'tcKimlikNo', etiket: 'sigortalı' }
     });
     // Yeni taban adres ortamın listesine kaydedildi; giriş profili kasada.
     const { ortamlar } = await basarili(`/platform/ortamlar?projeId=${projeId}`);
     expect(ortamlar.find((o: Nesne) => o.id === testOrtami).tabanAdresleri).toEqual(['http://127.0.0.1:9/', `${soap.adres}/Servis`]);
-    // Giriş bilgisi test verisine yazıldı: "Servis girişi" türü (kanal açık, kullanıcı / parola hassas) + profil; servis bu profile bağlı.
     expect(s.ayarlar.kimlikProfili).toBeUndefined();
-    const { turler } = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
-    const giris = turler.find((t: Nesne) => t.ad === 'Servis girişi');
-    expect(giris.alanlar.map((a: Nesne) => [a.ad, a.hassas, a.servisParametreleri]).sort()).toEqual([
-      ['kanal', false, [{ ad: 'CHANNEL', rol: 'giris' }]], ['kullanici', true, [{ ad: 'USERNAME', rol: 'giris' }]], ['parola', true, [{ ad: 'PASSWORD', rol: 'giris' }]]]);
-    const { profiller } = await basarili(`/platform/test-verisi-profilleri?projeId=${projeId}`);
-    const girisProfili = profiller.find((x: Nesne) => x.ad === 'Sihirbaz giriş');
-    expect(girisProfili).toMatchObject({ turId: giris.id, degerler: { kanal: '77' } });
-    expect(s.ayarlar.veriProfilleri[`${giris.id}:giris`]).toBe(girisProfili.id);
+    expect(s.ayarlar.veriProfilleri ?? {}).toEqual({});
 
     // Yeni senaryo: varsayılanlar dolu gelir.
     await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);
     const satir = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^CitizenshipNumber/ }) });
-    await expect(satir.getByLabel('CitizenshipNumber parametresi')).toHaveValue('SIGORTALI_TC');
+    await expect(satir.getByLabel('CitizenshipNumber değer kaynağı')).toHaveValue('tablo');
+    await expect(satir).toContainText('Kişi (sigortalı) → tcKimlikNo');
     // Zorunlu alanlar servisin listesinden: CitizenshipNumber vurgulu, IsSkiing değil; "Yalnız zorunlular" süzer; gönderilmeyen zorunlu alan uyarır.
     await expect(satir).toHaveClass(/zorunlu/);
     const kayak = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^IsSkiing/ }) });
@@ -176,17 +167,6 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.locator('.alan-formu .alan-satiri')).toHaveCount(5);
     await satir.getByLabel('CitizenshipNumber değer kaynağı').selectOption('gonderme');
     await expect(satir.locator('.alan-uyarisi')).toContainText('Zorunlu alan dolu gönderilmiyor');
-    await baglam.close();
-  });
-
-  test('giriş bilgileri Ayarlar > Test verisi\'nde ("Servis girişi" türü); ayrı "Servis giriş bilgileri" bölümü yok', async () => {
-    test.setTimeout(60_000);
-    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
-    const page = await baglam.newPage();
-    await page.goto('/#/ayarlar/test-verisi');
-    await page.getByRole('tab', { name: /^Servis girişi/ }).click();
-    await expect(page.getByText('Sihirbaz giriş')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Servis giriş bilgileri' })).toHaveCount(0);
     await baglam.close();
   });
 
@@ -201,9 +181,8 @@ test.describe('sihirbaz uçtan uca', () => {
     await page.goto(`/#/servisler/s/${s.id}/parametreler`);
     await expect(page.getByRole('heading', { name: 'Metot alanları' })).toBeVisible();
     await page.getByRole('button', { name: 'Teklif metodu' }).click();
-    await expect(page.getByLabel('Teklif Input/Channel değer kaynağı')).toHaveValue('CHANNEL');
-    // Senaryo olmasa da varsayılanlarda geçen parametreler listelenir.
-    await expect(page.locator('.kart').filter({ hasText: 'Kullanılan parametreler' })).toContainText('${CHANNEL}');
+    // Metot tablosu: sihirbazda bağlanan sütun görünür.
+    await expect(page.getByLabel('Teklif Input/Channel tablo sütunu')).toHaveValue(`${girisId}\u0001Channel`);
     await page.getByLabel('Teklif Input/IsSkiing zorunlu').check();
     // Alan ekleme formu gizli; "+ Alan ekle" açar, eklenince kapanır.
     await expect(page.getByLabel('Teklif yeni alan yolu')).toBeHidden();
@@ -222,7 +201,7 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar.ekAlanlar).toEqual({ Teklif: [{ yol: 'Input/EkAlan', tip: 'metin' }], Onayla: [] });
     const ayar = (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar;
     expect(ayar.alanZorunluluklari.Teklif).toEqual(expect.arrayContaining(['Input/EkAlan', 'Input/IsSkiing']));
-    expect(ayar.alanVarsayilanlari.Teklif['Input/Channel']).toEqual({ kaynak: 'parametre', deger: 'CHANNEL' });
+    expect(ayar.alanBaglari.Teklif['Input/Channel']).toEqual({ tablo: girisId, sutun: 'Channel' });
 
     // Düzenleyici: elle eklenen alan formda; gövdeye yazılır.
     await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);

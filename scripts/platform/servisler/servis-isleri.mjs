@@ -27,7 +27,9 @@ function temizle() {
 /**
  * İşi başlatır (hemen döner; koşu arka planda sürer). Senaryolar sırayla; kapsamı ortama uymayan / servisin bu ortamda
  * tanımlı olmadığı / CANLI'da çağrılmayan metodu kullanan senaryo "atlandi" olur (nedeniyle).
- * @param {Veritabani} vt @param {string} projeId @param {{ servisId: string; ortamId: string; senaryoIdleri: string[] }} girdi
+ * Taslak verilirse (düzenleyicideki "Dene"): kaydedilmemiş tek senaryo, yalnız TEST ortamında, "dene" olarak koşar.
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {{ servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown } }} girdi
  */
 export function servisIsiBaslat(vt, projeId, girdi) {
   temizle();
@@ -35,11 +37,16 @@ export function servisIsiBaslat(vt, projeId, girdi) {
   if (!servis || servis.projeId !== projeId) throw new DepoHatasi('Servis bulunamadı.');
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
-  if (!Array.isArray(girdi.senaryoIdleri) || !girdi.senaryoIdleri.length) throw new DepoHatasi('En az bir senaryo seçin.');
+  const taslak = girdi.taslak ?? null;
+  if (!taslak && (!Array.isArray(girdi.senaryoIdleri) || !girdi.senaryoIdleri.length)) throw new DepoHatasi('En az bir senaryo seçin.');
   const tur = ortamTuru(ortam);
+  if (taslak && tur !== 'test') throw new DepoHatasi('Deneme yalnızca test ortamında yapılır.');
   const yalnizTest = new Set(servis.ayarlar.yalnizTestOperasyonlari ?? []);
   const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
-  const satirlar = girdi.senaryoIdleri.map((id) => {
+  const satirlar = taslak ? [/** @type {IsSatiri} */ ({
+    senaryoId: 'taslak', baslik: taslak.baslik || 'Taslak', durum: tanimli ? 'sirada' : 'atlandi', olaylar: [], istek: null, yanit: null,
+    baslangic: null, bitis: null, sonuc: null, ...(tanimli ? {} : { neden: `Servis "${ortam.ad}" ortamında tanımlı değil.` })
+  })] : (girdi.senaryoIdleri ?? []).map((id) => {
     const s = servisSenaryosuGetir(vt, id);
     if (!s || s.servisId !== servis.id) throw new DepoHatasi('Senaryo bulunamadı.');
     const neden = !tanimli ? `Servis "${ortam.ad}" ortamında tanımlı değil.`
@@ -66,7 +73,8 @@ export function servisIsiBaslat(vt, projeId, girdi) {
       is.aktif = { senaryoId: satir.senaryoId, kontrol };
       try {
         const r = await servisSenaryosuCalistir(vt, projeId, {
-          servisId: servis.id, ortamId: ortam.id, tur: 'kosu', senaryoId: satir.senaryoId, sinyal: kontrol.signal,
+          servisId: servis.id, ortamId: ortam.id, sinyal: kontrol.signal,
+          ...(taslak ? { tur: 'dene', taslak: { baslik: taslak.baslik || 'Taslak', icerik: taslak.icerik } } : { tur: 'kosu', senaryoId: satir.senaryoId }),
           olay: (adim, durum, bilgi) => {
             const kisa = bilgi ? Object.fromEntries(Object.entries(bilgi).filter(([a]) => a !== 'istek' && a !== 'yanit')) : null;
             satir.olaylar.push({ adim, durum, zaman: Date.now(), ...(kisa && Object.keys(kisa).length ? { bilgi: kisa } : {}) });
