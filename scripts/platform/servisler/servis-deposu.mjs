@@ -3,7 +3,8 @@
 // Şifreli sütunlar gocler.mjs SIFRELI_ALANLAR'da; yazmak/okumak için kasa açık olmalıdır.
 import { randomUUID } from 'node:crypto';
 import { acikAnahtar, coz, sifrele, zarfMi } from '../kasa.mjs';
-import { DepoHatasi, gecmisYaz, jsonMetni } from '../veritabani/depo.mjs';
+import { DepoHatasi, gecmisYaz, jsonMetni, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
+import { TANIM_TURLERI } from './parametre-tanimlari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -92,6 +93,7 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
  *   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>; alanZorunluluklari?: Record<string, string[]>;
  *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
+ *   alanListeleri?: Record<string, Record<string, string>>;
  *   erisim?: { ortamId: string; zaman: string; durumKodu: number } }} ServisAyarlari
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
@@ -393,4 +395,92 @@ export function servisKosulariniListele(vt, filtre) {
 export function servisKosusuGetir(vt, id) {
   const s = vt.tek('SELECT * FROM servis_kosulari WHERE id = ?', [id]);
   return s ? kosuCevir(vt, s, true) : undefined;
+}
+
+// ---------------------------------------------------------------------------------------
+// Servis parametre tanımları (bir alanın alabileceği değerler; bkz. parametre-tanimlari.mjs)
+// ---------------------------------------------------------------------------------------
+
+/** @param {Veritabani} vt @param {Record<string, unknown>} s @returns {import('./parametre-tanimlari.mjs').ParametreTanimi} */
+function tanimCevir(vt, s) {
+  const i = sifreliJsonOku(vt, s.icerik_json);
+  return {
+    id: String(s.id), projeId: String(s.proje_id), ad: String(s.ad), aciklama: i.aciklama || '', tur: i.tur || 'serbest',
+    degerler: Array.isArray(i.degerler) ? i.degerler : [], kaynak: i.kaynak || null, varsayilan: i.varsayilan || '',
+    elleYazilabilir: i.elleYazilabilir !== false
+  };
+}
+
+/** Kasa açık olmalıdır. Ada göre sıralı. @param {Veritabani} vt @param {string} projeId */
+export function servisParametreTanimlariniListele(vt, projeId) {
+  acikAnahtar(vt);
+  return vt.tumu('SELECT * FROM servis_parametre_tanimlari WHERE proje_id = ? ORDER BY ad COLLATE NOCASE, olusturulma', [kimlik(projeId, 'projeId')])
+    .map((s) => tanimCevir(vt, s));
+}
+
+/**
+ * Kaydeder (id varsa günceller). Kurallar: ad geçerli XML alan adı; liste türünde en az bir değer, değerler tekrarsız;
+ * test_verisi türünde kaynak tür / alan var ve hassas değil; varsayılan (liste / evet-hayır) listede olmalı; ad projede tekil
+ * (harf duyarsız). Liste tüm servislerde seçilebilir; hangi alana bağlanacağı servisin ayarındadır (alanListeleri).
+ * @param {Veritabani} vt
+ * @param {{ id?: string; projeId: string; ad: string; aciklama?: string; tur: string; degerler?: Array<{ deger: unknown; aciklama?: unknown }>;
+ *   kaynak?: { turId: string; alan: string } | null; varsayilan?: string; elleYazilabilir?: boolean }} girdi
+ */
+export function servisParametreTanimiKaydet(vt, girdi) {
+  acikAnahtar(vt);
+  return vt.islem(() => {
+    const projeId = kimlik(girdi.projeId, 'projeId');
+    const ad = zorunluMetin(girdi.ad, 'Parametre adı');
+    if (ad.length > 80 || /[\u0000-\u001f<>]/.test(ad)) throw new DepoHatasi(`Liste adı geçersiz: en fazla 80 karakter; < > ve kontrol karakteri içeremez.`);
+    const tur = secenek(girdi.tur, TANIM_TURLERI, 'Değer türü');
+    const aciklama = typeof girdi.aciklama === 'string' ? girdi.aciklama.trim().slice(0, 500) : '';
+    /** @type {Array<{ deger: string; aciklama?: string }>} */
+    let degerler = [];
+    if (tur === 'liste' || tur === 'mantiksal') {
+      for (const x of girdi.degerler || []) {
+        const deger = String(x?.deger ?? '').trim();
+        if (!deger) continue;
+        if (deger.length > 200) throw new DepoHatasi('Bir değer en fazla 200 karakter olabilir.');
+        if (degerler.some((y) => y.deger === deger)) throw new DepoHatasi(`"${deger}" değeri iki kez yazılmış.`);
+        const a = typeof x.aciklama === 'string' ? x.aciklama.trim().slice(0, 200) : '';
+        degerler.push(a ? { deger, aciklama: a } : { deger });
+      }
+      if (tur === 'mantiksal') degerler = degerler.filter((x) => x.deger === 'true' || x.deger === 'false');
+      if (tur === 'liste' && !degerler.length) throw new DepoHatasi('Liste türünde en az bir değer girin.');
+      if (degerler.length > 500) throw new DepoHatasi('Bir listede en fazla 500 değer olabilir.');
+    }
+    /** @type {{ turId: string; alan: string } | null} */
+    let kaynak = null;
+    if (tur === 'test_verisi') {
+      const k = girdi.kaynak;
+      const t = k ? testVerisiTurleriniListele(vt, projeId).find((x) => x.id === k.turId) : undefined;
+      if (!t) throw new DepoHatasi('Değerlerin geleceği test verisi türünü seçin.');
+      const a = t.alanlar.find((x) => x.ad === k?.alan);
+      if (!a) throw new DepoHatasi(`"${t.ad}" türünde "${k?.alan ?? ''}" alanı yok.`);
+      if (a.hassas) throw new DepoHatasi(`"${t.ad}.${a.etiket || a.ad}" hassas bir alan; değerleri listelenemez. Hassas olmayan bir alan seçin.`);
+      kaynak = { turId: t.id, alan: a.ad };
+    }
+    const varsayilan = typeof girdi.varsayilan === 'string' ? girdi.varsayilan.trim().slice(0, 200) : '';
+    const elleYazilabilir = girdi.elleYazilabilir !== false;
+    if (varsayilan && tur === 'mantiksal' && !['true', 'false'].includes(varsayilan)) throw new DepoHatasi('Evet / Hayır türünde varsayılan "true" ya da "false" olabilir.');
+    if (varsayilan && tur === 'liste' && !elleYazilabilir && !degerler.some((x) => x.deger === varsayilan)) throw new DepoHatasi(`Varsayılan değer (${varsayilan}) listede yok.`);
+    if (servisParametreTanimlariniListele(vt, projeId).some((t) => t.id !== girdi.id && t.ad.toLocaleLowerCase('en') === ad.toLocaleLowerCase('en'))) {
+      throw new DepoHatasi(`"${ad}" adlı bir değer listesi zaten var; onu düzenleyin ya da başka bir ad verin (ör. "${ad} (Travel)").`);
+    }
+    if (girdi.id) {
+      const mevcut = vt.tek('SELECT proje_id FROM servis_parametre_tanimlari WHERE id = ?', [kimlik(girdi.id)]);
+      if (mevcut && mevcut.proje_id !== projeId) throw new DepoHatasi('Tanım bu projeye ait değil.');
+    }
+    return kaydet(vt, 'servis_parametre_tanimlari', {
+      proje_id: projeId, ad,
+      icerik_json: sifreliJson(vt, { aciklama, tur, degerler, kaynak, varsayilan, elleYazilabilir }, 'icerik')
+    }, { id: girdi.id });
+  });
+}
+
+/** @param {Veritabani} vt @param {string} projeId @param {string} id */
+export function servisParametreTanimiSil(vt, projeId, id) {
+  const s = vt.tek('SELECT proje_id FROM servis_parametre_tanimlari WHERE id = ?', [kimlik(id)]);
+  if (!s || s.proje_id !== projeId) return false;
+  return sil(vt, 'servis_parametre_tanimlari', id);
 }

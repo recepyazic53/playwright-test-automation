@@ -471,6 +471,26 @@ export const GOCLER = [
       );
       CREATE INDEX ix_servis_kosulari_servis ON servis_kosulari(servis_id, baslangic);
     `
+  },
+  {
+    // Sürüm 10 — servis parametre tanımları (Ayarlar > Test verisi > Servis parametreleri; bkz. servisler/parametre-tanimlari.mjs).
+    // Bir alanın (ör. IsTestMode) alabileceği değerler ve hangi servislerde geçerli olduğu. ad = XML alan adı; aynı ad için
+    // bir ortak (tüm servisler) ve servisleri çakışmayan servise özel tanımlar olabilir (depo denetler).
+    // icerik_json (şifreli): { aciklama, tur, degerler: [{ deger, aciklama }], kaynak: { turId, alan }, varsayilan,
+    // elleYazilabilir, servisler: [servisId] (boş = tümü) }.
+    surum: 10,
+    ad: 'servis_parametre_tanimlari',
+    sql: `
+      CREATE TABLE servis_parametre_tanimlari (
+        id           TEXT PRIMARY KEY,
+        proje_id     TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        ad           TEXT NOT NULL,
+        icerik_json  TEXT NOT NULL DEFAULT '{}',
+        olusturulma  TEXT NOT NULL,
+        guncellenme  TEXT NOT NULL
+      );
+      CREATE INDEX ix_servis_parametre_tanimlari_ad ON servis_parametre_tanimlari(proje_id, ad);
+    `
   }
 ];
 
@@ -499,6 +519,7 @@ export const SIFRELI_ALANLAR = Object.freeze({
   servisler: Object.freeze({ ayarlar_json: 'ozel' }),
   servis_senaryolari: Object.freeze({ icerik_json: 'ozel' }),
   servis_kimlikleri: Object.freeze({ degerler_json: 'gizli' }),
+  servis_parametre_tanimlari: Object.freeze({ icerik_json: 'ozel' }),
   servis_kosulari: Object.freeze({ sonuc_json: 'ozel' })
 });
 
@@ -532,6 +553,7 @@ export const TABLOLAR = [
   { ad: 'servisler', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, gecmisTuru: 'servis', baslikAlani: 'ad' },
   { ad: 'servis_senaryolari', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'servis_senaryosu', baslikAlani: 'baslik' },
   { ad: 'servis_kimlikleri', birincilAnahtar: 'id', json: ['degerler_json'], guncellenme: true, baslikAlani: 'ad' },
+  { ad: 'servis_parametre_tanimlari', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'degisiklik_gecmisi', birincilAnahtar: 'id', json: ['onceki_json', 'sonraki_json'], guncellenme: false },
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
   { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json'], guncellenme: false },

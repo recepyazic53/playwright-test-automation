@@ -210,6 +210,25 @@ function alanVarsayilanlariniDogrula(v) {
 }
 
 /**
+ * Alan → değer listesi bağlantıları: { <operasyon>: { <yol>: tanımId | '' } } ('' = bilerek liste yok).
+ * @param {unknown} v @returns {Record<string, Record<string, string>>}
+ */
+function alanListeleriniDogrula(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanListeleri" bir nesne olmalıdır.');
+  /** @type {Record<string, Record<string, string>>} */
+  const s = {};
+  for (const [op, alanlar] of Object.entries(v)) {
+    if (!alanlar || typeof alanlar !== 'object' || Array.isArray(alanlar)) throw new DepoHatasi(`"${op}" liste bağlantıları bir nesne olmalıdır.`);
+    for (const [yol, id] of Object.entries(alanlar)) {
+      if (!/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+      if (typeof id !== 'string' || (id && !/^[A-Za-z0-9_-]{1,100}$/.test(id))) throw new DepoHatasi(`"${yol}" için geçersiz liste.`);
+      (s[op] ??= {})[yol] = id;
+    }
+  }
+  return s;
+}
+
+/**
  * WSDL'i yeniden alıp operasyon listesini ve alan şemalarını günceller (yalnız test ortamı; adres değişmez).
  * @param {Veritabani} vt @param {string} projeId @param {{ servisId: string; ortamId: string }} girdi
  */
@@ -279,7 +298,7 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   secilenOperasyonlar?: string[];
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
- *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown }} girdi
+ *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown }} girdi
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -299,7 +318,8 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.tlsDogrulama !== undefined ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
     ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {}),
     ...(girdi.alanZorunluluklari !== undefined ? { alanZorunluluklari: alanZorunluluklariniDogrula(girdi.alanZorunluluklari) } : {}),
-    ...(girdi.ekAlanlar !== undefined ? { ekAlanlar: ekAlanlariDogrula(girdi.ekAlanlar) } : {})
+    ...(girdi.ekAlanlar !== undefined ? { ekAlanlar: ekAlanlariDogrula(girdi.ekAlanlar) } : {}),
+    ...(girdi.alanListeleri !== undefined ? { alanListeleri: alanListeleriniDogrula(girdi.alanListeleri) } : {})
   };
   if (adresDegisti) {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);
@@ -673,3 +693,4 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
     ozet: { basarili: sonuclar.filter((x) => x.durum === 'basarili').length, basarisiz: sonuclar.filter((x) => x.durum === 'basarisiz').length, hata: sonuclar.filter((x) => x.durum === 'hata').length }
   };
 }
+

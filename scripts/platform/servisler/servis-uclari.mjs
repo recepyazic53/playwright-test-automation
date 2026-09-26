@@ -4,7 +4,8 @@
 import { DepoHatasi } from '../veritabani/depo.mjs';
 import {
   servisGetir, servisKimligiKaydet, servisKimligiSil, servisKimlikOzeti, servisKosulariniListele, servisKosusuGetir, servisleriListele,
-  servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet, servisSenaryosuSil, servisSil
+  servisParametreTanimiKaydet, servisParametreTanimiSil, servisParametreTanimlariniListele, servisSenaryolariniListele, servisSenaryosuGetir,
+  servisSenaryosuKaydet, servisSenaryosuSil, servisSil
 } from './servis-deposu.mjs';
 import {
   erisimKontrolu, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
@@ -76,6 +77,7 @@ export const SERVIS_GET_UCLARI = [
     const projeId = kimlik(q.get('projeId'), 'projeId');
     return servisParametreleri(db, projeId, servisAl(db, projeId, q.get('id')).id);
   }],
+  ['/platform/servis-parametre-tanimlari', (db, q) => ({ tanimlar: servisParametreTanimlariniListele(db, kimlik(q.get('projeId'), 'projeId')) })],
   ['/platform/servis/kosular', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const s = servisAl(db, projeId, q.get('servisId'));
@@ -116,6 +118,7 @@ export const SERVIS_POST_UCLARI = [
       ...(g.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: g.alanVarsayilanlari } : {}),
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
       ...(g.ekAlanlar !== undefined ? { ekAlanlar: g.ekAlanlar } : {}),
+      ...(g.alanListeleri !== undefined ? { alanListeleri: g.alanListeleri } : {}),
       erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
     });
     return { id };
@@ -189,6 +192,16 @@ export const SERVIS_POST_UCLARI = [
   }],
   // Eski servis giriş profilini test verisine taşı (onay: false → yalnız önizleme).
   ['/platform/servis-kimligi/test-verisine-tasi', (db, g) => girisProfiliniTestVerisineTasi(db, kimlik(g.projeId, 'projeId'), { ad: metin(g.ad), onay: g.onay === true })],
+  ['/platform/servis-parametre-tanimi/kaydet', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const k = g.kaynak && typeof g.kaynak === 'object' ? { turId: kimlik(g.kaynak.turId, 'turId'), alan: metin(g.kaynak.alan) } : null;
+    return { id: servisParametreTanimiKaydet(db, {
+      id: secimli(g.id), projeId, ad: metin(g.ad), aciklama: metin(g.aciklama), tur: metin(g.tur),
+      degerler: Array.isArray(g.degerler) ? g.degerler.slice(0, 1000) : [], kaynak: k, varsayilan: metin(g.varsayilan),
+      elleYazilabilir: g.elleYazilabilir !== false
+    }) };
+  }],
+  ['/platform/servis-parametre-tanimi/sil', (db, g) => ({ silindi: servisParametreTanimiSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })],
   ['/platform/servis-kimligi/sil', (db, g) => ({ silindi: servisKimligiSil(db, kimlik(g.projeId, 'projeId'), metin(g.ad)) })],
   ['/platform/servis/soapui/onizle', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');

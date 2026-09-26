@@ -361,6 +361,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
@@ -378,6 +379,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/akis-tasarimi.js', { dosya: 'akis-tasarimi.js', tur: 'text/javascript; charset=utf-8' }],
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/servis-govdesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-govdesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'senaryo-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }]

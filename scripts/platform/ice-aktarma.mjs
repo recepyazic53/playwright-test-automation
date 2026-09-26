@@ -59,6 +59,7 @@ export const ONIZLEME_TABLOLARI = Object.freeze({
   servisler: 'Servisler',
   servis_senaryolari: 'Servis senaryoları',
   servis_kimlikleri: 'Servis giriş bilgileri',
+  servis_parametre_tanimlari: 'Servis parametre tanımları',
   ayarlar: 'Ayarlar'
 });
 /** Her zaman eklenen (kimlik üzerinden tekilleştirilen) ve yalnızca sayılan tablolar. */

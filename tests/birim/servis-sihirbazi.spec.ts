@@ -103,12 +103,16 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.getByRole('button', { name: 'Onayla metodu' })).toBeVisible();
     await page.getByRole('button', { name: 'Teklif metodu' }).click();
     await expect(page.getByRole('button', { name: 'Teklif metodu' })).toHaveAttribute('aria-pressed', 'true');
+    // "Alabileceği değerler" sütunu sihirbazda da var: tanım yoksa WSDL önerisi + "Ekle".
+    const clientType = page.locator('.metot-cercevesi .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^ClientType/ }) });
+    await expect(clientType.locator('.oneri-degerleri')).toContainText('T');
+    await expect(clientType.getByRole('button', { name: 'Yeni değer listesi: ClientType' })).toBeVisible();
     // Giriş bilgisi ve tarih önerileri hazır; CitizenshipNumber test verisine bağlanır.
-    await expect(page.getByLabel('Teklif Input/Channel varsayılanı')).toHaveValue('CHANNEL');
-    await expect(page.getByLabel('Teklif Input/Password varsayılanı')).toHaveValue('PASSWORD');
-    await expect(page.getByLabel('Teklif Input/BeginDate varsayılanı')).toHaveValue('BEGIN_DATE');
-    await expect(page.getByLabel('Teklif Input/EndDate varsayılanı')).toHaveValue('END_DATE');
-    await page.getByLabel('Teklif Input/CitizenshipNumber varsayılanı').selectOption('SIGORTALI_TC');
+    await expect(page.getByLabel('Teklif Input/Channel değer kaynağı')).toHaveValue('CHANNEL');
+    await expect(page.getByLabel('Teklif Input/Password değer kaynağı')).toHaveValue('PASSWORD');
+    await expect(page.getByLabel('Teklif Input/BeginDate değer kaynağı')).toHaveValue('BEGIN_DATE');
+    await expect(page.getByLabel('Teklif Input/EndDate değer kaynağı')).toHaveValue('END_DATE');
+    await page.getByLabel('Teklif Input/CitizenshipNumber değer kaynağı').selectOption('SIGORTALI_TC');
     // Zorunluluk: WSDL'e göre gelir (BeginDate minOccurs=1 → işaretli, CitizenshipNumber minOccurs=0 → boş); iş kuralına göre düzeltilir.
     await expect(page.getByLabel('Teklif Input/BeginDate zorunlu')).toBeChecked();
     await expect(page.getByLabel('Teklif Input/CitizenshipNumber zorunlu')).not.toBeChecked();
@@ -197,7 +201,7 @@ test.describe('sihirbaz uçtan uca', () => {
     await page.goto(`/#/servisler/s/${s.id}/parametreler`);
     await expect(page.getByRole('heading', { name: 'Metot alanları' })).toBeVisible();
     await page.getByRole('button', { name: 'Teklif metodu' }).click();
-    await expect(page.getByLabel('Teklif Input/Channel varsayılanı')).toHaveValue('CHANNEL');
+    await expect(page.getByLabel('Teklif Input/Channel değer kaynağı')).toHaveValue('CHANNEL');
     // Senaryo olmasa da varsayılanlarda geçen parametreler listelenir.
     await expect(page.locator('.kart').filter({ hasText: 'Kullanılan parametreler' })).toContainText('${CHANNEL}');
     await page.getByLabel('Teklif Input/IsSkiing zorunlu').check();
@@ -215,7 +219,6 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.getByLabel('Teklif Input/IsSkiing zorunlu')).toBeHidden();
     await page.getByRole('button', { name: 'Teklif metodu' }).click();
     await expect(page.getByLabel('Teklif Input/IsSkiing zorunlu')).toBeChecked();
-    await page.getByRole('button', { name: 'Alanları kaydet' }).click();
     await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar.ekAlanlar).toEqual({ Teklif: [{ yol: 'Input/EkAlan', tip: 'metin' }], Onayla: [] });
     const ayar = (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar;
     expect(ayar.alanZorunluluklari.Teklif).toEqual(expect.arrayContaining(['Input/EkAlan', 'Input/IsSkiing']));

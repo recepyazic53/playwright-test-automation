@@ -2100,3 +2100,35 @@ a.son-sonuc { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .servis-adimlari li.suruyor .nokta { animation: none; } }
 .servis-kosu-paneli .kosu-izleme details { margin-top: 6px; }
 .servis-kosu-paneli .kosu-izleme pre { max-height: 14rem; }
+
+/* Servis parametre tanımları: değer çipleri, tanım penceresi, ürünün "Parametreler ve alabileceği değerler" tablosu. */
+.deger-cipleri { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; max-width: 520px; }
+.deger-cipi { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font: 11.5px var(--yazi-mono); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.oneri-degerleri .deger-cipi { color: var(--metin-3); box-shadow: none; border: 1px dashed var(--cizgi-2); }
+.alan-degerleri { max-height: 560px; overflow: auto; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--cizgi); }
+.alan-degerleri thead th { position: sticky; top: 0; z-index: 1; background: var(--panel-kati); }
+.tanim-formu { display: grid; gap: 12px; }
+.tanim-degerleri { display: grid; gap: 6px; margin-bottom: 8px; }
+.tanim-deger-satiri { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) 32px; gap: 8px; align-items: center; }
+.tanim-deger-satiri.baslik { font-size: 11.5px; color: var(--metin-3); text-transform: uppercase; letter-spacing: .04em; }
+.tanim-servisleri { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 8px 0 4px 24px; }
+.tanim-servisleri.pasif { opacity: .45; }
+.tanimli-deger { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Metot tablosunda "Alabileceği değerler" sütunu (Parametreler sekmesi + sihirbaz 3. adım). */
+.sihirbaz-alanlari.degerli .alan-satiri { grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr) minmax(220px, 1.2fr) 70px; }
+.deger-hucresi { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; min-width: 0; }
+.deger-hucresi-alt { display: inline-flex; gap: 4px; align-items: center; }
+.deger-hucresi .deger-cipleri { max-width: 100%; }
+.kayit-durumu { margin-right: 8px; }
+@media (max-width: 900px) { .sihirbaz-alanlari.degerli .alan-satiri { grid-template-columns: 1fr 1fr; } }
+/* Metot tablosunda girinti yalnız alan adına uygulanır: sütunlar (değerler, varsayılan, zorunlu) iç içe alanlarda da hizalı kalır. */
+.sihirbaz-alanlari .alan-satiri { padding-left: 8px; }
+.sihirbaz-alanlari .alan-satiri .alan-adi { padding-left: calc(var(--derinlik, 0) * 18px); }
+/* Metot tablosu "Değer kaynağı" hücresi: seçim + Yeni / düzenle; altında bağlı listenin değerleri (ya da WSDL önerisi). */
+.kaynak-hucresi { display: grid; gap: 4px; min-width: 0; }
+.kaynak-secimi { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.kaynak-secimi select { flex: 1 1 auto; min-width: 0; }
+.kaynak-secimi .kucuk-dugme { flex: 0 0 auto; }
+.metot-kutusu { white-space: normal; min-width: 0; overflow: hidden; }
+.metot-kutusu-bilgi { overflow-wrap: anywhere; line-height: 1.35; }
+.liste-disi .deger-cipi { margin: 2px 4px 2px 0; }

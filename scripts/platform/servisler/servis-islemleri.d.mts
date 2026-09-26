@@ -84,3 +84,4 @@ export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, 
   sonuclar: { senaryoId: string; baslik: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; kosuId: string; ozet: string }[];
   ozet: { basarili: number; basarisiz: number; hata: number };
 }>;
+
