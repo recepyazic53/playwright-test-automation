@@ -1995,3 +1995,26 @@ tr.tiklanir:hover, tr.tiklanir:focus-visible { background: var(--panel-2); }
 .derinlik-4 { --derinlik: 4; }
 .derinlik-5 { --derinlik: 5; }
 .derinlik-6 { --derinlik: 6; }
+/* Sihirbaz (servis-sihirbazi.js) */
+.sihirbaz-adimlari { display: flex; gap: 6px; flex-wrap: wrap; list-style: none; margin: 0 0 16px; padding: 0; counter-reset: none; }
+.sihirbaz-adimlari li { display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; border: 1px solid var(--cizgi); color: var(--metin-3); font-size: 13px; }
+.sihirbaz-adimlari .adim-no { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--panel-2); font: 600 11.5px var(--yazi-mono); }
+.sihirbaz-adimlari li.simdiki { color: var(--metin); border-color: var(--vurgu); }
+.sihirbaz-adimlari li.simdiki .adim-no { background: var(--vurgu); color: #fff; }
+.sihirbaz-adimlari li.bitti { color: var(--metin-2); }
+.sihirbaz-adimlari li.bitti .adim-no { background: var(--basari-zemin); color: var(--basari); }
+.sihirbaz .dugmeler { align-items: center; }
+.taban-satiri { display: grid; grid-template-columns: 150px minmax(220px, 1fr) minmax(220px, 1fr); gap: 8px; align-items: center; margin-bottom: 8px; }
+.taban-satiri > [hidden] { display: none; }
+.taban-ortam { font-weight: 600; display: flex; gap: 6px; align-items: center; }
+@media (max-width: 800px) { .taban-satiri { grid-template-columns: 1fr; } }
+.adres-onizleme { list-style: none; padding: 0; margin: 4px 0 12px; display: grid; gap: 4px; font-size: 13px; }
+.metot-listesi { display: grid; gap: 2px; border: 1px solid var(--cizgi); border-radius: 10px; padding: 6px; margin-top: 8px; }
+.metot-satiri { display: grid; grid-template-columns: minmax(220px, 1.4fr) 1fr 160px; gap: 8px; align-items: center; padding: 4px 8px; border-radius: 8px; }
+.metot-satiri:hover { background: var(--panel-2); }
+.metot-satiri.baslik { font: 600 11px var(--yazi-mono); color: var(--metin-3); text-transform: uppercase; letter-spacing: .06em; }
+.sihirbaz-alanlari .alan-satiri { grid-template-columns: minmax(200px, 1fr) minmax(240px, 1.4fr); }
+.ozet-listesi { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; margin: 0; }
+.ozet-listesi dt { color: var(--metin-3); font-weight: 600; }
+.ozet-listesi dd { margin: 0; }
+.ozet-listesi ul { margin: 0; padding-left: 18px; }

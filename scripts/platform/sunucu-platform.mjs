@@ -970,12 +970,14 @@ function urunSecimi(d) {
 const ortamSecimi = (d) => (d === undefined ? undefined : d === null || d === '' ? null : kimlikAl(d, 'ortamId'));
 
 /**
- * Ortamın arayüze giden görünümü: ayarlar (giriş tarifi vb.) gönderilmez; yalnızca "canli" işareti.
+ * Ortamın arayüze giden görünümü: ayarlar (giriş tarifi vb.) gönderilmez; yalnızca "canli" işareti ve taban adresleri
+ * (ortamın asıl adresi + sonradan eklenenler; servis / ekran eklerken seçilir).
  * @param {import('./veritabani/depo.mjs').Ortam} o
  */
 function ortamGorunumu(o) {
   const { ayarlar, ...gorunum } = o;
-  return { ...gorunum, canli: ayarlar.canli === true };
+  const ekler = Array.isArray(ayarlar.tabanAdresleri) ? ayarlar.tabanAdresleri.filter((x) => typeof x === 'string') : [];
+  return { ...gorunum, canli: ayarlar.canli === true, tabanAdresleri: [o.tabanUrl, ...ekler] };
 }
 
 /** @param {import('./veritabani/depo.mjs').GirisProfili} p */

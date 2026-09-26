@@ -10,6 +10,7 @@
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
+import { servisSihirbazi } from './servis-sihirbazi.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi } from './servis-govdesi.mjs';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
@@ -64,9 +65,9 @@ async function servisEkleSayfasi(icerik, proje) {
   const secim = h('div', { class: 'segment', role: 'tablist', 'aria-label': 'Ekleme yolu' });
   const alanKap = h('div', {});
   const ciz = (yol) => {
-    yerlestir(secim, ...[['elle', 'Elle ekle'], ['soapui', 'SoapUI dosyasından']].map(([d, m]) =>
+    yerlestir(secim, ...[['sihirbaz', 'Adım adım'], ['soapui', 'SoapUI dosyasından']].map(([d, m]) =>
       h('button', { type: 'button', role: 'tab', 'aria-selected': d === yol ? 'true' : 'false', onclick: () => ciz(d) }, m)));
-    if (yol === 'elle') elleEkleFormu(alanKap, proje, ortamlar);
+    if (yol === 'sihirbaz') servisSihirbazi(alanKap, proje, ortamlar).catch((e) => yerlestir(alanKap, hataKutusu(e)));
     else soapuiAktarimi(alanKap, proje, ortamlar);
   };
   yerlestir(icerik,
@@ -75,7 +76,7 @@ async function servisEkleSayfasi(icerik, proje) {
       h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Servis ekle')))),
     testOrtamlari(ortamlar).length ? null : h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Projede TEST ortamı yok. Erişim kontrolü yalnız TEST ortamında yapılır; Ayarlar > Ortamlar bölümünden ekleyin.'),
     secim, alanKap);
-  ciz('soapui');
+  ciz('sihirbaz');
 }
 
 /** Erişim kontrolü bileşeni: TEST ortamı seçimi + onaylı istek + sonuç. sonuc(e) başarılı kontrolde çağrılır. */
@@ -88,13 +89,15 @@ function erisimKontrolAlani(proje, ortamlar, bilgiAl, sonuc) {
     const bilgi = bilgiAl();
     if (!bilgi) return;
     const ortam = testler.find((o) => o.id === ortamSec.value);
-    const adres = `${String(ortam.tabanUrl || '').replace(/\/$/, '')}${bilgi.yol}?wsdl`;
-    const tamam = await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${ortam.tabanUrl ? adres : `${ortam.ad} + ${bilgi.yol}?wsdl`}`, dugme: 'İstek at', ikonAd: 'ag' });
+    const taban = String((bilgi.tabanlar && bilgi.tabanlar[ortam.id]) || ortam.tabanUrl || '').replace(/\/+$/, '');
+    if (!taban) { yerlestir(durum, h('div', { class: 'not-kutusu hata', role: 'alert' }, `${ortam.ad} için taban adres yok; önce taban adresi seçin.`)); return; }
+    const adres = `${taban}/${bilgi.yol.replace(/^\/+/, '')}?wsdl`;
+    const tamam = await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}`, dugme: 'İstek at', ikonAd: 'ag' });
     if (!tamam) return;
     sonuc(null);
     await mesgulIken(dugme, 'Kontrol ediliyor…', async () => {
       try {
-        const e = await api('/platform/servis/erisim', { govde: { projeId: proje.id, ortamId: ortamSec.value, yol: bilgi.yol, ...(bilgi.tlsDogrulama === false ? { tlsDogrulama: false } : {}) } });
+        const e = await api('/platform/servis/erisim', { govde: { projeId: proje.id, ortamId: ortamSec.value, yol: bilgi.yol, ...(bilgi.tabanlar ? { tabanlar: bilgi.tabanlar } : {}), ...(bilgi.tlsDogrulama === false ? { tlsDogrulama: false } : {}) } });
         if (e.erisilebilir) {
           yerlestir(durum, h('div', { class: 'not-kutusu basari', role: 'status' }, ikon('onay'),
             ` Erişildi (${e.durumKodu}, ${e.sureMs} ms). ${e.operasyonlar.length} operasyon: ${e.operasyonlar.map((o) => o.ad).join(', ')}`));
@@ -106,50 +109,6 @@ function erisimKontrolAlani(proje, ortamlar, bilgiAl, sonuc) {
     });
   });
   return h('div', { class: 'erisim-kontrolu' }, h('div', { class: 'satir-duzen' }, alan('Kontrol ortamı', ortamSec), dugme), durum);
-}
-
-function anahtarUret(ad) {
-  return ad.trim().replace(/(?:Soap12|Soap)$/, '').replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLocaleLowerCase('tr')
-    .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c')
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
-}
-
-function elleEkleFormu(kap, proje, ortamlar) {
-  const ad = h('input', { type: 'text', autocomplete: 'off', placeholder: 'ör. TravelService' });
-  const anahtar = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'ör. travel-service' });
-  const yol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: '/AppService/travel.asmx' });
-  const surum = h('select', {}, h('option', { value: '1.1' }, 'SOAP 1.1'), h('option', { value: '1.2' }, 'SOAP 1.2'));
-  const tls = h('input', { type: 'checkbox', id: yeniKimlik('tls'), checked: true });
-  let anahtarElle = false;
-  anahtar.addEventListener('input', () => { anahtarElle = true; });
-  ad.addEventListener('input', () => { if (!anahtarElle) anahtar.value = anahtarUret(ad.value); });
-  let erisim = null;
-  const mesaj = mesajKutusu();
-  const kaydet = h('button', { type: 'button', class: 'birincil', disabled: true, title: 'Önce erişimi kontrol edin' }, 'Kaydet');
-  const bilgi = () => {
-    alanHatasi(yol, '');
-    if (!/^\/\S*$/.test(yol.value.trim())) { alanHatasi(yol, 'Yol "/" ile başlamalı (ör. /AppService/travel.asmx).'); yol.focus(); return null; }
-    return { yol: yol.value.trim(), tlsDogrulama: tls.checked };
-  };
-  const kontrol = erisimKontrolAlani(proje, ortamlar, bilgi, (e) => { erisim = e; kaydet.disabled = !e; kaydet.title = e ? '' : 'Önce erişimi kontrol edin'; });
-  for (const g of [yol, tls]) g.addEventListener('input', () => { erisim = null; kaydet.disabled = true; });
-  kaydet.addEventListener('click', async () => {
-    mesaj.temizle();
-    if (!ad.value.trim()) { alanHatasi(ad, 'Ad boş olamaz.'); ad.focus(); return; }
-    try {
-      const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/kaydet', { govde: {
-        projeId: proje.id, anahtar: anahtar.value.trim(), ad: ad.value.trim(), yol: yol.value.trim(), soapSurumu: surum.value, tlsDogrulama: tls.checked, erisimKimligi: erisim?.erisimKimligi
-      } }));
-      bildir('Servis eklendi.');
-      location.hash = `#/servisler/s/${q(r.id)}`;
-    } catch (e) { mesaj.goster(e.message); }
-  });
-  yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Servis bilgileri'), mesaj.kutu,
-    alan('Servis adı', ad, { zorunlu: true }), alan('Anahtar', anahtar, { yardim: 'Küçük harf, rakam ve "-". Addan önerilir.' }),
-    alan('Yol', yol, { zorunlu: true, yardim: 'Ortamın taban adresine eklenir. TEST ve CANLI adresleri ortamlardan gelir; gerekirse servis ayarından ortama özel adres verilir.' }),
-    alan('SOAP sürümü', surum),
-    h('label', { class: 'secenek', for: tls.id }, tls, 'TLS sertifikasını doğrula (iç ortamın sertifikası tanınmıyorsa kapatın)'),
-    kontrol, h('div', { class: 'dugmeler' }, kaydet, h('a', { class: 'dugme hayalet', href: '#/senaryolar' }, 'Vazgeç'))));
 }
 
 function soapuiAktarimi(kap, proje, ortamlar) {
@@ -772,9 +731,20 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
   const surum = h('select', {}, ['1.1', '1.2'].map((v) => h('option', { value: v, selected: (s.ayarlar.soapSurumu || '1.1') === v }, `SOAP ${v}`)));
   const tls = h('input', { type: 'checkbox', id: yeniKimlik('tls'), checked: s.ayarlar.tlsDogrulama !== false });
   const durum = h('input', { type: 'checkbox', id: yeniKimlik('durum'), checked: s.durum !== 'devre_disi' });
-  const adresler = ortamlar.map((o) => {
-    const g = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', value: (s.ayarlar.adresler || {})[o.id] || '', placeholder: 'boş = ortam adresi + yol' });
-    return { o, g };
+  // Taban adresler (adresin başı): ortamın listesinden seç, yeni yaz ya da (CANLI) "bu ortamda yok".
+  const temiz = (a) => String(a || '').trim().replace(/\/+$/, '');
+  const tabanlar = ortamlar.map((o) => {
+    const liste = [...new Set((o.tabanAdresleri && o.tabanAdresleri.length ? o.tabanAdresleri : [o.tabanUrl]).map(temiz))];
+    const ilk = s.ayarlar.tabanlar && o.id in s.ayarlar.tabanlar ? temiz(s.ayarlar.tabanlar[o.id]) : temiz(o.tabanUrl);
+    const sec = h('select', { 'aria-label': `${o.ad} taban adresi` }, ...liste.map((a) => h('option', { value: a, selected: ilk === a }, a)),
+      h('option', { value: '__yeni', selected: Boolean(ilk) && !liste.includes(ilk) }, 'Yeni adres yaz…'),
+      h('option', { value: '', selected: ilk === '' }, '— Bu ortamda yok —'));
+    const g = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', value: sec.value === '__yeni' ? ilk : '', placeholder: 'https://ornek.com/', hidden: sec.value !== '__yeni', 'aria-label': `${o.ad} yeni taban adresi` });
+    sec.addEventListener('change', () => { g.hidden = sec.value !== '__yeni'; if (!g.hidden) g.focus(); });
+    const deger = () => (sec.value === '__yeni' ? temiz(g.value) : sec.value);
+    const ozel = (s.ayarlar.adresler || {})[o.id];
+    return { o, ilk, deger, el: h('div', { class: 'taban-satiri' }, h('span', { class: 'taban-ortam' }, ortamEtiketi(o)), sec, g,
+      ozel ? h('span', { class: 'soluk kucuk' }, `Eski tam adres ayarı geçerli: ${ozel}`) : null) };
   });
   const yalnizTest = (s.ayarlar.operasyonlar || []).map((op) => {
     const c = h('input', { type: 'checkbox', id: yeniKimlik('op'), checked: (s.ayarlar.yalnizTestOperasyonlari || []).includes(op.ad) });
@@ -783,15 +753,16 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
   let erisim = null;
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
-  const adresDegisti = () => yol.value.trim() !== (s.ayarlar.yol || '') || adresler.some(({ o, g }) => g.value.trim() !== ((s.ayarlar.adresler || {})[o.id] || ''));
-  const kontrol = erisimKontrolAlani(proje, ortamlar, () => ({ yol: yol.value.trim(), tlsDogrulama: tls.checked }), (e) => { erisim = e; });
+  const tabanDegerleri = () => Object.fromEntries(tabanlar.map((t) => [t.o.id, t.deger()]));
+  const adresDegisti = () => yol.value.trim() !== (s.ayarlar.yol || '') || tabanlar.some((t) => t.deger() !== t.ilk);
+  const kontrol = erisimKontrolAlani(proje, ortamlar, () => ({ yol: yol.value.trim(), tlsDogrulama: tls.checked, tabanlar: tabanDegerleri() }), (e) => { erisim = e; });
   kaydet.addEventListener('click', async () => {
     mesaj.temizle();
     if (adresDegisti() && !erisim) { mesaj.goster('Yol ya da adres değişti: önce "Erişimi kontrol et".'); return; }
     try {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/kaydet', { govde: {
         projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: ad.value.trim(), yol: yol.value.trim(), soapSurumu: surum.value, tlsDogrulama: tls.checked,
-        durum: durum.checked ? 'etkin' : 'devre_disi', adresler: Object.fromEntries(adresler.filter(({ g }) => g.value.trim()).map(({ o, g }) => [o.id, g.value.trim()])),
+        durum: durum.checked ? 'etkin' : 'devre_disi', tabanlar: tabanDegerleri(),
         yalnizTestOperasyonlari: yalnizTest.filter(({ c }) => c.checked).map(({ op }) => op.ad), erisimKimligi: erisim?.erisimKimligi
       } }));
       bildir('Servis kaydedildi.');
@@ -813,7 +784,7 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
       alan('Servis adı', ad), alan('Yol', yol), alan('SOAP sürümü', surum),
       h('label', { class: 'secenek', for: tls.id }, tls, 'TLS sertifikasını doğrula'),
       h('label', { class: 'secenek', for: durum.id }, durum, 'Etkin (kapalıysa koşulara girmez)'),
-      h('fieldset', {}, h('legend', {}, 'Ortama özel adres (isteğe bağlı)'), ...adresler.map(({ o, g }) => alan(ortamEtiketi(o), g))),
+      h('fieldset', {}, h('legend', {}, 'Taban adresler (adresin başı)'), h('p', { class: 'soluk kucuk' }, 'Yol bu adresin arkasına eklenir. Yeni yazılan adres ortama kaydedilir. "Bu ortamda yok" seçilirse servis o ortamda koşmaz.'), ...tabanlar.map((x) => x.el)),
       yalnizTest.length ? h('fieldset', {}, h('legend', {}, 'Yalnız TEST\'te koşan operasyonlar'),
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,

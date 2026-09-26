@@ -6,18 +6,22 @@ import type { ServisTaslagi } from './soapui-ice-aktarma.mjs';
 
 export declare const ERISIM_GECERLILIK_MS: number;
 export declare function ortamTuru(ortam: { ayarlar: Record<string, unknown> }): 'test' | 'canli';
-export declare function servisAdresi(ayarlar: { yol?: string; adresler?: Record<string, string> }, ortam: { id: string; tabanUrl: string }): string;
+export declare function adresBirlestir(taban: string, yol: string): string;
+export declare function servisAdresi(ayarlar: { yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string> }, ortam: { id: string; ad?: string; tabanUrl: string }): string;
+export declare function ortamdaTanimli(ayarlar: { tabanlar?: Record<string, string> }, ortamId: string): boolean;
 export declare function tarihKurallariniDogrula(kurallar: unknown): Record<string, string>;
 
 export type ErisimSonucu =
-  | { erisilebilir: true; erisimKimligi: string; adres: string; ortam: string; durumKodu: number; sureMs: number; operasyonlar: { ad: string; eylem?: string }[] }
+  | { erisilebilir: true; erisimKimligi: string; adres: string; ortam: string; durumKodu: number; sureMs: number; operasyonlar: { ad: string; eylem?: string }[];
+      semalar: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi> }
   | { erisilebilir: false; adres: string; ortam: string; mesaj: string };
 export declare function erisimKontrolu(vt: Veritabani, projeId: string, girdi: {
-  ortamId: string; yol: string; adresler?: Record<string, string>; tlsDogrulama?: boolean;
+  ortamId: string; yol: string; adresler?: Record<string, string>; tabanlar?: Record<string, string>; tlsDogrulama?: boolean;
 }): Promise<ErisimSonucu>;
 
 export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
-  id?: string; anahtar: string; ad: string; yol: string; soapSurumu?: '1.1' | '1.2'; adresler?: Record<string, string>;
+  id?: string; anahtar: string; ad: string; yol: string; soapSurumu?: '1.1' | '1.2'; adresler?: Record<string, string>; tabanlar?: Record<string, string>;
+  secilenOperasyonlar?: string[];
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
@@ -64,7 +68,7 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
 export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number;
 }): Promise<{
-  ortam: string; ortamTuru: 'test' | 'canli'; atlanan: number;
+  ortam: string; ortamTuru: 'test' | 'canli'; atlanan: number; atlamaNedeni?: string;
   sonuclar: { senaryoId: string; baslik: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; kosuId: string; ozet: string }[];
   ozet: { basarili: number; basarisiz: number; hata: number };
 }>;

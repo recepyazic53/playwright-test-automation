@@ -87,7 +87,7 @@ export const SERVIS_GET_UCLARI = [
 export const SERVIS_POST_UCLARI = [
   // Erişim kontrolü: TEST ortamına WSDL isteği atar (arayüz kullanıcıya sorarak çağırır).
   ['/platform/servis/erisim', async (db, g) => erisimKontrolu(db, kimlik(g.projeId, 'projeId'), {
-    ortamId: kimlik(g.ortamId, 'ortamId'), yol: metin(g.yol), adresler: metinNesnesi(g.adresler),
+    ortamId: kimlik(g.ortamId, 'ortamId'), yol: metin(g.yol), adresler: metinNesnesi(g.adresler), tabanlar: metinNesnesi(g.tabanlar),
     ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {})
   })],
   ['/platform/servis/kaydet', (db, g) => {
@@ -96,6 +96,8 @@ export const SERVIS_POST_UCLARI = [
       id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), yol: metin(g.yol),
       ...(g.soapSurumu === '1.2' || g.soapSurumu === '1.1' ? { soapSurumu: g.soapSurumu } : {}),
       ...(g.adresler !== undefined ? { adresler: metinNesnesi(g.adresler) } : {}),
+      ...(g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(Array.isArray(g.secilenOperasyonlar) ? { secilenOperasyonlar: g.secilenOperasyonlar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
       ...(typeof g.kimlikProfili === 'string' ? { kimlikProfili: g.kimlikProfili } : {}),
       ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
       ...(g.veriProfilleri !== undefined ? { veriProfilleri: metinNesnesi(g.veriProfilleri) } : {}),

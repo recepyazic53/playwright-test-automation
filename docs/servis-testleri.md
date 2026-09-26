@@ -20,7 +20,7 @@ Nöbetçi'de ekran testlerinin yanında SOAP servis testleri. Servis kayıtları
   - Kontrol, WSDL'i ister: `GET <adres>?wsdl`.
   - Kontrol 30 dakika geçerlidir.
   - Yol ya da ortama özel adres değişirse kontrol yeniden gerekir.
-- **Adres:** ortamın taban adresi + servisin yolu. Servis gerekirse ortama özel tam adres verebilir.
+- **Adres:** servisin o ortamdaki taban adresi + yol (bkz. Servis ekle sihirbazı).
 - **Senaryo kapsamı:** `test`, `canli` ya da `ikisi`. Uymayan ortamda koşmaz.
 - **Yalnız TEST'te koşan operasyonlar:** İşlemler sekmesinde işaretlenir (ör. Approve). Bunlar CANLI'da hiç çağrılmaz.
 
@@ -44,6 +44,18 @@ Değer sırası:
 
 Değeri bulunamayan parametre, nedeniyle birlikte hata verir. Örnek: `SIGORTALI_TC ("Özel kişi" türü, "sigortali" rolü için profil seçilmedi)`.
 Raporda parola ve hassas test verisi maskelenir (`***`).
+
+## Servis ekle sihirbazı
+
+Servisler > Servis ekle > **Adım adım**:
+
+1. **Adresler:** servis adı; her ortam için **taban adres** (adresin başı). Ortamın listesinden seçilir ya da yenisi yazılır; yeni yazılan adres ortama kaydedilir ve sonraki servislerde listede hazır olur. CANLI için "Bu ortamda yok" seçilebilir; servis o ortamda koşmaz. Tam adres yapıştırılırsa taban + yol kendiliğinden ayrılır.
+2. **Metotlar:** yol (tüm ortamlarda aynı) + **Denetle** (TEST'e WSDL isteği, onayla). Metotlar listelenir, istenenler seçilir. Kayıt / belge üreten metotlar (Approve, Print…) "CANLI'da çağrılmasın" işaretli gelir.
+3. **Parametreler:** seçilen metotların alanları; her alan için varsayılan değer kaynağı. Öneriler hazır gelir: Username / Password / Channel → giriş bilgisi; BeginDate / EndDate → tarih kuralı; başka serviste ★ yapılmış alan adları. Bunlar servis varsayılanı (★) olur.
+4. **Giriş bilgisi:** kayıtlı profil / yeni profil (kasada şifreli) / yok.
+5. **Özet → Kaydet.**
+
+Adres = taban adres + yol, metin olarak birleştirilir: tabanın kendi yolu korunur (`https://x.com/api/` + `/a.asmx` → `https://x.com/api/a.asmx`). Mevcut servisler etkilenmez (taban tanımlı değilse ortamın asıl adresi kullanılır). Servisin İşlemler sekmesinde taban adresler aynı seçimle değiştirilir.
 
 ## Senaryo düzenleyici: alan formu
 
