@@ -9,7 +9,7 @@
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
-import { metotAlanTablosu } from './servis-alanlari.js';
+import { metotKutulari } from './servis-alanlari.js';
 
 const ADIMLAR = ['Adresler', 'Metotlar', 'Parametreler', 'Giriş bilgisi', 'Özet'];
 /** Kayıt oluşturan / belge üreten metot adları: "CANLI'da çağrılmasın" işaretli gelir (kullanıcı değiştirebilir). */
@@ -204,6 +204,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       ['Test verisi', veriParametreleri]
     ].filter(([, l]) => l.length);
     const bolumler = [];
+    const tanimlar = [];
     for (const ad of d.secilen) {
       const sema = d.erisim.semalar?.[ad];
       if (!sema || !sema.alanlar.length) { bolumler.push(h('p', { class: 'soluk' }, h('code', { class: 'duz' }, ad), ': alan listesi yok (senaryoları XML olarak düzenlenir).')); continue; }
@@ -211,12 +212,12 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       // Zorunluluk: WSDL'e göre işaretli gelir (şemada zorunlu), kullanıcı iş kuralına göre düzeltir.
       const z = (d.zorunlu[ad] ??= new Set(alanSatirlari(sema.alanlar).filter((x) => !x.grup && x.alan.zorunlu).map((x) => x.yol)));
       const ekler = (d.ekAlanlar[ad] ??= []);
-      const tablo = metotAlanTablosu({ ad, sema, varsayilan: v, zorunlu: z, ekler, secenekler });
-      bolumler.push(h('details', { open: d.secilen.size <= 2 }, h('summary', {}, h('code', { class: 'duz' }, ad), ` — ${alanSatirlari(sema.alanlar).filter((x) => !x.grup).length} alan`, tablo.sayac), tablo.el));
+      tanimlar.push({ ad, sema, varsayilan: v, zorunlu: z, ekler, secenekler });
     }
+    if (tanimlar.length) bolumler.unshift(metotKutulari(tanimlar, { anahtar: 'sihirbaz' }));
     return [
       h('p', { class: 'soluk' }, 'Seçilen metotların alanları. Her alan için varsayılan değer kaynağı seçebilirsiniz; yeni senaryolar bu alanlar dolu açılır (★ servis varsayılanı). Öneriler hazır geldi: giriş bilgisi, tarih ve daha önce başka serviste eşlenmiş alanlar. Boş bırakılanlar senaryoda doldurulur.'),
-      h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin (WSDL\'de sayı ve evet/hayır alanları hep zorunlu, metinler hep isteğe bağlı görünebilir). WSDL\'de olmayan bir alanı tablonun altından ekleyebilirsiniz. Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
+      h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin (WSDL\'de sayı ve evet/hayır alanları hep zorunlu, metinler hep isteğe bağlı görünebilir). WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz. Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
       ...bolumler
     ];
   };

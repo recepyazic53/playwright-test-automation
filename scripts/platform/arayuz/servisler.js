@@ -12,7 +12,7 @@ import { onayIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
 import { servisSihirbazi } from './servis-sihirbazi.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
-import { metotAlanTablosu } from './servis-alanlari.js';
+import { metotKutulari } from './servis-alanlari.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 
@@ -935,11 +935,10 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     } catch (e) { alanMesaji.goster(e.message); }
   });
   const metotKarti = h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Metot alanları'), alanMesaji.kutu,
-    metotlar.length ? h('p', { class: 'soluk kucuk' }, 'WSDL\'den gelen alanlar ve elle eklenenler. Varsayılan değer seçilen alanlar yeni senaryoda dolu açılır; "Zorunlu" iş kuralına göre düzeltilir. WSDL\'de olmayan bir alanı tablonun altından ekleyebilirsiniz.') : null,
-    ...(metotlar.length ? metotlar.map((m) => {
-      const t = metotAlanTablosu({ ad: m.sm.ad, sema: m.sm, varsayilan: m.varsayilan, sabitler: m.sabitler, zorunlu: m.zorunlu, ekler: m.ekler, secenekler });
-      return h('details', { open: metotlar.length <= 2 }, h('summary', {}, h('code', { class: 'duz' }, m.sm.ad), ` — ${alanSatirlari(semaBirlestir(m.sm, m.ekler).alanlar).filter((x) => !x.grup).length} alan`, t.sayac), t.el);
-    }) : [h('p', { class: 'soluk' }, 'Bu servisin metot alan listesi yok. İşlemler sekmesinden "WSDL\'den yeniden al" ile alınabilir.')]),
+    metotlar.length ? h('p', { class: 'soluk kucuk' }, 'WSDL\'den gelen alanlar ve elle eklenenler. Varsayılan değer seçilen alanlar yeni senaryoda dolu açılır; "Zorunlu" iş kuralına göre düzeltilir. WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz.') : null,
+    metotlar.length
+      ? metotKutulari(metotlar.map((m) => ({ ad: m.sm.ad, sema: m.sm, varsayilan: m.varsayilan, sabitler: m.sabitler, zorunlu: m.zorunlu, ekler: m.ekler, secenekler })), { anahtar: `servis:${s.id}` })
+      : h('p', { class: 'soluk' }, 'Bu servisin metot alan listesi yok. İşlemler sekmesinden "WSDL\'den yeniden al" ile alınabilir.'),
     metotlar.length ? h('div', { class: 'dugmeler' }, alanKaydet) : null);
 
   // --- Değer kaynakları: rol başına test verisi profili, tarih kuralları -------------------------------------------------

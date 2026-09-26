@@ -99,7 +99,11 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.getByLabel('Teklif CANLI\'da çağrılmasın')).not.toBeChecked();
     await ileri.click();
 
-    // 3 · Parametreler: giriş bilgisi ve tarih önerileri hazır; CitizenshipNumber test verisine bağlanır.
+    // 3 · Parametreler: her metot bir kutucuk; tıklanan metodun alanları çerçevede açılır.
+    await expect(page.getByRole('button', { name: 'Onayla metodu' })).toBeVisible();
+    await page.getByRole('button', { name: 'Teklif metodu' }).click();
+    await expect(page.getByRole('button', { name: 'Teklif metodu' })).toHaveAttribute('aria-pressed', 'true');
+    // Giriş bilgisi ve tarih önerileri hazır; CitizenshipNumber test verisine bağlanır.
     await expect(page.getByLabel('Teklif Input/Channel varsayılanı')).toHaveValue('CHANNEL');
     await expect(page.getByLabel('Teklif Input/Password varsayılanı')).toHaveValue('PASSWORD');
     await expect(page.getByLabel('Teklif Input/BeginDate varsayılanı')).toHaveValue('BEGIN_DATE');
@@ -192,14 +196,25 @@ test.describe('sihirbaz uçtan uca', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto(`/#/servisler/s/${s.id}/parametreler`);
     await expect(page.getByRole('heading', { name: 'Metot alanları' })).toBeVisible();
+    await page.getByRole('button', { name: 'Teklif metodu' }).click();
     await expect(page.getByLabel('Teklif Input/Channel varsayılanı')).toHaveValue('CHANNEL');
     // Senaryo olmasa da varsayılanlarda geçen parametreler listelenir.
     await expect(page.locator('.kart').filter({ hasText: 'Kullanılan parametreler' })).toContainText('${CHANNEL}');
     await page.getByLabel('Teklif Input/IsSkiing zorunlu').check();
+    // Alan ekleme formu gizli; "+ Alan ekle" açar, eklenince kapanır.
+    await expect(page.getByLabel('Teklif yeni alan yolu')).toBeHidden();
+    await page.getByRole('button', { name: '+ Alan ekle' }).click();
     await page.getByLabel('Teklif yeni alan yolu').fill('Input/EkAlan');
     await page.getByLabel('Teklif yeni alan zorunlu').check();
-    await page.getByRole('button', { name: '+ Alan ekle' }).first().click();
+    await page.getByRole('button', { name: 'Ekle', exact: true }).click();
     await expect(page.locator('.alan-satiri').filter({ hasText: 'EkAlan' })).toContainText('WSDL\'de yok');
+    await expect(page.getByLabel('Teklif yeni alan yolu')).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Teklif metodu' })).toContainText('1 elle eklenen');
+    // Kutucuk kapatılıp açılınca girilenler korunur.
+    await page.getByRole('button', { name: 'Teklif alanlarını kapat' }).click();
+    await expect(page.getByLabel('Teklif Input/IsSkiing zorunlu')).toBeHidden();
+    await page.getByRole('button', { name: 'Teklif metodu' }).click();
+    await expect(page.getByLabel('Teklif Input/IsSkiing zorunlu')).toBeChecked();
     await page.getByRole('button', { name: 'Alanları kaydet' }).click();
     await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar.ekAlanlar).toEqual({ Teklif: [{ yol: 'Input/EkAlan', tip: 'metin' }], Onayla: [] });
     const ayar = (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar;
