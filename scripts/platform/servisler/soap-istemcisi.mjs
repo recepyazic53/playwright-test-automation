@@ -2,6 +2,7 @@
 // Genel motordur: proje/ürün adı içermez. Ağ isteği YALNIZCA çağıran (sunucu uç noktası) istediğinde yapılır.
 import http from 'node:http';
 import https from 'node:https';
+import { wsdlSemalari } from './wsdl-semasi.mjs';
 
 export const VARSAYILAN_ZAMAN_ASIMI_MS = 60_000;
 /** Saklanan yanıt en çok bu kadar karakter tutulur (rapor boyutu). */
@@ -199,7 +200,7 @@ export async function erisimiDenetle(girdi) {
   const y = await httpIstegi({ adres: wsdlAdresi, yontem: 'GET', zamanAsimiMs: girdi.zamanAsimiMs ?? 20_000, tlsDogrulama: girdi.tlsDogrulama });
   if (y.durumKodu < 200 || y.durumKodu >= 300) throw new ServisHatasi(`Servis ${y.durumKodu} döndü (${wsdlAdresi}).`);
   if (!/<(?:\w+:)?definitions\b/.test(y.govde)) throw new ServisHatasi('Yanıt bir WSDL değil (adres ya da yol yanlış olabilir).');
-  return { durumKodu: y.durumKodu, sureMs: y.sureMs, operasyonlar: wsdlOperasyonlari(y.govde) };
+  return { durumKodu: y.durumKodu, sureMs: y.sureMs, operasyonlar: wsdlOperasyonlari(y.govde), semalar: wsdlSemalari(y.govde) };
 }
 
 // ---------------------------------------------------------------------------------------

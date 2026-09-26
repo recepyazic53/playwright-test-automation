@@ -10,6 +10,7 @@
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
+import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi } from './servis-govdesi.mjs';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -379,33 +380,196 @@ function sonucDiyalogu(r) {
 // Senaryo düzenleyici
 // ---------------------------------------------------------------------------------------
 
+const KAYNAK_ETIKETI = { parametre: 'Parametre', sabit: 'Sabit değer', bos: 'Boş gönder', nil: 'Boş (nil)', gonderme: 'Gönderme' };
+const TIP_ETIKETI = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
+const ayniDeger = (a, b) => Boolean(a && b) && a.kaynak === b.kaynak && (a.deger ?? '') === (b.deger ?? '');
+
 async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
-  const p = await api(`/platform/servis/parametreler?projeId=${q(proje.id)}&id=${q(s.id)}`);
-  const { turler } = await api(`/platform/test-verisi-turleri?projeId=${q(proje.id)}`);
+  const [p, { turler }, { profiller: kimlikProfilleri }] = await Promise.all([
+    api(`/platform/servis/parametreler?projeId=${q(proje.id)}&id=${q(s.id)}`),
+    api(`/platform/test-verisi-turleri?projeId=${q(proje.id)}`),
+    api(`/platform/servis-kimlikleri?projeId=${q(proje.id)}`)
+  ]);
   const i = senaryo ? senaryo.icerik : { operasyon: (s.ayarlar.operasyonlar || [])[0]?.ad || '', govde: '', kontroller: [{ tur: 'soapYaniti' }] };
+  const semalar = s.ayarlar.operasyonSemalari || {};
+  const varsayilanlar = JSON.parse(JSON.stringify(s.ayarlar.alanVarsayilanlari || {}));
   const baslik = h('input', { type: 'text', autocomplete: 'off', value: senaryo ? senaryo.baslik : '' });
   const operasyonlar = (s.ayarlar.operasyonlar || []).map((o) => o.ad);
   if (i.operasyon && !operasyonlar.includes(i.operasyon)) operasyonlar.push(i.operasyon);
   const operasyon = h('select', {}, operasyonlar.map((o) => h('option', { value: o, selected: o === i.operasyon }, o)));
   const kapsam = h('select', {}, Object.entries(KAPSAM).map(([k, m]) => h('option', { value: k, selected: (senaryo?.kapsam || 'test') === k }, m)));
   const dahil = h('input', { type: 'checkbox', id: yeniKimlik('dahil'), checked: senaryo ? senaryo.kosuyaDahil : true });
-  const govde = h('textarea', { class: 'kod-alani', rows: 18, spellcheck: 'false', autocomplete: 'off', value: i.govde });
+
+  // --- Kullanılabilir parametreler (alan formundaki "Parametre" seçimi) ---
+  const kimlikAlanlari = (kimlikProfilleri.find((x) => x.ad === s.ayarlar.kimlikProfili)?.alanlar) || p.parametreler.filter((x) => x.kaynak.tur === 'kimlik').map((x) => x.ad);
+  const parametreGruplari = [
+    ['Test verisi', turler.flatMap((t) => t.alanlar.flatMap((a) => (a.servisParametreleri || []).map((sp) => [sp.ad, `${sp.ad} — ${t.ad}.${a.etiket || a.ad} (${sp.rol})`])))],
+    ['Giriş bilgisi', kimlikAlanlari.map((a) => [a, `${a} — giriş profili`])],
+    ['Tarih kuralı', Object.entries(s.ayarlar.tarihKurallari || {}).map(([a, k]) => [a, `${a} — ${k}`])]
+  ].filter(([, l]) => l.length);
+  const bilinenParametreler = new Set(parametreGruplari.flatMap(([, l]) => l.map(([a]) => a)));
+
+  // --- Durum ---
+  const govde = h('textarea', { class: 'kod-alani', rows: 18, spellcheck: 'false', autocomplete: 'off', 'aria-label': 'İstek gövdesi (SOAP zarfı)' });
   govde.value = i.govde;
-  // Kullanılabilir parametreler: gövdeye ${AD} olarak eklenir.
-  const ekle = (ad) => {
-    const [bas, son] = [govde.selectionStart, govde.selectionEnd];
-    govde.setRangeText(`\${${ad}}`, bas, son, 'end');
-    govde.focus();
+  let mod = 'xml';
+  let degerler = {};
+  const sema = () => semalar[operasyon.value] || null;
+  const govdeUretFormdan = () => govdeUret(sema(), degerler, { soapSurumu: s.ayarlar.soapSurumu });
+  const sekmeKap = h('div', { class: 'segment', role: 'tablist', 'aria-label': 'Gövde görünümü' });
+  const govdeAlani = h('div', {});
+  const uyari = h('div', {});
+
+  const formaGec = (zorla = false) => {
+    const sm = sema();
+    if (!sm) return false;
+    if (!govde.value.trim()) { degerler = baslangicDegerleri(sm, varsayilanlar[operasyon.value]); mod = 'alanlar'; return true; }
+    const c = govdeCoz(govde.value, sm);
+    if (c.uyumsuz.length && !zorla) {
+      yerlestir(uyari, h('div', { class: 'not-kutusu uyari', role: 'status' },
+        h('b', {}, 'Bu gövde alan formunda tam gösterilemiyor: '), c.uyumsuz.slice(0, 6).join(' '), c.uyumsuz.length > 6 ? ` (+${c.uyumsuz.length - 6})` : '',
+        h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { if (formaGec(true)) ciz(); } }, 'Formu yine de kullan (şemada olmayan kısımlar atılır)'))));
+      return false;
+    }
+    degerler = c.degerler;
+    mod = 'alanlar';
+    return true;
   };
-  const cip = (ad, aciklama) => h('button', { type: 'button', class: 'parametre-cipi', title: aciklama, onclick: () => ekle(ad) }, ad);
-  const tarihler = Object.entries(s.ayarlar.tarihKurallari || {});
-  const veri = turler.flatMap((t) => t.alanlar.flatMap((a) => (a.servisParametreleri || []).map((sp) => [sp.ad, `${t.ad}.${a.etiket || a.ad} (${sp.rol})`])));
-  const kimlikler = p.parametreler.filter((x) => x.kaynak.tur === 'kimlik').map((x) => x.ad);
-  const paramPaneli = h('div', { class: 'parametre-paneli' },
-    h('div', { class: 'alt-nav-baslik' }, 'Parametreler (tıkla → ekle)'),
-    kimlikler.length ? h('div', {}, h('div', { class: 'soluk kucuk' }, 'Giriş bilgisi'), ...kimlikler.map((a) => cip(a, 'Giriş bilgisi profilinden'))) : null,
-    tarihler.length ? h('div', {}, h('div', { class: 'soluk kucuk' }, 'Tarih kuralı'), ...tarihler.map(([a, k]) => cip(a, k))) : null,
-    veri.length ? h('div', {}, h('div', { class: 'soluk kucuk' }, 'Test verisi'), ...veri.map(([a, m]) => cip(a, m))) : h('p', { class: 'soluk kucuk' }, 'Test verisi eşlemesi yok (Ayarlar > Test verisi > alan > Servis parametreleri).'));
+
+  const degerKontrolu = (alanT, v, yenile) => {
+    if (v.kaynak === 'parametre') {
+      const sec = h('select', { 'aria-label': `${alanT.ad} parametresi` }, h('option', { value: '' }, '— seçin —'),
+        ...parametreGruplari.map(([g, l]) => h('optgroup', { label: g }, l.map(([a, m]) => h('option', { value: a, selected: v.deger === a }, m)))),
+        v.deger && !bilinenParametreler.has(v.deger) ? h('option', { value: v.deger, selected: true }, `${v.deger} — tanımsız (Parametreler sekmesine bakın)`) : null);
+      sec.addEventListener('change', () => { v.deger = sec.value; yenile(); });
+      return sec;
+    }
+    if (v.kaynak !== 'sabit') return h('span', { class: 'soluk kucuk' }, v.kaynak === 'gonderme' ? 'gövdeye yazılmaz' : v.kaynak === 'bos' ? `<${alanT.ad}/>` : `<${alanT.ad} xsi:nil="true"/>`);
+    const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
+    const guncelle = (deger) => { v.deger = deger; not.textContent = sabitDegerUyarisi(alanT, deger) || ''; yenile(); };
+    let g;
+    if (alanT.secenekler && alanT.secenekler.length) {
+      g = h('select', { 'aria-label': alanT.ad }, h('option', { value: '' }, '—'), alanT.secenekler.map((x) => h('option', { value: x, selected: v.deger === x }, x)));
+    } else if (alanT.tip === 'mantiksal') {
+      g = h('select', { 'aria-label': alanT.ad }, h('option', { value: '' }, '—'), h('option', { value: 'true', selected: v.deger === 'true' }, 'Evet (true)'), h('option', { value: 'false', selected: v.deger === 'false' }, 'Hayır (false)'));
+    } else if (alanT.tip === 'tarih') {
+      g = h('input', { type: 'date', 'aria-label': alanT.ad, value: v.deger || '' });
+    } else if (alanT.tip === 'tarihSaat') {
+      g = h('input', { type: 'datetime-local', step: '1', 'aria-label': alanT.ad, value: (v.deger || '').slice(0, 19) });
+    } else {
+      g = h('input', { type: 'text', inputmode: alanT.tip === 'tamsayi' || alanT.tip === 'ondalik' ? 'decimal' : null,
+        autocomplete: 'off', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '', placeholder: alanT.tip === 'tamsayi' ? 'sayı' : alanT.tip === 'ondalik' ? '0.00' : '' });
+    }
+    g.addEventListener(g.tagName === 'SELECT' ? 'change' : 'input', () => guncelle(g.type === 'datetime-local' && g.value.length === 16 ? `${g.value}:00` : g.value));
+    not.textContent = sabitDegerUyarisi(alanT, v.deger || '') || '';
+    return h('span', { class: 'sabit-deger' }, g, not);
+  };
+
+  const aramaG = h('input', { type: 'search', placeholder: 'Alan ara…', 'aria-label': 'Alan ara' });
+  const yalnizDolu = h('input', { type: 'checkbox', id: yeniKimlik('dolu') });
+  const varsayilanKaydet = async (yol, v, kaldir) => {
+    const op = operasyon.value;
+    if (kaldir) { if (varsayilanlar[op]) delete varsayilanlar[op][yol]; } else (varsayilanlar[op] ??= {})[yol] = { ...v };
+    try {
+      await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, alanVarsayilanlari: varsayilanlar } });
+      s.ayarlar.alanVarsayilanlari = JSON.parse(JSON.stringify(varsayilanlar));
+      bildir(kaldir ? 'Alan varsayılanı kaldırıldı.' : `"${yol.split('/').pop()}" için servis varsayılanı kaydedildi; yeni senaryolar bu değerle açılır.`);
+    } catch (e) { bildir(e.message, 'hata'); }
+  };
+
+  const formCiz = () => {
+    const sm = sema();
+    const tablo = h('div', { class: 'alan-formu', role: 'table', 'aria-label': `${sm.ad} istek alanları` });
+    const ara = aramaG.value.trim().toLocaleLowerCase('tr');
+    const satirlar = alanSatirlari(sm.alanlar);
+    for (const sat of satirlar) {
+      const girinti = `derinlik-${Math.min(sat.derinlik, 6)}`;
+      if (sat.grup) {
+        if (!ara && !yalnizDolu.checked) tablo.append(h('div', { class: `alan-grubu ${girinti}`, role: 'row' }, h('span', { role: 'cell' }, sat.alan.ad)));
+        continue;
+      }
+      const v = degerler[sat.yol] ??= { kaynak: 'gonderme' };
+      if (ara && !sat.yol.toLocaleLowerCase('tr').includes(ara)) continue;
+      if (yalnizDolu.checked && v.kaynak === 'gonderme') continue;
+      const satir = h('div', { class: `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''}`, role: 'row' });
+      const yenile = () => { satirCiz(); };
+      const satirCiz = () => {
+        const kaynak = h('select', { 'aria-label': `${sat.alan.ad} değer kaynağı` }, Object.entries(KAYNAK_ETIKETI).map(([k, m]) => h('option', { value: k, selected: v.kaynak === k }, m)));
+        kaynak.addEventListener('change', () => {
+          v.kaynak = kaynak.value;
+          if (v.kaynak !== 'sabit' && v.kaynak !== 'parametre') delete v.deger;
+          else if (v.kaynak === 'parametre' && !bilinenParametreler.has(v.deger || '')) v.deger = '';
+          satirCiz();
+        });
+        const guncelVarsayilan = (varsayilanlar[operasyon.value] || {})[sat.yol];
+        const pin = h('button', { type: 'button', class: `kucuk-dugme pin ${ayniDeger(guncelVarsayilan, v) ? 'etkin' : ''}`,
+          title: ayniDeger(guncelVarsayilan, v) ? 'Servis varsayılanı (kaldırmak için tıklayın)' : 'Bu değeri servis varsayılanı yap (yeni senaryolar bununla açılır)',
+          'aria-label': `${sat.alan.ad} için servis varsayılanı` }, ayniDeger(guncelVarsayilan, v) ? '★' : '☆');
+        pin.addEventListener('click', async () => { await varsayilanKaydet(sat.yol, v, ayniDeger((varsayilanlar[operasyon.value] || {})[sat.yol], v)); satirCiz(); });
+        satir.className = `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''}`;
+        yerlestir(satir,
+          h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, sat.alan.zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Şemada zorunlu' }, '*') : null,
+            h('span', { class: 'alan-tipi' }, sat.alan.secenekler ? 'liste' : TIP_ETIKETI[sat.alan.tip] || 'metin')),
+          h('span', { role: 'cell' }, kaynak),
+          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, yenile)),
+          h('span', { role: 'cell' }, pin));
+      };
+      satirCiz();
+      tablo.append(satir);
+    }
+    const dolu = Object.values(degerler).filter((v) => v.kaynak !== 'gonderme').length;
+    return h('div', {},
+      h('div', { class: 'alan-formu-ust' }, aramaG, h('label', { class: 'secenek', for: yalnizDolu.id }, yalnizDolu, 'Yalnız gönderilenler'),
+        h('span', { class: 'soluk kucuk' }, `${dolu} / ${satirlar.filter((x) => !x.grup).length} alan gönderiliyor · ★ = servis varsayılanı`)),
+      tablo);
+  };
+  aramaG.addEventListener('input', () => ciz());
+  yalnizDolu.addEventListener('change', () => ciz());
+
+  const semaAl = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('ag'), 'Alan listesini WSDL\'den al');
+  semaAl.addEventListener('click', async () => {
+    const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
+    if (!test) { bildir('Projede TEST ortamı yok.', 'hata'); return; }
+    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    try {
+      const r = await mesgulIken(semaAl, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id } }));
+      bildir(`${r.alanliOperasyonlar.length} operasyonun alan listesi alındı.`);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    } catch (e) { bildir(e.message, 'hata'); }
+  });
+
+  const ciz = () => {
+    const sm = sema();
+    yerlestir(sekmeKap, ...[['alanlar', 'Alanlar'], ['xml', 'Gövde (XML)']].map(([m, e]) => h('button', {
+      type: 'button', role: 'tab', 'aria-selected': mod === m ? 'true' : 'false', disabled: m === 'alanlar' && !sm,
+      title: m === 'alanlar' && !sm ? 'Bu operasyonun alan listesi yok' : null,
+      onclick: () => {
+        if (m === mod) return;
+        if (m === 'xml') { govde.value = govdeUretFormdan(); mod = 'xml'; yerlestir(uyari); ciz(); return; }
+        if (formaGec()) { yerlestir(uyari); ciz(); }
+      }
+    }, e)));
+    if (mod === 'alanlar' && sm) { yerlestir(govdeAlani, formCiz()); return; }
+    yerlestir(govdeAlani,
+      sm ? null : h('div', { class: 'not-kutusu', role: 'status' }, `"${operasyon.value}" operasyonunun alan listesi yok; gövde XML olarak düzenlenir. `, semaAl),
+      h('div', { class: 'govde-duzen' }, alan('İstek gövdesi (SOAP zarfı)', govde, { yardim: 'Parametreler adıyla yazılır: ${SIGORTALI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()));
+  };
+  const parametrePaneli = () => {
+    const ekle = (ad) => { govde.setRangeText(`\${${ad}}`, govde.selectionStart, govde.selectionEnd, 'end'); govde.focus(); };
+    return h('div', { class: 'parametre-paneli' }, h('div', { class: 'alt-nav-baslik' }, 'Parametreler (tıkla → ekle)'),
+      ...parametreGruplari.map(([g, l]) => h('div', {}, h('div', { class: 'soluk kucuk' }, g), ...l.map(([a, m]) => h('button', { type: 'button', class: 'parametre-cipi', title: m, onclick: () => ekle(a) }, a)))),
+      parametreGruplari.length ? null : h('p', { class: 'soluk kucuk' }, 'Tanımlı parametre yok (Ayarlar > Test verisi > alan > Servis parametreleri).'));
+  };
+  operasyon.addEventListener('change', () => {
+    const sm = sema();
+    if (mod === 'alanlar' || !govde.value.trim()) {
+      if (sm) { degerler = baslangicDegerleri(sm, varsayilanlar[operasyon.value]); mod = 'alanlar'; } else { govde.value = ''; mod = 'xml'; }
+    }
+    yerlestir(uyari);
+    ciz();
+  });
+  if (sema() && formaGec()) mod = 'alanlar';
+  ciz();
 
   const kontrolKutusu = h('div', {});
   const kontroller = i.kontroller.map((k) => ({ ...k }));
@@ -427,11 +591,17 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   kontrolCiz();
   const mesaj = mesajKutusu();
-  const icerikAl = () => ({ ...i, operasyon: operasyon.value, govde: govde.value, kontroller: kontroller.map((k) => Object.fromEntries(Object.entries(k).filter(([, v]) => v !== '' && v !== false && v !== undefined))) });
+  const icerikAl = () => ({
+    ...i, operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value,
+    kontroller: kontroller.map((k) => Object.fromEntries(Object.entries(k).filter(([, v]) => v !== '' && v !== false && v !== undefined)))
+  });
+  const eksikParametre = () => mod === 'alanlar' ? Object.entries(degerler).find(([, v]) => v.kaynak === 'parametre' && !v.deger) : null;
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
   kaydet.addEventListener('click', async () => {
     mesaj.temizle();
     if (!baslik.value.trim()) { alanHatasi(baslik, 'Başlık boş olamaz.'); baslik.focus(); return; }
+    const eksik = eksikParametre();
+    if (eksik) { mesaj.goster(`"${eksik[0]}" alanında parametre seçilmedi.`); return; }
     try {
       const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/senaryo/kaydet', { govde: {
         projeId: proje.id, servisId: s.id, id: senaryo?.id, baslik: baslik.value.trim(), kapsam: kapsam.value, kosuyaDahil: dahil.checked, icerik: icerikAl()
@@ -442,14 +612,18 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   });
   const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
   const dene = h('button', { type: 'button', disabled: !test, title: 'Kaydedilmemiş hâliyle TEST ortamında dener; senaryo kaydedilmez' }, ikon('oynat'), 'Dene (TEST)');
-  dene.addEventListener('click', () => deneVeGoster(proje, s, test, { baslik: baslik.value.trim() || 'Taslak', icerik: icerikAl() }, baslik.value.trim() || 'Taslak', dene));
+  dene.addEventListener('click', () => {
+    const eksik = eksikParametre();
+    if (eksik) { mesaj.goster(`"${eksik[0]}" alanında parametre seçilmedi.`); return; }
+    deneVeGoster(proje, s, test, { baslik: baslik.value.trim() || 'Taslak', icerik: icerikAl() }, baslik.value.trim() || 'Taslak', dene);
+  });
   yerlestir(kap, h('div', { class: 'kart form-paneli' },
     h('h3', {}, senaryo ? 'Senaryoyu düzenle' : 'Yeni senaryo'), mesaj.kutu,
     alan('Başlık', baslik, { zorunlu: true }),
     h('div', { class: 'satir-duzen' }, alan('Operasyon', operasyon), alan('Kapsam', kapsam, { yardim: 'Hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' })),
     h('label', { class: 'secenek', for: dahil.id }, dahil, 'Koşuya dahil'),
     i.aciklama ? h('div', { class: 'not-kutusu uyari' }, i.aciklama) : null,
-    h('div', { class: 'govde-duzen' }, alan('İstek gövdesi (SOAP zarfı)', govde, { yardim: 'Parametreler adıyla yazılır: ${SIGORTALI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), paramPaneli),
+    h('fieldset', {}, h('legend', {}, 'İstek'), sekmeKap, uyari, govdeAlani),
     h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu),
     h('div', { class: 'dugmeler' }, kaydet, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
 }
@@ -644,5 +818,30 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       kontrol, h('div', { class: 'dugmeler' }, kaydet)),
+    semaKarti(proje, s, ortamlar),
     h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('cop'), 'Tehlikeli bölge')), sil));
+}
+
+/** Operasyon alan listeleri (WSDL şeması): hangi operasyonların formu var; TEST'ten yeniden alma. */
+function semaKarti(proje, s, ortamlar) {
+  const semalar = s.ayarlar.operasyonSemalari || {};
+  const alanli = Object.values(semalar).filter((x) => x.alanlar.length);
+  const yenile = h('button', { type: 'button' }, ikon('yenile'), 'WSDL\'den yeniden al');
+  yenile.addEventListener('click', async () => {
+    const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
+    if (!test) { bildir('Projede TEST ortamı yok.', 'hata'); return; }
+    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    try {
+      const r = await mesgulIken(yenile, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id } }));
+      bildir(`${r.operasyonSayisi} operasyon, ${r.alanliOperasyonlar.length} tanesinin alan listesi alındı.`);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    } catch (e) { bildir(e.message, 'hata'); }
+  });
+  const varsayilanSayisi = Object.values(s.ayarlar.alanVarsayilanlari || {}).reduce((n, x) => n + Object.keys(x).length, 0);
+  return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Operasyon alan listeleri'), h('span', { class: 'sag' }, yenile)),
+    h('p', { class: 'soluk kucuk' }, 'Senaryo düzenleyicideki alan formu bu listelerden oluşur (WSDL şeması). Servis değiştiyse yeniden alın.'),
+    alanli.length
+      ? h('ul', { class: 'onay-listesi' }, alanli.map((x) => h('li', {}, h('code', { class: 'duz' }, x.ad), ` — ${alanSatirlari(x.alanlar).filter((a) => !a.grup).length} alan`)))
+      : h('p', {}, 'Alan listesi yok; senaryolar XML olarak düzenlenir.'),
+    varsayilanSayisi ? h('p', { class: 'soluk kucuk' }, `${varsayilanSayisi} alan için servis varsayılanı tanımlı (★).`) : null);
 }

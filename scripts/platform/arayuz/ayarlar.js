@@ -4,7 +4,7 @@
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
   adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, mesajKutusu, mesgulIken,
-  onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik
+  onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { aktarimAkisi } from './aktarim.js';
@@ -399,12 +399,87 @@ async function baglamProfilleri(govde, baglam, yenile) {
 // Test verisi türleri ve profilleri
 // ---------------------------------------------------------------------------------------
 
+/** Parametre adından rol tahmini: SIGORTA_ETTIREN_TC → ettiren, SIGORTALI_TC2 → sigortali; bilinmeyen önek → önek; öneksiz → "varsayilan". */
+function rolTahmini(ad) {
+  const on = ad.toUpperCase();
+  if (on.startsWith('SIGORTA_ETTIREN')) return 'ettiren';
+  if (on.startsWith('SIGORTALI')) return 'sigortali';
+  const m = /^([A-Z]+)_/.exec(on);
+  return m ? m[1].toLocaleLowerCase('tr') : 'varsayilan';
+}
+
+/**
+ * Test verisi alanının servis parametreleri: 1) servis seçilir, 2) o servisin senaryolarında geçen parametrelerden biri seçilir
+ * (eşlenmemişler önce; eşli olanın yanında nereye bağlı olduğu yazar) ya da "Elle yaz…", 3) rol (addan tahmin, değiştirilebilir).
+ * Eşleme parametre ADINA göredir: aynı ad (ör. SIGORTALI_TC) tüm servislerde bu alandan dolar.
+ */
+function servisParametreEditoru(proje, baslangic, servisler) {
+  const liste = baslangic.map((x) => ({ ad: x.ad, rol: x.rol || 'varsayilan' }));
+  const cipler = h('div', { class: 'parametre-cipleri' });
+  const servisSec = h('select', { 'aria-label': 'Servis' }, h('option', { value: '' }, servisler.length ? '— servis seçin —' : 'Kayıtlı servis yok'),
+    servisler.map((s) => h('option', { value: s.id }, s.ad)), h('option', { value: '__elle' }, 'Elle yaz…'));
+  const paramSec = h('select', { 'aria-label': 'Parametre', disabled: true }, h('option', { value: '' }, '— önce servis —'));
+  const elle = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'PARAMETRE_ADI', 'aria-label': 'Parametre adı', hidden: true });
+  const rol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'rol', 'aria-label': 'Rol', class: 'rol-girdisi' });
+  const ekle = h('button', { type: 'button', class: 'kucuk-dugme', disabled: true }, '+ Ekle');
+  const hata = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
+  let rolElle = false;
+  const secilenAd = () => (servisSec.value === '__elle' ? elle.value.trim() : paramSec.value);
+  const durumGuncelle = () => { ekle.disabled = !secilenAd(); if (secilenAd() && !rolElle) rol.value = rolTahmini(secilenAd()); };
+  const cipCiz = () => yerlestir(cipler, ...liste.map((x, i) => h('span', { class: 'parametre-cipi sabit' }, x.ad, x.rol !== 'varsayilan' ? h('span', { class: 'soluk' }, ` · ${x.rol}`) : null,
+    h('button', { type: 'button', class: 'cip-kaldir', 'aria-label': `${x.ad} eşlemesini kaldır`, onclick: () => { liste.splice(i, 1); cipCiz(); } }, '×'))),
+    liste.length ? null : h('span', { class: 'soluk kucuk' }, 'Bu alan henüz bir servis parametresine eşli değil.'));
+  servisSec.addEventListener('change', async () => {
+    hata.textContent = '';
+    elle.hidden = servisSec.value !== '__elle';
+    paramSec.hidden = servisSec.value === '__elle';
+    if (!servisSec.value || servisSec.value === '__elle') { paramSec.disabled = true; durumGuncelle(); if (!elle.hidden) elle.focus(); return; }
+    paramSec.disabled = true;
+    yerlestir(paramSec, h('option', { value: '' }, 'Yükleniyor…'));
+    try {
+      const p = await api(`/platform/servis/parametreler?projeId=${encodeURIComponent(proje.id)}&id=${encodeURIComponent(servisSec.value)}`);
+      const adaylar = p.parametreler.filter((x) => x.kaynak.tur === 'veri' || x.kaynak.tur === 'eslenmemis')
+        .sort((a, b) => (a.kaynak.tur === 'eslenmemis' ? 0 : 1) - (b.kaynak.tur === 'eslenmemis' ? 0 : 1) || a.ad.localeCompare(b.ad));
+      yerlestir(paramSec, h('option', { value: '' }, adaylar.length ? '— parametre seçin —' : 'Bu serviste test verisi parametresi yok'),
+        adaylar.map((x) => h('option', { value: x.ad, disabled: liste.some((l) => l.ad === x.ad) },
+          x.kaynak.tur === 'eslenmemis' ? `${x.ad} (eşlenmemiş · ${x.senaryoSayisi} senaryo)` : `${x.ad} → ${x.kaynak.turAd}.${x.kaynak.alanEtiketi || x.kaynak.alan}`)));
+      paramSec.disabled = !adaylar.length;
+    } catch (e) { hata.textContent = e.message; }
+    durumGuncelle();
+  });
+  paramSec.addEventListener('change', durumGuncelle);
+  elle.addEventListener('input', durumGuncelle);
+  rol.addEventListener('input', () => { rolElle = Boolean(rol.value); });
+  ekle.addEventListener('click', () => {
+    const ad = secilenAd();
+    hata.textContent = '';
+    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) { hata.textContent = `Geçersiz parametre adı: "${ad}" (harf ya da "_" ile başlar).`; return; }
+    if (liste.some((x) => x.ad === ad)) { hata.textContent = `"${ad}" zaten ekli.`; return; }
+    const r = rol.value.trim() || 'varsayilan';
+    if (!/^[\p{L}\p{N}_-]{1,40}$/u.test(r)) { hata.textContent = 'Rol yalnız harf, rakam, "_" ve "-" içerebilir.'; return; }
+    liste.push({ ad, rol: r });
+    for (const o of paramSec.options) if (o.value === ad) o.disabled = true;
+    paramSec.value = ''; elle.value = ''; rol.value = ''; rolElle = false;
+    durumGuncelle();
+    cipCiz();
+  });
+  cipCiz();
+  const el = h('div', { class: 'servis-parametre-editoru' },
+    h('div', { class: 'alan-etiketi' }, 'Servis parametreleri'),
+    cipler,
+    h('div', { class: 'servis-parametre-ekle' }, servisSec, paramSec, elle, rol, ekle),
+    hata,
+    h('p', { class: 'soluk kucuk' }, 'Servisi, sonra o servisin senaryolarında geçen parametreyi seçin. Aynı parametre adı tüm servislerde bu alandan dolar. Rol, aynı türün farklı kişileri (sigortalı / ettiren) için ayrı profil seçmeye yarar.'));
+  return { el, deger: () => liste.map((x) => (x.rol && x.rol !== 'varsayilan' ? { ad: x.ad, rol: x.rol } : { ad: x.ad })) };
+}
+
 async function testVerisi(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
-  const [{ turler }, { profiller }, { ortamlar }] = await Promise.all([
+  const [{ turler }, { profiller }, { ortamlar }, servisler] = await Promise.all([
     api(`/platform/test-verisi-turleri?projeId=${encodeURIComponent(proje.id)}`),
     api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
+    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`).then((x) => x.servisler).catch(() => [])
   ]);
   const turFormAlani = h('div', {});
   const profilFormAlani = h('div', {});
@@ -420,17 +495,14 @@ async function testVerisi(govde, baglam, yenile) {
       const etiketG = h('input', { type: 'text', autocomplete: 'off', value: a.etiket === a.ad ? '' : a.etiket });
       const tipG = h('select', {}, TIP_SECENEKLERI.map(([d, m]) => h('option', { value: d, selected: a.tip === d }, m)));
       const hassasG = h('input', { type: 'checkbox', id: yeniKimlik('hassas'), checked: a.hassas !== false });
-      // Servis parametreleri: bu alanın servis gövdelerinde karşılık geldiği adlar ("AD:rol, AD2:rol2"; rol isteğe bağlı).
-      const servisG = h('input', {
-        type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'ör. SIGORTALI_TC:sigortali, SIGORTA_ETTIREN_TC:ettiren',
-        value: (a.servisParametreleri || []).map((sp) => (sp.rol && sp.rol !== 'varsayilan' ? `${sp.ad}:${sp.rol}` : sp.ad)).join(', ')
-      });
-      const s = { adG, etiketG, tipG, hassasG, servisG, el: null };
+      // Servis parametreleri: bu alanın servis gövdelerinde karşılık geldiği adlar (servis seçilir → o servisin parametreleri).
+      const servisP = servisParametreEditoru(proje, a.servisParametreleri || [], servisler);
+      const s = { adG, etiketG, tipG, hassasG, servisP, el: null };
       const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
       hassasG.classList.add('anahtar');
       s.el = h('div', { class: 'tur-alan-satiri' }, alan('Alan adı', adG), alan('Etiket', etiketG), alan('Tip', tipG),
         h('label', { class: 'secenek', for: hassasG.id, title: profilVar ? 'Değiştirirseniz bu türdeki profillerin mevcut değerleri de buna göre şifrelenir/çözülür.' : null }, hassasG, 'Hassas'), kaldir,
-        h('div', { class: 'tur-alan-servis' }, alan('Servis parametreleri', servisG, { yardim: 'Servis gövdesinde ${AD} olarak geçen parametreler. Aynı alan farklı kişiler için kullanılıyorsa rol yazın (AD:rol).' })));
+        h('div', { class: 'tur-alan-servis' }, servisP.el));
       satirlar.push(s);
       kutu.append(s.el);
       return s;
@@ -452,16 +524,11 @@ async function testVerisi(govde, baglam, yenile) {
       if (!ad.value.trim()) { alanHatasi(ad, 'Tür adı boş olamaz.'); ad.focus(); return; }
       const alanlar = [];
       for (const s of satirlar) {
-        alanHatasi(s.adG, ''); alanHatasi(s.servisG, '');
+        alanHatasi(s.adG, '');
         const a = s.adG.value.trim();
         if (!a) { if (s.etiketG.value.trim()) { alanHatasi(s.adG, 'Alan adı boş olamaz.'); s.adG.focus(); return; } continue; }
         if (alanlar.some((x) => x.ad === a)) { alanHatasi(s.adG, 'Bu alan adı tekrar ediyor.'); s.adG.focus(); return; }
-        const servisParametreleri = [];
-        for (const parca of s.servisG.value.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean)) {
-          const [spAd, rol] = parca.split(':').map((x) => x.trim());
-          if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(spAd || '')) { alanHatasi(s.servisG, `Geçersiz parametre adı: "${spAd}" (harf ya da "_" ile başlar).`); s.servisG.focus(); return; }
-          servisParametreleri.push(rol ? { ad: spAd, rol } : { ad: spAd });
-        }
+        const servisParametreleri = s.servisP.deger();
         alanlar.push({ ad: a, etiket: s.etiketG.value.trim() || a, tip: s.tipG.value, hassas: s.hassasG.checked, servisParametreleri });
       }
       if (!alanlar.length) { mesaj.goster('En az bir alan ekleyin.'); return; }

@@ -12,6 +12,8 @@ export interface ServisAyarlari {
   yol?: string; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
   adresler?: Record<string, string>; yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean;
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
+  operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
+  alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
   erisim?: { ortamId: string; zaman: string; durumKodu: number };
 }
 export interface Servis {

@@ -45,6 +45,18 @@ Değer sırası:
 Değeri bulunamayan parametre, nedeniyle birlikte hata verir. Örnek: `SIGORTALI_TC ("Özel kişi" türü, "sigortali" rolü için profil seçilmedi)`.
 Raporda parola ve hassas test verisi maskelenir (`***`).
 
+## Senaryo düzenleyici: alan formu
+
+- Erişim kontrolünde (ve İşlemler > "WSDL'den yeniden al") WSDL şemasından her operasyonun istek alanları alınır: grup, tip (metin / sayı / evet-hayır / tarih / tarih-saat / liste), zorunluluk.
+- Senaryo düzenleyicide **Alanlar** sekmesi: her alan için değer kaynağı — Parametre (test verisi / giriş bilgisi / tarih kuralı listesinden), Sabit değer (tipe göre giriş: evet/hayır, tarih, liste), Boş gönder (`<A/>`), Boş (nil), Gönderme.
+- **★ servis varsayılanı:** bir alanın değeri servis varsayılanı yapılır (ör. `CitizenshipNumber` → `${SIGORTALI_TC}`); yeni senaryolar bu değerlerle açılır.
+- **Gövde (XML)** sekmesi ileri kullanım içindir. Form gövdeyi tam temsil edemezse (şemada olmayan / tekrar eden öğe) neden gösterilir ve XML görünümünde kalınır; veri kaybolmaz.
+- Kaydedilen gövde yine SOAP XML'idir (koşucu, SoapUI aktarımı, raporlar aynı).
+
+## Test verisi eşlemesi (Ayarlar > Test verisi)
+
+Alan satırında **Servis parametreleri**: servis seçilir → o servisin senaryolarında geçen parametrelerden biri seçilir (eşlenmemişler önce) ya da "Elle yaz…"; rol addan tahmin edilir (`SIGORTALI_…` → sigortali, `SIGORTA_ETTIREN_…` → ettiren). Eşleme parametre adına göredir: aynı ad tüm servislerde bu alandan dolar.
+
 ## SoapUI aktarımı
 
 Servis ekle > SoapUI dosyasından. Dosya yalnız okunur, istek atılmaz.

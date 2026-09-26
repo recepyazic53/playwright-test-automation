@@ -47,8 +47,32 @@ export const SOAPUI = `<?xml version="1.0" encoding="UTF-8"?>
 
 // ---- Sahte SOAP sunucusu -----------------------------------------------------------------------------------------------
 
-const WSDL = `<?xml version="1.0"?><wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/">
-  <wsdl:binding name="OrnekServiceSoap"><wsdl:operation name="Teklif"><soap:operation soapAction="Ornek/Teklif" style="document"/></wsdl:operation>
+/** .asmx tarzı WSDL: Teklif'in girdisi kalıtımlı karmaşık tip (Channel / Username tabanda), iç içe grup, liste (enumeration). */
+export const WSDL = `<?xml version="1.0"?><wsdl:definitions xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:s="http://www.w3.org/2001/XMLSchema" xmlns:tns="Ornek" targetNamespace="Ornek">
+  <wsdl:types><s:schema elementFormDefault="qualified" targetNamespace="Ornek">
+    <s:element name="Teklif"><s:complexType><s:sequence><s:element minOccurs="0" maxOccurs="1" name="Input" type="tns:TeklifGirdisi"/></s:sequence></s:complexType></s:element>
+    <s:complexType name="TabanGirdi"><s:sequence>
+      <s:element minOccurs="0" maxOccurs="1" name="Channel" type="s:string"/><s:element minOccurs="0" maxOccurs="1" name="Username" type="s:string"/>
+      <s:element minOccurs="0" maxOccurs="1" name="Password" type="s:string"/></s:sequence></s:complexType>
+    <s:complexType name="TeklifGirdisi"><s:complexContent mixed="false"><s:extension base="tns:TabanGirdi"><s:sequence>
+      <s:element minOccurs="0" maxOccurs="1" name="CitizenshipNumber" type="s:string"/>
+      <s:element minOccurs="1" maxOccurs="1" name="BeginDate" type="s:dateTime"/>
+      <s:element minOccurs="1" maxOccurs="1" name="EndDate" type="s:dateTime"/>
+      <s:element minOccurs="1" maxOccurs="1" name="IsSkiing" nillable="true" type="s:boolean"/>
+      <s:element minOccurs="0" maxOccurs="1" name="CreditCard" type="tns:Kart"/>
+      <s:element minOccurs="1" maxOccurs="1" name="ClientType" type="tns:MusteriTipi"/>
+    </s:sequence></s:extension></s:complexContent></s:complexType>
+    <s:complexType name="Kart"><s:sequence><s:element minOccurs="0" maxOccurs="1" name="CardNumber" type="s:string"/><s:element minOccurs="1" maxOccurs="1" name="Installment" type="s:int"/></s:sequence></s:complexType>
+    <s:simpleType name="MusteriTipi"><s:restriction base="s:string"><s:enumeration value="O"/><s:enumeration value="T"/></s:restriction></s:simpleType>
+    <s:element name="Onayla"><s:complexType><s:sequence><s:element minOccurs="1" maxOccurs="1" name="TeklifNo" type="s:long"/></s:sequence></s:complexType></s:element>
+  </s:schema></wsdl:types>
+  <wsdl:message name="TeklifSoapIn"><wsdl:part name="parameters" element="tns:Teklif"/></wsdl:message>
+  <wsdl:message name="OnaylaSoapIn"><wsdl:part name="parameters" element="tns:Onayla"/></wsdl:message>
+  <wsdl:portType name="OrnekServiceSoap"><wsdl:operation name="Teklif"><wsdl:input message="tns:TeklifSoapIn"/></wsdl:operation>
+    <wsdl:operation name="Onayla"><wsdl:input message="tns:OnaylaSoapIn"/></wsdl:operation></wsdl:portType>
+  <wsdl:binding name="OrnekServiceSoap" type="tns:OrnekServiceSoap"><soap:binding transport="http://schemas.xmlsoap.org/soap/http"/>
+  <wsdl:operation name="Teklif"><soap:operation soapAction="Ornek/Teklif" style="document"/></wsdl:operation>
   <wsdl:operation name="Onayla"><soap:operation soapAction="Ornek/Onayla" style="document"/></wsdl:operation></wsdl:binding></wsdl:definitions>`;
 export const yanit = (durum: string, aciklama: string) => `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><TeklifResponse xmlns="Ornek"><Sonuc><Durum>${durum}</Durum><StatusDescription>${aciklama}</StatusDescription></Sonuc></TeklifResponse></soap:Body></soap:Envelope>`;
 

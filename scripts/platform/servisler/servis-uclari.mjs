@@ -7,7 +7,7 @@ import {
   servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet, servisSenaryosuSil, servisSil
 } from './servis-deposu.mjs';
 import {
-  erisimKontrolu, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
+  erisimKontrolu, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
 } from './servis-islemleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -102,9 +102,15 @@ export const SERVIS_POST_UCLARI = [
       ...(Array.isArray(g.yalnizTestOperasyonlari) ? { yalnizTestOperasyonlari: g.yalnizTestOperasyonlari } : {}),
       ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
       ...(g.durum === 'etkin' || g.durum === 'devre_disi' ? { durum: g.durum } : {}),
+      ...(g.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: g.alanVarsayilanlari } : {}),
       erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
     });
     return { id };
+  }],
+  // WSDL şemasını yeniden al (TEST'e istek; arayüz kullanıcıya sorarak çağırır).
+  ['/platform/servis/sema/yenile', async (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return semaYenile(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, ortamId: kimlik(g.ortamId, 'ortamId') });
   }],
   ['/platform/servis/sil', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
