@@ -150,6 +150,17 @@ window.addEventListener('kasa-kilitli', (olay) => {
   kilitEkrani(0);
 });
 
+// Nöbetçi yeniden başlatıldı (her başlatmada oturum token'ı değişir → bu sekmenin istekleri 401 alır): sekmedeki arayüz
+// kodu eski olabilir ve istekler artık geçmez. Sayfanın üstünde yenileme bandı gösterilir (kendiliğinden yenilenmez: açık
+// formdaki bilgi kullanıcının gözü önünde kalsın).
+window.addEventListener('sunucu-yenilendi', () => {
+  if (document.querySelector('.yenileme-bandi')) return;
+  const bant = h('div', { class: 'yenileme-bandi', role: 'alert' },
+    ikon('yenile'), h('span', {}, h('b', {}, 'Nöbetçi yeniden başlatıldı veya güncellendi. '), 'Bu sekme eski oturumu kullanıyor; devam etmek için sayfayı yenileyin.'),
+    h('button', { type: 'button', class: 'birincil', onclick: () => location.reload() }, 'Sayfayı yenile'));
+  document.body.prepend(bant);
+});
+
 const basHarf = (ad) => (String(ad || '?').trim()[0] || '?').toLocaleUpperCase('tr');
 
 // ---------------------------------------------------------------------------------------
