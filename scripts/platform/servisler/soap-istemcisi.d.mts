@@ -8,11 +8,12 @@ export declare const MASKE: string;
 
 export declare function tarihBicimle(t: Date, bicim: string): string;
 export declare function goreliTarih(ifade: string, simdi: Date): Date;
-export declare function tarihKuraliUygula(kural: string, simdi: Date): string;
+export declare function tarihKuraliUygula(kural: string, simdi: Date, varsayilanBicim?: string): string;
+export declare const VARSAYILAN_TARIH_BICIMI: string;
 export declare function tarihDegeriBicimle(deger: string, bicim: string, ad: string): string;
 export declare function yerTutuculariDoldur(govde: string, baglam: {
   degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string;
-  akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik';
+  akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik'; varsayilanTarihBicimi?: string;
 }): string;
 export declare function kullanilanParametreler(govde: string): string[];
 export declare function kullanilanAkisDegerleri(metin: string): string[];

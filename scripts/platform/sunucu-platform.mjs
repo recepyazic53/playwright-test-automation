@@ -123,6 +123,7 @@
 // (encodeURIComponent ile) gelir; URL'de parola kabul edilmez. Parola/anahtar ASLA loglanmaz,
 // yanıtlarda dönmez.
 
+import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from './ayarlar/kosu-ayarlari.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
@@ -355,13 +356,25 @@ const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
  * kilitliyse boş döner (testler veriyi okuyamaz; koşular kasa açıkken başlatılır).
  * @returns {Record<string, string>}
  */
+/** Koşu ayarları (Ayarlar > Koşu); kasa kilitliyse varsayılanlar. */
+function kosuAyarlari() {
+  return vt && kasaAcikMi(vt) ? kosuAyarlariniOku(vt) : varsayilanKosuAyarlari();
+}
+
+/** Tek koşunun süre limiti (ms): Ayarlar > Koşu; TEST_SUNUCU_SURE_LIMITI_DK yalnızca geliştirme / test için ezer. */
+export function platformKosuSureLimitiMs() {
+  const ezme = Number(process.env.TEST_SUNUCU_SURE_LIMITI_DK);
+  return (ezme > 0 ? ezme : kosuAyarlari().kosuSureLimitiDk) * 60 * 1000;
+}
+
 export function platformTestOrtami() {
   // Alt süreç (Playwright, veri okuyucu, raporlayıcı) AÇIK çalışma alanının veritabanını kullanır (kayıt defterine bakmaz).
   const yol = veritabaniYolu();
   /** @type {Record<string, string>} */
   const alan = yol ? { PLATFORM_VERITABANI: yol } : {};
-  if (!vt || !kasaAcikMi(vt)) return alan;
+  if (!vt || !kasaAcikMi(vt)) return { ...alan, ...kosuOrtamDegiskenleri(varsayilanKosuAyarlari()) };
   try {
+    Object.assign(alan, kosuOrtamDegiskenleri(kosuAyarlariniOku(vt)));
     // Yasak adresler (ayarlar + ortam değişkeni): alt süreçteki koşu koruması (global-setup, model koşucusu) okur.
     const yasak = etkinYasakAdresler(vt);
     return { ...alan, PLATFORM_KASA_ANAHTARI: acikAnahtar(vt).toString('base64url'), ...(yasak.length ? { [YASAK_ADRES_DEGISKENI]: yasak.join(',') } : {}) };
@@ -1289,6 +1302,8 @@ const GET_UCLARI = new Map([
     // Makine adları şifrelidir; kasa açıkken arayüz "kullanici@<makineId>" değerini ada çevirir.
     return { kayitlar, makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad])) };
   }],
+  // Ayarlar > Koşu: tanımlar (form) + kayıtlı değerler.
+  ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
   ['/platform/guvenlik', (db) => ({
     otomatikKilitDakika, enAz: OTOMATIK_KILIT_EN_AZ_DK, enCok: OTOMATIK_KILIT_EN_COK_DK, varsayilan: OTOMATIK_KILIT_VARSAYILAN_DK,
     videoSaklamaGun: videoSaklamaGunu(db), videoSaklamaVarsayilan: VIDEO_SAKLAMA_VARSAYILAN_GUN,
@@ -1405,6 +1420,7 @@ const POST_UCLARI = new Map([
   ['/platform/senaryo/kosuya-dahil', (db, g) => kosuyaDahilAyarla(db, kimlikAl(g.projeId, 'projeId'), g.idler, g.dahil === true)],
   ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
   ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],
+  ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
   ['/platform/guvenlik/kaydet', (db, g) => {
     /** @type {Record<string, unknown>} */
     const yanit = {};

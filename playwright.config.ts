@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { environments, getEnvironmentName } from './tests/support/environments';
 import { kosuListesiHaricDesenleri } from './tests/support/kosu-listesi';
 import { platformHazirOlmali } from './tests/support/platform-veri';
+import { ekranGoruntusuAyari, izAyari, videoAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
 
 // VERİ YALNIZCA PLATFORM VERİTABANINDA (Nöbetçi: veri/platform.db). Veritabanı yoksa ya da proje
 // aktarılmamışsa burada açık bir hata verilir: "Veritabanı hazır değil — Nöbetçi'yi açıp projeyi
@@ -66,7 +67,8 @@ export default defineConfig({
 
   forbidOnly: !!process.env.CI,
 
-  retries: process.env.CI ? 2 : 0,
+  // Yeniden deneme: Ayarlar > Koşu (Nöbetçi ortam değişkeniyle verir); yoksa CI'da 2, diğerlerinde 0.
+  retries: yenidenDenemeAyari(),
 
   workers: process.env.CI ? 1 : undefined,
 
@@ -90,18 +92,11 @@ export default defineConfig({
     // yoksa (ilk koşu, ya da giriş profili tanımlı değil) hiç verilmez, testler kendi login'ini yapar.
     storageState: existsSync(oturumDosyasi) ? oturumDosyasi : undefined,
 
-    // Başarılı koşularda gereksiz artifact üretme; hata incelemesinde videoyu koru.
-    // TEST_SUNUCU_GORUNUR (Nöbetçi'den başlatılan koşularda test-sunucu.mjs
-    // tarafından set edilir) aktifken İSTİSNA: başarılı olsun olmasın her koşuda video
-    // kaydedilir — kullanıcı Nöbetçi'nin koşu panelinde videoyu izleyebilsin
-    // diye. Normal toplu koşularda (npm run test, CI) davranış eskisi gibi kalır.
-    video: process.env.TEST_SUNUCU_GORUNUR ? 'on' : 'retain-on-failure',
-
-    // Sadece hata durumunda otomatik screenshot
-    screenshot: 'only-on-failure',
-
-    // Hata durumunda trace tut
-    trace: 'retain-on-failure'
+    // Video / ekran görüntüsü / iz: kullanıcının kararı (Ayarlar > Koşu > Kayıt; bkz. tests/support/kosu-ayarlari.ts).
+    // Terminal / CI koşusunda: video ve iz yalnız kalan testlerde, ekran görüntüsü yalnız hatada.
+    video: videoAyari(),
+    screenshot: ekranGoruntusuAyari(),
+    trace: izAyari()
   },
 
   projects: [

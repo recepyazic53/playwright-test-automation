@@ -76,11 +76,16 @@ export function tarihDegeriBicimle(deger, bicim, ad) {
   return tarihBicimle(t, bicim);
 }
 
-/** "bugun+1y|yyyy-MM-dd" → tarih metni. @param {string} kural @param {Date} simdi */
-export function tarihKuraliUygula(kural, simdi) {
+/**
+ * "bugun+1y|yyyy-MM-dd" → tarih metni; biçim yoksa varsayilanBicim (Ayarlar > Koşu > Varsayılan tarih biçimi).
+ * @param {string} kural @param {Date} simdi @param {string} [varsayilanBicim]
+ */
+export function tarihKuraliUygula(kural, simdi, varsayilanBicim = VARSAYILAN_TARIH_BICIMI) {
   const [ifade, bicim] = kural.split('|');
-  return tarihBicimle(goreliTarih(ifade, simdi), (bicim ?? "yyyy-MM-dd'T'HH:mm:ss").trim());
+  return tarihBicimle(goreliTarih(ifade, simdi), (bicim ?? varsayilanBicim).trim());
 }
+/** Biçim verilmemiş tarih ifadelerinin varsayılanı (kullanıcı Ayarlar > Koşu'dan değiştirir). */
+export const VARSAYILAN_TARIH_BICIMI = "yyyy-MM-dd'T'HH:mm:ss";
 
 /**
  * Gövdedeki ${AD} başvurularını doldurur: önce tarih kuralı (tarihKurallari[AD]), sonra değer (degerler[AD]; XML için
@@ -89,7 +94,7 @@ export function tarihKuraliUygula(kural, simdi) {
  * satır sonu içeren değer reddedilir).
  * @param {string} govde
  * @param {{ degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string;
- *   akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik' }} baglam
+ *   akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik'; varsayilanTarihBicimi?: string }} baglam
  */
 export function yerTutuculariDoldur(govde, baglam) {
   const simdi = baglam.simdi ?? new Date();
@@ -101,7 +106,7 @@ export function yerTutuculariDoldur(govde, baglam) {
     return v;
   };
   const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, akisAdi, hamAd, degerBicimi) => {
-    if (tarihIfadesi) return tarihKuraliUygula(`${tarihIfadesi}|${bicim ?? "yyyy-MM-dd'T'HH:mm:ss"}`, simdi);
+    if (tarihIfadesi) return tarihKuraliUygula(bicim ? `${tarihIfadesi}|${bicim}` : tarihIfadesi, simdi, baglam.varsayilanTarihBicimi);
     if (akisAdi) {
       const v = baglam.akisDegerleri?.[akisAdi];
       if (v === undefined) { eksik.add(`akis:${akisAdi}`); return ''; }
@@ -109,7 +114,7 @@ export function yerTutuculariDoldur(govde, baglam) {
     }
     const ad = typeof hamAd === 'string' ? hamAd.trim() : hamAd;
     const kural = baglam.tarihKurallari?.[ad];
-    if (kural) return tarihKuraliUygula(kural, simdi);
+    if (kural) return tarihKuraliUygula(kural, simdi, baglam.varsayilanTarihBicimi);
     const d = baglam.degerler[ad];
     if (d === undefined) { eksik.add(ad); return ''; }
     return kacis(degerBicimi ? tarihDegeriBicimle(d, degerBicimi.trim(), ad) : d, ad);

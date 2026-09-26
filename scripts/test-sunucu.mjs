@@ -34,7 +34,7 @@ import { tmpdir } from 'node:os';
 import {
   platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
   platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi,
-  platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu
+  platformKosuSureLimitiMs, platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
@@ -45,10 +45,8 @@ import {
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
 const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
-// Nöbetçi'den başlatılan tek bir koşunun (süreç başladıktan sonra) en fazla ne kadar
-// sürebileceği. En uzun senaryo zaman aşımı 3 dk + giriş; 10 dk güvenli bir üst sınır.
-// Gerekirse .env içinde TEST_SUNUCU_SURE_LIMITI_DK ile değiştirilebilir.
-const KOSU_SURE_LIMITI_MS = (Number(process.env.TEST_SUNUCU_SURE_LIMITI_DK) || 10) * 60 * 1000;
+// Nöbetçi'den başlatılan tek bir koşunun (süreç başladıktan sonra) en fazla ne kadar sürebileceği: kullanıcının kararı
+// (Ayarlar > Koşu > Koşu süre limiti; varsayılan 10 dk). Koşu başlarken okunur.
 // YALNIZCA doğrulama/geliştirme örnekleri için: TEST_SUNUCU_KOSU_KAPALI=1 ise bu sunucu hiçbir
 // Playwright koşusu başlatmaz (▷, Koşuyu başlat, Dene); istek açık bir hatayla reddedilir.
 const KOSU_KAPALI = process.env.TEST_SUNUCU_KOSU_KAPALI === '1';
@@ -776,14 +774,14 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
 
     // Süre limiti: takılan bir koşu (ör. hiç kapanmayan bir pop-up, donan tarayıcı)
     // dashboard'u sonsuza kadar "çalışıyor" durumunda bırakmasın diye, süreç
-    // KOSU_SURE_LIMITI_MS sonunda hâlâ çalışıyorsa zorla kapatılır. Süre, sıra beklerken
+    // Süre limiti sonunda hâlâ çalışıyorsa zorla kapatılır. Süre, sıra beklerken
     // değil süreç gerçekten başladığında işlemeye başlar.
     const sureLimitiZamanlayici = setTimeout(() => {
       if (!calisanSurecler.has(kosuId)) return;
       kayit.zamanAsimi = true;
-      console.log(`\n⏱ [${ortam.toUpperCase()}] "${senaryoAdi}" ${Math.round(KOSU_SURE_LIMITI_MS / 60000)} dakikalık süre limitini aştı, durduruluyor...\n`);
+      console.log(`\n⏱ [${ortam.toUpperCase()}] "${senaryoAdi}" ${Math.round(platformKosuSureLimitiMs() / 60000)} dakikalık süre limitini aştı, durduruluyor...\n`);
       surecAgaciniKapat(kayit);
-    }, KOSU_SURE_LIMITI_MS);
+    }, platformKosuSureLimitiMs());
 
     let sureciBaslatmaHatasi = null;
     alt.on('error', (hata) => {
@@ -820,8 +818,8 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
           cikisKodu: kod,
           sonuc: {
             durum: 'timedOut',
-            sureMs: KOSU_SURE_LIMITI_MS,
-            hataMesaji: `Koşu ${Math.round(KOSU_SURE_LIMITI_MS / 60000)} dakikalık süre limitini aştığı için durduruldu.`
+            sureMs: platformKosuSureLimitiMs(),
+            hataMesaji: `Koşu ${Math.round(platformKosuSureLimitiMs() / 60000)} dakikalık süre limitini aştığı için durduruldu.`
           },
           iptalEdildiMi: false
         });
@@ -1242,7 +1240,7 @@ const dogrudanCalistirildi = process.argv[1] && fileURLToPath(import.meta.url) =
 // olabileceği yenileri hariç) açılışta silinir.
 function artikGeciciSenaryolariTemizle() {
   try {
-    const esik = Date.now() - KOSU_SURE_LIMITI_MS - 60 * 60 * 1000;
+    const esik = Date.now() - platformKosuSureLimitiMs() - 60 * 60 * 1000;
     for (const ad of readdirSync(tmpdir())) {
       if (!ad.startsWith(EK_SENARYO_DOSYA_ON_EKI)) continue;
       const tamYol = join(tmpdir(), ad);

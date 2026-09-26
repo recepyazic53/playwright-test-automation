@@ -17,6 +17,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (acente) senaryoda satır adıyla seçilir.' },
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
+  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı ve varsayılan tarih biçimi. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
 ];
@@ -46,7 +47,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
-    'test-verisi': testVerisi, dosyalar, yedekleme, guvenlik
+    'test-verisi': testVerisi, dosyalar, kosu: kosuAyarlari, yedekleme, guvenlik
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
@@ -552,6 +553,48 @@ async function dosyalar(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 // Güvenlik
 // ---------------------------------------------------------------------------------------
+
+/** Ayarlar > Koşu: tanımlar sunucudan (scripts/platform/ayarlar/kosu-ayarlari.mjs); gruplar hâlinde tek form. */
+async function kosuAyarlari(govde) {
+  const { ayarlar, tanimlar } = await api('/platform/kosu-ayarlari');
+  const mesaj = mesajKutusu();
+  /** @type {Map<string, HTMLElement>} */
+  const girdiler = new Map();
+  const gruplar = [...new Set(tanimlar.map((t) => t.grup))];
+  const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const form = h('form', { class: 'kart form-paneli kosu-ayarlari', novalidate: true, 'aria-label': 'Koşu ayarları' }, mesaj.kutu,
+    ...gruplar.map((g) => h('fieldset', {}, h('legend', {}, g), ...tanimlar.filter((t) => t.grup === g).map((t) => {
+      let girdi;
+      if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
+      else if (t.tur === 'sayi') girdi = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', value: String(ayarlar[t.anahtar]) });
+      else girdi = h('input', { type: 'text', value: String(ayarlar[t.anahtar]), spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi' });
+      girdiler.set(t.anahtar, girdi);
+      const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
+      const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
+      return alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: `${t.aciklama} ${sinir}Varsayılan: ${varsayilan}.` });
+    }))),
+    h('div', { class: 'dugmeler' }, kaydet));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    for (const g of girdiler.values()) alanHatasi(g, '');
+    /** @type {Record<string, string | number>} */
+    const yeni = {};
+    for (const t of tanimlar) {
+      const g = girdiler.get(t.anahtar);
+      if (t.tur === 'sayi') {
+        const n = Number(g.value);
+        if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) { alanHatasi(g, `${t.enAz} ile ${t.enCok} arasında bir tam sayı girin.`); g.focus(); return; }
+        yeni[t.anahtar] = n;
+      } else yeni[t.anahtar] = g.value.trim();
+    }
+    try {
+      await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/kosu-ayarlari/kaydet', { govde: { ayarlar: yeni } }));
+      mesaj.goster('Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.', 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  yerlestir(govde, form);
+}
 
 async function guvenlik(govde, baglam) {
   const ayar = await api('/platform/guvenlik');

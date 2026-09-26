@@ -24,6 +24,7 @@ import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktar
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
+import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -829,6 +830,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   /** @type {string[]} */
   let gizliler = [...(girdi.ekGizliler ?? [])];
   let akisDegerleri = girdi.akisDegerleri;
+  /** Kullanıcının koşu ayarları (servis zaman aşımı, varsayılan tarih biçimi). */
+  const kosu = kosuAyarlariniOku(vt);
   let oturumKullanildi = false;
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
@@ -861,7 +864,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
     const doldurma = {
       degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
-      akisDegerleri
+      akisDegerleri, varsayilanTarihBicimi: kosu.tarihBicimi
     };
     const govde = yerTutuculariDoldur(icerik.govde, doldurma);
     const ekBasliklar = Object.fromEntries(Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]));
@@ -872,7 +875,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     olay('gonderim', 'basladi');
     if (girdi.sinyal?.aborted) throw new ServisHatasi('Kullanıcı durdurdu.');
     const yanit = await soapIstegi({
-      adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
+      adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs ?? kosu.servisZamanAsimiSn * 1000, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
       ekBasliklar, gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
     });
     // Oturum değeri (token) sunucuca reddedildiyse: oturum bir kez yenilenip senaryo yeniden denenir (bu deneme kaydedilmez).
