@@ -89,8 +89,13 @@ export async function sahteSoapSunucusu(): Promise<{ adres: string; istekler: Sa
       istekler.push({ yontem: req.method ?? '', yol: req.url ?? '', eylem: String(req.headers.soapaction ?? ''), govde });
       if (req.method === 'GET' && /\/Servis\/ornek\.asmx\?wsdl$/i.test(req.url ?? '')) { res.writeHead(200, { 'Content-Type': 'text/xml' }); res.end(WSDL); return; }
       if (req.method === 'POST' && (req.url ?? '').startsWith('/Servis/ornek.asmx')) {
-        res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
-        res.end(govde.includes(`<CitizenshipNumber>${SAHTE_TC}</CitizenshipNumber>`) ? yanit('OK', `Kimlik ${SAHTE_TC} kabul`) : yanit('HATA', 'Kimlik geçersiz'));
+        const cevapla = () => {
+          if (res.destroyed) return;
+          res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
+          res.end(govde.includes(`<CitizenshipNumber>${SAHTE_TC}</CitizenshipNumber>`) ? yanit('OK', `Kimlik ${SAHTE_TC} kabul`) : yanit('HATA', 'Kimlik geçersiz'));
+        };
+        // Gövdede "YAVAS" geçerse yanıt 1,5 sn gecikir (canlı panelde "cevap bekleniyor" ve Durdur denenir).
+        if (govde.includes('YAVAS')) setTimeout(cevapla, 1500); else cevapla();
         return;
       }
       res.writeHead(404); res.end('yok');

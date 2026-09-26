@@ -9,6 +9,7 @@ import {
 import {
   erisimKontrolu, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
 } from './servis-islemleri.mjs';
+import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu } from './servis-isleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
@@ -63,7 +64,13 @@ export const SERVIS_GET_UCLARI = [
   ['/platform/servis', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const s = servisAl(db, projeId, q.get('id'));
-    return { servis: servisOzeti(db, s), senaryolar: servisSenaryolariniListele(db, s.id) };
+    // Senaryo başına son sonuç (tabloda "Son sonuç"): koşular en yeniden eskiye gelir, ilk görülen alınır.
+    /** @type {Record<string, { durum: string; baslangic: string; kosuId: string }>} */
+    const sonSonuclar = {};
+    for (const k of servisKosulariniListele(db, { servisId: s.id, sinir: 1000 })) {
+      if (k.senaryoId && !sonSonuclar[k.senaryoId]) sonSonuclar[k.senaryoId] = { durum: k.durum, baslangic: k.baslangic, kosuId: k.id };
+    }
+    return { servis: servisOzeti(db, s), senaryolar: servisSenaryolariniListele(db, s.id), sonSonuclar };
   }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -80,6 +87,8 @@ export const SERVIS_GET_UCLARI = [
     if (!k || k.projeId !== projeId) throw new DepoHatasi('Koşu kaydı bulunamadı.');
     return { kosu: k };
   }],
+  // Canlı panel: arka plandaki koşunun durumu (adımlar, maskeli istek / yanıt).
+  ['/platform/servis/is', (db, q) => ({ is: servisIsiDurumu(kimlik(q.get('projeId'), 'projeId'), kimlik(q.get('id'))) })],
   ['/platform/servis-kimlikleri', (db, q) => ({ profiller: servisKimlikOzeti(db, kimlik(q.get('projeId'), 'projeId')) })]
 ];
 
@@ -159,6 +168,14 @@ export const SERVIS_POST_UCLARI = [
       ...(g.senaryoId ? { senaryoId: senaryoAl(db, projeId, g.senaryoId).id } : { taslak: { baslik: metin(g.baslik) || 'Taslak', icerik: g.icerik } })
     }) };
   }],
+  // Canlı panel: seçilen senaryoları arka planda koşar (hemen döner); durum /platform/servis/is ile sorulur.
+  ['/platform/servis/is/baslat', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const s = servisAl(db, projeId, g.servisId);
+    if (!Array.isArray(g.senaryoIdleri)) throw new DepoHatasi('"senaryoIdleri" bir dizi olmalıdır.');
+    return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), senaryoIdleri: g.senaryoIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'senaryoId')) }) };
+  }],
+  ['/platform/servis/is/durdur', (db, g) => servisIsiDurdur(kimlik(g.projeId, 'projeId'), kimlik(g.id), g.senaryoId ? kimlik(g.senaryoId, 'senaryoId') : undefined)],
   ['/platform/servis/kos', async (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     const s = servisAl(db, projeId, g.servisId);

@@ -112,7 +112,8 @@ export function gizlileriMaskele(metin, gizliler) {
  */
 
 /**
- * @param {{ adres: string; yontem?: 'GET' | 'POST'; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }} istek
+ * @param {{ adres: string; yontem?: 'GET' | 'POST'; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
+ *   sinyal?: AbortSignal; gonderildi?: () => void }} istek  gonderildi: istek gövdesi karşıya yazılınca çağrılır.
  * @returns {Promise<HamYanit>}
  */
 export function httpIstegi(istek) {
@@ -146,8 +147,13 @@ export function httpIstegi(istek) {
     });
     r.on('timeout', () => r.destroy(new ServisHatasi(`Yanıt ${Math.round(zamanAsimi / 1000)} sn içinde gelmedi.`)));
     r.on('error', (e) => red(e instanceof ServisHatasi ? e : new ServisHatasi(`Bağlantı kurulamadı: ${agHatasiMetni(e)}`)));
+    // Durdurma: istek (ya da yanıt beklemesi) kesilir.
+    if (istek.sinyal) {
+      if (istek.sinyal.aborted) { r.destroy(new ServisHatasi('Kullanıcı durdurdu.')); return; }
+      istek.sinyal.addEventListener('abort', () => r.destroy(new ServisHatasi('Kullanıcı durdurdu.')), { once: true });
+    }
     if (govde) r.write(govde);
-    r.end();
+    r.end(() => istek.gonderildi?.());
   });
 }
 
@@ -162,13 +168,15 @@ function agHatasiMetni(e) {
 
 /**
  * SOAP isteği. 1.1: text/xml + SOAPAction; 1.2: application/soap+xml; action=...
- * @param {{ adres: string; eylem?: string; soapSurumu?: '1.1' | '1.2'; govde: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }} istek
+ * @param {{ adres: string; eylem?: string; soapSurumu?: '1.1' | '1.2'; govde: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
+ *   sinyal?: AbortSignal; gonderildi?: () => void }} istek
  */
 export function soapIstegi(istek) {
   const basliklar = istek.soapSurumu === '1.2'
     ? { 'Content-Type': `application/soap+xml; charset=utf-8${istek.eylem ? `; action="${istek.eylem}"` : ''}` }
     : { 'Content-Type': 'text/xml; charset=utf-8', SOAPAction: `"${istek.eylem ?? ''}"` };
-  return httpIstegi({ adres: istek.adres, yontem: 'POST', basliklar, govde: istek.govde, zamanAsimiMs: istek.zamanAsimiMs, tlsDogrulama: istek.tlsDogrulama });
+  return httpIstegi({ adres: istek.adres, yontem: 'POST', basliklar, govde: istek.govde, zamanAsimiMs: istek.zamanAsimiMs, tlsDogrulama: istek.tlsDogrulama,
+    sinyal: istek.sinyal, gonderildi: istek.gonderildi });
 }
 
 // ---------------------------------------------------------------------------------------

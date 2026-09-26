@@ -2055,3 +2055,23 @@ a.satir-baglantisi:hover, a.satir-baglantisi:focus-visible { color: var(--vurgu)
 .kontrol-listesi li > div { display: flex; align-items: center; gap: 4px; }
 .kontrol-listesi .kontrol-listesi { margin: 4px 0 4px 22px; }
 @media (max-width: 800px) { .kontrol-satiri { grid-template-columns: 44px 1fr; } }
+/* Servis senaryoları tablosu: seçim, beklenen, son sonuç, araç çubuğu */
+.tablo-araclari { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.tablo-araclari .satir-ici { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--metin-2); }
+.servis-senaryo-tablosu th.secim, .servis-senaryo-tablosu td.secim { width: 32px; }
+.servis-senaryo-tablosu td.beklenen { max-width: 280px; font: 12px var(--yazi-mono); color: var(--metin-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+a.son-sonuc { text-decoration: none; }
+/* Servis canlı paneli: adım zaman çizelgesi */
+.servis-adimlari { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; }
+.servis-adimlari li { display: flex; align-items: center; gap: 8px; color: var(--metin-2); }
+.servis-adimlari .nokta { width: 10px; height: 10px; border-radius: 50%; background: var(--cizgi-2); flex: 0 0 auto; }
+.servis-adimlari li.suruyor { color: var(--metin); }
+.servis-adimlari li.suruyor .nokta { background: var(--atlanan); box-shadow: 0 0 8px var(--atlanan); animation: nabiz 1s ease-in-out infinite alternate; }
+.servis-adimlari li.tamam .nokta { background: var(--basari); }
+.servis-adimlari li.hata { color: var(--hata); }
+.servis-adimlari li.hata .nokta { background: var(--hata); }
+.servis-adimlari li.bekliyor { color: var(--metin-3); }
+@keyframes nabiz { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .servis-adimlari li.suruyor .nokta { animation: none; } }
+.servis-kosu-paneli .kosu-izleme details { margin-top: 6px; }
+.servis-kosu-paneli .kosu-izleme pre { max-height: 14rem; }

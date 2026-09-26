@@ -575,9 +575,12 @@ export function soapuiAktar(vt, projeId, girdi) {
  * tur 'dene': yalnız test ortamı; kapsam denetlenmez. tur 'kosu': kapsam ortam türüyle uyuşmalı.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string; taslak?: { baslik?: string; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: unknown };
- *   zamanAsimiMs?: number; simdi?: Date }} girdi
+ *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
+ *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void }} girdi
+ *   olay: canlı panel için adım bildirimi (istek / yanıt maskeli). sinyal: durdurma (bekleyen istek kesilir).
  */
 export async function servisSenaryosuCalistir(vt, projeId, girdi) {
+  const olay = girdi.olay ?? (() => undefined);
   const servis = servisGetir(vt, girdi.servisId);
   if (!servis || servis.projeId !== projeId) throw new DepoHatasi('Servis bulunamadı.');
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
@@ -602,7 +605,10 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur };
   /** @type {'basarili' | 'basarisiz' | 'hata'} */
   let durum = 'hata';
+  /** @type {'hazirlik' | 'gonderim' | 'yanit' | 'kontroller'} */
+  let adim = 'hazirlik';
   try {
+    olay('hazirlik', 'basladi');
     const adres = servisAdresi(servis.ayarlar, ortam);
     sonuc.adres = adres;
     const p = parametreDegerleri(vt, projeId, servis, icerik, ortam.id);
@@ -612,9 +618,19 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (ad) => p.eksikNedeni[ad] ?? 'tanımsız'
     });
     sonuc.istek = gizlileriMaskele(govde, gizliler);
-    const yanit = await soapIstegi({ adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs, tlsDogrulama: servis.ayarlar.tlsDogrulama });
+    olay('hazirlik', 'tamam', { adres, istek: sonuc.istek });
+    adim = 'gonderim';
+    olay('gonderim', 'basladi');
+    if (girdi.sinyal?.aborted) throw new ServisHatasi('Kullanıcı durdurdu.');
+    const yanit = await soapIstegi({
+      adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
+      gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
+    });
+    adim = 'kontroller';
+    olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
     const kontroller = kontrolleriDegerlendir(yanit, icerik.kontroller);
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';
+    olay('kontroller', durum === 'basarili' ? 'tamam' : 'hata', { gecen: kontroller.filter((k) => k.gecti).length, toplam: kontroller.length });
     Object.assign(sonuc, {
       durumKodu: yanit.durumKodu, yanitSureMs: yanit.sureMs, kontroller, ozet: gizlileriMaskele(yanitOzeti(yanit.govde), gizliler),
       yanit: gizlileriMaskele(yanit.govde.length > YANIT_SAKLAMA_SINIRI ? `${yanit.govde.slice(0, YANIT_SAKLAMA_SINIRI)}\n…(kırpıldı)` : yanit.govde, gizliler)
@@ -622,6 +638,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   } catch (e) {
     if (!(e instanceof ServisHatasi) && !(e instanceof DepoHatasi)) throw e;
     sonuc.hata = e.message;
+    if (girdi.sinyal?.aborted) sonuc.durduruldu = true;
+    olay(adim, 'hata', { mesaj: e.message });
   }
   const sureMs = Date.now() - bas;
   const kosuId = servisKosusuKaydet(vt, {

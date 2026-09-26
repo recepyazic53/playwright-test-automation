@@ -70,11 +70,12 @@ export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: {
 export interface CalistirmaSonucu {
   kosuId: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; baslik: string;
   operasyon: string; ortam: string; ortamTuru: 'test' | 'canli'; adres?: string; kimlikProfili?: string; istek?: string;
-  durumKodu?: number; yanitSureMs?: number; kontroller?: KontrolSonucu[]; ozet?: string; yanit?: string; hata?: string;
+  durumKodu?: number; yanitSureMs?: number; kontroller?: KontrolSonucu[]; ozet?: string; yanit?: string; hata?: string; durduruldu?: boolean;
 }
 export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string;
-  taslak?: { baslik?: string; kapsam?: ServisKapsami; icerik: unknown }; zamanAsimiMs?: number; simdi?: Date;
+  taslak?: { baslik?: string; kapsam?: ServisKapsami; icerik: unknown }; zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
+  olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
 }): Promise<CalistirmaSonucu>;
 export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number;

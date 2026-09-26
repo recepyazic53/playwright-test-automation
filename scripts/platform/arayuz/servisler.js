@@ -13,6 +13,7 @@ import { urunlerPaneli } from './senaryolar.js';
 import { servisSihirbazi } from './servis-sihirbazi.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotAlanTablosu } from './servis-alanlari.js';
+import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -208,7 +209,7 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   const adres = `#/servisler/s/${q(s.id)}`;
   const sekmeAlani = h('div', {});
   const kosBaslat = h('button', { type: 'button', class: 'birincil' }, ikon('oynat'), 'Koşuyu başlat');
-  kosBaslat.addEventListener('click', () => kosuDiyalogu(proje, s, ortamlar, d.senaryolar, () => { location.hash = `${adres}/raporlar`; window.dispatchEvent(new HashChangeEvent('hashchange')); }));
+  kosBaslat.addEventListener('click', () => kosuDiyalogu(proje, s, ortamlar, d.senaryolar, () => window.dispatchEvent(new HashChangeEvent('hashchange'))));
   const son = s.sonKosu;
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
@@ -237,7 +238,7 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   if (sekme === 'parametreler') { await parametrelerSekmesi(sekmeAlani, proje, s, ortamlar, yenile); return; }
   if (sekme === 'raporlar') { await raporlarSekmesi(sekmeAlani, proje, s, ortamlar, d.senaryolar, altKimlik); return; }
   if (sekme === 'islemler') { islemlerSekmesi(sekmeAlani, proje, s, ortamlar); return; }
-  senaryolarSekmesi(sekmeAlani, proje, s, ortamlar, d.senaryolar, yenile);
+  senaryolarSekmesi(sekmeAlani, proje, s, ortamlar, d.senaryolar, d.sonSonuclar || {}, yenile);
 }
 
 async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
@@ -264,11 +265,8 @@ async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
   tamam.addEventListener('click', async () => {
     if (!hesapla()) return;
     try {
-      const r = await mesgulIken(tamam, 'Koşuyor…', () => api('/platform/servis/kos', { govde: { projeId: proje.id, servisId: s.id, ortamId: ortamSec.value } }));
-      const o = r.kosu.ozet;
-      bildir(`Koşu bitti: ${o.basarili} başarılı, ${o.basarisiz} başarısız, ${o.hata} hata.`, o.basarisiz || o.hata ? 'hata' : 'basari');
+      await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortamSec.value, senaryoIdleri: senaryolar.filter((x) => x.kosuyaDahil).map((x) => x.id), bitti });
       diyalog.close();
-      bitti();
     } catch (e) { yerlestir(sonuc, hataKutusu(e)); }
   });
   document.body.append(diyalog);
@@ -276,12 +274,52 @@ async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
   hesapla();
 }
 
-function senaryolarSekmesi(kap, proje, s, ortamlar, senaryolar, yenile) {
+/** Beklenen: kontrollerin kısa özeti (SOAP zarfı kontrolü dışındaki ilk kontrol + kalan sayı). */
+function beklenenOzeti(kontroller) {
+  const anlamli = kontroller.filter((k) => k.tur !== 'soapYaniti');
+  if (!anlamli.length) return kontroller.length ? 'SOAP yanıtı' : '—';
+  const kisalt = (m) => (m.length > 60 ? `${m.slice(0, 57)}…` : m);
+  const tek = (k) => k.tur === 'icerir' ? `"${kisalt(k.deger || '')}"` : k.tur === 'icermez' ? `içermez "${kisalt(k.deger || '')}"`
+    : k.tur === 'xpathEsit' ? `${k.xpath} = ${kisalt(k.deger || '')}` : k.tur === 'durumKodu' ? `HTTP ${k.deger}`
+      : k.tur === 'soapHatasi' ? 'SOAP hatası (Fault)' : k.tur === 'soapHatasiYok' ? 'SOAP hatası yok'
+        : k.tur === 'veya' ? `biri: ${(k.alt || []).map(tek).join(' | ')}` : k.tur;
+  return `${tek(anlamli[0])}${anlamli.length > 1 ? ` (+${anlamli.length - 1})` : ''}`;
+}
+
+function senaryolarSekmesi(kap, proje, s, ortamlar, senaryolar, sonSonuclar, yenile) {
   if (!senaryolar.length) {
     yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin ya da SoapUI dosyasından aktarın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }));
     return;
   }
-  const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
+  const secim = new Set();
+  // Çalıştırma ortamı (▷ ve "Seçilenleri çalıştır"): varsayılan TEST.
+  const ortamSec = h('select', { 'aria-label': 'Çalıştırma ortamı' }, [...ortamlar].sort((a, b) => Number(a.canli) - Number(b.canli))
+    .map((o) => h('option', { value: o.id, selected: !o.canli && o.varsayilan }, ortamEtiketi(o))));
+  const calistir = async (idler, dugme) => {
+    const ortam = ortamlar.find((o) => o.id === ortamSec.value);
+    if (!ortam) return;
+    if (ortam.canli && !(await onayIste({ baslik: 'CANLI ortamda koşulsun mu?', metin: `${idler.length} senaryo ${ortam.ad} ortamında koşacak. CANLI'da çağrılmayan metotlar ve kapsamı uymayan senaryolar atlanır.`, dugme: 'Koş', tehlikeli: true }))) return;
+    dugme.disabled = true;
+    try {
+      await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, senaryoIdleri: idler, bitti: yenile });
+    } catch (e) { bildir(e.message, 'hata'); } finally { dugme.disabled = false; }
+  };
+  const seciliDugme = h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: true }, ikon('oynat'), 'Seçilenleri çalıştır');
+  seciliDugme.addEventListener('click', () => calistir(senaryolar.filter((x) => secim.has(x.id)).map((x) => x.id), seciliDugme));
+  const tumunuSec = h('input', { type: 'checkbox', 'aria-label': 'Tümünü seç' });
+  const secimGuncelle = () => {
+    seciliDugme.disabled = !secim.size;
+    yerlestir(seciliDugme, ikon('oynat'), secim.size ? `Seçilenleri çalıştır (${secim.size})` : 'Seçilenleri çalıştır');
+    tumunuSec.checked = secim.size === senaryolar.length;
+    tumunuSec.indeterminate = secim.size > 0 && secim.size < senaryolar.length;
+  };
+  const kutular = [];
+  tumunuSec.addEventListener('change', () => {
+    for (const x of senaryolar) tumunuSec.checked ? secim.add(x.id) : secim.delete(x.id);
+    for (const k of kutular) k.checked = tumunuSec.checked;
+    secimGuncelle();
+  });
+
   /** Koşuya dahil / hariç: sunucuya yazılır; hata olursa anahtar eski hâline döner. */
   const kosuyaDahilEt = async (liste, dahil, anahtar) => {
     anahtar.disabled = true;
@@ -305,28 +343,39 @@ function senaryolarSekmesi(kap, proje, s, ortamlar, senaryolar, yenile) {
   };
   tumuKosuda.addEventListener('change', () => kosuyaDahilEt(senaryolar.filter((x) => x.kosuyaDahil !== tumuKosuda.checked), tumuKosuda.checked, tumuKosuda));
   tumuGuncelle();
-  yerlestir(kap, h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
-    h('thead', {}, h('tr', {}, h('th', {}, '#'), h('th', {}, 'Başlık'), h('th', {}, 'Operasyon'), h('th', {}, 'Kapsam'),
-      h('th', { class: 'kosuda' }, h('label', { class: 'kosuda-baslik' }, tumuKosuda, 'Koşuda')), h('th', {}, 'Kontrol'), h('th', {}, ''))),
-    h('tbody', {}, senaryolar.map((x, i) => {
-      const kosuda = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: x.kosuyaDahil, 'aria-label': `Koşuda: ${x.baslik}` });
-      kosuda.addEventListener('change', () => kosuyaDahilEt([x], kosuda.checked, kosuda));
-      const dene = h('button', { type: 'button', class: 'kucuk-dugme', disabled: !test, title: test ? `TEST'te dene (${test.ad})` : 'TEST ortamı yok' }, ikon('oynat'), 'Dene');
-      dene.addEventListener('click', () => deneVeGoster(proje, s, test, { senaryoId: x.id }, x.baslik, dene));
-      const sil = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${x.baslik} senaryosunu sil` }, ikon('cop'));
-      sil.addEventListener('click', async () => {
-        if (!(await onayIste({ baslik: 'Senaryo silinsin mi?', metin: x.baslik, dugme: 'Sil', tehlikeli: true }))) return;
-        try { await api('/platform/servis/senaryo/sil', { govde: { projeId: proje.id, id: x.id } }); bildir('Senaryo silindi.'); yenile(); } catch (e) { bildir(e.message, 'hata'); }
-      });
-      return h('tr', {},
-        h('td', { class: 'soluk' }, String(i + 1)),
-        h('td', {}, h('a', { class: 'satir-baglantisi', href: `#/servisler/s/${q(s.id)}/senaryo/${q(x.id)}` }, x.baslik), x.icerik.aciklama ? h('div', { class: 'soluk kucuk' }, x.icerik.aciklama) : null),
-        h('td', {}, h('code', { class: 'duz' }, x.icerik.operasyon)),
-        h('td', {}, rozet(KAPSAM[x.kapsam] || x.kapsam, x.kapsam === 'test' ? '' : 'durdu')),
-        h('td', { class: 'kosuda' }, kosuda),
-        h('td', {}, String(x.icerik.kontroller.length)),
-        h('td', {}, h('div', { class: 'satir-eylemleri' }, dene, sil)));
-    })))));
+  yerlestir(kap,
+    h('div', { class: 'tablo-araclari' }, h('label', { class: 'satir-ici' }, 'Ortam', ortamSec), seciliDugme),
+    h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu servis-senaryo-tablosu' },
+      h('thead', {}, h('tr', {}, h('th', { class: 'secim' }, tumunuSec), h('th', {}, '#'), h('th', {}, 'Başlık'), h('th', {}, 'Operasyon'), h('th', {}, 'Kapsam'),
+        h('th', {}, 'Beklenen'), h('th', {}, 'Son sonuç'),
+        h('th', { class: 'kosuda' }, h('label', { class: 'kosuda-baslik' }, tumuKosuda, 'Koşuda')), h('th', {}, ''))),
+      h('tbody', {}, senaryolar.map((x, i) => {
+        const sec = h('input', { type: 'checkbox', 'aria-label': `Seç: ${x.baslik}`, checked: secim.has(x.id) });
+        kutular.push(sec);
+        sec.addEventListener('change', () => { sec.checked ? secim.add(x.id) : secim.delete(x.id); secimGuncelle(); });
+        const kosuda = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: x.kosuyaDahil, 'aria-label': `Koşuda: ${x.baslik}` });
+        kosuda.addEventListener('change', () => kosuyaDahilEt([x], kosuda.checked, kosuda));
+        const oynat = h('button', { type: 'button', class: 'ikon-dugme oynat-dugmesi', 'aria-label': `Çalıştır: ${x.baslik}`, title: 'Bu senaryoyu seçili ortamda çalıştır (canlı panel)' }, ikon('oynat'));
+        oynat.addEventListener('click', () => calistir([x.id], oynat));
+        const sil = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${x.baslik} senaryosunu sil` }, ikon('cop'));
+        sil.addEventListener('click', async () => {
+          if (!(await onayIste({ baslik: 'Senaryo silinsin mi?', metin: x.baslik, dugme: 'Sil', tehlikeli: true }))) return;
+          try { await api('/platform/servis/senaryo/sil', { govde: { projeId: proje.id, id: x.id } }); bildir('Senaryo silindi.'); yenile(); } catch (e) { bildir(e.message, 'hata'); }
+        });
+        const son = sonSonuclar[x.id];
+        const [etiket, sinif] = son ? DURUM[son.durum] || [son.durum, ''] : [null, ''];
+        return h('tr', {},
+          h('td', { class: 'secim' }, sec),
+          h('td', { class: 'soluk' }, String(i + 1)),
+          h('td', {}, h('a', { class: 'satir-baglantisi', href: `#/servisler/s/${q(s.id)}/senaryo/${q(x.id)}` }, x.baslik), x.icerik.aciklama ? h('div', { class: 'soluk kucuk' }, x.icerik.aciklama) : null),
+          h('td', {}, h('code', { class: 'duz' }, x.icerik.operasyon)),
+          h('td', {}, rozet(KAPSAM[x.kapsam] || x.kapsam, x.kapsam === 'test' ? '' : 'durdu')),
+          h('td', { class: 'beklenen', title: x.icerik.kontroller.map((k) => k.deger || k.tur).join(' · ') }, beklenenOzeti(x.icerik.kontroller)),
+          h('td', {}, son ? h('a', { href: `#/servisler/s/${q(s.id)}/raporlar/${q(son.kosuId)}`, title: tarihMetni(son.baslangic), class: 'son-sonuc' }, rozet(etiket, sinif)) : h('span', { class: 'soluk' }, '—')),
+          h('td', { class: 'kosuda' }, kosuda),
+          h('td', {}, h('div', { class: 'satir-eylemleri' }, oynat, sil)));
+      })))));
+  secimGuncelle();
 }
 
 /** Dene: onay sorulur (TEST ortamı + adres), sonuç diyalogda gösterilir. */

@@ -255,6 +255,63 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
+  test('canlı koşu işi: adımlar sırayla bildirilir, istek / yanıt tutulur; bekleyen istek Durdur ile kesilir', async () => {
+    test.setTimeout(60_000);
+    const kaydet = async (baslik: string, govde: string) => String((await basarili('/platform/servis/senaryo/kaydet', {
+      projeId, servisId, baslik, icerik: { operasyon: 'Teklif', govde, kontroller: [{ tur: 'soapYaniti' }] } })).id);
+    const hizli = await kaydet('Hızlı', '<a/>');
+    const yavas = await kaydet('Yavaş', '<a>YAVAS</a>');
+    const { is } = await basarili('/platform/servis/is/baslat', { projeId, servisId, ortamId: testOrtami, senaryoIdleri: [hizli, yavas] });
+    const durum = async () => (await basarili(`/platform/servis/is?projeId=${projeId}&id=${is.id}`)).is as Nesne;
+    // Yavaş senaryo cevap beklerken durdurulur.
+    await expect.poll(async () => (await durum()).satirlar[1].olaylar.map((o: Nesne) => `${o.adim}:${o.durum}`), { timeout: 10_000 }).toContain('yanit:basladi');
+    await basarili('/platform/servis/is/durdur', { projeId, id: is.id, senaryoId: yavas });
+    await expect.poll(async () => (await durum()).bitti, { timeout: 10_000 }).toBe(true);
+    const son = await durum();
+    expect(son.satirlar[0]).toMatchObject({ baslik: 'Hızlı', durum: 'basarili' });
+    expect(son.satirlar[0].olaylar.map((o: Nesne) => `${o.adim}:${o.durum}`)).toEqual([
+      'hazirlik:basladi', 'hazirlik:tamam', 'gonderim:basladi', 'gonderim:tamam', 'yanit:basladi', 'yanit:tamam', 'kontroller:tamam']);
+    expect(son.satirlar[0].istek).toContain('<a/>');
+    expect(son.satirlar[0].yanit).toContain('<Durum>HATA</Durum>');
+    expect(son.satirlar[1]).toMatchObject({ baslik: 'Yavaş', durum: 'durduruldu' });
+    expect(son.satirlar[1].olaylar.at(-1)).toMatchObject({ adim: 'yanit', durum: 'hata', bilgi: { mesaj: 'Kullanıcı durdurdu.' } });
+    // Sonuçlar raporlara da yazıldı; senaryonun son sonucu servis yanıtında.
+    const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
+    expect(d.sonSonuclar[hizli]).toMatchObject({ durum: 'basarili' });
+    expect(d.sonSonuclar[yavas]).toMatchObject({ durum: 'hata' });
+  });
+
+  test('arayüz: yeşil ▷ canlı paneli açar (adımlar, istek / yanıt); çoklu seçimle çalıştırma; Beklenen ve Son sonuç sütunları', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}`);
+    const satir = (baslik: string) => page.locator('.servis-senaryo-tablosu tbody tr').filter({ has: page.getByRole('link', { name: baslik, exact: true }) });
+    await expect(satir('VEYA senaryosu').locator('td.beklenen')).toContainText('biri: "<Durum>HATA</Durum>" | "<Durum>OK</Durum>"');
+    await expect(satir('Hızlı').locator('td').nth(6)).toContainText('Başarılı');
+    // ▷ → canlı panel: adımlar ve yanıt.
+    await satir('Yavaş').getByRole('button', { name: 'Çalıştır: Yavaş' }).click();
+    const panel = page.getByRole('region', { name: 'Servis koşu paneli' });
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.servis-adimlari li.suruyor')).toContainText('Cevap bekleniyor');
+    await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
+    await expect(panel.locator('.servis-adimlari')).toContainText('Cevap geldi (HTTP 200');
+    await panel.getByText('Yanıt (HTTP 200)').click();
+    await expect(panel.locator('pre').last()).toContainText('<Durum>HATA</Durum>');
+    await panel.getByRole('button', { name: 'Paneli kapat' }).click();
+    await expect(satir('Yavaş').locator('td').nth(6)).toContainText('Başarılı');
+    // Çoklu seçim.
+    await satir('Hızlı').getByLabel('Seç: Hızlı').check();
+    await satir('Formdan senaryo').getByLabel('Seç: Formdan senaryo').check();
+    await page.getByRole('button', { name: 'Seçilenleri çalıştır (2)' }).click();
+    await expect(panel.locator('.kosu-listesi li')).toHaveCount(2);
+    await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
   test('arayüz: senaryolar tablosunda "Koşuda" anahtarı (tek tek ve başlıktan hepsi)', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
