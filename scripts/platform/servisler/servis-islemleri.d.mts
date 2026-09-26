@@ -20,7 +20,11 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   id?: string; anahtar: string; ad: string; yol: string; soapSurumu?: '1.1' | '1.2'; adresler?: Record<string, string>;
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
+  alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
 }): string;
+export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
+  adres: string; durumKodu: number; operasyonSayisi: number; alanliOperasyonlar: string[];
+}>;
 
 export interface ParametreEslemesi { turId: string; turAd: string; alan: string; alanEtiketi: string; rol: string; hassas: boolean }
 export declare function parametreEslemeleri(vt: Veritabani, projeId: string): Map<string, ParametreEslemesi>;

@@ -19,6 +19,7 @@ import {
   servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
 } from './servis-deposu.mjs';
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
+import { KAYNAKLAR } from './servis-govdesi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -30,7 +31,8 @@ export const ERISIM_GECERLILIK_MS = 30 * 60_000;
 /** Giriş bilgisi profilinde gizli sayılan (raporda maskelenen) parametre adları. */
 const GIZLI_KIMLIK_PARAMETRELERI = /pass|parola|sifre|secret|token/i;
 
-/** @typedef {{ adres: string; ortamId: string; projeId: string; zaman: number; durumKodu: number; operasyonlar: { ad: string; eylem?: string }[] }} ErisimKaydi */
+/** @typedef {{ adres: string; ortamId: string; projeId: string; zaman: number; durumKodu: number; operasyonlar: { ad: string; eylem?: string }[];
+ *   semalar: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi> }} ErisimKaydi */
 /** @type {Map<string, ErisimKaydi>} */
 const erisimler = new Map();
 
@@ -95,6 +97,48 @@ export function tarihKurallariniDogrula(kurallar) {
   return s;
 }
 
+/**
+ * Alan varsayılanları: { <operasyon>: { <yol>: { kaynak, deger? } } } — yeni senaryo açılınca alanlar bunlarla dolar.
+ * @param {unknown} v @returns {Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>}
+ */
+function alanVarsayilanlariniDogrula(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanVarsayilanlari" bir nesne olmalıdır.');
+  /** @type {Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>} */
+  const s = {};
+  for (const [op, alanlar] of Object.entries(v)) {
+    if (!alanlar || typeof alanlar !== 'object' || Array.isArray(alanlar)) throw new DepoHatasi(`"${op}" varsayılanları bir nesne olmalıdır.`);
+    for (const [yol, d] of Object.entries(alanlar)) {
+      if (!/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+      if (!d || typeof d !== 'object' || !KAYNAKLAR.includes(d.kaynak)) throw new DepoHatasi(`"${yol}" için geçersiz kaynak.`);
+      if ((d.kaynak === 'sabit' || d.kaynak === 'parametre') && typeof d.deger !== 'string') throw new DepoHatasi(`"${yol}" için değer gerekli.`);
+      (s[op] ??= {})[yol] = d.kaynak === 'sabit' || d.kaynak === 'parametre' ? { kaynak: d.kaynak, deger: d.deger } : { kaynak: d.kaynak };
+    }
+  }
+  return s;
+}
+
+/**
+ * WSDL'i yeniden alıp operasyon listesini ve alan şemalarını günceller (yalnız test ortamı; adres değişmez).
+ * @param {Veritabani} vt @param {string} projeId @param {{ servisId: string; ortamId: string }} girdi
+ */
+export async function semaYenile(vt, projeId, girdi) {
+  const servis = servisGetir(vt, girdi.servisId);
+  if (!servis || servis.projeId !== projeId) throw new DepoHatasi('Servis bulunamadı.');
+  const ortam = ortamiAl(vt, projeId, girdi.ortamId);
+  if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('WSDL yalnızca test ortamından alınır.');
+  const adres = servisAdresi(servis.ayarlar, ortam);
+  let s;
+  try { s = await erisimiDenetle({ adres, tlsDogrulama: servis.ayarlar.tlsDogrulama }); } catch (e) {
+    if (e instanceof ServisHatasi) throw new DepoHatasi(e.message);
+    throw e;
+  }
+  servisKaydet(vt, { id: servis.id, projeId, anahtar: servis.anahtar, ad: servis.ad, ayarlar: {
+    ...servis.ayarlar, ...(s.operasyonlar.length ? { operasyonlar: s.operasyonlar } : {}), operasyonSemalari: s.semalar,
+    erisim: { ortamId: ortam.id, zaman: new Date().toISOString(), durumKodu: s.durumKodu }
+  } });
+  return { adres, durumKodu: s.durumKodu, operasyonSayisi: s.operasyonlar.length, alanliOperasyonlar: Object.values(s.semalar).filter((x) => x.alanlar.length).map((x) => x.ad) };
+}
+
 /** Tür + rol için seçilen profiller: { "<turId>:<rol>": profilId }. @param {unknown} secim @returns {Record<string, string>} */
 function veriProfilleriniDogrula(secim) {
   if (secim === undefined || secim === null) return {};
@@ -116,7 +160,7 @@ export async function erisimKontrolu(vt, projeId, girdi) {
     const s = await erisimiDenetle({ adres, tlsDogrulama: girdi.tlsDogrulama });
     const erisimKimligi = randomUUID();
     for (const [k, e] of erisimler) if (Date.now() - e.zaman > ERISIM_GECERLILIK_MS) erisimler.delete(k);
-    erisimler.set(erisimKimligi, { adres, ortamId: ortam.id, projeId, zaman: Date.now(), durumKodu: s.durumKodu, operasyonlar: s.operasyonlar });
+    erisimler.set(erisimKimligi, { adres, ortamId: ortam.id, projeId, zaman: Date.now(), durumKodu: s.durumKodu, operasyonlar: s.operasyonlar, semalar: s.semalar });
     return { erisilebilir: true, erisimKimligi, adres, ortam: ortam.ad, durumKodu: s.durumKodu, sureMs: s.sureMs, operasyonlar: s.operasyonlar };
   } catch (e) {
     if (e instanceof ServisHatasi) return { erisilebilir: false, adres, ortam: ortam.ad, mesaj: e.message };
@@ -141,7 +185,8 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ id?: string; anahtar: string; ad: string; yol: string; soapSurumu?: '1.1' | '1.2'; adresler?: Record<string, string>;
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
- *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string }} girdi
+ *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
+ *   alanVarsayilanlari?: unknown }} girdi
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -156,12 +201,14 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.tarihKurallari !== undefined ? { tarihKurallari: tarihKurallariniDogrula(girdi.tarihKurallari) } : {}),
     ...(girdi.veriProfilleri !== undefined ? { veriProfilleri: veriProfilleriniDogrula(girdi.veriProfilleri) } : {}),
     ...(girdi.yalnizTestOperasyonlari !== undefined ? { yalnizTestOperasyonlari: girdi.yalnizTestOperasyonlari.filter((x) => typeof x === 'string' && x) } : {}),
-    ...(girdi.tlsDogrulama !== undefined ? { tlsDogrulama: girdi.tlsDogrulama } : {})
+    ...(girdi.tlsDogrulama !== undefined ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
+    ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {})
   };
   if (adresDegisti) {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler }, o), vt);
     ayarlar.erisim = { ortamId: e.ortamId, zaman: new Date(e.zaman).toISOString(), durumKodu: e.durumKodu };
     if (e.operasyonlar.length) ayarlar.operasyonlar = e.operasyonlar;
+    if (Object.keys(e.semalar).length) ayarlar.operasyonSemalari = e.semalar;
   }
   return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
 }

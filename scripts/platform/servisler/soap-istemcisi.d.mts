@@ -25,7 +25,7 @@ export declare function soapIstegi(istek: {
 }): Promise<HamYanit>;
 export declare function wsdlOperasyonlari(wsdl: string): { ad: string; eylem?: string }[];
 export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }): Promise<{
-  durumKodu: number; sureMs: number; operasyonlar: { ad: string; eylem?: string }[];
+  durumKodu: number; sureMs: number; operasyonlar: { ad: string; eylem?: string }[]; semalar: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
 }>;
 
 export interface XmlDugumu { ad: string; cocuklar: XmlDugumu[]; metin: string }
