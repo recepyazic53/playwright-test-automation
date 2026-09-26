@@ -77,7 +77,7 @@ export interface CalistirmaSonucu {
   oturum?: { akis: string; durum: 'alindi' | 'onbellek' | 'yenilendi' };
 }
 export interface AkisOkumasi { ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
-export declare function okumaGizliMi(o: AkisOkumasi): boolean;
+export declare function okumaGizliMi(o: AkisOkumasi, ekler?: ReadonlyArray<string>): boolean;
 export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string;
   taslak?: { baslik?: string; kapsam?: ServisKapsami; icerik: unknown }; zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;

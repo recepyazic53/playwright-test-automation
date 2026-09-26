@@ -19,7 +19,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı ve varsayılan tarih biçimi. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
-  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
+  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
 ];
 
 const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
@@ -596,8 +596,33 @@ async function kosuAyarlari(govde) {
   yerlestir(govde, form);
 }
 
+/** Güvenlik > Maskeleme: çekirdek liste (salt okunur) + kullanıcının ek gizli adları (her satıra bir ad). */
+async function maskelemeKarti() {
+  const { cekirdek, ekAdlar } = await api('/platform/maskeleme');
+  const liste = h('textarea', { rows: '4', spellcheck: 'false', autocomplete: 'off', class: 'kod-alani', placeholder: 'musteriAnahtari' });
+  liste.value = ekAdlar.join('\n');
+  const mesaj = mesajKutusu();
+  const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const form = h('form', { class: 'kart', novalidate: true, 'aria-label': 'Maskeleme' }, h('h3', {}, ikon('goz'), 'Maskeleme'),
+    h('p', { class: 'soluk' }, 'Adı bu listede geçen alanların, başlıkların ve servis okumalarının değerleri raporlarda maskelenir, sayfa paketlerinde reddedilir. Çekirdek liste güvenlik gereği değiştirilemez; kendi adlarınızı ekleyebilirsiniz.'),
+    h('p', { class: 'kucuk' }, h('b', {}, 'Çekirdek: '), cekirdek.join(', ')),
+    mesaj.kutu,
+    alan('Ek gizli adlar (her satıra bir ad)', liste, { yardim: 'Harf, rakam, "-", "_"; 2–40 karakter. Büyük/küçük harf ve "-", "_" yok sayılır (ör. musteriAnahtari → Musteri_Anahtari da gizli).' }),
+    h('div', { class: 'dugmeler' }, kaydet));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    try {
+      const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/maskeleme/kaydet', { govde: { ekAdlar: liste.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) } }));
+      liste.value = r.ekAdlar.join('\n');
+      mesaj.goster(`${r.ekAdlar.length} ek ad kaydedildi.`, 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return form;
+}
+
 async function guvenlik(govde, baglam) {
-  const ayar = await api('/platform/guvenlik');
+  const [ayar, maskeleme] = await Promise.all([api('/platform/guvenlik'), maskelemeKarti()]);
   const dakika = h('input', { type: 'number', min: String(ayar.enAz), max: String(ayar.enCok), step: '1', value: String(ayar.otomatikKilitDakika), inputmode: 'numeric' });
   const kilitMesaj = mesajKutusu();
   const kilitKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
@@ -706,6 +731,7 @@ async function guvenlik(govde, baglam) {
     h('p', { class: 'soluk', style: { margin: '0' } }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.')),
     h('div', { class: 'ayar-izgarasi' }, kilitForm, saklamaForm),
     yasakForm,
+    maskeleme,
     tasimaKarti,
     form);
 }

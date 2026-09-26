@@ -25,6 +25,8 @@ import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govd
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -37,7 +39,6 @@ const ALAN_YOLU = /^[\p{L}_][\p{L}\p{N}_.-]*(\/[\p{L}_][\p{L}\p{N}_.-]*)*$/u;
 /** Başarılı erişim kontrolünün geçerlilik süresi (bu sürede "Kaydet" yapılmalı). */
 export const ERISIM_GECERLILIK_MS = 30 * 60_000;
 /** Giriş bilgisi profilinde gizli sayılan (raporda maskelenen) parametre adları. */
-const GIZLI_KIMLIK_PARAMETRELERI = /pass|parola|sifre|secret|token/i;
 
 /** @typedef {{ adres: string; ortamId: string; projeId: string; zaman: number; durumKodu: number; operasyonlar: { ad: string; eylem?: string }[];
  *   semalar: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi> }} ErisimKaydi */
@@ -498,7 +499,7 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     }
     if (kimlik[ad] !== undefined) {
       degerler[ad] = kimlik[ad];
-      if (GIZLI_KIMLIK_PARAMETRELERI.test(ad)) gizliler.push(kimlik[ad]);
+      if (gizliAdMi(ad, ekGizliAdlar(vt))) gizliler.push(kimlik[ad]);
       continue;
     }
     const e = eslemeler.get(ad);
@@ -832,6 +833,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   let akisDegerleri = girdi.akisDegerleri;
   /** Kullanıcının koşu ayarları (servis zaman aşımı, varsayılan tarih biçimi). */
   const kosu = kosuAyarlariniOku(vt);
+  /** Kullanıcının ek gizli adları (Ayarlar > Güvenlik > Maskeleme). */
+  const ekAdlar = ekGizliAdlar(vt);
   let oturumKullanildi = false;
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
@@ -869,7 +872,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const govde = yerTutuculariDoldur(icerik.govde, doldurma);
     const ekBasliklar = Object.fromEntries(Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]));
     sonuc.istek = gizlileriMaskele(govde, gizliler);
-    if (Object.keys(ekBasliklar).length) sonuc.istekBasliklari = basliklariMaskele(ekBasliklar, gizliler);
+    if (Object.keys(ekBasliklar).length) sonuc.istekBasliklari = basliklariMaskele(ekBasliklar, gizliler, ekAdlar);
     olay('hazirlik', 'tamam', { adres, istek: sonuc.istek });
     adim = 'gonderim';
     olay('gonderim', 'basladi');
@@ -893,8 +896,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
         continue;
       }
       okunan[o.ad] = v;
-      if (okumaGizliMi(o)) gizliler.push(v);
-      okumaSonuclari.push({ tur: 'okuma', ad: `Değer okundu: ${o.ad}`, gecti: true, aciklama: okumaGizliMi(o) ? 'gizli (maskelendi)' : '' });
+      if (okumaGizliMi(o, ekAdlar)) gizliler.push(v);
+      okumaSonuclari.push({ tur: 'okuma', ad: `Değer okundu: ${o.ad}`, gecti: true, aciklama: okumaGizliMi(o, ekAdlar) ? 'gizli (maskelendi)' : '' });
     }
     olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
     // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki TeklifNo = önceki adımda okunan) çözülür.
@@ -902,7 +905,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi), ...okumaSonuclari];
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';
     if (Object.keys(okunan).length) {
-      sonuc.okunanlar = Object.fromEntries((girdi.okumalar ?? []).filter((o) => okunan[o.ad] !== undefined).map((o) => [o.ad, okumaGizliMi(o) ? MASKE : okunan[o.ad]]));
+      sonuc.okunanlar = Object.fromEntries((girdi.okumalar ?? []).filter((o) => okunan[o.ad] !== undefined).map((o) => [o.ad, okumaGizliMi(o, ekAdlar) ? MASKE : okunan[o.ad]]));
     }
     olay('kontroller', durum === 'basarili' ? 'tamam' : 'hata', { gecen: kontroller.filter((k) => k.gecti).length, toplam: kontroller.length });
     Object.assign(sonuc, {
@@ -931,16 +934,17 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
  * @typedef {{ ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }} AkisOkumasi
  */
 
-const GIZLI_OKUMA_ADI = /token|pass|parola|şifre|sifre|secret|session|cookie|auth/i;
-/** @param {AkisOkumasi} o */
-export const okumaGizliMi = (o) => (o.gizli !== undefined ? o.gizli : GIZLI_OKUMA_ADI.test(o.ad));
+/** Okuma gizli mi: açıkça işaretlendiyse o; yoksa adı gizli ad listesinde mi (çekirdek + kullanıcının ekleri). @param {AkisOkumasi} o @param {ReadonlyArray<string>} [ekler] */
+export const okumaGizliMi = (o, ekler = []) => (o.gizli !== undefined ? o.gizli : gizliAdMi(o.ad, ekler));
 
-/** Kimlik taşıyan başlıklar raporda her zaman maskelenir (şema kalır: "Bearer ***"). */
-const KIMLIK_BASLIKLARI = new Set(['authorization', 'proxy-authorization', 'cookie', 'x-api-key', 'x-auth-token']);
-/** @param {Record<string, string>} b @param {string[]} gizliler */
-function basliklariMaskele(b, gizliler) {
+/**
+ * Adı gizli sayılan başlıklar (Authorization, Cookie, X-Api-Key… ve kullanıcının ek adları) raporda her zaman maskelenir (şema
+ * kalır: "Bearer ***"); diğerlerinde yalnız gizli değerler maskelenir.
+ * @param {Record<string, string>} b @param {string[]} gizliler @param {ReadonlyArray<string>} ekler
+ */
+function basliklariMaskele(b, gizliler, ekler) {
   return Object.fromEntries(Object.entries(b).map(([a, d]) => {
-    if (!KIMLIK_BASLIKLARI.has(a.toLowerCase())) return [a, gizlileriMaskele(d, gizliler)];
+    if (!gizliAdMi(a, ekler)) return [a, gizlileriMaskele(d, gizliler)];
     const sema = /^(Bearer|Basic|Digest|Token)\s+/i.exec(d);
     return [a, sema ? `${sema[1]} ${MASKE}` : MASKE];
   }));

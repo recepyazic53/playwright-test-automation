@@ -13,6 +13,7 @@
 
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { senaryoyuDogrula, tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
+import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
 export const SAYFA_PAKETI_TURU = 'sayfa-paketi';
 export const SAYFA_PAKETI_SURUMU = 1;
@@ -36,18 +37,9 @@ const metinDizisiMi = (d) => Array.isArray(d) && d.every((x) => typeof x === 'st
 
 // ---- Gizli değer taraması -----------------------------------------------------------------
 
-const GIZLI_AD_PARCALARI = new Set(['parola', 'sifre', 'şifre', 'password', 'passwd', 'pwd', 'secret', 'gizli', 'token', 'otp', 'totp', 'cvv', 'cvc', 'pin']);
-/** camelCase / snake_case / kebab-case adı küçük harfli parçalara ayırır. */
-function adParcalari(ad) {
-  return String(ad).replace(/([a-zçğıöşü0-9])([A-ZÇĞİÖŞÜ])/g, '$1 $2').toLocaleLowerCase('tr-TR').split(/[^a-zçğıöşü0-9]+/).filter(Boolean);
-}
-/** Anahtar adı gizli bilgi taşıdığını söylüyor mu? (ör. parola, apiKey, totpGizli, guvenlikKodu) */
-export function gizliAdMi(ad) {
-  const p = adParcalari(ad);
-  if (p.some((x) => GIZLI_AD_PARCALARI.has(x))) return true;
-  const k = new Set(p);
-  return (k.has('api') && k.has('key')) || (k.has('guvenlik') && k.has('kodu')) || (k.has('access') && k.has('key')) || (k.has('private') && k.has('key'));
-}
+// Anahtar adı gizli bilgi taşıdığını söylüyor mu (ör. parola, apiKey, totpGizli, guvenlikKodu): ortak çekirdek liste
+// (ayarlar/gizli-adlar.mjs; paket doğrulaması kullanıcı ayarından bağımsızdır).
+export { gizliAdMi };
 
 function luhnGecerliMi(rakamlar) {
   let toplam = 0;

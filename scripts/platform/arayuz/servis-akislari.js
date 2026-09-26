@@ -6,11 +6,14 @@
 // dolana kadar paylaşılır, 401'de yenilenir). Dene yalnız TEST; canlı koşu yalnız kullanıcı onayıyla. Açık token arayüze gelmez.
 import { alan, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
+import { gizliAdMi } from './gizli-adlar.mjs';
 
 const q = encodeURIComponent;
 const DURUM = { basarili: ['Başarılı', 'basari'], basarisiz: ['Başarısız', 'hata'], hata: ['Hata', 'hata'], atlandi: ['Atlandı', 'durdu'], durduruldu: ['Durduruldu', 'durdu'] };
 const KAYNAK = { xml: 'XML (XPath)', json: 'JSON yolu', baslik: 'Yanıt başlığı' };
-const GIZLI_AD = /token|pass|parola|şifre|sifre|secret|session|cookie|auth/i;
+/** Kullanıcının ek gizli adları (Ayarlar > Güvenlik > Maskeleme); sayfa açılırken alınır. */
+let ekGizliAdlar = [];
+const gizliMi = (ad) => gizliAdMi(ad, ekGizliAdlar);
 const durumRozeti = (d) => rozet(DURUM[d]?.[0] ?? d, DURUM[d]?.[1] ?? '');
 
 /**
@@ -18,6 +21,7 @@ const durumRozeti = (d) => rozet(DURUM[d]?.[0] ?? d, DURUM[d]?.[1] ?? '');
  * @param {() => void} yenile
  */
 export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile) {
+  try { ekGizliAdlar = (await api('/platform/maskeleme')).ekAdlar; } catch { /* çekirdek liste yeter */ }
   if (altKimlik) { await akisDuzenleyici(kap, proje, s, ortamlar, altKimlik === 'yeni' ? null : altKimlik); return; }
   const { akislar } = await api(`/platform/servis-akislari?projeId=${q(proje.id)}`);
   const adres = `#/servisler/s/${q(s.id)}/akislar`;
@@ -123,8 +127,8 @@ async function akisDuzenleyici(kap, proje, s, ortamlar, akisId) {
         const kaynak = h('select', { 'aria-label': `${n + 1}. adım ${k + 1}. okuma kaynağı` }, Object.entries(KAYNAK).map(([d, m]) => h('option', { value: d, selected: (o.kaynak || 'xml') === d }, m)));
         const yol = h('input', { type: 'text', value: o.yol, maxlength: '300', spellcheck: 'false', class: 'kod-girdisi',
           placeholder: o.kaynak === 'json' ? 'veri.token' : o.kaynak === 'baslik' ? 'x-auth-token' : '//Sonuc/Token', 'aria-label': `${n + 1}. adım ${k + 1}. okuma yolu` });
-        const gizli = h('input', { type: 'checkbox', checked: o.gizli ?? GIZLI_AD.test(o.ad), 'aria-label': `${n + 1}. adım ${k + 1}. okuma gizli`, title: 'Gizli: raporlarda maskelenir (token, parola…)' });
-        oad.addEventListener('input', () => { o.ad = oad.value.trim(); if (o.gizli === undefined) gizli.checked = GIZLI_AD.test(o.ad); });
+        const gizli = h('input', { type: 'checkbox', checked: o.gizli ?? gizliMi(o.ad), 'aria-label': `${n + 1}. adım ${k + 1}. okuma gizli`, title: 'Gizli: raporlarda maskelenir (token, parola…)' });
+        oad.addEventListener('input', () => { o.ad = oad.value.trim(); if (o.gizli === undefined) gizli.checked = gizliMi(o.ad); });
         kaynak.addEventListener('change', () => { o.kaynak = kaynak.value; adimlariCiz(); });
         yol.addEventListener('input', () => { o.yol = yol.value; });
         gizli.addEventListener('change', () => { o.gizli = gizli.checked; });
