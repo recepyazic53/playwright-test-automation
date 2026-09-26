@@ -13,8 +13,9 @@ import { metotKutulari } from './servis-alanlari.js';
 
 const ADIMLAR = ['Adresler', 'Metotlar', 'Alanlar', 'Özet'];
 /** Kayıt oluşturan / belge üreten metot adları: "CANLI'da çağrılmasın" işaretli gelir (kullanıcı değiştirebilir). */
-const YALNIZ_TEST_DESENI = /approve|onay|print|basim|cancel|iptal|delete|sil|create|kaydet|save|pay|odeme|purchase|policy|police/i;
-const TARIH_BICIMI = { tarih: 'yyyy-MM-dd', tarihSaat: "yyyy-MM-dd'T'HH:mm:ss" };
+const YALNIZ_TEST_DESENI = /approve|onay|print|basim|cancel|iptal|delete|sil|create|kaydet|save|pay|odeme|purchase|issue/i;
+/** WSDL "date" tipinin zorunlu biçimi; tarih-saat alanlarında biçim yazılmaz → kullanıcının varsayılanı (Ayarlar > Koşu). */
+const XSD_TARIH_BICIMI = 'yyyy-MM-dd';
 
 const temizTaban = (a) => a.trim().replace(/\/+$/, '');
 const birlestir = (taban, yol) => `${temizTaban(taban)}/${yol.replace(/^\/+/, '')}`;
@@ -239,8 +240,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       for (const s of alanSatirlari(sema.alanlar)) {
         const p = v[s.yol];
         if (p !== 'BEGIN_DATE' && p !== 'END_DATE') continue;
-        const bicim = TARIH_BICIMI[s.alan.tip] || TARIH_BICIMI.tarihSaat;
-        k[p] ??= p === 'BEGIN_DATE' ? `bugun|${bicim}` : `bugun+1y|${bicim}`;
+        const bicim = s.alan.tip === 'tarih' ? `|${XSD_TARIH_BICIMI}` : '';
+        k[p] ??= p === 'BEGIN_DATE' ? `bugun${bicim}` : `bugun+1y${bicim}`;
       }
     }
     return k;

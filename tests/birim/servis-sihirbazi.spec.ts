@@ -125,7 +125,8 @@ test.describe('sihirbaz uçtan uca', () => {
 
     // 4 · Özet → Kaydet (giriş bilgisi adımı yok: Servis girişi bir tablodur).
     await expect(page.locator('.ozet-listesi')).toContainText('Onayla (CANLI\'da çağrılmaz)');
-    await expect(page.locator('.ozet-listesi')).toContainText('BEGIN_DATE = bugun|yyyy-MM-dd\'T\'HH:mm:ss');
+    // Tarih-saat alanında biçim yazılmaz: koşuda kullanıcının varsayılan tarih biçimi (Ayarlar > Koşu) kullanılır.
+    await expect(page.locator('.ozet-listesi')).toContainText('BEGIN_DATE = bugun · END_DATE = bugun+1y');
     await expect(page.locator('.ozet-listesi')).toContainText('4 alan');
     await page.getByRole('button', { name: 'Kaydet' }).click();
     await expect(page).toHaveURL(/#\/servisler\/s\/[0-9a-f-]{36}$/);
@@ -135,7 +136,7 @@ test.describe('sihirbaz uçtan uca', () => {
     const s = servisler.find((x: Nesne) => x.anahtar === 'ornek-sihirbaz');
     expect(s.ayarlar).toMatchObject({
       yol: '/ornek.asmx', tabanlar: { [testOrtami]: `${soap.adres}/Servis`, [canli]: '' },
-      yalnizTestOperasyonlari: ['Onayla'], tarihKurallari: { BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" }
+      yalnizTestOperasyonlari: ['Onayla'], tarihKurallari: { BEGIN_DATE: 'bugun', END_DATE: 'bugun+1y' }
     });
     expect(s.ayarlar.operasyonlar.map((o: Nesne) => o.ad)).toEqual(['Teklif', 'Onayla']);
     expect([...s.ayarlar.alanZorunluluklari.Teklif].sort()).toEqual(['Input/BeginDate', 'Input/ClientType', 'Input/CitizenshipNumber', 'Input/CreditCard/Installment', 'Input/EndDate'].sort());
