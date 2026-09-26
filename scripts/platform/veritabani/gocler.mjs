@@ -401,6 +401,76 @@ export const GOCLER = [
       ALTER TABLE ekranlar ADD COLUMN sira INTEGER;
       ALTER TABLE ekranlar ADD COLUMN silinme_json TEXT;
     `
+  },
+  {
+    // Sürüm 9 — servis testleri (bkz. servisler/). Ekranlardan AYRI kayıtlar ve AYRI koşu sonuçları (raporlar karışmaz).
+    // - servisler: bir proje servisi (ör. bir SOAP arayüzü). ayarlar_json (şifreli): { yol, wsdlYolu, soapSurumu,
+    //   operasyonlar: [{ ad, eylem }], adresler: { <ortamId>: tam adres } (ortam taban adresini ezer), yalnizTestOperasyonlari,
+    //   erisim: { ortamId, zaman, durumKodu } (son başarılı erişim kontrolü) }.
+    // - servis_senaryolari: kapsam hangi ortam türlerinde koşacağını söyler ('test' | 'canli' | 'ikisi'; ortamın canlı
+    //   olup olmadığı ortam ayarındaki "canli" işaretinden okunur). icerik_json (şifreli): { operasyon, govde, kontroller,
+    //   aciklama, kaynak }.
+    // - servis_kimlikleri: gövdedeki giriş bilgisi parametrelerinin (${USERNAME} gibi) değerleri, ADLI profiller (ör. kanal /
+    //   kullanıcı başına bir profil). Servis bir profil seçer (ayarlar.kimlikProfili), senaryo ezebilir (icerik.kimlikProfili).
+    //   ortam_id NULL = profilin tüm ortamlar için değeri; ortama özel satır bu değerleri alan alan ezer. degerler_json GİZLİ.
+    // - servis_kosulari: her deneme / koşu sonucu. sonuc_json (şifreli): istek (gizliler maskelenmiş), yanıt (kırpılmış), kontroller.
+    surum: 9,
+    ad: 'servis_testleri',
+    sql: `
+      CREATE TABLE servisler (
+        id           TEXT PRIMARY KEY,
+        proje_id     TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        anahtar      TEXT NOT NULL,
+        ad           TEXT NOT NULL,
+        tur          TEXT NOT NULL DEFAULT 'soap' CHECK (tur IN ('soap', 'rest')),
+        durum        TEXT NOT NULL DEFAULT 'etkin' CHECK (durum IN ('etkin', 'devre_disi')),
+        sira         INTEGER,
+        ayarlar_json TEXT NOT NULL DEFAULT '{}',
+        olusturulma  TEXT NOT NULL,
+        guncellenme  TEXT NOT NULL,
+        UNIQUE (proje_id, anahtar)
+      );
+
+      CREATE TABLE servis_senaryolari (
+        id           TEXT PRIMARY KEY,
+        proje_id     TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        servis_id    TEXT NOT NULL REFERENCES servisler(id) ON DELETE CASCADE,
+        baslik       TEXT NOT NULL,
+        kapsam       TEXT NOT NULL DEFAULT 'test' CHECK (kapsam IN ('test', 'canli', 'ikisi')),
+        kosuya_dahil INTEGER NOT NULL DEFAULT 1,
+        sira         INTEGER,
+        icerik_json  TEXT NOT NULL DEFAULT '{}',
+        olusturulma  TEXT NOT NULL,
+        guncellenme  TEXT NOT NULL
+      );
+      CREATE INDEX ix_servis_senaryolari_servis ON servis_senaryolari(servis_id, sira);
+
+      CREATE TABLE servis_kimlikleri (
+        id            TEXT PRIMARY KEY,
+        proje_id      TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        ad            TEXT NOT NULL,
+        ortam_id      TEXT REFERENCES ortamlar(id) ON DELETE CASCADE,
+        degerler_json TEXT NOT NULL,
+        olusturulma   TEXT NOT NULL,
+        guncellenme   TEXT NOT NULL
+      );
+      CREATE UNIQUE INDEX ux_servis_kimlikleri ON servis_kimlikleri(proje_id, ad, IFNULL(ortam_id, ''));
+
+      CREATE TABLE servis_kosulari (
+        id          TEXT PRIMARY KEY,
+        proje_id    TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        servis_id   TEXT NOT NULL REFERENCES servisler(id) ON DELETE CASCADE,
+        senaryo_id  TEXT REFERENCES servis_senaryolari(id) ON DELETE SET NULL,
+        ortam_id    TEXT REFERENCES ortamlar(id) ON DELETE SET NULL,
+        tur         TEXT NOT NULL CHECK (tur IN ('dene', 'kosu')),
+        durum       TEXT NOT NULL CHECK (durum IN ('basarili', 'basarisiz', 'hata')),
+        baslangic   TEXT NOT NULL,
+        sure_ms     INTEGER NOT NULL DEFAULT 0,
+        baslik      TEXT NOT NULL DEFAULT '',
+        sonuc_json  TEXT NOT NULL DEFAULT '{}'
+      );
+      CREATE INDEX ix_servis_kosulari_servis ON servis_kosulari(servis_id, baslangic);
+    `
   }
 ];
 
@@ -425,7 +495,11 @@ export const SIFRELI_ALANLAR = Object.freeze({
   giris_profilleri: Object.freeze({ kullanici_adi: 'ozel', sms_ayari_json: 'ozel', parola: 'gizli', totp_gizli: 'gizli' }),
   baglam_profilleri: Object.freeze({ alanlar_json: 'ozel' }),
   ekranlar: Object.freeze({ ayarlar_json: 'ozel' }),
-  kaynak_eslemeleri: Object.freeze({ kaynak_ozeti: 'ozel' })
+  kaynak_eslemeleri: Object.freeze({ kaynak_ozeti: 'ozel' }),
+  servisler: Object.freeze({ ayarlar_json: 'ozel' }),
+  servis_senaryolari: Object.freeze({ icerik_json: 'ozel' }),
+  servis_kimlikleri: Object.freeze({ degerler_json: 'gizli' }),
+  servis_kosulari: Object.freeze({ sonuc_json: 'ozel' })
 });
 
 /** @param {string} tablo @returns {string[]} */
@@ -455,10 +529,14 @@ export const TABLOLAR = [
   { ad: 'ekran_modelleri', birincilAnahtar: 'id', json: ['model_json'], guncellenme: false, baslikAlani: 'surum' },
   { ad: 'senaryolar', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'senaryo', baslikAlani: 'baslik' },
   { ad: 'kaynak_eslemeleri', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'kaynak_anahtari' },
+  { ad: 'servisler', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, gecmisTuru: 'servis', baslikAlani: 'ad' },
+  { ad: 'servis_senaryolari', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'servis_senaryosu', baslikAlani: 'baslik' },
+  { ad: 'servis_kimlikleri', birincilAnahtar: 'id', json: ['degerler_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'degisiklik_gecmisi', birincilAnahtar: 'id', json: ['onceki_json', 'sonraki_json'], guncellenme: false },
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
   { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json'], guncellenme: false },
   { ad: 'adim_sonuclari', birincilAnahtar: 'id', json: [], guncellenme: false },
+  { ad: 'servis_kosulari', birincilAnahtar: 'id', json: ['sonuc_json'], guncellenme: false },
   // Medya satırları yedeğe her zaman girer; şifreli dosyalar kullanıcının dışa aktarma seçimine
   // göre girer (yedek.mjs, biçim 2). Dahil edilmeyenler yedekte yedek_disi = 1 taşır.
   { ad: 'medya', birincilAnahtar: 'id', json: [], guncellenme: false }

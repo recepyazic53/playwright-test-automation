@@ -187,10 +187,11 @@ import {
   ekranDurumunuAyarla, ekranDuzenle, ekranGeriYukle, ekranlariSirala, ekranSil, ekranSilmeOnizlemesi, ekranYenidenAdlandir
 } from './ekranlar/ekran-yonetimi.mjs';
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
+import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Sayfa paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
-const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir']);
+const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', ...SERVIS_BUYUK_GOVDE_UCLARI]);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
 export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
 /** İçe aktarılacak yedeğin üst sınırı (videolu yedekler büyük olabilir; gövde diske akıtılır). */
@@ -1315,6 +1316,7 @@ const GET_UCLARI = new Map([
     return { klasor, dosyalar };
   }]
 ]);
+for (const [yol, islem] of SERVIS_GET_UCLARI) GET_UCLARI.set(yol, islem);
 
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const POST_UCLARI = new Map([
@@ -1552,6 +1554,8 @@ const POST_UCLARI = new Map([
     return { deger: deger === null || deger === undefined ? '' : String(deger) };
   }]
 ]);
+// Servis testleri (servisler/servis-uclari.mjs): ekran uçlarından ayrı; aynı belirteç / kasa kuralları.
+for (const [yol, islem] of SERVIS_POST_UCLARI) POST_UCLARI.set(yol, islem);
 
 /**
  * @param {import('node:http').IncomingMessage} req

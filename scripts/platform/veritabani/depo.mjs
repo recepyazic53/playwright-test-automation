@@ -568,15 +568,38 @@ function turAlanlariniDogrula(alanlar) {
       tip: typeof alan.tip === 'string' ? alan.tip : 'metin',
       // Kullanıcı kararı: test verisindeki TÜM alanlar varsayılan olarak hassastır (şifreli);
       // yalnızca açıkça hassas: false verilen alan düz metin saklanır.
-      hassas: alan.hassas !== false
+      hassas: alan.hassas !== false,
+      // Verilmezse (undefined) kayıtta mevcut eşleme korunur (bkz. testVerisiTuruKaydet).
+      ...(alan.servisParametreleri !== undefined ? { servisParametreleri: servisParametreleriniDogrula(alan.servisParametreleri, ad) } : {})
     };
+  });
+}
+
+/** Servis parametresi adı (servis gövdesinde ${AD}): harf ya da "_" ile başlar. */
+export const SERVIS_PARAMETRESI_ADI = /^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/;
+/** Rol: aynı türün farklı kişileri (ör. sigortalı / sigorta ettiren) için ayrı profil seçilebilsin diye. */
+const ROL_ADI = /^[\p{L}\p{N}_-]{1,40}$/u;
+
+/**
+ * Test verisi alanının servislerde karşılık geldiği parametreler: [{ ad, rol? }]. rol boşsa "varsayilan".
+ * @param {unknown} liste @param {string} alanAdi @returns {Array<{ ad: string; rol: string }>}
+ */
+function servisParametreleriniDogrula(liste, alanAdi) {
+  if (!Array.isArray(liste)) throw new DepoHatasi(`"${alanAdi}" alanının servis parametreleri bir dizi olmalıdır.`);
+  return liste.map((x) => {
+    const o = /** @type {Record<string, unknown>} */ (typeof x === 'object' && x !== null ? x : {});
+    const ad = typeof o.ad === 'string' ? o.ad.trim() : '';
+    if (!SERVIS_PARAMETRESI_ADI.test(ad)) throw new DepoHatasi(`"${alanAdi}" alanında geçersiz servis parametresi adı: "${ad}" (harf ya da "_" ile başlar; harf, rakam, "_", ".", "-").`);
+    const rol = typeof o.rol === 'string' && o.rol.trim() ? o.rol.trim() : 'varsayilan';
+    if (!ROL_ADI.test(rol)) throw new DepoHatasi(`"${ad}" parametresinin rolü geçersiz: "${rol}" (harf, rakam, "_", "-").`);
+    return { ad, rol };
   });
 }
 
 /** @param {Record<string, unknown>} s */
 const turCevir = (s) => ({
   id: String(s.id), projeId: String(s.proje_id), ad: String(s.ad),
-  alanlar: /** @type {Array<{ ad: string; etiket: string; tip: string; hassas: boolean }>} */ (jsonOku(s.alanlar_json)),
+  alanlar: /** @type {Array<{ ad: string; etiket: string; tip: string; hassas: boolean; servisParametreleri?: Array<{ ad: string; rol: string }> }>} */ (jsonOku(s.alanlar_json)),
   olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
@@ -584,8 +607,31 @@ const turCevir = (s) => ({
 export function testVerisiTuruKaydet(vt, girdi) {
   const alanlar = turAlanlariniDogrula(girdi.alanlar);
   return vt.islem(() => {
+    const mevcutTur = girdi.id ? hamSatir(vt, 'test_verisi_turleri', girdi.id) : undefined;
+    // Servis parametresi eşlemesi verilmeyen alan (ör. koddan aktarım) mevcut eşlemesini korur.
+    if (mevcutTur) {
+      const eskiEsleme = new Map(turCevir(mevcutTur).alanlar.map((a) => [a.ad, a.servisParametreleri]));
+      for (const a of alanlar) {
+        const eski = eskiEsleme.get(a.ad);
+        if (a.servisParametreleri === undefined && eski?.length) a.servisParametreleri = eski;
+      }
+    }
+    // Bir servis parametresi projede tek bir türün tek bir alanına karşılık gelir.
+    /** @type {Map<string, string>} */
+    const sahipler = new Map();
+    for (const s of vt.tumu('SELECT id, ad, alanlar_json FROM test_verisi_turleri WHERE proje_id = ?', [girdi.projeId])) {
+      if (s.id === girdi.id) continue;
+      for (const a of turCevir(s).alanlar) for (const sp of a.servisParametreleri ?? []) sahipler.set(sp.ad, `"${s.ad}" türünün "${a.ad}" alanı`);
+    }
+    for (const a of alanlar) {
+      for (const sp of a.servisParametreleri ?? []) {
+        const sahip = sahipler.get(sp.ad);
+        if (sahip) throw new DepoHatasi(`"${sp.ad}" servis parametresi zaten ${sahip} ile eşli.`);
+        sahipler.set(sp.ad, `bu türün "${a.ad}" alanı`);
+      }
+    }
     if (girdi.id) {
-      const mevcut = hamSatir(vt, 'test_verisi_turleri', girdi.id);
+      const mevcut = mevcutTur;
       if (mevcut) {
         // Hassaslığı değişen alanların mevcut profillerdeki değerleri AYNI işlemde dönüştürülür
         // (hassas olan şifrelenir, hassaslığı kaldırılan çözülür; kasa açık olmalı).

@@ -709,6 +709,13 @@ function anaDuzen() {
       sayfaBasligi('Senaryolar');
       senaryolarModulu().then((m) => m.senaryolarEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
         .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Senaryolar ekranı yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+    } else if (bolum === 'servisler') {
+      // Servisler, Senaryolar bölümünün "ÜRÜNLER > 2 · Servisler" kısmıdır (aynı sol panel).
+      navSenaryolar.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sayfaBasligi('Servisler');
+      servislerModulu().then((m) => m.servislerEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
+        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Servisler yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'ekranlar') {
       navEkranlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
@@ -753,6 +760,9 @@ function anaDuzen() {
 /** Senaryolar modülü (bir kez yüklenir). */
 let senaryolarSozu = null;
 const senaryolarModulu = () => (senaryolarSozu ??= import('./senaryolar.js').catch((e) => { senaryolarSozu = null; throw e; }));
+/** Servisler modülü (bir kez yüklenir). */
+let servislerSozu = null;
+const servislerModulu = () => (servislerSozu ??= import('./servisler.js').catch((e) => { servislerSozu = null; throw e; }));
 /** Ekranlar modülü (bir kez yüklenir). */
 let ekranlarSozu = null;
 const ekranlarModulu = () => (ekranlarSozu ??= import('./ekranlar.js').catch((e) => { ekranlarSozu = null; throw e; }));

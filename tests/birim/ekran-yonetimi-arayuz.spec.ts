@@ -254,7 +254,7 @@ test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Sen
 
   // Senaryolar: ekran ve senaryoları gizli; anahtarla görünür, ▷ açık (tek başına), Koşuyu başlat onları saymaz.
   await page.goto('/#/senaryolar');
-  const sNav = page.getByRole('navigation', { name: 'Ürünler / ekranlar' });
+  const sNav = page.getByRole('navigation', { name: 'Ürünler', exact: true });
   await expect(sNav.getByRole('link', { name: /JetKasko/ })).toHaveCount(0);
   await expect(page.locator('td.ekran-hucresi', { hasText: 'JetKasko' })).toHaveCount(0);
   await sNav.getByText('Devre dışı ekranları göster').click();

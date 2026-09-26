@@ -420,11 +420,17 @@ async function testVerisi(govde, baglam, yenile) {
       const etiketG = h('input', { type: 'text', autocomplete: 'off', value: a.etiket === a.ad ? '' : a.etiket });
       const tipG = h('select', {}, TIP_SECENEKLERI.map(([d, m]) => h('option', { value: d, selected: a.tip === d }, m)));
       const hassasG = h('input', { type: 'checkbox', id: yeniKimlik('hassas'), checked: a.hassas !== false });
-      const s = { adG, etiketG, tipG, hassasG, el: null };
+      // Servis parametreleri: bu alanın servis gövdelerinde karşılık geldiği adlar ("AD:rol, AD2:rol2"; rol isteğe bağlı).
+      const servisG = h('input', {
+        type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'ör. SIGORTALI_TC:sigortali, SIGORTA_ETTIREN_TC:ettiren',
+        value: (a.servisParametreleri || []).map((sp) => (sp.rol && sp.rol !== 'varsayilan' ? `${sp.ad}:${sp.rol}` : sp.ad)).join(', ')
+      });
+      const s = { adG, etiketG, tipG, hassasG, servisG, el: null };
       const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
       hassasG.classList.add('anahtar');
       s.el = h('div', { class: 'tur-alan-satiri' }, alan('Alan adı', adG), alan('Etiket', etiketG), alan('Tip', tipG),
-        h('label', { class: 'secenek', for: hassasG.id, title: profilVar ? 'Değiştirirseniz bu türdeki profillerin mevcut değerleri de buna göre şifrelenir/çözülür.' : null }, hassasG, 'Hassas'), kaldir);
+        h('label', { class: 'secenek', for: hassasG.id, title: profilVar ? 'Değiştirirseniz bu türdeki profillerin mevcut değerleri de buna göre şifrelenir/çözülür.' : null }, hassasG, 'Hassas'), kaldir,
+        h('div', { class: 'tur-alan-servis' }, alan('Servis parametreleri', servisG, { yardim: 'Servis gövdesinde ${AD} olarak geçen parametreler. Aynı alan farklı kişiler için kullanılıyorsa rol yazın (AD:rol).' })));
       satirlar.push(s);
       kutu.append(s.el);
       return s;
@@ -446,11 +452,17 @@ async function testVerisi(govde, baglam, yenile) {
       if (!ad.value.trim()) { alanHatasi(ad, 'Tür adı boş olamaz.'); ad.focus(); return; }
       const alanlar = [];
       for (const s of satirlar) {
-        alanHatasi(s.adG, '');
+        alanHatasi(s.adG, ''); alanHatasi(s.servisG, '');
         const a = s.adG.value.trim();
         if (!a) { if (s.etiketG.value.trim()) { alanHatasi(s.adG, 'Alan adı boş olamaz.'); s.adG.focus(); return; } continue; }
         if (alanlar.some((x) => x.ad === a)) { alanHatasi(s.adG, 'Bu alan adı tekrar ediyor.'); s.adG.focus(); return; }
-        alanlar.push({ ad: a, etiket: s.etiketG.value.trim() || a, tip: s.tipG.value, hassas: s.hassasG.checked });
+        const servisParametreleri = [];
+        for (const parca of s.servisG.value.split(/[,;\n]/).map((x) => x.trim()).filter(Boolean)) {
+          const [spAd, rol] = parca.split(':').map((x) => x.trim());
+          if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(spAd || '')) { alanHatasi(s.servisG, `Geçersiz parametre adı: "${spAd}" (harf ya da "_" ile başlar).`); s.servisG.focus(); return; }
+          servisParametreleri.push(rol ? { ad: spAd, rol } : { ad: spAd });
+        }
+        alanlar.push({ ad: a, etiket: s.etiketG.value.trim() || a, tip: s.tipG.value, hassas: s.hassasG.checked, servisParametreleri });
       }
       if (!alanlar.length) { mesaj.goster('En az bir alan ekleyin.'); return; }
       try {

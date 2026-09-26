@@ -53,7 +53,7 @@ export function senaryolarEkrani(main, parcalar, baglam) {
   const [tur, kimlik] = parcalar;
   const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : '';
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler / ekranlar' }, iskelet('liste'));
+  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
   yerlestir(main, h('h1', { class: 'gorunmez' }, 'Senaryolar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,
@@ -67,8 +67,11 @@ export function senaryolarEkrani(main, parcalar, baglam) {
     if (!ortamlar.length) { yerlestir(icerik, bosDurum('Projede ortam yok.', 'Ayarlar > Ortamlar bölümünden bir ortam ekleyin.', { ikon: 'ag' })); return; }
     const kayitli = seciliOrtamOku();
     const ortam = ortamlar.find((o) => o.id === kayitli) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
-    const veri = await api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`);
-    const navCiz = () => ekranListesi(nav, veri, tur === 'u' || tur === undefined ? secili : null, tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || ''))?.ekranId : tur === 'yeni' ? decodeURIComponent(kimlik || '') : null,
+    const [veri, servisler] = await Promise.all([
+      api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`),
+      servisleriAl(proje)
+    ]);
+    const navCiz = () => ekranListesi(nav, veri, servisler, null, tur === 'u' || tur === undefined ? secili : null, tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || ''))?.ekranId : tur === 'yeni' ? decodeURIComponent(kimlik || '') : null,
       () => { navCiz(); if (tur !== 'yeni' && tur !== 'duzenle') window.dispatchEvent(new HashChangeEvent('hashchange')); });
     navCiz();
     if (tur === 'yeni' || tur === 'duzenle') {
@@ -85,7 +88,28 @@ export function senaryolarEkrani(main, parcalar, baglam) {
   })().catch(hata);
 }
 
-function ekranListesi(nav, veri, secili, formEkrani, degisti) {
+/** Servis listesi (sol panel "2 · Servisler"); alınamazsa boş (ör. eski sunucu). */
+async function servisleriAl(proje) {
+  try { return (await api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`)).servisler; } catch { return []; }
+}
+
+/**
+ * Sol panel "ÜRÜNLER" (Servisler sayfası da kullanır): 1 · Ekranlar, 2 · Servisler.
+ * @param {HTMLElement} nav @param {{ id: string }} proje @param {{ servisId?: string | null }} secim
+ */
+export async function urunlerPaneli(nav, proje, secim) {
+  const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`);
+  const kayitli = seciliOrtamOku();
+  const ortam = ortamlar.find((o) => o.id === kayitli) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
+  const [veri, servisler] = await Promise.all([
+    ortam ? api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`) : { ekranlar: [], senaryolar: [] },
+    servisleriAl(proje)
+  ]);
+  const ciz = () => ekranListesi(nav, veri, servisler, secim.servisId ?? null, null, null, ciz);
+  ciz();
+}
+
+function ekranListesi(nav, veri, servisler, seciliServis, secili, formEkrani, degisti) {
   const goster = devreDisiGoster();
   const pasif = new Set(veri.ekranlar.filter((e) => e.durum === 'devre_disi').map((e) => e.id));
   const toplam = veri.senaryolar.filter((x) => goster || !pasif.has(x.ekranId)).length;
@@ -94,9 +118,16 @@ function ekranListesi(nav, veri, secili, formEkrani, degisti) {
     'aria-current': (secili !== null && (secili || '') === (id || '')) || (formEkrani && formEkrani === id) ? 'page' : null
   }, ikonAd ? ikon(ikonAd) : h('span', { class: 'saglik', 'aria-hidden': 'true' }), ad, adet ? h('span', { class: 'adet' }, String(adet)) : null);
   const ekranlar = veri.ekranlar.filter((e) => (e.senaryoSayisi || e.olusturulabilir) && (goster || !pasif.has(e.id) || e.id === secili || e.id === formEkrani));
-  yerlestir(nav, 
+  const servisBaglantisi = (s) => {
+    const a = h('a', { href: `#/servisler/s/${encodeURIComponent(s.id)}`, 'aria-current': seciliServis === s.id ? 'page' : null },
+      ikon('ag'), s.ad, s.senaryoSayisi ? h('span', { class: 'adet' }, String(s.senaryoSayisi)) : null);
+    if (s.durum === 'devre_disi') { a.classList.add('devre-disi'); a.insertBefore(h('span', { class: 'nav-etiketi' }, 'kapalı'), a.querySelector('.adet')); }
+    return a;
+  };
+  yerlestir(nav,
     baglanti('', 'Genel', toplam, 'izgara'),
-    h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ürünler / ekranlar'),
+    h('div', { class: 'alt-nav-baslik urunler-basligi', 'aria-hidden': 'true' }, 'Ürünler'),
+    h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, '1 · Ekranlar'),
     ...ekranlar.map((e) => {
       const a = baglanti(e.id, e.ad, e.senaryoSayisi, e.modelVar ? 'katman' : null);
       if (pasif.has(e.id)) {
@@ -106,7 +137,10 @@ function ekranListesi(nav, veri, secili, formEkrani, degisti) {
       }
       return a;
     }),
-    devreDisiAnahtari(veri.ekranlar.filter((e) => pasif.has(e.id) && e.senaryoSayisi).length, degisti));
+    devreDisiAnahtari(veri.ekranlar.filter((e) => pasif.has(e.id) && e.senaryoSayisi).length, degisti),
+    h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, '2 · Servisler'),
+    ...servisler.map(servisBaglantisi),
+    h('a', { href: '#/servisler/yeni', class: 'ekle-baglantisi', 'aria-current': seciliServis === 'yeni' ? 'page' : null }, ikon('arti'), 'Servis ekle'));
 }
 
 // ---------------------------------------------------------------------------------------
