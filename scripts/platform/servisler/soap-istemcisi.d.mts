@@ -19,9 +19,11 @@ export declare function gizlileriMaskele(metin: string, gizliler: string[]): str
 export interface HamYanit { durumKodu: number; basliklar: Record<string, string>; govde: string; sureMs: number }
 export declare function httpIstegi(istek: {
   adres: string; yontem?: 'GET' | 'POST'; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
+  sinyal?: AbortSignal; gonderildi?: () => void;
 }): Promise<HamYanit>;
 export declare function soapIstegi(istek: {
   adres: string; eylem?: string; soapSurumu?: '1.1' | '1.2'; govde: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
+  sinyal?: AbortSignal; gonderildi?: () => void;
 }): Promise<HamYanit>;
 export declare function wsdlOperasyonlari(wsdl: string): { ad: string; eylem?: string }[];
 export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }): Promise<{
@@ -31,7 +33,7 @@ export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: nu
 export interface XmlDugumu { ad: string; cocuklar: XmlDugumu[]; metin: string }
 export declare function xmlAgaci(xml: string): XmlDugumu | null;
 export declare function xpathMetni(kok: XmlDugumu, yol: string): string | undefined;
-export interface KontrolSonucu { tur: string; ad: string; gecti: boolean; aciklama: string }
+export interface KontrolSonucu { tur: string; ad: string; gecti: boolean; aciklama: string; alt?: KontrolSonucu[] }
 export declare function kontrolAdi(k: ServisKontrolu): string;
 export declare function kontrolleriDegerlendir(yanit: { durumKodu: number; govde: string }, kontroller: ServisKontrolu[]): KontrolSonucu[];
 export declare function yanitOzeti(govde: string): string;

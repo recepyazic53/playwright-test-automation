@@ -9,14 +9,16 @@
 //   (tür detayında "servis parametreleri"), değer servisin (senaryo ezebilir) o tür + rol için seçtiği profilden gelir.
 // - Saklanan istek / yanıtta parola ve hassas test verisi değerleri maskelenir.
 import { randomUUID } from 'node:crypto';
-import { DepoHatasi, ortamGetir, ortamKaydet, testVerisiProfiliGetir, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
+import {
+  DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
+} from '../veritabani/depo.mjs';
 import {
   erisimiDenetle, gizlileriMaskele, goreliTarih, kontrolleriDegerlendir, kullanilanParametreler, ServisHatasi, soapIstegi,
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
 } from './soap-istemcisi.mjs';
 import {
   senaryoIceriginiDogrula, servisGetir, servisKaydet, servisKimligiKaydet, servisKimliginiCoz, servisKosusuKaydet,
-  servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
+  servisKimlikOzeti, servisleriListele, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
 } from './servis-deposu.mjs';
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
 import { KAYNAKLAR } from './servis-govdesi.mjs';
@@ -150,6 +152,44 @@ export function tarihKurallariniDogrula(kurallar) {
 }
 
 /**
+ * Elle eklenen alanlar: { <operasyon>: [{ yol, tip }] } — WSDL'de olmayan alanlar; alan formunda şemaya katılır (semaBirlestir).
+ * @param {unknown} v @returns {Record<string, Array<{ yol: string; tip: string }>>}
+ */
+function ekAlanlariDogrula(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"ekAlanlar" bir nesne olmalıdır.');
+  /** @type {Record<string, Array<{ yol: string; tip: string }>>} */
+  const s = {};
+  const tipler = ['metin', 'tamsayi', 'ondalik', 'mantiksal', 'tarih', 'tarihSaat'];
+  for (const [op, liste] of Object.entries(v)) {
+    if (!Array.isArray(liste)) throw new DepoHatasi(`"${op}" elle eklenen alanları bir dizi olmalıdır.`);
+    s[op] = liste.map((/** @type {any} */ e) => {
+      if (!e || typeof e.yol !== 'string' || !/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(e.yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${e?.yol}".`);
+      return { yol: e.yol, tip: tipler.includes(e.tip) ? e.tip : 'metin' };
+    });
+    if (new Set(s[op].map((e) => e.yol)).size !== s[op].length) throw new DepoHatasi(`"${op}" elle eklenen alanlarda aynı yol iki kez var.`);
+  }
+  return s;
+}
+
+/**
+ * Alan zorunlulukları: { <operasyon>: [<yol>, …] } — iş kuralına göre zorunlu alanlar (kullanıcı belirler; WSDL'deki minOccurs
+ * iş kuralını yansıtmayabilir: .asmx'te sayı / evet-hayır alanları hep "zorunlu", metinler hep "isteğe bağlı" görünür).
+ * Senaryo düzenleyicide vurgulanır ve süzülür; koşuyu ENGELLEMEZ (olumsuz senaryolar bilerek göndermeyebilir).
+ * @param {unknown} v @returns {Record<string, string[]>}
+ */
+function alanZorunluluklariniDogrula(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanZorunluluklari" bir nesne olmalıdır.');
+  /** @type {Record<string, string[]>} */
+  const s = {};
+  for (const [op, yollar] of Object.entries(v)) {
+    if (!Array.isArray(yollar)) throw new DepoHatasi(`"${op}" zorunlu alanları bir dizi olmalıdır.`);
+    for (const yol of yollar) if (typeof yol !== 'string' || !/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+    s[op] = [...new Set(/** @type {string[]} */ (yollar))];
+  }
+  return s;
+}
+
+/**
  * Alan varsayılanları: { <operasyon>: { <yol>: { kaynak, deger? } } } — yeni senaryo açılınca alanlar bunlarla dolar.
  * @param {unknown} v @returns {Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>}
  */
@@ -239,7 +279,7 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   secilenOperasyonlar?: string[];
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
- *   alanVarsayilanlari?: unknown }} girdi
+ *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown }} girdi
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -257,7 +297,9 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.veriProfilleri !== undefined ? { veriProfilleri: veriProfilleriniDogrula(girdi.veriProfilleri) } : {}),
     ...(girdi.yalnizTestOperasyonlari !== undefined ? { yalnizTestOperasyonlari: girdi.yalnizTestOperasyonlari.filter((x) => typeof x === 'string' && x) } : {}),
     ...(girdi.tlsDogrulama !== undefined ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
-    ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {})
+    ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {}),
+    ...(girdi.alanZorunluluklari !== undefined ? { alanZorunluluklari: alanZorunluluklariniDogrula(girdi.alanZorunluluklari) } : {}),
+    ...(girdi.ekAlanlar !== undefined ? { ekAlanlar: ekAlanlariDogrula(girdi.ekAlanlar) } : {})
   };
   if (adresDegisti) {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);
@@ -309,6 +351,10 @@ export function servisParametreleri(vt, projeId, servisId) {
   /** @type {Map<string, number>} */
   const kullanim = new Map();
   for (const s of servisSenaryolariniListele(vt, servisId)) for (const p of kullanilanParametreler(s.icerik.govde)) kullanim.set(p, (kullanim.get(p) ?? 0) + 1);
+  // Henüz senaryoda geçmese de servis varsayılanlarında (★) kullanılan parametreler (senaryo sayısı 0).
+  for (const alanlar of Object.values(servis.ayarlar.alanVarsayilanlari ?? {})) {
+    for (const v of Object.values(alanlar)) if (v.kaynak === 'parametre' && v.deger && !kullanim.has(v.deger)) kullanim.set(v.deger, 0);
+  }
   const tarih = servis.ayarlar.tarihKurallari ?? {};
   const parametreler = [...kullanim].sort((a, b) => a[0].localeCompare(b[0])).map(([ad, senaryoSayisi]) => {
     const e = eslemeler.get(ad);
@@ -357,7 +403,7 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     }
     const e = eslemeler.get(ad);
     if (!e) { eksikNedeni[ad] = kimlikProfili ? `giriş profilinde yok ve test verisinde eşlenmemiş` : 'test verisinde eşlenmemiş; giriş bilgisiyse servis için giriş profili seçin'; continue; }
-    const profilId = secimler[`${e.turId}:${e.rol}`];
+    const profilId = secimler[`${e.turId}:${e.rol}@${ortamId}`] || secimler[`${e.turId}:${e.rol}`];
     if (!profilId) { eksikNedeni[ad] = `"${e.turAd}" türü, "${e.rol}" rolü için profil seçilmedi`; continue; }
     if (!profiller.has(profilId)) {
       const p = testVerisiProfiliGetir(vt, profilId, { coz: true });
@@ -370,6 +416,78 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     if (e.hassas) gizliler.push(String(d));
   }
   return { degerler, tarihKurallari: tarih, gizliler, eksikNedeni, kimlikProfili };
+}
+
+// ---------------------------------------------------------------------------------------
+// Eski servis giriş profillerini test verisine taşıma
+// ---------------------------------------------------------------------------------------
+
+/** Bilinen giriş parametreleri → test verisi alan adı; CHANNEL açık (listede görünsün), diğerleri hassas. */
+const GIRIS_ALANLARI = /** @type {Record<string, { alan: string; etiket: string; hassas: boolean }>} */ ({
+  CHANNEL: { alan: 'kanal', etiket: 'Kanal', hassas: false },
+  USERNAME: { alan: 'kullanici', etiket: 'Kullanıcı adı', hassas: true },
+  PASSWORD: { alan: 'parola', etiket: 'Parola', hassas: true }
+});
+export const SERVIS_GIRISI_TURU = 'Servis girişi';
+
+/**
+ * Eski "servis giriş profili"ni (kasadaki servis_kimlikleri) test verisine taşır: parametreler (USERNAME / PASSWORD / CHANNEL…)
+ * bir test verisi türünün alanlarına eşlenir (zaten eşliyse o tür, değilse "Servis girişi" türü; rol "giris"), profilin genel
+ * değerleri aynı adla bir test verisi profili, ortama özel değerleri "<ad> · <ortam>" profilleri olur; profili kullanan servisler
+ * bu test verisi profillerine bağlanır (ortama özel olan "<tür>:<rol>@<ortam>" ile). Eski kayıt SİLİNMEZ (yalnız servislerden ayrılır).
+ * onay verilmezse yalnız ne yapılacağı döner.
+ * @param {Veritabani} vt @param {string} projeId @param {{ ad: string; onay?: boolean }} girdi
+ */
+export function girisProfiliniTestVerisineTasi(vt, projeId, girdi) {
+  const ozet = servisKimlikOzeti(vt, projeId).find((p) => p.ad === girdi.ad);
+  if (!ozet) throw new DepoHatasi(`"${girdi.ad}" servis giriş profili bulunamadı.`);
+  const ortamlar = ortamlariListele(vt, projeId);
+  const parametreler = [...new Set([...ozet.alanlar, ...Object.values(ozet.ortamlar).flat()])];
+  const eslemeler = parametreEslemeleri(vt, projeId);
+  const esli = parametreler.filter((p) => eslemeler.has(p)).map((p) => /** @type {NonNullable<ReturnType<typeof eslemeler.get>>} */ (eslemeler.get(p)));
+  const hedefler = new Set(esli.map((e) => `${e.turId}:${e.rol}`));
+  if (hedefler.size > 1) throw new DepoHatasi(`Profilin alanları farklı test verisi türlerine / rollerine eşli (${esli.map((e) => `${e.turAd}.${e.alan} (${e.rol})`).join(', ')}); elle taşıyın.`);
+  const turler = testVerisiTurleriniListele(vt, projeId);
+  const mevcutTur = esli.length ? turler.find((t) => t.id === esli[0].turId) : turler.find((t) => t.ad === SERVIS_GIRISI_TURU);
+  const rol = esli.length ? esli[0].rol : 'giris';
+  const eklenecek = parametreler.filter((p) => !eslemeler.has(p)).map((p) => {
+    const b = GIRIS_ALANLARI[p] ?? { alan: p.toLocaleLowerCase('en').replace(/[^a-z0-9_]/g, '_'), etiket: p, hassas: true };
+    return { parametre: p, ...b };
+  });
+  const alanAdi = (/** @type {string} */ p) => eslemeler.get(p)?.alan ?? eklenecek.find((x) => x.parametre === p)?.alan ?? p;
+  if (mevcutTur) for (const e of eklenecek) if (mevcutTur.alanlar.some((a) => a.ad === e.alan)) throw new DepoHatasi(`"${mevcutTur.ad}" türünde "${e.alan}" alanı zaten var ama ${e.parametre} parametresine eşli değil; elle eşleyin.`);
+  const kullanan = servisleriListele(vt, projeId).filter((s) => s.ayarlar.kimlikProfili === girdi.ad);
+  const ozelProfiller = Object.entries(ozet.ortamlar).map(([ortamId, alanlar]) => ({ ortamId, ortam: ortamlar.find((o) => o.id === ortamId)?.ad ?? ortamId, alanlar }));
+  const plan = {
+    tur: mevcutTur ? mevcutTur.ad : SERVIS_GIRISI_TURU, yeniTur: !mevcutTur, rol,
+    eklenecekAlanlar: eklenecek.map((e) => ({ alan: e.alan, parametre: e.parametre, hassas: e.hassas })),
+    profiller: [{ ad: girdi.ad, ortam: null, alanlar: ozet.alanlar.map(alanAdi) }, ...ozelProfiller.map((o) => ({ ad: `${girdi.ad} · ${o.ortam}`, ortam: o.ortam, alanlar: [...new Set([...ozet.alanlar, ...o.alanlar])].map(alanAdi) }))],
+    servisler: kullanan.map((s) => s.ad)
+  };
+  if (!girdi.onay) return { onizleme: plan };
+  return vt.islem(() => {
+    const turId = testVerisiTuruKaydet(vt, {
+      ...(mevcutTur ? { id: mevcutTur.id } : {}), projeId, ad: plan.tur,
+      alanlar: [
+        ...(mevcutTur ? mevcutTur.alanlar.map((a) => ({ ad: a.ad, etiket: a.etiket, tip: a.tip, hassas: a.hassas })) : []),
+        ...eklenecek.map((e) => ({ ad: e.alan, etiket: e.etiket, tip: 'metin', hassas: e.hassas, servisParametreleri: [{ ad: e.parametre, rol }] }))
+      ]
+    });
+    const degerlerAl = (/** @type {string} */ ortamId) => Object.fromEntries(Object.entries(servisKimliginiCoz(vt, projeId, girdi.ad, ortamId)).map(([p, v]) => [alanAdi(p), v]));
+    const profilBul = (/** @type {string} */ ad) => vt.tek('SELECT id FROM test_verisi_profilleri WHERE proje_id = ? AND tur_id = ? AND ad = ?', [projeId, turId, ad]);
+    const genelId = testVerisiProfiliKaydet(vt, { id: profilBul(girdi.ad)?.id, projeId, turId, ortamId: null, ad: girdi.ad, degerler: degerlerAl('') });
+    /** @type {Record<string, string>} */
+    const secim = { [`${turId}:${rol}`]: genelId };
+    for (const o of ozelProfiller) {
+      const ad = `${girdi.ad} · ${o.ortam}`;
+      secim[`${turId}:${rol}@${o.ortamId}`] = testVerisiProfiliKaydet(vt, { id: profilBul(ad)?.id, projeId, turId, ortamId: o.ortamId, ad, degerler: degerlerAl(o.ortamId) });
+    }
+    for (const s of kullanan) {
+      const { kimlikProfili: _eski, ...ayarlar } = s.ayarlar;
+      servisKaydet(vt, { id: s.id, projeId, anahtar: s.anahtar, ad: s.ad, ayarlar: { ...ayarlar, veriProfilleri: { ...(ayarlar.veriProfilleri ?? {}), ...secim } } });
+    }
+    return { tasindi: true, ...plan, turId, profilId: genelId };
+  });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -457,9 +575,12 @@ export function soapuiAktar(vt, projeId, girdi) {
  * tur 'dene': yalnız test ortamı; kapsam denetlenmez. tur 'kosu': kapsam ortam türüyle uyuşmalı.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string; taslak?: { baslik?: string; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: unknown };
- *   zamanAsimiMs?: number; simdi?: Date }} girdi
+ *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
+ *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void }} girdi
+ *   olay: canlı panel için adım bildirimi (istek / yanıt maskeli). sinyal: durdurma (bekleyen istek kesilir).
  */
 export async function servisSenaryosuCalistir(vt, projeId, girdi) {
+  const olay = girdi.olay ?? (() => undefined);
   const servis = servisGetir(vt, girdi.servisId);
   if (!servis || servis.projeId !== projeId) throw new DepoHatasi('Servis bulunamadı.');
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
@@ -484,7 +605,10 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur };
   /** @type {'basarili' | 'basarisiz' | 'hata'} */
   let durum = 'hata';
+  /** @type {'hazirlik' | 'gonderim' | 'yanit' | 'kontroller'} */
+  let adim = 'hazirlik';
   try {
+    olay('hazirlik', 'basladi');
     const adres = servisAdresi(servis.ayarlar, ortam);
     sonuc.adres = adres;
     const p = parametreDegerleri(vt, projeId, servis, icerik, ortam.id);
@@ -494,9 +618,19 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (ad) => p.eksikNedeni[ad] ?? 'tanımsız'
     });
     sonuc.istek = gizlileriMaskele(govde, gizliler);
-    const yanit = await soapIstegi({ adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs, tlsDogrulama: servis.ayarlar.tlsDogrulama });
+    olay('hazirlik', 'tamam', { adres, istek: sonuc.istek });
+    adim = 'gonderim';
+    olay('gonderim', 'basladi');
+    if (girdi.sinyal?.aborted) throw new ServisHatasi('Kullanıcı durdurdu.');
+    const yanit = await soapIstegi({
+      adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
+      gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
+    });
+    adim = 'kontroller';
+    olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
     const kontroller = kontrolleriDegerlendir(yanit, icerik.kontroller);
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';
+    olay('kontroller', durum === 'basarili' ? 'tamam' : 'hata', { gecen: kontroller.filter((k) => k.gecti).length, toplam: kontroller.length });
     Object.assign(sonuc, {
       durumKodu: yanit.durumKodu, yanitSureMs: yanit.sureMs, kontroller, ozet: gizlileriMaskele(yanitOzeti(yanit.govde), gizliler),
       yanit: gizlileriMaskele(yanit.govde.length > YANIT_SAKLAMA_SINIRI ? `${yanit.govde.slice(0, YANIT_SAKLAMA_SINIRI)}\n…(kırpıldı)` : yanit.govde, gizliler)
@@ -504,6 +638,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   } catch (e) {
     if (!(e instanceof ServisHatasi) && !(e instanceof DepoHatasi)) throw e;
     sonuc.hata = e.message;
+    if (girdi.sinyal?.aborted) sonuc.durduruldu = true;
+    olay(adim, 'hata', { mesaj: e.message });
   }
   const sureMs = Date.now() - bas;
   const kosuId = servisKosusuKaydet(vt, {

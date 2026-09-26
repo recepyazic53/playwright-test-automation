@@ -11,10 +11,10 @@ import {
   veritabaniniHazirla
 } from '../../scripts/platform/veritabani/depo.mjs';
 import {
-  servisGetir, servisKimlikOzeti, servisKosulariniListele, servisKosusuGetir, servisSenaryolariniListele, servisSenaryosuKaydet
+  senaryoIceriginiDogrula, servisGetir, servisKimligiKaydet, servisKimlikOzeti, servisKosulariniListele, servisKosusuGetir, servisSenaryolariniListele, servisSenaryosuKaydet
 } from '../../scripts/platform/servisler/servis-deposu.mjs';
 import {
-  erisimKontrolu, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
+  erisimKontrolu, girisProfiliniTestVerisineTasi, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
 } from '../../scripts/platform/servisler/servis-islemleri.mjs';
 import { kontrolleriDegerlendir, yerTutuculariDoldur } from '../../scripts/platform/servisler/soap-istemcisi.mjs';
 import { groovyOzellikleri, servisTaslaklari, soapuiCozumle } from '../../scripts/platform/servisler/soapui-ice-aktarma.mjs';
@@ -83,6 +83,18 @@ test('kontroller: SOAP zarfı, Fault, içerir / içermez, xpath, durum kodu', ()
   expect(f.map((x) => x.gecti)).toEqual([false, true, false, true]);
   expect(f[0].aciklama).toContain('Sunucu hatası');
   expect(kontrolleriDegerlendir({ durumKodu: 200, govde: 'düz metin' }, [{ tur: 'soapYaniti' }])[0].gecti).toBe(false);
+  // VEYA: alt kontrollerden biri yeter; hiçbiri tutmazsa kalır; alt sonuçlar döner.
+  const [veya] = kontrolleriDegerlendir(ok, [{ tur: 'veya', alt: [{ tur: 'icerir', deger: '<Durum>HATA</Durum>' }, { tur: 'icerir', deger: '<Durum>OK</Durum>' }] }]);
+  expect(veya).toMatchObject({ gecti: true, aciklama: 'Geçen: Yanıtta geçer: "<Durum>OK</Durum>"' });
+  expect(veya.alt?.map((a) => a.gecti)).toEqual([false, true]);
+  expect(kontrolleriDegerlendir(ok, [{ tur: 'veya', alt: [{ tur: 'icerir', deger: 'X' }, { tur: 'icermez', deger: 'OK' }] }])[0]).toMatchObject({ gecti: false, aciklama: 'Hiçbiri geçmedi' });
+  // Doğrulama: VEYA en az iki alt kontrol ister, iç içe VEYA yok, alt kontrol de doğrulanır.
+  const icerik = (kontroller: unknown[]) => ({ operasyon: 'Teklif', govde: '<a/>', kontroller });
+  expect(senaryoIceriginiDogrula(icerik([{ tur: 'veya', alt: [{ tur: 'soapYaniti' }, { tur: 'icerir', deger: 'x', fazla: 1 }] }])).kontroller)
+    .toEqual([{ tur: 'veya', alt: [{ tur: 'soapYaniti' }, { tur: 'icerir', deger: 'x' }] }]);
+  expect(() => senaryoIceriginiDogrula(icerik([{ tur: 'veya', alt: [{ tur: 'soapYaniti' }] }]))).toThrow(/en az iki/);
+  expect(() => senaryoIceriginiDogrula(icerik([{ tur: 'veya', alt: [{ tur: 'veya', alt: [] }, { tur: 'soapYaniti' }] }]))).toThrow(/VEYA içinde VEYA/);
+  expect(() => senaryoIceriginiDogrula(icerik([{ tur: 'veya', alt: [{ tur: 'soapYaniti' }, { tur: 'icerir' }] }]))).toThrow(/1\.2\. kontrol/);
 });
 
 // ---- Uçtan uca (veritabanı + sahte sunucu) --------------------------------------------------------------------------------
@@ -207,5 +219,33 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     expect(kos.sonuclar.map((x) => [x.baslik, x.durum])).toEqual([['Geçersiz kimlik', 'basarili'], ['Geçerli kimlik', 'basarili'], ['Başka kanal', 'basarili']]);
     expect(istekler[once + 2].govde).toContain('<Channel>999</Channel><Username>kullanici999</Username>');
     expect(servisKosulariniListele(vt, { servisId }).filter((k) => k.tur === 'kosu')).toHaveLength(3);
+  });
+
+  test('eski giriş profili test verisine taşınır: önizleme → onay; ortama özel değer ayrı profil; servis bağlanır; Dene aynı değerleri gönderir', async () => {
+    servisKimligiKaydet(vt, { projeId, ad: 'Kanal 100', ortamId: canliOrtam, degerler: { PASSWORD: 'canli-parola-2' } });
+    const on = girisProfiliniTestVerisineTasi(vt, projeId, { ad: 'Kanal 100' });
+    expect(on).toEqual({ onizleme: {
+      tur: 'Servis girişi', yeniTur: true, rol: 'giris',
+      eklenecekAlanlar: [{ alan: 'kanal', parametre: 'CHANNEL', hassas: false }, { alan: 'parola', parametre: 'PASSWORD', hassas: true }, { alan: 'kullanici', parametre: 'USERNAME', hassas: true }],
+      profiller: [{ ad: 'Kanal 100', ortam: null, alanlar: ['kanal', 'parola', 'kullanici'] }, { ad: 'Kanal 100 · CANLI', ortam: 'CANLI', alanlar: ['kanal', 'parola', 'kullanici'] }],
+      servisler: ['OrnekService']
+    } });
+    expect(servisGetir(vt, servisId)?.ayarlar.kimlikProfili).toBe('Kanal 100');
+    expect(girisProfiliniTestVerisineTasi(vt, projeId, { ad: 'Kanal 100', onay: true })).toMatchObject({ tasindi: true });
+    const s = servisGetir(vt, servisId);
+    expect(s?.ayarlar.kimlikProfili).toBeUndefined();
+    const tur = testVerisiTurleriniListele(vt, projeId).find((x) => x.ad === 'Servis girişi');
+    expect(tur?.alanlar.map((a) => [a.ad, a.hassas, a.servisParametreleri])).toEqual([
+      ['kanal', false, [{ ad: 'CHANNEL', rol: 'giris' }]], ['parola', true, [{ ad: 'PASSWORD', rol: 'giris' }]], ['kullanici', true, [{ ad: 'USERNAME', rol: 'giris' }]]]);
+    expect(Object.keys(s?.ayarlar.veriProfilleri ?? {}).sort()).toEqual([`${tur?.id}:giris`, `${tur?.id}:giris@${canliOrtam}`, `${turId}:sigortali`].sort());
+    // Dene (TEST): değerler artık test verisinden gelir — gövde öncekiyle aynı; parola raporda maskeli.
+    const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
+    const once = istekler.length;
+    const d = await servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: testOrtami, tur: 'dene', senaryoId: gecerli?.id });
+    expect(d.durum, d.hata).toBe('basarili');
+    expect(istekler[once].govde).toContain(`<Channel>100</Channel><Username>kullanici100</Username><Password>${SAHTE_PAROLA}</Password>`);
+    expect(JSON.stringify(servisKosusuGetir(vt, d.kosuId))).not.toContain(SAHTE_PAROLA);
+    // İkinci kez: tür artık var ve eşli → yeni tür / alan açılmaz; servis zaten ayrılmış.
+    expect(girisProfiliniTestVerisineTasi(vt, projeId, { ad: 'Kanal 100' })).toMatchObject({ onizleme: { tur: 'Servis girişi', yeniTur: false, eklenecekAlanlar: [], servisler: [] } });
   });
 });

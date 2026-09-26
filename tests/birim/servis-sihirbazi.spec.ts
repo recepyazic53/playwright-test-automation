@@ -105,6 +105,11 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.getByLabel('Teklif Input/BeginDate varsayılanı')).toHaveValue('BEGIN_DATE');
     await expect(page.getByLabel('Teklif Input/EndDate varsayılanı')).toHaveValue('END_DATE');
     await page.getByLabel('Teklif Input/CitizenshipNumber varsayılanı').selectOption('SIGORTALI_TC');
+    // Zorunluluk: WSDL'e göre gelir (BeginDate minOccurs=1 → işaretli, CitizenshipNumber minOccurs=0 → boş); iş kuralına göre düzeltilir.
+    await expect(page.getByLabel('Teklif Input/BeginDate zorunlu')).toBeChecked();
+    await expect(page.getByLabel('Teklif Input/CitizenshipNumber zorunlu')).not.toBeChecked();
+    await page.getByLabel('Teklif Input/CitizenshipNumber zorunlu').check();
+    await page.getByLabel('Teklif Input/IsSkiing zorunlu').uncheck();
     await ileri.click();
 
     // 4 · Giriş bilgisi: yeni profil.
@@ -127,22 +132,89 @@ test.describe('sihirbaz uçtan uca', () => {
     const { servisler } = await basarili(`/platform/servisler?projeId=${projeId}`);
     const s = servisler.find((x: Nesne) => x.anahtar === 'ornek-sihirbaz');
     expect(s.ayarlar).toMatchObject({
-      yol: '/ornek.asmx', tabanlar: { [testOrtami]: `${soap.adres}/Servis`, [canli]: '' }, kimlikProfili: 'Sihirbaz giriş',
+      yol: '/ornek.asmx', tabanlar: { [testOrtami]: `${soap.adres}/Servis`, [canli]: '' },
       yalnizTestOperasyonlari: ['Onayla'], tarihKurallari: { BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" }
     });
     expect(s.ayarlar.operasyonlar.map((o: Nesne) => o.ad)).toEqual(['Teklif', 'Onayla']);
+    expect([...s.ayarlar.alanZorunluluklari.Teklif].sort()).toEqual(['Input/BeginDate', 'Input/ClientType', 'Input/CitizenshipNumber', 'Input/CreditCard/Installment', 'Input/EndDate'].sort());
+    expect(s.ayarlar.alanZorunluluklari.Onayla).toEqual(['TeklifNo']);
     expect(s.ayarlar.alanVarsayilanlari.Teklif).toMatchObject({
       'Input/Channel': { kaynak: 'parametre', deger: 'CHANNEL' }, 'Input/CitizenshipNumber': { kaynak: 'parametre', deger: 'SIGORTALI_TC' }
     });
     // Yeni taban adres ortamın listesine kaydedildi; giriş profili kasada.
     const { ortamlar } = await basarili(`/platform/ortamlar?projeId=${projeId}`);
     expect(ortamlar.find((o: Nesne) => o.id === testOrtami).tabanAdresleri).toEqual(['http://127.0.0.1:9/', `${soap.adres}/Servis`]);
-    expect((await basarili(`/platform/servis-kimlikleri?projeId=${projeId}`)).profiller).toEqual([{ ad: 'Sihirbaz giriş', alanlar: ['CHANNEL', 'PASSWORD', 'USERNAME'], ortamlar: {} }]);
+    // Giriş bilgisi test verisine yazıldı: "Servis girişi" türü (kanal açık, kullanıcı / parola hassas) + profil; servis bu profile bağlı.
+    expect(s.ayarlar.kimlikProfili).toBeUndefined();
+    const { turler } = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
+    const giris = turler.find((t: Nesne) => t.ad === 'Servis girişi');
+    expect(giris.alanlar.map((a: Nesne) => [a.ad, a.hassas, a.servisParametreleri]).sort()).toEqual([
+      ['kanal', false, [{ ad: 'CHANNEL', rol: 'giris' }]], ['kullanici', true, [{ ad: 'USERNAME', rol: 'giris' }]], ['parola', true, [{ ad: 'PASSWORD', rol: 'giris' }]]]);
+    const { profiller } = await basarili(`/platform/test-verisi-profilleri?projeId=${projeId}`);
+    const girisProfili = profiller.find((x: Nesne) => x.ad === 'Sihirbaz giriş');
+    expect(girisProfili).toMatchObject({ turId: giris.id, degerler: { kanal: '77' } });
+    expect(s.ayarlar.veriProfilleri[`${giris.id}:giris`]).toBe(girisProfili.id);
 
     // Yeni senaryo: varsayılanlar dolu gelir.
     await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);
     const satir = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^CitizenshipNumber/ }) });
     await expect(satir.getByLabel('CitizenshipNumber parametresi')).toHaveValue('SIGORTALI_TC');
+    // Zorunlu alanlar servisin listesinden: CitizenshipNumber vurgulu, IsSkiing değil; "Yalnız zorunlular" süzer; gönderilmeyen zorunlu alan uyarır.
+    await expect(satir).toHaveClass(/zorunlu/);
+    const kayak = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^IsSkiing/ }) });
+    await expect(kayak).not.toHaveClass(/zorunlu/);
+    await page.getByText('Yalnız zorunlular').click();
+    await expect(kayak).toHaveCount(0);
+    await expect(page.locator('.alan-formu .alan-satiri')).toHaveCount(5);
+    await satir.getByLabel('CitizenshipNumber değer kaynağı').selectOption('gonderme');
+    await expect(satir.locator('.alan-uyarisi')).toContainText('Zorunlu alan dolu gönderilmiyor');
+    await baglam.close();
+  });
+
+  test('giriş bilgileri Ayarlar > Test verisi\'nde ("Servis girişi" türü); ayrı "Servis giriş bilgileri" bölümü yok', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/ayarlar/test-verisi');
+    await expect(page.locator('.kayit-listesi').first()).toContainText('Servis girişi');
+    await expect(page.getByText('Sihirbaz giriş')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Servis giriş bilgileri' })).toHaveCount(0);
+    await baglam.close();
+  });
+
+  test('Parametreler sekmesi: senaryo yokken de metot alanları görünür; zorunluluk düzeltilir; WSDL\'de olmayan alan eklenir ve düzenleyicide kullanılır', async () => {
+    test.setTimeout(60_000);
+    const { servisler } = await basarili(`/platform/servisler?projeId=${projeId}`);
+    const s = servisler.find((x: Nesne) => x.anahtar === 'ornek-sihirbaz');
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${s.id}/parametreler`);
+    await expect(page.getByRole('heading', { name: 'Metot alanları' })).toBeVisible();
+    await expect(page.getByLabel('Teklif Input/Channel varsayılanı')).toHaveValue('CHANNEL');
+    // Senaryo olmasa da varsayılanlarda geçen parametreler listelenir.
+    await expect(page.locator('.kart').filter({ hasText: 'Kullanılan parametreler' })).toContainText('${CHANNEL}');
+    await page.getByLabel('Teklif Input/IsSkiing zorunlu').check();
+    await page.getByLabel('Teklif yeni alan yolu').fill('Input/EkAlan');
+    await page.getByLabel('Teklif yeni alan zorunlu').check();
+    await page.getByRole('button', { name: '+ Alan ekle' }).first().click();
+    await expect(page.locator('.alan-satiri').filter({ hasText: 'EkAlan' })).toContainText('WSDL\'de yok');
+    await page.getByRole('button', { name: 'Alanları kaydet' }).click();
+    await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar.ekAlanlar).toEqual({ Teklif: [{ yol: 'Input/EkAlan', tip: 'metin' }], Onayla: [] });
+    const ayar = (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar;
+    expect(ayar.alanZorunluluklari.Teklif).toEqual(expect.arrayContaining(['Input/EkAlan', 'Input/IsSkiing']));
+    expect(ayar.alanVarsayilanlari.Teklif['Input/Channel']).toEqual({ kaynak: 'parametre', deger: 'CHANNEL' });
+
+    // Düzenleyici: elle eklenen alan formda; gövdeye yazılır.
+    await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);
+    const ek = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^EkAlan/ }) });
+    await expect(ek).toHaveClass(/zorunlu/);
+    await ek.getByLabel('EkAlan değer kaynağı').selectOption('sabit');
+    await ek.getByLabel('EkAlan', { exact: true }).fill('ek-deger');
+    await page.getByRole('tab', { name: 'Gövde (XML)' }).click();
+    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<EkAlan>ek-deger<\/EkAlan>/);
+    expect(hatalar).toEqual([]);
     await baglam.close();
   });
 

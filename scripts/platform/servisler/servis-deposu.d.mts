@@ -4,7 +4,7 @@ import type { Veritabani } from '../veritabani/baglanti.mjs';
 export declare const SERVIS_TURLERI: readonly ['soap', 'rest'];
 export declare const SENARYO_KAPSAMLARI: readonly ['test', 'canli', 'ikisi'];
 export declare const KOSU_DURUMLARI: readonly ['basarili', 'basarisiz', 'hata'];
-export declare const KONTROL_TURLERI: readonly ['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit'];
+export declare const KONTROL_TURLERI: readonly ['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'veya'];
 
 export type ServisKapsami = 'test' | 'canli' | 'ikisi';
 export interface ServisOperasyonu { ad: string; eylem?: string }
@@ -14,6 +14,8 @@ export interface ServisAyarlari {
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
+  alanZorunluluklari?: Record<string, string[]>;
+  ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
   erisim?: { ortamId: string; zaman: string; durumKodu: number };
 }
 export interface Servis {
@@ -21,7 +23,7 @@ export interface Servis {
   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string;
 }
 export interface ServisKontrolu {
-  tur: (typeof KONTROL_TURLERI)[number]; deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string;
+  tur: (typeof KONTROL_TURLERI)[number]; deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[];
 }
 export interface ServisSenaryoIcerigi {
   operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
