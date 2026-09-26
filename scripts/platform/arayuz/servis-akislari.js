@@ -175,7 +175,7 @@ async function akisDuzenleyici(kap, proje, s, ortamlar, akisId) {
     if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
     try {
       const { sonuc } = await mesgulIken(dene, 'Deneniyor…', () => api('/platform/servis-akisi/dene', { govde: {
-        projeId: proje.id, ortamId: test.id, baslik: is.baslik.trim() || 'Taslak akış', tur: is.tur, icerik: icerikAl()
+        projeId: proje.id, ortamId: test.id, akisId: akisId || undefined, baslik: is.baslik.trim() || 'Taslak akış', tur: is.tur, icerik: icerikAl()
       } }));
       yerlestir(sonucKap, sonucKarti(sonuc));
       if (akisId) kosulariCiz();

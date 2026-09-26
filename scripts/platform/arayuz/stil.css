@@ -2247,8 +2247,9 @@ dialog.karsilik-diyalogu { width: min(52rem, calc(100vw - 2rem)); }
 
 /* Servis akışları (servis-akislari.js) */
 .akis-adimlari { display: grid; gap: 12px; margin: 12px 0; }
-.akis-adimi .kart-basligi { gap: 8px; }
-.akis-adimi .kart-basligi input[type="text"] { font-weight: 600; min-width: 200px; }
+.akis-adimi .kart-basligi { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; }
+.akis-adimi .kart-basligi input[type="text"] { flex: 1 1 auto; width: auto; min-width: 160px; font-weight: 600; }
+.akis-adimi .kart-basligi .sag { display: inline-flex; gap: 2px; margin-left: auto; flex: none; }
 .akis-adimi .adim-no { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--vurgu-zemin); color: var(--vurgu); font-weight: 700; }
 .okuma-satiri { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(130px, 1fr) minmax(180px, 2fr) auto auto; gap: 6px; align-items: center; margin-bottom: 6px; }
 .okuma-satiri .kod-girdisi { font-family: var(--yazi-mono); }
@@ -2256,6 +2257,7 @@ dialog.karsilik-diyalogu { width: min(52rem, calc(100vw - 2rem)); }
 .akis-adim-listesi { margin: 8px 0 0; padding-left: 22px; display: grid; gap: 8px; }
 .akis-adim-listesi > li { padding-left: 4px; }
 .akis-adim-listesi > li .adim-adi { font-weight: 600; margin-right: 8px; }
+.akis-adim-listesi > li > a { margin-left: 8px; }
 .akis-adim-listesi > li.basarili::marker { color: var(--basari); }
 .akis-adim-listesi > li.basarisiz::marker { color: var(--hata); }
 .akis-adim-listesi > li.atlanan { opacity: .7; }

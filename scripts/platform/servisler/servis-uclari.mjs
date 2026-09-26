@@ -260,7 +260,8 @@ export const SERVIS_POST_UCLARI = [
     const projeId = kimlik(g.projeId, 'projeId');
     return { sonuc: await servisAkisiCalistir(db, projeId, {
       ortamId: kimlik(g.ortamId, 'ortamId'), tur: 'dene',
-      ...(g.akisId ? { akisId: akisAl(db, projeId, g.akisId).id } : { taslak: { baslik: metin(g.baslik) || 'Taslak akış', tur: g.tur === 'oturum' ? 'oturum' : 'akis', icerik: g.icerik } })
+      ...(g.akisId ? { akisId: akisAl(db, projeId, g.akisId).id } : {}),
+      ...(g.icerik !== undefined ? { taslak: { baslik: metin(g.baslik) || 'Taslak akış', tur: g.tur === 'oturum' ? 'oturum' : 'akis', icerik: g.icerik } } : {})
     }) };
   }],
   ['/platform/servis-akisi/kos', async (db, g) => {

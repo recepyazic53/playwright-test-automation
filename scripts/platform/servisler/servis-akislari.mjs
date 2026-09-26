@@ -144,7 +144,7 @@ async function akisiKos(vt, projeId, g) {
 }
 
 /**
- * Akışı (kayıtlı ya da taslak) bir ortamda koşar ve sonucu kaydeder. tur 'dene': yalnız test ortamı. tur 'kosu': kapsam ortam
+ * Akışı (kayıtlı ya da taslak; ikisi birlikte verilirse taslak koşulur, kayıt akışa bağlanır) bir ortamda koşar ve sonucu kaydeder. tur 'dene': yalnız test ortamı. tur 'kosu': kapsam ortam
  * türüne uymalı. Canlıda "yalnız test" operasyonu içeren akış hiç istek atmadan reddedilir.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ akisId?: string; taslak?: { baslik?: string; tur?: 'akis' | 'oturum'; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: unknown };
@@ -154,8 +154,9 @@ export async function servisAkisiCalistir(vt, projeId, girdi) {
   const kayitli = girdi.akisId ? servisAkisiGetir(vt, girdi.akisId) : undefined;
   if (girdi.akisId && (!kayitli || kayitli.projeId !== projeId)) throw new DepoHatasi('Akış bulunamadı.');
   if (!kayitli && !girdi.taslak) throw new DepoHatasi('"akisId" ya da "taslak" gerekli.');
-  const akisTuru = kayitli?.tur ?? girdi.taslak?.tur ?? 'akis';
-  const akis = kayitli ?? { baslik: girdi.taslak?.baslik || 'Taslak akış', tur: akisTuru, kapsam: girdi.taslak?.kapsam ?? 'test', icerik: akisIceriginiDogrula(girdi.taslak?.icerik, akisTuru) };
+  // Taslak verilirse (düzenleyicide kaydedilmemiş hâl) o koşulur; akisId de verildiyse koşu kaydı o akışa bağlanır.
+  const akisTuru = girdi.taslak?.tur ?? kayitli?.tur ?? 'akis';
+  const akis = kayitli && !girdi.taslak ? kayitli : { id: kayitli?.id, baslik: girdi.taslak?.baslik || kayitli?.baslik || 'Taslak akış', tur: akisTuru, kapsam: girdi.taslak?.kapsam ?? kayitli?.kapsam ?? 'test', icerik: akisIceriginiDogrula(girdi.taslak?.icerik, akisTuru) };
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
   const tur = ortamTuru(ortam);

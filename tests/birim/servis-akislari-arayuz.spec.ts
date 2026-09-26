@@ -94,6 +94,8 @@ test.describe('servis akışları arayüzü', () => {
     // Liste: akış görünür, son koşu başarılı.
     await page.goto(`/#/servisler/s/${servisId}/akislar`);
     await expect(page.getByRole('table', { name: 'Servis akışları' })).toContainText('Giriş → Teklif');
+    // Düzenleyicideki Dene (kaydedilmemiş hâl) koşusu akışa bağlanır: Son koşu dolu.
+    await expect(page.getByRole('row', { name: /Giriş → Teklif/ })).toContainText('Başarılı');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
