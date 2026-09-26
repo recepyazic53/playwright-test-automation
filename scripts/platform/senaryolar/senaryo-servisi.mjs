@@ -985,11 +985,13 @@ export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId, secenekler 
     // Model senaryosu: tek model spec'i, senaryonun etiketiyle (UUID) daraltılır; test kodu gerekmez.
     if (!s.ekranId || !modelBaglami(vt, s.ekranId)) throw new DepoHatasi(`"${s.baslik}" senaryosunun ekran modeli yok; model koşucusuyla çalıştırılamaz.`);
     if (!ortamKimlikleri(s.icerik).includes(ortamId)) throw new DepoHatasi(`"${s.baslik}" seçilen ortamda tanımlı değil.`);
+    // Model senaryosu HER ZAMAN genel yoldan koşar (playwright.model.config.ts; proje + ortam kimliği; giriş tarifi, profiller
+    // ve test verisi veritabanından). Ortamın eski aktarım anahtarı (test / canli) yalnız bilgi olarak döner.
     const ortamAnahtari = ortamAnahtariBul(vt, projeId, ortamId);
     return {
       senaryoId: s.id, baslik: s.baslik, dosya: MODEL_SPEC_DOSYASI, ad: null, ortamAnahtari, ekranId: s.ekranId,
       model: true, etiket: modelEtiketi(s.id), grepDeseni: modelGrepDeseni(s.id),
-      genel: ortamAnahtari ? null : { projeId, ortamId }
+      genel: { projeId, ortamId }
     };
   }
   let kaynak = senaryoKaynagi(s.icerik);
@@ -1023,7 +1025,7 @@ function modelDenemePaketi(vt, girdi, mb, secenekler) {
   const denemeId = `deneme-${secenekler.geciciEk}`;
   const mutlaka = Array.isArray(girdi.mutlakaGorunmeli) ? girdi.mutlakaGorunmeli.filter((x) => typeof x === 'string').slice(0, 500) : [];
   return {
-    model: /** @type {const} */ (true), ortamAnahtari, genel: ortamAnahtari ? null : { projeId: girdi.projeId, ortamId: girdi.ortamId },
+    model: /** @type {const} */ (true), ortamAnahtari, genel: { projeId: girdi.projeId, ortamId: girdi.ortamId },
     spec: MODEL_SPEC_DOSYASI, geciciBaslik, etiket: modelEtiketi(denemeId), grepDeseni: modelGrepDeseni(denemeId), uyarilar: d.uyarilar,
     denemeSenaryosu: { id: denemeId, ekranId: girdi.ekranId, akisId: mb.akisId, ortamId: girdi.ortamId, baslik: geciciBaslik, veri: d.veri, mutlakaGorunmeli: mutlaka }
   };
