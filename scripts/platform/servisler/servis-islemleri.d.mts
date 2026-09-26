@@ -73,11 +73,17 @@ export interface CalistirmaSonucu {
   kosuId: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; baslik: string;
   operasyon: string; ortam: string; ortamTuru: 'test' | 'canli'; adres?: string; kimlikProfili?: string; istek?: string;
   durumKodu?: number; yanitSureMs?: number; kontroller?: KontrolSonucu[]; ozet?: string; yanit?: string; hata?: string; durduruldu?: boolean;
+  istekBasliklari?: Record<string, string>; okunanlar?: Record<string, string>; akis?: Record<string, unknown>;
 }
+export interface AkisOkumasi { ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
+export declare function okumaGizliMi(o: AkisOkumasi): boolean;
 export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string;
   taslak?: { baslik?: string; kapsam?: ServisKapsami; icerik: unknown }; zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
+  akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
+  /** Yanıttan okunan AÇIK değerler ve maskelenen değerler: yalnız bellekte (akış motoru); kayda / dönüşe yazılmaz. */
+  acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void;
 }): Promise<CalistirmaSonucu>;
 export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number;

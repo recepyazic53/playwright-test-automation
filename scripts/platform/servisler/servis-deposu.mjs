@@ -171,7 +171,8 @@ export function servisSil(vt, id, yapan) {
  * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'veya';
  *   deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[] }} ServisKontrolu
  * @typedef {{ operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
- *   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown> }} ServisSenaryoIcerigi
+ *   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>;
+ *   basliklar?: Record<string, string> }} ServisSenaryoIcerigi
  * @typedef {{ id: string; projeId: string; servisId: string; baslik: string; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
  *   sira: number | null; icerik: ServisSenaryoIcerigi; olusturulma: string; guncellenme: string }} ServisSenaryosu
  */
@@ -209,8 +210,32 @@ export function senaryoIceriginiDogrula(icerik) {
   if (!Array.isArray(i.kontroller)) throw new DepoHatasi('"kontroller" bir dizi olmalıdır.');
   const kontroller = i.kontroller.map((k, n) => kontrolDogrula(k, `${n + 1}.`, false));
   const tabloSecimleri = tabloSecimleriniDogrula(i.tabloSecimleri);
-  const { tabloSecimleri: _eski, ...kalan } = i;
-  return { ...kalan, operasyon, govde, kontroller, ...(tabloSecimleri ? { tabloSecimleri } : {}) };
+  const basliklar = basliklariDogrula(i.basliklar);
+  const { tabloSecimleri: _eski, basliklar: _b, ...kalan } = i;
+  return { ...kalan, operasyon, govde, kontroller, ...(tabloSecimleri ? { tabloSecimleri } : {}), ...(basliklar ? { basliklar } : {}) };
+}
+
+/** İstek gövdesi / SOAP başlıkları koşucunun: senaryoda değiştirilemez. */
+const KORUNAN_BASLIKLAR = new Set(['content-type', 'soapaction', 'content-length', 'host']);
+
+/**
+ * Ek HTTP başlıkları (ör. Authorization: Bearer ${akis:Token}): { Ad: değer } — ad HTTP belirteci, değer tek satır (en çok 4000).
+ * @param {unknown} v @returns {Record<string, string> | undefined}
+ */
+function basliklariDogrula(v) {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"basliklar" bir nesne olmalıdır.');
+  const girdiler = Object.entries(v).filter(([, d]) => d !== '' && d !== undefined && d !== null);
+  if (girdiler.length > 30) throw new DepoHatasi('Bir senaryoda en çok 30 başlık olabilir.');
+  /** @type {Record<string, string>} */
+  const s = {};
+  for (const [ad, d] of girdiler) {
+    if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]{1,100}$/.test(ad)) throw new DepoHatasi(`Geçersiz başlık adı: "${ad}".`);
+    if (KORUNAN_BASLIKLAR.has(ad.toLowerCase())) throw new DepoHatasi(`"${ad}" başlığı koşucu tarafından yazılır; senaryoda verilemez.`);
+    if (typeof d !== 'string' || d.length > 4000 || /[\r\n]/.test(d)) throw new DepoHatasi(`"${ad}" başlığının değeri geçersiz (tek satır metin, en çok 4000 karakter).`);
+    s[ad] = d;
+  }
+  return Object.keys(s).length ? s : undefined;
 }
 
 /**

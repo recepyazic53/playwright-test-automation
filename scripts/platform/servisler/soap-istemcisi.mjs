@@ -8,7 +8,7 @@ import { AD_KALIBI, BICIM_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi
 export const VARSAYILAN_ZAMAN_ASIMI_MS = 60_000;
 /** Saklanan yanıt en çok bu kadar karakter tutulur (rapor boyutu). */
 export const YANIT_SAKLAMA_SINIRI = 200_000;
-const MASKE = '***';
+export const MASKE = '***';
 
 export class ServisHatasi extends Error {
   /** @param {string} mesaj */
@@ -51,8 +51,12 @@ export function goreliTarih(ifade, simdi) {
 
 /** Parametre başvurusu: ${AD} ya da doğrudan tarih ${tarih:bugun+1y|yyyy-MM-dd}. */
 // ${tarih:ifade|biçim} · ${AD} (eski parametre) · ${Tablo.Sütun} / ${Tablo[etiket].Sütun} (test verisi tablosu); başvuruda "|biçim"
-// varsa değer tarih olarak okunup o biçimde yazılır (ör. ${Kişi.Doğum tarihi|yyyy-MM-dd'T'HH:mm:ss}).
-const PARAMETRE = new RegExp(`\\$\\{\\s*(?:tarih:([^|}]+)(?:\\|([^}]+))?|([A-Za-z_][A-Za-z0-9_.-]{0,79}|${AD_KALIBI}(?:\\[${ETIKET_KALIBI}\\])?\\.${AD_KALIBI})\\s*(?:\\|(${BICIM_KALIBI}))?)\\s*\\}`, 'gu');
+// varsa değer tarih olarak okunup o biçimde yazılır (ör. ${Kişi.Doğum tarihi|yyyy-MM-dd'T'HH:mm:ss}) · ${akis:Ad} (servis akışında
+// önceki adımın yanıtından okunan değer, ör. token).
+const AKIS_ADI = '[A-Za-z_][A-Za-z0-9_-]{0,59}';
+/** Akış değeri adı (okuma adı). */
+export const AKIS_DEGERI_ADI = new RegExp(`^${AKIS_ADI}$`);
+const PARAMETRE = new RegExp(`\\$\\{\\s*(?:tarih:([^|}]+)(?:\\|([^}]+))?|akis:(${AKIS_ADI})|([A-Za-z_][A-Za-z0-9_.-]{0,79}|${AD_KALIBI}(?:\\[${ETIKET_KALIBI}\\])?\\.${AD_KALIBI})\\s*(?:\\|(${BICIM_KALIBI}))?)\\s*\\}`, 'gu');
 
 /**
  * Tablodaki tarih değeri → biçimli metin. Okunan: yyyy-MM-dd (ardından isteğe bağlı T/boşluk + HH:mm[:ss]), dd.MM.yyyy,
@@ -80,32 +84,77 @@ export function tarihKuraliUygula(kural, simdi) {
 
 /**
  * Gövdedeki ${AD} başvurularını doldurur: önce tarih kuralı (tarihKurallari[AD]), sonra değer (degerler[AD]; XML için
- * kaçışlanır). Değeri bulunamayan parametreler tek hatada listelenir (nereden dolacağı "eksikAciklamasi" ile söylenir).
+ * kaçışlanır). ${akis:Ad} akisDegerleri'nden (servis akışı / oturum). Değeri bulunamayan parametreler tek hatada listelenir
+ * (nereden dolacağı "eksikAciklamasi" ile söylenir). kacis: 'xml' (gövde; varsayılan) · 'baslik' (HTTP başlığı: kaçış yok,
+ * satır sonu içeren değer reddedilir).
  * @param {string} govde
- * @param {{ degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string }} baglam
+ * @param {{ degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string;
+ *   akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik' }} baglam
  */
 export function yerTutuculariDoldur(govde, baglam) {
   const simdi = baglam.simdi ?? new Date();
   /** @type {Set<string>} */
   const eksik = new Set();
-  const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, hamAd, degerBicimi) => {
-    const ad = typeof hamAd === 'string' ? hamAd.trim() : hamAd;
+  const kacis = (/** @type {string} */ v, /** @type {string} */ ad) => {
+    if (baglam.kacis !== 'baslik') return xmlKacis(v);
+    if (/[\r\n]/.test(v)) throw new ServisHatasi(`"${ad}" değeri satır sonu içeriyor; başlıkta kullanılamaz.`);
+    return v;
+  };
+  const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, akisAdi, hamAd, degerBicimi) => {
     if (tarihIfadesi) return tarihKuraliUygula(`${tarihIfadesi}|${bicim ?? "yyyy-MM-dd'T'HH:mm:ss"}`, simdi);
+    if (akisAdi) {
+      const v = baglam.akisDegerleri?.[akisAdi];
+      if (v === undefined) { eksik.add(`akis:${akisAdi}`); return ''; }
+      return kacis(v, `akis:${akisAdi}`);
+    }
+    const ad = typeof hamAd === 'string' ? hamAd.trim() : hamAd;
     const kural = baglam.tarihKurallari?.[ad];
     if (kural) return tarihKuraliUygula(kural, simdi);
     const d = baglam.degerler[ad];
     if (d === undefined) { eksik.add(ad); return ''; }
-    return xmlKacis(degerBicimi ? tarihDegeriBicimle(d, degerBicimi.trim(), ad) : d);
+    return kacis(degerBicimi ? tarihDegeriBicimle(d, degerBicimi.trim(), ad) : d, ad);
   });
   if (eksik.size) {
-    throw new ServisHatasi(`Değeri bulunamayan parametre: ${[...eksik].map((a) => (baglam.eksikAciklamasi ? `${a} (${baglam.eksikAciklamasi(a)})` : a)).join(', ')}.`);
+    const aciklama = (/** @type {string} */ a) => (a.startsWith('akis:') ? 'akış değeri: yalnız servis akışında ya da oturum akışıyla dolar'
+      : baglam.eksikAciklamasi ? baglam.eksikAciklamasi(a) : '');
+    throw new ServisHatasi(`Değeri bulunamayan parametre: ${[...eksik].map((a) => (aciklama(a) ? `${a} (${aciklama(a)})` : a)).join(', ')}.`);
   }
   return sonuc;
 }
 
-/** Gövdede geçen parametre adları (doğrudan tarih ifadeleri hariç). @param {string} govde */
+/** Gövdede geçen parametre adları (doğrudan tarih ifadeleri ve ${akis:…} hariç). @param {string} govde */
 export function kullanilanParametreler(govde) {
-  return [...new Set([...govde.matchAll(PARAMETRE)].map((m) => m[3]?.trim()).filter(Boolean))];
+  return [...new Set([...govde.matchAll(PARAMETRE)].map((m) => m[4]?.trim()).filter(Boolean))];
+}
+
+/** Metinde geçen akış değeri adları (${akis:Ad}). @param {string} metin */
+export function kullanilanAkisDegerleri(metin) {
+  return [...new Set([...metin.matchAll(PARAMETRE)].map((m) => m[3]).filter(Boolean))];
+}
+
+/**
+ * Yanıttan değer okuma: xml (basit XPath: /A/B, //B, //A/B), json (a.b[0].c; baştaki "$." isteğe bağlı), baslik (yanıt başlığı).
+ * Bulunamazsa undefined.
+ * @param {{ govde: string; basliklar?: Record<string, string> }} yanit @param {{ kaynak?: 'xml' | 'json' | 'baslik'; yol: string }} okuma
+ * @returns {string | undefined}
+ */
+export function degerOku(yanit, okuma) {
+  const yol = okuma.yol.trim();
+  if (okuma.kaynak === 'baslik') {
+    const b = Object.entries(yanit.basliklar ?? {}).find(([a]) => a.toLowerCase() === yol.toLowerCase());
+    return b ? b[1] : undefined;
+  }
+  if (okuma.kaynak === 'json') {
+    let v;
+    try { v = JSON.parse(yanit.govde); } catch { return undefined; }
+    for (const p of yol.replace(/^\$\.?/, '').split(/\.|\[(\d+)\]/).filter((x) => x !== undefined && x !== '')) {
+      if (v === null || typeof v !== 'object') return undefined;
+      v = /** @type {any} */ (v)[p];
+    }
+    return v === undefined || v === null ? undefined : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  }
+  const kok = xmlAgaci(yanit.govde);
+  return kok ? xpathMetni(kok, yol) : undefined;
 }
 
 /** @param {string} s */
@@ -189,14 +238,18 @@ function agHatasiMetni(e) {
 }
 
 /**
- * SOAP isteği. 1.1: text/xml + SOAPAction; 1.2: application/soap+xml; action=...
+ * SOAP isteği. 1.1: text/xml + SOAPAction; 1.2: application/soap+xml; action=... ekBasliklar (ör. Authorization) eklenir;
+ * Content-Type / SOAPAction ezilemez.
  * @param {{ adres: string; eylem?: string; soapSurumu?: '1.1' | '1.2'; govde: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
- *   sinyal?: AbortSignal; gonderildi?: () => void }} istek
+ *   sinyal?: AbortSignal; gonderildi?: () => void; ekBasliklar?: Record<string, string> }} istek
  */
 export function soapIstegi(istek) {
-  const basliklar = istek.soapSurumu === '1.2'
+  const soapBasliklari = istek.soapSurumu === '1.2'
     ? { 'Content-Type': `application/soap+xml; charset=utf-8${istek.eylem ? `; action="${istek.eylem}"` : ''}` }
     : { 'Content-Type': 'text/xml; charset=utf-8', SOAPAction: `"${istek.eylem ?? ''}"` };
+  const korunan = new Set(['content-type', 'soapaction', 'content-length', 'host']);
+  const ek = Object.fromEntries(Object.entries(istek.ekBasliklar ?? {}).filter(([a]) => !korunan.has(a.toLowerCase())));
+  const basliklar = { ...ek, ...soapBasliklari };
   return httpIstegi({ adres: istek.adres, yontem: 'POST', basliklar, govde: istek.govde, zamanAsimiMs: istek.zamanAsimiMs, tlsDogrulama: istek.tlsDogrulama,
     sinyal: istek.sinyal, gonderildi: istek.gonderildi });
 }
@@ -314,14 +367,17 @@ const yerelAd = (ad) => ad.slice(ad.indexOf(':') + 1);
 const tumMetin = (d) => d.metin + d.cocuklar.map(tumMetin).join('');
 
 /**
- * Basit XPath: "/Envelope/Body/X/Y" (önekler yok sayılır; "//Y" her derinlikte arar). İlk eşleşen düğümün metni.
+ * Basit XPath: "/Envelope/Body/X/Y" (önekler yok sayılır; "//Y" her derinlikte arar; "//X/Y" her derinlikteki X'in altındaki Y).
+ * İlk eşleşen düğümün metni.
  * @param {XmlDugumu} kok @param {string} yol @returns {string | undefined}
  */
 export function xpathMetni(kok, yol) {
   if (yol.startsWith('//')) {
-    const ad = yerelAd(yol.slice(2));
+    const [ilk, ...alt] = yol.slice(2).split('/').filter(Boolean).map(yerelAd);
     /** @param {XmlDugumu} d @returns {XmlDugumu | undefined} */
-    const ara = (d) => (d.ad === ad ? d : d.cocuklar.map(ara).find(Boolean));
+    const altina = (d) => alt.reduce((/** @type {XmlDugumu | undefined} */ x, p) => x?.cocuklar.find((c) => c.ad === p), d);
+    /** @param {XmlDugumu} d @returns {XmlDugumu | undefined} */
+    const ara = (d) => (d.ad === ilk && altina(d) ? altina(d) : d.cocuklar.map(ara).find(Boolean));
     const b = ara(kok);
     return b ? tumMetin(b).trim() : undefined;
   }

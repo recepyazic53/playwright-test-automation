@@ -13,7 +13,7 @@ import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import {
-  erisimiDenetle, gizlileriMaskele, goreliTarih, kontrolleriDegerlendir, kullanilanParametreler, ServisHatasi, soapIstegi,
+  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, goreliTarih, kontrolleriDegerlendir, kullanilanParametreler, ServisHatasi, soapIstegi,
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
 } from './soap-istemcisi.mjs';
 import {
@@ -772,8 +772,13 @@ export function soapuiAktar(vt, projeId, girdi) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string; taslak?: { baslik?: string; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: unknown };
  *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
- *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void }} girdi
+ *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
+ *   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
+ *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void }} girdi
  *   olay: canlı panel için adım bildirimi (istek / yanıt maskeli). sinyal: durdurma (bekleyen istek kesilir).
+ *   Servis akışı: akisDegerleri (${akis:Ad} değerleri), ekGizliler (maskelenecek önceki değerler), okumalar (yanıttan okunacak
+ *   değerler; açık değerler YALNIZ acikDegerler geri çağırmasıyla, bellekte; kayıtta ve dönüşte gizliler maskeli), akis (kayda
+ *   yazılan akış bilgisi).
  */
 export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const olay = girdi.olay ?? (() => undefined);
@@ -796,9 +801,11 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const baslangic = new Date();
   const bas = Date.now();
   /** @type {string[]} */
-  let gizliler = [];
+  let gizliler = [...(girdi.ekGizliler ?? [])];
+  /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
+  const okunan = {};
   /** @type {Record<string, unknown>} */
-  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur };
+  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}) };
   /** @type {'basarili' | 'basarisiz' | 'hata'} */
   let durum = 'hata';
   /** @type {'hazirlik' | 'gonderim' | 'yanit' | 'kontroller'} */
@@ -807,26 +814,50 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     olay('hazirlik', 'basladi');
     const adres = servisAdresi(servis.ayarlar, ortam);
     sonuc.adres = adres;
-    const p = parametreDegerleri(vt, projeId, servis, icerik, ortam.id);
-    gizliler = p.gizliler;
+    // Başlıklardaki ${Tablo.Sütun} de gövdedekilerle birlikte çözülür.
+    const basliklarHam = icerik.basliklar ?? {};
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [icerik.govde, ...Object.values(basliklarHam)].join('\n') }, ortam.id);
+    gizliler = [...gizliler, ...p.gizliler];
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
-    const govde = yerTutuculariDoldur(icerik.govde, {
-      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (ad) => p.eksikNedeni[ad] ?? 'tanımsız'
-    });
+    const doldurma = {
+      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
+      akisDegerleri: girdi.akisDegerleri
+    };
+    const govde = yerTutuculariDoldur(icerik.govde, doldurma);
+    const ekBasliklar = Object.fromEntries(Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]));
     sonuc.istek = gizlileriMaskele(govde, gizliler);
+    if (Object.keys(ekBasliklar).length) sonuc.istekBasliklari = basliklariMaskele(ekBasliklar, gizliler);
     olay('hazirlik', 'tamam', { adres, istek: sonuc.istek });
     adim = 'gonderim';
     olay('gonderim', 'basladi');
     if (girdi.sinyal?.aborted) throw new ServisHatasi('Kullanıcı durdurdu.');
     const yanit = await soapIstegi({
       adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
-      gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
+      ekBasliklar, gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
     });
     adim = 'kontroller';
+    // Yanıttan okuma (akış): gizli değerler kayda / panele yazılmadan önce maskeleme listesine girer.
+    /** @type {import('./soap-istemcisi.mjs').KontrolSonucu[]} */
+    const okumaSonuclari = [];
+    for (const o of girdi.okumalar ?? []) {
+      const v = degerOku(yanit, o);
+      if (v === undefined || v === '') {
+        okumaSonuclari.push({ tur: 'okuma', ad: `Değer okunamadı: ${o.ad}`, gecti: false, aciklama: `${o.kaynak ?? 'xml'} yolu "${o.yol}" yanıtta bulunamadı` });
+        continue;
+      }
+      okunan[o.ad] = v;
+      if (okumaGizliMi(o)) gizliler.push(v);
+      okumaSonuclari.push({ tur: 'okuma', ad: `Değer okundu: ${o.ad}`, gecti: true, aciklama: okumaGizliMi(o) ? 'gizli (maskelendi)' : '' });
+    }
     olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
-    const kontroller = kontrolleriDegerlendir(yanit, icerik.kontroller);
+    // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki TeklifNo = önceki adımda okunan) çözülür.
+    const kontrolListesi = girdi.akisDegerleri ? akisKontrolleriniCoz(icerik.kontroller, girdi.akisDegerleri) : icerik.kontroller;
+    const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi), ...okumaSonuclari];
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';
+    if (Object.keys(okunan).length) {
+      sonuc.okunanlar = Object.fromEntries((girdi.okumalar ?? []).filter((o) => okunan[o.ad] !== undefined).map((o) => [o.ad, okumaGizliMi(o) ? MASKE : okunan[o.ad]]));
+    }
     olay('kontroller', durum === 'basarili' ? 'tamam' : 'hata', { gecen: kontroller.filter((k) => k.gecti).length, toplam: kontroller.length });
     Object.assign(sonuc, {
       durumKodu: yanit.durumKodu, yanitSureMs: yanit.sureMs, kontroller, ozet: gizlileriMaskele(yanitOzeti(yanit.govde), gizliler),
@@ -843,7 +874,40 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     projeId, servisId: servis.id, senaryoId: kayitli?.id ?? null, ortamId: ortam.id, tur: girdi.tur, durum,
     baslangic: baslangic.toISOString(), sureMs, baslik, sonuc
   });
+  // Açık değerler yalnız çağıran akış motoruna (geri çağırma); dönüş / API yanıtı / kayıt maskeli kalır.
+  girdi.acikDegerler?.({ okunan, gizliler });
   return { kosuId, durum, sureMs, baslik, ...sonuc };
+}
+
+/**
+ * Akışta yanıttan okunacak değer: ad (${akis:Ad}), kaynak (xml: basit XPath · json: a.b[0] · baslik: yanıt başlığı), yol; gizli
+ * (varsayılan: adı token / parola / secret / session / cookie / auth içeriyorsa) — gizli değer kayıtta maskelenir.
+ * @typedef {{ ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }} AkisOkumasi
+ */
+
+const GIZLI_OKUMA_ADI = /token|pass|parola|şifre|sifre|secret|session|cookie|auth/i;
+/** @param {AkisOkumasi} o */
+export const okumaGizliMi = (o) => (o.gizli !== undefined ? o.gizli : GIZLI_OKUMA_ADI.test(o.ad));
+
+/** Kimlik taşıyan başlıklar raporda her zaman maskelenir (şema kalır: "Bearer ***"). */
+const KIMLIK_BASLIKLARI = new Set(['authorization', 'proxy-authorization', 'cookie', 'x-api-key', 'x-auth-token']);
+/** @param {Record<string, string>} b @param {string[]} gizliler */
+function basliklariMaskele(b, gizliler) {
+  return Object.fromEntries(Object.entries(b).map(([a, d]) => {
+    if (!KIMLIK_BASLIKLARI.has(a.toLowerCase())) return [a, gizlileriMaskele(d, gizliler)];
+    const sema = /^(Bearer|Basic|Digest|Token)\s+/i.exec(d);
+    return [a, sema ? `${sema[1]} ${MASKE}` : MASKE];
+  }));
+}
+
+/**
+ * Kontrol değerlerindeki ${akis:Ad} → değer (VEYA alt kontrolleri dahil). Tanımsız ad olduğu gibi kalır (kontrol düşer).
+ * @param {import('./servis-deposu.mjs').ServisKontrolu[]} kontroller @param {Record<string, string>} degerler
+ * @returns {import('./servis-deposu.mjs').ServisKontrolu[]}
+ */
+function akisKontrolleriniCoz(kontroller, degerler) {
+  const coz = (/** @type {unknown} */ v) => (typeof v === 'string' ? v.replace(/\$\{\s*akis:([A-Za-z_][A-Za-z0-9_-]{0,59})\s*\}/g, (m, ad) => degerler[ad] ?? m) : v);
+  return kontroller.map((k) => /** @type {any} */ ({ ...k, ...(k.deger !== undefined ? { deger: coz(k.deger) } : {}), ...(Array.isArray(k.alt) ? { alt: akisKontrolleriniCoz(k.alt, degerler) } : {}) }));
 }
 
 /**
