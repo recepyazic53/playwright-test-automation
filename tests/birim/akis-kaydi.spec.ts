@@ -580,6 +580,16 @@ test('çoklu akış: Akışlar sekmesinde kopyadan yeni akış; senaryo akışı
     await expect(grup1.getByRole('button', { name: 'Ad Soyad: zorunlu' })).toHaveText('Zorunlu');
     await grup1.getByRole('button', { name: 'TC kimlik no: gruptan çıkar' }).click();
     await expect(grup1).not.toContainText('TC kimlik no');
+    // Grup içi sıra: sol üstte doldurma sırası; ↑ ile ikinci alan başa geçer (sonra geri alınır).
+    const cipler = grup1.locator('.tasarim-alani');
+    await expect(cipler.first().locator('.alan-sirasi')).toHaveText('1');
+    const ikinci = await cipler.nth(1).locator('.ad').innerText();
+    await expect(cipler.first().getByRole('button', { name: /: yukarı taşı$/ })).toBeDisabled();
+    await cipler.nth(1).getByRole('button', { name: /: yukarı taşı$/ }).click();
+    await expect(cipler.first().locator('.ad')).toHaveText(ikinci);
+    await expect(cipler.nth(1).locator('.alan-sirasi')).toHaveText('2');
+    await cipler.first().getByRole('button', { name: /: aşağı taşı$/ }).click();
+    await expect(cipler.nth(1).locator('.ad')).toHaveText(ikinci);
     // Kaydedilmemiş değişiklikle sayfadan çıkılırken uyarı; vazgeçilince düzenleyicide kalınır.
     await page.locator('.kirinti').getByRole('link', { name: 'Ekranlar' }).click();
     const cikisOnayi = page.locator('dialog.onay-diyalogu');

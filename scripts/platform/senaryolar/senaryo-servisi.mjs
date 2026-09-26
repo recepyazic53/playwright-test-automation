@@ -105,9 +105,30 @@ function hassasAdlar(/** @type {Veritabani} */ vt, /** @type {string} */ projeId
   return new Set(testVerisiTurleriniListele(vt, projeId).flatMap((t) => t.alanlar.filter((a) => a.hassas !== false).map((a) => a.ad)));
 }
 
-/** @param {Veritabani} vt @param {string} projeId @param {unknown} veri */
-function veriyiSifrele(vt, projeId, veri) {
-  return adliAlanlariDonustur(veri, hassasAdlar(vt, projeId), (m) => sifrele(vt, m));
+/**
+ * Modelde "hassas" işaretli alanların senaryo anahtarları (tüm akışlar + senaryo düzeyi). Bu alanlar senaryo verisinde de kasa
+ * zarfıyla saklanır (ör. profilden türetilip senaryoya yazılan telefon). @param {unknown} model @returns {string[]}
+ */
+export function modelHassasAnahtarlari(model) {
+  if (!nesneMi(model)) return [];
+  /** @type {Set<string>} */
+  const adlar = new Set();
+  const alan = (/** @type {unknown} */ a) => {
+    if (!nesneMi(a) || a.hassas !== true || !nesneMi(a.eslesme)) return;
+    const s = a.eslesme.senaryo;
+    for (const k of Array.isArray(s) ? s : [s]) if (typeof k === 'string' && k) adlar.add(k);
+  };
+  const adimlar = [...(Array.isArray(model.adimlar) ? model.adimlar : []), ...(Array.isArray(model.akislar) ? model.akislar.flatMap((/** @type {any} */ x) => (nesneMi(x) && Array.isArray(x.adimlar) ? x.adimlar : [])) : [])];
+  for (const adim of adimlar) {
+    for (const b of nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []) for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) alan(a);
+  }
+  for (const a of nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? model.senaryoDuzeyi.alanlar : []) alan(a);
+  return [...adlar];
+}
+
+/** @param {Veritabani} vt @param {string} projeId @param {unknown} veri @param {string[]} [ekHassas] modelin hassas anahtarları */
+function veriyiSifrele(vt, projeId, veri, ekHassas = []) {
+  return adliAlanlariDonustur(veri, new Set([...hassasAdlar(vt, projeId), ...ekHassas]), (m) => sifrele(vt, m));
 }
 
 /** Senaryonun akışı (içerikte; yoksa null = ekranın varsayılan akışı). @param {unknown} icerik */
@@ -595,7 +616,7 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
   for (const o of ortamIdleri) {
     const eski = nesneMi(eskiOrtamlar[o]) ? eskiOrtamlar[o] : null;
     const sira = eski && typeof eski.sira === 'number' ? eski.sira : sonrakiSira(vt, girdi.projeId, kaynakVeri, o);
-    yeniOrtamlar[o] = ortamVerileri[o] ? { sira, veri: veriyiSifrele(vt, girdi.projeId, ortamVerileri[o]) } : { sira };
+    yeniOrtamlar[o] = ortamVerileri[o] ? { sira, veri: veriyiSifrele(vt, girdi.projeId, ortamVerileri[o], modelHassasAnahtarlari(mb?.model)) } : { sira };
   }
   /** @type {Nesne} */
   const icerik = {
@@ -790,15 +811,38 @@ export function senaryoKopyala(vt, projeId, id, yapan) {
   const veri = /** @type {{ dosya: string; yol: string }} */ (s.icerik.veri);
   /** @type {Record<string, Nesne>} */
   const ortamlar = {};
+  const modelHassas = s.ekranId ? modelHassasAnahtarlari(modelBaglami(vt, s.ekranId, senaryoAkisi(s.icerik))?.model) : [];
   for (const o of ortamKimlikleri(s.icerik)) {
     const v = ortamVerisi(vt, s.icerik, o);
-    ortamlar[o] = { sira: sonrakiSira(vt, projeId, veri, o), ...(v ? { veri: veriyiSifrele(vt, projeId, { ...v, ...(typeof v.baslik === 'string' ? { baslik } : {}) }) } : {}) };
+    ortamlar[o] = { sira: sonrakiSira(vt, projeId, veri, o), ...(v ? { veri: veriyiSifrele(vt, projeId, { ...v, ...(typeof v.baslik === 'string' ? { baslik } : {}) }, modelHassas) } : {}) };
   }
   const yeniId = depoSenaryoKaydet(vt, {
     projeId, ekranId: s.ekranId, baslik, kosuyaDahil: false, yapan,
     icerik: { ...kopya(s.icerik), kaynak: { dosya: kaynak.dosya, ad: baslik }, ortamlar }
   });
   return { id: yeniId, baslik };
+}
+
+/**
+ * Senaryoların değişiklik geçmişini siler (senaryolar kalır). Geri alınamaz: yalnızca açık onayla (onay: true); onaysız çağrı
+ * silinecek kayıt sayısını döner. Ör. eski sürümlerde şifrelenmemiş kalmış hassas değerleri temizlemek için.
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} idler @param {{ onay?: boolean }} [s]
+ * @returns {{ senaryo: number; kayit: number; silindi: boolean }}
+ */
+export function senaryoGecmisiniSil(vt, projeId, idler, s = {}) {
+  acikAnahtar(vt);
+  const liste = Array.isArray(idler) ? [...new Set(idler.filter((x) => typeof x === 'string'))] : [];
+  if (!liste.length) throw new DepoHatasi('En az bir senaryo seçin.');
+  if (liste.length > 500) throw new DepoHatasi('Tek seferde en çok 500 senaryo.');
+  for (const id of liste) {
+    const sen = senaryoGetir(vt, id);
+    if (!sen || sen.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+  }
+  const yer = liste.map(() => '?').join(', ');
+  const kayit = Number(vt.tek(`SELECT COUNT(*) AS n FROM degisiklik_gecmisi WHERE varlik_turu = 'senaryo' AND varlik_id IN (${yer})`, liste)?.n ?? 0);
+  if (s.onay !== true) return { senaryo: liste.length, kayit, silindi: false };
+  vt.islem(() => vt.calistir(`DELETE FROM degisiklik_gecmisi WHERE varlik_turu = 'senaryo' AND varlik_id IN (${yer})`, liste));
+  return { senaryo: liste.length, kayit, silindi: true };
 }
 
 // ---------------------------------------------------------------------------------------

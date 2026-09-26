@@ -184,6 +184,30 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
    - Akış tasarımında kaydedilmemiş değişiklikle sayfadan çıkarken onay istenir.
    - Kararlar: CANLI'da gerçek kart işareti gerekmiyor ("hiç bir zaman gerçek kart kullanılmayacak"); diyagramdan senaryo
      düzenleme (3b) ertelendi.
+   **JetDASK (akış) — 1. aşama (koddan) yapıldı** (2026-09-25, dal `jetdask-akis`, commit yok): `projeler/galaksi/jetdask-akis.mjs`,
+   çıktı `node scripts/jetdask-akis-paketi.mjs` → `Claude outputs/jetdask-akis.paket.json` (ödeme ortak akışıyla; Nöbetçi'de ödeme
+   ortak akışı yüklü olmalı). Sigortalı özel / tüzel / pasaport (kimlik profili; türe göre doğum tarihi, uyruk, sorgu düğmesi),
+   UAVT, tapu, poliçe, prim, ödeme. Koşucuya genel ek: `bekle.icermez` (sorgu sürerken "Aranıyor" dolu sayılmaz). Koruma testi:
+   `tests/birim/jetdask-akis.spec.ts` (yerel fikstür). Eksik: açılır listelerin seçenekleri (kodda yok; TEST ekranından
+   okunacak — kullanıcı oturumu + onayı), "bulunduğu kat" TEST'te eksik seçenek, sunucu hata göstergesi. Senaryolar henüz yok
+   (kodlu 6 kombinasyon: 3 kimlik tipi × 2 sıfat; değerleri şifreli test verisinde — kasa açılınca taşınacak).
+   **Diğer ürünler koddan (2026-09-26, dal `jetdask-akis`, commit yok):** JetSağlık, JetKOBİ, JetKonut, JetİlkAteşKonut, JetKasko
+   paketleri (`projeler/galaksi/<ürün>-akis.mjs`, `scripts/<ürün>-akis-paketi.mjs`, yerel fikstür + e2e testleri). Ödeme ortak
+   akışları `projeler/galaksi/odeme-akis.mjs`'te: "Ödeme (kredi kartı)" (JetSeyahat, JetDASK, JetKasko), "Ödeme (teklif kaydet +
+   kredi kartı)" (JetKOBİ, JetKonut, JetİlkAteşKonut), "Ödeme (doğrudan kart formu)" (JetSağlık). Hepsi kullanıcının Nöbetçi'sine
+   yüklendi (onaylı; senaryosuz). Listelerin seçenekleri TEST ekranından okunacak.
+   **Koşucu:** her alandan sonra alanın başlattığı XHR / fetch istekleri bitene kadar otomatik bekleme (en çok 8 sn;
+   `ALAN_SONRASI_EN_COK_MS`); oklu seçimde `yanitBekle` (JetSeyahat ülke listesi — TEST'te ülkenin silinmesi buydu, düzeldi,
+   kullanıcı doğruladı). **Akış tasarımı:** grup içi sıra (sol üstte numara, ↑/↓, alanın üstüne bırakınca önüne); modelde sıra
+   diyagramdakiyle aynı (bölümler ardışık parçalanır).
+   **Kodlu senaryoları akışa taşı** (kullanıcı onaylı yöntem): `scripts/platform/senaryolar/akis-tasima.mjs` (genel; önizleme =
+   senaryo kaydıyla aynı doğrulama, yazılıp geri alınır), adaptör kancası `akisSenaryoTaslaklari` / `akisTasimaEkranlari`,
+   Galaksi taşıyıcıları `projeler/galaksi/akis-tasima.mjs` + `tasima-*.mjs` (ürün verisi sunucuda okunur, kimlik profil adıyla,
+   başlık kodlu testinkiyle aynı). Arayüz: akış ekranında "Kodlu senaryoları taşı…" (ortam seç, önizle, seçilenleri taşı; senaryolar
+   yalnızca o ortamda, Koşuda kapalı). Kullanıcı yapacak (değerleri yalnızca o görür).
+   **Açık konular:** kodlu testlerin ürüne özgü kabul edilen ödeme sonuçları ortak akışlarda yok (önizleme notu; ortak akışa "veya"
+   mesajı eklenmeli); ajanların bulduğu motor eksikleri (görünmüyorsa tıklamayı atla, gizli alana değer yaz, telefon bölme, kapalı
+   alanı atla, bağlam profilinden değer, alan beklemesinde hata penceresi) — kullanıcıya liste olarak sunulacak.
 5. **CANLI ortamda authenticator ile giriş** denemesi (kullanıcıyla).
 6. **`.env` silinmesi** (Mac ve Windows) — 5 başarılı olunca (1 tamam), onayla.
 7. ~~**Küçük kararlar**~~ (2026-09-25): kilit ekranında proje sayısı GİZLENMEYECEK (kullanıcı: hayır); devre dışı

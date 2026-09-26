@@ -43,6 +43,7 @@ import { paketleTestleriListele } from '../../scripts/platform/aktarim/gecici-li
 import { senaryoKaynakAnahtari } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
 import { ortakBaglaminiOlustur } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
 import { galaksiGirisTarifi } from './giris-tarifi.mjs';
+import { akisSenaryoTaslaklariniKur, akisTasimaEkranlari } from './akis-tasima.mjs';
 
 /** @typedef {import('../../scripts/platform/veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('../../scripts/platform/aktarim/motor.d.mts').AktarimPaketi} AktarimPaketi */
@@ -732,5 +733,7 @@ export const galaksiAdaptoru = Object.freeze({
   profilHavuzlari,
   dogrulamaBaglami,
   varsayilanGirisTarifi,
-  dosyaKaynaklari
+  dosyaKaynaklari,
+  akisSenaryoTaslaklari: akisSenaryoTaslaklariniKur(yenidenKur),
+  akisTasimaEkranlari
 });

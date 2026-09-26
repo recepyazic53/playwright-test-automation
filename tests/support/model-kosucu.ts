@@ -14,7 +14,7 @@
 //      göstergesi (hata göstergesinde beklenmeyen bir uyarı çıkarsa Beklenen/Görülen hatası),
 //   4) adım ekran görüntüsü.
 // Planın kendisi (hangi adımlar, hangi alanlar, beklenen sonuç) saftır: scripts/platform/senaryolar/model-kosusu.mjs.
-import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Request, type TestInfo } from '@playwright/test';
 import { existsSync, realpathSync } from 'node:fs';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
@@ -104,6 +104,18 @@ async function okluSec(page: Page, alan: PlanAlani, gosterge: Locator, hedefMeti
   const y = alan.yardimci;
   const yonler = [y.ileri ?? y.arttir, y.geri ?? y.azalt].filter((x): x is string => Boolean(x));
   const maks = Number(alan.parametreler.maksDeneme) > 0 ? Number(alan.parametreler.maksDeneme) : 12;
+  // yanitBekle: her tıklamanın BAŞLATTIĞI, adresi bu metni içeren istek bitene kadar beklenir (ör. seçim değişince yeniden
+  // yüklenen bağımlı liste; beklenmezse liste sonraki alan seçildikten sonra yenilenip seçimi sıfırlayabilir). İlk tıklamadan
+  // önce sayfanın açılış istekleri (aynı listenin ilk yüklemesi) biter — yoksa bekleme o isteğe takılır.
+  const yanit = typeof alan.parametreler.yanitBekle === 'string' && alan.parametreler.yanitBekle ? alan.parametreler.yanitBekle : null;
+  if (yanit) await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => undefined);
+  const tikla = async (dugme: Locator): Promise<void> => {
+    if (!yanit) { await dugme.click(); return; }
+    const istek = page.waitForRequest((r) => r.url().includes(yanit), { timeout: 1_500 }).catch(() => null);
+    await dugme.click();
+    const r = await istek;
+    if (r) await (await r.response().catch(() => null))?.finished().catch(() => null);
+  };
   const gorulenler = new Set<string>();
   const ilk = await oku();
   gorulenler.add(ilk);
@@ -113,7 +125,7 @@ async function okluSec(page: Page, alan: PlanAlani, gosterge: Locator, hedefMeti
     const baslangic = await oku();
     for (let i = 0; i < maks; i++) {
       const once = await oku();
-      await dugme.click();
+      await tikla(dugme);
       await expect.poll(oku, { timeout: 3_000 }).not.toBe(once).catch(() => undefined);
       const simdi = await oku();
       gorulenler.add(simdi);
@@ -163,19 +175,25 @@ async function sayfadakiOge(page: Page, secici: string, sureMs = GORUNURLUK_BEKL
 }
 
 /** Öğe dolana kadar (metni ya da değeri boş değil) bekler. */
-async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi: string): Promise<void> {
+async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi: string, icermez?: string): Promise<void> {
   const oge = page.locator(secici).first();
   const oku = async (): Promise<string> => (await degerOku(oge).catch(() => '')).trim();
+  // icermez: geçici metin (ör. sorgu sürerken "Aranıyor…") görünürken dolu sayılmaz.
+  const hazir = async (): Promise<boolean> => {
+    const d = await oku();
+    return d !== '' && !(icermez && d.toLocaleLowerCase('tr-TR').includes(icermez.toLocaleLowerCase('tr-TR')));
+  };
   try {
-    await expect.poll(oku, { timeout: sureMs }).not.toBe('');
+    await expect.poll(hazir, { timeout: sureMs }).toBe(true);
   } catch {
-    throw new Error(beklenenGorulenMetni(adimBasligi, `"${secici}" dolar`, `${Math.round(sureMs / 1000)} sn içinde boş kaldı`));
+    throw new Error(beklenenGorulenMetni(adimBasligi, `"${secici}" dolar${icermez ? ` ("${icermez}" dışında)` : ''}`, `${Math.round(sureMs / 1000)} sn içinde ${icermez ? 'boş ya da geçici metinde' : 'boş'} kaldı`));
   }
 }
 
 /**
  * Alan doldurulduktan sonra (doldurucu parametreleri): tus (ör. "Tab"), tikla (seçici; ör. kimlik sorgula düğmesi),
- * bekle { secici, durum: dolu | gorunur | gizli, zamanAsimiSn } (ör. sorgulanan ad-soyadın gelmesi).
+ * bekle { secici, durum: dolu | gorunur | gizli, zamanAsimiSn, icermez? } (ör. sorgulanan ad-soyadın gelmesi; icermez: dolu
+ * sayılmayan geçici metin, ör. "Aranıyor").
  */
 async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
   const p = alan.parametreler;
@@ -183,10 +201,10 @@ async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
   if (typeof p.tikla === 'string' && p.tikla) await page.locator(p.tikla).filter({ visible: true }).first().click();
   const b = p.bekle;
   if (b && typeof b === 'object' && typeof (b as Record<string, unknown>).secici === 'string') {
-    const k = b as { secici: string; durum?: string; zamanAsimiSn?: number };
+    const k = b as { secici: string; durum?: string; zamanAsimiSn?: number; icermez?: unknown };
     const sureMs = (Number(k.zamanAsimiSn) > 0 ? Number(k.zamanAsimiSn) : 20) * 1000;
     if (k.durum === 'gorunur' || k.durum === 'gizli') await page.locator(k.secici).first().waitFor({ state: k.durum === 'gizli' ? 'hidden' : 'visible', timeout: sureMs });
-    else await doluBekle(page, k.secici, sureMs, adimBasligi);
+    else await doluBekle(page, k.secici, sureMs, adimBasligi, typeof k.icermez === 'string' && k.icermez ? k.icermez : undefined);
   }
 }
 
@@ -283,6 +301,43 @@ function tarayiciUyarilariniDinle(page: Page): void {
     liste.push(d.message());
     void d.dismiss().catch(() => undefined);
   });
+}
+
+/**
+ * Arka plan istekleri (XHR / fetch) izi: her alan doldurulduktan sonra, o alanın başlattığı istekler (ör. seçim değişince
+ * yeniden yüklenen bağımlı liste, kimlik sorgusu) bitene kadar beklenir — yoksa liste sonraki alan seçildikten sonra gelip
+ * seçimi silebilir. Alan doldurulmadan önce başlamış istekler (ör. süreklilik / izleme istekleri) beklenmez. Sınırlı süre:
+ * bitmeyen istek koşuyu durdurmaz (ALAN_SONRASI_EN_COK_MS sonra devam edilir).
+ */
+export const ALAN_SONRASI_EN_COK_MS = 8_000;
+/** İstek bittikten sonra yeni bir istek başlamadan geçmesi gereken süre (zincirleme istekler için). */
+const SESSIZLIK_MS = 150;
+type AgIzi = { suren: Map<Request, number>; son: number };
+const agIzleri = new WeakMap<Page, AgIzi>();
+function agIzle(page: Page): void {
+  if (agIzleri.has(page)) return;
+  const iz: AgIzi = { suren: new Map(), son: 0 };
+  agIzleri.set(page, iz);
+  page.on('request', (r) => {
+    if (r.resourceType() !== 'xhr' && r.resourceType() !== 'fetch') return;
+    iz.suren.set(r, Date.now());
+    iz.son = Date.now();
+  });
+  const bitti = (r: Request): void => { if (iz.suren.delete(r)) iz.son = Date.now(); };
+  page.on('requestfinished', bitti);
+  page.on('requestfailed', bitti);
+}
+/** baslangic'tan sonra başlayan arka plan istekleri bitene (ve kısa bir sessizlik olana) kadar bekler. */
+async function arkaPlanIstekleriniBekle(page: Page, baslangic: number): Promise<void> {
+  const iz = agIzleri.get(page);
+  if (!iz) return;
+  const bitis = Date.now() + ALAN_SONRASI_EN_COK_MS;
+  for (;;) {
+    const suren = [...iz.suren.values()].some((t) => t >= baslangic);
+    const sessiz = Date.now() - Math.max(baslangic, iz.son) >= SESSIZLIK_MS;
+    if ((!suren && sessiz) || Date.now() >= bitis) return;
+    await page.waitForTimeout(50);
+  }
 }
 
 /** Sayfa metni + adım boyunca çıkan tarayıcı uyarıları (öğesiz metin aramaları için). */
@@ -428,6 +483,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   const tarif = girissiz ? null : ortam.tarif();
   const engellenen = await yasakliAdresKorumasi(page, denetlenecekAdresler(ortam.veri.tabanUrl, tarif, plan.ekranUrl));
   tarayiciUyarilariniDinle(page);
+  agIzle(page);
 
   const atlanan: AtlananAlan[] = [];
   let sira = 1;
@@ -495,8 +551,10 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             continue;
           }
           if (alan.yalnizGorunurluk) continue;
+          const baslangic = Date.now();
           await alaniDoldur(page, alan, l, adim.baslik);
           await alanSonrasi(page, alan, l, adim.baslik);
+          await arkaPlanIstekleriniBekle(page, baslangic);
         }
         await aksiyonlariUygula(page, adim.kosu, sureSn);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);

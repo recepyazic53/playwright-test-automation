@@ -27,6 +27,14 @@ export interface YenidenKurulanVeri {
   girisTarifi?: { tarif: unknown; kaynak: string; hatalar: string[] } | null;
 }
 
+/** Kodlu senaryodan akış ekranı için senaryo taslağı: başlık + akış ekranının form verisi (kimlikler profil adıyla). */
+export interface AkisSenaryoTaslagi {
+  baslik: string;
+  veri: Record<string, unknown>;
+  /** Önizlemede gösterilecek kısa açıklama (ör. hangi kodlu senaryodan). */
+  aciklama?: string;
+}
+
 export interface AktarimAdaptoru {
   readonly ad: string;
   readonly projeAdi: string;
@@ -59,6 +67,13 @@ export interface AktarimAdaptoru {
    * Ayarlar > Güvenlik > "Açık dosyaları şifreli depoya taşı" ile şifreli depoya alınır (bkz. scripts/platform/dosyalar/).
    */
   dosyaKaynaklari?(kok: string): Array<{ goreliYol: string; yol: string }>;
+  /**
+   * Kodlu senaryoları akışa taşıma: akış ekranı (anahtarı) için kodlu testin senaryo matrisi, ürün verisinden akış ekranının
+   * alanlarıyla (kasa açık olmalı). Bu ekran için taşıma yoksa null. Bkz. scripts/platform/senaryolar/akis-tasima.mjs.
+   */
+  akisSenaryoTaslaklari?(vt: Veritabani, projeId: string, ortamAnahtari: string, ekranAnahtari: string): { kaynakEkran: string; taslaklar: AkisSenaryoTaslagi[]; notlar: string[] } | null;
+  /** Taşıması tanımlı akış ekranlarının anahtarları (arayüz "Kodlu senaryoları taşı…" düğmesini bunlarda gösterir). */
+  akisTasimaEkranlari?(): string[];
 }
 
 export declare const AKTARIM_ADAPTORLERI: ReadonlyArray<AktarimAdaptoru>;

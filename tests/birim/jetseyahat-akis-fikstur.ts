@@ -39,7 +39,7 @@ export class SeyahatUygulamasi {
   readonly isle: FiksturUygulamasi = (i: FiksturIstegi) => {
     this.olaylar.push(`${i.yontem} ${i.yol}`);
     if (i.yol === SEYAHAT_YOLU || i.yol === SEYAHAT_YOLU.slice(0, -1)) return this.sayfa();
-    if (i.yol === '/seyahat/ulkeler') return json([{ deger: '15', metin: 'ALMANYA' }, { deger: '22', metin: 'FRANSA' }]);
+    if (i.yol.startsWith('/jet-satis/jet-seyahat/ulke-listesi/')) return json([{ deger: '15', metin: 'ALMANYA' }, { deger: '22', metin: 'FRANSA' }]);
     if (i.yol === '/seyahat/kimlik') {
       const no = i.sorgu.get('no') ?? '';
       return json({ ad: no ? (no.length === 10 ? `UNVAN ${no.slice(-3)} A.Ş.` : `KİŞİ ${no.slice(-3)}`) : '' });
@@ -120,13 +120,17 @@ export class SeyahatUygulamasi {
           $('Bedel_Select').disabled = $('alternatif-text').textContent !== 'SEYAHAT PAKET';
         };
         // Halka: uçta başa döner; değer kısa bir gecikmeyle yazılır. Kapsam değişince alternatif listenin başına döner.
-        const degis = (ad, adim) => { const n = liste(ad).length; I[ad] = (I[ad] + adim + n) % n; if (ad === 'kapsam') I.alternatif = 0; setTimeout(yaz, 60); };
+        // Gerçek ekran gibi: her değişiklikte ülke listesi gecikmeli yeniden yüklenir (seçili ülke sıfırlanır).
+        const ulkeleriYukle = async () => {
+          const l = await (await fetch('/jet-satis/jet-seyahat/ulke-listesi/' + encodeURIComponent($('kapsam-text').textContent || 'x'))).json();
+          $('cmbCountries').length = 1; for (const u of l) $('cmbCountries').add(new Option(u.metin, u.deger));
+        };
+        const degis = (ad, adim) => { const n = liste(ad).length; I[ad] = (I[ad] + adim + n) % n; if (ad === 'kapsam') I.alternatif = 0;
+          setTimeout(yaz, 60); setTimeout(ulkeleriYukle, 700); };
         window.Increase = (ad) => degis(ad, 1);
         window.Decrease = (ad) => degis(ad, -1);
         yaz();
-        setTimeout(async () => {
-          for (const u of await (await fetch('/seyahat/ulkeler')).json()) $('cmbCountries').add(new Option(u.metin, u.deger));
-        }, 300);
+        setTimeout(ulkeleriYukle, 300);
         const tip = () => { const t = $('selectAllClientPolicy').value;
           $('tekli-kutu').hidden = t !== '1'; $('coklu-kutu').hidden = t !== '2'; $('sigortali').hidden = t !== '1'; };
         $('selectAllClientPolicy').onchange = tip;

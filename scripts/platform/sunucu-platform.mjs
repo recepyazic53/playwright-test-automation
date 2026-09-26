@@ -71,6 +71,8 @@
 //   GET  /platform/ekran/akis/tasarim?projeId=&ekranId=&akisId=|kopya=   akış diyagramı (bloklar + sağ liste; boş: yeni akış)
 //   POST /platform/ekran/akis/kaydet { projeId, ekranId, akisId?, ad, bloklar, onay }  onay yoksa etki (etkilenen senaryolar),
 //        varsa yeni model sürümü · POST /platform/ekran/akis/varsayilan | sil { projeId, ekranId, akisId }
+//   GET  /platform/akis-tasima?projeId=&ekranId=&ortamId=   kodlu senaryoları akış ekranına taşıma önizlemesi (taslaklar +
+//        durum; adaptör ürün verisini sunucuda okur) · POST /platform/akis-tasima/uygula { projeId, ekranId, ortamId, basliklar }
 //   GET  /platform/ortak-akis/ekranlar?projeId=&ekranId=  ortak akışın eklenebileceği ekranlar (ekranId: ortak akış)
 //   POST /platform/ortak-akis/ekle { projeId, ekranId, ekranIdleri, istegeBagli, onay }  ortak akışı seçilen ekranların
 //        varsayılan akışının sonuna ekler; onay yoksa etki
@@ -157,7 +159,7 @@ import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 import {
-  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, formBaglami, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
+  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, formBaglami, senaryoGecmisiniSil, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
   modelBaglami, ortamAnahtariBul, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
@@ -178,6 +180,7 @@ import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta, modeliPaketleDegistir
 } from './ekranlar/ekran-servisi.mjs';
+import { akisTasimaOnizle, akisTasimaUygula } from './senaryolar/akis-tasima.mjs';
 import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele, ortakAkisAdaylari, ortakAkisEkranlaraEkle } from './ekranlar/akis-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
 import {
@@ -1232,7 +1235,13 @@ const GET_UCLARI = new Map([
     makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad]))
   })],
   ['/platform/ekranlar', (db, q) => ekranListesi(db, kimlikAl(q.get('projeId'), 'projeId'))],
-  ['/platform/ekran', (db, q) => ekranDetayi(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
+  ['/platform/ekran', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    const d = ekranDetayi(db, projeId, kimlikAl(q.get('id')));
+    // Kodlu senaryoları bu akış ekranına taşıma (adaptör tanımlıysa; bkz. senaryolar/akis-tasima.mjs).
+    const adaptor = projeAdaptoru(db, projeId);
+    return { ...d, akisTasimasi: Boolean(adaptor?.akisTasimaEkranlari?.().includes(d.ekran.anahtar)) };
+  }],
   ['/platform/ekran/surum', (db, q) => {
     const surum = Number(q.get('surum'));
     if (!Number.isInteger(surum) || surum < 1) throw new DepoHatasi('"surum" geçersiz.');
@@ -1240,6 +1249,10 @@ const GET_UCLARI = new Map([
   }],
   ['/platform/ekran/analiz', (db, q) => analizGetir(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
   ['/platform/ekran/akislar', (db, q) => akislariListele(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
+  ['/platform/akis-tasima', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    return akisTasimaOnizle(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')), projeAdaptoru(db, projeId));
+  }],
   ['/platform/ortak-akis/ekranlar', (db, q) => ortakAkisAdaylari(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
   ['/platform/ekran/akis/tasarim', (db, q) => {
     const akisKimligi = (/** @type {string | null} */ d) => (d && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(d) ? d : null);
@@ -1319,6 +1332,10 @@ const POST_UCLARI = new Map([
     akisId: typeof g.akisId === 'string' && g.akisId ? g.akisId : null, ad: g.ad, bloklar: g.bloklar, onay: g.onay === true
   })],
   ['/platform/ekran/akis/varsayilan', (db, g) => akisVarsayilanYap(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
+  ['/platform/akis-tasima/uygula', (db, g) => {
+    const projeId = kimlikAl(g.projeId, 'projeId');
+    return akisTasimaUygula(db, projeId, kimlikAl(g.ekranId, 'ekranId'), ortamSec(db, projeId, g.ortamId), projeAdaptoru(db, projeId), g.basliklar);
+  }],
   ['/platform/ortak-akis/ekle', (db, g) => ortakAkisEkranlaraEkle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
     ekranIdleri: g.ekranIdleri, istegeBagli: g.istegeBagli === true, onay: g.onay === true
   })],
@@ -1373,6 +1390,8 @@ const POST_UCLARI = new Map([
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
     return { id: sonuc.id, uyarilar: sonuc.uyarilar };
   }],
+  // Senaryoların değişiklik geçmişini siler (geri alınamaz; onay: true olmadan yalnızca sayar).
+  ['/platform/senaryo/gecmis/sil', (db, g) => senaryoGecmisiniSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { onay: g.onay === true })],
   ['/platform/senaryo/kosuya-dahil', (db, g) => kosuyaDahilAyarla(db, kimlikAl(g.projeId, 'projeId'), g.idler, g.dahil === true)],
   ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
   ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],

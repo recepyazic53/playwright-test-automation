@@ -1,7 +1,7 @@
-export declare const ULKE_LISTESI_ISTEGI: string;
-export declare const GALAKSI_HAVUZLARI: Readonly<{ ozel: string; tuzel: string; acente: string }>;
+export declare const JETKOBI_HAVUZLARI: Readonly<{ ozel: string; tuzel: string; acente: string }>;
+export { TEKLIF_KAYDET_ODEME_AKIS_ANAHTARI, teklifKaydetOdemeAkisPaketi } from './odeme-akis.mjs';
 
-export type JetSeyahatAkisPaketi = {
+export type JetKobiAkisPaketi = {
   tur: 'sayfa-paketi';
   surum: 1;
   meta: Record<string, unknown>;
@@ -11,9 +11,10 @@ export type JetSeyahatAkisPaketi = {
   bilinmeyenler: string[];
 };
 
-export declare function jetSeyahatAkisPaketi(s?: {
+export declare function jetKobiAkisPaketi(s?: {
   havuzlar?: { ozel: string; tuzel: string; acente: string };
   girissiz?: boolean;
   odeme?: boolean;
   olusturulma?: string;
-}): JetSeyahatAkisPaketi;
+}): JetKobiAkisPaketi;
+

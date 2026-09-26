@@ -1,7 +1,6 @@
-export declare const ULKE_LISTESI_ISTEGI: string;
-export declare const GALAKSI_HAVUZLARI: Readonly<{ ozel: string; tuzel: string; acente: string }>;
+export declare const JETDASK_HAVUZLARI: Readonly<{ ozel: string; tuzel: string; pasaport: string; acente: string }>;
 
-export type JetSeyahatAkisPaketi = {
+export type JetDaskAkisPaketi = {
   tur: 'sayfa-paketi';
   surum: 1;
   meta: Record<string, unknown>;
@@ -11,9 +10,9 @@ export type JetSeyahatAkisPaketi = {
   bilinmeyenler: string[];
 };
 
-export declare function jetSeyahatAkisPaketi(s?: {
-  havuzlar?: { ozel: string; tuzel: string; acente: string };
+export declare function jetDaskAkisPaketi(s?: {
+  havuzlar?: { ozel: string; tuzel: string; pasaport: string; acente: string };
   girissiz?: boolean;
   odeme?: boolean;
   olusturulma?: string;
-}): JetSeyahatAkisPaketi;
+}): JetDaskAkisPaketi;
