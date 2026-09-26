@@ -9,6 +9,8 @@
 import type { FiksturIstegi, FiksturUygulamasi, FiksturYaniti } from './giris-fikstur';
 
 export const DASK_YOLU = '/jet-satis/jet-dask/';
+/** Ödemede iş kuralı reddi (TEST'te pasaportlu sigortalıda görüldü): "Tamam"lı #dialog penceresinde. Kart no 4000 ile başlarsa. */
+export const DASK_ODEME_RED = '123 numaralı teklif onaylanamadı. En az bir parametre dolu olmalıdır.';
 /** Ödeme sonucu (TEST'te test kartıyla poliçe kesilmez). */
 export const DASK_ODEME_SONUCU = 'Hiçbir poliçe onaylanamadı.';
 /** Liste seçenekleri: TEST ekranındaki değer / metinlerden bir alt küme (projeler/galaksi/jetdask-secenekler.mjs). */
@@ -52,8 +54,9 @@ export class DaskUygulamasi {
     // Bağımlı liste: sigortalı tipine göre sigorta ettiren sıfatları (yavaş sunucu; beklenmezse sonraki adımda seçilen sıfatı siler).
     if (i.yol === '/dask/sifat-listesi') return { ...json(DASK_LISTELERI.InsurerType), gecikmeMs: 7000 };
     if (i.yol === '/dask/odeme' && i.yontem === 'POST') {
-      this.odemeler.push(JSON.parse(i.govde || '{}') as Record<string, unknown>);
-      return json({ mesaj: DASK_ODEME_SONUCU });
+      const g = JSON.parse(i.govde || '{}') as Record<string, unknown>;
+      this.odemeler.push(g);
+      return json(String(g.kartNo ?? '').startsWith('4000') ? { red: DASK_ODEME_RED } : { mesaj: DASK_ODEME_SONUCU });
     }
     if (i.yol === '/jet-satis/jet-dask/hesapla' && i.yontem === 'POST') {
       const g = JSON.parse(i.govde || '{}') as Record<string, unknown>;
@@ -97,6 +100,7 @@ export class DaskUygulamasi {
         <p>Toplam prim: <span id="premium-total">0,00</span> · DASK: <span id="dask-amount">0,00</span></p>
         <p id="hesap-hatasi"></p>
         <button id="Policelestir" type="button" hidden>Poliçeleştir</button>
+        <div id="dialog" hidden><div id="dialogcontainer"></div><a href="javascript:void(0);" id="dialog-ok">Tamam</a></div>
         <div id="kart-formu" hidden>
           <label>Kart üzerindeki isim <input id="isim"></label><label>Kart üzerindeki soyisim <input id="soyisim"></label>
           <label>Kart numarası <input id="kartno"></label><label>Güvenlik kodu (CVV) <input id="cvv"></label>
@@ -137,6 +141,8 @@ export class DaskUygulamasi {
           o.preventDefault();
           const govde = { isim: $('isim').value, soyisim: $('soyisim').value, kartNo: $('kartno').value, cvv: $('cvv').value, ay: $('ay').value, yil: $('yil').value };
           const r = await (await fetch('/dask/odeme', { method: 'POST', body: JSON.stringify(govde) })).json();
+          // Ret: TEST'teki gibi "Tamam"lı pencerede (tarayıcı uyarısı değil).
+          if (r.red) { setTimeout(() => { $('dialogcontainer').textContent = r.red; $('dialog').hidden = false; }, 200); return; }
           setTimeout(() => alert(r.mesaj), 200);
         };
         $('Hesapla').onclick = async () => {

@@ -15,7 +15,7 @@ import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-pake
 import { jetDaskAkisPaketi, JETDASK_HAVUZLARI } from '../../projeler/galaksi/jetdask-akis.mjs';
 import { dogrudanKartOdemeAkisPaketi } from '../../projeler/galaksi/odeme-akis.mjs';
 import { SIRKET_DESENI, yerelSunucu } from './giris-fikstur';
-import { DASK_ODEME_SONUCU, DaskUygulamasi } from './jetdask-akis-fikstur';
+import { DASK_ODEME_RED, DASK_ODEME_SONUCU, DaskUygulamasi } from './jetdask-akis-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF } from './platform-ortak';
 
@@ -82,6 +82,11 @@ test.beforeAll(async () => {
     isim: 'Deneme', soyisim: 'Kart', kartNo: '1111222233334444', guvenlikKodu: '123',
     sonKullanmaAyi: JSON.stringify({ deger: '3', metin: '03' }), sonKullanmaYili: JSON.stringify({ deger: '2030', metin: '2030' })
   });
+  // Reddedilen sahte kart (fikstür 4000 ile başlayan kartı reddeder).
+  await profil(String((await api(`/platform/test-verisi-turleri?projeId=${projeId}`) as { turler: Array<{ id: string; ad: string }> }).turler.find((x) => x.ad === 'Kredi kartı')?.id), 'red', {
+    isim: 'Red', soyisim: 'Kart', kartNo: '4000111122223333', guvenlikKodu: '321',
+    sonKullanmaAyi: JSON.stringify({ deger: '3', metin: '03' }), sonKullanmaYili: JSON.stringify({ deger: '2030', metin: '2030' })
+  });
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: dogrudanKartOdemeAkisPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
   await basarili('/platform/sayfa-paketi/ekle', {
     projeId, paket: jetDaskAkisPaketi({ havuzlar: HAVUZLAR, girissiz: true, odeme: true }), senaryoIndeksleri: [], ortamIdleri: [ortamId]
@@ -135,4 +140,15 @@ test('pasaport / mal sahibi: uyruk metniyle seçilir, pasaport sorgu düğmesi k
   expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ tip: 'P', tel: PAS1.cepTelefonu, dogum: PAS1.dogumTarihi, uyruk: 'DE', no: PAS1.pasaportNo, ad: 'KİŞİ 678' });
   expect(uygulama.olaylar.filter((o) => SIRKET_DESENI.test(o))).toEqual([]);
+});
+
+test('ödemede ret penceresi (#dialogcontainer): adım zaman aşımını (90 sn) beklemeden, mesajıyla düşer', async () => {
+  test.setTimeout(120_000);
+  const bas = Date.now();
+  const sonuc = await kaydetVeKos('Ödeme reddi', { sigortaliTipi: 'ozel', sigortaliProfili: 'tc1', odemeAdimiDahil: true, krediKartiProfili: 'red' });
+  expect(sonuc.durum).toBe('basarisiz');
+  expect(String(sonuc.hataMesaji)).toContain('numaralı teklif onaylanamadı');
+  expect(String(sonuc.hataMesaji)).not.toContain('başarı göstergesi görünmedi');
+  expect(Date.now() - bas).toBeLessThan(60_000);
+  expect(DASK_ODEME_RED).toContain('onaylanamadı');
 });

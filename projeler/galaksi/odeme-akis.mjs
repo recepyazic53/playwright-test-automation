@@ -18,8 +18,11 @@ export const TEKLIF_KAYDET_KABUL_EDILEN_SONUCLAR = ['Hiçbir poliçe onaylanamad
 export const DOGRUDAN_KART_KABUL_EDILEN_SONUCLAR = ['Hiçbir poliçe onaylanamadı.', 'XML dodururken hata', 'mükerrer poliçe üretimi yapılamamaktadır'];
 /** Kabul edilen sonuçlar → başarı göstergesi (tek mesaj ya da "veya"). @param {string[]} l */
 const odemeSonucuGostergesi = (l) => (l.length > 1 ? { tur: 'veya', secenekler: l.map((deger) => ({ tur: 'metin', deger })) } : { tur: 'metin', deger: l[0] });
-/** Galaksi hata penceresi (fancybox / jQuery UI; "Tamam" düğmeli). */
-const HATA_PENCERESI = '#fancybox-wrap:has(a:text-is("Tamam")), .ui-dialog:has(a:text-is("Tamam"))';
+/**
+ * Galaksi hata penceresi ("Tamam" düğmeli): fancybox / jQuery UI ya da #dialog > #dialogcontainer (JetDASK; ödemede çıkan iş kuralı
+ * uyarıları — ör. "… numaralı teklif onaylanamadı …" — burada: görünür görünmez adım mesajıyla düşer, 90 sn beklenmez).
+ */
+const HATA_PENCERESI = '#fancybox-wrap:has(a:text-is("Tamam")), .ui-dialog:has(a:text-is("Tamam")), #dialogcontainer';
 
 const kartAlani = (id, sira, kimlikAlani, etiket, secici, ek = {}) => ({
   id, tip: 'metin', sira, etiket: { ekran: etiket }, eslesme: { kimlikAlani }, konum: { secici, kirilganlik: 'dusuk' }, ...ek

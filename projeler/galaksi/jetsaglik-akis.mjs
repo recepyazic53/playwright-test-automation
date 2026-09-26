@@ -206,12 +206,13 @@ export function jetSaglikAkisPaketi(s = {}) {
           {
             id: 'police', baslik: 'Poliçe ve sağlık beyanı', alanlar: [
               { ...alan('baslangicTarihi', 'tarih', 'Başlangıç tarihi', '#BeginDate', { doldurucu: 'tarihJs', bicim: 'gg.aa.yyyy' }), yapilandirma: 'turetilmis', sabitDeger: 'bugun', eslesme: {} },
-              liste('policeSuresi', 'Poliçe süresi', '#slPolicyPeriod'),
-              liste('hastalik', 'Hastalık beyanı', '#slHaveDisease'),
-              liste('kvkkOnayi', 'KVKK onayı', '#KVKKOnay'),
+              // Seçenekler TEST ekranından (2026-09-26); varsayılan ekranın açılış değeri.
+              liste('policeSuresi', 'Poliçe süresi', '#slPolicyPeriod', { zorunlu: false, secenekler: [secim('1', 'İlk Yıl'), secim('2', 'İkinci Yıl')], seceneklerDurumu: 'tam', varsayilan: { deger: '1' } }),
+              liste('hastalik', 'Hastalık beyanı', '#slHaveDisease', { zorunlu: false, secenekler: [secim('H', 'Hayır'), secim('E', 'Evet')], seceneklerDurumu: 'tam', varsayilan: { deger: 'H' } }),
+              liste('kvkkOnayi', 'KVKK onayı', '#KVKKOnay', { zorunlu: false, secenekler: [secim('E', 'Evet'), secim('H', 'Hayır')], seceneklerDurumu: 'tam', varsayilan: { deger: 'E' } }),
               // Gizli liste (POM betikle seçer): koşucu görünmeyen alanı ATLAR — ekranın varsayılanı kalır (bkz. bilinmeyenler).
               // Gizli liste (POM betikle seçer): degerJs.
-              liste('yenileme', 'Yenileme', '#Yenileme', { zorunlu: false, doldurucu: 'degerJs' }),
+              liste('yenileme', 'Yenileme', '#Yenileme', { zorunlu: false, secenekler: [secim('H', 'Hayır'), secim('E', 'Evet')], seceneklerDurumu: 'tam', varsayilan: { deger: 'H' }, doldurucu: 'degerJs' }),
               // 0 olabilir (kodlu verideki değer); "sayi" tipi yalnızca pozitif kabul ettiği için metin.
               alan('indirimOrani', 'metin', 'İndirim oranı (%)', '#DiscountRate', { zorunlu: true })
             ]
@@ -265,7 +266,7 @@ export function jetSaglikAkisPaketi(s = {}) {
         ? []
         : ['Ödeme (poliçeleştirme + kredi kartı) bu pakette yok; "Ödeme (doğrudan kart formu)" ortak akışı eklenebilir ("Ödeme (kredi kartı)" JetSağlık\'a uymaz: kart formu doğrudan açılır).']),
       'Kodlu test ödeme sonucunu "/jet-satis/jet-saglik/policelestir" servis cevabında da arıyor; ortak akış yalnızca sayfa metnini ve tarayıcı uyarılarını okur. Sonucun ekranda görünüp görünmediği TEST\'te doğrulanmalı.',
-      'Açılır listelerin seçenekleri (poliçe süresi, hastalık, KVKK, yenileme, uyruk, il / ilçe / belde, adres tipi) kodda yok; TEST ekranından okunacak. Senaryodaki değer önce "value", olmazsa görünen metinle seçilir.',
+      'Poliçe süresi, hastalık, KVKK ve yenileme seçenekleri TEST ekranından okundu (2026-09-26). Uyruk, il / ilçe / belde ve adres tipi listeleri kodda yok (profillerden gelir; değer önce "value", olmazsa görünen metinle seçilir). Kimlik sorgusundan sonra açılan alanlar TEST\'te ekrandan görülemedi (kimlik Claude tarafından girilmez).',
       'Gizli alanlar (#Yenileme, #ClientMobilePhone, telefon ülke kodları) POM gibi betikle yazılır (degerJs; görünmeseler de). Maskeli telefon alanının betikle yazılan değeri kabul ettiği TEST\'te doğrulanmalı.',
       'Yabancı kimlikli sigortalıda POM eksik adres seçimlerini koşullu tamamlar (belde "-1" ise ilk geçerli seçenek, mahalle / cadde boşsa "Test Mahallesi" / "Test Caddesi"); koşucu "boşsa doldur" ve "ilk geçerli seçenek" yapamaz: senaryoda verilen değer her zaman yazılır, verilmezse dokunulmaz.',
       'Telefon maskeli alan: POM değeri "(5xx) xxx xx xx" biçiminde betikle atar (tuşlamak rakamları kaydırıyor); koşucu değeri doğrudan yazar (fill). Maskenin bunu kabul ettiği TEST\'te doğrulanmalı.',

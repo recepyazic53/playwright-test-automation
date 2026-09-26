@@ -39,7 +39,7 @@ const ADRES1 = {
   adresTipi: secimJson('2', 'Site'), adresParcasi: 'A', mahalle: 'Deneme Mahallesi', binaNo: '7', blokKodu: 'B', siteAdi: 'Deneme Sitesi', daireNo: '3', kat: '2'
 };
 /** Kodlu testin JSON'undaki gibi poliçe değerleri (fikstür listelerinin değerleri); yenileme "E" (alan gizli; betikle seçilir). */
-const ORTAK_VERI = { policeSuresi: '12', hastalik: 'H', kvkkOnayi: '1', yenileme: 'E', indirimOrani: '5' };
+const ORTAK_VERI = { policeSuresi: '2', hastalik: 'H', kvkkOnayi: 'E', yenileme: 'E', indirimOrani: '5' };
 /** Yabancı kimlikte sorgudan eksik gelen adres (kodlu POM'un tamamladığı değerler). */
 const EKSIK_ADRES = { eksikBelde: '1', eksikMahalle: 'Test Mahallesi', eksikCadde: 'Test Caddesi' };
 
@@ -132,7 +132,7 @@ test('yabancı kimlik / kendisi: sorgu, telefon yeniden girilir, eksik adres tam
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({
     sigortaliTip: 'O', ulkeKodu: '90', tel: YK1.cepTelefonu, dogum: YK1.dogumTarihi, yabanciNo: YK1.yabanciKimlikNo, uyruk: null, ad: 'KİŞİ 012',
     farkli: 'H', ettirenTip: null, adres: { il: '34', ilce: '1103', belde: '1', mahalle: 'Test Mahallesi', cadde: 'Test Caddesi' },
-    baslangic: bugun(), sure: '12', hastalik: 'H', kvkk: '1', indirim: '5',
+    baslangic: bugun(), sure: '2', hastalik: 'H', kvkk: 'E', indirim: '5',
     // Gizli liste betikle seçilir (degerJs).
     yenileme: 'E'
   });
