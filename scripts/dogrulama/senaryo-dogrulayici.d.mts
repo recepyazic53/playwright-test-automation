@@ -95,7 +95,7 @@ export interface DogrulamaBaglami {
   ortam?: string;
   /** Tarih kontrolleri için "şimdi" (varsayılan new Date()). */
   simdi?: Date;
-  /** 'kayit' (varsayılan): jet-seyahat.json kaydı. 'girdi': dashboard formunun gövdesi. */
+  /** 'kayit' (varsayılan): kayıtlı senaryo. 'girdi': dashboard formunun gövdesi. */
   kaynak?: 'kayit' | 'girdi';
 }
 

@@ -6,7 +6,7 @@
 //
 //  - Model senaryosu: kodda karşılığı OLMAYAN senaryo — aktarım eşlemesi (kodda tanımlı test) yok, içerik
 //    sayfa paketinden gelmiş ("paket") ya da açıkça modelle koşar ("kosucu": "model") ve kaynaktaki spec
-//    dosyası diskte yok. Böylece Galaksi'nin kodlu testleri model koşucusunda ASLA tekrarlanmaz.
+//    dosyası diskte yok. Böylece projenin kodlu testleri model koşucusunda ASLA tekrarlanmaz.
 //  - Model senaryoları TEK bir spec dosyasında (MODEL_SPEC_DOSYASI) üretilir; her testin etiketi
 //    "@model-<senaryo UUID>" olur ve koşu bu etiketle daraltılır (grep).
 //  - Yasaklı adres koruması: Ayarlar > Güvenlik > "Yasak adresler" (guvenlik/yasak-adresler.mjs; alt süreçlere bu
@@ -96,8 +96,8 @@ export function modelTestBasliklari(senaryolar) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * Host kalıpları: virgül/boşluk/satırla ayrılmış; "*" herhangi bir karakter dizisi (ör. "*nippon*",
- * "galaksi-test.ornek.local"). Büyük/küçük harf duyarsız, tam host'a uygulanır.
+ * Host kalıpları: virgül/boşluk/satırla ayrılmış; "*" herhangi bir karakter dizisi (ör. "*sirket*",
+ * "test.ornek.local"). Büyük/küçük harf duyarsız, tam host'a uygulanır.
  * @param {string | undefined | null} metin @returns {Array<{ kalip: string; desen: RegExp }>}
  */
 export function yasakDesenleri(metin) {

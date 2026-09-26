@@ -4,8 +4,8 @@
 // bu makinede çalıştırır (/platform/senaryolar/calistir → senaryoyuCalistirVeYanitla), durdurur
 // (/durdur), canlı ekran görüntüsünü verir (/canli) ve girişte SMS kodu "elle" girilecekse koşu
 // panelinin kod isteğini/yanıtını iletir (/kod-istegi, /kod-gonder). Proje verisi YALNIZCA platform veritabanındadır
-// (veri/platform.db); eski dosya tabanlı uçlar (dashboard, /calistir, /kosu-listesi, JetSeyahat
-// senaryo dosyası düzenleyicileri) kaldırıldı.
+// (veri/platform.db); eski dosya tabanlı uçlar (dashboard, /calistir, /kosu-listesi, senaryo
+// dosyası düzenleyicileri) kaldırıldı.
 //
 // GÜVENLİK NOTLARI:
 // 1) Sunucu YALNIZCA 127.0.0.1'e bağlanır — ağdaki başka hiçbir cihaz erişemez.
@@ -260,8 +260,8 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
             for (const spec of suite.specs ?? []) {
               const specDosya = spec.file ?? buDosya;
               if (spec.title) {
-                // Spec'in test tanımında verdiği "beklenenSonuc" annotation'ı (şu an JetSeyahat
-                // — bkz. prim-hesaplama.spec.ts) "--list" çıktısında da gelir; dashboard'daki
+                // Spec'in test tanımında verdiği "beklenenSonuc" annotation'ı (kodlu testlerde)
+                // "--list" çıktısında da gelir; dashboard'daki
                 // Senaryolar tablosu bunu rozet olarak gösterir. Yoksa alan hiç eklenmez.
                 const beklenenSonuc = (spec.tests ?? [])
                   .flatMap((t) => t.annotations ?? [])
@@ -518,7 +518,7 @@ function calismaDurdur(kosuId) {
 // bir senaryo dosyası döngüyle (for kimlikTipi of kimlikTipleri { for sifat of
 // sifatlar { test(baslik, ...) } }) birden çok test ÜRETİYORSA, üretilen TÜM testler
 // kaynak kodda AYNI satırda tanımlıdır — Playwright "dosya:satır" ile o satırdaki
-// TÜM testleri eşleştirir, tek bir tanesini değil. Bu yüzden "JetSeyahat"teki gibi
+// TÜM testleri eşleştirir, tek bir tanesini değil. Bu yüzden
 // matris/döngü ile üretilen senaryolarda ▷ ikonuna basınca tek bir senaryo yerine o
 // dosyadaki TÜM senaryolar sırayla çalışıyordu. Çözüm: satır yerine, senaryonun
 // (üretilen) BAŞLIĞINI birebir eşleştiren "--grep" kullanılır — başlıklar döngüden

@@ -68,7 +68,7 @@ function locatorBul(mesajTam) {
 }
 
 // Hata mesajının SABİT KALIBINI çıkarır: değişken (sayısal) kısımlar "#" olur.
-// "250166487 numaralı teklif onaylanamadı" -> "# numaralı teklif onaylanamadı"
+// "123456789 numaralı kayıt onaylanamadı" -> "# numaralı kayıt onaylanamadı"
 // Mesajda bir locator varsa kalıba eklenir; böylece farklı ekranlardaki
 // "expect(locator).toBeVisible() failed" hataları tek satıra yığılmaz:
 // "Error: expect(locator).toBeVisible() failed · getByRole('button', { name: 'Prim Hesapla' })"

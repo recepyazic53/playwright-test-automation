@@ -15,7 +15,7 @@ const environmentName = getEnvironmentName();
 // için yapılandırma ilk değerlendirildiğinde (ana süreç) undefined olabilir — worker'lar
 // yapılandırmayı anahtarla yeniden yükler (bkz. tests/support/environments.ts).
 const environment = environments[environmentName];
-// globalSetup Galaksi'ye bir kez login olup bu dosyaya çerezleri yazar (bkz.
+// globalSetup uygulamaya bir kez giriş yapıp bu dosyaya çerezleri yazar (bkz.
 // tests/support/global-setup.ts). Dosya henüz yoksa (örn. giriş profili tanımlı değilse
 // globalSetup sessizce atlanır) storageState hiç verilmez — testler testBaslangiciniHazirla()
 // içindeki gerçek login'e düşer.
@@ -70,7 +70,7 @@ export default defineConfig({
 
   workers: process.env.CI ? 1 : undefined,
 
-  // Tüm testlerden ÖNCE bir kez Galaksi login'i yapıp oturumu playwright/.auth/ altına
+  // Tüm testlerden ÖNCE bir kez giriş yapıp oturumu playwright/.auth/ altına
   // kaydeder (CANLI'da authenticator kodu bu yüzden yalnızca burada, bir kere sorulur).
   globalSetup: './tests/support/global-setup.ts',
   // Koşuya özel geçici senaryo dosyası klasörünü siler (şifreli dosyalar koşu anında buraya çözülür).
@@ -86,7 +86,7 @@ export default defineConfig({
   use: {
     baseURL: environment.baseURL,
 
-    // globalSetup'ın kaydettiği paylaşılan Galaksi oturumu (bkz. yukarı) — dosya henüz
+    // globalSetup'ın kaydettiği paylaşılan oturum (bkz. yukarı) — dosya henüz
     // yoksa (ilk koşu, ya da giriş profili tanımlı değil) hiç verilmez, testler kendi login'ini yapar.
     storageState: existsSync(oturumDosyasi) ? oturumDosyasi : undefined,
 

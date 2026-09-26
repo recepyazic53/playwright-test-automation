@@ -1,5 +1,5 @@
 // AÇIK (DÜZ METİN) DOSYALARI ŞİFRELİ DEPOYA TAŞIMA (genel) — eski proje düzeninde senaryoların kullandığı dosyalar
-// (ör. Galaksi: tests/fixtures/**, çoklu sorgu Excel'leri) diskte düz metin durur. Hangi dosyaların bu türden
+// (ör. tests/fixtures/**, yüklenecek Excel dosyaları) diskte düz metin durur. Hangi dosyaların bu türden
 // olduğunu PROJE ADAPTÖRÜ bilir (adaptor.dosyaKaynaklari(kok)); bu modül genel işi yapar:
 //   1) acikDosyalariBul   — adaptörün bildiği dosyalar (proje kökü + eski dosya yedekleri), boyut ve şifreli
 //                           kopyanın olup olmadığıyla (ÖNİZLEME; hiçbir şey değişmez)

@@ -665,7 +665,7 @@ const BIRLIKTE_VERILENLER = [['cokluSorguDosyasi', 'cokluSorguKisiSayisi']];
  *  - baglam.model / altModeller: ekran modeli ve alt modelleri (dosya adı → alt model).
  *  - baglam.ortak: ortakBaglaminiOlustur(ortak.json) çıktısı; parçası eksikse o kontrol atlanır
  *    (ör. tarayıcıda profiller henüz yüklenmediyse profil varlığı kontrol edilmez).
- *  - baglam.kaynak: 'kayit' (jet-seyahat.json'daki kayıt; varsayılan) | 'girdi' (dashboard
+ *  - baglam.kaynak: 'kayit' (kayıtlı senaryo; varsayılan) | 'girdi' (dashboard
  *    formunun gönderdiği gövde: başlık sonradan verilebilir, acenteKodu/acenteKullanicisi olabilir).
  *  - baglam.simdi: tarih kontrolleri için "şimdi" (testlerde sabitlenir).
  * hatalar: kaydı/koşuyu engeller. uyarilar: engellemez (ör. ortak kartın süresi geçmiş,
