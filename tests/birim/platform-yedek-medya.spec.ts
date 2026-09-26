@@ -10,6 +10,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync, truncateSync, copyFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { setFlagsFromString } from 'node:v8';
+import { runInNewContext } from 'node:vm';
 import { expect, test } from '@playwright/test';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { KasaHatasi, MEDYA_ANAHTARI_META, kasaOlustur, medyaAnahtariniHazirla } from '../../scripts/platform/kasa.mjs';
@@ -285,9 +287,17 @@ test.describe('Yedekte medya dosyaları', () => {
     try {
       const kaynak = await kaynakKur(join(k.yol, 'kaynak'));
       const BOYUT = 200 * 1024 * 1024;
-      // Sınır dosya boyutunun altında ama çöp toplayıcı payı bırakır: Windows'ta serbest kalan parçalar geç
-      // toplandığı için 50 MB'lık dosyada bile ~80 MB tepe ölçülüyordu (sızıntı değil — boyutla büyümez).
-      const BELLEK_SINIRI = 120 * 1024 * 1024;
+      // Ölçülen: TUTULAN bellek (çöp toplayıcı zorlanarak). Mutlak değer güvenilmez: aynı işçideki önceki testler ve Node'un
+      // iç tamponları sabit ~80-100 MB taban bırakabiliyor (dosya boyutuyla büyümez; eskiden bu yüzden dalgalanıyordu).
+      // Asıl denetim BÜYÜME: video belleğe biriktirilseydi işlem ilerledikçe tutulan bellek de ~işlenen bayt kadar artardı;
+      // akışla işlenince ilk yarının ve ikinci yarının tepesi aynı düzeyde kalır. Ayrıca tepe dosya boyutunun altında olmalı.
+      const BUYUME_SINIRI = 48 * 1024 * 1024;
+      setFlagsFromString('--expose-gc');
+      const gc = runInNewContext('gc') as () => void;
+      let olcum = 0;
+      /** Her 4 çağrıda bir: çöp toplanır, tutulan arrayBuffers örneklenir. */
+      const ornekle = (liste: number[]) => { if (++olcum % 4) return; gc(); liste.push(process.memoryUsage().arrayBuffers); };
+      const buyume = (liste: number[]) => { const y = Math.floor(liste.length / 2); return Math.max(...liste.slice(y)) - Math.max(...liste.slice(0, y)); };
       const ozet = createHash('sha256');
       // Kaynak videonun kendisi de akışla (1 MiB'lık parçalar) şifrelenir; test belleğinde tutulmaz.
       async function* sahteVideo(): AsyncGenerator<Buffer> {
@@ -308,29 +318,33 @@ test.describe('Yedekte medya dosyaları', () => {
       });
 
       const yedekYolu = join(k.yol, 'buyuk.tayedek');
-      const bellek = () => process.memoryUsage().arrayBuffers;
+      const bellek = () => { gc(); return process.memoryUsage().arrayBuffers; };
       const once = bellek();
-      let tepe = once;
+      const ornekler: number[] = [];
       const baytlar: number[] = [];
       await yedekDosyasiYaz(kaynak.vt, yedekYolu, {
         ekranGoruntuleriDahil: false, videolarDahil: true, medyaKlasoru: kaynak.medyaKlasoru,
-        ilerleme: (_a, _y, b) => { tepe = Math.max(tepe, bellek()); if (b) baytlar.push(b.islenen); }
+        ilerleme: (_a, _y, b) => { ornekle(ornekler); if (b) baytlar.push(b.islenen); }
       });
       expect(statSync(yedekYolu).size).toBeGreaterThan(BOYUT);
       expect(baytlar.length, 'medya baytı ilerlemesi parça parça bildirilir').toBeGreaterThan(10);
-      expect(tepe - once, 'dışa aktarmada video belleğe alınmamalı').toBeLessThan(BELLEK_SINIRI);
+      expect(ornekler.length, 'bellek örnekleri').toBeGreaterThanOrEqual(6);
+      expect(buyume(ornekler), 'dışa aktarmada video belleğe biriktirilmemeli (bellek işlendikçe büyümez)').toBeLessThan(BUYUME_SINIRI);
+      expect(Math.max(...ornekler) - once, 'dışa aktarmada tutulan bellek dosya boyutunun altında').toBeLessThan(BOYUT / 2);
 
       const hedefVt = await veritabaniniHazirla(join(k.yol, 'hedef', 'platform.db'));
       await kasaOlustur(hedefVt, BASKA_PAROLA, { kdf: HIZLI_KDF });
       const hedefMedya = join(k.yol, 'hedef', 'medya');
       const once2 = bellek();
-      let tepe2 = once2;
-      const hazirlik = await iceAktarmaHazirla(hedefVt, yedekYolu, PAROLA, { medyaKlasoru: hedefMedya, ilerleme: () => { tepe2 = Math.max(tepe2, bellek()); } });
+      const ornekler2: number[] = [];
+      const hazirlik = await iceAktarmaHazirla(hedefVt, yedekYolu, PAROLA, { medyaKlasoru: hedefMedya, ilerleme: () => { ornekle(ornekler2); } });
       expect(hazirlik.onizleme.medya.turler.video.eklenecekBayt).toBe(BOYUT + 2 * ORNEK_ICERIK.video.veri.length);
       iceAktarmaUygula(hedefVt, hazirlik, { tumu: true });
-      const sonuc = await iceAktarmaMedyasiniYaz(hedefVt, hazirlik, { ilerleme: () => { tepe2 = Math.max(tepe2, bellek()); } });
+      const sonuc = await iceAktarmaMedyasiniYaz(hedefVt, hazirlik, { ilerleme: () => { ornekle(ornekler2); } });
       expect(sonuc.yenidenSifrelenen).toBeGreaterThanOrEqual(3);
-      expect(tepe2 - once2, 'içe aktarmada video belleğe alınmamalı').toBeLessThan(BELLEK_SINIRI);
+      expect(ornekler2.length, 'bellek örnekleri (içe aktarma)').toBeGreaterThanOrEqual(6);
+      expect(buyume(ornekler2), 'içe aktarmada video belleğe biriktirilmemeli').toBeLessThan(BUYUME_SINIRI);
+      expect(Math.max(...ornekler2) - once2, 'içe aktarmada tutulan bellek dosya boyutunun altında').toBeLessThan(BOYUT / 2);
       hazirligiAt(hazirlik);
 
       const satir = medyaSatiri(hedefVt, 'buyuk-video');
