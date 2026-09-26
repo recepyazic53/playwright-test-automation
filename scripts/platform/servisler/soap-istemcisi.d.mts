@@ -31,7 +31,7 @@ export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: nu
 export interface XmlDugumu { ad: string; cocuklar: XmlDugumu[]; metin: string }
 export declare function xmlAgaci(xml: string): XmlDugumu | null;
 export declare function xpathMetni(kok: XmlDugumu, yol: string): string | undefined;
-export interface KontrolSonucu { tur: string; ad: string; gecti: boolean; aciklama: string }
+export interface KontrolSonucu { tur: string; ad: string; gecti: boolean; aciklama: string; alt?: KontrolSonucu[] }
 export declare function kontrolAdi(k: ServisKontrolu): string;
 export declare function kontrolleriDegerlendir(yanit: { durumKodu: number; govde: string }, kontroller: ServisKontrolu[]): KontrolSonucu[];
 export declare function yanitOzeti(govde: string): string;

@@ -91,6 +91,7 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
  *   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>; alanZorunluluklari?: Record<string, string[]>;
+ *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
  *   erisim?: { ortamId: string; zaman: string; durumKodu: number } }} ServisAyarlari
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
@@ -163,15 +164,38 @@ export function servisSil(vt, id, yapan) {
  * - soapHatasiYok / soapHatasi: yanıtta SOAP Fault olmamalı / olmalı
  * - icerir / icermez: metin (buyukKucukDuyarsiz, duzenliIfade)
  * - xpathEsit: xpath ile bulunan ilk düğümün metni "deger"e eşit (basit yol: /a/b/c, önekler yok sayılır)
- * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit';
- *   deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string }} ServisKontrolu
+ * - veya: alt kontrollerden EN AZ BİRİ geçerse geçer (alt: kontroller; iç içe VEYA yok). Senaryonun kontrol listesi VE'dir.
+ * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'veya';
+ *   deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[] }} ServisKontrolu
  * @typedef {{ operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
  *   aciklama?: string; kaynak?: Record<string, unknown> }} ServisSenaryoIcerigi
  * @typedef {{ id: string; projeId: string; servisId: string; baslik: string; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
  *   sira: number | null; icerik: ServisSenaryoIcerigi; olusturulma: string; guncellenme: string }} ServisSenaryosu
  */
 
-export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit']);
+export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'veya']);
+
+/**
+ * Tek kontrolü doğrular (VEYA'nın alt kontrolleri de; iç içe VEYA kabul edilmez).
+ * @param {any} k @param {string} yer hata mesajı için ("2." / "2.1.") @param {boolean} altMi @returns {ServisKontrolu}
+ */
+function kontrolDogrula(k, yer, altMi) {
+  if (!k || typeof k !== 'object') throw new DepoHatasi(`${yer} kontrol geçersiz.`);
+  const tur = secenek(k.tur, KONTROL_TURLERI, `${yer} kontrolün türü`);
+  if (tur === 'veya') {
+    if (altMi) throw new DepoHatasi(`${yer} kontrol: VEYA içinde VEYA kullanılamaz.`);
+    if (!Array.isArray(k.alt) || k.alt.length < 2) throw new DepoHatasi(`${yer} kontrol (VEYA) en az iki alt kontrol içermeli.`);
+    return { tur, alt: k.alt.map((/** @type {unknown} */ a, /** @type {number} */ n) => kontrolDogrula(a, `${yer}${n + 1}.`, true)), ...(typeof k.ad === 'string' && k.ad ? { ad: k.ad } : {}) };
+  }
+  if ((tur === 'icerir' || tur === 'icermez' || tur === 'xpathEsit' || tur === 'durumKodu') && (typeof k.deger !== 'string' || !k.deger)) {
+    throw new DepoHatasi(`${yer} kontrol (${tur}) için "deger" gerekli.`);
+  }
+  if (tur === 'xpathEsit' && (typeof k.xpath !== 'string' || !k.xpath.startsWith('/'))) throw new DepoHatasi(`${yer} kontrol için "/" ile başlayan "xpath" gerekli.`);
+  if (k.duzenliIfade) {
+    try { new RegExp(k.deger); } catch { throw new DepoHatasi(`${yer} kontroldeki düzenli ifade geçersiz.`); }
+  }
+  return /** @type {ServisKontrolu} */ (Object.fromEntries(Object.entries(k).filter(([a]) => ['tur', 'deger', 'xpath', 'buyukKucukDuyarsiz', 'duzenliIfade', 'ad'].includes(a))));
+}
 
 /** @param {unknown} icerik @returns {ServisSenaryoIcerigi} */
 export function senaryoIceriginiDogrula(icerik) {
@@ -180,18 +204,7 @@ export function senaryoIceriginiDogrula(icerik) {
   const operasyon = zorunluMetin(i.operasyon, 'operasyon');
   const govde = zorunluMetin(i.govde, 'govde');
   if (!Array.isArray(i.kontroller)) throw new DepoHatasi('"kontroller" bir dizi olmalıdır.');
-  const kontroller = i.kontroller.map((k, n) => {
-    if (!k || typeof k !== 'object') throw new DepoHatasi(`${n + 1}. kontrol geçersiz.`);
-    const tur = secenek(k.tur, KONTROL_TURLERI, `${n + 1}. kontrolün türü`);
-    if ((tur === 'icerir' || tur === 'icermez' || tur === 'xpathEsit' || tur === 'durumKodu') && (typeof k.deger !== 'string' || !k.deger)) {
-      throw new DepoHatasi(`${n + 1}. kontrol (${tur}) için "deger" gerekli.`);
-    }
-    if (tur === 'xpathEsit' && (typeof k.xpath !== 'string' || !k.xpath.startsWith('/'))) throw new DepoHatasi(`${n + 1}. kontrol için "/" ile başlayan "xpath" gerekli.`);
-    if (k.duzenliIfade) {
-      try { new RegExp(k.deger); } catch { throw new DepoHatasi(`${n + 1}. kontroldeki düzenli ifade geçersiz.`); }
-    }
-    return /** @type {ServisKontrolu} */ (Object.fromEntries(Object.entries(k).filter(([a]) => ['tur', 'deger', 'xpath', 'buyukKucukDuyarsiz', 'duzenliIfade', 'ad'].includes(a))));
-  });
+  const kontroller = i.kontroller.map((k, n) => kontrolDogrula(k, `${n + 1}.`, false));
   return { ...i, operasyon, govde, kontroller };
 }
 

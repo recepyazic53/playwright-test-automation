@@ -178,6 +178,105 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
+  test('arayüz: tuş tuş yazarken odak kaybolmaz (sabit değer, alan arama); parametrenin yanında test verisi profili seçilir', async () => {
+    test.setTimeout(60_000);
+    const turler = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
+    const turId = String(turler.turler.find((t: Nesne) => t.ad === 'Kişi').id);
+    await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId, ad: 'k1', degerler: { tcKimlikNo: '11111111110' } });
+    const k2 = String((await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId, ad: 'k2', degerler: { tcKimlikNo: '22222222220' } })).profil.id);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    const form = page.locator('.alan-formu');
+    const satir = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+
+    // Sabit değer: harf harf yazılır, kutu odakta kalır, değer eksiksiz.
+    await satir('Channel').getByLabel('Channel değer kaynağı').selectOption('sabit');
+    const kanal = satir('Channel').getByLabel('Channel', { exact: true });
+    await kanal.click();
+    await kanal.pressSequentially('30447', { delay: 20 });
+    await expect(kanal).toHaveValue('30447');
+    await expect(kanal).toBeFocused();
+
+    // Alan arama: harf harf yazılır, kutu odakta kalır, tablo süzülür.
+    const ara = page.getByLabel('Alan ara');
+    await ara.click();
+    await ara.pressSequentially('Citiz', { delay: 20 });
+    await expect(ara).toHaveValue('Citiz');
+    await expect(ara).toBeFocused();
+    await expect(form.locator('.alan-satiri')).toHaveCount(1);
+    await ara.fill('');
+
+    // Parametre + değer listesi: SIGORTALI_TC → profiller (hassas alan değeri gösterilmez, yalnız ad).
+    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı').selectOption('parametre');
+    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber parametresi').selectOption('SIGORTALI_TC');
+    const deger = satir('CitizenshipNumber').getByLabel('SIGORTALI_TC değeri');
+    await expect(deger.locator('option')).toHaveText(['Servis varsayılanı (seçilmedi)', 'k1', 'k2']);
+    await deger.selectOption({ label: 'k2' });
+    await page.getByLabel('Başlık').fill('Profil seçili senaryo');
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
+    const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
+    const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'Profil seçili senaryo');
+    expect(kayit.icerik.veriProfilleri).toEqual({ [`${turId}:sigortali`]: k2 });
+    expect(kayit.icerik.govde).toContain('<Channel>30447</Channel>');
+    // Kayıtlı senaryo açılınca seçim görünür.
+    await page.reload();
+    await expect(satir('CitizenshipNumber').getByLabel('SIGORTALI_TC değeri')).toHaveValue(k2);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('arayüz: kontroller VE listesi + "Şunlardan biri (VEYA)" grubu kaydedilir; Dene sonucu alt kontrolleri gösterir', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    await page.getByLabel('Başlık').fill('VEYA senaryosu');
+    // Varsayılan tek kontrol: SOAP zarfı (VE). İkinci kontrol VEYA grubu.
+    await page.getByRole('button', { name: 'Kontrol ekle (VE)' }).click();
+    await page.getByLabel('2. kontrol türü', { exact: true }).selectOption('veya');
+    await page.getByLabel('2.1. kontrol değeri').fill('<Durum>HATA</Durum>');
+    await page.getByLabel('2.2. kontrol değeri').fill('<Durum>OK</Durum>');
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
+    const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
+    const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'VEYA senaryosu');
+    expect(kayit.icerik.kontroller).toEqual([{ tur: 'soapYaniti' }, { tur: 'veya', alt: [{ tur: 'icerir', deger: '<Durum>HATA</Durum>' }, { tur: 'icerir', deger: '<Durum>OK</Durum>' }] }]);
+    // Açılınca aynı yapı görünür.
+    await page.reload();
+    await expect(page.getByLabel('2. kontrol türü', { exact: true })).toHaveValue('veya');
+    await expect(page.getByLabel('2.2. kontrol değeri')).toHaveValue('<Durum>OK</Durum>');
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('arayüz: senaryolar tablosunda "Koşuda" anahtarı (tek tek ve başlıktan hepsi)', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    const dahiller = async () => ((await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar as Nesne[]).map((x) => x.kosuyaDahil);
+    await page.goto(`/#/servisler/s/${servisId}`);
+    const anahtar = page.getByRole('switch', { name: 'Koşuda: Formdan senaryo' });
+    await expect(anahtar).toBeChecked();
+    await anahtar.click();
+    await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar.find((x: Nesne) => x.baslik === 'Formdan senaryo').kosuyaDahil).toBe(false);
+    const tumu = page.getByRole('switch', { name: 'Tüm senaryolar koşuda' });
+    await expect(tumu).not.toBeChecked();
+    await tumu.click();
+    await expect.poll(async () => (await dahiller()).every(Boolean)).toBe(true);
+    await tumu.click();
+    await expect.poll(async () => (await dahiller()).some(Boolean)).toBe(false);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
   test('arayüz: test verisi alanında servis → parametre seçilerek eşleme eklenir (rol addan tahmin edilir)', async () => {
     test.setTimeout(60_000);
     // Serviste eşlenmemiş bir parametre olsun.

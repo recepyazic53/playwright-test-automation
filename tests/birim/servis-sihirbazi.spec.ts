@@ -132,7 +132,7 @@ test.describe('sihirbaz uçtan uca', () => {
     const { servisler } = await basarili(`/platform/servisler?projeId=${projeId}`);
     const s = servisler.find((x: Nesne) => x.anahtar === 'ornek-sihirbaz');
     expect(s.ayarlar).toMatchObject({
-      yol: '/ornek.asmx', tabanlar: { [testOrtami]: `${soap.adres}/Servis`, [canli]: '' }, kimlikProfili: 'Sihirbaz giriş',
+      yol: '/ornek.asmx', tabanlar: { [testOrtami]: `${soap.adres}/Servis`, [canli]: '' },
       yalnizTestOperasyonlari: ['Onayla'], tarihKurallari: { BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" }
     });
     expect(s.ayarlar.operasyonlar.map((o: Nesne) => o.ad)).toEqual(['Teklif', 'Onayla']);
@@ -144,7 +144,16 @@ test.describe('sihirbaz uçtan uca', () => {
     // Yeni taban adres ortamın listesine kaydedildi; giriş profili kasada.
     const { ortamlar } = await basarili(`/platform/ortamlar?projeId=${projeId}`);
     expect(ortamlar.find((o: Nesne) => o.id === testOrtami).tabanAdresleri).toEqual(['http://127.0.0.1:9/', `${soap.adres}/Servis`]);
-    expect((await basarili(`/platform/servis-kimlikleri?projeId=${projeId}`)).profiller).toEqual([{ ad: 'Sihirbaz giriş', alanlar: ['CHANNEL', 'PASSWORD', 'USERNAME'], ortamlar: {} }]);
+    // Giriş bilgisi test verisine yazıldı: "Servis girişi" türü (kanal açık, kullanıcı / parola hassas) + profil; servis bu profile bağlı.
+    expect(s.ayarlar.kimlikProfili).toBeUndefined();
+    const { turler } = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
+    const giris = turler.find((t: Nesne) => t.ad === 'Servis girişi');
+    expect(giris.alanlar.map((a: Nesne) => [a.ad, a.hassas, a.servisParametreleri]).sort()).toEqual([
+      ['kanal', false, [{ ad: 'CHANNEL', rol: 'giris' }]], ['kullanici', true, [{ ad: 'USERNAME', rol: 'giris' }]], ['parola', true, [{ ad: 'PASSWORD', rol: 'giris' }]]]);
+    const { profiller } = await basarili(`/platform/test-verisi-profilleri?projeId=${projeId}`);
+    const girisProfili = profiller.find((x: Nesne) => x.ad === 'Sihirbaz giriş');
+    expect(girisProfili).toMatchObject({ turId: giris.id, degerler: { kanal: '77' } });
+    expect(s.ayarlar.veriProfilleri[`${giris.id}:giris`]).toBe(girisProfili.id);
 
     // Yeni senaryo: varsayılanlar dolu gelir.
     await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);
@@ -162,56 +171,49 @@ test.describe('sihirbaz uçtan uca', () => {
     await baglam.close();
   });
 
-  test('Ayarlar > Servis giriş bilgileri: ekle, alan kaldır / ekle, ortama özel değer, kullanılan profil silinmez, kullanılmayan silinir', async () => {
+  test('giriş bilgileri Ayarlar > Test verisi\'nde ("Servis girişi" türü); ayrı "Servis giriş bilgileri" bölümü yok', async () => {
     test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/ayarlar/test-verisi');
+    await expect(page.locator('.kayit-listesi').first()).toContainText('Servis girişi');
+    await expect(page.getByText('Sihirbaz giriş')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Servis giriş bilgileri' })).toHaveCount(0);
+    await baglam.close();
+  });
+
+  test('Parametreler sekmesi: senaryo yokken de metot alanları görünür; zorunluluk düzeltilir; WSDL\'de olmayan alan eklenir ve düzenleyicide kullanılır', async () => {
+    test.setTimeout(60_000);
+    const { servisler } = await basarili(`/platform/servisler?projeId=${projeId}`);
+    const s = servisler.find((x: Nesne) => x.anahtar === 'ornek-sihirbaz');
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    const profiller = async () => (await basarili(`/platform/servis-kimlikleri?projeId=${projeId}`)).profiller as Nesne[];
-    await page.goto('/#/ayarlar/servis-girisleri');
-    const liste = page.locator('.kayit-listesi');
-    await expect(liste).toContainText('Sihirbaz giriş');
-    await expect(liste).toContainText('Kullanan: Ornek Sihirbaz');
+    await page.goto(`/#/servisler/s/${s.id}/parametreler`);
+    await expect(page.getByRole('heading', { name: 'Metot alanları' })).toBeVisible();
+    await expect(page.getByLabel('Teklif Input/Channel varsayılanı')).toHaveValue('CHANNEL');
+    // Senaryo olmasa da varsayılanlarda geçen parametreler listelenir.
+    await expect(page.locator('.kart').filter({ hasText: 'Kullanılan parametreler' })).toContainText('${CHANNEL}');
+    await page.getByLabel('Teklif Input/IsSkiing zorunlu').check();
+    await page.getByLabel('Teklif yeni alan yolu').fill('Input/EkAlan');
+    await page.getByLabel('Teklif yeni alan zorunlu').check();
+    await page.getByRole('button', { name: '+ Alan ekle' }).first().click();
+    await expect(page.locator('.alan-satiri').filter({ hasText: 'EkAlan' })).toContainText('WSDL\'de yok');
+    await page.getByRole('button', { name: 'Alanları kaydet' }).click();
+    await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar.ekAlanlar).toEqual({ Teklif: [{ yol: 'Input/EkAlan', tip: 'metin' }], Onayla: [] });
+    const ayar = (await basarili(`/platform/servis?projeId=${projeId}&id=${s.id}`)).servis.ayarlar;
+    expect(ayar.alanZorunluluklari.Teklif).toEqual(expect.arrayContaining(['Input/EkAlan', 'Input/IsSkiing']));
+    expect(ayar.alanVarsayilanlari.Teklif['Input/Channel']).toEqual({ kaynak: 'parametre', deger: 'CHANNEL' });
 
-    // Yeni profil: yalnız USERNAME değeri girilir.
-    await page.getByRole('button', { name: '+ Profil ekle' }).click();
-    await page.getByLabel('Profil adı').fill('Yedek');
-    await page.getByLabel('USERNAME değeri').fill('yedek-kullanici');
-    await page.getByRole('button', { name: 'Kaydet' }).click();
-    await expect(liste).toContainText('Yedek');
-    expect((await profiller()).find((p) => p.ad === 'Yedek')).toEqual({ ad: 'Yedek', alanlar: ['USERNAME'], ortamlar: {} });
-
-    // Düzenle: USERNAME kaldırılır, yeni alan eklenir; kayıtlı değer gösterilmez.
-    await page.getByRole('button', { name: 'Yedek: düzenle' }).click();
-    await expect(page.getByLabel('USERNAME değeri')).toHaveValue('');
-    await page.getByRole('button', { name: 'USERNAME kaldır' }).click();
-    await page.getByRole('button', { name: '+ Alan ekle' }).click();
-    await page.getByLabel('Alan adı').last().fill('KANAL2');
-    await page.getByLabel('Yeni alan değeri').fill('k2');
-    await page.getByRole('button', { name: 'Kaydet' }).click();
-    await expect.poll(async () => (await profiller()).find((p) => p.ad === 'Yedek')?.alanlar).toEqual(['KANAL2']);
-
-    // Ortama özel: CANLI'da farklı parola.
-    await page.getByRole('button', { name: 'Sihirbaz giriş: ortama özel değer' }).click();
-    await expect(page.getByLabel('Kapsam')).toHaveValue(canli);
-    await page.getByRole('button', { name: '+ Alan ekle' }).click();
-    await page.getByLabel('Alan adı').last().fill('PASSWORD');
-    await page.getByLabel('Yeni alan değeri').fill('canli-parola-1');
-    await page.getByRole('button', { name: 'Kaydet' }).click();
-    await expect.poll(async () => (await profiller()).find((p) => p.ad === 'Sihirbaz giriş')?.ortamlar).toEqual({ [canli]: ['PASSWORD'] });
-    expect(JSON.stringify(await profiller())).not.toContain('canli-parola-1');
-
-    // Kullanılan profil silinmez; kullanılmayan silinir.
-    // Satır içi onay: aynı düğmeye iki kez basılır (ikincisinde metni 'Silmeyi onayla').
-    await page.getByRole('button', { name: 'Sihirbaz giriş: sil' }).click();
-    await expect(page.getByRole('button', { name: 'Sihirbaz giriş: sil' })).toHaveText('Silmeyi onayla');
-    await page.getByRole('button', { name: 'Sihirbaz giriş: sil' }).click();
-    await expect(page.getByText('şu servislerde kullanılıyor: Ornek Sihirbaz')).toBeVisible();
-    expect((await profiller()).map((p) => p.ad)).toContain('Sihirbaz giriş');
-    await page.getByRole('button', { name: 'Yedek: sil' }).click();
-    await page.getByRole('button', { name: 'Yedek: sil' }).click();
-    await expect.poll(async () => (await profiller()).map((p) => p.ad)).toEqual(['Sihirbaz giriş']);
+    // Düzenleyici: elle eklenen alan formda; gövdeye yazılır.
+    await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);
+    const ek = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^EkAlan/ }) });
+    await expect(ek).toHaveClass(/zorunlu/);
+    await ek.getByLabel('EkAlan değer kaynağı').selectOption('sabit');
+    await ek.getByLabel('EkAlan', { exact: true }).fill('ek-deger');
+    await page.getByRole('tab', { name: 'Gövde (XML)' }).click();
+    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<EkAlan>ek-deger<\/EkAlan>/);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

@@ -2032,3 +2032,26 @@ tr.tiklanir:hover, tr.tiklanir:focus-visible { background: var(--panel-2); }
 /* Ayarlar > Servis giriş bilgileri */
 .kimlik-satiri { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(200px, 1.6fr) auto; gap: 8px; align-items: center; margin-bottom: 6px; }
 .kimlik-satiri.kaldirilacak input { text-decoration: line-through; opacity: .5; }
+/* Parametre + değer (test verisi profili) seçimi */
+.parametre-degeri { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.parametre-degeri .profil-secimi:empty { display: none; }
+.parametre-degeri:has(.profil-secimi:empty) { grid-template-columns: 1fr; }
+.profil-secimi select { width: 100%; }
+/* Tablo satırındaki başlık bağlantısı: düz metin görünür, üzerine gelince bağlantı olduğu belli olur */
+a.satir-baglantisi { color: var(--metin); font-weight: 600; text-decoration: none; }
+a.satir-baglantisi:hover, a.satir-baglantisi:focus-visible { color: var(--vurgu); text-decoration: underline; }
+/* Servis senaryoları tablosu: Koşuda anahtarı */
+.ozet-tablosu th.kosuda, .ozet-tablosu td.kosuda { width: 90px; text-align: center; }
+.kosuda-baslik { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+/* Kontrol düzenleyici: VE / VEYA */
+.kontrol-listesi-duzen { display: grid; gap: 8px; justify-items: start; }
+.kontrol-listesi-duzen > .kontrol-satiri, .kontrol-listesi-duzen > .kontrol-grubu { width: 100%; }
+.kontrol-satiri { display: grid; grid-template-columns: 52px minmax(180px, 240px) minmax(0, 1fr) auto auto; gap: 8px; align-items: center; margin: 0; }
+.kontrol-satiri select, .kontrol-satiri input[type="text"] { width: 100%; min-width: 0; }
+.kontrol-satiri > .secenek { white-space: nowrap; }
+.baglac { font: 600 10.5px var(--yazi-mono); color: var(--metin-3); letter-spacing: .08em; text-align: center; padding: 3px 0; border: 1px solid var(--cizgi); border-radius: 6px; }
+.kontrol-grubu { display: grid; gap: 6px; }
+.kontrol-alt { margin-left: 26px; padding: 8px 0 8px 14px; border-left: 2px solid var(--vurgu); }
+.kontrol-listesi li > div { display: flex; align-items: center; gap: 4px; }
+.kontrol-listesi .kontrol-listesi { margin: 4px 0 4px 22px; }
+@media (max-width: 800px) { .kontrol-satiri { grid-template-columns: 44px 1fr; } }

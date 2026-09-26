@@ -264,7 +264,7 @@ export function xpathMetni(kok, yol) {
 
 /**
  * @typedef {import('./servis-deposu.mjs').ServisKontrolu} ServisKontrolu
- * @typedef {{ tur: string; ad: string; gecti: boolean; aciklama: string }} KontrolSonucu
+ * @typedef {{ tur: string; ad: string; gecti: boolean; aciklama: string; alt?: KontrolSonucu[] }} KontrolSonucu
  */
 
 /** @param {ServisKontrolu} k */
@@ -278,6 +278,7 @@ export function kontrolAdi(k) {
     case 'icerir': return `Yanıtta geçer: "${k.deger}"`;
     case 'icermez': return `Yanıtta geçmez: "${k.deger}"`;
     case 'xpathEsit': return `${k.xpath} = "${k.deger}"`;
+    case 'veya': return `Şunlardan biri: ${(k.alt ?? []).map(kontrolAdi).join(' | ')}`;
     default: return String(k.tur);
   }
 }
@@ -306,7 +307,8 @@ export function kontrolleriDegerlendir(yanit, kontroller) {
   const govdeDugumu = zarf?.cocuklar.find((c) => c.ad === 'Body');
   const hata = govdeDugumu?.cocuklar.find((c) => c.ad === 'Fault');
   const hataMetni = hata ? (xpathMetni(hata, '//faultstring') ?? xpathMetni(hata, '//Text') ?? tumMetin(hata).trim()) : '';
-  return kontroller.map((k) => {
+  /** @param {ServisKontrolu} k @returns {KontrolSonucu} */
+  const degerlendir = (k) => {
     const ad = kontrolAdi(k);
     const s = (/** @type {boolean} */ gecti, /** @type {string} */ aciklama) => ({ tur: k.tur, ad, gecti, aciklama });
     switch (k.tur) {
@@ -321,9 +323,15 @@ export function kontrolleriDegerlendir(yanit, kontroller) {
         if (m === undefined) return s(false, agac ? 'Düğüm bulunamadı' : 'Yanıt XML değil');
         return m === k.deger ? s(true, `"${m}"`) : s(false, `Görülen: "${m.slice(0, 300)}"`);
       }
+      case 'veya': {
+        const altlar = (k.alt ?? []).map(degerlendir);
+        const gecen = altlar.filter((a) => a.gecti);
+        return { ...s(gecen.length > 0, gecen.length ? `Geçen: ${gecen.map((a) => a.ad).join(' | ')}` : 'Hiçbiri geçmedi'), alt: altlar };
+      }
       default: return s(false, 'Bilinmeyen kontrol türü');
     }
-  });
+  };
+  return kontroller.map(degerlendir);
 }
 
 /**

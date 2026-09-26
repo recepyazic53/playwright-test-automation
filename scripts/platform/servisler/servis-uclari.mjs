@@ -7,7 +7,7 @@ import {
   servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet, servisSenaryosuSil, servisSil
 } from './servis-deposu.mjs';
 import {
-  erisimKontrolu, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
+  erisimKontrolu, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
 } from './servis-islemleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -106,6 +106,7 @@ export const SERVIS_POST_UCLARI = [
       ...(g.durum === 'etkin' || g.durum === 'devre_disi' ? { durum: g.durum } : {}),
       ...(g.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: g.alanVarsayilanlari } : {}),
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
+      ...(g.ekAlanlar !== undefined ? { ekAlanlar: g.ekAlanlar } : {}),
       erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
     });
     return { id };
@@ -132,6 +133,19 @@ export const SERVIS_POST_UCLARI = [
     });
     return { id };
   }],
+  // Koşuya dahil / hariç (toplu): senaryoların yalnız bu işareti değişir.
+  ['/platform/servis/senaryo/kosuya-dahil', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    if (!Array.isArray(g.idler) || !g.idler.length) throw new DepoHatasi('"idler" boş olamaz.');
+    if (typeof g.dahil !== 'boolean') throw new DepoHatasi('"dahil" true ya da false olmalıdır.');
+    const senaryolar = g.idler.map((/** @type {unknown} */ id) => senaryoAl(db, projeId, id));
+    db.islem(() => {
+      for (const x of senaryolar) {
+        servisSenaryosuKaydet(db, { id: x.id, projeId, servisId: x.servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: g.dahil, icerik: x.icerik });
+      }
+    });
+    return { guncellenen: senaryolar.length };
+  }],
   ['/platform/servis/senaryo/sil', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     return { silindi: servisSenaryosuSil(db, senaryoAl(db, projeId, g.id).id) };
@@ -156,6 +170,8 @@ export const SERVIS_POST_UCLARI = [
     const degerler = metinNesnesi(g.degerler) ?? {};
     return { id: servisKimligiKaydet(db, { projeId, ad: metin(g.ad), ortamId: secimli(g.ortamId) ?? null, degerler }) };
   }],
+  // Eski servis giriş profilini test verisine taşı (onay: false → yalnız önizleme).
+  ['/platform/servis-kimligi/test-verisine-tasi', (db, g) => girisProfiliniTestVerisineTasi(db, kimlik(g.projeId, 'projeId'), { ad: metin(g.ad), onay: g.onay === true })],
   ['/platform/servis-kimligi/sil', (db, g) => ({ silindi: servisKimligiSil(db, kimlik(g.projeId, 'projeId'), metin(g.ad)) })],
   ['/platform/servis/soapui/onizle', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');

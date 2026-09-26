@@ -360,6 +360,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-diyagrami.js', { dosya: 'senaryo-diyagrami.js', tur: 'text/javascript; charset=utf-8' }],

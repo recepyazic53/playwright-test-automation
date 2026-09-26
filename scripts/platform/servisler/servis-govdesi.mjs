@@ -10,7 +10,7 @@
 
 /**
  * @typedef {'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat'} AlanTipi
- * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[] }} Alan
+ * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }} Alan
  * @typedef {{ ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[] }} OperasyonSemasi
  * @typedef {{ kaynak: 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri
  * @typedef {{ ad: string; yerel: string; oz: Record<string, string>; cocuklar: XmlOgesi[]; metin: string }} XmlOgesi
@@ -59,6 +59,30 @@ export function xmlAyristir(xml) {
   if (yigin.length !== 1) throw new Error(`XML ayrıştırılamadı: <${yigin[yigin.length - 1].ad}> kapanmadı.`);
   if (kok.cocuklar.length !== 1) throw new Error('XML tek bir kök öğe içermeli.');
   return kok.cocuklar[0];
+}
+
+/**
+ * WSDL şemasına elle eklenen alanları (WSDL'de yok) katar: { yol: "Input/YeniAlan", tip?, zorunlu? }. Yol üzerindeki gruplar
+ * yoksa oluşturulur; alan grubun sonuna "ek: true" işaretiyle eklenir; aynı adlı alan varsa eklenmez. Şemanın kopyası döner.
+ * @param {OperasyonSemasi} sema @param {Array<{ yol: string; tip?: AlanTipi; zorunlu?: boolean }>} [ekler] @returns {OperasyonSemasi}
+ */
+export function semaBirlestir(sema, ekler = []) {
+  /** @type {OperasyonSemasi} */
+  const kopya = JSON.parse(JSON.stringify(sema));
+  for (const e of ekler) {
+    const parcalar = String(e.yol || '').split('/').filter(Boolean);
+    if (!parcalar.length) continue;
+    let liste = kopya.alanlar;
+    for (const g of parcalar.slice(0, -1)) {
+      let grup = liste.find((a) => a.ad === g);
+      if (!grup) { grup = { ad: g, cocuklar: [] }; liste.push(grup); }
+      grup.cocuklar ??= [];
+      liste = grup.cocuklar;
+    }
+    const ad = parcalar[parcalar.length - 1];
+    if (!liste.some((a) => a.ad === ad)) liste.push({ ad, tip: e.tip || 'metin', ek: true, ...(e.zorunlu ? { zorunlu: true } : {}) });
+  }
+  return kopya;
 }
 
 /** Şemadaki yaprak alanlar ve yolları (form satırları). @param {Alan[]} alanlar @param {string} [on] @returns {Array<{ yol: string; alan: Alan; derinlik: number; grup: boolean }>} */

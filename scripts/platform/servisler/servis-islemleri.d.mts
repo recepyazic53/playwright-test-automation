@@ -26,6 +26,7 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
   alanZorunluluklari?: Record<string, string[]>;
+  ekAlanlar?: Record<string, Array<{ yol: string; tip?: string }>>;
 }): string;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
   adres: string; durumKodu: number; operasyonSayisi: number; alanliOperasyonlar: string[];
@@ -44,6 +45,15 @@ export declare function servisParametreleri(vt: Veritabani, projeId: string, ser
   kimlikProfili: string | null;
 };
 
+export declare const SERVIS_GIRISI_TURU: string;
+export interface GirisTasimaPlani {
+  tur: string; yeniTur: boolean; rol: string;
+  eklenecekAlanlar: { alan: string; parametre: string; hassas: boolean }[];
+  profiller: { ad: string; ortam: string | null; alanlar: string[] }[];
+  servisler: string[];
+}
+export declare function girisProfiliniTestVerisineTasi(vt: Veritabani, projeId: string, girdi: { ad: string; onay?: boolean }):
+  { onizleme: GirisTasimaPlani } | (GirisTasimaPlani & { tasindi: true; turId: string; profilId: string });
 export declare function soapuiOnizle(vt: Veritabani, projeId: string, xml: string, secim?: { takim?: string; durum?: string }): {
   proje: string;
   durumlar?: { takim: string; durum: string; istekSayisi: number; arayuzler: string[]; kimlikParametreleri: string[]; veriParametreleri: string[]; uyariSayisi: number }[];
