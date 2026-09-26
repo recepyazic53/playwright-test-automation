@@ -21,6 +21,7 @@ import { akisModeli } from './model-formu.mjs';
 import { onayIste } from './kosu-paneli.js';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { bulgularEkrani } from './bulgular.js';
+import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
 
 /** Otomatik tarama modülü isteğe bağlı yüklenir (yüklenemezse yalnızca tarama çalışmaz). */
@@ -62,9 +63,9 @@ export function ekranlarEkrani(main, parcalar, baglam) {
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
 
   (async () => {
-    const liste = await api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`);
+    const [liste, servisler] = await Promise.all([api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`), servisleriAl(proje)]);
     const secim = tur === 'e' ? kimlik : tur === 'yeni' ? '__yeni' : '';
-    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz);
+    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler);
     yanCiz();
     if (tur === 'yeni') {
       sayfaPaketiAkisi(icerik, { mod: 'yeni', proje, tara: () => taramaBaslat(proje, null), kaydet: () => kayitBaslat(proje, null), bitti: (id) => { location.hash = `#/ekranlar/e/${encodeURIComponent(id)}`; } });
@@ -101,7 +102,7 @@ export function ekranlarEkrani(main, parcalar, baglam) {
 /** Ekran listesinde (ürün/ekran kartları) gösterilmeyen model türleri: yan listede kendi gruplarında. */
 const EKRAN_DISI_TURLER = ['altModel', 'ortakAkis'];
 
-function yanListe(nav, tumu, secili, yeniden) {
+function yanListe(nav, tumu, secili, yeniden, servisler = []) {
   // Devre dışı ekranlar varsayılan olarak gizli (seçili olan hariç); "Devre dışı ekranları göster" ile görünür.
   const devreDisiSayisi = tumu.filter((e) => e.durum === 'devre_disi').length;
   const ekranlar = devreDisiGoster() ? tumu : tumu.filter((e) => e.durum !== 'devre_disi' || e.id === secili);
@@ -118,13 +119,14 @@ function yanListe(nav, tumu, secili, yeniden) {
   yerlestir(nav,
     h('a', { href: '#/ekranlar', 'aria-current': secili === '' ? 'page' : null }, ikon('izgara'), 'Tüm ekranlar', h('span', { class: 'adet' }, String(tumu.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru)).length))),
     h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('artiYalin'), 'Sayfa ekle'),
-    h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ürünler / ekranlar'),
+    ...ekranlarBasligi(),
     ...ekranModelli.map(baglanti),
     ortakAkislar.length ? h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ortak akışlar') : null,
     ...ortakAkislar.map(baglanti),
     altModeller.length ? h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Alt modeller') : null,
     ...altModeller.map(baglanti),
-    devreDisiAnahtari(devreDisiSayisi, () => yeniden()));
+    devreDisiAnahtari(devreDisiSayisi, () => yeniden()),
+    ...servislerBolumu(servisler));
 }
 
 // ---------------------------------------------------------------------------------------
