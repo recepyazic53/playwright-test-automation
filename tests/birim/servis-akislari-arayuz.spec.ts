@@ -100,6 +100,27 @@ test.describe('servis akışları arayüzü', () => {
     await baglam.close();
   });
 
+  test('alan formunda "Akıştan (önceki adım)" kaynağı: alan ${akis:PolicyNo} olur; XML ↔ form korunur', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
+    const form = page.locator('.alan-formu');
+    await expect(form).toBeVisible();
+    const satir = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+    await satir('Channel').getByLabel('Channel değer kaynağı').selectOption('akis');
+    await satir('Channel').getByLabel('Channel akış değeri adı').fill('PolicyNo');
+    await page.getByRole('tab', { name: 'Gövde (XML)' }).click();
+    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<Channel>\$\{akis:PolicyNo\}<\/Channel>/);
+    await page.getByRole('tab', { name: 'Alanlar' }).click();
+    await expect(satir('Channel').getByLabel('Channel değer kaynağı')).toHaveValue('akis');
+    await expect(satir('Channel').getByLabel('Channel akış değeri adı')).toHaveValue('PolicyNo');
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
   test('oturum akışı servise atanır; senaryo düzenleyicide HTTP başlıkları görünür ve kaydedilir', async () => {
     test.setTimeout(60_000);
     const { servis, senaryolar } = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);

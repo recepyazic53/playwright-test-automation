@@ -1,7 +1,8 @@
 // SERVİS TESTLERİ — istek gövdesi ↔ alan formu (ORTAK: sunucu ve arayüz kullanır; /arayuz/servis-govdesi.mjs olarak sunulur).
 // Tarayıcıda da çalışır: Node modülü İÇE AKTARMAZ.
 // - Operasyon şeması (WSDL'den; bkz. wsdl-semasi.mjs): { ad, eylem?, kok, ns, alanlar: Alan[] }.
-// - Alan değeri: { kaynak: 'tablo' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme', deger? }
+// - Alan değeri: { kaynak: 'tablo' | 'akis' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme', deger? }
+//     akis → <A>${akis:Ad}</A> (servis akışında önceki adımın yanıtından okunan değer ya da servisin oturum akışının değeri)
 //     tablo → <A>${Tablo.Sütun}</A> (değer koşuda seçilen tablo satırından) · parametre (eski) → <A>${AD}</A>
 //     sabit → <A>değer</A> (XML kaçışlı; ${…} yer tutucusu yazılabilir) · bos → <A/>
 //     nil → <A xsi:nil="true"/> · gonderme → alan hiç yazılmaz. Grup alanı, altında yazılan bir alan varsa yazılır.
@@ -13,11 +14,13 @@
  * @typedef {'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat'} AlanTipi
  * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }} Alan
  * @typedef {{ ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[] }} OperasyonSemasi
- * @typedef {{ kaynak: 'tablo' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri
+ * @typedef {{ kaynak: 'tablo' | 'akis' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri
  * @typedef {{ ad: string; yerel: string; oz: Record<string, string>; cocuklar: XmlOgesi[]; metin: string }} XmlOgesi
  */
 
-export const KAYNAKLAR = /** @type {const} */ (['tablo', 'parametre', 'sabit', 'bos', 'nil', 'gonderme']);
+export const KAYNAKLAR = /** @type {const} */ (['tablo', 'akis', 'parametre', 'sabit', 'bos', 'nil', 'gonderme']);
+/** Akış değeri adı (${akis:Ad}). */
+export const AKIS_DEGERI = /^[A-Za-z_][A-Za-z0-9_-]{0,59}$/;
 /** Eski parametre adı (SIGORTALI_TC) ve tablo başvurusu (Servis girişi.Kanal / Kişi[ettiren].TC). */
 const ESKI_PARAMETRE = /^[A-Za-z_][A-Za-z0-9_-]{0,79}$/;
 const TABLO_BASVURUSU = /^[^.[\]{}$<>&|]{1,60}(?:\[[^\]{}$<>&|]{1,40}\])?\.[^.[\]{}$<>&|]{1,60}(?:\|[^{}$]{1,60})?$/u;
@@ -145,6 +148,7 @@ export function govdeUret(sema, degerler, secenekler = {}) {
       if (v.kaynak === 'gonderme') continue;
       if (v.kaynak === 'bos') satirlar.push(`${girinti(d)}<${a.ad}/>`);
       else if (v.kaynak === 'nil') satirlar.push(`${girinti(d)}<${a.ad} xsi:nil="true"/>`);
+      else if (v.kaynak === 'akis') satirlar.push(`${girinti(d)}<${a.ad}>\${akis:${v.deger ?? ''}}</${a.ad}>`);
       else if (v.kaynak === 'parametre' || v.kaynak === 'tablo') satirlar.push(`${girinti(d)}<${a.ad}>\${${v.deger ?? ''}}</${a.ad}>`);
       else satirlar.push(`${girinti(d)}<${a.ad}>${xmlKacis(v.deger ?? '')}</${a.ad}>`);
     }
@@ -203,7 +207,8 @@ export function govdeCoz(govde, sema) {
       else {
         const p = /^\$\{\s*([^{}$]{1,200}?)\s*\}$/u.exec(c.metin.trim());
         const ic = p ? p[1] : '';
-        degerler[yol] = p && ESKI_PARAMETRE.test(ic) ? { kaynak: 'parametre', deger: ic }
+        const akis = /^akis:\s*([A-Za-z_][A-Za-z0-9_-]{0,59})$/.exec(ic);
+        degerler[yol] = akis ? { kaynak: 'akis', deger: akis[1] } : p && ESKI_PARAMETRE.test(ic) ? { kaynak: 'parametre', deger: ic }
           : p && TABLO_BASVURUSU.test(ic) ? { kaynak: 'tablo', deger: ic } : { kaynak: 'sabit', deger: c.metin };
       }
     }

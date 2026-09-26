@@ -79,7 +79,7 @@ async function akisDuzenleyici(kap, proje, s, ortamlar, akisId) {
   };
   const a = kayit?.akis ?? { baslik: '', tur: 'akis', kapsam: 'test', kosuyaDahil: true, icerik: { adimlar: [{ ad: 'Adım 1', servisId: s.id, senaryoId: '', okumalar: [] }] } };
   /** Düzenleme kopyası. */
-  const is = { baslik: a.baslik, tur: a.tur, kapsam: a.kapsam, omur: a.icerik.omurSaniye ?? 3600, adimlar: JSON.parse(JSON.stringify(a.icerik.adimlar)) };
+  const is = { baslik: a.baslik, tur: a.tur, kapsam: a.kapsam, omur: a.icerik.omurSaniye ?? 3600, yenileme: a.icerik.tokenYenileme ?? 'suresiDolunca', adimlar: JSON.parse(JSON.stringify(a.icerik.adimlar)) };
   for (const x of is.adimlar) await senaryolariAl(x.servisId);
   const adres = `#/servisler/s/${q(s.id)}/akislar`;
   const mesaj = mesajKutusu();
@@ -93,8 +93,14 @@ async function akisDuzenleyici(kap, proje, s, ortamlar, akisId) {
   const omur = h('input', { type: 'number', min: '30', max: '86400', step: '1', value: String(is.omur), 'aria-label': 'Oturum ömrü (saniye)' });
   const omurAlani = alan('Token ömrü (sn)', omur, { yardim: 'Oturum değerleri bu süre boyunca yeniden kullanılır; dolunca yeniden alınır.' });
   omur.addEventListener('input', () => { is.omur = Number(omur.value); });
-  tur.addEventListener('change', () => { is.tur = tur.value; omurAlani.hidden = is.tur !== 'oturum'; });
-  omurAlani.hidden = is.tur !== 'oturum';
+  const yenileme = h('select', {},
+    h('option', { value: 'suresiDolunca', selected: is.yenileme === 'suresiDolunca' }, 'Süresi dolunca yeniden al (koşular arasında paylaşılır)'),
+    h('option', { value: 'herIstekte', selected: is.yenileme === 'herIstekte' }, 'Her istekte yeniden al'));
+  const yenilemeAlani = alan('Token', yenileme, { yardim: 'Sunucu 401 / 403 dönerse token her iki seçenekte de bir kez yenilenir.' });
+  const oturumAlanlariniGoster = () => { yenilemeAlani.hidden = is.tur !== 'oturum'; omurAlani.hidden = is.tur !== 'oturum' || is.yenileme === 'herIstekte'; };
+  yenileme.addEventListener('change', () => { is.yenileme = yenileme.value; oturumAlanlariniGoster(); });
+  tur.addEventListener('change', () => { is.tur = tur.value; oturumAlanlariniGoster(); });
+  oturumAlanlariniGoster();
   const kapsam = h('select', {}, [['test', 'TEST'], ['canli', 'CANLI'], ['ikisi', 'TEST + CANLI']].map(([d, m]) => h('option', { value: d, selected: is.kapsam === d }, m)));
   kapsam.addEventListener('change', () => { is.kapsam = kapsam.value; });
 
@@ -145,7 +151,7 @@ async function akisDuzenleyici(kap, proje, s, ortamlar, akisId) {
 
   const icerikAl = () => ({
     adimlar: is.adimlar.map((x) => ({ ...x, okumalar: x.okumalar.filter((o) => o.ad || o.yol) })),
-    ...(is.tur === 'oturum' ? { omurSaniye: is.omur } : {})
+    ...(is.tur === 'oturum' ? { omurSaniye: is.omur, tokenYenileme: is.yenileme } : {})
   });
   const eksik = () => {
     if (!is.baslik.trim()) return 'Başlık boş olamaz.';
@@ -211,7 +217,7 @@ async function akisDuzenleyici(kap, proje, s, ortamlar, akisId) {
     h('h3', {}, akisId ? 'Akışı düzenle' : 'Yeni akış'), mesaj.kutu,
     kayit?.hatalar?.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, h('b', {}, 'Akış şu an koşulamaz: '), kayit.hatalar.join(' ')) : null,
     alan('Başlık', baslik, { zorunlu: true }),
-    h('div', { class: 'satir-duzen' }, alan('Tür', tur), alan('Kapsam', kapsam, { yardim: 'Koşuda hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' }), omurAlani),
+    h('div', { class: 'satir-duzen' }, alan('Tür', tur), alan('Kapsam', kapsam, { yardim: 'Koşuda hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' }), yenilemeAlani, omurAlani),
     adimKap,
     h('div', { class: 'dugmeler' }, kaydet, dene, h('a', { class: 'dugme hayalet', href: adres }, 'Vazgeç'))),
   sonucKap, kosuKap);

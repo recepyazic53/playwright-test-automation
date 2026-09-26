@@ -455,11 +455,14 @@ const OKUMA_ADI = /^[A-Za-z_][A-Za-z0-9_-]{0,59}$/;
 export const EN_COK_AKIS_ADIMI = 30;
 /** Oturum akışının değerleri (token) varsayılan olarak 1 saat geçerli. */
 export const VARSAYILAN_OTURUM_OMRU_SN = 3600;
+export const TOKEN_YENILEME = /** @type {const} */ (['suresiDolunca', 'herIstekte']);
 
 /**
  * @typedef {{ ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }} AkisOkumaTanimi
  * @typedef {{ id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean }} AkisAdimi
- * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; aciklama?: string }} ServisAkisIcerigi
+ * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }} ServisAkisIcerigi
+ *   tokenYenileme (oturum akışı): süresiDolunca (varsayılan: değer ömür boyunca koşular arasında yeniden kullanılır) ·
+ *   herIstekte (her senaryo çalıştırmasında oturum akışı yeniden koşulur).
  * @typedef {{ id: string; projeId: string; baslik: string; tur: 'akis' | 'oturum'; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
  *   sira: number | null; icerik: ServisAkisIcerigi; olusturulma: string; guncellenme: string }} ServisAkisi
  */
@@ -499,7 +502,7 @@ export function akisIceriginiDogrula(icerik, tur) {
   if (omur !== undefined && (!Number.isInteger(omur) || omur < 30 || omur > 86_400)) throw new DepoHatasi('"omurSaniye" 30 ile 86400 arasında tam sayı olmalıdır.');
   if (tur === 'oturum' && !adimlar.some((a) => a.okumalar.length)) throw new DepoHatasi('Oturum akışı en az bir değer okumalıdır (ör. Token).');
   return {
-    adimlar, ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN } : {}),
+    adimlar, ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN, tokenYenileme: secenek(i.tokenYenileme ?? 'suresiDolunca', TOKEN_YENILEME, 'tokenYenileme') } : {}),
     ...(typeof i.aciklama === 'string' && i.aciklama.trim() ? { aciklama: i.aciklama.trim().slice(0, 2000) } : {})
   };
 }

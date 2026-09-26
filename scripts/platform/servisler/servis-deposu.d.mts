@@ -75,7 +75,8 @@ export declare const EN_COK_AKIS_ADIMI: number;
 export declare const VARSAYILAN_OTURUM_OMRU_SN: number;
 export interface AkisOkumaTanimi { ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
 export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean }
-export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; aciklama?: string }
+export declare const TOKEN_YENILEME: readonly ['suresiDolunca', 'herIstekte'];
+export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }
 export interface ServisAkisi {
   id: string; projeId: string; baslik: string; tur: 'akis' | 'oturum'; kapsam: ServisKapsami; kosuyaDahil: boolean;
   sira: number | null; icerik: ServisAkisIcerigi; olusturulma: string; guncellenme: string;

@@ -6,7 +6,8 @@
 // - Gizli okumalar (token, parola…) sonraki adımların istek / yanıt / başlıklarında ve kayıtlarda maskelenir; açık değerler
 //   yalnız bu süreçte, bellekte.
 // OTURUM AKIŞI (tur "oturum"): servise atanır (ayarlar.oturumAkisi). Senaryoda ${akis:Token} verilmemişse değer oturumdan gelir;
-// oturum koşular arasında süresi (omurSaniye) dolana kadar bellekte paylaşılır; 401 / 403 gelirse bir kez yenilenir.
+// oturum koşular arasında süresi (omurSaniye) dolana kadar bellekte paylaşılır (tokenYenileme "herIstekte" ise her senaryo
+// çalıştırmasında yeniden alınır); 401 / 403 gelirse bir kez yenilenir.
 // Canlı ortam: akış yalnız kullanıcı başlatınca (arayüzdeki onayla) koşar; "yalnız test" operasyonu içeren akış canlıda hiç
 // istek atmadan reddedilir.
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
@@ -64,7 +65,8 @@ export function oturumlariTemizle(akisId) {
 export async function oturumDegerleriniAl(vt, projeId, akisId, ortamId, s = {}) {
   const anahtar = `${akisId}|${ortamId}`;
   const o = oturumlar.get(anahtar);
-  if (o && !s.yenile && o.gecerlilikSonu > Date.now()) return { degerler: o.degerler, gizliler: o.gizliler, baslik: o.baslik, durum: 'onbellek' };
+  const herIstekte = servisAkisiGetir(vt, akisId)?.icerik.tokenYenileme === 'herIstekte';
+  if (o && !s.yenile && !herIstekte && o.gecerlilikSonu > Date.now()) return { degerler: o.degerler, gizliler: o.gizliler, baslik: o.baslik, durum: 'onbellek' };
   const bekleyen = bekleyenOturumlar.get(anahtar);
   if (bekleyen) return bekleyen;
   const is = (async () => {

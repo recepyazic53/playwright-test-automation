@@ -12,7 +12,7 @@ import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu,
 import { onayIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
 import { servisSihirbazi } from './servis-sihirbazi.js';
-import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
+import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { akislarSekmesi } from './servis-akislari.js';
@@ -567,7 +567,7 @@ function sonucGovdesi(r) {
 // ---------------------------------------------------------------------------------------
 
 /** Alan değer kaynakları. "Tarih kuralı" (${BEGIN_DATE} gibi; Parametreler sekmesinde tanımlı) servisin tarih kuralı varsa listelenir. */
-const KAYNAK_ETIKETI = { tablo: 'Tablodan', sabit: 'Sabit değer', parametre: 'Tarih kuralı', bos: 'Boş gönder', nil: 'Boş (nil)', gonderme: 'Gönderme' };
+const KAYNAK_ETIKETI = { tablo: 'Tablodan', akis: 'Akıştan (önceki adım)', sabit: 'Sabit değer', parametre: 'Tarih kuralı', bos: 'Boş gönder', nil: 'Boş (nil)', gonderme: 'Gönderme' };
 const TIP_ETIKETI = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
 const ayniDeger = (a, b) => Boolean(a && b) && a.kaynak === b.kaynak && (a.deger ?? '') === (b.deger ?? '');
 
@@ -699,8 +699,22 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     });
     return h('span', { class: 'tablo-degeri' }, sec, grup, durum);
   };
+  /** Akış değeri: adı yazılır (önceki adımda "Yanıttan oku" ile okunan ya da servisin oturum akışının değeri, ör. PolicyNo / Token). */
+  const akisDegeri = (alanT, v, tazele) => {
+    const g = h('input', { type: 'text', value: v.deger || '', maxlength: '60', spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi', placeholder: 'PolicyNo',
+      'aria-label': `${alanT.ad} akış değeri adı` });
+    const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
+    g.addEventListener('input', () => {
+      const a = g.value.trim();
+      v.deger = AKIS_DEGERI.test(a) ? a : '';
+      not.textContent = a && !v.deger ? 'Ad harf ya da "_" ile başlar; harf, rakam, "_", "-".' : '';
+      tazele();
+    });
+    return h('span', { class: 'akis-degeri-girdisi', title: 'Akış çalışırken önceki adımın yanıtından okunan değer yazılır' }, h('code', {}, '${akis:'), g, h('code', {}, '}'), not);
+  };
   const degerKontrolu = (alanT, v, tazele) => {
     if (v.kaynak === 'tablo') return tabloDegeri(alanT, v);
+    if (v.kaynak === 'akis') return akisDegeri(alanT, v, tazele);
     if (v.kaynak === 'parametre') {
       const sec = h('select', { 'aria-label': `${alanT.ad} parametresi` }, h('option', { value: '' }, '— seçin —'),
         ...parametreGruplari.map(([g, l]) => h('optgroup', { label: g }, l.map(([a, m]) => h('option', { value: a, selected: v.deger === a }, m)))),
@@ -784,7 +798,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         pin.textContent = esit ? '★' : '☆';
         pin.title = esit ? 'Servis varsayılanı (kaldırmak için tıklayın)' : 'Bu değeri servis varsayılanı yap (yeni senaryolar bununla açılır)';
         satir.className = `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''} ${zorunlu ? 'zorunlu' : ''}`;
-        const eksik = zorunlu && (v.kaynak === 'gonderme' || v.kaynak === 'bos' || v.kaynak === 'nil' || ((v.kaynak === 'sabit' || v.kaynak === 'parametre' || v.kaynak === 'tablo') && !v.deger));
+        const eksik = zorunlu && (v.kaynak === 'gonderme' || v.kaynak === 'bos' || v.kaynak === 'nil' || ((v.kaynak === 'sabit' || v.kaynak === 'parametre' || v.kaynak === 'tablo' || v.kaynak === 'akis') && !v.deger));
         eksikNotu.textContent = eksik ? 'Zorunlu alan dolu gönderilmiyor (olumsuz senaryo değilse doldurun).' : '';
         sayacGuncelle();
       };
@@ -795,6 +809,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         kaynak.addEventListener('change', () => {
           v.kaynak = kaynak.value;
           if (v.kaynak === 'tablo') v.deger = bagBasvurusu(bag(sat.yol)) || (v.deger && basvuruCoz(v.deger) ? v.deger : '');
+          else if (v.kaynak === 'akis') v.deger = v.deger && AKIS_DEGERI.test(v.deger) ? v.deger : '';
           else if (v.kaynak !== 'sabit' && v.kaynak !== 'parametre') delete v.deger;
           else if (v.kaynak === 'parametre' && !bilinenParametreler.has(v.deger || '')) v.deger = '';
           else if (v.kaynak === 'sabit' && bilinenParametreler.has(v.deger || '')) v.deger = '';
@@ -935,8 +950,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       return k.tur === 'veya' ? { ...t, alt: (k.alt || []).map(temiz) } : t;
     })
   });
-  const eksikParametre = () => mod === 'alanlar' ? Object.entries(degerler).find(([, v]) => (v.kaynak === 'parametre' || v.kaynak === 'tablo') && !v.deger) : null;
-  const eksikMetni = (e) => `"${e[0]}" alanında ${e[1].kaynak === 'tablo' ? 'tablo sütunu' : 'parametre'} seçilmedi.`;
+  const eksikParametre = () => mod === 'alanlar' ? Object.entries(degerler).find(([, v]) => (v.kaynak === 'parametre' || v.kaynak === 'tablo' || v.kaynak === 'akis') && !v.deger) : null;
+  const eksikMetni = (e) => `"${e[0]}" alanında ${e[1].kaynak === 'tablo' ? 'tablo sütunu' : e[1].kaynak === 'akis' ? 'akış değeri adı' : 'parametre'} seçilmedi.`;
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
   kaydet.addEventListener('click', async () => {
     mesaj.temizle();
