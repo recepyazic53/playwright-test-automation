@@ -13,7 +13,7 @@ import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
 import { jetDaskAkisPaketi, JETDASK_HAVUZLARI } from '../../projeler/galaksi/jetdask-akis.mjs';
-import { odemeAkisPaketi } from '../../projeler/galaksi/odeme-akis.mjs';
+import { dogrudanKartOdemeAkisPaketi } from '../../projeler/galaksi/odeme-akis.mjs';
 import { SIRKET_DESENI, yerelSunucu } from './giris-fikstur';
 import { DASK_ODEME_SONUCU, DaskUygulamasi } from './jetdask-akis-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
@@ -29,7 +29,7 @@ const PAS1 = { pasaportNo: 'U12345678', dogumTarihi: '05.06.1980', uyruk: 'ALMAN
 /** Kodlu testin JSON'undaki gibi adres / tapu / poliçe değerleri (fikstür listelerinin değerleri). */
 const ORTAK_VERI = {
   sigortaEttirenSifati: '1', adresKodu: '1234567890', ada: '101', sayfaNo: '12', pafta: '3', bagimsizBolum: '4', parsel: '5',
-  brutYuzolcum: '120', kullanimSekli: '1', insaTarzi: 'Çelik, Betonarme Karkas', insaYili: '5', toplamKat: '2', oncekiHasar: '1', bulunduguKat: '2'
+  brutYuzolcum: '120', kullanimSekli: '5', insaTarzi: '4', insaYili: '10', toplamKat: '5', oncekiHasar: '0', bulunduguKat: '3'
 };
 
 let nobetci: Nobetci;
@@ -82,7 +82,7 @@ test.beforeAll(async () => {
     isim: 'Deneme', soyisim: 'Kart', kartNo: '1111222233334444', guvenlikKodu: '123',
     sonKullanmaAyi: JSON.stringify({ deger: '3', metin: '03' }), sonKullanmaYili: JSON.stringify({ deger: '2030', metin: '2030' })
   });
-  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: odemeAkisPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
+  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: dogrudanKartOdemeAkisPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
   await basarili('/platform/sayfa-paketi/ekle', {
     projeId, paket: jetDaskAkisPaketi({ havuzlar: HAVUZLAR, girissiz: true, odeme: true }), senaryoIndeksleri: [], ortamIdleri: [ortamId]
   });
@@ -113,7 +113,7 @@ test('özel / mal sahibi + ödeme: sorgu bitene kadar beklenir, telefon sorgudan
   expect(uygulama.hesaplamalar.at(-1)).toEqual({
     yenileme: 'H', tip: 'O', ulkeKodu: '90', tel: TC1.cepTelefonu, dogum: TC1.dogumTarihi, uyruk: null, no: TC1.tcKimlikNo, ad: 'KİŞİ 146',
     sifat: '1', ak: ORTAK_VERI.adresKodu, dr: ORTAK_VERI.adresKodu, tapu: ['101', '12', '3', '4', '5'], baslangic: bugun(), alan: '120',
-    kullanim: '1', insa: '1', yil: '5', kat: '2', hasar: '1', bulunduguKat: '2', dainiMurtehin: 'Y'
+    kullanim: '5', insa: '4', yil: '10', kat: '5', hasar: '0', bulunduguKat: '3', dainiMurtehin: 'Y'
   });
   expect(uygulama.odemeler).toHaveLength(1);
   expect(uygulama.odemeler[0]).toMatchObject({ kartNo: '1111222233334444', ay: '3', yil: '2030' });
@@ -123,7 +123,7 @@ test('özel / mal sahibi + ödeme: sorgu bitene kadar beklenir, telefon sorgudan
 test('tüzel / kiracı, ödemesiz: doğum tarihi ve uyruk atlanır, VKN sorgulanır; ödeme yapılmaz', async () => {
   test.setTimeout(120_000);
   const odemeOnce = uygulama.odemeler.length;
-  const sonuc = await kaydetVeKos('Sigortalı Tüzel / Kiracı', { sigortaliTipi: 'tuzel', sigortaliProfili: 'vkn1', sigortaEttirenSifati: 'Kiracı' });
+  const sonuc = await kaydetVeKos('Sigortalı Tüzel / Kiracı', { sigortaliTipi: 'tuzel', sigortaliProfili: 'vkn1', sigortaEttirenSifati: '2' });
   expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ tip: 'T', tel: VKN1.cepTelefonu, dogum: null, uyruk: null, no: VKN1.vergiKimlikNo, ad: 'UNVAN 890 A.Ş.', sifat: '2' });
   expect(uygulama.odemeler).toHaveLength(odemeOnce);

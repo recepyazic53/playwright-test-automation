@@ -14,8 +14,8 @@ export const ODEME_AKIS_ANAHTARI = 'odeme-kredi-karti-akis';
 export const KABUL_EDILEN_ODEME_SONUCLARI = ['Hiçbir poliçe onaylanamadı.', 'XML dodururken hata', 'mükerrer poliçe üretimi yapılamamaktadır', 'BRV-OVM-POLICE'];
 /** "Ödeme (teklif kaydet + kredi kartı)": JetKOBİ, JetKonut, JetİlkAteşKonut. */
 export const TEKLIF_KAYDET_KABUL_EDILEN_SONUCLAR = ['Hiçbir poliçe onaylanamadı.', 'XML dodururken hata', 'Bu adres kodu için genel müdürlüğe başvurunuz'];
-/** "Ödeme (doğrudan kart formu)": JetSağlık. */
-export const DOGRUDAN_KART_KABUL_EDILEN_SONUCLAR = ['Hiçbir poliçe onaylanamadı.', 'XML dodururken hata'];
+/** "Ödeme (doğrudan kart formu)": JetSağlık, JetDASK. */
+export const DOGRUDAN_KART_KABUL_EDILEN_SONUCLAR = ['Hiçbir poliçe onaylanamadı.', 'XML dodururken hata', 'mükerrer poliçe üretimi yapılamamaktadır'];
 /** Kabul edilen sonuçlar → başarı göstergesi (tek mesaj ya da "veya"). @param {string[]} l */
 const odemeSonucuGostergesi = (l) => (l.length > 1 ? { tur: 'veya', secenekler: l.map((deger) => ({ tur: 'metin', deger })) } : { tur: 'metin', deger: l[0] });
 /** Galaksi hata penceresi (fancybox / jQuery UI; "Tamam" düğmeli). */

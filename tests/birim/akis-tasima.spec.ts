@@ -13,7 +13,7 @@ import { senaryoDetayi, senaryoGecmisiniSil } from '../../scripts/platform/senar
 import { akisTasimaOnizle, akisTasimaUygula } from '../../scripts/platform/senaryolar/akis-tasima.mjs';
 import { adaptorBul } from '../../projeler/index.mjs';
 import { jetDaskAkisPaketi } from '../../projeler/galaksi/jetdask-akis.mjs';
-import { odemeAkisPaketi } from '../../projeler/galaksi/odeme-akis.mjs';
+import { dogrudanKartOdemeAkisPaketi } from '../../projeler/galaksi/odeme-akis.mjs';
 import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
@@ -38,7 +38,7 @@ test('JetDASK: kodlu matris (3 kimlik × 2 sıfat) önizlenir, yazılır; tekrar
   try {
     const adaptor = adaptorBul('galaksi') ?? null;
     const secenek = { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: o.medya };
-    await sayfaEkle(o.vt, o.projeId, odemeAkisPaketi(), secenek);
+    await sayfaEkle(o.vt, o.projeId, dogrudanKartOdemeAkisPaketi(), secenek);
     await sayfaEkle(o.vt, o.projeId, jetDaskAkisPaketi({ odeme: true }), secenek);
     const ekran = ekranlariListele(o.vt, o.projeId).find((e) => e.anahtar === 'jet-dask-akis');
     if (!ekran) throw new Error('jet-dask-akis yok');
@@ -53,7 +53,8 @@ test('JetDASK: kodlu matris (3 kimlik × 2 sıfat) önizlenir, yazılır; tekrar
     ]);
     expect(on.taslaklar.map((x) => [x.durum, x.hatalar])).toEqual(on.taslaklar.map(() => ['yeni', []]));
     expect(on.taslaklar[1].veri).toMatchObject({ sigortaliTipi: 'ozel', sigortaliProfili: 'tc1', sigortaEttirenSifati: '2', adresKodu: '1000000001', bulunduguKat: '3', odemeAdimiDahil: true });
-    expect(on.notlar.join(' ')).toContain('Bulunduğu kat');
+    // "Bulunduğu kat" seçeneği TEST ekranında var: eksik seçenek notu çıkmaz.
+    expect(on.notlar.join(' ')).not.toContain('Bulunduğu kat');
     expect(on.notlar.join(' ')).toContain('Kodlu testin kabul ettiği ödeme sonuçları');
     // Önizleme hiçbir şey yazmaz.
     expect(o.vt.tek('SELECT COUNT(*) AS n FROM senaryolar WHERE ekran_id = ?', [ekran.id])?.n).toBe(0);
@@ -73,7 +74,7 @@ test('JetDASK: kodlu matris (3 kimlik × 2 sıfat) önizlenir, yazılır; tekrar
     expect(() => akisTasimaUygula(o.vt, o.projeId, ekran.id, o.ortamId, adaptor, [])).toThrow(/En az bir senaryo/);
 
     // Taşıması tanımlı olmayan ekran: açık hata.
-    const odeme = ekranlariListele(o.vt, o.projeId).find((e) => e.anahtar === 'odeme-kredi-karti-akis');
+    const odeme = ekranlariListele(o.vt, o.projeId).find((e) => e.anahtar === 'odeme-dogrudan-kart-akis');
     expect(() => akisTasimaOnizle(o.vt, o.projeId, String(odeme?.id), o.ortamId, adaptor)).toThrow(/taşıması tanımlı değil/);
   } finally {
     o.temizle();
@@ -85,7 +86,7 @@ test('senaryo geçmişini sil: onaysız yalnızca sayar; onayla seçilen senaryo
   try {
     const adaptor = adaptorBul('galaksi') ?? null;
     const secenek = { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: o.medya };
-    await sayfaEkle(o.vt, o.projeId, odemeAkisPaketi(), secenek);
+    await sayfaEkle(o.vt, o.projeId, dogrudanKartOdemeAkisPaketi(), secenek);
     await sayfaEkle(o.vt, o.projeId, jetDaskAkisPaketi({ odeme: true }), secenek);
     const ekran = ekranlariListele(o.vt, o.projeId).find((e) => e.anahtar === 'jet-dask-akis');
     if (!ekran) throw new Error('jet-dask-akis yok');

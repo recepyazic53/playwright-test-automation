@@ -58,10 +58,8 @@ function jetDask(v) {
       });
     }
   }
-  const notlar = ['Kodlu testteki gibi her senaryoda ödeme dahil ("Ödeme (kredi kartı)" ortak akışı; yalnızca test ortamında koşar).'];
-  if (nesneMi(u.bulunduguKat) && u.bulunduguKat.testOrtamSecenekWorkaround) {
-    notlar.push('"Bulunduğu kat": kodlu test TEST ekranında eksik olan seçeneği sayfaya kendisi ekliyordu; akış koşucusu eklemez — seçenek hâlâ yoksa adım düşer.');
-  }
+  const notlar = ['Kodlu testteki gibi her senaryoda ödeme dahil ("Ödeme (doğrudan kart formu)" ortak akışı; yalnızca test ortamında koşar).'];
+  // "Bulunduğu kat": kodlu testin eksik seçenek çözümü artık gerekmiyor (TEST ekranında seçenek var; 2026-09-26).
   if (u.aktif === false) notlar.push('Ürün verisinde "aktif: false": kodlu testler bu ortamda atlanıyordu.');
   notlar.push(...odemeSonucuNotu(u));
   return { kaynakEkran: 'JetDASK', taslaklar, notlar };
