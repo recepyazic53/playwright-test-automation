@@ -22,27 +22,20 @@ const EPIC_ADLARI: Record<string, string> = {
   'jet-kobi': 'JetKOBİ',
   'jet-konut': 'JetKonut',
   'jet-saglik': 'JetSağlık',
-  'jet-ilk-ates-konut': 'İlk Ateş Konut',
-  'jet-satis': 'Jet Satış',
-  trafik: 'Trafik',
-  portal: 'Portal'
+  'jet-ilk-ates-konut': 'İlk Ateş Konut'
 };
 
 // "klasör/dosya" -> akış (özellik) görünen adı.
 const FEATURE_ADLARI: Record<string, string> = {
   'jet-kasko/yeni-kayit': 'Yeni Kayıt (YK)',
   'jet-kasko/teklif-olusturma': 'Teklif Oluşturma (Tescilli)',
-  'jet-kasko/canli': 'Canlı Kontrol',
   'jet-seyahat/prim-hesaplama': 'Prim Hesaplama',
   'jet-seyahat/validasyon': 'Validasyon',
   'jet-dask/yeni-is-matrisi': 'Yeni İş Matrisi',
   'jet-kobi/teklif-matrisi': 'Teklif Matrisi',
   'jet-konut/teklif-matrisi': 'Teklif Matrisi',
   'jet-saglik/yeni-is-matrisi': 'Yeni İş Matrisi',
-  'jet-ilk-ates-konut/teklif-matrisi': 'Teklif Matrisi',
-  'jet-satis/urun-ekranlari': 'Ürün Ekranları',
-  'trafik/jet-trafik': 'Teklif Alma',
-  'portal/canli': 'Genel Kontrol'
+  'jet-ilk-ates-konut/teklif-matrisi': 'Teklif Matrisi'
 };
 
 function epicVeFeatureAdlariniBul(dosyaYolu: string): { epicAdi: string; featureAdi: string } {

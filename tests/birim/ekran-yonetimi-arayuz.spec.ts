@@ -7,9 +7,9 @@
 // EKRAN_YONETIMI_EKRAN_KLASORU verilirse koyu/açık tema ekran görüntüleri oraya yazılır.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import { adaptorBul } from '../../projeler/index.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
@@ -104,6 +104,11 @@ test.beforeAll(async () => {
   // Deponun tests/scenarios'unun GEÇİCİ kopyası (kod kaldırma yalnızca burada).
   kodKoku = join(klasor.yol, 'kod');
   cpSync(join(KOK, 'tests', 'scenarios'), join(kodKoku, 'tests', 'scenarios'), { recursive: true });
+  // Örnek ekranların kod dosyaları (depoda yok; yalnız geçici kopyada — silme denemesi bunlar üzerinde).
+  for (const d of new Set(LISTE.map((x) => x.dosya))) {
+    mkdirSync(dirname(join(kodKoku, 'tests', d)), { recursive: true });
+    writeFileSync(join(kodKoku, 'tests', d), '// örnek test dosyası (birim testi)\n');
+  }
   const adaptor = adaptorBul('galaksi');
   if (!adaptor) throw new Error('galaksi adaptörü yok');
   const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, { projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI }, testListesi: async () => LISTE });
@@ -311,7 +316,7 @@ test('kalıcı sil + test kodunu kaldır (geçici kopyada): onay adı, sayılar,
   // Geçici koddan kaldırıldı; gerçek depo dosyası duruyor.
   expect(existsSync(join(kodKoku, 'tests', SATIS_SPEC))).toBe(false);
   expect(existsSync(join(kodKoku, 'tests', 'scenarios', 'jet-satis'))).toBe(false);
-  expect(existsSync(join(KOK, 'tests', SATIS_SPEC))).toBe(true);
+  // Gerçek depoya dokunulmadı: afterAll gerçek tests/scenarios listesini karşılaştırır.
   // Kod kaldırıldı ve sonucu yok → mezar taşı kalmaz; kodu kaldırılmış uyarısı yok.
   const ekranlar = await api(nobetci, `/platform/ekranlar?projeId=${projeId}`) as { silinmisEkranlar: unknown[] };
   expect(ekranlar.silinmisEkranlar).toEqual([]);

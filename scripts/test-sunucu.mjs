@@ -137,10 +137,7 @@ const EPIC_ADLARI = {
   'jet-kobi': 'JetKOBİ',
   'jet-konut': 'JetKonut',
   'jet-saglik': 'JetSağlık',
-  'jet-ilk-ates-konut': 'İlk Ateş Konut',
-  'jet-satis': 'Jet Satış',
-  trafik: 'Trafik',
-  portal: 'Portal'
+  'jet-ilk-ates-konut': 'İlk Ateş Konut'
 };
 
 function urunAdiBul(dosyaYolu) {
