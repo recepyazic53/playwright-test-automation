@@ -213,7 +213,9 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   agKontrol(istekler);
 });
 
-test('Koşu paneli: SMS kodu elle istenince kod formu açılır ve kod koşuya iletilir', async () => {
+// Galaksi temizliği A aşaması: kodlu testler (tests/scenarios) silindi; bu test eski "kodlu test" yolunu sınıyor —
+// C aşamasında model tabanlı örnekle yeniden yazılacak ya da kaldırılacak.
+test.fixme('Koşu paneli: SMS kodu elle istenince kod formu açılır ve kod koşuya iletilir', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   // Koşu başlatılamaz (KOSU_KAPALI); paneli göstermek için yalnızca bu uçlar sayfa içinde taklit edilir.

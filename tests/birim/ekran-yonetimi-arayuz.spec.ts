@@ -94,7 +94,8 @@ let nobetci: Nobetci;
 let klasor: ReturnType<typeof geciciKlasor>;
 let kodKoku = '';
 let projeId = '';
-const gercekDosyalar = readdirSync(join(KOK, 'tests', 'scenarios'), { recursive: true }).map(String).sort();
+const kodluTestler = () => (existsSync(join(KOK, 'tests', 'scenarios')) ? readdirSync(join(KOK, 'tests', 'scenarios'), { recursive: true }).map(String).sort() : []);
+const gercekDosyalar = kodluTestler();
 
 test.describe.configure({ mode: 'serial' });
 
@@ -103,9 +104,9 @@ test.beforeAll(async () => {
   klasor = geciciKlasor('ekran-yonetimi-arayuz');
   // Deponun tests/scenarios'unun GEÇİCİ kopyası (kod kaldırma yalnızca burada).
   kodKoku = join(klasor.yol, 'kod');
-  cpSync(join(KOK, 'tests', 'scenarios'), join(kodKoku, 'tests', 'scenarios'), { recursive: true });
+  if (existsSync(join(KOK, 'tests', 'scenarios'))) cpSync(join(KOK, 'tests', 'scenarios'), join(kodKoku, 'tests', 'scenarios'), { recursive: true });
   // Örnek ekranların kod dosyaları (depoda yok; yalnız geçici kopyada — silme denemesi bunlar üzerinde).
-  for (const d of new Set(LISTE.map((x) => x.dosya))) {
+  for (const d of new Set([...LISTE.map((x) => x.dosya), 'scenarios/jet-seyahat/prim-hesaplama.spec.ts'])) {
     mkdirSync(dirname(join(kodKoku, 'tests', d)), { recursive: true });
     writeFileSync(join(kodKoku, 'tests', d), '// örnek test dosyası (birim testi)\n');
   }
@@ -137,7 +138,7 @@ test.afterAll(async () => {
   nobetci?.surec.kill('SIGTERM');
   klasor?.temizle();
   // Gerçek tests/scenarios hiç değişmedi.
-  expect(readdirSync(join(KOK, 'tests', 'scenarios'), { recursive: true }).map(String).sort()).toEqual(gercekDosyalar);
+  expect(kodluTestler()).toEqual(gercekDosyalar);
 });
 
 async function arayuz(renk: 'dark' | 'light' = 'dark'): Promise<{ page: Page; istekler: string[] }> {
@@ -238,7 +239,9 @@ test('⋯ menüsü: yeniden adlandır, düzenle (URL yolu), yukarı taşı', asy
   agKontrol(istekler);
 });
 
-test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Senaryolar\'da toplu koşuya girmez (▷ tek başına açık), etkinleştirince geri gelir', async () => {
+// Galaksi temizliği A aşaması: kodlu testler (tests/scenarios) silindi; bu test eski "kodlu test" yolunu sınıyor —
+// C aşamasında model tabanlı örnekle yeniden yazılacak ya da kaldırılacak.
+test.fixme('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Senaryolar\'da toplu koşuya girmez (▷ tek başına açık), etkinleştirince geri gelir', async () => {
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
   await (await menuAc(page, 'JetKasko')).getByRole('menuitem', { name: 'Devre dışı bırak' }).click();
@@ -367,11 +370,11 @@ test('kalıcı sil (sonuçlar korunur): "Silinmiş ekranlar" bölümü, Sonuçla
 test('API doğrulaması: token, kasa, geçersiz gövde, yol dışı dosya listesi', async () => {
   const r = await fetch(`${nobetci.adres}/platform/ekran/sil`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projeId }) });
   expect(r.status).toBe(401);
-  const ekranlar = await api(nobetci, `/platform/ekranlar?projeId=${projeId}`) as { ekranlar: Array<{ id: string; ad: string }> };
-  const seyahat = ekranlar.ekranlar.find((e) => e.ad === 'Jet Seyahat Sağlık');
+  const ekranlar = await api(nobetci, `/platform/ekranlar?projeId=${projeId}`) as { ekranlar: Array<{ id: string; ad: string; anahtar: string }> };
+  const seyahat = ekranlar.ekranlar.find((e) => e.anahtar === 'jet-seyahat');
   expect((await api(nobetci, '/platform/ekran/durum', { projeId, ekranId: seyahat?.id, etkin: 'evet' })).mesaj).toMatch(/true ya da false/);
-  expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: seyahat?.id, onayAdi: 'Jet Seyahat Sağlık', koduKaldir: 'evet' })).mesaj).toMatch(/true ya da false/);
-  expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: seyahat?.id, onayAdi: 'Jet Seyahat Sağlık', koduKaldir: true, beklenenDosyalar: ['tests/../../etc/passwd'] })).mesaj)
+  expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: seyahat?.id, onayAdi: seyahat?.ad, koduKaldir: 'evet' })).mesaj).toMatch(/true ya da false/);
+  expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: seyahat?.id, onayAdi: seyahat?.ad, koduKaldir: true, beklenenDosyalar: ['tests/../../etc/passwd'] })).mesaj)
     .toMatch(/değişti; hiçbir şey silinmedi/);
   expect(existsSync(join(kodKoku, 'tests', 'scenarios', 'jet-seyahat', 'prim-hesaplama.spec.ts'))).toBe(true);
   const dask = seyahat;

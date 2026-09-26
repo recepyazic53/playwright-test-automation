@@ -316,7 +316,9 @@ function testListesi(ek: Record<string, string>): string[] {
 }
 
 test.describe('Testler veritabanındaki senaryolardan üretilir', () => {
-  test('oluşturulan senaryo listede, yeni başlık listede, silinen yok; Koşuda varsayılan listeyi etkiler', async () => {
+// Galaksi temizliği A aşaması: kodlu testler (tests/scenarios) silindi; bu test eski "kodlu test" yolunu sınıyor —
+// C aşamasında model tabanlı örnekle yeniden yazılacak ya da kaldırılacak.
+  test.fixme('oluşturulan senaryo listede, yeni başlık listede, silinen yok; Koşuda varsayılan listeyi etkiler', async () => {
     test.setTimeout(120_000);
     const k = geciciKlasor('senaryo-uretim');
     try {

@@ -98,7 +98,9 @@ function acikKaynakMetni(ekler: string[]): string {
 test.describe('Eski proje dosyası aktarımı — veritabanı eşdeğerliği (örnek dosyalar)', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('liste geçici veritabanından; yükleyiciler örnek dosyalarla aynı; yalnızca veritabanı; gizliler şifreli; tekrarlanabilir', async () => {
+// Galaksi temizliği A aşaması: kodlu testler (tests/scenarios) silindi; bu test eski "kodlu test" yolunu sınıyor —
+// C aşamasında model tabanlı örnekle yeniden yazılacak ya da kaldırılacak.
+  test.fixme('liste geçici veritabanından; yükleyiciler örnek dosyalarla aynı; yalnızca veritabanı; gizliler şifreli; tekrarlanabilir', async () => {
     test.setTimeout(240_000);
     const klasor = geciciKlasor('esdegerlik');
     const eskiEnv = { ...process.env };
