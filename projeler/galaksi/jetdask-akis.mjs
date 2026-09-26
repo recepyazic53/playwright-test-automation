@@ -80,7 +80,7 @@ export function jetDaskAkisPaketi(s = {}) {
               // Kimlik türünde karşılığı olmayan alt alan atlanır (tüzelde doğum tarihi, özel/tüzelde uyruk yok).
               altAlanlar: [
                 { id: 'sigortaliTelefon', tip: 'telefon', sira: 1, etiket: { ekran: 'Cep telefonu' }, eslesme: { kimlikAlani: 'cepTelefonu' }, konum: { secici: '#TL', kirilganlik: 'orta' }, doldurucu: 'metinDoldur' },
-                { id: 'sigortaliDogumTarihi', tip: 'tarih', bicim: 'gg.aa.yyyy', sira: 2, etiket: { ekran: 'Doğum tarihi' }, eslesme: { kimlikAlani: { ozel: 'dogumTarihi', pasaport: 'dogumTarihi' } }, konum: { secici: '#BirthDate', kirilganlik: 'orta' }, doldurucu: 'tarihJs' },
+                { id: 'sigortaliDogumTarihi', tip: 'tarih', bicim: 'gg.aa.yyyy', sira: 2, etiket: { ekran: 'Doğum tarihi' }, eslesme: { kimlikAlani: { ozel: 'dogumTarihi', pasaport: 'dogumTarihi' } }, konum: { secici: '#BirthDate', kirilganlik: 'orta' }, doldurucu: 'tarihJs', doldurucuParametreleri: { gizle: '#ui-datepicker-div' } },
                 { id: 'sigortaliUyruk', tip: 'secim', sira: 3, etiket: { ekran: 'Uyruk' }, eslesme: { kimlikAlani: { pasaport: 'uyruk' } }, konum: { secici: '#Nationality', kirilganlik: 'orta' } },
                 {
                   id: 'sigortaliKimlikNo', tip: 'metin', sira: 4, etiket: { ekran: 'Kimlik no (T.C. / VKN)' }, eslesme: { kimlikAlani: { ozel: 'tcKimlikNo', tuzel: 'vergiKimlikNo' } },

@@ -25,6 +25,13 @@ const alan = (id, tip, etiket, secici, ek = {}) => ({
   id, tip, etiket: { ekran: etiket }, yapilandirma: 'senaryo', eslesme: { senaryo: id }, konum: { secici, kirilganlik: 'orta' }, ...ek
 });
 /** Seçenekleri henüz bilinmeyen açılır liste (senaryodaki değer önce "value", olmazsa görünen metinle seçilir). */
+/** Doğum tarihinden sonra açık kalıp sorgu düğmesinin üstünü kapatan takvim (POM gibi gizlenir; TEST'te görüldü). */
+const TAKVIM = '#ui-datepicker-div';
+/**
+ * Maskeli cep telefonu (POM gibi): "(5xx) xxx xx xx" biçiminde, betikle tek seferde yazılır (tuşlamak rakamları kaydırıyor;
+ * düz yazılınca TEST "Cep telefonu zorunludur. Lütfen 10 hane olarak giriniz." dedi — 2026-09-26).
+ */
+const TELEFON = { doldurucu: 'degerJs', doldurucuParametreleri: { maske: '(###) ### ## ##' } };
 const liste = (id, etiket, secici, ek = {}) => alan(id, 'secim', etiket, secici, { zorunlu: true, secenekler: null, seceneklerDurumu: 'bilinmiyor', ...ek });
 /** Senaryo alanı olmayan, her koşuda aynı değerle doldurulan alan (ör. telefon ülke kodu 90). */
 const sabit = (id, etiket, secici, deger, ek = {}) => ({ ...alan(id, 'metin', etiket, secici), yapilandirma: 'sabit', sabitDeger: deger, eslesme: {}, ...ek });
@@ -43,7 +50,7 @@ const pasaportAyrintilari = (onEk, idOnEki, ilkSira) => {
     alt(`${idOnEki}Soyad`, ilkSira + 1, 'metin', 'Soyad', s('Lastname'), p('soyad')),
     alt(`${idOnEki}BabaAdi`, ilkSira + 2, 'metin', 'Baba adı', s('FatherName'), p('babaAdi')),
     // Salt okunur tarih: betikle yazılır (POM readonlyTarihAyarla).
-    alt(`${idOnEki}PasaportDogumTarihi`, ilkSira + 3, 'tarih', 'Doğum tarihi (pasaport)', s('Birthday'), p('dogumTarihi'), { bicim: 'gg.aa.yyyy', doldurucu: 'tarihJs' }),
+    alt(`${idOnEki}PasaportDogumTarihi`, ilkSira + 3, 'tarih', 'Doğum tarihi (pasaport)', s('Birthday'), p('dogumTarihi'), { bicim: 'gg.aa.yyyy', doldurucu: 'tarihJs', doldurucuParametreleri: { gizle: TAKVIM } }),
     alt(`${idOnEki}DogumYeri`, ilkSira + 4, 'metin', 'Doğum yeri', s('Birthplace'), p('dogumYeri')),
     alt(`${idOnEki}Cinsiyet`, ilkSira + 5, 'radyo', 'Cinsiyet', s('Gender-E'), p('cinsiyet'), {
       doldurucu: 'radyoZorla', secenekler: [secim('erkek', 'Erkek', { secici: s('Gender-E') }), secim('kadin', 'Kadın', { secici: s('Gender-K') })]
@@ -99,9 +106,9 @@ export function jetSaglikAkisPaketi(s = {}) {
               },
               // Kimlik türünde karşılığı olmayan alt alan atlanır.
               altAlanlar: [
-                alt('sigortaliTelefon', 1, 'telefon', 'Cep telefonu', '#MobilePhone', 'cepTelefonu', { doldurucu: 'metinDoldur' }),
+                alt('sigortaliTelefon', 1, 'telefon', 'Cep telefonu', '#MobilePhone', 'cepTelefonu', TELEFON),
                 // POM tarihGir: yazılır, Tab'a basılır (takvim kapanır).
-                alt('sigortaliDogumTarihi', 2, 'tarih', 'Doğum tarihi', '#BirthDate', { yabanciKimlik: 'dogumTarihi' }, { bicim: 'gg.aa.yyyy', doldurucuParametreleri: { tus: 'Tab' } }),
+                alt('sigortaliDogumTarihi', 2, 'tarih', 'Doğum tarihi', '#BirthDate', { yabanciKimlik: 'dogumTarihi' }, { bicim: 'gg.aa.yyyy', doldurucuParametreleri: { tus: 'Tab', gizle: TAKVIM } }),
                 // Sorgu bitince kimlik alanı yeniden yazılabilir olur ve ayrıntı açılır (POM: #IdentityDetail görünür).
                 alt('sigortaliYabanciKimlikNo', 3, 'metin', 'Yabancı kimlik no', '#IdentityNo', { yabanciKimlik: 'yabanciKimlikNo' }, {
                   doldurucuParametreleri: sorgu('#QueryIdentity', '#IdentityDetail')
@@ -112,7 +119,7 @@ export function jetSaglikAkisPaketi(s = {}) {
                 }),
                 ...pasaportAyrintilari('', 'sigortali', 6),
                 // Sorgu bazı müşterilerde kayıtlı eski telefonu alana yeniden yazıyor (POM telefonuGerekirseDuzelt): yeniden girilir.
-                alt('sigortaliTelefonSonra', 12, 'telefon', 'Cep telefonu (sorgudan sonra)', '#MobilePhone', 'cepTelefonu', { doldurucu: 'metinDoldur' })
+                alt('sigortaliTelefonSonra', 12, 'telefon', 'Cep telefonu (sorgudan sonra)', '#MobilePhone', 'cepTelefonu', TELEFON)
               ]
             }
           ]
@@ -149,10 +156,10 @@ export function jetSaglikAkisPaketi(s = {}) {
               },
               altAlanlar: [
                 // Salt okunur tarih: betikle yazılır, takvim Escape ile kapanır (POM).
-                alt('ettirenDogumTarihi', 1, 'tarih', 'Doğum tarihi', '#BirthDateCL', { ozel: 'dogumTarihi' }, { bicim: 'gg.aa.yyyy', doldurucu: 'tarihJs', doldurucuParametreleri: { tus: 'Escape' } }),
+                alt('ettirenDogumTarihi', 1, 'tarih', 'Doğum tarihi', '#BirthDateCL', { ozel: 'dogumTarihi' }, { bicim: 'gg.aa.yyyy', doldurucu: 'tarihJs', doldurucuParametreleri: { tus: 'Escape', gizle: TAKVIM } }),
                 // Uygulama kimlik sorgusundan önce telefonu zorunlu tutuyor (POM).
                 // Pasaportlu ettirende satır gizli, hesaplama servisi telefonu yine de ister (POM betikle yazar): degerJs.
-                alt('ettirenTelefon', 2, 'telefon', 'Cep telefonu', '#ClientMobilePhone', { ozel: 'cepTelefonu', tuzel: 'cepTelefonu' }, { doldurucu: 'degerJs' }),
+                alt('ettirenTelefon', 2, 'telefon', 'Cep telefonu', '#ClientMobilePhone', { ozel: 'cepTelefonu', tuzel: 'cepTelefonu' }, TELEFON),
                 alt('ettirenKimlikNo', 3, 'metin', 'Kimlik no (T.C. / VKN)', '#ClientIdentityNo', { ozel: 'tcKimlikNo', tuzel: 'vergiKimlikNo' }, {
                   doldurucuParametreleri: sorgu('#QueryClientIdentity', '#ClientIdentityDetail')
                 }),
@@ -163,7 +170,7 @@ export function jetSaglikAkisPaketi(s = {}) {
                 ...pasaportAyrintilari('Client', 'ettiren', 6),
                 // Özel / tüzel: sorgu eski telefonu yazabiliyor, yeniden girilir. Pasaport: telefon sorgudan sonra girilir — satır
                 // gizli olduğundan koşucu bunu ATLAR (bkz. bilinmeyenler).
-                alt('ettirenTelefonSonra', 12, 'telefon', 'Cep telefonu (sorgudan sonra)', '#ClientMobilePhone', 'cepTelefonu', { doldurucu: 'degerJs' })
+                alt('ettirenTelefonSonra', 12, 'telefon', 'Cep telefonu (sorgudan sonra)', '#ClientMobilePhone', 'cepTelefonu', TELEFON)
               ]
             }
           ]
