@@ -1,10 +1,11 @@
 // KORUMA TESTLERİ — koşullu liste çözümü ve modele uygulama (ekran alanlarının tablo bağlantılarından üretilen listeler;
 // bkz. tablo-secimi.mjs tabloDegerListeleri): en çok koşulu tutan liste seçilir; koşulsuz liste seçenekleri, tek koşullu liste
-// bağımlılık haritasını belirler; koşu sayfa değerini bulur. Saf modüller.
+// bağımlılık haritasını belirler; koşu sayfa değerini bulur (modeldeki seçenekten ya da tablo sütununun karşılığından). Saf modüller.
 import { expect, test } from '@playwright/test';
 import { birlesikDegerler, eslesenListeler, type ParametreTanimi } from '../../scripts/platform/servisler/parametre-tanimlari.mjs';
 import { modeleListeleriUygula } from '../../scripts/platform/senaryolar/deger-listesi-modeli.mjs';
 import { secenekBul } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
+import { servisDegeri, tabloDegerListeleri, type Tablo } from '../../scripts/platform/tablolar/tablo-secimi.mjs';
 
 
 test('koşullu liste çözümü: en çok koşulu tutan liste; tutan yoksa koşulsuz; değerler birleşir', () => {
@@ -40,3 +41,35 @@ test('model ↔ değer listeleri: koşulsuz liste seçenekleri değiştirir, tek
   expect((model.adimlar[0].bolumler[0].alanlar[1] as Record<string, any>).secenekler).toHaveLength(2);
 });
 
+
+test('karşılıklar: tablo listesi sayfa değerini taşır; modelde seçenek olmasa da koşu sayfa değeriyle seçer; servise servis değeri', () => {
+  const tablo: Tablo = { id: 't', ad: 'Seyahat', satirlar: [['DÜNYA', 'ALMANYA'], ['DÜNYA', 'A.B.D'], ['AVRUPA', 'ALMANYA']].map(([k, u]) => ({ ortamId: null, degerler: { Kapsam: k, Ülke: u } })),
+    sutunlar: [{ ad: 'Kapsam', gizli: false, karsiliklar: { 'DÜNYA': { sayfa: 'D1', servis: 'WORLD' } } }, { ad: 'Ülke', gizli: false, karsiliklar: { 'A.B.D': { sayfa: '1' }, 'ALMANYA': { sayfa: '15' } } }] };
+  const listeler = tabloDegerListeleri({ kapsam: { tablo: 't', sutun: 'Kapsam' }, ulke: { tablo: 't', sutun: 'Ülke' } }, [tablo], 'e', ['kapsam', 'ulke']);
+  expect(listeler.find((l) => l.hedef.alan === 'kapsam')?.degerler).toEqual([{ deger: 'DÜNYA', ekranDegeri: 'D1' }, { deger: 'AVRUPA' }]);
+  // Modelde seçenek listesi yok (yalnız alan): seçenekler tablodan, sayfa değeriyle.
+  const alan = (id: string, ek: Record<string, unknown>) => ({ id, tip: 'secim', yapilandirma: 'senaryo', etiket: { form: id }, ...ek });
+  const model = { adimlar: [{ id: 'a', bolumler: [{ id: 'b', alanlar: [alan('kapsam', { secenekler: [] }), alan('ulke', { secenekler: null, seceneklerDurumu: 'bilinmiyor' })] }] }] };
+  const yeni = modeleListeleriUygula(model, listeler) as typeof model;
+  const [kapsam, ulke] = yeni.adimlar[0].bolumler[0].alanlar as Array<Record<string, any>>;
+  expect(secenekBul(kapsam.secenekler, 'DÜNYA')).toMatchObject({ deger: 'D1', metin: 'DÜNYA' });
+  expect(secenekBul(kapsam.secenekler, 'AVRUPA')).toMatchObject({ deger: 'AVRUPA', metin: 'AVRUPA' });
+  expect(secenekBul(ulke.secenekler, 'A.B.D')).toMatchObject({ deger: '1', metin: 'A.B.D' });
+  expect(servisDegeri(tablo.sutunlar[0], 'DÜNYA')).toBe('WORLD');
+  expect(servisDegeri(tablo.sutunlar[0], 'AVRUPA')).toBe('AVRUPA');
+  expect(servisDegeri(tablo.sutunlar[1], 'ALMANYA')).toBe('ALMANYA');
+});
+
+test('karşılıklar: tabloda okunur ad + sayfa değeri → model seçeneği sayfa değeriyle eşleşir (seçici korunur); koddaki varsayılan ada çevrilir', () => {
+  const model = { adimlar: [{ id: 'a', bolumler: [{ id: 'b', alanlar: [
+    { id: 'tip', tip: 'radyo', yapilandirma: 'senaryo', etiket: { form: 'Tip' }, varsayilan: { deger: 'O' },
+      secenekler: [{ deger: 'O', metin: 'Özel', secici: '#Tip-O' }, { deger: 'T', metin: 'Tüzel', secici: '#Tip-T' }] }
+  ] }] }] };
+  const yeni = modeleListeleriUygula(model, [{ hedef: { alan: 'tip' }, kosullar: [], degerler: [{ deger: 'Özel', ekranDegeri: 'O' }, { deger: 'Tüzel', ekranDegeri: 'T' }] }]) as typeof model;
+  const tip = yeni.adimlar[0].bolumler[0].alanlar[0] as Record<string, any>;
+  expect(secenekBul(tip.secenekler, 'Tüzel')).toEqual({ deger: 'T', metin: 'Tüzel', secici: '#Tip-T' });
+  expect(tip.varsayilan).toEqual({ deger: 'Özel' });
+  // Varsayılan zaten listede olan bir değerse dokunulmaz.
+  const ayni = modeleListeleriUygula(model, [{ hedef: { alan: 'tip' }, kosullar: [], degerler: [{ deger: 'O' }, { deger: 'T' }] }]) as typeof model;
+  expect((ayni.adimlar[0].bolumler[0].alanlar[0] as Record<string, any>).varsayilan).toEqual({ deger: 'O' });
+});

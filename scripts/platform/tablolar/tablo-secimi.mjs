@@ -4,6 +4,8 @@
 // { Sütun: değer }) satırları süzer. Formda süzme YUKARIDAN AŞAĞIDIR: bir alanın seçenekleri, formda kendinden ÖNCEKİ alanların
 // seçimleriyle uyuşan satırlardaki değerlerdir (üstteki seçim değişince alttaki uyumsuz seçim temizlenir). Koşuda tüm
 // seçimlerle uyan ilk satır kullanılır; satırın ortamı boşsa (Tümü) her ortamda geçerlidir.
+// Karşılıklar: sütun değerinin sayfadaki (seçenek değeri) ve servisteki karşılığı; senaryoya tablodaki değer yazılır, ekran
+// koşusu sayfa değeriyle seçer, servis gövdesine servis değeri gider (tanımsızsa tablodaki değer).
 
 /** Tablo / sütun adı karakterleri (tablo-deposu.mjs TABLO_ADI ile aynı): . [ ] { } $ < > & ve denetim karakterleri yok. */
 export const AD_KALIBI = '[^.\\[\\]{}$<>&\\u0000-\\u001f]{1,60}';
@@ -12,7 +14,8 @@ export const ETIKET_KALIBI = '[\\p{L}\\p{N} _-]{1,40}';
 const BASVURU = new RegExp(`^\\s*(${AD_KALIBI})(?:\\[(${ETIKET_KALIBI})\\])?\\.(${AD_KALIBI})\\s*$`, 'u');
 
 /**
- * @typedef {{ ad: string; gizli: boolean; tip?: string }} Sutun
+ * @typedef {{ sayfa?: string; servis?: string }} Karsilik
+ * @typedef {{ ad: string; gizli: boolean; tip?: string; karsiliklar?: Record<string, Karsilik> }} Sutun
  * @typedef {{ id?: string; ortamId: string | null; degerler: Record<string, string | null> }} Satir
  * @typedef {{ id: string; ad: string; sutunlar: Sutun[]; satirlar: Satir[] }} Tablo
  * @typedef {{ tablo: string; etiket: string; sutun: string }} Basvuru
@@ -68,6 +71,9 @@ export function sutunSecenekleri(tablo, secim, sutun, ortamId) {
   return sonuc;
 }
 
+/** Değerin servis gövdesine yazılacak karşılığı (tanımsızsa değerin kendisi). @param {Sutun} sutun @param {string} deger */
+export const servisDegeri = (sutun, deger) => sutun.karsiliklar?.[deger]?.servis || deger;
+
 /** Koşuda kullanılacak satır: uyan ilk satır (yoksa undefined). @param {Tablo} tablo @param {Record<string, string>} secim @param {string | null} [ortamId] */
 export function secilenSatir(tablo, secim, ortamId) {
   return uyanSatirlar(tablo, secim, { ortamId })[0];
@@ -79,7 +85,8 @@ const dolu = (/** @type {unknown} */ v) => v !== null && v !== undefined && v !=
  * Ekran alanı → tablo sütunu bağlantılarından koşullu değer listeleri (Test verisi değer listeleriyle aynı biçim; senaryo formu,
  * doğrulayıcı ve koşu bunları kullanır): her bağlı alan için koşulsuz liste (sütunun tüm değerleri) ve aynı grupta formda
  * kendinden ÖNCE gelen bağlı alanların (en çok 3) değer birleşimleri için koşullu listeler. Form, koşulları tutan en çok koşullu
- * listeyi seçer; böylece seçtikçe alttaki alanlar satırlardan süzülür. Gizli sütun listeye girmez.
+ * listeyi seçer; böylece seçtikçe alttaki alanlar satırlardan süzülür. Gizli sütun listeye girmez. Sayfa değeri tanımlı
+ * değerde ekranDegeri (koşu seçeneği bununla seçer).
  * @param {Record<string, { tablo: string; sutun: string; etiket?: string }>} baglar @param {Tablo[]} tablolar @param {string} ekranId
  * @param {string[]} [sira] formdaki alan sırası (verilmezse bağlantıların sırası)
  */
@@ -95,7 +102,7 @@ export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
     if (!gruplar.has(k)) gruplar.set(k, []);
     /** @type {Array<{ alan: string; t: Tablo; s: Sutun }>} */ (gruplar.get(k)).push({ alan, t, s });
   }
-  /** @type {Array<{ id: string; ad: string; tur: 'liste'; kullanim: 'ekran'; hedef: { ekranId: string; alan: string }; kosullar: Array<{ alan: string; deger: string }>; degerler: Array<{ deger: string }> }>} */
+  /** @type {Array<{ id: string; ad: string; tur: 'liste'; kullanim: 'ekran'; hedef: { ekranId: string; alan: string }; kosullar: Array<{ alan: string; deger: string }>; degerler: Array<{ deger: string; ekranDegeri?: string }> }>} */
   const sonuc = [];
   for (const uyeler of gruplar.values()) {
     for (const u of uyeler) {
@@ -127,8 +134,12 @@ export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
         }
       }
       let n = 0;
+      const k = u.s.karsiliklar || {};
       for (const { kosullar, degerler } of harita.values()) {
-        sonuc.push({ id: `tablo:${u.alan}:${n++}`, ad: `${u.t.ad} → ${u.s.ad}`, tur: 'liste', kullanim: 'ekran', hedef: { ekranId, alan: u.alan }, kosullar, degerler: degerler.map((deger) => ({ deger })) });
+        sonuc.push({
+          id: `tablo:${u.alan}:${n++}`, ad: `${u.t.ad} → ${u.s.ad}`, tur: 'liste', kullanim: 'ekran', hedef: { ekranId, alan: u.alan }, kosullar,
+          degerler: degerler.map((deger) => ({ deger, ...(k[deger]?.sayfa ? { ekranDegeri: k[deger].sayfa } : {}) }))
+        });
       }
     }
   }

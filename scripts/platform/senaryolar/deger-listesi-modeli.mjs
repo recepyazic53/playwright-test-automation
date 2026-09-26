@@ -22,7 +22,8 @@ export function modelSecimAlanlari(model) {
     for (const a of Array.isArray(alanlar) ? alanlar : []) {
       if (!nesneMi(a) || a.yapilandirma !== 'senaryo' || !SECIM_TIPLERI.has(a.tip) || typeof a.id !== 'string') continue;
       if (a.eslesme && a.eslesme.profilHavuzu !== undefined) continue;   // hazır profil seçimi: değer listesi değil
-      if (Array.isArray(a.secenekler) || (nesneMi(a.bagimlilik) && nesneMi(a.bagimlilik.secenekHaritasi))) sonuc.push(a);
+      // Seçenek listesi olmayan (null / yok) alan da dahil: seçenekleri test verisi tablosundan gelir.
+      if (Array.isArray(a.secenekler) || a.secenekler == null || (nesneMi(a.bagimlilik) && nesneMi(a.bagimlilik.secenekHaritasi))) sonuc.push(a);
     }
   };
   for (const adim of Array.isArray(model?.adimlar) ? model.adimlar : []) for (const b of nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []) topla(nesneMi(b) ? b.alanlar : null);
@@ -49,7 +50,8 @@ export function listeDegeri(s) {
  * @param {ListeDegeri} x @param {Nesne[]} havuz modeldeki tüm seçenekler
  */
 function modelSecenegi(x, havuz) {
-  const m = havuz.find((s) => senaryoDegeri(s) === x.deger);
+  // Önce senaryo değeriyle; tabloda okunur ad + sayfa değeri (karşılık) varsa sayfa değeriyle (seçici vb. korunur).
+  const m = havuz.find((s) => senaryoDegeri(s) === x.deger) ?? (x.ekranDegeri ? havuz.find((s) => String(s.deger) === x.ekranDegeri) : undefined);
   if (m) return { ...m, ...(x.aciklama ? { formMetni: x.aciklama } : {}), ...(x.ekranDegeri ? { deger: x.ekranDegeri, senaryoDegeri: x.deger } : {}), ...(x.ekranMetni ? { metin: x.ekranMetni } : {}) };
   const ekranDegeri = x.ekranDegeri || x.deger;
   return {
@@ -94,6 +96,13 @@ export function modeleListeleriUygula(model, listeler) {
       const k = bag ? (l.kosullar || []).find((x) => x.alan === bag.alan)?.deger : undefined;
       if (bag) for (const anahtar of k !== undefined ? [k] : Object.keys(bag.secenekHaritasi)) bag.secenekHaritasi[anahtar] = birlestir(bag.secenekHaritasi[anahtar] || [], d);
       else alan.secenekler = birlestir(Array.isArray(alan.secenekler) ? alan.secenekler : [], d);
+    }
+    // Varsayılan modelde sayfa değeriyle yazılmışsa (ör. "H") ve listede o sayfa değerli bir değer varsa (ör. "Hayır"), o değer olur.
+    const v = nesneMi(alan.varsayilan) ? alan.varsayilan.deger : undefined;
+    if (typeof v === 'string') {
+      const tum = bu.flatMap((l) => l.degerler || []);
+      const k = !tum.some((x) => x.deger === v) ? tum.find((x) => x.ekranDegeri === v) : undefined;
+      if (k) alan.varsayilan = { ...alan.varsayilan, deger: k.deger };
     }
   }
   return yeni;

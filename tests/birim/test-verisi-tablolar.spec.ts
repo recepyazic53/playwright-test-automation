@@ -76,6 +76,27 @@ test.describe('test verisi tabloları', () => {
     } finally { vt.kapat(); }
   });
 
+  test('karşılıklar: değerin sayfa / servis değeri saklanır (diskte şifreli); verilmezse korunur, {} siler; gizli sütunda yok', async () => {
+    const kaydet = (sutunlar: Nesne[], satirlar?: Nesne[], id?: string) => basarili('/platform/tablo/kaydet', { projeId, id, ad: 'Seyahat kapsamı', sutunlar, satirlar });
+    let t = (await kaydet([{ ad: 'Kapsam', karsiliklar: { 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' }, 'BOŞ': { sayfa: ' ', servis: '' } } }, { ad: 'Anahtar', gizli: true, karsiliklar: { a: { sayfa: 'b' } } }],
+      [{ degerler: { Kapsam: 'DÜNYA', Anahtar: 'k1' } }, { degerler: { Kapsam: 'AVRUPA', Anahtar: 'k2' } }])).tablo;
+    expect(t.sutunlar).toEqual([{ ad: 'Kapsam', gizli: false, tip: 'metin', karsiliklar: { 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' } } }, { ad: 'Anahtar', gizli: true, tip: 'metin' }]);
+    const vt = await veritabaniAc(vtYolu, { saltOkunur: true });
+    try {
+      const ham = vt.tumu('SELECT alanlar_json FROM test_verisi_turleri').map((x) => String(x.alanlar_json)).join('\n');
+      expect(ham).not.toContain('WORLDWIDE-X');
+      expect(ham).not.toContain('DÜNYA');
+    } finally { vt.kapat(); }
+    // Karşılık verilmeden kaydedilince (ör. satır ekleme, sütun adı değişikliği) korunur; {} siler.
+    t = (await kaydet([{ ad: 'Kapsam alanı', eskiAd: 'Kapsam' }, { ad: 'Anahtar', gizli: true }], [{ degerler: { 'Kapsam alanı': 'ASYA' } }], t.id)).tablo;
+    expect(t.sutunlar[0].karsiliklar).toEqual({ 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' } });
+    t = (await kaydet([{ ad: 'Kapsam alanı', karsiliklar: {} }, { ad: 'Anahtar', gizli: true }], [], t.id)).tablo;
+    expect(t.sutunlar[0].karsiliklar).toBeUndefined();
+    const red = await api('/platform/tablo/kaydet', { projeId, id: t.id, ad: 'Seyahat kapsamı', sutunlar: [{ ad: 'Kapsam alanı', karsiliklar: ['x'] }] });
+    expect(red.mesaj).toContain('karşılıkları geçersiz');
+    await basarili('/platform/tablo/sil', { projeId, id: t.id });
+  });
+
   test('sütun adı değişince değerler taşınır; boş gizli hücre kayıtlı değeri korur; satır silinir; ad ve karakter kuralları', async () => {
     const [t] = await tablolar();
     const r = await basarili('/platform/tablo/kaydet', {
@@ -180,6 +201,43 @@ test.describe('test verisi tabloları', () => {
     await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
     t = (await tablolar()).find((x) => x.ad === 'Ülke seçenekleri') as Nesne;
     expect(t.satirlar[0].ad).toBe('dunya-vize');
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('arayüz: sütunun karşılıkları penceresi — tablodaki değerler; sayfa / servis değeri girilir, aranır, kaydedilir; gizli sütunda yok', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/ayarlar/test-verisi');
+    const nav = page.getByRole('navigation', { name: 'Tablolar' });
+    const duz = page.getByRole('region', { name: 'Tablo düzenleyici' });
+    await nav.getByRole('button', { name: /^Servis girişi/ }).click();
+    await expect(duz.getByRole('button', { name: /^3\. sütunun karşılıkları/ })).toHaveCount(0);   // Parola: gizli
+    await nav.getByRole('button', { name: /^Ülke seçenekleri/ }).click();
+    await duz.getByRole('button', { name: '1. sütunun karşılıkları' }).click();
+    const p = page.getByRole('dialog', { name: '"Kapsam" değerlerinin karşılıkları' });
+    await expect(p.locator('tbody th')).toHaveText(['DÜNYA', 'AVRUPA']);
+    await p.getByLabel('DÜNYA sayfa değeri').fill('1');
+    await p.getByLabel('DÜNYA servis değeri').fill('WORLD');
+    await p.getByLabel('Değerlerde ara').fill('avr');
+    await expect(p.locator('tbody th')).toHaveText(['AVRUPA']);
+    await p.getByLabel('AVRUPA sayfa değeri').fill('2');
+    await expect(p.getByText('2 değer · 2 karşılık tanımlı')).toBeVisible();
+    await p.getByRole('button', { name: 'Tamam' }).click();
+    await expect(duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' })).toBeVisible();
+    await expect(duz.getByText('kaydedilmemiş değişiklik')).toBeVisible();
+    await duz.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
+    const t = (await tablolar()).find((x) => x.ad === 'Ülke seçenekleri') as Nesne;
+    expect(t.sutunlar[0].karsiliklar).toEqual({ 'DÜNYA': { sayfa: '1', servis: 'WORLD' }, 'AVRUPA': { sayfa: '2' } });
+    // Vazgeç değiştirmez.
+    await duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' }).click();
+    await p.getByLabel('DÜNYA sayfa değeri').fill('9');
+    await p.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

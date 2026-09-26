@@ -69,7 +69,9 @@ test.describe('ekran alanları tablolardan', () => {
     girdiler = (await basarili(`/platform/ekran/girdiler?projeId=${projeId}&ekranId=${ekranId}`)).girdiler;
     K = girdi('kapsam').secenekler.map((x: Nesne) => x.deger).slice(0, 2);
     A = girdi('alternatif').secenekler.map((x: Nesne) => x.deger).slice(0, 3);
-    U = girdi('ulke').secenekler.map((x: Nesne) => x.deger).slice(1, 6);
+    // Ülke seçenekleri modelde yok (kodda liste tutulmaz); değerler yalnız tablodan gelir.
+    expect(girdi('ulke').secenekler).toEqual([]);
+    U = ['ALMANYA', 'FRANSA', 'A.B.D', 'İSPANYA', 'İTALYA'];
     tabloId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Seyahat seçenekleri', sutunlar: [{ ad: 'Kapsam' }, { ad: 'Alternatif' }, { ad: 'Ülke' }], satirlar: [
       [K[0], A[0], U[0]], [K[0], A[0], U[1]], [K[0], A[1], U[2]], [K[1], A[2], U[3]]
     ].map(([k, a, u]) => ({ degerler: { Kapsam: k, Alternatif: a, Ülke: u } })) })).tablo.id;
@@ -103,6 +105,21 @@ test.describe('ekran alanları tablolardan', () => {
     await expect(sec('ulke')).toHaveValue(`${tabloId}\u0001Ülke`);
     expect(hatalar).toEqual([]);
     await baglam.close();
+  });
+
+  test('bağlantı kaydedilince modeldeki sayfa değerleri sütunun karşılıklarına eklenir; kullanıcının karşılığı değişmez; senaryo formu sayfa değerini taşır', async () => {
+    const sorguId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Sorgu', sutunlar: [{ ad: 'Sorgu tipi', karsiliklar: { coklu: { servis: 'MULTI' } } }],
+      satirlar: [{ degerler: { 'Sorgu tipi': 'tekli' } }, { degerler: { 'Sorgu tipi': 'coklu' } }] })).tablo.id;
+    const baglar = (await basarili(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${ekranId}`)).baglar;
+    const r = await basarili('/platform/ekran/alan-baglari/kaydet', { projeId, ekranId, baglar: { ...baglar, sorguTipi: { tablo: sorguId, sutun: 'Sorgu tipi' } } });
+    expect(r.karsiliklar).toEqual({ eklenen: 2, tablolar: ['Sorgu'] });
+    const sutun = (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar.find((t: Nesne) => t.id === sorguId).sutunlar[0];
+    expect(sutun.karsiliklar).toEqual({ tekli: { sayfa: '1' }, coklu: { servis: 'MULTI', sayfa: '2' } });
+    // Kullanıcı sayfa değerini değiştirdiyse yeniden almak ezmez.
+    await basarili('/platform/tablo/kaydet', { projeId, id: sorguId, ad: 'Sorgu', sutunlar: [{ ad: 'Sorgu tipi', eskiAd: 'Sorgu tipi', karsiliklar: { tekli: { sayfa: '01' }, coklu: { sayfa: '2' } } }] });
+    expect(await basarili('/platform/ekran/karsiliklari-al', { projeId, ekranId })).toMatchObject({ eklenen: 0 });
+    const f = await basarili(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekranId}&ortamId=${ortamId}`);
+    expect(f.degerListeleri.find((l: Nesne) => l.hedef.alan === 'sorguTipi' && !l.kosullar.length).degerler).toEqual([{ deger: 'tekli', ekranDegeri: '01' }, { deger: 'coklu', ekranDegeri: '2' }]);
   });
 
   test('arayüz: senaryo formunda bağlı alanlar tablodan; Kapsam → Alternatif → Ülke süzülür; model aynı listeleri görür', async () => {

@@ -263,11 +263,17 @@ function maskeUygula(maske: unknown, deger: unknown): unknown {
  * görünmüyorsa (ör. display:none — "Element is not visible") betikle tıklanır (click olayı sayfanın kendi işleyicilerini
  * çalıştırır). Sonunda durum doğrulanır.
  */
+/** Zorla işaretlenecek öğenin sayfada belirmesi için en çok bekleme. */
+const ZORLA_BEKLEME_MS = 15_000;
+
 async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string, alan: PlanAlani): Promise<void> {
-  if ((await l.isChecked()) === isaretli) return;
+  // Öğe sayfada yoksa (ör. bu araç için sunulmayan ürün) test süresi boyunca beklemek yerine açık hata.
+  const sayfada = await l.waitFor({ state: 'attached', timeout: ZORLA_BEKLEME_MS }).then(() => true, () => false);
+  if (!sayfada) throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, `seçenek sayfada yok (${ZORLA_BEKLEME_MS / 1000} sn beklendi)`));
+  if ((await l.isChecked({ timeout: 5_000 })) === isaretli) return;
   await l.setChecked(isaretli, { force: true, timeout: 3_000 }).catch(() => undefined);
-  if ((await l.isChecked()) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
-  if ((await l.isChecked()) !== isaretli) {
+  if ((await l.isChecked({ timeout: 5_000 })) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
+  if ((await l.isChecked({ timeout: 5_000 })) !== isaretli) {
     throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, 'zorla ve betikle tıklandı, durum değişmedi'));
   }
 }

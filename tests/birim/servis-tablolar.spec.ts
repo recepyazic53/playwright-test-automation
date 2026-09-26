@@ -136,6 +136,19 @@ test.describe('servis alanları tablolardan', () => {
     expect(red.mesaj).toContain('etiketi geçersiz');
   });
 
+  test('servis değeri karşılığı: gövdeye tablodaki değer yerine servis değeri yazılır; tanımsız değer olduğu gibi', async () => {
+    const tablo = (await basarili(`/platform/tablolar?projeId=${projeId}`)).tablolar.find((t: Nesne) => t.id === kisiId);
+    await basarili('/platform/tablo/kaydet', { projeId, id: kisiId, ad: tablo.ad, sutunlar: [{ ad: 'TC', eskiAd: 'TC' }, { ad: 'Telefon', eskiAd: 'Telefon', karsiliklar: { '5550000001': { servis: '+905550000001', sayfa: 'yok-sayilir' } } }] });
+    const govde = zarf('<Phone>${Kişi.Telefon}</Phone>');
+    const dene = async (tabloSecimleri?: Nesne) => basarili('/platform/servis/senaryo/dene', {
+      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Teklif', govde, kontroller: [], tabloSecimleri }
+    });
+    await dene();
+    expect(soap.istekler.at(-1)?.govde).toContain('<Phone>+905550000001</Phone>');
+    await dene({ [`${kisiId}|`]: { TC: '00000000000' } });
+    expect(soap.istekler.at(-1)?.govde).toContain('<Phone>5550000002</Phone>');
+  });
+
   test('arayüz: Parametreler\'de tablo sütunu bağlanır; senaryoda bağlı alanlar "Tablodan", Kanal seçince Kullanıcı süzülür, parola satırdan', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });

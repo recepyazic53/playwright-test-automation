@@ -5,6 +5,9 @@
 // Ekran input'ları ve servis parametreleri bir sütuna bağlanır; seçimler satırlardan süzülür (tablo-secimi.mjs).
 // Gizli sütun değerleri hiçbir liste yanıtında dönmez; koşu (coz) dışında çözülmez.
 // Satır adı: senaryolar bazı satırları adıyla seçer (kimlik kayıtları "tc1", Acente "varsayilan"); ızgarada düzenlenir.
+// KARŞILIKLAR: sütundaki bir değerin sayfada ve serviste karşılığı farklı olabilir (ör. DÜNYA → sayfada seçenek değeri "1",
+//   serviste "WORLD"). Sütun tanımında { [değer]: { sayfa?, servis? } } olarak tutulur; ekran koşusu seçeneği sayfa değeriyle
+//   seçer, servis gövdesine servis değeri yazılır (tanımsızsa tablodaki değer). Anahtarlar değer olduğu için kasa zarfıdır.
 // BAĞLAM TABLOLARI (baglamDahil): kullanıcı / acente değiştirme profilleri (baglam_profilleri; tür = tablo, profil = satır)
 // Tablolar ekranında tablo olarak gösterilir ve düzenlenir; saklama ve koşucu değişmez. Kimlikleri "baglam_…" ile başlar,
 // sütunlara bağlanmaz (senaryoda satır adıyla seçilir), gizli sütun desteklemez.
@@ -12,10 +15,11 @@ import {
   DepoHatasi, baglamProfiliKaydet, baglamProfiliSil, baglamProfilleriniListele, testVerisiProfiliKaydet, testVerisiProfiliSil, testVerisiTuruKaydet,
   testVerisiTuruSil, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
-import { coz, zarfMi } from '../kasa.mjs';
+import { coz, sifrele, zarfMi } from '../kasa.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
-/** @typedef {{ ad: string; gizli: boolean; tip: string }} TabloSutunu */
+/** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
+/** @typedef {{ ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }} TabloSutunu */
 /** @typedef {{ id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[] }} TabloSatiri */
 /** @typedef {{ id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean }} Tablo */
 
@@ -50,6 +54,42 @@ function baglamTablolari(vt, projeId) {
 export const TABLO_ADI = /^[^.[\]{}$<>&\u0000-\u001f]{1,60}$/u;
 export const EN_COK_SATIR = 5000;
 export const EN_COK_SUTUN = 40;
+export const EN_COK_KARSILIK = 5000;
+
+/**
+ * Karşılıklar girdisi → { [değer]: { sayfa?, servis? } } (boşlar atılır). null / {} → boş.
+ * @param {unknown} v @param {string} sutun @returns {Record<string, Karsilik>}
+ */
+function karsiliklarDogrula(v, sutun) {
+  if (v === null || v === undefined) return {};
+  if (typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi(`"${sutun}" sütununun karşılıkları geçersiz.`);
+  /** @type {Record<string, Karsilik>} */
+  const sonuc = {};
+  const metin = (/** @type {unknown} */ x, /** @type {string} */ ne) => {
+    if (x === undefined || x === null || x === '') return '';
+    if (typeof x !== 'string' && typeof x !== 'number') throw new DepoHatasi(`"${sutun}" sütununda ${ne} geçersiz.`);
+    const s = String(x).trim();
+    if (s.length > 500) throw new DepoHatasi(`"${sutun}" sütununda ${ne} en çok 500 karakter olabilir.`);
+    return s;
+  };
+  for (const [deger, k] of Object.entries(v)) {
+    const d = deger.trim();
+    if (!d || d.length > 500) continue;
+    const o = /** @type {Record<string, unknown>} */ (k && typeof k === 'object' ? k : {});
+    const sayfa = metin(o.sayfa, `"${d}" değerinin sayfa değeri`);
+    const servis = metin(o.servis, `"${d}" değerinin servis değeri`);
+    if (sayfa || servis) sonuc[d] = { ...(sayfa ? { sayfa } : {}), ...(servis ? { servis } : {}) };
+  }
+  if (Object.keys(sonuc).length > EN_COK_KARSILIK) throw new DepoHatasi(`"${sutun}" sütununda en çok ${EN_COK_KARSILIK} karşılık olabilir.`);
+  return sonuc;
+}
+
+/** Saklanan karşılıklar (zarf) → nesne. @param {Veritabani} vt @param {unknown} z @returns {Record<string, Karsilik> | undefined} */
+function karsiliklarOku(vt, z) {
+  if (!zarfMi(z)) return undefined;
+  const o = JSON.parse(String(coz(vt, z)));
+  return o && typeof o === 'object' && Object.keys(o).length ? o : undefined;
+}
 
 /** @param {unknown} ad @param {string} ne */
 function adDogrula(ad, ne) {
@@ -89,7 +129,7 @@ export function tablolariListele(vt, projeId, secenekler = {}) {
   const turler = testVerisiTurleriniListele(vt, projeId).filter((t) => !secenekler.tabloId || t.id === secenekler.tabloId);
   /** @type {Map<string, TabloSatiri[]>} */
   const satirlar = new Map(turler.map((t) => [t.id, []]));
-  const sutunlari = new Map(turler.map((t) => [t.id, sutunlarOku(t.alanlar)]));
+  const sutunlari = new Map(turler.map((t) => [t.id, sutunlarOku(vt, t.alanlar)]));
   const ham = secenekler.tabloId
     ? vt.tumu('SELECT id, tur_id, ortam_id, ad, degerler_json FROM test_verisi_profilleri WHERE proje_id = ? AND tur_id = ? ORDER BY rowid', [projeId, secenekler.tabloId])
     : vt.tumu('SELECT id, tur_id, ortam_id, ad, degerler_json FROM test_verisi_profilleri WHERE proje_id = ? ORDER BY rowid', [projeId]);
@@ -110,15 +150,22 @@ export function tablolariListele(vt, projeId, secenekler = {}) {
   return secenekler.baglamDahil && !secenekler.tabloId ? [...tablolar, ...baglamTablolari(vt, projeId)] : tablolar;
 }
 
-/** tip: metin | secim (değer + metin, JSON) | json ... (arayüz gösterimi için). @param {ReadonlyArray<{ ad: string; gizli?: boolean; tip?: string }>} alanlar @returns {TabloSutunu[]} */
-const sutunlarOku = (alanlar) => alanlar.map((a) => ({ ad: a.ad, gizli: a.gizli === true || (a.gizli === undefined && GIZLI_AD.test(a.ad)), tip: a.tip || 'metin' }));
+/**
+ * tip: metin | secim (değer + metin, JSON) | json ... (arayüz gösterimi için). Gizli sütunun karşılığı olmaz.
+ * @param {Veritabani} vt @param {ReadonlyArray<{ ad: string; gizli?: boolean; tip?: string; karsiliklar?: unknown }>} alanlar @returns {TabloSutunu[]}
+ */
+const sutunlarOku = (vt, alanlar) => alanlar.map((a) => {
+  const gizli = a.gizli === true || (a.gizli === undefined && GIZLI_AD.test(a.ad));
+  const karsiliklar = gizli ? undefined : karsiliklarOku(vt, a.karsiliklar);
+  return { ad: a.ad, gizli, tip: a.tip || 'metin', ...(karsiliklar ? { karsiliklar } : {}) };
+});
 /** Gizli işareti olmayan eski alanlarda (tablolardan önceki kayıtlar) sır niteliğindeki adlar gizli sayılır. */
 const GIZLI_AD = /parola|password|passwd|şifre|sifre|secret|token|cvv|cvc|guvenlik|güvenlik|totp/i;
 
 /**
  * Tabloyu (sütunlar + değişen satırlar) tek işlemde kaydeder.
- * - sutunlar: [{ ad, eskiAd?, gizli }] — eskiAd verilen sütunun mevcut satırlardaki değerleri yeni ada taşınır; listede
- *   olmayan sütunun değerleri silinir.
+ * - sutunlar: [{ ad, eskiAd?, gizli, karsiliklar? }] — eskiAd verilen sütunun mevcut satırlardaki değerleri yeni ada taşınır;
+ *   listede olmayan sütunun değerleri silinir. karsiliklar verilmezse (undefined) mevcutlar korunur; null / {} siler.
  * - satirlar: yalnız yeni / değişen satırlar [{ id?, ad?, ortamId, degerler }]. Gizli sütunda değer verilmezse (undefined / null)
  *   kayıtlı değer korunur; '' siler. ad boşsa mevcut ad korunur (yeni satırda değerlerden üretilir).
  * - silinenSatirlar: satır kimlikleri.
@@ -136,7 +183,8 @@ export function tabloKaydet(vt, girdi) {
     return {
       ad: adDogrula(o.ad, `${i + 1}. sütunun adı`),
       eskiAd: typeof o.eskiAd === 'string' && o.eskiAd ? o.eskiAd : null,
-      gizli: o.gizli === true
+      gizli: o.gizli === true,
+      karsiliklar: o.karsiliklar === undefined ? undefined : karsiliklarDogrula(o.karsiliklar, String(o.ad ?? ''))
     };
   });
   const adlar = new Set();
@@ -160,10 +208,14 @@ export function tabloKaydet(vt, girdi) {
     for (const s of sutunlar) if (s.eskiAd && !eskiAlanlar.has(s.eskiAd)) throw new DepoHatasi(`"${s.eskiAd}" sütunu tabloda yok.`);
     // Sütunlar: mevcut alanın hassaslığı ve (eski) servis eşlemesi korunur; yeni sütun diskte şifreli saklanır.
     const alanlar = sutunlar.map((s) => {
-      const eski = eskiAlanlar.get(s.eskiAd ?? s.ad);
+      const eski = /** @type {Record<string, any> | undefined} */ (eskiAlanlar.get(s.eskiAd ?? s.ad));
+      const karsiliklar = s.gizli ? undefined
+        : s.karsiliklar === undefined ? (zarfMi(eski?.karsiliklar) ? eski?.karsiliklar : undefined)
+          : Object.keys(s.karsiliklar).length ? sifrele(vt, JSON.stringify(s.karsiliklar)) : undefined;
       return {
         ad: s.ad, etiket: s.ad, tip: eski?.tip ?? 'metin', hassas: s.gizli ? true : eski ? eski.hassas : true, gizli: s.gizli,
-        ...(eski?.servisParametreleri ? { servisParametreleri: eski.servisParametreleri } : {})
+        ...(eski?.servisParametreleri ? { servisParametreleri: eski.servisParametreleri } : {}),
+        ...(karsiliklar ? { karsiliklar } : {})
       };
     });
     // Ad değişen / kaldırılan sütunlar: mevcut satırlardaki anahtarlar önce düzenlenir (değerler zarf olarak taşınır).
