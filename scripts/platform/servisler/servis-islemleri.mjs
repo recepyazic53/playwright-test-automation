@@ -13,11 +13,11 @@ import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import {
-  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, goreliTarih, kontrolleriDegerlendir, kullanilanParametreler, ServisHatasi, soapIstegi,
+  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, goreliTarih, kontrolleriDegerlendir, kullanilanAkisDegerleri, kullanilanParametreler, ServisHatasi, soapIstegi,
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
 } from './soap-istemcisi.mjs';
 import {
-  senaryoIceriginiDogrula, servisGetir, servisKaydet, servisKimliginiCoz, servisKosusuKaydet,
+  senaryoIceriginiDogrula, servisAkisiGetir, servisGetir, servisKaydet, servisKimliginiCoz, servisKosusuKaydet,
   servisKimlikOzeti, servisleriListele, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
 } from './servis-deposu.mjs';
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
@@ -334,7 +334,8 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   secilenOperasyonlar?: string[];
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
- *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown }} girdi
+ *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown;
+ *   oturumAkisi?: string | null }} girdi  oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -356,7 +357,8 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.alanZorunluluklari !== undefined ? { alanZorunluluklari: alanZorunluluklariniDogrula(girdi.alanZorunluluklari) } : {}),
     ...(girdi.ekAlanlar !== undefined ? { ekAlanlar: ekAlanlariDogrula(girdi.ekAlanlar) } : {}),
     ...(girdi.alanListeleri !== undefined ? { alanListeleri: alanListeleriniDogrula(girdi.alanListeleri) } : {}),
-    ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {})
+    ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {}),
+    ...(girdi.oturumAkisi !== undefined ? { oturumAkisi: oturumAkisiDogrula(vt, projeId, girdi.oturumAkisi) } : {})
   };
   if (adresDegisti) {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);
@@ -373,6 +375,18 @@ export function servisiKaydet(vt, projeId, girdi) {
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
     return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
   });
+}
+
+/**
+ * Servise atanan oturum akışı: projenin "oturum" türündeki akışı olmalı. Boş → kaldırılır (undefined).
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} v @returns {string | undefined}
+ */
+function oturumAkisiDogrula(vt, projeId, v) {
+  if (v === null || v === '') return undefined;
+  const a = typeof v === 'string' ? servisAkisiGetir(vt, v) : undefined;
+  if (!a || a.projeId !== projeId) throw new DepoHatasi('Oturum akışı bulunamadı.');
+  if (a.tur !== 'oturum') throw new DepoHatasi(`"${a.baslik}" bir oturum akışı değil (akış türü: oturum olmalı).`);
+  return a.id;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -767,6 +781,17 @@ export function soapuiAktar(vt, projeId, girdi) {
 // ---------------------------------------------------------------------------------------
 
 /**
+ * Oturum sağlayıcı (servis-akislari.mjs kaydeder): servise atanan oturum akışının değerleri (token). Önbellekte geçerliyse
+ * yeniden kullanılır (durum "onbellek"), yoksa ya da yenile ile oturum akışı koşulur (durum "alindi").
+ * @typedef {(vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
+ *   Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>} OturumSaglayici
+ */
+/** @type {OturumSaglayici | null} */
+let oturumSaglayici = null;
+/** @param {OturumSaglayici | null} fn */
+export function oturumSaglayicisiAyarla(fn) { oturumSaglayici = fn; }
+
+/**
  * Tek bir senaryoyu (kayıtlı ya da taslak) bir ortamda çalıştırır ve sonucu servis koşuları tablosuna yazar.
  * tur 'dene': yalnız test ortamı; kapsam denetlenmez. tur 'kosu': kapsam ortam türüyle uyuşmalı.
  * @param {Veritabani} vt @param {string} projeId
@@ -774,7 +799,8 @@ export function soapuiAktar(vt, projeId, girdi) {
  *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
  *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
  *   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
- *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void }} girdi
+ *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean }} girdi
+ *   oturumYenile: oturum akışı önbelleği yok sayılıp yeniden koşulur (401 / 403 sonrası iç kullanım).
  *   olay: canlı panel için adım bildirimi (istek / yanıt maskeli). sinyal: durdurma (bekleyen istek kesilir).
  *   Servis akışı: akisDegerleri (${akis:Ad} değerleri), ekGizliler (maskelenecek önceki değerler), okumalar (yanıttan okunacak
  *   değerler; açık değerler YALNIZ acikDegerler geri çağırmasıyla, bellekte; kayıtta ve dönüşte gizliler maskeli), akis (kayda
@@ -802,6 +828,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const bas = Date.now();
   /** @type {string[]} */
   let gizliler = [...(girdi.ekGizliler ?? [])];
+  let akisDegerleri = girdi.akisDegerleri;
+  let oturumKullanildi = false;
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
   /** @type {Record<string, unknown>} */
@@ -814,15 +842,26 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     olay('hazirlik', 'basladi');
     const adres = servisAdresi(servis.ayarlar, ortam);
     sonuc.adres = adres;
-    // Başlıklardaki ${Tablo.Sütun} de gövdedekilerle birlikte çözülür.
+    // ${akis:…} değeri verilmemişse ve servise oturum akışı atanmışsa değerler (ör. token) oturumdan: önbellekte geçerliyse
+    // yeniden kullanılır, yoksa oturum akışı koşulur.
     const basliklarHam = icerik.basliklar ?? {};
+    const gereken = kullanilanAkisDegerleri([icerik.govde, ...Object.values(basliklarHam), JSON.stringify(icerik.kontroller)].join('\n'))
+      .filter((a) => akisDegerleri?.[a] === undefined);
+    if (gereken.length && servis.ayarlar.oturumAkisi && oturumSaglayici) {
+      const o = await oturumSaglayici(vt, projeId, servis.ayarlar.oturumAkisi, ortam.id, { yenile: girdi.oturumYenile === true, sinyal: girdi.sinyal });
+      akisDegerleri = { ...o.degerler, ...(akisDegerleri ?? {}) };
+      gizliler = [...gizliler, ...o.gizliler];
+      sonuc.oturum = { akis: o.baslik, durum: girdi.oturumYenile ? 'yenilendi' : o.durum };
+      oturumKullanildi = true;
+    }
+    // Başlıklardaki ${Tablo.Sütun} de gövdedekilerle birlikte çözülür.
     const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [icerik.govde, ...Object.values(basliklarHam)].join('\n') }, ortam.id);
     gizliler = [...gizliler, ...p.gizliler];
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
     const doldurma = {
       degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
-      akisDegerleri: girdi.akisDegerleri
+      akisDegerleri
     };
     const govde = yerTutuculariDoldur(icerik.govde, doldurma);
     const ekBasliklar = Object.fromEntries(Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]));
@@ -836,6 +875,10 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
       ekBasliklar, gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
     });
+    // Oturum değeri (token) sunucuca reddedildiyse: oturum bir kez yenilenip senaryo yeniden denenir (bu deneme kaydedilmez).
+    if (oturumKullanildi && !girdi.oturumYenile && (yanit.durumKodu === 401 || yanit.durumKodu === 403)) {
+      return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true });
+    }
     adim = 'kontroller';
     // Yanıttan okuma (akış): gizli değerler kayda / panele yazılmadan önce maskeleme listesine girer.
     /** @type {import('./soap-istemcisi.mjs').KontrolSonucu[]} */
@@ -852,7 +895,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     }
     olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
     // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki TeklifNo = önceki adımda okunan) çözülür.
-    const kontrolListesi = girdi.akisDegerleri ? akisKontrolleriniCoz(icerik.kontroller, girdi.akisDegerleri) : icerik.kontroller;
+    const kontrolListesi = akisDegerleri ? akisKontrolleriniCoz(icerik.kontroller, akisDegerleri) : icerik.kontroller;
     const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi), ...okumaSonuclari];
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';
     if (Object.keys(okunan).length) {

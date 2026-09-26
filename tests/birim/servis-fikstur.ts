@@ -80,7 +80,8 @@ export type SahteIstek = { yontem: string; yol: string; eylem: string; govde: st
 
 /**
  * Sahte SOAP sunucusunu başlatır: GET ?wsdl → WSDL; POST → kimlik ${SAHTE_TC} ise <Durum>OK</Durum>, değilse HATA. Gövdede <Giris>
- * geçerse token yanıtı (<Token>tok-N</Token>, başlık x-oturum: oturum-N; N her girişte artar).
+ * geçerse token yanıtı (<Token>tok-N</Token>, başlık x-oturum: oturum-N; N her girişte artar). <YetkiGerekli/> geçerse yalnız son
+ * token kabul edilir (değilse 401).
  */
 export async function sahteSoapSunucusu(): Promise<{ adres: string; istekler: SahteIstek[]; kapat: () => Promise<void> }> {
   const istekler: SahteIstek[] = [];
@@ -100,6 +101,8 @@ export async function sahteSoapSunucusu(): Promise<{ adres: string; istekler: Sa
           res.end(`<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><GirisResponse xmlns="Ornek"><Sonuc><Token>tok-${girisSayisi}</Token><Durum>OK</Durum></Sonuc></GirisResponse></soap:Body></soap:Envelope>`);
           return;
         }
+        // <YetkiGerekli/>: yalnız son verilen token kabul (Authorization: Bearer tok-N), değilse 401.
+        if (govde.includes('<YetkiGerekli/>') && req.headers.authorization !== `Bearer tok-${girisSayisi}`) { res.writeHead(401, { 'Content-Type': 'text/plain' }); res.end('yetkisiz'); return; }
         const cevapla = () => {
           if (res.destroyed) return;
           res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });

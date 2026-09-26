@@ -95,7 +95,7 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
  *   alanListeleri?: Record<string, Record<string, string>>;
  *   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>;
- *   erisim?: { ortamId: string; zaman: string; durumKodu: number } }} ServisAyarlari
+ *   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string }} ServisAyarlari
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
  */
@@ -443,4 +443,152 @@ export function servisKosulariniListele(vt, filtre) {
 export function servisKosusuGetir(vt, id) {
   const s = vt.tek('SELECT * FROM servis_kosulari WHERE id = ?', [id]);
   return s ? kosuCevir(vt, s, true) : undefined;
+}
+
+// ---------------------------------------------------------------------------------------
+// Servis akışları (sürüm 11): sırayla koşan servis senaryoları; adım yanıtından okunan değer sonraki adımlarda ${akis:Ad}
+// ---------------------------------------------------------------------------------------
+
+export const AKIS_TURLERI = /** @type {const} */ (['akis', 'oturum']);
+export const OKUMA_KAYNAKLARI = /** @type {const} */ (['xml', 'json', 'baslik']);
+const OKUMA_ADI = /^[A-Za-z_][A-Za-z0-9_-]{0,59}$/;
+export const EN_COK_AKIS_ADIMI = 30;
+/** Oturum akışının değerleri (token) varsayılan olarak 1 saat geçerli. */
+export const VARSAYILAN_OTURUM_OMRU_SN = 3600;
+
+/**
+ * @typedef {{ ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }} AkisOkumaTanimi
+ * @typedef {{ id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean }} AkisAdimi
+ * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; aciklama?: string }} ServisAkisIcerigi
+ * @typedef {{ id: string; projeId: string; baslik: string; tur: 'akis' | 'oturum'; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
+ *   sira: number | null; icerik: ServisAkisIcerigi; olusturulma: string; guncellenme: string }} ServisAkisi
+ */
+
+/**
+ * Akış içeriğinin yapısal doğrulaması (servis / senaryo varlığı ve ${akis:} kullanımı servis-akislari.mjs'de).
+ * @param {unknown} icerik @param {'akis' | 'oturum'} tur @returns {ServisAkisIcerigi}
+ */
+export function akisIceriginiDogrula(icerik, tur) {
+  if (!icerik || typeof icerik !== 'object' || Array.isArray(icerik)) throw new DepoHatasi('"icerik" bir nesne olmalıdır.');
+  const i = /** @type {Record<string, unknown>} */ (icerik);
+  if (!Array.isArray(i.adimlar) || !i.adimlar.length) throw new DepoHatasi('Akışta en az bir adım olmalıdır.');
+  if (i.adimlar.length > EN_COK_AKIS_ADIMI) throw new DepoHatasi(`Bir akışta en çok ${EN_COK_AKIS_ADIMI} adım olabilir.`);
+  const kimlikler = new Set();
+  const adimlar = i.adimlar.map((x, n) => {
+    const a = /** @type {Record<string, unknown>} */ (x && typeof x === 'object' ? x : {});
+    const yer = `${n + 1}. adım`;
+    const id = typeof a.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(a.id) && !kimlikler.has(a.id) ? a.id : `adim${n + 1}`;
+    kimlikler.add(id);
+    const okumalar = a.okumalar === undefined ? [] : a.okumalar;
+    if (!Array.isArray(okumalar) || okumalar.length > 20) throw new DepoHatasi(`${yer}: "okumalar" en çok 20 öğelik bir dizi olmalıdır.`);
+    return {
+      id, ad: typeof a.ad === 'string' && a.ad.trim() ? a.ad.trim().slice(0, 100) : yer,
+      servisId: kimlik(a.servisId, `${yer} servisId`), senaryoId: kimlik(a.senaryoId, `${yer} senaryoId`),
+      okumalar: okumalar.map((y, k) => {
+        const o = /** @type {Record<string, unknown>} */ (y && typeof y === 'object' ? y : {});
+        const ad = typeof o.ad === 'string' ? o.ad.trim() : '';
+        if (!OKUMA_ADI.test(ad)) throw new DepoHatasi(`${yer}, ${k + 1}. okuma: ad geçersiz (harf ya da "_" ile başlar; harf, rakam, "_", "-").`);
+        const yol = typeof o.yol === 'string' ? o.yol.trim() : '';
+        if (!yol || yol.length > 300) throw new DepoHatasi(`${yer}, "${ad}" okuması: yol boş olamaz (en çok 300 karakter).`);
+        return { ad, kaynak: secenek(o.kaynak ?? 'xml', OKUMA_KAYNAKLARI, `${ad} kaynak`), yol, ...(typeof o.gizli === 'boolean' ? { gizli: o.gizli } : {}) };
+      }),
+      ...(a.hataOlursaDevam === true ? { hataOlursaDevam: true } : {})
+    };
+  });
+  const omur = i.omurSaniye === undefined || i.omurSaniye === null || i.omurSaniye === '' ? undefined : Number(i.omurSaniye);
+  if (omur !== undefined && (!Number.isInteger(omur) || omur < 30 || omur > 86_400)) throw new DepoHatasi('"omurSaniye" 30 ile 86400 arasında tam sayı olmalıdır.');
+  if (tur === 'oturum' && !adimlar.some((a) => a.okumalar.length)) throw new DepoHatasi('Oturum akışı en az bir değer okumalıdır (ör. Token).');
+  return {
+    adimlar, ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN } : {}),
+    ...(typeof i.aciklama === 'string' && i.aciklama.trim() ? { aciklama: i.aciklama.trim().slice(0, 2000) } : {})
+  };
+}
+
+/** @param {Veritabani} vt @param {Record<string, unknown>} s @returns {ServisAkisi} */
+const akisCevir = (vt, s) => ({
+  id: String(s.id), projeId: String(s.proje_id), baslik: String(s.baslik), tur: /** @type {'akis' | 'oturum'} */ (String(s.tur)),
+  kapsam: /** @type {'test' | 'canli' | 'ikisi'} */ (String(s.kapsam)), kosuyaDahil: s.kosuya_dahil === 1, sira: s.sira == null ? null : Number(s.sira),
+  icerik: /** @type {ServisAkisIcerigi} */ (sifreliJsonOku(vt, s.icerik_json)), olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
+});
+
+/**
+ * @param {Veritabani} vt
+ * @param {{ id?: string; projeId: string; baslik: string; tur?: 'akis' | 'oturum'; kapsam?: 'test' | 'canli' | 'ikisi'; kosuyaDahil?: boolean;
+ *   sira?: number | null; icerik: unknown; yapan?: string }} girdi
+ */
+export function servisAkisiKaydet(vt, girdi) {
+  acikAnahtar(vt);
+  return vt.islem(() => {
+    const mevcut = girdi.id ? vt.tek('SELECT * FROM servis_akislari WHERE id = ?', [girdi.id]) : undefined;
+    if (girdi.id && mevcut && mevcut.proje_id !== girdi.projeId) throw new DepoHatasi('Akış bulunamadı.');
+    const tur = secenek(girdi.tur ?? mevcut?.tur ?? 'akis', AKIS_TURLERI, 'tur');
+    return kaydet(vt, 'servis_akislari', {
+      proje_id: kimlik(girdi.projeId, 'projeId'), baslik: zorunluMetin(girdi.baslik, 'baslik').slice(0, 200), tur,
+      kapsam: secenek(girdi.kapsam ?? mevcut?.kapsam ?? 'test', SENARYO_KAPSAMLARI, 'kapsam'),
+      kosuya_dahil: (girdi.kosuyaDahil ?? (mevcut ? mevcut.kosuya_dahil === 1 : true)) ? 1 : 0,
+      sira: girdi.sira === undefined ? (mevcut?.sira ?? null) : girdi.sira,
+      icerik_json: sifreliJson(vt, akisIceriginiDogrula(girdi.icerik, tur), 'icerik')
+    }, { id: girdi.id, gecmisTuru: 'servis_akisi', yapan: girdi.yapan });
+  });
+}
+
+/** @param {Veritabani} vt @param {string} id */
+export function servisAkisiGetir(vt, id) {
+  const s = vt.tek('SELECT * FROM servis_akislari WHERE id = ?', [id]);
+  return s ? akisCevir(vt, s) : undefined;
+}
+
+/** @param {Veritabani} vt @param {string} projeId */
+export function servisAkislariniListele(vt, projeId) {
+  acikAnahtar(vt);
+  return vt.tumu('SELECT * FROM servis_akislari WHERE proje_id = ? ORDER BY IFNULL(sira, 1e9), olusturulma', [projeId]).map((s) => akisCevir(vt, s));
+}
+
+/** @param {Veritabani} vt @param {string} id @param {string} [yapan] */
+export function servisAkisiSil(vt, id, yapan) {
+  return sil(vt, 'servis_akislari', id, { gecmisTuru: 'servis_akisi', yapan });
+}
+
+/**
+ * @typedef {{ id: string; projeId: string; akisId: string | null; ortamId: string | null; tur: 'dene' | 'kosu';
+ *   durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik: string; sonuc: Record<string, any> }} ServisAkisKosusu
+ */
+
+/**
+ * @param {Veritabani} vt
+ * @param {{ projeId: string; akisId?: string | null; ortamId?: string | null; tur: 'dene' | 'kosu'; durum: 'basarili' | 'basarisiz' | 'hata';
+ *   baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown> }} girdi
+ */
+export function servisAkisKosusuKaydet(vt, girdi) {
+  acikAnahtar(vt);
+  const id = randomUUID();
+  vt.calistir(`INSERT INTO servis_akis_kosulari (id, proje_id, akis_id, ortam_id, tur, durum, baslangic, sure_ms, baslik, sonuc_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+    id, kimlik(girdi.projeId, 'projeId'), girdi.akisId ?? null, girdi.ortamId ?? null, secenek(girdi.tur, ['dene', 'kosu'], 'tur'),
+    secenek(girdi.durum, KOSU_DURUMLARI, 'durum'), girdi.baslangic, Math.max(0, Math.round(girdi.sureMs)), girdi.baslik ?? '', sifreliJson(vt, girdi.sonuc, 'sonuc')
+  ]);
+  return id;
+}
+
+/** @param {Veritabani} vt @param {Record<string, unknown>} s @param {boolean} ayrinti @returns {ServisAkisKosusu} */
+const akisKosuCevir = (vt, s, ayrinti) => ({
+  id: String(s.id), projeId: String(s.proje_id), akisId: s.akis_id == null ? null : String(s.akis_id), ortamId: s.ortam_id == null ? null : String(s.ortam_id),
+  tur: /** @type {'dene' | 'kosu'} */ (String(s.tur)), durum: /** @type {'basarili' | 'basarisiz' | 'hata'} */ (String(s.durum)),
+  baslangic: String(s.baslangic), sureMs: Number(s.sure_ms), baslik: String(s.baslik), sonuc: ayrinti ? sifreliJsonOku(vt, s.sonuc_json) : {}
+});
+
+/** En yeniler önce. @param {Veritabani} vt @param {{ projeId: string; akisId?: string; sinir?: number }} filtre */
+export function servisAkisKosulariniListele(vt, filtre) {
+  const kosullar = ['proje_id = ?'];
+  const degerler = [filtre.projeId];
+  if (filtre.akisId) { kosullar.push('akis_id = ?'); degerler.push(filtre.akisId); }
+  const sinir = Math.min(Math.max(Number(filtre.sinir) || 200, 1), 1000);
+  return vt.tumu(`SELECT id, proje_id, akis_id, ortam_id, tur, durum, baslangic, sure_ms, baslik FROM servis_akis_kosulari
+    WHERE ${kosullar.join(' AND ')} ORDER BY baslangic DESC LIMIT ${sinir}`, degerler).map((s) => akisKosuCevir(vt, s, false));
+}
+
+/** @param {Veritabani} vt @param {string} id */
+export function servisAkisKosusuGetir(vt, id) {
+  const s = vt.tek('SELECT * FROM servis_akis_kosulari WHERE id = ?', [id]);
+  return s ? akisKosuCevir(vt, s, true) : undefined;
 }
