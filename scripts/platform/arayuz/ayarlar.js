@@ -812,7 +812,7 @@ async function guvenlik(govde, baglam) {
   });
   // Video saklama süresi (şifreli medya deposu): bu süreden eski koşu videoları silinir;
   // ekran görüntüleri ve sonuçlar saklanır.
-  const gun = h('input', { type: 'number', min: '1', max: '3650', step: '1', value: String(ayar.videoSaklamaGun), inputmode: 'numeric' });
+  const gun = h('input', { type: 'number', min: '1', max: '365', step: '1', value: String(ayar.videoSaklamaGun), inputmode: 'numeric' });
   const saklamaMesaj = mesajKutusu();
   const saklamaKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
   const saklamaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('video'), 'Video saklama süresi'),
@@ -825,7 +825,7 @@ async function guvenlik(govde, baglam) {
     saklamaMesaj.temizle();
     alanHatasi(gun, '');
     const g = Number(gun.value);
-    if (!Number.isInteger(g) || g < 1 || g > 3650) { alanHatasi(gun, '1 ile 3650 arasında bir tam sayı girin.'); gun.focus(); return; }
+    if (!Number.isInteger(g) || g < 1 || g > 365) { alanHatasi(gun, '1 ile 365 arasında bir tam sayı girin.'); gun.focus(); return; }
     try {
       await mesgulIken(saklamaKaydet, 'Kaydediliyor…', () => api('/platform/guvenlik/kaydet', { govde: { videoSaklamaGun: g } }));
       saklamaMesaj.goster(`${g} günden eski videolar silinecek.`, 'basari');

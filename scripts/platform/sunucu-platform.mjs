@@ -384,6 +384,8 @@ export function videoSaklamaGunu(db) {
     try {
       const ayar = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, MEDYA_AYAR_ANAHTARI));
       const gun = Number(ayar?.videoSaklamaGun);
+      // Okuma eski üst sınırla (3650) kalır: önceden kaydedilmiş uzun süre geçersiz sayılıp varsayılana (daha kısa) düşülürse
+      // videolar erken silinirdi. Yeni kayıt 365 günle sınırlıdır (/platform/ayarlar/medya).
       if (Number.isInteger(gun) && gun >= 1 && gun <= 3650) return gun;
     } catch { /* varsayılana düşülür */ }
   }
@@ -1410,7 +1412,7 @@ const POST_UCLARI = new Map([
     }
     if (g.videoSaklamaGun !== undefined) {
       const gun = Number(g.videoSaklamaGun);
-      if (!Number.isInteger(gun) || gun < 1 || gun > 3650) throw new DepoHatasi('Video saklama süresi 1–3650 gün arasında bir tam sayı olmalıdır.');
+      if (!Number.isInteger(gun) || gun < 1 || gun > 365) throw new DepoHatasi('Video saklama süresi 1–365 gün arasında bir tam sayı olmalıdır.');
       const mevcut = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, MEDYA_AYAR_ANAHTARI));
       ayarYaz(db, MEDYA_AYAR_ANAHTARI, { ...(mevcut ?? {}), videoSaklamaGun: gun });
       yanit.videoSaklamaGun = gun;
