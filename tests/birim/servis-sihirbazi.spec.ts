@@ -105,6 +105,11 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.getByLabel('Teklif Input/BeginDate varsayılanı')).toHaveValue('BEGIN_DATE');
     await expect(page.getByLabel('Teklif Input/EndDate varsayılanı')).toHaveValue('END_DATE');
     await page.getByLabel('Teklif Input/CitizenshipNumber varsayılanı').selectOption('SIGORTALI_TC');
+    // Zorunluluk: WSDL'e göre gelir (BeginDate minOccurs=1 → işaretli, CitizenshipNumber minOccurs=0 → boş); iş kuralına göre düzeltilir.
+    await expect(page.getByLabel('Teklif Input/BeginDate zorunlu')).toBeChecked();
+    await expect(page.getByLabel('Teklif Input/CitizenshipNumber zorunlu')).not.toBeChecked();
+    await page.getByLabel('Teklif Input/CitizenshipNumber zorunlu').check();
+    await page.getByLabel('Teklif Input/IsSkiing zorunlu').uncheck();
     await ileri.click();
 
     // 4 · Giriş bilgisi: yeni profil.
@@ -131,6 +136,8 @@ test.describe('sihirbaz uçtan uca', () => {
       yalnizTestOperasyonlari: ['Onayla'], tarihKurallari: { BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" }
     });
     expect(s.ayarlar.operasyonlar.map((o: Nesne) => o.ad)).toEqual(['Teklif', 'Onayla']);
+    expect([...s.ayarlar.alanZorunluluklari.Teklif].sort()).toEqual(['Input/BeginDate', 'Input/ClientType', 'Input/CitizenshipNumber', 'Input/CreditCard/Installment', 'Input/EndDate'].sort());
+    expect(s.ayarlar.alanZorunluluklari.Onayla).toEqual(['TeklifNo']);
     expect(s.ayarlar.alanVarsayilanlari.Teklif).toMatchObject({
       'Input/Channel': { kaynak: 'parametre', deger: 'CHANNEL' }, 'Input/CitizenshipNumber': { kaynak: 'parametre', deger: 'SIGORTALI_TC' }
     });
@@ -143,6 +150,69 @@ test.describe('sihirbaz uçtan uca', () => {
     await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);
     const satir = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^CitizenshipNumber/ }) });
     await expect(satir.getByLabel('CitizenshipNumber parametresi')).toHaveValue('SIGORTALI_TC');
+    // Zorunlu alanlar servisin listesinden: CitizenshipNumber vurgulu, IsSkiing değil; "Yalnız zorunlular" süzer; gönderilmeyen zorunlu alan uyarır.
+    await expect(satir).toHaveClass(/zorunlu/);
+    const kayak = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^IsSkiing/ }) });
+    await expect(kayak).not.toHaveClass(/zorunlu/);
+    await page.getByText('Yalnız zorunlular').click();
+    await expect(kayak).toHaveCount(0);
+    await expect(page.locator('.alan-formu .alan-satiri')).toHaveCount(5);
+    await satir.getByLabel('CitizenshipNumber değer kaynağı').selectOption('gonderme');
+    await expect(satir.locator('.alan-uyarisi')).toContainText('Zorunlu alan dolu gönderilmiyor');
+    await baglam.close();
+  });
+
+  test('Ayarlar > Servis giriş bilgileri: ekle, alan kaldır / ekle, ortama özel değer, kullanılan profil silinmez, kullanılmayan silinir', async () => {
+    test.setTimeout(60_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    const profiller = async () => (await basarili(`/platform/servis-kimlikleri?projeId=${projeId}`)).profiller as Nesne[];
+    await page.goto('/#/ayarlar/servis-girisleri');
+    const liste = page.locator('.kayit-listesi');
+    await expect(liste).toContainText('Sihirbaz giriş');
+    await expect(liste).toContainText('Kullanan: Ornek Sihirbaz');
+
+    // Yeni profil: yalnız USERNAME değeri girilir.
+    await page.getByRole('button', { name: '+ Profil ekle' }).click();
+    await page.getByLabel('Profil adı').fill('Yedek');
+    await page.getByLabel('USERNAME değeri').fill('yedek-kullanici');
+    await page.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(liste).toContainText('Yedek');
+    expect((await profiller()).find((p) => p.ad === 'Yedek')).toEqual({ ad: 'Yedek', alanlar: ['USERNAME'], ortamlar: {} });
+
+    // Düzenle: USERNAME kaldırılır, yeni alan eklenir; kayıtlı değer gösterilmez.
+    await page.getByRole('button', { name: 'Yedek: düzenle' }).click();
+    await expect(page.getByLabel('USERNAME değeri')).toHaveValue('');
+    await page.getByRole('button', { name: 'USERNAME kaldır' }).click();
+    await page.getByRole('button', { name: '+ Alan ekle' }).click();
+    await page.getByLabel('Alan adı').last().fill('KANAL2');
+    await page.getByLabel('Yeni alan değeri').fill('k2');
+    await page.getByRole('button', { name: 'Kaydet' }).click();
+    await expect.poll(async () => (await profiller()).find((p) => p.ad === 'Yedek')?.alanlar).toEqual(['KANAL2']);
+
+    // Ortama özel: CANLI'da farklı parola.
+    await page.getByRole('button', { name: 'Sihirbaz giriş: ortama özel değer' }).click();
+    await expect(page.getByLabel('Kapsam')).toHaveValue(canli);
+    await page.getByRole('button', { name: '+ Alan ekle' }).click();
+    await page.getByLabel('Alan adı').last().fill('PASSWORD');
+    await page.getByLabel('Yeni alan değeri').fill('canli-parola-1');
+    await page.getByRole('button', { name: 'Kaydet' }).click();
+    await expect.poll(async () => (await profiller()).find((p) => p.ad === 'Sihirbaz giriş')?.ortamlar).toEqual({ [canli]: ['PASSWORD'] });
+    expect(JSON.stringify(await profiller())).not.toContain('canli-parola-1');
+
+    // Kullanılan profil silinmez; kullanılmayan silinir.
+    // Satır içi onay: aynı düğmeye iki kez basılır (ikincisinde metni 'Silmeyi onayla').
+    await page.getByRole('button', { name: 'Sihirbaz giriş: sil' }).click();
+    await expect(page.getByRole('button', { name: 'Sihirbaz giriş: sil' })).toHaveText('Silmeyi onayla');
+    await page.getByRole('button', { name: 'Sihirbaz giriş: sil' }).click();
+    await expect(page.getByText('şu servislerde kullanılıyor: Ornek Sihirbaz')).toBeVisible();
+    expect((await profiller()).map((p) => p.ad)).toContain('Sihirbaz giriş');
+    await page.getByRole('button', { name: 'Yedek: sil' }).click();
+    await page.getByRole('button', { name: 'Yedek: sil' }).click();
+    await expect.poll(async () => (await profiller()).map((p) => p.ad)).toEqual(['Sihirbaz giriş']);
+    expect(hatalar).toEqual([]);
     await baglam.close();
   });
 

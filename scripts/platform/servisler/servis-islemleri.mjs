@@ -150,6 +150,24 @@ export function tarihKurallariniDogrula(kurallar) {
 }
 
 /**
+ * Alan zorunlulukları: { <operasyon>: [<yol>, …] } — iş kuralına göre zorunlu alanlar (kullanıcı belirler; WSDL'deki minOccurs
+ * iş kuralını yansıtmayabilir: .asmx'te sayı / evet-hayır alanları hep "zorunlu", metinler hep "isteğe bağlı" görünür).
+ * Senaryo düzenleyicide vurgulanır ve süzülür; koşuyu ENGELLEMEZ (olumsuz senaryolar bilerek göndermeyebilir).
+ * @param {unknown} v @returns {Record<string, string[]>}
+ */
+function alanZorunluluklariniDogrula(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanZorunluluklari" bir nesne olmalıdır.');
+  /** @type {Record<string, string[]>} */
+  const s = {};
+  for (const [op, yollar] of Object.entries(v)) {
+    if (!Array.isArray(yollar)) throw new DepoHatasi(`"${op}" zorunlu alanları bir dizi olmalıdır.`);
+    for (const yol of yollar) if (typeof yol !== 'string' || !/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+    s[op] = [...new Set(/** @type {string[]} */ (yollar))];
+  }
+  return s;
+}
+
+/**
  * Alan varsayılanları: { <operasyon>: { <yol>: { kaynak, deger? } } } — yeni senaryo açılınca alanlar bunlarla dolar.
  * @param {unknown} v @returns {Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>}
  */
@@ -239,7 +257,7 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   secilenOperasyonlar?: string[];
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
- *   alanVarsayilanlari?: unknown }} girdi
+ *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown }} girdi
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -257,7 +275,8 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.veriProfilleri !== undefined ? { veriProfilleri: veriProfilleriniDogrula(girdi.veriProfilleri) } : {}),
     ...(girdi.yalnizTestOperasyonlari !== undefined ? { yalnizTestOperasyonlari: girdi.yalnizTestOperasyonlari.filter((x) => typeof x === 'string' && x) } : {}),
     ...(girdi.tlsDogrulama !== undefined ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
-    ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {})
+    ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {}),
+    ...(girdi.alanZorunluluklari !== undefined ? { alanZorunluluklari: alanZorunluluklariniDogrula(girdi.alanZorunluluklari) } : {})
   };
   if (adresDegisti) {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);

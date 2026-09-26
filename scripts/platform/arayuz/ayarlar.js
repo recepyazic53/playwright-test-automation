@@ -14,6 +14,7 @@ import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
+  { ad: 'servis-girisleri', etiket: 'Servis giriş bilgileri', ikon: 'anahtar', aciklama: 'Servis testlerinin istek gövdesine yazılan giriş bilgileri (kullanıcı, parola, kanal…). Profil olarak tutulur; ortama göre farklı değer verilebilir. Değerler kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'baglam', etiket: 'Bağlam profilleri', ikon: 'hedef', aciklama: 'Testlerin hangi bağlamda (ör. rol, şube, müşteri tipi) çalışacağını tanımlayan profiller. Tür adlarını projeniz belirler.' },
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Testlerin kullanacağı veri kalıpları (türler) ve bu kalıplara göre doldurulmuş kayıtlar (profiller).' },
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
@@ -54,7 +55,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   kapsayici.replaceChildren(baslik, govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
-    proje: projeVeOrtamlar, giris: girisProfilleri, baglam: baglamProfilleri,
+    proje: projeVeOrtamlar, giris: girisProfilleri, 'servis-girisleri': servisGirisleri, baglam: baglamProfilleri,
     'test-verisi': testVerisi, dosyalar, yedekleme, guvenlik
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
@@ -209,6 +210,119 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 // Giriş profilleri
 // ---------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------
+// Servis giriş bilgileri (servis gövdelerindeki ${USERNAME} / ${PASSWORD} / ${CHANNEL} gibi parametrelerin değerleri)
+// ---------------------------------------------------------------------------------------
+
+async function servisGirisleri(govde, baglam, yenile) {
+  const proje = baglam.durum.proje;
+  const [{ profiller }, { ortamlar }, servisler] = await Promise.all([
+    api(`/platform/servis-kimlikleri?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`).then((x) => x.servisler).catch(() => [])
+  ]);
+  const formAlani = h('div', {});
+  const kullananlar = (ad) => servisler.filter((s) => s.ayarlar.kimlikProfili === ad);
+
+  /**
+   * Profil formu. p: mevcut profil (yoksa yeni); ortamId: '' = genel değerler, dolu = o ortama özel değerler.
+   * Kayıtlı değerler GÖSTERİLMEZ: boş bırakılan kayıtlı alan korunur, "Kaldır" ile silinir.
+   */
+  const profilFormu = (p, ortamId = '') => {
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '', disabled: Boolean(p) });
+    const kapsam = h('select', { disabled: !p }, h('option', { value: '' }, 'Genel (tüm ortamlar)'),
+      ortamlar.map((o) => h('option', { value: o.id, selected: ortamId === o.id }, `Yalnız ${o.ad}`)));
+    const kayitliAlanlar = (id) => (p ? (id ? p.ortamlar[id] || [] : p.alanlar) : []);
+    const satirlar = [];
+    const kutu = h('div', {});
+    const satirEkle = (alanAdi = '', kayitli = false) => {
+      const adG = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: alanAdi, placeholder: 'ör. USERNAME', disabled: kayitli, 'aria-label': 'Alan adı' });
+      const degerG = h('input', { type: 'password', autocomplete: 'new-password', placeholder: kayitli ? 'kayıtlı — değiştirmek için yazın' : 'değer', 'aria-label': `${alanAdi || 'Yeni alan'} değeri` });
+      const s = { adG, degerG, kayitli, kaldir: false, el: null };
+      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${alanAdi || 'Bu alanı'} kaldır` }, 'Kaldır');
+      kaldir.addEventListener('click', () => {
+        if (!s.kayitli) { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); return; }
+        s.kaldir = !s.kaldir;
+        s.el.classList.toggle('kaldirilacak', s.kaldir);
+        degerG.disabled = s.kaldir;
+        kaldir.textContent = s.kaldir ? 'Geri al' : 'Kaldır';
+      });
+      s.el = h('div', { class: 'kimlik-satiri' }, adG, degerG, kaldir);
+      satirlar.push(s);
+      kutu.append(s.el);
+      return s;
+    };
+    const alanlariCiz = () => {
+      satirlar.length = 0;
+      kutu.replaceChildren();
+      const kayitli = kayitliAlanlar(kapsam.value);
+      for (const a of kayitli) satirEkle(a, true);
+      if (!kayitli.length) for (const a of kapsam.value ? [] : ['USERNAME', 'PASSWORD', 'CHANNEL']) satirEkle(a, false);
+    };
+    kapsam.addEventListener('change', alanlariCiz);
+    alanlariCiz();
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(p ? `Profili düzenle: ${p.ad}` : 'Yeni servis giriş profili', mesaj.kutu,
+      alan('Profil adı', ad, { zorunlu: true, yardim: p ? 'Profil adı değiştirilemez (servisler bu adla bağlı).' : 'Ör. "Kanal 30447". Servisler bu adla seçer.' }),
+      alan('Kapsam', kapsam, { yardim: 'Genel değerler tüm ortamlarda geçerlidir. Bir ortamda farklıysa (ör. CANLI parolası) o ortamı seçip yalnız farklı alanları girin.' }),
+      h('fieldset', {}, h('legend', {}, 'Alanlar'),
+        h('p', { class: 'soluk kucuk' }, 'Değerler kasada şifreli saklanır ve gösterilmez. Kayıtlı bir alanı boş bırakırsanız değeri korunur.'),
+        kutu, h('button', { type: 'button', onclick: () => satirEkle().adG.focus() }, '+ Alan ekle')),
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      mesaj.temizle();
+      const profilAdi = ad.value.trim();
+      if (!profilAdi) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
+      if (!p && profiller.some((x) => x.ad === profilAdi)) { alanHatasi(ad, 'Bu adla bir profil zaten var.'); ad.focus(); return; }
+      const degerler = {};
+      for (const s of satirlar) {
+        const alanAdi = s.adG.value.trim();
+        if (!alanAdi) continue;
+        if (!/^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(alanAdi)) { mesaj.goster(`Geçersiz alan adı: "${alanAdi}" (harf ile başlar; harf, rakam, "_").`); return; }
+        if (s.kaldir) degerler[alanAdi] = '';
+        else if (s.degerG.value !== '') degerler[alanAdi] = s.degerG.value;
+      }
+      if (!Object.keys(degerler).length) { mesaj.goster(p ? 'Değişiklik yok: değiştirmek istediğiniz alana değer yazın ya da "Kaldır"a basın.' : 'En az bir alana değer girin.'); return; }
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis-kimligi/kaydet', {
+          govde: { projeId: proje.id, ad: profilAdi, ortamId: kapsam.value || undefined, degerler }
+        }));
+        bildir('Servis giriş profili kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(formAlani, form);
+  };
+
+  const ekle = h('button', { type: 'button', class: 'birincil kucuk-dugme', onclick: () => profilFormu(null) }, '+ Profil ekle');
+  yerlestir(govde,
+    bolumBasligi('Profiller', profiller.length, ekle),
+    h('p', { class: 'soluk kucuk' }, 'Servis istek gövdelerindeki giriş parametrelerinin (ör. ${USERNAME}, ${PASSWORD}, ${CHANNEL}) değerleri. Servis, Servis ekle sihirbazında ya da Parametreler sekmesinde bir profil seçer. Ekranların oturum açma hesapları "Giriş profilleri" bölümündedir.'),
+    formAlani,
+    kayitListesi(profiller.map((p) => {
+      const kullanan = kullananlar(p.ad);
+      const ozel = Object.entries(p.ortamlar);
+      return kayitSatiri(p.ad, h('span', {},
+        `Genel: ${p.alanlar.join(', ') || '—'}`,
+        ozel.length ? ` · ${ozel.map(([o, a]) => `${ortamAdiBul(ortamlar, o)}'a özel: ${a.join(', ')}`).join(' · ')}` : '',
+        ` · ${kullanan.length ? `Kullanan: ${kullanan.map((s) => s.ad).join(', ')}` : 'Kullanan servis yok'}`), [
+        duzenleDugmesi(p.ad, () => profilFormu(p, '')),
+        h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${p.ad}: ortama özel değer`, onclick: () => profilFormu(p, ortamlar.find((o) => o.canli)?.id || ortamlar[0]?.id || '') }, ikon('ag'), 'Ortama özel'),
+        silDugmesi(p.ad, async () => {
+          if (kullanan.length) {
+            bildir(`"${p.ad}" şu servislerde kullanılıyor: ${kullanan.map((s) => s.ad).join(', ')}. Önce o servislerde başka profil seçin.`, 'hata');
+            return;
+          }
+          await api('/platform/servis-kimligi/sil', { govde: { projeId: proje.id, ad: p.ad } });
+          bildir('Servis giriş profili silindi.');
+          yenile();
+        })
+      ], 'anahtar');
+    }), 'Henüz servis giriş profili yok.', 'anahtar'));
+}
 
 async function girisProfilleri(govde, baglam, yenile) {
   const proje = baglam.durum.proje;

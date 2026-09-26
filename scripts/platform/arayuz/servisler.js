@@ -426,6 +426,12 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
 
   const aramaG = h('input', { type: 'search', placeholder: 'Alan ara…', 'aria-label': 'Alan ara' });
   const yalnizDolu = h('input', { type: 'checkbox', id: yeniKimlik('dolu') });
+  const yalnizZorunlu = h('input', { type: 'checkbox', id: yeniKimlik('zorunlu') });
+  /** Alan zorunlu mu: servis ayarı (sihirbazda belirlenir) varsa o, yoksa WSDL şeması. */
+  const zorunluMu = (yol, alanT) => {
+    const liste = s.ayarlar.alanZorunluluklari?.[operasyon.value];
+    return Array.isArray(liste) ? liste.includes(yol) : Boolean(alanT.zorunlu);
+  };
   const varsayilanKaydet = async (yol, v, kaldir) => {
     const op = operasyon.value;
     if (kaldir) { if (varsayilanlar[op]) delete varsayilanlar[op][yol]; } else (varsayilanlar[op] ??= {})[yol] = { ...v };
@@ -450,6 +456,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       const v = degerler[sat.yol] ??= { kaynak: 'gonderme' };
       if (ara && !sat.yol.toLocaleLowerCase('tr').includes(ara)) continue;
       if (yalnizDolu.checked && v.kaynak === 'gonderme') continue;
+      const zorunlu = zorunluMu(sat.yol, sat.alan);
+      if (yalnizZorunlu.checked && !zorunlu) continue;
       const satir = h('div', { class: `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''}`, role: 'row' });
       const yenile = () => { satirCiz(); };
       const satirCiz = () => {
@@ -465,12 +473,14 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
           title: ayniDeger(guncelVarsayilan, v) ? 'Servis varsayılanı (kaldırmak için tıklayın)' : 'Bu değeri servis varsayılanı yap (yeni senaryolar bununla açılır)',
           'aria-label': `${sat.alan.ad} için servis varsayılanı` }, ayniDeger(guncelVarsayilan, v) ? '★' : '☆');
         pin.addEventListener('click', async () => { await varsayilanKaydet(sat.yol, v, ayniDeger((varsayilanlar[operasyon.value] || {})[sat.yol], v)); satirCiz(); });
-        satir.className = `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''}`;
+        satir.className = `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''} ${zorunlu ? 'zorunlu' : ''}`;
+        const eksikZorunlu = zorunlu && (v.kaynak === 'gonderme' || v.kaynak === 'bos' || v.kaynak === 'nil');
         yerlestir(satir,
-          h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, sat.alan.zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Şemada zorunlu' }, '*') : null,
+          h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Zorunlu alan' }, '*') : null,
             h('span', { class: 'alan-tipi' }, sat.alan.secenekler ? 'liste' : TIP_ETIKETI[sat.alan.tip] || 'metin')),
           h('span', { role: 'cell' }, kaynak),
-          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, yenile)),
+          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, yenile),
+            eksikZorunlu ? h('span', { class: 'alan-uyarisi' }, 'Zorunlu alan dolu gönderilmiyor (olumsuz senaryo değilse doldurun).') : null),
           h('span', { role: 'cell' }, pin));
       };
       satirCiz();
@@ -479,11 +489,13 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     const dolu = Object.values(degerler).filter((v) => v.kaynak !== 'gonderme').length;
     return h('div', {},
       h('div', { class: 'alan-formu-ust' }, aramaG, h('label', { class: 'secenek', for: yalnizDolu.id }, yalnizDolu, 'Yalnız gönderilenler'),
+        h('label', { class: 'secenek', for: yalnizZorunlu.id }, yalnizZorunlu, 'Yalnız zorunlular'),
         h('span', { class: 'soluk kucuk' }, `${dolu} / ${satirlar.filter((x) => !x.grup).length} alan gönderiliyor · ★ = servis varsayılanı`)),
       tablo);
   };
   aramaG.addEventListener('input', () => ciz());
   yalnizDolu.addEventListener('change', () => ciz());
+  yalnizZorunlu.addEventListener('change', () => ciz());
 
   const semaAl = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('ag'), 'Alan listesini WSDL\'den al');
   semaAl.addEventListener('click', async () => {
@@ -648,44 +660,16 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
         h('table', { class: 'ozet-tablosu' }, h('thead', {}, h('tr', {}, ['Tür', 'Rol', 'Profil'].map((x) => h('th', {}, x)))), h('tbody', {}, rolSatirlari))) : null,
       alan('Tarih kuralları', tarihMetin, { yardim: 'Her satır: AD = bugun|yyyy-MM-dd\'T\'HH:mm:ss · bugun+1y (yıl) · bugun+60g (gün) · bugun-1a (ay)' }),
       h('div', { class: 'dugmeler' }, kaydet)),
-    kimlikYonetimi(proje, ortamlar, kimlikProfilleri, yenile));
+    kimlikYonetimi(proje, ortamlar, kimlikProfilleri));
 }
 
-/** Giriş bilgisi profilleri: değerler yalnız yazılır (okunmaz); ortama özel ezme. */
-function kimlikYonetimi(proje, ortamlar, profiller, yenile) {
-  const ad = h('input', { type: 'text', autocomplete: 'off', placeholder: 'ör. Kanal 100' });
-  const ortam = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar (genel)'), ortamlar.map((o) => h('option', { value: o.id }, `Yalnız ${ortamEtiketi(o)}`)));
-  const satirlar = [];
-  const kutu = h('div', {});
-  const satirEkle = (a = '') => {
-    const adG = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: a, placeholder: 'USERNAME', 'aria-label': 'Parametre adı' });
-    const degerG = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'değer (boş = sil)', 'aria-label': 'Değer' });
-    const s = { adG, degerG };
-    satirlar.push(s);
-    kutu.append(h('div', { class: 'satir-duzen' }, adG, degerG));
-  };
-  for (const a of ['USERNAME', 'PASSWORD', 'CHANNEL']) satirEkle(a);
-  const mesaj = mesajKutusu();
-  const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Profili kaydet');
-  kaydet.addEventListener('click', async () => {
-    mesaj.temizle();
-    if (!ad.value.trim()) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
-    const degerler = {};
-    for (const s of satirlar) if (s.adG.value.trim() && (s.degerG.value !== '' || profiller.some((p) => p.ad === ad.value.trim()))) degerler[s.adG.value.trim()] = s.degerG.value;
-    for (const [k, v] of Object.entries(degerler)) if (v === '' && !profiller.some((p) => p.ad === ad.value.trim())) delete degerler[k];
-    try {
-      await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis-kimligi/kaydet', { govde: { projeId: proje.id, ad: ad.value.trim(), ortamId: ortam.value || undefined, degerler } }));
-      bildir('Giriş bilgisi profili kaydedildi.');
-      yenile();
-    } catch (e) { mesaj.goster(e.message); }
-  });
-  return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('anahtar'), 'Giriş bilgisi profilleri')),
+/** Giriş bilgisi profilleri özeti; ekleme / düzenleme / silme Ayarlar > Servis giriş bilgileri bölümünde. */
+function kimlikYonetimi(proje, ortamlar, profiller) {
+  return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('anahtar'), 'Giriş bilgisi profilleri'),
+    h('span', { class: 'sag' }, h('a', { class: 'dugme', href: '#/ayarlar/servis-girisleri' }, 'Profilleri yönet'))),
     profiller.length ? h('ul', { class: 'onay-listesi' }, profiller.map((p) => h('li', {}, h('b', {}, p.ad), ` — ${p.alanlar.join(', ') || '(genel değer yok)'}`,
       Object.keys(p.ortamlar).length ? h('span', { class: 'soluk kucuk' }, ` · ortama özel: ${Object.entries(p.ortamlar).map(([o, a]) => `${ortamlar.find((x) => x.id === o)?.ad ?? o} (${a.join(', ')})`).join('; ')}`) : null))) : h('p', { class: 'soluk' }, 'Profil yok.'),
-    h('details', {}, h('summary', {}, 'Profil ekle / değer değiştir'), mesaj.kutu,
-      h('p', { class: 'soluk kucuk' }, 'Değerler kasada şifreli saklanır ve bir daha gösterilmez. Mevcut profilde boş bırakılan değer korunur; silmek için alanı temizleyip adını bırakın. CANLI\'da farklı değer gerekiyorsa ortamı seçip yalnız farklı olanı girin.'),
-      alan('Profil adı', ad), alan('Kapsam', ortam), kutu,
-      h('div', { class: 'dugmeler' }, h('button', { type: 'button', onclick: () => satirEkle() }, ikon('arti'), 'Alan ekle'), kaydet)));
+    h('p', { class: 'soluk kucuk' }, 'Profil ekleme, değer değiştirme, ortama özel değer ve silme: Ayarlar > Servis giriş bilgileri.'));
 }
 
 // ---------------------------------------------------------------------------------------

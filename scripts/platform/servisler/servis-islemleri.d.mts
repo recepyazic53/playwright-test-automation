@@ -25,6 +25,7 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
+  alanZorunluluklari?: Record<string, string[]>;
 }): string;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
   adres: string; durumKodu: number; operasyonSayisi: number; alanliOperasyonlar: string[];

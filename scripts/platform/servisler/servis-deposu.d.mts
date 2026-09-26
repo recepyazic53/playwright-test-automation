@@ -14,6 +14,7 @@ export interface ServisAyarlari {
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
+  alanZorunluluklari?: Record<string, string[]>;
   erisim?: { ortamId: string; zaman: string; durumKodu: number };
 }
 export interface Servis {

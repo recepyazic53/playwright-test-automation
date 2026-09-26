@@ -46,7 +46,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     adim: 0, ad: '', anahtar: '', anahtarElle: false, soapSurumu: '1.1', tls: true,
     tabanlar: Object.fromEntries(ortamlar.map((o) => [o.id, o.canli ? '' : o.tabanUrl])),
     yol: '', kontrolOrtami: (testOrtamlari.find((o) => o.varsayilan) || testOrtamlari[0])?.id ?? '',
-    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, profil: { tur: 'yok', ad: '', degerler: {} }
+    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, zorunlu: {}, profil: { tur: 'yok', ad: '', degerler: {} }
   };
 
   // Parametre seçenekleri (3. adım): giriş bilgisi, tarih kuralı (sihirbaz önerir), test verisi eşlemeleri.
@@ -176,6 +176,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
           d.secilen = new Set(e.operasyonlar.map((x) => x.ad));
           d.yalnizTest = new Set(e.operasyonlar.filter((x) => YALNIZ_TEST_DESENI.test(x.ad)).map((x) => x.ad));
           d.varsayilanlar = {};
+          d.zorunlu = {};
           metotAlani();
         } catch (hata) { yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); }
         durumGuncelle();
@@ -201,22 +202,33 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       const sema = d.erisim.semalar?.[ad];
       if (!sema || !sema.alanlar.length) { bolumler.push(h('p', { class: 'soluk' }, h('code', { class: 'duz' }, ad), ': alan listesi yok (senaryoları XML olarak düzenlenir).')); continue; }
       const v = (d.varsayilanlar[ad] ??= Object.fromEntries(alanSatirlari(sema.alanlar).filter((x) => !x.grup).map((x) => [x.yol, oneri(x.alan)])));
+      // Zorunluluk: WSDL'e göre işaretli gelir (şemada zorunlu), kullanıcı iş kuralına göre düzeltir.
+      const z = (d.zorunlu[ad] ??= new Set(alanSatirlari(sema.alanlar).filter((x) => !x.grup && x.alan.zorunlu).map((x) => x.yol)));
+      const sayac = h('span', { class: 'soluk' });
+      const sayacGuncelle = () => { sayac.textContent = ` · ${z.size} zorunlu`; };
+      sayacGuncelle();
       const satirlar = alanSatirlari(sema.alanlar).map((s) => {
         if (s.grup) return h('div', { class: `alan-grubu derinlik-${Math.min(s.derinlik, 6)}` }, s.alan.ad);
         const sec = h('select', { 'aria-label': `${ad} ${s.yol} varsayılanı` }, h('option', { value: '' }, '— yok (senaryoda doldurulur) —'),
           ...secenekler.map(([g, l]) => h('optgroup', { label: g }, l.map(([p, m]) => h('option', { value: p, selected: v[s.yol] === p }, m)))),
           v[s.yol] && !secenekler.some(([, l]) => l.some(([p]) => p === v[s.yol])) ? h('option', { value: v[s.yol], selected: true }, v[s.yol]) : null);
         sec.addEventListener('change', () => { v[s.yol] = sec.value; });
-        return h('div', { class: `alan-satiri derinlik-${Math.min(s.derinlik, 6)} ${v[s.yol] ? '' : 'gonderilmez'}` },
-          h('span', { class: 'alan-adi', title: s.yol }, s.alan.ad, s.alan.zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Şemada zorunlu' }, '*') : null,
-            h('span', { class: 'alan-tipi' }, s.alan.secenekler ? 'liste' : TIP[s.alan.tip] || 'metin')),
-          sec);
+        const zk = h('input', { type: 'checkbox', checked: z.has(s.yol), 'aria-label': `${ad} ${s.yol} zorunlu`, title: s.alan.zorunlu ? 'WSDL\'de zorunlu (minOccurs=1)' : 'WSDL\'de isteğe bağlı' });
+        const satir = h('div', { class: `alan-satiri derinlik-${Math.min(s.derinlik, 6)} ${v[s.yol] ? '' : 'gonderilmez'} ${z.has(s.yol) ? 'zorunlu' : ''}` },
+          h('span', { class: 'alan-adi', title: s.yol }, s.alan.ad, h('span', { class: 'alan-tipi' }, s.alan.secenekler ? 'liste' : TIP[s.alan.tip] || 'metin')),
+          sec, h('span', { class: 'zorunlu-hucre' }, zk));
+        zk.addEventListener('change', () => { zk.checked ? z.add(s.yol) : z.delete(s.yol); satir.classList.toggle('zorunlu', zk.checked); sayacGuncelle(); });
+        return satir;
       });
-      bolumler.push(h('details', { open: d.secilen.size <= 2 }, h('summary', {}, h('code', { class: 'duz' }, ad), ` — ${satirlar.filter((x) => x.classList.contains('alan-satiri')).length} alan`),
-        h('div', { class: 'alan-formu sihirbaz-alanlari' }, ...satirlar)));
+      const alanSayisi = satirlar.filter((x) => x.classList.contains('alan-satiri')).length;
+      bolumler.push(h('details', { open: d.secilen.size <= 2 }, h('summary', {}, h('code', { class: 'duz' }, ad), ` — ${alanSayisi} alan`, sayac),
+        h('div', { class: 'alan-formu sihirbaz-alanlari' },
+          h('div', { class: 'alan-satiri baslik' }, h('span', {}, 'Alan'), h('span', {}, 'Varsayılan değer'), h('span', { class: 'zorunlu-hucre' }, 'Zorunlu')),
+          ...satirlar)));
     }
     return [
       h('p', { class: 'soluk' }, 'Seçilen metotların alanları. Her alan için varsayılan değer kaynağı seçebilirsiniz; yeni senaryolar bu alanlar dolu açılır (★ servis varsayılanı). Öneriler hazır geldi: giriş bilgisi, tarih ve daha önce başka serviste eşlenmiş alanlar. Boş bırakılanlar senaryoda doldurulur.'),
+      h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin (WSDL\'de sayı ve evet/hayır alanları hep zorunlu, metinler hep isteğe bağlı görünebilir). Senaryo düzenleyicide zorunlu alanlar vurgulanır ve süzülebilir.'),
       ...bolumler
     ];
   };
@@ -234,8 +246,18 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       if (d.profil.tur === 'mevcut') {
         const sec = h('select', { 'aria-label': 'Profil' }, kimlikProfilleri.map((p) => h('option', { value: p.ad, selected: d.profil.ad === p.ad }, `${p.ad} (${p.alanlar.join(', ')})`)));
         if (!d.profil.ad) d.profil.ad = kimlikProfilleri[0]?.ad ?? '';
-        sec.addEventListener('change', () => { d.profil.ad = sec.value; durumGuncelle(); });
-        yerlestir(alanlar, alan('Profil', sec));
+        const eksikNotu = h('div', { 'aria-live': 'polite' });
+        const eksikCiz = () => {
+          const p = kimlikProfilleri.find((x) => x.ad === d.profil.ad);
+          const eksik = p ? kullanilan.filter((a) => !p.alanlar.includes(a)) : [];
+          yerlestir(eksikNotu, eksik.length ? h('div', { class: 'not-kutusu uyari', role: 'status' },
+            `"${p.ad}" profilinde ${eksik.join(', ')} yok; bu alanlar senaryoda değer bulamaz. `,
+            h('a', { href: '#/ayarlar/servis-girisleri', target: '_blank', rel: 'noopener' }, 'Ayarlar > Servis giriş bilgileri'), ' bölümünden ekleyin ya da "Yeni profil oluştur"u seçin.') : null);
+        };
+        sec.addEventListener('change', () => { d.profil.ad = sec.value; eksikCiz(); durumGuncelle(); });
+        eksikCiz();
+        yerlestir(alanlar, alan('Profil', sec), eksikNotu,
+          h('p', { class: 'soluk kucuk' }, 'Profiller Ayarlar > Servis giriş bilgileri bölümünden eklenir, düzenlenir ve silinir.'));
       } else if (d.profil.tur === 'yeni') {
         const ad = h('input', { type: 'text', autocomplete: 'off', value: d.profil.ad, placeholder: 'ör. Kanal 100' });
         ad.addEventListener('input', () => { d.profil.ad = ad.value.trim(); durumGuncelle(); });
@@ -263,6 +285,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       h('dt', {}, 'Adresler'), h('dd', {}, h('ul', {}, ortamlar.map((o) => h('li', {}, `${o.ad}: `, d.tabanlar[o.id] ? h('code', { class: 'duz' }, birlestir(d.tabanlar[o.id], d.yol)) : h('span', { class: 'soluk' }, 'yok (bu ortamda koşmaz)'))))),
       h('dt', {}, 'Metotlar'), h('dd', {}, [...d.secilen].map((m) => `${m}${d.yalnizTest.has(m) ? ' (CANLI\'da çağrılmaz)' : ''}`).join(', ')),
       h('dt', {}, 'Varsayılan alanlar'), h('dd', {}, `${Object.values(d.varsayilanlar).reduce((n, v) => n + Object.values(v).filter(Boolean).length, 0)} alan`),
+      h('dt', {}, 'Zorunlu alanlar'), h('dd', {}, [...d.secilen].filter((m) => d.zorunlu[m]).map((m) => `${m}: ${d.zorunlu[m].size}`).join(' · ') || '—'),
       h('dt', {}, 'Tarih kuralları'), h('dd', {}, Object.entries(tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'),
       h('dt', {}, 'Giriş bilgisi'), h('dd', {}, d.profil.tur === 'yok' ? 'yok' : `${d.profil.ad}${d.profil.tur === 'yeni' ? ' (yeni profil)' : ''}`))];
   };
@@ -321,7 +344,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
         const r = await api('/platform/servis/kaydet', { govde: {
           projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), yol: d.yol, soapSurumu: d.soapSurumu, tlsDogrulama: d.tls,
           tabanlar: d.tabanlar, secilenOperasyonlar: [...d.secilen], yalnizTestOperasyonlari: [...d.yalnizTest].filter((x) => d.secilen.has(x)),
-          alanVarsayilanlari, tarihKurallari: tarihKuraliOnerileri(), kimlikProfili: d.profil.tur === 'yok' ? '' : d.profil.ad, erisimKimligi: d.erisim.erisimKimligi
+          alanVarsayilanlari, alanZorunluluklari: Object.fromEntries([...d.secilen].filter((m) => d.zorunlu[m]).map((m) => [m, [...d.zorunlu[m]]])),
+          tarihKurallari: tarihKuraliOnerileri(), kimlikProfili: d.profil.tur === 'yok' ? '' : d.profil.ad, erisimKimligi: d.erisim.erisimKimligi
         } });
         bildir('Servis eklendi.');
         location.hash = `#/servisler/s/${encodeURIComponent(r.id)}`;

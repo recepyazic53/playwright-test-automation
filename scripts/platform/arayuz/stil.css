@@ -2022,3 +2022,13 @@ tr.tiklanir:hover, tr.tiklanir:focus-visible { background: var(--panel-2); }
 .yenileme-bandi { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; background: var(--atlanan); color: #1b1300; font-size: 13.5px; box-shadow: 0 6px 20px -10px rgba(0, 0, 0, .6); }
 .yenileme-bandi span { flex: 1 1 320px; }
 .yenileme-bandi .ikon { flex: 0 0 auto; }
+/* Alan zorunluluğu (sihirbaz 3. adım, senaryo düzenleyici) */
+.sihirbaz-alanlari .alan-satiri { grid-template-columns: minmax(200px, 1fr) minmax(240px, 1.4fr) 80px; }
+.alan-satiri.baslik { font: 600 11px var(--yazi-mono); color: var(--metin-3); text-transform: uppercase; letter-spacing: .06em; }
+.alan-satiri.baslik:hover { background: none; }
+.zorunlu-hucre { display: flex; justify-content: center; }
+.alan-satiri.zorunlu .alan-adi { color: var(--metin); font-weight: 600; }
+.alan-satiri.zorunlu { box-shadow: inset 3px 0 0 var(--hata); }
+/* Ayarlar > Servis giriş bilgileri */
+.kimlik-satiri { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(200px, 1.6fr) auto; gap: 8px; align-items: center; margin-bottom: 6px; }
+.kimlik-satiri.kaldirilacak input { text-decoration: line-through; opacity: .5; }
