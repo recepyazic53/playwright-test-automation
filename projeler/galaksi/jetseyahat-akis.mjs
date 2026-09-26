@@ -13,7 +13,7 @@
 // NOT: import.meta KULLANILMAZ (birim testleri CommonJS'e çevirebilir).
 
 import { ODEME_AKIS_ANAHTARI } from './odeme-akis.mjs';
-import { AVRUPA_ULKELERI, DUNYA_ULKELERI, HESAPLA_UYARILARI, IPTAL_BEDELLERI, KAPSAM_ALTERNATIF, PLANLAR, SCHENGEN_ULKELERI, SUNUCU_UYARILARI } from './jetseyahat-secenekler.mjs';
+import { HESAPLA_UYARILARI, IPTAL_BEDELLERI, KAPSAM_ALTERNATIF, PLANLAR, SUNUCU_UYARILARI } from './jetseyahat-secenekler.mjs';
 
 /** Galaksi aktarımının profil havuzları (projeler/galaksi/aktarim.mjs > profilHavuzlari). */
 export const GALAKSI_HAVUZLARI = Object.freeze({
@@ -95,11 +95,11 @@ export function jetSeyahatAkisPaketi(s = {}) {
             alan('plan', 'secim', 'Plan', '#Plan_Select', {
               zorunlu: false, doldurucu: 'secimGerekirse', seceneklerDurumu: 'tam', secenekler: liste(PLANLAR), varsayilan: { deger: '1' }
             }),
-            // Liste kapsama göre AJAX ile değişir; AVRUPA + VİZE SCHENGEN'de yalnızca Schengen ülkeleri kalır (seceneklerKaynagi).
+            // Ülke listesi kodda tutulmaz: test verisi tablosundan gelir (Kapsam / Alternatif / Ülke sütunları; ülke adı tablo değeri,
+            // sayfadaki kod sütunun karşılıklarında "sayfa değeri"). Sayfada liste kapsama göre AJAX ile değişir.
             alan('ulke', 'secim', 'Ülke', '#cmbCountries', {
-              zorunlu: false, doldurucu: 'secimGerekirse', seceneklerDurumu: 'tam', secenekler: null, varsayilan: { deger: '15' },
-              bagimlilik: { alan: 'kapsam', secenekHaritasi: { 'DÜNYA': liste(DUNYA_ULKELERI), 'AVRUPA': liste(AVRUPA_ULKELERI) } },
-              seceneklerKaynagi: `TEST ekranı (Yurt Dışı). AVRUPA + VİZE SCHENGEN'de yalnızca şu değerler: ${SCHENGEN_ULKELERI.join(', ')}.`
+              zorunlu: false, doldurucu: 'secimGerekirse', seceneklerDurumu: 'bilinmiyor', secenekler: null, varsayilan: { deger: '15' },
+              seceneklerKaynagi: 'Test verisi tablosu (Ülke sütunu; sayfa değeri karşılıklarda).'
             }),
             alan('sorguTipi', 'secim', 'Sorgu tipi', '#selectAllClientPolicy', {
               zorunlu: false, doldurucu: 'secimGerekirse', varsayilan: { deger: 'tekli' },
@@ -227,7 +227,7 @@ export function jetSeyahatAkisPaketi(s = {}) {
       ...(s.odeme ? [] : ['Ödeme (poliçeleştirme + kredi kartı) bu pakette yok; "Ödeme (kredi kartı)" ortak akışı akışa eklenebilir.']),
       'Çoklu sorguda kişi sayısı denetlenmez; liste yüklenince ilk satırın adı dolana kadar beklenir.',
       'Seçenek listeleri ve iptal bedelinin koşulu tek acenteyle (TEST) okundu; acenteye göre değişebilir. #cmbIpt bu acentede hep gizliydi.',
-      'Ülke listesi AVRUPA + VİZE SCHENGEN\'de daralır (seceneklerKaynagi); form bu daralmayı denetlemez.',
+      'Ülke seçenekleri test verisi tablosundan gelir (Kapsam → Alternatif → Ülke süzülür); tablo bağlı değilse ülke serbest yazılır.',
       'Sunucu tarafı iş kuralı uyarıları (#dialog-content) kodlu senaryoların beklenen mesajlarından alındı; TEST\'te geçerli kimlikle doğrulanmadı.',
       'Ödeme alanları aynı sayfada gizli (#isim, #soyisim, #kartno, #cvv, #ay, #yil; "Ödemeyi tamamla", "AÇIK HESAP OLARAK") — 2. aşamada ortak akış.',
       'Koddaki testte olup burada olmayan: T.C. yazıldıktan sonra telefonun korunduğu denetimi, ürün bağlantısının görünürlük denetimi.'

@@ -2221,6 +2221,14 @@ a.son-sonuc { text-decoration: none; }
 .gizli-secimi { display: inline-flex; align-items: center; gap: 2px; color: var(--metin-3); cursor: pointer; }
 .gizli-secimi .ikon { width: 13px; height: 13px; }
 .gizli-secimi:has(input:checked) { color: var(--uyari, var(--atlanan)); }
+.karsilik-dugmesi { position: relative; color: var(--metin-3); }
+.karsilik-dugmesi.dolu { color: var(--vurgu); }
+.karsilik-sayisi { position: absolute; top: -4px; right: -6px; min-width: 16px; padding: 0 4px; border-radius: 8px; font-size: 10px; line-height: 16px; background: var(--vurgu); color: var(--vurgu-metin); }
+dialog.karsilik-diyalogu { width: min(52rem, calc(100vw - 2rem)); }
+.karsilik-diyalogu .arama-kutusu { margin: 10px 0 8px; }
+.karsilik-tablosu { max-height: min(55vh, 520px); overflow: auto; margin-bottom: 6px; }
+.karsilik-tablosu th[scope="row"] { font-weight: 500; white-space: nowrap; }
+.karsilik-tablosu input { width: 100%; min-width: 140px; }
 .tablo-alt-bilgi { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
 .kayit-gruplari { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .kayit-gruplari [role="tab"] { display: inline-flex; gap: 6px; align-items: center; padding: 6px 12px; border-radius: 999px; }

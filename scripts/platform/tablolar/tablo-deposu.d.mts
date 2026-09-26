@@ -1,6 +1,7 @@
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 
-export interface TabloSutunu { ad: string; gizli: boolean; tip: string }
+export interface Karsilik { sayfa?: string; servis?: string }
+export interface TabloSutunu { ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }
 export interface TabloSatiri { id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[] }
 export interface Tablo { id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean }
 export declare const BAGLAM_ONEKI: string;
@@ -8,6 +9,7 @@ export declare const BAGLAM_ONEKI: string;
 export declare const TABLO_ADI: RegExp;
 export declare const EN_COK_SATIR: number;
 export declare const EN_COK_SUTUN: number;
+export declare const EN_COK_KARSILIK: number;
 export declare function tablolariListele(vt: Veritabani, projeId: string, secenekler?: { cozulsun?: boolean; tabloId?: string; baglamDahil?: boolean }): Tablo[];
 export declare function tabloKaydet(vt: Veritabani, girdi: {
   projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean;

@@ -4,6 +4,7 @@ import { DepoHatasi } from '../veritabani/depo.mjs';
 import { tabloKaydet, tabloSil, tablolariListele } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from './ekran-baglari.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
+import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -36,6 +37,13 @@ export const TABLO_POST_UCLARI = [
     const [tablo] = tablolariListele(db, projeId, { tabloId: id, baglamDahil: true });
     return { tablo };
   }],
-  ['/platform/ekran/alan-baglari/kaydet', (db, g) => ({ baglar: ekranAlanBaglariniKaydet(db, kimlik(g.projeId, 'projeId'), kimlik(g.ekranId, 'ekranId'), g.baglar) })],
+  // Bağlantı kaydedilince bağlı sütunlara ekran modelindeki eksik sayfa değerleri eklenir (karsiliklar.mjs).
+  ['/platform/ekran/alan-baglari/kaydet', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const ekranId = kimlik(g.ekranId, 'ekranId');
+    const baglar = ekranAlanBaglariniKaydet(db, projeId, ekranId, g.baglar);
+    return { baglar, karsiliklar: karsiliklariEkrandanAl(db, projeId, ekranId) };
+  }],
+  ['/platform/ekran/karsiliklari-al', (db, g) => karsiliklariEkrandanAl(db, kimlik(g.projeId, 'projeId'), kimlik(g.ekranId, 'ekranId'))],
   ['/platform/tablo/sil', (db, g) => ({ silindi: tabloSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })]
 ];

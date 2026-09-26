@@ -571,6 +571,8 @@ function turAlanlariniDogrula(alanlar) {
       // gizli: tablo sütunu ekranda hiç gösterilmez (parola vb.); gizli olan her zaman hassastır (şifreli).
       hassas: alan.hassas !== false || alan.gizli === true,
       ...(alan.gizli === true ? { gizli: true } : {}),
+      // Tablo sütununun değer karşılıkları (sayfa / servis değeri; tablo-deposu.mjs): anahtarlar değer olduğu için kasa zarfı.
+      ...(zarfMi(alan.karsiliklar) ? { karsiliklar: alan.karsiliklar } : {}),
       // Verilmezse (undefined) kayıtta mevcut eşleme korunur (bkz. testVerisiTuruKaydet).
       ...(alan.servisParametreleri !== undefined ? { servisParametreleri: servisParametreleriniDogrula(alan.servisParametreleri, ad) } : {})
     };

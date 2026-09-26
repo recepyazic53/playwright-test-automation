@@ -5,15 +5,14 @@
 // Koddan (POM) + TEST ekranı (2026-09-26): yeni iş (yenileme "Hayır"), sigortalı (özel / tüzel / pasaport; kimlik
 // profili: telefon → doğum tarihi → uyruk → kimlik no + sorgu → telefon yeniden), adres (UAVT kodu + sorgu), tapu, poliçe
 // bilgileri, prim hesaplama (sıfırdan farklı prim) ve isteğe bağlı "Ödeme (doğrudan kart formu)" ortak akışı (kodlu testte her
-// senaryoda var). Seçiciler ve sıra POM'dan. Açılır listelerin seçenekleri TEST ekranından okundu (jetdask-secenekler.mjs);
+// senaryoda var). Seçiciler ve sıra POM'dan. Açılır listelerin seçenekleri kodda tutulmaz: test verisi tablolarından gelir
+// (değer = görünen ad, sayfadaki kod sütunun karşılıklarında "sayfa değeri"); varsayılanlar sayfa koduyla yazılır.
 // Hesapla doğrulama uyarıları #dialogcontainer penceresinde.
 // Çıktı: node scripts/jetdask-akis-paketi.mjs → "Claude outputs/jetdask-akis.paket.json" (git'e girmez).
 // NOT: import.meta KULLANILMAZ (birim testleri CommonJS'e çevirebilir).
 
 import { DOGRUDAN_KART_ODEME_AKIS_ANAHTARI } from './odeme-akis.mjs';
-import {
-  BULUNDUGU_KATLAR, INSA_TARZLARI, INSA_YILLARI, KULLANIM_SEKILLERI, ONCEKI_HASARLAR, SIGORTA_ETTIREN_SIFATLARI, TOPLAM_KATLAR, UYARI_PENCERESI
-} from './jetdask-secenekler.mjs';
+import { UYARI_PENCERESI } from './jetdask-secenekler.mjs';
 
 /** Galaksi aktarımının profil havuzları (projeler/galaksi/aktarim.mjs > profilHavuzlari). */
 export const JETDASK_HAVUZLARI = Object.freeze({
@@ -25,9 +24,10 @@ const alan = (id, tip, etiket, secici, ek = {}) => ({
   id, tip, etiket: { ekran: etiket }, yapilandirma: 'senaryo', eslesme: { senaryo: id }, konum: { secici, kirilganlik: 'orta' }, ...ek
 });
 /** TEST ekranından okunan açılır liste ([değer, metin]); varsayılan: ekranın açılışta seçili değeri (boş bırakılırsa o kalır). */
-const liste = (id, etiket, secici, secenekler, varsayilan, ek = {}) => alan(id, 'secim', etiket, secici, {
-  zorunlu: !varsayilan, doldurucu: 'secimGerekirse', seceneklerDurumu: 'tam', secenekler: secenekler.map(([d, m]) => secim(d, m)),
-  ...(varsayilan ? { varsayilan: { deger: varsayilan } } : {}), ...ek
+/** Açılır liste: seçenekleri test verisi tablosundan (varsayılan sayfa koduyla; tablodaki karşılığı olan ada çevrilir). */
+const liste = (id, etiket, secici, varsayilan, ek = {}) => alan(id, 'secim', etiket, secici, {
+  zorunlu: !varsayilan, doldurucu: 'secimGerekirse', seceneklerDurumu: 'bilinmiyor', secenekler: null,
+  seceneklerKaynagi: 'Test verisi tablosu (sayfa değeri karşılıklarda).', ...(varsayilan ? { varsayilan: { deger: varsayilan } } : {}), ...ek
 });
 const sabitRadyo = (id, etiket, secici, deger) => ({
   id, tip: 'radyo', etiket: { ekran: etiket }, yapilandirma: 'sabit', sabitDeger: deger,
@@ -102,7 +102,7 @@ export function jetDaskAkisPaketi(s = {}) {
         bolumler: [
           {
             id: 'adres', baslik: 'Adres', alanlar: [
-              liste('sigortaEttirenSifati', 'Sigorta ettiren sıfatı', '#InsurerType', SIGORTA_ETTIREN_SIFATLARI, '1'),
+              liste('sigortaEttirenSifati', 'Sigorta ettiren sıfatı', '#InsurerType', '1'),
               // UAVT adres kodu: yazılır, sorgulanır; adres gelene kadar beklenir (POM: #DR adres koduyla dolar, 20 sn).
               alan('adresKodu', 'metin', 'Adres kodu (UAVT)', '#AK', {
                 zorunlu: true, doldurucuParametreleri: { tikla: '#RefreshUAVT', bekle: { secici: '#DR', durum: 'dolu', zamanAsimiSn: 20 } }
@@ -122,12 +122,12 @@ export function jetDaskAkisPaketi(s = {}) {
             id: 'police', baslik: 'Poliçe bilgileri', alanlar: [
               { ...alan('baslangicTarihi', 'tarih', 'Başlangıç tarihi', '#BeginDate', { doldurucu: 'tarihJs', bicim: 'gg.aa.yyyy' }), yapilandirma: 'turetilmis', sabitDeger: 'bugun', eslesme: {} },
               alan('brutYuzolcum', 'sayi', 'Brüt yüzölçümü (m²)', '#GrossAreaM2', { zorunlu: true }),
-              liste('kullanimSekli', 'Kullanım şekli', '#UsageType', KULLANIM_SEKILLERI, '5'),
-              liste('insaTarzi', 'İnşa tarzı', '#BuildType', INSA_TARZLARI, '4'),
-              liste('insaYili', 'İnşa yılı', '#BuildYear', INSA_YILLARI, '6'),
-              liste('toplamKat', 'Toplam kat sayısı', '#TotalFloor', TOPLAM_KATLAR, '5'),
-              liste('oncekiHasar', 'Önceki hasar', '#AnteriorDamage', ONCEKI_HASARLAR, '0'),
-              liste('bulunduguKat', 'Bulunduğu kat', '#KT', BULUNDUGU_KATLAR, null),
+              liste('kullanimSekli', 'Kullanım şekli', '#UsageType', '5'),
+              liste('insaTarzi', 'İnşa tarzı', '#BuildType', '4'),
+              liste('insaYili', 'İnşa yılı', '#BuildYear', '6'),
+              liste('toplamKat', 'Toplam kat sayısı', '#TotalFloor', '5'),
+              liste('oncekiHasar', 'Önceki hasar', '#AnteriorDamage', '0'),
+              liste('bulunduguKat', 'Bulunduğu kat', '#KT', null),
               // Dain-i mürtehin yok (POM: #LP-Y işaretlenir).
               sabitRadyo('dainiMurtehinYok', 'Dain-i mürtehin: Yok', '#LP-Y', 'Y')
             ]

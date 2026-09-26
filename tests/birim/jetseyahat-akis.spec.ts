@@ -20,7 +20,6 @@ import { modelFarki } from '../../scripts/platform/ekranlar/model-farki.mjs';
 import { adimlardanBloklar, akisDuzenlenebilirMi, modeldenAkisEnvanteri } from '../../scripts/platform/ekranlar/akis-servisi.mjs';
 import { akistanKayitEnvanteri, bloklariAyikla } from '../../scripts/platform/tarama/akis-tasarimi.mjs';
 import { kayitPaketiOlustur } from '../../scripts/platform/tarama/paket-olusturucu.mjs';
-import { AVRUPA_ULKELERI, DUNYA_ULKELERI } from '../../projeler/galaksi/jetseyahat-secenekler.mjs';
 import { SIRKET_DESENI, korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { KIMLIK_UYARISI, ODEME_SONUCU, SEYAHAT_IS_KURALI, SeyahatUygulamasi } from './jetseyahat-akis-fikstur';
 import { odemeAkisPaketi } from '../../projeler/galaksi/odeme-akis.mjs';
@@ -131,15 +130,13 @@ test('tekrar analiz: düz liste bağlı listeye (kapsama göre) dönünce seçen
   const alternatif = alanlar.find((a) => a.id === 'alternatif') as Record<string, any>;
   delete alternatif.bagimlilik;
   alternatif.secenekler = ['VİZE TÜM DÜNYA', 'VİZE SCHENGEN', 'SEYAHAT PAKET'].map((d) => ({ deger: d, metin: d }));
-  const ulke = alanlar.find((a) => a.id === 'ulke') as Record<string, any>;
-  delete ulke.bagimlilik;
-  ulke.secenekler = [{ deger: '15', metin: 'ALMANYA' }];
   const bulgular = modelFarki(eski, yeni) as unknown as Array<Record<string, any>>;
   expect(bulgular.filter((b) => b.tur === 'kaldirilanSecenek')).toEqual([]);
-  const yeniUlke = bulgular.filter((b) => b.tur === 'yeniSecenek' && b.alanId === 'ulke');
-  expect(yeniUlke.length).toBe(new Set([...DUNYA_ULKELERI, ...AVRUPA_ULKELERI].map((u) => u[0])).size - 1);
-  expect(yeniUlke.some((b) => b.secenekKimligi === '15')).toBe(false);
   expect(bulgular.some((b) => b.tur === 'yeniSecenek' && b.alanId === 'alternatif')).toBe(false);
+  // Ülke seçenekleri kodda değil, test verisi tablosunda (model listesi yok).
+  const ulke = (yeni.adimlar[0].bolumler[0].alanlar as Array<Record<string, any>>).find((a) => a.id === 'ulke') as Record<string, any>;
+  expect(ulke.secenekler).toBeNull();
+  expect(ulke.bagimlilik).toBeUndefined();
 });
 
 test('akış düzenleyici: sabit değerli alanlar, kimlik blokları, kalıp göstergesi, uyarılar ve bekleme süresi diyagramdan geçip aynen geri gelir', () => {

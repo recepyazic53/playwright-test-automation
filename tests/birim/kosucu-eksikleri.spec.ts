@@ -1,6 +1,7 @@
 // UÇTAN UCA (yerel) — model koşucusunun ek doldurma kuralları: "degerJs" (gizli <select> / gizli girdi: değer betikle yazılır),
 // kapalı (disabled) alanın atlanması, kimlik profilindeki değerin dilimlenmesi (telefon → ilk 3 hane / kalanı) ve alan
-// beklemesi sırasında adımın hata penceresi açılınca zaman aşımını beklemeden düşme. Sahte sayfa (girişsiz; 127.0.0.1),
+// beklemesi sırasında adımın hata penceresi açılınca zaman aşımını beklemeden düşme; zorla işaretlenecek seçenek sayfada yoksa test
+// süresini beklemeden açık hata. Sahte sayfa (girişsiz; 127.0.0.1),
 // geçici Nöbetçi örneği. Şirket sitesine istek yoktur.
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -77,7 +78,7 @@ function paket(): Nesne {
           alan('gizliKod', 'metin', 'Gizli kod', '#gizliKod', { doldurucu: 'degerJs' }),
           alan('kapali', 'metin', 'Kapalı alan', '#kapali'),
           alan('sahip', 'radyo', 'Sahip', '#sahip-E', { doldurucu: 'radyoZorla', seceneklerDurumu: 'tam', secenekler: [
-            { deger: 'E', metin: 'Evet', secici: '#sahip-E' }, { deger: 'H', metin: 'Hayır', secici: '#sahip-H' }] }),
+            { deger: 'E', metin: 'Evet', secici: '#sahip-E' }, { deger: 'H', metin: 'Hayır', secici: '#sahip-H' }, { deger: 'K', metin: 'Kiracı', secici: '#sahip-K' }] }),
           alan('ek', 'onayKutusu', 'Ek', '#ek', { doldurucu: 'onayKutusuZorla' }),
           alan('tarih', 'metin', 'Tarih', '#tarih', { doldurucuParametreleri: { gizle: '#katman' } }),
           {
@@ -163,4 +164,13 @@ test('sorgu hata penceresi açılınca adım zaman aşımını (20 sn) beklemede
   expect(String(sonuc.hataMesaji)).toContain(HATA);
   expect(Date.now() - bas).toBeLessThan(20_000);
   expect(gonderimler.length).toBe(once);
+});
+
+test('zorla işaretlenecek radyo seçeneği sayfada yoksa test süresini beklemeden "seçenek sayfada yok" hatasıyla düşer', async () => {
+  test.setTimeout(90_000);
+  const bas = Date.now();
+  const sonuc = await kos('Olmayan seçenek', { sahip: 'K', liste: 'Mesken', kisiProfili: 'k1' });
+  expect(sonuc.durum).toBe('basarisiz');
+  expect(String(sonuc.hataMesaji)).toContain('seçenek sayfada yok');
+  expect(Date.now() - bas).toBeLessThan(60_000);
 });

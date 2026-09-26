@@ -5,6 +5,8 @@
 //   · Sağ: düzenlenebilir ızgara — sütun adı / gizli / sil, satır hücreleri, Ortam (Tümü / ortam), satır sil; arama;
 //     Excel / CSV yükle ve yapıştır (ilk satır sütun adlarıyla eşleşirse başlık sayılır, yeni başlıklar sütun olur).
 //   · Gizli sütun (parola vb.) değerleri sunucudan hiç gelmez; boş bırakılan gizli hücre kayıtlı değeri korur.
+//   · Sütun başlığındaki "Karşılıklar": sütundaki her değerin sayfadaki (seçenek değeri) ve servisteki karşılığı. Ekran koşusu
+//     seçeneği sayfa değeriyle seçer, servise servis değeri gider; boşsa tablodaki değer kullanılır.
 //   · Kaydet yalnız değişen satırları gönderir. Kaydedilmemiş değişiklik varken başka tabloya geçmek onay ister.
 import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
@@ -36,10 +38,74 @@ function secimYaz(metin) {
 function kopya(t) {
   return {
     id: t ? t.id : undefined, ad: t ? t.ad : '',
-    sutunlar: t ? t.sutunlar.map((s) => ({ ad: s.ad, eskiAd: s.ad, gizli: s.gizli, tip: s.tip })) : [{ ad: 'Değer', eskiAd: null, gizli: false, tip: 'metin' }],
+    sutunlar: t ? t.sutunlar.map((s) => ({ ad: s.ad, eskiAd: s.ad, gizli: s.gizli, tip: s.tip, karsiliklar: { ...(s.karsiliklar || {}) } }))
+      : [{ ad: 'Değer', eskiAd: null, gizli: false, tip: 'metin', karsiliklar: {} }],
     satirlar: t ? t.satirlar.map((r) => ({ id: r.id, ad: r.ad || '', ortamId: r.ortamId, degerler: { ...r.degerler }, doluGizli: new Set(r.doluGizli), degisti: false })) : [],
     silinen: new Set(), degisti: !t, baglam: Boolean(t && t.baglam)
   };
+}
+
+const KARSILIK_ADIM = 200;
+/**
+ * Sütunun karşılıkları penceresi: sütundaki farklı değerler; her biri için Sayfa değeri ve Servis değeri. Tamam'da yalnız
+ * tablodaki değerlerin dolu karşılıkları döner (vazgeçilirse null).
+ * @param {{ ad: string; karsiliklar?: Record<string, { sayfa?: string; servis?: string }> }} s @param {string[]} degerler
+ * @returns {Promise<Record<string, { sayfa?: string; servis?: string }> | null>}
+ */
+function karsilikPenceresi(s, degerler) {
+  return new Promise((coz) => {
+    const is = Object.fromEntries(degerler.map((d) => [d, { sayfa: s.karsiliklar?.[d]?.sayfa || '', servis: s.karsiliklar?.[d]?.servis || '' }]));
+    let ara = '';
+    let gorunur = KARSILIK_ADIM;
+    const govde = h('tbody', {});
+    const alt = h('div', { class: 'kucuk soluk tablo-alt-bilgi' });
+    const sayac = h('span', { 'aria-live': 'polite' });
+    const aramaG = h('input', { type: 'search', placeholder: 'Değerlerde ara…', 'aria-label': 'Değerlerde ara' });
+    aramaG.addEventListener('input', () => { ara = aramaG.value; gorunur = KARSILIK_ADIM; ciz(); });
+    function ciz() {
+      const a = kucuk(ara);
+      const eslesen = degerler.filter((d) => !a || kucuk(d).includes(a) || kucuk(is[d].sayfa).includes(a) || kucuk(is[d].servis).includes(a));
+      yerlestir(govde, eslesen.length ? eslesen.slice(0, gorunur).map((d) => {
+        const girdi = (ne, etiket) => {
+          const g = h('input', { type: 'text', value: is[d][ne], maxlength: '500', placeholder: d, 'aria-label': `${d} ${etiket}` });
+          g.addEventListener('input', () => { is[d][ne] = g.value; sayacCiz(); });
+          return h('td', {}, g);
+        };
+        return h('tr', {}, h('th', { scope: 'row' }, d), girdi('sayfa', 'sayfa değeri'), girdi('servis', 'servis değeri'));
+      }) : h('tr', {}, h('td', { colspan: '3', class: 'cok-soluk' }, degerler.length ? 'Aramayla eşleşen değer yok.' : 'Bu sütunda henüz değer yok.')));
+      yerlestir(alt, sayac, eslesen.length > gorunur
+        ? h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { gorunur += KARSILIK_ADIM * 5; ciz(); } }, `${eslesen.length - gorunur} değer daha göster`) : null);
+      sayacCiz();
+    }
+    function sayacCiz() {
+      const dolu = degerler.filter((d) => is[d].sayfa.trim() || is[d].servis.trim()).length;
+      sayac.textContent = `${degerler.length} değer · ${dolu} karşılık tanımlı`;
+    }
+    const tamam = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Tamam');
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    const diyalog = h('dialog', { class: 'onay-diyalogu karsilik-diyalogu', 'aria-labelledby': 'karsilik-basligi' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'karsilik-basligi' }, `"${s.ad}" değerlerinin karşılıkları`),
+        h('p', { class: 'soluk kucuk' }, 'Senaryoda tablodaki değer seçilir. ', h('b', {}, 'Sayfa değeri'), ': ekranda seçeneğin değeri farklıysa (ör. DÜNYA → 1) koşu seçeneği bununla seçer. ',
+          h('b', {}, 'Servis değeri'), ': servis gövdesine yazılacak değer. Boş bırakılırsa tablodaki değer kullanılır.'),
+        h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
+        h('div', { class: 'tablo-kaydirma karsilik-tablosu' }, h('table', { class: 'veri-tablosu' },
+          h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Tablodaki değer'), h('th', { scope: 'col' }, 'Sayfa değeri'), h('th', { scope: 'col' }, 'Servis değeri'))), govde)),
+        alt),
+      h('div', { class: 'diyalog-alt' }, vazgec, tamam));
+    let sonuc = null;
+    tamam.addEventListener('click', () => {
+      sonuc = Object.fromEntries(degerler.map((d) => [d, { sayfa: is[d].sayfa.trim(), servis: is[d].servis.trim() }]).filter(([, k]) => k.sayfa || k.servis)
+        .map(([d, k]) => [d, { ...(k.sayfa ? { sayfa: k.sayfa } : {}), ...(k.servis ? { servis: k.servis } : {}) }]));
+      diyalog.close();
+    });
+    vazgec.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(sonuc); });
+    ciz();
+    document.body.append(diyalog);
+    diyalog.showModal();
+    aramaG.focus();
+  });
 }
 
 /**
@@ -134,7 +200,7 @@ export async function tablolarBolumu(govde, proje) {
     const gizliler = new Set(is.sutunlar.filter((s) => s.gizli).map((s) => s.ad));
     const govde = {
       projeId: proje.id, id: is.id, ad: is.ad.trim(),
-      sutunlar: is.sutunlar.map((s) => ({ ad: s.ad.trim(), eskiAd: s.eskiAd, gizli: s.gizli })),
+      sutunlar: is.sutunlar.map((s) => ({ ad: s.ad.trim(), eskiAd: s.eskiAd, gizli: s.gizli, ...(is.baglam || s.gizli ? {} : { karsiliklar: s.karsiliklar || {} }) })),
       satirlar: is.satirlar.filter((r) => r.degisti).map((r) => ({
         id: r.id, ad: r.ad.trim(), ortamId: r.ortamId,
         degerler: Object.fromEntries(is.sutunlar.map((s) => {
@@ -213,6 +279,7 @@ export async function tablolarBolumu(govde, proje) {
           gizli.addEventListener('change', () => { s.gizli = gizli.checked; is.degisti = true; ciz(); });
           return h('th', { scope: 'col' }, h('div', { class: 'sutun-basligi' }, g,
             is.baglam ? null : h('label', { class: 'gizli-secimi', title: 'Gizli: değer ekranda hiç gösterilmez (parola vb.); koşuda satırdan gelir.' }, gizli, ikon('kilit')),
+            is.baglam || s.gizli ? null : karsilikDugmesi(s, i),
             is.sutunlar.length > 1 ? h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${i + 1}. sütunu sil`, title: 'Sütunu sil', onclick: () => {
               is.sutunlar.splice(i, 1); is.degisti = true; ciz();
             } }, ikon('carpi')) : null));
@@ -221,6 +288,29 @@ export async function tablolarBolumu(govde, proje) {
         h('th', { scope: 'col', class: 'eylem' }, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {
           is.sutunlar.push({ ad: `Sütun ${is.sutunlar.length + 1}`, eskiAd: null, gizli: false }); is.degisti = true; ciz();
         } }, ikon('arti'), 'Sütun'))));
+    }
+    /** Sütunun tablodaki farklı değerleri (tablo sırasıyla; ad değişikliği kaydedilmemişse eski anahtardan). */
+    function sutunDegerleri(s) {
+      const sonuc = [];
+      for (const r of is.satirlar) {
+        const v = r.degerler[s.eskiAd && s.eskiAd !== s.ad && !(s.ad in r.degerler) ? s.eskiAd : s.ad];
+        const d = String(v ?? '').trim();
+        if (d && !sonuc.includes(d)) sonuc.push(d);
+      }
+      return sonuc;
+    }
+    function karsilikDugmesi(s, i) {
+      const n = Object.keys(s.karsiliklar || {}).length;
+      return h('button', {
+        type: 'button', class: `ikon-dugme hayalet karsilik-dugmesi${n ? ' dolu' : ''}`, 'aria-label': `${i + 1}. sütunun karşılıkları${n ? ` (${n})` : ''}`,
+        title: n ? `Karşılıklar: ${n} değerin sayfa / servis değeri tanımlı` : 'Karşılıklar: değerin sayfada ve serviste farklı karşılığı (ör. DÜNYA → 1)',
+        onclick: async () => {
+          const yeni = await karsilikPenceresi(s, sutunDegerleri(s));
+          if (!yeni) return;
+          if (JSON.stringify(yeni) === JSON.stringify(s.karsiliklar || {})) return;
+          s.karsiliklar = yeni; is.degisti = true; ciz();
+        }
+      }, ikon('ok'), n ? h('span', { class: 'karsilik-sayisi' }, String(n)) : null);
     }
     function satirCiz(r, no) {
       const hucreler = is.sutunlar.map((s) => {

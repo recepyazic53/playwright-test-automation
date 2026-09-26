@@ -23,7 +23,7 @@ import {
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { basvuru, basvuruCoz, grupAnahtari, secilenSatir, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
+import { basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -466,7 +466,8 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
         if (!r) { eksikNedeni[ad] = Object.keys(secim).length ? `${grup} tablosunda seçimlerle uyan satır yok` : `${grup} tablosunda bu ortamda satır yok`; continue; }
         const d = r.degerler[sutun.ad];
         if (d === null || d === undefined || d === '') { eksikNedeni[ad] = `${grup} tablosunun seçilen satırında "${sutun.ad}" boş`; continue; }
-        degerler[ad] = d;
+        // Değerin servis karşılığı tanımlıysa gövdeye o yazılır (ör. DÜNYA → WORLD).
+        degerler[ad] = servisDegeri(sutun, d);
         if (sutun.gizli) gizliler.push(d);
         if (!kullanilanSatirlar.some((x) => x.tablo === t.ad && x.etiket === b.etiket)) {
           kullanilanSatirlar.push({ tablo: t.ad, etiket: b.etiket, satir: Object.fromEntries(t.sutunlar.filter((x) => !x.gizli).map((x) => [x.ad, r.degerler[x.ad]])) });
