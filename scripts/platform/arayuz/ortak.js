@@ -165,6 +165,8 @@ export async function api(yol, secenekler = {}) {
   if (!yanit.ok || (veri && veri.basarili === false)) {
     const hata = new ApiHatasi((veri && veri.mesaj) || `İstek başarısız oldu (${yanit.status}).`, yanit.status, veri);
     if (yanit.status === 423 && !secenekler.kilitOlayiYok) window.dispatchEvent(new CustomEvent('kasa-kilitli', { detail: hata.message }));
+    // 401: sayfanın oturum token'ı sunucuyu tutmuyor → Nöbetçi yeniden başlatılmış (her başlatmada token değişir).
+    if (yanit.status === 401) window.dispatchEvent(new CustomEvent('sunucu-yenilendi'));
     throw hata;
   }
   return veri || {};
