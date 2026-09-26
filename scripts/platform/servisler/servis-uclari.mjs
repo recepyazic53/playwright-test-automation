@@ -3,6 +3,7 @@
 // Giriş bilgisi DEĞERLERİ hiçbir yanıtta dönmez (yalnız alan adları).
 import { DepoHatasi } from '../veritabani/depo.mjs';
 import {
+  akisIceriginiDogrula, servisAkisiGetir, servisAkisiKaydet, servisAkisiSil, servisAkislariniListele, servisAkisKosulariniListele, servisAkisKosusuGetir,
   servisGetir, servisKimligiKaydet, servisKimligiSil, servisKimlikOzeti, servisKosulariniListele, servisKosusuGetir, servisleriListele,
   servisSenaryolariniListele, servisSenaryosuGetir,
   servisSenaryosuKaydet, servisSenaryosuSil, servisSil
@@ -11,6 +12,7 @@ import {
   erisimKontrolu, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
 } from './servis-islemleri.mjs';
 import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu } from './servis-isleri.mjs';
+import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
@@ -47,6 +49,13 @@ function metinNesnesi(d) {
   if (d === undefined) return undefined;
   if (!d || typeof d !== 'object' || Array.isArray(d)) throw new DepoHatasi('Beklenen bir nesne.');
   return Object.fromEntries(Object.entries(d).filter(([, v]) => typeof v === 'string'));
+}
+
+/** @param {Veritabani} vt @param {string} projeId @param {unknown} id */
+function akisAl(vt, projeId, id) {
+  const a = servisAkisiGetir(vt, kimlik(id, 'akisId'));
+  if (!a || a.projeId !== projeId) throw new DepoHatasi('Akış bulunamadı.');
+  return a;
 }
 
 /** Liste görünümü: servis + senaryo sayısı + son koşu. @param {Veritabani} vt @param {import('./servis-deposu.mjs').Servis} s */
@@ -90,7 +99,31 @@ export const SERVIS_GET_UCLARI = [
   }],
   // Canlı panel: arka plandaki koşunun durumu (adımlar, maskeli istek / yanıt).
   ['/platform/servis/is', (db, q) => ({ is: servisIsiDurumu(kimlik(q.get('projeId'), 'projeId'), kimlik(q.get('id'))) })],
-  ['/platform/servis-kimlikleri', (db, q) => ({ profiller: servisKimlikOzeti(db, kimlik(q.get('projeId'), 'projeId')) })]
+  ['/platform/servis-kimlikleri', (db, q) => ({ profiller: servisKimlikOzeti(db, kimlik(q.get('projeId'), 'projeId')) })],
+  // Servis akışları (proje düzeyi): liste (adım sayısı, son koşu, kullanan servisler), ayrıntı (+ denetim hataları), koşular.
+  ['/platform/servis-akislari', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    const servisler = servisleriListele(db, projeId);
+    return { akislar: servisAkislariniListele(db, projeId).map((a) => ({
+      ...a, adimSayisi: a.icerik.adimlar.length, sonKosu: servisAkisKosulariniListele(db, { projeId, akisId: a.id, sinir: 1 })[0] ?? null,
+      kullananServisler: servisler.filter((s) => s.ayarlar.oturumAkisi === a.id).map((s) => ({ id: s.id, ad: s.ad }))
+    })) };
+  }],
+  ['/platform/servis-akisi', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    const akis = akisAl(db, projeId, q.get('id'));
+    return { akis, hatalar: servisAkisiDenetle(db, projeId, akis.icerik) };
+  }],
+  ['/platform/servis-akisi/kosular', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    return { kosular: servisAkisKosulariniListele(db, { projeId, akisId: secimli(q.get('akisId')), sinir: Number(q.get('sinir')) || 100 }) };
+  }],
+  ['/platform/servis-akisi/kosu', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    const k = servisAkisKosusuGetir(db, kimlik(q.get('id')));
+    if (!k || k.projeId !== projeId) throw new DepoHatasi('Akış koşusu bulunamadı.');
+    return { kosu: k };
+  }]
 ];
 
 /** @type {Array<[string, (db: Veritabani, g: Govde) => Record<string, unknown> | Promise<Record<string, unknown>>]>} */
@@ -119,6 +152,7 @@ export const SERVIS_POST_UCLARI = [
       ...(g.ekAlanlar !== undefined ? { ekAlanlar: g.ekAlanlar } : {}),
       ...(g.alanListeleri !== undefined ? { alanListeleri: g.alanListeleri } : {}),
       ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
+      ...(g.oturumAkisi !== undefined ? { oturumAkisi: g.oturumAkisi === null || g.oturumAkisi === '' ? null : kimlik(g.oturumAkisi, 'oturumAkisi') } : {}),
       erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
     });
     return { id };
@@ -196,6 +230,43 @@ export const SERVIS_POST_UCLARI = [
   // Eski servis giriş profilini test verisine taşı (onay: false → yalnız önizleme).
   ['/platform/servis-kimligi/test-verisine-tasi', (db, g) => girisProfiliniTestVerisineTasi(db, kimlik(g.projeId, 'projeId'), { ad: metin(g.ad), onay: g.onay === true })],
   ['/platform/servis-kimligi/sil', (db, g) => ({ silindi: servisKimligiSil(db, kimlik(g.projeId, 'projeId'), metin(g.ad)) })],
+  // Akış kaydı: yapısal + anlamsal denetim (servis / senaryo projede; ${akis:X} önceki adımda okunuyor) geçmeden kaydedilmez.
+  ['/platform/servis-akisi/kaydet', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const id = secimli(g.id);
+    const mevcut = id ? akisAl(db, projeId, id) : undefined;
+    const tur = g.tur === 'oturum' || g.tur === 'akis' ? g.tur : (mevcut?.tur ?? 'akis');
+    const hatalar = servisAkisiDenetle(db, projeId, akisIceriginiDogrula(g.icerik, tur));
+    if (hatalar.length) throw new DepoHatasi(hatalar.join(' '));
+    const yeniId = servisAkisiKaydet(db, {
+      id, projeId, baslik: metin(g.baslik), tur,
+      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
+      ...(typeof g.kosuyaDahil === 'boolean' ? { kosuyaDahil: g.kosuyaDahil } : {}), icerik: g.icerik
+    });
+    oturumlariTemizle(yeniId);
+    return { id: yeniId };
+  }],
+  // Oturum akışı bir servise atanmışsa silinmez (önce servisten kaldırılmalı).
+  ['/platform/servis-akisi/sil', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const a = akisAl(db, projeId, g.id);
+    const kullanan = servisleriListele(db, projeId).filter((s) => s.ayarlar.oturumAkisi === a.id).map((s) => s.ad);
+    if (kullanan.length) throw new DepoHatasi(`"${a.baslik}" şu servislerin oturum akışı: ${kullanan.join(', ')}. Önce servislerden kaldırın.`);
+    oturumlariTemizle(a.id);
+    return { silindi: servisAkisiSil(db, a.id) };
+  }],
+  // Dene: kayıtlı ya da taslak akış; YALNIZ test ortamında. Koş: kapsam ortama uymalı (canlıyı yalnız kullanıcı, onayla başlatır).
+  ['/platform/servis-akisi/dene', async (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return { sonuc: await servisAkisiCalistir(db, projeId, {
+      ortamId: kimlik(g.ortamId, 'ortamId'), tur: 'dene',
+      ...(g.akisId ? { akisId: akisAl(db, projeId, g.akisId).id } : { taslak: { baslik: metin(g.baslik) || 'Taslak akış', tur: g.tur === 'oturum' ? 'oturum' : 'akis', icerik: g.icerik } })
+    }) };
+  }],
+  ['/platform/servis-akisi/kos', async (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return { sonuc: await servisAkisiCalistir(db, projeId, { akisId: akisAl(db, projeId, g.akisId).id, ortamId: kimlik(g.ortamId, 'ortamId'), tur: 'kosu' }) };
+  }],
   ['/platform/servis/soapui/onizle', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (typeof g.xml !== 'string' || !g.xml) throw new DepoHatasi('SoapUI dosyası boş.');

@@ -363,6 +363,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-akislari.js', { dosya: 'servis-akislari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/cikis-korumasi.js', { dosya: 'cikis-korumasi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
