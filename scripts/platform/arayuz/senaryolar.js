@@ -16,6 +16,7 @@ import { aramaEslesiyorMu } from './model-formu.mjs';
 import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuSuruyorMu, onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { senaryoFormu } from './senaryo-formu.js';
 import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
+import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
 
 const ORTAM_ANAHTARI = 'platform.senaryoOrtami';
 const SAYFA_BOYU = 50;
@@ -88,11 +89,6 @@ export function senaryolarEkrani(main, parcalar, baglam) {
   })().catch(hata);
 }
 
-/** Servis listesi (sol panel "2 · Servisler"); alınamazsa boş (ör. eski sunucu). */
-async function servisleriAl(proje) {
-  try { return (await api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`)).servisler; } catch { return []; }
-}
-
 /**
  * Sol panel "ÜRÜNLER" (Servisler sayfası da kullanır): 1 · Ekranlar, 2 · Servisler.
  * @param {HTMLElement} nav @param {{ id: string }} proje @param {{ servisId?: string | null }} secim
@@ -118,16 +114,9 @@ function ekranListesi(nav, veri, servisler, seciliServis, secili, formEkrani, de
     'aria-current': (secili !== null && (secili || '') === (id || '')) || (formEkrani && formEkrani === id) ? 'page' : null
   }, ikonAd ? ikon(ikonAd) : h('span', { class: 'saglik', 'aria-hidden': 'true' }), ad, adet ? h('span', { class: 'adet' }, String(adet)) : null);
   const ekranlar = veri.ekranlar.filter((e) => (e.senaryoSayisi || e.olusturulabilir) && (goster || !pasif.has(e.id) || e.id === secili || e.id === formEkrani));
-  const servisBaglantisi = (s) => {
-    const a = h('a', { href: `#/servisler/s/${encodeURIComponent(s.id)}`, 'aria-current': seciliServis === s.id ? 'page' : null },
-      ikon('ag'), s.ad, s.senaryoSayisi ? h('span', { class: 'adet' }, String(s.senaryoSayisi)) : null);
-    if (s.durum === 'devre_disi') { a.classList.add('devre-disi'); a.insertBefore(h('span', { class: 'nav-etiketi' }, 'kapalı'), a.querySelector('.adet')); }
-    return a;
-  };
   yerlestir(nav,
     baglanti('', 'Genel', toplam, 'izgara'),
-    h('div', { class: 'alt-nav-baslik urunler-basligi', 'aria-hidden': 'true' }, 'Ürünler'),
-    h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, '1 · Ekranlar'),
+    ...ekranlarBasligi(),
     ...ekranlar.map((e) => {
       const a = baglanti(e.id, e.ad, e.senaryoSayisi, e.modelVar ? 'katman' : null);
       if (pasif.has(e.id)) {
@@ -138,9 +127,7 @@ function ekranListesi(nav, veri, servisler, seciliServis, secili, formEkrani, de
       return a;
     }),
     devreDisiAnahtari(veri.ekranlar.filter((e) => pasif.has(e.id) && e.senaryoSayisi).length, degisti),
-    h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, '2 · Servisler'),
-    ...servisler.map(servisBaglantisi),
-    h('a', { href: '#/servisler/yeni', class: 'ekle-baglantisi', 'aria-current': seciliServis === 'yeni' ? 'page' : null }, ikon('arti'), 'Servis ekle'));
+    ...servislerBolumu(servisler, { seciliServis }));
 }
 
 // ---------------------------------------------------------------------------------------

@@ -9,6 +9,7 @@
 // çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
 import { api, bildir, bosDurum, h, ikon, iskelet, rozet, s, TOKEN, tarihMetni } from './ortak.js';
+import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
 
 const SAYFA_BOYU = 15;
 const DURUM = {
@@ -80,6 +81,7 @@ export function sonuclarEkrani(main, parcalar, baglam) {
   api(`/platform/sonuclar/ozet?projeId=${encodeURIComponent(proje.id)}${secili ? `&urun=${encodeURIComponent(secili)}` : ''}`)
     .then((ozet) => {
       urunListesi(liste, ozet.ekranlar, secili);
+      servisleriAl(proje).then((servisler) => { if (servisler.length) urunListesi(liste, ozet.ekranlar, secili, servisler); });
       if (tur === 'kosu' && kimlik) return kosuDetayi(icerik, decodeURIComponent(kimlik), proje);
       if (tur === 'sonuc' && kimlik) return sonucDetayi(icerik, decodeURIComponent(kimlik), proje);
       const ekran = secili ? ozet.ekranlar.find((e) => e.anahtar === secili) : null;
@@ -102,7 +104,7 @@ function ekranDurumRozeti(durum) {
   return null;
 }
 
-function urunListesi(nav, ekranlar, secili) {
+function urunListesi(nav, ekranlar, secili, servisler = []) {
   const toplamSenaryo = ekranlar.reduce((a, e) => a + (e.senaryoSayisi || 0), 0);
   const baglanti = (anahtar, ad, adet, son, ikonAd, durum) => {
     const o = son ? oran(son) : null;
@@ -119,8 +121,10 @@ function urunListesi(nav, ekranlar, secili) {
   };
   nav.replaceChildren(
     baglanti('', 'Genel', toplamSenaryo, null, 'izgara'),
-    h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ürünler / ekranlar'),
-    ...ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)));
+    ...ekranlarBasligi(),
+    ...ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)),
+    // Servis sonuçları ekran sonuçlarına karışmaz: bağlantı servisin kendi Raporlar sekmesini açar.
+    ...servislerBolumu(servisler, { sekme: 'raporlar', saglik: true }));
 }
 
 // ---------------------------------------------------------------------------------------
