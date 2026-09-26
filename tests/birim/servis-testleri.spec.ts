@@ -18,6 +18,7 @@ import {
 } from '../../scripts/platform/servisler/servis-islemleri.mjs';
 import { kontrolleriDegerlendir, yerTutuculariDoldur } from '../../scripts/platform/servisler/soap-istemcisi.mjs';
 import { groovyOzellikleri, servisTaslaklari, soapuiCozumle } from '../../scripts/platform/servisler/soapui-ice-aktarma.mjs';
+import { tabloKaydet, tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 import { GROOVY, SAHTE_PAROLA, SAHTE_TC, SOAPUI, sahteSoapSunucusu, yanit, type SahteIstek } from './servis-fikstur';
 
@@ -144,20 +145,30 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     // Kontrol başka adres için geçmez.
     expect(() => servisiKaydet(vt, projeId, { anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/baska.asmx', erisimKimligi: e.erisimKimligi })).toThrow(/Adres/);
 
+    // Giriş bilgisi tablosu: sütun adları WSDL alanlarıyla aynı → aktarım alanları kendiliğinden bağlar.
+    const girisTablosu = tabloKaydet(vt, { projeId, ad: 'Giriş', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }] });
     const onizleme = soapuiOnizle(vt, projeId, SOAPUI, { takim: 'Takim', durum: 'OrnekDurum' });
     expect(JSON.stringify(onizleme)).not.toContain(SAHTE_PAROLA);
     expect(onizleme.veriParametreleri).toEqual([{ ad: 'SIGORTALI_TC', esleme: { turAd: 'Kişi', alan: 'tcKimlikNo', rol: 'sigortali' } }]);
-    const r = soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: e.erisimKimligi, kimlikProfili: { ad: 'Kanal 100', kaydet: true } });
-    expect(r).toMatchObject({ yeniServis: true, eklenen: 3, atlanan: [], kimlikKaydedildi: true, eslenmemisParametreler: [] });
+    const r = soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: e.erisimKimligi, girisEkle: true });
+    expect(r).toMatchObject({ yeniServis: true, eklenen: 3, atlanan: [], baglananAlan: 3, girisSatiriEklendi: true, eksikSatirlar: [], eslenmemisParametreler: [] });
     servisId = r.servisId;
     // İkinci aktarım aynı başlıkları eklemez.
     expect(soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service' })).toMatchObject({ yeniServis: false, eklenen: 0 });
     const s = servisGetir(vt, servisId);
-    expect(s?.ayarlar).toMatchObject({ yol: '/Servis/ornek.asmx', kimlikProfili: 'Kanal 100', erisim: { ortamId: testOrtami, durumKodu: 200 } });
+    expect(s?.ayarlar).toMatchObject({ yol: '/Servis/ornek.asmx', erisim: { ortamId: testOrtami, durumKodu: 200 } });
+    expect(s?.ayarlar.kimlikProfili).toBeUndefined();
+    expect(s?.ayarlar.alanBaglari?.Teklif).toEqual({
+      'Input/Channel': { tablo: girisTablosu, sutun: 'Channel' }, 'Input/Username': { tablo: girisTablosu, sutun: 'Username' }, 'Input/Password': { tablo: girisTablosu, sutun: 'Password' } });
+    // Gövdede giriş parametreleri tablo başvurusu; dosyadaki kanal / kullanıcı senaryonun tablo seçimi; giriş satırı tabloya eklendi.
+    const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
+    expect(gecerli?.icerik.govde).toContain('<Channel>${Giriş.Channel}</Channel><Username>${Giriş.Username}</Username><Password>${Giriş.Password}</Password><CitizenshipNumber>${SIGORTALI_TC}</CitizenshipNumber>');
+    expect(gecerli?.icerik.tabloSecimleri).toEqual({ [`${girisTablosu}|`]: { Channel: '100', Username: 'kullanici100' } });
+    expect(tablolariListele(vt, projeId, { tabloId: girisTablosu })[0].satirlar.map((x) => [x.degerler.Channel, x.degerler.Username, x.doluGizli])).toEqual([['100', 'kullanici100', ['Password']]]);
     expect(s?.ayarlar.tarihKurallari).toEqual({ BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" });
-    expect(servisKimlikOzeti(vt, projeId)).toEqual([{ ad: 'Kanal 100', alanlar: ['CHANNEL', 'PASSWORD', 'USERNAME'], ortamlar: {} }]);
+    expect(servisKimlikOzeti(vt, projeId)).toEqual([]);
     // Giriş bilgileri veritabanında düz metin durmaz.
-    const ham = JSON.stringify(vt.tumu('SELECT * FROM servis_kimlikleri')) + JSON.stringify(vt.tumu('SELECT * FROM servis_senaryolari'));
+    const ham = JSON.stringify(vt.tumu('SELECT * FROM test_verisi_profilleri')) + JSON.stringify(vt.tumu('SELECT * FROM servis_senaryolari'));
     expect(ham).not.toContain(SAHTE_PAROLA);
     expect(ham).not.toContain('kullanici100');
   });
@@ -165,7 +176,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
   test('Parametreler görünümü: her parametrenin kaynağı; rol için profil seçilmeden koşu açık nedenle hata verir', async () => {
     const p = servisParametreleri(vt, projeId, servisId);
     const kaynak = Object.fromEntries(p.parametreler.map((x) => [x.ad, x.kaynak.tur]));
-    expect(kaynak).toEqual({ BEGIN_DATE: 'tarih', CHANNEL: 'kimlik', END_DATE: 'tarih', PASSWORD: 'kimlik', SIGORTALI_TC: 'veri', USERNAME: 'kimlik' });
+    expect(kaynak).toEqual({ BEGIN_DATE: 'tarih', END_DATE: 'tarih', SIGORTALI_TC: 'veri' });
     expect(p.roller).toEqual([{ anahtar: `${turId}:sigortali`, turId, turAd: 'Kişi', rol: 'sigortali', profilId: null }]);
     const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
     const r = await servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: testOrtami, tur: 'dene', senaryoId: gecerli?.id });
@@ -222,6 +233,9 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
   });
 
   test('eski giriş profili test verisine taşınır: önizleme → onay; ortama özel değer ayrı profil; servis bağlanır; Dene aynı değerleri gönderir', async () => {
+    // Eski yapı: servis kasadaki giriş profilini kullanıyor (artık aktarım oluşturmaz; eski kayıtlar taşınır).
+    servisKimligiKaydet(vt, { projeId, ad: 'Kanal 100', degerler: { CHANNEL: '100', USERNAME: 'kullanici100', PASSWORD: SAHTE_PAROLA } });
+    servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', kimlikProfili: 'Kanal 100' });
     servisKimligiKaydet(vt, { projeId, ad: 'Kanal 100', ortamId: canliOrtam, degerler: { PASSWORD: 'canli-parola-2' } });
     const on = girisProfiliniTestVerisineTasi(vt, projeId, { ad: 'Kanal 100' });
     expect(on).toEqual({ onizleme: {

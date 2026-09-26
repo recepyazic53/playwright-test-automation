@@ -59,12 +59,12 @@ function adDogrula(ad, ne) {
   return a;
 }
 
-/** Satırın kısa adı (geçmiş kayıtlarında görünür): gizli olmayan ilk üç değer. @param {TabloSutunu[]} sutunlar @param {Record<string, unknown>} d */
-function satirAdi(sutunlar, d) {
-  const parca = sutunlar.filter((s) => !s.gizli).map((s) => d[s.ad]).filter((v) => v !== undefined && v !== null && v !== '').slice(0, 3).map(String);
-  const ad = parca.join(' · ') || 'Satır';
-  return ad.length > 120 ? `${ad.slice(0, 117)}…` : ad;
-}
+/**
+ * Satır adı verilmezse sıra numarasıyla üretilir. Değerlerden üretilmez: ad sütunu şifrelenmez, değerler (kimlik, kullanıcı
+ * adı…) diskte düz metin kalmasın.
+ * @param {number} no
+ */
+const satirAdi = (no) => `Satır ${no}`;
 
 /**
  * @param {Veritabani} vt @param {unknown} v @param {boolean} gizli @param {boolean} cozulsun
@@ -207,7 +207,7 @@ export function tabloKaydet(vt, girdi) {
       }
       const ortamId = typeof o.ortamId === 'string' && o.ortamId ? o.ortamId : null;
       if (ortamId && girdi.ortamVar && !girdi.ortamVar(ortamId)) throw new DepoHatasi(`${i + 1}. satırın ortamı bulunamadı.`);
-      testVerisiProfiliKaydet(vt, { id, projeId: girdi.projeId, turId: tabloId, ortamId, ad: satirAdiOku(o.ad) || (id && satirAdlari.get(id)) || satirAdi(sutunlar, degerler), degerler });
+      testVerisiProfiliKaydet(vt, { id, projeId: girdi.projeId, turId: tabloId, ortamId, ad: satirAdiOku(o.ad) || (id && satirAdlari.get(id)) || satirAdi(mevcutSatirlar.size + i + 1), degerler });
     });
     return tabloId;
   });

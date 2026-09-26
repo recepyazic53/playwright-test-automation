@@ -17,13 +17,13 @@ import {
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
 } from './soap-istemcisi.mjs';
 import {
-  senaryoIceriginiDogrula, servisGetir, servisKaydet, servisKimligiKaydet, servisKimliginiCoz, servisKosusuKaydet,
+  senaryoIceriginiDogrula, servisGetir, servisKaydet, servisKimliginiCoz, servisKosusuKaydet,
   servisKimlikOzeti, servisleriListele, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
 } from './servis-deposu.mjs';
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
-import { KAYNAKLAR } from './servis-govdesi.mjs';
-import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { basvuruCoz, grupAnahtari, secilenSatir, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
+import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
+import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { basvuru, basvuruCoz, grupAnahtari, secilenSatir, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -402,7 +402,7 @@ export function servisParametreleri(vt, projeId, servisId) {
   const kimlikAlanlari = new Set(servis.ayarlar.kimlikProfili ? Object.keys(servisKimliginiCoz(vt, projeId, servis.ayarlar.kimlikProfili, '')) : []);
   /** @type {Map<string, number>} */
   const kullanim = new Map();
-  for (const s of servisSenaryolariniListele(vt, servisId)) for (const p of kullanilanParametreler(s.icerik.govde)) kullanim.set(p, (kullanim.get(p) ?? 0) + 1);
+  for (const s of servisSenaryolariniListele(vt, servisId)) for (const p of kullanilanParametreler(s.icerik.govde)) if (!basvuruCoz(p)) kullanim.set(p, (kullanim.get(p) ?? 0) + 1);
   // Henüz senaryoda geçmese de servis varsayılanlarında (★) kullanılan parametreler (senaryo sayısı 0).
   for (const alanlar of Object.values(servis.ayarlar.alanVarsayilanlari ?? {})) {
     for (const v of Object.values(alanlar)) if (v.kaynak === 'parametre' && v.deger && !kullanim.has(v.deger)) kullanim.set(v.deger, 0);
@@ -593,55 +593,166 @@ export function soapuiOnizle(vt, projeId, xml, secim = {}) {
   };
 }
 
+/** @param {unknown} x */
+const kucukAd = (x) => String(x ?? '').toLocaleLowerCase('tr');
+
+/**
+ * Bağlanmamış alanlar için tablo bağlantısı önerisi (sihirbazla aynı kural): başka serviste aynı adlı alanın bağlantısı; yoksa
+ * adı alanla aynı sütun (gizli dahil: parola). Mevcut bağlantılara dokunulmaz.
+ * @param {Veritabani} vt @param {string} projeId @param {Servis} servis @param {import('../tablolar/tablo-deposu.mjs').Tablo[]} tablolar
+ */
+function bagOnerileriniUygula(vt, projeId, servis, tablolar) {
+  /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
+  const ogrenilen = {};
+  for (const s of servisleriListele(vt, projeId)) {
+    if (s.id === servis.id) continue;
+    for (const alanlar of Object.values(s.ayarlar.alanBaglari ?? {})) {
+      for (const [yol, b] of Object.entries(alanlar)) if (b && tablolar.some((t) => t.id === b.tablo)) ogrenilen[kucukAd(yol.split('/').pop())] ??= b;
+    }
+  }
+  const baglar = /** @type {NonNullable<ServisAyarlari['alanBaglari']>} */ (JSON.parse(JSON.stringify(servis.ayarlar.alanBaglari ?? {})));
+  let yeni = 0;
+  for (const [op, sm] of Object.entries(servis.ayarlar.operasyonSemalari ?? {})) {
+    for (const st of alanSatirlari(semaBirlestir(sm, servis.ayarlar.ekAlanlar?.[op] ?? []).alanlar)) {
+      if (st.grup || baglar[op]?.[st.yol]) continue;
+      const ad = kucukAd(st.alan.ad);
+      let b = ogrenilen[ad];
+      if (!b) {
+        for (const t of tablolar) {
+          const c = t.sutunlar.find((x) => kucukAd(x.ad) === ad);
+          if (c) { b = { tablo: t.id, sutun: c.ad }; break; }
+        }
+      }
+      if (b) { (baglar[op] ??= {})[st.yol] = { ...b }; yeni++; }
+    }
+  }
+  return { baglar, yeni };
+}
+
+/**
+ * SoapUI senaryosunu tablolara çevirir: gövdedeki ${PARAMETRE}, tabloya bağlı bir alandaysa ${Tablo.Sütun} (etiketliyse
+ * ${Tablo[etiket].Sütun}) olur; dosyadaki giriş bilgisi değeri (kanal / kullanıcı) senaryonun tablo seçimi olur. Gövdenin geri
+ * kalanı (biçim, sabit değerler, tarih kuralları) olduğu gibi kalır. Bağlantısı olmayan parametreye eski eşleme (test verisi
+ * alanının servis parametreleri) uygulanır; o da yoksa parametre kalır.
+ * @param {Servis} servis @param {string} op @param {string} govde @param {import('../tablolar/tablo-deposu.mjs').Tablo[]} tablolar
+ * @param {Record<string, string>} kimlik dosyadaki giriş bilgileri (CHANNEL / USERNAME / PASSWORD)
+ * @param {Map<string, { turId: string; alan: string; rol: string }>} eslemeler eski parametre eşlemeleri
+ */
+function senaryoyuTablolaraCevir(servis, op, govde, tablolar, kimlik, eslemeler) {
+  const tarih = servis.ayarlar.tarihKurallari ?? {};
+  /** @type {Record<string, Record<string, string>>} */
+  const secimler = {};
+  /** Grup → dosyadaki giriş değerleri (gizli sütunlar dahil; tabloya satır eklemek için). @type {Map<string, { t: import('../tablolar/tablo-deposu.mjs').Tablo; degerler: Record<string, string> }>} */
+  const girisler = new Map();
+  /** Parametre → tablo başvurusu. @type {Map<string, string>} */
+  const donusum = new Map();
+  const sm = servis.ayarlar.operasyonSemalari?.[op];
+  if (sm) {
+    const c = govdeCoz(govde, semaBirlestir(sm, servis.ayarlar.ekAlanlar?.[op] ?? []));
+    const baglar = servis.ayarlar.alanBaglari?.[op] ?? {};
+    for (const [yol, v] of Object.entries(c.degerler)) {
+      if (v.kaynak !== 'parametre' || !v.deger || tarih[v.deger] || donusum.has(v.deger)) continue;
+      const b = baglar[yol];
+      const tb = b ? tablolar.find((x) => x.id === b.tablo) : undefined;
+      const s = tb && b ? tb.sutunlar.find((x) => x.ad === b.sutun) : undefined;
+      if (!tb || !s || !b) continue;
+      donusum.set(v.deger, basvuru(tb.ad, s.ad, b.etiket || ''));
+      const dosyada = kimlik[v.deger];
+      if (!dosyada) continue;
+      const grup = grupAnahtari(tb.id, b.etiket || '');
+      if (!s.gizli) (secimler[grup] ??= {})[s.ad] = dosyada;
+      if (!girisler.has(grup)) girisler.set(grup, { t: tb, degerler: {} });
+      /** @type {{ degerler: Record<string, string> }} */ (girisler.get(grup)).degerler[s.ad] = dosyada;
+    }
+  }
+  const etiketi = (/** @type {string | undefined} */ rol) => (!rol || rol === 'giris' || rol === 'varsayilan' ? '' : rol);
+  const yeni = govde.replace(/\$\{\s*([A-Za-z_][A-Za-z0-9_.-]{0,79})\s*\}/g, (m, ad) => {
+    if (tarih[ad]) return m;
+    const ref = donusum.get(ad);
+    if (ref) return `\${${ref}}`;
+    // Alan formu yoksa (şema yok) eski eşleme metin olarak uygulanır; şema varsa bağlanmamış parametre olduğu gibi kalır.
+    const e = sm ? undefined : eslemeler.get(ad);
+    const tb = e ? tablolar.find((x) => x.id === e.turId) : undefined;
+    return e && tb ? `\${${basvuru(tb.ad, e.alan, etiketi(e.rol))}}` : m;
+  });
+  return { govde: yeni, secimler, girisler };
+}
+
 /**
  * Aktarım: seçilen test durumunun bir servisini ve senaryolarını yazar. Aynı anahtarlı servis varsa senaryolar ona eklenir
  * (aynı başlıklı senaryo atlanır); yoksa servis erisimKimligi ile (erişim kontrolünden sonra) oluşturulur. Tarih kuralları
- * servise eklenir (mevcut kural korunur). kimlikProfili.ad verilirse servis bu profili kullanır; kimlikProfili.kaydet true
- * ise dosyadaki giriş bilgileri bu profilin genel değerleri olarak kasaya yazılır (kullanıcı onayıyla).
+ * servise eklenir (mevcut kural korunur). Bağlanmamış alanlar tablolara bağlanır (öneri kuralı) ve senaryolar tablolara
+ * çevrilir (bkz. senaryoyuTablolaraCevir). girisEkle: dosyadaki giriş bilgisi (kanal / kullanıcı / parola) bağlı tabloda
+ * yoksa satır olarak eklenir (parola gizli sütunda şifreli).
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: 'test' | 'canli' | 'ikisi';
- *   kimlikProfili?: { ad: string; kaydet?: boolean }; yapan?: string }} girdi
+ *   girisEkle?: boolean; yapan?: string }} girdi
  */
 export function soapuiAktar(vt, projeId, girdi) {
   const t = servisTaslaklari(soapuiCozumle(girdi.xml), { takim: girdi.takim, durum: girdi.durum });
   const taslak = t.servisler.find((s) => s.anahtar === girdi.servis);
   if (!taslak) throw new DepoHatasi(`Test durumunda "${girdi.servis}" servisi yok.`);
-  const profilAdi = girdi.kimlikProfili?.ad?.trim() || undefined;
   return vt.islem(() => {
     const mevcut = vt.tek('SELECT id FROM servisler WHERE proje_id = ? AND anahtar = ?', [projeId, taslak.anahtar]);
     const servisId = mevcut ? String(mevcut.id) : servisiKaydet(vt, projeId, {
       anahtar: taslak.anahtar, ad: taslak.ad, yol: taslak.yol, soapSurumu: taslak.soapSurumu, erisimKimligi: girdi.erisimKimligi, yapan: girdi.yapan
     });
-    const s = /** @type {Servis} */ (servisGetir(vt, servisId));
+    let s = /** @type {Servis} */ (servisGetir(vt, servisId));
+    let tablolar = tablolariListele(vt, projeId);
+    const oneri = bagOnerileriniUygula(vt, projeId, s, tablolar);
     /** @type {ServisAyarlari} */
     const ayarlar = {
       ...s.ayarlar,
       tarihKurallari: { ...t.tarihKurallari, ...(s.ayarlar.tarihKurallari ?? {}) },
       ...(!s.ayarlar.operasyonlar?.length ? { operasyonlar: taslak.operasyonlar } : {}),
-      ...(profilAdi && !s.ayarlar.kimlikProfili ? { kimlikProfili: profilAdi } : {})
+      alanBaglari: oneri.baglar
     };
     servisKaydet(vt, { id: servisId, projeId, anahtar: s.anahtar, ad: s.ad, ayarlar, yapan: girdi.yapan });
+    s = /** @type {Servis} */ (servisGetir(vt, servisId));
+    const eslemeler = parametreEslemeleri(vt, projeId);
+    // Giriş bilgisi satırı (istenirse): ilk senaryodan dosyadaki kanal / kullanıcı / parola hangi tabloya gidiyorsa.
+    let girisSatiriEklendi = false;
+    if (girdi.girisEkle && Object.keys(t.kimlikAdaylari).length) {
+      for (const x of taslak.senaryolar) {
+        const { girisler } = senaryoyuTablolaraCevir(s, x.operasyon, x.govde, tablolar, t.kimlikAdaylari, eslemeler);
+        for (const { t: tablo, degerler } of girisler.values()) {
+          const acik = tablo.sutunlar.filter((c) => !c.gizli && degerler[c.ad] !== undefined);
+          if (!acik.length || tablo.satirlar.some((r) => acik.every((c) => r.degerler[c.ad] === degerler[c.ad]))) continue;
+          tabloKaydet(vt, { projeId, id: tablo.id, ad: tablo.ad, sutunlar: tablo.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: c.gizli })),
+            satirlar: [{ ortamId: null, degerler }] });
+          girisSatiriEklendi = true;
+        }
+        if (girisler.size) break;
+      }
+      if (girisSatiriEklendi) tablolar = tablolariListele(vt, projeId);
+    }
     const mevcutBasliklar = new Set(servisSenaryolariniListele(vt, servisId).map((x) => x.baslik));
     let eklenen = 0;
     /** @type {string[]} */
     const atlanan = [];
+    /** Tabloda satırı bulunmayan seçimler (senaryo koşmaz; tabloya satır eklenmeli). @type {Set<string>} */
+    const eksikSatirlar = new Set();
     for (const x of taslak.senaryolar) {
       if (mevcutBasliklar.has(x.baslik)) { atlanan.push(x.baslik); continue; }
+      const c = senaryoyuTablolaraCevir(s, x.operasyon, x.govde, tablolar, t.kimlikAdaylari, eslemeler);
+      for (const [grup, secim] of Object.entries(c.secimler)) {
+        const tablo = tablolar.find((y) => y.id === grup.split('|')[0]);
+        if (tablo && !secilenSatir(tablo, secim)) eksikSatirlar.add(`${tablo.ad}: ${Object.entries(secim).map(([k, v]) => `${k} = ${v}`).join(', ')}`);
+      }
       servisSenaryosuKaydet(vt, {
         projeId, servisId, baslik: x.baslik, kapsam: girdi.kapsam ?? 'test', kosuyaDahil: x.kosuyaDahil,
-        icerik: { operasyon: x.operasyon, govde: x.govde, kontroller: x.kontroller.length ? x.kontroller : [{ tur: 'soapYaniti' }], kaynak: x.kaynak, ...(x.uyarilar.length ? { aciklama: x.uyarilar.join(' ') } : {}) },
+        icerik: {
+          operasyon: x.operasyon, govde: c.govde, kontroller: x.kontroller.length ? x.kontroller : [{ tur: 'soapYaniti' }], kaynak: x.kaynak,
+          ...(Object.keys(c.secimler).length ? { tabloSecimleri: c.secimler } : {}), ...(x.uyarilar.length ? { aciklama: x.uyarilar.join(' ') } : {})
+        },
         yapan: girdi.yapan
       });
       mevcutBasliklar.add(x.baslik);
       eklenen++;
     }
-    let kimlikKaydedildi = false;
-    if (profilAdi && girdi.kimlikProfili?.kaydet && Object.keys(t.kimlikAdaylari).length) {
-      servisKimligiKaydet(vt, { projeId, ad: profilAdi, degerler: t.kimlikAdaylari });
-      kimlikKaydedildi = true;
-    }
-    const eslemeler = parametreEslemeleri(vt, projeId);
-    return { servisId, yeniServis: !mevcut, eklenen, atlanan, kimlikKaydedildi, eslenmemisParametreler: t.veriParametreleri.filter((ad) => !eslemeler.has(ad)) };
+    const kalanParametreler = [...new Set(servisSenaryolariniListele(vt, servisId).flatMap((y) => kullanilanParametreler(y.icerik.govde)))]
+      .filter((ad) => !(s.ayarlar.tarihKurallari ?? {})[ad] && !basvuruCoz(ad) && !eslemeler.has(ad));
+    return { servisId, yeniServis: !mevcut, eklenen, atlanan, baglananAlan: oneri.yeni, girisSatiriEklendi, eksikSatirlar: [...eksikSatirlar], eslenmemisParametreler: kalanParametreler };
   });
 }
 
