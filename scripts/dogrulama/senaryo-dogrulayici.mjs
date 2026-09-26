@@ -533,7 +533,9 @@ function kimlikAlaniniDogrula(alan, gorunur, b, rapor) {
   }
   for (const alt of alan.altAlanlar || []) {
     const k = alt.eslesme && alt.eslesme.kimlikAlani;
-    const kimlikAlani = typeof k === 'string' ? k : nesneMi(k) ? k[tur] : undefined;
+    // "ad" | { ad, dilim } | { <tür>: "ad" | { ad, dilim } } (dilimli alanda profilin tüm değeri denetlenir).
+    const ref = typeof k === 'string' || (nesneMi(k) && typeof k.ad === 'string') ? k : nesneMi(k) ? k[tur] : undefined;
+    const kimlikAlani = typeof ref === 'string' ? ref : nesneMi(ref) && typeof ref.ad === 'string' ? ref.ad : undefined;
     if (typeof kimlikAlani !== 'string') continue;
     if (alt.gorunurluk && gorunurlukDegerlendir(alt.gorunurluk, b) === false) continue;
     const yol = `${kimlikAnahtari}.${kimlikAlani}`;

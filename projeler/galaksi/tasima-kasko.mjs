@@ -91,7 +91,7 @@ export function jetKaskoTasiyici(v) {
   if (eksikArac.length) notlar.push(`Araç sözlüğünde bulunmayan araç (araç alanları boş kalır, önizlemede hata verir): ${eksikArac.join(', ')}.`);
   if (bilinmeyenUrun.length) notlar.push(`Ürün kısa koda çevrilemedi (akış paketi yalnızca 1–5 kabul eder; ürün boş bırakıldı → varsayılan "4"): ${bilinmeyenUrun.join(', ')}.`);
   if (indirimli.length) {
-    notlar.push(`"Yetkili indirimi %": kodlu test değeri acente profilinden okuyup alan KAPALIYSA atlıyordu; akış koşucusu kapalı alanı atlamaz. Değer yalnızca profilinde indirim tanımlı senaryolara yazıldı: ${indirimli.join(', ')}. Bu acentede alan kapalı gelirse adım düşer.`);
+    notlar.push(`"Yetkili indirimi %": kodlu test değeri acente profilinden okuyup alan kapalıysa atlıyordu; akış koşucusu da kapalı alanı atlar ("atlanan alanlar"da görünür). Değer yalnızca profilinde indirim tanımlı senaryolara yazıldı: ${indirimli.join(', ')}.`);
   }
   notlar.push('Tescil tarihi taşınmaz: akışta "bugün" olarak türetilir (kodlu testteki gibi).');
   if (u.aktif === false) notlar.push('Ürün verisinde "aktif: false": kodlu testler bu ortamda atlanıyordu.');

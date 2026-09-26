@@ -34,7 +34,7 @@ export const YAPILANDIRMA_TURLERI = Object.freeze([
 ]);
 export const DOLDURUCULAR = Object.freeze([
   'secimGerekirse', 'secim', 'okluSecim', 'metinDoldur', 'tuslayarakYaz', 'tarihJs', 'telefonTuslama',
-  'onayKutusuZorla', 'radyoZorla', 'dosyaYukle', 'tcSorgulu', 'musteriSorgula'
+  'onayKutusuZorla', 'radyoZorla', 'dosyaYukle', 'tcSorgulu', 'musteriSorgula', 'degerJs'
 ]);
 export const FORM_KONTROLLERI = Object.freeze(['select', 'text', 'number', 'checkbox', 'radio', 'file', 'password', 'textarea']);
 export const SECENEK_DURUMLARI = Object.freeze(['tam', 'kismi', 'bilinmiyor', 'dinamik']);

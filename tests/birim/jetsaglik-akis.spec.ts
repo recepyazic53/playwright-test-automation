@@ -3,7 +3,7 @@
 // kart profilleri kurulur, formdan senaryolar kaydedilip JetSağlık benzeri fikstüre (jetsaglik-akis-fikstur.ts) karşı koşulur:
 // yabancı kimlik / pasaport sigortalı (türe göre alanlar, sorgu, pasaport ayrıntıları, sorgudan sonra telefonun yeniden
 // girilmesi), sigorta ettiren kendisi / farklı özel / tüzel / pasaport, pasaportta adres profili, yabancı kimlikte eksik adres,
-// poliçe listeleri, prim. Bilinen motor eksikleri de sabitlenir: gizli alanlar (#Yenileme, pasaportlu ettiren telefonu) atlanır;
+// poliçe listeleri, prim. Gizli alanlar (#Yenileme, pasaportlu ettiren telefonu) POM gibi betikle yazılır (degerJs);
 // ödeme ortak akışının "Kart formu açılır" adımı JetSağlık'ta (kart formu doğrudan açılır) düşer.
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez; ayrı Nöbetçi örneği geçici veritabanıyla çalışır.
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -38,7 +38,7 @@ const ADRES1 = {
   il: secimJson('34', 'İSTANBUL'), ilce: secimJson('1183', 'ÜSKÜDAR'), belde: secimJson('2', 'KÖY'), cadde: 'Deneme Caddesi', sokak: 'Deneme Sokak',
   adresTipi: secimJson('2', 'Site'), adresParcasi: 'A', mahalle: 'Deneme Mahallesi', binaNo: '7', blokKodu: 'B', siteAdi: 'Deneme Sitesi', daireNo: '3', kat: '2'
 };
-/** Kodlu testin JSON'undaki gibi poliçe değerleri (fikstür listelerinin değerleri); yenileme "E" verilir ama alan gizli. */
+/** Kodlu testin JSON'undaki gibi poliçe değerleri (fikstür listelerinin değerleri); yenileme "E" (alan gizli; betikle seçilir). */
 const ORTAK_VERI = { policeSuresi: '12', hastalik: 'H', kvkkOnayi: '1', yenileme: 'E', indirimOrani: '5' };
 /** Yabancı kimlikte sorgudan eksik gelen adres (kodlu POM'un tamamladığı değerler). */
 const EKSIK_ADRES = { eksikBelde: '1', eksikMahalle: 'Test Mahallesi', eksikCadde: 'Test Caddesi' };
@@ -123,7 +123,7 @@ test('paket: Galaksi havuzlarıyla ve girişli (ödemesiz) üretilir, doğrulama
   expect((await api(`/platform/ekran/akislar?projeId=${projeId}&ekranId=${ekranId}`))).toMatchObject({ duzenlenebilir: true });
 });
 
-test('yabancı kimlik / kendisi: sorgu, telefon yeniden girilir, eksik adres tamamlanır, prim; gizli #Yenileme atlanır', async () => {
+test('yabancı kimlik / kendisi: sorgu, telefon yeniden girilir, eksik adres tamamlanır, prim; gizli #Yenileme betikle seçilir', async () => {
   test.setTimeout(120_000);
   const sonuc = await kaydetVeKos('Sigortalı Yabancı Kimlik / Sigorta Ettiren Kendisi', {
     sigortaliTipi: 'yabanciKimlik', sigortaliProfili: 'yk1', farkliMusteri: 'kendisi', ...EKSIK_ADRES
@@ -133,10 +133,10 @@ test('yabancı kimlik / kendisi: sorgu, telefon yeniden girilir, eksik adres tam
     sigortaliTip: 'O', ulkeKodu: '90', tel: YK1.cepTelefonu, dogum: YK1.dogumTarihi, yabanciNo: YK1.yabanciKimlikNo, uyruk: null, ad: 'KİŞİ 012',
     farkli: 'H', ettirenTip: null, adres: { il: '34', ilce: '1103', belde: '1', mahalle: 'Test Mahallesi', cadde: 'Test Caddesi' },
     baslangic: bugun(), sure: '12', hastalik: 'H', kvkk: '1', indirim: '5',
-    // Motor eksiği: gizli liste doldurulmaz, ekranın varsayılanı kalır.
-    yenileme: 'H'
+    // Gizli liste betikle seçilir (degerJs).
+    yenileme: 'E'
   });
-  expect(atlananlar(sonuc)).toContain('Yenileme');
+  expect(atlananlar(sonuc)).not.toContain('Yenileme');
 });
 
 test('pasaport / farklı özel: pasaport ayrıntıları ve adres profili girilir, ettiren T.C. sorgulanır, telefonlar yeniden girilir', async () => {
@@ -168,7 +168,7 @@ test('yabancı kimlik / farklı tüzel: VKN sorgulanır, doğum tarihi atlanır'
   });
 });
 
-test('pasaport / farklı pasaport: ettiren pasaportu sorgulanır; gizli telefon satırı atlanır (motor eksiği)', async () => {
+test('pasaport / farklı pasaport: ettiren pasaportu sorgulanır; gizli telefon satırı betikle yazılır', async () => {
   test.setTimeout(120_000);
   const sonuc = await kaydetVeKos('Sigortalı Pasaport / Sigorta Ettiren Farklı Pasaport', {
     sigortaliTipi: 'pasaport', sigortaliProfili: 'pas1', sigortaliAdresProfili: 'adres1', farkliMusteri: 'farkli', musteriTipi: 'pasaport', ettirenProfili: 'pas2'
@@ -177,10 +177,10 @@ test('pasaport / farklı pasaport: ettiren pasaportu sorgulanır; gizli telefon 
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({
     farkli: 'E', ettirenTip: 'P', ettirenUyruk: 'FR', ettirenPasaportNo: PAS2.pasaportNo, ettirenAd: PAS2.ad,
     ettirenPasaport: { ad: PAS2.ad, cinsiyet: 'E', dogum: PAS2.dogumTarihi },
-    // Gerçek hesaplama servisi bu telefonu zorunlu tutuyor (POM); koşucu gizli satırı dolduramaz.
-    ettirenTel: '', ettirenUlkeKodu: ''
+    // Gerçek hesaplama servisi bu telefonu zorunlu tutuyor (POM): gizli satır betikle yazılır (degerJs).
+    ettirenTel: PAS2.cepTelefonu, ettirenUlkeKodu: '90'
   });
-  expect(atlananlar(sonuc).some((a) => a.includes('Cep telefonu'))).toBe(true);
+  expect(atlananlar(sonuc).some((a) => a.includes('Cep telefonu'))).toBe(false);
 });
 
 test('ödeme dahil: prim hesaplanır; "Ödeme (doğrudan kart formu)" ile Poliçeleştir\'den sonra kart formu doğrudan doldurulur ve ödenir', async () => {

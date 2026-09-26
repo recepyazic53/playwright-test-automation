@@ -243,9 +243,10 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
     const altlar = (Array.isArray(alan.altAlanlar) ? alan.altAlanlar : []).filter((a) => nesneMi(a) && nesneMi(a.eslesme) && a.eslesme.kimlikAlani !== undefined)
       .slice().sort((a, b) => (a.sira || 0) - (b.sira || 0));
     return altlar.flatMap((a) => {
-      const k = a.eslesme.kimlikAlani;
-      const ad = typeof k === 'string' ? k : nesneMi(k) && tur && typeof k[tur] === 'string' ? k[tur] : null;
-      const deger = secimDegeri(ad ? /** @type {Record<string, unknown>} */ (kimlik)[ad] : undefined);
+      const { ad, dilim } = kimlikAlaniCoz(a.eslesme.kimlikAlani, tur);
+      const ham = secimDegeri(ad ? /** @type {Record<string, unknown>} */ (kimlik)[ad] : undefined);
+      // Dilim: profildeki değerin bir parçası (ör. cep telefonu → ilk 3 hane / kalanı); boşluklar yok sayılır.
+      const deger = dilim && typeof ham === 'string' ? ham.replace(/\s+/g, '').slice(dilim[0], dilim[1]) : ham;
       if (bosMu(deger)) return [];
       return [planAlani(a, deger, { etiket: `${etiketi(alan)} — ${etiketi(a)}`, anahtar: `${senaryoAnahtarlari(alan)[0] ?? alan.id}.${ad}` })];
     });
@@ -386,6 +387,18 @@ function sabitDegeriCoz(alan, simdi) {
  * @param {Array<{ deger: string; metin?: string | null; senaryoDegeri?: string; formMetni?: string; secici?: string }>} secenekler
  * @param {unknown} deger
  */
+/**
+ * Kimlik alt alanının profil alanı referansı: "ad" | { ad, dilim?: [baş, son?] } | { <kimlik türü>: "ad" | { ad, dilim } }.
+ * @param {unknown} k @param {string | null} tur @returns {{ ad: string | null; dilim: [number, number | undefined] | null }}
+ */
+export function kimlikAlaniCoz(k, tur) {
+  const ref = typeof k === 'string' || (nesneMi(k) && typeof /** @type {any} */ (k).ad === 'string') ? k : nesneMi(k) && tur ? /** @type {any} */ (k)[tur] : null;
+  if (typeof ref === 'string') return { ad: ref, dilim: null };
+  if (!nesneMi(ref) || typeof ref.ad !== 'string') return { ad: null, dilim: null };
+  const d = Array.isArray(ref.dilim) && Number.isInteger(ref.dilim[0]) ? /** @type {[number, number | undefined]} */ ([ref.dilim[0], Number.isInteger(ref.dilim[1]) ? ref.dilim[1] : undefined]) : null;
+  return { ad: ref.ad, dilim: d };
+}
+
 export function secenekBul(secenekler, deger) {
   const d = String(deger);
   const s = secenekler.find((x) => (x.senaryoDegeri ?? x.deger) === d) ?? secenekler.find((x) => x.deger === d || x.metin === d);

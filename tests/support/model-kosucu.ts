@@ -175,7 +175,7 @@ async function sayfadakiOge(page: Page, secici: string, sureMs = GORUNURLUK_BEKL
 }
 
 /** Öğe dolana kadar (metni ya da değeri boş değil) bekler. */
-async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi: string, icermez?: string): Promise<void> {
+async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi: string, icermez?: string, kosu: PlanKosuTanimi | null = null): Promise<void> {
   const oge = page.locator(secici).first();
   const oku = async (): Promise<string> => (await degerOku(oge).catch(() => '')).trim();
   // icermez: geçici metin (ör. sorgu sürerken "Aranıyor…") görünürken dolu sayılmaz.
@@ -183,10 +183,15 @@ async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi
     const d = await oku();
     return d !== '' && !(icermez && d.toLocaleLowerCase('tr-TR').includes(icermez.toLocaleLowerCase('tr-TR')));
   };
-  try {
-    await expect.poll(hazir, { timeout: sureMs }).toBe(true);
-  } catch {
-    throw new Error(beklenenGorulenMetni(adimBasligi, `"${secici}" dolar${icermez ? ` ("${icermez}" dışında)` : ''}`, `${Math.round(sureMs / 1000)} sn içinde ${icermez ? 'boş ya da geçici metinde' : 'boş'} kaldı`));
+  const beklenen = `"${secici}" dolar${icermez ? ` ("${icermez}" dışında)` : ''}`;
+  const bitis = Date.now() + sureMs;
+  for (;;) {
+    if (await hazir()) return;
+    // Adımın hata penceresi (ör. sorgu hatası) açılırsa zaman aşımını beklemeden düşer; akışın kabul ettiği uyarılar hariç.
+    const hatalar = kosu ? (await hataMesajlari(page, kosu)).filter((m) => !(kosu.uyarilar ?? []).some((u) => mesajIceriyorMu(m, u.metin))) : [];
+    if (hatalar.length) throw new Error(beklenenGorulenMetni(adimBasligi, beklenen, hatalar.join(' | ')));
+    if (Date.now() >= bitis) throw new Error(beklenenGorulenMetni(adimBasligi, beklenen, `${Math.round(sureMs / 1000)} sn içinde ${icermez ? 'boş ya da geçici metinde' : 'boş'} kaldı`));
+    await page.waitForTimeout(150);
   }
 }
 
@@ -195,7 +200,7 @@ async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi
  * bekle { secici, durum: dolu | gorunur | gizli, zamanAsimiSn, icermez? } (ör. sorgulanan ad-soyadın gelmesi; icermez: dolu
  * sayılmayan geçici metin, ör. "Aranıyor").
  */
-async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
+async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string, kosu: PlanKosuTanimi | null = null): Promise<void> {
   const p = alan.parametreler;
   if (typeof p.tus === 'string' && p.tus) await l.press(p.tus);
   if (typeof p.tikla === 'string' && p.tikla) await page.locator(p.tikla).filter({ visible: true }).first().click();
@@ -204,12 +209,35 @@ async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
     const k = b as { secici: string; durum?: string; zamanAsimiSn?: number; icermez?: unknown };
     const sureMs = (Number(k.zamanAsimiSn) > 0 ? Number(k.zamanAsimiSn) : 20) * 1000;
     if (k.durum === 'gorunur' || k.durum === 'gizli') await page.locator(k.secici).first().waitFor({ state: k.durum === 'gizli' ? 'hidden' : 'visible', timeout: sureMs });
-    else await doluBekle(page, k.secici, sureMs, adimBasligi, typeof k.icermez === 'string' && k.icermez ? k.icermez : undefined);
+    else await doluBekle(page, k.secici, sureMs, adimBasligi, typeof k.icermez === 'string' && k.icermez ? k.icermez : undefined, kosu);
   }
+}
+
+/**
+ * "degerJs": değer betikle yazılır, input / change olayları tetiklenir — görünmeyen (gizli ya da özel çizimli) alanlar için
+ * (sayfada olması yeter). Açılır listede seçenek önce değerle (value), sonra görünen metinle aranır.
+ */
+async function degerJsIleYaz(alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
+  const s = alan.tip === 'secim' || alan.tip === 'okluSecim' ? secenekBul(alan.secenekler, alan.deger) : null;
+  const sonuc = await l.evaluate((e, a) => {
+    const el = e as HTMLInputElement | HTMLSelectElement;
+    if (el instanceof HTMLSelectElement) {
+      const o = [...el.options].find((x) => x.value === a.deger) ?? [...el.options].find((x) => x.text.trim() === a.metin);
+      if (!o) return false;
+      el.value = o.value;
+    } else {
+      el.value = a.deger;
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }, { deger: s ? s.deger : String(alan.deger), metin: s ? s.metin : String(alan.deger) });
+  if (!sonuc) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s ? s.metin : String(alan.deger)}" seçilir`, 'listede böyle bir seçenek yok'));
 }
 
 async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
   const deger = alan.deger;
+  if (alan.doldurucu === 'degerJs') { await degerJsIleYaz(alan, l, adimBasligi); return; }
   switch (alan.tip) {
     case 'okluSecim':
       await okluSec(page, alan, l, secenekBul(alan.secenekler, deger).metin, adimBasligi);
@@ -540,7 +568,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             continue;
           }
           // "Zorla" doldurucular gizli (özel çizimli) girdilere yazar: görünürlük yerine sayfada varlığı yeter.
-          const zorla = alan.doldurucu === 'radyoZorla' || alan.doldurucu === 'onayKutusuZorla';
+          const zorla = alan.doldurucu === 'radyoZorla' || alan.doldurucu === 'onayKutusuZorla' || alan.doldurucu === 'degerJs';
           const l = zorla ? await sayfadakiOge(page, alan.secici as string) : await gorunurOge(page, alan.secici as string);
           if (!l) {
             const profil = plan.baglamProfili ? ` (bağlam profili: ${plan.baglamProfili})` : '';
@@ -551,9 +579,15 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             continue;
           }
           if (alan.yalnizGorunurluk) continue;
+          // Kapalı (disabled) alan doldurulamaz: görünmeyen alan gibi atlanır (mutlaka görünmeli ise hata).
+          if (await l.isDisabled().catch(() => false)) {
+            if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, `${alan.etiket} alanı kapalı (disabled)`));
+            atlanan.push({ alan: alan.etiket, neden: 'kapalı (disabled)' });
+            continue;
+          }
           const baslangic = Date.now();
           await alaniDoldur(page, alan, l, adim.baslik);
-          await alanSonrasi(page, alan, l, adim.baslik);
+          await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null);
           await arkaPlanIstekleriniBekle(page, baslangic);
         }
         await aksiyonlariUygula(page, adim.kosu, sureSn);
