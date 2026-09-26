@@ -331,7 +331,8 @@ export function sonucDetayi(vt, sonucId) {
 
 /**
  * Hata kalıpları: tarih aralığındaki BAŞARISIZ sonuçlar (ürün, kategori, kalıp) üçlüsüne göre
- * sayılır; her kalıp için en yeni örnek (ekran görüntüsü olan tercih edilir) döner.
+ * sayılır; her kalıp için en yeni örnek (ekran görüntüsü olan tercih edilir) ve hatanın alındığı testler (en yeniden eskiye,
+ * en çok 100: sonuç, koşu, senaryo, ortam, hatanın alındığı adım, zaman) döner.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ urun?: string | null; baslangic?: string | null; bitis?: string | null; limit?: number }} [filtre]
  */
@@ -349,28 +350,35 @@ export function hataKaliplari(vt, projeId, filtre = {}) {
   }
   const satirlar = vt.tumu(
     `SELECT r.id, r.ekran_id, r.urun_adi, e.ad AS ekran_adi, r.hata_kategorisi, r.hata_kalibi, r.senaryo_baslik,
-            COALESCE(r.bitis, k.bitis, k.baslangic) AS zaman,
+            r.kosu_id, r.senaryo_id, k.ortam_id, COALESCE(r.bitis, k.bitis, k.baslangic) AS zaman,
+            (SELECT a.ad FROM adim_sonuclari a WHERE a.sonuc_id = r.id AND a.durum = 'basarisiz' ORDER BY a.sira LIMIT 1) AS basarisiz_adim,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu') AS gorsel
        FROM kosu_sonuclari r JOIN kosular k ON k.id = r.kosu_id LEFT JOIN ekranlar e ON e.id = r.ekran_id
       WHERE ${kosullar.join(' AND ')} ORDER BY zaman`, p
   );
-  /** @type {Map<string, { urun: string; kategori: string; kalip: string; sayi: number; senaryolar: Set<string>; ilk: string; son: string; ornekId: string; ornekGorselli: boolean }>} */
+  /** @typedef {{ sonucId: string; kosuId: string; senaryoId: string | null; senaryoBaslik: string; ortamId: string | null; adim: string | null; zaman: string }} KalipSonucu */
+  /** @type {Map<string, { urun: string; kategori: string; kalip: string; sayi: number; senaryolar: Set<string>; ilk: string; son: string; ornekId: string; ornekGorselli: boolean; sonuclar: KalipSonucu[] }>} */
   const gruplar = new Map();
   for (const s of satirlar) {
     const urun = s.ekran_adi != null ? String(s.ekran_adi) : s.urun_adi != null ? String(s.urun_adi) : 'Diğer';
     const kategori = String(s.hata_kategorisi ?? 'Diğer / Sınıflandırılamadı');
     const kalip = String(s.hata_kalibi ?? 'Mesaj yok / boş hata');
     const anahtar = `${urun}\u0000${kategori}\u0000${kalip}`;
-    const g = gruplar.get(anahtar) ?? { urun, kategori, kalip, sayi: 0, senaryolar: new Set(), ilk: String(s.zaman), son: String(s.zaman), ornekId: String(s.id), ornekGorselli: false };
+    const g = gruplar.get(anahtar) ?? { urun, kategori, kalip, sayi: 0, senaryolar: new Set(), ilk: String(s.zaman), son: String(s.zaman), ornekId: String(s.id), ornekGorselli: false, sonuclar: [] };
     gruplar.set(anahtar, g);
     g.sayi++;
     g.senaryolar.add(String(s.senaryo_baslik));
+    g.sonuclar.push({
+      sonucId: String(s.id), kosuId: String(s.kosu_id), senaryoId: s.senaryo_id == null ? null : String(s.senaryo_id), senaryoBaslik: String(s.senaryo_baslik),
+      ortamId: s.ortam_id == null ? null : String(s.ortam_id), adim: s.basarisiz_adim == null ? null : String(s.basarisiz_adim), zaman: String(s.zaman)
+    });
     g.son = String(s.zaman);
     const gorselli = Number(s.gorsel) > 0;
     if (gorselli || !g.ornekGorselli) { g.ornekId = String(s.id); g.ornekGorselli = gorselli; }
   }
   const kaliplar = [...gruplar.values()]
-    .map((g) => ({ urun: g.urun, kategori: g.kategori, kalip: g.kalip, sayi: g.sayi, senaryoSayisi: g.senaryolar.size, ilk: g.ilk, son: g.son, ornekSonucId: g.ornekId }))
+    .map((g) => ({ urun: g.urun, kategori: g.kategori, kalip: g.kalip, sayi: g.sayi, senaryoSayisi: g.senaryolar.size, ilk: g.ilk, son: g.son, ornekSonucId: g.ornekId,
+      sonuclar: g.sonuclar.slice(-100).reverse() }))
     .sort((a, b) => b.sayi - a.sayi || b.son.localeCompare(a.son));
   /** @type {Record<string, number>} */
   const kategoriler = {};

@@ -677,6 +677,8 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     // ekran görüntüsü ile sağlanır (bkz. fixtures.ts > canliIzlemeYayini ve aşağıdaki
     // /canli ucu).
     const canliYolu = join(tmpdir(), `test-sunucu-canli-${randomBytes(6).toString('hex')}.png`);
+    // Canlı adım listesi: raporlayıcı üst düzey adımları başladıkça / bittikçe bu JSON'a yazar (bkz. /adim-durumu).
+    const adimYolu = join(tmpdir(), `test-sunucu-adim-${randomBytes(6).toString('hex')}.json`);
     // Elle doğrulama kodu (SMS "elle" kipi): giriş motoru bu yola istek yazar, panel kullanıcıdan kodu alıp
     // yanıtı yazar (bkz. platform/giris/elle-kod.mjs; /kod-istegi ve /kod-gonder uçları).
     const kodYolu = join(tmpdir(), `test-sunucu-kod-${randomBytes(8).toString('hex')}`);
@@ -721,6 +723,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
         PLATFORM_SONUC_TOKENI: RAPORLAYICI_TOKENI,
         TEST_SUNUCU_GORUNUR: '1',
         TEST_SUNUCU_CANLI_YOLU: canliYolu,
+        TEST_SUNUCU_ADIM_YOLU: adimYolu,
         [KOD_YOLU_DEGISKENI]: kodYolu,
         TEST_SUNUCU_GREP_DESENI: desen,
         // Türetilmiş kasa anahtarı (yalnızca alt sürecin belleğinde): test verisi platform
@@ -763,7 +766,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     });
 
     if (alt.pid) sahipYaz(dosyaKlasoru, alt.pid);
-    const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu, kodYolu };
+    const kayit = { surec: alt, pid: alt.pid, iptalEdiliyor: false, zamanAsimi: false, canliYolu, adimYolu, kodYolu };
     calisanSurecler.set(kosuId, kayit);
     aktifPlatformKosulari.set(kosuKimligi, (aktifPlatformKosulari.get(kosuKimligi) ?? 0) + 1);
     const platformKosusunuBirak = async (durum) => {
@@ -799,6 +802,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
       // sorun değil, sessizce yok sayılır).
       try {
         if (existsSync(canliYolu)) unlinkSync(canliYolu);
+        if (existsSync(adimYolu)) unlinkSync(adimYolu);
       } catch {
         // yok sayılır
       }
@@ -1120,6 +1124,17 @@ async function istegiIsle(req, res) {
   // tarafından yazılan en güncel ekran görüntüsünü döner. Henüz dosya yazılmamışsa
   // (koşu daha yeni başladıysa) veya senaryo hiç çalışmıyorsa 404 döner; istemci bunu
   // "henüz görüntü yok" olarak yorumlayıp bir sonraki tikte tekrar dener.
+  // Canlı adım listesi (çalışan koşu): raporlayıcının yazdığı { adimlar } JSON'u; dosya yoksa boş liste.
+  if (req.method === 'GET' && req.url && req.url.startsWith('/adim-durumu')) {
+    const url = new URL(req.url, 'http://127.0.0.1');
+    if (!tokenGecerli(url.searchParams.get('token'))) { jsonGonder(res, 401, { basarili: false, mesaj: 'Geçersiz token.' }); return; }
+    const kayit = calisanSurecler.get(url.searchParams.get('kosuId') ?? '');
+    let adimlar = [];
+    try { if (kayit?.adimYolu && existsSync(kayit.adimYolu)) adimlar = JSON.parse(readFileSync(kayit.adimYolu, 'utf-8')).adimlar ?? []; } catch { adimlar = []; }
+    jsonGonder(res, 200, { basarili: true, calisiyor: Boolean(kayit), adimlar });
+    return;
+  }
+
   if (req.method === 'GET' && req.url && req.url.startsWith('/canli')) {
     const url = new URL(req.url, 'http://127.0.0.1');
     const token = url.searchParams.get('token');
