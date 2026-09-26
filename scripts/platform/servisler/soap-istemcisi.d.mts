@@ -28,7 +28,9 @@ export declare function soapIstegi(istek: {
 export declare function wsdlOperasyonlari(wsdl: string): { ad: string; eylem?: string }[];
 export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }): Promise<{
   durumKodu: number; sureMs: number; operasyonlar: { ad: string; eylem?: string }[]; semalar: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
+  iceAktarilan?: number; alinamayan?: string[];
 }>;
+export declare function iceAktarmaAdresleri(metin: string, taban: string): string[];
 
 export interface XmlDugumu { ad: string; cocuklar: XmlDugumu[]; metin: string }
 export declare function xmlAgaci(xml: string): XmlDugumu | null;

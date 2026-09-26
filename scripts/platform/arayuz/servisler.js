@@ -15,7 +15,7 @@ import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyari
 import { metotKutulari } from './servis-alanlari.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { tanimDiyalogu } from './parametre-tanimi-formu.js';
-import { alanListesi, degerEtiketi, listedeMi, tanimDegerleri, wsdlOnerisi } from './parametre-tanimlari.mjs';
+import { alanListesi, birlesikDegerler, degerEtiketi, eslesenListeler, listedeMi, servisHedefiMi, tanimDegerleri, wsdlOnerisi } from './parametre-tanimlari.mjs';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
@@ -109,7 +109,7 @@ function erisimKontrolAlani(proje, ortamlar, bilgiAl, sonuc) {
     const taban = String((bilgi.tabanlar && bilgi.tabanlar[ortam.id]) || ortam.tabanUrl || '').replace(/\/+$/, '');
     if (!taban) { yerlestir(durum, h('div', { class: 'not-kutusu hata', role: 'alert' }, `${ortam.ad} için taban adres yok; önce taban adresi seçin.`)); return; }
     const adres = `${taban}/${bilgi.yol.replace(/^\/+/, '')}?wsdl`;
-    const tamam = await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}`, dugme: 'İstek at', ikonAd: 'ag' });
+    const tamam = await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}. WSDL ayrı şema dosyalarını içe aktarıyorsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' });
     if (!tamam) return;
     sonuc(null);
     await mesgulIken(dugme, 'Kontrol ediliyor…', async () => {
@@ -566,8 +566,21 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
    * Alanın değer listesi (servisin metot tablosunda bağlanan; yoksa adı aynı liste — alana servis varsayılanı olarak
    * koşuda dolan parametre bağlıysa ad eşleşmesi yapılmaz). { tanim, degerler } | undefined.
    */
+  /** Formdaki bir parametrenin (alan adı, harf duyarsız) şu anki sabit değeri — koşullu listeler için. */
+  const parametreDegeri = (ad) => {
+    const sm = sema();
+    if (!sm) return undefined;
+    const sat = alanSatirlari(sm.alanlar).find((x) => !x.grup && x.alan.ad.toLocaleLowerCase('en') === ad.toLocaleLowerCase('en'));
+    const v = sat ? degerler[sat.yol] : undefined;
+    return v && v.kaynak === 'sabit' ? String(v.deger ?? '') : undefined;
+  };
+  /** Koşullarda geçen parametre adları: bunların değeri değişince tablo yeniden çizilir (bağlı listeler süzülsün). */
+  const kosulAdlari = new Set(degerListeleri.filter((l) => l.kullanim !== 'ekran').flatMap((l) => (l.kosullar || []).map((k) => k.alan.toLocaleLowerCase('en'))));
   const alanTanimi = {
     get: (yol, alanAdi) => {
+      // Önce koşullu listeler (Channel = 30047 ise Username: …), sonra metot tablosundaki bağlantı / adı aynı liste.
+      const kural = eslesenListeler(degerListeleri, (l) => servisHedefiMi(l, s.id, alanAdi), parametreDegeri);
+      if (kural.length) return { tanim: kural[0], degerler: birlesikDegerler(kural, veriProfilleri) };
       const op = operasyon.value;
       const pv = (s.ayarlar.alanVarsayilanlari?.[op] || {})[yol];
       const t = alanListesi(degerListeleri, (s.ayarlar.alanListeleri || {})[op], yol, alanAdi, pv?.kaynak === 'parametre');
@@ -778,6 +791,11 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const formUst = h('div', { class: 'alan-formu-ust' }, aramaG, h('label', { class: 'secenek', for: yalnizDolu.id }, yalnizDolu, 'Yalnız gönderilenler'),
     h('label', { class: 'secenek', for: yalnizZorunlu.id }, yalnizZorunlu, 'Yalnız zorunlular'), sayac);
   const tabloKap = h('div', {});
+  // Koşulda geçen bir parametrenin değeri değişince (seçim / yazma bitince) bağlı listeler yeniden süzülür.
+  tabloKap.addEventListener('change', (o) => {
+    const ad = o.target && o.target.getAttribute ? o.target.getAttribute('aria-label') : null;
+    if (ad && o.target.value !== '__elle' && kosulAdlari.has(ad.toLocaleLowerCase('en'))) tabloCiz();
+  });
   /** Alan zorunlu mu: servis ayarı (sihirbazda belirlenir) varsa o, yoksa WSDL şeması. */
   const zorunluMu = (yol, alanT) => {
     const liste = s.ayarlar.alanZorunluluklari?.[operasyon.value];
@@ -883,7 +901,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   semaAl.addEventListener('click', async () => {
     const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
     if (!test) { bildir('Projede TEST ortamı yok.', 'hata'); return; }
-    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl. Ayrı şema dosyaları varsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
     try {
       const r = await mesgulIken(semaAl, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id } }));
       bildir(`${r.alanliOperasyonlar.length} operasyonun alan listesi alındı.`);
@@ -1075,7 +1093,7 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     const oneri = tanim ? null : wsdlOnerisi(alanT);
     tanimDiyalogu({
       proje, ...tanimVeri,
-      ...(tanim ? { tanim } : { on: { ad: alanT.ad, tur: oneri ? oneri.tur : 'liste', degerler: oneri ? oneri.degerler : [] } }),
+      ...(tanim ? { tanim } : { on: { ad: alanT.ad, tur: oneri ? oneri.tur : 'liste', degerler: oneri ? oneri.degerler : [], kullanim: 'servis', hedef: { servisId: '', parametre: alanT.ad } } }),
       bitti: async (id) => {
         const { tanimlar: yeni } = await api(`/platform/servis-parametre-tanimlari?projeId=${q(proje.id)}`);
         tanimlar.splice(0, tanimlar.length, ...yeni);
@@ -1284,7 +1302,7 @@ function semaKarti(proje, s, ortamlar) {
   yenile.addEventListener('click', async () => {
     const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
     if (!test) { bildir('Projede TEST ortamı yok.', 'hata'); return; }
-    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl. Ayrı şema dosyaları varsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
     try {
       const r = await mesgulIken(yenile, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id } }));
       bildir(`${r.operasyonSayisi} operasyon, ${r.alanliOperasyonlar.length} tanesinin alan listesi alındı.`);

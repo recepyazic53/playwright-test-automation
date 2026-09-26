@@ -10,13 +10,12 @@ import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { aktarimAkisi } from './aktarim.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
-import { servisParametreleriBolumu } from './parametre-tanimi-formu.js';
+import { servisParametreleriBolumu, tabloOku } from './parametre-tanimi-formu.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
-  { ad: 'baglam', etiket: 'Bağlam profilleri', ikon: 'hedef', aciklama: 'Testlerin hangi bağlamda (ör. rol, şube, müşteri tipi) çalışacağını tanımlayan profiller. Tür adlarını projeniz belirler.' },
-  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Testlerin kullanacağı veri kalıpları (türler), bu kalıplara göre doldurulmuş kayıtlar (profiller) ve servis alanlarının alabileceği değerler (servis parametreleri).' },
+  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Kayıtlar (kişi, adres, kart, acente… — birbirine bağlı değerler; senaryoda adıyla seçilir) ve değer listeleri (bir ekran input\'unun ya da servis parametresinin alabileceği değerler, koşullu).' },
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
@@ -45,6 +44,7 @@ const ISLEM_ETIKETI = {
  * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void> }} baglam
  */
 export function ayarlarBolumu(kapsayici, bolum, baglam) {
+  if (bolum === 'baglam') { bolum = 'test-verisi'; testVerisiSekmesi = 'turler'; }
   const tanim = AYAR_BOLUMLERI.find((b) => b.ad === bolum) || AYAR_BOLUMLERI[0];
   const baslik = h('div', { class: 'sayfa-basligi' }, h('div', {},
     h('div', { class: 'kirinti' }, h('span', {}, baglam.durum.proje ? baglam.durum.proje.ad : ''), h('span', { 'aria-hidden': 'true' }, '/'),
@@ -55,7 +55,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   kapsayici.replaceChildren(baslik, govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
-    proje: projeVeOrtamlar, giris: girisProfilleri, baglam: baglamProfilleri,
+    proje: projeVeOrtamlar, giris: girisProfilleri,
     'test-verisi': testVerisi, dosyalar, yedekleme, guvenlik
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
@@ -276,7 +276,7 @@ async function girisProfilleri(govde, baglam, yenile) {
       o.preventDefault();
       mesaj.temizle();
       [ad, kullanici, parola.girdi, totp.girdi, smsKod].forEach((g) => alanHatasi(g, ''));
-      if (!ad.value.trim()) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
+      if (!ad.value.trim()) { alanHatasi(ad, 'Kayıt adı boş olamaz.'); ad.focus(); return; }
       if (!kullanici.value.trim()) { alanHatasi(kullanici, 'Kullanıcı adı boş olamaz.'); kullanici.focus(); return; }
       if (!p && !parola.girdi.value) { alanHatasi(parola.girdi, 'Parola girin.'); parola.girdi.focus(); return; }
       const secilenTur = rTotp.r.checked ? 'totp' : rSms.r.checked ? 'sms' : 'yok';
@@ -319,82 +319,6 @@ async function girisProfilleri(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 // Bağlam profilleri (tür adı projeye özgü serbest metin)
 // ---------------------------------------------------------------------------------------
-
-async function baglamProfilleri(govde, baglam, yenile) {
-  const proje = baglam.durum.proje;
-  const [{ profiller, turler }, { ortamlar }] = await Promise.all([
-    api(`/platform/baglam-profilleri?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
-  ]);
-  const formAlani = h('div', {});
-  const turListesiId = yeniKimlik('turler');
-
-  const profilFormu = (p) => {
-    const tur = h('input', { type: 'text', autocomplete: 'off', list: turListesiId, value: p ? p.tur : '' });
-    const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '' });
-    const ortam = ortamSecimi(ortamlar, p ? p.ortamId : null);
-    const satirlar = [];
-    const satirKutusu = h('div', {});
-    const satirEkle = (anahtar = '', deger = '') => {
-      const a = h('input', { type: 'text', autocomplete: 'off', value: anahtar });
-      const d = h('input', { type: 'text', autocomplete: 'off', value: deger });
-      const s = { a, d, el: null };
-      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
-      s.el = h('div', { class: 'anahtar-deger-satiri' }, alan('Alan adı', a), alan('Değer', d), kaldir);
-      satirlar.push(s);
-      satirKutusu.append(s.el);
-      return s;
-    };
-    for (const [k, v] of Object.entries((p && p.alanlar) || {})) satirEkle(k, typeof v === 'string' ? v : JSON.stringify(v));
-    if (!satirlar.length) satirEkle();
-    const mesaj = mesajKutusu();
-    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-    const form = formPaneli(p ? `Bağlam profilini düzenle: ${p.ad}` : 'Yeni bağlam profili', mesaj.kutu,
-      alan('Tür', tur, { zorunlu: true, yardim: 'Projenize özgü bağlam türü; ör. Rol, Şube, Müşteri tipi. Var olan bir türü seçebilir ya da yenisini yazabilirsiniz.' }),
-      h('datalist', { id: turListesiId }, turler.map((t) => h('option', { value: t }))),
-      alan('Profil adı', ad, { zorunlu: true }),
-      alan('Ortam', ortam, { yardim: 'Profil yalnızca seçilen ortamda mı, yoksa tüm ortamlarda mı geçerli?' }),
-      h('fieldset', {}, h('legend', {}, 'Alanlar'), h('p', { class: 'soluk kucuk' }, 'Alan değerleri kasada şifreli saklanır.'), satirKutusu,
-        h('button', { type: 'button', onclick: () => satirEkle().a.focus() }, '+ Alan ekle')),
-      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
-    form.addEventListener('submit', async (o) => {
-      o.preventDefault();
-      mesaj.temizle();
-      alanHatasi(tur, ''); alanHatasi(ad, '');
-      if (!tur.value.trim()) { alanHatasi(tur, 'Tür boş olamaz.'); tur.focus(); return; }
-      if (!ad.value.trim()) { alanHatasi(ad, 'Profil adı boş olamaz.'); ad.focus(); return; }
-      const alanlar = {};
-      for (const s of satirlar) {
-        alanHatasi(s.a, '');
-        const k = s.a.value.trim();
-        if (!k && !s.d.value.trim()) continue;
-        if (!k) { alanHatasi(s.a, 'Alan adı boş olamaz.'); s.a.focus(); return; }
-        if (k in alanlar) { alanHatasi(s.a, 'Bu alan adı tekrar ediyor.'); s.a.focus(); return; }
-        alanlar[k] = s.d.value;
-      }
-      try {
-        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/baglam-profili/kaydet', {
-          govde: { id: p ? p.id : undefined, projeId: proje.id, tur: tur.value.trim(), ad: ad.value.trim(), alanlar, ortamId: ortam.value || null }
-        }));
-        bildir('Bağlam profili kaydedildi.');
-        yenile();
-      } catch (hata) { mesaj.goster(hata.message); }
-    });
-    formuGoster(formAlani, form);
-  };
-
-  const gruplar = turler.map((t) => h('section', { 'aria-label': t },
-    h('h4', { class: 'grup-basligi-h4' }, ikon('hedef'), t, ' ', h('span', { class: 'rozet' }, String(profiller.filter((p) => p.tur === t).length))),
-    kayitListesi(profiller.filter((p) => p.tur === t).map((p) => kayitSatiri(p.ad,
-      `${ortamAdiBul(ortamlar, p.ortamId)} · ${Object.keys(p.alanlar || {}).length ? `Alanlar: ${Object.keys(p.alanlar).join(', ')}` : 'Alan yok'}`,
-      [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('baglam_profili', p.id, p.ad, baglam)),
-        silDugmesi(p.ad, async () => { await api('/platform/baglam-profili/sil', { govde: { id: p.id } }); bildir('Bağlam profili silindi.'); yenile(); })])), '')));
-
-  govde.replaceChildren(
-    bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Bağlam profili ekle')),
-    formAlani,
-    ...(gruplar.length ? gruplar : [bosDurum('Henüz bağlam profili yok.', 'Rol, şube ya da müşteri tipi gibi bir tür yazarak ilk profili ekleyin.', { ikon: 'hedef', rol: 'status' })]));
-}
 
 // ---------------------------------------------------------------------------------------
 // Test verisi türleri ve profilleri
@@ -476,10 +400,12 @@ function servisParametreEditoru(proje, baslangic, servisler) {
 
 /** Test verisi sekmesi (oturum boyunca hatırlanır): türler ve profiller | servis parametreleri. */
 let testVerisiSekmesi = 'turler';
+/** Kayıtlar sekmesinde seçili grup ("veri:<turId>" | "baglam:<tür>"). */
+let seciliKayitGrubu = '';
 
 async function testVerisi(govde, baglam, yenile) {
   const sekmeler = h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Test verisi bölümleri' },
-    [['turler', 'Türler ve profiller'], ['servis', 'Servis parametreleri']].map(([a, m]) => h('button', {
+    [['turler', 'Kayıtlar'], ['servis', 'Değer listeleri']].map(([a, m]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': testVerisiSekmesi === a ? 'true' : 'false',
       onclick: () => { if (testVerisiSekmesi !== a) { testVerisiSekmesi = a; yenile(); } }
     }, m)));
@@ -491,11 +417,12 @@ async function testVerisi(govde, baglam, yenile) {
 
 async function turlerVeProfiller(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
-  const [{ turler }, { profiller }, { ortamlar }, servisler] = await Promise.all([
+  const [{ turler }, { profiller }, { ortamlar }, servisler, { profiller: baglamProfilleri, turler: baglamTurleri }] = await Promise.all([
     api(`/platform/test-verisi-turleri?projeId=${encodeURIComponent(proje.id)}`),
     api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`),
     api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`).then((x) => x.servisler).catch(() => [])
+    api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`).then((x) => x.servisler).catch(() => []),
+    api(`/platform/baglam-profilleri?projeId=${encodeURIComponent(proje.id)}`)
   ]);
   const turFormAlani = h('div', {});
   const profilFormAlani = h('div', {});
@@ -527,8 +454,8 @@ async function turlerVeProfiller(govde, baglam, yenile) {
     if (!satirlar.length) satirEkle();
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-    const form = formPaneli(t ? `Türü düzenle: ${t.ad}` : 'Yeni test verisi türü', mesaj.kutu,
-      alan('Tür adı', ad, { zorunlu: true, yardim: 'Ör. Müşteri, Adres, Kart.' }),
+    const form = formPaneli(t ? `Kayıt grubunu düzenle: ${t.ad}` : 'Yeni kayıt grubu', mesaj.kutu,
+      alan('Grup adı', ad, { zorunlu: true, yardim: 'Ör. Özel kişi, Adres, Kredi kartı.' }),
       h('fieldset', {}, h('legend', {}, 'Alanlar'),
         h('p', { class: 'soluk kucuk' }, 'Hassas işaretli alanların değerleri kasada şifreli saklanır ve maskeli gösterilir. Yeni alanlar varsayılan olarak hassastır; yalnızca gerçekten gizli olmayan alanlarda işareti kaldırın.'),
         kutu, h('button', { type: 'button', onclick: () => satirEkle().adG.focus() }, '+ Alan ekle')),
@@ -537,7 +464,7 @@ async function turlerVeProfiller(govde, baglam, yenile) {
       o.preventDefault();
       mesaj.temizle();
       alanHatasi(ad, '');
-      if (!ad.value.trim()) { alanHatasi(ad, 'Tür adı boş olamaz.'); ad.focus(); return; }
+      if (!ad.value.trim()) { alanHatasi(ad, 'Grup adı boş olamaz.'); ad.focus(); return; }
       const alanlar = [];
       for (const s of satirlar) {
         alanHatasi(s.adG, '');
@@ -597,8 +524,9 @@ async function turlerVeProfiller(govde, baglam, yenile) {
     alanlariCiz();
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-    const form = formPaneli(p ? `Test verisi profilini düzenle: ${p.ad}` : 'Yeni test verisi profili', mesaj.kutu,
-      alan('Tür', turSecimi), alan('Profil adı', ad, { zorunlu: true }), alan('Ortam', ortam), alanKutusu,
+    const grupAdi = (turler.find((x) => x.id === (p ? p.turId : varsayilanTurId)) || { ad: '' }).ad;
+    const form = formPaneli(p ? `Kaydı düzenle: ${p.ad} (${grupAdi})` : `Yeni kayıt (${grupAdi})`, mesaj.kutu,
+      alan('Kayıt adı', ad, { zorunlu: true, yardim: 'Senaryolarda bu adla seçilir (ör. tc1).' }), alan('Ortam', ortam), alanKutusu,
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => profilFormAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (o) => {
       o.preventDefault();
@@ -616,33 +544,172 @@ async function turlerVeProfiller(govde, baglam, yenile) {
         await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/test-verisi-profili/kaydet', {
           govde: { id: p ? p.id : undefined, projeId: proje.id, turId: turSecimi.value, ad: ad.value.trim(), degerler, ortamId: ortam.value || null }
         }));
-        bildir('Test verisi profili kaydedildi.');
+        bildir('Kayıt kaydedildi.');
         yenile();
       } catch (hata) { mesaj.goster(hata.message); }
     });
     formuGoster(profilFormAlani, form);
   };
 
-  const turSatirlari = turler.map((t) => kayitSatiri(t.ad,
-    `${t.alanlar.length} alan: ${t.alanlar.map((a) => `${a.etiket}${a.hassas ? ' (hassas)' : ''}`).join(', ')}`,
-    [duzenleDugmesi(t.ad, () => turFormu(t)),
-      onayliDugme('Sil', 'Tür ve profilleri silinsin', async () => {
-        await api('/platform/test-verisi-turu/sil', { govde: { id: t.id } }); bildir('Test verisi türü silindi.'); yenile();
-      }, { kucuk: true, etiket: `${t.ad}: sil (bu türün tüm profilleri de silinir)` })], 'veri'));
-  const turAdi = (id) => (turler.find((t) => t.id === id) || { ad: '?' }).ad;
-  const profilSatirlari = profiller.map((p) => kayitSatiri(p.ad,
-    [`Tür: ${turAdi(p.turId)} · ${ortamAdiBul(ortamlar, p.ortamId)} · `, Object.entries(p.degerler).map(([k, v]) => `${k}: ${v && typeof v === 'object' ? (v.dolu ? v.maske : '—') : v === null || v === '' ? '—' : String(v)}`).join(', ')],
-    [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('test_verisi_profili', p.id, p.ad, baglam)),
-      silDugmesi(p.ad, async () => { await api('/platform/test-verisi-profili/sil', { govde: { id: p.id } }); bildir('Test verisi profili silindi.'); yenile(); })], 'dosya'));
+  // --- Bağlam kayıtları (ör. Acente): ekranlarda "kullanıcı / acente değiştir" seçimi bunlardan gelir ---------------------
+  const baglamFormu = (p, turAdi) => {
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: p ? p.ad : '', 'aria-label': 'Kayıt adı' });
+    const ortam = ortamSecimi(ortamlar, p ? p.ortamId : null);
+    const satirlar = [];
+    const satirKutusu = h('div', {});
+    const satirEkle = (anahtar = '', deger = '') => {
+      const a = h('input', { type: 'text', autocomplete: 'off', value: anahtar, 'aria-label': 'Alan adı' });
+      const d = h('input', { type: 'text', autocomplete: 'off', value: deger, 'aria-label': `${anahtar || 'Alan'} değeri` });
+      const s = { a, d, el: null };
+      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': 'Bu alanı kaldır', onclick: () => { satirlar.splice(satirlar.indexOf(s), 1); s.el.remove(); } }, 'Kaldır');
+      s.el = h('div', { class: 'anahtar-deger-satiri' }, alan('Alan adı', a), alan('Değer', d), kaldir);
+      satirlar.push(s);
+      satirKutusu.append(s.el);
+      return s;
+    };
+    const ornek = baglamProfilleri.find((x) => x.tur === turAdi);
+    for (const [k, v] of Object.entries((p && p.alanlar) || (ornek ? Object.fromEntries(Object.keys(ornek.alanlar || {}).map((x) => [x, ''])) : {}))) satirEkle(k, typeof v === 'string' ? v : JSON.stringify(v));
+    if (!satirlar.length) satirEkle();
+    const mesaj = mesajKutusu();
+    const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const form = formPaneli(p ? `Kaydı düzenle: ${p.ad} (${turAdi})` : `Yeni kayıt (${turAdi})`, mesaj.kutu,
+      alan('Kayıt adı', ad, { zorunlu: true, yardim: 'Senaryolarda bu adla seçilir.' }), alan('Ortam', ortam),
+      h('fieldset', {}, h('legend', {}, 'Alanlar'), h('p', { class: 'soluk kucuk' }, 'Değerler kasada şifreli saklanır.'), satirKutusu,
+        h('button', { type: 'button', onclick: () => satirEkle().a.focus() }, '+ Alan ekle')),
+      h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => profilFormAlani.replaceChildren() }, 'Vazgeç')));
+    form.addEventListener('submit', async (o) => {
+      o.preventDefault();
+      mesaj.temizle();
+      alanHatasi(ad, '');
+      if (!ad.value.trim()) { alanHatasi(ad, 'Kayıt adı boş olamaz.'); ad.focus(); return; }
+      const alanlar = {};
+      for (const s of satirlar) {
+        const k = s.a.value.trim();
+        if (!k && !s.d.value.trim()) continue;
+        if (!k) { alanHatasi(s.a, 'Alan adı boş olamaz.'); s.a.focus(); return; }
+        alanlar[k] = s.d.value;
+      }
+      try {
+        await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/baglam-profili/kaydet', {
+          govde: { id: p ? p.id : undefined, projeId: proje.id, tur: turAdi, ad: ad.value.trim(), alanlar, ortamId: ortam.value || null }
+        }));
+        bildir('Kayıt kaydedildi.');
+        yenile();
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    formuGoster(profilFormAlani, form);
+  };
 
-  govde.replaceChildren(
-    bolumBasligi('Türler', turler.length, h('button', { type: 'button', class: 'birincil', onclick: () => turFormu(null) }, '+ Tür ekle')),
-    turFormAlani,
-    kayitListesi(turSatirlari, 'Henüz test verisi türü yok.', 'veri'),
-    bolumBasligi('Profiller', profiller.length,
-      h('button', { type: 'button', class: 'birincil', disabled: !turler.length, title: turler.length ? null : 'Önce bir tür ekleyin.', onclick: () => profilFormu(null, turler[0] && turler[0].id) }, '+ Profil ekle')),
-    profilFormAlani,
-    kayitListesi(profilSatirlari, turler.length ? 'Henüz test verisi profili yok.' : 'Profil eklemek için önce bir tür tanımlayın.', 'dosya'));
+  // --- Gruplar: test verisi türleri (kayıt grupları) + bağlam türleri ------------------------------------------------------
+  const gruplar = [
+    ...turler.map((t) => ({ anahtar: `veri:${t.id}`, tur: 'veri', ad: t.ad, t, alanlar: t.alanlar.map((a) => ({ ad: a.ad, etiket: a.etiket || a.ad, gizli: a.hassas })),
+      kayitlar: profiller.filter((p) => p.turId === t.id) })),
+    ...baglamTurleri.map((ad) => {
+      const kayitlar = baglamProfilleri.filter((p) => p.tur === ad);
+      return { anahtar: `baglam:${ad}`, tur: 'baglam', ad, t: null, alanlar: [...new Set(kayitlar.flatMap((p) => Object.keys(p.alanlar || {})))].map((x) => ({ ad: x, etiket: x, gizli: false })), kayitlar };
+    })
+  ];
+  if (!gruplar.some((g) => g.anahtar === seciliKayitGrubu)) seciliKayitGrubu = gruplar[0]?.anahtar || '';
+  const grup = gruplar.find((g) => g.anahtar === seciliKayitGrubu);
+  const grupSecimi = h('div', { class: 'kayit-gruplari', role: 'tablist', 'aria-label': 'Kayıt grupları' },
+    gruplar.map((g) => h('button', {
+      type: 'button', role: 'tab', 'aria-selected': g.anahtar === seciliKayitGrubu ? 'true' : 'false',
+      title: g.tur === 'baglam' ? 'Ekran bağlamı (kullanıcı / acente değiştirme)' : `${g.alanlar.length} alan`,
+      onclick: () => { seciliKayitGrubu = g.anahtar; yenile(); }
+    }, g.ad, h('span', { class: 'sekme-sayisi' }, String(g.kayitlar.length)))),
+    h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => turFormu(null) }, ikon('arti'), 'Kayıt grubu ekle'));
+
+  const hucre = (p, a) => {
+    const v = grup.tur === 'baglam' ? (p.alanlar || {})[a.ad] : p.degerler[a.ad];
+    if (v && typeof v === 'object') return v.dolu ? h('span', { class: 'soluk', title: 'Gizli değer' }, '••••') : h('span', { class: 'cok-soluk' }, '—');
+    if (v === null || v === undefined || v === '') return h('span', { class: 'cok-soluk' }, '—');
+    return String(v);
+  };
+  const excelNot = h('span', { class: 'soluk kucuk', 'aria-live': 'polite' });
+  const excelOnizleme = h('div', {});
+  const excelDosyasi = h('input', { type: 'file', accept: '.xlsx,.csv,.txt', class: 'gorunmez', 'aria-label': 'Excel dosyası' });
+  excelDosyasi.addEventListener('change', async () => {
+    const f = excelDosyasi.files && excelDosyasi.files[0];
+    excelDosyasi.value = '';
+    if (!f || !grup) return;
+    try {
+      const satirlarX = await tabloOku(f);
+      const bas = (satirlarX[0] || []).map((b) => String(b).trim());
+      const kucuk = (x) => String(x || '').toLocaleLowerCase('tr');
+      const adSut = bas.findIndex((b) => ['ad', 'kayıt adı', 'kayit adi', 'profil', 'profil adı'].includes(kucuk(b)));
+      if (adSut < 0) throw new Error('İlk satırda "Ad" sütunu olmalı (kayıt adı: tc1, vkn1…).');
+      const ortamSut = bas.findIndex((b) => kucuk(b) === 'ortam');
+      const sutunlar = grup.tur === 'baglam'
+        ? bas.map((b, i) => ({ ad: b, i })).filter((x) => x.i !== adSut && x.i !== ortamSut && x.ad)
+        : grup.alanlar.map((a) => ({ ad: a.ad, i: bas.findIndex((b) => kucuk(b) === kucuk(a.ad) || kucuk(b) === kucuk(a.etiket)) })).filter((x) => x.i >= 0);
+      const taninmayan = bas.filter((b, i) => b && i !== adSut && i !== ortamSut && !sutunlar.some((x) => x.i === i));
+      const kayitlar = satirlarX.slice(1).map((r) => {
+        const ortamAdi = ortamSut >= 0 ? String(r[ortamSut] || '').trim() : '';
+        const o = ortamAdi ? ortamlar.find((x) => kucuk(x.ad) === kucuk(ortamAdi)) : null;
+        return { ad: String(r[adSut] || '').trim(), ortamId: o ? o.id : null, ortamHatasi: Boolean(ortamAdi && !o),
+          degerler: Object.fromEntries(sutunlar.map((x) => [x.ad, String(r[x.i] ?? '').trim()]).filter(([, v]) => v !== '')) };
+      }).filter((x) => x.ad);
+      const mevcut = (k) => grup.kayitlar.find((p) => p.ad === k.ad && (p.ortamId || null) === k.ortamId);
+      const yeni = kayitlar.filter((k) => !mevcut(k)).length;
+      const yukle = h('button', { type: 'button', class: 'birincil kucuk-dugme' }, `Yükle (${kayitlar.length})`);
+      yukle.addEventListener('click', async () => {
+        await mesgulIken(yukle, 'Yükleniyor…', async () => {
+          for (const k of kayitlar) {
+            const m = mevcut(k);
+            if (grup.tur === 'baglam') {
+              await api('/platform/baglam-profili/kaydet', { govde: { id: m?.id, projeId: proje.id, tur: grup.ad, ad: k.ad, alanlar: { ...(m?.alanlar || {}), ...k.degerler }, ortamId: k.ortamId } });
+            } else {
+              await api('/platform/test-verisi-profili/kaydet', { govde: { id: m?.id, projeId: proje.id, turId: grup.t.id, ad: k.ad, degerler: k.degerler, ortamId: k.ortamId } });
+            }
+          }
+        });
+        bildir(`${kayitlar.length} kayıt yüklendi.`);
+        yenile();
+      });
+      yerlestir(excelOnizleme, h('div', { class: 'not-kutusu', role: 'status' },
+        h('div', {}, h('b', {}, `${kayitlar.length} kayıt okundu`), ` · ${yeni} yeni, ${kayitlar.length - yeni} güncellenecek · sütunlar: ${sutunlar.map((x) => x.ad).join(', ') || '—'}`),
+        taninmayan.length ? h('div', { class: 'soluk kucuk' }, `Tanınmayan sütunlar (alınmaz): ${taninmayan.join(', ')}. Önce gruba alan olarak ekleyin.`) : null,
+        kayitlar.some((k) => k.ortamHatasi) ? h('div', { class: 'alan-uyarisi' }, 'Bazı satırlardaki ortam adı projede yok; o satırlar tüm ortamlar için yüklenir.') : null,
+        h('div', { class: 'dugmeler' }, yukle, h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => yerlestir(excelOnizleme) }, 'Vazgeç'))));
+      excelNot.textContent = f.name;
+    } catch (e) { excelNot.textContent = e.message; }
+  });
+
+  const grupGorunumu = !grup
+    ? bosDurum('Henüz kayıt grubu yok.', 'Kişi, adres, kart gibi birbirine bağlı değerler için bir grup oluşturun (ör. "Özel kişi": T.C. kimlik no, doğum tarihi, telefon); sonra kayıtlarını (tc1, tc2…) ekleyin.', { ikon: 'veri' })
+    : h('section', { class: 'kart kayit-grubu' },
+      h('div', { class: 'kart-basligi' }, h('h3', {}, grup.ad), grup.tur === 'baglam' ? rozet('ekran bağlamı', 'vurgu') : rozet(`${grup.alanlar.length} alan`, ''),
+        h('span', { class: 'sag' },
+          h('button', { type: 'button', class: 'birincil kucuk-dugme', onclick: () => (grup.tur === 'baglam' ? baglamFormu(null, grup.ad) : profilFormu(null, grup.t.id)) }, ikon('arti'), 'Kayıt ekle'),
+          h('label', { class: 'dugme kucuk-dugme' }, ikon('yukle'), 'Excel\'den yükle', excelDosyasi),
+          grup.tur === 'veri' ? h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => turFormu(grup.t) }, ikon('duzenle'), 'Alanları düzenle') : null,
+          grup.tur === 'veri' ? onayliDugme('Grubu sil', 'Grup ve kayıtları silinsin', async () => {
+            await api('/platform/test-verisi-turu/sil', { govde: { id: grup.t.id } }); bildir('Kayıt grubu silindi.'); yenile();
+          }, { kucuk: true, etiket: `${grup.ad}: grubu sil (tüm kayıtları da silinir)` }) : null)),
+      h('p', { class: 'soluk kucuk' }, grup.tur === 'baglam'
+        ? 'Ekranlarda kullanıcı / acente değiştirme seçimi bu kayıtlardan gelir. Excel\'den yüklerken ilk satır: Ad, (Ortam), alan adları.'
+        : 'Her satır bir kayıt; senaryolarda kayıt adıyla seçilir (ör. Hazır profil: tc1) ve alanları birlikte gelir. 🔒 gizli alanlar şifreli saklanır. Excel\'den yüklerken ilk satır: Ad, (Ortam), alan adları ya da etiketleri.'),
+      h('div', { class: 'excel-satiri' }, excelNot), excelOnizleme,
+      turFormAlani, profilFormAlani,
+      grup.kayitlar.length ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'senaryo-tablosu kayit-tablosu' },
+        h('caption', { class: 'gorunmez' }, `${grup.ad} kayıtları`),
+        h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Kayıt'), h('th', { scope: 'col' }, 'Ortam'),
+          grup.alanlar.slice(0, 6).map((a) => h('th', { scope: 'col' }, a.etiket, a.gizli ? ' 🔒' : '')),
+          grup.alanlar.length > 6 ? h('th', { scope: 'col' }, `+${grup.alanlar.length - 6} alan`) : null,
+          h('th', { scope: 'col', class: 'eylemler' }, h('span', { class: 'gorunmez' }, 'Eylemler')))),
+        h('tbody', {}, grup.kayitlar.map((p) => h('tr', { 'data-kayit': p.ad },
+          h('td', {}, h('strong', {}, p.ad)), h('td', { class: 'kucuk' }, ortamAdiBul(ortamlar, p.ortamId)),
+          grup.alanlar.slice(0, 6).map((a) => h('td', { class: 'kucuk' }, hucre(p, a))),
+          grup.alanlar.length > 6 ? h('td', {}) : null,
+          h('td', { class: 'eylemler' }, h('span', { class: 'satir-eylemleri' },
+            duzenleDugmesi(p.ad, () => (grup.tur === 'baglam' ? baglamFormu(p, grup.ad) : profilFormu(p))),
+            gecmisDugmesi(p.ad, () => gecmisGoster(grup.tur === 'baglam' ? 'baglam_profili' : 'test_verisi_profili', p.id, p.ad, baglam)),
+            silDugmesi(p.ad, async () => {
+              await api(grup.tur === 'baglam' ? '/platform/baglam-profili/sil' : '/platform/test-verisi-profili/sil', { govde: { id: p.id } });
+              bildir('Kayıt silindi.'); yenile();
+            })))))))) : bosDurum('Bu grupta kayıt yok.', '"Kayıt ekle" ile ilk kaydı oluşturun ya da Excel\'den yükleyin.', { ikon: 'dosya', rol: 'status' }));
+
+  govde.replaceChildren(...[grupSecimi, grup ? null : turFormAlani, grupGorunumu].filter(Boolean));
 }
 
 // ---------------------------------------------------------------------------------------

@@ -351,7 +351,7 @@ test.describe('alan formu uçtan uca', () => {
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/ayarlar/test-verisi');
-    await page.getByRole('button', { name: 'Düzenle' }).first().click();
+    await page.getByRole('button', { name: 'Alanları düzenle' }).click();
     const editor = page.locator('.servis-parametre-editoru').first();
     await expect(editor.locator('.parametre-cipleri')).toContainText('SIGORTALI_TC');
     await editor.getByLabel('Servis', { exact: true }).selectOption({ label: 'Ornek' });

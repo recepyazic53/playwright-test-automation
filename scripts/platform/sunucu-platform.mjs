@@ -159,7 +159,7 @@ import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 import {
-  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, formBaglami, senaryoGecmisiniSil, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
+  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, modellerdenDegerListeleri, senaryoGecmisiniSil, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
   modelBaglami, ortamAnahtariBul, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
@@ -1247,6 +1247,8 @@ const GET_UCLARI = new Map([
     const adaptor = projeAdaptoru(db, projeId);
     return { ...d, akisTasimasi: Boolean(adaptor?.akisTasimaEkranlari?.().includes(d.ekran.anahtar)) };
   }],
+  // Değer listesi formu: ekranın inputları ve seçenekleri.
+  ['/platform/ekran/girdiler', (db, q) => ekranGirdileri(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
   ['/platform/ekran/surum', (db, q) => {
     const surum = Number(q.get('surum'));
     if (!Number.isInteger(surum) || surum < 1) throw new DepoHatasi('"surum" geçersiz.');
@@ -1531,6 +1533,10 @@ const POST_UCLARI = new Map([
     });
     return { id };
   }],
+  // Ekran modellerindeki seçenek listelerini test verisine (değer listeleri) al: onay yoksa önizleme.
+  ['/platform/deger-listeleri/modellerden', (db, g) => modellerdenDegerListeleri(db, kimlikAl(g.projeId, 'projeId'), {
+    onay: g.onay === true, ekranIdleri: Array.isArray(g.ekranIdleri) ? g.ekranIdleri.map((x) => kimlikAl(x, 'ekranId')) : undefined
+  })],
   ['/platform/baglam-profili/sil', (db, g) => ({ silindi: baglamProfiliSil(db, kimlikAl(g.id)) })],
   ['/platform/test-verisi-turu/kaydet', (db, g) => {
     if (!Array.isArray(g.alanlar)) throw new DepoHatasi('"alanlar" bir dizi olmalıdır.');

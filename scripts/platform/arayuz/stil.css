@@ -2132,3 +2132,19 @@ a.son-sonuc { text-decoration: none; }
 .metot-kutusu { white-space: normal; min-width: 0; overflow: hidden; }
 .metot-kutusu-bilgi { overflow-wrap: anywhere; line-height: 1.35; }
 .liste-disi .deger-cipi { margin: 2px 4px 2px 0; }
+/* Değer listesi formu: koşullar, ekranın listesinden seçim, Excel satırı. */
+.kosul-listesi { display: grid; gap: 6px; margin-bottom: 8px; }
+.kosul-satiri { display: grid; grid-template-columns: 44px minmax(0, 1fr) 14px minmax(0, 1fr) 32px; gap: 8px; align-items: center; }
+.kosul-satiri .baglac { font: 600 10.5px var(--yazi-mono); color: var(--metin-3); text-transform: uppercase; }
+.secim-araclari { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.secim-araclari input[type="search"] { flex: 1 1 180px; min-width: 0; }
+.deger-secim-listesi { max-height: 240px; overflow: auto; border: 1px solid var(--cizgi); border-radius: 8px; padding: 6px 10px; display: grid; gap: 2px; }
+.excel-satiri { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.excel-satiri select { width: auto; }
+/* Test verisi > Kayıtlar: grup seçimi ve kayıt tablosu. */
+.kayit-gruplari { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
+.kayit-gruplari [role="tab"] { display: inline-flex; gap: 6px; align-items: center; padding: 6px 12px; border-radius: 999px; }
+.kayit-gruplari [role="tab"][aria-selected="true"] { background: color-mix(in srgb, var(--vurgu) 12%, transparent); box-shadow: inset 0 0 0 1px var(--vurgu); color: var(--vurgu); }
+.kayit-grubu .kart-basligi { gap: 8px; }
+.kayit-grubu .kart-basligi .sag { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.kayit-tablosu td.kucuk { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

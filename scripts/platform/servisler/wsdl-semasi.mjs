@@ -3,6 +3,8 @@
 // (element) → o öğenin karmaşık tipi. Desteklenen: element / complexType / sequence / all / choice / complexContent extension,
 // simpleType enumeration (seçenek listesi), minOccurs / maxOccurs / nillable. Özellikler (attribute) ve any yok sayılır.
 // Anlaşılmayan yapı hata vermez: o operasyon alansız ya da eksik alanla döner (arayüz XML görünümüne düşer).
+// İçe aktarılan belgeler (wsdl:import, xsd:import / include — ör. Java JAX-WS "?wsdl=1", "?xsd=1") erisimiDenetle tarafından
+// alınıp ana belgenin içine eklenir; burada tüm definitions ve schema bölümleri birlikte okunur.
 import { xmlAyristir } from './servis-govdesi.mjs';
 
 /** @typedef {import('./servis-govdesi.mjs').Alan} Alan */
@@ -145,16 +147,24 @@ export function wsdlSemalari(wsdl) {
     };
   }
 
-  // Operasyonlar: binding (SOAPAction) + portType (girdi mesajı) + mesaj (parça öğesi).
+  // Operasyonlar: binding (SOAPAction) + portType (girdi mesajı) + mesaj (parça öğesi). İçe aktarılan WSDL'ler iç içe
+  // definitions olarak eklenmiş olabilir: hepsi okunur.
+  /** @type {XmlOgesi[]} */
+  const tanimlar = [];
+  /** @param {XmlOgesi} o */
+  const tanimTopla = (o) => { if (o.yerel === 'definitions') tanimlar.push(o); o.cocuklar.forEach(tanimTopla); };
+  tanimTopla(kok);
+  if (!tanimlar.length) tanimlar.push(kok);
+  const hepsi = (/** @type {string} */ ad) => tanimlar.flatMap((t) => cocuklar(t, ad));
   /** @type {Map<string, string>} */
   const mesajOgesi = new Map();
-  for (const m of cocuklar(kok, 'message')) {
+  for (const m of hepsi('message')) {
     const p = cocuklar(m, 'part')[0];
     if (m.oz.name && p?.oz.element) mesajOgesi.set(m.oz.name, yerel(p.oz.element));
   }
   /** @type {Map<string, string>} */
   const girdiler = new Map();
-  for (const pt of cocuklar(kok, 'portType')) {
+  for (const pt of hepsi('portType')) {
     for (const op of cocuklar(pt, 'operation')) {
       const girdi = cocuklar(op, 'input')[0];
       if (op.oz.name && girdi?.oz.message && !girdiler.has(op.oz.name)) girdiler.set(op.oz.name, yerel(girdi.oz.message));
@@ -162,7 +172,7 @@ export function wsdlSemalari(wsdl) {
   }
   /** @type {Record<string, OperasyonSemasi>} */
   const sonuc = {};
-  for (const b of cocuklar(kok, 'binding')) {
+  for (const b of hepsi('binding')) {
     // Yalnız SOAP binding'leri (HTTP GET/POST binding'leri atlanır).
     if (!b.cocuklar.some((c) => c.yerel === 'binding' && /soap/i.test(c.ad))) continue;
     for (const op of cocuklar(b, 'operation')) {

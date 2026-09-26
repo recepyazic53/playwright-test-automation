@@ -120,7 +120,7 @@ export async function taramaDiyalogu(s) {
     yerlestir(profilAlani, girissiz.checked
       ? h('div', { class: 'bos-liste' }, 'Giriş yapılmadan açılır; bağlam profilleri uygulanmaz.')
       : t && t.baglamTuru
-      ? baglamProfiliSecimi({ baglamProfilleri: uygun, secili, degisti: guncelle, bosMetin: `Bu ortamda "${t.baglamTuru}" türünde bağlam profili yok (Ayarlar > Bağlam profilleri). Sayfa giriş sonrası bağlamla taranır.` })
+      ? baglamProfiliSecimi({ baglamProfilleri: uygun, secili, degisti: guncelle, bosMetin: `Bu ortamda "${t.baglamTuru}" türünde bağlam profili yok (Ayarlar > Test verisi > Kayıtlar). Sayfa giriş sonrası bağlamla taranır.` })
       : h('div', { class: 'bos-liste' }, t ? 'Bu ortamın giriş tarifinde bağlam değiştirme yok; sayfa giriş sonrası bağlamla tek kez taranır.' : 'Giriş tarifi olmadığı için bağlam profilleri uygulanamaz.'));
     guncelle();
   }

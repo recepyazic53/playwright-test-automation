@@ -20,6 +20,7 @@ import {
 import { gorunurlukleriHesapla, senaryoyuDogrula } from './senaryo-dogrulayici.mjs';
 import { onayIste } from './kosu-paneli.js';
 import { akisDiyagrami } from './akis-diyagrami.mjs';
+import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
@@ -136,6 +137,17 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const mutlaka = new Set(s.taslak?.mutlaka ?? senaryo?.mutlakaGorunmeli ?? []);
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, ...(baglam.ortak ? { ortak: baglam.ortak } : {}), kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
+  // Koşullu değer listeleri (Ayarlar > Test verisi): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
+  // açıklama, yoksa modelin metni); tutan liste yoksa modelin kendi listesi.
+  const degerListeleri = baglam.degerListeleri || [];
+  const alanDegeri = (id) => { const a = tumAlanlar.find((x) => x.id === id); return a ? String(degerler[a.anahtar] ?? '') : undefined; };
+  const alanSecenekleri = (alan) => {
+    const model = secenekleriBul(alan, degerler, sema);
+    const eslesen = eslesenListeler(degerListeleri, (l) => l.hedef?.alan === alan.id, alanDegeri);
+    if (!eslesen.length) return model;
+    const metinler = new Map([...(alan.secenekler || []), ...Object.values(alan.bagimlilik?.harita || {}).flat()].map((x) => [x.deger, x.metin]));
+    return birlesikDegerler(eslesen).map((x) => ({ deger: x.deger, metin: x.aciklama || metinler.get(x.deger) || x.deger }));
+  };
   /** kontrol anahtarı → { el, hata, uyari, odak } */
   const kontroller = new Map();
   /** alan kimliği → { kap, ciz } */
@@ -222,10 +234,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
     for (const alan of tumAlanlar) {
       const k = alanlar.get(alan.id);
       if (!k) continue;
-      const bagli = (alan.tip === 'secim' && alan.bagimlilik && alan.bagimlilik.alan === degisenAlan.id) || (alan.tip === 'kimlik' && alan.bagliAlan === degisenAlan.id);
+      const bagli = (alan.tip === 'secim' && alan.bagimlilik && alan.bagimlilik.alan === degisenAlan.id) || (alan.tip === 'kimlik' && alan.bagliAlan === degisenAlan.id)
+        || (alan.tip === 'secim' && degerListeleri.some((l) => l.hedef?.alan === alan.id && (l.kosullar || []).some((k) => k.alan === degisenAlan.id)));
       if (!bagli) continue;
       if (alan.tip === 'secim') {
-        const liste = secenekleriBul(alan, degerler, sema);
+        const liste = alanSecenekleri(alan);
         if (degerler[alan.anahtar] && !liste.some((x) => x.deger === degerler[alan.anahtar])) degerler[alan.anahtar] = '';
       }
       k.ciz();
@@ -282,7 +295,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       let ust;
       switch (alan.tip) {
         case 'secim': {
-          const liste = secenekleriBul(alan, degerler, sema);
+          const liste = alanSecenekleri(alan);
           if (alan.gorunum === 'radyo') {
             const ad = yeniId(`${alan.id}-r`);
             const radyolar = liste.map((x) => h('input', { type: 'radio', name: ad, value: x.deger, checked: degerler[alan.anahtar] === x.deger }));

@@ -199,8 +199,29 @@ export function wsdlOperasyonlari(wsdl) {
   return [...ops].map(([ad, eylem]) => (eylem ? { ad, eylem } : { ad }));
 }
 
+/** İçe aktarmalar en çok bu derinliğe ve bu sayıda belgeye kadar izlenir. */
+const ICE_AKTARMA_DERINLIGI = 3;
+const ICE_AKTARMA_SINIRI = 15;
+
 /**
- * Servise erişimi denetler: WSDL'i (GET <adres>?wsdl) ister, operasyonları çıkarır. Başarısızsa açık mesajlı ServisHatasi.
+ * Belgedeki içe aktarma adresleri (wsdl:import location, xsd:import / xsd:include schemaLocation), temel adrese göre çözülmüş.
+ * @param {string} metin @param {string} taban
+ */
+export function iceAktarmaAdresleri(metin, taban) {
+  /** @type {string[]} */
+  const adresler = [];
+  for (const m of metin.matchAll(/<(?:[\w.-]+:)?(?:import|include)\b[^>]*?\b(?:schemaLocation|location)\s*=\s*("([^"]*)"|'([^']*)')/g)) {
+    const yer = (m[2] ?? m[3] ?? '').replace(/&amp;/g, '&').trim();
+    if (!yer) continue;
+    try { adresler.push(new URL(yer, taban).toString()); } catch { /* geçersiz adres atlanır */ }
+  }
+  return [...new Set(adresler)];
+}
+
+/**
+ * Servise erişimi denetler: WSDL'i (GET <adres>?wsdl) ister, operasyonları ve alan şemalarını çıkarır. WSDL ayrı şema ya da WSDL
+ * dosyalarını içe aktarıyorsa (ör. Java JAX-WS: "?xsd=1", "?wsdl=1") bunlar da — yalnız AYNI sunucudan, en çok 3 kat derinlik ve
+ * 15 belge — alınıp ana belgeye eklenir. Başarısızsa açık mesajlı ServisHatasi.
  * @param {{ adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }} girdi
  */
 export async function erisimiDenetle(girdi) {
@@ -208,7 +229,30 @@ export async function erisimiDenetle(girdi) {
   const y = await httpIstegi({ adres: wsdlAdresi, yontem: 'GET', zamanAsimiMs: girdi.zamanAsimiMs ?? 20_000, tlsDogrulama: girdi.tlsDogrulama });
   if (y.durumKodu < 200 || y.durumKodu >= 300) throw new ServisHatasi(`Servis ${y.durumKodu} döndü (${wsdlAdresi}).`);
   if (!/<(?:\w+:)?definitions\b/.test(y.govde)) throw new ServisHatasi('Yanıt bir WSDL değil (adres ya da yol yanlış olabilir).');
-  return { durumKodu: y.durumKodu, sureMs: y.sureMs, operasyonlar: wsdlOperasyonlari(y.govde), semalar: wsdlSemalari(y.govde) };
+  const koken = new URL(wsdlAdresi).origin;
+  const alinan = new Set([wsdlAdresi]);
+  /** @type {string[]} */
+  const ekler = [];
+  /** @type {string[]} */
+  const alinamayan = [];
+  let kuyruk = iceAktarmaAdresleri(y.govde, wsdlAdresi).map((a) => ({ adres: a, derinlik: 1 }));
+  while (kuyruk.length && alinan.size <= ICE_AKTARMA_SINIRI) {
+    const { adres, derinlik } = /** @type {{ adres: string; derinlik: number }} */ (kuyruk.shift());
+    if (alinan.has(adres) || new URL(adres).origin !== koken) continue;
+    alinan.add(adres);
+    try {
+      const e = await httpIstegi({ adres, yontem: 'GET', zamanAsimiMs: girdi.zamanAsimiMs ?? 20_000, tlsDogrulama: girdi.tlsDogrulama });
+      if (e.durumKodu < 200 || e.durumKodu >= 300) { alinamayan.push(`${adres} (${e.durumKodu})`); continue; }
+      ekler.push(e.govde.replace(/^\s*<\?xml[^>]*\?>/, ''));
+      if (derinlik < ICE_AKTARMA_DERINLIGI) kuyruk = [...kuyruk, ...iceAktarmaAdresleri(e.govde, adres).map((a) => ({ adres: a, derinlik: derinlik + 1 }))];
+    } catch (h) { alinamayan.push(`${adres} (${h instanceof Error ? h.message : String(h)})`); }
+  }
+  // İçe aktarılanlar ana belgenin kök öğesinin içine eklenir (tek XML; okuyucu tüm definitions / schema bölümlerini okur).
+  const birlesik = ekler.length ? y.govde.replace(/<\/((?:[\w.-]+:)?definitions)>\s*$/, `${ekler.join('\n')}</$1>`) : y.govde;
+  return {
+    durumKodu: y.durumKodu, sureMs: y.sureMs, operasyonlar: wsdlOperasyonlari(birlesik), semalar: wsdlSemalari(birlesik),
+    ...(ekler.length ? { iceAktarilan: ekler.length } : {}), ...(alinamayan.length ? { alinamayan } : {})
+  };
 }
 
 // ---------------------------------------------------------------------------------------

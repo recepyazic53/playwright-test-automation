@@ -105,21 +105,21 @@ test.describe('servis değer listeleri uçtan uca', () => {
     expect(JSON.stringify(await listeler())).not.toContain('gizli-a');
   });
 
-  test('arayüz: Test verisi > Servis parametreleri sekmesinde değer listesi eklenir (servis seçimi yok)', async () => {
+  test('arayüz: Test verisi > Değer listeleri sekmesinde değer listesi eklenir (servis seçimi yok)', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/ayarlar/test-verisi');
-    await page.getByRole('tab', { name: 'Servis parametreleri' }).click();
+    await page.getByRole('tab', { name: 'Değer listeleri' }).click();
     const tablo = page.locator('.tanim-tablosu');
     await expect(tablo.locator('tr[data-tanim]')).toHaveCount(3);
     await expect(tablo.locator('tr').filter({ hasText: 'Acente kanalları' })).toContainText('100 — Acente A');
-    await page.getByRole('button', { name: '+ Parametre ekle' }).click();
+    await page.getByRole('button', { name: '+ Değer listesi ekle' }).click();
     const d = page.getByRole('dialog');
     await expect(d.getByText('Kullanılacağı servisler')).toHaveCount(0);
-    await d.getByLabel('Parametre adı').fill('Installment');
+    await d.getByLabel('Ad', { exact: true }).fill('Installment');
     await d.getByLabel('Açıklama', { exact: true }).fill('Taksit sayısı');
     await d.getByLabel('1. değer', { exact: true }).fill('1');
     await d.getByLabel('1. değerin açıklaması').fill('Peşin');
@@ -162,7 +162,7 @@ test.describe('servis değer listeleri uçtan uca', () => {
     await expect(satir('ClientType').locator('.oneri-degerleri')).toContainText('O');
     await satir('ClientType').getByRole('button', { name: 'Yeni değer listesi: ClientType' }).click();
     const d = page.getByRole('dialog');
-    await expect(d.getByLabel('Parametre adı')).toHaveValue('ClientType');
+    await expect(d.getByLabel('Ad', { exact: true })).toHaveValue('ClientType');
     await expect(d.getByLabel('1. değer', { exact: true })).toHaveValue('O');
     await expect(d.getByLabel('2. değer', { exact: true })).toHaveValue('T');
     await d.getByLabel('1. değerin açıklaması').fill('Özel');
@@ -249,6 +249,33 @@ test.describe('servis değer listeleri uçtan uca', () => {
     await expect(kutu).toHaveCount(0);
     await expect(satirB('ClientType').getByLabel('ClientType', { exact: true })).toHaveValue('X');
     await expect(satirB('ClientType')).not.toContainText('Listede yok');
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+  test('arayüz: koşullu servis listesi — Channel = 30047 ise Username yalnız 30047001 / 30047002; koşul değişince yeniden süzülür', async () => {
+    test.setTimeout(60_000);
+    await basarili('/platform/servis-parametre-tanimi/kaydet', { projeId, ad: 'KULLANICILAR 30047', tur: 'liste', degerler: [{ deger: '30047001' }, { deger: '30047002' }],
+      kullanim: 'servis', hedef: { servisId: '', parametre: 'Username' }, kosullar: [{ alan: 'Channel', deger: '30047' }] });
+    await basarili('/platform/servis-parametre-tanimi/kaydet', { projeId, ad: 'KULLANICILAR 20171', tur: 'liste', degerler: [{ deger: '20171001' }],
+      kullanim: 'servis', hedef: { servisId: s1, parametre: 'Username' }, kosullar: [{ alan: 'Channel', deger: '20171' }] });
+    await hatali('/platform/servis-parametre-tanimi/kaydet', { projeId, ad: 'Hedefsiz', tur: 'liste', degerler: [{ deger: '1' }], kullanim: 'servis', hedef: { parametre: '' }, kosullar: [{ alan: 'Channel', deger: '1' }] }, /parametreyi seçin/);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/servisler/s/${s1}/senaryo/yeni`);
+    const satirB = (ad: string) => page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
+    await satirB('Channel').getByLabel('Channel değer kaynağı').selectOption('sabit');
+    await satirB('Channel').getByLabel('Channel', { exact: true }).selectOption('__elle');
+    await satirB('Channel').getByLabel('Channel', { exact: true }).fill('30047');
+    await satirB('Channel').getByLabel('Channel', { exact: true }).blur();
+    await satirB('Username').getByLabel('Username değer kaynağı').selectOption('sabit');
+    await expect(satirB('Username').getByLabel('Username', { exact: true }).locator('option')).toHaveText(['—', '30047001', '30047002', 'Elle yaz…']);
+    await expect(satirB('Channel').getByLabel('Channel', { exact: true })).toHaveValue('30047');
+    await satirB('Channel').getByLabel('Channel', { exact: true }).selectOption('__elle');
+    await satirB('Channel').getByLabel('Channel', { exact: true }).fill('20171');
+    await satirB('Channel').getByLabel('Channel', { exact: true }).blur();
+    await expect(satirB('Username').getByLabel('Username', { exact: true }).locator('option')).toHaveText(['—', '20171001', 'Elle yaz…']);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

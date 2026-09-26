@@ -190,7 +190,7 @@ export async function claudeDosyasiOlustur(s, dugme) {
 export function baglamProfiliSecimi(s) {
   const turler = [...new Set(s.baglamProfilleri.map((b) => b.tur))];
   if (!s.baglamProfilleri.length) {
-    return h('div', { class: 'bos-liste' }, s.bosMetin || 'Projede bağlam profili yok (Ayarlar > Bağlam profilleri). Sayfa tek bağlamla incelenecek.');
+    return h('div', { class: 'bos-liste' }, s.bosMetin || 'Projede bağlam profili yok (Ayarlar > Test verisi > Kayıtlar). Sayfa tek bağlamla incelenecek.');
   }
   return h('div', { class: 'profil-secimi' }, turler.map((tur) => h('fieldset', {},
     h('legend', {}, tur),

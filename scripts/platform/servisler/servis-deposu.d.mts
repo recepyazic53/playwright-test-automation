@@ -69,7 +69,8 @@ export declare function servisKosusuGetir(vt: Veritabani, id: string): ServisKos
 
 export declare function servisParametreTanimlariniListele(vt: Veritabani, projeId: string): ParametreTanimi[];
 export declare function servisParametreTanimiKaydet(vt: Veritabani, girdi: {
-  id?: string; projeId: string; ad: string; aciklama?: string; tur: string; degerler?: Array<{ deger: unknown; aciklama?: unknown }>;
+  id?: string; projeId: string; ad: string; aciklama?: string; tur: string; degerler?: Array<{ deger: unknown; aciklama?: unknown; ekranDegeri?: unknown; ekranMetni?: unknown }>;
   kaynak?: { turId: string; alan: string } | null; varsayilan?: string; elleYazilabilir?: boolean;
+  kullanim?: string; hedef?: { servisId?: string; parametre?: string; ekranId?: string; alan?: string; alanEtiketi?: string } | null; kosullar?: Array<{ alan?: unknown; deger?: unknown; etiket?: unknown }>;
 }): string;
 export declare function servisParametreTanimiSil(vt: Veritabani, projeId: string, id: string): boolean;
