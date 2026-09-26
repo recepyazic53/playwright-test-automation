@@ -86,7 +86,7 @@ function sil(vt, tablo, id, secenekler = {}) {
 
 /**
  * @typedef {{ ad: string; eylem?: string }} ServisOperasyonu
- * @typedef {{ yol?: string; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
+ * @typedef {{ yol?: string; tabanlar?: Record<string, string>; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
  *   adresler?: Record<string, string>; yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean;
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;

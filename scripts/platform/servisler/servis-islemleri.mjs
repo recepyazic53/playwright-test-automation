@@ -9,7 +9,7 @@
 //   (tür detayında "servis parametreleri"), değer servisin (senaryo ezebilir) o tür + rol için seçtiği profilden gelir.
 // - Saklanan istek / yanıtta parola ve hassas test verisi değerleri maskelenir.
 import { randomUUID } from 'node:crypto';
-import { DepoHatasi, ortamGetir, testVerisiProfiliGetir, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
+import { DepoHatasi, ortamGetir, ortamKaydet, testVerisiProfiliGetir, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
 import {
   erisimiDenetle, gizlileriMaskele, goreliTarih, kontrolleriDegerlendir, kullanilanParametreler, ServisHatasi, soapIstegi,
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
@@ -46,15 +46,67 @@ function ortamiAl(vt, projeId, ortamId) {
   return o;
 }
 
+/** Taban adres + yol (metin olarak: tabanın kendi yolu korunur — "https://x.com/api/" + "/a.asmx" → ".../api/a.asmx"). @param {string} taban @param {string} yol */
+export const adresBirlestir = (taban, yol) => `${taban.replace(/\/+$/, '')}/${yol.replace(/^\/+/, '')}`;
+
 /**
- * Servisin bir ortamdaki tam adresi: servise özel adres (ayarlar.adresler[ortamId]) varsa o, yoksa ortam taban adresi + yol.
- * @param {{ yol?: string; adresler?: Record<string, string> }} ayarlar @param {{ id: string; tabanUrl: string }} ortam
+ * Servisin bir ortamdaki tam adresi:
+ * - ayarlar.adresler[ortamId] (eski: servise özel TAM adres) varsa o;
+ * - ayarlar.tabanlar[ortamId] tanımlıysa taban + yol; boş metinse servis bu ortamda TANIMLI DEĞİL (hata);
+ * - yoksa ortamın taban adresi + yol.
+ * @param {{ yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string> }} ayarlar @param {{ id: string; ad?: string; tabanUrl: string }} ortam
  */
 export function servisAdresi(ayarlar, ortam) {
   const ozel = ayarlar.adresler?.[ortam.id];
   if (ozel) return ozel;
   if (!ayarlar.yol) throw new DepoHatasi('Servisin yolu tanımlı değil (ör. /AppService/servis.asmx).');
-  return new URL(ayarlar.yol, ortam.tabanUrl.endsWith('/') ? ortam.tabanUrl : `${ortam.tabanUrl}/`).href;
+  const taban = ayarlar.tabanlar?.[ortam.id];
+  if (taban === '') throw new DepoHatasi(`Servis ${ortam.ad ? `"${ortam.ad}"` : 'bu'} ortamında tanımlı değil (taban adres boş).`);
+  return adresBirlestir(taban || ortam.tabanUrl, ayarlar.yol);
+}
+
+/** Servis bu ortamda tanımlı mı (taban adresi bilerek boş bırakılmadıysa). @param {{ tabanlar?: Record<string, string> }} ayarlar @param {string} ortamId */
+export const ortamdaTanimli = (ayarlar, ortamId) => ayarlar.tabanlar?.[ortamId] !== '';
+
+/**
+ * Ortam taban adresleri: { <ortamId>: adres | '' }. '' = servis o ortamda yok. Adres http(s) olmalı.
+ * @param {unknown} tabanlar @returns {Record<string, string>}
+ */
+function tabanlariDogrula(tabanlar) {
+  if (tabanlar === undefined || tabanlar === null) return {};
+  if (typeof tabanlar !== 'object' || Array.isArray(tabanlar)) throw new DepoHatasi('"tabanlar" bir nesne olmalıdır.');
+  /** @type {Record<string, string>} */
+  const s = {};
+  for (const [ortamId, adres] of Object.entries(tabanlar)) {
+    if (typeof adres !== 'string') continue;
+    const a = adres.trim();
+    if (a) {
+      try {
+        const u = new URL(a);
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('protokol');
+      } catch {
+        throw new DepoHatasi(`Taban adres geçersiz: ${a} (http:// ya da https:// ile başlamalı)`);
+      }
+    }
+    s[ortamId] = a;
+  }
+  return s;
+}
+
+/**
+ * Yeni kullanılan taban adresleri ortamın listesine eklenir (sonraki servislerde seçilebilsin). Ortamın asıl adresi zaten listede.
+ * @param {Veritabani} vt @param {string} projeId @param {Record<string, string>} tabanlar
+ */
+function tabanlariOrtamlaraKaydet(vt, projeId, tabanlar) {
+  for (const [ortamId, adres] of Object.entries(tabanlar)) {
+    if (!adres) continue;
+    const o = ortamGetir(vt, ortamId);
+    if (!o || o.projeId !== projeId) throw new DepoHatasi('Taban adresi verilen ortam bulunamadı.');
+    const mevcut = Array.isArray(o.ayarlar.tabanAdresleri) ? /** @type {string[]} */ (o.ayarlar.tabanAdresleri) : [];
+    const ayni = (/** @type {string} */ x) => x.replace(/\/+$/, '') === adres.replace(/\/+$/, '');
+    if (ayni(o.tabanUrl) || mevcut.some(ayni)) continue;
+    ortamKaydet(vt, { id: o.id, projeId, ad: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, ayarlar: { ...o.ayarlar, tabanAdresleri: [...mevcut, adres] } });
+  }
 }
 
 /** @param {unknown} yol */
@@ -150,18 +202,18 @@ function veriProfilleriniDogrula(secim) {
  * Erişim kontrolü (yalnız test ortamı): WSDL istenir. Başarılıysa kısa süre geçerli bir "erisimKimligi" döner; yeni servis
  * bu kimlikle kaydedilir.
  * @param {Veritabani} vt @param {string} projeId
- * @param {{ ortamId: string; yol: string; adresler?: Record<string, string>; tlsDogrulama?: boolean }} girdi
+ * @param {{ ortamId: string; yol: string; adresler?: Record<string, string>; tabanlar?: Record<string, string>; tlsDogrulama?: boolean }} girdi
  */
 export async function erisimKontrolu(vt, projeId, girdi) {
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
   if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('Erişim kontrolü yalnızca test ortamında yapılır (seçilen ortam canlı işaretli).');
-  const adres = servisAdresi({ yol: yolDogrula(girdi.yol), adresler: adresleriDogrula(girdi.adresler) }, ortam);
+  const adres = servisAdresi({ yol: yolDogrula(girdi.yol), adresler: adresleriDogrula(girdi.adresler), tabanlar: tabanlariDogrula(girdi.tabanlar) }, ortam);
   try {
     const s = await erisimiDenetle({ adres, tlsDogrulama: girdi.tlsDogrulama });
     const erisimKimligi = randomUUID();
     for (const [k, e] of erisimler) if (Date.now() - e.zaman > ERISIM_GECERLILIK_MS) erisimler.delete(k);
     erisimler.set(erisimKimligi, { adres, ortamId: ortam.id, projeId, zaman: Date.now(), durumKodu: s.durumKodu, operasyonlar: s.operasyonlar, semalar: s.semalar });
-    return { erisilebilir: true, erisimKimligi, adres, ortam: ortam.ad, durumKodu: s.durumKodu, sureMs: s.sureMs, operasyonlar: s.operasyonlar };
+    return { erisilebilir: true, erisimKimligi, adres, ortam: ortam.ad, durumKodu: s.durumKodu, sureMs: s.sureMs, operasyonlar: s.operasyonlar, semalar: s.semalar };
   } catch (e) {
     if (e instanceof ServisHatasi) return { erisilebilir: false, adres, ortam: ortam.ad, mesaj: e.message };
     throw e;
@@ -183,7 +235,8 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  * Servis ekler / günceller. Yeni servis ya da yolu / ortama özel adresleri değişen servis için erisimKimligi gerekir.
  * Verilmeyen ayarlar korunur.
  * @param {Veritabani} vt @param {string} projeId
- * @param {{ id?: string; anahtar: string; ad: string; yol: string; soapSurumu?: '1.1' | '1.2'; adresler?: Record<string, string>;
+ * @param {{ id?: string; anahtar: string; ad: string; yol: string; soapSurumu?: '1.1' | '1.2'; adresler?: Record<string, string>; tabanlar?: Record<string, string>;
+ *   secilenOperasyonlar?: string[];
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
  *   alanVarsayilanlari?: unknown }} girdi
@@ -193,10 +246,12 @@ export function servisiKaydet(vt, projeId, girdi) {
   if (girdi.id && (!mevcut || mevcut.projeId !== projeId)) throw new DepoHatasi('Servis bulunamadı.');
   const yol = yolDogrula(girdi.yol);
   const adresler = girdi.adresler === undefined && mevcut ? (mevcut.ayarlar.adresler ?? {}) : adresleriDogrula(girdi.adresler);
-  const adresDegisti = !mevcut || mevcut.ayarlar.yol !== yol || JSON.stringify(mevcut.ayarlar.adresler ?? {}) !== JSON.stringify(adresler);
+  const tabanlar = girdi.tabanlar === undefined && mevcut ? (mevcut.ayarlar.tabanlar ?? {}) : tabanlariDogrula(girdi.tabanlar);
+  const adresDegisti = !mevcut || mevcut.ayarlar.yol !== yol || JSON.stringify(mevcut.ayarlar.adresler ?? {}) !== JSON.stringify(adresler)
+    || JSON.stringify(mevcut.ayarlar.tabanlar ?? {}) !== JSON.stringify(tabanlar);
   /** @type {ServisAyarlari} */
   const ayarlar = {
-    ...(mevcut?.ayarlar ?? {}), yol, adresler, soapSurumu: girdi.soapSurumu ?? mevcut?.ayarlar.soapSurumu ?? '1.1',
+    ...(mevcut?.ayarlar ?? {}), yol, adresler, ...(Object.keys(tabanlar).length ? { tabanlar } : {}), soapSurumu: girdi.soapSurumu ?? mevcut?.ayarlar.soapSurumu ?? '1.1',
     ...(girdi.kimlikProfili !== undefined ? { kimlikProfili: girdi.kimlikProfili || undefined } : {}),
     ...(girdi.tarihKurallari !== undefined ? { tarihKurallari: tarihKurallariniDogrula(girdi.tarihKurallari) } : {}),
     ...(girdi.veriProfilleri !== undefined ? { veriProfilleri: veriProfilleriniDogrula(girdi.veriProfilleri) } : {}),
@@ -205,12 +260,20 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {})
   };
   if (adresDegisti) {
-    const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler }, o), vt);
+    const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);
     ayarlar.erisim = { ortamId: e.ortamId, zaman: new Date(e.zaman).toISOString(), durumKodu: e.durumKodu };
-    if (e.operasyonlar.length) ayarlar.operasyonlar = e.operasyonlar;
-    if (Object.keys(e.semalar).length) ayarlar.operasyonSemalari = e.semalar;
+    // Sihirbazda seçilen metotlar: yalnız onlar (ve şemaları) saklanır.
+    const secilen = girdi.secilenOperasyonlar ? new Set(girdi.secilenOperasyonlar) : null;
+    if (secilen && !e.operasyonlar.some((o) => secilen.has(o.ad))) throw new DepoHatasi('En az bir metot seçin.');
+    const ops = secilen ? e.operasyonlar.filter((o) => secilen.has(o.ad)) : e.operasyonlar;
+    if (ops.length) ayarlar.operasyonlar = ops;
+    const semalar = Object.fromEntries(Object.entries(e.semalar).filter(([ad]) => !secilen || secilen.has(ad)));
+    if (Object.keys(semalar).length) ayarlar.operasyonSemalari = semalar;
   }
-  return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
+  return vt.islem(() => {
+    tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
+    return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
+  });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -462,14 +525,15 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
   const yalnizTest = new Set(servis.ayarlar.yalnizTestOperasyonlari ?? []);
   const secili = girdi.senaryoIdleri ? new Set(girdi.senaryoIdleri) : null;
   const liste = servisSenaryolariniListele(vt, girdi.servisId).filter((s) => (secili ? secili.has(s.id) : s.kosuyaDahil));
-  const kosulacak = liste.filter((s) => (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon)));
+  const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
+  const kosulacak = tanimli ? liste.filter((s) => (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))) : [];
   const sonuclar = [];
   for (const s of kosulacak) {
     const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs });
     sonuclar.push({ senaryoId: s.id, baslik: s.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') });
   }
   return {
-    ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, sonuclar,
+    ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, ...(tanimli ? {} : { atlamaNedeni: `Servis "${ortam.ad}" ortamında tanımlı değil (taban adres boş).` }), sonuclar,
     ozet: { basarili: sonuclar.filter((x) => x.durum === 'basarili').length, basarisiz: sonuclar.filter((x) => x.durum === 'basarisiz').length, hata: sonuclar.filter((x) => x.durum === 'hata').length }
   };
 }

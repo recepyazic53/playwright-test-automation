@@ -9,7 +9,7 @@ export declare const KONTROL_TURLERI: readonly ['durumKodu', 'soapYaniti', 'soap
 export type ServisKapsami = 'test' | 'canli' | 'ikisi';
 export interface ServisOperasyonu { ad: string; eylem?: string }
 export interface ServisAyarlari {
-  yol?: string; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
+  yol?: string; tabanlar?: Record<string, string>; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
   adresler?: Record<string, string>; yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean;
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   operasyonSemalari?: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
