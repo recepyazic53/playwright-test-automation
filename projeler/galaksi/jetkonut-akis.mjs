@@ -43,6 +43,15 @@ const liste = (id, etiket, selectId, ek = {}) => alan(id, 'secim', etiket, gizli
   zorunlu: true, mutlakaGorunmeli: true, secenekler: null, seceneklerDurumu: 'bilinmiyor', ...ek
 });
 /**
+ * TEST ekranından seçenekleri okunan gizli (jqTransform) liste: POM gibi betikle yazılır (degerJs: önce değer, yoksa metin;
+ * input/change tetiklenir). Taşınan senaryolarda metin değerler olduğu için doğrulama gevşek ("bilinmiyor") kalır; okunan
+ * seçenekler seceneklerKaynagi notunda.
+ */
+const testListesi = (id, etiket, selectId, secenekler, ek = {}) => alan(id, 'secim', etiket, `#${selectId}`, {
+  zorunlu: true, mutlakaGorunmeli: true, doldurucu: 'degerJs', secenekler: null, seceneklerDurumu: 'bilinmiyor',
+  seceneklerKaynagi: `TEST ekranı (2026-09-26): ${secenekler.map(([d, m]) => `${d}=${m}`).join(', ')}`, ...ek
+});
+/**
  * Özel çizimli (gizli girdili) evet / hayır radyosu: #<ad>-E / #<ad>-H. evet / hayir: [senaryo değeri, görünen metin].
  * @param {string} id @param {string} etiket @param {string} ad @param {[string, string]} evet @param {[string, string]} hayir
  */
@@ -218,17 +227,17 @@ export function jetKonutAkisPaketi(s = {}) {
           id: 'rizikoBolumu', baslik: 'Riziko ve poliçe bilgileri', alanlar: [
             baslangicTarihi(),
             sigortaliDurumu(),
-            liste('binaTipi', 'Bina tipi', 'BuildingType'),
+            testListesi('binaTipi', 'Bina tipi', 'BuildingType', [['9', 'APARTMAN DAİRESİ'], ['1', 'MÜSTAKİL BİNA']]),
             alan('brutYuzolcum', 'sayi', 'Brüt yüzölçümü (m²)', '#GrossAreaM2', { zorunlu: true, gorunurluk: { kosul: 'malSahibi' } }),
             evetHayir('daskaBagli', 'DASK\'a bağlı', 'IsDASKDepended', undefined, undefined, { gorunurluk: { kosul: 'malSahibi' } }),
             evetHayir('dainiMurtehin', 'Dain-i mürtehin', 'IsHaveLossPayee', ['var', 'Var'], ['yok', 'Yok']),
-            liste('alternatifPlus', 'Alternatif plus', 'AlternativePlus'),
-            liste('alternatif', 'Alternatif', 'Alternative'),
-            liste('yapiTarzi', 'Yapı tarzı', 'ConstructionType'),
+            testListesi('alternatifPlus', 'Alternatif plus', 'AlternativePlus', [['E', 'E'], ['H', 'H']]),
+            testListesi('alternatif', 'Alternatif', 'Alternative', [['1', '1'], ['2', '2'], ['3', '3']]),
+            testListesi('yapiTarzi', 'Yapı tarzı', 'ConstructionType', [['1', 'TAM KAGİR'], ['2', 'YIĞMA KAGİR'], ['3', 'ADİ KAGİR'], ['4', 'AHŞAP']]),
             // Kat sayısı seçilince bulunduğu kat listesi yenilenir (POM: yükleme örtüsü kalkana kadar beklenir).
-            liste('toplamKat', 'Toplam kat sayısı', 'TotalFloor', { doldurucuParametreleri: { bekle: { secici: '.blockUI.blockOverlay', durum: 'gizli', zamanAsimiSn: 20 } } }),
-            liste('rizikonunBulunduguKat', 'Rizikonun bulunduğu kat', 'RiskFloor'),
-            liste('catiTipi', 'Çatı tipi', 'RoofType'),
+            testListesi('toplamKat', 'Toplam kat sayısı', 'TotalFloor', [['1', '1-4 ARASI'], ['2', '5-7 ARASI'], ['3', '8 KAT VE ÜZERİ']], { doldurucuParametreleri: { bekle: { secici: '.blockUI.blockOverlay', durum: 'gizli', zamanAsimiSn: 20 } } }),
+            testListesi('rizikonunBulunduguKat', 'Rizikonun bulunduğu kat', 'RiskFloor', [['1', 'ZEMİN ALTI / BODRUM'], ['2', 'ZEMİN / GİRİŞ'], ['3', '1.KAT'], ['4', '2.KAT VE ÜSTÜ'], ['5', 'EN ÜST KAT']]),
+            testListesi('catiTipi', 'Çatı tipi', 'RoofType', [['1', 'AHŞAP ÜSTÜ KİREMİT'], ['2', 'BETONARME TERAS'], ['3', 'ÇELİK KONSTRÜKSİYON ÜZE.İZOLE'], ['4', 'ETERNİT'], ['5', 'DİĞER']]),
             evetHayir('altmisGundenFazlaBos', '60 günden fazla boş', 'BlankMoreThan60Days'),
             alan('binaInsaYili', 'sayi', 'Bina inşa yılı', '#BuildYear', { zorunlu: true })
           ]
