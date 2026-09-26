@@ -109,6 +109,14 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await kurallar.getByLabel('1. kural: kategori').selectOption({ index: 0 });
     await kurallar.getByRole('button', { name: 'Kaydet' }).click();
     await expect(kurallar.getByText('1 kural kaydedildi.')).toBeVisible();
+    // Yedekleme > Geçmiş sonuçları sil: önce sayım, silinecek yoksa silme düğmesi kapalı kalır.
+    await page.goto('/#/ayarlar/yedekleme');
+    const temizle = page.getByRole('group', { name: 'Geçmiş sonuçları sil' });
+    await temizle.getByRole('button', { name: 'Neler silinecek?' }).click();
+    await expect(temizle.getByText('Silinecek sonuç yok.')).toBeVisible();
+    await expect(temizle.getByRole('button', { name: 'Kalıcı olarak sil' })).toBeDisabled();
+    expect(((await nobetciApi(nobetci, '/platform/sonuclar/temizle', { gun: 0 })) as { mesaj?: string }).mesaj).toContain('1–3650');
+    expect(await nobetciApi(nobetci, '/platform/sonuclar/temizle', { tumu: true, onay: true })).toMatchObject({ silinen: { kosu: 0, sonuc: 0 } });
     const red = await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { kosuSureLimitiDk: 0 } }) as { mesaj?: string };
     expect(String(red.mesaj)).toContain('1–120');
     expect(hatalar).toEqual([]);
@@ -128,13 +136,16 @@ test('sonuç saklama: süresiz varsayılan hiçbir şey silmez; süre verilince 
       sonucKaydet(vt, { kosuId: id, projeId, senaryoBaslik: id, durum: 'basarili', testKimligi: id, bitis: gunOnce(g), adimlar: [{ ad: 'a', durum: 'basarili', sureMs: 1 }] });
       kosuyuBitir(vt, id, { durum: 'tamamlandi', bitis: gunOnce(g) });
     }
-    expect(eskiSonuclariSil(vt, 0)).toEqual({ kosu: 0, sonuc: 0, servisKosusu: 0, akisKosusu: 0 });
+    expect(eskiSonuclariSil(vt, 0)).toEqual({ kosu: 0, sonuc: 0, servisKosusu: 0, akisKosusu: 0, medyaDosyalari: [] });
     expect(varsayilanKosuAyarlari().sonucSaklamaGun).toBe(0);
     expect(eskiSonuclariSil(vt, 30)).toMatchObject({ kosu: 1, sonuc: 1 });
     expect(vt.tumu('SELECT id FROM kosular').map((r) => r.id)).toEqual(['yeni']);
     expect(Number(vt.tek('SELECT COUNT(*) AS n FROM adim_sonuclari')?.n)).toBe(1);
     expect(kosuAyarlariniKaydet(vt, { sonucSaklamaGun: 90, otomatikYedekSayisi: 7 })).toMatchObject({ sonucSaklamaGun: 90, otomatikYedekSayisi: 7 });
     expect(() => kosuAyarlariniKaydet(vt, { otomatikYedekSayisi: 0 })).toThrow('1–365');
+    // Tümü: gün yok sayılır, kalan yeni koşu da silinir.
+    expect(eskiSonuclariSil(vt, 0, { tumu: true })).toMatchObject({ kosu: 1, sonuc: 1 });
+    expect(vt.tumu('SELECT id FROM kosular')).toEqual([]);
   } finally { vt.kapat(); klasor.temizle(); }
 });
 

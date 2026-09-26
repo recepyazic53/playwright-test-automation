@@ -497,7 +497,7 @@ async function yedekleme(govde, baglam, yenile) {
     h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; kaç tanesinin saklanacağını aşağıdaki "Saklama ayarları"ndan belirlersiniz.'),
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     liste);
-  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart, saklamaFormu);
+  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart, saklamaFormu, sonucTemizlemeKarti());
 }
 
 // ---------------------------------------------------------------------------------------
@@ -554,6 +554,43 @@ async function dosyalar(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 // Güvenlik
 // ---------------------------------------------------------------------------------------
+
+/**
+ * Geçmiş sonuçları sil (geri alınamaz): tümü ya da N günden eski koşular — sonuçlar, adımlar, ekran görüntüleri, videolar, izler
+ * ile servis / akış koşuları. Önce sayım gösterilir; silme düğmesi sayımdan sonra açılır.
+ */
+function sonucTemizlemeKarti() {
+  const kapsam = h('select', {}, h('option', { value: 'tumu' }, 'Tüm geçmiş sonuçlar'), h('option', { value: 'gun' }, 'Şu kadar günden eski olanlar'));
+  const gun = h('input', { type: 'number', min: '1', max: '3650', step: '1', value: '30', inputmode: 'numeric', 'aria-label': 'Gün' });
+  const gunAlani = alan('Gün', gun);
+  gunAlani.hidden = true;
+  const mesaj = mesajKutusu();
+  const say = h('button', { type: 'button' }, 'Neler silinecek?');
+  const sil = h('button', { type: 'button', class: 'tehlike', disabled: true }, ikon('cop'), 'Kalıcı olarak sil');
+  const govdeAl = () => (kapsam.value === 'tumu' ? { tumu: true } : { gun: Number(gun.value) });
+  const sifirla = () => { sil.disabled = true; mesaj.temizle(); };
+  kapsam.addEventListener('change', () => { gunAlani.hidden = kapsam.value === 'tumu'; sifirla(); });
+  gun.addEventListener('input', sifirla);
+  say.addEventListener('click', async () => {
+    mesaj.temizle();
+    try {
+      const { onizleme: o } = await mesgulIken(say, 'Sayılıyor…', () => api('/platform/sonuclar/temizle', { govde: govdeAl() }));
+      const toplam = o.kosu + o.servisKosusu + o.akisKosusu;
+      mesaj.goster(toplam ? `Silinecek: ${o.kosu} ekran koşusu (${o.sonuc} sonuç, ${o.medya} ekran görüntüsü / video / iz), ${o.servisKosusu} servis koşusu, ${o.akisKosusu} akış koşusu. Bu işlem geri alınamaz.` : 'Silinecek sonuç yok.', toplam ? 'uyari' : 'basari');
+      sil.disabled = !toplam;
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  sil.addEventListener('click', async () => {
+    try {
+      const { silinen: s } = await mesgulIken(sil, 'Siliniyor…', () => api('/platform/sonuclar/temizle', { govde: { ...govdeAl(), onay: true } }));
+      mesaj.goster(`Silindi: ${s.kosu} ekran koşusu (${s.sonuc} sonuç, ${s.medya} medya dosyası), ${s.servisKosusu} servis koşusu, ${s.akisKosusu} akış koşusu.`, 'basari');
+      sil.disabled = true;
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return h('div', { class: 'kart form-paneli', role: 'group', 'aria-label': 'Geçmiş sonuçları sil' }, h('h3', {}, ikon('cop'), 'Geçmiş sonuçları sil'),
+    h('p', { class: 'soluk' }, 'Koşu sonuçlarını, adımlarını, ekran görüntülerini, videolarını ve izlerini; servis ve akış koşularını siler. Senaryolar, ekranlar ve test verisi silinmez. Çalışmakta olan koşular etkilenmez.'),
+    mesaj.kutu, alan('Kapsam', kapsam), gunAlani, h('div', { class: 'dugmeler' }, say, sil));
+}
 
 /** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları. */
 async function kosuAyarlari(govde) {

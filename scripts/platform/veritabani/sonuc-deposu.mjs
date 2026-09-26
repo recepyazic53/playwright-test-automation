@@ -421,14 +421,18 @@ export function kosudakiSonucuBul(vt, kosuId, arama) {
 /**
  * Sonuç saklama (Ayarlar > Yedekleme > Sonuç saklama): başlangıcı gun günden eski, bitmiş ekran koşularını (sonuçları, adımları,
  * medya satırları) ve servis / servis akışı koşularını siler. Medya DOSYALARI satırları silinince sahipsiz kalır; günlük medya
- * temizliği (medyaSaklamaTemizligi) onları siler. gun <= 0: hiçbir şey silinmez.
- * @param {Veritabani} vt @param {number} gun @param {{ simdi?: number }} [s]
- * @returns {{ kosu: number; sonuc: number; servisKosusu: number; akisKosusu: number }}
+ * temizliği (medyaSaklamaTemizligi) onları siler; hemen silmek için dönen medyaDosyalari kullanılır. gun <= 0: hiçbir şey
+ * silinmez; tumu: gün yok sayılır, bitmiş TÜM koşular silinir (Sonuçlar > Geçmiş sonuçları sil).
+ * @param {Veritabani} vt @param {number} gun @param {{ simdi?: number; tumu?: boolean }} [s]
+ * @returns {{ kosu: number; sonuc: number; servisKosusu: number; akisKosusu: number; medyaDosyalari: string[] }}
  */
 export function eskiSonuclariSil(vt, gun, s = {}) {
-  const bos = { kosu: 0, sonuc: 0, servisKosusu: 0, akisKosusu: 0 };
-  if (!Number.isFinite(gun) || gun <= 0) return bos;
-  const esik = new Date((s.simdi ?? Date.now()) - gun * 24 * 60 * 60 * 1000).toISOString();
+  const bos = { kosu: 0, sonuc: 0, servisKosusu: 0, akisKosusu: 0, medyaDosyalari: /** @type {string[]} */ ([]) };
+  if (!s.tumu && (!Number.isFinite(gun) || gun <= 0)) return bos;
+  const simdi = s.simdi ?? Date.now();
+  const esik = new Date(s.tumu ? simdi + 24 * 60 * 60 * 1000 : simdi - gun * 24 * 60 * 60 * 1000).toISOString();
+  /** @type {string[]} */
+  const medyaDosyalari = [];
   return vt.islem(() => {
     const kosular = vt.tumu("SELECT id FROM kosular WHERE baslangic < ? AND durum != 'calisiyor'", [esik]).map((r) => String(r.id));
     let sonuc = 0;
@@ -439,6 +443,7 @@ export function eskiSonuclariSil(vt, gun, s = {}) {
       for (let j = 0; j < sonuclar.length; j += 200) {
         const sp = sonuclar.slice(j, j + 200);
         const y2 = sp.map(() => '?').join(', ');
+        for (const r of vt.tumu(`SELECT dosya FROM medya WHERE sonuc_id IN (${y2})`, sp)) medyaDosyalari.push(String(r.dosya));
         vt.calistir(`DELETE FROM medya WHERE sonuc_id IN (${y2})`, sp);
         vt.calistir(`DELETE FROM adim_sonuclari WHERE sonuc_id IN (${y2})`, sp);
         vt.calistir(`DELETE FROM kosu_sonuclari WHERE id IN (${y2})`, sp);
@@ -450,6 +455,6 @@ export function eskiSonuclariSil(vt, gun, s = {}) {
     vt.calistir('DELETE FROM servis_kosulari WHERE baslangic < ?', [esik]);
     const akisKosusu = Number(vt.tek('SELECT COUNT(*) AS n FROM servis_akis_kosulari WHERE baslangic < ?', [esik])?.n ?? 0);
     vt.calistir('DELETE FROM servis_akis_kosulari WHERE baslangic < ?', [esik]);
-    return { kosu: kosular.length, sonuc, servisKosusu, akisKosusu };
+    return { kosu: kosular.length, sonuc, servisKosusu, akisKosusu, medyaDosyalari };
   });
 }

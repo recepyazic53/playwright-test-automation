@@ -1435,6 +1435,28 @@ const POST_UCLARI = new Map([
   ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
   ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
+  // Sonuçlar > Geçmiş sonuçları sil: tümü ya da "gun" günden eski bitmiş koşular (sonuç, adım, ekran görüntüsü, video, iz) ile
+  // servis / akış koşuları. onay: true olmadan yalnızca sayar. Şifreli medya dosyaları hemen silinir. Geri alınamaz.
+  ['/platform/sonuclar/temizle', (db, g) => {
+    const tumu = g.tumu === true;
+    const gun = Number(g.gun);
+    if (!tumu && (!Number.isInteger(gun) || gun < 1 || gun > 3650)) throw new DepoHatasi('"gun" 1–3650 arasında bir tam sayı olmalıdır (ya da "tumu": true).');
+    const esik = new Date(tumu ? Date.now() + 86_400_000 : Date.now() - gun * 86_400_000).toISOString();
+    if (g.onay !== true) {
+      const say = (/** @type {string} */ sql) => Number(db.tek(sql, [esik])?.n ?? 0);
+      return { onizleme: {
+        kosu: say("SELECT COUNT(*) AS n FROM kosular WHERE baslangic < ? AND durum != 'calisiyor'"),
+        sonuc: say("SELECT COUNT(*) AS n FROM kosu_sonuclari WHERE kosu_id IN (SELECT id FROM kosular WHERE baslangic < ? AND durum != 'calisiyor')"),
+        medya: say("SELECT COUNT(*) AS n FROM medya WHERE sonuc_id IN (SELECT r.id FROM kosu_sonuclari r JOIN kosular k ON k.id = r.kosu_id WHERE k.baslangic < ? AND k.durum != 'calisiyor')"),
+        servisKosusu: say('SELECT COUNT(*) AS n FROM servis_kosulari WHERE baslangic < ?'),
+        akisKosusu: say('SELECT COUNT(*) AS n FROM servis_akis_kosulari WHERE baslangic < ?')
+      } };
+    }
+    const r = eskiSonuclariSil(db, tumu ? 0 : gun, { tumu });
+    for (const dosya of r.medyaDosyalari) medyaDosyasiniSil(medyaKlasoruYolu(), dosya);
+    console.log(`[platform] Geçmiş sonuçlar silindi: ${r.kosu} koşu, ${r.sonuc} sonuç, ${r.medyaDosyalari.length} medya dosyası, ${r.servisKosusu} servis ve ${r.akisKosusu} akış koşusu.`);
+    return { silinen: { kosu: r.kosu, sonuc: r.sonuc, medya: r.medyaDosyalari.length, servisKosusu: r.servisKosusu, akisKosusu: r.akisKosusu } };
+  }],
   ['/platform/guvenlik/kaydet', (db, g) => {
     /** @type {Record<string, unknown>} */
     const yanit = {};

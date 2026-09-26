@@ -61,4 +61,4 @@ export declare function kosudakiSonucuBul(vt: Veritabani, kosuId: string, arama:
   detay: SonucDetayi; sonEkranGoruntusuId: string | null; videoId: string | null; basarisizAdim: string | null;
 } | null;
 
-export declare function eskiSonuclariSil(vt: Veritabani, gun: number, s?: { simdi?: number }): { kosu: number; sonuc: number; servisKosusu: number; akisKosusu: number };
+export declare function eskiSonuclariSil(vt: Veritabani, gun: number, s?: { simdi?: number; tumu?: boolean }): { kosu: number; sonuc: number; servisKosusu: number; akisKosusu: number; medyaDosyalari: string[] };
