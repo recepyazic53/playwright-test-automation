@@ -371,6 +371,9 @@ test('API doğrulaması: token, kasa, geçersiz gövde, yol dışı dosya listes
   expect(existsSync(join(kodKoku, 'tests', 'scenarios', 'jet-seyahat', 'prim-hesaplama.spec.ts'))).toBe(true);
   const dask = seyahat;
   expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: '../x', onayAdi: 'x' })).mesaj).toMatch(/geçersiz/);
+  // Video saklama süresi: yeni kayıt 1–365 gün.
+  expect((await api(nobetci, '/platform/guvenlik/kaydet', { videoSaklamaGun: 366 })).mesaj).toMatch(/1–365 gün/);
+  expect(await api(nobetci, '/platform/guvenlik/kaydet', { videoSaklamaGun: 365 })).toMatchObject({ basarili: true, videoSaklamaGun: 365 });
   await api(nobetci, '/platform/kasa/kilitle', {});
   const kilitli = await fetch(`${nobetci.adres}/platform/ekran/sil/onizle`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projeId, ekranId: dask?.id, token: nobetci.token }) });
   expect(kilitli.status).toBe(423);
