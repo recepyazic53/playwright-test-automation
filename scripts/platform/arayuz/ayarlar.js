@@ -555,9 +555,47 @@ async function dosyalar(govde, baglam, yenile) {
 // Güvenlik
 // ---------------------------------------------------------------------------------------
 
-/** Ayarlar > Koşu. */
+/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları. */
 async function kosuAyarlari(govde) {
-  yerlestir(govde, await ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'));
+  const [form, kurallar] = await Promise.all([
+    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'), siniflandirmaKarti()
+  ]);
+  yerlestir(govde, form, kurallar);
+}
+
+/** Hata sınıflandırma kuralları: "hata mesajında şu geçerse → kategori" (genel kurallardan önce denenir). */
+async function siniflandirmaKarti() {
+  const { kurallar, kategoriler } = await api('/platform/siniflandirma');
+  const is = kurallar.map((k) => ({ ...k }));
+  const mesaj = mesajKutusu();
+  const liste = h('div', { class: 'siniflandirma-kurallari' });
+  const ciz = () => {
+    yerlestir(liste, is.length ? is.map((k, n) => {
+      const metin = h('input', { type: 'text', value: k.icerir, maxlength: '200', 'aria-label': `${n + 1}. kural: hata mesajında geçen metin`, placeholder: 'ör. beklenmeyen bir hata' });
+      metin.addEventListener('input', () => { k.icerir = metin.value; });
+      const kat = h('select', { 'aria-label': `${n + 1}. kural: kategori` }, kategoriler.map((x) => h('option', { value: x, selected: x === k.kategori }, x)));
+      kat.addEventListener('change', () => { k.kategori = kat.value; });
+      return h('div', { class: 'kural-satiri' }, metin, kat,
+        h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. kuralı sil`, onclick: () => { is.splice(n, 1); ciz(); } }, ikon('carpi')));
+    }) : h('p', { class: 'soluk kucuk' }, 'Kural yok: yalnız genel kurallar (zaman aşımı, seçici, doğrulama) uygulanır.'));
+  };
+  ciz();
+  const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const form = h('form', { class: 'kart form-paneli', novalidate: true, 'aria-label': 'Hata sınıflandırma kuralları' },
+    h('h3', {}, ikon('uyari'), 'Hata sınıflandırma kuralları'),
+    h('p', { class: 'soluk' }, 'Kalan testin hata mesajında bu metin geçerse Sonuçlar\'da seçtiğiniz kategoride görünür (ör. uygulamanızın iş kuralı pop-up metni → "İş Kuralı / Ekran Hatası"). Kurallar yukarıdan aşağı denenir; eşleşmezse genel kurallar uygulanır. Yeni koşulara uygulanır.'),
+    mesaj.kutu, liste,
+    h('div', { class: 'dugmeler' },
+      h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { is.push({ icerir: '', kategori: kategoriler[0] }); ciz(); } }, ikon('arti'), 'Kural ekle'), kaydet));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    try {
+      const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/siniflandirma/kaydet', { govde: { kurallar: is.map((k) => ({ icerir: k.icerir.trim(), kategori: k.kategori })) } }));
+      mesaj.goster(`${r.kurallar.length} kural kaydedildi.`, 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return form;
 }
 
 /**

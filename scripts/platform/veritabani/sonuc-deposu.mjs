@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { DepoHatasi, yerelMakine } from './depo.mjs';
 import { beklenenGorulenCikar, kalipCikar, kategoriBul } from '../sonuclar/siniflandirma.mjs';
 import { kartlariHesapla, sayilariTopla, trendHesapla } from '../sonuclar/hesaplama.mjs';
+import { siniflandirmaKurallari } from '../ayarlar/siniflandirma-kurallari.mjs';
 
 /** @typedef {import('./baglanti.mjs').Veritabani} Veritabani */
 
@@ -156,7 +157,7 @@ export function sonucKaydet(vt, g) {
          test_kimligi, senaryo_anahtari, ekran_id, urun_adi, ham_durum, hata_kategorisi, hata_kalibi, beklenen_sonuc, atlanan_alanlar_json, deneme)
        VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, kosuId, senaryoId, baslik, g.durum, tamSayi(g.sureMs), hata, isoZaman(g.baslangic), isoZaman(g.bitis) ?? new Date().toISOString(),
-        testKimligi, anahtar, ekranId, urunAdi, metin(g.hamDurum, 40), basarisiz ? kategoriBul(hata ?? '') : null,
+        testKimligi, anahtar, ekranId, urunAdi, metin(g.hamDurum, 40), basarisiz ? kategoriBul(hata ?? '', siniflandirmaKurallari(vt)) : null,
         basarisiz ? kalipCikar(hata ?? '') : null, metin(g.beklenenSonuc, 2000), JSON.stringify(atlanan), tamSayi(g.deneme) ?? 0]
     );
     (g.adimlar ?? []).slice(0, 1000).forEach((a, sira) => {

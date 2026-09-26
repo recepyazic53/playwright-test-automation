@@ -11,6 +11,8 @@ import { projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritab
 import { eskiSonuclariSil, kosuKaydet, kosuyuBitir, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
 import { kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from '../../scripts/platform/ayarlar/kosu-ayarlari.mjs';
 import { yerTutuculariDoldur } from '../../scripts/platform/servisler/soap-istemcisi.mjs';
+import { KATEGORI, kategoriBul } from '../../scripts/platform/sonuclar/siniflandirma.mjs';
+import { siniflandirmaKurallariniKaydet } from '../../scripts/platform/ayarlar/siniflandirma-kurallari.mjs';
 import { ekranGoruntusuAyari, izAyari, sureAyari, videoAyari, yenidenDenemeAyari } from '../support/kosu-ayarlari';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
@@ -100,6 +102,13 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await expect(form.getByText('Koşu ayarları kaydedildi')).toBeVisible();
     const y = await nobetciApi(nobetci, '/platform/kosu-ayarlari') as { ayarlar: Record<string, unknown> };
     expect(y.ayarlar).toMatchObject({ yenidenDeneme: 1, video: 'yalnizHata', servisZamanAsimiSn: 90 });
+    // Hata sınıflandırma kuralları kartı.
+    const kurallar = page.getByRole('form', { name: 'Hata sınıflandırma kuralları' });
+    await kurallar.getByRole('button', { name: 'Kural ekle' }).click();
+    await kurallar.getByLabel('1. kural: hata mesajında geçen metin').fill('beklenmeyen bir hata');
+    await kurallar.getByLabel('1. kural: kategori').selectOption({ index: 0 });
+    await kurallar.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(kurallar.getByText('1 kural kaydedildi.')).toBeVisible();
     const red = await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { kosuSureLimitiDk: 0 } }) as { mesaj?: string };
     expect(String(red.mesaj)).toContain('1–120');
     expect(hatalar).toEqual([]);
@@ -126,5 +135,22 @@ test('sonuç saklama: süresiz varsayılan hiçbir şey silmez; süre verilince 
     expect(Number(vt.tek('SELECT COUNT(*) AS n FROM adim_sonuclari')?.n)).toBe(1);
     expect(kosuAyarlariniKaydet(vt, { sonucSaklamaGun: 90, otomatikYedekSayisi: 7 })).toMatchObject({ sonucSaklamaGun: 90, otomatikYedekSayisi: 7 });
     expect(() => kosuAyarlariniKaydet(vt, { otomatikYedekSayisi: 0 })).toThrow('1–365');
+  } finally { vt.kapat(); klasor.temizle(); }
+});
+
+test('hata sınıflandırma kuralları: kullanıcı kuralı genel kurallardan önce; kayıtta kategori kurala göre; doğrulama', async () => {
+  expect(kategoriBul('Error: expect(locator).toBeVisible() failed\nUygulama: Beklenmeyen Bir Hata oluştu')).toBe(KATEGORI.dogrulama);
+  expect(kategoriBul('Error: expect(locator).toBeVisible() failed\nUygulama: Beklenmeyen Bir Hata oluştu', [{ icerir: 'beklenmeyen bir hata', kategori: KATEGORI.popup }])).toBe(KATEGORI.popup);
+  const klasor = geciciKlasor('siniflandirma');
+  const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
+  try {
+    await kasaOlustur(vt, 'Gecici-Sinif-1', { kdf: HIZLI_KDF });
+    expect(() => siniflandirmaKurallariniKaydet(vt, [{ icerir: 'ab', kategori: KATEGORI.popup }])).toThrow('3–200');
+    expect(() => siniflandirmaKurallariniKaydet(vt, [{ icerir: 'uygun metin', kategori: 'Uydurma' }])).toThrow('kategori geçersiz');
+    siniflandirmaKurallariniKaydet(vt, [{ icerir: 'Beklenmeyen bir hata', kategori: KATEGORI.popup }]);
+    const projeId = projeKaydet(vt, { ad: 'Sınıflandırma' });
+    kosuKaydet(vt, { id: 'k1', projeId, tur: 'tekil' });
+    sonucKaydet(vt, { kosuId: 'k1', projeId, senaryoBaslik: 'S', durum: 'basarisiz', testKimligi: 't1', hataMesaji: 'Hesapla: beklenmeyen bir hata penceresi açıldı' });
+    expect(vt.tek('SELECT hata_kategorisi FROM kosu_sonuclari')?.hata_kategorisi).toBe(KATEGORI.popup);
   } finally { vt.kapat(); klasor.temizle(); }
 });
