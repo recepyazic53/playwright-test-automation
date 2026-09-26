@@ -1,8 +1,9 @@
 // Metot alan tablosu (ORTAK: Servis ekle sihirbazı 3. adım ve servisin Parametreler sekmesi).
 // Satır: Alan (tip) | Varsayılan değer (parametre) | Zorunlu. İsteğe bağlı: "Alan ekle (WSDL'de yok)" — elle eklenen alanlar
 // ek listesinde tutulur (servis ayarı ekAlanlar), şemaya semaBirlestir ile katılır ve kaldırılabilir.
-// Yazma kutusu yoktur (seçim kutuları); alan ekleme formu ayrı durur, tablo yalnız ekleme / kaldırma olunca yeniden çizilir.
-import { h, rozet } from './ortak.js';
+// Yazma kutusu yoktur (seçim kutuları); alan ekleme formu "+ Alan ekle" ile açılır, tablo yalnız ekleme / kaldırma olunca yeniden çizilir.
+// metotKutulari: her metot bir kutucuk; tıklanan metodun tablosu altta çerçeve içinde açılır (iç içe açılır bölümler yok).
+import { h, ikon, rozet } from './ortak.js';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 
 const TIP = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
@@ -62,13 +63,22 @@ export function metotAlanTablosu(s) {
   ciz();
   kap.append(tablo);
   if (s.ekler) {
-    // Alan ekle (WSDL'de yok): yol (grup/alan), tip, zorunlu.
+    // Alan ekle (WSDL'de yok): "+ Alan ekle" formu açar; yol (grup/alan), tip, zorunlu.
     const kok = s.sema.alanlar.length === 1 && s.sema.alanlar[0].cocuklar ? `${s.sema.alanlar[0].ad}/` : '';
     const yol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: `${kok}YeniAlan`, value: kok, 'aria-label': `${s.ad} yeni alan yolu` });
     const tip = h('select', { 'aria-label': `${s.ad} yeni alan tipi` }, Object.entries(TIP).map(([d, m]) => h('option', { value: d }, m)));
     const zor = h('input', { type: 'checkbox', 'aria-label': `${s.ad} yeni alan zorunlu` });
     const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
-    const ekle = h('button', { type: 'button', class: 'kucuk-dugme' }, '+ Alan ekle');
+    const ekle = h('button', { type: 'button', class: 'kucuk-dugme birincil' }, 'Ekle');
+    const ac = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-expanded': 'false' }, '+ Alan ekle');
+    const form = h('div', { class: 'alan-ekle-formu', hidden: true });
+    const goster = (acik) => {
+      form.hidden = !acik; ac.hidden = acik; ac.setAttribute('aria-expanded', String(acik));
+      not.textContent = ''; yol.value = kok; zor.checked = false;
+      if (acik) yol.focus(); else ac.focus();
+    };
+    ac.addEventListener('click', () => goster(true));
+    const vazgec = h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => goster(false) }, 'Vazgeç');
     ekle.addEventListener('click', () => {
       const y = yol.value.trim().replace(/^\/+|\/+$/g, '');
       not.textContent = '';
@@ -76,13 +86,66 @@ export function metotAlanTablosu(s) {
       if (alanSatirlari(semaBirlestir(s.sema, s.ekler).alanlar).some((x) => x.yol === y)) { not.textContent = `"${y}" zaten var.`; return; }
       s.ekler.push({ yol: y, tip: tip.value });
       if (zor.checked) s.zorunlu.add(y);
-      yol.value = kok;
-      zor.checked = false;
       ciz();
       s.degisti?.();
+      goster(false);
     });
-    kap.append(h('div', { class: 'alan-ekle-satiri' }, h('span', { class: 'soluk kucuk' }, 'WSDL\'de olmayan bir alan:'), yol, tip,
-      h('label', { class: 'secenek' }, zor, 'Zorunlu'), ekle, not));
+    form.append(h('span', { class: 'soluk kucuk' }, 'WSDL\'de olmayan bir alan (gruplar "/" ile):'),
+      h('div', { class: 'alan-ekle-satiri' }, yol, tip, h('label', { class: 'secenek' }, zor, 'Zorunlu'), ekle, vazgec), not);
+    kap.append(h('div', { class: 'alan-ekle' }, ac, form));
   }
   return { el: kap, sayac };
+}
+
+/** Son açılan metot (anahtar → metot adı): kaydet / yenile sonrası aynı metot açık gelir. */
+const sonAcik = new Map();
+
+/**
+ * Metot kutucukları: her metot bir kutucuk (ad, alan ve zorunlu sayısı); tıklanan metodun alan tablosu altta çerçeve içinde
+ * açılır. Tek metot varsa kendiliğinden açılır. Tablolar ilk açılışta kurulur; açılıp kapanınca girilenler korunur.
+ * @param {Array<Parameters<typeof metotAlanTablosu>[0]>} tanimlar @param {{ anahtar?: string }} [secim]
+ */
+export function metotKutulari(tanimlar, secim = {}) {
+  /** @type {Map<string, ReturnType<typeof metotAlanTablosu>>} */
+  const tablolar = new Map();
+  /** @type {Map<string, Array<() => void>>} */
+  const guncelleyiciler = new Map();
+  const alanSayisi = (s) => alanSatirlari(semaBirlestir(s.sema, s.ekler || []).alanlar).filter((x) => !x.grup).length;
+  const bilgi = (s) => {
+    const el = h('span', { class: 'metot-kutusu-bilgi' });
+    const g = () => { el.textContent = `${alanSayisi(s)} alan · ${s.zorunlu.size} zorunlu${s.ekler && s.ekler.length ? ` · ${s.ekler.length} elle eklenen` : ''}`; };
+    g();
+    guncelleyiciler.get(s.ad)?.push(g);
+    return el;
+  };
+  for (const s of tanimlar) {
+    guncelleyiciler.set(s.ad, []);
+    const eski = s.degisti;
+    s.degisti = () => { for (const g of guncelleyiciler.get(s.ad) || []) g(); eski?.(); };
+  }
+  const cerceve = h('div', { class: 'metot-cercevesi', hidden: true });
+  const kutular = tanimlar.map((s) => h('button', {
+    type: 'button', class: 'metot-kutusu', 'aria-pressed': 'false', 'aria-label': `${s.ad} metodu`, onclick: () => ac(acik === s.ad ? null : s.ad)
+  }, h('code', { class: 'duz' }, s.ad), bilgi(s)));
+  let acik = null;
+  function ac(ad) {
+    acik = ad;
+    if (secim.anahtar) { if (ad) sonAcik.set(secim.anahtar, ad); else sonAcik.delete(secim.anahtar); }
+    tanimlar.forEach((s, i) => kutular[i].setAttribute('aria-pressed', s.ad === ad ? 'true' : 'false'));
+    const s = tanimlar.find((x) => x.ad === ad);
+    if (!s) { cerceve.hidden = true; cerceve.replaceChildren(); return; }
+    if (!tablolar.has(ad)) tablolar.set(ad, metotAlanTablosu(s));
+    const t = /** @type {ReturnType<typeof metotAlanTablosu>} */ (tablolar.get(ad));
+    cerceve.replaceChildren(
+      h('div', { class: 'metot-cercevesi-baslik' }, h('h4', {}, h('code', { class: 'duz' }, s.ad)), bilgi(s),
+        h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${s.ad} alanlarını kapat`, title: 'Kapat', onclick: () => ac(null) }, ikon('carpi'))),
+      t.el);
+    cerceve.hidden = false;
+  }
+  const ilk = (secim.anahtar && sonAcik.get(secim.anahtar)) || (tanimlar.length === 1 ? tanimlar[0].ad : null);
+  if (ilk && tanimlar.some((s) => s.ad === ilk)) ac(ilk);
+  return h('div', { class: 'metot-kutulari' },
+    h('div', { class: 'metot-izgara', role: 'group', 'aria-label': 'Metotlar' }, kutular),
+    tanimlar.length > 1 ? h('p', { class: 'soluk kucuk metot-ipucu' }, 'Alanlarını görmek için bir metot seçin.') : null,
+    cerceve);
 }
