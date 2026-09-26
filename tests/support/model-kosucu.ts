@@ -258,6 +258,20 @@ function maskeUygula(maske: unknown, deger: unknown): unknown {
   return maske.replace(/#/g, () => rakamlar[i++]);
 }
 
+/**
+ * Zorla işaretleme (radyoZorla / onayKutusuZorla): gizli girdili özel çizimli kutular. Önce zorla tıklama denenir; öğe hiç
+ * görünmüyorsa (ör. display:none — "Element is not visible") betikle tıklanır (click olayı sayfanın kendi işleyicilerini
+ * çalıştırır). Sonunda durum doğrulanır.
+ */
+async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string, alan: PlanAlani): Promise<void> {
+  if ((await l.isChecked()) === isaretli) return;
+  await l.setChecked(isaretli, { force: true, timeout: 3_000 }).catch(() => undefined);
+  if ((await l.isChecked()) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
+  if ((await l.isChecked()) !== isaretli) {
+    throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, 'zorla ve betikle tıklandı, durum değişmedi'));
+  }
+}
+
 async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
   const alan = ham.parametreler.maske ? { ...ham, deger: maskeUygula(ham.parametreler.maske, ham.deger) } : ham;
   const deger = alan.deger;
@@ -289,11 +303,13 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       const hedef = s.secici
         ? page.locator(s.secici)
         : page.locator(alan.secici as string).and(page.locator(`[value="${cssKacis(s.deger)}"]`));
-      await hedef.first().check({ force: alan.doldurucu === 'radyoZorla' });
+      if (alan.doldurucu === 'radyoZorla') { await zorlaIsaretle(hedef.first(), true, adimBasligi, alan); return; }
+      await hedef.first().check();
       return;
     }
     case 'onayKutusu':
-      await l.setChecked(deger === true || deger === 'true', { force: alan.doldurucu === 'onayKutusuZorla' });
+      if (alan.doldurucu === 'onayKutusuZorla') { await zorlaIsaretle(l, deger === true || deger === 'true', adimBasligi, alan); return; }
+      await l.setChecked(deger === true || deger === 'true');
       return;
     case 'tarih':
       if (alan.doldurucu === 'tarihJs') {
