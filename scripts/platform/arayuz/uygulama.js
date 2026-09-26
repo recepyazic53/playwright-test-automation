@@ -156,8 +156,12 @@ window.addEventListener('kasa-kilitli', (olay) => {
 window.addEventListener('sunucu-yenilendi', () => {
   if (document.querySelector('.yenileme-bandi')) return;
   const bant = h('div', { class: 'yenileme-bandi', role: 'alert' },
-    ikon('yenile'), h('span', {}, h('b', {}, 'Nöbetçi yeniden başlatıldı veya güncellendi. '), 'Bu sekme eski oturumu kullanıyor; devam etmek için sayfayı yenileyin.'),
-    h('button', { type: 'button', class: 'birincil', onclick: () => location.reload() }, 'Sayfayı yenile'));
+    h('span', { class: 'bant-simge', 'aria-hidden': 'true' }, ikon('yenile')),
+    h('div', { class: 'bant-metin' }, h('b', {}, 'Nöbetçi yeniden başlatıldı veya güncellendi'),
+      h('span', {}, 'Bu sekme eski oturumu kullanıyor; devam etmek için sayfayı yenileyin.')),
+    h('div', { class: 'dugmeler' },
+      h('button', { type: 'button', class: 'birincil kucuk-dugme', onclick: () => location.reload() }, ikon('yenile'), 'Sayfayı yenile'),
+      h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Uyarıyı kapat', title: 'Kapat', onclick: () => bant.remove() }, ikon('carpi'))));
   document.body.prepend(bant);
 });
 

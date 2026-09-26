@@ -289,8 +289,8 @@ test.describe('alan formu uçtan uca', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto(`/#/servisler/s/${servisId}`);
     const satir = (baslik: string) => page.locator('.servis-senaryo-tablosu tbody tr').filter({ has: page.getByRole('link', { name: baslik, exact: true }) });
-    await expect(satir('VEYA senaryosu').locator('td.beklenen')).toContainText('biri: "<Durum>HATA</Durum>" | "<Durum>OK</Durum>"');
-    await expect(satir('Hızlı').locator('td').nth(6)).toContainText('Başarılı');
+    await expect(satir('VEYA senaryosu').locator('td.beklenen-hucresi')).toContainText('biri: "<Durum>HATA</Durum>" | "<Durum>OK</Durum>"');
+    await expect(satir('Hızlı').locator('.son-sonuc')).toContainText('Başarılı');
     // ▷ → canlı panel: adımlar ve yanıt.
     await satir('Yavaş').getByRole('button', { name: 'Çalıştır: Yavaş' }).click();
     const panel = page.getByRole('region', { name: 'Servis koşu paneli' });
@@ -301,7 +301,7 @@ test.describe('alan formu uçtan uca', () => {
     await panel.getByText('Yanıt (HTTP 200)').click();
     await expect(panel.locator('pre').last()).toContainText('<Durum>HATA</Durum>');
     await panel.getByRole('button', { name: 'Paneli kapat' }).click();
-    await expect(satir('Yavaş').locator('td').nth(6)).toContainText('Başarılı');
+    await expect(satir('Yavaş').locator('.son-sonuc')).toContainText('Başarılı');
     // Çoklu seçim.
     await satir('Hızlı').getByLabel('Seç: Hızlı').check();
     await satir('Formdan senaryo').getByLabel('Seç: Formdan senaryo').check();
@@ -312,7 +312,7 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
-  test('arayüz: senaryolar tablosunda "Koşuda" anahtarı (tek tek ve başlıktan hepsi)', async () => {
+  test('arayüz: senaryolar tablosunda "Koşuda" anahtarı (tek tek ve seçilenler için toplu)', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
@@ -324,12 +324,20 @@ test.describe('alan formu uçtan uca', () => {
     await expect(anahtar).toBeChecked();
     await anahtar.click();
     await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar.find((x: Nesne) => x.baslik === 'Formdan senaryo').kosuyaDahil).toBe(false);
-    const tumu = page.getByRole('switch', { name: 'Tüm senaryolar koşuda' });
-    await expect(tumu).not.toBeChecked();
-    await tumu.click();
+    await expect(page.locator('.servis-senaryo-tablosu tr.haric')).toContainText('hariç');
+    // Toplu: görünenlerin hepsini seç → Koşuya ekle / Koşudan çıkar.
+    await page.getByLabel('Görünen tüm senaryoları seç').check();
+    const toplu = page.getByRole('toolbar', { name: 'Seçili senaryolar için işlemler' });
+    await toplu.getByRole('button', { name: 'Koşuya ekle' }).click();
     await expect.poll(async () => (await dahiller()).every(Boolean)).toBe(true);
-    await tumu.click();
+    await toplu.getByRole('button', { name: 'Koşudan çıkar' }).click();
     await expect.poll(async () => (await dahiller()).some(Boolean)).toBe(false);
+    // Filtre: hepsi hariçken "Koşuda" süzgeci boş liste verir; arama süzer.
+    await page.getByLabel('Koşuda', { exact: true }).selectOption('evet');
+    await expect(page.getByText('Filtreyle eşleşen senaryo yok.')).toBeVisible();
+    await page.getByRole('button', { name: 'Filtreleri temizle' }).first().click();
+    await page.getByLabel('Senaryo ara').fill('formdan');
+    await expect(page.locator('.servis-senaryo-tablosu tbody tr')).toHaveCount(1);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
