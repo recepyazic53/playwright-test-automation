@@ -818,7 +818,7 @@ async function guvenlik(govde, baglam) {
   const saklamaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('video'), 'Video saklama süresi'),
     h('p', { class: 'soluk' }, 'Koşu videoları şifreli olarak saklanır; bu süreden eski videolar günlük temizlikte silinir. Ekran görüntüleri, izler ve sonuçlar silinmez.'),
     saklamaMesaj.kutu,
-    alan('Süre (gün)', gun, { yardim: `1–3650 gün; varsayılan ${ayar.videoSaklamaVarsayilan}.` }),
+    alan('Süre (gün)', gun, { yardim: `1–365 gün; varsayılan ${ayar.videoSaklamaVarsayilan}.` }),
     h('div', { class: 'dugmeler' }, saklamaKaydet));
   saklamaForm.addEventListener('submit', async (o) => {
     o.preventDefault();
