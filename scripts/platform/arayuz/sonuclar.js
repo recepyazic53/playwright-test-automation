@@ -8,7 +8,7 @@
 // Medya (ekran görüntüsü/video/iz) şifrelidir; sunucu /platform/medya/<id> ile kasa açıkken
 // çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
-import { api, bildir, bosDurum, h, ikon, iskelet, rozet, s, TOKEN, tarihMetni } from './ortak.js';
+import { api, bildir, bosDurum, h, ikon, iskelet, rozet, s, TOKEN, tarihMetni, yerlestir } from './ortak.js';
 import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
 
 const SAYFA_BOYU = 15;
@@ -541,6 +541,47 @@ function sinirliListe(ogeler, sinir, sinif, ekOzellik = {}) {
 }
 const kalipListesi = (ogeler) => sinirliListe(ogeler, 8, 'kalip-listesi', { role: 'list', 'aria-label': 'Hata kalıpları' });
 
+/**
+ * Kalıbın testleri: her başarısız sonuç için senaryo, hatanın alındığı adım, zaman; "Ayrıntı" (sağ panel), "Koşu" (koşu
+ * detayı), "Tekrar çalıştır" (senaryoya bağlıysa; aynı ortamda, canlı panelde). Üstte "Hepsini tekrar çalıştır".
+ */
+function kalipTestleri(k, proje, ornekAc) {
+  const sonuclar = k.sonuclar || [];
+  const tekrar = async (hedefler, ortamId, dugme) => {
+    try {
+      if (dugme) dugme.disabled = true;
+      const [{ kosuOnayi, kosuBaslat }, { ortamlar }] = await Promise.all([
+        import('./kosu-paneli.js'), api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
+      ]);
+      const ortam = ortamlar.find((o) => o.id === ortamId) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
+      if (!ortam) { bildir('Projede ortam yok.', 'hata'); return; }
+      const onay = await kosuOnayi({ baslik: 'Tekrar çalıştırılsın mı?', senaryolar: hedefler, ortam, tur: 'tekil', esZamanli: false,
+        not: `Bu hata kalıbının alındığı senaryolar ${ortam.ad} ortamında sırayla, kısmi (tekil) koşu olarak çalışır.` });
+      if (!onay) return;
+      kosuBaslat({ projeId: proje.id, ortam, senaryolar: hedefler, tur: 'tekil', esZamanli: false, baslik: 'Hata kalıbı (tekrar)' });
+    } catch (e) {
+      if (e && e.durum === 423) return;
+      bildir(e.message, 'hata');
+    } finally { if (dugme) dugme.disabled = false; }
+  };
+  const hedef = (x) => ({ id: x.senaryoId, baslik: x.senaryoBaslik, ekranAdi: k.urun });
+  const gorulen = new Set();
+  const benzersiz = sonuclar.filter((x) => x.senaryoId && !gorulen.has(x.senaryoId) && gorulen.add(x.senaryoId));
+  const hepsi = benzersiz.length > 1 ? h('button', { type: 'button', class: 'kucuk-dugme', onclick: (o) => tekrar(benzersiz.map(hedef), benzersiz[0].ortamId, o.currentTarget) },
+    ikon('yenile'), `Hepsini tekrar çalıştır (${benzersiz.length} senaryo)`) : null;
+  if (!sonuclar.length) return h('p', { class: 'soluk kucuk' }, 'Test bilgisi yok.');
+  return h('div', {},
+    hepsi ? h('div', { class: 'kalip-testleri-ust' }, hepsi) : null,
+    h('ul', { class: 'kalip-test-listesi', 'aria-label': 'Hatanın alındığı testler' }, sonuclar.map((x) => h('li', {},
+      h('span', { class: 'kalip-test-adi' }, h('b', { title: x.senaryoBaslik }, x.senaryoBaslik),
+        h('small', {}, [x.adim ? `"${x.adim}" adımında` : null, kisaTarih(x.zaman)].filter(Boolean).join(' · '))),
+      h('span', { class: 'kalip-test-eylemleri' },
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => ornekAc(x.sonucId), 'aria-label': `Ayrıntı: ${x.senaryoBaslik}` }, 'Ayrıntı'),
+        h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/sonuclar/kosu/${encodeURIComponent(x.kosuId)}`, 'aria-label': `Koşu: ${x.senaryoBaslik}` }, 'Koşu'),
+        x.senaryoId ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Tekrar çalıştır: ${x.senaryoBaslik}`, onclick: (o) => tekrar([hedef(x)], x.ortamId, o.currentTarget) },
+          ikon('oynat'), 'Tekrar çalıştır') : null)))));
+}
+
 function hataKaliplariBolumu(alan, proje, urun, ornekAc) {
   const baslangic = h('input', { type: 'datetime-local', id: 'kalip-baslangic' });
   const bitis = h('input', { type: 'datetime-local', id: 'kalip-bitis' });
@@ -559,13 +600,26 @@ function hataKaliplariBolumu(alan, proje, urun, ornekAc) {
           ...Object.entries(v.kategoriler).map(([k, n]) => h('span', { class: 'rozet hap' }, kisaKategori(k), h('b', {}, String(n))))),
         kalipListesi(v.kaliplar.map((k) => {
           const sinif = kategoriSinifi(k.kategori);
-          return h('div', { class: `kalip-satiri ${sinif}`, role: 'listitem' },
+          // Kalıba tıklanınca: hatanın alındığı testler (senaryo, adım, zaman) — ayrıntı, koşu, tekrar çalıştır.
+          const testler = h('div', { class: 'kalip-testleri', hidden: true });
+          const ac = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-expanded': 'false', 'aria-label': `Hatanın alındığı testler: ${kisaKategori(k.kategori)}, ${k.urun}` },
+            ikon('liste'), `Testler (${(k.sonuclar || []).length})`);
+          const degistir = () => {
+            const acik = testler.hidden;
+            testler.hidden = !acik;
+            ac.setAttribute('aria-expanded', String(acik));
+            if (acik && !testler.childElementCount) yerlestir(testler, kalipTestleri(k, proje, ornekAc));
+          };
+          ac.addEventListener('click', (o) => { o.stopPropagation(); degistir(); });
+          const satir = h('div', { class: `kalip-satiri ${sinif}`, role: 'listitem' },
             h('span', { class: 'kalip-ikon', 'aria-hidden': 'true' }, ikon(KATEGORI_IKONU[sinif])),
             h('div', { class: 'kalip-baslik' }, kisaKategori(k.kategori), rozet(`${k.senaryoSayisi} senaryo`), urun ? null : rozet(k.urun, 'vurgu'),
               h('span', { class: 'cok-soluk' }, `ilk ${gunAy(k.ilk)} · son ${kisaTarih(k.son)}`)),
             h('div', { class: 'kalip-sayi' }, h('span', {}, String(k.sayi), h('small', {}, ' adet')),
-              h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => ornekAc(k.ornekSonucId), 'aria-label': `Örnek sonucu aç: ${kisaKategori(k.kategori)}, ${k.urun}` }, 'Örnek')),
-            kalipMetni(k.kalip));
+              h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: (o) => { o.stopPropagation(); ornekAc(k.ornekSonucId); }, 'aria-label': `Örnek sonucu aç: ${kisaKategori(k.kategori)}, ${k.urun}` }, 'Örnek'), ac),
+            kalipMetni(k.kalip), testler);
+          satir.addEventListener('click', (o) => { if (!(o.target instanceof Element) || !o.target.closest('button, a, .kalip-testleri')) degistir(); });
+          return satir;
         })));
     } catch (e) {
       if (e && e.durum === 423) return;

@@ -53,7 +53,8 @@ export declare function kosuDetayi(vt: Veritabani, kosuId: string): {
 export declare function sonucDetayi(vt: Veritabani, sonucId: string): SonucDetayi | null;
 export declare function hataKaliplari(vt: Veritabani, projeId: string, filtre?: { urun?: string | null; baslangic?: string | null; bitis?: string | null; limit?: number }): {
   toplam: number; kategoriler: Record<string, number>;
-  kaliplar: Array<{ urun: string; kategori: string; kalip: string; sayi: number; senaryoSayisi: number; ilk: string; son: string; ornekSonucId: string }>;
+  kaliplar: Array<{ urun: string; kategori: string; kalip: string; sayi: number; senaryoSayisi: number; ilk: string; son: string; ornekSonucId: string;
+    sonuclar: Array<{ sonucId: string; kosuId: string; senaryoId: string | null; senaryoBaslik: string; ortamId: string | null; adim: string | null; zaman: string }> }>;
 };
 export declare function medyaGetir(vt: Veritabani, id: string): (MedyaOgesi & { dosya: string; senaryoBaslik: string | null; sonucZamani: string | null }) | null;
 export declare function kosudakiSonucuBul(vt: Veritabani, kosuId: string, arama: { senaryoAnahtari?: string; senaryoBaslik?: string }): {

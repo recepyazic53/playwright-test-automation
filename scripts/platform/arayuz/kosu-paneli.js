@@ -339,6 +339,30 @@ function paneliCiz() {
     izlemeAlani(oturum));
 }
 
+/** Adım durumu → simge ve etiket (canlı ve biten koşu aynı görünüm; bkz. sonuç detayı "Adımlar"). */
+const ADIM_DURUMU = {
+  calisiyor: { etiket: 'çalışıyor', ikon: null }, basarili: { etiket: 'başarılı', ikon: 'onay' }, basarisiz: { etiket: 'başarısız', ikon: 'carpi' },
+  durduruldu: { etiket: 'durduruldu', ikon: 'eksi' }, atlanan: { etiket: 'atlandı', ikon: 'eksi' }
+};
+
+/**
+ * Adım listesi: "Adımlar N / M başarılı"; çalışan adım sarı (süre canlı akar), biten yeşil, hata veren kırmızı.
+ * @param {Array<{ ad: string; durum: string; sureMs?: number | null; baslangic?: number }>} adimlar @param {boolean} canli
+ */
+function adimListesi(adimlar, canli) {
+  const basarili = adimlar.filter((a) => a.durum === 'basarili').length;
+  return h('div', { class: 'kosu-adimlari', 'aria-label': 'Adımlar', 'aria-live': canli ? 'polite' : null },
+    h('div', { class: 'kosu-adimlari-baslik' }, ikon('liste'), h('b', {}, 'Adımlar'), adimlar.length ? h('span', { class: 'soluk' }, `${basarili} / ${adimlar.length} başarılı`) : null),
+    adimlar.length ? h('ol', { class: 'adim-listesi' }, adimlar.map((a) => {
+      const g = ADIM_DURUMU[a.durum] || ADIM_DURUMU.atlanan;
+      const sure = a.durum === 'calisiyor' && a.baslangic ? Date.now() - a.baslangic : a.sureMs;
+      return h('li', { class: `adim ${a.durum}` },
+        h('span', { class: 'adim-isareti', 'aria-hidden': 'true' }, g.ikon ? ikon(g.ikon) : h('span', { class: 'donen-halka' })),
+        h('span', { class: 'adim-metni' }, h('span', {}, a.ad), h('span', { class: 'gorunmez' }, ` — ${g.etiket}`)),
+        h('span', { class: 'adim-suresi' }, sure === null || sure === undefined ? '—' : sureMetni(sure)));
+    })) : h('p', { class: 'soluk kucuk' }, canli ? 'İlk adım bekleniyor…' : 'Adım bilgisi yok.'));
+}
+
 function izlemeAlani(oturum) {
   const satir = oturum.satirlar.find((x) => x.senaryoId === durum.secili) || oturum.satirlar[0];
   const alan = h('div', { class: 'kosu-izleme' });
@@ -354,7 +378,16 @@ function izlemeAlani(oturum) {
     alan.append(kap);
     // Önceki kare yeni çizimde de gösterilir (yenileme sırasında titreme olmasın).
     if (sonCanliKare && sonCanliKare.kosuId === satir.kosuId) { img.src = sonCanliKare.src; bos.replaceWith(img); }
+    const adimKap = h('div', {}, adimListesi(satir.canliAdimlar || [], true));
+    alan.append(adimKap);
+    const adimlariYukle = async () => {
+      try {
+        const y = await fetch(`/adim-durumu?token=${encodeURIComponent(TOKEN)}&kosuId=${encodeURIComponent(satir.kosuId)}`, { cache: 'no-store' }).then((r) => r.json());
+        if (Array.isArray(y.adimlar)) { satir.canliAdimlar = y.adimlar; if (adimKap.isConnected) yerlestir(adimKap, adimListesi(y.adimlar, true)); }
+      } catch { /* bir sonraki tikte yeniden denenir */ }
+    };
     canliYukle = () => {
+      void adimlariYukle();
       const on = new Image();
       on.onload = () => {
         sonCanliKare = { kosuId: satir.kosuId, src: on.src };
@@ -389,6 +422,16 @@ function izlemeAlani(oturum) {
   });
   alan.append(h('div', { class: 'panel-eylemleri' }, izle,
     s.sonucId ? h('a', { class: 'dugme kucuk-dugme', href: `#/sonuclar/sonuc/${encodeURIComponent(s.sonucId)}` }, 'Tüm ayrıntılar', ikon('ok')) : null));
+  if (s.sonucId) {
+    const adimKap = h('div', {}, adimListesi(satir.sonucAdimlari || satir.canliAdimlar || [], false));
+    alan.append(adimKap);
+    if (!satir.sonucAdimlari) {
+      api(`/platform/sonuclar/sonuc?id=${encodeURIComponent(s.sonucId)}`).then((r) => {
+        satir.sonucAdimlari = (r.sonuc?.adimlar || r.adimlar || []).map((a) => ({ ad: a.ad, durum: a.durum, sureMs: a.sureMs }));
+        if (adimKap.isConnected) yerlestir(adimKap, adimListesi(satir.sonucAdimlari, false));
+      }).catch(() => {});
+    }
+  } else if (satir.canliAdimlar?.length) alan.append(adimListesi(satir.canliAdimlar, false));
   const mesaj = s.hataMesaji || (satir.durum === 'hata' || satir.durum === 'durduruldu' ? s.mesaj : null);
   if (mesaj) alan.append(h('div', { class: `hata-ozeti ${satir.durum === 'durduruldu' ? 'notr' : ''}`.trim() }, h('b', {}, satir.durum === 'durduruldu' ? 'Not: ' : 'Hata: '), String(mesaj).split('\n').find((x) => x.trim()) || String(mesaj)));
   return alan;

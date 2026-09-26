@@ -23,7 +23,7 @@
 // klasörleri de kaldırılır. Daha eski dosyalara ve çıktı klasörü dışındaki dosyalara dokunulmaz.
 // stdout'a HİÇ yazılmaz (--list --reporter=json çıktısı bozulmasın); uyarılar stderr'e gider.
 import { randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, rmdirSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { veritabaniAc, veritabaniYolu } from './veritabani/baglanti.mjs';
 import { sunucuBaglantisiniOku } from './sunucu-baglantisi.mjs';
@@ -225,6 +225,41 @@ export default class PlatformRaporlayici {
     if (this.uyarilar.has(mesaj)) return;
     this.uyarilar.add(mesaj);
     uyar(mesaj);
+  }
+
+  /**
+   * Canlı adım listesi (Nöbetçi koşusu; TEST_SUNUCU_ADIM_YOLU verilmişse): üst düzey test.step başladıkça / bittikçe adımlar
+   * (ad, durum, süre) bu dosyaya yazılır; panel /adim-durumu ucundan okur. Yazma hatası koşuyu etkilemez.
+   */
+  canliAdimlariYaz() {
+    const yol = process.env.TEST_SUNUCU_ADIM_YOLU;
+    if (!yol) return;
+    try {
+      writeFileSync(`${yol}.tmp`, JSON.stringify({ adimlar: this.canliAdimlar ?? [] }));
+      renameSync(`${yol}.tmp`, yol);
+    } catch { /* canlı gösterim en iyi çabayla */ }
+  }
+
+  /** @param {import('@playwright/test/reporter').TestCase} _test @param {import('@playwright/test/reporter').TestResult} _result */
+  onTestBegin(_test, _result) {
+    /** @type {Array<{ ad: string; durum: 'calisiyor' | 'basarili' | 'basarisiz'; baslangic: number; sureMs?: number }>} */
+    this.canliAdimlar = [];
+    this.canliAdimlariYaz();
+  }
+
+  /** @param {import('@playwright/test/reporter').TestCase} _test @param {import('@playwright/test/reporter').TestResult} _result @param {import('@playwright/test/reporter').TestStep} adim */
+  onStepBegin(_test, _result, adim) {
+    if (adim.category !== 'test.step' || adim.parent || adimGurultuMu(adim.title)) return;
+    (this.canliAdimlar ??= []).push({ ad: adim.title, durum: 'calisiyor', baslangic: Date.now() });
+    this.canliAdimlariYaz();
+  }
+
+  /** @param {import('@playwright/test/reporter').TestCase} _test @param {import('@playwright/test/reporter').TestResult} _result @param {import('@playwright/test/reporter').TestStep} adim */
+  onStepEnd(_test, _result, adim) {
+    if (adim.category !== 'test.step' || adim.parent || adimGurultuMu(adim.title)) return;
+    const a = [...(this.canliAdimlar ?? [])].reverse().find((x) => x.ad === adim.title && x.durum === 'calisiyor');
+    if (a) { a.durum = adim.error ? 'basarisiz' : 'basarili'; a.sureMs = adim.duration; }
+    this.canliAdimlariYaz();
   }
 
   /** @param {import('@playwright/test/reporter').FullConfig} config */

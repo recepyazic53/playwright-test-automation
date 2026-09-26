@@ -352,7 +352,12 @@ test('arayüz: Senaryolar listesinde "model" rozetleri ve bir fikstür koşusunu
     if (await onay.count()) await onay.getByRole('button', { name: /Çalıştır|Başlat|Evet/ }).first().click();
     const panel = page.getByRole('region', { name: 'Canlı koşu paneli' });
     await expect(panel).toBeVisible({ timeout: 15_000 });
+    // Koşu sürerken adımlar canlı listelenir (çalışan adım sarı); bitince sonucun adımları kalır.
+    await expect(panel.locator('.kosu-adimlari .adim-listesi li').first()).toBeVisible({ timeout: 60_000 });
     await expect(panel.getByText('Başarılı').first()).toBeVisible({ timeout: 150_000 });
+    await expect(panel.locator('.kosu-adimlari')).toContainText('başarılı', { timeout: 15_000 });
+    await expect.poll(async () => panel.locator('.kosu-adimlari li.basarili').count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(3);
+    await expect(panel.locator('.kosu-adimlari li.calisiyor')).toHaveCount(0);
     if (EKRAN_KLASORU) {
       for (const renk of ['dark', 'light'] as const) {
         await page.emulateMedia({ colorScheme: renk });
