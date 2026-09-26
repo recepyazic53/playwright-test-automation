@@ -581,7 +581,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const bag = (yol) => ((s.ayarlar.alanBaglari || {})[operasyon.value] || {})[yol];
   const bagBasvurusu = (b) => {
     const t = b ? tablolar.find((x) => x.id === b.tablo) : null;
-    return t && t.sutunlar.some((c) => c.ad === b.sutun) ? basvuru(t.ad, b.sutun, b.etiket || '') : '';
+    return t && t.sutunlar.some((c) => c.ad === b.sutun) ? basvuru(t.ad, b.sutun, b.etiket || '', b.bicim || '') : '';
   };
   const semalar = s.ayarlar.operasyonSemalari || {};
   const varsayilanlar = JSON.parse(JSON.stringify(s.ayarlar.alanVarsayilanlari || {}));

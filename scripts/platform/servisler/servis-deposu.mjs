@@ -94,7 +94,7 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>; alanZorunluluklari?: Record<string, string[]>;
  *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
  *   alanListeleri?: Record<string, Record<string, string>>;
- *   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
+ *   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>;
  *   erisim?: { ortamId: string; zaman: string; durumKodu: number } }} ServisAyarlari
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis

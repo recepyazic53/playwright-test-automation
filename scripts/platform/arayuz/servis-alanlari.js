@@ -55,7 +55,7 @@ export function metotAlanTablosu(s) {
       if (!sec.value) delete s.baglar[st.yol];
       else {
         const [tabloId, sutunAdi] = sec.value.split('\u0001');
-        s.baglar[st.yol] = { tablo: tabloId, sutun: sutunAdi, ...(b && b.etiket ? { etiket: b.etiket } : {}) };
+        s.baglar[st.yol] = { tablo: tabloId, sutun: sutunAdi, ...(b && b.etiket ? { etiket: b.etiket } : {}), ...(b && b.bicim ? { bicim: b.bicim } : {}) };
       }
       ciz();
       s.degisti?.();
@@ -69,13 +69,25 @@ export function metotAlanTablosu(s) {
       if (e) b.etiket = e; else delete b.etiket;
       s.degisti?.();
     });
+    // Tarih alanı: tablodaki değer (1983-05-10 / 10.05.1983) servise bu biçimde gider; boşsa olduğu gibi.
+    const tarihMi = st.alan && (st.alan.tip === 'tarih' || st.alan.tip === 'tarihSaat');
+    const bicim = b && (tarihMi || b.bicim) ? h('input', {
+      type: 'text', value: b.bicim || '', maxlength: '60', class: 'bag-bicimi', spellcheck: 'false',
+      placeholder: st.alan.tip === 'tarih' ? "biçim (ör. yyyy-MM-dd)" : "biçim (ör. yyyy-MM-dd'T'HH:mm:ss)", 'aria-label': `${s.ad} ${st.yol} tarih biçimi`,
+      title: "Tablodaki tarih bu biçimde gönderilir: yyyy yıl, MM ay, dd gün, HH saat, mm dakika, ss saniye; 'T' gibi sabitler tek tırnakta. Boş: değer olduğu gibi."
+    }) : null;
+    bicim?.addEventListener('change', () => {
+      const v = bicim.value.trim();
+      if (v) b.bicim = v; else delete b.bicim;
+      s.degisti?.();
+    });
     let alt = null;
     if (sutun && sutun.gizli) alt = h('span', { class: 'soluk kucuk' }, 'gizli sütun — değer koşuda satırdan gelir');
     else if (sutun) {
       const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
       alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
     }
-    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), alt);
+    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), alt);
   };
   const ciz = () => {
     const birlesik = semaBirlestir(s.sema, s.ekler || []);

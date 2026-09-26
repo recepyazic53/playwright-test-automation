@@ -20,7 +20,7 @@
 export const KAYNAKLAR = /** @type {const} */ (['tablo', 'parametre', 'sabit', 'bos', 'nil', 'gonderme']);
 /** Eski parametre adı (SIGORTALI_TC) ve tablo başvurusu (Servis girişi.Kanal / Kişi[ettiren].TC). */
 const ESKI_PARAMETRE = /^[A-Za-z_][A-Za-z0-9_-]{0,79}$/;
-const TABLO_BASVURUSU = /^[^.[\]{}$<>&]{1,60}(?:\[[^\]{}$<>&]{1,40}\])?\.[^.[\]{}$<>&]{1,60}$/u;
+const TABLO_BASVURUSU = /^[^.[\]{}$<>&|]{1,60}(?:\[[^\]{}$<>&|]{1,40}\])?\.[^.[\]{}$<>&|]{1,60}(?:\|[^{}$]{1,60})?$/u;
 const ZARF_NS = { '1.1': 'http://schemas.xmlsoap.org/soap/envelope/', '1.2': 'http://www.w3.org/2003/05/soap-envelope' };
 const XSI = 'http://www.w3.org/2001/XMLSchema-instance';
 

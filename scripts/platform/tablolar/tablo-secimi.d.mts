@@ -2,12 +2,13 @@ export interface Karsilik { sayfa?: string; servis?: string }
 export interface Sutun { ad: string; gizli: boolean; tip?: string; karsiliklar?: Record<string, Karsilik> }
 export interface Satir { id?: string; ortamId: string | null; degerler: Record<string, string | null> }
 export interface Tablo { id: string; ad: string; sutunlar: Sutun[]; satirlar: Satir[] }
-export interface Basvuru { tablo: string; etiket: string; sutun: string }
+export interface Basvuru { tablo: string; etiket: string; sutun: string; bicim: string }
 
 export declare const AD_KALIBI: string;
 export declare const ETIKET_KALIBI: string;
+export declare const BICIM_KALIBI: string;
 export declare function basvuruCoz(ad: string): Basvuru | null;
-export declare function basvuru(tablo: string, sutun: string, etiket?: string): string;
+export declare function basvuru(tablo: string, sutun: string, etiket?: string, bicim?: string): string;
 export declare function grupAnahtari(tabloId: string, etiket?: string): string;
 export declare function tabloBul<T extends { ad: string }>(tablolar: T[], ad: string): T | undefined;
 export declare function sutunBul(tablo: Tablo, ad: string): Sutun | undefined;

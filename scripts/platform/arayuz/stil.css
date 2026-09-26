@@ -2170,6 +2170,7 @@ a.son-sonuc { text-decoration: none; }
 .tablo-durumu.yok { color: var(--hata); }
 .tablo-degeri .gizli-deger { font-family: var(--yazi-mono); color: var(--metin-2); }
 .bag-etiketi { max-width: 110px; }
+.bag-bicimi { max-width: 200px; font-family: var(--yazi-mono); }
 /* Ekran sayfası > Test verisi: input | tablo sütunu (+ etiket, değer çipleri); geniş seçim kutusu. */
 .ekran-baglari .alan-satiri { grid-template-columns: minmax(180px, 1fr) minmax(320px, 2fr); padding: 8px 10px; }
 .ekran-baglari .kaynak-secimi select { min-width: 260px; }

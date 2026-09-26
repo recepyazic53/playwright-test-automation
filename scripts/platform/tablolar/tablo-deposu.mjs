@@ -50,8 +50,8 @@ function baglamTablolari(vt, projeId) {
   });
 }
 
-/** Tablo ve sütun adı: gövdede ${Tablo.Sütun} / ${Tablo[etiket].Sütun} olarak yazılır; bu yüzden . [ ] { } $ < > & yok. */
-export const TABLO_ADI = /^[^.[\]{}$<>&\u0000-\u001f]{1,60}$/u;
+/** Tablo ve sütun adı: gövdede ${Tablo.Sütun} / ${Tablo[etiket].Sütun|biçim} olarak yazılır; bu yüzden . [ ] { } $ < > & | yok. */
+export const TABLO_ADI = /^[^.[\]{}$<>&|\u0000-\u001f]{1,60}$/u;
 export const EN_COK_SATIR = 5000;
 export const EN_COK_SUTUN = 40;
 export const EN_COK_KARSILIK = 5000;
@@ -95,7 +95,7 @@ function karsiliklarOku(vt, z) {
 function adDogrula(ad, ne) {
   const a = typeof ad === 'string' ? ad.trim() : '';
   if (!a) throw new DepoHatasi(`${ne} boş olamaz.`);
-  if (!TABLO_ADI.test(a)) throw new DepoHatasi(`${ne} geçersiz: "${a}" (en çok 60 karakter; . [ ] { } $ < > & kullanılamaz).`);
+  if (!TABLO_ADI.test(a)) throw new DepoHatasi(`${ne} geçersiz: "${a}" (en çok 60 karakter; . [ ] { } $ < > & | kullanılamaz).`);
   return a;
 }
 

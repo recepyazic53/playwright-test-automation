@@ -3,7 +3,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { wsdlSemalari } from './wsdl-semasi.mjs';
-import { AD_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi.mjs';
+import { AD_KALIBI, BICIM_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi.mjs';
 
 export const VARSAYILAN_ZAMAN_ASIMI_MS = 60_000;
 /** Saklanan yanıt en çok bu kadar karakter tutulur (rapor boyutu). */
@@ -50,8 +50,27 @@ export function goreliTarih(ifade, simdi) {
 }
 
 /** Parametre başvurusu: ${AD} ya da doğrudan tarih ${tarih:bugun+1y|yyyy-MM-dd}. */
-// ${tarih:ifade|biçim} · ${AD} (eski parametre) · ${Tablo.Sütun} / ${Tablo[etiket].Sütun} (test verisi tablosu).
-const PARAMETRE = new RegExp(`\\$\\{\\s*(?:tarih:([^|}]+)(?:\\|([^}]+))?|([A-Za-z_][A-Za-z0-9_.-]{0,79}|${AD_KALIBI}(?:\\[${ETIKET_KALIBI}\\])?\\.${AD_KALIBI}))\\s*\\}`, 'gu');
+// ${tarih:ifade|biçim} · ${AD} (eski parametre) · ${Tablo.Sütun} / ${Tablo[etiket].Sütun} (test verisi tablosu); başvuruda "|biçim"
+// varsa değer tarih olarak okunup o biçimde yazılır (ör. ${Kişi.Doğum tarihi|yyyy-MM-dd'T'HH:mm:ss}).
+const PARAMETRE = new RegExp(`\\$\\{\\s*(?:tarih:([^|}]+)(?:\\|([^}]+))?|([A-Za-z_][A-Za-z0-9_.-]{0,79}|${AD_KALIBI}(?:\\[${ETIKET_KALIBI}\\])?\\.${AD_KALIBI})\\s*(?:\\|(${BICIM_KALIBI}))?)\\s*\\}`, 'gu');
+
+/**
+ * Tablodaki tarih değeri → biçimli metin. Okunan: yyyy-MM-dd (ardından isteğe bağlı T/boşluk + HH:mm[:ss]), dd.MM.yyyy,
+ * dd/MM/yyyy (isteğe bağlı saat). Okunamazsa hata (değer mesaja yazılmaz; kişisel olabilir).
+ * @param {string} deger @param {string} bicim @param {string} ad
+ */
+export function tarihDegeriBicimle(deger, bicim, ad) {
+  const v = deger.trim();
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(v);
+  const tr = /^(\d{1,2})[./](\d{1,2})[./](\d{4})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(v);
+  const p = iso ? [iso[1], iso[2], iso[3], iso[4], iso[5], iso[6]] : tr ? [tr[3], tr[2], tr[1], tr[4], tr[5], tr[6]] : null;
+  const [y, a, g, s, dk, sn] = (p ?? []).map((x) => Number(x ?? 0));
+  const t = p ? new Date(y, a - 1, g, s, dk, sn) : null;
+  if (!t || t.getFullYear() !== y || t.getMonth() !== a - 1 || t.getDate() !== g) {
+    throw new ServisHatasi(`"${ad}" değeri tarih olarak okunamadı (beklenen: 1983-05-10 ya da 10.05.1983).`);
+  }
+  return tarihBicimle(t, bicim);
+}
 
 /** "bugun+1y|yyyy-MM-dd" → tarih metni. @param {string} kural @param {Date} simdi */
 export function tarihKuraliUygula(kural, simdi) {
@@ -69,14 +88,14 @@ export function yerTutuculariDoldur(govde, baglam) {
   const simdi = baglam.simdi ?? new Date();
   /** @type {Set<string>} */
   const eksik = new Set();
-  const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, hamAd) => {
+  const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, hamAd, degerBicimi) => {
     const ad = typeof hamAd === 'string' ? hamAd.trim() : hamAd;
     if (tarihIfadesi) return tarihKuraliUygula(`${tarihIfadesi}|${bicim ?? "yyyy-MM-dd'T'HH:mm:ss"}`, simdi);
     const kural = baglam.tarihKurallari?.[ad];
     if (kural) return tarihKuraliUygula(kural, simdi);
     const d = baglam.degerler[ad];
     if (d === undefined) { eksik.add(ad); return ''; }
-    return xmlKacis(d);
+    return xmlKacis(degerBicimi ? tarihDegeriBicimle(d, degerBicimi.trim(), ad) : d);
   });
   if (eksik.size) {
     throw new ServisHatasi(`Değeri bulunamayan parametre: ${[...eksik].map((a) => (baglam.eksikAciklamasi ? `${a} (${baglam.eksikAciklamasi(a)})` : a)).join(', ')}.`);

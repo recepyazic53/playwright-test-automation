@@ -23,7 +23,7 @@ import {
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
+import { BICIM_KALIBI, basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -235,13 +235,14 @@ function alanListeleriniDogrula(v) {
 }
 
 /**
- * Alan → tablo sütunu bağlantıları: { <operasyon>: { <yol>: { tablo: tabloId, sutun, etiket? } } }. Aynı tablo bir istekte
- * iki kez gerekiyorsa etiket (sigortalı / ettiren) iki ayrı satır seçimi demektir.
- * @param {unknown} v @returns {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>}
+ * Alan → tablo sütunu bağlantıları: { <operasyon>: { <yol>: { tablo: tabloId, sutun, etiket?, bicim? } } }. Aynı tablo bir istekte
+ * iki kez gerekiyorsa etiket (sigortalı / ettiren) iki ayrı satır seçimi demektir. bicim: değer tarih olarak okunup bu biçimde
+ * gönderilir (ör. yyyy-MM-dd'T'HH:mm:ss).
+ * @param {unknown} v @returns {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>}
  */
 function alanBaglariniDogrula(v) {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanBaglari" bir nesne olmalıdır.');
-  /** @type {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>} */
+  /** @type {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>} */
   const s = {};
   for (const [op, alanlar] of Object.entries(v)) {
     if (!alanlar || typeof alanlar !== 'object' || Array.isArray(alanlar)) throw new DepoHatasi(`"${op}" tablo bağlantıları bir nesne olmalıdır.`);
@@ -253,7 +254,11 @@ function alanBaglariniDogrula(v) {
       }
       const etiket = typeof b.etiket === 'string' ? b.etiket.trim() : '';
       if (etiket && !/^[\p{L}\p{N} _-]{1,40}$/u.test(etiket)) throw new DepoHatasi(`"${yol}" etiketi geçersiz (harf, rakam, boşluk, "_", "-").`);
-      (s[op] ??= {})[yol] = { tablo: b.tablo, sutun: b.sutun.trim(), ...(etiket ? { etiket } : {}) };
+      const bicim = typeof b.bicim === 'string' ? b.bicim.trim() : '';
+      if (bicim && (!new RegExp(`^${BICIM_KALIBI}$`, 'u').test(bicim) || !/yyyy|MM|dd|HH|mm|ss/.test(bicim))) {
+        throw new DepoHatasi(`"${yol}" tarih biçimi geçersiz (ör. yyyy-MM-dd'T'HH:mm:ss; yyyy MM dd HH mm ss).`);
+      }
+      (s[op] ??= {})[yol] = { tablo: b.tablo, sutun: b.sutun.trim(), ...(etiket ? { etiket } : {}), ...(bicim ? { bicim } : {}) };
     }
   }
   return s;
@@ -657,7 +662,7 @@ function senaryoyuTablolaraCevir(servis, op, govde, tablolar, kimlik, eslemeler)
       const tb = b ? tablolar.find((x) => x.id === b.tablo) : undefined;
       const s = tb && b ? tb.sutunlar.find((x) => x.ad === b.sutun) : undefined;
       if (!tb || !s || !b) continue;
-      donusum.set(v.deger, basvuru(tb.ad, s.ad, b.etiket || ''));
+      donusum.set(v.deger, basvuru(tb.ad, s.ad, b.etiket || '', b.bicim || ''));
       const dosyada = kimlik[v.deger];
       if (!dosyada) continue;
       const grup = grupAnahtari(tb.id, b.etiket || '');

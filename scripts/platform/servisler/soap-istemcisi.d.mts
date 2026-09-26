@@ -8,6 +8,7 @@ export declare class ServisHatasi extends Error {}
 export declare function tarihBicimle(t: Date, bicim: string): string;
 export declare function goreliTarih(ifade: string, simdi: Date): Date;
 export declare function tarihKuraliUygula(kural: string, simdi: Date): string;
+export declare function tarihDegeriBicimle(deger: string, bicim: string, ad: string): string;
 export declare function yerTutuculariDoldur(govde: string, baglam: {
   degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string;
 }): string;

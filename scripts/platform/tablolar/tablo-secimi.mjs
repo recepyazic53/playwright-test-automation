@@ -1,5 +1,6 @@
 // TABLO SEÇİMİ — saf yardımcılar (ORTAK: sunucu ve arayüz; /arayuz/tablo-secimi.mjs olarak sunulur, Node modülü içe aktarmaz).
 // Bir alan tablo sütununa bağlıdır; gövdede ${Tablo.Sütun} ya da aynı tablo iki kez gerekiyorsa ${Tablo[etiket].Sütun}.
+// Tarih değeri servise başka biçimde gidecekse sona biçim eklenir: ${Kişi.Doğum tarihi|yyyy-MM-dd'T'HH:mm:ss}.
 // Aynı tablo + etiketteki alanlar bir seçim grubudur: senaryodaki seçimler (tabloSecimleri["<tabloId>|<etiket>"] =
 // { Sütun: değer }) satırları süzer. Formda süzme YUKARIDAN AŞAĞIDIR: bir alanın seçenekleri, formda kendinden ÖNCEKİ alanların
 // seçimleriyle uyuşan satırlardaki değerlerdir (üstteki seçim değişince alttaki uyumsuz seçim temizlenir). Koşuda tüm
@@ -7,30 +8,32 @@
 // Karşılıklar: sütun değerinin sayfadaki (seçenek değeri) ve servisteki karşılığı; senaryoya tablodaki değer yazılır, ekran
 // koşusu sayfa değeriyle seçer, servis gövdesine servis değeri gider (tanımsızsa tablodaki değer).
 
-/** Tablo / sütun adı karakterleri (tablo-deposu.mjs TABLO_ADI ile aynı): . [ ] { } $ < > & ve denetim karakterleri yok. */
-export const AD_KALIBI = '[^.\\[\\]{}$<>&\\u0000-\\u001f]{1,60}';
+/** Tablo / sütun adı karakterleri (tablo-deposu.mjs TABLO_ADI ile aynı): . [ ] { } $ < > & | ve denetim karakterleri yok. */
+export const AD_KALIBI = '[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}';
+/** Tarih biçimi (yyyy, MM, dd, HH, mm, ss; tek tırnak içi sabit): { } $ yok, en çok 60. */
+export const BICIM_KALIBI = "[^{}$\\u0000-\\u001f]{1,60}";
 /** Etiket (sigortalı / ettiren): harf, rakam, boşluk, "_", "-". */
 export const ETIKET_KALIBI = '[\\p{L}\\p{N} _-]{1,40}';
-const BASVURU = new RegExp(`^\\s*(${AD_KALIBI})(?:\\[(${ETIKET_KALIBI})\\])?\\.(${AD_KALIBI})\\s*$`, 'u');
+const BASVURU = new RegExp(`^\\s*(${AD_KALIBI})(?:\\[(${ETIKET_KALIBI})\\])?\\.(${AD_KALIBI})\\s*(?:\\|(${BICIM_KALIBI}))?$`, 'u');
 
 /**
  * @typedef {{ sayfa?: string; servis?: string }} Karsilik
  * @typedef {{ ad: string; gizli: boolean; tip?: string; karsiliklar?: Record<string, Karsilik> }} Sutun
  * @typedef {{ id?: string; ortamId: string | null; degerler: Record<string, string | null> }} Satir
  * @typedef {{ id: string; ad: string; sutunlar: Sutun[]; satirlar: Satir[] }} Tablo
- * @typedef {{ tablo: string; etiket: string; sutun: string }} Basvuru
+ * @typedef {{ tablo: string; etiket: string; sutun: string; bicim: string }} Basvuru
  */
 
 const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
 
-/** "Tablo.Sütun" / "Tablo[etiket].Sütun" → { tablo, etiket, sutun } | null. @param {string} ad @returns {Basvuru | null} */
+/** "Tablo.Sütun" / "Tablo[etiket].Sütun" (+ "|biçim") → { tablo, etiket, sutun, bicim } | null. @param {string} ad @returns {Basvuru | null} */
 export function basvuruCoz(ad) {
   const m = BASVURU.exec(ad);
-  return m ? { tablo: m[1].trim(), etiket: (m[2] || '').trim(), sutun: m[3].trim() } : null;
+  return m ? { tablo: m[1].trim(), etiket: (m[2] || '').trim(), sutun: m[3].trim(), bicim: (m[4] || '').trim() } : null;
 }
 
-/** @param {string} tablo @param {string} sutun @param {string} [etiket] */
-export const basvuru = (tablo, sutun, etiket = '') => `${tablo}${etiket ? `[${etiket}]` : ''}.${sutun}`;
+/** @param {string} tablo @param {string} sutun @param {string} [etiket] @param {string} [bicim] tarih biçimi */
+export const basvuru = (tablo, sutun, etiket = '', bicim = '') => `${tablo}${etiket ? `[${etiket}]` : ''}.${sutun}${bicim ? `|${bicim}` : ''}`;
 
 /** Seçim grubunun anahtarı. @param {string} tabloId @param {string} [etiket] */
 export const grupAnahtari = (tabloId, etiket = '') => `${tabloId}|${etiket}`;
