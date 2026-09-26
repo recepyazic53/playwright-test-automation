@@ -18,7 +18,7 @@ export function devreDisiGosterAyarla(acik) {
 /** Sol listenin altındaki "Devre dışı ekranları göster" anahtarı. sayi: devre dışı ekran sayısı (0 ise gösterilmez). */
 export function devreDisiAnahtari(sayi, degisti) {
   if (!sayi) return null;
-  const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: devreDisiGoster(), id: yeniKimlik('devre-disi') });
+  const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: devreDisiGoster(), id: yeniKimlik('devre-disi'), 'data-kayit-disi': true });
   kutu.addEventListener('change', () => { devreDisiGosterAyarla(kutu.checked); degisti(kutu.checked); });
   return h('label', { class: 'devre-disi-anahtari', for: kutu.id }, kutu, h('span', {}, 'Devre dışı ekranları göster', h('small', {}, ` (${sayi})`)));
 }

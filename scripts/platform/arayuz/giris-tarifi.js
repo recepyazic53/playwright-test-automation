@@ -3,7 +3,7 @@
 // Tarifte gizli değer yoktur (parola/anahtar/kod giriş profilindedir). "Varsayılanları öner" YALNIZCA
 // kullanıcı açıkça isteyip onaylayınca ortamın giriş sayfasını sunucuda görünmez bir tarayıcıda açar
 // (alan doldurmaz, göndermez). Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
-import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 
 const IKINCI_ADIM_ETIKETI = { yok: 'Yok', totp: 'Authenticator (TOTP)', sms: 'SMS' };
@@ -160,8 +160,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
 
     // --- Bağlam değiştirme ----------------------------------------------------------------
     const baglamVar = h('input', { type: 'checkbox', id: yeniKimlik('baglam'), checked: Boolean(t.baglamDegistirme) });
-    const turListesiId = yeniKimlik('turler');
-    const baglamTuru = h('input', { type: 'text', autocomplete: 'off', list: turListesiId, value: t.baglamDegistirme ? t.baglamDegistirme.baglamTuru : '' });
+    const baglamTuru = oneriListesi(h('input', { type: 'text', value: t.baglamDegistirme ? t.baglamDegistirme.baglamTuru : '' }), () => veri.baglamTurleri.map((x) => x.tur));
     const alanCipleri = h('div', { class: 'yer-tutucu-cipleri', 'aria-live': 'polite' });
     const cipleriCiz = () => {
       const tur = veri.baglamTurleri.find((x) => x.tur === baglamTuru.value.trim());
@@ -242,7 +241,6 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     adimEkle.addEventListener('click', () => { adimlar.push({ islem: 'tikla', hedef: { secici: '' } }); adimlariCiz(); });
     const baglamAlani = h('div', { class: 'ic-alanlar' },
       alan('Bağlam türü', baglamTuru, { yardim: 'Adımlardaki {alan} yer tutucuları bu türdeki seçilen bağlam profilinin alanlarıyla doldurulur.' }),
-      h('datalist', { id: turListesiId }, veri.baglamTurleri.map((x) => h('option', { value: x.tur }))),
       alanCipleri,
       h('details', { class: 'tarif-adim-kutusu', open: adimlar.length <= 6 },
         h('summary', {}, adimOzetMetni), adimListesi, h('div', { class: 'dugmeler' }, adimEkle)));

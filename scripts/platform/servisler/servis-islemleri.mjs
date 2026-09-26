@@ -22,11 +22,16 @@ import {
 } from './servis-deposu.mjs';
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
 import { KAYNAKLAR } from './servis-govdesi.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { basvuruCoz, grupAnahtari, secilenSatir, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
 /** @typedef {import('./servis-deposu.mjs').ServisAyarlari} ServisAyarlari */
 /** @typedef {import('./servis-deposu.mjs').ServisSenaryoIcerigi} ServisSenaryoIcerigi */
+
+/** Alan yolu (grup/alan): WSDL öğe adları Türkçe harf de içerebilir (ör. "sigortali-detayları"). */
+const ALAN_YOLU = /^[\p{L}_][\p{L}\p{N}_.-]*(\/[\p{L}_][\p{L}\p{N}_.-]*)*$/u;
 
 /** Başarılı erişim kontrolünün geçerlilik süresi (bu sürede "Kaydet" yapılmalı). */
 export const ERISIM_GECERLILIK_MS = 30 * 60_000;
@@ -163,7 +168,7 @@ function ekAlanlariDogrula(v) {
   for (const [op, liste] of Object.entries(v)) {
     if (!Array.isArray(liste)) throw new DepoHatasi(`"${op}" elle eklenen alanları bir dizi olmalıdır.`);
     s[op] = liste.map((/** @type {any} */ e) => {
-      if (!e || typeof e.yol !== 'string' || !/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(e.yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${e?.yol}".`);
+      if (!e || typeof e.yol !== 'string' || !ALAN_YOLU.test(e.yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${e?.yol}".`);
       return { yol: e.yol, tip: tipler.includes(e.tip) ? e.tip : 'metin' };
     });
     if (new Set(s[op].map((e) => e.yol)).size !== s[op].length) throw new DepoHatasi(`"${op}" elle eklenen alanlarda aynı yol iki kez var.`);
@@ -183,7 +188,7 @@ function alanZorunluluklariniDogrula(v) {
   const s = {};
   for (const [op, yollar] of Object.entries(v)) {
     if (!Array.isArray(yollar)) throw new DepoHatasi(`"${op}" zorunlu alanları bir dizi olmalıdır.`);
-    for (const yol of yollar) if (typeof yol !== 'string' || !/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+    for (const yol of yollar) if (typeof yol !== 'string' || !ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
     s[op] = [...new Set(/** @type {string[]} */ (yollar))];
   }
   return s;
@@ -200,10 +205,11 @@ function alanVarsayilanlariniDogrula(v) {
   for (const [op, alanlar] of Object.entries(v)) {
     if (!alanlar || typeof alanlar !== 'object' || Array.isArray(alanlar)) throw new DepoHatasi(`"${op}" varsayılanları bir nesne olmalıdır.`);
     for (const [yol, d] of Object.entries(alanlar)) {
-      if (!/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+      if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (!d || typeof d !== 'object' || !KAYNAKLAR.includes(d.kaynak)) throw new DepoHatasi(`"${yol}" için geçersiz kaynak.`);
-      if ((d.kaynak === 'sabit' || d.kaynak === 'parametre') && typeof d.deger !== 'string') throw new DepoHatasi(`"${yol}" için değer gerekli.`);
-      (s[op] ??= {})[yol] = d.kaynak === 'sabit' || d.kaynak === 'parametre' ? { kaynak: d.kaynak, deger: d.deger } : { kaynak: d.kaynak };
+      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo';
+      if (degerli && typeof d.deger !== 'string') throw new DepoHatasi(`"${yol}" için değer gerekli.`);
+      (s[op] ??= {})[yol] = degerli ? { kaynak: d.kaynak, deger: d.deger } : { kaynak: d.kaynak };
     }
   }
   return s;
@@ -220,9 +226,34 @@ function alanListeleriniDogrula(v) {
   for (const [op, alanlar] of Object.entries(v)) {
     if (!alanlar || typeof alanlar !== 'object' || Array.isArray(alanlar)) throw new DepoHatasi(`"${op}" liste bağlantıları bir nesne olmalıdır.`);
     for (const [yol, id] of Object.entries(alanlar)) {
-      if (!/^[A-Za-z_][\w.-]*(\/[A-Za-z_][\w.-]*)*$/.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+      if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (typeof id !== 'string' || (id && !/^[A-Za-z0-9_-]{1,100}$/.test(id))) throw new DepoHatasi(`"${yol}" için geçersiz liste.`);
       (s[op] ??= {})[yol] = id;
+    }
+  }
+  return s;
+}
+
+/**
+ * Alan → tablo sütunu bağlantıları: { <operasyon>: { <yol>: { tablo: tabloId, sutun, etiket? } } }. Aynı tablo bir istekte
+ * iki kez gerekiyorsa etiket (sigortalı / ettiren) iki ayrı satır seçimi demektir.
+ * @param {unknown} v @returns {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>}
+ */
+function alanBaglariniDogrula(v) {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanBaglari" bir nesne olmalıdır.');
+  /** @type {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>} */
+  const s = {};
+  for (const [op, alanlar] of Object.entries(v)) {
+    if (!alanlar || typeof alanlar !== 'object' || Array.isArray(alanlar)) throw new DepoHatasi(`"${op}" tablo bağlantıları bir nesne olmalıdır.`);
+    for (const [yol, b] of Object.entries(alanlar)) {
+      if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
+      if (!b) continue;
+      if (typeof b !== 'object' || typeof b.tablo !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(b.tablo) || typeof b.sutun !== 'string' || !b.sutun.trim() || b.sutun.length > 60) {
+        throw new DepoHatasi(`"${yol}" için geçersiz tablo bağlantısı.`);
+      }
+      const etiket = typeof b.etiket === 'string' ? b.etiket.trim() : '';
+      if (etiket && !/^[\p{L}\p{N} _-]{1,40}$/u.test(etiket)) throw new DepoHatasi(`"${yol}" etiketi geçersiz (harf, rakam, boşluk, "_", "-").`);
+      (s[op] ??= {})[yol] = { tablo: b.tablo, sutun: b.sutun.trim(), ...(etiket ? { etiket } : {}) };
     }
   }
   return s;
@@ -298,7 +329,7 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   secilenOperasyonlar?: string[];
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
- *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown }} girdi
+ *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown }} girdi
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -319,7 +350,8 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {}),
     ...(girdi.alanZorunluluklari !== undefined ? { alanZorunluluklari: alanZorunluluklariniDogrula(girdi.alanZorunluluklari) } : {}),
     ...(girdi.ekAlanlar !== undefined ? { ekAlanlar: ekAlanlariDogrula(girdi.ekAlanlar) } : {}),
-    ...(girdi.alanListeleri !== undefined ? { alanListeleri: alanListeleriniDogrula(girdi.alanListeleri) } : {})
+    ...(girdi.alanListeleri !== undefined ? { alanListeleri: alanListeleriniDogrula(girdi.alanListeleri) } : {}),
+    ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {})
   };
   if (adresDegisti) {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);
@@ -414,8 +446,35 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
   const secimler = { ...(servis.ayarlar.veriProfilleri ?? {}), ...(icerik.veriProfilleri ?? {}) };
   /** @type {Map<string, Record<string, unknown>>} */
   const profiller = new Map();
+  /** @type {import('../tablolar/tablo-deposu.mjs').Tablo[] | null} */
+  let tablolar = null;
+  /** Kullanılan tablo satırları (raporda: hangi satırla koştu). @type {Array<{ tablo: string; etiket: string; satir: Record<string, string | null> }>} */
+  const kullanilanSatirlar = [];
   for (const ad of adlar) {
     if (tarih[ad]) continue;
+    // ${Tablo.Sütun} / ${Tablo[etiket].Sütun}: senaryonun seçimleriyle (ve ortamla) uyan ilk satırdan.
+    const b = /[.[]/.test(ad) ? basvuruCoz(ad) : null;
+    if (b) {
+      tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
+      const t = tabloBul(tablolar, b.tablo);
+      if (t) {
+        const sutun = sutunBul(t, b.sutun);
+        if (!sutun) { eksikNedeni[ad] = `"${t.ad}" tablosunda "${b.sutun}" sütunu yok`; continue; }
+        const secim = icerik.tabloSecimleri?.[grupAnahtari(t.id, b.etiket)] ?? {};
+        const r = secilenSatir(t, secim, ortamId);
+        const grup = `"${t.ad}${b.etiket ? ` (${b.etiket})` : ''}"`;
+        if (!r) { eksikNedeni[ad] = Object.keys(secim).length ? `${grup} tablosunda seçimlerle uyan satır yok` : `${grup} tablosunda bu ortamda satır yok`; continue; }
+        const d = r.degerler[sutun.ad];
+        if (d === null || d === undefined || d === '') { eksikNedeni[ad] = `${grup} tablosunun seçilen satırında "${sutun.ad}" boş`; continue; }
+        degerler[ad] = d;
+        if (sutun.gizli) gizliler.push(d);
+        if (!kullanilanSatirlar.some((x) => x.tablo === t.ad && x.etiket === b.etiket)) {
+          kullanilanSatirlar.push({ tablo: t.ad, etiket: b.etiket, satir: Object.fromEntries(t.sutunlar.filter((x) => !x.gizli).map((x) => [x.ad, r.degerler[x.ad]])) });
+        }
+        continue;
+      }
+      if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) { eksikNedeni[ad] = `"${b.tablo}" adında tablo yok`; continue; }
+    }
     if (kimlik[ad] !== undefined) {
       degerler[ad] = kimlik[ad];
       if (GIZLI_KIMLIK_PARAMETRELERI.test(ad)) gizliler.push(kimlik[ad]);
@@ -435,7 +494,7 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     degerler[ad] = String(d);
     if (e.hassas) gizliler.push(String(d));
   }
-  return { degerler, tarihKurallari: tarih, gizliler, eksikNedeni, kimlikProfili };
+  return { degerler, tarihKurallari: tarih, gizliler, eksikNedeni, kimlikProfili, kullanilanSatirlar };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -634,6 +693,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const p = parametreDegerleri(vt, projeId, servis, icerik, ortam.id);
     gizliler = p.gizliler;
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
+    if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
     const govde = yerTutuculariDoldur(icerik.govde, {
       degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (ad) => p.eksikNedeni[ad] ?? 'tanımsız'
     });

@@ -3,6 +3,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { wsdlSemalari } from './wsdl-semasi.mjs';
+import { AD_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi.mjs';
 
 export const VARSAYILAN_ZAMAN_ASIMI_MS = 60_000;
 /** Saklanan yanıt en çok bu kadar karakter tutulur (rapor boyutu). */
@@ -49,7 +50,8 @@ export function goreliTarih(ifade, simdi) {
 }
 
 /** Parametre başvurusu: ${AD} ya da doğrudan tarih ${tarih:bugun+1y|yyyy-MM-dd}. */
-const PARAMETRE = /\$\{\s*(?:tarih:([^|}]+)(?:\|([^}]+))?|([A-Za-z_][A-Za-z0-9_.-]{0,79}))\s*\}/g;
+// ${tarih:ifade|biçim} · ${AD} (eski parametre) · ${Tablo.Sütun} / ${Tablo[etiket].Sütun} (test verisi tablosu).
+const PARAMETRE = new RegExp(`\\$\\{\\s*(?:tarih:([^|}]+)(?:\\|([^}]+))?|([A-Za-z_][A-Za-z0-9_.-]{0,79}|${AD_KALIBI}(?:\\[${ETIKET_KALIBI}\\])?\\.${AD_KALIBI}))\\s*\\}`, 'gu');
 
 /** "bugun+1y|yyyy-MM-dd" → tarih metni. @param {string} kural @param {Date} simdi */
 export function tarihKuraliUygula(kural, simdi) {
@@ -67,7 +69,8 @@ export function yerTutuculariDoldur(govde, baglam) {
   const simdi = baglam.simdi ?? new Date();
   /** @type {Set<string>} */
   const eksik = new Set();
-  const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, ad) => {
+  const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, hamAd) => {
+    const ad = typeof hamAd === 'string' ? hamAd.trim() : hamAd;
     if (tarihIfadesi) return tarihKuraliUygula(`${tarihIfadesi}|${bicim ?? "yyyy-MM-dd'T'HH:mm:ss"}`, simdi);
     const kural = baglam.tarihKurallari?.[ad];
     if (kural) return tarihKuraliUygula(kural, simdi);
@@ -83,7 +86,7 @@ export function yerTutuculariDoldur(govde, baglam) {
 
 /** Gövdede geçen parametre adları (doğrudan tarih ifadeleri hariç). @param {string} govde */
 export function kullanilanParametreler(govde) {
-  return [...new Set([...govde.matchAll(PARAMETRE)].map((m) => m[3]).filter(Boolean))];
+  return [...new Set([...govde.matchAll(PARAMETRE)].map((m) => m[3]?.trim()).filter(Boolean))];
 }
 
 /** @param {string} s */

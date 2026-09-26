@@ -15,9 +15,10 @@
 // henüz sunmuyorsa (eski sürüm çalışıyorsa) yalnızca o sekme hata verir.
 import {
   MARKA, adresGecerliMi, alan, alanHatasi, api, bildir, geriSayim, h, ikon, iskelet, logo, mesajKutusu, mesgulIken,
-  parolaAlani, s, temaDugmesi
+  degisiklikleriBirak, parolaAlani, s, temaDugmesi
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
+import { cikisKorumasiniKur } from './cikis-korumasi.js';
 import { aktarimAkisi } from './aktarim.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
@@ -82,6 +83,7 @@ function odakSayfa({ ustMetin, alt = true }, main) {
 // ---------------------------------------------------------------------------------------
 
 export async function yonlendir() {
+  degisiklikleriBirak();
   let d;
   try {
     d = await api('/platform/durum');
@@ -796,4 +798,5 @@ function ayarlarEkrani(main, bolum) {
   ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile });
 }
 
+cikisKorumasiniKur();
 yonlendir();

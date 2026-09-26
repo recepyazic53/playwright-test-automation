@@ -27,6 +27,8 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: string }>>;
+  alanListeleri?: Record<string, Record<string, string>>;
+  alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
 }): string;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
   adres: string; durumKodu: number; operasyonSayisi: number; alanliOperasyonlar: string[];

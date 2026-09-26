@@ -11,7 +11,7 @@
 // Çoklu akış: ekranın birden çok akışı varsa senaryo kartında "Akış" seçilir (yeni senaryoda varsayılan akış önde); akış
 // değişince form o akışın modeliyle yeniden çizilir, girilen değerler korunur (yeni akışta olmayanlar uyarıyla kaldırılır).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, yerlestir, bildir, boyutMetni, h, ikon, iskelet, rozet, TOKEN } from './ortak.js';
+import { api, yerlestir, bildir, boyutMetni, degisiklikleriBirak, h, ikon, iskelet, oneriListesi, rozet, TOKEN } from './ortak.js';
 import { dosyaOnDenetimi, dosyaReferansiCoz, dosyaYukle, kabulListesi } from './dosya-yukleme.js';
 import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
@@ -352,6 +352,10 @@ function modelFormu(icerik, s, senaryo, baglam) {
             placeholder: alan.tip === 'tarih' ? (alan.bicim || '') : alan.tip === 'dosya' ? `proje köküne göre yol${alan.kabul ? ` (${alan.kabul})` : ''}` : ''
           }), id);
           if (alan.tip === 'sayi') girdi.min = '1';
+          // Tabloya (ya da değer listesine) bağlı metin alanı: aynı tablodaki seçimlere göre süzülen öneriler (elle yazılabilir).
+          if (!alan.hassas && degerListeleri.some((l) => l.hedef?.alan === alan.id)) {
+            oneriListesi(girdi, () => birlesikDegerler(eslesenListeler(degerListeleri, (l) => l.hedef?.alan === alan.id, alanDegeri)).map((x) => x.deger));
+          }
           girdi.addEventListener('input', () => degerYaz(alan.anahtar, girdi.value, { dokun: false }));
           girdi.addEventListener('change', () => { dokunulan.add(alan.anahtar); planla(); });
           govde = girdi;
@@ -773,6 +777,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
 
   vazgecDugmesi.addEventListener('click', async () => {
     if (degisti && !(await onayIste({ baslik: 'Değişiklikler kaydedilmedi', metin: 'Formdaki kaydedilmemiş değişiklikler kaybolacak.', dugme: 'Çık', tehlikeli: false, ikonAd: 'uyari' }))) return;
+    degisiklikleriBirak();
     s.geri();
   });
 

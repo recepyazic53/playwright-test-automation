@@ -159,7 +159,7 @@ import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 import {
-  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, modellerdenDegerListeleri, senaryoGecmisiniSil, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
+  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
   modelBaglami, ortamAnahtariBul, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
@@ -188,10 +188,11 @@ import {
 } from './ekranlar/ekran-yonetimi.mjs';
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
+import { TABLO_GET_UCLARI, TABLO_POST_UCLARI } from './tablolar/tablo-uclari.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Sayfa paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
-const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', ...SERVIS_BUYUK_GOVDE_UCLARI]);
+const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', '/platform/tablo/kaydet', ...SERVIS_BUYUK_GOVDE_UCLARI]);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
 export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
 /** İçe aktarılacak yedeğin üst sınırı (videolu yedekler büyük olabilir; gövde diske akıtılır). */
@@ -1321,6 +1322,7 @@ const GET_UCLARI = new Map([
   }]
 ]);
 for (const [yol, islem] of SERVIS_GET_UCLARI) GET_UCLARI.set(yol, islem);
+for (const [yol, islem] of TABLO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const POST_UCLARI = new Map([
@@ -1533,10 +1535,6 @@ const POST_UCLARI = new Map([
     });
     return { id };
   }],
-  // Ekran modellerindeki seçenek listelerini test verisine (değer listeleri) al: onay yoksa önizleme.
-  ['/platform/deger-listeleri/modellerden', (db, g) => modellerdenDegerListeleri(db, kimlikAl(g.projeId, 'projeId'), {
-    onay: g.onay === true, ekranIdleri: Array.isArray(g.ekranIdleri) ? g.ekranIdleri.map((x) => kimlikAl(x, 'ekranId')) : undefined
-  })],
   ['/platform/baglam-profili/sil', (db, g) => ({ silindi: baglamProfiliSil(db, kimlikAl(g.id)) })],
   ['/platform/test-verisi-turu/kaydet', (db, g) => {
     if (!Array.isArray(g.alanlar)) throw new DepoHatasi('"alanlar" bir dizi olmalıdır.');
@@ -1564,6 +1562,8 @@ const POST_UCLARI = new Map([
 ]);
 // Servis testleri (servisler/servis-uclari.mjs): ekran uçlarından ayrı; aynı belirteç / kasa kuralları.
 for (const [yol, islem] of SERVIS_POST_UCLARI) POST_UCLARI.set(yol, islem);
+// Test verisi tabloları (tablolar/tablo-uclari.mjs).
+for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 
 /**
  * @param {import('node:http').IncomingMessage} req
