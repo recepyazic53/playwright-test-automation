@@ -29,8 +29,14 @@ const PRIM_DESENI = '[Pp][Rr][İIiı][Mm]\\s+[\\d.,]+\\s*₺';
 const alan = (id, tip, etiket, secici, ek = {}) => ({
   id, tip, etiket: { ekran: etiket }, yapilandirma: 'senaryo', eslesme: { senaryo: id }, konum: { secici, kirilganlik: 'orta' }, ...ek
 });
-const liste = (id, etiket, selectId) => alan(id, 'secim', etiket, gizliListeSecicisi(selectId), {
-  zorunlu: true, mutlakaGorunmeli: true, secenekler: null, seceneklerDurumu: 'bilinmiyor'
+/**
+ * Gizli (jqTransform) <select>: kodlu test gibi değer betikle yazılır + change (degerJs; görünen listeye tıklanmaz — "1" gibi kısa
+ * metinler sayfada başka öğelerle karışabiliyordu). Seçenekler TEST ekranından (2026-09-26), not olarak
+ * (seceneklerKaynagi); listeye kısıtlanmaz, taşınan senaryolardaki görünen metinler geçerli kalsın (degerJs önce değer, sonra metin).
+ */
+const liste = (id, etiket, selectId, secenekler) => alan(id, 'secim', etiket, `#${selectId}`, {
+  zorunlu: true, mutlakaGorunmeli: true, doldurucu: 'degerJs', secenekler: null, seceneklerDurumu: 'bilinmiyor',
+  seceneklerKaynagi: `TEST ekranı (2026-09-26): ${secenekler.map(([d, m]) => `${d}=${m}`).join(', ')}`
 });
 
 /**
@@ -61,8 +67,8 @@ export function jetIlkAtesKonutAkisPaketi(s = {}) {
             baslangicTarihi(),
             sigortaliDurumu(),
             // Alternatif seçilince eşya yangın ve ek teminat bedelleri dolar (POM bunları test verisiyle karşılaştırıyordu).
-            liste('alternatif', 'Alternatif', 'Alternative'),
-            liste('yapiTarzi', 'Yapı tarzı', 'ConstructionType'),
+            liste('alternatif', 'Alternatif', 'Alternative', [['1', '1'], ['2', '2']]),
+            liste('yapiTarzi', 'Yapı tarzı', 'ConstructionType', [['1', 'TAM KAGİR']]),
             alan('binaInsaYili', 'sayi', 'Bina inşa yılı', '#BuildYear', { zorunlu: true })
           ]
         }]
