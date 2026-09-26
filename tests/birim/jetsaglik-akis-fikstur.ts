@@ -22,9 +22,10 @@ export const SAGLIK_LISTELERI: Record<string, Array<[string, string]>> = {
   ClientNationality: [['DE', 'ALMANYA'], ['FR', 'FRANSA']],
   IL: [['-1', 'Seçiniz'], ['34', 'İSTANBUL'], ['6', 'ANKARA']],
   STAPSelector: [['1', 'Apartman'], ['2', 'Site']],
-  slPolicyPeriod: [['', 'Seçiniz'], ['12', '1 Yıl'], ['6', '6 Ay']],
-  slHaveDisease: [['', 'Seçiniz'], ['H', 'Hayır'], ['E', 'Evet']],
-  KVKKOnay: [['', 'Seçiniz'], ['1', 'Onaylıyorum']],
+  // TEST ekranındaki değerler (2026-09-26).
+  slPolicyPeriod: [['1', 'İlk Yıl'], ['2', 'İkinci Yıl']],
+  slHaveDisease: [['H', 'Hayır'], ['E', 'Evet']],
+  KVKKOnay: [['E', 'Evet'], ['H', 'Hayır']],
   Yenileme: [['H', 'Hayır'], ['E', 'Evet']]
 };
 const ILCELER: Record<string, Array<[string, string]>> = { '34': [['1103', 'KADIKÖY'], ['1183', 'ÜSKÜDAR']], '6': [['1130', 'ÇANKAYA']] };

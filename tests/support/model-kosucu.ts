@@ -203,7 +203,18 @@ async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi
 async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string, kosu: PlanKosuTanimi | null = null): Promise<void> {
   const p = alan.parametreler;
   if (typeof p.tus === 'string' && p.tus) await l.press(p.tus);
-  if (typeof p.tikla === 'string' && p.tikla) await page.locator(p.tikla).filter({ visible: true }).first().click();
+  // gizle: alan doldurulunca açık kalıp sonraki tıklamaları kapatan katman (ör. takvim) gizlenir.
+  if (typeof p.gizle === 'string' && p.gizle) {
+    await page.locator(p.gizle).evaluateAll((ogeler) => { for (const e of ogeler) (e as HTMLElement).style.display = 'none'; }).catch(() => undefined);
+  }
+  if (typeof p.tikla === 'string' && p.tikla) {
+    const dugme = page.locator(p.tikla).filter({ visible: true }).first();
+    try {
+      await dugme.click({ timeout: ALAN_TIKLAMA_SURESI_MS });
+    } catch {
+      throw new Error(beklenenGorulenMetni(adimBasligi, `"${p.tikla}" tıklanır`, `${ALAN_TIKLAMA_SURESI_MS / 1000} sn içinde tıklanamadı (görünmüyor ya da üstünü başka bir öğe kapatıyor — ör. açık kalan takvim; doldurucuParametreleri.gizle)`));
+    }
+  }
   const b = p.bekle;
   if (b && typeof b === 'object' && typeof (b as Record<string, unknown>).secici === 'string') {
     const k = b as { secici: string; durum?: string; zamanAsimiSn?: number; icermez?: unknown };
@@ -235,7 +246,34 @@ async function degerJsIleYaz(alan: PlanAlani, l: Locator, adimBasligi: string): 
   if (!sonuc) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s ? s.metin : String(alan.deger)}" seçilir`, 'listede böyle bir seçenek yok'));
 }
 
-async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
+/**
+ * maske: değerin rakamları kalıptaki "#" yerlerine sırayla yerleştirilir (ör. "(###) ### ## ##" → "(532) 111 22 33"); maskeli
+ * alanlar için (tuşlamak imleci kaydırabilir; degerJs ile tek seferde yazılır). Rakam sayısı kalıba uymazsa değer olduğu gibi kalır.
+ */
+function maskeUygula(maske: unknown, deger: unknown): unknown {
+  if (typeof maske !== 'string' || !maske.includes('#') || (typeof deger !== 'string' && typeof deger !== 'number')) return deger;
+  const rakamlar = String(deger).replace(/\D/g, '');
+  if (rakamlar.length !== (maske.match(/#/g) ?? []).length) return deger;
+  let i = 0;
+  return maske.replace(/#/g, () => rakamlar[i++]);
+}
+
+/**
+ * Zorla işaretleme (radyoZorla / onayKutusuZorla): gizli girdili özel çizimli kutular. Önce zorla tıklama denenir; öğe hiç
+ * görünmüyorsa (ör. display:none — "Element is not visible") betikle tıklanır (click olayı sayfanın kendi işleyicilerini
+ * çalıştırır). Sonunda durum doğrulanır.
+ */
+async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string, alan: PlanAlani): Promise<void> {
+  if ((await l.isChecked()) === isaretli) return;
+  await l.setChecked(isaretli, { force: true, timeout: 3_000 }).catch(() => undefined);
+  if ((await l.isChecked()) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
+  if ((await l.isChecked()) !== isaretli) {
+    throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, 'zorla ve betikle tıklandı, durum değişmedi'));
+  }
+}
+
+async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
+  const alan = ham.parametreler.maske ? { ...ham, deger: maskeUygula(ham.parametreler.maske, ham.deger) } : ham;
   const deger = alan.deger;
   if (alan.doldurucu === 'degerJs') { await degerJsIleYaz(alan, l, adimBasligi); return; }
   switch (alan.tip) {
@@ -265,11 +303,13 @@ async function alaniDoldur(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
       const hedef = s.secici
         ? page.locator(s.secici)
         : page.locator(alan.secici as string).and(page.locator(`[value="${cssKacis(s.deger)}"]`));
-      await hedef.first().check({ force: alan.doldurucu === 'radyoZorla' });
+      if (alan.doldurucu === 'radyoZorla') { await zorlaIsaretle(hedef.first(), true, adimBasligi, alan); return; }
+      await hedef.first().check();
       return;
     }
     case 'onayKutusu':
-      await l.setChecked(deger === true || deger === 'true', { force: alan.doldurucu === 'onayKutusuZorla' });
+      if (alan.doldurucu === 'onayKutusuZorla') { await zorlaIsaretle(l, deger === true || deger === 'true', adimBasligi, alan); return; }
+      await l.setChecked(deger === true || deger === 'true');
       return;
     case 'tarih':
       if (alan.doldurucu === 'tarihJs') {
@@ -338,6 +378,8 @@ function tarayiciUyarilariniDinle(page: Page): void {
  * bitmeyen istek koşuyu durdurmaz (ALAN_SONRASI_EN_COK_MS sonra devam edilir).
  */
 export const ALAN_SONRASI_EN_COK_MS = 8_000;
+/** Alan sonrası tıklamanın (ör. sorgu düğmesi) en çok süresi; aşılırsa açık hatayla düşer (test süresi beklenmez). */
+const ALAN_TIKLAMA_SURESI_MS = 15_000;
 /** İstek bittikten sonra yeni bir istek başlamadan geçmesi gereken süre (zincirleme istekler için). */
 const SESSIZLIK_MS = 150;
 type AgIzi = { suren: Map<Request, number>; son: number };

@@ -31,11 +31,18 @@ const sayfa = (): FiksturYaniti => html(`<h1>Başvuru</h1>
   <select id="gizliListe" style="display:none"><option value="">Seçiniz</option><option value="10">Mesken</option><option value="20">İşyeri</option></select>
   <input type="hidden" id="gizliKod">
   <label>Kapalı <input id="kapali" disabled></label>
+  <span>Sahip <input type="radio" name="sahip" id="sahip-E" value="E" style="display:none"><input type="radio" name="sahip" id="sahip-H" value="H" style="display:none"></span>
+  <span>Ek <input type="checkbox" id="ek" style="display:none"></span><input type="hidden" id="sahipIsleyici">
+  <label>Tarih <input id="tarih"></label><div id="katman" style="display:none;position:fixed;inset:0;z-index:99;background:rgba(0,0,0,.01)"></div>
   <label>Kimlik no <input id="kimlik"></label><button id="sorgula" type="button">Sorgula</button><span id="ad"></span>
   <label>Tel kodu <input id="telKodu"></label><label>Tel no <input id="telNo"></label>
   <button id="gonder" type="button">Gönder</button><p id="sonuc"></p><div id="hata" hidden></div>
   <script>
     const $ = (id) => document.getElementById(id);
+    // Takvim benzeri katman: tarih alanına odaklanınca açılır, sayfanın üstünü kapatır (kendiliğinden kapanmaz).
+    // Gizli radyonun kendi tıklama işleyicisi (özel çizimli kutular gibi): betikle tıklanınca da çalışmalı.
+    for (const r of document.getElementsByName('sahip')) r.onclick = () => { $('sahipIsleyici').value = 'tiklandi:' + r.value; };
+    $('tarih').addEventListener('focus', () => { $('katman').style.display = 'block'; });
     // Sorgu: kimlik "99…" ile başlarsa hata penceresi açılır, ad hiç dolmaz.
     $('sorgula').onclick = () => setTimeout(() => {
       if ($('kimlik').value.startsWith('99')) { $('hata').textContent = ${JSON.stringify(HATA)}; $('hata').hidden = false; }
@@ -43,7 +50,8 @@ const sayfa = (): FiksturYaniti => html(`<h1>Başvuru</h1>
     }, 200);
     $('gonder').onclick = async () => {
       const g = { liste: $('gizliListe').value, gizliKod: $('gizliKod').value, kapali: $('kapali').value, kimlik: $('kimlik').value, ad: $('ad').textContent,
-        telKodu: $('telKodu').value, telNo: $('telNo').value };
+        telKodu: $('telKodu').value, telNo: $('telNo').value,
+        sahip: document.querySelector('[name=sahip]:checked')?.value ?? '', sahipIsleyici: $('sahipIsleyici').value, ek: $('ek').checked };
       await fetch('/gonder', { method: 'POST', body: JSON.stringify(g) });
       $('sonuc').textContent = 'Başvuru alındı.';
     };
@@ -68,6 +76,10 @@ function paket(): Nesne {
           alan('liste', 'secim', 'Kullanım', '#gizliListe', { doldurucu: 'degerJs', secenekler: null, seceneklerDurumu: 'bilinmiyor' }),
           alan('gizliKod', 'metin', 'Gizli kod', '#gizliKod', { doldurucu: 'degerJs' }),
           alan('kapali', 'metin', 'Kapalı alan', '#kapali'),
+          alan('sahip', 'radyo', 'Sahip', '#sahip-E', { doldurucu: 'radyoZorla', seceneklerDurumu: 'tam', secenekler: [
+            { deger: 'E', metin: 'Evet', secici: '#sahip-E' }, { deger: 'H', metin: 'Hayır', secici: '#sahip-H' }] }),
+          alan('ek', 'onayKutusu', 'Ek', '#ek', { doldurucu: 'onayKutusuZorla' }),
+          alan('tarih', 'metin', 'Tarih', '#tarih', { doldurucuParametreleri: { gizle: '#katman' } }),
           {
             id: 'kisi', tip: 'kimlikProfili', kimlikTuru: 'ozel', etiket: { ekran: null, form: 'Kişi' }, zorunlu: true, yapilandirma: 'senaryo',
             eslesme: { senaryo: ['kisiKimligi', 'kisiProfili'], profilHavuzu: 'Özel kişi' },
@@ -134,11 +146,12 @@ test.afterAll(async () => {
   if (klasor) rmSync(klasor, { recursive: true, force: true });
 });
 
-test('degerJs gizli listeyi metinle / gizli girdiyi yazar; kapalı alan atlanır; telefon profilden dilimlenir', async () => {
+test('degerJs gizli listeyi metinle / gizli girdiyi yazar; görünmez radyo / onay kutusu zorla işaretlenir; kapalı alan atlanır; telefon profilden dilimlenir; üstü kapatan katman gizlenir', async () => {
   test.setTimeout(90_000);
-  const sonuc = await kos('Ek kurallar', { liste: 'İşyeri', gizliKod: 'X-7', kapali: 'yazılmamalı', kisiProfili: 'k1' });
+  const sonuc = await kos('Ek kurallar', { sahip: 'H', ek: true, liste: 'İşyeri', gizliKod: 'X-7', kapali: 'yazılmamalı', tarih: '01.01.2026', kisiProfili: 'k1' });
   expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
-  expect(gonderimler.at(-1)).toEqual({ liste: '20', gizliKod: 'X-7', kapali: '', kimlik: KISI.tcKimlikNo, ad: 'KİŞİ 146', telKodu: '532', telNo: '1112233' });
+  expect(gonderimler.at(-1)).toEqual({ liste: '20', gizliKod: 'X-7', kapali: '', kimlik: KISI.tcKimlikNo, ad: 'KİŞİ 146', telKodu: '532', telNo: '1112233',
+    sahip: 'H', sahipIsleyici: 'tiklandi:H', ek: true });
 });
 
 test('sorgu hata penceresi açılınca adım zaman aşımını (20 sn) beklemeden, hata mesajıyla düşer', async () => {

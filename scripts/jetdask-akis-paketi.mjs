@@ -5,12 +5,12 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { jetDaskAkisPaketi } from '../projeler/galaksi/jetdask-akis.mjs';
-import { odemeAkisPaketi } from '../projeler/galaksi/odeme-akis.mjs';
+import { dogrudanKartOdemeAkisPaketi } from '../projeler/galaksi/odeme-akis.mjs';
 import { sayfaPaketiniDogrula } from './platform/ekranlar/sayfa-paketi.mjs';
 
 const paket = jetDaskAkisPaketi({ odeme: true });
 // Ödeme ortak akışına başvuru: doğrulama, projedeki ortak akış yerine paket üreticisinin modeliyle yapılır.
-const odeme = odemeAkisPaketi().model;
+const odeme = dogrudanKartOdemeAkisPaketi().model;
 const d = sayfaPaketiniDogrula(paket, { altModelKaynagi: (dosya) => (dosya === `${String(odeme.id)}.model.json` ? odeme : undefined) });
 if (!d.gecerli) {
   console.error('jetdask-akis.paket.json doğrulanamadı:', JSON.stringify(d.hatalar, null, 2));

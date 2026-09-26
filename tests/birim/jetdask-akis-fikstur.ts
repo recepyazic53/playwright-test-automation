@@ -4,22 +4,24 @@
 // sorgu düğmesi (T.C.-VKN: #RefreshIdentity, pasaport: #QueryPassportNumber), sorgu sürerken "Aranıyor…" yazan ad alanı ve
 // sorgu bitince telefon alanının yeniden oluşturulması (boşalır), sigortalı tipi değişince sıfat listesinin yavaş (7 sn)
 // yeniden yüklenmesi (seçimi siler), UAVT adres sorgusu (#DR gecikmeli dolar), tapu ve poliçe
-// alanları, "Hesapla" → prim ve "Poliçeleştir"; ödeme (kredi kartı) JetSeyahat fikstüründeki gibi.
+// alanları, "Hesapla" → prim ve "Poliçeleştir" → kart formu doğrudan (TEST ekranında görüldü).
 // Şirket sitesine hiçbir istek gitmez.
 import type { FiksturIstegi, FiksturUygulamasi, FiksturYaniti } from './giris-fikstur';
 
 export const DASK_YOLU = '/jet-satis/jet-dask/';
+/** Ödemede iş kuralı reddi (TEST'te pasaportlu sigortalıda görüldü): "Tamam"lı #dialog penceresinde. Kart no 4000 ile başlarsa. */
+export const DASK_ODEME_RED = '123 numaralı teklif onaylanamadı. En az bir parametre dolu olmalıdır.';
 /** Ödeme sonucu (TEST'te test kartıyla poliçe kesilmez). */
 export const DASK_ODEME_SONUCU = 'Hiçbir poliçe onaylanamadı.';
-/** Liste seçenekleri (fikstürün; gerçek ekranın listeleri TEST'ten okunacak). */
+/** Liste seçenekleri: TEST ekranındaki değer / metinlerden bir alt küme (projeler/galaksi/jetdask-secenekler.mjs). */
 export const DASK_LISTELERI: Record<string, Array<[string, string]>> = {
-  InsurerType: [['1', 'Mal Sahibi'], ['2', 'Kiracı']],
-  UsageType: [['1', 'Mesken'], ['2', 'İşyeri']],
-  BuildType: [['1', 'Çelik, Betonarme Karkas'], ['2', 'Yığma Kagir']],
-  BuildYear: [['1', '1975 Öncesi'], ['4', '2001 - 2006'], ['5', '2007 Sonrası']],
-  TotalFloor: [['1', '1 - 3 Kat'], ['2', '4 - 7 Kat']],
-  AnteriorDamage: [['1', 'Hasarsız'], ['2', 'Az Hasarlı']],
-  KT: [['1', 'Zemin'], ['2', '1. Kat']],
+  InsurerType: [['1', 'MAL SAHIBI'], ['2', 'KIRACI']],
+  UsageType: [['5', 'MESKEN'], ['6', 'TICARETHANE']],
+  BuildType: [['4', 'ÇELIK,BETONARME,KARKAS'], ['5', 'DIGER YAPILAR']],
+  BuildYear: [['6', '1975 VE ÖNCESİ'], ['9', '2007-2019'], ['10', '2020 VE SONRASI']],
+  TotalFloor: [['5', '01-03 ARASI KAT'], ['6', '04-07 ARASI KAT']],
+  AnteriorDamage: [['0', 'HASARSIZ'], ['1', 'AZ HASARLI']],
+  KT: [['0', 'ZEMIN KAT'], ['3', '3. KAT']],
   Nationality: [['DE', 'ALMANYA'], ['FR', 'FRANSA']]
 };
 
@@ -52,8 +54,9 @@ export class DaskUygulamasi {
     // Bağımlı liste: sigortalı tipine göre sigorta ettiren sıfatları (yavaş sunucu; beklenmezse sonraki adımda seçilen sıfatı siler).
     if (i.yol === '/dask/sifat-listesi') return { ...json(DASK_LISTELERI.InsurerType), gecikmeMs: 7000 };
     if (i.yol === '/dask/odeme' && i.yontem === 'POST') {
-      this.odemeler.push(JSON.parse(i.govde || '{}') as Record<string, unknown>);
-      return json({ mesaj: DASK_ODEME_SONUCU });
+      const g = JSON.parse(i.govde || '{}') as Record<string, unknown>;
+      this.odemeler.push(g);
+      return json(String(g.kartNo ?? '').startsWith('4000') ? { red: DASK_ODEME_RED } : { mesaj: DASK_ODEME_SONUCU });
     }
     if (i.yol === '/jet-satis/jet-dask/hesapla' && i.yontem === 'POST') {
       const g = JSON.parse(i.govde || '{}') as Record<string, unknown>;
@@ -97,7 +100,7 @@ export class DaskUygulamasi {
         <p>Toplam prim: <span id="premium-total">0,00</span> · DASK: <span id="dask-amount">0,00</span></p>
         <p id="hesap-hatasi"></p>
         <button id="Policelestir" type="button" hidden>Poliçeleştir</button>
-        <div id="fancybox-wrap" hidden><a href="#" id="kart-baglantisi">KREDİ KARTI İLE POLİÇELEŞTİR</a></div>
+        <div id="dialog" hidden><div id="dialogcontainer"></div><a href="javascript:void(0);" id="dialog-ok">Tamam</a></div>
         <div id="kart-formu" hidden>
           <label>Kart üzerindeki isim <input id="isim"></label><label>Kart üzerindeki soyisim <input id="soyisim"></label>
           <label>Kart numarası <input id="kartno"></label><label>Güvenlik kodu (CVV) <input id="cvv"></label>
@@ -132,12 +135,14 @@ export class DaskUygulamasi {
           const r = await (await fetch('/dask/uavt?ak=' + encodeURIComponent($('AK').value))).json();
           setTimeout(() => { $('DR').value = r.Data; }, 300);
         };
-        $('Policelestir').onclick = () => { setTimeout(() => { $('fancybox-wrap').hidden = false; }, 150); };
-        $('kart-baglantisi').onclick = (o) => { o.preventDefault(); $('fancybox-wrap').hidden = true; $('kart-formu').hidden = false; };
+        // TEST'teki gibi: Poliçeleştir kart formunu doğrudan açar (ara "KREDİ KARTI İLE POLİÇELEŞTİR" bağlantısı yok).
+        $('Policelestir').onclick = () => { setTimeout(() => { $('kart-formu').hidden = false; }, 150); };
         $('odemeyi-tamamla').onclick = async (o) => {
           o.preventDefault();
           const govde = { isim: $('isim').value, soyisim: $('soyisim').value, kartNo: $('kartno').value, cvv: $('cvv').value, ay: $('ay').value, yil: $('yil').value };
           const r = await (await fetch('/dask/odeme', { method: 'POST', body: JSON.stringify(govde) })).json();
+          // Ret: TEST'teki gibi "Tamam"lı pencerede (tarayıcı uyarısı değil).
+          if (r.red) { setTimeout(() => { $('dialogcontainer').textContent = r.red; $('dialog').hidden = false; }, 200); return; }
           setTimeout(() => alert(r.mesaj), 200);
         };
         $('Hesapla').onclick = async () => {
