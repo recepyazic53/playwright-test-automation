@@ -129,7 +129,7 @@ async function ornekVeri(vt: Veritabani): Promise<{ proje: string; ortam: string
 
 test.describe('Genişletilmiş şifreleme (şema v2)', () => {
   test('SIFRELI_ALANLAR tek kaynak: beklenen sütunlar, gizli olanlar HASSAS_SUTUNLAR ile aynı', () => {
-    expect(GUNCEL_SEMA_SURUMU).toBe(8);
+    expect(GUNCEL_SEMA_SURUMU).toBe(9);
     expect(Object.fromEntries(Object.entries(SIFRELI_ALANLAR).map(([t, a]) => [t, Object.keys(a).sort()]))).toEqual({
       makineler: ['ad'],
       ayarlar: ['deger_json'],
@@ -137,9 +137,14 @@ test.describe('Genişletilmiş şifreleme (şema v2)', () => {
       giris_profilleri: ['kullanici_adi', 'parola', 'sms_ayari_json', 'totp_gizli'],
       baglam_profilleri: ['alanlar_json'],
       ekranlar: ['ayarlar_json'],
-      kaynak_eslemeleri: ['kaynak_ozeti']
+      kaynak_eslemeleri: ['kaynak_ozeti'],
+      servisler: ['ayarlar_json'],
+      servis_senaryolari: ['icerik_json'],
+      servis_kimlikleri: ['degerler_json'],
+      servis_kosulari: ['sonuc_json']
     });
-    expect(HASSAS_SUTUNLAR).toEqual({ giris_profilleri: ['parola', 'totp_gizli'] });
+    // Servis giriş bilgileri (parola dahil) sır niteliğindedir: önizlemede / yanıtlarda hiç gösterilmez.
+    expect(HASSAS_SUTUNLAR).toEqual({ giris_profilleri: ['parola', 'totp_gizli'], servis_kimlikleri: ['degerler_json'] });
   });
 
   test('şifreli sütunlar DB dosyasında, geçmiş anlık görüntülerinde ve yedekte düz metin olarak durmaz', async () => {

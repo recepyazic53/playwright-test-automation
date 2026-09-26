@@ -1934,3 +1934,29 @@ dialog.kapat-diyalogu { width: min(38rem, calc(100vw - 2rem)); overflow: auto; }
 .tasima-taslaklari .hata-metni { color: var(--hata); margin: 2px 0 0 24px; }
 .tasima-taslaklari details { margin-left: 24px; }
 .tasima-notlari { margin: 6px 0; color: var(--metin-3); }
+
+/* ---- Servis testleri (servisler.js) ---- */
+.alt-nav-alt-baslik { margin: 10px 10px 4px; font: 600 11px var(--yazi-mono); color: var(--metin-2); letter-spacing: .04em; }
+.alt-nav a.ekle-baglantisi { color: var(--metin-3); font-size: 12.5px; }
+.satir-duzen { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.satir-duzen > * { flex: 1 1 200px; }
+.satir-duzen > button { flex: 0 0 auto; }
+textarea.kod-alani { font: 12.5px/1.5 var(--yazi-mono); width: 100%; white-space: pre; tab-size: 2; }
+.govde-duzen { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 14px; align-items: start; }
+@media (max-width: 900px) { .govde-duzen { grid-template-columns: 1fr; } }
+.parametre-paneli { display: grid; gap: 8px; max-height: 420px; overflow: auto; padding: 4px 0; }
+.parametre-paneli > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.parametre-paneli > div > .soluk { flex-basis: 100%; }
+.parametre-cipi { font: 11.5px var(--yazi-mono); padding: 3px 7px; border-radius: 6px; border: 1px solid var(--cizgi-2); background: var(--panel-2); color: var(--metin); cursor: pointer; }
+.parametre-cipi:hover, .parametre-cipi:focus-visible { border-color: var(--vurgu); }
+.kontrol-satiri { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.kontrol-satiri input[type="text"] { flex: 1 1 220px; }
+.kontrol-listesi { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 4px; }
+.kontrol-listesi li { display: flex; align-items: center; gap: 4px; }
+.kontrol-listesi li.gecti .ikon { color: var(--basari); }
+.kontrol-listesi li.kaldi .ikon { color: var(--hata); }
+pre.kod-blogu { max-height: 22rem; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+dialog.genis-diyalog { width: min(900px, 94vw); }
+tr.tiklanir { cursor: pointer; }
+tr.tiklanir:hover, tr.tiklanir:focus-visible { background: var(--panel-2); }
+.tur-alan-servis { grid-column: 1 / -1; margin: -2px 0 10px; }
