@@ -152,7 +152,7 @@ function soapuiAktarimi(kap, proje, ortamlar) {
     } catch (e) { mesaj.goster(e.message); }
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'SoapUI proje dosyası'), mesaj.kutu,
-    h('p', { class: 'soluk kucuk' }, 'Dosya yalnızca okunur; hiçbir servise istek atılmaz. Parametreler gövdede adıyla kalır (${SIGORTALI_TC} gibi); değerler senaryoya yazılmaz: giriş bilgileri kasadaki profile, kişi verileri test verisi eşlemesine, tarihler servis tarih kurallarına gider.'),
+    h('p', { class: 'soluk kucuk' }, 'Dosya yalnızca okunur; hiçbir servise istek atılmaz. Servisin alanları test verisi tablolarına bağlanır (başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun); gövdedeki giriş parametreleri tablo sütunlarına çevrilir, dosyadaki kanal / kullanıcı senaryonun tablo seçimi olur. Tarihler servis tarih kurallarına gider.'),
     alan('Dosya', dosya)), sonuc);
 }
 
@@ -160,8 +160,7 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
   const { onizleme: o } = await api('/platform/servis/soapui/onizle', { govde: { projeId: proje.id, xml, takim: d.takim, durum: d.durum } });
   const { servisler: mevcut } = await api(`/platform/servisler?projeId=${q(proje.id)}`);
   const servisSec = h('select', { 'aria-label': 'Aktarılacak servis' }, o.servisler.map((s) => h('option', { value: s.anahtar }, `${s.ad} — ${s.senaryolar.length} senaryo (${s.yol})`)));
-  const profilAdi = h('input', { type: 'text', autocomplete: 'off', value: `${d.durum} giriş` });
-  const profilKaydet = h('input', { type: 'checkbox', id: yeniKimlik('profil'), checked: o.kimlikParametreleri.length > 0, disabled: !o.kimlikParametreleri.length });
+  const girisEkle = h('input', { type: 'checkbox', id: yeniKimlik('giris'), checked: o.kimlikParametreleri.length > 0, disabled: !o.kimlikParametreleri.length });
   const kapsam = h('select', {}, Object.entries(KAPSAM).map(([k, m]) => h('option', { value: k }, m)));
   const mesaj = mesajKutusu();
   const aktar = h('button', { type: 'button', class: 'birincil' }, ikon('yukle'), 'Aktar');
@@ -188,13 +187,14 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
     try {
       const r = await mesgulIken(aktar, 'Aktarılıyor…', () => api('/platform/servis/soapui/aktar', { govde: {
         projeId: proje.id, xml, takim: d.takim, durum: d.durum, servis: servisSec.value, kapsam: kapsam.value, erisimKimligi: erisim?.erisimKimligi,
-        kimlikProfili: profilAdi.value.trim() ? { ad: profilAdi.value.trim(), kaydet: profilKaydet.checked } : undefined
+        girisEkle: girisEkle.checked
       } }));
-      bildir(`${r.eklenen} senaryo aktarıldı${r.atlanan.length ? `, ${r.atlanan.length} atlandı` : ''}.`);
+      bildir(`${r.eklenen} senaryo aktarıldı${r.atlanan.length ? `, ${r.atlanan.length} atlandı` : ''}; ${r.baglananAlan} alan tabloya bağlandı${r.girisSatiriEklendi ? '; giriş bilgisi tabloya eklendi' : ''}.`);
+      if (r.eksikSatirlar.length) bildir(`Tabloda satırı olmayan seçimler (senaryo koşmaz, satır ekleyin): ${r.eksikSatirlar.join(' · ')}`, 'hata');
+      if (r.eslenmemisParametreler.length) bildir(`Tabloya bağlanamayan parametreler: ${r.eslenmemisParametreler.join(', ')} (Parametreler sekmesinden bağlayın).`, 'hata');
       location.hash = `#/servisler/s/${q(r.servisId)}/${r.eslenmemisParametreler.length ? 'parametreler' : 'senaryolar'}`;
     } catch (e) { mesaj.goster(e.message); }
   });
-  const eslenmemis = o.veriParametreleri.filter((p) => !p.esleme);
   yerlestir(kap, h('div', { class: 'kart form-paneli' },
     h('h3', {}, `${d.takim} / ${d.durum}`), mesaj.kutu,
     o.durum.uyarilar.length ? h('div', { class: 'not-kutusu uyari' }, o.durum.uyarilar.map((u) => h('div', {}, u))) : null,
@@ -202,11 +202,10 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
     h('fieldset', {}, h('legend', {}, 'Parametreler'),
       h('p', { class: 'kucuk' }, h('b', {}, 'Giriş bilgisi: '), o.kimlikParametreleri.join(', ') || 'yok'),
       h('p', { class: 'kucuk' }, h('b', {}, 'Tarih kuralları: '), Object.entries(o.tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'),
-      h('p', { class: 'kucuk' }, h('b', {}, 'Test verisi: '), o.veriParametreleri.length ? o.veriParametreleri.map((p) => `${p.ad}${p.esleme ? ` → ${p.esleme.turAd}.${p.esleme.alan} (${p.esleme.rol})` : ' (eşlenmemiş)'}`).join(' · ') : 'yok'),
-      eslenmemis.length ? h('div', { class: 'not-kutusu uyari' }, `${eslenmemis.length} parametre test verisinde eşlenmemiş. Aktarımdan sonra `, h('a', { href: '#/ayarlar/test-verisi' }, 'Ayarlar > Test verisi'), ' bölümünde ilgili alanın "Servis parametreleri"ne yazın.') : null),
-    o.kimlikParametreleri.length ? h('fieldset', {}, h('legend', {}, 'Giriş bilgisi profili'),
-      alan('Profil adı', profilAdi, { yardim: 'Servis bu profili kullanır. TEST ve CANLI farklıysa Parametreler sekmesinden ortama özel değer girilir.' }),
-      h('label', { class: 'secenek', for: profilKaydet.id }, profilKaydet, 'Dosyadaki giriş bilgilerini bu profile kaydet (kasada şifreli; ekranda gösterilmez)')) : null,
+      h('p', { class: 'kucuk' }, h('b', {}, 'Diğer parametreler: '), o.veriParametreleri.length ? o.veriParametreleri.map((p) => p.ad).join(', ') : 'yok', ' ',
+        h('span', { class: 'soluk' }, '(aktarımda alanın tablo bağlantısına çevrilir; bağlantı yoksa Parametreler sekmesinden bağlanır)'))),
+    o.kimlikParametreleri.length ? h('label', { class: 'secenek', for: girisEkle.id }, girisEkle,
+      'Dosyadaki giriş bilgisi (kanal / kullanıcı / parola) bağlı tabloda yoksa satır olarak ekle (parola gizli sütunda, şifreli)') : null,
     alan('Senaryoların kapsamı', kapsam),
     kontrolKap, h('div', { class: 'dugmeler' }, aktar)));
   kontrolCiz();

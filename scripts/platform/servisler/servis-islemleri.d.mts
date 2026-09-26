@@ -66,8 +66,8 @@ export declare function soapuiOnizle(vt: Veritabani, projeId: string, xml: strin
 };
 export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: {
   xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: ServisKapsami;
-  kimlikProfili?: { ad: string; kaydet?: boolean }; yapan?: string;
-}): { servisId: string; yeniServis: boolean; eklenen: number; atlanan: string[]; kimlikKaydedildi: boolean; eslenmemisParametreler: string[] };
+  girisEkle?: boolean; yapan?: string;
+}): { servisId: string; yeniServis: boolean; eklenen: number; atlanan: string[]; baglananAlan: number; girisSatiriEklendi: boolean; eksikSatirlar: string[]; eslenmemisParametreler: string[] };
 
 export interface CalistirmaSonucu {
   kosuId: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; baslik: string;

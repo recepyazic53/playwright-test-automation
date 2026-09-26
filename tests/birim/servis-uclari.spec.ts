@@ -43,6 +43,8 @@ test.beforeAll(async () => {
   projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Servis Projesi' })).proje.id);
   testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
   await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'SIGORTALI_TC', rol: 'sigortali' }] }] });
+  // Giriş bilgisi tablosu (sütun adları WSDL alanlarıyla aynı): aktarım bağlar, dosyadaki giriş bilgisini satır olarak ekler.
+  await basarili('/platform/tablo/kaydet', { projeId, ad: 'Giriş', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }] });
 });
 
 test.afterAll(async () => {
@@ -68,19 +70,19 @@ test('SoapUI önizle → erişimi kontrol et → aktar → parametreler → Dene
   const erisim = await basarili('/platform/servis/erisim', { projeId, ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
   expect(erisim).toMatchObject({ erisilebilir: true, durumKodu: 200 });
   const aktar = await basarili('/platform/servis/soapui/aktar', {
-    projeId, xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: erisim.erisimKimligi, kimlikProfili: { ad: 'Kanal 100', kaydet: true }
+    projeId, xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: erisim.erisimKimligi, girisEkle: true
   });
-  expect(aktar).toMatchObject({ yeniServis: true, eklenen: 3, kimlikKaydedildi: true });
+  expect(aktar).toMatchObject({ yeniServis: true, eklenen: 3, baglananAlan: 3, girisSatiriEklendi: true, eksikSatirlar: [] });
   const servisId = String(aktar.servisId);
 
   const liste = await basarili(`/platform/servisler?projeId=${projeId}`);
   expect(liste.servisler).toEqual([expect.objectContaining({ id: servisId, anahtar: 'ornek-service', senaryoSayisi: 3, sonKosu: null })]);
   const kimlikler = await basarili(`/platform/servis-kimlikleri?projeId=${projeId}`);
-  expect(kimlikler.profiller).toEqual([{ ad: 'Kanal 100', alanlar: ['CHANNEL', 'PASSWORD', 'USERNAME'], ortamlar: {} }]);
+  expect(kimlikler.profiller).toEqual([]);
 
   // Rol için profil seç (test verisi profili) → Parametreler tamam.
   const turler = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
-  const turId = String(turler.turler[0].id);
+  const turId = String(turler.turler.find((x: Nesne) => x.ad === 'Kişi').id);
   const profil = await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId, ad: 'k1', degerler: { tcKimlikNo: SAHTE_TC } });
   await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', veriProfilleri: { [`${turId}:sigortali`]: profil.profil.id } });
   const parametreler = await basarili(`/platform/servis/parametreler?projeId=${projeId}&id=${servisId}`);

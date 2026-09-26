@@ -2162,6 +2162,11 @@ a.son-sonuc { text-decoration: none; }
 .tablo-durumu.yok { color: var(--hata); }
 .tablo-degeri .gizli-deger { font-family: var(--yazi-mono); color: var(--metin-2); }
 .bag-etiketi { max-width: 110px; }
+/* Ekran sayfası > Test verisi: input | tablo sütunu (+ etiket, değer çipleri); geniş seçim kutusu. */
+.ekran-baglari .alan-satiri { grid-template-columns: minmax(180px, 1fr) minmax(320px, 2fr); padding: 8px 10px; }
+.ekran-baglari .kaynak-secimi select { min-width: 260px; }
+.ekran-baglari .kaynak-hucresi .deger-cipleri { max-width: 100%; }
+@media (max-width: 760px) { .ekran-baglari .alan-satiri { grid-template-columns: minmax(0, 1fr); } .ekran-baglari .kaynak-secimi select { min-width: 0; } }
 /* Test verisi tabloları (tablolar.js) */
 .tablo-duzeni { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; align-items: start; }
 @media (max-width: 900px) { .tablo-duzeni { grid-template-columns: 1fr; } }

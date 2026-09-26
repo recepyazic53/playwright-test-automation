@@ -209,13 +209,12 @@ export const SERVIS_POST_UCLARI = [
   ['/platform/servis/soapui/aktar', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (typeof g.xml !== 'string' || !g.xml) throw new DepoHatasi('SoapUI dosyası boş.');
-    const profil = g.kimlikProfili && typeof g.kimlikProfili === 'object' ? { ad: metin(g.kimlikProfili.ad), kaydet: g.kimlikProfili.kaydet === true } : undefined;
     try {
       return soapuiAktar(db, projeId, {
         xml: g.xml, takim: metin(g.takim), durum: metin(g.durum), servis: metin(g.servis),
         erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined,
         ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
-        ...(profil?.ad ? { kimlikProfili: profil } : {})
+        girisEkle: g.girisEkle === true
       });
     } catch (e) {
       if (e instanceof DepoHatasi) throw e;
