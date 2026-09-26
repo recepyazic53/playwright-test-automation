@@ -18,7 +18,7 @@ export interface ServisAyarlari {
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
   alanListeleri?: Record<string, Record<string, string>>;
   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
-  erisim?: { ortamId: string; zaman: string; durumKodu: number };
+  erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string;
 }
 export interface Servis {
   id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
@@ -29,7 +29,7 @@ export interface ServisKontrolu {
 }
 export interface ServisSenaryoIcerigi {
   operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
-  tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>;
+  tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>; basliklar?: Record<string, string>;
 }
 export interface ServisSenaryosu {
   id: string; projeId: string; servisId: string; baslik: string; kapsam: ServisKapsami; kosuyaDahil: boolean;
@@ -67,3 +67,34 @@ export declare function servisKosusuKaydet(vt: Veritabani, girdi: {
 export declare function servisKosulariniListele(vt: Veritabani, filtre: { servisId: string; senaryoId?: string; sinir?: number }): ServisKosusu[];
 export declare function servisKosusuGetir(vt: Veritabani, id: string): ServisKosusu | undefined;
 
+
+// Servis akışları (sürüm 11)
+export declare const AKIS_TURLERI: readonly ['akis', 'oturum'];
+export declare const OKUMA_KAYNAKLARI: readonly ['xml', 'json', 'baslik'];
+export declare const EN_COK_AKIS_ADIMI: number;
+export declare const VARSAYILAN_OTURUM_OMRU_SN: number;
+export interface AkisOkumaTanimi { ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
+export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean }
+export declare const TOKEN_YENILEME: readonly ['suresiDolunca', 'herIstekte'];
+export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }
+export interface ServisAkisi {
+  id: string; projeId: string; baslik: string; tur: 'akis' | 'oturum'; kapsam: ServisKapsami; kosuyaDahil: boolean;
+  sira: number | null; icerik: ServisAkisIcerigi; olusturulma: string; guncellenme: string;
+}
+export declare function akisIceriginiDogrula(icerik: unknown, tur: 'akis' | 'oturum'): ServisAkisIcerigi;
+export declare function servisAkisiKaydet(vt: Veritabani, girdi: {
+  id?: string; projeId: string; baslik: string; tur?: 'akis' | 'oturum'; kapsam?: ServisKapsami; kosuyaDahil?: boolean; sira?: number | null; icerik: unknown; yapan?: string;
+}): string;
+export declare function servisAkisiGetir(vt: Veritabani, id: string): ServisAkisi | undefined;
+export declare function servisAkislariniListele(vt: Veritabani, projeId: string): ServisAkisi[];
+export declare function servisAkisiSil(vt: Veritabani, id: string, yapan?: string): boolean;
+export interface ServisAkisKosusu {
+  id: string; projeId: string; akisId: string | null; ortamId: string | null; tur: 'dene' | 'kosu';
+  durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik: string; sonuc: Record<string, any>;
+}
+export declare function servisAkisKosusuKaydet(vt: Veritabani, girdi: {
+  projeId: string; akisId?: string | null; ortamId?: string | null; tur: 'dene' | 'kosu'; durum: 'basarili' | 'basarisiz' | 'hata';
+  baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown>;
+}): string;
+export declare function servisAkisKosulariniListele(vt: Veritabani, filtre: { projeId: string; akisId?: string; sinir?: number }): ServisAkisKosusu[];
+export declare function servisAkisKosusuGetir(vt: Veritabani, id: string): ServisAkisKosusu | undefined;

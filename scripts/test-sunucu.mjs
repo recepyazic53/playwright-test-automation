@@ -4,8 +4,8 @@
 // bu makinede çalıştırır (/platform/senaryolar/calistir → senaryoyuCalistirVeYanitla), durdurur
 // (/durdur), canlı ekran görüntüsünü verir (/canli) ve girişte SMS kodu "elle" girilecekse koşu
 // panelinin kod isteğini/yanıtını iletir (/kod-istegi, /kod-gonder). Proje verisi YALNIZCA platform veritabanındadır
-// (veri/platform.db); eski dosya tabanlı uçlar (dashboard, /calistir, /kosu-listesi, JetSeyahat
-// senaryo dosyası düzenleyicileri) kaldırıldı.
+// (veri/platform.db); eski dosya tabanlı uçlar (dashboard, /calistir, /kosu-listesi, senaryo
+// dosyası düzenleyicileri) kaldırıldı.
 //
 // GÜVENLİK NOTLARI:
 // 1) Sunucu YALNIZCA 127.0.0.1'e bağlanır — ağdaki başka hiçbir cihaz erişemez.
@@ -34,7 +34,7 @@ import { tmpdir } from 'node:os';
 import {
   platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
   platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi,
-  platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu
+  platformKosuSureLimitiMs, platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
@@ -45,10 +45,8 @@ import {
 const buDosyaninKlasoru = dirname(fileURLToPath(import.meta.url));
 const projeKoku = join(buDosyaninKlasoru, '..');
 const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
-// Nöbetçi'den başlatılan tek bir koşunun (süreç başladıktan sonra) en fazla ne kadar
-// sürebileceği. En uzun senaryo zaman aşımı 3 dk + giriş; 10 dk güvenli bir üst sınır.
-// Gerekirse .env içinde TEST_SUNUCU_SURE_LIMITI_DK ile değiştirilebilir.
-const KOSU_SURE_LIMITI_MS = (Number(process.env.TEST_SUNUCU_SURE_LIMITI_DK) || 10) * 60 * 1000;
+// Nöbetçi'den başlatılan tek bir koşunun (süreç başladıktan sonra) en fazla ne kadar sürebileceği: kullanıcının kararı
+// (Ayarlar > Koşu > Koşu süre limiti; varsayılan 10 dk). Koşu başlarken okunur.
 // YALNIZCA doğrulama/geliştirme örnekleri için: TEST_SUNUCU_KOSU_KAPALI=1 ise bu sunucu hiçbir
 // Playwright koşusu başlatmaz (▷, Koşuyu başlat, Dene); istek açık bir hatayla reddedilir.
 const KOSU_KAPALI = process.env.TEST_SUNUCU_KOSU_KAPALI === '1';
@@ -137,10 +135,7 @@ const EPIC_ADLARI = {
   'jet-kobi': 'JetKOBİ',
   'jet-konut': 'JetKonut',
   'jet-saglik': 'JetSağlık',
-  'jet-ilk-ates-konut': 'İlk Ateş Konut',
-  'jet-satis': 'Jet Satış',
-  trafik: 'Trafik',
-  portal: 'Portal'
+  'jet-ilk-ates-konut': 'İlk Ateş Konut'
 };
 
 function urunAdiBul(dosyaYolu) {
@@ -263,8 +258,8 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
             for (const spec of suite.specs ?? []) {
               const specDosya = spec.file ?? buDosya;
               if (spec.title) {
-                // Spec'in test tanımında verdiği "beklenenSonuc" annotation'ı (şu an JetSeyahat
-                // — bkz. prim-hesaplama.spec.ts) "--list" çıktısında da gelir; dashboard'daki
+                // Spec'in test tanımında verdiği "beklenenSonuc" annotation'ı (kodlu testlerde)
+                // "--list" çıktısında da gelir; dashboard'daki
                 // Senaryolar tablosu bunu rozet olarak gösterir. Yoksa alan hiç eklenmez.
                 const beklenenSonuc = (spec.tests ?? [])
                   .flatMap((t) => t.annotations ?? [])
@@ -363,6 +358,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-akislari.js', { dosya: 'servis-akislari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/cikis-korumasi.js', { dosya: 'cikis-korumasi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
@@ -383,6 +379,7 @@ const ARAYUZ_DOSYALARI = new Map([
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/servis-govdesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-govdesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -520,7 +517,7 @@ function calismaDurdur(kosuId) {
 // bir senaryo dosyası döngüyle (for kimlikTipi of kimlikTipleri { for sifat of
 // sifatlar { test(baslik, ...) } }) birden çok test ÜRETİYORSA, üretilen TÜM testler
 // kaynak kodda AYNI satırda tanımlıdır — Playwright "dosya:satır" ile o satırdaki
-// TÜM testleri eşleştirir, tek bir tanesini değil. Bu yüzden "JetSeyahat"teki gibi
+// TÜM testleri eşleştirir, tek bir tanesini değil. Bu yüzden
 // matris/döngü ile üretilen senaryolarda ▷ ikonuna basınca tek bir senaryo yerine o
 // dosyadaki TÜM senaryolar sırayla çalışıyordu. Çözüm: satır yerine, senaryonun
 // (üretilen) BAŞLIĞINI birebir eşleştiren "--grep" kullanılır — başlıklar döngüden
@@ -778,14 +775,14 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
 
     // Süre limiti: takılan bir koşu (ör. hiç kapanmayan bir pop-up, donan tarayıcı)
     // dashboard'u sonsuza kadar "çalışıyor" durumunda bırakmasın diye, süreç
-    // KOSU_SURE_LIMITI_MS sonunda hâlâ çalışıyorsa zorla kapatılır. Süre, sıra beklerken
+    // Süre limiti sonunda hâlâ çalışıyorsa zorla kapatılır. Süre, sıra beklerken
     // değil süreç gerçekten başladığında işlemeye başlar.
     const sureLimitiZamanlayici = setTimeout(() => {
       if (!calisanSurecler.has(kosuId)) return;
       kayit.zamanAsimi = true;
-      console.log(`\n⏱ [${ortam.toUpperCase()}] "${senaryoAdi}" ${Math.round(KOSU_SURE_LIMITI_MS / 60000)} dakikalık süre limitini aştı, durduruluyor...\n`);
+      console.log(`\n⏱ [${ortam.toUpperCase()}] "${senaryoAdi}" ${Math.round(platformKosuSureLimitiMs() / 60000)} dakikalık süre limitini aştı, durduruluyor...\n`);
       surecAgaciniKapat(kayit);
-    }, KOSU_SURE_LIMITI_MS);
+    }, platformKosuSureLimitiMs());
 
     let sureciBaslatmaHatasi = null;
     alt.on('error', (hata) => {
@@ -822,8 +819,8 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
           cikisKodu: kod,
           sonuc: {
             durum: 'timedOut',
-            sureMs: KOSU_SURE_LIMITI_MS,
-            hataMesaji: `Koşu ${Math.round(KOSU_SURE_LIMITI_MS / 60000)} dakikalık süre limitini aştığı için durduruldu.`
+            sureMs: platformKosuSureLimitiMs(),
+            hataMesaji: `Koşu ${Math.round(platformKosuSureLimitiMs() / 60000)} dakikalık süre limitini aştığı için durduruldu.`
           },
           iptalEdildiMi: false
         });
@@ -1244,7 +1241,7 @@ const dogrudanCalistirildi = process.argv[1] && fileURLToPath(import.meta.url) =
 // olabileceği yenileri hariç) açılışta silinir.
 function artikGeciciSenaryolariTemizle() {
   try {
-    const esik = Date.now() - KOSU_SURE_LIMITI_MS - 60 * 60 * 1000;
+    const esik = Date.now() - platformKosuSureLimitiMs() - 60 * 60 * 1000;
     for (const ad of readdirSync(tmpdir())) {
       if (!ad.startsWith(EK_SENARYO_DOSYA_ON_EKI)) continue;
       const tamYol = join(tmpdir(), ad);

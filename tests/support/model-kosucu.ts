@@ -28,6 +28,7 @@ import { beklenenGorulenMetni, beklenenMesajiBekle, mesajIceriyorMu, mesajiNorma
 import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKaydetmeyeHazirla, type GirisKimligi } from './giris-motoru';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
+import { sureAyari } from './kosu-ayarlari';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
 /** Alanın ekranda görünmesi için beklenen süre (koşullu alanlar önceki seçimden sonra çizilebilir). */
@@ -263,8 +264,8 @@ function maskeUygula(maske: unknown, deger: unknown): unknown {
  * görünmüyorsa (ör. display:none — "Element is not visible") betikle tıklanır (click olayı sayfanın kendi işleyicilerini
  * çalıştırır). Sonunda durum doğrulanır.
  */
-/** Zorla işaretlenecek öğenin sayfada belirmesi için en çok bekleme. */
-const ZORLA_BEKLEME_MS = 15_000;
+/** Zorla işaretlenecek öğenin sayfada belirmesi için en çok bekleme (Ayarlar > Koşu > Zorla işaretlenecek seçenek). */
+const ZORLA_BEKLEME_MS = sureAyari('NOBETCI_ZORLA_BEKLEME_MS', 15_000);
 
 async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string, alan: PlanAlani): Promise<void> {
   // Öğe sayfada yoksa (ör. bu araç için sunulmayan ürün) test süresi boyunca beklemek yerine açık hata.
@@ -384,8 +385,8 @@ function tarayiciUyarilariniDinle(page: Page): void {
  * bitmeyen istek koşuyu durdurmaz (ALAN_SONRASI_EN_COK_MS sonra devam edilir).
  */
 export const ALAN_SONRASI_EN_COK_MS = 8_000;
-/** Alan sonrası tıklamanın (ör. sorgu düğmesi) en çok süresi; aşılırsa açık hatayla düşer (test süresi beklenmez). */
-const ALAN_TIKLAMA_SURESI_MS = 15_000;
+/** Alan sonrası tıklamanın (ör. sorgu düğmesi) en çok süresi; aşılırsa açık hatayla düşer (Ayarlar > Koşu > Alan işlemi). */
+const ALAN_TIKLAMA_SURESI_MS = sureAyari('NOBETCI_ALAN_BEKLEME_MS', 15_000);
 /** İstek bittikten sonra yeni bir istek başlamadan geçmesi gereken süre (zincirleme istekler için). */
 const SESSIZLIK_MS = 150;
 type AgIzi = { suren: Map<Request, number>; son: number };

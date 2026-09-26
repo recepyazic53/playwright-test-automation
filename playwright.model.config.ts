@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 import { MODEL_SPEC_DOSYASI } from './scripts/platform/senaryolar/model-kosusu.mjs';
 import { genelOturumDosyasi, genelVeri } from './tests/support/genel-veri';
+import { ekranGoruntusuAyari, izAyari, videoAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
 
 // GENEL MODEL KOŞUSU — elle oluşturulan (aktarımla gelmemiş) proje/ortamların test kodu OLMAYAN senaryoları.
 // Nöbetçi, aktarımla bir çalıştırıcı anahtarına ("test"/"canli") eşlenmemiş bir ortamdaki model senaryosunu bu
@@ -25,7 +26,7 @@ export default defineConfig({
 
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  retries: yenidenDenemeAyari(),
 
   // Koşuya özel geçici senaryo dosyası klasörünü siler (şifreli dosyalar koşu anında buraya çözülür).
   globalTeardown: './tests/support/global-teardown.ts',
@@ -39,10 +40,10 @@ export default defineConfig({
   use: {
     baseURL: veri.model?.tabanUrl,
     storageState: existsSync(oturumDosyasi) ? oturumDosyasi : undefined,
-    // Nöbetçi koşularında (TEST_SUNUCU_GORUNUR) her koşuda video; playwright.config.ts ile aynı.
-    video: process.env.TEST_SUNUCU_GORUNUR ? 'on' : 'retain-on-failure',
-    screenshot: 'only-on-failure',
-    trace: 'retain-on-failure'
+    // Kayıt kuralları: Ayarlar > Koşu (playwright.config.ts ile aynı).
+    video: videoAyari(),
+    screenshot: ekranGoruntusuAyari(),
+    trace: izAyari()
   },
 
   projects: [

@@ -123,6 +123,9 @@
 // (encodeURIComponent ile) gelir; URL'de parola kabul edilmez. Parola/anahtar ASLA loglanmaz,
 // yanıtlarda dönmez.
 
+import { KATEGORI_SECENEKLERI, siniflandirmaKurallari, siniflandirmaKurallariniKaydet } from './ayarlar/siniflandirma-kurallari.mjs';
+import { CEKIRDEK_GIZLI_ADLAR, ekGizliAdlar, ekGizliAdlariKaydet } from './ayarlar/maskeleme.mjs';
+import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from './ayarlar/kosu-ayarlari.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
@@ -148,7 +151,7 @@ import {
   kasaOlustur, medyaAnahtariniAc, medyaAnahtariniHazirla, parolaDegistir, parolayiDogrula, zarfMi
 } from './kasa.mjs';
 import {
-  hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
+  eskiSonuclariSil, hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
 } from './veritabani/sonuc-deposu.mjs';
 import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
 import { allureSonuclariniAktar } from './aktarim/allure-sonuclari.mjs';
@@ -355,13 +358,25 @@ const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
  * kilitliyse boş döner (testler veriyi okuyamaz; koşular kasa açıkken başlatılır).
  * @returns {Record<string, string>}
  */
+/** Koşu ayarları (Ayarlar > Koşu); kasa kilitliyse varsayılanlar. */
+function kosuAyarlari() {
+  return vt && kasaAcikMi(vt) ? kosuAyarlariniOku(vt) : varsayilanKosuAyarlari();
+}
+
+/** Tek koşunun süre limiti (ms): Ayarlar > Koşu; TEST_SUNUCU_SURE_LIMITI_DK yalnızca geliştirme / test için ezer. */
+export function platformKosuSureLimitiMs() {
+  const ezme = Number(process.env.TEST_SUNUCU_SURE_LIMITI_DK);
+  return (ezme > 0 ? ezme : kosuAyarlari().kosuSureLimitiDk) * 60 * 1000;
+}
+
 export function platformTestOrtami() {
   // Alt süreç (Playwright, veri okuyucu, raporlayıcı) AÇIK çalışma alanının veritabanını kullanır (kayıt defterine bakmaz).
   const yol = veritabaniYolu();
   /** @type {Record<string, string>} */
   const alan = yol ? { PLATFORM_VERITABANI: yol } : {};
-  if (!vt || !kasaAcikMi(vt)) return alan;
+  if (!vt || !kasaAcikMi(vt)) return { ...alan, ...kosuOrtamDegiskenleri(varsayilanKosuAyarlari()) };
   try {
+    Object.assign(alan, kosuOrtamDegiskenleri(kosuAyarlariniOku(vt)));
     // Yasak adresler (ayarlar + ortam değişkeni): alt süreçteki koşu koruması (global-setup, model koşucusu) okur.
     const yasak = etkinYasakAdresler(vt);
     return { ...alan, PLATFORM_KASA_ANAHTARI: acikAnahtar(vt).toString('base64url'), ...(yasak.length ? { [YASAK_ADRES_DEGISKENI]: yasak.join(',') } : {}) };
@@ -448,6 +463,12 @@ export function platformMedyaTemizligiZamanla() {
     try {
       const db = await platformVeritabani();
       if (!db) return;
+      // Sonuç saklama (kullanıcı kararı; varsayılan süresiz): önce eski sonuç satırları, sonra sahipsiz kalan medya dosyaları.
+      if (kasaAcikMi(db)) {
+        const saklamaGun = kosuAyarlariniOku(db).sonucSaklamaGun;
+        const s = eskiSonuclariSil(db, saklamaGun);
+        if (s.kosu || s.servisKosusu || s.akisKosusu) console.log(`[platform] Sonuç saklama: ${saklamaGun} günden eski ${s.kosu} koşu (${s.sonuc} sonuç), ${s.servisKosusu} servis ve ${s.akisKosusu} akış koşusu silindi.`);
+      }
       const gun = videoSaklamaGunu(db);
       const sonuc = medyaSaklamaTemizligi(db, medyaKlasoruYolu(), { videoGun: gun });
       if (sonuc.silinenVideo || sonuc.silinenSahipsiz) {
@@ -1289,6 +1310,12 @@ const GET_UCLARI = new Map([
     // Makine adları şifrelidir; kasa açıkken arayüz "kullanici@<makineId>" değerini ada çevirir.
     return { kayitlar, makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad])) };
   }],
+  // Ayarlar > Koşu: tanımlar (form) + kayıtlı değerler.
+  ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
+  // Ayarlar > Güvenlik > Maskeleme: çekirdek gizli ad listesi (değiştirilemez) + kullanıcının ek adları.
+  ['/platform/maskeleme', (db) => ({ cekirdek: CEKIRDEK_GIZLI_ADLAR, ekAdlar: ekGizliAdlar(db) })],
+  // Ayarlar > Koşu > Hata sınıflandırma: kullanıcının kuralları + seçilebilen kategoriler.
+  ['/platform/siniflandirma', (db) => ({ kurallar: siniflandirmaKurallari(db), kategoriler: KATEGORI_SECENEKLERI })],
   ['/platform/guvenlik', (db) => ({
     otomatikKilitDakika, enAz: OTOMATIK_KILIT_EN_AZ_DK, enCok: OTOMATIK_KILIT_EN_COK_DK, varsayilan: OTOMATIK_KILIT_VARSAYILAN_DK,
     videoSaklamaGun: videoSaklamaGunu(db), videoSaklamaVarsayilan: VIDEO_SAKLAMA_VARSAYILAN_GUN,
@@ -1405,6 +1432,9 @@ const POST_UCLARI = new Map([
   ['/platform/senaryo/kosuya-dahil', (db, g) => kosuyaDahilAyarla(db, kimlikAl(g.projeId, 'projeId'), g.idler, g.dahil === true)],
   ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
   ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],
+  ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
+  ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
+  ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
   ['/platform/guvenlik/kaydet', (db, g) => {
     /** @type {Record<string, unknown>} */
     const yanit = {};
@@ -2408,7 +2438,7 @@ export function platformOtomatikYedekZamanla() {
   const zamanlayici = setInterval(() => {
     if (!vt || !kasaAcikMi(vt)) return;
     try {
-      const sonuc = otomatikYedekAl(vt);
+      const sonuc = otomatikYedekAl(vt, { saklanacak: kosuAyarlariniOku(vt).otomatikYedekSayisi });
       console.log(`[platform] Günlük otomatik yedek alındı: ${sonuc.dosya}`);
     } catch (hata) {
       console.error(`[platform] Günlük otomatik yedek alınamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);

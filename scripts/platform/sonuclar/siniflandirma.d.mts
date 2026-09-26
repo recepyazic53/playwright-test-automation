@@ -2,7 +2,7 @@
 export declare const KATEGORI: Readonly<Record<'popup' | 'zamanAsimi' | 'secici' | 'dogrulama' | 'diger', string>>;
 export declare const KATEGORILER: ReadonlyArray<{ ad: string }>;
 export declare const DURUM_ETIKETLERI: Readonly<Record<string, string>>;
-export declare function kategoriBul(mesaj: string | null | undefined): string;
+export declare function kategoriBul(mesaj: string | null | undefined, kurallar?: ReadonlyArray<{ icerir: string; kategori: string }>): string;
 export declare function kalipCikar(mesajTam: string | null | undefined): string;
 export declare function allureDurumuEsle(icerik: Record<string, unknown>): 'basarili' | 'basarisiz' | 'atlanan' | 'durduruldu';
 export declare function playwrightDurumuEsle(durum: string, hataMesaji: string | null | undefined, beklenenDurum?: string): 'basarili' | 'basarisiz' | 'atlanan' | 'durduruldu';

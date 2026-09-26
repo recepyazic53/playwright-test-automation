@@ -2,7 +2,8 @@
 export type AlanTipi = 'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat';
 export interface Alan { ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }
 export interface OperasyonSemasi { ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[] }
-export type AlanKaynagi = 'tablo' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme';
+export type AlanKaynagi = 'tablo' | 'akis' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme';
+export declare const AKIS_DEGERI: RegExp;
 export interface AlanDegeri { kaynak: AlanKaynagi; deger?: string }
 export interface XmlOgesi { ad: string; yerel: string; oz: Record<string, string>; cocuklar: XmlOgesi[]; metin: string }
 

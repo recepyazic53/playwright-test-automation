@@ -16,6 +16,8 @@ import {
   testVerisiTuruSil, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import { coz, sifrele, zarfMi } from '../kasa.mjs';
+import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
@@ -50,8 +52,8 @@ function baglamTablolari(vt, projeId) {
   });
 }
 
-/** Tablo ve sütun adı: gövdede ${Tablo.Sütun} / ${Tablo[etiket].Sütun} olarak yazılır; bu yüzden . [ ] { } $ < > & yok. */
-export const TABLO_ADI = /^[^.[\]{}$<>&\u0000-\u001f]{1,60}$/u;
+/** Tablo ve sütun adı: gövdede ${Tablo.Sütun} / ${Tablo[etiket].Sütun|biçim} olarak yazılır; bu yüzden . [ ] { } $ < > & | yok. */
+export const TABLO_ADI = /^[^.[\]{}$<>&|\u0000-\u001f]{1,60}$/u;
 export const EN_COK_SATIR = 5000;
 export const EN_COK_SUTUN = 40;
 export const EN_COK_KARSILIK = 5000;
@@ -95,7 +97,7 @@ function karsiliklarOku(vt, z) {
 function adDogrula(ad, ne) {
   const a = typeof ad === 'string' ? ad.trim() : '';
   if (!a) throw new DepoHatasi(`${ne} boş olamaz.`);
-  if (!TABLO_ADI.test(a)) throw new DepoHatasi(`${ne} geçersiz: "${a}" (en çok 60 karakter; . [ ] { } $ < > & kullanılamaz).`);
+  if (!TABLO_ADI.test(a)) throw new DepoHatasi(`${ne} geçersiz: "${a}" (en çok 60 karakter; . [ ] { } $ < > & | kullanılamaz).`);
   return a;
 }
 
@@ -155,12 +157,11 @@ export function tablolariListele(vt, projeId, secenekler = {}) {
  * @param {Veritabani} vt @param {ReadonlyArray<{ ad: string; gizli?: boolean; tip?: string; karsiliklar?: unknown }>} alanlar @returns {TabloSutunu[]}
  */
 const sutunlarOku = (vt, alanlar) => alanlar.map((a) => {
-  const gizli = a.gizli === true || (a.gizli === undefined && GIZLI_AD.test(a.ad));
+  const gizli = a.gizli === true || (a.gizli === undefined && gizliAdMi(a.ad, ekGizliAdlar(vt)));
   const karsiliklar = gizli ? undefined : karsiliklarOku(vt, a.karsiliklar);
   return { ad: a.ad, gizli, tip: a.tip || 'metin', ...(karsiliklar ? { karsiliklar } : {}) };
 });
-/** Gizli işareti olmayan eski alanlarda (tablolardan önceki kayıtlar) sır niteliğindeki adlar gizli sayılır. */
-const GIZLI_AD = /parola|password|passwd|şifre|sifre|secret|token|cvv|cvc|guvenlik|güvenlik|totp/i;
+// Gizli işareti olmayan eski alanlarda (tablolardan önceki kayıtlar) sır niteliğindeki adlar gizli sayılır (gizli-adlar.mjs).
 
 /**
  * Tabloyu (sütunlar + değişen satırlar) tek işlemde kaydeder.

@@ -4,7 +4,7 @@ import { defineConfig } from '@playwright/test';
 // Platform (veritabanı, kasa, yedek, aktarım, senaryolar, sonuçlar), ekran modeli ve tek doğrulayıcı
 // tutarlılığını saniyeler içinde kontrol eder; gerçek proje verisi yerine SAHTE değerli örnekler
 // kullanılır (tests/birim/fixtures/). Çalıştırma: npm run test:birim
-// Ana playwright.config.ts'den bilerek AYRIDIR: globalSetup (Galaksi login), globalTeardown,
+// Ana playwright.config.ts'den bilerek AYRIDIR: globalSetup (uygulamaya giriş), globalTeardown,
 // Allure raporlayıcısı ve koşu listesi filtresi burada yoktur. Ana yapılandırma da tests/birim/
 // klasörünü testIgnore ile dışarıda bırakır (Nöbetçi'deki senaryo listesi değişmesin diye).
 export default defineConfig({

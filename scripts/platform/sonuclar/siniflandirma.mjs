@@ -17,7 +17,6 @@ export const KATEGORI = {
 };
 export const KATEGORILER = [KATEGORI.popup, KATEGORI.zamanAsimi, KATEGORI.secici, KATEGORI.dogrulama].map((ad) => ({ ad }));
 
-const POPUP_DESENI = /beklenmeyen bir hata pop.?up/i;
 // "locator.click: Timeout 30000ms exceeded." / "Test timeout of 180000ms exceeded." /
 // "TimeoutError: page.waitForFunction: Timeout 20000ms exceeded."
 const ZAMAN_ASIMI_DESENI = /\btimeout\b.*\bexceeded\b/i;
@@ -38,7 +37,8 @@ const SECICI_DESENI = /(element\(s\) not found|strict mode violation|resolved to
 // üzerinde sırayla desen aransaydı (eski davranış) bunlar hep "Seçici" sayılır,
 // "Doğrulama" neredeyse hiç eşleşmezdi. Bu yüzden karar öncelikle mesajın İLK
 // satırına göre, şu sırayla verilir:
-//   1) Beklenmeyen hata pop-up'ı (iş kuralı) — tüm mesajda aranır, özel/uzun metin.
+//   1) Kullanıcının kuralları (Ayarlar > Koşu > Hata sınıflandırma; ör. uygulamanın iş kuralı pop-up metni) — tüm
+//      mesajda, büyük/küçük harf duyarsız "içerir"; ilk eşleşen kuralın kategorisi.
 //   2) Zaman aşımı — ilk satırda "timeout ... exceeded" (test/aksiyon zaman aşımı).
 //      (Çağrı günlüğündeki "Timeout 45000ms exceeded while waiting on the predicate"
 //      gibi satırlar ilk satırda olmadığından doğrulama olarak kalır.)
@@ -46,10 +46,13 @@ const SECICI_DESENI = /(element\(s\) not found|strict mode violation|resolved to
 //      "expect(received)..." / "Expected:" / "Received:" var.
 //   4) Seçici — element(s) not found / strict mode violation / "waiting for locator".
 //   5) Diğer.
-export function kategoriBul(mesaj) {
+/** @param {string | null | undefined} mesaj @param {ReadonlyArray<{ icerir: string; kategori: string }>} [kurallar] */
+export function kategoriBul(mesaj, kurallar = []) {
   if (!mesaj) return KATEGORI.diger;
   const ilkSatir = mesaj.split('\n')[0].trim();
-  if (POPUP_DESENI.test(mesaj)) return KATEGORI.popup;
+  const kucukMesaj = mesaj.toLocaleLowerCase('tr');
+  const kural = kurallar.find((k) => k.icerir && kucukMesaj.includes(k.icerir.toLocaleLowerCase('tr')));
+  if (kural) return kural.kategori;
   if (ZAMAN_ASIMI_DESENI.test(ilkSatir)) return KATEGORI.zamanAsimi;
   if (DOGRULAMA_ILK_SATIR_DESENI.test(ilkSatir) || DOGRULAMA_GOVDE_DESENI.test(mesaj)) return KATEGORI.dogrulama;
   if (SECICI_DESENI.test(mesaj)) return KATEGORI.secici;
@@ -68,7 +71,7 @@ function locatorBul(mesajTam) {
 }
 
 // Hata mesajının SABİT KALIBINI çıkarır: değişken (sayısal) kısımlar "#" olur.
-// "250166487 numaralı teklif onaylanamadı" -> "# numaralı teklif onaylanamadı"
+// "123456789 numaralı kayıt onaylanamadı" -> "# numaralı kayıt onaylanamadı"
 // Mesajda bir locator varsa kalıba eklenir; böylece farklı ekranlardaki
 // "expect(locator).toBeVisible() failed" hataları tek satıra yığılmaz:
 // "Error: expect(locator).toBeVisible() failed · getByRole('button', { name: 'Prim Hesapla' })"

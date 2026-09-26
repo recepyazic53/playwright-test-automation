@@ -10,7 +10,7 @@ import { chromium, expect, test, type Browser } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { govdeCoz, govdeUret, type AlanDegeri } from '../../scripts/platform/servisler/servis-govdesi.mjs';
-import { kullanilanParametreler } from '../../scripts/platform/servisler/soap-istemcisi.mjs';
+import { kullanilanParametreler, tarihDegeriBicimle, yerTutuculariDoldur } from '../../scripts/platform/servisler/soap-istemcisi.mjs';
 import { wsdlSemalari } from '../../scripts/platform/servisler/wsdl-semasi.mjs';
 import { basvuru, basvuruCoz, secilenSatir, sutunSecenekleri, uyanSatirlar } from '../../scripts/platform/tablolar/tablo-secimi.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
@@ -29,8 +29,8 @@ const GIRIS = {
 };
 
 test('tablo seçimi: başvuru çözümü, süzülen seçenekler (sıra fark etmez), ortam, ilk uyan satır', () => {
-  expect(basvuruCoz('Servis girişi.Kanal')).toEqual({ tablo: 'Servis girişi', etiket: '', sutun: 'Kanal' });
-  expect(basvuruCoz('Kişi[ettiren].TC / VKN')).toEqual({ tablo: 'Kişi', etiket: 'ettiren', sutun: 'TC / VKN' });
+  expect(basvuruCoz('Servis girişi.Kanal')).toEqual({ tablo: 'Servis girişi', etiket: '', sutun: 'Kanal', bicim: '' });
+  expect(basvuruCoz('Kişi[ettiren].TC / VKN')).toEqual({ tablo: 'Kişi', etiket: 'ettiren', sutun: 'TC / VKN', bicim: '' });
   expect(basvuruCoz('SIGORTALI_TC')).toBeNull();
   expect(basvuru('Kişi', 'TC', 'sigortalı')).toBe('Kişi[sigortalı].TC');
   expect(sutunSecenekleri(GIRIS, {}, 'Kullanıcı')).toEqual(['100001', '100002', '200001']);
@@ -55,6 +55,23 @@ test('gövde: tablo başvurusu (Türkçe ad, etiket) yer tutucu olarak bulunur; 
   expect(c.degerler['Input/Channel']).toEqual({ kaynak: 'tablo', deger: 'Servis girişi.Kanal' });
   expect(c.degerler['Input/CitizenshipNumber']).toEqual({ kaynak: 'tablo', deger: 'Kişi[sigortalı].TC' });
   expect(c.degerler['Input/Username']).toEqual({ kaynak: 'parametre', deger: 'USERNAME' });
+});
+
+test('tarih biçimi: ${Tablo.Sütun|biçim} tablodaki tarihi (1983-05-10 / 10.05.1983, saatli) istenen biçimde yazar; okunamayan değer açık hata', () => {
+  expect(basvuruCoz("Kişi.Doğum tarihi|yyyy-MM-dd'T'HH:mm:ss")).toEqual({ tablo: 'Kişi', etiket: '', sutun: 'Doğum tarihi', bicim: "yyyy-MM-dd'T'HH:mm:ss" });
+  expect(basvuru('Kişi', 'Doğum tarihi', 'ettiren', 'dd.MM.yyyy')).toBe('Kişi[ettiren].Doğum tarihi|dd.MM.yyyy');
+  expect(tarihDegeriBicimle('1983-05-10', "yyyy-MM-dd'T'HH:mm:ss", 'x')).toBe('1983-05-10T00:00:00');
+  expect(tarihDegeriBicimle('10.05.1983', 'yyyy-MM-dd', 'x')).toBe('1983-05-10');
+  expect(tarihDegeriBicimle('1983-05-10T14:30', 'dd/MM/yyyy HH:mm', 'x')).toBe('10/05/1983 14:30');
+  expect(() => tarihDegeriBicimle('31.02.1983', 'yyyy-MM-dd', 'Kişi.Doğum tarihi')).toThrow('"Kişi.Doğum tarihi" değeri tarih olarak okunamadı');
+  expect(() => tarihDegeriBicimle('abc', 'yyyy', 'x')).toThrow('okunamadı');
+  const govde = "<B>${Kişi.Doğum tarihi|yyyy-MM-dd'T'HH:mm:ss}</B><C>${Kişi.Doğum tarihi}</C>";
+  expect(kullanilanParametreler(govde)).toEqual(['Kişi.Doğum tarihi']);
+  expect(yerTutuculariDoldur(govde, { degerler: { 'Kişi.Doğum tarihi': '10.05.1983' } })).toBe('<B>1983-05-10T00:00:00</B><C>10.05.1983</C>');
+  // Form ↔ gövde: biçim başvuruyla birlikte korunur.
+  const sema = wsdlSemalari(WSDL).Teklif;
+  const g = govdeUret(sema, { 'Input/CitizenshipNumber': { kaynak: 'tablo', deger: 'Kişi.TC|dd.MM.yyyy' } });
+  expect(govdeCoz(g, sema).degerler['Input/CitizenshipNumber']).toEqual({ kaynak: 'tablo', deger: 'Kişi.TC|dd.MM.yyyy' });
 });
 
 test.describe('servis alanları tablolardan', () => {
@@ -134,6 +151,22 @@ test.describe('servis alanları tablolardan', () => {
     expect(s.ayarlar.alanBaglari.Teklif['Input/CitizenshipNumber']).toEqual({ tablo: kisiId, sutun: 'TC', etiket: 'sigortalı' });
     const red = await api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanBaglari: { Teklif: { 'Input/Channel': { tablo: girisId, sutun: 'Kanal', etiket: 'a<b' } } } });
     expect(red.mesaj).toContain('etiketi geçersiz');
+  });
+
+  test('tarih biçimli bağlantı: bağlantıya biçim kaydedilir (geçersiz biçim reddedilir); gövdeye tarih istenen biçimde gider', async () => {
+    const onceki = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis.ayarlar.alanBaglari;
+    const dogumId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Doğum', sutunlar: [{ ad: 'Tarih' }], satirlar: [{ degerler: { Tarih: '10.05.1983' } }] })).tablo.id;
+    const kaydet = (bicim: string) => api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx',
+      alanBaglari: { Teklif: { 'Input/BirthDate': { tablo: dogumId, sutun: 'Tarih', bicim } } } });
+    expect((await kaydet('abc')).mesaj).toContain('tarih biçimi geçersiz');
+    expect((await kaydet("yyyy-MM-dd'T'HH:mm:ss")).basarili).toBe(true);
+    const s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis;
+    expect(s.ayarlar.alanBaglari.Teklif['Input/BirthDate']).toEqual({ tablo: dogumId, sutun: 'Tarih', bicim: "yyyy-MM-dd'T'HH:mm:ss" });
+    await basarili('/platform/servis/senaryo/dene', {
+      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Teklif', govde: zarf("<BirthDate>${Doğum.Tarih|yyyy-MM-dd'T'HH:mm:ss}</BirthDate>"), kontroller: [] }
+    });
+    expect(soap.istekler.at(-1)?.govde).toContain('<BirthDate>1983-05-10T00:00:00</BirthDate>');
+    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanBaglari: onceki });
   });
 
   test('servis değeri karşılığı: gövdeye tablodaki değer yerine servis değeri yazılır; tanımsız değer olduğu gibi', async () => {

@@ -27,7 +27,7 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: string }>>;
-  alanListeleri?: Record<string, Record<string, string>>;
+  alanListeleri?: Record<string, Record<string, string>>; oturumAkisi?: string | null;
   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
 }): string;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
@@ -73,12 +73,22 @@ export interface CalistirmaSonucu {
   kosuId: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; baslik: string;
   operasyon: string; ortam: string; ortamTuru: 'test' | 'canli'; adres?: string; kimlikProfili?: string; istek?: string;
   durumKodu?: number; yanitSureMs?: number; kontroller?: KontrolSonucu[]; ozet?: string; yanit?: string; hata?: string; durduruldu?: boolean;
+  istekBasliklari?: Record<string, string>; okunanlar?: Record<string, string>; akis?: Record<string, unknown>;
+  oturum?: { akis: string; durum: 'alindi' | 'onbellek' | 'yenilendi' };
 }
+export interface AkisOkumasi { ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
+export declare function okumaGizliMi(o: AkisOkumasi, ekler?: ReadonlyArray<string>): boolean;
 export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string;
   taslak?: { baslik?: string; kapsam?: ServisKapsami; icerik: unknown }; zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
+  akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
+  /** Yanıttan okunan AÇIK değerler ve maskelenen değerler: yalnız bellekte (akış motoru); kayda / dönüşe yazılmaz. */
+  acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
 }): Promise<CalistirmaSonucu>;
+export type OturumSaglayici = (vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
+  Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>;
+export declare function oturumSaglayicisiAyarla(fn: OturumSaglayici | null): void;
 export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number;
 }): Promise<{

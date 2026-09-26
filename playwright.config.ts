@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { environments, getEnvironmentName } from './tests/support/environments';
 import { kosuListesiHaricDesenleri } from './tests/support/kosu-listesi';
 import { platformHazirOlmali } from './tests/support/platform-veri';
+import { ekranGoruntusuAyari, izAyari, videoAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
 
 // VERİ YALNIZCA PLATFORM VERİTABANINDA (Nöbetçi: veri/platform.db). Veritabanı yoksa ya da proje
 // aktarılmamışsa burada açık bir hata verilir: "Veritabanı hazır değil — Nöbetçi'yi açıp projeyi
@@ -15,7 +16,7 @@ const environmentName = getEnvironmentName();
 // için yapılandırma ilk değerlendirildiğinde (ana süreç) undefined olabilir — worker'lar
 // yapılandırmayı anahtarla yeniden yükler (bkz. tests/support/environments.ts).
 const environment = environments[environmentName];
-// globalSetup Galaksi'ye bir kez login olup bu dosyaya çerezleri yazar (bkz.
+// globalSetup uygulamaya bir kez giriş yapıp bu dosyaya çerezleri yazar (bkz.
 // tests/support/global-setup.ts). Dosya henüz yoksa (örn. giriş profili tanımlı değilse
 // globalSetup sessizce atlanır) storageState hiç verilmez — testler testBaslangiciniHazirla()
 // içindeki gerçek login'e düşer.
@@ -34,7 +35,7 @@ export default defineConfig({
 
   // TEST çalıştırmalarında canlıya özel kontroller keşfedilmez. tests/birim/ (tarayıcısız
   // koruma testleri) yalnızca playwright.birim.config.ts ile (npm run test:birim) koşar.
-  testIgnore: environmentName === 'test' ? ['canli/**', 'birim/**'] : ['birim/**'],
+  testIgnore: ['birim/**'],
 
   // test-sunucu.mjs bir senaryoyu başlığına göre çalıştırırken "--grep" CLI argümanı
   // YERİNE bu ortam değişkenini kullanır (komut satırı argümanı yerine CreateProcess'in
@@ -66,11 +67,12 @@ export default defineConfig({
 
   forbidOnly: !!process.env.CI,
 
-  retries: process.env.CI ? 2 : 0,
+  // Yeniden deneme: Ayarlar > Koşu (Nöbetçi ortam değişkeniyle verir); yoksa CI'da 2, diğerlerinde 0.
+  retries: yenidenDenemeAyari(),
 
   workers: process.env.CI ? 1 : undefined,
 
-  // Tüm testlerden ÖNCE bir kez Galaksi login'i yapıp oturumu playwright/.auth/ altına
+  // Tüm testlerden ÖNCE bir kez giriş yapıp oturumu playwright/.auth/ altına
   // kaydeder (CANLI'da authenticator kodu bu yüzden yalnızca burada, bir kere sorulur).
   globalSetup: './tests/support/global-setup.ts',
   // Koşuya özel geçici senaryo dosyası klasörünü siler (şifreli dosyalar koşu anında buraya çözülür).
@@ -86,22 +88,15 @@ export default defineConfig({
   use: {
     baseURL: environment.baseURL,
 
-    // globalSetup'ın kaydettiği paylaşılan Galaksi oturumu (bkz. yukarı) — dosya henüz
+    // globalSetup'ın kaydettiği paylaşılan oturum (bkz. yukarı) — dosya henüz
     // yoksa (ilk koşu, ya da giriş profili tanımlı değil) hiç verilmez, testler kendi login'ini yapar.
     storageState: existsSync(oturumDosyasi) ? oturumDosyasi : undefined,
 
-    // Başarılı koşularda gereksiz artifact üretme; hata incelemesinde videoyu koru.
-    // TEST_SUNUCU_GORUNUR (Nöbetçi'den başlatılan koşularda test-sunucu.mjs
-    // tarafından set edilir) aktifken İSTİSNA: başarılı olsun olmasın her koşuda video
-    // kaydedilir — kullanıcı Nöbetçi'nin koşu panelinde videoyu izleyebilsin
-    // diye. Normal toplu koşularda (npm run test, CI) davranış eskisi gibi kalır.
-    video: process.env.TEST_SUNUCU_GORUNUR ? 'on' : 'retain-on-failure',
-
-    // Sadece hata durumunda otomatik screenshot
-    screenshot: 'only-on-failure',
-
-    // Hata durumunda trace tut
-    trace: 'retain-on-failure'
+    // Video / ekran görüntüsü / iz: kullanıcının kararı (Ayarlar > Koşu > Kayıt; bkz. tests/support/kosu-ayarlari.ts).
+    // Terminal / CI koşusunda: video ve iz yalnız kalan testlerde, ekran görüntüsü yalnız hatada.
+    video: videoAyari(),
+    screenshot: ekranGoruntusuAyari(),
+    trace: izAyari()
   },
 
   projects: [

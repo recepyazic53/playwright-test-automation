@@ -17,8 +17,9 @@ export const AYAR_BOLUMLERI = [
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (acente) senaryoda satır adıyla seçilir.' },
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
-  { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
-  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
+  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı ve varsayılan tarih biçimi. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
+  { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
+  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
 ];
 
 const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
@@ -46,7 +47,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
-    'test-verisi': testVerisi, dosyalar, yedekleme, guvenlik
+    'test-verisi': testVerisi, dosyalar, kosu: kosuAyarlari, yedekleme, guvenlik
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
@@ -432,10 +433,11 @@ export function disaAktarmaFormu(tahmin, ayar = {}) {
 }
 
 async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, aktarimDurumu, tahmin] = await Promise.all([
+  const [{ klasor, dosyalar }, aktarimDurumu, tahmin, saklamaFormu] = await Promise.all([
     api('/platform/yedek/otomatik-liste'),
     api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] })),
-    api('/platform/yedek/tahmin').catch(() => null)
+    api('/platform/yedek/tahmin').catch(() => null),
+    ayarFormu('yedekleme', 'Saklama ayarları', 'Saklama ayarları kaydedildi; günlük yedek ve temizlikte geçerli.')
   ]);
 
   // Dışa aktar (ortak form — "Çalışma alanını kapat" > "Dışa aktar ve kapat" da bunu kullanır)
@@ -492,10 +494,10 @@ async function yedekleme(govde, baglam, yenile) {
     'Henüz yerel yedek yok.', 'arsiv');
 
   const otomatikKart = h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('saat'), 'Otomatik yedekler'), h('div', { class: 'sag' }, simdi)),
-    h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; en yeni 30 otomatik yedek saklanır.'),
+    h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; kaç tanesinin saklanacağını aşağıdaki "Saklama ayarları"ndan belirlersiniz.'),
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     liste);
-  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart);
+  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart, saklamaFormu);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -553,8 +555,122 @@ async function dosyalar(govde, baglam, yenile) {
 // Güvenlik
 // ---------------------------------------------------------------------------------------
 
+/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları. */
+async function kosuAyarlari(govde) {
+  const [form, kurallar] = await Promise.all([
+    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'), siniflandirmaKarti()
+  ]);
+  yerlestir(govde, form, kurallar);
+}
+
+/** Hata sınıflandırma kuralları: "hata mesajında şu geçerse → kategori" (genel kurallardan önce denenir). */
+async function siniflandirmaKarti() {
+  const { kurallar, kategoriler } = await api('/platform/siniflandirma');
+  const is = kurallar.map((k) => ({ ...k }));
+  const mesaj = mesajKutusu();
+  const liste = h('div', { class: 'siniflandirma-kurallari' });
+  const ciz = () => {
+    yerlestir(liste, is.length ? is.map((k, n) => {
+      const metin = h('input', { type: 'text', value: k.icerir, maxlength: '200', 'aria-label': `${n + 1}. kural: hata mesajında geçen metin`, placeholder: 'ör. beklenmeyen bir hata' });
+      metin.addEventListener('input', () => { k.icerir = metin.value; });
+      const kat = h('select', { 'aria-label': `${n + 1}. kural: kategori` }, kategoriler.map((x) => h('option', { value: x, selected: x === k.kategori }, x)));
+      kat.addEventListener('change', () => { k.kategori = kat.value; });
+      return h('div', { class: 'kural-satiri' }, metin, kat,
+        h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. kuralı sil`, onclick: () => { is.splice(n, 1); ciz(); } }, ikon('carpi')));
+    }) : h('p', { class: 'soluk kucuk' }, 'Kural yok: yalnız genel kurallar (zaman aşımı, seçici, doğrulama) uygulanır.'));
+  };
+  ciz();
+  const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const form = h('form', { class: 'kart form-paneli', novalidate: true, 'aria-label': 'Hata sınıflandırma kuralları' },
+    h('h3', {}, ikon('uyari'), 'Hata sınıflandırma kuralları'),
+    h('p', { class: 'soluk' }, 'Kalan testin hata mesajında bu metin geçerse Sonuçlar\'da seçtiğiniz kategoride görünür (ör. uygulamanızın iş kuralı pop-up metni → "İş Kuralı / Ekran Hatası"). Kurallar yukarıdan aşağı denenir; eşleşmezse genel kurallar uygulanır. Yeni koşulara uygulanır.'),
+    mesaj.kutu, liste,
+    h('div', { class: 'dugmeler' },
+      h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { is.push({ icerir: '', kategori: kategoriler[0] }); ciz(); } }, ikon('arti'), 'Kural ekle'), kaydet));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    try {
+      const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/siniflandirma/kaydet', { govde: { kurallar: is.map((k) => ({ icerir: k.icerir.trim(), kategori: k.kategori })) } }));
+      mesaj.goster(`${r.kurallar.length} kural kaydedildi.`, 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return form;
+}
+
+/**
+ * Kullanıcı kararları formu (tanımlar sunucudan: scripts/platform/ayarlar/kosu-ayarlari.mjs): bölümün ayarları gruplar hâlinde.
+ * @param {'kosu' | 'yedekleme'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
+ */
+async function ayarFormu(bolum, ad, basariMetni) {
+  const { ayarlar, tanimlar: tumu } = await api('/platform/kosu-ayarlari');
+  const tanimlar = tumu.filter((t) => (t.bolum || 'kosu') === bolum);
+  const mesaj = mesajKutusu();
+  /** @type {Map<string, HTMLElement>} */
+  const girdiler = new Map();
+  const gruplar = [...new Set(tanimlar.map((t) => t.grup))];
+  const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const form = h('form', { class: 'kart form-paneli kosu-ayarlari', novalidate: true, 'aria-label': ad }, mesaj.kutu,
+    ...gruplar.map((g) => h('fieldset', {}, h('legend', {}, g), ...tanimlar.filter((t) => t.grup === g).map((t) => {
+      let girdi;
+      if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
+      else if (t.tur === 'sayi') girdi = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', value: String(ayarlar[t.anahtar]) });
+      else girdi = h('input', { type: 'text', value: String(ayarlar[t.anahtar]), spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi' });
+      girdiler.set(t.anahtar, girdi);
+      const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
+      const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
+      return alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: `${t.aciklama} ${sinir}Varsayılan: ${varsayilan}.` });
+    }))),
+    h('div', { class: 'dugmeler' }, kaydet));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    for (const g of girdiler.values()) alanHatasi(g, '');
+    /** @type {Record<string, string | number>} */
+    const yeni = {};
+    for (const t of tanimlar) {
+      const g = girdiler.get(t.anahtar);
+      if (t.tur === 'sayi') {
+        const n = Number(g.value);
+        if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) { alanHatasi(g, `${t.enAz} ile ${t.enCok} arasında bir tam sayı girin.`); g.focus(); return; }
+        yeni[t.anahtar] = n;
+      } else yeni[t.anahtar] = g.value.trim();
+    }
+    try {
+      await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/kosu-ayarlari/kaydet', { govde: { ayarlar: yeni } }));
+      mesaj.goster(basariMetni, 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return form;
+}
+
+/** Güvenlik > Maskeleme: çekirdek liste (salt okunur) + kullanıcının ek gizli adları (her satıra bir ad). */
+async function maskelemeKarti() {
+  const { cekirdek, ekAdlar } = await api('/platform/maskeleme');
+  const liste = h('textarea', { rows: '4', spellcheck: 'false', autocomplete: 'off', class: 'kod-alani', placeholder: 'musteriAnahtari' });
+  liste.value = ekAdlar.join('\n');
+  const mesaj = mesajKutusu();
+  const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const form = h('form', { class: 'kart', novalidate: true, 'aria-label': 'Maskeleme' }, h('h3', {}, ikon('goz'), 'Maskeleme'),
+    h('p', { class: 'soluk' }, 'Adı bu listede geçen alanların, başlıkların ve servis okumalarının değerleri raporlarda maskelenir, sayfa paketlerinde reddedilir. Çekirdek liste güvenlik gereği değiştirilemez; kendi adlarınızı ekleyebilirsiniz.'),
+    h('p', { class: 'kucuk' }, h('b', {}, 'Çekirdek: '), cekirdek.join(', ')),
+    mesaj.kutu,
+    alan('Ek gizli adlar (her satıra bir ad)', liste, { yardim: 'Harf, rakam, "-", "_"; 2–40 karakter. Büyük/küçük harf ve "-", "_" yok sayılır (ör. musteriAnahtari → Musteri_Anahtari da gizli).' }),
+    h('div', { class: 'dugmeler' }, kaydet));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    try {
+      const r = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/maskeleme/kaydet', { govde: { ekAdlar: liste.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) } }));
+      liste.value = r.ekAdlar.join('\n');
+      mesaj.goster(`${r.ekAdlar.length} ek ad kaydedildi.`, 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return form;
+}
+
 async function guvenlik(govde, baglam) {
-  const ayar = await api('/platform/guvenlik');
+  const [ayar, maskeleme] = await Promise.all([api('/platform/guvenlik'), maskelemeKarti()]);
   const dakika = h('input', { type: 'number', min: String(ayar.enAz), max: String(ayar.enCok), step: '1', value: String(ayar.otomatikKilitDakika), inputmode: 'numeric' });
   const kilitMesaj = mesajKutusu();
   const kilitKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
@@ -663,6 +779,7 @@ async function guvenlik(govde, baglam) {
     h('p', { class: 'soluk', style: { margin: '0' } }, 'Kasa kilitlenince şifreli bilgiler okunamaz; devam etmek için parola gerekir. Sunucu kapanınca kasa da kilitlenir.')),
     h('div', { class: 'ayar-izgarasi' }, kilitForm, saklamaForm),
     yasakForm,
+    maskeleme,
     tasimaKarti,
     form);
 }

@@ -76,19 +76,33 @@ export const WSDL = `<?xml version="1.0"?><wsdl:definitions xmlns:wsdl="http://s
   <wsdl:operation name="Onayla"><soap:operation soapAction="Ornek/Onayla" style="document"/></wsdl:operation></wsdl:binding></wsdl:definitions>`;
 export const yanit = (durum: string, aciklama: string) => `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><TeklifResponse xmlns="Ornek"><Sonuc><Durum>${durum}</Durum><StatusDescription>${aciklama}</StatusDescription></Sonuc></TeklifResponse></soap:Body></soap:Envelope>`;
 
-export type SahteIstek = { yontem: string; yol: string; eylem: string; govde: string };
+export type SahteIstek = { yontem: string; yol: string; eylem: string; govde: string; basliklar: Record<string, string> };
 
-/** Sahte SOAP sunucusunu başlatır: GET ?wsdl → WSDL; POST → kimlik ${SAHTE_TC} ise <Durum>OK</Durum>, değilse HATA. */
+/**
+ * Sahte SOAP sunucusunu başlatır: GET ?wsdl → WSDL; POST → kimlik ${SAHTE_TC} ise <Durum>OK</Durum>, değilse HATA. Gövdede <Giris>
+ * geçerse token yanıtı (<Token>tok-N</Token>, başlık x-oturum: oturum-N; N her girişte artar). <YetkiGerekli/> geçerse yalnız son
+ * token kabul edilir (değilse 401).
+ */
 export async function sahteSoapSunucusu(): Promise<{ adres: string; istekler: SahteIstek[]; kapat: () => Promise<void> }> {
   const istekler: SahteIstek[] = [];
+  let girisSayisi = 0;
   const sunucu: Server = createServer((req, res) => {
     let govde = '';
     req.setEncoding('utf8');
     req.on('data', (p) => { govde += p; });
     req.on('end', () => {
-      istekler.push({ yontem: req.method ?? '', yol: req.url ?? '', eylem: String(req.headers.soapaction ?? ''), govde });
+      istekler.push({ yontem: req.method ?? '', yol: req.url ?? '', eylem: String(req.headers.soapaction ?? ''), govde,
+        basliklar: Object.fromEntries(Object.entries(req.headers).map(([a, v]) => [a, Array.isArray(v) ? v.join(', ') : String(v ?? '')])) });
       if (req.method === 'GET' && /\/Servis\/ornek\.asmx\?wsdl$/i.test(req.url ?? '')) { res.writeHead(200, { 'Content-Type': 'text/xml' }); res.end(WSDL); return; }
       if (req.method === 'POST' && (req.url ?? '').startsWith('/Servis/ornek.asmx')) {
+        if (govde.includes('<Giris')) {
+          girisSayisi++;
+          res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8', 'x-oturum': `oturum-${girisSayisi}` });
+          res.end(`<?xml version="1.0"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><GirisResponse xmlns="Ornek"><Sonuc><Token>tok-${girisSayisi}</Token><Durum>OK</Durum></Sonuc></GirisResponse></soap:Body></soap:Envelope>`);
+          return;
+        }
+        // <YetkiGerekli/>: yalnız son verilen token kabul (Authorization: Bearer tok-N), değilse 401.
+        if (govde.includes('<YetkiGerekli/>') && req.headers.authorization !== `Bearer tok-${girisSayisi}`) { res.writeHead(401, { 'Content-Type': 'text/plain' }); res.end('yetkisiz'); return; }
         const cevapla = () => {
           if (res.destroyed) return;
           res.writeHead(200, { 'Content-Type': 'text/xml; charset=utf-8' });
