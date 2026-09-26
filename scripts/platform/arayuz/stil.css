@@ -2018,3 +2018,7 @@ tr.tiklanir:hover, tr.tiklanir:focus-visible { background: var(--panel-2); }
 .ozet-listesi dt { color: var(--metin-3); font-weight: 600; }
 .ozet-listesi dd { margin: 0; }
 .ozet-listesi ul { margin: 0; padding-left: 18px; }
+/* Nöbetçi yeniden başlatıldı bandı (uygulama.js "sunucu-yenilendi") */
+.yenileme-bandi { position: sticky; top: 0; z-index: 1000; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 16px; background: var(--atlanan); color: #1b1300; font-size: 13.5px; box-shadow: 0 6px 20px -10px rgba(0, 0, 0, .6); }
+.yenileme-bandi span { flex: 1 1 320px; }
+.yenileme-bandi .ikon { flex: 0 0 auto; }
