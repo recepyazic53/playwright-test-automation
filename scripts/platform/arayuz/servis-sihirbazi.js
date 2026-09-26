@@ -10,6 +10,8 @@ import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik,
 import { onayIste } from './kosu-paneli.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
+import { tanimDiyalogu } from './parametre-tanimi-formu.js';
+import { wsdlOnerisi } from './parametre-tanimlari.mjs';
 
 const ADIMLAR = ['Adresler', 'Metotlar', 'Parametreler', 'Giriş bilgisi', 'Özet'];
 /** Kayıt oluşturan / belge üreten metot adları: "CANLI'da çağrılmasın" işaretli gelir (kullanıcı değiştirebilir). */
@@ -37,11 +39,14 @@ function anahtarUret(ad) {
 export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   // TEST ortamları önce (denetleme ve ilk adres oradan), CANLI sonra.
   const ortamlar = [...tumOrtamlar].sort((a, b) => Number(a.canli) - Number(b.canli));
-  const [{ servisler }, { turler }, { profiller: veriProfilleri }] = await Promise.all([
+  const [{ servisler }, { turler }, { profiller: veriProfilleri }, tanimYaniti] = await Promise.all([
     api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`),
     api(`/platform/test-verisi-turleri?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`)
+    api(`/platform/test-verisi-profilleri?projeId=${encodeURIComponent(proje.id)}`),
+    api(`/platform/servis-parametre-tanimlari?projeId=${encodeURIComponent(proje.id)}`)
   ]);
+  /** Değer listeleri (Ayarlar > Test verisi > Servis parametreleri); 3. adımda alanlara bağlanır. */
+  const tanimlar = tanimYaniti.tanimlar;
   /** Parametre → test verisi türü / alanı / rolü / hassaslığı. */
   const eslemeler = new Map(turler.flatMap((t) => t.alanlar.flatMap((a) => (a.servisParametreleri || []).map((sp) => [sp.ad, { turId: t.id, turAd: t.ad, alan: a.ad, rol: sp.rol, hassas: a.hassas }]))));
   const testOrtamlari = ortamlar.filter((o) => !o.canli);
@@ -50,7 +55,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     adim: 0, ad: '', anahtar: '', anahtarElle: false, soapSurumu: '1.1', tls: true,
     tabanlar: Object.fromEntries(ortamlar.map((o) => [o.id, o.canli ? '' : o.tabanUrl])),
     yol: '', kontrolOrtami: (testOrtamlari.find((o) => o.varsayilan) || testOrtamlari[0])?.id ?? '',
-    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, zorunlu: {}, ekAlanlar: {}, profil: { tur: 'yok', ad: '', degerler: {}, profilId: '', secildi: false }
+    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, alanListeleri: {}, zorunlu: {}, ekAlanlar: {}, profil: { tur: 'yok', ad: '', degerler: {}, profilId: '', secildi: false }
   };
 
   // Parametre seçenekleri (3. adım): giriş bilgisi, tarih kuralı (sihirbaz önerir), test verisi eşlemeleri.
@@ -181,6 +186,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
           d.secilen = new Set(e.operasyonlar.map((x) => x.ad));
           d.yalnizTest = new Set(e.operasyonlar.filter((x) => YALNIZ_TEST_DESENI.test(x.ad)).map((x) => x.ad));
           d.varsayilanlar = {};
+          d.alanListeleri = {};
           d.zorunlu = {};
           d.ekAlanlar = {};
           metotAlani();
@@ -204,7 +210,20 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       ['Test verisi', veriParametreleri]
     ].filter(([, l]) => l.length);
     const bolumler = [];
-    const tanimlar = [];
+    const metotTanimlari = [];
+    // "+ Yeni" / ✎: değer listesi hemen Ayarlar > Test verisi'ne kaydedilir (servis kaydını beklemez); bağlantı servisle kaydedilir.
+    const listeAc = (tanim, alanT, sonra) => {
+      const oneri = tanim ? null : wsdlOnerisi(alanT);
+      tanimDiyalogu({
+        proje, turler, profiller: veriProfilleri,
+        ...(tanim ? { tanim } : { on: { ad: alanT.ad, tur: oneri ? oneri.tur : 'liste', degerler: oneri ? oneri.degerler : [] } }),
+        bitti: async (id) => {
+          const { tanimlar: yeni } = await api(`/platform/servis-parametre-tanimlari?projeId=${encodeURIComponent(proje.id)}`);
+          tanimlar.splice(0, tanimlar.length, ...yeni);
+          sonra(id);
+        }
+      });
+    };
     for (const ad of d.secilen) {
       const sema = d.erisim.semalar?.[ad];
       if (!sema || !sema.alanlar.length) { bolumler.push(h('p', { class: 'soluk' }, h('code', { class: 'duz' }, ad), ': alan listesi yok (senaryoları XML olarak düzenlenir).')); continue; }
@@ -212,12 +231,13 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       // Zorunluluk: WSDL'e göre işaretli gelir (şemada zorunlu), kullanıcı iş kuralına göre düzeltir.
       const z = (d.zorunlu[ad] ??= new Set(alanSatirlari(sema.alanlar).filter((x) => !x.grup && x.alan.zorunlu).map((x) => x.yol)));
       const ekler = (d.ekAlanlar[ad] ??= []);
-      tanimlar.push({ ad, sema, varsayilan: v, zorunlu: z, ekler, secenekler });
+      const baglantilar = (d.alanListeleri[ad] ??= {});
+      metotTanimlari.push({ ad, sema, varsayilan: v, zorunlu: z, ekler, secenekler, baglantilar, listeler: tanimlar, profiller: veriProfilleri, listeAc });
     }
-    if (tanimlar.length) bolumler.unshift(metotKutulari(tanimlar, { anahtar: 'sihirbaz' }));
+    if (metotTanimlari.length) bolumler.unshift(metotKutulari(metotTanimlari, { anahtar: 'sihirbaz' }));
     return [
       h('p', { class: 'soluk' }, 'Seçilen metotların alanları. Her alan için varsayılan değer kaynağı seçebilirsiniz; yeni senaryolar bu alanlar dolu açılır (★ servis varsayılanı). Öneriler hazır geldi: giriş bilgisi, tarih ve daha önce başka serviste eşlenmiş alanlar. Boş bırakılanlar senaryoda doldurulur.'),
-      h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin (WSDL\'de sayı ve evet/hayır alanları hep zorunlu, metinler hep isteğe bağlı görünebilir). WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz. Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
+      h('p', { class: 'soluk kucuk' }, '"Zorunlu" işareti WSDL\'e göre gelir; iş kuralına göre düzeltin (WSDL\'de sayı ve evet/hayır alanları hep zorunlu, metinler hep isteğe bağlı görünebilir). WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz. Değer kaynağı olarak bir değer listesi seçilirse senaryoda o alanın değeri listeden seçilir; uygun liste yoksa "+ Yeni" ile oluşturun (Ayarlar > Test verisi\'ne kaydedilir). Bunlar sonra servisin Parametreler sekmesinden de değiştirilir.'),
       ...bolumler
     ];
   };
@@ -307,7 +327,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       h('dt', {}, 'Servis'), h('dd', {}, `${d.ad} (${d.anahtar})`),
       h('dt', {}, 'Adresler'), h('dd', {}, h('ul', {}, ortamlar.map((o) => h('li', {}, `${o.ad}: `, d.tabanlar[o.id] ? h('code', { class: 'duz' }, birlestir(d.tabanlar[o.id], d.yol)) : h('span', { class: 'soluk' }, 'yok (bu ortamda koşmaz)'))))),
       h('dt', {}, 'Metotlar'), h('dd', {}, [...d.secilen].map((m) => `${m}${d.yalnizTest.has(m) ? ' (CANLI\'da çağrılmaz)' : ''}`).join(', ')),
-      h('dt', {}, 'Varsayılan alanlar'), h('dd', {}, `${Object.values(d.varsayilanlar).reduce((n, v) => n + Object.values(v).filter(Boolean).length, 0)} alan`),
+      h('dt', {}, 'Varsayılan alanlar'), h('dd', {}, `${Object.values(d.varsayilanlar).reduce((n, v) => n + Object.values(v).filter(Boolean).length, 0)} alan`), h('dt', {}, 'Değer listesi bağlı'), h('dd', {}, `${Object.values(d.alanListeleri).reduce((n, v) => n + Object.values(v).filter(Boolean).length, 0)} alan (adı aynı listeler kendiliğinden)`),
       h('dt', {}, 'Zorunlu alanlar'), h('dd', {}, [...d.secilen].filter((m) => d.zorunlu[m]).map((m) => `${m}: ${d.zorunlu[m].size}`).join(' · ') || '—'),
       h('dt', {}, 'Tarih kuralları'), h('dd', {}, Object.entries(tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'),
       h('dt', {}, 'Giriş bilgisi'), h('dd', {}, d.profil.tur === 'yok' ? 'yok'
@@ -368,7 +388,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
         const r = await api('/platform/servis/kaydet', { govde: {
           projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), yol: d.yol, soapSurumu: d.soapSurumu, tlsDogrulama: d.tls,
           tabanlar: d.tabanlar, secilenOperasyonlar: [...d.secilen], yalnizTestOperasyonlari: [...d.yalnizTest].filter((x) => d.secilen.has(x)),
-          alanVarsayilanlari, ekAlanlar: Object.fromEntries([...d.secilen].filter((m) => d.ekAlanlar[m]?.length).map((m) => [m, d.ekAlanlar[m]])), alanZorunluluklari: Object.fromEntries([...d.secilen].filter((m) => d.zorunlu[m]).map((m) => [m, [...d.zorunlu[m]]])),
+          alanVarsayilanlari, alanListeleri: Object.fromEntries([...d.secilen].filter((m) => d.alanListeleri[m]).map((m) => [m, d.alanListeleri[m]])), ekAlanlar: Object.fromEntries([...d.secilen].filter((m) => d.ekAlanlar[m]?.length).map((m) => [m, d.ekAlanlar[m]])), alanZorunluluklari: Object.fromEntries([...d.secilen].filter((m) => d.zorunlu[m]).map((m) => [m, [...d.zorunlu[m]]])),
           tarihKurallari: tarihKuraliOnerileri(), veriProfilleri: veriSecimi, erisimKimligi: d.erisim.erisimKimligi
         } });
         bildir('Servis eklendi.');

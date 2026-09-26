@@ -10,12 +10,13 @@ import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { aktarimAkisi } from './aktarim.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
+import { servisParametreleriBolumu } from './parametre-tanimi-formu.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'baglam', etiket: 'Bağlam profilleri', ikon: 'hedef', aciklama: 'Testlerin hangi bağlamda (ör. rol, şube, müşteri tipi) çalışacağını tanımlayan profiller. Tür adlarını projeniz belirler.' },
-  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Testlerin kullanacağı veri kalıpları (türler) ve bu kalıplara göre doldurulmuş kayıtlar (profiller).' },
+  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Testlerin kullanacağı veri kalıpları (türler), bu kalıplara göre doldurulmuş kayıtlar (profiller) ve servis alanlarının alabileceği değerler (servis parametreleri).' },
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
@@ -473,7 +474,22 @@ function servisParametreEditoru(proje, baslangic, servisler) {
   return { el, deger: () => liste.map((x) => (x.rol && x.rol !== 'varsayilan' ? { ad: x.ad, rol: x.rol } : { ad: x.ad })) };
 }
 
+/** Test verisi sekmesi (oturum boyunca hatırlanır): türler ve profiller | servis parametreleri. */
+let testVerisiSekmesi = 'turler';
+
 async function testVerisi(govde, baglam, yenile) {
+  const sekmeler = h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Test verisi bölümleri' },
+    [['turler', 'Türler ve profiller'], ['servis', 'Servis parametreleri']].map(([a, m]) => h('button', {
+      type: 'button', role: 'tab', 'aria-selected': testVerisiSekmesi === a ? 'true' : 'false',
+      onclick: () => { if (testVerisiSekmesi !== a) { testVerisiSekmesi = a; yenile(); } }
+    }, m)));
+  const icerik = h('div', {}, iskelet('liste'));
+  govde.replaceChildren(sekmeler, icerik);
+  if (testVerisiSekmesi === 'servis') return servisParametreleriBolumu(icerik, baglam.durum.proje, yenile);
+  return turlerVeProfiller(icerik, baglam, yenile);
+}
+
+async function turlerVeProfiller(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
   const [{ turler }, { profiller }, { ortamlar }, servisler] = await Promise.all([
     api(`/platform/test-verisi-turleri?projeId=${encodeURIComponent(proje.id)}`),

@@ -14,6 +14,8 @@ import { servisSihirbazi } from './servis-sihirbazi.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
+import { tanimDiyalogu } from './parametre-tanimi-formu.js';
+import { alanListesi, degerEtiketi, listedeMi, tanimDegerleri, wsdlOnerisi } from './parametre-tanimlari.mjs';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
@@ -553,12 +555,54 @@ const TIP_ETIKETI = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', man
 const ayniDeger = (a, b) => Boolean(a && b) && a.kaynak === b.kaynak && (a.deger ?? '') === (b.deger ?? '');
 
 async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
-  const [p, { turler }, { profiller: kimlikProfilleri }, { profiller: veriProfilleri }] = await Promise.all([
+  const [p, { turler }, { profiller: kimlikProfilleri }, { profiller: veriProfilleri }, { tanimlar: degerListeleri }] = await Promise.all([
     api(`/platform/servis/parametreler?projeId=${q(proje.id)}&id=${q(s.id)}`),
     api(`/platform/test-verisi-turleri?projeId=${q(proje.id)}`),
     api(`/platform/servis-kimlikleri?projeId=${q(proje.id)}`),
-    api(`/platform/test-verisi-profilleri?projeId=${q(proje.id)}`)
+    api(`/platform/test-verisi-profilleri?projeId=${q(proje.id)}`),
+    api(`/platform/servis-parametre-tanimlari?projeId=${q(proje.id)}`)
   ]);
+  /**
+   * Alanın değer listesi (servisin metot tablosunda bağlanan; yoksa adı aynı liste — alana servis varsayılanı olarak
+   * koşuda dolan parametre bağlıysa ad eşleşmesi yapılmaz). { tanim, degerler } | undefined.
+   */
+  const alanTanimi = {
+    get: (yol, alanAdi) => {
+      const op = operasyon.value;
+      const pv = (s.ayarlar.alanVarsayilanlari?.[op] || {})[yol];
+      const t = alanListesi(degerListeleri, (s.ayarlar.alanListeleri || {})[op], yol, alanAdi, pv?.kaynak === 'parametre');
+      return t ? { tanim: t, degerler: tanimDegerleri(t, veriProfilleri) } : undefined;
+    }
+  };
+  /**
+   * Gövdede yazılan ama bağlı listede olmayan değerleri o listeye ekler (yalnız "liste" türü; test verisinden gelen ve
+   * evet / hayır listelerine eklenmez). Kullanıcı onayıyla çağrılır (olumsuz senaryo değerleri bilerek listede olmayabilir).
+   * @param {Map<any, Set<string>>} eklenecek  liste → yeni değerler
+   */
+  const listelereEkle = async (eklenecek) => {
+    for (const [tanim, yeni] of eklenecek) {
+      const degerler = [...(tanim.degerler || []), ...[...yeni].filter((d) => !(tanim.degerler || []).some((x) => x.deger === d)).map((deger) => ({ deger }))];
+      await api('/platform/servis-parametre-tanimi/kaydet', { govde: {
+        id: tanim.id, projeId: proje.id, ad: tanim.ad, aciklama: tanim.aciklama, tur: tanim.tur, degerler, kaynak: tanim.kaynak,
+        varsayilan: tanim.varsayilan, elleYazilabilir: tanim.elleYazilabilir
+      } });
+      tanim.degerler = degerler;
+    }
+  };
+  /** Alanlar formundaki sabit değerlerden, bağlı ("liste" türü) listede olmayanlar. */
+  const listeDisiDegerler = () => {
+    const sm = sema();
+    if (!sm) return [];
+    const sonuc = [];
+    for (const sat of alanSatirlari(sm.alanlar)) {
+      if (sat.grup) continue;
+      const v = degerler[sat.yol];
+      if (!v || v.kaynak !== 'sabit' || !v.deger || v.deger.includes('${')) continue;
+      const tr = alanTanimi.get(sat.yol, sat.alan.ad);
+      if (tr && tr.tanim.tur === 'liste' && !listedeMi(tr.degerler, v.deger)) sonuc.push({ alan: sat.alan.ad, deger: v.deger, tanim: tr.tanim });
+    }
+    return sonuc;
+  };
   /** Parametre → test verisi türü / alanı / rolü. */
   const eslemeler = new Map(turler.flatMap((t) => t.alanlar.flatMap((a) => (a.servisParametreleri || []).map((sp) => [sp.ad, { turId: t.id, alan: a.ad, rol: sp.rol }]))));
   const i = senaryo ? senaryo.icerik : { operasyon: (s.ayarlar.operasyonlar || [])[0]?.ad || '', govde: '', kontroller: [{ tur: 'soapYaniti' }] };
@@ -593,10 +637,23 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const govdeAlani = h('div', {});
   const uyari = h('div', {});
 
+  /**
+   * Yeni gövde: değer listesine bağlı olup servis varsayılanı (★) olmayan alanlar listenin varsayılanıyla açılır (şemanın
+   * kendiliğinden verdiği boş / nil / gönderme yerine).
+   */
+  const tanimVarsayilanlariniUygula = (sm) => {
+    const servisVarsayilani = varsayilanlar[operasyon.value] || {};
+    for (const sat of alanSatirlari(sm.alanlar)) {
+      if (sat.grup) continue;
+      const tr = alanTanimi.get(sat.yol, sat.alan.ad);
+      if (!tr || !tr.tanim.varsayilan || servisVarsayilani[sat.yol]) continue;
+      degerler[sat.yol] = { kaynak: 'sabit', deger: tr.tanim.varsayilan };
+    }
+  };
   const formaGec = (zorla = false) => {
     const sm = sema();
     if (!sm) return false;
-    if (!govde.value.trim()) { degerler = baslangicDegerleri(sm, varsayilanlar[operasyon.value]); mod = 'alanlar'; return true; }
+    if (!govde.value.trim()) { degerler = baslangicDegerleri(sm, varsayilanlar[operasyon.value]); tanimVarsayilanlariniUygula(sm); mod = 'alanlar'; return true; }
     const c = govdeCoz(govde.value, sm);
     if (c.uyumsuz.length && !zorla) {
       yerlestir(uyari, h('div', { class: 'not-kutusu uyari', role: 'status' },
@@ -611,7 +668,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
 
   // Değer kontrolü. Yazarken satır YENİDEN ÇİZİLMEZ (imleç / odak korunur): değer ve durum yerinde güncellenir (tazele);
   // yalnızca değer kaynağı değişince satır baştan çizilir.
-  const degerKontrolu = (alanT, v, tazele) => {
+  const degerKontrolu = (alanT, v, tazele, yol) => {
     if (v.kaynak === 'parametre') {
       const sec = h('select', { 'aria-label': `${alanT.ad} parametresi` }, h('option', { value: '' }, '— seçin —'),
         ...parametreGruplari.map(([g, l]) => h('optgroup', { label: g }, l.map(([a, m]) => h('option', { value: a, selected: v.deger === a }, m)))),
@@ -625,6 +682,51 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (v.kaynak !== 'sabit') return h('span', { class: 'soluk kucuk' }, v.kaynak === 'gonderme' ? 'gövdeye yazılmaz' : v.kaynak === 'bos' ? `<${alanT.ad}/>` : `<${alanT.ad} xsi:nil="true"/>`);
     const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
     const guncelle = (deger) => { v.deger = deger; not.textContent = sabitDegerUyarisi(alanT, deger) || ''; tazele(); };
+    // Parametre tanımı varsa değer listeden seçilir; "Elle yaz…" (izinliyse) serbest yazdırır. Listede olmayan değer
+    // engellenmez (olumsuz senaryo), uyarılır.
+    const tr = alanTanimi.get(yol, alanT.ad);
+    if (tr && tr.degerler.length) {
+      const liste = tr.degerler;
+      const kutu = h('span', { class: 'sabit-deger tanimli-deger' });
+      // "Listeye ekle": yalnız "liste" türünde ve değer listede yokken.
+      const ekle = h('button', { type: 'button', class: 'kucuk-dugme', hidden: true, 'aria-label': `${alanT.ad} değerini listeye ekle`,
+        title: `"${tr.tanim.ad}" listesine ekle` }, ikon('arti'), 'Listeye ekle');
+      ekle.addEventListener('click', async () => {
+        const d = v.deger || '';
+        try {
+          await mesgulIken(ekle, 'Ekleniyor…', () => listelereEkle(new Map([[tr.tanim, new Set([d])]])));
+          bildir(`"${d}" değeri "${tr.tanim.ad}" listesine eklendi.`);
+          tabloCiz();
+        } catch (e) { bildir(e.message, 'hata'); }
+      });
+      const listeNotu = () => {
+        const d = v.deger || '';
+        const disinda = Boolean(d) && !listedeMi(liste, d);
+        not.textContent = disinda ? 'Listede yok (olumsuz senaryo değilse listeden seçin ya da listeye ekleyin).' : sabitDegerUyarisi(alanT, d) || '';
+        ekle.hidden = !(disinda && tr.tanim.tur === 'liste' && !d.includes('${'));
+      };
+      const listeCiz = (elle, odakla = false) => {
+        if (elle) {
+          const g = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', 'aria-label': alanT.ad, value: v.deger || '' });
+          g.addEventListener('input', () => { v.deger = g.value; listeNotu(); tazele(); });
+          yerlestir(kutu, g, h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => listeCiz(false) }, 'Listeden seç'), not, ekle);
+          if (odakla) g.focus();
+        } else {
+          const g = h('select', { 'aria-label': alanT.ad, title: tr.tanim.aciklama || null }, h('option', { value: '' }, '—'),
+            liste.map((x) => h('option', { value: x.deger, selected: v.deger === x.deger }, degerEtiketi(x))),
+            v.deger && !listedeMi(liste, v.deger) ? h('option', { value: v.deger, selected: true }, `${v.deger} (listede yok)`) : null,
+            tr.tanim.elleYazilabilir !== false ? h('option', { value: '__elle' }, 'Elle yaz…') : null);
+          g.addEventListener('change', () => {
+            if (g.value === '__elle') { listeCiz(true, true); return; }
+            v.deger = g.value; listeNotu(); tazele();
+          });
+          yerlestir(kutu, g, not, ekle);
+        }
+        listeNotu();
+      };
+      listeCiz(false);
+      return kutu;
+    }
     let g;
     if (alanT.secenekler && alanT.secenekler.length) {
       g = h('select', { 'aria-label': alanT.ad }, h('option', { value: '' }, '—'), alanT.secenekler.map((x) => h('option', { value: x, selected: v.deger === x }, x)));
@@ -695,8 +797,29 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (!sm) return;
     const dolu = Object.values(degerler).filter((v) => v.kaynak !== 'gonderme').length;
     sayac.textContent = `${dolu} / ${alanSatirlari(sm.alanlar).filter((x) => !x.grup).length} alan gönderiliyor · ★ = servis varsayılanı`;
+    listeDisiCiz();   // yazarken de güncel kalsın (ayrı kutu; satırlar yeniden çizilmez)
   };
 
+  const listeDisiKap = h('div', { 'aria-live': 'polite' });
+  const listeDisiCiz = () => {
+    const l = listeDisiDegerler();
+    if (!l.length) { yerlestir(listeDisiKap); return; }
+    const hepsi = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('arti'), 'Hepsini listelere ekle');
+    hepsi.addEventListener('click', async () => {
+      const harita = new Map();
+      for (const x of l) { if (!harita.has(x.tanim)) harita.set(x.tanim, new Set()); harita.get(x.tanim).add(x.deger); }
+      try {
+        await mesgulIken(hepsi, 'Ekleniyor…', () => listelereEkle(harita));
+        bildir(`${l.length} değer listelere eklendi.`);
+        tabloCiz();
+      } catch (e) { bildir(e.message, 'hata'); }
+    });
+    yerlestir(listeDisiKap, h('div', { class: 'not-kutusu uyari liste-disi', role: 'status' },
+      h('div', {}, h('b', {}, `Gövdedeki ${l.length} değer bağlı değer listelerinde yok: `),
+        l.map((x) => h('span', { class: 'deger-cipi' }, `${x.alan} = ${x.deger} → ${x.tanim.ad}`))),
+      h('div', { class: 'soluk kucuk' }, 'Olumsuz senaryo için bilerek yazılmış değerleri eklemeyin; tek tek eklemek için alanın yanındaki "Listeye ekle"yi kullanın.'),
+      h('div', { class: 'dugmeler' }, hepsi)));
+  };
   const tabloCiz = () => {
     const sm = sema();
     const tablo = h('div', { class: 'alan-formu', role: 'table', 'aria-label': `${sm.ad} istek alanları` });
@@ -741,7 +864,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
           h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Zorunlu alan' }, '*') : null,
             h('span', { class: 'alan-tipi' }, sat.alan.secenekler ? 'liste' : TIP_ETIKETI[sat.alan.tip] || 'metin')),
           h('span', { role: 'cell' }, kaynak),
-          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele), eksikNotu),
+          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele, sat.yol), eksikNotu),
           h('span', { role: 'cell' }, pin));
         tazele();
       };
@@ -751,7 +874,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     yerlestir(tabloKap, tablo);
     sayacGuncelle();
   };
-  const formCiz = () => { tabloCiz(); return h('div', {}, formUst, tabloKap); };
+  const formCiz = () => { tabloCiz(); return h('div', {}, formUst, listeDisiKap, tabloKap); };
   aramaG.addEventListener('input', () => tabloCiz());
   yalnizDolu.addEventListener('change', () => tabloCiz());
   yalnizZorunlu.addEventListener('change', () => tabloCiz());
@@ -793,7 +916,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   operasyon.addEventListener('change', () => {
     const sm = sema();
     if (mod === 'alanlar' || !govde.value.trim()) {
-      if (sm) { degerler = baslangicDegerleri(sm, varsayilanlar[operasyon.value]); mod = 'alanlar'; } else { govde.value = ''; mod = 'xml'; }
+      if (sm) { degerler = baslangicDegerleri(sm, varsayilanlar[operasyon.value]); tanimVarsayilanlariniUygula(sm); mod = 'alanlar'; } else { govde.value = ''; mod = 'xml'; }
     }
     yerlestir(uyari);
     ciz();
@@ -885,11 +1008,13 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
 // ---------------------------------------------------------------------------------------
 
 async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
-  const [p, { profiller }, { turler }] = await Promise.all([
+  const [p, { profiller }, { turler }, { tanimlar }] = await Promise.all([
     api(`/platform/servis/parametreler?projeId=${q(proje.id)}&id=${q(s.id)}`),
     api(`/platform/test-verisi-profilleri?projeId=${q(proje.id)}`),
-    api(`/platform/test-verisi-turleri?projeId=${q(proje.id)}`)
+    api(`/platform/test-verisi-turleri?projeId=${q(proje.id)}`),
+    api(`/platform/servis-parametre-tanimlari?projeId=${q(proje.id)}`)
   ]);
+  const tanimVeri = { turler, profiller };
   const kaynakMetni = (k) => k.tur === 'tarih' ? [`Tarih kuralı: ${k.kural}`, '']
     : k.tur === 'kimlik' ? [`Eski giriş profili: ${k.profil}`, 'durdu']
       : k.tur === 'veri' ? [`Test verisi: ${k.turAd}.${k.alanEtiketi || k.alan} — rol "${k.rol}"`, '']
@@ -909,14 +1034,15 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     const sabitler = Object.fromEntries(Object.entries(mevcut).filter(([, v]) => v.kaynak !== 'parametre')
       .map(([y, v]) => [y, v.kaynak === 'sabit' ? `Sabit: ${v.deger}` : v.kaynak === 'bos' ? 'Boş gönder' : v.kaynak === 'nil' ? 'Boş (nil)' : 'Gönderme']));
     const ekler = JSON.parse(JSON.stringify((s.ayarlar.ekAlanlar || {})[sm.ad] || []));
+    const baglantilar = { ...((s.ayarlar.alanListeleri || {})[sm.ad] || {}) };
     const liste = (s.ayarlar.alanZorunluluklari || {})[sm.ad];
     const zorunlu = new Set(Array.isArray(liste) ? liste : alanSatirlari(sm.alanlar).filter((x) => !x.grup && x.alan.zorunlu).map((x) => x.yol));
-    return { sm, mevcut, varsayilan, sabitler, ekler, zorunlu };
+    return { sm, mevcut, varsayilan, sabitler, ekler, baglantilar, zorunlu };
   });
-  const alanMesaji = mesajKutusu();
-  const alanKaydet = h('button', { type: 'button', class: 'birincil' }, 'Alanları kaydet');
-  alanKaydet.addEventListener('click', async () => {
-    alanMesaji.temizle();
+  // Anında kaydet: her değişiklikten kısa süre sonra (art arda değişiklikler tek istekte) servis ayarına yazılır.
+  const kayitDurumu = h('span', { class: 'kayit-durumu soluk kucuk', 'aria-live': 'polite' });
+  let kayitZamanlayici = null;
+  const alanlariKaydet = async () => {
     const alanVarsayilanlari = { ...(s.ayarlar.alanVarsayilanlari || {}) };
     for (const m of metotlar) {
       alanVarsayilanlari[m.sm.ad] = Object.fromEntries([
@@ -924,22 +1050,49 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
         ...Object.entries(m.varsayilan).filter(([, p2]) => p2).map(([y, p2]) => [y, { kaynak: 'parametre', deger: p2 }])
       ]);
     }
+    const govde = {
+      alanVarsayilanlari,
+      alanZorunluluklari: { ...(s.ayarlar.alanZorunluluklari || {}), ...Object.fromEntries(metotlar.map((m) => [m.sm.ad, [...m.zorunlu]])) },
+      ekAlanlar: { ...(s.ayarlar.ekAlanlar || {}), ...Object.fromEntries(metotlar.map((m) => [m.sm.ad, m.ekler])) },
+      alanListeleri: { ...(s.ayarlar.alanListeleri || {}), ...Object.fromEntries(metotlar.map((m) => [m.sm.ad, m.baglantilar])) }
+    };
+    kayitDurumu.textContent = 'Kaydediliyor…';
+    kayitDurumu.className = 'kayit-durumu soluk kucuk';
     try {
-      await mesgulIken(alanKaydet, 'Kaydediliyor…', () => api('/platform/servis/kaydet', { govde: {
-        projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, alanVarsayilanlari,
-        alanZorunluluklari: { ...(s.ayarlar.alanZorunluluklari || {}), ...Object.fromEntries(metotlar.map((m) => [m.sm.ad, [...m.zorunlu]])) },
-        ekAlanlar: { ...(s.ayarlar.ekAlanlar || {}), ...Object.fromEntries(metotlar.map((m) => [m.sm.ad, m.ekler])) }
-      } }));
-      bildir('Metot alanları kaydedildi.');
-      yenile();
-    } catch (e) { alanMesaji.goster(e.message); }
-  });
-  const metotKarti = h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Metot alanları'), alanMesaji.kutu,
-    metotlar.length ? h('p', { class: 'soluk kucuk' }, 'WSDL\'den gelen alanlar ve elle eklenenler. Varsayılan değer seçilen alanlar yeni senaryoda dolu açılır; "Zorunlu" iş kuralına göre düzeltilir. WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz.') : null,
+      await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, ...govde } });
+      Object.assign(s.ayarlar, JSON.parse(JSON.stringify(govde)));
+      kayitDurumu.textContent = '✓ Kaydedildi';
+    } catch (e) {
+      kayitDurumu.textContent = `Kaydedilemedi: ${e.message}`;
+      kayitDurumu.className = 'kayit-durumu alan-uyarisi';
+    }
+  };
+  const degisti = () => { clearTimeout(kayitZamanlayici); kayitDurumu.textContent = 'Değişti…'; kayitZamanlayici = setTimeout(alanlariKaydet, 500); };
+
+  // Değer listeleri (Ayarlar > Test verisi > Servis parametreleri): "+ Yeni" / ✎ aynı pencereyi açar; kayıttan sonra liste
+  // yerinde yenilenir (sayfa yeniden çizilmez; bekleyen kayıt kaybolmaz).
+  const listeAc = (tanim, alanT, sonra) => {
+    const oneri = tanim ? null : wsdlOnerisi(alanT);
+    tanimDiyalogu({
+      proje, ...tanimVeri,
+      ...(tanim ? { tanim } : { on: { ad: alanT.ad, tur: oneri ? oneri.tur : 'liste', degerler: oneri ? oneri.degerler : [] } }),
+      bitti: async (id) => {
+        const { tanimlar: yeni } = await api(`/platform/servis-parametre-tanimlari?projeId=${q(proje.id)}`);
+        tanimlar.splice(0, tanimlar.length, ...yeni);
+        sonra(id);
+      }
+    });
+  };
+  const metotKarti = h('div', { class: 'kart form-paneli' },
+    h('div', { class: 'kart-basligi' }, h('h3', {}, 'Metot alanları'), h('span', { class: 'sag' }, kayitDurumu,
+      h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/ayarlar/test-verisi' }, 'Tüm değer listeleri (Test verisi)'))),
+    metotlar.length ? h('p', { class: 'soluk kucuk' }, 'Metodu seçin. Her alan için değer kaynağını seçin: bir değer listesi (senaryoda değer bu listeden seçilir; uygun liste yoksa "+ Yeni") ya da koşuda dolan bir parametre (test verisi, tarih kuralı). Değişiklikler anında kaydedilir. WSDL\'de olmayan bir alanı "+ Alan ekle" ile ekleyebilirsiniz.') : null,
     metotlar.length
-      ? metotKutulari(metotlar.map((m) => ({ ad: m.sm.ad, sema: m.sm, varsayilan: m.varsayilan, sabitler: m.sabitler, zorunlu: m.zorunlu, ekler: m.ekler, secenekler })), { anahtar: `servis:${s.id}` })
-      : h('p', { class: 'soluk' }, 'Bu servisin metot alan listesi yok. İşlemler sekmesinden "WSDL\'den yeniden al" ile alınabilir.'),
-    metotlar.length ? h('div', { class: 'dugmeler' }, alanKaydet) : null);
+      ? metotKutulari(metotlar.map((m) => ({
+        ad: m.sm.ad, sema: m.sm, varsayilan: m.varsayilan, sabitler: m.sabitler, zorunlu: m.zorunlu, ekler: m.ekler, secenekler,
+        baglantilar: m.baglantilar, listeler: tanimlar, profiller: tanimVeri.profiller, listeAc, degisti
+      })), { anahtar: `servis:${s.id}` })
+      : h('p', { class: 'soluk' }, 'Bu servisin metot alan listesi yok. İşlemler sekmesinden "WSDL\'den yeniden al" ile alınabilir.'));
 
   // --- Değer kaynakları: rol başına test verisi profili, tarih kuralları -------------------------------------------------
   const secimler = { ...(s.ayarlar.veriProfilleri || {}) };
