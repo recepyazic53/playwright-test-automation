@@ -926,46 +926,63 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
 
   const kontrolKutusu = h('div', {});
   const kopya = (k) => ({ ...k, ...(k.alt ? { alt: k.alt.map(kopya) } : {}) });
-  const kontroller = i.kontroller.map(kopya);
-  /** Bir kontrol listesini çizer. Ana liste VE'dir; "veya" satırı kendi alt listesini (VEYA) taşır. */
-  const listeCiz = (liste, yer, altMi) => {
-    const satirlar = liste.map((k, n) => {
-      const no = `${yer}${n + 1}.`;
-      const tur = h('select', { 'aria-label': `${no} kontrol türü` }, KONTROL_TURLERI.filter(([d]) => !altMi || d !== 'veya').map(([d, m]) => h('option', { value: d, selected: k.tur === d }, m)));
-      tur.addEventListener('change', () => {
-        k.tur = tur.value;
-        if (k.tur === 'veya' && !k.alt) { k.alt = [{ tur: 'icerir', deger: k.deger || '' }, { tur: 'icerir', deger: '' }]; delete k.deger; }
+  // Kontroller düz satırlar olarak düzenlenir; her satırın başında VE / VEYA seçilir. VEYA ile bağlanan ardışık satırlar
+  // bir grup olur (en az biri tutması yeter); gruplar arası VE: "A VE B VEYA C" = A ve (B ya da C). Kayıtta grup
+  // { tur: 'veya', alt: [...] } olarak saklanır (sunucu biçimi değişmez).
+  /** @type {Array<{ k: Record<string, any>; bag: 'VE' | 'VEYA' }>} */
+  const kontrolSatirlari = [];
+  for (const k of i.kontroller.map(kopya)) {
+    if (k.tur === 'veya') (k.alt || []).forEach((a, n) => kontrolSatirlari.push({ k: a, bag: n === 0 ? 'VE' : 'VEYA' }));
+    else kontrolSatirlari.push({ k, bag: 'VE' });
+  }
+  const kontrolYapisi = () => {
+    const gruplar = [];
+    kontrolSatirlari.forEach((x, n) => { if (n === 0 || x.bag === 'VE') gruplar.push([x.k]); else gruplar[gruplar.length - 1].push(x.k); });
+    return gruplar.map((g) => (g.length > 1 ? { tur: 'veya', alt: g } : g[0]));
+  };
+  const kontrolCiz = () => {
+    // Grup başları ve boyları (VEYA grubu satırları birlikte çerçevelenir).
+    const grupBoyu = [];
+    const grupNo = kontrolSatirlari.map((x, n) => { if (n === 0 || x.bag === 'VE') grupBoyu.push(0); grupBoyu[grupBoyu.length - 1]++; return grupBoyu.length - 1; });
+    const satirlar = kontrolSatirlari.map((x, n) => {
+      const k = x.k;
+      const no = `${n + 1}.`;
+      const bag = n === 0
+        ? h('span', { class: 'baglac', title: 'İlk kontrol' }, '—')
+        : h('select', { class: `baglac-secimi ${x.bag === 'VEYA' ? 'veya' : ''}`, 'aria-label': `${no} bağlaç`, title: 'VE: bu kontrol de tutmalı · VEYA: üstteki kontrolle birlikte, en az biri tutması yeter' },
+          h('option', { value: 'VE', selected: x.bag === 'VE' }, 'VE'), h('option', { value: 'VEYA', selected: x.bag === 'VEYA' }, 'VEYA'));
+      if (n > 0) bag.addEventListener('change', () => { x.bag = bag.value; kontrolCiz(); });
+      const tur = h('select', { 'aria-label': `${no} kontrol türü` }, KONTROL_TURLERI.filter(([d]) => d !== 'veya').map(([d, m]) => h('option', { value: d, selected: k.tur === d }, m)));
+      tur.addEventListener('change', () => { k.tur = tur.value; kontrolCiz(); });
+      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${no} kontrolü kaldır`, onclick: () => {
+        kontrolSatirlari.splice(n, 1);
+        if (kontrolSatirlari[0]) kontrolSatirlari[0].bag = 'VE';
         kontrolCiz();
-      });
-      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${no} kontrolü kaldır`, onclick: () => { liste.splice(n, 1); kontrolCiz(); } }, ikon('carpi'));
-      if (k.tur === 'veya') {
-        k.alt ??= [];
-        return h('div', { class: 'kontrol-grubu' },
-          h('div', { class: 'kontrol-satiri' }, h('span', { class: 'baglac' }, altMi ? 'VEYA' : 'VE'), tur, h('span', { class: 'soluk kucuk' }, 'Aşağıdakilerden en az biri tutarsa geçer.'), kaldir),
-          h('div', { class: 'kontrol-alt' }, listeCiz(k.alt, no, true)));
-      }
+      } }, ikon('carpi'));
       const deger = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: k.deger || '', placeholder: k.tur === 'durumKodu' ? '200 ya da 200-299' : 'Metin', 'aria-label': `${no} kontrol değeri` });
       const xpath = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: k.xpath || '', placeholder: '/Envelope/Body/…/Durum ya da //Durum', 'aria-label': `${no} kontrol XPath` });
       const buyuk = h('input', { type: 'checkbox', id: yeniKimlik('bk'), checked: Boolean(k.buyukKucukDuyarsiz) });
       deger.addEventListener('input', () => { k.deger = deger.value; });
       xpath.addEventListener('input', () => { k.xpath = xpath.value; });
       buyuk.addEventListener('change', () => { k.buyukKucukDuyarsiz = buyuk.checked; });
-      return h('div', { class: 'kontrol-satiri' }, h('span', { class: 'baglac' }, altMi ? 'VEYA' : 'VE'), tur,
+      const grupta = grupBoyu[grupNo[n]] > 1;
+      const bas = n === 0 || x.bag === 'VE';
+      const son = n === kontrolSatirlari.length - 1 || kontrolSatirlari[n + 1].bag === 'VE';
+      return h('div', { class: `kontrol-satiri${grupta ? ' veya-grubunda' : ''}${grupta && bas ? ' grup-basi' : ''}${grupta && son ? ' grup-sonu' : ''}` }, bag, tur,
         k.tur === 'xpathEsit' ? xpath : null, DEGERLI_KONTROLLER.has(k.tur) ? deger : null,
         k.tur === 'icerir' || k.tur === 'icermez' ? h('label', { class: 'secenek', for: buyuk.id }, buyuk, 'büyük/küçük duyarsız') : null,
         kaldir);
     });
-    const ekle = h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { liste.push({ tur: 'icerir', deger: '' }); kontrolCiz(); } }, ikon('arti'), altMi ? 'Seçenek ekle (VEYA)' : 'Kontrol ekle (VE)');
-    return h('div', { class: 'kontrol-listesi-duzen' }, ...satirlar, ekle);
+    const ekle = h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { kontrolSatirlari.push({ k: { tur: 'icerir', deger: '' }, bag: 'VE' }); kontrolCiz(); } }, ikon('arti'), 'Kontrol ekle');
+    yerlestir(kontrolKutusu,
+      h('p', { class: 'soluk kucuk' }, 'Satırın başındaki VE: bu kontrol de tutmalı. VEYA: üstündeki kontrolle birlikte grup olur, gruptan en az biri tutması yeter (A VE B VEYA C = A ve (B ya da C)).'),
+      h('div', { class: 'kontrol-listesi-duzen' }, ...satirlar, ekle));
   };
-  const kontrolCiz = () => yerlestir(kontrolKutusu,
-    h('p', { class: 'soluk kucuk' }, 'Kontrollerin hepsi tutmalı (VE). "Şunlardan biri (VEYA)" seçilen satırın altındaki kontrollerden biri tutması yeter.'),
-    listeCiz(kontroller, '', false));
   kontrolCiz();
   const mesaj = mesajKutusu();
   const icerikAl = () => ({
     ...i, veriProfilleri: Object.keys(senaryoProfilleri).length ? { ...senaryoProfilleri } : undefined, operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value,
-    kontroller: kontroller.map(function temiz(k) {
+    kontroller: kontrolYapisi().map(function temiz(k) {
       const t = Object.fromEntries(Object.entries(k).filter(([a, v]) => a !== 'alt' && v !== '' && v !== false && v !== undefined));
       return k.tur === 'veya' ? { ...t, alt: (k.alt || []).map(temiz) } : t;
     })

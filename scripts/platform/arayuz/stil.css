@@ -2132,3 +2132,10 @@ a.son-sonuc { text-decoration: none; }
 .metot-kutusu { white-space: normal; min-width: 0; overflow: hidden; }
 .metot-kutusu-bilgi { overflow-wrap: anywhere; line-height: 1.35; }
 .liste-disi .deger-cipi { margin: 2px 4px 2px 0; }
+/* Kontrol satırı bağlacı: VE / VEYA seçimi; VEYA ile bağlanan satırlar tek grup olarak çerçevelenir. */
+.baglac-secimi { font: 600 11px var(--yazi-mono); letter-spacing: .06em; padding: 4px 6px; }
+.baglac-secimi.veya { color: var(--vurgu); border-color: var(--vurgu); }
+.kontrol-satiri.veya-grubunda { background: color-mix(in srgb, var(--vurgu) 6%, transparent); box-shadow: inset 2px 0 0 var(--vurgu); padding-top: 4px; padding-bottom: 4px; }
+.kontrol-satiri.veya-grubunda.grup-basi { border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.kontrol-satiri.veya-grubunda.grup-sonu { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+.kontrol-listesi-duzen { gap: 6px; }
