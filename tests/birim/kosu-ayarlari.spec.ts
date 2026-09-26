@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, expect, test, type Browser } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { eskiSonuclariSil, kosuKaydet, kosuyuBitir, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
 import { kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from '../../scripts/platform/ayarlar/kosu-ayarlari.mjs';
 import { yerTutuculariDoldur } from '../../scripts/platform/servisler/soap-istemcisi.mjs';
 import { ekranGoruntusuAyari, izAyari, sureAyari, videoAyari, yenidenDenemeAyari } from '../support/kosu-ayarlari';
@@ -104,4 +105,26 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
+});
+
+test('sonuç saklama: süresiz varsayılan hiçbir şey silmez; süre verilince eski koşular (sonuç, adım, medya satırı) ve servis koşuları silinir', async () => {
+  const klasor = geciciKlasor('sonuc-saklama');
+  const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
+  try {
+    await kasaOlustur(vt, 'Gecici-Saklama-1', { kdf: HIZLI_KDF });
+    const projeId = projeKaydet(vt, { ad: 'Saklama' });
+    const gunOnce = (g: number) => new Date(Date.now() - g * 86_400_000).toISOString();
+    for (const [id, g] of [['eski', 40], ['yeni', 2]] as const) {
+      kosuKaydet(vt, { id, projeId, tur: 'tekil', baslangic: gunOnce(g) });
+      sonucKaydet(vt, { kosuId: id, projeId, senaryoBaslik: id, durum: 'basarili', testKimligi: id, bitis: gunOnce(g), adimlar: [{ ad: 'a', durum: 'basarili', sureMs: 1 }] });
+      kosuyuBitir(vt, id, { durum: 'tamamlandi', bitis: gunOnce(g) });
+    }
+    expect(eskiSonuclariSil(vt, 0)).toEqual({ kosu: 0, sonuc: 0, servisKosusu: 0, akisKosusu: 0 });
+    expect(varsayilanKosuAyarlari().sonucSaklamaGun).toBe(0);
+    expect(eskiSonuclariSil(vt, 30)).toMatchObject({ kosu: 1, sonuc: 1 });
+    expect(vt.tumu('SELECT id FROM kosular').map((r) => r.id)).toEqual(['yeni']);
+    expect(Number(vt.tek('SELECT COUNT(*) AS n FROM adim_sonuclari')?.n)).toBe(1);
+    expect(kosuAyarlariniKaydet(vt, { sonucSaklamaGun: 90, otomatikYedekSayisi: 7 })).toMatchObject({ sonucSaklamaGun: 90, otomatikYedekSayisi: 7 });
+    expect(() => kosuAyarlariniKaydet(vt, { otomatikYedekSayisi: 0 })).toThrow('1–365');
+  } finally { vt.kapat(); klasor.temizle(); }
 });

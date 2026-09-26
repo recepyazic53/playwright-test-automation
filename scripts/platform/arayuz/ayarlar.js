@@ -18,7 +18,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (acente) senaryoda satır adıyla seçilir.' },
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı ve varsayılan tarih biçimi. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
-  { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir.' },
+  { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
 ];
 
@@ -433,10 +433,11 @@ export function disaAktarmaFormu(tahmin, ayar = {}) {
 }
 
 async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, aktarimDurumu, tahmin] = await Promise.all([
+  const [{ klasor, dosyalar }, aktarimDurumu, tahmin, saklamaFormu] = await Promise.all([
     api('/platform/yedek/otomatik-liste'),
     api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] })),
-    api('/platform/yedek/tahmin').catch(() => null)
+    api('/platform/yedek/tahmin').catch(() => null),
+    ayarFormu('yedekleme', 'Saklama ayarları', 'Saklama ayarları kaydedildi; günlük yedek ve temizlikte geçerli.')
   ]);
 
   // Dışa aktar (ortak form — "Çalışma alanını kapat" > "Dışa aktar ve kapat" da bunu kullanır)
@@ -493,10 +494,10 @@ async function yedekleme(govde, baglam, yenile) {
     'Henüz yerel yedek yok.', 'arsiv');
 
   const otomatikKart = h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('saat'), 'Otomatik yedekler'), h('div', { class: 'sag' }, simdi)),
-    h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; en yeni 30 otomatik yedek saklanır.'),
+    h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; kaç tanesinin saklanacağını aşağıdaki "Saklama ayarları"ndan belirlersiniz.'),
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     liste);
-  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart);
+  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart, saklamaFormu);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -554,15 +555,24 @@ async function dosyalar(govde, baglam, yenile) {
 // Güvenlik
 // ---------------------------------------------------------------------------------------
 
-/** Ayarlar > Koşu: tanımlar sunucudan (scripts/platform/ayarlar/kosu-ayarlari.mjs); gruplar hâlinde tek form. */
+/** Ayarlar > Koşu. */
 async function kosuAyarlari(govde) {
-  const { ayarlar, tanimlar } = await api('/platform/kosu-ayarlari');
+  yerlestir(govde, await ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'));
+}
+
+/**
+ * Kullanıcı kararları formu (tanımlar sunucudan: scripts/platform/ayarlar/kosu-ayarlari.mjs): bölümün ayarları gruplar hâlinde.
+ * @param {'kosu' | 'yedekleme'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
+ */
+async function ayarFormu(bolum, ad, basariMetni) {
+  const { ayarlar, tanimlar: tumu } = await api('/platform/kosu-ayarlari');
+  const tanimlar = tumu.filter((t) => (t.bolum || 'kosu') === bolum);
   const mesaj = mesajKutusu();
   /** @type {Map<string, HTMLElement>} */
   const girdiler = new Map();
   const gruplar = [...new Set(tanimlar.map((t) => t.grup))];
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-  const form = h('form', { class: 'kart form-paneli kosu-ayarlari', novalidate: true, 'aria-label': 'Koşu ayarları' }, mesaj.kutu,
+  const form = h('form', { class: 'kart form-paneli kosu-ayarlari', novalidate: true, 'aria-label': ad }, mesaj.kutu,
     ...gruplar.map((g) => h('fieldset', {}, h('legend', {}, g), ...tanimlar.filter((t) => t.grup === g).map((t) => {
       let girdi;
       if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
@@ -590,10 +600,10 @@ async function kosuAyarlari(govde) {
     }
     try {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/kosu-ayarlari/kaydet', { govde: { ayarlar: yeni } }));
-      mesaj.goster('Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.', 'basari');
+      mesaj.goster(basariMetni, 'basari');
     } catch (hata) { mesaj.goster(hata.message); }
   });
-  yerlestir(govde, form);
+  return form;
 }
 
 /** Güvenlik > Maskeleme: çekirdek liste (salt okunur) + kullanıcının ek gizli adları (her satıra bir ad). */

@@ -60,3 +60,5 @@ export declare function medyaGetir(vt: Veritabani, id: string): (MedyaOgesi & { 
 export declare function kosudakiSonucuBul(vt: Veritabani, kosuId: string, arama: { senaryoAnahtari?: string; senaryoBaslik?: string }): {
   detay: SonucDetayi; sonEkranGoruntusuId: string | null; videoId: string | null; basarisizAdim: string | null;
 } | null;
+
+export declare function eskiSonuclariSil(vt: Veritabani, gun: number, s?: { simdi?: number }): { kosu: number; sonuc: number; servisKosusu: number; akisKosusu: number };

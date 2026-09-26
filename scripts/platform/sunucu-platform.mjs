@@ -150,7 +150,7 @@ import {
   kasaOlustur, medyaAnahtariniAc, medyaAnahtariniHazirla, parolaDegistir, parolayiDogrula, zarfMi
 } from './kasa.mjs';
 import {
-  hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
+  eskiSonuclariSil, hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
 } from './veritabani/sonuc-deposu.mjs';
 import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
 import { allureSonuclariniAktar } from './aktarim/allure-sonuclari.mjs';
@@ -462,6 +462,12 @@ export function platformMedyaTemizligiZamanla() {
     try {
       const db = await platformVeritabani();
       if (!db) return;
+      // Sonuç saklama (kullanıcı kararı; varsayılan süresiz): önce eski sonuç satırları, sonra sahipsiz kalan medya dosyaları.
+      if (kasaAcikMi(db)) {
+        const saklamaGun = kosuAyarlariniOku(db).sonucSaklamaGun;
+        const s = eskiSonuclariSil(db, saklamaGun);
+        if (s.kosu || s.servisKosusu || s.akisKosusu) console.log(`[platform] Sonuç saklama: ${saklamaGun} günden eski ${s.kosu} koşu (${s.sonuc} sonuç), ${s.servisKosusu} servis ve ${s.akisKosusu} akış koşusu silindi.`);
+      }
       const gun = videoSaklamaGunu(db);
       const sonuc = medyaSaklamaTemizligi(db, medyaKlasoruYolu(), { videoGun: gun });
       if (sonuc.silinenVideo || sonuc.silinenSahipsiz) {
@@ -2428,7 +2434,7 @@ export function platformOtomatikYedekZamanla() {
   const zamanlayici = setInterval(() => {
     if (!vt || !kasaAcikMi(vt)) return;
     try {
-      const sonuc = otomatikYedekAl(vt);
+      const sonuc = otomatikYedekAl(vt, { saklanacak: kosuAyarlariniOku(vt).otomatikYedekSayisi });
       console.log(`[platform] Günlük otomatik yedek alındı: ${sonuc.dosya}`);
     } catch (hata) {
       console.error(`[platform] Günlük otomatik yedek alınamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);

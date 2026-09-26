@@ -416,3 +416,39 @@ export function kosudakiSonucuBul(vt, kosuId, arama) {
   const basarisizAdim = detay.adimlar.find((a) => a.durum === 'basarisiz')?.ad ?? null;
   return { detay, sonEkranGoruntusuId: gorseller.length ? gorseller[gorseller.length - 1].id : null, videoId: video?.id ?? null, basarisizAdim };
 }
+
+/**
+ * Sonuç saklama (Ayarlar > Yedekleme > Sonuç saklama): başlangıcı gun günden eski, bitmiş ekran koşularını (sonuçları, adımları,
+ * medya satırları) ve servis / servis akışı koşularını siler. Medya DOSYALARI satırları silinince sahipsiz kalır; günlük medya
+ * temizliği (medyaSaklamaTemizligi) onları siler. gun <= 0: hiçbir şey silinmez.
+ * @param {Veritabani} vt @param {number} gun @param {{ simdi?: number }} [s]
+ * @returns {{ kosu: number; sonuc: number; servisKosusu: number; akisKosusu: number }}
+ */
+export function eskiSonuclariSil(vt, gun, s = {}) {
+  const bos = { kosu: 0, sonuc: 0, servisKosusu: 0, akisKosusu: 0 };
+  if (!Number.isFinite(gun) || gun <= 0) return bos;
+  const esik = new Date((s.simdi ?? Date.now()) - gun * 24 * 60 * 60 * 1000).toISOString();
+  return vt.islem(() => {
+    const kosular = vt.tumu("SELECT id FROM kosular WHERE baslangic < ? AND durum != 'calisiyor'", [esik]).map((r) => String(r.id));
+    let sonuc = 0;
+    for (let i = 0; i < kosular.length; i += 200) {
+      const parca = kosular.slice(i, i + 200);
+      const yer = parca.map(() => '?').join(', ');
+      const sonuclar = vt.tumu(`SELECT id FROM kosu_sonuclari WHERE kosu_id IN (${yer})`, parca).map((r) => String(r.id));
+      for (let j = 0; j < sonuclar.length; j += 200) {
+        const sp = sonuclar.slice(j, j + 200);
+        const y2 = sp.map(() => '?').join(', ');
+        vt.calistir(`DELETE FROM medya WHERE sonuc_id IN (${y2})`, sp);
+        vt.calistir(`DELETE FROM adim_sonuclari WHERE sonuc_id IN (${y2})`, sp);
+        vt.calistir(`DELETE FROM kosu_sonuclari WHERE id IN (${y2})`, sp);
+      }
+      sonuc += sonuclar.length;
+      vt.calistir(`DELETE FROM kosular WHERE id IN (${yer})`, parca);
+    }
+    const servisKosusu = Number(vt.tek('SELECT COUNT(*) AS n FROM servis_kosulari WHERE baslangic < ?', [esik])?.n ?? 0);
+    vt.calistir('DELETE FROM servis_kosulari WHERE baslangic < ?', [esik]);
+    const akisKosusu = Number(vt.tek('SELECT COUNT(*) AS n FROM servis_akis_kosulari WHERE baslangic < ?', [esik])?.n ?? 0);
+    vt.calistir('DELETE FROM servis_akis_kosulari WHERE baslangic < ?', [esik]);
+    return { kosu: kosular.length, sonuc, servisKosusu, akisKosusu };
+  });
+}
