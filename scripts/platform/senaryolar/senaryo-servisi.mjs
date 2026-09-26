@@ -823,6 +823,28 @@ export function senaryoKopyala(vt, projeId, id, yapan) {
   return { id: yeniId, baslik };
 }
 
+/**
+ * Senaryoların değişiklik geçmişini siler (senaryolar kalır). Geri alınamaz: yalnızca açık onayla (onay: true); onaysız çağrı
+ * silinecek kayıt sayısını döner. Ör. eski sürümlerde şifrelenmemiş kalmış hassas değerleri temizlemek için.
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} idler @param {{ onay?: boolean }} [s]
+ * @returns {{ senaryo: number; kayit: number; silindi: boolean }}
+ */
+export function senaryoGecmisiniSil(vt, projeId, idler, s = {}) {
+  acikAnahtar(vt);
+  const liste = Array.isArray(idler) ? [...new Set(idler.filter((x) => typeof x === 'string'))] : [];
+  if (!liste.length) throw new DepoHatasi('En az bir senaryo seçin.');
+  if (liste.length > 500) throw new DepoHatasi('Tek seferde en çok 500 senaryo.');
+  for (const id of liste) {
+    const sen = senaryoGetir(vt, id);
+    if (!sen || sen.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+  }
+  const yer = liste.map(() => '?').join(', ');
+  const kayit = Number(vt.tek(`SELECT COUNT(*) AS n FROM degisiklik_gecmisi WHERE varlik_turu = 'senaryo' AND varlik_id IN (${yer})`, liste)?.n ?? 0);
+  if (s.onay !== true) return { senaryo: liste.length, kayit, silindi: false };
+  vt.islem(() => vt.calistir(`DELETE FROM degisiklik_gecmisi WHERE varlik_turu = 'senaryo' AND varlik_id IN (${yer})`, liste));
+  return { senaryo: liste.length, kayit, silindi: true };
+}
+
 // ---------------------------------------------------------------------------------------
 // Geçmiş
 // ---------------------------------------------------------------------------------------

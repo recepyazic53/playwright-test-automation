@@ -93,6 +93,7 @@ export declare function senaryolariSil(
 ): { silinen: number };
 export declare function senaryoKopyala(vt: Veritabani, projeId: string, id: string, yapan?: string): { id: string; baslik: string };
 export declare function senaryoSonSonucu(vt: Veritabani, id: string, ortamId: string): { sonucId: string; kosuId: string; durum: string; zaman: string } | null;
+export declare function senaryoGecmisiniSil(vt: Veritabani, projeId: string, idler: unknown, s?: { onay?: boolean }): { senaryo: number; kayit: number; silindi: boolean };
 export declare function senaryoGecmisi(vt: Veritabani, id: string): Array<{
   id: string; zaman: string; islem: string; yapan: string; makineId: string | null; aciklama: string | null; baslik: string; degisenler: string[];
 }>;

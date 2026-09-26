@@ -9,7 +9,7 @@ import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { ekranlariListele, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
 import { sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
-import { senaryoDetayi } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
+import { senaryoDetayi, senaryoGecmisiniSil } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
 import { akisTasimaOnizle, akisTasimaUygula } from '../../scripts/platform/senaryolar/akis-tasima.mjs';
 import { adaptorBul } from '../../projeler/index.mjs';
 import { jetDaskAkisPaketi } from '../../projeler/galaksi/jetdask-akis.mjs';
@@ -75,6 +75,33 @@ test('JetDASK: kodlu matris (3 kimlik × 2 sıfat) önizlenir, yazılır; tekrar
     // Taşıması tanımlı olmayan ekran: açık hata.
     const odeme = ekranlariListele(o.vt, o.projeId).find((e) => e.anahtar === 'odeme-kredi-karti-akis');
     expect(() => akisTasimaOnizle(o.vt, o.projeId, String(odeme?.id), o.ortamId, adaptor)).toThrow(/taşıması tanımlı değil/);
+  } finally {
+    o.temizle();
+  }
+});
+
+test('senaryo geçmişini sil: onaysız yalnızca sayar; onayla seçilen senaryoların geçmişi silinir, senaryolar ve diğerlerinin geçmişi kalır', async () => {
+  const o = await kur();
+  try {
+    const adaptor = adaptorBul('galaksi') ?? null;
+    const secenek = { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: o.medya };
+    await sayfaEkle(o.vt, o.projeId, odemeAkisPaketi(), secenek);
+    await sayfaEkle(o.vt, o.projeId, jetDaskAkisPaketi({ odeme: true }), secenek);
+    const ekran = ekranlariListele(o.vt, o.projeId).find((e) => e.anahtar === 'jet-dask-akis');
+    if (!ekran) throw new Error('jet-dask-akis yok');
+    const on = akisTasimaOnizle(o.vt, o.projeId, ekran.id, o.ortamId, adaptor);
+    akisTasimaUygula(o.vt, o.projeId, ekran.id, o.ortamId, adaptor, on.taslaklar.map((x) => x.baslik));
+    const idler = o.vt.tumu('SELECT id FROM senaryolar WHERE ekran_id = ? ORDER BY baslik', [ekran.id]).map((s) => String(s.id));
+    const gecmis = (id: string) => Number(o.vt.tek("SELECT COUNT(*) AS n FROM degisiklik_gecmisi WHERE varlik_turu = 'senaryo' AND varlik_id = ?", [id])?.n);
+    expect(idler.every((id) => gecmis(id) >= 1)).toBe(true);
+    const secilen = idler.slice(0, 2);
+    expect(senaryoGecmisiniSil(o.vt, o.projeId, secilen)).toEqual({ senaryo: 2, kayit: 2, silindi: false });
+    expect(gecmis(secilen[0])).toBe(1);
+    expect(senaryoGecmisiniSil(o.vt, o.projeId, secilen, { onay: true })).toEqual({ senaryo: 2, kayit: 2, silindi: true });
+    expect(secilen.map(gecmis)).toEqual([0, 0]);
+    expect(gecmis(idler[2])).toBe(1);
+    expect(o.vt.tumu('SELECT id FROM senaryolar WHERE ekran_id = ?', [ekran.id])).toHaveLength(6);
+    expect(() => senaryoGecmisiniSil(o.vt, o.projeId, ['00000000-0000-4000-8000-000000000000'], { onay: true })).toThrow(/bulunamadı/);
   } finally {
     o.temizle();
   }

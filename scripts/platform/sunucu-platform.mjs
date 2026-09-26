@@ -159,7 +159,7 @@ import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
 import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 import {
-  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, formBaglami, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
+  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, formBaglami, senaryoGecmisiniSil, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
   modelBaglami, ortamAnahtariBul, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
@@ -1390,6 +1390,8 @@ const POST_UCLARI = new Map([
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
     return { id: sonuc.id, uyarilar: sonuc.uyarilar };
   }],
+  // Senaryoların değişiklik geçmişini siler (geri alınamaz; onay: true olmadan yalnızca sayar).
+  ['/platform/senaryo/gecmis/sil', (db, g) => senaryoGecmisiniSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { onay: g.onay === true })],
   ['/platform/senaryo/kosuya-dahil', (db, g) => kosuyaDahilAyarla(db, kimlikAl(g.projeId, 'projeId'), g.idler, g.dahil === true)],
   ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
   ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],
