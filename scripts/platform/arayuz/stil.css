@@ -2203,3 +2203,10 @@ a.son-sonuc { text-decoration: none; }
 .kayit-grubu .kart-basligi { gap: 8px; }
 .kayit-grubu .kart-basligi .sag { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .kayit-tablosu td.kucuk { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Kontrol satırı bağlacı: VE / VEYA seçimi; VEYA ile bağlanan satırlar tek grup olarak çerçevelenir. */
+.baglac-secimi { font: 600 11px var(--yazi-mono); letter-spacing: .06em; padding: 4px 6px; }
+.baglac-secimi.veya { color: var(--vurgu); border-color: var(--vurgu); }
+.kontrol-satiri.veya-grubunda { background: color-mix(in srgb, var(--vurgu) 6%, transparent); box-shadow: inset 2px 0 0 var(--vurgu); padding-top: 4px; padding-bottom: 4px; }
+.kontrol-satiri.veya-grubunda.grup-basi { border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.kontrol-satiri.veya-grubunda.grup-sonu { border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; }
+.kontrol-listesi-duzen { gap: 6px; }
