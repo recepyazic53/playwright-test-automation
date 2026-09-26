@@ -229,7 +229,7 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
-  test('arayüz: kontroller VE listesi + "Şunlardan biri (VEYA)" grubu kaydedilir; Dene sonucu alt kontrolleri gösterir', async () => {
+  test('arayüz: kontroller satır başında VE / VEYA ile bağlanır; VEYA ile bağlı satırlar grup olarak kaydedilir ve öyle açılır', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
@@ -237,11 +237,14 @@ test.describe('alan formu uçtan uca', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
     await page.getByLabel('Başlık').fill('VEYA senaryosu');
-    // Varsayılan tek kontrol: SOAP zarfı (VE). İkinci kontrol VEYA grubu.
-    await page.getByRole('button', { name: 'Kontrol ekle (VE)' }).click();
-    await page.getByLabel('2. kontrol türü', { exact: true }).selectOption('veya');
-    await page.getByLabel('2.1. kontrol değeri').fill('<Durum>HATA</Durum>');
-    await page.getByLabel('2.2. kontrol değeri').fill('<Durum>OK</Durum>');
+    // Varsayılan tek kontrol: SOAP zarfı. 2. VE, 3. VEYA → SOAP zarfı ve (HATA ya da OK). Tür listesinde VEYA seçeneği yok.
+    await expect(page.getByLabel('1. kontrol türü', { exact: true }).locator('option[value="veya"]')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Kontrol ekle' }).click();
+    await page.getByRole('button', { name: 'Kontrol ekle' }).click();
+    await page.getByLabel('2. kontrol değeri').fill('<Durum>HATA</Durum>');
+    await page.getByLabel('3. kontrol değeri').fill('<Durum>OK</Durum>');
+    await expect(page.getByLabel('2. bağlaç')).toHaveValue('VE');
+    await page.getByLabel('3. bağlaç').selectOption('VEYA');
     await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
     await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
     const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
@@ -249,8 +252,9 @@ test.describe('alan formu uçtan uca', () => {
     expect(kayit.icerik.kontroller).toEqual([{ tur: 'soapYaniti' }, { tur: 'veya', alt: [{ tur: 'icerir', deger: '<Durum>HATA</Durum>' }, { tur: 'icerir', deger: '<Durum>OK</Durum>' }] }]);
     // Açılınca aynı yapı görünür.
     await page.reload();
-    await expect(page.getByLabel('2. kontrol türü', { exact: true })).toHaveValue('veya');
-    await expect(page.getByLabel('2.2. kontrol değeri')).toHaveValue('<Durum>OK</Durum>');
+    await expect(page.getByLabel('3. bağlaç')).toHaveValue('VEYA');
+    await expect(page.getByLabel('2. bağlaç')).toHaveValue('VE');
+    await expect(page.getByLabel('3. kontrol değeri')).toHaveValue('<Durum>OK</Durum>');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
