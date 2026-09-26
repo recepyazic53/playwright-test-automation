@@ -184,7 +184,7 @@ test.describe('sihirbaz uçtan uca', () => {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
     await page.goto('/#/ayarlar/test-verisi');
-    await expect(page.locator('.kayit-listesi').first()).toContainText('Servis girişi');
+    await page.getByRole('tab', { name: /^Servis girişi/ }).click();
     await expect(page.getByText('Sihirbaz giriş')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Servis giriş bilgileri' })).toHaveCount(0);
     await baglam.close();

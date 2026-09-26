@@ -407,7 +407,8 @@ function tanimCevir(vt, s) {
   return {
     id: String(s.id), projeId: String(s.proje_id), ad: String(s.ad), aciklama: i.aciklama || '', tur: i.tur || 'serbest',
     degerler: Array.isArray(i.degerler) ? i.degerler : [], kaynak: i.kaynak || null, varsayilan: i.varsayilan || '',
-    elleYazilabilir: i.elleYazilabilir !== false
+    elleYazilabilir: i.elleYazilabilir !== false, kullanim: i.kullanim === 'ekran' ? 'ekran' : 'servis',
+    hedef: i.hedef && typeof i.hedef === 'object' ? i.hedef : null, kosullar: Array.isArray(i.kosullar) ? i.kosullar : []
   };
 }
 
@@ -421,10 +422,14 @@ export function servisParametreTanimlariniListele(vt, projeId) {
 /**
  * Kaydeder (id varsa günceller). Kurallar: ad geçerli XML alan adı; liste türünde en az bir değer, değerler tekrarsız;
  * test_verisi türünde kaynak tür / alan var ve hassas değil; varsayılan (liste / evet-hayır) listede olmalı; ad projede tekil
- * (harf duyarsız). Liste tüm servislerde seçilebilir; hangi alana bağlanacağı servisin ayarındadır (alanListeleri).
+ * (harf duyarsız). Kullanım yeri:
+ * - servis: hedef { servisId ('' = tüm servisler), parametre (alan adı; '' = yalnız metot tablosunda bağlanır) }
+ * - ekran : hedef { ekranId, alan (model alan kimliği) } — zorunlu
+ * Koşullar ("ve"): [{ alan, deger }] — servis için parametre adı, ekran için aynı ekranın alan kimliği; en fazla 5.
  * @param {Veritabani} vt
- * @param {{ id?: string; projeId: string; ad: string; aciklama?: string; tur: string; degerler?: Array<{ deger: unknown; aciklama?: unknown }>;
- *   kaynak?: { turId: string; alan: string } | null; varsayilan?: string; elleYazilabilir?: boolean }} girdi
+ * @param {{ id?: string; projeId: string; ad: string; aciklama?: string; tur: string; degerler?: Array<{ deger: unknown; aciklama?: unknown; ekranDegeri?: unknown; ekranMetni?: unknown }>;
+ *   kaynak?: { turId: string; alan: string } | null; varsayilan?: string; elleYazilabilir?: boolean;
+ *   kullanim?: string; (degerler öğeleri ayrıca ekranDegeri?, ekranMetni? taşıyabilir: sayfadaki value / görünen metin) hedef?: { servisId?: string; parametre?: string; ekranId?: string; alan?: string; alanEtiketi?: string } | null; kosullar?: Array<{ alan?: unknown; deger?: unknown; etiket?: unknown }> }} girdi
  */
 export function servisParametreTanimiKaydet(vt, girdi) {
   acikAnahtar(vt);
@@ -443,11 +448,13 @@ export function servisParametreTanimiKaydet(vt, girdi) {
         if (deger.length > 200) throw new DepoHatasi('Bir değer en fazla 200 karakter olabilir.');
         if (degerler.some((y) => y.deger === deger)) throw new DepoHatasi(`"${deger}" değeri iki kez yazılmış.`);
         const a = typeof x.aciklama === 'string' ? x.aciklama.trim().slice(0, 200) : '';
-        degerler.push(a ? { deger, aciklama: a } : { deger });
+        const ed = typeof x.ekranDegeri === 'string' ? x.ekranDegeri.trim().slice(0, 200) : '';
+        const em = typeof x.ekranMetni === 'string' ? x.ekranMetni.trim().slice(0, 200) : '';
+        degerler.push({ deger, ...(a ? { aciklama: a } : {}), ...(ed && ed !== deger ? { ekranDegeri: ed } : {}), ...(em ? { ekranMetni: em } : {}) });
       }
       if (tur === 'mantiksal') degerler = degerler.filter((x) => x.deger === 'true' || x.deger === 'false');
       if (tur === 'liste' && !degerler.length) throw new DepoHatasi('Liste türünde en az bir değer girin.');
-      if (degerler.length > 500) throw new DepoHatasi('Bir listede en fazla 500 değer olabilir.');
+      if (degerler.length > 2000) throw new DepoHatasi('Bir listede en fazla 2000 değer olabilir.');
     }
     /** @type {{ turId: string; alan: string } | null} */
     let kaynak = null;
@@ -464,6 +471,41 @@ export function servisParametreTanimiKaydet(vt, girdi) {
     const elleYazilabilir = girdi.elleYazilabilir !== false;
     if (varsayilan && tur === 'mantiksal' && !['true', 'false'].includes(varsayilan)) throw new DepoHatasi('Evet / Hayır türünde varsayılan "true" ya da "false" olabilir.');
     if (varsayilan && tur === 'liste' && !elleYazilabilir && !degerler.some((x) => x.deger === varsayilan)) throw new DepoHatasi(`Varsayılan değer (${varsayilan}) listede yok.`);
+    // Kullanım yeri, hedef ve koşullar.
+    const kullanim = girdi.kullanim === 'ekran' ? 'ekran' : 'servis';
+    const h = girdi.hedef && typeof girdi.hedef === 'object' ? girdi.hedef : {};
+    const alanAdi = (/** @type {unknown} */ x, /** @type {string} */ ne) => {
+      const s = typeof x === 'string' ? x.trim() : '';
+      if (s.length > 200 || /[\u0000-\u001f]/.test(s)) throw new DepoHatasi(`${ne} geçersiz.`);
+      return s;
+    };
+    /** @type {Record<string, string>} */
+    let hedef;
+    if (kullanim === 'ekran') {
+      const ekranId = typeof h.ekranId === 'string' ? h.ekranId : '';
+      if (!ekranId || !vt.tek('SELECT id FROM ekranlar WHERE id = ? AND proje_id = ?', [ekranId, projeId])) throw new DepoHatasi('Listenin kullanılacağı ekranı seçin.');
+      const alan = alanAdi(h.alan, 'Input');
+      if (!alan) throw new DepoHatasi('Listenin kullanılacağı input\'u seçin.');
+      const alanEtiketi = alanAdi(h.alanEtiketi, 'Input etiketi');
+      hedef = { ekranId, alan, ...(alanEtiketi ? { alanEtiketi } : {}) };
+    } else {
+      const servisId = typeof h.servisId === 'string' ? h.servisId : '';
+      if (servisId && !vt.tek('SELECT id FROM servisler WHERE id = ? AND proje_id = ?', [servisId, projeId])) throw new DepoHatasi('Seçilen servis bu projede yok.');
+      hedef = { servisId, parametre: alanAdi(h.parametre, 'Parametre') };
+    }
+    const kosullar = [];
+    for (const k of girdi.kosullar || []) {
+      const alan = alanAdi(k?.alan, 'Bağlı olduğu parametre');
+      const deger = typeof k?.deger === 'string' ? k.deger.trim().slice(0, 200) : String(k?.deger ?? '').trim().slice(0, 200);
+      if (!alan && !deger) continue;
+      if (!alan || !deger) throw new DepoHatasi('Her koşulda bağlı olduğu parametreyi ve değerini seçin.');
+      if (alan === (hedef.alan ?? hedef.parametre)) throw new DepoHatasi('Liste kendi parametresine bağlanamaz.');
+      if (kosullar.some((x) => x.alan === alan)) throw new DepoHatasi(`"${alan}" iki kez koşul olarak seçilmiş.`);
+      const etiket = alanAdi(k?.etiket, 'Koşul etiketi');
+      kosullar.push({ alan, deger, ...(etiket && etiket !== alan ? { etiket } : {}) });
+    }
+    if (kosullar.length > 5) throw new DepoHatasi('En fazla 5 koşul olabilir.');
+    if (kosullar.length && kullanim === 'servis' && !hedef.parametre) throw new DepoHatasi('Koşullu listede parametreyi seçin.');
     if (servisParametreTanimlariniListele(vt, projeId).some((t) => t.id !== girdi.id && t.ad.toLocaleLowerCase('en') === ad.toLocaleLowerCase('en'))) {
       throw new DepoHatasi(`"${ad}" adlı bir değer listesi zaten var; onu düzenleyin ya da başka bir ad verin (ör. "${ad} (Travel)").`);
     }
@@ -473,7 +515,7 @@ export function servisParametreTanimiKaydet(vt, girdi) {
     }
     return kaydet(vt, 'servis_parametre_tanimlari', {
       proje_id: projeId, ad,
-      icerik_json: sifreliJson(vt, { aciklama, tur, degerler, kaynak, varsayilan, elleYazilabilir }, 'icerik')
+      icerik_json: sifreliJson(vt, { aciklama, tur, degerler, kaynak, varsayilan, elleYazilabilir, kullanim, hedef, kosullar }, 'icerik')
     }, { id: girdi.id });
   });
 }

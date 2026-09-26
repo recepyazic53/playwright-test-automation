@@ -197,8 +197,10 @@ export const SERVIS_POST_UCLARI = [
     const k = g.kaynak && typeof g.kaynak === 'object' ? { turId: kimlik(g.kaynak.turId, 'turId'), alan: metin(g.kaynak.alan) } : null;
     return { id: servisParametreTanimiKaydet(db, {
       id: secimli(g.id), projeId, ad: metin(g.ad), aciklama: metin(g.aciklama), tur: metin(g.tur),
-      degerler: Array.isArray(g.degerler) ? g.degerler.slice(0, 1000) : [], kaynak: k, varsayilan: metin(g.varsayilan),
-      elleYazilabilir: g.elleYazilabilir !== false
+      degerler: Array.isArray(g.degerler) ? g.degerler.slice(0, 2000) : [], kaynak: k, varsayilan: metin(g.varsayilan),
+      elleYazilabilir: g.elleYazilabilir !== false, kullanim: metin(g.kullanim),
+      hedef: g.hedef && typeof g.hedef === 'object' ? { servisId: metin(g.hedef.servisId), parametre: metin(g.hedef.parametre), ekranId: metin(g.hedef.ekranId), alan: metin(g.hedef.alan), alanEtiketi: metin(g.hedef.alanEtiketi) } : null,
+      kosullar: Array.isArray(g.kosullar) ? g.kosullar.slice(0, 10).map((/** @type {any} */ k) => ({ alan: metin(k?.alan), deger: typeof k?.deger === 'number' ? String(k.deger) : metin(k?.deger), etiket: metin(k?.etiket) })) : []
     }) };
   }],
   ['/platform/servis-parametre-tanimi/sil', (db, g) => ({ silindi: servisParametreTanimiSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })],

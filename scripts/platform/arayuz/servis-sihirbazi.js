@@ -177,7 +177,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       const o = testOrtamlari.find((x) => x.id === d.kontrolOrtami);
       if (!o || !d.tabanlar[o.id]) { mesaj.goster('Denetleme için TEST ortamının taban adresi gerekli (1. adım).'); return; }
       const adres = `${birlestir(d.tabanlar[o.id], d.yol)}?wsdl`;
-      if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+      if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}. WSDL ayrı şema dosyalarını içe aktarıyorsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
       await mesgulIken(denetle, 'Denetleniyor…', async () => {
         try {
           const e = await api('/platform/servis/erisim', { govde: { projeId: proje.id, ortamId: o.id, yol: d.yol, tabanlar: { [o.id]: d.tabanlar[o.id] }, ...(d.tls ? {} : { tlsDogrulama: false }) } });
@@ -216,7 +216,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       const oneri = tanim ? null : wsdlOnerisi(alanT);
       tanimDiyalogu({
         proje, turler, profiller: veriProfilleri,
-        ...(tanim ? { tanim } : { on: { ad: alanT.ad, tur: oneri ? oneri.tur : 'liste', degerler: oneri ? oneri.degerler : [] } }),
+        ...(tanim ? { tanim } : { on: { ad: alanT.ad, tur: oneri ? oneri.tur : 'liste', degerler: oneri ? oneri.degerler : [], kullanim: 'servis', hedef: { servisId: '', parametre: alanT.ad } } }),
         bitti: async (id) => {
           const { tanimlar: yeni } = await api(`/platform/servis-parametre-tanimlari?projeId=${encodeURIComponent(proje.id)}`);
           tanimlar.splice(0, tanimlar.length, ...yeni);

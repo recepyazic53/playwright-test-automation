@@ -741,7 +741,8 @@ function anaDuzen() {
       navAyarlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
       sayfaBasligi('Ayarlar');
-      ayarlarEkrani(main, AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje');
+      // Eski "Bağlam profilleri" adresi: bağlam kayıtları artık Test verisi > Kayıtlar'da.
+      ayarlarEkrani(main, alt === 'baglam' ? 'test-verisi' : AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje');
     } else {
       // #/sonuclar ve bilinmeyen adresler (ör. eski #/gorunum yer imleri) → Sonuçlar.
       navSonuclar.setAttribute('aria-current', 'page');

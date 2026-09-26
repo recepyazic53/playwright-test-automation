@@ -11,7 +11,7 @@
 
 /** @typedef {'liste' | 'mantiksal' | 'test_verisi' | 'serbest'} TanimTuru */
 /**
- * @typedef {{ deger: string; aciklama?: string }} TanimDegeri
+ * @typedef {{ deger: string; aciklama?: string; ekranDegeri?: string; ekranMetni?: string }} TanimDegeri
  * @typedef {{ id: string; projeId?: string; ad: string; aciklama?: string; tur: TanimTuru; degerler?: TanimDegeri[];
  *   kaynak?: { turId: string; alan: string } | null; varsayilan?: string; elleYazilabilir?: boolean }} ParametreTanimi
  */
@@ -82,3 +82,37 @@ export function wsdlOnerisi(alan) {
 
 /** Değer etiketi: "1 — Peşin" (açıklama yoksa yalnız değer). @param {TanimDegeri} x */
 export const degerEtiketi = (x) => (x.aciklama ? `${x.deger} — ${x.aciklama}` : x.deger);
+
+// ---- Koşullu listeler (kullanım yeri: ekran / servis) ---------------------------------------------------------------------
+// Liste bir alanı hedefler (ekran: ekranId + alan kimliği; servis: parametre adı, isteğe bağlı servisId) ve koşulları ("ve")
+// o ekranın / servisin diğer alanlarının değerleridir. Çözüm: koşulları tutan listeler (en çok koşul tutanlar; birden
+// çoksa değerler birleşir) → yoksa hedefi aynı koşulsuz liste → yoksa (çağıranda) alanın kendi listesi.
+
+/** @param {ParametreTanimi} t @param {string} ekranId @param {string} alanId */
+export const ekranHedefiMi = (t, ekranId, alanId) => t.kullanim === 'ekran' && t.hedef?.ekranId === ekranId && t.hedef?.alan === alanId;
+/** @param {ParametreTanimi} t @param {string | null} servisId @param {string} alanAdi */
+export const servisHedefiMi = (t, servisId, alanAdi) => t.kullanim !== 'ekran' && Boolean(t.hedef?.parametre)
+  && anahtar(t.hedef?.parametre ?? '') === anahtar(alanAdi) && (!t.hedef?.servisId || t.hedef.servisId === servisId);
+
+/**
+ * @param {ParametreTanimi[]} listeler @param {(t: ParametreTanimi) => boolean} hedefMi
+ * @param {(alan: string) => string | undefined} degerOku  koşuldaki alanın şu anki değeri
+ * @returns {ParametreTanimi[]}
+ */
+export function eslesenListeler(listeler, hedefMi, degerOku) {
+  const aday = listeler.filter(hedefMi);
+  const kosullu = aday.filter((t) => (t.kosullar || []).length && (t.kosullar || []).every((k) => degerOku(k.alan) === k.deger));
+  if (kosullu.length) {
+    const en = Math.max(...kosullu.map((t) => (t.kosullar || []).length));
+    return kosullu.filter((t) => (t.kosullar || []).length === en);
+  }
+  return aday.filter((t) => !(t.kosullar || []).length);
+}
+
+/** Eşleşen listelerin değerleri (tekrarsız; ilk açıklama kalır). @param {ParametreTanimi[]} eslesen @param {Parameters<typeof tanimDegerleri>[1]} [profiller] */
+export function birlesikDegerler(eslesen, profiller = []) {
+  /** @type {Map<string, TanimDegeri>} */
+  const m = new Map();
+  for (const t of eslesen) for (const x of tanimDegerleri(t, profiller)) if (!m.has(x.deger)) m.set(x.deger, x);
+  return [...m.values()];
+}
