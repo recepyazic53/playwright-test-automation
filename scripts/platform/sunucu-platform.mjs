@@ -2408,7 +2408,7 @@ async function raporlayiciIsteginiIsle(req, res, islem, baglam) {
         ? (db.tek('SELECT id FROM projeler WHERE id = ?', [projeId]) ? { id: projeId } : undefined)
         : typeof govde.adaptor === 'string' ? aktarilmisProjeyiBul(db, govde.adaptor) : undefined;
       const etkin = Boolean(proje) && kasaDurumu(db).olusturuldu;
-      // Genel yol (playwright.model.config.ts): ortam kimliği doğrudan gelir — yalnızca bu projenin ortamıysa kabul edilir.
+      // Genel yol (playwright.config.ts): ortam kimliği doğrudan gelir — yalnızca bu projenin ortamıysa kabul edilir.
       const verilenOrtamId = proje && typeof govde.ortamId === 'string' && govde.ortamId
         && db.tek('SELECT id FROM ortamlar WHERE id = ? AND proje_id = ?', [govde.ortamId, proje.id]) ? govde.ortamId : null;
       jsonGonder(res, 200, {

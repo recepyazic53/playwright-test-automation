@@ -83,6 +83,8 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
 export async function senaryoCalistir(vt, govde, kosucu, secenekler = {}) {
   const h = calistirmaIsteginiHazirla(vt, govde, secenekler);
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
+  // Kodlu testler kaldırıldı: yalnızca model senaryoları (proje + ortam kimliğiyle) koşar.
+  if (!h.hedef.genel) throw new DepoHatasi(`"${h.hedef.baslik}" kodlu bir teste bağlı; kodlu testler kaldırıldı. Senaryoyu ekran modeliyle yeniden oluşturun.`);
   const sonuc = await kosucu.calistir({
     ortam: h.hedef.ortamAnahtari ?? GENEL_ORTAM_ETIKETI, dosya: h.hedef.dosya, ad: h.hedef.ad, kosuId: h.kosuId,
     kosuTuru: h.kosuTuru, kosuKimligi: h.kosuKimligi, kosuKapsami: h.kosuKapsami, senaryoId: h.hedef.senaryoId,

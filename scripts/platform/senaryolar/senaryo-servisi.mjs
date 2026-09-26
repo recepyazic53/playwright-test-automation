@@ -965,7 +965,7 @@ export function senaryoGecmisi(vt, id) {
  * Model senaryosunda (kodda karşılığı yok) hedef model spec'idir: ad yerine etiket + grep deseni döner.
  * GENEL YOL: model senaryosunun ortamı aktarımla bir çalıştırıcı anahtarına ("test"/"canli") eşlenmemişse (elle
  * oluşturulan proje/ortam) ortamAnahtari null, genel = { projeId, ortamId } döner — koşu genel model yapılandırmasıyla
- * (playwright.model.config.ts) proje ve ortam KİMLİKLERİYLE yapılır; hiçbir adaptöre bağlı değildir.
+ * (playwright.config.ts) proje ve ortam KİMLİKLERİYLE yapılır; hiçbir adaptöre bağlı değildir.
  * @param {Veritabani} vt @param {string} projeId @param {unknown} senaryoId @param {unknown} ortamId
  * @param {{ kodDosyasiVar?: (dosya: string) => boolean; yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> }} [secenekler]
  */
@@ -985,7 +985,7 @@ export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId, secenekler 
     // Model senaryosu: tek model spec'i, senaryonun etiketiyle (UUID) daraltılır; test kodu gerekmez.
     if (!s.ekranId || !modelBaglami(vt, s.ekranId)) throw new DepoHatasi(`"${s.baslik}" senaryosunun ekran modeli yok; model koşucusuyla çalıştırılamaz.`);
     if (!ortamKimlikleri(s.icerik).includes(ortamId)) throw new DepoHatasi(`"${s.baslik}" seçilen ortamda tanımlı değil.`);
-    // Model senaryosu HER ZAMAN genel yoldan koşar (playwright.model.config.ts; proje + ortam kimliği; giriş tarifi, profiller
+    // Model senaryosu HER ZAMAN genel yoldan koşar (playwright.config.ts; proje + ortam kimliği; giriş tarifi, profiller
     // ve test verisi veritabanından). Ortamın eski aktarım anahtarı (test / canli) yalnız bilgi olarak döner.
     const ortamAnahtari = ortamAnahtariBul(vt, projeId, ortamId);
     return {

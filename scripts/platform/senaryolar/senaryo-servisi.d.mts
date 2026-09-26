@@ -109,7 +109,7 @@ export type CalistirmaHedefi = {
   model: boolean;
   etiket: string | null;
   grepDeseni: string | null;
-  /** Genel yol (eşlenmemiş ortamda model senaryosu): koşu proje + ortam kimlikleriyle (playwright.model.config.ts). */
+  /** Genel yol (eşlenmemiş ortamda model senaryosu): koşu proje + ortam kimlikleriyle (playwright.config.ts). */
   genel: { projeId: string; ortamId: string } | null;
 };
 export declare function calistirmaHedefiCoz(

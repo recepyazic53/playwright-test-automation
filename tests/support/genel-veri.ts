@@ -1,5 +1,5 @@
 // GENEL YOL VERİSİ — hiçbir aktarım adaptörüne bağlı OLMAYAN model koşusu: elle oluşturulan proje/ortamların test kodu
-// olmayan senaryoları Nöbetçi'den playwright.model.config.ts ile koşar. Proje ve ortam KİMLİKLERİ sunucudan ortam
+// olmayan senaryoları Nöbetçi'den playwright.config.ts ile koşar. Proje ve ortam KİMLİKLERİ sunucudan ortam
 // değişkenleriyle gelir (NOBETCI_PROJE_ID, NOBETCI_ORTAM_ID); "test"/"canli" ortam adları ve aktarım eşlemesi
 // kullanılmaz. Veri platform veritabanından veri-oku.mjs'nin "genel" kipiyle okunur (kasa anahtarı gerekir;
 // Nöbetçi koşularında PLATFORM_KASA_ANAHTARI). Giriş bilgisi ve giriş tarifi ortamın kendi kayıtlarıdır.

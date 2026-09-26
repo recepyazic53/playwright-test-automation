@@ -1,5 +1,5 @@
 // UÇTAN UCA (yerel) — GENEL YOL: elle oluşturulan (aktarımla gelmemiş, hiçbir adaptöre bağlı olmayan) bir projenin
-// test kodu olmayan senaryoları Nöbetçi'nin koşu ucundan (/platform/senaryolar/calistir) playwright.model.config.ts
+// test kodu olmayan senaryoları Nöbetçi'nin koşu ucundan (/platform/senaryolar/calistir) playwright.config.ts
 // ile, proje ve ortam KİMLİKLERİYLE koşar; sonuç, ekran görüntüsü ve video gerçek raporlayıcıyla GEÇİCİ veritabanına
 // ve şifreli medya deposuna yazılır. Proje, ortam, giriş profili, giriş tarifi, bağlam profilleri, sayfa paketi ve
 // formdan yeni senaryo — hepsi kullanıcının yapacağı gibi sunucunun uçlarıyla kurulur.

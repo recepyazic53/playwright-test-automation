@@ -285,7 +285,7 @@ test('yasaklı adres: CANLI (…nippon… host) koşusu sunucuda ve doğrudan CL
   const log = readFileSync(join(klasor, 'sunucu.log'), 'utf8');
   expect(log).not.toContain('▶ [CANLI]'); // hiç süreç başlatılmadı
 
-  // Doğrudan CLI (sunucu atlanırsa): global-setup ve model koşucusu aynı korumayla tarayıcı açmadan durur.
+  // Doğrudan CLI (sunucu atlanırsa): model koşucusu aynı korumayla tarayıcı açmadan durur.
   const bakis = await veritabaniAc(vtYolu, { saltOkunur: true });
   const anahtar = await parolayiDogrula(bakis, PAROLA);
   bakis.kapat();
@@ -297,7 +297,7 @@ test('yasaklı adres: CANLI (…nippon… host) koşusu sunucuda ve doğrudan CL
       `--output=${join(klasor, 'cli-cikti')}`], {
       cwd: KOK,
       env: {
-        ...env, TEST_ENV: 'canli', PLATFORM_VERITABANI: vtYolu, PLATFORM_KASA_ANAHTARI: anahtar.toString('base64url'),
+        ...env, NOBETCI_PROJE_ID: projeId, NOBETCI_ORTAM_ID: canliOrtami, PLATFORM_VERITABANI: vtYolu, PLATFORM_KASA_ANAHTARI: anahtar.toString('base64url'),
         TEST_SUNUCU_GREP_DESENI: modelGrepDeseni(senaryolar.get(baslik) as string), NOBETCI_YASAK_ADRESLER: yasakliKaliplar()
       },
       stdio: ['ignore', 'pipe', 'pipe']

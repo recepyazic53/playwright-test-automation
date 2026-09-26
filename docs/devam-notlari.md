@@ -40,7 +40,7 @@ Proje, bir sigorta acente portalının (ilk proje: "Galaksi") Playwright testler
 | Genel giriş motoru (tarif, TOTP/SMS, bağlam adımları) | `tests/support/giris-motoru.ts`, `scripts/platform/giris/*` |
 | Ortak doğrulayıcı (sunucu + test + form) | `scripts/dogrulama/*` |
 | Model koşucusu (test kodu olmayan senaryolar) | `tests/support/model-kosucu.ts`, `tests/model-kosucu/*` |
-| Genel model koşusu (elle oluşturulan proje/ortam; adaptörsüz) | `playwright.model.config.ts`, `tests/support/genel-veri.ts` |
+| Genel model koşusu (elle oluşturulan proje/ortam; adaptörsüz) | `playwright.config.ts`, `tests/support/genel-veri.ts` |
 | Testlerin veri erişimi (yalnız DB) | `tests/support/platform-veri.ts` |
 | Galaksi'ye özgü kod ("proje eklentisi") | `projeler/galaksi/*`, `tests/scenarios/**`, `tests/support/pages/**` |
 | Birim/koruma testleri (tarayıcısız + yerel fikstürler) | `tests/birim/*`, `npm run test:birim` |
@@ -125,7 +125,7 @@ Komutlar: `npm run baslat` (sunucu + tarayıcı), `npm run test:birim`, `npm run
 1. ~~**Windows doğrulaması**~~ — tamamlandı (PR #4; bkz. §5).
 2. ~~**Yeni projelerde senaryoların koşması**~~ — yapıldı (yerel fikstürle doğrulandı; gerçek bir uygulamayla
    **denenmedi**, 3. işte birlikte denenecek). Aktarımla "test"/"canli" anahtarına eşlenmemiş ortamdaki model
-   senaryoları Nöbetçi'den **genel yolla** koşar: `playwright.model.config.ts` + `tests/support/genel-veri.ts` +
+   senaryoları Nöbetçi'den **genel yolla** koşar: `playwright.config.ts` + `tests/support/genel-veri.ts` +
    `veri-oku.mjs genel` (proje/ortam KİMLİKLERİYLE, adaptörsüz; giriş profili ve kayıtlı giriş tarifi ortamın kendisinden).
    Test kodu olmayan ekranda formdan yeni senaryo da oluşturulabilir (`icerik.kosucu = 'model'`). Koruma testi:
    `tests/birim/genel-model-kosusu.spec.ts`. Bilinçli sınırlar (kullanıcı kararı): yalnızca Nöbetçi'den başlatılır

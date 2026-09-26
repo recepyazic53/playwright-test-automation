@@ -1,6 +1,6 @@
 // KOŞU VE SAKLAMA AYARLARI (Ayarlar > Koşu, Ayarlar > Yedekleme) — kullanıcının verdiği kararlar. Kasada (ayarlar tablosu,
 // anahtar "kosu") şifreli saklanır; verilmeyen ayar varsayılanını kullanır. Nöbetçi koşuyu başlatırken ayarları alt sürece
-// ortam değişkeni olarak verir (kosuOrtamDegiskenleri); playwright.config.ts / playwright.model.config.ts ve model koşucusu
+// ortam değişkeni olarak verir (kosuOrtamDegiskenleri); playwright.config.ts ve model koşucusu
 // bu değişkenleri okur (yoksa aynı varsayılanlar). Servis ayarları (zaman aşımı, varsayılan tarih biçimi) sunucuda kullanılır.
 import { DepoHatasi, ayarGetir, ayarYaz } from '../veritabani/depo.mjs';
 

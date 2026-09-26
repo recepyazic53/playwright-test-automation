@@ -14,7 +14,7 @@
 //             senaryo verisi (hassas alanlar çözülmüş), ekran modeli + alt modeller, "mutlaka görünmeli"
 //             alanları ve bağlam profilleri (tür → ad → alanlar). Kasa anahtarı gerekir (veri kipiyle aynı).
 //   anahtar → PLATFORM_KASA_PAROLASI'ndan anahtarı türetip doğrular, base64url olarak döner
-//   genel   → ADAPTÖRSÜZ (elle oluşturulan proje/ortam; Nöbetçi'nin genel model koşusu, playwright.model.config.ts):
+//   genel   → ADAPTÖRSÜZ (elle oluşturulan proje/ortam; Nöbetçi'nin genel model koşusu, playwright.config.ts):
 //             node veri-oku.mjs genel --proje <id> --ortam-id <id> — "model" kipinin çıktısı ortam KİMLİĞİYLE +
 //             ortamın giriş bilgisi (giris; ortama özel profil, yoksa tüm ortamlar için olan) ve KAYITLI giriş
 //             tarifi (girisTarifi; adaptör varsayılanı yok). Kasa anahtarı gerekir.

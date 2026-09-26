@@ -270,10 +270,10 @@ test.describe('Senaryo servisi (genel proje)', () => {
       await expect(senaryoCalistir(vt, { ...govde, senaryoId: 'olmayan' }, kosucu)).rejects.toThrow(/bulunamadı/);
       await expect(senaryoCalistir(vt, { ...govde, ortamId: o.digerOrtamId }, kosucu)).rejects.toThrow(/ortamda tanımlı değil/);
       await expect(senaryoCalistir(vt, govde, null)).rejects.toThrow(/etkin değil/);
-      // İstemcinin gönderdiği başlık/dosya yok sayılır.
-      const yanit = await senaryoCalistir(vt, { ...govde, kosuTuru: 'tam', kosuKimligi: 'g-1', kosuKapsami: 'Örnek ekran', dosya: 'kotu.spec.ts', senaryoAdi: 'kötü' }, kosucu);
-      expect(yanit).toEqual({ httpDurum: 200, govde: { basarili: true, durum: 'passed', sureMs: 5, senaryoId: o.veriSenaryo, baslik: 'Mevcut veri senaryosu' } });
-      expect(istekler).toEqual([{ ortam: 'test', dosya: SPEC, ad: 'Mevcut veri senaryosu', kosuId: 'k1', kosuTuru: 'tam', kosuKimligi: 'g-1', kosuKapsami: 'Örnek ekran', senaryoId: o.veriSenaryo }]);
+      // Kodlu teste bağlı senaryo koşmaz (kodlu testler kaldırıldı); koşucuya hiç istek gitmez.
+      await expect(senaryoCalistir(vt, { ...govde, kosuTuru: 'tam', kosuKimligi: 'g-1', kosuKapsami: 'Örnek ekran', dosya: 'kotu.spec.ts', senaryoAdi: 'kötü' }, kosucu))
+        .rejects.toThrow(/kodlu testler kaldırıldı/);
+      expect(istekler).toEqual([]);
 
       const once = vt.tek('SELECT COUNT(*) AS n, MAX(guncellenme) AS g FROM senaryolar');
       await expect(senaryoDene(vt, { projeId, ekranId, ortamId, kosuId: 'd1', veri: { kapsam: 'DÜNYA' } }, kosucu, sahteAdaptor)).rejects.toThrow(SenaryoDogrulamaHatasi);

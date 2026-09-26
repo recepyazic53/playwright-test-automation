@@ -189,7 +189,7 @@ class DogrudanYazici {
 
 export default class PlatformRaporlayici {
   /**
-   * ortamId: genel yol (playwright.model.config.ts) — ortam aktarımla bir anahtara eşlenmediği için doğrudan kimlikle
+   * ortamId: genel yol (playwright.config.ts) — ortam aktarımla bir anahtara eşlenmediği için doğrudan kimlikle
    * verilir (ortam anahtarından çözülmez).
    * @param {{ adaptor?: string; projeId?: string; ortam?: string; ortamId?: string; projeKoku?: string }} [secenekler]
    */

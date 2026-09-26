@@ -12,7 +12,7 @@ export interface KosuIstegi {
   /** Test çalıştırıcısının ortam anahtarı (TEST_ENV; ör. "test"); genel yolda GENEL_ORTAM_ETIKETI. */
   ortam: string;
   /**
-   * Genel yol (elle oluşturulan proje/ortam; model senaryosu): koşu playwright.model.config.ts ile, proje ve
+   * Genel yol (elle oluşturulan proje/ortam; model senaryosu): koşu playwright.config.ts ile, proje ve
    * ortam kimlikleriyle yapılır (TEST_ENV kullanılmaz).
    */
   genel?: { projeId: string; ortamId: string } | null;

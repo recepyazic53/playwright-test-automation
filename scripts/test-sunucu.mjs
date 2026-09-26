@@ -125,33 +125,6 @@ function playwrightCliVarMi() {
   return false;
 }
 
-// Klasör adı -> Allure Epic (ürün) görünen adı. tests/support/fixtures.ts'teki
-// EPIC_ADLARI ile AYNI TUTULMALI — "Senaryolar" tablosundaki ürün adı, allure
-// raporundaki ve Nöbetçi'deki diğer tablolardakiyle tutarlı olsun diye.
-const EPIC_ADLARI = {
-  'jet-kasko': 'JetKasko',
-  'jet-seyahat': 'JetSeyahat',
-  'jet-dask': 'JetDASK',
-  'jet-kobi': 'JetKOBİ',
-  'jet-konut': 'JetKonut',
-  'jet-saglik': 'JetSağlık',
-  'jet-ilk-ates-konut': 'İlk Ateş Konut'
-};
-
-function urunAdiBul(dosyaYolu) {
-  if (!dosyaYolu) return 'Diğer';
-  // "--list --reporter=json" çıktısındaki spec.file, testDir'e GÖRE GÖRELİ bir yol
-  // ("scenarios/jet-kobi/teklif-matrisi.spec.ts" gibi, başında "/" YOK) — bu yüzden
-  // eşleşme başta "/" aramaz (fixtures.ts'teki testInfo.file MUTLAK yol olduğundan
-  // orada "/" aranıyor, ikisi farklı kaynak).
-  const normalizeEdilmisYol = dosyaYolu.replace(/\\/g, '/');
-  const senaryoEslesme = normalizeEdilmisYol.match(/(?:^|\/)scenarios\/([^/]+)\//);
-  if (senaryoEslesme) return EPIC_ADLARI[senaryoEslesme[1]] ?? senaryoEslesme[1];
-  const canliEslesme = normalizeEdilmisYol.match(/(?:^|\/)canli\/([^/]+)\.spec\.ts$/);
-  if (canliEslesme) return EPIC_ADLARI[canliEslesme[1]] ?? canliEslesme[1];
-  return 'Diğer';
-}
-
 function jsonGonder(res, durumKodu, govde) {
   const metin = JSON.stringify(govde);
   res.writeHead(durumKodu, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -210,15 +183,15 @@ function regexIcinKac(metin) {
 // ekOrtamDegiskenleri: Senaryolar > "Dene", geçici "ek veri" dosyasının yolunu
 // (TEST_SUNUCU_EK_SENARYO_DOSYASI) listeleme sürecine de vermek için kullanır — aksi halde
 // Playwright geçici senaryoyu listede göremez ve whitelist kontrolü onu reddeder.
-// genel: { projeId, ortamId } verilirse (elle oluşturulan proje/ortam) liste genel model yapılandırmasından alınır
-// (bkz. genelKosuAyarlari).
+// genel: { projeId, ortamId } — listelenen proje ve ortam (bkz. genelKosuAyarlari).
 function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined, ekOrtamDegiskenleri = {}, genel = null) {
   return new Promise((resolve, reject) => {
     if (!playwrightCliVarMi()) {
       reject(new Error(`"${PLAYWRIGHT_CLI_YOLU}" bulunamadı (npm install çalıştırılmamış olabilir).`));
       return;
     }
-    const g = genelKosuAyarlari(genel, ortam);
+    let g;
+    try { g = genelKosuAyarlari(genel); } catch (h) { reject(h); return; }
     execFile(
       process.execPath,
       [PLAYWRIGHT_CLI_YOLU, 'test', '--list', '--reporter=json', ...g.argumanlar, ...ekstraArgumanlar],
@@ -266,7 +239,6 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
                   .find((a) => a?.type === 'beklenenSonuc' && typeof a.description === 'string')?.description;
                 liste.push({
                   ad: spec.title,
-                  urun: urunAdiBul(specDosya),
                   dosya: specDosya,
                   satir: spec.line,
                   // Etiketler (ör. model koşucusunun "@model-<UUID>" etiketi — model senaryosu etiketle bulunur).
@@ -309,16 +281,11 @@ function tumSenaryolariGetir(ortam, genel = null) {
   return istek;
 }
 
-// GENEL YOL (elle oluşturulan proje/ortam; aktarımla "test"/"canli" anahtarına eşlenmemiş ortamdaki model senaryosu):
-// Playwright genel model yapılandırmasıyla (playwright.model.config.ts) ve proje + ortam KİMLİKLERİYLE başlatılır;
-// TEST_ENV verilmez. Aksi halde eski yol: asıl yapılandırma + TEST_ENV (ortam anahtarı).
-const MODEL_YAPILANDIRMASI = 'playwright.model.config.ts';
-function genelKosuAyarlari(genel, ortam) {
-  if (!genel) return { argumanlar: [], ortamDegiskenleri: { TEST_ENV: ortam } };
-  return {
-    argumanlar: ['--config', MODEL_YAPILANDIRMASI],
-    ortamDegiskenleri: { NOBETCI_PROJE_ID: genel.projeId, NOBETCI_ORTAM_ID: genel.ortamId }
-  };
+// Playwright (playwright.config.ts) proje + ortam KİMLİKLERİYLE başlatılır; veri, giriş bilgisi ve giriş tarifi
+// platform veritabanından okunur. Kimlik yoksa koşu başlatılmaz.
+function genelKosuAyarlari(genel) {
+  if (!genel?.projeId || !genel?.ortamId) throw new Error('Koşu için proje ve ortam kimliği gerekir (senaryoyu Nöbetçi\'den çalıştırın).');
+  return { argumanlar: [], ortamDegiskenleri: { NOBETCI_PROJE_ID: genel.projeId, NOBETCI_ORTAM_ID: genel.ortamId } };
 }
 
 // Şu an çalışmakta olan süreçleri kosuId -> { surec, pid, iptalEdiliyor } şeklinde
@@ -703,7 +670,7 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     // Raporlayıcılar playwright.config.ts'ten gelir (list + json + Allure). "--reporter"
     // VERİLMEZ: CLI'dan verilirse config'teki Allure raporlayıcısı devre dışı kalıyor ve
     // dashboard koşuları rapora hiç yansımıyordu.
-    const genelAyarlar = genelKosuAyarlari(genel, ortam);
+    const genelAyarlar = genelKosuAyarlari(genel);
     const argumanlar = [PLAYWRIGHT_CLI_YOLU, 'test', ...genelAyarlar.argumanlar, dosya, `--output=${ciktiKlasoru}`];
 
     console.log(`\n▶ [${ortam.toUpperCase()}] "${senaryoAdi}" başlatıldı...\n`);
@@ -885,10 +852,8 @@ function hataOzetiCikar(cikti) {
 }
 
 // ---- Senaryolar > "Dene" -------------------------------------------------------------------
-// Taslak senaryo veritabanına YAZILMAZ: geçici bir "ek veri" dosyasına yazılır ve yolu bu ortam
-// değişkeniyle hem "--list" hem koşu sürecine verilir (tests/support/test-data.ts >
-// EK_SENARYO_DOSYASI_ORTAM_DEGISKENI ile AYNI TUTULMALI). Deneme bitince dosya silinir.
-const EK_SENARYO_ORTAM_DEGISKENI = 'TEST_SUNUCU_EK_SENARYO_DOSYASI';
+// Taslak senaryo veritabanına YAZILMAZ: geçici bir dosyaya yazılır (TEST_SUNUCU_MODEL_DENEME_DOSYASI) ve
+// hem "--list" hem koşu sürecine verilir. Deneme bitince dosya silinir.
 const EK_SENARYO_DOSYA_ON_EKI = 'test-sunucu-ek-senaryo-';
 
 // ---- Tek senaryo çalıştırma çekirdeği ------------------------------------------------------
@@ -942,7 +907,7 @@ async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, ko
       httpDurum: 409,
       govde: {
         basarili: false,
-        mesaj: 'Bu başlık birden fazla üründe var (' + [...new Set(eslesenler.map((s) => s.urun))].join(', ') +
+        mesaj: 'Bu başlık birden fazla dosyada var (' + [...new Set(eslesenler.map((s) => s.dosya))].join(', ') +
           '). Yanlış testi koşmamak için lütfen senaryoyu "Senaryolar" tablosundan çalıştırın.'
       }
     };
@@ -994,35 +959,14 @@ function calistirmaYaniti(calistirmaSonucu, ad) {
 
 // Platform "Senaryolar" ekranının koşucusu (bkz. scripts/platform/senaryolar/calistirma.mjs): senaryo
 // UUID'si platformda güncel dosya + başlığa çözülmüş olarak gelir; burada yukarıdaki AYNI yol kullanılır.
-// "Dene": taslak senaryo geçici bir ek veri dosyasıyla (TEST_SUNUCU_EK_SENARYO_DOSYASI; kalıcı veriye
-// yazılmaz) spec dosyasına daraltılmış ayrı bir listelemeyle bulunur ve çalıştırılır; dosya sonra silinir.
 platformKosucusunuAyarla({
-  // Senaryolar ekranı "kodu kaldırılmış" denetimi: Playwright'ın güncel test listesi (dosya + başlık).
-  testListesi: async (ortam) => (await tumSenaryolariGetir(ortam)).map((t) => ({ dosya: t.dosya, ad: t.ad })),
   calistir: (istek) => senaryoyuCalistirVeYanitla({
     ortam: istek.ortam, senaryoAdi: istek.ad, dosya: istek.dosya, kosuId: istek.kosuId, kosuTuru: istek.kosuTuru ?? null,
     kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel',
     etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null, genel: istek.genel ?? null
   }),
-  dene: async (istek) => {
-    const ekDosyaYolu = join(tmpdir(), `${EK_SENARYO_DOSYA_ON_EKI}${Date.now()}-${randomBytes(6).toString('hex')}.json`);
-    try {
-      writeFileSync(ekDosyaYolu, JSON.stringify(istek.ekVeri), { encoding: 'utf-8', mode: 0o600 });
-      const ekOrtamDegiskenleri = { [EK_SENARYO_ORTAM_DEGISKENI]: ekDosyaYolu };
-      const tumSenaryolar = await senaryolariListele(istek.ortam, [istek.dosya], undefined, ekOrtamDegiskenleri);
-      if (!tumSenaryolar.some((s) => s.ad === istek.ad && s.dosya === istek.dosya)) {
-        return { httpDurum: 500, govde: { basarili: false, mesaj: 'Deneme senaryosu test listesinde bulunamadı (ek veri dosyası Playwright tarafından görülemedi).' } };
-      }
-      const sonuc = await testiCalistirVeBekle(istek.ortam, istek.ad, istek.dosya, tumSenaryolar, istek.kosuId, ekOrtamDegiskenleri);
-      return calistirmaYaniti(sonuc, 'Deneme');
-    } finally {
-      try {
-        if (existsSync(ekDosyaYolu)) unlinkSync(ekDosyaYolu);
-      } catch (temizlemeHatasi) {
-        console.error('[platform/dene] Geçici ek veri dosyası silinemedi:', temizlemeHatasi.message);
-      }
-    }
-  },
+  // Kodlu testler kaldırıldı: yalnızca model senaryoları denenir.
+  dene: async () => ({ httpDurum: 410, govde: { basarili: false, mesaj: 'Kodlu testler kaldırıldı; senaryo model koşucusuyla denenir.' } }),
   // Model senaryosu "Dene": deneme senaryosu geçici dosyayla (TEST_SUNUCU_MODEL_DENEME_DOSYASI) veri okuyucuya verilir; model
   // spec'i onu etiketle tek test olarak üretir; listeleme ve koşu aynı dosyayla yapılır, dosya sonra silinir.
   modelDene: async (istek) => {

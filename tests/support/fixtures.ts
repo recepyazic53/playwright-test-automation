@@ -1,99 +1,25 @@
-// Bütün senaryo dosyalarının import ettiği ortak `test` nesnesi.
+// Model spec'inin import ettiği ortak `test` nesnesi.
 // Platform raporlayıcısının (scripts/platform/raporlayici.mjs) okuduğu bilgileri Playwright
 // ANNOTATION'ları olarak ekleyen otomatik (auto) fixture'lar:
-//  1) kosuEtiketleri: ürün (urun), akış (ozellik), koşu kimliği/türü/kapsamı — sonuçlar
-//     veritabanında koşulara ve ürünlere bunlarla bağlanır (eskiden Allure etiketleriydi).
+//  1) kosuEtiketleri: koşu kimliği/türü/kapsamı — sonuçlar veritabanında koşulara bunlarla bağlanır
+//     (senaryo kimliğini model spec'i kendisi ekler).
 //  2) hataYakalayici: Test başarısız olduğunda (ve dashboard koşularında her zaman) son ekran
 //     görüntüsünü ek olarak ekler; raporlayıcı bunu ŞİFRELİ medya deposuna taşır.
 // Senaryo dosyaları `test`'i '@playwright/test' yerine buradan import etmelidir.
 import { test as base } from '@playwright/test';
 import { writeFileSync, renameSync } from 'node:fs';
-import { relative, sep } from 'node:path';
-import { getEnvironmentName } from './environments';
-import { genelKosuMu } from './genel-veri';
-import { platformSenaryoKimligi } from './platform-veri';
 import { ekranGoruntusuAl } from './screenshots';
 
-// Klasör adı -> ürün görünen adı (platformdaki ekran adıyla aynı; bkz. projeler/galaksi/aktarim.mjs > EKRAN_ADLARI).
-const EPIC_ADLARI: Record<string, string> = {
-  'jet-kasko': 'JetKasko',
-  'jet-seyahat': 'JetSeyahat',
-  'jet-dask': 'JetDASK',
-  'jet-kobi': 'JetKOBİ',
-  'jet-konut': 'JetKonut',
-  'jet-saglik': 'JetSağlık',
-  'jet-ilk-ates-konut': 'İlk Ateş Konut'
-};
-
-// "klasör/dosya" -> akış (özellik) görünen adı.
-const FEATURE_ADLARI: Record<string, string> = {
-  'jet-kasko/yeni-kayit': 'Yeni Kayıt (YK)',
-  'jet-kasko/teklif-olusturma': 'Teklif Oluşturma (Tescilli)',
-  'jet-seyahat/prim-hesaplama': 'Prim Hesaplama',
-  'jet-seyahat/validasyon': 'Validasyon',
-  'jet-dask/yeni-is-matrisi': 'Yeni İş Matrisi',
-  'jet-kobi/teklif-matrisi': 'Teklif Matrisi',
-  'jet-konut/teklif-matrisi': 'Teklif Matrisi',
-  'jet-saglik/yeni-is-matrisi': 'Yeni İş Matrisi',
-  'jet-ilk-ates-konut/teklif-matrisi': 'Teklif Matrisi'
-};
-
-function epicVeFeatureAdlariniBul(dosyaYolu: string): { epicAdi: string; featureAdi: string } {
-  const normalizeEdilmisYol = dosyaYolu.replace(/\\/g, '/');
-  const senaryoEslesme = normalizeEdilmisYol.match(/\/scenarios\/([^/]+)\/([^/]+)\.spec\.ts$/);
-  const canliEslesme = normalizeEdilmisYol.match(/\/canli\/([^/]+)\.spec\.ts$/);
-
-  if (senaryoEslesme) {
-    const [, klasor, dosya] = senaryoEslesme;
-    return {
-      epicAdi: EPIC_ADLARI[klasor] ?? klasor,
-      featureAdi: FEATURE_ADLARI[`${klasor}/${dosya}`] ?? dosya
-    };
-  }
-
-  if (canliEslesme) {
-    const [, dosya] = canliEslesme;
-    return {
-      epicAdi: EPIC_ADLARI[dosya] ?? dosya,
-      featureAdi: FEATURE_ADLARI[`${dosya}/canli`] ?? 'Canlı Kontrol'
-    };
-  }
-
-  return { epicAdi: 'Diğer', featureAdi: 'Diğer' };
-}
-
 type OrtakFixturelar = {
-  senaryoKimligi: void;
   kosuEtiketleri: void;
   hataYakalayici: void;
   canliIzlemeYayini: void;
 };
 
 export const test = base.extend<OrtakFixturelar>({
-  // Veri platform veritabanından geliyorsa testin kalıcı senaryo kimliği (UUID) "senaryoId"
-  // annotation'ı olarak eklenir. Başlıklar DEĞİŞMEZ (geçmiş ve kosu-listesi anahtarları
-  // "<dosya>::<başlık>" aynen çalışır); veri dosyalardan geliyorsa hiçbir şey eklenmez.
-  senaryoKimligi: [
-    async ({}, use, testInfo) => {
-      // Genel yol (elle oluşturulan proje; playwright.model.config.ts): aktarılmış proje verisi yoktur; model testleri
-      // "senaryoId" annotation'ını kendileri ekler (tests/model-kosucu/model-senaryolari.spec.ts).
-      if (genelKosuMu()) {
-        await use();
-        return;
-      }
-      const dosya = relative(testInfo.project.testDir, testInfo.file).split(sep).join('/');
-      const kimlik = platformSenaryoKimligi(getEnvironmentName(), `${dosya}::${testInfo.title}`);
-      if (kimlik) testInfo.annotations.push({ type: 'senaryoId', description: kimlik });
-      await use();
-    },
-    { auto: true }
-  ],
   kosuEtiketleri: [
     async ({}, use, testInfo) => {
-      const { epicAdi, featureAdi } = epicVeFeatureAdlariniBul(testInfo.file);
       const ekle = (type: string, description: string): void => { testInfo.annotations.push({ type, description }); };
-      ekle('urun', epicAdi);
-      ekle('ozellik', featureAdi);
       // Koşu gruplama (bkz. global-setup.ts > KOSU_KIMLIGI): aynı "playwright test" çağrısındaki
       // tüm sonuçlar aynı kosuKimligi'ni taşır. kosuTuru: platformdaki ▷ ile tetiklenen tekil
       // koşular (TEST_SUNUCU_GORUNUR=1) 'tekil', normal npm run test / CI koşuları 'tam' — Sonuçlar
