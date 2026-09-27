@@ -90,6 +90,39 @@ Servis ekle > SoapUI dosyasından. Dosya yalnız okunur, istek atılmaz.
 - **Diğer özellikler** test verisinde eşlenmesi gereken parametre olarak listelenir; değerleri aktarılmaz.
 - **Desteklenmeyenler** uyarı olarak gösterilir: Property Transfer, Groovy doğrulaması, başka adım çalıştıran Groovy.
 
+## Taban adresleri toplu düzenleme
+
+Ayarlar > Proje ve ortamlar > Servis taban adresleri: satır = servis, sütun = ortam. Hücre: özel adres, ortamın adresi ya da "bu ortamda yok" (eski tam adres ayarı salt okunur gösterilir).
+
+- **Taban adres adı:** Aynı sunucuyu paylaşan servisler bir ada bağlanır (`ayarlar.tabanGrubu`). Addaki servislerin her ortamdaki adresi aynı olmalı; bir hücre değişince o ada bağlı tüm servisler birlikte değişir. Ayrı tablo yoktur, adresler servisin şifreli ayarlarında kalır; koşu değişmedi, göç gerekmedi.
+- **Toplu işlemler:** Bul-değiştir (ortam seçilebilir; seçili satırlarda, seçim yoksa tümünde), seçilenlere adres ata, seçilenleri bir ada bağla.
+- **Etki önizlemesi:** Hangi servisler, kaç senaryo ve akış etkilenir, eski → yeni adresler. Yalnız "Onayla ve kaydet" ile yazılır (`POST /platform/servis-tabanlari/uygula`, `onay: true`).
+- **Denetim:** Adres http(s) olmalı ve yasak adres kalıplarına (Ayarlar > Güvenlik) uymamalı. Erişim kontrolü yapılmaz (dış istek yok). Adresi değişen ortamın eski erişim kaydı silinir; düzenlenen hücrede eski tam adres ayarı kalkar.
+
+## Hesaplama kuralları (tarih kuralları dahil)
+
+Servis > Parametreler > Hesaplama kuralları. Kural: `AD = ifade | biçim` (ayar adı geriye uyum için `tarihKurallari`; eski `bugun+1y|yyyy-MM-dd` kuralları aynen çalışır). Ayrıştırıcı `scripts/platform/servisler/hesap-kurallari.mjs` (eval yok).
+
+- **İfade:** `${Parametre}` / `${Tablo.Sütun}`, `${akis:Ad}`, başka kural adı; `+ - * / %`, parantez, `= != < > <= >=`; süre `1y 3a 10g 2s`; `bugun`, `simdi`; fonksiyonlar `yuvarla, asagiYuvarla, yukariYuvarla, mutlak, min, max, uzunluk, birlestir, buyukHarf, kucukHarf, parca, eger, bosIse, tarih, gunFarki, sayi`.
+- **Örnekler:** `${Tutar} / 100` · `yuvarla(${Prim} * 1.18, 2) | #,##0.00` · `BEGIN_DATE+1y | yyyy-MM-dd` · `eger(${Tip} = 'T', ${VergiNo}, ${TcNo})` · `birlestir(${Ad}, ' ', ${Soyad})`.
+- **Zincir:** `END_DATE = BEGIN_DATE+1y` bitişi başlangıca bağlar; aynı koşuda her kural bir kez hesaplanır (aynı an). Döngü, tanımsız ad, bilinmeyen fonksiyon kayıtta reddedilir; koşuda sayı olmayan değer / sıfıra bölme açık hatayla (gizli değerler maskeli).
+- **Bağlama:** Metot alanları tablosunda alan bir kurala bağlanır (`alanBaglari[op][yol] = { kural }`; tarih alanlarında kurallar üstte, "+ Yeni kural…" canlı önizlemeli). Yeni senaryolarda alan kaynağı "Hesaplama kuralı" olur; mevcut senaryolardaki seçim değişmez.
+- **Satır içi:** `${hesap: ifade | biçim}` (senaryo formunda "Satır içi hesap"); JSON gövdede tırnaksız yazılan sonuç sayı olarak gider.
+
+## Postman aktarımı (REST)
+
+Servis ekle > Postman koleksiyonu. Postman Collection v2.1 (v2.0 da olur) JSON; isteğe bağlı ortam dosyası (environment JSON). Dosyalar yalnız okunur, istek atılmaz; önizlemeden sonra kullanıcının seçimiyle kaydedilir.
+
+- **Klasör → servis** (tür `rest`). Alt klasörlerin istekleri üst klasörün servisine girer (başlık `Alt / İstek`). Klasörsüz istekler koleksiyon adıyla tek serviste toplanır. Aynı anahtarlı REST servisi varsa senaryolar ona eklenir (aynı başlık atlanır); SOAP servisi varsa o klasör alınmaz.
+- **İstek → senaryo.** Senaryoda `http: { metot, yol, icerikTuru }` (yol servis yoluna göredir, sorgu dahil), başlıklar ve gövde. Operasyon adı `METOT /yol`. Kontrol: test betiğindeki `pm.response.to.have.status(N)` → durumKodu, `pm.expect(pm.response.text()).to.include("x")` → icerir; yoksa `durumKodu 200-299`.
+- **Adres.** Adresin başındaki değişken (`{{baseUrl}}`) ana makinedir: tabloya girmez; çözülen kökeni önizlemede bir ortamın taban adresi yapılabilir. Servis yolu isteklerin ortak dizinidir.
+- **Değişkenler** (`{{ad}}`; ortam dosyası koleksiyonu ezer) bir test verisi tablosunun sütunları olur (`${Tablo.ad}`); değerler tek satıra yazılır (ortamı seçilir). Önizlemede her değişken için "Akış değeri" seçilebilir: `${akis:ad}` olur (ör. betikle atanan token → oturum akışı).
+- **Gizli değerler.** Postman `secret` tipi ya da adı gizli ad listesinde / token, password, parola, secret, key, authorization içeren değişkenler gizli sütun olur. Değer yalnız kullanıcı önizlemede "Şifreli kaydet" işaretlerse şifreli yazılır; yoksa boş kalır. Önizleme yanıtı gizli değer içermez. İstekte düz yazılmış sırlar (Authorization / X-Api-Key başlığı, bearer / apikey yetkisi, gizli adlı sorgu parametresi ya da JSON alanı) değişkene çevrilir.
+- **Yetki:** bearer → `Authorization: Bearer …`, apikey → başlık ya da sorgu (miras: istek > klasör > koleksiyon).
+- **Desteklenmeyenler** uyarı olarak gösterilir: istek öncesi / test betiklerinin geri kalanı, form-data ve dosya gövdesi, basic / digest / oauth yetkileri, `{{$guid}}` gibi dinamik değişkenler (`{{$isoTimestamp}}` tarih ifadesine çevrilir), Postman v1.
+
+REST koşusu: gövdedeki değerler içerik türüne göre kaçışlanır (JSON / form / XML), yoldaki değerler URL kodlanır; Content-Type içerik türünden yazılır. Yanıtta `jsonEsit` kontrolü (`yol: data.id`) ve akışta `json` okuması kullanılır. REST servisinde WSDL olmadığından erişim kontrolü istenmez.
+
 ## Kod
 
 | Dosya | İçerik |
@@ -97,6 +130,9 @@ Servis ekle > SoapUI dosyasından. Dosya yalnız okunur, istek atılmaz.
 | `scripts/platform/servisler/servis-deposu.mjs` | Tablolar (göç 9): `servisler`, `servis_senaryolari`, `servis_kimlikleri`, `servis_kosulari` |
 | `scripts/platform/servisler/soap-istemcisi.mjs` | Parametre doldurma, HTTP/SOAP isteği, WSDL, kontroller |
 | `scripts/platform/servisler/soapui-ice-aktarma.mjs` | SoapUI okuyucu |
+| `scripts/platform/servisler/postman-ice-aktarma.mjs` | Postman koleksiyonu okuyucu |
+| `scripts/platform/servisler/rest-istemcisi.mjs` | REST isteği |
+| `scripts/platform/servisler/taban-adresleri.mjs` | Taban adresleri toplu düzenleme (önizleme → onay) |
 | `scripts/platform/servisler/servis-islemleri.mjs` | Erişim kontrolü, kayıt, parametre çözümü, Dene / koşu |
 | `scripts/platform/servisler/servis-uclari.mjs` | HTTP uçları |
 | `scripts/platform/arayuz/servisler.js` | Arayüz |

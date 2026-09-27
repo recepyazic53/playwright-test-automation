@@ -16,6 +16,9 @@
 //                      de kalır).
 //   dokunulanlariBul   alanların aday CSS seçicileri → son düğme basışından beri kullanıcı o alana dokundu mu?
 //   secimDegerleri     seçim alanlarının (select/radyo) seçili SEÇENEK değeri (metin kutusu değeri okunmaz).
+//   acikListeSecenekleri  kullanıcı bir alana tıklayınca açılan listbox / combobox listesinin SEÇENEKLERİ (etiket + değer;
+//                      yazarak süzülen öneri listeleri alınmaz). Panel bunları arka planda seçenek gözlemi olarak gönderir;
+//                      paketin test verisi tablolarına girer.
 import type { SayfaEnvanteri } from './paket-olusturucu.mjs';
 
 /** Panelin gösterdiği durum (kayıt motorundan; değer içermez). */
@@ -26,6 +29,8 @@ export type PanelDurumu = {
   dugmeler: string[];
   /** Seçilen mesajların metinleri. */
   mesajlar: string[];
+  /** Seçenekleri yakalanan seçim alanı sayısı (test verisine önerilir). */
+  listeler?: number;
 };
 /** Sayfada eşzamanlı alınan ekran anlığı (kayıt motoru süzer). */
 export type EkranAnligi = { yol: string; baslik: string; alanlar: SayfaEnvanteri['alanlar']; dokunulan: string[]; secimler: Record<string, string> };
@@ -181,6 +186,7 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string }): void 
       el('div', { class: 'i' }, 'Akışı sayfada normal yürütün. Yeni alanlar açılınca “Ekranı yeniden oku”ya basın. Kullanılacak alanları işaretleyin (dokunduklarınız işaretli gelir). “Bitir”e bastıktan sonra akış diyagramını Nöbetçi’de kurarsınız.'),
       el('h4', {}, `Görülen alanlar (${durum.alanlar.length}; listede ${secili})`),
       liste,
+      durum.listeler ? el('div', { class: 'i' }, `Seçenekleri yakalanan liste: ${durum.listeler} (test verisine tablo olarak önerilir)`) : null,
       el('h4', {}, `Basılan düğmeler (${durum.dugmeler.length})`),
       durum.dugmeler.length ? el('ul', {}, ...durum.dugmeler.map((d) => el('li', {}, `“${d}”`))) : el('div', { class: 'i' }, 'Henüz düğmeye basılmadı.'),
       durum.mesajlar.length ? el('h4', {}, `Mesajlar (${durum.mesajlar.length})`) : null,
@@ -247,6 +253,44 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string }): void 
     if (!panelIci(e) && (t instanceof HTMLSelectElement || (t instanceof HTMLInputElement && (t.type === 'radio' || t.type === 'checkbox')))) sonraOku(400);
   }, true);
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && mesajModu) { mesajModu = false; anaGorunum(); } }, true);
+
+  // ---- Açılan listeler: alana tıklanınca / ok tuşuyla açılan listbox seçenekleri arka planda gönderilir (değer değil) ----
+  const sonGonderilen = new Map<string, string>();
+  const listeOku = (tetik: Element): void => {
+    const liste = pencere.__nobetciAcikListe as ((t: Element) => Array<{ deger: string; metin: string }> | null) | undefined;
+    const secimOku = pencere.__nobetciSecimDegerleri as ((a: Array<{ anahtar: string; seciciler: string[] }>) => Record<string, string>) | undefined;
+    const envOku = pencere.__nobetciSayfadakiAlanlar as (() => Envanter) | undefined;
+    if (!liste || !secimOku || !envOku) return;
+    try {
+      const secenekler = liste(tetik);
+      if (!secenekler || !secenekler.length) return;
+      const kutu = tetik.closest('[role="combobox"],[aria-haspopup],[aria-controls],[aria-owns]') ?? tetik;
+      const env = envOku();
+      const PW = /^(role|text|xpath)=|>>|:text|:has-text/;
+      const adaylar = env.alanlar.map((a) => [a.secici, ...a.adaySeciciler]);
+      const i = adaylar.findIndex((l) => l.some((s) => {
+        if (PW.test(s)) return false;
+        try { return [...document.querySelectorAll(s)].some((e) => e === kutu || kutu.contains(e) || e.contains(kutu)); } catch { return false; }
+      }));
+      if (i < 0) return;
+      const anahtar = env.alanlar[i].anahtar;
+      const imza = JSON.stringify(secenekler);
+      if (sonGonderilen.get(anahtar) === imza) return;
+      sonGonderilen.set(anahtar, imza);
+      const secimler = secimOku(env.alanlar.map((a, j) => ({ anahtar: a.anahtar, seciciler: adaylar[j], tur: a.tur }))
+        .filter((a) => a.tur === 'select' || a.tur === 'radio').map(({ anahtar: k, seciciler }) => ({ anahtar: k, seciciler })));
+      void islem({ tur: 'secenekler', anahtar, secenekler, secimler });
+    } catch { /* okunamazsa yok sayılır */ }
+  };
+  const listeyiIzle = (tetik: Element): void => { setTimeout(() => listeOku(tetik), 350); setTimeout(() => listeOku(tetik), 1100); };
+  window.addEventListener('click', (e) => {
+    if (mesajModu || panelIci(e) || !(e.target instanceof Element) || e.target.closest('select')) return;
+    listeyiIzle(e.target);
+  }, true);
+  window.addEventListener('keyup', (e) => {
+    if (panelIci(e) || !(e.target instanceof Element) || !['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key) || e.target.closest('select')) return;
+    listeyiIzle(e.target);
+  }, true);
   window.addEventListener('click', (e) => {
     if (panelIci(e) || !(e.target instanceof Element)) return;
     if (mesajModu) {
@@ -293,6 +337,43 @@ export function dokunulanlariBul(adaylar: string[][]): boolean[] {
     if (/^(role|text|xpath)=|>>|:text|:has-text/.test(s)) return false;
     try { return [...document.querySelectorAll(s)].some((e) => dokunulan.has(e)); } catch { return false; }
   }));
+}
+
+/**
+ * Kullanıcı bir alana tıklayınca açılan listenin (listbox / combobox; aria-controls / aria-owns ya da sayfada görünen TEK
+ * listbox) görünür seçenekleri: görünen metin + değer (data-value / value; yoksa metin), en çok 300. Yerel <select> atlanır
+ * (seçenekleri ekran okumasında gelir). Yazarak süzülen öneri listeleri (aria-autocomplete + girdide metin) ALINMAZ: içerik
+ * kullanıcının yazdığına bağlıdır. Girdinin değeri okunmaz, yalnızca boş olup olmadığına bakılır.
+ */
+export function acikListeSecenekleri(tetik: Element | null): Array<{ deger: string; metin: string }> | null {
+  if (!tetik || tetik.closest('select')) return null;
+  const bosluk = (m: string | null | undefined): string => (m ?? '').replace(/\s+/g, ' ').trim();
+  const gorunur = (el: Element | null): boolean => {
+    if (!(el instanceof HTMLElement)) return false;
+    const st = getComputedStyle(el);
+    if (st.display === 'none' || st.visibility === 'hidden') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const kutu = tetik.closest('[role="combobox"],[aria-haspopup],[aria-controls],[aria-owns]') ?? tetik;
+  const girdi = kutu instanceof HTMLInputElement ? kutu : kutu.querySelector('input');
+  const suzulen = girdi && /list|both/.test(girdi.getAttribute('aria-autocomplete') ?? '') && girdi.value !== '';
+  if (suzulen) return null;
+  const idler = [kutu, girdi].flatMap((e) => (e ? [e.getAttribute('aria-controls'), e.getAttribute('aria-owns')] : []))
+    .flatMap((x) => (x ?? '').split(/\s+/)).filter(Boolean);
+  let liste: Element | null = idler.map((id) => document.getElementById(id)).find((e) => e && gorunur(e)) ?? null;
+  if (!liste) {
+    const acik = [...document.querySelectorAll('[role="listbox"]')].filter((e) => !(e instanceof HTMLSelectElement) && gorunur(e));
+    if (acik.length === 1) liste = acik[0];
+  }
+  if (!liste) return null;
+  const ogeler = [...liste.querySelectorAll('[role="option"]')].filter(gorunur).slice(0, 300);
+  const sonuc = ogeler.map((o) => {
+    const metin = bosluk(o.textContent).slice(0, 120);
+    const deger = bosluk(o.getAttribute('data-value') ?? o.getAttribute('value') ?? metin).slice(0, 200);
+    return { deger, metin: metin || deger };
+  }).filter((x) => x.deger);
+  return sonuc.length ? sonuc : null;
 }
 
 /**

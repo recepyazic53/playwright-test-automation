@@ -25,6 +25,10 @@ export type PlatformGirisBilgisi = {
   sabitKod: string | null;
   /** SMS 2FA'da kodun kaynağı (giriş profilindeki ayar); SMS değilse null. */
   smsKipi: 'sabit' | 'elle' | null;
+  /** Giriş profilinin ek alanları (ad → değer; giriş adımlarındaki "{ad}"). Eski çıktılarda yok. */
+  ekAlanlar?: Record<string, string>;
+  /** Gizli ek alanların adları. */
+  gizliEkAlanlar?: string[];
 };
 
 /** Ortamın kayıtlı giriş tarifi (bkz. scripts/platform/giris/tarif-deposu.mjs). */
@@ -122,6 +126,8 @@ export type PlatformModelSenaryosu = {
   mutlakaGorunmeli: string[];
   /** Nöbetçi "Dene" taslağı (veritabanında yok; sonucu senaryosuz kaydedilir). */
   deneme?: boolean;
+  /** Senaryonun giriş seçimi (senaryo-girisi.mjs); null/yok = ortamın girişiyle (varsayılan). */
+  giris?: import('../../scripts/platform/senaryolar/senaryo-girisi.mjs').SenaryoGirisi | null;
 };
 
 export type PlatformModelVerisi = {
@@ -135,4 +141,6 @@ export type PlatformModelVerisi = {
   canli?: boolean;
   /** Kimlik alanlarının hazır profilleri: profil havuzu → profil adı → değerler (çözülmüş; yalnızca koşu belleğinde). */
   kimlikProfilleri?: Record<string, Record<string, Record<string, unknown>>>;
+  /** SQL adımlarının veritabanı bağlantıları: kimlik → çözülmüş ayar (parola dahil; yalnızca koşu belleğinde) ya da { hata }. */
+  sqlBaglantilari?: Record<string, import('../../scripts/platform/sql/sorgu-bagdastirici.mjs').VeritabaniAyari | { hata: string }>;
 };

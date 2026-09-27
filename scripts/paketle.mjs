@@ -60,7 +60,26 @@ for (const m of ['@playwright', 'playwright', 'playwright-core', 'sql.js', 'dote
   if (!existsSync(k)) { console.error(`Eksik modül: node_modules/${m} ("npm install" çalıştırın).`); process.exit(1); }
   cpSync(k, join(UYGULAMA, 'node_modules', m), { recursive: true });
 }
-adim('Çalışma zamanı modülleri kopyalandı.');
+// package.json "dependencies" ve veritabanı sürücüleri (Ayarlar > Entegrasyonlar > Veritabanı bağlantısı; kuruluysa) bağımlılık
+// ağaçlarıyla birlikte (node_modules kökündeki bağımlılıklar tek tek izlenir; paketin kendi node_modules'ü onunla kopyalanır).
+const EK_MODULLER = ['mssql', 'oracledb', 'pg', 'mysql2'];
+const kopyalananlar = new Set(['@playwright', 'playwright', 'playwright-core', 'sql.js', 'dotenv']);
+const modulKopyala = (ad, zorunlu) => {
+  if (kopyalananlar.has(ad) || kopyalananlar.has(ad.split('/')[0])) return;
+  const k = join(KOK, 'node_modules', ad);
+  if (!existsSync(join(k, 'package.json'))) {
+    if (zorunlu) { console.error(`Eksik modül: node_modules/${ad} ("npm install" çalıştırın).`); process.exit(1); }
+    return;
+  }
+  kopyalananlar.add(ad);
+  cpSync(k, join(UYGULAMA, 'node_modules', ad), { recursive: true });
+  const p = JSON.parse(readFileSync(join(k, 'package.json'), 'utf8'));
+  for (const b of Object.keys({ ...(p.dependencies ?? {}), ...(p.optionalDependencies ?? {}) })) modulKopyala(b, false);
+};
+const kokPaket = JSON.parse(readFileSync(join(KOK, 'package.json'), 'utf8'));
+for (const m of Object.keys(kokPaket.dependencies ?? {})) modulKopyala(m, true);
+for (const m of EK_MODULLER) modulKopyala(m, false);
+adim(`Çalışma zamanı modülleri kopyalandı (veritabanı sürücüleri: ${EK_MODULLER.filter((m) => kopyalananlar.has(m)).join(', ') || 'kurulu değil'}).`);
 
 // 3) Node.
 mkdirSync(join(HEDEF, 'runtime'), { recursive: true });
@@ -89,15 +108,16 @@ const csc = [join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framewo
   join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework', 'v4.0.30319', 'csc.exe')].find((y) => existsSync(y));
 if (!csc) { console.error('.NET Framework derleyicisi (csc.exe) bulunamadı; başlatıcı derlenemedi.'); process.exit(1); }
 const exe = join(HEDEF, 'Nöbetçi.exe');
-execFileSync(csc, ['/nologo', '/target:exe', '/codepage:65001', `/out:${exe}`, join(KOK, 'scripts', 'paket', 'Nobetci.cs')], { stdio: 'inherit' });
+// /target:winexe: arka plan açılışında (--arka-plan) konsol hiç oluşmaz; normal açılışta başlatıcı konsolu kendisi açar (Nobetci.cs).
+execFileSync(csc, ['/nologo', '/target:winexe', '/codepage:65001', `/out:${exe}`, join(KOK, 'scripts', 'paket', 'Nobetci.cs')], { stdio: 'inherit' });
 adim(`Başlatıcı derlendi: ${basename(exe)}`);
 
 // 6) Kullanım notu.
 writeFileSync(join(HEDEF, 'OKUBENI.txt'), [
   'NÖBETÇİ — taşınabilir sürüm',
   '',
-  'Başlatmak: "Nöbetçi.exe" dosyasına çift tıklayın. Açılan pencere açık kaldığı sürece Nöbetçi çalışır ve arayüz varsayılan',
-  'tarayıcınızda açılır (http://127.0.0.1:5566/). Kapatmak için o pencereyi kapatın.',
+  'Başlatmak: "Nöbetçi.exe" dosyasına çift tıklayın. Nöbetçi kendi penceresinde açılır (Ayarlar > Arayüz bölümünden varsayılan',
+  'tarayıcıyı da seçebilirsiniz). Nöbetçi penceresini kapatınca Nöbetçi de kapanır.',
   '',
   'Kurulum gerekmez; Node, VS Code ya da internet bağlantısı gerekmez. Nöbetçi yalnızca bu bilgisayardan erişilebilir.',
   'Verileriniz "uygulama\\veri" klasöründe, sizin belirlediğiniz kasa parolasıyla şifreli durur. Yeni bir sürüme geçerken',

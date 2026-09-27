@@ -130,6 +130,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (!ortamSecimi.size) ortamSecimi.add(s.ortam.id);
   let kosuyaDahil = s.taslak?.kosuyaDahil ?? (senaryo ? senaryo.kosuyaDahil : true);
   const mutlaka = new Set(s.taslak?.mutlaka ?? senaryo?.mutlakaGorunmeli ?? []);
+  // Giriş seçimi (senaryo-girisi.mjs): { kip: ortam | girissiz | temiz, profil }; null = ortamın girişiyle (varsayılan).
+  let girisSecimi = s.taslak && 'giris' in s.taslak ? s.taslak.giris : senaryo?.giris ?? null;
+  const modelGirissiz = baglam.model?.girisGerekmez === true;
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, ...(baglam.ortak ? { ortak: baglam.ortak } : {}), kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
   // Koşullu değer listeleri (Ayarlar > Test verisi): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
@@ -568,15 +571,50 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (akisSecimi) {
     akisSecimi.addEventListener('change', () => {
       const d = hesapla();
-      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka] } });
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi } });
     });
   }
+  // Giriş: ortamın girişiyle (varsayılan) / girişsiz / temiz oturumla yeniden giriş; birden çok giriş profili varsa profil. Ekran
+  // modeli girişsizse seçim kilitli (her zaman girişsiz).
+  const girisKipi = h('select', { id: yeniId('giris'), disabled: modelGirissiz },
+    [['ortam', 'Ortamın girişiyle (varsayılan)'], ['girissiz', 'Girişsiz'], ['temiz', 'Temiz oturumla yeniden giriş (kayıtlı oturumu kullanma)']]
+      .map(([d, m]) => h('option', { value: d, selected: (modelGirissiz ? 'girissiz' : girisSecimi?.kip ?? 'ortam') === d }, m)));
+  const girisProfili = h('select', { id: yeniId('girisProfili'), 'aria-label': 'Giriş profili' });
+  const girisNotu = h('div', { class: 'alan-notu' });
+  const girisProfilAlani = h('div', { class: 'giris-profil-secimi' }, h('label', { for: girisProfili.id, class: 'kucuk' }, 'Giriş profili'), girisProfili);
+  /** Seçili ortamlarda kullanılabilen giriş profili adları (tüm ortamlar için olanlar dahil). */
+  const profilAdlari = () => [...new Set((baglam.girisProfilleri || []).filter((p) => p.ortamId === null || ortamSecimi.has(p.ortamId)).map((p) => p.ad))]
+    .sort((a, b) => a.localeCompare(b, 'tr'));
+  const girisCiz = () => {
+    const adlar = profilAdlari();
+    const secili = girisSecimi?.profil ?? '';
+    girisProfili.replaceChildren(h('option', { value: '' }, 'Ortamın varsayılan profili'),
+      ...[...new Set([...adlar, ...(secili ? [secili] : [])])].map((ad) => h('option', { value: ad, selected: ad === secili }, adlar.includes(ad) ? ad : `${ad} (seçili ortamlarda yok)`)));
+    const kip = modelGirissiz ? 'girissiz' : girisKipi.value;
+    girisProfilAlani.hidden = kip === 'girissiz' || (adlar.length < 2 && !secili);
+    girisNotu.textContent = modelGirissiz ? 'Bu ekranın modeli girişsiz: senaryo giriş yapmadan koşar (seçim kilitli).'
+      : kip === 'girissiz' ? 'Giriş yapılmaz; kayıtlı oturum da kullanılmaz (ekran girişsiz açılır).'
+        : kip === 'temiz' ? 'Kayıtlı oturum kullanılmaz: çerezler temizlenip ortamın giriş tarifiyle yeniden girilir.'
+          : 'Kayıtlı oturum geçerliyse kullanılır, değilse ortamın giriş tarifiyle girilir (Ayarlar > Giriş profilleri > Giriş tarifi).';
+  };
+  const girisDegistir = () => {
+    const kip = girisKipi.value;
+    const profil = kip === 'girissiz' ? null : girisProfili.value || null;
+    girisSecimi = kip === 'ortam' && !profil ? null : { kip, profil };
+    degisti = true;
+    girisCiz();
+    if (!diyagramAlani.hidden) diyagramiCiz();
+  };
+  girisKipi.addEventListener('change', girisDegistir);
+  girisProfili.addEventListener('change', girisDegistir);
+  girisCiz();
   const senaryoKarti = h('section', { class: 'kart', 'aria-labelledby': 'senaryo-karti-baslik' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-karti-baslik' }, ikon('liste'), 'Senaryo'),
       h('span', { class: 'alt' }, 'Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.')),
     h('div', { class: 'alan-izgarasi' },
       akisSecimi ? h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: akisSecimi.id }, 'Akış')), akisSecimi,
         h('div', { class: 'alan-notu' }, 'Senaryo bu akışın adımlarıyla koşar; form seçilen akışa göre değişir.')) : null,
+      h('div', { class: 'model-alani genis giris-secimi' }, h('div', { class: 'alan-ust' }, h('label', { for: girisKipi.id }, 'Giriş')), girisKipi, girisProfilAlani, girisNotu),
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: baslikId }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslikGirdisi, baslikHata),
       sema.senaryoAlanlari.map(alanCiz)));
 
@@ -681,7 +719,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const ortamKutulari = h('div', { class: 'ortam-secimleri', role: 'group', 'aria-label': 'Senaryonun geçerli olduğu ortamlar' },
     s.ortamlar.map((o) => {
       const k = h('input', { type: 'checkbox', checked: ortamSecimi.has(o.id) });
-      k.addEventListener('change', () => { if (k.checked) ortamSecimi.add(o.id); else ortamSecimi.delete(o.id); degisti = true; ortamHata.textContent = ''; });
+      k.addEventListener('change', () => { if (k.checked) ortamSecimi.add(o.id); else ortamSecimi.delete(o.id); degisti = true; ortamHata.textContent = ''; girisCiz(); });
       return h('label', {}, k, o.ad);
     }));
   const ortamHata = h('div', { class: 'alan-hatasi', role: 'alert' });
@@ -757,7 +795,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
         govde: {
           ...(senaryo ? { id: senaryo.id } : { ekranId: baglam.ekran.id }), projeId: s.proje.id, baslik: baslikDegeri, veri,
           ...(baglam.akisId ? { akisId: baglam.akisId } : {}),
-          ortamIdleri: [...ortamSecimi], kosuyaDahil, mutlakaGorunmeli: [...mutlaka]
+          ortamIdleri: [...ortamSecimi], kosuyaDahil, mutlakaGorunmeli: [...mutlaka],
+          // Model girişsizse seçim yok sayılır (her zaman girişsiz); varsayılan seçim sunucuda içeriğe yazılmaz.
+          giris: modelGirissiz ? null : girisSecimi
         }
       });
       degisti = false;
@@ -796,7 +836,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const yanit = await api('/platform/senaryo/dene', {
         govde: {
           projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}),
-          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka]
+          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi
         }
       });
       deneme.bitti = true;
@@ -892,13 +932,14 @@ function modelFormu(icerik, s, senaryo, baglam) {
       diyagram = akisDiyagrami(baglam.model, {
         gorunurluk: d.gorunurluk,
         beklenen: hataAdimi ? { hataAdimi, mesaj: String(degerler[`${bs.anahtar}.mesaj`] || '') || null } : null,
-        sonuc: sonKosu.durum === 'hazir' ? sonKosu.sonuc : null
+        sonuc: sonKosu.durum === 'hazir' ? sonKosu.sonuc : null,
+        giris: girisSecimi
       });
     } catch (e) {
       yerlestir(diyagramAlani, hataKutusu(e));
       return;
     }
-    akisDiyagramiCiz(diyagramAlani, diyagram, { ...sonKosu, ortamAdi: s.ortam.ad });
+    akisDiyagramiCiz(diyagramAlani, diyagram, { ...sonKosu, ortamAdi: s.ortam.ad, projeId: s.proje.id, ortamId: s.ortam.id });
   }
   async function sonKosuyuOku() {
     if (!senaryo || sonKosuIstendi) return;

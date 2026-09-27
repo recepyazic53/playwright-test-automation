@@ -7,13 +7,14 @@ export declare class ServisHatasi extends Error {}
 export declare const MASKE: string;
 
 export declare function tarihBicimle(t: Date, bicim: string): string;
-export declare function goreliTarih(ifade: string, simdi: Date): Date;
-export declare function tarihKuraliUygula(kural: string, simdi: Date, varsayilanBicim?: string): string;
+export declare function goreliTarih(ifade: string, simdi: Date, kurallar?: Record<string, string>): Date;
+export declare function tarihKuraliUygula(kural: string, simdi: Date, varsayilanBicim?: string, kurallar?: Record<string, string>): string;
 export declare const VARSAYILAN_TARIH_BICIMI: string;
 export declare function tarihDegeriBicimle(deger: string, bicim: string, ad: string): string;
 export declare function yerTutuculariDoldur(govde: string, baglam: {
   degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string;
-  akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik'; varsayilanTarihBicimi?: string;
+  akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik' | 'json' | 'url' | 'yok'; varsayilanTarihBicimi?: string;
+  tarihOnbellegi?: Map<string, unknown>; gizliler?: string[];
 }): string;
 export declare function kullanilanParametreler(govde: string): string[];
 export declare function kullanilanAkisDegerleri(metin: string): string[];
@@ -25,7 +26,7 @@ export declare function gizlileriMaskele(metin: string, gizliler: string[]): str
 
 export interface HamYanit { durumKodu: number; basliklar: Record<string, string>; govde: string; sureMs: number }
 export declare function httpIstegi(istek: {
-  adres: string; yontem?: 'GET' | 'POST'; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
+  adres: string; yontem?: string; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
   sinyal?: AbortSignal; gonderildi?: () => void;
 }): Promise<HamYanit>;
 export declare function soapIstegi(istek: {

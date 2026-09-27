@@ -502,8 +502,8 @@ test('akış diyagramı: senaryonun akışı formdaki seçimlerle çizilir, adı
     const d = page.locator('.akis-diyagrami');
     await expect(d.getByText('Renkler: Deneme ortamındaki son koşu')).toBeVisible();
     const dugum = (baslik: string) => d.locator('.diyagram-dugumu').filter({ has: page.getByRole('heading', { name: baslik, exact: true }) });
-    await expect(dugum('Başlangıç')).toHaveClass(/durum-basari/);
-    await expect(dugum('Başlangıç')).toContainText('Ekran açılır (giriş gerekmez)');
+    await expect(dugum('Girişsiz')).toHaveClass(/durum-basari/);
+    await expect(dugum('Girişsiz')).toContainText('Girişsiz: ekran açılır (ekran giriş gerektirmez)');
     await expect(dugum('Müşteri bilgileri')).toHaveClass(/durum-basari/);
     // Seçime bağlı alanlar: bu senaryoda (bireysel) vergi numarası görünmez, TC görünür.
     const musteri = dugum('Müşteri bilgileri');

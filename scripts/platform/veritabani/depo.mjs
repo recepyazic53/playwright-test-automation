@@ -423,8 +423,72 @@ function girisProfiliCevir(vt, s, cozulsun) {
     parolaVar: parolaZarfi !== null, totpGizliVar: totpZarfi !== null,
     parola: cozulsun && parolaZarfi ? coz(vt, parolaZarfi) : null,
     totpGizli: cozulsun && totpZarfi ? coz(vt, totpZarfi) : null,
+    ekAlanlar: ekAlanlariOku(vt, s, cozulsun),
     olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
   };
+}
+
+// Ek alanlar (giriş tarifinin giriş adımlarındaki "{ad}" yer tutucuları). ek_alanlar_json ('ozel'): [{ ad, gizli, deger?,
+// degerVar? }] — gizli olmayanın değeri burada; ek_gizli_json ('gizli'): { ad: deger } — yalnızca { coz: true } ile çözülür.
+const EK_ALAN_ADI = /^[\p{L}\p{N}_.-]{1,60}$/u;
+const EK_ALAN_EN_COK = 30;
+const EK_ALAN_DEGER_EN_UZUN = 2000;
+
+/**
+ * @param {Veritabani} vt @param {Record<string, unknown>} s @param {boolean} cozulsun
+ * @returns {Array<{ ad: string; gizli: boolean; deger: string | null; degerVar: boolean }>}
+ */
+function ekAlanlariOku(vt, s, cozulsun) {
+  const meta = jsonOku(sifreliOku(vt, s.ek_alanlar_json ?? null));
+  if (!Array.isArray(meta)) return [];
+  const gizliler = cozulsun && typeof s.ek_gizli_json === 'string' ? /** @type {Record<string, unknown>} */ (jsonOku(coz(vt, s.ek_gizli_json)) ?? {}) : {};
+  return meta.filter((e) => typeof e === 'object' && e !== null && typeof e.ad === 'string').map((e) => {
+    const gizli = e.gizli === true;
+    const gizliDeger = gizliler[e.ad];
+    return {
+      ad: e.ad, gizli,
+      deger: gizli ? (cozulsun && typeof gizliDeger === 'string' ? gizliDeger : null) : typeof e.deger === 'string' ? e.deger : '',
+      degerVar: gizli ? e.degerVar === true : typeof e.deger === 'string' && e.deger !== ''
+    };
+  });
+}
+
+/**
+ * Ek alan girdisi → iki sütun. undefined = mevcut sütunlar korunur. Gizli alanda deger undefined = kayıtlı değeri koru
+ * (daha önce gizli değilse eski değeri gizliye taşınır), '' / null = sil.
+ * @param {Veritabani} vt @param {unknown} ham @param {Record<string, unknown> | undefined} mevcut
+ */
+function ekAlanSutunlari(vt, ham, mevcut) {
+  if (ham === undefined) return { ek_alanlar_json: mevcut?.ek_alanlar_json ?? null, ek_gizli_json: mevcut?.ek_gizli_json ?? null };
+  if (!Array.isArray(ham)) throw new DepoHatasi('"ekAlanlar" bir liste olmalıdır.');
+  if (ham.length > EK_ALAN_EN_COK) throw new DepoHatasi(`En fazla ${EK_ALAN_EN_COK} ek alan olabilir.`);
+  const eskiler = mevcut ? ekAlanlariOku(vt, mevcut, true) : [];
+  /** @type {Array<Record<string, unknown>>} */
+  const meta = [];
+  /** @type {Record<string, string>} */
+  const gizli = {};
+  const adlar = new Set();
+  for (const e of ham) {
+    if (typeof e !== 'object' || e === null) throw new DepoHatasi('Ek alan bir nesne olmalıdır.');
+    const ad = typeof e.ad === 'string' ? e.ad.trim() : '';
+    if (!EK_ALAN_ADI.test(ad)) throw new DepoHatasi(`Ek alan adı "${ad}" geçersiz: 1–60 karakter; yalnızca harf, rakam, _ . - (boşluk yok; ör. firmaKodu).`);
+    if (adlar.has(ad)) throw new DepoHatasi(`"${ad}" ek alanı iki kez tanımlanmış.`);
+    adlar.add(ad);
+    if (e.deger !== undefined && e.deger !== null && typeof e.deger !== 'string') throw new DepoHatasi(`"${ad}" ek alanının değeri metin olmalıdır.`);
+    if (typeof e.deger === 'string' && e.deger.length > EK_ALAN_DEGER_EN_UZUN) throw new DepoHatasi(`"${ad}" ek alanının değeri çok uzun.`);
+    const eski = eskiler.find((x) => x.ad === ad);
+    if (e.gizli === true) {
+      const deger = e.deger === undefined ? (eski?.deger ?? '') : (e.deger ?? '');
+      if (deger) gizli[ad] = deger;
+      meta.push({ ad, gizli: true, degerVar: Boolean(deger) });
+    } else {
+      // Gizliden açığa alınan alanın kayıtlı değeri açığa TAŞINMAZ (yeniden girilir).
+      const deger = e.deger === undefined ? (eski && !eski.gizli ? eski.deger ?? '' : '') : (e.deger ?? '');
+      meta.push({ ad, gizli: false, deger });
+    }
+  }
+  if (!meta.length) return { ek_alanlar_json: null, ek_gizli_json: null };
+  return { ek_alanlar_json: sifreliYaz(vt, JSON.stringify(meta)), ek_gizli_json: Object.keys(gizli).length ? sifrele(vt, JSON.stringify(gizli)) : null };
 }
 
 /**
@@ -441,7 +505,7 @@ function hassasDeger(vt, deger, mevcut) {
 /**
  * Kasa açık olmalıdır (kullanıcı adı ve SMS ayarı da şifreli yazılır).
  * @param {Veritabani} vt
- * @param {{ id?: string; projeId: string; ortamId?: string | null; ad: string; kullaniciAdi: string; parola?: string | null; ikiAsamaliTur?: 'yok' | 'totp' | 'sms'; totpGizli?: string | null; smsAyari?: Record<string, unknown>; yapan?: string }} girdi
+ * @param {{ id?: string; projeId: string; ortamId?: string | null; ad: string; kullaniciAdi: string; parola?: string | null; ikiAsamaliTur?: 'yok' | 'totp' | 'sms'; totpGizli?: string | null; smsAyari?: Record<string, unknown>; ekAlanlar?: Array<{ ad: string; gizli?: boolean; deger?: string | null }>; yapan?: string }} girdi
  */
 export function girisProfiliKaydet(vt, girdi) {
   return vt.islem(() => {
@@ -459,7 +523,8 @@ export function girisProfiliKaydet(vt, girdi) {
       parola: hassasDeger(vt, girdi.parola, mevcut?.parola),
       iki_asamali_tur: tur,
       totp_gizli: tur === 'totp' ? totp : null,
-      sms_ayari_json: sifreliYaz(vt, jsonMetni(girdi.smsAyari ?? jsonOku(sifreliOku(vt, mevcut?.sms_ayari_json)) ?? {}, 'smsAyari'))
+      sms_ayari_json: sifreliYaz(vt, jsonMetni(girdi.smsAyari ?? jsonOku(sifreliOku(vt, mevcut?.sms_ayari_json)) ?? {}, 'smsAyari')),
+      ...ekAlanSutunlari(vt, girdi.ekAlanlar, mevcut)
     }, { id: girdi.id, gecmisTuru: 'giris_profili', yapan: girdi.yapan });
   });
 }
@@ -604,10 +669,15 @@ function servisParametreleriniDogrula(liste, alanAdi) {
 const turCevir = (s) => ({
   id: String(s.id), projeId: String(s.proje_id), ad: String(s.ad),
   alanlar: /** @type {Array<{ ad: string; etiket: string; tip: string; hassas: boolean; servisParametreleri?: Array<{ ad: string; rol: string }> }>} */ (jsonOku(s.alanlar_json)),
+  // Tablonun kaynağı (sayfa paketinden içe aktarıldıysa; elle oluşturulanda null).
+  kaynak: /** @type {Record<string, string> | null} */ (s.kaynak_json ? jsonOku(s.kaynak_json) ?? null : null),
   olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });
 
-/** @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean; gizli?: boolean }> }} girdi */
+/**
+ * kaynak: verilmezse (undefined) mevcut kaynak korunur; null siler.
+ * @param {Veritabani} vt @param {{ id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean; gizli?: boolean }>; kaynak?: Record<string, string> | null }} girdi
+ */
 export function testVerisiTuruKaydet(vt, girdi) {
   const alanlar = turAlanlariniDogrula(girdi.alanlar);
   return vt.islem(() => {
@@ -646,7 +716,8 @@ export function testVerisiTuruKaydet(vt, girdi) {
     }
     return kaydetGenel(vt, 'test_verisi_turleri', {
       proje_id: kimlikKontrol(girdi.projeId, 'projeId'), ad: zorunluMetin(girdi.ad, 'ad'),
-      alanlar_json: JSON.stringify(alanlar)
+      alanlar_json: JSON.stringify(alanlar),
+      ...(girdi.kaynak !== undefined ? { kaynak_json: girdi.kaynak ? JSON.stringify(girdi.kaynak) : null } : {})
     }, { id: girdi.id });
   });
 }

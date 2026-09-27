@@ -8,12 +8,15 @@
 // kanıtlar (PNG ekran görüntüleri) ve GİZLİ DEĞER TARAMASI: parola/anahtar/token adlı alanlarda değer,
 // kart numarası (Luhn), T.C. kimlik no (resmi algoritma), IBAN, JWT, özel anahtar, adreste kullanıcı:parola
 // bulunan paket REDDEDİLİR (açık hata mesajıyla). Paketler gizli ya da kişisel veri taşımaz; kişi/kart gibi
-// veriler için test verisi profil ADI kullanılır.
+// veriler için test verisi profil ADI kullanılır. İsteğe bağlı "testVerisi" bölümü (seçim alanlarının seçenekleri tablo olarak +
+// alan → sütun bağlantıları) paket-tablolari.mjs ile doğrulanır; gizli sütuna değer yazılmaz.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: sayfa-paketi.d.mts.
 
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { senaryoyuDogrula, tcKimlikNoGecerliMi } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { paketListeleri, testVerisiniDogrula } from '../tablolar/paket-tablolari.mjs';
+import { modeleListeleriUygula } from '../senaryolar/deger-listesi-modeli.mjs';
 
 export const SAYFA_PAKETI_TURU = 'sayfa-paketi';
 export const SAYFA_PAKETI_SURUMU = 1;
@@ -24,7 +27,7 @@ export const KANIT_BOYUT_SINIRI = 4 * 1024 * 1024;
 export const IKI_ASAMALI_TURLER = Object.freeze(['yok', 'totp', 'sms', 'bilinmiyor']);
 export const EKRAN_ANAHTARI_DESENI = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
-const UST_ANAHTARLAR = new Set(['$schema', 'tur', 'surum', 'meta', 'model', 'senaryoOnerileri', 'gerekenAyarlar', 'bilinmeyenler', 'kanitlar']);
+const UST_ANAHTARLAR = new Set(['$schema', 'tur', 'surum', 'meta', 'model', 'senaryoOnerileri', 'gerekenAyarlar', 'bilinmeyenler', 'kanitlar', 'testVerisi']);
 const META_ANAHTARLARI = new Set(['proje', 'ekran', 'olusturan', 'olusturulma', 'baglamProfilleri', 'not']);
 const EKRAN_ANAHTARLARI = new Set(['anahtar', 'ad', 'urlYolu']);
 const ONERI_ANAHTARLARI = new Set(['baslik', 'veri', 'adimKapsami', 'beklenenSonuc', 'gerekce']);
@@ -217,6 +220,15 @@ export function sayfaPaketiniDogrula(ham, secenekler = {}) {
     }
   }
 
+  // Test verisi (isteğe bağlı): tablolar + alan bağlantıları (paket-tablolari.mjs).
+  let testVerisiGecerli = false;
+  if (ham.testVerisi !== undefined) {
+    const t = testVerisiniDogrula(ham.testVerisi, nesneMi(model) ? model : null);
+    for (const x of t.hatalar) hata(x.yer, x.mesaj);
+    for (const x of t.uyarilar) uyari(x.yer, x.mesaj);
+    testVerisiGecerli = !t.hatalar.length;
+  }
+
   // Senaryo önerileri
   if (!Array.isArray(ham.senaryoOnerileri)) {
     hata('senaryoOnerileri', 'dizi olmalı (öneri yoksa []).');
@@ -241,7 +253,10 @@ export function sayfaPaketiniDogrula(ham, secenekler = {}) {
         const adimlar = new Set((model.adimlar || []).map((a) => a && a.id));
         for (const a of Array.isArray(o.adimKapsami) ? o.adimKapsami : []) if (!adimlar.has(a)) uyari(`${yer}.adimKapsami`, `adım "${a}" modelde yok.`);
         try {
-          const d = senaryoyuDogrula({ ...o.veri, baslik: typeof o.veri.baslik === 'string' ? o.veri.baslik : o.baslik }, { model, altModeller, kaynak: 'kayit' });
+          // Tabloya bağlı alanda senaryo değeri tablodaki değerdir: paketin tabloları modele uygulanarak doğrulanır.
+          const listeler = testVerisiGecerli ? paketListeleri(ham.testVerisi, model) : [];
+          const oneriModeli = listeler.length ? modeleListeleriUygula(model, listeler) : model;
+          const d = senaryoyuDogrula({ ...o.veri, baslik: typeof o.veri.baslik === 'string' ? o.veri.baslik : o.baslik }, { model: oneriModeli, altModeller, kaynak: 'kayit' });
           senaryoSorunlari[i] = d.hatalar;
           if (d.hatalar.length) uyari(yer, `"${o.baslik}" önerisi modele göre ${d.hatalar.length} sorun içeriyor (varsayılan olarak seçilmez): ${d.hatalar.slice(0, 3).map((x) => `${x.alan || '—'}: ${x.mesaj}`).join(' · ')}`);
         } catch (e) {

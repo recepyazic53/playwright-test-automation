@@ -53,8 +53,18 @@ Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapıla
 - **Test verisi** — kayıtlar, tablolar ve değer listeleri.
 - **Sonuçlar** — koşular, kartlar, trend, hata kalıpları, test ayrıntısı (ekran görüntüsü, video, iz). Medya
   şifrelidir ve yalnızca kasa açıkken gösterilir.
-- **Ayarlar** — proje, ortamlar, giriş profilleri ve giriş tarifleri, bağlam profilleri, dosyalar, koşu ayarları,
-  hata sınıflandırma kuralları, maskeleme, güvenlik (otomatik kilit, yasak adresler), yedekleme.
+- **Ayarlar** — proje, ortamlar, giriş profilleri ve giriş tarifleri, bağlam profilleri, koşu ayarları,
+  hata sınıflandırma kuralları, maskeleme, güvenlik (otomatik kilit, yasak adresler), yedekleme, entegrasyonlar
+  (koşu bitti webhook bildirimi, iş takip sisteminde hata kaydı, veritabanı bağlantıları; gizliler kasada şifreli).
+
+### Giriş
+
+Her ortamın girişi **Ayarlar > Giriş profilleri > Giriş tarifi**'ndedir ve **Ekranlar > Ortak akışlar**'da "Giriş (ortam)"
+olarak adım adım okunur; **Düzenle** o ortamın tarif formunu açar. Kullanıcı adı, parola ve giriş düğmesinin önüne,
+arasına ya da arkasına adım eklenebilir (ek alan, seçim, "Devam" ile iki sayfalı giriş, çerez onayı); bu adımların
+değerleri giriş profilinde **Ek alanlar**'da durur, gizli işaretlenen (PIN gibi) kasada şifreli ve maskelidir.
+**Girişi kaydet** ile girişi görünür tarayıcıda kendiniz yaparsınız (yazdığınız değerler kaydedilmez); alanları
+işaretleyip önizledikten sonra tarif formunda kontrol edip kaydedersiniz.
 
 ### Senaryo dosyaları
 
@@ -73,6 +83,19 @@ kaynak olarak desteklenir.
 Koşular yalnızca Nöbetçi'den başlatılır: sunucu Playwright'ı (`playwright.config.ts`) proje ve ortam kimlikleriyle
 çalıştırır; veri, giriş bilgisi ve giriş tarifi şifreli veritabanından okunur, sonuçlar şifreli olarak yazılır.
 Playwright HTML raporu üretilmez.
+
+### Zamanlanmış koşular ve kilitli kasa
+
+**Ayarlar > Koşu > Zamanlanmış koşular**: kurallar varsayılan olarak yalnız Nöbetçi açıkken ve kasa açıkken çalışır.
+"Kasa kilitliyken ve açılışta" bölümündeki üç seçenek **varsayılan kapalıdır** ve ayrı ayrı açılır:
+
+- **Kilitliyken çalışsın (anahtar yalnız bellekte)** — kilitlemede arayüz kilitlenir (veri uçları 423), anahtarın kopyası
+  yalnız zamanlayıcının belleğinde kalır; Nöbetçi kapanınca gider. Kilitlerken "Tamamen kilitle" anahtarı da siler.
+- **Windows oturumuna bağlı otomatik açma (DPAPI)** — parola yeniden sorulur; anahtar DPAPI (CurrentUser) ile şifrelenip
+  çalışma alanının klasörüne yazılır (`<veritabanı>.zamanlayici.dpapi`; yedeğe/pakete girmez). Açılışta yalnız zamanlayıcıya
+  verilir, arayüz kilitli başlar. Risk: Windows oturumunuzu ele geçiren biri zamanlanmış koşuların kullandığı verilere erişebilir.
+- **Bilgisayar açılınca arka planda başlasın** — Görev Zamanlayıcı'ya kendi hesabınızla, yönetici izni gerektirmeyen
+  "Nöbetçi (arka plan)" görevi eklenir (`baslat.mjs --arka-plan`; pakette `Nöbetçi.exe --arka-plan`, pencere açılmaz).
 
 ## Yapı
 

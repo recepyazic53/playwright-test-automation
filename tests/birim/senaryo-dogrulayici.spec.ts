@@ -7,6 +7,7 @@
 //  - Mesaj şablonları birbirinden farklı; hiçbir mesaj kart numarası/CVV içermiyor.
 //  - Her hata alanı formda bir kontrole eşleniyor (modelin form karşılıkları).
 //  - Örnek sayfa paketinin (model-fikstur.ts) önerileri hatasız.
+//  - Geriye uyum: eski anahtar adlarıyla gelen model aynı sonucu verir; etiketsiz alanda iç anahtar gösterilmez.
 // Model: bu dosyadaki NÖTR "Örnek talep" ekran modeli + kart alt modeli (değerler sahte).
 import { expect, test } from '@playwright/test';
 import {
@@ -23,6 +24,7 @@ import {
   type DogrulamaKarti,
   type DogrulamaSonucu
 } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
+import { ekranModeliniDogrula, eskiModelAnahtarlariniCevir } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
 import { modelFormKontrolleri, type YuklenmisEkranModeli } from '../support/ekran-modeli';
 import { ornekBasvuruModeli, ornekBasvuruPaketi } from './model-fikstur';
 
@@ -51,7 +53,7 @@ const kimlikParcalari = (onEk: string): Nesne[] => [
   { id: `${onEk}Telefon`, tip: 'metin', etiket: { ekran: 'Telefon', form: 'Telefon' }, eslesme: { kimlikAlani: 'cepTelefonu' }, form: form(`f_${onEk}Telefon`, 'metin') }
 ];
 const kartAlani = (kart: string, etiket: string, tip = 'metin', ek: Nesne = {}): Nesne => ({
-  id: `kart_${kart}`, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { kart }, form: form(`f_kart_${kart}`, tip), ...ek
+  id: `kart_${kart}`, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { kayitAlani: kart }, form: form(`f_kart_${kart}`, tip), ...ek
 });
 
 function ornekTalepModeli(): Nesne {
@@ -445,7 +447,7 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
       gorunmeyenAlan: ['E'], birlikteZorunlu: ['E', 'F'], profilYok: ['E', 'P'], profilVeKimlikBirlikte: ['E'],
       profilYaDaKimlikZorunlu: ['E'], tcBicim: [], tcKontrolHanesi: [], vknBicim: [], telefonBicim: [],
       tarihBicim: ['E', 'B'], tarihGelecekte: ['E'], kartNoBicim: [], cvvBicim: [], kartAyBicim: [], kartYilBicim: [],
-      kartTaksitBicim: [12], kartSuresiGecmis: ['01/2026'], ortakKartSuresiGecmis: ['01/2026'], eskiBeklenenSonucAlanlari: [liste]
+      kartTaksitBicim: [12], kartSuresiGecmis: ['01/2026'], varsayilanKayitSuresiGecmis: ['E', '01/2026'], eskiBeklenenSonucAlanlari: [liste]
     };
     const metinler = Object.entries(MESAJLAR).map(([ad, sablon]) =>
       (sablon as (...a: unknown[]) => string)(...ARGUMANLAR[ad as keyof typeof MESAJLAR]));
@@ -492,5 +494,97 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
       for (const h of senaryoyuDogrula(o.veri, { model, altModeller: {}, simdi: new Date() }).hatalar) sorunlar.push(`"${String(o.veri.baslik)}" > ${h.alan}: ${h.mesaj}`);
     }
     expect(sorunlar, sorunlar.join('\n')).toEqual([]);
+  });
+});
+
+test.describe('Tek senaryo doğrulayıcısı — geriye uyum (eski anahtar adları)', () => {
+  /** Nesnenin derin kopyası; anahtarları ad(eski) → ad(yeni) çevirerek (testte eski biçimi üretmek için). */
+  const anahtarDegistir = (d: unknown, eski: string, yeni: string): unknown => {
+    if (Array.isArray(d)) return d.map((x) => anahtarDegistir(x, eski, yeni));
+    if (typeof d !== 'object' || d === null) return d;
+    return Object.fromEntries(Object.entries(d).map(([k, v]) => [k === eski ? yeni : k, anahtarDegistir(v, eski, yeni)]));
+  };
+
+  test('alt modelde eski "eslesme.kart" anahtarı: tüm vakalar yeni adla aynı sonucu verir', () => {
+    const eskiAltModeller = anahtarDegistir(ALT_MODELLER, 'kayitAlani', 'kart') as DogrulamaBaglami['altModeller'];
+    expect(JSON.stringify(eskiAltModeller)).toContain('"kart":"kartNo"');
+    for (const vaka of VAKALAR) {
+      const yeni = dogrula(vaka);
+      const eski = senaryoyuDogrula(vaka.senaryo, baglam({ ...vaka.baglam, altModeller: eskiAltModeller }));
+      expect(eski, vaka.ad).toEqual(yeni);
+    }
+    expect(alanFormKimlikleri('odemeKarti.sonKullanmaYili', { model: MODEL as unknown as DogrulamaBaglami['model'], altModeller: eskiAltModeller }))
+      .toEqual(['f_kart_sonKullanmaYili']);
+  });
+
+  /** Bağlam profiline göre görünen alan: bilinen durum profil koduyla eşleşir. */
+  const baglamModeli = (profilAlaniId: string, durum: Nesne): DogrulamaBaglami['model'] => ({
+    kosullar: { profileGore: { aciklama: 'profile göre', ifade: { calismaZamani: 'gorunurse' }, bilinenDurumlar: [durum] } },
+    adimlar: [],
+    senaryoDuzeyi: {
+      alanlar: [
+        { id: profilAlaniId, tip: 'secim', yapilandirma: 'senaryo', etiket: { form: 'Profil' }, eslesme: { senaryo: 'profil' } },
+        { id: 'gizli', tip: 'metin', yapilandirma: 'senaryo', zorunlu: true, etiket: { form: 'Gizli alan' }, eslesme: { senaryo: 'gizli' }, gorunurluk: { kosul: 'profileGore' } }
+      ]
+    }
+  } as unknown as DogrulamaBaglami['model']);
+
+  test('bağlam profili görünürlüğü: yeni (profiller/profilKodu) ve eski (ortak/acentePartaji) biçim aynı sonucu verir', () => {
+    const senaryoVerisi = { profil: 'Merkez' };
+    const yeni = senaryoyuDogrula(senaryoVerisi, {
+      model: baglamModeli('baglamProfili', { profil: 'Merkez', profilKodu: '100', gorunur: false, kaynak: 'test' }),
+      profiller: { baglamProfilleri: { Merkez: { kod: '100' } } }
+    });
+    // Eski biçim: alan kimliği, durum anahtarları ve bağlam parçası eski adlarıyla.
+    const eskiBaglam = { model: baglamModeli('acenteProfili', { acente: 'Merkez', acentePartaji: '100', gorunur: false, kaynak: 'test' }),
+      ortak: { acenteProfilleri: { Merkez: { acentePartaji: '100' } } } } as unknown as DogrulamaBaglami;
+    const eski = senaryoyuDogrula(senaryoVerisi, eskiBaglam);
+    expect(yeni).toEqual({ gecerli: true, hatalar: [], uyarilar: [] });
+    expect(eski).toEqual(yeni);
+    // Profil bağlamı yoksa görünürlük bilinmiyor: alan zorunlu kalır.
+    const bilinmiyor = senaryoyuDogrula(senaryoVerisi, { model: baglamModeli('baglamProfili', { profilKodu: '100', gorunur: false }) });
+    expect(bilinmiyor.hatalar).toEqual([{ alan: 'gizli', mesaj: MESAJLAR.zorunlu('Gizli alan') }]);
+  });
+
+  test('ekran modeli: eski anahtarlar okunur; eskiModelAnahtarlariniCevir yeni adlara çevirir, girdiyi değiştirmez', () => {
+    const eskiModel = {
+      ...ornekBasvuruModeli(),
+      kosullar: {
+        ...(ornekBasvuruModeli().kosullar as Nesne),
+        profilKosulu: {
+          ifade: { calismaZamani: 'gorunurse' }, hedefIfade: { acente: { alanSeti: 'A' } },
+          bilinenDurumlar: [{ acente: 'Merkez', acentePartaji: '100', gorunur: true, kaynak: 'gözlem' }]
+        }
+      },
+      acenteBaglami: { aciklama: 'Bağlam ekranı', veriKaynagi: 'test', alanlar: [], bilinenProfiller: ['Merkez'] }
+    };
+    const onceki = JSON.stringify(eskiModel);
+    const altModelYok = () => { throw new Error('alt model yok'); };
+    expect(() => ekranModeliniDogrula('eski.model.json', eskiModel, altModelYok)).not.toThrow();
+
+    const yeniModel = eskiModelAnahtarlariniCevir(eskiModel) as Nesne;
+    expect(JSON.stringify(eskiModel)).toBe(onceki);
+    expect(yeniModel).not.toHaveProperty('acenteBaglami');
+    expect(yeniModel.baglam).toEqual(eskiModel.acenteBaglami);
+    expect((yeniModel.kosullar as Record<string, Nesne>).profilKosulu).toEqual({
+      ifade: { calismaZamani: 'gorunurse' }, hedefIfade: { baglam: { alanSeti: 'A' } },
+      bilinenDurumlar: [{ profil: 'Merkez', profilKodu: '100', gorunur: true, kaynak: 'gözlem' }]
+    });
+    expect(() => ekranModeliniDogrula('yeni.model.json', yeniModel, altModelYok)).not.toThrow();
+    // Yeni adlı model olduğu gibi döner; eski ve yeni ad birlikte hatadır.
+    expect(eskiModelAnahtarlariniCevir(yeniModel)).toBe(yeniModel);
+    expect(() => ekranModeliniDogrula('ikisi.model.json', { ...yeniModel, acenteBaglami: yeniModel.baglam }, altModelYok)).toThrow(/birlikte olmaz/);
+    // Alt model: eslesme.kart → eslesme.kayitAlani.
+    const altModel = eskiModelAnahtarlariniCevir(anahtarDegistir(ALT_MODELLER[KART_DOSYASI], 'kayitAlani', 'kart'));
+    expect(altModel).toEqual(ALT_MODELLER[KART_DOSYASI]);
+  });
+
+  test('etiketi olmayan alanın mesajında iç anahtar görünmez', () => {
+    const model = {
+      adimlar: [],
+      senaryoDuzeyi: { alanlar: [{ id: 'icAnahtarAdi', tip: 'metin', yapilandirma: 'senaryo', zorunlu: true, eslesme: { senaryo: 'icAnahtarAdi' } }] }
+    } as unknown as DogrulamaBaglami['model'];
+    const { hatalar } = senaryoyuDogrula({}, { model });
+    expect(hatalar).toEqual([{ alan: 'icAnahtarAdi', mesaj: 'Bu alan zorunludur.' }]);
   });
 });

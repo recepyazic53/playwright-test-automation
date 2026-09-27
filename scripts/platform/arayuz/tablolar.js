@@ -45,6 +45,14 @@ function kopya(t) {
   };
 }
 
+/** Sayfa paketinden içe aktarılan tablonun kaynağı: "Akış kaydı · “Ekran” · 27.09.2026 10:30". */
+const KAYNAK_TURU = { paket: 'Sayfa paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
+function kaynakMetni(k) {
+  if (!k || !k.tur) return '';
+  const z = Date.parse(k.yazilma || k.olusturulma || '');
+  return [KAYNAK_TURU[k.tur] || k.tur, k.ekran ? `“${k.ekran}”` : '', Number.isNaN(z) ? '' : new Date(z).toLocaleString('tr-TR')].filter(Boolean).join(' · ');
+}
+
 const KARSILIK_ADIM = 200;
 /**
  * Sütunun karşılıkları penceresi: sütundaki farklı değerler; her biri için Sayfa değeri ve Servis değeri. Tamam'da yalnız
@@ -141,7 +149,8 @@ export async function tablolarBolumu(govde, proje) {
         type: 'button', 'aria-current': t.id === seciliId && is?.id ? 'true' : 'false',
         onclick: async () => { if (t.id === seciliId && is?.id) return; if (!(await gecebilirMi())) return; seciliId = t.id; is = kopya(t); ara = ''; gorunur = GORUNUR_ADIM; ciz(); }
       }, h('span', { class: 'tablo-adi' }, t.ad, t.baglam ? h('span', { class: 'rozet kucuk-rozet', title: 'Kullanıcı / şube değiştirme profilleri: senaryoda satır adıyla seçilir' }, 'bağlam') : null),
-        h('small', {}, `${t.sutunlar.length} sütun · ${t.satirlar.length} satır`))),
+        h('small', {}, `${t.sutunlar.length} sütun · ${t.satirlar.length} satır`),
+        t.kaynak && t.kaynak.tur ? h('small', { class: 'tablo-kaynagi', title: kaynakMetni(t.kaynak) }, `kaynak: ${KAYNAK_TURU[t.kaynak.tur] || t.kaynak.tur}`) : null)),
       h('button', { type: 'button', class: 'kucuk-dugme yeni-tablo', onclick: async () => { if (!(await gecebilirMi())) return; seciliId = ''; is = kopya(null); ciz(); } },
         ikon('arti'), 'Yeni tablo')));
   }
@@ -353,6 +362,7 @@ export async function tablolarBolumu(govde, proje) {
       h('div', { class: 'kart-basligi' }, adG, durum,
         h('span', { class: 'sag' },
           is.id ? h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => tabloyuSil() }, ikon('cop'), 'Tabloyu sil') : null)),
+      (() => { const k = is.id ? liste.find((x) => x.id === is.id)?.kaynak : null; return k && k.tur ? h('p', { class: 'kucuk soluk tablo-kaynagi' }, h('b', {}, 'Kaynak: '), kaynakMetni(k), ' — sayfa paketinden içe aktarıldı (seçim alanlarının seçenekleri).') : null; })(),
       h('div', { class: 'tablo-arac-cubugu' },
         h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {

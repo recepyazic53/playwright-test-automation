@@ -31,6 +31,7 @@ import { kosuKaydet, kosuyuBitir, sonucKaydet } from './veritabani/sonuc-deposu.
 import { MEDYA_ANAHTARI_META, medyaAnahtariniAc, yeniMedyaAnahtari } from './kasa.mjs';
 import { medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi, medyaSifrele } from './medya.mjs';
 import { adimGurultuMu, ansiTemizle, playwrightDurumuEsle } from './sonuclar/siniflandirma.mjs';
+import { yakalananMesajlariAyristir } from './sonuclar/yakalanan-mesajlar.mjs';
 
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
 const VARSAYILAN_VIDEO_SAKLAMA_GUN = 30;
@@ -433,8 +434,10 @@ export default class PlatformRaporlayici {
         kosuId, projeId: baglam.projeId, testKimligi: test.id, senaryoAnahtari: `${dosya}::${test.title}`,
         senaryoId: aciklama.get('senaryoId') ?? null, senaryoBaslik: test.title, urunAdi: aciklama.get('urun') ?? null,
         durum, hamDurum: result.status, sureMs: result.duration, hataMesaji, beklenenSonuc: aciklama.get('beklenenSonuc') ?? null,
-        atlananAlanlar: atlanan, deneme: result.retry, baslangic: baslangic.toISOString(),
-        bitis: new Date(baslangic.getTime() + Math.max(0, result.duration)).toISOString(), adimlar, medya
+        atlananAlanlar: atlanan, deneme: result.retry,
+        // Koşuda yakalanan mesajlar (tests/support/mesaj-yakalayici.ts; maskeli): geçen testlerde de.
+        yakalananMesajlar: yakalananMesajlariAyristir(aciklama.get('yakalananMesajlar') ?? '[]'),
+        baslangic: baslangic.toISOString(), bitis: new Date(baslangic.getTime() + Math.max(0, result.duration)).toISOString(), adimlar, medya
       });
     } catch (hata) {
       // Satır yazılamadıysa şifreli kopyalar sahipsiz kalmasın; düz metin dosyalara dokunulmaz.

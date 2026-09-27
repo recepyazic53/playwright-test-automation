@@ -13,7 +13,7 @@ import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import {
-  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, goreliTarih, kontrolleriDegerlendir, kullanilanAkisDegerleri, kullanilanParametreler, ServisHatasi, soapIstegi,
+  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, kontrolleriDegerlendir, kullanilanAkisDegerleri, kullanilanParametreler, ServisHatasi, soapIstegi,
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
 } from './soap-istemcisi.mjs';
 import {
@@ -21,10 +21,13 @@ import {
   servisKimlikOzeti, servisleriListele, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
 } from './servis-deposu.mjs';
 import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktarma.mjs';
+import { adresBirlestirRest, govdeKacisi, restIstegi } from './rest-istemcisi.mjs';
+import { ortakYol, postmanCozumle, postmanOzeti, sablonCevir, sablonDegiskenleri } from './postman-ice-aktarma.mjs';
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 
@@ -81,7 +84,7 @@ export const ortamdaTanimli = (ayarlar, ortamId) => ayarlar.tabanlar?.[ortamId] 
  * Ortam taban adresleri: { <ortamId>: adres | '' }. '' = servis o ortamda yok. Adres http(s) olmalı.
  * @param {unknown} tabanlar @returns {Record<string, string>}
  */
-function tabanlariDogrula(tabanlar) {
+export function tabanlariDogrula(tabanlar) {
   if (tabanlar === undefined || tabanlar === null) return {};
   if (typeof tabanlar !== 'object' || Array.isArray(tabanlar)) throw new DepoHatasi('"tabanlar" bir nesne olmalıdır.');
   /** @type {Record<string, string>} */
@@ -106,7 +109,7 @@ function tabanlariDogrula(tabanlar) {
  * Yeni kullanılan taban adresleri ortamın listesine eklenir (sonraki servislerde seçilebilsin). Ortamın asıl adresi zaten listede.
  * @param {Veritabani} vt @param {string} projeId @param {Record<string, string>} tabanlar
  */
-function tabanlariOrtamlaraKaydet(vt, projeId, tabanlar) {
+export function tabanlariOrtamlaraKaydet(vt, projeId, tabanlar) {
   for (const [ortamId, adres] of Object.entries(tabanlar)) {
     if (!adres) continue;
     const o = ortamGetir(vt, ortamId);
@@ -143,18 +146,24 @@ function adresleriDogrula(adresler) {
   return s;
 }
 
-/** Tarih kuralları: { AD: "bugun+1y|yyyy-MM-dd" }. @param {unknown} kurallar @returns {Record<string, string>} */
+/**
+ * Hesaplama kuralları (ayar adı geriye uyum için tarihKurallari): { AD: "bugun+1y|yyyy-MM-dd" | "yuvarla(${Tutar} / 100, 2)" }.
+ * Sözdizimi, tanımsız kural adı, bilinmeyen fonksiyon ve döngü (A → B → A) açık hatayla reddedilir (bkz. hesap-kurallari.mjs).
+ * @param {unknown} kurallar @returns {Record<string, string>}
+ */
 export function tarihKurallariniDogrula(kurallar) {
   if (kurallar === undefined || kurallar === null) return {};
   if (typeof kurallar !== 'object' || Array.isArray(kurallar)) throw new DepoHatasi('"tarihKurallari" bir nesne olmalıdır.');
   /** @type {Record<string, string>} */
   const s = {};
   for (const [ad, kural] of Object.entries(kurallar)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) throw new DepoHatasi(`Geçersiz parametre adı: "${ad}".`);
+    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) throw new DepoHatasi(`Geçersiz kural adı: "${ad}".`);
     if (typeof kural !== 'string' || !kural.trim()) continue;
-    try { goreliTarih(kural.split('|')[0], new Date()); } catch (e) { throw new DepoHatasi(`${ad}: ${/** @type {Error} */ (e).message}`); }
+    if (kural.length > 2000) throw new DepoHatasi(`${ad}: kural en çok 2000 karakter olabilir.`);
     s[ad] = kural.trim();
   }
+  const hatalar = Object.entries(hesapKurallariniDenetle(s));
+  if (hatalar.length) throw new DepoHatasi(hatalar.map(([ad, m]) => `${ad}: ${m}`).join(' '));
   return s;
 }
 
@@ -184,7 +193,7 @@ function ekAlanlariDogrula(v) {
  * Senaryo düzenleyicide vurgulanır ve süzülür; koşuyu ENGELLEMEZ (olumsuz senaryolar bilerek göndermeyebilir).
  * @param {unknown} v @returns {Record<string, string[]>}
  */
-function alanZorunluluklariniDogrula(v) {
+export function alanZorunluluklariniDogrula(v) {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanZorunluluklari" bir nesne olmalıdır.');
   /** @type {Record<string, string[]>} */
   const s = {};
@@ -209,7 +218,7 @@ function alanVarsayilanlariniDogrula(v) {
     for (const [yol, d] of Object.entries(alanlar)) {
       if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (!d || typeof d !== 'object' || !KAYNAKLAR.includes(d.kaynak)) throw new DepoHatasi(`"${yol}" için geçersiz kaynak.`);
-      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo';
+      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo' || d.kaynak === 'hesap';
       if (degerli && typeof d.deger !== 'string') throw new DepoHatasi(`"${yol}" için değer gerekli.`);
       (s[op] ??= {})[yol] = degerli ? { kaynak: d.kaynak, deger: d.deger } : { kaynak: d.kaynak };
     }
@@ -242,7 +251,7 @@ function alanListeleriniDogrula(v) {
  * gönderilir (ör. yyyy-MM-dd'T'HH:mm:ss).
  * @param {unknown} v @returns {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>}
  */
-function alanBaglariniDogrula(v) {
+export function alanBaglariniDogrula(v) {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanBaglari" bir nesne olmalıdır.');
   /** @type {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>} */
   const s = {};
@@ -251,6 +260,12 @@ function alanBaglariniDogrula(v) {
     for (const [yol, b] of Object.entries(alanlar)) {
       if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (!b) continue;
+      // Hesaplama kuralı bağı: alan servisin bir kuralından dolar ({ kural: 'BEGIN_DATE' }; tablo bağının yerine).
+      if (typeof b === 'object' && typeof b.kural === 'string') {
+        if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(b.kural)) throw new DepoHatasi(`"${yol}" için geçersiz kural adı.`);
+        (s[op] ??= {})[yol] = { kural: b.kural };
+        continue;
+      }
       if (typeof b !== 'object' || typeof b.tablo !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(b.tablo) || typeof b.sutun !== 'string' || !b.sutun.trim() || b.sutun.length > 60) {
         throw new DepoHatasi(`"${yol}" için geçersiz tablo bağlantısı.`);
       }
@@ -362,7 +377,9 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {}),
     ...(girdi.oturumAkisi !== undefined ? { oturumAkisi: oturumAkisiDogrula(vt, projeId, girdi.oturumAkisi) } : {})
   };
-  if (adresDegisti) {
+  kuralBaglariniDenetle(ayarlar);
+  // REST servisinde WSDL yoktur: adres değişikliği erişim kontrolü (WSDL isteği) gerektirmez.
+  if (adresDegisti && mevcut?.tur !== 'rest') {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);
     ayarlar.erisim = { ortamId: e.ortamId, zaman: new Date(e.zaman).toISOString(), durumKodu: e.durumKodu };
     // Sihirbazda seçilen metotlar: yalnız onlar (ve şemaları) saklanır.
@@ -375,8 +392,21 @@ export function servisiKaydet(vt, projeId, girdi) {
   }
   return vt.islem(() => {
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
-    return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
+    return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: mevcut?.tur ?? 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
   });
+}
+
+/**
+ * Kural bağları servisin kurallarında tanımlı olmalı (kural silinirken bağlı alan varsa açık hata).
+ * @param {{ tarihKurallari?: Record<string, string>; alanBaglari?: ServisAyarlari['alanBaglari'] }} ayarlar
+ */
+export function kuralBaglariniDenetle(ayarlar) {
+  const kurallar = ayarlar.tarihKurallari ?? {};
+  for (const [op, alanlar] of Object.entries(ayarlar.alanBaglari ?? {})) {
+    for (const [yol, b] of Object.entries(alanlar)) {
+      if (b?.kural && !Object.hasOwn(kurallar, b.kural)) throw new DepoHatasi(`"${op}" metodunun "${yol}" alanı "${b.kural}" kuralına bağlı ama bu kural tanımlı değil (önce bağı kaldırın ya da kuralı ekleyin).`);
+    }
+  }
 }
 
 /**
@@ -423,7 +453,7 @@ export function servisParametreleri(vt, projeId, servisId) {
   const kimlikAlanlari = new Set(servis.ayarlar.kimlikProfili ? Object.keys(servisKimliginiCoz(vt, projeId, servis.ayarlar.kimlikProfili, '')) : []);
   /** @type {Map<string, number>} */
   const kullanim = new Map();
-  for (const s of servisSenaryolariniListele(vt, servisId)) for (const p of kullanilanParametreler(s.icerik.govde)) if (!basvuruCoz(p)) kullanim.set(p, (kullanim.get(p) ?? 0) + 1);
+  for (const s of servisSenaryolariniListele(vt, servisId)) for (const p of kullanilanParametreler(s.icerik.govde ?? '')) if (!basvuruCoz(p)) kullanim.set(p, (kullanim.get(p) ?? 0) + 1);
   // Henüz senaryoda geçmese de servis varsayılanlarında (★) kullanılan parametreler (senaryo sayısı 0).
   for (const alanlar of Object.values(servis.ayarlar.alanVarsayilanlari ?? {})) {
     for (const v of Object.values(alanlar)) if (v.kaynak === 'parametre' && v.deger && !kullanim.has(v.deger)) kullanim.set(v.deger, 0);
@@ -772,9 +802,165 @@ export function soapuiAktar(vt, projeId, girdi) {
       mevcutBasliklar.add(x.baslik);
       eklenen++;
     }
-    const kalanParametreler = [...new Set(servisSenaryolariniListele(vt, servisId).flatMap((y) => kullanilanParametreler(y.icerik.govde)))]
+    const kalanParametreler = [...new Set(servisSenaryolariniListele(vt, servisId).flatMap((y) => kullanilanParametreler(y.icerik.govde ?? '')))]
       .filter((ad) => !(s.ayarlar.tarihKurallari ?? {})[ad] && !basvuruCoz(ad) && !eslemeler.has(ad));
     return { servisId, yeniServis: !mevcut, eklenen, atlanan, baglananAlan: oneri.yeni, girisSatiriEklendi, eksikSatirlar: [...eksikSatirlar], eslenmemisParametreler: kalanParametreler };
+  });
+}
+
+// ---------------------------------------------------------------------------------------
+// Postman aktarımı (REST)
+// ---------------------------------------------------------------------------------------
+
+/** Tablo / sütun adında kullanılamayan karakterler ("." "[" "]" "{" "}" "$" "<" ">" "&" "|" ve denetim karakterleri) → "_". @param {string} ad */
+const tabloAdiTemizle = (ad) => ad.replace(/[.[\]{}$<>&|\u0000-\u001f]/g, '_').trim().slice(0, 60);
+/** Akış değeri adı: harf / "_" ile başlar; harf, rakam, "_", "-". @param {string} ad */
+const akisAdiTemizle = (ad) => (ad.replace(/[^A-Za-z0-9_-]/g, '_').replace(/^([^A-Za-z_])/, '_$1')).slice(0, 60);
+
+/**
+ * Önizleme: koleksiyonun klasörleri (→ servisler), istekler, değişkenler (gizli olanların DEĞERİ dönmez), taban adres adayları.
+ * Hiçbir şey yazılmaz, ağ isteği yok.
+ * @param {Veritabani} vt @param {string} projeId @param {{ koleksiyon: string; ortam?: string }} girdi
+ */
+export function postmanOnizle(vt, projeId, girdi) {
+  const c = postmanCozumle(girdi.koleksiyon, { ...(girdi.ortam ? { ortamMetni: girdi.ortam } : {}), ekGizliAdlar: ekGizliAdlar(vt) });
+  const mevcut = new Map(servisleriListele(vt, projeId).map((s) => [s.anahtar, s]));
+  const o = postmanOzeti(c);
+  return {
+    ...o,
+    klasorler: o.klasorler.map((kl) => {
+      const s = mevcut.get(kl.anahtar);
+      return { ...kl, mevcutServis: s ? { id: s.id, ad: s.ad, tur: s.tur } : null };
+    }),
+    varsayilanTabloAdi: tabloAdiTemizle(`Postman ${c.koleksiyon}`),
+    tablolar: tablolariListele(vt, projeId).map((t) => t.ad)
+  };
+}
+
+/**
+ * Aktarım (kullanıcının önizlemedeki seçimleriyle):
+ * - klasorler: içe alınacak klasör anahtarları; her biri bir REST servisi (aynı anahtarlı REST servisi varsa senaryolar ona eklenir;
+ *   aynı başlıklı senaryo atlanır; aynı anahtarlı SOAP servisi varsa hata).
+ * - Değişkenler bir test verisi tablosunun sütunları olur (tabloAdi; varsa sütunlar eklenir); değerler tek satıra yazılır
+ *   (degerOrtami: satırın ortamı, boş = tüm ortamlar). Şablonda {{ad}} → ${Tablo.ad}.
+ * - gizliler: gizli sütun olacak değişkenler (verilmezse dosyadaki / addan gelen varsayılan). Gizli değer YALNIZ sifreliKaydet'te
+ *   adı varsa şifreli sütuna yazılır; değilse boş kalır (koşudan önce tabloda doldurulur).
+ * - akisDegiskenleri: tabloya değil akış değerine (${akis:ad}) çevrilecek değişkenler (ör. betikle / oturum akışıyla alınan token).
+ * - tabanOrtami: verilirse klasörün adres kökeni o ortamda servisin taban adresi olur (ortamın adres listesine de eklenir).
+ * Ağ isteği atılmaz (REST servisinde WSDL / erişim kontrolü yok).
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {{ koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
+ *   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string }} girdi
+ */
+export function postmanAktar(vt, projeId, girdi) {
+  const c = postmanCozumle(girdi.koleksiyon, { ...(girdi.ortam ? { ortamMetni: girdi.ortam } : {}), ekGizliAdlar: ekGizliAdlar(vt) });
+  const secilen = c.klasorler.filter((kl) => girdi.klasorler.includes(kl.anahtar));
+  if (!secilen.length) throw new DepoHatasi('En az bir klasör (servis) seçin.');
+  if (girdi.degerOrtami) ortamiAl(vt, projeId, girdi.degerOrtami);
+  if (girdi.tabanOrtami) ortamiAl(vt, projeId, girdi.tabanOrtami);
+  const degiskenler = new Map(c.degiskenler.map((v) => [v.ad, v]));
+  const gizliler = new Set(girdi.gizliler ?? c.degiskenler.filter((v) => v.gizli).map((v) => v.ad));
+  const sifreli = new Set(girdi.sifreliKaydet ?? []);
+  const akis = new Set(girdi.akisDegiskenleri ?? []);
+  // Seçilen isteklerde geçen değişkenler (sırayla).
+  /** @type {string[]} */
+  const kullanilan = [];
+  for (const kl of secilen) {
+    for (const i of kl.istekler) for (const ad of sablonDegiskenleri([i.yol, i.govde, ...Object.values(i.basliklar)].join('\n'))) if (!kullanilan.includes(ad)) kullanilan.push(ad);
+  }
+  const tabloya = kullanilan.filter((ad) => !akis.has(ad));
+  const tabloAdi = tabloAdiTemizle(girdi.tabloAdi || `Postman ${c.koleksiyon}`);
+  if (tabloya.length && !tabloAdi) throw new DepoHatasi('Tablo adı boş olamaz.');
+  /** Değişken → sütun adı (tekil). @type {Map<string, string>} */
+  const sutunAdi = new Map();
+  for (const ad of tabloya) {
+    const temel = tabloAdiTemizle(ad) || 'deger';
+    let s = temel;
+    for (let n = 2; [...sutunAdi.values()].some((x) => x.toLocaleLowerCase('tr') === s.toLocaleLowerCase('tr')); n++) s = `${temel.slice(0, 56)}_${n}`;
+    sutunAdi.set(ad, s);
+  }
+  /** @param {string} s */
+  const cevir = (s) => sablonCevir(s, (ad) => (akis.has(ad) ? `\${akis:${akisAdiTemizle(ad)}}` : sutunAdi.has(ad) ? `\${${basvuru(tabloAdi, /** @type {string} */ (sutunAdi.get(ad)))}}` : undefined));
+
+  return vt.islem(() => {
+    // --- Değişken tablosu ---
+    /** @type {{ ad: string; yeni: boolean; sutunSayisi: number; sifreliYazilan: string[]; bosBirakilan: string[] } | null} */
+    let tabloOzeti = null;
+    if (tabloya.length) {
+      const tablolar = tablolariListele(vt, projeId);
+      const mevcut = tablolar.find((t) => t.ad.toLocaleLowerCase('tr') === tabloAdi.toLocaleLowerCase('tr'));
+      const eskiSutunlar = mevcut ? mevcut.sutunlar.map((x) => ({ ad: x.ad, eskiAd: x.ad, gizli: x.gizli })) : [];
+      const yeniSutunlar = tabloya.map((ad) => /** @type {string} */ (sutunAdi.get(ad)))
+        .filter((s) => !eskiSutunlar.some((x) => x.ad.toLocaleLowerCase('tr') === s.toLocaleLowerCase('tr')))
+        .map((s) => ({ ad: s, gizli: gizliler.has(/** @type {string} */ ([...sutunAdi].find(([, v]) => v === s)?.[0])) }));
+      /** @type {Record<string, string>} */
+      const degerler = {};
+      /** @type {string[]} */
+      const sifreliYazilan = [];
+      /** @type {string[]} */
+      const bosBirakilan = [];
+      for (const ad of tabloya) {
+        const d = degiskenler.get(ad)?.deger ?? '';
+        const sutun = /** @type {string} */ (sutunAdi.get(ad));
+        const gizliSutun = mevcut?.sutunlar.find((x) => x.ad.toLocaleLowerCase('tr') === sutun.toLocaleLowerCase('tr'))?.gizli ?? gizliler.has(ad);
+        if (gizliSutun) {
+          // Gizli değer yalnız kullanıcı onayladıysa (şifreli sütuna); onay yoksa satıra hiç yazılmaz (boş kalır / mevcut korunur).
+          if (sifreli.has(ad) && d) { degerler[sutun] = d; sifreliYazilan.push(ad); } else bosBirakilan.push(ad);
+        } else degerler[sutun] = d;
+      }
+      const ortamId = girdi.degerOrtami || null;
+      const satir = mevcut?.satirlar.find((r) => (r.ortamId ?? null) === ortamId);
+      tabloKaydet(vt, {
+        projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: mevcut?.ad ?? tabloAdi, sutunlar: [...eskiSutunlar, ...yeniSutunlar],
+        satirlar: [{ ...(satir ? { id: satir.id } : {}), ortamId, degerler }], ortamVar: (id) => Boolean(ortamGetir(vt, id))
+      });
+      tabloOzeti = { ad: mevcut?.ad ?? tabloAdi, yeni: !mevcut, sutunSayisi: tabloya.length, sifreliYazilan, bosBirakilan };
+    }
+
+    // --- Servisler ve senaryolar ---
+    const servisOzetleri = [];
+    for (const kl of secilen) {
+      const istekler = kl.istekler.map((i) => ({ ...i, yol: cevir(i.yol), govde: cevir(i.govde), basliklar: Object.fromEntries(Object.entries(i.basliklar).map(([a, v]) => [a, cevir(v)])) }));
+      const mevcut = servisleriListele(vt, projeId).find((s) => s.anahtar === kl.anahtar);
+      if (mevcut && mevcut.tur !== 'rest') throw new DepoHatasi(`"${kl.anahtar}" anahtarlı bir SOAP servisi var; klasörü içe almak için önce o servisin anahtarını değiştirin.`);
+      const yol = mevcut?.ayarlar.yol ?? ortakYol(istekler.map((i) => i.yol));
+      /** @param {string} tam */
+      const goreli = (tam) => {
+        const y = yol === '/' ? tam : tam.startsWith(yol) ? tam.slice(yol.length) : tam;
+        return y && !/^[/?]/.test(y) ? `/${y}` : y;
+      };
+      const koken = istekler.map((i) => i.koken).find(Boolean);
+      const tabanlar = { ...(mevcut?.ayarlar.tabanlar ?? {}), ...(girdi.tabanOrtami && koken ? { [girdi.tabanOrtami]: koken } : {}) };
+      /** @type {import('./servis-deposu.mjs').ServisOperasyonu[]} */
+      const operasyonlar = [...(mevcut?.ayarlar.operasyonlar ?? [])];
+      for (const i of istekler) {
+        if (!operasyonlar.some((o) => o.ad === i.operasyon)) operasyonlar.push({ ad: i.operasyon, metot: i.metot, yol: goreli(i.yol.split('?')[0]) });
+      }
+      if (Object.keys(tabanlar).length) tabanlariOrtamlaraKaydet(vt, projeId, tabanlariDogrula(tabanlar));
+      const servisId = servisKaydet(vt, {
+        ...(mevcut ? { id: mevcut.id } : {}), projeId, anahtar: kl.anahtar, ad: mevcut?.ad ?? kl.ad, tur: 'rest', yapan: girdi.yapan,
+        ayarlar: { ...(mevcut?.ayarlar ?? {}), yol: yolDogrula(yol), adresler: mevcut?.ayarlar.adresler ?? {}, ...(Object.keys(tabanlar).length ? { tabanlar } : {}), operasyonlar }
+      });
+      const basliklar = new Set(servisSenaryolariniListele(vt, servisId).map((x) => x.baslik));
+      let eklenen = 0;
+      /** @type {string[]} */
+      const atlanan = [];
+      for (const i of istekler) {
+        if (basliklar.has(i.baslik)) { atlanan.push(i.baslik); continue; }
+        servisSenaryosuKaydet(vt, {
+          projeId, servisId, baslik: i.baslik, kapsam: girdi.kapsam ?? 'test', yapan: girdi.yapan,
+          icerik: {
+            operasyon: i.operasyon, govde: i.govde, kontroller: i.kontroller, kaynak: i.kaynak,
+            http: { metot: i.metot, yol: goreli(i.yol), ...(i.icerikTuru ? { icerikTuru: i.icerikTuru } : {}) },
+            ...(Object.keys(i.basliklar).length ? { basliklar: i.basliklar } : {}), ...(i.uyarilar.length ? { aciklama: i.uyarilar.join(' ') } : {})
+          }
+        });
+        basliklar.add(i.baslik);
+        eklenen++;
+      }
+      servisOzetleri.push({ servisId, anahtar: kl.anahtar, ad: mevcut?.ad ?? kl.ad, yeniServis: !mevcut, yol, eklenen, atlanan });
+    }
+    return { servisler: servisOzetleri, tablo: tabloOzeti, akisDegerleri: kullanilan.filter((ad) => akis.has(ad)).map(akisAdiTemizle) };
   });
 }
 
@@ -792,6 +978,19 @@ export function soapuiAktar(vt, projeId, girdi) {
 let oturumSaglayici = null;
 /** @param {OturumSaglayici | null} fn */
 export function oturumSaglayicisiAyarla(fn) { oturumSaglayici = fn; }
+
+/**
+ * Akış senaryosu kancası (akis-senaryosu.mjs kaydeder): içeriği tur 'akis' olan senaryo akış motoruyla koşar; bir servisin toplu
+ * koşusu, akışı o servisten geçen (başka serviste kayıtlı) akış senaryolarını da içerir.
+ * @typedef {{ kos: (vt: Veritabani, projeId: string, girdi: any) => Promise<any>; gecenler: (vt: Veritabani, projeId: string, servisId: string) => any[];
+ *   atlamaNedeni: (vt: Veritabani, senaryo: any, ortam: any) => string }} AkisSenaryoKancasi
+ */
+/** @type {AkisSenaryoKancasi | null} */
+let akisSenaryoKancasi = null;
+/** @param {AkisSenaryoKancasi | null} k */
+export function akisSenaryoKancasiAyarla(k) { akisSenaryoKancasi = k; }
+/** Kayıtlı kanca (servis-isleri.mjs kullanır). */
+export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
 
 /**
  * Tek bir senaryoyu (kayıtlı ya da taslak) bir ortamda çalıştırır ve sonucu servis koşuları tablosuna yazar.
@@ -815,6 +1014,13 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
   const tur = ortamTuru(ortam);
   const kayitli = girdi.senaryoId ? servisSenaryosuGetir(vt, girdi.senaryoId) : undefined;
+  // Akış senaryosu: akış motoru koşar (akis-senaryosu.mjs); akışın geçtiği her servisten çalıştırılabilir.
+  const hamIcerik = /** @type {any} */ (kayitli ? kayitli.icerik : girdi.taslak?.icerik);
+  if (hamIcerik && typeof hamIcerik === 'object' && hamIcerik.tur === 'akis') {
+    if (!akisSenaryoKancasi) throw new DepoHatasi('Akış senaryosu bu süreçte koşulamaz (akış motoru yüklü değil).');
+    if (kayitli && kayitli.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+    return akisSenaryoKancasi.kos(vt, projeId, { ...girdi, servis, kayitli });
+  }
   if (girdi.senaryoId && (!kayitli || kayitli.servisId !== servis.id)) throw new DepoHatasi('Senaryo bulunamadı.');
   if (!kayitli && !girdi.taslak) throw new DepoHatasi('"senaryoId" ya da "taslak" gerekli.');
   const icerik = kayitli ? kayitli.icerik : senaryoIceriginiDogrula(girdi.taslak?.icerik);
@@ -825,7 +1031,11 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   if (tur === 'canli' && (servis.ayarlar.yalnizTestOperasyonlari ?? []).includes(icerik.operasyon)) {
     throw new DepoHatasi(`"${icerik.operasyon}" operasyonu yalnız test ortamında koşar (servis ayarı).`);
   }
-  const eylem = servis.ayarlar.operasyonlar?.find((o) => o.ad === icerik.operasyon)?.eylem;
+  const opTanimi = servis.ayarlar.operasyonlar?.find((o) => o.ad === icerik.operasyon);
+  const eylem = opTanimi?.eylem;
+  // REST: istek tanımı senaryoda (icerik.http); yoksa operasyonun metodu + yolu.
+  const rest = servis.tur === 'rest';
+  const http = rest ? (icerik.http ?? (opTanimi?.metot ? { metot: opTanimi.metot, yol: opTanimi.yol ?? '' } : undefined)) : undefined;
   const baslangic = new Date();
   const bas = Date.now();
   /** @type {string[]} */
@@ -846,12 +1056,15 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   let adim = 'hazirlik';
   try {
     olay('hazirlik', 'basladi');
-    const adres = servisAdresi(servis.ayarlar, ortam);
+    if (rest && !http) throw new DepoHatasi('REST senaryosunda HTTP metodu / yolu tanımlı değil.');
+    const servisAdr = servisAdresi(servis.ayarlar, ortam);
+    let adres = servisAdr;
     sonuc.adres = adres;
+    if (http) sonuc.metot = http.metot;
     // ${akis:…} değeri verilmemişse ve servise oturum akışı atanmışsa değerler (ör. token) oturumdan: önbellekte geçerliyse
     // yeniden kullanılır, yoksa oturum akışı koşulur.
     const basliklarHam = icerik.basliklar ?? {};
-    const gereken = kullanilanAkisDegerleri([icerik.govde, ...Object.values(basliklarHam), JSON.stringify(icerik.kontroller)].join('\n'))
+    const gereken = kullanilanAkisDegerleri([icerik.govde, ...Object.values(basliklarHam), JSON.stringify(icerik.kontroller), http?.yol ?? ''].join('\n'))
       .filter((a) => akisDegerleri?.[a] === undefined);
     if (gereken.length && servis.ayarlar.oturumAkisi && oturumSaglayici) {
       const o = await oturumSaglayici(vt, projeId, servis.ayarlar.oturumAkisi, ortam.id, { yenile: girdi.oturumYenile === true, sinyal: girdi.sinyal });
@@ -861,26 +1074,38 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       oturumKullanildi = true;
     }
     // Başlıklardaki ${Tablo.Sütun} de gövdedekilerle birlikte çözülür.
-    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [icerik.govde, ...Object.values(basliklarHam)].join('\n') }, ortam.id);
+    const hamMetin = [icerik.govde, ...Object.values(basliklarHam), http?.yol ?? ''].join('\n');
+    const kurallar = servis.ayarlar.tarihKurallari ?? {};
+    const kuralRefleri = kuralParametreleri(kullanilanParametreler(hamMetin).filter((a) => Object.hasOwn(kurallar, a)), kurallar).refler.map((r) => `\${${r}}`);
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortam.id);
     gizliler = [...gizliler, ...p.gizliler];
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
+    // Aynı "şimdi" ve önbellek gövde / yol / başlık doldurmalarında paylaşılır: zincirli kurallar aynı anı temel alır.
     const doldurma = {
-      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
+      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi ?? baslangic, tarihOnbellegi: new Map(), gizliler, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
       akisDegerleri, varsayilanTarihBicimi: kosu.tarihBicimi
     };
-    const govde = yerTutuculariDoldur(icerik.govde, doldurma);
+    // REST: gövde değerleri içerik türüne göre kaçışlanır (JSON / form / XML); yol değerleri URL kodlanır.
+    const govde = yerTutuculariDoldur(icerik.govde, http ? { ...doldurma, kacis: govdeKacisi(http.icerikTuru) } : doldurma);
+    if (http) {
+      adres = adresBirlestirRest(servisAdr, yerTutuculariDoldur(http.yol, { ...doldurma, kacis: 'url' }));
+      sonuc.adres = gizlileriMaskele(adres, gizliler);
+    }
     const ekBasliklar = Object.fromEntries(Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]));
     sonuc.istek = gizlileriMaskele(govde, gizliler);
     if (Object.keys(ekBasliklar).length) sonuc.istekBasliklari = basliklariMaskele(ekBasliklar, gizliler, ekAdlar);
-    olay('hazirlik', 'tamam', { adres, istek: sonuc.istek });
+    olay('hazirlik', 'tamam', { adres: sonuc.adres, istek: sonuc.istek });
     adim = 'gonderim';
     olay('gonderim', 'basladi');
     if (girdi.sinyal?.aborted) throw new ServisHatasi('Kullanıcı durdurdu.');
-    const yanit = await soapIstegi({
-      adres, eylem, soapSurumu: servis.ayarlar.soapSurumu, govde, zamanAsimiMs: girdi.zamanAsimiMs ?? kosu.servisZamanAsimiSn * 1000, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
+    const ortak = {
+      adres, govde, zamanAsimiMs: girdi.zamanAsimiMs ?? kosu.servisZamanAsimiSn * 1000, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
       ekBasliklar, gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
-    });
+    };
+    const yanit = http
+      ? await restIstegi({ ...ortak, metot: http.metot, ...(http.icerikTuru ? { icerikTuru: http.icerikTuru } : {}) })
+      : await soapIstegi({ ...ortak, eylem, soapSurumu: servis.ayarlar.soapSurumu });
     // Oturum değeri (token) sunucuca reddedildiyse: oturum bir kez yenilenip senaryo yeniden denenir (bu deneme kaydedilmez).
     if (oturumKullanildi && !girdi.oturumYenile && (yanit.durumKodu === 401 || yanit.durumKodu === 403)) {
       return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true });
@@ -971,9 +1196,13 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
   if (!servis || servis.projeId !== projeId) throw new DepoHatasi('Servis bulunamadı.');
   const yalnizTest = new Set(servis.ayarlar.yalnizTestOperasyonlari ?? []);
   const secili = girdi.senaryoIdleri ? new Set(girdi.senaryoIdleri) : null;
-  const liste = servisSenaryolariniListele(vt, girdi.servisId).filter((s) => (secili ? secili.has(s.id) : s.kosuyaDahil));
+  // Akışı bu servisten geçen (başka serviste kayıtlı) akış senaryoları da koşar.
+  const liste = [...servisSenaryolariniListele(vt, girdi.servisId), ...(akisSenaryoKancasi?.gecenler(vt, projeId, girdi.servisId) ?? [])]
+    .filter((s) => (secili ? secili.has(s.id) : s.kosuyaDahil));
   const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
-  const kosulacak = tanimli ? liste.filter((s) => (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))) : [];
+  const akisMi = (/** @type {any} */ s) => s.icerik?.tur === 'akis';
+  const kosulacak = liste.filter((s) => (akisMi(s) ? Boolean(akisSenaryoKancasi) && !akisSenaryoKancasi?.atlamaNedeni(vt, s, ortam)
+    : tanimli && (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))));
   const sonuclar = [];
   for (const s of kosulacak) {
     const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs });

@@ -19,7 +19,7 @@ export function rehberAnahtari(hash) {
   else if (bolum === 'senaryolar') anahtar = parca === 'yeni' || parca === 'duzenle' ? 'senaryo-formu' : 'senaryolar';
   else if (bolum === 'servisler') {
     const sekme = String(hash).split('/')[4] || '';
-    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : 'servis') : 'servisler';
+    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 'sonuclar' ? 'servis-sonuclari' : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : 'servis') : 'servisler';
   } else if (bolum === 'ekranlar') {
     if (parca === 'yeni') anahtar = 'ekran-ekle';
     else if (parca === 'tarama') anahtar = 'tarama';
@@ -118,6 +118,7 @@ export function rehberBaslat(anahtar) {
     const adim = rehber.adimlar[sira];
     const el = hedefBul(adim);
     kart.classList.toggle('ortada', !el);
+    kart.classList.toggle('hedefli', !!el);
     if (!el) { vurgu.hidden = true; kart.style.removeProperty('top'); kart.style.removeProperty('left'); return; }
     const r = el.getBoundingClientRect();
     const bosluk = 6;
@@ -133,23 +134,34 @@ export function rehberBaslat(anahtar) {
     kart.style.left = `${left}px`;
   };
 
+  let yon = 1;
   const ciz = () => {
     const adim = rehber.adimlar[sira];
-    const son = sira === rehber.adimlar.length - 1;
+    const sonAdim = sira === rehber.adimlar.length - 1;
     const geri = h('button', { type: 'button', class: 'hayalet', disabled: sira === 0, onclick: () => git(-1) }, ikon('geri'), 'Geri');
-    const ileri = h('button', { type: 'button', class: 'birincil', onclick: () => (son ? kapat(true) : git(1)) }, son ? 'Bitti' : 'İleri', son ? ikon('onay') : ikon('ok'));
+    const ileri = h('button', { type: 'button', class: 'birincil', onclick: () => (sonAdim ? kapat(true) : git(1)) }, sonAdim ? 'Bitti' : 'İleri', sonAdim ? ikon('onay') : ikon('ok'));
     const kapatDugmesi = h('button', { type: 'button', class: 'ikon-dugme hayalet rehber-kapat', 'aria-label': 'Rehberi kapat', title: 'Kapat (Esc)', onclick: () => kapat(true) }, ikon('carpi'));
     const metinler = (Array.isArray(adim.metin) ? adim.metin : [adim.metin]).filter(Boolean);
+    const sahne = adim.cizim ? cizim(adim.cizim) : null;
+    // İlerleme: her adım bir parça; tıklayınca o adıma gider.
+    const ilerleme = h('div', { class: 'rehber-ilerleme', role: 'group', 'aria-label': 'Adımlar' },
+      rehber.adimlar.map((a, i) => h('button', {
+        type: 'button', class: `rehber-parca${i === sira ? ' aktif' : i < sira ? ' gecti' : ''}`, title: a.baslik,
+        'aria-label': `Adım ${i + 1}: ${a.baslik}`, 'aria-current': i === sira ? 'step' : null,
+        onclick: () => { if (i !== sira) { yon = i > sira ? 1 : -1; sira = i; ciz(); } }
+      })));
+    const icerik = h('div', { class: 'rehber-icerik' },
+      h('h2', { id: baslikId }, adim.baslik),
+      ...metinler.map((x) => h('p', {}, x)),
+      adim.sira ? h('ol', { class: 'rehber-sira' }, adim.sira.map((x, i) => h('li', { style: { '--i': i } }, h('span', { class: 'rehber-sira-no', 'aria-hidden': 'true' }, String(i + 1)), h('span', {}, x)))) : null,
+      adim.ipucu ? h('p', { class: 'rehber-ipucu' }, ikon('simsek'), adim.ipucu) : null);
+    kart.classList.toggle('sahneli', !!sahne);
     yerlestir(kart,
       h('div', { class: 'rehber-ust' },
         h('span', { class: 'rehber-etiket' }, ikon('pusula'), rehber.baslik),
         h('span', { class: 'rehber-sayac' }, `${sira + 1} / ${rehber.adimlar.length}`), kapatDugmesi),
-      h('h2', { id: baslikId }, adim.baslik),
-      ...metinler.map((m) => h('p', {}, m)),
-      adim.sira ? h('ol', { class: 'rehber-sira' }, adim.sira.map((x) => h('li', {}, x))) : null,
-      adim.cizim ? cizim(adim.cizim) : null,
-      adim.ipucu ? h('p', { class: 'rehber-ipucu' }, ikon('simsek'), adim.ipucu) : null,
-      h('div', { class: 'rehber-nokta', 'aria-hidden': 'true' }, rehber.adimlar.map((_, i) => h('span', { class: i === sira ? 'aktif' : '' }))),
+      ilerleme,
+      h('div', { class: `rehber-govde ${yon > 0 ? 'ileri' : 'geri'}` }, sahne ? h('div', { class: 'rehber-sahne' }, sahne) : null, icerik),
       h('div', { class: 'dugmeler' }, geri, ileri));
     const el = hedefBul(adim);
     if (el) el.scrollIntoView({ block: 'center' });
@@ -157,7 +169,7 @@ export function rehberBaslat(anahtar) {
     ileri.focus();
   };
 
-  const git = (yon) => { sira = Math.min(Math.max(0, sira + yon), rehber.adimlar.length - 1); ciz(); };
+  const git = (adim) => { yon = adim; sira = Math.min(Math.max(0, sira + adim), rehber.adimlar.length - 1); ciz(); };
 
   const tus = (o) => {
     if (o.key === 'Escape') { o.preventDefault(); kapat(true); return; }
@@ -194,15 +206,79 @@ export function rehberBaslat(anahtar) {
 }
 
 /**
- * Anlatım çizimi (örnek veri kurulmaz; kullanıcı kararı "yalnız anlatım"): kutular ve oklarla küçük bir akış.
- * @param {{ tur: 'akis'; kutular: Array<{ baslik: string; alt?: string; ikon?: string }> }} c
+ * ANLATIM ÇİZİMLERİ (örnek veri kurulmaz; kullanıcı kararı "yalnız anlatım"). Hepsi CSS ile canlandırılır; "hareketi azalt"
+ * tercihinde durağan gösterilir. Türler:
+ *   akis   { kutular: [{ baslik, alt?, ikon? }] }        kutular tek satırda, sırayla yanar; oklarda ilerleyen nokta
+ *   maket  { bolge, etiket? }                              küçük uygulama maketi: imleç vurgulu bölgeye gider ve tıklar
+ *          bolge: 'menu' | 'sol' | 'eylem' | 'arac' | 'tablo' | 'kartlar' | 'grafik' | 'form' | 'soru' | 'proje'
+ *   form   { alanlar: string[], dugme }                    alanlar sırayla dolar, sonra düğmeye basılır
+ *   istek  { sol, sag, gidis, donus, kontroller? }        istek gider, yanıt döner, kontroller tek tek onaylanır
+ *   katman { katmanlar: [{ baslik, alt? }] }               iç içe katmanlar (ör. kasa → proje → ortam)
+ * @param {Record<string, any>} c
  */
 function cizim(c) {
-  if (c.tur !== 'akis') return null;
+  if (c.tur === 'akis') return akisCizimi(c);
+  if (c.tur === 'maket') return maketCizimi(c);
+  if (c.tur === 'form') return formCizimi(c);
+  if (c.tur === 'istek') return istekCizimi(c);
+  if (c.tur === 'katman') return katmanCizimi(c);
+  return null;
+}
+
+/** @param {Record<string, any>} c */
+function akisCizimi(c) {
   const ogeler = [];
   c.kutular.forEach((k, i) => {
-    if (i) ogeler.push(h('span', { class: 'rehber-ok', 'aria-hidden': 'true' }, ikon('ok')));
-    ogeler.push(h('span', { class: 'rehber-kutu' }, k.ikon ? ikon(k.ikon) : null, h('b', {}, k.baslik), k.alt ? h('small', {}, k.alt) : null));
+    if (i) ogeler.push(h('span', { class: 'rehber-ok', style: { '--i': i }, 'aria-hidden': 'true' }, h('span', { class: 'rehber-ok-nokta' })));
+    ogeler.push(h('span', { class: 'rehber-kutu', style: { '--i': i } },
+      h('span', { class: 'rehber-kutu-ikon' }, ikon(k.ikon || 'hedef')), h('b', {}, k.baslik), k.alt ? h('small', {}, k.alt) : null));
   });
-  return h('div', { class: 'rehber-cizim', role: 'img', 'aria-label': c.kutular.map((k) => k.baslik).join(' → ') }, ogeler);
+  return h('div', { class: 'rehber-cizim rehber-akis', style: { '--n': c.kutular.length }, role: 'img', 'aria-label': c.kutular.map((k) => k.baslik).join(' → ') }, ogeler);
+}
+
+const MAKET_BOLGELERI = ['menu', 'sol', 'eylem', 'arac', 'tablo', 'kartlar', 'grafik', 'form', 'soru', 'proje'];
+/** @param {Record<string, any>} c */
+function maketCizimi(c) {
+  const bolge = MAKET_BOLGELERI.includes(c.bolge) ? c.bolge : 'tablo';
+  const b = (ad, ...cocuk) => h('div', { class: `mk-${ad}${ad === bolge ? ' mk-hedef' : ''}` }, ...cocuk);
+  const cizgiler = (adet) => Array.from({ length: adet }, (_, i) => h('i', { style: { '--i': i } }));
+  const pano = bolge === 'kartlar' || bolge === 'grafik';
+  return h('div', { class: `rehber-cizim rehber-maket hedef-${bolge}`, role: 'img', 'aria-label': c.etiket || 'Ekran maketi' },
+    h('div', { class: 'mk-ekran' },
+      h('div', { class: 'mk-ust' }, h('span', { class: 'mk-logo' }), b('proje'), b('menu', ...cizgiler(4)), b('soru')),
+      h('div', { class: 'mk-alt' },
+        b('sol', ...cizgiler(5)),
+        h('div', { class: 'mk-ana' },
+          h('div', { class: 'mk-baslik' }, h('span', { class: 'mk-baslik-metin' }), b('eylem', h('i'), h('i'))),
+          pano ? h('div', { class: 'mk-panolar' }, b('kartlar', ...cizgiler(3)), b('grafik', h('span', { class: 'mk-egri' }))) : null,
+          bolge === 'form' ? b('form', ...cizgiler(4)) : null,
+          !pano && bolge !== 'form' ? b('arac', h('i'), h('i')) : null,
+          !pano && bolge !== 'form' ? b('tablo', ...cizgiler(4)) : null)),
+      h('span', { class: 'mk-imlec', 'aria-hidden': 'true' }, h('span', { class: 'mk-dalga' }))),
+    c.etiket ? h('span', { class: 'mk-etiket' }, c.etiket) : null);
+}
+
+/** @param {Record<string, any>} c */
+function formCizimi(c) {
+  return h('div', { class: 'rehber-cizim rehber-form', style: { '--n': c.alanlar.length }, role: 'img', 'aria-label': `Form: ${c.alanlar.join(', ')}; ardından ${c.dugme}` },
+    ...c.alanlar.map((a, i) => h('div', { class: 'rf-satir', style: { '--i': i } },
+      h('span', { class: 'rf-etiket' }, a), h('span', { class: 'rf-girdi' }, h('span', { class: 'rf-dolgu' })), h('span', { class: 'rf-onay' }, ikon('onay')))),
+    h('div', { class: 'rf-dugme' }, ikon('oynat'), c.dugme));
+}
+
+/** @param {Record<string, any>} c */
+function istekCizimi(c) {
+  const kontroller = c.kontroller || [];
+  return h('div', { class: 'rehber-cizim rehber-istek', style: { '--n': kontroller.length }, role: 'img', 'aria-label': `${c.sol} → ${c.gidis} → ${c.sag}; ${c.donus} geri döner${kontroller.length ? `; kontroller: ${kontroller.join(', ')}` : ''}` },
+    h('div', { class: 'ri-hat' },
+      h('span', { class: 'ri-dugum' }, ikon('bilgisayar'), h('b', {}, c.sol)),
+      h('span', { class: 'ri-yol' }, h('span', { class: 'ri-paket gidis' }, c.gidis), h('span', { class: 'ri-paket donus' }, c.donus)),
+      h('span', { class: 'ri-dugum' }, ikon('ag'), h('b', {}, c.sag))),
+    kontroller.length ? h('ul', { class: 'ri-kontroller' }, kontroller.map((k, i) => h('li', { style: { '--i': i } }, ikon('onay'), h('span', {}, k)))) : null);
+}
+
+/** @param {Record<string, any>} c */
+function katmanCizimi(c) {
+  return h('div', { class: 'rehber-cizim rehber-katman', role: 'img', 'aria-label': c.katmanlar.map((k) => k.baslik).join(' → ') },
+    ...c.katmanlar.map((k, i) => h('div', { class: 'rk-katman', style: { '--i': i } }, h('b', {}, k.baslik), k.alt ? h('small', {}, k.alt) : null)));
 }

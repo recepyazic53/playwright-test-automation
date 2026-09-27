@@ -22,8 +22,9 @@ import { onayIste } from './kosu-paneli.js';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { bulgularEkrani } from './bulgular.js';
 import { ekranBaglariSekmesi } from './ekran-baglari.js';
-import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
+import { ekranlarGrubu, navGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
+import { girisAkislariniAl, girisBaglantisi, girisKarti } from './giris-akisi.js';
 
 /** Otomatik tarama modülü isteğe bağlı yüklenir (yüklenemezse yalnızca tarama çalışmaz). */
 let taramaSozu = null;
@@ -41,7 +42,7 @@ function kayitBaslat(proje, ekran) {
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
 /** Claude'un inceleme kuralları (düğme grupları; docs/sayfa-paketi.md ve sayfa-paketi.js / ekran-servisi.mjs ile aynı metin). */
-export const INCELEME_KURALLARI = 'Seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere basıp sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, onaylayan ya da ödeme yapan bir düğmeye gelince dur ve bana sor (yalnızca TEST ortamında, onayımla basılır). Kart, şifre gibi bilgileri girme. Bir düğmenin ne yaptığından emin değilsen basmadan önce sor.';
+export const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. Alanlara kart, parola, kimlik no gibi bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. Tüm seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini testVerisi.tablolar\'a yaz: bağımlı listelerde her satır geçerli bir kombinasyon olsun (üst seçim + alt seçenek); hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar\'ına ekle; alanları testVerisi.baglantilar ile sütunlara bağla, senaryo önerilerinde bu alanlara tablodaki değeri yaz. Kişisel ya da gizli değerleri (parola, kart, kimlik no) hiçbir yere yazma; böyle bir sütun gerekiyorsa "gizli": true işaretle ve boş bırak.';
 export const CLAUDE_ISTEK_CUMLESI = (adres) =>
   `${adres || '<sayfa bağlantısı>'} sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI}`;
 
@@ -64,9 +65,10 @@ export function ekranlarEkrani(main, parcalar, baglam) {
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
 
   (async () => {
-    const [liste, servisler] = await Promise.all([api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`), servisleriAl(proje)]);
+    // Girişler (ortam başına giriş tarifi) "Ortak akışlar"da görünür; düzenleme Ayarlar > Giriş profilleri'nde.
+    const [liste, servisler, girisler] = await Promise.all([api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`), servisleriAl(proje), girisAkislariniAl(proje)]);
     const secim = tur === 'e' ? kimlik : tur === 'yeni' ? '__yeni' : '';
-    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler);
+    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler, girisler);
     yanCiz();
     if (tur === 'yeni') {
       sayfaPaketiAkisi(icerik, { mod: 'yeni', proje, tara: () => taramaBaslat(proje, null), kaydet: () => kayitBaslat(proje, null), bitti: (id) => { location.hash = `#/ekranlar/e/${encodeURIComponent(id)}`; } });
@@ -96,14 +98,14 @@ export function ekranlarEkrani(main, parcalar, baglam) {
       await ekranAyrintisi(icerik, { proje, ekranId: kimlik, sekme: alt || 'model', surum: alt === 'gecmis' && altKimlik ? Number(altKimlik) : null, akisSecimi: alt === 'akis' ? altKimlik || null : null, listeKaydi: ekran, idler: gorunenSira(liste).idler });
       return;
     }
-    listeGorunumu(icerik, proje, liste);
+    listeGorunumu(icerik, proje, liste, girisler);
   })().catch(hata);
 }
 
 /** Ekran listesinde (ürün/ekran kartları) gösterilmeyen model türleri: yan listede kendi gruplarında. */
 const EKRAN_DISI_TURLER = ['altModel', 'ortakAkis'];
 
-function yanListe(nav, tumu, secili, yeniden, servisler = []) {
+function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
   // Devre dışı ekranlar varsayılan olarak gizli (seçili olan hariç); "Devre dışı ekranları göster" ile görünür.
   const devreDisiSayisi = tumu.filter((e) => e.durum === 'devre_disi').length;
   const ekranlar = devreDisiGoster() ? tumu : tumu.filter((e) => e.durum !== 'devre_disi' || e.id === secili);
@@ -120,12 +122,10 @@ function yanListe(nav, tumu, secili, yeniden, servisler = []) {
   yerlestir(nav,
     h('a', { href: '#/ekranlar', 'aria-current': secili === '' ? 'page' : null }, ikon('izgara'), 'Tüm ekranlar', h('span', { class: 'adet' }, String(tumu.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru)).length))),
     h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('artiYalin'), 'Sayfa ekle'),
-    ...ekranlarBasligi(),
-    ...ekranModelli.map(baglanti),
-    ortakAkislar.length ? h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ortak akışlar') : null,
-    ...ortakAkislar.map(baglanti),
-    altModeller.length ? h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Alt modeller') : null,
-    ...altModeller.map(baglanti),
+    ...urunlerBasligi(),
+    ekranlarGrubu(ekranModelli.map(baglanti)),
+    navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: [...girisler.map(girisBaglantisi), ...ortakAkislar.map(baglanti)], bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }),
+    altModeller.length ? navGrubu({ anahtar: 'alt-modeller', baslik: 'Alt modeller', ogeler: altModeller.map(baglanti), ekle: { etiket: 'Alt model ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }) : null,
     devreDisiAnahtari(devreDisiSayisi, () => yeniden()),
     ...servislerBolumu(servisler));
 }
@@ -145,7 +145,7 @@ function gorunenSira(liste) {
   return { sirali, idler: [...sirali.map((e) => e.id), ...liste.ekranlar.filter((e) => EKRAN_DISI_TURLER.includes(e.modelTuru)).map((e) => e.id)] };
 }
 
-function listeGorunumu(icerik, proje, liste) {
+function listeGorunumu(icerik, proje, liste, girisler = []) {
   const ekranlar = liste.ekranlar.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru));
   const { sirali, idler } = gorunenSira(liste);
   const devreDisi = ekranlar.filter((e) => e.durum === 'devre_disi').length;
@@ -172,17 +172,20 @@ function listeGorunumu(icerik, proje, liste) {
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
       : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('artiYalin'), 'Sayfa ekle') }),
-    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis')),
+    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }
 
-/** Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. */
-function ortakAkisBolumu(liste) {
-  if (!liste.length) return null;
+/**
+ * Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. Her ortamın GİRİŞİ
+ * de burada "Giriş (<ortam>)" kartıdır (adımlar okunur dille; Düzenle → Ayarlar > Giriş profilleri > Giriş tarifi).
+ */
+function ortakAkisBolumu(liste, girisler = []) {
+  if (!liste.length && !girisler.length) return null;
   return h('section', { class: 'ortak-akis-bolumu', 'aria-labelledby': 'ortak-akislar-baslik' },
-    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length), 'vurgu')),
-      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar.')),
-    h('div', { class: 'ekran-izgarasi' }, liste.map((e) => h('a', { class: 'kart ortak-akis-karti', href: `#/ekranlar/e/${encodeURIComponent(e.id)}` },
+    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length + girisler.length), 'vurgu')),
+      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar. Giriş her koşuda ortamın giriş tarifiyle yapılır.')),
+    h('div', { class: 'ekran-izgarasi' }, ...girisler.map(girisKarti), ...liste.map((e) => h('a', { class: 'kart ortak-akis-karti', href: `#/ekranlar/e/${encodeURIComponent(e.id)}` },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('pusula'), e.ad), e.modelSurumu ? rozet(`model v${e.modelSurumu}`, 'vurgu') : null),
       h('code', { class: 'duz kucuk' }, e.anahtar),
       h('p', { class: 'kucuk soluk' }, `${e.adimSayisi ?? 0} adım · ${e.alanSayisi ?? 0} alan`)))));
@@ -376,7 +379,7 @@ async function akisSekmesi(kap, s, d, icerik) {
   const diyagram = h('section', { class: 'kart akis-diyagrami', 'aria-label': 'Ekranın akışı' });
   try {
     akisDiyagramiCiz(diyagram, akisDiyagrami(akisModeli(d.model, secili.id)), {
-      durum: 'ekran', ortamAdi: '',
+      durum: 'ekran', ortamAdi: '', projeId: s.proje.id,
       not: 'İsteğe bağlı adımlar senaryoda “dahil” işaretliyse, koşullu alanlar koşulu sağlandığında koşulur. Senaryoya göre görünüm için senaryoyu açıp “Akış diyagramı” sekmesine bakın.'
     });
   } catch (hataNesnesi) {

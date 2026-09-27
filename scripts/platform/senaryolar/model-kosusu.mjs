@@ -264,7 +264,12 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       id: adim.id, baslik: adim.baslik || adim.id, sira: adim.sira || 0, dahil, alanlar, kosu: nesneMi(adim.kosu) ? adim.kosu : null, sonAdim: false,
       // Ortak akıştan açılan adım: "yalnızca test ortamı" (koşucu canlı ortamda atlar) ve ortak akışın adı (raporda).
       ...(adim.yalnizTest === true ? { yalnizTest: true } : {}),
-      ...(typeof adim.ortakAkisAdi === 'string' ? { ortakAkisAdi: adim.ortakAkisAdi } : {})
+      ...(typeof adim.ortakAkisAdi === 'string' ? { ortakAkisAdi: adim.ortakAkisAdi } : {}),
+      // SQL sorgusu adımı (sql/sql-adimi.mjs): koşucu sorguyu çalıştırıp beklenenle karşılaştırır (alan / aksiyon yok).
+      ...(nesneMi(adim.sqlKontrolu) ? { sql: adim.sqlKontrolu } : {}),
+      // Yeniden giriş adımı: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle (isteğe bağlı başka giriş
+      // profiliyle) yeniden girilir; alan / aksiyon yok.
+      ...(nesneMi(adim.yenidenGiris) ? { yenidenGiris: { profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil.trim() ? adim.yenidenGiris.profil.trim() : null } } : {})
     };
   });
 

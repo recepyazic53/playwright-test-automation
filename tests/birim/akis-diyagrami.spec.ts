@@ -40,7 +40,7 @@ const bireysel = { adimlar: { bilgi: true, ek: false, onay: true }, alanlar: { t
 
 test('akış: adımlar, koşullu alanların okunuşu, bu senaryonun kapsamı, ilerleme düğmesi ve bitiş (koşu sonucu yok)', () => {
   const d = akisDiyagrami(model, { gorunurluk: bireysel });
-  expect(d.baslangic).toEqual({ girisVar: true, metin: 'Sisteme giriş yapılır, ekran açılır', sonuc: null });
+  expect(d.baslangic).toEqual({ girisVar: true, kip: 'ortam', profil: null, metin: 'Giriş (ortam tarifi), ekran açılır', sonuc: null });
   expect(d.adimlar.map((a) => [a.no, a.baslik, a.kosulur, a.hedef])).toEqual([[1, 'Bilgiler', true, null], [2, 'Ek adım', false, null], [3, 'Onay', true, 'basari']]);
   const [bilgi, ek, onay] = d.adimlar;
   // Düğmeler alan listesinde yok (ilerleme olarak bağlantıda); koşul metni modelin açıklaması ya da ifadenin okunuşu.
@@ -59,7 +59,14 @@ test('akış: adımlar, koşullu alanların okunuşu, bu senaryonun kapsamı, il
   // Görünürlük verilmezse her şey koşulur; girişsiz modelde başlangıç yalnız ekranı açar.
   const g = akisDiyagrami({ ...model, girisGerekmez: true });
   expect(g.adimlar.map((a) => a.kosulur)).toEqual([true, true, true]);
-  expect(g.baslangic.metin).toBe('Ekran açılır (giriş gerekmez)');
+  expect(g.baslangic.metin).toBe('Girişsiz: ekran açılır (ekran giriş gerektirmez)');
+  // Girişsiz model senaryonun seçimini ezer; senaryo seçimi (temiz oturum + profil / girişsiz) başlangıçta okunur.
+  expect(akisDiyagrami({ ...model, girisGerekmez: true }, { giris: { kip: 'temiz', profil: 'Onaycı' } }).baslangic).toMatchObject({ girisVar: false, kip: 'girissiz', profil: null });
+  expect(akisDiyagrami(model, { giris: { kip: 'temiz', profil: 'Onaycı' } }).baslangic).toMatchObject({ girisVar: true, kip: 'temiz', profil: 'Onaycı', metin: 'Giriş (ortam tarifi; Onaycı profili, temiz oturum), ekran açılır' });
+  expect(akisDiyagrami(model, { giris: { kip: 'girissiz', profil: null } }).baslangic.metin).toBe('Girişsiz: ekran açılır (senaryo girişsiz)');
+  // Yeniden giriş adımı diyagramda okunur (alan yok).
+  const yg = akisDiyagrami({ ...model, adimlar: [...model.adimlar, { id: 'tekrar', sira: 4, baslik: 'Onaycı girer', yenidenGiris: { profil: 'Onaycı' } }] });
+  expect(yg.adimlar[3]).toMatchObject({ baslik: 'Onaycı girer', yenidenGiris: { profil: 'Onaycı' }, alanlar: [] });
 });
 
 test('son koşu: adım sonuçları başlıkla eşlenir; kalan adım kırmızı, koşulmayan gri, kapsam dışı boş; eşleşmeyenler bildirilir', () => {

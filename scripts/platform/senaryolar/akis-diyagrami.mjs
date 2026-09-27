@@ -16,6 +16,8 @@ export const BASLANGIC_ADIMLARI = Object.freeze(['Sisteme giriş yapılır', 'Ek
 export const BAGLAM_ADIMI_ONEKI = 'Bağlam değiştirilir';
 /** Diyagramda gösterilmeyen alan tipleri (düğmeler ilerleme olarak, çıktılar bitişte gösterilir). */
 const ALAN_DISI_TIPLER = new Set(['buton', 'cikti']);
+/** SQL adımının beklenen sonuç türü → kısa metin (sql/sql-adimi.mjs; bu dosya tarayıcıda da çalışır, içe aktarmaz). @type {Record<string, string>} */
+const SQL_BEKLENEN_METNI = { satirSayisi: 'satır sayısı denetlenir', sutunDegeri: 'ilk satırdaki değer denetlenir', bosDegil: 'sonuç boş olmamalı', bos: 'sonuç boş olmalı', tabloEsit: 'sonuç tabloyla karşılaştırılır' };
 
 function nesneMi(d) {
   return typeof d === 'object' && d !== null && !Array.isArray(d);
@@ -118,7 +120,8 @@ function gostergeMetni(g) {
  * @param {object} model ekran modeli
  * @param {{ gorunurluk?: { adimlar?: Record<string, boolean | null>; alanlar?: Record<string, boolean | null> } | null;
  *   beklenen?: { hataAdimi?: string | null; mesaj?: string | null } | null;
- *   sonuc?: { durum: string; adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }> } | null }} [s]
+ *   sonuc?: { durum: string; adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }> } | null;
+ *   giris?: { kip: string; profil?: string | null } | null }} [s] giris: senaryonun giriş seçimi (senaryo-girisi.mjs; yoksa ortamın girişiyle)
  */
 export function akisDiyagrami(model, s = {}) {
   if (!nesneMi(model) || !Array.isArray(model.adimlar)) throw new Error('Geçersiz ekran modeli (adimlar yok).');
@@ -154,6 +157,10 @@ export function akisDiyagrami(model, s = {}) {
       // Bu senaryoda koşulur mu? false: kapsam dışı ya da beklenen hata adımından sonra; null: bilinmiyor.
       kosulur: hedefSonrasi ? false : kapsamda === undefined ? true : kapsamda,
       altAkis: nesneMi(adim.altModel) ? String(adim.altModel.bolum || adim.altModel.dosya || '') || null : null,
+      // SQL sorgusu adımı: veritabanı sorgusu beklenenle karşılaştırılır (alan yok).
+      sqlOzeti: nesneMi(adim.sqlKontrolu) ? `SQL sorgusu: ${SQL_BEKLENEN_METNI[adim.sqlKontrolu.beklenen?.tur] ?? 'sonuç beklenenle karşılaştırılır'}` : null,
+      // Yeniden giriş adımı: oturum kapatılır, ortamın giriş tarifiyle (isteğe bağlı başka profille) yeniden girilir.
+      yenidenGiris: nesneMi(adim.yenidenGiris) ? { profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil ? adim.yenidenGiris.profil : null } : null,
       alanlar,
       ilerleme: tikla.map((x) => (typeof x.aciklama === 'string' && x.aciklama ? x.aciklama : 'düğme')),
       // Adımdan sonraki bağlantıda okunan aksiyonlar, sırayla (düğmeye basma, süreli ya da öğeye bağlı bekleme).
@@ -196,12 +203,18 @@ export function akisDiyagrami(model, s = {}) {
         : baslangicSonuclari.length ? 'basarili' : 'kosulmadi';
   const baslangicHatasi = baslangicSonuclari.find((x) => x.durum === 'basarisiz');
 
-  const girisVar = model.girisGerekmez !== true;
+  // Giriş: model girişsizse her zaman girişsiz; değilse senaryonun seçimi (senaryo-girisi.mjs ile aynı kural).
+  const secim = nesneMi(s.giris) ? s.giris : null;
+  const kip = model.girisGerekmez === true ? 'girissiz' : secim && (secim.kip === 'girissiz' || secim.kip === 'temiz') ? secim.kip : 'ortam';
+  const girisProfili = kip !== 'girissiz' && secim && typeof secim.profil === 'string' && secim.profil ? secim.profil : null;
+  const girisVar = kip !== 'girissiz';
+  const girisNotu = [girisProfili ? `${girisProfili} profili` : '', kip === 'temiz' ? 'temiz oturum' : ''].filter(Boolean).join(', ');
   const son = hedef && hedef.hedef === 'basari' ? sirali.find((a) => a.id === hedef.id) : null;
   return {
     baslangic: {
-      girisVar,
-      metin: girisVar ? 'Sisteme giriş yapılır, ekran açılır' : 'Ekran açılır (giriş gerekmez)',
+      girisVar, kip, profil: girisProfili,
+      metin: girisVar ? `Giriş (ortam tarifi${girisNotu ? `; ${girisNotu}` : ''}), ekran açılır`
+        : model.girisGerekmez === true ? 'Girişsiz: ekran açılır (ekran giriş gerektirmez)' : 'Girişsiz: ekran açılır (senaryo girişsiz)',
       sonuc: baslangicDurumu ? { durum: baslangicDurumu, sureMs: null, hataMesaji: baslangicHatasi && typeof baslangicHatasi.hataMesaji === 'string' ? baslangicHatasi.hataMesaji : null } : null
     },
     adimlar,

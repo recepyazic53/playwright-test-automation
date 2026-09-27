@@ -42,6 +42,12 @@ export declare function metindekiZarflariDonustur(metin: string, donustur: (zarf
 export declare function kasaKdfOku(vt: Veritabani): KdfParametreleri | undefined;
 export declare function kasaDurumu(vt: Veritabani): KasaDurumu;
 export declare function kasaAcikMi(vt: Veritabani): boolean;
+/** Kasa arayüzde açık mı (arka plan kipinde false). */
+export declare function arayuzAcikMi(vt: Veritabani): boolean;
+/** Anahtar bellekte, arayüz kilitli (zamanlanmış koşuların arka plan kipi). */
+export declare function arkaPlanKipindeMi(vt: Veritabani): boolean;
+export declare function arayuzuKilitle(vt: Veritabani): KasaDurumu;
+export declare function kasayiArkaPlandaAc(vt: Veritabani, anahtar: Buffer): boolean;
 export declare function kasaOlustur(vt: Veritabani, parola: string, secenekler?: { kdf?: ScryptMaliyeti }): Promise<KasaDurumu>;
 export declare function parolayiDogrula(vt: Veritabani, parola: string): Promise<Buffer | null>;
 export declare function anahtarDogrulayiciyaUyarMi(anahtar: Buffer, dogrulayici: string): boolean;

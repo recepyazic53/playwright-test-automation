@@ -9,11 +9,13 @@
 import { test as base } from '@playwright/test';
 import { writeFileSync, renameSync } from 'node:fs';
 import { ekranGoruntusuAl } from './screenshots';
+import { mesajYakalayicisiKur, yakalananMesajlariEkle } from './mesaj-yakalayici';
 
 type OrtakFixturelar = {
   kosuEtiketleri: void;
   hataYakalayici: void;
   canliIzlemeYayini: void;
+  kosuMesajlari: void;
 };
 
 export const test = base.extend<OrtakFixturelar>({
@@ -64,6 +66,18 @@ export const test = base.extend<OrtakFixturelar>({
 
       // Hata mesajı ayrıca ek olarak EKLENMEZ: raporlayıcı testin hatasını doğrudan sonuç
       // satırına (veritabanında) yazar.
+    },
+    { auto: true }
+  ],
+
+  // Koşuda yakalanan mesajlar (tests/support/mesaj-yakalayici.ts): konsol / sayfa hataları ve aynı kökendeki HTTP 4xx-5xx
+  // testin başından dinlenir; diyalog ve hata göstergesi metinlerini model koşucusu bildirir. Test geçse de kalsa da (zaman
+  // aşımında da — fixture sökümü çalışır) "yakalananMesajlar" annotation'ı olarak eklenir.
+  kosuMesajlari: [
+    async ({ page }, use, testInfo) => {
+      mesajYakalayicisiKur(page);
+      await use();
+      yakalananMesajlariEkle(page, testInfo);
     },
     { auto: true }
   ],

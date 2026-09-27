@@ -12,6 +12,9 @@
 //   açılır; yanlışsa GCM etiketi tutmaz. Parolanın kendisi veya özeti SAKLANMAZ.
 // - Türetilen anahtar YALNIZCA bu sürecin belleğinde tutulur (kasaAc); kasaKilitle ile
 //   sıfırlanıp atılır. Parola unutulursa veri KURTARILAMAZ (bilinçli tasarım).
+// - Arayüz kilidi (zamanlanmış koşular, bkz. zamanlama/anahtar-emaneti.mjs): anahtar bellekte olsa da ARAYÜZ kilitli
+//   olabilir ("arka plan kipi"). Bu kipte kasaAcikMi true (koşucu/raporlayıcı iç işleri çalışır), arayuzAcikMi false:
+//   HTTP veri uçları ve kasaDurumu().acik kasayı KİLİTLİ görür. Kullanıcı parolayla açınca (kasaAc) kilit kalkar.
 // - Gizli değerler (parola, anahtar, düz metin) hiçbir yerde loglanmaz; hata mesajları da
 //   gizli değer içermez.
 
@@ -119,6 +122,8 @@ export class ParolaDenemeSiniri {
 
 /** @type {WeakMap<Veritabani, Buffer>} */
 const acikAnahtarlar = new WeakMap();
+/** Anahtarı bellekte olan ama ARAYÜZÜ kilitli veritabanları (arka plan kipi). @type {WeakSet<Veritabani>} */
+const arayuzKilitliler = new WeakSet();
 
 /** @param {unknown} parola */
 export function parolaKontrolEt(parola) {
@@ -203,15 +208,51 @@ export function kasaDurumu(vt) {
   const kdf = kasaKdfOku(vt);
   return {
     olusturuldu: Boolean(kdf && vt.metaOku('kasa_dogrulayici')),
-    acik: acikAnahtarlar.has(vt),
+    // Arayüzün gördüğü durum: arka plan kipinde (anahtar yalnız zamanlayıcının işi için bellekte) kasa KİLİTLİ görünür.
+    acik: arayuzAcikMi(vt),
     minParolaUzunlugu: MIN_PAROLA_UZUNLUGU,
     kdf: kdf ? { alg: kdf.alg, N: kdf.N, r: kdf.r, p: kdf.p } : null
   };
 }
 
-/** @param {Veritabani} vt */
+/**
+ * Anahtar bellekte mi? (İç işler: koşucu, raporlayıcı, zamanlayıcı.) Arka plan kipinde de true döner; HTTP veri uçları
+ * bunun yerine arayuzAcikMi'ye bakmalıdır.
+ * @param {Veritabani} vt
+ */
 export function kasaAcikMi(vt) {
   return acikAnahtarlar.has(vt);
+}
+
+/** Kasa kullanıcı için (arayüzde) açık mı? Arka plan kipinde false. @param {Veritabani} vt */
+export function arayuzAcikMi(vt) {
+  return acikAnahtarlar.has(vt) && !arayuzKilitliler.has(vt);
+}
+
+/** Arka plan kipi: anahtar bellekte, arayüz kilitli. @param {Veritabani} vt */
+export function arkaPlanKipindeMi(vt) {
+  return acikAnahtarlar.has(vt) && arayuzKilitliler.has(vt);
+}
+
+/** Anahtar bellekte kalır, arayüz kilitlenir (anahtar yoksa hiçbir şey yapmaz). @param {Veritabani} vt */
+export function arayuzuKilitle(vt) {
+  if (acikAnahtarlar.has(vt)) arayuzKilitliler.add(vt);
+  return kasaDurumu(vt);
+}
+
+/**
+ * İç kullanım (zamanlama/anahtar-emaneti.mjs): kasa kilitliyken anahtarın KOPYASINI arka plan kipinde yerleştirir (arayüz
+ * kilitli kalır; şifreli alan tamamlama gibi yazmalar yapılmaz). Anahtar doğrulayıcıya uymazsa PAROLA_YANLIS. Anahtar
+ * zaten bellekteyse hiçbir şey yapmaz ve false döner.
+ * @param {Veritabani} vt @param {Buffer} anahtar
+ */
+export function kasayiArkaPlandaAc(vt, anahtar) {
+  if (acikAnahtarlar.has(vt)) return false;
+  const dogrulayici = vt.metaOku('kasa_dogrulayici');
+  if (!dogrulayici || !anahtarDogrulayiciyaUyarMi(anahtar, dogrulayici)) throw new KasaHatasi('PAROLA_YANLIS', 'Kasa anahtarı bu kasaya uymuyor.');
+  acikAnahtarlar.set(vt, Buffer.from(anahtar));
+  arayuzKilitliler.add(vt);
+  return true;
 }
 
 /**
@@ -232,6 +273,7 @@ export async function kasaOlustur(vt, parola, secenekler = {}) {
     vt.metaYaz('kasa_dogrulayici', zarfSifrele(anahtar, DOGRULAYICI_METNI));
   });
   anahtariYerlestir(vt, anahtar);
+  arayuzKilitliler.delete(vt);
   sifreliAlanlariTamamla(vt);
   medyaAnahtariniHazirlaSessiz(vt);
   return kasaDurumu(vt);
@@ -274,6 +316,7 @@ export async function kasaAc(vt, parola) {
   const anahtar = await parolayiDogrula(vt, parola);
   if (!anahtar) throw new KasaHatasi('PAROLA_YANLIS', 'Kasa parolası yanlış.');
   anahtariYerlestir(vt, anahtar);
+  arayuzKilitliler.delete(vt);
   sifreliAlanlariTamamla(vt);
   medyaAnahtariniHazirlaSessiz(vt);
   return kasaDurumu(vt);
@@ -284,6 +327,7 @@ export function kasaKilitle(vt) {
   const anahtar = acikAnahtarlar.get(vt);
   if (anahtar) anahtar.fill(0);
   acikAnahtarlar.delete(vt);
+  arayuzKilitliler.delete(vt);
   return kasaDurumu(vt);
 }
 
@@ -315,6 +359,7 @@ export function kasayiAnahtarlaAc(vt, anahtar) {
   // anahtarla yeniden sarılır — eski anahtar bellekten silinmeden ÖNCE.
   medyaAnahtariniYenidenSar(vt, acikAnahtarlar.get(vt) ?? null, anahtar);
   anahtariYerlestir(vt, Buffer.from(anahtar));
+  arayuzKilitliler.delete(vt);
   sifreliAlanlariTamamla(vt);
   medyaAnahtariniHazirlaSessiz(vt);
 }

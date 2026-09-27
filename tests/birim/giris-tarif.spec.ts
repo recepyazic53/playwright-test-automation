@@ -6,13 +6,16 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import {
-  GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula, girisTarifiOlmali,
-  regexKacis, yerTutuculari, yerTutuculariDoldur, type GirisTarifi
+  GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisAdimlariniCoz, girisAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula,
+  girisTarifiOlmali, regexKacis, varsayilanGirisAdimlariMi, yerTutuculari, yerTutuculariDoldur, type GirisTarifi
 } from '../../scripts/platform/giris/tarif.mjs';
+import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../../scripts/platform/giris/giris-kaydi.mjs';
 import { KOD_DESENI, kodIstegiOku, kodIstegiYaz, kodYanitiniBekle, koduYanitla } from '../../scripts/platform/giris/elle-kod.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from '../../scripts/platform/giris/tarif-deposu.mjs';
 import { kasaOlustur, parolayiDogrula } from '../../scripts/platform/kasa.mjs';
-import { girisProfiliKaydet, ortamGetir, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import {
+  girisProfiliGetir, girisProfiliKaydet, girisProfilleriniListele, ortamGetir, ortamKaydet, projeKaydet, veritabaniniHazirla
+} from '../../scripts/platform/veritabani/depo.mjs';
 import { girisHazirMi, kodKaynagi, tarifiHazirla, GirisHatasi, type GirisKimligi } from '../support/giris-motoru';
 import { hataMi, platformOkuyucusunuCalistir, type PlatformGirisBilgisi, type PlatformGirisTarifi } from '../support/platform-veri';
 import { ornekGirisTarifi } from './model-fikstur';
@@ -197,6 +200,125 @@ test.describe('Giriş tarifi deposu — ortam ayarlarında, şifreli; ortam gün
       const canli = oku(canliId);
       expect(canli.girisTarifi?.tarif.ikinciAdim).toMatchObject({ tur: 'totp', kodAlani: '#kod' });
       expect(canli.giris).toBeNull(); // bu ortama özel ya da tüm ortamlar için profil yok
+    } finally {
+      klasor.temizle();
+    }
+  });
+});
+
+test.describe('Giriş adımları (girisAdimlari) ve giriş profilinin ek alanları', () => {
+  const adimli = (girisAdimlari: unknown[]): Record<string, unknown> => ({ ...gecerliTarif(), girisAdimlari });
+
+  test('eski tarif aynen: alan yoksa normalleştirilmiş tarife EKLENMEZ, etkin adımlar kullanıcı adı → parola → gönder', () => {
+    const t = girisTarifiOlmali(gecerliTarif());
+    expect('girisAdimlari' in t).toBe(false);
+    expect(girisAdimlariniCoz(t).map((a) => a.islem)).toEqual(['kullaniciAdi', 'parola', 'gonder']);
+    expect(girisAlanlari(t)).toEqual([]);
+    expect(varsayilanGirisAdimlariMi([{ islem: 'kullaniciAdi' }, { islem: 'parola' }, { islem: 'gonder' }])).toBe(true);
+    expect(varsayilanGirisAdimlariMi([{ islem: 'kullaniciAdi', aciklama: 'x' }, { islem: 'parola' }, { islem: 'gonder' }])).toBe(false);
+  });
+
+  test('önce / ara / sonra adımları geçerli; ek alan adları yer tutuculardan çıkar; özet değer içermez', () => {
+    const t = girisTarifiOlmali(adimli([
+      { islem: 'tikla', hedef: { rol: 'button', ad: 'Kabul et' } },
+      { islem: 'doldur', hedef: { secici: '#firma' }, deger: '{firmaKodu}' },
+      { islem: 'kullaniciAdi' },
+      { islem: 'tikla', hedef: { secici: 'button', metin: 'Devam' } },
+      { islem: 'parola', zamanAsimiSn: 20 },
+      { islem: 'sec', hedef: { secici: '#sube' }, deger: '{sube}' },
+      { islem: 'gonder', aciklama: 'Oturum aç' },
+      { islem: 'gorunurBekle', hedef: { secici: '#duyuru' } }
+    ]));
+    expect(t.girisAdimlari?.map((a) => a.islem)).toEqual(['tikla', 'doldur', 'kullaniciAdi', 'tikla', 'parola', 'sec', 'gonder', 'gorunurBekle']);
+    expect(t.girisAdimlari?.[4]).toEqual({ islem: 'parola', zamanAsimiSn: 20 });
+    expect(girisAlanlari(t)).toEqual(['firmaKodu', 'sube']);
+    expect(baglamAlanlari(t)).toEqual([]); // giriş adımları bağlam profilinden beslenmez
+    expect(adimOzeti({ islem: 'parola' }, 5)).toBe('Adım 5 (Parolayı yaz)');
+    expect(adimOzeti(t.girisAdimlari![1], 2)).toBe('Adım 2 (Doldur: #firma)');
+  });
+
+  test('özel adımlar tam bir kez ve gönderden önce; genel adım hataları "Giriş adımı n" der', () => {
+    const d = girisTarifiniDogrula(adimli([
+      { islem: 'kullaniciAdi' }, { islem: 'kullaniciAdi' }, { islem: 'gonder' }, { islem: 'parola' }, { islem: 'uç' }, { islem: 'kosulBekle', ifade: 'x[{a}]' }
+    ]));
+    expect(d.gecerli).toBe(false);
+    const metin = d.hatalar.join('\n');
+    for (const beklenen of [/"Kullanıcı adını yaz" adımı tam bir kez olmalıdır \(şu an 2\)/, /parola, giriş düğmesinden önce/, /Giriş adımı 5: işlem yalnızca/, /Giriş adımı 6: koşul ifadesi yer tutucu/]) {
+      expect(metin).toMatch(beklenen);
+    }
+    expect(girisTarifiniDogrula(adimli([{ islem: 'kullaniciAdi' }, { islem: 'parola' }])).hatalar.join(' ')).toMatch(/"Giriş düğmesine bas" adımı tam bir kez/);
+    expect(girisTarifiniDogrula({ ...gecerliTarif(), girisAdimlari: 'x' }).hatalar).toContain('Giriş adımları bir liste olmalıdır.');
+  });
+
+  test('"Girişi kaydet": kayıttan taslak + kullanıcının işaretleriyle tarif (değer yok; mevcut göstergeler korunur)', () => {
+    const alan = (anahtar: string, tur: string, etiket: string) => ({ alan: { anahtar, tur, etiket, secici: `#${anahtar}`, adaySeciciler: [], bolum: { anahtar: 'b', baslik: '' } }, secili: true });
+    const okuma = (yol: string, dokunulan: string[]) => ({ yol, gorunen: dokunulan, dokunulan, secimler: {} });
+    const env = {
+      kip: 'kayit', bicim: 'akis', profil: null, baslik: 'Giriş', engellenenler: [], notlar: [], mesajlar: [],
+      alanlar: [alan('firma', 'text', 'Firma kodu'), alan('kad', 'text', 'Kullanıcı'), alan('sif', 'password', 'Şifre'), alan('pin', 'password', 'PIN')],
+      dugmeler: [{ secici: '#devam', metin: 'Devam' }, { secici: '#gir', metin: 'Giriş' }],
+      olaylar: [
+        { tur: 'tik', dugme: 0, oncesi: okuma('/giris', ['firma', 'kad']) },
+        { tur: 'okuma', elle: false, okuma: okuma('/giris', ['sif', 'pin']) },
+        { tur: 'tik', dugme: 1, oncesi: okuma('/giris', []) },
+        { tur: 'okuma', elle: false, okuma: okuma('/panel', []) }
+      ]
+    } as unknown as Parameters<typeof girisKaydiTaslagi>[0];
+    const taslak = girisKaydiTaslagi(env);
+    expect(taslak.adimlar.map((a) => (a.tur === 'alan' ? a.anahtar : a.metin))).toEqual(['firma', 'kad', 'Devam', 'sif', 'pin', 'Giriş']);
+    expect(taslak.adimlar.map((a) => a.oneri)).toEqual(['ek', 'kullaniciAdi', 'tikla', 'parola', 'ek', 'gonder']);
+    expect(ekAlanAdiOner('Firma kodu')).toBe('firmaKodu');
+    const isaretler = [{ rol: 'ek', ad: 'firmaKodu' }, { rol: 'kullaniciAdi' }, { rol: 'tikla' }, { rol: 'parola' }, { rol: 'ek', ad: 'pin', gizli: true }, { rol: 'gonder' }];
+    const mevcut = girisTarifiOlmali({ ...gecerliTarif(), hataGostergeleri: [{ tur: 'metin', deger: 'Hatalı' }] });
+    const s = kayittanTarif(taslak, isaretler, mevcut, '/giris');
+    expect(s.hatalar).toEqual([]);
+    expect(s.ekAlanlar).toEqual([{ ad: 'firmaKodu', gizli: false, etiket: 'Firma kodu' }, { ad: 'pin', gizli: true, etiket: 'PIN' }]);
+    const t = girisTarifiOlmali(s.tarif);
+    expect(t).toMatchObject({ kullaniciAlani: '#kad', parolaAlani: '#sif', gonderDugmesi: '#gir', basariGostergesi: { tur: 'metin', deger: 'Çıkış' }, hataGostergeleri: [{ tur: 'metin', deger: 'Hatalı' }] });
+    expect(t.girisAdimlari?.map((a) => a.islem)).toEqual(['doldur', 'kullaniciAdi', 'tikla', 'parola', 'doldur', 'gonder']);
+    expect(girisAlanlari(t)).toEqual(['firmaKodu', 'pin']);
+    // Yalnız kullanıcı adı + parola + gönder işaretlenirse tarif eski biçimdedir (girisAdimlari yazılmaz).
+    const sade = kayittanTarif(taslak, [{ rol: 'yoksay' }, { rol: 'kullaniciAdi' }, { rol: 'yoksay' }, { rol: 'parola' }, { rol: 'yoksay' }, { rol: 'gonder' }], null, '/giris');
+    expect('girisAdimlari' in sade.tarif).toBe(false);
+    expect(sade.tarif.basariGostergesi).toEqual({ tur: 'url', deger: '/panel' });
+    expect(kayittanTarif(taslak, [], null, null).hatalar.join(' ')).toMatch(/Kullanıcı adı alanını işaretleyin/);
+    expect(kayittanTarif(taslak, [{ rol: 'ek', ad: 'firma kodu' }, ...isaretler.slice(1)], null, null).hatalar.join(' ')).toMatch(/ek alan adı/);
+  });
+
+  test('ek alanlar: gizli olan kasada ayrı ve şifreli, listede değersiz; boş gönderilince korunur; veri okuyucu testlere verir', async () => {
+    test.setTimeout(120_000);
+    const klasor = geciciKlasor('ek-alanlar');
+    try {
+      const yol = join(klasor.yol, 'platform.db');
+      const parola = randomBytes(24).toString('base64url');
+      const vt = await veritabaniniHazirla(yol);
+      await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
+      const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
+      const ortamId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+      const id = girisProfiliKaydet(vt, {
+        projeId, ortamId, ad: 'Profil', kullaniciAdi: 'k', parola: 'P-1',
+        ekAlanlar: [{ ad: 'firmaKodu', deger: 'FIRMA-BENZERSIZ-77' }, { ad: 'pin', gizli: true, deger: 'PIN-BENZERSIZ-4321' }]
+      });
+      expect(girisProfilleriniListele(vt, projeId)[0].ekAlanlar).toEqual([
+        { ad: 'firmaKodu', gizli: false, deger: 'FIRMA-BENZERSIZ-77', degerVar: true }, { ad: 'pin', gizli: true, deger: null, degerVar: true }
+      ]);
+      expect(girisProfiliGetir(vt, id, { coz: true })?.ekAlanlar[1].deger).toBe('PIN-BENZERSIZ-4321');
+      // Gizli değer gönderilmeden güncelleme → korunur; ek alanlar hiç verilmezse hepsi korunur.
+      girisProfiliKaydet(vt, { id, projeId, ortamId, ad: 'Profil', kullaniciAdi: 'k', ekAlanlar: [{ ad: 'firmaKodu', deger: 'FIRMA-BENZERSIZ-77' }, { ad: 'pin', gizli: true }] });
+      girisProfiliKaydet(vt, { id, projeId, ortamId, ad: 'Profil 2', kullaniciAdi: 'k' });
+      expect(girisProfiliGetir(vt, id, { coz: true })?.ekAlanlar.map((e) => e.deger)).toEqual(['FIRMA-BENZERSIZ-77', 'PIN-BENZERSIZ-4321']);
+      expect(() => girisProfiliKaydet(vt, { id, projeId, ortamId, ad: 'Profil', kullaniciAdi: 'k', ekAlanlar: [{ ad: 'firma kodu' }] })).toThrow(/Ek alan adı "firma kodu" geçersiz/);
+      // Eski profil (ek alan yok) aynen okunur.
+      const eski = girisProfiliKaydet(vt, { projeId, ad: 'Eski', kullaniciAdi: 'e', parola: 'x' });
+      expect(girisProfiliGetir(vt, eski)?.ekAlanlar).toEqual([]);
+      const anahtar = (await parolayiDogrula(vt, parola))?.toString('base64url') ?? '';
+      vt.kapat();
+      const disk = readFileSync(yol);
+      expect(disk.includes(Buffer.from('PIN-BENZERSIZ-4321'))).toBe(false);
+      expect(disk.includes(Buffer.from('FIRMA-BENZERSIZ-77'))).toBe(false);
+      const d = platformOkuyucusunuCalistir(['genel', '--proje', projeId, '--ortam-id', ortamId], { PLATFORM_VERITABANI: yol, PLATFORM_KASA_ANAHTARI: anahtar });
+      if (hataMi(d)) throw new Error(d.hata);
+      expect((d as { giris: PlatformGirisBilgisi }).giris).toMatchObject({ ekAlanlar: { firmaKodu: 'FIRMA-BENZERSIZ-77', pin: 'PIN-BENZERSIZ-4321' }, gizliEkAlanlar: ['pin'] });
     } finally {
       klasor.temizle();
     }

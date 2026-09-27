@@ -15,7 +15,7 @@ import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
-import { KESIF_SECENEK_SINIRI, type EngellenenIstek, type HamAlan, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
+import { KESIF_SECENEK_SINIRI, type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
 import type { TaramaGirdisi, TaramaHataKodu, TaramaOlayi } from './protokol.mjs';
 import { formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
 
@@ -228,7 +228,8 @@ async function profilTara(
 
 /**
  * Seçim keşfi: ≤ 8 seçenekli, etkin, tekli her açılır listede diğer seçenekler sırayla seçilir; beliren/kaybolan
- * alanlar kaydedilir; sonunda ilk değer geri yüklenir. Seçim sayfayı başka adrese götürürse not düşülür ve hedefe
+ * alanlar ve seçenekleri DEĞİŞEN diğer seçim alanları (bağımlı listeler; yalnız seçenek etiketi/değeri) kaydedilir; sonunda
+ * ilk değer geri yüklenir. Seçim sayfayı başka adrese götürürse not düşülür ve hedefe
  * dönülür. (selectOption yalnızca sayfa içi durumu değiştirir; buna bağlı yazma istekleri ağ katmanında iptal edilir.)
  */
 async function secimleriKesfet(
@@ -251,6 +252,9 @@ async function secimleriKesfet(
     }
     const baslangic = await anahtarlar();
     const temelAnahtarlar = new Set(baslangic.alanlar.map((a) => a.anahtar));
+    // Bağımlı listeler: bu seçim değişince seçenekleri değişen diğer seçim alanları (ilk değerdeki listelere göre).
+    const secenekImzasi = (a: HamAlan): string => JSON.stringify((a.secenekler ?? a.radyolar ?? []).map((x) => x.deger));
+    const temelSecenekler = new Map(baslangic.alanlar.filter((a) => a.anahtar !== s.anahtar && (a.secenekler || a.radyolar)).map((a) => [a.anahtar, secenekImzasi(a)]));
     const degerler: KesifDegeri[] = [];
     for (const o of s.secenekler ?? []) {
       if (o.deger === ilk) continue;
@@ -278,7 +282,16 @@ async function secimleriKesfet(
       }
       const simdiAnahtarlar = new Set(simdi.alanlar.map((a) => a.anahtar));
       const gorunenler: HamAlan[] = simdi.alanlar.filter((a) => !temelAnahtarlar.has(a.anahtar));
-      degerler.push({ deger: o.deger, metin: o.metin, gorunenler, kaybolanlar: [...temelAnahtarlar].filter((k) => !simdiAnahtarlar.has(k)), gezinme: null });
+      const secenekler: Record<string, HamSecenek[]> = {};
+      for (const a of simdi.alanlar) {
+        const temel = temelSecenekler.get(a.anahtar);
+        if (temel === undefined || temel === secenekImzasi(a)) continue;
+        secenekler[a.anahtar] = a.secenekler ?? (a.radyolar ?? []).map((x) => ({ deger: x.deger, metin: x.metin ?? x.deger }));
+      }
+      degerler.push({
+        deger: o.deger, metin: o.metin, gorunenler, kaybolanlar: [...temelAnahtarlar].filter((k) => !simdiAnahtarlar.has(k)), gezinme: null,
+        ...(Object.keys(secenekler).length ? { secenekler } : {})
+      });
     }
     let geriAlindi = false;
     try {

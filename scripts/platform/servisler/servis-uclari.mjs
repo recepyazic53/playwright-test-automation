@@ -9,16 +9,19 @@ import {
   servisSenaryosuKaydet, servisSenaryosuSil, servisSil
 } from './servis-deposu.mjs';
 import {
-  erisimKontrolu, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle
+  erisimKontrolu, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle, postmanAktar, postmanOnizle
 } from './servis-islemleri.mjs';
 import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu } from './servis-isleri.mjs';
+import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
+import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
+import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
 
 /** SoapUI dosyası büyük olabilir: bu uçlar büyük gövde sınırıyla okunur. */
-export const SERVIS_BUYUK_GOVDE_UCLARI = Object.freeze(['/platform/servis/soapui/onizle', '/platform/servis/soapui/aktar']);
+export const SERVIS_BUYUK_GOVDE_UCLARI = Object.freeze(['/platform/servis/soapui/onizle', '/platform/servis/soapui/aktar', '/platform/servis/postman/onizle', '/platform/servis/postman/aktar']);
 
 /** @param {unknown} d @param {string} alan */
 function kimlik(d, alan = 'id') {
@@ -80,7 +83,8 @@ export const SERVIS_GET_UCLARI = [
     for (const k of servisKosulariniListele(db, { servisId: s.id, sinir: 1000 })) {
       if (k.senaryoId && !sonSonuclar[k.senaryoId]) sonSonuclar[k.senaryoId] = { durum: k.durum, baslangic: k.baslangic, kosuId: k.id };
     }
-    return { servis: servisOzeti(db, s), senaryolar: servisSenaryolariniListele(db, s.id), sonSonuclar };
+    // Akış senaryoları: akış adı, akışı bu servisten geçen başka servislerin akış senaryoları ve son sonuçları (akis-senaryosu.mjs).
+    return { servis: servisOzeti(db, s), ...servisSenaryoGorunumu(db, projeId, s.id, servisSenaryolariniListele(db, s.id), sonSonuclar) };
   }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -99,6 +103,8 @@ export const SERVIS_GET_UCLARI = [
   }],
   // Canlı panel: arka plandaki koşunun durumu (adımlar, maskeli istek / yanıt).
   ['/platform/servis/is', (db, q) => ({ is: servisIsiDurumu(kimlik(q.get('projeId'), 'projeId'), kimlik(q.get('id'))) })],
+  // Ayarlar > Servis taban adresleri: servis × ortam tablosu (adlandırılmış taban adresler dahil).
+  ['/platform/servis-tabanlari', (db, q) => tabanTablosu(db, kimlik(q.get('projeId'), 'projeId'))],
   ['/platform/servis-kimlikleri', (db, q) => ({ profiller: servisKimlikOzeti(db, kimlik(q.get('projeId'), 'projeId')) })],
   // Servis akışları (proje düzeyi): liste (adım sayısı, son koşu, kullanan servisler), ayrıntı (+ denetim hataları), koşular.
   ['/platform/servis-akislari', (db, q) => {
@@ -273,6 +279,58 @@ export const SERVIS_POST_UCLARI = [
     if (typeof g.xml !== 'string' || !g.xml) throw new DepoHatasi('SoapUI dosyası boş.');
     try {
       return { onizleme: soapuiOnizle(db, projeId, g.xml, { takim: metin(g.takim) || undefined, durum: metin(g.durum) || undefined }) };
+    } catch (e) {
+      if (e instanceof DepoHatasi) throw e;
+      throw new DepoHatasi(/** @type {Error} */ (e).message);
+    }
+  }],
+  // REST servisi (Adım adım > REST ve İşlemler): uçlarla kayıt (ağ isteği yok) ve isteğe bağlı "Dene" (yalnız TEST, kullanıcı onayıyla).
+  ['/platform/servis/rest/kaydet', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return restServisiKaydet(db, projeId, {
+      id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), uclar: Array.isArray(g.uclar) ? g.uclar : [],
+      ...(g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
+      ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
+      ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
+      ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
+      senaryolar: Array.isArray(g.senaryolar) ? g.senaryolar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
+      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {})
+    });
+  }],
+  ['/platform/servis/rest/dene', async (db, g) => restUcuDene(db, kimlik(g.projeId, 'projeId'), {
+    ortamId: kimlik(g.ortamId, 'ortamId'), ...(typeof g.taban === 'string' ? { taban: g.taban } : {}), uc: g.uc,
+    ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {})
+  })],
+  // Taban adresleri toplu düzenle: onay yoksa yalnız etki önizlemesi; onay: true ile yazılır. Ağ isteği yok.
+  ['/platform/servis-tabanlari/uygula', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    if (!g.degisiklikler || typeof g.degisiklikler !== 'object' || Array.isArray(g.degisiklikler)) throw new DepoHatasi('"degisiklikler" bir nesne olmalıdır.');
+    return tabanlariUygula(db, projeId, { degisiklikler: g.degisiklikler, onay: g.onay === true });
+  }],
+  // Postman koleksiyonu (REST): önizleme (gizli değişken DEĞERLERİ dönmez) ve kullanıcı seçimleriyle aktarım. Ağ isteği yok.
+  ['/platform/servis/postman/onizle', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    if (typeof g.koleksiyon !== 'string' || !g.koleksiyon) throw new DepoHatasi('Postman koleksiyon dosyası boş.');
+    try {
+      return { onizleme: postmanOnizle(db, projeId, { koleksiyon: g.koleksiyon, ...(typeof g.ortam === 'string' && g.ortam ? { ortam: g.ortam } : {}) }) };
+    } catch (e) {
+      if (e instanceof DepoHatasi) throw e;
+      throw new DepoHatasi(/** @type {Error} */ (e).message);
+    }
+  }],
+  ['/platform/servis/postman/aktar', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    if (typeof g.koleksiyon !== 'string' || !g.koleksiyon) throw new DepoHatasi('Postman koleksiyon dosyası boş.');
+    const metinler = (/** @type {unknown} */ d) => (Array.isArray(d) ? d.filter((x) => typeof x === 'string') : undefined);
+    try {
+      return postmanAktar(db, projeId, {
+        koleksiyon: g.koleksiyon, ...(typeof g.ortam === 'string' && g.ortam ? { ortam: g.ortam } : {}),
+        klasorler: metinler(g.klasorler) ?? [], tabloAdi: metin(g.tabloAdi),
+        gizliler: metinler(g.gizliler), sifreliKaydet: metinler(g.sifreliKaydet) ?? [], akisDegiskenleri: metinler(g.akisDegiskenleri) ?? [],
+        degerOrtami: secimli(g.degerOrtami) ?? null, tabanOrtami: secimli(g.tabanOrtami) ?? null,
+        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {})
+      });
     } catch (e) {
       if (e instanceof DepoHatasi) throw e;
       throw new DepoHatasi(/** @type {Error} */ (e).message);

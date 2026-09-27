@@ -4,6 +4,10 @@ import http from 'node:http';
 import https from 'node:https';
 import { wsdlSemalari } from './wsdl-semasi.mjs';
 import { AD_KALIBI, BICIM_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi.mjs';
+import * as hesap from './hesap-kurallari.mjs';
+import { tarihBicimle, VARSAYILAN_TARIH_BICIMI } from './hesap-kurallari.mjs';
+
+export { tarihBicimle, VARSAYILAN_TARIH_BICIMI };
 
 export const VARSAYILAN_ZAMAN_ASIMI_MS = 60_000;
 /** Saklanan yanıt en çok bu kadar karakter tutulur (rapor boyutu). */
@@ -23,30 +27,14 @@ export class ServisHatasi extends Error {
 // ---------------------------------------------------------------------------------------
 
 /**
- * Tarih biçimi: yyyy, MM, dd, HH, mm, ss; tek tırnak içi olduğu gibi yazılır ("yyyy-MM-dd'T'HH:mm:ss").
- * @param {Date} t @param {string} bicim
+ * Tarih ifadesi ("bugun", "bugun+1y", "BEGIN_DATE-30g"; kurallar verilirse kural adları) → tarih. Hata ServisHatasi.
+ * @param {string} ifade @param {Date} simdi @param {Record<string, string>} [kurallar]
  */
-export function tarihBicimle(t, bicim) {
-  const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
-  const parcalar = { yyyy: String(t.getFullYear()), MM: iki(t.getMonth() + 1), dd: iki(t.getDate()), HH: iki(t.getHours()), mm: iki(t.getMinutes()), ss: iki(t.getSeconds()) };
-  return bicim.replace(/'([^']*)'|yyyy|MM|dd|HH|mm|ss/g, (m, sabit) => (sabit !== undefined ? sabit : parcalar[/** @type {keyof typeof parcalar} */ (m)]));
-}
-
-/**
- * "bugun", "bugun+1y", "bugun-30g", "bugun+2a" (y: yıl, a: ay, g: gün) → tarih.
- * @param {string} ifade @param {Date} simdi
- */
-export function goreliTarih(ifade, simdi) {
-  const e = /^bugun(?:([+-])(\d{1,4})([yag]))?$/.exec(ifade.trim());
-  if (!e) throw new ServisHatasi(`Tarih ifadesi anlaşılmadı: "${ifade}" (ör. bugun, bugun+1y, bugun-30g, bugun+2a).`);
-  const t = new Date(simdi.getTime());
-  if (e[1]) {
-    const n = Number(e[2]) * (e[1] === '-' ? -1 : 1);
-    if (e[3] === 'y') t.setFullYear(t.getFullYear() + n);
-    else if (e[3] === 'a') t.setMonth(t.getMonth() + n);
-    else t.setDate(t.getDate() + n);
-  }
-  return t;
+export function goreliTarih(ifade, simdi, kurallar = {}) {
+  let v;
+  try { v = hesap.ifadeDegeri(ifade, kurallar, { simdi }); } catch (e) { throw new ServisHatasi(/** @type {Error} */ (e).message); }
+  if (!(v instanceof Date)) throw new ServisHatasi(`Tarih ifadesi anlaşılmadı: "${ifade}" (ör. bugun, bugun+1y, bugun-30g, BEGIN_DATE+1y).`);
+  return v;
 }
 
 /** Parametre başvurusu: ${AD} ya da doğrudan tarih ${tarih:bugun+1y|yyyy-MM-dd}. */
@@ -77,46 +65,71 @@ export function tarihDegeriBicimle(deger, bicim, ad) {
 }
 
 /**
- * "bugun+1y|yyyy-MM-dd" → tarih metni; biçim yoksa varsayilanBicim (Ayarlar > Koşu > Varsayılan tarih biçimi).
- * @param {string} kural @param {Date} simdi @param {string} [varsayilanBicim]
+ * Kural ya da satır içi ifade "İFADE|BİÇİM" (tarih ve hesaplama; bkz. hesap-kurallari.mjs) → metin. Tarihte biçim yoksa
+ * varsayilanBicim (Ayarlar > Koşu > Varsayılan tarih biçimi). Hata ServisHatasi.
+ * @param {string} kural @param {Date} simdi @param {string} [varsayilanBicim] @param {Record<string, string>} [kurallar]
  */
-export function tarihKuraliUygula(kural, simdi, varsayilanBicim = VARSAYILAN_TARIH_BICIMI) {
-  const [ifade, bicim] = kural.split('|');
-  return tarihBicimle(goreliTarih(ifade, simdi), (bicim ?? varsayilanBicim).trim());
+export function tarihKuraliUygula(kural, simdi, varsayilanBicim = VARSAYILAN_TARIH_BICIMI, kurallar = {}) {
+  try { return hesap.ifadeUygula(kural, kurallar, { simdi }, varsayilanBicim); } catch (e) { throw new ServisHatasi(/** @type {Error} */ (e).message); }
 }
-/** Biçim verilmemiş tarih ifadelerinin varsayılanı (kullanıcı Ayarlar > Koşu'dan değiştirir). */
-export const VARSAYILAN_TARIH_BICIMI = "yyyy-MM-dd'T'HH:mm:ss";
 
 /**
  * Gövdedeki ${AD} başvurularını doldurur: önce tarih kuralı (tarihKurallari[AD]), sonra değer (degerler[AD]; XML için
  * kaçışlanır). ${akis:Ad} akisDegerleri'nden (servis akışı / oturum). Değeri bulunamayan parametreler tek hatada listelenir
  * (nereden dolacağı "eksikAciklamasi" ile söylenir). kacis: 'xml' (gövde; varsayılan) · 'baslik' (HTTP başlığı: kaçış yok,
- * satır sonu içeren değer reddedilir).
+ * satır sonu içeren değer reddedilir) · 'json' (JSON metin kaçışı; REST gövdesi) · 'url' (URL kodlaması; REST yolu / form) · 'yok'.
  * @param {string} govde
  * @param {{ degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string;
- *   akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik'; varsayilanTarihBicimi?: string }} baglam
+ *   akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik' | 'json' | 'url' | 'yok'; varsayilanTarihBicimi?: string;
+ *   tarihOnbellegi?: Map<string, any>; gizliler?: string[] }} baglam  tarihKurallari: hesaplama kuralları (tarih kuralları dahil);
+ *   tarihOnbellegi: aynı istekteki doldurmalar (gövde / yol / başlık) paylaşır; gizliler: hata mesajlarında maskelenir.
  */
 export function yerTutuculariDoldur(govde, baglam) {
   const simdi = baglam.simdi ?? new Date();
   /** @type {Set<string>} */
   const eksik = new Set();
+  const kurallar = baglam.tarihKurallari ?? {};
+  // Hesaplama bağlamı: aynı doldurmada (ve tarihOnbellegi paylaşılırsa aynı istekte) her kural bir kez hesaplanır.
+  /** @type {import('./hesap-kurallari.mjs').Baglam} */
+  const hb = {
+    simdi, onbellek: baglam.tarihOnbellegi ?? new Map(),
+    ref: (ad) => (Object.hasOwn(kurallar, ad) ? hesap.kuralUygula(ad, kurallar, hb, baglam.varsayilanTarihBicimi) : Object.hasOwn(baglam.degerler, ad) ? baglam.degerler[ad] : undefined),
+    akis: (ad) => (baglam.akisDegerleri && Object.hasOwn(baglam.akisDegerleri, ad) ? baglam.akisDegerleri[ad] : undefined)
+  };
+  /** Hesap: eksik başvuru eksik listesine; diğer hata (gizliler maskeli) ServisHatasi. @param {() => string} f */
+  const hesapla = (f) => {
+    try { return f(); } catch (e) {
+      if (e instanceof hesap.HesapHatasi && e.tur === 'tanimsiz' && /** @type {any} */ (e).ad) { eksik.add(/** @type {any} */ (e).ad); return ''; }
+      if (e instanceof hesap.HesapHatasi) throw new ServisHatasi(gizlileriMaskele(e.message, baglam.gizliler ?? []));
+      throw e;
+    }
+  };
   const kacis = (/** @type {string} */ v, /** @type {string} */ ad) => {
+    if (baglam.kacis === 'json') return JSON.stringify(v).slice(1, -1);
+    if (baglam.kacis === 'url') return encodeURIComponent(v);
+    if (baglam.kacis === 'yok') return v;
     if (baglam.kacis !== 'baslik') return xmlKacis(v);
     if (/[\r\n]/.test(v)) throw new ServisHatasi(`"${ad}" değeri satır sonu içeriyor; başlıkta kullanılamaz.`);
     return v;
   };
-  const sonuc = govde.replace(PARAMETRE, (_m, tarihIfadesi, bicim, akisAdi, hamAd, degerBicimi) => {
-    if (tarihIfadesi) return tarihKuraliUygula(bicim ? `${tarihIfadesi}|${bicim}` : tarihIfadesi, simdi, baglam.varsayilanTarihBicimi);
+  // Satır içi hesap: ${hesap: ifade | biçim} (XML gövdede ifade kaçışlı yazılır, önce çözülür).
+  let metin = govde;
+  for (const b of hesap.hesapBloklari(govde).reverse()) {
+    const ic = !baglam.kacis || baglam.kacis === 'xml' ? xmlKacisCoz(b.ic) : b.ic;
+    const d = hesapla(() => hesap.ifadeUygula(ic, kurallar, hb, baglam.varsayilanTarihBicimi));
+    metin = `${metin.slice(0, b.bas)}${kacis(d, 'hesap')}${metin.slice(b.son)}`;
+  }
+  const sonuc = metin.replace(PARAMETRE, (_m, tarihIfadesi, bicim, akisAdi, hamAd, degerBicimi) => {
+    if (tarihIfadesi) return hesapla(() => hesap.ifadeUygula(bicim ? `${tarihIfadesi}|${bicim}` : tarihIfadesi, kurallar, hb, baglam.varsayilanTarihBicimi));
     if (akisAdi) {
-      const v = baglam.akisDegerleri?.[akisAdi];
+      const v = baglam.akisDegerleri && Object.hasOwn(baglam.akisDegerleri, akisAdi) ? baglam.akisDegerleri[akisAdi] : undefined;
       if (v === undefined) { eksik.add(`akis:${akisAdi}`); return ''; }
       return kacis(v, `akis:${akisAdi}`);
     }
     const ad = typeof hamAd === 'string' ? hamAd.trim() : hamAd;
-    const kural = baglam.tarihKurallari?.[ad];
-    if (kural) return tarihKuraliUygula(kural, simdi, baglam.varsayilanTarihBicimi);
-    const d = baglam.degerler[ad];
-    if (d === undefined) { eksik.add(ad); return ''; }
+    if (Object.hasOwn(kurallar, ad)) return kacis(hesapla(() => hesap.kuralUygula(ad, kurallar, hb, baglam.varsayilanTarihBicimi)), ad);
+    const d = Object.hasOwn(baglam.degerler, ad) ? baglam.degerler[ad] : undefined;
+    if (typeof d !== 'string') { eksik.add(ad); return ''; }
     return kacis(degerBicimi ? tarihDegeriBicimle(d, degerBicimi.trim(), ad) : d, ad);
   });
   if (eksik.size) {
@@ -127,9 +140,17 @@ export function yerTutuculariDoldur(govde, baglam) {
   return sonuc;
 }
 
-/** Gövdede geçen parametre adları (doğrudan tarih ifadeleri ve ${akis:…} hariç). @param {string} govde */
+/**
+ * Gövdede geçen parametre adları (doğrudan tarih ifadeleri ve ${akis:…} hariç). ${hesap: …} bloklarının içindeki ${X} başvuruları
+ * da sayılır (bloğun kendisi parametre değildir).
+ * @param {string} govde
+ */
 export function kullanilanParametreler(govde) {
-  return [...new Set([...govde.matchAll(PARAMETRE)].map((m) => m[4]?.trim()).filter(Boolean))];
+  const bloklar = hesap.hesapBloklari(govde);
+  let duz = govde;
+  for (const b of [...bloklar].reverse()) duz = `${duz.slice(0, b.bas)} ${duz.slice(b.son)}`;
+  const ic = bloklar.flatMap((b) => [...b.ic.matchAll(/\$\{\s*([^{}]+?)\s*\}/g)].map((m) => m[1]).filter((x) => !x.startsWith('akis:')));
+  return [...new Set([...[...duz.matchAll(PARAMETRE)].map((m) => m[4]?.trim()), ...ic].filter(Boolean))];
 }
 
 /** Metinde geçen akış değeri adları (${akis:Ad}). @param {string} metin */
@@ -168,13 +189,13 @@ export const xmlKacis = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 export const xmlKacisCoz = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 
 /**
- * Saklanacak metinde gizli değerleri (parola vb.) maskeler (kaçışlı ve düz hâlleri).
+ * Saklanacak metinde gizli değerleri (parola vb.) maskeler (XML / JSON kaçışlı, URL kodlu ve düz hâlleri).
  * @param {string} metin @param {string[]} gizliler
  */
 export function gizlileriMaskele(metin, gizliler) {
   let m = metin;
   for (const d of gizliler.filter((x) => x && x.length >= 2).sort((a, b) => b.length - a.length)) {
-    m = m.split(xmlKacis(d)).join(MASKE).split(d).join(MASKE);
+    for (const bicim of [xmlKacis(d), JSON.stringify(d).slice(1, -1), encodeURIComponent(d), d]) m = m.split(bicim).join(MASKE);
   }
   return m;
 }
@@ -188,7 +209,7 @@ export function gizlileriMaskele(metin, gizliler) {
  */
 
 /**
- * @param {{ adres: string; yontem?: 'GET' | 'POST'; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
+ * @param {{ adres: string; yontem?: string; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
  *   sinyal?: AbortSignal; gonderildi?: () => void }} istek  gonderildi: istek gövdesi karşıya yazılınca çağrılır.
  * @returns {Promise<HamYanit>}
  */
@@ -413,6 +434,7 @@ export function kontrolAdi(k) {
     case 'icerir': return `Yanıtta geçer: "${k.deger}"`;
     case 'icermez': return `Yanıtta geçmez: "${k.deger}"`;
     case 'xpathEsit': return `${k.xpath} = "${k.deger}"`;
+    case 'jsonEsit': return `JSON ${k.yol} = "${k.deger}"`;
     case 'veya': return `Şunlardan biri: ${(k.alt ?? []).map(kontrolAdi).join(' | ')}`;
     default: return String(k.tur);
   }
@@ -456,6 +478,11 @@ export function kontrolleriDegerlendir(yanit, kontroller) {
       case 'xpathEsit': {
         const m = agac ? xpathMetni(agac, String(k.xpath)) : undefined;
         if (m === undefined) return s(false, agac ? 'Düğüm bulunamadı' : 'Yanıt XML değil');
+        return m === k.deger ? s(true, `"${m}"`) : s(false, `Görülen: "${m.slice(0, 300)}"`);
+      }
+      case 'jsonEsit': {
+        const m = degerOku(yanit, { kaynak: 'json', yol: String(k.yol ?? '') });
+        if (m === undefined) return s(false, 'Değer bulunamadı (yanıt JSON değil ya da yol yok)');
         return m === k.deger ? s(true, `"${m}"`) : s(false, `Görülen: "${m.slice(0, 300)}"`);
       }
       case 'veya': {

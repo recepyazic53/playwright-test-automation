@@ -45,8 +45,10 @@ export interface SenaryoSatiri {
   /** Ekranı devre dışıysa false: senaryo hiçbir koşuya girmez. */
   ekranEtkin: boolean;
   guncellenme: string;
+  /** Yalnız birleşik listede (ortamId verilmeden): projedeki her ortam için tanım, Koşuda ve son sonuç. */
+  ortamlar?: Array<{ ortamId: string; tanimli: boolean; kosuyaDahil: boolean; sonSonuc: { durum: string; zaman: string; sonucId: string; kosuId: string } | null }>;
 }
-export declare function senaryoListesi(vt: Veritabani, projeId: string, ortamId: string): {
+export declare function senaryoListesi(vt: Veritabani, projeId: string, ortamId: string | null): {
   ekranlar: Array<{ id: string; anahtar: string; ad: string; senaryoSayisi: number; durum: 'etkin' | 'devre_disi' | 'silindi'; modelVar: boolean; olusturulabilir: boolean }>;
   senaryolar: SenaryoSatiri[];
 };
@@ -56,6 +58,8 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   olusturulma: string; guncellenme: string;
   /** Senaryonun akışı (null: ekranın varsayılan akışı). */
   akis: string | null;
+  /** Giriş seçimi (null = ortamın girişiyle, varsayılan). */
+  giris: import('./senaryo-girisi.mjs').SenaryoGirisi | null;
 };
 export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
 export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null): {
@@ -77,15 +81,19 @@ export declare function senaryoKaydet(
   vt: Veritabani,
   girdi: {
     id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown;
-    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; yapan?: string;
+    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; yapan?: string;
   },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
 ): { id: string; uyarilar: Bulgu[] };
-export declare function kosuyaDahilAyarla(vt: Veritabani, projeId: string, idler: unknown, dahil: boolean, yapan?: string): { degisen: number };
+export declare function kosuyaDahilAyarla(vt: Veritabani, projeId: string, idler: unknown, dahil: boolean, yapan?: string, ortamId?: string | null): { degisen: number };
+/** Senaryo o ortamda koşuda mı (ortam başına değer, yoksa genel değer; tanımlı değilse false). */
+export declare function ortamdaKosuyaDahil(icerik: unknown, genel: boolean, ortamId: string): boolean;
 export declare function senaryolariSil(
   vt: Veritabani, projeId: string, idler: unknown, secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string }
 ): { silinen: number };
-export declare function senaryoKopyala(vt: Veritabani, projeId: string, id: string, yapan?: string): { id: string; baslik: string };
+export declare function senaryoKopyala(vt: Veritabani, projeId: string, id: string, yapan?: string, istenenBaslik?: string): { id: string; baslik: string };
+export declare function senaryolariCogalt(vt: Veritabani, projeId: string, g: { idler: unknown; adet: unknown; sablon?: unknown; onay?: boolean }, yapan?: string):
+  { onizleme: true; plan: Array<{ kaynakId: string; kaynakBaslik: string; baslik: string; cakisma: boolean }>; cakisanlar: number } | { onizleme: false; olusanlar: Array<{ id: string; baslik: string }> };
 export declare function senaryoSonSonucu(vt: Veritabani, id: string, ortamId: string): { sonucId: string; kosuId: string; durum: string; zaman: string } | null;
 export declare function senaryoGecmisiniSil(vt: Veritabani, projeId: string, idler: unknown, s?: { onay?: boolean }): { senaryo: number; kayit: number; silindi: boolean };
 export declare function senaryoGecmisi(vt: Veritabani, id: string): Array<{
@@ -107,7 +115,7 @@ export declare function calistirmaHedefiCoz(
 ): CalistirmaHedefi;
 export declare function denemePaketiOlustur(
   vt: Veritabani,
-  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown },
+  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown },
   secenekler: { geciciEk: string }
 ): {
   model: true; genel: { projeId: string; ortamId: string }; spec: string; geciciBaslik: string;

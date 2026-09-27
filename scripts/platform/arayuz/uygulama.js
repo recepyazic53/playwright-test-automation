@@ -18,9 +18,13 @@ import {
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { rehberAnahtari, rehberDugmesi, rehberOtomatikDene } from './rehber.js';
+import { hizliAramaDugmesi, hizliAramaKisayolu } from './hizli-arama.js';
+import { olusturMenusu } from './olustur-menusu.js';
 import { cikisKorumasiniKur } from './cikis-korumasi.js';
+import { tabloSiralamaKur } from './tablo-siralama.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
+import { kasayiKilitleSecimli } from './zamanlanmis-kosular.js';
 
 // Çalışma alanı ve proje ⋯ modülleri DİNAMİK yüklenir: eski sürüm bir sunucu (yeniden başlatılmamış) bu dosyaları sunmuyorsa
 // kabuk yine açılır, yalnızca bu özellikler görünmez. (Eski sunucunun /platform/durum yanıtında "calismaAlani" alanı yoktur.)
@@ -54,12 +58,12 @@ const markaOgesi = () => h('div', { class: 'marka' }, logo(),
 
 /** Sunucu durumu hapı (canlı nokta + adres). */
 function sunucuDurumu() {
-  const el = h('div', { class: 'sunucu-durumu', role: 'status', title: 'Yerel sunucu çalışıyor' },
+  const el = h('div', { class: 'sunucu-durumu', role: 'status', title: `Yerel sunucu çalışıyor (${location.host})` },
     h('span', { class: 'canli-nokta', 'aria-hidden': 'true' }), h('span', { class: 'adres' }, location.host),
     h('span', { class: 'gorunmez' }, 'Sunucu bağlı'));
   el.durumAyarla = (bagli) => {
     el.classList.toggle('kopuk', !bagli);
-    el.title = bagli ? 'Yerel sunucu çalışıyor' : 'Sunucuya ulaşılamıyor';
+    el.title = bagli ? `Yerel sunucu çalışıyor (${location.host})` : 'Sunucuya ulaşılamıyor';
     el.lastChild.textContent = bagli ? 'Sunucu bağlı' : 'Sunucuya ulaşılamıyor';
   };
   return el;
@@ -593,7 +597,7 @@ function yapilacaklarKarti(git) {
       'Ekranlar: test edilecek sayfayı Nöbetçi\'ye tanıtın; modeli ve önerilen senaryoları kontrol edin.', cevaplar.ekranYolu === 'tara' ? '#/ekranlar/yeni/tara' : '#/ekranlar/yeni']);
     isler.push(['Senaryo oluşturun ve deneyin', 'Senaryolar: ekranın formunu doldurun, "Dene" ile kaydetmeden deneyin, sonra kaydedin.', '#/senaryolar']);
   }
-  if (cevaplar.hedef !== 'web') isler.push(['Servis ekleyin', 'Servisler: WSDL / SoapUI projesi ya da elle; alanları test verisine bağlayın, kontrolleri ekleyin.', '#/servisler/yeni']);
+  if (cevaplar.hedef !== 'web') isler.push(['Servis ekleyin', 'Servisler: WSDL, SoapUI projesi, Postman koleksiyonu ya da elle; alanları test verisine bağlayın, kontrolleri ekleyin.', '#/servisler/yeni']);
   isler.push(['Koşun ve sonuçları izleyin', '"Koşuyu başlat" ile koşun; Sonuçlar\'da kalan testleri, ekran görüntülerini ve hata kalıplarını inceleyin.', '#/sonuclar']);
   return h('div', { class: 'kart vurgulu yapilacaklar' },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sizin için yapılacaklar')),
@@ -665,6 +669,8 @@ function kilitEkrani(beklemeSaniye) {
       cokluAlan ? h('p', { class: 'kilit-alan-adi' }, h('span', { class: 'ca-avatar kucuk', 'aria-hidden': 'true' }, basHarf(alan.ad)), h('span', {}, alan.ad)) : null,
       h('p', { class: 'soluk' }, cokluAlan ? 'Devam etmek için bu çalışma alanının kasa parolasını girin.' : 'Devam etmek için kasa parolasını girin.')),
     mesaj.kutu, halka.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder),
+    durum.sunucu && durum.sunucu.zamanlama && durum.sunucu.zamanlama.anahtarBellekte
+      ? h('p', { class: 'soluk kucuk', role: 'status' }, 'Zamanlanmış koşular arka planda sürebilir: kasa anahtarı yalnız zamanlayıcı için bellekte (Ayarlar > Koşu).') : null,
     baska ? h('div', { class: 'kilit-alt' }, baska) : null);
   let durdur = () => {};
   const bekle = (saniye, onMetin) => {
@@ -761,8 +767,9 @@ function anaDuzen() {
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
   const kilitle = h('button', { type: 'button', class: 'kilitle-dugmesi', 'aria-label': 'Kilitle' }, ikon('kilit'), h('span', { class: 'dugme-metni' }, 'Kilitle'));
   const kilitleVeDon = async () => {
-    await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
-    bildir('Kasa kilitlendi.');
+    const secim = await mesgulIken(kilitle, 'Kilitleniyor…', () => kasayiKilitleSecimli());
+    if (!secim) return;
+    bildir(secim === 'surdur' ? 'Kasa kilitlendi; zamanlanmış koşular sürüyor.' : 'Kasa kilitlendi.');
     yonlendir();
   };
   kilitle.addEventListener('click', kilitleVeDon);
@@ -774,17 +781,22 @@ function anaDuzen() {
     yenile: async () => { durum.sunucu = await api('/platform/durum').catch(() => durum.sunucu); anaDuzen(); }
   }) : null;
   const sunucu = sunucuDurumu();
+  const aramaBaglami = () => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI });
   const ust = h('header', { class: 'ust-cubuk' },
     markaOgesi(),
     projeSecici(),
     h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navAyarlar),
+    olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('tanisma', 'ek') })),
     h('span', { class: 'bosluk' }),
-    sunucu, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
+    hizliAramaDugmesi(aramaBaglami), sunucu, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
+  hizliAramaKisayolu(aramaBaglami);
   ekran(ust, main);
 
   const ciz = () => {
     const hash = location.hash || '#/sonuclar';
     const [, bolum, alt, ...kalan] = hash.split('/');
+    // Sayfa değişince önceki sayfanın açık pencereleri (ör. geri düğmesiyle çıkılan rapor penceresi) kapanır.
+    for (const d of document.querySelectorAll('dialog[open]')) d.close();
     for (const n of [navSonuclar, navSenaryolar, navEkranlar, navAyarlar]) n.removeAttribute('aria-current');
     if (bolum === 'senaryolar') {
       navSenaryolar.setAttribute('aria-current', 'page');
@@ -867,4 +879,6 @@ function ayarlarEkrani(main, bolum) {
 }
 
 cikisKorumasiniKur();
+// Tüm tablolarda başlığa tıklayınca sıralama (sayfalı tablolar kendi verisinde sıralar; bkz. tablo-siralama.js).
+tabloSiralamaKur();
 yonlendir();

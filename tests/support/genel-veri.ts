@@ -19,6 +19,8 @@ export type GenelVeri = {
   ortamId: string;
   model: PlatformModelVerisi | null;
   giris: PlatformGirisBilgisi | null;
+  /** Senaryoların / "Yeniden giriş" adımlarının ADIYLA seçtiği giriş profilleri (yalnızca kullanılanlar). */
+  girisProfilleri: Record<string, PlatformGirisBilgisi>;
   girisTarifi: PlatformGirisTarifi | null;
 };
 
@@ -43,7 +45,7 @@ export function genelVeri(): GenelVeri {
   const cikti = sonuc as Partial<GenelVeri> & { durum?: string; yasakAdresler?: PlatformYasakAdresleri };
   if (cikti.durum !== 'hazir') throw new PlatformVeriHatasi('veritabanı bulunamadı');
   yasakAdresleriniBirlestir(cikti.yasakAdresler);
-  onbellek = { projeId, ortamId, model: cikti.model ?? null, giris: cikti.giris ?? null, girisTarifi: cikti.girisTarifi ?? null };
+  onbellek = { projeId, ortamId, model: cikti.model ?? null, giris: cikti.giris ?? null, girisProfilleri: cikti.girisProfilleri ?? {}, girisTarifi: cikti.girisTarifi ?? null };
   return onbellek;
 }
 
@@ -52,13 +54,21 @@ export function genelGirisTarifi(): GirisTarifi {
   return tarifiHazirla(genelVeri().girisTarifi?.tarif ?? null, 'Bu ortam');
 }
 
-/** Giriş motoru için kimlik (şifreler yalnızca bellekte). Eksikse açık hata. */
-export function genelGirisKimligi(): GirisKimligi {
-  const giris = genelVeri().giris;
+/**
+ * Giriş motoru için kimlik (şifreler yalnızca bellekte). profil: giriş profilinin ADI (senaryonun giriş seçimi ya da
+ * "Yeniden giriş" adımı); verilmezse ortamın varsayılan profili. Eksikse açık hata.
+ */
+export function genelGirisKimligi(profil?: string | null): GirisKimligi {
+  const v = genelVeri();
+  const giris = profil ? v.girisProfilleri[profil] ?? null : v.giris;
+  if (profil && !giris) throw new Error(`"${profil}" giriş profili bu ortamda tanımlı değil (Nöbetçi > Ayarlar > Giriş profilleri).`);
   if (!giris?.kullaniciAdi || !giris.parola) {
-    throw new Error('Bu ortamın giriş profilinde kullanıcı adı ve parola tanımlı olmalı (Nöbetçi > Ayarlar > Giriş profilleri).');
+    throw new Error(`${profil ? `"${profil}" giriş profilinde` : 'Bu ortamın giriş profilinde'} kullanıcı adı ve parola tanımlı olmalı (Nöbetçi > Ayarlar > Giriş profilleri).`);
   }
-  return { kullaniciAdi: giris.kullaniciAdi, parola: giris.parola, totpGizli: giris.totpGizli, sabitKod: giris.sabitKod, smsKipi: giris.smsKipi ?? null };
+  return {
+    kullaniciAdi: giris.kullaniciAdi, parola: giris.parola, totpGizli: giris.totpGizli, sabitKod: giris.sabitKod, smsKipi: giris.smsKipi ?? null,
+    ekAlanlar: giris.ekAlanlar ?? {}, gizliEkAlanlar: giris.gizliEkAlanlar ?? []
+  };
 }
 
 /**

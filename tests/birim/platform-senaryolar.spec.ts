@@ -405,6 +405,44 @@ test.describe('Senaryo servisi (nötr proje)', () => {
     } finally { o.temizle(); }
   });
 
+  test('birleşik liste: tüm ortamlar tek listede; Koşuda ve son sonuç ortam başına (ortamId verilince eski yanıt)', async () => {
+    const o = await ortamKur();
+    try {
+      const { vt, projeId, ortamId, digerOrtamId, ekranId } = o;
+      const { id } = senaryoKaydet(vt, { projeId, ekranId, baslik: 'İki ortamlı', veri: TEMEL, ortamIdleri: [ortamId, digerOrtamId], kosuyaDahil: true });
+      kosuKaydet(vt, { id: 'k-diger', projeId, ortamId: digerOrtamId, tur: 'tekil' });
+      sonucKaydet(vt, { kosuId: 'k-diger', projeId, senaryoId: id, senaryoBaslik: 'İki ortamlı', durum: 'basarili', bitis: '2026-09-27T08:00:00.000Z' });
+
+      // Birleşik: ortamı yalnız biri olan senaryolar da listede; her satırda projedeki her ortam.
+      const birlesik = senaryoListesi(vt, projeId, null);
+      expect(birlesik.senaryolar.map((s) => s.baslik)).toEqual(['Eski kayıt', 'Mevcut veri senaryosu', 'İki ortamlı']);
+      const satir = birlesik.senaryolar.find((s) => s.id === id);
+      expect(satir?.ortamlar).toEqual([
+        { ortamId, tanimli: true, kosuyaDahil: true, sonSonuc: null },
+        { ortamId: digerOrtamId, tanimli: true, kosuyaDahil: true, sonSonuc: expect.objectContaining({ durum: 'basarili', kosuId: 'k-diger' }) }
+      ]);
+      expect(satir).toMatchObject({ kosuyaDahil: true, sonSonuc: { durum: 'basarili' } });
+      expect(birlesik.senaryolar.find((s) => s.id === o.veriSenaryo)?.ortamlar?.map((x) => x.tanimli)).toEqual([true, false]);
+      expect(birlesik.ekranlar.find((e) => e.id === ekranId)?.senaryoSayisi).toBe(3);
+
+      // Koşuda yalnız bir ortamda kapatılır; diğeri korunur. Ortamlı eski yanıt o ortamın değerini verir (ortamlar alanı yok).
+      expect(kosuyaDahilAyarla(vt, projeId, [id, o.veriSenaryo], false, undefined, digerOrtamId).degisen).toBe(1);
+      expect(senaryoListesi(vt, projeId, null).senaryolar.find((s) => s.id === id)?.ortamlar?.map((x) => x.kosuyaDahil)).toEqual([true, false]);
+      const eski = senaryoListesi(vt, projeId, digerOrtamId).senaryolar.find((s) => s.id === id);
+      expect(eski).toMatchObject({ kosuyaDahil: false, sonSonuc: { durum: 'basarili' } });
+      expect(eski && 'ortamlar' in eski).toBe(false);
+      expect(senaryoListesi(vt, projeId, ortamId).senaryolar.find((s) => s.id === id)?.kosuyaDahil).toBe(true);
+      expect(senaryoDetayi(vt, id, null).kosuyaDahil).toBe(true); // genel: en az bir ortamda koşuda
+      expect(senaryoGecmisi(vt, id)[0].degisenler).toEqual(['Koşuda (IKINCI): açık → kapalı']);
+      // Başlık değişikliği (Koşuda değişmeden) ortam başına değeri korur; tüm ortamlar için ayar hepsini eşitler.
+      senaryoKaydet(vt, { id, projeId, baslik: 'İki ortamlı 2', kosuyaDahil: true });
+      expect(senaryoListesi(vt, projeId, digerOrtamId).senaryolar.find((s) => s.id === id)?.kosuyaDahil).toBe(false);
+      expect(kosuyaDahilAyarla(vt, projeId, [id], true).degisen).toBe(1);
+      expect(senaryoListesi(vt, projeId, null).senaryolar.find((s) => s.id === id)?.ortamlar?.map((x) => x.kosuyaDahil)).toEqual([true, true]);
+      expect(() => kosuyaDahilAyarla(vt, projeId, [id], true, undefined, 'olmayan')).toThrow(/Ortam bulunamadı/);
+    } finally { o.temizle(); }
+  });
+
   test('çalıştırma ucu: gövde doğrulanır, UUID sunucuda çözülür, SAHTE koşucu çağrılır; Dene veritabanına yazmaz', async () => {
     const o = await ortamKur();
     try {

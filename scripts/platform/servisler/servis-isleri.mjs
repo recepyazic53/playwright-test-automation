@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { servisGetir, servisSenaryosuGetir } from './servis-deposu.mjs';
-import { ortamTuru, ortamdaTanimli, servisSenaryosuCalistir } from './servis-islemleri.mjs';
+import { akisSenaryoKancasiAl, ortamTuru, ortamdaTanimli, servisSenaryosuCalistir } from './servis-islemleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -48,8 +48,11 @@ export function servisIsiBaslat(vt, projeId, girdi) {
     baslangic: null, bitis: null, sonuc: null, ...(tanimli ? {} : { neden: `Servis "${ortam.ad}" ortamında tanımlı değil.` })
   })] : (girdi.senaryoIdleri ?? []).map((id) => {
     const s = servisSenaryosuGetir(vt, id);
-    if (!s || s.servisId !== servis.id) throw new DepoHatasi('Senaryo bulunamadı.');
-    const neden = !tanimli ? `Servis "${ortam.ad}" ortamında tanımlı değil.`
+    // Akış senaryosu: akışı bu servisten geçiyorsa (başka serviste kayıtlı olsa da) koşar; atlama nedeni akışın adımlarından.
+    const kanca = akisSenaryoKancasiAl();
+    const akis = s && /** @type {any} */ (s.icerik).tur === 'akis' && kanca && (s.servisId === servis.id || kanca.gecenler(vt, projeId, servis.id).some((x) => x.id === s.id));
+    if (!s || (s.servisId !== servis.id && !akis)) throw new DepoHatasi('Senaryo bulunamadı.');
+    const neden = akis ? (kanca?.atlamaNedeni(vt, s, ortam) ?? '') : !tanimli ? `Servis "${ortam.ad}" ortamında tanımlı değil.`
       : s.kapsam !== 'ikisi' && s.kapsam !== tur ? `Senaryo yalnız ${s.kapsam === 'test' ? 'TEST' : 'CANLI'} ortamda koşar.`
         : tur === 'canli' && yalnizTest.has(s.icerik.operasyon) ? `"${s.icerik.operasyon}" CANLI'da çağrılmaz.` : '';
     return /** @type {IsSatiri} */ ({

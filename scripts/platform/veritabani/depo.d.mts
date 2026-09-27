@@ -19,8 +19,11 @@ export interface GirisProfili {
   /** Yalnızca { coz: true } ile ve kasa açıkken dolu; aksi halde null. */
   parola: string | null;
   totpGizli: string | null;
+  /** Giriş tarifinin giriş adımlarındaki "{ad}" yer tutucuları. Gizli olanın değeri yalnızca { coz: true } ile dolu. */
+  ekAlanlar: GirisEkAlani[];
   olusturulma: string; guncellenme: string;
 }
+export interface GirisEkAlani { ad: string; gizli: boolean; deger: string | null; degerVar: boolean }
 export interface BaglamProfili {
   id: string; projeId: string; tur: string; ad: string;
   /** null = tüm ortamlar. */
@@ -33,7 +36,7 @@ export interface BaglamProfili {
 export interface ServisParametresiEslemesi { ad: string; rol: string }
 export interface TestVerisiAlani { ad: string; etiket: string; tip: string; hassas: boolean; gizli?: boolean; servisParametreleri?: ServisParametresiEslemesi[] }
 export declare const SERVIS_PARAMETRESI_ADI: RegExp;
-export interface TestVerisiTuru { id: string; projeId: string; ad: string; alanlar: TestVerisiAlani[]; olusturulma: string; guncellenme: string }
+export interface TestVerisiTuru { id: string; projeId: string; ad: string; alanlar: TestVerisiAlani[]; kaynak?: Record<string, string> | null; olusturulma: string; guncellenme: string }
 export interface TestVerisiProfili {
   id: string; projeId: string; turId: string; ad: string;
   /** null = tüm ortamlar. */
@@ -113,6 +116,8 @@ export declare function girisProfiliKaydet(vt: Veritabani, girdi: {
   ikiAsamaliTur?: IkiAsamaliTur;
   totpGizli?: string | null;
   smsAyari?: Record<string, unknown>;
+  /** undefined = mevcut ek alanlar korunur; gizli alanda deger undefined = kayıtlı değer korunur. */
+  ekAlanlar?: Array<{ ad: string; gizli?: boolean; deger?: string | null }>;
   yapan?: string;
 }): string;
 export declare function girisProfiliGetir(vt: Veritabani, id: string, secenekler?: { coz?: boolean }): GirisProfili | undefined;
@@ -126,6 +131,8 @@ export declare function baglamProfiliSil(vt: Veritabani, id: string, yapan?: str
 
 export declare function testVerisiTuruKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean; gizli?: boolean; servisParametreleri?: ReadonlyArray<{ ad: string; rol?: string }> }>;
+  /** Tablonun kaynağı (sayfa paketinden içe aktarım); verilmezse korunur, null siler. */
+  kaynak?: Record<string, string> | null;
 }): string;
 export declare function testVerisiTurleriniListele(vt: Veritabani, projeId: string): TestVerisiTuru[];
 export declare function profilHassasliginiDonustur(vt: Veritabani, turId: string, yeniHassaslik: Map<string, boolean>): number;

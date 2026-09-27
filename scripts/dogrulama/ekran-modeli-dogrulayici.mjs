@@ -50,6 +50,71 @@ function listedeMi(liste, d) {
   return typeof d === 'string' && liste.includes(d);
 }
 
+/**
+ * GERİYE UYUM: şemanın eski (ilk projeye özgü) anahtar adları → genel karşılıkları. Eski adlar OKUNURKEN
+ * kabul edilir ve eşdeğer yeni anahtar gibi yorumlanır; yeni kayıtlar yeni adla yazılır
+ * (eskiModelAnahtarlariniCevir). Kaydedilmiş modeller kendiliğinden yeniden yazılmaz.
+ *  - baglam: modelin bağlam profili ekranı ({ alanlar, … }).
+ *  - baglamIfadesi: koşul ifadesi { baglam: { alanSeti } } (bağlam profiline göre alan seti).
+ *  - durumProfili / durumKodu: kosullar.<ad>.bilinenDurumlar[] öğesinde profil adı (profil) / eşleşme kodu (profilKodu).
+ *  - kayitAlani: alt model alanının senaryodaki kayıt (ör. test verisi kaydı) içindeki adı (eslesme.kayitAlani).
+ */
+export const ESKI_ANAHTARLAR = Object.freeze({
+  baglam: 'acenteBaglami',
+  baglamIfadesi: 'acente',
+  durumProfili: 'acente',
+  durumKodu: 'acentePartaji',
+  kayitAlani: 'kart'
+});
+
+/** Alanın kayıt içindeki adı (eslesme.kayitAlani; eski adı eslesme.kart) ya da undefined. */
+export function kayitAlaniAdi(alan) {
+  const e = nesneMi(alan) && nesneMi(alan.eslesme) ? alan.eslesme : null;
+  if (!e) return undefined;
+  return e.kayitAlani !== undefined ? e.kayitAlani : e[ESKI_ANAHTARLAR.kayitAlani];
+}
+
+/** Modelin bağlam profili ekranı (baglam; eski adı acenteBaglami) ya da undefined. */
+export function baglamEkrani(model) {
+  if (!nesneMi(model)) return undefined;
+  return model.baglam !== undefined ? model.baglam : model[ESKI_ANAHTARLAR.baglam];
+}
+
+/**
+ * Eski anahtarlı modeli (ya da alt modeli) yeni anahtarlara çevirir. Girdiyi değiştirmez: eski anahtar varsa yeni
+ * bir kopya, yoksa AYNI nesne döner. Yalnızca YENİ kayıt yazılırken kullanılır (ör. sayfa paketiyle eklenen model).
+ */
+export function eskiModelAnahtarlariniCevir(model) {
+  if (!nesneMi(model)) return model;
+  let degisti = false;
+  const yeniAd = (k, yer, d) => {
+    if (yer === 'kok' && k === ESKI_ANAHTARLAR.baglam && !('baglam' in d)) return 'baglam';
+    if (yer === 'eslesme' && k === ESKI_ANAHTARLAR.kayitAlani && !('kayitAlani' in d)) return 'kayitAlani';
+    if (yer === 'durum' && k === ESKI_ANAHTARLAR.durumProfili && !('profil' in d)) return 'profil';
+    if (yer === 'durum' && k === ESKI_ANAHTARLAR.durumKodu && !('profilKodu' in d)) return 'profilKodu';
+    return k;
+  };
+  const cevir = (d, yer) => {
+    if (Array.isArray(d)) return d.map((x) => cevir(x, yer === 'durumlar' ? 'durum' : null));
+    if (!nesneMi(d)) return d;
+    const anahtarlar = Object.keys(d);
+    const eski = ESKI_ANAHTARLAR.baglamIfadesi;
+    if (yer !== 'durum' && anahtarlar.length === 1 && anahtarlar[0] === eski && nesneMi(d[eski])) {
+      degisti = true;
+      return { baglam: cevir(d[eski], null) };
+    }
+    const sonuc = {};
+    for (const k of anahtarlar) {
+      const yeni = yeniAd(k, yer, d);
+      if (yeni !== k) degisti = true;
+      sonuc[yeni] = cevir(d[k], k === 'eslesme' ? 'eslesme' : k === 'bilinenDurumlar' ? 'durumlar' : null);
+    }
+    return sonuc;
+  };
+  const kopya = cevir(model, 'kok');
+  return degisti ? kopya : model;
+}
+
 const ALAN_ANAHTARLARI = new Set([
   'id', 'tip', 'etiket', 'secenekler', 'seceneklerDurumu', 'seceneklerKaynagi', 'bagimlilik', 'zorunlu',
   'benzersiz', 'varsayilan', 'yapilandirma', 'eslesme', 'konum', 'doldurucu', 'doldurucuParametreleri',
@@ -57,16 +122,18 @@ const ALAN_ANAHTARLARI = new Set([
   'kimlikTuru', 'bicim', 'kabul', 'birim', 'hassas', 'ekrandaAlanDegil', 'sira', 'sonKontrol', 'kullanim',
   'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger'
 ]);
-const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kart', 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
+const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kayitAlani', ESKI_ANAHTARLAR.kayitAlani, 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
 const FORM_ANAHTARLARI = new Set(['id', 'kontrol', 'etiket', 'secenekler', 'yardimciKontroller', 'not']);
 const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDegeri', 'ekranDegerleri', 'secici', 'kosul']);
-const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'kosu']);
+const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'yenidenGiris', 'kosu']);
+/** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
+export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
 const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'not']);
 const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklama', 'zamanAsimiSn', 'sureSn']);
 const BOLUM_ANAHTARLARI = new Set(['id', 'baslik', 'pomMetodu', 'gorunurluk', 'alanlar']);
 const EKRAN_ANAHTARLARI = new Set([
   'semaSurumu', 'tur', 'id', 'ad', 'aciklama', 'ekranUrl', 'specDosyasi', 'pageObject', 'veriKaynaklari',
-  'kosullar', 'adimlar', 'senaryoDuzeyi', 'urunDuzeyi', 'acenteBaglami', 'isKurallari', 'bilinmeyenler',
+  'kosullar', 'adimlar', 'senaryoDuzeyi', 'urunDuzeyi', 'baglam', ESKI_ANAHTARLAR.baglam, 'isKurallari', 'bilinmeyenler',
   'baglamGorunurlugu', 'girisGerekmez', 'akislar', 'yalnizTestOrtami'
 ]);
 const AKIS_ANAHTARLARI = new Set(['id', 'ad', 'varsayilan', 'adimlar']);
@@ -156,9 +223,13 @@ function kosulIfadesiDogrula(h, yer, ifade, basvurular) {
     case 'degil':
       kosulIfadesiDogrula(h, `${yer}.degil`, ifade.degil, basvurular);
       return;
-    case 'acente':
-      if (!nesneMi(ifade.acente) || !metinMi(ifade.acente.alanSeti)) h.ekle(yer, '"acente.alanSeti" metin olmalı');
+    case 'baglam':
+    case ESKI_ANAHTARLAR.baglamIfadesi: {
+      // { baglam: { alanSeti } } (eski adı hâlâ okunur)
+      const deger = ifade[anahtarlar];
+      if (!nesneMi(deger) || !metinMi(deger.alanSeti)) h.ekle(yer, 'bağlam koşulunun "alanSeti" değeri metin olmalı');
       return;
+    }
     case 'calismaZamani':
       if (ifade.calismaZamani !== 'gorunurse') h.ekle(yer, '"calismaZamani" yalnızca "gorunurse" olabilir');
       return;
@@ -241,8 +312,11 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
       }
     }
   }
-  if (alan.yapilandirma === 'senaryo' && !(nesneMi(alan.eslesme) && (alan.eslesme.senaryo !== undefined || alan.eslesme.kart !== undefined))) {
-    h.ekle(aYer, 'yapilandirma "senaryo" olan alanın "eslesme.senaryo" (ya da alt modelde "eslesme.kart") karşılığı olmalı');
+  if (nesneMi(alan.eslesme) && alan.eslesme.kayitAlani !== undefined && alan.eslesme[ESKI_ANAHTARLAR.kayitAlani] !== undefined) {
+    h.ekle(aYer, `"eslesme.kayitAlani" ile eski adı "eslesme.${ESKI_ANAHTARLAR.kayitAlani}" birlikte olmaz`);
+  }
+  if (alan.yapilandirma === 'senaryo' && !(nesneMi(alan.eslesme) && (alan.eslesme.senaryo !== undefined || kayitAlaniAdi(alan) !== undefined))) {
+    h.ekle(aYer, 'yapilandirma "senaryo" olan alanın "eslesme.senaryo" (ya da alt modelde "eslesme.kayitAlani") karşılığı olmalı');
   }
   if (alan.konum !== undefined) {
     if (!nesneMi(alan.konum) || !metinMi(alan.konum.secici) || !listedeMi(KIRILGANLIK_DUZEYLERI, alan.konum.kirilganlik)) {
@@ -538,14 +612,40 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
       const bolumVar = adim.bolumler !== undefined;
       const altModelVar = adim.altModel !== undefined;
       const ortakVar = adim.ortakAkis !== undefined;
-      if ([bolumVar, altModelVar, ortakVar].filter(Boolean).length !== 1) {
-        h.ekle(adYer, ortakVar ? 'adımda "bolumler", "altModel" ve "ortakAkis"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
+      const sqlVar = adim.sqlKontrolu !== undefined;
+      const girisVar = adim.yenidenGiris !== undefined;
+      if ([bolumVar, altModelVar, ortakVar, sqlVar, girisVar].filter(Boolean).length !== 1) {
+        h.ekle(adYer, ortakVar || sqlVar || girisVar ? 'adımda "bolumler", "altModel", "ortakAkis", "sqlKontrolu" ve "yenidenGiris"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
+      }
+      // YENİDEN GİRİŞ ADIMI: { profil? } — koşuda oturum kapatılır (çerezler temizlenir) ve ortamın giriş tarifiyle yeniden
+      // girilir; profil = giriş profilinin adı (yoksa ortamın varsayılan profili). Girişsiz modelde olmaz.
+      if (girisVar) {
+        const g = adim.yenidenGiris;
+        const gYer = `${adYer}.yenidenGiris`;
+        if (!nesneMi(g) || Object.keys(g).some((k) => k !== 'profil')) h.ekle(gYer, '"yenidenGiris" { profil? } olmalı');
+        else if (g.profil !== undefined && g.profil !== null && !metinMi(g.profil)) h.ekle(gYer, '"profil" metin olmalı');
+        if (adim.kosu !== undefined) h.ekle(adYer, 'yeniden giriş adımının koşu tanımı ("kosu") olmaz');
+        if (ham.girisGerekmez === true) h.ekle(gYer, 'girişsiz modelde ("girisGerekmez": true) yeniden giriş adımı olmaz');
       }
       if (ortakMi && (altModelVar || ortakVar)) h.ekle(adYer, 'ortak akışın adımında alt model ya da başka ortak akış olmaz');
       if (ortakVar) {
         if (!nesneMi(adim.ortakAkis) || !metinMi(adim.ortakAkis.dosya) || Object.keys(adim.ortakAkis).length !== 1) h.ekle(`${adYer}.ortakAkis`, '"ortakAkis" { dosya } olmalı');
         else b.ortakAkislar.push([`${adYer}.ortakAkis`, adim.ortakAkis.dosya]);
         if (adim.kosu !== undefined) h.ekle(adYer, 'ortak akış adımının kendi koşu tanımı olmaz (adımları ortak akıştadır)');
+      }
+      // SQL ADIMI: { baglantiId, sql, beklenen: { tur, … }, yenidenDeneme?, zamanAsimiSn?, okumalar? } — koşuda veritabanında sorgu
+      // çalışır, sonuç beklenenle karşılaştırılır (ayrıntılı kurallar platform/sql/sql-adimi.mjs; burada yapı).
+      if (sqlVar) {
+        const q = adim.sqlKontrolu;
+        const qYer = `${adYer}.sqlKontrolu`;
+        if (!nesneMi(q)) h.ekle(qYer, '"sqlKontrolu" bir nesne olmalı');
+        else {
+          if (!metinMi(q.baglantiId)) h.ekle(qYer, '"baglantiId" zorunlu');
+          if (!metinMi(q.sql)) h.ekle(qYer, '"sql" zorunlu');
+          if (!nesneMi(q.beklenen) || !SQL_BEKLENEN_TURLERI.includes(q.beklenen.tur)) h.ekle(qYer, `"beklenen.tur" şunlardan biri olmalı: ${SQL_BEKLENEN_TURLERI.join(', ')}`);
+          if (q.okumalar !== undefined && !Array.isArray(q.okumalar)) h.ekle(qYer, '"okumalar" dizi olmalı');
+        }
+        if (adim.kosu !== undefined) h.ekle(adYer, 'SQL adımının koşu tanımı ("kosu") olmaz');
       }
       if (bolumVar) {
         if (!Array.isArray(adim.bolumler) || adim.bolumler.length === 0) h.ekle(adYer, '"bolumler" boş olmayan dizi olmalı');
@@ -571,13 +671,19 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
   }
 
   // Proje bağlamı ekranı (ayrı ekran; id'leri ayrı ad alanında tutulur)
-  if (ham.acenteBaglami !== undefined) {
-    if (!nesneMi(ham.acenteBaglami) || !Array.isArray(ham.acenteBaglami.alanlar)) {
-      h.ekle(yer, '"acenteBaglami.alanlar" dizi olmalı');
+  // Yeni ad "baglam"; eski adı (ESKI_ANAHTARLAR.baglam) hâlâ okunur, ikisi birlikte olmaz.
+  if (ham.baglam !== undefined && ham[ESKI_ANAHTARLAR.baglam] !== undefined) {
+    h.ekle(yer, `"baglam" ile eski adı "${ESKI_ANAHTARLAR.baglam}" birlikte olmaz`);
+  }
+  const baglamAdi = ham.baglam !== undefined ? 'baglam' : ESKI_ANAHTARLAR.baglam;
+  const baglam = baglamEkrani(ham);
+  if (baglam !== undefined) {
+    if (!nesneMi(baglam) || !Array.isArray(baglam.alanlar)) {
+      h.ekle(yer, `"${baglamAdi}.alanlar" dizi olmalı`);
     } else {
       const baglamKimlikleri = [];
-      ham.acenteBaglami.alanlar.forEach((alan, i) => alanDogrula(h, `acenteBaglami.alanlar[${i}]`, alan, baglamKimlikleri, b));
-      for (const [id, yerler] of tekrarlananlar(baglamKimlikleri)) h.ekle('acenteBaglami', `"${id}" birden fazla kez: ${yerler.join(' | ')}`);
+      baglam.alanlar.forEach((alan, i) => alanDogrula(h, `${baglamAdi}.alanlar[${i}]`, alan, baglamKimlikleri, b));
+      for (const [id, yerler] of tekrarlananlar(baglamKimlikleri)) h.ekle(baglamAdi, `"${id}" birden fazla kez: ${yerler.join(' | ')}`);
     }
   }
 

@@ -1,10 +1,16 @@
-// Ayarlar > Giriş profilleri > "Giriş tarifi" (genel): ortam başına giriş sayfasının tarifi — seçiciler,
-// başarı/hata göstergeleri, iki aşamalı doğrulama adımı ve isteğe bağlı bağlam değiştirme adımları.
-// Tarifte gizli değer yoktur (parola/anahtar/kod giriş profilindedir). "Varsayılanları öner" YALNIZCA
+// Ayarlar > Giriş profilleri > "Giriş tarifi" (genel): ortam başına giriş sayfasının tarifi — giriş adımları (kullanıcı
+// adı / parola / giriş düğmesi ve aralarına eklenen doldur / seç / tıkla / bekle adımları), başarı/hata göstergeleri,
+// iki aşamalı doğrulama adımı ve isteğe bağlı bağlam değiştirme adımları. Adımlar önce OKUNUR özetle gösterilir
+// (giris-ozeti.mjs); teknik seçiciler "Gelişmiş" altındadır.
+// Tarifte gizli değer yoktur (parola/anahtar/kod ve ek alan değerleri giriş profilindedir). "Varsayılanları öner" YALNIZCA
 // kullanıcı açıkça isteyip onaylayınca ortamın giriş sayfasını sunucuda görünmez bir tarayıcıda açar
-// (alan doldurmaz, göndermez). Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
+// (alan doldurmaz, göndermez). "Girişi kaydet" YALNIZCA kullanıcı onaylayınca görünür tarayıcıda giriş sayfasını açar;
+// kullanıcı girişi kendisi yapar, yazılan değerler kaydedilmez; kullanıcı alanları işaretler, tarif önizlenir ve formda
+// kontrol edilip kaydedilir. Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
+// #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (Ekranlar > Ortak akışlar > Giriş).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
+import { girisAdimlariOzeti } from './giris-ozeti.mjs';
 
 const IKINCI_ADIM_ETIKETI = { yok: 'Yok', totp: 'Authenticator (TOTP)', sms: 'SMS' };
 const KAYNAK_ROZETI = {
@@ -12,6 +18,13 @@ const KAYNAK_ROZETI = {
   yok: ['Tanımlı değil', 'uyari']
 };
 const SECICI_YARDIMI = 'Playwright seçicisi: CSS (#kimlik, input[name="kullanici"]), text=Giriş ya da role=button[name="Giriş"]. Birden fazla öğe eşleşirse ilki kullanılır.';
+const OZEL_ACIKLAMA = {
+  kullaniciAdi: 'Giriş profilindeki kullanıcı adı, “Gelişmiş” bölümündeki kullanıcı adı seçicisine yazılır.',
+  parola: 'Giriş profilindeki parola (kasada şifreli), “Gelişmiş” bölümündeki parola seçicisine yazılır.',
+  gonder: 'Gelişmiş bölümündeki giriş düğmesine basılır; sonra başarı / hata göstergesi (ya da doğrulama kodu) beklenir.'
+};
+const VARSAYILAN_GIRIS_ADIMLARI = [{ islem: 'kullaniciAdi' }, { islem: 'parola' }, { islem: 'gonder' }];
+const HEDEFLI = ['tikla', 'doldur', 'sec', 'gorunurBekle', 'degerBekle', 'sayiBekle', 'metinBekle'];
 
 /** Boş tarif iskeleti (yeni tarif). */
 const bosTarif = () => ({
@@ -21,12 +34,110 @@ const bosTarif = () => ({
 
 const monoGirdi = (deger, ek = {}) => h('input', { type: 'text', class: 'mono', autocomplete: 'off', spellcheck: 'false', value: deger ?? '', ...ek });
 
-/** Tarifin tek satırlık özeti. */
+/** Tarifin tek satırlık teknik özeti. */
 function ozet(t) {
   if (!t) return 'Bu ortamda giriş yapılamaz; tarif tanımlayın.';
   const parca = [`Giriş: ${t.girisAdresi}`, `2FA: ${IKINCI_ADIM_ETIKETI[t.ikinciAdim.tur] || t.ikinciAdim.tur}`];
   parca.push(t.baglamDegistirme ? `Bağlam: ${t.baglamDegistirme.baglamTuru} (${t.baglamDegistirme.adimlar.length} adım)` : 'Bağlam değiştirme yok');
   return parca.join(' · ');
+}
+
+/** Okunur adım listesi (ol). */
+function okunurAdimlar(tarif) {
+  const liste = girisAdimlariOzeti(tarif);
+  return h('ol', { class: 'giris-ozet-adimlari' }, liste.map((x) => h('li', { class: x.bolum !== 'giris' ? `giris-ozet-${x.bolum}` : null }, x.metin)));
+}
+
+/** Adımın düzenleme için kopyası; kaydederken geçici alanlar temizlenir. */
+function adimlariTemizle(adimlar) {
+  return adimlar.map((a) => {
+    const { _yanitYolu, ...kalan } = a;
+    if (a.islem === 'tikla') {
+      if (_yanitYolu !== undefined) { if (String(_yanitYolu).trim()) kalan.yanitBekle = { yol: String(_yanitYolu).trim() }; else delete kalan.yanitBekle; }
+      if (kalan.adresBekle !== undefined && !String(kalan.adresBekle).trim()) delete kalan.adresBekle;
+    }
+    if (kalan.aciklama !== undefined && !String(kalan.aciklama).trim()) delete kalan.aciklama;
+    if (kalan.hedef && 'metin' in kalan.hedef && !String(kalan.hedef.metin).trim()) delete kalan.hedef.metin;
+    if (a.islem === 'sayiBekle') kalan.sayi = Number(kalan.sayi);
+    return kalan;
+  });
+}
+
+const varsayilanMi = (adimlar) => adimlar.length === 3 && adimlar.every((a, i) => Object.keys(a).length === 1 && a.islem === VARSAYILAN_GIRIS_ADIMLARI[i].islem);
+
+/**
+ * Sıralı adım düzenleyici (bağlam adımları ve giriş adımları ortak).
+ * @param {{ adimlar: any[]; islemler: Array<{ islem: string; etiket: string }>; onEk: string; ogeSinifi: string; degerYardimi: string; degisti?: () => void }} s
+ */
+function adimDuzenleyici(s) {
+  const { adimlar } = s;
+  const liste = h('ol', { class: 'tarif-adimlari' });
+  const degisti = () => { if (s.degisti) s.degisti(); };
+  const ciz = () => { liste.replaceChildren(...adimlar.map((a, i) => satir(a, i))); degisti(); };
+  const satir = (a, i) => {
+    const no = `${s.onEk} ${i + 1}`;
+    const islem = h('select', { 'aria-label': `${no}: işlem` }, s.islemler.map((x) => h('option', { value: x.islem, selected: a.islem === x.islem }, x.etiket)));
+    islem.addEventListener('change', () => {
+      const yeni = { islem: islem.value };
+      if (a.aciklama) yeni.aciklama = a.aciklama;
+      if (HEDEFLI.includes(islem.value)) yeni.hedef = a.hedef || { secici: '' };
+      adimlar[i] = yeni;
+      ciz();
+    });
+    const govde = h('div', { class: 'tarif-adim-alanlari' });
+    const girdi = (etiket, anahtar, yardim, nesne = a) => {
+      const g = monoGirdi(nesne[anahtar] ?? '', { 'aria-label': `${no}: ${etiket}` });
+      g.addEventListener('input', () => { nesne[anahtar] = g.value; degisti(); });
+      return h('label', { class: 'mini-alan' }, h('span', {}, etiket), g, yardim ? h('small', { class: 'soluk' }, yardim) : null);
+    };
+    const hedefAlanlari = () => {
+      a.hedef = a.hedef || { secici: '' };
+      const rolMu = 'rol' in a.hedef;
+      const tur = h('select', { 'aria-label': `${no}: hedef türü` }, h('option', { value: 'secici', selected: !rolMu }, 'Seçici'), h('option', { value: 'rol', selected: rolMu }, 'Rol + ad'));
+      tur.addEventListener('change', () => { a.hedef = tur.value === 'rol' ? { rol: 'button', ad: '' } : { secici: '' }; ciz(); });
+      const parcalar = [h('label', { class: 'mini-alan dar' }, h('span', {}, 'Hedef'), tur)];
+      if (rolMu) {
+        parcalar.push(girdi('Rol', 'rol', 'ör. button, link, textbox', a.hedef), girdi('Erişilebilir ad', 'ad', null, a.hedef));
+      } else {
+        parcalar.push(girdi('Seçici', 'secici', null, a.hedef), girdi('Metni içeren', 'metin', 'İsteğe bağlı', a.hedef));
+        const tam = h('input', { type: 'checkbox', id: yeniKimlik('tam'), checked: Boolean(a.hedef.tamMetin) });
+        tam.addEventListener('change', () => { if (tam.checked) a.hedef.tamMetin = true; else delete a.hedef.tamMetin; });
+        parcalar.push(h('label', { class: 'secenek mini-secenek', for: tam.id }, tam, 'Metin birebir'));
+      }
+      return parcalar;
+    };
+    if (a.islem === 'tikla' && a.yanitBekle && a._yanitYolu === undefined) a._yanitYolu = a.yanitBekle.yol;
+    switch (a.islem) {
+      case 'kullaniciAdi': case 'parola': case 'gonder':
+        govde.append(h('p', { class: 'soluk kucuk giris-ozel-not' }, OZEL_ACIKLAMA[a.islem]));
+        break;
+      case 'git': govde.append(girdi('Adres', 'adres', '/yol ya da tam adres')); break;
+      case 'adresBekle': govde.append(girdi('Adres deseni', 'desen', 'Düzenli ifade')); break;
+      case 'kosulBekle': govde.append(girdi('Sayfa koşulu (JavaScript)', 'ifade', 'ör. window.hazir === true — yer tutucu içeremez')); break;
+      case 'tikla':
+        govde.append(...hedefAlanlari());
+        govde.append(girdi('Beklenen yanıt yolu', '_yanitYolu', 'İsteğe bağlı: tıklamayla gelen yanıtın yolu', a));
+        govde.append(girdi('Sonraki adres deseni', 'adresBekle', 'İsteğe bağlı'));
+        break;
+      case 'doldur': case 'sec': case 'degerBekle':
+        govde.append(...hedefAlanlari(), girdi(a.islem === 'degerBekle' ? 'Beklenen değer' : 'Değer', 'deger', s.degerYardimi));
+        break;
+      case 'sayiBekle': govde.append(...hedefAlanlari(), girdi('Beklenen sayı', 'sayi')); break;
+      case 'metinBekle': govde.append(...hedefAlanlari(), girdi('Beklenen metin', 'metin')); break;
+      default: govde.append(...hedefAlanlari());
+    }
+    const tasi = (yon) => { const j = i + yon; if (j < 0 || j >= adimlar.length) return; [adimlar[i], adimlar[j]] = [adimlar[j], adimlar[i]]; ciz(); };
+    return h('li', { class: s.ogeSinifi },
+      h('div', { class: 'tarif-adim-ust' }, h('span', { class: 'tarif-adim-no sayi', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')), islem,
+        girdi('Açıklama', 'aciklama', null),
+        h('div', { class: 'tarif-adim-eylemleri' },
+          h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${no}: yukarı taşı`, disabled: i === 0, onclick: () => tasi(-1) }, ikon('asagi', 'yukari')),
+          h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${no}: aşağı taşı`, disabled: i === adimlar.length - 1, onclick: () => tasi(1) }, ikon('asagi')),
+          h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${no}: kaldır`, onclick: () => { adimlar.splice(i, 1); ciz(); } }, ikon('cop')))),
+      govde);
+  };
+  ciz();
+  return { liste, ciz };
 }
 
 /**
@@ -36,6 +147,10 @@ function ozet(t) {
 export async function girisTarifiBolumu(kapsayici, baglam) {
   const proje = baglam.durum.proje;
   const veri = await api(`/platform/giris-tarifleri?projeId=${encodeURIComponent(proje.id)}`);
+  const girisIslemleri = veri.girisAdimIslemleri || [
+    { islem: 'kullaniciAdi', etiket: 'Kullanıcı adını yaz' }, { islem: 'parola', etiket: 'Parolayı yaz' }, { islem: 'gonder', etiket: 'Giriş düğmesine bas' },
+    ...veri.adimIslemleri
+  ];
   const formAlani = h('div', {});
   const liste = h('ul', { class: 'kayit-listesi' });
   const ciz = () => {
@@ -45,8 +160,10 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('anahtar')),
         h('div', { class: 'kayit-ana' }, h('strong', {}, o.ortamAd, ' ', rozet(rozetMetni, rozetTuru)),
           h('div', { class: 'kayit-meta' }, ozet(o.tarif)),
+          o.tarif ? h('div', { class: 'kayit-meta giris-ozet-satiri' }, girisAdimlariOzeti(o.tarif).map((x, i) => `${i + 1}. ${x.metin}`).join(' · ')) : null,
           o.hatalar && o.hatalar.length ? h('div', { class: 'kayit-meta hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null),
         h('div', { class: 'kayit-eylemleri' },
+          h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${o.ortamAd}: girişi kaydet`, onclick: () => girisiKaydet(o) }, ikon('oynat'), 'Girişi kaydet'),
           h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifini düzenle`, onclick: () => tarifFormu(o) }, ikon('duzenle'), o.tarif ? 'Düzenle' : 'Tanımla')));
     }));
   };
@@ -56,8 +173,9 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     ciz();
   };
 
-  const tarifFormu = (o) => {
-    const t = JSON.parse(JSON.stringify(o.tarif || bosTarif()));
+  /** @param {any} o ortam satırı @param {{ tarif?: any; not?: string }} [on] kayıttan gelen öneri (kaydedilmemiş) */
+  const tarifFormu = (o, on = {}) => {
+    const t = JSON.parse(JSON.stringify(on.tarif || o.tarif || bosTarif()));
     const mesaj = mesajKutusu();
     const girisAdresi = monoGirdi(t.girisAdresi);
     const oturumAdresi = monoGirdi(t.oturumKontrolAdresi);
@@ -93,6 +211,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         if (oneri.kullaniciAlani) kullanici.value = oneri.kullaniciAlani;
         if (oneri.parolaAlani) parola.value = oneri.parolaAlani;
         if (oneri.gonderDugmesi) gonder.value = oneri.gonderDugmesi;
+        ozetiCiz();
         oneriNotu.append(h('div', { class: 'not-kutusu basari' },
           h('p', {}, 'Öneriler alanlara yazıldı; kaydetmeden önce kontrol edin. Başarı göstergesini (giriş sonrası görünen metin/öğe) siz belirleyin.'),
           oneri.notlar && oneri.notlar.length ? h('ul', {}, oneri.notlar.map((n) => h('li', {}, n))) : null));
@@ -100,6 +219,22 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         oneriNotu.replaceChildren(h('div', { class: 'not-kutusu hata' }, hata.message));
       }
     });
+
+    // --- Giriş adımları (okunur özet + düzenleyici) ------------------------------------------
+    const girisAdimlari = (Array.isArray(t.girisAdimlari) && t.girisAdimlari.length ? t.girisAdimlari : VARSAYILAN_GIRIS_ADIMLARI).map((a) => JSON.parse(JSON.stringify(a)));
+    const ozetKutusu = h('div', { class: 'giris-ozet', 'aria-live': 'polite' });
+    const girisAdimSayisi = h('span', {});
+    let ozetiCiz = () => {};
+    const girisDuzenleyici = adimDuzenleyici({
+      adimlar: girisAdimlari, islemler: girisIslemleri, onEk: 'Giriş adımı', ogeSinifi: 'giris-adimi',
+      degerYardimi: '{ad} = giriş profilinin ek alanı (ör. {firmaKodu})', degisti: () => ozetiCiz()
+    });
+    const girisAdimEkle = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('arti'), 'Giriş adımı ekle');
+    girisAdimEkle.addEventListener('click', () => { girisAdimlari.push({ islem: 'doldur', hedef: { secici: '' }, deger: '' }); girisDuzenleyici.ciz(); });
+    const ekAlanCipleri = h('div', { class: 'yer-tutucu-cipleri' },
+      veri.ekAlanAdlari && veri.ekAlanAdlari.length
+        ? [h('span', { class: 'soluk kucuk' }, 'Giriş profillerindeki ek alanlar:'), ...veri.ekAlanAdlari.map((a) => h('code', {}, `{${a}}`))]
+        : [h('span', { class: 'soluk kucuk' }, 'Ek alan (ör. firma kodu, şube, PIN) gerekiyorsa değerini giriş profiline “Ek alan” olarak ekleyin ve adımda {ad} yazın.')]);
 
     // --- Başarı / hata göstergeleri -------------------------------------------------------
     const basariTur = h('select', {}, [['metin', 'Sayfada görünen metin (tam eşleşme)'], ['url', 'Adres deseni (düzenli ifade)'], ['eleman', 'Öğe (seçici)']]
@@ -153,9 +288,9 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const ikinciGorunum = () => {
       kodAlanlari.hidden = rYok.r.checked;
       smsAlani.hidden = !rSms.r.checked;
+      ozetiCiz();
     };
     [rYok.r, rTotp.r, rSms.r].forEach((r) => r.addEventListener('change', ikinciGorunum));
-    ikinciGorunum();
 
     // --- Bağlam değiştirme ----------------------------------------------------------------
     const baglamVar = h('input', { type: 'checkbox', id: yeniKimlik('baglam'), checked: Boolean(t.baglamDegistirme) });
@@ -171,86 +306,26 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     baglamTuru.addEventListener('input', cipleriCiz);
     cipleriCiz();
     const adimlar = t.baglamDegistirme ? t.baglamDegistirme.adimlar.map((a) => JSON.parse(JSON.stringify(a))) : [];
-    const adimListesi = h('ol', { class: 'tarif-adimlari' });
     const adimOzetMetni = h('span', {});
-    const adimlariCiz = () => {
-      adimListesi.replaceChildren(...adimlar.map((a, i) => adimSatiri(a, i)));
-      adimOzetMetni.textContent = `Adımlar (${adimlar.length})`;
-    };
-    const adimSatiri = (a, i) => {
-      const islem = h('select', { 'aria-label': `Adım ${i + 1}: işlem` }, veri.adimIslemleri.map((x) => h('option', { value: x.islem, selected: a.islem === x.islem }, x.etiket)));
-      islem.addEventListener('change', () => {
-        const yeni = { islem: islem.value };
-        if (a.aciklama) yeni.aciklama = a.aciklama;
-        if (['tikla', 'doldur', 'sec', 'gorunurBekle', 'degerBekle', 'sayiBekle', 'metinBekle'].includes(islem.value)) yeni.hedef = a.hedef || { secici: '' };
-        adimlar[i] = yeni;
-        adimlariCiz();
-      });
-      const govde = h('div', { class: 'tarif-adim-alanlari' });
-      const girdi = (etiket, anahtar, yardim, nesne = a) => {
-        const g = monoGirdi(nesne[anahtar] ?? '', { 'aria-label': `Adım ${i + 1}: ${etiket}` });
-        g.addEventListener('input', () => { nesne[anahtar] = g.value; });
-        return h('label', { class: 'mini-alan' }, h('span', {}, etiket), g, yardim ? h('small', { class: 'soluk' }, yardim) : null);
-      };
-      const hedefAlanlari = () => {
-        a.hedef = a.hedef || { secici: '' };
-        const rolMu = 'rol' in a.hedef;
-        const tur = h('select', { 'aria-label': `Adım ${i + 1}: hedef türü` }, h('option', { value: 'secici', selected: !rolMu }, 'Seçici'), h('option', { value: 'rol', selected: rolMu }, 'Rol + ad'));
-        tur.addEventListener('change', () => { a.hedef = tur.value === 'rol' ? { rol: 'button', ad: '' } : { secici: '' }; adimlariCiz(); });
-        const parcalar = [h('label', { class: 'mini-alan dar' }, h('span', {}, 'Hedef'), tur)];
-        if (rolMu) {
-          parcalar.push(girdi('Rol', 'rol', 'ör. button, link, textbox', a.hedef), girdi('Erişilebilir ad', 'ad', null, a.hedef));
-        } else {
-          parcalar.push(girdi('Seçici', 'secici', null, a.hedef), girdi('Metni içeren', 'metin', 'İsteğe bağlı', a.hedef));
-          const tam = h('input', { type: 'checkbox', id: yeniKimlik('tam'), checked: Boolean(a.hedef.tamMetin) });
-          tam.addEventListener('change', () => { if (tam.checked) a.hedef.tamMetin = true; else delete a.hedef.tamMetin; });
-          parcalar.push(h('label', { class: 'secenek mini-secenek', for: tam.id }, tam, 'Metin birebir'));
-        }
-        return parcalar;
-      };
-      if (a.islem === 'tikla' && a.yanitBekle && a._yanitYolu === undefined) a._yanitYolu = a.yanitBekle.yol;
-      switch (a.islem) {
-        case 'git': govde.append(girdi('Adres', 'adres', '/yol ya da tam adres')); break;
-        case 'adresBekle': govde.append(girdi('Adres deseni', 'desen', 'Düzenli ifade')); break;
-        case 'kosulBekle': govde.append(girdi('Sayfa koşulu (JavaScript)', 'ifade', 'ör. window.hazir === true — yer tutucu içeremez')); break;
-        case 'tikla':
-          govde.append(...hedefAlanlari());
-          govde.append(girdi('Beklenen yanıt yolu', '_yanitYolu', 'İsteğe bağlı: tıklamayla gelen yanıtın yolu', a));
-          govde.append(girdi('Sonraki adres deseni', 'adresBekle', 'İsteğe bağlı'));
-          break;
-        case 'doldur': case 'sec': case 'degerBekle':
-          govde.append(...hedefAlanlari(), girdi(a.islem === 'degerBekle' ? 'Beklenen değer' : 'Değer', 'deger', '{alan} yer tutucusu kullanılabilir'));
-          break;
-        case 'sayiBekle': govde.append(...hedefAlanlari(), girdi('Beklenen sayı', 'sayi')); break;
-        case 'metinBekle': govde.append(...hedefAlanlari(), girdi('Beklenen metin', 'metin')); break;
-        default: govde.append(...hedefAlanlari());
-      }
-      const tasi = (yon) => { const j = i + yon; if (j < 0 || j >= adimlar.length) return; [adimlar[i], adimlar[j]] = [adimlar[j], adimlar[i]]; adimlariCiz(); };
-      return h('li', { class: 'tarif-adim' },
-        h('div', { class: 'tarif-adim-ust' }, h('span', { class: 'tarif-adim-no sayi', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')), islem,
-          girdi('Açıklama', 'aciklama', null),
-          h('div', { class: 'tarif-adim-eylemleri' },
-            h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `Adım ${i + 1}: yukarı taşı`, disabled: i === 0, onclick: () => tasi(-1) }, ikon('asagi', 'yukari')),
-            h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `Adım ${i + 1}: aşağı taşı`, disabled: i === adimlar.length - 1, onclick: () => tasi(1) }, ikon('asagi')),
-            h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `Adım ${i + 1}: kaldır`, onclick: () => { adimlar.splice(i, 1); adimlariCiz(); } }, ikon('cop')))),
-        govde);
-    };
-    adimlariCiz();
+    const baglamDuzenleyici = adimDuzenleyici({
+      adimlar, islemler: veri.adimIslemleri, onEk: 'Adım', ogeSinifi: 'tarif-adim', degerYardimi: '{alan} yer tutucusu kullanılabilir',
+      degisti: () => { adimOzetMetni.textContent = `Adımlar (${adimlar.length})`; ozetiCiz(); }
+    });
     const adimEkle = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('arti'), 'Adım ekle');
-    adimEkle.addEventListener('click', () => { adimlar.push({ islem: 'tikla', hedef: { secici: '' } }); adimlariCiz(); });
+    adimEkle.addEventListener('click', () => { adimlar.push({ islem: 'tikla', hedef: { secici: '' } }); baglamDuzenleyici.ciz(); });
     const baglamAlani = h('div', { class: 'ic-alanlar' },
       alan('Bağlam türü', baglamTuru, { yardim: 'Adımlardaki {alan} yer tutucuları bu türdeki seçilen bağlam profilinin alanlarıyla doldurulur.' }),
       alanCipleri,
       h('details', { class: 'tarif-adim-kutusu', open: adimlar.length <= 6 },
-        h('summary', {}, adimOzetMetni), adimListesi, h('div', { class: 'dugmeler' }, adimEkle)));
-    const baglamGorunum = () => { baglamAlani.hidden = !baglamVar.checked; };
+        h('summary', {}, adimOzetMetni), baglamDuzenleyici.liste, h('div', { class: 'dugmeler' }, adimEkle)));
+    const baglamGorunum = () => { baglamAlani.hidden = !baglamVar.checked; ozetiCiz(); };
     baglamVar.addEventListener('change', baglamGorunum);
-    baglamGorunum();
 
     // --- Toplama + kaydetme ---------------------------------------------------------------
     const topla = () => {
       const tur = rTotp.r.checked ? 'totp' : rSms.r.checked ? 'sms' : 'yok';
-      return {
+      const giris = adimlariTemizle(girisAdimlari);
+      const sonuc = {
         girisAdresi: girisAdresi.value.trim() || '/',
         oturumKontrolAdresi: oturumAdresi.value.trim(),
         kullaniciAlani: kullanici.value.trim(),
@@ -264,29 +339,33 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
           smsKipi: tur === 'sms' ? (sSabit.r.checked ? 'sabit' : sElle.r.checked ? 'elle' : null) : null,
           hataGostergeleri: ikinci.hataGostergeleri || [], elleBeklemeSn: Number(elleSure.value) || 180
         },
-        baglamDegistirme: baglamVar.checked ? {
-          baglamTuru: baglamTuru.value.trim(),
-          adimlar: adimlar.map((a) => {
-            const { _yanitYolu, ...kalan } = a;
-            if (a.islem === 'tikla') {
-              if (_yanitYolu !== undefined) { if (String(_yanitYolu).trim()) kalan.yanitBekle = { yol: String(_yanitYolu).trim() }; else delete kalan.yanitBekle; }
-              if (kalan.adresBekle !== undefined && !String(kalan.adresBekle).trim()) delete kalan.adresBekle;
-            }
-            if (kalan.aciklama !== undefined && !String(kalan.aciklama).trim()) delete kalan.aciklama;
-            if (kalan.hedef && 'metin' in kalan.hedef && !String(kalan.hedef.metin).trim()) delete kalan.hedef.metin;
-            if (a.islem === 'sayiBekle') kalan.sayi = Number(kalan.sayi);
-            return kalan;
-          })
-        } : null
+        baglamDegistirme: baglamVar.checked ? { baglamTuru: baglamTuru.value.trim(), adimlar: adimlariTemizle(adimlar) } : null
       };
+      // Varsayılan sıra (kullanıcı adı → parola → giriş düğmesi) tarife yazılmaz: eski tariflerle aynı biçim kalır.
+      if (!varsayilanMi(giris)) sonuc.girisAdimlari = giris;
+      return sonuc;
     };
+    ozetiCiz = () => {
+      let tarif;
+      try { tarif = topla(); } catch { return; }
+      girisAdimSayisi.textContent = `Adımları düzenle (${girisAdimlari.length})`;
+      ozetKutusu.replaceChildren(h('p', { class: 'kucuk soluk' }, 'Giriş şöyle yapılır:'), okunurAdimlar(tarif));
+    };
+
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Tarifi kaydet');
     const sifirla = o.kaynak === 'kayitli'
       ? h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Kayıtlı tarifi sil')
       : null;
-    const form = h('form', { class: 'kart form-paneli tarif-formu', novalidate: true },
+    // Seçiciler "Gelişmiş" altında; boşsa (yeni tarif) açık gelir.
+    const gelismis = h('details', { class: 'tarif-adim-kutusu giris-gelismis', open: !t.kullaniciAlani || !t.parolaAlani || !t.gonderDugmesi },
+      h('summary', {}, 'Gelişmiş: giriş formunun seçicileri'),
+      alan('Kullanıcı adı alanı', kullanici, { zorunlu: true, yardim: SECICI_YARDIMI }),
+      alan('Parola alanı', parola, { zorunlu: true }),
+      alan('Giriş düğmesi', gonder, { zorunlu: true, yardim: 'Form düğmesi, input[type=submit] ya da görüntü düğmesi (input[type=image]).' }));
+    const form = h('form', { class: 'kart form-paneli tarif-formu', novalidate: true, 'data-ortam': o.ortamId },
       h('h3', {}, `Giriş tarifi: ${o.ortamAd}`),
       h('p', { class: 'soluk kucuk' }, h('span', { class: 'mono' }, o.tabanUrl), ' — tarifte parola ya da kod yoktur; onlar giriş profilinde şifreli durur.'),
+      on.not ? h('div', { class: 'not-kutusu uyari', role: 'status' }, on.not) : null,
       mesaj.kutu,
       h('fieldset', {}, h('legend', {}, 'Giriş sayfası'),
         h('div', { class: 'iki-sutun' },
@@ -295,9 +374,14 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         h('div', { class: 'oneri-satiri' }, oner,
           h('span', { class: 'soluk kucuk' }, ikon('uyari'), ' Ortamın adresini bu bilgisayarda açar; yalnızca siz basınca çalışır.')),
         oneriNotu,
-        alan('Kullanıcı adı alanı', kullanici, { zorunlu: true, yardim: SECICI_YARDIMI }),
-        alan('Parola alanı', parola, { zorunlu: true }),
-        alan('Giriş düğmesi', gonder, { zorunlu: true, yardim: 'Form düğmesi, input[type=submit] ya da görüntü düğmesi (input[type=image]).' })),
+        gelismis),
+      h('fieldset', { class: 'giris-adimlari-bolumu' }, h('legend', {}, 'Giriş adımları'),
+        ozetKutusu,
+        h('details', { class: 'tarif-adim-kutusu', open: !varsayilanMi(girisAdimlari) },
+          h('summary', {}, girisAdimSayisi),
+          h('p', { class: 'soluk kucuk' }, 'Kullanıcı adı, parola ve giriş düğmesinin önüne, arasına ya da arkasına adım ekleyin: ek alan (Doldur / Seçenek seç), onay kutusu ya da “Devam” (Tıkla), bekleme. İki sayfalı girişte: Kullanıcı adı → “Devam”a tıkla → Parola → Giriş.'),
+          ekAlanCipleri,
+          girisDuzenleyici.liste, h('div', { class: 'dugmeler' }, girisAdimEkle))),
       h('fieldset', {}, h('legend', {}, 'Sonuç göstergeleri'),
         h('div', { class: 'iki-sutun' }, alan('Başarı göstergesi türü', basariTur), alan('Başarı göstergesi', basariDeger, { zorunlu: true, yardim: 'Girişten sonra görünen metin (ör. "Oturumu Kapat"), adres deseni ya da öğe.' })),
         h('div', { class: 'alan' }, h('label', {}, 'Hata göstergeleri'),
@@ -311,12 +395,19 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         h('label', { class: 'secenek', for: baglamVar.id }, baglamVar, 'Girişten sonra bağlam seç (rol, şube…)'),
         baglamAlani),
       h('div', { class: 'dugmeler' }, kaydet, sifirla, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
+    ikinciGorunum();
+    baglamGorunum();
+    adimOzetMetni.textContent = `Adımlar (${adimlar.length})`;
+    form.addEventListener('input', () => ozetiCiz());
+    ozetiCiz();
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       mesaj.temizle();
       [kullanici, parola, gonder, basariDeger].forEach((g) => alanHatasi(g, ''));
       const zorunlu = [[kullanici, 'Kullanıcı adı alanı boş olamaz.'], [parola, 'Parola alanı boş olamaz.'], [gonder, 'Giriş düğmesi boş olamaz.'], [basariDeger, 'Başarı göstergesi boş olamaz.']];
-      for (const [g, m] of zorunlu) if (!g.value.trim()) { alanHatasi(g, m); g.focus(); return; }
+      for (const [g, m] of zorunlu) {
+        if (!g.value.trim()) { if (gelismis.contains(g)) gelismis.open = true; alanHatasi(g, m); g.focus(); return; }
+      }
       try {
         const { tarif } = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/giris-tarifi/kaydet', { govde: { projeId: proje.id, ortamId: o.ortamId, tarif: topla() } }));
         bildir('Giriş tarifi kaydedildi.');
@@ -341,10 +432,127 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     form.scrollIntoView({ block: 'nearest' });
   };
 
+  // --- Girişi kaydet (görünür tarayıcıda kullanıcı girişi yapar; değer kaydedilmez) -------------
+  const girisiKaydet = async (o) => {
+    let adres = o.tarif ? o.tarif.girisAdresi : '/';
+    try { adres = new URL(adres, o.tabanUrl).toString(); } catch { /* sunucu doğrular */ }
+    const tamam = await onayIste({
+      baslik: 'Giriş kaydedilsin mi?',
+      metin: `Nöbetçi bu bilgisayarda görünür bir tarayıcıda ${adres} adresini GİRİŞ YAPMADAN açar. Girişi siz yaparsınız: bastığınız düğmeler siteye gerçek istek gönderir (dış siteye istek gider). Sayfadaki Nöbetçi paneli yalnızca alanları ve düğmeleri toplar; yazdığınız değerler (kullanıcı adı, parola, kod) kaydedilmez. Girişi bitirince paneldeki “Bitir”e basın.`,
+      dugme: 'Tarayıcıyı aç', ikonAd: 'ag',
+      liste: ['Canlı olarak işaretli ortamda kayıt yapılamaz.', 'Süre sınırı: Ayarlar > Koşu > akış kaydı süresi.']
+    });
+    if (!tamam) return;
+    const kutu = h('div', { class: 'kart form-paneli giris-kaydi', 'data-ortam': o.ortamId, role: 'region', 'aria-label': `Giriş kaydı: ${o.ortamAd}` });
+    formAlani.replaceChildren(kutu);
+    const durumMetni = h('p', { role: 'status' }, 'Başlatılıyor…');
+    const iptal = h('button', { type: 'button', class: 'hayalet' }, 'İptal');
+    kutu.replaceChildren(h('h3', {}, `Giriş kaydı: ${o.ortamAd}`), durumMetni, h('div', { class: 'dugmeler' }, iptal));
+    let isId = null;
+    let bitti = false;
+    iptal.addEventListener('click', async () => {
+      bitti = true;
+      if (isId) { try { await api('/platform/tarama/iptal', { govde: { id: isId } }); } catch { /* bitmiş olabilir */ } }
+      formAlani.replaceChildren();
+      bildir('Giriş kaydı iptal edildi.');
+    });
+    try {
+      const r = await api('/platform/tarama/baslat', { govde: { kip: 'girisKaydi', projeId: proje.id, ortamId: o.ortamId, onay: true } });
+      isId = r.isId;
+    } catch (hata) {
+      kutu.replaceChildren(h('h3', {}, `Giriş kaydı: ${o.ortamAd}`), h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message),
+        h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Kapat')));
+      return;
+    }
+    // Durum yoklaması (1 sn).
+    for (;;) {
+      if (bitti || !kutu.isConnected) return;
+      let d;
+      try { d = (await api(`/platform/tarama/durum?id=${encodeURIComponent(isId)}`)).is; } catch (hata) { durumMetni.textContent = hata.message; return; }
+      if (d.durum === 'suruyor') {
+        const k = d.adimlar.find((a) => a.anahtar === 'kayit');
+        durumMetni.textContent = k && k.mesaj ? k.mesaj : 'Tarayıcı açılıyor…';
+        await new Promise((c) => setTimeout(c, 1000));
+        continue;
+      }
+      if (d.durum !== 'tamam' || !d.girisTaslagi) {
+        kutu.replaceChildren(h('h3', {}, `Giriş kaydı: ${o.ortamAd}`), h('div', { class: 'not-kutusu hata', role: 'alert' }, (d.hata && d.hata.mesaj) || 'Kayıt tamamlanmadı.'),
+          h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Kapat')));
+        return;
+      }
+      break;
+    }
+    const v = await api(`/platform/tarama/giris?id=${encodeURIComponent(isId)}`);
+    taslakIsaretle(o, kutu, isId, v);
+  };
+
+  /** Kayıttan gelen adımlar: kullanıcı her birinin ne olduğunu işaretler → önizleme → tarif formu. */
+  const taslakIsaretle = (o, kutu, isId, v) => {
+    const ALAN_SECENEKLERI = [['kullaniciAdi', 'Kullanıcı adı'], ['parola', 'Parola'], ['kod', 'Doğrulama kodu (2FA)'], ['ek', 'Ek alan (değeri giriş profilinde)'], ['yoksay', 'Tarife alma']];
+    const DUGME_SECENEKLERI = [['gonder', 'Giriş düğmesi'], ['tikla', 'Ara tıklama (ör. Devam, sekme, onay)'], ['kodGonder', 'Kodu gönder (2FA)'], ['yoksay', 'Tarife alma']];
+    const satirlar = v.taslak.adimlar.map((a, i) => {
+      const secim = h('select', { 'aria-label': `Kayıt adımı ${i + 1}: ne?` },
+        (a.tur === 'alan' ? ALAN_SECENEKLERI : DUGME_SECENEKLERI).map(([d, m]) => h('option', { value: d, selected: a.oneri === d }, m)));
+      const adGirdi = monoGirdi(v.oneriler[i] || '', { 'aria-label': `Kayıt adımı ${i + 1}: ek alan adı`, placeholder: 'ör. firmaKodu' });
+      const gizli = h('input', { type: 'checkbox', id: yeniKimlik('gizli') });
+      const ekKutusu = h('div', { class: 'giris-kaydi-ek' }, h('label', { class: 'mini-alan' }, h('span', {}, 'Ek alan adı'), adGirdi),
+        h('label', { class: 'secenek mini-secenek', for: gizli.id }, gizli, 'Gizli (PIN gibi; kasada şifreli, maskeli)'));
+      const gorunum = () => { ekKutusu.hidden = !(a.tur === 'alan' && secim.value === 'ek' && !['checkbox', 'radio'].includes(a.alanTuru)); };
+      secim.addEventListener('change', gorunum);
+      gorunum();
+      return {
+        el: h('li', { class: 'giris-kaydi-adimi' },
+          h('span', { class: 'tarif-adim-no sayi', 'aria-hidden': 'true' }, String(i + 1).padStart(2, '0')),
+          h('div', {}, h('strong', {}, a.tur === 'alan' ? `Alan: ${a.etiket}` : `Düğme: ${a.metin || a.secici}`),
+            h('div', { class: 'kucuk soluk' }, a.tur === 'alan' ? `tür: ${a.alanTuru}` : 'basıldı')),
+          secim, ekKutusu),
+        isaret: () => ({ rol: secim.value, ad: adGirdi.value.trim(), gizli: gizli.checked })
+      };
+    });
+    const sonucAlani = h('div', { 'aria-live': 'polite' });
+    const onizle = h('button', { type: 'button', class: 'birincil' }, 'Önizle');
+    onizle.addEventListener('click', async () => {
+      sonucAlani.replaceChildren();
+      let r;
+      try {
+        r = await mesgulIken(onizle, 'Hazırlanıyor…', () => api('/platform/tarama/giris', { govde: { id: isId, isaretler: satirlar.map((s) => s.isaret()) } }));
+      } catch (hata) { sonucAlani.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); return; }
+      const hatalar = [...r.hatalar];
+      const aktar = h('button', { type: 'button', class: 'birincil', disabled: hatalar.length > 0 }, 'Tarif formunda aç');
+      aktar.addEventListener('click', () => {
+        const ekNot = r.ekAlanlar.length ? ` Giriş profiline şu ek alanları ekleyin: ${r.ekAlanlar.map((e) => `${e.ad}${e.gizli ? ' (gizli)' : ''}`).join(', ')}.` : '';
+        tarifFormu(o, { tarif: r.tarif, not: `Bu tarif girişi kaydından hazırlandı ve henüz KAYDEDİLMEDİ: kontrol edip “Tarifi kaydet”e basın.${ekNot}` });
+      });
+      sonucAlani.replaceChildren(
+        h('h4', {}, 'Önizleme'),
+        okunurAdimlar(r.tarif),
+        hatalar.length ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('ul', {}, hatalar.map((x) => h('li', {}, x)))) : null,
+        r.dogrulamaHatalari.length && !hatalar.length ? h('div', { class: 'not-kutusu uyari' }, h('p', {}, 'Formda tamamlanacaklar:'), h('ul', {}, r.dogrulamaHatalari.map((x) => h('li', {}, x)))) : null,
+        r.notlar.length ? h('div', { class: 'not-kutusu bilgi' }, h('ul', {}, r.notlar.map((x) => h('li', {}, x)))) : null,
+        r.ekAlanlar.length ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Giriş profiline eklenecek ek alanlar (değerleri siz yazarsınız):'),
+          h('ul', {}, r.ekAlanlar.map((e) => h('li', {}, h('code', {}, `{${e.ad}}`), ` — ${e.etiket}${e.gizli ? ' (gizli)' : ''}`)))) : null,
+        h('div', { class: 'dugmeler' }, aktar));
+    });
+    kutu.replaceChildren(
+      h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
+      h('p', { class: 'soluk kucuk' }, 'Kayıtta değer yok; yalnızca dokunduğunuz alanlar ve bastığınız düğmeler sırayla listelendi. Her birinin ne olduğunu seçin. Kullanıcı adı, parola ve giriş düğmesi zorunludur; diğer alanlar giriş profilinde “ek alan” olur.'),
+      h('ol', { class: 'giris-kaydi-listesi' }, satirlar.map((s) => s.el)),
+      h('div', { class: 'dugmeler' }, onizle, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')),
+      sonucAlani);
+    kutu.scrollIntoView({ block: 'nearest' });
+  };
+
   ciz();
   kapsayici.replaceChildren(
     h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Giriş tarifi', rozet(String(veri.ortamlar.length)))),
-    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, 'Testlerin giriş sayfasını nasıl kullanacağı (alanlar, başarı/hata göstergeleri, iki aşamalı doğrulama ve bağlam seçimi) ortam başına burada tanımlanır.'),
+    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, 'Testlerin giriş sayfasını nasıl kullanacağı (giriş adımları, başarı/hata göstergeleri, iki aşamalı doğrulama ve bağlam seçimi) ortam başına burada tanımlanır. “Girişi kaydet” ile girişi tarayıcıda kendiniz yapıp tarifi oradan da çıkarabilirsiniz.'),
     formAlani,
     veri.ortamlar.length ? liste : bosDurum('Henüz ortam yok.', 'Önce Proje ve ortamlar bölümünden bir ortam ekleyin.', { ikon: 'ag', rol: 'status' }));
+
+  // #/ayarlar/giris/tarif/<ortamId>: ilgili formu doğrudan aç.
+  const eslesme = /^#\/ayarlar\/giris\/tarif\/([^/?#]+)/.exec(location.hash || '');
+  if (eslesme) {
+    const o = veri.ortamlar.find((x) => x.ortamId === decodeURIComponent(eslesme[1]));
+    if (o) tarifFormu(o);
+  }
 }

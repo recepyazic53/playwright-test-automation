@@ -126,7 +126,7 @@ test.describe('Sayfa paketi — doğrulama', () => {
 
   test('JSON Schema dosyası doğrulayıcıyla aynı üst düzey ve zorunlu anahtarları tanımlar', () => {
     const sema = JSON.parse(readFileSync(resolve(__dirname, '..', '..', 'docs', 'sayfa-paketi.schema.json'), 'utf-8')) as Nesne;
-    expect(Object.keys(sema.properties as Nesne).sort()).toEqual(['$schema', 'bilinmeyenler', 'gerekenAyarlar', 'kanitlar', 'meta', 'model', 'senaryoOnerileri', 'surum', 'tur']);
+    expect(Object.keys(sema.properties as Nesne).sort()).toEqual(['$schema', 'bilinmeyenler', 'gerekenAyarlar', 'kanitlar', 'meta', 'model', 'senaryoOnerileri', 'surum', 'testVerisi', 'tur']);
     expect(sema.required).toEqual(['tur', 'surum', 'meta', 'model', 'senaryoOnerileri', 'gerekenAyarlar', 'bilinmeyenler']);
     for (const zorunlu of sema.required as string[]) {
       const p = kopya(V1);

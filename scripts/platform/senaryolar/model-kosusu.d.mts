@@ -60,6 +60,10 @@ export type PlanAdimi = {
   yalnizTest?: boolean;
   /** Ortak akıştan açılan adımın ortak akış adı. */
   ortakAkisAdi?: string;
+  /** SQL sorgusu adımı: koşucu veritabanı sorgusunu beklenenle karşılaştırır. */
+  sql?: import('../sql/sql-adimi.mjs').SqlTanimi;
+  /** Yeniden giriş adımı: oturum kapatılıp ortamın tarifiyle yeniden girilir (profil: giriş profilinin adı; null = ortamın varsayılanı). */
+  yenidenGiris?: { profil: string | null };
   id: string;
   baslik: string;
   sira: number;

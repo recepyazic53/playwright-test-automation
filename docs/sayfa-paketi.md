@@ -13,12 +13,28 @@ Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **sa
 |---|---|---|
 | Açan / ilerleten (kayıt yok) | Devam, Ek sürücü ekle, sekmeler, oklar, seçim değiştirme | Serbestçe basılır; koşullu alanlar, bağımlı listeler ve sonraki ekranın alanları böyle çıkarılır. |
 | Hesaplayan / sorgulayan | Prim hesapla, Kimlik sorgula | Basılır; sonuç alanları ve uyarılar (tarayıcı uyarıları — alert — dahil) toplanır. Kimlik sorgusunda yalnızca kullanıcının verdiği test profili kullanılır. |
-| Kayıt oluşturan / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | Claude durur ve sorar; yalnızca TEST ortamında, kullanıcının onayıyla basılır. CANLI'da basılmaz. |
+| Kayıt oluşturan / gönderen / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | **Basılmaz.** Claude orada durur; o noktadan sonrası pakete "bilinmiyor" olarak yazılır. |
 
-Ne yaptığından emin olunamayan düğme üçüncü gruptan sayılır (önce sorulur). Kart, şifre gibi bilgiler hiçbir zaman
-girilmez; ödeme ekranında alanlar okunur. Onay verilmezse o noktadan sonrası pakete "bilinmiyor" olarak yazılır.
-Çok ekranlı ve kayıt oluşturan akışlarda **Akışı kaydet** (düğmelere kullanıcı basar, panel toplar) daha güvenli yoldur.
-Nöbetçi'nin kendi "Ekranı otomatik tara" özelliği bu kuralları kullanmaz: yalnızca okur.
+Ne yaptığından emin olunamayan düğme üçüncü gruptan sayılır (basılmaz, kullanıcıya sorulur). Kart, parola, kimlik no gibi
+bilgiler hiçbir zaman girilmez; ödeme ekranında alanlar yalnızca okunur. Kayıt oluşturan adımlardan sonraki ekranlar için
+**Akışı kaydet** (düğmelere kullanıcı basar, panel toplar) kullanılır. Nöbetçi'nin kendi "Ekranı otomatik tara" özelliği
+yalnızca okur (düğmelere hiç basmaz).
+
+### Claude Code'a verilecek istek
+
+Ekranlar > **Sayfa ekle** sayfasındaki "Paket nasıl üretilir?" kartı bu cümleyi kopyalatır (`arayuz/sayfa-paketi.js > CUMLE`;
+kurallar kısmı `arayuz/ekranlar.js` ve `ekranlar/ekran-servisi.mjs > INCELEME_KURALLARI` ile aynı):
+
+> `<sayfa bağlantısı>` sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. Sayfayı yalnızca
+> okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten
+> ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, gönderen,
+> onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. Alanlara kart, parola, kimlik no gibi
+> bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. İş kuralı uyarısının göründüğü öğeyi adımın
+> kosu.hataGostergesi'ne, uyarı metinlerini kosu.uyarilar'a yaz. Tüm seçim alanlarının (açılır liste, radyo, oklu seçim)
+> seçeneklerini testVerisi.tablolar'a yaz: bağımlı listelerde her satır geçerli bir kombinasyon olsun (üst seçim + alt seçenek);
+> hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar'ına ekle; alanları testVerisi.baglantilar ile
+> sütunlara bağla, senaryo önerilerinde bu alanlara tablodaki değeri yaz. Kişisel ya da gizli değerleri (parola, kart, kimlik
+> no) hiçbir yere yazma; böyle bir sütun gerekiyorsa "gizli": true işaretle ve boş bırak.
 
 Claude API kullanılmaz. Nöbetçi'nin "Claude ile yorumla" / "Tekrar analiz et" düğmeleri, Claude Code'a
 verilecek **gizli değer içermeyen** bir analiz/istek dosyası yazar (`veri/analiz/<ekran>-<tarih>.json`).
@@ -38,11 +54,12 @@ Model kuralları: `scripts/dogrulama/ekran-modeli-dogrulayici.mjs` (testlerin mo
   "senaryoOnerileri": [ ... ],
   "gerekenAyarlar": { ... },
   "bilinmeyenler": [ ... ],
-  "kanitlar": [ ... ]
+  "kanitlar": [ ... ],
+  "testVerisi": { "tablolar": [ ... ], "baglantilar": [ ... ] }
 }
 ```
 
-Bilinmeyen anahtar hatadır. `kanitlar` isteğe bağlıdır; diğerleri zorunludur (öneri ya da bilinmeyen
+Bilinmeyen anahtar hatadır. `kanitlar` ve `testVerisi` isteğe bağlıdır; diğerleri zorunludur (öneri ya da bilinmeyen
 yoksa boş dizi yazılır — "bilinmeyen yok" açıkça söylenmiş olur).
 
 ## meta
@@ -84,6 +101,22 @@ Paket, modele isteğe bağlı bir **gözlem** ekler:
 koşuda alan **görünüyorsa doldurulur, görünmüyorsa atlanır**; senaryoda "mutlaka görünmeli" işaretli
 alan görünmezse test başarısız olur; atlanan alanlar sonuçlarda listelenir. Bağlam ↔ alan eşlemesi elle
 tutulmaz.
+
+### Bağlam profili ve kayıt alanı anahtarları
+
+Şema genel adlar kullanır. Eski adlar **hâlâ okunur** (eşdeğer yeni anahtar gibi yorumlanır); yeni kayıtlar
+(sayfa paketiyle eklenen ya da değiştirilen model) yeni adla yazılır. Kaydedilmiş modeller kendiliğinden
+yeniden yazılmaz. Aynı yerde eski ve yeni ad birlikte olamaz.
+
+| Yeni ad | Eski ad (hâlâ okunur) | Anlamı |
+|---|---|---|
+| `baglam` | `acenteBaglami` | Modelin bağlam profili ekranı: `{ aciklama, veriKaynagi, alanlar, bilinenProfiller, pageObject? }`. |
+| `{ "baglam": { "alanSeti": "…" } }` | `{ "acente": { "alanSeti": "…" } }` | Koşul ifadesi: bağlam profiline göre alan seti (hedef ifade; doğrulayıcı "bilinmiyor" sayar). |
+| `kosullar.<ad>.bilinenDurumlar[].profil` / `.profilKodu` | `.acente` / `.acentePartaji` | Bağlam profili bazında bilinen görünürlük; `profilKodu`, seçilen bağlam profilinin koduyla eşleşir. |
+| `eslesme.kayitAlani` | `eslesme.kart` | Alt model alanının senaryodaki kayıt (ör. test verisi kaydı) içindeki adı. |
+| Senaryo girdisi `baglamKodu` / `baglamKullanicisi` | `acenteKodu` / `acenteKullanicisi` | Bağlam profilini seçen alanın (`baglamProfili`; eski kimliği `acenteProfili`) form girdileri. |
+
+Doğrulayıcı mesajları kullanıcıya dönüktür: alanın etiketi yoksa iç anahtar yerine "Bu alan" yazılır.
 
 ### Ortak akışlar (ör. ödeme)
 
@@ -247,6 +280,10 @@ Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Sayfa ek
   engellenen yazma istekleri, keşfedilmeyen uzun listeler, etiketsiz alanlar, özel bileşenler/çerçeveler…),
   `kanitlar` (profil başına görünür alan ekran görüntüsü).
 * Alan **değerleri** pakete hiç yazılmaz; sayfadan gelen metinlerde gizli veri kalıbı varsa metin atılır.
+* `testVerisi`: her seçim alanının (açılır liste, radyo; gizli bilgi alanları hariç) seçenekleri tablo olur ve alan sütuna
+  bağlanır. Seçim keşfinde bir seçim değişince seçenekleri değişen listeler (bağımlı listeler) üst seçimle aynı tabloya
+  girer (satır = kombinasyon). Hücre görünen metin, sayfa değeri farklıysa karşılık (aynı metin farklı değerlere denk
+  geliyorsa sütun değerle yazılır).
 
 Uçlar ve protokol: `scripts/platform/tarama/yonetici.mjs` (`/platform/tarama/*`) ve `protokol.mjs`.
 
@@ -271,6 +308,11 @@ Alanları bir düğmeyle açılan ekranlarda (çok adımlı formlar) otomatik ta
    - **Bitir** (özet + "Bitir ve Nöbetçi’ye gönder"), **Sıfırla** (iki adımlı onay; toplananlar silinir), **İptal**.
    Her okumada seçim alanlarının (select / radyo) SEÇİLİ SEÇENEĞİ kaydedilir (yalnızca kayıtlı seçeneklerden biriyse; metin
    değerleri okunmaz) — seçime göre değişen alanların koşulu bundan çıkarılır (aşağıda).
+   **Seçenek listeleri (arka planda):** her okumada seçim alanlarının seçenekleri, kullanıcı bir alana tıklayınca / ok
+   tuşuyla açılan listbox / combobox listesinin seçenekleri (`kayit-paneli.ts > acikListeSecenekleri`; yazarak süzülen öneri
+   listeleri alınmaz) o andaki diğer seçimlerle birlikte kaydedilir. Yalnız seçenek etiketi / değeri — kullanıcının yazdığı
+   metin kaydedilmez. Panel "Seçenekleri yakalanan liste: N" gösterir. Üretilen paketin `testVerisi` bölümüne akıştaki
+   alanlar için tablo olarak girer; üst seçimin değerine göre seçenekleri değişen listeler kombinasyon satırları olur.
 3. **Akış diyagramı oluştur** (Nöbetçi'de, iş ekranı; `arayuz/akis-tasarimi.js`, saf kurallar `tarama/akis-tasarimi.mjs`):
    kayıttan hazırlanan **taslak** açılır — her düğme basışı bir **Aksiyon**, aradaki dokunulan (listede işaretli) alanlar bir
    **Alan grubu** (adı bölüm başlığından önerilir), seçilen mesajlar **Beklenen mesaj** (öneri: metnin sabit kısmı), sonunda
@@ -371,6 +413,56 @@ Ayarlar bölümüne bağlantı verir.
 En fazla 12 PNG ekran görüntüsü: `{ "ad", "aciklama"?, "icerikTuru": "image/png", "veri": "<base64>" }`,
 her biri en fazla 4 MB. Kabul edilince medya deposunda **şifreli** saklanır. Paket (kanıtlar dahil) en
 fazla 16 MB olabilir. Görüntülerde gerçek kişi/kart verisi bulunmamalıdır.
+
+## testVerisi (isteğe bağlı)
+
+Seçim alanlarının seçenekleri **Test verisi tablolarına** (Ayarlar > Test verisi > Tablolar: Excel sayfası gibi; sütun = alan,
+satır = birlikte geçerli değerler) yazılır ve alanlar sütunlara **bağlanır** (ekranın Test verisi sekmesi). Biçim, mevcut
+tablo + alan bağlantısı modelinin paket karşılığıdır (`scripts/platform/tablolar/paket-tablolari.mjs`):
+
+```json
+"testVerisi": {
+  "tablolar": [
+    {
+      "ad": "İl - İlçe",
+      "aciklama": "İl seçilince ilçe listesi değişir",
+      "sutunlar": [
+        { "ad": "İl", "karsiliklar": { "İstanbul": { "sayfa": "34" }, "Ankara": { "sayfa": "06" } } },
+        { "ad": "İlçe", "karsiliklar": { "Kadıköy": { "sayfa": "34-2" } } }
+      ],
+      "satirlar": [["İstanbul", "Kadıköy"], ["İstanbul", "Üsküdar"], ["Ankara", "Çankaya"]]
+    },
+    { "ad": "Müşteri tipi", "sutunlar": [{ "ad": "Müşteri tipi" }], "satirlar": [["Bireysel"], ["Kurumsal"]] },
+    { "ad": "Servis girişi", "sutunlar": [{ "ad": "Kullanıcı" }, { "ad": "Parola", "gizli": true }], "satirlar": [["kanal-1", null]] }
+  ],
+  "baglantilar": [
+    { "alanId": "il", "tablo": "İl - İlçe", "sutun": "İl" },
+    { "alanId": "ilce", "tablo": "İl - İlçe", "sutun": "İlçe" },
+    { "alanId": "musteriTipi", "tablo": "Müşteri tipi", "sutun": "Müşteri tipi" }
+  ]
+}
+```
+
+| Alan | Kural |
+|---|---|
+| `tablolar[].ad`, `sutunlar[].ad` | En çok 60 karakter; `. [ ] { } $ < > & \|` yok. Pakette tablo adı, tabloda sütun adı tekil. En çok 50 tablo, 40 sütun, 5000 satır. |
+| `satirlar` | Her satır sütun sırasıyla hücre dizisi (metin / sayı / `null`). **Bağımlı listelerde satır = geçerli kombinasyon** (üst seçim + o seçimde görünen alt seçenek); bağımsız seçim alanı tek sütunlu tablodur. Tekrarlanan satır bir kez yazılır (uyarı). |
+| Hücre değeri | Seçeneğin **görünen metni**. Sayfadaki `value` farklıysa sütunun `karsiliklar`ına `{ "<metin>": { "sayfa": "<value>" } }` yazılır (servise giden değer farklıysa `servis`). Bağlı seçim alanında karşılık, modeldeki seçenekten (metin ≠ değer) kendiliğinden de tamamlanır. |
+| `gizli: true` | Değeri Nöbetçi'de **şifreli** girilen sütun (parola vb.): pakette hücreleri boştur (`null`); değer yazılırsa paket reddedilir. Adı gizli bilgi taşıyan (parola, şifre, token, PIN, güvenlik…) ama gizli işaretlenmemiş sütun **uyarı** verir, değer taşıyorsa **hata**. Kart / T.C. kimlik no / IBAN kalıpları her yerde olduğu gibi reddedilir. |
+| `baglantilar[]` | `alanId`: modelde senaryoda ayarlanan seçim / metin alanı (gizli bilgi alanı bağlanmaz); `tablo` + `sutun` pakette olmalı, gizli sütuna bağlanmaz; alan bir kez bağlanır. `etiket` (isteğe bağlı): aynı tablo ekranda iki kez gerekiyorsa. |
+| Senaryo önerileri | Tabloya bağlı alanda senaryo değeri **tablodaki değerdir**; öneriler tablolar modele uygulanarak doğrulanır. |
+
+**Önizleme ve onay** (Sayfa ekle / Paket yükle / tarama ve kayıt sonucu): "Test verisine yazılacaklar" bölümü her tabloyu (sütun /
+satır sayısı, ilk satırlar, gizli sütunlar, bağlanacak alanlar) ve alan bağlantılarını (mevcut bağlantı değişiyorsa o da)
+gösterir. Kullanıcı tablo başına **yaz / atla** seçer; projede **aynı adlı tablo** varsa **Birleştir** (mevcut satır ve sütunlar
+değişmez; eksik sütunlar, tabloda olmayan satırlar ve eksik karşılıklar eklenir) / **Yeni adla yaz** / **Atla** seçmeden kabul
+edilemez. Bağlantılar tek tek seçilir. **Onaylanmayan hiçbir şey yazılmaz**; yazım ekran + model kaydıyla aynı işlemdedir
+(`tablolar/paket-test-verisi.mjs`; uçlar `sayfa-paketi/ekle`, `ekran/model/degistir`, `ekran/analiz/yukle` gövdesinde
+`testVerisi: { tablolar: { "<ad>": { islem: "yeni" | "birlestir" | "yeniAd" | "atla", yeniAd? } }, baglantilar: [alanId] }`).
+Tekrar analizde bağlantı hemen yazılır; alan henüz modelde değilse bulgu kabul edilince geçerli olur. Tablonun **kaynağı**
+(sayfa paketi / otomatik tarama / akış kaydı, ekran, tarih) Tablolar ekranında görünür. Akış kaydında mevcut ekranı
+doğrudan bir akışa yazan yol ("yeni akış olarak ekle" / "seçilen akışı güncelle") paket önizlemesinden geçmediği için test
+verisi yazmaz; test verisi için "varsayılan akışı güncelle" (önizleme) yolu kullanılır.
 
 ## Gizli değer yasağı
 

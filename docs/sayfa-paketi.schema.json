@@ -39,6 +39,14 @@
       "properties": {
         "semaSurumu": { "enum": [1, 2], "description": "2: adımlarda koşu tanımı (kosu: aksiyonlar, basariGostergesi, hataGostergesi, zamanAsimiSn) — model koşucusu." },
         "tur": { "const": "ekran" },
+        "baglam": {
+          "type": "object",
+          "description": "Bağlam profili ekranı: { aciklama, veriKaynagi, alanlar, bilinenProfiller, pageObject? }. Eski adı acenteBaglami hâlâ okunur (yeni kayıtta baglam yazılır); ikisi birlikte olamaz. Alt model alanında kayıt adı eslesme.kayitAlani (eski adı eslesme.kart hâlâ okunur)."
+        },
+        "acenteBaglami": {
+          "type": "object",
+          "description": "Eski ad (hâlâ okunur): baglam."
+        },
         "baglamGorunurlugu": {
           "type": "object",
           "additionalProperties": false,
@@ -97,6 +105,69 @@
           "aciklama": { "type": "string" },
           "icerikTuru": { "const": "image/png" },
           "veri": { "type": "string", "contentEncoding": "base64", "contentMediaType": "image/png", "description": "En fazla 4 MB (çözülmüş)." }
+        }
+      }
+    },
+    "testVerisi": {
+      "type": "object",
+      "description": "İsteğe bağlı: seçim alanlarının seçenekleri Test verisi tabloları olarak (satır = birlikte geçerli değerler; bağımlı listelerde kombinasyon) ve alan → sütun bağlantıları. Önizlemede kullanıcı onaylamadan yazılmaz. Gizli sütuna değer yazılmaz.",
+      "additionalProperties": false,
+      "required": ["tablolar"],
+      "properties": {
+        "tablolar": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ad", "sutunlar", "satirlar"],
+            "properties": {
+              "ad": { "type": "string", "pattern": "^[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}$" },
+              "aciklama": { "type": "string" },
+              "sutunlar": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 40,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["ad"],
+                  "properties": {
+                    "ad": { "type": "string", "pattern": "^[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}$" },
+                    "gizli": { "type": "boolean", "description": "Değeri Nöbetçi'de şifreli girilir; pakette hücreleri null." },
+                    "karsiliklar": {
+                      "type": "object",
+                      "description": "Hücre değeri → sayfadaki (seçenek value) / servisteki karşılık.",
+                      "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": { "sayfa": { "type": "string" }, "servis": { "type": "string" } }
+                      }
+                    }
+                  }
+                }
+              },
+              "satirlar": {
+                "type": "array",
+                "maxItems": 5000,
+                "items": { "type": "array", "items": { "type": ["string", "number", "boolean", "null"] } }
+              }
+            }
+          }
+        },
+        "baglantilar": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["alanId", "tablo", "sutun"],
+            "properties": {
+              "alanId": { "type": "string", "description": "Modeldeki alan kimliği (senaryoda ayarlanan seçim / metin alanı)." },
+              "tablo": { "type": "string" },
+              "sutun": { "type": "string" },
+              "etiket": { "type": "string", "pattern": "^[\\p{L}\\p{N} _-]{1,40}$" }
+            }
+          }
         }
       }
     }

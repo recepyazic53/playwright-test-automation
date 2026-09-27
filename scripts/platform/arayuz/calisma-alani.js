@@ -291,7 +291,7 @@ export function hesapMenusu(s) {
   const ad = alan ? (alan.sabit ? 'Tek veritabanı' : alan.ad) : 'Çalışma alanı';
   const dugme = h('button', { type: 'button', class: 'hesap-dugmesi', title: `Çalışma alanı: ${ad}` },
     h('span', { class: 'ca-avatar kucuk', 'aria-hidden': 'true' }, basHarf(ad)),
-    h('span', { class: 'hesap-adi' }, ad), ikon('asagi'));
+    h('span', { class: 'hesap-adi', title: ad }, ad), ikon('asagi'));
   dugme.setAttribute('aria-label', `Çalışma alanı menüsü: ${ad}`);
   return acilirMenu({
     dugme, sinif: 'satir-menusu-kap hesap-menusu', baslik: 'Çalışma alanı',

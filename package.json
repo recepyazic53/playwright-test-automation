@@ -8,7 +8,8 @@
     "test:birim": "playwright test --config playwright.birim.config.ts",
     "test-sunucu": "node scripts/test-sunucu.mjs",
     "baslat": "node scripts/baslat.mjs",
-    "paketle": "node scripts/paketle.mjs"
+    "paketle": "node scripts/paketle.mjs",
+    "kos": "node scripts/kos.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
@@ -17,6 +18,10 @@
     "typescript": "^5.9.0"
   },
   "dependencies": {
+    "mssql": "^12.7.2",
+    "mysql2": "^3.24.4",
+    "oracledb": "^7.0.1",
+    "pg": "^8.23.0",
     "sql.js": "1.14.2"
   }
 }

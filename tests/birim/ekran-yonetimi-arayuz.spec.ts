@@ -157,7 +157,7 @@ test('⋯ menüsü: yeniden adlandır, düzenle (URL yolu), yukarı taşı', asy
   await expect.poll(async () => page.locator('article.ekran-karti').first().getByRole('heading').innerText()).toBe(ad2);
   const sonra = await page.locator('article.ekran-karti').evaluateAll((l) => l.map((e) => e.getAttribute('data-ekran')));
   expect(sonra.slice(0, 2)).toEqual([once[1], once[0]]);
-  await expect(page.getByRole('navigation', { name: 'Ekranlar' }).locator('a').nth(2)).toContainText(ad2);
+  await expect(page.getByRole('navigation', { name: 'Ekranlar' }).getByRole('group', { name: 'Ekranlar' }).locator('a').first()).toContainText(ad2);
   await page.context().close();
   agKontrol(istekler);
 });

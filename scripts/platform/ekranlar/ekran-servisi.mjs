@@ -22,13 +22,14 @@ import { acikAnahtar, adliAlanlariDonustur, medyaAnahtariniHazirla, sifrele, zar
 import { medyaSifrele } from '../medya.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
-import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
+import { ekranModeliniDogrula, dogrulamaMaddeleri, eskiModelAnahtarlariniCevir } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
+import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
 /** Claude'un inceleme kuralları (düğme grupları; arayüz ekranlar.js > INCELEME_KURALLARI ve docs/sayfa-paketi.md ile aynı metin). */
-const INCELEME_KURALLARI = 'Seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere basıp sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, onaylayan ya da ödeme yapan bir düğmeye gelince dur ve bana sor (yalnızca TEST ortamında, onayımla basılır). Kart, şifre gibi bilgileri girme. Bir düğmenin ne yaptığından emin değilsen basmadan önce sor.';
+const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. Alanlara kart, parola, kimlik no gibi bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. Tüm seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini testVerisi.tablolar\'a yaz: bağımlı listelerde her satır geçerli bir kombinasyon olsun (üst seçim + alt seçenek); hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar\'ına ekle; alanları testVerisi.baglantilar ile sütunlara bağla, senaryo önerilerinde bu alanlara tablodaki değeri yaz. Kişisel ya da gizli değerleri (parola, kart, kimlik no) hiçbir yere yazma; böyle bir sütun gerekiyorsa "gizli": true işaretle ve boş bırak.';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, unknown>} Nesne */
@@ -414,7 +415,9 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
         baglamProfilleri: incelenen.map((ad) => ({ ad, projedeVar: baglamAdlari.has(ad) }))
       },
       agac, senaryolar, gerekenAyarlar, bilinmeyenler: Array.isArray(p.bilinmeyenler) ? p.bilinmeyenler : [],
-      kanitSayisi: Array.isArray(p.kanitlar) ? p.kanitlar.length : 0, ortamlar
+      kanitSayisi: Array.isArray(p.kanitlar) ? p.kanitlar.length : 0, ortamlar,
+      // Paketin test verisi bölümü: yazılacak tablolar ve alan bağlantıları (kullanıcı seçer; onaysız yazılmaz).
+      testVerisi: paketTestVerisiOnizle(vt, projeId, p, hedef ? hedef.id : null)
     }
   };
 }
@@ -481,7 +484,8 @@ function degistirmeEtkisiHesapla(vt, projeId, ekranId, paketModeli) {
  * bağlı liste, koşu değişiklikleri için). Senaryolar korunur; diğer akışlar korunur; isteğe bağlı olarak paketin senaryo
  * önerileri eklenir. onay yoksa yalnızca etki döner.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} paket
- * @param {{ onay?: boolean; senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string }} secenekler
+ * testVerisi: önizlemede onaylanan test verisi seçimi (paket-test-verisi.mjs); verilmezse test verisine yazılmaz.
+ * @param {{ onay?: boolean; senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string; testVerisi?: unknown }} secenekler
  */
 export async function modeliPaketleDegistir(vt, projeId, ekranId, paket, secenekler) {
   const o = paketOnizle(vt, projeId, paket, { ekranId, mod: 'degistir' });
@@ -490,7 +494,8 @@ export async function modeliPaketleDegistir(vt, projeId, ekranId, paket, secenek
   const p = /** @type {Nesne} */ (paket);
   const meta = /** @type {Nesne} */ (p.meta);
   const kayit = ekranModeliGetir(vt, ekranId);
-  const yeni = degistirilenModel(kayit && nesneMi(kayit.model) ? /** @type {Nesne} */ (kayit.model) : {}, /** @type {Nesne} */ (p.model));
+  // Yeni sürüm yeni anahtar adlarıyla yazılır (eski adlar okunur; kaydedilmiş sürümler olduğu gibi kalır).
+  const yeni = eskiModelAnahtarlariniCevir(degistirilenModel(kayit && nesneMi(kayit.model) ? /** @type {Nesne} */ (kayit.model) : {}, /** @type {Nesne} */ (p.model)));
   modeliDogrula(vt, projeId, yeni, 'model');
   const ortamlar = ortamlariListele(vt, projeId);
   const ortamIdleri = Array.isArray(secenekler.ortamIdleri) ? [...new Set(secenekler.ortamIdleri.filter((x) => typeof x === 'string'))] : [];
@@ -515,7 +520,8 @@ export async function modeliPaketleDegistir(vt, projeId, ekranId, paket, secenek
       kanitlar: [...analiz.kanitlar, ...kanitKayitlari]
     });
     const senaryoIdleri = senaryoOnerileriniEkle(vt, projeId, ekranId, yeni, /** @type {Nesne[]} */ (p.senaryoOnerileri ?? []), /** @type {number[]} */ (indeksler), ortamIdleri, meta, secenekler.yapan);
-    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length };
+    const testVerisi = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
+    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length, testVerisi };
   });
 }
 
@@ -560,7 +566,8 @@ const paketKaynagi = (/** @type {Nesne} */ meta) => `${String(meta.olusturan ?? 
  * "Sayfa ekle": ekran (yoksa) + model v1 + seçilen senaryo önerileri + şifreli kanıtlar. Senaryolar
  * Koşuda KAPALI başlar (test kodu henüz yok; öneriler gözden geçirilmeden koşuya girmez).
  * @param {Veritabani} vt @param {string} projeId @param {unknown} paket
- * @param {{ senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string }} secenekler
+ * testVerisi: önizlemede onaylanan test verisi seçimi (paket-test-verisi.mjs); verilmezse test verisine yazılmaz.
+ * @param {{ senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string; testVerisi?: unknown }} secenekler
  */
 export async function sayfaEkle(vt, projeId, paket, secenekler) {
   const o = paketOnizle(vt, projeId, paket, { mod: 'yeni' });
@@ -568,7 +575,8 @@ export async function sayfaEkle(vt, projeId, paket, secenekler) {
   const p = /** @type {Nesne} */ (paket);
   const meta = /** @type {Nesne} */ (p.meta);
   const ekranMeta = /** @type {Nesne} */ (meta.ekran);
-  const model = /** @type {Nesne} */ (p.model);
+  // Yeni kayıt yeni anahtar adlarıyla yazılır (paketteki eski adlar — ör. acenteBaglami — genel karşılıklarına çevrilir).
+  const model = eskiModelAnahtarlariniCevir(/** @type {Nesne} */ (p.model));
   const ortamlar = ortamlariListele(vt, projeId);
   const ortamIdleri = Array.isArray(secenekler.ortamIdleri) ? [...new Set(secenekler.ortamIdleri.filter((x) => typeof x === 'string'))] : [];
   for (const id of ortamIdleri) if (!ortamlar.some((x) => x.id === id)) throw new DepoHatasi('Seçilen ortam bu projede yok.');
@@ -596,7 +604,8 @@ export async function sayfaEkle(vt, projeId, paket, secenekler) {
       kanitlar: [...analiz.kanitlar, ...kanitKayitlari]
     });
     const senaryoIdleri = senaryoOnerileriniEkle(vt, projeId, ekranId, model, /** @type {Nesne[]} */ (p.senaryoOnerileri), /** @type {number[]} */ (indeksler), ortamIdleri, meta, secenekler.yapan);
-    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length };
+    const testVerisi = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
+    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length, testVerisi };
   });
 }
 
@@ -648,7 +657,9 @@ function senaryoOnerileriniEkle(vt, projeId, ekranId, model, oneriler, indeksler
 /**
  * Mevcut ekran için yeni paketi yükler: bulgular hesaplanır, daha önce REDDEDİLEN (aynı imzalı)
  * bulgular gizlenir, analiz "bekleyen" olarak saklanır (öncekinin yerine geçer).
- * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} paket @param {{ medyaKlasoru: string }} secenekler
+ * testVerisi: önizlemede onaylanan test verisi seçimi; tablolar ve bağlantılar hemen yazılır (bağlanan alan henüz modelde
+ * değilse bulgu kabul edilince geçerli olur).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} paket @param {{ medyaKlasoru: string; testVerisi?: unknown }} secenekler
  */
 export async function analizYukle(vt, projeId, ekranId, paket, secenekler) {
   const o = paketOnizle(vt, projeId, paket, { mod: 'analiz', ekranId });
@@ -681,7 +692,8 @@ export async function analizYukle(vt, projeId, ekranId, paket, secenekler) {
       ...guncel, bekleyen: bulgular.length ? kayit : null, sonBaglamProfilleri: Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : guncel.sonBaglamProfilleri,
       kanitlar: [...guncel.kanitlar, ...kanitKayitlari]
     });
-    return { analizId: bulgular.length ? kayit.id : null, bulguSayisi: bulgular.length, gizlenenSayisi: gizlenen.length, uyarilar: o.uyarilar };
+    const testVerisi = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
+    return { analizId: bulgular.length ? kayit.id : null, bulguSayisi: bulgular.length, gizlenenSayisi: gizlenen.length, uyarilar: o.uyarilar, testVerisi };
   });
 }
 

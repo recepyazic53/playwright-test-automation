@@ -4,23 +4,25 @@
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
   adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
-  onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir
-} from './ortak.js';
+  onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
 import { tablolarBolumu } from './tablolar.js';
+import { tabanAdresleriBolumu } from './taban-adresler.js';
 import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
+import { entegrasyonlarBolumu } from './entegrasyonlar.js';
+import { kasayiKilitleSecimli, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
-  { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
-  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi ve ekran taraması / akış kaydı süreleri. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
+  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi, ekran taraması / akış kaydı süreleri ve zamanlanmış koşular. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
-  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları. Rehberler her ekranda üst çubuktaki "?" düğmesiyle yeniden açılır.' }
+  { ad: 'entegrasyonlar', etiket: 'Entegrasyonlar', ikon: 'ag', aciklama: 'Dış uygulamalarla bağlantılar: koşu bitince webhook bildirimi, testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantıları. Token, parola ve gizli adresler kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.' },
+  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları.' }
 ];
 
 const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
@@ -48,7 +50,8 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
-    'test-verisi': testVerisi, dosyalar, kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari
+    entegrasyonlar: entegrasyonlarBolumu,
+    'test-verisi': testVerisi, kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
@@ -196,7 +199,8 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     projeFormu,
     bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, '+ Ortam ekle')),
     formAlani,
-    kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'));
+    kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
+    tabanAdresleriBolumu(proje));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -255,6 +259,31 @@ async function girisProfilleri(govde, baglam, yenile) {
     [rYok.r, rTotp.r, rSms.r, smsSabit, smsElle].forEach((r) => r.addEventListener('change', gorunurluk));
     gorunurluk();
 
+    // Ek alanlar: giriş tarifinin giriş adımlarındaki "{ad}" değerleri (ör. firma kodu, şube, PIN). Gizli işaretli olan
+    // kasada şifreli saklanır ve maskeli gösterilir (boş bırakılırsa kayıtlı değer korunur).
+    const ekSatirlari = [];
+    const ekKutusu = h('div', { class: 'ek-alan-listesi' });
+    const ekAlanEkle = (e = { ad: '', gizli: false, deger: '' }) => {
+      const adG = h('input', { type: 'text', class: 'mono', autocomplete: 'off', spellcheck: 'false', value: e.ad, placeholder: 'ör. firmaKodu', 'aria-label': 'Ek alan adı' });
+      const kayitliGizli = e.gizli && e.deger && typeof e.deger === 'object' && e.deger.dolu;
+      const degerG = h('input', {
+        type: e.gizli ? 'password' : 'text', autocomplete: 'off', spellcheck: 'false', value: e.gizli ? '' : (e.deger || ''), 'aria-label': 'Ek alan değeri',
+        placeholder: kayitliGizli ? `${e.deger.maske} kayıtlı — değiştirmek için yazın` : ''
+      });
+      const gizli = h('input', { type: 'checkbox', id: yeniKimlik('ekgizli'), checked: Boolean(e.gizli) });
+      gizli.addEventListener('change', () => { degerG.type = gizli.checked ? 'password' : 'text'; });
+      const s = { adG, degerG, gizli, kayitliGizli, el: null };
+      s.el = h('div', { class: 'ek-alan-satiri' }, adG, degerG,
+        h('label', { class: 'secenek mini-secenek', for: gizli.id }, gizli, 'Gizli'),
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Bu ek alanı kaldır', onclick: () => { ekSatirlari.splice(ekSatirlari.indexOf(s), 1); s.el.remove(); } }, ikon('carpi')));
+      ekSatirlari.push(s);
+      ekKutusu.append(s.el);
+    };
+    (p && p.ekAlanlar ? p.ekAlanlar : []).forEach(ekAlanEkle);
+    const ekAlanlarBolumu = h('fieldset', {}, h('legend', {}, 'Ek alanlar (isteğe bağlı)'),
+      h('p', { class: 'yardim' }, 'Giriş formunda kullanıcı adı ve paroladan başka alan varsa (firma kodu, şube, PIN…) değerini burada tutun; giriş tarifinin adımında {ad} olarak kullanılır. Gizli işaretlenen değer kasada şifreli saklanır, maskeli gösterilir ve hata mesajlarına yazılmaz.'),
+      ekKutusu, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => ekAlanEkle() }, ikon('arti'), 'Ek alan ekle'));
+
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
     const form = formPaneli(p ? `Giriş profilini düzenle: ${p.ad}` : 'Yeni giriş profili', mesaj.kutu,
@@ -263,6 +292,7 @@ async function girisProfilleri(govde, baglam, yenile) {
       alan('Kullanıcı adı', kullanici, { zorunlu: true }),
       parola.kapsayici,
       h('fieldset', {}, h('legend', {}, 'İki aşamalı doğrulama'), rYok.etiket, rTotp.etiket, totpAlani, rSms.etiket, smsAlani),
+      ekAlanlarBolumu,
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (o) => {
       o.preventDefault();
@@ -279,6 +309,17 @@ async function girisProfilleri(govde, baglam, yenile) {
         kullaniciAdi: kullanici.value.trim(), ikiAsamaliTur: secilenTur,
         sms: { yontem: smsElle.checked ? 'elle' : 'sabit', kod: smsKod.value.trim() }
       };
+      const ekAdlar = new Set();
+      for (const s of ekSatirlari) {
+        const ekAd = s.adG.value.trim();
+        if (!/^[\p{L}\p{N}_.-]{1,60}$/u.test(ekAd)) { mesaj.goster(`Ek alan adı "${ekAd}" geçersiz: boşluksuz; harf, rakam, _ . - (ör. firmaKodu).`); s.adG.focus(); return; }
+        if (ekAdlar.has(ekAd)) { mesaj.goster(`"${ekAd}" ek alanı iki kez yazılmış.`); s.adG.focus(); return; }
+        ekAdlar.add(ekAd);
+      }
+      // Gizli alanda boş değer = kayıtlı değeri koru (sunucu); açık alanda yazılan değer olduğu gibi.
+      istek.ekAlanlar = ekSatirlari.map((s) => (s.gizli.checked
+        ? { ad: s.adG.value.trim(), gizli: true, ...(s.degerG.value ? { deger: s.degerG.value } : {}) }
+        : { ad: s.adG.value.trim(), gizli: false, deger: s.degerG.value }));
       if (parola.girdi.value) istek.parola = parola.girdi.value;
       if (secilenTur === 'totp' && totp.girdi.value) istek.totpGizli = totp.girdi.value.replace(/\s+/g, '');
       try {
@@ -292,7 +333,8 @@ async function girisProfilleri(govde, baglam, yenile) {
 
   const satirlar = profiller.map((p) => kayitSatiri(p.ad,
     [`${ortamAdi(p.ortamId)} · ${p.kullaniciAdi} · Parola: ${p.parola.dolu ? `${p.parola.maske} kayıtlı` : 'yok'} · İki aşamalı: ${IKI_ASAMALI_ETIKET[p.ikiAsamaliTur] || p.ikiAsamaliTur}`,
-      p.ikiAsamaliTur === 'sms' ? (p.sms.yontem === 'elle' ? ' (elle girilir)' : ' (sabit test kodu)') : ''],
+      p.ikiAsamaliTur === 'sms' ? (p.sms.yontem === 'elle' ? ' (elle girilir)' : ' (sabit test kodu)') : '',
+      p.ekAlanlar && p.ekAlanlar.length ? ` · Ek alanlar: ${p.ekAlanlar.map((e) => `${e.ad}${e.gizli ? ' (gizli)' : ''}`).join(', ')}` : ''],
     [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('giris_profili', p.id, p.ad, baglam)),
       silDugmesi(p.ad, async () => { await api('/platform/giris-profili/sil', { govde: { id: p.id } }); bildir('Giriş profili silindi.'); yenile(); })], 'kullanici'));
 
@@ -480,57 +522,6 @@ async function yedekleme(govde, baglam, yenile) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Dosyalar (ekranların varsayılan dosyaları — şifreli)
-// ---------------------------------------------------------------------------------------
-
-async function dosyalar(govde, baglam, yenile) {
-  const proje = baglam.durum.proje;
-  const { ekranlar } = await api(`/platform/ekran-dosyalari?projeId=${encodeURIComponent(proje.id)}`);
-  const satirlar = [];
-  for (const e of ekranlar) {
-    for (const d of e.dosyalar) {
-      const secici = h('input', { type: 'file', class: 'gorunmez-dosya', 'aria-label': `${e.ad}: ${d.anahtar} dosyasını değiştir` });
-      const mesaj = h('div', { class: 'kucuk', 'aria-live': 'polite' });
-      const eskiUzanti = (d.dosya ? d.dosya.ad : d.eskiYol || '').split('.').pop();
-      secici.accept = eskiUzanti ? `.${eskiUzanti}` : '';
-      const degistir = h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => secici.click() }, ikon('yukle'), d.dosya ? 'Değiştir' : 'Yükle ve şifrele');
-      secici.addEventListener('change', async () => {
-        const dosya = secici.files && secici.files[0];
-        secici.value = '';
-        if (!dosya) return;
-        const sorun = dosyaOnDenetimi(dosya, secici.accept);
-        if (sorun) { mesaj.className = 'kucuk hata-metni'; mesaj.textContent = sorun; return; }
-        mesaj.className = 'kucuk soluk';
-        mesaj.textContent = `${dosya.name} şifrelenip yükleniyor…`;
-        degistir.disabled = true;
-        try {
-          const adres = `/platform/ekran-dosyasi/yukle?projeId=${encodeURIComponent(proje.id)}&ekranId=${encodeURIComponent(e.id)}&yol=${encodeURIComponent(JSON.stringify(d.yol))}`;
-          const y = await dosyaYukle(adres, dosya, (p) => { mesaj.textContent = `${dosya.name} şifrelenip yükleniyor… %${p}`; });
-          bildir(`${e.ad}: ${y.ad} şifreli olarak kaydedildi.`, 'basari');
-          yenile();
-        } catch (hata) {
-          degistir.disabled = false;
-          if (hata.durum === 423) return;
-          mesaj.className = 'kucuk hata-metni';
-          mesaj.textContent = hata.message;
-        }
-      });
-      const dosyaMetni = d.dosya
-        ? [h('strong', {}, d.dosya.ad), ' ', rozet([ikon('kilit'), 'şifreli'], 'basari'), d.dosya.eksik ? rozet('şifreli depoda yok', 'hata') : null]
-        : [h('code', {}, d.eskiYol), ' ', rozet([ikon('uyari'), 'düz metin yol'], 'uyari', { title: 'Eski düz metin dosya yolu: dosyayı yükleyip şifreleyin.' })];
-      satirlar.push(kayitSatiri(
-        h('span', {}, e.ad, h('span', { class: 'soluk kucuk' }, ` · ${d.anahtar}`)),
-        [h('span', {}, ...dosyaMetni), h('br', {}), h('span', {}, `${d.ortamAd || 'tüm ortamlar'}${d.dosya && d.dosya.boyut !== null ? ` · ${boyutMetni(d.dosya.boyut)}` : ''}`), mesaj],
-        [secici, degistir], 'dosya'));
-    }
-  }
-  govde.replaceChildren(
-    h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Senaryoda dosya seçilmemişse ekranın varsayılan dosyası kullanılır. Dosyalar diskte yalnızca şifreli durur ve indirilemez; koşuda yalnızca sizin okuyabildiğiniz geçici bir klasöre çözülür, koşu bitince silinir. Senaryoya özel dosyalar senaryo formundan yüklenir.')),
-    bolumBasligi('Ekran dosyaları', satirlar.length),
-    kayitListesi(satirlar, 'Ekran ayarlarında dosya yok.', 'dosya'));
-}
-
-// ---------------------------------------------------------------------------------------
 // Güvenlik
 // ---------------------------------------------------------------------------------------
 
@@ -571,12 +562,17 @@ function sonucTemizlemeKarti() {
     mesaj.kutu, alan('Kapsam', kapsam), gunAlani, h('div', { class: 'dugmeler' }, say, sil));
 }
 
-/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları. */
-async function kosuAyarlari(govde) {
-  const [form, kurallar] = await Promise.all([
-    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'), siniflandirmaKarti()
+/** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları + zamanlanmış koşular. */
+async function kosuAyarlari(govde, baglam) {
+  const proje = baglam && baglam.durum ? baglam.durum.proje : null;
+  const [form, kurallar, zamanli] = await Promise.all([
+    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'), siniflandirmaKarti(),
+    proje ? zamanlanmisKosularKarti(proje).catch((hata) => {
+      if (hata && hata.durum === 423) throw hata;
+      return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Zamanlanmış koşular yüklenemedi: ${hata.message || hata}`);
+    }) : null
   ]);
-  yerlestir(govde, form, kurallar);
+  yerlestir(govde, form, kurallar, zamanli);
 }
 
 /** Hata sınıflandırma kuralları: "hata mesajında şu geçerse → kategori" (genel kurallardan önce denenir). */
@@ -752,8 +748,9 @@ async function guvenlik(govde, baglam) {
 
   const kilitle = h('button', { type: 'button' }, ikon('kilit'), 'Kasayı kilitle');
   kilitle.addEventListener('click', async () => {
-    await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
-    bildir('Kasa kilitlendi.');
+    const secim = await mesgulIken(kilitle, 'Kilitleniyor…', () => kasayiKilitleSecimli());
+    if (!secim) return;
+    bildir(secim === 'surdur' ? 'Kasa kilitlendi; zamanlanmış koşular sürüyor.' : 'Kasa kilitlendi.');
     baglam.yonlendir();
   });
 
@@ -802,7 +799,7 @@ async function guvenlik(govde, baglam) {
 // ---------------------------------------------------------------------------------------
 
 async function arayuzAyarlari(govde) {
-  const [{ rehber }, listeFormu] = await Promise.all([api('/platform/rehber'), ayarFormu('arayuz', 'Arayüz ayarları', 'Arayüz ayarları kaydedildi.')]);
+  const [{ rehber }, listeFormu, { acilis }] = await Promise.all([api('/platform/rehber'), ayarFormu('arayuz', 'Arayüz ayarları', 'Arayüz ayarları kaydedildi.'), api('/platform/acilis')]);
   const otomatik = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', id: yeniKimlik('rehber-otomatik'), checked: rehber.otomatik, disabled: rehber.ortamKapali });
   const mesaj = mesajKutusu();
   const sifirla = h('button', { type: 'button' }, ikon('yenile'), 'Tüm rehberleri yeniden göster');
@@ -834,5 +831,45 @@ async function arayuzAyarlari(govde) {
           ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
           : 'Kapalıysa rehberler yalnızca üst çubuktaki "?" düğmesiyle açılır.'))),
     h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
-    h('div', { class: 'dugmeler' }, sifirla, tanitim)), listeFormu);
+    h('div', { class: 'dugmeler' }, sifirla, tanitim)), temaKarti(), acilisKarti(acilis), listeFormu);
+}
+
+/** Tema seçimi (renk ailesi + biçim); açık / koyu seçimi üst çubuktaki düğmededir. Seçim hemen uygulanır. */
+function temaKarti() {
+  const ad = yeniKimlik('stil');
+  const secili = kayitliStil();
+  const kart = (s) => {
+    const girdi = h('input', { type: 'radio', name: ad, value: s.ad, id: `${ad}-${s.ad}`, checked: s.ad === secili });
+    girdi.addEventListener('change', () => { if (girdi.checked) { stilUygula(s.ad); bildir(`Tema: ${s.etiket}`); } });
+    return h('label', { class: 'tema-karti', for: girdi.id }, girdi,
+      h('span', { class: `tema-onizleme ${s.ad}`, 'aria-hidden': 'true' }, h('i', { class: 'to-ust' }), h('i', { class: 'to-sol' }), h('i', { class: 'to-ana' })),
+      h('b', {}, s.etiket), h('small', {}, s.aciklama));
+  };
+  return h('div', { class: 'kart form-paneli', role: 'group', 'aria-label': 'Tema' },
+    h('h3', {}, ikon('gorunum'), 'Tema'),
+    h('p', { class: 'soluk' }, 'Nöbetçi\'nin görünümü. Her tema açık ve koyu modda çalışır; açık / koyu seçimi üst çubuktaki güneş / ay düğmesindedir. Seçim bu tarayıcıda hatırlanır.'),
+    h('div', { class: 'tema-secimi', role: 'radiogroup', 'aria-label': 'Tema' }, STILLER.map(kart)));
+}
+
+/** "Nöbetçi nasıl açılsın": kendi penceresi (masaüstü uygulaması gibi) ya da varsayılan tarayıcı. Bir sonraki açılışta geçerli. */
+function acilisKarti(acilis) {
+  const mesaj = mesajKutusu();
+  const ad = yeniKimlik('acilis');
+  const secenek = (deger, baslik, aciklama) => {
+    const girdi = h('input', { type: 'radio', name: ad, value: deger, id: `${ad}-${deger}`, checked: acilis.bicim === deger, disabled: acilis.ortamdan });
+    girdi.addEventListener('change', async () => {
+      mesaj.temizle();
+      try {
+        await api('/platform/acilis/kaydet', { govde: { bicim: deger } });
+        mesaj.goster(deger === 'pencere' ? 'Nöbetçi bir sonraki açılışta kendi penceresinde açılacak.' : 'Nöbetçi bir sonraki açılışta varsayılan tarayıcınızda açılacak.', 'basari');
+      } catch (hata) { mesaj.goster(hata.message); }
+    });
+    return h('label', { class: 'onay-satiri', for: girdi.id }, girdi, h('span', {}, h('b', {}, baslik), h('small', { class: 'blok soluk' }, aciklama)));
+  };
+  return h('div', { class: 'kart form-paneli', role: 'group', 'aria-label': 'Açılış' },
+    h('h3', {}, ikon('bilgisayar'), 'Nöbetçi nasıl açılsın'),
+    h('p', { class: 'soluk' }, acilis.ortamdan ? 'Bu bilgisayarda NOBETCI_ACILIS ortam değişkeniyle belirlenmiş; buradan değiştirilemez.' : 'Seçiminiz bir sonraki açılışta ("npm run baslat" ya da Nöbetçi.exe) geçerli olur.'),
+    mesaj.kutu,
+    secenek('pencere', 'Kendi penceresinde (masaüstü uygulaması gibi)', 'Adres çubuğu ve sekmeler olmadan ayrı bir pencere. Bu bilgisayardaki Chromium kullanılır; pencere kapanınca Nöbetçi de kapanır.'),
+    secenek('tarayici', 'Varsayılan tarayıcıda', 'Her zamanki tarayıcınızda yeni bir sekme açılır; sekme kapansa da Nöbetçi arka planda çalışmaya devam eder.'));
 }

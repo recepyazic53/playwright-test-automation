@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { acikAnahtar, coz, sifrele, zarfMi } from '../kasa.mjs';
 import { DepoHatasi, gecmisYaz, jsonMetni, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
 import { TANIM_TURLERI } from './parametre-tanimlari.mjs';
+import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
+import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './akis-senaryo-icerigi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -86,7 +88,7 @@ function sil(vt, tablo, id, secenekler = {}) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * @typedef {{ ad: string; eylem?: string }} ServisOperasyonu
+ * @typedef {{ ad: string; eylem?: string; metot?: string; yol?: string }} ServisOperasyonu  metot / yol: REST (bkz. ServisHttpTanimi)
  * @typedef {{ yol?: string; tabanlar?: Record<string, string>; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
  *   adresler?: Record<string, string>; yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean;
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
@@ -94,8 +96,8 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>; alanZorunluluklari?: Record<string, string[]>;
  *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
  *   alanListeleri?: Record<string, Record<string, string>>;
- *   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>;
- *   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string }} ServisAyarlari
+ *   alanBaglari?: Record<string, Record<string, { tablo?: string; sutun?: string; etiket?: string; bicim?: string; kural?: string }>>;
+ *   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string; tabanGrubu?: string }} ServisAyarlari  tabanGrubu: adlandırılmış taban adres (taban-adresleri.mjs)
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
  */
@@ -167,17 +169,20 @@ export function servisSil(vt, id, yapan) {
  * - soapHatasiYok / soapHatasi: yanıtta SOAP Fault olmamalı / olmalı
  * - icerir / icermez: metin (buyukKucukDuyarsiz, duzenliIfade)
  * - xpathEsit: xpath ile bulunan ilk düğümün metni "deger"e eşit (basit yol: /a/b/c, önekler yok sayılır)
+ * - jsonEsit: JSON yanıtta "yol"daki değer (a.b[0].c; baştaki "$." isteğe bağlı) "deger"e eşit (REST)
  * - veya: alt kontrollerden EN AZ BİRİ geçerse geçer (alt: kontroller; iç içe VEYA yok). Senaryonun kontrol listesi VE'dir.
- * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'veya';
- *   deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[] }} ServisKontrolu
+ * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'jsonEsit' | 'veya';
+ *   deger?: string; xpath?: string; yol?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[] }} ServisKontrolu
  * @typedef {{ operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
  *   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>;
- *   basliklar?: Record<string, string> }} ServisSenaryoIcerigi
+ *   basliklar?: Record<string, string>; http?: ServisHttpTanimi }} ServisSenaryoIcerigi
+ * REST isteği (servis türü rest): metot, servis yoluna göre göreli yol (sorgu dahil; ${…} parametreleri olabilir), gövdenin içerik türü.
+ * @typedef {{ metot: string; yol: string; icerikTuru?: string }} ServisHttpTanimi
  * @typedef {{ id: string; projeId: string; servisId: string; baslik: string; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
  *   sira: number | null; icerik: ServisSenaryoIcerigi; olusturulma: string; guncellenme: string }} ServisSenaryosu
  */
 
-export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'veya']);
+export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya']);
 
 /**
  * Tek kontrolü doğrular (VEYA'nın alt kontrolleri de; iç içe VEYA kabul edilmez).
@@ -191,28 +196,53 @@ function kontrolDogrula(k, yer, altMi) {
     if (!Array.isArray(k.alt) || k.alt.length < 2) throw new DepoHatasi(`${yer} kontrol (VEYA) en az iki alt kontrol içermeli.`);
     return { tur, alt: k.alt.map((/** @type {unknown} */ a, /** @type {number} */ n) => kontrolDogrula(a, `${yer}${n + 1}.`, true)), ...(typeof k.ad === 'string' && k.ad ? { ad: k.ad } : {}) };
   }
-  if ((tur === 'icerir' || tur === 'icermez' || tur === 'xpathEsit' || tur === 'durumKodu') && (typeof k.deger !== 'string' || !k.deger)) {
+  if ((tur === 'icerir' || tur === 'icermez' || tur === 'xpathEsit' || tur === 'jsonEsit' || tur === 'durumKodu') && (typeof k.deger !== 'string' || !k.deger)) {
     throw new DepoHatasi(`${yer} kontrol (${tur}) için "deger" gerekli.`);
   }
   if (tur === 'xpathEsit' && (typeof k.xpath !== 'string' || !k.xpath.startsWith('/'))) throw new DepoHatasi(`${yer} kontrol için "/" ile başlayan "xpath" gerekli.`);
+  if (tur === 'jsonEsit' && (typeof k.yol !== 'string' || !k.yol.trim())) throw new DepoHatasi(`${yer} kontrol için JSON "yol" gerekli (ör. data.id).`);
   if (k.duzenliIfade) {
     try { new RegExp(k.deger); } catch { throw new DepoHatasi(`${yer} kontroldeki düzenli ifade geçersiz.`); }
   }
-  return /** @type {ServisKontrolu} */ (Object.fromEntries(Object.entries(k).filter(([a]) => ['tur', 'deger', 'xpath', 'buyukKucukDuyarsiz', 'duzenliIfade', 'ad'].includes(a))));
+  return /** @type {ServisKontrolu} */ (Object.fromEntries(Object.entries(k).filter(([a]) => ['tur', 'deger', 'xpath', 'yol', 'buyukKucukDuyarsiz', 'duzenliIfade', 'ad'].includes(a))));
 }
 
 /** @param {unknown} icerik @returns {ServisSenaryoIcerigi} */
 export function senaryoIceriginiDogrula(icerik) {
   if (!icerik || typeof icerik !== 'object' || Array.isArray(icerik)) throw new DepoHatasi('"icerik" bir nesne olmalıdır.');
+  // Akış senaryosu (tur 'akis'; akis-senaryo-icerigi.mjs): her operasyon adımının içeriği bu işlevle doğrulanır.
+  if (akisSenaryosuMu(icerik)) return /** @type {any} */ (akisSenaryoIceriginiDogrula(icerik, senaryoIceriginiDogrula, DepoHatasi));
   const i = /** @type {Record<string, unknown>} */ (icerik);
   const operasyon = zorunluMetin(i.operasyon, 'operasyon');
-  const govde = zorunluMetin(i.govde, 'govde');
+  const http = httpTanimiDogrula(i.http);
+  // REST isteğinde gövde boş olabilir (GET / DELETE); SOAP'ta zorunlu.
+  const govde = http ? (typeof i.govde === 'string' ? i.govde : '') : zorunluMetin(i.govde, 'govde');
   if (!Array.isArray(i.kontroller)) throw new DepoHatasi('"kontroller" bir dizi olmalıdır.');
   const kontroller = i.kontroller.map((k, n) => kontrolDogrula(k, `${n + 1}.`, false));
   const tabloSecimleri = tabloSecimleriniDogrula(i.tabloSecimleri);
   const basliklar = basliklariDogrula(i.basliklar);
-  const { tabloSecimleri: _eski, basliklar: _b, ...kalan } = i;
-  return { ...kalan, operasyon, govde, kontroller, ...(tabloSecimleri ? { tabloSecimleri } : {}), ...(basliklar ? { basliklar } : {}) };
+  const { tabloSecimleri: _eski, basliklar: _b, http: _h, ...kalan } = i;
+  return { ...kalan, operasyon, govde, kontroller, ...(tabloSecimleri ? { tabloSecimleri } : {}), ...(basliklar ? { basliklar } : {}), ...(http ? { http } : {}) };
+}
+
+export const HTTP_METOTLARI = /** @type {const} */ (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
+/**
+ * REST isteği tanımı: metot (listeden), göreli yol (boş, "/" ya da "?" ile başlar; boşluk / satır sonu yok), içerik türü (tek satır).
+ * @param {unknown} v @returns {ServisHttpTanimi | undefined}
+ */
+function httpTanimiDogrula(v) {
+  if (v === undefined || v === null) return undefined;
+  if (typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"http" bir nesne olmalıdır.');
+  const o = /** @type {Record<string, unknown>} */ (v);
+  const metot = secenek(typeof o.metot === 'string' ? o.metot.toUpperCase() : o.metot, HTTP_METOTLARI, 'http.metot');
+  const yol = typeof o.yol === 'string' ? o.yol.trim() : '';
+  if (yol && (!/^[/?]/.test(yol) || /\s/.test(yol.replace(/\$\{[^}]*\}/g, '')) || yol.length > 2000)) {
+    throw new DepoHatasi('"http.yol" "/" ya da "?" ile başlamalı, ${…} dışında boşluk içermemeli (en çok 2000 karakter).');
+  }
+  const icerikTuru = typeof o.icerikTuru === 'string' ? o.icerikTuru.trim() : '';
+  if (icerikTuru && (icerikTuru.length > 200 || /[\r\n]/.test(icerikTuru))) throw new DepoHatasi('"http.icerikTuru" geçersiz.');
+  return { metot, yol, ...(icerikTuru ? { icerikTuru } : {}) };
 }
 
 /** İstek gövdesi / SOAP başlıkları koşucunun: senaryoda değiştirilemez. */
@@ -459,7 +489,9 @@ export const TOKEN_YENILEME = /** @type {const} */ (['suresiDolunca', 'herIstekt
 
 /**
  * @typedef {{ ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }} AkisOkumaTanimi
- * @typedef {{ id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean }} AkisAdimi
+ * @typedef {{ id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon'; sql?: any;
+ *   operasyon?: string; baglar?: Record<string, string> }} AkisAdimi
+ *   tur 'sql': SQL sorgusu adımı (servisId / senaryoId yok; sql: sql-adimi.mjs SqlTanimi).
  * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }} ServisAkisIcerigi
  *   tokenYenileme (oturum akışı): süresiDolunca (varsayılan: değer ömür boyunca koşular arasında yeniden kullanılır) ·
  *   herIstekte (her senaryo çalıştırmasında oturum akışı yeniden koşulur).
@@ -482,11 +514,21 @@ export function akisIceriginiDogrula(icerik, tur) {
     const yer = `${n + 1}. adım`;
     const id = typeof a.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(a.id) && !kimlikler.has(a.id) ? a.id : `adim${n + 1}`;
     kimlikler.add(id);
+    // SQL adımı (sql/sql-adimi.mjs): servis / senaryo yok; sorgudan okunan değerler tanımın okumalarında (sql.okumalar).
+    if (a.tur === 'sql') {
+      const d = sqlTanimiDogrula(a.sql);
+      if (d.hatalar.length) throw new DepoHatasi(`${yer} (SQL): ${d.hatalar.join(' ')}`);
+      return { id, ad: typeof a.ad === 'string' && a.ad.trim() ? a.ad.trim().slice(0, 100) : yer, tur: 'sql', sql: d.tanim, okumalar: [], ...(a.hataOlursaDevam === true ? { hataOlursaDevam: true } : {}) };
+    }
     const okumalar = a.okumalar === undefined ? [] : a.okumalar;
     if (!Array.isArray(okumalar) || okumalar.length > 20) throw new DepoHatasi(`${yer}: "okumalar" en çok 20 öğelik bir dizi olmalıdır.`);
+    // Operasyon adımı (akis-senaryo-icerigi.mjs): servisin bir operasyonu; alan değerleri akış senaryosunda, bağlar burada.
+    const opMi = a.tur === 'operasyon';
     return {
       id, ad: typeof a.ad === 'string' && a.ad.trim() ? a.ad.trim().slice(0, 100) : yer,
-      servisId: kimlik(a.servisId, `${yer} servisId`), senaryoId: kimlik(a.senaryoId, `${yer} senaryoId`),
+      ...(opMi
+        ? { tur: 'operasyon', servisId: kimlik(a.servisId, `${yer} servisId`), operasyon: zorunluMetin(a.operasyon, `${yer} operasyon`), baglar: baglariDogrula(a.baglar, yer, DepoHatasi) }
+        : { servisId: kimlik(a.servisId, `${yer} servisId`), senaryoId: kimlik(a.senaryoId, `${yer} senaryoId`) }),
       okumalar: okumalar.map((y, k) => {
         const o = /** @type {Record<string, unknown>} */ (y && typeof y === 'object' ? y : {});
         const ad = typeof o.ad === 'string' ? o.ad.trim() : '';
@@ -500,7 +542,7 @@ export function akisIceriginiDogrula(icerik, tur) {
   });
   const omur = i.omurSaniye === undefined || i.omurSaniye === null || i.omurSaniye === '' ? undefined : Number(i.omurSaniye);
   if (omur !== undefined && (!Number.isInteger(omur) || omur < 30 || omur > 86_400)) throw new DepoHatasi('"omurSaniye" 30 ile 86400 arasında tam sayı olmalıdır.');
-  if (tur === 'oturum' && !adimlar.some((a) => a.okumalar.length)) throw new DepoHatasi('Oturum akışı en az bir değer okumalıdır (ör. Token).');
+  if (tur === 'oturum' && !adimlar.some((a) => a.okumalar.length || a.sql?.okumalar?.length)) throw new DepoHatasi('Oturum akışı en az bir değer okumalıdır (ör. Token).');
   return {
     adimlar, ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN, tokenYenileme: secenek(i.tokenYenileme ?? 'suresiDolunca', TOKEN_YENILEME, 'tokenYenileme') } : {}),
     ...(typeof i.aciklama === 'string' && i.aciklama.trim() ? { aciklama: i.aciklama.trim().slice(0, 2000) } : {})

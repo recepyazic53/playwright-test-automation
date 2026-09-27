@@ -4,10 +4,13 @@ import type { Veritabani } from '../veritabani/baglanti.mjs';
 export declare const SERVIS_TURLERI: readonly ['soap', 'rest'];
 export declare const SENARYO_KAPSAMLARI: readonly ['test', 'canli', 'ikisi'];
 export declare const KOSU_DURUMLARI: readonly ['basarili', 'basarisiz', 'hata'];
-export declare const KONTROL_TURLERI: readonly ['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'veya'];
+export declare const KONTROL_TURLERI: readonly ['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya'];
 
+export declare const HTTP_METOTLARI: readonly ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 export type ServisKapsami = 'test' | 'canli' | 'ikisi';
-export interface ServisOperasyonu { ad: string; eylem?: string }
+export interface ServisOperasyonu { ad: string; eylem?: string; metot?: string; yol?: string }
+/** REST isteğinin tanımı: metot, servis yoluna göre göreli yol (sorgu dahil; ${…} parametreleri olabilir), gövdenin içerik türü. */
+export interface ServisHttpTanimi { metot: string; yol: string; icerikTuru?: string }
 export interface ServisAyarlari {
   yol?: string; tabanlar?: Record<string, string>; wsdlYolu?: string; soapSurumu?: '1.1' | '1.2'; operasyonlar?: ServisOperasyonu[];
   adresler?: Record<string, string>; yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean;
@@ -17,19 +20,23 @@ export interface ServisAyarlari {
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
   alanListeleri?: Record<string, Record<string, string>>;
-  alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
+  /** Alan → tablo sütunu ({ tablo, sutun, etiket?, bicim? }) ya da hesaplama kuralı ({ kural }). */
+  alanBaglari?: Record<string, Record<string, { tablo?: string; sutun?: string; etiket?: string; bicim?: string; kural?: string }>>;
   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string;
+  /** Adlandırılmış taban adres: aynı adlı servislerin taban adresleri hep aynıdır (taban-adresleri.mjs). */
+  tabanGrubu?: string;
 }
 export interface Servis {
   id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string;
 }
 export interface ServisKontrolu {
-  tur: (typeof KONTROL_TURLERI)[number]; deger?: string; xpath?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[];
+  tur: (typeof KONTROL_TURLERI)[number]; deger?: string; xpath?: string; yol?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[];
 }
 export interface ServisSenaryoIcerigi {
   operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>; basliklar?: Record<string, string>;
+  http?: ServisHttpTanimi;
 }
 export interface ServisSenaryosu {
   id: string; projeId: string; servisId: string; baslik: string; kapsam: ServisKapsami; kosuyaDahil: boolean;
@@ -74,7 +81,8 @@ export declare const OKUMA_KAYNAKLARI: readonly ['xml', 'json', 'baslik'];
 export declare const EN_COK_AKIS_ADIMI: number;
 export declare const VARSAYILAN_OTURUM_OMRU_SN: number;
 export interface AkisOkumaTanimi { ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
-export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean }
+/** tur "operasyon": servisin operasyonu (senaryoId yok; baglar: alan yolu → ${akis:Ad}); tur "sql": SQL sorgusu. */
+export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon'; operasyon?: string; baglar?: Record<string, string>; sql?: import('../sql/sql-adimi.mjs').SqlTanimi }
 export declare const TOKEN_YENILEME: readonly ['suresiDolunca', 'herIstekte'];
 export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }
 export interface ServisAkisi {
