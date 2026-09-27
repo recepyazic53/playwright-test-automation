@@ -1,17 +1,17 @@
 // SERVİS TESTLERİ — HTTP uçları (sunucu-platform.mjs GET_UCLARI / POST_UCLARI'na eklenir). Belirteç denetimi, gövde
 // ayrıştırma ve kasa kilidi sunucuda yapılır; burada yalnız girdi doğrulama ve proje sahipliği denetimi vardır.
 // Giriş bilgisi DEĞERLERİ hiçbir yanıtta dönmez (yalnız alan adları).
-import { DepoHatasi } from '../veritabani/depo.mjs';
+import { DepoHatasi, ortamGetir, ortamlariListele } from '../veritabani/depo.mjs';
 import {
   akisIceriginiDogrula, servisAkisiGetir, servisAkisiKaydet, servisAkisiSil, servisAkislariniListele, servisAkisKosulariniListele, servisAkisKosusuGetir,
   servisGetir, servisKimligiKaydet, servisKimligiSil, servisKimlikOzeti, servisKosulariniListele, servisKosusuGetir, servisleriListele,
-  servisSenaryolariniListele, servisSenaryosuGetir,
+  servisOrtamdaKosuyaDahil, servisSenaryolariniListele, servisSenaryosuGetir,
   servisSenaryosuKaydet, servisSenaryosuSil, servisSil
 } from './servis-deposu.mjs';
 import {
-  erisimKontrolu, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle, postmanAktar, postmanOnizle
+  erisimKontrolu, eskiParametreleriDonustur, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle, postmanAktar, postmanOnizle
 } from './servis-islemleri.mjs';
-import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu } from './servis-isleri.mjs';
+import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu, servisSenaryoAtlamaNedeni } from './servis-isleri.mjs';
 import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
@@ -78,13 +78,31 @@ export const SERVIS_GET_UCLARI = [
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const s = servisAl(db, projeId, q.get('id'));
     // Senaryo başına son sonuç (tabloda "Son sonuç"): koşular en yeniden eskiye gelir, ilk görülen alınır.
-    /** @type {Record<string, { durum: string; baslangic: string; kosuId: string }>} */
+    // ORTAM BAŞINA son sonuç da (tabloda nokta + ortam adı + tarih); eski (ortamsız) koşular yalnız genel son sonuçta görünür.
+    /** @type {Record<string, { durum: string; baslangic: string; kosuId: string; ortamId: string | null }>} */
     const sonSonuclar = {};
+    /** @type {Record<string, Record<string, any>>} */
+    const ortamSonuclari = {};
     for (const k of servisKosulariniListele(db, { servisId: s.id, sinir: 1000 })) {
-      if (k.senaryoId && !sonSonuclar[k.senaryoId]) sonSonuclar[k.senaryoId] = { durum: k.durum, baslangic: k.baslangic, kosuId: k.id };
+      if (!k.senaryoId) continue;
+      const kayit = { durum: k.durum, baslangic: k.baslangic, kosuId: k.id, ortamId: k.ortamId };
+      if (!sonSonuclar[k.senaryoId]) sonSonuclar[k.senaryoId] = kayit;
+      if (k.ortamId) {
+        const o = (ortamSonuclari[k.senaryoId] ??= {});
+        if (!o[k.ortamId]) o[k.ortamId] = kayit;
+      }
     }
     // Akış senaryoları: akış adı, akışı bu servisten geçen başka servislerin akış senaryoları ve son sonuçları (akis-senaryosu.mjs).
-    return { servis: servisOzeti(db, s), ...servisSenaryoGorunumu(db, projeId, s.id, servisSenaryolariniListele(db, s.id), sonSonuclar) };
+    const g = servisSenaryoGorunumu(db, projeId, s.id, servisSenaryolariniListele(db, s.id), sonSonuclar, ortamSonuclari);
+    // Satır başına ortam kayıtları (ekran senaryolarındaki gibi): { ortamId, tanimli, neden, kosuyaDahil, sonSonuc }.
+    const ortamlar = ortamlariListele(db, projeId);
+    for (const x of g.senaryolar) {
+      x.ortamlar = ortamlar.map((o) => {
+        const neden = servisSenaryoAtlamaNedeni(db, s, x, o);
+        return { ortamId: o.id, tanimli: !neden, neden, kosuyaDahil: !neden && servisOrtamdaKosuyaDahil(x, o.id), sonSonuc: g.ortamSonuclari[x.id]?.[o.id] ?? null };
+      });
+    }
+    return { servis: servisOzeti(db, s), senaryolar: g.senaryolar, sonSonuclar: g.sonSonuclar };
   }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -185,18 +203,39 @@ export const SERVIS_POST_UCLARI = [
     });
     return { id };
   }],
-  // Koşuya dahil / hariç (toplu): senaryoların yalnız bu işareti değişir.
+  // Koşuya dahil / hariç (toplu): senaryoların yalnız bu işareti değişir. ortamId verilirse YALNIZ o ortamda (ekran
+  // senaryolarındaki gibi ortam başına; diğer ortamların o anki değeri ezme olarak yazılır, genel değer "en az bir ortamda koşuda"
+  // olur); verilmezse tüm ortamlarda (ortam ezmeleri silinir). Senaryonun o ortamda koşmadığı (kapsam / tanım) durumda atlanır.
   ['/platform/servis/senaryo/kosuya-dahil', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (!Array.isArray(g.idler) || !g.idler.length) throw new DepoHatasi('"idler" boş olamaz.');
     if (typeof g.dahil !== 'boolean') throw new DepoHatasi('"dahil" true ya da false olmalıdır.');
+    const ortam = secimli(g.ortamId) ? ortamGetir(db, kimlik(g.ortamId, 'ortamId')) : null;
+    if (g.ortamId && (!ortam || ortam.projeId !== projeId)) throw new DepoHatasi('Ortam bulunamadı.');
     const senaryolar = g.idler.map((/** @type {unknown} */ id) => senaryoAl(db, projeId, id));
+    const ortamlar = ortam ? ortamlariListele(db, projeId) : [];
+    let guncellenen = 0;
     db.islem(() => {
       for (const x of senaryolar) {
-        servisSenaryosuKaydet(db, { id: x.id, projeId, servisId: x.servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: g.dahil, icerik: x.icerik });
+        const { kosuOrtamlari: _eski, ...icerik } = /** @type {Record<string, unknown>} */ (x.icerik);
+        if (!ortam) {
+          servisSenaryosuKaydet(db, { id: x.id, projeId, servisId: x.servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: g.dahil, icerik: { ...icerik, kosuOrtamlari: null } });
+          guncellenen++;
+          continue;
+        }
+        const servis = servisGetir(db, x.servisId);
+        if (!servis) continue;
+        const tanimlilar = ortamlar.filter((o) => !servisSenaryoAtlamaNedeni(db, servis, x, o));
+        if (!tanimlilar.some((o) => o.id === ortam.id) || servisOrtamdaKosuyaDahil(x, ortam.id) === g.dahil) continue;
+        /** @type {Record<string, boolean>} */
+        const yeni = {};
+        for (const o of tanimlilar) yeni[o.id] = o.id === ortam.id ? g.dahil : servisOrtamdaKosuyaDahil(x, o.id);
+        const genel = Object.values(yeni).some(Boolean);
+        servisSenaryosuKaydet(db, { id: x.id, projeId, servisId: x.servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: genel, icerik: { ...icerik, kosuOrtamlari: yeni } });
+        guncellenen++;
       }
     });
-    return { guncellenen: senaryolar.length };
+    return { guncellenen };
   }],
   ['/platform/servis/senaryo/sil', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
@@ -344,11 +383,23 @@ export const SERVIS_POST_UCLARI = [
         xml: g.xml, takim: metin(g.takim), durum: metin(g.durum), servis: metin(g.servis),
         erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined,
         ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
-        girisEkle: g.girisEkle === true
+        girisEkle: g.girisEkle === true,
+        // Kullanıcının önizlemedeki seçimleri (yeni bağlama modeli; soapui-aktarimi.mjs).
+        ...(g.ozellikler !== undefined ? { ozellikler: metinNesnesi(g.ozellikler) } : {}),
+        ...(typeof g.tabloAdi === 'string' ? { tabloAdi: g.tabloAdi } : {}),
+        ...(g.degerOrtami ? { degerOrtami: kimlik(g.degerOrtami, 'degerOrtami') } : {}),
+        ...(Array.isArray(g.gizliler) ? { gizliler: g.gizliler.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+        ...(Array.isArray(g.sifreliKaydet) ? { sifreliKaydet: g.sifreliKaydet.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+        ...(Array.isArray(g.baglar) ? { baglar: g.baglar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {})
       });
     } catch (e) {
       if (e instanceof DepoHatasi) throw e;
       throw new DepoHatasi(/** @type {Error} */ (e).message);
     }
+  }],
+  // Eski parametre eşlemesi (veriProfilleri) → yeni bağlama modeli: onay yoksa yalnız plan; onayla dönüştürür.
+  ['/platform/servis/eski-parametreler/donustur', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return eskiParametreleriDonustur(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, onay: g.onay === true });
   }]
 ];

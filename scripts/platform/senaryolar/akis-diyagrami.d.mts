@@ -5,7 +5,8 @@ export declare const BAGLAM_ADIMI_ONEKI: string;
 
 export interface DiyagramAdimSonucu { durum: string; sureMs: number | null; hataMesaji: string | null }
 /** zorunlu: akışta zorunlu (model: mutlakaGorunmeli) — koşuda görünmezse test başarısız. */
-export interface DiyagramAlani { id: string; etiket: string; kosul: string | null; buSenaryoda: boolean | null; zorunlu: boolean }
+/** deger: senaryodaki değerin kısa okunuşu (yalnız seçeneklerde degerler verilince; hassas değer maskeli gelir). */
+export interface DiyagramAlani { id: string; etiket: string; kosul: string | null; buSenaryoda: boolean | null; zorunlu: boolean; deger?: string | null }
 export interface DiyagramAdimi {
   id: string;
   no: number;
@@ -13,6 +14,8 @@ export interface DiyagramAdimi {
   istegeBagli: boolean;
   kapsamEtiketi: string | null;
   kosulur: boolean | null;
+  /** Koşulmuyorsa (kosulur false) nedeni; değilse null. */
+  neden: string | null;
   altAkis: string | null;
   /** SQL sorgusu adımının kısa açıklaması (yoksa null). */
   sqlOzeti: string | null;
@@ -38,8 +41,16 @@ export interface DiyagramSecenekleri {
   sonuc?: { durum: string; adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }> } | null;
   /** Senaryonun giriş seçimi (senaryo-girisi.mjs); yoksa ortamın girişiyle. */
   giris?: { kip: string; profil?: string | null } | null;
+  /** Alan kimliği → senaryodaki değerin kısa okunuşu (senaryo formu verir; diyagram kutusunda gösterilir). */
+  degerler?: Record<string, string | null> | null;
 }
 
 export declare function ifadeMetni(ifade: unknown, model: object): string;
 export declare function gorunurlukMetni(gorunurluk: unknown, model: object): string | null;
 export declare function akisDiyagrami(model: object, s?: DiyagramSecenekleri): AkisDiyagrami;
+export declare const GIRIS_DUGUMU: 'giris';
+export declare const SONUC_DUGUMU: 'sonuc';
+export declare function adimDugumu(adimId: string): string;
+/** Form kontrol anahtarının diyagram düğümleri (sema: formSemasiOlustur sonucu). */
+export declare function kontrolDugumleri(anahtar: string, sema: object): string[];
+export declare function hataDugumleri(alanHatalari: Record<string, string[]>, sema: object): Record<string, string[]>;

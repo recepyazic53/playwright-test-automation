@@ -56,18 +56,7 @@ export interface GirisTasimaPlani {
 }
 export declare function girisProfiliniTestVerisineTasi(vt: Veritabani, projeId: string, girdi: { ad: string; onay?: boolean }):
   { onizleme: GirisTasimaPlani } | (GirisTasimaPlani & { tasindi: true; turId: string; profilId: string });
-export declare function soapuiOnizle(vt: Veritabani, projeId: string, xml: string, secim?: { takim?: string; durum?: string }): {
-  proje: string;
-  durumlar?: { takim: string; durum: string; istekSayisi: number; arayuzler: string[]; kimlikParametreleri: string[]; veriParametreleri: string[]; uyariSayisi: number }[];
-  durum?: { takim: string; ad: string; uyarilar: string[] };
-  kimlikParametreleri?: string[]; tarihKurallari?: Record<string, string>;
-  veriParametreleri?: { ad: string; esleme: { turAd: string; alan: string; rol: string } | null }[];
-  servisler?: (Omit<ServisTaslagi, 'senaryolar'> & { senaryolar: (Omit<ServisTaslagi['senaryolar'][number], 'govde'> & { govdeUzunlugu: number })[] })[];
-};
-export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: {
-  xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: ServisKapsami;
-  girisEkle?: boolean; yapan?: string;
-}): { servisId: string; yeniServis: boolean; eklenen: number; atlanan: string[]; baglananAlan: number; girisSatiriEklendi: boolean; eksikSatirlar: string[]; eslenmemisParametreler: string[] };
+export { eskiParametreleriDonustur, soapuiAktar, soapuiOnizle } from './soapui-aktarimi.mjs';
 export declare function postmanOnizle(vt: Veritabani, projeId: string, girdi: { koleksiyon: string; ortam?: string }):
   ReturnType<typeof import('./postman-ice-aktarma.mjs').postmanOzeti> & {
     klasorler: Array<ReturnType<typeof import('./postman-ice-aktarma.mjs').postmanOzeti>['klasorler'][number] & { mevcutServis: { id: string; ad: string; tur: 'soap' | 'rest' } | null }>;

@@ -10,7 +10,7 @@
 // Giriş bilgisi değerleri arayüze hiç gelmez; kullanıcı yazdığında sunucuya gider, kasada şifreli durur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste } from './kosu-paneli.js';
+import { kosuOnayi, onayIste, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
 import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-sihirbazi.js';
@@ -40,13 +40,17 @@ const iki = (n) => String(n).padStart(2, '0');
 const kisaTarih = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '—' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
 /** Senaryolar sekmesinin oturum boyunca korunan durumu (filtreler, seçim); servis değişince sıfırlanır. */
 const liste = { servisId: null, arama: '', kosuda: '', operasyon: '', son: '', secim: new Set() };
+// Ortam yalnız koşu diyaloğunda seçilir (başlıkta ortam segmenti yok). Diyalog son seçilen ortamla açılır (yalnız bu tarayıcıda
+// hatırlanır); yoksa varsayılan TEST ortamı.
 const ORTAM_ANAHTARI = 'platform.servisOrtami';
-/** Senaryoların çalıştırılacağı ortam: son seçilen, yoksa varsayılan TEST ortamı. */
-function calismaOrtami(ortamlar) {
+/** @param {any[]} ortamlar */
+function sonOrtam(ortamlar) {
   let id = null;
   try { id = localStorage.getItem(ORTAM_ANAHTARI); } catch { /* yok sayılır */ }
   return ortamlar.find((o) => o.id === id) || ortamlar.find((o) => !o.canli && o.varsayilan) || ortamlar.find((o) => !o.canli) || ortamlar[0] || null;
 }
+/** @param {{ id: string }} o */
+const ortamiHatirla = (o) => { try { localStorage.setItem(ORTAM_ANAHTARI, o.id); } catch { /* yok sayılır */ } };
 
 /** Ortamlar (canlı işaretiyle). */
 async function ortamlariAl(proje) {
@@ -161,69 +165,193 @@ function soapuiAktarimi(kap, proje, ortamlar) {
       if (!onizleme.durumlar.length) { yerlestir(sonuc, bosDurum('Dosyada test durumu yok.', 'SoapUI projesinde en az bir TestCase olmalı.', { ikon: 'dosya' })); return; }
       yerlestir(sonuc, h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), `${onizleme.proje || 'SoapUI projesi'} — test durumları`)),
         h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
-          h('thead', {}, h('tr', {}, ['Takım', 'Test durumu', 'İstek', 'Servis (arayüz)', 'Giriş bilgisi', 'Test verisi parametresi', 'Uyarı', ''].map((x) => h('th', {}, x)))),
+          h('thead', {}, h('tr', {}, ['Takım', 'Test durumu', 'İstek', 'Servis (arayüz)', 'Giriş bilgisi', 'Diğer özellik', 'Uyarı', ''].map((x) => h('th', {}, x)))),
           h('tbody', {}, onizleme.durumlar.map((d) => h('tr', {},
             h('td', {}, d.takim), h('td', {}, h('b', {}, d.durum)), h('td', {}, String(d.istekSayisi)), h('td', {}, d.arayuzler.join(', ')),
             h('td', {}, d.kimlikParametreleri.join(', ') || '—'), h('td', {}, d.veriParametreleri.length ? String(d.veriParametreleri.length) : '—'),
             h('td', {}, d.uyariSayisi ? rozet(String(d.uyariSayisi), 'durdu') : '—'),
-            h('td', {}, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => durumAyrintisi(sonuc, proje, ortamlar, xml, d) }, 'Seç')))))))));
+            h('td', {}, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => durumAyrintisi(sonuc, proje, ortamlar, xml, d).catch((e) => mesaj.goster(e.message)) }, 'Seç')))))))));
     } catch (e) { mesaj.goster(e.message); }
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'SoapUI proje dosyası'), mesaj.kutu,
-    h('p', { class: 'soluk kucuk' }, 'Dosya yalnızca okunur; hiçbir servise istek atılmaz. Servisin alanları test verisi tablolarına bağlanır (başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun); gövdedeki giriş parametreleri tablo sütunlarına çevrilir, dosyadaki kanal / kullanıcı senaryonun tablo seçimi olur. Tarihler servis tarih kurallarına gider.'),
+    h('p', { class: 'soluk kucuk' }, 'Dosya yalnızca okunur; hiçbir servise istek atılmaz. Proje, ortam, takım ve test durumu özellikleri (${#Project#…}, ${#TestCase#…}) bir test verisi tablosunun sütunları olur ya da var olan bir sütuna bağlanır; Groovy tarih betikleri hesaplama kuralı olarak önerilir. İstekte özelliğe başvuran alanlar servisin alan bağları olur. Test durumunu seçince neyin nereye yazılacağını görür ve seçersiniz; gizli değerler yalnız siz onaylarsanız şifreli yazılır.'),
     alan('Dosya', dosya)), sonuc);
 }
 
+/** Özellik hedeflerinin görünen adları (önizlemedeki "Nereden dolsun"). */
+const OZELLIK_HEDEFI = { tablo: 'Tabloya (yeni sütun)', bag: 'Bağlı sütun', kural: 'Hesaplama kuralı', birak: 'Gövdede bırak' };
+const OZELLIK_KAYNAGI = { Proje: 'proje', Ortam: 'ortam', 'Takım': 'takım', 'Test durumu': 'test durumu', Groovy: 'Groovy betiği', 'Gövde': 'istekte düz yazılı' };
+
+/**
+ * SoapUI test durumu önizlemesi (yeni bağlama modeli): servis seçimi, senaryolar, özellikler (değer, kaynak, nereden dolsun, gizli,
+ * şifreli kaydet), "Test verisine yazılacaklar", "Hesaplama kuralı önerileri" ve "Kurulacak bağlar" (kullanıcı seçer). Karar
+ * kullanıcının: varsayılanlar yalnız öneridir; onaydan (Aktar) önce hiçbir şey yazılmaz.
+ */
 async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
   const { onizleme: o } = await api('/platform/servis/soapui/onizle', { govde: { projeId: proje.id, xml, takim: d.takim, durum: d.durum } });
-  const { servisler: mevcut } = await api(`/platform/servisler?projeId=${q(proje.id)}`);
+  if (!o.servisler.length) { yerlestir(kap, bosDurum('Bu test durumunda istek yok.', 'Aktarılacak servis bulunamadı.', { ikon: 'dosya' })); return; }
   const servisSec = h('select', { 'aria-label': 'Aktarılacak servis' }, o.servisler.map((s) => h('option', { value: s.anahtar }, `${s.ad} — ${s.senaryolar.length} senaryo (${s.yol})`)));
-  const girisEkle = h('input', { type: 'checkbox', id: yeniKimlik('giris'), checked: o.kimlikParametreleri.length > 0, disabled: !o.kimlikParametreleri.length });
+  const girisEkle = h('input', { type: 'checkbox', id: yeniKimlik('giris') });
   const kapsam = h('select', {}, Object.entries(KAPSAM).map(([k, m]) => h('option', { value: k }, m)));
+  const tabloAdi = h('input', { type: 'text', autocomplete: 'off', maxlength: '60', 'aria-label': 'Test verisi tablosunun adı' });
+  const degerOrtami = h('select', { 'aria-label': 'Değerler hangi ortam için' }, h('option', { value: '' }, 'Tüm ortamlar'), ortamlar.map((x) => h('option', { value: x.id }, ortamEtiketi(x))));
   const mesaj = mesajKutusu();
   const aktar = h('button', { type: 'button', class: 'birincil' }, ikon('yukle'), 'Aktar');
   const seciliTaslak = () => o.servisler.find((s) => s.anahtar === servisSec.value);
-  const varMi = () => mevcut.some((m) => m.anahtar === servisSec.value);
+  const varMi = () => Boolean(seciliTaslak()?.mevcutServis);
+  /** Servis başına kullanıcı seçimleri (servis değiştirince korunur). */
+  const secimler = new Map();
+  const secim = () => {
+    const t = seciliTaslak();
+    if (!secimler.has(t.anahtar)) {
+      secimler.set(t.anahtar, {
+        hedef: new Map(t.plan.ozellikler.map((x) => [x.ad, x.varsayilan])),
+        gizli: new Set(t.plan.ozellikler.filter((x) => x.gizli).map((x) => x.ad)),
+        sifreli: new Set(),
+        baglar: new Set(t.plan.alanlar.filter((a) => !a.mevcut).map((a) => `${a.operasyon}|${a.yol}`)),
+        tabloAdi: t.plan.tabloAdi
+      });
+    }
+    return secimler.get(t.anahtar);
+  };
   let erisim = null;
   const kontrolKap = h('div', {});
   const senaryoListesi = h('div', {});
+  const ozellikKap = h('div', {});
+  const ozetKap = h('div', { 'aria-live': 'polite' });
+
+  /** Özelliğin hedef metni ("SoapUI Takım.SUBE", "kural: BEGIN_DATE", "gövdede ${AD}"). */
+  const hedefMetni = (x, sc) => {
+    const h0 = sc.hedef.get(x.ad);
+    if (h0 === 'tablo') return `${tabloAdi.value.trim() || sc.tabloAdi}.${x.ad}`;
+    if (h0 === 'bag' && x.bag) return `${x.bag.tabloAd}${x.bag.etiket ? `[${x.bag.etiket}]` : ''}.${x.bag.sutun}`;
+    if (h0 === 'kural') return `kural: ${x.ad}`;
+    return `gövdede \${${x.ad}}`;
+  };
+
+  const ozetCiz = () => {
+    const t = seciliTaslak();
+    const sc = secim();
+    const ozellik = (ad) => t.plan.ozellikler.find((x) => x.ad === ad);
+    const tabloya = t.plan.ozellikler.filter((x) => sc.hedef.get(x.ad) === 'tablo');
+    const kurallar = t.plan.ozellikler.filter((x) => sc.hedef.get(x.ad) === 'kural' && x.tarih && !x.mevcutKural);
+    const tabloVar = (o.tablolar || []).some((a) => a.toLocaleLowerCase('tr') === (tabloAdi.value.trim() || sc.tabloAdi).toLocaleLowerCase('tr'));
+    const bagSatiri = (a) => {
+      const anahtar = `${a.operasyon}|${a.yol}`;
+      const x = ozellik(a.ozellik);
+      const birak = !x || sc.hedef.get(a.ozellik) === 'birak';
+      const kutu = h('input', { type: 'checkbox', checked: !birak && sc.baglar.has(anahtar), disabled: birak, 'aria-label': `Bağ kur: ${a.operasyon} ${a.yol}` });
+      kutu.addEventListener('change', () => { if (kutu.checked) sc.baglar.add(anahtar); else sc.baglar.delete(anahtar); });
+      return h('li', {}, h('label', { class: 'secenek' }, kutu,
+        h('span', { class: 'bag-yolu' }, h('code', { class: 'duz' }, `${a.operasyon} · ${a.yol}`)), h('span', { 'aria-hidden': 'true' }, ' → '),
+        h('span', { class: 'bag-hedefi' }, birak ? h('span', { class: 'soluk' }, 'bağ yok (gövdede bırakıldı)') : hedefMetni(x, sc))));
+    };
+    const yeniBaglar = t.plan.alanlar.filter((a) => !a.mevcut);
+    const mevcutBaglar = t.plan.alanlar.filter((a) => a.mevcut);
+    yerlestir(ozetKap,
+      h('section', { class: 'kart soapui-bolumu', 'aria-label': 'Test verisine yazılacaklar' },
+        h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Test verisine yazılacaklar')),
+        tabloya.length ? [
+          h('div', { class: 'satir-duzen' },
+            alan('Tablo', tabloAdi, { yardim: tabloVar ? 'Bu adla bir tablo var: eksik sütunlar eklenir, değerler seçilen ortamın satırına yazılır.' : 'Yeni test verisi tablosu oluşturulur.' }),
+            alan('Değerler hangi ortam için', degerOrtami)),
+          h('ul', { class: 'onay-listesi soapui-sutunlari' }, tabloya.map((x) => {
+            const gizli = sc.gizli.has(x.ad);
+            const deger = gizli ? (x.tanimli ? (sc.sifreli.has(x.ad) ? 'değer şifreli yazılır' : 'değer yazılmaz (boş kalır)') : 'değer yok')
+              : x.deger !== null && x.deger !== '' ? x.deger : 'değer yok';
+            return h('li', {}, h('code', { class: 'duz' }, x.ad), gizli ? ' (gizli sütun)' : '', ': ', h('span', { class: 'soluk' }, deger));
+          }))
+        ] : h('p', { class: 'soluk kucuk' }, 'Tabloya yazılacak özellik yok (hepsi bağlı sütuna, kurala gidiyor ya da gövdede kalıyor).')),
+      kurallar.length ? h('section', { class: 'kart soapui-bolumu', 'aria-label': 'Hesaplama kuralı önerileri' },
+        h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('saat'), 'Hesaplama kuralı önerileri')),
+        h('p', { class: 'soluk kucuk' }, 'Groovy tarih betiğinden çıkarıldı; servisin hesaplama kurallarına eklenir (aynı adlı kural varsa o korunur). İstemiyorsanız özelliğin "Nereden dolsun" seçimini değiştirin.'),
+        h('ul', { class: 'onay-listesi' }, kurallar.map((x) => h('li', {}, h('code', { class: 'duz' }, x.ad), ' = ', x.tarih, h('span', { class: 'soluk' }, ` (${kuralOzeti(x.tarih)})`))))) : null,
+      h('section', { class: 'kart soapui-bolumu', 'aria-label': 'Kurulacak bağlar' },
+        h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('isaret'), 'Kurulacak bağlar')),
+        h('p', { class: 'soluk kucuk' }, 'Metot alanı → tablo sütunu / hesaplama kuralı. Yeni senaryolar bu alanları buradan doldurur; işaretini kaldırdığınız bağ kurulmaz (senaryo gövdesi yine çevrilir).'),
+        yeniBaglar.length ? h('ul', { class: 'soapui-bag-listesi' }, yeniBaglar.map(bagSatiri)) : h('p', { class: 'soluk kucuk' }, 'Kurulacak yeni bağ yok.'),
+        mevcutBaglar.length ? h('details', {}, h('summary', { class: 'kucuk' }, `${mevcutBaglar.length} alanın bağı zaten var (korunur)`),
+          h('ul', { class: 'onay-listesi' }, mevcutBaglar.map((a) => h('li', {}, `${a.operasyon} · ${a.yol} → ${a.mevcut}`)))) : null));
+  };
+
+  const ozellikCiz = () => {
+    const t = seciliTaslak();
+    const sc = secim();
+    tabloAdi.value = sc.tabloAdi;
+    const satir = (x) => {
+      const nereden = h('select', { 'aria-label': `${x.ad} nereden dolsun` },
+        h('option', { value: 'tablo', selected: sc.hedef.get(x.ad) === 'tablo' }, OZELLIK_HEDEFI.tablo),
+        x.bag ? h('option', { value: 'bag', selected: sc.hedef.get(x.ad) === 'bag' }, `${OZELLIK_HEDEFI.bag}: ${x.bag.tabloAd}${x.bag.etiket ? `[${x.bag.etiket}]` : ''}.${x.bag.sutun}`) : null,
+        x.tarih || x.mevcutKural ? h('option', { value: 'kural', selected: sc.hedef.get(x.ad) === 'kural' }, `${OZELLIK_HEDEFI.kural}${x.mevcutKural ? ' (serviste var)' : ''}: ${kuralOzeti(x.mevcutKural || x.tarih)}`) : null,
+        h('option', { value: 'birak', selected: sc.hedef.get(x.ad) === 'birak' }, `${OZELLIK_HEDEFI.birak} (\${${x.ad}})`));
+      const gizli = h('input', { type: 'checkbox', checked: sc.gizli.has(x.ad), 'aria-label': `${x.ad} gizli` });
+      const sifreli = h('input', { type: 'checkbox', checked: sc.sifreli.has(x.ad), 'aria-label': `${x.ad} değerini şifreli kaydet` });
+      const guncelle = () => {
+        const h0 = sc.hedef.get(x.ad);
+        gizli.disabled = h0 !== 'tablo';
+        // Şifreli kaydet: gizli değer tabloya (yeni sütun) ya da bağlı gizli sütuna (satır ekle ile) yazılacaksa; değer yoksa kapalı.
+        sifreli.disabled = !x.tanimli || !((h0 === 'tablo' && sc.gizli.has(x.ad)) || (h0 === 'bag' && x.bag && x.bag.gizli));
+        if (sifreli.disabled) { sifreli.checked = false; sc.sifreli.delete(x.ad); }
+      };
+      nereden.addEventListener('change', () => { sc.hedef.set(x.ad, nereden.value); guncelle(); ozetCiz(); });
+      gizli.addEventListener('change', () => { if (gizli.checked) sc.gizli.add(x.ad); else sc.gizli.delete(x.ad); guncelle(); ozetCiz(); });
+      sifreli.addEventListener('change', () => { if (sifreli.checked) sc.sifreli.add(x.ad); else sc.sifreli.delete(x.ad); ozetCiz(); });
+      guncelle();
+      return h('tr', {},
+        h('td', {}, h('code', { class: 'duz' }, x.ad),
+          x.eskiEsleme ? h('div', { class: 'soluk kucuk' }, `eski eşleme: ${x.eskiEsleme.turAd}.${x.eskiEsleme.alan} (${x.eskiEsleme.rol})`) : null),
+        h('td', { class: 'soapui-deger' }, x.gizli ? h('span', { class: 'soluk' }, x.tanimli ? 'gizli (gösterilmez)' : 'değer yok')
+          : x.tarih ? h('span', { class: 'soluk' }, kuralOzeti(x.tarih)) : x.deger ? h('code', { class: 'duz' }, x.deger) : h('span', { class: 'soluk' }, 'değer yok')),
+        h('td', {}, x.kaynak ? OZELLIK_KAYNAGI[x.kaynak] || x.kaynak : h('span', { class: 'soluk' }, 'tanımsız')),
+        h('td', { class: 'sayi' }, String(x.senaryoSayisi)),
+        h('td', {}, nereden), h('td', {}, gizli), h('td', {}, sifreli));
+    };
+    yerlestir(ozellikKap, h('fieldset', {}, h('legend', {}, `Özellikler (${t.plan.ozellikler.length})`),
+      t.plan.ozellikler.length ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu', 'aria-label': 'Özellikler' },
+        h('thead', {}, h('tr', {}, ['Ad', 'Değer', 'Kaynak', 'Senaryo', 'Nereden dolsun', 'Gizli', 'Şifreli kaydet'].map((x) => h('th', { scope: 'col' }, x)))),
+        h('tbody', {}, t.plan.ozellikler.map(satir)))) : h('p', { class: 'soluk' }, 'İsteklerde özellik başvurusu yok.'),
+      h('p', { class: 'soluk kucuk' }, '"Gizli" sütun şifreli saklanır ve raporlarda maskelenir. Gizli değer yalnız "Şifreli kaydet" işaretliyse yazılır; değilse boş kalır, koşudan önce tabloda doldurulur. "Gövdede bırak": ${AD} olduğu gibi kalır (koşuda çözülemezse senaryo nedeniyle durur).')));
+    ozetCiz();
+  };
+
   const kontrolCiz = () => {
     const t = seciliTaslak();
     erisim = null;
     aktar.disabled = !varMi();
     yerlestir(kontrolKap, varMi()
-      ? h('p', { class: 'soluk kucuk' }, ikon('onay'), ' Bu servis zaten var; senaryolar ona eklenir (aynı başlıklılar atlanır).')
+      ? h('p', { class: 'soluk kucuk' }, ikon('onay'), ' Bu servis zaten var; senaryolar ona eklenir (aynı başlıklılar atlanır), servisin var olan bağları değişmez.')
       : h('div', {}, h('p', { class: 'soluk kucuk' }, `Yeni servis: yol ${t.yol}. Kaydetmeden önce erişim kontrolü gerekir.`),
         erisimKontrolAlani(proje, ortamlar, () => ({ yol: t.yol }), (e) => { erisim = e; aktar.disabled = !e; })));
     yerlestir(senaryoListesi, h('details', {}, h('summary', {}, `${t.senaryolar.length} senaryo`),
       h('ul', { class: 'onay-listesi' }, t.senaryolar.map((x) => h('li', {}, x.baslik, ' ', h('span', { class: 'soluk kucuk' }, `(${x.operasyon}; ${x.kontroller.length} kontrol)`),
         x.uyarilar.length ? h('div', { class: 'soluk kucuk' }, ikon('uyari'), ' ', x.uyarilar.join(' ')) : null)))));
+    ozellikCiz();
   };
   servisSec.addEventListener('change', kontrolCiz);
+  tabloAdi.addEventListener('input', () => { secim().tabloAdi = tabloAdi.value; ozetCiz(); });
   aktar.addEventListener('click', async () => {
     mesaj.temizle();
+    const sc = secim();
     try {
       const r = await mesgulIken(aktar, 'Aktarılıyor…', () => api('/platform/servis/soapui/aktar', { govde: {
         projeId: proje.id, xml, takim: d.takim, durum: d.durum, servis: servisSec.value, kapsam: kapsam.value, erisimKimligi: erisim?.erisimKimligi,
-        girisEkle: girisEkle.checked
+        girisEkle: girisEkle.checked, ozellikler: Object.fromEntries(sc.hedef), tabloAdi: tabloAdi.value.trim(), degerOrtami: degerOrtami.value || null,
+        gizliler: [...sc.gizli], sifreliKaydet: [...sc.sifreli], baglar: [...sc.baglar]
       } }));
-      bildir(`${r.eklenen} senaryo aktarıldı${r.atlanan.length ? `, ${r.atlanan.length} atlandı` : ''}; ${r.baglananAlan} alan tabloya bağlandı${r.girisSatiriEklendi ? '; giriş bilgisi tabloya eklendi' : ''}.`);
+      bildir(`${r.eklenen} senaryo aktarıldı${r.atlanan.length ? `, ${r.atlanan.length} atlandı` : ''}; ${r.baglananAlan} alan bağlandı${r.tablo ? `; özellikler "${r.tablo.ad}" tablosunda` : ''}${r.eklenenKurallar.length ? `; ${r.eklenenKurallar.length} hesaplama kuralı eklendi` : ''}${r.girisSatiriEklendi ? '; bağlı tabloya satır eklendi' : ''}.`);
+      if (r.tablo && r.tablo.bosBirakilan.length) bildir(`Gizli değeri boş bırakılanlar (tabloda doldurun): ${r.tablo.bosBirakilan.join(', ')}`, 'hata');
       if (r.eksikSatirlar.length) bildir(`Tabloda satırı olmayan seçimler (senaryo koşmaz, satır ekleyin): ${r.eksikSatirlar.join(' · ')}`, 'hata');
-      if (r.eslenmemisParametreler.length) bildir(`Tabloya bağlanamayan parametreler: ${r.eslenmemisParametreler.join(', ')} (Parametreler sekmesinden bağlayın).`, 'hata');
+      if (r.eslenmemisParametreler.length) bildir(`Gövdede bağlanmamış parametreler: ${r.eslenmemisParametreler.join(', ')} (Parametreler sekmesinden bağlayın).`, 'hata');
       location.hash = `#/servisler/s/${q(r.servisId)}/${r.eslenmemisParametreler.length ? 'parametreler' : 'senaryolar'}`;
     } catch (e) { mesaj.goster(e.message); }
   });
-  yerlestir(kap, h('div', { class: 'kart form-paneli' },
+  yerlestir(kap, h('div', { class: 'kart form-paneli soapui-onizleme' },
     h('h3', {}, `${d.takim} / ${d.durum}`), mesaj.kutu,
     o.durum.uyarilar.length ? h('div', { class: 'not-kutusu uyari' }, o.durum.uyarilar.map((u) => h('div', {}, u))) : null,
     alan('Servis', servisSec), senaryoListesi,
-    h('fieldset', {}, h('legend', {}, 'Parametreler'),
-      h('p', { class: 'kucuk' }, h('b', {}, 'Giriş bilgisi: '), o.kimlikParametreleri.join(', ') || 'yok'),
-      h('p', { class: 'kucuk' }, h('b', {}, 'Tarih kuralları: '), Object.entries(o.tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'),
-      h('p', { class: 'kucuk' }, h('b', {}, 'Diğer parametreler: '), o.veriParametreleri.length ? o.veriParametreleri.map((p) => p.ad).join(', ') : 'yok', ' ',
-        h('span', { class: 'soluk' }, '(aktarımda alanın tablo bağlantısına çevrilir; bağlantı yoksa Parametreler sekmesinden bağlanır)'))),
-    o.kimlikParametreleri.length ? h('label', { class: 'secenek', for: girisEkle.id }, girisEkle,
-      'Dosyadaki giriş bilgisi (kanal / kullanıcı / parola) bağlı tabloda yoksa satır olarak ekle (parola gizli sütunda, şifreli)') : null,
+    ozellikKap, ozetKap,
+    h('label', { class: 'secenek', for: girisEkle.id }, girisEkle,
+      'Bağlı sütuna giden değerler (ör. kanal / kullanıcı) bağlı tabloda yoksa satır olarak ekle (gizli değer yalnız "Şifreli kaydet" işaretliyse)'),
     alan('Senaryoların kapsamı', kapsam),
     kontrolKap, h('div', { class: 'dugmeler' }, aktar)));
   kontrolCiz();
@@ -239,14 +367,9 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   const adres = `#/servisler/s/${q(s.id)}`;
   const sekmeAlani = h('div', {});
   const kosBaslat = h('button', { type: 'button', class: 'birincil' }, ikon('oynat'), 'Koşuyu başlat');
-  kosBaslat.addEventListener('click', () => kosuDiyalogu(proje, s, ortamlar, calismaOrtami(ortamlar), d.senaryolar, () => window.dispatchEvent(new HashChangeEvent('hashchange'))));
+  kosBaslat.addEventListener('click', () => kosuDiyalogu(proje, s, ortamlar, d.senaryolar, () => window.dispatchEvent(new HashChangeEvent('hashchange'))));
   const son = s.sonKosu;
-  const ortam = calismaOrtami(ortamlar);
-  const ortamSegmenti = (sekme === 'senaryolar') && ortamlar.length > 1 ? h('div', { class: 'segment', role: 'group', 'aria-label': 'Çalıştırma ortamı' },
-    ortamlar.map((o) => h('button', {
-      type: 'button', 'aria-pressed': ortam && o.id === ortam.id ? 'true' : 'false', title: o.canli ? `${o.ad}: CANLI ortam (çalıştırmadan önce onay istenir)` : o.ad,
-      onclick: () => { if (ortam && o.id === ortam.id) return; try { localStorage.setItem(ORTAM_ANAHTARI, o.id); } catch { /* yok sayılır */ } window.dispatchEvent(new HashChangeEvent('hashchange')); }
-    }, o.ad))) : null;
+  const sonOrtamAdi = son && son.ortamId ? ortamlar.find((o) => o.id === son.ortamId)?.ad : null;
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
@@ -257,8 +380,8 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
           h('span', {}, ikon('ag'), h('code', { class: 'duz' }, s.ayarlar.yol || '—')),
           h('span', {}, ikon('liste'), `${s.senaryoSayisi} senaryo`),
           s.ayarlar.erisim ? h('span', { title: tarihMetni(s.ayarlar.erisim.zaman) }, ikon('onay'), 'erişim kontrol edildi') : null,
-          son ? h('span', { title: tarihMetni(son.baslangic) }, ikon('saat'), `son: ${DURUM[son.durum]?.[0] ?? son.durum}`) : null)),
-      h('div', { class: 'eylemler' }, ortamSegmenti, h('a', { class: 'dugme', href: `${adres}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle'), kosBaslat)),
+          son ? h('span', { title: `${sonOrtamAdi ? `${sonOrtamAdi} · ` : ''}${tarihMetni(son.baslangic)}` }, ikon('saat'), `son: ${DURUM[son.durum]?.[0] ?? son.durum}${sonOrtamAdi ? ` (${sonOrtamAdi})` : ''}`) : null)),
+      h('div', { class: 'eylemler' }, h('a', { class: 'dugme', href: `${adres}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle'), kosBaslat)),
     h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Servis bölümleri' },
       SEKMELER.map(([ad, etiket]) => h('button', {
         type: 'button', role: 'tab', 'aria-selected': sekme === ad || (sekme === 'senaryo' && ad === 'senaryolar') ? 'true' : 'false',
@@ -275,19 +398,29 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
   if (sekme === 'parametreler') { await parametrelerSekmesi(sekmeAlani, proje, s, ortamlar, yenile); return; }
   if (sekme === 'raporlar') { await raporlarSekmesi(sekmeAlani, proje, s, ortamlar, d.senaryolar, altKimlik); return; }
   if (sekme === 'islemler') { islemlerSekmesi(sekmeAlani, proje, s, ortamlar); return; }
-  senaryolarSekmesi(sekmeAlani, proje, s, ortam, d.senaryolar, d.sonSonuclar || {}, yenile, ortamlar);
+  senaryolarSekmesi(sekmeAlani, proje, s, d.senaryolar, d.sonSonuclar || {}, yenile, ortamlar);
 }
 
+/** Satırın ortam kaydı ({ ortamId, tanimli, neden, kosuyaDahil, sonSonuc }; sunucu GET /platform/servis) ya da undefined. */
+const ortamKaydi = (x, ortamId) => (Array.isArray(x.ortamlar) ? x.ortamlar.find((o) => o.ortamId === ortamId) : undefined);
 /**
- * Senaryonun koştuğu ortamlar (sunucudaki kuralla aynı): kapsam ortam türüne uyar ('ikisi' hepsi), servis o ortamda tanımlı
- * (taban adres bilerek boş değil) ve CANLI ortamda "yalnız test" metodu değil. Etiket ortam adlarından: "TEST + CANLI".
+ * Senaryonun koştuğu ortamlar. Sunucu satır başına hesaplar (servisSenaryoAtlamaNedeni: kapsam ortam türüne uyar, servis o
+ * ortamda tanımlı, CANLI'da "yalnız test" metodu değil; akış senaryosunda akışın adımları). Eski yanıtta ortam kaydı yoksa aynı
+ * kural burada uygulanır. Etiket ortam adlarından: "TEST + CANLI".
  */
 function kapsamOrtamlari(s, x, ortamlar) {
+  if (Array.isArray(x.ortamlar)) return ortamlar.filter((o) => ortamKaydi(x, o.id)?.tanimli);
   const yalnizTest = new Set(s.ayarlar.yalnizTestOperasyonlari || []);
   return ortamlar.filter((o) => s.ayarlar.tabanlar?.[o.id] !== ''
     && (x.kapsam === 'ikisi' || x.kapsam === (o.canli ? 'canli' : 'test'))
     && !(o.canli && yalnizTest.has(x.icerik.operasyon)));
 }
+/** Senaryo bu ortamda koşar mı (kapsam / tanım). */
+const ortamdaKosar = (s, x, o) => kapsamOrtamlari(s, x, [o]).length > 0;
+/** Bu ortamda "Koşuda" mı (ortam başına; eski yanıtta genel değer). */
+const ortamdaDahil = (s, x, o) => { const k = ortamKaydi(x, o.id); return k ? Boolean(k.kosuyaDahil) : Boolean(x.kosuyaDahil) && ortamdaKosar(s, x, o); };
+/** Bu ortamda neden atlanır (koşuyorsa ''). */
+const atlamaNedeni = (s, x, o) => (ortamdaKosar(s, x, o) ? '' : ortamKaydi(x, o.id)?.neden || `${o.ad} ortamında koşmaz (kapsam).`);
 /** REST operasyonunun senaryo yolu: {id} → ${id}, sorgu parametreleri eklenir. */
 const restOpYolu = (op) => {
   if (!op) return '';
@@ -295,38 +428,30 @@ const restOpYolu = (op) => {
   return `${String(op.yol || '').replace(/{([^}]+)}/g, '${$1}')}${sorgu ? `?${sorgu}` : ''}`;
 };
 const kapsamEtiketi = (liste) => (liste.length ? liste.map((o) => o.ad).join(' + ') : 'Hiçbir ortam');
+const DURUM_SIMGESI = { basarili: '✓', basarisiz: '✗', hata: '!' };
+const gunAy = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
+const SERVIS_KOSU_NOTU = 'Seçilen ortamdaki servis adresine istekler sırayla gönderilir; sonuçlar Raporlar sekmesine yazılır.';
 
-async function kosuDiyalogu(proje, s, ortamlar, secili, senaryolar, bitti) {
-  const ortamSec = h('select', {}, ortamlar.map((o) => h('option', { value: o.id, selected: secili ? o.id === secili.id : o.varsayilan }, ortamEtiketi(o))));
-  const bilgi = h('p', { class: 'soluk kucuk' });
-  const hesapla = () => {
-    const o = ortamlar.find((x) => x.id === ortamSec.value);
-    const tur = o.canli ? 'canli' : 'test';
-    const yalnizTest = new Set(s.ayarlar.yalnizTestOperasyonlari || []);
-    const kosacak = senaryolar.filter((x) => x.kosuyaDahil && (x.kapsam === 'ikisi' || x.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(x.icerik.operasyon)));
-    bilgi.textContent = `${kosacak.length} senaryo kosacak (${senaryolar.filter((x) => x.kosuyaDahil).length - kosacak.length} tanesi kapsam / ortam nedeniyle atlanır).${o.canli ? ' DİKKAT: CANLI ortam.' : ''}`;
-    return kosacak.length;
-  };
-  ortamSec.addEventListener('change', hesapla);
-  const tamam = h('button', { type: 'button', class: 'birincil' }, ikon('oynat'), 'Koşuyu başlat');
-  const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
-  const sonuc = h('div', { 'aria-live': 'polite' });
-  const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'kosu-basligi' },
-    h('div', { class: 'diyalog-govde' }, h('h2', { id: 'kosu-basligi' }, `${s.ad} — koşu`),
-      h('p', { class: 'soluk' }, 'Seçilen ortamdaki servis adresine SOAP istekleri gönderilir.'), alan('Ortam', ortamSec), bilgi, sonuc),
-    h('div', { class: 'diyalog-alt' }, vazgec, tamam));
-  vazgec.addEventListener('click', () => diyalog.close());
-  diyalog.addEventListener('close', () => diyalog.remove());
-  tamam.addEventListener('click', async () => {
-    if (!hesapla()) return;
-    try {
-      await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortamSec.value, senaryoIdleri: senaryolar.filter((x) => x.kosuyaDahil).map((x) => x.id), bitti });
-      diyalog.close();
-    } catch (e) { yerlestir(sonuc, hataKutusu(e)); }
+/**
+ * "Koşuyu başlat": ortam DİYALOGDA seçilir (başlıkta ortam segmenti yok). O ortamda koşan ve o ortamda Koşuda açık senaryolar
+ * koşar; kapsamı / tanımı uymayanlar nedenleriyle listelenir (sunucu da aynı nedenle atlar). Riskli / CANLI ortam uyarısı diyalogda.
+ */
+async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
+  if (!ortamlar.length) { bildir('Projede ortam yok (Ayarlar > Ortamlar).', 'hata'); return; }
+  const y = await kosuOnayi({
+    baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', esZamanli: false,
+    hesapla: (o) => ({
+      senaryolar: senaryolar.filter((x) => ortamdaDahil(s, x, o)),
+      haricSayisi: senaryolar.filter((x) => ortamdaKosar(s, x, o) && !ortamdaDahil(s, x, o)).length,
+      atlananlar: senaryolar.filter((x) => x.kosuyaDahil && !ortamdaKosar(s, x, o)).map((x) => ({ baslik: x.baslik, neden: atlamaNedeni(s, x, o) }))
+    }),
+    not: SERVIS_KOSU_NOTU
   });
-  document.body.append(diyalog);
-  diyalog.showModal();
-  hesapla();
+  if (!y) return;
+  ortamiHatirla(y.ortam);
+  try {
+    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: y.ortam.id, senaryoIdleri: y.senaryolar.map((x) => x.id), bitti });
+  } catch (e) { bildir(e.message, 'hata'); }
 }
 
 /** Beklenen: kontrollerin kısa özeti (SOAP zarfı kontrolü dışındaki ilk kontrol + kalan sayı). */
@@ -341,7 +466,7 @@ function beklenenOzeti(kontroller) {
   return `${tek(anlamli[0])}${anlamli.length > 1 ? ` (+${anlamli.length - 1})` : ''}`;
 }
 
-function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile, ortamlar = []) {
+function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortamlar = []) {
   if (!senaryolar.length) {
     yerlestir(kap, bosDurum('Bu serviste senaryo yok.', 'Senaryo ekleyin ya da SoapUI dosyasından aktarın.', { ikon: 'liste', eylem: h('a', { class: 'dugme birincil', href: `#/servisler/s/${q(s.id)}/senaryo/yeni` }, ikon('arti'), 'Senaryo ekle') }));
     return;
@@ -349,8 +474,9 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
   // Servis değişince seçim ve filtreler sıfırlanır; aynı serviste yenilemeden sonra korunur.
   if (liste.servisId !== s.id) Object.assign(liste, { servisId: s.id, arama: '', kosuda: '', operasyon: '', son: '', kapsam: '', secim: new Set() });
   liste.kapsam ??= '';
-  /** Kapsam: senaryonun koştuğu ortamların adları (ör. "TEST + CANLI"). */
-  const kapsamlar = new Map(senaryolar.map((x) => [x.id, kapsamEtiketi(kapsamOrtamlari(s, x, ortamlar))]));
+  /** Senaryonun koştuğu ortamlar ve kapsam etiketi (ör. "TEST + CANLI"). Tüm ortam seçimleri (Koşuda, Son sonuç, ▷) buna göre. */
+  const kosanOrtamlar = new Map(senaryolar.map((x) => [x.id, kapsamOrtamlari(s, x, ortamlar)]));
+  const kapsamlar = new Map(senaryolar.map((x) => [x.id, kapsamEtiketi(kosanOrtamlar.get(x.id))]));
   const kapsamSecenekleri = [...new Set(kapsamlar.values())].sort((a, b) => a.localeCompare(b, 'tr'));
   if (liste.kapsam && !kapsamSecenekleri.includes(liste.kapsam)) liste.kapsam = '';
   const gecerli = new Set(senaryolar.map((x) => x.id));
@@ -360,16 +486,18 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
   const akisMi = (x) => x.icerik.tur === 'akis';
   const kontrolleri = (x) => (akisMi(x) ? Object.values(x.icerik.adimlar || {}).flatMap((a) => a.kontroller || []) : x.icerik.kontroller);
   const sonDurumu = (x) => sonSonuclar[x.id]?.durum || null;
-  // İsteğin gideceği adres (seçili ortamda; sunucudaki servisAdresi ile aynı kural): ortama özel adres, yoksa taban + yol.
-  const istekAdresi = (() => {
+  /** En az bir ortamda Koşuda mı. */
+  const dahilMi = (x) => (kosanOrtamlar.get(x.id) || []).some((o) => ortamdaDahil(s, x, o));
+  // İsteğin gideceği adres ORTAM BAŞINA (sunucudaki servisAdresi ile aynı kural): ortama özel adres, yoksa taban + yol.
+  const adresi = (o) => {
     const a = s.ayarlar;
-    if (!ortam) return a.yol || '';
-    if (a.adresler?.[ortam.id]) return a.adresler[ortam.id];
-    const taban = a.tabanlar?.[ortam.id];
+    if (a.adresler?.[o.id]) return a.adresler[o.id];
+    const taban = a.tabanlar?.[o.id];
     if (taban === '') return '';
-    const t = taban || ortam.tabanUrl || '';
+    const t = taban || o.tabanUrl || '';
     return t && a.yol ? `${t.replace(/\/+$/, '')}/${a.yol.replace(/^\/+/, '')}` : a.yol || '';
-  })();
+  };
+  const adresBasligi = ortamlar.map((o) => `${o.ad}: ${adresi(o) || 'tanımlı değil'}`).join('\n');
 
   // --- Filtreler (ekran senaryolarıyla aynı araç çubuğu) ---
   const arama = h('input', { type: 'search', placeholder: 'Senaryo ara… (Türkçe karakter duyarsız)', value: liste.arama, 'aria-label': 'Senaryo ara' });
@@ -380,6 +508,7 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
     return { kap: kutu, sel };
   };
   const kosudaSecimi = secimKutusu('Koşuda', 'kosuda', [['', 'Tümü'], ['evet', 'Koşuda'], ['hayir', 'Hariç']]);
+  kosudaSecimi.sel.title = 'Koşuda: en az bir ortamda koşuda · Hariç: hiçbir ortamda koşuda değil';
   const operasyonSecimi = secimKutusu('Metot', 'operasyon', [['', 'Tümü'], ...operasyonlar.map((o) => [o, o])]);
   const sonSecimi = secimKutusu('Son durum', 'son', [['', 'Tümü'], ['basarili', 'Başarılı'], ['basarisiz', 'Başarısız'], ['hata', 'Hata'], ['yok', 'Koşulmadı']]);
   const kapsamSecimi = secimKutusu('Kapsam', 'kapsam', [['', 'Tümü'], ...kapsamSecenekleri.map((k) => [k, k])]);
@@ -396,33 +525,66 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
     aramaZamanlayici = setTimeout(() => { liste.arama = arama.value; ciz(); }, 120);
   });
   const gorunenler = () => senaryolar.filter((x) => {
-    if (liste.kosuda === 'evet' && !x.kosuyaDahil) return false;
-    if (liste.kosuda === 'hayir' && x.kosuyaDahil) return false;
+    if (liste.kosuda === 'evet' && !dahilMi(x)) return false;
+    if (liste.kosuda === 'hayir' && dahilMi(x)) return false;
     if (liste.operasyon && x.icerik.operasyon !== liste.operasyon) return false;
     if (liste.son === 'yok' && sonDurumu(x)) return false;
     if (liste.son && liste.son !== 'yok' && sonDurumu(x) !== liste.son) return false;
     if (liste.kapsam && kapsamlar.get(x.id) !== liste.kapsam) return false;
-    return aramaEslesiyorMu(liste.arama, x.baslik, x.icerik.aciklama, x.icerik.operasyon, istekAdresi, beklenenOzeti(kontrolleri(x)), akisMi(x) ? `akış ${x.akisAdi || ''}` : '');
+    return aramaEslesiyorMu(liste.arama, x.baslik, x.icerik.aciklama, x.icerik.operasyon, s.ayarlar.yol, beklenenOzeti(kontrolleri(x)), akisMi(x) ? `akış ${x.akisAdi || ''}` : '');
   });
 
-  // --- Çalıştırma (▷ ve seçilenler): başlıktaki ortam ---
-  const calistir = async (idler, dugme) => {
-    if (!ortam || !idler.length) return;
-    if (ortam.canli && !(await onayIste({ baslik: 'CANLI ortamda koşulsun mu?', metin: `${idler.length} senaryo ${ortam.ad} ortamında koşacak. CANLI'da çağrılmayan metotlar ve kapsamı uymayan senaryolar atlanır.`, dugme: 'Koş', tehlikeli: true }))) return;
+  // --- Çalıştırma (▷ ve seçilenler): ortam DİYALOGDA seçilir ---
+  // ▷: senaryo tek, riskli olmayan bir ortamda koşuyorsa sormadan çalışır (ekran senaryolarındaki gibi); aksi halde diyalog.
+  // Seçilenler: her zaman diyalog; o ortamda koşmayanlar nedenleriyle listelenir ve atlanır.
+  const calistir = async (secilenler, tekil, dugme) => {
+    if (!secilenler.length) return;
+    const ilgili = ortamlar.filter((o) => secilenler.some((x) => ortamdaKosar(s, x, o)));
+    if (!ilgili.length) {
+      bildir(tekil ? `"${secilenler[0].baslik}" hiçbir ortamda koşmaz (kapsam / taban adres).` : 'Seçilen senaryolar hiçbir ortamda koşmaz (kapsam / taban adres).', 'hata');
+      return;
+    }
+    let ortam = tekil && ilgili.length === 1 && !riskliOrtamMi(ilgili[0]) ? ilgili[0] : null;
+    let kosacak = secilenler;
+    if (!ortam) {
+      const y = await kosuOnayi({
+        baslik: tekil ? 'Senaryoyu çalıştır?' : 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu',
+        esZamanli: false, ...(tekil ? { dugme: 'Çalıştır' } : {}), not: SERVIS_KOSU_NOTU,
+        hesapla: (o) => ({
+          senaryolar: secilenler.filter((x) => ortamdaKosar(s, x, o)),
+          atlananlar: secilenler.filter((x) => !ortamdaKosar(s, x, o)).map((x) => ({ baslik: x.baslik, neden: atlamaNedeni(s, x, o) }))
+        })
+      });
+      if (!y) return;
+      ortam = y.ortam;
+      kosacak = y.senaryolar;
+      ortamiHatirla(ortam);
+    }
     if (dugme) dugme.disabled = true;
     try {
-      await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, senaryoIdleri: idler, bitti: yenile });
+      await servisKosusuBaslat({ proje, servisId: s.id, ortamId: ortam.id, senaryoIdleri: kosacak.map((x) => x.id), bitti: yenile });
     } catch (e) { bildir(e.message, 'hata'); } finally { if (dugme) dugme.disabled = false; }
   };
 
-  /** Koşuya dahil / hariç: sunucuya yazılır; hata olursa anahtar eski hâline döner. */
-  const kosuyaDahilEt = async (hedef, dahil, anahtar) => {
+  /**
+   * Koşuya dahil / hariç: ortam verilirse YALNIZ o ortamda (satırdaki ortam anahtarı), verilmezse senaryonun koştuğu tüm
+   * ortamlarda. Sunucuya yazılır; hata olursa anahtar eski hâline döner.
+   */
+  const kosuyaDahilEt = async (hedef, dahil, anahtar, ortam = null) => {
     if (!hedef.length) return;
     if (anahtar) anahtar.disabled = true;
     try {
-      await api('/platform/servis/senaryo/kosuya-dahil', { govde: { projeId: proje.id, idler: hedef.map((x) => x.id), dahil } });
-      for (const x of hedef) x.kosuyaDahil = dahil;
-      bildir(hedef.length > 1 ? `${hedef.length} senaryo ${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.` : dahil ? 'Senaryo koşuya eklendi.' : 'Senaryo koşudan çıkarıldı.');
+      await api('/platform/servis/senaryo/kosuya-dahil', { govde: { projeId: proje.id, idler: hedef.map((x) => x.id), dahil, ...(ortam ? { ortamId: ortam.id } : {}) } });
+      for (const x of hedef) {
+        for (const o of kosanOrtamlar.get(x.id) || []) {
+          if (ortam && o.id !== ortam.id) continue;
+          const k = ortamKaydi(x, o.id);
+          if (k) k.kosuyaDahil = dahil;
+        }
+        x.kosuyaDahil = Array.isArray(x.ortamlar) ? x.ortamlar.some((k) => k.kosuyaDahil) : dahil;
+      }
+      const yer = ortam ? `${ortam.ad} ortamında ` : '';
+      bildir(hedef.length > 1 ? `${hedef.length} senaryo ${yer}${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.` : `Senaryo ${yer}${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.`);
     } catch (e) {
       if (anahtar) anahtar.checked = !dahil;
       bildir(`Koşu listesi güncellenemedi: ${e.message}`, 'hata');
@@ -430,6 +592,27 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
       if (anahtar) anahtar.disabled = false;
       ciz();
     }
+  };
+
+  /** Toplu Koşuya ekle / çıkar: birden çok ortam varsa hangi ortamda (ya da tüm ortamlarda) olduğu sorulur. */
+  const topluKosuyaDahil = async (secilenler, dahil) => {
+    const ilgili = ortamlar.filter((o) => secilenler.some((x) => ortamdaKosar(s, x, o)));
+    if (!ilgili.length) { bildir('Seçilen senaryolar hiçbir ortamda koşmaz (kapsam / taban adres).', 'hata'); return; }
+    let ortam = null;
+    if (ilgili.length > 1) {
+      const secim = await secenekIste({
+        baslik: dahil ? 'Hangi ortamda koşuya eklensin?' : 'Hangi ortamda koşudan çıkarılsın?',
+        metin: `${secilenler.length} seçili senaryo. Senaryo seçilen ortamda koşmuyorsa (kapsam / taban adres) atlanır.`,
+        ikonAd: dahil ? 'onay' : 'eksi',
+        secenekler: [
+          { deger: '*', etiket: 'Tüm ortamlar', aciklama: 'Her senaryonun koştuğu tüm ortamlarda', ikonAd: 'ag' },
+          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (varsayılan test ortamı değil)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
+        ]
+      });
+      if (secim === null) return;
+      ortam = secim === '*' ? null : ilgili.find((o) => o.id === secim) || null;
+    }
+    await kosuyaDahilEt(ortam ? secilenler.filter((x) => ortamdaKosar(s, x, ortam)) : secilenler, dahil, null, ortam);
   };
 
   const sil = async (secilenler) => {
@@ -450,8 +633,9 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
     const mevcut = new Set(senaryolar.map((y) => y.baslik));
     let baslik = `${x.baslik} (kopya)`;
     for (let i = 2; mevcut.has(baslik); i++) baslik = `${x.baslik} (kopya ${i})`;
+    const { kosuOrtamlari: _ortamlar, ...icerik } = x.icerik;
     try {
-      await api('/platform/servis/senaryo/kaydet', { govde: { projeId: proje.id, servisId: s.id, baslik, kapsam: x.kapsam, kosuyaDahil: false, icerik: x.icerik } });
+      await api('/platform/servis/senaryo/kaydet', { govde: { projeId: proje.id, servisId: s.id, baslik, kapsam: x.kapsam, kosuyaDahil: false, icerik } });
       bildir(`Kopya oluşturuldu: "${baslik}" (Koşuda kapalı).`);
     } catch (e) { bildir(e.message, 'hata'); }
     yenile();
@@ -478,14 +662,16 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
     const secilenler = gorunen.filter((x) => liste.secim.has(x.id));
     const gizliSecili = liste.secim.size - secilenler.length;
     if (!liste.secim.size) { yerlestir(topluAlani); return; }
+    const eklenebilir = secilenler.some((x) => (kosanOrtamlar.get(x.id) || []).some((o) => !ortamdaDahil(s, x, o)));
+    const cikarilabilir = secilenler.some((x) => dahilMi(x));
     yerlestir(topluAlani, h('div', { class: 'toplu-cubuk', role: 'toolbar', 'aria-label': 'Seçili senaryolar için işlemler' },
       h('span', { class: 'secim-bilgisi' }, h('b', {}, String(secilenler.length)), 'seçili',
         gizliSecili ? h('span', { class: 'soluk kucuk' }, `(+${gizliSecili} filtre dışında; işlemlere dahil edilmez)`) : null),
-      h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: !secilenler.length, onclick: (o) => calistir(secilenler.map((x) => x.id), o.currentTarget) },
+      h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: !secilenler.length, onclick: (o) => calistir(secilenler, false, o.currentTarget) },
         ikon('oynat'), `Seçilenleri çalıştır (${secilenler.length})`),
       h('span', { class: 'ayrac', 'aria-hidden': 'true' }),
-      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => !x.kosuyaDahil), onclick: () => kosuyaDahilEt(secilenler.filter((x) => !x.kosuyaDahil), true) }, ikon('onay'), 'Koşuya ekle'),
-      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => x.kosuyaDahil), onclick: () => kosuyaDahilEt(secilenler.filter((x) => x.kosuyaDahil), false) }, ikon('eksi'), 'Koşudan çıkar'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !eklenebilir, onclick: () => topluKosuyaDahil(secilenler, true) }, ikon('onay'), 'Koşuya ekle'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !cikarilabilir, onclick: () => topluKosuyaDahil(secilenler, false) }, ikon('eksi'), 'Koşudan çıkar'),
       h('button', { type: 'button', class: 'kucuk-dugme tehlike', disabled: !secilenler.length, onclick: () => sil(secilenler) }, ikon('cop'), 'Sil'),
       h('span', { class: 'sag' }, h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { liste.secim.clear(); ciz(); } }, 'Seçimi temizle'))));
   }
@@ -518,41 +704,64 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
         h('tbody', {}, gorunen.map((x) => satir(x)))))));
   }
 
+  /** Son sonuç ORTAM BAŞINA: nokta + ortam adı + simge ve gün.ay; tıklayınca koşu raporu / akışın koşuları. */
+  function sonSonucHucresi(x, kosan) {
+    const baglanti = (r) => (r.akisId ? `#/servisler/s/${q(s.id)}/akislar/${q(r.akisId)}` : `#/servisler/s/${q(s.id)}/raporlar/${q(r.kosuId)}`);
+    const parca = (etiketAd, r) => {
+      if (!r) {
+        return h('span', { class: 'son-sonuc ortam-sonucu yok', title: `${etiketAd}: koşulmadı`, 'aria-label': `${etiketAd}: koşulmadı` },
+          h('span', { class: 'nokta', 'aria-hidden': 'true' }), h('span', { class: 'etiket' }, etiketAd), h('span', { class: 'zaman', 'aria-hidden': 'true' }, '—'));
+      }
+      const [etiket, sinif] = DURUM[r.durum] || [r.durum, ''];
+      const tam = `${etiketAd}: ${etiket} · ${kisaTarih(r.baslangic)}`;
+      return h('a', { class: `son-sonuc ortam-sonucu ${sinif}`, href: baglanti(r), title: `${tam} — ${r.akisId ? 'akışın koşularını aç' : 'koşu raporunu aç'}`, 'aria-label': tam },
+        h('span', { class: `nokta ${sinif}`, 'aria-hidden': 'true' }), h('span', { class: 'etiket' }, etiketAd),
+        h('span', { class: 'zaman', 'aria-hidden': 'true' }, `${DURUM_SIMGESI[r.durum] || ''} ${gunAy(r.baslangic)}`.trim()));
+    };
+    const ortamli = kosan.map((o) => parca(o.ad, ortamKaydi(x, o.id)?.sonSonuc || null));
+    // Eski (ortamı kaydedilmemiş) koşu: ortam başına sonuç yoksa genel son sonuç "önceki" etiketiyle gösterilir.
+    const eski = sonSonuclar[x.id];
+    const ortamSonucuVar = Array.isArray(x.ortamlar) && x.ortamlar.some((k) => k.sonSonuc);
+    if (eski && !eski.ortamId && !ortamSonucuVar) ortamli.push(parca('önceki', eski));
+    return ortamli.length ? h('div', { class: 'ortam-sonuclari' }, ortamli) : h('span', { class: 'son-sonuc yok' }, '—');
+  }
+
   function satir(x) {
     const secim = h('input', { type: 'checkbox', 'aria-label': `Seç: ${x.baslik}`, checked: liste.secim.has(x.id) });
     secim.addEventListener('change', () => { if (secim.checked) liste.secim.add(x.id); else liste.secim.delete(x.id); ciz(); });
-    const kosuda = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: x.kosuyaDahil, 'aria-label': `Koşuda: ${x.baslik}` });
-    kosuda.addEventListener('change', () => kosuyaDahilEt([x], kosuda.checked, kosuda));
-    const oynat = h('button', { type: 'button', class: 'ikon-dugme oynat-dugmesi', 'aria-label': `Çalıştır: ${x.baslik}`, title: `Çalıştır (${ortam ? ortam.ad : 'ortam yok'})` }, ikon('oynat'));
-    oynat.addEventListener('click', () => calistir([x.id], oynat));
+    const kosan = kosanOrtamlar.get(x.id) || [];
+    // Koşuda: ORTAM BAŞINA ayrı anahtar (ortam adıyla etiketli; ekran senaryolarındaki gibi).
+    const kosuda = kosan.length ? h('div', { class: 'ortam-anahtarlari' }, kosan.map((o) => {
+      const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: ortamdaDahil(s, x, o), 'aria-label': `Koşuda (${o.ad}): ${x.baslik}` });
+      kutu.addEventListener('change', () => kosuyaDahilEt([x], kutu.checked, kutu, o));
+      return h('label', { class: 'ortam-anahtari', title: `${o.ad} ortamında koşuda` }, kutu, h('span', { class: 'ortam-adi', 'aria-hidden': 'true' }, o.ad));
+    })) : h('span', { class: 'cok-soluk', title: 'Senaryo hiçbir ortamda koşmaz (kapsam / taban adres)' }, '—');
+    const oynat = h('button', { type: 'button', class: 'ikon-dugme oynat-dugmesi', 'aria-label': `Çalıştır: ${x.baslik}`, title: 'Çalıştır (ortam sorulur)' }, ikon('oynat'));
+    oynat.addEventListener('click', () => calistir([x], true, oynat));
+    const dahil = dahilMi(x);
+    // İstek adresi: senaryonun koştuğu ortamlarda tek adres varsa o; ortamlara göre değişiyorsa yol (tam adresler ipucunda).
+    const adresler = [...new Set(kosan.map(adresi).filter(Boolean))];
+    const gosterilenAdres = adresler.length === 1 ? adresler[0] : s.ayarlar.yol || '';
     const altBilgi = [
-      !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
+      !dahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.icerik.aciklama ? h('span', {}, x.icerik.aciklama) : null,
       x.gecen ? h('span', { class: 'soluk' }, `${x.sahipServisAd || 'başka serviste'} kayıtlı`) : null
     ].filter(Boolean);
-    const son = sonSonuclar[x.id];
-    let sonHucre;
-    if (son) {
-      const [etiket, sinif] = DURUM[son.durum] || [son.durum, ''];
-      sonHucre = h('a', { class: `son-sonuc ${sinif}`, href: son.akisId ? `#/servisler/s/${q(s.id)}/akislar/${q(son.akisId)}` : `#/servisler/s/${q(s.id)}/raporlar/${q(son.kosuId)}`, title: son.akisId ? 'Akışın koşularını aç' : 'Koşu raporunu aç' },
-        h('span', { class: `nokta ${sinif}`, 'aria-hidden': 'true' }), h('span', { class: 'etiket' }, etiket), h('span', { class: 'zaman' }, kisaTarih(son.baslangic)));
-    } else sonHucre = h('span', { class: 'son-sonuc yok' }, '— koşulmadı');
     const beklenen = beklenenOzeti(kontrolleri(x));
     const senaryoAdresi = `#/servisler/s/${q(x.servisId || s.id)}/senaryo/${q(x.id)}`;
-    return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', x.kosuyaDahil ? '' : 'haric'].join(' ').trim() || null, 'data-senaryo': x.id },
+    return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', dahil ? '' : 'haric'].join(' ').trim() || null, 'data-senaryo': x.id },
       h('td', { class: 'secim' }, secim),
       h('td', {}, h('div', { class: 'senaryo-adi' },
         h('strong', {}, h('a', { class: 'satir-baglantisi', href: senaryoAdresi }, x.baslik)),
         h('small', {}, altBilgi))),
       h('td', { class: 'istek-hucresi' },
         akisMi(x) ? rozet(`akış: ${x.akisAdi || '?'}`, 'vurgu', { title: `Akış senaryosu: ${Object.keys(x.icerik.adimlar || {}).length} adımın değerleri` }) : rozet(x.icerik.operasyon, 'vurgu', { title: 'Metot (operasyon)' }),
-        istekAdresi ? h('code', { class: 'duz istek-adresi', title: `${ortam ? `${ortam.ad}: ` : ''}${istekAdresi}` }, istekAdresi)
-          : h('span', { class: 'cok-soluk kucuk' }, ortam ? `${ortam.ad} ortamında tanımlı değil` : 'ortam yok')),
+        !akisMi(x) && gosterilenAdres ? h('code', { class: 'duz istek-adresi', title: adresBasligi }, gosterilenAdres) : null),
       h('td', { class: 'beklenen-hucresi' }, beklenen === '—' ? h('span', { class: 'cok-soluk' }, '—')
         : rozet(beklenen, '', { title: kontrolleri(x).map((k) => k.deger || k.tur).join(' · ') })),
       h('td', { class: 'kapsam-hucresi', 'data-deger': kapsamlar.get(x.id) },
-        rozet(kapsamlar.get(x.id), kapsamOrtamlari(s, x, ortamlar).length ? 'durdu' : 'atlanan', { title: 'Kapsam: bu senaryonun koştuğu ortamlar' })),
-      h('td', {}, sonHucre),
+        rozet(kapsamlar.get(x.id), kosan.length ? 'durdu' : 'atlanan', { title: 'Kapsam: bu senaryonun koştuğu ortamlar' })),
+      h('td', { class: 'son-hucresi' }, sonSonucHucresi(x, kosan)),
       h('td', { class: 'kosuda' }, kosuda),
       h('td', { class: 'eylemler' }, h('span', { class: 'satir-eylemleri' },
         oynat,
@@ -1151,8 +1360,46 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
   kuralKartiniYenile();
   yerlestir(kap,
     kimlikYonetimi(proje, s, yenile),
+    eskiParametreKarti(proje, s, yenile),
     metotKarti,
     kuralKarti);
+}
+
+/**
+ * Eski parametre eşlemesi (test verisi türü alanının "servis parametreleri" + servisin seçtiği profil) kullanan servis: "Yeni bağlama
+ * modeline geçir" kartı. Önce ne değişeceği gösterilir (gövdede ${PARAMETRE} → ${Tablo[etiket].Sütun}, satır seçimi, alan bağları);
+ * yalnız onayla dönüştürülür. Dönüştürülecek parametre yoksa kart görünmez.
+ */
+function eskiParametreKarti(proje, s, yenile) {
+  const kap = h('div', {});
+  api('/platform/servis/eski-parametreler/donustur', { govde: { projeId: proje.id, servisId: s.id } }).then(({ onizleme: o }) => {
+    if (!o.parametreler.length) return;
+    const gecir = h('button', { type: 'button', class: 'birincil' }, 'Yeni bağlama modeline geçir…');
+    const sonuc = h('div', { 'aria-live': 'polite' });
+    const plan = [
+      ...o.parametreler.map((p) => `\${${p.ad}} → \${${p.hedef}} · ${p.satir ? `satır: ${p.satir}` : 'satır seçilmemiş'} · ${p.senaryoSayisi} senaryo`),
+      ...o.baglar.map((b) => `Alan bağı: ${b.operasyon} · ${b.yol} → ${b.hedef}`),
+      ...o.uyarilar.map((u) => `Not: ${u}`)
+    ];
+    gecir.addEventListener('click', async () => {
+      if (!(await onayIste({
+        baslik: 'Yeni bağlama modeline geçirilsin mi?',
+        metin: `${o.senaryolar.length} senaryonun gövdesi tablo başvurusuna çevrilir; servisin seçtiği satır senaryonun tablo seçimi olur${o.baglar.length ? `, ${o.baglar.length} alan bağı kurulur` : ''}. Eski ayarlar silinmez.`,
+        liste: plan, dugme: 'Geçir', ikonAd: 'veri'
+      }))) return;
+      try {
+        await mesgulIken(gecir, 'Geçiriliyor…', () => api('/platform/servis/eski-parametreler/donustur', { govde: { projeId: proje.id, servisId: s.id, onay: true } }));
+        bildir('Servis yeni bağlama modeline geçirildi.');
+        yenile();
+      } catch (e) { yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message)); }
+    });
+    yerlestir(kap, h('div', { class: 'kart eski-parametre-karti' },
+      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('uyari'), 'Eski parametre eşlemesi'), h('span', { class: 'sag' }, gecir)),
+      h('p', {}, `Bu servisin ${o.senaryolar.length} senaryosu değerleri eski eşlemeden alıyor (${o.parametreler.map((p) => p.ad).join(', ')}). Yeni modelde değer gövdede tablo başvurusuyla (\${Tablo.Sütun}) ve senaryonun tablo seçimiyle gelir; alanlar tablo sütunlarına bağlanır. Geçirmeden önce değişiklikler gösterilir; siz onaylamadan hiçbir şey değişmez.`),
+      h('details', {}, h('summary', { class: 'kucuk' }, 'Ne değişecek?'), h('ul', { class: 'onay-listesi' }, plan.map((x) => h('li', { title: x }, x)))),
+      sonuc));
+  }).catch(() => { /* önizleme alınamazsa kart gösterilmez */ });
+  return kap;
 }
 
 /**

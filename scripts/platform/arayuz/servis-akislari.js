@@ -46,7 +46,12 @@ export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile)
       a.kullananServisler.length ? h('div', { class: 'soluk kucuk' }, `Oturum: ${a.kullananServisler.map((x) => x.ad).join(', ')}`) : null),
     h('td', {}, a.tur === 'oturum' ? rozet('Oturum', 'vurgu') : rozet('Akış')),
     h('td', {}, String(a.adimSayisi)),
-    h('td', {}, a.sonKosu ? h('span', { title: tarihMetni(a.sonKosu.baslangic) }, durumRozeti(a.sonKosu.durum)) : h('span', { class: 'cok-soluk' }, '—')),
+    h('td', {}, a.sonKosu ? (() => {
+      // Ortam başına koşar (ortam koşu diyaloğunda seçilir): son koşunun ortamı da yazılır.
+      const ortamAd = a.sonKosu.ortamId ? ortamlar.find((o) => o.id === a.sonKosu.ortamId)?.ad : null;
+      return h('span', { class: 'akis-son-kosu', title: `${ortamAd ? `${ortamAd} · ` : ''}${tarihMetni(a.sonKosu.baslangic)}` }, durumRozeti(a.sonKosu.durum),
+        ortamAd ? h('span', { class: 'soluk kucuk' }, ortamAd) : null);
+    })() : h('span', { class: 'cok-soluk' }, '—')),
     h('td', { class: 'eylem' }, h('a', { class: 'dugme ikon-dugme', href: `${adres}/${q(a.id)}`, title: 'Düzenle', 'aria-label': `Düzenle: ${a.baslik}` }, ikon('duzenle')),
       h('button', { type: 'button', class: 'ikon-dugme hayalet', title: 'Sil', 'aria-label': `Sil: ${a.baslik}`, onclick: async () => {
         if (!(await onayIste({ baslik: `"${a.baslik}" silinsin mi?`, metin: 'Akış silinir; geçmiş koşu kayıtları kalır.', dugme: 'Sil', tehlikeli: true }))) return;

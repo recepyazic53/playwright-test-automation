@@ -33,7 +33,7 @@ import {
   platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
   platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformZamanlanmisKosulariBaslat,
   platformKosuSureLimitiMs, platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu,
-  platformArayuzKilitliMi
+  platformArayuzKilitliMi, platformHataOzetiniMaskele
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
@@ -325,6 +325,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servis-akislari.js', { dosya: 'servis-akislari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sonuclari.js', { dosya: 'servis-sonuclari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/html-rapor.js', { dosya: 'html-rapor.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/karsilastirma.js', { dosya: 'karsilastirma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tarih-araligi.js', { dosya: 'tarih-araligi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/entegrasyonlar.js', { dosya: 'entegrasyonlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/zamanlanmis-kosular.js', { dosya: 'zamanlanmis-kosular.js', tur: 'text/javascript; charset=utf-8' }],
@@ -832,7 +833,8 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
         cikisKodu: kod,
         sonuc,
         iptalEdildiMi: false,
-        ciktiHataOzeti: sonuc ? null : hataOzetiCikar(ciktiKuyrugu)
+        // Çıktı özeti arayüze döner: gizli değerler gösterimde maskelenir.
+        ciktiHataOzeti: sonuc ? null : await platformHataOzetiniMaskele(hataOzetiCikar(ciktiKuyrugu), kosuKimligi).catch(() => null)
       });
     });
   });

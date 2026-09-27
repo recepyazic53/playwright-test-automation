@@ -65,6 +65,15 @@ export const REHBERLER = {
       { baslik: 'Raporu paylaşmak', metin: '"Raporu indir (HTML)" tek dosyalık, internet gerektirmeyen bir rapor üretir; e-postayla gönderebilir ya da yazdırabilirsiniz. Gizli bilgiler her zaman maskelenir; ekran görüntüleri ve ortam adresi yalnızca siz seçerseniz eklenir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Seçenekler', ikon: 'ayar' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: '.html', alt: 'tek dosya', ikon: 'indir' }] } }
     ]
   },
+  'sonuclar-karsilastir': {
+    baslik: 'Koşu karşılaştırması',
+    adimlar: [
+      { baslik: 'İki koşuyu seçmek', metin: 'Koşu geçmişinde iki satırı işaretleyip "Karşılaştır"a basın ya da bir koşunun ayrıntısında "Başka bir koşuyla karşılaştır…" deyin. Önceki koşu A, sonraki B olur; adres paylaşılabilir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu A', alt: 'önceki', ikon: 'liste' }, { baslik: 'Koşu B', alt: 'sonraki', ikon: 'liste' }, { baslik: 'Karşılaştır', ikon: 'grafik' }] } },
+      { baslik: 'Özet ve değişimler', metin: 'Üstte A | B özeti ve farklar (↑ ↓). Tabloda her senaryonun A ve B durumu ile değişim rozeti: yeni kalan, düzelen, hep kalan, hep geçen, yalnız A\'da / yalnız B\'de. "Yalnız değişenler" varsayılan açıktır.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'A durumu | B durumu | değişim' }, ipucu: 'Önce "yeni kalan" satırlara bakın: son değişiklikten etkilenenler onlardır.' },
+      { baslik: 'Adım adım fark', metin: 'Bir satırı açınca adımlar yan yana hizalanır; hata farkı (Beklenen / Görülen), iki tarafın ekran görüntüsü ve koşuda yakalanan mesajlar görünür. Servislerde istek başına HTTP kodu ve kontrol sonuçları karşılaştırılır; gövdeler gösterilmez.', cizim: { tur: 'istek', sol: 'A', sag: 'B', gidis: 'istek', donus: 'yanıt', kontroller: ['HTTP kodu', 'Kontrol sonuçları'] } },
+      { baslik: 'Paylaşmak', metin: '"Karşılaştırmayı indir (HTML)" tek dosyalık bir rapor üretir. Gizli bilgiler her zaman maskelenir; ekran görüntüleri yalnız siz seçerseniz eklenir.' }
+    ]
+  },
   'sonuclar-sonuc': {
     baslik: 'Test ayrıntısı',
     adimlar: [
@@ -279,6 +288,7 @@ export const REHBERLER = {
     baslik: 'Test verisi',
     adimlar: [
       { baslik: 'Tablolar', metin: 'Her satır birlikte geçerli değerlerdir (ör. kanal | kullanıcı | ürün kodu). Ekran ve servis alanları sütunlara bağlanır; senaryoda seçim yaptıkça diğer seçenekler süzülür.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Satırlar birlikte geçerli değerler' } },
+      { baslik: 'Tablo grupları', metin: 'Soldaki liste iki gruptur: "Kişi ve kayıt verileri" (sizin tablolarınız) ve "Ekran listeleri" (ekranlardan içe alınan seçenek listeleri; ekran başına alt grup). Grupları açıp kapatabilirsiniz; tercih bu tarayıcıda hatırlanır. Arama tüm gruplarda çalışır.', cizim: { tur: 'maket', bolge: 'sol', etiket: 'Gruplar ve arama' } },
       { baslik: 'Kayıtlar (profiller)', metin: 'Kişi, kart, adres gibi kayıtlar profil adıyla seçilir; değer senaryoya yazılmaz. Hassas işaretli alanlar kasada şifrelidir ve maskeli gösterilir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Tür', alt: 'ör. Kişi' }, { baslik: 'Profil', alt: 'ör. Test kişisi 1' }, { baslik: 'Alanlar', alt: 'hassas olanlar şifreli' }] } },
       { baslik: 'Sıra', sira: ['Türü / tabloyu oluşturun (sütunlar).', 'Satırları ya da profilleri ekleyin (ortama özel olabilir).', 'Ekranın ya da servisin alanlarını sütunlara bağlayın.'] }
     ]

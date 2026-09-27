@@ -11,6 +11,8 @@
 //   dizileri, e-posta adresleri, adreslerdeki sorgu dizesi (yakalanan-mesajlar.mjs > yakalananMetniMaskele). İstek / yanıt
 //   gövdesi, başlıklar, okunan değerler ve giriş bilgisi rapora HİÇ girmez.
 // - Tüm kullanıcı verisi HTML'e kaçışlanarak yazılır.
+// - Karşılaştırma raporu (karsilastirmaRaporuUret): iki koşu yan yana (özet A | B | fark, senaryo değişimleri, değişen kalan
+//   senaryoların A / B hata ayrıntısı); aynı seçenekler ve maskeleme. Veri: sonuclar/karsilastirma.mjs.
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { DepoHatasi, girisProfiliGetir, girisProfilleriniListele, ortamGetir, projeGetir } from '../veritabani/depo.mjs';
@@ -24,6 +26,7 @@ import { medyaDosyaAdiGecerliMi, medyaTamamenCoz } from '../medya.mjs';
 import { ansiTemizle, beklenenGorulenCikar, kalipCikar } from './siniflandirma.mjs';
 import { raporMetniniMaskele, servisSonucKosusu } from './servis-sonuclari.mjs';
 import { yakalananMetniMaskele } from './yakalanan-mesajlar.mjs';
+import { DEGISIM_ETIKETLERI, DEGISIM_SINIFLARI } from './karsilastirma-hesabi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -89,9 +92,11 @@ export function raporDosyaAdi(proje, ortam, tarih = new Date()) {
 
 /**
  * Maskeleyici: bilinen gizli değerler + adı gizli alanlar + uzun rakam / e-posta / sorgu dizesi; adres kapalıysa ortam adresi.
+ * Karşılaştırma ekranı (karsilastirma.mjs) da aynı kurallarla maskeler.
  * @param {RaporSecenekleri} s @param {string | null} ortamAdresi
+ * @returns {(metin: unknown) => string}
  */
-function maskeleyici(s, ortamAdresi) {
+export function raporMaskeleyici(s, ortamAdresi) {
   const ekAdlar = s.ekAdlar ?? [];
   const gizliDegerler = s.gizliDegerler ?? [];
   let koken = null;
@@ -129,8 +134,17 @@ function adliDegerleriMaskele(m, ekler) {
   return cikti + m.slice(i);
 }
 
+/**
+ * Başlık / ad alanları için: yalnız bilinen gizli değerler (uzun rakam vb. başlıkta anlamlı olabilir).
+ * @param {ReadonlyArray<string> | undefined} gizliDegerler @returns {(m: unknown) => string}
+ */
+export function adMaskeleyici(gizliDegerler) {
+  const gizliler = [...new Set((gizliDegerler ?? []).map(String))].filter((x) => x.length >= 3).sort((a, b) => b.length - a.length);
+  return (m) => gizliler.reduce((t, g) => t.split(g).join('•••'), String(m ?? ''));
+}
+
 /** Hata metninin ilk satırları (boş satırlar ve Playwright çağrı günlüğü sonrası atılır). @param {string} m */
-function ilkSatirlar(m) {
+export function ilkSatirlar(m) {
   const satirlar = m.split('\n');
   const gunluk = satirlar.findIndex((x) => /^\s*Call log:/.test(x));
   return (gunluk > 0 ? satirlar.slice(0, gunluk) : satirlar).map((x) => x.trimEnd()).filter((x) => x.trim()).slice(0, HATA_SATIR_SINIRI).join('\n');
@@ -174,11 +188,9 @@ pre{white-space:pre-wrap}figure img{max-height:120mm}a{color:inherit;text-decora
  */
 export function htmlRaporuUret(v, secenekler = {}) {
   const s = { goruntuler: false, hatalar: true, adres: false, ...secenekler };
-  const maskele = maskeleyici(s, v.ortamAdresi);
+  const maskele = raporMaskeleyici(s, v.ortamAdresi);
   // Başlık / ad alanlarında yalnız bilinen gizli değerler ve adı gizli alanlar (uzun rakam vb. başlıkta anlamlı olabilir).
-  const gizliler = [...new Set((s.gizliDegerler ?? []).map(String))].filter((x) => x.length >= 3).sort((a, b) => b.length - a.length);
-  /** @param {unknown} m */
-  const adMaskele = (m) => gizliler.reduce((t, g) => t.split(g).join('•••'), String(m ?? ''));
+  const adMaskele = adMaskeleyici(s.gizliDegerler);
   const e = (/** @type {unknown} */ x) => kacis(adMaskele(x));
   const sayilar = v.sayilar;
   const payda = sayilar.basarili + sayilar.basarisiz + sayilar.atlanan;
@@ -299,7 +311,7 @@ ${ayrintilar.join('\n')}
  * Projenin bilinen gizli değerleri (yalnız maskeleme için; rapora yazılmaz).
  * @param {Veritabani} vt @param {string} projeId @returns {string[]}
  */
-function bilinenGizliDegerler(vt, projeId) {
+export function bilinenGizliDegerler(vt, projeId) {
   /** @type {unknown[]} */
   const d = [];
   try {
@@ -404,6 +416,191 @@ function servisKosusuVerisi(vt, projeId, id) {
 }
 
 /**
+ * Şifreli ekran görüntülerini (kasada) çözüp base64 olarak döndürür; toplam EN_COK_GORUNTU_BAYT'ı aşanlar atlanır. Gruplar sırayla
+ * işlenir (önce gelenler öncelikli). acik false ise hiçbir şey çözülmez (gruplar boş).
+ * @param {Veritabani} vt @param {Array<Array<{ id: string; ad: string; icerikTuru: string; boyut: number }>>} gruplar
+ * @param {string} medyaKlasoru @param {boolean} acik
+ * @returns {Promise<{ gruplar: RaporGoruntusu[][]; eklenen: number; atlanan: number; bayt: number }>}
+ */
+export async function goruntuleriCoz(vt, gruplar, medyaKlasoru, acik) {
+  let bayt = 0;
+  let eklenen = 0;
+  let atlanan = 0;
+  /** @type {RaporGoruntusu[][]} */
+  const cikti = gruplar.map(() => []);
+  const anahtar = acik && gruplar.some((g) => g.length) ? medyaAnahtariniHazirla(vt) : null;
+  try {
+    for (let i = 0; anahtar && i < gruplar.length; i++) {
+      for (const m of gruplar[i]) {
+        if (!GORUNTU_TURU.test(m.icerikTuru)) continue;
+        const tahmin = Math.ceil(m.boyut / 3) * 4;
+        if (bayt + tahmin > EN_COK_GORUNTU_BAYT) { atlanan++; continue; }
+        const kayit = medyaGetir(vt, m.id);
+        if (!kayit || !medyaDosyaAdiGecerliMi(kayit.dosya)) { atlanan++; continue; }
+        try {
+          const base64 = (await medyaTamamenCoz(anahtar, join(medyaKlasoru, kayit.dosya))).toString('base64');
+          if (bayt + base64.length > EN_COK_GORUNTU_BAYT) { atlanan++; continue; }
+          bayt += base64.length;
+          eklenen++;
+          cikti[i].push({ ad: m.ad, icerikTuru: m.icerikTuru, base64 });
+        } catch {
+          atlanan++; // dosya yok / bozuk
+        }
+      }
+    }
+  } finally {
+    if (anahtar) anahtar.fill(0);
+  }
+  return { gruplar: cikti, eklenen, atlanan, bayt };
+}
+
+// ---------------------------------------------------------------------------------------
+// Karşılaştırma raporu (iki koşu yan yana; veri: sonuclar/karsilastirma.mjs > karsilastirmaRaporuOlustur)
+// ---------------------------------------------------------------------------------------
+
+/**
+ * @typedef {{ etiket: string; baslangic: string | null; bitis: string | null; sureMs: number | null; ortam: string | null; kapsam: string | null;
+ *   sayilar: { basarili: number; kalan: number; atlanan: number; durduruldu: number }; oran: number | null }} KarsilastirmaKosusu
+ * @typedef {{ durum: string; sureMs: number | null; hata?: string | null; kalinanAdim?: string | null; httpKodu?: number | null;
+ *   goruntuler?: RaporGoruntusu[] }} KarsilastirmaTarafi
+ * @typedef {{ baslik: string; grup: string; degisim: string; degisti: boolean; sureFarkiMs: number | null;
+ *   a: KarsilastirmaTarafi | null; b: KarsilastirmaTarafi | null }} KarsilastirmaSatiri
+ * @typedef {{ tur: 'ekran' | 'servis' | 'akis'; proje: string; ortamAdresi: string | null; a: KarsilastirmaKosusu; b: KarsilastirmaKosusu;
+ *   sayim: Record<string, number>; senaryolar: KarsilastirmaSatiri[]; atlananGoruntu?: number; olusturma?: string }} KarsilastirmaRaporVerisi
+ */
+
+const KARSILASTIRMA_CSS = `
+.ikili{display:grid;grid-template-columns:1fr 1fr;gap:12px}.ikili>div{min-width:0}
+.ikili h4{margin:6px 0 2px;font-size:13px}
+.degisim{font-weight:600;white-space:nowrap}
+.degisim.yeni-kalan,.degisim.yalniz-b{color:var(--kirmizi)}.degisim.duzelen{color:var(--yesil)}.degisim.hep-kalan,.degisim.degisti{color:var(--sari)}
+.degisim.hep-gecen,.degisim.ayni,.degisim.yalniz-a{color:var(--gri)}
+td.iyi{color:var(--yesil)}td.kotu{color:var(--kirmizi)}
+@media (max-width:640px){.ikili{grid-template-columns:1fr}}
+`;
+
+/**
+ * Karşılaştırma raporu HTML'i (saf). Görüntüler yalnız secenekler.goruntuler açıkken (tarafların goruntuler alanı) gömülür.
+ * @param {KarsilastirmaRaporVerisi} v @param {RaporSecenekleri} [secenekler]
+ * @returns {string}
+ */
+export function karsilastirmaRaporuUret(v, secenekler = {}) {
+  const s = { goruntuler: false, hatalar: true, adres: false, ...secenekler };
+  const maskele = raporMaskeleyici(s, v.ortamAdresi);
+  const adMaskele = adMaskeleyici(s.gizliDegerler);
+  const e = (/** @type {unknown} */ x) => kacis(adMaskele(x));
+  const durum = (/** @type {string | undefined} */ d) => (d
+    ? `<span class="durum ${kacis(/^[a-z_]+$/.test(d) ? d : '')}">${kacis(DURUM_ETIKETI[d] ?? d)}</span>` : '<span class="not">—</span>');
+  const degisim = (/** @type {string} */ d) => `<span class="degisim ${kacis(/^[a-z-]+$/.test(d) ? d : '')}">${kacis(/** @type {Record<string, string>} */ (DEGISIM_ETIKETLERI)[d] ?? d)}</span>`;
+  const oranMetni = (/** @type {number | null} */ o) => (o === null ? '—' : `%${o}`);
+  /** Fark hücresi: pozitif iyi mi? @param {number | null} d @param {boolean} artisIyi @param {(n: number) => string} [bicim] */
+  const farkHucresi = (d, artisIyi, bicim = (n) => String(n)) => {
+    if (d === null) return '<td class="sayi">—</td>';
+    if (d === 0) return '<td class="sayi">= 0</td>';
+    const iyi = artisIyi ? d > 0 : d < 0;
+    return `<td class="sayi ${iyi ? 'iyi' : 'kotu'}">${d > 0 ? '↑' : '↓'} ${kacis(bicim(Math.abs(d)))}</td>`;
+  };
+  const A = v.a;
+  const B = v.b;
+  const fark = (/** @type {keyof KarsilastirmaKosusu['sayilar']} */ k) => B.sayilar[k] - A.sayilar[k];
+  const satir = (/** @type {string} */ etiket, /** @type {string} */ a, /** @type {string} */ b, /** @type {string} */ f) =>
+    `<tr><th scope="row">${kacis(etiket)}</th><td>${a}</td><td>${b}</td>${f}</tr>`;
+  const turMetni = v.tur === 'ekran' ? 'Ekran koşuları' : v.tur === 'akis' ? 'Servis akışı koşuları' : 'Servis koşuları';
+  const kalanMi = (/** @type {KarsilastirmaTarafi | null} */ t) => Boolean(t && (t.durum === 'basarisiz' || t.durum === 'hata'));
+
+  let gomulen = 0;
+  const ayrintilar = [];
+  const satirlar = v.senaryolar.map((x, i) => {
+    const id = `k${i + 1}`;
+    const ayrintiVar = x.degisti && (kalanMi(x.a) || kalanMi(x.b));
+    if (ayrintiVar) {
+      const taraf = (/** @type {'A' | 'B'} */ ad, /** @type {KarsilastirmaTarafi | null} */ t) => {
+        if (!t) return `<div><h4>${ad}</h4><p class="not">Bu koşuda yok.</p></div>`;
+        const hata = s.hatalar && t.hata ? ilkSatirlar(maskele(t.hata)) : '';
+        const bg = s.hatalar && t.hata ? beklenenGorulenCikar(maskele(t.hata)) : null;
+        const goruntuler = s.goruntuler ? (t.goruntuler ?? []).filter((g) => GORUNTU_TURU.test(g.icerikTuru) && /^[A-Za-z0-9+/=]+$/.test(g.base64)) : [];
+        gomulen += goruntuler.length;
+        return `<div><h4>${ad} — ${durum(t.durum)}${typeof t.httpKodu === 'number' ? ` · HTTP ${t.httpKodu}` : ''}</h4>
+${t.kalinanAdim ? `<p><strong>Kalınan adım:</strong> ${kacis(maskele(t.kalinanAdim))}</p>` : ''}
+${bg ? `<dl class="bg"><dt>Beklenen</dt><dd>${kacis(bg.beklenen || '—')}</dd><dt>Görülen</dt><dd>${kacis(bg.gorulen || '—')}</dd></dl>` : ''}
+${hata ? `<pre aria-label="${ad} hata mesajı (ilk satırlar)">${kacis(hata)}</pre>` : ''}
+${goruntuler.map((g) => `<figure><img src="data:${g.icerikTuru};base64,${g.base64}" alt="${e(`${x.baslik} — ${ad} ekran görüntüsü`)}"><figcaption>${ad}: ${e(g.ad)}</figcaption></figure>`).join('\n')}
+</div>`;
+      };
+      ayrintilar.push(`<section class="ayrinti" id="${id}" aria-labelledby="${id}-b">
+<h3 id="${id}-b">${i + 1}. ${e(x.baslik)} — ${degisim(x.degisim)}</h3>
+<div class="ikili">${taraf('A', x.a)}${taraf('B', x.b)}</div>
+</section>`);
+    }
+    return `<tr><td class="sayi">${i + 1}</td><td>${ayrintiVar ? `<a href="#${id}">${e(x.baslik)}</a>` : e(x.baslik)}</td><td>${e(x.grup)}</td>`
+      + `<td>${durum(x.a?.durum)}</td><td>${durum(x.b?.durum)}</td><td>${degisim(x.degisim)}</td>`
+      + `<td class="sayi">${kacis(sureMetni(x.a?.sureMs))}</td><td class="sayi">${kacis(sureMetni(x.b?.sureMs))}</td>`
+      + `${farkHucresi(x.sureFarkiMs, false, sureMetni)}</tr>`;
+  });
+  const olusturma = v.olusturma ?? new Date().toISOString();
+  const sayimListesi = DEGISIM_SINIFLARI.filter((k) => v.sayim[k]).map((k) =>
+    `<li><span class="sayi">${Number(v.sayim[k]) || 0}</span><span class="etiket">${kacis(/** @type {Record<string, string>} */ (DEGISIM_ETIKETLERI)[k])}</span></li>`).join('');
+  return `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'">
+<meta name="referrer" content="no-referrer">
+<title>${e(`Nöbetçi karşılaştırma raporu — ${v.proje}`)}</title>
+<style>${CSS}${KARSILASTIRMA_CSS}</style>
+</head>
+<body>
+<main>
+<header>
+<h1>Nöbetçi karşılaştırma raporu</h1>
+<p class="alt">${kacis(turMetni)}: ${e(A.etiket)} (A) ↔ ${e(B.etiket)} (B) · Proje: ${e(v.proje)}</p>
+</header>
+<section aria-labelledby="ozet-b">
+<h2 id="ozet-b">Özet</h2>
+<table>
+<thead><tr><th scope="col"><span class="not">Alan</span></th><th scope="col">A</th><th scope="col">B</th><th scope="col" class="sayi">Fark (B − A)</th></tr></thead>
+<tbody>
+${satir('Tarih', kacis(tarihMetni(A.baslangic)), kacis(tarihMetni(B.baslangic)), '<td></td>')}
+${satir('Ortam', e(A.ortam || '—'), e(B.ortam || '—'), '<td></td>')}
+${s.adres && v.ortamAdresi ? satir('Ortam adresi', kacis(maskele(v.ortamAdresi)), kacis(maskele(v.ortamAdresi)), '<td></td>') : ''}
+${satir('Kapsam', e(A.kapsam || '—'), e(B.kapsam || '—'), '<td></td>')}
+${satir('Süre', kacis(sureMetni(A.sureMs)), kacis(sureMetni(B.sureMs)), farkHucresi(A.sureMs !== null && B.sureMs !== null ? B.sureMs - A.sureMs : null, false, sureMetni))}
+${satir('Başarılı', String(A.sayilar.basarili), String(B.sayilar.basarili), farkHucresi(fark('basarili'), true))}
+${satir('Kalan', String(A.sayilar.kalan), String(B.sayilar.kalan), farkHucresi(fark('kalan'), false))}
+${satir('Atlanan', String(A.sayilar.atlanan), String(B.sayilar.atlanan), farkHucresi(fark('atlanan'), false))}
+${satir('Durduruldu', String(A.sayilar.durduruldu), String(B.sayilar.durduruldu), farkHucresi(fark('durduruldu'), false))}
+${satir('Başarı oranı', kacis(oranMetni(A.oran)), kacis(oranMetni(B.oran)), farkHucresi(A.oran !== null && B.oran !== null ? B.oran - A.oran : null, true, (n) => `${n} puan`))}
+</tbody>
+</table>
+${sayimListesi ? `<ul class="ozet" aria-label="Değişim sayıları">${sayimListesi}</ul>` : ''}
+</section>
+<section aria-labelledby="senaryo-b">
+<h2 id="senaryo-b">${v.tur === 'akis' ? 'Akış senaryoları' : 'Senaryolar'} (${v.senaryolar.length})</h2>
+${v.senaryolar.length ? `<table>
+<thead><tr><th scope="col" class="sayi">#</th><th scope="col">Senaryo</th><th scope="col">${v.tur === 'ekran' ? 'Ekran' : 'Servis'}</th><th scope="col">A</th><th scope="col">B</th><th scope="col">Değişim</th><th scope="col" class="sayi">Süre A</th><th scope="col" class="sayi">Süre B</th><th scope="col" class="sayi">Süre farkı</th></tr></thead>
+<tbody>
+${satirlar.join('\n')}
+</tbody>
+</table>` : '<p>Karşılaştırılacak senaryo yok.</p>'}
+</section>
+${ayrintilar.length ? `<section aria-labelledby="ayrinti-b">
+<h2 id="ayrinti-b">Değişen kalan senaryoların ayrıntısı</h2>
+${ayrintilar.join('\n')}
+</section>` : ''}
+<footer>
+<p>Oluşturma: ${kacis(tarihMetni(olusturma))} · Nöbetçi. Gizli değerler maskelenmiştir; giriş bilgisi, istek / yanıt gövdesi ve test verisinin gizli sütunları rapora eklenmez.${
+  s.goruntuler ? ` Gömülü ekran görüntüsü: ${gomulen}.` : ''}${
+  s.goruntuler && v.atlananGoruntu ? ` Boyut sınırı (${Math.round(EN_COK_GORUNTU_BAYT / 1024 / 1024)} MB) nedeniyle eklenmeyen görüntü: ${v.atlananGoruntu}.` : ''}</p>
+</footer>
+</main>
+</body>
+</html>
+`;
+}
+
+/**
  * GET /platform/sonuclar/html-rapor?projeId=&tur=ekran|servis&id=&goruntuler=1&hatalar=0|1&adres=1
  * @param {Veritabani} vt @param {URLSearchParams} q @param {{ medyaKlasoru: string }} ortamlar
  * @returns {Promise<{ html: string; dosyaAdi: string; boyut: number; goruntu: { eklenen: number; atlanan: number; bayt: number } }>}
@@ -414,39 +611,15 @@ export async function htmlRaporuOlustur(vt, q, ortamlar) {
   const tur = q.get('tur') === 'servis' ? 'servis' : 'ekran';
   const secenekler = { goruntuler: q.get('goruntuler') === '1', hatalar: q.get('hatalar') !== '0', adres: q.get('adres') === '1' };
   const { veri, senaryolar } = tur === 'servis' ? servisKosusuVerisi(vt, projeId, id) : ekranKosusuVerisi(vt, projeId, id);
-  let bayt = 0;
-  let eklenen = 0;
-  let atlanan = 0;
-  /** @type {RaporSenaryosu[]} */
-  const son = [];
   // Görüntüler: kalan senaryolarınki önce (koşu detayı zaten başarısızları önce sıralar); sığmayanlar atlanır.
-  const anahtar = secenekler.goruntuler && senaryolar.some((x) => 'medya' in x && x.medya.length) ? medyaAnahtariniHazirla(vt) : null;
-  try {
-    for (const x of senaryolar) {
-      const { medya, ...kalan } = /** @type {RaporSenaryosu & { medya?: Array<{ id: string; ad: string; icerikTuru: string; boyut: number }> }} */ (x);
-      /** @type {RaporGoruntusu[]} */
-      const goruntuler = [];
-      for (const m of anahtar ? medya ?? [] : []) {
-        if (!GORUNTU_TURU.test(m.icerikTuru)) continue;
-        const tahmin = Math.ceil(m.boyut / 3) * 4;
-        if (bayt + tahmin > EN_COK_GORUNTU_BAYT) { atlanan++; continue; }
-        const kayit = medyaGetir(vt, m.id);
-        if (!kayit || !medyaDosyaAdiGecerliMi(kayit.dosya)) { atlanan++; continue; }
-        try {
-          const base64 = (await medyaTamamenCoz(/** @type {Buffer} */ (anahtar), join(ortamlar.medyaKlasoru, kayit.dosya))).toString('base64');
-          if (bayt + base64.length > EN_COK_GORUNTU_BAYT) { atlanan++; continue; }
-          bayt += base64.length;
-          eklenen++;
-          goruntuler.push({ ad: m.ad, icerikTuru: m.icerikTuru, base64 });
-        } catch {
-          atlanan++; // dosya yok / bozuk
-        }
-      }
-      son.push({ ...kalan, ...(goruntuler.length ? { goruntuler } : {}) });
-    }
-  } finally {
-    if (anahtar) anahtar.fill(0);
-  }
+  const cozulen = await goruntuleriCoz(vt, senaryolar.map((x) => ('medya' in x ? x.medya : [])), ortamlar.medyaKlasoru, secenekler.goruntuler);
+  const { eklenen, atlanan, bayt } = cozulen;
+  /** @type {RaporSenaryosu[]} */
+  const son = senaryolar.map((x, i) => {
+    const { medya, ...kalan } = /** @type {RaporSenaryosu & { medya?: unknown }} */ (x);
+    const goruntuler = cozulen.gruplar[i];
+    return { ...kalan, ...(goruntuler.length ? { goruntuler } : {}) };
+  });
   const html = htmlRaporuUret({ ...veri, senaryolar: son, atlananGoruntu: atlanan }, {
     ...secenekler, ekAdlar: ekGizliAdlar(vt), gizliDegerler: bilinenGizliDegerler(vt, projeId)
   });

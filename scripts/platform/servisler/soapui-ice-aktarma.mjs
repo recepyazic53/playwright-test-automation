@@ -8,7 +8,13 @@
 //   · diğerleri (kişi verileri vb.) → test verisi türlerinde eşlenmesi gereken parametre adları (değerleri dönmez).
 // - Gövdeye düz yazılmış giriş bilgisi öğeleri (<Username>…</Username>) durumda en çok geçen değerse ${USERNAME} olur;
 //   farklı değer (adım bilerek başka kanal / kullanıcı deniyor) gövdede kalır ve not düşülür.
+// - Özellikler dört yerden okunur: proje (<con:properties> proje düzeyinde), ortam (<con:environment>; ${#Env#X}), takım
+//   (TestSuite) ve test durumu (TestCase; Groovy ile atananlar üstüne yazar). Kapsamlı başvuru (${#Project#X}) o kapsamın
+//   değerini, kapsamsız başvuru (${X}) test durumu → takım → proje → ortam sırasıyla ilk bulunanı alır.
+// - Her istek adımında gövdede DOĞRUDAN bir özelliğe başvuran alanlar (alan yolu → özellik adı) çıkarılır: aktarım bunları
+//   servisin alan bağlarına (alan yolu → tablo sütunu / hesaplama kuralı) çevirir (soapui-aktarimi.mjs; yeni bağlama modeli).
 import { xmlKacisCoz } from './soap-istemcisi.mjs';
+import { xmlAyristir } from './servis-govdesi.mjs';
 
 /** Giriş bilgisi sayılan özellik / öğe adları (küçük harf, yalnız harfler) → gövdedeki ortak parametre adı. */
 export const KIMLIK_PARAMETRELERI = Object.freeze(/** @type {Record<string, string>} */ ({
@@ -36,10 +42,14 @@ const istekGovdesi = (s) => icMetin(s, 'request').replace(/\\r(?=\r?\n|$)/g, '')
  * @typedef {{ ad: string; soapSurumu: '1.1' | '1.2'; wsdl: string; operasyonlar: Operasyon[] }} Arayuz
  * @typedef {{ tur: 'deger'; deger: string } | { tur: 'tarih'; ifade: string }} OzellikCozumu
  * @typedef {import('./servis-deposu.mjs').ServisKontrolu} ServisKontrolu
+ * @typedef {{ yol: string; ad: string }} AlanBasvurusu gövdede değeri doğrudan ${ad} olan alan (yol: işlem öğesinin altından, "Input/Channel")
  * @typedef {{ ad: string; etkin: boolean; arayuz: string; operasyon: string; eylem?: string; adres: string; yol: string; govde: string;
- *   kontroller: ServisKontrolu[]; uyarilar: string[] }} IstekAdimi
+ *   kontroller: ServisKontrolu[]; uyarilar: string[]; alanlar: AlanBasvurusu[] }} IstekAdimi
+ * @typedef {'Proje' | 'Ortam' | 'Takım' | 'Test durumu' | 'Groovy' | 'Gövde'} OzellikKaynagi
+ * @typedef {{ ad: string; kaynak: OzellikKaynagi | null; deger?: string; tarih?: string }} KullanilanOzellik gövdelerde geçen özellik (kaynak
+ *   null: dosyada tanımlı değil); deger yalnız sunucu içinde kullanılır (gizli adlıların değeri arayüze gitmez)
  * @typedef {{ takim: string; ad: string; adimlar: IstekAdimi[]; kimlik: Record<string, string>; tarihKurallari: Record<string, string>;
- *   veriParametreleri: string[]; uyarilar: string[] }} TestDurumu
+ *   veriParametreleri: string[]; uyarilar: string[]; ozellikler: KullanilanOzellik[] }} TestDurumu
  */
 
 /**
@@ -125,18 +135,59 @@ const icMetinDuz = (s, etiket) => (s.match(new RegExp(`<${etiket}>([\\s\\S]*?)</
 /** Özellik / öğe adı giriş bilgisiyse ortak parametre adı (USERNAME / PASSWORD / CHANNEL). @param {string} ad */
 const kimlikParametresi = (ad) => KIMLIK_PARAMETRELERI[ad.toLowerCase().replace(/[^a-z]/g, '')];
 
-/** SoapUI özellik başvurusu: ${#TestCase#AD}, ${#Project#AD}, ${AD}. */
-const SOAPUI_OZELLIGI = /\$\{(?:#(?:TestCase|TestSuite|Project|Global)#)?([A-Za-z_][\w.-]*)\}/g;
+/** SoapUI özellik başvurusu: ${#TestCase#AD}, ${#TestSuite#AD}, ${#Project#AD}, ${#Env#AD}, ${#Global#AD}, ${AD}. */
+const SOAPUI_OZELLIGI = /\$\{(?:#(TestCase|TestSuite|Project|Env|Global)#)?([A-Za-z_][\w.-]*)\}/g;
 
 /**
  * Gövdedeki SoapUI özellik başvurularını sade yazıma çevirir (${AD}); giriş bilgisi özellikleri ortak ada (${USERNAME}).
- * @param {string} govde @param {Set<string>} kullanilan (doldurulur: gövdede geçen özgün özellik adları)
+ * @param {string} govde @param {Map<string, Set<string>>} kullanilan (doldurulur: gövdede geçen özgün özellik adı → başvuru kapsamları; '' kapsamsız)
  */
 function ozellikleriSadelestir(govde, kullanilan) {
-  return govde.replace(SOAPUI_OZELLIGI, (_m, ad) => {
-    kullanilan.add(ad);
+  return govde.replace(SOAPUI_OZELLIGI, (_m, kapsam, ad) => {
+    if (!kullanilan.has(ad)) kullanilan.set(ad, new Set());
+    /** @type {Set<string>} */ (kullanilan.get(ad)).add(kapsam ?? '');
     return `\${${kimlikParametresi(ad) ?? ad}}`;
   });
+}
+
+/**
+ * Bir bölümdeki özellikler (<con:property><con:name>A</con:name><con:value>V</con:value></con:property>; değer boş olabilir).
+ * @param {string} bolum @returns {Record<string, string>}
+ */
+function ozellikleriOku(bolum) {
+  /** @type {Record<string, string>} */
+  const s = {};
+  for (const p of bolum.matchAll(/<con:property>\s*<con:name>([^<]*)<\/con:name>\s*(?:<con:value>([^<]*)<\/con:value>|<con:value\s*\/>)?\s*<\/con:property>/g)) {
+    s[xmlKacisCoz(p[1])] = xmlKacisCoz(p[2] ?? '');
+  }
+  return s;
+}
+
+/**
+ * Gövdede değeri DOĞRUDAN ${AD} olan yaprak alanlar: yol işlem öğesinin (Body'nin ilk çocuğu) altından, yerel adlarla ("Input/Channel").
+ * XML ayrıştırılamazsa boş döner (alan bağı önerilmez; gövde yine aktarılır).
+ * @param {string} govde @returns {AlanBasvurusu[]}
+ */
+export function alanBasvurulari(govde) {
+  /** @type {AlanBasvurusu[]} */
+  const sonuc = [];
+  try {
+    const kok = xmlAyristir(govde);
+    const body = kok.yerel === 'Envelope' ? kok.cocuklar.find((c) => c.yerel === 'Body') : null;
+    const sarmal = body?.cocuklar[0];
+    if (!sarmal) return sonuc;
+    /** @param {import('./servis-govdesi.mjs').XmlOgesi} o @param {string} on */
+    const gez = (o, on) => {
+      for (const c of o.cocuklar) {
+        const yol = on ? `${on}/${c.yerel}` : c.yerel;
+        if (c.cocuklar.length) { gez(c, yol); continue; }
+        const m = /^\$\{\s*([A-Za-z_][\w.-]*)\s*\}$/.exec(c.metin.trim());
+        if (m && !sonuc.some((x) => x.yol === yol)) sonuc.push({ yol, ad: m[1] });
+      }
+    };
+    gez(sarmal, '');
+  } catch { /* ayrıştırılamayan gövde: bağ önerisi yok */ }
+  return sonuc;
 }
 
 const DUZ_OGE = /<((?:\w+:)?(\w+))(\s[^>]*)?>([^<]*)<\/\1>/g;
@@ -188,19 +239,29 @@ export function soapuiCozumle(xml) {
     });
     arayuzler.push({ ad, soapSurumu: oznitelik(m[1], 'soapVersion') === '1_2' ? '1.2' : '1.1', wsdl: oznitelik(m[1], 'definition'), operasyonlar });
   }
+  /** @type {string[]} */
+  const genelUyarilar = [];
+  // Proje özellikleri: arayüzler, takımlar, ortamlar ve sahte servisler dışındaki <con:properties>.
+  const projeOz = ozellikleriOku(temiz.replace(/<con:(interface|testSuite|environment|mockService|restMockService)\b[\s\S]*?<\/con:\1>/g, ''));
+  // Ortam (ReadyAPI environment) özellikleri: ilk ortamın değerleri; birden çok ortam varsa not düşülür.
+  const ortamlar = [...temiz.matchAll(/<con:environment\b([^>]*)>([\s\S]*?)<\/con:environment>/g)];
+  const ortamOz = ortamlar.length ? ozellikleriOku(ortamlar[0][2]) : {};
+  if (ortamlar.length > 1) genelUyarilar.push(`Dosyada ${ortamlar.length} ortam var; ortam özelliklerinin değerleri ilk ortamdan ("${oznitelik(ortamlar[0][1], 'name')}") alındı.`);
   /** @type {TestDurumu[]} */
   const durumlar = [];
   for (const t of temiz.matchAll(/<con:testSuite\b([^>]*)>([\s\S]*?)<\/con:testSuite>/g)) {
     const takim = oznitelik(t[1], 'name');
+    const takimOz = ozellikleriOku(t[2].replace(/<con:testCase\b[\s\S]*?<\/con:testCase>/g, ''));
     for (const c of t[2].matchAll(/<con:testCase\b([^>]*)>([\s\S]*?)<\/con:testCase>/g)) {
       /** @type {string[]} */
-      const uyarilar = [];
-      /** @type {Record<string, OzellikCozumu>} */
+      const uyarilar = [...genelUyarilar];
+      /** Test durumu özellikleri (son kaydedilen değerler) — Groovy ile üretilenler aşağıda ezilir. @type {Record<string, OzellikCozumu>} */
       const ozellikler = {};
-      // Test durumu özellikleri (son kaydedilen değerler) — Groovy ile üretilenler aşağıda ezilir.
-      const ozellikBolumu = c[2].replace(/<con:testStep\b[\s\S]*?<\/con:testStep>/g, '');
-      for (const p of ozellikBolumu.matchAll(/<con:property><con:name>([^<]*)<\/con:name><con:value>([^<]*)<\/con:value><\/con:property>/g)) {
-        ozellikler[p[1]] = { tur: 'deger', deger: xmlKacisCoz(p[2]) };
+      /** @type {Record<string, OzellikKaynagi>} */
+      const durumKaynagi = {};
+      for (const [ad, deger] of Object.entries(ozellikleriOku(c[2].replace(/<con:testStep\b[\s\S]*?<\/con:testStep>/g, '')))) {
+        ozellikler[ad] = { tur: 'deger', deger };
+        durumKaynagi[ad] = 'Test durumu';
       }
       const adimlar = [...c[2].matchAll(/<con:testStep\b([^>]*)>([\s\S]*?)<\/con:testStep>/g)];
       for (const a of adimlar) {
@@ -208,22 +269,49 @@ export function soapuiCozumle(xml) {
         if (tur === 'groovy') {
           const g = groovyOzellikleri(betikMetni(a[2]));
           Object.assign(ozellikler, g.ozellikler);
+          for (const ad of Object.keys(g.ozellikler)) durumKaynagi[ad] = 'Groovy';
           if (g.anlasilmayanlar.length) uyarilar.push(`Groovy adımı "${oznitelik(a[1], 'name')}": anlaşılamayan özellik(ler) ${g.anlasilmayanlar.join(', ')}.`);
           if (/runTestStepByName|testRunner\.(?:gotoStep|fail)/.test(betikMetni(a[2]))) uyarilar.push(`Groovy adımı "${oznitelik(a[1], 'name')}" başka adım çalıştırıyor / akışı değiştiriyor — bu kısmı aktarılmadı.`);
         } else if (tur !== 'request') {
           uyarilar.push(`"${oznitelik(a[1], 'name')}" (${tur}) adımı desteklenmiyor — aktarılmadı.`);
         }
       }
-      /** @type {Record<string, string>} */
-      const kimlik = {};
-      for (const [ad, oc] of Object.entries(ozellikler)) {
-        const p = kimlikParametresi(ad);
-        if (p && oc.tur === 'deger' && oc.deger) kimlik[p] = oc.deger;
-      }
-      /** @type {Set<string>} */
-      const kullanilan = new Set();
+      /**
+       * Özelliğin değeri ve kaynağı: kapsamlı başvuru o kapsamdan; kapsamsız test durumu → takım → proje → ortam.
+       * @param {string} ad @param {Set<string>} [kapsamlar] @returns {{ oc: OzellikCozumu; kaynak: OzellikKaynagi } | null}
+       */
+      const coz = (ad, kapsamlar = new Set([''])) => {
+        /** @type {Array<[string, () => ({ oc: OzellikCozumu; kaynak: OzellikKaynagi } | null)]>} */
+        const yerler = [
+          ['TestCase', () => (ozellikler[ad] ? { oc: ozellikler[ad], kaynak: durumKaynagi[ad] ?? 'Test durumu' } : null)],
+          ['TestSuite', () => (Object.hasOwn(takimOz, ad) ? { oc: { tur: 'deger', deger: takimOz[ad] }, kaynak: 'Takım' } : null)],
+          ['Project', () => (Object.hasOwn(projeOz, ad) ? { oc: { tur: 'deger', deger: projeOz[ad] }, kaynak: 'Proje' } : null)],
+          ['Env', () => (Object.hasOwn(ortamOz, ad) ? { oc: { tur: 'deger', deger: ortamOz[ad] }, kaynak: 'Ortam' } : null)]
+        ];
+        for (const k of kapsamlar) {
+          if (!k) continue;
+          const yer = yerler.find(([y]) => y === k);
+          const r = yer ? yer[1]() : null;
+          if (r) return r;
+        }
+        for (const [, al] of yerler) { const r = al(); if (r) return r; }
+        return null;
+      };
+      /** @type {Map<string, Set<string>>} */
+      const kullanilan = new Map();
       const istekAdimlari = adimlar.filter((a) => oznitelik(a[1], 'type') === 'request')
         .map((a) => ({ a, adimUyarilari: /** @type {string[]} */ ([]), govde: ozellikleriSadelestir(istekGovdesi(a[2]), kullanilan) }));
+      /** @type {Record<string, string>} */
+      const kimlik = {};
+      /** @type {Record<string, OzellikKaynagi>} */
+      const kimlikKaynagi = {};
+      // Giriş bilgisi: önce gövdede başvurulan, sonra dosyada tanımlı giriş özellikleri (test durumu → takım → proje → ortam).
+      for (const ad of [...kullanilan.keys(), ...Object.keys(ozellikler), ...Object.keys(takimOz), ...Object.keys(projeOz), ...Object.keys(ortamOz)]) {
+        const p = kimlikParametresi(ad);
+        if (!p || kimlik[p] !== undefined) continue;
+        const r = coz(ad, kullanilan.get(ad));
+        if (r && r.oc.tur === 'deger' && r.oc.deger) { kimlik[p] = r.oc.deger; kimlikKaynagi[p] = r.kaynak; }
+      }
       // Düz yazılmış giriş bilgileri: her parametre için adımlarda EN ÇOK geçen değer profil değeri olur.
       /** @type {Record<string, Map<string, number>>} */
       const sayac = {};
@@ -233,7 +321,9 @@ export function soapuiCozumle(xml) {
           sayac[p].set(d, (sayac[p].get(d) ?? 0) + 1);
         }
       }
-      for (const [p, m] of Object.entries(sayac)) if (kimlik[p] === undefined) kimlik[p] = [...m].sort((x, y) => y[1] - x[1])[0][0];
+      for (const [p, m] of Object.entries(sayac)) {
+        if (kimlik[p] === undefined) { kimlik[p] = [...m].sort((x, y) => y[1] - x[1])[0][0]; kimlikKaynagi[p] = 'Gövde'; }
+      }
       /** @type {IstekAdimi[]} */
       const istekler = [];
       for (const { a, adimUyarilari, govde: sade } of istekAdimlari) {
@@ -256,20 +346,37 @@ export function soapuiCozumle(xml) {
           if (cevrilen) kontroller.push(cevrilen);
           else adimUyarilari.push(`"${ktur}" doğrulaması desteklenmiyor — aktarılmadı.`);
         }
-        istekler.push({ ad: oznitelik(a[1], 'name'), etkin: oznitelik(a[1], 'disabled') !== 'true', arayuz, operasyon, ...(eylem ? { eylem } : {}), adres, yol, govde, kontroller, uyarilar: adimUyarilari });
+        istekler.push({
+          ad: oznitelik(a[1], 'name'), etkin: oznitelik(a[1], 'disabled') !== 'true', arayuz, operasyon, ...(eylem ? { eylem } : {}), adres, yol, govde, kontroller,
+          uyarilar: adimUyarilari, alanlar: alanBasvurulari(govde)
+        });
       }
       /** @type {Record<string, string>} */
       const tarihKurallari = {};
       /** @type {string[]} */
       const veriParametreleri = [];
-      for (const ad of [...kullanilan].sort()) {
-        if (kimlikParametresi(ad)) continue;
-        const oc = ozellikler[ad];
-        if (oc?.tur === 'tarih') tarihKurallari[ad] = oc.ifade;
-        else veriParametreleri.push(ad);
-        if (!oc) uyarilar.push(`"${ad}" özelliği dosyada tanımlı değil; test verisinde eşlenmeli.`);
+      /** Gövdelerde (son hâliyle) geçen her özellik: kaynağı ve değeri / tarih ifadesi. @type {KullanilanOzellik[]} */
+      const kullanilanlar = [];
+      /** Sade ad → özgün özellik adı (giriş bilgisi ortak adları için ilk özgün ad). @type {Map<string, string>} */
+      const ozgun = new Map([...kullanilan.keys()].map((ad) => [kimlikParametresi(ad) ?? ad, ad]));
+      for (const x of istekler) {
+        for (const m of x.govde.matchAll(/\$\{([A-Za-z_][\w.-]*)\}/g)) {
+          const ad = m[1];
+          if (kullanilanlar.some((k) => k.ad === ad)) continue;
+          if (kimlik[ad] !== undefined) { kullanilanlar.push({ ad, kaynak: kimlikKaynagi[ad] ?? null, deger: kimlik[ad] }); continue; }
+          const ilk = ozgun.get(ad) ?? ad;
+          const r = coz(ilk, kullanilan.get(ilk));
+          kullanilanlar.push(!r ? { ad, kaynak: null } : r.oc.tur === 'tarih' ? { ad, kaynak: r.kaynak, tarih: r.oc.ifade } : { ad, kaynak: r.kaynak, deger: r.oc.deger });
+        }
       }
-      durumlar.push({ takim, ad: oznitelik(c[1], 'name'), adimlar: istekler, kimlik, tarihKurallari, veriParametreleri, uyarilar });
+      for (const ad of [...kullanilan.keys()].sort()) {
+        if (kimlikParametresi(ad)) continue;
+        const r = coz(ad, kullanilan.get(ad));
+        if (r?.oc.tur === 'tarih') tarihKurallari[ad] = r.oc.ifade;
+        else veriParametreleri.push(ad);
+        if (!r) uyarilar.push(`"${ad}" özelliği dosyada tanımlı değil; test verisinde eşlenmeli.`);
+      }
+      durumlar.push({ takim, ad: oznitelik(c[1], 'name'), adimlar: istekler, kimlik, tarihKurallari, veriParametreleri, uyarilar, ozellikler: kullanilanlar });
     }
   }
   return { proje, arayuzler, durumlar };
@@ -291,7 +398,8 @@ export function servisTaslaklari(cozum, secim) {
   const durum = cozum.durumlar.find((d) => d.takim === secim.takim && d.ad === secim.durum);
   if (!durum) throw new Error(`Test durumu bulunamadı: ${secim.takim} / ${secim.durum}`);
   /** @type {Map<string, { anahtar: string; ad: string; yol: string; soapSurumu: '1.1' | '1.2'; operasyonlar: Operasyon[]; adresler: string[];
-   *   senaryolar: { baslik: string; operasyon: string; govde: string; kontroller: ServisKontrolu[]; kosuyaDahil: boolean; uyarilar: string[]; kaynak: Record<string, string> }[] }>} */
+   *   senaryolar: { baslik: string; operasyon: string; govde: string; kontroller: ServisKontrolu[]; kosuyaDahil: boolean; uyarilar: string[]; kaynak: Record<string, string>;
+   *     alanlar: AlanBasvurusu[] }[] }>} */
   const servisler = new Map();
   for (const a of durum.adimlar) {
     const ar = cozum.arayuzler.find((x) => x.ad === a.arayuz);
@@ -303,14 +411,14 @@ export function servisTaslaklari(cozum, secim) {
     }
     if (!s.yol && a.yol) s.yol = a.yol;
     try { const h = new URL(a.adres).origin; if (!s.adresler.includes(h)) s.adresler.push(h); } catch { /* yok */ }
-    s.senaryolar.push({ baslik: a.ad, operasyon: a.operasyon, govde: a.govde, kontroller: a.kontroller, kosuyaDahil: a.etkin,
+    s.senaryolar.push({ baslik: a.ad, operasyon: a.operasyon, govde: a.govde, kontroller: a.kontroller, kosuyaDahil: a.etkin, alanlar: a.alanlar,
       uyarilar: [...a.uyarilar, ...(a.yol && s.yol && a.yol.toLowerCase() !== s.yol.toLowerCase() ? [`Bu adım farklı bir yola gidiyor (${a.yol}).`] : [])],
       kaynak: { arac: 'SoapUI', takim: durum.takim, durum: durum.ad, adim: a.ad } });
   }
   return {
     durum: { takim: durum.takim, ad: durum.ad, uyarilar: durum.uyarilar },
     kimlikParametreleri: Object.keys(durum.kimlik).sort(), kimlikAdaylari: durum.kimlik,
-    tarihKurallari: durum.tarihKurallari, veriParametreleri: durum.veriParametreleri,
+    tarihKurallari: durum.tarihKurallari, veriParametreleri: durum.veriParametreleri, ozellikler: durum.ozellikler,
     servisler: [...servisler.values()]
   };
 }

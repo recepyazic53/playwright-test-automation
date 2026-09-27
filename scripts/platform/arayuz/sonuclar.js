@@ -5,7 +5,8 @@
 // (ekran görüntüsü, video, hata, adımlar, atlanan alanlar). Koşu detayı ve test detayı aynı
 // ekranda açılır.
 // Adresler: #/sonuclar (Genel > Ekranlar), #/sonuclar/servisler (Genel > Servisler: servis-sonuclari.js),
-// #/sonuclar/u/<ürün>, #/sonuclar/kosu/<id>, #/sonuclar/sonuc/<id>. Tarih aralığı: ortak süzgeç (tarih-araligi.js; oturumda).
+// #/sonuclar/u/<ürün>, #/sonuclar/kosu/<id>, #/sonuclar/sonuc/<id>, #/sonuclar/karsilastir/<A>/<B> (yan yana koşu
+// karşılaştırması: karsilastirma.js). Tarih aralığı: ortak süzgeç (tarih-araligi.js; oturumda).
 // Medya (ekran görüntüsü/video/iz) şifrelidir; sunucu /platform/medya/<id> ile kasa açıkken
 // çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
@@ -15,6 +16,7 @@ import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } fr
 import { hataKaydiDugmesi } from './entegrasyonlar.js';
 import { veriyiSirala } from './tablo-siralama.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
+import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
 
 /** Koşu geçmişinde bir sayfadaki koşu (Ayarlar > Arayüz; kullanıcı kararı). */
 let SAYFA_BOYU = 15;
@@ -103,6 +105,10 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       servisleriAl(proje).then((servisler) => { if (servisler.length) urunListesi(liste, ozet.ekranlar, secili, servisler); });
       if (tur === 'kosu' && kimlik) return kosuDetayi(icerik, decodeURIComponent(kimlik), proje);
       if (tur === 'sonuc' && kimlik) return sonucDetayi(icerik, decodeURIComponent(kimlik), proje);
+      if (tur === 'karsilastir' && kimlik && parcalar[2]) {
+        return karsilastirmaEkrani(icerik, proje, { tur: 'ekran', a: decodeURIComponent(kimlik), b: decodeURIComponent(parcalar[2]) })
+          .catch((e) => { if (!(e && e.durum === 423)) karsilastirmaHatasi(icerik, e, '#/sonuclar'); });
+      }
       // Genel > Servisler: servis sonuçlarının genel görünümü (servis-sonuclari.js; ayrıntılar #/servisler/sonuclar altında).
       if (tur === 'servisler') {
         return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { ust: genelSekmeleri('servisler'), gomulu: true }));
@@ -513,6 +519,8 @@ function kosuGecmisi(kosular, urun) {
   // Sıralama VERİDE (sayfalı tablo; tablo-siralama.js 'tablo-sirala' olayı → { anahtar, yon }).
   /** @type {{ anahtar: string | null; yon: 'artan' | 'azalan' | null }} */
   let siralama = { anahtar: null, yon: null };
+  // Karşılaştırma: iki satır seçilip "Karşılaştır" (karsilastirma.js; seçim sayfa değişse de korunur).
+  const secici = kosuSecici('ekran');
   const SIRALAMA_ALANLARI = {
     zaman: (k) => { const t = Date.parse(k.bitis || k.baslangic); return Number.isNaN(t) ? 0 : t; },
     tur: (k) => `${k.tur === 'tam' ? 'tam' : 'tekil'} ${k.kapsam || ''}`,
@@ -521,6 +529,7 @@ function kosuGecmisi(kosular, urun) {
   };
   const basliklar = [['Koşu', 'zaman'], ['Tür / kapsam', 'tur'], ['Dağılım', null], ['Top.', 'toplam', 1], ['Başarılı', 'basarili', 1], ['Başarısız', 'basarisiz', 1], ['Atlanan', 'atlanan', 1], ['Durd.', 'durduruldu', 1], ['Oran', 'oran', 1]]
     .map(([b, anahtar, sag]) => h('th', { scope: 'col', class: sag ? 'sayi' : null, ...(anahtar ? { 'data-sirala-anahtar': anahtar, 'aria-sort': 'none' } : { 'data-sirala': 'yok' }) }, b));
+  basliklar.unshift(secici.baslik());
   const sayiHucresi = (v, ek = '') => h('td', { class: `sayi ${v ? ek : 'sifir'}`.trim() }, String(v));
   const ciz = () => {
     const suzulen = filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre);
@@ -530,9 +539,10 @@ function kosuGecmisi(kosular, urun) {
       if (a) th.setAttribute('aria-sort', a === siralama.anahtar && siralama.yon ? (siralama.yon === 'artan' ? 'ascending' : 'descending') : 'none');
     }
     const dilim = secilen.slice(sayfa * SAYFA_BOYU, (sayfa + 1) * SAYFA_BOYU);
+    secici.sifirla();
     govde.replaceChildren(...dilim.map((k) => {
       const o = oran(k);
-      return h('tr', {},
+      return h('tr', {}, secici.hucre(k, k.bitis || k.baslangic, kisaTarih(k.bitis || k.baslangic)),
         h('td', {}, h('a', { class: 'kosu-baglantisi', href: `#/sonuclar/kosu/${encodeURIComponent(k.id)}` }, kosuNoktasi(k), kisaTarih(k.bitis || k.baslangic)),
           h('span', { class: 'gorunmez' }, ` (${KOSU_DURUMU[k.durum] || k.durum})`)),
         h('td', {}, h('span', { class: 'etiketler' }, rozet(k.tur === 'tam' ? 'tam' : 'tekil', k.tur === 'tam' ? 'vurgu' : ''), ' ',
@@ -564,7 +574,7 @@ function kosuGecmisi(kosular, urun) {
   return h('section', { class: 'kart', 'aria-labelledby': 'gecmis-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'gecmis-basligi' }, ikon('liste'), 'Koşu geçmişi'),
       h('span', { class: 'alt' }, urun ? 'Bu ürünü içeren tüm koşular; sayılar yalnızca bu ürün için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
-      kosular.length ? h('div', { class: 'sag' }, filtreSegmenti) : null),
+      kosular.length ? h('div', { class: 'sag' }, filtreSegmenti, kosular.length > 1 ? secici.dugme : null) : null),
     kosular.length
       ? [h('div', { class: 'tablo-kaydirma' }, tablo), sayfalama]
       : h('p', { class: 'bos-liste' }, 'Henüz koşu yok.'));
@@ -957,7 +967,7 @@ async function kosuDetayi(icerik, id, proje) {
           h('span', {}, kosuNoktasi(kosu), KOSU_DURUMU[kosu.durum] || kosu.durum),
           h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} → ${kosu.bitis ? saatMetni(kosu.bitis) : '—'}`)),
           sure !== null ? h('span', {}, h('span', { class: 'mono' }, sureMetni(sure))) : null)),
-      h('div', { class: 'eylemler' }, htmlRaporDugmesi({ tur: 'ekran', projeId: proje.id, id: kosu.id }),
+      h('div', { class: 'eylemler' }, karsilastirDugmesi({ tur: 'ekran', projeId: proje.id, kosuId: kosu.id }), htmlRaporDugmesi({ tur: 'ekran', projeId: proje.id, id: kosu.id }),
         h('a', { class: 'dugme hayalet', href: '#/sonuclar' }, ikon('geri'), 'Sonuçlar'))),
     h('div', { class: 'sonuc-kartlari mini' },
       ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Başarısız', kosu.basarisiz, 'basarisiz'),

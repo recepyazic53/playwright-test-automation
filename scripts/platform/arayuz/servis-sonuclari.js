@@ -2,13 +2,15 @@
 // servis / servis akışı süzgeci (son koşunun sağlık noktası); sağda tarih aralığı + ortam süzgeci, özet kartlar, koşu trendi
 // (sonuclar.js'teki grafik), sayfalı koşu geçmişi ve hata kalıpları. Koşu ayrıntısı (her senaryo / akış adımı: durum, süre,
 // hata) ve senaryo ayrıntısı (istek / yanıt — gizli alanlar maskeli) aynı ekranda açılır.
-// Adresler: #/servisler/sonuclar, …/s/<servisId>, …/a/<akisId>, …/kosu/<s-… | a-…>, …/senaryo/<satırId>.
+// Adresler: #/servisler/sonuclar, …/s/<servisId>, …/a/<akisId>, …/kosu/<s-… | a-…>, …/senaryo/<satırId>,
+// …/karsilastir/<A>/<B> (yan yana koşu karşılaştırması: karsilastirma.js).
 // Sonuçlar > Genel > "Servisler" sekmesi aynı genel görünümü (servisGenelBakis) kullanır.
 // Veri: /platform/servis-sonuclari* (yalnız okuma). Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { alan, api, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { dagilimCubugu, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
+import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
 
 export const TABAN = '#/servisler/sonuclar';
 const q = encodeURIComponent;
@@ -57,6 +59,12 @@ export function servisSonuclariEkrani(main, parcalar, baglam) {
   if ((tur === 'kosu' || tur === 'senaryo') && id) {
     ozetAl(proje, {}).then(navCiz).catch(() => yerlestir(nav));
     (tur === 'kosu' ? kosuAyrintisi(icerik, proje, id) : senaryoAyrintisi(icerik, proje, id)).catch(hata);
+    return;
+  }
+  if (tur === 'karsilastir' && id && parcalar[2]) {
+    ozetAl(proje, {}).then(navCiz).catch(() => yerlestir(nav));
+    karsilastirmaEkrani(icerik, proje, { tur: 'servis', a: id, b: decodeURIComponent(parcalar[2]) })
+      .catch((e) => { if (!(e && e.durum === 423)) karsilastirmaHatasi(icerik, e, TABAN); });
     return;
   }
   servisGenelBakis(icerik, proje, { ...(tur === 's' && id ? { servisId: id } : tur === 'a' && id ? { akisId: id } : {}), navCiz }).catch(hata);
@@ -229,13 +237,16 @@ function kosuGecmisi(kosular, genel) {
   let sayfa = 0;
   let filtre = 'tumu';
   const sayiHucresi = (v, ek = '') => h('td', { class: `sayi ${v ? ek : 'sifir'}`.trim() }, String(v));
+  // Karşılaştırma: iki satır seçilip "Karşılaştır" (karsilastirma.js; servis ↔ servis, akış ↔ akış).
+  const secici = kosuSecici('servis');
   const ciz = () => {
     const secilen = filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre);
     const sayfaSayisi = Math.max(1, Math.ceil(secilen.length / SAYFA_BOYU));
     if (sayfa >= sayfaSayisi) sayfa = sayfaSayisi - 1;
+    secici.sifirla();
     govdeT.replaceChildren(...secilen.slice(sayfa * SAYFA_BOYU, (sayfa + 1) * SAYFA_BOYU).map((k) => {
       const o = oran(k);
-      return h('tr', {},
+      return h('tr', {}, secici.hucre(k, k.baslangic, `${kisaTarih(k.baslangic)} ${k.baslik}`, k.tur),
         h('td', {}, h('a', { class: 'kosu-baglantisi', href: kosuAdresi(k.id) }, kosuNoktasi(k), kisaTarih(k.baslangic)),
           h('span', { class: 'gorunmez' }, kalan(k) ? ` (${kalan(k)} kalan)` : ' (hepsi geçti)')),
         h('td', { class: 'servis-sonuc-kaynak' }, h('span', { class: 'etiketler' }, rozet(k.tur === 'akis' ? 'akış' : 'servis', k.tur === 'akis' ? 'vurgu' : ''),
@@ -257,10 +268,10 @@ function kosuGecmisi(kosular, genel) {
   return h('section', { class: 'kart', 'aria-labelledby': 'ss-gecmis-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-gecmis-basligi' }, ikon('liste'), 'Koşu geçmişi'),
       h('span', { class: 'alt' }, 'Bir koşuya tıklayınca senaryo / adım sonuçları açılır'),
-      filtreSegmenti ? h('div', { class: 'sag' }, filtreSegmenti) : null),
+      h('div', { class: 'sag' }, filtreSegmenti, kosular.length > 1 ? secici.dugme : null)),
     h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu gecmis-tablosu' },
       h('caption', { class: 'gorunmez' }, 'Servis koşu geçmişi'),
-      h('thead', {}, h('tr', {}, ...[['Koşu'], ['Servis / akış'], ['Ortam'], ['Dağılım'], ['Top.', 1], ['Başarılı', 1], ['Kalan', 1], ['Atlanan', 1], ['Oran', 1], ['Süre', 1]]
+      h('thead', {}, h('tr', {}, secici.baslik(), ...[['Koşu'], ['Servis / akış'], ['Ortam'], ['Dağılım'], ['Top.', 1], ['Başarılı', 1], ['Kalan', 1], ['Atlanan', 1], ['Oran', 1], ['Süre', 1]]
         .map(([b, sag]) => h('th', { scope: 'col', class: sag ? 'sayi' : null }, b)))),
       govdeT)),
     sayfalama);
@@ -340,7 +351,7 @@ async function kosuAyrintisi(icerik, proje, id) {
           kosu.calistirma === 'dene' ? h('span', {}, rozet('deneme')) : null,
           h('span', {}, ikon('ag'), `ortam: ${kosu.ortam}`),
           h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} · ${sureMetni(kosu.sureMs)}`)))),
-      h('div', { class: 'eylemler' }, htmlRaporDugmesi({ tur: 'servis', projeId: proje.id, id: kosu.id }),
+      h('div', { class: 'eylemler' }, karsilastirDugmesi({ tur: 'servis', projeId: proje.id, kosuId: kosu.id }), htmlRaporDugmesi({ tur: 'servis', projeId: proje.id, id: kosu.id }),
         h('a', { class: 'dugme hayalet', href: kaynakAdresi(kosu) }, ikon('geri'), 'Servis sonuçları'))),
     h('div', { class: 'sonuc-kartlari mini' },
       ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Kalan', kalan(kosu), 'basarisiz'),

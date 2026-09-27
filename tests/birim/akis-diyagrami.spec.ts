@@ -3,7 +3,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { BAGLAM_ADIMI_ONEKI, BASLANGIC_ADIMLARI, akisDiyagrami, ifadeMetni } from '../../scripts/platform/senaryolar/akis-diyagrami.mjs';
+import {
+  BAGLAM_ADIMI_ONEKI, BASLANGIC_ADIMLARI, GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri, ifadeMetni, kontrolDugumleri
+} from '../../scripts/platform/senaryolar/akis-diyagrami.mjs';
+import { formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
+import { ornekBasvuruModeli } from './model-fikstur';
 
 const model = {
   id: 'deneme', ad: 'Deneme ekranı',
@@ -101,6 +105,28 @@ test('beklenen iş kuralı hatası: hedef adım işaretlenir, sonraki adımlar b
   const d = akisDiyagrami(model, { gorunurluk: { ...bireysel, adimlar: { bilgi: true, ek: true, onay: true } }, beklenen: { hataAdimi: 'bilgi', mesaj: 'Vergi no hatalı' } });
   expect(d.adimlar.map((a) => [a.id, a.kosulur, a.hedef])).toEqual([['bilgi', true, 'hata'], ['ek', false, null], ['onay', false, null]]);
   expect(d.bitis).toEqual({ tur: 'hata', metin: 'İş kuralı hatası beklenir: “Vergi no hatalı”', durum: null });
+});
+
+test('diyagramdan düzenleme (saf): koşulmama nedeni, kutudaki değer okunuşu, doğrulama hatalarının düğümlere dağılımı', () => {
+  // Neden: isteğe bağlı adım işaretsiz / beklenen hatadan sonra.
+  const d = akisDiyagrami(model, { gorunurluk: bireysel, degerler: { tip: 'Bireysel', vkn: 'gizli-olmali', eposta: null } });
+  expect(d.adimlar.map((a) => a.neden)).toEqual([null, '“Ek adım dahil” bu senaryoda işaretli değil.', null]);
+  const h = akisDiyagrami(model, { gorunurluk: bireysel, beklenen: { hataAdimi: 'bilgi', mesaj: 'x' } });
+  expect(h.adimlar[2].neden).toBe('Beklenen hata daha önceki bir adımda: akış orada biter.');
+  // Değerler yalnızca verilince alana yazılır (ekran sayfası: yok).
+  expect(d.adimlar[0].alanlar.map((a) => [a.id, a.deger])).toEqual([['tip', 'Bireysel'], ['vkn', 'gizli-olmali'], ['not', null], ['eposta', null]]);
+  expect('deger' in akisDiyagrami(model).adimlar[0].alanlar[0]).toBe(false);
+  // Kontrol anahtarı → düğüm: başlık ve senaryo ayarları girişte, beklenen sonuç bitişte, kapsam ayarı grubundaki adımda.
+  const bs = formSemasiOlustur(ornekBasvuruModeli());
+  expect(kontrolDugumleri('baslik', bs)).toEqual([GIRIS_DUGUMU]);
+  expect(kontrolDugumleri('adSoyad', bs)).toEqual([adimDugumu('bilgiler')]);
+  expect(kontrolDugumleri('onayAdimiDahil', bs)).toEqual([adimDugumu('onay')]);
+  expect(kontrolDugumleri('bilinmeyen', bs)).toEqual([]);
+  expect(kontrolDugumleri('beklenenSonuc.mesaj', bs)).toEqual([SONUC_DUGUMU]);
+  expect(kontrolDugumleri('subeProfili', bs)).toEqual([GIRIS_DUGUMU]);
+  expect(hataDugumleri({ adSoyad: ['Ad Soyad zorunludur.'], urun: ['Ürün seçin.'], 'beklenenSonuc.mesaj': ['Mesaj zorunlu.'] }, bs)).toEqual({
+    [adimDugumu('bilgiler')]: ['Ad Soyad zorunludur.', 'Ürün seçin.'], [SONUC_DUGUMU]: ['Mesaj zorunlu.']
+  });
 });
 
 test('koşul ifadelerinin okunuşu (ve / ya da / değil, onay kutusu, senaryo ayarı, çalışma anı)', () => {

@@ -30,8 +30,8 @@ export const KOSU_DURUMLARI = Object.freeze({
 
 const sureMetni = (ms) => (ms == null ? '' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
 
-/** Ortam "gerçek işlem" riski taşıyor mu? (varsayılan test ortamı değilse ya da adı canlı/üretim çağrıştırıyorsa) */
-export const riskliOrtamMi = (ortam) => Boolean(ortam) && (!ortam.varsayilan || /canl|prod|uretim|üretim/i.test(String(ortam.ad || '')));
+/** Ortam "gerçek işlem" riski taşıyor mu? (CANLI işaretliyse, varsayılan test ortamı değilse ya da adı canlı/üretim çağrıştırıyorsa) */
+export const riskliOrtamMi = (ortam) => Boolean(ortam) && (ortam.canli === true || !ortam.varsayilan || /canl|prod|uretim|üretim/i.test(String(ortam.ad || '')));
 
 // ---------------------------------------------------------------------------------------
 // Durum
@@ -71,15 +71,17 @@ export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) ||
  * ortamda uyarı.
  *  - Sabit ortam (s.ortam, s.senaryolar): Promise<boolean>.
  *  - ORTAM SEÇİMLİ (s.ortamlar + s.hesapla): ortam diyalogda seçilir; her seçimde hesapla(ortam) koşacak senaryoları
- *    (ve o ortamda Koşuda kapalı / tanımsız olanların sayısını) verir. Promise<{ ortam, senaryolar } | null>.
+ *    (ve o ortamda Koşuda kapalı / tanımsız olanların sayısını; istenirse atlananları nedenleriyle) verir. Promise<{ ortam, senaryolar } | null>.
+ *  - turEtiketi: "Kapsam" özet kutusunda tam / kısmi yerine gösterilecek metin (ör. servis koşusu).
  * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; not?: string; haricSayisi?: number; dugme?: string;
- *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number } }} s
+ *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; turEtiketi?: string;
+ *   hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }> } }} s
  */
 export function kosuOnayi(s) {
   return new Promise((coz) => {
     const secimli = Array.isArray(s.ortamlar) && s.ortamlar.length > 0 && typeof s.hesapla === 'function';
     let ortam = secimli ? (s.ortam && s.ortamlar.find((o) => o.id === s.ortam.id)) || onerilenOrtam(s.ortamlar) : s.ortam;
-    /** @type {{ senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number }} */
+    /** @type {{ senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }> }} */
     let hesap = { senaryolar: s.senaryolar || [], haricSayisi: s.haricSayisi };
     const baslat = h('button', { type: 'button', class: 'birincil' });
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
@@ -100,12 +102,16 @@ export function kosuOnayi(s) {
         h('dl', { class: 'onay-ozeti' },
           h('div', {}, h('dt', {}, 'Senaryo'), h('dd', {}, String(adet))),
           h('div', {}, h('dt', {}, 'Ortam'), h('dd', { class: riskli ? 'canli' : null }, ortam.ad)),
-          h('div', {}, h('dt', {}, 'Kapsam'), h('dd', { title: turMetni }, s.tur === 'tam' ? s.kapsam || 'Genel' : 'Kısmi'))),
+          h('div', {}, h('dt', {}, 'Kapsam'), h('dd', { title: s.turEtiketi || turMetni }, s.turEtiketi || (s.tur === 'tam' ? s.kapsam || 'Genel' : 'Kısmi')))),
         adet ? h('ul', { class: 'onay-listesi', 'aria-label': 'Çalıştırılacak senaryolar' },
           hesap.senaryolar.slice(0, 40).map((x) => h('li', {}, x.baslik)),
           adet > 40 ? h('li', {}, `… ve ${adet - 40} senaryo daha`) : null) : null,
         hesap.haricSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.haricSayisi} senaryo ${secimli ? `${ortam.ad} ortamında ` : ''}koşu listesinde olmadığı (Koşuda kapalı) için dahil edilmedi.`) : null,
         hesap.tanimsizSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.tanimsizSayisi} senaryo ${ortam.ad} ortamında tanımlı olmadığı için dahil edilmedi.`) : null,
+        hesap.atlananlar && hesap.atlananlar.length ? h('details', { class: 'atlananlar-listesi' },
+          h('summary', {}, `${hesap.atlananlar.length} senaryo ${ortam.ad} ortamında atlanır`),
+          h('ul', { class: 'onay-listesi' }, hesap.atlananlar.slice(0, 40).map((x) => h('li', {}, h('span', { class: 'atlanan-adi' }, x.baslik), h('small', { class: 'soluk' }, x.neden))),
+            hesap.atlananlar.length > 40 ? h('li', {}, `… ve ${hesap.atlananlar.length - 40} senaryo daha`) : null)) : null,
         h('p', { class: 'soluk kucuk' }, s.not || (s.tur === 'tam'
           ? 'Tam koşu olarak kaydedilir; bitince Sonuçlar kartları ve trendi güncellenir.'
           : 'Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez, koşu geçmişinde "tekil" görünür.')),

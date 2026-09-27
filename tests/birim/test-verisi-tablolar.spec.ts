@@ -168,7 +168,7 @@ test.describe('test verisi tabloları', () => {
     await duz.getByLabel('3. satır Parola').fill('gizli-9');
     await expect(duz.getByText('kaydedilmemiş değişiklik')).toBeVisible();
     // Kaydetmeden başka tabloya geçmek onay ister.
-    await nav.getByRole('button', { name: /^Kişi/ }).click();
+    await nav.getByRole('button', { name: /^Kişi \d+ sütun/ }).click(); // (grup başlığı "Kişi ve kayıt verileri" ile karışmasın)
     const onay = page.getByRole('dialog', { name: 'Değişiklikleriniz kaydedilmeyecek' });
     await onay.getByRole('button', { name: 'Vazgeç' }).click();
     await duz.getByRole('button', { name: 'Kaydet' }).click();

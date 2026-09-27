@@ -518,7 +518,9 @@ test('akış diyagramı: senaryonun akışı formdaki seçimlerle çizilir, adı
     await expect(d.getByText('“Teklifi kaydet” düğmesine basılır')).toBeVisible();
     await expect(dugum('Teminat')).toHaveClass(/durum-basari/);
     await expect(dugum('Beklenen sonuç: başarı')).toContainText('“Teklif oluşturuldu” metni görünür');
-    await expect(d.locator('input, select, textarea')).toHaveCount(0);
+    // Kutularda yalnız isteğe bağlı adımın "dahil" anahtarı var; alanlar kutu seçilince açılan düzenleme alanında (kapalı).
+    await expect(d.locator('.diyagram-dugumu').locator('input:not([role="switch"]), select, textarea')).toHaveCount(0);
+    await expect(d.locator('.diyagram-paneli')).toBeHidden();
     await goruntu(d, '09-akis-diyagrami.png');
     // Formda "Ek sürücü ekle" dahil edilince diyagram kaydetmeden güncellenir: adımlar artık koşulur, son koşuda yoktu.
     await page.getByRole('tab', { name: 'Form' }).click();
