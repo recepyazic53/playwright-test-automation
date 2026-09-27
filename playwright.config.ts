@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { MODEL_SPEC_DOSYASI } from './scripts/platform/senaryolar/model-kosusu.mjs';
 import { genelOturumDosyasi, genelVeri } from './tests/support/genel-veri';
 import { oturumuSifreliOku } from './tests/support/oturum-kasasi';
-import { ekranGoruntusuAyari, izAyari, kosuTarayiciAyarlari, videoAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
+import { ekranGoruntusuAyari, izAyari, kayitSecimleri, kosuTarayiciAyarlari, videoKaydiAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
 
 // MODEL KOŞUSU — Nöbetçi'deki senaryolar (test kodu yok; her senaryo ekran modeliyle genel model koşucusunda koşar).
 // Nöbetçi koşuyu proje ve ortam KİMLİKLERİYLE başlatır (NOBETCI_PROJE_ID / NOBETCI_ORTAM_ID; scripts/test-sunucu.mjs).
@@ -33,15 +33,17 @@ export default defineConfig({
   reporter: [
     ['list'],
     // Raporlayıcı TypeScript giriş noktasından yüklenir (neden: tests/support/platform-raporlayici.ts).
-    ['./tests/support/platform-raporlayici.ts', { projeId: veri.projeId, ortamId: veri.ortamId }]
+    // kayit: Ayarlar > Koşu > Kayıt seçimleri — "yalnız başarılı" seçiminde raporlayıcı kalan testlerin medyasını kaydetmeden atar.
+    ['./tests/support/platform-raporlayici.ts', { projeId: veri.projeId, ortamId: veri.ortamId, kayit: kayitSecimleri() }]
   ],
 
   use: {
     baseURL: veri.model?.tabanUrl,
     // Paylaşılan giriş oturumu kasa anahtarıyla şifreli saklanır (tests/support/oturum-kasasi.ts); burada bellekte çözülür.
     storageState: oturumuSifreliOku(oturumDosyasi),
-    // Kayıt kuralları: Ayarlar > Koşu (bkz. tests/support/kosu-ayarlari.ts).
-    video: videoAyari(),
+    // Kayıt kuralları: Ayarlar > Koşu (bkz. tests/support/kosu-ayarlari.ts). Video: kip + boyut ("Ekranla aynı" seçiliyse koşu
+    // ekran boyutu; "Küçük" — varsayılan — Playwright'ın kendi boyutu).
+    video: videoKaydiAyari(),
     screenshot: ekranGoruntusuAyari(),
     trace: izAyari()
   },

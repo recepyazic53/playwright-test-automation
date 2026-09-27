@@ -137,6 +137,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const mutlaka = new Set(s.taslak?.mutlaka ?? senaryo?.mutlakaGorunmeli ?? []);
   // Giriş seçimi (senaryo-girisi.mjs): { kip: ortam | girissiz | temiz, profil }; null = ortamın girişiyle (varsayılan).
   let girisSecimi = s.taslak && 'giris' in s.taslak ? s.taslak.giris : senaryo?.giris ?? null;
+  /** Adım ekran görüntüsü seçimi (null = Ayarlara uy; Ayarlar > Koşu > Kayıt). */
+  let adimGoruntusuSecimi = s.taslak && 'adimGoruntusu' in s.taslak ? s.taslak.adimGoruntusu : senaryo?.adimGoruntusu ?? null;
   // Satır seçimleri: "<tabloId>|<etiket>" → { Sütun: değer } (çözümleyicinin okuduğu biçim; servis senaryosundakiyle aynı).
   // ${Tablo.Sütun} değerleri koşuda bu koşullarla (+ bağlı alanların düz değerleri ve ortam) uyan ilk satırdan gelir.
   const tabloSecimleri = JSON.parse(JSON.stringify(s.taslak?.tabloSecimleri ?? senaryo?.tabloSecimleri ?? {}));
@@ -633,7 +635,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (akisSecimi) {
     akisSecimi.addEventListener('change', () => {
       const d = hesapla();
-      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, tabloSecimleri, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, adimGoruntusu: adimGoruntusuSecimi, tabloSecimleri, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
     });
   }
   // Giriş: ortamın girişiyle (varsayılan) / girişsiz / temiz oturumla yeniden giriş; birden çok giriş profili varsa profil. Ekran
@@ -670,6 +672,14 @@ function modelFormu(icerik, s, senaryo, baglam) {
   girisKipi.addEventListener('change', girisDegistir);
   girisProfili.addEventListener('change', girisDegistir);
   girisCiz();
+  // Adım ekran görüntüleri: "Ayarlara uy" (varsayılan; Ayarlar > Koşu > Kayıt) ya da bu senaryoya özel seçim.
+  const adimGoruntusuGirdisi = h('select', { id: yeniId('adimGoruntusu') },
+    [['ayar', 'Ayarlara uy (varsayılan)'], ['her', 'Her adımda'], ['yalnizKalan', 'Yalnız kalan adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']]
+      .map(([d, m]) => h('option', { value: d, selected: (adimGoruntusuSecimi ?? 'ayar') === d }, m)));
+  adimGoruntusuGirdisi.addEventListener('change', () => {
+    adimGoruntusuSecimi = adimGoruntusuGirdisi.value === 'ayar' ? null : adimGoruntusuGirdisi.value;
+    degisti = true;
+  });
   const senaryoKarti = h('section', { class: 'kart', 'aria-labelledby': 'senaryo-karti-baslik' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-karti-baslik' }, ikon('liste'), 'Senaryo'),
       h('span', { class: 'alt' }, 'Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.')),
@@ -677,6 +687,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       akisSecimi ? h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: akisSecimi.id }, 'Akış')), akisSecimi,
         h('div', { class: 'alan-notu' }, 'Senaryo bu akışın adımlarıyla koşar; form seçilen akışa göre değişir.')) : null,
       h('div', { class: 'model-alani genis giris-secimi' }, h('div', { class: 'alan-ust' }, h('label', { for: girisKipi.id }, 'Giriş')), girisKipi, girisProfilAlani, girisNotu),
+      h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: adimGoruntusuGirdisi.id }, 'Adım ekran görüntüleri')), adimGoruntusuGirdisi,
+        h('div', { class: 'alan-notu' }, 'Seçili adımlarda: ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar. Test sonu görüntüsü, video ve iz Ayarlar > Koşu > Kayıt\'tadır.')),
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: baslikId }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslikGirdisi, baslikHata),
       sema.senaryoAlanlari.map(alanCiz)));
 
@@ -975,6 +987,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
           ortamIdleri: [...ortamSecimi], kosuyaDahil, mutlakaGorunmeli: [...mutlaka],
           // Model girişsizse seçim yok sayılır (her zaman girişsiz); varsayılan seçim sunucuda içeriğe yazılmaz.
           giris: modelGirissiz ? null : girisSecimi,
+          // Adım ekran görüntüsü seçimi ('ayar' = Ayarlara uy; içeriğe yazılmaz).
+          adimGoruntusu: adimGoruntusuSecimi ?? 'ayar',
           // Satır seçimleri (yalnız formda kullanılan tablo grupları; boşsa kaldırılır).
           tabloSecimleri: kaydedilecekSecimler()
         }
@@ -1016,7 +1030,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const yanit = await api('/platform/senaryo/dene', {
         govde: {
           projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}), ...canliOnayEki(ortamId),
-          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi,
+          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi, adimGoruntusu: adimGoruntusuSecimi ?? 'ayar',
           tabloSecimleri: kaydedilecekSecimler()
         }
       });

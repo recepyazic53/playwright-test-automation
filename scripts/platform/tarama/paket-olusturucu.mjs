@@ -778,7 +778,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   // Alt adımlar. Model koşucusu bir adımda önce alanları doldurur, sonra düğmelere basar; bu yüzden alan AÇAN düğmesi olan
   // adım parçalara bölünür: [ilk alanlar] → [düğme] → [açılan alanlar] … → [ilerleme]. "Her senaryoda basılmaz" işaretli
   // düğmenin parçaları senaryo ayarına ("“<düğme>” dahil") bağlı isteğe bağlı adımlardır (senaryo formunda onay kutusu).
-  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; yenidenGiris?: { profil?: string } }} AltAdim */
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; ekranGoruntusu?: boolean; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; yenidenGiris?: { profil?: string } }} AltAdim */
   const kosulAdlari = new Set(mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar) : []);
   /** @type {Record<string, Record<string, unknown>>} */
   const yeniKosullar = {};
@@ -858,6 +858,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     const eklenen = dolu.length ? dolu : [parcalar[0]];
     // Kabul edilen uyarılar: ilerleme düğmesinin parçasına (düğme yoksa son parçaya).
     if (k.uyarilar?.length) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).uyarilar = k.uyarilar;
+    // "Ekran görüntüsü al" (akış tasarımı): adımın sonu — ilerleme düğmesinin parçası (düğme yoksa son parça).
+    if (k.ekranGoruntusu) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).ekranGoruntusu = true;
     altAdimlar.push(...eklenen);
   }
 
@@ -968,6 +970,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (secicili) kosu.hataGostergesi = { secici: secicili.secici };
     }
     if (p.zamanAsimiSn) kosu.zamanAsimiSn = p.zamanAsimiSn;
+    if (p.ekranGoruntusu) kosu.ekranGoruntusu = true;
     const id = adimKimligi(p.ad);
     // Mevcut modeldeki aynı adımın diyagramda gösterilmeyen koşu ayarları korunur: hata penceresi (uyarısız) ve öğe
     // "veya" göstergesi (diyagramın yazdığı öğeyi içeriyorsa; ör. "kart seçeneği YA DA doğrudan kart formu açılır").

@@ -295,6 +295,7 @@ export function adimlardanBloklar(model, adimlar, env) {
     const kosu = nesneMi(adim.kosu) ? adim.kosu : {};
     const aksiyonlar = Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar.filter(nesneMi) : [];
     const tikla = aksiyonlar.some((x) => x.tur === 'tikla');
+    const ilkBlok = bloklar.length;
     if (alanlar.length || (!istegeBagli && tikla)) bloklar.push({ tur: 'alanlar', ad: String(adim.baslik || adim.id), alanlar, zorunlu, kosullar });
     // İsteğe bağlı düğme adımı: aksiyon önce (grubundan sonra); açtığı alanlar ayrı adımdaysa yukarıda grup olarak geldi.
     for (const x of aksiyonlar) {
@@ -320,6 +321,11 @@ export function adimlardanBloklar(model, adimlar, env) {
     for (const u of uyariListesi(kosu)) {
       const m = env.mesajlar.findIndex((o) => o.metin === u.metin && o.secici === (typeof u.secici === 'string' ? u.secici : ''));
       bloklar.push({ tur: 'mesaj', mesaj: m >= 0 ? m : null, metin: u.metin, uyari: true });
+    }
+    // "Ekran görüntüsü al" (kosu.ekranGoruntusu): adımın alan grubunda, grup yoksa (isteğe bağlı olmayan) aksiyonunda gösterilir.
+    if (kosu.ekranGoruntusu === true) {
+      const hedef = bloklar.slice(ilkBlok).find((x) => x.tur === 'alanlar') ?? bloklar.slice(ilkBlok).find((x) => x.tur === 'aksiyon' && !x.istegeBagli);
+      if (hedef && (hedef.tur === 'alanlar' || hedef.tur === 'aksiyon')) hedef.ekranGoruntusu = true;
     }
   }
   bloklar.push({ tur: 'bitir' });

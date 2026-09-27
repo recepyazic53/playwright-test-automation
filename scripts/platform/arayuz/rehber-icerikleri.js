@@ -93,7 +93,7 @@ export const REHBERLER = {
   'sonuclar-sonuc': {
     baslik: 'Test ayrıntısı',
     adimlar: [
-      { baslik: 'Test ayrıntısı', metin: 'Hata mesajı, "Beklenen / Görülen" karşılaştırması, adım adım ekran görüntüleri, video ve iz kaydı (trace) burada. Görüntüler ve video şifrelidir; yalnızca kasa açıkken gösterilir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', ikon: 'liste' }, { baslik: 'Kalınan adım', alt: 'kırmızı', ikon: 'uyari' }, { baslik: 'Görüntü + video', ikon: 'video' }] } },
+      { baslik: 'Test ayrıntısı', metin: 'Hata mesajı, "Beklenen / Görülen" karşılaştırması, adım adım ekran görüntüleri, video ve iz kaydı (trace) burada. Görüntüler ve video şifrelidir; yalnızca kasa açıkken gösterilir. Hangi görüntülerin alınacağı Ayarlar > Koşu > Kayıt\'tadır; saklama süresi dolup silinen ya da alınamayan görüntüler not olarak yazar.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', ikon: 'liste' }, { baslik: 'Kalınan adım', alt: 'kırmızı', ikon: 'uyari' }, { baslik: 'Görüntü + video', ikon: 'video' }] } },
       {
         baslik: 'Test kaldıysa ne yapmalı?',
         sira: ['Hangi adımda kaldığına bakın (kırmızı adım) ve o anın ekran görüntüsünü açın.', 'Ekran değiştiyse Ekranlar\'da ekranı yeniden tarayın ya da yeni paket yükleyin (tekrar analiz).', 'Beklenen sonuç değiştiyse senaryoyu düzenleyin.', 'Ortamdan kaynaklı geçici bir hataysa senaryoyu tekrar çalıştırın.']
@@ -133,7 +133,7 @@ export const REHBERLER = {
         sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
       },
       { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinize göre koşacak adımları kutular hâlinde gösterir; seçili ortamdaki son koşu varsa adımlar yeşil / kırmızı boyanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Alanlar', ikon: 'duzenle' }, { baslik: 'Gönder', ikon: 'ok' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
-      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
+      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer. "Adım ekran görüntüleri" varsayılan olarak Ayarlar > Koşu > Kayıt\'a uyar; bu senaryo için her adımda, yalnız kalan adımda, seçili adımlarda ya da kapalı seçebilirsiniz.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
     ]
   },
 
@@ -267,7 +267,8 @@ export const REHBERLER = {
     baslik: 'Akış tasarımı',
     adimlar: [
       { baslik: 'Akış diyagramı', metin: 'Ekranın adımları kutular hâlinde, çalışma sırasıyla. Kutuları sürükleyerek sıralar, "+" ile koşullu adım ya da ortak akış eklersiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adım 1', ikon: 'duzenle' }, { baslik: 'Koşullu', alt: 'ör. Kurumsal ise', ikon: 'isaret' }, { baslik: 'Ortak akış', ikon: 'pusula' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
-      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Yeni akış" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] }
+      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Yeni akış" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] },
+      { baslik: 'Ekran görüntüsü al', metin: 'Alan grubunda (ya da aksiyonda) "Ekran görüntüsü al" işaretli adımların sonunda görüntü alınır — adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu). Diğer seçimlerde işaret etkisizdir.' }
     ]
   },
   bulgular: {
@@ -326,6 +327,13 @@ export const REHBERLER = {
     baslik: 'Koşu ayarları',
     adimlar: [
       { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi ve tarama / akış kaydı (süreler, ekran boyutu, dil, açılır liste keşif sınırı, girişte giriş alanı beklemesi; koşudaki giriş beklemelerinden ayrı). Tarama ve akış kaydında giriş: varsayılan her seferinde baştan giriş; "Koşunun saklanan oturumunu kullan" seçilirse koşunun aynı ortam ve giriş profili için şifreli sakladığı oturum denenir ("Girişte oturum kontrolü" süresiyle), geçersizse baştan girilip oturum güncellenir; "Giriş yapmadan aç" saklanan oturumu hiç kullanmaz. Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
+      {
+        baslik: 'Kayıt: görüntü, video ve iz',
+        metin: ['Video, test sonu ekran görüntüsü ve iz (trace) için: her testte, yalnız başarılı testlerde, yalnız kalan testlerde ya da kapalı. "Yalnız başarılı"da kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir.',
+          'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı ve ekran anları. Sonuç ayrıntısından indirilir, Playwright iz görüntüleyicisiyle (npx playwright show-trace) açılır.',
+          'Adım ekran görüntüleri: her adımda (varsayılan), yalnız kalan adımda, seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) ya da kapalı; senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan) ya da Ekranla aynı (koşu ekran boyutu).'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', alt: 'görüntü', ikon: 'ekran' }, { baslik: 'Test sonu', alt: 'görüntü', ikon: 'onay' }, { baslik: 'Video', alt: 'boyut', ikon: 'video' }, { baslik: 'İz', alt: 'trace', ikon: 'liste' }] }
+      },
       { baslik: 'Gelişmiş koşu davranışı', metin: 'Açılır bölümde koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı (SQL adımındaki beklenen satır sayısı bunu aşamaz: kaydederken uyarı verilir; sınırı düşürürseniz aşan adımlar koşuda anlaşılır bir hatayla kalır), koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
       { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
       {
@@ -342,7 +350,13 @@ export const REHBERLER = {
     baslik: 'Yedekleme',
     adimlar: [
       { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır. Yedeğin tamamı yüklenince (ya da seçmeli içe aktarmada Ayarlar\'daki "izinler" kaydı alınınca) yedekteki izinler ve ortamların riskli seçimleri olduğu gibi geçerli olur; Nöbetçi açıldığında bir kez hangi izinlerin açık olduğunu gösteren bir uyarı çıkar ("Tamam" ya da "İzinlere git" ile kapatılınca kimse için bir daha çıkmaz).', cizim: { tur: 'akis', kutular: [{ baslik: 'Kasa', ikon: 'kilit' }, { baslik: '.tayedek', alt: 'şifreli', ikon: 'arsiv' }, { baslik: 'Başka bilgisayar', ikon: 'bilgisayar' }] } },
-      { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' }
+      { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' },
+      {
+        baslik: 'Medyayı incelt (kademeli saklama)',
+        metin: ['N günden eski sonuçlarda başarılı, kalan ya da tüm testlerin ekran görüntüleri ve videoları silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Kalan testlerde "kalan adımın görüntüsünü ve test sonu görüntüsünü koru" işaretliyse (varsayılan) hatanın görüldüğü iki görüntü kalır. Silinen medya sonuçta "saklama süresi doldu" diye görünür.',
+          'Günlük temizlikte sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra inceltme, en son Güvenlik > Video saklama süresi. Video hangi süre önce dolarsa o zaman silinir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Sonuç saklama', alt: 'bütün sonuç', ikon: 'cop' }, { baslik: 'İnceltme', alt: 'görüntü + video', ikon: 'ekran' }, { baslik: 'Video saklama', alt: 'Güvenlik', ikon: 'video' }] }
+      }
     ]
   },
   // İzin metinleri izin tanımlarından gelir (izin-tanimlari.mjs; Ayarlar > İzinler ve kapalı izin uyarısıyla aynı kaynak).

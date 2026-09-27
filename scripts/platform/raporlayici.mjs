@@ -33,6 +33,7 @@ import { videoSaklamaGunu as ortakVideoSaklamaGunu } from './ayarlar/video-sakla
 import { medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi, medyaSifrele } from './medya.mjs';
 import { adimGurultuMu, ansiTemizle, playwrightDurumuEsle } from './sonuclar/siniflandirma.mjs';
 import { yakalananMesajlariAyristir } from './sonuclar/yakalanan-mesajlar.mjs';
+import { ekAtilsinMi, kayitSecimi, ortamKayitKurallari } from './ayarlar/kayit-kurallari.mjs';
 
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
 
@@ -197,12 +198,17 @@ class DogrudanYazici {
 
 export default class PlatformRaporlayici {
   /**
-   * Koşunun proje ve ortam kimlikleri (playwright.config.ts verir).
-   * @param {{ projeId?: string; ortamId?: string; projeKoku?: string }} [secenekler]
+   * Koşunun proje ve ortam kimlikleri ve kayıt seçimleri (playwright.config.ts verir; kayıt verilmezse ortam değişkenleri —
+   * ayarlar/kayit-kurallari.mjs, koşucuyla aynı varsayılanlar).
+   * @param {{ projeId?: string; ortamId?: string; projeKoku?: string; kayit?: { video?: string; ekranGoruntusu?: string; iz?: string } }} [secenekler]
    */
   constructor(secenekler = {}) {
     this.projeIdSecimi = secenekler.projeId ?? null;
     this.ortamIdSecimi = secenekler.ortamId ?? null;
+    const ortam = ortamKayitKurallari();
+    const k = secenekler.kayit ?? {};
+    /** Kayıt seçimleri: "yalnız başarılı" seçiminde kalan testin ilgili medyası şifrelenmeden atılır. */
+    this.kayitKurallari = { video: kayitSecimi(k.video, ortam.video), ekranGoruntusu: kayitSecimi(k.ekranGoruntusu, ortam.ekranGoruntusu), iz: kayitSecimi(k.iz, ortam.iz) };
     this.projeKoku = secenekler.projeKoku ? resolve(secenekler.projeKoku) : process.cwd();
     /** @type {Promise<void>} */
     this.sira = Promise.resolve();
@@ -216,7 +222,7 @@ export default class PlatformRaporlayici {
     this.yedekKosuKimligi = `${Date.now()}-${randomBytes(4).toString('hex')}`;
     /** @type {string[]} */
     this.ciktiKlasorleri = [];
-    this.sayac = { sonuc: 0, medya: 0, silinen: 0 };
+    this.sayac = { sonuc: 0, medya: 0, silinen: 0, atilan: 0 };
     /** @type {Set<string>} */
     this.uyarilar = new Set();
   }
@@ -422,11 +428,19 @@ export default class PlatformRaporlayici {
     const medya = [];
     /** @type {string[]} */
     const silinecekler = [];
+    // Kayıt seçimi "yalnız başarılı" olan medya (video / iz / test sonu görüntüsü) kalan testte kaydedilmez: şifrelenmeden ve sonuç
+    // deposuna eklenmeden atılır, düz metin dosyası (bu koşunun çıktı klasöründeyse) silinir.
+    const basarili = durum === 'basarili';
     for (const ek of result.attachments ?? []) {
       if (ek.name === 'atlananAlanlar') {
         const icerik = ek.body ? ek.body.toString('utf8') : ek.path && existsSync(ek.path) ? readFileSync(ek.path, 'utf8') : '';
         atlanan.push(...atlananAlanlariAyristir(icerik));
         if (ek.path) silinecekler.push(ek.path);
+        continue;
+      }
+      if (ekAtilsinMi({ name: ek.name, contentType: ek.contentType }, this.kayitKurallari, basarili)) {
+        if (ek.path) this.duzMetniSil(ek.path);
+        this.sayac.atilan++;
         continue;
       }
       if (!ek.body && !(ek.path && existsSync(ek.path))) continue;
@@ -495,7 +509,7 @@ export default class PlatformRaporlayici {
       if (kosuId) {
         const durum = sonuc.status === 'interrupted' ? 'durduruldu' : sonuc.status === 'timedout' ? 'zaman_asimi' : 'tamamlandi';
         await baglam.yazici.kosuyuBitir(kosuId, { durum, bitis: new Date().toISOString() });
-        uyar(`${this.sayac.sonuc} sonuç platform veritabanına yazıldı (koşu ${kosuId}); ${this.sayac.medya} medya şifrelendi, ${this.sayac.silinen} düz metin dosya silindi.`);
+        uyar(`${this.sayac.sonuc} sonuç platform veritabanına yazıldı (koşu ${kosuId}); ${this.sayac.medya} medya şifrelendi, ${this.sayac.silinen} düz metin dosya silindi${this.sayac.atilan ? `; kayıt ayarı gereği ${this.sayac.atilan} medya kaydedilmedi` : ''}.`);
       }
     } catch (hata) {
       this.birKezUyar(`Koşu kapatılamadı: ${/** @type {Error} */ (hata).message}`);

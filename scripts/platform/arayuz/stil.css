@@ -768,6 +768,14 @@ dialog.gorsel-diyalog { width: min(92rem, calc(100vw - 2rem)); padding: 14px 16p
 .buyuk-gorsel:fullscreen { object-fit: contain; background: #000; box-shadow: none; border-radius: 0; }
 .medya-yedek-disi { border: 1px dashed var(--cizgi-2); border-radius: var(--yaricap-m); padding: 10px 12px; margin: 0 0 8px; background: var(--panel-2); font-size: 12.5px; display: flex; gap: 10px; align-items: flex-start; }
 .medya-yedek-disi .ikon { color: var(--atlanan); margin-top: 1px; }
+/* Medya notları: saklama süresi dolup silinen görüntüler, alınamayan adım görüntüleri. */
+.medya-notlari { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; }
+.medya-notlari li { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
+.medya-notlari .ikon { flex: none; margin-top: 2px; color: var(--atlanan); }
+/* Akış tasarımı: "Ekran görüntüsü al" işareti; Ayarlar: açık / kapalı ayarı. */
+.goruntu-isareti .ikon { color: var(--soluk, inherit); }
+.onay-alani .secenek { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; }
+.onay-alani .secenek input { margin-top: 3px; flex: none; }
 .goruntuleyici .medya-yedek-disi { margin: 14px; background: rgba(255, 255, 255, .04); color: #c7d0dc; border-color: rgba(148, 163, 184, .3); }
 
 /* Hata kutusu, beklenen/görülen */
@@ -1263,7 +1271,10 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 
 /* Akış diyagramı oluştur (akis-tasarimi.js): solda dikey bloklar (diyagram düğümleriyle aynı görünüm), aralarında "+",
    sağda kayıtta yakalananlar. Etkin blok vurgu kenarlı; alan bırakılabilir blok kesik vurgu çizgili. */
-.tasarim-karti { display: grid; gap: 12px; }
+.tasarim-karti { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+/* Dar ekranda (390 px) kart içeriği karttan taşmasın: uzun seçenek metinli listeler ve blok içerikleri daralabilir. */
+.tasarim-karti > *, .tasarim-blogu > * { min-width: 0; }
+.tasarim-karti select, .tasarim-karti input:not([type=checkbox]):not([type=radio]) { max-width: 100%; }
 .tasarim-akisi { list-style: none; margin: 0; padding: 0; display: grid; justify-items: center; }
 .tasarim-blogu { cursor: default; }
 .tasarim-blogu.etkin { box-shadow: inset 0 0 0 1px var(--vurgu), 0 0 22px -12px var(--vurgu), var(--golge); }

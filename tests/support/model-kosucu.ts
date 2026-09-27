@@ -30,7 +30,8 @@ import { oturumuSifreliYaz } from './oturum-kasasi';
 import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
-import { sayiAyari, secimAyari, sureAyari } from './kosu-ayarlari';
+import { adimGoruntusuAyari, sayiAyari, secimAyari, sureAyari } from './kosu-ayarlari';
+import { adimGoruntusuAlinsinMi } from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
 import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
@@ -683,13 +684,23 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
 
   const atlanan: AtlananAlan[] = [];
   let sira = 1;
-  const ekranGoruntusu = (ad: string): Promise<void> => attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${ad}`);
+  // Adım ekran görüntüleri (Ayarlar > Koşu > Kayıt; senaryo ezebilir): her adımda (varsayılan, bugünkü davranış) · yalnız kalan
+  // adımda (başarılı adımda alınmaz; kalan adımın görüntüsü aşağıdaki catch'te) · seçili adımlarda (modelde kosu.ekranGoruntusu
+  // işaretli akış adımı; giriş / bağlam / ekran açılışı alınmaz) · kapalı.
+  const adimGoruntusu = adimGoruntusuAyari(s.adimGoruntusu ?? null);
+  /** Şu an koşan adımın başlığı (kalan adımın görüntüsü için). */
+  let simdikiAdim: string | null = null;
+  const ekranGoruntusu = async (ad: string, adim?: PlanAdimi): Promise<void> => {
+    if (!adimGoruntusuAlinsinMi(adimGoruntusu, { isaretli: adim?.kosu?.ekranGoruntusu === true })) return;
+    await attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${ad}`);
+  };
   /** Bağlam değiştirme (tarifte varsa; senaryonun bağlam profiliyle) — ilk girişten ve yeniden girişten sonra. */
   const baglamiUygula = async (t: GirisTarifi): Promise<void> => {
     if (!t.baglamDegistirme) return;
     const tur = t.baglamDegistirme.baglamTuru;
     const profil = plan.baglamProfili;
     await test.step(`Bağlam değiştirilir (${profil ?? '—'})`, async () => {
+      simdikiAdim = `Bağlam değiştirilir (${profil ?? '—'})`;
       adimAdiniBildir(page, `Bağlam değiştirilir (${profil ?? '—'})`);
       if (!profil) throw new Error(`Giriş tarifi "${tur}" bağlamını değiştiriyor ama senaryonun bağlam profili yok (modelde profil havuzlu alan ya da varsayılanı yok).`);
       const degerler = ortam.veri.baglamProfilleri[tur]?.[profil];
@@ -704,6 +715,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
     if (girissiz && s.giris?.kip === 'girissiz' && s.model.girisGerekmez !== true) await oturumuKapat(page);
     // Adım başlığı SABİT (akis-diyagrami.mjs > BASLANGIC_ADIMLARI ile eşleşir); profil / temiz oturum ekran görüntüsünün adında.
     if (tarif) await test.step('Sisteme giriş yapılır', async () => {
+      simdikiAdim = 'Sisteme giriş yapılır';
       adimAdiniBildir(page, 'Sisteme giriş yapılır');
       if (temizGiris) {
         // Kayıtlı oturum kullanılmaz: çerezler temizlenir, seçilen (ya da varsayılan) profille girilir. Varsayılan dışı profilin
@@ -722,6 +734,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
     if (tarif) await baglamiUygula(tarif);
 
     await test.step('Ekran açılır', async () => {
+      simdikiAdim = 'Ekran açılır';
       adimAdiniBildir(page, 'Ekran açılır');
       await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
       await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
@@ -743,6 +756,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         continue;
       }
       await test.step(adim.baslik, async () => {
+        simdikiAdim = adim.baslik;
         adimAdiniBildir(page, adim.baslik);
         // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
         if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
@@ -753,7 +767,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           const donus = page.url();
           await oturumuKapat(page);
           await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
-          await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`);
+          await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`, adim);
           await baglamiUygula(t);
           if (/^https?:/i.test(donus)) await page.goto(donus, { waitUntil: 'domcontentloaded' });
           return;
@@ -795,11 +809,17 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         await aksiyonlariUygula(page, adim.kosu, sureSn);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
         // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
-        await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik);
+        await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik, adim);
       });
+      simdikiAdim = null;
       if (adim.sonAdim) break;
     }
   } catch (hata) {
+    // "Yalnız kalan adımda": testin kaldığı adımın görüntüsü (ad: "NN - <adım> (kalan adım)"). Atlama (test.skip) kalan adım değildir.
+    // Alınamazsa not düşülür, hata olduğu gibi iletilir.
+    if (adimGoruntusu === 'yalnizKalan' && simdikiAdim && testInfo.expectedStatus !== 'skipped') {
+      await attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${simdikiAdim}`, { kalanAdim: true }).catch(() => undefined);
+    }
     // Hata metninde (ör. seçenek bulunamadı) gizli tablo sütunundan gelen değer görünmesin.
     if (hata instanceof Error && tabloGizlileri.length) {
       hata.message = gizliDegerleriMaskele(hata.message, tabloGizlileri);

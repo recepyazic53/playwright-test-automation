@@ -25,6 +25,7 @@ import {
 import { modelBaglami, ortamdaKosuyaDahil, senaryoAkisi } from './senaryolar/senaryo-servisi.mjs';
 import { modelSenaryosuMu } from './senaryolar/model-kosusu.mjs';
 import { senaryoGirisi, senaryoGirisiniAyikla } from './senaryolar/senaryo-girisi.mjs';
+import { senaryoAdimGoruntusuAyikla } from './ayarlar/kayit-kurallari.mjs';
 import { etkinGirisTarifi } from './giris/tarif-deposu.mjs';
 import { medyaKlasoru } from './medya.mjs';
 import { referansCoz, referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
@@ -281,7 +282,9 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
       ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
       ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
       // Senaryonun giriş seçimi (senaryo-girisi.mjs; null = ortamın girişiyle, bugünkü davranış).
-      giris: senaryoGirisi(icerik)
+      giris: senaryoGirisi(icerik),
+      // Senaryonun adım ekran görüntüsü seçimi (null = Ayarlar > Koşu > Kayıt'a uyar; bugünkü davranış).
+      adimGoruntusu: senaryoAdimGoruntusuAyikla(icerik.adimGoruntusu).secim
     });
   }
   // Model senaryosu "Dene": taslak, geçici dosyadan (veritabanında yok) tek deneme senaryosu olarak eklenir.
@@ -298,7 +301,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
         model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: cozum.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true,
         ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
         ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
-        giris: deneme.giris
+        giris: deneme.giris, adimGoruntusu: deneme.adimGoruntusu
       });
     }
   }
@@ -359,6 +362,7 @@ function modelDenemeSenaryosu(ortamId) {
       id: d.id, ekranId: d.ekranId, akisId: typeof d.akisId === 'string' ? d.akisId : null, baslik: d.baslik, veri: d.veri,
       mutlakaGorunmeli: Array.isArray(d.mutlakaGorunmeli) ? d.mutlakaGorunmeli.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
       giris: senaryoGirisiniAyikla(d.giris).giris,
+      adimGoruntusu: senaryoAdimGoruntusuAyikla(d.adimGoruntusu).secim,
       // Formdaki satır seçimleri (sunucu ekran-basvurulari.mjs > tabloSecimleriniAyikla ile denetledi).
       tabloSecimleri: d.tabloSecimleri && typeof d.tabloSecimleri === 'object' && !Array.isArray(d.tabloSecimleri) ? d.tabloSecimleri : null
     };

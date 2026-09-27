@@ -52,6 +52,8 @@ export type PlanKosuTanimi = {
   /** Adımda kabul edilen iş kuralı uyarıları: başarı beklenirken biri görünürse test hemen başarısız. */
   uyarilar?: Array<{ metin: string; secici?: string }>;
   zamanAsimiSn?: number;
+  /** Ekran modelinde "Ekran görüntüsü al" işareti (adım görüntüleri "Seçili adımlarda" iken yalnız bu adımlarda alınır). */
+  ekranGoruntusu?: boolean;
   not?: string;
 };
 

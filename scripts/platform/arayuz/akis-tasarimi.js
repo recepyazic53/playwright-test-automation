@@ -322,6 +322,17 @@ export async function akisTasarimi(icerik, s) {
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { kosulDuzenleme = null; ciz(); } }, 'Vazgeç')));
   }
 
+  /**
+   * "Ekran görüntüsü al" işareti (adımın sonunda; Ayarlar > Koşu > Kayıt > Adım ekran görüntüleri "Seçili adımlarda" iken — ya da
+   * senaryo bu seçimi yaptıysa — yalnız işaretli adımların görüntüsü alınır). Modelde adımın kosu.ekranGoruntusu alanı.
+   */
+  function goruntuIsareti(b) {
+    const kutu = h('input', { type: 'checkbox', checked: b.ekranGoruntusu === true });
+    kutu.addEventListener('change', () => { if (kutu.checked) b.ekranGoruntusu = true; else delete b.ekranGoruntusu; sakla(); });
+    return h('label', { class: 'onay-satiri kucuk goruntu-isareti', title: 'Adım ekran görüntüleri "Seçili adımlarda" iken bu adımın sonunda görüntü alınır (Ayarlar > Koşu > Kayıt ya da senaryo formu).' },
+      kutu, ikon('ekran'), 'Ekran görüntüsü al (seçili adımlarda)');
+  }
+
   function blokGovdesi(b, i) {
     if (b.tur === 'alanlar') {
       const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Müşteri bilgileri', 'aria-label': 'Adım adı' });
@@ -329,6 +340,7 @@ export async function akisTasarimi(icerik, s) {
       ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); paletCiz(); });
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        goruntuIsareti(b),
         b.alanlar.length ? h('ul', { class: 'tasarim-alanlari', 'aria-label': 'Doldurulacak alanlar' }, b.alanlar.map((a) => alanCipi(a, i)))
           : h('p', { class: 'soluk kucuk' }, 'Alan yok. Sağdaki listeden alanları buraya sürükleyin ya da grubu seçip “Ekle”ye basın.'),
         kosulDuzenleme && kosulDuzenleme.blok === i && b.alanlar.includes(kosulDuzenleme.alan) ? kosulDuzenleyici(b, kosulDuzenleme.alan) : null,
@@ -360,6 +372,7 @@ export async function akisTasarimi(icerik, s) {
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Basılacak düğme'), secim),
         h('label', { class: 'onay-satiri kucuk' }, kutu, 'Her senaryoda basılmaz (senaryoda seçilir)'),
         b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Sonucu en çok bekleme (sn)'), sure),
+        b.istegeBagli ? null : goruntuIsareti(b),
         b.istegeBagli ? h('p', { class: 'soluk kucuk' }, 'Hemen ardından gelen alan grubu bu düğmeyle açılan alanlardır; senaryoda “dahil” işaretliyse doldurulur.') : null
       ];
     }

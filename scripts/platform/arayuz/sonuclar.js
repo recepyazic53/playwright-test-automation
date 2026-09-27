@@ -804,6 +804,27 @@ function hataKaliplariBolumu(alan, proje, urun, ornekAc) {
 // Ortak test sonucu parçaları (sağ panel ve detay sayfası)
 // ---------------------------------------------------------------------------------------
 
+/** Adım görüntüsü alınamadığında koşucunun eklediği not (ad: "NN - <adım> (ekran görüntüsü alınamadı: <neden>)"). */
+const ALINAMADI_DESENI = /^(.*) \(ekran görüntüsü alınamadı(?:: (.*))?\)$/;
+const alinamadiMi = (m) => m.tur === 'diger' && ALINAMADI_DESENI.test(m.ad);
+
+/**
+ * Sonucun medya notları: saklama süresi dolduğu için silinen ekran görüntüleri (Ayarlar > Yedekleme > Sonuç saklama > Medyayı
+ * incelt) ve alınamayan adım görüntüleri ("görüntü alınamadı: neden").
+ */
+function medyaNotlari(s2) {
+  const silinen = s2.medya.filter((m) => m.tur === 'ekran_goruntusu' && m.silinme);
+  const alinamayan = s2.medya.filter(alinamadiMi);
+  if (!silinen.length && !alinamayan.length) return null;
+  const son = silinen.reduce((a, m) => (!a || m.silinme > a ? m.silinme : a), null);
+  return h('ul', { class: 'medya-notlari soluk kucuk', 'aria-label': 'Medya notları' },
+    silinen.length ? h('li', {}, ikon('saat'), `${silinen.length} ekran görüntüsü saklama süresi dolduğu için ${tarihMetni(son)} tarihinde silindi (sonuç ve adımlar duruyor).`) : null,
+    ...alinamayan.map((m) => {
+      const [, adim, neden] = m.ad.match(ALINAMADI_DESENI) || [];
+      return h('li', {}, ikon('uyari'), `Görüntü alınamadı: ${neden || 'süre sınırı doldu'} — ${adim || m.ad}`);
+    }));
+}
+
 /** Başka bir bilgisayardan yedekle gelen ve dosyası yedeğe alınmamış medya. */
 function yedekDisiNotu(m) {
   const tur = { ekran_goruntusu: 'Ekran görüntüsü', video: 'Video', iz: 'İz (trace) dosyası', diger: 'Ek' }[m.tur] || 'Medya';
@@ -914,7 +935,8 @@ async function testPaneli(alan, id, kapat) {
     alan.replaceChildren(h('div', { class: 'bolum' }, hataKutusu(e)));
     return;
   }
-  const gorseller = s2.medya.filter((m) => m.tur === 'ekran_goruntusu');
+  // Saklama süresi dolup silinen görüntüler gösterilmez (medya notu kalır).
+  const gorseller = s2.medya.filter((m) => m.tur === 'ekran_goruntusu' && !m.silinme);
   const video = s2.medya.find((m) => m.tur === 'video' && !m.silinme && !m.yedekDisi);
   const silinenVideo = s2.medya.find((m) => m.tur === 'video' && m.silinme);
   const dg = gorselDiyalogu(gorseller.filter((m) => !m.yedekDisi));
@@ -922,7 +944,7 @@ async function testPaneli(alan, id, kapat) {
   alan.classList.toggle('basarili', s2.durum !== 'basarisiz');
   const izle = h('button', {
     type: 'button', class: 'birincil', disabled: !video,
-    title: video ? null : silinenVideo ? `Video saklama süresi dolduğu için ${tarihMetni(silinenVideo.silinme)} tarihinde silindi` : 'Bu sonuçta video yok'
+    title: video ? null : silinenVideo ? `Video saklama süresi dolduğu için ${tarihMetni(silinenVideo.silinme)} tarihinde silindi` : 'Bu sonuçta video yok (Ayarlar > Koşu > Kayıt > Video)'
   }, ikon('oynat'), 'Videoyu izle');
   let oynuyor = false;
   izle.addEventListener('click', () => {
@@ -937,7 +959,7 @@ async function testPaneli(alan, id, kapat) {
       h('h3', {}, s2.senaryoBaslik),
       h('div', { class: 'm' }, h('span', {}, s2.urun, ' ', ekranDurumRozeti(s2.ekranDurumu)), s2.deneme ? h('span', {}, `${s2.deneme}. yeniden deneme`) : null,
         h('span', {}, `${saatMetni(s2.baslangic)} → ${saatMetni(s2.bitis)}`))),
-    h('div', { class: 'bolum' }, gv.kap),
+    h('div', { class: 'bolum' }, gv.kap, medyaNotlari(s2)),
     h('div', { class: 'panel-eylemleri' }, izle,
       gv.gorsel ? indirBaglantisi(gv.gorsel, 'İndir', 'dugme') : null,
       gv.gorsel ? h('button', { type: 'button', class: 'ikon-dugme', 'aria-label': 'Tam ekran', title: 'Tam ekran', onclick: () => dg.ac(gv.gorsel, true) }, ikon('genislet')) : null),
@@ -1011,10 +1033,11 @@ async function kosuDetayi(icerik, id, proje) {
 
 async function sonucDetayi(icerik, id, proje) {
   const { sonuc: s2 } = await api(`/platform/sonuclar/sonuc?id=${encodeURIComponent(id)}`);
-  const gorseller = s2.medya.filter((m) => m.tur === 'ekran_goruntusu');
+  // Saklama süresi dolup silinen görüntüler ve "görüntü alınamadı" notları medya notlarında gösterilir.
+  const gorseller = s2.medya.filter((m) => m.tur === 'ekran_goruntusu' && !m.silinme);
   const videolar = s2.medya.filter((m) => m.tur === 'video');
-  const izler = s2.medya.filter((m) => m.tur === 'iz');
-  const digerleri = s2.medya.filter((m) => m.tur === 'diger');
+  const izler = s2.medya.filter((m) => m.tur === 'iz' && !m.silinme);
+  const digerleri = s2.medya.filter((m) => m.tur === 'diger' && !m.silinme && !alinamadiMi(m));
   const dg = gorselDiyalogu(gorseller.filter((m) => !m.yedekDisi));
   const gv = goruntuleyici(s2, gorseller, (m) => dg.ac(m));
 
@@ -1026,6 +1049,7 @@ async function sonucDetayi(icerik, id, proje) {
       gv.gorsel ? h('div', { class: 'sag' }, indirBaglantisi(gv.gorsel, 'İndir'),
         h('button', { type: 'button', class: 'kucuk-dugme ikon-dugme', 'aria-label': 'Tam ekran', title: 'Tam ekran', onclick: () => dg.ac(gv.gorsel, true) }, ikon('genislet'))) : null),
     gv.kap,
+    medyaNotlari(s2),
     gorseller.length
       ? h('ul', { class: 'gorsel-izgarasi' }, ...gorseller.map((m) => h('li', {},
         m.yedekDisi

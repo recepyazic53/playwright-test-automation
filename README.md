@@ -66,6 +66,17 @@ Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapıla
   hata sınıflandırma kuralları, maskeleme, güvenlik (otomatik kilit, yasak adresler), yedekleme, entegrasyonlar
   (koşu bitti webhook bildirimi, iş takip sisteminde hata kaydı, veritabanı bağlantıları; gizliler kasada şifreli).
 
+### Kayıt ve saklama
+
+**Ayarlar > Koşu > Kayıt**: video, test sonu ekran görüntüsü ve iz (trace; ağ istekleri, sayfa yapısı ve adımların kaydı,
+Playwright iz görüntüleyicisiyle açılır) için her testte / yalnız başarılı testlerde / yalnız kalan testlerde / kapalı
+("yalnız başarılı"da kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir). Adım ekran görüntüleri: her adımda
+(varsayılan) / yalnız kalan adımda / seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) / kapalı;
+senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan, 800 px'e sığdırma) ya da Ekranla aynı.
+**Ayarlar > Yedekleme > Sonuç saklama**: sonuçları N gün sonra silme ve "medyayı incelt" (N günden eski sonuçlarda başarılı,
+kalan ya da tüm testlerin görüntü ve videoları silinir; sonucun kendisi kalır). Günlük temizlikte sıra: sonuç saklama →
+medya inceltme → Güvenlik > Video saklama süresi. Her yeni ayarın varsayılanı önceki davranıştır.
+
 ### Giriş
 
 Her ortamın girişi **Ayarlar > Giriş profilleri > Giriş tarifi**'ndedir ve **Ekranlar > Ortak akışlar**'da "Giriş (ortam)"

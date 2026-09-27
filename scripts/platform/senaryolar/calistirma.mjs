@@ -102,7 +102,7 @@ export async function senaryoDene(vt, govde, kosucu) {
     projeId, ekranId: kimlik(govde.ekranId, 'ekranId'), ortamId: kimlik(govde.ortamId, 'ortamId'), veri: govde.veri,
     id: typeof govde.id === 'string' && KIMLIK.test(govde.id) ? govde.id : null,
     akisId: typeof govde.akisId === 'string' && KIMLIK.test(govde.akisId) ? govde.akisId : null, mutlakaGorunmeli: govde.mutlakaGorunmeli,
-    giris: govde.giris, ...(govde.tabloSecimleri !== undefined ? { tabloSecimleri: govde.tabloSecimleri } : {})
+    giris: govde.giris, adimGoruntusu: govde.adimGoruntusu, ...(govde.tabloSecimleri !== undefined ? { tabloSecimleri: govde.tabloSecimleri } : {})
   }, { geciciEk: randomBytes(4).toString('hex') });
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
   const sonuc = await kosucu.modelDene({

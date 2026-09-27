@@ -283,7 +283,7 @@ export function kosuDetayi(vt, kosuId) {
   const sonuclar = vt.tumu(
     `SELECT r.id, r.senaryo_id, r.senaryo_baslik, r.senaryo_anahtari, r.durum, r.ham_durum, r.sure_ms, r.hata_kategorisi, r.hata_kalibi,
             r.ekran_id, r.urun_adi, e.ad AS ekran_adi, e.durum AS ekran_durumu, r.baslangic, r.bitis, r.deneme,
-            (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu') AS ekran_goruntusu_sayisi,
+            (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu' AND m.silinme IS NULL) AS ekran_goruntusu_sayisi,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'video' AND m.silinme IS NULL) AS video_sayisi
        FROM kosu_sonuclari r LEFT JOIN ekranlar e ON e.id = r.ekran_id WHERE r.kosu_id = ? ORDER BY r.rowid`, [kosuId]
   ).map((s) => ({
@@ -383,7 +383,7 @@ export function hataKaliplari(vt, projeId, filtre = {}) {
     `SELECT r.id, r.ekran_id, r.urun_adi, e.ad AS ekran_adi, r.hata_kategorisi, r.hata_kalibi, r.senaryo_baslik,
             r.kosu_id, r.senaryo_id, k.ortam_id, COALESCE(r.bitis, k.bitis, k.baslangic) AS zaman,
             (SELECT a.ad FROM adim_sonuclari a WHERE a.sonuc_id = r.id AND a.durum = 'basarisiz' ORDER BY a.sira LIMIT 1) AS basarisiz_adim,
-            (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu') AS gorsel
+            (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu' AND m.silinme IS NULL) AS gorsel
        FROM kosu_sonuclari r JOIN kosular k ON k.id = r.kosu_id LEFT JOIN ekranlar e ON e.id = r.ekran_id
       WHERE ${kosullar.join(' AND ')} ORDER BY zaman`, p
   );
@@ -526,7 +526,7 @@ export function kosudakiSonucuBul(vt, kosuId, arama) {
   if (!s) return null;
   const detay = sonucDetayi(vt, String(s.id));
   if (!detay) return null;
-  const gorseller = detay.medya.filter((m) => m.tur === 'ekran_goruntusu');
+  const gorseller = detay.medya.filter((m) => m.tur === 'ekran_goruntusu' && !m.silinme);
   const video = detay.medya.find((m) => m.tur === 'video' && !m.silinme);
   const basarisizAdim = detay.adimlar.find((a) => a.durum === 'basarisiz')?.ad ?? null;
   return { detay, sonEkranGoruntusuId: gorseller.length ? gorseller[gorseller.length - 1].id : null, videoId: video?.id ?? null, basarisizAdim };

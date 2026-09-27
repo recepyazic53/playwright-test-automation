@@ -158,7 +158,7 @@ import { siraOlustur } from './kasa-sirasi.mjs';
 import {
   eskiSonuclariSil, hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
 } from './veritabani/sonuc-deposu.mjs';
-import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
+import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaInceltme, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
 import {
   YEDEK_KLASORU_AYARI, YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, seciliYedekKlasoru, varsayilanYedekKlasoru, veriKlasoruYedekYolu,
   yedekBoyutTahmini, yedekDosyasiYaz
@@ -550,7 +550,7 @@ export async function platformKosusunuKapat(kosuId, durum) {
   if (k && k.durum === 'calisiyor') kosuyuBitir(db, kosuId, { durum });
 }
 
-/** Günlük (ve açılışta) medya saklama temizliği: eski videolar + sahipsiz şifreli dosyalar. */
+/** Günlük (ve açılışta) temizlik: sonuç saklama, medya inceltme (kademeli saklama), eski videolar + sahipsiz şifreli dosyalar. */
 export function platformMedyaTemizligiZamanla() {
   const calistir = async () => {
     try {
@@ -558,9 +558,14 @@ export function platformMedyaTemizligiZamanla() {
       if (!db) return;
       // Sonuç saklama (kullanıcı kararı; varsayılan süresiz): önce eski sonuç satırları, sonra sahipsiz kalan medya dosyaları.
       if (kasaAcikMi(db)) {
-        const saklamaGun = kosuAyarlariniOku(db).sonucSaklamaGun;
+        const ayar = kosuAyarlariniOku(db);
+        const saklamaGun = ayar.sonucSaklamaGun;
         const s = eskiSonuclariSil(db, saklamaGun);
         if (s.kosu || s.servisKosusu || s.akisKosusu) console.log(`[platform] Sonuç saklama: ${saklamaGun} günden eski ${s.kosu} koşu (${s.sonuc} sonuç), ${s.servisKosusu} servis ve ${s.akisKosusu} akış koşusu silindi.`);
+        // Kademeli saklama (Yedekleme > Sonuç saklama > Medyayı incelt; varsayılan kapalı): sonuç kalır, seçilen testlerin ekran
+        // görüntüleri ve videoları silinir. Sıra: sonuç saklama → inceltme → video saklama (aşağıda) → sahipsiz dosyalar.
+        const i = medyaInceltme(db, medyaKlasoruYolu(), { secim: ayar.medyaInceltme, gun: ayar.medyaInceltmeGun, koru: ayar.medyaInceltmeKoru });
+        if (i.silinenGoruntu || i.silinenVideo) console.log(`[platform] Medya inceltme: ${ayar.medyaInceltmeGun} günden eski ${i.sonuc} sonuçta ${i.silinenGoruntu} ekran görüntüsü, ${i.silinenVideo} video silindi (sonuçlar duruyor).`);
       }
       const gun = videoSaklamaGunu(db);
       const sonuc = medyaSaklamaTemizligi(db, medyaKlasoruYolu(), { videoGun: gun });
@@ -1395,6 +1400,8 @@ const POST_UCLARI = new Map([
       ...(typeof g.akisId === 'string' ? { akisId: g.akisId } : {}),
       // Giriş seçimi (senaryo-girisi.mjs): verilmezse mevcut korunur.
       ...(g.giris !== undefined ? { giris: g.giris } : {}),
+      // Adım ekran görüntüsü seçimi (senaryo formu; 'ayar' = Ayarlara uy): verilmezse mevcut korunur.
+      ...(g.adimGoruntusu !== undefined ? { adimGoruntusu: g.adimGoruntusu } : {}),
       // Satır seçimleri (${Tablo.Sütun} değerlerinin koşuda kullanılacak satırı): verilmezse mevcut korunur.
       ...(g.tabloSecimleri !== undefined ? { tabloSecimleri: g.tabloSecimleri } : {})
     }, { kosuyorMu });
@@ -2361,7 +2368,7 @@ async function medyaSun(req, res, id, indir, jsonGonder) {
   const db = await acikVeritabani();
   const m = medyaGetir(db, id);
   if (!m) { jsonGonder(res, 404, { basarili: false, mesaj: 'Medya bulunamadı.' }); return; }
-  if (m.silinme) { jsonGonder(res, 410, { basarili: false, mesaj: 'Bu video saklama süresi dolduğu için silindi.' }); return; }
+  if (m.silinme) { jsonGonder(res, 410, { basarili: false, mesaj: m.tur === 'video' ? 'Bu video saklama süresi dolduğu için silindi.' : 'Bu medya saklama süresi dolduğu için silindi.' }); return; }
   // Senaryo dosyaları (ör. müşteri listesi Excel'i) yalnızca koşuda kullanılır; düz metin olarak indirilmez/gösterilmez.
   if (m.tur === SENARYO_DOSYASI_TURU) { jsonGonder(res, 403, { basarili: false, mesaj: 'Senaryo dosyaları indirilemez; yalnızca koşuda (geçici olarak) çözülür.' }); return; }
   const klasor = medyaKlasoruYolu();
