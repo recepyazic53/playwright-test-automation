@@ -380,6 +380,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/senaryo-onerileri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'senaryo-onerileri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-onerileri.js', { dosya: 'senaryo-onerileri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Ekran modeli doğrulayıcısı (import yok): akış tasarımcısının "Sınırlar" düzenleyicisi aynı kurallarla anında denetler.
+  ['/arayuz/ekran-modeli-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'ekran-modeli-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'senaryo-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }]
 ]);
 const KABUK_GUVENLIK_BASLIKLARI = {

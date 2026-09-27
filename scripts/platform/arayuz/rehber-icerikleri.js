@@ -140,7 +140,7 @@ export const REHBERLER = {
         sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
       },
       { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinize göre koşacak adımları kutular hâlinde gösterir; seçili ortamdaki son koşu varsa adımlar yeşil / kırmızı boyanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Alanlar', ikon: 'duzenle' }, { baslik: 'Gönder', ikon: 'ok' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
-      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
+      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır; zorunlu bir alanı "Bilerek boş bırak" ile işaretlerseniz (olumsuz senaryo) koşucu o alana değer yazmaz. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
     ]
   },
 

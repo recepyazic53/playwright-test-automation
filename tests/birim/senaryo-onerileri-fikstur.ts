@@ -76,12 +76,26 @@ export function tabanVerisi(tarih: string): Nesne {
   return { baslik: 'Kitap siparişi', urunAdi: 'Roman', adet: 2, kategori: 'kitap', renk: 'standart', teslimatTarihi: tarih, telefon: TELEFON };
 }
 
+/**
+ * Akış tasarımcısında düzenlenebilen sürüm (onay kutusuna bağlı koşul diyagramda gösterilemez: hediye alanları yok). Adet alanı
+ * sınırın yanında modelin başka anahtarlarını da taşır (birim, notlar, dogrulama) — yeniden kaydetmede korunmalı.
+ */
+export function akisSiparisModeli(): Nesne {
+  const m = siparisModeli();
+  m.id = 'siparis-akisi';
+  m.ad = 'Sipariş akışı';
+  const teslimat = m.adimlar[1].bolumler[0];
+  teslimat.alanlar = teslimat.alanlar.filter((a: Nesne) => !a.id.startsWith('hediye'));
+  Object.assign(m.adimlar[0].bolumler[0].alanlar[1], { birim: 'adet', notlar: ['fikstür notu'], dogrulama: { istemci: 'min=1 max=10' } });
+  return m;
+}
+
 /** Modelin sayfa paketi (girişsiz). */
-export function siparisPaketi(): Nesne {
+export function siparisPaketi(model: Nesne = siparisModeli()): Nesne {
   return {
     tur: 'sayfa-paketi', surum: 1,
-    meta: { ekran: { anahtar: 'siparis-formu', ad: EKRAN_ADI, urlYolu: '/siparis/' }, olusturan: 'birim testi', olusturulma: '2026-09-28T09:00:00Z', baglamProfilleri: [] },
-    model: siparisModeli(), senaryoOnerileri: [],
+    meta: { ekran: { anahtar: String(model.id), ad: String(model.ad), urlYolu: '/siparis/' }, olusturan: 'birim testi', olusturulma: '2026-09-28T09:00:00Z', baglamProfilleri: [] },
+    model, senaryoOnerileri: [],
     gerekenAyarlar: { girisGerekli: false, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [], baglamTurleri: [] },
     bilinmeyenler: []
   };

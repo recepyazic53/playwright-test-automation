@@ -77,6 +77,16 @@ const SINIR_ANAHTARLARI = new Set(['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enC
 const GORELI_TARIH = /^bugun(\s*[+-]\s*\d{1,5})?$/;
 const MUTLAK_TARIH = /^(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})$/;
 
+/**
+ * Alan tipine göre "sinirlar" sorunları (Türkçe; yer öneki yok). Akış tasarımcısı da alan düzenleyicide aynı mesajları gösterir.
+ * @param {unknown} tip alan tipi @param {unknown} sinirlar @returns {string[]}
+ */
+export function sinirHatalari(tip, sinirlar) {
+  const t = hataToplayici();
+  sinirlarDogrula(t, '', { tip, sinirlar });
+  return t.hatalar.map((m) => m.replace(/^: /, ''));
+}
+
 function sinirlarDogrula(h, yer, alan) {
   const s = alan.sinirlar;
   if (!nesneMi(s)) { h.ekle(yer, '"sinirlar" nesne olmalı'); return; }

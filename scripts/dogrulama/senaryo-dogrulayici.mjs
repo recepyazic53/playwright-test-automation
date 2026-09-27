@@ -82,7 +82,7 @@ export const MESAJLAR = Object.freeze({
   tabloSutunuYok: (etiket, tablo, sutun) => `${adGoster(etiket)} için "${tablo}" tablosunda "${sutun}" sütunu yok.`,
   gizliSutunSecimde: (etiket, sutun) => `${adGoster(etiket)} bir seçim alanı; gizli "${sutun}" sütunundan değer alamaz.`,
   gizliSutunDosyada: (etiket, sutun) => `${adGoster(etiket)} bir dosya alanı; gizli "${sutun}" sütunundan dosya adı alamaz.`,
-  bilerekBos: (etiket) => `${adGoster(etiket)} bu senaryoda bilerek boş bırakılıyor (olumsuz senaryo); koşuda doldurulmaz, varsayılan da yazılmaz.`
+  bilerekBos: (etiket) => `${adGoster(etiket)} bu senaryoda bilerek boş bırakılıyor (olumsuz senaryo); koşucu bu alana değer yazmaz (varsayılanı da).`
 });
 
 /**

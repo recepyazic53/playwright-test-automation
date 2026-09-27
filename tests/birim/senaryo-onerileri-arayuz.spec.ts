@@ -91,8 +91,10 @@ test('liste gruplu; önizleme formu doldurur ama kaydetmez; seçilenler "Koşuda
   await expect(page.getByRole('heading', { name: 'Yeni senaryo', level: 2 })).toBeVisible();
   await expect(page.getByRole('note').filter({ hasText: 'Öneri önizlemesi — kaydedilmedi.' })).toBeVisible();
   await expect(page.getByPlaceholder('ör. bağlam / kapsam / beklenen sonuç…')).toHaveValue('Zorunlu alan boş: Adet');
-  await expect(page.locator('[data-alan="urunAdi"] input')).toHaveValue('Roman');
-  await expect(page.locator('[data-alan="adet"] input')).toHaveValue('');
+  await expect(page.locator('[data-alan="urunAdi"] input[type="text"]')).toHaveValue('Roman');
+  await expect(page.locator('[data-alan="adet"] input[type="number"]')).toHaveValue('');
+  await expect(page.locator('[data-alan="adet"] input[type="number"]')).toBeDisabled();
+  await expect(page.locator('[data-alan="adet"]').getByRole('checkbox', { name: 'Bilerek boş bırak' })).toBeChecked();
   await expect(page.locator('[data-alan="adet"]')).toContainText(MESAJLAR.bilerekBos('Adet'));
   await expect(page.getByRole('switch', { name: 'Koşuda' })).not.toBeChecked();
   expect(await senaryolar()).toHaveLength(1);

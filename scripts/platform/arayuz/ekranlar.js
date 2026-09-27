@@ -290,6 +290,9 @@ async function ekranAyrintisi(icerik, s) {
           h('span', {}, ikon('isaret'), h('code', { class: 'duz' }, e.anahtar)),
           agac && agac.ekranUrl ? h('span', {}, ikon('ag'), h('code', { class: 'duz' }, agac.ekranUrl)) : null,
           h('span', {}, ikon('liste'), h('a', { href: `#/senaryolar/u/${encodeURIComponent(e.id)}` }, `${d.senaryoSayisi} senaryo`)),
+          // Senaryo tasarım yardımcısı (Senaryolar > ekran > "Senaryo önerileri"; öneri yalnızca öneridir).
+          d.model && !EKRAN_DISI_TURLER.includes(d.modelTuru)
+            ? h('span', {}, ikon('simsek'), h('a', { href: `#/senaryolar/oneriler/${encodeURIComponent(e.id)}`, class: 'senaryo-onerileri-baglantisi' }, 'Senaryo önerileri')) : null,
           d.gecmis[0] ? h('span', { title: tarihMetni(d.gecmis[0].olusturulma) }, ikon('saat'), `son sürüm ${goreliZaman(d.gecmis[0].olusturulma)}`) : null)),
       h('div', { class: 'eylemler' }, d.surum && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? yorumla : null, d.surum && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? tekrar : null,
         !EKRAN_DISI_TURLER.includes(d.modelTuru) ? tara : null, !EKRAN_DISI_TURLER.includes(d.modelTuru) ? kaydet : null,
