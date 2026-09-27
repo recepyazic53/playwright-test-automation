@@ -3287,3 +3287,27 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .etki-bolumu { display: grid; gap: 10px; min-width: 0; }
 .etki-bolumu .kart-basligi h3 { overflow-wrap: anywhere; }
 .genis-onay .etki-bolumu { margin-top: 12px; }
+/* Ayarlar > Entegrasyonlar > Veritabanları (veritabanlari.js): satır = veritabanı, sütun = ortam; dar ekranda tablo kendi içinde kayar. */
+.veritabanlari-bolumu { display: grid; gap: 8px; min-width: 0; margin-top: 18px; }
+.veritabani-tablosu th[scope="row"] { min-width: 150px; max-width: 280px; overflow-wrap: anywhere; font-weight: normal; text-align: left; }
+.veritabani-tablosu td { overflow-wrap: anywhere; min-width: 110px; }
+.veritabani-tablosu td.eslemesiz { background: var(--atlanan-zemin); }
+.veritabani-tablosu th.riskli-ortam { color: var(--hata); }
+.veritabani-tablosu th .rozet { margin-left: 6px; }
+.veritabani-tablosu td.eylem { white-space: nowrap; }
+.veritabani-uyarilari { margin: 4px 0 0; padding: 0; list-style: none; color: var(--hata); display: grid; gap: 2px; }
+.veritabani-formu { min-width: 0; }
+.veritabani-eslemeleri { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 8px; min-width: 0; }
+.veritabani-eslemeleri legend { grid-column: 1 / -1; }
+.veritabani-eslemeleri select { width: 100%; min-width: 0; }
+.veritabani-eslemeleri .riskli-ortam label { color: var(--hata); }
+.veritabani-formu .not-kutusu[hidden] { display: none; }
+/* SQL adımı formu: veritabanının ortam eşlemeleri ve eski bağlantıdan "Veritabanına çevir…". */
+.sql-hedef-bilgisi { min-width: 0; overflow-wrap: anywhere; }
+.sql-hedef-bilgisi .sql-eslemeler { margin: 2px 0 6px; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.sql-hedef-bilgisi .sql-eslemeler li.eslemesiz { color: var(--hata); }
+.sql-hedef-bilgisi .dugmeler { display: flex; flex-wrap: wrap; gap: 6px; }
+.sql-cevir-paneli[hidden] { display: none; }
+.sql-uyarilari summary { color: var(--hata); }
+.veritabani-tablosu td.eylem .kucuk-dugme + .kucuk-dugme { margin-left: 6px; }
+.veritabanlari-bolumu + .entegrasyon-katalog-basligi { margin-top: 22px; }

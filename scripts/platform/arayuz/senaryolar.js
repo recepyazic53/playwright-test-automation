@@ -17,6 +17,7 @@ import { api, yerlestir, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, 
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuOrtamiId, kosuSuruyorMu, onayIste, onerilenOrtam, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { senaryoFormu } from './senaryo-formu.js';
+import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
 import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { veriyiSirala } from './tablo-siralama.js';
@@ -532,9 +533,11 @@ function listeGorunumu(icerik, s) {
     const secenek = tanimliOrtamlar(x, ortamlar);
     if (!secenek.length) { bildir(`"${x.baslik}" hiçbir ortamda tanımlı değil.`, 'hata'); return; }
     let ortam = secenek[0];
-    // Tek, riskli olmayan ortamda tanımlıysa sormadan çalışır; aksi halde ortam diyalogda seçilir.
-    if (secenek.length > 1 || riskliOrtamMi(ortam)) {
-      const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hesapla: () => ({ senaryolar: [x] }), tur: 'tekil', esZamanli: true, dugme: 'Çalıştır' });
+    const denetim = await sqlKosuDenetimiAl(proje.id);
+    const sqlUyarilari = (o) => sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, [x], o);
+    // Tek, riskli olmayan ortamda tanımlıysa (ve SQL uyarısı yoksa) sormadan çalışır; aksi halde ortam diyalogda seçilir.
+    if (secenek.length > 1 || riskliOrtamMi(ortam) || sqlUyarilari(ortam).length) {
+      const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hesapla: (o) => ({ senaryolar: [x], uyarilar: sqlUyarilari(o) }), tur: 'tekil', esZamanli: true, dugme: 'Çalıştır' });
       if (!y) return;
       ortam = y.ortam;
     }
@@ -546,11 +549,12 @@ function listeGorunumu(icerik, s) {
     if (!calisabilir.length) return;
     const ilgili = ortamlar.filter((o) => calisabilir.some((x) => ortamKaydi(x, o.id)?.tanimli));
     if (!ilgili.length) { bildir('Seçilen senaryolar hiçbir ortamda tanımlı değil.', 'hata'); return; }
+    const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
       baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), tur: 'tekil', esZamanli: true,
       hesapla: (o) => {
         const k = calisabilir.filter((x) => ortamKaydi(x, o.id)?.tanimli);
-        return { senaryolar: k, tanimsizSayisi: calisabilir.length - k.length };
+        return { senaryolar: k, tanimsizSayisi: calisabilir.length - k.length, uyarilar: sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, k, o) };
       }
     });
     if (!y) return;
@@ -562,15 +566,19 @@ function listeGorunumu(icerik, s) {
     if (!gorunen.some((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id))) return;
     const tam = !filtreliMi();
     const kapsam = ekran ? ekran.ad : 'Genel';
+    const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
       baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false,
       // Koşuya o ortamda tanımlı ve o ortamda Koşuda açık senaryolar girer.
       hesapla: (o) => {
         const tanimli = gorunen.filter((x) => ortamKaydi(x, o.id)?.tanimli);
+        const kosacak = tanimli.filter((x) => ortamdaDahil(x, o.id) && x.ekranEtkin !== false && !kosuDurumu(x.id));
         return {
-          senaryolar: tanimli.filter((x) => ortamdaDahil(x, o.id) && x.ekranEtkin !== false && !kosuDurumu(x.id)),
+          senaryolar: kosacak,
           haricSayisi: tanimli.filter((x) => !ortamdaDahil(x, o.id) || x.ekranEtkin === false).length,
-          tanimsizSayisi: gorunen.length - tanimli.length
+          tanimsizSayisi: gorunen.length - tanimli.length,
+          // Veritabanı bu ortamda eşli değilse uyarı (koşu engellenmez; senaryo o SQL adımında kalır).
+          uyarilar: sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, kosacak, o)
         };
       },
       not: tam

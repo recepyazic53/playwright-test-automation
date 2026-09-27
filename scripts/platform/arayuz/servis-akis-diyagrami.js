@@ -21,7 +21,7 @@ import { alan, api, bildir, degisiklikleriBirak, h, ikon, kayitIzi, mesajKutusu,
 import { onayIste } from './kosu-paneli.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
 import { sqlAkisDegerleri, sqlTanimiDogrula } from './sql-adimi.mjs';
-import { sqlAdimiFormu, sqlBaglantilariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
+import { sqlAdimiFormu, sqlHedefAdi, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
 import { bagAdi } from './akis-senaryo-icerigi.mjs';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 
@@ -93,7 +93,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   try { ekGizliAdlar = (await api('/platform/maskeleme')).ekAdlar; } catch { /* çekirdek liste yeter */ }
   const gizliMi = (ad) => gizliAdMi(ad, ekGizliAdlar);
   /** SQL adımlarının seçebileceği veritabanı bağlantıları (Ayarlar > Entegrasyonlar). */
-  const sqlBaglantilari = await sqlBaglantilariniAl(proje.id);
+  const sqlKaynaklari = await sqlKaynaklariniAl(proje.id);
   /** Adımın okumaları (SQL adımında sonuçtan okunan sütunlar). */
   const adimOkumalari = (x) => (x.tur === 'sql' ? (x.sql?.okumalar ?? []) : x.okumalar);
   const [{ servisler }, { akislar: tumAkislar }, kayit, akisSenaryolari] = await Promise.all([
@@ -256,7 +256,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
         }, ikon('artiYalin'), sn.baslik))))
         : h('p', { class: 'soluk kucuk' }, senaryolar.has(menuServisId) ? 'Bu serviste kayıtlı senaryo yok.' : 'Senaryolar okunuyor…')),
       h('div', { class: 'dugmeler' },
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => adimEkle(konum, { ad: 'SQL sorgusu', tur: 'sql', sql: yeniSqlTanimi(sqlBaglantilari) }) }, ikon('veri'), 'SQL sorgusu'),
+        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => adimEkle(konum, { ad: 'SQL sorgusu', tur: 'sql', sql: yeniSqlTanimi(sqlKaynaklari) }) }, ikon('veri'), 'SQL sorgusu'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { acikMenu = -1; ciz(); odakla(`[data-ekle="${konum}"]`); } }, 'Kapat'))) : null;
     if (menu) menu.addEventListener('keydown', (o) => { if (o.key === 'Escape') { o.preventDefault(); acikMenu = -1; ciz(); odakla(`[data-ekle="${konum}"]`); } });
     return h('li', { class: 'tasarim-ekle servis-ekle' },
@@ -280,7 +280,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     const opMi = x.tur === 'operasyon';
     const sn = sqlMi || opMi ? null : senaryoBul(x);
     const sqlO = sqlMi ? sqlOzeti(x.sql) : null;
-    const baglantiAdi = sqlMi ? sqlBaglantilari.find((b) => b.id === x.sql?.baglantiId)?.ad ?? '' : '';
+    const baglantiAdi = sqlMi ? sqlHedefAdi(x.sql, sqlKaynaklari) : '';
     const sonuc = adimSonucu(n);
     const renk = sonuc ? RENK[sonuc.durum] : null;
     const metot = sn ? (sn.icerik?.http ? `${sn.icerik.http.metot} ${sn.icerik.http.yol || '/'}` : sn.icerik?.operasyon ?? '') : '';
@@ -430,7 +430,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
         once.length ? h('p', { class: 'soluk kucuk' }, 'Bu adımda kullanılabilir: ', ...once.map((o) => h('code', { class: 'akis-degeri' }, `\${akis:${o}}`))) : null);
     };
     girdileriCiz();
-    const form = sqlAdimiFormu(x.sql, { baglantilar: sqlBaglantilari, onek: `${n + 1}. adım `, gizliMi, degisti: () => { degisti(); ciz(); girdileriCiz(); } });
+    const form = sqlAdimiFormu(x.sql, { ...sqlKaynaklari, onek: `${n + 1}. adım `, gizliMi, degisti: () => { degisti(); ciz(); girdileriCiz(); } });
     yerlestir(ayrintiKap, h('section', { class: 'kart form-paneli servis-akis-ayrinti', 'aria-label': `${n + 1}. adım ayrıntısı` },
       h('div', { class: 'kart-basligi' }, h('h3', {}, h('span', { class: 'dugum-no', 'aria-hidden': 'true' }, String(n + 1)), `${n + 1}. adım: SQL sorgusu`)),
       alan('Adım adı', ad), form, girdiKap,
@@ -653,7 +653,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     const e = eksik();
     if (e) { mesaj.goster(e); return; }
     const liste = is.adimlar.map((x, n) => (x.tur === 'sql'
-      ? `${n + 1}. SQL sorgusu › ${sqlBaglantilari.find((b) => b.id === x.sql?.baglantiId)?.ad ?? '?'}`
+      ? `${n + 1}. SQL sorgusu › ${sqlHedefAdi(x.sql, sqlKaynaklari, test.id)}`
       : x.tur === 'operasyon' ? `${n + 1}. ${servisAdi(x.servisId)} · ${x.operasyon} (varsayılan değerlerle)`
         : `${n + 1}. ${servisAdi(x.servisId)} › ${senaryoBul(x)?.baslik ?? '?'}`));
     if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;

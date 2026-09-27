@@ -147,4 +147,8 @@ export type PlatformModelVerisi = {
   kimlikProfilleri?: Record<string, Record<string, Record<string, unknown>>>;
   /** SQL adımlarının veritabanı bağlantıları: kimlik → çözülmüş ayar (parola dahil; yalnızca koşu belleğinde) ya da { hata }. */
   sqlBaglantilari?: Record<string, import('../../scripts/platform/sql/sorgu-bagdastirici.mjs').VeritabaniAyari | { hata: string }>;
+  /** SQL adımlarının mantıksal veritabanları: kimlik → bu ortamdaki eşlemenin bağlantısı ya da { hata } (eşleme yok / kullanılamaz). */
+  sqlVeritabanlari?: Record<string, import('../../scripts/platform/sql/sorgu-bagdastirici.mjs').KosuSqlVeritabani>;
+  /** Rapor için bağlantı adları (kimlik → ad; parola yok). */
+  sqlBaglantiAdlari?: Record<string, string>;
 };

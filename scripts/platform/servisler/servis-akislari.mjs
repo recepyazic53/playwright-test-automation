@@ -23,7 +23,7 @@ import {
 } from './servis-deposu.mjs';
 import { ortamTuru, oturumSaglayicisiAyarla, servisSenaryosuCalistir } from './servis-islemleri.mjs';
 import { sqlAdiminiKos, sqlAkisDegerleri } from '../sql/sql-adimi.mjs';
-import { sorguCalistir, sqlBaglantiDenetle } from '../sql/sorgu-bagdastirici.mjs';
+import { sqlHedefi, sqlTanimDenetle, sqlTanimiylaSorgula } from '../sql/sorgu-bagdastirici.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { bagAdi, baglariUygula } from './akis-senaryo-icerigi.mjs';
 import { baslangicDegerleri, govdeCoz, govdeUret, semaBirlestir } from './servis-govdesi.mjs';
@@ -47,7 +47,7 @@ export function servisAkisiDenetle(vt, projeId, icerik, adimIcerikleri) {
   icerik.adimlar.forEach((a, n) => {
     const yer = `${n + 1}. adım (${a.ad})`;
     if (a.tur === 'sql') {
-      const b = sqlBaglantiDenetle(vt, projeId, a.sql.baglantiId);
+      const b = sqlTanimDenetle(vt, projeId, a.sql);
       if (b) hatalar.push(`${yer}: ${b}`);
       const eksik = sqlAkisDegerleri(a.sql).filter((x) => !okunan.has(x));
       if (eksik.length) hatalar.push(`${yer}: ${eksik.map((x) => `\${akis:${x}}`).join(', ')} önceki adımlarda okunmuyor.`);
@@ -119,7 +119,7 @@ oturumSaglayicisiAyarla(oturumDegerleriniAl);
 
 /**
  * @typedef {{ no: number; ad: string; servis: string; senaryo: string; durum: 'basarili' | 'basarisiz' | 'hata' | 'atlandi' | 'durduruldu';
- *   sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; tur?: 'sql';
+ *   sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; tur?: 'sql'; sqlHedefi?: { baglanti: string; veritabani?: string };
  *   sql?: { sutunlar: string[]; satirlar: string[][]; toplamSatir: number; kesildi: boolean; beklenen?: string; gorulen?: string; deneme: number } }} AkisAdimSonucu
  */
 
@@ -131,14 +131,18 @@ oturumSaglayicisiAyarla(oturumDegerleriniAl);
  */
 async function sqlAdimiKos(vt, projeId, ortamId, a, degerler, gizliler, sinyal) {
   const ekler = ekGizliAdlar(vt);
+  // Hedef önce çözülür (veritabanı → bu ortamın eşlemesi → bağlantı): eşleme yoksa / bağlantı kullanılamıyorsa sorgu atılmaz,
+  // adım anlaşılır hatayla kalır (DepoHatasi akisiKos'ta 'hata' olur). Raporda kullanılan bağlantının ADI görünür.
+  const hedef = sqlHedefi(vt, a.sql, { projeId, ortamId });
+  const kullanilan = { baglanti: hedef.baglanti.ad, ...(hedef.veritabani ? { veritabani: hedef.veritabani.ad } : {}) };
   const r = await sqlAdiminiKos(a.sql, {
     adimAdi: a.ad, sinyal, gizliDegerler: gizliler, gizliSutunMu: (ad) => gizliAdMi(ad, ekler),
     coz: (ifade) => (ifade.startsWith('akis:') ? degerler[ifade.slice(5).trim()] : undefined),
-    yurutucu: (sql, parametreler, o) => sorguCalistir(vt, a.sql.baglantiId, sql, parametreler, { ...o, projeId, ortamId })
+    yurutucu: (sql, parametreler, o) => sqlTanimiylaSorgula(vt, { baglantiId: hedef.baglanti.id }, sql, parametreler, { ...o, projeId, ortamId })
   });
   const acikGizliler = r.gizliOkunanlar.map((ad) => r.okunanlar[ad]).filter((x) => typeof x === 'string' && x.length > 0);
   /** @type {Partial<AkisAdimSonucu>} */
-  const sonuc = { durum: r.durum, sureMs: r.sureMs, ...(r.mesaj ? { neden: r.mesaj } : {}) };
+  const sonuc = { durum: r.durum, sureMs: r.sureMs, sqlHedefi: kullanilan, ...(r.mesaj ? { neden: r.mesaj } : {}) };
   if (r.ozet) sonuc.sql = { ...r.ozet, beklenen: r.beklenen, gorulen: r.gorulen, deneme: r.deneme };
   if (Object.keys(r.okunanlar).length) sonuc.okunanlar = Object.fromEntries(Object.entries(r.okunanlar).map(([k, v]) => [k, r.gizliOkunanlar.includes(k) ? '***' : v]));
   return { sonuc, acik: { okunan: r.okunanlar, gizliler: acikGizliler } };
@@ -177,6 +181,8 @@ async function akisiKos(vt, projeId, g) {
       if (sqlMi) {
         const r = await sqlAdimiKos(vt, projeId, g.ortamId, a, degerler, gizliler, g.sinyal);
         Object.assign(s, r.sonuc);
+        // Raporda / sonuç kartında kullanılan bağlantı ("SQL sorgusu · Veritabanı → bağlantı"; parola yok).
+        if (r.sonuc.sqlHedefi) s.senaryo = `SQL sorgusu · ${r.sonuc.sqlHedefi.veritabani ? `${r.sonuc.sqlHedefi.veritabani} → ` : ''}${r.sonuc.sqlHedefi.baglanti}`;
         acik = r.acik;
       } else {
       if (!servis || (!opMi && !senaryo)) throw new DepoHatasi('Adımın servisi ya da senaryosu bulunamadı.');

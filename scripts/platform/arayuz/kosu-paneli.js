@@ -73,16 +73,16 @@ export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) ||
  *  - ORTAM SEÇİMLİ (s.ortamlar + s.hesapla): ortam diyalogda seçilir; her seçimde hesapla(ortam) koşacak senaryoları
  *    (ve o ortamda Koşuda kapalı / tanımsız olanların sayısını; istenirse atlananları nedenleriyle) verir. Promise<{ ortam, senaryolar } | null>.
  *  - turEtiketi: "Kapsam" özet kutusunda tam / kısmi yerine gösterilecek metin (ör. servis koşusu).
- * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; not?: string; haricSayisi?: number; dugme?: string;
+ * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; not?: string; haricSayisi?: number; dugme?: string; uyarilar?: Array<{ baslik: string; neden: string }>;
  *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; turEtiketi?: string;
- *   hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }> } }} s
+ *   hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }>; uyarilar?: Array<{ baslik: string; neden: string }> } }} s
  */
 export function kosuOnayi(s) {
   return new Promise((coz) => {
     const secimli = Array.isArray(s.ortamlar) && s.ortamlar.length > 0 && typeof s.hesapla === 'function';
     let ortam = secimli ? (s.ortam && s.ortamlar.find((o) => o.id === s.ortam.id)) || onerilenOrtam(s.ortamlar) : s.ortam;
-    /** @type {{ senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }> }} */
-    let hesap = { senaryolar: s.senaryolar || [], haricSayisi: s.haricSayisi };
+    /** @type {{ senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }>; uyarilar?: Array<{ baslik: string; neden: string }> }} */
+    let hesap = { senaryolar: s.senaryolar || [], haricSayisi: s.haricSayisi, uyarilar: s.uyarilar };
     const baslat = h('button', { type: 'button', class: 'birincil' });
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const turMetni = s.tur === 'tam' ? `Tam koşu · ${s.kapsam || 'Genel'}` : 'Kısmi (tekil)';
@@ -112,6 +112,11 @@ export function kosuOnayi(s) {
           h('summary', {}, `${hesap.atlananlar.length} senaryo ${ortam.ad} ortamında atlanır`),
           h('ul', { class: 'onay-listesi' }, hesap.atlananlar.slice(0, 40).map((x) => h('li', {}, h('span', { class: 'atlanan-adi' }, x.baslik), h('small', { class: 'soluk' }, x.neden))),
             hesap.atlananlar.length > 40 ? h('li', {}, `… ve ${hesap.atlananlar.length - 40} senaryo daha`) : null)) : null,
+        // Uyarılar (koşuyu engellemez): ör. SQL adımının veritabanı bu ortamda eşli değil → senaryo o adımda kalır.
+        hesap.uyarilar && hesap.uyarilar.length ? h('details', { class: 'atlananlar-listesi sql-uyarilari', open: true },
+          h('summary', {}, `${hesap.uyarilar.length} senaryoda SQL adımı ${ortam.ad} ortamında çalışmaz`),
+          h('ul', { class: 'onay-listesi' }, hesap.uyarilar.slice(0, 40).map((x) => h('li', {}, h('span', { class: 'atlanan-adi' }, x.baslik), h('small', { class: 'soluk' }, x.neden))),
+            hesap.uyarilar.length > 40 ? h('li', {}, `… ve ${hesap.uyarilar.length - 40} senaryo daha`) : null)) : null,
         h('p', { class: 'soluk kucuk' }, s.not || (s.tur === 'tam'
           ? 'Tam koşu olarak kaydedilir; bitince Sonuçlar kartları ve trendi güncellenir.'
           : 'Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez, koşu geçmişinde "tekil" görünür.')),

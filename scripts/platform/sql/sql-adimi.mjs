@@ -4,7 +4,9 @@
 // Geçti, değilse Kaldı ("Beklenen / Görülen" biçiminde mesaj).
 //
 // Tanım (SqlTanimi):
-//   { baglantiId, sql, beklenen, yenidenDeneme?: { sureSn, aralikSn }, zamanAsimiSn?, okumalar?: [{ ad, sutun, gizli? }] }
+//   { veritabaniId | baglantiId, sql, beklenen, yenidenDeneme?: { sureSn, aralikSn }, zamanAsimiSn?, okumalar?: [{ ad, sutun, gizli? }] }
+//   veritabaniId: mantıksal veritabanı (Ayarlar > Entegrasyonlar > Veritabanları; koşuda ortamın eşlemesiyle bağlantıya çözülür;
+//   önerilen). baglantiId: doğrudan bağlantı (eski; her ortamda aynı bağlantı). İkisinden yalnız biri bulunur.
 //   beklenen: { tur: 'satirSayisi', deger: N } | { tur: 'sutunDegeri', sutun, deger } (ilk satır) | { tur: 'bosDegil' } |
 //             { tur: 'bos' } | { tur: 'tabloEsit', sutunlar: [...] ([]: sonucun tüm sütunları), satirlar: [[...], ...] }
 // Yer tutucular: SQL'de ${akis:Ad} (önceki adımda okunan değer), ${alanAnahtari} (ekran senaryosunun değeri) gibi mevcut
@@ -105,7 +107,10 @@ export function sqlTanimiDogrula(ham) {
   const hatalar = [];
   const h = nesneMi(ham) ? ham : {};
   const baglantiId = typeof h.baglantiId === 'string' ? h.baglantiId.trim() : '';
-  if (!/^[A-Za-z0-9_-]{1,200}$/.test(baglantiId)) hatalar.push('Veritabanı bağlantısını seçin.');
+  const veritabaniId = typeof h.veritabaniId === 'string' ? h.veritabaniId.trim() : '';
+  const kimlikMi = (/** @type {string} */ x) => /^[A-Za-z0-9_-]{1,200}$/.test(x);
+  if (veritabaniId && baglantiId) hatalar.push('Veritabanı ya da doğrudan bağlantıdan yalnız birini seçin.');
+  else if (!kimlikMi(veritabaniId || baglantiId)) hatalar.push('Veritabanı bağlantısını seçin.');
   const sql = typeof h.sql === 'string' ? h.sql.trim() : '';
   if (!sql) hatalar.push('SQL sorgusunu yazın.');
   else if (sql.length > SQL_EN_UZUN) hatalar.push(`SQL en çok ${SQL_EN_UZUN} karakter olabilir.`);
@@ -133,7 +138,7 @@ export function sqlTanimiDogrula(ham) {
     beklenen = { tur: 'tabloEsit', sutunlar, satirlar };
   } else beklenen = { tur: b.tur };
   /** @type {Record<string, unknown>} */
-  const tanim = { baglantiId, sql, beklenen };
+  const tanim = { ...(veritabaniId ? { veritabaniId } : { baglantiId }), sql, beklenen };
   const yd = nesneMi(h.yenidenDeneme) ? h.yenidenDeneme : null;
   if (yd && (yd.sureSn !== undefined && yd.sureSn !== null && yd.sureSn !== '')) {
     const sure = Number(yd.sureSn);
