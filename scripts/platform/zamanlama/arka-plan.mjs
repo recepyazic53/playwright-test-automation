@@ -13,7 +13,7 @@ import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { KasaHatasi, acikAnahtar, arayuzAcikMi, arkaPlanKipindeMi, kasaKdfOku, kasaKilitle, parolayiDogrula } from '../kasa.mjs';
 import { DepoHatasi, ayarGetir, ayarYaz } from '../veritabani/depo.mjs';
-import { anahtariEmanetEt, arayuzuKilitleEmanetle, emanetVarMi, emanetiSil } from './anahtar-emaneti.mjs';
+import { anahtariEmanetEt, arayuzuKilitleEmanetle, arkaPlanIsiSuruyorMu, emanetVarMi, emanetiSil } from './anahtar-emaneti.mjs';
 import { dosyayiGuvenliSil, dpapiDosyaBilgisi, dpapiDosyaYolu, dpapiDosyasiOku, dpapiDosyasiYaz, varsayilanDpapiYurutucu } from './dpapi.mjs';
 import { gorevHedefi, gorevOlustur, gorevSil, gorevVarMi, gorevXml, varsayilanGorevYurutucu } from './oturum-gorevi.mjs';
 
@@ -59,6 +59,8 @@ export function arkaPlanYoneticisi(bag) {
   const geciciKlasor = bag.geciciKlasor ?? tmpdir;
   /** Kullanıcıya gösterilecek son uyarı (gizli bilgi içermez). @type {string | null} */
   let uyari = null;
+  /** Her tam kilitlemede artar: await süren bir iş (açılışta DPAPI çözme) bitince anahtarı emanete geri koymasın. */
+  let tamamenKilitNesli = 0;
 
   const dosyaYolu = () => { const y = bag.veritabaniYolu(); return y ? dpapiDosyaYolu(y) : null; };
   const dosyaBilgisi = () => { const y = dosyaYolu(); return y ? dpapiDosyaBilgisi(y) : { var: false, gecerli: false, kasaTuzu: null }; };
@@ -95,8 +97,12 @@ export function arkaPlanYoneticisi(bag) {
 
   /**
    * Kilitleme: tamamen=false ve tercih (A ya da B) açıksa arayüz kilitlenir, anahtar yalnız zamanlayıcının emanetinde kalır;
-   * aksi hâlde (ya da "Tamamen kilitle") emanet de silinir — bugünkü davranış.
+   * aksi hâlde (ya da "Tamamen kilitle") emanet de açık anahtar da HER KOŞULDA hemen silinir — süren bir arka plan işi olsa
+   * bile beklenmez (iş kasa kilitli görünce kalan adımları atlar; zamanlayici.mjs > devamMi). Süren iş varsa sonuçta
+   * surenIs: true döner (arayüz kullanıcıyı açıkça uyarır). Başlamış bir DPAPI açılış yüklemesi bu kilitten sonra
+   * anahtarı emanete geri koyamaz (tamamenKilitNesli).
    * @param {Veritabani} db @param {{ tamamen?: boolean }} [secenekler]
+   * @returns {{ arkaPlan: boolean; surenIs?: true }}
    */
   function kilitle(db, secenekler = {}) {
     if (!secenekler.tamamen) {
@@ -111,9 +117,11 @@ export function arkaPlanYoneticisi(bag) {
         return { arkaPlan: true };
       }
     }
+    const surenIs = arkaPlanIsiSuruyorMu(db);
+    tamamenKilitNesli += 1;
     emanetiSil(db);
     kasaKilitle(db);
-    return { arkaPlan: false };
+    return surenIs ? { arkaPlan: false, surenIs: true } : { arkaPlan: false };
   }
 
   /** Kilit menüsünde iki seçenek gösterilsin mi? (Kasa arayüzde açıkken ve A ya da B açıksa.) @param {Veritabani} db */
@@ -158,8 +166,14 @@ export function arkaPlanYoneticisi(bag) {
     if (!yol || !dpapiDosyaBilgisi(yol).var) return false;
     /** @type {Buffer | null} */
     let anahtar = null;
+    const nesil = tamamenKilitNesli;
     try {
       anahtar = await dpapiDosyasiOku(yol, { kasaTuzu: kasaTuzu(db), yurutucu: dpapiYurutucu });
+      // Çözme sürerken kullanıcı "Tamamen kilitle" dediyse anahtar emanete konmaz (silinir).
+      if (nesil !== tamamenKilitNesli) {
+        log('[zamanlama] Windows oturumuna bağlı otomatik açma yüklenmedi: kasa bu sırada tamamen kilitlendi.');
+        return false;
+      }
       anahtariEmanetEt(db, anahtar);
       log('[zamanlama] Windows oturumuna bağlı otomatik açma: zamanlanmış koşular kasa kilitliyken çalışabilir (anahtar yalnız bellekte, arayüz kilitli).');
       return true;

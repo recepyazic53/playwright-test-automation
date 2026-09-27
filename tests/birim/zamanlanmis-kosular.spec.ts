@@ -364,7 +364,9 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     const secim = page.getByRole('dialog', { name: 'Kasayı kilitle' });
     await expect(secim.getByRole('button', { name: 'Tamamen kilitle (anahtarı da sil)' })).toBeVisible();
     await secim.getByRole('button', { name: 'Kilitle (zamanlanmış koşular sürsün)' }).click();
-    await expect(page.getByRole('heading', { name: 'Kasa kilitli' })).toBeVisible();
+    // exact: bu sayfadaki "Kasa kilitliyken ve açılışta" başlığı da alt dizge olarak eşleşir; kilit ekranı başlığı beklenmeli.
+    const kilitBasligi = page.getByRole('heading', { name: 'Kasa kilitli', exact: true });
+    await expect(kilitBasligi).toBeVisible();
     await expect(page.getByText('Zamanlanmış koşular arka planda sürebilir', { exact: false })).toBeVisible();
     expect((await nobetciApi(nobetci, `/platform/ortamlar?projeId=${projeId}`)).kod).toBe('KASA_KILITLI');
     await page.getByRole('textbox', { name: /^Kasa parolası/ }).fill(PAROLA);
@@ -374,7 +376,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     // "Tamamen kilitle": bellekteki anahtar da silinir.
     await page.getByRole('button', { name: 'Kilitle', exact: true }).click();
     await page.getByRole('dialog', { name: 'Kasayı kilitle' }).getByRole('button', { name: 'Tamamen kilitle (anahtarı da sil)' }).click();
-    await expect(page.getByRole('heading', { name: 'Kasa kilitli' })).toBeVisible();
+    await expect(kilitBasligi).toBeVisible();
     await expect(page.getByText('Zamanlanmış koşular arka planda sürebilir', { exact: false })).toHaveCount(0);
     expect(((await nobetciApi(nobetci, '/platform/durum')).zamanlama as { anahtarBellekte: boolean }).anahtarBellekte).toBe(false);
     await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA });

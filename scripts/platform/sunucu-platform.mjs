@@ -154,6 +154,7 @@ import {
   KasaHatasi, MEDYA_ANAHTARI_META, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, acikAnahtar, arayuzAcikMi, arkaPlanKipindeMi, kasaAc, kasaAcikMi,
   kasaDurumu, kasaKilitle, kasaOlustur, medyaAnahtariniAc, medyaAnahtariniHazirla, parolaDegistir, parolayiDogrula, zarfMi
 } from './kasa.mjs';
+import { siraOlustur } from './kasa-sirasi.mjs';
 import {
   eskiSonuclariSil, hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
 } from './veritabani/sonuc-deposu.mjs';
@@ -343,13 +344,22 @@ function guvenlikAyariniYukle(db) {
   otomatikKilitZamani = null;
 }
 
+/**
+ * Kasa açma / kilitleme / parola değiştirme / çalışma alanı açma SIRAYLA yürür (kasa-sirasi.mjs): süren bir açmanın
+ * ardından gelen "Tamamen kilitle", açma bittikten sonra kilitler — anahtar belleğe geri konamaz.
+ */
+const kasaSirali = siraOlustur();
+
 setInterval(() => {
   if (!vt || !arayuzAcikMi(vt)) return;
   if (Date.now() - sonEtkinlik < otomatikKilitDakika * DAKIKA_MS) return;
   // Tercih ("kilitliyken de çalışsın" / DPAPI) açıksa arayüz kilitlenir, anahtar yalnız zamanlayıcının emanetinde kalır.
-  arkaPlan.kilitle(vt);
-  otomatikKilitZamani = new Date().toISOString();
-  console.log(`[platform] Kasa ${otomatikKilitDakika} dakika işlem yapılmadığı için otomatik kilitlendi.`);
+  void kasaSirali(() => {
+    if (!vt || !arayuzAcikMi(vt) || Date.now() - sonEtkinlik < otomatikKilitDakika * DAKIKA_MS) return;
+    arkaPlan.kilitle(vt);
+    otomatikKilitZamani = new Date().toISOString();
+    console.log(`[platform] Kasa ${otomatikKilitDakika} dakika işlem yapılmadığı için otomatik kilitlendi.`);
+  });
 }, Math.min(5_000, DAKIKA_MS)).unref();
 
 /** @type {import('./senaryolar/calistirma.d.mts').Kosucu | null} */
@@ -1709,7 +1719,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
           return true;
         }
         case 'ac': {
-          const acilan = await alaniAc(alanKimligi(), metinAl(g.parola));
+          const acilan = await kasaSirali(() => alaniAc(alanKimligi(), metinAl(g.parola)));
           jsonGonder(res, 200, { basarili: true, calismaAlani: acilan });
           return true;
         }
@@ -2041,10 +2051,13 @@ export async function platformIsteginiIsle(req, res, baglam) {
       case '/platform/kasa/ac': {
         const db = await platformVeritabani();
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
-        const kasa = await denemeSiniri.dene(() => kasaAc(db, metin(govde.parola)));
+        const kasa = await kasaSirali(async () => {
+          const k = await denemeSiniri.dene(() => kasaAc(db, metin(govde.parola)));
+          arkaPlan.kasaAcildi(db);
+          return k;
+        });
         yerelMakine(db);
         guvenlikAyariniYukle(db);
-        arkaPlan.kasaAcildi(db);
         if (aktifAlan && !aktifAlan.sabit) {
           try { alanAcildi(VERI_KOKU, aktifAlan.id, { projeSayisi: Number(db.tek('SELECT COUNT(*) AS n FROM projeler')?.n ?? 0) }); } catch { /* yalnızca gösterim */ }
         }
@@ -2054,18 +2067,26 @@ export async function platformIsteginiIsle(req, res, baglam) {
       case '/platform/kasa/kilitle': {
         // { tamamen?: true } — tercih (A/B) açıkken "Kilitle (zamanlanmış koşular sürsün)" varsayılandır; "Tamamen kilitle"
         // bellekteki anahtarı da siler. Tercihler kapalıyken bugünkü gibi tamamen kilitlenir.
+        // Süren açma / parola değiştirme varsa önce o biter, sonra kilitlenir (kasaSirali). "Tamamen"de süren arka plan işi
+        // beklenmez: anahtar hemen silinir, iş kalan adımları atlar; surenIs: true ile arayüz kullanıcıyı uyarır.
         const db = await platformVeritabani();
-        const sonuc = db ? arkaPlan.kilitle(db, { tamamen: govde.tamamen === true }) : { arkaPlan: false };
-        jsonGonder(res, 200, { basarili: true, kasa: db ? kasaDurumu(db) : { olusturuldu: false, acik: false }, arkaPlan: sonuc.arkaPlan });
+        const sonuc = db ? await kasaSirali(() => arkaPlan.kilitle(db, { tamamen: govde.tamamen === true })) : { arkaPlan: false };
+        jsonGonder(res, 200, {
+          basarili: true, kasa: db ? kasaDurumu(db) : { olusturuldu: false, acik: false }, arkaPlan: sonuc.arkaPlan,
+          ...('surenIs' in sonuc && sonuc.surenIs ? { surenIs: true } : {})
+        });
         return true;
       }
       case '/platform/kasa/parola-degistir': {
         const db = await platformVeritabani();
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
-        const kasa = await denemeSiniri.dene(() => parolaDegistir(db, metin(govde.eskiParola), metin(govde.yeniParola)));
-        console.log(`[platform] Kasa parolası değiştirildi (${kasa.yenidenSifrelenen} değer yeniden şifrelendi).`);
-        // Zamanlayıcının bellekteki anahtarı ve (varsa) DPAPI dosyası yeni anahtarla yenilenir; yenilenemezse silinip uyarılır.
-        await arkaPlan.parolaDegisti(db);
+        const kasa = await kasaSirali(async () => {
+          const k = await denemeSiniri.dene(() => parolaDegistir(db, metin(govde.eskiParola), metin(govde.yeniParola)));
+          console.log(`[platform] Kasa parolası değiştirildi (${k.yenidenSifrelenen} değer yeniden şifrelendi).`);
+          // Zamanlayıcının bellekteki anahtarı ve (varsa) DPAPI dosyası yeni anahtarla yenilenir; yenilenemezse silinip uyarılır.
+          await arkaPlan.parolaDegisti(db);
+          return k;
+        });
         jsonGonder(res, 200, { basarili: true, kasa });
         return true;
       }

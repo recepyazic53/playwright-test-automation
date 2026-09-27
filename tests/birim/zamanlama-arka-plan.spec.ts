@@ -27,6 +27,7 @@ import {
   GOREV_ADI, gorevHedefi, gorevKomutlari, gorevOlustur, gorevSil, gorevXml, gorevXmlBaytlari, komutSatiriArgumani, type GorevYurutucu
 } from '../../scripts/platform/zamanlama/oturum-gorevi.mjs';
 import { TERCIH_AYAR_ANAHTARI, arkaPlanYoneticisi } from '../../scripts/platform/zamanlama/arka-plan.mjs';
+import { siraOlustur } from '../../scripts/platform/kasa-sirasi.mjs';
 import { nobetciApi, nobetciBaslat } from './nobetci-sunucusu';
 import { HIZLI_KDF, geciciKlasor, loglariYakala, izinleriAc } from './platform-ortak';
 
@@ -293,6 +294,182 @@ test('A (uçtan uca, geçici sunucu): kilitleme seçimi, arayüz kilidinde veri 
   } finally {
     n2.surec.kill();
     await new Promise((c) => n2.surec.once('exit', c));
+    klasor.temizle();
+  }
+});
+
+test('A: "Tamamen kilitle" süren arka plan işini beklemez — anahtar hemen silinir, surenIs döner; iş bitince anahtar geri gelmez', async () => {
+  const klasor = geciciKlasor('arka-plan-tamamen');
+  const { vt } = await hazirVeritabani(klasor.yol);
+  const yonetici = arkaPlanYoneticisi({ veritabaniYolu: () => join(klasor.yol, 'platform.db'), projeKoku: KOK, denemeSiniri, platform: 'linux', log: () => {} });
+  try {
+    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true, onay: true });
+    // 1) Arka plan kipinde (arayüz kilitli, zamanlayıcının işi anahtarı kasaya yerleştirmiş) iş sürerken "Tamamen kilitle".
+    expect(yonetici.kilitle(vt)).toEqual({ arkaPlan: true });
+    const bitir = arkaPlanIsiBaslat(vt);
+    expect(bitir).not.toBeNull();
+    expect(arkaPlanKipindeMi(vt)).toBe(true);
+    expect(yonetici.kilitle(vt, { tamamen: true })).toEqual({ arkaPlan: false, surenIs: true });
+    expect(emanetVarMi(vt)).toBe(false);
+    expect(kasaAcikMi(vt)).toBe(false);
+    expect(yonetici.kilitDurumu(vt).anahtarBellekte).toBe(false);
+    // Süren işin bitişi anahtarı geri getirmez; yeni iş anahtar bulamaz.
+    bitir?.();
+    expect(kasaAcikMi(vt)).toBe(false);
+    expect(emanetVarMi(vt)).toBe(false);
+    expect(arkaPlanIsiBaslat(vt)).toBeNull();
+    expect(yonetici.kilitDurumu(vt).anahtarBellekte).toBe(false);
+
+    // 2) Kasa kullanıcı tarafından açıkken iş sürüyor (emanet de var): "Tamamen kilitle" yine hemen siler.
+    await kasaAc(vt, PAROLA);
+    expect(yonetici.kilitle(vt)).toEqual({ arkaPlan: true });
+    await kasaAc(vt, PAROLA);
+    const bitir2 = arkaPlanIsiBaslat(vt);
+    expect(bitir2).not.toBeNull();
+    expect(emanetVarMi(vt)).toBe(true);
+    expect(yonetici.kilitle(vt, { tamamen: true })).toEqual({ arkaPlan: false, surenIs: true });
+    expect(kasaAcikMi(vt)).toBe(false);
+    expect(emanetVarMi(vt)).toBe(false);
+    bitir2?.();
+    expect(yonetici.kilitDurumu(vt).anahtarBellekte).toBe(false);
+
+    // 3) Süren iş yokken surenIs alanı hiç gelmez.
+    await kasaAc(vt, PAROLA);
+    expect(yonetici.kilitle(vt, { tamamen: true })).toEqual({ arkaPlan: false });
+  } finally {
+    emanetiSil(vt);
+    vt.kapat();
+    klasor.temizle();
+  }
+});
+
+test('B: açılışta DPAPI çözülürken "Tamamen kilitle" gelirse (yarış) anahtar emanete konmaz', async () => {
+  const klasor = geciciKlasor('dpapi-yaris');
+  const { vt } = await hazirVeritabani(klasor.yol);
+  const vtYolu = join(klasor.yol, 'platform.db');
+  const dpapi = sahteDpapi();
+  // Çözme çağrısı (stdin "coz" ile başlar) kapı açılana kadar bekletilir: kilitleme tam bu arada gelir.
+  let kapiyiAc: () => void = () => {};
+  let bekletilsin = false;
+  let cozmeBekliyor = false;
+  const yavasDpapi: DpapiYurutucu = async (komut, argumanlar, stdin) => {
+    if (bekletilsin && stdin.startsWith('coz')) await new Promise<void>((c) => { kapiyiAc = c; cozmeBekliyor = true; });
+    return dpapi.yurutucu(komut, argumanlar, stdin);
+  };
+  const yonetici = arkaPlanYoneticisi({
+    veritabaniYolu: () => vtYolu, projeKoku: KOK, denemeSiniri, platform: 'win32', dpapiYurutucu: yavasDpapi, gorevYurutucu: sahteSchtasks().yurutucu, log: () => {}
+  });
+  try {
+    await yonetici.tercihDegistir(vt, { ad: 'dpapi', acik: true, parola: PAROLA, onay: true });
+    yonetici.kilitle(vt, { tamamen: true });
+    // Kontrol: yarış yokken açılış yüklemesi anahtarı emanete koyar.
+    expect(await yonetici.acilistaYukle(vt)).toBe(true);
+    expect(emanetVarMi(vt)).toBe(true);
+    emanetiSil(vt);
+
+    bekletilsin = true;
+    const yukleme = yonetici.acilistaYukle(vt);
+    await expect.poll(() => cozmeBekliyor).toBe(true);
+    // Kullanıcı kasayı açıp "Tamamen kilitle" diyor; ardından DPAPI çözmesi biter.
+    await kasaAc(vt, PAROLA);
+    expect(yonetici.kilitle(vt, { tamamen: true })).toEqual({ arkaPlan: false });
+    kapiyiAc();
+    expect(await yukleme).toBe(false);
+    expect(emanetVarMi(vt)).toBe(false);
+    expect(kasaAcikMi(vt)).toBe(false);
+    expect(yonetici.kilitDurumu(vt).anahtarBellekte).toBe(false);
+  } finally {
+    emanetiSil(vt);
+    vt.kapat();
+    klasor.temizle();
+  }
+});
+
+test('A: kasa sırası (yarış) — süren açma / parola değiştirme sonrası gelen "Tamamen kilitle" kazanır; sırasız hâlde anahtar geri gelir', async () => {
+  const klasor = geciciKlasor('kasa-sirasi');
+  const { vt } = await hazirVeritabani(klasor.yol);
+  const yonetici = arkaPlanYoneticisi({ veritabaniYolu: () => join(klasor.yol, 'platform.db'), projeKoku: KOK, denemeSiniri, platform: 'linux', log: () => {} });
+  try {
+    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true, onay: true });
+    yonetici.kilitle(vt, { tamamen: true });
+    // Sırasız (düzeltme öncesi davranış): açma KDF'yi beklerken kilitleme biter, sonra açma anahtarı yerleştirir → kasa AÇIK kalır.
+    const sirasizAc = kasaAc(vt, PAROLA);
+    yonetici.kilitle(vt, { tamamen: true });
+    await sirasizAc;
+    expect(kasaAcikMi(vt)).toBe(true);
+    yonetici.kilitle(vt, { tamamen: true });
+
+    // Sıralı: kilitleme açmanın bitmesini bekler, sonra hem açık anahtarı hem emaneti siler.
+    const sira = siraOlustur();
+    const ac = sira(() => kasaAc(vt, PAROLA));
+    const kilit = sira(() => yonetici.kilitle(vt, { tamamen: true }));
+    await ac;
+    expect(await kilit).toEqual({ arkaPlan: false });
+    expect(kasaAcikMi(vt)).toBe(false);
+    expect(yonetici.kilitDurumu(vt).anahtarBellekte).toBe(false);
+
+    // Yanlış parolayla açma hata verir; sıra takılmaz, ardındaki kilitleme yine çalışır.
+    await kasaAc(vt, PAROLA);
+    yonetici.kilitle(vt); // "sürsün": emanet var
+    expect(emanetVarMi(vt)).toBe(true);
+    const yanlis = sira(() => kasaAc(vt, 'yanlis-parola-1'));
+    const kilit2 = sira(() => yonetici.kilitle(vt, { tamamen: true }));
+    await expect(yanlis).rejects.toMatchObject({ kod: 'PAROLA_YANLIS' });
+    await kilit2;
+    expect(emanetVarMi(vt)).toBe(false);
+    expect(kasaAcikMi(vt)).toBe(false);
+
+    // Parola değiştirme (iki KDF await eder) sürerken gelen kilitleme: değiştirme biter, SONRA kilitlenir.
+    await kasaAc(vt, PAROLA);
+    const degistir = sira(() => parolaDegistir(vt, PAROLA, YENI_PAROLA, { kdf: HIZLI_KDF }));
+    const kilit3 = sira(() => yonetici.kilitle(vt, { tamamen: true }));
+    await degistir;
+    await kilit3;
+    expect(kasaAcikMi(vt)).toBe(false);
+    expect(yonetici.kilitDurumu(vt).anahtarBellekte).toBe(false);
+    await kasaAc(vt, YENI_PAROLA);
+  } finally {
+    emanetiSil(vt);
+    vt.kapat();
+    klasor.temizle();
+  }
+});
+
+test('A (uçtan uca, geçici sunucu): kilitleme ile açılış / parola değiştirme sıraya konur — sonra gelen "Tamamen kilitle" kazanır', async () => {
+  test.setTimeout(90_000);
+  const klasor = geciciKlasor('arka-plan-sira');
+  const vtYolu = join(klasor.yol, 'platform.db');
+  const hazir = await veritabaniniHazirla(vtYolu);
+  // Kasıtlı YAVAŞ KDF (~1 sn): açma / parola değiştirme uzun süre await eder; kilitleme isteği (250 ms sonra) bu arada gelir.
+  // Kuyruğun kendisi yukarıdaki testte deterministik sınanır; bu test sunucu uçlarının kuyruğa bağlı olduğunu doğrular.
+  await kasaOlustur(hazir, PAROLA, { kdf: { N: 2 ** 18, r: 8, p: 1 } });
+  izinleriAc(hazir);
+  ayarYaz(hazir, TERCIH_AYAR_ANAHTARI, { kilitliyken: true, dpapi: false, oturumAcilisi: false });
+  kasaKilitle(hazir);
+  hazir.kapat();
+  const n = await nobetciBaslat(klasor.yol, vtYolu);
+  const bekle = (ms: number) => new Promise((c) => setTimeout(c, ms));
+  try {
+    // Açma (KDF await eder) sürerken tamamen kilitleme isteği gelir.
+    const ac = nobetciApi(n, '/platform/kasa/ac', { parola: PAROLA });
+    await bekle(250);
+    const kilitAc = nobetciApi(n, '/platform/kasa/kilitle', { tamamen: true });
+    expect((await ac).basarili).toBe(true);
+    expect(await kilitAc).toMatchObject({ basarili: true, arkaPlan: false, kasa: { acik: false } });
+    expect(await nobetciApi(n, '/platform/durum')).toMatchObject({ kasa: { acik: false }, zamanlama: { anahtarBellekte: false } });
+    // Parola değiştirme sürerken "Tamamen kilitle": değiştirme biter, SONRA kilitlenir (yeni anahtar belleğe geri konmaz).
+    expect((await nobetciApi(n, '/platform/kasa/ac', { parola: PAROLA })).basarili).toBe(true);
+    const degistir = nobetciApi(n, '/platform/kasa/parola-degistir', { eskiParola: PAROLA, yeniParola: YENI_PAROLA });
+    await bekle(250);
+    const kilit = nobetciApi(n, '/platform/kasa/kilitle', { tamamen: true });
+    expect((await degistir).basarili).toBe(true);
+    expect(await kilit).toMatchObject({ basarili: true, kasa: { acik: false } });
+    expect(await nobetciApi(n, '/platform/durum')).toMatchObject({ kasa: { acik: false }, zamanlama: { anahtarBellekte: false } });
+    expect((await nobetciApi(n, '/platform/projeler')).kod).toBe('KASA_KILITLI');
+    expect((await nobetciApi(n, '/platform/kasa/ac', { parola: YENI_PAROLA })).basarili).toBe(true);
+  } finally {
+    n.surec.kill();
+    await new Promise((c) => n.surec.once('exit', c));
     klasor.temizle();
   }
 });
