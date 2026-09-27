@@ -16,7 +16,7 @@ export declare function izinleriOku(vt: Veritabani | null | undefined): Record<s
 export declare function izinAcikMi(vt: Veritabani | null | undefined, anahtar: string): boolean;
 export declare function izinGerekli(vt: Veritabani | null | undefined, anahtar: string, baglam?: string): void;
 export declare function izinDurumundanDenetle(durum: Record<string, unknown> | null | undefined, anahtar: string, baglam?: string): void;
-export declare function izinDegistir(vt: Veritabani, anahtar: unknown, acik: unknown, s?: { onay?: unknown; yapan?: string }): {
+export declare function izinDegistir(vt: Veritabani, anahtar: unknown, acik: unknown, s?: { onay?: unknown; yapan?: string; kaynak?: 'izin-penceresi' }): {
   izinler: Record<string, boolean>; degisti: boolean;
 };
 export declare function izinDegisiklikleri(vt: Veritabani, sinir?: number): Array<{

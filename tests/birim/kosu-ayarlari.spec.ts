@@ -159,6 +159,15 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     // Zamanlanmış koşu davranışı: Zamanlanmış koşular kartının içinde.
     const zamanli = page.getByRole('form', { name: 'Zamanlanmış koşu davranışı' });
     await expect(page.locator('.zamanlanmis-kosular').getByRole('form', { name: 'Zamanlanmış koşu davranışı' })).toBeVisible();
+    // Tek başlık (dış h4; iç fieldset legend'i yok), çerçevesiz gömülü form; Kaydet kartın içinde; alt bölüm ayrı çizgiyle başlar.
+    await expect(page.locator('.zamanlama-davranisi').getByText('Zamanlanmış koşu davranışı', { exact: true })).toHaveCount(1);
+    await expect(zamanli.locator('legend')).toHaveCount(0);
+    await expect(zamanli).not.toHaveClass(/form-paneli/);
+    const kartKutusu = await page.locator('.zamanlanmis-kosular').boundingBox();
+    const kaydetKutusu = await zamanli.getByRole('button', { name: 'Kaydet' }).boundingBox();
+    expect(kartKutusu && kaydetKutusu && kaydetKutusu.x >= kartKutusu.x && kaydetKutusu.x + kaydetKutusu.width <= kartKutusu.x + kartKutusu.width).toBe(true);
+    const tercihUst = await page.locator('.zamanlama-tercihleri').evaluate((e) => parseFloat(getComputedStyle(e).paddingTop) + parseFloat(getComputedStyle(e).marginTop));
+    expect(tercihUst).toBeGreaterThanOrEqual(16);
     await expect(zamanli.getByLabel('Kaçan zaman')).toHaveValue('atla');
     await zamanli.getByLabel('Kaçan zaman').selectOption('sonraKos');
     await zamanli.getByLabel('Koşu sürerken gelen zaman').selectOption('bitinceKos');

@@ -37,6 +37,8 @@ import {
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
+import { paketBicimiBelgesi } from './platform/ekranlar/paket-bicimi.mjs';
+import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './platform/ekranlar/paket-istekleri.mjs';
 import {
   DOSYA_KLASORU_DEGISKENI, artikKlasorleriTemizle, geciciDosyaKoku, kosuKlasoruOlustur, kosuKlasorunuSil, sahipYaz
 } from './platform/dosyalar/gecici-dosyalar.mjs';
@@ -327,6 +329,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/html-rapor.js', { dosya: 'html-rapor.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/karsilastirma.js', { dosya: 'karsilastirma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tarih-araligi.js', { dosya: 'tarih-araligi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/veri-klasoru.js', { dosya: 'veri-klasoru.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/entegrasyonlar.js', { dosya: 'entegrasyonlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/zamanlanmis-kosular.js', { dosya: 'zamanlanmis-kosular.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-akis-diyagrami.js', { dosya: 'servis-akis-diyagrami.js', tur: 'text/javascript; charset=utf-8' }],
@@ -393,6 +396,12 @@ function arayuzIsteginiIsle(req, res) {
     const html = readFileSync(join(ARAYUZ_KLASORU, 'index.html'), 'utf-8').replace('__OTURUM_TOKENI__', OTURUM_TOKEN);
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...KABUK_GUVENLIK_BASLIKLARI });
     res.end(html);
+    return true;
+  }
+  // "Paket biçimini indir": yapay zekâ aracına istek metniyle verilecek tek biçim dosyası (belgelerden birleştirilir; sır yok).
+  if (yol === BICIM_ADRESI) {
+    res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': `attachment; filename="${BICIM_DOSYASI_ADI}"`, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+    res.end(paketBicimiBelgesi(join(buDosyaninKlasoru, '..')));
     return true;
   }
   const dosya = ARAYUZ_DOSYALARI.get(yol);
@@ -1303,8 +1312,12 @@ if (dogrudanCalistirildi) {
     try { taramalariKapat(); } catch { /* yok sayılır */ }
     try { platformKapanirken(); } catch { /* yok sayılır */ }
     sunucu.close();
-    setTimeout(() => process.exit(sinyal === 'SIGINT' ? 130 : 0), 300).unref();
+    // YENIDEN: Ayarlar > Veri klasörü değişince "Nöbetçi'yi yeniden başlat" (75: başlatıcı yeniden başlatır; bkz. klasor-secimi.mjs).
+    const kod = sinyal === 'SIGINT' ? 130 : sinyal === 'YENIDEN' ? 75 : 0;
+    process.exitCode = kod; // olay döngüsü zamanlayıcıdan önce boşalırsa da doğru kodla çıkılır
+    setTimeout(() => process.exit(kod), 300).unref();
   };
+  process.on('nobetci-yeniden-baslat', () => kapat('YENIDEN'));
   process.on('SIGINT', () => kapat('SIGINT'));
   process.on('SIGTERM', () => kapat('SIGTERM'));
   process.on('SIGHUP', () => kapat('SIGHUP'));

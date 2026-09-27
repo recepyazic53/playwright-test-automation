@@ -76,7 +76,7 @@ export function izinDurumundanDenetle(durum, anahtar, baglam) {
 /**
  * İzni açar / kapatır (kasa açık olmalı). Açmak onay ister (arayüz "ne yapar / riski" penceresini gösterip onay: true gönderir);
  * kapatmak serbesttir. Değişiklik geçmişe yazılır.
- * @param {Veritabani} vt @param {unknown} anahtar @param {unknown} acik @param {{ onay?: unknown; yapan?: string }} [s]
+ * @param {Veritabani} vt @param {unknown} anahtar @param {unknown} acik @param {{ onay?: unknown; yapan?: string; kaynak?: 'izin-penceresi' }} [s]
  * @returns {{ izinler: Record<string, boolean>; degisti: boolean }}
  */
 export function izinDegistir(vt, anahtar, acik, s = {}) {
@@ -93,7 +93,7 @@ export function izinDegistir(vt, anahtar, acik, s = {}) {
     ayarYaz(vt, IZIN_AYAR_ANAHTARI, yeni);
     gecmisYaz(vt, {
       varlikTuru: IZIN_GECMIS_TURU, varlikId: a, islem: 'guncelle', ...(s.yapan ? { yapan: s.yapan } : {}),
-      onceki: { acik: onceki }, sonraki: { acik }, aciklama: acik ? 'açıldı' : 'kapatıldı'
+      onceki: { acik: onceki }, sonraki: { acik }, aciklama: `${acik ? 'açıldı' : 'kapatıldı'}${s.kaynak === 'izin-penceresi' ? ' (izin penceresinden)' : ''}`
     });
   });
   return { izinler: izinleriOku(vt), degisti: true };

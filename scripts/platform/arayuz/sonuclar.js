@@ -922,7 +922,7 @@ async function testPaneli(alan, id, kapat) {
     if (oynuyor) { gv.onizleme(); izle.replaceChildren(ikon('oynat'), 'Videoyu izle'); oynuyor = false; return; }
     gv.videoOynat(video); oynuyor = true; izle.replaceChildren(ikon('gorunum'), 'Görüntüye dön');
   });
-  alan.replaceChildren(
+  yerlestir(alan,
     h('div', { class: 'panel-ust' },
       h('div', { class: 'satir' }, durumRozeti(s2.durum), s2.hataKategorisi ? rozet(kisaKategori(s2.hataKategorisi)) : null, rozet(sureMetni(s2.sureMs)),
         h('button', { type: 'button', class: 'ikon-dugme hayalet kapat', 'aria-label': 'Paneli kapat', onclick: kapat }, ikon('carpi'))),

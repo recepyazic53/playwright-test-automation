@@ -110,7 +110,7 @@ async function alanGoruntusu(page: Page, ad: string, hedefler: Locator[]): Promi
   await page.emulateMedia({ colorScheme: 'dark' });
 }
 
-const kart = (page: Page, ad: string) => page.locator('article.ekran-karti').filter({ has: page.getByRole('heading', { name: ad, exact: true }) });
+const kart = (page: Page, ad: string) => page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ has: page.getByRole('heading', { name: ad, exact: true }) });
 async function menuAc(page: Page, ad: string): Promise<Locator> {
   await page.getByRole('button', { name: `Ekran işlemleri: ${ad}` }).first().click();
   const menu = page.getByRole('menu');
@@ -153,11 +153,11 @@ test('⋯ menüsü: yeniden adlandır, düzenle (URL yolu), yukarı taşı', asy
   await expect(kart(page, 'Müşteri Kartı')).toContainText('/yeni/musteri/');
 
   // Yukarı taşı: kart ve sol liste sırası değişir.
-  const once = await page.locator('article.ekran-karti').evaluateAll((l) => l.map((e) => e.getAttribute('data-ekran')));
-  const ad2 = await page.locator('article.ekran-karti').nth(1).getByRole('heading').innerText();
+  const once = await page.locator('article.ekran-karti:not(.ortak-akis-karti)').evaluateAll((l) => l.map((e) => e.getAttribute('data-ekran')));
+  const ad2 = await page.locator('article.ekran-karti:not(.ortak-akis-karti)').nth(1).getByRole('heading').innerText();
   await (await menuAc(page, ad2)).getByRole('menuitem', { name: 'Yukarı taşı' }).click();
-  await expect.poll(async () => page.locator('article.ekran-karti').first().getByRole('heading').innerText()).toBe(ad2);
-  const sonra = await page.locator('article.ekran-karti').evaluateAll((l) => l.map((e) => e.getAttribute('data-ekran')));
+  await expect.poll(async () => page.locator('article.ekran-karti:not(.ortak-akis-karti)').first().getByRole('heading').innerText()).toBe(ad2);
+  const sonra = await page.locator('article.ekran-karti:not(.ortak-akis-karti)').evaluateAll((l) => l.map((e) => e.getAttribute('data-ekran')));
   expect(sonra.slice(0, 2)).toEqual([once[1], once[0]]);
   await expect(page.getByRole('navigation', { name: 'Ekranlar' }).getByRole('group', { name: 'Ekranlar' }).locator('a').first()).toContainText(ad2);
   await page.context().close();

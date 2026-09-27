@@ -3,7 +3,7 @@
 //   "Sayfa ekle" (ekran + model v1 + seçilen senaryo önerileri + şifreli kanıtlar) · tekrar analiz
 //   (paket yükle → bulgular → kabul/red → yalnızca kabul edilenlerle yeni model sürümü; reddedilenler
 //   imzasıyla hatırlanır) · etki paneli (bulgu → etkilenen senaryolar, toplu değer atama) ·
-//   Claude analiz/istek dosyası (gizli değer içermez).
+//   yapay zekâ aracı için analiz/istek dosyası (gizli değer içermez).
 //
 // Durum: ekranlar.ayarlar_json (ŞİFRELİ, 'ozel') içinde "analiz" anahtarı:
 //   { bekleyen: Analiz | null, son: Analiz | null, reddedilenler: [{ imza, tur, baslik, zaman }],
@@ -26,13 +26,13 @@ import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
-import { INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-istekleri.mjs';
+import { BICIM_ATFI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-istekleri.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
 import { modelAlanlari, alanEtiketi as paketAlanEtiketi } from '../tablolar/paket-tablolari.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
-/** Claude'un inceleme kuralları ve tekrar analiz ek kuralı: TEK kaynak paket-istekleri.mjs (arayüz de aynı dosyayı kullanır). */
+/** Yapay zekâ aracının inceleme kuralları ve tekrar analiz ek kuralı: TEK kaynak paket-istekleri.mjs (arayüz de aynı dosyayı kullanır). */
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, unknown>} Nesne */
@@ -193,16 +193,32 @@ function baglamProfilAdlari(vt, projeId) {
   return [...harita.values()].sort((a, b) => a.tur.localeCompare(b.tur, 'tr') || a.ad.localeCompare(b.ad, 'tr'));
 }
 
+/** Ekran modelinin (tüm akışları) kullandığı ortak akış dosyaları ("<anahtar>.model.json"). @param {Nesne} model */
+function kullanilanOrtakAkislar(model) {
+  /** @type {Set<string>} */
+  const dosyalar = new Set();
+  const adimListeleri = [model.adimlar, ...(Array.isArray(model.akislar) ? model.akislar.map((/** @type {unknown} */ a) => nesneMi(a) ? a.adimlar : null) : [])];
+  for (const adimlar of adimListeleri) {
+    if (!Array.isArray(adimlar)) continue;
+    for (const x of adimlar) if (nesneMi(x) && nesneMi(x.ortakAkis) && typeof x.ortakAkis.dosya === 'string') dosyalar.add(x.ortakAkis.dosya);
+  }
+  return dosyalar;
+}
+
 /** @param {Veritabani} vt @param {string} projeId */
 export function ekranListesi(vt, projeId) {
   acikAnahtar(vt);
   const sayilar = new Map(vt.tumu('SELECT ekran_id, COUNT(*) AS n FROM senaryolar WHERE proje_id = ? GROUP BY ekran_id', [projeId]).map((s) => [String(s.ekran_id), Number(s.n)]));
+  // Ortak akışın kartındaki "K ekranda kullanılıyor": ekran modellerinin (tüm akışları) başvurduğu ortak akış dosyaları.
+  /** @type {Map<string, number>} */
+  const kullanim = new Map();
   const ekranlar = ekranlariListele(vt, projeId).map((e) => {
     const m = ekranModeliGetir(vt, e.id);
     const model = m && nesneMi(m.model) ? /** @type {Nesne} */ (m.model) : null;
     const env = model ? modelEnvanteri(model) : null;
     const { analiz } = analizDurumu(vt, e.id);
     const bekleyen = analiz.bekleyen;
+    if (model && !['altModel', 'ortakAkis'].includes(String(model.tur))) for (const d of kullanilanOrtakAkislar(model)) kullanim.set(d, (kullanim.get(d) ?? 0) + 1);
     return {
       id: e.id, anahtar: e.anahtar, ad: e.ad, aciklama: e.aciklama,
       modelTuru: model ? (['altModel', 'ortakAkis'].includes(model.tur) ? model.tur : 'ekran') : null, modelSurumu: m ? m.surum : null,
@@ -213,6 +229,7 @@ export function ekranListesi(vt, projeId) {
       guncellenme: e.guncellenme, durum: e.durum, sira: e.sira
     };
   });
+  for (const e of ekranlar) if (e.modelTuru === 'ortakAkis') Object.assign(e, { kullananSayisi: kullanim.get(`${e.anahtar}.model.json`) ?? 0 });
   // Silinmiş ekranlar (mezar taşı): geçmiş sonuçları için tutulur; geri yüklenebilir.
   const silinmisler = ekranlariListele(vt, projeId, { silinenlerDahil: true }).filter((e) => e.durum === 'silindi').map((e) => {
     const m = mezarTasiOku(vt.tek('SELECT silinme_json FROM ekranlar WHERE id = ?', [e.id])?.silinme_json);
@@ -924,7 +941,7 @@ export function topluDegerAta(vt, projeId, ekranId, girdi) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Claude analiz / istek dosyası (gizli değer YOK)
+// Yapay zekâ aracı için analiz / istek dosyası (gizli değer YOK)
 // ---------------------------------------------------------------------------------------
 
 const DOSYA_TURLERI = Object.freeze({
@@ -958,7 +975,7 @@ function senaryoGizliDegersizOzet(s) {
 }
 
 /**
- * Claude Code'a verilecek analiz/istek dosyasını yazar: <klasor>/<ekran anahtarı>-<YYYYMMDD-HHMMSS>[-tur].json.
+ * Yapay zekâ aracına verilecek analiz/istek dosyasını yazar: <klasor>/<ekran anahtarı>-<YYYYMMDD-HHMMSS>[-tur].json.
  * İçerik: ekran bilgisi, güncel model, (varsa) bekleyen/son analizin bulguları ve etki özeti, senaryo
  * özetleri (gizli değer yok), seçilen bağlam profillerinin ADLARI ve istek açıklaması.
  * tur 'tekrar-analiz' ise seçilen profiller ekran için "son seçim" olarak saklanır.
@@ -981,7 +998,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const etki = a && model && Array.isArray(a.bulgular) ? etkiHesapla(/** @type {Nesne[]} */ (a.bulgular), model, /** @type {Nesne} */ (a.model), senaryolar) : [];
   const proje = projeGetir(vt, projeId);
   // Ekranın mevcut alan bağlantıları ve bağlı tabloların adları / sütunları (DEĞER YOK; gizli sütunun yalnız adı ve işareti):
-  // Claude yeni pakette aynı tablo ve sütun adlarını kullansın.
+  // Araç yeni pakette aynı tablo ve sütun adlarını kullansın.
   const baglar = ekranAlanBaglari(vt, ekranId);
   const tumTablolar = Object.keys(baglar).length ? tablolariListele(vt, projeId) : [];
   const alanHaritasi = model ? modelAlanlari(model) : new Map();
@@ -1004,9 +1021,9 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
     tur: 'nobetci-analiz-dosyasi', surum: 1, olusturulma: zaman.toISOString(),
     istek: { tur, aciklama: DOSYA_TURLERI[tur], baglamProfilleri: secilen ?? analiz.sonBaglamProfilleri },
     talimat: tur === 'tekrar-analiz'
-      ? `Sayfayı listelenen bağlam profilleriyle yeniden incele ve docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI} Paket gizli/kişisel veri içermemeli.`
+      ? `Sayfayı listelenen bağlam profilleriyle yeniden incele ve ${BICIM_ATFI} yeni bir sayfa paketi üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI} Paket gizli/kişisel veri içermemeli.`
       : tur === 'eksik-kombinasyon'
-        ? 'Modeldeki seçenek/koşul kombinasyonlarını mevcut senaryolarla karşılaştır; kapsanmayan anlamlı kombinasyonlar için docs/sayfa-paketi.md > senaryoOnerileri biçiminde öneriler üret (yalnızca öneri; gizli değer yok).'
+        ? `Modeldeki seçenek/koşul kombinasyonlarını mevcut senaryolarla karşılaştır; kapsanmayan anlamlı kombinasyonlar için ${BICIM_ATFI} (senaryoOnerileri bölümü) öneriler üret (yalnızca öneri; gizli değer yok).`
         : 'Bulguları ve etkilerini değerlendir: hangileri gerçek ekran değişikliği, hangileri inceleme hatası olabilir; kabul/red ve senaryo güncellemesi için öneri yaz.',
     proje: proje ? proje.ad : null,
     ekran: { anahtar: ekran.anahtar, ad: ekran.ad, urlYolu: model && typeof model.ekranUrl === 'string' ? model.ekranUrl : null, modelSurumu: mevcut ? mevcut.surum : null },
@@ -1028,9 +1045,9 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const goreli = relative(girdi.projeKoku, yol);
   const gosterilen = goreli.startsWith('..') ? yol : goreli.split(sep).join('/');
   const cumle = tur === 'tekrar-analiz'
-    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
+    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. ${BICIM_ATFI} yeni bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
     : tur === 'eksik-kombinasyon'
-      ? `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının modelini ve mevcut senaryolarını karşılaştırıp eksik kombinasyonlar için docs/sayfa-paketi.md biçiminde senaryo önerileri üret.`
+      ? `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının modelini ve mevcut senaryolarını karşılaştırıp eksik kombinasyonlar için ${BICIM_ATFI} senaryo önerileri üret.`
       : `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının bulgularını, etkilerini ve senaryo özetlerini yorumla; kabul/red ve senaryo güncellemesi için önerilerini yaz.`;
   return { yol: gosterilen, tamYol: yol, cumle };
 }

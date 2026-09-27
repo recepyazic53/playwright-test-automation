@@ -4,7 +4,7 @@
 //   model sürümü; reddedilenler hatırlanır, aynı değişiklik tekrar gösterilmez).
 //   Etki paneli (seçili bulgu): etkilenen senaryolar; zorunlu yeni alanda eksik değer → toplu değer atama
 //   (bulgu kabul edilip uygulandıktan sonra) ya da tek tek düzenleme; "Eksik kombinasyonlara senaryo öner"
-//   ve "Claude ile yorumla" (gizli değer içermeyen analiz dosyası; Claude API kullanılmaz).
+//   ve "Yapay zekâ ile yorumla" (gizli değer içermeyen analiz dosyası; Nöbetçi hiçbir yapay zekâ servisine bağlanmaz).
 // Karar taslağı sekme oturumunda (sessionStorage) tutulur; kalıcı olan yalnızca "Kararları uygula"dır.
 import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import {
@@ -204,7 +204,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
       e && e.mesaj ? h('p', { class: `etki-mesaji ${e.senaryolar.length ? 'var' : ''}` }, e.mesaj) : h('p', { class: 'kucuk soluk' }, 'Bu bulgu senaryo verisini etkilemiyor.'),
       senaryoListesi,
       atama,
-      h('div', { class: 'etki-alt' }, oner, h('span', { class: 'kucuk cok-soluk' }, 'Claude Code için gizli değer içermeyen bir öneri isteği dosyası yazılır.'))));
+      h('div', { class: 'etki-alt' }, oner, h('span', { class: 'kucuk cok-soluk' }, 'Yapay zekâ aracınız için gizli değer içermeyen bir öneri isteği dosyası yazılır.'))));
   }
 
   function altCubukCiz(kabul, red, bekleyen) {
@@ -283,7 +283,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
 }
 
 function yorumlaDugmesi(s) {
-  const d = h('button', { type: 'button', class: 'hayalet' }, ikon('simsek'), 'Claude ile yorumla');
+  const d = h('button', { type: 'button', class: 'hayalet' }, ikon('simsek'), 'Yapay zekâ ile yorumla');
   d.addEventListener('click', () => claudeDosyasiOlustur({ proje: s.proje, ekranId: s.ekranId, tur: 'yorumla' }, d));
   return d;
 }

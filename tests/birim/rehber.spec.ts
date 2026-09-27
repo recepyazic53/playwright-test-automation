@@ -134,4 +134,88 @@ test.describe('Rehber arayüzü', () => {
     expect(((await nobetciApi(nobetci, '/platform/rehber')) as { rehber: { gorulenler: string[]; otomatik: boolean } }).rehber).toMatchObject({ gorulenler: [], otomatik: false });
     await baglam.close();
   });
+
+  test('tüm rehberlerin tüm adımları: kart ekranın ortasında, akış kutuları eşit boyutta, metin taşmaz (masaüstü + telefon)', async () => {
+    test.setTimeout(240_000);
+    for (const [genislik, yukseklik] of [[1400, 1000], [390, 844]] as const) {
+      const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: genislik, height: yukseklik } });
+      const page = await baglam.newPage();
+      const hatalar: string[] = [];
+      page.on('pageerror', (e) => hatalar.push(String(e)));
+      await page.goto('/#/sonuclar');
+      await expect(page.locator('#proje-rozeti')).toBeVisible();
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const sorunlar: string[] = await page.evaluate(async () => {
+        const { REHBERLER } = await import('/arayuz/rehber-icerikleri.js' as string);
+        const { rehberBaslat } = await import('/arayuz/rehber.js' as string);
+        const bekle = () => new Promise((c) => requestAnimationFrame(() => requestAnimationFrame(c)));
+        const cikti: string[] = [];
+        for (const anahtar of Object.keys(REHBERLER)) {
+          rehberBaslat(anahtar);
+          const adimlar = REHBERLER[anahtar].adimlar.length;
+          for (let i = 0; i < adimlar; i++) {
+            await bekle();
+            const kart = document.querySelector('.rehber-karti') as HTMLElement;
+            const r = kart.getBoundingClientRect();
+            const yer = `${anahtar}#${i + 1}`;
+            const fark = Math.max(Math.abs((r.left + r.right) / 2 - innerWidth / 2), Math.abs((r.top + r.bottom) / 2 - innerHeight / 2));
+            if (fark > 2) cikti.push(`${yer}: ortada değil (${Math.round(fark)}px)`);
+            if (r.left < 0 || r.right > innerWidth || r.top < 0 || r.bottom > innerHeight) cikti.push(`${yer}: kart pencereden taşıyor`);
+            const kutular = [...document.querySelectorAll('.rehber-akis > .rehber-kutu')].map((k) => k.getBoundingClientRect());
+            for (const boyut of ['height', 'width'] as const) {
+              const d = kutular.map((k) => k[boyut]);
+              if (d.length && Math.max(...d) - Math.min(...d) > 1 && !(boyut === 'width' && innerWidth < 520)) cikti.push(`${yer}: kutu ${boyut} ${d.map(Math.round).join(',')}`);
+            }
+            for (const e of document.querySelectorAll('.rehber-kutu b, .rehber-kutu small, .rehber-akis')) {
+              if (e.scrollWidth > e.clientWidth + 1) cikti.push(`${yer}: taşan "${e.textContent}"`);
+            }
+            if (i < adimlar - 1) (kart.querySelector('.dugmeler .birincil') as HTMLButtonElement).click();
+          }
+          (document.querySelector('.rehber-kapat') as HTMLButtonElement).click();
+        }
+        return cikti;
+      });
+      expect(sorunlar, `${genislik}px`).toEqual([]);
+      expect(hatalar).toEqual([]);
+      await baglam.close();
+    }
+  });
+
+  test('Sonuçlar rehberi Koşu geçmişi ve Hata kalıpları bölümlerini anlatır ve vurgular', async () => {
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/sonuclar');
+    await expect(page.locator('section[aria-labelledby="kalip-basligi"]')).toBeVisible();
+    await page.getByRole('button', { name: 'Bu ekranın rehberini aç' }).click();
+    const kart = rehberKarti(page);
+    for (const baslik of ['Koşu geçmişi', 'Hata kalıpları']) {
+      await kart.getByRole('button', { name: new RegExp(`^Adım \\d+: ${baslik}$`) }).click();
+      await expect(kart.getByRole('heading', { name: baslik })).toBeVisible();
+      await expect(page.locator('.rehber-vurgu')).toBeVisible();
+    }
+    await expect(kart).toContainText('Koşuda yakalanan mesajlar');
+    await page.keyboard.press('Escape');
+    await baglam.close();
+  });
+  test('Test verisi rehberi: "Karşılıklar" adımı sütun başlığındaki Karşılıklar düğmesini vurgular', async () => {
+    const { projeler } = (await nobetciApi(nobetci, '/platform/projeler')) as unknown as { projeler: Array<{ id: string }> };
+    await nobetciApi(nobetci, '/platform/tablo/kaydet', { projeId: projeler[0].id, ad: 'Rehber tablosu', sutunlar: [{ ad: 'Kapsam', eskiAd: null, gizli: false }],
+      satirlar: [{ ad: '', ortamId: null, degerler: { Kapsam: 'EKSPRES' } }], silinenSatirlar: [] });
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/ayarlar/test-verisi');
+    await page.getByRole('navigation', { name: 'Tablolar' }).getByRole('button', { name: /^Rehber tablosu/ }).click();
+    const dugme = page.getByRole('button', { name: '1. sütunun karşılıkları' });
+    await expect(dugme).toBeVisible();
+    await page.getByRole('button', { name: 'Bu ekranın rehberini aç' }).click();
+    const kart = rehberKarti(page);
+    await kart.getByRole('button', { name: /^Adım \d+: Karşılıklar$/ }).click();
+    await expect(kart.getByRole('heading', { name: 'Karşılıklar' })).toBeVisible();
+    await expect(kart).toContainText('EKSPRES → sayfa: 1, servis: EXP');
+    const vurgu = await page.locator('.rehber-vurgu').boundingBox();
+    const hedef = await dugme.boundingBox();
+    expect(vurgu && hedef && vurgu.x <= hedef.x && vurgu.y <= hedef.y && vurgu.x + vurgu.width >= hedef.x + hedef.width && vurgu.y + vurgu.height >= hedef.y + hedef.height).toBe(true);
+    await page.keyboard.press('Escape');
+    await baglam.close();
+  });
 });

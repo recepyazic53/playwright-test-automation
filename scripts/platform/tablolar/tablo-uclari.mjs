@@ -2,7 +2,7 @@
 // kilidi sunucuda denetlenir. Gizli sütun değerleri hiçbir yanıtta dönmez.
 import { DepoHatasi } from '../veritabani/depo.mjs';
 import { tabloSil, tablolariListele } from './tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from './ekran-baglari.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
 import { tabloKaydetEtkiyle } from './tablo-etkisi.mjs';
@@ -25,8 +25,13 @@ function kimlik(d, alan = 'id') {
 
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const TABLO_GET_UCLARI = [
-  // baglam=1: bağlam profilleri de tablo olarak (Tablolar ekranı); diğer ekranlar yalnız test verisi tablolarını görür.
-  ['/platform/tablolar', (db, q) => ({ tablolar: tablolariListele(db, kimlik(q.get('projeId'), 'projeId'), { baglamDahil: q.get('baglam') === '1' }) })],
+  // baglam=1: bağlam profilleri de tablo olarak (Tablolar ekranı); diğer ekranlar yalnız test verisi tablolarını görür. Tablolar
+  // ekranı için ayrıca ekran adları ve tabloların hangi ekranların alan bağlarında kullanıldığı (liste gruplaması; yalnız gösterim).
+  ['/platform/tablolar', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    const baglamDahil = q.get('baglam') === '1';
+    return { tablolar: tablolariListele(db, projeId, { baglamDahil }), ...(baglamDahil ? tabloEkranKullanimi(db, projeId) : {}) };
+  }],
   // Ekranın "Test verisi" sekmesi: input'lar, tablo bağlantıları ve tablolar.
   ['/platform/ekran/alan-baglari', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');

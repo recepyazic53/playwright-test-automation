@@ -355,9 +355,9 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     await expect(satirlar).toHaveCount(IZIN_TANIMLARI.length);
 
     // Kapalı izne tabi işlem → ortak uyarı + "İzinlere git" (izin satırına odak).
-    await page.evaluate(async () => {
-      const m = await import('/arayuz/ortak.js' as string);
-      try { await m.api('/platform/senaryolar/calistir', { govde: { projeId: 'p', ortamId: 'o', senaryoId: 's', kosuId: 'k' } }); } catch { /* beklenen */ }
+    // api() pencere kapanana kadar bekler (izin verilirse isteği yeniden dener): çağrı beklenmeden başlatılır.
+    await page.evaluate(() => {
+      void import('/arayuz/ortak.js' as string).then((m) => m.api('/platform/senaryolar/calistir', { govde: { projeId: 'p', ortamId: 'o', senaryoId: 's', kosuId: 'k' } })).catch(() => { /* beklenen */ });
     });
     const uyari = page.getByRole('dialog', { name: 'İzin gerekli' });
     await expect(uyari).toBeVisible();
@@ -414,6 +414,83 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     await page.screenshot({ path: testInfo.outputPath('izinler-390.png'), fullPage: true });
     await testInfo.attach('izinler-masaustu', { path: testInfo.outputPath('izinler-masaustu.png'), contentType: 'image/png' });
     await testInfo.attach('izinler-390', { path: testInfo.outputPath('izinler-390.png'), contentType: 'image/png' });
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('arayüz: "İzin ver ve devam et" izni açar ve işlemi BİR KEZ yeniden dener; ardışık iki izin; canlı onayı yine istenir; kasa kilitliyken düğme yok', async ({}, testInfo) => {
+    test.setTimeout(120_000);
+    for (const a of ['servis-istekleri', 'guvenlik-gevsetme', 'canli-ortam']) await api('/platform/izin/degistir', { anahtar: a, acik: false });
+    await ac('web-erisimi');
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1360, height: 900 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/ayarlar/izinler');
+    await expect(page.locator('.izin-satiri').first()).toBeVisible();
+    const baslat = (yol: string, govde: Nesne) => page.evaluate(({ yol, govde }) => {
+      (window as unknown as { __sonuc: Promise<unknown> }).__sonuc = import('/arayuz/ortak.js' as string)
+        .then((m) => m.api(yol, { govde }))
+        .then((r: unknown) => ({ ok: true, r }), (e: { message: string; kod?: string }) => ({ ok: false, mesaj: e.message, kod: e.kod }));
+    }, { yol, govde });
+    const sonuc = () => page.evaluate(() => (window as unknown as { __sonuc: Promise<Nesne> }).__sonuc);
+    const pencere = page.getByRole('dialog', { name: 'İzin gerekli' });
+    const tanim = (a: string) => IZIN_TANIMLARI.find((t) => t.anahtar === a) as (typeof IZIN_TANIMLARI)[number];
+
+    // 1) Tek izin: pencere iznin ne yaptığını ve riskini gösterir; "İzin ver ve devam et" → izin açık, geçmişte kayıt, istek BİR kez.
+    const onceki = hedef.istekler.length;
+    await baslat('/platform/servis/erisim', { projeId, ortamId: test_, yol: '/Servis' });
+    await expect(pencere).toContainText(izinMesaji('servis-istekleri'));
+    await expect(pencere).toContainText(tanim('servis-istekleri').risk);
+    await expect(pencere.getByRole('button')).toHaveText(['Kapat', 'İzinlere git', 'İzin ver ve devam et']);
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: testInfo.outputPath('izin-penceresi-masaustu.png') });
+    await pencere.getByRole('button', { name: 'İzin ver ve devam et' }).click();
+    expect(await sonuc()).toMatchObject({ ok: true, r: { basarili: true } });
+    expect(hedef.istekler.length - onceki, 'işlem bir kez yapıldı').toBe(1);
+    expect(((await api('/platform/izinler')).izinler as Record<string, boolean>)['servis-istekleri']).toBe(true);
+    const { kayitlar } = await api('/platform/gecmis?varlikTuru=izin&varlikId=servis-istekleri');
+    expect((kayitlar as Nesne[]).at(-1)).toMatchObject({ aciklama: 'açıldı (izin penceresinden)' });
+
+    // 2) İki izin gereken işlem: ardışık iki pencere (önce servis istekleri, sonra güvenlik gevşetme); sonunda tek istek.
+    await api('/platform/izin/degistir', { anahtar: 'servis-istekleri', acik: false });
+    const once2 = hedef.istekler.length;
+    await baslat('/platform/servis/erisim', { projeId, ortamId: test_, yol: '/Servis', tlsDogrulama: false });
+    await expect(pencere).toContainText(izinMesaji('servis-istekleri'));
+    await pencere.getByRole('button', { name: 'İzin ver ve devam et' }).click();
+    await expect(pencere).toContainText(izinMesaji('guvenlik-gevsetme'));
+    await pencere.getByRole('button', { name: 'İzin ver ve devam et' }).click();
+    expect(await sonuc()).toMatchObject({ ok: true });
+    expect(hedef.istekler.length - once2).toBe(1);
+
+    // 3) Kapat: izin açılmaz, hata çağırana döner (işlem yapılmaz).
+    await api('/platform/izin/degistir', { anahtar: 'servis-istekleri', acik: false });
+    const once3 = hedef.istekler.length;
+    await baslat('/platform/servis/erisim', { projeId, ortamId: test_, yol: '/Servis' });
+    await pencere.getByRole('button', { name: 'Kapat' }).click();
+    expect(await sonuc()).toMatchObject({ ok: false, kod: 'IZIN_KAPALI' });
+    expect(hedef.istekler.length).toBe(once3);
+
+    // 4) Riskli ortam: izin açılsa da canlı onayı atlanmaz (yeniden denemede 409 CANLI_ONAY_GEREKLI çağırana döner).
+    await page.setViewportSize({ width: 390, height: 844 });
+    await baslat('/platform/senaryolar/calistir', { projeId, ortamId: canli, senaryoId: 'yok', kosuId: 'k-izin-penceresi' });
+    await expect(pencere).toContainText('İzin açılsa da riskli ortamdaki her çalıştırma ayrıca onay ister.');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+    const altKutu = await pencere.locator('.diyalog-alt').boundingBox();
+    for (const d of await pencere.locator('.diyalog-alt button').all()) { const k = await d.boundingBox(); expect(k && altKutu && k.x >= altKutu.x && k.x + k.width <= altKutu.x + altKutu.width + 1).toBe(true); }
+    await page.waitForTimeout(400);
+    await page.screenshot({ path: testInfo.outputPath('izin-penceresi-390.png') });
+    await pencere.getByRole('button', { name: 'İzin ver ve devam et' }).click();
+    expect(await sonuc()).toMatchObject({ ok: false, kod: 'CANLI_ONAY_GEREKLI' });
+    expect(((await api('/platform/izinler')).izinler as Record<string, boolean>)['canli-ortam']).toBe(true);
+
+    // 5) Kasa kilitliyken düğme yok (Kapat + İzinlere git; kilidi açma notu).
+    await api('/platform/kasa/kilitle', {});
+    await page.evaluate(() => { void import('/arayuz/ortak.js' as string).then((m) => m.izinUyarisiGoster('web-erisimi', 'Deneme')); });
+    await expect(pencere).toContainText('Kasa kilitli');
+    await expect(pencere.getByRole('button', { name: 'İzin ver ve devam et' })).toHaveCount(0);
+    await pencere.getByRole('button', { name: 'Kapat' }).click();
+    expect((await api('/platform/kasa/ac', { parola: PAROLA })).basarili).toBe(true);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

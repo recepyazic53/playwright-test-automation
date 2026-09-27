@@ -1,12 +1,25 @@
-// SAYFA PAKETİ İSTEK METİNLERİ (ORTAK, saf) — Claude Code'a verilen inceleme kuralları ve "Paket nasıl üretilir?" cümlesi TEK
-// kaynaktan gelir: sunucu (ekran-servisi.mjs > istek dosyası) bu modülü içe aktarır; arayüz aynı dosyayı /arayuz/paket-istekleri.mjs
-// olarak alır (ekranlar.js, sayfa-paketi.js). docs/sayfa-paketi.md > "Claude Code'a verilecek istek" bu metni anlatır.
+// SAYFA PAKETİ İSTEK METİNLERİ (ORTAK, saf) — yapay zekâ aracına (tarayıcıyı kullanabilen bir kodlama asistanı) verilen inceleme
+// kuralları ve "İstek metnini kopyala" metni TEK kaynaktan gelir: sunucu (ekran-servisi.mjs > istek dosyası) bu modülü içe aktarır;
+// arayüz aynı dosyayı /arayuz/paket-istekleri.mjs olarak alır (ekranlar.js, sayfa-paketi.js). Metin belirli bir araca ya da depo
+// dosyasına bağlı değildir: paketin biçimi, arayüzdeki "Paket biçimini indir" ile verilen TEK dosyadadır (BICIM_DOSYASI_ADI; sunucu
+// paket-bicimi.mjs ile docs/sayfa-paketi.md + şemalardan üretir). docs/sayfa-paketi.md > "Yapay zekâ aracına verilecek istek" bu metni anlatır.
 // KURALLAR: bu dosya hiçbir modül içe aktarmaz, Node'a / DOM'a özgü API kullanmaz (tarayıcıya olduğu gibi gider).
+
+/** Kullanıcının yapay zekâ aracına istek metniyle birlikte verdiği biçim dosyasının adı. */
+export const BICIM_DOSYASI_ADI = 'sayfa-paketi-bicimi.md';
+/** Biçim dosyasının yerel adresi (127.0.0.1'deki Nöbetçi sunar; arayüzdeki "Paket biçimini indir"). */
+export const BICIM_ADRESI = `/arayuz/${BICIM_DOSYASI_ADI}`;
+/** İstek metinlerinde biçime yapılan atıf ("… dosyasındaki biçimde … üret"). */
+export const BICIM_ATFI = `ekteki ${BICIM_DOSYASI_ADI} dosyasındaki biçimde`;
+/** Paket zarfının özü: biçim dosyası eklenmese de araç zarfı doğru kursun (ayrıntı biçim dosyasında). */
+export const PAKET_OZU = 'Paket tek bir JSON nesnesidir: "tur": "sayfa-paketi", "surum": 1; meta (ekran.anahtar, ekran.ad, ekran.urlYolu — tam adres değil yol; '
+  + 'olusturan, olusturulma, baglamProfilleri), model, senaryoOnerileri, gerekenAyarlar ve bilinmeyenler zorunludur (yoksa boş dizi); '
+  + 'kanitlar ve testVerisi isteğe bağlıdır; başka anahtar yazma.';
 
 /** Paketteki test verisi tablosunun adı en çok bu kadar karakterdir (tablo-deposu.mjs TABLO_ADI ile aynı sınır). */
 export const TABLO_ADI_EN_UZUN = 60;
 
-/** Claude'un inceleme kuralları (düğme grupları + test verisi tabloları). */
+/** Yapay zekâ aracının inceleme kuralları (düğme grupları + test verisi tabloları). */
 export const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; '
   + 'yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. '
   + 'Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. '
@@ -28,9 +41,9 @@ export const MEVCUT_TABLO_KURALI = 'Dosyadaki testVerisi bölümü ekranın mevc
   + 'listeler (değer yok): paketinde bu tablo ve sütun adlarını AYNEN kullan; aynı listeyi başka adla yeni tablo olarak yazma.';
 
 /**
- * "Paket nasıl üretilir?" cümlesi (Ekranlar listesi ve Sayfa ekle kartı kopyalatır).
+ * İstek metni ("İstek metnini kopyala": Ekranlar listesi ve Sayfa ekle > "Yapay zekâ ile oluştur" kopyalatır).
  * @param {string} [adres] sayfa bağlantısı (yoksa yer tutucu)
  */
 export function paketIstekCumlesi(adres = '') {
-  return `${adres || '<sayfa bağlantısı>'} sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI}`;
+  return `${adres || '<sayfa bağlantısı>'} sayfasını incele ve ${BICIM_ATFI} bir sayfa paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`;
 }

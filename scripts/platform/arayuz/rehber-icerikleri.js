@@ -27,7 +27,7 @@ export const REHBERLER = {
       {
         baslik: "Nöbetçi'ye hoş geldiniz",
         metin: ['Nöbetçi, web ekranlarınızı ve servislerinizi kod yazmadan test eder: ekranı tanıtırsınız, senaryoyu formdan yazarsınız, Nöbetçi tarayıcıda sizin yerinize dener ve sonucu kanıtlarıyla (ekran görüntüsü, video) saklar.',
-          'Soldaki çizim bir işin baştan sona yolunu gösteriyor. Her ekranın kendi rehberi, o ekrandaki adımları ayrıca anlatır.'],
+          'Çizim bir işin baştan sona yolunu gösteriyor. Her ekranın kendi rehberi, o ekrandaki adımları ayrıca anlatır.'],
         cizim: ANA_AKIS
       },
       {
@@ -53,6 +53,19 @@ export const REHBERLER = {
       { baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav', metin: 'Soldan bir ekran seçerseniz kartlar, eğilim ve geçmiş yalnızca onun sonuçlarını gösterir. "Tümü" bütün projeyi gösterir.' },
       { baslik: 'Özet kartlar', hedef: ['.sonuc-kartlari', '.sonuc-kartlari-bos'], metin: 'Son tam koşunun başarı oranı, kalan ve atlanan test sayısı. Kalan testlerin hata türü (ör. ortam hatası, iş kuralı uyarısı) Ayarlar > Koşu > Hata sınıflandırma kurallarına göre belirlenir.' },
       { baslik: 'Eğilim', hedef: '.trend-kapsayici', metin: 'Tam koşuların zaman içindeki başarı oranı. Bir noktanın üzerine gelince o koşunun özeti görünür; tıklayınca koşu açılır.' },
+      {
+        baslik: 'Koşu geçmişi', hedef: 'section[aria-labelledby="gecmis-basligi"]',
+        metin: ['Yapılan bütün koşuların listesi: tam koşular (Koşuyu başlat) ve tekil ▷ koşuları. Her satırda başlangıç zamanı, ortam, başarı oranı ve süre görünür.',
+          'Bir satıra tıklayınca koşunun ayrıntısı açılır. İki satırı işaretleyip "Karşılaştır" ile iki koşunun farkını görebilirsiniz.'],
+        ipucu: 'Liste üstteki tarih aralığına (Son 1 saat … Tümü) göre süzülür.'
+      },
+      {
+        baslik: 'Hata kalıpları', hedef: 'section[aria-labelledby="kalip-basligi"]',
+        metin: ['Kalan testlerin hata mesajları benzerliklerine göre gruplanır: değişken sayılar # ile gösterilir, aynı sorun tek satırda toplanır ve kaç testi etkilediği yazar.',
+          '"Kalan testlerin hataları" kalan testleri, "Koşuda yakalanan mesajlar" ise geçen testlerde de ekranda görülen uyarı / hata mesajlarını kapsar. Bir kalıbı açınca etkilenen testler listelenir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Hata mesajları', ikon: 'uyari' }, { baslik: 'Kalıp', alt: 'sayılar #', ikon: 'liste' }, { baslik: 'Etkilenenler', alt: 'test sayısı', ikon: 'grafik' }] },
+        ipucu: 'Önce en çok testi etkileyen kalıba bakın: tek bir düzeltme birçok testi geçirebilir.'
+      },
       {
         baslik: 'Kalan bir testi incelemek',
         sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
@@ -225,8 +238,8 @@ export const REHBERLER = {
       },
       {
         baslik: 'Ekran eklemenin üç yolu',
-        sira: ['Sayfa ekle: bir yapay zekâ aracının sayfayı yalnızca okuyarak ürettiği paketi yükleyin.', 'Ekranı tara: Nöbetçi sayfayı seçtiğiniz ortamda kendisi açıp okur.', 'Akışı kaydet: işlemi siz görünür bir tarayıcıda yaparken Nöbetçi adımları kaydeder.'],
-        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Ekleme düğmeleri sağ üstte' }
+        sira: ['Ekranı tara: Nöbetçi sayfayı seçtiğiniz ortamda kendisi açıp yalnızca okur.', 'Akışı kaydet: işlemi siz görünür bir tarayıcıda yaparken Nöbetçi adımları kaydeder.', 'Yapay zekâ ile oluştur: istek metnini kopyalayıp sayfanın bağlantısıyla yapay zekâ aracınıza verin, ürettiği paketi yükleyin.'],
+        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Üçü de "Sayfa ekle"de yan yana' }
       },
       { baslik: 'Sol panel', hedef: '.alt-nav', metin: 'Ekranlar, alt modeller (ör. bir kart bloğu) ve ortak akışlar (birden çok ekranın kullandığı adımlar, ör. ödeme) burada. Devre dışı ekranlar varsayılan olarak gizlidir.' },
       { baslik: 'Ekran değişince', metin: 'Sayfa değiştiyse aynı ekrana yeni paket yükleyin ya da yeniden tarayın. Farklar "bulgular" olarak gelir; kabul ettikleriniz yeni model sürümü olur, eski senaryolar korunur.', cizim: { tur: 'akis', kutular: [{ baslik: 'Yeni tarama', ikon: 'yenile' }, { baslik: 'Bulgular', alt: 'farklar', ikon: 'uyari' }, { baslik: 'Kabul / ret', ikon: 'onay' }, { baslik: 'Yeni sürüm', ikon: 'katman' }] } }
@@ -236,7 +249,8 @@ export const REHBERLER = {
     baslik: 'Sayfa ekle',
     adimlar: [
       { baslik: 'Sayfa paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
-      { baslik: 'Adımlar', sira: ['Paketi yükleyin ya da "Ekranı tara"yı seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
+      { baslik: 'Paketiniz yoksa: üç yol', hedef: '.ekleme-kutulari', sira: ['Ekranı tara: Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).', 'Yapay zekâ ile oluştur: "İstek metnini kopyala" ile metni alın, sayfanın bağlantısıyla (ve "Paket biçimini indir" dosyasıyla) yapay zekâ aracınıza verin; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.'] },
+      { baslik: 'Adımlar', sira: ['Paketi yükleyin ya da aşağıdaki kutulardan birini seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
       { baslik: 'Güvenlik', metin: 'Tarama sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Yasak adreslere (Ayarlar > Güvenlik) hiç gidilmez.' }
     ]
   },
@@ -298,6 +312,12 @@ export const REHBERLER = {
       { baslik: 'Tablolar', metin: 'Her satır birlikte geçerli değerlerdir (ör. kanal | kullanıcı | ürün kodu). Ekran ve servis alanları sütunlara bağlanır; senaryoda seçim yaptıkça diğer seçenekler süzülür.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Satırlar birlikte geçerli değerler' } },
       { baslik: 'Tablo grupları', metin: 'Soldaki liste iki gruptur: "Kişi ve kayıt verileri" (sizin tablolarınız) ve "Ekran listeleri" (ekranlardan içe alınan seçenek listeleri; ekran başına alt grup). Grupları açıp kapatabilirsiniz; tercih bu tarayıcıda hatırlanır. Arama tüm gruplarda çalışır.', cizim: { tur: 'maket', bolge: 'sol', etiket: 'Gruplar ve arama' } },
       { baslik: 'Kişi ve kayıt verileri', metin: 'Kişi, kart, adres gibi kayıtlar tablolarda satırdır. Senaryo değeri tablodan alır: ${Tablo.Sütun} (aynı tablo iki kez gerekiyorsa ${Tablo[etiket].Sütun}); koşuda seçilen satırdan gelir, değer senaryoya yazılmaz. Gizli sütunlar kasada şifrelidir ve maskeli gösterilir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Tablo', alt: 'ör. Kişi' }, { baslik: 'Satır', alt: 'ör. Test kişisi 1' }, { baslik: 'Sütunlar', alt: 'gizli olanlar şifreli' }] } },
+      {
+        baslik: 'Karşılıklar', hedef: ['.karsilik-dugmesi', '.tablo-duzenleyici thead'],
+        metin: ['Tabloya ekranda görünen değeri yazarsınız. Sayfadaki seçeneğin değeri ya da servise giden değer farklıysa, sütun başlığındaki "Karşılıklar" düğmesiyle her değer için ayrıca "Sayfa değeri" (ekrandaki seçeneğin değeri) ve "Servis değeri" (servis gövdesine yazılan) tanımlanır. Örnek: EKSPRES → sayfa: 1, servis: EXP.',
+          'Boş bırakılan karşılıkta tablodaki değer kullanılır. Ekran taranınca ya da alan sütuna bağlanınca sayfa değerleri kendiliğinden dolabilir; düğmedeki sayı tanımlı karşılık sayısıdır.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Tablo değeri', alt: 'EKSPRES', ikon: 'veri' }, { baslik: 'Sayfa değeri', alt: '1', ikon: 'ekran' }, { baslik: 'Servis değeri', alt: 'EXP', ikon: 'ag' }] }
+      },
       { baslik: 'Sıra', sira: ['Tabloyu oluşturun (sütunlar).', 'Satırları ekleyin (ortama özel olabilir).', 'Ekranın ya da servisin alanlarını sütunlara bağlayın; kişi / kayıt değerini senaryoda ${Tablo.Sütun} ile alın.'] },
       { baslik: 'Değer değişince', metin: 'Bir hücrenin değerini değiştirip (ör. "a" → "b") kaydettiğinizde, o değeri düz metin olarak kullanan senaryolar (ekran alanı, servis alanı, satır seçimi) listelenir: seçtiklerinizi tabloyla birlikte yeni değere güncelleyebilir ya da yalnız tabloyu kaydedebilirsiniz. Silinen değeri kullanan senaryolar uyarı olarak gösterilir; koşan senaryolar atlanır. Karşılıklar yeni değere kendiliğinden taşınır. SoapUI / Postman aktarımı ve "Test verisine taşı" mevcut bir değeri değiştirecekse bu, önizlemede "Tabloda değişecek değerler ve etkilenen senaryolar" bölümünde görünür (seçimlerinizle güncellenir; "Mevcut değerleri koru" ile dolu hücrelerin üzerine yazılmaz); aktarım işaretli senaryolarla birlikte yazılır, arada veri değiştiyse yeniden onay istenir.' }
     ]

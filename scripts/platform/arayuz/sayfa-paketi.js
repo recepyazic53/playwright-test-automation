@@ -4,22 +4,23 @@
 //                  yaz / birleştir / yeni ad / atla + alan bağlantıları], bilinmeyenler, kanıtlar) →
 //                  kabul: ekran + model v1 + seçilen senaryolar (Koşuda KAPALI) → bildirim + ekrana git.
 //   mod 'analiz' — mevcut ekran için yeni paket (tekrar analiz): yükle → doğrula/önizle → "Bulguları hesapla".
-// Paketin iki kaynağı vardır: yüklenen JSON dosyası ya da "Ekranı otomatik tara" (tarama.js; s.tara verilirse yükleme
-// adımında ikinci seçenek olarak gösterilir, tarama bitince paket taranmisPaketAkisi ile AYNI önizleme adımına girer).
+// Paketin kaynakları: yüklenen JSON dosyası (yapay zekâ aracınızın ürettiği) ya da "Ekranı tara" / "Akışı kaydet" (tarama.js;
+// yükleme alanının altında yan yana üç kutu: tara, kaydet, yapay zekâ ile oluştur — eklemeKutulari). Tarama/kayıt bitince paket
+// taranmisPaketAkisi ile AYNI önizleme adımına girer.
 // Dosya tarayıcıda okunur ve sunucuya JSON olarak gönderilir; kanıt görüntüleri önizlemede yerel veriden
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
 import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
-import { gorselDiyalogu, kopyalaDugmesi, modelAgaciCiz } from './ekran-ortak.js';
+import { bicimIndirBaglantisi, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz } from './ekran-ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
 
 const PAKET_EN_BUYUK = 16 * 1024 * 1024;
-// Claude'a verilecek cümle: TEK kaynak paket-istekleri.mjs (sunucunun istek dosyası ve Ekranlar listesi de aynı metni kullanır).
+// Yapay zekâ aracına verilecek istek metni: TEK kaynak paket-istekleri.mjs (sunucunun istek dosyası ve Ekranlar listesi de aynı metni kullanır).
 const CUMLE = paketIstekCumlesi();
 
 /**
  * @typedef {{ mod: 'yeni' | 'analiz'; proje: { id: string; ad: string }; ekran?: { id: string; ad: string; anahtar: string } | null;
- *   bitti: (ekranId: string, analiz?: boolean) => void; tara?: () => void }} AkisSecenekleri
+ *   bitti: (ekranId: string, analiz?: boolean) => void; tara?: () => void; kaydet?: () => void }} AkisSecenekleri
  */
 
 /**
@@ -124,21 +125,46 @@ function yuklemeAdimi(govde, s, onceki = null) {
   alan.addEventListener('dragover', (o) => { o.preventDefault(); alan.classList.add('surukleniyor'); });
   alan.addEventListener('dragleave', () => alan.classList.remove('surukleniyor'));
   alan.addEventListener('drop', (o) => { o.preventDefault(); alan.classList.remove('surukleniyor'); isle(o.dataTransfer && o.dataTransfer.files[0]); });
-  const taramaSecenegi = s.tara ? h('section', { class: 'kart tarama-secenegi', 'aria-label': 'Ekranı otomatik tara' },
-    h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('ara'), 'Ya da: Ekranı otomatik tara'), h('span', { class: 'sag' }, rozet('Nöbetçi', 'vurgu'))),
-    h('p', { class: 'kucuk soluk' }, 'Nöbetçi seçtiğiniz ortama giriş tarifiyle bağlanır, sayfayı bağlam profilleriyle YALNIZCA OKUYARAK tarar ve paketi kendisi üretir: düğmelere tıklanmaz, form gönderilmez, yazma istekleri engellenir. Sonuç bu sayfadaki önizleme adımına gelir.'),
-    h('div', { class: 'form-eylemleri' }, h('button', { type: 'button', class: 'birincil', onclick: () => s.tara() }, ikon('ara'), 'Ekranı tara'),
-      s.kaydet ? h('button', { type: 'button', onclick: () => s.kaydet(), title: 'Düğmeyle açılan adımlar için: akışı tarayıcıda siz yürütürsünüz, Nöbetçi adımları kaydeder' }, ikon('video'), 'Akışı kaydet') : null),
-    s.kaydet ? h('p', { class: 'kucuk soluk' }, 'Alanlar bir düğmeyle açılıyorsa (çok adımlı formlar) tarama onları göremez: "Akışı kaydet" ile akışı kendiniz yürütün; adımları ve alanları siz seçersiniz, girdiğiniz değerler kaydedilmez.') : null) : null;
-  yerlestir(govde, h('div', { class: 'yukleme-duzeni' },
-    h('div', { class: 'tarama-yukleme-sutunu' }, h('section', { class: 'kart' }, modSecimi, girdi, alan, durumAlani, onceki), taramaSecenegi),
-    h('aside', { class: 'kart nasil-karti', 'aria-label': 'Paket nasıl üretilir' },
-      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('simsek'), 'Paket nasıl üretilir?')),
-      h('ol', { class: 'kesif-adimlari dikey' },
-        h('li', {}, h('b', {}, 'Claude Code sohbetini açın'), h('span', {}, 'Bu projenin klasöründe (docs/sayfa-paketi.md okunabilsin).')),
-        h('li', {}, h('b', {}, 'Bağlantıyı ve isteği yazın'), h('span', {}, s.mod === 'analiz' ? 'Ekran sayfasındaki "Tekrar analiz et" hangi bağlam profilleriyle inceleneceğini sorar ve hazır bir istek dosyası yazar.' : 'Claude sayfayı yalnızca okur: seçimleri değiştirip koşullu alanları ve bağımlı listeleri çıkarır, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan, gönderen ya da ödeme yapan düğmelere basmaz. Seçim alanlarının seçeneklerini test verisi tablosu olarak pakete yazar; kişisel / gizli değer yazmaz.')),
-        h('li', {}, h('b', {}, 'Üretilen JSON\'u buraya yükleyin'), h('span', {}, 'Önizleyip kabul edene kadar hiçbir şey kaydedilmez; test verisi tablolarını ve alan bağlantılarını önizlemede siz seçersiniz.'))),
-      h('div', { class: 'kesif-cumlesi dikey' }, h('code', {}, CUMLE), kopyalaDugmesi(CUMLE, 'Cümleyi kopyala')))));
+  yerlestir(govde, h('div', { class: 'yukleme-duzeni tek-sutun' },
+    h('section', { class: 'kart' }, modSecimi, girdi, alan, durumAlani, onceki),
+    eklemeKutulari(s)));
+}
+
+/**
+ * Paketin diğer kaynakları: yan yana üç eşit kutu (dar ekranda alt alta). Her kutu: büyük ikon, başlık, kısa açıklama,
+ * TEK ana eylem, altta tek satır küçük not (izin / güvenlik). "Yapay zekâ ile oluştur" yalnızca istek metnini kopyalatır
+ * (ve biçim dosyasını indirtir); paket yukarıdaki yükleme alanıyla ("Dosya seç") yüklenir — kutuda yükleme düğmesi YOK.
+ * Tekrar analizde (s.mod 'analiz') tarama/kayıt yine bu kutulardadır; yapay zekâ kutusu "Tekrar analiz et"e yönlendirir.
+ * @param {AkisSecenekleri & { kaydet?: () => void }} s
+ */
+function eklemeKutulari(s) {
+  const kutu = (sinif, ikonAd, baslik, aciklama, eylem, not) => h('article', { class: `ekleme-kutusu ${sinif}`, 'aria-label': baslik },
+    h('span', { class: 'ekleme-ikonu', 'aria-hidden': 'true' }, ikon(ikonAd)),
+    h('h3', {}, baslik),
+    h('div', { class: 'ekleme-aciklamasi' }, aciklama),
+    h('div', { class: 'ekleme-eylemi' }, eylem),
+    h('p', { class: 'ekleme-notu' }, not));
+  const analiz = s.mod === 'analiz';
+  const kutular = [
+    s.tara ? kutu('tara-kutusu', 'ara', 'Ekranı tara', h('p', {}, 'Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.'),
+      h('button', { type: 'button', class: 'birincil', onclick: () => s.tara() }, ikon('ara'), 'Ekranı tara'),
+      '“Web uygulamasına erişim” izni gerekir; riskli ortamda ayrıca izin ve onay ister.') : null,
+    s.kaydet ? kutu('kaydet-kutusu', 'video', 'Akışı kaydet', h('p', {}, 'Siz ekranda işlemi yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).'),
+      h('button', { type: 'button', class: 'birincil', onclick: () => s.kaydet() }, ikon('video'), 'Akışı kaydet'),
+      'Erişim izni gerekir; riskli ortamda çalışmaz. Girdiğiniz değerler kaydedilmez.') : null,
+    kutu('yapay-zeka-kutusu', 'simsek', 'Yapay zekâ ile oluştur',
+      analiz
+        ? h('p', {}, 'Ekran sayfasındaki "Tekrar analiz et" bağlam profillerini sorar ve istek metnini hazırlar; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.')
+        : h('ol', { class: 'ekleme-adimlari' },
+          h('li', {}, 'İstek metnini kopyalayın'),
+          h('li', {}, 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin'),
+          h('li', {}, 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin')),
+      analiz ? h('a', { class: 'dugme birincil', href: `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` }, ikon('yenile'), 'Ekrana dön') : istekMetniKutusu(CUMLE, { birincil: true, ek: bicimIndirBaglantisi() }),
+      'Araç: tarayıcıyı kullanabilen bir kodlama asistanı. Gizli değer içeren paket reddedilir.')
+  ].filter(Boolean);
+  return h('section', { class: 'ekleme-secenekleri', 'aria-labelledby': 'ekleme-secenekleri-baslik' },
+    h('h3', { id: 'ekleme-secenekleri-baslik', class: 'ara-baslik' }, 'Paketiniz yoksa'),
+    h('div', { class: 'ekleme-kutulari' }, kutular));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -245,7 +271,7 @@ function hataListesi(baslik, hatalar, dosyaAdi) {
     h('div', { class: 'dogrulama-hatalari-ust' }, ikon('uyari'), h('strong', {}, baslik), dosyaAdi ? h('code', {}, dosyaAdi) : null),
     h('ul', {}, hatalar.slice(0, 60).map((x) => h('li', {}, x.yer ? h('code', {}, x.yer) : null, h('span', {}, x.mesaj))),
       hatalar.length > 60 ? h('li', {}, h('span', {}, `… ve ${hatalar.length - 60} sorun daha`)) : null),
-    h('p', { class: 'kucuk soluk' }, 'Paketi düzeltip (ya da Claude Code\'dan düzeltilmiş paketi isteyip) yeniden yükleyin.'));
+    h('p', { class: 'kucuk soluk' }, 'Paketi düzeltip (ya da yapay zekâ aracınızdan düzeltilmiş paketi isteyip) yeniden yükleyin.'));
 }
 
 // ---------------------------------------------------------------------------------------

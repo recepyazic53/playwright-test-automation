@@ -56,8 +56,9 @@ function kaynakMetni(k) {
 // --- Liste grupları (yalnız görünüm; veri değişmez) ---------------------------------------------------------------------
 // Ölçüt önce TABLO TÜRÜdür (kaynak.tabloTuru: paketin testVerisi.tablolar[].tur; tarama / akış kaydı tabloları "liste"):
 // "kayit" → "Kişi ve kayıt verileri", "liste" → "Ekran listeleri". Tür yoksa (eski kayıtlar) sezgi: kaynağı olan (sayfa paketi /
-// tarama / akış kaydı) ya da tek sütunlu "<Ekran> — <Alan>" adlı tablolar ekran listesidir, diğerleri kişi ve kayıt verisi.
-// Ekran listeleri ekran başına alt gruptur. Açık / kapalı durumu tarayıcıda (localStorage) hatırlanır.
+// tarama / akış kaydı) tablolar ile "<Ekran> — <Alan…>" adlı tablolardan tek sütunlu olanlar, bir ekranın alan bağlarında
+// kullanılanlar ya da "<Ekran>" kısmı projedeki bir ekranın adı olanlar (çok sütunlu bağımlı listeler dahil) ekran listesidir;
+// diğerleri kişi ve kayıt verisi. Ekran listeleri ekran başına alt gruptur. Açık / kapalı durumu tarayıcıda (localStorage) hatırlanır.
 const GRUP_ANAHTARI = 'platform.tabloGruplari.kapali';
 const AD_DESENI = /^(.+?)\s+—\s+(.+)$/;
 let grupSayaci = 0;
@@ -73,9 +74,16 @@ function tabloGrubuDurumuYaz(anahtar, kapali) {
 }
 /**
  * @template {{ ad: string; baglam?: boolean; sutunlar: unknown[]; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null }} T
- * @param {T[]} liste @returns {{ kayitlar: T[]; ekranlar: Map<string, T[]> }}
+ * @param {T[]} liste
+ * @param {{ ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }} [ek] projedeki ekran adları ve tablo kimliği →
+ *   alan bağlarında kullanan ekranlar (sunucu: /platform/tablolar?baglam=1)
+ * @returns {{ kayitlar: T[]; ekranlar: Map<string, T[]> }}
  */
-export function tablolariGrupla(liste) {
+export function tablolariGrupla(liste, ek = {}) {
+  const ekranAdlari = new Set((ek.ekranAdlari || []).map(kucuk));
+  const kullanim = ek.ekranKullanimi || {};
+  /** "<Ekran> (akış)" gibi sondaki parantezli ek atılarak da ekran adıyla karşılaştırılır. @param {string} onEk */
+  const ekranAdiMi = (onEk) => ekranAdlari.has(kucuk(onEk)) || ekranAdlari.has(kucuk(onEk.replace(/\s*\([^)]*\)\s*$/, '')));
   /** @type {T[]} */
   const kayitlar = [];
   /** @type {Map<string, T[]>} */
@@ -84,7 +92,8 @@ export function tablolariGrupla(liste) {
     const desen = AD_DESENI.exec(String(t.ad || ''));
     const tur = t.kaynak && t.kaynak.tabloTuru;
     const kaynakli = Boolean(t.kaynak && t.kaynak.tur);
-    const ekranListesi = tur === 'liste' || (tur !== 'kayit' && (kaynakli || Boolean(desen && t.sutunlar.length === 1)));
+    const bagli = Boolean(/** @type {any} */ (t).id && kullanim[/** @type {any} */ (t).id]?.length);
+    const ekranListesi = tur === 'liste' || (tur !== 'kayit' && (kaynakli || Boolean(desen && (t.sutunlar.length === 1 || bagli || ekranAdiMi(desen[1].trim())))));
     if (t.baglam || !ekranListesi) { kayitlar.push(t); continue; }
     const ekran = (t.kaynak && t.kaynak.ekran) || (desen ? desen[1].trim() : '') || 'Diğer ekranlar';
     if (!ekranlar.has(ekran)) ekranlar.set(ekran, []);
@@ -404,11 +413,12 @@ export function guncellemeMetni(r) {
  */
 export async function tablolarBolumu(govde, proje) {
   yerlestir(govde, iskelet('liste'));
-  const [{ tablolar }, { ortamlar }] = await Promise.all([
+  const [{ tablolar, ekranAdlari, ekranKullanimi }, { ortamlar }] = await Promise.all([
     api(`/platform/tablolar?projeId=${q(proje.id)}&baglam=1`),
     api(`/platform/ortamlar?projeId=${q(proje.id)}`)
   ]);
   let liste = tablolar;
+  const grupBilgisi = { ekranAdlari: ekranAdlari || [], ekranKullanimi: ekranKullanimi || {} };
   if (!liste.some((t) => t.id === seciliId)) seciliId = liste[0]?.id || '';
   let is = liste.length ? kopya(liste.find((t) => t.id === seciliId)) : null;
   let ara = '';
@@ -434,7 +444,7 @@ export async function tablolarBolumu(govde, proje) {
   const tabloDugmesi = (t) => h('button', {
     type: 'button', class: 'tablo-ogesi', 'aria-current': t.id === seciliId && is?.id ? 'true' : 'false',
     onclick: async () => { if (t.id === seciliId && is?.id) return; if (!(await gecebilirMi())) return; seciliId = t.id; is = kopya(t); ara = ''; gorunur = GORUNUR_ADIM; ciz(); }
-  }, h('span', { class: 'tablo-adi' }, t.ad, t.baglam ? h('span', { class: 'rozet kucuk-rozet', title: 'Kullanıcı / şube değiştirme profilleri: senaryoda satır adıyla seçilir' }, 'bağlam') : null),
+  }, h('span', { class: 'tablo-adi', title: t.ad }, h('span', { class: 'tablo-adi-metni' }, t.ad), t.baglam ? h('span', { class: 'rozet kucuk-rozet', title: 'Kullanıcı / şube değiştirme profilleri: senaryoda satır adıyla seçilir' }, 'bağlam') : null),
   h('small', {}, `${t.sutunlar.length} sütun · ${t.satirlar.length} satır`),
   t.kaynak && t.kaynak.tur ? h('small', { class: 'tablo-kaynagi', title: kaynakMetni(t.kaynak) }, `kaynak: ${KAYNAK_TURU[t.kaynak.tur] || t.kaynak.tur}`) : null);
   /** Açılır-kapanır grup (durum tarayıcıda hatırlanır; arama ya da seçili tablo varken açık). */
@@ -444,7 +454,7 @@ export async function tablolarBolumu(govde, proje) {
     const icerik = h('div', { class: 'tablo-grubu-icerik', id: icerikId, role: 'group', 'aria-label': baslik, hidden: kapali }, ogeler);
     const adet = ogeler.filter((o) => o.classList.contains('tablo-ogesi')).length
       + ogeler.reduce((t, o) => t + (o.classList.contains('tablo-grubu') ? Number(o.dataset.adet || 0) : 0), 0);
-    const dugme = h('button', { type: 'button', class: 'tablo-grubu-baslik', 'aria-expanded': String(!kapali), 'aria-controls': icerikId },
+    const dugme = h('button', { type: 'button', class: 'tablo-grubu-baslik', 'aria-expanded': String(!kapali), 'aria-controls': icerikId, title: baslik },
       h('span', { class: 'tablo-grubu-ok', 'aria-hidden': 'true' }, ikon('asagi')), h('span', { class: 'tablo-grubu-adi' }, baslik), h('span', { class: 'adet' }, String(adet)));
     const grup = h('div', { class: `tablo-grubu ${sinif}${kapali ? ' kapali' : ''}`, 'data-adet': String(adet) }, dugme, icerik);
     dugme.addEventListener('click', () => {
@@ -459,17 +469,19 @@ export async function tablolarBolumu(govde, proje) {
   function solCiz() {
     const a = kucuk(listeArama);
     const uyan = liste.filter((t) => !a || kucuk(t.ad).includes(a) || kucuk(t.kaynak?.ekran).includes(a));
-    const { kayitlar, ekranlar } = tablolariGrupla(uyan);
+    const { kayitlar, ekranlar } = tablolariGrupla(uyan, grupBilgisi);
     const seciliGrup = (tl) => tl.some((t) => t.id === seciliId);
     const ekranGruplari = [...ekranlar.entries()].map(([ekran, tl]) => grupCiz(`ekran:${ekran}`, ekran, tl.map(tabloDugmesi), 'alt-grup', Boolean(a) || seciliGrup(tl)));
     const ekranToplam = [...ekranlar.values()].flat();
+    // Boş grup başlığı gösterilmez (grup silinebilir bir öğe değildir); hiç tablo yokken tek boş durum mesajı sağ paneldedir.
+    listeAramaG.closest('.tablo-listesi-arama')?.toggleAttribute('hidden', !liste.length);
     yerlestir(listeKap,
-      !uyan.length ? h('p', { class: 'soluk kucuk tablo-grubu-bos' }, liste.length ? 'Aramayla eşleşen tablo yok.' : 'Henüz tablo yok.') : null,
-      kayitlar.length || !a ? grupCiz('kayit', 'Kişi ve kayıt verileri', kayitlar.length ? kayitlar.map(tabloDugmesi) : [h('p', { class: 'soluk kucuk tablo-grubu-bos' }, 'Tablo yok.')], 'ust-grup', Boolean(a) || seciliGrup(kayitlar)) : null,
+      liste.length && !uyan.length ? h('p', { class: 'soluk kucuk tablo-grubu-bos' }, 'Aramayla eşleşen tablo yok.') : null,
+      kayitlar.length ? grupCiz('kayit', 'Kişi ve kayıt verileri', kayitlar.map(tabloDugmesi), 'ust-grup', Boolean(a) || seciliGrup(kayitlar)) : null,
       ekranToplam.length ? grupCiz('ekran-listeleri', 'Ekran listeleri', ekranGruplari, 'ust-grup', Boolean(a) || seciliGrup(ekranToplam)) : null);
     if (!solKap.firstChild) {
       yerlestir(solKap, h('nav', { class: 'kart tablo-listesi', 'aria-label': 'Tablolar' },
-        h('div', { class: 'arama-kutusu tablo-listesi-arama' }, ikon('ara'), listeAramaG),
+        h('div', { class: 'arama-kutusu tablo-listesi-arama', hidden: !liste.length }, ikon('ara'), listeAramaG),
         listeKap,
         h('button', { type: 'button', class: 'kucuk-dugme yeni-tablo', onclick: async () => { if (!(await gecebilirMi())) return; seciliId = ''; is = kopya(null); ciz(); } },
           ikon('arti'), 'Yeni tablo')));
@@ -623,17 +635,27 @@ export async function tablolarBolumu(govde, proje) {
           g.addEventListener('input', () => { s.ad = g.value; is.degisti = true; durumCiz(); });
           const gizli = h('input', { type: 'checkbox', checked: s.gizli, 'aria-label': `${i + 1}. sütun gizli` });
           gizli.addEventListener('change', () => { s.gizli = gizli.checked; is.degisti = true; ciz(); });
-          return h('th', { scope: 'col' }, h('div', { class: 'sutun-basligi' }, g,
-            is.baglam ? null : h('label', { class: 'gizli-secimi', title: 'Gizli: değer ekranda hiç gösterilmez (parola vb.); koşuda satırdan gelir.' }, gizli, ikon('kilit')),
-            is.baglam || s.gizli ? null : karsilikDugmesi(s, i),
-            is.sutunlar.length > 1 ? h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${i + 1}. sütunu sil`, title: 'Sütunu sil', onclick: () => {
-              is.sutunlar.splice(i, 1); is.degisti = true; ciz();
-            } }, ikon('carpi')) : null));
+          return h('th', { scope: 'col', class: 'veri-sutunu' }, h('div', { class: 'sutun-basligi' },
+            h('div', { class: 'sutun-basligi-ust' }, g,
+              is.sutunlar.length > 1 ? h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${i + 1}. sütunu sil`, title: 'Sütunu sil', onclick: () => {
+                is.sutunlar.splice(i, 1); is.degisti = true; ciz();
+              } }, ikon('carpi')) : null),
+            is.baglam ? null : h('div', { class: 'sutun-basligi-alt' },
+              h('label', { class: 'gizli-secimi', title: 'Gizli: değer ekranda hiç gösterilmez (parola vb.); koşuda satırdan gelir.' }, gizli, ikon('kilit'), h('span', {}, 'Gizli')),
+              s.gizli ? null : karsilikDugmesi(s, i))));
         }),
-        h('th', { scope: 'col', class: 'ortam-sutunu', title: 'Satırın geçerli olduğu ortam (Tümü: her ortamda)' }, 'Ortam'),
-        h('th', { scope: 'col', class: 'eylem' }, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {
-          is.sutunlar.push({ ad: `Sütun ${is.sutunlar.length + 1}`, eskiAd: null, gizli: false }); is.degisti = true; ciz();
-        } }, ikon('arti'), 'Sütun'))));
+        h('th', { scope: 'col', class: 'ortam-sutunu', title: 'Satırın geçerli olduğu ortam (Tümü: her ortamda)' }, h('span', { class: 'ortam-sutunu-baslik' }, 'Geçerli ortam')),
+        h('th', { scope: 'col', class: 'eylem ekle-sutunu' }, h('div', { class: 'ekle-dugmeleri' },
+          h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {
+            is.sutunlar.push({ ad: `Sütun ${is.sutunlar.length + 1}`, eskiAd: null, gizli: false }); is.degisti = true; ciz();
+          } }, ikon('arti'), 'Sütun'),
+          h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => satirEkle() }, ikon('arti'), 'Satır')))));
+    }
+    /** Sona boş satır ekler ve ilk hücresine odaklanır (arama temizlenir). */
+    function satirEkle() {
+      is.satirlar.push({ id: undefined, ad: '', ortamId: null, degerler: {}, doluGizli: new Set(), degisti: true });
+      ara = ''; aramaG.value = ''; gorunur = Math.max(gorunur, is.satirlar.length); govdeCiz(); durumCiz();
+      tablo.querySelector('tbody tr:last-child input')?.focus();
     }
     /** Sütunun tablodaki farklı değerleri (tablo sırasıyla; ad değişikliği kaydedilmemişse eski anahtardan). */
     function sutunDegerleri(s) {
@@ -648,7 +670,7 @@ export async function tablolarBolumu(govde, proje) {
     function karsilikDugmesi(s, i) {
       const n = Object.keys(s.karsiliklar || {}).length;
       return h('button', {
-        type: 'button', class: `ikon-dugme hayalet karsilik-dugmesi${n ? ' dolu' : ''}`, 'aria-label': `${i + 1}. sütunun karşılıkları${n ? ` (${n})` : ''}`,
+        type: 'button', class: `kucuk-dugme hayalet karsilik-dugmesi${n ? ' dolu' : ''}`, 'aria-label': `${i + 1}. sütunun karşılıkları${n ? ` (${n})` : ''}`,
         title: n ? `Karşılıklar: ${n} değerin sayfa / servis değeri tanımlı` : 'Karşılıklar: değerin sayfada ve serviste farklı karşılığı (ör. EKSPRES → 1)',
         onclick: async () => {
           const yeni = await karsilikPenceresi(s, sutunDegerleri(s));
@@ -656,7 +678,7 @@ export async function tablolarBolumu(govde, proje) {
           if (JSON.stringify(yeni) === JSON.stringify(s.karsiliklar || {})) return;
           s.karsiliklar = yeni; is.degisti = true; ciz();
         }
-      }, ikon('ok'), n ? h('span', { class: 'karsilik-sayisi' }, String(n)) : null);
+      }, ikon('esle'), h('span', { class: 'karsilik-metni' }, 'Karşılıklar'), n ? h('span', { class: 'karsilik-sayisi' }, String(n)) : null);
     }
     function satirCiz(r, no) {
       const hucreler = is.sutunlar.map((s) => {
@@ -702,11 +724,6 @@ export async function tablolarBolumu(govde, proje) {
       (() => { const k = is.id ? liste.find((x) => x.id === is.id)?.kaynak : null; return k && k.tur ? h('p', { class: 'kucuk soluk tablo-kaynagi' }, h('b', {}, 'Kaynak: '), kaynakMetni(k), ' — sayfa paketinden içe aktarıldı (seçim alanlarının seçenekleri).') : null; })(),
       h('div', { class: 'tablo-arac-cubugu' },
         h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {
-          is.satirlar.push({ id: undefined, ad: '', ortamId: null, degerler: {}, doluGizli: new Set(), degisti: true });
-          ara = ''; aramaG.value = ''; gorunur = Math.max(gorunur, is.satirlar.length); govdeCiz(); durumCiz();
-          tablo.querySelector('tbody tr:last-child input')?.focus();
-        } }, ikon('arti'), 'Satır'),
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => dosya.click() }, ikon('yukle'), 'Excel / CSV yükle'), dosya,
         is.satirlar.length ? h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: async () => {
           if (!(await onayIste({ baslik: 'Tüm satırlar silinsin mi?', metin: `${is.satirlar.length} satır kaldırılır (Kaydet'e basınca kalıcı olur).`, dugme: 'Satırları kaldır', tehlikeli: true }))) return;

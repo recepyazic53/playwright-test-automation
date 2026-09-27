@@ -1,0 +1,359 @@
+// ENTEGRASYON (yerel) — Nöbetçi arayüzü: Ekranlar > "Sayfa ekle" (yan yana üç eşit kutu: Ekranı tara / Akışı kaydet /
+// Yapay zekâ ile oluştur), istek metni gösterimi (tam metin yok; tek "İstek metnini kopyala" + kapalı "Metni göster"),
+// "Paket biçimini indir" ve Ekranlar > Ortak akışlar kartları (ekran kartıyla aynı düzen; adım listesi yok).
+// Tek kaynak: arayüzün kopyaladığı metin === paketIstekCumlesi(); biçim dosyası === paketBicimiBelgesi().
+// Geçici veritabanı + AYRI Nöbetçi örneği (TEST_SUNUCU_KOSU_KAPALI=1); tüm istekler 127.0.0.1'dedir.
+import { randomBytes } from 'node:crypto';
+import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
+import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
+import { ekranKaydet, ekranModeliEkle, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { BICIM_ADRESI, BICIM_DOSYASI_ADI, paketIstekCumlesi } from '../../scripts/platform/ekranlar/paket-istekleri.mjs';
+import { paketBicimiBelgesi } from '../../scripts/platform/ekranlar/paket-bicimi.mjs';
+import { korumaliTarayici, SIRKET_DESENI } from './giris-fikstur';
+import { ornekBasvuruModeli, ornekGirisTarifi } from './model-fikstur';
+import { ONAY_AKIS_ANAHTARI, onayAkisPaketi } from './model-kosucu-ozellikleri-fikstur';
+import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
+
+const KOK = join(__dirname, '..', '..');
+/** EKRAN_EKLEME_EKRAN_KLASORU verilirse kart ızgarası görüntüleri (1920/1400/1024/390, koyu/açık) oraya yazılır. */
+const EKRAN_KLASORU = process.env.EKRAN_EKLEME_EKRAN_KLASORU;
+const UZUN_ORTAK_AKISLAR: ReadonlyArray<readonly [string, string, number]> = [
+  ['odeme-siparis-kaydet-kredi-karti', 'Ödeme (sipariş kaydet + kredi kartı)', 3],
+  ['adres-iletisim-dogrulama', 'Adres ve iletişim bilgilerinin doğrulanması (ortak adımlar, çok bölümlü)', 2]
+];
+const UZUN_EKRAN_ADI = 'Kurumsal müşteri başvurusu ve sipariş hazırlama ekranı (çok adımlı)';
+let tarayici: Browser;
+let nobetci: Nobetci;
+let klasor: ReturnType<typeof geciciKlasor>;
+let projeId = '';
+
+const api = (yol: string, govde?: Record<string, unknown>) => nobetciApi(nobetci, yol, govde);
+
+test.describe.configure({ mode: 'serial' });
+
+test.beforeAll(async () => {
+  test.setTimeout(120_000);
+  klasor = geciciKlasor('ekran-ekleme-arayuz');
+  const vtYolu = join(klasor.yol, 'platform.db');
+  const parola = randomBytes(18).toString('base64url');
+  const vt = await veritabaniniHazirla(vtYolu);
+  await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
+  izinleriAc(vt);
+  projeId = projeKaydet(vt, { ad: 'Örnek Proje' });
+  const ortamlar = ['TEST', 'CANLI'].map((ad, i) => ortamKaydet(vt, { projeId, ad, tabanUrl: 'http://127.0.0.1:9/', varsayilan: i === 0, ayarlar: { riskli: i === 1 } }));
+  // Ortak akış + onu varsayılan akışının sonunda kullanan bir ekran (kartta "1 ekranda kullanılıyor").
+  const ortak = onayAkisPaketi().model;
+  const ortakId = ekranKaydet(vt, { projeId, anahtar: ONAY_AKIS_ANAHTARI, ad: String(ortak.ad) });
+  ekranModeliEkle(vt, { ekranId: ortakId, model: ortak });
+  const model = ornekBasvuruModeli() as Record<string, unknown> & { adimlar: Array<Record<string, unknown>> };
+  model.adimlar = [...model.adimlar, { id: 'onay', sira: model.adimlar.length + 1, baslik: 'Onay', ortakAkis: { dosya: `${ONAY_AKIS_ANAHTARI}.model.json` } }];
+  const ekranId = ekranKaydet(vt, { projeId, anahtar: 'ornek-basvuru', ad: 'Örnek Başvuru' });
+  ekranModeliEkle(vt, { ekranId, model });
+  const digerId = ekranKaydet(vt, { projeId, anahtar: 'musteri-kaydi', ad: 'Müşteri Kaydı' });
+  ekranModeliEkle(vt, { ekranId: digerId, model: { ...ornekBasvuruModeli(), id: 'musteri-kaydi', ad: 'Müşteri Kaydı', ekranUrl: '/musteri/' } });
+  // Gerçekçi uzun adlar (kart taşması denetimi): uzun başlıklı, iki rozetli (ortak akış + model v3) ortak akışlar ve uzun yollu ekran.
+  for (const [anahtar, ad, surum] of UZUN_ORTAK_AKISLAR) {
+    const id = ekranKaydet(vt, { projeId, anahtar, ad });
+    for (let i = 0; i < surum; i++) ekranModeliEkle(vt, { ekranId: id, model: { ...onayAkisPaketi().model, id: anahtar, ad } });
+  }
+  const uzunId = ekranKaydet(vt, { projeId, anahtar: 'kurumsal-basvuru-siparis-hazirlama', ad: UZUN_EKRAN_ADI });
+  ekranModeliEkle(vt, { ekranId: uzunId, model: { ...ornekBasvuruModeli(), id: 'kurumsal-basvuru-siparis-hazirlama', ad: UZUN_EKRAN_ADI, ekranUrl: '/uzun-yol/ornek-kurumsal-musteri-basvurusu/siparis-hazirlama-ve-onay/' } });
+  vt.kapat();
+  nobetci = await nobetciBaslat(klasor.yol, vtYolu, { TEST_SUNUCU_KOSU_KAPALI: '1' });
+  expect((await api('/platform/kasa/ac', { parola })).basarili).toBe(true);
+  for (const ortamId of ortamlar) expect((await api('/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: ornekGirisTarifi() })).basarili).toBe(true);
+  tarayici = await korumaliTarayici();
+});
+
+test.afterAll(async () => {
+  await tarayici?.close();
+  nobetci?.surec.kill('SIGTERM');
+  klasor?.temizle();
+});
+
+async function arayuz(genislik = 1360): Promise<{ page: Page; istekler: string[] }> {
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, colorScheme: 'dark', viewport: { width: genislik, height: 1000 } });
+  await baglam.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: nobetci.adres });
+  const istekler: string[] = [];
+  baglam.on('request', (r) => { istekler.push(r.url()); });
+  const page = await baglam.newPage();
+  const hatalar: string[] = [];
+  page.on('pageerror', (e) => hatalar.push(String(e)));
+  page.on('close', () => expect(hatalar, 'sayfa hataları').toEqual([]));
+  return { page, istekler };
+}
+
+function agKontrol(istekler: string[]): void {
+  expect(istekler.filter((u) => SIRKET_DESENI.test(u))).toEqual([]);
+  expect(istekler.filter((u) => !u.startsWith(nobetci.adres) && !u.startsWith('data:'))).toEqual([]);
+}
+
+/** Yatay taşma yok (sayfa genişliği pencereyi aşmaz). */
+async function tasmaYok(page: Page): Promise<void> {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+}
+
+async function kutular(l: Locator): Promise<Array<{ x: number; y: number; width: number; height: number }>> {
+  const n = await l.count();
+  const sonuc = [];
+  for (let i = 0; i < n; i++) sonuc.push((await l.nth(i).boundingBox())!);
+  return sonuc;
+}
+
+test('Sayfa ekle: yan yana üç eşit kutu, tek eylem; istek metni gösterilmez, kopyalanan metin tek kaynaktan; 390px taşma yok', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar/yeni');
+  const kutu = page.locator('.ekleme-kutusu');
+  await expect(kutu).toHaveCount(3);
+  await expect(kutu.locator('h3')).toHaveText(['Ekranı tara', 'Akışı kaydet', 'Yapay zekâ ile oluştur']);
+  await expect(kutu.nth(0)).toContainText('Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.');
+  await expect(kutu.nth(1)).toContainText('Siz ekranda işlemi yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).');
+  await expect(kutu.nth(2).locator('.ekleme-adimlari li')).toHaveText(['İstek metnini kopyalayın', 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin', 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin']);
+  // Yükleme alanı ("Dosya seç") üstte olduğu gibi durur; yapay zekâ kutusunda yükleme düğmesi YOK, tek ana eylem kopyalamadır.
+  await expect(page.locator('label.yukleme-alani')).toContainText('Dosya seç');
+  await expect(kutu.nth(2).getByRole('button', { name: /yükle/i })).toHaveCount(0);
+  await expect(kutu.nth(2).getByRole('button')).toHaveText(['İstek metnini kopyala']);
+  for (const i of [0, 1]) await expect(kutu.nth(i).getByRole('button')).toHaveCount(1);
+  for (const i of [0, 1, 2]) await expect(kutu.nth(i).locator('.ekleme-notu')).toBeVisible();
+  // Eşit boyutlu, yan yana (aynı üst kenar).
+  const b = await kutular(kutu);
+  expect(Math.max(...b.map((x) => x.height)) - Math.min(...b.map((x) => x.height))).toBeLessThanOrEqual(1);
+  expect(Math.max(...b.map((x) => x.width)) - Math.min(...b.map((x) => x.width))).toBeLessThanOrEqual(1);
+  expect(new Set(b.map((x) => Math.round(x.y))).size).toBe(1);
+  // Uzun istek metni ekranda görünmez; "Metni göster" varsayılan kapalı.
+  const metin = paketIstekCumlesi();
+  await expect(page.getByText('Sayfayı yalnızca okuyarak incele', { exact: false })).toBeHidden();
+  await expect(page.locator('details.istek-metni-acilir')).not.toHaveAttribute('open', '');
+  await kutu.nth(2).getByRole('button', { name: 'İstek metnini kopyala' }).click();
+  await expect(page.getByText('İstek metni kopyalandı.')).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(metin);
+  await kutu.nth(2).getByText('Metni göster').click();
+  await expect(kutu.nth(2).locator('pre.istek-metni')).toHaveText(metin);
+  // "Paket biçimini indir": yerel uç, tek dosya, içerik sunucunun birleştirdiği belgeyle aynı.
+  const indir = kutu.nth(2).getByRole('link', { name: 'Paket biçimini indir' });
+  await expect(indir).toHaveAttribute('href', BICIM_ADRESI);
+  await expect(indir).toHaveAttribute('download', BICIM_DOSYASI_ADI);
+  const yanit = await page.request.get(BICIM_ADRESI);
+  expect(yanit.status()).toBe(200);
+  expect(yanit.headers()['content-disposition']).toContain(BICIM_DOSYASI_ADI);
+  expect(await yanit.text()).toBe(paketBicimiBelgesi(KOK));
+  // Mevcut akış değişmedi: "Ekranı tara" tarama diyaloğunu açar (klavyeyle).
+  await kutu.nth(0).getByRole('button', { name: 'Ekranı tara' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('dialog[open]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  // 390px: alt alta, taşma yok.
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.waitForTimeout(200);
+  const d = await kutular(kutu);
+  expect(new Set(d.map((x) => Math.round(x.x))).size).toBe(1);
+  expect(d[1].y).toBeGreaterThan(d[0].y + d[0].height - 1);
+  await tasmaYok(page);
+  agKontrol(istekler);
+  await page.close();
+});
+
+test('Ekranlar: istek metni tam gösterilmez (kopyala düğmesi); ortak akış kartları ekran kartı düzeninde, adım listesi yok, eşit yükseklik', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar');
+  const serit = page.locator('.kesif-seridi');
+  await expect(serit.getByRole('button', { name: 'İstek metnini kopyala' })).toHaveCount(1);
+  await expect(serit.locator('code')).toHaveCount(0);
+  await expect(serit.locator('pre.istek-metni')).toBeHidden();
+  await serit.getByRole('button', { name: 'İstek metnini kopyala' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(paketIstekCumlesi(''));
+
+  const bolum = page.locator('.ortak-akis-bolumu');
+  const kartlar = bolum.locator('article.ekran-karti.ortak-akis-karti');
+  await expect(kartlar).toHaveCount(2 + 1 + UZUN_ORTAK_AKISLAR.length);
+  await expect(bolum.locator('.giris-ozet-adimlari, ol, ul')).toHaveCount(0);
+  for (let i = 0; i < 2 + 1 + UZUN_ORTAK_AKISLAR.length; i++) {
+    await expect(kartlar.nth(i).locator('.ekran-karti-ust .ekran-karti-rozetler .rozet').first()).toBeVisible();
+    await expect(kartlar.nth(i).locator('.ekran-karti-alt .dugme').first()).toBeVisible();
+  }
+  const giris = kartlar.filter({ hasText: 'Giriş (TEST)' });
+  await expect(giris.locator('.ortak-akis-ozeti')).toHaveText('3 adım · Authenticator kodu · bağlam seçimi: Şube');
+  await expect(giris.locator('.ekran-karti-rozetler')).toHaveText('giriş tarifi');
+  const ortak = kartlar.filter({ hasText: 'Onay (ortak)' });
+  await expect(ortak.locator('.ekran-karti-rozetler')).toContainText('ortak akış');
+  await expect(ortak.locator('.ortak-akis-ozeti')).toHaveText(/^\d+ adım · \d+ alan$/);
+  await expect(ortak.locator('.ortak-akis-kullanimi')).toHaveText('1 ekranda kullanılıyor');
+  await expect(ortak.getByRole('link', { name: 'Onay (ortak): düzenle' })).toHaveAttribute('href', /\/akis$/);
+  await expect(kartlar.filter({ hasText: UZUN_ORTAK_AKISLAR[0][1] }).locator('.ekran-karti-rozetler')).toHaveText(/ortak akışs*model v3/);
+  // Aynı satırdaki kartlar eşit yükseklikte, içerik yukarıdan hizalı; eylemler altta aynı hizada.
+  const b = await kutular(kartlar);
+  const altlar = await kutular(bolum.locator('.ekran-karti-alt'));
+  for (const y of new Set(b.map((x) => Math.round(x.y)))) {
+    const satir = b.map((x, i) => ({ x, alt: altlar[i] })).filter((k) => Math.round(k.x.y) === y);
+    expect(Math.max(...satir.map((k) => k.x.height)) - Math.min(...satir.map((k) => k.x.height))).toBeLessThanOrEqual(1);
+    expect(Math.max(...satir.map((k) => k.alt.y)) - Math.min(...satir.map((k) => k.alt.y))).toBeLessThanOrEqual(1);
+  }
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.waitForTimeout(200);
+  await tasmaYok(page);
+  agKontrol(istekler);
+  await page.close();
+});
+
+/**
+ * Kart ızgarası geometrisi: kartlar birbiriyle kesişmez; her kartın (görünür) tüm alt öğeleri kart sınırları içinde kalır.
+ * Kartın bütününü kaplayan bağlantı katmanı (h3 a::after) sözde öğedir, ölçüme girmez.
+ */
+async function kartGeometrisi(page: Page, secici: string): Promise<{ kesisen: string[]; tasan: string[]; sayi: number }> {
+  return page.evaluate((s) => {
+    const kartlar = [...document.querySelectorAll(s)] as HTMLElement[];
+    const ad = (e: Element) => (e.querySelector('h3')?.textContent || e.getAttribute('aria-label') || '?').trim().slice(0, 40);
+    const kutu = kartlar.map((k) => k.getBoundingClientRect());
+    const kesisen: string[] = [];
+    for (let i = 0; i < kutu.length; i++) for (let j = i + 1; j < kutu.length; j++) {
+      const a = kutu[i], b = kutu[j];
+      if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5) kesisen.push(`${ad(kartlar[i])} × ${ad(kartlar[j])}`);
+    }
+    const tasan: string[] = [];
+    kartlar.forEach((k, i) => {
+      const d = kutu[i];
+      for (const c of k.querySelectorAll('*')) {
+        const r = c.getBoundingClientRect();
+        if (!r.width || !r.height || getComputedStyle(c).visibility === 'hidden') continue;
+        if (r.left < d.left - 0.5 || r.right > d.right + 0.5 || r.top < d.top - 0.5 || r.bottom > d.bottom + 0.5) {
+          tasan.push(`${ad(k)}: ${c.tagName.toLowerCase()}.${[...c.classList].join('.')} (${Math.round(r.left)}–${Math.round(r.right)} / kart ${Math.round(d.left)}–${Math.round(d.right)})`);
+        }
+      }
+    });
+    return { kesisen, tasan, sayi: kartlar.length };
+  }, secici);
+}
+
+test('kart ızgaraları (ekran + ortak akış): uzun başlık ve iki rozetle kartlar kesişmez, içerik kart içinde kalır (1920/1400/1024/390)', async () => {
+  test.setTimeout(90_000);
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar');
+  await expect(page.locator('.ortak-akis-bolumu article.ortak-akis-karti')).toHaveCount(2 + 1 + UZUN_ORTAK_AKISLAR.length);
+  const uzun = page.locator('.ortak-akis-karti').filter({ hasText: UZUN_ORTAK_AKISLAR[1][1] });
+  await expect.soft(uzun.locator('h3 a')).toHaveAttribute('title', UZUN_ORTAK_AKISLAR[1][1]);
+  // Üç tema (Ayarlar > Arayüz) yazı ve boşlukları değiştirir: her birinde ölçülür.
+  for (const stil of ['komuta', 'kurumsal', 'canli']) {
+  await page.evaluate((x) => { localStorage.setItem('platform.stil', x); }, stil);
+  await page.reload();
+  await expect(page.locator('.ortak-akis-izgarasi > article')).toHaveCount(2 + 1 + UZUN_ORTAK_AKISLAR.length);
+  for (const genislik of [1920, 1400, 1024, 390]) {
+    await page.setViewportSize({ width: genislik, height: 1000 });
+    await page.waitForTimeout(250);
+    for (const secici of ['.ekran-izgarasi:not(.ortak-akis-izgarasi) > article.ekran-karti', '.ortak-akis-izgarasi > article.ortak-akis-karti']) {
+      const g = await kartGeometrisi(page, secici);
+      expect(g.sayi, `${genislik}px ${secici}`).toBeGreaterThan(0);
+      expect.soft(g.kesisen, `${stil} ${genislik}px kesişen kartlar`).toEqual([]);
+      expect.soft(g.tasan, `${stil} ${genislik}px kart dışına taşan öğeler`).toEqual([]);
+    }
+    await tasmaYok(page);
+    if (EKRAN_KLASORU && stil === 'komuta') {
+      mkdirSync(EKRAN_KLASORU, { recursive: true });
+      for (const renk of ['dark', 'light'] as const) {
+        await page.emulateMedia({ colorScheme: renk });
+        await page.waitForTimeout(150);
+        await page.screenshot({ path: join(EKRAN_KLASORU, `ajan-a-kartlar-${genislik}-${renk === 'dark' ? 'koyu' : 'acik'}.png`), fullPage: true, animations: 'disabled' });
+      }
+      await page.emulateMedia({ colorScheme: 'dark' });
+    }
+  }
+  }
+  await page.evaluate(() => { localStorage.removeItem('platform.stil'); });
+  agKontrol(istekler);
+  await page.close();
+});
+
+test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapalı) + biçim dosyası bağlantısı', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar');
+  await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
+  await page.getByRole('button', { name: 'Tekrar analiz et' }).click();
+  const d = page.locator('dialog[open]');
+  await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();
+  await expect(d.getByRole('button', { name: 'İstek metnini kopyala' })).toBeVisible();
+  await expect(d.locator('pre.istek-metni')).toBeHidden();
+  await expect(d.locator('textarea')).toHaveCount(0);
+  await expect(d.getByRole('link', { name: 'Paket biçimini indir' })).toHaveAttribute('href', BICIM_ADRESI);
+  await d.getByRole('button', { name: 'İstek metnini kopyala' }).click();
+  const kopya = await page.evaluate(() => navigator.clipboard.readText());
+  expect(kopya).toContain(`ekteki ${BICIM_DOSYASI_ADI} dosyasındaki biçimde`);
+  expect(kopya).not.toContain('docs/sayfa-paketi.md');
+  await expect(d.getByRole('button', { name: 'Paketi yükle' })).toBeVisible();
+  agKontrol(istekler);
+  await page.close();
+});
+
+/** Öğe ve TÜM alt öğelerinde yatay taşma (scrollWidth > clientWidth) ya da kutunun dışına çıkan alt öğe listesi. */
+async function yatayTasmalar(kok: Locator): Promise<string[]> {
+  return kok.evaluate((d) => {
+    const sinir = d.getBoundingClientRect();
+    const sonuc: string[] = [];
+    for (const e of [d, ...d.querySelectorAll('*')] as HTMLElement[]) {
+      if (!(e instanceof HTMLElement) || !e.clientWidth) continue;
+      const ad = `${e.tagName.toLowerCase()}.${[...e.classList].join('.')}`;
+      if (e.scrollWidth > e.clientWidth + 1) sonuc.push(`${ad}: scrollWidth ${e.scrollWidth} > clientWidth ${e.clientWidth}`);
+      const r = e.getBoundingClientRect();
+      if (r.width && (r.left < sinir.left - 0.5 || r.right > sinir.right + 0.5)) sonuc.push(`${ad}: diyalog dışında (${Math.round(r.left)}–${Math.round(r.right)})`);
+    }
+    return sonuc;
+  });
+}
+
+test('istek metni diyalogları (tekrar analiz, yapay zekâ ile yorumla): "Metni göster" çok satırlı, hiçbir genişlikte yatay taşma yok (1400/1024/390)', async () => {
+  test.setTimeout(90_000);
+  const { page, istekler } = await arayuz();
+  for (const [dugme, olustur] of [['Tekrar analiz et', true], ['Yapay zekâ ile yorumla', false]] as const) {
+    for (const genislik of [1400, 1024, 390]) {
+      await page.setViewportSize({ width: genislik, height: 900 });
+      await page.goto('/#/ekranlar');
+      await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
+      await page.getByRole('button', { name: dugme }).click();
+      const d = page.locator('dialog[open]');
+      if (olustur) await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();
+      await expect(d.getByRole('button', { name: 'İstek metnini kopyala' })).toBeVisible();
+      await d.getByText('Metni göster').click();
+      const pre = d.locator('pre.istek-metni');
+      await expect(pre).toBeVisible();
+      // Çok satırlı (sarılır), en çok ~12 satır yüksekliğinde; yatay kaydırma yok.
+      const olcu = await pre.evaluate((e) => ({ yukseklik: e.clientHeight, satir: parseFloat(getComputedStyle(e).lineHeight), sw: e.scrollWidth, cw: e.clientWidth, beyaz: getComputedStyle(e).whiteSpace }));
+      expect(olcu.beyaz).toBe('pre-wrap');
+      expect(olcu.sw).toBeLessThanOrEqual(olcu.cw + 1);
+      expect(olcu.yukseklik).toBeGreaterThan(olcu.satir * 2);
+      expect(olcu.yukseklik).toBeLessThanOrEqual(olcu.satir * 12 + 20);
+      expect(await yatayTasmalar(d), `${dugme} ${genislik}px`).toEqual([]);
+      if (EKRAN_KLASORU) {
+        mkdirSync(EKRAN_KLASORU, { recursive: true });
+        for (const renk of ['dark', 'light'] as const) {
+          await page.emulateMedia({ colorScheme: renk });
+          await page.waitForTimeout(150);
+          await page.screenshot({ path: join(EKRAN_KLASORU, `ajan-a-istek-metni-${olustur ? 'tekrar-analiz' : 'yorumla'}-${genislik}-${renk === 'dark' ? 'koyu' : 'acik'}.png`), animations: 'disabled' });
+        }
+        await page.emulateMedia({ colorScheme: 'dark' });
+      }
+      await page.keyboard.press('Escape');
+    }
+  }
+  agKontrol(istekler);
+  await page.close();
+});
+
+test('arayüz ve belge metinleri yapay zekâ aracından bağımsız: kullanıcıya görünen "Claude" ifadesi yok (iç adlar hariç)', () => {
+  const ESKI = /Claude Code'a verin|Claude Code gibi|Claude ile yorumla|Claude Code sohbet|Claude Code'a yapıştırın|Claude'da ekran tara/;
+  const arayuzKlasoru = join(KOK, 'scripts', 'platform', 'arayuz');
+  const dosyalar = [...readdirSync(arayuzKlasoru).filter((d) => /\.(m?js)$/.test(d)).map((d) => join(arayuzKlasoru, d)), join(KOK, 'docs', 'sayfa-paketi.md'),
+    join(KOK, 'scripts', 'platform', 'ekranlar', 'paket-istekleri.mjs')];
+  for (const y of dosyalar) {
+    // İç adlar (claudeDosyasiOlustur, /platform/ekran/claude-dosyasi, claude-diyalogu, CLAUDE_ISTEK_CUMLESI) çıkarılır.
+    const metin = readFileSync(y, 'utf8').replace(/claude[A-Za-z-]*|CLAUDE_[A-Z_]+/g, '');
+    expect(metin.match(ESKI), y).toBeNull();
+    expect(metin.split(/\r?\n/).filter((s) => /Claude/.test(s)), y).toEqual([]);
+  }
+  // İstek metni depo dosyasına değil, istekle verilen biçim dosyasına atıf yapar.
+  expect(paketIstekCumlesi()).not.toContain('docs/');
+  expect(paketIstekCumlesi()).toContain(BICIM_DOSYASI_ADI);
+});

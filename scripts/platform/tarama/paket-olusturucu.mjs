@@ -22,7 +22,7 @@ import { alanEtiketi, modelAlanlari, secenekTablolariUret } from '../tablolar/pa
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
-export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — Claude ile tamamlayın.';
+export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (sayfa paketi) ya da akış kaydıyla tamamlayın.';
 /** Keşfedilen açılır listelerin en fazla seçenek sayısı. */
 export const KESIF_SECENEK_SINIRI = 8;
 /** Mevcut modelde taramayla eşleştirilebilen alan tipleri. */
@@ -522,7 +522,7 @@ export function taramaPaketiOlustur(meta, envanter) {
     const sayfaBasligi = temizMetin(profiller.find((p) => p.baslik)?.baslik, sayac, 120);
     model = {
       semaSurumu: 1, tur: 'ekran', id: meta.ekranAnahtari, ad: meta.ekranAdi, ...(meta.girissiz ? { girisGerekmez: true } : {}),
-      aciklama: `"${meta.ekranAdi}" ekranının otomatik taramayla çıkarılan TASLAK modeli (${hamlar.size} alan). Adım/aksiyon tanımları ve iş kuralları Claude ile tamamlanmalı.`,
+      aciklama: `"${meta.ekranAdi}" ekranının otomatik taramayla çıkarılan TASLAK modeli (${hamlar.size} alan). Adım/aksiyon tanımları ve iş kuralları yapay zekâ aracınızla ya da akış kaydıyla tamamlanmalı.`,
       ekranUrl: urlYolu,
       specDosyasi: `tests/scenarios/${meta.ekranAnahtari}/${meta.ekranAnahtari}.spec.ts`,
       pageObject: 'yok (model koşucusu)',

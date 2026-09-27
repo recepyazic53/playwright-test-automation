@@ -2,7 +2,7 @@
 //   - Ekran ilk açıldığında otomatik başlar (Ayarlar > Arayüz > "Rehberleri ilk girişte göster"; kullanıcı kararı). Bir
 //     rehber bitince ya da kapatılınca "görüldü" olur (kasada; bkz. scripts/platform/ayarlar/rehber-ayarlari.mjs).
 //   - Üst çubuktaki "?" düğmesi o anki ekranın rehberini istediğiniz zaman yeniden başlatır.
-//   - Adımın hedefi (CSS seçici) sayfada varsa vurgulanır ve kart onun yanına konur; yoksa kart ortada açılır.
+//   - Kart her zaman ekranın ortasında açılır; adımın hedefi (CSS seçici) sayfada varsa ayrıca vurgulanır.
 //   - Klavye: → / Enter ileri, ← geri, Esc kapat; odak kartın içinde kalır, kapanınca eski yerine döner.
 //   - Otomatik sürülen tarayıcıda (navigator.webdriver; ör. Playwright testleri) kendiliğinden açılmaz — testler "?" ile ya da
 //     localStorage 'nobetci-rehber-otomatik' = '1' ile açar.
@@ -114,24 +114,18 @@ export function rehberBaslat(anahtar) {
     return null;
   };
 
+  // Kart HER ZAMAN ekranın ortasında açılır (masaüstü ve telefon); adımın hedefi varsa yalnızca vurgulanır (kart hedefin yanına
+  // taşınmaz — kenara / üste yapışık kart olmaz).
   const yerlestirKart = () => {
     const adim = rehber.adimlar[sira];
     const el = hedefBul(adim);
-    kart.classList.toggle('ortada', !el);
+    kart.classList.add('ortada');
     kart.classList.toggle('hedefli', !!el);
-    if (!el) { vurgu.hidden = true; kart.style.removeProperty('top'); kart.style.removeProperty('left'); return; }
+    if (!el) { vurgu.hidden = true; return; }
     const r = el.getBoundingClientRect();
     const bosluk = 6;
     vurgu.hidden = false;
     Object.assign(vurgu.style, { top: `${r.top - bosluk}px`, left: `${r.left - bosluk}px`, width: `${r.width + bosluk * 2}px`, height: `${r.height + bosluk * 2}px` });
-    if (window.innerWidth < 640) { kart.style.removeProperty('top'); kart.style.removeProperty('left'); kart.classList.add('altta'); return; }
-    kart.classList.remove('altta');
-    const k = kart.getBoundingClientRect();
-    const altaSigar = r.bottom + 12 + k.height < window.innerHeight;
-    const top = altaSigar ? r.bottom + 12 : Math.max(12, r.top - 12 - k.height);
-    const left = Math.min(Math.max(12, r.left), window.innerWidth - k.width - 12);
-    kart.style.top = `${top}px`;
-    kart.style.left = `${left}px`;
   };
 
   let yon = 1;
@@ -233,7 +227,7 @@ function akisCizimi(c) {
     ogeler.push(h('span', { class: 'rehber-kutu', style: { '--i': i } },
       h('span', { class: 'rehber-kutu-ikon' }, ikon(k.ikon || 'hedef')), h('b', {}, k.baslik), k.alt ? h('small', {}, k.alt) : null));
   });
-  return h('div', { class: 'rehber-cizim rehber-akis', style: { '--n': c.kutular.length }, role: 'img', 'aria-label': c.kutular.map((k) => k.baslik).join(' → ') }, ogeler);
+  return h('div', { class: `rehber-cizim rehber-akis${c.kutular.length >= 4 ? ' genis' : ''}`, style: { '--n': c.kutular.length }, role: 'img', 'aria-label': c.kutular.map((k) => k.baslik).join(' → ') }, ogeler);
 }
 
 const MAKET_BOLGELERI = ['menu', 'sol', 'eylem', 'arac', 'tablo', 'kartlar', 'grafik', 'form', 'soru', 'proje'];

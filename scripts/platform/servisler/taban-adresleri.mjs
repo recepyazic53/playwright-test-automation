@@ -2,7 +2,8 @@
 // - Tablo: satır = servis, sütun = ortam. Hücre: servise özel taban (ayarlar.tabanlar[ortamId]), "yok" ('' = servis o ortamda
 //   tanımlı değil), ortamın asıl adresi (tanım yok) ya da eski tam adres ayarı (ayarlar.adresler[ortamId]; düzenlenince kalkar).
 // - Adlandırılmış taban adres (grup): aynı sunucuyu paylaşan servisler bir ada bağlanır (ayarlar.tabanGrubu). Gruptaki
-//   servislerin taban adresleri hep aynıdır; grup bir yerde değişince bağlı tüm servisler birlikte güncellenir. Ayrı tablo yok:
+//   servislerin taban adresleri (tanımlı oldukları ortamlarda; "yok" grubu bozmaz) hep aynıdır; grup bir yerde değişince bağlı
+//   tüm servisler birlikte güncellenir. Arayüzün "adrese göre" görünümü de yalnız görünümdür (veri servis başına). Ayrı tablo yok:
 //   adresler servisin ŞİFRELİ ayarlarında kalır (koşu değişmeden servis.ayarlar.tabanlar'ı okur; geriye uyumlu, göç gerekmez).
 // - Önce etki önizlemesi (hangi servisler, kaç senaryo / akış, eski → yeni adres); YALNIZ onay: true ile yazılır.
 // - Adres http(s) olmalı ve yasak adres kalıplarına (Ayarlar > Güvenlik) uymamalı. Ağ isteği YOK (SOAP'ta da erişim kontrolü
@@ -109,18 +110,26 @@ export function tabanlariUygula(vt, projeId, girdi) {
     }).map((o) => o.id);
     if (degisenOrtamlar.length || grup !== s.ayarlar.tabanGrubu) yeniler.set(s.id, { s, ayarlar, degisenOrtamlar });
   }
-  // Gruptaki servislerin (değişmeyen üyeler dahil) her ortamdaki geçerli taban adresi aynı olmalı.
-  /** @type {Map<string, Array<{ ad: string; imza: string }>>} */
+  // Gruptaki servislerin (değişmeyen üyeler dahil) her ortamdaki geçerli taban adresi aynı olmalı. "Bu ortamda yok" olan servis
+  // grubu bozmaz (o ortamda karşılaştırmaya girmez): gruptaki diğer servislerle yalnız tanımlı olduğu ortamlarda aynı olmalıdır.
+  /** @type {Map<string, { adlar: string[]; ortamlar: Map<string, Set<string>> }>} */
   const gruplar = new Map();
   for (const s of servisler) {
     const a = yeniler.get(s.id)?.ayarlar ?? s.ayarlar;
     if (!a.tabanGrubu) continue;
-    const l = gruplar.get(a.tabanGrubu) ?? [];
-    l.push({ ad: s.ad, imza: JSON.stringify(ortamlar.map((o) => tabanHucresi(a, o).deger)) });
-    gruplar.set(a.tabanGrubu, l);
+    const g = gruplar.get(a.tabanGrubu) ?? { adlar: [], ortamlar: new Map() };
+    g.adlar.push(s.ad);
+    for (const o of ortamlar) {
+      const h = tabanHucresi(a, o);
+      if (h.kaynak === 'yok') continue;
+      const d = g.ortamlar.get(o.id) ?? new Set();
+      d.add(h.deger);
+      g.ortamlar.set(o.id, d);
+    }
+    gruplar.set(a.tabanGrubu, g);
   }
-  for (const [ad, l] of gruplar) {
-    if (new Set(l.map((x) => x.imza)).size > 1) throw new DepoHatasi(`"${ad}" adlı taban adresine bağlı servislerin adresleri aynı olmalı (${l.map((x) => x.ad).join(', ')}).`);
+  for (const [ad, g] of gruplar) {
+    if ([...g.ortamlar.values()].some((d) => d.size > 1)) throw new DepoHatasi(`"${ad}" adlı taban adresine bağlı servislerin adresleri aynı olmalı (${g.adlar.join(', ')}).`);
   }
   const onizleme = [...yeniler.values()].map(({ s, ayarlar, degisenOrtamlar }) => ({
     servisId: s.id, ad: s.ad, tur: s.tur, grup: { eski: s.ayarlar.tabanGrubu ?? null, yeni: ayarlar.tabanGrubu ?? null },
