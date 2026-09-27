@@ -9,6 +9,7 @@
     "test-sunucu": "node scripts/test-sunucu.mjs",
     "baslat": "node scripts/baslat.mjs",
     "paketle": "node scripts/paketle.mjs",
+    "paketle:mac": "node scripts/paketle-mac.mjs",
     "kos": "node scripts/kos.mjs"
   },
   "devDependencies": {

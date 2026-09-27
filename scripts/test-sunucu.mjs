@@ -688,7 +688,10 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     // temizlediği için diğer koşuların trace/video dosyaları siliniyordu (ENOENT hataları,
     // açılmayan videolar). Klasör test-results/ altında kaldığı için /medya ucu değişmeden
     // çalışır.
-    const ciktiKlasoru = join(projeKoku, 'test-results', 'dashboard-kosulari', `${Date.now()}-${randomBytes(4).toString('hex')}`);
+    // NOBETCI_CIKTI_KLASORU: test-results/ yerine kullanılacak kök (macOS paketi: uygulama salt okunur olabilir; başlatıcı
+    // ~/Library/Caches altını verir). Verilmezse <proje kökü>/test-results.
+    const ciktiKoku = process.env.NOBETCI_CIKTI_KLASORU?.trim() || join(projeKoku, 'test-results');
+    const ciktiKlasoru = join(ciktiKoku, 'dashboard-kosulari', `${Date.now()}-${randomBytes(4).toString('hex')}`);
     // Raporlayıcılar playwright.config.ts'ten gelir (list + json + Allure). "--reporter"
     // VERİLMEZ: CLI'dan verilirse config'teki Allure raporlayıcısı devre dışı kalıyor ve
     // dashboard koşuları rapora hiç yansımıyordu.

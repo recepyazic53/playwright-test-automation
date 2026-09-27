@@ -28,6 +28,7 @@ import {
 } from '../../scripts/platform/zamanlama/oturum-gorevi.mjs';
 import { TERCIH_AYAR_ANAHTARI, arkaPlanYoneticisi } from '../../scripts/platform/zamanlama/arka-plan.mjs';
 import { siraOlustur } from '../../scripts/platform/kasa-sirasi.mjs';
+import { UYGULAMA_GIRDILERI } from '../../scripts/paket/paket-ortak.mjs';
 import { nobetciApi, nobetciBaslat } from './nobetci-sunucusu';
 import { HIZLI_KDF, geciciKlasor, loglariYakala, izinleriAc } from './platform-ortak';
 
@@ -634,11 +635,11 @@ test('B: DPAPI dosyası yedeğe (.tayedek) girmez; paketleme veri/ klasörünü 
       acik.kasaAnahtari?.fill(0);
       acik.medyaAnahtari?.fill(0);
     }
-    // Taşınabilir paket: kullanıcı verisi (veri/) kopyalanmaz — kopyalanan kökler sabit listede.
+    // Taşınabilir paket (Windows ve macOS): kullanıcı verisi (veri/) kopyalanmaz — kopyalanan kökler ortak sabit listede.
     const paketle = readFileSync(join(KOK, 'scripts', 'paketle.mjs'), 'utf8');
-    const liste = /for \(const g of \[([^\]]+)\]\) kopyala\(g\)/.exec(paketle)?.[1] ?? '';
-    expect(liste).toContain("'scripts'");
-    expect(liste).not.toMatch(/'veri'/);
+    expect(paketle).toContain('for (const g of UYGULAMA_GIRDILERI) kopyala(g)');
+    expect(UYGULAMA_GIRDILERI).toContain('scripts');
+    expect(UYGULAMA_GIRDILERI.some((g) => /^(veri|\.env)([\\/]|$)/.test(g))).toBe(false);
   } finally {
     vt.kapat();
     klasor.temizle();

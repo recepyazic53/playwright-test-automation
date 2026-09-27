@@ -16,6 +16,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statS
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PaketHatasi, UYGULAMA_GIRDILERI, calismaZamaniModulleri, haricMi } from './paket/paket-ortak.mjs';
 
 const KOK = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HEDEF = resolve(process.argv[2] || join(KOK, 'dist', 'Nöbetçi'));
@@ -44,42 +45,25 @@ adim(`Hedef: ${HEDEF}`);
 if (existsSync(HEDEF)) rmSync(HEDEF, { recursive: true, force: true });
 mkdirSync(UYGULAMA, { recursive: true });
 
-// 1) Uygulama dosyaları (kullanıcı verisi, günlük ve geçici dosyalar hariç).
-const HARIC = [/[\\/]test-sunucu\.log$/, /[\\/]\.test-sunucu-token$/, /[\\/]paket[\\/]/];
+// 1) Uygulama dosyaları (kullanıcı verisi, günlük ve geçici dosyalar hariç; liste: scripts/paket/paket-ortak.mjs).
 const kopyala = (goreli) => {
   const kaynak = join(KOK, goreli);
   if (!existsSync(kaynak)) return;
-  cpSync(kaynak, join(UYGULAMA, goreli), { recursive: true, filter: (y) => !HARIC.some((d) => d.test(y)) });
+  cpSync(kaynak, join(UYGULAMA, goreli), { recursive: true, filter: (y) => !haricMi(y) });
 };
-for (const g of ['package.json', 'playwright.config.ts', 'tsconfig.json', 'README.md', 'docs', 'scripts', join('tests', 'support'), join('tests', 'model-kosucu')]) kopyala(g);
+for (const g of UYGULAMA_GIRDILERI) kopyala(g);
 adim('Uygulama dosyaları kopyalandı.');
 
-// 2) Çalışma zamanı modülleri (geliştirme araçları — typescript, @types — hariç).
-for (const m of ['@playwright', 'playwright', 'playwright-core', 'sql.js', 'dotenv']) {
-  const k = join(KOK, 'node_modules', m);
-  if (!existsSync(k)) { console.error(`Eksik modül: node_modules/${m} ("npm install" çalıştırın).`); process.exit(1); }
-  cpSync(k, join(UYGULAMA, 'node_modules', m), { recursive: true });
+// 2) Çalışma zamanı modülleri (geliştirme araçları — typescript, @types — hariç), package.json "dependencies" ve veritabanı
+// sürücüleri (Ayarlar > Entegrasyonlar > Veritabanı bağlantısı; kuruluysa) bağımlılık ağaçlarıyla birlikte.
+let moduller;
+try { moduller = calismaZamaniModulleri(KOK); } catch (h) {
+  if (!(h instanceof PaketHatasi)) throw h;
+  console.error(h.message);
+  process.exit(1);
 }
-// package.json "dependencies" ve veritabanı sürücüleri (Ayarlar > Entegrasyonlar > Veritabanı bağlantısı; kuruluysa) bağımlılık
-// ağaçlarıyla birlikte (node_modules kökündeki bağımlılıklar tek tek izlenir; paketin kendi node_modules'ü onunla kopyalanır).
-const EK_MODULLER = ['mssql', 'oracledb', 'pg', 'mysql2'];
-const kopyalananlar = new Set(['@playwright', 'playwright', 'playwright-core', 'sql.js', 'dotenv']);
-const modulKopyala = (ad, zorunlu) => {
-  if (kopyalananlar.has(ad) || kopyalananlar.has(ad.split('/')[0])) return;
-  const k = join(KOK, 'node_modules', ad);
-  if (!existsSync(join(k, 'package.json'))) {
-    if (zorunlu) { console.error(`Eksik modül: node_modules/${ad} ("npm install" çalıştırın).`); process.exit(1); }
-    return;
-  }
-  kopyalananlar.add(ad);
-  cpSync(k, join(UYGULAMA, 'node_modules', ad), { recursive: true });
-  const p = JSON.parse(readFileSync(join(k, 'package.json'), 'utf8'));
-  for (const b of Object.keys({ ...(p.dependencies ?? {}), ...(p.optionalDependencies ?? {}) })) modulKopyala(b, false);
-};
-const kokPaket = JSON.parse(readFileSync(join(KOK, 'package.json'), 'utf8'));
-for (const m of Object.keys(kokPaket.dependencies ?? {})) modulKopyala(m, true);
-for (const m of EK_MODULLER) modulKopyala(m, false);
-adim(`Çalışma zamanı modülleri kopyalandı (veritabanı sürücüleri: ${EK_MODULLER.filter((m) => kopyalananlar.has(m)).join(', ') || 'kurulu değil'}).`);
+for (const m of moduller.moduller) cpSync(join(KOK, 'node_modules', m), join(UYGULAMA, 'node_modules', m), { recursive: true });
+adim(`Çalışma zamanı modülleri kopyalandı (veritabanı sürücüleri: ${moduller.veritabaniSurucuLeri.join(', ') || 'kurulu değil'}).`);
 
 // 3) Node.
 mkdirSync(join(HEDEF, 'runtime'), { recursive: true });
