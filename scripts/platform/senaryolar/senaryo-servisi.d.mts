@@ -60,8 +60,10 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   akis: string | null;
   /** Giriş seçimi (null = ortamın girişiyle, varsayılan). */
   giris: import('./senaryo-girisi.mjs').SenaryoGirisi | null;
+  /** Satır seçimleri: "<tabloId>|<etiket>" → { Sütun: değer } (yoksa null). */
+  tabloSecimleri: Record<string, Record<string, string>> | null;
 };
-export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
+export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string, secenekler?: { tumTipler?: boolean }): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
 export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null): {
   ekran: { id: string; anahtar: string; ad: string };
   ortamlar: Array<{ id: string; ad: string; varsayilan: boolean }>;
@@ -81,8 +83,14 @@ export declare function senaryoKaydet(
   vt: Veritabani,
   girdi: {
     id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown;
-    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; yapan?: string;
+    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; tabloSecimleri?: unknown; yapan?: string;
   },
+  secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
+): { id: string; uyarilar: Bulgu[] };
+/** Mevcut senaryonun ortam başına verisini (+ satır seçimlerini) doğrulayıp yazar; diğer içerik değişmez (değişiklik geçmişine düşer). */
+export declare function senaryoOrtamVerileriniYaz(
+  vt: Veritabani,
+  girdi: { projeId: string; id: string; ortamVerileri: Record<string, Record<string, unknown>>; tabloSecimleri?: unknown; denetlenecekAlanlar?: string[]; yapan?: string },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
 ): { id: string; uyarilar: Bulgu[] };
 export declare function kosuyaDahilAyarla(vt: Veritabani, projeId: string, idler: unknown, dahil: boolean, yapan?: string, ortamId?: string | null): { degisen: number };
@@ -115,7 +123,7 @@ export declare function calistirmaHedefiCoz(
 ): CalistirmaHedefi;
 export declare function denemePaketiOlustur(
   vt: Veritabani,
-  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown },
+  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; tabloSecimleri?: unknown },
   secenekler: { geciciEk: string }
 ): {
   model: true; genel: { projeId: string; ortamId: string }; spec: string; geciciBaslik: string;

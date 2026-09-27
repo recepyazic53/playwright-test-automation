@@ -22,7 +22,7 @@ import {
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
 import { gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
-import { degerBasvurusuYaz } from './tablo-secimi.mjs';
+import { degerBasvurusuYaz, grupAnahtari, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
@@ -137,6 +137,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const mutlaka = new Set(s.taslak?.mutlaka ?? senaryo?.mutlakaGorunmeli ?? []);
   // Giriş seçimi (senaryo-girisi.mjs): { kip: ortam | girissiz | temiz, profil }; null = ortamın girişiyle (varsayılan).
   let girisSecimi = s.taslak && 'giris' in s.taslak ? s.taslak.giris : senaryo?.giris ?? null;
+  // Satır seçimleri: "<tabloId>|<etiket>" → { Sütun: değer } (çözümleyicinin okuduğu biçim; servis senaryosundakiyle aynı).
+  // ${Tablo.Sütun} değerleri koşuda bu koşullarla (+ bağlı alanların düz değerleri ve ortam) uyan ilk satırdan gelir.
+  const tabloSecimleri = JSON.parse(JSON.stringify(s.taslak?.tabloSecimleri ?? senaryo?.tabloSecimleri ?? {}));
   const modelGirissiz = baglam.model?.girisGerekmez === true;
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, ...(baglam.ortak ? { ortak: baglam.ortak } : {}), kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
@@ -234,6 +237,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     yerlestir(genelHatalar, ...(gonderildi ? dagit.genel : []).map((m) => h('li', {}, m)));
     genelHatalar.hidden = !(gonderildi && dagit.genel.length);
     ozetiCiz(d);
+    satirSecimiCiz();
     beklenenAdimSecenekleriniGuncelle(g);
     if (!diyagramAlani.hidden) diyagramiCiz();
   }
@@ -333,9 +337,26 @@ function modelFormu(icerik, s, senaryo, baglam) {
           break;
         }
         case 'onayKutusu': {
+          // Tabloya bağlı onay kutusu "Tablodan" alabilir: koşuda seçilen satırdaki değer evet / hayır olarak okunur
+          // (true/false, evet/hayır, 1/0, E/H; tanınmazsa koşu anlaşılır hatayla durur).
+          const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+          const b = tabloBasvurusuCoz(degerler[alan.anahtar]);
+          if (b) {
+            const kaldir = h('button', { type: 'button', class: 'kucuk-dugme hayalet', id, 'aria-label': `${alan.etiket}: tablodan almayı kaldır` }, ikon('carpi'), 'Kaldır');
+            kaldir.addEventListener('click', () => { degerYaz(alan.anahtar, false); kayit.ciz(); });
+            ust = alanUst(alan, id);
+            govde = h('div', { class: 'tablodan-deger' }, ikon('veri'),
+              h('span', {}, `Tablodan: ${b.tablo}${b.etiket ? ` [${b.etiket}]` : ''} → ${b.sutun}`, h('small', { class: 'soluk' }, ' · koşuda evet / hayır olarak okunur')), kaldir);
+            kontrolKaydet(alan.anahtar, [kaldir], hata, uyari);
+            break;
+          }
           const kutu = h('input', { type: 'checkbox', checked: degerler[alan.anahtar] === true, id });
           kutu.addEventListener('change', () => degerYaz(alan.anahtar, kutu.checked));
-          ust = alanUst(alan, id);
+          const tablodanDugmesi = tablodan ? h('button', {
+            type: 'button', class: 'kucuk-dugme hayalet', title: tablodan.metin, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
+            onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
+          }, ikon('veri'), 'Tablodan') : null;
+          ust = alanUst(alan, id, tablodanDugmesi ? [tablodanDugmesi] : []);
           ust.el.querySelector('label').textContent = '';
           govde = h('label', { class: 'onay-satiri', for: id }, kutu, alan.etiket);
           kontrolKaydet(alan.anahtar, [kutu], hata, uyari);
@@ -430,7 +451,18 @@ function modelFormu(icerik, s, senaryo, baglam) {
     const kaldir = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${alan.etiket}: dosyayı kaldır` }, ikon('carpi'), 'Kaldır');
     kaldir.addEventListener('click', () => { degerYaz(alan.anahtar, ''); alanlar.get(alan.id)?.ciz(); });
     let icerikEl;
-    if (ref) {
+    // Tabloya bağlı dosya alanı "Tablodan" alabilir: koşuda seçilen satırdaki dosya ADI kullanılır (izinli klasör kuralları aynen).
+    const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+    const tb = tabloBasvurusuCoz(deger);
+    if (tb) {
+      icerikEl = h('div', { class: 'dosya-karti' },
+        h('span', { class: 'dosya-karti-ikon', 'aria-hidden': 'true' }, ikon('veri')),
+        h('div', { class: 'dosya-karti-ana' },
+          h('strong', { class: 'dosya-adi' }, `Tablodan: ${tb.tablo}${tb.etiket ? ` [${tb.etiket}]` : ''} → ${tb.sutun}`),
+          h('small', { class: 'soluk' }, 'Koşuda seçilen satırdaki dosya adı; dosya izinli klasörde olmalı (NOBETCI_YUKLEME_KLASORU ya da veri/yuklenecek-dosyalar/).')),
+        h('span', { class: 'dosya-karti-eylemler' },
+          h('button', { type: 'button', class: 'kucuk-dugme', onclick: sec, 'aria-label': `${alan.etiket}: dosya yükle` }, ikon('yukle'), 'Dosya yükle'), kaldir));
+    } else if (ref) {
       const b = dosyaBilgileri[deger];
       icerikEl = h('div', { class: `dosya-karti ${b && b.eksik ? 'eksik' : ''}`.trim() },
         h('span', { class: 'dosya-karti-ikon', 'aria-hidden': 'true' }, ikon('dosya')),
@@ -456,7 +488,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
       h('div', { class: 'alan-notu', id: `${id}-not` }, alan.varsayilan !== undefined
         ? 'Boş bırakılırsa ekranın varsayılan dosyası kullanılır (Ayarlar > Dosyalar).'
         : 'Dosya diskte yalnızca şifreli durur; koşuda geçici olarak çözülür ve koşu bitince silinir.'));
-    const ust = alanUst(alan, id);
+    const tablodanDugmesi = tablodan && !tb ? h('button', {
+      type: 'button', class: 'kucuk-dugme hayalet', title: tablodan.metin, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
+      onclick: () => { degerYaz(alan.anahtar, tablodan.deger); alanlar.get(alan.id)?.ciz(); }
+    }, ikon('veri'), 'Tablodan') : null;
+    const ust = alanUst(alan, id, tablodanDugmesi ? [tablodanDugmesi] : []);
     kontrolKaydet(alan.anahtar, [secici], hata, uyari);
     return { govde, ust };
   }
@@ -597,7 +633,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (akisSecimi) {
     akisSecimi.addEventListener('change', () => {
       const d = hesapla();
-      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, tabloSecimleri, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
     });
   }
   // Giriş: ortamın girişiyle (varsayılan) / girişsiz / temiz oturumla yeniden giriş; birden çok giriş profili varsa profil. Ekran
@@ -643,6 +679,108 @@ function modelFormu(icerik, s, senaryo, baglam) {
       h('div', { class: 'model-alani genis giris-secimi' }, h('div', { class: 'alan-ust' }, h('label', { for: girisKipi.id }, 'Giriş')), girisKipi, girisProfilAlani, girisNotu),
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: baslikId }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslikGirdisi, baslikHata),
       sema.senaryoAlanlari.map(alanCiz)));
+
+  // --- Satır seçimi (tablo başvuruları) --------------------------------------------------------
+  // Formda ${Tablo.Sütun} kullanan her tablo + etiket grubu için koşuda kullanılacak satır: "Otomatik" (bağlı alanların düz
+  // değerleri ve ortamla uyan ilk satır) ya da bir satır / sütun koşulları (tabloSecimleri; satır seçilince satırın açık sütun
+  // değerleri koşul olur, gizli sütun koşula girmez). Ortama özel satırlar ortam adıyla gösterilir.
+  const satirSecimiKarti = h('section', { class: 'kart satir-secimi-karti', 'aria-labelledby': 'satir-secimi-baslik', hidden: true });
+  let tabloListesi = null;
+  let tabloIstegi = null;
+  let satirImzasi = null;
+  const ortamAdi = (id) => (s.ortamlar.find((o) => o.id === id) || {}).ad || 'başka ortam';
+  /** Formda tablo başvurusu kullanan gruplar: [{ tablo, etiket, alanlar: [etiket] }]. */
+  const kullanilanGruplar = () => {
+    const gruplar = new Map();
+    for (const alan of tumAlanlar) {
+      const b = alan.anahtar ? tabloBasvurusuCoz(degerler[alan.anahtar]) : null;
+      if (!b) continue;
+      const k = `${b.tablo.toLocaleLowerCase('tr')}|${b.etiket}`;
+      if (!gruplar.has(k)) gruplar.set(k, { tablo: b.tablo, etiket: b.etiket, alanlar: [] });
+      gruplar.get(k).alanlar.push(alan.etiket);
+    }
+    return [...gruplar.values()];
+  };
+  /** Kaydedilecek seçimler: yalnız formda kullanılan gruplar (başvuru kalmadıysa hiçbiri). */
+  const kaydedilecekSecimler = () => {
+    const gruplar = kullanilanGruplar();
+    if (!gruplar.length) return {};
+    if (!tabloListesi) return tabloSecimleri;
+    const kullanilan = new Set(gruplar.map((g) => { const t = tabloBul(tabloListesi, g.tablo); return t ? grupAnahtari(t.id, g.etiket) : null; }).filter(Boolean));
+    return Object.fromEntries(Object.entries(tabloSecimleri).filter(([k, v]) => kullanilan.has(k) && Object.keys(v).length));
+  };
+  function satirSecimiCiz(zorla = false) {
+    const gruplar = kullanilanGruplar();
+    const imza = JSON.stringify(gruplar);
+    if (!zorla && imza === satirImzasi) return;
+    satirImzasi = imza;
+    if (!gruplar.length) { satirSecimiKarti.hidden = true; return; }
+    if (!tabloListesi) {
+      tabloIstegi ??= api(`/platform/tablolar?projeId=${encodeURIComponent(s.proje.id)}`)
+        .then((y) => { tabloListesi = y.tablolar || []; })
+        .catch(() => { tabloListesi = []; })
+        .finally(() => satirSecimiCiz(true));
+      return;
+    }
+    satirSecimiKarti.hidden = false;
+    yerlestir(satirSecimiKarti,
+      h('div', { class: 'kart-basligi' }, h('h3', { id: 'satir-secimi-baslik' }, ikon('veri'), 'Satır seçimi'),
+        h('span', { class: 'alt' }, 'Tablodan alınan değerler koşuda bu satırdan gelir.')),
+      ...gruplar.map(satirGrubuCiz));
+  }
+  function satirGrubuCiz(g) {
+    const t = tabloBul(tabloListesi, g.tablo);
+    const baslikEl = h('h4', {}, `${t ? t.ad : g.tablo}${g.etiket ? ` [${g.etiket}]` : ''}`, h('small', { class: 'soluk' }, ` · ${g.alanlar.join(', ')}`));
+    if (!t) return h('div', { class: 'satir-secimi-grubu' }, baslikEl, h('div', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Ayarlar > Test verisi).`));
+    const anahtar = grupAnahtari(t.id, g.etiket);
+    const secim = tabloSecimleri[anahtar] || {};
+    const secimVar = Object.keys(secim).length > 0;
+    const acik = t.sutunlar.filter((c) => !c.gizli);
+    const satirKosulu = (r) => Object.fromEntries(acik.filter((c) => r.degerler[c.ad] !== null && r.degerler[c.ad] !== undefined && r.degerler[c.ad] !== '')
+      .map((c) => [c.ad, String(r.degerler[c.ad])]));
+    const ayni = (a, b) => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+    const secilenSatir = secimVar ? t.satirlar.find((r) => ayni(satirKosulu(r), secim)) : null;
+    const id = yeniId('satir');
+    const sel = h('select', { id },
+      h('option', { value: '', selected: !secimVar }, 'Otomatik (bağlı alanlar ve ortamla uyan ilk satır)'),
+      h('optgroup', { label: 'Satır' }, t.satirlar.map((r) => h('option', { value: `s:${r.id}`, selected: secilenSatir === r },
+        `${r.ad || 'Satır'}${acik.length ? ` — ${acik.slice(0, 3).map((c) => r.degerler[c.ad] ?? '—').join(' · ')}` : ''}${r.ortamId ? ` [${ortamAdi(r.ortamId)}]` : ''}`))),
+      secimVar && !secilenSatir ? h('option', { value: 'kosul', selected: true }, `Koşullar: ${Object.entries(secim).map(([k, v]) => `${k} = ${v}`).join(', ')}`) : null);
+    sel.addEventListener('change', () => {
+      if (!sel.value) delete tabloSecimleri[anahtar];
+      else if (sel.value.startsWith('s:')) {
+        const r = t.satirlar.find((x) => `s:${x.id}` === sel.value);
+        if (r) tabloSecimleri[anahtar] = satirKosulu(r);
+      }
+      degisti = true;
+      satirSecimiCiz(true);
+      if (!diyagramAlani.hidden) diyagramiCiz();
+    });
+    // Koşullar: açık sütun başına değer; bir sütunun seçenekleri kendinden önceki koşullarla uyan satırlardan (yukarıdan aşağı).
+    const kosullar = acik.map((c, i) => {
+      const onceki = Object.fromEntries(Object.entries(secim).filter(([k]) => acik.findIndex((x) => x.ad === k) < i));
+      const secenekler = sutunSecenekleri(t, onceki, c.ad);
+      const mevcut = secim[c.ad] || '';
+      const k = h('select', { 'aria-label': `${t.ad} → ${c.ad} koşulu` }, h('option', { value: '' }, '— koşul yok —'),
+        secenekler.map((x) => h('option', { value: x, selected: x === mevcut }, x)),
+        mevcut && !secenekler.includes(mevcut) ? h('option', { value: mevcut, selected: true }, `${mevcut} (uyuşmuyor)`) : null);
+      k.addEventListener('change', () => {
+        const yeni = { ...secim };
+        if (k.value) yeni[c.ad] = k.value; else delete yeni[c.ad];
+        if (Object.keys(yeni).length) tabloSecimleri[anahtar] = yeni; else delete tabloSecimleri[anahtar];
+        degisti = true;
+        satirSecimiCiz(true);
+      });
+      return h('label', { class: 'kosul-satiri' }, h('span', {}, c.ad), k);
+    });
+    const uyan = uyanSatirlar(t, secim, { ortamId: s.ortam.id });
+    const durum = !secimVar ? 'Koşuda bağlı alanların değerleri ve ortamla uyan ilk satır kullanılır.'
+      : uyan.length === 1 ? `✓ ${s.ortam.ad} ortamında tek satır uyuyor.` : uyan.length ? `${uyan.length} satır uyuyor (${s.ortam.ad}) · koşuda ilki.` : `${s.ortam.ad} ortamında uyan satır yok.`;
+    return h('div', { class: 'satir-secimi-grubu', 'data-tablo': t.ad },
+      baslikEl, h('label', { class: 'gorunmez', for: id }, `${t.ad}${g.etiket ? ` [${g.etiket}]` : ''} satırı`), sel,
+      h('div', { class: `alan-notu ${secimVar && !uyan.length ? 'alan-uyarisi' : ''}`.trim(), role: 'status' }, durum),
+      acik.length ? h('details', { open: secimVar && !secilenSatir }, h('summary', { class: 'kucuk' }, 'Koşullar'), h('div', { class: 'kosul-izgarasi' }, kosullar)) : null);
+  }
 
   // --- Beklenen sonuç -----------------------------------------------------------------------
   const bs = sema.beklenenSonuc;
@@ -836,7 +974,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
           ...(baglam.akisId ? { akisId: baglam.akisId } : {}),
           ortamIdleri: [...ortamSecimi], kosuyaDahil, mutlakaGorunmeli: [...mutlaka],
           // Model girişsizse seçim yok sayılır (her zaman girişsiz); varsayılan seçim sunucuda içeriğe yazılmaz.
-          giris: modelGirissiz ? null : girisSecimi
+          giris: modelGirissiz ? null : girisSecimi,
+          // Satır seçimleri (yalnız formda kullanılan tablo grupları; boşsa kaldırılır).
+          tabloSecimleri: kaydedilecekSecimler()
         }
       });
       degisti = false;
@@ -875,7 +1015,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const yanit = await api('/platform/senaryo/dene', {
         govde: {
           projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}),
-          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi
+          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi,
+          tabloSecimleri: kaydedilecekSecimler()
         }
       });
       deneme.bitti = true;
@@ -1187,7 +1328,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
           dogrulamaOzeti, genelHatalar,
           h('div', { class: 'form-eylemleri' }, kaydetDugmesi, deneDugmesi, vazgecDugmesi)),
         denemeAlani)));
-  formAlani.append(senaryoKarti, adimAkisi, beklenenKarti);
+  formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);
   beklenenCiz();
   guncelle();
   if (s.taslak) {
