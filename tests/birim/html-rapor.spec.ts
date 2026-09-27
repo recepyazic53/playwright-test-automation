@@ -103,7 +103,7 @@ test('sunucu toplayıcısı: ekran koşusundan rapor; giriş parolası maskeleni
     await kasaOlustur(vt, `Gecici-${randomBytes(6).toString('hex')}`, { kdf: HIZLI_KDF });
     const proje = projeKaydet(vt, { ad: 'Rapor Projesi' });
     const baska = projeKaydet(vt, { ad: 'Başka' });
-    const ortam = ortamKaydet(vt, { projeId: proje, ad: 'TEST', tabanUrl: 'https://test.ornek.local/' });
+    const ortam = ortamKaydet(vt, { projeId: proje, ad: 'TEST', tabanUrl: 'https://test.ornek.local/', ayarlar: { riskli: false } });
     girisProfiliKaydet(vt, { projeId: proje, ad: 'Ana', kullaniciAdi: 'rapor.kullanici', parola: 'Cok-Gizli-Parola-9' });
     const ekran = ekranKaydet(vt, { projeId: proje, anahtar: 'kasko', ad: 'Kasko' });
     const senaryo = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Peşin', icerik: {} });

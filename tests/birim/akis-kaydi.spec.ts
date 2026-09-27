@@ -79,7 +79,7 @@ test.beforeAll(async () => {
   });
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Kayıt Projesi' })).proje as Nesne).id);
-  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true })).ortam as Nesne).id);
+  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
   canliOrtamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Üretim', tabanUrl: 'https://uretim.ornek.invalid', canli: true })).ortam as Nesne).id);
   await basarili('/platform/giris-profili/kaydet', {
     projeId, ad: 'Deneme kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA, ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI
@@ -271,7 +271,7 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (canlı ortam seçilemez, ona
     await page.getByRole('button', { name: 'Akışı kaydet' }).first().click();
     const diyalog = page.locator('dialog[open]');
     await expect(diyalog.getByText('Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.')).toBeVisible();
-    await expect(diyalog.locator('option', { hasText: 'Üretim (canlı — kayıt kapalı)' })).toBeDisabled();
+    await expect(diyalog.locator('option', { hasText: 'Üretim (riskli — kayıt kapalı)' })).toBeDisabled();
     const baslat = diyalog.getByRole('button', { name: 'Kaydı başlat' });
     await expect(baslat).toBeDisabled();
     // "Giriş yapmadan aç": bağlam profili seçilemez.

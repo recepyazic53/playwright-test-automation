@@ -190,7 +190,7 @@ export function restServisiKaydet(vt, projeId, girdi) {
 export async function restUcuDene(vt, projeId, girdi) {
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
-  if (riskliOrtamMi(ortam)) throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır (seçilen ortam canlı / riskli: canlı işaretli ya da varsayılan test ortamı değil).');
+  if (riskliOrtamMi(ortam)) throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır (seçilen ortam riskli; Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").');
   const u = restUcuDogrula(girdi.uc, 0);
   const taban = girdi.taban === undefined || girdi.taban === null ? ortam.tabanUrl : String(girdi.taban);
   if (!taban) throw new DepoHatasi('Bu ortam için taban adres yok.');

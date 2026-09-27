@@ -135,8 +135,8 @@ test.describe('Platform veritabanı — veri erişim katmanı', () => {
     expect(makine.id).toMatch(/^[0-9a-f-]{36}$/);
 
     const proje = projeKaydet(vt, { ad: 'Genel Proje', ayarlar: { dil: 'tr' } });
-    const ortam = ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://ornek.test', varsayilan: true });
-    ortamKaydet(vt, { projeId: proje, ad: 'Canlı', tabanUrl: 'https://canli.ornek.test', varsayilan: true });
+    const ortam = ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://ornek.test', varsayilan: true, ayarlar: { riskli: false } });
+    ortamKaydet(vt, { projeId: proje, ad: 'Canlı', tabanUrl: 'https://canli.ornek.test', varsayilan: true, ayarlar: { riskli: false } });
     const ortamlar = ortamlariListele(vt, proje);
     expect(ortamlar.filter((o) => o.varsayilan).map((o) => o.ad)).toEqual(['Canlı']);
     expect(() => ortamKaydet(vt, { projeId: proje, ad: 'x', tabanUrl: 'ftp://a' })).toThrow(DepoHatasi);

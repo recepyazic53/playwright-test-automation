@@ -65,7 +65,7 @@ test.describe('veritabanları arayüzü', () => {
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Veritabanı Arayüz Projesi' })).proje.id);
-    TEST = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true })).ortam.id);
+    TEST = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, riskli: false })).ortam.id);
     CANLI = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'CANLI', tabanUrl: 'http://127.0.0.1:9', canli: true })).ortam.id);
     // Bağlantılar yalnız kaydedilir (Dene yok → hiçbir istek gitmez).
     const bag = async (ad: string, sunucu: string, ortamIdleri: string[]) => String((await basarili('/platform/entegrasyon/kaydet', {
@@ -104,7 +104,7 @@ test.describe('veritabanları arayüzü', () => {
     await form.getByRole('button', { name: 'Kaydet' }).click();
     const tablo = page.getByRole('table', { name: 'Veritabanları ve ortam eşlemeleri' });
     await expect(tablo).toBeVisible();
-    await expect(tablo.getByRole('columnheader', { name: /CANLI/ })).toContainText('canlı');
+    await expect(tablo.getByRole('columnheader', { name: /CANLI/ })).toContainText('riskli');
     const satir = tablo.getByRole('row', { name: /Kayıt veritabanı/ });
     await expect(satir.locator('td[data-ortam="TEST"]')).toHaveText('kayit-TEST');
     await expect(satir.locator('td[data-ortam="CANLI"]')).toHaveText('kayit-CANLI');

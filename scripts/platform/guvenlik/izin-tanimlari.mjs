@@ -2,7 +2,7 @@
 // açık / kapalı bir anahtardır ve VARSAYILANI KAPALIDIR (yeni ve mevcut kurulumlar; kayıt yoksa kapalı sayılır).
 // Bu dosya hem sunucuda (guvenlik/izinler.mjs, guvenlik/uc-denetimi.mjs: uç → izin eşlemesi bu listeden üretilir) hem
 // arayüzde (/arayuz/izin-tanimlari.mjs: Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) kullanılır — metin
-// kopyası yoktur. Saf modül: hiçbir şey içe aktarmaz.
+// kopyası yoktur. Saf modül: yalnız saf ortam-riski.mjs'yi (riskli ortam tanımı) içe aktarır.
 //
 // Alanlar:
 //   anahtar, etiket, aciklama     kısa tanım
@@ -14,6 +14,8 @@
 //                                 (zamanlayıcı, koşucu, otomatik bildirim) ve aynı merkezden denetlenir.
 //   risk                          riski
 //   kapaliyken                    izin kapalıyken ne olur
+
+import { RISKLI_ORTAM_TANIMI } from './ortam-riski.mjs';
 
 /**
  * @typedef {{ ad: string; uclar: readonly string[]; kosul?: string }} IzinIslemi
@@ -130,7 +132,7 @@ export const IZIN_TANIMLARI = Object.freeze([
   {
     anahtar: 'canli-ortam',
     etiket: 'Canlı / riskli ortamda çalıştırma',
-    aciklama: 'Canlı işaretli ya da varsayılan test ortamı olmayan ortamlarda koşu, Dene ve tarama yapılmasına izin verir.',
+    aciklama: `Riskli ortamlarda koşu, Dene ve tarama yapılmasına izin verir. ${RISKLI_ORTAM_TANIMI}`,
     yapabilecekleri: [
       'Canlı / riskli ortamda ekran ve servis senaryolarını koşmak.',
       'Canlı / riskli ortamda ekran taraması yapmak ve giriş sayfası önermek.',

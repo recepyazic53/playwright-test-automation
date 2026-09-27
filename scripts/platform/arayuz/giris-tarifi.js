@@ -196,7 +196,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         dugme: 'Sayfayı aç ve öner', ikonAd: 'ag'
       });
       if (!tamam) return;
-      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, varsayilan: o.varsayilan, canli: o.canli }, 'Giriş sayfası önerisi'))) return;
+      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, riskli: o.riskli, canli: o.canli }, 'Giriş sayfası önerisi'))) return;
       oneriNotu.replaceChildren();
       try {
         const { oneri } = await mesgulIken(oner, 'Sayfa inceleniyor…', () => api('/platform/giris-tarifi/oner', {
@@ -458,7 +458,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       bildir('Giriş kaydı iptal edildi.');
     });
     try {
-      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, varsayilan: o.varsayilan, canli: o.canli }, 'Giriş kaydı'))) { formAlani.replaceChildren(); return; }
+      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, riskli: o.riskli, canli: o.canli }, 'Giriş kaydı'))) { formAlani.replaceChildren(); return; }
       const r = await api('/platform/tarama/baslat', { govde: { kip: 'girisKaydi', projeId: proje.id, ortamId: o.ortamId, onay: true, ...canliOnayEki(o.ortamId) } });
       isId = r.isId;
     } catch (hata) {

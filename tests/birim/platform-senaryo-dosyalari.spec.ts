@@ -66,7 +66,7 @@ async function notrVeritabani(klasor: string): Promise<NotrKurulum> {
   const vt = await veritabaniniHazirla(yol);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
   const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-  const ortamId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+  const ortamId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
   const ekranId = ekranKaydet(vt, { projeId, anahtar: 'ornek-basvuru', ad: 'Örnek Başvuru', ayarlar: { ortamlar: { [ortamId]: { urunListesi: DUZ_YOL } } } });
   ekranModeliEkle(vt, { ekranId, model: dosyaAlanliModel() });
   return { vt, yol, projeId, ortamId, ekranId };

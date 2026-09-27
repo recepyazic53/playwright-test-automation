@@ -48,12 +48,10 @@ test('izin tanımları tek kaynak: 10 izin, her birinde yapabilecekleri / yerler
     '/platform/servis-akisi/dene', '/platform/servis-akisi/kos', '/platform/entegrasyon/dene', '/platform/entegrasyon/hata-kaydi/ac', '/platform/entegrasyon/kaydet',
     '/platform/zamanlama/tercih', '/platform/servis/kaydet', '/platform/servis/rest/kaydet']) expect(uclar.has(u), u).toBe(true);
   expect(izinMesaji('web-erisimi')).toBe('Bu işlem için Ayarlar > İzinler\'de "Web uygulamasına erişim" iznini açmalısınız.');
-  // Riskli ortam tek tanım (sunucu görünümü ve arayüz görünümü aynı sonucu verir).
-  expect(riskliOrtamMi({ ad: 'TEST', varsayilan: true, ayarlar: {} })).toBe(false);
-  expect(riskliOrtamMi({ ad: 'TEST', varsayilan: true, ayarlar: { canli: true } })).toBe(true);
+  // Riskli ortam tek tanım, kullanıcı seçimi (ayrıntı: ortam-riski.spec.ts); belirtilmemiş = riskli.
+  expect(riskliOrtamMi({ ad: 'TEST', varsayilan: true, ayarlar: { riskli: false } })).toBe(false);
+  expect(riskliOrtamMi({ ad: 'TEST', varsayilan: true, ayarlar: {} })).toBe(true);
   expect(riskliOrtamMi({ ad: 'TEST', varsayilan: true, canli: true })).toBe(true);
-  expect(riskliOrtamMi({ ad: 'HAZIRLIK', varsayilan: false, ayarlar: {} })).toBe(true);
-  expect(riskliOrtamMi({ ad: 'Prod kopya', varsayilan: true, ayarlar: {} })).toBe(true);
   expect(girisKokenleri('https://a.ornek.invalid/uygulama/', { girisAdresi: '/giris' })).toEqual(['https://a.ornek.invalid']);
   expect(girisKokenleri('https://a.ornek.invalid', { girisAdresi: 'https://sso.ornek.invalid/giris' })).toEqual(['https://a.ornek.invalid', 'https://sso.ornek.invalid']);
 });
@@ -97,7 +95,7 @@ test('koşullu izinler: riskli ortam + açık onay, giriş tarifi, yalnız okuma
     const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, 'Gecici-Izin-Kosul-1', { kdf: HIZLI_KDF });
     const projeId = projeKaydet(vt, { ad: 'İzin' });
-    const test_ = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
+    const test_ = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
     const canli = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'http://127.0.0.1:9', ayarlar: { canli: true } });
     const hazirlik = ortamKaydet(vt, { projeId, ad: 'HAZIRLIK', tabanUrl: 'http://127.0.0.1:9' });
     expect(gerekenIzinler(vt, '/platform/senaryolar/calistir', { projeId, ortamId: test_, senaryoId: 'yok' })).toMatchObject({ izinler: ['web-erisimi'], canliOnayGerekli: false });
@@ -148,7 +146,7 @@ test('zamanlanmış koşu: arka plan izni kapalıysa atlanır; web erişimi kapa
     const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, 'Gecici-Izin-Zaman-1', { kdf: HIZLI_KDF });
     const projeId = projeKaydet(vt, { ad: 'Z' });
-    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
+    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
     const kural = { id: 'k1', projeId, ad: 'Gece', ortamId, kapsam: { senaryolar: 'tum', ekranIdleri: [], servisAkisIdleri: [] }, canliOnay: false } as unknown as Kural;
     const cagrilar: string[] = [];
     const bag = {
@@ -181,7 +179,7 @@ test('veri okuyucu: giriş bilgisi izni kapalıyken koşucuya parola / TOTP / gi
     const vt = await veritabaniniHazirla(yol);
     await kasaOlustur(vt, 'Gecici-Izin-Veri-1', { kdf: HIZLI_KDF });
     const projeId = projeKaydet(vt, { ad: 'V' });
-    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
+    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
     girisProfiliKaydet(vt, { projeId, ortamId, ad: 'P', kullaniciAdi: 'kisi', parola: 'Izin-Parola-77', ekAlanlar: [{ ad: 'pin', gizli: true, deger: 'PIN-IZIN-4321' }, { ad: 'firma', deger: 'F1' }] });
     const anahtar = acikAnahtar(vt).toString('base64url');
     const oku = () => {
@@ -260,7 +258,7 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
     projeId = projeKaydet(vt, { ad: 'İzin sunucusu' });
-    test_ = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: hedef.adres, varsayilan: true });
+    test_ = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: hedef.adres, varsayilan: true, ayarlar: { riskli: false } });
     canli = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: hedef.adres, ayarlar: { canli: true } });
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});

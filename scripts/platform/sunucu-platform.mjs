@@ -142,7 +142,7 @@ import { sunucuBaglantisiniSil, sunucuBaglantisiniYaz } from './sunucu-baglantis
 import { projeSilmeOnizlemesi, projeyiSil, varsayilanProjeAyarla, varsayilanProjeKimligi } from './proje-yonetimi.mjs';
 import { GUNCEL_SEMA_SURUMU } from './veritabani/gocler.mjs';
 import {
-  DepoHatasi, ayarGetir, ayarYaz, baglamProfiliKaydet, ekranAyarlariniGetir, ekranKaydet, ekranlariListele, baglamProfiliSil, baglamProfilleriniListele, degisiklikGecmisiListele,
+  DepoHatasi, ayarGetir, ayarYaz, gecmisYaz, baglamProfiliKaydet, ekranAyarlariniGetir, ekranKaydet, ekranlariListele, baglamProfiliSil, baglamProfilleriniListele, degisiklikGecmisiListele,
   girisProfiliGetir, girisProfiliKaydet, girisProfiliSil, girisProfilleriniListele, makineleriListele, ortamGetir,
   ortamKaydet, ortamSil, ortamlariListele, platformDurumOzeti, projeGetir, projeKaydet, projeleriListele,
   testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiProfiliSil, testVerisiProfilleriniListele,
@@ -179,6 +179,7 @@ import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, GIRIS_ADIM_ISLEMLERI, girisTarifiniDog
 import { girisSayfasiniOner } from './giris/algilama.mjs';
 import { IzinHatasi, izinDegisiklikleri, izinDegistir, izinleriOku } from './guvenlik/izinler.mjs';
 import { CanliOnayHatasi, denetlenenUclar, ucDenetle } from './guvenlik/uc-denetimi.mjs';
+import { adCanliyiCagristiriyorMu, riskliOrtamMi, riskliSecimi } from './guvenlik/ortam-riski.mjs';
 import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta, modeliPaketleDegistir
@@ -941,14 +942,15 @@ function urunSecimi(d) {
 const ortamSecimi = (d) => (d === undefined ? undefined : d === null || d === '' ? null : kimlikAl(d, 'ortamId'));
 
 /**
- * Ortamın arayüze giden görünümü: ayarlar (giriş tarifi vb.) gönderilmez; yalnızca "canli" işareti ve taban adresleri
+ * Ortamın arayüze giden görünümü: ayarlar (giriş tarifi vb.) gönderilmez; yalnızca risk (riskli: kullanıcının seçimi true | false | null;
+ * canli: etkin risk — guvenlik/ortam-riski.mjs > riskliOrtamMi, belirtilmemiş = riskli) ve taban adresleri
  * (ortamın asıl adresi + sonradan eklenenler; servis / ekran eklerken seçilir).
  * @param {import('./veritabani/depo.mjs').Ortam} o
  */
 function ortamGorunumu(o) {
   const { ayarlar, ...gorunum } = o;
   const ekler = Array.isArray(ayarlar.tabanAdresleri) ? ayarlar.tabanAdresleri.filter((x) => typeof x === 'string') : [];
-  return { ...gorunum, canli: ayarlar.canli === true, tabanAdresleri: [o.tabanUrl, ...ekler] };
+  return { ...gorunum, riskli: riskliSecimi(o), canli: riskliOrtamMi(o), tabanAdresleri: [o.tabanUrl, ...ekler] };
 }
 
 /** @param {import('./veritabani/depo.mjs').GirisProfili} p */
@@ -995,7 +997,7 @@ function ortamSec(db, projeId, d) {
 function girisTarifiGorunumu(db, projeId, o) {
   const etkin = etkinGirisTarifi(db, projeId, o.id);
   return {
-    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, canli: o.ayarlar?.canli === true, kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar
+    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, riskli: riskliSecimi(o), canli: riskliOrtamMi(o), kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar
   };
 }
 /** "Varsayılanları öner" aynı anda tek bir tarayıcı açsın. */
@@ -1461,13 +1463,30 @@ const POST_UCLARI = new Map([
   }],
   ['/platform/ortam/kaydet', (db, g) => {
     const mevcutId = secimliKimlik(g.id);
-    // "canli": ortam CANLI (üretim) ortamıdır → "Akışı kaydet" bu ortamda başlatılamaz (ayarlar.canli; diğer ayarlar korunur).
-    const mevcutAyarlar = mevcutId ? ortamGetir(db, mevcutId)?.ayarlar : undefined;
-    const ayarlar = typeof g.canli === 'boolean' ? { ...(mevcutAyarlar ?? {}), canli: g.canli } : undefined;
+    const mevcut = mevcutId ? ortamGetir(db, mevcutId) : undefined;
+    // "Bu ortam riskli mi? (gerçek işlem oluşturabilir)" — KULLANICI SEÇİMİ (guvenlik/ortam-riski.mjs): riskli true | false | null
+    // (belirtilmemiş = riskli sayılır). Eski istemcinin canli: true'su "Evet" demektir. Seçim gönderilmezse mevcut korunur; eski
+    // canli işareti kaydedilince riskli: true olarak yazılır (canli alanı kalkar).
+    const onceki = mevcut ? riskliSecimi(mevcut) : null;
+    const istenen = g.riskli === true || g.riskli === false ? g.riskli : g.riskli === null ? null : g.canli === true ? true : undefined;
+    const yeni = istenen === undefined ? onceki : istenen;
+    const ad = metinAl(g.ad);
+    if (yeni === false && onceki !== false && g.onay !== true) {
+      // Evet → Hayır (ya da belirtilmemiş → Hayır) ve adı canlıyı çağrıştıran ortam: açık onay.
+      if (onceki === true) throw new DepoHatasi('Riskli bir ortamı "riskli değil" yapmak için onaylayın (koşular bu ortamda ek onaysız başlayabilir).');
+      if (adCanliyiCagristiriyorMu(ad)) throw new DepoHatasi('Bu ortamın adı canlıyı çağrıştırıyor; "riskli değil" seçimini onaylayın.');
+    }
+    const { canli: _eskiCanli, riskli: _eskiRiskli, ...kalanAyarlar } = /** @type {Record<string, unknown>} */ (mevcut?.ayarlar ?? {});
+    const ayarlar = { ...kalanAyarlar, ...(yeni === null ? {} : { riskli: yeni }) };
     const id = ortamKaydet(db, {
-      id: mevcutId, projeId: kimlikAl(g.projeId, 'projeId'), ad: metinAl(g.ad), tabanUrl: metinAl(g.tabanUrl).trim(),
-      varsayilan: g.varsayilan === true, ...(ayarlar ? { ayarlar } : {})
+      id: mevcutId, projeId: kimlikAl(g.projeId, 'projeId'), ad, tabanUrl: metinAl(g.tabanUrl).trim(),
+      varsayilan: g.varsayilan === true, ayarlar
     });
+    // Risk seçimi değişikliği geçmişe yazılır (kim / ne zaman / önce → sonra): GET /platform/gecmis?varlikTuru=ortam_riski&varlikId=<ortam>.
+    if (yeni !== onceki) {
+      const m = (/** @type {boolean | null} */ x) => (x === true ? 'Evet' : x === false ? 'Hayır' : 'belirtilmemiş');
+      gecmisYaz(db, { varlikTuru: 'ortam_riski', varlikId: id, islem: mevcut ? 'guncelle' : 'olustur', onceki: { riskli: onceki }, sonraki: { riskli: yeni }, aciklama: `Riskli mi: ${m(onceki)} → ${m(yeni)}` });
+    }
     return { ortam: ortamGorunumu(/** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, id))) };
   }],
   ['/platform/ortam/sil', (db, g) => ({ silindi: ortamSil(db, kimlikAl(g.id)) })],

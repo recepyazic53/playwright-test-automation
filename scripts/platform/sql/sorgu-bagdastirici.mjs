@@ -13,6 +13,7 @@ import { eslemedenBaglanti, veritabaniGetir, veritabanlariListele } from './veri
 import { veritabaniAyari } from '../entegrasyonlar/katalog.mjs';
 import { SURUCULER, sorguIzinleri, veritabaniSorgusu } from '../entegrasyonlar/veritabani-suruculeri.mjs';
 import { izinDurumundanDenetle, izinGerekli } from '../guvenlik/izinler.mjs';
+import { riskliOrtamMi, riskliSecimi } from '../guvenlik/ortam-riski.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { yasakDesenleri, YASAK_ADRES_DEGISKENI } from '../senaryolar/model-kosusu.mjs';
 
@@ -222,7 +223,7 @@ export const SQL_GET_UCLARI = [
     return {
       baglantilar: sqlBaglantilari(db, projeId),
       veritabanlari: veritabanlariListele(db, projeId).map((v) => ({ id: v.id, ad: v.ad, aciklama: v.aciklama, eslemeler: v.eslemeler })),
-      ortamlar: ortamlariListele(db, projeId).map((o) => ({ id: o.id, ad: o.ad, varsayilan: o.varsayilan, canli: o.ayarlar.canli === true }))
+      ortamlar: ortamlariListele(db, projeId).map((o) => ({ id: o.id, ad: o.ad, varsayilan: o.varsayilan, riskli: riskliSecimi(o), canli: riskliOrtamMi(o) }))
     };
   }]
 ];

@@ -10,6 +10,7 @@
 import { DepoHatasi, ortamlariListele } from '../veritabani/depo.mjs';
 import { servisAkislariniListele, servisAkisKosusuGetir, servisKosusuGetir, servisleriListele } from '../servisler/servis-deposu.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
+import { riskliOrtamMi, riskliSecimi } from '../guvenlik/ortam-riski.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { kalipCikar } from './siniflandirma.mjs';
 import { yakalananMetniMaskele } from './yakalanan-mesajlar.mjs';
@@ -322,7 +323,7 @@ export function servisSonucOzeti(vt, q) {
   return {
     servisler: servisler.map((s) => ({ id: s.id, ad: s.ad, durum: s.durum, son: sonDurum(sonlar.get(`servis:${s.id}`)) })),
     akislar: akislar.map((a) => ({ id: a.id, baslik: a.baslik, tur: a.tur, son: sonDurum(sonlar.get(`akis:${a.id}`)) })),
-    ortamlar: ortamlar.map((o) => ({ id: o.id, ad: o.ad, canli: o.ayarlar.canli === true })),
+    ortamlar: ortamlar.map((o) => ({ id: o.id, ad: o.ad, riskli: riskliSecimi(o), canli: riskliOrtamMi(o) })),
     kosular: kosular.reverse().map(({ satirlar, ...k }) => k),
     kaliplar: kaliplar.kaliplar, kalipIncelenen: kaliplar.incelenen, aralik,
     // Koşuda yakalanan mesajlar (geçen senaryolar dahil; önce beklenmeyen) — ekran sonuçlarındaki ikinci küme ile aynı yapı.

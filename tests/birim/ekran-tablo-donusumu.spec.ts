@@ -148,8 +148,8 @@ test.describe('uçtan uca: değerleri tabloya bağla + satır seçimi (127.0.0.1
     nobetci = await nobetciBaslat(klasor, vtYolu, { NOBETCI_YUKLEME_KLASORU: join(klasor, 'yuklenecek') });
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Dönüşüm Projesi' })).proje as Nesne).id);
-    ortamA = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true })).ortam as Nesne).id);
-    ortamB = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Diğer', tabanUrl: fikstur.adres })).ortam as Nesne).id);
+    ortamA = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
+    ortamB = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Diğer', tabanUrl: fikstur.adres, riskli: false })).ortam as Nesne).id);
     const tur = String((await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: HAVUZLAR.ozel, alanlar: ['kimlikNo', 'dogumTarihi', 'cepTelefonu'].map((ad) => ({ ad, hassas: true })) })).id);
     await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: tur, ad: 'k1', degerler: { kimlikNo: '10000000146', dogumTarihi: '01.02.1990', cepTelefonu: '5321112233' } });
     await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: akisPaketi(), senaryoIndeksleri: [], ortamIdleri: [ortamA] });

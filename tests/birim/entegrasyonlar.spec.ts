@@ -47,7 +47,7 @@ test('şifreli saklama, maskeli görünüm, webhook koşu bildirimi, hata kaydı
     // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
     izinleriAc(vt);
     const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://uygulama.ornek.invalid', varsayilan: true });
+    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://uygulama.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
 
     // Webhook: adres gizli alan → görünümde maskeli, diskte şifreli.
     const w = baglantiKaydet(vt, projeId, { tur: 'webhook', ad: 'Ekip kanalı', alanlar: { adres: `${webhook.adres}${GIZLI_YOL}`, bicim: 'ayrintili' }, olaylar: ['kosu-bitti'] });

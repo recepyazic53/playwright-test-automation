@@ -117,7 +117,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
     projeId = projeKaydet(vt, { ad: 'Servis projesi' });
-    testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true });
+    testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true, ayarlar: { riskli: false } });
     canliOrtam = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: adres, ayarlar: { canli: true } });
     turId = testVerisiTuruKaydet(vt, { projeId, ad: 'Kişi', alanlar: [
       { ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }, { ad: 'KEFIL_TC', rol: 'kefil' }] },

@@ -121,7 +121,7 @@ test.describe('kural bağı ve koşu (sahte sunucu)', () => {
     vt = await veritabaniniHazirla(join(klasor.yol, 'p.db'));
     await kasaOlustur(vt, 'Deneme-Parola-123!', { kdf: HIZLI_KDF });
     const projeId = projeKaydet(vt, { ad: 'P' });
-    const testO = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true });
+    const testO = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true, ayarlar: { riskli: false } });
     const tablo = tabloKaydet(vt, { projeId, ad: 'Teklif verisi', sutunlar: [{ ad: 'Tutar' }], satirlar: [{ degerler: { Tutar: '1500' } }] });
     const kurallar = { BEGIN_DATE: 'bugun|yyyy-MM-dd', END_DATE: 'BEGIN_DATE+1y|yyyy-MM-dd', ORAN: 'yuvarla(${Teklif verisi.Tutar} / 100, 2)' };
     const uc = { ad: 'teklif', metot: 'POST', yol: '/teklif', icerikTuru: 'application/json', govdeOrnegi: '{"BeginDate":"x","EndDate":"x","Oran":0,"Tutar":"0"}' };

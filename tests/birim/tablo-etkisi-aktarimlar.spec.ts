@@ -65,7 +65,7 @@ interface Kurulum { projeId: string; servisId: string; soapuiTablo: string; post
 /** Proje, SOAP servisi (şema + alan bağları; ağ yok), tablolar ve düz değerli senaryolar. */
 function kur(vt: Veritabani): Kurulum {
   const projeId = projeKaydet(vt, { ad: 'Aktarım Projesi' });
-  ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
+  ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
   const soapuiTablo = tabloKaydet(vt, { projeId, ad: SOAPUI_TABLOSU, sutunlar: [{ ad: 'SUBE' }], satirlar: [{ ad: 's1', degerler: { SUBE: '5' } }] });
   const postmanTablo = tabloKaydet(vt, { projeId, ad: POSTMAN_TABLOSU, sutunlar: [{ ad: 'kanal' }], satirlar: [{ ad: 'p1', degerler: { kanal: '100' } }] });
   // "Servis girişi" tablosu (CHANNEL → kanal eşlemesi) ve aynı adlı eski profil satırı.

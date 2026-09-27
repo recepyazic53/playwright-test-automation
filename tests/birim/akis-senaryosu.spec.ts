@@ -49,7 +49,7 @@ test.describe('akış senaryosu koşusu', () => {
     vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, 'Gecici-Akis-Senaryosu-1', { kdf: HIZLI_KDF });
     projeId = projeKaydet(vt, { ad: 'Akış senaryosu projesi' });
-    testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true });
+    testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, ayarlar: { riskli: false } });
     const servis = async (anahtar: string, ad: string) => {
       const e = await erisimKontrolu(vt, projeId, { ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
       if (!e.erisilebilir) throw new Error('erişim yok');

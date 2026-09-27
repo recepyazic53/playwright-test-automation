@@ -14,7 +14,7 @@ const DURUM = {
   atlandi: ['Atlandı', 'durdu'], yarida: ['Yarıda kaldı', 'uyari'], hata: ['Başlatılamadı', 'hata']
 };
 const durumRozeti = (d) => { const [m, t] = DURUM[d] || [d, '']; return rozet(m, t); };
-const ortamRiskli = (o) => Boolean(o && (o.canli || riskliOrtamMi(o)));
+const ortamRiskli = (o) => riskliOrtamMi(o);
 const KILAVUZ = 'Zamanlanmış koşular yalnız Nöbetçi açıkken (sunucu çalışırken) ve kasa AÇIKKEN çalışır (aşağıdaki "Kasa kilitliyken ve açılışta" tercihleriyle değiştirebilirsiniz); zamanlar bu bilgisayarın saatine göredir. '
   + 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar sonradan toplu koşulmaz: bir sonraki zaman beklenir. Otomatik kilit süresi '
   + '(Ayarlar > Güvenlik) dolunca kasa kilitlenir. Vakti geldiğinde başka bir koşu sürüyorsa o zaman atlanır ("Atlandı: koşu sürüyordu"). '
@@ -357,7 +357,7 @@ function kuralFormu(s) {
   // Canlı ortam onayı
   const canliOnay = h('input', { type: 'checkbox', checked: k ? k.canliOnay : false, id: yeniKimlik('zk-canli') });
   const canliKutusu = h('div', { class: 'not-kutusu hata', role: 'alert' },
-    h('p', {}, h('strong', {}, 'Dikkat: '), 'Seçilen ortam canlı / riskli işaretli. Zamanlanmış koşu bu ortamda sizin başında olmadığınız bir anda gerçek işlemler yapabilir.'),
+    h('p', {}, h('strong', {}, 'Dikkat: '), 'Seçilen ortam riskli (ya da riskli olup olmadığı belirtilmemiş). Zamanlanmış koşu bu ortamda sizin başında olmadığınız bir anda gerçek işlemler yapabilir.'),
     h('label', { class: 'onay-satiri', for: canliOnay.id }, canliOnay, 'Canlı ortamda zamanlanmış koşuya izin veriyorum'));
   const riskGuncelle = () => { canliKutusu.hidden = !ortamRiskli(s.ortamlar.find((o) => o.id === ortam.value)); };
   ortam.addEventListener('change', riskGuncelle);

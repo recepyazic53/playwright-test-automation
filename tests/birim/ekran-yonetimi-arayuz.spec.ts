@@ -38,7 +38,7 @@ test.beforeAll(async () => {
   // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
   izinleriAc(vt);
   projeId = projeKaydet(vt, { ad: 'Örnek Proje' });
-  ortamId = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true });
+  ortamId = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true, ayarlar: { riskli: false } });
   // Nötr ekranlar: hepsi örnek başvuru modelinin kopyası (anahtar + URL yolu farklı), her birinde model senaryoları.
   const ekran = (anahtar: string, ad: string, senaryolar: string[]) => {
     const id = ekranKaydet(vt, { projeId, anahtar, ad });

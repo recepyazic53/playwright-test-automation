@@ -100,7 +100,7 @@ test.describe('ekran alanları tablolardan', () => {
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Ekran Tablo Projesi' })).proje.id);
-    ortamId = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true })).ortam.id);
+    ortamId = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, riskli: false })).ortam.id);
     await basarili('/platform/sayfa-paketi/ekle', {
       projeId, paket: rotaPaketi(), senaryoIndeksleri: [], ortamIdleri: [ortamId]
     });

@@ -62,7 +62,7 @@ test.describe('REST servisi kaydı ve koşu (sahte sunucu)', () => {
     vt = await veritabaniniHazirla(join(klasor.yol, 'p.db'));
     await kasaOlustur(vt, 'Deneme-Parola-123!', { kdf: HIZLI_KDF });
     const projeId = projeKaydet(vt, { ad: 'P' });
-    const testO = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
+    const testO = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
     const canli = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid', ayarlar: { canli: true } });
     const kisi = tabloKaydet(vt, { projeId, ad: 'Kişi', sutunlar: [{ ad: 'Ad' }], satirlar: [{ degerler: { Ad: 'Ay"şe' } }] });
 

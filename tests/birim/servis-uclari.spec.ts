@@ -43,7 +43,7 @@ test.beforeAll(async () => {
   nobetci = await nobetciBaslat(klasor, vtYolu, {});
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Servis Projesi' })).proje.id);
-  testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
+  testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, riskli: false })).ortam.id);
   await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }] }] });
   // Giriş bilgisi tablosu (sütun adları WSDL alanlarıyla aynı): aktarım bağlar, dosyadaki giriş bilgisini satır olarak ekler.
   await basarili('/platform/tablo/kaydet', { projeId, ad: 'Giriş', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }] });

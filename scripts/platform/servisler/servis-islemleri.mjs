@@ -53,7 +53,7 @@ const erisimler = new Map();
 
 /**
  * Ortam türü (servis kapsamı, Dene / erişim kontrolü yalnız test'te). TEK TANIM: guvenlik/ortam-riski.mjs > riskliOrtamMi — canlı
- * işaretli, varsayılan test ortamı olmayan ya da adı canlı / üretim çağrıştıran ortam 'canli' sayılır (arayüz ve sunucu aynı kural).
+ * ortam — kullanıcının "Bu ortam riskli mi?" seçimi; belirtilmemiş = riskli — 'canli' sayılır (arayüz ve sunucu aynı kural).
  * @param {{ ayarlar: Record<string, unknown>; varsayilan?: boolean; ad?: string }} ortam
  */
 export const ortamTuru = (ortam) => (riskliOrtamMi(ortam) ? 'canli' : 'test');
@@ -325,7 +325,7 @@ function veriProfilleriniDogrula(secim) {
  */
 export async function erisimKontrolu(vt, projeId, girdi) {
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
-  if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('Erişim kontrolü yalnızca test ortamında yapılır (seçilen ortam canlı / riskli: canlı işaretli ya da varsayılan test ortamı değil).');
+  if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('Erişim kontrolü yalnızca test ortamında yapılır (seçilen ortam riskli; Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").');
   const adres = servisAdresi({ yol: yolDogrula(girdi.yol), adresler: adresleriDogrula(girdi.adresler), tabanlar: tabanlariDogrula(girdi.tabanlar) }, ortam);
   try {
     const s = await erisimiDenetle({ adres, tlsDogrulama: girdi.tlsDogrulama, yasakDesenleri: etkinYasakDesenleri(vt) });

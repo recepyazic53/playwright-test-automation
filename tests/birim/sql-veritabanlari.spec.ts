@@ -65,7 +65,7 @@ test.describe('SQL veritabanları (ortama göre bağlantı)', () => {
     // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
     izinleriAc(vt);
     projeId = projeKaydet(vt, { ad: 'Veritabanı projesi' });
-    TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
+    TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
     CANLI = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'http://127.0.0.1:9', ayarlar: { canli: true } });
     HAZIRLIK = ortamKaydet(vt, { projeId, ad: 'HAZIRLIK', tabanUrl: 'http://127.0.0.1:9' });
     const pg = (ad: string, sunucu: string, ortamIdleri: string[]) => baglantiKaydet(vt, projeId, {

@@ -38,7 +38,7 @@ test.describe('SoapUI önizlemesi ve eski parametre dönüşümü (arayüz)', ()
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'SoapUI Projesi' })).proje.id);
-    await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true });
+    await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, riskli: false });
     // Eski eşleme (geriye uyum): MUSTERI_TC → Kişi.tcKimlikNo (rol musteri).
     await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', hassas: false, servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }] }] });
     tarayici = await chromium.launch();

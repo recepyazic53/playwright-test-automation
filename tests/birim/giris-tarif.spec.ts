@@ -298,7 +298,7 @@ test.describe('Giriş adımları (girisAdimlari) ve giriş profilinin ek alanlar
       // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
       izinleriAc(vt);
       const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-      const ortamId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+      const ortamId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
       const id = girisProfiliKaydet(vt, {
         projeId, ortamId, ad: 'Profil', kullaniciAdi: 'k', parola: 'P-1',
         ekAlanlar: [{ ad: 'firmaKodu', deger: 'FIRMA-BENZERSIZ-77' }, { ad: 'pin', gizli: true, deger: 'PIN-BENZERSIZ-4321' }]

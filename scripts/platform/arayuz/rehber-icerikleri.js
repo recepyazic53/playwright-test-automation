@@ -6,6 +6,7 @@
 // hiçbir ürün / şirket adı içermez.
 
 import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
+import { RISKLI_ORTAM_TANIMI } from './ortam-riski.mjs';
 
 const ANA_AKIS = {
   tur: 'akis',
@@ -274,7 +275,12 @@ export const REHBERLER = {
     baslik: 'Proje ve ortamlar',
     adimlar: [
       { baslik: 'Ayarlar', hedef: '.alt-nav', metin: 'Ayarlar bölümleri solda. Buradaki her seçim sizin kararınızdır; Nöbetçi\'nin kodunda sizin yerinize verilmiş bir tercih yoktur.' },
-      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). "Canlı" işaretli ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'adres + giriş' }, { baslik: 'CANLI ortamı', alt: 'yalnız güvenli adımlar' }] } },
+      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). Riskli ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'riskli değil' }, { baslik: 'CANLI ortamı', alt: 'riskli: yalnız güvenli adımlar' }] } },
+      {
+        baslik: 'Bu ortam riskli mi?',
+        metin: [RISKLI_ORTAM_TANIMI, 'Riskli ortamda her çalıştırma ayrıca onay ve Ayarlar > İzinler\'de "Canlı / riskli ortamda çalıştırma" izni ister; akış / giriş kaydı yapılamaz; servis "Dene"si yapılamaz.'],
+        ipucu: 'Yanıtlanmamış ortamlar listede "Riskli mi? belirtin" olarak görünür. "Evet"ten "Hayır"a geçmek onay ister; her değişiklik ortamın "Geçmiş"inde durur.'
+      },
       { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (ekran listeleri, kişi ve kayıt tabloları) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
     ]
   },

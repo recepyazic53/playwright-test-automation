@@ -24,7 +24,7 @@ export type KarsilastirmaFiksturu = {
 export async function karsilastirmaVerisiKur(vt: Veritabani, vtYolu: string): Promise<KarsilastirmaFiksturu> {
   const projeId = projeKaydet(vt, { ad: 'Karşılaştırma Projesi' });
   const baskaProjeId = projeKaydet(vt, { ad: 'Başka Proje' });
-  const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid/uygulama/', varsayilan: true });
+  const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid/uygulama/', varsayilan: true, ayarlar: { riskli: false } });
   girisProfiliKaydet(vt, { projeId, ad: 'Ana', kullaniciAdi: 'deneme.kullanici', parola: GIZLI_PAROLA });
   const ekranId = ekranKaydet(vt, { projeId, anahtar: 'basvuru', ad: 'Başvuru' });
   // Son sonuç ucu (/platform/senaryo/son-sonuc) için B'deki "Kayıt" sonucu bir senaryoya bağlıdır.

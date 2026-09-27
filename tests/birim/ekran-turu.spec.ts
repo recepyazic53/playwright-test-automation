@@ -58,7 +58,7 @@ test.beforeAll(async () => {
   nobetci = await nobetciBaslat(klasor, vtYolu, {});
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Örnek Başvuru Projesi', aciklama: 'Tüm ekranların turu için nötr proje.' })).proje as Nesne).id);
-  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: fikstur.adres, varsayilan: true })).ortam as Nesne).id);
+  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: fikstur.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
   await basarili('/platform/ortam/kaydet', { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid', canli: true });
   await basarili('/platform/giris-profili/kaydet', {
     projeId, ortamId, ad: 'Deneme kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA, ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI

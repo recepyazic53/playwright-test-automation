@@ -122,8 +122,8 @@ test.beforeAll(async () => {
   // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
   izinleriAc(vt);
   projeId = projeKaydet(vt, { ad: 'Tarama Deneme' });
-  ortamlar.TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: fs1.adres, varsayilan: true });
-  ortamlar.SMS = ortamKaydet(vt, { projeId, ad: 'SMS', tabanUrl: fs2.adres });
+  ortamlar.TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: fs1.adres, varsayilan: true, ayarlar: { riskli: false } });
+  ortamlar.SMS = ortamKaydet(vt, { projeId, ad: 'SMS', tabanUrl: fs2.adres, ayarlar: { riskli: false } });
   ortamlar.YASAKLI = ortamKaydet(vt, { projeId, ad: 'YASAKLI', tabanUrl: 'https://portal.yasak-ornek.invalid' });
   for (const [ad, id] of Object.entries(ortamlar)) {
     girisProfiliKaydet(vt, { projeId, ortamId: id, ad: `${ad} kullanıcısı`, kullaniciAdi: TARAMA_KULLANICI, parola: TARAMA_PAROLA, ikiAsamaliTur: ad === 'SMS' ? 'sms' : 'yok', smsAyari: ad === 'SMS' ? { yontem: 'elle' } : {} });

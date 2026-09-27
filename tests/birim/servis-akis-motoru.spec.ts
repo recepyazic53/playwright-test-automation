@@ -62,7 +62,7 @@ test.describe('akış adımı çağrısı', () => {
     vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
     projeId = projeKaydet(vt, { ad: 'Akış projesi' });
-    ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true });
+    ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, ayarlar: { riskli: false } });
     const e = await erisimKontrolu(vt, projeId, { ortamId, yol: '/Servis/ornek.asmx' });
     if (!e.erisilebilir) throw new Error('erişim yok');
     servisId = servisiKaydet(vt, projeId, { anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', erisimKimligi: e.erisimKimligi });

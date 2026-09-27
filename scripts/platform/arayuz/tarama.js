@@ -2,7 +2,7 @@
 //   taramaDiyalogu  başlatma diyaloğu — ortam, bağlam profilleri (tekrar analiz diyaloğuyla ortak seçim; ekran için son
 //                   seçim işaretli gelir ama HER SEFERİNDE onay istenir), hedef yol, seçim keşfi, yeni ekranın adı/anahtarı
 //                   ve açık uyarı ("Bu işlem seçilen ortama bağlanır; hiçbir şey kaydedilmez/gönderilmez") + onay kutusu.
-//   kayitDiyalogu   "Akışı kaydet" başlatma diyaloğu — ortam (canlı işaretliler seçilemez), EN FAZLA BİR bağlam profili (her
+//   kayitDiyalogu   "Akışı kaydet" başlatma diyaloğu — ortam (riskli ortamlar seçilemez), EN FAZLA BİR bağlam profili (her
 //                   seferinde sorulur), başlangıç sayfası, yeni ekranın adı/anahtarı ve açık uyarı ("bastığınız düğmeler siteye
 //                   gerçek istek gönderir; değerler kaydedilmez") + onay kutusu. Kayıt aynı iş ekranında izlenir.
 //   taramaEkrani    #/ekranlar/tarama/<iş kimliği>: adımlar (güvenlik kontrolü, giriş, bağlam profilleri, paket), profil
@@ -203,7 +203,7 @@ export async function kayitDiyalogu(s) {
   const son = s.ekran ? v.son : (yerelOku(sonSecimAnahtari(s.proje.id)) || {});
   const uygunlar = v.ortamlar.filter((o) => !o.canli);
   const ilkOrtam = uygunlar.find((o) => o.id === son.ortamId) || uygunlar.find((o) => o.varsayilan) || uygunlar[0] || v.ortamlar[0];
-  const ortamSecimi = h('select', {}, v.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ilkOrtam.id, disabled: o.canli }, o.canli ? `${o.ad} (canlı — kayıt kapalı)` : o.ad)));
+  const ortamSecimi = h('select', {}, v.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ilkOrtam.id, disabled: o.canli }, o.canli ? `${o.ad} (riskli — kayıt kapalı)` : o.ad)));
   const hedef = h('input', { type: 'text', value: son.hedef || (v.ekran && v.ekran.urlYolu) || '', placeholder: '/satis/basvuru/', spellcheck: 'false', autocomplete: 'off' });
   const profilSecimi = h('select', {});
   const girissiz = h('input', { type: 'checkbox', id: 'kayit-girissiz' });
@@ -249,7 +249,7 @@ export async function kayitDiyalogu(s) {
     h('a', { href: taramaAdresi(v.calisanIs.id), onclick: () => diyalog.close() }, 'İlerlemeyi göster')) : null;
   const govde = h('div', { class: 'tarama-diyalogu' },
     calisan,
-    uygunlar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Bu projedeki tüm ortamlar canlı olarak işaretli; akış kaydı yapılamaz (Ayarlar > Ortamlar).'),
+    uygunlar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Bu projedeki tüm ortamlar riskli (ya da riskli olup olmadığı belirtilmemiş); akış kaydı yapılamaz (Ayarlar > Proje ve ortamlar).'),
     s.ekran ? null : h('div', { class: 'tarama-ikili' },
       alan('Yeni ekranın adı', ad, { zorunlu: true }),
       alan('Ekran anahtarı', anahtar, { yardim: 'Küçük harf, rakam ve "-" (boş bırakılırsa addan üretilir).' })),
@@ -263,7 +263,7 @@ export async function kayitDiyalogu(s) {
       h('b', {}, 'Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.'),
       h('ul', {},
         h('li', {}, 'Görünür bir tarayıcı açılır; giriş ve bağlam değiştirme giriş tarifiyle otomatik yapılır ("Giriş yapmadan aç" seçiliyse yapılmaz), sonra başlangıç sayfası açılır.'),
-        h('li', {}, 'Bu ortamda gerçek kayıtlar (teklif, müşteri…) oluşabilir. Canlı işaretli ortamlarda kayıt yapılamaz.'),
+        h('li', {}, 'Bu ortamda gerçek kayıtlar (teklif, müşteri…) oluşabilir. Riskli ortamlarda kayıt yapılamaz.'),
         h('li', {}, 'Akışı sayfada normal yürütün: sayfanın köşesindeki Nöbetçi paneli gördüğü alanları ve bastığınız düğmeleri toplar. Yeni alanlar açılınca "Ekranı yeniden oku"ya basın, beklenen mesajı "Mesaj seç" ile seçin, bitince "Bitir".'),
         h('li', {}, 'Ardından Nöbetçi\'de kayıttan hazırlanan taslak akış diyagramını düzenleyip kaydedersiniz.'),
         h('li', {}, 'Girdiğiniz değerler ve ekran görüntüleri kaydedilmez; yalnızca alanların yapısı (etiket, tür, seçenekler) ve düğmeler kaydedilir.'),

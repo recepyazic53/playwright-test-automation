@@ -83,7 +83,7 @@ test.describe('veritabanı ile', () => {
     vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
     projeId = projeKaydet(vt, { ad: 'Model projesi' });
-    testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true });
+    testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true, ayarlar: { riskli: false } });
     const e = await erisimKontrolu(vt, projeId, { ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
     expect(e.erisilebilir).toBe(true);
     if (e.erisilebilir) erisimKimligi = e.erisimKimligi;

@@ -103,7 +103,7 @@ test.beforeAll(async () => {
   // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
   izinleriAc(vt);
   projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-  const testId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: site.adres, varsayilan: true });
+  const testId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: site.adres, varsayilan: true, ayarlar: { riskli: false } });
   const canliId = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid' });
   girisTarifiKaydet(vt, projeId, testId, {
     ...ornekGirisTarifi(), girisAdresi: '/klasik', oturumKontrolAdresi: '/ana',

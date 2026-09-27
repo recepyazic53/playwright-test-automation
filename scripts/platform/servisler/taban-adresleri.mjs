@@ -9,6 +9,7 @@
 //   yapılmaz; kullanıcı isterse servis sayfasından kendisi kontrol eder). Adresi değişen ortamın eski erişim kaydı silinir.
 import { DepoHatasi, ortamlariListele } from '../veritabani/depo.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
+import { riskliOrtamMi, riskliSecimi } from '../guvenlik/ortam-riski.mjs';
 import { adresYasakliMi } from '../senaryolar/model-kosusu.mjs';
 import { servisAkislariniListele, servisKaydet, servisleriListele, servisSenaryolariniListele } from './servis-deposu.mjs';
 import { tabanlariDogrula, tabanlariOrtamlaraKaydet } from './servis-islemleri.mjs';
@@ -51,7 +52,7 @@ export function tabanTablosu(vt, projeId) {
   const { ortamlar, akislari } = baglam(vt, projeId);
   return {
     ortamlar: ortamlar.map((o) => ({
-      id: o.id, ad: o.ad, canli: o.ayarlar.canli === true, tabanUrl: o.tabanUrl,
+      id: o.id, ad: o.ad, riskli: riskliSecimi(o), canli: riskliOrtamMi(o), tabanUrl: o.tabanUrl,
       tabanAdresleri: Array.isArray(o.ayarlar.tabanAdresleri) ? /** @type {string[]} */ (o.ayarlar.tabanAdresleri) : []
     })),
     satirlar: servisleriListele(vt, projeId).map((s) => ({

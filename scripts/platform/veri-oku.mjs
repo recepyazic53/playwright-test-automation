@@ -31,6 +31,7 @@ import { referansCoz, referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
 import { izinleriOku } from './guvenlik/izinler.mjs';
+import { riskliOrtamMi } from './guvenlik/ortam-riski.mjs';
 import { izinMesaji } from './guvenlik/izin-tanimlari.mjs';
 import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
@@ -314,9 +315,8 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
       for (const x of typeof h === 'string' ? [h] : h && typeof h === 'object' ? Object.values(h) : []) if (typeof x === 'string') havuzlar.add(x);
     }
   }
-  // Canlı ortam (Ayarlar > ortam "canlı"): "yalnızca test ortamı" ortak akış adımları atlanır.
-  const ayarlar = ortam.ayarlar && typeof ortam.ayarlar === 'object' ? /** @type {Record<string, unknown>} */ (ortam.ayarlar) : {};
-  const canli = ayarlar.canli === true;
+  // Riskli ortam (Ayarlar > ortam "Bu ortam riskli mi?"; belirtilmemiş = riskli): "yalnızca test ortamı" ortak akış adımları atlanır.
+  const canli = riskliOrtamMi(ortam);
   // SQL adımlarının veritabanı bağlantıları (Ayarlar > Entegrasyonlar): yalnız modellerde kullanılanlar; parola çözülmüş, giriş
   // bilgisi gibi yalnız bu borudan koşu belleğine gider (loglara / rapora yazılmaz). Kullanılamayan bağlantı { hata }.
   // Mantıksal veritabanları (Ayarlar > Entegrasyonlar > Veritabanları) bu ortamın eşlemesiyle bağlantıya çözülür; eşleme yoksa

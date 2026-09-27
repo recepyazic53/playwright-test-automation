@@ -2,7 +2,7 @@
 //
 // AKIŞ KAYDI: aynı iş altyapısı; alt süreç GÖRÜNÜR tarayıcı açar, kullanıcı akışı kendisi yürütür, sayfadaki Nöbetçi paneli
 // alanları/düğmeleri/mesajları TOPLAR (kayit-motoru.ts). Başlatma kuralları: açık onay (bastığı düğmeler siteye gerçek istek
-// gönderir), ortam CANLI olarak işaretliyse ret (ortam ayarları > canli), en fazla bir bağlam profili, süre sınırı varsayılan
+// gönderir), ortam riskliyse ret (guvenlik/ortam-riski.mjs; kullanıcı seçimi), en fazla bir bağlam profili, süre sınırı varsayılan
 // 30 dk (NOBETCI_KAYIT_ZAMAN_ASIMI_SN). Kayıt bitince iş "tasarım" bekler: taslak diyagram (akis-tasarimi.mjs > akisTaslagi)
 // Nöbetçi'de düzenlenir; kaydedilen diyagram kayıt envanterine çevrilip kayitPaketiOlustur ile aynı sayfa paketi akışına girer.
 // Tasarım bekleyen iş, son erişimden itibaren TASARIM_SAKLAMA_KATI kat daha uzun saklanır (bellekte; sunucu yeniden
@@ -56,6 +56,7 @@ import { baglamAlanlari, girisTarifiniDogrula } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
+import { riskliOrtamMi, riskliSecimi } from '../guvenlik/ortam-riski.mjs';
 import { EKRAN_ANAHTARI_DESENI, sayfaPaketiniDogrula } from '../ekranlar/sayfa-paketi.mjs';
 import { HedefHatasi, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji } from './koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './paket-olusturucu.mjs';
@@ -245,7 +246,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       const t = etkinGirisTarifi(vt, projeId, o.id);
       const g = girisProfilleriniListele(vt, projeId).find((x) => x.ortamId === o.id) ?? girisProfilleriniListele(vt, projeId).find((x) => x.ortamId === null);
       return {
-        id: o.id, ad: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, canli: o.ayarlar.canli === true,
+        id: o.id, ad: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, riskli: riskliSecimi(o), canli: riskliOrtamMi(o),
         tarif: t.tarif ? { kaynak: t.kaynak, baglamTuru: t.tarif.baglamDegistirme?.baglamTuru ?? null, ikinciAdim: t.tarif.ikinciAdim.tur, smsElle: t.tarif.ikinciAdim.tur === 'sms' } : null,
         tarifHatalari: t.hatalar, girisProfili: g ? { ad: g.ad, ikiAsamaliTur: g.ikiAsamaliTur } : null
       };
@@ -295,8 +296,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     const ortamId = kimlikAl(g.ortamId, 'ortamId');
     const ortamKaydi = ortamlariListele(vt, projeId).find((o) => o.id === ortamId);
     if (!ortamKaydi) throw new DepoHatasi('Ortam bulunamadı.');
-    if (kayit && ortamKaydi.ayarlar.canli === true) {
-      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı canlı olarak işaretli; ${girisKaydi ? 'giriş' : 'akış'} kaydı bu ortamda yapılamaz (Ayarlar > Ortamlar).`);
+    // Akış / giriş kaydında bastığınız düğmeler siteye gerçek istek gönderir: riskli ortamda (kullanıcı seçimi; belirtilmemiş = riskli) yapılamaz.
+    if (kayit && riskliOrtamMi(ortamKaydi)) {
+      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı riskli${riskliSecimi(ortamKaydi) === null ? ' (riskli olup olmadığı belirtilmemiş)' : ''}; ${girisKaydi ? 'giriş' : 'akış'} kaydı bu ortamda yapılamaz (Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").`);
     }
 
     // Ekran: mevcut (tekrar analiz ya da modelsiz ekrana ilk model) ya da yeni (ad + anahtar). Giriş kaydında ekran yoktur.

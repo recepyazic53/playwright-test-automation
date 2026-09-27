@@ -147,8 +147,8 @@ interface Fikstur {
 /** Proje, ekran (bağlı alanlar), senaryolar, servis ve tablolar (ağ yok). */
 async function kur(vt: Veritabani, klasor: string): Promise<Fikstur> {
   const projeId = projeKaydet(vt, { ad: 'Etki Projesi' });
-  const ortamA = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
-  const ortamB = ortamKaydet(vt, { projeId, ad: 'Diğer', tabanUrl: 'http://127.0.0.1:9' });
+  const ortamA = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
+  const ortamB = ortamKaydet(vt, { projeId, ad: 'Diğer', tabanUrl: 'http://127.0.0.1:9', ayarlar: { riskli: false } });
   const { ekranId } = await sayfaEkle(vt, projeId, ekliPaket(), { senaryoIndeksleri: [], ortamIdleri: [ortamA], medyaKlasoru: join(klasor, 'medya') });
   const t = (ad: string, sutunlar: Nesne[], satirlar: Nesne[]) => tabloKaydet(vt, { projeId, ad, sutunlar, satirlar });
   const tablo = {

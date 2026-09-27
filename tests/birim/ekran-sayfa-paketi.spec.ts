@@ -275,7 +275,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, 'Ekranlar-Kasa-Parolasi-9', { kdf: HIZLI_KDF });
     projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-    ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+    ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
     baglamProfiliKaydet(vt, { projeId, tur: 'Rol', ad: 'varsayilan', alanlar: { kod: '1' } });
     baglamProfiliKaydet(vt, { projeId, tur: 'Rol', ad: 'ÖzelTanımlıŞube', alanlar: { kod: '2' } });
     testVerisiTuruKaydet(vt, { projeId, ad: 'Özel kişi', alanlar: [{ ad: 'tcKimlikNo', hassas: true }] });

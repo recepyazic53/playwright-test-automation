@@ -20,7 +20,7 @@ test.describe('servis taban adresleri', () => {
     vt = await veritabaniniHazirla(join(klasor.yol, 'p.db'));
     await kasaOlustur(vt, 'Deneme-Parola-123!', { kdf: HIZLI_KDF });
     const projeId = projeKaydet(vt, { ad: 'P' });
-    const test1 = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.test', varsayilan: true });
+    const test1 = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.test', varsayilan: true, ayarlar: { riskli: false } });
     const canli = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.test', ayarlar: { canli: true } });
     const a = servisKaydet(vt, { projeId, anahtar: 'a', ad: 'A', ayarlar: { yol: '/a.asmx', tabanlar: { [test1]: 'https://eski.ornek.test' }, erisim: { ortamId: test1, zaman: 'x', durumKodu: 200 } } });
     const b = servisKaydet(vt, { projeId, anahtar: 'b', ad: 'B', tur: 'rest', ayarlar: { yol: '/b', adresler: { [canli]: 'https://tam.ornek.test/b' } } });

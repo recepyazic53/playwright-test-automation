@@ -83,7 +83,7 @@ async function hazirVeritabani(klasor: string): Promise<{ vt: Veritabani; projeI
   // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
   izinleriAc(vt);
   const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-  const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+  const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
   return { vt, projeId, ortamId };
 }
 

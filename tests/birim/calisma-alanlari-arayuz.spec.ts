@@ -91,7 +91,7 @@ test.beforeAll(async () => {
   await kasaOlustur(vt, PAROLA_A, { kdf: HIZLI_KDF });
   ornekProjeAdi = 'Örnek başvuru projesi';
   const projeId = projeKaydet(vt, { ad: ornekProjeAdi });
-  ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://basvuru.ornek.invalid', varsayilan: true });
+  ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://basvuru.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
   vt.kapat();
   nobetci = await nobetciBaslat(veriKoku, klasor.yol);
   tarayici = await korumaliTarayici();
@@ -173,7 +173,7 @@ test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → giriş profili i
   await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Adres (link)').first().fill('https://ikinci.ornek.invalid');
   await expect(page.getByLabel('Ortam adı').nth(1)).toHaveValue('CANLI');
-  await expect(page.getByLabel('Canlı ortam')).toBeChecked();
+  await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)')).toBeChecked();
   await page.getByLabel('Adres (link)').nth(1).fill('https://canli-ikinci.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
   await expect(page.getByRole('heading', { name: 'Giriş profili' })).toBeVisible();

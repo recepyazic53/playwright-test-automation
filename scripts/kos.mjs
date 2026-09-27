@@ -12,7 +12,7 @@
 //   --hepsi             "Koşuda" kapalı olanlar da (varsayılan: yalnız "Koşuda" açık senaryolar)
 //   --junit <dosya>     sonuçları JUnit XML olarak yaz (CI sistemleri için)
 //   --json              özet çıktıyı JSON olarak yaz
-//   --canli-onay        canlı / riskli işaretli ortamda koşmayı AÇIKÇA onaylar (verilmezse koşu başlamaz)
+//   --canli-onay        riskli ortamda (Ayarlar > "Bu ortam riskli mi?" Evet ya da belirtilmemiş) koşmayı AÇIKÇA onaylar (verilmezse koşu başlamaz)
 //   --liste             koşmadan, seçilecek senaryoları listeler
 // Çıkış kodu: 0 = hepsi başarılı (ya da --liste), 1 = en az bir senaryo kaldı / çalıştırılamadı, 2 = kullanım / bağlantı hatası.
 // Port: TEST_SUNUCU_PORT (varsayılan 5566).
@@ -86,7 +86,7 @@ async function main() {
   // çalıştırma" iznini ve istekteki açık onayı (canliOnay) denetler; izin kapalıysa koşu başlamaz ve mesaj yazılır.
   const riskli = riskliOrtamMi(ortam);
   if (riskli && !a.canliOnay && !a.liste) {
-    console.error(`"${ortam.ad}" canlı / riskli işaretli bir ortam. Koşmak için --canli-onay seçeneğini açıkça verin.`);
+    console.error(`"${ortam.ad}" riskli bir ortam${ortam.riskli === null ? ' (riskli olup olmadığı belirtilmemiş: Nöbetçi > Ayarlar > Proje ve ortamlar)' : ''}. Koşmak için --canli-onay seçeneğini açıkça verin.`);
     return 2;
   }
 

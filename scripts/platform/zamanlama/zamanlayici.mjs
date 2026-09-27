@@ -41,7 +41,7 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   if (!izinAcikMi(vt, 'arka-plan')) {
     return { durum: 'atlandi', mesaj: `Atlandı: ${izinKapaliNotu('arka-plan')}. ${izinMesaji('arka-plan')}`, kosuId: null, ozet: null, akisKosulari: [] };
   }
-  if (ortamRiskliMi(ortam) && !kural.canliOnay) throw new DepoHatasi('Ortam canlı / riskli işaretli ama kuralda canlı ortam onayı yok; koşu başlatılmadı.');
+  if (ortamRiskliMi(ortam) && !kural.canliOnay) throw new DepoHatasi('Ortam riskli ama kuralda canlı ortam onayı yok; koşu başlatılmadı.');
   const { senaryolar: kapsam, ekranIdleri, servisAkisIdleri } = kural.kapsam;
   const secilen = kapsam === 'yok' ? [] : bag.senaryolar(vt, kural.projeId, kural.ortamId)
     .filter((s) => s.kosuyaDahil && s.ekranEtkin !== false && (kapsam === 'tum' || (s.ekranId !== null && ekranIdleri.includes(s.ekranId))));
