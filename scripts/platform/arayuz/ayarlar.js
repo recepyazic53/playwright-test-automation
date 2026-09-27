@@ -12,7 +12,7 @@ import { tablolarBolumu } from './tablolar.js';
 import { tabanAdresleriBolumu } from './taban-adresler.js';
 import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
 import { entegrasyonlarBolumu } from './entegrasyonlar.js';
-import { kasayiKilitleSecimli, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
+import { kasayiKilitleSecimli, kilitBildirimi, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
 import { izinlerBolumu } from './izinler.js';
 import { onayIste, riskBelirtinNotu } from './kosu-paneli.js';
 import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, riskliOrtamMi, riskliSecimi } from './ortam-riski.mjs';
@@ -826,7 +826,7 @@ async function guvenlik(govde, baglam) {
   kilitle.addEventListener('click', async () => {
     const secim = await mesgulIken(kilitle, 'Kilitleniyor…', () => kasayiKilitleSecimli());
     if (!secim) return;
-    bildir(secim === 'surdur' ? 'Kasa kilitlendi; zamanlanmış koşular sürüyor.' : 'Kasa kilitlendi.');
+    bildir(...kilitBildirimi(secim));
     baglam.yonlendir();
   });
 

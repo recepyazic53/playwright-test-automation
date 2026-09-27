@@ -31,7 +31,7 @@ export declare function arkaPlanYoneticisi(bag: {
 }): {
   tercihleriOku(db: Veritabani): ArkaPlanTercihleri;
   kasaAcildi(db: Veritabani): void;
-  kilitle(db: Veritabani, secenekler?: { tamamen?: boolean }): { arkaPlan: boolean };
+  kilitle(db: Veritabani, secenekler?: { tamamen?: boolean }): { arkaPlan: boolean; surenIs?: true };
   kilitSecimiVarMi(db: Veritabani): boolean;
   parolaDegisti(db: Veritabani): Promise<void>;
   acilistaYukle(db: Veritabani | null): Promise<boolean>;

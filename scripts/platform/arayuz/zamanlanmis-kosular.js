@@ -198,13 +198,16 @@ function tercihOnayi(t, yeni) {
 
 /**
  * Kasayı kilitle (üst çubuk, hesap menüsü, Ayarlar > Güvenlik): "kilitliyken çalışsın" ya da DPAPI açıksa iki seçenek sunulur —
- * "Kilitle (zamanlanmış koşular sürsün)" / "Tamamen kilitle (anahtarı da sil)". Tercihler kapalıyken bugünkü gibi doğrudan kilitler.
- * @returns {Promise<'surdur' | 'tamamen' | null>} null: vazgeçildi
+ * "Kilitle (zamanlanmış koşular sürsün)" / "Tamamen kilitle (anahtarı da sil)". Tercihler kapalıyken (ya da durum okunamazsa)
+ * doğrudan TAMAMEN kilitler: sunucuya her zaman açıkça tamamen:true gider (arada tercih açılmış olsa bile anahtar bellekte kalmaz).
+ * Dönen değer sunucunun yanıtına göredir, kullanıcının seçimine göre değil.
+ * @returns {Promise<'surdur' | 'tamamen' | 'tamamen-suren-is' | null>} null: vazgeçildi; 'tamamen-suren-is': anahtar silindi,
+ *   süren zamanlanmış koşu kalan adımları atlayacak
  */
 export async function kasayiKilitleSecimli() {
   let secimVar = false;
   try { const d = await api('/platform/durum'); secimVar = Boolean(d.zamanlama && d.zamanlama.kilitSecimi); } catch { secimVar = false; }
-  if (!secimVar) { await api('/platform/kasa/kilitle', { govde: {} }); return 'tamamen'; }
+  if (!secimVar) return kilitSonucu(await api('/platform/kasa/kilitle', { govde: { tamamen: true } }));
   const secim = await new Promise((coz) => {
     let deger = null;
     const surdur = h('button', { type: 'button', class: 'birincil' }, ikon('kilit'), 'Kilitle (zamanlanmış koşular sürsün)');
@@ -225,8 +228,26 @@ export async function kasayiKilitleSecimli() {
     surdur.focus();
   });
   if (!secim) return null;
-  const r = await api('/platform/kasa/kilitle', { govde: { tamamen: secim === 'tamamen' } });
-  return r.arkaPlan ? 'surdur' : 'tamamen';
+  return kilitSonucu(await api('/platform/kasa/kilitle', { govde: { tamamen: secim === 'tamamen' } }));
+}
+
+/** @param {{ arkaPlan?: boolean; surenIs?: boolean }} r /platform/kasa/kilitle yanıtı */
+function kilitSonucu(r) {
+  if (r.arkaPlan) return 'surdur';
+  return r.surenIs ? 'tamamen-suren-is' : 'tamamen';
+}
+
+/**
+ * Kilitleme sonrası kullanıcıya gösterilecek bildirim (üst çubuk, hesap menüsü, Ayarlar > Güvenlik ortak).
+ * @param {'surdur' | 'tamamen' | 'tamamen-suren-is'} secim
+ * @returns {[string, 'basari' | 'hata']} 'hata': uyarı simgesiyle, daha uzun süre görünür
+ */
+export function kilitBildirimi(secim) {
+  if (secim === 'surdur') return ['Kasa kilitlendi; zamanlanmış koşular sürüyor.', 'basari'];
+  if (secim === 'tamamen-suren-is') {
+    return ['Kasa tamamen kilitlendi; anahtar bellekten silindi. Süren zamanlanmış koşu kasa anahtarı olmadan devam edemez: kalan senaryoları koşulmayacak.', 'hata'];
+  }
+  return ['Kasa kilitlendi.', 'basari'];
 }
 
 function kapsamMetni(k, s) {

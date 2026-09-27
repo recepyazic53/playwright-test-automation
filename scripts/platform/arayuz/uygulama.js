@@ -25,7 +25,7 @@ import { cikisKorumasiniKur } from './cikis-korumasi.js';
 import { tabloSiralamaKur } from './tablo-siralama.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
-import { kasayiKilitleSecimli } from './zamanlanmis-kosular.js';
+import { kasayiKilitleSecimli, kilitBildirimi } from './zamanlanmis-kosular.js';
 import { adCanliyiCagristiriyorMu } from './ortam-riski.mjs';
 
 // Çalışma alanı ve proje ⋯ modülleri DİNAMİK yüklenir: eski sürüm bir sunucu (yeniden başlatılmamış) bu dosyaları sunmuyorsa
@@ -781,7 +781,10 @@ function anaDuzen() {
   const kilitleVeDon = async () => {
     const secim = await mesgulIken(kilitle, 'Kilitleniyor…', () => kasayiKilitleSecimli());
     if (!secim) return;
-    bildir(secim === 'surdur' ? 'Kasa kilitlendi; zamanlanmış koşular sürüyor.' : 'Kasa kilitlendi.');
+    const [metin, tur] = kilitBildirimi(secim);
+    bildir(metin, tur);
+    // Uyarı kilit ekranında da kalıcı görünür (bildirim birkaç saniyede kaybolur).
+    if (tur === 'hata') durum.kilitMesaji = metin;
     yonlendir();
   };
   kilitle.addEventListener('click', kilitleVeDon);
