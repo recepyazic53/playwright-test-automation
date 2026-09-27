@@ -11,12 +11,14 @@
 //   Oluşturma/düzenleme: model tabanlı form (senaryo-formu.js).
 //   DEVRE DIŞI EKRANLAR (Ekranlar > ⋯): sol listede ve Genel listede varsayılan olarak gizli ("Devre dışı ekranları göster");
 //   senaryoları "Koşuyu başlat"a / ▷'ye girmez (sunucu da reddeder), satırda "ekran devre dışı" rozeti.
-// Adresler: #/senaryolar, #/senaryolar/u/<ekranId>, #/senaryolar/yeni/<ekranId>, #/senaryolar/duzenle/<id>
+//   Ekran seçiliyken "Senaryo önerileri": senaryo tasarım yardımcısı (senaryo-onerileri.js; öneri yalnızca öneridir).
+// Adresler: #/senaryolar, #/senaryolar/u/<ekranId>, #/senaryolar/yeni/<ekranId>, #/senaryolar/duzenle/<id>, #/senaryolar/oneriler/<ekranId>
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, yerlestir, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, mesgulIken, rozet, yeniKimlik } from './ortak.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuOrtamiId, kosuSuruyorMu, onayIste, onerilenOrtam, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { senaryoFormu } from './senaryo-formu.js';
+import { senaryoOnerileriEkrani } from './senaryo-onerileri.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
 import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
@@ -77,9 +79,18 @@ export function senaryolarEkrani(main, parcalar, baglam) {
     // Formun doğrulama bağlamı: düzenlenen senaryonun tanımlı olduğu ortam (varsayılan önce), yoksa önerilen ortam.
     const duzenlenen = tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || '')) : null;
     const ortam = (duzenlenen && onerilenOrtam(tanimliOrtamlar(duzenlenen, ortamlar))) || onerilenOrtam(ortamlar);
-    const navCiz = () => ekranListesi(nav, veri, servisler, null, tur === 'u' || tur === undefined ? secili : null, tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || ''))?.ekranId : tur === 'yeni' ? decodeURIComponent(kimlik || '') : null,
-      () => { navCiz(); if (tur !== 'yeni' && tur !== 'duzenle') window.dispatchEvent(new HashChangeEvent('hashchange')); });
+    const navCiz = () => ekranListesi(nav, veri, servisler, null, tur === 'u' || tur === undefined ? secili : null, tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || ''))?.ekranId : tur === 'yeni' || tur === 'oneriler' ? decodeURIComponent(kimlik || '') : null,
+      () => { navCiz(); if (tur !== 'yeni' && tur !== 'duzenle' && tur !== 'oneriler') window.dispatchEvent(new HashChangeEvent('hashchange')); });
     navCiz();
+    if (tur === 'oneriler' && kimlik) {
+      // Senaryo tasarım yardımcısı (senaryo-onerileri.js): öneriler seçili ortamın bağlamıyla üretilir; eklenenler o ortama yazılır.
+      const ekranId = decodeURIComponent(kimlik);
+      senaryoOnerileriEkrani(icerik, {
+        proje, ortam, ortamlar, ekranId, ekranAdi: veri.ekranlar.find((e) => e.id === ekranId)?.ad ?? null,
+        geri: () => { location.hash = `#/senaryolar/u/${encodeURIComponent(ekranId)}`; }
+      });
+      return;
+    }
     if (tur === 'yeni' || tur === 'duzenle') {
       const senaryo = tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || '')) : null;
       const ekranId = tur === 'yeni' ? decodeURIComponent(kimlik || '') : senaryo?.ekranId ?? null;
@@ -219,6 +230,10 @@ function listeGorunumu(icerik, s) {
   const yeniDugmesi = ekran
     ? (ekran.olusturulabilir ? h('a', { class: 'dugme', href: `#/senaryolar/yeni/${encodeURIComponent(ekran.id)}` }, ikon('artiYalin'), 'Yeni senaryo') : null)
     : olusturulabilirler.length ? yeniMenusu(olusturulabilirler) : null;
+  // Senaryo tasarım yardımcısı: modelden öneri (kaydetmez; kullanıcı seçip ekler).
+  const oneriDugmesi = ekran && ekran.olusturulabilir && ekran.modelVar
+    ? h('a', { class: 'dugme senaryo-onerileri-dugmesi', href: `#/senaryolar/oneriler/${encodeURIComponent(ekran.id)}`, title: 'Ekran modelinden ve mevcut senaryolardan senaryo önerileri (siz seçmeden senaryo oluşmaz)' }, ikon('simsek'), 'Senaryo önerileri')
+    : null;
   const kosuDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('oynat'), 'Koşuyu başlat');
   kosuDugmesi.addEventListener('click', () => kosuyuBaslat());
 
@@ -230,7 +245,7 @@ function listeGorunumu(icerik, s) {
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, baslikMetni)),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Senaryolar — '), baslikMetni), baslikRozeti),
         metaAlani),
-      h('div', { class: 'eylemler' }, yeniDugmesi, kosuDugmesi)),
+      h('div', { class: 'eylemler' }, oneriDugmesi, yeniDugmesi, kosuDugmesi)),
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama, h('kbd', { 'aria-hidden': 'true' }, '/')),
       ekranSecimi ? ekranSecimi.kap : null, kosudaSecimi.kap, kapsamSecimi.kap, beklenenSecimi.kap, sonSecimi.kap, temizle, ozetAlani),

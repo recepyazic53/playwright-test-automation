@@ -114,6 +114,13 @@ export const REHBERLER = {
       { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Yeni senaryo" ekran modelinden bir form açar. "Koşuyu başlat", "Koşuda" açık olan tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
       { baslik: 'Senaryo tablosu', hedef: '.senaryo-tablosu', metin: 'Satırdaki ▷ tek senaryoyu çalıştırır, kalem düzenler, ⋯ kopyalar / geçmişi gösterir / siler. Birden çok satır seçince toplu işlemler (ör. toplu değer atama) çıkar.' },
       {
+        baslik: 'Senaryo önerileri',
+        hedef: '.senaryo-onerileri-dugmesi',
+        metin: ['Bir ekran seçiliyken "Senaryo önerileri", ekranın modelinden ve mevcut senaryolardan öneri çıkarır: zorunlu alan boş, modeldeki kurallara göre sınır değerleri, koşullu alanların her dalı ve işaretlediğiniz 2–3 seçim alanının eksik kombinasyonları.',
+          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). Eklenenler "Koşuda" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.'],
+        ipucu: 'Kişisel / gizli alanlarda değer üretilmez; mevcut senaryodaki değer ya da bağlı tablo kullanılır.'
+      },
+      {
         baslik: 'Önerilen çalışma sırası',
         sira: ['Ekranlar\'dan ekranı ekleyin (sayfa paketi, tarama ya da akış kaydı).', 'Bu ekranda "Yeni senaryo" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
         cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Yeni senaryo" ve "Koşuyu başlat" sağ üstte' }

@@ -81,8 +81,21 @@ export const MESAJLAR = Object.freeze({
   tabloYok: (etiket, tablo) => `${adGoster(etiket)} için "${tablo}" adında test verisi tablosu yok (Ayarlar > Test verisi).`,
   tabloSutunuYok: (etiket, tablo, sutun) => `${adGoster(etiket)} için "${tablo}" tablosunda "${sutun}" sütunu yok.`,
   gizliSutunSecimde: (etiket, sutun) => `${adGoster(etiket)} bir seçim alanı; gizli "${sutun}" sütunundan değer alamaz.`,
-  gizliSutunDosyada: (etiket, sutun) => `${adGoster(etiket)} bir dosya alanı; gizli "${sutun}" sütunundan dosya adı alamaz.`
+  gizliSutunDosyada: (etiket, sutun) => `${adGoster(etiket)} bir dosya alanı; gizli "${sutun}" sütunundan dosya adı alamaz.`,
+  bilerekBos: (etiket) => `${adGoster(etiket)} bu senaryoda bilerek boş bırakılıyor (olumsuz senaryo); koşuda doldurulmaz, varsayılan da yazılmaz.`
 });
+
+/**
+ * Senaryo verisinde bilerek boş bırakılan alanların senaryo anahtarları (olumsuz senaryo: "zorunlu alan boşken uyarı çıkmalı").
+ * Listedeki zorunlu alan boşsa hata değil uyarı verilir; koşucu bu alanlara modelin varsayılanını da yazmaz.
+ */
+export const BILEREK_BOS_ANAHTARI = 'bilerekBos';
+
+/** Senaryonun bilerek boş bıraktığı alan anahtarları. @param {unknown} senaryo @returns {string[]} */
+export function bilerekBosAnahtarlari(senaryo) {
+  const liste = nesneMi(senaryo) ? senaryo[BILEREK_BOS_ANAHTARI] : undefined;
+  return Array.isArray(liste) ? liste.filter((x) => typeof x === 'string' && x) : [];
+}
 
 // ---- Tablo başvurusu (ekran senaryosunda değer: ${Tablo.Sütun} / ${Tablo[etiket].Sütun|biçim}) ----
 // Biçim scripts/platform/tablolar/tablo-secimi.mjs > degerBasvurusu ile AYNIDIR (bu dosya modül içe aktarmaz; birim testi iki
@@ -754,6 +767,7 @@ export function senaryoyuDogrula(senaryo, baglam) {
   }
   if (!baglam || !nesneMi(baglam.model)) throw new Error('senaryoyuDogrula: baglam.model (ekran modeli) zorunludur.');
   const b = ic(baglam, senaryo);
+  const bilerekBos = bilerekBosAnahtarlari(senaryo);
 
   const eskiler = ESKI_BEKLENEN_SONUC_ALANLARI.filter((a) => a in senaryo);
   if (eskiler.length) rapor.hata('beklenenSonuc', MESAJLAR.eskiBeklenenSonucAlanlari(eskiler));
@@ -781,8 +795,11 @@ export function senaryoyuDogrula(senaryo, baglam) {
       // Girdide başlık HİÇ yoksa ("Senaryoyu Koş": başlık kaydederken sorulur) atlanır; boş
       // gönderildiyse (Düzenle formu) zorunluluk hatası verilir.
       const sonradanVerilir = b.kaynak === 'girdi' && alan.id === 'baslik' && !(anahtar in senaryo);
-      // Görünmeyen alan zorunlu değildir; görünürlüğü bilinmiyorsa (null) zorunlu kalır.
-      if (alan.zorunlu === true && gorunur !== false && !sonradanVerilir) rapor.hata(anahtar, MESAJLAR.zorunlu(etiketi(alan)));
+      // Görünmeyen alan zorunlu değildir; görünürlüğü bilinmiyorsa (null) zorunlu kalır. Bilerek boş bırakılan (olumsuz senaryo)
+      // alan hata değil uyarıdır (başlık hariç).
+      const zorunluBos = alan.zorunlu === true && gorunur !== false && !sonradanVerilir;
+      if (zorunluBos && anahtar !== 'baslik' && bilerekBos.includes(anahtar)) rapor.uyari(anahtar, MESAJLAR.bilerekBos(etiketi(alan)));
+      else if (zorunluBos) rapor.hata(anahtar, MESAJLAR.zorunlu(etiketi(alan)));
       continue;
     }
     // Değer tablodan: ${Tablo.Sütun} (seçenek / biçim denetimi koşuda çözülen değere kalır).

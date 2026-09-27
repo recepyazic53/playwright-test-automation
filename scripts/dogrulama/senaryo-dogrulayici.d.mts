@@ -164,7 +164,11 @@ export declare const MESAJLAR: {
   readonly tabloSutunuYok: (etiket: string, tablo: string, sutun: string) => string;
   readonly gizliSutunSecimde: (etiket: string, sutun: string) => string;
   readonly gizliSutunDosyada: (etiket: string, sutun: string) => string;
+  readonly bilerekBos: (etiket: string) => string;
 };
+/** Senaryo verisinde bilerek boş bırakılan alanların listesinin anahtarı (olumsuz senaryo). */
+export declare const BILEREK_BOS_ANAHTARI: 'bilerekBos';
+export declare function bilerekBosAnahtarlari(senaryo: unknown): string[];
 /** Değerin tamamı "${Tablo.Sütun}" ise başvuru (tablo-secimi.mjs > degerBasvurusu ile aynı biçim), değilse null. */
 export declare function tabloBasvurusuCoz(deger: unknown): { tablo: string; etiket: string; sutun: string; bicim: string } | null;
 

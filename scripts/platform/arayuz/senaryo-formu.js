@@ -1317,7 +1317,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     senaryo ? h('span', { class: 'mono cok-soluk' }, senaryo.id) : null
   ];
   yerlestir(icerik, 
-    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), 'Listeye dön')),
+    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), s.taslak?.oneri ? 'Önerilere dön' : 'Listeye dön')),
     h('div', { class: 'form-duzeni' },
       h('div', { class: 'form-sutunu' }, sekmeCubugu, formAlani, diyagramAlani),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıt' },
@@ -1332,7 +1332,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
   formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);
   beklenenCiz();
   guncelle();
-  if (s.taslak) {
+  if (s.taslak?.oneri) {
+    // Senaryo önerisinin önizlemesi (senaryo-onerileri.js): kaydedilmedi; oluşturmak kullanıcının kararı.
+    icerik.querySelector('.form-duzeni')?.before(h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' },
+      h('p', {}, h('b', {}, 'Öneri önizlemesi — kaydedilmedi. '), `Beklenen: ${s.taslak.oneri.beklenen}. İsterseniz düzenleyip "Senaryoyu oluştur" ile ekleyin; "Koşuda" kapalı gelir.`)));
+  } else if (s.taslak) {
     // Akış değişti: yeni akışta olmayan değerler kaldırıldı mı?
     degisti = true;
     const yeni = hesapla().senaryo;

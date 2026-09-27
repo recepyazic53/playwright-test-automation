@@ -65,8 +65,40 @@ const ALAN_ANAHTARLARI = new Set([
   'benzersiz', 'varsayilan', 'yapilandirma', 'eslesme', 'konum', 'doldurucu', 'doldurucuParametreleri',
   'gorunurluk', 'form', 'dogrulama', 'altAlanlar', 'ekranAlanlari', 'altModel', 'varyantlar', 'akisPlani',
   'kimlikTuru', 'bicim', 'kabul', 'birim', 'hassas', 'ekrandaAlanDegil', 'sira', 'sonKontrol', 'kullanim',
-  'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger'
+  'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger', 'sinirlar'
 ]);
+/**
+ * Alanın uygulamadaki değer kuralları (sınır değer önerileri yalnız bunlardan üretilir; senaryo verisini kısıtlamaz):
+ * sayıda enAz / enCok (sayı) ve artis (sınırın bir yanındaki değer farkı, varsayılan 1); tarihte enAz / enCok ("bugun",
+ * "bugun+7", "bugun-3" ya da alanın biçiminde / yyyy-aa-gg tarih); metinde enAzUzunluk / enCokUzunluk (tam sayı) ve desen
+ * (düzenli ifade; değerin tamamı uymalı).
+ */
+const SINIR_ANAHTARLARI = new Set(['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enCokUzunluk', 'desen', 'not']);
+const GORELI_TARIH = /^bugun(\s*[+-]\s*\d{1,5})?$/;
+const MUTLAK_TARIH = /^(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})$/;
+
+function sinirlarDogrula(h, yer, alan) {
+  const s = alan.sinirlar;
+  if (!nesneMi(s)) { h.ekle(yer, '"sinirlar" nesne olmalı'); return; }
+  h.bilinmeyenAnahtarlar(yer, s, SINIR_ANAHTARLARI);
+  const sayiMi = (d) => typeof d === 'number' && Number.isFinite(d);
+  const tamSayiMi = (d) => Number.isInteger(d) && d >= 0;
+  for (const ad of ['enAz', 'enCok']) {
+    const d = s[ad];
+    if (d === undefined) continue;
+    if (alan.tip === 'tarih') {
+      if (typeof d !== 'string' || !(GORELI_TARIH.test(d.trim()) || MUTLAK_TARIH.test(d.trim()))) h.ekle(yer, `"${ad}" tarihte "bugun", "bugun+7" ya da gg.aa.yyyy / yyyy-aa-gg olmalı`);
+    } else if (!sayiMi(d)) h.ekle(yer, `"${ad}" sayı olmalı`);
+  }
+  if (sayiMi(s.enAz) && sayiMi(s.enCok) && s.enAz > s.enCok) h.ekle(yer, '"enAz" "enCok"tan büyük olamaz');
+  if (s.artis !== undefined && !(sayiMi(s.artis) && s.artis > 0)) h.ekle(yer, '"artis" pozitif sayı olmalı');
+  for (const ad of ['enAzUzunluk', 'enCokUzunluk']) if (s[ad] !== undefined && !tamSayiMi(s[ad])) h.ekle(yer, `"${ad}" 0 ya da pozitif tam sayı olmalı`);
+  if (tamSayiMi(s.enAzUzunluk) && tamSayiMi(s.enCokUzunluk) && s.enAzUzunluk > s.enCokUzunluk) h.ekle(yer, '"enAzUzunluk" "enCokUzunluk"tan büyük olamaz');
+  if (s.desen !== undefined) {
+    if (!metinMi(s.desen)) h.ekle(yer, '"desen" boş olmayan metin olmalı');
+    else { try { new RegExp(s.desen, 'u'); } catch { h.ekle(yer, '"desen" geçerli bir düzenli ifade değil'); } }
+  }
+}
 const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kayitAlani', 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
 const FORM_ANAHTARLARI = new Set(['id', 'kontrol', 'etiket', 'secenekler', 'yardimciKontroller', 'not']);
 const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDegeri', 'ekranDegerleri', 'secici', 'kosul']);
@@ -232,6 +264,7 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
   }
   // Akışta "zorunlu": koşuda ekranda görünmezse test başarısız (koşullu alanda koşul sağlandığında).
   if (alan.mutlakaGorunmeli !== undefined && typeof alan.mutlakaGorunmeli !== 'boolean') h.ekle(aYer, '"mutlakaGorunmeli" true ya da false olmalı');
+  if (alan.sinirlar !== undefined) sinirlarDogrula(h, `${aYer}.sinirlar`, alan);
   if (alan.yapilandirma !== undefined && !listedeMi(YAPILANDIRMA_TURLERI, alan.yapilandirma)) {
     h.ekle(aYer, `bilinmeyen yapilandirma "${String(alan.yapilandirma)}"`);
   }
