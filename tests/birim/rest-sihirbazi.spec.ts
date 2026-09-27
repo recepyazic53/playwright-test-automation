@@ -18,14 +18,14 @@ import { geciciKlasor, HIZLI_KDF } from './platform-ortak';
 const ORNEK = '{"kullanici":{"ad":"ornek","parola":"ornek-parola"},"yas":30,"etiketler":[{"kod":"A"}]}';
 
 test('tam adres: köken + yol + sorgu; şemasız adres https; uç adı yoldan önerilir', () => {
-  expect(adresAyir('xxx.com/api/rest/user-auth-rs/v10/authenticate')).toEqual({
-    koken: 'https://xxx.com', yol: '/api/rest/user-auth-rs/v10/authenticate', sorgu: [], semaEklendi: true
+  expect(adresAyir('xxx.com/api/rest/hesap/v2/authenticate')).toEqual({
+    koken: 'https://xxx.com', yol: '/api/rest/hesap/v2/authenticate', sorgu: [], semaEklendi: true
   });
   expect(adresAyir('http://127.0.0.1:8080/k/{id}?sayfa=2&q=a b')).toEqual({
     koken: 'http://127.0.0.1:8080', yol: '/k/{id}', sorgu: [{ ad: 'sayfa', deger: '2' }, { ad: 'q', deger: 'a b' }], semaEklendi: false
   });
   expect(() => adresAyir('ftp://x.com/a')).toThrow(/http/);
-  expect(ucAdiOner('/api/rest/user-auth-rs/v10/authenticate')).toBe('authenticate');
+  expect(ucAdiOner('/api/rest/hesap/v2/authenticate')).toBe('authenticate');
   expect(ucAdiOner('/kullanicilar/{id}')).toBe('kullanicilar');
 });
 
