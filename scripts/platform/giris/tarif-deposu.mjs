@@ -1,7 +1,6 @@
 // GİRİŞ TARİFİ DEPOSU (genel) — tarif ortam ayarlarında durur: ortamlar.ayarlar_json > "girisTarifi"
 // (sütun kasada şifreli, bkz. gocler.mjs > SIFRELI_ALANLAR; ŞEMA GÖÇÜ GEREKMEZ). Kasa açık olmalıdır.
-// Etkin tarif: kaydedilmiş tarif; yoksa projenin aktarım adaptörünün varsayılanı (ör. mevcut davranışın
-// karşılığı); o da yoksa null (giriş yapılamaz — Ayarlar'dan tarif tanımlanmalı).
+// Etkin tarif: kaydedilmiş tarif; yoksa null (giriş yapılamaz — Ayarlar'dan tarif tanımlanmalı).
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir).
 import { DepoHatasi, ortamGetir, ortamKaydet } from '../veritabani/depo.mjs';
 import { girisTarifiniDogrula } from './tarif.mjs';
@@ -13,21 +12,15 @@ export const GIRIS_TARIFI_ANAHTARI = 'girisTarifi';
 
 /**
  * @param {Veritabani} vt @param {string} projeId @param {string} ortamId
- * @param {{ varsayilanGirisTarifi?: (vt: Veritabani, projeId: string, ortamId: string) => unknown } | null | undefined} adaptor
- * @returns {{ tarif: GirisTarifi | null; kaynak: 'kayitli' | 'proje-varsayilani' | 'yok'; hatalar: string[] }}
+ * @returns {{ tarif: GirisTarifi | null; kaynak: 'kayitli' | 'yok'; hatalar: string[] }}
  */
-export function etkinGirisTarifi(vt, projeId, ortamId, adaptor) {
+export function etkinGirisTarifi(vt, projeId, ortamId) {
   const ortam = ortamGetir(vt, ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
   const kayitli = ortam.ayarlar[GIRIS_TARIFI_ANAHTARI];
   if (kayitli !== undefined && kayitli !== null) {
     const d = girisTarifiniDogrula(kayitli);
     return { tarif: d.tarif, kaynak: 'kayitli', hatalar: d.hatalar };
-  }
-  const varsayilan = adaptor?.varsayilanGirisTarifi?.(vt, projeId, ortamId);
-  if (varsayilan) {
-    const d = girisTarifiniDogrula(varsayilan);
-    return { tarif: d.tarif, kaynak: 'proje-varsayilani', hatalar: d.hatalar };
   }
   return { tarif: null, kaynak: 'yok', hatalar: [] };
 }
@@ -48,7 +41,7 @@ export function girisTarifiKaydet(vt, projeId, ortamId, ham) {
   return tarif;
 }
 
-/** Kayıtlı tarifi kaldırır (proje varsayılanına döner). @param {Veritabani} vt @param {string} projeId @param {string} ortamId */
+/** Kayıtlı tarifi kaldırır. @param {Veritabani} vt @param {string} projeId @param {string} ortamId */
 export function girisTarifiniSifirla(vt, projeId, ortamId) {
   const ortam = ortamGetir(vt, ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');

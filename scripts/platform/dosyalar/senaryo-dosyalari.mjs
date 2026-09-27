@@ -1,5 +1,5 @@
 // SENARYO DOSYALARI (genel) — senaryoların ve ekran ayarlarının kullandığı dosyalar (ör. çoklu sorgu Excel'i:
-// sigortalı listesi) diskte YALNIZCA ŞİFRELİ durur: şifreli medya deposunda (medya.mjs; tür 'senaryo-dosyasi').
+// müşteri listesi) diskte YALNIZCA ŞİFRELİ durur: şifreli medya deposunda (medya.mjs; tür 'senaryo-dosyasi').
 // Düz metin HİÇBİR ZAMAN kalıcı olarak diske yazılmaz: yükleme bellekte şifrelenir; koşu anında test süreci
 // dosyayı yalnızca kullanıcının okuyabildiği koşuya özel geçici bir klasöre çözer (gecici-dosyalar.mjs) ve koşu
 // bitince silinir.

@@ -37,10 +37,10 @@ export const SOAPUI = `<?xml version="1.0" encoding="UTF-8"?>
     <con:testCase id="c" name="OrnekDurum">
       <con:testStep type="groovy" name="Tarihler"><con:config><script>${GROOVY}</script></con:config></con:testStep>
       ${istekAdimi('Geçersiz kimlik', zarf(`<Channel>100</Channel><Username>kullanici100</Username><Password>\${#TestCase#PASSWORD}</Password><CitizenshipNumber>000</CitizenshipNumber><BeginDate>\${#TestCase#BEGIN_DATE}</BeginDate>`), SOAP_YANITI + icerir('<Durum>HATA</Durum>'))}
-      ${istekAdimi('Geçerli kimlik', zarf(`<Channel>100</Channel><Username>kullanici100</Username><Password>\${#TestCase#PASSWORD}</Password><CitizenshipNumber>\${#TestCase#SIGORTALI_TC}</CitizenshipNumber><EndDate>\${#TestCase#END_DATE}</EndDate>`), SOAP_YANITI + icerir('<Durum>OK</Durum>'))}
+      ${istekAdimi('Geçerli kimlik', zarf(`<Channel>100</Channel><Username>kullanici100</Username><Password>\${#TestCase#PASSWORD}</Password><CitizenshipNumber>\${#TestCase#MUSTERI_TC}</CitizenshipNumber><EndDate>\${#TestCase#END_DATE}</EndDate>`), SOAP_YANITI + icerir('<Durum>OK</Durum>'))}
       ${istekAdimi('Başka kanal', zarf(`<Channel>999</Channel><Username>kullanici999</Username><CitizenshipNumber>000</CitizenshipNumber>`), SOAP_YANITI)}
       <con:testStep type="transfer" name="Aktarım"><con:config/></con:testStep>
-      <con:properties><con:property><con:name>SIGORTALI_TC</con:name><con:value>55555555555</con:value></con:property></con:properties>
+      <con:properties><con:property><con:name>MUSTERI_TC</con:name><con:value>55555555555</con:value></con:property></con:properties>
     </con:testCase>
   </con:testSuite>
 </con:soapui-project>`;

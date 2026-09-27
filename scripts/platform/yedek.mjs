@@ -58,7 +58,7 @@ import { createReadStream, existsSync, mkdirSync, readdirSync, rmSync, statSync,
 import { open, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { atomikIkiliYaz } from './veritabani/baglanti.mjs';
-import { GUNCEL_SEMA_SURUMU, TABLOLAR, mevcutSemaSurumu } from './veritabani/gocler.mjs';
+import { GUNCEL_SEMA_SURUMU, KALDIRILAN_TABLOLAR, TABLOLAR, mevcutSemaSurumu } from './veritabani/gocler.mjs';
 import { gecmisYapaniniNormallestir, sayimlar, yerelMakine } from './veritabani/depo.mjs';
 import {
   KasaHatasi, MEDYA_ANAHTARI_META, acikAnahtar, anahtarDogrulayiciyaUyarMi, anahtarTuret, kasaDurumu, kasaKdfOku,
@@ -758,6 +758,8 @@ function icerikDogrula(icerik, surum) {
   if (i.kasa.medyaAnahtari !== undefined && !zarfMi(i.kasa.medyaAnahtari)) throw new YedekHatasi('VERI', 'Yedekteki medya anahtarı geçersiz.');
   if (!nesne(i.tablolar)) throw new YedekHatasi('VERI', 'Yedekte tablo verisi yok.');
   const bilinen = new Map(TABLOLAR.map((t) => [t.ad, t]));
+  // Şemadan kaldırılmış tablolar (eski yedeklerde) yok sayılır.
+  for (const ad of KALDIRILAN_TABLOLAR) delete /** @type {Record<string, unknown>} */ (i.tablolar)[ad];
   for (const [ad, satirlar] of Object.entries(i.tablolar)) {
     const tablo = bilinen.get(ad);
     if (!tablo) throw new YedekHatasi('VERI', `Yedekte bilinmeyen tablo: "${ad}".`);

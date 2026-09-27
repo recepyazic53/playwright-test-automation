@@ -44,7 +44,7 @@ function secenekMetni(alan, deger) {
   return s ? String(s.formMetni || s.metin || deger) : String(deger);
 }
 
-/** Koşul ifadesinin Türkçe okunuşu (ör. "Sigortalı tipi = Tüzel"). */
+/** Koşul ifadesinin Türkçe okunuşu (ör. "Müşteri tipi = Kurumsal"). */
 export function ifadeMetni(ifade, model, harita = alanHaritasi(model)) {
   if (!nesneMi(ifade)) return 'koşullu';
   if (Array.isArray(ifade.ve)) return ifade.ve.map((x) => ifadeMetni(x, model, harita)).join(' ve ');
@@ -69,7 +69,7 @@ export function ifadeMetni(ifade, model, harita = alanHaritasi(model)) {
 }
 
 /**
- * Görünürlük tanımının kısa okunuşu (ör. "Müşteri tipi = Kurumsal"). İfade okunamıyorsa (ör. acenteye bağlı koşul)
+ * Görünürlük tanımının kısa okunuşu (ör. "Müşteri tipi = Kurumsal"). İfade okunamıyorsa (ör. bağlama bağlı koşul)
  * adlandırılmış koşulun açıklaması kullanılır.
  */
 export function gorunurlukMetni(gorunurluk, model, harita = alanHaritasi(model)) {

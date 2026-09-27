@@ -42,7 +42,7 @@ test.beforeAll(async () => {
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Servis Projesi' })).proje.id);
   testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
-  await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'SIGORTALI_TC', rol: 'sigortali' }] }] });
+  await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }] }] });
   // Giriş bilgisi tablosu (sütun adları WSDL alanlarıyla aynı): aktarım bağlar, dosyadaki giriş bilgisini satır olarak ekler.
   await basarili('/platform/tablo/kaydet', { projeId, ad: 'Giriş', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }] });
 });
@@ -61,7 +61,7 @@ test('SoapUI önizle → erişimi kontrol et → aktar → parametreler → Dene
   expect(ozet.onizleme.durumlar).toEqual([expect.objectContaining({ takim: 'Takim', durum: 'OrnekDurum', istekSayisi: 3, kimlikParametreleri: ['CHANNEL', 'PASSWORD', 'USERNAME'] })]);
   const onizleme = await basarili('/platform/servis/soapui/onizle', { projeId, xml: buyuk, takim: 'Takim', durum: 'OrnekDurum' });
   expect(JSON.stringify(onizleme)).not.toContain(SAHTE_PAROLA);
-  expect(onizleme.onizleme.veriParametreleri).toEqual([{ ad: 'SIGORTALI_TC', esleme: { turAd: 'Kişi', alan: 'tcKimlikNo', rol: 'sigortali' } }]);
+  expect(onizleme.onizleme.veriParametreleri).toEqual([{ ad: 'MUSTERI_TC', esleme: { turAd: 'Kişi', alan: 'tcKimlikNo', rol: 'musteri' } }]);
 
   // Erişim kontrolü olmadan aktarım (yeni servis) reddedilir.
   const red = await api('/platform/servis/soapui/aktar', { projeId, xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service' });
@@ -84,9 +84,9 @@ test('SoapUI önizle → erişimi kontrol et → aktar → parametreler → Dene
   const turler = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
   const turId = String(turler.turler.find((x: Nesne) => x.ad === 'Kişi').id);
   const profil = await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId, ad: 'k1', degerler: { tcKimlikNo: SAHTE_TC } });
-  await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', veriProfilleri: { [`${turId}:sigortali`]: profil.profil.id } });
+  await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', veriProfilleri: { [`${turId}:musteri`]: profil.profil.id } });
   const parametreler = await basarili(`/platform/servis/parametreler?projeId=${projeId}&id=${servisId}`);
-  expect(parametreler.roller).toEqual([expect.objectContaining({ turAd: 'Kişi', rol: 'sigortali', profilId: profil.profil.id })]);
+  expect(parametreler.roller).toEqual([expect.objectContaining({ turAd: 'Kişi', rol: 'musteri', profilId: profil.profil.id })]);
   expect(parametreler.parametreler.every((p: Nesne) => p.kaynak.tur !== 'eslenmemis')).toBe(true);
 
   const servis = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);

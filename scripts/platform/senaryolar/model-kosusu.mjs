@@ -1,12 +1,8 @@
-// MODEL KOŞUSU (genel, saf) — test kodu OLMAYAN senaryoların (sayfa paketinden/modelden oluşturulanlar)
-// ekran modeliyle koşturulması için ortak kurallar. Hem platform sunucusu (koşu hedefi, liste rozeti,
-// yasaklı adres koruması) hem veri okuyucu (scripts/platform/aktarim/veri-oku.mjs > model kipi) hem de
-// Playwright tarafı (tests/support/model-kosucu.ts, tests/model-kosucu/model-senaryolari.spec.ts) bu
-// dosyayı kullanır.
+// MODEL KOŞUSU (genel, saf) — senaryoların ekran modeliyle koşturulması için ortak kurallar. Hem platform sunucusu
+// (koşu hedefi, liste rozeti, yasaklı adres koruması) hem veri okuyucu (scripts/platform/veri-oku.mjs) hem de
+// Playwright tarafı (tests/support/model-kosucu.ts, tests/model-kosucu/model-senaryolari.spec.ts) bu dosyayı kullanır.
 //
-//  - Model senaryosu: kodda karşılığı OLMAYAN senaryo — aktarım eşlemesi (kodda tanımlı test) yok, içerik
-//    sayfa paketinden gelmiş ("paket") ya da açıkça modelle koşar ("kosucu": "model") ve kaynaktaki spec
-//    dosyası diskte yok. Böylece projenin kodlu testleri model koşucusunda ASLA tekrarlanmaz.
+//  - Model senaryosu: içeriği sayfa paketinden gelmiş ("paket") ya da açıkça modelle koşan ("kosucu": "model") senaryo.
 //  - Model senaryoları TEK bir spec dosyasında (MODEL_SPEC_DOSYASI) üretilir; her testin etiketi
 //    "@model-<senaryo UUID>" olur ve koşu bu etiketle daraltılır (grep).
 //  - Yasaklı adres koruması: Ayarlar > Güvenlik > "Yasak adresler" (guvenlik/yasak-adresler.mjs; alt süreçlere bu
@@ -41,26 +37,13 @@ const regexKacis = (m) => String(m).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // Model senaryosu mu?
 // ---------------------------------------------------------------------------------------
 
-/** @param {unknown} icerik @returns {{ dosya: string; ad: string } | null} */
-function kaynak(icerik) {
-  const k = nesneMi(icerik) && nesneMi(icerik.kaynak) ? icerik.kaynak : null;
-  return k && typeof k.dosya === 'string' && k.dosya && typeof k.ad === 'string' ? { dosya: k.dosya, ad: k.ad } : null;
-}
-
 /**
- * Senaryo model koşucusuyla mı çalışır (kodda karşılığı yok mu)?
+ * Senaryo model koşucusuyla mı çalışır? (İçeriği sayfa paketinden gelmiş ya da "kosucu": "model".)
  * @param {unknown} icerik senaryolar.icerik_json
- * @param {{ kodEslemesiVar?: boolean; kodDosyasiVar?: (dosya: string) => boolean }} [s]
- *   kodEslemesiVar: senaryo koddan aktarılmış (kaynak_eslemeleri'nde 'senaryo' kaydı var);
- *   kodDosyasiVar: kaynaktaki spec dosyası (testDir'e göre) diskte var mı?
  */
-export function modelSenaryosuMu(icerik, s = {}) {
-  if (!nesneMi(icerik) || s.kodEslemesiVar) return false;
-  if (icerik.kosucu === 'kod') return false;
-  if (!(nesneMi(icerik.paket) || icerik.kosucu === 'model')) return false;
-  const k = kaynak(icerik);
-  if (k && s.kodDosyasiVar && s.kodDosyasiVar(k.dosya)) return false;
-  return true;
+export function modelSenaryosuMu(icerik) {
+  if (!nesneMi(icerik) || icerik.kosucu === 'kod') return false;
+  return nesneMi(icerik.paket) || icerik.kosucu === 'model';
 }
 
 /** @param {string} senaryoId */

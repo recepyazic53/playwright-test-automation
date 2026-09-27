@@ -9,7 +9,6 @@ import { onayIste } from './kosu-paneli.js';
 const IKINCI_ADIM_ETIKETI = { yok: 'Yok', totp: 'Authenticator (TOTP)', sms: 'SMS' };
 const KAYNAK_ROZETI = {
   kayitli: ['Kaydedilmiş', 'basari'],
-  'proje-varsayilani': ['Proje varsayılanı', 'vurgu'],
   yok: ['Tanımlı değil', 'uyari']
 };
 const SECICI_YARDIMI = 'Playwright seçicisi: CSS (#kimlik, input[name="kullanici"]), text=Giriş ya da role=button[name="Giriş"]. Birden fazla öğe eşleşirse ilki kullanılır.';
@@ -144,8 +143,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     const smsAlani = h('div', { class: 'ic-alanlar' },
       h('div', { class: 'secenek-grubu', role: 'radiogroup', 'aria-label': 'SMS kodunun kaynağı' }, sProfil.etiket, sSabit.etiket, sElle.etiket),
       h('div', { class: 'not-kutusu bilgi' },
-        h('p', {}, h('strong', {}, 'Elle kipi: '), 'Nöbetçi’den başlatılan koşularda giriş SMS kodu isteyince canlı koşu panelinde bir kod kutusu açılır; telefonunuza gelen kodu oraya yazarsınız. Terminalden başlatılan koşularda kod terminalde sorulur.'),
-        h('p', {}, 'Kod aşağıdaki süre içinde girilmezse giriş “Doğrulama kodu alınamadı” hatasıyla durur. Etkileşimsiz koşularda (CI) elle kip kullanılamaz; sabit test kodu tanımlayın.')),
+        h('p', {}, h('strong', {}, 'Elle kipi: '), 'Nöbetçi’den başlatılan koşularda giriş SMS kodu isteyince canlı koşu panelinde bir kod kutusu açılır; telefonunuza gelen kodu oraya yazarsınız.'),
+        h('p', {}, 'Kod aşağıdaki süre içinde girilmezse giriş “Doğrulama kodu alınamadı” hatasıyla durur. Gözetimsiz (zamanlanmış) koşular için sabit test kodu tanımlayın.')),
       alan('Kod bekleme süresi (sn)', elleSure, { yardim: '15–1800 saniye.' }));
     const kodAlanlari = h('div', { class: 'ic-alanlar' },
       alan('Kod alanı', kodAlani, { yardim: `Boş bırakılırsa kod alanı giriş sonrası sayfadan otomatik bulunur (tek kullanımlık kod alanına benzeyen alan). ${SECICI_YARDIMI}` }),
@@ -283,7 +282,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     };
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Tarifi kaydet');
     const sifirla = o.kaynak === 'kayitli'
-      ? h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), o.varsayilanVar ? 'Proje varsayılanına dön' : 'Kayıtlı tarifi sil')
+      ? h('button', { type: 'button', class: 'hayalet' }, ikon('geri'), 'Kayıtlı tarifi sil')
       : null;
     const form = h('form', { class: 'kart form-paneli tarif-formu', novalidate: true },
       h('h3', {}, `Giriş tarifi: ${o.ortamAd}`),
@@ -309,7 +308,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         h('div', { role: 'radiogroup', 'aria-label': 'İkinci adım türü' }, rYok.etiket, rTotp.etiket, rSms.etiket),
         kodAlanlari),
       h('fieldset', {}, h('legend', {}, 'Bağlam değiştirme (isteğe bağlı)'),
-        h('label', { class: 'secenek', for: baglamVar.id }, baglamVar, 'Girişten sonra bağlam seç (rol, şube, acente…)'),
+        h('label', { class: 'secenek', for: baglamVar.id }, baglamVar, 'Girişten sonra bağlam seç (rol, şube…)'),
         baglamAlani),
       h('div', { class: 'dugmeler' }, kaydet, sifirla, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (e) => {
@@ -327,13 +326,11 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
     });
     if (sifirla) {
       sifirla.addEventListener('click', async () => {
-        const tamam = await onayIste(o.varsayilanVar
-          ? { baslik: 'Proje varsayılanına dönülsün mü?', metin: `${o.ortamAd} ortamının kaydedilmiş giriş tarifi silinir; projenin varsayılan tarifi kullanılır.`, dugme: 'Varsayılana dön' }
-          : { baslik: 'Kayıtlı tarif silinsin mi?', metin: `${o.ortamAd} ortamının giriş tarifi silinir; tarif yeniden tanımlanana kadar bu ortamda giriş yapılamaz.`, dugme: 'Tarifi sil', tehlikeli: true });
+        const tamam = await onayIste({ baslik: 'Kayıtlı tarif silinsin mi?', metin: `${o.ortamAd} ortamının giriş tarifi silinir; tarif yeniden tanımlanana kadar bu ortamda giriş yapılamaz.`, dugme: 'Tarifi sil', tehlikeli: true });
         if (!tamam) return;
         try {
           const { tarif } = await api('/platform/giris-tarifi/sifirla', { govde: { projeId: proje.id, ortamId: o.ortamId } });
-          bildir('Proje varsayılanına dönüldü.');
+          bildir('Kayıtlı tarif silindi.');
           guncelle(tarif);
           formAlani.replaceChildren();
         } catch (hata) { mesaj.goster(hata.message); }

@@ -1,9 +1,9 @@
 // GENEL GİRİŞ MOTORU — bir projenin/ortamın "giriş tarifini" (scripts/platform/giris/tarif.mjs) Playwright
-// ile uygular. Hiçbir proje adı/seçicisi burada yoktur; Galaksi'nin tarifi projeler/galaksi/giris-tarifi.mjs'te.
+// ile uygular. Hiçbir proje adı/seçicisi burada yoktur; tarif ortamın ayarlarındadır (Ayarlar > Giriş tarifi).
 //   girisYap          kullanıcı adı + parola → (varsa) ikinci adım (TOTP / SMS sabit kod / SMS elle) → başarı
 //   oturumGecerliMi   kayıtlı oturum (storageState) hâlâ geçerli mi (form DOLDURULMAZ)
 //   oturumuHazirla    global-setup: geçerli oturum dosyası varsa kullanır, yoksa giriş yapıp kaydeder
-//   baglamiDegistir   giriş sonrası bağlam (rol/şube/acente…) adımları, bağlam profili değerleriyle
+//   baglamiDegistir   giriş sonrası bağlam (rol/şube…) adımları, bağlam profili değerleriyle
 // Hatalar GirisHatasi (kod + açık Türkçe mesaj): site erişilemedi, kullanıcı adı/parola hatalı (hata göstergesi
 // göründü), iki aşamalı doğrulama başarısız, kod alınamadı, CAPTCHA, alan bulunamadı, zaman aşımı, bağlam
 // adımı, tarif geçersiz. GİZLİ DEĞER (parola, TOTP anahtarı/kodu, SMS kodu) hiçbir mesaja/loga yazılmaz;

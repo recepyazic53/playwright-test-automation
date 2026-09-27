@@ -24,7 +24,7 @@ const envanter = (ek: Partial<KayitEnvanteri> = {}): KayitEnvanteri => ({
     { ad: 'Boş adım', yol: '/basvuru/', baslik: 'Başvuru', alanlar: [], ilerleme: null },
     { ad: 'Teminat seçimi', yol: '/basvuru/teminat', baslik: 'Teminat', alanlar: [ham('teminatSecimi', 'select', { secenekler: [{ deger: 'T1', metin: 'Dar' }] })], ilerleme: { secici: '#kaydet', metin: 'Kaydet' } }
   ],
-  basariGostergesi: { secici: '#sonuc', metin: 'Poliçe oluşturuldu. No: 5550012' },
+  basariGostergesi: { secici: '#sonuc', metin: 'Kayıt oluşturuldu. No: 5550012' },
   engellenenler: [], notlar: [], ...ek
 });
 
@@ -44,7 +44,7 @@ test('yeni ekran: adımlar sırayla, koşu tanımları, İşlemler bölümü, ba
   expect(m.semaSurumu).toBe(2);
   expect(m.adimlar.map((a: Nesne) => [a.id, a.sira, a.baslik])).toEqual([['musteriOlusturma', 1, 'Müşteri oluşturma'], ['teminatSecimi', 2, 'Teminat seçimi']]);
   expect(m.adimlar[0].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#devam', aciklama: 'Devam' }], basariGostergesi: { tur: 'eleman', deger: '#teminatSecimi' } });
-  expect(m.adimlar[1].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Poliçe oluşturuldu. No', secici: '#sonuc' } });
+  expect(m.adimlar[1].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Kayıt oluşturuldu. No', secici: '#sonuc' } });
   expect(m.adimlar[1].bolumler.at(-1)).toMatchObject({ baslik: 'İşlemler', alanlar: [{ tip: 'buton', yapilandirma: 'aksiyon' }, { id: 'sonucMesaji', tip: 'cikti', yapilandirma: 'cikti' }] });
   // Bölüm kimlikleri model genelinde tekil ("İşlemler" iki adımda).
   const bolumIdleri = m.adimlar.flatMap((a: Nesne) => a.bolumler.map((b: Nesne) => b.id));
@@ -115,7 +115,7 @@ test('seçime göre görünürlük: okumalar arasında değişen tek seçimden k
   const kanal = ham('kanal', 'select', { secenekler: [{ deger: 'web', metin: 'Web' }, { deger: 'sube', metin: 'Şube' }] });
   const adim = (okumalar: Array<{ gorunen: string[]; secimler: Record<string, string> }>) => kayitPaketiOlustur({ ...META, baglamTuru: null }, {
     kip: 'kayit', profil: null,
-    adimlar: [{ ad: 'Sigortalı', yol: '/s/', baslik: 'S', alanlar: [tip, kanal, ham('tc', 'text'), ham('vkn', 'text')], ilerleme: null, okumalar }],
+    adimlar: [{ ad: 'Başvuran', yol: '/s/', baslik: 'S', alanlar: [tip, kanal, ham('tc', 'text'), ham('vkn', 'text')], ilerleme: null, okumalar }],
     basariGostergesi: null, engellenenler: [], notlar: []
   });
   const tekDegisim = adim([

@@ -4,7 +4,7 @@
 //   Bekleme süresi (saniye; önceki düğmeden sonra), Bitir. Blokların arasındaki "+" ile blok eklenir; ↑/↓ ile taşınır, Sil ile
 //   çıkarılır. Alan grubundaki her alan "Zorunlu" (senaryoda değer şart; koşuda görünmezse test başarısız) ya da "Görünürse
 //   doldur" (boş bırakılabilir; görünmüyorsa atlanır) — alanın yanındaki düğmeyle değişir; varsayılan sayfanın zorunluluğu.
-//   Alanın koşulu ("Sigortalı tipi = Bireysel ise") yanında yazar; "Koşul" ile seçim alanı + seçenekler seçilerek düzeltilir ya
+//   Alanın koşulu ("Müşteri tipi = Bireysel ise") yanında yazar; "Koşul" ile seçim alanı + seçenekler seçilerek düzeltilir ya
 //   da kaldırılır (kayıttan otomatik bulunan taslakta gelir). Koşuldaki seçim alanı akışta olmalı (sunucu doğrular).
 //   sağda "Kayıtta yakalananlar": alanlar (sürükleyip bir alan grubuna bırakılır ya da "Ekle" ile etkin gruba eklenir; bir
 //   alan tek grupta olur, başka gruba bırakılınca taşınır), düğmeler ("Aksiyon ekle") ve mesajlar ("Mesaj ekle").

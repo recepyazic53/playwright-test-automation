@@ -1,4 +1,4 @@
-// KOŞU VE SAKLAMA AYARLARI (Ayarlar > Koşu, Ayarlar > Yedekleme) — kullanıcının verdiği kararlar. Kasada (ayarlar tablosu,
+// KOŞU, SAKLAMA VE ARAYÜZ AYARLARI (Ayarlar > Koşu, Yedekleme, Arayüz) — kullanıcının verdiği kararlar. Kasada (ayarlar tablosu,
 // anahtar "kosu") şifreli saklanır; verilmeyen ayar varsayılanını kullanır. Nöbetçi koşuyu başlatırken ayarları alt sürece
 // ortam değişkeni olarak verir (kosuOrtamDegiskenleri); playwright.config.ts ve model koşucusu
 // bu değişkenleri okur (yoksa aynı varsayılanlar). Servis ayarları (zaman aşımı, varsayılan tarih biçimi) sunucuda kullanılır.
@@ -12,7 +12,7 @@ const KAYIT_SECENEKLERI = /** @type {const} */ (['her', 'yalnizHata', 'kapali'])
 /**
  * Tanımlar: arayüz bu listeden formu çizer (bölüm: ayar sayfası, grup, etiket, açıklama, tür, sınırlar); sunucu doğrular.
  * env: alt sürece verilen ortam değişkeni (yoksa yalnız sunucuda kullanılır). carpan: ortam değişkenine yazılırken çarpan.
- * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin';
+ * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin';
  *   varsayilan: string | number; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number }>}
  */
 export const KOSU_AYAR_TANIMLARI = Object.freeze([
@@ -31,6 +31,14 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'servisZamanAsimiSn', grup: 'Servisler', etiket: 'Servis isteği zaman aşımı', aciklama: 'Servis yanıtı bu sürede gelmezse istek kesilir.', tur: 'sayi', varsayilan: 60, enAz: 5, enCok: 600, birim: 'sn' },
   { anahtar: 'tarihBicimi', grup: 'Servisler', etiket: 'Varsayılan tarih biçimi', aciklama: 'Biçim verilmemiş tarih kurallarında ve ${tarih:…} ifadelerinde kullanılır. yyyy yıl, MM ay, dd gün, HH saat, mm dakika, ss saniye; sabitler tek tırnakta.',
     tur: 'metin', varsayilan: "yyyy-MM-dd'T'HH:mm:ss" },
+  { anahtar: 'taramaZamanAsimiDk', grup: 'Tarama ve akış kaydı', etiket: 'Ekran taraması süre limiti', aciklama: 'Ekran taraması bu sürede bitmezse durdurulur.',
+    tur: 'sayi', varsayilan: 5, enAz: 1, enCok: 60, birim: 'dk' },
+  { anahtar: 'kayitZamanAsimiDk', grup: 'Tarama ve akış kaydı', etiket: 'Akış kaydı süre limiti', aciklama: 'Akışı kaydederken siz işlemi yaparken en çok bu kadar beklenir.',
+    tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 180, birim: 'dk' },
+  { anahtar: 'senaryoSayfaBoyu', bolum: 'arayuz', grup: 'Listeler', etiket: 'Senaryolar sayfa boyu', aciklama: 'Senaryolar tablosunda bir sayfada gösterilen satır.',
+    tur: 'sayi', varsayilan: 50, enAz: 10, enCok: 500, birim: 'satır' },
+  { anahtar: 'kosuGecmisiSayfaBoyu', bolum: 'arayuz', grup: 'Listeler', etiket: 'Koşu geçmişi sayfa boyu', aciklama: 'Sonuçlar > Koşu geçmişinde bir sayfada gösterilen koşu.',
+    tur: 'sayi', varsayilan: 15, enAz: 5, enCok: 200, birim: 'satır' },
   { anahtar: 'otomatikYedekSayisi', bolum: 'yedekleme', grup: 'Otomatik yedek', etiket: 'Saklanacak otomatik yedek', aciklama: 'Günlük otomatik yedeklerden en yeni bu kadarı tutulur; eskiler silinir.',
     tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 365, birim: 'adet' },
   { anahtar: 'sonucSaklamaGun', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Koşu sonuçlarını sakla', aciklama: 'Bu süreden eski ekran ve servis koşu sonuçları (adımlar, ekran görüntüleri, videolar dahil) günlük temizlikte silinir. 0: süresiz (hiç silinmez).',
@@ -38,7 +46,8 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 ]);
 
 /** @typedef {{ video: string; ekranGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
- *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; otomatikYedekSayisi: number; sonucSaklamaGun: number }} KosuAyarlari */
+ *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
+ *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */
 export const varsayilanKosuAyarlari = () => /** @type {KosuAyarlari} */ (Object.fromEntries(KOSU_AYAR_TANIMLARI.map((t) => [t.anahtar, t.varsayilan])));

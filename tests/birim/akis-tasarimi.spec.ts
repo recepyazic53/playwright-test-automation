@@ -146,7 +146,7 @@ test('VEYA: art arda beklenen mesajlar bir grup (herhangi biri başarı); ara ve
     { tur: 'aksiyon', dugme: 2, istegeBagli: false },
     { tur: 'mesaj', mesaj: 0, metin: 'Teklif oluşturuldu' },
     { tur: 'mesaj', mesaj: null, metin: 'Teklif kaydedildi' },
-    { tur: 'mesaj', mesaj: null, metin: 'Poliçe hazır' },
+    { tur: 'mesaj', mesaj: null, metin: 'Başvuru hazır' },
     { tur: 'bitir' }
   ]);
   expect(hatalar).toEqual([]);
@@ -155,11 +155,11 @@ test('VEYA: art arda beklenen mesajlar bir grup (herhangi biri başarı); ara ve
   const m = paket.model as Nesne;
   expect(m.adimlar.map((a: Nesne) => a.kosu.basariGostergesi)).toEqual([
     { tur: 'veya', secenekler: [{ tur: 'metin', deger: 'Müşteri kaydedildi' }, { tur: 'metin', deger: 'Müşteri güncellendi' }] },
-    { tur: 'veya', secenekler: [{ tur: 'metin', deger: 'Teklif oluşturuldu', secici: '#sonuc' }, { tur: 'metin', deger: 'Teklif kaydedildi' }, { tur: 'metin', deger: 'Poliçe hazır' }] }
+    { tur: 'veya', secenekler: [{ tur: 'metin', deger: 'Teklif oluşturuldu', secici: '#sonuc' }, { tur: 'metin', deger: 'Teklif kaydedildi' }, { tur: 'metin', deger: 'Başvuru hazır' }] }
   ]);
   // Modelden tasarıma geri: her seçenek ardışık bir mesaj bloğu.
   const geri = adimlardanBloklar(m, m.adimlar, modeldenAkisEnvanteri(m));
-  expect(geri.filter((b) => b.tur === 'mesaj').map((b) => (b as Nesne).metin)).toEqual(['Müşteri kaydedildi', 'Müşteri güncellendi', 'Teklif oluşturuldu', 'Teklif kaydedildi', 'Poliçe hazır']);
+  expect(geri.filter((b) => b.tur === 'mesaj').map((b) => (b as Nesne).metin)).toEqual(['Müşteri kaydedildi', 'Müşteri güncellendi', 'Teklif oluşturuldu', 'Teklif kaydedildi', 'Başvuru hazır']);
   expect(geri.map((b) => b.tur)).toEqual(['alanlar', 'aksiyon', 'mesaj', 'mesaj', 'alanlar', 'aksiyon', 'mesaj', 'mesaj', 'mesaj', 'bitir']);
   // Diyagramda "VEYA" ile okunur.
   expect(JSON.stringify(akisDiyagrami(m))).toContain('“Müşteri kaydedildi” metni görünür VEYA “Müşteri güncellendi” metni görünür');

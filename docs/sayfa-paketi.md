@@ -13,7 +13,7 @@ Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **sa
 |---|---|---|
 | Açan / ilerleten (kayıt yok) | Devam, Ek sürücü ekle, sekmeler, oklar, seçim değiştirme | Serbestçe basılır; koşullu alanlar, bağımlı listeler ve sonraki ekranın alanları böyle çıkarılır. |
 | Hesaplayan / sorgulayan | Prim hesapla, Kimlik sorgula | Basılır; sonuç alanları ve uyarılar (tarayıcı uyarıları — alert — dahil) toplanır. Kimlik sorgusunda yalnızca kullanıcının verdiği test profili kullanılır. |
-| Kayıt oluşturan / onaylayan / ödeme yapan | Teklif kaydet, Poliçeleştir, Onayla, Ödemeyi tamamla | Claude durur ve sorar; yalnızca TEST ortamında, kullanıcının onayıyla basılır. CANLI'da basılmaz. |
+| Kayıt oluşturan / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | Claude durur ve sorar; yalnızca TEST ortamında, kullanıcının onayıyla basılır. CANLI'da basılmaz. |
 
 Ne yaptığından emin olunamayan düğme üçüncü gruptan sayılır (önce sorulur). Kart, şifre gibi bilgiler hiçbir zaman
 girilmez; ödeme ekranında alanlar okunur. Onay verilmezse o noktadan sonrası pakete "bilinmiyor" olarak yazılır.
@@ -109,23 +109,11 @@ akış olmaz. Nasıl çalışır:
 - **Kart:** kimlik bloğu gibi bir profil bloğudur (`kimlikProfili`, `kimlikTuru: "kart"`). Değer, "Kredi kartı" test verisi
   profilinden (varsayılan `ortak`) ya da senaryoya özel karttan gelir ve koşu anında çözülür. `{deger, metin}` biçimli
   değerler `deger` ile seçilir.
-- **Galaksi:** `projeler/galaksi/odeme-akis.mjs` ödeme ortak akışını üretir: Poliçeleştir → kart formu → kart + "Ödemeyi
-  tamamla". Başarı TEST'te "Hiçbir poliçe onaylanamadı." olur.
-
-### Kodlu senaryoları akışa taşıma
-
-Kodlu (POM'lu) bir ürünün senaryoları, aynı ürünün akış ekranına senaryo olarak kurulabilir: akış ekranında **"Kodlu
-senaryoları taşı…"** (yalnızca projenin adaptörü o ekran için taşıma tanımlıysa görünür; `akisTasimaEkranlari`).
-- Değerler adaptörün `akisSenaryoTaslaklari` kancasından gelir: ürün verisi sunucuda okunur, kodlu testin senaryo matrisi akış
-  ekranının senaryo anahtarlarına çevrilir (kimlikler profil adıyla, başlıklar kodlu testinkiyle aynı).
-- Önizleme her taslağı senaryo kaydıyla aynı doğrulamadan geçirir (yazıp geri alır): yeni / zaten var / hata (nedeniyle) + notlar.
-- Seçilen yeni taslaklar tek işlemde yazılır; yalnızca seçilen ortamda ve "Koşuda" kapalı oluşur.
-- Uçlar: `GET /platform/akis-tasima?projeId=&ekranId=&ortamId=`, `POST /platform/akis-tasima/uygula`.
 
 ### Akışlar (bir ekranda birden çok akış)
 
 `akislar` (isteğe bağlı): `[{ id, ad, varsayilan?: true, adimlar }]`. Varsayılan akışın `adimlar`ı modelin `adimlar`ıyla
-AYNIDIR (yazılırken eşitlenir; akış bilmeyen okuyucular — kodlu testler, eski modeller — `adimlar`ı okur). `akislar` yoksa
+AYNIDIR (yazılırken eşitlenir; akış bilmeyen okuyucular — eski modeller — `adimlar`ı okur). `akislar` yoksa
 tek, örtük "Ana akış" (`id: "ana"`) vardır. Alanlar, koşullar ve senaryo düzeyi ayarlar ekranın ORTAK havuzundadır; aynı alan
 (aynı kimlik) birden çok akışta olabilir. Her akış, `adimlar`ı o akışın adımlarıyla değiştirilmiş model olarak doğrulanır
 (`model-formu.mjs > akisModeli`: o akışta olmayan adımlara bağlı iş kuralları, alanlara bağlı bağlam görünürlükleri ve başka
@@ -174,13 +162,13 @@ Sürüm 2'de `okluSecim` doldurucusu (ok düğmeleriyle değer değiştiren öze
 (`konum.secici`) ve düğmeleri (`konum.yardimci.ileri` ve `konum.yardimci.geri`; eski adlarla `arttir`/`azalt`)
 bildirmek zorundadır; `doldurucuParametreleri.maksDeneme` yön başına en fazla tıklamadır.
 
-Koşucunun diğer alan olanakları (JetSeyahat (akış) ile eklendi; hepsi genel):
+Koşucunun diğer alan olanakları:
 
 | Olanak | Açıklama |
 |---|---|
 | `sabitDeger` | Senaryo alanı olmayan (`yapilandirma` `sabit`/`turetilmis`) alan her koşuda bu değerle doldurulur. Tarihte `bugun`, `bugun+7`, `bugun-3` (İstanbul günü, alanın `bicim`iyle). |
 | Varsayılan | Senaryoda boş bırakılan alan modelin `varsayilan.deger`ini alır; görünürlük koşulları da bu değerle hesaplanır (dosya hariç). |
-| `kimlikProfili` | Senaryoya özel kimlik ya da seçilen (yoksa varsayılan) hazır profil (Ayarlar > Test verisi profilleri; havuz = aynı adlı test verisi türü ya da aktarım tanımı) `altAlanlar`a `sira` ile açılır; `eslesme.kimlikAlani` metin ya da kimlik türüne göre harita (türde karşılığı yoksa alt alan atlanır). |
+| `kimlikProfili` | Senaryoya özel kimlik ya da seçilen (yoksa varsayılan) hazır profil (Ayarlar > Test verisi profilleri; havuz = aynı adlı test verisi türü) `altAlanlar`a `sira` ile açılır; `eslesme.kimlikAlani` metin ya da kimlik türüne göre harita (türde karşılığı yoksa alt alan atlanır). |
 | `doldurucuParametreleri` | Alan doldurulduktan sonra: `tus` (ör. `Tab`), `tikla` (seçici; ör. kimlik sorgula), `bekle {secici, durum: dolu \| gorunur \| gizli, zamanAsimiSn, icermez?}` (`icermez`: dolu sayılmayan geçici metin, ör. sorgu sürerken "Aranıyor"), `gizle` (seçici: alan doldurulunca açık kalıp sonraki tıklamayı kapatan katman gizlenir, ör. takvim `#ui-datepicker-div`). Alan sonrası tıklama en çok 15 sn denenir, sonra açık hatayla düşer. `maske` (ör. `"(###) ### ## ##"`): değerin rakamları kalıba yerleştirilerek yazılır (maskeli alanlarda `degerJs` ile birlikte). Alan beklemesi sırasında adımın hata göstergesi (`kosu.hataGostergesi`) açılırsa adım hemen düşer (akışın kabul ettiği uyarılar hariç). Oklu seçimde `yanitBekle`: her tıklamadan sonra adresi bu metni içeren isteğin bitmesi beklenir (ör. seçim değişince yeniden yüklenen bağımlı liste). |
 | Doldurucular | `radyoZorla` / `onayKutusuZorla` (gizli çizimli girdiler; görünürlük yerine sayfada varlık), `secimGerekirse` (değer zaten seçiliyse dokunulmaz), `degerJs` (değer betikle yazılır + input/change; gizli alan ya da gizli <select> — sayfada varlık yeter; seçenek önce değerle, sonra metinle). Kapalı (disabled) alan doldurulmaz, "atlanan alanlar"a yazılır (mutlaka görünmeli ise hata). |
 | Kimlik alanı dilimi | Alt alanda `eslesme.kimlikAlani: { "ad": "cepTelefonu", "dilim": [0, 3] }` (ya da türe göre `{ "ozel": { ad, dilim } }`): profildeki değerin parçası yazılır (boşluklar yok sayılır). |
@@ -190,9 +178,7 @@ edilince sürüm 2'ye yükselir.
 
 ## Model koşucusu
 
-Test kodu **olmayan** senaryolar (sayfa paketinden eklenmiş, kodlu bir teste eşlenmemiş ve kaynaktaki spec dosyası
-diskte olmayan) `tests/model-kosucu/model-senaryolari.spec.ts` tarafından üretilen testlerle koşar; kodlu (Galaksi)
-testler burada üretilmez. Her test `@model-<senaryo kimliği>` etiketini taşır; Nöbetçi tek senaryo koşusunu bu
+Tüm senaryolar `tests/model-kosucu/model-senaryolari.spec.ts` tarafından üretilen testlerle koşar. Her test `@model-<senaryo kimliği>` etiketini taşır; Nöbetçi tek senaryo koşusunu bu
 etiketle daraltır, "Koşuyu başlat" Koşuda açık model senaryolarını da dahil eder.
 
 Koşu: giriş tarifiyle giriş → senaryonun bağlam profiliyle (modelde `eslesme.profilHavuzu` olan alan; havuz adı
@@ -353,7 +339,7 @@ artık var olmayan alan/adımlara bağlı koşullar ve iş kuralları çıkarıl
 ```
 
 * `veri`: modelin senaryo biçimi (alanların `eslesme.senaryo` anahtarları). Kişi, kart, adres gibi
-  veriler için **test verisi profil adı** kullanılır (ör. `"sigortaliProfili": "ozel1"`), değer yazılmaz.
+  veriler için **test verisi profil adı** kullanılır (ör. `"musteriProfili": "ozel1"`), değer yazılmaz.
 * `adimKapsami`: dahil edilen isteğe bağlı adımların kimlikleri (modelin adım kapsamı ayarlarına çevrilir).
 * `beklenenSonuc.tur`: `basari` | `hata` (iş kuralı hatası beklenir — ayrıntısı `veri`deki beklenen sonuç alanında).
 * Öneriler tek senaryo doğrulayıcısından geçirilir; modele uymayan öneri önizlemede sorunlarıyla
@@ -411,6 +397,6 @@ sorar (ekran için son seçim işaretli gelir) ve seçilen profil **adlarını**
 
 ## Örnek
 
-Sahte değerli örnek paketler: `tests/birim/fixtures/sayfa-paketi/ornek-seyahat-v1.json` (ilk inceleme) ve
-`ornek-seyahat-v2.json` (zorunlu yeni alan, yeni seçenek, etiket değişikliği, kaldırılan alan, kaldırılan
+Sahte değerli örnek paketler: `tests/birim/fixtures/sayfa-paketi/ornek-rota-v1.json` (ilk inceleme) ve
+`ornek-rota-v2.json` (zorunlu yeni alan, yeni seçenek, etiket değişikliği, kaldırılan alan, kaldırılan
 seçenek, bağlam profiline göre görünürlük ve adım başlığı değişikliği).

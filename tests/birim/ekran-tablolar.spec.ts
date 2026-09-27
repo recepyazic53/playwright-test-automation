@@ -10,14 +10,54 @@ import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { birlesikDegerler, eslesenListeler, type ParametreTanimi } from '../../scripts/platform/servisler/parametre-tanimlari.mjs';
 import { tabloDegerListeleri } from '../../scripts/platform/tablolar/tablo-secimi.mjs';
-import { jetSeyahatAkisPaketi } from '../../projeler/galaksi/jetseyahat-akis.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF } from './platform-ortak';
 
 type Nesne = Record<string, any>;
 
+const ROTA_EKRANI = 'Rota seçimi';
+
+/** Küçük nötr sayfa paketi: Kapsam / Alternatif seçenekleri modelde, Ülke listesi yalnız tablodan; Sorgu tipi sayfa değerli. */
+function rotaPaketi(): Nesne {
+  const secim = (deger: string, metin: string, ek: Nesne = {}) => ({ deger, metin, ...ek });
+  const alan = (id: string, etiket: string, secici: string, ek: Nesne = {}) => ({
+    id, tip: 'secim', etiket: { ekran: etiket }, yapilandirma: 'senaryo', eslesme: { senaryo: id }, konum: { secici, kirilganlik: 'orta' },
+    zorunlu: false, doldurucu: 'secimGerekirse', ...ek
+  });
+  return {
+    tur: 'sayfa-paketi', surum: 1,
+    meta: { proje: 'Örnek', ekran: { anahtar: 'rota-secimi', ad: ROTA_EKRANI, urlYolu: '/rota/' }, olusturan: 'birim testi', olusturulma: '2026-09-25T09:00:00Z', baglamProfilleri: [] },
+    model: {
+      semaSurumu: 2, tur: 'ekran', id: 'rota-secimi', ad: ROTA_EKRANI, aciklama: 'Tablo bağlantısı fikstürü (değerler sahte).',
+      ekranUrl: '/rota/', specDosyasi: 'yok', pageObject: 'yok (model koşucusu)', veriKaynaklari: { senaryo: 'Nöbetçi > Senaryolar' }, girisGerekmez: true, kosullar: {},
+      adimlar: [{
+        id: 'bilgiler', sira: 1, baslik: 'Rota bilgileri girilir',
+        bolumler: [{
+          id: 'rota', baslik: 'Rota', alanlar: [
+            alan('kapsam', 'Kapsam', '#kapsam', { seceneklerDurumu: 'tam', secenekler: [secim('BÖLGE-1', 'BÖLGE-1'), secim('BÖLGE-2', 'BÖLGE-2')] }),
+            alan('plan', 'Plan', '#plan', { seceneklerDurumu: 'tam', secenekler: [secim('1', 'Plan 1'), secim('2', 'Plan 2')] }),
+            alan('alternatif', 'Alternatif', '#alternatif', {
+              seceneklerDurumu: 'tam', secenekler: [secim('SEÇENEK A', 'SEÇENEK A'), secim('SEÇENEK B', 'SEÇENEK B'), secim('SEÇENEK C', 'SEÇENEK C')]
+            }),
+            alan('ulke', 'Ülke', '#ulke', { seceneklerDurumu: 'bilinmiyor', secenekler: null, seceneklerKaynagi: 'Test verisi tablosu (Ülke sütunu).' }),
+            alan('sorguTipi', 'Sorgu tipi', '#sorgu', {
+              varsayilan: { deger: 'tekli' },
+              secenekler: [secim('1', 'Tekli', { senaryoDegeri: 'tekli', formMetni: 'Tekli' }), secim('2', 'Çoklu', { senaryoDegeri: 'coklu', formMetni: 'Çoklu' })]
+            })
+          ]
+        }]
+      }],
+      senaryoDuzeyi: { aciklama: 'Ekran alanı olmayan ayarlar.', alanlar: [{ id: 'baslik', tip: 'metin', zorunlu: true, benzersiz: true, yapilandirma: 'senaryo', eslesme: { senaryo: 'baslik' } }] },
+      urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
+    },
+    senaryoOnerileri: [],
+    gerekenAyarlar: { girisGerekli: false, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [], baglamTurleri: [] },
+    bilinmeyenler: []
+  };
+}
+
 test('tablo bağlantılarından koşullu listeler: formdaki sırayla yukarıdan aşağı süzülür', () => {
-  const tablo = { id: 't', ad: 'Seyahat', sutunlar: [{ ad: 'Kapsam', gizli: false }, { ad: 'Alternatif', gizli: false }, { ad: 'Ülke', gizli: false }], satirlar: [
+  const tablo = { id: 't', ad: 'Rota', sutunlar: [{ ad: 'Kapsam', gizli: false }, { ad: 'Alternatif', gizli: false }, { ad: 'Ülke', gizli: false }], satirlar: [
     ['D', 'V', 'ALMANYA'], ['D', 'V', 'FRANSA'], ['D', 'P', 'ABD'], ['A', 'S', 'ALMANYA'], ['A', 'P', 'İSPANYA']
   ].map(([k, a, u]) => ({ ortamId: null, degerler: { Kapsam: k, Alternatif: a, Ülke: u } })) };
   // Bağlantıların sırası karışık; formdaki sıra kapsam → alternatif → ülke.
@@ -62,17 +102,17 @@ test.describe('ekran alanları tablolardan', () => {
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Ekran Tablo Projesi' })).proje.id);
     ortamId = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true })).ortam.id);
     await basarili('/platform/sayfa-paketi/ekle', {
-      projeId, paket: jetSeyahatAkisPaketi({ havuzlar: { ozel: 'Özel kişi', tuzel: 'Tüzel kişi', acente: 'Acente' }, girissiz: true }), senaryoIndeksleri: [], ortamIdleri: [ortamId]
+      projeId, paket: rotaPaketi(), senaryoIndeksleri: [], ortamIdleri: [ortamId]
     });
     const liste = await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`) as { ekranlar: Nesne[] };
-    ekranId = String(liste.ekranlar.find((e) => e.ad === 'JetSeyahat (akış)')?.id);
+    ekranId = String(liste.ekranlar.find((e) => e.ad === ROTA_EKRANI)?.id);
     girdiler = (await basarili(`/platform/ekran/girdiler?projeId=${projeId}&ekranId=${ekranId}`)).girdiler;
     K = girdi('kapsam').secenekler.map((x: Nesne) => x.deger).slice(0, 2);
     A = girdi('alternatif').secenekler.map((x: Nesne) => x.deger).slice(0, 3);
     // Ülke seçenekleri modelde yok (kodda liste tutulmaz); değerler yalnız tablodan gelir.
     expect(girdi('ulke').secenekler).toEqual([]);
     U = ['ALMANYA', 'FRANSA', 'A.B.D', 'İSPANYA', 'İTALYA'];
-    tabloId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Seyahat seçenekleri', sutunlar: [{ ad: 'Kapsam' }, { ad: 'Alternatif' }, { ad: 'Ülke' }], satirlar: [
+    tabloId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Rota seçenekleri', sutunlar: [{ ad: 'Kapsam' }, { ad: 'Alternatif' }, { ad: 'Ülke' }], satirlar: [
       [K[0], A[0], U[0]], [K[0], A[0], U[1]], [K[0], A[1], U[2]], [K[1], A[2], U[3]]
     ].map(([k, a, u]) => ({ degerler: { Kapsam: k, Alternatif: a, Ülke: u } })) })).tablo.id;
     tarayici = await chromium.launch();

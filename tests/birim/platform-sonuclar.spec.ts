@@ -1,16 +1,15 @@
-// KORUMA TESTLERİ — koşu sonuçları (şema v5), şifreli medya deposu, eski Allure sonuçlarının içe
-// aktarımı ve "test verisinin tüm alanları hassas" kararı. Tarayıcı açmaz, siteye bağlanmaz; her
-// test kendi geçici klasöründe çalışır (repo içindeki sonuç klasörlerine DOKUNMAZ).
+// KORUMA TESTLERİ — koşu sonuçları (şema v5), şifreli medya deposu ve "test verisinin tüm alanları hassas" kararı.
+// Tarayıcı açmaz, siteye bağlanmaz; her test kendi geçici klasöründe çalışır (repo içindeki sonuç klasörlerine DOKUNMAZ).
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import {
-  MEDYA_ANAHTARI_META, coz, kasaOlustur, medyaAnahtariniHazirla, parolaDegistir, zarfMi
+  MEDYA_ANAHTARI_META, kasaOlustur, medyaAnahtariniHazirla, parolaDegistir, zarfMi
 } from '../../scripts/platform/kasa.mjs';
 import {
-  degisiklikGecmisiListele, ekranKaydet, kaynakEslemesiYaz, projeKaydet, senaryoKaydet, testVerisiProfiliGetir,
+  degisiklikGecmisiListele, ekranKaydet, projeKaydet, senaryoKaydet, testVerisiProfiliGetir,
   testVerisiProfiliKaydet, testVerisiTuruKaydet, veritabaniniHazirla
 } from '../../scripts/platform/veritabani/depo.mjs';
 import {
@@ -19,8 +18,6 @@ import {
 import {
   MedyaHatasi, PARCA_BOYUTU, medyaBoyutu, medyaCoz, medyaSaklamaTemizligi, medyaSifrele, medyaTamamenCoz
 } from '../../scripts/platform/medya.mjs';
-import { allureSonuclariniAktar } from '../../scripts/platform/aktarim/allure-sonuclari.mjs';
-import { hassasAlanlariTamamla } from '../../scripts/platform/aktarim/motor.mjs';
 import { playwrightDurumuEsle } from '../../scripts/platform/sonuclar/siniflandirma.mjs';
 import { atlananAlanlariAyristir, medyaTuru } from '../../scripts/platform/raporlayici.mjs';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
@@ -118,14 +115,13 @@ test.describe('Koşu sonuçları deposu', () => {
       const ekranA = ekranKaydet(vt, { projeId: proje, anahtar: 'a', ad: 'Ürün A' });
       ekranKaydet(vt, { projeId: proje, anahtar: 'b', ad: 'Ürün B' });
       const s1 = senaryoKaydet(vt, { projeId: proje, ekranId: ekranA, baslik: 'A1', icerik: {} });
-      kaynakEslemesiYaz(vt, { id: randomBytes(8).toString('hex'), projeId: proje, varlikTuru: 'senaryo', kaynakAnahtari: 'a.spec.ts::A1', varlikId: s1, kaynakOzeti: null });
       const zaman = (dk: number) => new Date(Date.UTC(2026, 0, 1, 10, dk)).toISOString();
       const sonuc = (kosuId: string, baslik: string, durum: string, ek: Record<string, unknown> = {}) => sonucKaydet(vt, {
         kosuId, projeId: proje, senaryoBaslik: baslik, durum, testKimligi: `${baslik}-id`, bitis: zaman(0), ...ek
       });
-      // 1) tam, Genel: A1 geçti (senaryo eşlemesi ile), A2 kaldı (ürün adıyla), B1 geçti
+      // 1) tam, Genel: A1 geçti (senaryo kimliğiyle), A2 kaldı (ürün adıyla), B1 geçti
       kosuKaydet(vt, { id: 'kosu-1', projeId: proje, tur: 'tam', kapsam: 'Genel', baslangic: zaman(0) });
-      sonuc('kosu-1', 'A1', 'basarili', { senaryoAnahtari: 'a.spec.ts::A1' });
+      sonuc('kosu-1', 'A1', 'basarili', { senaryoId: s1 });
       sonuc('kosu-1', 'A2', 'basarisiz', { urunAdi: 'Ürün A', hataMesaji: 'Error: expect(locator).toBeVisible() failed\n\nLocator: getByRole(\'button\')\nExpected: visible\nReceived: hidden' });
       sonuc('kosu-1', 'B1', 'basarili', { urunAdi: 'Ürün B' });
       kosuyuBitir(vt, 'kosu-1', { durum: 'tamamlandi', bitis: zaman(5) });
@@ -135,7 +131,7 @@ test.describe('Koşu sonuçları deposu', () => {
       kosuyuBitir(vt, 'kosu-2', { durum: 'tamamlandi', bitis: zaman(12) });
       // 3) tam, kapsam Ürün A: iki A testi geçti; A2 önce kaldı sonra yeniden denemede geçti
       kosuKaydet(vt, { id: 'kosu-3', projeId: proje, tur: 'tam', kapsam: 'Ürün A', baslangic: zaman(20) });
-      sonuc('kosu-3', 'A1', 'basarili', { senaryoAnahtari: 'a.spec.ts::A1' });
+      sonuc('kosu-3', 'A1', 'basarili', { senaryoId: s1 });
       const ilk = sonuc('kosu-3', 'A2', 'basarisiz', { urunAdi: 'Ürün A', hataMesaji: 'x', medya: [{ tur: 'ekran_goruntusu', ad: 'g', icerikTuru: 'image/png', boyut: 1, dosya: `${'a'.repeat(32)}.medya` }] });
       const ikinci = sonuc('kosu-3', 'A2', 'basarili', { urunAdi: 'Ürün A', deneme: 1 });
       expect(ilk.id).not.toBe(ikinci.id);
@@ -220,73 +216,8 @@ test.describe('Koşu sonuçları deposu', () => {
   });
 });
 
-test.describe('Eski Allure sonuçlarının içe aktarımı', () => {
-  test('koşu gruplama (etiket + 10 dk boşluk), durumlar, adımlar, png/webm şifreli kopya; kaynak dokunulmaz; tekrarlanabilir', async () => {
-    const k = geciciKlasor('allure');
-    try {
-      const vt = await kasaliVeritabani(k.yol);
-      const proje = projeKaydet(vt, { ad: 'Proje' });
-      ekranKaydet(vt, { projeId: proje, anahtar: 'jet', ad: 'JetÜrün' });
-      const kaynak = join(k.yol, 'allure-results-test');
-      mkdirSync(kaynak);
-      const png = sahtePng(3000);
-      const webm = sahteWebm(PARCA_BOYUTU + 10);
-      writeFileSync(join(kaynak, 'g1-attachment.png'), png);
-      writeFileSync(join(kaynak, 'v1-attachment.webm'), webm);
-      const t0 = Date.UTC(2026, 8, 1, 8, 0);
-      const sonuc = (uuid: string, ad: string, durum: string, start: number, etiketler: Array<[string, string]>, ek: Record<string, unknown> = {}) => {
-        writeFileSync(join(kaynak, `${uuid}-result.json`), JSON.stringify({
-          uuid, historyId: `${ad}-h`, name: ad, fullName: `scenarios/jet/x.spec.ts › ${ad}`, status: durum, start, stop: start + 1000,
-          labels: [['epic', 'JetÜrün'], ...etiketler].map(([name, value]) => ({ name, value })), steps: [], ...ek
-        }));
-      };
-      sonuc('r1', 'T1', 'failed', t0, [['kosuKimligi', 'dashboard-abc'], ['kosuTuru', 'tam'], ['kosuKapsami', 'JetÜrün']], {
-        statusDetails: { message: 'Error: expect(received).toBe(expected)\n\nExpected: "1"\nReceived: "2"' },
-        steps: [
-          { name: 'Giriş yapılır', status: 'passed', start: t0, stop: t0 + 10, steps: [{ name: '01', attachments: [{ name: '01', source: 'g1-attachment.png', type: 'image/png' }] }] },
-          { name: 'Screenshot', status: 'passed' },
-          { name: 'Form doldurulur', status: 'failed', statusDetails: { message: 'hata' } },
-          { name: 'video', attachments: [{ name: 'video', source: 'v1-attachment.webm', type: 'video/webm' }, { name: 'trace', source: 'yok.zip', type: 'application/zip' }] }
-        ]
-      });
-      sonuc('r2', 'T2', 'passed', t0 + 2000, [['kosuKimligi', 'dashboard-abc'], ['kosuTuru', 'tam']]);
-      sonuc('r3', 'T3', 'failed', t0 + 60 * 60 * 1000, []); // etiketsiz, mesajsız → durduruldu
-      sonuc('r4', 'T4', 'skipped', t0 + 60 * 60 * 1000 + 5 * 60 * 1000, []); // aynı etiketsiz koşu (10 dk içinde)
-      const onceki = new Map(readdirSync(kaynak).map((d) => [d, statSync(join(kaynak, d)).mtimeMs]));
-
-      const anahtar = medyaAnahtariniHazirla(vt);
-      const medyaKlasoru = join(k.yol, 'medya');
-      const ilk = await allureSonuclariniAktar(vt, { projeId: proje, ortamAnahtari: 'test', klasor: kaynak, medyaAnahtari: anahtar, medyaKlasoru });
-      expect(ilk).toEqual({ kosu: 2, sonuc: 4, medya: 2, zatenVar: 0, eksikEk: 0 });
-      const ikinci = await allureSonuclariniAktar(vt, { projeId: proje, ortamAnahtari: 'test', klasor: kaynak, medyaAnahtari: anahtar, medyaKlasoru });
-      expect(ikinci).toEqual({ kosu: 0, sonuc: 0, medya: 0, zatenVar: 4, eksikEk: 0 });
-      expect(readdirSync(medyaKlasoru)).toHaveLength(2);
-      for (const d of readdirSync(medyaKlasoru)) {
-        const b = readFileSync(join(medyaKlasoru, d));
-        expect(b.includes(PNG_IMZASI) || b.includes(WEBM_IMZASI), 'şifreli medyada imza olmamalı').toBe(false);
-      }
-      for (const [d, mtime] of onceki) expect(statSync(join(kaynak, d)).mtimeMs, `${d} değişmemeli`).toBe(mtime);
-
-      const ozet = sonucOzeti(vt, proje);
-      expect(ozet.kosuGecmisi.map((g) => [g.id, g.tur, g.kapsam, g.basarili, g.basarisiz, g.atlanan, g.durduruldu])).toEqual([
-        [`allure-test-${t0 + 60 * 60 * 1000}`, 'tam', 'Genel', 0, 0, 1, 1],
-        ['dashboard-abc', 'tam', 'JetÜrün', 1, 1, 0, 0]
-      ]);
-      const detay = kosuDetayi(vt, 'dashboard-abc');
-      const t1 = sonucDetayi(vt, detay?.sonuclar.find((s) => s.senaryoBaslik === 'T1')?.id ?? '');
-      expect(t1?.adimlar.map((a) => [a.ad, a.durum])).toEqual([['Giriş yapılır', 'basarili'], ['Form doldurulur', 'basarisiz']]);
-      expect(t1?.medya.map((m) => m.tur)).toEqual(['ekran_goruntusu', 'video']);
-      expect(t1?.urun).toBe('JetÜrün');
-      expect(t1?.senaryoAnahtari).toBe('scenarios/jet/x.spec.ts::T1');
-      vt.kapat();
-    } finally {
-      k.temizle();
-    }
-  });
-});
-
 test.describe('Test verisi: tüm alanlar hassas (kullanıcı kararı)', () => {
-  test('yeni tür alanları varsayılan hassas; hassaslık değişince profil değerleri ve geçmişi dönüştürülür; senaryo içeriği tamamlanır', async () => {
+  test('yeni tür alanları varsayılan hassas; hassaslık değişince profil değerleri ve geçmişi dönüştürülür', async () => {
     const k = geciciKlasor('hassas');
     try {
       const vt = await kasaliVeritabani(k.yol);
@@ -300,20 +231,15 @@ test.describe('Test verisi: tüm alanlar hassas (kullanıcı kararı)', () => {
       // Eski durum: alan açıkça hassas değil → düz metin (profil + geçmiş).
       const tur = testVerisiTuruKaydet(vt, { projeId: proje, ad: 'Adres', alanlar: [{ ad: 'cadde', hassas: false }] });
       const profil = testVerisiProfiliKaydet(vt, { projeId: proje, turId: tur, ad: 'adres1', degerler: { cadde: ADRES } });
-      const senaryo = senaryoKaydet(vt, { projeId: proje, baslik: 'S', icerik: { kaynak: { dosya: 'x', ad: 'S' }, veri: { cadde: ADRES } } });
       const dbYolu = join(k.yol, 'platform.db');
       expect(readFileSync(dbYolu).includes(Buffer.from(ADRES))).toBe(true);
-      // Hassas yapılır → profil + geçmişi şifrelenir; senaryo içeriği motorla tamamlanır.
+      // Hassas yapılır → profil + geçmişi şifrelenir.
       testVerisiTuruKaydet(vt, { id: tur, projeId: proje, ad: 'Adres', alanlar: [{ ad: 'cadde', hassas: true }] });
-      expect(hassasAlanlariTamamla(vt, proje, new Set(['cadde', 'isim']))).toBeGreaterThan(0);
       const bayt = readFileSync(dbYolu);
       for (const deger of [ADRES, SAHIP]) expect(bayt.includes(Buffer.from(deger)), 'düz metin kalmamalı').toBe(false);
       expect(testVerisiProfiliGetir(vt, profil, { coz: true })?.degerler).toEqual({ cadde: ADRES });
       const gecmis = degisiklikGecmisiListele(vt, 'test_verisi_profili', profil);
       expect(zarfMi(JSON.parse(String(gecmis[0].sonraki?.degerler_json)).cadde)).toBe(true);
-      const icerik = JSON.parse(String(vt.tek('SELECT icerik_json FROM senaryolar WHERE id = ?', [senaryo])?.icerik_json));
-      expect(zarfMi(icerik.veri.cadde) && coz(vt, icerik.veri.cadde) === ADRES).toBe(true);
-      expect(icerik.kaynak).toEqual({ dosya: 'x', ad: 'S' });
       // Kullanıcı hassaslığı kaldırırsa değerler çözülür (düz metin kalır — bilinçli tercih).
       testVerisiTuruKaydet(vt, { id: tur, projeId: proje, ad: 'Adres', alanlar: [{ ad: 'cadde', hassas: false }] });
       expect(testVerisiProfiliGetir(vt, profil)?.degerler).toEqual({ cadde: ADRES });

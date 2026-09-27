@@ -63,3 +63,7 @@ export declare const MEDYA_ANAHTARI_META: 'medya_anahtari';
 export declare function medyaAnahtariniAc(zarf: string, kasaAnahtari: Buffer): Buffer;
 export declare function yeniMedyaAnahtari(kasaAnahtari: Buffer): { anahtar: Buffer; zarf: string };
 export declare function medyaAnahtariniHazirla(vt: Veritabani): Buffer;
+/** Nesne ağacında adı "adlar" içinde olan anahtarların dolu metin değerlerini dönüştürür. */
+export declare function adliAlanlariDonustur(deger: unknown, adlar: ReadonlySet<string>, donustur: (metin: string) => string): unknown;
+/** Nesne ağacındaki tüm kasa zarflarını çözer (kasa açık olmalı). */
+export declare function zarflariCoz(vt: Veritabani, deger: unknown): unknown;

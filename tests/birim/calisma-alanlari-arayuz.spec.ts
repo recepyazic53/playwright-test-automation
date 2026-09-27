@@ -1,22 +1,20 @@
 // ENTEGRASYON (yerel) — Nöbetçi arayüzü: çalışma alanları ve aynı çalışma alanında birden çok proje.
 // AYRI bir Nöbetçi sunucusu örneği GEÇİCİ bir veri köküyle başlatılır (NOBETCI_VERI_KOKU; TEST_SUNUCU_PORT: 5578 boşsa o,
 // değilse boş bir port; TEST_SUNUCU_KOSU_KAPALI=1: hiçbir test koşusu başlatılamaz). Veri kökünde eski düzende bir
-// platform.db (SAHTE örnek dosyalardan aktarılmış) vardır: sunucu onu YERİNDE ilk çalışma alanı olarak kaydeder.
+// platform.db (bir örnek proje) vardır: sunucu onu YERİNDE ilk çalışma alanı olarak kaydeder.
 // Akışlar: kilit ekranı (ad + "Başka çalışma alanı"), aynı kasada yeni proje sihirbazı, proje değiştirme / yeniden
 // adlandırma / varsayılan / silme, çalışma alanını kapat (dışa aktarmadan · dışa aktar ve kapat · değişiklik yok), yeni
-// çalışma alanı, yanlış parola beklemesi, bu bilgisayardan kaldır. Tüm istekler 127.0.0.1'dedir (şirket alan adı yok).
+// çalışma alanı, yanlış parola beklemesi, bu bilgisayardan kaldır. Tüm istekler 127.0.0.1'dedir (yasak örnek alan adı yok).
 // CALISMA_ALANLARI_EKRAN_KLASORU verilirse koyu/açık tema ekran görüntüleri oraya yazılır.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
-import { adaptorBul } from '../../projeler/index.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
-import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
+import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { korumaliTarayici, SIRKET_DESENI } from './giris-fikstur';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
 const EKRAN_KLASORU = process.env.CALISMA_ALANLARI_EKRAN_KLASORU;
@@ -88,14 +86,12 @@ test.beforeAll(async () => {
   klasor = geciciKlasor('calisma-alanlari-arayuz');
   veriKoku = join(klasor.yol, 'veri');
   mkdirSync(veriKoku, { recursive: true });
-  // Eski düzen: <veri kökü>/platform.db (örnek proje aktarılmış) — sunucu açılışta yerinde ilk çalışma alanı yapar.
-  const adaptor = adaptorBul('galaksi');
-  if (!adaptor) throw new Error('adaptör yok');
-  const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, { projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI }, testListesi: async () => [] });
+  // Eski düzen: <veri kökü>/platform.db (bir örnek proje + ortam) — sunucu açılışta yerinde ilk çalışma alanı yapar.
   const vt = await veritabaniniHazirla(join(veriKoku, 'platform.db'));
   await kasaOlustur(vt, PAROLA_A, { kdf: HIZLI_KDF });
-  aktarimiUygula(vt, paket);
-  ornekProjeAdi = String(vt.tek('SELECT ad FROM projeler LIMIT 1')?.ad);
+  ornekProjeAdi = 'Örnek başvuru projesi';
+  const projeId = projeKaydet(vt, { ad: ornekProjeAdi });
+  ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://basvuru.ornek.invalid', varsayilan: true });
   vt.kapat();
   nobetci = await nobetciBaslat(veriKoku, klasor.yol);
   tarayici = await korumaliTarayici();
@@ -113,7 +109,7 @@ test.afterAll(async () => {
 
 test.afterEach(() => {
   expect(hatalar, 'sayfa hataları').toEqual([]);
-  // Yalnızca yerel sunucu; şirket alan adına hiçbir istek yok.
+  // Yalnızca yerel sunucu; yasak örnek alan adına hiçbir istek yok.
   expect(istekler.filter((u) => SIRKET_DESENI.test(u))).toEqual([]);
   expect(istekler.filter((u) => !u.startsWith(nobetci.adres) && !u.startsWith('data:') && !u.startsWith('blob:'))).toEqual([]);
 });
@@ -167,16 +163,25 @@ test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → giriş profili i
   await goruntu('03-proje-secici', undefined, { x: 0, y: 0, width: 760, height: 300 });
   await menu.getByRole('menuitem', { name: 'Yeni proje' }).click();
   await expect(page.getByRole('heading', { name: 'Yeni proje', level: 1 })).toBeVisible();
-  await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Ortamlar', 'Giriş profili', 'Tamam']);
+  await expect(page.locator('.adimlar li')).toHaveText(['Tanışalım', 'Proje', 'Ortamlar', 'Giriş profili', 'Tamam']);
+  // Tanışma: yalnız servisler + test ve canlı → canlı ortam satırı hazır gelir; ekran adımı yapılacaklarda yok.
+  const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
+  await tanisma.getByRole('radio', { name: /Servisler/ }).check();
+  await tanisma.getByRole('radio', { name: /Test ve canlı/ }).check();
+  await tanisma.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Proje adı').fill('İkinci proje');
   await page.getByRole('button', { name: 'Devam' }).click();
-  await page.getByLabel('Adres (link)').fill('https://ikinci.ornek.invalid');
+  await page.getByLabel('Adres (link)').first().fill('https://ikinci.ornek.invalid');
+  await expect(page.getByLabel('Ortam adı').nth(1)).toHaveValue('CANLI');
+  await expect(page.getByLabel('Canlı ortam')).toBeChecked();
+  await page.getByLabel('Adres (link)').nth(1).fill('https://canli-ikinci.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
   await expect(page.getByRole('heading', { name: 'Giriş profili' })).toBeVisible();
   await goruntu('04-sihirbaz-giris-profili');
   await page.getByRole('button', { name: 'Şimdilik atla' }).click();
   await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toHaveCount(0);
+  await expect(page.locator('.yapilacaklar-listesi li')).toHaveText([/Giriş tarifini/, /Test verisini/, /Servis ekleyin/, /Koşun ve sonuçları/]);
   await goruntu('05-sihirbaz-tamam');
   await page.getByRole('button', { name: 'Ayarlara git' }).click();
   await expect(page.locator('#proje-rozeti')).toHaveText('İkinci proje');
@@ -237,7 +242,7 @@ test('çalışma alanını kapat (dışa aktarmadan): soru diyaloğu → başlan
   await expect(page.locator('.ca-karti')).toHaveCount(1);
   await expect(page.locator('.ca-karti .ca-adi')).toHaveText(ILK_AD);
   await expect(page.locator('.ca-karti .ca-meta')).toContainText('1 proje');
-  // Hiç çalışma alanı olmasaydı görünecek "Mevcut proje dosyalarını aktar" kartı burada yok.
+  // Yeni çalışma alanı için yalnız iki kart: Yedek yükle, Yeni proje başlat.
   await expect(page.locator('.secim-karti')).toHaveCount(2);
   await goruntu('10-baslangic-ekrani');
 });
@@ -250,6 +255,11 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   await d.getByLabel('Çalışma alanı adı').fill('İş');
   await goruntu('11-yeni-calisma-alani-adi', d);
   await d.getByRole('button', { name: 'Oluştur ve devam et' }).click();
+  // Tanışma soruları (varsayılan cevaplarla devam).
+  const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
+  await expect(tanisma.getByRole('heading', { name: 'Sizi tanıyalım' })).toBeVisible();
+  await expect(tanisma.getByRole('radio', { name: /İkisi de/ })).toBeChecked();
+  await tanisma.getByRole('button', { name: 'Devam' }).click();
   await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
   await expect(page.locator('.odak-ust')).toContainText('İş');
   await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA_B);

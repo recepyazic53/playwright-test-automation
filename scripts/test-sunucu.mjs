@@ -3,9 +3,7 @@
 // arayüzünü (GET /) ve /platform/* uç noktalarını sunar, Nöbetçi'den başlatılan Playwright koşularını
 // bu makinede çalıştırır (/platform/senaryolar/calistir → senaryoyuCalistirVeYanitla), durdurur
 // (/durdur), canlı ekran görüntüsünü verir (/canli) ve girişte SMS kodu "elle" girilecekse koşu
-// panelinin kod isteğini/yanıtını iletir (/kod-istegi, /kod-gonder). Proje verisi YALNIZCA platform veritabanındadır
-// (veri/platform.db); eski dosya tabanlı uçlar (dashboard, /calistir, /kosu-listesi, senaryo
-// dosyası düzenleyicileri) kaldırıldı.
+// panelinin kod isteğini/yanıtını iletir (/kod-istegi, /kod-gonder). Proje verisi YALNIZCA platform veritabanındadır.
 //
 // GÜVENLİK NOTLARI:
 // 1) Sunucu YALNIZCA 127.0.0.1'e bağlanır — ağdaki başka hiçbir cihaz erişemez.
@@ -105,7 +103,7 @@ function tokenGecerli(token) {
   return gecerli;
 }
 
-/** Koşu anahtarı "<dosya>::<başlık>" (dosya "/" ayraçlı; tests/support/kosu-listesi.ts ile aynı biçim). */
+/** Koşu anahtarı "<dosya>::<başlık>" (dosya "/" ayraçlı). */
 function kosuAnahtari(dosya, ad) {
   return `${String(dosya).replace(/\\/g, '/')}::${ad}`;
 }
@@ -180,9 +178,8 @@ function regexIcinKac(metin) {
 // döner. tumSenaryolariGetir (aşağıda) bunu argümansız çağırır; testiCalistirVeBekle
 // ise bir senaryoyu ÇALIŞTIRMADAN ÖNCE dosya+grep ile daraltıp TAM OLARAK 1 sonuç
 // döndüğünü doğrulamak için kullanır (bkz. o fonksiyondaki NOT).
-// ekOrtamDegiskenleri: Senaryolar > "Dene", geçici "ek veri" dosyasının yolunu
-// (TEST_SUNUCU_EK_SENARYO_DOSYASI) listeleme sürecine de vermek için kullanır — aksi halde
-// Playwright geçici senaryoyu listede göremez ve whitelist kontrolü onu reddeder.
+// ekOrtamDegiskenleri: Senaryolar > "Dene", geçici deneme dosyasının yolunu (TEST_SUNUCU_MODEL_DENEME_DOSYASI)
+// listeleme sürecine de vermek için kullanır — aksi halde Playwright deneme senaryosunu listede göremez.
 // genel: { projeId, ortamId } — listelenen proje ve ortam (bkz. genelKosuAyarlari).
 function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined, ekOrtamDegiskenleri = {}, genel = null) {
   return new Promise((resolve, reject) => {
@@ -201,9 +198,7 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
         // ortam değişkeni ile aktarılır (bkz. playwright.config.ts'teki "grep" ayarı ve
         // gercektenCalistir'deki açıklama) — Windows'ta argüman-satırı Unicode
         // bozulmasından kaçınmak için.
-        // TEST_SUNUCU_TUM_LISTE=1: playwright.config.ts'teki koşu listesi filtresi
-        // (grepInvert) bu listelemede UYGULANMAZ — "Senaryolar" tablosu, whitelist ve
-        // /kosu-listesi doğrulaması koşudan hariç tutulanlar dahil TÜM senaryoları görmeli.
+        // TEST_SUNUCU_TUM_LISTE=1: model spec'i "Koşuda" kapalı senaryoları da üretir (whitelist hepsini görmeli).
         env: {
           ...process.env,
           ...g.ortamDegiskenleri,
@@ -231,9 +226,7 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
             for (const spec of suite.specs ?? []) {
               const specDosya = spec.file ?? buDosya;
               if (spec.title) {
-                // Spec'in test tanımında verdiği "beklenenSonuc" annotation'ı (kodlu testlerde)
-                // "--list" çıktısında da gelir; dashboard'daki
-                // Senaryolar tablosu bunu rozet olarak gösterir. Yoksa alan hiç eklenmez.
+                // Testin "beklenenSonuc" annotation'ı "--list" çıktısında da gelir. Yoksa alan hiç eklenmez.
                 const beklenenSonuc = (spec.tests ?? [])
                   .flatMap((t) => t.annotations ?? [])
                   .find((a) => a?.type === 'beklenenSonuc' && typeof a.description === 'string')?.description;
@@ -317,7 +310,6 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-tarifi.js', { dosya: 'giris-tarifi.js', tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/aktarim.js', { dosya: 'aktarim.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
@@ -326,6 +318,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-akislari.js', { dosya: 'servis-akislari.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/rehber.js', { dosya: 'rehber.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/rehber-icerikleri.js', { dosya: 'rehber-icerikleri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/cikis-korumasi.js', { dosya: 'cikis-korumasi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
@@ -552,16 +546,14 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   const desen = grepDeseni || `${regexIcinKac(senaryoAdi)}$`;
 
   // NOT (3. kök neden): Bu kontrol ÖNCEDEN yalnızca "ad"a (başlığa) bakıyordu — ama
-  // aynı senaryo başlığı ("...Kiracı Testi", "...Mal Sahibi Testi" gibi) BİRDEN FAZLA
-  // ürün dosyasında (jet-konut, jet-satis, jet-ilk-ates-konut vb.) KASITLI olarak
-  // tekrarlanabiliyor. Bu yüzden sadece "ad" ile filtrelemek, gerçekte TEK bir dosyada
+  // aynı senaryo başlığı BİRDEN FAZLA dosyada KASITLI olarak tekrarlanabiliyor. Bu yüzden sadece "ad" ile filtrelemek, gerçekte TEK bir dosyada
   // benzersiz olan bir senaryoyu "3 kez eşleşti" diyerek yanlışlıkla reddediyordu.
   // Çözüm: hem "ad" HEM "dosya" ile eşleştir — tekillik artık (dosya, başlık) ikilisi
   // için doğrulanıyor, ki zaten çalıştırılmak istenen kayıt da bu ikiliyle geliyor.
-  // Test verisi ve sonuçlar YALNIZCA platform veritabanında: proje aktarılmamışsa koşu başlatılmaz.
+  // Test verisi ve sonuçlar YALNIZCA platform veritabanında: proje yoksa ya da kasa oluşturulmamışsa koşu başlatılmaz.
   // Medya şifrelenmek zorunda: kasa kilitliyken de koşu BAŞLATILMAZ.
   if (!(await platformSonucKaydiEtkinMi(genel?.projeId ?? null))) {
-    return { calistiMi: false, mesaj: "Veritabanı hazır değil — Nöbetçi'yi açıp projeyi aktarın/yedek yükleyin." };
+    return { calistiMi: false, mesaj: "Veritabanı hazır değil — Nöbetçi'de proje oluşturun ya da yedek yükleyin." };
   }
   if (!(await platformKasaAcikMi())) {
     return {
@@ -965,8 +957,6 @@ platformKosucusunuAyarla({
     kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel',
     etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null, genel: istek.genel ?? null
   }),
-  // Kodlu testler kaldırıldı: yalnızca model senaryoları denenir.
-  dene: async () => ({ httpDurum: 410, govde: { basarili: false, mesaj: 'Kodlu testler kaldırıldı; senaryo model koşucusuyla denenir.' } }),
   // Model senaryosu "Dene": deneme senaryosu geçici dosyayla (TEST_SUNUCU_MODEL_DENEME_DOSYASI) veri okuyucuya verilir; model
   // spec'i onu etiketle tek test olarak üretir; listeleme ve koşu aynı dosyayla yapılır, dosya sonra silinir.
   modelDene: async (istek) => {

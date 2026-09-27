@@ -1,36 +1,24 @@
 // EKRAN YÖNETİMİ (genel) — Ekranlar > ⋯ menüsü: yeniden adlandır, düzenle (URL yolu, liste sırası), devre dışı bırak /
-// etkinleştir, kalıcı sil (+ isteğe bağlı: geçmiş sonuçlar, projedeki test kodu) ve silinmiş ekranı geri yükle.
+// etkinleştir, kalıcı sil (+ isteğe bağlı: geçmiş sonuçlar) ve silinmiş ekranı geri yükle.
 //
 // Durum (ekranlar.durum, şema v8 — AÇIK sütunlar; koşu listesi filtresi kasa kilitliyken de okuyabilsin):
 //   'etkin'      — normal.
 //   'devre_disi' — geri alınabilir: sol listelerde varsayılan olarak gizli; senaryoları "Koşuyu başlat"a, seçilenlerin
-//                  toplu koşusuna ve varsayılan Playwright listesine (playwright.config.ts > grepInvert) girmez. Tek
-//                  senaryo (▷) ve Dene ise çalışır (kullanıcı kararı, 2026-09-25).
+//                  toplu koşusuna girmez. Tek senaryo (▷) ve Dene ise çalışır (kullanıcı kararı, 2026-09-25).
 //                  Geçmiş sonuçlar Sonuçlar'da "devre dışı" rozetiyle görünür.
 //   'silindi'    — MEZAR TAŞI: ekranın model sürümleri, senaryoları (değişiklik geçmişi KORUNUR), şifreli senaryo/kanıt
-//                  dosyaları silinmiştir; satır yalnızca (a) korunan geçmiş sonuçlar "silinmiş ekran" diye görünsün ve
-//                  (b) test kodu KALDIRILMADIYSA koddaki testleri koşulardan hariç kalsın (kod kaldırılana ya da ekran
-//                  geri yüklenene kadar) diye durur. Sonuçlar da silinmiş ve kod da kalmamışsa satır tamamen silinir.
-//   Kaynak eşlemeleri (kaynak_eslemeleri) SİLİNMEZ: yeniden aktarım silinen ekranı/senaryoları geri getirmez.
+//                  dosyaları silinmiştir; satır yalnızca korunan geçmiş sonuçlar "silinmiş ekran" diye görünsün diye durur.
+//                  Sonuçlar da silinmişse satır tamamen silinir.
 //
-// Test kodunun kaldırılması: YALNIZCA <kod kökü>/tests/scenarios/** altındaki dosyalar (gerçek yol denetimi; "..",
-// mutlak yol, sembolik bağla dışarı çıkış reddedilir). Önce kuru çalıştırma (önizleme) tam dosya listesini gösterir;
-// silme isteği aynı listeyi (beklenenDosyalar) taşımak zorundadır — liste değiştiyse hiçbir şey silinmez. Dosyalar diskten
-// silinir (git "deleted" gösterir; git ile geri alınabilir). Kod kökü sunucuda enjekte edilir (testler geçici klasör verir).
-//
-// Tüm değişiklikler degisiklik_gecmisi'ne (varlik_turu 'ekran') yazılır. Kasa AÇIK olmalıdır (ekranHaricKapsami hariç).
+// Tüm değişiklikler degisiklik_gecmisi'ne (varlik_turu 'ekran') yazılır. Kasa AÇIK olmalıdır.
 // NOT: import.meta KULLANILMAZ. Tipler: ekran-yonetimi.d.mts.
 
-import { existsSync, lstatSync, readdirSync, realpathSync, rmdirSync, unlinkSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
-  DepoHatasi, ekranAyarlariniGetir, ekranKaydet, ekranModeliEkle, ekranModeliGetir, ekranlariListele, gecmisYaz,
-  kaynakEslemeleriniListele, senaryoSil
+  DepoHatasi, ekranAyarlariniGetir, ekranKaydet, ekranModeliEkle, ekranModeliGetir, ekranlariListele, gecmisYaz, senaryoSil
 } from '../veritabani/depo.mjs';
 import { acikAnahtar } from '../kasa.mjs';
 import { medyaDosyasiniGuvenliSil } from '../medya.mjs';
 import { referanslariBul } from '../dosyalar/senaryo-dosyalari.mjs';
-import { MODEL_SPEC_DOSYASI } from '../senaryolar/model-kosusu.mjs';
 import { senaryoKaynagi } from '../senaryolar/senaryo-servisi.mjs';
 import { modeliDogrula } from './ekran-servisi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
@@ -40,16 +28,11 @@ export { mezarTasiOku };
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, unknown>} Nesne */
 /** @typedef {import('../veritabani/depo.mjs').Ekran} Ekran */
-/** @typedef {{ dosyalar: string[]; anahtarlar: string[] }} KodKapsami */
-/** @typedef {{ zaman: string; kod: KodKapsami; kaldirilanDosyalar: string[]; sonuclarSilindi: boolean; onceki: Nesne }} MezarTasi */
+/** @typedef {{ zaman: string; sonuclarSilindi: boolean; onceki: Nesne }} MezarTasi */
 
 export const AD_EN_UZUN = 120;
 export const ACIKLAMA_EN_UZUN = 1000;
 export const URL_YOLU_EN_UZUN = 500;
-/** Kod kaldırmada tek seferde silinebilecek en fazla dosya (yanlışlıkla dev bir klasörün silinmesine karşı). */
-export const KOD_DOSYASI_EN_COK = 200;
-/** Test kodunun kaldırılabileceği TEK klasör (testDir'e — tests/ — göre). */
-export const KOD_KLASORU = 'scenarios';
 
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const simdi = () => new Date().toISOString();
@@ -76,80 +59,6 @@ function mezarTasiGetir(vt, ekranId) {
 
 /** Geçmiş kaydı için ekranın açık alanları (ayarlar — şifreli — yazılmaz). @param {Ekran} e */
 const ekranAnlik = (e) => ({ anahtar: e.anahtar, ad: e.ad, aciklama: e.aciklama, durum: e.durum, sira: e.sira });
-
-/**
- * Senaryoların Playwright kaynağı (dosya + başlık): içerikteki kaynak ya da aktarım eşlemesindeki "<dosya>::<başlık>".
- * @param {Veritabani} vt @param {string} projeId
- */
-function senaryoKaynaklari(vt, projeId) {
-  const eslemeler = new Map(kaynakEslemeleriniListele(vt, projeId, 'senaryo').map((e) => [e.varlikId, e.kaynakAnahtari]));
-  return vt.tumu('SELECT id, ekran_id, icerik_json FROM senaryolar WHERE proje_id = ?', [projeId]).map((s) => {
-    const k = senaryoKaynagi(JSON.parse(String(s.icerik_json)));
-    const a = eslemeler.get(String(s.id));
-    const i = a ? a.indexOf('::') : -1;
-    const kaynak = k ?? (a && i > 0 ? { dosya: a.slice(0, i), ad: a.slice(i + 2) } : null);
-    return { id: String(s.id), ekranId: s.ekran_id == null ? null : String(s.ekran_id), kaynak };
-  });
-}
-
-// ---------------------------------------------------------------------------------------
-// Koşu listesi kapsamı (kasa GEREKMEZ; veri-oku.mjs "durum" kipi kullanır)
-// ---------------------------------------------------------------------------------------
-
-/**
- * Devre dışı ve silinmiş (mezar taşı) ekranların koşulardan hariç tutulacak testleri:
- *  - dosyalar: TÜM testleri bu ekranlara ait spec dosyaları (testDir'e göre; kodla sonradan eklenen testler de hariç),
- *  - anahtarlar: etkin bir ekranla PAYLAŞILAN dosyalardaki bu ekranların senaryoları ("<dosya>::<başlık>").
- * Model koşucusunun ortak spec'i (her model senaryosu) dosya düzeyinde hariç tutulmaz (model spec'i kendisi süzer).
- * @param {Veritabani} vt @param {string} projeId @returns {KodKapsami}
- */
-export function ekranHaricKapsami(vt, projeId) {
-  const ekranlar = vt.tumu('SELECT id, durum, silinme_json FROM ekranlar WHERE proje_id = ?', [projeId]);
-  const pasif = new Set(ekranlar.filter((e) => e.durum !== 'etkin').map((e) => String(e.id)));
-  if (!pasif.size) return { dosyalar: [], anahtarlar: [] };
-  /** @type {Map<string, Set<string>>} dosya → sahip ekranlar ('' = ekransız) */
-  const sahipler = new Map();
-  const senaryolar = senaryoKaynaklari(vt, projeId);
-  for (const s of senaryolar) {
-    if (!s.kaynak || s.kaynak.dosya === MODEL_SPEC_DOSYASI) continue;
-    if (!sahipler.has(s.kaynak.dosya)) sahipler.set(s.kaynak.dosya, new Set());
-    /** @type {Set<string>} */ (sahipler.get(s.kaynak.dosya)).add(s.ekranId ?? '');
-  }
-  const tamamenPasif = (/** @type {string} */ dosya) => [...(sahipler.get(dosya) ?? [])].every((x) => pasif.has(x));
-  /** @type {Set<string>} */
-  const dosyalar = new Set();
-  /** @type {Set<string>} */
-  const anahtarlar = new Set();
-  for (const s of senaryolar) {
-    if (!s.kaynak || !s.ekranId || !pasif.has(s.ekranId) || s.kaynak.dosya === MODEL_SPEC_DOSYASI) continue;
-    if (tamamenPasif(s.kaynak.dosya)) dosyalar.add(s.kaynak.dosya);
-    else anahtarlar.add(`${s.kaynak.dosya}::${s.kaynak.ad}`);
-  }
-  for (const e of ekranlar) {
-    if (e.durum !== 'silindi') continue;
-    const m = mezarTasiOku(e.silinme_json);
-    if (!m) continue;
-    for (const d of m.kod.dosyalar) if (d !== MODEL_SPEC_DOSYASI && tamamenPasif(d)) dosyalar.add(d);
-    for (const a of m.kod.anahtarlar) anahtarlar.add(a);
-  }
-  return { dosyalar: [...dosyalar].sort(), anahtarlar: [...anahtarlar].sort() };
-}
-
-/**
- * "Kodu kaldırılmış" denetiminin yok sayacağı dosyalar: silinmiş ekranların (mezar taşı) kodu kaldırılan ya da hâlâ hariç
- * tutulan dosyaları (bu dosyalara bağlı eski satırlar — ör. yedekten gelenler — tekrar uyarı üretmesin).
- * @param {Veritabani} vt @param {string} projeId
- */
-export function silinmisEkranDosyalari(vt, projeId) {
-  /** @type {Set<string>} */
-  const sonuc = new Set();
-  for (const e of vt.tumu("SELECT silinme_json FROM ekranlar WHERE proje_id = ? AND durum = 'silindi'", [projeId])) {
-    const m = mezarTasiOku(e.silinme_json);
-    if (!m) continue;
-    for (const d of [...m.kaldirilanDosyalar, ...m.kod.dosyalar]) sonuc.add(d);
-  }
-  return sonuc;
-}
 
 /** Ekran etkin mi? (senaryo çalıştırma / Dene denetimi). Ekran yoksa (ekransız senaryo) true. @param {Veritabani} vt @param {string | null} ekranId */
 export function ekranEtkinMi(vt, ekranId) {
@@ -276,8 +185,7 @@ export function ekranDurumunuAyarla(vt, projeId, ekranId, etkin, yapan) {
 }
 
 /**
- * Silinmiş ekranı (mezar taşı) geri yükler: ekran boş (modelsiz, senaryosuz) olarak etkinleşir; kodu duran testler bir
- * sonraki aktarımda/listede yeniden görünür ve koşulara girer.
+ * Silinmiş ekranı (mezar taşı) geri yükler: ekran boş (modelsiz, senaryosuz) olarak etkinleşir.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string} [yapan]
  */
 export function ekranGeriYukle(vt, projeId, ekranId, yapan) {
@@ -294,157 +202,20 @@ export function ekranGeriYukle(vt, projeId, ekranId, yapan) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Kod dosyaları (yol güvenliği + kuru çalıştırma)
-// ---------------------------------------------------------------------------------------
-
-/**
- * testDir'e (tests/) göre spec yolunu GÜVENLE çözer: yalnızca <kök>/tests/scenarios/** altı. Mutlak yol, "..", ".",
- * boş parça, ters bölü ve (varsa) gerçek yolu tests/scenarios dışına çıkan sembolik bağlar reddedilir.
- * @param {string} kok proje (kod) kökü @param {unknown} goreli ör. "scenarios/urun/x.spec.ts"
- * @returns {{ tam: string; goreli: string } | { neden: string }}
- */
-export function kodYolunuDenetle(kok, goreli) {
-  if (typeof goreli !== 'string' || !goreli || goreli.length > 500 || /[\u0000-\u001f]/.test(goreli)) return { neden: 'geçersiz yol' };
-  if (goreli.includes('\\')) return { neden: 'ters bölü içeren yol' };
-  if (isAbsolute(goreli) || /^[A-Za-z]:/.test(goreli)) return { neden: 'mutlak yol' };
-  const parcalar = goreli.split('/');
-  if (parcalar.some((p) => p === '' || p === '.' || p === '..')) return { neden: 'geçersiz yol parçası ("..", "." ya da boş)' };
-  if (parcalar[0] !== KOD_KLASORU || parcalar.length < 2) return { neden: 'tests/scenarios dışında' };
-  const taban = resolve(kok, 'tests', KOD_KLASORU);
-  const tam = resolve(kok, 'tests', ...parcalar);
-  if (!tam.startsWith(taban + sep)) return { neden: 'tests/scenarios dışında' };
-  if (existsSync(taban)) {
-    const gercekTaban = realpathSync(taban);
-    let klasor = dirname(tam);
-    while (!existsSync(klasor) && klasor.startsWith(taban + sep)) klasor = dirname(klasor);
-    const gercekKlasor = realpathSync(klasor);
-    if (gercekKlasor !== gercekTaban && !gercekKlasor.startsWith(gercekTaban + sep)) return { neden: 'sembolik bağ tests/scenarios dışına çıkıyor' };
-  }
-  return { tam, goreli };
-}
-
-/**
- * Klasördeki dosyalar (özyinelemeli; sembolik bağlar izlenmez — bağın kendisi listelenir). @param {string} klasor
- * @returns {string[]} tam yollar
- */
-function klasorDosyalari(klasor) {
-  /** @type {string[]} */
-  const sonuc = [];
-  const gez = (/** @type {string} */ k) => {
-    for (const ad of readdirSync(k).sort()) {
-      const tam = join(k, ad);
-      const b = lstatSync(tam);
-      if (b.isDirectory()) gez(tam);
-      else sonuc.push(tam);
-      if (sonuc.length > KOD_DOSYASI_EN_COK) throw new DepoHatasi(`Klasörde ${KOD_DOSYASI_EN_COK}'den fazla dosya var; kod kaldırma güvenlik nedeniyle yapılmaz.`);
-    }
-  };
-  gez(klasor);
-  return sonuc;
-}
-
-/**
- * Ekranın test kodu: sahip olduğu spec dosyaları (başka etkin/devre dışı bir ekranın senaryosu da kullanıyorsa
- * "paylaşılan"), paylaşılan dosyalardaki kendi senaryo anahtarları. Mezar taşında kayıtlı liste kullanılır.
- * @param {Veritabani} vt @param {string} projeId @param {Ekran} e
- */
-function ekranKodu(vt, projeId, e) {
-  const senaryolar = senaryoKaynaklari(vt, projeId);
-  /** @type {Map<string, Set<string>>} */
-  const digerSahipler = new Map();
-  for (const s of senaryolar) {
-    if (!s.kaynak || s.ekranId === e.id) continue;
-    if (!digerSahipler.has(s.kaynak.dosya)) digerSahipler.set(s.kaynak.dosya, new Set());
-    /** @type {Set<string>} */ (digerSahipler.get(s.kaynak.dosya)).add(s.ekranId ?? '');
-  }
-  const mezar = e.durum === 'silindi' ? mezarTasiGetir(vt, e.id) : null;
-  /** @type {Set<string>} */
-  const dosyalar = new Set(mezar ? mezar.kod.dosyalar : []);
-  /** @type {Set<string>} */
-  const anahtarlar = new Set(mezar ? mezar.kod.anahtarlar : []);
-  for (const s of senaryolar) {
-    if (s.ekranId !== e.id || !s.kaynak || s.kaynak.dosya === MODEL_SPEC_DOSYASI) continue;
-    if (digerSahipler.has(s.kaynak.dosya)) anahtarlar.add(`${s.kaynak.dosya}::${s.kaynak.ad}`);
-    else dosyalar.add(s.kaynak.dosya);
-  }
-  // Mezar taşındaki dosya sonradan başka bir ekrana geçtiyse (ör. geri yüklenen senaryo) artık paylaşılandır.
-  for (const d of [...dosyalar]) if (digerSahipler.has(d)) dosyalar.delete(d);
-  return { dosyalar: [...dosyalar].sort(), anahtarlar: [...anahtarlar].sort(), paylasilan: [...new Set([...anahtarlar].map((a) => a.slice(0, a.indexOf('::'))))].sort() };
-}
-
-/**
- * Kod kaldırma planı (KURU ÇALIŞTIRMA — hiçbir şey silinmez). Klasör kipi: ekranın dosyaları tests/scenarios/<ekran
- * anahtarı>/ altındaysa ve o klasörde başka bir ekranın senaryosu yoksa klasörün TAMAMI (içindeki her dosya listelenir).
- * Aksi halde yalnızca ekranın spec dosyaları.
- * @param {Veritabani} vt @param {string} projeId @param {Ekran} e @param {string} kok
- */
-function kodPlani(vt, projeId, e, kok) {
-  const kod = ekranKodu(vt, projeId, e);
-  /** @type {Array<{ yol: string; neden: string }>} */
-  const reddedilenler = [];
-  /** @type {Array<{ goreli: string; tam: string }>} */
-  const mevcut = [];
-  for (const d of kod.dosyalar) {
-    const r = kodYolunuDenetle(kok, d);
-    if ('neden' in r) { reddedilenler.push({ yol: `tests/${d}`, neden: r.neden }); continue; }
-    if (existsSync(r.tam) || lstatVarMi(r.tam)) mevcut.push({ goreli: d, tam: r.tam });
-  }
-  const taban = resolve(kok, 'tests', KOD_KLASORU);
-  // Klasör kipi
-  /** @type {string | null} */
-  let klasor = null;
-  /** @type {string[]} */
-  let silinecekler = mevcut.map((m) => m.tam);
-  const ekranKlasoru = join(taban, e.anahtar);
-  const baskaEkranDosyasi = (/** @type {string} */ tam) => {
-    const goreli = relative(resolve(kok, 'tests'), tam).split(sep).join('/');
-    return senaryoKaynaklari(vt, projeId).some((s) => s.ekranId !== e.id && s.kaynak && s.kaynak.dosya === goreli);
-  };
-  if (mevcut.length && /^[A-Za-z0-9._-]+$/.test(e.anahtar) && !e.anahtar.startsWith('.') && mevcut.every((m) => m.tam.startsWith(ekranKlasoru + sep))
-    && existsSync(ekranKlasoru) && lstatSync(ekranKlasoru).isDirectory()) {
-    const hepsi = klasorDosyalari(ekranKlasoru);
-    if (!hepsi.some(baskaEkranDosyasi)) {
-      klasor = ekranKlasoru;
-      silinecekler = hepsi;
-    }
-  }
-  if (silinecekler.length > KOD_DOSYASI_EN_COK) throw new DepoHatasi(`${silinecekler.length} dosya silinecekti; güvenlik sınırı ${KOD_DOSYASI_EN_COK}. Kodu elle kaldırın.`);
-  const projeGoreli = (/** @type {string} */ tam) => relative(kok, tam).split(sep).join('/');
-  return {
-    testVar: mevcut.length > 0 || kod.anahtarlar.length > 0,
-    klasor: klasor ? projeGoreli(klasor) : null,
-    dosyalar: silinecekler.map(projeGoreli).sort(),
-    tamYollar: silinecekler,
-    /** Ekranın (tests/'e göre) sahip olduğu spec dosyaları — mezar taşına yazılır. */
-    sahipDosyalar: kod.dosyalar,
-    anahtarlar: kod.anahtarlar,
-    paylasilanlar: kod.paylasilan.map((d) => `tests/${d}`),
-    reddedilenler
-  };
-}
-
-/** Sembolik bağ (hedefi olmasa da) var mı? @param {string} yol */
-function lstatVarMi(yol) {
-  try { lstatSync(yol); return true; } catch { return false; }
-}
-
-// ---------------------------------------------------------------------------------------
 // Silme: önizleme + uygulama
 // ---------------------------------------------------------------------------------------
 
 /**
- * Silinecek her şeyin sayıları ve kod planı (hiçbir şey değişmez).
- * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {{ kodKoku: string }} s
+ * Silinecek her şeyin sayıları (hiçbir şey değişmez).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
  */
-export function ekranSilmeOnizlemesi(vt, projeId, ekranId, s) {
+export function ekranSilmeOnizlemesi(vt, projeId, ekranId) {
   acikAnahtar(vt);
   const e = ekranBul(vt, projeId, ekranId, { silinenlerDahil: true });
   const k = sayimlar(vt, e);
-  const kod = kodPlani(vt, projeId, e, s.kodKoku);
   return {
     ekran: { id: e.id, ad: e.ad, anahtar: e.anahtar, durum: e.durum },
-    sayilar: { modelSurumu: k.modelSurumu, senaryo: k.senaryoIdleri.length, sonuc: k.sonucIdleri.length, medya: k.sonucMedyasi.length + k.ekranMedyasi.length, sonucMedyasi: k.sonucMedyasi.length, ekranMedyasi: k.ekranMedyasi.length },
-    kod: { testVar: kod.testVar, klasor: kod.klasor, dosyalar: kod.dosyalar, paylasilanlar: kod.paylasilanlar, reddedilenler: kod.reddedilenler }
+    sayilar: { modelSurumu: k.modelSurumu, senaryo: k.senaryoIdleri.length, sonuc: k.sonucIdleri.length, medya: k.sonucMedyasi.length + k.ekranMedyasi.length, sonucMedyasi: k.sonucMedyasi.length, ekranMedyasi: k.ekranMedyasi.length }
   };
 }
 
@@ -503,34 +274,17 @@ function sayimlar(vt, e) {
 }
 
 /**
- * KALICI SİL. onayAdi ekranın adıyla aynı olmalı. Seçenekler:
- *  - sonuclariSil (varsayılan KAPALI): ekranın/senaryolarının koşu sonuçları + adımları + şifreli medyaları (güvenli silme).
- *    Kapalıysa sonuçlar kalır, ekran mezar taşı olur ve sonuçlar "silinmiş ekran" diye görünür.
- *  - koduKaldir: önizlemedeki dosyalar (beklenenDosyalar ile AYNI olmalı) <kodKoku>/tests/scenarios altından silinir.
- * Senaryolar senaryoSil ile silinir (değişiklik geçmişi korunur). Kaynak eşlemeleri korunur (yeniden aktarım geri getirmez).
+ * KALICI SİL. onayAdi ekranın adıyla aynı olmalı. sonuclariSil (varsayılan KAPALI): ekranın/senaryolarının koşu sonuçları +
+ * adımları + şifreli medyaları (güvenli silme). Kapalıysa sonuçlar kalır, ekran mezar taşı olur ve sonuçlar "silinmiş ekran"
+ * diye görünür. Senaryolar senaryoSil ile silinir (değişiklik geçmişi korunur).
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
- * @param {{ onayAdi: unknown; sonuclariSil?: unknown; koduKaldir?: unknown; beklenenDosyalar?: unknown; kodKoku: string; medyaKlasoru: string; yapan?: string; kosuyorMu?: (dosya: string, ad: string) => boolean }} s
+ * @param {{ onayAdi: unknown; sonuclariSil?: unknown; medyaKlasoru: string; yapan?: string; kosuyorMu?: (dosya: string, ad: string) => boolean }} s
  */
 export function ekranSil(vt, projeId, ekranId, s) {
   acikAnahtar(vt);
   const e = ekranBul(vt, projeId, ekranId, { silinenlerDahil: true });
   if (typeof s.onayAdi !== 'string' || s.onayAdi.replace(/\s+/g, ' ').trim() !== e.ad) throw new DepoHatasi('Onay için ekranın adını aynen yazın.');
   const sonuclariSil = s.sonuclariSil === true;
-  const koduKaldir = s.koduKaldir === true;
-  const plan = kodPlani(vt, projeId, e, s.kodKoku);
-  if (koduKaldir) {
-    if (!plan.dosyalar.length) throw new DepoHatasi('Bu ekranın kaldırılabilecek test kodu yok.');
-    const beklenen = Array.isArray(s.beklenenDosyalar) ? [...s.beklenenDosyalar].filter((x) => typeof x === 'string').sort() : null;
-    if (!beklenen || beklenen.length !== plan.dosyalar.length || beklenen.some((d, i) => d !== plan.dosyalar[i])) {
-      throw new DepoHatasi('Kaldırılacak dosya listesi önizlemeden sonra değişti; hiçbir şey silinmedi. Önizlemeyi yenileyip tekrar deneyin.');
-    }
-    // Her dosya yeniden denetlenir (önizlemeden sonra sembolik bağ vb. eklenmiş olabilir).
-    const taban = resolve(s.kodKoku, 'tests');
-    for (const tam of plan.tamYollar) {
-      const r = kodYolunuDenetle(s.kodKoku, relative(taban, tam).split(sep).join('/'));
-      if ('neden' in r) throw new DepoHatasi(`"${relative(s.kodKoku, tam)}" kaldırılamaz (${r.neden}); hiçbir şey silinmedi.`);
-    }
-  }
   const k = sayimlar(vt, e);
   if (s.kosuyorMu) {
     for (const x of vt.tumu(`SELECT baslik, icerik_json FROM senaryolar WHERE ekran_id = ?`, [e.id])) {
@@ -538,31 +292,16 @@ export function ekranSil(vt, projeId, ekranId, s) {
       if (kaynak && s.kosuyorMu(kaynak.dosya, kaynak.ad)) throw new DepoHatasi(`"${x.baslik}" şu anda koşuyor; bitmesini bekleyin veya durdurun.`);
     }
   }
-  // Kaldırılacak spec dosyaları: yalnızca yol denetiminden geçenler (tests/scenarios altı). Diğerleri (ör. tests/canli)
-  // ve paylaşılan dosyalardaki anahtarlar mezar taşında kalır ve koşulardan hariç tutulmaya devam eder.
-  const kaldirilacak = koduKaldir ? plan.sahipDosyalar.filter((d) => !('neden' in kodYolunuDenetle(s.kodKoku, d))) : [];
-  const kalanKodDosyalari = plan.sahipDosyalar.filter((d) => !kaldirilacak.includes(d));
-  const kalanAnahtarlar = plan.anahtarlar;
   const oncekiMezar = e.durum === 'silindi' ? mezarTasiGetir(vt, e.id) : null;
-  const kaldirilanDosyalar = [...new Set([...(oncekiMezar?.kaldirilanDosyalar ?? []), ...kaldirilacak])].sort();
   const sonuclarKaliyor = !sonuclariSil && (k.sonucIdleri.length > 0 || (oncekiMezar ? !oncekiMezar.sonuclarSilindi : false));
-  // Diskte hâlâ duran kod (ya da paylaşılan dosyadaki test) varsa mezar taşı kalır: o testler koşulara girmesin.
-  const kodDuruyor = kalanKodDosyalari.some((d) => existsSync(resolve(s.kodKoku, 'tests', d))) || kalanAnahtarlar.length > 0;
-  const tamamenSil = !sonuclarKaliyor && !kodDuruyor;
+  const tamamenSil = !sonuclarKaliyor;
   /** @type {string[]} */
   const silinecekMedyaDosyalari = [...k.ekranMedyasi.map((m) => m.dosya), ...(sonuclariSil ? k.sonucMedyasi.map((m) => m.dosya) : [])];
 
   const yer = (/** @type {unknown[]} */ l) => l.map(() => '?').join(', ');
   const ozet = vt.islem(() => {
-    // Senaryolar (geçmiş korunur) + kodu kaldırılan dosyalara bağlı ekransız senaryolar.
+    // Senaryolar (geçmiş korunur).
     for (const id of k.senaryoIdleri) senaryoSil(vt, id, s.yapan);
-    let ekSenaryo = 0;
-    if (koduKaldir) {
-      const dosyaKumesi = new Set(kaldirilacak);
-      for (const x of senaryoKaynaklari(vt, projeId)) {
-        if (x.ekranId === null && x.kaynak && dosyaKumesi.has(x.kaynak.dosya)) { senaryoSil(vt, x.id, s.yapan); ekSenaryo++; }
-      }
-    }
     // Ekranın şifreli dosyaları (medya satırları; dosyalar işlemden sonra güvenle silinir).
     for (let i = 0; i < k.ekranMedyasi.length; i += 500) {
       const parca = k.ekranMedyasi.slice(i, i + 500).map((m) => m.id);
@@ -589,20 +328,17 @@ export function ekranSil(vt, projeId, ekranId, s) {
     }
     vt.calistir('DELETE FROM ekran_modelleri WHERE ekran_id = ?', [e.id]);
     const aciklama = [
-      `Ekran silindi ("${e.ad}"): ${k.modelSurumu} model sürümü, ${k.senaryoIdleri.length + ekSenaryo} senaryo, ${k.ekranMedyasi.length} ekran dosyası`,
-      sonuclariSil ? `${k.sonucIdleri.length} sonuç ve ${k.sonucMedyasi.length} sonuç medyası silindi` : k.sonucIdleri.length ? `${k.sonucIdleri.length} geçmiş sonuç korundu` : null,
-      koduKaldir ? `test kodu kaldırıldı (${plan.dosyalar.length} dosya${plan.klasor ? `, ${plan.klasor}` : ''})` : kalanKodDosyalari.length || kalanAnahtarlar.length ? 'test kodu duruyor: koşulardan hariç (mezar taşı)' : null
+      `Ekran silindi ("${e.ad}"): ${k.modelSurumu} model sürümü, ${k.senaryoIdleri.length} senaryo, ${k.ekranMedyasi.length} ekran dosyası`,
+      sonuclariSil ? `${k.sonucIdleri.length} sonuç ve ${k.sonucMedyasi.length} sonuç medyası silindi` : k.sonucIdleri.length ? `${k.sonucIdleri.length} geçmiş sonuç korundu` : null
     ].filter(Boolean).join('; ');
-    // Kod kaldırılacaksa satır, dosyalar gerçekten silinene kadar mezar taşı olarak kalır (silinemeyen dosya hariç kalsın).
-    if (tamamenSil && !koduKaldir) {
+    if (tamamenSil) {
       vt.calistir('DELETE FROM ekranlar WHERE id = ?', [e.id]);
     } else {
       // Mezar taşı: şifreli ayarlar boşaltılır, durum 'silindi'.
       ekranKaydet(vt, { id: e.id, projeId, anahtar: e.anahtar, ad: e.ad, aciklama: e.aciklama, ayarlar: {} });
       /** @type {MezarTasi} */
       const mezar = {
-        zaman: oncekiMezar?.zaman || simdi(), kod: { dosyalar: kalanKodDosyalari, anahtarlar: kalanAnahtarlar }, kaldirilanDosyalar,
-        sonuclarSilindi: !sonuclarKaliyor, onceki: oncekiMezar?.onceki ?? { modelSurumu: k.modelSurumu, senaryo: k.senaryoIdleri.length, durum: e.durum }
+        zaman: oncekiMezar?.zaman || simdi(), sonuclarSilindi: !sonuclarKaliyor, onceki: oncekiMezar?.onceki ?? { modelSurumu: k.modelSurumu, senaryo: k.senaryoIdleri.length, durum: e.durum }
       };
       vt.calistir("UPDATE ekranlar SET durum = 'silindi', sira = NULL, silinme_json = ?, guncellenme = ? WHERE id = ?", [JSON.stringify(mezar), simdi(), e.id]);
     }
@@ -610,41 +346,12 @@ export function ekranSil(vt, projeId, ekranId, s) {
       varlikTuru: 'ekran', varlikId: e.id, islem: 'sil', yapan: s.yapan, onceki: ekranAnlik(e),
       sonraki: tamamenSil ? null : { ...ekranAnlik(e), durum: 'silindi' }, aciklama
     });
-    return { senaryo: k.senaryoIdleri.length + ekSenaryo, silinenKosu };
+    return { senaryo: k.senaryoIdleri.length, silinenKosu };
   });
 
-  // İşlem tamamlandı: şifreli medya dosyaları güvenle silinir; sonra test kodu.
+  // İşlem tamamlandı: şifreli medya dosyaları güvenle silinir.
   let silinenMedyaDosyasi = 0;
   for (const d of silinecekMedyaDosyalari) if (medyaDosyasiniGuvenliSil(s.medyaKlasoru, d)) silinenMedyaDosyasi++;
-  /** @type {string[]} */
-  const kaldirilanlar = [];
-  /** @type {Array<{ yol: string; neden: string }>} */
-  const kodHatalari = [];
-  if (koduKaldir) {
-    for (const tam of plan.tamYollar) {
-      try { unlinkSync(tam); kaldirilanlar.push(relative(s.kodKoku, tam).split(sep).join('/')); } catch (h) { kodHatalari.push({ yol: relative(s.kodKoku, tam).split(sep).join('/'), neden: /** @type {Error} */ (h).message.split('\n')[0] }); }
-    }
-    // Boşalan klasörler (tests/scenarios'un kendisi hariç).
-    const taban = resolve(s.kodKoku, 'tests', KOD_KLASORU);
-    const klasorler = [...new Set(plan.tamYollar.map((t) => dirname(t)))].sort((a, b) => b.length - a.length);
-    for (const baslangic of klasorler) {
-      let klasor = baslangic;
-      while (klasor.startsWith(taban + sep)) {
-        try { if (readdirSync(klasor).length) break; rmdirSync(klasor); } catch { break; }
-        klasor = dirname(klasor);
-      }
-    }
-    if (tamamenSil && !kodHatalari.length) {
-      vt.islem(() => vt.calistir('DELETE FROM ekranlar WHERE id = ?', [e.id]));
-    } else if (kodHatalari.length) {
-      // Silinemeyen dosyalar hariç tutulmaya devam etsin.
-      const kalan = plan.sahipDosyalar.filter((d) => existsSync(resolve(s.kodKoku, 'tests', d)));
-      const m = mezarTasiGetir(vt, e.id);
-      if (m && kalan.length) {
-        vt.islem(() => vt.calistir('UPDATE ekranlar SET silinme_json = ? WHERE id = ?', [JSON.stringify({ ...m, kod: { ...m.kod, dosyalar: kalan } }), e.id]));
-      }
-    }
-  }
   const satirKaldi = Boolean(vt.tek('SELECT 1 AS v FROM ekranlar WHERE id = ?', [e.id]));
   return {
     tamamenSilindi: !satirKaldi, mezarTasi: satirKaldi,
@@ -652,7 +359,6 @@ export function ekranSil(vt, projeId, ekranId, s) {
       modelSurumu: k.modelSurumu, senaryo: ozet.senaryo, sonuc: sonuclariSil ? k.sonucIdleri.length : 0, kosu: ozet.silinenKosu,
       medya: k.ekranMedyasi.length + (sonuclariSil ? k.sonucMedyasi.length : 0), medyaDosyasi: silinenMedyaDosyasi
     },
-    korunanSonuc: sonuclariSil ? 0 : k.sonucIdleri.length,
-    kod: { kaldirilanlar, hatalar: kodHatalari, haricKalan: kalanKodDosyalari.length + kalanAnahtarlar.length }
+    korunanSonuc: sonuclariSil ? 0 : k.sonucIdleri.length
   };
 }

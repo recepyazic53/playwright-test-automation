@@ -26,7 +26,7 @@ Nöbetçi'de ekran testlerinin yanında SOAP servis testleri. Servis kayıtları
 
 ## Parametreler
 
-Gövdede yalnız parametre adı durur, SoapUI'deki gibi: `<CitizenshipNumber>${SIGORTALI_TC}</CitizenshipNumber>`.
+Gövdede yalnız parametre adı durur, SoapUI'deki gibi: `<CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber>`.
 Değer sırası:
 
 1. **Tarih kuralı** (servis, Parametreler sekmesi).
@@ -37,12 +37,12 @@ Değer sırası:
    - Adlı profiller, ör. "Kanal 100": `USERNAME`, `PASSWORD`, `CHANNEL`.
    - Servis bir profil seçer; senaryo ezebilir.
    - Profil tüm ortamlar için genel değer taşır. Ortama özel satır, ör. CANLI'da farklı parola, alan alan ezer.
-3. **Test verisi.** Ayarlar > Test verisi > tür > alan > **Servis parametreleri** alanına `SIGORTALI_TC:sigortali, SIGORTA_ETTIREN_TC:ettiren` yazılır.
+3. **Test verisi.** Ayarlar > Test verisi > tür > alan > **Servis parametreleri** alanına `MUSTERI_TC:musteri, KEFIL_TC:kefil` yazılır.
    - Rol, aynı türün farklı kişileri için ayrı profil seçmeye yarar.
    - Servisin Parametreler sekmesinde her tür + rol için profil seçilir; senaryo ezebilir.
    - Bir parametre adı projede tek bir alana eşlenebilir.
 
-Değeri bulunamayan parametre, nedeniyle birlikte hata verir. Örnek: `SIGORTALI_TC ("Özel kişi" türü, "sigortali" rolü için profil seçilmedi)`.
+Değeri bulunamayan parametre, nedeniyle birlikte hata verir. Örnek: `MUSTERI_TC ("Özel kişi" türü, "musteri" rolü için profil seçilmedi)`.
 Raporda parola ve hassas test verisi maskelenir (`***`).
 
 ## Servis ekle sihirbazı
@@ -61,13 +61,13 @@ Adres = taban adres + yol, metin olarak birleştirilir: tabanın kendi yolu koru
 
 - Erişim kontrolünde (ve İşlemler > "WSDL'den yeniden al") WSDL şemasından her operasyonun istek alanları alınır: grup, tip (metin / sayı / evet-hayır / tarih / tarih-saat / liste), zorunluluk.
 - Senaryo düzenleyicide **Alanlar** sekmesi: her alan için değer kaynağı — Parametre (test verisi / giriş bilgisi / tarih kuralı listesinden), Sabit değer (tipe göre giriş: evet/hayır, tarih, liste), Boş gönder (`<A/>`), Boş (nil), Gönderme.
-- **★ servis varsayılanı:** bir alanın değeri servis varsayılanı yapılır (ör. `CitizenshipNumber` → `${SIGORTALI_TC}`); yeni senaryolar bu değerlerle açılır.
+- **★ servis varsayılanı:** bir alanın değeri servis varsayılanı yapılır (ör. `CitizenshipNumber` → `${MUSTERI_TC}`); yeni senaryolar bu değerlerle açılır.
 - **Gövde (XML)** sekmesi ileri kullanım içindir. Form gövdeyi tam temsil edemezse (şemada olmayan / tekrar eden öğe) neden gösterilir ve XML görünümünde kalınır; veri kaybolmaz.
 - Kaydedilen gövde yine SOAP XML'idir (koşucu, SoapUI aktarımı, raporlar aynı).
 
 ## Test verisi eşlemesi (Ayarlar > Test verisi)
 
-Alan satırında **Servis parametreleri**: servis seçilir → o servisin senaryolarında geçen parametrelerden biri seçilir (eşlenmemişler önce) ya da "Elle yaz…"; rol addan tahmin edilir (`SIGORTALI_…` → sigortali, `SIGORTA_ETTIREN_…` → ettiren). Eşleme parametre adına göredir: aynı ad tüm servislerde bu alandan dolar.
+Alan satırında **Servis parametreleri**: servis seçilir → o servisin senaryolarında geçen parametrelerden biri seçilir (eşlenmemişler önce) ya da "Elle yaz…"; rol addan tahmin edilir (`MUSTERI_…` → musteri, `KEFIL_…` → kefil). Eşleme parametre adına göredir: aynı ad tüm servislerde bu alandan dolar.
 
 ## SoapUI aktarımı
 

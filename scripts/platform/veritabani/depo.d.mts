@@ -161,15 +161,3 @@ export declare function kosuSonucuEkle(vt: Veritabani, girdi: {
 export declare function kosulariListele(vt: Veritabani, filtre?: { projeId?: string; limit?: number }): Kosu[];
 export declare function kosuSonuclariniListele(vt: Veritabani, kosuId: string): KosuSonucu[];
 
-export interface KaynakEslemesi {
-  id: string; projeId: string; varlikTuru: string; kaynakAnahtari: string; varlikId: string;
-  /** Şifreli özet (zarf); çözmek için kaynakOzetiniCoz. */
-  kaynakOzetiZarfi: string | null;
-  olusturulma: string; guncellenme: string;
-}
-export declare function kaynakEslemeleriniListele(vt: Veritabani, projeId: string, varlikTuru?: string): KaynakEslemesi[];
-export declare function kaynakEslemesiYaz(vt: Veritabani, girdi: {
-  id: string; projeId: string; varlikTuru: string; kaynakAnahtari: string; varlikId: string; kaynakOzeti: string | null;
-}): void;
-export declare function kaynakEslemesiSil(vt: Veritabani, projeId: string, varlikTuru: string, kaynakAnahtari: string): void;
-export declare function kaynakOzetiniCoz(vt: Veritabani, zarf: string | null): string | null;

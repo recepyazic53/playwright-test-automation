@@ -77,7 +77,7 @@ test.describe('test verisi tabloları', () => {
   });
 
   test('karşılıklar: değerin sayfa / servis değeri saklanır (diskte şifreli); verilmezse korunur, {} siler; gizli sütunda yok', async () => {
-    const kaydet = (sutunlar: Nesne[], satirlar?: Nesne[], id?: string) => basarili('/platform/tablo/kaydet', { projeId, id, ad: 'Seyahat kapsamı', sutunlar, satirlar });
+    const kaydet = (sutunlar: Nesne[], satirlar?: Nesne[], id?: string) => basarili('/platform/tablo/kaydet', { projeId, id, ad: 'Rota kapsamı', sutunlar, satirlar });
     let t = (await kaydet([{ ad: 'Kapsam', karsiliklar: { 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' }, 'BOŞ': { sayfa: ' ', servis: '' } } }, { ad: 'Anahtar', gizli: true, karsiliklar: { a: { sayfa: 'b' } } }],
       [{ degerler: { Kapsam: 'DÜNYA', Anahtar: 'k1' } }, { degerler: { Kapsam: 'AVRUPA', Anahtar: 'k2' } }])).tablo;
     expect(t.sutunlar).toEqual([{ ad: 'Kapsam', gizli: false, tip: 'metin', karsiliklar: { 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' } } }, { ad: 'Anahtar', gizli: true, tip: 'metin' }]);
@@ -92,7 +92,7 @@ test.describe('test verisi tabloları', () => {
     expect(t.sutunlar[0].karsiliklar).toEqual({ 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' } });
     t = (await kaydet([{ ad: 'Kapsam alanı', karsiliklar: {} }, { ad: 'Anahtar', gizli: true }], [], t.id)).tablo;
     expect(t.sutunlar[0].karsiliklar).toBeUndefined();
-    const red = await api('/platform/tablo/kaydet', { projeId, id: t.id, ad: 'Seyahat kapsamı', sutunlar: [{ ad: 'Kapsam alanı', karsiliklar: ['x'] }] });
+    const red = await api('/platform/tablo/kaydet', { projeId, id: t.id, ad: 'Rota kapsamı', sutunlar: [{ ad: 'Kapsam alanı', karsiliklar: ['x'] }] });
     expect(red.mesaj).toContain('karşılıkları geçersiz');
     await basarili('/platform/tablo/sil', { projeId, id: t.id });
   });
@@ -126,22 +126,22 @@ test.describe('test verisi tabloları', () => {
   });
 
   test('bağlam profilleri tablo olarak: listelenir, satır adı zorunlu, sütun / ad değişikliği profillere yazılır', async () => {
-    await basarili('/platform/baglam-profili/kaydet', { projeId, tur: 'Acente', ad: 'varsayilan', alanlar: { acenteKodu: '9001' }, ortamId: null });
-    await basarili('/platform/baglam-profili/kaydet', { projeId, tur: 'Acente', ad: 'ikinci', alanlar: { acenteKodu: '9002' }, ortamId: testOrtami });
+    await basarili('/platform/baglam-profili/kaydet', { projeId, tur: 'Şube', ad: 'varsayilan', alanlar: { subeKodu: '9001' }, ortamId: null });
+    await basarili('/platform/baglam-profili/kaydet', { projeId, tur: 'Şube', ad: 'ikinci', alanlar: { subeKodu: '9002' }, ortamId: testOrtami });
     // Diğer ekranlar (bağlama) bağlam tablolarını görmez; Tablolar ekranı görür.
     expect((await tablolar()).some((x) => x.baglam)).toBe(false);
     const hepsi = (await basarili(`/platform/tablolar?projeId=${projeId}&baglam=1`)).tablolar as Nesne[];
-    const acente = hepsi.find((x) => x.baglam && x.ad === 'Acente') as Nesne;
-    expect(acente.sutunlar).toEqual([{ ad: 'acenteKodu', gizli: false, tip: 'metin' }]);
-    expect(acente.satirlar.map((r: Nesne) => [r.ad, r.degerler.acenteKodu, r.ortamId])).toEqual([['ikinci', '9002', testOrtami], ['varsayilan', '9001', null]]);
+    const sube = hepsi.find((x) => x.baglam && x.ad === 'Şube') as Nesne;
+    expect(sube.sutunlar).toEqual([{ ad: 'subeKodu', gizli: false, tip: 'metin' }]);
+    expect(sube.satirlar.map((r: Nesne) => [r.ad, r.degerler.subeKodu, r.ortamId])).toEqual([['ikinci', '9002', testOrtami], ['varsayilan', '9001', null]]);
     // Satır adı zorunlu.
-    const red = await api('/platform/tablo/kaydet', { projeId, id: acente.id, ad: 'Acente', sutunlar: [{ ad: 'acenteKodu', eskiAd: 'acenteKodu' }], satirlar: [{ degerler: { acenteKodu: '9003' } }] });
+    const red = await api('/platform/tablo/kaydet', { projeId, id: sube.id, ad: 'Şube', sutunlar: [{ ad: 'subeKodu', eskiAd: 'subeKodu' }], satirlar: [{ degerler: { subeKodu: '9003' } }] });
     expect(red.mesaj).toContain('adı boş');
     // Sütun adı değişir + yeni satır: profillere yazılır (koşucu bağlam profillerinden okur).
-    await basarili('/platform/tablo/kaydet', { projeId, id: acente.id, ad: 'Acente', sutunlar: [{ ad: 'acentePartaji', eskiAd: 'acenteKodu' }],
-      satirlar: [{ ad: 'ucuncu', ortamId: null, degerler: { acentePartaji: '9003' } }] });
+    await basarili('/platform/tablo/kaydet', { projeId, id: sube.id, ad: 'Şube', sutunlar: [{ ad: 'subePartaji', eskiAd: 'subeKodu' }],
+      satirlar: [{ ad: 'ucuncu', ortamId: null, degerler: { subePartaji: '9003' } }] });
     const profiller = (await basarili(`/platform/baglam-profilleri?projeId=${projeId}`)).profiller as Nesne[];
-    expect(profiller.map((p) => [p.ad, p.alanlar]).sort()).toEqual([['ikinci', { acentePartaji: '9002' }], ['ucuncu', { acentePartaji: '9003' }], ['varsayilan', { acentePartaji: '9001' }]]);
+    expect(profiller.map((p) => [p.ad, p.alanlar]).sort()).toEqual([['ikinci', { subePartaji: '9002' }], ['ucuncu', { subePartaji: '9003' }], ['varsayilan', { subePartaji: '9001' }]]);
     expect(profiller.find((p) => p.ad === 'ikinci')?.ortamId).toBe(testOrtami);
   });
 
@@ -189,7 +189,7 @@ test.describe('test verisi tabloları', () => {
     expect(t.sutunlar.map((s: Nesne) => s.ad)).toEqual(['Kapsam', 'Alternatif', 'Ülke']);
     // Excel (.xlsx): başlık satırı sütunlarla eşleşir, satır eklenir.
     await duz.getByLabel('Excel ya da CSV dosyası').setInputFiles({ name: 'ulkeler.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      buffer: sahteXlsx([['Kapsam', 'Alternatif', 'Ülke'], ['AVRUPA', 'SEYAHAT PAKET', 'İSPANYA']]) });
+      buffer: sahteXlsx([['Kapsam', 'Alternatif', 'Ülke'], ['AVRUPA', 'ROTA PAKET', 'İSPANYA']]) });
     await expect(duz.getByLabel('3. satır Ülke')).toHaveValue('İSPANYA');
     // Arama.
     await duz.getByLabel('Satırlarda ara').fill('schengen');

@@ -1,11 +1,8 @@
 // Uçtan uca birim testlerinin ortak yardımcısı (spec DEĞİL): GEÇİCİ veritabanıyla, boş bir portta AYRI bir Nöbetçi
-// sunucusu başlatır (gerçek Nöbetçi'ye ve veri/ klasörüne dokunulmaz). Yasaklı adres koruması açıktır: "*nippon*" +
-// yerel .env'deki gerçek ortam host'ları (değerler dosyaya/loga yazılmaz).
+// sunucusu başlatır (gerçek Nöbetçi'ye ve veri/ klasörüne dokunulmaz). Yasaklı adres koruması açıktır: "*yasak-ornek*".
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
-import { parse as envAyristir } from 'dotenv';
 import { expect } from '@playwright/test';
 
 const KOK = resolve(__dirname, '..', '..');
@@ -13,17 +10,9 @@ const KOK = resolve(__dirname, '..', '..');
 export type Nobetci = { adres: string; token: string; surec: ChildProcess };
 export type Yanit = Record<string, unknown> & { basarili?: boolean; mesaj?: string; kod?: string };
 
-/** "*nippon*" + yerel .env'deki gerçek ortam host'ları. */
+/** Yasaklı adres kalıbı: "*yasak-ornek*". */
 export function yasakliKaliplar(): string {
-  const kaliplar = ['*nippon*'];
-  const env = join(KOK, '.env');
-  if (existsSync(env)) {
-    const d = envAyristir(readFileSync(env));
-    for (const a of [d.TEST_BASE_URL, d.CANLI_BASE_URL]) {
-      try { if (a) kaliplar.push(new URL(/^https?:\/\//.test(a) ? a : `http://${a}`).hostname); } catch { /* yok */ }
-    }
-  }
-  return kaliplar.join(',');
+  return '*yasak-ornek*';
 }
 
 export function bosPort(): Promise<number> {

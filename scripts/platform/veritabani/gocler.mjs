@@ -531,8 +531,20 @@ export const GOCLER = [
       );
       CREATE INDEX ix_servis_akis_kosulari_akis ON servis_akis_kosulari(akis_id, baslangic);
     `
+  },
+  {
+    // Sürüm 12 — eski proje dosyalarından aktarım (adaptörler) kaldırıldı: aktarılan kayıtların kaynak eşlemeleri artık
+    // kullanılmıyor. Bu tabloyu içeren eski yedekler yüklenirken tablo atlanır (bkz. KALDIRILAN_TABLOLAR).
+    surum: 12,
+    ad: 'kaynak_eslemeleri_kaldir',
+    sql: `
+      DROP TABLE IF EXISTS kaynak_eslemeleri;
+    `
   }
 ];
+
+/** Artık şemada olmayan tablolar: eski yedeklerde bulunursa yok sayılır (içe aktarma ve tam yükleme). */
+export const KALDIRILAN_TABLOLAR = Object.freeze(['kaynak_eslemeleri']);
 
 /**
  * ŞİFRELİ SÜTUNLAR — tek bildirim noktası. depo (yazma/okuma), kasa (ilk açılışta düz metin
@@ -555,7 +567,6 @@ export const SIFRELI_ALANLAR = Object.freeze({
   giris_profilleri: Object.freeze({ kullanici_adi: 'ozel', sms_ayari_json: 'ozel', parola: 'gizli', totp_gizli: 'gizli' }),
   baglam_profilleri: Object.freeze({ alanlar_json: 'ozel' }),
   ekranlar: Object.freeze({ ayarlar_json: 'ozel' }),
-  kaynak_eslemeleri: Object.freeze({ kaynak_ozeti: 'ozel' }),
   servisler: Object.freeze({ ayarlar_json: 'ozel' }),
   servis_senaryolari: Object.freeze({ icerik_json: 'ozel' }),
   servis_kimlikleri: Object.freeze({ degerler_json: 'gizli' }),
@@ -591,7 +602,6 @@ export const TABLOLAR = [
   { ad: 'ekranlar', birincilAnahtar: 'id', json: ['ayarlar_json', 'silinme_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'ekran_modelleri', birincilAnahtar: 'id', json: ['model_json'], guncellenme: false, baslikAlani: 'surum' },
   { ad: 'senaryolar', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'senaryo', baslikAlani: 'baslik' },
-  { ad: 'kaynak_eslemeleri', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'kaynak_anahtari' },
   { ad: 'servisler', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, gecmisTuru: 'servis', baslikAlani: 'ad' },
   { ad: 'servis_senaryolari', birincilAnahtar: 'id', json: ['icerik_json'], guncellenme: true, gecmisTuru: 'servis_senaryosu', baslikAlani: 'baslik' },
   { ad: 'servis_kimlikleri', birincilAnahtar: 'id', json: ['degerler_json'], guncellenme: true, baslikAlani: 'ad' },

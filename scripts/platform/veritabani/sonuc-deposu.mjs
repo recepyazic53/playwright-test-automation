@@ -134,13 +134,7 @@ export function sonucKaydet(vt, g) {
       vt.calistir('DELETE FROM kosu_sonuclari WHERE id = ?', [o.id]);
     }
     const anahtar = metin(g.senaryoAnahtari, 2000);
-    let senaryoId = g.senaryoId && KIMLIK.test(g.senaryoId) && vt.tek('SELECT 1 AS v FROM senaryolar WHERE id = ?', [g.senaryoId]) ? g.senaryoId : null;
-    if (!senaryoId && anahtar) {
-      const esleme = vt.tek(
-        "SELECT varlik_id FROM kaynak_eslemeleri WHERE proje_id = ? AND varlik_turu = 'senaryo' AND kaynak_anahtari = ?", [projeId, anahtar]
-      );
-      if (esleme && vt.tek('SELECT 1 AS v FROM senaryolar WHERE id = ?', [esleme.varlik_id])) senaryoId = String(esleme.varlik_id);
-    }
+    const senaryoId = g.senaryoId && KIMLIK.test(g.senaryoId) && vt.tek('SELECT 1 AS v FROM senaryolar WHERE id = ?', [g.senaryoId]) ? g.senaryoId : null;
     let ekranId = senaryoId ? /** @type {string | null} */ (vt.tek('SELECT ekran_id FROM senaryolar WHERE id = ?', [senaryoId])?.ekran_id ?? null) : null;
     const urunAdi = metin(g.urunAdi, 200);
     if (!ekranId && urunAdi) {

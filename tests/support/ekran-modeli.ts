@@ -1,6 +1,4 @@
-// EKRAN MODELİ: bir ürün ekranının tek doğruluk kaynağı. Modeller platform veritabanında durur
-// (Nöbetçi > ekran modeli; eski dosya adıyla "<ekran anahtarı>.model.json"); Git'te yalnızca birim
-// testlerinin SAHTE değerli örnekleri vardır (tests/birim/fixtures/ornek-eski-dosyalar/).
+// EKRAN MODELİ: bir ekranın tek doğruluk kaynağı. Modeller platform veritabanında durur (Nöbetçi > Ekranlar).
 //
 // Bu dosya modelin TypeScript tiplerini ve modeli dosyadan/veritabanı kümesinden kuran yükleyicileri
 // içerir. Yapısal DOĞRULAMA kuralları (bilinen anahtarlar/tipler, benzersiz alan id'leri, adım/koşul/
@@ -13,8 +11,6 @@ import {
   AKSIYON_TURLERI, ALAN_TIPLERI, BASARI_GOSTERGESI_TURLERI, DESTEKLENEN_SEMA_SURUMU, SEMA_SURUMLERI, DOLDURUCULAR, FORM_KONTROLLERI, KIRILGANLIK_DUZEYLERI, SECENEK_DURUMLARI,
   YAPILANDIRMA_TURLERI, altModeliDogrula as dogrulayiciAltModel, ekranModeliniDogrula as dogrulayiciEkranModeli
 } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
-import { getEnvironmentName } from './environments';
-import { platformVerisi } from './platform-veri';
 
 /** Bu yükleyicinin anladığı en yeni şema sürümü ve kabul edilen sürümler (doğrulayıcıyla aynı). */
 export { DESTEKLENEN_SEMA_SURUMU, SEMA_SURUMLERI, AKSIYON_TURLERI, BASARI_GOSTERGESI_TURLERI };
@@ -76,9 +72,9 @@ export type AdlandirilmisKosul = {
 export type Etiket = { ekran: string | null; form?: string | null; kaynak?: string; not?: string };
 
 export type Eslesme = {
-  /** Senaryo JSON anahtar(lar)ı (jetSeyahat.senaryolar[i].<anahtar>). */
+  /** Senaryo JSON anahtar(lar)ı (senaryo verisindeki <anahtar>). */
   senaryo?: string | string[];
-  /** Ürün verisindeki yol (jetSeyahat.<yol>, noktalı). */
+  /** Ürün verisindeki yol (<yol>, noktalı). */
   urun?: string | null;
   /** Kart nesnesi içindeki anahtar (yalnızca odemeKrediKarti alt modelinde). */
   kart?: string;
@@ -276,7 +272,7 @@ export type BaglamGorunurlugu = {
 /** Yüklenmiş ve doğrulanmış model + başvurduğu alt modeller (dosya adı → alt model). */
 export type YuklenmisEkranModeli = {
   model: EkranModeli;
-  /** Modelin adı (eski dosya adı, ör. "jet-seyahat.model.json") ya da fixture dosyasının yolu. */
+  /** Modelin adı (ör. "<ekran anahtarı>.model.json") ya da fixture dosyasının yolu. */
   dosyaYolu: string;
   altModeller: Record<string, AltModel>;
 };
@@ -356,7 +352,7 @@ function senaryoAnahtarlari(alan: Alan): string[] {
 }
 
 /**
- * Senaryo JSON'unda (jetSeyahat.senaryolar[i]) BİLİNEN üst düzey anahtarlar → modeldeki alan.
+ * Senaryo verisinde BİLİNEN üst düzey anahtarlar → modeldeki alan.
  * Ekran alanları + senaryo düzeyi ayarları; yapilandirma "harici" olanlar (JSON'da yok) hariç.
  */
 export function senaryoAnahtarHaritasi(model: EkranModeli): Map<string, Alan> {
@@ -401,14 +397,4 @@ export function modelFormKontrolleri(yuklenmis: YuklenmisEkranModeli): Map<strin
     if (bolum) ekle(tumAlanlar(bolum.alanlar), `${altModel?.id}.`);
   }
   return harita;
-}
-
-// ---- JetSeyahat modeli (önbellekli) ----
-
-let jetSeyahatOnbellegi: YuklenmisEkranModeli | undefined;
-
-/** JetSeyahat ekran modeli — platform veritabanından (bu koşunun ortamı); bir kez doğrulanır, sonra önbellekten. */
-export function jetSeyahatModeliniYukle(): YuklenmisEkranModeli {
-  jetSeyahatOnbellegi ??= ekranModeliniKur('jet-seyahat.model.json', platformVerisi(getEnvironmentName()).ekranModelleri);
-  return jetSeyahatOnbellegi;
 }

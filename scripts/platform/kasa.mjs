@@ -561,3 +561,33 @@ function medyaAnahtariniYenidenSar(vt, eskiAnahtar, yeniAnahtar) {
     console.error('[kasa] Medya anahtarı yeniden sarılamadı; mevcut şifreli medya dosyaları okunamayabilir.');
   }
 }
+
+/**
+ * Nesne ağacında adı "adlar" içinde olan anahtarların DOLU metin değerlerini dönüştürür (ör. hassas alanları şifrelemek için).
+ * @param {unknown} deger @param {ReadonlySet<string>} adlar @param {(metin: string) => string} donustur
+ * @returns {unknown}
+ */
+export function adliAlanlariDonustur(deger, adlar, donustur) {
+  if (Array.isArray(deger)) return deger.map((d) => adliAlanlariDonustur(d, adlar, donustur));
+  if (typeof deger === 'object' && deger !== null) {
+    /** @type {Record<string, unknown>} */
+    const yeni = {};
+    for (const [k, v] of Object.entries(deger)) {
+      yeni[k] = adlar.has(k) && typeof v === 'string' && v !== '' ? donustur(v) : adliAlanlariDonustur(v, adlar, donustur);
+    }
+    return yeni;
+  }
+  return deger;
+}
+
+/**
+ * Nesne ağacındaki tüm kasa zarflarını (metin değerleri) çözer. Kasa açık olmalıdır.
+ * @param {import('./veritabani/baglanti.mjs').Veritabani} vt @param {unknown} deger @returns {unknown}
+ */
+export function zarflariCoz(vt, deger) {
+  if (Array.isArray(deger)) return deger.map((d) => zarflariCoz(vt, d));
+  if (typeof deger === 'object' && deger !== null) {
+    return Object.fromEntries(Object.entries(deger).map(([k, v]) => [k, zarflariCoz(vt, v)]));
+  }
+  return zarfMi(deger) ? coz(vt, deger) : deger;
+}

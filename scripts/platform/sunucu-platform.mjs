@@ -29,17 +29,6 @@
 //        baglam-profili, test-verisi-turu, test-verisi-profili)
 //   POST /platform/giris-profili/goster, /platform/test-verisi-profili/goster
 //        — AÇIK göster: tek bir gizli değeri düz metin döner (yalnızca kullanıcı isteyince).
-// Eski proje dosyalarını aktarma (genel motor: aktarim/motor.mjs; projeye özgü adaptörler:
-// projeler/index.mjs). Proje verisi Git'te değil, yalnızca veritabanındadır; eski dosyalar bir KAYNAK
-// KLASÖRDEN okunur: varsayılan en yeni veri/eski-dosyalar/<zaman>/ yedeği (içinde aktarılacak dosya
-// varsa), yoksa proje kökü (tests/data hâlâ duruyorsa). Kullanıcı başka bir klasör seçebilir.
-//   GET  /platform/aktarim/durum[?kaynakKlasoru=]   eski dosyalar (varsayılan ya da seçilen klasörde) var
-//                                    mı, veritabanı boş mu, daha önce aktarıldı mı
-//   POST /platform/aktarim/onizle    { adaptor, kaynakKlasoru? } → varlık başına sayılar (GİZLİ DEĞER YOK)
-//   POST /platform/aktarim/uygula    { adaptor, kaynakKlasoru?, parola? } → kasa yoksa parola ile BU AKIŞTA
-//                                    oluşturulur; kasa kilitliyse 423. Tekrar çalıştırmak çift kayıt
-//                                    üretmez (kaynak anahtarıyla birleştirir; atlananlar raporlanır).
-//   Dosyalardan veritabanına OTOMATİK yeniden aktarım YOKTUR (yalnızca kullanıcı başlatır).
 // Koşu sonuçları (şema v5; Playwright raporlayıcısı: scripts/platform/raporlayici.mjs):
 //   GET  /platform/sonuclar/ozet?projeId=&urun=       ürün listesi, kartlar, trend, koşu geçmişi
 //   GET  /platform/sonuclar/kosu?id=                  koşu detayı (senaryo bazında sonuçlar)
@@ -71,8 +60,6 @@
 //   GET  /platform/ekran/akis/tasarim?projeId=&ekranId=&akisId=|kopya=   akış diyagramı (bloklar + sağ liste; boş: yeni akış)
 //   POST /platform/ekran/akis/kaydet { projeId, ekranId, akisId?, ad, bloklar, onay }  onay yoksa etki (etkilenen senaryolar),
 //        varsa yeni model sürümü · POST /platform/ekran/akis/varsayilan | sil { projeId, ekranId, akisId }
-//   GET  /platform/akis-tasima?projeId=&ekranId=&ortamId=   kodlu senaryoları akış ekranına taşıma önizlemesi (taslaklar +
-//        durum; adaptör ürün verisini sunucuda okur) · POST /platform/akis-tasima/uygula { projeId, ekranId, ortamId, basliklar }
 //   GET  /platform/ortak-akis/ekranlar?projeId=&ekranId=  ortak akışın eklenebileceği ekranlar (ekranId: ortak akış)
 //   POST /platform/ortak-akis/ekle { projeId, ekranId, ekranIdleri, istegeBagli, onay }  ortak akışı seçilen ekranların
 //        varsayılan akışının sonuna ekler; onay yoksa etki
@@ -88,9 +75,8 @@
 //   POST /platform/ekran/duzenle { projeId, ekranId, urlYolu }                   yeni model sürümü (yalnızca ekranUrl)
 //   POST /platform/ekran/sirala { projeId, idler }                               sol listelerdeki sıra
 //   POST /platform/ekran/durum { projeId, ekranId, etkin }                       devre dışı bırak / etkinleştir
-//   POST /platform/ekran/sil/onizle { projeId, ekranId }                         KURU ÇALIŞTIRMA: sayılar + kaldırılacak dosyalar
-//   POST /platform/ekran/sil { projeId, ekranId, onayAdi, sonuclariSil?, koduKaldir?, beklenenDosyalar? }
-//        kalıcı sil; kod yalnızca <kod kökü>/tests/scenarios altından ve önizlemedeki listeyle AYNIYSA kaldırılır
+//   POST /platform/ekran/sil/onizle { projeId, ekranId }                         KURU ÇALIŞTIRMA: silinecek sayılar
+//   POST /platform/ekran/sil { projeId, ekranId, onayAdi, sonuclariSil? }        kalıcı sil
 //   POST /platform/ekran/geri-yukle { projeId, ekranId }                         silinmiş ekranı (mezar taşı) geri getirir
 // Senaryo dosyaları (ŞİFRELİ medya deposunda, tür 'senaryo-dosyasi'; bkz. dosyalar/senaryo-dosyalari.mjs):
 //   POST /platform/senaryo-dosyasi/yukle?projeId=&ekranId=&alan=   ham dosya gövdesi + X-Dosya-Adi → { dosya: { id, ad,
@@ -98,11 +84,6 @@
 //   POST /platform/ekran-dosyasi/yukle?projeId=&ekranId=&yol=<JSON>  ekran ayarındaki dosyayı (ör. ürünün varsayılan
 //        Excel'i) değiştirir;  GET /platform/ekran-dosyalari?projeId=  ekran ayarlarındaki dosya değerleri
 //   GET  /platform/senaryo-dosyalari?idler=a,b   ad + boyut (içerik ASLA dönmez; /platform/medya da senaryo dosyası sunmaz)
-//   POST /platform/acik-dosyalar/onizle { projeId } → adaptörün bildiği düz metin dosyalar (tests/fixtures/**…)
-//   POST /platform/acik-dosyalar/tasi { projeId, kimlikler, onay: true } → şifreli depoya al + referansa çevir +
-//        doğrula + düz metni ez/sil (tek seferlik; Ayarlar > Güvenlik)
-// Kodu kaldırılmış senaryolar (spec dosyası ya da test başlığı artık yok):
-//   POST /platform/senaryolar/kod-denetimi { projeId, ortamId } · POST /platform/senaryo/kodu-kaldirilmis-sil { projeId, ortamId, idler }
 // Yasak adresler: GET /platform/guvenlik → yasakAdresler (ayarlar) + ortamYasakAdresleri (NOBETCI_YASAK_ADRESLER);
 //   POST /platform/guvenlik/kaydet { yasakAdresler } — koşu koruması ve ekran taraması kullanır.
 // Otomatik kilit: kasa, kimliği doğrulanmış API etkinliği olmadan ayarlanan süre (Ayarlar >
@@ -126,6 +107,7 @@
 import { KATEGORI_SECENEKLERI, siniflandirmaKurallari, siniflandirmaKurallariniKaydet } from './ayarlar/siniflandirma-kurallari.mjs';
 import { CEKIRDEK_GIZLI_ADLAR, ekGizliAdlar, ekGizliAdlariKaydet } from './ayarlar/maskeleme.mjs';
 import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from './ayarlar/kosu-ayarlari.mjs';
+import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
@@ -154,16 +136,13 @@ import {
   eskiSonuclariSil, hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
 } from './veritabani/sonuc-deposu.mjs';
 import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
-import { allureSonuclariniAktar } from './aktarim/allure-sonuclari.mjs';
 import {
   YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, varsayilanYedekKlasoru, yedekBoyutTahmini, yedekDosyasiYaz
 } from './yedek.mjs';
 import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
-import { AktarimHatasi, aktarilmisProjeyiBul, aktarimiOnizle, aktarimiUygula, ortamKimligiBul } from './aktarim/motor.mjs';
-import { AKTARIM_ADAPTORLERI, adaptorBul } from '../../projeler/index.mjs';
 import {
-  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kodKaldirilmisSenaryolar, kodKaldirilmisSenaryolariSil, kosuyaDahilAyarla,
-  modelBaglami, ortamAnahtariBul, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
+  SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kosuyaDahilAyarla,
+  modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
 import { YASAK_ADRES_DEGISKENI } from './senaryolar/model-kosusu.mjs';
@@ -174,7 +153,6 @@ import {
   DOSYA_BOYUT_SINIRI, SENARYO_DOSYASI_TURU, dosyaSahipleriniBagla, kabulUzantilari, referansCoz, referanslariBul,
   sahipsizSenaryoDosyalariniTemizle, senaryoDosyasiBilgisi, senaryoDosyasiEkle
 } from './dosyalar/senaryo-dosyalari.mjs';
-import { acikDosyalariAktar, acikDosyalariBul, acikDosyalariTasi } from './dosyalar/acik-dosyalar.mjs';
 import { formSemasiOlustur, tumFormAlanlari } from './senaryolar/model-formu.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
 import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
@@ -183,7 +161,6 @@ import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta, modeliPaketleDegistir
 } from './ekranlar/ekran-servisi.mjs';
-import { akisTasimaOnizle, akisTasimaUygula } from './senaryolar/akis-tasima.mjs';
 import { akisKaydet, akisSil, akisTasarimi, akisVarsayilanYap, akislariListele, ortakAkisAdaylari, ortakAkisEkranlaraEkle } from './ekranlar/akis-servisi.mjs';
 import { PAKET_BOYUT_SINIRI } from './ekranlar/sayfa-paketi.mjs';
 import {
@@ -261,19 +238,11 @@ export function platformVeritabaniYolu() {
   return veritabaniYolu() ?? join(VERI_KOKU, VERITABANI_DOSYASI);
 }
 /**
- * Test KODUNUN kökü (tests/ bunun altında): "kodu kaldırılmış" denetimi ve Ekranlar > Sil > "test kodu da kaldırılsın".
- * Varsayılan proje köküdür; NOBETCI_KOD_KOKU yalnızca testler içindir (geçici bir kopya üzerinde kod kaldırma denenir,
- * gerçek tests/scenarios'a dokunulmaz).
- */
-const KOD_KOKU = process.env.NOBETCI_KOD_KOKU && process.env.NOBETCI_KOD_KOKU.trim() ? resolve(process.env.NOBETCI_KOD_KOKU.trim()) : PROJE_KOKU;
-/** Senaryonun kaynağındaki spec dosyası (testDir = tests/) diskte var mı? Yoksa senaryo model koşucusuyla çalışır. */
-const kodDosyasiVar = (/** @type {string} */ dosya) => existsSync(join(KOD_KOKU, 'tests', dosya));
-/**
  * Model/senaryo koşularının seçenekleri: yasaklı adres kalıpları (Ayarlar > Güvenlik > "Yasak adresler" +
  * NOBETCI_YASAK_ADRESLER) her istekte okunur.
  * @param {import('./veritabani/baglanti.mjs').Veritabani | null} db
  */
-const calistirmaSecenekleri = (db) => ({ kodDosyasiVar, yasakDesenleri: etkinYasakDesenleri(db) });
+const calistirmaSecenekleri = (db) => ({ yasakDesenleri: etkinYasakDesenleri(db) });
 /** Şifreli medya klasörü: veritabanının yanındaki medya/ (varsayılan veri/medya/). */
 const medyaKlasoruYolu = () => medyaKlasoru(acikVeritabaniYolu());
 /** Claude analiz/istek dosyaları: veritabanının yanındaki analiz/ (varsayılan veri/analiz/; Git'e girmez). */
@@ -411,16 +380,15 @@ export function videoSaklamaGunu(db) {
 }
 
 /**
- * Sonuçlar veritabanına mı yazılıyor? (Veritabanı + kasa var ve bir adaptörün projesi aktarılmış.)
- * Test sunucusu buna göre: kasa kilitliyse koşu başlatmaz, sonucu JSON dosyası yerine veritabanından okur.
- * projeId verilirse (genel yol: elle oluşturulan proje) aktarım aranmaz — o projenin veritabanında olması yeter.
+ * Sonuçlar veritabanına mı yazılıyor? (Veritabanı + kasa var ve proje — verilmezse herhangi bir proje — veritabanında.)
+ * Test sunucusu buna göre: kasa kilitliyse koşu başlatmaz.
  * @param {string | null} [projeId]
  */
 export async function platformSonucKaydiEtkinMi(projeId = null) {
   const db = await platformVeritabani();
   if (!db || !kasaDurumu(db).olusturuldu) return false;
   if (projeId) return Boolean(db.tek('SELECT id FROM projeler WHERE id = ?', [projeId]));
-  return AKTARIM_ADAPTORLERI.some((a) => Boolean(aktarilmisProjeyiBul(db, a.ad)));
+  return Boolean(db.tek('SELECT id FROM projeler LIMIT 1'));
 }
 
 /** Kasa açık mı (sunucunun veritabanında)? */
@@ -487,133 +455,6 @@ export function platformMedyaTemizligiZamanla() {
   setTimeout(calistir, 5_000).unref();
   setInterval(calistir, 24 * 60 * 60 * 1000).unref();
 }
-
-/**
- * Adaptörün eski koşu sonucu klasörlerini (varsa; kaynak klasörde ve proje kökünde) içe aktarır; kasa
- * AÇIK olmalı. Tekrarlanabilir.
- * @param {import('./veritabani/baglanti.mjs').Veritabani} db
- * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor
- * @param {string} projeId
- * @param {string} [kaynak] eski dosyaların klasörü
- */
-export async function eskiSonuclariAktar(db, adaptor, projeId, kaynak = PROJE_KOKU) {
-  const klasorler = [...new Set([resolve(kaynak), PROJE_KOKU])];
-  const gorulen = new Set();
-  const kaynaklar = (adaptor.sonucKaynaklari ? klasorler.flatMap((k) => adaptor.sonucKaynaklari?.(k) ?? []) : [])
-    .filter((k) => !gorulen.has(k.klasor) && gorulen.add(k.klasor));
-  const toplam = { kosu: 0, sonuc: 0, medya: 0, zatenVar: 0, eksikEk: 0 };
-  if (!kaynaklar.length) return toplam;
-  const anahtar = medyaAnahtariniHazirla(db);
-  try {
-    for (const k of kaynaklar) {
-      const s = await allureSonuclariniAktar(db, {
-        projeId, ortamAnahtari: k.ortam, ortamId: ortamKimligiBul(db, projeId, k.ortam) ?? null, klasor: k.klasor,
-        medyaAnahtari: anahtar, medyaKlasoru: medyaKlasoruYolu()
-      });
-      for (const a of /** @type {Array<keyof typeof toplam>} */ (Object.keys(toplam))) toplam[a] += s[a];
-    }
-  } finally {
-    anahtar.fill(0);
-  }
-  return toplam;
-}
-
-// ---------------------------------------------------------------------------------------
-// Proje dosyalarını aktarma
-// ---------------------------------------------------------------------------------------
-let aktarimSuruyor = false;
-
-/** @param {unknown} ad */
-function adaptorAl(ad) {
-  const adaptor = typeof ad === 'string' && ad ? adaptorBul(ad) : AKTARIM_ADAPTORLERI[0];
-  if (!adaptor) throw new AktarimHatasi('Bilinmeyen aktarım adaptörü.');
-  return adaptor;
-}
-
-/** @template T @param {() => Promise<T>} fn */
-async function aktarimKilidi(fn) {
-  if (aktarimSuruyor) throw new YedekHatasi('MESGUL', 'Başka bir aktarım sürüyor; bitmesini bekleyin.');
-  aktarimSuruyor = true;
-  try { return await fn(); } finally { aktarimSuruyor = false; }
-}
-
-/** Eski proje dosyası yedekleri: <proje kökü>/veri/eski-dosyalar/<YYYYMMDD-HHMM>/ (Git'e girmez). */
-export const ESKI_DOSYALAR_KLASORU = join(PROJE_KOKU, 'veri', 'eski-dosyalar');
-
-/** Kaynak klasör adayları: en yeni yedek önce, sonra proje kökü. */
-function kaynakAdaylari() {
-  /** @type {string[]} */
-  const adaylar = [];
-  try {
-    const yedekler = readdirSync(ESKI_DOSYALAR_KLASORU, { withFileTypes: true }).filter((g) => g.isDirectory()).map((g) => g.name).sort().reverse();
-    for (const ad of yedekler) adaylar.push(join(ESKI_DOSYALAR_KLASORU, ad));
-  } catch { /* yedek klasörü yok */ }
-  adaylar.push(PROJE_KOKU);
-  return adaylar;
-}
-
-/**
- * Adaptörün varsayılan kaynak klasörü: aktarılacak dosyaları olan en yeni yedek, yoksa proje kökü
- * (eski dosyalar hâlâ oradaysa); hiçbiri yoksa null.
- * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor
- */
-function varsayilanKaynak(adaptor) {
-  return kaynakAdaylari().find((k) => adaptor.algila(k).var) ?? null;
-}
-
-/**
- * İstekteki kaynak klasörü doğrular (yoksa varsayılan). Göreli yollar proje köküne göre çözülür, "~"
- * ev klasörüdür. Klasörde aktarılacak dosya yoksa AktarimHatasi.
- * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor @param {unknown} istenen
- */
-function kaynakKlasoruCoz(adaptor, istenen) {
-  if (istenen === undefined || istenen === null || (typeof istenen === 'string' && !istenen.trim())) {
-    const k = varsayilanKaynak(adaptor);
-    if (!k) throw new AktarimHatasi('Eski proje dosyalarının bulunduğu bir klasör bulunamadı (veri/eski-dosyalar/<zaman>/). Klasörü seçin.');
-    return k;
-  }
-  if (typeof istenen !== 'string' || istenen.length > 1000 || istenen.includes('\0')) throw new AktarimHatasi('Geçersiz klasör yolu.');
-  const yol = resolve(PROJE_KOKU, istenen.trim().replace(/^~(?=$|[\\/])/, homedir()));
-  let klasorMu = false;
-  try { klasorMu = statSync(yol).isDirectory(); } catch { klasorMu = false; }
-  if (!klasorMu) throw new AktarimHatasi('Seçilen klasör bulunamadı.');
-  if (!adaptor.algila(yol).var) throw new AktarimHatasi('Seçilen klasörde eski proje dosyaları yok (beklenen: tests/data/<ortam>/ortak.json).');
-  return yol;
-}
-
-/**
- * @param {import('./veritabani/baglanti.mjs').Veritabani | null} db
- * @param {unknown} [istenenKlasor] kullanıcının seçtiği kaynak klasör (yoksa varsayılan)
- */
-async function aktarimDurumu(db, istenenKlasor) {
-  const projeSayisi = db ? Number(db.tek('SELECT COUNT(*) AS n FROM projeler')?.n ?? 0) : 0;
-  return {
-    veritabaniBos: projeSayisi === 0,
-    kasaVar: db ? kasaDurumu(db).olusturuldu : false,
-    adaptorler: AKTARIM_ADAPTORLERI.map((a) => {
-      /** @type {string | null} */
-      let kaynakKlasoru = null;
-      /** @type {string | null} */
-      let kaynakHatasi = null;
-      try { kaynakKlasoru = kaynakKlasoruCoz(a, istenenKlasor); } catch (hata) { kaynakHatasi = /** @type {Error} */ (hata).message; }
-      const algi = kaynakKlasoru ? a.algila(kaynakKlasoru) : { var: false, ortamlar: [] };
-      const proje = db ? aktarilmisProjeyiBul(db, a.ad) : undefined;
-      const aktarim = /** @type {Record<string, unknown> | undefined} */ (proje?.ayarlar?.aktarim);
-      return {
-        ad: a.ad, etiket: a.etiket, projeAdi: a.projeAdi, dosyalarVar: algi.var, ortamlar: algi.ortamlar,
-        kaynakKlasoru, kaynakHatasi, yedekKlasoru: ESKI_DOSYALAR_KLASORU,
-        aktarildi: Boolean(proje), projeId: proje?.id ?? null, sonAktarim: typeof aktarim?.sonAktarim === 'string' ? aktarim.sonAktarim : null
-      };
-    })
-  };
-}
-
-/**
- * Paket: kaynak klasördeki eski dosyalar; ortam değişkenleri (taban adres, giriş bilgisi) kaynak
- * klasördeki .env'den (varsa), yoksa bu sürecin (dotenv'i yüklenmiş) değişkenlerinden.
- * @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor @param {string} kaynak
- */
-const paketOlustur = (adaptor, kaynak) => adaptor.paketOlustur(kaynak, { projeKoku: PROJE_KOKU, ortamDegiskenleri: process.env });
 
 /**
  * Kaba kuvvet sayacı ÇALIŞMA ALANI BAŞINA (kasa açma, parola değiştirme, dışa aktarma ve yedek parolası): bir çalışma
@@ -749,7 +590,6 @@ function mesgulNedeni() {
   if (taramaSuruyorMu()) return 'Bir ekran taraması sürüyor';
   if (iceAktarma.aktifIs()) return 'Bir yedek içe aktarması sürüyor';
   if ([...disaAktarmaIsleri.values()].some((i) => i.durum === 'hazirlaniyor')) return 'Bir dışa aktarma sürüyor';
-  if (aktarimSuruyor) return 'Proje dosyası aktarımı sürüyor';
   if (girisOnerisiSuruyor) return 'Giriş sayfası önerisi sürüyor';
   if (vtSozu) return 'Veritabanı açılıyor';
   return null;
@@ -875,7 +715,6 @@ function hataYaniti(hata) {
   if (hata instanceof SenaryoCakismaHatasi) return { durum: 409, govde: { basarili: false, kod: 'CAKISMA', mesaj: hata.message } };
   if (hata instanceof EkranDogrulamaHatasi) return { durum: 400, govde: { basarili: false, kod: 'DOGRULAMA', mesaj: hata.message, hatalar: hata.hatalar } };
   if (hata instanceof DepoHatasi) return { durum: 400, govde: { basarili: false, kod: 'VERI', mesaj: hata.message } };
-  if (hata instanceof AktarimHatasi) return { durum: 400, govde: { basarili: false, kod: 'AKTARIM', mesaj: hata.message } };
   if (hata instanceof CalismaAlaniHatasi) {
     const kodlar = { GECERSIZ: 400, BULUNAMADI: 404, AYNI_AD: 409, BOZUK: 500, ACIK: 409, ONAY: 400, MESGUL: 409, SABIT: 409, KAPALI: 409 };
     return { durum: kodlar[hata.kod] ?? 400, govde: { basarili: false, kod: hata.kod === 'KAPALI' ? 'CALISMA_ALANI_YOK' : hata.kod, mesaj: hata.message } };
@@ -1025,12 +864,6 @@ function testVerisiProfiliGorunumu(p) {
   return { id: p.id, projeId: p.projeId, turId: p.turId, ortamId: p.ortamId, ad: p.ad, degerler, hassasAlanlar: p.hassasAlanlar, guncellenme: p.guncellenme };
 }
 
-/** Projenin aktarım adaptörü (proje ayarlarından; yoksa null — genel davranış). @param {Veritabani} db @param {string} projeId */
-function projeAdaptoru(db, projeId) {
-  const proje = projeGetir(db, projeId);
-  const aktarim = /** @type {Record<string, unknown> | undefined} */ (proje?.ayarlar?.aktarim);
-  return typeof aktarim?.adaptor === 'string' ? adaptorBul(aktarim.adaptor) ?? null : null;
-}
 /** Ortam seçimi: verilen kimlik (projede olmalı) ya da projenin varsayılan ortamı. @param {Veritabani} db @param {string} projeId @param {unknown} d */
 function ortamSec(db, projeId, d) {
   const ortamlar = ortamlariListele(db, projeId);
@@ -1048,11 +881,9 @@ function ortamSec(db, projeId, d) {
  * Giriş tarifi görünümü (tarifte gizli değer yoktur). @param {Veritabani} db @param {string} projeId @param {import('./veritabani/depo.mjs').Ortam} o
  */
 function girisTarifiGorunumu(db, projeId, o) {
-  const adaptor = projeAdaptoru(db, projeId);
-  const etkin = etkinGirisTarifi(db, projeId, o.id, adaptor);
+  const etkin = etkinGirisTarifi(db, projeId, o.id);
   return {
-    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar,
-    varsayilanVar: Boolean(adaptor?.varsayilanGirisTarifi?.(db, projeId, o.id))
+    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar
   };
 }
 /** "Varsayılanları öner" aynı anda tek bir tarayıcı açsın. */
@@ -1157,49 +988,6 @@ function dosyaAlaniKabulu(db, ekranId, alan) {
   throw new DepoHatasi('Modelde bu adla bir dosya alanı yok.');
 }
 
-/** Açık dosya taraması için kökler: proje kökü + eski dosya yedekleri (veri/eski-dosyalar/<zaman>/). */
-function acikDosyaKokleri() {
-  const kokler = [{ kok: PROJE_KOKU, konum: 'proje' }];
-  try {
-    for (const g of readdirSync(ESKI_DOSYALAR_KLASORU, { withFileTypes: true }).filter((x) => x.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))) {
-      kokler.push({ kok: join(ESKI_DOSYALAR_KLASORU, g.name), konum: `eski-dosyalar/${g.name}` });
-    }
-  } catch { /* yedek klasörü yok */ }
-  return kokler;
-}
-
-/**
- * Ortamın güncel Playwright test listesi ("kodu kaldırılmış" denetimi). Çalıştırıcı yoksa ya da liste alınamazsa null.
- * @param {Veritabani} db @param {string} projeId @param {string} ortamId
- */
-async function kodListesiAl(db, projeId, ortamId) {
-  const ortamAnahtari = ortamAnahtariBul(db, projeId, ortamId);
-  if (!ortamAnahtari || !kosucu?.testListesi) return null;
-  try {
-    return await kosucu.testListesi(ortamAnahtari);
-  } catch (hata) {
-    console.error(`[platform] Test listesi alınamadı (yalnızca dosya denetimi yapıldı): ${/** @type {Error} */ (hata)?.message ?? hata}`);
-    return null;
-  }
-}
-
-/** @param {import('./dosyalar/acik-dosyalar.mjs').AcikDosya} d */
-const acikDosyaGorunumu = (d) => ({ kimlik: d.kimlik, konum: d.konum, goreliYol: d.goreliYol, boyut: d.boyut, sifreliKopyaVar: d.sifreliKopyaVar });
-
-/**
- * Aktarımdan sonra: adaptörün bildiği düz metin dosyalar (kaynak klasör + proje kökü) şifreli depoya alınır ve eski yol
- * değerleri referansa çevrilir. Düz metin dosyalar SİLİNMEZ (bunu kullanıcı Ayarlar > Güvenlik'ten yapar). Kasa açık olmalı.
- * @param {Veritabani} db @param {import('../../projeler/index.d.mts').AktarimAdaptoru} adaptor @param {string} projeId @param {string} kaynak
- */
-export async function eskiDosyalariAktar(db, adaptor, projeId, kaynak) {
-  const kokler = [{ kok: PROJE_KOKU, konum: 'proje' }];
-  if (resolve(kaynak) !== resolve(PROJE_KOKU)) kokler.push({ kok: resolve(kaynak), konum: 'kaynak' });
-  const dosyalar = acikDosyalariBul(db, adaptor, kokler);
-  if (!dosyalar.length) return { aktarilan: 0, zatenVardi: 0, referans: { senaryo: 0, ekran: 0 }, hatalar: [] };
-  const r = await acikDosyalariAktar(db, projeId, dosyalar, { medyaKlasoru: medyaKlasoruYolu(), yapan: 'aktarim:dosyalar' });
-  return { aktarilan: r.aktarilan, zatenVardi: r.zatenVardi, referans: r.referans, hatalar: r.hatalar };
-}
-
 /** @type {Map<string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>>} */
 const GET_UCLARI = new Map([
   // Giriş tarifleri (ortam başına; kaydedilmiş ya da projenin varsayılanı) + bağlam türlerinin ALAN ADLARI (değer yok).
@@ -1220,7 +1008,7 @@ const GET_UCLARI = new Map([
   ['/platform/senaryolar', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     const ortamId = ortamSec(db, projeId, q.get('ortamId'));
-    return { ortamId, ...senaryoListesi(db, projeId, ortamId, projeAdaptoru(db, projeId), { kodDosyasiVar }) };
+    return { ortamId, ...senaryoListesi(db, projeId, ortamId) };
   }],
   ['/platform/senaryo', (db, q) => {
     const id = kimlikAl(q.get('id'));
@@ -1242,7 +1030,7 @@ const GET_UCLARI = new Map([
   ['/platform/senaryo/form', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     const akisId = q.get('akisId');
-    return formBaglami(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')), projeAdaptoru(db, projeId),
+    return formBaglami(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')),
       akisId && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(akisId) ? akisId : null);
   }],
   ['/platform/senaryo/son-sonuc', (db, q) => {
@@ -1264,10 +1052,7 @@ const GET_UCLARI = new Map([
   ['/platform/ekranlar', (db, q) => ekranListesi(db, kimlikAl(q.get('projeId'), 'projeId'))],
   ['/platform/ekran', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
-    const d = ekranDetayi(db, projeId, kimlikAl(q.get('id')));
-    // Kodlu senaryoları bu akış ekranına taşıma (adaptör tanımlıysa; bkz. senaryolar/akis-tasima.mjs).
-    const adaptor = projeAdaptoru(db, projeId);
-    return { ...d, akisTasimasi: Boolean(adaptor?.akisTasimaEkranlari?.().includes(d.ekran.anahtar)) };
+    return ekranDetayi(db, projeId, kimlikAl(q.get('id')));
   }],
   // Değer listesi formu: ekranın inputları ve seçenekleri.
   ['/platform/ekran/girdiler', (db, q) => ekranGirdileri(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
@@ -1278,10 +1063,6 @@ const GET_UCLARI = new Map([
   }],
   ['/platform/ekran/analiz', (db, q) => analizGetir(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('id')))],
   ['/platform/ekran/akislar', (db, q) => akislariListele(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
-  ['/platform/akis-tasima', (db, q) => {
-    const projeId = kimlikAl(q.get('projeId'), 'projeId');
-    return akisTasimaOnizle(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')), projeAdaptoru(db, projeId));
-  }],
   ['/platform/ortak-akis/ekranlar', (db, q) => ortakAkisAdaylari(db, kimlikAl(q.get('projeId'), 'projeId'), kimlikAl(q.get('ekranId'), 'ekranId'))],
   ['/platform/ekran/akis/tasarim', (db, q) => {
     const akisKimligi = (/** @type {string | null} */ d) => (d && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(d) ? d : null);
@@ -1312,6 +1093,8 @@ const GET_UCLARI = new Map([
   }],
   // Ayarlar > Koşu: tanımlar (form) + kayıtlı değerler.
   ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
+  // Ekran rehberleri: ilk girişte otomatik açılsın mı (kullanıcı kararı) + görülenler (bkz. ayarlar/rehber-ayarlari.mjs).
+  ['/platform/rehber', (db) => ({ rehber: rehberAyarlariniOku(db) })],
   // Ayarlar > Güvenlik > Maskeleme: çekirdek gizli ad listesi (değiştirilemez) + kullanıcının ek adları.
   ['/platform/maskeleme', (db) => ({ cekirdek: CEKIRDEK_GIZLI_ADLAR, ekAdlar: ekGizliAdlar(db) })],
   // Ayarlar > Koşu > Hata sınıflandırma: kullanıcının kuralları + seçilebilen kategoriler.
@@ -1369,10 +1152,6 @@ const POST_UCLARI = new Map([
     akisId: typeof g.akisId === 'string' && g.akisId ? g.akisId : null, ad: g.ad, bloklar: g.bloklar, onay: g.onay === true
   })],
   ['/platform/ekran/akis/varsayilan', (db, g) => akisVarsayilanYap(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
-  ['/platform/akis-tasima/uygula', (db, g) => {
-    const projeId = kimlikAl(g.projeId, 'projeId');
-    return akisTasimaUygula(db, projeId, kimlikAl(g.ekranId, 'ekranId'), ortamSec(db, projeId, g.ortamId), projeAdaptoru(db, projeId), g.basliklar);
-  }],
   ['/platform/ortak-akis/ekle', (db, g) => ortakAkisEkranlaraEkle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
     ekranIdleri: g.ekranIdleri, istegeBagli: g.istegeBagli === true, onay: g.onay === true
   })],
@@ -1404,16 +1183,14 @@ const POST_UCLARI = new Map([
     console.log('[platform] Silinmiş ekran geri yüklendi.');
     return sonuc;
   }],
-  // KURU ÇALIŞTIRMA: silinecek sayılar + kaldırılacak test dosyalarının tam listesi (hiçbir şey değişmez).
-  ['/platform/ekran/sil/onizle', (db, g) => ({ onizleme: ekranSilmeOnizlemesi(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { kodKoku: KOD_KOKU }) })],
+  // KURU ÇALIŞTIRMA: silinecek sayılar (hiçbir şey değişmez).
+  ['/platform/ekran/sil/onizle', (db, g) => ({ onizleme: ekranSilmeOnizlemesi(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId')) })],
   ['/platform/ekran/sil', (db, g) => {
     if (g.sonuclariSil !== undefined && typeof g.sonuclariSil !== 'boolean') throw new DepoHatasi('"sonuclariSil" true ya da false olmalıdır.');
-    if (g.koduKaldir !== undefined && typeof g.koduKaldir !== 'boolean') throw new DepoHatasi('"koduKaldir" true ya da false olmalıdır.');
     const sonuc = ekranSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
-      onayAdi: g.onayAdi, sonuclariSil: g.sonuclariSil === true, koduKaldir: g.koduKaldir === true, beklenenDosyalar: g.beklenenDosyalar,
-      kodKoku: KOD_KOKU, medyaKlasoru: medyaKlasoruYolu(), kosuyorMu
+      onayAdi: g.onayAdi, sonuclariSil: g.sonuclariSil === true, medyaKlasoru: medyaKlasoruYolu(), kosuyorMu
     });
-    console.log(`[platform] Ekran silindi (${sonuc.silinen.senaryo} senaryo, ${sonuc.silinen.modelSurumu} model sürümü, ${sonuc.silinen.sonuc} sonuç, ${sonuc.kod.kaldirilanlar.length} kod dosyası kaldırıldı${sonuc.mezarTasi ? '; mezar taşı kaldı' : ''}).`);
+    console.log(`[platform] Ekran silindi (${sonuc.silinen.senaryo} senaryo, ${sonuc.silinen.modelSurumu} model sürümü, ${sonuc.silinen.sonuc} sonuç${sonuc.mezarTasi ? '; mezar taşı kaldı' : ''}).`);
     return sonuc;
   }],
   ['/platform/senaryo/kaydet', (db, g) => {
@@ -1422,7 +1199,7 @@ const POST_UCLARI = new Map([
       id: secimliKimlik(g.id) ?? null, projeId, ekranId: secimliKimlik(g.ekranId) ?? null, baslik: g.baslik,
       ...(g.veri !== undefined ? { veri: g.veri } : {}), ortamIdleri: g.ortamIdleri, kosuyaDahil: g.kosuyaDahil, mutlakaGorunmeli: g.mutlakaGorunmeli,
       ...(typeof g.akisId === 'string' ? { akisId: g.akisId } : {})
-    }, { adaptor: projeAdaptoru(db, projeId), kosuyorMu });
+    }, { kosuyorMu });
     // Formda yüklenen (henüz sahipsiz) şifreli dosyalar bu senaryoya bağlanır (sahipsiz temizliği silmesin).
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
     return { id: sonuc.id, uyarilar: sonuc.uyarilar };
@@ -1433,6 +1210,7 @@ const POST_UCLARI = new Map([
   ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
   ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],
   ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
+  ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],
   ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
   // Sonuçlar > Geçmiş sonuçları sil: tümü ya da "gun" günden eski bitmiş koşular (sonuç, adım, ekran görüntüsü, video, iz) ile
@@ -1793,13 +1571,6 @@ export async function platformIsteginiIsle(req, res, baglam) {
       return true;
     }
 
-    // --- GET /platform/aktarim/durum (kasa kilitliyken de çalışır; gizli bilgi yok) -----------
-    if (req.method === 'GET' && yol === '/platform/aktarim/durum') {
-      if (!disTokenGecerli) { tokenYok(); return true; }
-      jsonGonder(res, 200, { basarili: true, aktarimSuruyor, ...(await aktarimDurumu(await platformVeritabani(), url.searchParams.get('kaynakKlasoru'))) });
-      return true;
-    }
-
     // --- GET /platform/medya/<id> — şifreli medyayı çözerek akıtır (kasa açık olmalı) ---------
     const medyaEslesme = /^\/platform\/medya\/([A-Za-z0-9_-]{1,100})$/.exec(yol);
     if (req.method === 'GET' && medyaEslesme) {
@@ -1818,7 +1589,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
     // --- /platform/tarama/* — "Ekranı otomatik tara" (iş yöneticisi: tarama/yonetici.mjs; kendi token/gövde kontrolü) ---
     if (yol.startsWith('/platform/tarama/')) {
       return await taramaIsteginiIsle(req, res, {
-        token: baglam.token, disTokenGecerli, jsonGonder, jsonGovde, acikVeritabani, projeAdaptoru, projeKoku: PROJE_KOKU
+        token: baglam.token, disTokenGecerli, jsonGonder, jsonGovde, acikVeritabani, projeKoku: PROJE_KOKU
       });
     }
 
@@ -1974,77 +1745,6 @@ export async function platformIsteginiIsle(req, res, baglam) {
     }
 
     switch (yol) {
-      case '/platform/aktarim/onizle': {
-        const adaptor = adaptorAl(govde.adaptor);
-        const kaynak = kaynakKlasoruCoz(adaptor, govde.kaynakKlasoru);
-        const onizleme = await aktarimKilidi(async () => {
-          const db = await platformVeritabani();
-          if (db && kasaDurumu(db).olusturuldu && !kasaAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Önizleme için önce kasayı açın.');
-          return aktarimiOnizle(db, await paketOlustur(adaptor, kaynak));
-        });
-        res.setHeader('Cache-Control', 'no-store');
-        jsonGonder(res, 200, { basarili: true, onizleme, kaynakKlasoru: kaynak });
-        return true;
-      }
-      case '/platform/aktarim/uygula': {
-        const adaptor = adaptorAl(govde.adaptor);
-        const kaynak = kaynakKlasoruCoz(adaptor, govde.kaynakKlasoru);
-        const sonuc = await aktarimKilidi(async () => {
-          let db = await platformVeritabani();
-          if (!db || !kasaDurumu(db).olusturuldu) {
-            // Kasa yoksa AYNI akışta verilen parolayla oluşturulur (tekrar alanı istemci tarafında da denetlenir).
-            const parola = metin(govde.parola);
-            if (govde.parolaTekrar !== undefined && metin(govde.parolaTekrar) !== parola) {
-              throw new KasaHatasi('PAROLA_KISA', 'Kasa parolaları aynı değil.');
-            }
-            db = /** @type {import('./veritabani/baglanti.mjs').Veritabani} */ (await platformVeritabani({ olustur: true }));
-            await kasaOlustur(db, parola);
-            guvenlikAyariniYukle(db);
-            console.log('[platform] Kasa oluşturuldu (proje dosyası aktarımı).');
-          } else if (!kasaAcikMi(db)) {
-            throw new KasaHatasi('KASA_KILITLI', 'Aktarım için önce kasayı açın.');
-          }
-          const paket = await paketOlustur(adaptor, kaynak);
-          const uygulanan = aktarimiUygula(db, paket);
-          // Eski (Allure dönemi) koşu sonuçları + png/webm ekleri: tek seferlik, tekrarlanabilir
-          // (var olan sonuç atlanır). Kaynak klasörlere dokunulmaz; medya şifrelenerek kopyalanır.
-          let sonucAktarimi = null;
-          try {
-            sonucAktarimi = await eskiSonuclariAktar(db, adaptor, uygulanan.projeId, kaynak);
-          } catch (hata) {
-            uygulanan.uyarilar.push(`Eski koşu sonuçları aktarılamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);
-          }
-          // Senaryoların kullandığı düz metin dosyalar (ör. çoklu sorgu Excel'leri) şifreli depoya alınır; yol
-          // değerleri referansa çevrilir. Düz metinler SİLİNMEZ (Ayarlar > Güvenlik > "Açık dosyaları şifreli depoya taşı").
-          let dosyaAktarimi = null;
-          try {
-            dosyaAktarimi = await eskiDosyalariAktar(db, adaptor, uygulanan.projeId, kaynak);
-            for (const h of dosyaAktarimi.hatalar) uygulanan.uyarilar.push(`${h.goreliYol}: şifreli depoya alınamadı (${h.neden}).`);
-          } catch (hata) {
-            uygulanan.uyarilar.push(`Proje dosyaları şifreli depoya alınamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);
-          }
-          return { ...uygulanan, sonucAktarimi, dosyaAktarimi };
-        });
-        projeSayisiniKaydet(vt);
-        baglantiDosyasiniYaz();
-        const s = sonuc.sayimlar;
-        const toplam = (/** @type {'yeni' | 'guncellenecek' | 'ayni'} */ k) => Object.values(s).reduce((t, x) => t + x[k], 0);
-        console.log(`[platform] Eski proje dosyaları aktarıldı (${adaptor.ad}): yeni ${toplam('yeni')}, güncellenen ${toplam('guncellenecek')}, aynı (atlanan) ${toplam('ayni')}, kaldırılan ${sonuc.kaldirilanlar.length}.`);
-        if (sonuc.sonucAktarimi) {
-          const sa = sonuc.sonucAktarimi;
-          console.log(`[platform] Eski koşu sonuçları: ${sa.kosu} koşu, ${sa.sonuc} sonuç, ${sa.medya} şifreli medya aktarıldı (zaten var: ${sa.zatenVar}).`);
-        }
-        jsonGonder(res, 200, {
-          basarili: true,
-          sonuc: {
-            projeId: sonuc.projeId, sayimlar: sonuc.sayimlar, uyarilar: sonuc.uyarilar,
-            atlanan: { ayni: sonuc.atlananlar.ayni.length, silinmis: sonuc.atlananlar.silinmis, ortamYok: sonuc.atlananlar.ortamYok },
-            kaldirilanlar: sonuc.kaldirilanlar, kaynaktaYok: sonuc.kaynaktaYok, sonucAktarimi: sonuc.sonucAktarimi,
-            dosyaAktarimi: sonuc.dosyaAktarimi ? { aktarilan: sonuc.dosyaAktarimi.aktarilan, zatenVardi: sonuc.dosyaAktarimi.zatenVardi, referans: sonuc.dosyaAktarimi.referans } : null
-          }
-        });
-        return true;
-      }
       case '/platform/giris-tarifi/oner': {
         // YALNIZCA kullanıcı "Varsayılanları öner"e açıkça basınca: ortamın giriş sayfası başsız tarayıcıda
         // açılır, form ALGILANIR (hiçbir alan doldurulmaz/gönderilmez). Adres ortamın taban adresi + tarifteki
@@ -2074,53 +1774,9 @@ export async function platformIsteginiIsle(req, res, baglam) {
         jsonGonder(res, sonuc.httpDurum, sonuc.govde);
         return true;
       }
-      case '/platform/senaryolar/kod-denetimi': {
-        // "Kodu kaldırılmış" senaryolar: spec dosyası yok ya da (kodda tanımlı testin) başlığı güncel Playwright
-        // listesinde yok. Liste alınamazsa yalnızca dosya denetimi yapılır.
-        const db = await acikVeritabani();
-        const projeId = kimlikAl(govde.projeId, 'projeId');
-        const ortamId = ortamSec(db, projeId, govde.ortamId);
-        const testListesi = await kodListesiAl(db, projeId, ortamId);
-        jsonGonder(res, 200, { basarili: true, ...kodKaldirilmisSenaryolar(db, projeId, ortamId, { kodDosyasiVar, testListesi }) });
-        return true;
-      }
-      case '/platform/senaryo/kodu-kaldirilmis-sil': {
-        const db = await acikVeritabani();
-        const projeId = kimlikAl(govde.projeId, 'projeId');
-        const ortamId = ortamSec(db, projeId, govde.ortamId);
-        const testListesi = await kodListesiAl(db, projeId, ortamId);
-        const sonuc = kodKaldirilmisSenaryolariSil(db, projeId, ortamId, govde.idler, { kodDosyasiVar, testListesi, kosuyorMu });
-        console.log(`[platform] Kodu kaldırılmış ${sonuc.silinen} senaryo silindi (değişiklik geçmişi korunur).`);
-        jsonGonder(res, 200, { basarili: true, ...sonuc });
-        return true;
-      }
-      case '/platform/acik-dosyalar/onizle': {
-        // ÖNİZLEME: adaptörün bildiği düz metin dosyalar (hiçbir şey değişmez).
-        const db = await acikVeritabani();
-        const projeId = kimlikAl(govde.projeId, 'projeId');
-        const dosyalar = acikDosyalariBul(db, projeAdaptoru(db, projeId), acikDosyaKokleri());
-        jsonGonder(res, 200, { basarili: true, dosyalar: dosyalar.map(acikDosyaGorunumu) });
-        return true;
-      }
-      case '/platform/acik-dosyalar/tasi': {
-        // TEK SEFERLİK TAŞIMA (kullanıcı onaylı): seçilen düz metin dosyalar şifreli depoya alınır, yol değerleri
-        // referansa çevrilir, şifreli kopya doğrulanınca düz metin ezilip silinir.
-        const db = await acikVeritabani();
-        const projeId = kimlikAl(govde.projeId, 'projeId');
-        if (govde.onay !== true) throw new DepoHatasi('Taşıma için açık onay gerekir.');
-        const secilen = new Set(Array.isArray(govde.kimlikler) ? govde.kimlikler.filter((k) => typeof k === 'string') : []);
-        const dosyalar = acikDosyalariBul(db, projeAdaptoru(db, projeId), acikDosyaKokleri()).filter((d) => secilen.has(d.kimlik));
-        if (!dosyalar.length) throw new DepoHatasi('Taşınacak dosya seçilmedi (ya da seçilen dosyalar artık yok).');
-        const sonuc = await acikDosyalariTasi(db, projeId, dosyalar, {
-          medyaKlasoru: medyaKlasoruYolu(), yapan: 'guvenlik:acik-dosya-tasima', bosKlasorKoku: (d) => join(d.kok, 'tests', 'fixtures')
-        });
-        console.log(`[platform] Açık dosyalar şifreli depoya taşındı: ${sonuc.aktarilan} yeni, ${sonuc.zatenVardi} zaten vardı, ${sonuc.silinen} düz metin silindi, ${sonuc.atlanan.length} atlandı.`);
-        jsonGonder(res, 200, { basarili: true, sonuc });
-        return true;
-      }
       case '/platform/senaryo/dene': {
         const db = await acikVeritabani();
-        const sonuc = await senaryoDene(db, govde, kosucu, projeAdaptoru(db, kimlikAl(govde.projeId, 'projeId')));
+        const sonuc = await senaryoDene(db, govde, kosucu);
         jsonGonder(res, sonuc.httpDurum, sonuc.govde);
         return true;
       }
@@ -2313,7 +1969,7 @@ async function medyaSun(req, res, id, indir, jsonGonder) {
   const m = medyaGetir(db, id);
   if (!m) { jsonGonder(res, 404, { basarili: false, mesaj: 'Medya bulunamadı.' }); return; }
   if (m.silinme) { jsonGonder(res, 410, { basarili: false, mesaj: 'Bu video saklama süresi dolduğu için silindi.' }); return; }
-  // Senaryo dosyaları (ör. sigortalı listesi Excel'i) yalnızca koşuda kullanılır; düz metin olarak indirilmez/gösterilmez.
+  // Senaryo dosyaları (ör. müşteri listesi Excel'i) yalnızca koşuda kullanılır; düz metin olarak indirilmez/gösterilmez.
   if (m.tur === SENARYO_DOSYASI_TURU) { jsonGonder(res, 403, { basarili: false, mesaj: 'Senaryo dosyaları indirilemez; yalnızca koşuda (geçici olarak) çözülür.' }); return; }
   const klasor = medyaKlasoruYolu();
   const yol = medyaDosyaAdiGecerliMi(m.dosya) ? join(klasor, m.dosya) : null;
@@ -2404,17 +2060,15 @@ async function raporlayiciIsteginiIsle(req, res, islem, baglam) {
   switch (islem) {
     case 'durum': {
       const projeId = typeof govde.projeId === 'string' && govde.projeId ? govde.projeId : null;
-      const proje = projeId
-        ? (db.tek('SELECT id FROM projeler WHERE id = ?', [projeId]) ? { id: projeId } : undefined)
-        : typeof govde.adaptor === 'string' ? aktarilmisProjeyiBul(db, govde.adaptor) : undefined;
+      const proje = projeId && db.tek('SELECT id FROM projeler WHERE id = ?', [projeId]) ? { id: projeId } : undefined;
       const etkin = Boolean(proje) && kasaDurumu(db).olusturuldu;
-      // Genel yol (playwright.config.ts): ortam kimliği doğrudan gelir — yalnızca bu projenin ortamıysa kabul edilir.
+      // Ortam kimliği doğrudan gelir — yalnızca bu projenin ortamıysa kabul edilir.
       const verilenOrtamId = proje && typeof govde.ortamId === 'string' && govde.ortamId
         && db.tek('SELECT id FROM ortamlar WHERE id = ? AND proje_id = ?', [govde.ortamId, proje.id]) ? govde.ortamId : null;
       jsonGonder(res, 200, {
         basarili: true, etkin, veritabaniYolu: veritabaniYolu(), medyaKlasoru: medyaKlasoruYolu(),
         projeId: proje?.id ?? null,
-        ortamId: verilenOrtamId ?? (proje && typeof govde.ortam === 'string' ? ortamKimligiBul(db, proje.id, govde.ortam) ?? null : null),
+        ortamId: verilenOrtamId,
         medyaZarfi: db.metaOku(MEDYA_ANAHTARI_META) ?? null
       });
       return;

@@ -39,8 +39,8 @@ export type IsGorunumu = {
 
 export type TaramaYoneticisi = {
   isler: Map<string, Record<string, unknown>>;
-  secenekler(vt: Veritabani, projeId: string, ekranId: string | null, adaptorBul: (vt: Veritabani, projeId: string) => unknown): Record<string, unknown>;
-  baslat(vt: Veritabani, govde: Record<string, unknown>, s: { adaptor: unknown; sunucuAdresi: string }): { isId: string };
+  secenekler(vt: Veritabani, projeId: string, ekranId: string | null): Record<string, unknown>;
+  baslat(vt: Veritabani, govde: Record<string, unknown>, s: { sunucuAdresi: string }): { isId: string };
   durum(id: string): IsGorunumu;
   paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
   akis(id: string): {
@@ -70,7 +70,6 @@ export type TaramaIstekBaglami = {
   jsonGonder: (res: ServerResponse, durum: number, govde: unknown) => void;
   jsonGovde: (sinir?: number) => Promise<Record<string, unknown> | null>;
   acikVeritabani: () => Promise<Veritabani>;
-  projeAdaptoru: (vt: Veritabani, projeId: string) => unknown;
   projeKoku: string;
   /** Testler için: varsayılan yerine bu yönetici kullanılır. */
   yonetici?: TaramaYoneticisi;

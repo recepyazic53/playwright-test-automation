@@ -28,7 +28,7 @@ function girdi(adres: string, ek: Partial<TaramaGirdisi> = {}): TaramaGirdisi {
     tabanUrl: adres, hedefAdres: `${adres}/basvuru/`, hedefYol: '/basvuru/', tarif: tarif(),
     kimlik: { kullaniciAdi: TARAMA_KULLANICI, parola: TARAMA_PAROLA, totpGizli: null, sabitKod: null, smsKipi: null },
     profiller: [{ ad: 'Standart', degerler: { profilKodu: 'P1' } }, { ad: 'Yetkili', degerler: { profilKodu: 'P2' } }],
-    kesif: true, yasakKaliplari: ['*nippon*'], izinliKokenler: [adres], zamanAsimiMs: 120_000, ...ek
+    kesif: true, yasakKaliplari: ['*yasak-ornek*'], izinliKokenler: [adres], zamanAsimiMs: 120_000, ...ek
   };
 }
 
@@ -103,7 +103,7 @@ test('iki profille tam tarama: alanlar, etiketler, bölümler, keşif, geri alma
   const yazma = envanter.engellenenler.filter((e) => e.neden === 'yazma');
   expect(yazma.length).toBeGreaterThanOrEqual(4);
   expect(new Set(yazma.map((e) => `${e.yontem} ${new URL(e.adres).pathname} ${e.asama}`))).toEqual(new Set(['POST /basvuru/otomatik-kaydet tarama']));
-  // Yasaklı host'a (görsel) giden istek her profilde engellendi; şirket alan adına istek sunucuya ulaşmadı.
+  // Yasaklı host'a (görsel) giden istek her profilde engellendi; yasak örnek alan adına istek sunucuya ulaşmadı.
   expect(envanter.engellenenler.filter((e) => e.neden === 'yasakli').map((e) => new URL(e.adres).hostname)).toContain(YASAKLI_GORSEL_HOST);
   expect(fikstur.kayitlar.filter((k) => SIRKET_DESENI.test(k.yol))).toEqual([]);
   // İlerleme olayları.

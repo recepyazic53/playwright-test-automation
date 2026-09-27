@@ -5,7 +5,7 @@
 // formdan yeni senaryo — hepsi kullanıcının yapacağı gibi sunucunun uçlarıyla kurulur.
 //
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez. Ortamın adresi 127.0.0.1'deki örnek başvuru fikstürüdür
-// (model-fikstur.ts); yasaklı adres koruması açıktır ("*nippon*" + yerel .env'deki gerçek ortam host'ları). Ayrı bir
+// (model-fikstur.ts); yasaklı adres koruması açıktır ("*yasak-ornek*"). Ayrı bir
 // Nöbetçi örneği boş bir portta, geçici veritabanıyla çalışır (gerçek Nöbetçi'ye ve veri/ klasörüne dokunulmaz).
 import { randomBytes, randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -74,7 +74,7 @@ test.beforeAll(async () => {
     projeId, ortamId, ad: 'Deneme kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA, ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI
   });
   const { profiller } = await api(`/platform/giris-profilleri?projeId=${projeId}`) as { profiller: Array<{ id: string }> };
-  oturumDosyasi = join(KOK, 'playwright', '.auth', `genel-${ortamId.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36)}-${profiller[0].id.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36)}.json`);
+  oturumDosyasi = join(klasor, 'oturumlar', `genel-${ortamId.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36)}-${profiller[0].id.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36)}.json`);
   rmSync(oturumDosyasi, { force: true });
   await basarili('/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: ornekGirisTarifi() });
   for (const [ad, subeKodu] of [['Merkez', 'S01'], ['Yetkili', 'S02']]) {

@@ -8,10 +8,11 @@
 // Medya (ekran görüntüsü/video/iz) şifrelidir; sunucu /platform/medya/<id> ile kasa açıkken
 // çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
-import { api, bildir, bosDurum, h, ikon, iskelet, rozet, s, TOKEN, tarihMetni, yerlestir } from './ortak.js';
+import { api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, s, TOKEN, tarihMetni, yerlestir } from './ortak.js';
 import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
 
-const SAYFA_BOYU = 15;
+/** Koşu geçmişinde bir sayfadaki koşu (Ayarlar > Arayüz; kullanıcı kararı). */
+let SAYFA_BOYU = 15;
 const DURUM = {
   basarili: { etiket: 'Başarılı', sinif: 'basari', ikon: 'onay' },
   basarisiz: { etiket: 'Başarısız', sinif: 'hata', ikon: 'carpi' },
@@ -78,8 +79,9 @@ export function sonuclarEkrani(main, parcalar, baglam) {
   const hata = (e) => { if (e && e.durum === 423) return; icerik.replaceChildren(hataKutusu(e)); };
 
   // Sol liste her görünümde aynı özetten gelir (koşu/sonuç detayında seçili ürün yok).
-  api(`/platform/sonuclar/ozet?projeId=${encodeURIComponent(proje.id)}${secili ? `&urun=${encodeURIComponent(secili)}` : ''}`)
-    .then((ozet) => {
+  Promise.all([api(`/platform/sonuclar/ozet?projeId=${encodeURIComponent(proje.id)}${secili ? `&urun=${encodeURIComponent(secili)}` : ''}`), kullaniciAyarlari()])
+    .then(([ozet, ayar]) => {
+      if (Number.isInteger(ayar.kosuGecmisiSayfaBoyu)) SAYFA_BOYU = ayar.kosuGecmisiSayfaBoyu;
       urunListesi(liste, ozet.ekranlar, secili);
       servisleriAl(proje).then((servisler) => { if (servisler.length) urunListesi(liste, ozet.ekranlar, secili, servisler); });
       if (tur === 'kosu' && kimlik) return kosuDetayi(icerik, decodeURIComponent(kimlik), proje);
@@ -229,7 +231,7 @@ function farkHapi(fark, iyiMi, birim = '') {
 function kartlar(kart, trend, urun) {
   if (!kart) {
     return h('div', { class: 'sonuc-kartlari-bos' },
-      bosDurum('Henüz koşu yok.', 'Kartlar yalnızca tam koşulardan hesaplanır (Koşuyu başlat, terminal/CI koşuları). Tekil ▷ koşuları koşu geçmişinde görünür.', { ikon: 'grafik' }));
+      bosDurum('Henüz koşu yok.', 'Kartlar yalnızca tam koşulardan (Koşuyu başlat) hesaplanır. Tekil ▷ koşuları koşu geçmişinde görünür.', { ikon: 'grafik' }));
   }
   const son = kart.son;
   const onceki = kart.onceki;
@@ -280,7 +282,7 @@ function trendKarti(tumNoktalar, urun) {
       noktalar.length ? h('div', { class: 'sag' }, kipSegmenti) : null),
     h('p', { class: 'gorunmez' }, urun ? 'Bu ürünü içeren tam koşular (yalnızca bu ürünün sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.'),
     kap);
-  if (!noktalar.length) { kap.append(bosDurum('Henüz tam koşu yok.', 'Tam koşular (Koşuyu başlat, terminal/CI) burada günlük çubuklar olarak görünür.', { ikon: 'grafik' })); return kart; }
+  if (!noktalar.length) { kap.append(bosDurum('Henüz tam koşu yok.', 'Tam koşular (Koşuyu başlat) burada günlük çubuklar olarak görünür.', { ikon: 'grafik' })); return kart; }
   // Genişlik kapsayıcıya göre; boyut değişince yeniden çizilir.
   requestAnimationFrame(ciz);
   if (window.ResizeObserver) {
@@ -485,7 +487,7 @@ function kosuGecmisi(kosular, urun) {
         h('td', {}, h('a', { class: 'kosu-baglantisi', href: `#/sonuclar/kosu/${encodeURIComponent(k.id)}` }, kosuNoktasi(k), kisaTarih(k.bitis || k.baslangic)),
           h('span', { class: 'gorunmez' }, ` (${KOSU_DURUMU[k.durum] || k.durum})`)),
         h('td', {}, h('span', { class: 'etiketler' }, rozet(k.tur === 'tam' ? 'tam' : 'tekil', k.tur === 'tam' ? 'vurgu' : ''), ' ',
-          k.kapsam ? rozet(k.kapsam) : null, k.kaynak === 'allure-aktarimi' ? rozet('aktarıldı', '', { title: 'Eski Allure sonuçlarından aktarıldı' }) : null)),
+          k.kapsam ? rozet(k.kapsam) : null)),
         h('td', {}, dagilimCubugu(k)),
         h('td', { class: 'sayi' }, String(toplam(k))), sayiHucresi(k.basarili, 'basarili-renk'),
         sayiHucresi(k.basarisiz, 'basarisiz-renk'), sayiHucresi(k.atlanan),
@@ -821,8 +823,7 @@ async function kosuDetayi(icerik, id, proje) {
           ortam ? h('span', {}, ikon('ag'), `ortam: ${ortam}`) : null,
           h('span', {}, kosuNoktasi(kosu), KOSU_DURUMU[kosu.durum] || kosu.durum),
           h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} → ${kosu.bitis ? saatMetni(kosu.bitis) : '—'}`)),
-          sure !== null ? h('span', {}, h('span', { class: 'mono' }, sureMetni(sure))) : null,
-          kosu.kaynak === 'allure-aktarimi' ? h('span', {}, rozet('eski sonuçlardan aktarıldı')) : null)),
+          sure !== null ? h('span', {}, h('span', { class: 'mono' }, sureMetni(sure))) : null)),
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: '#/sonuclar' }, ikon('geri'), 'Sonuçlar'))),
     h('div', { class: 'sonuc-kartlari mini' },
       ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Başarısız', kosu.basarisiz, 'basarisiz'),
@@ -923,7 +924,7 @@ async function sonucDetayi(icerik, id, proje) {
           h('span', {}, ikon('saat'), h('span', { class: 'mono' }, sureMetni(s2.sureMs))),
           s2.deneme ? h('span', {}, rozet(`${s2.deneme}. yeniden deneme`, 'atlanan')) : null,
           h('span', {}, ikon('takvim'), h('span', { class: 'mono' }, `${kisaTarih(s2.baslangic)} → ${saatMetni(s2.bitis)}`)),
-          s2.senaryoAnahtari ? h('span', { class: 'mono cok-soluk' }, s2.senaryoAnahtari) : null)),
+          null)),
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: `#/sonuclar/kosu/${encodeURIComponent(s2.kosuId)}` }, ikon('geri'), 'Koşuya dön'))),
     h('div', { class: 'detay-izgarasi' }, h('div', {}, sol), h('div', {}, sag)));
 }

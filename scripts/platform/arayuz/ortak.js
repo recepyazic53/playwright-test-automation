@@ -105,7 +105,8 @@ const IKONLAR = {
   simsek: ['M13 2L4 14h7l-1 8 9-12h-7z'],
   cikis: ['M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3', 'M10 17l5-5-5-5M15 12H3'],
   yildiz: ['M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z'],
-  cekmece: ['M3 13l3-8h12l3 8v6a2 2 0 01-2 2H5a2 2 0 01-2-2z', 'M3 13h5l1 3h6l1-3h5']
+  cekmece: ['M3 13l3-8h12l3 8v6a2 2 0 01-2 2H5a2 2 0 01-2-2z', 'M3 13h5l1 3h6l1-3h5'],
+  soru: ['c:12,12,9', 'M9.5 9.2a2.6 2.6 0 015 .8c0 1.8-2.5 2.2-2.5 4', 'M12 17.2v.3']
 };
 const SVG_NS = 'http://www.w3.org/2000/svg';
 /** SVG öğesi oluşturur (özellikler setAttribute ile). */
@@ -480,3 +481,11 @@ export function iskelet(tur = 'liste') {
 
 /** Rozet (etiket). tur: vurgu | basari | hata | atlanan | durdu | '' */
 export const rozet = (metin, tur = '', ek = {}) => h('span', { class: `rozet ${tur}`.trim(), ...ek }, metin);
+
+/** Kullanıcının koşu / arayüz ayarları (Ayarlar > Koşu, Arayüz; oturum boyunca önbellekte, kaydedince tazelenir). */
+let ayarSozu = null;
+export function kullaniciAyarlari() {
+  ayarSozu ??= api('/platform/kosu-ayarlari').then((y) => y.ayarlar || {}).catch(() => { ayarSozu = null; return {}; });
+  return ayarSozu;
+}
+export function kullaniciAyarlariniTazele() { ayarSozu = null; }

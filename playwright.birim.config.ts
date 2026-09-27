@@ -1,12 +1,9 @@
 import { defineConfig } from '@playwright/test';
 
-// KORUMA (birim) TESTLERİ: şirket ortamına BAĞLANMAZ (giris-*.spec.ts yalnızca yerel fikstürlerle tarayıcı açar).
-// Platform (veritabanı, kasa, yedek, aktarım, senaryolar, sonuçlar), ekran modeli ve tek doğrulayıcı
-// tutarlılığını saniyeler içinde kontrol eder; gerçek proje verisi yerine SAHTE değerli örnekler
-// kullanılır (tests/birim/fixtures/). Çalıştırma: npm run test:birim
-// Ana playwright.config.ts'den bilerek AYRIDIR: globalSetup (uygulamaya giriş), globalTeardown,
-// Allure raporlayıcısı ve koşu listesi filtresi burada yoktur. Ana yapılandırma da tests/birim/
-// klasörünü testIgnore ile dışarıda bırakır (Nöbetçi'deki senaryo listesi değişmesin diye).
+// KORUMA (birim) TESTLERİ: dış siteye BAĞLANMAZ (tarayıcı açan testler yalnızca 127.0.0.1'deki sahte uygulamalara gider).
+// Platform (veritabanı, kasa, yedek, ekranlar, senaryolar, servisler, sonuçlar), ekran modeli ve doğrulayıcı tutarlılığını
+// kontrol eder; gerçek veri yerine SAHTE değerli örnekler kullanılır (tests/birim/fixtures/). Çalıştırma: npm test
+// Ana playwright.config.ts (model koşusu; yalnızca Nöbetçi başlatır) bu klasörü içermez.
 export default defineConfig({
   testDir: './tests/birim',
   fullyParallel: true,

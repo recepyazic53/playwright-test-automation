@@ -1,7 +1,6 @@
 // SENARYO ÇALIŞTIRMA (genel) — POST /platform/senaryolar/calistir ve /platform/senaryo/dene'nin
-// doğrulama + çözümleme katmanı. Senaryo KİMLİĞİ (UUID) gelir; sunucu bunu veritabanından güncel
-// Playwright dosyası + test başlığına ve ortamın çalıştırıcı anahtarına çözer (senaryo-servisi.mjs >
-// calistirmaHedefiCoz), ardından enjekte edilen "koşucu" ile mevcut çalıştırma altyapısını kullanır
+// doğrulama + çözümleme katmanı. Senaryo KİMLİĞİ (UUID) gelir; sunucu bunu model spec'i + senaryonun etiketine
+// çözer (senaryo-servisi.mjs > calistirmaHedefiCoz; koşu proje + ortam kimliğiyle), ardından enjekte edilen "koşucu" ile mevcut çalıştırma altyapısını kullanır
 // (scripts/test-sunucu.mjs: --list beyaz listesi, dosya sırası, canlı görüntü, durdurma, platform
 // raporlayıcısı). İstemciden gelen başlık/dosya ASLA kullanılmaz.
 // Birim testleri sahte bir koşucu verir; gerçek koşu başlatmaz.
@@ -15,8 +14,8 @@ import { calistirmaHedefiCoz, denemePaketiOlustur } from './senaryo-servisi.mjs'
 /** @typedef {import('./calistirma.d.mts').Kosucu} Kosucu */
 
 /**
- * Genel yol koşularında (elle oluşturulan proje/ortam) "ortam" alanının değeri: yalnızca loglarda ve koşu
- * kuyruğunda görünür. Ortamın ADI kullanılmaz — ad şifreli saklanır ve sunucu logu düz metindir.
+ * Koşularda "ortam" alanının değeri: yalnızca loglarda ve koşu kuyruğunda görünür. Ortamın ADI kullanılmaz — ad şifreli
+ * saklanır ve sunucu logu düz metindir.
  */
 export const GENEL_ORTAM_ETIKETI = 'genel';
 
@@ -49,7 +48,7 @@ function ekranEtkinOlmali(vt, senaryoId, ekranId, s = {}) {
  *  - kosuTuru 'tam' | 'tekil' (isteğe bağlı): birlikte başlatılan senaryolar ortak kosuKimligi taşır.
  *  - kosuKapsami yalnızca 'tam' koşuda: 'Genel' ya da projedeki bir ekranın adı.
  *  - tekBasina: true yalnızca tek senaryo (▷) çalıştırmasında; devre dışı ekranın senaryosu yalnızca böyle çalışır.
- * secenekler: kodDosyasiVar (model senaryosu tespiti), yasakDesenleri (yasaklı adres koruması).
+ * secenekler: yasakDesenleri (yasaklı adres koruması).
  * @param {Veritabani} vt @param {Record<string, unknown>} govde @param {import('./calistirma.d.mts').CalistirmaSecenekleri} [secenekler]
  */
 export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
@@ -83,24 +82,19 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
 export async function senaryoCalistir(vt, govde, kosucu, secenekler = {}) {
   const h = calistirmaIsteginiHazirla(vt, govde, secenekler);
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
-  // Kodlu testler kaldırıldı: yalnızca model senaryoları (proje + ortam kimliğiyle) koşar.
-  if (!h.hedef.genel) throw new DepoHatasi(`"${h.hedef.baslik}" kodlu bir teste bağlı; kodlu testler kaldırıldı. Senaryoyu ekran modeliyle yeniden oluşturun.`);
   const sonuc = await kosucu.calistir({
-    ortam: h.hedef.ortamAnahtari ?? GENEL_ORTAM_ETIKETI, dosya: h.hedef.dosya, ad: h.hedef.ad, kosuId: h.kosuId,
+    ortam: GENEL_ORTAM_ETIKETI, dosya: h.hedef.dosya, ad: h.hedef.ad, kosuId: h.kosuId,
     kosuTuru: h.kosuTuru, kosuKimligi: h.kosuKimligi, kosuKapsami: h.kosuKapsami, senaryoId: h.hedef.senaryoId,
-    ...(h.hedef.model ? { etiket: h.hedef.etiket, grepDeseni: h.hedef.grepDeseni } : {}),
-    ...(h.hedef.genel ? { genel: h.hedef.genel } : {})
+    etiket: h.hedef.etiket, grepDeseni: h.hedef.grepDeseni, genel: h.hedef.genel
   });
   return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, senaryoId: h.hedef.senaryoId, baslik: h.hedef.baslik } };
 }
 
 /**
- * "Dene": taslak senaryoyu doğrular, geçici başlıklı ek veri paketi kurar ve koşucuya verir.
- * Veritabanına hiçbir şey yazılmaz.
- * @param {Veritabani} vt @param {Record<string, unknown>} govde
- * @param {Kosucu | null} kosucu @param {import('../../../projeler/index.d.mts').AktarimAdaptoru | null} adaptor
+ * "Dene": taslak senaryoyu doğrular, geçici deneme senaryosu kurar ve koşucuya verir. Veritabanına hiçbir şey yazılmaz.
+ * @param {Veritabani} vt @param {Record<string, unknown>} govde @param {Kosucu | null} kosucu
  */
-export async function senaryoDene(vt, govde, kosucu, adaptor) {
+export async function senaryoDene(vt, govde, kosucu) {
   const projeId = kimlik(govde.projeId, 'projeId');
   const kosuId = kimlik(govde.kosuId, 'kosuId');
   ekranEtkinOlmali(vt, '', kimlik(govde.ekranId, 'ekranId'), { devreDisiIzinli: true });
@@ -108,17 +102,11 @@ export async function senaryoDene(vt, govde, kosucu, adaptor) {
     projeId, ekranId: kimlik(govde.ekranId, 'ekranId'), ortamId: kimlik(govde.ortamId, 'ortamId'), veri: govde.veri,
     id: typeof govde.id === 'string' && KIMLIK.test(govde.id) ? govde.id : null,
     akisId: typeof govde.akisId === 'string' && KIMLIK.test(govde.akisId) ? govde.akisId : null, mutlakaGorunmeli: govde.mutlakaGorunmeli
-  }, { adaptor, geciciEk: randomBytes(4).toString('hex') });
+  }, { geciciEk: randomBytes(4).toString('hex') });
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
-  if ('model' in paket && paket.model) {
-    // Model senaryosu: geçici deneme senaryosu model spec'inde etiketle üretilir (veritabanına senaryo yazılmaz).
-    if (!kosucu.modelDene) throw new DepoHatasi('Bu sunucuda model senaryosu denemesi desteklenmiyor.');
-    const sonuc = await kosucu.modelDene({
-      ortam: paket.ortamAnahtari ?? GENEL_ORTAM_ETIKETI, dosya: paket.spec, kosuId, etiket: paket.etiket, grepDeseni: paket.grepDeseni,
-      genel: paket.genel, denemeSenaryosu: paket.denemeSenaryosu
-    });
-    return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, uyarilar: paket.uyarilar } };
-  }
-  const sonuc = await kosucu.dene({ ortam: paket.ortamAnahtari, dosya: paket.spec, ad: paket.geciciBaslik, kosuId, ekVeri: paket.ekVeri });
+  const sonuc = await kosucu.modelDene({
+    ortam: GENEL_ORTAM_ETIKETI, dosya: paket.spec, kosuId, etiket: paket.etiket, grepDeseni: paket.grepDeseni,
+    genel: paket.genel, denemeSenaryosu: paket.denemeSenaryosu
+  });
   return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, uyarilar: paket.uyarilar } };
 }

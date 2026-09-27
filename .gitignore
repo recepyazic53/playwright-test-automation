@@ -1,44 +1,24 @@
 node_modules/
 .env
 
-# Playwright çıktıları
+# Playwright çıktıları ve oturum dosyaları
 playwright-report/
 test-results/
 playwright/.auth/
 
-# Allure çıktıları (TEST/CANLI ayrı klasörlerde tutulur)
-allure-results*/
-allure-report*/
-
-# ESKİ (kaldırılmış) dashboard çıktıları ve token dosyası — yeniden oluşmasınlar/eklenmesinler.
-urun-hata-ozeti-*.md
-dashboard-*.html
-scripts/.test-sunucu-token
-
-# PROJE VERİSİ GİT'E GİRMEZ: test verisi, ekran modelleri, koşu listesi ve proje dosyaları
-# (ör. gerçek kimlik içeren Excel yüklemeleri) YALNIZCA platform veritabanında (veri/) durur.
-# Eski dosyaların yedeği: veri/eski-dosyalar/<zaman>/. Birim testlerinin sahte örnekleri
-# tests/birim/fixtures/ altındadır (bu kurallar yalnızca proje kökündeki klasörleri kapsar).
-/tests/data/
-/tests/ekran-modelleri/
-/tests/fixtures/
-/allure-results*/
-
-# Playwright tarayıcı ikilileri, npm önbelleği ve yerel test/rapor çıktıları — büyük
-# ve makineye özeldir, Git'e eklenmemeli (ilk push'ta yanlışlıkla eklenip 300+ MB'a
-# çıkmasına ve push'un zaman aşımına uğramasına sebep oldu).
+# Playwright tarayıcı ikilileri ve npm önbelleği — büyük ve makineye özeldir.
 .playwright-browsers/
 .npm-cache/
-test-data/
-test-report/
-Claude outputs/
 
 # Yerel test sunucusunun log dosyası — makineye özeldir.
 scripts/test-sunucu.log
 
-# Platform veritabanı (projeler, profiller, senaryolar, koşular — hassas alanlar şifreli)
-# ve yerel yedekleri: YALNIZCA bu makinede durur, Git'e/buluta ASLA gitmez.
+# Nöbetçi veritabanı (projeler, profiller, senaryolar, koşular — hassas alanlar şifreli) ve yerel yedekleri:
+# YALNIZCA bu makinede durur, Git'e/buluta ASLA gitmez.
 veri/
 *.tayedek
 # Birim testlerinin eski biçim (1) yedek fixture'ı (test parolasıyla, gerçek veri içermez)
 !tests/birim/fixtures/*.tayedek
+
+# Taşınabilir paket çıktısı (npm run paketle)
+dist/

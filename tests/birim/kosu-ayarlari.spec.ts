@@ -28,6 +28,11 @@ test('varsayılanlar, doğrulama, kasada saklama ve alt sürece giden ortam değ
     expect(() => kosuAyarlariniKaydet(vt, { yenidenDeneme: 9 })).toThrow('0–3');
     expect(() => kosuAyarlariniKaydet(vt, { video: 'bazen' })).toThrow('geçersiz seçim');
     expect(() => kosuAyarlariniKaydet(vt, { tarihBicimi: 'abc' })).toThrow('geçersiz');
+    // Tarama / akış kaydı süreleri ve liste sayfa boyları da kullanıcı kararıdır.
+    expect(varsayilanKosuAyarlari()).toMatchObject({ taramaZamanAsimiDk: 5, kayitZamanAsimiDk: 30, senaryoSayfaBoyu: 50, kosuGecmisiSayfaBoyu: 15 });
+    expect(() => kosuAyarlariniKaydet(vt, { taramaZamanAsimiDk: 0 })).toThrow('1–60');
+    expect(() => kosuAyarlariniKaydet(vt, { senaryoSayfaBoyu: 5 })).toThrow('10–500');
+    expect(kosuAyarlariniKaydet(vt, { kayitZamanAsimiDk: 45, kosuGecmisiSayfaBoyu: 30 })).toMatchObject({ kayitZamanAsimiDk: 45, kosuGecmisiSayfaBoyu: 30 });
     const a = kosuAyarlariniKaydet(vt, { video: 'kapali', iz: 'her', yenidenDeneme: 2, alanBeklemeSn: 40, tarihBicimi: 'dd.MM.yyyy' });
     expect(a).toMatchObject({ video: 'kapali', iz: 'her', yenidenDeneme: 2, alanBeklemeSn: 40, zorlaIsaretlemeSn: 15, tarihBicimi: 'dd.MM.yyyy' });
     // Verilmeyen ayar korunur.

@@ -3,19 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "playwright test",
-    "test:ui": "playwright test --ui",
-    "test:headed": "playwright test --headed",
-    "test:debug": "playwright test --debug",
+    "test": "playwright test --config playwright.birim.config.ts",
     "typecheck": "tsc --noEmit",
     "test:birim": "playwright test --config playwright.birim.config.ts",
     "test-sunucu": "node scripts/test-sunucu.mjs",
-    "baslat": "node scripts/baslat.mjs"
+    "baslat": "node scripts/baslat.mjs",
+    "paketle": "node scripts/paketle.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@types/node": "^24.13.6",
-    "cross-env": "^10.1.0",
     "dotenv": "^16.6.1",
     "typescript": "^5.9.0"
   },

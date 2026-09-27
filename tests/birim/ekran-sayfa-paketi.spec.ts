@@ -25,8 +25,8 @@ type Nesne = Record<string, unknown>;
 const FIKSTUR = resolve(__dirname, 'fixtures', 'sayfa-paketi');
 const oku = (ad: string): Nesne => JSON.parse(readFileSync(join(FIKSTUR, ad), 'utf-8')) as Nesne;
 const kopya = <T>(d: T): T => JSON.parse(JSON.stringify(d)) as T;
-const V1 = oku('ornek-seyahat-v1.json');
-const V2 = oku('ornek-seyahat-v2.json');
+const V1 = oku('ornek-rota-v1.json');
+const V2 = oku('ornek-rota-v2.json');
 const M1 = V1.model as Nesne;
 const M2 = V2.model as Nesne;
 const dogrula = (model: unknown) => ekranModeliniDogrula('model', model, () => { throw new Error('alt model yok'); });
@@ -61,14 +61,14 @@ test.describe('Sayfa paketi — doğrulama', () => {
     expect(d1.uyarilar.some((u) => u.yer === 'senaryoOnerileri[5]' && u.mesaj.includes('ASYA'))).toBe(true);
     expect(sayfaPaketiniDogrula(V2).gecerli).toBe(true);
     // Paket modeli testlerin model yükleyicisinden de geçer (ortak doğrulayıcı; baglamGorunurlugu dahil).
-    expect(() => ekranModeliniKur('ornek-seyahat.model.json', { 'ornek-seyahat.model.json': M2 })).not.toThrow();
+    expect(() => ekranModeliniKur('ornek-rota.model.json', { 'ornek-rota.model.json': M2 })).not.toThrow();
   });
 
   test('biçim hataları açık mesajla listelenir', () => {
     const tur = sayfaPaketiniDogrula({ ...V1, tur: 'baska' });
     expect(tur.hatalar[0]).toMatchObject({ yer: 'tur' });
     const p = kopya(V1);
-    (p.meta as Nesne).ekran = { anahtar: 'Büyük Harf', ad: '', urlYolu: 'seyahat' };
+    (p.meta as Nesne).ekran = { anahtar: 'Büyük Harf', ad: '', urlYolu: 'rota' };
     (p as Nesne).fazla = 1;
     delete (p as Nesne).bilinmeyenler;
     (p.senaryoOnerileri as Nesne[])[1].baslik = (p.senaryoOnerileri as Nesne[])[0].baslik;
@@ -100,7 +100,7 @@ test.describe('Sayfa paketi — doğrulama', () => {
     const alan = alanBul(p.model as Nesne, 'taksitSayisi');
     alan.hassas = true;
     alan.varsayilan = { deger: '6' };
-    (p.model as Nesne).ekranUrl = 'https://ornek.invalid/seyahat/';
+    (p.model as Nesne).ekranUrl = 'https://ornek.invalid/rota/';
     const d = sayfaPaketiniDogrula(p);
     expect(d.gecerli).toBe(false);
     const metin = d.hatalar.map((h) => `${h.yer}: ${h.mesaj}`).join('\n');
@@ -147,12 +147,12 @@ test.describe('Model fark motoru', () => {
       'adimDegisikligi:baslik', 'etiketDegisikligi', 'gorunurlukDegisikligi', 'kaldirilanAlan', 'kaldirilanSecenek', 'yeniAlan', 'yeniSecenek'
     ]);
     const bul = (t: string) => b.find((x) => x.tur === t) as Bulgu;
-    expect(bul('yeniAlan')).toMatchObject({ alanId: 'seyahatAmaci', yeni: { zorunlu: true, secenekSayisi: 3, senaryoAnahtari: 'seyahatAmaci' } });
+    expect(bul('yeniAlan')).toMatchObject({ alanId: 'rotaAmaci', yeni: { zorunlu: true, secenekSayisi: 3, senaryoAnahtari: 'rotaAmaci' } });
     expect(bul('yeniSecenek')).toMatchObject({ alanId: 'kapsam', secenek: { deger: 'ASYA' } });
     expect(bul('kaldirilanSecenek')).toMatchObject({ alanId: 'ettiren', secenek: { deger: 'farkliTuzel' } });
     expect(bul('etiketDegisikligi')).toMatchObject({ alanId: 'sorguTipi', eski: 'Sorgu Tipi', yeni: 'Sorgulama türü' });
     expect(bul('kaldirilanAlan')).toMatchObject({ alanId: 'kayakTeminati' });
-    expect(bul('gorunurlukDegisikligi')).toMatchObject({ alanId: 'covidTeminati', profil: 'varsayilan', eski: false, yeni: true });
+    expect(bul('gorunurlukDegisikligi')).toMatchObject({ alanId: 'ekHizmet', profil: 'varsayilan', eski: false, yeni: true });
     // Kimlikler kararlı: aynı fark yeniden hesaplanınca aynı kimlik/imza.
     expect(modelFarki(M1, M2).map((x) => x.id)).toEqual(b.map((x) => x.id));
     expect(modelFarki(M1, M1)).toEqual([]);
@@ -166,10 +166,10 @@ test.describe('Model fark motoru', () => {
     alanBul(y, 'kayakTeminati').zorunlu = true;
     delete alanBul(y, 'plan').gorunurluk;
     // Alan taşıma: ülke → sorgu bölümüne
-    const teminatlar = bolum(y, 'policeBilgileri', 'teminatlar');
+    const teminatlar = bolum(y, 'basvuruBilgileri', 'teminatlar');
     const ulke = (teminatlar.alanlar as Nesne[]).find((a) => a.id === 'ulke') as Nesne;
     teminatlar.alanlar = (teminatlar.alanlar as Nesne[]).filter((a) => a !== ulke);
-    (bolum(y, 'policeBilgileri', 'sorgu').alanlar as Nesne[]).push(ulke);
+    (bolum(y, 'basvuruBilgileri', 'sorgu').alanlar as Nesne[]).push(ulke);
     // Yeni bölüm (var olan adımda) ve yeni adım; kaldırılan bölüm
     (adim(y, 'primHesaplama').bolumler as Nesne[]).push({ id: 'indirim', baslik: 'İndirim', alanlar: [{ id: 'indirimKodu', tip: 'metin', yapilandirma: 'senaryo', eslesme: { senaryo: 'indirimKodu' } }] });
     const adimlar = y.adimlar as Nesne[];
@@ -207,13 +207,13 @@ test.describe('Model fark motoru', () => {
     const kalan = modelFarki(u.model, M2);
     expect(kalan.map((x) => x.imza).sort()).toEqual(b.filter((x) => !kabul.includes(x)).map((x) => x.imza).sort());
     // Yeni alan doğru yere (ülkeden sonra) ve bağlam görünürlüğüyle; kaldırılanın görünürlük kaydı silinir.
-    const ids = (bolum(u.model, 'policeBilgileri', 'teminatlar').alanlar as Nesne[]).map((a) => a.id);
-    expect(ids.indexOf('seyahatAmaci')).toBe(ids.indexOf('ulke') + 1);
+    const ids = (bolum(u.model, 'basvuruBilgileri', 'teminatlar').alanlar as Nesne[]).map((a) => a.id);
+    expect(ids.indexOf('rotaAmaci')).toBe(ids.indexOf('ulke') + 1);
     expect(ids).not.toContain('kayakTeminati');
     const bg = u.model.baglamGorunurlugu as { alanlar: Record<string, Nesne> };
-    expect(bg.alanlar.seyahatAmaci).toEqual({ varsayilan: true, JetSeyahatÖzelTanımlıAcente: true });
+    expect(bg.alanlar.rotaAmaci).toEqual({ varsayilan: true, ÖzelTanımlıŞube: true });
     expect(bg.alanlar.kayakTeminati).toBeUndefined();
-    expect(bg.alanlar.covidTeminati.varsayilan).toBe(true);
+    expect(bg.alanlar.ekHizmet.varsayilan).toBe(true);
     // Reddedilen seçenek ve adım başlığı eski halinde.
     expect((alanBul(u.model, 'ettiren').secenekler as Nesne[]).map((s) => s.deger)).toContain('farkliTuzel');
     expect(adim(u.model, 'primHesaplama').baslik).toBe('Prim hesaplanır');
@@ -237,13 +237,13 @@ test.describe('Model fark motoru', () => {
   test('etki: eksik zorunlu değer, kaldırılan seçenek/alan kullanımı, tip kontrolü, görünmez profil', () => {
     const senaryolar = [
       { id: 's1', baslik: 'A', veri: { kapsam: 'DÜNYA', ettiren: 'farkliTuzel', kayakTeminati: true }, mutlakaGorunmeli: [], baglamProfili: 'varsayilan' },
-      { id: 's2', baslik: 'B', veri: { kapsam: 'AVRUPA', ettiren: 'ayni', seyahatAmaci: 'IS', cokluSorguKisiSayisi: 3 }, mutlakaGorunmeli: ['kayakTeminati'], baglamProfili: 'Yetkili' },
-      { id: 's3', baslik: 'C', veri: { kapsam: 'AVRUPA', ettiren: 'ayni', covidTeminati: 'E' }, mutlakaGorunmeli: ['covidTeminati'], baglamProfili: 'Yetkili' }
+      { id: 's2', baslik: 'B', veri: { kapsam: 'AVRUPA', ettiren: 'ayni', rotaAmaci: 'IS', cokluSorguKisiSayisi: 3 }, mutlakaGorunmeli: ['kayakTeminati'], baglamProfili: 'Yetkili' },
+      { id: 's3', baslik: 'C', veri: { kapsam: 'AVRUPA', ettiren: 'ayni', ekHizmet: 'E' }, mutlakaGorunmeli: ['ekHizmet'], baglamProfili: 'Yetkili' }
     ];
     const b = modelFarki(M1, M2);
     const e = etkiHesapla(b, M1, M2, senaryolar);
     const etki = (tur: string) => e.find((x) => x.bulguId === (b.find((y) => y.tur === tur) as Bulgu).id);
-    expect(etki('yeniAlan')).toMatchObject({ tur: 'eksikDeger', anahtar: 'seyahatAmaci', atanabilir: true, senaryolar: [{ id: 's1' }, { id: 's3' }] });
+    expect(etki('yeniAlan')).toMatchObject({ tur: 'eksikDeger', anahtar: 'rotaAmaci', atanabilir: true, senaryolar: [{ id: 's1' }, { id: 's3' }] });
     expect(etki('yeniAlan')?.secenekler?.map((s) => s.deger)).toEqual(['TURISTIK', 'IS', 'EGITIM']);
     expect(etki('kaldirilanSecenek')).toMatchObject({ tur: 'kullanilanSecenek', senaryolar: [{ id: 's1', deger: 'farkliTuzel' }] });
     expect(etki('kaldirilanAlan')).toMatchObject({ tur: 'kaldirilanAlanKullanimi', senaryolar: [{ id: 's1', mutlakaGorunmeli: false }, { id: 's2', mutlakaGorunmeli: true }] });
@@ -252,7 +252,7 @@ test.describe('Model fark motoru', () => {
     const y = kopya(M2);
     alanBul(y, 'cokluSorguKisiSayisi').tip = 'metin';
     ((y.baglamGorunurlugu as Nesne).profiller as string[]).push('Yetkili');
-    ((y.baglamGorunurlugu as { alanlar: Record<string, Nesne> }).alanlar.covidTeminati).Yetkili = false;
+    ((y.baglamGorunurlugu as { alanlar: Record<string, Nesne> }).alanlar.ekHizmet).Yetkili = false;
     const b2 = modelFarki(M2, y);
     const e2 = etkiHesapla(b2, M2, y, senaryolar);
     expect(e2.find((x) => x.bulguId === b2.find((z) => z.tur === 'tipDegisikligi')?.id)).toMatchObject({ tur: 'tipKontrolu', senaryolar: [{ id: 's2' }] });
@@ -277,7 +277,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     projeId = projeKaydet(vt, { ad: 'Örnek proje' });
     ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
     baglamProfiliKaydet(vt, { projeId, tur: 'Rol', ad: 'varsayilan', alanlar: { kod: '1' } });
-    baglamProfiliKaydet(vt, { projeId, tur: 'Rol', ad: 'JetSeyahatÖzelTanımlıAcente', alanlar: { kod: '2' } });
+    baglamProfiliKaydet(vt, { projeId, tur: 'Rol', ad: 'ÖzelTanımlıŞube', alanlar: { kod: '2' } });
     testVerisiTuruKaydet(vt, { projeId, ad: 'Özel kişi', alanlar: [{ ad: 'tcKimlikNo', hassas: true }] });
   });
   test.afterEach(() => { vt.kapat(); klasor.temizle(); });
@@ -289,7 +289,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     expect(o.gecerli).toBe(true);
     expect(o.onizleme?.senaryolar.filter((s) => s.varsayilanSecili).length).toBe(5);
     expect(Object.fromEntries((o.onizleme?.gerekenAyarlar ?? []).map((g) => [g.anahtar, g.durum]))).toMatchObject({
-      giris: 'eksik', ikiAsamali: 'eksik', 'tur:Özel kişi': 'tamam', 'tur:Tüzel kişi': 'eksik', 'baglam:Acente': 'eksik'
+      giris: 'eksik', ikiAsamali: 'eksik', 'tur:Özel kişi': 'tamam', 'tur:Tüzel kişi': 'eksik', 'baglam:Şube': 'eksik'
     });
     // Sorunlu öneri seçilemez.
     await expect(sayfaEkle(vt, projeId, V1, { senaryoIndeksleri: [5], ortamIdleri: [ortamId], medyaKlasoru: medya })).rejects.toThrow('modele uymuyor');
@@ -299,7 +299,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     for (const id of ek.senaryoIdleri) {
       const s = senaryoGetir(vt, id);
       expect(s?.kosuyaDahil).toBe(false);
-      expect(s?.icerik).toMatchObject({ kaynak: { dosya: 'scenarios/ornek-seyahat/teklif.spec.ts' }, veri: { dosya: 'ornek-seyahat', yol: 'senaryolar' }, paket: { kaynak: 'sayfa-paketi' } });
+      expect(s?.icerik).toMatchObject({ kaynak: { dosya: 'scenarios/ornek-rota/teklif.spec.ts' }, veri: { dosya: 'ornek-rota', yol: 'senaryolar' }, paket: { kaynak: 'sayfa-paketi' } });
     }
     // Aynı anahtarla ikinci kez "Sayfa ekle" reddedilir.
     expect(paketOnizle(vt, projeId, V1).hatalar[0].mesaj).toContain('zaten var');
@@ -307,7 +307,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     const dosyalar = readdirSync(medya).filter((d) => d.endsWith('.medya'));
     expect(dosyalar).toHaveLength(2);
     for (const d of dosyalar) expect(readFileSync(join(medya, d)).includes(Buffer.from([0x89, 0x50, 0x4e, 0x47]))).toBe(false);
-    expect(ekranListesi(vt, projeId).ekranlar[0]).toMatchObject({ anahtar: 'ornek-seyahat', modelSurumu: 1, senaryoSayisi: 5 });
+    expect(ekranListesi(vt, projeId).ekranlar[0]).toMatchObject({ anahtar: 'ornek-rota', modelSurumu: 1, senaryoSayisi: 5 });
 
     // Tekrar analiz
     const y = await analizYukle(vt, projeId, ek.ekranId, V2, { medyaKlasoru: medya });
@@ -320,7 +320,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     expect(a.etki.find((e) => e.bulguId === bulgu('kaldirilanSecenek').id)?.senaryolar).toHaveLength(1);
     expect(a.etki.find((e) => e.bulguId === bulgu('kaldirilanAlan').id)?.senaryolar).toHaveLength(1);
     // Toplu atama, alan modele girmeden reddedilir.
-    expect(() => topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'seyahatAmaci', deger: 'IS', senaryoIdler: ek.senaryoIdleri })).toThrow('güncel modelde');
+    expect(() => topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'rotaAmaci', deger: 'IS', senaryoIdler: ek.senaryoIdleri })).toThrow('güncel modelde');
     const red = [bulgu('kaldirilanSecenek').id, bulgu('adimDegisikligi').id];
     const kabul = a.bulgular.map((b) => b.id).filter((id) => !red.includes(id));
     expect(analizUygula(vt, projeId, ek.ekranId, { analizId: a.id, kabul, red })).toEqual({ surum: 2, yeniSurum: true, kabul: 5, red: 2, kararsiz: 0 });
@@ -342,17 +342,17 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     // Uygulanmış analizin etki paneli: toplu değer atama → eksik kalmaz.
     a = analizGetir(vt, projeId, ek.ekranId).analiz;
     expect(a?.durum).toBe('bekliyor');
-    expect(() => topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'seyahatAmaci', deger: 'YOK', senaryoIdler: ek.senaryoIdleri })).toThrow('seçeneklerden biri');
-    expect(topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'seyahatAmaci', deger: 'IS', senaryoIdler: ek.senaryoIdleri })).toEqual({ guncellenen: 5 });
-    expect(topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'seyahatAmaci', deger: 'IS', senaryoIdler: ek.senaryoIdleri })).toEqual({ guncellenen: 0 });
+    expect(() => topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'rotaAmaci', deger: 'YOK', senaryoIdler: ek.senaryoIdleri })).toThrow('seçeneklerden biri');
+    expect(topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'rotaAmaci', deger: 'IS', senaryoIdler: ek.senaryoIdleri })).toEqual({ guncellenen: 5 });
+    expect(topluDegerAta(vt, projeId, ek.ekranId, { anahtar: 'rotaAmaci', deger: 'IS', senaryoIdler: ek.senaryoIdleri })).toEqual({ guncellenen: 0 });
     const s0 = senaryoGetir(vt, ek.senaryoIdleri[0]);
     const ortamVeri = ((s0?.icerik.ortamlar as Record<string, Nesne>)[ortamId].veri) as Nesne;
-    expect(ortamVeri.seyahatAmaci).toBe('IS');
+    expect(ortamVeri.rotaAmaci).toBe('IS');
 
     // Claude dosyası: tekrar analiz isteği profil ADLARIYLA; gizli değer yok; son seçim saklanır.
     expect(() => claudeDosyasiYaz(vt, projeId, ek.ekranId, { tur: 'tekrar-analiz', baglamProfilleri: [], klasor: join(klasor.yol, 'analiz'), projeKoku: klasor.yol })).toThrow('En az bir');
     const c = claudeDosyasiYaz(vt, projeId, ek.ekranId, { tur: 'tekrar-analiz', baglamProfilleri: ['varsayilan', 'bilinmeyen-profil'], klasor: join(klasor.yol, 'analiz'), projeKoku: klasor.yol });
-    expect(c.yol).toMatch(/^analiz\/ornek-seyahat-\d{8}-\d{6}-tekrar-analiz\.json$/);
+    expect(c.yol).toMatch(/^analiz\/ornek-rota-\d{8}-\d{6}-tekrar-analiz\.json$/);
     expect(c.cumle).toContain('varsayilan');
     const icerik = readFileSync(c.tamYol, 'utf-8');
     const j = JSON.parse(icerik) as Nesne;
@@ -370,7 +370,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
     // "kaldırılan alan" kabul edilirse eski koşullar olmayan alana başvurur → model geçersiz → yazılmaz.
     const p = kopya(V2);
     const m = p.model as Nesne;
-    const sorgu = bolum(m, 'policeBilgileri', 'sorgu');
+    const sorgu = bolum(m, 'basvuruBilgileri', 'sorgu');
     sorgu.alanlar = (sorgu.alanlar as Nesne[]).filter((a) => a.id !== 'sorguTipi');
     delete (m.kosullar as Nesne).tekliSorgu;
     delete (m.kosullar as Nesne).cokluSorgu;

@@ -1,9 +1,7 @@
 // SONUÇ SINIFLANDIRMA (genel, saf fonksiyonlar — yan etki yok): hata kategorisi, hata kalıbı,
-// Playwright/Allure durumu → platform durumu ('basarili' | 'basarisiz' | 'atlanan' | 'durduruldu'),
+// Playwright durumu → platform durumu ('basarili' | 'basarisiz' | 'atlanan' | 'durduruldu'),
 // adım gürültüsü filtresi, beklenen/görülen ayrıştırma, koşu etiketi.
-// Kullananlar: Playwright raporlayıcısı (scripts/platform/raporlayici.mjs), eski Allure sonuçlarının
-// içe aktarımı (aktarim/allure-sonuclari.mjs), sonuç deposu ve eski görünüm üreticisi.
-// (Eskiden scripts/rapor/veri-siniflandirma.mjs idi; Allure kaldırıldığında buraya taşındı.)
+// Kullananlar: Playwright raporlayıcısı (scripts/platform/raporlayici.mjs) ve sonuç deposu.
 
 // Kategori ADLARI ve SIRASI (istemci tarafında renk eşlemesi bu sıraya göre yapılır —
 // bkz. KATEGORI_RENKLERI). Sınıflandırma MANTIĞI ise aşağıdaki kategoriBul()'dadır;
@@ -98,29 +96,10 @@ export function kalipCikar(mesajTam) {
 }
 
 // --- Durum eşleme (TEK KAYNAK) ---
-// Bir (eski) Allure sonucunu platform durumuna çevirir: 'basarili' | 'basarisiz' | 'atlanan' |
-// 'durduruldu'. Playwright sonuçları için aynı kural: playwrightDurumuEsle.
-// "Durduruldu" = kullanıcı durdurdu / koşu yarıda kesildi — BAŞARISIZ SAYILMAZ:
-//   - status 'unknown' ya da hiç yok (Allure sonucu tamamlanmamış),
-//   - failed/broken ama mesaj "Test was interrupted" (Playwright interrupted),
-//   - failed/broken ve HİÇ hata mesajı yok: Playwright, Ctrl+C/SIGTERM ile kesilen
-//     (status 'interrupted') testlere hata eklemez; allure-playwright bunu 'failed'
-//     olarak yazar. Kendi başına başarısız olan her test (zaman aşımı dahil — o
-//     'broken' + "Test timeout of ...ms exceeded." mesajıyla gelir) bir hata taşır.
+// "Durduruldu" = kullanıcı durdurdu / koşu yarıda kesildi — BAŞARISIZ SAYILMAZ (bkz. playwrightDurumuEsle).
 // NOT: "navigation ... is interrupted by another navigation" gibi GERÇEK hatalar
 // kasıtlı olarak eşleşmez (desen yalnızca "Test was interrupted").
 const KESINTI_DESENI = /\bTest (?:run )?was interrupted\b/i;
-export function allureDurumuEsle(icerik) {
-  const status = icerik.status;
-  if (status === 'passed') return 'basarili';
-  if (status === 'skipped') return 'atlanan';
-  if (status === 'failed' || status === 'broken') {
-    const mesaj = icerik.statusDetails?.message ?? '';
-    if (!mesaj.trim() || KESINTI_DESENI.test(mesaj)) return 'durduruldu';
-    return 'basarisiz';
-  }
-  return 'durduruldu'; // 'unknown', undefined veya tanınmayan bir değer
-}
 
 export function kosuEtiketi(zamanDamgasiMs) {
   return new Date(zamanDamgasiMs).toLocaleString('tr-TR', {
@@ -139,7 +118,7 @@ export function kacHesapla(icerikTuru) {
 }
 
 /**
- * Playwright TestResult durumunu platform durumuna çevirir (allureDurumuEsle ile AYNI anlam):
+ * Playwright TestResult durumunu platform durumuna çevirir:
  *  - passed → basarili (test.fail() ile beklenen başarısızlık da başarılıdır), skipped → atlanan,
  *  - interrupted → durduruldu (Ctrl+C / Durdur / SIGTERM),
  *  - failed / timedOut → basarisiz; ANCAK hata mesajı yoksa ya da "Test was interrupted" ise

@@ -12,6 +12,7 @@ export interface TabloBilgisi {
 }
 export declare const GOCLER: readonly Goc[];
 export declare const TABLOLAR: readonly TabloBilgisi[];
+export declare const KALDIRILAN_TABLOLAR: readonly string[];
 export declare const VERI_TABLOLARI: readonly string[];
 export declare const GUNCEL_SEMA_SURUMU: number;
 export type SifreliAlanTuru = 'gizli' | 'ozel';

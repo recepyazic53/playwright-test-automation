@@ -21,7 +21,7 @@
 export const KAYNAKLAR = /** @type {const} */ (['tablo', 'akis', 'parametre', 'sabit', 'bos', 'nil', 'gonderme']);
 /** Akış değeri adı (${akis:Ad}). */
 export const AKIS_DEGERI = /^[A-Za-z_][A-Za-z0-9_-]{0,59}$/;
-/** Eski parametre adı (SIGORTALI_TC) ve tablo başvurusu (Servis girişi.Kanal / Kişi[ettiren].TC). */
+/** Eski parametre adı (MUSTERI_TC) ve tablo başvurusu (Servis girişi.Kanal / Kişi[kefil].TC). */
 const ESKI_PARAMETRE = /^[A-Za-z_][A-Za-z0-9_-]{0,79}$/;
 const TABLO_BASVURUSU = /^[^.[\]{}$<>&|]{1,60}(?:\[[^\]{}$<>&|]{1,40}\])?\.[^.[\]{}$<>&|]{1,60}(?:\|[^{}$]{1,60})?$/u;
 const ZARF_NS = { '1.1': 'http://schemas.xmlsoap.org/soap/envelope/', '1.2': 'http://www.w3.org/2003/05/soap-envelope' };

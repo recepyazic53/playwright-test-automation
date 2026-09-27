@@ -44,14 +44,14 @@ test('yasaklı adres: ortam, hedef, tarif ve bağlam adımlarının (yer tutucul
     ...taramaGirisTarifi(),
     baglamDegistirme: { baglamTuru: 'Profil', adimlar: [{ islem: 'git', adres: 'https://{alanAdi}/profil' }] }
   }).tarif;
-  const adresler = taramaAdresleri('https://test.ornek.invalid', 'https://test.ornek.invalid/a', tarif, [{ alanAdi: 'giris.nippon-deneme.invalid' }, null]);
-  expect(adresler).toContain('https://giris.nippon-deneme.invalid/profil');
-  expect(yasakliAdresBul(adresler, yasakDesenleri('*nippon*'))).toEqual({ adres: 'https://giris.nippon-deneme.invalid/profil', host: 'giris.nippon-deneme.invalid', kalip: '*nippon*' });
+  const adresler = taramaAdresleri('https://test.ornek.invalid', 'https://test.ornek.invalid/a', tarif, [{ alanAdi: 'giris.yasak-ornek-deneme.invalid' }, null]);
+  expect(adresler).toContain('https://giris.yasak-ornek-deneme.invalid/profil');
+  expect(yasakliAdresBul(adresler, yasakDesenleri('*yasak-ornek*'))).toEqual({ adres: 'https://giris.yasak-ornek-deneme.invalid/profil', host: 'giris.yasak-ornek-deneme.invalid', kalip: '*yasak-ornek*' });
   expect(yasakliAdresBul(adresler, yasakDesenleri('baska.invalid'))).toBeNull();
 });
 
 test('istek kararı: tarama aşamasında yalnızca GET/HEAD; yasaklı host her aşamada; izinli köken listesi', () => {
-  const d = yasakDesenleri('*nippon*');
+  const d = yasakDesenleri('*yasak-ornek*');
   const karar = (yontem: string, adres: string, asama: 'giris' | 'baglam' | 'tarama', izinli: string[] | null = null) =>
     istekKarari({ yontem, adres, asama, yasakDesenleri: d, izinliKokenler: izinli });
   expect(karar('POST', 'https://test.ornek.invalid/giris', 'giris')).toEqual({ izin: true });
@@ -60,7 +60,7 @@ test('istek kararı: tarama aşamasında yalnızca GET/HEAD; yasaklı host her a
   expect(karar('PUT', 'https://test.ornek.invalid/kaydet', 'tarama')).toEqual({ izin: false, neden: 'yazma' });
   expect(karar('GET', 'https://test.ornek.invalid/liste?q=1', 'tarama')).toEqual({ izin: true });
   expect(karar('HEAD', 'https://test.ornek.invalid/', 'tarama')).toEqual({ izin: true });
-  expect(karar('GET', 'https://cdn.nippon.invalid/a.js', 'giris')).toEqual({ izin: false, neden: 'yasakli', kalip: '*nippon*' });
+  expect(karar('GET', 'https://cdn.yasak-ornek.invalid/a.js', 'giris')).toEqual({ izin: false, neden: 'yasakli', kalip: '*yasak-ornek*' });
   expect(karar('GET', 'https://cdn.ornek.invalid/a.js', 'giris', ['https://test.ornek.invalid'])).toEqual({ izin: false, neden: 'izinsiz-koken' });
   expect(karar('GET', 'data:image/png;base64,AAAA', 'tarama', ['https://test.ornek.invalid'])).toEqual({ izin: true });
   expect(adresOzeti('https://test.ornek.invalid/kaydet?tc=12345678901#x')).toBe('https://test.ornek.invalid/kaydet');

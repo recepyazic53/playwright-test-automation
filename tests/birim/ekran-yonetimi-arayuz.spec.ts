@@ -1,135 +1,60 @@
 // ENTEGRASYON (yerel) — Nöbetçi arayüzü: Ekranlar > ⋯ menüsü (yeniden adlandır, düzenle, taşı, devre dışı bırak /
-// etkinleştir, kalıcı sil + test kodunu kaldır), Senaryolar'da devre dışı ekranlar ve Sonuçlar'da "silinmiş ekran".
-// Geçici bir veritabanı (SAHTE örnek dosyalardan aktarılmış) ile AYRI bir Nöbetçi sunucusu örneği başlatılır
-// (TEST_SUNUCU_PORT: 5579 boşsa o, değilse boş bir port; TEST_SUNUCU_KOSU_KAPALI=1: hiçbir test koşusu başlatılamaz).
-// KOD KÖKÜ geçicidir: deponun tests/scenarios klasörünün GEÇİCİ bir kopyası (NOBETCI_KOD_KOKU) — kod kaldırma yalnızca
-// kopyada denenir; gerçek tests/scenarios'a dokunulmadığı doğrulanır. Tüm istekler 127.0.0.1'dedir (şirket alan adı yok).
+// etkinleştir, kalıcı sil), Senaryolar'da devre dışı ekranlar ve Sonuçlar'da "silinmiş ekran".
+// Geçici bir veritabanı (nötr proje: örnek başvuru modelli ekranlar + model senaryoları, depo fonksiyonlarıyla kurulur) ile
+// AYRI bir Nöbetçi sunucusu örneği boş bir portta başlatılır (nobetci-sunucusu.ts; TEST_SUNUCU_KOSU_KAPALI=1: hiçbir test
+// koşusu başlatılamaz). Tüm istekler 127.0.0.1'dedir (yasak örnek alan adı yok).
 // EKRAN_YONETIMI_EKRAN_KLASORU verilirse koyu/açık tema ekran görüntüleri oraya yazılır.
-import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { createServer } from 'node:net';
-import { dirname, join, resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
-import { adaptorBul } from '../../projeler/index.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { ekranKaydet, ekranModeliEkle, ortamKaydet, projeKaydet, senaryoKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { kosuKaydet, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
-import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
 import { korumaliTarayici, SIRKET_DESENI } from './giris-fikstur';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
+import { ornekBasvuruModeli } from './model-fikstur';
+import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
+import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
-const KOK = resolve(__dirname, '..', '..');
 const EKRAN_KLASORU = process.env.EKRAN_YONETIMI_EKRAN_KLASORU;
-const SATIS_SPEC = 'scenarios/jet-satis/urun-ekranlari.spec.ts';
-const LISTE = [
-  { dosya: SATIS_SPEC, ad: 'Ürün A ekranı açılmalı' },
-  { dosya: SATIS_SPEC, ad: 'Ürün B ekranı açılmalı' },
-  { dosya: 'scenarios/trafik/jet-trafik.spec.ts', ad: 'Trafik kod testi' }
-];
-
-function portBosMu(port: number): Promise<boolean> {
-  return new Promise((coz) => {
-    const s = createServer();
-    s.once('error', () => coz(false));
-    s.listen(port, '127.0.0.1', () => s.close(() => coz(true)));
-  });
-}
-function bosPort(): Promise<number> {
-  return new Promise((coz, reddet) => {
-    const s = createServer();
-    s.once('error', reddet);
-    s.listen(0, '127.0.0.1', () => {
-      const adres = s.address();
-      const port = typeof adres === 'object' && adres ? adres.port : 0;
-      s.close(() => coz(port));
-    });
-  });
-}
-
-type Nobetci = { adres: string; token: string; surec: ChildProcess };
-
-async function nobetciBaslat(klasor: string, vtYolu: string, kodKoku: string): Promise<Nobetci> {
-  const port = (await portBosMu(5579)) ? 5579 : await bosPort();
-  const env: NodeJS.ProcessEnv = {};
-  for (const [k, v] of Object.entries(process.env)) {
-    if (/^(TEST_WORKER_INDEX|TEST_PARALLEL_INDEX|PW_|PLATFORM_|TEST_SUNUCU_|NOBETCI_)/.test(k)) continue;
-    env[k] = v;
-  }
-  const surec = spawn(process.execPath, [join(KOK, 'scripts', 'test-sunucu.mjs')], {
-    cwd: KOK,
-    env: {
-      ...env, TEST_SUNUCU_PORT: String(port), TEST_SUNUCU_KOSU_KAPALI: '1', PLATFORM_VERITABANI: vtYolu, NOBETCI_KOD_KOKU: kodKoku,
-      PLATFORM_YEDEK_KLASORU: join(klasor, 'yedekler'), TEST_SUNUCU_LOG_DOSYASI: join(klasor, 'sunucu.log')
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  const cikti: string[] = [];
-  await new Promise<void>((coz, reddet) => {
-    const zaman = setTimeout(() => reddet(new Error(`Nöbetçi başlamadı:\n${cikti.join('')}`)), 20_000);
-    const dinle = (p: Buffer): void => {
-      cikti.push(p.toString('utf8'));
-      if (cikti.join('').includes('Nöbetçi hazır')) { clearTimeout(zaman); coz(); }
-    };
-    surec.stdout?.on('data', dinle);
-    surec.stderr?.on('data', dinle);
-    surec.once('exit', (kod) => { clearTimeout(zaman); reddet(new Error(`Nöbetçi kapandı (${kod}):\n${cikti.join('')}`)); });
-  });
-  const adres = `http://127.0.0.1:${port}`;
-  const html = await (await fetch(`${adres}/`)).text();
-  const token = /name="oturum-tokeni" content="([^"]+)"/.exec(html)?.[1] ?? '';
-  expect(token, 'oturum token').not.toBe('');
-  return { adres, token, surec };
-}
-
-async function api(n: Nobetci, yol: string, govde?: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const r = await fetch(`${n.adres}${yol}`, govde
-    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...govde, token: n.token }) }
-    : { headers: { 'x-test-sunucu-token': n.token } });
-  return (await r.json()) as Record<string, unknown>;
-}
 
 let tarayici: Browser;
 let nobetci: Nobetci;
 let klasor: ReturnType<typeof geciciKlasor>;
-let kodKoku = '';
 let projeId = '';
-const kodluTestler = () => (existsSync(join(KOK, 'tests', 'scenarios')) ? readdirSync(join(KOK, 'tests', 'scenarios'), { recursive: true }).map(String).sort() : []);
-const gercekDosyalar = kodluTestler();
+let ortamId = '';
+
+const api = (yol: string, govde?: Record<string, unknown>) => nobetciApi(nobetci, yol, govde);
 
 test.describe.configure({ mode: 'serial' });
 
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   klasor = geciciKlasor('ekran-yonetimi-arayuz');
-  // Deponun tests/scenarios'unun GEÇİCİ kopyası (kod kaldırma yalnızca burada).
-  kodKoku = join(klasor.yol, 'kod');
-  if (existsSync(join(KOK, 'tests', 'scenarios'))) cpSync(join(KOK, 'tests', 'scenarios'), join(kodKoku, 'tests', 'scenarios'), { recursive: true });
-  // Örnek ekranların kod dosyaları (depoda yok; yalnız geçici kopyada — silme denemesi bunlar üzerinde).
-  for (const d of new Set([...LISTE.map((x) => x.dosya), 'scenarios/jet-seyahat/prim-hesaplama.spec.ts'])) {
-    mkdirSync(dirname(join(kodKoku, 'tests', d)), { recursive: true });
-    writeFileSync(join(kodKoku, 'tests', d), '// örnek test dosyası (birim testi)\n');
-  }
-  const adaptor = adaptorBul('galaksi');
-  if (!adaptor) throw new Error('galaksi adaptörü yok');
-  const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, { projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI }, testListesi: async () => LISTE });
   const vtYolu = join(klasor.yol, 'platform.db');
   const parola = randomBytes(18).toString('base64url');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
-  projeId = aktarimiUygula(vt, paket).projeId;
-  // Trafik'in (kod testi) ve JetKasko'nun bir senaryosuna geçmiş sonuç (silinince/devre dışıyken görünür kalsın diye).
-  const ortamId = String(vt.tek("SELECT varlik_id FROM kaynak_eslemeleri WHERE varlik_turu = 'ortam' AND kaynak_anahtari = 'test'")?.varlik_id);
-  const konutSenaryosu = String(vt.tek("SELECT s.id FROM senaryolar s JOIN ekranlar e ON e.id = s.ekran_id WHERE e.anahtar = 'trafik' LIMIT 1")?.id ?? '');
-  const kaskoSenaryosu = String(vt.tek("SELECT s.id FROM senaryolar s JOIN ekranlar e ON e.id = s.ekran_id WHERE e.anahtar = 'jet-kasko' LIMIT 1")?.id ?? '');
+  projeId = projeKaydet(vt, { ad: 'Örnek Proje' });
+  ortamId = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true });
+  // Nötr ekranlar: hepsi örnek başvuru modelinin kopyası (anahtar + URL yolu farklı), her birinde model senaryoları.
+  const ekran = (anahtar: string, ad: string, senaryolar: string[]) => {
+    const id = ekranKaydet(vt, { projeId, anahtar, ad });
+    ekranModeliEkle(vt, { ekranId: id, model: { ...ornekBasvuruModeli(), id: anahtar, ad, ekranUrl: `/${anahtar}/` } });
+    return senaryolar.map((baslik) => senaryoKaydet(vt, { projeId, ekranId: id, baslik, icerik: { kosucu: 'model', ortamlar: { [ortamId]: {} }, veri: { baslik } } }));
+  };
+  const [basvuruSenaryosu] = ekran('ornek-basvuru', 'Örnek Başvuru', ['Başvuru A', 'Başvuru B']);
+  ekran('musteri-kaydi', 'Müşteri Kaydı', ['Yeni müşteri']);
+  ekran('kampanya', 'Kampanya', ['Kampanya A', 'Kampanya B']);
+  const [subeSenaryosu] = ekran('sube-listesi', 'Şube Listesi', ['Şube arama']);
+  // Şube Listesi ve Örnek Başvuru'ya geçmiş sonuç (silinince/devre dışıyken görünür kalsın diye).
   kosuKaydet(vt, { id: 'kosu-ornek-1', projeId, ortamId, tur: 'tam', kapsam: 'Genel' });
-  expect(konutSenaryosu && kaskoSenaryosu).toBeTruthy();
-  for (const [senaryoId, durum] of [[konutSenaryosu, 'basarili'], [kaskoSenaryosu, 'basarisiz']] as const) {
+  for (const [senaryoId, durum] of [[subeSenaryosu, 'basarili'], [basvuruSenaryosu, 'basarisiz']] as const) {
     sonucKaydet(vt, { kosuId: 'kosu-ornek-1', projeId, senaryoId, senaryoBaslik: 'Örnek senaryo', durum, hataMesaji: durum === 'basarisiz' ? 'sahte hata' : null });
   }
   vt.kapat();
-  nobetci = await nobetciBaslat(klasor.yol, vtYolu, kodKoku);
-  expect((await api(nobetci, '/platform/kasa/ac', { parola })).basarili).toBe(true);
+  nobetci = await nobetciBaslat(klasor.yol, vtYolu, { TEST_SUNUCU_KOSU_KAPALI: '1' });
+  expect((await api('/platform/kasa/ac', { parola })).basarili).toBe(true);
   tarayici = await korumaliTarayici();
 });
 
@@ -137,8 +62,6 @@ test.afterAll(async () => {
   await tarayici?.close();
   nobetci?.surec.kill('SIGTERM');
   klasor?.temizle();
-  // Gerçek tests/scenarios hiç değişmedi.
-  expect(kodluTestler()).toEqual(gercekDosyalar);
 });
 
 async function arayuz(renk: 'dark' | 'light' = 'dark'): Promise<{ page: Page; istekler: string[] }> {
@@ -196,36 +119,36 @@ async function menuAc(page: Page, ad: string): Promise<Locator> {
 test('⋯ menüsü: yeniden adlandır, düzenle (URL yolu), yukarı taşı', async () => {
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
-  await expect(kart(page, 'JetDASK')).toBeVisible();
+  await expect(kart(page, 'Örnek Başvuru')).toBeVisible();
   await ekranGoruntusu(page, '01-ekran-listesi');
-  const menu = await menuAc(page, 'JetSeyahat');
+  const menu = await menuAc(page, 'Müşteri Kaydı');
   await expect(menu.getByRole('menuitem')).toHaveText(['Yeniden adlandır', 'Düzenle (URL yolu)', 'Yukarı taşı', 'Aşağı taşı', 'Devre dışı bırak', 'Sil (kalıcı)…']);
-  await alanGoruntusu(page, '02-menu', [kart(page, 'JetSeyahat'), menu]);
+  await alanGoruntusu(page, '02-menu', [kart(page, 'Müşteri Kaydı'), menu]);
 
   // Yeniden adlandır (anahtar aynı kalır).
   await menu.getByRole('menuitem', { name: 'Yeniden adlandır' }).click();
   const ad = page.getByRole('dialog', { name: 'Yeniden adlandır' });
-  await ad.getByLabel('Görünen ad').fill('JetKasko');
+  await ad.getByLabel('Görünen ad').fill('örnek başvuru');
   await ad.getByRole('button', { name: 'Kaydet' }).click();
   await expect(ad.getByRole('alert')).toHaveText(/başka bir ekran var/);
-  await ad.getByLabel('Görünen ad').fill('Jet Seyahat Sağlık');
-  await ad.getByLabel('Açıklama').fill('Seyahat sigortası satış ekranı');
+  await ad.getByLabel('Görünen ad').fill('Müşteri Kartı');
+  await ad.getByLabel('Açıklama').fill('Müşteri bilgileri ekranı');
   await ekranGoruntusu(page, '03-yeniden-adlandir', ad);
   await ad.getByRole('button', { name: 'Kaydet' }).click();
-  await expect(page.getByText('Ekran adı "Jet Seyahat Sağlık" olarak kaydedildi.')).toBeVisible();
-  await expect(kart(page, 'Jet Seyahat Sağlık').locator('code')).toHaveText('jet-seyahat');
+  await expect(page.getByText('Ekran adı "Müşteri Kartı" olarak kaydedildi.')).toBeVisible();
+  await expect(kart(page, 'Müşteri Kartı').locator('code')).toHaveText('musteri-kaydi');
 
   // Düzenle: URL yolu → yeni model sürümü.
-  await (await menuAc(page, 'Jet Seyahat Sağlık')).getByRole('menuitem', { name: 'Düzenle (URL yolu)' }).click();
+  await (await menuAc(page, 'Müşteri Kartı')).getByRole('menuitem', { name: 'Düzenle (URL yolu)' }).click();
   const duzenle = page.getByRole('dialog', { name: /^Düzenle:/ });
   await duzenle.getByLabel('URL yolu').fill('https://ornek.invalid/x');
   await duzenle.getByRole('button', { name: 'Kaydet' }).click();
   await expect(duzenle.getByRole('alert')).toHaveText(/YOL girin/);
-  await duzenle.getByLabel('URL yolu').fill('/yeni/seyahat/');
+  await duzenle.getByLabel('URL yolu').fill('/yeni/musteri/');
   await ekranGoruntusu(page, '04-duzenle', duzenle);
   await duzenle.getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByText(/URL yolu kaydedildi \(model v2\)/)).toBeVisible();
-  await expect(kart(page, 'Jet Seyahat Sağlık')).toContainText('/yeni/seyahat/');
+  await expect(kart(page, 'Müşteri Kartı')).toContainText('/yeni/musteri/');
 
   // Yukarı taşı: kart ve sol liste sırası değişir.
   const once = await page.locator('article.ekran-karti').evaluateAll((l) => l.map((e) => e.getAttribute('data-ekran')));
@@ -239,34 +162,32 @@ test('⋯ menüsü: yeniden adlandır, düzenle (URL yolu), yukarı taşı', asy
   agKontrol(istekler);
 });
 
-// Galaksi temizliği A aşaması: kodlu testler (tests/scenarios) silindi; bu test eski "kodlu test" yolunu sınıyor —
-// C aşamasında model tabanlı örnekle yeniden yazılacak ya da kaldırılacak.
-test.fixme('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Senaryolar\'da toplu koşuya girmez (▷ tek başına açık), etkinleştirince geri gelir', async () => {
+test('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür), Senaryolar\'da toplu koşuya girmez (▷ tek başına açık), etkinleştirince geri gelir', async () => {
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
-  await (await menuAc(page, 'JetKasko')).getByRole('menuitem', { name: 'Devre dışı bırak' }).click();
-  await expect(page.getByText('"JetKasko" devre dışı bırakıldı; senaryoları koşulara girmez.')).toBeVisible();
-  await expect(kart(page, 'JetKasko').getByText('devre dışı')).toBeVisible();
+  await (await menuAc(page, 'Örnek Başvuru')).getByRole('menuitem', { name: 'Devre dışı bırak' }).click();
+  await expect(page.getByText('"Örnek Başvuru" devre dışı bırakıldı; senaryoları koşulara girmez.')).toBeVisible();
+  await expect(kart(page, 'Örnek Başvuru').getByText('devre dışı')).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Ekranlar' });
-  await expect(nav.getByRole('link', { name: /JetKasko/ })).toHaveCount(0);
+  await expect(nav.getByRole('link', { name: /Örnek Başvuru/ })).toHaveCount(0);
   await nav.getByText('Devre dışı ekranları göster').click();
-  await expect(nav.getByRole('link', { name: /JetKasko/ })).toContainText('kapalı');
+  await expect(nav.getByRole('link', { name: /Örnek Başvuru/ })).toContainText('kapalı');
   await ekranGoruntusu(page, '05-devre-disi-liste');
   await nav.getByText('Devre dışı ekranları göster').click();
 
   // Ayrıntı: şerit + Etkinleştir, başlıkta ⋯.
-  await kart(page, 'JetKasko').getByRole('link', { name: 'JetKasko' }).click();
+  await kart(page, 'Örnek Başvuru').getByRole('link', { name: 'Örnek Başvuru' }).click();
   await expect(page.getByText('Bu ekran devre dışı.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Ekran işlemleri: JetKasko' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Ekran işlemleri: Örnek Başvuru' })).toBeVisible();
   await ekranGoruntusu(page, '06-devre-disi-ayrinti', page.locator('.sayfa-basligi').locator('..'));
 
   // Senaryolar: ekran ve senaryoları gizli; anahtarla görünür, ▷ açık (tek başına), Koşuyu başlat onları saymaz.
   await page.goto('/#/senaryolar');
   const sNav = page.getByRole('navigation', { name: 'Ürünler', exact: true });
-  await expect(sNav.getByRole('link', { name: /JetKasko/ })).toHaveCount(0);
-  await expect(page.locator('td.ekran-hucresi', { hasText: 'JetKasko' })).toHaveCount(0);
+  await expect(sNav.getByRole('link', { name: /Örnek Başvuru/ })).toHaveCount(0);
+  await expect(page.locator('td.ekran-hucresi', { hasText: 'Örnek Başvuru' })).toHaveCount(0);
   await sNav.getByText('Devre dışı ekranları göster').click();
-  await sNav.getByRole('link', { name: /JetKasko/ }).click();
+  await sNav.getByRole('link', { name: /Örnek Başvuru/ }).click();
   const satir = page.locator('tbody tr').first();
   await expect(satir.getByText('ekran devre dışı')).toBeVisible();
   await expect(satir.getByRole('button', { name: /^Çalıştır:/ })).toBeEnabled();
@@ -275,57 +196,50 @@ test.fixme('devre dışı bırak: sol listelerden gizlenir (anahtarla görünür
   await sNav.getByText('Devre dışı ekranları göster').click();
 
   // Sunucu toplu koşuda (tam) reddeder.
-  const liste = await api(nobetci, `/platform/senaryolar?projeId=${projeId}`) as { ortamId: string; senaryolar: Array<{ id: string; ekranAdi: string }> };
-  const kasko = liste.senaryolar.find((s) => s.ekranAdi === 'JetKasko');
-  const red = await api(nobetci, '/platform/senaryolar/calistir', { projeId, ortamId: liste.ortamId, senaryoId: kasko?.id, kosuId: 'k1', kosuTuru: 'tam', kosuKimligi: 'toplu-1' });
+  const liste = await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`) as { senaryolar: Array<{ id: string; ekranAdi: string }> };
+  const basvuru = liste.senaryolar.find((s) => s.ekranAdi === 'Örnek Başvuru');
+  expect(basvuru).toBeTruthy();
+  const red = await api('/platform/senaryolar/calistir', { projeId, ortamId, senaryoId: basvuru?.id, kosuId: 'k1', kosuTuru: 'tam', kosuKimligi: 'toplu-1' });
   expect(String(red.mesaj)).toMatch(/devre dışı/);
 
   // Sonuçlar: "devre dışı" etiketiyle görünür kalır.
   await page.goto('/#/sonuclar');
-  await expect(page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /JetKasko/ })).toContainText('kapalı');
+  await expect(page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /Örnek Başvuru/ })).toContainText('kapalı');
 
   await page.goto('/#/ekranlar');
   await page.getByRole('navigation', { name: 'Ekranlar' }).getByText('Devre dışı ekranları göster').click();
-  await page.getByRole('navigation', { name: 'Ekranlar' }).getByRole('link', { name: /JetKasko/ }).click();
+  await page.getByRole('navigation', { name: 'Ekranlar' }).getByRole('link', { name: /Örnek Başvuru/ }).click();
   await page.getByRole('button', { name: 'Etkinleştir' }).click();
-  await expect(page.getByText('"JetKasko" etkinleştirildi.')).toBeVisible();
+  await expect(page.getByText('"Örnek Başvuru" etkinleştirildi.')).toBeVisible();
   await expect(page.getByText('Bu ekran devre dışı.')).toHaveCount(0);
   await page.context().close();
   agKontrol(istekler);
 });
 
-test('kalıcı sil + test kodunu kaldır (geçici kopyada): onay adı, sayılar, tam dosya listesi', async () => {
+test('kalıcı sil (sonuç yok): onay adı, sayılar; mezar taşı kalmaz', async () => {
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
-  await (await menuAc(page, 'Jet Satış')).getByRole('menuitem', { name: 'Sil (kalıcı)…' }).click();
-  const d = page.getByRole('dialog', { name: 'Ekranı kalıcı sil: Jet Satış' });
-  await expect(d.locator('.onay-ozeti dd')).toHaveText(['0', '2', '0', '0']);
-  await expect(d.getByText('Test kodu projede kalıyor.')).toBeVisible();
+  await (await menuAc(page, 'Kampanya')).getByRole('menuitem', { name: 'Sil (kalıcı)…' }).click();
+  const d = page.getByRole('dialog', { name: 'Ekranı kalıcı sil: Kampanya' });
+  await expect(d.locator('.onay-ozeti dd')).toHaveText(['1', '2', '0', '0']);
   await expect(d.getByLabel(/Geçmiş sonuçları da sil/)).toBeDisabled();
+  await expect(d).toContainText('Bu ekranın koşu sonucu yok.');
+  await expect(d).not.toContainText(/test kodu/i);
   const sil = d.getByRole('button', { name: 'Kalıcı olarak sil' });
   await expect(sil).toBeDisabled();
-  await d.getByLabel(/Bu ekranın test kodu da projeden kaldırılsın/).check();
-  await expect(d.locator('.kod-dosyalari li')).toHaveText(['tests/scenarios/jet-satis/urun-ekranlari.spec.ts']);
-  await expect(d.getByText('tests/scenarios/jet-satis/', { exact: true })).toBeVisible();
-  await expect(d.getByText('Test kodu projede kalıyor.')).toBeHidden();
-  await d.getByLabel(/Onaylamak için/).fill('Jet satış');
+  await d.getByLabel(/Onaylamak için/).fill('kampanya');
   await expect(sil).toBeDisabled();
-  await d.getByLabel(/Onaylamak için/).fill('Jet Satış');
+  await d.getByLabel(/Onaylamak için/).fill('Kampanya');
   await expect(sil).toBeEnabled();
-  await ekranGoruntusu(page, '08-sil-kod-kaldir', d);
+  await ekranGoruntusu(page, '08-sil-sonuc-yok', d);
   await sil.click();
-  await expect(page.getByText(/"Jet Satış" silindi \(2 senaryo, 0 model sürümü, 1 test dosyası\)/)).toBeVisible();
-  await expect(kart(page, 'Jet Satış')).toHaveCount(0);
-  // Geçici koddan kaldırıldı; gerçek depo dosyası duruyor.
-  expect(existsSync(join(kodKoku, 'tests', SATIS_SPEC))).toBe(false);
-  expect(existsSync(join(kodKoku, 'tests', 'scenarios', 'jet-satis'))).toBe(false);
-  // Gerçek depoya dokunulmadı: afterAll gerçek tests/scenarios listesini karşılaştırır.
-  // Kod kaldırıldı ve sonucu yok → mezar taşı kalmaz; kodu kaldırılmış uyarısı yok.
-  const ekranlar = await api(nobetci, `/platform/ekranlar?projeId=${projeId}`) as { silinmisEkranlar: unknown[] };
+  await expect(page.getByText('"Kampanya" silindi (2 senaryo, 1 model sürümü).')).toBeVisible();
+  await expect(kart(page, 'Kampanya')).toHaveCount(0);
+  // Sonucu yok → mezar taşı kalmaz.
+  const ekranlar = await api(`/platform/ekranlar?projeId=${projeId}`) as { ekranlar: Array<{ anahtar: string }>; silinmisEkranlar: unknown[] };
   expect(ekranlar.silinmisEkranlar).toEqual([]);
-  // (SAHTE listedeki başka ekranların başlıkları gerçek kodda olmadığı için onlar uyarı verebilir; Jet Satış vermez.)
-  const denetim = await api(nobetci, '/platform/senaryolar/kod-denetimi', { projeId }) as { senaryolar: Array<{ dosya: string | null }> };
-  expect(denetim.senaryolar.filter((x) => x.dosya?.includes('jet-satis'))).toEqual([]);
+  expect(ekranlar.ekranlar.map((e) => e.anahtar)).not.toContain('kampanya');
+  await expect(page.locator('details.silinmis-ekranlar')).toHaveCount(0);
   await page.context().close();
   agKontrol(istekler);
 });
@@ -333,25 +247,23 @@ test('kalıcı sil + test kodunu kaldır (geçici kopyada): onay adı, sayılar,
 test('kalıcı sil (sonuçlar korunur): "Silinmiş ekranlar" bölümü, Sonuçlar\'da "silinmiş ekran", geri yükle', async () => {
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar/');
-  await (await menuAc(page, 'Trafik')).getByRole('menuitem', { name: 'Sil (kalıcı)…' }).click();
-  const d = page.getByRole('dialog', { name: 'Ekranı kalıcı sil: Trafik' });
-  await expect(d.locator('.onay-ozeti dd').nth(2)).toHaveText('1');
+  await (await menuAc(page, 'Şube Listesi')).getByRole('menuitem', { name: 'Sil (kalıcı)…' }).click();
+  const d = page.getByRole('dialog', { name: 'Ekranı kalıcı sil: Şube Listesi' });
+  await expect(d.locator('.onay-ozeti dd')).toHaveText(['1', '1', '1', '0']);
+  await expect(d.getByLabel(/Geçmiş sonuçları da sil/)).toBeEnabled();
   await expect(d.getByLabel(/Geçmiş sonuçları da sil/)).not.toBeChecked();
-  await expect(d.getByText('Test kodu projede kalıyor.')).toBeVisible();
   await ekranGoruntusu(page, '09-sil-sonuclar-korunur', d);
-  await d.getByLabel(/Onaylamak için/).fill('Trafik');
+  await d.getByLabel(/Onaylamak için/).fill('Şube Listesi');
   await d.getByRole('button', { name: 'Kalıcı olarak sil' }).click();
-  await expect(page.getByText(/"Trafik" silindi .* 1 geçmiş sonuç korundu\./)).toBeVisible();
+  await expect(page.getByText(/"Şube Listesi" silindi .* 1 geçmiş sonuç korundu\./)).toBeVisible();
   const bolum = page.locator('details.silinmis-ekranlar');
   await bolum.locator('summary').click();
-  await expect(bolum.getByText('Trafik', { exact: true })).toBeVisible();
+  await expect(bolum.getByText('Şube Listesi', { exact: true })).toBeVisible();
   await expect(bolum).toContainText('1 geçmiş sonuç korunuyor');
   await ekranGoruntusu(page, '10-silinmis-ekranlar', bolum);
-  // Koddaki test dosyası geçici kopyada duruyor (kaldırılmadı).
-  expect(existsSync(join(kodKoku, 'tests', 'scenarios', 'trafik', 'jet-trafik.spec.ts'))).toBe(true);
 
   await page.goto('/#/sonuclar');
-  const urun = page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /Trafik/ });
+  const urun = page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /Şube Listesi/ });
   await expect(urun).toContainText('silinmiş');
   await urun.click();
   await expect(page.locator('.sayfa-basligi').getByText('silinmiş ekran')).toBeVisible();
@@ -361,28 +273,29 @@ test('kalıcı sil (sonuçlar korunur): "Silinmiş ekranlar" bölümü, Sonuçla
   await page.goto('/#/ekranlar');
   await page.locator('details.silinmis-ekranlar summary').click();
   await page.locator('details.silinmis-ekranlar').getByRole('button', { name: 'Geri yükle' }).click();
-  await expect(page.getByText(/"Trafik" geri yüklendi/)).toBeVisible();
-  await expect(kart(page, 'Trafik')).toBeVisible();
+  await expect(page.getByText(/"Şube Listesi" geri yüklendi/)).toBeVisible();
+  await expect(kart(page, 'Şube Listesi')).toBeVisible();
+  await expect(page.locator('details.silinmis-ekranlar')).toHaveCount(0);
   await page.context().close();
   agKontrol(istekler);
 });
 
-test('API doğrulaması: token, kasa, geçersiz gövde, yol dışı dosya listesi', async () => {
+test('API doğrulaması: token, kasa, geçersiz gövde', async () => {
   const r = await fetch(`${nobetci.adres}/platform/ekran/sil`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projeId }) });
   expect(r.status).toBe(401);
-  const ekranlar = await api(nobetci, `/platform/ekranlar?projeId=${projeId}`) as { ekranlar: Array<{ id: string; ad: string; anahtar: string }> };
-  const seyahat = ekranlar.ekranlar.find((e) => e.anahtar === 'jet-seyahat');
-  expect((await api(nobetci, '/platform/ekran/durum', { projeId, ekranId: seyahat?.id, etkin: 'evet' })).mesaj).toMatch(/true ya da false/);
-  expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: seyahat?.id, onayAdi: seyahat?.ad, koduKaldir: 'evet' })).mesaj).toMatch(/true ya da false/);
-  expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: seyahat?.id, onayAdi: seyahat?.ad, koduKaldir: true, beklenenDosyalar: ['tests/../../etc/passwd'] })).mesaj)
-    .toMatch(/değişti; hiçbir şey silinmedi/);
-  expect(existsSync(join(kodKoku, 'tests', 'scenarios', 'jet-seyahat', 'prim-hesaplama.spec.ts'))).toBe(true);
-  const dask = seyahat;
-  expect((await api(nobetci, '/platform/ekran/sil', { projeId, ekranId: '../x', onayAdi: 'x' })).mesaj).toMatch(/geçersiz/);
+  const ekranlar = await api(`/platform/ekranlar?projeId=${projeId}`) as { ekranlar: Array<{ id: string; ad: string; anahtar: string }> };
+  const musteri = ekranlar.ekranlar.find((e) => e.anahtar === 'musteri-kaydi');
+  expect(musteri).toBeTruthy();
+  expect((await api('/platform/ekran/durum', { projeId, ekranId: musteri?.id, etkin: 'evet' })).mesaj).toMatch(/true ya da false/);
+  expect((await api('/platform/ekran/sil', { projeId, ekranId: musteri?.id, onayAdi: musteri?.ad, sonuclariSil: 'evet' })).mesaj).toMatch(/true ya da false/);
+  expect((await api('/platform/ekran/sil', { projeId, ekranId: musteri?.id, onayAdi: 'yanlış ad' })).mesaj).toMatch(/adını aynen/);
+  expect((await api('/platform/ekran/sil', { projeId, ekranId: '../x', onayAdi: 'x' })).mesaj).toMatch(/geçersiz/);
+  const sonra = await api(`/platform/ekranlar?projeId=${projeId}`) as { ekranlar: Array<{ id: string }> };
+  expect(sonra.ekranlar.some((e) => e.id === musteri?.id)).toBe(true);
   // Video saklama süresi: yeni kayıt 1–365 gün.
-  expect((await api(nobetci, '/platform/guvenlik/kaydet', { videoSaklamaGun: 366 })).mesaj).toMatch(/1–365 gün/);
-  expect(await api(nobetci, '/platform/guvenlik/kaydet', { videoSaklamaGun: 365 })).toMatchObject({ basarili: true, videoSaklamaGun: 365 });
-  await api(nobetci, '/platform/kasa/kilitle', {});
-  const kilitli = await fetch(`${nobetci.adres}/platform/ekran/sil/onizle`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projeId, ekranId: dask?.id, token: nobetci.token }) });
+  expect((await api('/platform/guvenlik/kaydet', { videoSaklamaGun: 366 })).mesaj).toMatch(/1–365 gün/);
+  expect(await api('/platform/guvenlik/kaydet', { videoSaklamaGun: 365 })).toMatchObject({ basarili: true, videoSaklamaGun: 365 });
+  await api('/platform/kasa/kilitle', {});
+  const kilitli = await fetch(`${nobetci.adres}/platform/ekran/sil/onizle`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ projeId, ekranId: musteri?.id, token: nobetci.token }) });
   expect(kilitli.status).toBe(423);
 });

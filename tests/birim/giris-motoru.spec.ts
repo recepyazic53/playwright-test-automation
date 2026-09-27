@@ -2,7 +2,7 @@
 // motoru (tests/support/giris-motoru.ts). Tarayıcı açılır ama HİÇBİR istek ağa çıkmaz: tüm istekler
 // route ile yakalanıp bellekteki fikstür sayfalarından yanıtlanır (ya da 127.0.0.1'deki geçici sunucu);
 // tanınmayan her istek iptal edilir ve DNS de kapalıdır (bkz. giris-fikstur.ts). Her testin sonunda
-// şirket alan adına (…nippon…) istek olmadığı ve iptal edilmemiş dış istek kalmadığı doğrulanır.
+// yasak örnek alan adına (…yasak-ornek…) istek olmadığı ve iptal edilmemiş dış istek kalmadığı doğrulanır.
 import { join } from 'node:path';
 import { expect, test, type Browser, type BrowserContext } from '@playwright/test';
 import { captchaAlgila, girisFormunuAlgila, kodAlaniniAlgila } from '../../scripts/platform/giris/algilama.mjs';
@@ -30,7 +30,7 @@ test.beforeEach(async () => {
 test.afterEach(async () => {
   await baglam.close();
   const { sirket, disari } = agTemizMi(ag, [KOKEN]);
-  expect(sirket, 'şirket alan adına istek olmamalı').toEqual([]);
+  expect(sirket, 'yasak örnek alan adına istek olmamalı').toEqual([]);
   expect(disari, 'yakalanmayan dış istek olmamalı').toEqual([]);
 });
 

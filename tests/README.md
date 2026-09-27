@@ -1,20 +1,15 @@
-# Test yapısı
-
-`scenarios` altındaki spec dosyaları TEST ve CANLI için ortaktır. Ortam `TEST_ENV` ile seçilir; spec kopyalanmaz.
+# Testler
 
 ```text
 tests/
-├── scenarios/
-│   ├── login/
-│   ├── jet-kasko/
-│   └── trafik/
-├── support/
-│   ├── flows/
-│   └── pages/
-└── birim/          # tarayıcısız koruma testleri (+ fixtures/: sahte değerli örnekler)
+├── model-kosucu/model-senaryolari.spec.ts   # Nöbetçi'deki her senaryo için bir test üretir (ekran modeliyle koşar)
+├── support/                                 # Model koşucusu, giriş motoru, veri erişimi (genel-veri.ts), raporlayıcı
+└── birim/                                   # Koruma testleri (playwright.birim.config.ts; yerel sahte uygulamalar)
 ```
 
-Test verisi dosyalarda DEĞİL, platform veritabanındadır (Nöbetçi; bkz. kök README). Spec'ler veriyi
-`tests/support/test-data.ts` yükleyicileriyle (veritabanından) alır.
+Senaryo verisi dosyalarda DEĞİL, Nöbetçi'nin şifreli veritabanındadır. Model spec'i koşuyu başlatan Nöbetçi'den gelen
+proje ve ortam kimlikleriyle (NOBETCI_PROJE_ID / NOBETCI_ORTAM_ID) veriyi okur; bu yüzden tek başına terminalden
+çalıştırılmaz.
 
-Yeni bir ürün testi eklerken spec içinde `testBaslangiciniHazirla` çağrılır, ardından ilgili Page Object ile ürün akışı yürütülür. Locator ve teknik beklemeler spec içine yazılmaz.
+Koruma testleri: `npm test` (tarayıcıyla yalnızca 127.0.0.1'deki sahte uygulamalara bağlanır). Uçtan uca model koşusu
+testi isteğe bağlıdır: `MODEL_UCTAN_UCA=1 npx playwright test --config playwright.birim.config.ts model-kosucu-uctan-uca`.

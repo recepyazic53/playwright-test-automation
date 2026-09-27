@@ -1,14 +1,13 @@
 // Platform kabuğu: /platform/durum'a göre yönlendirme.
 //   çalışma alanı açık değil → Başlangıç ekranı: çalışma alanı listesi (Aç · ⋯ Yeniden adlandır / Bu bilgisayardan
-//                         kaldır) + "Yeni çalışma alanı" (ad adımı → Yedek yükle / Yeni proje başlat / [eski dosya
-//                         klasörü varsa ve hiç çalışma alanı yoksa] Mevcut proje dosyalarını aktar)
+//                         kaldır) + "Yeni çalışma alanı" (ad adımı → Yedek yükle / Yeni proje başlat)
 //   kasa yok            → Hoş geldiniz (açık — henüz kurulmamış — çalışma alanı için aynı seçenekler)
 //   kasa var, kilitli   → Kilit ekranı (çalışma alanının adı, "Başka çalışma alanı"; yanlış parolada bekleme)
-//   kasa açık, proje yok → Yeni proje sihirbazı (proje adımından)
+//   kasa açık, proje yok → Yeni proje sihirbazı (tanışma sorularından; kasa adımı atlanır)
 //   kasa açık           → Ana düzen: üst çubuk (marka, proje seçici [projeler, ⋯ Yeniden adlandır / Varsayılan yap /
-//                         Sil, + Yeni proje], Sonuçlar | Senaryolar | Ekranlar | Ayarlar, hızlı arama*, sunucu durumu,
+//                         Sil, + Yeni proje], Sonuçlar | Senaryolar | Ekranlar | Ayarlar, sunucu durumu, rehber (?),
 //                         tema, Kilitle, çalışma alanı menüsü [Kilitle · Yeniden adlandır · Çalışma alanını kapat]) +
-//                         sol panel + içerik. (* = yakında; bağlantı değildir.)
+//                         sol panel + içerik.
 //                         (#/sonuclar[/...], #/senaryolar[/...], #/ekranlar[/...], #/ayarlar/<bölüm>)
 // Senaryolar ekranı (senaryolar.js, senaryo-formu.js, kosu-paneli.js) ve Ekranlar ekranı (ekranlar.js,
 // ekran-ortak.js, sayfa-paketi.js, bulgular.js) ayrı modüllerde ve DİNAMİK yüklenir: sunucu bu dosyaları
@@ -18,8 +17,8 @@ import {
   degisiklikleriBirak, parolaAlani, s, temaDugmesi
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
+import { rehberAnahtari, rehberDugmesi, rehberOtomatikDene } from './rehber.js';
 import { cikisKorumasiniKur } from './cikis-korumasi.js';
-import { aktarimAkisi } from './aktarim.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
 
@@ -105,7 +104,7 @@ export async function yonlendir() {
   const { projeler, varsayilanId } = await api('/platform/projeler');
   durum.projeler = projeler;
   durum.varsayilanProjeId = varsayilanId || null;
-  if (!projeler.length) { sihirbaz('proje'); return; }
+  if (!projeler.length) { sihirbaz('tanisma'); return; }
   let secili = null;
   try { secili = localStorage.getItem(seciliProjeAnahtari()); } catch { secili = null; }
   durum.proje = projeler.find((p) => p.id === secili) || projeler.find((p) => p.id === durum.varsayilanProjeId) || projeler[0];
@@ -197,8 +196,8 @@ function secimKarti({ sinif = '', ikonAd, no, baslik, aciklama, altIkon, altMeti
     h('span', { class: 'kart-alt' }, ikon(altIkon), h('span', { class: altSinif || null }, altMetin), h('span', { class: 'git', 'aria-hidden': 'true' }, git, ikon('ok'))));
 }
 
-/** Yedek yükle / Yeni proje başlat / [Mevcut proje dosyalarını aktar] kartları. yeniAlan: önce çalışma alanı adı sorulur. */
-function baslangicKartlari(aktarilabilir, yeniAlan) {
+/** Yedek yükle / Yeni proje başlat kartları. yeniAlan: önce çalışma alanı adı sorulur. */
+function baslangicKartlari(yeniAlan) {
   const once = (amac, fn) => (yeniAlan && alanMod ? () => alanMod.yeniAlanDiyalogu({
     amac,
     devam: (alan) => {
@@ -218,20 +217,14 @@ function baslangicKartlari(aktarilabilir, yeniAlan) {
       altIkon: 'dosya', altMetin: '.tayedek · şifreli', git: 'Seç'
     }),
     secimKarti({
-      sinif: 'k-basari', ikonAd: 'arti', no: 2, baslik: 'Yeni proje başlat', onerilen: !aktarilabilir && !yeniAlan, onclick: once('kasa parolası ve proje', () => sihirbaz('kasa')),
+      sinif: 'k-basari', ikonAd: 'arti', no: 2, baslik: 'Yeni proje başlat', onerilen: !yeniAlan, onclick: once('kasa parolası ve proje', () => sihirbaz('tanisma', 'ilk')),
       aciklama: 'Kasa parolası belirleyin, projenizi ve test ortamlarınızı tanımlayın.',
       altIkon: 'saat', altMetin: 'yaklaşık 3 dakika', git: 'Başla'
-    }),
-    aktarilabilir ? secimKarti({
-      sinif: 'k-mor', ikonAd: 'klasor', no: 3, baslik: 'Mevcut proje dosyalarını aktar', onerilen: true,
-      onclick: once('eski dosyaları aktarmak', () => dosyaAktarimEkrani(aktarilabilir)),
-      aciklama: `Eski ${aktarilabilir.projeAdi} dosyalarını (test verileri, ortamlar, giriş bilgileri, senaryolar) şifreli platform veritabanına aktarın. Klasör: ${aktarilabilir.kaynakKlasoru}. Dosyalar değiştirilmez.`,
-      altIkon: 'ara', altMetin: 'eski dosyalar bulundu', altSinif: 'bulundu', git: 'Aktar'
-    }) : null
-  ].filter(Boolean);
+    })
+  ];
 }
 
-/** 1/2/3 kısayolları (yazı alanında değilken). */
+/** 1/2 kısayolları (yazı alanında değilken). */
 function kartKisayollari() {
   const kisayol = (olay) => {
     if (olay.altKey || olay.ctrlKey || olay.metaKey || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '') || document.querySelector('dialog[open]')) return;
@@ -242,17 +235,8 @@ function kartKisayollari() {
   ekranTemizle = () => document.removeEventListener('keydown', kisayol);
 }
 
-/** Eski proje dosyaları (en yeni veri/eski-dosyalar/<zaman>/ ya da proje kökündeki tests/data) aktarılabilir mi? */
-async function aktarilabilirAdaptor() {
-  try {
-    const d = await api('/platform/aktarim/durum');
-    return d.veritabaniBos ? (d.adaptorler || []).find((a) => a.dosyalarVar && !a.aktarildi) || null : null;
-  } catch { return null; }
-}
-
 /**
  * BAŞLANGIÇ EKRANI (açık çalışma alanı yok): üstte bu bilgisayardaki çalışma alanları, altta "Yeni çalışma alanı".
- * "Mevcut proje dosyalarını aktar" kartı yalnızca eski dosyalar varsa ve henüz hiç çalışma alanı yoksa görünür.
  */
 async function baslangicEkrani() {
   history.replaceState(null, '', '/');
@@ -260,7 +244,6 @@ async function baslangicEkrani() {
   let liste = { alanlar: [] };
   try { liste = await api('/platform/calisma-alanlari'); } catch (hata) { bildir(hata.message, 'hata'); }
   const alanlar = liste.alanlar || [];
-  const aktarilabilir = alanlar.length ? null : await aktarilabilirAdaptor();
   const listeBolumu = alanMod.alanListesi(alanlar, { acildi: () => { location.hash = ''; yonlendir(); }, yenile: () => baslangicEkrani() });
   ekran(odakSayfa({ ustMetin: alanlar.length ? 'çalışma alanları' : 'ilk kurulum' }, anaAlan('karsilama baslangic',
     radar(),
@@ -274,7 +257,7 @@ async function baslangicEkrani() {
     listeBolumu,
     h('div', { class: 'yeni-alan-baslik' }, h('h2', {}, alanlar.length ? 'Yeni çalışma alanı' : 'Başlayın'),
       h('span', { class: 'kucuk cok-soluk' }, 'Önce çalışma alanına bir ad verirsiniz (kilit açılmadan önce görünür).')),
-    h('div', { class: 'secim-kartlari' }, baslangicKartlari(aktarilabilir, true)))));
+    h('div', { class: 'secim-kartlari' }, baslangicKartlari(true)))));
   kartKisayollari();
 }
 
@@ -293,9 +276,6 @@ async function hosgeldin() {
   sayfaBasligi('Hoş geldiniz');
   const alan = durum.sunucu && durum.sunucu.calismaAlani;
   const cokluAlan = alan && !alan.sabit;
-  // Eski proje dosyalarının olduğu bir klasör varsa (en yeni veri/eski-dosyalar/<zaman>/ yedeği ya da
-  // proje kökünde hâlâ duran tests/data) üçüncü kart gösterilir.
-  const aktarilabilir = await aktarilabilirAdaptor();
   const geri = cokluAlan ? h('button', { type: 'button', class: 'hayalet baska-alan', onclick: (o) => baskaCalismaAlani(o.currentTarget) }, ikon('geri'), 'Başlangıç ekranı') : null;
   ekran(odakSayfa({ ustMetin: cokluAlan ? `çalışma alanı: ${alan.ad}` : 'ilk kurulum' }, anaAlan('karsilama',
     radar(),
@@ -303,20 +283,9 @@ async function hosgeldin() {
     h('span', { class: 'ust-hap' }, h('span', { class: 'nokta vurgu', 'aria-hidden': 'true' }), cokluAlan ? `"${alan.ad}" çalışma alanında henüz proje yok` : 'Bu bilgisayarda henüz bir proje yok'),
     h('h1', {}, `${MARKA.yonelme} `, h('span', { class: 'parlak' }, 'hoş geldiniz')),
     h('p', { class: 'giris' }, 'Test senaryolarınızı çalıştırın, sonuçları izleyin, hataları kalıplara ayırın. Her şey bu bilgisayarda, şifreli bir kasada kalır. Başlamak için bir seçenek belirleyin.'),
-    h('div', { class: 'secim-kartlari' }, baslangicKartlari(aktarilabilir, false)),
+    h('div', { class: 'secim-kartlari' }, baslangicKartlari(false)),
     geri ? h('div', { class: 'dugmeler ortala ust-bosluk' }, geri) : null)));
   kartKisayollari();
-}
-
-function dosyaAktarimEkrani(adaptor) {
-  const kapsayici = h('div', {});
-  sayfaBasligi('Eski proje dosyalarını aktar');
-  ekran(odakSayfa({ ustMetin: 'dosyalardan aktarım' }, anaAlan('ortali', h('h1', { class: 'gorunmez' }, 'Eski proje dosyalarını aktar'), kapsayici)));
-  aktarimAkisi(kapsayici, {
-    mod: 'hosgeldin', adaptor,
-    bitti: () => { location.hash = '#/senaryolar'; yonlendir(); },
-    vazgec: () => hosgeldin()
-  });
 }
 
 function yedekYukleEkrani() {
@@ -330,9 +299,13 @@ function yedekYukleEkrani() {
 // Yeni proje sihirbazı
 // ---------------------------------------------------------------------------------------
 
-// İki kip: 'ilk' (kasa parolası → proje → ortamlar → giriş profili → tamam; yeni çalışma alanı) ve 'ek' (AYNI kasada yeni
-// proje: proje → ortamlar → giriş profili → tamam; üst çubuktaki proje seçici > "+ Yeni proje").
+// İki kip: 'ilk' (tanışma → kasa parolası → proje → ortamlar → giriş profili → tamam; yeni çalışma alanı) ve 'ek' (AYNI
+// kasada yeni proje: tanışma → proje → ortamlar → giriş profili → tamam; üst çubuktaki proje seçici > "+ Yeni proje").
+// TANIŞMA: birkaç soruyla kullanıcının ne yapacağı öğrenilir; cevaplar sonraki adımları şekillendirir (canlı ortam satırı,
+// giriş adımının atlanması) ve "Tamam" adımında sıralı, kişiye özel bir yapılacaklar listesi gösterilir. Cevaplar yalnızca
+// bu sihirbaz boyunca bellekte tutulur; kalıcı olan, kullanıcının oluşturduğu ortam / profil kayıtlarıdır.
 const ILK_ADIMLAR = [
+  { ad: 'tanisma', etiket: 'Tanışalım' },
   { ad: 'kasa', etiket: 'Kasa parolası' },
   { ad: 'proje', etiket: 'Proje' },
   { ad: 'ortamlar', etiket: 'Ortamlar' },
@@ -341,6 +314,8 @@ const ILK_ADIMLAR = [
 ];
 const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa');
 let sihirbazModu = 'ilk';
+/** Tanışma cevapları (varsayılanlar: en yaygın kurulum). */
+const cevaplar = { hedef: 'ikisi', ortam: 'test', giris: 'evet', ikiAsama: 'yok', ekranYolu: 'tara' };
 const sihirbazAdimlari = () => (sihirbazModu === 'ek' ? EK_ADIMLAR : ILK_ADIMLAR);
 
 function adimListesi(aktif) {
@@ -376,11 +351,74 @@ export function sihirbaz(adim, mod) {
   history.replaceState(null, '', '/');
   if (mod) sihirbazModu = mod;
   else if (adim === 'kasa' || !durum.projeler.length) sihirbazModu = 'ilk';
+  if (adim === 'tanisma') return sihirbazTanisma();
   if (adim === 'kasa') return sihirbazKasa();
   if (adim === 'proje') return sihirbazProje();
   if (adim === 'ortamlar') return sihirbazOrtamlar();
   if (adim === 'giris') return sihirbazGiris();
   return sihirbazTamam();
+}
+
+/** Kasa henüz oluşturulmadı mı (yeni çalışma alanı / ilk kurulum)? */
+const kasaYok = () => !(durum.sunucu && durum.sunucu.kasa && durum.sunucu.kasa.olusturuldu);
+
+/** Tek seçimli soru (radyo grubu). @param {string} soru @param {keyof typeof cevaplar} anahtar @param {Array<[string, string, string?]>} secenekler */
+function soruGrubu(soru, anahtar, secenekler, degisti) {
+  const ad = yeniKimlikAdi(anahtar);
+  const grup = h('fieldset', { class: 'tanisma-sorusu' }, h('legend', {}, soru),
+    h('div', { class: 'tanisma-secenekleri' }, secenekler.map(([deger, etiket, aciklama]) => {
+      const girdi = h('input', { type: 'radio', name: ad, value: deger, checked: cevaplar[anahtar] === deger });
+      girdi.addEventListener('change', () => { if (girdi.checked) { cevaplar[anahtar] = deger; if (degisti) degisti(); } });
+      return h('label', { class: 'tanisma-secenegi' }, girdi, h('span', {}, h('b', {}, etiket), aciklama ? h('small', {}, aciklama) : null));
+    })));
+  return grup;
+}
+let adSayaci = 0;
+const yeniKimlikAdi = (onEk) => `${onEk}-${++adSayaci}`;
+
+/** TANIŞMA: ne test edileceği, ortamlar, giriş ve iki aşamalı doğrulama, ekranların nasıl tanıtılacağı. */
+function sihirbazTanisma() {
+  const ikiAsamaAlani = h('div', {});
+  const ekranYoluAlani = h('div', {});
+  const ciz = () => {
+    ikiAsamaAlani.replaceChildren(cevaplar.giris === 'evet' ? soruGrubu('Girişte iki aşamalı doğrulama var mı?', 'ikiAsama', [
+      ['yok', 'Yok', 'Yalnızca kullanıcı adı ve parola.'],
+      ['totp', 'Doğrulama uygulaması', 'Authenticator ile 6 haneli kod (kod her koşuda otomatik üretilir).'],
+      ['sms', 'SMS kodu', 'Sabit test kodu ya da koşu sırasında elle girilen kod.']
+    ]) : '');
+    ekranYoluAlani.replaceChildren(cevaplar.hedef !== 'servis' ? soruGrubu('Test edilecek sayfaları Nöbetçi\'ye nasıl tanıtmak istersiniz?', 'ekranYolu', [
+      ['tara', 'Nöbetçi tarasın', 'Sayfayı seçtiğiniz ortamda yalnızca okuyarak inceler ve modeli kendisi çıkarır.'],
+      ['paket', 'Sayfa paketi yükleyeceğim', 'Claude Code gibi bir araçla üretilmiş sayfa paketi (JSON).'],
+      ['kayit', 'İşlemi ben yapayım, kaydetsin', 'Siz ekranda işlemi yaparken Nöbetçi adımları kaydeder.']
+    ]) : '');
+  };
+  ciz();
+  const devam = h('button', { type: 'submit', class: 'birincil' }, 'Devam', ikon('ok'));
+  const form = h('form', { class: 'kart tanisma-karti', novalidate: true, 'aria-label': 'Tanışma soruları' },
+    h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sizi tanıyalım')),
+    h('p', { class: 'soluk' }, 'Birkaç soruyla kurulumu size göre hazırlayalım. Cevaplarınızı sonra Ayarlar\'dan istediğiniz gibi değiştirebilirsiniz.'),
+    soruGrubu('Ne test edeceksiniz?', 'hedef', [
+      ['web', 'Web ekranları', 'Tarayıcıda açılan sayfalar (form doldurma, akışlar).'],
+      ['servis', 'Servisler', 'SOAP / REST servisleri (tarayıcısız).'],
+      ['ikisi', 'İkisi de', 'Hem ekranlar hem servisler.']
+    ], ciz),
+    soruGrubu('Testler hangi ortamlarda çalışacak?', 'ortam', [
+      ['test', 'Yalnızca test ortamı', 'Önerilen başlangıç.'],
+      ['testCanli', 'Test ve canlı', 'Canlı işaretli ortamda kayıt oluşturan "yalnızca test ortamı" adımları atlanır.']
+    ]),
+    soruGrubu('Uygulamanıza giriş yaparak mı erişiliyor?', 'giris', [
+      ['evet', 'Evet', 'Kullanıcı adı ve parola ile giriş.'],
+      ['hayir', 'Hayır', 'Sayfalar girişsiz açılıyor.']
+    ], ciz),
+    ikiAsamaAlani, ekranYoluAlani,
+    h('div', { class: 'dugmeler' }, devam, sihirbazModu === 'ilk' && kasaYok()
+      ? h('button', { type: 'button', class: 'hayalet', onclick: () => hosgeldin() }, ikon('geri'), 'Geri')
+      : sihirbazModu === 'ek' && durum.projeler.length ? h('button', { type: 'button', class: 'hayalet', onclick: () => { location.hash = '#/sonuclar'; yonlendir(); } }, 'Vazgeç') : null));
+  form.addEventListener('submit', (olay) => {
+    olay.preventDefault();
+    if (sihirbazModu === 'ilk' && kasaYok()) sihirbazKasa(); else sihirbazProje();
+  });
+  sihirbazEkrani('tanisma', sihirbazBasligi(), 'Kurulumu size göre hazırlamak için birkaç soru.', form);
 }
 
 function sihirbazKasa() {
@@ -395,7 +433,7 @@ function sihirbazKasa() {
       h('p', {}, h('strong', {}, 'Bu parolayı unutmayın. '), 'Parola unutulursa veriler kurtarılamaz; parolanın bir kopyası hiçbir yerde saklanmaz.')),
     mesaj.kutu, p1.kapsayici, p2.kapsayici,
     h('label', { class: 'secenek', for: 'parola-anladim' }, anladim, 'Parolayı unutursam verilerin kurtarılamayacağını anladım.'),
-    h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: () => hosgeldin() }, ikon('geri'), 'Geri')));
+    h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: () => sihirbazTanisma() }, ikon('geri'), 'Geri')));
   form.addEventListener('submit', async (olay) => {
     olay.preventDefault();
     mesaj.temizle();
@@ -406,6 +444,7 @@ function sihirbazKasa() {
     try {
       await mesgulIken(gonder, 'Kasa oluşturuluyor…', () => api('/platform/kasa/olustur', { govde: { parola: p1.girdi.value } }));
       p1.girdi.value = ''; p2.girdi.value = '';
+      if (durum.sunucu) durum.sunucu = { ...durum.sunucu, kasa: { ...(durum.sunucu.kasa || {}), olusturuldu: true, acik: true } };
       sihirbazProje();
     } catch (hata) {
       mesaj.goster(hata.message);
@@ -452,10 +491,11 @@ function sihirbazProje() {
 function sihirbazOrtamlar() {
   const satirlar = [];
   const liste = h('div', {});
-  const ortamSatiri = (zorunlu) => {
-    const ad = h('input', { type: 'text', autocomplete: 'off', value: zorunlu ? 'TEST' : '' });
+  const ortamSatiri = (zorunlu, ilkAd = '', canliMi = false) => {
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: zorunlu ? 'TEST' : ilkAd });
     const adres = h('input', { type: 'url', autocomplete: 'off', placeholder: 'https://', inputmode: 'url' });
-    const satir = { ad, adres, zorunlu, el: null };
+    const canli = h('input', { type: 'checkbox', checked: canliMi, id: yeniKimlikAdi('canli') });
+    const satir = { ad, adres, zorunlu, canli, el: null };
     const kaldir = zorunlu ? null : h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => {
       satirlar.splice(satirlar.indexOf(satir), 1); satir.el.remove();
     } }, ikon('carpi'), 'Kaldır');
@@ -463,18 +503,20 @@ function sihirbazOrtamlar() {
     satir.el = h('div', { class: 'ortam-satiri' },
       alan('Ortam adı', ad, { zorunlu: true }),
       alan('Adres (link)', adres, { zorunlu: true }),
-      kaldir || h('span', { class: 'rozet vurgu' }, 'Zorunlu'));
+      zorunlu ? h('span', { class: 'rozet vurgu' }, 'Zorunlu') : h('div', { class: 'ortam-satiri-sag' },
+        h('label', { class: 'secenek kucuk', for: canli.id }, canli, 'Canlı ortam'), kaldir));
     satirlar.push(satir);
     liste.append(satir.el);
     return satir;
   };
   ortamSatiri(true);
+  if (cevaplar.ortam === 'testCanli') ortamSatiri(false, 'CANLI', true);
   const ekleDugmesi = h('button', { type: 'button', onclick: () => ortamSatiri(false).ad.focus() }, '+ Ortam ekle');
   const mesaj = mesajKutusu();
   const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve devam', ikon('ok'));
   const form = h('form', { class: 'kart', novalidate: true },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ag'), 'Ortamlar')),
-    h('p', { class: 'soluk' }, 'TEST ortamı zorunludur. Diğer ortamları (ör. hazırlık, canlı) şimdi veya daha sonra Ayarlar\'dan ekleyebilirsiniz.'),
+    h('p', { class: 'soluk' }, 'TEST ortamı zorunludur. Diğer ortamları (ör. hazırlık, canlı) şimdi veya daha sonra Ayarlar\'dan ekleyebilirsiniz. "Canlı ortam" işaretliyse kayıt oluşturan "yalnızca test ortamı" adımları orada atlanır.'),
     mesaj.kutu, liste, ekleDugmesi,
     h('div', { class: 'dugmeler' }, gonder));
   form.addEventListener('submit', async (olay) => {
@@ -490,10 +532,10 @@ function sihirbazOrtamlar() {
     try {
       await mesgulIken(gonder, 'Kaydediliyor…', async () => {
         for (const s2 of satirlar) {
-          await api('/platform/ortam/kaydet', { govde: { projeId: durum.proje.id, ad: s2.ad.value.trim(), tabanUrl: s2.adres.value.trim(), varsayilan: s2.zorunlu } });
+          await api('/platform/ortam/kaydet', { govde: { projeId: durum.proje.id, ad: s2.ad.value.trim(), tabanUrl: s2.adres.value.trim(), varsayilan: s2.zorunlu, canli: s2.canli.checked } });
         }
       });
-      sihirbazGiris();
+      if (cevaplar.giris === 'hayir') sihirbazTamam(); else sihirbazGiris();
     } catch (hata) {
       mesaj.goster(hata.message);
     }
@@ -512,6 +554,9 @@ function sihirbazGiris() {
   const form = h('form', { class: 'kart', novalidate: true },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('kullanici'), 'Giriş profili'), h('span', { class: 'rozet' }, 'İsteğe bağlı')),
     h('p', { class: 'soluk' }, 'Testlerin uygulamaya hangi kullanıcıyla gireceği. İki aşamalı doğrulama ve giriş tarifi Ayarlar > Giriş profilleri\'nden tanımlanır.'),
+    cevaplar.ikiAsama !== 'yok' ? h('div', { class: 'not-kutusu bilgi kucuk' }, cevaplar.ikiAsama === 'totp'
+      ? 'Doğrulama uygulaması kullanıyorsunuz: profili kaydettikten sonra Ayarlar > Giriş profilleri\'nden uygulamanın gizli anahtarını (QR kodundaki) ekleyin; kod her koşuda otomatik üretilir.'
+      : 'SMS kodu kullanıyorsunuz: profili kaydettikten sonra Ayarlar > Giriş profilleri\'nden sabit test kodunu girin ya da "koşu sırasında elle gir"i seçin.') : null,
     mesaj.kutu, alan('Profil adı', ad, { zorunlu: true }), alan('Kullanıcı adı', kullanici, { zorunlu: true }), parola.kapsayici,
     h('div', { class: 'dugmeler' }, gonder, atla));
   form.addEventListener('submit', async (olay) => {
@@ -534,6 +579,29 @@ function sihirbazGiris() {
   kullanici.focus();
 }
 
+/** Tanışma cevaplarına göre sıralı yapılacaklar (her satır ilgili ekrana götürür; o ekranın rehberi ilk girişte açılır). */
+function yapilacaklarKarti(git) {
+  /** @type {Array<[string, string, string]>} */
+  const isler = [];
+  if (cevaplar.giris === 'evet') {
+    isler.push(['Giriş tarifini tanımlayın', 'Ayarlar > Giriş profilleri: ortamın giriş sayfasını "Varsayılanları öner" ile algılatın, kontrol edip kaydedin.' +
+      (cevaplar.ikiAsama === 'totp' ? ' Doğrulama uygulamasının gizli anahtarını profile ekleyin.' : cevaplar.ikiAsama === 'sms' ? ' SMS kodunun nasıl girileceğini profilde seçin.' : ''), '#/ayarlar/giris']);
+  }
+  isler.push(['Test verisini ekleyin', 'Ayarlar > Test verisi: senaryoların kullanacağı kayıtlar ve tablolar (ör. kişi, kart, ürün listeleri).', '#/ayarlar/test-verisi']);
+  if (cevaplar.hedef !== 'servis') {
+    isler.push([cevaplar.ekranYolu === 'kayit' ? 'İlk ekranı kaydedin' : cevaplar.ekranYolu === 'paket' ? 'İlk sayfa paketini yükleyin' : 'İlk ekranı taratın',
+      'Ekranlar: test edilecek sayfayı Nöbetçi\'ye tanıtın; modeli ve önerilen senaryoları kontrol edin.', cevaplar.ekranYolu === 'tara' ? '#/ekranlar/yeni/tara' : '#/ekranlar/yeni']);
+    isler.push(['Senaryo oluşturun ve deneyin', 'Senaryolar: ekranın formunu doldurun, "Dene" ile kaydetmeden deneyin, sonra kaydedin.', '#/senaryolar']);
+  }
+  if (cevaplar.hedef !== 'web') isler.push(['Servis ekleyin', 'Servisler: WSDL / SoapUI projesi ya da elle; alanları test verisine bağlayın, kontrolleri ekleyin.', '#/servisler/yeni']);
+  isler.push(['Koşun ve sonuçları izleyin', '"Koşuyu başlat" ile koşun; Sonuçlar\'da kalan testleri, ekran görüntülerini ve hata kalıplarını inceleyin.', '#/sonuclar']);
+  return h('div', { class: 'kart vurgulu yapilacaklar' },
+    h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sizin için yapılacaklar')),
+    h('ol', { class: 'yapilacaklar-listesi' }, isler.map(([baslik, aciklama, adres]) => h('li', {},
+      h('button', { type: 'button', class: 'yapilacak', onclick: git(adres) }, h('b', {}, baslik), h('small', {}, aciklama), ikon('ok'))))),
+    h('p', { class: 'soluk kucuk' }, ikon('soru'), ' Her ekranın bir rehberi vardır: ilk açılışta kendiliğinden başlar, sonra üst çubuktaki "?" ile yeniden açılır.'));
+}
+
 function sihirbazTamam() {
   sayfaBasligi('Proje hazır');
   const git = (adres) => () => { location.hash = adres; yonlendir(); };
@@ -543,12 +611,13 @@ function sihirbazTamam() {
         ? `"${durum.proje ? durum.proje.ad : ''}" projesi ve ortamları oluşturuldu. Proje seçiciden projeler arasında geçebilirsiniz.`
         : 'Kasa, proje ve ortamlar oluşturuldu.')),
     adimListesi('tamam'),
-    h('div', { class: 'kart' },
+    yapilacaklarKarti(git),
+    cevaplar.hedef !== 'servis' ? h('div', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ekran'), 'Sırada: ekranlar')),
       h('p', { class: 'soluk' }, 'Test edilecek sayfayı ekleyin: Claude Code\'un ürettiği sayfa paketini yükleyin ("Sayfa ekle") ya da Nöbetçi sayfayı seçilen ortamda yalnızca okuyarak kendisi tarasın ("Ekranı otomatik tara").'),
       h('div', { class: 'dugmeler' },
-        h('button', { type: 'button', class: 'birincil', onclick: git('#/ekranlar/yeni') }, ikon('artiYalin'), 'Sayfa ekle'),
-        h('button', { type: 'button', onclick: git('#/ekranlar/yeni/tara') }, ikon('ara'), 'Ekranı otomatik tara'))),
+        h('button', { type: 'button', class: cevaplar.ekranYolu === 'tara' ? '' : 'birincil', onclick: git('#/ekranlar/yeni') }, ikon('artiYalin'), 'Sayfa ekle'),
+        h('button', { type: 'button', class: cevaplar.ekranYolu === 'tara' ? 'birincil' : '', onclick: git('#/ekranlar/yeni/tara') }, ikon('ara'), 'Ekranı otomatik tara'))) : null,
     h('div', { class: 'kart vurgulu' },
       h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sırada ne var?')),
       h('p', {}, 'Giriş profillerini, bağlam profillerini ve test verilerini Ayarlar\'dan ekleyebilirsiniz.'),
@@ -662,7 +731,7 @@ function projeSecici() {
     h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, alan && !alan.sabit ? `Projeler · ${alan.ad}` : 'Projeler'),
     durum.projeler.map(satir),
     h('hr', {}),
-    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('proje', 'ek'); } }, ikon('artiYalin'), 'Yeni proje'),
+    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('tanisma', 'ek'); } }, ikon('artiYalin'), 'Yeni proje'),
     h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); location.hash = '#/ayarlar/proje'; } }, ikon('duzenle'), 'Projeyi düzenle'));
   dugme.addEventListener('click', () => {
     if (acik()) { kapat(); return; }
@@ -704,16 +773,13 @@ function anaDuzen() {
     kapandi: () => { location.hash = ''; yonlendir(); },
     yenile: async () => { durum.sunucu = await api('/platform/durum').catch(() => durum.sunucu); anaDuzen(); }
   }) : null;
-  const arama = h('button', { type: 'button', class: 'hizli-arama', 'aria-disabled': 'true', title: 'Hızlı arama yakında', 'aria-label': 'Hızlı arama (yakında)' },
-    ikon('ara'), h('span', { class: 'arama-metni' }, 'Hızlı ara…'), h('kbd', {}, '⌘K'));
-  arama.addEventListener('click', () => bildir('Hızlı arama bir sonraki sürümde gelecek.'));
   const sunucu = sunucuDurumu();
   const ust = h('header', { class: 'ust-cubuk' },
     markaOgesi(),
     projeSecici(),
     h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navAyarlar),
     h('span', { class: 'bosluk' }),
-    arama, sunucu, temaDugmesi(), kilitle, hesap);
+    sunucu, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
   ekran(ust, main);
 
   const ciz = () => {
@@ -753,7 +819,9 @@ function anaDuzen() {
       sonuclarEkrani(main, bolum === 'sonuclar' && alt ? [alt, ...kalan] : [], { durum });
     }
   };
-  window.addEventListener('hashchange', ciz);
+  // Ekran rehberi: ilk girişte (tercih açıksa) kendiliğinden başlar; "?" her zaman yeniden açar.
+  const cizVeRehber = () => { ciz(); rehberOtomatikDene(rehberAnahtari(location.hash)); };
+  window.addEventListener('hashchange', cizVeRehber);
   // Otomatik kilit: sunucu kasayı hareketsizlik sonrası kilitler; arayüz bunu periyodik durum
   // sorgusuyla (etkinlik SAYILMAZ) fark edip kilit ekranına döner. Aynı sorgu sunucu hapını da günceller.
   const kilitKontrolu = setInterval(async () => {
@@ -771,8 +839,8 @@ function anaDuzen() {
       }
     } catch { sunucu.durumAyarla(false); /* bağlantı hatası: bir sonraki denemede */ }
   }, 15_000);
-  ekranTemizle = () => { window.removeEventListener('hashchange', ciz); clearInterval(kilitKontrolu); };
-  ciz();
+  ekranTemizle = () => { window.removeEventListener('hashchange', cizVeRehber); clearInterval(kilitKontrolu); };
+  cizVeRehber();
 }
 
 /** Senaryolar modülü (bir kez yüklenir). */
