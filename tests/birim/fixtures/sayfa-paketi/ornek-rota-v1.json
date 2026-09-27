@@ -22,40 +22,40 @@
   "tur": "ekran",
   "id": "ornek-rota",
   "ad": "Örnek Rota",
-  "aciklama": "Örnek rota başvurusu teklif ekranı: kapsam/alternatif, teminatlar, sorgu tipi, başvuran ve kefil, prim hesaplama ve isteğe bağlı ödeme adımı. (Sayfa paketi örneği — değerler sahtedir.)",
+  "aciklama": "Örnek rota başvurusu siparis ekranı: kapsam/alternatif, teslimatlar, sorgu tipi, başvuran ve kefil, toplam hesaplama ve isteğe bağlı ödeme adımı. (Sayfa paketi örneği — değerler sahtedir.)",
   "ekranUrl": "/ornek/rota/",
-  "specDosyasi": "tests/scenarios/ornek-rota/teklif.spec.ts",
+  "specDosyasi": "tests/scenarios/ornek-rota/siparis.spec.ts",
   "pageObject": "tests/support/pages/ornek-rota.page.ts#OrnekRotaPage",
   "veriKaynaklari": {
    "senaryo": "Nöbetçi > Senaryolar (ornek-rota)",
-   "ortak": "Nöbetçi > Ayarlar (bağlam ve test verisi profilleri)"
+   "profiller": "Nöbetçi > Ayarlar (bağlam ve test verisi profilleri)"
   },
   "kosullar": {
    "subeAlanSetiTam": {
-    "aciklama": "Ek hizmet, kayak teminatı, Plan Kodu ve Rota İptal Bedeli alanları şubeye göre gösteriliyor ya da hiç gösterilmiyor.",
+    "aciklama": "Ek hizmet, hediye paketi, Plan Kodu ve Rota İade Bedeli alanları şubeye göre gösteriliyor ya da hiç gösterilmiyor.",
     "ifade": {
      "calismaZamani": "gorunurse"
     },
     "hedefIfade": {
-     "acente": {
+     "baglam": {
       "alanSeti": "tam"
      }
     },
     "bilinenDurumlar": [
      {
-      "acente": "90001 (ortak.kullaniciDegistir.varsayilan)",
-      "acentePartaji": "90001",
+      "profil": "90001 (baglam.varsayilan)",
+      "profilKodu": "90001",
       "gorunur": false,
       "kaynak": "ornek-rota.page.ts yorumu"
      },
      {
-      "acente": "90002 (ortak.kullaniciDegistir.ÖzelTanımlıŞube)",
-      "acentePartaji": "90002",
+      "profil": "90002 (baglam.ÖzelTanımlıŞube)",
+      "profilKodu": "90002",
       "gorunur": true,
-      "kaynak": "senaryo başlıkları + kayak senaryosu; canlıda doğrulanmadı"
+      "kaynak": "senaryo başlıkları + hediye senaryosu; canlıda doğrulanmadı"
      }
     ],
-    "not": "Doğrulayıcı (scripts/dogrulama/senaryo-dogrulayici.mjs) bilinenDurumlar > acentePartaji ile karar veriyor: listede olmayan şubede görünürlük BİLİNMİYOR sayılır ve alan zorunlu kalır. POM bugün şubeye göre değil, her alanın isVisible() sonucuna göre karar veriyor. Hedef: şube profiline 'rotaAlanSeti' gibi bir özellik eklemek ve crawler ile her şubenin görünürlük matrisini çıkarmak. Dört alanın birlikte mi yoksa ayrı ayrı mı gizlendiği bilinmiyor."
+    "not": "Doğrulayıcı (scripts/dogrulama/senaryo-dogrulayici.mjs) bilinenDurumlar > profilKodu ile karar veriyor: listede olmayan şubede görünürlük BİLİNMİYOR sayılır ve alan zorunlu kalır. POM bugün şubeye göre değil, her alanın isVisible() sonucuna göre karar veriyor. Hedef: şube profiline 'rotaAlanSeti' gibi bir özellik eklemek ve crawler ile her şubenin görünürlük matrisini çıkarmak. Dört alanın birlikte mi yoksa ayrı ayrı mı gizlendiği bilinmiyor."
    },
    "tekliSorgu": {
     "ifade": {
@@ -69,24 +69,24 @@
      "esit": "coklu"
     }
    },
-   "ettirenFarkli": {
+   "odeyenFarkli": {
     "ifade": {
-     "alan": "ettiren",
+     "alan": "odeyen",
      "icinde": [
       "farkliOzel",
       "farkliTuzel"
      ]
     }
    },
-   "ettirenFarkliOzel": {
+   "odeyenFarkliOzel": {
     "ifade": {
-     "alan": "ettiren",
+     "alan": "odeyen",
      "esit": "farkliOzel"
     }
    },
-   "ettirenFarkliTuzel": {
+   "odeyenFarkliTuzel": {
     "ifade": {
-     "alan": "ettiren",
+     "alan": "odeyen",
      "esit": "farkliTuzel"
     }
    },
@@ -161,12 +161,12 @@
         },
         "secenekler": [
          {
-          "deger": "DÜNYA",
-          "metin": "DÜNYA"
+          "deger": "EKSPRES",
+          "metin": "EKSPRES"
          },
          {
-          "deger": "AVRUPA",
-          "metin": "AVRUPA"
+          "deger": "STANDART",
+          "metin": "STANDART"
          }
         ],
         "seceneklerDurumu": "kismi",
@@ -187,7 +187,7 @@
           "tablo": "#syh-kapsam-tb",
           "arttir": "#syh-kapsam-tb img[onclick*=\"Increase\"]",
           "azalt": "#syh-kapsam-tb img[onclick*=\"Decrease\"]",
-          "yanitBekle": "/jet-satis/ornek-rota/ulke-listesi/"
+          "yanitBekle": "/magaza/ornek-rota/ulke-listesi/"
          },
          "kirilganlik": "yuksek",
          "not": "Değer metinden okunuyor, oklar onclick içeriğiyle bulunuyor. Seçenek listesi DOM'da yok; listeyi görmek için halkayı dolaşmak gerekiyor."
@@ -220,20 +220,20 @@
         "bagimlilik": {
          "alan": "kapsam",
          "secenekHaritasi": {
-          "DÜNYA": [
+          "EKSPRES": [
            {
-            "deger": "VİZE TÜM DÜNYA",
-            "metin": "VİZE TÜM DÜNYA"
+            "deger": "HIZLI TESLİMAT",
+            "metin": "HIZLI TESLİMAT"
            },
            {
             "deger": "ROTA PAKET",
             "metin": "ROTA PAKET"
            }
           ],
-          "AVRUPA": [
+          "STANDART": [
            {
-            "deger": "VİZE SCHENGEN",
-            "metin": "VİZE SCHENGEN"
+            "deger": "ADRESE TESLİM",
+            "metin": "ADRESE TESLİM"
            },
            {
             "deger": "ROTA PAKET",
@@ -256,7 +256,7 @@
           "tablo": "#syh-alternatif-tb",
           "arttir": "#syh-alternatif-tb img[onclick*=\"Increase\"]",
           "azalt": "#syh-alternatif-tb img[onclick*=\"Decrease\"]",
-          "yanitBekle": "/jet-satis/ornek-rota/ulke-listesi/"
+          "yanitBekle": "/magaza/ornek-rota/ulke-listesi/"
          },
          "kirilganlik": "yuksek"
         },
@@ -320,14 +320,14 @@
         "doldurucu": "tarihJs",
         "form": null,
         "notlar": [
-         "Senaryoya göre değiştirilemiyor; süreye bağlı prim/iş kuralı test etmek için 'senaryo' yapılabilir."
+         "Senaryoya göre değiştirilemiyor; süreye bağlı toplam/iş kuralı test etmek için 'senaryo' yapılabilir."
         ]
        }
       ]
      },
      {
-      "id": "teminatlar",
-      "baslik": "Teminatlar, plan ve ülke",
+      "id": "teslimatlar",
+      "baslik": "Teslimatlar, plan ve ülke",
       "alanlar": [
        {
         "id": "ekHizmet",
@@ -382,11 +382,11 @@
         ]
        },
        {
-        "id": "kayakTeminati",
+        "id": "hediyePaketi",
         "tip": "onayKutusu",
         "etiket": {
          "ekran": null,
-         "form": "Kayak teminatı"
+         "form": "Hediye paketi"
         },
         "zorunlu": false,
         "varsayilan": {
@@ -395,7 +395,7 @@
         },
         "yapilandirma": "senaryo",
         "eslesme": {
-         "senaryo": "kayakTeminati",
+         "senaryo": "hediyePaketi",
          "donusum": "undefined = dokunma; true/false = setChecked"
         },
         "konum": {
@@ -408,9 +408,9 @@
          "kosul": "subeAlanSetiTam"
         },
         "form": {
-         "id": "sof_kayak",
+         "id": "sof_hediye",
          "kontrol": "checkbox",
-         "etiket": "Kayak teminatı"
+         "etiket": "Hediye paketi"
         },
         "dogrulama": {
          "istemci": "yok",
@@ -419,11 +419,11 @@
         }
        },
        {
-        "id": "rotaIptalBedeli",
+        "id": "rotaIadeBedeli",
         "tip": "secim",
         "etiket": {
          "ekran": null,
-         "not": "POM yorumunda 'Rota İptal Bedeli'"
+         "not": "POM yorumunda 'Rota İade Bedeli'"
         },
         "secenekler": [
          {
@@ -432,11 +432,11 @@
          }
         ],
         "seceneklerDurumu": "kismi",
-        "seceneklerKaynagi": "tests/data/test/ornek-rota.json > rotaIptalBedeli (yalnızca kullanılan değer)",
+        "seceneklerKaynagi": "tests/data/test/ornek-rota.json > rotaIadeBedeli (yalnızca kullanılan değer)",
         "zorunlu": null,
         "yapilandirma": "urun",
         "eslesme": {
-         "urun": "rotaIptalBedeli.deger"
+         "urun": "rotaIadeBedeli.deger"
         },
         "konum": {
          "secici": "#cmbIpt",
@@ -491,7 +491,7 @@
          }
         ],
         "seceneklerDurumu": "dinamik",
-        "seceneklerKaynagi": "AJAX /jet-satis/ornek-rota/ulke-listesi/ (kapsam/alternatif değişince yenileniyor). Veride yalnızca kullanılan değer var.",
+        "seceneklerKaynagi": "AJAX /magaza/ornek-rota/ulke-listesi/ (kapsam/alternatif değişince yenileniyor). Veride yalnızca kullanılan değer var.",
         "bagimlilik": {
          "alan": [
           "kapsam",
@@ -512,7 +512,7 @@
         "sonKontrol": "toHaveValue(ulke.deger)",
         "form": null,
         "notlar": [
-         "AVRUPA kapsamında ALMANYA dışındaki ülkeler / DÜNYA'da Schengen dışı ülke testi senaryodan yapılamıyor."
+         "STANDART kapsamında ALMANYA dışındaki ülkeler / EKSPRES'te AB dışı ülke testi senaryodan yapılamıyor."
         ]
        }
       ]
@@ -554,7 +554,7 @@
          }
         },
         "konum": {
-         "secici": "#selectAllClientPolicy",
+         "secici": "#selectAllClientOrders",
          "kirilganlik": "dusuk"
         },
         "doldurucu": "secimGerekirse",
@@ -609,7 +609,7 @@
          "donusum": "senaryo ?? urun (proje köküne göre göreli yol)"
         },
         "varsayilan": {
-         "deger": "tests/fixtures/ornek-rota/fma-coklu-sorgu-10-kisi.xlsx",
+         "deger": "tests/fixtures/ornek-rota/ornek-coklu-sorgu-10-kisi.xlsx",
          "kaynak": "urun.cokluSorguDosyasi"
         },
         "konum": {
@@ -692,7 +692,7 @@
     "id": "musteriKefil",
     "sira": 3,
     "baslik": "Başvuran ve kefil bilgileri girilir",
-    "pomMetodu": "musteriVeKefilAyniGir | ettirenAyniSec + farkliOzelEttirenGir | farkliTuzelEttirenGir",
+    "pomMetodu": "musteriVeKefilAyniGir | odeyenAyniSec + farkliOzelOdeyenGir | farkliTuzelOdeyenGir",
     "bolumler": [
      {
       "id": "musteri",
@@ -717,8 +717,8 @@
           "musteriProfili"
          ],
          "urun": "musteriProfili",
-         "profilHavuzu": "ortak.kimlikBilgileri.ozel",
-         "donusum": "spec: senaryo.musteriKimligi ?? ortak.ozel[senaryo.musteriProfili] ?? ortak.ozel[urun.musteriProfili]"
+         "profilHavuzu": "ozel",
+         "donusum": "spec: senaryo.musteriKimligi ?? profiller.ozel[senaryo.musteriProfili] ?? profiller.ozel[urun.musteriProfili]"
         },
         "varsayilan": {
          "deger": "tc1",
@@ -747,7 +747,7 @@
           {
            "id": "sof_musteriProfili",
            "kontrol": "select",
-           "amac": "hazır profil anahtarı (ortak.kimlikBilgileri.ozel)"
+           "amac": "hazır profil anahtarı (ozel)"
           }
          ],
          "not": "Alt blok kimlikAltBlokCiz(blok, 'ozel', 'sof_musteri') ile çiziliyor."
@@ -843,7 +843,7 @@
       "baslik": "Kefil",
       "alanlar": [
        {
-        "id": "ettiren",
+        "id": "odeyen",
         "tip": "radyo",
         "etiket": {
          "ekran": null,
@@ -876,11 +876,11 @@
          }
         ],
         "seceneklerDurumu": "kismi",
-        "seceneklerKaynagi": "test-data.ts + sof_ettiren. Ekranda iki ayrı radyo grubu var (DifferentClient H/E, ClientType O/T); senaryoda üç değerli tek alan. Ekrandaki radyo etiketleri ve başka ClientType değeri (pasaport/yabancı?) olup olmadığı bilinmiyor.",
+        "seceneklerKaynagi": "test-data.ts + sof_odeyen. Ekranda iki ayrı radyo grubu var (DifferentClient H/E, ClientType O/T); senaryoda üç değerli tek alan. Ekrandaki radyo etiketleri ve başka ClientType değeri (pasaport/yabancı?) olup olmadığı bilinmiyor.",
         "zorunlu": true,
         "yapilandirma": "senaryo",
         "eslesme": {
-         "senaryo": "ettiren"
+         "senaryo": "odeyen"
         },
         "ekranAlanlari": [
          {
@@ -922,12 +922,12 @@
           },
           "doldurucu": "radyoZorla",
           "gorunurluk": {
-           "kosul": "ettirenFarkli"
+           "kosul": "odeyenFarkli"
           }
          }
         ],
         "form": {
-         "id": "sof_ettiren",
+         "id": "sof_odeyen",
          "kontrol": "select",
          "etiket": "Kefil"
         },
@@ -938,15 +938,15 @@
         }
        },
        {
-        "id": "ettirenKimlik",
+        "id": "odeyenKimlik",
         "tip": "kimlikProfili",
         "kimlikTuru": {
          "farkliOzel": "ozel",
          "farkliTuzel": "tuzel"
         },
         "bagimlilik": {
-         "alan": "ettiren",
-         "not": "Kimlik türü ve profil havuzu ettiren değerine göre seçilir."
+         "alan": "odeyen",
+         "not": "Kimlik türü ve profil havuzu ödeyen değerine göre seçilir."
         },
         "etiket": {
          "ekran": null,
@@ -955,36 +955,36 @@
         "zorunlu": true,
         "yapilandirma": "senaryo",
         "gorunurluk": {
-         "kosul": "ettirenFarkli"
+         "kosul": "odeyenFarkli"
         },
         "eslesme": {
          "senaryo": [
-          "ettirenProfili",
-          "ettirenOzelKimligi",
-          "ettirenTuzelKimligi"
+          "odeyenProfili",
+          "odeyenOzelKimligi",
+          "odeyenTuzelKimligi"
          ],
          "profilHavuzu": {
-          "farkliOzel": "ortak.kimlikBilgileri.ozel",
-          "farkliTuzel": "ortak.kimlikBilgileri.tuzel"
+          "farkliOzel": "ozel",
+          "farkliTuzel": "tuzel"
          },
-         "donusum": "spec: ettirenOzelKimligi | ettirenTuzelKimligi ?? havuz[ettirenProfili]"
+         "donusum": "spec: odeyenOzelKimligi | odeyenTuzelKimligi ?? havuz[odeyenProfili]"
         },
         "form": {
-         "id": "sof_ettirenKaynak",
+         "id": "sof_odeyenKaynak",
          "kontrol": "radio",
          "etiket": "Hazır profil kullan / Yeni kimlik gir",
          "yardimciKontroller": [
           {
-           "id": "sof_ettirenProfili",
+           "id": "sof_odeyenProfili",
            "kontrol": "select",
-           "amac": "hazır profil anahtarı (ortak.kimlikBilgileri.ozel|tuzel)"
+           "amac": "hazır profil anahtarı (ozel|tuzel)"
           }
          ],
-         "not": "Alt blok (#sof_ettirenAltBlok) kimlikAltBlokCiz(blok, 'ozel'|'tuzel', 'sof_ettiren') ile çiziliyor."
+         "not": "Alt blok (#sof_odeyenAltBlok) kimlikAltBlokCiz(blok, 'ozel'|'tuzel', 'sof_odeyen') ile çiziliyor."
         },
         "altAlanlar": [
          {
-          "id": "ettirenDogumTarihi",
+          "id": "odeyenDogumTarihi",
           "tip": "tarih",
           "bicim": "gg.aa.yyyy",
           "eslesme": {
@@ -993,23 +993,23 @@
           "konum": {
            "secici": "#BirthDate",
            "yardimci": {
-            "satir": "#trClientBirthDate"
+            "satir": "#trClientBirthday"
            },
            "kirilganlik": "dusuk"
           },
           "doldurucu": "tarihJs",
           "gorunurluk": {
-           "kosul": "ettirenFarkliOzel",
-           "not": "Tüzelde #trClientBirthDate gizli olmalı (POM bunu doğruluyor)."
+           "kosul": "odeyenFarkliOzel",
+           "not": "Tüzelde #trClientBirthday gizli olmalı (POM bunu doğruluyor)."
           },
           "form": {
-           "id": "sof_ettirenDogum",
+           "id": "sof_odeyenDogum",
            "kontrol": "text",
            "etiket": "Doğum Tarihi"
           }
          },
          {
-          "id": "ettirenTelefon",
+          "id": "odeyenTelefon",
           "tip": "telefon",
           "eslesme": {
            "kimlikAlani": "cepTelefonu"
@@ -1020,7 +1020,7 @@
           },
           "doldurucu": "telefonTuslama",
           "form": {
-           "id": "sof_ettirenTelefon",
+           "id": "sof_odeyenTelefon",
            "kontrol": "text",
            "etiket": "Cep Telefonu"
           },
@@ -1029,7 +1029,7 @@
           ]
          },
          {
-          "id": "ettirenKimlikNo",
+          "id": "odeyenKimlikNo",
           "tip": "metin",
           "eslesme": {
            "kimlikAlani": {
@@ -1043,20 +1043,20 @@
           },
           "doldurucu": "musteriSorgula",
           "form": {
-           "id": "sof_ettirenTc",
+           "id": "sof_odeyenTc",
            "kontrol": "text",
            "etiket": "T.C. Kimlik No",
            "yardimciKontroller": [
             {
-             "id": "sof_ettirenVkn",
+             "id": "sof_odeyenVkn",
              "kontrol": "text",
-             "amac": "tüzel ettirende 'Vergi Kimlik No' (sof_ettirenTc yerine çizilir)"
+             "amac": "tüzel ödeyende 'Vergi Kimlik No' (sof_odeyenTc yerine çizilir)"
             }
            ]
           }
          },
          {
-          "id": "ettirenSorgula",
+          "id": "odeyenSorgula",
           "tip": "buton",
           "yapilandirma": "aksiyon",
           "konum": {
@@ -1065,7 +1065,7 @@
           }
          },
          {
-          "id": "ettirenAdUnvan",
+          "id": "odeyenAdUnvan",
           "tip": "cikti",
           "yapilandirma": "cikti",
           "konum": {
@@ -1075,7 +1075,7 @@
          }
         ],
         "dogrulama": {
-         "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): ettiren≠ayni ise profil YA DA kimlik (ikisi birden değil); profil havuzda olmalı; serbest kimlikte TC (11 hane + kontrol haneleri) / VKN (10 hane), telefon 5XXXXXXXXX, doğum tarihi gg.aa.yyyy ve gelecekte değil (tüzelde doğum tarihi yok)",
+         "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): odeyen≠ayni ise profil YA DA kimlik (ikisi birden değil); profil havuzda olmalı; serbest kimlikte TC (11 hane + kontrol haneleri) / VKN (10 hane), telefon 5XXXXXXXXX, doğum tarihi gg.aa.yyyy ve gelecekte değil (tüzelde doğum tarihi yok)",
          "sunucu": "aynı",
          "ts": "aynı"
         },
@@ -1089,17 +1089,17 @@
     ]
    },
    {
-    "id": "primHesaplama",
+    "id": "toplamHesaplama",
     "sira": 4,
-    "baslik": "Prim hesaplanır",
-    "pomMetodu": "primHesapla | primHesaplaVeHataDogrula(mesaj)",
+    "baslik": "Toplam hesaplanır",
+    "pomMetodu": "toplamHesapla | toplamHesaplaVeHataDogrula(mesaj)",
     "bolumler": [
      {
-      "id": "prim",
-      "baslik": "Prim hesaplama",
+      "id": "toplam",
+      "baslik": "Toplam hesaplama",
       "alanlar": [
        {
-        "id": "primHesaplaButonu",
+        "id": "toplamHesaplaButonu",
         "tip": "buton",
         "yapilandirma": "aksiyon",
         "etiket": {
@@ -1111,7 +1111,7 @@
         }
        },
        {
-        "id": "toplamPrimEur",
+        "id": "toplamTutarEur",
         "tip": "cikti",
         "yapilandirma": "cikti",
         "birim": "EUR",
@@ -1125,7 +1125,7 @@
         }
        },
        {
-        "id": "primHataDiyalogu",
+        "id": "toplamHataDiyalogu",
         "tip": "diyalog",
         "yapilandirma": "cikti",
         "konum": {
@@ -1239,7 +1239,7 @@
     {
      "id": "subeProfili",
      "tip": "secim",
-     "seceneklerKaynagi": "ortak.kullaniciDegistir anahtarları (bkz. acenteBaglami)",
+     "seceneklerKaynagi": "baglam anahtarları (bkz. baglam)",
      "varsayilan": {
       "deger": "varsayilan",
       "kaynak": "testBaslangiciniHazirla"
@@ -1248,7 +1248,7 @@
      "yapilandirma": "senaryo",
      "eslesme": {
       "senaryo": "subeProfili",
-      "profilHavuzu": "ortak.kullaniciDegistir"
+      "profilHavuzu": "baglam"
      },
      "form": {
       "id": "sof_subeKodu",
@@ -1261,10 +1261,10 @@
         "amac": "Şube Kullanıcı Kodu"
        }
       ],
-      "not": "Form anahtar değil ham kod+kullanıcı alıyor; sunucu eşleşen profili buluyor ya da 'Şube<kod>' anahtarıyla ortak.json'a ekliyor."
+      "not": "Form anahtar değil ham kod+kullanıcı alıyor; sunucu eşleşen profili buluyor ya da 'Şube<kod>' anahtarıyla profillere ekliyor."
      },
      "dogrulama": {
-      "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): girdide kod ↔ kullanıcı birlikte; kayıttaki profil anahtarı ortak.kullaniciDegistir içinde olmalı",
+      "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): girdide kod ↔ kullanıcı birlikte; kayıttaki profil anahtarı baglam içinde olmalı",
       "sunucu": "aynı",
       "ts": "aynı"
      }
@@ -1304,7 +1304,7 @@
      "varyantlar": [
       {
        "tip": "basarili",
-       "anlam": "odemeAdimiDahil ise urun.kabulEdilenOdemeSonuclari'ndan biri; değilse prim > 0"
+       "anlam": "odemeAdimiDahil ise urun.kabulEdilenOdemeSonuclari'ndan biri; değilse toplam > 0"
       },
       {
        "tip": "isKuraliHatasi",
@@ -1314,8 +1314,8 @@
          "etiket": "Hatanın Beklendiği Adım",
          "secenekler": [
           {
-           "deger": "primHesaplama",
-           "metin": "Prim hesaplama"
+           "deger": "toplamHesaplama",
+           "metin": "Toplam hesaplama"
           },
           {
            "deger": "odeme",
@@ -1350,7 +1350,7 @@
        }
       ]
      },
-     "akisPlani": "beklenen-sonuc.ts > adimPlaniniOlustur: prim hatası → [primHesaplaVeHataDogrula]; ödeme yok → [primHesapla, odemeAtlandi]; kayıt hatası → [primHesapla, kaydetVeHataDogrula]; aksi → [primHesapla, kaydetVeKartGir, odemeyiTamamlaVeDogrula]",
+     "akisPlani": "beklenen-sonuc.ts > adimPlaniniOlustur: toplam hatası → [toplamHesaplaVeHataDogrula]; ödeme yok → [toplamHesapla, odemeAtlandi]; kayıt hatası → [toplamHesapla, kaydetVeHataDogrula]; aksi → [toplamHesapla, kaydetVeKartGir, odemeyiTamamlaVeDogrula]",
      "notlar": [
       "Eski beklenenHataMesaji/beklenenHataAdimi alanları kaldırıldı (TS ve sunucu artık reddediyor)."
      ]
@@ -1402,9 +1402,9 @@
     "tip": "SelectData",
     "kullanan": "ulke"
    },
-   "rotaIptalBedeli": {
+   "rotaIadeBedeli": {
     "tip": "SelectData",
-    "kullanan": "rotaIptalBedeli"
+    "kullanan": "rotaIadeBedeli"
    },
    "plan": {
     "tip": "SelectData",
@@ -1441,10 +1441,10 @@
     "tip": "senaryo[]"
    }
   },
-  "acenteBaglami": {
+  "baglam": {
    "aciklama": "Giriş sonrası 'Kullanıcı Değiştir' ekranı (kullanici-degistir.page.ts). Bu ekranın parçası değil, senaryo bağlamı; ama alan seti görünürlüğünü belirliyor.",
    "pageObject": "tests/support/pages/kullanici-degistir.page.ts",
-   "veriKaynagi": "ortak.kullaniciDegistir[<senaryo.subeProfili ?? 'varsayilan'>]",
+   "veriKaynagi": "baglam[<senaryo.subeProfili ?? 'varsayilan'>]",
    "alanlar": [
     {
      "id": "subePartaji",
@@ -1505,7 +1505,7 @@
   "isKurallari": [
    {
     "id": "ekHizmetHayirAlternatifKisiti",
-    "adim": "primHesaplama",
+    "adim": "toplamHesaplama",
     "kosul": {
      "ve": [
       {
@@ -1516,8 +1516,8 @@
        "degil": {
         "alan": "alternatif",
         "icinde": [
-         "VİZE SCHENGEN",
-         "VİZE TÜM DÜNYA"
+         "ADRESE TESLİM",
+         "HIZLI TESLİMAT"
         ]
        }
       }
@@ -1526,8 +1526,8 @@
     "gecerlilik": {
      "kosul": "subeAlanSetiTam"
     },
-    "mesaj": "Ek Hizmet “Hayır” olması durumunda yalnızca “VİZE SCHENGEN” veya “VİZE TÜM DÜNYA” alternatifleri seçilebilir",
-    "kaynak": "tests/data/test/ornek-rota.json > '90002 /DÜNYA / ROTA PAKET / Ek hizmet Hayır / Çoklu Sorgu ...' senaryosu"
+    "mesaj": "Ek Hizmet “Hayır” olması durumunda yalnızca “ADRESE TESLİM” veya “HIZLI TESLİMAT” alternatifleri seçilebilir",
+    "kaynak": "tests/data/test/ornek-rota.json > '90002 /EKSPRES / ROTA PAKET / Ek hizmet Hayır / Çoklu Sorgu ...' senaryosu"
    }
   ],
   "bilinmeyenler": [
@@ -1556,11 +1556,11 @@
      "varsayilan": false,
      "ÖzelTanımlıŞube": true
     },
-    "kayakTeminati": {
+    "hediyePaketi": {
      "varsayilan": false,
      "ÖzelTanımlıŞube": true
     },
-    "rotaIptalBedeli": {
+    "rotaIadeBedeli": {
      "varsayilan": false,
      "ÖzelTanımlıŞube": true
     },
@@ -1592,11 +1592,11 @@
      "varsayilan": true,
      "ÖzelTanımlıŞube": true
     },
-    "ettiren": {
+    "odeyen": {
      "varsayilan": true,
      "ÖzelTanımlıŞube": true
     },
-    "ettirenKimlik": {
+    "odeyenKimlik": {
      "varsayilan": true,
      "ÖzelTanımlıŞube": true
     },
@@ -1610,14 +1610,14 @@
  },
  "senaryoOnerileri": [
   {
-   "baslik": "Dünya / Vize Tüm Dünya / Tekli / Ettiren kendisi / Ödeme",
+   "baslik": "Ekspres / Hızlı Teslimat / Tekli / Ödeyen kendisi / Ödeme",
    "veri": {
-    "baslik": "Dünya / Vize Tüm Dünya / Tekli / Ettiren kendisi / Ödeme",
-    "kapsam": "DÜNYA",
-    "alternatif": "VİZE TÜM DÜNYA",
+    "baslik": "Ekspres / Hızlı Teslimat / Tekli / Ödeyen kendisi / Ödeme",
+    "kapsam": "EKSPRES",
+    "alternatif": "HIZLI TESLİMAT",
     "ekHizmet": "E",
     "sorguTipi": "tekli",
-    "ettiren": "ayni",
+    "odeyen": "ayni",
     "odemeAdimiDahil": true,
     "taksitSayisi": "1",
     "subeProfili": "ÖzelTanımlıŞube"
@@ -1629,108 +1629,108 @@
     "tur": "basari",
     "aciklama": "Ödeme adımı tamamlanır (tek çekim)."
    },
-   "gerekce": "Ana başarılı akış: tüm teminat alanlarının görüldüğü profille uçtan uca (ödeme dahil)."
+   "gerekce": "Ana başarılı akış: tüm teslimat alanlarının görüldüğü profille uçtan uca (ödeme dahil)."
   },
   {
-   "baslik": "Dünya / Rota Paket / Tekli / Ettiren farklı tüzel",
+   "baslik": "Ekspres / Rota Paket / Tekli / Ödeyen farklı tüzel",
    "veri": {
-    "baslik": "Dünya / Rota Paket / Tekli / Ettiren farklı tüzel",
-    "kapsam": "DÜNYA",
+    "baslik": "Ekspres / Rota Paket / Tekli / Ödeyen farklı tüzel",
+    "kapsam": "EKSPRES",
     "alternatif": "ROTA PAKET",
     "ekHizmet": "E",
     "sorguTipi": "tekli",
-    "ettiren": "farkliTuzel",
-    "ettirenProfili": "vkn1",
+    "odeyen": "farkliTuzel",
+    "odeyenProfili": "vkn1",
     "odemeAdimiDahil": false,
     "subeProfili": "ÖzelTanımlıŞube"
    },
    "adimKapsami": [],
    "beklenenSonuc": {
     "tur": "basari",
-    "aciklama": "Prim hesaplanır (tutar > 0)."
+    "aciklama": "Toplam hesaplanır (tutar > 0)."
    },
    "gerekce": "Tüzel kefil seçildiğinde görünen VKN alanlarını kapsar."
   },
   {
-   "baslik": "Avrupa / Rota Paket / Kayak teminatı / Ettiren farklı özel",
+   "baslik": "Standart / Rota Paket / Hediye paketi / Ödeyen farklı özel",
    "veri": {
-    "baslik": "Avrupa / Rota Paket / Kayak teminatı / Ettiren farklı özel",
-    "kapsam": "AVRUPA",
+    "baslik": "Standart / Rota Paket / Hediye paketi / Ödeyen farklı özel",
+    "kapsam": "STANDART",
     "alternatif": "ROTA PAKET",
     "ekHizmet": "E",
     "sorguTipi": "tekli",
-    "ettiren": "farkliOzel",
-    "ettirenProfili": "tc2",
-    "kayakTeminati": true,
+    "odeyen": "farkliOzel",
+    "odeyenProfili": "tc2",
+    "hediyePaketi": true,
     "odemeAdimiDahil": false,
     "subeProfili": "ÖzelTanımlıŞube"
    },
    "adimKapsami": [],
    "beklenenSonuc": {
     "tur": "basari",
-    "aciklama": "Prim hesaplanır (tutar > 0)."
+    "aciklama": "Toplam hesaplanır (tutar > 0)."
    },
-   "gerekce": "Kayak teminatı yalnızca bazı bağlam profillerinde görünüyor; görünen profille işaretli akış."
+   "gerekce": "Hediye paketi yalnızca bazı bağlam profillerinde görünüyor; görünen profille işaretli akış."
   },
   {
    "baslik": "Ek hizmet Hayır + Rota Paket → iş kuralı uyarısı",
    "veri": {
     "baslik": "Ek hizmet Hayır + Rota Paket → iş kuralı uyarısı",
-    "kapsam": "DÜNYA",
+    "kapsam": "EKSPRES",
     "alternatif": "ROTA PAKET",
     "ekHizmet": "H",
     "sorguTipi": "tekli",
-    "ettiren": "ayni",
+    "odeyen": "ayni",
     "odemeAdimiDahil": false,
     "subeProfili": "ÖzelTanımlıŞube",
     "beklenenSonuc": {
      "tip": "isKuraliHatasi",
-     "adim": "primHesaplama",
-     "mesaj": "Ek Hizmet “Hayır” olması durumunda yalnızca “VİZE SCHENGEN” veya “VİZE TÜM DÜNYA” alternatifleri seçilebilir"
+     "adim": "toplamHesaplama",
+     "mesaj": "Ek Hizmet “Hayır” olması durumunda yalnızca “ADRESE TESLİM” veya “HIZLI TESLİMAT” alternatifleri seçilebilir"
     }
    },
    "adimKapsami": [],
    "beklenenSonuc": {
     "tur": "hata",
-    "aciklama": "Prim hesaplamada iş kuralı uyarısı beklenir."
+    "aciklama": "Toplam hesaplamada iş kuralı uyarısı beklenir."
    },
-   "gerekce": "Ekranda görülen iş kuralı: Ek hizmet “Hayır” iken yalnızca vize alternatifleri seçilebilir."
+   "gerekce": "Ekranda görülen iş kuralı: Ek hizmet “Hayır” iken yalnızca teslimat alternatifleri seçilebilir."
   },
   {
-   "baslik": "Varsayılan profil / Avrupa / Vize Schengen / Tekli",
+   "baslik": "Varsayılan profil / Standart / Adrese Teslim / Tekli",
    "veri": {
-    "baslik": "Varsayılan profil / Avrupa / Vize Schengen / Tekli",
-    "kapsam": "AVRUPA",
-    "alternatif": "VİZE SCHENGEN",
+    "baslik": "Varsayılan profil / Standart / Adrese Teslim / Tekli",
+    "kapsam": "STANDART",
+    "alternatif": "ADRESE TESLİM",
     "ekHizmet": "E",
     "sorguTipi": "tekli",
-    "ettiren": "ayni",
+    "odeyen": "ayni",
     "odemeAdimiDahil": false
    },
    "adimKapsami": [],
    "beklenenSonuc": {
     "tur": "basari",
-    "aciklama": "Prim hesaplanır (tutar > 0)."
+    "aciklama": "Toplam hesaplanır (tutar > 0)."
    },
-   "gerekce": "Varsayılan bağlam profilinde teminat alanları görünmüyor: \"görünüyorsa doldur, görünmüyorsa atla\" davranışını kapsar."
+   "gerekce": "Varsayılan bağlam profilinde teslimat alanları görünmüyor: \"görünüyorsa doldur, görünmüyorsa atla\" davranışını kapsar."
   },
   {
-   "baslik": "Asya kapsamı / Rota Paket",
+   "baslik": "Kurye kapsamı / Rota Paket",
    "veri": {
-    "baslik": "Asya kapsamı / Rota Paket",
-    "kapsam": "ASYA",
+    "baslik": "Kurye kapsamı / Rota Paket",
+    "kapsam": "KURYE",
     "alternatif": "ROTA PAKET",
     "ekHizmet": "E",
     "sorguTipi": "tekli",
-    "ettiren": "ayni",
+    "odeyen": "ayni",
     "odemeAdimiDahil": false
    },
    "adimKapsami": [],
    "beklenenSonuc": {
     "tur": "basari",
-    "aciklama": "Prim hesaplanır (tutar > 0)."
+    "aciklama": "Toplam hesaplanır (tutar > 0)."
    },
-   "gerekce": "Açılır listede \"ASYA\" görüldü ama modelin kapsam seçeneklerinde yok — model güncellenmeden bu öneri geçersiz."
+   "gerekce": "Açılır listede \"KURYE\" görüldü ama modelin kapsam seçeneklerinde yok — model güncellenmeden bu öneri geçersiz."
   }
  ],
  "gerekenAyarlar": {
@@ -1738,7 +1738,7 @@
   "ikiAsamaliDogrulama": "sms",
   "captchaGoruldu": false,
   "testVerisiTurleri": [
-   "Özel kişi",
+   "Bireysel kişi",
    "Tüzel kişi"
   ],
   "baglamTurleri": [
@@ -1747,7 +1747,7 @@
   "not": "Giriş sonrası bağlam (şube) seçimi gerekiyor."
  },
  "bilinmeyenler": [
-  "Kapsam listesinin tamamı: listede görünen \"ASYA\" seçeneği modelde yok (bu sürümde eklenmedi).",
+  "Kapsam listesinin tamamı: listede görünen \"KURYE\" seçeneği modelde yok (bu sürümde eklenmedi).",
   "Rota iptal bedeli seçeneklerinin bağlam profiline göre değişip değişmediği.",
   "Ödeme adımındaki kart formunun tam alan listesi."
  ],

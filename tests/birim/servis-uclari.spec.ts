@@ -103,8 +103,8 @@ test('SoapUI önizle → erişimi kontrol et → aktar → parametreler → Dene
   // Taslak Dene (kaydedilmemiş gövde) ve senaryo kaydı.
   const taslak = await basarili('/platform/servis/senaryo/dene', { projeId, servisId, ortamId: testOrtami, baslik: 'Taslak', icerik: { ...gecerli.icerik, kontroller: [{ tur: 'icermez', deger: 'HATA' }] } });
   expect(taslak.sonuc.durum).toBe('basarili');
-  const yeni = await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Elle eklenen', kapsam: 'ikisi', icerik: { operasyon: 'Teklif', govde: gecerli.icerik.govde, kontroller: [{ tur: 'soapHatasiYok' }] } });
-  const bozuk = await api('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Bozuk', icerik: { operasyon: 'Teklif', govde: '<a/>', kontroller: [{ tur: 'icerir' }] } });
+  const yeni = await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Elle eklenen', kapsam: 'ikisi', icerik: { operasyon: 'Siparis', govde: gecerli.icerik.govde, kontroller: [{ tur: 'soapHatasiYok' }] } });
+  const bozuk = await api('/platform/servis/senaryo/kaydet', { projeId, servisId, baslik: 'Bozuk', icerik: { operasyon: 'Siparis', govde: '<a/>', kontroller: [{ tur: 'icerir' }] } });
   expect(bozuk.basarili).toBe(false);
 
   const kos = await basarili('/platform/servis/kos', { projeId, servisId, ortamId: testOrtami });

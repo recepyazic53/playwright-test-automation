@@ -11,7 +11,7 @@ import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs'
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from '../../scripts/platform/ayarlar/rehber-ayarlari.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
-import { YASAK_SOZCUK_DESENI } from './yasak-sozcukler';
+import { yasakSozcukleriBul } from './yasak-sozcukler';
 
 const KOK = join(__dirname, '..', '..');
 
@@ -41,7 +41,7 @@ test('rehber ayarları: varsayılan otomatik, görülenler tekil, sıfırlama, d
 
 test('rehber içerikleri: ürün/şirket adı içermez; her rehberin adımı ve başlığı var', () => {
   const metin = readFileSync(join(KOK, 'scripts', 'platform', 'arayuz', 'rehber-icerikleri.js'), 'utf8');
-  expect(metin).not.toMatch(YASAK_SOZCUK_DESENI);
+  expect(yasakSozcukleriBul(metin)).toEqual([]);
   const anahtarlar = [...metin.matchAll(/^ {2}(?:'([a-z0-9-]+)'|([a-z0-9]+)): \{/gm)].map((m) => m[1] || m[2]);
   expect(anahtarlar).toEqual(expect.arrayContaining(['genel', 'sonuclar', 'senaryolar', 'senaryo-formu', 'servisler', 'servis-akislari', 'ekranlar', 'ekran',
     'akis-tasarimi', 'ayarlar-proje', 'ayarlar-giris', 'ayarlar-test-verisi', 'ayarlar-kosu', 'ayarlar-arayuz']));

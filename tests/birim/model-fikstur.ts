@@ -7,12 +7,12 @@
 //   /panel        "Şube: <kod>" (bağlam) — /sube'den şube değiştirilir (bağlam profili: { subeKodu })
 //   /basvuru/     form: ürün (select), ad soyad, başlangıç tarihi, kapsam (ok düğmeli özel seçici; uçlarda
 //                 durur), ödeme (radyo), kampanya (onay kutusu), İNDİRİM ORANI (yalnızca "Yetkili" şubede S02
-//                 görünür), belge (dosya) · "Hesapla" → prim ya da iş kuralı uyarısı · isteğe bağlı "Onayla"
-//   /acik-teklif/ GİRİŞ GEREKTİRMEYEN iki adımlı form (akış kaydı testleri): ad soyad, müşteri tipi (radyo: Bireysel →
-//                 TC kimlik no, Kurumsal → Vergi kimlik no görünür) ve "Ek sürücü ekle" düğmesiyle AÇILAN ek sürücü alanı ·
-//                 "Devam" → teminat (select; "Geniş" seçilince "Cam kırılması" kutusu görünür) · "Teklifi kaydet" → "Teklif
-//                 oluşturuldu. No: TK-<n>"
-// Uygulama gelen her hesaplama/onay/teklif isteğini kaydeder (testler alanların gerçekten gönderildiğini doğrular).
+//                 görünür), belge (dosya) · "Hesapla" → toplam ya da iş kuralı uyarısı · isteğe bağlı "Onayla"
+//   /acik-siparis/ GİRİŞ GEREKTİRMEYEN iki adımlı form (akış kaydı testleri): ad soyad, müşteri tipi (radyo: Bireysel →
+//                 TC kimlik no, Kurumsal → Vergi kimlik no görünür) ve "Ek adres ekle" düğmesiyle AÇILAN ek adres alanı ·
+//                 "Devam" → teslimat (select; "Geniş" seçilince "Hediye notu" kutusu görünür) · "Siparisi kaydet" → "Siparis
+//                 oluşturuldu. No: SP-<n>"
+// Uygulama gelen her hesaplama/onay/siparis isteğini kaydeder (testler alanların gerçekten gönderildiğini doğrular).
 import { totpKoduUret } from '../support/totp';
 import type { FiksturIstegi, FiksturUygulamasi, FiksturYaniti } from './giris-fikstur';
 
@@ -21,9 +21,9 @@ export const ORNEK_PAROLA = 'Ornek-Model-Parolasi-1';
 /** RFC 6238 örnek anahtarı (sahte). */
 export const ORNEK_TOTP_ANAHTARI = 'JBSWY3DPEHPK3PXP';
 /** Uygulamadaki iş kuralı mesajı (kıvrık tırnaklı; senaryo düz tırnak/küçük harfle bekler — toleranslı eşleşme). */
-export const IS_KURALI_MESAJI = 'Türkiye kapsamında “Taksitli” ödeme seçilemez.';
+export const IS_KURALI_MESAJI = 'Ekonomi kapsamında “Taksitli” ödeme seçilemez.';
 export const SUBELER: Record<string, string> = { S01: 'Merkez Şube', S02: 'Yetkili Şube' };
-const KAPSAMLAR = ['DÜNYA', 'AVRUPA', 'TÜRKİYE'];
+const KAPSAMLAR = ['EKSPRES', 'STANDART', 'EKONOMİ'];
 
 export type Hesaplama = Record<string, unknown> & { sube: string };
 
@@ -42,8 +42,8 @@ const yonlendir = (adres: string, basliklar: Record<string, string> = {}): Fikst
 export class OrnekBasvuruUygulamasi {
   readonly hesaplamalar: Hesaplama[] = [];
   readonly onaylar: string[] = [];
-  /** /acik-teklif/ kayıtları (girişsiz sayfa). */
-  readonly acikTeklifler: Array<Record<string, unknown>> = [];
+  /** /acik-siparis/ kayıtları (girişsiz sayfa). */
+  readonly acikSiparisler: Array<Record<string, unknown>> = [];
   readonly olaylar: string[] = [];
   private noSayaci = 1000;
   private readonly ayar: { totp: boolean };
@@ -85,10 +85,10 @@ export class OrnekBasvuruUygulamasi {
         <input id="kod" name="kod" inputmode="numeric" autocomplete="one-time-code"></label><button id="dogrula" type="submit">Doğrula</button></form>`);
     }
     // Girişsiz sayfa (oturum gerekmez).
-    if (yol === '/acik-teklif' || yol === '/acik-teklif/') return this.acikTeklifSayfasi();
-    if (yol === '/acik-teklif/kaydet' && i.yontem === 'POST') {
-      this.acikTeklifler.push(JSON.parse(i.govde || '{}') as Record<string, unknown>);
-      return json({ no: `TK-${++this.noSayaci}` });
+    if (yol === '/acik-siparis' || yol === '/acik-siparis/') return this.acikSiparisSayfasi();
+    if (yol === '/acik-siparis/kaydet' && i.yontem === 'POST') {
+      this.acikSiparisler.push(JSON.parse(i.govde || '{}') as Record<string, unknown>);
+      return json({ no: `SP-${++this.noSayaci}` });
     }
     if (!oturum) return yonlendir('/giris');
     if (yol === '/panel') {
@@ -110,10 +110,10 @@ export class OrnekBasvuruUygulamasi {
       const g = JSON.parse(i.govde || '{}') as Record<string, unknown>;
       this.hesaplamalar.push({ ...g, sube });
       if (!g.urun || !g.adSoyad) return json({ hata: 'Ürün ve ad soyad zorunludur.' });
-      if (g.kapsam === 'TÜRKİYE' && g.odeme === 'taksit') return json({ hata: IS_KURALI_MESAJI });
+      if (g.kapsam === 'EKONOMİ' && g.odeme === 'taksit') return json({ hata: IS_KURALI_MESAJI });
       const taban = g.urun === 'B' ? 2400 : 1200;
       const indirim = Number(g.indirim || 0);
-      return json({ prim: (taban * (1 - indirim / 100) * (g.kampanya ? 0.9 : 1)).toFixed(2) });
+      return json({ toplam: (taban * (1 - indirim / 100) * (g.kampanya ? 0.9 : 1)).toFixed(2) });
     }
     if (yol === '/basvuru/onayla' && i.yontem === 'POST') {
       const no = String(++this.noSayaci);
@@ -123,8 +123,8 @@ export class OrnekBasvuruUygulamasi {
     return { durum: 404, tur: 'text/plain', govde: 'yok' };
   };
 
-  private acikTeklifSayfasi(): FiksturYaniti {
-    return html('Açık teklif', `<h1>Açık teklif</h1>
+  private acikSiparisSayfasi(): FiksturYaniti {
+    return html('Açık siparis', `<h1>Açık siparis</h1>
       <section id="adim-musteri">
         <label>Ad Soyad <input id="musteriAd"></label>
         <fieldset><legend>Müşteri tipi</legend>
@@ -132,35 +132,35 @@ export class OrnekBasvuruUygulamasi {
           <label><input type="radio" name="tip" value="kurumsal"> Kurumsal</label></fieldset>
         <div id="bireyselAlanlar"><label>TC kimlik no <input id="tcKimlik"></label></div>
         <div id="kurumsalAlanlar" hidden><label>Vergi kimlik no <input id="vergiNo"></label></div>
-        <button id="ekSurucuEkle" type="button">Ek sürücü ekle</button>
-        <div id="ekSurucu" hidden><label>Ek sürücü adı <input id="ekSurucuAd"></label></div>
+        <button id="ekAdresEkle" type="button">Ek adres ekle</button>
+        <div id="ekAdres" hidden><label>Ek adres adı <input id="ekAdresAd"></label></div>
         <button id="devam" type="button">Devam</button>
       </section>
-      <section id="adim-teminat" hidden>
-        <label>Teminat <select id="teminat"><option value="">Seçiniz</option><option value="dar">Dar</option><option value="genis">Geniş</option></select></label>
-        <div id="ekTeminatKutu" hidden><label><input type="checkbox" id="ekTeminat"> Cam kırılması</label></div>
-        <button id="kaydet" type="button">Teklifi kaydet</button>
-        <p id="teklif-sonuc"></p>
+      <section id="adim-teslimat" hidden>
+        <label>Teslimat <select id="teslimat"><option value="">Seçiniz</option><option value="dar">Dar</option><option value="genis">Geniş</option></select></label>
+        <div id="ekTeslimatKutu" hidden><label><input type="checkbox" id="ekTeslimat"> Hediye notu</label></div>
+        <button id="kaydet" type="button">Siparisi kaydet</button>
+        <p id="siparis-sonuc"></p>
       </section>
       <script>
-        document.getElementById('ekSurucuEkle').onclick = () => { document.getElementById('ekSurucu').hidden = false; };
+        document.getElementById('ekAdresEkle').onclick = () => { document.getElementById('ekAdres').hidden = false; };
         document.querySelectorAll('input[name=tip]').forEach((r) => r.addEventListener('change', () => {
           const kurumsal = document.querySelector('input[name=tip]:checked').value === 'kurumsal';
           document.getElementById('bireyselAlanlar').hidden = kurumsal; document.getElementById('kurumsalAlanlar').hidden = !kurumsal;
         }));
-        document.getElementById('teminat').onchange = () => { document.getElementById('ekTeminatKutu').hidden = document.getElementById('teminat').value !== 'genis'; };
+        document.getElementById('teslimat').onchange = () => { document.getElementById('ekTeslimatKutu').hidden = document.getElementById('teslimat').value !== 'genis'; };
         document.getElementById('devam').onclick = () => {
-          document.getElementById('adim-musteri').hidden = true; document.getElementById('adim-teminat').hidden = false;
+          document.getElementById('adim-musteri').hidden = true; document.getElementById('adim-teslimat').hidden = false;
         };
         document.getElementById('kaydet').onclick = async () => {
-          const ek = document.getElementById('ekSurucu');
+          const ek = document.getElementById('ekAdres');
           const gorunurse = (kutu, id, oz) => (document.getElementById(kutu).hidden ? null : document.getElementById(id)[oz]);
           const govde = { musteriAd: document.getElementById('musteriAd').value, tip: document.querySelector('input[name=tip]:checked').value,
             tcKimlik: gorunurse('bireyselAlanlar', 'tcKimlik', 'value'), vergiNo: gorunurse('kurumsalAlanlar', 'vergiNo', 'value'),
-            ekSurucuAd: ek.hidden ? null : document.getElementById('ekSurucuAd').value, teminat: document.getElementById('teminat').value,
-            ekTeminat: gorunurse('ekTeminatKutu', 'ekTeminat', 'checked') };
-          const r = await (await fetch('/acik-teklif/kaydet', { method: 'POST', body: JSON.stringify(govde) })).json();
-          document.getElementById('teklif-sonuc').textContent = 'Teklif oluşturuldu. No: ' + r.no;
+            ekAdresAd: ek.hidden ? null : document.getElementById('ekAdresAd').value, teslimat: document.getElementById('teslimat').value,
+            ekTeslimat: gorunurse('ekTeslimatKutu', 'ekTeslimat', 'checked') };
+          const r = await (await fetch('/acik-siparis/kaydet', { method: 'POST', body: JSON.stringify(govde) })).json();
+          document.getElementById('siparis-sonuc').textContent = 'Siparis oluşturuldu. No: ' + r.no;
         };
       </script>`);
   }
@@ -173,7 +173,7 @@ export class OrnekBasvuruUygulamasi {
         <label>Ad Soyad <input id="adSoyad"></label>
         <label>Başlangıç tarihi <input id="baslangic" type="date"></label>
         <div id="kapsam-kutu">Kapsam: <button id="kapsam-geri" type="button" aria-label="Önceki kapsam">‹</button>
-          <span id="kapsam-deger">AVRUPA</span><button id="kapsam-ileri" type="button" aria-label="Sonraki kapsam">›</button></div>
+          <span id="kapsam-deger">STANDART</span><button id="kapsam-ileri" type="button" aria-label="Sonraki kapsam">›</button></div>
         <fieldset><legend>Ödeme</legend>
           <label><input type="radio" name="odeme" value="pesin" checked> Peşin</label>
           <label><input type="radio" name="odeme" value="taksit"> Taksitli</label></fieldset>
@@ -189,7 +189,7 @@ export class OrnekBasvuruUygulamasi {
         const K = ${JSON.stringify(KAPSAMLAR)};
         let k = 1;
         const d = document.getElementById('kapsam-deger');
-        // Uçlarda durur (halka değil): ileri TÜRKİYE'de, geri DÜNYA'da değişmez.
+        // Uçlarda durur (halka değil): ileri EKONOMİ'de, geri EKSPRES'te değişmez.
         document.getElementById('kapsam-ileri').onclick = () => { if (k < K.length - 1) { k++; setTimeout(() => { d.textContent = K[k]; }, 80); } };
         document.getElementById('kapsam-geri').onclick = () => { if (k > 0) { k--; setTimeout(() => { d.textContent = K[k]; }, 80); } };
         document.getElementById('hesapla').onclick = async () => {
@@ -204,7 +204,7 @@ export class OrnekBasvuruUygulamasi {
           const r = await (await fetch('/basvuru/hesapla', { method: 'POST', body: JSON.stringify(govde) })).json();
           await new Promise((c) => setTimeout(c, 150));
           if (r.hata) { uyari.textContent = r.hata; uyari.hidden = false; return; }
-          sonuc.textContent = 'Prim: ' + r.prim + ' TL'; sonuc.hidden = false;
+          sonuc.textContent = 'Toplam: ' + r.toplam + ' TL'; sonuc.hidden = false;
           document.getElementById('adim-onay').hidden = false;
         };
         document.getElementById('onayla').onclick = async () => {
@@ -258,7 +258,7 @@ export function ornekBasvuruModeli(): Record<string, unknown> {
             alan('baslangic', 'tarih', 'Başlangıç tarihi', '#baslangic', { bicim: 'YYYY-AA-GG' }),
             {
               ...alan('kapsam', 'okluSecim', 'Kapsam', '#kapsam-deger', { zorunlu: true }),
-              secenekler: [{ deger: 'DÜNYA', metin: 'DÜNYA' }, { deger: 'AVRUPA', metin: 'AVRUPA' }, { deger: 'TÜRKİYE', metin: 'TÜRKİYE' }],
+              secenekler: [{ deger: 'EKSPRES', metin: 'EKSPRES' }, { deger: 'STANDART', metin: 'STANDART' }, { deger: 'EKONOMİ', metin: 'EKONOMİ' }],
               seceneklerDurumu: 'tam', doldurucu: 'okluSecim', doldurucuParametreleri: { maksDeneme: 5 },
               konum: { secici: '#kapsam-deger', yardimci: { ileri: '#kapsam-ileri', geri: '#kapsam-geri' }, kirilganlik: 'orta', not: 'Uçlarda durur.' }
             },
@@ -270,11 +270,11 @@ export function ornekBasvuruModeli(): Record<string, unknown> {
         }]
       },
       {
-        id: 'hesaplama', sira: 2, baslik: 'Prim hesaplanır',
-        bolumler: [{ id: 'sonuc', baslik: 'Sonuç', alanlar: [{ id: 'prim', tip: 'cikti', yapilandirma: 'cikti', konum: { secici: '#sonuc', kirilganlik: 'dusuk' } }] }],
+        id: 'hesaplama', sira: 2, baslik: 'Toplam hesaplanır',
+        bolumler: [{ id: 'sonuc', baslik: 'Sonuç', alanlar: [{ id: 'toplam', tip: 'cikti', yapilandirma: 'cikti', konum: { secici: '#sonuc', kirilganlik: 'dusuk' } }] }],
         kosu: {
           aksiyonlar: [{ tur: 'tikla', secici: '#hesapla', aciklama: 'Hesapla' }],
-          basariGostergesi: { tur: 'metin', deger: 'Prim:', secici: '#sonuc' },
+          basariGostergesi: { tur: 'metin', deger: 'Toplam:', secici: '#sonuc' },
           hataGostergesi: { secici: '#uyari' },
           zamanAsimiSn: 15
         }
@@ -306,7 +306,7 @@ export function ornekBasvuruModeli(): Record<string, unknown> {
             {
               tip: 'isKuraliHatasi', anlam: 'Belirtilen adımda belirtilen mesaj beklenir.',
               alanlar: {
-                adim: { etiket: 'Hatanın Beklendiği Adım', secenekler: [{ deger: 'hesaplama', metin: 'Prim hesaplama' }, { deger: 'onay', metin: 'Onay', kosul: 'onayDahil' }] },
+                adim: { etiket: 'Hatanın Beklendiği Adım', secenekler: [{ deger: 'hesaplama', metin: 'Toplam hesaplama' }, { deger: 'onay', metin: 'Onay', kosul: 'onayDahil' }] },
                 mesaj: { etiket: 'Beklenen Mesaj', tip: 'metin', zorunlu: true }
               }
             }
@@ -316,7 +316,7 @@ export function ornekBasvuruModeli(): Record<string, unknown> {
     },
     urunDuzeyi: {},
     isKurallari: [{
-      id: 'turkiyeTaksit', adim: 'hesaplama', kosul: { ve: [{ alan: 'kapsam', esit: 'TÜRKİYE' }, { alan: 'odemeTipi', esit: 'taksit' }] },
+      id: 'ekonomiTaksit', adim: 'hesaplama', kosul: { ve: [{ alan: 'kapsam', esit: 'EKONOMİ' }, { alan: 'odemeTipi', esit: 'taksit' }] },
       mesaj: IS_KURALI_MESAJI, kaynak: 'fikstür'
     }],
     bilinmeyenler: [],
@@ -339,16 +339,16 @@ export function ornekBasvuruPaketi(): Record<string, unknown> {
     },
     model: ornekBasvuruModeli(),
     senaryoOnerileri: [
-      oneri('Yetkili / Dünya / peşin / onaylı', { ...ORTAK_VERI, subeProfili: 'Yetkili', kapsam: 'DÜNYA', odemeTipi: 'pesin', indirimOrani: '10', belge: 'ornek-belge.txt' },
+      oneri('Yetkili / Ekspres / peşin / onaylı', { ...ORTAK_VERI, subeProfili: 'Yetkili', kapsam: 'EKSPRES', odemeTipi: 'pesin', indirimOrani: '10', belge: 'ornek-belge.txt' },
         ['onay'], 'basari', 'Ana akış: tüm alanlar, ok düğmeli kapsam, dosya ve isteğe bağlı onay adımı.'),
-      oneri('Merkez / Türkiye taksitli → iş kuralı', { ...ORTAK_VERI, subeProfili: 'Merkez', kapsam: 'TÜRKİYE', odemeTipi: 'taksit',
-        beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'hesaplama', mesaj: 'türkiye kapsamında "taksitli" ödeme seçilemez' } }, [], 'hata', 'İş kuralı uyarısı beklenir (toleranslı eşleşme).'),
-      oneri('Merkez / indirim alanı atlanır', { ...ORTAK_VERI, urun: 'B', subeProfili: 'Merkez', kapsam: 'AVRUPA', odemeTipi: 'taksit', indirimOrani: '15' },
+      oneri('Merkez / Ekonomi taksitli → iş kuralı', { ...ORTAK_VERI, subeProfili: 'Merkez', kapsam: 'EKONOMİ', odemeTipi: 'taksit',
+        beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'hesaplama', mesaj: 'ekonomi kapsamında "taksitli" ödeme seçilemez' } }, [], 'hata', 'İş kuralı uyarısı beklenir (toleranslı eşleşme).'),
+      oneri('Merkez / indirim alanı atlanır', { ...ORTAK_VERI, urun: 'B', subeProfili: 'Merkez', kapsam: 'STANDART', odemeTipi: 'taksit', indirimOrani: '15' },
         [], 'basari', 'İndirim alanı Merkez şubesinde görünmez: atlanır ve kaydedilir.'),
-      oneri('Merkez / indirim mutlaka görünmeli', { ...ORTAK_VERI, subeProfili: 'Merkez', kapsam: 'AVRUPA', odemeTipi: 'pesin', indirimOrani: '5' },
+      oneri('Merkez / indirim mutlaka görünmeli', { ...ORTAK_VERI, subeProfili: 'Merkez', kapsam: 'STANDART', odemeTipi: 'pesin', indirimOrani: '5' },
         [], 'basari', '"Mutlaka görünmeli" işaretlenince görünmeyen alan testi düşürür.'),
-      oneri('Yetkili / onay adımı hariç', { ...ORTAK_VERI, subeProfili: 'Yetkili', kapsam: 'AVRUPA', odemeTipi: 'pesin', indirimOrani: '20' },
-        [], 'basari', 'İsteğe bağlı onay adımı koşulmaz; prim hesaplanınca biter.')
+      oneri('Yetkili / onay adımı hariç', { ...ORTAK_VERI, subeProfili: 'Yetkili', kapsam: 'STANDART', odemeTipi: 'pesin', indirimOrani: '20' },
+        [], 'basari', 'İsteğe bağlı onay adımı koşulmaz; toplam hesaplanınca biter.')
     ],
     gerekenAyarlar: { girisGerekli: true, ikiAsamaliDogrulama: 'totp', captchaGoruldu: false, testVerisiTurleri: [], baglamTurleri: ['Şube'] },
     bilinmeyenler: []

@@ -102,10 +102,10 @@ test.describe('saf: değişiklik, etki, karşılık', () => {
   });
 
   test('gövde: SOAP\'ta yalnız yoldaki öğenin metni değişir (kalanı birebir); çok eşleşme / bulunamaz nedenle döner; REST JSON / sorgu / yol', () => {
-    const govde = '<s:Envelope xmlns:s="x">\n  <s:Body><Teklif xmlns="Ornek"><Input><Channel>100</Channel>  <Username>a&amp;b</Username><CitizenshipNumber>100</CitizenshipNumber></Input></Teklif></s:Body>\n</s:Envelope>';
-    const r = soapDegeriniDegistir(govde, 'Input/Channel', '100', '1<01', 'Teklif');
+    const govde = '<s:Envelope xmlns:s="x">\n  <s:Body><Siparis xmlns="Ornek"><Input><Channel>100</Channel>  <Username>a&amp;b</Username><IdentityNumber>100</IdentityNumber></Input></Siparis></s:Body>\n</s:Envelope>';
+    const r = soapDegeriniDegistir(govde, 'Input/Channel', '100', '1<01', 'Siparis');
     expect(r).toEqual({ sonuc: govde.replace('<Channel>100</Channel>', '<Channel>1&lt;01</Channel>') });
-    expect(soapDegeriniDegistir(govde, 'Input/Username', 'a&b', 'c', 'Teklif')).toEqual({ sonuc: govde.replace('a&amp;b', 'c') });
+    expect(soapDegeriniDegistir(govde, 'Input/Username', 'a&b', 'c', 'Siparis')).toEqual({ sonuc: govde.replace('a&amp;b', 'c') });
     expect(soapDegeriniDegistir(govde, 'Input/Channel', '999', '1')).toEqual({ neden: GOVDE_NEDENLERI.bulunamadi });
     const iki = '<E><Body><T><Input><Kod>1</Kod></Input><Input><Kod>1</Kod></Input></T></Body></E>';
     expect(soapDegeriniDegistir(iki, 'Input/Kod', '1', '2', 'T')).toEqual({ neden: GOVDE_NEDENLERI.cokEslesme });
@@ -124,7 +124,7 @@ test.describe('saf: değişiklik, etki, karşılık', () => {
 
 const GIZLI_ESKI = 'gizli-eski-7';
 const GIZLI_YENI = 'gizli-yeni-8';
-const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">\n  <s:Body><Teklif xmlns="Ornek"><Input>${ic}</Input></Teklif></s:Body>\n</s:Envelope>`;
+const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">\n  <s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body>\n</s:Envelope>`;
 
 /** Metin alanı eklenmiş model (üye kodu gizli sütuna bağlanır). */
 function ekliPaket(): Nesne {
@@ -175,13 +175,13 @@ async function kur(vt: Veritabani, klasor: string): Promise<Fikstur> {
     S5: senaryo('Üye kodlu', { kategori: 'K2', urun: 'Ürün C', uyeKodu: GIZLI_ESKI })
   };
   const servisId = servisKaydet(vt, { projeId, anahtar: 'ornek', ad: 'Ornek', ayarlar: {
-    yol: '/Servis/ornek.asmx', operasyonlar: [{ ad: 'Teklif' }], operasyonSemalari: wsdlSemalari(WSDL),
-    alanBaglari: { Teklif: { 'Input/Channel': { tablo: tablo.kanallar, sutun: 'Kanal' }, 'Input/Username': { tablo: tablo.kanallar, sutun: 'Kullanıcı' } } }
+    yol: '/Servis/ornek.asmx', operasyonlar: [{ ad: 'Siparis' }], operasyonSemalari: wsdlSemalari(WSDL),
+    alanBaglari: { Siparis: { 'Input/Channel': { tablo: tablo.kanallar, sutun: 'Kanal' }, 'Input/Username': { tablo: tablo.kanallar, sutun: 'Kullanıcı' } } }
   } });
   const servisSenaryosu = (baslik: string, govde: string, ek: Nesne = {}) =>
-    servisSenaryosuKaydet(vt, { projeId, servisId, baslik, icerik: { operasyon: 'Teklif', govde, kontroller: [{ tur: 'soapHatasiYok' }], ...ek } });
+    servisSenaryosuKaydet(vt, { projeId, servisId, baslik, icerik: { operasyon: 'Siparis', govde, kontroller: [{ tur: 'soapHatasiYok' }], ...ek } });
   const v = {
-    SV1: servisSenaryosu('Kanal 100', zarf('<Channel>100</Channel><Username>kullanici100</Username>\n    <CitizenshipNumber>100</CitizenshipNumber>')),
+    SV1: servisSenaryosu('Kanal 100', zarf('<Channel>100</Channel><Username>kullanici100</Username>\n    <IdentityNumber>100</IdentityNumber>')),
     SV2: servisSenaryosu('Kanal 100 başka kullanıcı', zarf('<Channel>100</Channel><Username>kullanici200</Username>')),
     SV3: servisSenaryosu('Seçimli', zarf('<Channel>${Kanallar.Kanal}</Channel>'), { tabloSecimleri: { [`${tablo.kanallar}|`]: { Kanal: '100' } } })
   };

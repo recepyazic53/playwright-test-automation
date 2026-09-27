@@ -127,7 +127,7 @@ test.describe('Koşu sonuçları deposu', () => {
       kosuyuBitir(vt, 'kosu-1', { durum: 'tamamlandi', bitis: zaman(5) });
       // 2) tekil: A2 yine kaldı (kartları etkilememeli)
       kosuKaydet(vt, { id: 'kosu-2', projeId: proje, tur: 'tekil', baslangic: zaman(10) });
-      sonuc('kosu-2', 'A2', 'basarisiz', { urunAdi: 'Ürün A', hataMesaji: 'Teklif 250166487 onaylanamadı' });
+      sonuc('kosu-2', 'A2', 'basarisiz', { urunAdi: 'Ürün A', hataMesaji: 'Siparis 250166487 onaylanamadı' });
       kosuyuBitir(vt, 'kosu-2', { durum: 'tamamlandi', bitis: zaman(12) });
       // 3) tam, kapsam Ürün A: iki A testi geçti; A2 önce kaldı sonra yeniden denemede geçti
       kosuKaydet(vt, { id: 'kosu-3', projeId: proje, tur: 'tam', kapsam: 'Ürün A', baslangic: zaman(20) });
@@ -156,7 +156,7 @@ test.describe('Koşu sonuçları deposu', () => {
       // Hata kalıpları: sayılar "#" olur; tarih filtresi uygulanır.
       const kaliplar = hataKaliplari(vt, proje);
       expect(kaliplar.toplam).toBe(2);
-      expect(kaliplar.kaliplar.map((x) => x.kalip)).toContain('Teklif # onaylanamadı');
+      expect(kaliplar.kaliplar.map((x) => x.kalip)).toContain('Siparis # onaylanamadı');
       expect(hataKaliplari(vt, proje, { baslangic: zaman(1) }).toplam).toBe(0); // bitis alanı zaman(0)
       vt.kapat();
     } finally {

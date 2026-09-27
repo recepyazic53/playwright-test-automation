@@ -151,7 +151,7 @@ test.describe('paket istek metinleri', () => {
   });
 
   test('kullanıcıya görünen metinlerde eski test verisi terimleri (profil / tür / değer listesi / olmayan menü) yok', () => {
-    const ESKI = /test verisi (profil|tür)|Test verisi > Kayıtlar|Test verisi profilleri|Kayıtlar \(profiller\)|değer listesi|prim hesapla/i;
+    const ESKI = /test verisi (profil|tür)|Test verisi > Kayıtlar|Test verisi profilleri|Kayıtlar \(profiller\)|değer listesi|toplam hesapla/i;
     const dosyalar = ['scripts/platform/ekranlar/paket-istekleri.mjs', 'scripts/platform/arayuz/rehber-icerikleri.js', 'scripts/platform/arayuz/olustur-menusu.js',
       'scripts/platform/arayuz/tarama.js', 'scripts/platform/arayuz/ekran-ortak.js', 'scripts/platform/arayuz/sayfa-paketi.js', 'scripts/platform/arayuz/akis-tasarimi.js',
       'docs/sayfa-paketi.md'];

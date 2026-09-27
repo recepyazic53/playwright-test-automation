@@ -18,10 +18,10 @@ import { GROOVY, SAHTE_TC, WSDL, sahteSoapSunucusu, type SahteIstek } from './se
 const PAROLA = 'SoapUI-Yeni-Model-Kasa-1';
 const SAHTE_TOKEN = 'sahte-anahtar-degeri-77';
 
-const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Teklif xmlns="Ornek"><Input>${ic}</Input></Teklif></s:Body></s:Envelope>`;
+const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body></s:Envelope>`;
 const istek = (ad: string, govde: string) => `
       <con:testStep type="request" name="${ad}"><con:config xsi:type="con:RequestStep" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-        <con:interface>OrnekServiceSoap</con:interface><con:operation>Teklif</con:operation>
+        <con:interface>OrnekServiceSoap</con:interface><con:operation>Siparis</con:operation>
         <con:request name="${ad}"><con:endpoint>http://eski-adres.invalid/Servis/ornek.asmx</con:endpoint>
           <con:request><![CDATA[${govde}]]></con:request><con:assertion type="SOAP Response" id="a1"/>
         </con:request></con:config></con:testStep>`;
@@ -29,13 +29,13 @@ const istek = (ad: string, govde: string) => `
 const DOSYA = `<?xml version="1.0" encoding="UTF-8"?>
 <con:soapui-project id="p" name="Model Proje" xmlns:con="http://eviware.com/soapui/config">
   <con:interface xsi:type="con:WsdlInterface" name="OrnekServiceSoap" soapVersion="1_1" definition="http://eski-adres.invalid/Servis/ornek.asmx?wsdl" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-    <con:operation id="o1" action="Ornek/Teklif" name="Teklif" type="Request-Response"/>
+    <con:operation id="o1" action="Ornek/Siparis" name="Siparis" type="Request-Response"/>
   </con:interface>
   <con:testSuite id="t" name="Model Takimi">
     <con:testCase id="c" name="Durum">
       <con:testStep type="groovy" name="Tarihler"><con:config><script>${GROOVY}</script></con:config></con:testStep>
-      ${istek('Teklif al', zarf('<Channel>${#TestSuite#SUBE}</Channel><Username>${#Project#KULLANICI}</Username><Password>${#Project#API_TOKEN}</Password>'
-        + '<CitizenshipNumber>${#Env#MUSTERI_NO}</CitizenshipNumber><BeginDate>${#TestCase#BEGIN_DATE}</BeginDate><EndDate>${#TestCase#END_DATE}</EndDate>'))}
+      ${istek('Siparis al', zarf('<Channel>${#TestSuite#SUBE}</Channel><Username>${#Project#KULLANICI}</Username><Password>${#Project#API_TOKEN}</Password>'
+        + '<IdentityNumber>${#Env#MUSTERI_NO}</IdentityNumber><BeginDate>${#TestCase#BEGIN_DATE}</BeginDate><EndDate>${#TestCase#END_DATE}</EndDate>'))}
       <con:properties><con:property><con:name>NOT</con:name><con:value/></con:property></con:properties>
     </con:testCase>
     <con:properties><con:property><con:name>SUBE</con:name><con:value>7</con:value></con:property></con:properties>
@@ -64,7 +64,7 @@ test('çözümleme: özellikler kapsamlarından okunur; gövdede doğrudan başv
   const [s] = t.servisler;
   expect(s.senaryolar[0].alanlar).toEqual([
     { yol: 'Input/Channel', ad: 'SUBE' }, { yol: 'Input/Username', ad: 'USERNAME' }, { yol: 'Input/Password', ad: 'API_TOKEN' },
-    { yol: 'Input/CitizenshipNumber', ad: 'MUSTERI_NO' }, { yol: 'Input/BeginDate', ad: 'BEGIN_DATE' }, { yol: 'Input/EndDate', ad: 'END_DATE' }]);
+    { yol: 'Input/IdentityNumber', ad: 'MUSTERI_NO' }, { yol: 'Input/BeginDate', ad: 'BEGIN_DATE' }, { yol: 'Input/EndDate', ad: 'END_DATE' }]);
   expect(alanBasvurulari('bozuk <xml')).toEqual([]);
   expect(alanBasvurulari(zarf('<Channel>a ${X}</Channel><Username>${Y}</Username>'))).toEqual([{ yol: 'Input/Username', ad: 'Y' }]);
 });
@@ -97,13 +97,13 @@ test.describe('veritabanı ile', () => {
     expect(oz.API_TOKEN).toMatchObject({ gizli: true, tanimli: true, deger: null, varsayilan: 'tablo', kaynak: 'Proje' });
     expect(oz.SUBE).toMatchObject({ gizli: false, deger: '7', varsayilan: 'tablo' });
     expect(oz.BEGIN_DATE).toMatchObject({ tarih: "bugun|yyyy-MM-dd'T'HH:mm:ss", varsayilan: 'kural' });
-    expect(plan?.alanlar.map((a) => `${a.operasyon}|${a.yol}→${a.ozellik}`)).toContain('Teklif|Input/Password→API_TOKEN');
+    expect(plan?.alanlar.map((a) => `${a.operasyon}|${a.yol}→${a.ozellik}`)).toContain('Siparis|Input/Password→API_TOKEN');
     expect(plan?.tabloAdi).toBe('SoapUI Model Takimi');
   });
 
   test('aktarım (varsayılanlar): tablo sütunları + değerler, gizli değer onaysız boş, kural önerisi eklenir, alan bağları; eski yapı yazılmaz', async () => {
     const r = soapuiAktar(vt, projeId, { xml: DOSYA, takim: 'Model Takimi', durum: 'Durum', servis: 'ornek-service', erisimKimligi,
-      baglar: ['Teklif|Input/Channel', 'Teklif|Input/Password', 'Teklif|Input/CitizenshipNumber', 'Teklif|Input/BeginDate'] });
+      baglar: ['Siparis|Input/Channel', 'Siparis|Input/Password', 'Siparis|Input/IdentityNumber', 'Siparis|Input/BeginDate'] });
     expect(r).toMatchObject({ yeniServis: true, eklenen: 1, eklenenKurallar: ['BEGIN_DATE', 'END_DATE'], eslenmemisParametreler: [],
       tablo: { ad: 'SoapUI Model Takimi', yeni: true, sutunSayisi: 4, sifreliYazilan: [], bosBirakilan: ['API_TOKEN'] } });
     const [tablo] = tablolariListele(vt, projeId, { cozulsun: true }).filter((x) => x.ad === 'SoapUI Model Takimi');
@@ -113,9 +113,9 @@ test.describe('veritabanı ile', () => {
     expect(tablo.satirlar[0].degerler.API_TOKEN ?? null).toBeNull();
     const s = servisGetir(vt, r.servisId);
     // Yalnız seçilen bağlar kuruldu (Username / EndDate seçilmedi).
-    expect(s?.ayarlar.alanBaglari?.Teklif).toEqual({
+    expect(s?.ayarlar.alanBaglari?.Siparis).toEqual({
       'Input/Channel': { tablo: tablo.id, sutun: 'SUBE' }, 'Input/Password': { tablo: tablo.id, sutun: 'API_TOKEN' },
-      'Input/CitizenshipNumber': { tablo: tablo.id, sutun: 'MUSTERI_NO' }, 'Input/BeginDate': { kural: 'BEGIN_DATE' } });
+      'Input/IdentityNumber': { tablo: tablo.id, sutun: 'MUSTERI_NO' }, 'Input/BeginDate': { kural: 'BEGIN_DATE' } });
     expect(s?.ayarlar.tarihKurallari).toEqual({ BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" });
     expect(s?.ayarlar.veriProfilleri).toBeUndefined();
     expect(testVerisiTurleriniListele(vt, projeId).flatMap((x) => x.alanlar).some((a) => a.servisParametreleri?.length)).toBe(false);
@@ -132,14 +132,14 @@ test.describe('veritabanı ile', () => {
 
   test('aktarım (onaylı gizli değer, bağlı sütun): parola şifreli yazılır; mevcut bağ korunur, istek değeri gönderir', async () => {
     // Aynı başlıklı senaryo zaten var: başka takım adıyla yeni tabloya, senaryo adı değiştirilerek yeniden aktarılır.
-    const dosya = DOSYA.replace('name="Teklif al"', 'name="Teklif al 2"').replace(/name="Teklif al"/g, 'name="Teklif al 2"');
+    const dosya = DOSYA.replace('name="Siparis al"', 'name="Siparis al 2"').replace(/name="Siparis al"/g, 'name="Siparis al 2"');
     const once = istekler.length;
     const r = soapuiAktar(vt, projeId, { xml: dosya, takim: 'Model Takimi', durum: 'Durum', servis: 'ornek-service', sifreliKaydet: ['API_TOKEN'] });
     // Servisin alanları zaten bağlı: özellikler "bağlı sütun" hedefini önerir ve bağlar değişmez; tablo yazılmaz.
     expect(r).toMatchObject({ yeniServis: false, eklenen: 1, baglananAlan: 2, tablo: null });
     const s = servisGetir(vt, r.servisId);
-    expect(s?.ayarlar.alanBaglari?.Teklif?.['Input/EndDate']).toEqual({ kural: 'END_DATE' });
-    const sn = servisSenaryolariniListele(vt, r.servisId).find((x) => x.baslik === 'Teklif al 2');
+    expect(s?.ayarlar.alanBaglari?.Siparis?.['Input/EndDate']).toEqual({ kural: 'END_DATE' });
+    const sn = servisSenaryolariniListele(vt, r.servisId).find((x) => x.baslik === 'Siparis al 2');
     expect(sn?.icerik.govde).toContain('<Password>${SoapUI Model Takimi.API_TOKEN}</Password>');
     expect(sn?.icerik.tabloSecimleri).toBeTruthy();
     // Gizli değer bağlı tabloda yoktu; onay (sifreliKaydet) + girisEkle olmadan eklenmez → hâlâ boş.
@@ -155,8 +155,8 @@ test.describe('veritabanı ile', () => {
     const servisId = servisKaydet(vt, { projeId, anahtar: 'eski-servis', ad: 'Eski', ayarlar: {
       yol: '/Servis/ornek.asmx', operasyonSemalari: wsdlSemalari(WSDL), veriProfilleri: { [`${turId}:musteri`]: profil }
     } });
-    const govde = zarf('<CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber><BeginDate>2026-01-01T00:00:00</BeginDate><EndDate>2026-01-01T00:00:00</EndDate>');
-    const senaryoId = servisSenaryosuKaydet(vt, { projeId, servisId, baslik: 'Eski senaryo', icerik: { operasyon: 'Teklif', govde, kontroller: [{ tur: 'soapYaniti' }, { tur: 'icerir', deger: '<Durum>OK</Durum>' }] } });
+    const govde = zarf('<IdentityNumber>${MUSTERI_TC}</IdentityNumber><BeginDate>2026-01-01T00:00:00</BeginDate><EndDate>2026-01-01T00:00:00</EndDate>');
+    const senaryoId = servisSenaryosuKaydet(vt, { projeId, servisId, baslik: 'Eski senaryo', icerik: { operasyon: 'Siparis', govde, kontroller: [{ tur: 'soapYaniti' }, { tur: 'icerir', deger: '<Durum>OK</Durum>' }] } });
     // Geriye uyum: eski yapı koşuda okunur.
     const eskiKosu = await servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: testOrtami, tur: 'dene', senaryoId });
     expect(eskiKosu.durum, eskiKosu.hata).toBe('basarili');
@@ -165,20 +165,20 @@ test.describe('veritabanı ile', () => {
     expect('onizleme' in o).toBe(true);
     if (!('onizleme' in o)) return;
     expect(o.onizleme.parametreler).toEqual([{ ad: 'MUSTERI_TC', hedef: 'Kişi[musteri].tcKimlikNo', tablo: 'Kişi', sutun: 'tcKimlikNo', etiket: 'musteri', rol: 'musteri', satir: 'k1', senaryoSayisi: 1 }]);
-    expect(o.onizleme.baglar).toEqual([{ operasyon: 'Teklif', yol: 'Input/CitizenshipNumber', hedef: 'Kişi[musteri].tcKimlikNo' }]);
+    expect(o.onizleme.baglar).toEqual([{ operasyon: 'Siparis', yol: 'Input/IdentityNumber', hedef: 'Kişi[musteri].tcKimlikNo' }]);
     // Önizleme hiçbir şey yazmaz.
     expect(servisSenaryolariniListele(vt, servisId)[0].icerik.govde).toBe(govde);
     expect(servisGetir(vt, servisId)?.ayarlar.alanBaglari).toBeUndefined();
 
     eskiParametreleriDonustur(vt, projeId, { servisId, onay: true });
     const [sn] = servisSenaryolariniListele(vt, servisId);
-    expect(sn.icerik.govde).toContain('<CitizenshipNumber>${Kişi[musteri].tcKimlikNo}</CitizenshipNumber>');
+    expect(sn.icerik.govde).toContain('<IdentityNumber>${Kişi[musteri].tcKimlikNo}</IdentityNumber>');
     expect(sn.icerik.tabloSecimleri).toEqual({ [`${turId}|musteri`]: { tcKimlikNo: SAHTE_TC, adi: 'Deneme' } });
-    expect(servisGetir(vt, servisId)?.ayarlar.alanBaglari?.Teklif).toEqual({ 'Input/CitizenshipNumber': { tablo: turId, sutun: 'tcKimlikNo', etiket: 'musteri' } });
+    expect(servisGetir(vt, servisId)?.ayarlar.alanBaglari?.Siparis).toEqual({ 'Input/IdentityNumber': { tablo: turId, sutun: 'tcKimlikNo', etiket: 'musteri' } });
     const once = istekler.length;
     const yeniKosu = await servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: testOrtami, tur: 'dene', senaryoId });
     expect(yeniKosu.durum, yeniKosu.hata).toBe('basarili');
-    expect(istekler[once].govde).toContain(`<CitizenshipNumber>${SAHTE_TC}</CitizenshipNumber>`);
+    expect(istekler[once].govde).toContain(`<IdentityNumber>${SAHTE_TC}</IdentityNumber>`);
     // Dönüştürülecek parametre kalmadı.
     const tekrar = eskiParametreleriDonustur(vt, projeId, { servisId });
     expect('onizleme' in tekrar && tekrar.onizleme.parametreler).toEqual([]);

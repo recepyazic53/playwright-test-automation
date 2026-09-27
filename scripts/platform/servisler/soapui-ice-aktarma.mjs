@@ -382,7 +382,7 @@ export function soapuiCozumle(xml) {
   return { proje, arayuzler, durumlar };
 }
 
-/** "TravelServiceSoap" → "travel-service". @param {string} ad */
+/** "SiparisServisiSoap" → "siparis-servisi". @param {string} ad */
 export function servisAnahtariUret(ad) {
   return ad.replace(/(?:Soap12|Soap|PortBinding|Binding)$/, '')
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')

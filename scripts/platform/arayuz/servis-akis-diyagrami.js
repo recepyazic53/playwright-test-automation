@@ -479,7 +479,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
       yerlestir(bagKap, satirlar.map((b, k) => {
         const yolG = yollar
           ? h('select', { 'aria-label': `${n + 1}. adım ${k + 1}. bağ alanı` }, h('option', { value: '' }, '— alan —'), yollar.map((y) => h('option', { value: y, selected: y === b.yol }, y)))
-          : h('input', { type: 'text', value: b.yol, spellcheck: 'false', class: 'kod-girdisi', placeholder: sv?.tur === 'rest' ? 'kayit/no' : 'Input/PolicyNo', 'aria-label': `${n + 1}. adım ${k + 1}. bağ alanı` });
+          : h('input', { type: 'text', value: b.yol, spellcheck: 'false', class: 'kod-girdisi', placeholder: sv?.tur === 'rest' ? 'kayit/no' : 'Input/OrderNo', 'aria-label': `${n + 1}. adım ${k + 1}. bağ alanı` });
         const adG = h('select', { 'aria-label': `${n + 1}. adım ${k + 1}. bağ değeri` }, h('option', { value: '' }, '— akış değeri —'),
           adlar.map((a2) => h('option', { value: a2, selected: a2 === b.ad }, `\${akis:${a2}}`)),
           b.ad && !adlar.includes(b.ad) ? h('option', { value: b.ad, selected: true }, `\${akis:${b.ad}} (önce okunmuyor)`) : null);
@@ -496,9 +496,9 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     const okumaKap = h('div', { class: 'okuma-listesi' });
     const okumalariCiz = () => {
       yerlestir(okumaKap, x.okumalar.map((o, k) => {
-        const oad = h('input', { type: 'text', value: o.ad, maxlength: '60', placeholder: 'PolicyNo', autocomplete: 'off', 'aria-label': `${n + 1}. adım ${k + 1}. okuma adı` });
+        const oad = h('input', { type: 'text', value: o.ad, maxlength: '60', placeholder: 'OrderNo', autocomplete: 'off', 'aria-label': `${n + 1}. adım ${k + 1}. okuma adı` });
         const kaynak = h('select', { 'aria-label': `${n + 1}. adım ${k + 1}. okuma kaynağı` }, Object.entries(KAYNAK).map(([d, m]) => h('option', { value: d, selected: (o.kaynak || 'xml') === d }, m)));
-        const yol = h('input', { type: 'text', value: o.yol, maxlength: '300', spellcheck: 'false', class: 'kod-girdisi', autocomplete: 'off', placeholder: '//PolicyNo', 'aria-label': `${n + 1}. adım ${k + 1}. okuma yolu` });
+        const yol = h('input', { type: 'text', value: o.yol, maxlength: '300', spellcheck: 'false', class: 'kod-girdisi', autocomplete: 'off', placeholder: '//OrderNo', 'aria-label': `${n + 1}. adım ${k + 1}. okuma yolu` });
         const gizli = h('input', { type: 'checkbox', checked: o.gizli ?? gizliMi(o.ad), 'aria-label': `${n + 1}. adım ${k + 1}. okuma gizli` });
         oad.addEventListener('input', () => { o.ad = oad.value.trim(); if (o.gizli === undefined) gizli.checked = gizliMi(o.ad); ciz(); });
         kaynak.addEventListener('change', () => { o.kaynak = kaynak.value; ciz(); });

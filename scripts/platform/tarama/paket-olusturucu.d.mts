@@ -88,7 +88,7 @@ export type KayitOgesi = { secici: string; metin: string | null };
 /** desen: aranan bir düzenli ifadedir (öğenin / sayfanın metni ona uymalı). */
 export type KayitGostergesi = { secici: string | null; metin: string | null; aranan?: string | null; veya?: KayitGostergesi[]; desen?: boolean };
 /** Kullanıcının adlandırıp aldığı adım: seçtiği alanların YAPISI (değer yok) + ilerleme düğmesi. */
-/** Adımın içinde yeni alanlar açan düğme ("Ek sürücü ekle"); secimli: her senaryoda basılmaz, senaryoda seçilir. */
+/** Adımın içinde yeni alanlar açan düğme ("Ek adres ekle"); secimli: her senaryoda basılmaz, senaryoda seçilir. */
 export type KayitAcicisi = KayitOgesi & { secimli: boolean; onceBekle?: number; sonraBekle?: number };
 export type KayitAdimi = {
   ad: string; yol: string; baslik: string; alanlar: HamAlan[]; ilerleme: KayitOgesi | null;

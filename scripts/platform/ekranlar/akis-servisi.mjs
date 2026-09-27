@@ -310,7 +310,7 @@ export function adimlardanBloklar(model, adimlar, env) {
       const m = env.mesajlar.findIndex((o) => o.metin === g.deger && o.secici === (typeof g.secici === 'string' ? g.secici : ''));
       bloklar.push({ tur: 'mesaj', mesaj: m >= 0 ? m : null, metin: g.deger });
     }
-    // Kalıp göstergesi (ör. prim sıfırdan farklı: [1-9]): öğesi mesajın yeri, metni düzenli ifade.
+    // Kalıp göstergesi (ör. toplam sıfırdan farklı: [1-9]): öğesi mesajın yeri, metni düzenli ifade.
     for (const g of desenGostergeleri(kosu.basariGostergesi)) {
       const m = env.mesajlar.findIndex((o) => o.metin === g.deger && o.secici === (typeof g.secici === 'string' ? g.secici : ''));
       bloklar.push({ tur: 'mesaj', mesaj: m >= 0 ? m : null, metin: g.deger, desen: true });

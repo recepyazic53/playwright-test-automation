@@ -83,7 +83,7 @@ function paket(): Nesne {
           alan('tarih', 'metin', 'Tarih', '#tarih', { doldurucuParametreleri: { gizle: '#katman' } }),
           {
             id: 'kisi', tip: 'kimlikProfili', kimlikTuru: 'ozel', etiket: { ekran: null, form: 'Kişi' }, zorunlu: true, yapilandirma: 'senaryo',
-            eslesme: { senaryo: ['kisiKimligi', 'kisiProfili'], profilHavuzu: 'Özel kişi' },
+            eslesme: { senaryo: ['kisiKimligi', 'kisiProfili'], profilHavuzu: 'Bireysel kişi' },
             altAlanlar: [
               { id: 'kisiTc', tip: 'metin', sira: 1, etiket: { ekran: 'Kimlik no' }, eslesme: { kimlikAlani: 'tcKimlikNo' }, konum: { secici: '#kimlik', kirilganlik: 'orta' },
                 doldurucuParametreleri: { tikla: '#sorgula', bekle: { secici: '#ad', durum: 'dolu', zamanAsimiSn: 20 } } },
@@ -135,7 +135,7 @@ test.beforeAll(async () => {
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Koşucu Projesi' })).proje as Nesne).id);
   ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
-  const tur = String((await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Özel kişi', alanlar: ['tcKimlikNo', 'cepTelefonu'].map((ad) => ({ ad, hassas: true })) })).id);
+  const tur = String((await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Bireysel kişi', alanlar: ['tcKimlikNo', 'cepTelefonu'].map((ad) => ({ ad, hassas: true })) })).id);
   await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: tur, ad: 'k1', degerler: KISI });
   await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: tur, ad: 'hatali', degerler: { ...KISI, tcKimlikNo: '99000000012' } });
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: paket(), senaryoIndeksleri: [], ortamIdleri: [ortamId] });

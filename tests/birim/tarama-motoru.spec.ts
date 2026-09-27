@@ -81,14 +81,14 @@ test('iki profille tam tarama: alanlar, etiketler, bölümler, keşif, geri alma
   expect(alan(yetkili.alanlar, '#indirim')).toMatchObject({ tur: 'number', etiket: 'İndirim oranı' });
   expect(standart.ekranGoruntusu?.length ?? 0).toBeGreaterThan(1000);
 
-  // Keşif: ürün B → Ek teminat, C → Vergi numarası; ilk değer geri alındı. Dil → sayfa başka adrese gitti.
+  // Keşif: ürün B → Ek teslimat, C → Vergi numarası; ilk değer geri alındı. Dil → sayfa başka adrese gitti.
   const urun = standart.kesifler.find((k) => k.secim === '#urun');
   expect(urun).toMatchObject({ ilkDeger: '', geriAlindi: true });
   const deger = (d: string) => urun?.degerler.find((x) => x.deger === d);
   expect(deger('A')?.gorunenler).toEqual([]);
-  expect(anahtarlar(deger('B')?.gorunenler ?? [])).toEqual(['#ekTeminat']);
+  expect(anahtarlar(deger('B')?.gorunenler ?? [])).toEqual(['#ekTeslimat']);
   expect(anahtarlar(deger('C')?.gorunenler ?? [])).toEqual(['#vergiNo']);
-  expect(deger('B')?.gorunenler[0]).toMatchObject({ etiket: 'Ek teminat', tur: 'select', bolum: { baslik: 'Temel bilgiler' } });
+  expect(deger('B')?.gorunenler[0]).toMatchObject({ etiket: 'Ek teslimat', tur: 'select', bolum: { baslik: 'Temel bilgiler' } });
   const dil = standart.kesifler.find((k) => k.secim === '#dil');
   expect(dil?.degerler).toEqual([expect.objectContaining({ deger: 'en', gezinme: '/basvuru/?dil=en' })]);
   expect(dil?.geriAlindi).toBe(true);
@@ -122,13 +122,13 @@ test('iki profille tam tarama: alanlar, etiketler, bölümler, keşif, geri alma
   const metin = JSON.stringify({ ...paket, kanitlar: undefined }); // kanıtlar base64 PNG
   for (const gizli of [SALT_OKUNUR_DEGER, TARAMA_PAROLA, TARAMA_KULLANICI, 'gizli-token-degeri', 'profilKodu', '"P1"', '"P2"']) expect(metin.includes(gizli), gizli).toBe(false);
   const model = paket.model as { kosullar: Record<string, { ifade: unknown }>; baglamGorunurlugu: { alanlar: Record<string, unknown> }; adimlar: Array<{ bolumler: Array<{ baslik: string; alanlar: Array<Record<string, unknown>> }> }> };
-  expect(model.kosullar.ekTeminatGorunur.ifade).toEqual({ alan: 'urun', esit: 'B' });
+  expect(model.kosullar.ekTeslimatGorunur.ifade).toEqual({ alan: 'urun', esit: 'B' });
   expect(model.kosullar.vergiNoGorunur.ifade).toEqual({ alan: 'urun', esit: 'C' });
   expect(model.baglamGorunurlugu.alanlar.indirim).toEqual({ Standart: false, Yetkili: true });
   expect(model.baglamGorunurlugu.alanlar.urun).toEqual({ Standart: true, Yetkili: true });
   expect(model.adimlar[0].bolumler.map((b) => b.baslik)).toEqual(['Temel bilgiler', 'Ödeme', 'Belgeler']);
   const tumAlanlar = model.adimlar[0].bolumler.flatMap((b) => b.alanlar);
-  expect(tumAlanlar.find((x) => x.id === 'ekTeminat')).toMatchObject({ tip: 'secim', gorunurluk: { kosul: 'ekTeminatGorunur' } });
+  expect(tumAlanlar.find((x) => x.id === 'ekTeslimat')).toMatchObject({ tip: 'secim', gorunurluk: { kosul: 'ekTeslimatGorunur' } });
   expect(tumAlanlar.find((x) => x.id === 'odeme')).toMatchObject({ tip: 'radyo', secenekler: [{ deger: 'pesin', metin: 'Peşin', secici: '#odemePesin' }, { deger: 'taksit', metin: 'Taksitli', secici: '#odemeTaksit' }] });
   expect(tumAlanlar.find((x) => x.id === 'belge')).toMatchObject({ tip: 'dosya', kabul: '.xlsx', eslesme: { senaryo: 'belge' } });
   expect(tumAlanlar.find((x) => x.id === 'musteriNo')).toMatchObject({ yapilandirma: 'dokunulmuyor' });

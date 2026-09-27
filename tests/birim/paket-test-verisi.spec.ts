@@ -31,7 +31,7 @@ const TEST_VERISI = {
   tablolar: [
     {
       ad: 'Kapsam - Alternatif', sutunlar: [{ ad: 'Kapsam' }, { ad: 'Alternatif' }],
-      satirlar: [['DÜNYA', 'VİZE TÜM DÜNYA'], ['DÜNYA', 'ROTA PAKET'], ['AVRUPA', 'VİZE SCHENGEN'], ['AVRUPA', 'ROTA PAKET'], ['DÜNYA', 'ROTA PAKET']]
+      satirlar: [['EKSPRES', 'HIZLI TESLİMAT'], ['EKSPRES', 'ROTA PAKET'], ['STANDART', 'ADRESE TESLİM'], ['STANDART', 'ROTA PAKET'], ['EKSPRES', 'ROTA PAKET']]
     },
     { ad: 'Taksit', sutunlar: [{ ad: 'Taksit' }], satirlar: [['Tek çekim'], ['3 taksit'], ['6 taksit']] },
     { ad: 'Servis girişi', sutunlar: [{ ad: 'Kullanıcı' }, { ad: 'Parola', gizli: true }], satirlar: [['kanal-1', null]] }
@@ -137,7 +137,7 @@ test.describe('Seçenek gözlemlerinden tablolar', () => {
     expect(ekranListesiTabloAdi('Başvuru', ['İl', 'İlçe'])).toBe('Başvuru — İl - İlçe');
     expect(ekranListesiTabloAdi('', ['İl'])).toBe('İl');
     expect(ekranListesiTabloAdi('Ekran {1}. [x]', ['Alan.Adı'])).toBe('Ekran 1 x — Alan Adı');
-    const uzunEkran = 'Çok uzun bir ekran adı olan başvuru ve teklif sayfası (deneme)';
+    const uzunEkran = 'Çok uzun bir ekran adı olan başvuru ve siparis sayfası (deneme)';
     const ad = ekranListesiTabloAdi(uzunEkran, ['Başvuranın doğum yeri bilgisi']);
     expect(ad.length).toBeLessThanOrEqual(60);
     expect(ad.endsWith(' — Başvuranın doğum yeri bilgisi')).toBe(true);
@@ -284,7 +284,7 @@ test.describe('Onaylanan test verisinin yazılması', () => {
 
     // İkinci paket (başka ekran): aynı adlı tablolar.
     const ikinci = paketTV({ meta: { ...V1.meta, ekran: { ...V1.meta.ekran, anahtar: 'ikinci-ekran' } }, model: { ...V1.model, id: 'ikinci-ekran' } });
-    ikinci.testVerisi.tablolar[0].satirlar.push(['ASYA', 'ROTA PAKET']);
+    ikinci.testVerisi.tablolar[0].satirlar.push(['KURYE', 'ROTA PAKET']);
     ikinci.testVerisi.tablolar[0].sutunlar.push({ ad: 'Bölge' });
     const o2 = paketOnizle(vt, projeId, ikinci);
     const m2 = ((o2.onizleme as Nesne).testVerisi as Nesne).tablolar[0].mevcut;
@@ -419,7 +419,7 @@ test.describe('Onaylanan test verisinin yazılması', () => {
 function v2TestVerisi(): { paket: Nesne; secim: Nesne } {
   const tablolar = [
     { ad: 'Örnek Rota — Rota amacı', tur: 'liste', sutunlar: [{ ad: 'Rota amacı' }], satirlar: [['Turistik'], ['İş']] },
-    { ad: 'Örnek Rota — Kapsam', tur: 'liste', sutunlar: [{ ad: 'Kapsam' }], satirlar: [['DÜNYA'], ['ASYA']] },
+    { ad: 'Örnek Rota — Kapsam', tur: 'liste', sutunlar: [{ ad: 'Kapsam' }], satirlar: [['EKSPRES'], ['KURYE']] },
     { ad: 'Örnek Rota — Taksit', tur: 'liste', sutunlar: [{ ad: 'Taksit' }], satirlar: [['Tek çekim'], ['3 taksit'], ['Yalnız tablo değeri']] }
   ];
   const paket = {

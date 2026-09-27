@@ -4,7 +4,7 @@
 // kimlikleri, koşul ifadelerinin biçimi, adım/koşul/alan/alt model başvurularının varlığı, bağlam
 // profili görünürlüğü gözlemleri. Senaryo verisinin modele uygunluğu senaryo-dogrulayici.mjs'dedir.
 //
-//  - Bu dosya HİÇBİR modül import etmez; Node'a/DOM'a özgü API kullanmaz.
+//  - Bu dosya hiçbir modül import etmez; Node'a/DOM'a özgü API kullanmaz.
 //  - Hata varsa TÜM sorunlar toplanır ve TEK bir Türkçe Error'da listelenir.
 // Tipler: ekran-modeli-dogrulayici.d.mts (modelin TypeScript tipleri: tests/support/ekran-modeli.ts).
 
@@ -50,69 +50,14 @@ function listedeMi(liste, d) {
   return typeof d === 'string' && liste.includes(d);
 }
 
-/**
- * GERİYE UYUM: şemanın eski (ilk projeye özgü) anahtar adları → genel karşılıkları. Eski adlar OKUNURKEN
- * kabul edilir ve eşdeğer yeni anahtar gibi yorumlanır; yeni kayıtlar yeni adla yazılır
- * (eskiModelAnahtarlariniCevir). Kaydedilmiş modeller kendiliğinden yeniden yazılmaz.
- *  - baglam: modelin bağlam profili ekranı ({ alanlar, … }).
- *  - baglamIfadesi: koşul ifadesi { baglam: { alanSeti } } (bağlam profiline göre alan seti).
- *  - durumProfili / durumKodu: kosullar.<ad>.bilinenDurumlar[] öğesinde profil adı (profil) / eşleşme kodu (profilKodu).
- *  - kayitAlani: alt model alanının senaryodaki kayıt (ör. test verisi kaydı) içindeki adı (eslesme.kayitAlani).
- */
-export const ESKI_ANAHTARLAR = Object.freeze({
-  baglam: 'acenteBaglami',
-  baglamIfadesi: 'acente',
-  durumProfili: 'acente',
-  durumKodu: 'acentePartaji',
-  kayitAlani: 'kart'
-});
-
-/** Alanın kayıt içindeki adı (eslesme.kayitAlani; eski adı eslesme.kart) ya da undefined. */
+/** Alanın kayıt içindeki adı (eslesme.kayitAlani) ya da undefined. */
 export function kayitAlaniAdi(alan) {
-  const e = nesneMi(alan) && nesneMi(alan.eslesme) ? alan.eslesme : null;
-  if (!e) return undefined;
-  return e.kayitAlani !== undefined ? e.kayitAlani : e[ESKI_ANAHTARLAR.kayitAlani];
+  return nesneMi(alan) && nesneMi(alan.eslesme) ? alan.eslesme.kayitAlani : undefined;
 }
 
-/** Modelin bağlam profili ekranı (baglam; eski adı acenteBaglami) ya da undefined. */
+/** Modelin bağlam profili ekranı (baglam) ya da undefined. */
 export function baglamEkrani(model) {
-  if (!nesneMi(model)) return undefined;
-  return model.baglam !== undefined ? model.baglam : model[ESKI_ANAHTARLAR.baglam];
-}
-
-/**
- * Eski anahtarlı modeli (ya da alt modeli) yeni anahtarlara çevirir. Girdiyi değiştirmez: eski anahtar varsa yeni
- * bir kopya, yoksa AYNI nesne döner. Yalnızca YENİ kayıt yazılırken kullanılır (ör. sayfa paketiyle eklenen model).
- */
-export function eskiModelAnahtarlariniCevir(model) {
-  if (!nesneMi(model)) return model;
-  let degisti = false;
-  const yeniAd = (k, yer, d) => {
-    if (yer === 'kok' && k === ESKI_ANAHTARLAR.baglam && !('baglam' in d)) return 'baglam';
-    if (yer === 'eslesme' && k === ESKI_ANAHTARLAR.kayitAlani && !('kayitAlani' in d)) return 'kayitAlani';
-    if (yer === 'durum' && k === ESKI_ANAHTARLAR.durumProfili && !('profil' in d)) return 'profil';
-    if (yer === 'durum' && k === ESKI_ANAHTARLAR.durumKodu && !('profilKodu' in d)) return 'profilKodu';
-    return k;
-  };
-  const cevir = (d, yer) => {
-    if (Array.isArray(d)) return d.map((x) => cevir(x, yer === 'durumlar' ? 'durum' : null));
-    if (!nesneMi(d)) return d;
-    const anahtarlar = Object.keys(d);
-    const eski = ESKI_ANAHTARLAR.baglamIfadesi;
-    if (yer !== 'durum' && anahtarlar.length === 1 && anahtarlar[0] === eski && nesneMi(d[eski])) {
-      degisti = true;
-      return { baglam: cevir(d[eski], null) };
-    }
-    const sonuc = {};
-    for (const k of anahtarlar) {
-      const yeni = yeniAd(k, yer, d);
-      if (yeni !== k) degisti = true;
-      sonuc[yeni] = cevir(d[k], k === 'eslesme' ? 'eslesme' : k === 'bilinenDurumlar' ? 'durumlar' : null);
-    }
-    return sonuc;
-  };
-  const kopya = cevir(model, 'kok');
-  return degisti ? kopya : model;
+  return nesneMi(model) ? model.baglam : undefined;
 }
 
 const ALAN_ANAHTARLARI = new Set([
@@ -122,7 +67,7 @@ const ALAN_ANAHTARLARI = new Set([
   'kimlikTuru', 'bicim', 'kabul', 'birim', 'hassas', 'ekrandaAlanDegil', 'sira', 'sonKontrol', 'kullanim',
   'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger'
 ]);
-const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kayitAlani', ESKI_ANAHTARLAR.kayitAlani, 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
+const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kayitAlani', 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
 const FORM_ANAHTARLARI = new Set(['id', 'kontrol', 'etiket', 'secenekler', 'yardimciKontroller', 'not']);
 const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDegeri', 'ekranDegerleri', 'secici', 'kosul']);
 const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'yenidenGiris', 'kosu']);
@@ -133,7 +78,7 @@ const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklam
 const BOLUM_ANAHTARLARI = new Set(['id', 'baslik', 'pomMetodu', 'gorunurluk', 'alanlar']);
 const EKRAN_ANAHTARLARI = new Set([
   'semaSurumu', 'tur', 'id', 'ad', 'aciklama', 'ekranUrl', 'specDosyasi', 'pageObject', 'veriKaynaklari',
-  'kosullar', 'adimlar', 'senaryoDuzeyi', 'urunDuzeyi', 'baglam', ESKI_ANAHTARLAR.baglam, 'isKurallari', 'bilinmeyenler',
+  'kosullar', 'adimlar', 'senaryoDuzeyi', 'urunDuzeyi', 'baglam', 'isKurallari', 'bilinmeyenler',
   'baglamGorunurlugu', 'girisGerekmez', 'akislar', 'yalnizTestOrtami'
 ]);
 const AKIS_ANAHTARLARI = new Set(['id', 'ad', 'varsayilan', 'adimlar']);
@@ -223,10 +168,9 @@ function kosulIfadesiDogrula(h, yer, ifade, basvurular) {
     case 'degil':
       kosulIfadesiDogrula(h, `${yer}.degil`, ifade.degil, basvurular);
       return;
-    case 'baglam':
-    case ESKI_ANAHTARLAR.baglamIfadesi: {
-      // { baglam: { alanSeti } } (eski adı hâlâ okunur)
-      const deger = ifade[anahtarlar];
+    case 'baglam': {
+      // { baglam: { alanSeti } }
+      const deger = ifade.baglam;
       if (!nesneMi(deger) || !metinMi(deger.alanSeti)) h.ekle(yer, 'bağlam koşulunun "alanSeti" değeri metin olmalı');
       return;
     }
@@ -311,9 +255,6 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
         h.ekle(aYer, '"eslesme.senaryo" metin ya da boş olmayan metin dizisi olmalı');
       }
     }
-  }
-  if (nesneMi(alan.eslesme) && alan.eslesme.kayitAlani !== undefined && alan.eslesme[ESKI_ANAHTARLAR.kayitAlani] !== undefined) {
-    h.ekle(aYer, `"eslesme.kayitAlani" ile eski adı "eslesme.${ESKI_ANAHTARLAR.kayitAlani}" birlikte olmaz`);
   }
   if (alan.yapilandirma === 'senaryo' && !(nesneMi(alan.eslesme) && (alan.eslesme.senaryo !== undefined || kayitAlaniAdi(alan) !== undefined))) {
     h.ekle(aYer, 'yapilandirma "senaryo" olan alanın "eslesme.senaryo" (ya da alt modelde "eslesme.kayitAlani") karşılığı olmalı');
@@ -673,11 +614,7 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
   }
 
   // Proje bağlamı ekranı (ayrı ekran; id'leri ayrı ad alanında tutulur)
-  // Yeni ad "baglam"; eski adı (ESKI_ANAHTARLAR.baglam) hâlâ okunur, ikisi birlikte olmaz.
-  if (ham.baglam !== undefined && ham[ESKI_ANAHTARLAR.baglam] !== undefined) {
-    h.ekle(yer, `"baglam" ile eski adı "${ESKI_ANAHTARLAR.baglam}" birlikte olmaz`);
-  }
-  const baglamAdi = ham.baglam !== undefined ? 'baglam' : ESKI_ANAHTARLAR.baglam;
+  const baglamAdi = 'baglam';
   const baglam = baglamEkrani(ham);
   if (baglam !== undefined) {
     if (!nesneMi(baglam) || !Array.isArray(baglam.alanlar)) {

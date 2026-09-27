@@ -30,26 +30,26 @@ test.describe('hata kalıbından testlere', () => {
     const proje = projeKaydet(vt, { ad: 'Kalıp Projesi' });
     const ortam = ortamKaydet(vt, { projeId: proje, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
     const ekran = ekranKaydet(vt, { projeId: proje, anahtar: 'rota', ad: 'Rota' });
-    s1 = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Avrupa paket', icerik: {} });
-    s2 = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Dünya vize', icerik: {} });
+    s1 = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Standart paket', icerik: {} });
+    s2 = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Ekspres teslimat', icerik: {} });
     const zaman = (dk: number) => new Date(Date.UTC(2026, 8, 26, 10, dk)).toISOString();
     const kaldi = (kosuId: string, senaryoId: string, baslik: string, dk: number) => sonucKaydet(vt, {
       kosuId, projeId: proje, senaryoId, senaryoBaslik: baslik, durum: 'basarisiz', testKimligi: `${kosuId}-${baslik}`, bitis: zaman(dk),
-      hataMesaji: 'Error: Prim hesaplanır adımında beklenen sonuç doğrulanamadı.',
-      adimlar: [{ ad: 'Ekran açılır', durum: 'basarili', sureMs: 280 }, { ad: 'Prim hesaplanır', durum: 'basarisiz', sureMs: 1100 }]
+      hataMesaji: 'Error: Toplam hesaplanır adımında beklenen sonuç doğrulanamadı.',
+      adimlar: [{ ad: 'Ekran açılır', durum: 'basarili', sureMs: 280 }, { ad: 'Toplam hesaplanır', durum: 'basarisiz', sureMs: 1100 }]
     });
     kosuKaydet(vt, { id: 'kosu-1', projeId: proje, ortamId: ortam, tur: 'tekil', baslangic: zaman(0) });
-    kaldi('kosu-1', s1, 'Avrupa paket', 1);
+    kaldi('kosu-1', s1, 'Standart paket', 1);
     kosuyuBitir(vt, 'kosu-1', { durum: 'tamamlandi', bitis: zaman(2) });
     kosuKaydet(vt, { id: 'kosu-2', projeId: proje, ortamId: ortam, tur: 'tekil', baslangic: zaman(10) });
-    kaldi('kosu-2', s2, 'Dünya vize', 11);
-    kaldi('kosu-2', s1, 'Avrupa paket', 12);
+    kaldi('kosu-2', s2, 'Ekspres teslimat', 11);
+    kaldi('kosu-2', s1, 'Standart paket', 12);
     kosuyuBitir(vt, 'kosu-2', { durum: 'tamamlandi', bitis: zaman(13) });
     // Depo: kalıbın testleri en yeniden eskiye; hatanın alındığı adım.
     const k = hataKaliplari(vt, proje).kaliplar[0];
     expect(k.sayi).toBe(3);
     expect(k.sonuclar.map((x) => [x.senaryoBaslik, x.kosuId, x.adim, x.ortamId])).toEqual([
-      ['Avrupa paket', 'kosu-2', 'Prim hesaplanır', ortam], ['Dünya vize', 'kosu-2', 'Prim hesaplanır', ortam], ['Avrupa paket', 'kosu-1', 'Prim hesaplanır', ortam]]);
+      ['Standart paket', 'kosu-2', 'Toplam hesaplanır', ortam], ['Ekspres teslimat', 'kosu-2', 'Toplam hesaplanır', ortam], ['Standart paket', 'kosu-1', 'Toplam hesaplanır', ortam]]);
     expect(k.sonuclar[0].senaryoId).toBe(s1);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
@@ -78,18 +78,18 @@ test.describe('hata kalıbından testlere', () => {
     // Satırın kendisine tıklamak açar / kapatır.
     await satir.locator('.kalip-baslik').click();
     await expect(testler.locator('li')).toHaveCount(3);
-    await expect(testler.locator('li').first()).toContainText('Avrupa paket');
-    await expect(testler.locator('li').first()).toContainText('"Prim hesaplanır" adımında');
+    await expect(testler.locator('li').first()).toContainText('Standart paket');
+    await expect(testler.locator('li').first()).toContainText('"Toplam hesaplanır" adımında');
     await expect(satir.getByRole('button', { name: /^Hatanın alındığı testler/ })).toHaveAttribute('aria-expanded', 'true');
     // Koşu bağlantısı ve ayrıntı paneli.
-    await expect(testler.getByRole('link', { name: 'Koşu: Dünya vize' })).toHaveAttribute('href', '#/sonuclar/kosu/kosu-2');
-    await testler.getByRole('button', { name: 'Ayrıntı: Dünya vize' }).click();
-    await expect(page.getByText('Dünya vize').last()).toBeVisible();
+    await expect(testler.getByRole('link', { name: 'Koşu: Ekspres teslimat' })).toHaveAttribute('href', '#/sonuclar/kosu/kosu-2');
+    await testler.getByRole('button', { name: 'Ayrıntı: Ekspres teslimat' }).click();
+    await expect(page.getByText('Ekspres teslimat').last()).toBeVisible();
     // Tekrar çalıştır: aynı ortamda koşu onayı (vazgeç; koşu başlamaz).
-    await testler.getByRole('button', { name: 'Tekrar çalıştır: Avrupa paket' }).first().click();
+    await testler.getByRole('button', { name: 'Tekrar çalıştır: Standart paket' }).first().click();
     const onay = page.locator('dialog[open]');
     await expect(onay).toContainText('Tekrar çalıştırılsın mı?');
-    await expect(onay).toContainText('Avrupa paket');
+    await expect(onay).toContainText('Standart paket');
     await onay.getByRole('button', { name: 'Vazgeç' }).click();
     await expect(satir.getByRole('button', { name: 'Hepsini tekrar çalıştır (2 senaryo)' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Canlı koşu paneli' })).toHaveCount(0);

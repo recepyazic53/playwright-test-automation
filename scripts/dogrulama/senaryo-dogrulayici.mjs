@@ -7,54 +7,21 @@
 //  - Senaryolar formu (tarayıcı): sunucu bu dosyayı /arayuz/senaryo-dogrulayici.mjs olarak sunar (ESM).
 //
 // KURALLAR:
-//  - Bu dosya HİÇBİR modül import etmez, Node'a/DOM'a özgü API kullanmaz (tarayıcıya olduğu
-//    gibi gömülür). Dışa açılan her şey "export function" ya da "export const" ile başlar
-//    (tarayıcı paketleyicisi yalnızca bu iki biçimi tanır).
+//  - Bu dosya hiçbir modül import etmez; Node'a/DOM'a özgü API kullanmaz (tarayıcıda olduğu gibi çalışır).
 //  - Kurallar mümkün olduğunca MODELDEN okunur: zorunluluk (zorunlu), seçenek listeleri
 //    (secenekler / bagimlilik.secenekHaritasi), görünürlük koşulları (gorunurluk + kosullar,
 //    bağlam profili bazında bilinenDurumlar), profil havuzları (eslesme.profilHavuzu), kayıt alanları
 //    (alt model > eslesme.kayitAlani), beklenen sonuç varyantları ve adım koşulları, tarih biçimi (bicim).
 //    Modelde ifade edilemeyen kural mantığı (TC kontrol hanesi, telefon/VKN biçimi, kartın
 //    son kullanma tarihi, "ikisi birlikte" kuralları) aşağıda, YALNIZCA bu dosyada durur.
-//  - Geriye uyum: şemanın eski anahtar adları (ESKI_ANAHTARLAR) okunurken yeni karşılıkları gibi yorumlanır.
 //  - Mesajlar kullanıcıya dönüktür: alanın etiketi yoksa iç anahtar değil "Bu alan" yazılır.
 //  - Hata mesajları kart numarasını ve güvenlik kodunu (CVV) ASLA içermez.
 //
 // API: senaryoyuDogrula(senaryo, baglam) → { gecerli, hatalar: [{ alan, mesaj }], uyarilar: [...] }
 // Tipler: senaryo-dogrulayici.d.mts.
 
-/** Formdaki taksit seçeneklerinin üst sınırı (dashboard 1..N sunar). */
-export const TAKSIT_UST_SINIRI = 12;
-
 /** Artık desteklenmeyen eski beklenen sonuç alanları (beklenenSonuc'tan önceki biçim). */
 export const ESKI_BEKLENEN_SONUC_ALANLARI = Object.freeze(['beklenenHataMesaji', 'beklenenHataAdimi']);
-
-/**
- * GERİYE UYUM: eski (ilk projeye özgü) anahtar adları. Okunurken yeni karşılıkları gibi yorumlanır;
- * yeni kayıtlar yeni adla yazılır. (ekran-modeli-dogrulayici.mjs > ESKI_ANAHTARLAR ile aynı adlar; bu dosya
- * modül içe aktarmaz.)
- */
-export const ESKI_ANAHTARLAR = Object.freeze({
-  /** Model: eslesme.kayitAlani'nın eski adı. */
-  kayitAlani: 'kart',
-  /** Model: bilinenDurumlar[].profilKodu'nun (bağlam profillerinde kod'un) eski adı. */
-  durumKodu: 'acentePartaji',
-  /** Model: bağlam profili seçen alanın (id: baglamProfili) eski kimliği. */
-  baglamProfiliAlani: 'acenteProfili',
-  /** Girdi: baglamKodu / baglamKullanicisi'nin eski adları. */
-  baglamKodu: 'acenteKodu',
-  baglamKullanicisi: 'acenteKullanicisi',
-  /** Doğrulama bağlamı: "profiller"in eski adı ve eski biçimdeki parçaları. */
-  profiller: 'ortak',
-  baglamProfilleri: 'acenteProfilleri',
-  varsayilanKayit: 'varsayilanKrediKarti',
-  /** Modelde eslesme.profilHavuzu'nun eski yolları → yeni havuz adı. */
-  havuzYollari: Object.freeze({
-    'ortak.kullaniciDegistir': 'baglam',
-    'ortak.kimlikBilgileri.ozel': 'ozel',
-    'ortak.kimlikBilgileri.tuzel': 'tuzel'
-  })
-});
 
 /**
  * Yalnızca dashboard girdisinde (baglam.kaynak === 'girdi') bulunan, kayda doğrudan
@@ -105,7 +72,6 @@ export const MESAJLAR = Object.freeze({
   cvvBicim: () => 'Güvenlik kodu (CVV) 3 ya da 4 haneli olmalıdır.',
   kartAyBicim: () => 'Son kullanma ayı 01-12 arasında olmalıdır.',
   kartYilBicim: () => 'Son kullanma yılı 4 haneli olmalıdır.',
-  kartTaksitBicim: (ust) => `Taksit 1-${ust} arasında olmalıdır.`,
   kartSuresiGecmis: (aaYyyy) => `Kartın son kullanma tarihi (${aaYyyy}) geçmiş; bu ay ya da sonrası olmalıdır.`,
   varsayilanKayitSuresiGecmis: (etiket, aaYyyy) =>
     `${adGoster(etiket)} için kullanılacak varsayılan test verisi kaydının son kullanma tarihi (${aaYyyy}) geçmiş; adım bu kayıtla reddedilebilir. Test verisindeki kaydı güncelleyin ya da senaryoya özel değer girin.`,
@@ -168,11 +134,9 @@ function etiketi(alan) {
   return (alan && alan.etiket && (alan.etiket.form || alan.etiket.ekran)) || (alan && alan.form && alan.form.etiket) || '';
 }
 
-/** Alanın kayıt içindeki adı (eslesme.kayitAlani; eski adı hâlâ okunur) ya da undefined. */
+/** Alanın kayıt içindeki adı (eslesme.kayitAlani) ya da undefined. */
 function kayitAlaniAdi(alan) {
-  const e = alan && nesneMi(alan.eslesme) ? alan.eslesme : null;
-  if (!e) return undefined;
-  return e.kayitAlani !== undefined ? e.kayitAlani : e[ESKI_ANAHTARLAR.kayitAlani];
+  return alan && nesneMi(alan.eslesme) ? alan.eslesme.kayitAlani : undefined;
 }
 
 function senaryoAnahtarlari(alan) {
@@ -265,8 +229,10 @@ const KIMLIK_ALANI_KURALLARI = {
 
 /**
  * Kayıt alanlarının (alt model > bölüm > eslesme.kayitAlani) adına bağlı biçim kuralları (kart biçimi:
- * numara, güvenlik kodu, son kullanma, taksit). Kuralı olmayan kayıt alanında yalnızca zorunluluk
- * denetlenir. secim: değer { deger, metin } nesnesinden okunur. dogrula(metin) → hata mesajı ya da null.
+ * numara, güvenlik kodu, son kullanma). Kuralı olmayan kayıt alanında zorunluluk ve — modeldeki alan
+ * tanımında seçenekler varsa — değerin seçeneklerden biri olması denetlenir (ör. taksit sayısı: izinli
+ * değerler modelden gelir, kodda sabit üst sınır yoktur). secim: değer { deger, metin } nesnesinden okunur
+ * (kuralı olmayan alanda: tip "secim" ya da değer { deger } nesnesiyse). dogrula(metin) → hata mesajı ya da null.
  */
 const KAYIT_ALANI_KURALLARI = {
   isim: { secim: false, dogrula: () => null },
@@ -274,9 +240,15 @@ const KAYIT_ALANI_KURALLARI = {
   kartNo: { secim: false, dogrula: (d) => (/^\d{16}$/.test(d.replace(/\s+/g, '')) ? null : MESAJLAR.kartNoBicim()) },
   guvenlikKodu: { secim: false, dogrula: (d) => (/^\d{3,4}$/.test(d.trim()) ? null : MESAJLAR.cvvBicim()) },
   sonKullanmaAyi: { secim: true, dogrula: (d) => (aralikta(d, 1, 12) === null ? MESAJLAR.kartAyBicim() : null) },
-  sonKullanmaYili: { secim: true, dogrula: (d) => (/^\d{4}$/.test(d) ? null : MESAJLAR.kartYilBicim()) },
-  taksit: { secim: true, dogrula: (d) => (aralikta(d, 1, TAKSIT_UST_SINIRI) === null ? MESAJLAR.kartTaksitBicim(TAKSIT_UST_SINIRI) : null) }
+  sonKullanmaYili: { secim: true, dogrula: (d) => (/^\d{4}$/.test(d) ? null : MESAJLAR.kartYilBicim()) }
 };
+
+/** Kuralı olmayan kayıt alanı: modelde seçenekler tanımlıysa izinli değerler (yoksa null — yalnız zorunluluk). */
+function kayitAlaniSecenekleri(kayitAlani) {
+  const liste = Array.isArray(kayitAlani.secenekler) ? kayitAlani.secenekler : [];
+  const degerler = liste.map((x) => secimDegeri(x)).filter((d) => d !== '');
+  return degerler.length ? degerler : null;
+}
 
 /**
  * Kartın son kullanma tarihi (ay + yıl) simdi'ye göre geçmiş mi? Bu ay hâlâ geçerlidir.
@@ -311,7 +283,8 @@ export function taksitMetni(sayi) {
 export function kartiNormallestir(ham, varsayilanKart) {
   const ay = aralikta(secimDegeri(ham.sonKullanmaAyi), 1, 12);
   const yil = secimDegeri(ham.sonKullanmaYili);
-  const taksit = aralikta(secimDegeri(ham.taksit), 1, TAKSIT_UST_SINIRI);
+  const taksit = secimDegeri(ham.taksit);
+  const taksitSayisi = /^\d{1,3}$/.test(taksit) ? Number(taksit) : null;
   const varsayilanTaksit = varsayilanKart && nesneMi(varsayilanKart.taksit) ? varsayilanKart.taksit : null;
   return {
     isim: String(ham.isim).trim(),
@@ -321,10 +294,11 @@ export function kartiNormallestir(ham, varsayilanKart) {
     sonKullanmaAyi: { deger: String(ay), metin: ikiHane(ay) },
     sonKullanmaYili: { deger: yil, metin: yil },
     taksit: {
-      deger: String(taksit),
-      metin: varsayilanTaksit && secimDegeri(varsayilanTaksit) === String(taksit) && varsayilanTaksit.metin
+      deger: taksit,
+      metin: varsayilanTaksit && secimDegeri(varsayilanTaksit) === taksit && varsayilanTaksit.metin
         ? String(varsayilanTaksit.metin)
-        : taksitMetni(taksit)
+        : nesneMi(ham.taksit) && ham.taksit.metin ? String(ham.taksit.metin)
+          : taksitSayisi !== null && taksitSayisi > 0 ? taksitMetni(taksitSayisi) : taksit
     }
   };
 }
@@ -344,44 +318,32 @@ export function krediKartlariAyniMi(a, b) {
 // ---- Bağlam ----
 
 /**
- * Doğrulama bağlamının profil parçası (baglam.profiller; eski adı baglam.ortak, eski biçimi de okunur) →
+ * Doğrulama bağlamının profil parçası (baglam.profiller) →
  * { havuzlar, baglamProfilleri, varsayilanKayit } ya da null (verilmediyse profil kontrolleri atlanır).
  *  - havuzlar: profil havuzu adı (modelde eslesme.profilHavuzu) → { profilAdı: kayıt }.
  *  - baglamProfilleri: bağlam profili adı → { kod } (bilinenDurumlar[].profilKodu ile eşleşir).
  *  - varsayilanKayit: alt model ezme alanında senaryo değer vermezse kullanılacak kayıt.
  */
 function profilBaglami(baglam) {
-  const yeni = nesneMi(baglam.profiller) ? baglam.profiller : null;
-  const eski = nesneMi(baglam[ESKI_ANAHTARLAR.profiller]) ? baglam[ESKI_ANAHTARLAR.profiller] : null;
-  if (!yeni && !eski) return null;
-  const havuzlar = { ...(yeni && nesneMi(yeni.havuzlar) ? yeni.havuzlar : {}) };
-  let baglamProfilleri = yeni && nesneMi(yeni.baglamProfilleri) ? yeni.baglamProfilleri : undefined;
-  let varsayilanKayit = yeni ? yeni.varsayilanKayit : undefined;
-  if (eski) {
-    // Eski biçim: { kimlikProfilleri: { ozel, tuzel }, <bağlam profilleri>, <varsayılan kayıt> }.
-    const kimlik = nesneMi(eski.kimlikProfilleri) ? eski.kimlikProfilleri : {};
-    for (const tur of ['ozel', 'tuzel']) if (!(tur in havuzlar) && nesneMi(kimlik[tur])) havuzlar[tur] = kimlik[tur];
-    const eskiProfiller = eski[ESKI_ANAHTARLAR.baglamProfilleri];
-    if (baglamProfilleri === undefined && nesneMi(eskiProfiller)) baglamProfilleri = eskiProfiller;
-    if (varsayilanKayit === undefined) varsayilanKayit = eski[ESKI_ANAHTARLAR.varsayilanKayit];
-  }
-  if (nesneMi(baglamProfilleri) && !('baglam' in havuzlar)) havuzlar.baglam = baglamProfilleri;
-  return { havuzlar, baglamProfilleri, varsayilanKayit: nesneMi(varsayilanKayit) ? varsayilanKayit : null };
+  const p = nesneMi(baglam.profiller) ? baglam.profiller : null;
+  if (!p) return null;
+  const havuzlar = { ...(nesneMi(p.havuzlar) ? p.havuzlar : {}) };
+  const baglamProfilleri = nesneMi(p.baglamProfilleri) ? p.baglamProfilleri : undefined;
+  if (baglamProfilleri && !('baglam' in havuzlar)) havuzlar.baglam = baglamProfilleri;
+  return { havuzlar, baglamProfilleri, varsayilanKayit: nesneMi(p.varsayilanKayit) ? p.varsayilanKayit : null };
 }
 
-/** Modeldeki profil havuzu (ad; eski yollar da okunur) → bağlamdaki kayıtlar (bağlamda yoksa undefined: kontrol atlanır). */
-function profilHavuzu(yol, profiller) {
-  if (!profiller || typeof yol !== 'string') return undefined;
-  const ad = Object.prototype.hasOwnProperty.call(ESKI_ANAHTARLAR.havuzYollari, yol) ? ESKI_ANAHTARLAR.havuzYollari[yol] : yol;
+/** Modeldeki profil havuzu (ad) → bağlamdaki kayıtlar (bağlamda yoksa undefined: kontrol atlanır). */
+function profilHavuzu(ad, profiller) {
+  if (!profiller || typeof ad !== 'string') return undefined;
   const havuz = profiller.havuzlar[ad];
   return nesneMi(havuz) ? havuz : undefined;
 }
 
-/** Eşleşme kodu: bilinenDurumlar[].profilKodu ya da bağlam profilinin kod'u (eski adı da okunur). */
+/** Eşleşme kodu: bilinenDurumlar[].profilKodu ya da bağlam profilinin kod'u. */
 function durumKodu(durum) {
   if (!nesneMi(durum)) return undefined;
-  if (durum.profilKodu !== undefined) return durum.profilKodu;
-  return durum.kod !== undefined ? durum.kod : durum[ESKI_ANAHTARLAR.durumKodu];
+  return durum.profilKodu !== undefined ? durum.profilKodu : durum.kod;
 }
 
 /** Senaryoda ayarlanabilen tüm model alanları + her birinin (adım/bölüm/alan) görünürlükleri. */
@@ -427,15 +389,10 @@ function ic(baglam, senaryo) {
   return icBaglam;
 }
 
-/** Bağlam profilini seçen model alanı (id "baglamProfili"; eski kimliği de okunur). */
+/** Bağlam profilini seçen model alanı (id "baglamProfili"). */
 function baglamProfiliAlani(alanlar) {
-  const bul = (id) => (Array.isArray(alanlar) ? alanlar.find((a) => a && a.id === id) : alanlar[id]);
-  return bul(GIRDI_ALANLARI.baglamKodu.modelAlani) || bul(ESKI_ANAHTARLAR.baglamProfiliAlani);
-}
-
-/** Girdideki bağlam alanı (yeni adı; yoksa eski adı). */
-function girdiDegeri(senaryo, ad) {
-  return senaryo[ad] !== undefined ? senaryo[ad] : senaryo[ESKI_ANAHTARLAR[ad]];
+  const id = GIRDI_ALANLARI.baglamKodu.modelAlani;
+  return Array.isArray(alanlar) ? alanlar.find((a) => a && a.id === id) : alanlar[id];
 }
 
 /**
@@ -445,7 +402,7 @@ function girdiDegeri(senaryo, ad) {
  */
 function baglamKodunuBul(b) {
   const s = b.senaryo;
-  const girdiKodu = girdiDegeri(s, 'baglamKodu');
+  const girdiKodu = s.baglamKodu;
   if (b.kaynak === 'girdi' && typeof girdiKodu === 'string' && girdiKodu.trim()) return girdiKodu.trim();
   const alan = baglamProfiliAlani(b.idAlan);
   const anahtar = alan ? senaryoAnahtarlari(alan)[0] : GIRDI_ALANLARI.baglamKodu.modelAlani;
@@ -589,7 +546,7 @@ function kimlikTuruBul(alan, b) {
 /**
  * kimlikProfili alanı: senaryo anahtarlarından "...Profili" ile biten hazır profil anahtarı,
  * diğerleri serbest kimlik nesneleri (birden fazlaysa adında kimlik türü geçen seçilir:
- * ettirenOzelKimligi ↔ ozel, ettirenTuzelKimligi ↔ tuzel).
+ * odeyenOzelKimligi ↔ ozel, odeyenTuzelKimligi ↔ tuzel).
  */
 function kimlikAlaniniDogrula(alan, gorunur, b, rapor) {
   const s = b.senaryo;
@@ -603,7 +560,7 @@ function kimlikAlaniniDogrula(alan, gorunur, b, rapor) {
     return;
   }
   const tur = kimlikTuruBul(alan, b);
-  if (!tur) return; // bağlı alan (ettiren) geçersiz; hatası orada.
+  if (!tur) return; // bağlı alan (ödeyen) geçersiz; hatası orada.
   const kimlikAnahtari = kimlikAnahtarlari.length === 1
     ? kimlikAnahtarlari[0]
     : kimlikAnahtarlari.find((a) => a.toLowerCase().includes(tur.toLowerCase()));
@@ -698,9 +655,10 @@ function kayitAlaniniDogrula(alan, gorunur, b, rapor) {
     const k = kayitAlaniAdi(kayitAlani);
     if (typeof k !== 'string') continue;
     const yol = `${anahtar}.${k}`;
-    const kural = KAYIT_ALANI_KURALLARI[k];
+    const kural = Object.prototype.hasOwnProperty.call(KAYIT_ALANI_KURALLARI, k) ? KAYIT_ALANI_KURALLARI[k] : undefined;
     const ham = kayit[k];
-    const metin = kural && kural.secim ? secimDegeri(ham) : typeof ham === 'string' ? ham : bosMu(ham) ? '' : null;
+    const secim = kural ? kural.secim : kayitAlani.tip === 'secim' || (nesneMi(ham) && 'deger' in ham);
+    const metin = secim ? secimDegeri(ham) : typeof ham === 'string' ? ham : bosMu(ham) ? '' : null;
     if (metin === null) {
       rapor.hata(yol, MESAJLAR.metinOlmali(etiketi(kayitAlani)));
       hataVar = true;
@@ -713,7 +671,9 @@ function kayitAlaniniDogrula(alan, gorunur, b, rapor) {
       }
       continue;
     }
-    const mesaj = kural ? kural.dogrula(metin) : null;
+    const izinliler = kural ? null : kayitAlaniSecenekleri(kayitAlani);
+    const mesaj = kural ? kural.dogrula(metin)
+      : izinliler && !izinliler.includes(metin.trim()) ? MESAJLAR.secenekDisi(etiketi(kayitAlani), metin.trim(), izinliler) : null;
     if (mesaj) {
       rapor.hata(yol, mesaj);
       hataVar = true;
@@ -772,8 +732,7 @@ const BIRLIKTE_VERILENLER = [['cokluSorguDosyasi', 'cokluSorguKisiSayisi']];
 /**
  * Senaryoyu modele göre doğrular.
  *  - baglam.model / altModeller: ekran modeli ve alt modelleri (dosya adı → alt model).
- *  - baglam.profiller: { havuzlar, baglamProfilleri, varsayilanKayit } (eski adı "ortak", eski biçimi de
- *    okunur); parçası eksikse o kontrol atlanır (ör. profiller yüklenmediyse profil varlığı kontrol edilmez).
+ *  - baglam.profiller: { havuzlar, baglamProfilleri, varsayilanKayit }; parçası eksikse o kontrol atlanır (ör. profiller yüklenmediyse profil varlığı kontrol edilmez).
  *  - baglam.kaynak: 'kayit' (kayıtlı senaryo; varsayılan) | 'girdi' (dashboard
  *    formunun gönderdiği gövde: başlık sonradan verilebilir, baglamKodu/baglamKullanicisi olabilir).
  *  - baglam.simdi: tarih kontrolleri için "şimdi" (testlerde sabitlenir).
@@ -859,8 +818,8 @@ export function senaryoyuDogrula(senaryo, baglam) {
       : [];
     const kodEtiketi = kontroller[GIRDI_ALANLARI.baglamKodu.formSirasi] || 'Bağlam kodu';
     const kullaniciEtiketi = kontroller[GIRDI_ALANLARI.baglamKullanicisi.formSirasi] || 'Bağlam kullanıcısı';
-    const kod = girdiDegeri(senaryo, 'baglamKodu');
-    const kullanici = girdiDegeri(senaryo, 'baglamKullanicisi');
+    const kod = senaryo.baglamKodu;
+    const kullanici = senaryo.baglamKullanicisi;
     if (!bosMu(kod) && bosMu(kullanici)) rapor.hata('baglamKullanicisi', MESAJLAR.birlikteZorunlu(kodEtiketi, kullaniciEtiketi));
     if (!bosMu(kullanici) && bosMu(kod)) rapor.hata('baglamKodu', MESAJLAR.birlikteZorunlu(kullaniciEtiketi, kodEtiketi));
   }
@@ -921,9 +880,9 @@ export function hatalariMetneCevir(hatalar) {
 }
 
 /**
- * Hata alanı yolunun (ör. "ettirenTuzelKimligi.vergiKimlikNo") dashboard formundaki aday
+ * Hata alanı yolunun (ör. "odeyenTuzelKimligi.vergiKimlikNo") dashboard formundaki aday
  * kontrol id'leri — modelin form karşılıklarından türetilir. Tarayıcı sayfada VAR olan
- * ilk adayı kullanır (ör. tüzel ettirende sof_ettirenTc yerine sof_ettirenVkn çizilir).
+ * ilk adayı kullanır (ör. tüzel ödeyende sof_odeyenTc yerine sof_odeyenVkn çizilir).
  */
 export function alanFormKimlikleri(alanYolu, baglam) {
   const model = baglam.model;

@@ -16,19 +16,19 @@ const alan = (anahtar: string, etiket: string, tur = 'text', ek: Partial<HamAlan
   zorunlu: false, devreDisi: false, saltOkunur: false, coklu: false, bolum: { anahtar: 'b', baslik: 'Müşteri' }, ...ek
 });
 const TIP = alan('@tip', 'Müşteri tipi', 'radio', { secici: 'input[name="tip"]', radyolar: [{ deger: 'b', metin: 'Bireysel', secici: null }, { deger: 'k', metin: 'Kurumsal', secici: null }] });
-const TEMINAT = alan('#teminat', 'Teminat', 'select', { secenekler: [{ deger: '', metin: 'Seçiniz' }, { deger: 'dar', metin: 'Dar' }, { deger: 'genis', metin: 'Geniş' }], bolum: { anahtar: 't', baslik: 'Teminat' } });
+const TESLIMAT = alan('#teslimat', 'Teslimat', 'select', { secenekler: [{ deger: '', metin: 'Seçiniz' }, { deger: 'dar', metin: 'Dar' }, { deger: 'genis', metin: 'Geniş' }], bolum: { anahtar: 't', baslik: 'Teslimat' } });
 const ALANLAR = [alan('#ad', 'Ad Soyad'), TIP, alan('#tc', 'TC kimlik no'), alan('#arama', 'Site içi arama'), alan('#vkn', 'Vergi kimlik no'),
-  alan('#ekAd', 'Ek sürücü adı'), TEMINAT, alan('#cam', 'Cam kırılması', 'checkbox', { bolum: { anahtar: 't', baslik: 'Teminat' } })];
-const oku = (gorunen: string[], dokunulan: string[] = [], secimler: Record<string, string> = {}): AkisOkumasi => ({ yol: '/teklif/', gorunen, dokunulan, secimler });
+  alan('#ekAd', 'Ek adres adı'), TESLIMAT, alan('#hediyeNotu', 'Hediye notu', 'checkbox', { bolum: { anahtar: 't', baslik: 'Teslimat' } })];
+const oku = (gorunen: string[], dokunulan: string[] = [], secimler: Record<string, string> = {}): AkisOkumasi => ({ yol: '/siparis/', gorunen, dokunulan, secimler });
 const MUSTERI = ['#ad', '@tip', '#arama'];
 
-/** Bireysel alanları doldur → yeniden oku → Kurumsal seç → "Ek sürücü ekle" → ek sürücü adı → Devam → teminat dar/geniş → Kaydet → mesaj. */
+/** Bireysel alanları doldur → yeniden oku → Kurumsal seç → "Ek adres ekle" → ek adres adı → Devam → teslimat dar/geniş → Kaydet → mesaj. */
 function envanter(): AkisEnvanteri {
   return {
-    kip: 'kayit', bicim: 'akis', profil: null, baslik: 'Açık teklif',
+    kip: 'kayit', bicim: 'akis', profil: null, baslik: 'Açık siparis',
     alanlar: ALANLAR.map((a) => ({ alan: a, secili: a.anahtar !== '#arama' })),
-    dugmeler: [{ secici: '#ekSurucuEkle', metin: 'Ek sürücü ekle' }, { secici: '#devam', metin: 'Devam' }, { secici: '#kaydet', metin: 'Teklifi kaydet' }],
-    mesajlar: [{ secici: '#sonuc', metin: 'Teklif oluşturuldu. No: TK-1001' }],
+    dugmeler: [{ secici: '#ekAdresEkle', metin: 'Ek adres ekle' }, { secici: '#devam', metin: 'Devam' }, { secici: '#kaydet', metin: 'Siparisi kaydet' }],
+    mesajlar: [{ secici: '#sonuc', metin: 'Siparis oluşturuldu. No: SP-1001' }],
     olaylar: [
       { tur: 'okuma', elle: false, okuma: oku([...MUSTERI, '#tc'], [], { '@tip': 'b' }) },
       { tur: 'okuma', elle: true, okuma: oku([...MUSTERI, '#tc'], ['#ad', '#tc'], { '@tip': 'b' }) },
@@ -36,17 +36,17 @@ function envanter(): AkisEnvanteri {
       { tur: 'tik', dugme: 0, oncesi: oku([...MUSTERI, '#vkn'], ['#ad', '@tip', '#vkn'], { '@tip': 'k' }) },
       { tur: 'okuma', elle: false, okuma: oku([...MUSTERI, '#vkn', '#ekAd'], [], { '@tip': 'k' }) },
       { tur: 'tik', dugme: 1, oncesi: oku([...MUSTERI, '#vkn', '#ekAd'], ['#ekAd'], { '@tip': 'k' }) },
-      // Teminat henüz seçilmemişken okundu ("Seçiniz"): koşul çıkarımında yok sayılır.
-      { tur: 'okuma', elle: false, okuma: oku(['#teminat', '#arama'], [], {}) },
-      { tur: 'okuma', elle: false, okuma: oku(['#teminat', '#arama'], ['#teminat'], { '#teminat': 'dar' }) },
-      { tur: 'okuma', elle: false, okuma: oku(['#teminat', '#cam', '#arama'], ['#teminat'], { '#teminat': 'genis' }) },
-      { tur: 'tik', dugme: 2, oncesi: oku(['#teminat', '#cam', '#arama'], ['#teminat', '#cam'], { '#teminat': 'genis' }) },
+      // Teslimat henüz seçilmemişken okundu ("Seçiniz"): koşul çıkarımında yok sayılır.
+      { tur: 'okuma', elle: false, okuma: oku(['#teslimat', '#arama'], [], {}) },
+      { tur: 'okuma', elle: false, okuma: oku(['#teslimat', '#arama'], ['#teslimat'], { '#teslimat': 'dar' }) },
+      { tur: 'okuma', elle: false, okuma: oku(['#teslimat', '#hediyeNotu', '#arama'], ['#teslimat'], { '#teslimat': 'genis' }) },
+      { tur: 'tik', dugme: 2, oncesi: oku(['#teslimat', '#hediyeNotu', '#arama'], ['#teslimat', '#hediyeNotu'], { '#teslimat': 'genis' }) },
       { tur: 'mesaj', mesaj: 0 }
     ],
     engellenenler: [], notlar: []
   };
 }
-const META = { ekranAnahtari: 'teklif', ekranAdi: 'Teklif', urlYolu: '/teklif/', girisGerekli: false, girissiz: true, ikiAsamali: 'yok' as const, baglamTuru: null };
+const META = { ekranAnahtari: 'siparis', ekranAdi: 'Siparis', urlYolu: '/siparis/', girisGerekli: false, girissiz: true, ikiAsamali: 'yok' as const, baglamTuru: null };
 
 test('taslak: her düğme basışı bir aksiyon, aradaki dokunulan (listede işaretli) alanlar bir grup, seçilen mesaj; sonunda Bitir', () => {
   const t = akisTaslagi(envanter());
@@ -56,19 +56,19 @@ test('taslak: her düğme basışı bir aksiyon, aradaki dokunulan (listede işa
     { tur: 'aksiyon', dugme: 0, istegeBagli: false },
     { tur: 'alanlar', ad: 'Müşteri (2)', alanlar: ['#ekAd'], zorunlu: [], kosullar: { '#ekAd': null } },
     { tur: 'aksiyon', dugme: 1, istegeBagli: false },
-    { tur: 'alanlar', ad: 'Teminat', alanlar: ['#teminat', '#cam'], zorunlu: [], kosullar: { '#teminat': null, '#cam': { secim: '#teminat', degerler: ['genis'] } } },
+    { tur: 'alanlar', ad: 'Teslimat', alanlar: ['#teslimat', '#hediyeNotu'], zorunlu: [], kosullar: { '#teslimat': null, '#hediyeNotu': { secim: '#teslimat', degerler: ['genis'] } } },
     { tur: 'aksiyon', dugme: 2, istegeBagli: false },
     // Mesajın değişken numarası atılır (öneri; kullanıcı değiştirebilir).
-    { tur: 'mesaj', mesaj: 0, metin: 'Teklif oluşturuldu. No' },
+    { tur: 'mesaj', mesaj: 0, metin: 'Siparis oluşturuldu. No' },
     { tur: 'bitir' }
   ]);
   // Listeye alınmamış alan (site içi arama) taslağa girmez; sağ listede görünür ama kullanılmamış.
   const p = akisPaleti(envanter(), t);
   expect(p.alanlar.find((a) => a.anahtar === '#arama')).toMatchObject({ secili: false, blok: null });
   expect(p.alanlar.find((a) => a.anahtar === '#vkn')).toMatchObject({ secili: true, blok: 0, etiket: 'Vergi kimlik no' });
-  expect(p.dugmeler.map((d) => [d.metin, d.blok])).toEqual([['Ek sürücü ekle', 1], ['Devam', 3], ['Teklifi kaydet', 5]]);
-  expect(p.mesajlar).toEqual([{ sira: 0, metin: 'Teklif oluşturuldu. No: TK-1001', oneri: 'Teklif oluşturuldu. No', blok: 6 }]);
-  expect(JSON.stringify(p)).not.toContain('#ekSurucuEkle'); // seçiciler arayüze gitmez
+  expect(p.dugmeler.map((d) => [d.metin, d.blok])).toEqual([['Ek adres ekle', 1], ['Devam', 3], ['Siparisi kaydet', 5]]);
+  expect(p.mesajlar).toEqual([{ sira: 0, metin: 'Siparis oluşturuldu. No: SP-1001', oneri: 'Siparis oluşturuldu. No', blok: 6 }]);
+  expect(JSON.stringify(p)).not.toContain('#ekAdresEkle'); // seçiciler arayüze gitmez
 });
 
 test('tasarlanan akış: isteğe bağlı aksiyon + açtığı alanlar alt adım, ilerleme ayrı adım, seçime göre görünürlük, beklenen mesaj', () => {
@@ -76,27 +76,27 @@ test('tasarlanan akış: isteğe bağlı aksiyon + açtığı alanlar alt adım,
   const bloklar: AkisBlogu[] = [
     { tur: 'alanlar', ad: 'Müşteri bilgileri', alanlar: ['#ad', '@tip', '#tc', '#vkn'], zorunlu: [] },
     { tur: 'aksiyon', dugme: 0, istegeBagli: true },
-    { tur: 'alanlar', ad: 'Ek sürücü', alanlar: ['#ekAd'], zorunlu: [] },
+    { tur: 'alanlar', ad: 'Ek adres', alanlar: ['#ekAd'], zorunlu: [] },
     { tur: 'aksiyon', dugme: 1, istegeBagli: false },
-    { tur: 'alanlar', ad: 'Teminat', alanlar: ['#teminat', '#cam'], zorunlu: [] },
+    { tur: 'alanlar', ad: 'Teslimat', alanlar: ['#teslimat', '#hediyeNotu'], zorunlu: [] },
     { tur: 'aksiyon', dugme: 2, istegeBagli: false },
-    { tur: 'mesaj', mesaj: 0, metin: 'Teklif oluşturuldu' },
+    { tur: 'mesaj', mesaj: 0, metin: 'Siparis oluşturuldu' },
     { tur: 'bitir' }
   ];
   const { envanter: k, hatalar } = akistanKayitEnvanteri(env, bloklar);
   expect(hatalar).toEqual([]);
   expect(k?.adimlar.map((a) => [a.ad, a.alanlar.map((x) => x.anahtar), a.parcalar ?? null, a.ilerleme?.metin ?? null])).toEqual([
     ['Müşteri bilgileri', ['#ad', '@tip', '#tc', '#vkn', '#ekAd'], [0, 0, 0, 0, 1], 'Devam'],
-    ['Teminat', ['#teminat', '#cam'], null, 'Teklifi kaydet']
+    ['Teslimat', ['#teslimat', '#hediyeNotu'], null, 'Siparisi kaydet']
   ]);
-  expect(k?.adimlar[0].acicilar).toEqual([{ secici: '#ekSurucuEkle', metin: 'Ek sürücü ekle', secimli: true }]);
-  expect(k?.basariGostergesi).toEqual({ secici: '#sonuc', metin: 'Teklif oluşturuldu. No: TK-1001', aranan: 'Teklif oluşturuldu' });
-  // Başka ekrandaki okumalar (teminat sayfası) müşteri adımının okumalarına girmez.
+  expect(k?.adimlar[0].acicilar).toEqual([{ secici: '#ekAdresEkle', metin: 'Ek adres ekle', secimli: true }]);
+  expect(k?.basariGostergesi).toEqual({ secici: '#sonuc', metin: 'Siparis oluşturuldu. No: SP-1001', aranan: 'Siparis oluşturuldu' });
+  // Başka ekrandaki okumalar (teslimat sayfası) müşteri adımının okumalarına girmez.
   expect(k?.adimlar[0].okumalar?.length).toBe(6);
   expect(k?.adimlar[1].okumalar?.length).toBe(4);
 
   const m = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket.model as Nesne;
-  expect(m.adimlar.map((a: Nesne) => a.baslik)).toEqual(['Müşteri bilgileri', 'Müşteri bilgileri: Ek sürücü ekle', 'Müşteri bilgileri: Ek sürücü ekle sonrası', 'Müşteri bilgileri: Devam', 'Teminat']);
+  expect(m.adimlar.map((a: Nesne) => a.baslik)).toEqual(['Müşteri bilgileri', 'Müşteri bilgileri: Ek adres ekle', 'Müşteri bilgileri: Ek adres ekle sonrası', 'Müşteri bilgileri: Devam', 'Teslimat']);
   const alanId = (secici: string): string => m.adimlar.flatMap((a: Nesne) => a.bolumler.flatMap((b: Nesne) => b.alanlar)).find((x: Nesne) => x.konum.secici === secici).id;
   const gorunurluk = (secici: string): unknown => {
     const a = m.adimlar.flatMap((x: Nesne) => x.bolumler.flatMap((b: Nesne) => b.alanlar)).find((x: Nesne) => x.konum.secici === secici);
@@ -105,10 +105,10 @@ test('tasarlanan akış: isteğe bağlı aksiyon + açtığı alanlar alt adım,
   expect(gorunurluk('#tc')).toEqual({ alan: alanId('input[name="tip"]'), esit: 'b' });
   expect(gorunurluk('#vkn')).toEqual({ alan: alanId('input[name="tip"]'), esit: 'k' });
   expect(gorunurluk('#ekAd')).toBeNull();
-  // "Seçiniz" iken alınan okuma yok sayıldı: cam kırılması "Geniş"te görünür.
-  expect(gorunurluk('#cam')).toEqual({ alan: alanId('#teminat'), esit: 'genis' });
-  expect(m.adimlar[4].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Teklifi kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Teklif oluşturuldu', secici: '#sonuc' } });
-  expect(m.senaryoDuzeyi.alanlar).toEqual([expect.objectContaining({ tip: 'onayKutusu', etiket: { ekran: null, form: '“Ek sürücü ekle” dahil' } })]);
+  // "Seçiniz" iken alınan okuma yok sayıldı: hediye notu "Geniş"te görünür.
+  expect(gorunurluk('#hediyeNotu')).toEqual({ alan: alanId('#teslimat'), esit: 'genis' });
+  expect(m.adimlar[4].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Siparisi kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Siparis oluşturuldu', secici: '#sonuc' } });
+  expect(m.senaryoDuzeyi.alanlar).toEqual([expect.objectContaining({ tip: 'onayKutusu', etiket: { ekran: null, form: '“Ek adres ekle” dahil' } })]);
 });
 
 test('ara mesaj düğmeden sonra beklenir; elle yazılan mesaj (öğesiz) sayfada aranır; alansız adım boş grupla adlandırılır', () => {
@@ -119,7 +119,7 @@ test('ara mesaj düğmeden sonra beklenir; elle yazılan mesaj (öğesiz) sayfad
     { tur: 'mesaj', mesaj: null, metin: 'Müşteri kaydedildi' },
     { tur: 'alanlar', ad: 'Onay', alanlar: [], zorunlu: [] },
     { tur: 'aksiyon', dugme: 2, istegeBagli: false },
-    { tur: 'mesaj', mesaj: null, metin: 'Teklif oluşturuldu' },
+    { tur: 'mesaj', mesaj: null, metin: 'Siparis oluşturuldu' },
     { tur: 'bitir' }
   ]);
   expect(hatalar).toEqual([]);
@@ -129,7 +129,7 @@ test('ara mesaj düğmeden sonra beklenir; elle yazılan mesaj (öğesiz) sayfad
   const m = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket.model as Nesne;
   expect(m.adimlar.map((a: Nesne) => [a.baslik, a.kosu])).toEqual([
     ['Müşteri', { aksiyonlar: [{ tur: 'tikla', secici: '#devam', aciklama: 'Devam' }], basariGostergesi: { tur: 'metin', deger: 'Müşteri kaydedildi' } }],
-    ['Onay', { aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Teklifi kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Teklif oluşturuldu' } }]
+    ['Onay', { aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Siparisi kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Siparis oluşturuldu' } }]
   ]);
   // Öğe seçilmediği için "sonuç mesajı" çıktısı modele eklenmez.
   expect(JSON.stringify(m)).not.toContain('"cikti"');
@@ -144,8 +144,8 @@ test('VEYA: art arda beklenen mesajlar bir grup (herhangi biri başarı); ara ve
     { tur: 'mesaj', mesaj: null, metin: 'Müşteri güncellendi' },
     { tur: 'alanlar', ad: 'Onay', alanlar: [], zorunlu: [] },
     { tur: 'aksiyon', dugme: 2, istegeBagli: false },
-    { tur: 'mesaj', mesaj: 0, metin: 'Teklif oluşturuldu' },
-    { tur: 'mesaj', mesaj: null, metin: 'Teklif kaydedildi' },
+    { tur: 'mesaj', mesaj: 0, metin: 'Siparis oluşturuldu' },
+    { tur: 'mesaj', mesaj: null, metin: 'Siparis kaydedildi' },
     { tur: 'mesaj', mesaj: null, metin: 'Başvuru hazır' },
     { tur: 'bitir' }
   ]);
@@ -155,11 +155,11 @@ test('VEYA: art arda beklenen mesajlar bir grup (herhangi biri başarı); ara ve
   const m = paket.model as Nesne;
   expect(m.adimlar.map((a: Nesne) => a.kosu.basariGostergesi)).toEqual([
     { tur: 'veya', secenekler: [{ tur: 'metin', deger: 'Müşteri kaydedildi' }, { tur: 'metin', deger: 'Müşteri güncellendi' }] },
-    { tur: 'veya', secenekler: [{ tur: 'metin', deger: 'Teklif oluşturuldu', secici: '#sonuc' }, { tur: 'metin', deger: 'Teklif kaydedildi' }, { tur: 'metin', deger: 'Başvuru hazır' }] }
+    { tur: 'veya', secenekler: [{ tur: 'metin', deger: 'Siparis oluşturuldu', secici: '#sonuc' }, { tur: 'metin', deger: 'Siparis kaydedildi' }, { tur: 'metin', deger: 'Başvuru hazır' }] }
   ]);
   // Modelden tasarıma geri: her seçenek ardışık bir mesaj bloğu.
   const geri = adimlardanBloklar(m, m.adimlar, modeldenAkisEnvanteri(m));
-  expect(geri.filter((b) => b.tur === 'mesaj').map((b) => (b as Nesne).metin)).toEqual(['Müşteri kaydedildi', 'Müşteri güncellendi', 'Teklif oluşturuldu', 'Teklif kaydedildi', 'Başvuru hazır']);
+  expect(geri.filter((b) => b.tur === 'mesaj').map((b) => (b as Nesne).metin)).toEqual(['Müşteri kaydedildi', 'Müşteri güncellendi', 'Siparis oluşturuldu', 'Siparis kaydedildi', 'Başvuru hazır']);
   expect(geri.map((b) => b.tur)).toEqual(['alanlar', 'aksiyon', 'mesaj', 'mesaj', 'alanlar', 'aksiyon', 'mesaj', 'mesaj', 'mesaj', 'bitir']);
   // Diyagramda "VEYA" ile okunur.
   expect(JSON.stringify(akisDiyagrami(m))).toContain('“Müşteri kaydedildi” metni görünür VEYA “Müşteri güncellendi” metni görünür');
@@ -182,7 +182,7 @@ test('Başarı / Uyarı: uyarılar adımın kabul edilen uyarıları (VEYA grubu
     { tur: 'mesaj', mesaj: null, metin: 'Müşteri güncellendi' },
     { tur: 'alanlar', ad: 'Onay', alanlar: [], zorunlu: [] },
     { tur: 'aksiyon', dugme: 2, istegeBagli: false },
-    { tur: 'mesaj', mesaj: 0, metin: 'Teklif oluşturuldu' },
+    { tur: 'mesaj', mesaj: 0, metin: 'Siparis oluşturuldu' },
     { tur: 'mesaj', mesaj: null, metin: 'Limit aşıldı', uyari: true },
     { tur: 'mesaj', mesaj: null, metin: 'Onay gerekiyor', uyari: true },
     { tur: 'bitir' }
@@ -193,7 +193,7 @@ test('Başarı / Uyarı: uyarılar adımın kabul edilen uyarıları (VEYA grubu
   const m = paket.model as Nesne;
   expect(m.adimlar.map((a: Nesne) => [a.kosu.basariGostergesi, a.kosu.uyarilar])).toEqual([
     [{ tur: 'veya', secenekler: [{ tur: 'metin', deger: 'Müşteri kaydedildi' }, { tur: 'metin', deger: 'Müşteri güncellendi' }] }, [{ metin: 'Kara listede' }]],
-    [{ tur: 'metin', deger: 'Teklif oluşturuldu', secici: '#sonuc' }, [{ metin: 'Limit aşıldı' }, { metin: 'Onay gerekiyor' }]]
+    [{ tur: 'metin', deger: 'Siparis oluşturuldu', secici: '#sonuc' }, [{ metin: 'Limit aşıldı' }, { metin: 'Onay gerekiyor' }]]
   ]);
   // Senaryo düzeyinde "Beklenen sonuç": uyarının beklendiği adım seçenekleri uyarılı adımlar.
   const bs = (m.senaryoDuzeyi.alanlar as Nesne[]).find((a) => a.tip === 'birlesim') as Nesne;
@@ -201,12 +201,12 @@ test('Başarı / Uyarı: uyarılar adımın kabul edilen uyarıları (VEYA grubu
   // Tasarıma geri: uyarılar "Uyarı" işaretli bloklar.
   const geri = adimlardanBloklar(m, m.adimlar, modeldenAkisEnvanteri(m));
   expect(geri.filter((b) => b.tur === 'mesaj').map((b) => [(b as Nesne).metin, (b as Nesne).uyari ?? false])).toEqual([
-    ['Müşteri kaydedildi', false], ['Müşteri güncellendi', false], ['Kara listede', true], ['Teklif oluşturuldu', false], ['Limit aşıldı', true], ['Onay gerekiyor', true]
+    ['Müşteri kaydedildi', false], ['Müşteri güncellendi', false], ['Kara listede', true], ['Siparis oluşturuldu', false], ['Limit aşıldı', true], ['Onay gerekiyor', true]
   ]);
   // Form: akışın uyarıları ve başarı mesajları; iki uyarı seçilince senaryoda mesajlar (VEYA), plan ikisini de bekler.
   const sema = formSemasiOlustur(m, {});
   expect(sema.beklenenSonuc?.uyarilar.map((u) => [u.adimBasligi, u.metin])).toEqual([['Müşteri', 'Kara listede'], ['Onay', 'Limit aşıldı'], ['Onay', 'Onay gerekiyor']]);
-  expect(sema.beklenenSonuc?.basariMesajlari).toEqual(['Teklif oluşturuldu']);
+  expect(sema.beklenenSonuc?.basariMesajlari).toEqual(['Siparis oluşturuldu']);
   const onayId = String(m.adimlar[1].id);
   const d = formDegerleriniKur(sema, {});
   Object.assign(d, { [`${bs.id}.tip`]: 'isKuraliHatasi', [`${bs.id}.adim`]: onayId, [`${bs.id}.mesaj`]: 'Limit aşıldı', [`${bs.id}.mesajlar`]: ['Limit aşıldı', 'Onay gerekiyor'], baslik: 'x' });
@@ -292,11 +292,11 @@ test('bekleme süresi düğmeden sonra (isteğe bağlı düğmede yalnız o dü�
     { tur: 'bekle', saniye: 2 },
     { tur: 'aksiyon', dugme: 0, istegeBagli: true },
     { tur: 'bekle', saniye: 1 },
-    { tur: 'alanlar', ad: 'Ek sürücü', alanlar: ['#ekAd'], zorunlu: [] },
+    { tur: 'alanlar', ad: 'Ek adres', alanlar: ['#ekAd'], zorunlu: [] },
     { tur: 'aksiyon', dugme: 1, istegeBagli: false },
     { tur: 'bekle', saniye: 3 },
     { tur: 'bekle', saniye: 2 },
-    { tur: 'alanlar', ad: 'Teminat', alanlar: ['#teminat'], zorunlu: ['#teminat'] },
+    { tur: 'alanlar', ad: 'Teslimat', alanlar: ['#teslimat'], zorunlu: ['#teslimat'] },
     { tur: 'bekle', saniye: 4 },
     { tur: 'bitir' }
   ]);
@@ -304,14 +304,14 @@ test('bekleme süresi düğmeden sonra (isteğe bağlı düğmede yalnız o dü�
   const m = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket.model as Nesne;
   expect(m.adimlar.map((a: Nesne) => [a.baslik, a.kosu?.aksiyonlar ?? null])).toEqual([
     ['Müşteri bilgileri', null],
-    ['Müşteri bilgileri: Ek sürücü ekle', [{ tur: 'bekle', sureSn: 2 }, { tur: 'tikla', secici: '#ekSurucuEkle', aciklama: 'Ek sürücü ekle' }, { tur: 'bekle', sureSn: 1 }]],
-    ['Müşteri bilgileri: Ek sürücü ekle sonrası', null],
+    ['Müşteri bilgileri: Ek adres ekle', [{ tur: 'bekle', sureSn: 2 }, { tur: 'tikla', secici: '#ekAdresEkle', aciklama: 'Ek adres ekle' }, { tur: 'bekle', sureSn: 1 }]],
+    ['Müşteri bilgileri: Ek adres ekle sonrası', null],
     ['Müşteri bilgileri: Devam', [{ tur: 'tikla', secici: '#devam', aciklama: 'Devam' }, { tur: 'bekle', sureSn: 5 }]],
-    ['Teminat', [{ tur: 'bekle', sureSn: 4 }]]
+    ['Teslimat', [{ tur: 'bekle', sureSn: 4 }]]
   ]);
   const alanlar = m.adimlar.flatMap((a: Nesne) => a.bolumler.flatMap((b: Nesne) => b.alanlar)).filter((x: Nesne) => x.yapilandirma === 'senaryo');
   expect(alanlar.map((x: Nesne) => [x.konum.secici, x.zorunlu, x.mutlakaGorunmeli ?? false])).toEqual([
-    ['#ad', true, true], ['input[name="tip"]', false, false], ['#tc', false, false], ['#vkn', true, true], ['#ekAd', false, false], ['#teminat', true, true]
+    ['#ad', true, true], ['input[name="tip"]', false, false], ['#tc', false, false], ['#vkn', true, true], ['#ekAd', false, false], ['#teslimat', true, true]
   ]);
   // Hatalı bekleme: süre sınırı ve yer.
   expect(akistanKayitEnvanteri(env, [{ tur: 'bekle', saniye: 5 }, { tur: 'alanlar', ad: 'A', alanlar: ['#ad'], zorunlu: [] }, { tur: 'bekle', saniye: 0 }, { tur: 'bitir' }]).hatalar).toEqual([
@@ -336,8 +336,8 @@ test('elle koşul: otomatik bulunanın yerine geçer, null koşulsuz yapar; seç
   const bul = (s: string): Nesne => alanlar.find((x: Nesne) => x.konum.secici === s);
   expect(bul('#tc').gorunurluk).toBeUndefined();
   expect(m.kosullar[bul('#vkn').gorunurluk.kosul]).toMatchObject({ ifade: { alan: bul('input[name="tip"]').id, icinde: ['b', 'k'] }, aciklama: 'Müşteri tipi = Bireysel / Kurumsal seçilince görünür (akış tasarımı).' });
-  // Otomatik olan (cam kırılması → Geniş) korunur.
-  expect(m.kosullar[bul('#cam').gorunurluk.kosul].ifade).toEqual({ alan: bul('#teminat').id, esit: 'genis' });
+  // Otomatik olan (hediye notu → Geniş) korunur.
+  expect(m.kosullar[bul('#hediyeNotu').gorunurluk.kosul].ifade).toEqual({ alan: bul('#teslimat').id, esit: 'genis' });
   // Hatalar: seçim alanı akışta değil / seçim alanı değil / geçersiz seçenek.
   const hatali = (kosul: { secim: string; degerler: string[] }) => akistanKayitEnvanteri(env, [{ tur: 'alanlar', ad: 'A', alanlar: ['#ad', '#tc'], zorunlu: [], kosullar: { '#tc': kosul } }, { tur: 'bitir' }]).hatalar;
   expect(hatali({ secim: '@tip', degerler: ['b'] })).toEqual([{ blok: 0, mesaj: '“TC kimlik no” alanının koşulundaki seçim alanı akışta yok; seçim alanını bir gruba ekleyin ya da koşulu kaldırın.' }]);
@@ -351,13 +351,13 @@ test('elle koşul: otomatik bulunanın yerine geçer, null koşulsuz yapar; seç
 test('sıra: gruptaki alan sırası modelde doldurma sırasıdır (farklı bölümlerin alanları karışık sırada olsa da)', () => {
   const env = envanter();
   const k = akistanKayitEnvanteri(env, [
-    { tur: 'alanlar', ad: 'Karışık', alanlar: ['#teminat', '#ad', '#cam'], zorunlu: [] }, { tur: 'aksiyon', dugme: 2, istegeBagli: false }, { tur: 'bitir' }
+    { tur: 'alanlar', ad: 'Karışık', alanlar: ['#teslimat', '#ad', '#hediyeNotu'], zorunlu: [] }, { tur: 'aksiyon', dugme: 2, istegeBagli: false }, { tur: 'bitir' }
   ]);
   expect(k.hatalar).toEqual([]);
   const model = kayitPaketiOlustur(META, k.envanter as NonNullable<typeof k.envanter>).paket.model as Nesne;
   const sira = (model.adimlar[0].bolumler as Nesne[]).flatMap((b) => (b.alanlar as Nesne[]).filter((a) => a.tip !== 'buton' && a.tip !== 'cikti').map((a) => a.konum.secici));
-  expect(sira).toEqual(['#teminat', '#ad', '#cam']);
+  expect(sira).toEqual(['#teslimat', '#ad', '#hediyeNotu']);
   // Diyagrama geri: aynı sıra.
   const geri = adimlardanBloklar(model, model.adimlar as Nesne[], modeldenAkisEnvanteri(model));
-  expect((geri.find((b) => b.tur === 'alanlar') as Nesne).alanlar).toEqual(['teminat', 'ad', 'cam']);
+  expect((geri.find((b) => b.tur === 'alanlar') as Nesne).alanlar).toEqual(['teslimat', 'ad', 'hediyeNotu']);
 });

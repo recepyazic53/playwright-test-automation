@@ -51,14 +51,14 @@ export async function akisTasarimi(icerik, s) {
     : await api(`/platform/tarama/akis?id=${encodeURIComponent(s.isId || '')}`);
   let degisiklik = false;
   const akisAdi = ekranKipi ? h('input', {
-    type: 'text', maxlength: '80', placeholder: 'ör. Tüzel teklif', 'aria-label': 'Akış adı',
+    type: 'text', maxlength: '80', placeholder: 'ör. Kurumsal sipariş', 'aria-label': 'Akış adı',
     value: veri.akis ? veri.akis.ad : s.ad || (veri.kopyaKaynagi ? `${veri.kopyaKaynagi} (kopya)` : '')
   }) : null;
   if (akisAdi) akisAdi.addEventListener('input', () => { degisiklik = true; });
   // Mevcut ekranın kaydı: nereye yazılsın?
   const ekranAkislari = !ekranKipi && veri.ekranAkislari && veri.ekranAkislari.duzenlenebilir ? veri.ekranAkislari.akislar : null;
   let hedefTuru = 'varsayilan';
-  const hedefAdi = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Tüzel teklif', 'aria-label': 'Yeni akışın adı' });
+  const hedefAdi = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Kurumsal sipariş', 'aria-label': 'Yeni akışın adı' });
   const hedefAkis = ekranAkislari ? h('select', { 'aria-label': 'Güncellenecek akış' }, ekranAkislari.map((a) => h('option', { value: a.id }, `${a.ad}${a.varsayilan ? ' (varsayılan)' : ''}`))) : null;
   const palet = veri.palet;
   /** Projenin ortak akışları ("+ > Ortak akış"; ör. ödeme): [{ dosya, ad, adimlar, yalnizTest }]. */
@@ -375,7 +375,7 @@ export async function akisTasarimi(icerik, s) {
       const secim = h('select', { 'aria-label': 'Mesaj öğesi' },
         h('option', { value: '' }, 'Öğe seçilmedi (sayfanın tamamında aranır)'),
         palet.mesajlar.map((m) => h('option', { value: String(m.sira), selected: m.sira === b.mesaj }, `“${m.metin}”`)));
-      const metin = h('input', { type: 'text', value: b.metin, maxlength: '200', placeholder: 'ör. Teklif oluşturuldu', 'aria-label': 'Aranacak metin' });
+      const metin = h('input', { type: 'text', value: b.metin, maxlength: '200', placeholder: 'ör. Sipariş oluşturuldu', 'aria-label': 'Aranacak metin' });
       secim.addEventListener('change', () => {
         b.mesaj = secim.value === '' ? null : Number(secim.value);
         const m = palet.mesajlar.find((x) => x.sira === b.mesaj);
@@ -393,7 +393,7 @@ export async function akisTasarimi(icerik, s) {
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Mesajın yeri'), secim),
         h('p', { class: 'soluk kucuk' }, b.uyari
           ? 'Kabul edilen iş kuralı uyarısı: senaryo “uyarı bekleniyor” derken bunu seçer; başarı bekleyen senaryoda görünürse test başarısız olur.'
-          : 'Numara, tarih gibi her seferinde değişen kısmı yazmayın (ör. “Teklif oluşturuldu”).'),
+          : 'Numara, tarih gibi her seferinde değişen kısmı yazmayın (ör. “Sipariş oluşturuldu”).'),
         i === son ? h('div', { class: 'veya-satiri' },
           h('button', {
             type: 'button', class: 'kucuk-dugme', disabled: grupBoyu >= MESAJ_GRUBU_EN_COK, 'aria-label': 'Veya: başka bir başarı mesajı ekle',

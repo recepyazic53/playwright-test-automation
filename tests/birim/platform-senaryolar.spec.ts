@@ -46,7 +46,7 @@ const kimlikParcalari = (onEk: string): Nesne[] => [
   { id: `${onEk}Telefon`, tip: 'metin', etiket: { ekran: 'Telefon' }, eslesme: { kimlikAlani: 'cepTelefonu' } }
 ];
 const kartAlani = (kart: string, etiket: string, tip = 'metin', ek: Nesne = {}): Nesne => ({
-  id: `kart_${kart}`, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { kart }, ...ek
+  id: `kart_${kart}`, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { kayitAlani: kart }, ...ek
 });
 
 function ornekTalepModeli(): Nesne {
@@ -54,7 +54,7 @@ function ornekTalepModeli(): Nesne {
     semaSurumu: 1, tur: 'ekran', id: 'ornek-talep', ad: 'Örnek talep',
     kosullar: {
       onayDahil: { aciklama: 'onay adımı dahil (onayAdimiDahil: true)', ifade: { senaryoAyari: 'onayAdimiDahil', esit: true } },
-      ekHizmetGorunur: { aciklama: 'kapsam DÜNYA', ifade: { alan: 'kapsam', esit: 'DÜNYA' } },
+      ekHizmetGorunur: { aciklama: 'kapsam EKSPRES', ifade: { alan: 'kapsam', esit: 'EKSPRES' } },
       tekliTalep: { aciklama: 'tekli talep', ifade: { alan: 'talepTipi', esit: 'tekli' } },
       cokluTalep: { aciklama: 'çoklu talep', ifade: { alan: 'talepTipi', esit: 'coklu' } },
       farkliSahip: { aciklama: 'hesap sahibi farklı', ifade: { alan: 'sahip', icinde: ['farkliBireysel', 'farkliKurumsal'] } }
@@ -66,10 +66,10 @@ function ornekTalepModeli(): Nesne {
         bolumler: [
           {
             id: 'temel', baslik: 'Temel', alanlar: [
-              alan('kapsam', 'secim', 'Kapsam', { zorunlu: true, secenekler: [{ deger: 'DÜNYA' }, { deger: 'AVRUPA' }] }),
+              alan('kapsam', 'secim', 'Kapsam', { zorunlu: true, secenekler: [{ deger: 'EKSPRES' }, { deger: 'STANDART' }] }),
               alan('plan', 'secim', 'Plan', {
                 zorunlu: true,
-                bagimlilik: { alan: 'kapsam', secenekHaritasi: { 'DÜNYA': [{ deger: 'PLAN A' }, { deger: 'PLAN B' }], AVRUPA: [{ deger: 'PLAN C' }] } }
+                bagimlilik: { alan: 'kapsam', secenekHaritasi: { 'EKSPRES': [{ deger: 'PLAN A' }, { deger: 'PLAN B' }], STANDART: [{ deger: 'PLAN C' }] } }
               }),
               alan('ekHizmet', 'secim', 'Ek hizmet', { zorunlu: true, secenekler: [{ deger: 'E' }, { deger: 'H' }], gorunurluk: { kosul: 'ekHizmetGorunur' } }),
               alan('talepTipi', 'secim', 'Talep tipi', { zorunlu: true, secenekler: [{ deger: 'tekli' }, { deger: 'coklu' }] }),
@@ -172,12 +172,12 @@ const ALT_MODELLER: Record<string, Nesne> = { [KART_DOSYASI]: ornekKartModeli() 
 const sema = formSemasiOlustur(MODEL, ALT_MODELLER);
 const dogrulamaBaglami = { model: MODEL, altModeller: ALT_MODELLER } as unknown as Parameters<typeof gorunurlukleriHesapla>[1];
 const gorunurlukHesapla = (t: Nesne) => gorunurlukleriHesapla(t, dogrulamaBaglami);
-const TEMEL = { kapsam: 'DÜNYA', plan: 'PLAN A', ekHizmet: 'E', talepTipi: 'tekli', sahip: 'ayni', onayAdimiDahil: false };
+const TEMEL = { kapsam: 'EKSPRES', plan: 'PLAN A', ekHizmet: 'E', talepTipi: 'tekli', sahip: 'ayni', onayAdimiDahil: false };
 /** Formdan gidiş-dönüş örnekleri (kart hariç: kart seçimleri formda metin olarak tutulur). */
 const ORNEK_SENARYOLAR: Nesne[] = [
   { baslik: 'Temel', ...TEMEL },
   { baslik: 'Kişi kimliği ve şube', ...TEMEL, bildirim: true, kisiKimligi: { tcKimlikNo: TC, dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' }, subeProfili: 'Yetkili' },
-  { baslik: 'Kurumsal sahip profili', ...TEMEL, kapsam: 'AVRUPA', plan: 'PLAN C', ekHizmet: undefined, sahip: 'farkliKurumsal', sahipProfili: 't1', onayAdimiDahil: true },
+  { baslik: 'Kurumsal sahip profili', ...TEMEL, kapsam: 'STANDART', plan: 'PLAN C', ekHizmet: undefined, sahip: 'farkliKurumsal', sahipProfili: 't1', onayAdimiDahil: true },
   { baslik: 'Çoklu talep', ...TEMEL, talepTipi: 'coklu', talepDosyasi: 'liste.xlsx', kisiSayisi: 3 },
   { baslik: 'Beklenen hata', ...TEMEL, onayAdimiDahil: true, beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'onay', mesaj: 'Onay reddedildi' } },
   { baslik: 'Bireysel sahip yeni kimlik', ...TEMEL, sahip: 'farkliBireysel', sahipOzelKimligi: { tcKimlikNo: TC, dogumTarihi: '01.02.1985', cepTelefonu: '5550000002' } }
@@ -233,9 +233,9 @@ test.describe('Model tabanlı form — şema', () => {
     const s = senaryoNesnesiOlustur(sema, d, { gorunurlukHesapla });
     expect(s).toMatchObject({ talepTipi: 'coklu', talepDosyasi: 'x.xlsx', kisiSayisi: 3, onayAdimiDahil: false });
     for (const yok of ['kisiKimligi', 'odemeKarti', 'bildirim']) expect(s).not.toHaveProperty(yok);
-    // Başka bir alanın değerine bağlı görünürlük: ek hizmet yalnızca DÜNYA kapsamında.
+    // Başka bir alanın değerine bağlı görünürlük: ek hizmet yalnızca EKSPRES kapsamında.
     expect(gorunurlukHesapla({ ...TEMEL }).alanlar.ekHizmet).toBe(true);
-    expect(gorunurlukHesapla({ ...TEMEL, kapsam: 'AVRUPA' }).alanlar.ekHizmet).toBe(false);
+    expect(gorunurlukHesapla({ ...TEMEL, kapsam: 'STANDART' }).alanlar.ekHizmet).toBe(false);
     // Kimlik parçasının kendi görünürlüğü: kurumsal sahipte doğum tarihi yok.
     expect(gorunurlukHesapla({ ...TEMEL, sahip: 'farkliKurumsal' }).altAlanlar['sahipKimlik.sahipDogum']).toBe(false);
     expect(gorunurlukHesapla({ ...TEMEL, sahip: 'farkliBireysel' }).altAlanlar['sahipKimlik.sahipDogum']).toBe(true);
@@ -319,7 +319,7 @@ test.describe('Senaryo servisi (nötr proje)', () => {
       const { vt, projeId, ortamId, ekranId } = o;
       // Doğrulama: alan bazında hata (tek doğrulayıcı), hiçbir şey yazılmaz.
       let hata: unknown;
-      try { senaryoKaydet(vt, { projeId, ekranId, baslik: 'Yeni', veri: { kapsam: 'DÜNYA' }, ortamIdleri: [ortamId] }); } catch (e) { hata = e; }
+      try { senaryoKaydet(vt, { projeId, ekranId, baslik: 'Yeni', veri: { kapsam: 'EKSPRES' }, ortamIdleri: [ortamId] }); } catch (e) { hata = e; }
       expect(hata).toBeInstanceOf(SenaryoDogrulamaHatasi);
       expect((hata as SenaryoDogrulamaHatasi).hatalar.map((x) => x.alan)).toEqual(expect.arrayContaining(['plan', 'talepTipi', 'sahip', 'onayAdimiDahil']));
       expect(() => senaryoKaydet(vt, { projeId, ekranId, baslik: 'Mevcut veri senaryosu', veri: TEMEL, ortamIdleri: [ortamId] })).toThrow(/zaten var/);
@@ -400,7 +400,7 @@ test.describe('Senaryo servisi (nötr proje)', () => {
       expect(fb.profiller['Şube'].map((p) => p.ad)).toEqual(['Merkez', 'Yetkili']);
       expect(fb.profiller['Şube'][1]).toMatchObject({ tur: 'baglam', alanlar: [{ etiket: 'subeKodu', deger: 'S02', dolu: true }] });
       expect(JSON.stringify(fb)).not.toContain(TC);
-      expect(fb).toMatchObject({ ortak: null, olusturulabilir: true, veriKaynagi: { spec: SPEC, dosya: 'ornek', yol: 'senaryolar' } });
+      expect(fb).toMatchObject({ olusturulabilir: true, veriKaynagi: { spec: SPEC, dosya: 'ornek', yol: 'senaryolar' } });
       expect(() => formBaglami(vt, projeId, ekranId, 'olmayan-ortam')).toThrow(/Ortam bulunamadı/);
     } finally { o.temizle(); }
   });
@@ -473,7 +473,7 @@ test.describe('Senaryo servisi (nötr proje)', () => {
       }]);
 
       const once = vt.tek('SELECT COUNT(*) AS n, MAX(guncellenme) AS g FROM senaryolar');
-      await expect(senaryoDene(vt, { projeId, ekranId, ortamId, kosuId: 'd1', veri: { kapsam: 'DÜNYA' } }, kosucu)).rejects.toThrow(SenaryoDogrulamaHatasi);
+      await expect(senaryoDene(vt, { projeId, ekranId, ortamId, kosuId: 'd1', veri: { kapsam: 'EKSPRES' } }, kosucu)).rejects.toThrow(SenaryoDogrulamaHatasi);
       await expect(senaryoDene(vt, { projeId, ekranId, ortamId: o.digerOrtamId + 'x', kosuId: 'd1', veri: TEMEL }, kosucu)).rejects.toThrow(/ortam/);
       const d = await senaryoDene(vt, { projeId, ekranId, ortamId, kosuId: 'd1', veri: { ...TEMEL, sahip: 'farkliBireysel', sahipProfili: 'k1' }, mutlakaGorunmeli: ['ekHizmet'] }, kosucu);
       expect(d.govde).toMatchObject({ basarili: true, durum: 'failed', uyarilar: [] });

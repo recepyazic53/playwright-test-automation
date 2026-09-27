@@ -22,7 +22,7 @@ import { acikAnahtar, adliAlanlariDonustur, medyaAnahtariniHazirla, sifrele, zar
 import { medyaSifrele } from '../medya.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
-import { ekranModeliniDogrula, dogrulamaMaddeleri, eskiModelAnahtarlariniCevir } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
+import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
@@ -508,8 +508,7 @@ export async function modeliPaketleDegistir(vt, projeId, ekranId, paket, secenek
   const p = /** @type {Nesne} */ (paket);
   const meta = /** @type {Nesne} */ (p.meta);
   const kayit = ekranModeliGetir(vt, ekranId);
-  // Yeni sürüm yeni anahtar adlarıyla yazılır (eski adlar okunur; kaydedilmiş sürümler olduğu gibi kalır).
-  const yeni = eskiModelAnahtarlariniCevir(degistirilenModel(kayit && nesneMi(kayit.model) ? /** @type {Nesne} */ (kayit.model) : {}, /** @type {Nesne} */ (p.model)));
+  const yeni = degistirilenModel(kayit && nesneMi(kayit.model) ? /** @type {Nesne} */ (kayit.model) : {}, /** @type {Nesne} */ (p.model));
   modeliDogrula(vt, projeId, yeni, 'model');
   const ortamlar = ortamlariListele(vt, projeId);
   const ortamIdleri = Array.isArray(secenekler.ortamIdleri) ? [...new Set(secenekler.ortamIdleri.filter((x) => typeof x === 'string'))] : [];
@@ -589,8 +588,7 @@ export async function sayfaEkle(vt, projeId, paket, secenekler) {
   const p = /** @type {Nesne} */ (paket);
   const meta = /** @type {Nesne} */ (p.meta);
   const ekranMeta = /** @type {Nesne} */ (meta.ekran);
-  // Yeni kayıt yeni anahtar adlarıyla yazılır (paketteki eski adlar — ör. acenteBaglami — genel karşılıklarına çevrilir).
-  const model = eskiModelAnahtarlariniCevir(/** @type {Nesne} */ (p.model));
+  const model = /** @type {Nesne} */ (p.model);
   const ortamlar = ortamlariListele(vt, projeId);
   const ortamIdleri = Array.isArray(secenekler.ortamIdleri) ? [...new Set(secenekler.ortamIdleri.filter((x) => typeof x === 'string'))] : [];
   for (const id of ortamIdleri) if (!ortamlar.some((x) => x.id === id)) throw new DepoHatasi('Seçilen ortam bu projede yok.');

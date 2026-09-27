@@ -29,7 +29,7 @@ const PAROLA = `Gecici-Genel-${randomBytes(6).toString('hex')}`;
 /** Ortamın adı ŞİFRELİ saklanır: sunucunun düz metin loguna yazılmamalıdır. */
 const ORTAM_ADI = 'Deneme Ortamı Gizli-Ad';
 const BELGE = 'Sahte belge içeriği.\n';
-const FORM_BASLIGI = 'Formdan / Yetkili / Avrupa / peşin';
+const FORM_BASLIGI = 'Formdan / Yetkili / Standart / peşin';
 
 let nobetci: Nobetci;
 let uygulama: OrnekBasvuruUygulamasi;
@@ -92,7 +92,7 @@ test.beforeAll(async () => {
   expect(ekran.olusturulabilir).toBe(true);
   const yeni = await basarili('/platform/senaryo/kaydet', {
     projeId, ekranId: ekran.id, baslik: FORM_BASLIGI, ortamIdleri: [ortamId],
-    veri: { urun: 'A', adSoyad: 'Form Kişi', baslangic: '2026-11-01', kampanya: false, subeProfili: 'Yetkili', kapsam: 'AVRUPA', odemeTipi: 'pesin', indirimOrani: '7', onayAdimiDahil: false }
+    veri: { urun: 'A', adSoyad: 'Form Kişi', baslangic: '2026-11-01', kampanya: false, subeProfili: 'Yetkili', kapsam: 'STANDART', odemeTipi: 'pesin', indirimOrani: '7', onayAdimiDahil: false }
   });
   senaryolar.set(FORM_BASLIGI, String(yeni.id));
   await basarili('/platform/senaryo/kosuya-dahil', { projeId, idler: [...senaryolar.values()], dahil: true });
@@ -123,8 +123,8 @@ test('Nöbetçi koşusu (genel yol): sonuç, adımlar, ekran görüntüleri ve v
     sonuclar.set(baslik, (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne);
   }
   expect(Object.fromEntries([...sonuclar.entries()].map(([b, d]) => [b, d.durum]))).toEqual({
-    'Yetkili / Dünya / peşin / onaylı': 'basarili',
-    'Merkez / Türkiye taksitli → iş kuralı': 'basarili',
+    'Yetkili / Ekspres / peşin / onaylı': 'basarili',
+    'Merkez / Ekonomi taksitli → iş kuralı': 'basarili',
     [FORM_BASLIGI]: 'basarili'
   });
   for (const [baslik, d] of sonuclar) {
@@ -135,7 +135,7 @@ test('Nöbetçi koşusu (genel yol): sonuç, adımlar, ekran görüntüleri ve v
     expect(medya.some((m) => m.tur === 'video'), `${baslik}: video`).toBe(true);
   }
   // Uygulamaya gerçekten ulaşıldı: form senaryosu Yetkili şubesinde, indirimle hesaplandı; onay adımı yok.
-  expect(uygulama.hesaplamalar.find((x) => x.sube === 'S02' && x.kapsam === 'AVRUPA')).toMatchObject({ adSoyad: 'Form Kişi', indirim: '7' });
+  expect(uygulama.hesaplamalar.find((x) => x.sube === 'S02' && x.kapsam === 'STANDART')).toMatchObject({ adSoyad: 'Form Kişi', indirim: '7' });
   expect(uygulama.onaylar).toHaveLength(1);
   // Medya yalnızca şifreli: medya klasöründe düz PNG/WebM imzası yok.
   const medyaKlasoru = join(klasor, 'medya');

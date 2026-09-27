@@ -45,7 +45,7 @@ export type PlanBasariGostergesi = { tur: 'metin' | 'eleman' | 'url' | 'desen'; 
 
 export type PlanKosuTanimi = {
   aksiyonlar?: PlanAksiyonu[];
-  /** desen: öğenin (yoksa sayfanın) metni bu düzenli ifadeye uyar (ör. "[1-9]" — sıfırdan farklı prim). */
+  /** desen: öğenin (yoksa sayfanın) metni bu düzenli ifadeye uyar (ör. "[1-9]" — sıfırdan farklı toplam). */
   /** veya: seçeneklerden herhangi biri görünürse başarılı. */
   basariGostergesi?: PlanBasariGostergesi | { tur: 'veya'; secenekler: PlanBasariGostergesi[] };
   hataGostergesi?: { secici: string };

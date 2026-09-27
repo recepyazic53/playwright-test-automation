@@ -29,7 +29,7 @@ test('ayrıştırıcı: öncelik, parantez, tekli eksi, fonksiyonlar, karşıla�
   expect(hesap('-2 * -3 + 10 % 4')).toBe('8');
   expect(hesap('0.1 + 0.2')).toBe('0.3');
   expect(hesap('${Tutar} / 100', { Tutar: '1500' })).toBe('15');
-  expect(hesap('yuvarla(${Prim} * 1.18, 2)', { Prim: '99.99' })).toBe('117.99');
+  expect(hesap('yuvarla(${Toplam} * 1.18, 2)', { Toplam: '99.99' })).toBe('117.99');
   expect(hesap('asagiYuvarla(2.789, 1) + yukariYuvarla(2.701, 1) + mutlak(-1)')).toBe('6.5');
   expect(hesap('min(3, ${A}, 7) + max(1, 2)', { A: '1' })).toBe('3');
   expect(hesap("eger(${Tip} = 'T', ${VergiNo}, ${TcNo})", { Tip: 'T', VergiNo: '11', TcNo: '22' })).toBe('11');
@@ -93,13 +93,13 @@ test('tarih: zincir aynı anı izler, ay sonu taşmaz, eski sözdizimi, gunFarki
 });
 
 test('gövde doldurma: kural, satır içi ${hesap: …} (XML kaçışlı), JSON sayı, eksik başvuru, gizli değer maskeli hata', () => {
-  const kurallar = { PRIM: 'yuvarla(${Tutar} * 1.18, 2) | 0.00', BEGIN_DATE: 'bugun|yyyy-MM-dd', END_DATE: 'BEGIN_DATE+1y|yyyy-MM-dd' };
-  const xml = '<A>${PRIM}</A><B>${hesap: eger(${Tutar} &lt; 100, \'az\', \'çok\')}</B><C>${END_DATE}</C><D>${tarih:BEGIN_DATE-1g|dd.MM.yyyy}</D>';
+  const kurallar = { TOPLAM: 'yuvarla(${Tutar} * 1.18, 2) | 0.00', BEGIN_DATE: 'bugun|yyyy-MM-dd', END_DATE: 'BEGIN_DATE+1y|yyyy-MM-dd' };
+  const xml = '<A>${TOPLAM}</A><B>${hesap: eger(${Tutar} &lt; 100, \'az\', \'çok\')}</B><C>${END_DATE}</C><D>${tarih:BEGIN_DATE-1g|dd.MM.yyyy}</D>';
   expect(yerTutuculariDoldur(xml, { degerler: { Tutar: '1000' }, tarihKurallari: kurallar, simdi: SIMDI }))
     .toBe('<A>1180.00</A><B>çok</B><C>2027-01-31</C><D>30.01.2026</D>');
   expect(yerTutuculariDoldur('{"n": ${hesap: ${Tutar} / 4}, "s": "${hesap: birlestir(\'"\', ${Tutar})}"}', { degerler: { Tutar: '10' }, kacis: 'json', simdi: SIMDI }))
     .toBe('{"n": 2.5, "s": "\\"10"}');
-  expect(() => yerTutuculariDoldur('<A>${PRIM}</A>', { degerler: {}, tarihKurallari: kurallar, simdi: SIMDI, eksikAciklamasi: () => 'tabloda yok' }))
+  expect(() => yerTutuculariDoldur('<A>${TOPLAM}</A>', { degerler: {}, tarihKurallari: kurallar, simdi: SIMDI, eksikAciklamasi: () => 'tabloda yok' }))
     .toThrow(/Değeri bulunamayan parametre: Tutar \(tabloda yok\)/);
   let hata: unknown;
   try { yerTutuculariDoldur('<A>${hesap: ${Parola} * 2}</A>', { degerler: { Parola: 'cok-gizli-1' }, simdi: SIMDI, gizliler: ['cok-gizli-1'] }); } catch (e) { hata = e; }
@@ -122,26 +122,26 @@ test.describe('kural bağı ve koşu (sahte sunucu)', () => {
     await kasaOlustur(vt, 'Deneme-Parola-123!', { kdf: HIZLI_KDF });
     const projeId = projeKaydet(vt, { ad: 'P' });
     const testO = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true, ayarlar: { riskli: false } });
-    const tablo = tabloKaydet(vt, { projeId, ad: 'Teklif verisi', sutunlar: [{ ad: 'Tutar' }], satirlar: [{ degerler: { Tutar: '1500' } }] });
-    const kurallar = { BEGIN_DATE: 'bugun|yyyy-MM-dd', END_DATE: 'BEGIN_DATE+1y|yyyy-MM-dd', ORAN: 'yuvarla(${Teklif verisi.Tutar} / 100, 2)' };
-    const uc = { ad: 'teklif', metot: 'POST', yol: '/teklif', icerikTuru: 'application/json', govdeOrnegi: '{"BeginDate":"x","EndDate":"x","Oran":0,"Tutar":"0"}' };
+    const tablo = tabloKaydet(vt, { projeId, ad: 'Siparis verisi', sutunlar: [{ ad: 'Tutar' }], satirlar: [{ degerler: { Tutar: '1500' } }] });
+    const kurallar = { BEGIN_DATE: 'bugun|yyyy-MM-dd', END_DATE: 'BEGIN_DATE+1y|yyyy-MM-dd', ORAN: 'yuvarla(${Siparis verisi.Tutar} / 100, 2)' };
+    const uc = { ad: 'siparis', metot: 'POST', yol: '/siparis', icerikTuru: 'application/json', govdeOrnegi: '{"BeginDate":"x","EndDate":"x","Oran":0,"Tutar":"0"}' };
     // Döngü ve tanımsız kural reddedilir; tanımsız kurala bağ reddedilir.
     expect(() => restServisiKaydet(vt, projeId, { anahtar: 'd', ad: 'D', uclar: [uc], tarihKurallari: { A: 'B', B: 'A' } })).toThrow(/döngüye giriyor/);
     expect(() => restServisiKaydet(vt, projeId, { anahtar: 'd', ad: 'D', uclar: [uc], tarihKurallari: { A: 'YOK+1g' } })).toThrow(/Tanımsız ad: YOK/);
-    expect(() => restServisiKaydet(vt, projeId, { anahtar: 'd', ad: 'D', uclar: [uc], tarihKurallari: kurallar, alanBaglari: { teklif: { 'govde/Oran': { kural: 'YOK' } } } }))
+    expect(() => restServisiKaydet(vt, projeId, { anahtar: 'd', ad: 'D', uclar: [uc], tarihKurallari: kurallar, alanBaglari: { siparis: { 'govde/Oran': { kural: 'YOK' } } } }))
       .toThrow(/kuralına bağlı ama bu kural tanımlı değil/);
     const r = restServisiKaydet(vt, projeId, {
-      anahtar: 'teklif', ad: 'Teklif', tabanlar: { [testO]: adres }, uclar: [uc], tarihKurallari: kurallar, senaryolar: ['teklif'],
-      alanBaglari: { teklif: { 'govde/BeginDate': { kural: 'BEGIN_DATE' }, 'govde/EndDate': { kural: 'END_DATE' }, 'govde/Oran': { kural: 'ORAN' }, 'govde/Tutar': { tablo, sutun: 'Tutar' } } }
+      anahtar: 'siparis', ad: 'Siparis', tabanlar: { [testO]: adres }, uclar: [uc], tarihKurallari: kurallar, senaryolar: ['siparis'],
+      alanBaglari: { siparis: { 'govde/BeginDate': { kural: 'BEGIN_DATE' }, 'govde/EndDate': { kural: 'END_DATE' }, 'govde/Oran': { kural: 'ORAN' }, 'govde/Tutar': { tablo, sutun: 'Tutar' } } }
     });
     const s = servisGetir(vt, r.id);
-    expect(s?.ayarlar.alanBaglari?.teklif['govde/BeginDate']).toEqual({ kural: 'BEGIN_DATE' });
+    expect(s?.ayarlar.alanBaglari?.siparis['govde/BeginDate']).toEqual({ kural: 'BEGIN_DATE' });
     const [sen] = servisSenaryolariniListele(vt, r.id);
-    expect(JSON.parse(sen.icerik.govde.replace('${ORAN}', '0'))).toEqual({ BeginDate: '${BEGIN_DATE}', EndDate: '${END_DATE}', Oran: 0, Tutar: '${Teklif verisi.Tutar}' });
+    expect(JSON.parse(sen.icerik.govde.replace('${ORAN}', '0'))).toEqual({ BeginDate: '${BEGIN_DATE}', EndDate: '${END_DATE}', Oran: 0, Tutar: '${Siparis verisi.Tutar}' });
     const k = await servisSenaryosuCalistir(vt, projeId, { servisId: r.id, ortamId: testO, tur: 'dene', senaryoId: sen.id, simdi: SIMDI });
     expect(k.durum, String(k.hata)).toBe('basarili');
     expect(JSON.parse(govdeler[govdeler.length - 1])).toEqual({ BeginDate: '2026-01-31', EndDate: '2027-01-31', Oran: 15, Tutar: '1500' });
     // Kural silinirken bağlı alan varsa açık hata (servisiKaydet de denetler).
-    expect(() => servisiKaydet(vt, projeId, { id: r.id, anahtar: 'teklif', ad: 'Teklif', yol: '/', tarihKurallari: { BEGIN_DATE: 'bugun' } })).toThrow(/tanımlı değil/);
+    expect(() => servisiKaydet(vt, projeId, { id: r.id, anahtar: 'siparis', ad: 'Siparis', yol: '/', tarihKurallari: { BEGIN_DATE: 'bugun' } })).toThrow(/tanımlı değil/);
   });
 });

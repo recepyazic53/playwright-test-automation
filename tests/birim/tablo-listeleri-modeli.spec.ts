@@ -11,19 +11,19 @@ import { servisDegeri, tabloDegerListeleri, type Tablo } from '../../scripts/pla
 test('koşullu liste çözümü: en çok koşulu tutan liste; tutan yoksa koşulsuz; değerler birleşir', () => {
   const l = (id: string, kosullar: Array<{ alan: string; deger: string }>, degerler: string[]): ParametreTanimi =>
     ({ id, ad: id, tur: 'liste', kullanim: 'ekran', hedef: { ekranId: 'e', alan: 'ulke' }, kosullar, degerler: degerler.map((deger) => ({ deger })) });
-  const listeler = [l('genel', [], ['1', '2', '3']), l('dunya', [{ alan: 'kapsam', deger: 'D' }], ['1', '2']),
-    l('dunyaVize', [{ alan: 'kapsam', deger: 'D' }, { alan: 'alternatif', deger: 'V' }], ['2']), l('dunyaVize2', [{ alan: 'kapsam', deger: 'D' }, { alan: 'alternatif', deger: 'V' }], ['4'])];
+  const listeler = [l('genel', [], ['1', '2', '3']), l('ekspres', [{ alan: 'kapsam', deger: 'D' }], ['1', '2']),
+    l('ekspresHizli', [{ alan: 'kapsam', deger: 'D' }, { alan: 'alternatif', deger: 'V' }], ['2']), l('ekspresHizli2', [{ alan: 'kapsam', deger: 'D' }, { alan: 'alternatif', deger: 'V' }], ['4'])];
   const cozum = (d: Record<string, string>) => eslesenListeler(listeler, (t) => t.hedef?.alan === 'ulke', (a) => d[a]).map((t) => t.id);
   expect(cozum({})).toEqual(['genel']);
-  expect(cozum({ kapsam: 'D' })).toEqual(['dunya']);
-  expect(cozum({ kapsam: 'D', alternatif: 'V' })).toEqual(['dunyaVize', 'dunyaVize2']);
+  expect(cozum({ kapsam: 'D' })).toEqual(['ekspres']);
+  expect(cozum({ kapsam: 'D', alternatif: 'V' })).toEqual(['ekspresHizli', 'ekspresHizli2']);
   expect(birlesikDegerler(eslesenListeler(listeler, () => true, (a) => ({ kapsam: 'D', alternatif: 'V' } as Record<string, string>)[a])).map((x) => x.deger)).toEqual(['2', '4']);
 });
 
 test('model ↔ değer listeleri: koşulsuz liste seçenekleri değiştirir, tek koşullu bağımlılık haritasını, diğerleri ekler; koşu sayfa değerini bulur', () => {
   const alan = (id: string, ek: Record<string, unknown>) => ({ id, tip: 'secim', yapilandirma: 'senaryo', etiket: { form: id.toUpperCase() }, ...ek });
   const model = { adimlar: [{ id: 'a', bolumler: [{ id: 'b', alanlar: [
-    alan('kapsam', { secenekler: [{ deger: '1', metin: 'DÜNYA', senaryoDegeri: 'D' }, { deger: '2', metin: 'AVRUPA', senaryoDegeri: 'A' }] }),
+    alan('kapsam', { secenekler: [{ deger: '1', metin: 'EKSPRES', senaryoDegeri: 'D' }, { deger: '2', metin: 'STANDART', senaryoDegeri: 'A' }] }),
     alan('plan', { secenekler: [{ deger: '1', metin: 'Plan 1' }, { deger: '2', metin: 'Plan 2' }] }),
     alan('ulke', { secenekler: null, bagimlilik: { alan: 'kapsam', secenekHaritasi: { D: [{ deger: '10', metin: 'ABD' }, { deger: '15', metin: 'ALMANYA' }], A: [{ deger: '15', metin: 'ALMANYA' }] } } })
   ] }] }] };
@@ -43,20 +43,20 @@ test('model ↔ değer listeleri: koşulsuz liste seçenekleri değiştirir, tek
 
 
 test('karşılıklar: tablo listesi sayfa değerini taşır; modelde seçenek olmasa da koşu sayfa değeriyle seçer; servise servis değeri', () => {
-  const tablo: Tablo = { id: 't', ad: 'Rota', satirlar: [['DÜNYA', 'ALMANYA'], ['DÜNYA', 'A.B.D'], ['AVRUPA', 'ALMANYA']].map(([k, u]) => ({ ortamId: null, degerler: { Kapsam: k, Ülke: u } })),
-    sutunlar: [{ ad: 'Kapsam', gizli: false, karsiliklar: { 'DÜNYA': { sayfa: 'D1', servis: 'WORLD' } } }, { ad: 'Ülke', gizli: false, karsiliklar: { 'A.B.D': { sayfa: '1' }, 'ALMANYA': { sayfa: '15' } } }] };
+  const tablo: Tablo = { id: 't', ad: 'Rota', satirlar: [['EKSPRES', 'ALMANYA'], ['EKSPRES', 'A.B.D'], ['STANDART', 'ALMANYA']].map(([k, u]) => ({ ortamId: null, degerler: { Kapsam: k, Ülke: u } })),
+    sutunlar: [{ ad: 'Kapsam', gizli: false, karsiliklar: { 'EKSPRES': { sayfa: 'D1', servis: 'EXPRESS' } } }, { ad: 'Ülke', gizli: false, karsiliklar: { 'A.B.D': { sayfa: '1' }, 'ALMANYA': { sayfa: '15' } } }] };
   const listeler = tabloDegerListeleri({ kapsam: { tablo: 't', sutun: 'Kapsam' }, ulke: { tablo: 't', sutun: 'Ülke' } }, [tablo], 'e', ['kapsam', 'ulke']);
-  expect(listeler.find((l) => l.hedef.alan === 'kapsam')?.degerler).toEqual([{ deger: 'DÜNYA', ekranDegeri: 'D1' }, { deger: 'AVRUPA' }]);
+  expect(listeler.find((l) => l.hedef.alan === 'kapsam')?.degerler).toEqual([{ deger: 'EKSPRES', ekranDegeri: 'D1' }, { deger: 'STANDART' }]);
   // Modelde seçenek listesi yok (yalnız alan): seçenekler tablodan, sayfa değeriyle.
   const alan = (id: string, ek: Record<string, unknown>) => ({ id, tip: 'secim', yapilandirma: 'senaryo', etiket: { form: id }, ...ek });
   const model = { adimlar: [{ id: 'a', bolumler: [{ id: 'b', alanlar: [alan('kapsam', { secenekler: [] }), alan('ulke', { secenekler: null, seceneklerDurumu: 'bilinmiyor' })] }] }] };
   const yeni = modeleListeleriUygula(model, listeler) as typeof model;
   const [kapsam, ulke] = yeni.adimlar[0].bolumler[0].alanlar as Array<Record<string, any>>;
-  expect(secenekBul(kapsam.secenekler, 'DÜNYA')).toMatchObject({ deger: 'D1', metin: 'DÜNYA' });
-  expect(secenekBul(kapsam.secenekler, 'AVRUPA')).toMatchObject({ deger: 'AVRUPA', metin: 'AVRUPA' });
+  expect(secenekBul(kapsam.secenekler, 'EKSPRES')).toMatchObject({ deger: 'D1', metin: 'EKSPRES' });
+  expect(secenekBul(kapsam.secenekler, 'STANDART')).toMatchObject({ deger: 'STANDART', metin: 'STANDART' });
   expect(secenekBul(ulke.secenekler, 'A.B.D')).toMatchObject({ deger: '1', metin: 'A.B.D' });
-  expect(servisDegeri(tablo.sutunlar[0], 'DÜNYA')).toBe('WORLD');
-  expect(servisDegeri(tablo.sutunlar[0], 'AVRUPA')).toBe('AVRUPA');
+  expect(servisDegeri(tablo.sutunlar[0], 'EKSPRES')).toBe('EXPRESS');
+  expect(servisDegeri(tablo.sutunlar[0], 'STANDART')).toBe('STANDART');
   expect(servisDegeri(tablo.sutunlar[1], 'ALMANYA')).toBe('ALMANYA');
 });
 

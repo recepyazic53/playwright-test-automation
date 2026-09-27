@@ -22,40 +22,40 @@
   "tur": "ekran",
   "id": "ornek-rota",
   "ad": "Örnek Rota",
-  "aciklama": "Örnek rota başvurusu teklif ekranı: kapsam/alternatif, teminatlar, sorgu tipi, başvuran ve kefil, prim hesaplama ve isteğe bağlı ödeme adımı. (Sayfa paketi örneği — değerler sahtedir.)",
+  "aciklama": "Örnek rota başvurusu siparis ekranı: kapsam/alternatif, teslimatlar, sorgu tipi, başvuran ve kefil, toplam hesaplama ve isteğe bağlı ödeme adımı. (Sayfa paketi örneği — değerler sahtedir.)",
   "ekranUrl": "/ornek/rota/",
-  "specDosyasi": "tests/scenarios/ornek-rota/teklif.spec.ts",
+  "specDosyasi": "tests/scenarios/ornek-rota/siparis.spec.ts",
   "pageObject": "tests/support/pages/ornek-rota.page.ts#OrnekRotaPage",
   "veriKaynaklari": {
    "senaryo": "Nöbetçi > Senaryolar (ornek-rota)",
-   "ortak": "Nöbetçi > Ayarlar (bağlam ve test verisi profilleri)"
+   "profiller": "Nöbetçi > Ayarlar (bağlam ve test verisi profilleri)"
   },
   "kosullar": {
    "subeAlanSetiTam": {
-    "aciklama": "Ek hizmet, kayak teminatı, Plan Kodu ve Rota İptal Bedeli alanları şubeye göre gösteriliyor ya da hiç gösterilmiyor.",
+    "aciklama": "Ek hizmet, hediye paketi, Plan Kodu ve Rota İade Bedeli alanları şubeye göre gösteriliyor ya da hiç gösterilmiyor.",
     "ifade": {
      "calismaZamani": "gorunurse"
     },
     "hedefIfade": {
-     "acente": {
+     "baglam": {
       "alanSeti": "tam"
      }
     },
     "bilinenDurumlar": [
      {
-      "acente": "90001 (ortak.kullaniciDegistir.varsayilan)",
-      "acentePartaji": "90001",
+      "profil": "90001 (baglam.varsayilan)",
+      "profilKodu": "90001",
       "gorunur": false,
       "kaynak": "ornek-rota.page.ts yorumu"
      },
      {
-      "acente": "90002 (ortak.kullaniciDegistir.ÖzelTanımlıŞube)",
-      "acentePartaji": "90002",
+      "profil": "90002 (baglam.ÖzelTanımlıŞube)",
+      "profilKodu": "90002",
       "gorunur": true,
-      "kaynak": "senaryo başlıkları + kayak senaryosu; canlıda doğrulanmadı"
+      "kaynak": "senaryo başlıkları + hediye senaryosu; canlıda doğrulanmadı"
      }
     ],
-    "not": "Doğrulayıcı (scripts/dogrulama/senaryo-dogrulayici.mjs) bilinenDurumlar > acentePartaji ile karar veriyor: listede olmayan şubede görünürlük BİLİNMİYOR sayılır ve alan zorunlu kalır. POM bugün şubeye göre değil, her alanın isVisible() sonucuna göre karar veriyor. Hedef: şube profiline 'rotaAlanSeti' gibi bir özellik eklemek ve crawler ile her şubenin görünürlük matrisini çıkarmak. Dört alanın birlikte mi yoksa ayrı ayrı mı gizlendiği bilinmiyor."
+    "not": "Doğrulayıcı (scripts/dogrulama/senaryo-dogrulayici.mjs) bilinenDurumlar > profilKodu ile karar veriyor: listede olmayan şubede görünürlük BİLİNMİYOR sayılır ve alan zorunlu kalır. POM bugün şubeye göre değil, her alanın isVisible() sonucuna göre karar veriyor. Hedef: şube profiline 'rotaAlanSeti' gibi bir özellik eklemek ve crawler ile her şubenin görünürlük matrisini çıkarmak. Dört alanın birlikte mi yoksa ayrı ayrı mı gizlendiği bilinmiyor."
    },
    "tekliSorgu": {
     "ifade": {
@@ -69,24 +69,24 @@
      "esit": "coklu"
     }
    },
-   "ettirenFarkli": {
+   "odeyenFarkli": {
     "ifade": {
-     "alan": "ettiren",
+     "alan": "odeyen",
      "icinde": [
       "farkliOzel",
       "farkliTuzel"
      ]
     }
    },
-   "ettirenFarkliOzel": {
+   "odeyenFarkliOzel": {
     "ifade": {
-     "alan": "ettiren",
+     "alan": "odeyen",
      "esit": "farkliOzel"
     }
    },
-   "ettirenFarkliTuzel": {
+   "odeyenFarkliTuzel": {
     "ifade": {
-     "alan": "ettiren",
+     "alan": "odeyen",
      "esit": "farkliTuzel"
     }
    },
@@ -161,16 +161,16 @@
         },
         "secenekler": [
          {
-          "deger": "DÜNYA",
-          "metin": "DÜNYA"
+          "deger": "EKSPRES",
+          "metin": "EKSPRES"
          },
          {
-          "deger": "AVRUPA",
-          "metin": "AVRUPA"
+          "deger": "STANDART",
+          "metin": "STANDART"
          },
          {
-          "deger": "ASYA",
-          "metin": "ASYA"
+          "deger": "KURYE",
+          "metin": "KURYE"
          }
         ],
         "seceneklerDurumu": "kismi",
@@ -191,7 +191,7 @@
           "tablo": "#syh-kapsam-tb",
           "arttir": "#syh-kapsam-tb img[onclick*=\"Increase\"]",
           "azalt": "#syh-kapsam-tb img[onclick*=\"Decrease\"]",
-          "yanitBekle": "/jet-satis/ornek-rota/ulke-listesi/"
+          "yanitBekle": "/magaza/ornek-rota/ulke-listesi/"
          },
          "kirilganlik": "yuksek",
          "not": "Değer metinden okunuyor, oklar onclick içeriğiyle bulunuyor. Seçenek listesi DOM'da yok; listeyi görmek için halkayı dolaşmak gerekiyor."
@@ -224,20 +224,20 @@
         "bagimlilik": {
          "alan": "kapsam",
          "secenekHaritasi": {
-          "DÜNYA": [
+          "EKSPRES": [
            {
-            "deger": "VİZE TÜM DÜNYA",
-            "metin": "VİZE TÜM DÜNYA"
+            "deger": "HIZLI TESLİMAT",
+            "metin": "HIZLI TESLİMAT"
            },
            {
             "deger": "ROTA PAKET",
             "metin": "ROTA PAKET"
            }
           ],
-          "AVRUPA": [
+          "STANDART": [
            {
-            "deger": "VİZE SCHENGEN",
-            "metin": "VİZE SCHENGEN"
+            "deger": "ADRESE TESLİM",
+            "metin": "ADRESE TESLİM"
            },
            {
             "deger": "ROTA PAKET",
@@ -260,7 +260,7 @@
           "tablo": "#syh-alternatif-tb",
           "arttir": "#syh-alternatif-tb img[onclick*=\"Increase\"]",
           "azalt": "#syh-alternatif-tb img[onclick*=\"Decrease\"]",
-          "yanitBekle": "/jet-satis/ornek-rota/ulke-listesi/"
+          "yanitBekle": "/magaza/ornek-rota/ulke-listesi/"
          },
          "kirilganlik": "yuksek"
         },
@@ -324,14 +324,14 @@
         "doldurucu": "tarihJs",
         "form": null,
         "notlar": [
-         "Senaryoya göre değiştirilemiyor; süreye bağlı prim/iş kuralı test etmek için 'senaryo' yapılabilir."
+         "Senaryoya göre değiştirilemiyor; süreye bağlı toplam/iş kuralı test etmek için 'senaryo' yapılabilir."
         ]
        }
       ]
      },
      {
-      "id": "teminatlar",
-      "baslik": "Teminatlar, plan ve ülke",
+      "id": "teslimatlar",
+      "baslik": "Teslimatlar, plan ve ülke",
       "alanlar": [
        {
         "id": "ekHizmet",
@@ -386,11 +386,11 @@
         ]
        },
        {
-        "id": "rotaIptalBedeli",
+        "id": "rotaIadeBedeli",
         "tip": "secim",
         "etiket": {
          "ekran": null,
-         "not": "POM yorumunda 'Rota İptal Bedeli'"
+         "not": "POM yorumunda 'Rota İade Bedeli'"
         },
         "secenekler": [
          {
@@ -399,11 +399,11 @@
          }
         ],
         "seceneklerDurumu": "kismi",
-        "seceneklerKaynagi": "tests/data/test/ornek-rota.json > rotaIptalBedeli (yalnızca kullanılan değer)",
+        "seceneklerKaynagi": "tests/data/test/ornek-rota.json > rotaIadeBedeli (yalnızca kullanılan değer)",
         "zorunlu": null,
         "yapilandirma": "urun",
         "eslesme": {
-         "urun": "rotaIptalBedeli.deger"
+         "urun": "rotaIadeBedeli.deger"
         },
         "konum": {
          "secici": "#cmbIpt",
@@ -458,7 +458,7 @@
          }
         ],
         "seceneklerDurumu": "dinamik",
-        "seceneklerKaynagi": "AJAX /jet-satis/ornek-rota/ulke-listesi/ (kapsam/alternatif değişince yenileniyor). Veride yalnızca kullanılan değer var.",
+        "seceneklerKaynagi": "AJAX /magaza/ornek-rota/ulke-listesi/ (kapsam/alternatif değişince yenileniyor). Veride yalnızca kullanılan değer var.",
         "bagimlilik": {
          "alan": [
           "kapsam",
@@ -479,7 +479,7 @@
         "sonKontrol": "toHaveValue(ulke.deger)",
         "form": null,
         "notlar": [
-         "AVRUPA kapsamında ALMANYA dışındaki ülkeler / DÜNYA'da Schengen dışı ülke testi senaryodan yapılamıyor."
+         "STANDART kapsamında ALMANYA dışındaki ülkeler / EKSPRES'te AB dışı ülke testi senaryodan yapılamıyor."
         ]
        },
        {
@@ -554,7 +554,7 @@
          }
         },
         "konum": {
-         "secici": "#selectAllClientPolicy",
+         "secici": "#selectAllClientOrders",
          "kirilganlik": "dusuk"
         },
         "doldurucu": "secimGerekirse",
@@ -609,7 +609,7 @@
          "donusum": "senaryo ?? urun (proje köküne göre göreli yol)"
         },
         "varsayilan": {
-         "deger": "tests/fixtures/ornek-rota/fma-coklu-sorgu-10-kisi.xlsx",
+         "deger": "tests/fixtures/ornek-rota/ornek-coklu-sorgu-10-kisi.xlsx",
          "kaynak": "urun.cokluSorguDosyasi"
         },
         "konum": {
@@ -692,7 +692,7 @@
     "id": "musteriKefil",
     "sira": 3,
     "baslik": "Başvuran ve kefil bilgileri girilir",
-    "pomMetodu": "musteriVeKefilAyniGir | ettirenAyniSec + farkliOzelEttirenGir | farkliTuzelEttirenGir",
+    "pomMetodu": "musteriVeKefilAyniGir | odeyenAyniSec + farkliOzelOdeyenGir | farkliTuzelOdeyenGir",
     "bolumler": [
      {
       "id": "musteri",
@@ -717,8 +717,8 @@
           "musteriProfili"
          ],
          "urun": "musteriProfili",
-         "profilHavuzu": "ortak.kimlikBilgileri.ozel",
-         "donusum": "spec: senaryo.musteriKimligi ?? ortak.ozel[senaryo.musteriProfili] ?? ortak.ozel[urun.musteriProfili]"
+         "profilHavuzu": "ozel",
+         "donusum": "spec: senaryo.musteriKimligi ?? profiller.ozel[senaryo.musteriProfili] ?? profiller.ozel[urun.musteriProfili]"
         },
         "varsayilan": {
          "deger": "tc1",
@@ -747,7 +747,7 @@
           {
            "id": "sof_musteriProfili",
            "kontrol": "select",
-           "amac": "hazır profil anahtarı (ortak.kimlikBilgileri.ozel)"
+           "amac": "hazır profil anahtarı (ozel)"
           }
          ],
          "not": "Alt blok kimlikAltBlokCiz(blok, 'ozel', 'sof_musteri') ile çiziliyor."
@@ -843,7 +843,7 @@
       "baslik": "Kefil",
       "alanlar": [
        {
-        "id": "ettiren",
+        "id": "odeyen",
         "tip": "radyo",
         "etiket": {
          "ekran": null,
@@ -868,11 +868,11 @@
          }
         ],
         "seceneklerDurumu": "kismi",
-        "seceneklerKaynagi": "test-data.ts + sof_ettiren. Ekranda iki ayrı radyo grubu var (DifferentClient H/E, ClientType O/T); senaryoda üç değerli tek alan. Ekrandaki radyo etiketleri ve başka ClientType değeri (pasaport/yabancı?) olup olmadığı bilinmiyor.",
+        "seceneklerKaynagi": "test-data.ts + sof_odeyen. Ekranda iki ayrı radyo grubu var (DifferentClient H/E, ClientType O/T); senaryoda üç değerli tek alan. Ekrandaki radyo etiketleri ve başka ClientType değeri (pasaport/yabancı?) olup olmadığı bilinmiyor.",
         "zorunlu": true,
         "yapilandirma": "senaryo",
         "eslesme": {
-         "senaryo": "ettiren"
+         "senaryo": "odeyen"
         },
         "ekranAlanlari": [
          {
@@ -914,12 +914,12 @@
           },
           "doldurucu": "radyoZorla",
           "gorunurluk": {
-           "kosul": "ettirenFarkli"
+           "kosul": "odeyenFarkli"
           }
          }
         ],
         "form": {
-         "id": "sof_ettiren",
+         "id": "sof_odeyen",
          "kontrol": "select",
          "etiket": "Kefil"
         },
@@ -930,15 +930,15 @@
         }
        },
        {
-        "id": "ettirenKimlik",
+        "id": "odeyenKimlik",
         "tip": "kimlikProfili",
         "kimlikTuru": {
          "farkliOzel": "ozel",
          "farkliTuzel": "tuzel"
         },
         "bagimlilik": {
-         "alan": "ettiren",
-         "not": "Kimlik türü ve profil havuzu ettiren değerine göre seçilir."
+         "alan": "odeyen",
+         "not": "Kimlik türü ve profil havuzu ödeyen değerine göre seçilir."
         },
         "etiket": {
          "ekran": null,
@@ -947,36 +947,36 @@
         "zorunlu": true,
         "yapilandirma": "senaryo",
         "gorunurluk": {
-         "kosul": "ettirenFarkli"
+         "kosul": "odeyenFarkli"
         },
         "eslesme": {
          "senaryo": [
-          "ettirenProfili",
-          "ettirenOzelKimligi",
-          "ettirenTuzelKimligi"
+          "odeyenProfili",
+          "odeyenOzelKimligi",
+          "odeyenTuzelKimligi"
          ],
          "profilHavuzu": {
-          "farkliOzel": "ortak.kimlikBilgileri.ozel",
-          "farkliTuzel": "ortak.kimlikBilgileri.tuzel"
+          "farkliOzel": "ozel",
+          "farkliTuzel": "tuzel"
          },
-         "donusum": "spec: ettirenOzelKimligi | ettirenTuzelKimligi ?? havuz[ettirenProfili]"
+         "donusum": "spec: odeyenOzelKimligi | odeyenTuzelKimligi ?? havuz[odeyenProfili]"
         },
         "form": {
-         "id": "sof_ettirenKaynak",
+         "id": "sof_odeyenKaynak",
          "kontrol": "radio",
          "etiket": "Hazır profil kullan / Yeni kimlik gir",
          "yardimciKontroller": [
           {
-           "id": "sof_ettirenProfili",
+           "id": "sof_odeyenProfili",
            "kontrol": "select",
-           "amac": "hazır profil anahtarı (ortak.kimlikBilgileri.ozel|tuzel)"
+           "amac": "hazır profil anahtarı (ozel|tuzel)"
           }
          ],
-         "not": "Alt blok (#sof_ettirenAltBlok) kimlikAltBlokCiz(blok, 'ozel'|'tuzel', 'sof_ettiren') ile çiziliyor."
+         "not": "Alt blok (#sof_odeyenAltBlok) kimlikAltBlokCiz(blok, 'ozel'|'tuzel', 'sof_odeyen') ile çiziliyor."
         },
         "altAlanlar": [
          {
-          "id": "ettirenDogumTarihi",
+          "id": "odeyenDogumTarihi",
           "tip": "tarih",
           "bicim": "gg.aa.yyyy",
           "eslesme": {
@@ -985,23 +985,23 @@
           "konum": {
            "secici": "#BirthDate",
            "yardimci": {
-            "satir": "#trClientBirthDate"
+            "satir": "#trClientBirthday"
            },
            "kirilganlik": "dusuk"
           },
           "doldurucu": "tarihJs",
           "gorunurluk": {
-           "kosul": "ettirenFarkliOzel",
-           "not": "Tüzelde #trClientBirthDate gizli olmalı (POM bunu doğruluyor)."
+           "kosul": "odeyenFarkliOzel",
+           "not": "Tüzelde #trClientBirthday gizli olmalı (POM bunu doğruluyor)."
           },
           "form": {
-           "id": "sof_ettirenDogum",
+           "id": "sof_odeyenDogum",
            "kontrol": "text",
            "etiket": "Doğum Tarihi"
           }
          },
          {
-          "id": "ettirenTelefon",
+          "id": "odeyenTelefon",
           "tip": "telefon",
           "eslesme": {
            "kimlikAlani": "cepTelefonu"
@@ -1012,7 +1012,7 @@
           },
           "doldurucu": "telefonTuslama",
           "form": {
-           "id": "sof_ettirenTelefon",
+           "id": "sof_odeyenTelefon",
            "kontrol": "text",
            "etiket": "Cep Telefonu"
           },
@@ -1021,7 +1021,7 @@
           ]
          },
          {
-          "id": "ettirenKimlikNo",
+          "id": "odeyenKimlikNo",
           "tip": "metin",
           "eslesme": {
            "kimlikAlani": {
@@ -1035,20 +1035,20 @@
           },
           "doldurucu": "musteriSorgula",
           "form": {
-           "id": "sof_ettirenTc",
+           "id": "sof_odeyenTc",
            "kontrol": "text",
            "etiket": "T.C. Kimlik No",
            "yardimciKontroller": [
             {
-             "id": "sof_ettirenVkn",
+             "id": "sof_odeyenVkn",
              "kontrol": "text",
-             "amac": "tüzel ettirende 'Vergi Kimlik No' (sof_ettirenTc yerine çizilir)"
+             "amac": "tüzel ödeyende 'Vergi Kimlik No' (sof_odeyenTc yerine çizilir)"
             }
            ]
           }
          },
          {
-          "id": "ettirenSorgula",
+          "id": "odeyenSorgula",
           "tip": "buton",
           "yapilandirma": "aksiyon",
           "konum": {
@@ -1057,7 +1057,7 @@
           }
          },
          {
-          "id": "ettirenAdUnvan",
+          "id": "odeyenAdUnvan",
           "tip": "cikti",
           "yapilandirma": "cikti",
           "konum": {
@@ -1067,7 +1067,7 @@
          }
         ],
         "dogrulama": {
-         "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): ettiren≠ayni ise profil YA DA kimlik (ikisi birden değil); profil havuzda olmalı; serbest kimlikte TC (11 hane + kontrol haneleri) / VKN (10 hane), telefon 5XXXXXXXXX, doğum tarihi gg.aa.yyyy ve gelecekte değil (tüzelde doğum tarihi yok)",
+         "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): odeyen≠ayni ise profil YA DA kimlik (ikisi birden değil); profil havuzda olmalı; serbest kimlikte TC (11 hane + kontrol haneleri) / VKN (10 hane), telefon 5XXXXXXXXX, doğum tarihi gg.aa.yyyy ve gelecekte değil (tüzelde doğum tarihi yok)",
          "sunucu": "aynı",
          "ts": "aynı"
         },
@@ -1081,17 +1081,17 @@
     ]
    },
    {
-    "id": "primHesaplama",
+    "id": "toplamHesaplama",
     "sira": 4,
-    "baslik": "Prim hesaplama ve teklif",
-    "pomMetodu": "primHesapla | primHesaplaVeHataDogrula(mesaj)",
+    "baslik": "Toplam hesaplama ve siparis",
+    "pomMetodu": "toplamHesapla | toplamHesaplaVeHataDogrula(mesaj)",
     "bolumler": [
      {
-      "id": "prim",
-      "baslik": "Prim hesaplama",
+      "id": "toplam",
+      "baslik": "Toplam hesaplama",
       "alanlar": [
        {
-        "id": "primHesaplaButonu",
+        "id": "toplamHesaplaButonu",
         "tip": "buton",
         "yapilandirma": "aksiyon",
         "etiket": {
@@ -1103,7 +1103,7 @@
         }
        },
        {
-        "id": "toplamPrimEur",
+        "id": "toplamTutarEur",
         "tip": "cikti",
         "yapilandirma": "cikti",
         "birim": "EUR",
@@ -1117,7 +1117,7 @@
         }
        },
        {
-        "id": "primHataDiyalogu",
+        "id": "toplamHataDiyalogu",
         "tip": "diyalog",
         "yapilandirma": "cikti",
         "konum": {
@@ -1231,7 +1231,7 @@
     {
      "id": "subeProfili",
      "tip": "secim",
-     "seceneklerKaynagi": "ortak.kullaniciDegistir anahtarları (bkz. acenteBaglami)",
+     "seceneklerKaynagi": "baglam anahtarları (bkz. baglam)",
      "varsayilan": {
       "deger": "varsayilan",
       "kaynak": "testBaslangiciniHazirla"
@@ -1240,7 +1240,7 @@
      "yapilandirma": "senaryo",
      "eslesme": {
       "senaryo": "subeProfili",
-      "profilHavuzu": "ortak.kullaniciDegistir"
+      "profilHavuzu": "baglam"
      },
      "form": {
       "id": "sof_subeKodu",
@@ -1253,10 +1253,10 @@
         "amac": "Şube Kullanıcı Kodu"
        }
       ],
-      "not": "Form anahtar değil ham kod+kullanıcı alıyor; sunucu eşleşen profili buluyor ya da 'Şube<kod>' anahtarıyla ortak.json'a ekliyor."
+      "not": "Form anahtar değil ham kod+kullanıcı alıyor; sunucu eşleşen profili buluyor ya da 'Şube<kod>' anahtarıyla profillere ekliyor."
      },
      "dogrulama": {
-      "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): girdide kod ↔ kullanıcı birlikte; kayıttaki profil anahtarı ortak.kullaniciDegistir içinde olmalı",
+      "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): girdide kod ↔ kullanıcı birlikte; kayıttaki profil anahtarı baglam içinde olmalı",
       "sunucu": "aynı",
       "ts": "aynı"
      }
@@ -1296,7 +1296,7 @@
      "varyantlar": [
       {
        "tip": "basarili",
-       "anlam": "odemeAdimiDahil ise urun.kabulEdilenOdemeSonuclari'ndan biri; değilse prim > 0"
+       "anlam": "odemeAdimiDahil ise urun.kabulEdilenOdemeSonuclari'ndan biri; değilse toplam > 0"
       },
       {
        "tip": "isKuraliHatasi",
@@ -1306,8 +1306,8 @@
          "etiket": "Hatanın Beklendiği Adım",
          "secenekler": [
           {
-           "deger": "primHesaplama",
-           "metin": "Prim hesaplama"
+           "deger": "toplamHesaplama",
+           "metin": "Toplam hesaplama"
           },
           {
            "deger": "odeme",
@@ -1342,7 +1342,7 @@
        }
       ]
      },
-     "akisPlani": "beklenen-sonuc.ts > adimPlaniniOlustur: prim hatası → [primHesaplaVeHataDogrula]; ödeme yok → [primHesapla, odemeAtlandi]; kayıt hatası → [primHesapla, kaydetVeHataDogrula]; aksi → [primHesapla, kaydetVeKartGir, odemeyiTamamlaVeDogrula]",
+     "akisPlani": "beklenen-sonuc.ts > adimPlaniniOlustur: toplam hatası → [toplamHesaplaVeHataDogrula]; ödeme yok → [toplamHesapla, odemeAtlandi]; kayıt hatası → [toplamHesapla, kaydetVeHataDogrula]; aksi → [toplamHesapla, kaydetVeKartGir, odemeyiTamamlaVeDogrula]",
      "notlar": [
       "Eski beklenenHataMesaji/beklenenHataAdimi alanları kaldırıldı (TS ve sunucu artık reddediyor)."
      ]
@@ -1394,9 +1394,9 @@
     "tip": "SelectData",
     "kullanan": "ulke"
    },
-   "rotaIptalBedeli": {
+   "rotaIadeBedeli": {
     "tip": "SelectData",
-    "kullanan": "rotaIptalBedeli"
+    "kullanan": "rotaIadeBedeli"
    },
    "plan": {
     "tip": "SelectData",
@@ -1433,10 +1433,10 @@
     "tip": "senaryo[]"
    }
   },
-  "acenteBaglami": {
+  "baglam": {
    "aciklama": "Giriş sonrası 'Kullanıcı Değiştir' ekranı (kullanici-degistir.page.ts). Bu ekranın parçası değil, senaryo bağlamı; ama alan seti görünürlüğünü belirliyor.",
    "pageObject": "tests/support/pages/kullanici-degistir.page.ts",
-   "veriKaynagi": "ortak.kullaniciDegistir[<senaryo.subeProfili ?? 'varsayilan'>]",
+   "veriKaynagi": "baglam[<senaryo.subeProfili ?? 'varsayilan'>]",
    "alanlar": [
     {
      "id": "subePartaji",
@@ -1497,7 +1497,7 @@
   "isKurallari": [
    {
     "id": "ekHizmetHayirAlternatifKisiti",
-    "adim": "primHesaplama",
+    "adim": "toplamHesaplama",
     "kosul": {
      "ve": [
       {
@@ -1508,8 +1508,8 @@
        "degil": {
         "alan": "alternatif",
         "icinde": [
-         "VİZE SCHENGEN",
-         "VİZE TÜM DÜNYA"
+         "ADRESE TESLİM",
+         "HIZLI TESLİMAT"
         ]
        }
       }
@@ -1518,8 +1518,8 @@
     "gecerlilik": {
      "kosul": "subeAlanSetiTam"
     },
-    "mesaj": "Ek Hizmet “Hayır” olması durumunda yalnızca “VİZE SCHENGEN” veya “VİZE TÜM DÜNYA” alternatifleri seçilebilir",
-    "kaynak": "tests/data/test/ornek-rota.json > '90002 /DÜNYA / ROTA PAKET / Ek hizmet Hayır / Çoklu Sorgu ...' senaryosu"
+    "mesaj": "Ek Hizmet “Hayır” olması durumunda yalnızca “ADRESE TESLİM” veya “HIZLI TESLİMAT” alternatifleri seçilebilir",
+    "kaynak": "tests/data/test/ornek-rota.json > '90002 /EKSPRES / ROTA PAKET / Ek hizmet Hayır / Çoklu Sorgu ...' senaryosu"
    }
   ],
   "bilinmeyenler": [
@@ -1547,7 +1547,7 @@
      "varsayilan": true,
      "ÖzelTanımlıŞube": true
     },
-    "rotaIptalBedeli": {
+    "rotaIadeBedeli": {
      "varsayilan": false,
      "ÖzelTanımlıŞube": true
     },
@@ -1579,11 +1579,11 @@
      "varsayilan": true,
      "ÖzelTanımlıŞube": true
     },
-    "ettiren": {
+    "odeyen": {
      "varsayilan": true,
      "ÖzelTanımlıŞube": true
     },
-    "ettirenKimlik": {
+    "odeyenKimlik": {
      "varsayilan": true,
      "ÖzelTanımlıŞube": true
     },
@@ -1605,7 +1605,7 @@
   "ikiAsamaliDogrulama": "sms",
   "captchaGoruldu": false,
   "testVerisiTurleri": [
-   "Özel kişi",
+   "Bireysel kişi",
    "Tüzel kişi"
   ],
   "baglamTurleri": [
@@ -1614,12 +1614,12 @@
   "not": "Giriş sonrası bağlam (şube) seçimi gerekiyor."
  },
  "bilinmeyenler": [
-  "Rota amacının prim hesaplamasını etkileyip etkilemediği."
+  "Rota amacının toplam hesaplamasını etkileyip etkilemediği."
  ],
  "kanitlar": [
   {
    "ad": "Kayıt bilgileri (yeni)",
-   "aciklama": "Rota amacı alanı, ASYA kapsamı ve yeni etiket (sahte içerik).",
+   "aciklama": "Rota amacı alanı, KURYE kapsamı ve yeni etiket (sahte içerik).",
    "icerikTuru": "image/png",
    "veri": "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"
   }

@@ -474,7 +474,7 @@ export const GOCLER = [
   },
   {
     // Sürüm 10 — servis parametre tanımları (Ayarlar > Test verisi > Servis parametreleri; bkz. servisler/parametre-tanimlari.mjs).
-    // Bir alanın (ör. IsTestMode) alabileceği değerler ve hangi servislerde geçerli olduğu. ad = XML alan adı; aynı ad için
+    // Bir alanın (ör. DeliveryType) alabileceği değerler ve hangi servislerde geçerli olduğu. ad = XML alan adı; aynı ad için
     // bir ortak (tüm servisler) ve servisleri çakışmayan servise özel tanımlar olabilir (depo denetler).
     // icerik_json (şifreli): { aciklama, tur, degerler: [{ deger, aciklama }], kaynak: { turId, alan }, varsayilan,
     // elleYazilabilir, servisler: [servisId] (boş = tümü) }.
@@ -494,7 +494,7 @@ export const GOCLER = [
   },
   {
     // Sürüm 11 — servis akışları (bkz. servisler/servis-akislari.mjs). Birden çok servis senaryosunu sırayla koşar; bir adımın
-    // yanıtından okunan değer sonraki adımlarda ${akis:Ad} ile kullanılır (ör. token, teklif no).
+    // yanıtından okunan değer sonraki adımlarda ${akis:Ad} ile kullanılır (ör. token, sipariş no).
     // - servis_akislari: tur 'akis' (normal akış) | 'oturum' (servislere atanan giriş akışı: token alır, değerleri koşular arasında
     //   süresi dolana kadar bellekte paylaşılır). icerik_json (şifreli): { adimlar: [{ id, ad, servisId, senaryoId,
     //   okumalar: [{ ad, kaynak, yol, gizli }], hataOlursaDevam }], omurSaniye?, aciklama? }.

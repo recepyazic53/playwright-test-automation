@@ -13,7 +13,7 @@ import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 import { sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
 const PAROLA = 'Gecici-Akis-Motoru-1';
-const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Teklif xmlns="Ornek"><Input>${ic}</Input></Teklif></s:Body></s:Envelope>`;
+const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body></s:Envelope>`;
 
 test('${akis:Ad}: parametre listesine girmez; gövdede XML kaçışlı, başlıkta olduğu gibi; tanımsızsa açık hata; başlıkta satır sonu reddedilir', () => {
   const govde = '<T>${akis:Token}</T><K>${Kişi.TC}</K><D>${tarih:bugun|yyyy}</D>';
@@ -41,7 +41,7 @@ test('yanıttan değer okuma: xml (//A/B, /tam/yol), json (a.b[0].c, $.), başl�
 });
 
 test('senaryo başlıkları doğrulanır: HTTP belirteci ad, tek satır değer; Content-Type / SOAPAction verilemez', () => {
-  const temel = { operasyon: 'Teklif', govde: '<a/>', kontroller: [] };
+  const temel = { operasyon: 'Siparis', govde: '<a/>', kontroller: [] };
   expect(senaryoIceriginiDogrula({ ...temel, basliklar: { Authorization: 'Bearer ${akis:Token}', Bos: '' } }).basliklar).toEqual({ Authorization: 'Bearer ${akis:Token}' });
   expect(() => senaryoIceriginiDogrula({ ...temel, basliklar: { 'Kötü ad': 'x' } })).toThrow('Geçersiz başlık adı');
   expect(() => senaryoIceriginiDogrula({ ...temel, basliklar: { SOAPAction: 'x' } })).toThrow('koşucu tarafından yazılır');
@@ -72,7 +72,7 @@ test.describe('akış adımı çağrısı', () => {
   test('giriş yanıtından token okunur (gizli: kayıtta ve dönüşte maskeli; açık değer yalnız geri çağırmada); sonraki istekte başlık + gövde + kontrol', async () => {
     let acik: { okunan: Record<string, string>; gizliler: string[] } = { okunan: {}, gizliler: [] };
     const giris = await servisSenaryosuCalistir(vt, projeId, {
-      servisId, ortamId, tur: 'dene', taslak: { baslik: 'Giriş', icerik: { operasyon: 'Teklif', govde: zarf('<Giris/>'), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }] } },
+      servisId, ortamId, tur: 'dene', taslak: { baslik: 'Giriş', icerik: { operasyon: 'Siparis', govde: zarf('<Giris/>'), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }] } },
       okumalar: [{ ad: 'Token', yol: '//Sonuc/Token' }, { ad: 'Oturum', kaynak: 'baslik', yol: 'x-oturum', gizli: false }, { ad: 'Yok', yol: '//Yok' }],
       akis: { akisBaslik: 'Deneme akışı', adimNo: 1 }, acikDegerler: (d) => { acik = d; }
     });
@@ -89,7 +89,7 @@ test.describe('akış adımı çağrısı', () => {
     const once = soap.istekler.length;
     const r = await servisSenaryosuCalistir(vt, projeId, {
       servisId, ortamId, tur: 'dene',
-      taslak: { baslik: 'Teklif', icerik: { operasyon: 'Teklif', govde: zarf('<Tok>${akis:Token}</Tok><Ot>${akis:Oturum}</Ot>'), basliklar: { Authorization: 'Bearer ${akis:Token}', 'X-Oturum': '${akis:Oturum}', 'Content-Type': 'text/plain' },
+      taslak: { baslik: 'Siparis', icerik: { operasyon: 'Siparis', govde: zarf('<Tok>${akis:Token}</Tok><Ot>${akis:Oturum}</Ot>'), basliklar: { Authorization: 'Bearer ${akis:Token}', 'X-Oturum': '${akis:Oturum}', 'Content-Type': 'text/plain' },
         kontroller: [{ tur: 'icermez', deger: '${akis:Oturum}' }] } },
       akisDegerleri: acik.okunan, ekGizliler: acik.gizliler
     }).catch((e: Error) => e);
@@ -97,7 +97,7 @@ test.describe('akış adımı çağrısı', () => {
     expect(String(r)).toContain('koşucu tarafından yazılır');
     const r2 = await servisSenaryosuCalistir(vt, projeId, {
       servisId, ortamId, tur: 'dene',
-      taslak: { baslik: 'Teklif', icerik: { operasyon: 'Teklif', govde: zarf('<Tok>${akis:Token}</Tok><Ot>${akis:Oturum}</Ot>'), basliklar: { Authorization: 'Bearer ${akis:Token}', 'X-Oturum': '${akis:Oturum}' },
+      taslak: { baslik: 'Siparis', icerik: { operasyon: 'Siparis', govde: zarf('<Tok>${akis:Token}</Tok><Ot>${akis:Oturum}</Ot>'), basliklar: { Authorization: 'Bearer ${akis:Token}', 'X-Oturum': '${akis:Oturum}' },
         kontroller: [{ tur: 'icermez', deger: '${akis:Oturum}' }] } },
       akisDegerleri: acik.okunan, ekGizliler: acik.gizliler
     });
@@ -116,7 +116,7 @@ test.describe('akış adımı çağrısı', () => {
   test('akış dışında ${akis:…} içeren senaryo açık hatayla düşer (istek atılmaz)', async () => {
     const once = soap.istekler.length;
     const r = await servisSenaryosuCalistir(vt, projeId, {
-      servisId, ortamId, tur: 'dene', taslak: { baslik: 'Tek', icerik: { operasyon: 'Teklif', govde: zarf('${akis:Token}'), kontroller: [] } }
+      servisId, ortamId, tur: 'dene', taslak: { baslik: 'Tek', icerik: { operasyon: 'Siparis', govde: zarf('${akis:Token}'), kontroller: [] } }
     });
     expect(r.durum).toBe('hata');
     expect(r.hata).toContain('akış değeri');

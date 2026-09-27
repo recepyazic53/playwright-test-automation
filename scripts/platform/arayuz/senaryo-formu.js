@@ -141,7 +141,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   // ${Tablo.Sütun} değerleri koşuda bu koşullarla (+ bağlı alanların düz değerleri ve ortam) uyan ilk satırdan gelir.
   const tabloSecimleri = JSON.parse(JSON.stringify(s.taslak?.tabloSecimleri ?? senaryo?.tabloSecimleri ?? {}));
   const modelGirissiz = baglam.model?.girisGerekmez === true;
-  const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, ...(baglam.ortak ? { ortak: baglam.ortak } : {}), kaynak: 'kayit' };
+  const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
   // Koşullu değer listeleri (Ayarlar > Test verisi): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
   // açıklama, yoksa modelin metni); tutan liste yoksa modelin kendi listesi.

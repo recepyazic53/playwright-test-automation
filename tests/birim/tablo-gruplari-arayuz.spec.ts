@@ -29,7 +29,7 @@ test.beforeAll(async () => {
   tabloKaydet(vt, { projeId, ad: 'Test kişileri', sutunlar: [{ ad: 'Ad' }, { ad: 'Soyad' }], satirlar: [{ degerler: { Ad: 'Deneme', Soyad: 'Kişi' } }] });
   tabloKaydet(vt, { projeId, ad: 'Başvuru — İl', sutunlar: [{ ad: 'Değer' }], satirlar: [{ degerler: { Değer: 'Ankara' } }] });
   tabloKaydet(vt, { projeId, ad: 'Başvuru — Kanal', sutunlar: [{ ad: 'Değer' }] });
-  tabloKaydet(vt, { projeId, ad: 'Liste A', sutunlar: [{ ad: 'Değer' }], kaynak: { tur: 'paket', ekran: 'Poliçe' } });
+  tabloKaydet(vt, { projeId, ad: 'Liste A', sutunlar: [{ ad: 'Değer' }], kaynak: { tur: 'paket', ekran: 'Fatura' } });
   // Tablo türü sezgiden önce gelir: paketten gelen kişi / kayıt tablosu (adı ve kaynağı ekran listesine benzese de) kayıt grubunda;
   // çok sütunlu ama türü "liste" olan tablo ekran listesidir.
   tabloKaydet(vt, { projeId, ad: 'Başvuru — Müşteri kayıtları', sutunlar: [{ ad: 'Ad' }], kaynak: { tur: 'paket', ekran: 'Başvuru', tabloTuru: 'kayit' } });
@@ -63,18 +63,18 @@ test('gruplar, sayılar, arama ve hatırlanan açık / kapalı durumu; telefonda
   await expect(liste.getByRole('group', { name: 'Kişi ve kayıt verileri' })).toContainText('Test kişileri');
   const basvuru = liste.getByRole('button', { name: /^Başvuru\s*2$/ });
   await expect(basvuru).toBeVisible();
-  await expect(liste.getByRole('group', { name: 'Poliçe' })).toContainText('Liste A');
+  await expect(liste.getByRole('group', { name: 'Fatura' })).toContainText('Liste A');
   // Kapat → yeniden yükleyince kapalı kalır (seçili tablonun grubu ise hep açık gelir).
-  const police = liste.getByRole('button', { name: /^Poliçe\s*1$/ });
-  await police.click();
-  await expect(police).toHaveAttribute('aria-expanded', 'false');
-  await expect(liste.getByRole('group', { name: 'Poliçe' })).toBeHidden();
+  const fatura = liste.getByRole('button', { name: /^Fatura\s*1$/ });
+  await fatura.click();
+  await expect(fatura).toHaveAttribute('aria-expanded', 'false');
+  await expect(liste.getByRole('group', { name: 'Fatura' })).toBeHidden();
   await page.reload();
-  await expect(liste.getByRole('button', { name: /^Poliçe\s*1$/ })).toHaveAttribute('aria-expanded', 'false');
+  await expect(liste.getByRole('button', { name: /^Fatura\s*1$/ })).toHaveAttribute('aria-expanded', 'false');
   await expect(liste.getByRole('button', { name: /^Başvuru\s*2$/ })).toHaveAttribute('aria-expanded', 'true');
   // Arama tüm gruplarda çalışır; eşleşen grup açılır.
   await liste.getByRole('searchbox', { name: 'Tablolarda ara' }).fill('liste a');
-  await expect(liste.getByRole('group', { name: 'Poliçe' })).toBeVisible(); // kapalı grup aramada açılır
+  await expect(liste.getByRole('group', { name: 'Fatura' })).toBeVisible(); // kapalı grup aramada açılır
   await liste.getByRole('searchbox', { name: 'Tablolarda ara' }).fill('kanal');
   await expect(liste.getByRole('group', { name: 'Başvuru' })).toBeVisible();
   await expect(liste.locator('.tablo-ogesi:visible')).toHaveCount(1);

@@ -337,7 +337,7 @@ async function akisSekmesi(kap, s, d, icerik) {
   const yeniForm = h('form', { class: 'yeni-akis-formu', hidden: true, 'aria-label': 'Yeni akış' });
   const cokluAkis = liste.duzenlenebilir && !liste.ortakAkis;
   if (cokluAkis) {
-    const ad = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Tüzel teklif', 'aria-label': 'Yeni akışın adı', required: true });
+    const ad = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Kurumsal sipariş', 'aria-label': 'Yeni akışın adı', required: true });
     const bos = h('input', { type: 'radio', name: 'yeni-akis-baslangic', value: '', checked: true });
     const kopyala = h('input', { type: 'radio', name: 'yeni-akis-baslangic', value: 'kopya' });
     const kaynak = h('select', { 'aria-label': 'Kopyalanacak akış' }, liste.akislar.map((a) => h('option', { value: a.id, selected: a.id === secili.id }, a.ad)));

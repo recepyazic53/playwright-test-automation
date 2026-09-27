@@ -300,8 +300,8 @@ function alanCevir(alan, konum, altModeller) {
     }
     case 'altModelGecersizKilma': {
       const bolum = altModelBolumu(altModeller, alan.altModel);
-      // Kayıt alanının adı: eslesme.kayitAlani (eski adı eslesme.kart hâlâ okunur).
-      const kayitAdi = (a) => (a.eslesme ? (a.eslesme.kayitAlani !== undefined ? a.eslesme.kayitAlani : a.eslesme.kart) : undefined);
+      // Kayıt alanının adı: eslesme.kayitAlani.
+      const kayitAdi = (a) => (a.eslesme ? a.eslesme.kayitAlani : undefined);
       const alanlar = bolum ? (bolum.alanlar || []).filter((a) => a.yapilandirma === 'senaryo' && typeof kayitAdi(a) === 'string')
         .map((a) => ({
           id: a.id, anahtar: kayitAdi(a), etiket: etiketi(a), zorunlu: a.zorunlu === true,
@@ -641,7 +641,7 @@ function taslakOlustur(sema, d, onceki, gorunurluk) {
 }
 
 /**
- * Doğrulayıcının alan yolu (ör. "kapsam", "ettirenOzelKimligi.tcKimlikNo", "krediKarti.kartNo",
+ * Doğrulayıcının alan yolu (ör. "kapsam", "odeyenOzelKimligi.tcKimlikNo", "krediKarti.kartNo",
  * "beklenenSonuc.mesaj") → form kontrol anahtarı. Eşleşmezse null (genel hata).
  */
 export function hataKontrolu(alanYolu, sema) {

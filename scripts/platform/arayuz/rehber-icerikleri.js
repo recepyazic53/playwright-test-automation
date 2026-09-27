@@ -162,7 +162,7 @@ export const REHBERLER = {
       { baslik: 'Servis sayfası', metin: 'Sekmeler: Senaryolar (istekler ve kontroller), Akışlar (istekleri zincirleme), Parametreler (değer tanımları), Raporlar (koşu geçmişi), İşlemler (metotlar).', cizim: { tur: 'maket', bolge: 'arac', etiket: 'Sekmeler ekranın üstünde' } },
       {
         baslik: 'Senaryo türü: tek istek ya da akış',
-        metin: ['"Senaryo ekle"de önce türü seçin. Tek istek: bir operasyona istek atılır. Akış: bir servis akışının operasyonları sırayla çağrılır (ör. önce teklif, sonra basım); akış başka servislerin operasyonlarını da içerebilir.',
+        metin: ['"Senaryo ekle"de önce türü seçin. Tek istek: bir operasyona istek atılır. Akış: bir servis akışının operasyonları sırayla çağrılır (ör. önce sipariş, sonra fatura); akış başka servislerin operasyonlarını da içerebilir.',
           'Ekranlardaki gibi: akış adımların sırasını ve adımlar arasında taşınan değerleri tanımlar, senaryo ise verileri tutar.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Akış', alt: 'operasyon sırası', ikon: 'katman' }, { baslik: 'Senaryo', alt: 'her adımın verisi', ikon: 'liste' }, { baslik: 'Koşu', alt: 'adım adım', ikon: 'oynat' }] }
       },

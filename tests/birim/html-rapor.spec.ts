@@ -21,7 +21,7 @@ function veri(): RaporVerisi {
     sayilar: { basarili: 1, basarisiz: 1, atlanan: 0, durduruldu: 0 },
     senaryolar: [
       {
-        baslik: '<script>alert(1)</script> Poliçe', grup: 'Kasko"><img src=x onerror=alert(2)>', durum: 'basarisiz', sureMs: 4200,
+        baslik: '<script>alert(1)</script> Fatura', grup: 'Kargo"><img src=x onerror=alert(2)>', durum: 'basarisiz', sureMs: 4200,
         kalinanAdim: 'Giriş: parola=Adim-Gizli-77',
         hata: [
           'Error: expect(locator).toHaveText(expected) failed',
@@ -32,7 +32,7 @@ function veri(): RaporVerisi {
         ].join('\n'),
         goruntuler: [{ ad: 'hata.png', icerikTuru: 'image/png', base64: PNG_1X1 }, { ad: 'kotu.html', icerikTuru: 'text/html', base64: PNG_1X1 }]
       },
-      { baslik: 'Kaydet', grup: 'Kasko', durum: 'basarili', sureMs: 900, kalinanAdim: null, hata: null }
+      { baslik: 'Kaydet', grup: 'Kargo', durum: 'basarili', sureMs: 900, kalinanAdim: null, hata: null }
     ],
     olusturma: '2026-09-27T09:00:00.000Z'
   };
@@ -45,8 +45,8 @@ test('kullanıcı verisi kaçışlanır; raporda betik ve etkin öznitelik yoktu
   expect(html).not.toMatch(/<script/i);
   expect(html).not.toContain('<img src=x');
   expect(html).not.toContain('<b>Proje</b>');
-  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; Poliçe');
-  expect(html).toContain('Kasko&quot;&gt;&lt;img src=x onerror=alert(2)&gt;');
+  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt; Fatura');
+  expect(html).toContain('Kargo&quot;&gt;&lt;img src=x onerror=alert(2)&gt;');
   expect(html).toContain('<html lang="tr">');
   expect(html).toContain('<th scope="col">');
   expect(html).toContain("default-src 'none'");
@@ -105,7 +105,7 @@ test('sunucu toplayıcısı: ekran koşusundan rapor; giriş parolası maskeleni
     const baska = projeKaydet(vt, { ad: 'Başka' });
     const ortam = ortamKaydet(vt, { projeId: proje, ad: 'TEST', tabanUrl: 'https://test.ornek.local/', ayarlar: { riskli: false } });
     girisProfiliKaydet(vt, { projeId: proje, ad: 'Ana', kullaniciAdi: 'rapor.kullanici', parola: 'Cok-Gizli-Parola-9' });
-    const ekran = ekranKaydet(vt, { projeId: proje, anahtar: 'kasko', ad: 'Kasko' });
+    const ekran = ekranKaydet(vt, { projeId: proje, anahtar: 'kargo', ad: 'Kargo' });
     const senaryo = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Peşin', icerik: {} });
     const z = (dk: number) => new Date(Date.UTC(2026, 8, 27, 9, dk)).toISOString();
     kosuKaydet(vt, { id: 'k1', projeId: proje, ortamId: ortam, tur: 'tam', baslangic: z(0) });

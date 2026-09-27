@@ -7,7 +7,7 @@ import { hesapKurallariniDenetle, kuralAyir, kuralParametreleri, ornekSonuclar }
 
 const ORNEKLER = [
   ['${Tutar} / 100', 'parametrenin yüzde biri'],
-  ['yuvarla(${Prim} * 1.18, 2) | #,##0.00', 'KDV dahil, iki basamak'],
+  ['yuvarla(${Toplam} * 1.18, 2) | #,##0.00', 'KDV dahil, iki basamak'],
   ["BEGIN_DATE+1y | yyyy-MM-dd", 'başlangıçtan bir yıl sonra'],
   ["bugun | yyyy-MM-dd'T'HH:mm:ss", 'koşunun anı'],
   ["eger(${Tip} = 'T', ${VergiNo}, ${TcNo})", 'koşula göre'],

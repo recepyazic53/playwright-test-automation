@@ -4,7 +4,7 @@
 // Çok profilli başvuru uygulaması:
 //   /giris        kullanıcı adı + parola (POST form). captcha: true → sayfada reCAPTCHA izi. sms: true → /dogrulama (kod 123456)
 //   /panel        "Hoş geldiniz" + "Profil: <kod>" (bağlam) — /profil'den profil değiştirilir (POST, çerez)
-//   /basvuru/     hedef form: fieldset/legend + başlıklar; ürün seçimi (B → "Ek teminat", C → "Vergi numarası" belirir;
+//   /basvuru/     hedef form: fieldset/legend + başlıklar; ürün seçimi (B → "Ek teslimat", C → "Vergi numarası" belirir;
 //                 her değişiklikte OTOMATİK KAYDET XHR POST'u); dil seçimi (sayfayı ?dil= ile yeniden yükler);
 //                 radyo grubu, onay kutusu, onay kutusu grubu, dosya (.xlsx), tarih, e-posta, salt okunur ve devre dışı
 //                 alanlar; YALNIZCA "Yetkili" (P2) profilde "İndirim oranı"; gönder düğmesi (POST /basvuru/kaydet) ve
@@ -100,8 +100,8 @@ export class TaramaFiksturu {
             <select id="urun" name="urun" required onchange="urunDegisti()">
               <option value="">Seçiniz</option><option value="A">Temel</option><option value="B">Geniş</option><option value="C">Kurumsal</option>
             </select>
-            <div id="genisKap" hidden><label for="ekTeminat">Ek teminat</label>
-              <select id="ekTeminat" name="ekTeminat"><option value="yok">Yok</option><option value="cam">Cam</option></select></div>
+            <div id="genisKap" hidden><label for="ekTeslimat">Ek teslimat</label>
+              <select id="ekTeslimat" name="ekTeslimat"><option value="yok">Yok</option><option value="not">Not</option></select></div>
             <div id="kurumKap" hidden><label>Vergi numarası <input id="vergiNo" name="vergiNo" type="text"></label></div>
             <label>Ad Soyad <input id="adSoyad" name="adSoyad" required></label>
             ${this.ekAlan ? '<label for="referans">Referans kodu</label><input id="referans" name="referans">' : ''}

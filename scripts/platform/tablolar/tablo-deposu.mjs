@@ -5,8 +5,8 @@
 // Ekran input'ları ve servis parametreleri bir sütuna bağlanır; seçimler satırlardan süzülür (tablo-secimi.mjs).
 // Gizli sütun değerleri hiçbir liste yanıtında dönmez; koşu (coz) dışında çözülmez.
 // Satır adı: senaryolar bazı satırları adıyla seçer (kimlik kayıtları "tc1", Şube "varsayilan"); ızgarada düzenlenir.
-// KARŞILIKLAR: sütundaki bir değerin sayfada ve serviste karşılığı farklı olabilir (ör. DÜNYA → sayfada seçenek değeri "1",
-//   serviste "WORLD"). Sütun tanımında { [değer]: { sayfa?, servis? } } olarak tutulur; ekran koşusu seçeneği sayfa değeriyle
+// KARŞILIKLAR: sütundaki bir değerin sayfada ve serviste karşılığı farklı olabilir (ör. EKSPRES → sayfada seçenek değeri "1",
+//   serviste "EXPRESS"). Sütun tanımında { [değer]: { sayfa?, servis? } } olarak tutulur; ekran koşusu seçeneği sayfa değeriyle
 //   seçer, servis gövdesine servis değeri yazılır (tanımsızsa tablodaki değer). Anahtarlar değer olduğu için kasa zarfıdır.
 // BAĞLAM TABLOLARI (baglamDahil): kullanıcı / şube değiştirme profilleri (baglam_profilleri; tür = tablo, profil = satır)
 // Tablolar ekranında tablo olarak gösterilir ve düzenlenir; saklama ve koşucu değişmez. Kimlikleri "baglam_…" ile başlar,
