@@ -22,7 +22,7 @@ import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }} TabloSutunu */
-/** @typedef {{ id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[] }} TabloSatiri */
+/** @typedef {{ id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[]; guncellenme?: string }} TabloSatiri */
 /** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string; tabloTuru?: 'liste' | 'kayit' }} TabloKaynagi */
 /** @typedef {{ id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean; kaynak?: TabloKaynagi | null }} Tablo */
 
@@ -134,8 +134,8 @@ export function tablolariListele(vt, projeId, secenekler = {}) {
   const satirlar = new Map(turler.map((t) => [t.id, []]));
   const sutunlari = new Map(turler.map((t) => [t.id, sutunlarOku(vt, t.alanlar)]));
   const ham = secenekler.tabloId
-    ? vt.tumu('SELECT id, tur_id, ortam_id, ad, degerler_json FROM test_verisi_profilleri WHERE proje_id = ? AND tur_id = ? ORDER BY rowid', [projeId, secenekler.tabloId])
-    : vt.tumu('SELECT id, tur_id, ortam_id, ad, degerler_json FROM test_verisi_profilleri WHERE proje_id = ? ORDER BY rowid', [projeId]);
+    ? vt.tumu('SELECT id, tur_id, ortam_id, ad, degerler_json, guncellenme FROM test_verisi_profilleri WHERE proje_id = ? AND tur_id = ? ORDER BY rowid', [projeId, secenekler.tabloId])
+    : vt.tumu('SELECT id, tur_id, ortam_id, ad, degerler_json, guncellenme FROM test_verisi_profilleri WHERE proje_id = ? ORDER BY rowid', [projeId]);
   for (const s of ham) {
     const liste = satirlar.get(String(s.tur_id));
     const sutunlar = sutunlari.get(String(s.tur_id));
@@ -145,7 +145,7 @@ export function tablolariListele(vt, projeId, secenekler = {}) {
     const degerler = {};
     for (const sutun of sutunlar) degerler[sutun.ad] = degerOku(vt, d[sutun.ad], sutun.gizli, Boolean(secenekler.cozulsun));
     liste.push({
-      id: String(s.id), ad: String(s.ad ?? ''), ortamId: s.ortam_id == null ? null : String(s.ortam_id), degerler,
+      id: String(s.id), ad: String(s.ad ?? ''), ortamId: s.ortam_id == null ? null : String(s.ortam_id), degerler, ...(s.guncellenme ? { guncellenme: String(s.guncellenme) } : {}),
       doluGizli: sutunlar.filter((x) => x.gizli && d[x.ad] !== undefined && d[x.ad] !== null && d[x.ad] !== '').map((x) => x.ad)
     });
   }

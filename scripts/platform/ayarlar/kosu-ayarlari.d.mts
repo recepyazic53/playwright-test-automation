@@ -16,6 +16,8 @@ export interface KosuAyarlari {
   onayPenceresi: 'iptal' | 'onayla'; oturumKontrolSn: number; girisAlanBeklemeSn: number; tabloSatirSecimi: 'ilk' | 'rastgele'; sqlSatirSiniri: number;
   kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string; saatDilimi: string; eszamanliKosu: 'sirayla';
   zamanliKacan: 'atla' | 'sonraKos'; zamanliCakisma: 'atla' | 'bitinceKos'; raporGoruntuSiniriMb: number;
+  /** Ayarlar > Koşu > Tek senaryoda en çok veri koşusu (tablodan çoklu satır). */
+  enCokVeriKosusu: number;
 }
 export declare const KOSU_AYAR_ANAHTARI: string;
 export declare const KOSU_AYAR_TANIMLARI: ReadonlyArray<KosuAyarTanimi>;

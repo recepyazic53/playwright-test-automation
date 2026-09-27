@@ -132,6 +132,11 @@ export type PlatformModelSenaryosu = {
   deneme?: boolean;
   /** Senaryonun giriş seçimi (senaryo-girisi.mjs); null/yok = ortamın girişiyle (varsayılan). */
   giris?: import('../../scripts/platform/senaryolar/senaryo-girisi.mjs').SenaryoGirisi | null;
+  /**
+   * Veri koşusu (tablolar/veri-kosulari.mjs): anahtar/ad yalnız tablodan çoklu satırla koşan senaryonun her testinde dolu (başlık
+   * "Senaryo [ad]"); satirlar koşuda kullanılan tablo satırları (açık sütunlar; gizli sütunun yalnız adı).
+   */
+  veriKosusu?: { anahtar: string | null; ad: string | null; satirlar: import('../../scripts/platform/tablolar/veri-kosulari.mjs').SatirOzeti[] } | null;
 };
 
 export type PlatformModelVerisi = {

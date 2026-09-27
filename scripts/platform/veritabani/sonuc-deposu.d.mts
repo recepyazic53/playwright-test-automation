@@ -11,7 +11,15 @@ export interface SonucGirdisi {
   adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }>;
   medya?: Array<{ id?: string; tur: string; ad: string; icerikTuru: string; boyut: number; dosya: string; olusturulma?: string }>;
   yakalananMesajlar?: Array<{ kaynak: string; metin: string; adim?: string | null; sayi?: number; ilk?: string; son?: string; beklenen?: boolean }>;
+  /** Raporlayıcının "veriKosusu" annotation'ı (veriKosusuTemizle doğrular). */
+  veriKosusu?: unknown;
 }
+/** Sonucun veri koşusu bilgisi: hangi tablo satırlarıyla (açık sütunlar) ve model sürümüyle koştu. */
+export interface SonucVeriKosusu {
+  anahtar: string | null; ad: string | null; modelSurumu: number | null;
+  satirlar: Array<{ grup: string; tablo: string; etiket?: string; satirId: string; satirAdi: string; guncellenme?: string; degerler: Record<string, string | null>; gizliSutunlar: string[] }>;
+}
+export declare function veriKosusuTemizle(v: unknown): SonucVeriKosusu | null;
 export interface YakalananMesajOgesi { kaynak: string; metin: string; kalip: string; adim: string | null; sayi: number; beklenen: boolean; ilk: string; son: string }
 export interface YakalananMesajKaliplari {
   toplam: number; beklenmeyen: number; kaynaklar: Record<string, number>;
@@ -32,6 +40,7 @@ export interface SonucDetayi {
   adimlar: Array<{ ad: string; durum: string; sureMs: number | null; hataMesaji: string | null }>;
   medya: MedyaOgesi[];
   yakalananMesajlar: YakalananMesajOgesi[];
+  veriKosusu: SonucVeriKosusu | null;
 }
 export interface KosuGecmisiSatiri extends Sayilar {
   id: string; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string; urunSayisi: number;
@@ -41,7 +50,7 @@ export interface KartOzeti extends Sayilar { kosuId?: string; z?: number; kapsam
 export declare const SONUC_DURUMLARI: readonly SonucDurumu[];
 export declare const KOSU_DURUMLARI: readonly string[];
 export declare const MEDYA_TURLERI: readonly string[];
-export declare function kosuKaydet(vt: Veritabani, girdi: { id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string }): string;
+export declare function kosuKaydet(vt: Veritabani, girdi: { id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null }): string;
 export declare function kosuyuBitir(vt: Veritabani, id: string, girdi: { durum: string; bitis?: string }): void;
 export declare function sonucKaydet(vt: Veritabani, g: SonucGirdisi): { id: string; silinecekMedyaDosyalari: string[] };
 export declare function kosulariHesapIcinOku(vt: Veritabani, projeId: string): Array<{
@@ -55,11 +64,12 @@ export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { ur
   kosuGecmisi: KosuGecmisiSatiri[];
 };
 export declare function kosuDetayi(vt: Veritabani, kosuId: string): {
-  kosu: Sayilar & { id: string; projeId: string | null; ortamId: string | null; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string };
+  kosu: Sayilar & { id: string; projeId: string | null; ortamId: string | null; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string;
+    tekrarKaynagi: { id: string; baslangic: string | null; bitis: string | null; var: boolean } | null; tekrarlar: Array<{ id: string; baslangic: string; bitis: string | null; durum: string }> };
   sonuclar: Array<{
     id: string; senaryoId: string | null; senaryoBaslik: string; senaryoAnahtari: string | null; durum: string; hamDurum: string | null; sureMs: number | null;
     hataKategorisi: string | null; hataKalibi: string | null; urun: string; urunAnahtari: string; ekranDurumu: string | null; baslangic: string | null; bitis: string | null;
-    deneme: number; ekranGoruntusuSayisi: number; videoSayisi: number;
+    deneme: number; ekranGoruntusuSayisi: number; videoSayisi: number; veriKosusu: SonucVeriKosusu | null;
   }>;
 } | null;
 export declare function sonucDetayi(vt: Veritabani, sonucId: string): SonucDetayi | null;

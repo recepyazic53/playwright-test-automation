@@ -23,6 +23,7 @@ import {
 } from './model-formu.mjs';
 import { gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
 import { degerBasvurusuYaz, grupAnahtari, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { calistirmaBicimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
@@ -140,6 +141,10 @@ function modelFormu(icerik, s, senaryo, baglam) {
   // Satır seçimleri: "<tabloId>|<etiket>" → { Sütun: değer } (çözümleyicinin okuduğu biçim; servis senaryosundakiyle aynı).
   // ${Tablo.Sütun} değerleri koşuda bu koşullarla (+ bağlı alanların düz değerleri ve ortam) uyan ilk satırdan gelir.
   const tabloSecimleri = JSON.parse(JSON.stringify(s.taslak?.tabloSecimleri ?? senaryo?.tabloSecimleri ?? {}));
+  // Çalıştırma biçimi (tablolar/veri-kosulari.mjs): grup → { kip: 'secili', satirlar } | { kip: 'tumu' }; listede olmayan grup "Tek satır"
+  // (bugünkü davranış). Birden çok grup çoklu ise birleşim: tüm kombinasyonlar ya da eşleştirerek (eslesmeler).
+  const veriKosulari = JSON.parse(JSON.stringify(s.taslak?.veriKosulari ?? senaryo?.veriKosulari ?? {}));
+  veriKosulari.gruplar ??= {};
   const modelGirissiz = baglam.model?.girisGerekmez === true;
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
@@ -633,7 +638,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (akisSecimi) {
     akisSecimi.addEventListener('change', () => {
       const d = hesapla();
-      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, tabloSecimleri, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, tabloSecimleri, veriKosulari, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
     });
   }
   // Giriş: ortamın girişiyle (varsayılan) / girişsiz / temiz oturumla yeniden giriş; birden çok giriş profili varsa profil. Ekran
@@ -726,8 +731,22 @@ function modelFormu(icerik, s, senaryo, baglam) {
     yerlestir(satirSecimiKarti,
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'satir-secimi-baslik' }, ikon('veri'), 'Satır seçimi'),
         h('span', { class: 'alt' }, 'Tablodan alınan değerler koşuda bu satırdan gelir.')),
-      ...gruplar.map(satirGrubuCiz));
+      ...gruplar.map(satirGrubuCiz),
+      veriKosusuOzetiCiz(gruplar));
   }
+  /** Formda kullanılan grupların anahtarları (tablo kimliğiyle). */
+  const grupAnahtarlari = (gruplar) => gruplar.map((g) => { const t = tabloBul(tabloListesi || [], g.tablo); return t ? { anahtar: grupAnahtari(t.id, g.etiket), tablo: t, etiket: g.etiket } : null; }).filter(Boolean);
+  /** Kaydedilecek çalıştırma biçimi (veri-kosusu-secimi.js): kullanılan çoklu gruplar; hiçbiri yoksa null. Tablolar okunmadıysa undefined (mevcut korunur). */
+  const kaydedilecekVeriKosulari = () => {
+    if (!tabloListesi) return kullanilanGruplar().length ? undefined : null;
+    return veriKosulariniHazirla(veriKosulari, grupAnahtarlari(kullanilanGruplar()).map((g) => g.anahtar));
+  };
+  const veriKosusuDurumu = () => ({
+    veriKosulari, ortam: s.ortam, ortamAdi, tablolar: tabloListesi || [], tabloSecimleri,
+    degisti: () => { degisti = true; satirSecimiCiz(true); }
+  });
+  function calistirmaBicimiCiz(t, anahtar, secim) { return calistirmaBicimi(t, anahtar, secim, veriKosusuDurumu()); }
+  function veriKosusuOzetiCiz(gruplar) { return veriKosusuOzeti(grupAnahtarlari(gruplar), veriKosusuDurumu()); }
   function satirGrubuCiz(g) {
     const t = tabloBul(tabloListesi, g.tablo);
     const baslikEl = h('h4', {}, `${t ? t.ad : g.tablo}${g.etiket ? ` [${g.etiket}]` : ''}`, h('small', { class: 'soluk' }, ` · ${g.alanlar.join(', ')}`));
@@ -779,7 +798,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
     return h('div', { class: 'satir-secimi-grubu', 'data-tablo': t.ad },
       baslikEl, h('label', { class: 'gorunmez', for: id }, `${t.ad}${g.etiket ? ` [${g.etiket}]` : ''} satırı`), sel,
       h('div', { class: `alan-notu ${secimVar && !uyan.length ? 'alan-uyarisi' : ''}`.trim(), role: 'status' }, durum),
-      acik.length ? h('details', { open: secimVar && !secilenSatir }, h('summary', { class: 'kucuk' }, 'Koşullar'), h('div', { class: 'kosul-izgarasi' }, kosullar)) : null);
+      acik.length ? h('details', { open: secimVar && !secilenSatir }, h('summary', { class: 'kucuk' }, 'Koşullar'), h('div', { class: 'kosul-izgarasi' }, kosullar)) : null,
+      calistirmaBicimiCiz(t, anahtar, secim));
   }
 
   // --- Beklenen sonuç -----------------------------------------------------------------------
@@ -976,7 +996,9 @@ function modelFormu(icerik, s, senaryo, baglam) {
           // Model girişsizse seçim yok sayılır (her zaman girişsiz); varsayılan seçim sunucuda içeriğe yazılmaz.
           giris: modelGirissiz ? null : girisSecimi,
           // Satır seçimleri (yalnız formda kullanılan tablo grupları; boşsa kaldırılır).
-          tabloSecimleri: kaydedilecekSecimler()
+          tabloSecimleri: kaydedilecekSecimler(),
+          // Çalıştırma biçimi (tablodan çoklu satır; hepsi "Tek satır"sa kaldırılır). Tablolar okunamadıysa mevcut korunur.
+          ...(kaydedilecekVeriKosulari() !== undefined ? { veriKosulari: kaydedilecekVeriKosulari() } : {})
         }
       });
       degisti = false;
