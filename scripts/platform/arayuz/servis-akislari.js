@@ -65,5 +65,5 @@ export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile)
       akislar.length
         ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'veri-tablosu', 'aria-label': 'Servis akışları' },
           h('thead', {}, h('tr', {}, ...['Akış', 'Tür', 'Adım', 'Son koşu', ''].map((x) => h('th', { scope: 'col' }, x)))), h('tbody', {}, satirlar)))
-        : bosDurum('Henüz akış yok.', 'Örnek: 1. adım Giriş senaryosu (yanıttan Token okunur), 2. adım Teklif senaryosu (başlıkta Bearer ${akis:Token}).', { ikon: 'katman' })));
+        : bosDurum('Henüz akış yok.', 'Örnek: 1. adım Giriş senaryosu (yanıttan Token okunur), 2. adım Sipariş senaryosu (başlıkta Bearer ${akis:Token}).', { ikon: 'katman' })));
 }

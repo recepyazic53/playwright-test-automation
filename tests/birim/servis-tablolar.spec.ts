@@ -47,13 +47,13 @@ test('tablo seçimi: başvuru çözümü, süzülen seçenekler (sıra fark etme
 test('gövde: tablo başvurusu (Türkçe ad, etiket) yer tutucu olarak bulunur; form ↔ gövde "tablo" kaynağı', () => {
   const govde = '<a>${Servis girişi.Kanal}</a><b>${Kişi[kefil].TC}</b><c>${MUSTERI_TC}</c><d>${tarih:bugun}</d>';
   expect(kullanilanParametreler(govde)).toEqual(['Servis girişi.Kanal', 'Kişi[kefil].TC', 'MUSTERI_TC']);
-  const sema = wsdlSemalari(WSDL).Teklif;
-  const degerler: Record<string, AlanDegeri> = { 'Input/Channel': { kaynak: 'tablo', deger: 'Servis girişi.Kanal' }, 'Input/CitizenshipNumber': { kaynak: 'tablo', deger: 'Kişi[başvuran].TC' }, 'Input/Username': { kaynak: 'parametre', deger: 'USERNAME' } };
+  const sema = wsdlSemalari(WSDL).Siparis;
+  const degerler: Record<string, AlanDegeri> = { 'Input/Channel': { kaynak: 'tablo', deger: 'Servis girişi.Kanal' }, 'Input/IdentityNumber': { kaynak: 'tablo', deger: 'Kişi[başvuran].TC' }, 'Input/Username': { kaynak: 'parametre', deger: 'USERNAME' } };
   const g = govdeUret(sema, degerler);
   expect(g).toContain('<Channel>${Servis girişi.Kanal}</Channel>');
   const c = govdeCoz(g, sema);
   expect(c.degerler['Input/Channel']).toEqual({ kaynak: 'tablo', deger: 'Servis girişi.Kanal' });
-  expect(c.degerler['Input/CitizenshipNumber']).toEqual({ kaynak: 'tablo', deger: 'Kişi[başvuran].TC' });
+  expect(c.degerler['Input/IdentityNumber']).toEqual({ kaynak: 'tablo', deger: 'Kişi[başvuran].TC' });
   expect(c.degerler['Input/Username']).toEqual({ kaynak: 'parametre', deger: 'USERNAME' });
 });
 
@@ -69,9 +69,9 @@ test('tarih biçimi: ${Tablo.Sütun|biçim} tablodaki tarihi (1983-05-10 / 10.05
   expect(kullanilanParametreler(govde)).toEqual(['Kişi.Doğum tarihi']);
   expect(yerTutuculariDoldur(govde, { degerler: { 'Kişi.Doğum tarihi': '10.05.1983' } })).toBe('<B>1983-05-10T00:00:00</B><C>10.05.1983</C>');
   // Form ↔ gövde: biçim başvuruyla birlikte korunur.
-  const sema = wsdlSemalari(WSDL).Teklif;
-  const g = govdeUret(sema, { 'Input/CitizenshipNumber': { kaynak: 'tablo', deger: 'Kişi.TC|dd.MM.yyyy' } });
-  expect(govdeCoz(g, sema).degerler['Input/CitizenshipNumber']).toEqual({ kaynak: 'tablo', deger: 'Kişi.TC|dd.MM.yyyy' });
+  const sema = wsdlSemalari(WSDL).Siparis;
+  const g = govdeUret(sema, { 'Input/IdentityNumber': { kaynak: 'tablo', deger: 'Kişi.TC|dd.MM.yyyy' } });
+  expect(govdeCoz(g, sema).degerler['Input/IdentityNumber']).toEqual({ kaynak: 'tablo', deger: 'Kişi.TC|dd.MM.yyyy' });
 });
 
 test.describe('servis alanları tablolardan', () => {
@@ -88,7 +88,7 @@ test.describe('servis alanları tablolardan', () => {
   let kisiId = '';
   const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
   const basarili = async (yol: string, govde?: Nesne) => { const y = await api(yol, govde); expect(y.basarili, `${yol}: ${String(y.mesaj ?? '')}`).toBe(true); return y; };
-  const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Teklif xmlns="Ornek"><Input>${ic}</Input></Teklif></s:Body></s:Envelope>`;
+  const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body></s:Envelope>`;
 
   test.beforeAll(async () => {
     test.setTimeout(120_000);
@@ -123,9 +123,9 @@ test.describe('servis alanları tablolardan', () => {
   });
 
   test('koşu değerleri seçilen satırdan alır; gizli değer kayıtta maskeli; uyan satır yoksa açık hata; bağlantı doğrulanır', async () => {
-    const govde = zarf('<Channel>${Servis girişi.Kanal}</Channel><Username>${Servis girişi.Kullanıcı}</Username><Password>${Servis girişi.Parola}</Password><CitizenshipNumber>${Kişi[başvuran].TC}</CitizenshipNumber>');
+    const govde = zarf('<Channel>${Servis girişi.Kanal}</Channel><Username>${Servis girişi.Kullanıcı}</Username><Password>${Servis girişi.Parola}</Password><IdentityNumber>${Kişi[başvuran].TC}</IdentityNumber>');
     const dene = async (tabloSecimleri?: Nesne) => (await basarili('/platform/servis/senaryo/dene', {
-      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Teklif', govde, kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }], tabloSecimleri }
+      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Siparis', govde, kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }], tabloSecimleri }
     })).sonuc as Nesne;
     // Seçim yok → her grupta ilk satır.
     let r = await dene();
@@ -146,12 +146,12 @@ test.describe('servis alanları tablolardan', () => {
     expect(r.hata).toContain('"Servis girişi" tablosunda seçimlerle uyan satır yok');
     expect(soap.istekler.length).toBe(once);
     // Bağlantı: tablo + sütun + etiket saklanır; geçersiz etiket reddedilir.
-    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanBaglari: { Teklif: {
+    await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanBaglari: { Siparis: {
       'Input/Channel': { tablo: girisId, sutun: 'Kanal' }, 'Input/Username': { tablo: girisId, sutun: 'Kullanıcı' }, 'Input/Password': { tablo: girisId, sutun: 'Parola' },
-      'Input/CitizenshipNumber': { tablo: kisiId, sutun: 'TC', etiket: 'başvuran' } } } });
+      'Input/IdentityNumber': { tablo: kisiId, sutun: 'TC', etiket: 'başvuran' } } } });
     const s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis;
-    expect(s.ayarlar.alanBaglari.Teklif['Input/CitizenshipNumber']).toEqual({ tablo: kisiId, sutun: 'TC', etiket: 'başvuran' });
-    const red = await api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanBaglari: { Teklif: { 'Input/Channel': { tablo: girisId, sutun: 'Kanal', etiket: 'a<b' } } } });
+    expect(s.ayarlar.alanBaglari.Siparis['Input/IdentityNumber']).toEqual({ tablo: kisiId, sutun: 'TC', etiket: 'başvuran' });
+    const red = await api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanBaglari: { Siparis: { 'Input/Channel': { tablo: girisId, sutun: 'Kanal', etiket: 'a<b' } } } });
     expect(red.mesaj).toContain('etiketi geçersiz');
   });
 
@@ -159,13 +159,13 @@ test.describe('servis alanları tablolardan', () => {
     const onceki = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis.ayarlar.alanBaglari;
     const dogumId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Doğum', sutunlar: [{ ad: 'Tarih' }], satirlar: [{ degerler: { Tarih: '10.05.1983' } }] })).tablo.id;
     const kaydet = (bicim: string) => api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx',
-      alanBaglari: { Teklif: { 'Input/BirthDate': { tablo: dogumId, sutun: 'Tarih', bicim } } } });
+      alanBaglari: { Siparis: { 'Input/BirthDate': { tablo: dogumId, sutun: 'Tarih', bicim } } } });
     expect((await kaydet('abc')).mesaj).toContain('tarih biçimi geçersiz');
     expect((await kaydet("yyyy-MM-dd'T'HH:mm:ss")).basarili).toBe(true);
     const s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis;
-    expect(s.ayarlar.alanBaglari.Teklif['Input/BirthDate']).toEqual({ tablo: dogumId, sutun: 'Tarih', bicim: "yyyy-MM-dd'T'HH:mm:ss" });
+    expect(s.ayarlar.alanBaglari.Siparis['Input/BirthDate']).toEqual({ tablo: dogumId, sutun: 'Tarih', bicim: "yyyy-MM-dd'T'HH:mm:ss" });
     await basarili('/platform/servis/senaryo/dene', {
-      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Teklif', govde: zarf("<BirthDate>${Doğum.Tarih|yyyy-MM-dd'T'HH:mm:ss}</BirthDate>"), kontroller: [] }
+      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Siparis', govde: zarf("<BirthDate>${Doğum.Tarih|yyyy-MM-dd'T'HH:mm:ss}</BirthDate>"), kontroller: [] }
     });
     expect(soap.istekler.at(-1)?.govde).toContain('<BirthDate>1983-05-10T00:00:00</BirthDate>');
     await basarili('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanBaglari: onceki });
@@ -176,7 +176,7 @@ test.describe('servis alanları tablolardan', () => {
     await basarili('/platform/tablo/kaydet', { projeId, id: kisiId, ad: tablo.ad, sutunlar: [{ ad: 'TC', eskiAd: 'TC' }, { ad: 'Telefon', eskiAd: 'Telefon', karsiliklar: { '5550000001': { servis: '+905550000001', sayfa: 'yok-sayilir' } } }] });
     const govde = zarf('<Phone>${Kişi.Telefon}</Phone>');
     const dene = async (tabloSecimleri?: Nesne) => basarili('/platform/servis/senaryo/dene', {
-      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Teklif', govde, kontroller: [], tabloSecimleri }
+      projeId, servisId, ortamId: testOrtami, baslik: 'T', icerik: { operasyon: 'Siparis', govde, kontroller: [], tabloSecimleri }
     });
     await dene();
     expect(soap.istekler.at(-1)?.govde).toContain('<Phone>+905550000001</Phone>');
@@ -192,22 +192,22 @@ test.describe('servis alanları tablolardan', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     // Parametreler: bağlantıyı kaldır / yeniden bağla (anında kaydedilir).
     await page.goto(`/#/servisler/s/${servisId}/parametreler`);
-    await page.getByRole('button', { name: 'Teklif metodu' }).click();
-    const bagSec = page.getByLabel('Teklif Input/Channel tablo sütunu');
+    await page.getByRole('button', { name: 'Siparis metodu' }).click();
+    const bagSec = page.getByLabel('Siparis Input/Channel tablo sütunu');
     await expect(bagSec).toHaveValue(`${girisId}\u0001Kanal`);
     await expect(page.locator('.metot-cercevesi .alan-satiri').filter({ hasText: /^Channel/ })).toContainText('100');
-    await page.getByLabel('Teklif Input/EndDate tablo sütunu').selectOption(`${kisiId}\u0001Telefon`);
+    await page.getByLabel('Siparis Input/EndDate tablo sütunu').selectOption(`${kisiId}\u0001Telefon`);
     await expect(page.getByText('✓ Kaydedildi')).toBeVisible();
     let s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis;
-    expect(s.ayarlar.alanBaglari.Teklif['Input/EndDate']).toEqual({ tablo: kisiId, sutun: 'Telefon' });
-    await page.getByLabel('Teklif Input/EndDate tablo sütunu').selectOption('');
+    expect(s.ayarlar.alanBaglari.Siparis['Input/EndDate']).toEqual({ tablo: kisiId, sutun: 'Telefon' });
+    await page.getByLabel('Siparis Input/EndDate tablo sütunu').selectOption('');
     await expect(page.getByText('✓ Kaydedildi')).toBeVisible();
     // Yeni senaryo: bağlı alanlar Tablodan, bağlı olmayanlar gönderilmez.
     await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
     const form = page.locator('.alan-formu');
     const satir = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
     await expect(satir('Channel').getByLabel('Channel değer kaynağı')).toHaveValue('tablo');
-    await expect(satir('IsSkiing').getByLabel('IsSkiing değer kaynağı')).toHaveValue('gonderme');
+    await expect(satir('IsGiftWrap').getByLabel('IsGiftWrap değer kaynağı')).toHaveValue('gonderme');
     await expect(satir('Password')).toContainText('•••• seçilen satırdan gelir');
     await expect(satir('Username').getByLabel('Username', { exact: true }).locator('option')).toHaveCount(4);
     await satir('Channel').getByLabel('Channel', { exact: true }).selectOption('100');
@@ -221,8 +221,8 @@ test.describe('servis alanları tablolardan', () => {
     const kayit = s.senaryolar.find((x: Nesne) => x.baslik === 'Tablodan senaryo');
     expect(kayit.icerik.tabloSecimleri).toEqual({ [`${girisId}|`]: { Kanal: '100', Kullanıcı: '100002' } });
     expect(kayit.icerik.govde).toContain('<Channel>${Servis girişi.Kanal}</Channel>');
-    expect(kayit.icerik.govde).toContain('<CitizenshipNumber>${Kişi[başvuran].TC}</CitizenshipNumber>');
-    expect(kayit.icerik.govde).not.toContain('IsSkiing');
+    expect(kayit.icerik.govde).toContain('<IdentityNumber>${Kişi[başvuran].TC}</IdentityNumber>');
+    expect(kayit.icerik.govde).not.toContain('IsGiftWrap');
     // Açılınca seçim geri gelir.
     await page.reload();
     await expect(satir('Username').getByLabel('Username', { exact: true })).toHaveValue('100002');

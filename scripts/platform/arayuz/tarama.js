@@ -208,8 +208,8 @@ export async function kayitDiyalogu(s) {
   const profilSecimi = h('select', {});
   const girissiz = h('input', { type: 'checkbox', id: 'kayit-girissiz' });
   const onay = h('input', { type: 'checkbox', id: 'kayit-onayi' });
-  const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Trafik teklifi', autocomplete: 'off' });
-  const anahtar = h('input', { type: 'text', maxlength: '64', placeholder: 'trafik-teklifi', spellcheck: 'false', autocomplete: 'off' });
+  const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Sipariş formu', autocomplete: 'off' });
+  const anahtar = h('input', { type: 'text', maxlength: '64', placeholder: 'siparis-formu', spellcheck: 'false', autocomplete: 'off' });
   let anahtarElle = false;
   ad.addEventListener('input', () => { if (!anahtarElle) anahtar.value = anahtarOner(ad.value); guncelle(); });
   anahtar.addEventListener('input', () => { anahtarElle = true; guncelle(); });
@@ -263,7 +263,7 @@ export async function kayitDiyalogu(s) {
       h('b', {}, 'Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.'),
       h('ul', {},
         h('li', {}, 'Görünür bir tarayıcı açılır; giriş ve bağlam değiştirme giriş tarifiyle otomatik yapılır ("Giriş yapmadan aç" seçiliyse yapılmaz), sonra başlangıç sayfası açılır.'),
-        h('li', {}, 'Bu ortamda gerçek kayıtlar (teklif, müşteri…) oluşabilir. Riskli ortamlarda kayıt yapılamaz.'),
+        h('li', {}, 'Bu ortamda gerçek kayıtlar (sipariş, müşteri…) oluşabilir. Riskli ortamlarda kayıt yapılamaz.'),
         h('li', {}, 'Akışı sayfada normal yürütün: sayfanın köşesindeki Nöbetçi paneli gördüğü alanları ve bastığınız düğmeleri toplar. Yeni alanlar açılınca "Ekranı yeniden oku"ya basın, beklenen mesajı "Mesaj seç" ile seçin, bitince "Bitir".'),
         h('li', {}, 'Ardından Nöbetçi\'de kayıttan hazırlanan taslak akış diyagramını düzenleyip kaydedersiniz.'),
         h('li', {}, 'Girdiğiniz değerler ve ekran görüntüleri kaydedilmez; yalnızca alanların yapısı (etiket, tür, seçenekler) ve düğmeler kaydedilir.'),

@@ -47,8 +47,8 @@ export interface DogrulamaModeli {
   kosullar?: Readonly<Record<string, {
     ifade: DogrulamaKosulIfadesi;
     aciklama?: string;
-    /** Bağlam profili bazında bilinen görünürlük; profilKodu bağlam profilinin kod'uyla eşleşir (eski adı acentePartaji hâlâ okunur). */
-    bilinenDurumlar?: ReadonlyArray<{ profil?: string; profilKodu?: string; acentePartaji?: string; gorunur: boolean | null }>;
+    /** Bağlam profili bazında bilinen görünürlük; profilKodu bağlam profilinin kod'uyla eşleşir (eski adı da okunur: eski-anahtarlar.mjs). */
+    bilinenDurumlar?: ReadonlyArray<{ profil?: string; profilKodu?: string; gorunur: boolean | null }>;
   }>>;
   adimlar: ReadonlyArray<{
     gorunurluk?: DogrulamaGorunurlugu | null;
@@ -110,7 +110,7 @@ export interface DogrulamaBaglami {
 }
 
 export interface DogrulamaBulgusu {
-  /** Alan yolu (ör. "kapsam", "sigortaliKimligi.tcKimlikNo", "krediKarti.sonKullanmaYili"); senaryonun kendisi için "". */
+  /** Alan yolu (ör. "kapsam", "musteriKimligi.tcKimlikNo", "krediKarti.sonKullanmaYili"); senaryonun kendisi için "". */
   alan: string;
   mesaj: string;
 }
@@ -126,7 +126,6 @@ export type CozulmusBeklenenSonucGirdisi = {
   beklenenSonuc: { tip: 'basarili' } | { tip: 'isKuraliHatasi'; adim: string; mesaj: string };
 };
 
-export declare const TAKSIT_UST_SINIRI: number;
 export declare const ESKI_BEKLENEN_SONUC_ALANLARI: readonly string[];
 export declare const ESKI_ANAHTARLAR: Readonly<{
   kayitAlani: string;
@@ -168,7 +167,6 @@ export declare const MESAJLAR: {
   readonly cvvBicim: () => string;
   readonly kartAyBicim: () => string;
   readonly kartYilBicim: () => string;
-  readonly kartTaksitBicim: (ust: number) => string;
   readonly kartSuresiGecmis: (aaYyyy: string) => string;
   readonly varsayilanKayitSuresiGecmis: (etiket: string, aaYyyy: string) => string;
   readonly eskiBeklenenSonucAlanlari: (alanlar: readonly string[]) => string;

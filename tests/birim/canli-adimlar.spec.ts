@@ -33,10 +33,10 @@ test('raporlayıcı canlı adımları dosyaya yazar: çalışıyor → başarıl
     r.onStepBegin({}, {}, { category: 'pw:api', title: 'locator.click' });
     expect(oku()).toHaveLength(1);
     r.onStepEnd({}, {}, { ...giris, duration: 410 });
-    const prim = { category: 'test.step', title: 'Prim hesaplanır' };
-    r.onStepBegin({}, {}, prim);
-    r.onStepEnd({}, {}, { ...prim, duration: 1100, error: { message: 'beklenen sonuç doğrulanamadı' } });
-    expect(oku().map((a) => [a.ad, a.durum, a.sureMs])).toEqual([['Sisteme giriş yapılır', 'basarili', 410], ['Prim hesaplanır', 'basarisiz', 1100]]);
+    const toplam = { category: 'test.step', title: 'Toplam hesaplanır' };
+    r.onStepBegin({}, {}, toplam);
+    r.onStepEnd({}, {}, { ...toplam, duration: 1100, error: { message: 'beklenen sonuç doğrulanamadı' } });
+    expect(oku().map((a) => [a.ad, a.durum, a.sureMs])).toEqual([['Sisteme giriş yapılır', 'basarili', 410], ['Toplam hesaplanır', 'basarisiz', 1100]]);
     // Yeni test (yeniden deneme) listeyi sıfırlar.
     r.onTestBegin({}, {});
     expect(oku()).toEqual([]);

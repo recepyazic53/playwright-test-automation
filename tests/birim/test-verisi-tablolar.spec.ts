@@ -78,18 +78,18 @@ test.describe('test verisi tabloları', () => {
 
   test('karşılıklar: değerin sayfa / servis değeri saklanır (diskte şifreli); verilmezse korunur, {} siler; gizli sütunda yok', async () => {
     const kaydet = (sutunlar: Nesne[], satirlar?: Nesne[], id?: string) => basarili('/platform/tablo/kaydet', { projeId, id, ad: 'Rota kapsamı', sutunlar, satirlar });
-    let t = (await kaydet([{ ad: 'Kapsam', karsiliklar: { 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' }, 'BOŞ': { sayfa: ' ', servis: '' } } }, { ad: 'Anahtar', gizli: true, karsiliklar: { a: { sayfa: 'b' } } }],
-      [{ degerler: { Kapsam: 'DÜNYA', Anahtar: 'k1' } }, { degerler: { Kapsam: 'AVRUPA', Anahtar: 'k2' } }])).tablo;
-    expect(t.sutunlar).toEqual([{ ad: 'Kapsam', gizli: false, tip: 'metin', karsiliklar: { 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' } } }, { ad: 'Anahtar', gizli: true, tip: 'metin' }]);
+    let t = (await kaydet([{ ad: 'Kapsam', karsiliklar: { 'EKSPRES': { sayfa: '1', servis: 'EXPRESS-X' }, 'STANDART': { sayfa: '2' }, 'BOŞ': { sayfa: ' ', servis: '' } } }, { ad: 'Anahtar', gizli: true, karsiliklar: { a: { sayfa: 'b' } } }],
+      [{ degerler: { Kapsam: 'EKSPRES', Anahtar: 'k1' } }, { degerler: { Kapsam: 'STANDART', Anahtar: 'k2' } }])).tablo;
+    expect(t.sutunlar).toEqual([{ ad: 'Kapsam', gizli: false, tip: 'metin', karsiliklar: { 'EKSPRES': { sayfa: '1', servis: 'EXPRESS-X' }, 'STANDART': { sayfa: '2' } } }, { ad: 'Anahtar', gizli: true, tip: 'metin' }]);
     const vt = await veritabaniAc(vtYolu, { saltOkunur: true });
     try {
       const ham = vt.tumu('SELECT alanlar_json FROM test_verisi_turleri').map((x) => String(x.alanlar_json)).join('\n');
-      expect(ham).not.toContain('WORLDWIDE-X');
-      expect(ham).not.toContain('DÜNYA');
+      expect(ham).not.toContain('EXPRESS-X');
+      expect(ham).not.toContain('EKSPRES');
     } finally { vt.kapat(); }
     // Karşılık verilmeden kaydedilince (ör. satır ekleme, sütun adı değişikliği) korunur; {} siler.
-    t = (await kaydet([{ ad: 'Kapsam alanı', eskiAd: 'Kapsam' }, { ad: 'Anahtar', gizli: true }], [{ degerler: { 'Kapsam alanı': 'ASYA' } }], t.id)).tablo;
-    expect(t.sutunlar[0].karsiliklar).toEqual({ 'DÜNYA': { sayfa: '1', servis: 'WORLDWIDE-X' }, 'AVRUPA': { sayfa: '2' } });
+    t = (await kaydet([{ ad: 'Kapsam alanı', eskiAd: 'Kapsam' }, { ad: 'Anahtar', gizli: true }], [{ degerler: { 'Kapsam alanı': 'KURYE' } }], t.id)).tablo;
+    expect(t.sutunlar[0].karsiliklar).toEqual({ 'EKSPRES': { sayfa: '1', servis: 'EXPRESS-X' }, 'STANDART': { sayfa: '2' } });
     t = (await kaydet([{ ad: 'Kapsam alanı', karsiliklar: {} }, { ad: 'Anahtar', gizli: true }], [], t.id)).tablo;
     expect(t.sutunlar[0].karsiliklar).toBeUndefined();
     const red = await api('/platform/tablo/kaydet', { projeId, id: t.id, ad: 'Rota kapsamı', sutunlar: [{ ad: 'Kapsam alanı', karsiliklar: ['x'] }] });
@@ -180,7 +180,7 @@ test.describe('test verisi tabloları', () => {
     await nav.getByRole('button', { name: 'Yeni tablo' }).click();
     await duz.getByLabel('Tablo adı').fill('Ülke seçenekleri');
     await duz.getByText('Excel\'den yapıştır').click();
-    await duz.getByLabel('Yapıştırılacak satırlar').fill('Kapsam\tAlternatif\tÜlke\nDÜNYA\tVİZE TÜM DÜNYA\tALMANYA\nAVRUPA\tVİZE SCHENGEN\tİTALYA');
+    await duz.getByLabel('Yapıştırılacak satırlar').fill('Kapsam\tAlternatif\tÜlke\nEKSPRES\tHIZLI TESLİMAT\tALMANYA\nSTANDART\tADRESE TESLİM\tİTALYA');
     await duz.getByRole('button', { name: 'Yapıştırılanları ekle' }).click();
     await expect(duz.getByLabel('2. satır Ülke')).toHaveValue('İTALYA');
     await duz.getByRole('button', { name: 'Kaydet' }).click();
@@ -189,18 +189,18 @@ test.describe('test verisi tabloları', () => {
     expect(t.sutunlar.map((s: Nesne) => s.ad)).toEqual(['Kapsam', 'Alternatif', 'Ülke']);
     // Excel (.xlsx): başlık satırı sütunlarla eşleşir, satır eklenir.
     await duz.getByLabel('Excel ya da CSV dosyası').setInputFiles({ name: 'ulkeler.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      buffer: sahteXlsx([['Kapsam', 'Alternatif', 'Ülke'], ['AVRUPA', 'ROTA PAKET', 'İSPANYA']]) });
+      buffer: sahteXlsx([['Kapsam', 'Alternatif', 'Ülke'], ['STANDART', 'ROTA PAKET', 'İSPANYA']]) });
     await expect(duz.getByLabel('3. satır Ülke')).toHaveValue('İSPANYA');
     // Arama.
-    await duz.getByLabel('Satırlarda ara').fill('schengen');
+    await duz.getByLabel('Satırlarda ara').fill('adrese');
     await expect(duz.locator('tbody tr')).toHaveCount(1);
     // Satır adı (senaryoda satırı adıyla seçmek için) düzenlenir.
     await duz.getByLabel('Satırlarda ara').fill('');
-    await duz.getByLabel('1. satır adı').fill('dunya-vize');
+    await duz.getByLabel('1. satır adı').fill('ekspres-hizli');
     await duz.getByRole('button', { name: 'Kaydet' }).click();
     await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
     t = (await tablolar()).find((x) => x.ad === 'Ülke seçenekleri') as Nesne;
-    expect(t.satirlar[0].ad).toBe('dunya-vize');
+    expect(t.satirlar[0].ad).toBe('ekspres-hizli');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
@@ -219,12 +219,12 @@ test.describe('test verisi tabloları', () => {
     await nav.getByRole('button', { name: /^Ülke seçenekleri/ }).click();
     await duz.getByRole('button', { name: '1. sütunun karşılıkları' }).click();
     const p = page.getByRole('dialog', { name: '"Kapsam" değerlerinin karşılıkları' });
-    await expect(p.locator('tbody th')).toHaveText(['DÜNYA', 'AVRUPA']);
-    await p.getByLabel('DÜNYA sayfa değeri').fill('1');
-    await p.getByLabel('DÜNYA servis değeri').fill('WORLD');
-    await p.getByLabel('Değerlerde ara').fill('avr');
-    await expect(p.locator('tbody th')).toHaveText(['AVRUPA']);
-    await p.getByLabel('AVRUPA sayfa değeri').fill('2');
+    await expect(p.locator('tbody th')).toHaveText(['EKSPRES', 'STANDART']);
+    await p.getByLabel('EKSPRES sayfa değeri').fill('1');
+    await p.getByLabel('EKSPRES servis değeri').fill('EXPRESS');
+    await p.getByLabel('Değerlerde ara').fill('sta');
+    await expect(p.locator('tbody th')).toHaveText(['STANDART']);
+    await p.getByLabel('STANDART sayfa değeri').fill('2');
     await expect(p.getByText('2 değer · 2 karşılık tanımlı')).toBeVisible();
     await p.getByRole('button', { name: 'Tamam' }).click();
     await expect(duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' })).toBeVisible();
@@ -232,10 +232,10 @@ test.describe('test verisi tabloları', () => {
     await duz.getByRole('button', { name: 'Kaydet' }).click();
     await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
     const t = (await tablolar()).find((x) => x.ad === 'Ülke seçenekleri') as Nesne;
-    expect(t.sutunlar[0].karsiliklar).toEqual({ 'DÜNYA': { sayfa: '1', servis: 'WORLD' }, 'AVRUPA': { sayfa: '2' } });
+    expect(t.sutunlar[0].karsiliklar).toEqual({ 'EKSPRES': { sayfa: '1', servis: 'EXPRESS' }, 'STANDART': { sayfa: '2' } });
     // Vazgeç değiştirmez.
     await duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' }).click();
-    await p.getByLabel('DÜNYA sayfa değeri').fill('9');
+    await p.getByLabel('EKSPRES sayfa değeri').fill('9');
     await p.getByRole('button', { name: 'Vazgeç' }).click();
     await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();
     expect(hatalar).toEqual([]);

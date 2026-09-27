@@ -2,8 +2,8 @@
 // yardımcıları kullanır, HİÇBİR modül içe aktarmaz).
 //
 // Servis akışının OPERASYON adımı (tur 'operasyon'): { id, ad, tur: 'operasyon', servisId, operasyon, okumalar, baglar?, hataOlursaDevam? }
-//   baglar: { "<alan yolu>": "${akis:Ad}" } — operasyonun o alanı önceki adımda okunan değerle dolar (ör. Print "Input/PolicyNo" ←
-//   ${akis:PolicyNo}). Alan yolu SOAP'ta şema yolu ("Input/PolicyNo"), REST'te JSON gövdesindeki yol ("policy/no"). Akış yalnız SIRAYI
+//   baglar: { "<alan yolu>": "${akis:Ad}" } — operasyonun o alanı önceki adımda okunan değerle dolar (ör. GetInvoice "Input/OrderNo" ←
+//   ${akis:OrderNo}). Alan yolu SOAP'ta şema yolu ("Input/OrderNo"), REST'te JSON gövdesindeki yol ("order/no"). Akış yalnız SIRAYI
 //   ve TAŞINAN değerleri tanımlar; alan DEĞERLERİ senaryodadır.
 // AKIŞ SENARYOSU (servis senaryosu içeriği, tur 'akis'): { tur: 'akis', akisId, adimlar: { "<adımId>": AdimIcerigi }, aciklama? }
 //   AdimIcerigi = tek istekli senaryonun içeriği (operasyon, govde, kontroller, basliklar?, http?, tabloSecimleri? …): o operasyon

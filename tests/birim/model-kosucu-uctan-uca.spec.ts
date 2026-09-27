@@ -207,8 +207,8 @@ test('beş model senaryosu sunucunun koşu ucuyla, gerçek raporlayıcıyla (Ko�
   expect(Object.fromEntries([...sonuclar.entries()].map(([b, d]) => [b, d.durum]))).toEqual({
     'Merkez / indirim alanı atlanır': 'basarili',
     'Merkez / indirim mutlaka görünmeli': 'basarisiz',
-    'Merkez / Türkiye taksitli → iş kuralı': 'basarili',
-    'Yetkili / Dünya / peşin / onaylı': 'basarili',
+    'Merkez / Ekonomi taksitli → iş kuralı': 'basarili',
+    'Yetkili / Ekspres / peşin / onaylı': 'basarili',
     'Yetkili / onay adımı hariç': 'basarili'
   });
   // Hepsi aynı koşuda, senaryo kimliği ve ekranla; kodlu testler koşmadı.
@@ -222,23 +222,23 @@ test('beş model senaryosu sunucunun koşu ucuyla, gerçek raporlayıcıyla (Ko�
 });
 
 test('mutlu yol: tüm alanlar (ok düğmeli kapsam, radyo, onay kutusu, tarih, dosya, bağlama göre görünen indirim) + isteğe bağlı onay', () => {
-  const d = sonuclar.get('Yetkili / Dünya / peşin / onaylı') as Nesne;
+  const d = sonuclar.get('Yetkili / Ekspres / peşin / onaylı') as Nesne;
   expect((d.adimlar as Array<{ ad: string; durum: string }>).map((a) => [a.ad, a.durum])).toEqual([
     ['Sisteme giriş yapılır', 'basarili'], ['Bağlam değiştirilir (Yetkili)', 'basarili'], ['Ekran açılır', 'basarili'],
-    ['Başvuru bilgileri girilir', 'basarili'], ['Prim hesaplanır', 'basarili'], ['Başvuru onaylanır', 'basarili']
+    ['Başvuru bilgileri girilir', 'basarili'], ['Toplam hesaplanır', 'basarili'], ['Başvuru onaylanır', 'basarili']
   ]);
   expect(d.atlananAlanlar).toEqual([]);
-  const h = uygulama.hesaplamalar.find((x) => x.sube === 'S02' && x.kapsam === 'DÜNYA');
-  expect(h).toMatchObject({ urun: 'A', adSoyad: 'Deneme Kişi', baslangic: '2026-10-01', kapsam: 'DÜNYA', odeme: 'pesin', kampanya: true, indirim: '10', belge: `ornek-belge.txt:${Buffer.byteLength(BELGE)}` });
+  const h = uygulama.hesaplamalar.find((x) => x.sube === 'S02' && x.kapsam === 'EKSPRES');
+  expect(h).toMatchObject({ urun: 'A', adSoyad: 'Deneme Kişi', baslangic: '2026-10-01', kapsam: 'EKSPRES', odeme: 'pesin', kampanya: true, indirim: '10', belge: `ornek-belge.txt:${Buffer.byteLength(BELGE)}` });
   expect(uygulama.onaylar).toHaveLength(1);
-  expect((d.medya as Array<{ ad: string }>).map((m) => m.ad)).toEqual(expect.arrayContaining(['06 - Başvuru onaylanır', '05 - Prim hesaplanır']));
+  expect((d.medya as Array<{ ad: string }>).map((m) => m.ad)).toEqual(expect.arrayContaining(['06 - Başvuru onaylanır', '05 - Toplam hesaplanır']));
 });
 
 test('iş kuralı hatası beklenir: toleranslı mesaj eşleşmesi, onay adımına geçilmez', () => {
-  const d = sonuclar.get('Merkez / Türkiye taksitli → iş kuralı') as Nesne;
+  const d = sonuclar.get('Merkez / Ekonomi taksitli → iş kuralı') as Nesne;
   expect(d.durum).toBe('basarili');
-  expect((d.adimlar as Array<{ ad: string }>).map((a) => a.ad).at(-1)).toBe('Prim hesaplanır');
-  expect(uygulama.hesaplamalar.some((x) => x.kapsam === 'TÜRKİYE' && x.odeme === 'taksit' && x.sube === 'S01')).toBe(true);
+  expect((d.adimlar as Array<{ ad: string }>).map((a) => a.ad).at(-1)).toBe('Toplam hesaplanır');
+  expect(uygulama.hesaplamalar.some((x) => x.kapsam === 'EKONOMİ' && x.odeme === 'taksit' && x.sube === 'S01')).toBe(true);
   expect(IS_KURALI_MESAJI).toContain('“Taksitli”'); // senaryo düz tırnak + küçük harf bekliyordu
 });
 
@@ -257,11 +257,11 @@ test('görünmeyen alan atlanır ve "atlanan alanlar"a yazılır; "mutlaka gör�
   expect((dusen.medya as Array<{ ad: string }>).some((m) => m.ad.startsWith('❌ HATA ANI'))).toBe(true);
 });
 
-test('isteğe bağlı adım hariç: prim hesaplanınca biter, onay isteği gitmez; şifreli belge çözülüp yüklendi, geçici klasör silindi', () => {
+test('isteğe bağlı adım hariç: toplam hesaplanınca biter, onay isteği gitmez; şifreli belge çözülüp yüklendi, geçici klasör silindi', () => {
   const d = sonuclar.get('Yetkili / onay adımı hariç') as Nesne;
   expect(d.durum).toBe('basarili');
   // Şifreli senaryo dosyası koşuda çözüldü ve sayfaya yüklendi (ad + boyut); koşu bitince geçici klasör kalmadı.
-  expect(uygulama.hesaplamalar.find((x) => x.sube === 'S02' && x.kapsam === 'AVRUPA')).toMatchObject({ belge: `sifreli-belge.txt:${Buffer.byteLength(SIFRELI_BELGE)}` });
+  expect(uygulama.hesaplamalar.find((x) => x.sube === 'S02' && x.kapsam === 'STANDART')).toMatchObject({ belge: `sifreli-belge.txt:${Buffer.byteLength(SIFRELI_BELGE)}` });
   const kok = geciciDosyaKoku(vtYolu);
   expect(existsSync(kok) ? readdirSync(kok) : []).toEqual([]);
   expect((d.adimlar as Array<{ ad: string }>).map((a) => a.ad)).not.toContain('Başvuru onaylanır');

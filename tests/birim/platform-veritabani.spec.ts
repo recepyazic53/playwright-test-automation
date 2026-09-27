@@ -35,7 +35,7 @@ import {
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
-import { MOTOR_YASAK_SOZCUKLERI, YASAK_TABLO_DESENI } from './yasak-sozcukler';
+import { MOTOR_YASAK_OZETLERI, tabloTanimindaYasakBul, yasakSozcukleriBul } from './yasak-sozcukler';
 
 test.describe('Platform veritabanı — göçler', () => {
   test('boş veritabanına tüm göçler uygulanır, tekrar açınca yeniden uygulanmaz', async () => {
@@ -184,13 +184,11 @@ test.describe('Platform veritabanı — veri erişim katmanı', () => {
     const kaynaklar = ['veritabani/gocler.mjs', 'veritabani/depo.mjs', 'kasa.mjs', 'yedek.mjs', 'ice-aktarma.mjs', 'sunucu-platform.mjs',
       'veri-oku.mjs',
       'servisler/servis-deposu.mjs', 'servisler/soap-istemcisi.mjs', 'servisler/soapui-ice-aktarma.mjs', 'servisler/soapui-aktarimi.mjs', 'servisler/servis-islemleri.mjs']
-      .map((d) => readFileSync(join(__dirname, '..', '..', 'scripts', 'platform', d), 'utf-8').toLowerCase());
+      .map((d) => readFileSync(join(__dirname, '..', '..', 'scripts', 'platform', d), 'utf-8'));
     for (const metin of kaynaklar) {
-      for (const yasak of MOTOR_YASAK_SOZCUKLERI) {
-        expect(metin.includes(yasak), `"${yasak}" motorda geçmemeli`).toBe(false);
-      }
-      // Alana özgü bağlam kavramı yalnızca açıklama örneği olarak geçebilir, tablo/sütun adı olarak değil.
-      expect(YASAK_TABLO_DESENI.test(metin)).toBe(false);
+      expect(yasakSozcukleriBul(metin, MOTOR_YASAK_OZETLERI), 'projeye özgü kavram motorda geçmemeli').toEqual([]);
+      // Alana özgü kavram tablo/sütun adı olamaz.
+      expect(tabloTanimindaYasakBul(metin)).toEqual([]);
     }
   });
 });

@@ -17,7 +17,7 @@ import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 test('eşleşme kuralı: uzun parçalar ad içinde, kısa parçalar tam sözcük; büyük/küçük harf ve -, _ yok sayılır', () => {
   for (const ad of ['Password', 'musteri_parola', 'ŞifreTekrar', 'Authorization', 'X-Api-Key', 'accessKey', 'session_id', 'Cookie', 'PinKodu', 'pin', 'totpGizli', 'guvenlikKodu', 'CVV'])
     expect(gizliAdMi(ad), ad).toBe(true);
-  for (const ad of ['Shipping', 'Username', 'Channel', 'TeklifNo', 'Opinion', 'Kanal', 'otopark'])
+  for (const ad of ['Shipping', 'Username', 'Channel', 'SiparisNo', 'Opinion', 'Kanal', 'otopark'])
     expect(gizliAdMi(ad), ad).toBe(false);
   expect(gizliAdMi('MusteriAnahtari')).toBe(false);
   expect(gizliAdMi('Musteri_Anahtari', ['musteriAnahtari'])).toBe(true);

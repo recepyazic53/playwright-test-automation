@@ -659,7 +659,7 @@ export function secimKosuluCikar(okumalar, hedef, adaylar, gecerliDegerler) {
  */
 export function sabitGostergeMetni(m) {
   if (!m) return null;
-  // Rakam içeren ilk kelimeden itibaren (ör. "No: TK-1003", "12.05.2026") değişken kabul edilir.
+  // Rakam içeren ilk kelimeden itibaren (ör. "No: SP-1003", "12.05.2026") değişken kabul edilir.
   const i = m.search(/[^\s:;,()]*\d/);
   const s = (i >= 0 ? m.slice(0, i) : m).replace(/[\s:;,.#№(\-–—]+$/u, '').trim();
   return s.length >= 3 ? s : null;

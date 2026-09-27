@@ -1,9 +1,9 @@
 // SERVİS SENARYOSU TÜRÜ SEÇİMİ + AKIŞ SENARYOSU FORMU (servis sayfası > Senaryo ekle / bir akış senaryosu).
 //   Yeni senaryoda en üstte karşılıklı dışlayıcı seçim: "Tek istek (operasyon)" → mevcut senaryo düzenleyicisi aynen;
 //   "Akış" → bu form: Başlık, Akış (akışı bu servisten geçenler; "Tüm akışları göster" ile projedekilerin tümü), Kapsam, Koşuya
-//   dahil ve akışın HER OPERASYON ADIMI için ayrı bölüm ("1. TeklifServisi · Proposal"): o metodun zorunlu / seçili alanları
+//   dahil ve akışın HER OPERASYON ADIMI için ayrı bölüm ("1. SiparisServisi · CreateOrder"): o metodun zorunlu / seçili alanları
 //   (metot ayarlarındaki zorunlu işaretleri, tablo ve hesaplama kuralı bağları, servis varsayılanları; "Tüm alanlar" ile hepsi),
-//   akıştan gelen alanlar KİLİTLİ ("1. adımdan gelir (${akis:PolicyNo})"; sorulmaz), adımın beklenen sonucu (kontroller).
+//   akıştan gelen alanlar KİLİTLİ ("1. adımdan gelir (${akis:OrderNo})"; sorulmaz), adımın beklenen sonucu (kontroller).
 //   Aynı adlı alan her adımda ayrı sorulur. Akıştaki bir operasyon CANLI'da çağrılmıyorsa CANLI kapsamı seçilemez (neden yazılı).
 //   Adres: #/servisler/s/<id>/senaryo/yeni?akis=<akisId> (akış sayfasındaki "Senaryo ekle") akış seçili açılır.
 // Kayıt: POST /platform/servis/akis-senaryosu/kaydet (içerik: { tur: 'akis', akisId, adimlar: { <adımId>: tek istekli içerik } }).
@@ -204,7 +204,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
               kurallar.map((k) => h('option', { value: k, selected: v.deger === k }, k)), v.deger && !kurallar.includes(v.deger) ? h('option', { value: v.deger, selected: true }, `${v.deger} (tanımsız)`) : null);
             girdi.addEventListener('change', () => { v.deger = girdi.value; });
           } else if (v.kaynak === 'akis') {
-            girdi = h('input', { type: 'text', value: v.deger || '', maxlength: '60', spellcheck: 'false', class: 'kod-girdisi', placeholder: 'PolicyNo', 'aria-label': `${a.no}. adım ${sat.alan.ad} akış değeri adı` });
+            girdi = h('input', { type: 'text', value: v.deger || '', maxlength: '60', spellcheck: 'false', class: 'kod-girdisi', placeholder: 'OrderNo', 'aria-label': `${a.no}. adım ${sat.alan.ad} akış değeri adı` });
             girdi.addEventListener('input', () => { v.deger = girdi.value.trim(); });
           }
           yerlestir(satir, ad, h('span', { role: 'cell' }, kaynak),

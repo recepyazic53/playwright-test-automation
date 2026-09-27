@@ -18,32 +18,32 @@ type Nesne = Record<string, any>;
 
 test('WSDL şeması: kalıtım, iç içe grup, zorunluluk, nillable, tip ve seçenek listesi; SOAPAction ve kök öğe', () => {
   const s = wsdlSemalari(WSDL);
-  expect(Object.keys(s)).toEqual(['Teklif', 'Onayla']);
-  expect(s.Teklif).toMatchObject({ ad: 'Teklif', eylem: 'Ornek/Teklif', kok: 'Teklif', ns: 'Ornek' });
-  const girdi = s.Teklif.alanlar[0];
+  expect(Object.keys(s)).toEqual(['Siparis', 'Onayla']);
+  expect(s.Siparis).toMatchObject({ ad: 'Siparis', eylem: 'Ornek/Siparis', kok: 'Siparis', ns: 'Ornek' });
+  const girdi = s.Siparis.alanlar[0];
   expect(girdi.ad).toBe('Input');
-  expect(girdi.cocuklar?.map((a) => a.ad)).toEqual(['Channel', 'Username', 'Password', 'CitizenshipNumber', 'BeginDate', 'EndDate', 'IsSkiing', 'CreditCard', 'ClientType']);
+  expect(girdi.cocuklar?.map((a) => a.ad)).toEqual(['Channel', 'Username', 'Password', 'IdentityNumber', 'BeginDate', 'EndDate', 'IsGiftWrap', 'CreditCard', 'ClientType']);
   const alan = (ad: string) => girdi.cocuklar?.find((a) => a.ad === ad);
   expect(alan('BeginDate')).toEqual({ ad: 'BeginDate', zorunlu: true, tip: 'tarihSaat' });
-  expect(alan('IsSkiing')).toEqual({ ad: 'IsSkiing', zorunlu: true, nillable: true, tip: 'mantiksal' });
+  expect(alan('IsGiftWrap')).toEqual({ ad: 'IsGiftWrap', zorunlu: true, nillable: true, tip: 'mantiksal' });
   expect(alan('ClientType')).toEqual({ ad: 'ClientType', zorunlu: true, tip: 'metin', secenekler: ['O', 'T'] });
   expect(alan('CreditCard')?.cocuklar).toEqual([{ ad: 'CardNumber', tip: 'metin' }, { ad: 'Installment', zorunlu: true, tip: 'tamsayi' }]);
-  expect(s.Onayla.alanlar).toEqual([{ ad: 'TeklifNo', zorunlu: true, tip: 'tamsayi' }]);
+  expect(s.Onayla.alanlar).toEqual([{ ad: 'SiparisNo', zorunlu: true, tip: 'tamsayi' }]);
   expect(wsdlSemalari('bozuk <xml')).toEqual({});
 });
 
 test('form ↔ gövde: üretilen gövde geri çözülür; boş / nil / gönderme / parametre / sabit (kaçışlı); grup yalnız doluysa yazılır', () => {
-  const sema = wsdlSemalari(WSDL).Teklif;
-  const bas = baslangicDegerleri(sema, { 'Input/CitizenshipNumber': { kaynak: 'parametre', deger: 'MUSTERI_TC' } });
-  expect(bas['Input/CitizenshipNumber']).toEqual({ kaynak: 'parametre', deger: 'MUSTERI_TC' });
-  expect(bas['Input/IsSkiing']).toEqual({ kaynak: 'nil' });
+  const sema = wsdlSemalari(WSDL).Siparis;
+  const bas = baslangicDegerleri(sema, { 'Input/IdentityNumber': { kaynak: 'parametre', deger: 'MUSTERI_TC' } });
+  expect(bas['Input/IdentityNumber']).toEqual({ kaynak: 'parametre', deger: 'MUSTERI_TC' });
+  expect(bas['Input/IsGiftWrap']).toEqual({ kaynak: 'nil' });
   expect(bas['Input/BeginDate']).toEqual({ kaynak: 'bos' });
   expect(bas['Input/Channel']).toEqual({ kaynak: 'gonderme' });
   const degerler: Record<string, AlanDegeri> = { ...bas, 'Input/Channel': { kaynak: 'parametre', deger: 'CHANNEL' }, 'Input/ClientType': { kaynak: 'sabit', deger: 'A&B <x>' } };
   const govde = govdeUret(sema, degerler);
-  expect(govde).toContain('<Teklif xmlns="Ornek">');
+  expect(govde).toContain('<Siparis xmlns="Ornek">');
   expect(govde).toContain('<Channel>${CHANNEL}</Channel>');
-  expect(govde).toContain('<IsSkiing xsi:nil="true"/>');
+  expect(govde).toContain('<IsGiftWrap xsi:nil="true"/>');
   expect(govde).toContain('<ClientType>A&amp;B &lt;x&gt;</ClientType>');
   expect(govde).not.toContain('CreditCard');
   expect(govde).not.toContain('<Username');
@@ -55,18 +55,18 @@ test('form ↔ gövde: üretilen gövde geri çözülür; boş / nil / gönderme
 });
 
 test('gövde formda temsil edilemiyorsa neden bildirilir (şemada olmayan / tekrar eden öğe, farklı kök, bozuk XML)', () => {
-  const sema = wsdlSemalari(WSDL).Teklif;
+  const sema = wsdlSemalari(WSDL).Siparis;
   const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>${ic}</s:Body></s:Envelope>`;
-  expect(govdeCoz(zarf('<Teklif xmlns="Ornek"><Input><Extra>1</Extra></Input></Teklif>'), sema).uyumsuz).toEqual(['"Input/Extra" şemada yok.']);
-  expect(govdeCoz(zarf('<Teklif><Input><Channel>1</Channel><Channel>2</Channel></Input></Teklif>'), sema).uyumsuz[0]).toContain('birden çok');
-  expect(govdeCoz(zarf('<Onayla/>'), sema).uyumsuz[0]).toContain('"Teklif"');
+  expect(govdeCoz(zarf('<Siparis xmlns="Ornek"><Input><Extra>1</Extra></Input></Siparis>'), sema).uyumsuz).toEqual(['"Input/Extra" şemada yok.']);
+  expect(govdeCoz(zarf('<Siparis><Input><Channel>1</Channel><Channel>2</Channel></Input></Siparis>'), sema).uyumsuz[0]).toContain('birden çok');
+  expect(govdeCoz(zarf('<Onayla/>'), sema).uyumsuz[0]).toContain('"Siparis"');
   expect(govdeCoz('<a><b></a>', sema).uyumsuz[0]).toContain('XML');
   // SoapUI tarzı (önekli zarf, xsi:nil, satır boşlukları) sorunsuz çözülür.
-  const soapui = zarf('\n  <Teklif xmlns="Ornek">\n    <Input>\n      <IsSkiing xsi:nil="true"/>\n      <CitizenshipNumber>000</CitizenshipNumber>\n    </Input>\n  </Teklif>\n');
+  const soapui = zarf('\n  <Siparis xmlns="Ornek">\n    <Input>\n      <IsGiftWrap xsi:nil="true"/>\n      <IdentityNumber>000</IdentityNumber>\n    </Input>\n  </Siparis>\n');
   const c = govdeCoz(soapui, sema);
   expect(c.uyumsuz).toEqual([]);
-  expect(c.degerler['Input/IsSkiing']).toEqual({ kaynak: 'nil' });
-  expect(c.degerler['Input/CitizenshipNumber']).toEqual({ kaynak: 'sabit', deger: '000' });
+  expect(c.degerler['Input/IsGiftWrap']).toEqual({ kaynak: 'nil' });
+  expect(c.degerler['Input/IdentityNumber']).toEqual({ kaynak: 'sabit', deger: '000' });
 });
 
 test('tipe göre sabit değer uyarısı (yer tutucu her zaman geçer)', () => {
@@ -124,11 +124,11 @@ test.describe('alan formu uçtan uca', () => {
     const e = await basarili('/platform/servis/erisim', { projeId, ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
     servisId = String((await basarili('/platform/servis/kaydet', { projeId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', erisimKimligi: e.erisimKimligi })).id);
     const s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis;
-    expect(Object.keys(s.ayarlar.operasyonSemalari)).toEqual(['Teklif', 'Onayla']);
+    expect(Object.keys(s.ayarlar.operasyonSemalari)).toEqual(['Siparis', 'Onayla']);
     const red = await api('/platform/servis/sema/yenile', { projeId, servisId, ortamId: canli });
     expect(red.basarili).toBe(false);
-    expect(await basarili('/platform/servis/sema/yenile', { projeId, servisId, ortamId: testOrtami })).toMatchObject({ durumKodu: 200, operasyonSayisi: 2, alanliOperasyonlar: ['Teklif', 'Onayla'] });
-    const bozuk = await api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanVarsayilanlari: { Teklif: { 'Input/A': { kaynak: 'uydurma' } } } });
+    expect(await basarili('/platform/servis/sema/yenile', { projeId, servisId, ortamId: testOrtami })).toMatchObject({ durumKodu: 200, operasyonSayisi: 2, alanliOperasyonlar: ['Siparis', 'Onayla'] });
+    const bozuk = await api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanVarsayilanlari: { Siparis: { 'Input/A': { kaynak: 'uydurma' } } } });
     expect(bozuk.basarili).toBe(false);
   });
 
@@ -142,42 +142,42 @@ test.describe('alan formu uçtan uca', () => {
     const form = page.locator('.alan-formu');
     await expect(form).toBeVisible();
     const satir = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
-    await expect(satir('CitizenshipNumber')).toBeVisible();
+    await expect(satir('IdentityNumber')).toBeVisible();
     // Bağlı olmayan alan da "Tablodan" seçilebilir: sütun seçilir (test verisi türü "Kişi" bir tablodur).
-    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı').selectOption('tablo');
-    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber tablo sütunu').selectOption('Kişi.tcKimlikNo');
-    await satir('IsSkiing').getByLabel('IsSkiing değer kaynağı').selectOption('sabit');
-    await satir('IsSkiing').getByLabel('IsSkiing', { exact: true }).selectOption('true');
+    await satir('IdentityNumber').getByLabel('IdentityNumber değer kaynağı').selectOption('tablo');
+    await satir('IdentityNumber').getByLabel('IdentityNumber tablo sütunu').selectOption('Kişi.tcKimlikNo');
+    await satir('IsGiftWrap').getByLabel('IsGiftWrap değer kaynağı').selectOption('sabit');
+    await satir('IsGiftWrap').getByLabel('IsGiftWrap', { exact: true }).selectOption('true');
     await satir('ClientType').getByLabel('ClientType değer kaynağı').selectOption('sabit');
     await satir('ClientType').getByLabel('ClientType', { exact: true }).selectOption('O');
     await satir('BeginDate').getByLabel('BeginDate değer kaynağı').selectOption('sabit');
     await satir('BeginDate').getByLabel('BeginDate', { exact: true }).fill('2026-01-02T03:04:05');
-    // ★: CitizenshipNumber için servis varsayılanı.
-    await satir('CitizenshipNumber').getByRole('button', { name: 'CitizenshipNumber için servis varsayılanı' }).click();
-    await expect(satir('CitizenshipNumber').getByRole('button', { name: 'CitizenshipNumber için servis varsayılanı' })).toHaveText('★');
+    // ★: IdentityNumber için servis varsayılanı.
+    await satir('IdentityNumber').getByRole('button', { name: 'IdentityNumber için servis varsayılanı' }).click();
+    await expect(satir('IdentityNumber').getByRole('button', { name: 'IdentityNumber için servis varsayılanı' })).toHaveText('★');
     // XML sekmesine geçip dönünce değerler korunur.
     await page.getByRole('tab', { name: 'Gövde (XML)' }).click();
-    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<CitizenshipNumber>\$\{Kişi\.tcKimlikNo\}<\/CitizenshipNumber>/);
+    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<IdentityNumber>\$\{Kişi\.tcKimlikNo\}<\/IdentityNumber>/);
     await page.getByRole('tab', { name: 'Alanlar' }).click();
-    await expect(satir('IsSkiing').getByLabel('IsSkiing', { exact: true })).toHaveValue('true');
+    await expect(satir('IsGiftWrap').getByLabel('IsGiftWrap', { exact: true })).toHaveValue('true');
     await page.getByLabel('Başlık').fill('Formdan senaryo');
     await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
     await expect(page).toHaveURL(/\/senaryo\/[0-9a-f-]{36}$/);
 
     const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
     const kayit = d.senaryolar.find((x: Nesne) => x.baslik === 'Formdan senaryo');
-    expect(kayit.icerik.govde).toContain('<CitizenshipNumber>${Kişi.tcKimlikNo}</CitizenshipNumber>');
-    expect(kayit.icerik.govde).toContain('<IsSkiing>true</IsSkiing>');
+    expect(kayit.icerik.govde).toContain('<IdentityNumber>${Kişi.tcKimlikNo}</IdentityNumber>');
+    expect(kayit.icerik.govde).toContain('<IsGiftWrap>true</IsGiftWrap>');
     expect(kayit.icerik.govde).toContain('<ClientType>O</ClientType>');
     expect(kayit.icerik.govde).toContain('<BeginDate>2026-01-02T03:04:05</BeginDate>');
-    expect(d.servis.ayarlar.alanVarsayilanlari).toEqual({ Teklif: { 'Input/CitizenshipNumber': { kaynak: 'tablo', deger: 'Kişi.tcKimlikNo' } } });
+    expect(d.servis.ayarlar.alanVarsayilanlari).toEqual({ Siparis: { 'Input/IdentityNumber': { kaynak: 'tablo', deger: 'Kişi.tcKimlikNo' } } });
 
     // Kayıtlı senaryo formda açılır; yeni senaryoda varsayılan dolu gelir.
     await page.reload();
     await expect(satir('ClientType').getByLabel('ClientType', { exact: true })).toHaveValue('O');
     await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
-    await expect(satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı')).toHaveValue('tablo');
-    await expect(satir('CitizenshipNumber')).toContainText('Kişi → tcKimlikNo');
+    await expect(satir('IdentityNumber').getByLabel('IdentityNumber değer kaynağı')).toHaveValue('tablo');
+    await expect(satir('IdentityNumber')).toContainText('Kişi → tcKimlikNo');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
@@ -207,15 +207,15 @@ test.describe('alan formu uçtan uca', () => {
     // Alan arama: harf harf yazılır, kutu odakta kalır, tablo süzülür.
     const ara = page.getByLabel('Alan ara');
     await ara.click();
-    await ara.pressSequentially('Citiz', { delay: 20 });
-    await expect(ara).toHaveValue('Citiz');
+    await ara.pressSequentially('Identi', { delay: 20 });
+    await expect(ara).toHaveValue('Identi');
     await expect(ara).toBeFocused();
     await expect(form.locator('.alan-satiri')).toHaveCount(1);
     await ara.fill('');
 
     // Tablodan: "Kişi" tablosunun satırlarındaki kimlik numaraları listelenir; seçilen değer senaryoya yazılır.
-    await satir('CitizenshipNumber').getByLabel('CitizenshipNumber değer kaynağı').selectOption('tablo');
-    const deger = satir('CitizenshipNumber').getByLabel('CitizenshipNumber', { exact: true });
+    await satir('IdentityNumber').getByLabel('IdentityNumber değer kaynağı').selectOption('tablo');
+    const deger = satir('IdentityNumber').getByLabel('IdentityNumber', { exact: true });
     await expect(deger.locator('option')).toHaveText(['— seçilmedi (2 seçenek) —', '11111111110', '22222222220']);
     await deger.selectOption('22222222220');
     await page.getByLabel('Başlık').fill('Profil seçili senaryo');
@@ -228,7 +228,7 @@ test.describe('alan formu uçtan uca', () => {
     expect(kayit.icerik.govde).toContain('<Channel>30447</Channel>');
     // Kayıtlı senaryo açılınca seçim görünür.
     await page.reload();
-    await expect(satir('CitizenshipNumber').getByLabel('CitizenshipNumber', { exact: true })).toHaveValue('22222222220');
+    await expect(satir('IdentityNumber').getByLabel('IdentityNumber', { exact: true })).toHaveValue('22222222220');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
@@ -266,7 +266,7 @@ test.describe('alan formu uçtan uca', () => {
   test('canlı koşu işi: adımlar sırayla bildirilir, istek / yanıt tutulur; bekleyen istek Durdur ile kesilir', async () => {
     test.setTimeout(60_000);
     const kaydet = async (baslik: string, govde: string) => String((await basarili('/platform/servis/senaryo/kaydet', {
-      projeId, servisId, baslik, icerik: { operasyon: 'Teklif', govde, kontroller: [{ tur: 'soapYaniti' }] } })).id);
+      projeId, servisId, baslik, icerik: { operasyon: 'Siparis', govde, kontroller: [{ tur: 'soapYaniti' }] } })).id);
     const hizli = await kaydet('Hızlı', '<a/>');
     const yavas = await kaydet('Yavaş', '<a>YAVAS</a>');
     const { is } = await basarili('/platform/servis/is/baslat', { projeId, servisId, ortamId: testOrtami, senaryoIdleri: [hizli, yavas] });
@@ -347,7 +347,7 @@ test.describe('alan formu uçtan uca', () => {
     await expect(panel.locator('.servis-adimlari')).toContainText('Cevap geldi (HTTP 200');
     expect(await sayi()).toBe(once);
     // CANLI ortamda taslak koşusu reddedilir.
-    const red = await api('/platform/servis/is/baslat', { projeId, servisId, ortamId: canli, taslak: { baslik: 'x', icerik: { operasyon: 'Teklif', govde: '<a/>', kontroller: [] } } });
+    const red = await api('/platform/servis/is/baslat', { projeId, servisId, ortamId: canli, taslak: { baslik: 'x', icerik: { operasyon: 'Siparis', govde: '<a/>', kontroller: [] } } });
     expect(red.basarili).toBe(false);
     expect(hatalar).toEqual([]);
     await baglam.close();
@@ -399,7 +399,7 @@ test.describe('alan formu uçtan uca', () => {
     await page.goto(`/#/servisler/s/${servisId}`);
     const satir = (baslik: string) => page.locator('.servis-senaryo-tablosu tbody tr').filter({ has: page.getByRole('link', { name: baslik, exact: true }) });
     const istek = satir('Hızlı').locator('td.istek-hucresi');
-    await expect(istek).toContainText('Teklif');
+    await expect(istek).toContainText('Siparis');
     await expect(istek.locator('.istek-adresi')).toHaveText(`${soap.adres.replace(/\/+$/, '')}/Servis/ornek.asmx`);
     // Metot filtresi.
     await page.getByLabel('Metot', { exact: true }).selectOption('Onayla');

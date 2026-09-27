@@ -1,4 +1,4 @@
-// SERVİS AKIŞLARI — birden çok kayıtlı servis senaryosunu sırayla koşar. Bir adımın yanıtından okunan değer (ör. token, teklif
+// SERVİS AKIŞLARI — birden çok kayıtlı servis senaryosunu sırayla koşar. Bir adımın yanıtından okunan değer (ör. token, sipariş
 // no) sonraki adımlarda ${akis:Ad} ile gövdede, HTTP başlığında ve kontrollerde kullanılır.
 // - Adım kayıtlı bir senaryoya başvurur (gövde / kontroller tek yerde); akış yalnız okumaları ve "hata olursa devam"ı tutar.
 // - Kalan / hata veren adımdan sonraki adımlar atlanır (hataOlursaDevam yoksa). Durdurma bekleyen isteği keser.

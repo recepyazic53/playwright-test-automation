@@ -39,7 +39,7 @@ export type AkisBlogu =
   /** zamanAsimiSn: düğmeden sonra sonucu (mesaj / sonraki alan) en çok bekleme süresi (1–600 sn; yoksa koşucunun varsayılanı). */
   | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; zamanAsimiSn?: number }
   /** uyari: kabul edilen iş kuralı uyarısı (başarı değil; senaryo "uyarı bekleniyor" derken seçer). */
-  /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı prim); öğesi seçildiyse onun metninde aranır. */
+  /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı toplam); öğesi seçildiyse onun metninde aranır. */
   | { tur: 'mesaj'; mesaj: number | null; metin: string; uyari?: boolean; desen?: boolean }
   /** Ortak akış (ör. ödeme): dosya = "<ortak akış anahtarı>.model.json"; ad adımın başlığı; istegeBagli: senaryoda "“ad” dahil". */
   | { tur: 'ortak'; dosya: string; ad: string; istegeBagli: boolean }

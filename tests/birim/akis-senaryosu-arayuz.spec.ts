@@ -37,11 +37,11 @@ test('akış senaryosu formu: adım bölümleri, kilitli bağ, kayıt ve öteki 
       await api('/platform/servis/sema/yenile', { projeId, servisId: id, ortamId });
       return id;
     };
-    const A = await servis('teklif', 'TeklifServisi');
+    const A = await servis('siparis', 'SiparisServisi');
     const B = await servis('onay', 'OnayServisi');
-    const akis = await api('/platform/servis-akisi/kaydet', { projeId, baslik: 'Teklif → Onay', tur: 'akis', icerik: { adimlar: [
-      { id: 'teklif', ad: 'Teklif', tur: 'operasyon', servisId: A, operasyon: 'Teklif', okumalar: [{ ad: 'Token', yol: '//Sonuc/Token' }] },
-      { id: 'onay', ad: 'Onay', tur: 'operasyon', servisId: B, operasyon: 'Onayla', baglar: { TeklifNo: '${akis:Token}' } }
+    const akis = await api('/platform/servis-akisi/kaydet', { projeId, baslik: 'Siparis → Onay', tur: 'akis', icerik: { adimlar: [
+      { id: 'siparis', ad: 'Siparis', tur: 'operasyon', servisId: A, operasyon: 'Siparis', okumalar: [{ ad: 'Token', yol: '//Sonuc/Token' }] },
+      { id: 'onay', ad: 'Onay', tur: 'operasyon', servisId: B, operasyon: 'Onayla', baglar: { SiparisNo: '${akis:Token}' } }
     ] } });
     expect(akis.basarili).toBe(true);
     const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } })).newPage();
@@ -49,15 +49,15 @@ test('akış senaryosu formu: adım bölümleri, kilitli bağ, kayıt ve öteki 
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto(`/#/servisler/s/${A}/senaryo/yeni?akis=${akis.id}`);
     await expect(page.getByRole('radio', { name: 'Akış' })).toHaveAttribute('aria-checked', 'true');
-    await expect(page.getByText('1. TeklifServisi · Teklif')).toBeVisible();
+    await expect(page.getByText('1. SiparisServisi · Siparis')).toBeVisible();
     await expect(page.getByText('2. OnayServisi · Onayla')).toBeVisible();
     await expect(page.getByText('1. adımdan gelir (${akis:Token})')).toBeVisible();
-    await expect(page.getByLabel('2. adım TeklifNo değer kaynağı')).toHaveCount(0);   // kilitli: sorulmaz
-    await page.getByLabel('Başlık').fill('Teklif ve onay');
+    await expect(page.getByLabel('2. adım SiparisNo değer kaynağı')).toHaveCount(0);   // kilitli: sorulmaz
+    await page.getByLabel('Başlık').fill('Siparis ve onay');
     await page.getByRole('button', { name: 'Kaydet' }).click();
     await expect(page).toHaveURL(/\/senaryo\/[A-Za-z0-9-]+$/);
     await page.goto(`/#/servisler/s/${B}`);
-    await expect(page.getByRole('row', { name: /Teklif ve onay/ })).toContainText('akış: Teklif → Onay');
+    await expect(page.getByRole('row', { name: /Siparis ve onay/ })).toContainText('akış: Siparis → Onay');
     // Tür seçimi: "Tek istek" mevcut düzenleyiciyi açar.
     await page.goto(`/#/servisler/s/${A}/senaryo/yeni`);
     await expect(page.getByRole('radio', { name: 'Tek istek (operasyon)' })).toHaveAttribute('aria-checked', 'true');

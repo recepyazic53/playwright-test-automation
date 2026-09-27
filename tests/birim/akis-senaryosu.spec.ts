@@ -18,7 +18,7 @@ import { wsdlSemalari } from '../../scripts/platform/servisler/wsdl-semasi.mjs';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 import { SAHTE_TC, WSDL, sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
-const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Teklif xmlns="Ornek"><Input>${ic}</Input></Teklif></s:Body></s:Envelope>`;
+const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body></s:Envelope>`;
 
 test('içerik: yapısal doğrulama; bağlar gövdeye uygulanır (SOAP şemadan, REST JSON)', () => {
   expect(() => senaryoIceriginiDogrula({ tur: 'akis' })).toThrow('akışını seçin');
@@ -26,10 +26,10 @@ test('içerik: yapısal doğrulama; bağlar gövdeye uygulanır (SOAP şemadan, 
   expect(senaryoIceriginiDogrula({ tur: 'akis', akisId: 'a1', adimlar: { adim1: { operasyon: 'X', govde: '<a/>', kontroller: [] } } }))
     .toEqual({ tur: 'akis', akisId: 'a1', adimlar: { adim1: { operasyon: 'X', govde: '<a/>', kontroller: [] } } });
   const sema = wsdlSemalari(WSDL).Onayla;
-  const soap = baglariUygula({ operasyon: 'Onayla', govde: '', kontroller: [] }, { TeklifNo: '${akis:Token}' }, { rest: false, sema, govdeCoz, govdeUret });
-  expect(soap.govde).toContain('<TeklifNo>${akis:Token}</TeklifNo>');
-  const rest = baglariUygula({ operasyon: 'Yazdir', govde: '{"kayit":{"tur":"K"}}', kontroller: [] }, { 'kayit/no': '${akis:PolicyNo}' }, { rest: true });
-  expect(JSON.parse(rest.govde)).toEqual({ kayit: { tur: 'K', no: '${akis:PolicyNo}' } });
+  const soap = baglariUygula({ operasyon: 'Onayla', govde: '', kontroller: [] }, { SiparisNo: '${akis:Token}' }, { rest: false, sema, govdeCoz, govdeUret });
+  expect(soap.govde).toContain('<SiparisNo>${akis:Token}</SiparisNo>');
+  const rest = baglariUygula({ operasyon: 'Yazdir', govde: '{"kayit":{"tur":"K"}}', kontroller: [] }, { 'kayit/no': '${akis:OrderNo}' }, { rest: true });
+  expect(JSON.parse(rest.govde)).toEqual({ kayit: { tur: 'K', no: '${akis:OrderNo}' } });
 });
 
 test.describe('akış senaryosu koşusu', () => {
@@ -57,12 +57,12 @@ test.describe('akış senaryosu koşusu', () => {
       await semaYenile(vt, projeId, { servisId: id, ortamId: testOrtami });
       return id;
     };
-    servisA = await servis('teklif', 'TeklifServisi');
+    servisA = await servis('siparis', 'SiparisServisi');
     servisB = await servis('onay', 'OnayServisi');
-    // Servisler arası akış: A.Teklif (yanıttan Token okunur) → B.Onayla (TeklifNo ← ${akis:Token}).
-    akisId = servisAkisiKaydet(vt, { projeId, baslik: 'Teklif → Onay', icerik: { adimlar: [
-      { id: 'teklif', ad: 'Teklif', tur: 'operasyon', servisId: servisA, operasyon: 'Teklif', okumalar: [{ ad: 'Token', yol: '//Sonuc/Token', gizli: false }] },
-      { id: 'onay', ad: 'Onay', tur: 'operasyon', servisId: servisB, operasyon: 'Onayla', baglar: { TeklifNo: '${akis:Token}' } }
+    // Servisler arası akış: A.Siparis (yanıttan Token okunur) → B.Onayla (SiparisNo ← ${akis:Token}).
+    akisId = servisAkisiKaydet(vt, { projeId, baslik: 'Siparis → Onay', icerik: { adimlar: [
+      { id: 'siparis', ad: 'Siparis', tur: 'operasyon', servisId: servisA, operasyon: 'Siparis', okumalar: [{ ad: 'Token', yol: '//Sonuc/Token', gizli: false }] },
+      { id: 'onay', ad: 'Onay', tur: 'operasyon', servisId: servisB, operasyon: 'Onayla', baglar: { SiparisNo: '${akis:Token}' } }
     ] } });
   });
   test.afterAll(async () => { vt?.kapat(); await soap?.kapat(); klasor.temizle(); });
@@ -71,19 +71,19 @@ test.describe('akış senaryosu koşusu', () => {
     expect(servisGetir(vt, servisB)?.ayarlar.operasyonSemalari?.Onayla).toBeTruthy();
     const f = akisSenaryoFormVerisi(vt, projeId, akisId);
     expect(f.adimlar.map((a) => [a.no, a.servis.ad, a.operasyon, a.kilitli])).toEqual([
-      [1, 'TeklifServisi', 'Teklif', []],
-      [2, 'OnayServisi', 'Onayla', [{ yol: 'TeklifNo', ad: 'Token', ureten: 1 }]]
+      [1, 'SiparisServisi', 'Siparis', []],
+      [2, 'OnayServisi', 'Onayla', [{ yol: 'SiparisNo', ad: 'Token', ureten: 1 }]]
     ]);
     expect(f.canliEngeli).toEqual([]);
   });
 
   test('koşu: iki istek sırayla; ikincide ilk yanıttan okunan değer; toplu koşuya girer; akışın geçtiği serviste listelenir', async () => {
     const icerik = { tur: 'akis', akisId, adimlar: {
-      teklif: { operasyon: 'Teklif', govde: zarf(`<Giris/><CitizenshipNumber>${SAHTE_TC}</CitizenshipNumber>`), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }] }
+      siparis: { operasyon: 'Siparis', govde: zarf(`<Giris/><IdentityNumber>${SAHTE_TC}</IdentityNumber>`), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }] }
     } };
     expect(akisSenaryosuDenetle(vt, projeId, icerik)).toEqual([]);
-    expect(akisSenaryosuDenetle(vt, projeId, { ...icerik, adimlar: { yok: icerik.adimlar.teklif } })[0]).toContain('akışta yok');
-    senaryoId = servisSenaryosuKaydet(vt, { projeId, servisId: servisA, baslik: 'Teklif ve onay', kapsam: 'test', icerik });
+    expect(akisSenaryosuDenetle(vt, projeId, { ...icerik, adimlar: { yok: icerik.adimlar.siparis } })[0]).toContain('akışta yok');
+    senaryoId = servisSenaryosuKaydet(vt, { projeId, servisId: servisA, baslik: 'Siparis ve onay', kapsam: 'test', icerik });
     const once = soap.istekler.length;
     const r = await servisSenaryosuCalistir(vt, projeId, { servisId: servisA, ortamId: testOrtami, tur: 'kosu', senaryoId }) as Record<string, any>;
     expect(r.durum).toBe('basarili');
@@ -94,21 +94,21 @@ test.describe('akış senaryosu koşusu', () => {
     const adimlar = (servisAkisKosusuGetir(vt, r.akisKosuId)?.sonuc as Record<string, any>).adimlar;
     const token = adimlar[0].okunanlar.Token;
     expect(token).toMatch(/^tok-\d+$/);
-    expect(ikinci.govde).toContain(`<TeklifNo>${token}</TeklifNo>`);
+    expect(ikinci.govde).toContain(`<SiparisNo>${token}</SiparisNo>`);
     // Akış koşusu senaryonun başlığıyla kaydedilir.
-    expect(servisAkisKosulariniListele(vt, { projeId, akisId }).map((k) => k.baslik)).toContain('Teklif ve onay');
+    expect(servisAkisKosulariniListele(vt, { projeId, akisId }).map((k) => k.baslik)).toContain('Siparis ve onay');
     // B servisinin listesinde (başka serviste kayıtlı) görünür, son sonucu akış koşusundan.
     const g = servisSenaryoGorunumu(vt, projeId, servisB, [], {});
-    expect(g.senaryolar.map((s) => [s.baslik, s.gecen, s.akisAdi, s.sahipServisAd])).toEqual([['Teklif ve onay', true, 'Teklif → Onay', 'TeklifServisi']]);
+    expect(g.senaryolar.map((s) => [s.baslik, s.gecen, s.akisAdi, s.sahipServisAd])).toEqual([['Siparis ve onay', true, 'Siparis → Onay', 'SiparisServisi']]);
     expect(g.sonSonuclar[senaryoId]).toMatchObject({ durum: 'basarili', akisId });
     // B'nin toplu koşusu akış senaryosunu da koşar.
     const t = await servisSenaryolariniKos(vt, projeId, { servisId: servisB, ortamId: testOrtami });
-    expect(t.sonuclar.map((x) => [x.baslik, x.durum])).toEqual([['Teklif ve onay', 'basarili']]);
+    expect(t.sonuclar.map((x) => [x.baslik, x.durum])).toEqual([['Siparis ve onay', 'basarili']]);
   });
 
   test('bağlanan değer önce okunmuyorsa senaryo reddedilir (istek atılmaz)', async () => {
     const bozuk = servisAkisiKaydet(vt, { projeId, baslik: 'Bozuk', icerik: { adimlar: [
-      { id: 'onay', ad: 'Onay', tur: 'operasyon', servisId: servisB, operasyon: 'Onayla', baglar: { TeklifNo: '${akis:Token}' } }
+      { id: 'onay', ad: 'Onay', tur: 'operasyon', servisId: servisB, operasyon: 'Onayla', baglar: { SiparisNo: '${akis:Token}' } }
     ] } });
     const id = servisSenaryosuKaydet(vt, { projeId, servisId: servisB, baslik: 'Bozuk senaryo', kapsam: 'test', icerik: { tur: 'akis', akisId: bozuk, adimlar: {} } });
     const once = soap.istekler.length;

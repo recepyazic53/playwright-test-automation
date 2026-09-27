@@ -11,7 +11,7 @@ Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **sa
 
 | Grup | Örnek | Kural |
 |---|---|---|
-| Açan / ilerleten (kayıt yok) | Devam, Ek sürücü ekle, sekmeler, oklar, seçim değiştirme | Serbestçe basılır; koşullu alanlar, bağımlı listeler ve sonraki ekranın alanları böyle çıkarılır. |
+| Açan / ilerleten (kayıt yok) | Devam, Ek adres ekle, sekmeler, oklar, seçim değiştirme | Serbestçe basılır; koşullu alanlar, bağımlı listeler ve sonraki ekranın alanları böyle çıkarılır. |
 | Hesaplayan / sorgulayan | Tutar hesapla, Kimlik sorgula | Basılır; sonuç alanları ve uyarılar (tarayıcı uyarıları — alert — dahil) toplanır. Kimlik sorgusunda yalnızca kullanıcının verdiği test kaydı kullanılır. |
 | Kayıt oluşturan / gönderen / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | **Basılmaz.** Claude orada durur; o noktadan sonrası pakete "bilinmiyor" olarak yazılır. |
 
@@ -109,17 +109,18 @@ tutulmaz.
 
 ### Bağlam profili ve kayıt alanı anahtarları
 
-Şema genel adlar kullanır. Eski adlar **hâlâ okunur** (eşdeğer yeni anahtar gibi yorumlanır); yeni kayıtlar
-(sayfa paketiyle eklenen ya da değiştirilen model) yeni adla yazılır. Kaydedilmiş modeller kendiliğinden
-yeniden yazılmaz. Aynı yerde eski ve yeni ad birlikte olamaz.
+Şema genel adlar kullanır. Önceki sürümlerin eski anahtar adları **hâlâ okunur** (eşdeğer yeni anahtar gibi
+yorumlanır); eski → yeni eşlemesi yalnızca `scripts/dogrulama/eski-anahtarlar.mjs` geriye uyum tablosundadır. Yeni
+kayıtlar (sayfa paketiyle eklenen ya da değiştirilen model) yeni adla yazılır; yeni paketlerde eski adlar kullanılmaz.
+Kaydedilmiş modeller kendiliğinden yeniden yazılmaz. Aynı yerde eski ve yeni ad birlikte olamaz.
 
-| Yeni ad | Eski ad (hâlâ okunur) | Anlamı |
-|---|---|---|
-| `baglam` | `acenteBaglami` | Modelin bağlam profili ekranı: `{ aciklama, veriKaynagi, alanlar, bilinenProfiller, pageObject? }`. |
-| `{ "baglam": { "alanSeti": "…" } }` | `{ "acente": { "alanSeti": "…" } }` | Koşul ifadesi: bağlam profiline göre alan seti (hedef ifade; doğrulayıcı "bilinmiyor" sayar). |
-| `kosullar.<ad>.bilinenDurumlar[].profil` / `.profilKodu` | `.acente` / `.acentePartaji` | Bağlam profili bazında bilinen görünürlük; `profilKodu`, seçilen bağlam profilinin koduyla eşleşir. |
-| `eslesme.kayitAlani` | `eslesme.kart` | Alt model alanının senaryodaki kayıt (ör. test verisi kaydı) içindeki adı. |
-| Senaryo girdisi `baglamKodu` / `baglamKullanicisi` | `acenteKodu` / `acenteKullanicisi` | Bağlam profilini seçen alanın (`baglamProfili`; eski kimliği `acenteProfili`) form girdileri. |
+| Ad | Anlamı |
+|---|---|
+| `baglam` | Modelin bağlam profili ekranı: `{ aciklama, veriKaynagi, alanlar, bilinenProfiller, pageObject? }`. |
+| `{ "baglam": { "alanSeti": "…" } }` | Koşul ifadesi: bağlam profiline göre alan seti (hedef ifade; doğrulayıcı "bilinmiyor" sayar). |
+| `kosullar.<ad>.bilinenDurumlar[].profil` / `.profilKodu` | Bağlam profili bazında bilinen görünürlük; `profilKodu`, seçilen bağlam profilinin koduyla eşleşir. |
+| `eslesme.kayitAlani` | Alt model alanının senaryodaki kayıt (ör. test verisi kaydı) içindeki adı. |
+| Senaryo girdisi `baglamKodu` / `baglamKullanicisi` | Bağlam profilini seçen alanın (`baglamProfili`) form girdileri. |
 
 Doğrulayıcı mesajları kullanıcıya dönüktür: alanın etiketi yoksa iç anahtar yerine "Bu alan" yazılır.
 
@@ -182,7 +183,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 "kosu": {
   "aksiyonlar": [ { "tur": "tikla", "secici": "#hesapla", "aciklama": "Hesapla" },
                   { "tur": "bekle", "secici": "#yukleniyor", "durum": "gizli" } ],
-  "basariGostergesi": { "tur": "metin", "deger": "Prim:", "secici": "#sonuc" },
+  "basariGostergesi": { "tur": "metin", "deger": "Toplam:", "secici": "#sonuc" },
   "hataGostergesi": { "secici": "#uyari" },
   "zamanAsimiSn": 30
 }
@@ -191,7 +192,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 | Alan | Açıklama |
 |---|---|
 | `aksiyonlar[]` | `tur`: `tikla` (düğme/bağlantı) ya da `bekle` (`durum`: `gorunur` varsayılan \| `gizli` \| `dolu` — öğenin metni/değeri boş değil; `secici` yoksa `sureSn` kadar beklenir); `secici` zorunlu; `metin` (birden çok öğe eşleşirse bu metni içeren), `aciklama`, `zamanAsimiSn` isteğe bağlı. **Kaydet/öde/onayla** gibi kalıcı işlem yapan düğmeler yalnızca test ortamında koşulacak adımlara yazılır. |
-| `basariGostergesi` | `tur`: `metin` (sayfada ya da `secici` öğesinde toleranslı içerir), `eleman` (`deger` seçicisi görünür), `url` (`deger` düzenli ifadesi), `desen` (sayfanın ya da `secici` öğesinin metni `deger` düzenli ifadesine uyar; ör. prim sıfırdan farklı: `[1-9]`), `veya` (`secenekler`: 2–5 gösterge; herhangi biri görünürse başarılı). |
+| `basariGostergesi` | `tur`: `metin` (sayfada ya da `secici` öğesinde toleranslı içerir), `eleman` (`deger` seçicisi görünür), `url` (`deger` düzenli ifadesi), `desen` (sayfanın ya da `secici` öğesinin metni `deger` düzenli ifadesine uyar; ör. toplam sıfırdan farklı: `[1-9]`), `veya` (`secenekler`: 2–5 gösterge; herhangi biri görünürse başarılı). |
 | `uyarilar` | Adımda kabul edilen iş kuralı uyarıları `[{ metin, secici? }]` (en çok 10): senaryo "iş kuralı hatası" beklerken bunlardan seçer; başarı beklenen senaryoda biri görünürse test hemen düşer. |
 | `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |

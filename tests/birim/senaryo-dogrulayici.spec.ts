@@ -12,7 +12,6 @@
 import { expect, test } from '@playwright/test';
 import {
   MESAJLAR,
-  TAKSIT_UST_SINIRI,
   alanFormKimlikleri,
   kartSuresiGectiMi,
   kartiNormallestir,
@@ -25,6 +24,8 @@ import {
   type DogrulamaSonucu
 } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
 import { ekranModeliniDogrula, eskiModelAnahtarlariniCevir } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
+// Eski anahtar adları yalnızca geriye uyum tablosunda durur; testler adları oradan okur.
+import { ESKI_MODEL_ANAHTARLARI as EM, ESKI_SENARYO_ANAHTARLARI as ES } from '../../scripts/dogrulama/eski-anahtarlar.mjs';
 import { modelFormKontrolleri, type YuklenmisEkranModeli } from '../support/ekran-modeli';
 import { ornekBasvuruModeli, ornekBasvuruPaketi } from './model-fikstur';
 
@@ -61,7 +62,7 @@ function ornekTalepModeli(): Nesne {
     semaSurumu: 1, tur: 'ekran', id: 'ornek-talep', ad: 'Örnek talep',
     kosullar: {
       onayDahil: { aciklama: ONAY_KOSULU, ifade: { senaryoAyari: 'onayAdimiDahil', esit: true } },
-      ekHizmetGorunur: { aciklama: 'kapsam DÜNYA', ifade: { alan: 'kapsam', esit: 'DÜNYA' } },
+      ekHizmetGorunur: { aciklama: 'kapsam EKSPRES', ifade: { alan: 'kapsam', esit: 'EKSPRES' } },
       tekliTalep: { aciklama: 'tekli talep', ifade: { alan: 'talepTipi', esit: 'tekli' } },
       cokluTalep: { aciklama: 'çoklu talep', ifade: { alan: 'talepTipi', esit: 'coklu' } },
       farkliSahip: { aciklama: 'hesap sahibi farklı', ifade: { alan: 'sahip', icinde: ['farkliBireysel', 'farkliKurumsal'] } }
@@ -73,10 +74,10 @@ function ornekTalepModeli(): Nesne {
         bolumler: [
           {
             id: 'temel', alanlar: [
-              alan('kapsam', 'secim', 'Kapsam', { zorunlu: true, secenekler: [{ deger: 'DÜNYA' }, { deger: 'AVRUPA' }] }),
+              alan('kapsam', 'secim', 'Kapsam', { zorunlu: true, secenekler: [{ deger: 'EKSPRES' }, { deger: 'STANDART' }] }),
               alan('plan', 'secim', 'Plan', {
                 zorunlu: true,
-                bagimlilik: { alan: 'kapsam', secenekHaritasi: { 'DÜNYA': [{ deger: 'PLAN A' }, { deger: 'PLAN B' }], AVRUPA: [{ deger: 'PLAN C' }] } }
+                bagimlilik: { alan: 'kapsam', secenekHaritasi: { 'EKSPRES': [{ deger: 'PLAN A' }, { deger: 'PLAN B' }], STANDART: [{ deger: 'PLAN C' }] } }
               }),
               alan('ekHizmet', 'secim', 'Ek hizmet', { zorunlu: true, secenekler: [{ deger: 'E' }, { deger: 'H' }], gorunurluk: { kosul: 'ekHizmetGorunur' } }),
               alan('talepTipi', 'secim', 'Talep tipi', { zorunlu: true, secenekler: [{ deger: 'tekli' }, { deger: 'coklu' }] }),
@@ -162,6 +163,8 @@ function ornekTalepModeli(): Nesne {
   };
 }
 
+const TAKSITLER = ['1', '2', '3', '6', '9'];
+
 function ornekKartModeli(): Nesne {
   const ay = Array.from({ length: 12 }, (_, i) => ({ deger: String(i + 1), metin: String(i + 1).padStart(2, '0') }));
   return {
@@ -174,7 +177,8 @@ function ornekKartModeli(): Nesne {
         kartAlani('guvenlikKodu', 'Güvenlik kodu', 'metin', { zorunlu: true, hassas: true }),
         kartAlani('sonKullanmaAyi', 'Son kullanma ayı', 'secim', { zorunlu: true, secenekler: ay }),
         kartAlani('sonKullanmaYili', 'Son kullanma yılı', 'secim', { zorunlu: true }),
-        kartAlani('taksit', 'Taksit', 'secim')
+        // Taksit: izinli değerler modelden gelir (kodda sabit üst sınır yok).
+        kartAlani('taksit', 'Taksit', 'secim', { secenekler: TAKSITLER.map((t) => ({ deger: t })) })
       ]
     }]
   };
@@ -188,10 +192,10 @@ function baglam(ek: Partial<DogrulamaBaglami> = {}): DogrulamaBaglami {
   return { ...(YUKLENMIS as unknown as Pick<DogrulamaBaglami, 'model' | 'altModeller'>), ortam: 'test', simdi: SIMDI, kaynak: 'kayit', ...ek };
 }
 
-/** Geçerli bir kayıt (kapsam DÜNYA: ek hizmet görünür); vakalar bunun üzerine değişiklik yapar. */
+/** Geçerli bir kayıt (kapsam EKSPRES: ek hizmet görünür); vakalar bunun üzerine değişiklik yapar. */
 const TEMEL: Readonly<Nesne> = Object.freeze({
   baslik: 'Birim testi senaryosu',
-  kapsam: 'DÜNYA',
+  kapsam: 'EKSPRES',
   plan: 'PLAN A',
   ekHizmet: 'E',
   talepTipi: 'tekli',
@@ -244,20 +248,20 @@ const kisi = (ek: Nesne): Nesne => ({ kisiKimligi: { tcKimlikNo: '10000000146', 
 const VAKALAR: Vaka[] = [
   { ad: 'geçerli temel kayıt', senaryo: senaryo({}), hatalar: [] },
   // Seçenek listesi / bağımlı seçenek (modelin seçenekleri, plan kapsama bağlı)
-  { ad: 'kapsam listede değil', senaryo: senaryo({ kapsam: 'ASYA' }), hatalar: [{ alan: 'kapsam', mesaj: MESAJLAR.secenekDisi('Kapsam', 'ASYA', ['DÜNYA', 'AVRUPA']) }] },
+  { ad: 'kapsam listede değil', senaryo: senaryo({ kapsam: 'KURYE' }), hatalar: [{ alan: 'kapsam', mesaj: MESAJLAR.secenekDisi('Kapsam', 'KURYE', ['EKSPRES', 'STANDART']) }] },
   {
     ad: 'plan kapsama uymuyor',
     senaryo: senaryo({ plan: 'PLAN C' }),
-    hatalar: [{ alan: 'plan', mesaj: MESAJLAR.bagimliSecenekDisi('Plan', 'PLAN C', 'Kapsam', 'DÜNYA', ['PLAN A', 'PLAN B']) }]
+    hatalar: [{ alan: 'plan', mesaj: MESAJLAR.bagimliSecenekDisi('Plan', 'PLAN C', 'Kapsam', 'EKSPRES', ['PLAN A', 'PLAN B']) }]
   },
-  { ad: 'AVRUPA + PLAN C geçerli', senaryo: senaryo({ kapsam: 'AVRUPA', plan: 'PLAN C' }, ['ekHizmet']), hatalar: [] },
+  { ad: 'STANDART + PLAN C geçerli', senaryo: senaryo({ kapsam: 'STANDART', plan: 'PLAN C' }, ['ekHizmet']), hatalar: [] },
   { ad: 'talep tipi listede değil', senaryo: senaryo({ talepTipi: 'toplu' }), hatalar: [{ alan: 'talepTipi', mesaj: MESAJLAR.secenekDisi('Talep tipi', 'toplu', ['tekli', 'coklu']) }] },
   // Görünürlük koşulu: alan yalnızca görünürse zorunlu; görünmeyen alana değer → uyarı
   { ad: 'ek hizmet eksik, görünür → hata', senaryo: senaryo({}, ['ekHizmet']), hatalar: [{ alan: 'ekHizmet', mesaj: MESAJLAR.zorunlu('Ek hizmet') }] },
-  { ad: 'ek hizmet eksik, gizli → geçerli', senaryo: senaryo({ kapsam: 'AVRUPA', plan: 'PLAN C' }, ['ekHizmet']), hatalar: [] },
+  { ad: 'ek hizmet eksik, gizli → geçerli', senaryo: senaryo({ kapsam: 'STANDART', plan: 'PLAN C' }, ['ekHizmet']), hatalar: [] },
   {
     ad: 'ek hizmet verilmiş, gizli → uyarı (değer kullanılmaz)',
-    senaryo: senaryo({ kapsam: 'AVRUPA', plan: 'PLAN C' }),
+    senaryo: senaryo({ kapsam: 'STANDART', plan: 'PLAN C' }),
     hatalar: [],
     uyarilar: [{ alan: 'ekHizmet', mesaj: MESAJLAR.gorunmeyenAlan('Ek hizmet') }]
   },
@@ -362,7 +366,7 @@ const VAKALAR: Vaka[] = [
   {
     ad: 'kart alanları biçim dışı',
     senaryo: senaryo({
-      odemeKarti: kart({ isim: ' ', kartNo: '123456789012', guvenlikKodu: '12', sonKullanmaAyi: { deger: '13' }, sonKullanmaYili: { deger: '26' }, taksit: { deger: String(TAKSIT_UST_SINIRI + 1) } })
+      odemeKarti: kart({ isim: ' ', kartNo: '123456789012', guvenlikKodu: '12', sonKullanmaAyi: { deger: '13' }, sonKullanmaYili: { deger: '26' }, taksit: { deger: '24' } })
     }),
     hatalar: [
       { alan: 'odemeKarti.isim', mesaj: MESAJLAR.zorunlu('Kart üzerindeki ad') },
@@ -370,7 +374,7 @@ const VAKALAR: Vaka[] = [
       { alan: 'odemeKarti.guvenlikKodu', mesaj: MESAJLAR.cvvBicim() },
       { alan: 'odemeKarti.sonKullanmaAyi', mesaj: MESAJLAR.kartAyBicim() },
       { alan: 'odemeKarti.sonKullanmaYili', mesaj: MESAJLAR.kartYilBicim() },
-      { alan: 'odemeKarti.taksit', mesaj: MESAJLAR.kartTaksitBicim(TAKSIT_UST_SINIRI) }
+      { alan: 'odemeKarti.taksit', mesaj: MESAJLAR.secenekDisi('Taksit', '24', TAKSITLER) }
     ]
   },
   {
@@ -447,7 +451,7 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
       gorunmeyenAlan: ['E'], birlikteZorunlu: ['E', 'F'], profilYok: ['E', 'P'], profilVeKimlikBirlikte: ['E'],
       profilYaDaKimlikZorunlu: ['E'], tcBicim: [], tcKontrolHanesi: [], vknBicim: [], telefonBicim: [],
       tarihBicim: ['E', 'B'], tarihGelecekte: ['E'], kartNoBicim: [], cvvBicim: [], kartAyBicim: [], kartYilBicim: [],
-      kartTaksitBicim: [12], kartSuresiGecmis: ['01/2026'], varsayilanKayitSuresiGecmis: ['E', '01/2026'], eskiBeklenenSonucAlanlari: [liste],
+      kartSuresiGecmis: ['01/2026'], varsayilanKayitSuresiGecmis: ['E', '01/2026'], eskiBeklenenSonucAlanlari: [liste],
       tabloBasvurusuAlamaz: ['E'], tabloYok: ['E', 'T'], tabloSutunuYok: ['E', 'T', 'S'], gizliSutunSecimde: ['E', 'S'], gizliSutunDosyada: ['E', 'S']
     };
     const metinler = Object.entries(MESAJLAR).map(([ad, sablon]) =>
@@ -530,15 +534,15 @@ test.describe('Tek senaryo doğrulayıcısı — geriye uyum (eski anahtar adlar
     }
   } as unknown as DogrulamaBaglami['model']);
 
-  test('bağlam profili görünürlüğü: yeni (profiller/profilKodu) ve eski (ortak/acentePartaji) biçim aynı sonucu verir', () => {
+  test('bağlam profili görünürlüğü: yeni (profiller/profilKodu) ve eski biçim aynı sonucu verir', () => {
     const senaryoVerisi = { profil: 'Merkez' };
     const yeni = senaryoyuDogrula(senaryoVerisi, {
       model: baglamModeli('baglamProfili', { profil: 'Merkez', profilKodu: '100', gorunur: false, kaynak: 'test' }),
       profiller: { baglamProfilleri: { Merkez: { kod: '100' } } }
     });
     // Eski biçim: alan kimliği, durum anahtarları ve bağlam parçası eski adlarıyla.
-    const eskiBaglam = { model: baglamModeli('acenteProfili', { acente: 'Merkez', acentePartaji: '100', gorunur: false, kaynak: 'test' }),
-      ortak: { acenteProfilleri: { Merkez: { acentePartaji: '100' } } } } as unknown as DogrulamaBaglami;
+    const eskiBaglam = { model: baglamModeli(ES.baglamProfiliAlani, { [EM.durumProfili]: 'Merkez', [EM.durumKodu]: '100', gorunur: false, kaynak: 'test' }),
+      [ES.profiller]: { [ES.baglamProfilleri]: { Merkez: { [ES.durumKodu]: '100' } } } } as unknown as DogrulamaBaglami;
     const eski = senaryoyuDogrula(senaryoVerisi, eskiBaglam);
     expect(yeni).toEqual({ gecerli: true, hatalar: [], uyarilar: [] });
     expect(eski).toEqual(yeni);
@@ -553,20 +557,20 @@ test.describe('Tek senaryo doğrulayıcısı — geriye uyum (eski anahtar adlar
       kosullar: {
         ...(ornekBasvuruModeli().kosullar as Nesne),
         profilKosulu: {
-          ifade: { calismaZamani: 'gorunurse' }, hedefIfade: { acente: { alanSeti: 'A' } },
-          bilinenDurumlar: [{ acente: 'Merkez', acentePartaji: '100', gorunur: true, kaynak: 'gözlem' }]
+          ifade: { calismaZamani: 'gorunurse' }, hedefIfade: { [EM.baglamIfadesi]: { alanSeti: 'A' } },
+          bilinenDurumlar: [{ [EM.durumProfili]: 'Merkez', [EM.durumKodu]: '100', gorunur: true, kaynak: 'gözlem' }]
         }
       },
-      acenteBaglami: { aciklama: 'Bağlam ekranı', veriKaynagi: 'test', alanlar: [], bilinenProfiller: ['Merkez'] }
-    };
+      [EM.baglam]: { aciklama: 'Bağlam ekranı', veriKaynagi: 'test', alanlar: [], bilinenProfiller: ['Merkez'] }
+    } as Nesne;
     const onceki = JSON.stringify(eskiModel);
     const altModelYok = () => { throw new Error('alt model yok'); };
     expect(() => ekranModeliniDogrula('eski.model.json', eskiModel, altModelYok)).not.toThrow();
 
     const yeniModel = eskiModelAnahtarlariniCevir(eskiModel) as Nesne;
     expect(JSON.stringify(eskiModel)).toBe(onceki);
-    expect(yeniModel).not.toHaveProperty('acenteBaglami');
-    expect(yeniModel.baglam).toEqual(eskiModel.acenteBaglami);
+    expect(yeniModel).not.toHaveProperty(EM.baglam);
+    expect(yeniModel.baglam).toEqual(eskiModel[EM.baglam]);
     expect((yeniModel.kosullar as Record<string, Nesne>).profilKosulu).toEqual({
       ifade: { calismaZamani: 'gorunurse' }, hedefIfade: { baglam: { alanSeti: 'A' } },
       bilinenDurumlar: [{ profil: 'Merkez', profilKodu: '100', gorunur: true, kaynak: 'gözlem' }]
@@ -574,7 +578,7 @@ test.describe('Tek senaryo doğrulayıcısı — geriye uyum (eski anahtar adlar
     expect(() => ekranModeliniDogrula('yeni.model.json', yeniModel, altModelYok)).not.toThrow();
     // Yeni adlı model olduğu gibi döner; eski ve yeni ad birlikte hatadır.
     expect(eskiModelAnahtarlariniCevir(yeniModel)).toBe(yeniModel);
-    expect(() => ekranModeliniDogrula('ikisi.model.json', { ...yeniModel, acenteBaglami: yeniModel.baglam }, altModelYok)).toThrow(/birlikte olmaz/);
+    expect(() => ekranModeliniDogrula('ikisi.model.json', { ...yeniModel, [EM.baglam]: yeniModel.baglam }, altModelYok)).toThrow(/birlikte olmaz/);
     // Alt model: eslesme.kart → eslesme.kayitAlani.
     const altModel = eskiModelAnahtarlariniCevir(anahtarDegistir(ALT_MODELLER[KART_DOSYASI], 'kayitAlani', 'kart'));
     expect(altModel).toEqual(ALT_MODELLER[KART_DOSYASI]);

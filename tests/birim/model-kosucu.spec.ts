@@ -83,7 +83,7 @@ test.describe('Model şeması sürüm 2', () => {
     for (const a of eski.adimlar as Nesne[]) delete a.kosu;
     const bulgular = modelFarki(eski, yeni).filter((b) => b.altTur === 'kosuTanimi');
     expect(bulgular.map((b) => b.adimId)).toEqual(['hesaplama', 'onay']);
-    expect(bulgular[0]).toMatchObject({ eski: 'yok', yeni: 'tıkla #hesapla · başarı: metin "Prim:" · hata: #uyari' });
+    expect(bulgular[0]).toMatchObject({ eski: 'yok', yeni: 'tıkla #hesapla · başarı: metin "Toplam:" · hata: #uyari' });
     const r = bulgulariUygula(eski, yeni, [bulgular[0].id]);
     expect(r.model.semaSurumu).toBe(2);
     expect((r.model.adimlar as Nesne[])[1].kosu).toEqual((yeni.adimlar as Nesne[])[1].kosu);
@@ -117,12 +117,12 @@ test.describe('Koşu planı (saf)', () => {
 
   test('iş kuralı hatası: hesaplama adımında durur; isteğe bağlı adım kapsam dışı', () => {
     const p = plan(1);
-    expect(p.beklenen).toEqual({ tur: 'hata', adim: 'hesaplama', mesaj: 'türkiye kapsamında "taksitli" ödeme seçilemez', mesajlar: ['türkiye kapsamında "taksitli" ödeme seçilemez'] });
+    expect(p.beklenen).toEqual({ tur: 'hata', adim: 'hesaplama', mesaj: 'ekonomi kapsamında "taksitli" ödeme seçilemez', mesajlar: ['ekonomi kapsamında "taksitli" ödeme seçilemez'] });
     expect(dahil(p)).toEqual(['bilgiler', 'hesaplama']);
     expect(p.baglamProfili).toBe('Merkez');
   });
 
-  test('isteğe bağlı adım hariç: prim hesaplanınca biter; "mutlaka görünmeli" alan işaretlenir', () => {
+  test('isteğe bağlı adım hariç: toplam hesaplanınca biter; "mutlaka görünmeli" alan işaretlenir', () => {
     expect(dahil(plan(4))).toEqual(['bilgiler', 'hesaplama']);
     expect(plan(4).adimlar.find((a) => a.sonAdim)?.id).toBe('hesaplama');
     const p = plan(3, ['indirimOrani']);

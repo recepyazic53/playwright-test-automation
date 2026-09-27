@@ -58,7 +58,7 @@ export function kategoriBul(mesaj, kurallar = []) {
 }
 
 // Hata mesajındaki hedef locator'ı bulur. Playwright 1.5x doğrulama mesajlarında ayrı
-// bir "Locator: getByRole('button', { name: 'Prim Hesapla' })" satırı bulunur; yoksa
+// bir "Locator: getByRole('button', { name: 'Toplam Hesapla' })" satırı bulunur; yoksa
 // (ör. "locator.click: Timeout ... exceeded" gibi aksiyon hatalarında) çağrı
 // günlüğündeki ilk "waiting for <locator>" satırı kullanılır.
 function locatorBul(mesajTam) {
@@ -72,7 +72,7 @@ function locatorBul(mesajTam) {
 // "123456789 numaralı kayıt onaylanamadı" -> "# numaralı kayıt onaylanamadı"
 // Mesajda bir locator varsa kalıba eklenir; böylece farklı ekranlardaki
 // "expect(locator).toBeVisible() failed" hataları tek satıra yığılmaz:
-// "Error: expect(locator).toBeVisible() failed · getByRole('button', { name: 'Prim Hesapla' })"
+// "Error: expect(locator).toBeVisible() failed · getByRole('button', { name: 'Toplam Hesapla' })"
 export function kalipCikar(mesajTam) {
   if (!mesajTam) return 'Mesaj yok / boş hata';
   let ilkSatir = mesajTam.split('\n')[0].trim();
@@ -85,7 +85,7 @@ export function kalipCikar(mesajTam) {
   let kalip = hamKalip
     // UUID benzeri değerleri önce sil (sayı deseni bunları yarım bırakabilir)
     .replace(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, '#')
-    // Her sayısal diziyi (teklif no, id, tarih, tutar vb.) tek karaktere indir
+    // Her sayısal diziyi (sipariş no, id, tarih, tutar vb.) tek karaktere indir
     .replace(/\d+/g, '#')
     .replace(/\s+/g, ' ')
     .trim();

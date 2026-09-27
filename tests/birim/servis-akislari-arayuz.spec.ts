@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — servis akışları arayüzü (servis sayfası > Akışlar): yeni akış (Giriş → Token oku, Teklif başlıkta
+// KORUMA TESTLERİ — servis akışları arayüzü (servis sayfası > Akışlar): yeni akış (Giriş → Token oku, Siparis başlıkta
 // Bearer ${akis:Token}), kayıt, Dene (onay → adım adım sonuç; token maskeli), oturum akışının servise atanması ve senaryo
 // düzenleyicide HTTP başlıkları. Yalnız yerel Nöbetçi + sahte SOAP sunucusu.
 import { randomBytes } from 'node:crypto';
@@ -13,7 +13,7 @@ import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { SAHTE_TC, sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
-const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Teklif xmlns="Ornek"><Input>${ic}</Input></Teklif></s:Body></s:Envelope>`;
+const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body></s:Envelope>`;
 
 test.describe('servis akışları arayüzü', () => {
   test.describe.configure({ mode: 'serial' });
@@ -44,10 +44,10 @@ test.describe('servis akışları arayüzü', () => {
     const e = await basarili('/platform/servis/erisim', { projeId, ortamId, yol: '/Servis/ornek.asmx' });
     servisId = String((await basarili('/platform/servis/kaydet', { projeId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', erisimKimligi: e.erisimKimligi })).id);
     const senaryo = (baslik: string, govde: string, basliklar?: Nesne) => basarili('/platform/servis/senaryo/kaydet', {
-      projeId, servisId, baslik, icerik: { operasyon: 'Teklif', govde: zarf(govde), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }], ...(basliklar ? { basliklar } : {}) }
+      projeId, servisId, baslik, icerik: { operasyon: 'Siparis', govde: zarf(govde), kontroller: [{ tur: 'icerir', deger: '<Durum>OK</Durum>' }], ...(basliklar ? { basliklar } : {}) }
     });
     await senaryo('Giriş', '<Giris/>');
-    await senaryo('Teklif', `<CitizenshipNumber>${SAHTE_TC}</CitizenshipNumber>`, { Authorization: 'Bearer ${akis:Token}' });
+    await senaryo('Siparis', `<IdentityNumber>${SAHTE_TC}</IdentityNumber>`, { Authorization: 'Bearer ${akis:Token}' });
     tarayici = await chromium.launch();
   });
 
@@ -67,7 +67,7 @@ test.describe('servis akışları arayüzü', () => {
     await page.goto(`/#/servisler/s/${servisId}/akislar`);
     await expect(page.getByText('Henüz akış yok.')).toBeVisible();
     await page.getByRole('link', { name: 'Yeni akış' }).click();
-    await page.getByLabel('Başlık').fill('Giriş → Teklif');
+    await page.getByLabel('Başlık').fill('Giriş → Siparis');
     // Yeni adımın varsayılan türü "Operasyon"; bu test kayıtlı senaryo adımlarını (eski tür) kullanır.
     await page.getByLabel('1. adım türü').selectOption('senaryo');
     await page.getByLabel('1. adım senaryosu').selectOption({ label: 'Giriş' });
@@ -78,7 +78,7 @@ test.describe('servis akışları arayüzü', () => {
     await page.getByRole('button', { name: 'Adım ekle' }).click();
     await page.getByLabel('2. adım türü').selectOption('senaryo');
     await page.getByLabel('2. adım servisi').selectOption({ label: 'Ornek' });
-    await page.getByLabel('2. adım senaryosu').selectOption({ label: 'Teklif' });
+    await page.getByLabel('2. adım senaryosu').selectOption({ label: 'Siparis' });
     await expect(page.getByRole('region', { name: '2. adım' })).toContainText('${akis:Token}');
     await page.getByRole('button', { name: 'Kaydet' }).click();
     await expect(page).toHaveURL(/#\/servisler\/s\/[^/]+\/akislar\/[A-Za-z0-9-]+$/);
@@ -93,19 +93,19 @@ test.describe('servis akışları arayüzü', () => {
     await expect(sonuc).toContainText('2 adım başarılı');
     await expect(sonuc.locator('li')).toHaveCount(2);
     await expect(sonuc).toContainText('Token = ***');
-    const teklif = soap.istekler.slice(once)[1];
-    expect(teklif.basliklar.authorization).toMatch(/^Bearer tok-\d+$/);
+    const siparis = soap.istekler.slice(once)[1];
+    expect(siparis.basliklar.authorization).toMatch(/^Bearer tok-\d+$/);
     expect(await page.content()).not.toMatch(/tok-\d/);
     // Liste: akış görünür, son koşu başarılı.
     await page.goto(`/#/servisler/s/${servisId}/akislar`);
-    await expect(page.getByRole('table', { name: 'Servis akışları' })).toContainText('Giriş → Teklif');
+    await expect(page.getByRole('table', { name: 'Servis akışları' })).toContainText('Giriş → Siparis');
     // Düzenleyicideki Dene (kaydedilmemiş hâl) koşusu akışa bağlanır: Son koşu dolu.
-    await expect(page.getByRole('row', { name: /Giriş → Teklif/ })).toContainText('Başarılı');
+    await expect(page.getByRole('row', { name: /Giriş → Siparis/ })).toContainText('Başarılı');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
 
-  test('alan formunda "Akıştan (önceki adım)" kaynağı: alan ${akis:PolicyNo} olur; XML ↔ form korunur', async () => {
+  test('alan formunda "Akıştan (önceki adım)" kaynağı: alan ${akis:OrderNo} olur; XML ↔ form korunur', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
@@ -116,12 +116,12 @@ test.describe('servis akışları arayüzü', () => {
     await expect(form).toBeVisible();
     const satir = (ad: string) => form.locator('.alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: new RegExp(`^${ad}`) }) });
     await satir('Channel').getByLabel('Channel değer kaynağı').selectOption('akis');
-    await satir('Channel').getByLabel('Channel akış değeri adı').fill('PolicyNo');
+    await satir('Channel').getByLabel('Channel akış değeri adı').fill('OrderNo');
     await page.getByRole('tab', { name: 'Gövde (XML)' }).click();
-    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<Channel>\$\{akis:PolicyNo\}<\/Channel>/);
+    await expect(page.getByLabel('İstek gövdesi (SOAP zarfı)')).toHaveValue(/<Channel>\$\{akis:OrderNo\}<\/Channel>/);
     await page.getByRole('tab', { name: 'Alanlar' }).click();
     await expect(satir('Channel').getByLabel('Channel değer kaynağı')).toHaveValue('akis');
-    await expect(satir('Channel').getByLabel('Channel akış değeri adı')).toHaveValue('PolicyNo');
+    await expect(satir('Channel').getByLabel('Channel akış değeri adı')).toHaveValue('OrderNo');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
@@ -130,7 +130,7 @@ test.describe('servis akışları arayüzü', () => {
     test.setTimeout(60_000);
     const { servis, senaryolar } = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
     const giris = senaryolar.find((x: Nesne) => x.baslik === 'Giriş');
-    const teklif = senaryolar.find((x: Nesne) => x.baslik === 'Teklif');
+    const siparis = senaryolar.find((x: Nesne) => x.baslik === 'Siparis');
     const oturumId = String((await basarili('/platform/servis-akisi/kaydet', { projeId, baslik: 'Giriş oturumu', tur: 'oturum', icerik: {
       adimlar: [{ ad: 'Giriş', servisId, senaryoId: giris.id, okumalar: [{ ad: 'Token', yol: '//Sonuc/Token' }] }], omurSaniye: 600 } })).id);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
@@ -146,15 +146,15 @@ test.describe('servis akışları arayüzü', () => {
     const red = await api('/platform/servis-akisi/sil', { projeId, id: oturumId });
     expect(String(red.mesaj)).toContain('oturum akışı');
     // Senaryo düzenleyici: başlıklar.
-    await page.goto(`/#/servisler/s/${servisId}/senaryo/${teklif.id}`);
+    await page.goto(`/#/servisler/s/${servisId}/senaryo/${siparis.id}`);
     const basliklar = page.getByLabel('HTTP header');
     await expect(basliklar).toHaveValue('Authorization: Bearer ${akis:Token}');
     await basliklar.fill('Authorization: Bearer ${akis:Token}\nX-Kanal: web');
     await page.getByRole('button', { name: 'Kaydet' }).click();
-    await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar.find((x: Nesne) => x.id === teklif.id).icerik.basliklar)
+    await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar.find((x: Nesne) => x.id === siparis.id).icerik.basliklar)
       .toEqual({ Authorization: 'Bearer ${akis:Token}', 'X-Kanal': 'web' });
     // Tek senaryo Dene: token oturumdan gelir.
-    const d = await basarili('/platform/servis/senaryo/dene', { projeId, servisId, ortamId: (await basarili(`/platform/ortamlar?projeId=${projeId}`)).ortamlar[0].id, senaryoId: teklif.id });
+    const d = await basarili('/platform/servis/senaryo/dene', { projeId, servisId, ortamId: (await basarili(`/platform/ortamlar?projeId=${projeId}`)).ortamlar[0].id, senaryoId: siparis.id });
     expect(d.sonuc.durum).toBe('basarili');
     expect(d.sonuc.oturum).toMatchObject({ akis: 'Giriş oturumu' });
     expect(JSON.stringify(d)).not.toMatch(/tok-\d/);

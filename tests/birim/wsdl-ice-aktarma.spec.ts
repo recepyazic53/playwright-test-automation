@@ -10,10 +10,10 @@ const TNS = 'http://ws.ornek.test/';
 const XSD = `<?xml version="1.0" encoding="UTF-8"?><xs:schema xmlns:tns="${TNS}" xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="${TNS}" version="1.0">
   <xs:element name="getData" type="tns:getData"/><xs:element name="getDataResponse" type="tns:getDataResponse"/>
   <xs:complexType name="getData"><xs:sequence>
-    <xs:element name="plakaNo" type="xs:string" minOccurs="0"/><xs:element name="tescilSeriNo" type="xs:string" minOccurs="0"/>
+    <xs:element name="barkodNo" type="xs:string" minOccurs="0"/><xs:element name="faturaSeriNo" type="xs:string" minOccurs="0"/>
     <xs:element name="sorguTipi" type="tns:sorguTipi"/><xs:element name="tarih" type="xs:dateTime" minOccurs="0"/>
   </xs:sequence></xs:complexType>
-  <xs:simpleType name="sorguTipi"><xs:restriction base="xs:string"><xs:enumeration value="POLICE"/><xs:enumeration value="HASAR"/></xs:restriction></xs:simpleType>
+  <xs:simpleType name="sorguTipi"><xs:restriction base="xs:string"><xs:enumeration value="FATURA"/><xs:enumeration value="IADE"/></xs:restriction></xs:simpleType>
   <xs:complexType name="getDataResponse"><xs:sequence><xs:element name="return" type="xs:string" minOccurs="0"/></xs:sequence></xs:complexType>
 </xs:schema>`;
 const ICERIK = (xsd: string) => `<types><xsd:schema><xsd:import namespace="${TNS}" schemaLocation="${xsd}"/></xsd:schema></types>
@@ -61,8 +61,8 @@ test.describe('WSDL içe aktarmaları', () => {
     const e = await erisimiDenetle({ adres: `${adres}/TEST-DataWS/DataService` });
     expect(e.operasyonlar).toEqual([{ ad: 'getData' }]);
     expect(e.iceAktarilan).toBe(1);
-    expect(e.semalar.getData.alanlar.map((a) => a.ad)).toEqual(['plakaNo', 'tescilSeriNo', 'sorguTipi', 'tarih']);
-    expect(e.semalar.getData.alanlar.find((a) => a.ad === 'sorguTipi')).toMatchObject({ zorunlu: true, secenekler: ['POLICE', 'HASAR'] });
+    expect(e.semalar.getData.alanlar.map((a) => a.ad)).toEqual(['barkodNo', 'faturaSeriNo', 'sorguTipi', 'tarih']);
+    expect(e.semalar.getData.alanlar.find((a) => a.ad === 'sorguTipi')).toMatchObject({ zorunlu: true, secenekler: ['FATURA', 'IADE'] });
     expect(e.semalar.getData.alanlar.find((a) => a.ad === 'tarih')).toMatchObject({ tip: 'tarihSaat' });
     expect(istekler).toEqual(['/TEST-DataWS/DataService?wsdl', '/TEST-DataWS/DataService?xsd=1']);
   });

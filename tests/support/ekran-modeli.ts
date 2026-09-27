@@ -39,7 +39,7 @@ export type Secenek = {
   formMetni?: string;
   /** Senaryo JSON'unda tutulan değer ekrandaki value'dan farklıysa (ör. sorguTipi "tekli" → "1"). */
   senaryoDegeri?: string;
-  /** Tek senaryo değerinin ekranda birden fazla kontrole dağıldığı durumlar (ör. ettiren). */
+  /** Tek senaryo değerinin ekranda birden fazla kontrole dağıldığı durumlar (ör. ödeyen). */
   ekranDegerleri?: Record<string, string>;
   secici?: string;
   /** Seçeneğin geçerli olduğu adlandırılmış koşul (kosullar anahtarı). */
@@ -54,9 +54,8 @@ export type KosulIfadesi =
   | { ve: KosulIfadesi[] }
   | { veya: KosulIfadesi[] }
   | { degil: KosulIfadesi }
+  /** Bağlam profiline göre alan seti (eski adı da okunur: scripts/dogrulama/eski-anahtarlar.mjs). */
   | { baglam: { alanSeti: string } }
-  /** Eski adı (hâlâ okunur): { baglam: { alanSeti } }. */
-  | { acente: { alanSeti: string } }
   | { calismaZamani: 'gorunurse' };
 
 /** Alan/bölüm/adım görünürlüğü: adlandırılmış koşul (kosul) YA DA satır içi ifade. */
@@ -68,9 +67,9 @@ export type AdlandirilmisKosul = {
   hedefIfade?: KosulIfadesi;
   /**
    * Bağlam profili bazında bilinen görünürlük; doğrulayıcı profilKodu'nu bağlam profilinin kod'uyla eşleştirir.
-   * Eski adları hâlâ okunur: acente (profil), acentePartaji (profilKodu).
+   * Eski adları hâlâ okunur (scripts/dogrulama/eski-anahtarlar.mjs).
    */
-  bilinenDurumlar?: Array<{ profil?: string; profilKodu?: string; acente?: string; acentePartaji?: string; gorunur: boolean | null; kaynak: string }>;
+  bilinenDurumlar?: Array<{ profil?: string; profilKodu?: string; gorunur: boolean | null; kaynak: string }>;
   not?: string;
 };
 
@@ -252,17 +251,15 @@ export type EkranModeli = {
   adimlar: Adim[];
   senaryoDuzeyi: { aciklama: string; alanlar: Alan[] };
   urunDuzeyi: Record<string, UrunDuzeyiAlani>;
-  /** Bağlam profili ekranı (ayrı ekran; alan kimlikleri ayrı ad alanında). */
+  /** Bağlam profili ekranı (ayrı ekran; alan kimlikleri ayrı ad alanında; eski adı da okunur: eski-anahtarlar.mjs). */
   baglam?: BaglamEkrani;
-  /** Eski adı (hâlâ okunur): baglam. */
-  acenteBaglami?: BaglamEkrani;
   isKurallari: IsKurali[];
   bilinmeyenler: string[];
   /** Bağlam profiline göre alan görünürlüğü (gözlem; sayfa paketinden gelir). */
   baglamGorunurlugu?: BaglamGorunurlugu;
 };
 
-/** Modelin bağlam profili ekranı (model.baglam; eski adı acenteBaglami). */
+/** Modelin bağlam profili ekranı (model.baglam; eski adı da okunur). */
 export type BaglamEkrani = {
   aciklama: string;
   pageObject?: string;

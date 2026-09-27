@@ -74,14 +74,14 @@ test.describe('SoapUI önizlemesi ve eski parametre dönüşümü (arayüz)', ()
     await expect(yazilacak).toContainText('PASSWORD (gizli sütun): değer yazılmaz (boş kalır)');
     await expect(page.getByRole('region', { name: 'Hesaplama kuralı önerileri' })).toContainText('BEGIN_DATE');
     const baglar = page.getByRole('region', { name: 'Kurulacak bağlar' });
-    await expect(baglar.getByLabel('Bağ kur: Teklif Input/Channel')).toBeChecked();
+    await expect(baglar.getByLabel('Bağ kur: Siparis Input/Channel')).toBeChecked();
     // Kullanıcı seçer: şifreli kaydet → özet değişir; MUSTERI_TC gövdede kalsın → bağı kurulmaz.
     await page.getByLabel('PASSWORD değerini şifreli kaydet').check();
     await expect(yazilacak).toContainText('PASSWORD (gizli sütun): değer şifreli yazılır');
     await page.getByLabel('MUSTERI_TC nereden dolsun').selectOption('birak');
-    await expect(baglar.getByLabel('Bağ kur: Teklif Input/CitizenshipNumber')).toBeDisabled();
+    await expect(baglar.getByLabel('Bağ kur: Siparis Input/IdentityNumber')).toBeDisabled();
     await expect(yazilacak).not.toContainText('MUSTERI_TC');
-    await baglar.getByLabel('Bağ kur: Teklif Input/Username').uncheck();
+    await baglar.getByLabel('Bağ kur: Siparis Input/Username').uncheck();
 
     // Yeni servis: erişim kontrolü (onaylı; yalnız sahte sunucu) → Aktar.
     await page.getByRole('button', { name: 'Erişimi kontrol et' }).click();
@@ -91,10 +91,10 @@ test.describe('SoapUI önizlemesi ve eski parametre dönüşümü (arayüz)', ()
     await expect(page).toHaveURL(/#\/servisler\/s\/[^/]+\/(senaryolar|parametreler)$/);
     const servisId = decodeURIComponent(page.url().split('/servisler/s/')[1].split('/')[0]);
     const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
-    expect(Object.keys(d.servis.ayarlar.alanBaglari.Teklif).sort()).toEqual(['Input/BeginDate', 'Input/Channel', 'Input/EndDate', 'Input/Password']);
+    expect(Object.keys(d.servis.ayarlar.alanBaglari.Siparis).sort()).toEqual(['Input/BeginDate', 'Input/Channel', 'Input/EndDate', 'Input/Password']);
     expect(d.servis.ayarlar.tarihKurallari).toMatchObject({ BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss" });
     const gecerli = (d.senaryolar as Nesne[]).find((x) => x.baslik === 'Geçerli kimlik') as Nesne;
-    expect(gecerli.icerik.govde).toContain('<Password>${SoapUI Takim.PASSWORD}</Password><CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber>');
+    expect(gecerli.icerik.govde).toContain('<Password>${SoapUI Takim.PASSWORD}</Password><IdentityNumber>${MUSTERI_TC}</IdentityNumber>');
 
     // Eski eşleme için servis profil (satır) seçimi → Parametreler'de "Yeni bağlama modeline geçir" kartı.
     const turler = await basarili(`/platform/test-verisi-turleri?projeId=${projeId}`);
@@ -115,7 +115,7 @@ test.describe('SoapUI önizlemesi ve eski parametre dönüşümü (arayüz)', ()
     await page.getByRole('dialog', { name: 'Yeni bağlama modeline geçirilsin mi?' }).getByRole('button', { name: 'Geçir' }).click();
     await expect(page.locator('.eski-parametre-karti')).toHaveCount(0);
     const sonra = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar as Nesne[];
-    expect(sonra.find((x) => x.baslik === 'Geçerli kimlik')?.icerik.govde).toContain('<CitizenshipNumber>${Kişi[musteri].tcKimlikNo}</CitizenshipNumber>');
+    expect(sonra.find((x) => x.baslik === 'Geçerli kimlik')?.icerik.govde).toContain('<IdentityNumber>${Kişi[musteri].tcKimlikNo}</IdentityNumber>');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

@@ -641,7 +641,7 @@ function taslakOlustur(sema, d, onceki, gorunurluk) {
 }
 
 /**
- * Doğrulayıcının alan yolu (ör. "kapsam", "ettirenOzelKimligi.tcKimlikNo", "krediKarti.kartNo",
+ * Doğrulayıcının alan yolu (ör. "kapsam", "odeyenOzelKimligi.tcKimlikNo", "krediKarti.kartNo",
  * "beklenenSonuc.mesaj") → form kontrol anahtarı. Eşleşmezse null (genel hata).
  */
 export function hataKontrolu(alanYolu, sema) {

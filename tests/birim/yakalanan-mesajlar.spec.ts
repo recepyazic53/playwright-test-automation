@@ -18,7 +18,7 @@ import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { HIZLI_KDF } from './platform-ortak';
 
 const SAYFA = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Sahte</title></head><body>
-<p id="uyari" role="alert">Poliçe 12345 bulunamadı</p>
+<p id="uyari" role="alert">Fatura 12345 bulunamadı</p>
 <script>
   console.error('Doğrulama: parola=Gizli-Deger-987 kart 4111 1111 1111 1111');
   console.log('bilgi iletisi yakalanmaz');
@@ -39,15 +39,15 @@ test('model koşucusu okuma noktaları: diyalog, hata göstergesi, konsol, sayfa
     tarayiciUyarilariniDinle(page);
     y.adim = 'Ekran açılır';
     await page.goto(`${fikstur.adres}/ekran`);
-    y.adim = 'Prim hesaplanır';
+    y.adim = 'Toplam hesaplanır';
     // Diyalog: mevcut davranış (kapatılır) değişmez; iki kez aynı metin → tek kayıt, sayı 2.
     await page.evaluate(() => { alert('Tutar sıfır olamaz'); alert('Tutar sıfır olamaz'); });
     // Hata göstergesi yoklanırken aynı metin bir kez sayılır.
-    for (let i = 0; i < 3; i++) expect(await hataMesajlari(page, { hataGostergesi: { secici: '#uyari' } })).toContain('Poliçe 12345 bulunamadı');
+    for (let i = 0; i < 3; i++) expect(await hataMesajlari(page, { hataGostergesi: { secici: '#uyari' } })).toContain('Fatura 12345 bulunamadı');
     await expect.poll(() => [...new Set(y.liste().map((m) => m.kaynak))].sort()).toEqual(['ag', 'diyalog', 'hata-gostergesi', 'konsol', 'sayfa-hatasi']);
     const bul = (k: string) => y.liste().find((m) => m.kaynak === k)!;
-    expect(bul('diyalog')).toMatchObject({ metin: 'Tutar sıfır olamaz', sayi: 2, beklenen: true, adim: 'Prim hesaplanır' });
-    expect(bul('hata-gostergesi')).toMatchObject({ metin: 'Poliçe 12345 bulunamadı', sayi: 1, beklenen: false });
+    expect(bul('diyalog')).toMatchObject({ metin: 'Tutar sıfır olamaz', sayi: 2, beklenen: true, adim: 'Toplam hesaplanır' });
+    expect(bul('hata-gostergesi')).toMatchObject({ metin: 'Fatura 12345 bulunamadı', sayi: 1, beklenen: false });
     expect(bul('ag').metin).toBe('GET /api/hesapla → HTTP 500');
     expect(bul('sayfa-hatasi').metin).toContain('Beklenmeyen hata oluştu');
     const konsol = y.liste().find((m) => m.kaynak === 'konsol' && m.metin.startsWith('Doğrulama'))!.metin;
@@ -70,16 +70,16 @@ test('depo: koşuda yakalanan mesajlar gruplanır (önce beklenmeyen, geçen/kal
     await kasaOlustur(vt, `Gecici-${randomBytes(6).toString('hex')}`, { kdf: HIZLI_KDF });
     const proje = projeKaydet(vt, { ad: 'Yakalama' });
     const e1 = ekranKaydet(vt, { projeId: proje, anahtar: 'rota', ad: 'Rota' });
-    const e2 = ekranKaydet(vt, { projeId: proje, anahtar: 'kasko', ad: 'Kasko' });
-    const s1 = senaryoKaydet(vt, { projeId: proje, ekranId: e1, baslik: 'Avrupa', icerik: {} });
-    const s2 = senaryoKaydet(vt, { projeId: proje, ekranId: e2, baslik: 'Kasko peşin', icerik: {} });
+    const e2 = ekranKaydet(vt, { projeId: proje, anahtar: 'kargo', ad: 'Kargo' });
+    const s1 = senaryoKaydet(vt, { projeId: proje, ekranId: e1, baslik: 'Standart', icerik: {} });
+    const s2 = senaryoKaydet(vt, { projeId: proje, ekranId: e2, baslik: 'Kargo peşin', icerik: {} });
     const z = (dk: number) => new Date(Date.UTC(2026, 8, 27, 9, dk)).toISOString();
     kosuKaydet(vt, { id: 'k1', projeId: proje, tur: 'tam', baslangic: z(0) });
-    const m = (kaynak: string, metin: string, beklenen = false, sayi = 1) => ({ kaynak, metin, adim: 'Prim hesaplanır', sayi, beklenen, ilk: z(1), son: z(1) });
-    const gecen = sonucKaydet(vt, { kosuId: 'k1', projeId: proje, senaryoId: s1, senaryoBaslik: 'Avrupa', durum: 'basarili', testKimligi: 't1', bitis: z(2),
-      yakalananMesajlar: [m('ag', 'POST /api/teklif/123 → HTTP 500', false, 2), m('diyalog', 'Tutar sıfır olamaz', true)] });
-    sonucKaydet(vt, { kosuId: 'k1', projeId: proje, senaryoId: s2, senaryoBaslik: 'Kasko peşin', durum: 'basarisiz', testKimligi: 't2', bitis: z(3),
-      hataMesaji: 'Error: beklenmeyen', yakalananMesajlar: [m('ag', 'POST /api/teklif/456 → HTTP 500'), m('konsol', 'Uncaught TypeError: x is undefined'),
+    const m = (kaynak: string, metin: string, beklenen = false, sayi = 1) => ({ kaynak, metin, adim: 'Toplam hesaplanır', sayi, beklenen, ilk: z(1), son: z(1) });
+    const gecen = sonucKaydet(vt, { kosuId: 'k1', projeId: proje, senaryoId: s1, senaryoBaslik: 'Standart', durum: 'basarili', testKimligi: 't1', bitis: z(2),
+      yakalananMesajlar: [m('ag', 'POST /api/siparis/123 → HTTP 500', false, 2), m('diyalog', 'Tutar sıfır olamaz', true)] });
+    sonucKaydet(vt, { kosuId: 'k1', projeId: proje, senaryoId: s2, senaryoBaslik: 'Kargo peşin', durum: 'basarisiz', testKimligi: 't2', bitis: z(3),
+      hataMesaji: 'Error: beklenmeyen', yakalananMesajlar: [m('ag', 'POST /api/siparis/456 → HTTP 500'), m('konsol', 'Uncaught TypeError: x is undefined'),
         { kaynak: 'bilinmez', metin: 'atlanır' }] });
     kosuyuBitir(vt, 'k1', { durum: 'tamamlandi', bitis: z(4) });
 
@@ -89,16 +89,16 @@ test('depo: koşuda yakalanan mesajlar gruplanır (önce beklenmeyen, geçen/kal
     expect(y.kaynaklar).toMatchObject({ ag: 3, diyalog: 1, konsol: 1 });
     // Aynı kalıp (sayılar #) iki testte: bir geçen, bir kalan; beklenen grup en sonda.
     expect(y.kaliplar.map((k) => [k.kaynak, k.kalip, k.beklenen])).toEqual([
-      ['ag', 'POST /api/teklif/# → HTTP #', false], ['konsol', 'Uncaught TypeError: x is undefined', false], ['diyalog', 'Tutar sıfır olamaz', true]]);
-    expect(y.kaliplar[0]).toMatchObject({ sayi: 3, senaryoSayisi: 2, gecenTestSayisi: 1, kalanTestSayisi: 1, urunler: ['Kasko', 'Rota'] });
-    expect(y.kaliplar[0].sonuclar.map((x) => [x.senaryoBaslik, x.durum])).toEqual([['Kasko peşin', 'basarisiz'], ['Avrupa', 'basarili']]);
+      ['ag', 'POST /api/siparis/# → HTTP #', false], ['konsol', 'Uncaught TypeError: x is undefined', false], ['diyalog', 'Tutar sıfır olamaz', true]]);
+    expect(y.kaliplar[0]).toMatchObject({ sayi: 3, senaryoSayisi: 2, gecenTestSayisi: 1, kalanTestSayisi: 1, urunler: ['Kargo', 'Rota'] });
+    expect(y.kaliplar[0].sonuclar.map((x) => [x.senaryoBaslik, x.durum])).toEqual([['Kargo peşin', 'basarisiz'], ['Standart', 'basarili']]);
     // Ürün süzgeci ve tarih aralığı.
     expect(hataKaliplari(vt, proje, { urun: e1 }).yakalanan.kaliplar.map((k) => k.kaynak)).toEqual(['ag', 'diyalog']);
     expect(hataKaliplari(vt, proje, { baslangic: z(30) }).yakalanan.toplam).toBe(0);
     // Test ayrıntısı: önce beklenmeyen.
     expect(sonucDetayi(vt, gecen.id)?.yakalananMesajlar.map((x) => [x.kaynak, x.beklenen, x.sayi])).toEqual([['ag', false, 2], ['diyalog', true, 1]]);
     // Yeniden deneme (aynı test kimliği) eski satırın mesajlarını da siler.
-    sonucKaydet(vt, { kosuId: 'k1', projeId: proje, senaryoId: s1, senaryoBaslik: 'Avrupa', durum: 'basarili', testKimligi: 't1', bitis: z(5) });
+    sonucKaydet(vt, { kosuId: 'k1', projeId: proje, senaryoId: s1, senaryoBaslik: 'Standart', durum: 'basarili', testKimligi: 't1', bitis: z(5) });
     expect(hataKaliplari(vt, proje).yakalanan.toplam).toBe(2);
     vt.kapat();
   } finally {

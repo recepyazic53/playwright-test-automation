@@ -518,7 +518,7 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
       const c = basvuruyuCoz(tablolar, b, icerik.tabloSecimleri, ortamId);
       if ('deger' in c) {
         const { tablo: t, sutun, satir: r, deger: d } = c;
-        // Değerin servis karşılığı tanımlıysa gövdeye o yazılır (ör. DÜNYA → WORLD).
+        // Değerin servis karşılığı tanımlıysa gövdeye o yazılır (ör. EKSPRES → EXPRESS).
         degerler[ad] = servisDegeri(sutun, d);
         if (sutun.gizli) gizliler.push(d);
         if (!kullanilanSatirlar.some((x) => x.tablo === t.ad && x.etiket === b.etiket)) {
@@ -989,7 +989,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       okumaSonuclari.push({ tur: 'okuma', ad: `Değer okundu: ${o.ad}`, gecti: true, aciklama: okumaGizliMi(o, ekAdlar) ? 'gizli (maskelendi)' : '' });
     }
     olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
-    // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki TeklifNo = önceki adımda okunan) çözülür.
+    // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki SiparisNo = önceki adımda okunan) çözülür.
     const kontrolListesi = akisDegerleri ? akisKontrolleriniCoz(icerik.kontroller, akisDegerleri) : icerik.kontroller;
     const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi), ...okumaSonuclari];
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';

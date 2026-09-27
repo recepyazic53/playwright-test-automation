@@ -12,16 +12,16 @@ const alan = (anahtar: string, etiket: string, tur = 'text', ek: Partial<HamAlan
   anahtar, tur, etiket, etiketKaynagi: 'label', kimlik: anahtar.slice(1), ad: null, secici: anahtar, kirilganlik: 'dusuk', adaySeciciler: [anahtar],
   zorunlu: false, devreDisi: false, saltOkunur: false, coklu: false, bolum: { anahtar: 'b', baslik: 'Genel' }, ...ek
 });
-const META = { ekranAnahtari: 'teklif', ekranAdi: 'Teklif', urlYolu: '/teklif/', girisGerekli: false, girissiz: true, ikiAsamali: 'yok' as const, baglamTuru: null };
+const META = { ekranAnahtari: 'siparis', ekranAdi: 'Siparis', urlYolu: '/siparis/', girisGerekli: false, girissiz: true, ikiAsamali: 'yok' as const, baglamTuru: null };
 
-/** Kayıttan model: müşteri (tip radyo, TC Bireysel'de) → isteğe bağlı "Ek sürücü ekle" → Devam → teminat → mesaj. */
+/** Kayıttan model: müşteri (tip radyo, TC Bireysel'de) → isteğe bağlı "Ek adres ekle" → Devam → teslimat → mesaj. */
 function ornekModel(): Nesne {
   const tip = alan('@tip', 'Müşteri tipi', 'radio', { secici: 'input[name="tip"]', radyolar: [{ deger: 'b', metin: 'Bireysel', secici: null }, { deger: 'k', metin: 'Kurumsal', secici: null }] });
   const env = {
-    kip: 'kayit' as const, bicim: 'akis' as const, profil: null, baslik: 'Teklif',
-    alanlar: [alan('#ad', 'Ad Soyad', 'text', { zorunlu: true }), tip, alan('#tc', 'TC kimlik no'), alan('#ekAd', 'Ek sürücü adı'), alan('#teminat', 'Teminat')].map((a) => ({ alan: a, secili: true })),
-    dugmeler: [{ secici: '#ek', metin: 'Ek sürücü ekle' }, { secici: '#devam', metin: 'Devam' }, { secici: '#kaydet', metin: 'Kaydet' }],
-    mesajlar: [{ secici: '#sonuc', metin: 'Teklif oluşturuldu. No: 5' }],
+    kip: 'kayit' as const, bicim: 'akis' as const, profil: null, baslik: 'Siparis',
+    alanlar: [alan('#ad', 'Ad Soyad', 'text', { zorunlu: true }), tip, alan('#tc', 'TC kimlik no'), alan('#ekAd', 'Ek adres adı'), alan('#teslimat', 'Teslimat')].map((a) => ({ alan: a, secili: true })),
+    dugmeler: [{ secici: '#ek', metin: 'Ek adres ekle' }, { secici: '#devam', metin: 'Devam' }, { secici: '#kaydet', metin: 'Kaydet' }],
+    mesajlar: [{ secici: '#sonuc', metin: 'Siparis oluşturuldu. No: 5' }],
     olaylar: [], engellenenler: [], notlar: []
   };
   const { envanter, hatalar } = akistanKayitEnvanteri(env, [
@@ -30,9 +30,9 @@ function ornekModel(): Nesne {
     { tur: 'alanlar', ad: 'Ek', alanlar: ['#ekAd'], zorunlu: [] },
     { tur: 'aksiyon', dugme: 1, istegeBagli: false },
     { tur: 'bekle', saniye: 2 },
-    { tur: 'alanlar', ad: 'Teminat', alanlar: ['#teminat'], zorunlu: [] },
+    { tur: 'alanlar', ad: 'Teslimat', alanlar: ['#teslimat'], zorunlu: [] },
     { tur: 'aksiyon', dugme: 2, istegeBagli: false },
-    { tur: 'mesaj', mesaj: 0, metin: 'Teklif oluşturuldu' },
+    { tur: 'mesaj', mesaj: 0, metin: 'Siparis oluşturuldu' },
     { tur: 'bitir' }
   ]);
   expect(hatalar).toEqual([]);
@@ -43,18 +43,18 @@ test('akış listesi ve akışın modeli: örtük "Ana akış"; seçilen akış�
   const m = ornekModel();
   expect(akisListesi(m)).toEqual([{ id: ANA_AKIS_ID, ad: 'Ana akış', varsayilan: true, adimSayisi: 5 }]);
   expect(akisModeli(m, 'yok')).toBe(m);
-  // İkinci akış: yalnızca ilk ve son adım (ek sürücü yok); iş kuralı ek sürücü adımına bağlı.
+  // İkinci akış: yalnızca ilk ve son adım (ek adres yok); iş kuralı ek adres adımına bağlı.
   const ikinci = { id: 'kisa', ad: 'Kısa', adimlar: [m.adimlar[0], { ...m.adimlar[4], sira: 2 }] };
   const tam = { ...m, akislar: [{ id: 'ana', ad: 'Ana akış', varsayilan: true, adimlar: m.adimlar }, ikinci], isKurallari: [{ id: 'k1', adim: m.adimlar[1].id, kosul: { alan: 'tip', esit: 'b' }, mesaj: 'x' }] };
   expect(akisListesi(tam).map((a) => [a.id, a.varsayilan, a.adimSayisi])).toEqual([['ana', true, 5], ['kisa', false, 2]]);
   expect(varsayilanAkisId(tam)).toBe('ana');
   const kisa = akisModeli(tam, 'kisa') as Nesne;
   expect(kisa.akislar).toBeUndefined();
-  expect(kisa.adimlar.map((a: Nesne) => a.baslik)).toEqual(['Müşteri', 'Teminat']);
+  expect(kisa.adimlar.map((a: Nesne) => a.baslik)).toEqual(['Müşteri', 'Teslimat']);
   expect(kisa.isKurallari).toEqual([]);
-  // "“Ek sürücü ekle” dahil" ayarı yalnızca onu kullanan akışın formunda.
+  // "“Ek adres ekle” dahil" ayarı yalnızca onu kullanan akışın formunda.
   expect(kisa.senaryoDuzeyi.alanlar.map((a: Nesne) => a.id)).toEqual([]);
-  expect((akisModeli(tam, 'ana') as Nesne).senaryoDuzeyi.alanlar.map((a: Nesne) => a.id)).toEqual(['ekSurucuEkleDahil']);
+  expect((akisModeli(tam, 'ana') as Nesne).senaryoDuzeyi.alanlar.map((a: Nesne) => a.id)).toEqual(['ekAdresEkleDahil']);
   expect((akisModeli(tam, 'ana') as Nesne).isKurallari).toHaveLength(1);
   // Varsayılan akışın kopyası model.adimlar ile eşitlenir.
   const esit = akislariEsitle({ ...tam, adimlar: [m.adimlar[0]] }) as Nesne;
@@ -63,7 +63,7 @@ test('akış listesi ve akışın modeli: örtük "Ana akış"; seçilen akış�
 
 test('doğrulayıcı: tek varsayılan (adımları model.adimlar ile aynı), tekil kimlik, her akış geçerli bir akış modeli', () => {
   const m = ornekModel();
-  const dogrula = (akislar: unknown) => () => ekranModeliniDogrula('teklif.model.json', { ...m, akislar }, () => { throw new Error('alt model yok'); });
+  const dogrula = (akislar: unknown) => () => ekranModeliniDogrula('siparis.model.json', { ...m, akislar }, () => { throw new Error('alt model yok'); });
   expect(dogrula([{ id: 'ana', ad: 'Ana akış', varsayilan: true, adimlar: m.adimlar }, { id: 'kisa', ad: 'Kısa', adimlar: [m.adimlar[0], { ...m.adimlar[4], sira: 2 }] }])).not.toThrow();
   expect(dogrula([{ id: 'ana', ad: 'Ana', varsayilan: true, adimlar: [m.adimlar[0]] }])).toThrow(/varsayılan akışın "adimlar"ı modelin "adimlar"ıyla aynı olmalı/);
   expect(dogrula([{ id: 'ana', ad: 'Ana', varsayilan: true, adimlar: m.adimlar }, { id: 'ana', ad: 'B', adimlar: m.adimlar }])).toThrow(/akış id'si "ana" birden fazla kez/);
@@ -77,7 +77,7 @@ test('modelden diyagram ve geri: bloklar adımların aynısını verir (koşul, 
   expect(akisDuzenlenebilirMi(m)).toEqual({ duzenlenebilir: true, neden: null });
   const env = modeldenAkisEnvanteri(m);
   expect(env.alanlar.map((a) => [a.alan.anahtar, a.alan.tur, a.alan.zorunlu])).toEqual([
-    ['ad', 'text', true], ['tip', 'radio', false], ['tc', 'text', false], ['ekAd', 'text', false], ['teminat', 'text', false]
+    ['ad', 'text', true], ['tip', 'radio', false], ['tc', 'text', false], ['ekAd', 'text', false], ['teslimat', 'text', false]
   ]);
   const bloklar = adimlardanBloklar(m, m.adimlar, env);
   expect(bloklar.map((b) => b.tur)).toEqual(['alanlar', 'aksiyon', 'alanlar', 'alanlar', 'aksiyon', 'bekle', 'alanlar', 'aksiyon', 'mesaj', 'bitir']);
@@ -89,7 +89,7 @@ test('modelden diyagram ve geri: bloklar adımların aynısını verir (koşul, 
   const ozet = (x: Nesne) => x.adimlar.map((a: Nesne) => [a.baslik, a.kosu ?? null, a.bolumler.flatMap((b: Nesne) => b.alanlar.map((y: Nesne) => [y.id, y.gorunurluk ?? null, y.mutlakaGorunmeli ?? false]))]);
   expect(ozet(yeni)).toEqual(ozet(m));
   // Aynı düğmenin "… dahil" ayarı yeniden kullanılır (ikinci ayar üretilmez).
-  expect(yeni.senaryoDuzeyi.alanlar.map((a: Nesne) => a.id)).toEqual(['ekSurucuEkleDahil']);
+  expect(yeni.senaryoDuzeyi.alanlar.map((a: Nesne) => a.id)).toEqual(['ekAdresEkleDahil']);
   // Alt model adımı olan model düzenlenemez.
   expect(akisDuzenlenebilirMi({ ...m, adimlar: [...m.adimlar, { id: 'odeme', sira: 6, baslik: 'Ödeme', altModel: { dosya: 'x.model.json', bolum: 'kart' } }] }).duzenlenebilir).toBe(false);
 });

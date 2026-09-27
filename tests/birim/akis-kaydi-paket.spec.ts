@@ -22,7 +22,7 @@ const envanter = (ek: Partial<KayitEnvanteri> = {}): KayitEnvanteri => ({
   adimlar: [
     { ad: 'Müşteri oluşturma', yol: '/basvuru/', baslik: 'Başvuru', alanlar: [ham('urun', 'select', { secenekler: [{ deger: 'A', metin: 'Temel' }] }), ham('adSoyad', 'text')], ilerleme: { secici: '#devam', metin: 'Devam' } },
     { ad: 'Boş adım', yol: '/basvuru/', baslik: 'Başvuru', alanlar: [], ilerleme: null },
-    { ad: 'Teminat seçimi', yol: '/basvuru/teminat', baslik: 'Teminat', alanlar: [ham('teminatSecimi', 'select', { secenekler: [{ deger: 'T1', metin: 'Dar' }] })], ilerleme: { secici: '#kaydet', metin: 'Kaydet' } }
+    { ad: 'Teslimat seçimi', yol: '/basvuru/teslimat', baslik: 'Teslimat', alanlar: [ham('teslimatSecimi', 'select', { secenekler: [{ deger: 'T1', metin: 'Dar' }] })], ilerleme: { secici: '#kaydet', metin: 'Kaydet' } }
   ],
   basariGostergesi: { secici: '#sonuc', metin: 'Kayıt oluşturuldu. No: 5550012' },
   engellenenler: [], notlar: [], ...ek
@@ -30,7 +30,7 @@ const envanter = (ek: Partial<KayitEnvanteri> = {}): KayitEnvanteri => ({
 
 test('değişken gösterge metni: rakam içeren ilk kelimeden öncesi, sondaki noktalama atılır; çok kısaysa null', () => {
   expect(sabitGostergeMetni('Başvuru onaylandı. No: 1001')).toBe('Başvuru onaylandı. No');
-  expect(sabitGostergeMetni('Teklif oluşturuldu. No: TK-1003')).toBe('Teklif oluşturuldu. No');
+  expect(sabitGostergeMetni('Siparis oluşturuldu. No: SP-1003')).toBe('Siparis oluşturuldu. No');
   expect(sabitGostergeMetni('İşlem tamamlandı.')).toBe('İşlem tamamlandı');
   expect(sabitGostergeMetni('12345 numaralı')).toBeNull();
   expect(sabitGostergeMetni(null)).toBeNull();
@@ -42,8 +42,8 @@ test('yeni ekran: adımlar sırayla, koşu tanımları, İşlemler bölümü, ba
   expect(d.hatalar).toEqual([]);
   const m = paket.model as Nesne;
   expect(m.semaSurumu).toBe(2);
-  expect(m.adimlar.map((a: Nesne) => [a.id, a.sira, a.baslik])).toEqual([['musteriOlusturma', 1, 'Müşteri oluşturma'], ['teminatSecimi', 2, 'Teminat seçimi']]);
-  expect(m.adimlar[0].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#devam', aciklama: 'Devam' }], basariGostergesi: { tur: 'eleman', deger: '#teminatSecimi' } });
+  expect(m.adimlar.map((a: Nesne) => [a.id, a.sira, a.baslik])).toEqual([['musteriOlusturma', 1, 'Müşteri oluşturma'], ['teslimatSecimi', 2, 'Teslimat seçimi']]);
+  expect(m.adimlar[0].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#devam', aciklama: 'Devam' }], basariGostergesi: { tur: 'eleman', deger: '#teslimatSecimi' } });
   expect(m.adimlar[1].kosu).toEqual({ aksiyonlar: [{ tur: 'tikla', secici: '#kaydet', aciklama: 'Kaydet' }], basariGostergesi: { tur: 'metin', deger: 'Kayıt oluşturuldu. No', secici: '#sonuc' } });
   expect(m.adimlar[1].bolumler.at(-1)).toMatchObject({ baslik: 'İşlemler', alanlar: [{ tip: 'buton', yapilandirma: 'aksiyon' }, { id: 'sonucMesaji', tip: 'cikti', yapilandirma: 'cikti' }] });
   // Bölüm kimlikleri model genelinde tekil ("İşlemler" iki adımda).

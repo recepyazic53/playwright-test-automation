@@ -995,9 +995,9 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     });
     return h('span', { class: 'tablo-degeri' }, sec, grup, durum);
   };
-  /** Akış değeri: adı yazılır (önceki adımda "Yanıttan oku" ile okunan ya da servisin oturum akışının değeri, ör. PolicyNo / Token). */
+  /** Akış değeri: adı yazılır (önceki adımda "Yanıttan oku" ile okunan ya da servisin oturum akışının değeri, ör. OrderNo / Token). */
   const akisDegeri = (alanT, v, tazele) => {
-    const g = h('input', { type: 'text', value: v.deger || '', maxlength: '60', spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi', placeholder: 'PolicyNo',
+    const g = h('input', { type: 'text', value: v.deger || '', maxlength: '60', spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi', placeholder: 'OrderNo',
       'aria-label': `${alanT.ad} akış değeri adı` });
     const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
     g.addEventListener('input', () => {
@@ -1020,7 +1020,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     }
     if (v.kaynak === 'hesap') {
       const g = h('input', { type: 'text', value: v.deger || '', spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi', placeholder: "${Tutar} / 100 | 0.00",
-        'aria-label': `${alanT.ad} hesap ifadesi`, title: 'Koşu anında hesaplanır: ifade | biçim (ör. yuvarla(${Prim} * 1.18, 2), bugun+1y | yyyy-MM-dd)' });
+        'aria-label': `${alanT.ad} hesap ifadesi`, title: 'Koşu anında hesaplanır: ifade | biçim (ör. yuvarla(${Toplam} * 1.18, 2), bugun+1y | yyyy-MM-dd)' });
       g.addEventListener('input', () => { v.deger = g.value.trim(); tazele(); });
       return h('span', { class: 'hesap-girdisi' }, h('code', {}, '${hesap:'), g, h('code', {}, '}'));
     }

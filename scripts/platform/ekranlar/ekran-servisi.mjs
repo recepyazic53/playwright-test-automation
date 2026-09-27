@@ -589,7 +589,7 @@ export async function sayfaEkle(vt, projeId, paket, secenekler) {
   const p = /** @type {Nesne} */ (paket);
   const meta = /** @type {Nesne} */ (p.meta);
   const ekranMeta = /** @type {Nesne} */ (meta.ekran);
-  // Yeni kayıt yeni anahtar adlarıyla yazılır (paketteki eski adlar — ör. acenteBaglami — genel karşılıklarına çevrilir).
+  // Yeni kayıt yeni anahtar adlarıyla yazılır (paketteki eski adlar — bkz. dogrulama/eski-anahtarlar.mjs — genel karşılıklarına çevrilir).
   const model = eskiModelAnahtarlariniCevir(/** @type {Nesne} */ (p.model));
   const ortamlar = ortamlariListele(vt, projeId);
   const ortamIdleri = Array.isArray(secenekler.ortamIdleri) ? [...new Set(secenekler.ortamIdleri.filter((x) => typeof x === 'string'))] : [];

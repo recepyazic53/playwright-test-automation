@@ -136,8 +136,8 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     ciz();
   };
   const adim1 = () => {
-    const ad = h('input', { type: 'text', autocomplete: 'off', value: d.ad, placeholder: 'ör. TravelService' });
-    const anahtar = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.anahtar, placeholder: 'ör. travel-service' });
+    const ad = h('input', { type: 'text', autocomplete: 'off', value: d.ad, placeholder: 'ör. SiparisServisi' });
+    const anahtar = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.anahtar, placeholder: 'ör. siparis-servisi' });
     ad.addEventListener('input', () => { d.ad = ad.value; if (!d.anahtarElle) { d.anahtar = anahtarUret(ad.value); anahtar.value = d.anahtar; } durumGuncelle(); });
     anahtar.addEventListener('input', () => { d.anahtar = anahtar.value.trim(); d.anahtarElle = Boolean(anahtar.value); durumGuncelle(); });
     // Tam adres yapıştır: bilinen bir taban adresiyle başlıyorsa taban + yol ayrılır, değilse adresin kökü yeni taban olur.
@@ -174,7 +174,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   };
 
   const adim2 = () => {
-    const yol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.yol, placeholder: '/AppService/travel.asmx', 'aria-label': 'Yol' });
+    const yol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.yol, placeholder: '/AppService/siparis.asmx', 'aria-label': 'Yol' });
     const onizleme = h('ul', { class: 'adres-onizleme' });
     const onizle = () => yerlestir(onizleme, ...ortamlar.map((o) => h('li', {}, h('b', {}, `${o.ad}: `),
       d.tabanlar[o.id] ? h('code', { class: 'duz' }, birlestir(d.tabanlar[o.id], d.yol || '/…')) : h('span', { class: 'soluk' }, 'bu ortamda yok'))));
@@ -204,7 +204,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     };
     denetle.addEventListener('click', async () => {
       mesaj.temizle();
-      if (!/^\/\S*$/.test(d.yol)) { mesaj.goster('Yol "/" ile başlamalı (ör. /AppService/travel.asmx).'); return; }
+      if (!/^\/\S*$/.test(d.yol)) { mesaj.goster('Yol "/" ile başlamalı (ör. /AppService/siparis.asmx).'); return; }
       const o = testOrtamlari.find((x) => x.id === d.kontrolOrtami);
       if (!o || !d.tabanlar[o.id]) { mesaj.goster('Denetleme için TEST ortamının taban adresi gerekli (1. adım).'); return; }
       const adres = `${birlestir(d.tabanlar[o.id], d.yol)}?wsdl`;

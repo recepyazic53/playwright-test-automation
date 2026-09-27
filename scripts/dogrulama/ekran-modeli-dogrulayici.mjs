@@ -4,9 +4,11 @@
 // kimlikleri, koşul ifadelerinin biçimi, adım/koşul/alan/alt model başvurularının varlığı, bağlam
 // profili görünürlüğü gözlemleri. Senaryo verisinin modele uygunluğu senaryo-dogrulayici.mjs'dedir.
 //
-//  - Bu dosya HİÇBİR modül import etmez; Node'a/DOM'a özgü API kullanmaz.
+//  - Bu dosya yalnızca geriye uyum tablosunu (eski-anahtarlar.mjs) import eder; Node'a/DOM'a özgü API kullanmaz.
 //  - Hata varsa TÜM sorunlar toplanır ve TEK bir Türkçe Error'da listelenir.
 // Tipler: ekran-modeli-dogrulayici.d.mts (modelin TypeScript tipleri: tests/support/ekran-modeli.ts).
+
+import { ESKI_MODEL_ANAHTARLARI } from './eski-anahtarlar.mjs';
 
 /**
  * Bu doğrulayıcının anladığı EN YENİ model şema sürümü. Sürüm 1 modeller aynen geçerlidir (geriye uyumlu).
@@ -51,7 +53,7 @@ function listedeMi(liste, d) {
 }
 
 /**
- * GERİYE UYUM: şemanın eski (ilk projeye özgü) anahtar adları → genel karşılıkları. Eski adlar OKUNURKEN
+ * GERİYE UYUM: şemanın eski anahtar adları → genel karşılıkları (tablo: eski-anahtarlar.mjs). Eski adlar OKUNURKEN
  * kabul edilir ve eşdeğer yeni anahtar gibi yorumlanır; yeni kayıtlar yeni adla yazılır
  * (eskiModelAnahtarlariniCevir). Kaydedilmiş modeller kendiliğinden yeniden yazılmaz.
  *  - baglam: modelin bağlam profili ekranı ({ alanlar, … }).
@@ -59,13 +61,7 @@ function listedeMi(liste, d) {
  *  - durumProfili / durumKodu: kosullar.<ad>.bilinenDurumlar[] öğesinde profil adı (profil) / eşleşme kodu (profilKodu).
  *  - kayitAlani: alt model alanının senaryodaki kayıt (ör. test verisi kaydı) içindeki adı (eslesme.kayitAlani).
  */
-export const ESKI_ANAHTARLAR = Object.freeze({
-  baglam: 'acenteBaglami',
-  baglamIfadesi: 'acente',
-  durumProfili: 'acente',
-  durumKodu: 'acentePartaji',
-  kayitAlani: 'kart'
-});
+export const ESKI_ANAHTARLAR = ESKI_MODEL_ANAHTARLARI;
 
 /** Alanın kayıt içindeki adı (eslesme.kayitAlani; eski adı eslesme.kart) ya da undefined. */
 export function kayitAlaniAdi(alan) {
@@ -74,7 +70,7 @@ export function kayitAlaniAdi(alan) {
   return e.kayitAlani !== undefined ? e.kayitAlani : e[ESKI_ANAHTARLAR.kayitAlani];
 }
 
-/** Modelin bağlam profili ekranı (baglam; eski adı acenteBaglami) ya da undefined. */
+/** Modelin bağlam profili ekranı (baglam; eski adı ESKI_ANAHTARLAR.baglam) ya da undefined. */
 export function baglamEkrani(model) {
   if (!nesneMi(model)) return undefined;
   return model.baglam !== undefined ? model.baglam : model[ESKI_ANAHTARLAR.baglam];

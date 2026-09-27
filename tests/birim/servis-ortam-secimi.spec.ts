@@ -51,7 +51,7 @@ test.describe('servis sayfası: ortam diyalogda, Koşuda ve Son sonuç ortam ba�
     servisId = String((await basarili('/platform/servis/kaydet', { projeId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', erisimKimligi: e.erisimKimligi })).id);
     const kaydet = async (baslik: string, kapsam: string) => {
       senaryolar[baslik] = String((await basarili('/platform/servis/senaryo/kaydet', {
-        projeId, servisId, baslik, kapsam, icerik: { operasyon: 'Teklif', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] }
+        projeId, servisId, baslik, kapsam, icerik: { operasyon: 'Siparis', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] }
       })).id);
     };
     await kaydet('İkisinde', 'ikisi');
@@ -83,7 +83,7 @@ test.describe('servis sayfası: ortam diyalogda, Koşuda ve Son sonuç ortam ba�
     expect(ortamKaydi(ikisi(), testOrtami).kosuyaDahil).toBe(true);
     // Senaryo düzenleyicisi (genel değer değişmeden) kaydederse ezme korunur.
     await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId, id: senaryolar['İkisinde'], baslik: 'İkisinde', kapsam: 'ikisi', kosuyaDahil: true,
-      icerik: { operasyon: 'Teklif', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] } });
+      icerik: { operasyon: 'Siparis', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] } });
     d = await servis();
     expect(ortamKaydi(ikisi(), canli).kosuyaDahil).toBe(false);
     // Kapsamı uymayan ortamda istek atlanır (değişmez).

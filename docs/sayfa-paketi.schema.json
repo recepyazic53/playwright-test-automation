@@ -41,11 +41,7 @@
         "tur": { "const": "ekran" },
         "baglam": {
           "type": "object",
-          "description": "Bağlam profili ekranı: { aciklama, veriKaynagi, alanlar, bilinenProfiller, pageObject? }. Eski adı acenteBaglami hâlâ okunur (yeni kayıtta baglam yazılır); ikisi birlikte olamaz. Alt model alanında kayıt adı eslesme.kayitAlani (eski adı eslesme.kart hâlâ okunur)."
-        },
-        "acenteBaglami": {
-          "type": "object",
-          "description": "Eski ad (hâlâ okunur): baglam."
+          "description": "Bağlam profili ekranı: { aciklama, veriKaynagi, alanlar, bilinenProfiller, pageObject? }. Önceki sürümün eski adı hâlâ okunur (scripts/dogrulama/eski-anahtarlar.mjs; yeni kayıtta baglam yazılır); ikisi birlikte olamaz. Alt model alanında kayıt adı eslesme.kayitAlani (eski adı da okunur)."
         },
         "baglamGorunurlugu": {
           "type": "object",

@@ -134,7 +134,7 @@ function karsilikPenceresi(s, degerler) {
     const diyalog = h('dialog', { class: 'onay-diyalogu karsilik-diyalogu', 'aria-labelledby': 'karsilik-basligi' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'karsilik-basligi' }, `"${s.ad}" değerlerinin karşılıkları`),
-        h('p', { class: 'soluk kucuk' }, 'Senaryoda tablodaki değer seçilir. ', h('b', {}, 'Sayfa değeri'), ': ekranda seçeneğin değeri farklıysa (ör. DÜNYA → 1) koşu seçeneği bununla seçer. ',
+        h('p', { class: 'soluk kucuk' }, 'Senaryoda tablodaki değer seçilir. ', h('b', {}, 'Sayfa değeri'), ': ekranda seçeneğin değeri farklıysa (ör. EKSPRES → 1) koşu seçeneği bununla seçer. ',
           h('b', {}, 'Servis değeri'), ': servis gövdesine yazılacak değer. Boş bırakılırsa tablodaki değer kullanılır.'),
         h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
         h('div', { class: 'tablo-kaydirma karsilik-tablosu' }, h('table', { class: 'veri-tablosu' },
@@ -649,7 +649,7 @@ export async function tablolarBolumu(govde, proje) {
       const n = Object.keys(s.karsiliklar || {}).length;
       return h('button', {
         type: 'button', class: `ikon-dugme hayalet karsilik-dugmesi${n ? ' dolu' : ''}`, 'aria-label': `${i + 1}. sütunun karşılıkları${n ? ` (${n})` : ''}`,
-        title: n ? `Karşılıklar: ${n} değerin sayfa / servis değeri tanımlı` : 'Karşılıklar: değerin sayfada ve serviste farklı karşılığı (ör. DÜNYA → 1)',
+        title: n ? `Karşılıklar: ${n} değerin sayfa / servis değeri tanımlı` : 'Karşılıklar: değerin sayfada ve serviste farklı karşılığı (ör. EKSPRES → 1)',
         onclick: async () => {
           const yeni = await karsilikPenceresi(s, sutunDegerleri(s));
           if (!yeni) return;

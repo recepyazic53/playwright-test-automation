@@ -139,10 +139,10 @@ test('diyagramdan düzenleme: form ile aynı taslak, dahil anahtarı, beklenen h
   await page.getByRole('tab', { name: 'Akış diyagramı' }).click();
 
   // "Burada hata beklenir" (klavyeyle açılan kutudan): beklenen sonuç alanı açılır, adım seçili, mesaj yazılır.
-  const prim = dugum('Prim hesaplanır');
-  await prim.getByRole('button', { name: '2. Prim hesaplanır: senaryoda düzenle' }).focus();
+  const toplam = dugum('Toplam hesaplanır');
+  await toplam.getByRole('button', { name: '2. Toplam hesaplanır: senaryoda düzenle' }).focus();
   await page.keyboard.press('Enter');
-  await expect(panel.getByRole('heading', { name: '2. Prim hesaplanır' })).toBeFocused();
+  await expect(panel.getByRole('heading', { name: '2. Toplam hesaplanır' })).toBeFocused();
   await panel.getByRole('button', { name: 'Burada hata beklenir' }).click();
   await expect(panel.getByRole('heading', { name: 'Beklenen sonuç' })).toBeVisible();
   await expect(panel.getByRole('radio', { name: 'İş kuralı hatası beklenir' })).toBeChecked();
@@ -155,7 +155,7 @@ test('diyagramdan düzenleme: form ile aynı taslak, dahil anahtarı, beklenen h
   await expect(bitis).toContainText('İş kuralı hatası beklenir: “Taksitli ödeme seçilemez”');
   await expect(bitis.locator('.dugum-hata-rozeti')).toHaveCount(0);
   await goruntu(page, '02-genis-beklenen-sonuc.png');
-  await expect(prim).toContainText('hata beklenir');
+  await expect(toplam).toContainText('hata beklenir');
   await expect(dugum('Başvuru onaylanır')).toHaveClass(/disarida/);
   await expect(dugum('Başvuru onaylanır')).toContainText('Beklenen hata daha önceki bir adımda');
   // Form da aynı beklenen sonucu gösterir.
@@ -194,7 +194,7 @@ test('dar ekran: diyagram ve düzenleme alanı dikey, yatay taşma yok; kaydedil
   const d = page.locator('.akis-diyagrami');
   const dugum = (baslik: string) => d.locator('.diyagram-dugumu').filter({ has: page.getByRole('heading', { name: baslik, exact: true }) });
   await expect(dugum('Girişsiz')).toBeVisible();
-  await expect(dugum('Prim hesaplanır')).toContainText('hata beklenir');
+  await expect(dugum('Toplam hesaplanır')).toContainText('hata beklenir');
   await expect(page.getByRole('switch', { name: 'Başvuru onaylanır: bu senaryoda dahil' })).toBeChecked();
   const bilgiler = dugum('Başvuru bilgileri girilir');
   await bilgiler.getByRole('button', { name: /senaryoda düzenle/ }).click();

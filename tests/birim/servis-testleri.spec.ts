@@ -43,11 +43,11 @@ test('SoapUI: parametreler sade yazımla kalır; giriş bilgisi / tarih / test v
   expect(t.veriParametreleri).toEqual(['MUSTERI_TC']);
   expect(t.durum.uyarilar.join(' ')).toContain('Aktarım');
   const [s] = t.servisler;
-  expect(s).toMatchObject({ anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', soapSurumu: '1.1', operasyonlar: [{ ad: 'Teklif', eylem: 'Ornek/Teklif' }] });
+  expect(s).toMatchObject({ anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', soapSurumu: '1.1', operasyonlar: [{ ad: 'Siparis', eylem: 'Ornek/Siparis' }] });
   const [gecersiz, gecerli, baska] = s.senaryolar;
   expect(gecersiz.govde).toContain('<Channel>${CHANNEL}</Channel><Username>${USERNAME}</Username><Password>${PASSWORD}</Password>');
   expect(gecersiz.govde).toContain('<BeginDate>${BEGIN_DATE}</BeginDate>');
-  expect(gecerli.govde).toContain('<CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber>');
+  expect(gecerli.govde).toContain('<IdentityNumber>${MUSTERI_TC}</IdentityNumber>');
   // Değerler gövdeye yazılmaz (ne parola ne dosyadaki test verisi).
   for (const x of s.senaryolar) { expect(x.govde).not.toContain(SAHTE_PAROLA); expect(x.govde).not.toContain('55555555555'); }
   expect(gecersiz.kontroller).toEqual([{ tur: 'soapYaniti' }, { tur: 'icerir', deger: '<Durum>HATA</Durum>' }]);
@@ -78,7 +78,7 @@ test('kontroller: SOAP zarfı, Fault, içerir / içermez, xpath, durum kodu', ()
   const ok = { durumKodu: 200, govde: yanit('OK', 'Tamam') };
   const fault = { durumKodu: 500, govde: '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault><faultcode>soap:Server</faultcode><faultstring>Sunucu hatası</faultstring></soap:Fault></soap:Body></soap:Envelope>' };
   const s = kontrolleriDegerlendir(ok, [{ tur: 'soapYaniti' }, { tur: 'soapHatasiYok' }, { tur: 'icerir', deger: '<Durum>OK</Durum>' }, { tur: 'icermez', deger: 'HATA' },
-    { tur: 'xpathEsit', xpath: '/Envelope/Body/TeklifResponse/Sonuc/Durum', deger: 'OK' }, { tur: 'durumKodu', deger: '200-299' }]);
+    { tur: 'xpathEsit', xpath: '/Envelope/Body/SiparisResponse/Sonuc/Durum', deger: 'OK' }, { tur: 'durumKodu', deger: '200-299' }]);
   expect(s.map((x) => x.gecti)).toEqual([true, true, true, true, true, true]);
   const f = kontrolleriDegerlendir(fault, [{ tur: 'soapHatasiYok' }, { tur: 'soapHatasi' }, { tur: 'durumKodu', deger: '200' }, { tur: 'soapYaniti' }]);
   expect(f.map((x) => x.gecti)).toEqual([false, true, false, true]);
@@ -90,7 +90,7 @@ test('kontroller: SOAP zarfı, Fault, içerir / içermez, xpath, durum kodu', ()
   expect(veya.alt?.map((a) => a.gecti)).toEqual([false, true]);
   expect(kontrolleriDegerlendir(ok, [{ tur: 'veya', alt: [{ tur: 'icerir', deger: 'X' }, { tur: 'icermez', deger: 'OK' }] }])[0]).toMatchObject({ gecti: false, aciklama: 'Hiçbiri geçmedi' });
   // Doğrulama: VEYA en az iki alt kontrol ister, iç içe VEYA yok, alt kontrol de doğrulanır.
-  const icerik = (kontroller: unknown[]) => ({ operasyon: 'Teklif', govde: '<a/>', kontroller });
+  const icerik = (kontroller: unknown[]) => ({ operasyon: 'Siparis', govde: '<a/>', kontroller });
   expect(senaryoIceriginiDogrula(icerik([{ tur: 'veya', alt: [{ tur: 'soapYaniti' }, { tur: 'icerir', deger: 'x', fazla: 1 }] }])).kontroller)
     .toEqual([{ tur: 'veya', alt: [{ tur: 'soapYaniti' }, { tur: 'icerir', deger: 'x' }] }]);
   expect(() => senaryoIceriginiDogrula(icerik([{ tur: 'veya', alt: [{ tur: 'soapYaniti' }] }]))).toThrow(/en az iki/);
@@ -140,7 +140,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     const e = await erisimKontrolu(vt, projeId, { ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
     expect(e.erisilebilir).toBe(true);
     if (!e.erisilebilir) return;
-    expect(e.operasyonlar).toEqual([{ ad: 'Teklif', eylem: 'Ornek/Teklif' }, { ad: 'Onayla', eylem: 'Ornek/Onayla' }]);
+    expect(e.operasyonlar).toEqual([{ ad: 'Siparis', eylem: 'Ornek/Siparis' }, { ad: 'Onayla', eylem: 'Ornek/Onayla' }]);
     expect(istekler.slice(once).map((i) => `${i.yontem} ${i.yol}`)).toEqual(['GET /Servis/ornek.asmx?wsdl']);
     // Kontrol başka adres için geçmez.
     expect(() => servisiKaydet(vt, projeId, { anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/baska.asmx', erisimKimligi: e.erisimKimligi })).toThrow(/Adres/);
@@ -161,12 +161,12 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     const s = servisGetir(vt, servisId);
     expect(s?.ayarlar).toMatchObject({ yol: '/Servis/ornek.asmx', erisim: { ortamId: testOrtami, durumKodu: 200 } });
     expect(s?.ayarlar.kimlikProfili).toBeUndefined();
-    expect(s?.ayarlar.alanBaglari?.Teklif).toEqual({
+    expect(s?.ayarlar.alanBaglari?.Siparis).toEqual({
       'Input/Channel': { tablo: girisTablosu, sutun: 'Channel' }, 'Input/Username': { tablo: girisTablosu, sutun: 'Username' }, 'Input/Password': { tablo: girisTablosu, sutun: 'Password' },
       'Input/BeginDate': { kural: 'BEGIN_DATE' }, 'Input/EndDate': { kural: 'END_DATE' } });
     // Gövdede giriş parametreleri tablo başvurusu; dosyadaki kanal / kullanıcı senaryonun tablo seçimi; giriş satırı tabloya eklendi.
     const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
-    expect(gecerli?.icerik.govde).toContain('<Channel>${Giriş.Channel}</Channel><Username>${Giriş.Username}</Username><Password>${Giriş.Password}</Password><CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber>');
+    expect(gecerli?.icerik.govde).toContain('<Channel>${Giriş.Channel}</Channel><Username>${Giriş.Username}</Username><Password>${Giriş.Password}</Password><IdentityNumber>${MUSTERI_TC}</IdentityNumber>');
     expect(gecerli?.icerik.tabloSecimleri).toEqual({ [`${girisTablosu}|`]: { Channel: '100', Username: 'kullanici100' } });
     expect(tablolariListele(vt, projeId, { tabloId: girisTablosu })[0].satirlar.map((x) => [x.degerler.Channel, x.degerler.Username, x.doluGizli])).toEqual([['100', 'kullanici100', ['Password']]]);
     expect(s?.ayarlar.tarihKurallari).toEqual({ BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" });
@@ -198,13 +198,13 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     const r = await servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: testOrtami, tur: 'dene', senaryoId: gecerli?.id, simdi: new Date(2026, 0, 2, 3, 4, 5) });
     expect(r.durum, r.hata).toBe('basarili');
     const giden = istekler[once];
-    expect(giden.eylem).toBe('"Ornek/Teklif"');
-    expect(giden.govde).toContain(`<Channel>100</Channel><Username>kullanici100</Username><Password>${SAHTE_PAROLA}</Password><CitizenshipNumber>${SAHTE_TC}</CitizenshipNumber><EndDate>2027-01-02T03:04:05</EndDate>`);
+    expect(giden.eylem).toBe('"Ornek/Siparis"');
+    expect(giden.govde).toContain(`<Channel>100</Channel><Username>kullanici100</Username><Password>${SAHTE_PAROLA}</Password><IdentityNumber>${SAHTE_TC}</IdentityNumber><EndDate>2027-01-02T03:04:05</EndDate>`);
     const kayit = servisKosusuGetir(vt, r.kosuId);
     const rapor = JSON.stringify(kayit);
     expect(rapor).not.toContain(SAHTE_PAROLA);
     expect(rapor).not.toContain(SAHTE_TC);
-    expect(kayit?.sonuc.istek).toContain('<Password>***</Password><CitizenshipNumber>***</CitizenshipNumber>');
+    expect(kayit?.sonuc.istek).toContain('<Password>***</Password><IdentityNumber>***</IdentityNumber>');
     expect(kayit?.sonuc.ozet).toBe('Kimlik *** kabul');
     expect(kayit).toMatchObject({ tur: 'dene', durum: 'basarili', ortamId: testOrtami, senaryoId: gecerli?.id });
     expect(kosulariListele(vt, { projeId })).toEqual([]);
@@ -222,7 +222,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     const kos = await servisSenaryolariniKos(vt, projeId, { servisId, ortamId: canliOrtam });
     expect(kos).toMatchObject({ ortamTuru: 'canli', atlanan: 3, sonuclar: [] });
     servisSenaryosuKaydet(vt, { id: ilk.id, projeId, servisId, baslik: ilk.baslik, kapsam: 'ikisi', icerik: ilk.icerik });
-    servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', yalnizTestOperasyonlari: ['Teklif'] });
+    servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', yalnizTestOperasyonlari: ['Siparis'] });
     await expect(servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: canliOrtam, tur: 'kosu', senaryoId: ilk.id })).rejects.toThrow(/yalnız test ortamında koşar/);
     expect((await servisSenaryolariniKos(vt, projeId, { servisId, ortamId: canliOrtam })).sonuclar).toEqual([]);
     expect(istekler.length).toBe(once);

@@ -31,18 +31,18 @@ import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 type Nesne = Record<string, any>;
 
-const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Teklif xmlns="Ornek"><Input>${ic}</Input></Teklif></s:Body></s:Envelope>`;
+const zarf = (ic: string) => `<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body><Siparis xmlns="Ornek"><Input>${ic}</Input></Siparis></s:Body></s:Envelope>`;
 /** Takım özelliği SUBE = 7 (tabloda 5): aktarım var olan satırın değerini değiştirir. */
 const SOAPUI = `<?xml version="1.0" encoding="UTF-8"?>
 <con:soapui-project id="p" name="Model Proje" xmlns:con="http://eviware.com/soapui/config">
   <con:interface xsi:type="con:WsdlInterface" name="OrnekServiceSoap" soapVersion="1_1" definition="http://eski-adres.invalid/Servis/ornek.asmx?wsdl" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-    <con:operation id="o1" action="Ornek/Teklif" name="Teklif" type="Request-Response"/>
+    <con:operation id="o1" action="Ornek/Siparis" name="Siparis" type="Request-Response"/>
   </con:interface>
   <con:testSuite id="t" name="Model Takimi">
     <con:testCase id="c" name="Durum">
-      <con:testStep type="request" name="Yeni teklif"><con:config xsi:type="con:RequestStep" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-        <con:interface>OrnekServiceSoap</con:interface><con:operation>Teklif</con:operation>
-        <con:request name="Yeni teklif"><con:endpoint>http://eski-adres.invalid/Servis/ornek.asmx</con:endpoint>
+      <con:testStep type="request" name="Yeni siparis"><con:config xsi:type="con:RequestStep" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+        <con:interface>OrnekServiceSoap</con:interface><con:operation>Siparis</con:operation>
+        <con:request name="Yeni siparis"><con:endpoint>http://eski-adres.invalid/Servis/ornek.asmx</con:endpoint>
           <con:request><![CDATA[${zarf('<Channel>${#TestSuite#SUBE}</Channel>')}]]></con:request><con:assertion type="SOAP Response" id="a1"/>
         </con:request></con:config></con:testStep>
     </con:testCase>
@@ -73,18 +73,18 @@ function kur(vt: Veritabani): Kurulum {
   testVerisiProfiliKaydet(vt, { projeId, turId: girisTur, ad: 'ornek-giris', ortamId: null, degerler: { kanal: '300' } });
   const anahtar = servisTaslaklari(soapuiCozumle(SOAPUI), TAKIM).servisler[0].anahtar;
   const servisId = servisKaydet(vt, { projeId, anahtar, ad: 'Ornek', ayarlar: {
-    yol: '/Servis/ornek.asmx', operasyonlar: [{ ad: 'Teklif' }], operasyonSemalari: wsdlSemalari(WSDL), kimlikProfili: 'ornek-giris',
-    alanBaglari: { Teklif: {
-      'Input/Channel': { tablo: soapuiTablo, sutun: 'SUBE' }, 'Input/Username': { tablo: postmanTablo, sutun: 'kanal' }, 'Input/CitizenshipNumber': { tablo: girisTur, sutun: 'kanal' }
+    yol: '/Servis/ornek.asmx', operasyonlar: [{ ad: 'Siparis' }], operasyonSemalari: wsdlSemalari(WSDL), kimlikProfili: 'ornek-giris',
+    alanBaglari: { Siparis: {
+      'Input/Channel': { tablo: soapuiTablo, sutun: 'SUBE' }, 'Input/Username': { tablo: postmanTablo, sutun: 'kanal' }, 'Input/IdentityNumber': { tablo: girisTur, sutun: 'kanal' }
     } }
   } });
   servisKimligiKaydet(vt, { projeId, ad: 'ornek-giris', degerler: { CHANNEL: '301' } });
-  const senaryo = (baslik: string, ic: string) => servisSenaryosuKaydet(vt, { projeId, servisId, baslik, icerik: { operasyon: 'Teklif', govde: zarf(ic), kontroller: [{ tur: 'soapHatasiYok' }] } });
+  const senaryo = (baslik: string, ic: string) => servisSenaryosuKaydet(vt, { projeId, servisId, baslik, icerik: { operasyon: 'Siparis', govde: zarf(ic), kontroller: [{ tur: 'soapHatasiYok' }] } });
   return {
     projeId, servisId, soapuiTablo, postmanTablo, girisTur,
     senaryo: {
       sube: senaryo('Şube 5', '<Channel>5</Channel>'), sube2: senaryo('Şube 5 (ikinci)', '<Channel>5</Channel>'),
-      kanal: senaryo('Kanal 100', '<Username>100</Username>'), giris: senaryo('Giriş 300', '<CitizenshipNumber>300</CitizenshipNumber>')
+      kanal: senaryo('Kanal 100', '<Username>100</Username>'), giris: senaryo('Giriş 300', '<IdentityNumber>300</IdentityNumber>')
     }
   };
 }
@@ -164,13 +164,13 @@ test.describe('aktarımlar: etki denetimi (geçici veritabanı)', () => {
     expect(govde(vt, k.senaryo.sube)).toBe(zarf('<Channel>5</Channel>'));
     // Koru: tabloyu 5'e geri al, aynı dosya ikinci adla → dolu hücre korunur, onay istenmez.
     tabloKaydet(vt, { projeId: k.projeId, id: k.soapuiTablo, ad: SOAPUI_TABLOSU, sutunlar: [{ ad: 'SUBE', eskiAd: 'SUBE' }], satirlar: [{ id: tablolariListele(vt, k.projeId, { tabloId: k.soapuiTablo })[0].satirlar[0].id, degerler: { SUBE: '5' } }] });
-    const ikinci = SOAPUI.replace(/Yeni teklif/g, 'Yeni teklif 2');
+    const ikinci = SOAPUI.replace(/Yeni siparis/g, 'Yeni siparis 2');
     const koru = soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), xml: ikinci, etki: 'denetle', mevcutDegerleriKoru: true });
     expect(koru.onayGerekli).toBeUndefined();
     expect(koru.etki.degisiklikler).toEqual([]);
     expect(deger(vt, k.projeId, k.soapuiTablo, 'SUBE')).toBe('5');
     // Etki verilmeden (eski çağıranlar): doğrudan yazılır, güncelleme yok.
-    const ucuncu = SOAPUI.replace(/Yeni teklif/g, 'Yeni teklif 3');
+    const ucuncu = SOAPUI.replace(/Yeni siparis/g, 'Yeni siparis 3');
     const eski = soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), xml: ucuncu });
     expect(eski.guncelleme).toBeUndefined();
     expect(eski.etki.degisiklikler).toHaveLength(1);
@@ -224,13 +224,13 @@ test.describe('aktarımlar: etki denetimi (geçici veritabanı)', () => {
     const r = girisProfiliniTestVerisineTasi(vt, k.projeId, { ad: 'ornek-giris', onay: true, guncellenecekler: o.onizleme.etki.etkilenenler.map((x) => x.anahtar) });
     expect(r).toMatchObject({ tasindi: true, guncelleme: { guncellenenSenaryo: 1 } });
     expect(deger(vt, k.projeId, k.girisTur, 'kanal')).toBe('301');
-    expect(govde(vt, k.senaryo.giris)).toBe(zarf('<CitizenshipNumber>301</CitizenshipNumber>'));
+    expect(govde(vt, k.senaryo.giris)).toBe(zarf('<IdentityNumber>301</IdentityNumber>'));
     expect(servisGetir(vt, k.servisId)?.ayarlar.kimlikProfili).toBeUndefined();
   });
 
   test('REST servis kaydı: başlıktaki gizli değer değişir ama senaryolar yalnız ${…} başvurusu kullanır → düz metin etkisi yok', () => {
-    const uc = (sir: string) => ({ ad: 'teklif', metot: 'POST', yol: '/teklif', icerikTuru: 'application/json', govdeOrnegi: '{"a":"x"}', basliklar: [{ ad: 'Authorization', deger: `Bearer ${sir}` }] });
-    const ilk = restServisiKaydet(vt, k.projeId, { anahtar: 'rest-ornek', ad: 'Rest Örnek', uclar: [uc('eski-sir-1')], senaryolar: ['teklif'] });
+    const uc = (sir: string) => ({ ad: 'siparis', metot: 'POST', yol: '/siparis', icerikTuru: 'application/json', govdeOrnegi: '{"a":"x"}', basliklar: [{ ad: 'Authorization', deger: `Bearer ${sir}` }] });
+    const ilk = restServisiKaydet(vt, k.projeId, { anahtar: 'rest-ornek', ad: 'Rest Örnek', uclar: [uc('eski-sir-1')], senaryolar: ['siparis'] });
     const tablo = tablolariListele(vt, k.projeId).find((x) => x.ad === 'Rest Örnek başlıkları');
     expect(tablo?.sutunlar.map((c) => [c.ad, c.gizli])).toEqual([['Authorization', true]]);
     const r = etkiDenetimiyle(vt, { etki: 'onizle' }, (y) => y.izle(k.projeId, tablo?.id, () => restServisiKaydet(vt, k.projeId, { id: ilk.id, anahtar: 'rest-ornek', ad: 'Rest Örnek', uclar: [uc('yeni-sir-2')] })));
@@ -245,7 +245,7 @@ test.describe('aktarımlar: etki denetimi (geçici veritabanı)', () => {
     const r = girisProfiliniTestVerisineTasi(vt, k.projeId, { ad: 'ornek-giris', onay: true, guncellenecekler: [] });
     expect(r).toMatchObject({ tasindi: true, guncelleme: { guncellenenSenaryo: 0 } });
     expect(deger(vt, k.projeId, k.girisTur, 'kanal')).toBe('301');
-    expect(govde(vt, k.senaryo.giris)).toBe(zarf('<CitizenshipNumber>300</CitizenshipNumber>'));
+    expect(govde(vt, k.senaryo.giris)).toBe(zarf('<IdentityNumber>300</IdentityNumber>'));
   });
 });
 
@@ -345,9 +345,9 @@ test.describe('arayüz: SoapUI aktarım önizlemesinde etki', () => {
 
   test('önizlemeden sonra veri değişirse yazılmaz: güncel etki gösterilir, yeniden onay istenir', async () => {
     test.setTimeout(90_000);
-    // Önceki testten sonra tablo 7 ve "Yeni teklif" var: yeni adlı senaryoyla, tablo yeniden 5.
+    // Önceki testten sonra tablo 7 ve "Yeni siparis" var: yeni adlı senaryoyla, tablo yeniden 5.
     await subeYaz('5');
-    const { baglam, page, hatalar, bolum } = await onizlemeyiAc(SOAPUI.replace(/Yeni teklif/g, 'Yeni teklif 2'));
+    const { baglam, page, hatalar, bolum } = await onizlemeyiAc(SOAPUI.replace(/Yeni siparis/g, 'Yeni siparis 2'));
     await page.getByLabel('SUBE nereden dolsun').selectOption('tablo');
     await expect(bolum).toContainText('SUBE: 5 → 7');
     // Arada tablo başka yerden değişti (5 → 6): önizlemedeki etki artık geçerli değil.
