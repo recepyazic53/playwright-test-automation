@@ -20,7 +20,8 @@ export interface ServisAyarlari {
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
   alanListeleri?: Record<string, Record<string, string>>;
-  alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
+  /** Alan → tablo sütunu ({ tablo, sutun, etiket?, bicim? }) ya da hesaplama kuralı ({ kural }). */
+  alanBaglari?: Record<string, Record<string, { tablo?: string; sutun?: string; etiket?: string; bicim?: string; kural?: string }>>;
   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string;
   /** Adlandırılmış taban adres: aynı adlı servislerin taban adresleri hep aynıdır (taban-adresleri.mjs). */
   tabanGrubu?: string;
@@ -80,7 +81,8 @@ export declare const OKUMA_KAYNAKLARI: readonly ['xml', 'json', 'baslik'];
 export declare const EN_COK_AKIS_ADIMI: number;
 export declare const VARSAYILAN_OTURUM_OMRU_SN: number;
 export interface AkisOkumaTanimi { ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
-export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean }
+/** tur "operasyon": servisin operasyonu (senaryoId yok; baglar: alan yolu → ${akis:Ad}); tur "sql": SQL sorgusu. */
+export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon'; operasyon?: string; baglar?: Record<string, string>; sql?: import('../sql/sql-adimi.mjs').SqlTanimi }
 export declare const TOKEN_YENILEME: readonly ['suresiDolunca', 'herIstekte'];
 export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }
 export interface ServisAkisi {

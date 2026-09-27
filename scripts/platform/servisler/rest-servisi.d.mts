@@ -8,7 +8,7 @@ export interface RestUcu {
 export declare function restUcuDogrula(x: unknown, i: number): RestUcu;
 export declare function restServisiKaydet(vt: Veritabani, projeId: string, girdi: {
   id?: string; anahtar: string; ad: string; tabanlar?: Record<string, string>; tlsDogrulama?: boolean; uclar: unknown[];
-  alanBaglari?: unknown; alanZorunluluklari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string;
+  alanBaglari?: unknown; alanZorunluluklari?: unknown; tarihKurallari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string;
 }): { id: string; eklenenSenaryolar: string[] };
 export declare function restUcuDene(vt: Veritabani, projeId: string, girdi: { ortamId: string; taban?: string; uc: unknown; tlsDogrulama?: boolean }): Promise<{
   basarili: boolean; adres: string; metot: string; durumKodu?: number; sureMs?: number; yanit?: string; mesaj?: string; atlananBasliklar: string[];

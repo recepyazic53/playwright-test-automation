@@ -13,7 +13,7 @@ import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import {
-  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, goreliTarih, kontrolleriDegerlendir, kullanilanAkisDegerleri, kullanilanParametreler, ServisHatasi, soapIstegi,
+  degerOku, erisimiDenetle, gizlileriMaskele, MASKE, kontrolleriDegerlendir, kullanilanAkisDegerleri, kullanilanParametreler, ServisHatasi, soapIstegi,
   yanitOzeti, YANIT_SAKLAMA_SINIRI, yerTutuculariDoldur
 } from './soap-istemcisi.mjs';
 import {
@@ -27,6 +27,7 @@ import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govd
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 
@@ -145,18 +146,24 @@ function adresleriDogrula(adresler) {
   return s;
 }
 
-/** Tarih kuralları: { AD: "bugun+1y|yyyy-MM-dd" }. @param {unknown} kurallar @returns {Record<string, string>} */
+/**
+ * Hesaplama kuralları (ayar adı geriye uyum için tarihKurallari): { AD: "bugun+1y|yyyy-MM-dd" | "yuvarla(${Tutar} / 100, 2)" }.
+ * Sözdizimi, tanımsız kural adı, bilinmeyen fonksiyon ve döngü (A → B → A) açık hatayla reddedilir (bkz. hesap-kurallari.mjs).
+ * @param {unknown} kurallar @returns {Record<string, string>}
+ */
 export function tarihKurallariniDogrula(kurallar) {
   if (kurallar === undefined || kurallar === null) return {};
   if (typeof kurallar !== 'object' || Array.isArray(kurallar)) throw new DepoHatasi('"tarihKurallari" bir nesne olmalıdır.');
   /** @type {Record<string, string>} */
   const s = {};
   for (const [ad, kural] of Object.entries(kurallar)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) throw new DepoHatasi(`Geçersiz parametre adı: "${ad}".`);
+    if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) throw new DepoHatasi(`Geçersiz kural adı: "${ad}".`);
     if (typeof kural !== 'string' || !kural.trim()) continue;
-    try { goreliTarih(kural.split('|')[0], new Date()); } catch (e) { throw new DepoHatasi(`${ad}: ${/** @type {Error} */ (e).message}`); }
+    if (kural.length > 2000) throw new DepoHatasi(`${ad}: kural en çok 2000 karakter olabilir.`);
     s[ad] = kural.trim();
   }
+  const hatalar = Object.entries(hesapKurallariniDenetle(s));
+  if (hatalar.length) throw new DepoHatasi(hatalar.map(([ad, m]) => `${ad}: ${m}`).join(' '));
   return s;
 }
 
@@ -211,7 +218,7 @@ function alanVarsayilanlariniDogrula(v) {
     for (const [yol, d] of Object.entries(alanlar)) {
       if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (!d || typeof d !== 'object' || !KAYNAKLAR.includes(d.kaynak)) throw new DepoHatasi(`"${yol}" için geçersiz kaynak.`);
-      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo';
+      const degerli = d.kaynak === 'sabit' || d.kaynak === 'parametre' || d.kaynak === 'tablo' || d.kaynak === 'hesap';
       if (degerli && typeof d.deger !== 'string') throw new DepoHatasi(`"${yol}" için değer gerekli.`);
       (s[op] ??= {})[yol] = degerli ? { kaynak: d.kaynak, deger: d.deger } : { kaynak: d.kaynak };
     }
@@ -253,6 +260,12 @@ export function alanBaglariniDogrula(v) {
     for (const [yol, b] of Object.entries(alanlar)) {
       if (!ALAN_YOLU.test(yol)) throw new DepoHatasi(`Geçersiz alan yolu: "${yol}".`);
       if (!b) continue;
+      // Hesaplama kuralı bağı: alan servisin bir kuralından dolar ({ kural: 'BEGIN_DATE' }; tablo bağının yerine).
+      if (typeof b === 'object' && typeof b.kural === 'string') {
+        if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(b.kural)) throw new DepoHatasi(`"${yol}" için geçersiz kural adı.`);
+        (s[op] ??= {})[yol] = { kural: b.kural };
+        continue;
+      }
       if (typeof b !== 'object' || typeof b.tablo !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(b.tablo) || typeof b.sutun !== 'string' || !b.sutun.trim() || b.sutun.length > 60) {
         throw new DepoHatasi(`"${yol}" için geçersiz tablo bağlantısı.`);
       }
@@ -364,6 +377,7 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {}),
     ...(girdi.oturumAkisi !== undefined ? { oturumAkisi: oturumAkisiDogrula(vt, projeId, girdi.oturumAkisi) } : {})
   };
+  kuralBaglariniDenetle(ayarlar);
   // REST servisinde WSDL yoktur: adres değişikliği erişim kontrolü (WSDL isteği) gerektirmez.
   if (adresDegisti && mevcut?.tur !== 'rest') {
     const e = erisimiDogrula(girdi.erisimKimligi, projeId, (o) => servisAdresi({ yol, adresler, tabanlar }, o), vt);
@@ -380,6 +394,19 @@ export function servisiKaydet(vt, projeId, girdi) {
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
     return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: mevcut?.tur ?? 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
   });
+}
+
+/**
+ * Kural bağları servisin kurallarında tanımlı olmalı (kural silinirken bağlı alan varsa açık hata).
+ * @param {{ tarihKurallari?: Record<string, string>; alanBaglari?: ServisAyarlari['alanBaglari'] }} ayarlar
+ */
+export function kuralBaglariniDenetle(ayarlar) {
+  const kurallar = ayarlar.tarihKurallari ?? {};
+  for (const [op, alanlar] of Object.entries(ayarlar.alanBaglari ?? {})) {
+    for (const [yol, b] of Object.entries(alanlar)) {
+      if (b?.kural && !Object.hasOwn(kurallar, b.kural)) throw new DepoHatasi(`"${op}" metodunun "${yol}" alanı "${b.kural}" kuralına bağlı ama bu kural tanımlı değil (önce bağı kaldırın ya da kuralı ekleyin).`);
+    }
+  }
 }
 
 /**
@@ -426,7 +453,7 @@ export function servisParametreleri(vt, projeId, servisId) {
   const kimlikAlanlari = new Set(servis.ayarlar.kimlikProfili ? Object.keys(servisKimliginiCoz(vt, projeId, servis.ayarlar.kimlikProfili, '')) : []);
   /** @type {Map<string, number>} */
   const kullanim = new Map();
-  for (const s of servisSenaryolariniListele(vt, servisId)) for (const p of kullanilanParametreler(s.icerik.govde)) if (!basvuruCoz(p)) kullanim.set(p, (kullanim.get(p) ?? 0) + 1);
+  for (const s of servisSenaryolariniListele(vt, servisId)) for (const p of kullanilanParametreler(s.icerik.govde ?? '')) if (!basvuruCoz(p)) kullanim.set(p, (kullanim.get(p) ?? 0) + 1);
   // Henüz senaryoda geçmese de servis varsayılanlarında (★) kullanılan parametreler (senaryo sayısı 0).
   for (const alanlar of Object.values(servis.ayarlar.alanVarsayilanlari ?? {})) {
     for (const v of Object.values(alanlar)) if (v.kaynak === 'parametre' && v.deger && !kullanim.has(v.deger)) kullanim.set(v.deger, 0);
@@ -775,7 +802,7 @@ export function soapuiAktar(vt, projeId, girdi) {
       mevcutBasliklar.add(x.baslik);
       eklenen++;
     }
-    const kalanParametreler = [...new Set(servisSenaryolariniListele(vt, servisId).flatMap((y) => kullanilanParametreler(y.icerik.govde)))]
+    const kalanParametreler = [...new Set(servisSenaryolariniListele(vt, servisId).flatMap((y) => kullanilanParametreler(y.icerik.govde ?? '')))]
       .filter((ad) => !(s.ayarlar.tarihKurallari ?? {})[ad] && !basvuruCoz(ad) && !eslemeler.has(ad));
     return { servisId, yeniServis: !mevcut, eklenen, atlanan, baglananAlan: oneri.yeni, girisSatiriEklendi, eksikSatirlar: [...eksikSatirlar], eslenmemisParametreler: kalanParametreler };
   });
@@ -953,6 +980,19 @@ let oturumSaglayici = null;
 export function oturumSaglayicisiAyarla(fn) { oturumSaglayici = fn; }
 
 /**
+ * Akış senaryosu kancası (akis-senaryosu.mjs kaydeder): içeriği tur 'akis' olan senaryo akış motoruyla koşar; bir servisin toplu
+ * koşusu, akışı o servisten geçen (başka serviste kayıtlı) akış senaryolarını da içerir.
+ * @typedef {{ kos: (vt: Veritabani, projeId: string, girdi: any) => Promise<any>; gecenler: (vt: Veritabani, projeId: string, servisId: string) => any[];
+ *   atlamaNedeni: (vt: Veritabani, senaryo: any, ortam: any) => string }} AkisSenaryoKancasi
+ */
+/** @type {AkisSenaryoKancasi | null} */
+let akisSenaryoKancasi = null;
+/** @param {AkisSenaryoKancasi | null} k */
+export function akisSenaryoKancasiAyarla(k) { akisSenaryoKancasi = k; }
+/** Kayıtlı kanca (servis-isleri.mjs kullanır). */
+export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
+
+/**
  * Tek bir senaryoyu (kayıtlı ya da taslak) bir ortamda çalıştırır ve sonucu servis koşuları tablosuna yazar.
  * tur 'dene': yalnız test ortamı; kapsam denetlenmez. tur 'kosu': kapsam ortam türüyle uyuşmalı.
  * @param {Veritabani} vt @param {string} projeId
@@ -974,6 +1014,13 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
   const tur = ortamTuru(ortam);
   const kayitli = girdi.senaryoId ? servisSenaryosuGetir(vt, girdi.senaryoId) : undefined;
+  // Akış senaryosu: akış motoru koşar (akis-senaryosu.mjs); akışın geçtiği her servisten çalıştırılabilir.
+  const hamIcerik = /** @type {any} */ (kayitli ? kayitli.icerik : girdi.taslak?.icerik);
+  if (hamIcerik && typeof hamIcerik === 'object' && hamIcerik.tur === 'akis') {
+    if (!akisSenaryoKancasi) throw new DepoHatasi('Akış senaryosu bu süreçte koşulamaz (akış motoru yüklü değil).');
+    if (kayitli && kayitli.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
+    return akisSenaryoKancasi.kos(vt, projeId, { ...girdi, servis, kayitli });
+  }
   if (girdi.senaryoId && (!kayitli || kayitli.servisId !== servis.id)) throw new DepoHatasi('Senaryo bulunamadı.');
   if (!kayitli && !girdi.taslak) throw new DepoHatasi('"senaryoId" ya da "taslak" gerekli.');
   const icerik = kayitli ? kayitli.icerik : senaryoIceriginiDogrula(girdi.taslak?.icerik);
@@ -1027,12 +1074,16 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       oturumKullanildi = true;
     }
     // Başlıklardaki ${Tablo.Sütun} de gövdedekilerle birlikte çözülür.
-    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [icerik.govde, ...Object.values(basliklarHam), http?.yol ?? ''].join('\n') }, ortam.id);
+    const hamMetin = [icerik.govde, ...Object.values(basliklarHam), http?.yol ?? ''].join('\n');
+    const kurallar = servis.ayarlar.tarihKurallari ?? {};
+    const kuralRefleri = kuralParametreleri(kullanilanParametreler(hamMetin).filter((a) => Object.hasOwn(kurallar, a)), kurallar).refler.map((r) => `\${${r}}`);
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortam.id);
     gizliler = [...gizliler, ...p.gizliler];
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
+    // Aynı "şimdi" ve önbellek gövde / yol / başlık doldurmalarında paylaşılır: zincirli kurallar aynı anı temel alır.
     const doldurma = {
-      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
+      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi ?? baslangic, tarihOnbellegi: new Map(), gizliler, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
       akisDegerleri, varsayilanTarihBicimi: kosu.tarihBicimi
     };
     // REST: gövde değerleri içerik türüne göre kaçışlanır (JSON / form / XML); yol değerleri URL kodlanır.
@@ -1145,9 +1196,13 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
   if (!servis || servis.projeId !== projeId) throw new DepoHatasi('Servis bulunamadı.');
   const yalnizTest = new Set(servis.ayarlar.yalnizTestOperasyonlari ?? []);
   const secili = girdi.senaryoIdleri ? new Set(girdi.senaryoIdleri) : null;
-  const liste = servisSenaryolariniListele(vt, girdi.servisId).filter((s) => (secili ? secili.has(s.id) : s.kosuyaDahil));
+  // Akışı bu servisten geçen (başka serviste kayıtlı) akış senaryoları da koşar.
+  const liste = [...servisSenaryolariniListele(vt, girdi.servisId), ...(akisSenaryoKancasi?.gecenler(vt, projeId, girdi.servisId) ?? [])]
+    .filter((s) => (secili ? secili.has(s.id) : s.kosuyaDahil));
   const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
-  const kosulacak = tanimli ? liste.filter((s) => (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))) : [];
+  const akisMi = (/** @type {any} */ s) => s.icerik?.tur === 'akis';
+  const kosulacak = liste.filter((s) => (akisMi(s) ? Boolean(akisSenaryoKancasi) && !akisSenaryoKancasi?.atlamaNedeni(vt, s, ortam)
+    : tanimli && (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))));
   const sonuclar = [];
   for (const s of kosulacak) {
     const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs });

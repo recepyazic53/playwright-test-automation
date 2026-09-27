@@ -14,10 +14,13 @@ import { onayIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
 import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-sihirbazi.js';
+import { hesapKurallariKarti } from './hesap-kurali-formu.js';
+import { kuralOzeti } from './hesap-kurallari.mjs';
 import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { akislarSekmesi } from './servis-akislari.js';
+import { senaryoSayfasi } from './akis-senaryo-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 
@@ -263,7 +266,11 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
       }, etiket, ad === 'senaryolar' ? h('span', { class: 'sekme-sayisi' }, String(d.senaryolar.length)) : null))),
     sekmeAlani);
   const yenile = () => window.dispatchEvent(new HashChangeEvent('hashchange'));
-  if (sekme === 'senaryo') { await senaryoDuzenleyici(sekmeAlani, proje, s, ortamlar, d.senaryolar.find((x) => x.id === altKimlik) ?? null); return; }
+  if (sekme === 'senaryo') {
+    const sn = d.senaryolar.find((x) => x.id === altKimlik) ?? null;
+    await senaryoSayfasi(sekmeAlani, proje, s, ortamlar, sn, altKimlik, (k) => senaryoDuzenleyici(k, proje, s, ortamlar, sn));
+    return;
+  }
   if (sekme === 'akislar') { await akislarSekmesi(sekmeAlani, proje, s, ortamlar, altKimlik, yenile); return; }
   if (sekme === 'parametreler') { await parametrelerSekmesi(sekmeAlani, proje, s, ortamlar, yenile); return; }
   if (sekme === 'raporlar') { await raporlarSekmesi(sekmeAlani, proje, s, ortamlar, d.senaryolar, altKimlik); return; }
@@ -348,7 +355,10 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
   if (liste.kapsam && !kapsamSecenekleri.includes(liste.kapsam)) liste.kapsam = '';
   const gecerli = new Set(senaryolar.map((x) => x.id));
   for (const id of [...liste.secim]) if (!gecerli.has(id)) liste.secim.delete(id);
-  const operasyonlar = [...new Set(senaryolar.map((x) => x.icerik.operasyon))].sort();
+  const operasyonlar = [...new Set(senaryolar.map((x) => x.icerik.operasyon))].filter(Boolean).sort();
+  /** Akış senaryosu (servis senaryosu türü "Akış"; akis-senaryo-formu.js): kontrolleri adımlarda, operasyonu yok. */
+  const akisMi = (x) => x.icerik.tur === 'akis';
+  const kontrolleri = (x) => (akisMi(x) ? Object.values(x.icerik.adimlar || {}).flatMap((a) => a.kontroller || []) : x.icerik.kontroller);
   const sonDurumu = (x) => sonSonuclar[x.id]?.durum || null;
   // İsteğin gideceği adres (seçili ortamda; sunucudaki servisAdresi ile aynı kural): ortama özel adres, yoksa taban + yol.
   const istekAdresi = (() => {
@@ -392,7 +402,7 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
     if (liste.son === 'yok' && sonDurumu(x)) return false;
     if (liste.son && liste.son !== 'yok' && sonDurumu(x) !== liste.son) return false;
     if (liste.kapsam && kapsamlar.get(x.id) !== liste.kapsam) return false;
-    return aramaEslesiyorMu(liste.arama, x.baslik, x.icerik.aciklama, x.icerik.operasyon, istekAdresi, beklenenOzeti(x.icerik.kontroller));
+    return aramaEslesiyorMu(liste.arama, x.baslik, x.icerik.aciklama, x.icerik.operasyon, istekAdresi, beklenenOzeti(kontrolleri(x)), akisMi(x) ? `akış ${x.akisAdi || ''}` : '');
   });
 
   // --- Çalıştırma (▷ ve seçilenler): başlıktaki ortam ---
@@ -517,34 +527,36 @@ function senaryolarSekmesi(kap, proje, s, ortam, senaryolar, sonSonuclar, yenile
     oynat.addEventListener('click', () => calistir([x.id], oynat));
     const altBilgi = [
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
-      x.icerik.aciklama ? h('span', {}, x.icerik.aciklama) : null
+      x.icerik.aciklama ? h('span', {}, x.icerik.aciklama) : null,
+      x.gecen ? h('span', { class: 'soluk' }, `${x.sahipServisAd || 'başka serviste'} kayıtlı`) : null
     ].filter(Boolean);
     const son = sonSonuclar[x.id];
     let sonHucre;
     if (son) {
       const [etiket, sinif] = DURUM[son.durum] || [son.durum, ''];
-      sonHucre = h('a', { class: `son-sonuc ${sinif}`, href: `#/servisler/s/${q(s.id)}/raporlar/${q(son.kosuId)}`, title: 'Koşu raporunu aç' },
+      sonHucre = h('a', { class: `son-sonuc ${sinif}`, href: son.akisId ? `#/servisler/s/${q(s.id)}/akislar/${q(son.akisId)}` : `#/servisler/s/${q(s.id)}/raporlar/${q(son.kosuId)}`, title: son.akisId ? 'Akışın koşularını aç' : 'Koşu raporunu aç' },
         h('span', { class: `nokta ${sinif}`, 'aria-hidden': 'true' }), h('span', { class: 'etiket' }, etiket), h('span', { class: 'zaman' }, kisaTarih(son.baslangic)));
     } else sonHucre = h('span', { class: 'son-sonuc yok' }, '— koşulmadı');
-    const beklenen = beklenenOzeti(x.icerik.kontroller);
+    const beklenen = beklenenOzeti(kontrolleri(x));
+    const senaryoAdresi = `#/servisler/s/${q(x.servisId || s.id)}/senaryo/${q(x.id)}`;
     return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', x.kosuyaDahil ? '' : 'haric'].join(' ').trim() || null, 'data-senaryo': x.id },
       h('td', { class: 'secim' }, secim),
       h('td', {}, h('div', { class: 'senaryo-adi' },
-        h('strong', {}, h('a', { class: 'satir-baglantisi', href: `#/servisler/s/${q(s.id)}/senaryo/${q(x.id)}` }, x.baslik)),
+        h('strong', {}, h('a', { class: 'satir-baglantisi', href: senaryoAdresi }, x.baslik)),
         h('small', {}, altBilgi))),
       h('td', { class: 'istek-hucresi' },
-        rozet(x.icerik.operasyon, 'vurgu', { title: 'Metot (operasyon)' }),
+        akisMi(x) ? rozet(`akış: ${x.akisAdi || '?'}`, 'vurgu', { title: `Akış senaryosu: ${Object.keys(x.icerik.adimlar || {}).length} adımın değerleri` }) : rozet(x.icerik.operasyon, 'vurgu', { title: 'Metot (operasyon)' }),
         istekAdresi ? h('code', { class: 'duz istek-adresi', title: `${ortam ? `${ortam.ad}: ` : ''}${istekAdresi}` }, istekAdresi)
           : h('span', { class: 'cok-soluk kucuk' }, ortam ? `${ortam.ad} ortamında tanımlı değil` : 'ortam yok')),
       h('td', { class: 'beklenen-hucresi' }, beklenen === '—' ? h('span', { class: 'cok-soluk' }, '—')
-        : rozet(beklenen, '', { title: x.icerik.kontroller.map((k) => k.deger || k.tur).join(' · ') })),
+        : rozet(beklenen, '', { title: kontrolleri(x).map((k) => k.deger || k.tur).join(' · ') })),
       h('td', { class: 'kapsam-hucresi', 'data-deger': kapsamlar.get(x.id) },
         rozet(kapsamlar.get(x.id), kapsamOrtamlari(s, x, ortamlar).length ? 'durdu' : 'atlanan', { title: 'Kapsam: bu senaryonun koştuğu ortamlar' })),
       h('td', {}, sonHucre),
       h('td', { class: 'kosuda' }, kosuda),
       h('td', { class: 'eylemler' }, h('span', { class: 'satir-eylemleri' },
         oynat,
-        h('a', { class: 'dugme ikon-dugme', href: `#/servisler/s/${q(s.id)}/senaryo/${q(x.id)}`, title: 'Düzenle', 'aria-label': `Düzenle: ${x.baslik}` }, ikon('duzenle')),
+        h('a', { class: 'dugme ikon-dugme', href: senaryoAdresi, title: 'Düzenle', 'aria-label': `Düzenle: ${x.baslik}` }, ikon('duzenle')),
         satirMenusu(x))));
   }
 
@@ -607,7 +619,7 @@ function sonucGovdesi(r) {
 // ---------------------------------------------------------------------------------------
 
 /** Alan değer kaynakları. "Tarih kuralı" (${BEGIN_DATE} gibi; Parametreler sekmesinde tanımlı) servisin tarih kuralı varsa listelenir. */
-const KAYNAK_ETIKETI = { tablo: 'Tablodan', akis: 'Akıştan (önceki adım)', sabit: 'Sabit değer', parametre: 'Tarih kuralı', bos: 'Boş gönder', nil: 'Boş (nil)', gonderme: 'Gönderme' };
+const KAYNAK_ETIKETI = { tablo: 'Tablodan', akis: 'Akıştan (önceki adım)', sabit: 'Sabit değer', parametre: 'Hesaplama kuralı', hesap: 'Satır içi hesap', bos: 'Boş gönder', nil: 'Boş (nil)', gonderme: 'Gönderme' };
 const TIP_ETIKETI = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
 const ayniDeger = (a, b) => Boolean(a && b) && a.kaynak === b.kaynak && (a.deger ?? '') === (b.deger ?? '');
 
@@ -638,9 +650,9 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const kapsam = h('select', {}, Object.entries(KAPSAM).map(([k, m]) => h('option', { value: k, selected: (senaryo?.kapsam || 'test') === k }, m)));
   const dahil = h('input', { type: 'checkbox', id: yeniKimlik('dahil'), checked: senaryo ? senaryo.kosuyaDahil : true });
 
-  // --- Tarih kuralları (alan formundaki "Tarih kuralı" seçimi; değer koşuda kuraldan üretilir) ---
+  // --- Hesaplama kuralları (alan formundaki "Hesaplama kuralı" seçimi; değer koşuda kuraldan üretilir; tarih kuralları dahil) ---
   const parametreGruplari = [
-    ['Tarih kuralı', Object.entries(s.ayarlar.tarihKurallari || {}).map(([a, k]) => [a, `${a} — ${k}`])]
+    ['Hesaplama kuralı', Object.entries(s.ayarlar.tarihKurallari || {}).map(([a, k]) => [a, `${a} — ${kuralOzeti(k)}`])]
   ].filter(([, l]) => l.length);
   const bilinenParametreler = new Set(parametreGruplari.flatMap(([, l]) => l.map(([a]) => a)));
 
@@ -679,7 +691,9 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     const dg = baslangicDegerleri(sm, ops);
     for (const sat of alanSatirlari(sm.alanlar)) {
       if (sat.grup || ops[sat.yol]) continue;
-      const ref = bagBasvurusu(bag(sat.yol));
+      const b = bag(sat.yol);
+      if (b && b.kural) { dg[sat.yol] = { kaynak: 'parametre', deger: b.kural }; continue; }
+      const ref = bagBasvurusu(b);
       dg[sat.yol] = ref ? { kaynak: 'tablo', deger: ref } : { kaynak: 'gonderme' };
     }
     return dg;
@@ -770,6 +784,12 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       sec.addEventListener('change', () => { v.deger = sec.value; tazele(); });
       return h('span', { class: 'parametre-degeri' }, sec);
     }
+    if (v.kaynak === 'hesap') {
+      const g = h('input', { type: 'text', value: v.deger || '', spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi', placeholder: "${Tutar} / 100 | 0.00",
+        'aria-label': `${alanT.ad} hesap ifadesi`, title: 'Koşu anında hesaplanır: ifade | biçim (ör. yuvarla(${Prim} * 1.18, 2), bugun+1y | yyyy-MM-dd)' });
+      g.addEventListener('input', () => { v.deger = g.value.trim(); tazele(); });
+      return h('span', { class: 'hesap-girdisi' }, h('code', {}, '${hesap:'), g, h('code', {}, '}'));
+    }
     if (v.kaynak !== 'sabit') return h('span', { class: 'soluk kucuk' }, v.kaynak === 'gonderme' ? 'gövdeye yazılmaz' : v.kaynak === 'bos' ? `<${alanT.ad}/>` : `<${alanT.ad} xsi:nil="true"/>`);
     const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
     const guncelle = (deger) => { v.deger = deger; not.textContent = sabitDegerUyarisi(alanT, deger) || ''; tazele(); };
@@ -820,6 +840,13 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     sayac.textContent = `${dolu} / ${alanSatirlari(sm.alanlar).filter((x) => !x.grup).length} alan gönderiliyor · ★ = servis varsayılanı`;
   };
 
+  /** Alan bir hesaplama kuralına bağlıysa (Parametreler > Metot alanları) kaynağın nereden geldiği. */
+  const kuralNotu = (yol, v) => {
+    const b = bag(yol);
+    if (!b || !b.kural) return null;
+    return h('span', { class: 'soluk kucuk kural-bagi-notu' }, v.kaynak === 'parametre' && v.deger === b.kural
+      ? `parametreden: Hesaplama kuralı → ${b.kural}` : `Bağlı kural: ${b.kural} (bu senaryoda elle başka kaynak seçili)`);
+  };
   const tabloCiz = () => {
     const sm = sema();
     const tablo = h('div', { class: 'alan-formu', role: 'table', 'aria-label': `${sm.ad} istek alanları` });
@@ -846,7 +873,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         pin.textContent = esit ? '★' : '☆';
         pin.title = esit ? 'Servis varsayılanı (kaldırmak için tıklayın)' : 'Bu değeri servis varsayılanı yap (yeni senaryolar bununla açılır)';
         satir.className = `alan-satiri ${girinti} ${v.kaynak === 'gonderme' ? 'gonderilmez' : ''} ${zorunlu ? 'zorunlu' : ''}`;
-        const eksik = zorunlu && (v.kaynak === 'gonderme' || v.kaynak === 'bos' || v.kaynak === 'nil' || ((v.kaynak === 'sabit' || v.kaynak === 'parametre' || v.kaynak === 'tablo' || v.kaynak === 'akis') && !v.deger));
+        const eksik = zorunlu && (v.kaynak === 'gonderme' || v.kaynak === 'bos' || v.kaynak === 'nil' || ((v.kaynak === 'sabit' || v.kaynak === 'parametre' || v.kaynak === 'tablo' || v.kaynak === 'akis' || v.kaynak === 'hesap') && !v.deger));
         eksikNotu.textContent = eksik ? 'Zorunlu alan dolu gönderilmiyor (olumsuz senaryo değilse doldurun).' : '';
         sayacGuncelle();
       };
@@ -857,8 +884,10 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         kaynak.addEventListener('change', () => {
           v.kaynak = kaynak.value;
           if (v.kaynak === 'tablo') v.deger = bagBasvurusu(bag(sat.yol)) || (v.deger && basvuruCoz(v.deger) ? v.deger : '');
+          else if (v.kaynak === 'parametre' && bag(sat.yol)?.kural) v.deger = bag(sat.yol).kural;
+          else if (v.kaynak === 'hesap') v.deger = typeof v.deger === 'string' && !bilinenParametreler.has(v.deger) ? v.deger : '';
           else if (v.kaynak === 'akis') v.deger = v.deger && AKIS_DEGERI.test(v.deger) ? v.deger : '';
-          else if (v.kaynak !== 'sabit' && v.kaynak !== 'parametre') delete v.deger;
+          else if (v.kaynak !== 'sabit' && v.kaynak !== 'parametre' && v.kaynak !== 'hesap') delete v.deger;
           else if (v.kaynak === 'parametre' && !bilinenParametreler.has(v.deger || '')) v.deger = '';
           else if (v.kaynak === 'sabit' && bilinenParametreler.has(v.deger || '')) v.deger = '';
           satirCiz();
@@ -867,7 +896,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
           h('span', { class: 'alan-adi', role: 'cell', title: sat.yol }, sat.alan.ad, zorunlu ? h('span', { class: 'zorunlu-isaret', title: 'Zorunlu alan' }, '*') : null,
             h('span', { class: 'alan-tipi' }, sat.alan.secenekler ? 'liste' : TIP_ETIKETI[sat.alan.tip] || 'metin')),
           h('span', { role: 'cell' }, kaynak),
-          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele), eksikNotu),
+          h('span', { role: 'cell', class: 'alan-degeri' }, degerKontrolu(sat.alan, v, tazele), eksikNotu, kuralNotu(sat.yol, v)),
           h('span', { role: 'cell' }, pin));
         tazele();
       };
@@ -1049,7 +1078,26 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
 // ---------------------------------------------------------------------------------------
 
 async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
-  const { tablolar } = await api(`/platform/tablolar?projeId=${q(proje.id)}`);
+  const [{ tablolar }, { senaryolar }] = await Promise.all([api(`/platform/tablolar?projeId=${q(proje.id)}`), api(`/platform/servis?projeId=${q(proje.id)}&id=${q(s.id)}`)]);
+  /** Hesaplama kuralları (tarih kuralları dahil); "+ Yeni kural…" buna ekler. */
+  const kurallar = { ...(s.ayarlar.tarihKurallari || {}) };
+  const kurallariKaydet = async (yeni) => {
+    await api('/platform/servis/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, tarihKurallari: yeni } });
+    s.ayarlar.tarihKurallari = { ...yeni };
+    for (const k of Object.keys(kurallar)) if (!Object.hasOwn(yeni, k)) delete kurallar[k];
+    Object.assign(kurallar, yeni);
+  };
+  /** Etki: bu metodun senaryolarından kaçı alanı zaten kuraldan alıyor (mevcut senaryolar DEĞİŞMEZ; bağ yeni senaryoların varsayılanıdır). */
+  const etki = (op) => (yol, kural) => {
+    const ilgili = senaryolar.filter((x) => x.icerik.operasyon === op);
+    if (!ilgili.length) return 'Bu metodun senaryosu yok; yeni senaryolar bu kuralla açılır.';
+    const sm = semalar[op];
+    const kuraldan = ilgili.filter((x) => {
+      if (s.tur === 'rest' || !sm) return x.icerik.govde.includes(`\${${kural}}`) || (x.icerik.http?.yol || '').includes(`\${${kural}}`);
+      try { const v = govdeCoz(x.icerik.govde, semaBirlestir(sm, (s.ayarlar.ekAlanlar || {})[op] || [])).degerler[yol]; return v && v.kaynak === 'parametre' && v.deger === kural; } catch { return false; }
+    });
+    return `${ilgili.length} senaryodan ${kuraldan.length} tanesi alanı zaten bu kuraldan alıyor; diğerleri kendi seçtikleri kaynakla kalır (yeni senaryolar kuralla açılır).`;
+  };
 
   // --- Metot alanları: WSDL alanları + elle eklenenler; varsayılan değer (★) ve zorunluluk -----------------------------
   const semalar = s.ayarlar.operasyonSemalari || {};
@@ -1090,38 +1138,21 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
     metotlar.length && !tablolar.length ? h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/ayarlar/test-verisi' }, 'Ayarlar > Test verisi > Tablolar'), ' bölümünden ekleyin.') : null,
     metotlar.length
       ? metotKutulari(metotlar.map((m) => ({
-        ad: m.sm.ad, sema: m.sm, zorunlu: m.zorunlu, ekler: m.ekler, degisti, baglar: m.baglar, tablolar
+        ad: m.sm.ad, sema: m.sm, zorunlu: m.zorunlu, ekler: m.ekler, degisti, baglar: m.baglar, tablolar,
+        kurallar, kuralEkle: (ad, kural) => kurallariKaydet({ ...kurallar, [ad]: kural }).then(() => kuralKartiniYenile()), etki: etki(m.sm.ad)
       })), { anahtar: `servis:${s.id}` })
       : h('p', { class: 'soluk' }, 'Bu servisin metot alan listesi yok. İşlemler sekmesinden "WSDL\'den yeniden al" ile alınabilir.'));
 
-  // --- Tarih kuralları: ${BEGIN_DATE} gibi alanların değeri koşuda kuraldan üretilir -----------------------------------------
-  const tarihMetin = h('textarea', { rows: 4, spellcheck: 'false', class: 'kod-alani', 'aria-label': 'Tarih kuralları' });
-  tarihMetin.value = Object.entries(s.ayarlar.tarihKurallari || {}).map(([a, k]) => `${a} = ${k}`).join('\n');
-  const mesaj = mesajKutusu();
-  const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
-  kaydet.addEventListener('click', async () => {
-    mesaj.temizle();
-    const kurallar = {};
-    for (const satir of tarihMetin.value.split('\n').map((x) => x.trim()).filter(Boolean)) {
-      const m = /^([A-Za-z_][\w.-]*)\s*=\s*(.+)$/.exec(satir);
-      if (!m) { mesaj.goster(`Tarih kuralı anlaşılmadı: "${satir}" (biçim: AD = bugun+1y|yyyy-MM-dd)`); return; }
-      kurallar[m[1]] = m[2].trim();
-    }
-    try {
-      await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/kaydet', { govde: {
-        projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, yol: s.ayarlar.yol, tarihKurallari: kurallar
-      } }));
-      bildir('Tarih kuralları kaydedildi.');
-      yenile();
-    } catch (e) { mesaj.goster(e.message); }
-  });
+  // --- Hesaplama kuralları (tarih kuralları dahil): ${BEGIN_DATE} gibi alanların değeri koşuda kuraldan üretilir -----------------
+  const kuralKarti = h('div', {});
+  const kuralKartiniYenile = () => yerlestir(kuralKarti, hesapKurallariKarti({
+    kurallar, kaydet: async (yeni) => { await kurallariKaydet(yeni); bildir('Hesaplama kuralları kaydedildi.'); yenile(); }
+  }));
+  kuralKartiniYenile();
   yerlestir(kap,
     kimlikYonetimi(proje, s, yenile),
     metotKarti,
-    h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Tarih kuralları'), mesaj.kutu,
-      h('p', { class: 'soluk kucuk' }, 'Senaryoda alanın kaynağı "Tarih kuralı" seçilince değer koşu anında bu kuraldan üretilir.'),
-      alan('Tarih kuralları', tarihMetin, { yardim: 'Her satır: AD = bugun|yyyy-MM-dd\'T\'HH:mm:ss · bugun+1y (yıl) · bugun+60g (gün) · bugun-1a (ay)' }),
-      h('div', { class: 'dugmeler' }, kaydet)));
+    kuralKarti);
 }
 
 /**

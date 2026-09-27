@@ -102,6 +102,10 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
 export type OturumSaglayici = (vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
   Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>;
 export declare function oturumSaglayicisiAyarla(fn: OturumSaglayici | null): void;
+export type AkisSenaryoKancasi = { kos: (vt: Veritabani, projeId: string, girdi: unknown) => Promise<unknown>; gecenler: (vt: Veritabani, projeId: string, servisId: string) => unknown[];
+  atlamaNedeni: (vt: Veritabani, senaryo: unknown, ortam: unknown) => string };
+export declare function akisSenaryoKancasiAyarla(k: AkisSenaryoKancasi | null): void;
+export declare function akisSenaryoKancasiAl(): AkisSenaryoKancasi | null;
 export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, girdi: {
   servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number;
 }): Promise<{

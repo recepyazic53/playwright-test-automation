@@ -14,11 +14,11 @@
  * @typedef {'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat'} AlanTipi
  * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }} Alan
  * @typedef {{ ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[] }} OperasyonSemasi
- * @typedef {{ kaynak: 'tablo' | 'akis' | 'sabit' | 'parametre' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri
+ * @typedef {{ kaynak: 'tablo' | 'akis' | 'sabit' | 'parametre' | 'hesap' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri  hesap: <A>${hesap: ifade}</A> (satır içi hesap)
  * @typedef {{ ad: string; yerel: string; oz: Record<string, string>; cocuklar: XmlOgesi[]; metin: string }} XmlOgesi
  */
 
-export const KAYNAKLAR = /** @type {const} */ (['tablo', 'akis', 'parametre', 'sabit', 'bos', 'nil', 'gonderme']);
+export const KAYNAKLAR = /** @type {const} */ (['tablo', 'akis', 'parametre', 'hesap', 'sabit', 'bos', 'nil', 'gonderme']);
 /** Akış değeri adı (${akis:Ad}). */
 export const AKIS_DEGERI = /^[A-Za-z_][A-Za-z0-9_-]{0,59}$/;
 /** Eski parametre adı (MUSTERI_TC) ve tablo başvurusu (Servis girişi.Kanal / Kişi[kefil].TC). */
@@ -149,6 +149,7 @@ export function govdeUret(sema, degerler, secenekler = {}) {
       if (v.kaynak === 'bos') satirlar.push(`${girinti(d)}<${a.ad}/>`);
       else if (v.kaynak === 'nil') satirlar.push(`${girinti(d)}<${a.ad} xsi:nil="true"/>`);
       else if (v.kaynak === 'akis') satirlar.push(`${girinti(d)}<${a.ad}>\${akis:${v.deger ?? ''}}</${a.ad}>`);
+      else if (v.kaynak === 'hesap') satirlar.push(`${girinti(d)}<${a.ad}>\${hesap: ${xmlKacis(v.deger ?? '')}}</${a.ad}>`);
       else if (v.kaynak === 'parametre' || v.kaynak === 'tablo') satirlar.push(`${girinti(d)}<${a.ad}>\${${v.deger ?? ''}}</${a.ad}>`);
       else satirlar.push(`${girinti(d)}<${a.ad}>${xmlKacis(v.deger ?? '')}</${a.ad}>`);
     }
@@ -205,10 +206,12 @@ export function govdeCoz(govde, sema) {
       if (nil && nil[1] === 'true') degerler[yol] = { kaynak: 'nil' };
       else if (c.metin === '') degerler[yol] = { kaynak: 'bos' };
       else {
+        // Satır içi hesap: ${hesap: …} (tek blok; içinde ${X} başvuruları olabilir).
+        const hesapMi = /^\$\{\s*hesap:([\s\S]*)\}$/.exec(c.metin.trim());
         const p = /^\$\{\s*([^{}$]{1,200}?)\s*\}$/u.exec(c.metin.trim());
         const ic = p ? p[1] : '';
         const akis = /^akis:\s*([A-Za-z_][A-Za-z0-9_-]{0,59})$/.exec(ic);
-        degerler[yol] = akis ? { kaynak: 'akis', deger: akis[1] } : p && ESKI_PARAMETRE.test(ic) ? { kaynak: 'parametre', deger: ic }
+        degerler[yol] = hesapMi ? { kaynak: 'hesap', deger: hesapMi[1].trim() } : akis ? { kaynak: 'akis', deger: akis[1] } : p && ESKI_PARAMETRE.test(ic) ? { kaynak: 'parametre', deger: ic }
           : p && TABLO_BASVURUSU.test(ic) ? { kaynak: 'tablo', deger: ic } : { kaynak: 'sabit', deger: c.metin };
       }
     }

@@ -6,6 +6,7 @@ import { acikAnahtar, coz, sifrele, zarfMi } from '../kasa.mjs';
 import { DepoHatasi, gecmisYaz, jsonMetni, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
 import { TANIM_TURLERI } from './parametre-tanimlari.mjs';
 import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
+import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './akis-senaryo-icerigi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -95,7 +96,7 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>; alanZorunluluklari?: Record<string, string[]>;
  *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
  *   alanListeleri?: Record<string, Record<string, string>>;
- *   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>;
+ *   alanBaglari?: Record<string, Record<string, { tablo?: string; sutun?: string; etiket?: string; bicim?: string; kural?: string }>>;
  *   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string; tabanGrubu?: string }} ServisAyarlari  tabanGrubu: adlandırılmış taban adres (taban-adresleri.mjs)
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
@@ -209,6 +210,8 @@ function kontrolDogrula(k, yer, altMi) {
 /** @param {unknown} icerik @returns {ServisSenaryoIcerigi} */
 export function senaryoIceriginiDogrula(icerik) {
   if (!icerik || typeof icerik !== 'object' || Array.isArray(icerik)) throw new DepoHatasi('"icerik" bir nesne olmalıdır.');
+  // Akış senaryosu (tur 'akis'; akis-senaryo-icerigi.mjs): her operasyon adımının içeriği bu işlevle doğrulanır.
+  if (akisSenaryosuMu(icerik)) return /** @type {any} */ (akisSenaryoIceriginiDogrula(icerik, senaryoIceriginiDogrula, DepoHatasi));
   const i = /** @type {Record<string, unknown>} */ (icerik);
   const operasyon = zorunluMetin(i.operasyon, 'operasyon');
   const http = httpTanimiDogrula(i.http);
@@ -486,7 +489,8 @@ export const TOKEN_YENILEME = /** @type {const} */ (['suresiDolunca', 'herIstekt
 
 /**
  * @typedef {{ ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }} AkisOkumaTanimi
- * @typedef {{ id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql'; sql?: any }} AkisAdimi
+ * @typedef {{ id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon'; sql?: any;
+ *   operasyon?: string; baglar?: Record<string, string> }} AkisAdimi
  *   tur 'sql': SQL sorgusu adımı (servisId / senaryoId yok; sql: sql-adimi.mjs SqlTanimi).
  * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }} ServisAkisIcerigi
  *   tokenYenileme (oturum akışı): süresiDolunca (varsayılan: değer ömür boyunca koşular arasında yeniden kullanılır) ·
@@ -518,9 +522,13 @@ export function akisIceriginiDogrula(icerik, tur) {
     }
     const okumalar = a.okumalar === undefined ? [] : a.okumalar;
     if (!Array.isArray(okumalar) || okumalar.length > 20) throw new DepoHatasi(`${yer}: "okumalar" en çok 20 öğelik bir dizi olmalıdır.`);
+    // Operasyon adımı (akis-senaryo-icerigi.mjs): servisin bir operasyonu; alan değerleri akış senaryosunda, bağlar burada.
+    const opMi = a.tur === 'operasyon';
     return {
       id, ad: typeof a.ad === 'string' && a.ad.trim() ? a.ad.trim().slice(0, 100) : yer,
-      servisId: kimlik(a.servisId, `${yer} servisId`), senaryoId: kimlik(a.senaryoId, `${yer} senaryoId`),
+      ...(opMi
+        ? { tur: 'operasyon', servisId: kimlik(a.servisId, `${yer} servisId`), operasyon: zorunluMetin(a.operasyon, `${yer} operasyon`), baglar: baglariDogrula(a.baglar, yer, DepoHatasi) }
+        : { servisId: kimlik(a.servisId, `${yer} servisId`), senaryoId: kimlik(a.senaryoId, `${yer} senaryoId`) }),
       okumalar: okumalar.map((y, k) => {
         const o = /** @type {Record<string, unknown>} */ (y && typeof y === 'object' ? y : {});
         const ad = typeof o.ad === 'string' ? o.ad.trim() : '';

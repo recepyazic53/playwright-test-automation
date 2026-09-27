@@ -12,6 +12,9 @@
 //     sonra değiştiyse o adım renklenmez.
 //   · SQL sorgusu adımı ("+ > SQL sorgusu"; tur 'sql'): seçilen veritabanı bağlantısında sorgu, sonuç beklenenle karşılaştırılır;
 //     girdileri SQL / beklenen değerlerdeki ${akis:Ad}, çıktıları sonuçtan okunan sütunlar (sql.okumalar).
+//   · OPERASYON adımı ("+ > Operasyon"; tur 'operasyon', varsayılan): servisin bir operasyonu; akış yalnız sırayı ve taşınan
+//     değerleri tutar (bağlar: alan ← ${akis:Ad}); alan değerleri ve beklenen sonuç akış SENARYOSUNDA (akis-senaryo-formu.js).
+//     Girdileri bağlardan, çıktıları yanıttan okumalardan. "Bu akışın senaryoları" sayfanın altında.
 // Veri modeli değişmedi (adımlar = { id, ad, servisId, senaryoId, okumalar, hataOlursaDevam? } | { id, ad, tur: 'sql', sql, … }); kayıt var olan
 // /platform/servis-akisi/kaydet ucundan (yapısal + anlamsal denetim) geçer. Kullanıcı verisi DOM'a yalnız metin olarak yazılır.
 import { alan, api, bildir, degisiklikleriBirak, h, ikon, kayitIzi, mesajKutusu, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
@@ -19,6 +22,8 @@ import { onayIste } from './kosu-paneli.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
 import { sqlAkisDegerleri, sqlTanimiDogrula } from './sql-adimi.mjs';
 import { sqlAdimiFormu, sqlBaglantilariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
+import { bagAdi } from './akis-senaryo-icerigi.mjs';
+import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 
 const q = encodeURIComponent;
 const KAYNAK = { xml: 'XML (XPath)', json: 'JSON yolu', baslik: 'Yanıt başlığı' };
@@ -91,10 +96,11 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   const sqlBaglantilari = await sqlBaglantilariniAl(proje.id);
   /** Adımın okumaları (SQL adımında sonuçtan okunan sütunlar). */
   const adimOkumalari = (x) => (x.tur === 'sql' ? (x.sql?.okumalar ?? []) : x.okumalar);
-  const [{ servisler }, { akislar: tumAkislar }, kayit] = await Promise.all([
+  const [{ servisler }, { akislar: tumAkislar }, kayit, akisSenaryolari] = await Promise.all([
     api(`/platform/servisler?projeId=${q(proje.id)}`),
     api(`/platform/servis-akislari?projeId=${q(proje.id)}`).catch(() => ({ akislar: [] })),
-    akisId ? api(`/platform/servis-akisi?projeId=${q(proje.id)}&id=${q(akisId)}`) : Promise.resolve(null)
+    akisId ? api(`/platform/servis-akisi?projeId=${q(proje.id)}&id=${q(akisId)}`) : Promise.resolve(null),
+    akisId ? api(`/platform/servis-akisi/senaryolar?projeId=${q(proje.id)}&akisId=${q(akisId)}`).then((y) => y.senaryolar).catch(() => []) : Promise.resolve([])
   ]);
   /** Servis → senaryolar (gerektikçe alınır). @type {Map<string, any[]>} */
   const senaryolar = new Map();
@@ -105,7 +111,11 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     }
     return senaryolar.get(servisId);
   };
-  const a = kayit?.akis ?? { baslik: '', tur: 'akis', kapsam: 'test', icerik: { adimlar: [{ ad: 'Adım 1', servisId: s.id, senaryoId: '', okumalar: [] }] } };
+  /** Servisin operasyon adları (akışın operasyon adımı). */
+  const operasyonlari = (servisId) => (servisler.find((x) => x.id === servisId)?.ayarlar?.operasyonlar ?? []).map((o) => o.ad);
+  /** Yeni operasyon adımı (servisin ilk operasyonu). */
+  const yeniOperasyonAdimi = (servisId, ad) => ({ ad: ad ?? operasyonlari(servisId)[0] ?? 'Operasyon', tur: 'operasyon', servisId, operasyon: operasyonlari(servisId)[0] ?? '', okumalar: [], baglar: {} });
+  const a = kayit?.akis ?? { baslik: '', tur: 'akis', kapsam: 'test', icerik: { adimlar: [yeniOperasyonAdimi(s.id)] } };
   /** Düzenleme kopyası (kayıtlı akış aynen açılır; kimliği olmayan adıma kimlik verilir). */
   const is = {
     baslik: a.baslik, tur: a.tur, kapsam: a.kapsam, omur: a.icerik.omurSaniye ?? 3600, yenileme: a.icerik.tokenYenileme ?? 'suresiDolunca',
@@ -138,7 +148,9 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   const kosuKap = h('div', {});
 
   const iz = () => degerIzi(is.adimlar.map((x) => ({ okumalar: adimOkumalari(x) })),
-    (n) => (is.adimlar[n].tur === 'sql' ? sqlAkisDegerleri(is.adimlar[n].sql) : senaryoAkisDegerleri(senaryoBul(is.adimlar[n]))),
+    (n) => (is.adimlar[n].tur === 'sql' ? sqlAkisDegerleri(is.adimlar[n].sql)
+      : is.adimlar[n].tur === 'operasyon' ? [...new Set(Object.values(is.adimlar[n].baglar ?? {}).map(bagAdi).filter(Boolean))]
+        : senaryoAkisDegerleri(senaryoBul(is.adimlar[n]))),
     (n) => (is.adimlar[n].tur === 'sql' ? null : oturumBul(is.adimlar[n].servisId)));
   const degisti = () => { kayitIzi.kirli = true; durumSatiri.textContent = 'Kaydedilmemiş değişiklikler var.'; };
 
@@ -224,18 +236,26 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     const tasinan = konum > 0 ? t.tasinan[konum] ?? [] : [];
     const eksik = konum < is.adimlar.length ? t.eksikler[konum].filter((g) => g.tur === 'sonra') : [];
     const doldu = is.adimlar.length >= EN_COK_ADIM;
+    const oplar = operasyonlari(menuServisId);
     const menu = acik ? h('div', { class: 'ekle-menusu servis-ekle-menusu', role: 'group', 'aria-label': 'Eklenecek adım' },
       h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Servis'),
         h('select', { 'aria-label': 'Eklenecek adımın servisi', onchange: async (o) => { menuServisId = o.target.value; await senaryolariAl(menuServisId); ciz(); odakla('.servis-ekle-menusu select'); } },
           servisler.map((sv) => h('option', { value: sv.id, selected: sv.id === menuServisId }, sv.ad)))),
+      h('span', { class: 'tasarim-etiketi' }, h('span', {}, 'Operasyon (alan değerleri senaryoda)')),
+      oplar.length
+        ? h('ul', { class: 'senaryo-secenekleri', 'aria-label': 'Operasyonlar' }, oplar.map((op) => h('li', {}, h('button', {
+          type: 'button', 'aria-label': `Operasyon adımı koy: ${op}`,
+          onclick: () => adimEkle(konum, { ...yeniOperasyonAdimi(menuServisId, op), operasyon: op })
+        }, ikon('artiYalin'), op))))
+        : h('p', { class: 'soluk kucuk' }, 'Bu serviste operasyon yok.'),
+      h('details', { class: 'kayitli-senaryo-secimi' }, h('summary', { class: 'kucuk' }, 'Kayıtlı senaryo (eski tür: değerler senaryoda sabit)'),
       (senaryolar.get(menuServisId) || []).length
         ? h('ul', { class: 'senaryo-secenekleri', 'aria-label': 'Kayıtlı senaryolar' }, (senaryolar.get(menuServisId) || []).map((sn) => h('li', {}, h('button', {
           type: 'button', 'aria-label': `Adım olarak koy: ${sn.baslik}`,
           onclick: () => adimEkle(konum, { ad: sn.baslik, servisId: menuServisId, senaryoId: sn.id })
         }, ikon('artiYalin'), sn.baslik))))
-        : h('p', { class: 'soluk kucuk' }, senaryolar.has(menuServisId) ? 'Bu serviste kayıtlı senaryo yok.' : 'Senaryolar okunuyor…'),
+        : h('p', { class: 'soluk kucuk' }, senaryolar.has(menuServisId) ? 'Bu serviste kayıtlı senaryo yok.' : 'Senaryolar okunuyor…')),
       h('div', { class: 'dugmeler' },
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => adimEkle(konum, { ad: `Adım ${is.adimlar.length + 1}`, servisId: menuServisId, senaryoId: '' }) }, 'Boş adım (sonra seç)'),
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => adimEkle(konum, { ad: 'SQL sorgusu', tur: 'sql', sql: yeniSqlTanimi(sqlBaglantilari) }) }, ikon('veri'), 'SQL sorgusu'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { acikMenu = -1; ciz(); odakla(`[data-ekle="${konum}"]`); } }, 'Kapat'))) : null;
     if (menu) menu.addEventListener('keydown', (o) => { if (o.key === 'Escape') { o.preventDefault(); acikMenu = -1; ciz(); odakla(`[data-ekle="${konum}"]`); } });
@@ -248,7 +268,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
       h('button', {
         type: 'button', class: `ekle-dugmesi${acik ? ' acik' : ''}`, 'data-ekle': String(konum), disabled: doldu,
         'aria-label': konum === 0 ? 'Başa yeni adım koy' : `${konum}. adımdan sonra yeni adım koy`, 'aria-expanded': acik ? 'true' : 'false',
-        title: doldu ? `En çok ${EN_COK_ADIM} adım` : 'Kayıtlı bir servis senaryosunu buraya adım olarak koy',
+        title: doldu ? `En çok ${EN_COK_ADIM} adım` : 'Buraya adım koy: bir servisin operasyonu, kayıtlı senaryo ya da SQL sorgusu',
         onclick: async () => { acikMenu = acik ? -1 : konum; if (!acik) await senaryolariAl(menuServisId); ciz(); if (!acik) odakla('.servis-ekle-menusu select'); }
       }, ikon('artiYalin')),
       menu);
@@ -257,7 +277,8 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   function adimKutusu(x, n, t) {
     const b = t.adimlar[n];
     const sqlMi = x.tur === 'sql';
-    const sn = sqlMi ? null : senaryoBul(x);
+    const opMi = x.tur === 'operasyon';
+    const sn = sqlMi || opMi ? null : senaryoBul(x);
     const sqlO = sqlMi ? sqlOzeti(x.sql) : null;
     const baglantiAdi = sqlMi ? sqlBaglantilari.find((b) => b.id === x.sql?.baglantiId)?.ad ?? '' : '';
     const sonuc = adimSonucu(n);
@@ -266,7 +287,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     const el = h('li', {
       class: ['diyagram-dugumu', 'tasarim-blogu', 'servis-adimi', n === secili ? 'etkin' : '', renk ? `durum-${renk.sinif}` : '', b.hatali ? 'sira-hatasi' : ''].filter(Boolean).join(' '),
       'data-adim': String(n), tabindex: '0', draggable: 'true', 'aria-current': n === secili ? 'step' : null,
-      'aria-label': `${n + 1}. adım: ${x.ad}${sqlMi ? `, SQL sorgusu, ${sqlO.beklenen}` : sn ? `, ${servisAdi(x.servisId)} › ${sn.baslik}` : ', senaryo seçilmedi'}${b.hatali ? ', değer sırası hatalı' : ''}${sonuc ? `, son sonuç ${renk?.etiket ?? sonuc.durum}` : ''}`
+      'aria-label': `${n + 1}. adım: ${x.ad}${sqlMi ? `, SQL sorgusu, ${sqlO.beklenen}` : opMi ? `, ${servisAdi(x.servisId)} · ${x.operasyon || 'operasyon seçilmedi'}` : sn ? `, ${servisAdi(x.servisId)} › ${sn.baslik}` : ', senaryo seçilmedi'}${b.hatali ? ', değer sırası hatalı' : ''}${sonuc ? `, son sonuç ${renk?.etiket ?? sonuc.durum}` : ''}`
     },
     h('div', { class: 'dugum-basligi' },
       h('span', { class: 'dugum-no', 'aria-hidden': 'true' }, String(n + 1)),
@@ -283,6 +304,10 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
       baglantiAdi ? h('span', { class: 'mono metot' }, baglantiAdi) : h('span', { class: 'hata-metni' }, 'Bağlantı seçilmedi'),
       h('span', { class: 'senaryo-adi' }, sqlO.beklenen),
       sqlO.sqlSatiri ? h('code', { class: 'sql-satiri' }, sqlO.sqlSatiri) : h('span', { class: 'hata-metni' }, 'SQL yazılmadı')) :
+    opMi ? h('p', { class: 'dugum-aciklamasi servis-adimi-kimligi' },
+      h('span', { class: 'servis-adi' }, servisAdi(x.servisId)),
+      x.operasyon ? h('span', { class: 'mono metot' }, x.operasyon) : h('span', { class: 'hata-metni' }, 'Operasyon seçilmedi'),
+      Object.keys(x.baglar ?? {}).length ? h('span', { class: 'soluk kucuk' }, `${Object.keys(x.baglar).length} alan akıştan`) : null) :
     h('p', { class: 'dugum-aciklamasi servis-adimi-kimligi' },
       h('span', { class: 'servis-adi' }, servisAdi(x.servisId)),
       metot ? h('span', { class: 'mono metot' }, metot) : null,
@@ -412,11 +437,103 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
       h('label', { class: 'secenek' }, devam, 'Bu adım kalırsa da sonraki adımlara devam et')));
   }
 
+  /** Operasyon ↔ kayıtlı senaryo adımı geçişi (SQL adımı dışında). */
+  function turSecimi(n, x) {
+    const sec = h('select', { 'aria-label': `${n + 1}. adım türü` },
+      h('option', { value: 'operasyon', selected: x.tur === 'operasyon' }, 'Operasyon (değerler senaryoda)'),
+      h('option', { value: 'senaryo', selected: x.tur !== 'operasyon' }, 'Kayıtlı senaryo'));
+    sec.addEventListener('change', async () => {
+      if (sec.value === 'operasyon') { const y = yeniOperasyonAdimi(x.servisId || s.id); x.tur = 'operasyon'; x.operasyon = y.operasyon; x.baglar = {}; delete x.senaryoId; if (!x.servisId) x.servisId = y.servisId; }
+      else { delete x.tur; delete x.operasyon; delete x.baglar; x.senaryoId = ''; await senaryolariAl(x.servisId); }
+      degisti(); ciz(); ayrintiCiz(); ayrintiKap.querySelector('select')?.focus();
+    });
+    return alan('Adım türü', sec, { yardim: 'Operasyon: akış yalnız sırayı ve taşınan değerleri tutar, alan değerleri akış senaryosunda. Kayıtlı senaryo: eski tür.' });
+  }
+
+  /** Operasyon adımının ayrıntısı: servis, operasyon, akıştan gelen alanlar (bağlar), yanıttan okumalar. */
+  function operasyonAyrintisi(n, x) {
+    x.baglar ??= {};
+    const ad = h('input', { type: 'text', value: x.ad, maxlength: '100', 'aria-label': `${n + 1}. adım adı` });
+    ad.addEventListener('input', () => { x.ad = ad.value; ciz(); });
+    const servisSec = h('select', { 'aria-label': `${n + 1}. adım servisi` }, servisler.map((sv) => h('option', { value: sv.id, selected: sv.id === x.servisId }, sv.ad)));
+    const opSec = h('select', { 'aria-label': `${n + 1}. adım operasyonu` }, h('option', { value: '' }, '— operasyon —'),
+      operasyonlari(x.servisId).map((o) => h('option', { value: o, selected: o === x.operasyon }, o)),
+      x.operasyon && !operasyonlari(x.servisId).includes(x.operasyon) ? h('option', { value: x.operasyon, selected: true }, `${x.operasyon} (serviste yok)`) : null);
+    servisSec.addEventListener('change', () => { x.servisId = servisSec.value; x.operasyon = operasyonlari(x.servisId)[0] ?? ''; x.baglar = {}; degisti(); ciz(); ayrintiCiz(); ayrintiKap.querySelector(`[aria-label="${n + 1}. adım servisi"]`)?.focus(); });
+    opSec.addEventListener('change', () => {
+      const eski = x.operasyon;
+      x.operasyon = opSec.value; x.baglar = {};
+      if (!x.ad || x.ad === eski) { x.ad = x.operasyon; ad.value = x.ad; }
+      degisti(); ciz(); ayrintiCiz(); ayrintiKap.querySelector(`[aria-label="${n + 1}. adım operasyonu"]`)?.focus();
+    });
+    const sv = servisler.find((y) => y.id === x.servisId);
+    const sema0 = sv?.tur !== 'rest' ? sv?.ayarlar?.operasyonSemalari?.[x.operasyon] : null;
+    const yollar = sema0 ? alanSatirlari(semaBirlestir(sema0, sv.ayarlar.ekAlanlar?.[x.operasyon] ?? []).alanlar).filter((y) => !y.grup).map((y) => y.yol) : null;
+    const once = () => [...new Set(is.adimlar.slice(0, n).flatMap((y) => adimOkumalari(y).map((o) => o.ad)).filter(Boolean))];
+    const bagKap = h('div', { class: 'okuma-listesi' });
+    /** Düzenlenen satırlar (yarım satır da görünür; kayıtta yalnız tamamlananlar). */
+    const satirlar = Object.entries(x.baglar).map(([yol, v]) => ({ yol, ad: bagAdi(v) ?? '' }));
+    const yaz = () => { x.baglar = Object.fromEntries(satirlar.filter((b) => b.yol && b.ad).map((b) => [b.yol, `\${akis:${b.ad}}`])); degisti(); ciz(); };
+    const bagCiz = () => {
+      const adlar = once();
+      yerlestir(bagKap, satirlar.map((b, k) => {
+        const yolG = yollar
+          ? h('select', { 'aria-label': `${n + 1}. adım ${k + 1}. bağ alanı` }, h('option', { value: '' }, '— alan —'), yollar.map((y) => h('option', { value: y, selected: y === b.yol }, y)))
+          : h('input', { type: 'text', value: b.yol, spellcheck: 'false', class: 'kod-girdisi', placeholder: sv?.tur === 'rest' ? 'kayit/no' : 'Input/PolicyNo', 'aria-label': `${n + 1}. adım ${k + 1}. bağ alanı` });
+        const adG = h('select', { 'aria-label': `${n + 1}. adım ${k + 1}. bağ değeri` }, h('option', { value: '' }, '— akış değeri —'),
+          adlar.map((a2) => h('option', { value: a2, selected: a2 === b.ad }, `\${akis:${a2}}`)),
+          b.ad && !adlar.includes(b.ad) ? h('option', { value: b.ad, selected: true }, `\${akis:${b.ad}} (önce okunmuyor)`) : null);
+        yolG.addEventListener(yolG.tagName === 'SELECT' ? 'change' : 'input', () => { b.yol = yolG.value.trim(); yaz(); });
+        adG.addEventListener('change', () => { b.ad = adG.value; yaz(); });
+        return h('div', { class: 'okuma-karti' }, h('div', { class: 'okuma-ust' }, yolG, adG),
+          h('div', { class: 'okuma-alt' }, h('span', { class: 'soluk kucuk' }, '← önceki adımdan gelir; senaryoda sorulmaz'),
+            h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. adım ${k + 1}. bağı sil`, onclick: () => { satirlar.splice(k, 1); yaz(); bagCiz(); } }, ikon('carpi'))));
+      }));
+    };
+    bagCiz();
+    const devam = h('input', { type: 'checkbox', checked: Boolean(x.hataOlursaDevam) });
+    devam.addEventListener('change', () => { if (devam.checked) x.hataOlursaDevam = true; else delete x.hataOlursaDevam; degisti(); ciz(); });
+    const okumaKap = h('div', { class: 'okuma-listesi' });
+    const okumalariCiz = () => {
+      yerlestir(okumaKap, x.okumalar.map((o, k) => {
+        const oad = h('input', { type: 'text', value: o.ad, maxlength: '60', placeholder: 'PolicyNo', autocomplete: 'off', 'aria-label': `${n + 1}. adım ${k + 1}. okuma adı` });
+        const kaynak = h('select', { 'aria-label': `${n + 1}. adım ${k + 1}. okuma kaynağı` }, Object.entries(KAYNAK).map(([d, m]) => h('option', { value: d, selected: (o.kaynak || 'xml') === d }, m)));
+        const yol = h('input', { type: 'text', value: o.yol, maxlength: '300', spellcheck: 'false', class: 'kod-girdisi', autocomplete: 'off', placeholder: '//PolicyNo', 'aria-label': `${n + 1}. adım ${k + 1}. okuma yolu` });
+        const gizli = h('input', { type: 'checkbox', checked: o.gizli ?? gizliMi(o.ad), 'aria-label': `${n + 1}. adım ${k + 1}. okuma gizli` });
+        oad.addEventListener('input', () => { o.ad = oad.value.trim(); if (o.gizli === undefined) gizli.checked = gizliMi(o.ad); ciz(); });
+        kaynak.addEventListener('change', () => { o.kaynak = kaynak.value; ciz(); });
+        yol.addEventListener('input', () => { o.yol = yol.value; });
+        gizli.addEventListener('change', () => { o.gizli = gizli.checked; ciz(); });
+        return h('div', { class: 'okuma-karti' }, h('div', { class: 'okuma-ust' }, oad, kaynak), yol,
+          h('div', { class: 'okuma-alt' }, h('label', { class: 'secenek' }, gizli, 'gizli'),
+            h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': `${n + 1}. adım ${k + 1}. okumayı sil`, onclick: () => { x.okumalar.splice(k, 1); degisti(); ciz(); okumalariCiz(); } }, ikon('carpi'))));
+      }));
+    };
+    okumalariCiz();
+    const b = iz().adimlar[n];
+    yerlestir(ayrintiKap, h('section', { class: 'kart form-paneli servis-akis-ayrinti', 'aria-label': `${n + 1}. adım ayrıntısı` },
+      h('div', { class: 'kart-basligi' }, h('h3', {}, h('span', { class: 'dugum-no', 'aria-hidden': 'true' }, String(n + 1)), `${n + 1}. adım: operasyon`)),
+      alan('Adım adı', ad), turSecimi(n, x), alan('Servis', servisSec), alan('Operasyon', opSec, { yardim: 'Alan değerleri ve beklenen sonuç bu akışı kullanan senaryoda doldurulur.' }),
+      h('fieldset', {}, h('legend', {}, 'Önceki adımlardan gelen alanlar (girdiler)'),
+        b.girdiler.some((g) => g.tur === 'sonra' || g.tur === 'yok') ? h('p', { class: 'hata-metni kucuk' }, 'Bağlanan bir değer bu adımdan önce okunmuyor.') : null,
+        bagKap,
+        h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { satirlar.push({ yol: '', ad: once()[0] ?? '' }); bagCiz(); bagKap.querySelector('.okuma-karti:last-child select, .okuma-karti:last-child input')?.focus(); } },
+          ikon('arti'), 'Alan bağla'),
+        once().length ? null : h('p', { class: 'soluk kucuk' }, 'Önceki adımlarda okunan değer yok; önce bir adımda “Yanıttan oku” ekleyin.')),
+      h('fieldset', {}, h('legend', {}, 'Yanıttan oku (çıktılar)'),
+        h('p', { class: 'soluk kucuk' }, 'Okunan değer sonraki adımlarda alanlara bağlanır ya da ', h('code', {}, '${akis:Ad}'), ' ile kullanılır.'),
+        okumaKap,
+        h('button', { type: 'button', class: 'kucuk-dugme okuma-ekle', onclick: () => { x.okumalar.push({ ad: '', kaynak: 'xml', yol: '' }); degisti(); okumalariCiz(); okumaKap.querySelector('.okuma-karti:last-child input')?.focus(); } },
+          ikon('arti'), 'Değer oku')),
+      h('label', { class: 'secenek' }, devam, 'Bu adım kalırsa da sonraki adımlara devam et')));
+  }
+
   function ayrintiCiz() {
     const n = secili;
     const x = is.adimlar[n];
     if (!x) { yerlestir(ayrintiKap, h('section', { class: 'kart' }, h('p', { class: 'soluk' }, 'Ayrıntı için diyagramdan bir adım seçin.'))); return; }
     if (x.tur === 'sql') { sqlAyrintisi(n, x); return; }
+    if (x.tur === 'operasyon') { operasyonAyrintisi(n, x); return; }
     const servisSec = h('select', { 'aria-label': `${n + 1}. adım servisi` }, h('option', { value: '' }, '— servis —'),
       servisler.map((sv) => h('option', { value: sv.id, selected: sv.id === x.servisId }, sv.ad)));
     const senaryoSec = h('select', { 'aria-label': `${n + 1}. adım senaryosu` }, h('option', { value: '' }, '— senaryo —'),
@@ -474,6 +591,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     yerlestir(ayrintiKap, h('section', { class: 'kart form-paneli servis-akis-ayrinti', 'aria-label': `${n + 1}. adım ayrıntısı` },
       h('div', { class: 'kart-basligi' }, h('h3', {}, h('span', { class: 'dugum-no', 'aria-hidden': 'true' }, String(n + 1)), `${n + 1}. adım`)),
       alan('Adım adı', ad),
+      turSecimi(n, x),
       alan('Servis', servisSec), alan('Senaryo', senaryoSec),
       girdiKap,
       h('fieldset', {}, h('legend', {}, 'Yanıttan oku (çıktılar)'),
@@ -493,8 +611,8 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   });
   const eksik = () => {
     if (!is.baslik.trim()) return 'Başlık boş olamaz.';
-    const n = is.adimlar.findIndex((x) => x.tur !== 'sql' && (!x.servisId || !x.senaryoId));
-    if (n >= 0) { sec(n); return `${n + 1}. adımda servis ve senaryo seçin.`; }
+    const n = is.adimlar.findIndex((x) => x.tur !== 'sql' && (!x.servisId || (x.tur === 'operasyon' ? !x.operasyon : !x.senaryoId)));
+    if (n >= 0) { sec(n); return `${n + 1}. adımda servis ve ${is.adimlar[n].tur === 'operasyon' ? 'operasyon' : 'senaryo'} seçin.`; }
     // SQL adımı: bağlantı, sorgu ve beklenen sonuç (sunucuyla aynı kurallar: sql-adimi.mjs).
     for (const [j, x] of is.adimlar.entries()) {
       if (x.tur !== 'sql') continue;
@@ -536,7 +654,8 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     if (e) { mesaj.goster(e); return; }
     const liste = is.adimlar.map((x, n) => (x.tur === 'sql'
       ? `${n + 1}. SQL sorgusu › ${sqlBaglantilari.find((b) => b.id === x.sql?.baglantiId)?.ad ?? '?'}`
-      : `${n + 1}. ${servisAdi(x.servisId)} › ${senaryoBul(x)?.baslik ?? '?'}`));
+      : x.tur === 'operasyon' ? `${n + 1}. ${servisAdi(x.servisId)} · ${x.operasyon} (varsayılan değerlerle)`
+        : `${n + 1}. ${servisAdi(x.servisId)} › ${senaryoBul(x)?.baslik ?? '?'}`));
     if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
     try {
       const { sonuc } = await mesgulIken(dene, 'Deneniyor…', () => api('/platform/servis-akisi/dene', { govde: {
@@ -609,7 +728,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
         h('p', { class: 'soluk kucuk' }, 'Kutuya tıklayın ya da Enter’a basın: ayrıntısı sağda açılır. Sıralamak için sürükleyin, ↑ / ↓ düğmelerini ya da Alt + ↑ / ↓ tuşlarını kullanın. Oklarda sonraki adımlara taşınan ',
           h('code', {}, '${akis:Ad}'), ' değerleri yazar.'),
         ustEl, hataKutusu, akisEl, duyuru,
-        h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => adimEkle(is.adimlar.length, { ad: `Adım ${is.adimlar.length + 1}`, servisId: s.id, senaryoId: '' }) }, ikon('arti'), 'Adım ekle'))),
+        h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => adimEkle(is.adimlar.length, yeniOperasyonAdimi(s.id)) }, ikon('arti'), 'Adım ekle'))),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Adım ayrıntısı ve kayıt' },
         // Kaydet üstte: yapışkan sütun kaydırılsa da görünür kalır.
         h('section', { class: 'kart form-paneli' },
@@ -617,6 +736,20 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
           h('div', { class: 'dugmeler' }, kaydet, dene, h('a', { class: 'dugme hayalet', href: adres }, 'Vazgeç')),
           h('p', { class: 'kucuk' }, durumSatiri)),
         ayrintiKap)),
-    sonucKap, kosuKap);
+    sonucKap, kosuKap, akisSenaryolariKarti());
   void kosulariCiz(true);
+
+  /** Akış sayfasının altında: bu akışı kullanan senaryolar (+ Senaryo ekle akış seçili açılır). */
+  function akisSenaryolariKarti() {
+    if (!akisId || is.tur !== 'akis') return null;
+    const ilk = is.adimlar.find((x) => x.tur === 'operasyon')?.servisId ?? s.id;
+    return h('section', { class: 'kart', 'aria-label': 'Bu akışın senaryoları' },
+      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Bu akışın senaryoları'),
+        h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: `#/servisler/s/${q(ilk)}/senaryo/yeni?akis=${q(akisId)}` }, ikon('arti'), 'Senaryo ekle'))),
+      h('p', { class: 'soluk kucuk' }, 'Akış operasyonların sırasını ve taşınan değerleri tanımlar; senaryo her adımın alan değerlerini ve beklenen sonucunu tutar (ekran senaryolarındaki gibi).'),
+      akisSenaryolari.length
+        ? h('ul', { class: 'akis-kosulari' }, akisSenaryolari.map((x) => h('li', {}, h('a', { href: `#/servisler/s/${q(x.servisId)}/senaryo/${q(x.id)}` }, x.baslik),
+          ' ', rozet(x.kapsam === 'ikisi' ? 'TEST + CANLI' : x.kapsam === 'canli' ? 'CANLI' : 'TEST'), x.kosuyaDahil ? null : rozet('hariç', 'atlanan'))))
+        : h('p', { class: 'soluk' }, 'Henüz senaryo yok.'));
+  }
 }

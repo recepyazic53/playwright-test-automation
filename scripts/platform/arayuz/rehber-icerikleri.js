@@ -149,9 +149,21 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Servis sayfası', metin: 'Sekmeler: Senaryolar (istekler ve kontroller), Akışlar (istekleri zincirleme), Parametreler (değer tanımları), Raporlar (koşu geçmişi), İşlemler (metotlar).', cizim: { tur: 'maket', bolge: 'arac', etiket: 'Sekmeler ekranın üstünde' } },
       {
-        baslik: 'Senaryo oluşturma sırası',
-        sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, tarih kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'],
+        baslik: 'Senaryo türü: tek istek ya da akış',
+        metin: ['"Senaryo ekle"de önce türü seçin. Tek istek: bir operasyona istek atılır. Akış: bir servis akışının operasyonları sırayla çağrılır (ör. önce teklif, sonra basım); akış başka servislerin operasyonlarını da içerebilir.',
+          'Ekranlardaki gibi: akış adımların sırasını ve adımlar arasında taşınan değerleri tanımlar, senaryo ise verileri tutar.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Akış', alt: 'operasyon sırası', ikon: 'katman' }, { baslik: 'Senaryo', alt: 'her adımın verisi', ikon: 'liste' }, { baslik: 'Koşu', alt: 'adım adım', ikon: 'oynat' }] }
+      },
+      {
+        baslik: 'Tek istek senaryosu',
+        sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, hesaplama kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'],
         cizim: { tur: 'form', alanlar: ['Metot', 'Alanlar', 'Kontroller'], dugme: 'Dene' }
+      },
+      {
+        baslik: 'Akış senaryosu',
+        sira: ['Türü "Akış" seçin ve akışı seçin (bu servisten geçen akışlar listelenir).', 'Her adım ayrı bölümde sorulur ("1. Servis · Operasyon"): o metodun zorunlu ve seçili alanlarını doldurun. Aynı adlı alan her adımda ayrı sorulur.',
+          'Önceki adımdan gelen alanlar kilitlidir ("1. adımdan gelir") ve sorulmaz.', 'Her adımın beklenen sonucunu kontrol edin (ör. bu adım bir hata vermeli).', 'Dene ile TEST’te deneyin, sonra kaydedin. Akış senaryosu, akışın geçtiği her serviste "akış: <ad>" rozetiyle listelenir.'],
+        cizim: { tur: 'form', alanlar: ['Akış', '1. adımın alanları', '2. adımın alanları (kilitliler hariç)', 'Beklenen sonuçlar'], dugme: 'Dene' }
       },
       { baslik: 'Gizli bilgiler', metin: 'Yanıtlarda ve raporlarda gizli adlı alanlar maskelenir. Maskelenecek ek adları Ayarlar > Güvenlik > Maskeleme\'den ekleyebilirsiniz.' }
     ]
@@ -177,11 +189,17 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Akış nedir?',
-        metin: ['Akış, birden çok servis isteğini sırayla çalıştırır. Bir isteğin yanıtından okunan değer (ör. oluşan kayıt numarası) sonraki isteklerde ${akis:Ad} yazılarak kullanılır.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: '1. istek', alt: 'kayıt oluştur', ikon: 'ag' }, { baslik: 'Değer oku', alt: '${akis:No}', ikon: 'hedef' }, { baslik: '2. istek', alt: 'No ile sorgula', ikon: 'ag' }, { baslik: 'Kontrol', ikon: 'onay' }] }
+        metin: ['Akış, hangi servise hangi sırayla istek atılacağını tanımlar: adımlar servislerin operasyonlarıdır (başka servisler de olabilir). Bir adımın yanıtından okunan değer (ör. oluşan kayıt numarası) sonraki adımın bir alanına bağlanır.',
+          'Alan DEĞERLERİ akışta değil, akışı kullanan senaryodadır (ekranlardaki akış ↔ senaryo ayrımıyla aynı).'],
+        cizim: { tur: 'akis', kutular: [{ baslik: '1. operasyon', alt: 'kayıt oluştur', ikon: 'ag' }, { baslik: 'Değer oku', alt: '${akis:No}', ikon: 'hedef' }, { baslik: '2. operasyon', alt: 'No alanı ← akış', ikon: 'ag' }, { baslik: 'Senaryo', alt: 'verileri doldurur', ikon: 'liste' }] }
       },
       { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın. Token\'ın süresi dolana kadar mı kullanılacağını, yoksa her istekte yeniden mi alınacağını akışta siz seçersiniz.', cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Giriş servisi', gidis: 'giriş', donus: 'token', kontroller: ['Token alındı', 'Sonraki isteklere eklendi'] } },
-      { baslik: 'Akış kurma sırası', sira: ['"Yeni akış" ile adımları ekleyin (her adım kayıtlı bir servis senaryosu).', 'Okunacak değerleri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).', 'Sonraki adımın alanında akış değerini seçin.', 'Test ortamında deneyin, sonra kaydedin.'] }
+      {
+        baslik: 'Akış kurma sırası',
+        sira: ['"Yeni akış"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" ile değeri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).',
+          'Sonraki adımda "Alan bağla" ile o değeri operasyonun alanına bağlayın; diyagramdaki oklar taşınan değerleri gösterir.', 'Kaydedin; sayfanın altındaki "Bu akışın senaryoları"ndan "Senaryo ekle" ile verileri girin.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: '+ Operasyon', ikon: 'artiYalin' }, { baslik: 'Yanıttan oku', ikon: 'hedef' }, { baslik: 'Alan bağla', ikon: 'ok' }, { baslik: 'Senaryo ekle', ikon: 'liste' }] }
+      }
     ]
   },
 

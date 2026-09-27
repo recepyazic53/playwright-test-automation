@@ -15,6 +15,7 @@ import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu } from './servis-isle
 import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
+import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
@@ -82,7 +83,8 @@ export const SERVIS_GET_UCLARI = [
     for (const k of servisKosulariniListele(db, { servisId: s.id, sinir: 1000 })) {
       if (k.senaryoId && !sonSonuclar[k.senaryoId]) sonSonuclar[k.senaryoId] = { durum: k.durum, baslangic: k.baslangic, kosuId: k.id };
     }
-    return { servis: servisOzeti(db, s), senaryolar: servisSenaryolariniListele(db, s.id), sonSonuclar };
+    // Akış senaryoları: akış adı, akışı bu servisten geçen başka servislerin akış senaryoları ve son sonuçları (akis-senaryosu.mjs).
+    return { servis: servisOzeti(db, s), ...servisSenaryoGorunumu(db, projeId, s.id, servisSenaryolariniListele(db, s.id), sonSonuclar) };
   }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -291,6 +293,7 @@ export const SERVIS_POST_UCLARI = [
       ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
       ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
+      ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
       senaryolar: Array.isArray(g.senaryolar) ? g.senaryolar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
       ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {})
     });

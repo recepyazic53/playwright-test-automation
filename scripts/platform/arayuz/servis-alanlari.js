@@ -4,9 +4,11 @@
 // (WSDL'de yok)" — elle eklenen alanlar ek listesinde tutulur (servis ayarı ekAlanlar), şemaya semaBirlestir ile katılır ve kaldırılabilir.
 // Yazma kutusu yoktur (seçim kutuları); alan ekleme formu "+ Alan ekle" ile açılır, tablo yalnız ekleme / kaldırma olunca yeniden çizilir.
 // metotKutulari: her metot bir kutucuk; tıklanan metodun tablosu altta çerçeve içinde açılır (iç içe açılır bölümler yok).
-import { h, ikon, rozet, yeniKimlik } from './ortak.js';
+import { h, ikon, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { alanSatirlari, semaBirlestir } from './servis-govdesi.mjs';
 import { degerCipleri } from './parametre-tanimi-formu.js';
+import { kuralOzeti } from './hesap-kurallari.mjs';
+import { kuralFormu } from './hesap-kurali-formu.js';
 
 const TIP = { metin: 'metin', tamsayi: 'sayı', ondalik: 'ondalık', mantiksal: 'evet/hayır', tarih: 'tarih', tarihSaat: 'tarih-saat' };
 const YOL = /^[\p{L}_][\p{L}\p{N}_.-]*(\/[\p{L}_][\p{L}\p{N}_.-]*)*$/u;
@@ -23,7 +25,10 @@ export function kaynakSecimi(s, yol) {
  *   zorunlu: Set<string>;                         // zorunlu yollar; DEĞİŞTİRİLİR
  *   ekler?: Array<{ yol: string; tip?: string }>; // elle eklenen alanlar; verilirse "Alan ekle" gösterilir; DEĞİŞTİRİLİR
  *   degisti?: () => void;
- *   baglar: Record<string, { tablo: string; sutun: string; etiket?: string }>;   // yol → tablo sütunu; DEĞİŞTİRİLİR
+ *   baglar: Record<string, { tablo?: string; sutun?: string; etiket?: string; kural?: string }>;   // yol → tablo sütunu ya da hesaplama kuralı; DEĞİŞTİRİLİR
+ *   kurallar?: Record<string, string>;            // servisin hesaplama kuralları (tarih kuralları dahil); verilirse "Hesaplama kuralları" grubu
+ *   kuralEkle?: (ad: string, kural: string) => Promise<void> | void;   // "+ Yeni kural…" kaydı (kurallar'a da eklemeli)
+ *   etki?: (yol: string, kural: string) => string | null;   // kurala bağlanınca etki notu (hangi senaryolar zaten kuraldan alıyor)
  *   tablolar?: Array<{ id: string; ad: string; sutunlar: Array<{ ad: string; gizli: boolean }>; satirlar: Array<{ degerler: Record<string, string | null> }> }>;
  * }} s
  */
@@ -40,19 +45,47 @@ export function metotAlanTablosu(s) {
   const ust = h('div', { class: 'alan-formu-ust' }, ara,
     h('label', { class: 'secenek', for: yalnizZorunlu.id }, yalnizZorunlu, 'Yalnız zorunlular'),
     h('label', { class: 'secenek', for: yalnizBos.id }, yalnizBos, bosEtiket));
-  /** Alanın tablo sütunu seçimi + etiket + sütunun ilk değerleri. */
+  /** Alanın tablo sütunu ya da hesaplama kuralı seçimi + etiket / biçim + sütunun ilk değerleri. */
   const bagHucresi = (st) => {
     const b = s.baglar[st.yol];
-    const tablo = b ? (s.tablolar || []).find((t) => t.id === b.tablo) : null;
+    const tablo = b && b.tablo ? (s.tablolar || []).find((t) => t.id === b.tablo) : null;
     const sutun = tablo ? tablo.sutunlar.find((c) => c.ad === b.sutun) : null;
-    const sec = h('select', { 'aria-label': `${s.ad} ${st.yol} tablo sütunu` }, h('option', { value: '' }, '— bağlı değil (senaryoda yazılır) —'),
-      (s.tablolar || []).map((t) => h('optgroup', { label: t.ad }, t.sutunlar.map((c) => h('option', {
-        value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
-      }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))),
-      b && !sutun ? h('option', { value: '__yok', selected: true }, 'Bulunamadı (tablo ya da sütun silinmiş)') : null);
+    const kurallar = s.kurallar || {};
+    const kuralVar = Boolean(b && b.kural && Object.hasOwn(kurallar, b.kural));
+    const tarihMi = st.alan && (st.alan.tip === 'tarih' || st.alan.tip === 'tarihSaat');
+    const tabloGruplari = (s.tablolar || []).map((t) => h('optgroup', { label: t.ad }, t.sutunlar.map((c) => h('option', {
+      value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
+    }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`))));
+    // Hesaplama kuralları (tarih kuralları dahil): tarih / tarih-saat alanlarında üstte.
+    const kuralGrubu = s.kurallar ? h('optgroup', { label: 'Hesaplama kuralları' },
+      Object.entries(kurallar).map(([ad, k]) => h('option', { value: `\u0002${ad}`, selected: Boolean(b && b.kural === ad) }, `Kural → ${ad} (${kuralOzeti(k)})`)),
+      s.kuralEkle ? h('option', { value: '\u0003yeni' }, '+ Yeni kural…') : null) : null;
+    const sec = h('select', { 'aria-label': `${s.ad} ${st.yol} tablo sütunu ya da kural` }, h('option', { value: '' }, '— bağlı değil (senaryoda yazılır) —'),
+      tarihMi ? [kuralGrubu, tabloGruplari] : [tabloGruplari, kuralGrubu],
+      b && b.kural && !kuralVar ? h('option', { value: '__yok', selected: true }, `Kural bulunamadı: ${b.kural}`) : null,
+      b && b.tablo && !sutun ? h('option', { value: '__yok', selected: true }, 'Bulunamadı (tablo ya da sütun silinmiş)') : null);
+    const formKap = h('div', { class: 'kural-formu-kap' });
+    const onceki = sec.value;
     sec.addEventListener('change', () => {
       if (sec.value === '__yok') return;
+      if (sec.value === '\u0003yeni') {
+        sec.value = onceki;
+        const oneri = st.alan.ad.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+        yerlestir(formKap, kuralFormu({
+          kurallar, varsayilanAd: Object.hasOwn(kurallar, oneri) ? '' : oneri, vazgec: () => { yerlestir(formKap); sec.focus(); },
+          kaydet: async (ad, kural) => {
+            await s.kuralEkle(ad, kural);
+            kurallar[ad] ??= kural;
+            s.baglar[st.yol] = { kural: ad };
+            ciz();
+            s.degisti?.();
+          }
+        }));
+        formKap.querySelector('input')?.focus();
+        return;
+      }
       if (!sec.value) delete s.baglar[st.yol];
+      else if (sec.value.startsWith('\u0002')) s.baglar[st.yol] = { kural: sec.value.slice(1) };
       else {
         const [tabloId, sutunAdi] = sec.value.split('\u0001');
         s.baglar[st.yol] = { tablo: tabloId, sutun: sutunAdi, ...(b && b.etiket ? { etiket: b.etiket } : {}), ...(b && b.bicim ? { bicim: b.bicim } : {}) };
@@ -60,7 +93,7 @@ export function metotAlanTablosu(s) {
       ciz();
       s.degisti?.();
     });
-    const etiket = b ? h('input', {
+    const etiket = b && b.tablo ? h('input', {
       type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${s.ad} ${st.yol} etiketi`,
       title: 'Aynı tablo bu istekte iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.'
     }) : null;
@@ -70,8 +103,7 @@ export function metotAlanTablosu(s) {
       s.degisti?.();
     });
     // Tarih alanı: tablodaki değer (1983-05-10 / 10.05.1983) servise bu biçimde gider; boşsa olduğu gibi.
-    const tarihMi = st.alan && (st.alan.tip === 'tarih' || st.alan.tip === 'tarihSaat');
-    const bicim = b && (tarihMi || b.bicim) ? h('input', {
+    const bicim = b && b.tablo && (tarihMi || b.bicim) ? h('input', {
       type: 'text', value: b.bicim || '', maxlength: '60', class: 'bag-bicimi', spellcheck: 'false',
       placeholder: st.alan.tip === 'tarih' ? "biçim (ör. yyyy-MM-dd)" : "biçim (ör. yyyy-MM-dd'T'HH:mm:ss)", 'aria-label': `${s.ad} ${st.yol} tarih biçimi`,
       title: "Tablodaki tarih bu biçimde gönderilir: yyyy yıl, MM ay, dd gün, HH saat, mm dakika, ss saniye; 'T' gibi sabitler tek tırnakta. Boş: değer olduğu gibi."
@@ -82,12 +114,15 @@ export function metotAlanTablosu(s) {
       s.degisti?.();
     });
     let alt = null;
-    if (sutun && sutun.gizli) alt = h('span', { class: 'soluk kucuk' }, 'gizli sütun — değer koşuda satırdan gelir');
+    if (kuralVar) {
+      const etki = s.etki ? s.etki(st.yol, b.kural) : null;
+      alt = h('span', { class: 'soluk kucuk kural-bagi-notu' }, `Koşu anında hesaplanır: ${b.kural} = ${kurallar[b.kural]}`, etki ? h('br', {}) : null, etki);
+    } else if (sutun && sutun.gizli) alt = h('span', { class: 'soluk kucuk' }, 'gizli sütun — değer koşuda satırdan gelir');
     else if (sutun) {
       const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
       alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
     }
-    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), alt);
+    return h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket, bicim), alt, formKap);
   };
   const ciz = () => {
     const birlesik = semaBirlestir(s.sema, s.ekler || []);
@@ -118,7 +153,7 @@ export function metotAlanTablosu(s) {
       }
     }).filter(Boolean);
     tablo.replaceChildren(h('div', { class: 'alan-satiri baslik' }, h('span', {}, 'Alan'),
-      h('span', { title: 'Test verisi tablosunun sütunu: senaryoda değer bu sütundan seçilir (aynı tablodaki diğer alanlara göre süzülür). Bağlı olmayan alan senaryoda elle yazılır ya da gönderilmez.' }, 'Tablo sütunu'),
+      h('span', { title: 'Test verisi tablosunun sütunu (senaryoda değer bu sütundan seçilir; aynı tablodaki diğer alanlara göre süzülür) ya da hesaplama kuralı (değer koşu anında hesaplanır). Bağlı olmayan alan senaryoda elle yazılır ya da gönderilmez.' }, s.kurallar ? 'Tablo sütunu / kural' : 'Tablo sütunu'),
       h('span', { class: 'zorunlu-hucre' }, 'Zorunlu')),
     ...(satirlar.length ? satirlar : [h('p', { class: 'soluk kucuk' }, 'Süzgeçle eşleşen alan yok.')]));
     sayacGuncelle();

@@ -52,7 +52,9 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     yol: '', kontrolOrtami: (testOrtamlari.find((o) => o.varsayilan) || testOrtamlari[0])?.id ?? '',
     erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, baglar: {}, zorunlu: {}, ekAlanlar: {},
     // REST: tür, uçlar, uç kimliğine göre alan bağları / zorunluluklar, başlangıç senaryosu istenen uçlar (kimlik).
-    tur: 'soap', uclar: [yeniUc()], restBaglar: {}, restZorunlu: {}, senaryoIstenen: null, kapsam: 'test'
+    tur: 'soap', uclar: [yeniUc()], restBaglar: {}, restZorunlu: {}, senaryoIstenen: null, kapsam: 'test',
+    // Hesaplama kuralları (alan bağlamada "+ Yeni kural…" ile eklenenler; tarih önerileri kayıtta birleşir).
+    kurallar: {}
   };
   const rest = () => d.tur === 'rest';
   const adimAdlari = () => (rest() ? REST_ADIMLARI : ADIMLAR);
@@ -243,7 +245,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       // Zorunluluk: WSDL'e göre işaretli gelir (şemada zorunlu), kullanıcı iş kuralına göre düzeltir.
       const z = (d.zorunlu[ad] ??= new Set(alanlar.filter((x) => x.alan.zorunlu).map((x) => x.yol)));
       const ekler = (d.ekAlanlar[ad] ??= []);
-      metotTanimlari.push({ ad, sema, zorunlu: z, ekler, baglar, tablolar });
+      metotTanimlari.push({ ad, sema, zorunlu: z, ekler, baglar, tablolar, kurallar: Object.assign(d.kurallar, { ...tarihKuraliOnerileri(), ...d.kurallar }), kuralEkle: (a, k) => { d.kurallar[a] = k; } });
     }
     if (metotTanimlari.length) bolumler.unshift(metotKutulari(metotTanimlari, { anahtar: 'sihirbaz' }));
     return [
@@ -274,7 +276,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   const restAdim3 = () => [
     h('p', { class: 'soluk' }, 'İsteklerin alanları: yol yer tutucuları ({id}), sorgu parametreleri ve gövde örneğindeki alanlar. Her alanı bir test verisi tablosunun sütununa bağlayın; senaryoda değer o sütundan gelir. Öneriler hazır geldi (başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun).'),
     tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok; alanları sonra Parametreler sekmesinden bağlayabilirsiniz.'),
-    ...restAlanlari(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu, tablolar, bagOnerisi })
+    ...restAlanlari(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu, tablolar, bagOnerisi, kurallar: d.kurallar, kuralEkle: (a, k) => { d.kurallar[a] = k; } })
   ];
   const restAdim4 = () => {
     d.senaryoIstenen ??= new Set(d.uclar.map((u) => u.kimlik));
@@ -343,7 +345,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
         await mesgulIken(ileri, 'Kaydediliyor…', async () => {
           const r = await api('/platform/servis/rest/kaydet', { govde: {
             projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), tabanlar: d.tabanlar, tlsDogrulama: d.tls, uclar: d.uclar.map(ucGovdesi),
-            ...adaGore(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu }),
+            ...adaGore(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu }), ...(Object.keys(d.kurallar).length ? { tarihKurallari: d.kurallar } : {}),
             senaryolar: d.uclar.filter((u) => (d.senaryoIstenen ?? new Set(d.uclar.map((x) => x.kimlik))).has(u.kimlik)).map((u) => u.ad.trim()), kapsam: d.kapsam
           } });
           bildir(`REST servisi eklendi${r.eklenenSenaryolar.length ? `; ${r.eklenenSenaryolar.length} başlangıç senaryosu oluşturuldu` : ''}.`);
@@ -363,7 +365,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
           tabanlar: d.tabanlar, secilenOperasyonlar: [...d.secilen], yalnizTestOperasyonlari: [...d.yalnizTest].filter((x) => d.secilen.has(x)),
           alanVarsayilanlari, alanBaglari: secilenler(d.baglar), ekAlanlar: Object.fromEntries([...d.secilen].filter((m) => d.ekAlanlar[m]?.length).map((m) => [m, d.ekAlanlar[m]])),
           alanZorunluluklari: Object.fromEntries([...d.secilen].filter((m) => d.zorunlu[m]).map((m) => [m, [...d.zorunlu[m]]])),
-          tarihKurallari: tarihKuraliOnerileri(), erisimKimligi: d.erisim.erisimKimligi
+          tarihKurallari: { ...tarihKuraliOnerileri(), ...d.kurallar }, erisimKimligi: d.erisim.erisimKimligi
         } });
         bildir('Servis eklendi.');
         location.hash = `#/servisler/s/${encodeURIComponent(r.id)}`;

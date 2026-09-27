@@ -174,7 +174,8 @@ export function restUclariFormu(uclar, s) {
 /**
  * Alanlar adımı: her ucun alanları (yol / sorgu / gövde) tablo sütunlarına bağlanır; zorunlu ve gizli işaretleri.
  * @param {ReturnType<typeof yeniUc>[]} uclar @param {{ baglar: Record<string, any>; zorunlu: Record<string, Set<string>>; tablolar: any[];
- *   bagOnerisi: (alan: { ad: string }) => any }} d baglar / zorunlu uç kimliğine göre; DEĞİŞTİRİLİR
+ *   bagOnerisi: (alan: { ad: string }) => any; kurallar?: Record<string, string>; kuralEkle?: (ad: string, kural: string) => void }} d
+ *   baglar / zorunlu uç kimliğine göre; DEĞİŞTİRİLİR. kurallar: alanlar hesaplama kuralına da bağlanabilir.
  */
 export function restAlanlari(uclar, d) {
   const tanimlar = [];
@@ -191,7 +192,7 @@ export function restAlanlari(uclar, d) {
     for (const y of [...z]) if (!gecerli.has(y)) z.delete(y);
     if (!u.gizliAlanlar) u.gizliAlanlar = yapraklar.filter((x) => gizliAdMi(x.alan.ad)).map((x) => x.yol);
     u.gizliAlanlar = u.gizliAlanlar.filter((y) => gecerli.has(y));
-    tanimlar.push({ ad: u.ad, sema, zorunlu: z, baglar, tablolar: d.tablolar });
+    tanimlar.push({ ad: u.ad, sema, zorunlu: z, baglar, tablolar: d.tablolar, ...(d.kurallar ? { kurallar: d.kurallar, kuralEkle: d.kuralEkle } : {}) });
     bolumler.push(h('fieldset', { class: 'gizli-alanlar' }, h('legend', {}, `${u.ad}: gizli alanlar`),
       h('p', { class: 'soluk kucuk' }, 'İşaretli alanların örnek değeri senaryoya yazılmaz (değer tablonun gizli sütunundan gelmeli).'),
       h('div', { class: 'secenek-izgarasi' }, yapraklar.map((x) => {

@@ -99,6 +99,16 @@ Ayarlar > Proje ve ortamlar > Servis taban adresleri: satır = servis, sütun = 
 - **Etki önizlemesi:** Hangi servisler, kaç senaryo ve akış etkilenir, eski → yeni adresler. Yalnız "Onayla ve kaydet" ile yazılır (`POST /platform/servis-tabanlari/uygula`, `onay: true`).
 - **Denetim:** Adres http(s) olmalı ve yasak adres kalıplarına (Ayarlar > Güvenlik) uymamalı. Erişim kontrolü yapılmaz (dış istek yok). Adresi değişen ortamın eski erişim kaydı silinir; düzenlenen hücrede eski tam adres ayarı kalkar.
 
+## Hesaplama kuralları (tarih kuralları dahil)
+
+Servis > Parametreler > Hesaplama kuralları. Kural: `AD = ifade | biçim` (ayar adı geriye uyum için `tarihKurallari`; eski `bugun+1y|yyyy-MM-dd` kuralları aynen çalışır). Ayrıştırıcı `scripts/platform/servisler/hesap-kurallari.mjs` (eval yok).
+
+- **İfade:** `${Parametre}` / `${Tablo.Sütun}`, `${akis:Ad}`, başka kural adı; `+ - * / %`, parantez, `= != < > <= >=`; süre `1y 3a 10g 2s`; `bugun`, `simdi`; fonksiyonlar `yuvarla, asagiYuvarla, yukariYuvarla, mutlak, min, max, uzunluk, birlestir, buyukHarf, kucukHarf, parca, eger, bosIse, tarih, gunFarki, sayi`.
+- **Örnekler:** `${Tutar} / 100` · `yuvarla(${Prim} * 1.18, 2) | #,##0.00` · `BEGIN_DATE+1y | yyyy-MM-dd` · `eger(${Tip} = 'T', ${VergiNo}, ${TcNo})` · `birlestir(${Ad}, ' ', ${Soyad})`.
+- **Zincir:** `END_DATE = BEGIN_DATE+1y` bitişi başlangıca bağlar; aynı koşuda her kural bir kez hesaplanır (aynı an). Döngü, tanımsız ad, bilinmeyen fonksiyon kayıtta reddedilir; koşuda sayı olmayan değer / sıfıra bölme açık hatayla (gizli değerler maskeli).
+- **Bağlama:** Metot alanları tablosunda alan bir kurala bağlanır (`alanBaglari[op][yol] = { kural }`; tarih alanlarında kurallar üstte, "+ Yeni kural…" canlı önizlemeli). Yeni senaryolarda alan kaynağı "Hesaplama kuralı" olur; mevcut senaryolardaki seçim değişmez.
+- **Satır içi:** `${hesap: ifade | biçim}` (senaryo formunda "Satır içi hesap"); JSON gövdede tırnaksız yazılan sonuç sayı olarak gider.
+
 ## Postman aktarımı (REST)
 
 Servis ekle > Postman koleksiyonu. Postman Collection v2.1 (v2.0 da olur) JSON; isteğe bağlı ortam dosyası (environment JSON). Dosyalar yalnız okunur, istek atılmaz; önizlemeden sonra kullanıcının seçimiyle kaydedilir.

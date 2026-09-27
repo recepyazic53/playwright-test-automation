@@ -66,12 +66,15 @@ test.describe('servis akışları arayüzü', () => {
     await expect(page.getByText('Henüz akış yok.')).toBeVisible();
     await page.getByRole('link', { name: 'Yeni akış' }).click();
     await page.getByLabel('Başlık').fill('Giriş → Teklif');
+    // Yeni adımın varsayılan türü "Operasyon"; bu test kayıtlı senaryo adımlarını (eski tür) kullanır.
+    await page.getByLabel('1. adım türü').selectOption('senaryo');
     await page.getByLabel('1. adım senaryosu').selectOption({ label: 'Giriş' });
     await page.getByRole('button', { name: 'Değer oku' }).click();
     await page.getByLabel('1. adım 1. okuma adı').fill('Token');
     await expect(page.getByLabel('1. adım 1. okuma gizli')).toBeChecked();   // adı "token" içeriyor
     await page.getByLabel('1. adım 1. okuma yolu').fill('//Sonuc/Token');
     await page.getByRole('button', { name: 'Adım ekle' }).click();
+    await page.getByLabel('2. adım türü').selectOption('senaryo');
     await page.getByLabel('2. adım servisi').selectOption({ label: 'Ornek' });
     await page.getByLabel('2. adım senaryosu').selectOption({ label: 'Teklif' });
     await expect(page.getByRole('region', { name: '2. adım' })).toContainText('${akis:Token}');

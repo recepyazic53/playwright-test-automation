@@ -18,7 +18,7 @@ import { gizlileriMaskele, ServisHatasi } from './soap-istemcisi.mjs';
 import { adresBirlestirRest, restIstegi } from './rest-istemcisi.mjs';
 import { baslangicSablonu, govdeOrnegiCoz, GOVDELI_METOTLAR, REST_METOTLARI, restSemasi } from './rest-semasi.mjs';
 import { servisGetir, servisKaydet, servisSenaryolariniListele, servisSenaryosuKaydet } from './servis-deposu.mjs';
-import { alanBaglariniDogrula, alanZorunluluklariniDogrula, tabanlariDogrula, tabanlariOrtamlaraKaydet } from './servis-islemleri.mjs';
+import { alanBaglariniDogrula, alanZorunluluklariniDogrula, kuralBaglariniDenetle, tabanlariDogrula, tabanlariOrtamlaraKaydet, tarihKurallariniDogrula } from './servis-islemleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -75,7 +75,8 @@ export function restUcuDogrula(x, i) {
  * oluşturur. Ağ isteği atılmaz.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ id?: string; anahtar: string; ad: string; tabanlar?: Record<string, string>; tlsDogrulama?: boolean; uclar: unknown[];
- *   alanBaglari?: unknown; alanZorunluluklari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string }} girdi
+ *   alanBaglari?: unknown; alanZorunluluklari?: unknown; tarihKurallari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string }} girdi
+ *   tarihKurallari: hesaplama kuralları (verilirse mevcutların yerine; tarih kuralları dahil).
  */
 export function restServisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -128,6 +129,8 @@ export function restServisiKaydet(vt, projeId, girdi) {
     const operasyonlar = uclar.map((u) => ({
       ad: u.ad, metot: u.metot, yol: u.yol, sorgu: u.sorgu, icerikTuru: u.icerikTuru, basliklar: u.basliklar, govdeOrnegi: u.govdeOrnegi, gizliAlanlar: u.gizliAlanlar
     }));
+    const kurallar = girdi.tarihKurallari !== undefined ? tarihKurallariniDogrula(girdi.tarihKurallari) : (mevcut?.ayarlar.tarihKurallari ?? {});
+    kuralBaglariniDenetle({ tarihKurallari: kurallar, alanBaglari: sadece(baglar) });
     const servisId = servisKaydet(vt, {
       id: mevcut?.id, projeId, anahtar: girdi.anahtar, ad, tur: 'rest', yapan: girdi.yapan,
       ayarlar: {
@@ -135,7 +138,7 @@ export function restServisiKaydet(vt, projeId, girdi) {
         ...(typeof girdi.tlsDogrulama === 'boolean' ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
         operasyonlar, operasyonSemalari: Object.fromEntries(uclar.map((u) => [u.ad, restSemasi(u)])),
         yalnizTestOperasyonlari: uclar.filter((u) => u.yalnizTest).map((u) => u.ad),
-        alanBaglari: sadece(baglar), alanZorunluluklari: sadece(zorunlu)
+        alanBaglari: sadece(baglar), alanZorunluluklari: sadece(zorunlu), tarihKurallari: kurallar
       }
     });
     // Adı değişen uçların senaryoları yeni ada geçer.
@@ -155,6 +158,7 @@ export function restServisiKaydet(vt, projeId, girdi) {
       const opBaglari = baglar[u.ad] ?? {};
       const ref = (/** @type {string} */ yol) => {
         const b = opBaglari[yol];
+        if (b?.kural) return b.kural;
         const t = b ? tablolar.find((x) => x.id === b.tablo) : undefined;
         return b && t ? basvuru(t.ad, b.sutun, b.etiket || '', b.bicim || '') : undefined;
       };
