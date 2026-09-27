@@ -24,7 +24,7 @@ export const SQL_BEKLENEN_ETIKETLERI = Object.freeze({
 });
 /** Raporda gösterilen en çok satır. */
 export const SQL_RAPOR_SATIR_SINIRI = 20;
-/** Sorguda okunan en çok satır (tablo eşitliği / satır sayısı için). */
+/** Sorguda okunan en çok satırın varsayılanı (tablo eşitliği / satır sayısı için; Ayarlar > Koşu > Gelişmiş > SQL sorgusunda okunan en çok satır). */
 export const SQL_SORGU_SATIR_SINIRI = 1000;
 export const SQL_EN_UZUN = 20_000;
 export const SQL_MASKE = '••••••';
@@ -274,14 +274,16 @@ export function beklenenGorulenMetni(/** @type {string} */ adim, /** @type {stri
 
 /**
  * @typedef {{ sutunlar: string[]; satirlar: unknown[][]; kesildi?: boolean }} SqlSonucu
- * @typedef {(sql: string, parametreler: Record<string, string>, s: { zamanAsimiMs: number; satirSiniri: number }) => Promise<SqlSonucu>} SqlYurutucu
+ * zamanAsimiMs: adımda süre verilmemişse undefined — sürücü bağlantının kendi zaman aşımını (yoksa 30 sn) kullanır.
+ * @typedef {(sql: string, parametreler: Record<string, string>, s: { zamanAsimiMs: number | undefined; satirSiniri: number }) => Promise<SqlSonucu>} SqlYurutucu
  */
 
 /**
  * SQL adımını koşar (yeniden deneme dahil). Sorgu hatası → durum 'hata'; beklenene uymazsa 'basarisiz'.
  * @param {any} tanim sqlTanimiDogrula'dan geçmiş tanım
  * @param {{ adimAdi: string; yurutucu: SqlYurutucu; coz: (ifade: string) => string | undefined; gizliSutunMu?: (ad: string) => boolean;
- *   gizliDegerler?: string[]; bekle?: (ms: number) => Promise<void>; simdi?: () => number; sinyal?: AbortSignal }} g
+ *   gizliDegerler?: string[]; bekle?: (ms: number) => Promise<void>; simdi?: () => number; sinyal?: AbortSignal; satirSiniri?: number }} g
+ *   satirSiniri: sorguda okunan en çok satır (Ayarlar > Koşu; verilmezse SQL_SORGU_SATIR_SINIRI)
  * @returns {Promise<{ durum: 'basarili' | 'basarisiz' | 'hata'; mesaj?: string; beklenen?: string; gorulen?: string; ozet?: ReturnType<typeof sonucOzeti>;
  *   okunanlar: Record<string, string>; gizliOkunanlar: string[]; deneme: number; sureMs: number }>}
  */
@@ -297,7 +299,10 @@ export async function sqlAdiminiKos(tanim, g) {
   if (bag.eksikler.length) {
     return { durum: 'hata', mesaj: `${g.adimAdi}: yer tutucunun değeri yok: ${bag.eksikler.map((x) => `\${${x}}`).join(', ')}.`, ...bos, deneme: 0, sureMs: simdi() - bas };
   }
-  const zamanAsimiMs = (tanim.zamanAsimiSn ?? 30) * 1000;
+  // Adımda süre verilmemişse sürücü bağlantının zaman aşımını kullanır (Ayarlar > Entegrasyonlar; o da yoksa 30 sn —
+  // veritabani-suruculeri.mjs > veritabaniSorgusu). Önceden adım boşken 30 sn sabitti ve bağlantının ayarı hiç kullanılmıyordu.
+  const zamanAsimiMs = Number(tanim.zamanAsimiSn) > 0 ? Number(tanim.zamanAsimiSn) * 1000 : undefined;
+  const satirSiniri = Number.isInteger(g.satirSiniri) && Number(g.satirSiniri) >= 1 ? Math.min(100_000, Number(g.satirSiniri)) : SQL_SORGU_SATIR_SINIRI;
   const bitis = bas + (tanim.yenidenDeneme ? tanim.yenidenDeneme.sureSn * 1000 : 0);
   let deneme = 0;
   for (;;) {
@@ -305,7 +310,7 @@ export async function sqlAdiminiKos(tanim, g) {
     /** @type {SqlSonucu} */
     let sonuc;
     try {
-      sonuc = await g.yurutucu(bag.sql, bag.parametreler, { zamanAsimiMs, satirSiniri: SQL_SORGU_SATIR_SINIRI });
+      sonuc = await g.yurutucu(bag.sql, bag.parametreler, { zamanAsimiMs, satirSiniri });
     } catch (e) {
       const m = String(/** @type {any} */ (e)?.message ?? e).replace(/\s+/g, ' ').slice(0, 500);
       const gizli = g.gizliDegerler ?? [];

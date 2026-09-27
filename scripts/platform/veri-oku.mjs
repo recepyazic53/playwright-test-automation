@@ -37,6 +37,8 @@ import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.m
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
+import { satirSecimiOlustur } from './tablolar/tablo-secimi.mjs';
+import { kayitliKosuOrtamDegiskenleri, kosuAyarlariniOku } from './ayarlar/kosu-ayarlari.mjs';
 import { YUKLEME_KLASORU_DEGISKENI, yuklemeDosyasiYolu } from './senaryolar/model-kosusu.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -135,6 +137,9 @@ async function genelKip() {
     const girisProfilleri = adliGirisProfilleri(vt, projeId, ortamId, kullanilanGirisProfilleri(model));
     return {
       durum: 'hazir', projeId, ortamId, yasakAdresler: ayarlardakiYasakAdresler(vt), model, izinler,
+      // Kullanıcının kaydettiği koşu ayarları (ortam değişkeni adıyla): Nöbetçi dışından (terminal / CI) başlatılan koşularda
+      // ortam değişkeni yoksa bunlar kullanılır (tests/support/kosu-ayarlari.ts).
+      kosuAyarlari: kayitliKosuOrtamDegiskenleri(vt),
       giris: giris && !girisIzni ? gizlisiz(giris) : giris,
       // Senaryoların ("Giriş" seçimi) ve akışların ("Yeniden giriş" adımı) ADIYLA seçtiği giriş profilleri — yalnızca
       // kullanılanlar (şifreler yalnızca bu sürecin çıktısında; giriş bilgisi izni kapalıysa hiç verilmez).
@@ -233,6 +238,8 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
   let tablolar = null;
   /** @type {Map<string, ReturnType<typeof ekranAlanBaglari>>} */
   const baglarOnbellegi = new Map();
+  // Birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi); senaryo başına ayrı seçim (grubun değerleri aynı satırdan).
+  const satirSecimKipi = (() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })();
   /**
    * @param {Record<string, unknown>} veri @param {string} ekranId @param {ReturnType<typeof modelBaglami>} mb @param {unknown} tabloSecimleri
    */
@@ -242,6 +249,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, ekranAlanBaglari(vt, ekranId));
     const r = ekranBasvurulariniCoz(veri, {
       tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId, dosyaDenetle: tablodanDosyaDenetle,
+      satirSecimi: satirSecimiOlustur(satirSecimKipi),
       ...(tabloSecimleri && typeof tabloSecimleri === 'object' ? { tabloSecimleri: /** @type {Record<string, Record<string, string>>} */ (tabloSecimleri) } : {})
     });
     return { veri: r.veri, tabloGizliDegerleri: r.gizliDegerler, veriHatalari: r.hatalar };

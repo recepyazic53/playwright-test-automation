@@ -2,12 +2,17 @@
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 
 export interface KosuAyarTanimi {
-  anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin'; varsayilan: string | number;
+  anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin'; varsayilan: string | number;
   secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
 }
 export interface KosuAyarlari {
   video: string; ekranGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number;
+  taramaSayfaAcilmaSn: number; kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string;
+  gorunmeyenAlanBeklemeSn: number; gorunmeyenAlan: 'atla' | 'kaldir'; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number;
+  onayPenceresi: 'iptal' | 'onayla'; oturumKontrolSn: number; girisAlanBeklemeSn: number; tabloSatirSecimi: 'ilk' | 'rastgele'; sqlSatirSiniri: number;
+  kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string; saatDilimi: string; eszamanliKosu: 'sirayla';
+  zamanliKacan: 'atla' | 'sonraKos'; zamanliCakisma: 'atla' | 'bitinceKos'; raporGoruntuSiniriMb: number;
 }
 export declare const KOSU_AYAR_ANAHTARI: string;
 export declare const KOSU_AYAR_TANIMLARI: ReadonlyArray<KosuAyarTanimi>;
@@ -15,3 +20,4 @@ export declare function varsayilanKosuAyarlari(): KosuAyarlari;
 export declare function kosuAyarlariniOku(vt: Veritabani): KosuAyarlari;
 export declare function kosuAyarlariniKaydet(vt: Veritabani, girdi: unknown): KosuAyarlari;
 export declare function kosuOrtamDegiskenleri(a: KosuAyarlari): Record<string, string>;
+export declare function kayitliKosuOrtamDegiskenleri(vt: Veritabani): Record<string, string>;

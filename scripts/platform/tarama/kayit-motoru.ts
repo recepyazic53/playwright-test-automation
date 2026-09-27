@@ -26,12 +26,11 @@ import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import type { EngellenenIstek, HamAlan, KayitOgesi, SecenekGozlemi } from './paket-olusturucu.mjs';
 import type { AkisEnvanteri, AkisOkumasi, AkisOlayi } from './akis-tasarimi.mjs';
-import { KAYIT_KOPRUSU, KAYIT_PANELI_KIMLIGI, type TaramaGirdisi, type TaramaOlayi } from './protokol.mjs';
+import { KAYIT_KOPRUSU, KAYIT_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaOlayi } from './protokol.mjs';
 import { acikListeSecenekleri, dokunulanlariBul, kayitPaneliniKur, secimDegerleri, type PanelDurumu } from './kayit-paneli';
 import { sayfadakiAlanlar } from './sayfa-envanteri';
 import { TaramaHatasi, hataBilgisi, type OlayGonderici } from './tarama-motoru';
 
-const SAYFA_ACILMA_MS = 30_000;
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g;
 const ilkSatir = (hata: unknown): string => String(hata instanceof Error ? hata.message : hata).replace(ANSI, '').split('\n')[0].slice(0, 300);
@@ -57,8 +56,9 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
   if (yasak) throw new TaramaHatasi('YASAKLI_ADRES', yasakliTaramaMesaji(yasak));
 
   const baglam = await browser.newContext({
-    // Sabit ekran boyutu (tarama ve koşularla aynı düzen; dar pencerede menüler daralıp giriş göstergesi gizlenmesin).
-    baseURL: g.tabanUrl, viewport: { width: 1366, height: 900 }, acceptDownloads: false, serviceWorkers: 'block', locale: 'tr-TR'
+    // Sabit ekran boyutu (taramayla aynı düzen; dar pencerede menüler daralıp giriş göstergesi gizlenmesin). Boyut, dil ve saat
+    // dilimi: Ayarlar > Koşu > Tarama ve akış kaydı (varsayılan 1366×900, tr-TR, bilgisayarın saat dilimi).
+    baseURL: g.tabanUrl, ...taramaTarayiciAyarlari(g).baglam, acceptDownloads: false, serviceWorkers: 'block'
   });
   const durum: { asama: TaramaAsamasi } = { asama: 'hazirlik' };
   const engellenenler: EngellenenIstek[] = [];
@@ -310,10 +310,10 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
     durum.asama = 'kayit';
     await paneliKur();
     try {
-      await islem.goto(g.hedefAdres, { waitUntil: 'domcontentloaded', timeout: SAYFA_ACILMA_MS });
+      await islem.goto(g.hedefAdres, { waitUntil: 'domcontentloaded', timeout: taramaTarayiciAyarlari(g).sayfaAcilmaMs });
     } catch (hata) {
       const m = ilkSatir(hata);
-      if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${g.hedefYol}) ${SAYFA_ACILMA_MS / 1000} sn içinde açılmadı.`);
+      if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${g.hedefYol}) ${taramaTarayiciAyarlari(g).sayfaAcilmaMs / 1000} sn içinde açılmadı.`);
       if (agHatasiMi(m)) throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılamadı (${adreslerGizli(m)}).`);
       throw hata;
     }

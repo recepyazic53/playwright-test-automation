@@ -35,6 +35,11 @@ export interface ZamanlayiciBagimliliklari {
    * yerleştirilir; dönen fonksiyon denetim ve başlatılan koşular bitince çağrılır. Anahtar yoksa null.
    */
   arkaPlanIsi?(): (() => void) | null;
+  /**
+   * Kullanıcının kararları (Ayarlar > Koşu > Zamanlanmış koşu davranışı): kaçan zaman ('atla' | 'sonraKos') ve koşu sürerken gelen
+   * zaman ('atla' | 'bitinceKos'). Verilmezse ikisi de 'atla' (önceki davranış).
+   */
+  davranis?(vt: Veritabani): { kacan: string; cakisma: string };
 }
 
 export declare const KONTROL_ARALIGI_MS: number;

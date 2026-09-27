@@ -52,3 +52,24 @@ export const KAYIT_PANELI_KIMLIGI = 'nobetci-kayit-paneli';
 export const SONUC_GOVDE_SINIRI = 72 * 1024 * 1024;
 /** Olay gövdesi sınırı. */
 export const OLAY_GOVDE_SINIRI = 64 * 1024;
+
+/**
+ * Tarama / akış kaydı tarayıcısının kullanıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
+ * Girdide yoksa (eski sunucu / testler) önceki sabitler: 1366×900, tr-TR, bilgisayarın saat dilimi, 30 sn sayfa açılma, 8 seçenek.
+ * @param {{ tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number } }} g
+ */
+export function taramaTarayiciAyarlari(g) {
+  const t = g.tarayici ?? {};
+  const tam = (/** @type {unknown} */ v, /** @type {number} */ vars, /** @type {number} */ enAz, /** @type {number} */ enCok) =>
+    (Number.isInteger(v) && Number(v) >= enAz && Number(v) <= enCok ? Number(v) : vars);
+  const dil = t.dil === undefined ? 'tr-TR' : t.dil;
+  return {
+    baglam: {
+      viewport: { width: tam(t.genislik, 1366, 320, 3840), height: tam(t.yukseklik, 900, 240, 2160) },
+      ...(dil ? { locale: dil } : {}),
+      ...(t.saatDilimi ? { timezoneId: t.saatDilimi } : {})
+    },
+    sayfaAcilmaMs: tam(t.sayfaAcilmaMs, 30_000, 5_000, 300_000),
+    kesifSecenekSiniri: tam(t.kesifSecenekSiniri, 8, 2, 50)
+  };
+}

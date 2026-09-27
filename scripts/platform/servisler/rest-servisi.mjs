@@ -12,6 +12,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
+import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { adresYasakliMi } from '../senaryolar/model-kosusu.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { basvuru } from '../tablolar/tablo-secimi.mjs';
@@ -206,7 +207,8 @@ export async function restUcuDene(vt, projeId, girdi) {
   try {
     const y = await restIstegi({
       adres, metot: u.metot, ...(u.govdeOrnegi ? { govde: u.govdeOrnegi, icerikTuru: u.icerikTuru } : {}), ekBasliklar: basliklar,
-      zamanAsimiMs: 30_000, ...(girdi.tlsDogrulama === false ? { tlsDogrulama: false } : {}), yasakDesenleri: etkinYasakDesenleri(vt)
+      // Zaman aşımı: Ayarlar > Koşu > Servis isteği zaman aşımı (servis koşularıyla aynı; önceden "Dene"de 30 sn sabitti).
+      zamanAsimiMs: kosuAyarlariniOku(vt).servisZamanAsimiSn * 1000, ...(girdi.tlsDogrulama === false ? { tlsDogrulama: false } : {}), yasakDesenleri: etkinYasakDesenleri(vt)
     });
     return { basarili: true, adres, metot: u.metot, durumKodu: y.durumKodu, sureMs: y.sureMs, atlananBasliklar: atlanan, yanit: gizlileriMaskele(y.govde.slice(0, 4000), gizliler) };
   } catch (e) {

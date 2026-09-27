@@ -8,6 +8,7 @@ import { OTURUM_UZANTISI, eskiOturumDosyalariniSil } from './oturum-kasasi';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { izinMesaji } from '../../scripts/platform/guvenlik/izin-tanimlari.mjs';
 import { tarifiHazirla, type GirisKimligi } from './giris-motoru';
+import { kasaKosuAyarlariniYukle } from './kosu-ayarlari';
 import {
   PlatformVeriHatasi, hataMi, platformOkuyucusunuCalistir, platformVeritabaniYolu, yasakAdresleriniBirlestir,
   type PlatformGirisBilgisi, type PlatformGirisTarifi, type PlatformModelVerisi, type PlatformYasakAdresleri
@@ -46,9 +47,11 @@ export function genelVeri(): GenelVeri {
     if (sonuc.kod === 'PAROLA_YANLIS') throw new Error(`Platform kasası açılamadı: ${sonuc.hata}`);
     throw new PlatformVeriHatasi(`platform veritabanı okunamadı: ${sonuc.hata}`);
   }
-  const cikti = sonuc as Partial<GenelVeri> & { durum?: string; yasakAdresler?: PlatformYasakAdresleri };
+  const cikti = sonuc as Partial<GenelVeri> & { durum?: string; yasakAdresler?: PlatformYasakAdresleri; kosuAyarlari?: Record<string, string> };
   if (cikti.durum !== 'hazir') throw new PlatformVeriHatasi('veritabanı bulunamadı');
   yasakAdresleriniBirlestir(cikti.yasakAdresler);
+  // Kasadaki kayıtlı koşu ayarları: ortam değişkeni verilmemiş koşularda (terminal / CI) Ayarlar > Koşu değerleri kullanılır.
+  kasaKosuAyarlariniYukle(cikti.kosuAyarlari);
   onbellek = { projeId, ortamId, model: cikti.model ?? null, giris: cikti.giris ?? null, girisProfilleri: cikti.girisProfilleri ?? {}, girisTarifi: cikti.girisTarifi ?? null, izinler: cikti.izinler ?? {} };
   return onbellek;
 }

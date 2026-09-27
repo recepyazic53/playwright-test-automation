@@ -84,11 +84,14 @@ export function sonuclarEkrani(main, parcalar, baglam) {
   const [tur, kimlik] = parcalar;
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('kartlar'), iskelet('sayfa'));
   const liste = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
+  // Sağlık noktası eşikleri proje başınadır (Ayarlar > Arayüz > Sağlık noktası); not eşikler gelince güncellenir.
+  const saglikMetni = h('span', {}, esikMetni(ESIKLER));
+  const saglikNotu = h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}), saglikMetni, ' ',
+    h('a', { href: '#/ayarlar/arayuz', class: 'kucuk' }, 'Eşikleri değiştir'));
   main.replaceChildren(h('h1', { class: 'gorunmez' }, 'Sonuçlar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, liste,
-        h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}),
-          'Son tam koşunun başarı oranı: yeşil ≥ %90, sarı ≥ %75, kırmızı altı.')),
+        saglikNotu),
       icerik));
   // "servisler": Genel'in Servisler sekmesi (Genel seçili kalır).
   const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && tur !== 'servisler' ? null : '';
@@ -98,9 +101,12 @@ export function sonuclarEkrani(main, parcalar, baglam) {
   if (secili) sorgu.set('urun', secili);
 
   // Sol liste her görünümde aynı özetten gelir (koşu/sonuç detayında seçili ürün yok).
-  Promise.all([api(`/platform/sonuclar/ozet?${sorgu}`), kullaniciAyarlari()])
-    .then(([ozet, ayar]) => {
+  Promise.all([api(`/platform/sonuclar/ozet?${sorgu}`), kullaniciAyarlari(),
+    api(`/platform/saglik-esikleri?projeId=${encodeURIComponent(proje.id)}`).then((y) => y.esikler).catch(() => null)])
+    .then(([ozet, ayar, esikler]) => {
       if (Number.isInteger(ayar.kosuGecmisiSayfaBoyu)) SAYFA_BOYU = ayar.kosuGecmisiSayfaBoyu;
+      ESIKLER = esikler && Number.isInteger(esikler.yesil) && Number.isInteger(esikler.sari) ? esikler : VARSAYILAN_ESIKLER;
+      saglikMetni.textContent = esikMetni(ESIKLER);
       urunListesi(liste, ozet.ekranlar, secili);
       servisleriAl(proje).then((servisler) => { if (servisler.length) urunListesi(liste, ozet.ekranlar, secili, servisler); });
       if (tur === 'kosu' && kimlik) return kosuDetayi(icerik, decodeURIComponent(kimlik), proje);
@@ -127,11 +133,16 @@ export function sonuclarEkrani(main, parcalar, baglam) {
     .catch(hata);
 }
 
+/** Sağlık noktası eşikleri (proje başına; Ayarlar > Arayüz; varsayılan yeşil ≥ 90, sarı ≥ 75 — ayarlar/saglik-esikleri.mjs ile aynı kural). */
+const VARSAYILAN_ESIKLER = { yesil: 90, sari: 75 };
+let ESIKLER = VARSAYILAN_ESIKLER;
+const esikMetni = (e) => `Son tam koşunun başarı oranı: yeşil ≥ %${e.yesil}, sarı ≥ %${e.sari}, kırmızı altı.`;
+
 function saglikSinifi(son) {
   if (!son) return '';
   const o = oran(son);
   if (o === null) return '';
-  return o >= 90 ? 'basari' : o >= 75 ? 'uyari' : 'hata';
+  return o >= ESIKLER.yesil ? 'basari' : o >= ESIKLER.sari ? 'uyari' : 'hata';
 }
 
 /** Ekranı devre dışı / silinmiş ürünün rozeti (sonuçlar görünür kalır). */

@@ -11,6 +11,6 @@ export declare function zamanDogrula(girdi: unknown): Zaman;
 export declare function gununZamanlari(z: Zaman, t: Date): Date[];
 export declare function sonrakiZaman(z: Zaman, simdi: Date): Date | null;
 export declare function oncekiZaman(z: Zaman, simdi: Date): Date | null;
-export declare function vadesiGelenZaman(z: Zaman, simdi: Date, tuketilen: string | null | undefined, toleransMs?: number): Date | null;
+export declare function vadesiGelenZaman(z: Zaman, simdi: Date, tuketilen: string | null | undefined, toleransMs?: number, s?: { kacanlariKos?: boolean }): Date | null;
 export declare function sonrakiZamanlar(z: Zaman, simdi: Date, adet: number): Date[];
 export declare function zamanMetni(z: Zaman): string;

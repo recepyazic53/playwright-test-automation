@@ -30,17 +30,22 @@ import { oturumuSifreliYaz } from './oturum-kasasi';
 import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
-import { sureAyari } from './kosu-ayarlari';
+import { sayiAyari, secimAyari, sureAyari } from './kosu-ayarlari';
 import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
-/** Alanın ekranda görünmesi için beklenen süre (koşullu alanlar önceki seçimden sonra çizilebilir). */
-const GORUNURLUK_BEKLEME_MS = 2_000;
-/** Adımın başarı/hata göstergesi için varsayılan bekleme (model: kosu.zamanAsimiSn). */
-const ADIM_SURESI_SN = 30;
+// Kullanıcı kararları (Ayarlar > Koşu > Gelişmiş koşu davranışı; kosu-ayarlari.ts): ÇAĞRI anında okunur. Varsayılanlar önceki sabitlerdir.
+/** Alanın ekranda görünmesi için beklenen süre (koşullu alanlar önceki seçimden sonra çizilebilir; varsayılan 2 sn). */
+const gorunurlukBeklemeMs = (): number => sureAyari('NOBETCI_GORUNURLUK_BEKLEME_MS', 2_000, 1_000, 60_000);
+/** Adımın başarı/hata göstergesi için varsayılan bekleme (sn; adımda kosu.zamanAsimiSn verilmişse o; varsayılan 30). */
+const adimSuresiSn = (): number => sureAyari('NOBETCI_ADIM_BEKLEME_MS', 30_000, 1_000, 600_000) / 1000;
+/** Alan görünmezse: 'atla' (atlanan alanlara yazılır; varsayılan) ya da 'kaldir' (test Beklenen / Görülen hatasıyla kalır). */
+export const gorunmeyenAlanDavranisi = (): 'atla' | 'kaldir' => secimAyari('NOBETCI_GORUNMEYEN_ALAN', ['atla', 'kaldir'] as const, 'atla');
+/** Tarayıcı onay (confirm) / soru (prompt) pencereleri: 'iptal' (varsayılan) ya da 'onayla'. Bilgi pencereleri (alert) her durumda kapatılır. */
+export const onayPenceresiDavranisi = (): 'iptal' | 'onayla' => secimAyari('NOBETCI_ONAY_PENCERESI', ['iptal', 'onayla'] as const, 'iptal');
 
 export type AtlananAlan = { alan: string; neden: string };
 
@@ -79,7 +84,7 @@ export async function yasakliAdresKorumasi(page: Page, adresler: string[], desen
 }
 
 /** Seçicinin ekranda GÖRÜNEN ilk öğesi (süre içinde görünmezse null). */
-async function gorunurOge(page: Page, secici: string, sureMs = GORUNURLUK_BEKLEME_MS): Promise<Locator | null> {
+async function gorunurOge(page: Page, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
   const l = page.locator(secici).filter({ visible: true }).first();
   try {
     await l.waitFor({ state: 'visible', timeout: sureMs });
@@ -171,7 +176,7 @@ function yuklenecekDosya(deger: unknown): string {
 
 /** Görünen alanı tipine/doldurucusuna göre doldurur. */
 /** Gizli olabilen (özel çizimli radyo / onay kutusu) öğe: sayfada varsa ilki. */
-async function sayfadakiOge(page: Page, secici: string, sureMs = GORUNURLUK_BEKLEME_MS): Promise<Locator | null> {
+async function sayfadakiOge(page: Page, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
   const l = page.locator(secici).first();
   try {
     await l.waitFor({ state: 'attached', timeout: sureMs });
@@ -217,15 +222,16 @@ async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
   if (typeof p.tikla === 'string' && p.tikla) {
     const dugme = page.locator(p.tikla).filter({ visible: true }).first();
     try {
-      await dugme.click({ timeout: ALAN_TIKLAMA_SURESI_MS });
+      await dugme.click({ timeout: alanTiklamaSuresiMs() });
     } catch {
-      throw new Error(beklenenGorulenMetni(adimBasligi, `"${p.tikla}" tıklanır`, `${ALAN_TIKLAMA_SURESI_MS / 1000} sn içinde tıklanamadı (görünmüyor ya da üstünü başka bir öğe kapatıyor — ör. açık kalan takvim; doldurucuParametreleri.gizle)`));
+      throw new Error(beklenenGorulenMetni(adimBasligi, `"${p.tikla}" tıklanır`, `${alanTiklamaSuresiMs() / 1000} sn içinde tıklanamadı (görünmüyor ya da üstünü başka bir öğe kapatıyor — ör. açık kalan takvim; doldurucuParametreleri.gizle)`));
     }
   }
   const b = p.bekle;
   if (b && typeof b === 'object' && typeof (b as Record<string, unknown>).secici === 'string') {
     const k = b as { secici: string; durum?: string; zamanAsimiSn?: number; icermez?: unknown };
-    const sureMs = (Number(k.zamanAsimiSn) > 0 ? Number(k.zamanAsimiSn) : 20) * 1000;
+    // Süre verilmemişse Ayarlar > Koşu > Gelişmiş > Alan sonrası koşul beklemesi (varsayılan 20 sn).
+    const sureMs = Number(k.zamanAsimiSn) > 0 ? Number(k.zamanAsimiSn) * 1000 : sureAyari('NOBETCI_ALAN_KOSUL_BEKLEME_MS', 20_000, 1_000, 600_000);
     if (k.durum === 'gorunur' || k.durum === 'gizli') await page.locator(k.secici).first().waitFor({ state: k.durum === 'gizli' ? 'hidden' : 'visible', timeout: sureMs });
     else await doluBekle(page, k.secici, sureMs, adimBasligi, typeof k.icermez === 'string' && k.icermez ? k.icermez : undefined, kosu);
   }
@@ -271,12 +277,13 @@ function maskeUygula(maske: unknown, deger: unknown): unknown {
  * çalıştırır). Sonunda durum doğrulanır.
  */
 /** Zorla işaretlenecek öğenin sayfada belirmesi için en çok bekleme (Ayarlar > Koşu > Zorla işaretlenecek seçenek). */
-const ZORLA_BEKLEME_MS = sureAyari('NOBETCI_ZORLA_BEKLEME_MS', 15_000);
+const zorlaBeklemeMs = (): number => sureAyari('NOBETCI_ZORLA_BEKLEME_MS', 15_000);
 
 async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string, alan: PlanAlani): Promise<void> {
   // Öğe sayfada yoksa (ör. bu araç için sunulmayan ürün) test süresi boyunca beklemek yerine açık hata.
-  const sayfada = await l.waitFor({ state: 'attached', timeout: ZORLA_BEKLEME_MS }).then(() => true, () => false);
-  if (!sayfada) throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, `seçenek sayfada yok (${ZORLA_BEKLEME_MS / 1000} sn beklendi)`));
+  const beklemeMs = zorlaBeklemeMs();
+  const sayfada = await l.waitFor({ state: 'attached', timeout: beklemeMs }).then(() => true, () => false);
+  if (!sayfada) throw new Error(beklenenGorulenMetni(adimBasligi, `"${alan.etiket}" ${isaretli ? 'işaretli' : 'işaretsiz'}`, `seçenek sayfada yok (${beklemeMs / 1000} sn beklendi)`));
   if ((await l.isChecked({ timeout: 5_000 })) === isaretli) return;
   await l.setChecked(isaretli, { force: true, timeout: 3_000 }).catch(() => undefined);
   if ((await l.isChecked({ timeout: 5_000 })) !== isaretli) await l.evaluate((e) => (e as HTMLInputElement).click());
@@ -374,8 +381,9 @@ export async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Pr
 }
 
 /**
- * Sayfanın tarayıcı uyarıları (alert / confirm / prompt): mesajı adım boyunca saklanır, uyarı kapatılır (dismiss —
- * Playwright'ın dinleyicisiz varsayılanıyla aynı; confirm onaylanmaz). Hata göstergesi ve beklenen mesaj bunları da okur.
+ * Sayfanın tarayıcı uyarıları (alert / confirm / prompt): mesajı adım boyunca saklanır. alert kapatılır; confirm / prompt
+ * Ayarlar > Koşu > Gelişmiş > Tarayıcı onay pencereleri kararına göre iptal edilir (varsayılan; Playwright'ın dinleyicisiz
+ * davranışıyla aynı) ya da onaylanır (prompt varsayılan değeriyle). Hata göstergesi ve beklenen mesaj bunları da okur.
  */
 const tarayiciUyarilari = new WeakMap<Page, string[]>();
 export function tarayiciUyarilariniDinle(page: Page): void {
@@ -385,7 +393,8 @@ export function tarayiciUyarilariniDinle(page: Page): void {
   page.on('dialog', (d) => {
     liste.push(d.message());
     mesajYakalayicisi(page)?.yakala('diyalog', d.message());
-    void d.dismiss().catch(() => undefined);
+    const onayla = (d.type() === 'confirm' || d.type() === 'prompt') && onayPenceresiDavranisi() === 'onayla';
+    void (onayla ? d.accept(d.type() === 'prompt' ? d.defaultValue() : undefined) : d.dismiss()).catch(() => undefined);
   });
 }
 
@@ -393,11 +402,11 @@ export function tarayiciUyarilariniDinle(page: Page): void {
  * Arka plan istekleri (XHR / fetch) izi: her alan doldurulduktan sonra, o alanın başlattığı istekler (ör. seçim değişince
  * yeniden yüklenen bağımlı liste, kimlik sorgusu) bitene kadar beklenir — yoksa liste sonraki alan seçildikten sonra gelip
  * seçimi silebilir. Alan doldurulmadan önce başlamış istekler (ör. süreklilik / izleme istekleri) beklenmez. Sınırlı süre:
- * bitmeyen istek koşuyu durdurmaz (ALAN_SONRASI_EN_COK_MS sonra devam edilir).
+ * bitmeyen istek koşuyu durdurmaz (alanSonrasiEnCokMs sonra devam edilir; Ayarlar > Koşu > Gelişmiş, varsayılan 8 sn).
  */
-export const ALAN_SONRASI_EN_COK_MS = 8_000;
+export const alanSonrasiEnCokMs = (): number => sureAyari('NOBETCI_ARKA_PLAN_BEKLEME_MS', 8_000, 1_000, 120_000);
 /** Alan sonrası tıklamanın (ör. sorgu düğmesi) en çok süresi; aşılırsa açık hatayla düşer (Ayarlar > Koşu > Alan işlemi). */
-const ALAN_TIKLAMA_SURESI_MS = sureAyari('NOBETCI_ALAN_BEKLEME_MS', 15_000);
+const alanTiklamaSuresiMs = (): number => sureAyari('NOBETCI_ALAN_BEKLEME_MS', 15_000);
 /** İstek bittikten sonra yeni bir istek başlamadan geçmesi gereken süre (zincirleme istekler için). */
 const SESSIZLIK_MS = 150;
 type AgIzi = { suren: Map<Request, number>; son: number };
@@ -419,7 +428,7 @@ function agIzle(page: Page): void {
 async function arkaPlanIstekleriniBekle(page: Page, baslangic: number): Promise<void> {
   const iz = agIzleri.get(page);
   if (!iz) return;
-  const bitis = Date.now() + ALAN_SONRASI_EN_COK_MS;
+  const bitis = Date.now() + alanSonrasiEnCokMs();
   for (;;) {
     const suren = [...iz.suren.values()].some((t) => t >= baslangic);
     const sessiz = Date.now() - Math.max(baslangic, iz.son) >= SESSIZLIK_MS;
@@ -514,7 +523,7 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
  */
 async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuPlani): Promise<string | null> {
   const kosu = adim.kosu;
-  const sureMs = (kosu?.zamanAsimiSn ?? ADIM_SURESI_SN) * 1000;
+  const sureMs = (kosu?.zamanAsimiSn ?? adimSuresiSn()) * 1000;
   if (plan.beklenen.tur === 'hata' && plan.beklenen.adim === adim.id) {
     const beklenenler = plan.beklenen.mesajlar.length ? plan.beklenen.mesajlar : [plan.beklenen.mesaj];
     const oku = async (): Promise<string> => (kosu?.hataGostergesi ? hataMetni(page, kosu) : sayfaMetni(page));
@@ -574,7 +583,9 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
       return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : undefined;
     },
     // İzinler (veritabanı okuma / yazma): koşucu kasayı açmaz; durum veri-oku.mjs çıktısından gelir.
-    yurutucu: (sql, parametreler, o) => ayarlaSorgula(ayar, sql, parametreler, { ...o, izinler: ortam.veri.izinler ?? null })
+    yurutucu: (sql, parametreler, o) => ayarlaSorgula(ayar, sql, parametreler, { ...o, izinler: ortam.veri.izinler ?? null }),
+    // Sorguda okunan en çok satır: Ayarlar > Koşu > Gelişmiş (varsayılan 1000).
+    satirSiniri: sayiAyari('NOBETCI_SQL_SATIR_SINIRI', 1000, 1, 100_000)
   });
   // Ek her zaman yazılır (sorgu hatasında da): hangi bağlantının kullanıldığı raporda görünür (ad; parola asla).
   await testInfo.attach(`SQL sonucu - ${adimBasligi}`, {
@@ -748,7 +759,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           return;
         }
         tarayiciUyarilari.get(page)?.splice(0);
-        const sureSn = adim.kosu?.zamanAsimiSn ?? ADIM_SURESI_SN;
+        const sureSn = adim.kosu?.zamanAsimiSn ?? adimSuresiSn();
+        const gorunmeyenKaldirir = gorunmeyenAlanDavranisi() === 'kaldir';
         for (const alan of adim.alanlar) {
           if (alan.atla) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, alan.atla));
@@ -760,8 +772,9 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           const l = zorla ? await sayfadakiOge(page, alan.secici as string) : await gorunurOge(page, alan.secici as string);
           if (!l) {
             const profil = plan.baglamProfili ? ` (bağlam profili: ${plan.baglamProfili})` : '';
-            if (alan.mutlakaGorunmeli) {
-              throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı ekranda görünür (mutlaka görünmeli)`, `${alan.etiket} alanı ekranda görünmüyor${profil}`));
+            // "Mutlaka görünmeli" alan ya da Ayarlar > Koşu > Gelişmiş > Alan görünmezse = "Testi kaldır": test kalır.
+            if (alan.mutlakaGorunmeli || gorunmeyenKaldirir) {
+              throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı ekranda görünür${alan.mutlakaGorunmeli ? ' (mutlaka görünmeli)' : ''}`, `${alan.etiket} alanı ekranda görünmüyor${profil}`));
             }
             atlanan.push({ alan: alan.etiket, neden: `ekranda görünmüyor${profil}` });
             continue;

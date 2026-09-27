@@ -4,12 +4,23 @@
 //  1) kosuEtiketleri: koşu kimliği/türü/kapsamı — sonuçlar veritabanında koşulara bunlarla bağlanır
 //     (senaryo kimliğini model spec'i kendisi ekler).
 //  2) hataYakalayici: Test başarısız olduğunda (ve dashboard koşularında her zaman) son ekran
-//     görüntüsünü ek olarak ekler; raporlayıcı bunu ŞİFRELİ medya deposuna taşır.
+//     görüntüsünü ek olarak ekler (Ayarlar > Koşu > Ekran görüntüsü "Kapalı" ise eklemez); raporlayıcı bunu ŞİFRELİ
+//     medya deposuna taşır.
 // Senaryo dosyaları `test`'i '@playwright/test' yerine buradan import etmelidir.
 import { test as base } from '@playwright/test';
 import { writeFileSync, renameSync } from 'node:fs';
 import { ekranGoruntusuAl } from './screenshots';
 import { mesajYakalayicisiKur, yakalananMesajlariEkle } from './mesaj-yakalayici';
+import { ekranGoruntusuAyari } from './kosu-ayarlari';
+
+/**
+ * Test sonu (tam sayfa) ekran görüntüsü alınsın mı? Kalan testte ve Nöbetçi'nin ▷ koşusunda (panelde gösterilir) alınır; Ayarlar >
+ * Koşu > Ekran görüntüsü (test sonu) "Kapalı" ise hiç alınmaz (adım görüntüleri bundan bağımsızdır).
+ */
+export function testSonuGoruntusuAlinsinMi(basariliMi: boolean, gorunurKosuMu: boolean, ayar: 'on' | 'only-on-failure' | 'off' = ekranGoruntusuAyari()): boolean {
+  if (ayar === 'off') return false;
+  return !basariliMi || gorunurKosuMu;
+}
 
 type OrtakFixturelar = {
   kosuEtiketleri: void;
@@ -53,8 +64,8 @@ export const test = base.extend<OrtakFixturelar>({
       // şişirir; bu yüzden başarılı durumda SADECE dashboard'dan tetiklenen koşularda
       // ekran görüntüsü alınır — dashboard'daki sonuç popup'ında gösterilebilsin diye.
       const gorunurKosuMu = Boolean(process.env.TEST_SUNUCU_GORUNUR);
-
-      if (!basariliMi || gorunurKosuMu) {
+      // Ayarlar > Koşu > Ekran görüntüsü (test sonu) "Kapalı" ise test sonu görüntüsü hiç alınmaz (adım görüntüleri ayrıdır).
+      if (testSonuGoruntusuAlinsinMi(basariliMi, gorunurKosuMu)) {
         const ekranGoruntusu = await page.screenshot({ fullPage: true }).catch(() => undefined);
         if (ekranGoruntusu) {
           await testInfo.attach(

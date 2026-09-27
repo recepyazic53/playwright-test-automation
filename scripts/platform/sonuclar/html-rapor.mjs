@@ -22,6 +22,7 @@ import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { medyaAnahtariniHazirla } from '../kasa.mjs';
+import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { medyaDosyaAdiGecerliMi, medyaTamamenCoz } from '../medya.mjs';
 import { ansiTemizle, beklenenGorulenCikar, kalipCikar } from './siniflandirma.mjs';
 import { raporMetniniMaskele, servisSonucKosusu } from './servis-sonuclari.mjs';
@@ -37,12 +38,19 @@ import { DEGISIM_ETIKETLERI, DEGISIM_SINIFLARI } from './karsilastirma-hesabi.mj
  * @typedef {{ tur: 'ekran' | 'servis' | 'akis'; baslik: string; proje: string; ortam: string | null; ortamAdresi: string | null;
  *   baslangic: string | null; bitis: string | null; sureMs: number | null; kosuDurumu: string | null;
  *   sayilar: { basarili: number; basarisiz: number; atlanan: number; durduruldu: number };
- *   senaryolar: RaporSenaryosu[]; atlananGoruntu?: number; olusturma?: string }} RaporVerisi
+ *   senaryolar: RaporSenaryosu[]; atlananGoruntu?: number; goruntuSiniriBayt?: number; olusturma?: string }} RaporVerisi
  * @typedef {{ goruntuler?: boolean; hatalar?: boolean; adres?: boolean; gizliDegerler?: ReadonlyArray<string>; ekAdlar?: ReadonlyArray<string> }} RaporSecenekleri
  */
 
-/** Gömülen görüntülerin toplam en çok boyutu (base64, bayt). */
+/** Gömülen görüntülerin toplam en çok boyutunun varsayılanı (base64, bayt; Ayarlar > Arayüz > Raporlar). */
 export const EN_COK_GORUNTU_BAYT = 25 * 1024 * 1024;
+
+/** Kullanıcının görüntü sınırı (Ayarlar > Arayüz > HTML rapora gömülen görüntü sınırı; bayt). @param {Veritabani} vt */
+export function raporGoruntuSiniriBayt(vt) {
+  try { return kosuAyarlariniOku(vt).raporGoruntuSiniriMb * 1024 * 1024; } catch { return EN_COK_GORUNTU_BAYT; }
+}
+/** Rapor metnindeki sınır (MB). @param {{ goruntuSiniriBayt?: number }} v */
+const sinirMb = (v) => Math.round((v.goruntuSiniriBayt ?? EN_COK_GORUNTU_BAYT) / 1024 / 1024);
 /** Hata metninden rapora giren en çok satır. */
 const HATA_SATIR_SINIRI = 12;
 const ADRES_YERINE = '‹ortam adresi›';
@@ -295,7 +303,7 @@ ${ayrintilar.join('\n')}
 <footer>
 <p>Oluşturma: ${kacis(tarihMetni(olusturma))} · Nöbetçi. Gizli değerler maskelenmiştir; giriş bilgisi, istek / yanıt gövdesi ve test verisinin gizli sütunları rapora eklenmez.${
   s.goruntuler ? ` Gömülü ekran görüntüsü: ${gomulen}.` : ''}${
-  s.goruntuler && v.atlananGoruntu ? ` Boyut sınırı (${Math.round(EN_COK_GORUNTU_BAYT / 1024 / 1024)} MB) nedeniyle eklenmeyen görüntü: ${v.atlananGoruntu}.` : ''}</p>
+  s.goruntuler && v.atlananGoruntu ? ` Boyut sınırı (${sinirMb(v)} MB) nedeniyle eklenmeyen görüntü: ${v.atlananGoruntu}.` : ''}</p>
 </footer>
 </main>
 </body>
@@ -416,13 +424,13 @@ function servisKosusuVerisi(vt, projeId, id) {
 }
 
 /**
- * Şifreli ekran görüntülerini (kasada) çözüp base64 olarak döndürür; toplam EN_COK_GORUNTU_BAYT'ı aşanlar atlanır. Gruplar sırayla
- * işlenir (önce gelenler öncelikli). acik false ise hiçbir şey çözülmez (gruplar boş).
+ * Şifreli ekran görüntülerini (kasada) çözüp base64 olarak döndürür; toplam sınırı (kullanıcının ayarı; varsayılan
+ * EN_COK_GORUNTU_BAYT) aşanlar atlanır. Gruplar sırayla işlenir (önce gelenler öncelikli). acik false ise hiçbir şey çözülmez (gruplar boş).
  * @param {Veritabani} vt @param {Array<Array<{ id: string; ad: string; icerikTuru: string; boyut: number }>>} gruplar
- * @param {string} medyaKlasoru @param {boolean} acik
+ * @param {string} medyaKlasoru @param {boolean} acik @param {number} [sinirBayt]
  * @returns {Promise<{ gruplar: RaporGoruntusu[][]; eklenen: number; atlanan: number; bayt: number }>}
  */
-export async function goruntuleriCoz(vt, gruplar, medyaKlasoru, acik) {
+export async function goruntuleriCoz(vt, gruplar, medyaKlasoru, acik, sinirBayt = raporGoruntuSiniriBayt(vt)) {
   let bayt = 0;
   let eklenen = 0;
   let atlanan = 0;
@@ -434,12 +442,12 @@ export async function goruntuleriCoz(vt, gruplar, medyaKlasoru, acik) {
       for (const m of gruplar[i]) {
         if (!GORUNTU_TURU.test(m.icerikTuru)) continue;
         const tahmin = Math.ceil(m.boyut / 3) * 4;
-        if (bayt + tahmin > EN_COK_GORUNTU_BAYT) { atlanan++; continue; }
+        if (bayt + tahmin > sinirBayt) { atlanan++; continue; }
         const kayit = medyaGetir(vt, m.id);
         if (!kayit || !medyaDosyaAdiGecerliMi(kayit.dosya)) { atlanan++; continue; }
         try {
           const base64 = (await medyaTamamenCoz(anahtar, join(medyaKlasoru, kayit.dosya))).toString('base64');
-          if (bayt + base64.length > EN_COK_GORUNTU_BAYT) { atlanan++; continue; }
+          if (bayt + base64.length > sinirBayt) { atlanan++; continue; }
           bayt += base64.length;
           eklenen++;
           cikti[i].push({ ad: m.ad, icerikTuru: m.icerikTuru, base64 });
@@ -466,7 +474,7 @@ export async function goruntuleriCoz(vt, gruplar, medyaKlasoru, acik) {
  * @typedef {{ baslik: string; grup: string; degisim: string; degisti: boolean; sureFarkiMs: number | null;
  *   a: KarsilastirmaTarafi | null; b: KarsilastirmaTarafi | null }} KarsilastirmaSatiri
  * @typedef {{ tur: 'ekran' | 'servis' | 'akis'; proje: string; ortamAdresi: string | null; a: KarsilastirmaKosusu; b: KarsilastirmaKosusu;
- *   sayim: Record<string, number>; senaryolar: KarsilastirmaSatiri[]; atlananGoruntu?: number; olusturma?: string }} KarsilastirmaRaporVerisi
+ *   sayim: Record<string, number>; senaryolar: KarsilastirmaSatiri[]; atlananGoruntu?: number; goruntuSiniriBayt?: number; olusturma?: string }} KarsilastirmaRaporVerisi
  */
 
 const KARSILASTIRMA_CSS = `
@@ -592,7 +600,7 @@ ${ayrintilar.join('\n')}
 <footer>
 <p>Oluşturma: ${kacis(tarihMetni(olusturma))} · Nöbetçi. Gizli değerler maskelenmiştir; giriş bilgisi, istek / yanıt gövdesi ve test verisinin gizli sütunları rapora eklenmez.${
   s.goruntuler ? ` Gömülü ekran görüntüsü: ${gomulen}.` : ''}${
-  s.goruntuler && v.atlananGoruntu ? ` Boyut sınırı (${Math.round(EN_COK_GORUNTU_BAYT / 1024 / 1024)} MB) nedeniyle eklenmeyen görüntü: ${v.atlananGoruntu}.` : ''}</p>
+  s.goruntuler && v.atlananGoruntu ? ` Boyut sınırı (${sinirMb(v)} MB) nedeniyle eklenmeyen görüntü: ${v.atlananGoruntu}.` : ''}</p>
 </footer>
 </main>
 </body>
@@ -620,7 +628,7 @@ export async function htmlRaporuOlustur(vt, q, ortamlar) {
     const goruntuler = cozulen.gruplar[i];
     return { ...kalan, ...(goruntuler.length ? { goruntuler } : {}) };
   });
-  const html = htmlRaporuUret({ ...veri, senaryolar: son, atlananGoruntu: atlanan }, {
+  const html = htmlRaporuUret({ ...veri, senaryolar: son, atlananGoruntu: atlanan, goruntuSiniriBayt: raporGoruntuSiniriBayt(vt) }, {
     ...secenekler, ekAdlar: ekGizliAdlar(vt), gizliDegerler: bilinenGizliDegerler(vt, projeId)
   });
   return {

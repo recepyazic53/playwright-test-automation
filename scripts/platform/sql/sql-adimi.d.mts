@@ -19,7 +19,7 @@ export type SqlTanimi = {
 };
 export type SqlSonucu = { sutunlar: string[]; satirlar: unknown[][]; kesildi?: boolean };
 export type SqlOzeti = { sutunlar: string[]; satirlar: string[][]; toplamSatir: number; kesildi: boolean };
-export type SqlYurutucu = (sql: string, parametreler: Record<string, string>, s: { zamanAsimiMs: number; satirSiniri: number }) => Promise<SqlSonucu>;
+export type SqlYurutucu = (sql: string, parametreler: Record<string, string>, s: { zamanAsimiMs: number | undefined; satirSiniri: number }) => Promise<SqlSonucu>;
 export type SqlAdimSonucu = {
   durum: 'basarili' | 'basarisiz' | 'hata';
   mesaj?: string;
@@ -53,5 +53,7 @@ export declare function sqlAdiminiKos(tanim: SqlTanimi, g: {
   gizliDegerler?: string[];
   bekle?: (ms: number) => Promise<void>;
   simdi?: () => number;
+  /** Sorguda okunan en çok satır (Ayarlar > Koşu; verilmezse SQL_SORGU_SATIR_SINIRI). */
+  satirSiniri?: number;
   sinyal?: AbortSignal;
 }): Promise<SqlAdimSonucu>;

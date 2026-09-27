@@ -51,7 +51,7 @@ import {
   girisProfilleriniListele, ortamlariListele, projeGetir
 } from '../veritabani/depo.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
-import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { kosuAyarlariniOku, varsayilanKosuAyarlari } from '../ayarlar/kosu-ayarlari.mjs';
 import { baglamAlanlari, girisTarifiniDogrula } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
@@ -149,6 +149,19 @@ function altModelAnlikGoruntusu(vt, projeId, model) {
     if (m && nesneMi(m.model)) sonuc[String(dosya)] = m.model;
   }
   return sonuc;
+}
+
+/**
+ * Tarama / akış kaydı tarayıcısının kullanıcı kararları (kasa okunamazsa varsayılanlar — önceki sabitler).
+ * @param {Veritabani | undefined} vt
+ */
+function taramaTarayiciGirdisi(vt) {
+  let a;
+  try { a = vt ? kosuAyarlariniOku(vt) : varsayilanKosuAyarlari(); } catch { a = varsayilanKosuAyarlari(); }
+  return {
+    genislik: a.taramaEkranGenisligi, yukseklik: a.taramaEkranYuksekligi, dil: a.taramaDili,
+    saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri
+  };
 }
 
 /**
@@ -426,7 +439,9 @@ export function taramaYoneticisiOlustur(secenekler) {
       engellenenler: [], engellenenSayisi: 0, olaylar: [],
       girdi: {
         kip: kayit ? 'kayit' : 'tarama', tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
-        yasakKaliplari: etkinYasakAdresler(vt, ortam), izinliKokenler: izinliKokenler.length ? izinliKokenler : null, zamanAsimiMs: sure
+        yasakKaliplari: etkinYasakAdresler(vt, ortam), izinliKokenler: izinliKokenler.length ? izinliKokenler : null, zamanAsimiMs: sure,
+        // Tarayıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
+        tarayici: taramaTarayiciGirdisi(vt)
       },
       meta: {
         ekranAnahtari: ekran.anahtar, ekranAdi: ekran.ad, urlYolu: hedef.yol, proje: proje.ad, girisGerekli: Boolean(tarif), girissiz,

@@ -560,9 +560,11 @@ export function taramaPaketiOlustur(meta, envanter) {
   const yasakli = envanter.engellenenler.filter((e) => e.neden === 'yasakli');
   if (yasakli.length) bilinmeyenler.push(`Yasaklı adres kalıbına uyan ${yasakli.length} istek engellendi (${[...new Set(yasakli.map((e) => e.adres))].slice(0, 3).join(', ')}).`);
   if (!envanter.kesifYapildi) bilinmeyenler.push('Seçim keşfi kapalıydı: açılır listelere bağlı olarak beliren alanlar ve görünürlük koşulları çıkarılmadı.');
-  const buyukListeler = [...hamlar.values()].filter((a) => a.tur === 'select' && !a.coklu && (a.secenekler?.length ?? 0) > KESIF_SECENEK_SINIRI);
+  // Keşif sınırı: taramanın kullandığı (Ayarlar > Koşu > Açılır liste keşif sınırı); eski envanterde yok → varsayılan.
+  const kesifSiniri = Number.isInteger(envanter.kesifSecenekSiniri) ? Number(envanter.kesifSecenekSiniri) : KESIF_SECENEK_SINIRI;
+  const buyukListeler = [...hamlar.values()].filter((a) => a.tur === 'select' && !a.coklu && (a.secenekler?.length ?? 0) > kesifSiniri);
   if (envanter.kesifYapildi && buyukListeler.length) {
-    bilinmeyenler.push(`${KESIF_SECENEK_SINIRI}'den fazla seçenekli ${buyukListeler.length} liste keşfedilmedi (${buyukListeler.slice(0, 5).map((a) => temizMetin(a.etiket, sayac) ?? a.anahtar).join(', ')}); bu listelere bağlı alanlar olabilir.`);
+    bilinmeyenler.push(`Keşif sınırından (${kesifSiniri} seçenek) uzun ${buyukListeler.length} liste keşfedilmedi (${buyukListeler.slice(0, 5).map((a) => temizMetin(a.etiket, sayac) ?? a.anahtar).join(', ')}); bu listelere bağlı alanlar olabilir.`);
   }
   if (etiketsizler.length) bilinmeyenler.push(`Etiketi bulunamayan ${etiketsizler.length} alan: ${etiketsizler.slice(0, 10).join(', ')} (etiketi ekrandan kontrol edin).`);
   if (cokluDegerliler.length) bilinmeyenler.push(`Çoklu seçim listeleri: ${cokluDegerliler.join(', ')} — model tek değer bekler.`);
