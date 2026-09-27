@@ -191,6 +191,7 @@ import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from
 import { TABLO_GET_UCLARI, TABLO_POST_UCLARI, tabloKosuDenetimiAyarla } from './tablolar/tablo-uclari.mjs';
 import { ekranTabloDonusumu } from './tablolar/ekran-donusumu.mjs';
 import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
+import { SQL_KULLANIM_GET_UCLARI, SQL_KULLANIM_POST_UCLARI } from './sql/sql-kullanimi.mjs';
 import { AKIS_SENARYO_GET_UCLARI, AKIS_SENARYO_POST_UCLARI } from './servisler/akis-senaryosu.mjs';
 import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
 import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
@@ -1252,6 +1253,7 @@ for (const [yol, islem] of SERVIS_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of TABLO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // SQL adımları: veritabanı bağlantısı seçim listesi (sql/sorgu-bagdastirici.mjs).
 for (const [yol, islem] of SQL_GET_UCLARI) GET_UCLARI.set(yol, islem);
+for (const [yol, islem] of SQL_KULLANIM_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Akış senaryoları (servis senaryosu türü "Akış"; servisler/akis-senaryosu.mjs).
 for (const [yol, islem] of AKIS_SENARYO_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
@@ -1557,6 +1559,7 @@ for (const [yol, islem] of AKIS_SENARYO_POST_UCLARI) POST_UCLARI.set(yol, islem)
 for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
 for (const [yol, islem] of entegrasyonPostUclari({ medyaKlasoruYolu })) POST_UCLARI.set(yol, islem);
+for (const [yol, islem] of SQL_KULLANIM_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs; hiçbir uç koşu başlatmaz).
 for (const [yol, islem] of ZAMANLAMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 POST_UCLARI.set('/platform/zamanlama/tercih', (db, g) => arkaPlan.tercihDegistir(db, g));

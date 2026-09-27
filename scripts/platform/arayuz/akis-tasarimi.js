@@ -21,7 +21,7 @@
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
-import { sqlAdimiFormu, sqlBaglantilariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
+import { sqlAdimiFormu, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
 import { girisAyrintisi } from './senaryo-diyagrami.js';
 import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
 
@@ -64,7 +64,7 @@ export async function akisTasarimi(icerik, s) {
   /** Projenin ortak akışları ("+ > Ortak akış"; ör. ödeme): [{ dosya, ad, adimlar, yalnizTest }]. */
   const ortakAkislar = Array.isArray(veri.ortakAkislar) ? veri.ortakAkislar : [];
   /** SQL sorgusu adımlarının seçebileceği veritabanı bağlantıları (Ayarlar > Entegrasyonlar). */
-  const sqlBaglantilari = await sqlBaglantilariniAl(s.proje.id);
+  const sqlKaynaklari = await sqlKaynaklariniAl(s.proje.id);
   /** Ekran girişsiz açılıyor mu (akışın başı "Girişsiz"; "Yeniden giriş" sunulmaz). */
   const girissiz = veri.girissiz === true;
   /** "Yeniden giriş" bloğunun seçebileceği giriş profili ADLARI (Ayarlar > Giriş profilleri; değer yok). */
@@ -212,7 +212,7 @@ export async function akisTasarimi(icerik, s) {
         ortakAkislar.length ? h('button', {
           type: 'button', onclick: () => blokEkle(konum, { tur: 'ortak', dosya: ortakAkislar[0].dosya, ad: ortakAkislar[0].ad, istegeBagli: false })
         }, ikon('pusula'), 'Ortak akış') : null,
-        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlBaglantilari) }) }, ikon('veri'), 'SQL sorgusu'),
+        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlKaynaklari) }) }, ikon('veri'), 'SQL sorgusu'),
         girissiz ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'giris', ad: '', profil: null }) }, ikon('kilit'), 'Yeniden giriş'),
         bitirVar ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'bitir' }) }, ikon('onay'), 'Bitir')) : null);
   }
@@ -451,7 +451,7 @@ export async function akisTasarimi(icerik, s) {
       ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
-        sqlAdimiFormu(b.sql, { baglantilar: sqlBaglantilari, degisti: sakla, yerTutucuOrnegi: '${alanAnahtari}' }),
+        sqlAdimiFormu(b.sql, { ...sqlKaynaklari, degisti: sakla, yerTutucuOrnegi: '${alanAnahtari}' }),
         h('p', { class: 'soluk kucuk' }, 'SQL’de senaryonun değerleri ${alanAnahtari}, önceki SQL adımlarında okunan değerler ${akis:Ad} ile yazılır. Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar.')
       ];
     }

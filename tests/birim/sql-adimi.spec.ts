@@ -101,3 +101,28 @@ test('servis akışı: SQL adımı doğrulanır (servis / senaryo istemez); otur
   expect(icerik.adimlar[0]).toMatchObject({ tur: 'sql', okumalar: [], sql: { baglantiId: 'db1', okumalar: [{ ad: 'Token', sutun: 'token' }] } });
   expect(() => akisIceriginiDogrula({ adimlar: [{ ad: 'X', tur: 'sql', sql: { baglantiId: 'db1', sql: '', beklenen: { tur: 'bos' } } }] }, 'akis')).toThrow('SQL sorgusunu yazın');
 });
+
+test('tanım: mantıksal veritabanı (veritabaniId) ya da doğrudan bağlantı (baglantiId, eski) — ikisinden yalnız biri', () => {
+  const temel = { sql: 'SELECT 1', beklenen: { tur: 'bosDegil' } };
+  const v = sqlTanimiDogrula({ ...temel, veritabaniId: 'vt-1' });
+  expect(v.hatalar).toEqual([]);
+  expect(v.tanim).toEqual({ veritabaniId: 'vt-1', sql: 'SELECT 1', beklenen: { tur: 'bosDegil' } });
+  expect(sqlTanimiDogrula({ ...temel, baglantiId: 'db1' }).tanim).toEqual({ baglantiId: 'db1', sql: 'SELECT 1', beklenen: { tur: 'bosDegil' } });
+  expect(sqlTanimiDogrula({ ...temel, veritabaniId: 'vt-1', baglantiId: 'db1' }).hatalar).toEqual(['Veritabanı ya da doğrudan bağlantıdan yalnız birini seçin.']);
+  expect(sqlTanimiDogrula({ ...temel, veritabaniId: 'geçersiz kimlik' }).hatalar).toEqual(['Veritabanı bağlantısını seçin.']);
+  // Ekran akışı: veritabanlı SQL bloğu modele (sqlKontrolu) ve koşu planına aynen geçer; model doğrulayıcı kabul eder.
+  const { envanter: k, hatalar } = akistanKayitEnvanteri(ENV, [
+    { tur: 'alanlar', ad: 'Kayıt', alanlar: ['#no'], zorunlu: [] },
+    { tur: 'aksiyon', dugme: 0, istegeBagli: false },
+    { tur: 'sql', ad: 'Veritabanına yazıldı', sql: { veritabaniId: 'vt-1', ...temel } },
+    { tur: 'bitir' }
+  ]);
+  expect(hatalar).toEqual([]);
+  const paket = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket;
+  expect(sayfaPaketiniDogrula(paket, {})).toMatchObject({ gecerli: true, hatalar: [] });
+  const m = paket.model as Nesne;
+  expect(m.adimlar[1].sqlKontrolu).toEqual({ veritabaniId: 'vt-1', sql: 'SELECT 1', beklenen: { tur: 'bosDegil' } });
+  expect(modelKosuPlani(m, {}).adimlar[1]).toMatchObject({ sql: { veritabaniId: 'vt-1' } });
+  // Servis akışı adımı da kabul eder.
+  expect(akisIceriginiDogrula({ adimlar: [{ ad: 'K', tur: 'sql', sql: { veritabaniId: 'vt-1', ...temel } }] }, 'akis').adimlar[0]).toMatchObject({ sql: { veritabaniId: 'vt-1' } });
+});

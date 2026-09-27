@@ -13,6 +13,7 @@
 import { EntegrasyonHatasi } from './istek.mjs';
 import { katalogGorunumu } from './katalog.mjs';
 import { baglantiEtkinlestir, baglantiKaydet, baglantiSil, baglantilariListele } from './depo.mjs';
+import { baglantiEslemeleriniKaldir } from '../sql/veritabanlari.mjs';
 import { baglantiDene, dbeaverEkle, dbeaverOnizle, denemeHedefi, hataKaydiAc, hataKaydiOnizle } from './servis.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -39,7 +40,12 @@ export function entegrasyonPostUclari(ortam) {
   return [
     ['/platform/entegrasyon/kaydet', (db, g) => ({ baglanti: baglantiKaydet(db, kimlik(g.projeId, 'projeId'), g) })],
     ['/platform/entegrasyon/etkin', (db, g) => ({ baglanti: baglantiEtkinlestir(db, kimlik(g.projeId, 'projeId'), kimlik(g.id), g.etkin === true) })],
-    ['/platform/entegrasyon/sil', (db, g) => ({ silindi: baglantiSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })],
+    // Silinen bağlantının Veritabanları eşlemeleri de kalkar (o ortamlarda SQL adımı sorgu atmadan "bağlantı tanımlı değil" hatasıyla kalır).
+    ['/platform/entegrasyon/sil', (db, g) => {
+      const projeId = kimlik(g.projeId, 'projeId');
+      const silindi = baglantiSil(db, projeId, kimlik(g.id));
+      return { silindi, kaldirilanEsleme: baglantiEslemeleriniKaldir(db, projeId, kimlik(g.id)) };
+    }],
     ['/platform/entegrasyon/dene-hedefi', (db, g) => ({ hedef: denemeHedefi(db, kimlik(g.projeId, 'projeId'), g) })],
     ['/platform/entegrasyon/dene', (db, g) => baglantiDene(db, kimlik(g.projeId, 'projeId'), g)],
     ['/platform/entegrasyon/hata-kaydi/onizle', (db, g) => hataKaydiOnizle(db, kimlik(g.projeId, 'projeId'), kimlik(g.sonucId, 'sonucId'), kimlik(g.baglantiId, 'baglantiId'))],

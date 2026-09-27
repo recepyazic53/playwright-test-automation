@@ -33,7 +33,7 @@ import { sureAyari } from './kosu-ayarlari';
 import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
-import { ayarlaSorgula } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
+import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
 /** Alanın ekranda görünmesi için beklenen süre (koşullu alanlar önceki seçimden sonra çizilebilir). */
@@ -558,9 +558,11 @@ type SqlDegerleri = { degerler: Record<string, string>; gizliler: string[] };
  * uyuşmazsa "Beklenen / Görülen" hatası.
  */
 async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: SqlTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
-  const ayar = ortam.veri.sqlBaglantilari?.[tanim.baglantiId];
-  if (!ayar) throw new Error(`${adimBasligi}: SQL adımının veritabanı bağlantısı koşu verisinde yok (Ayarlar > Entegrasyonlar).`);
-  if ('hata' in ayar) throw new Error(`${adimBasligi}: ${ayar.hata}`);
+  // Hedef: mantıksal veritabanı → bu ortamın eşlemesi (veri-oku.mjs çözdü) ya da doğrudan bağlantı. Çözülemezse sorgu atılmaz.
+  const hedef = kosuSqlAyari(ortam.veri, tanim);
+  if ('hata' in hedef) throw new Error(`${adimBasligi}: ${hedef.hata}`);
+  const { ayar } = hedef;
+  const kullanilan = { baglanti: hedef.baglantiAdi, ...(hedef.veritabaniAdi ? { veritabani: hedef.veritabaniAdi } : {}) };
   const r = await sqlAdiminiKos(tanim, {
     adimAdi: adimBasligi,
     gizliDegerler: d.gizliler,
@@ -572,12 +574,11 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
     },
     yurutucu: (sql, parametreler, o) => ayarlaSorgula(ayar, sql, parametreler, o)
   });
-  if (r.ozet) {
-    await testInfo.attach(`SQL sonucu - ${adimBasligi}`, {
-      contentType: 'application/json',
-      body: JSON.stringify({ beklenen: r.beklenen, gorulen: r.gorulen, deneme: r.deneme, sureMs: r.sureMs, ...r.ozet }, null, 2)
-    });
-  }
+  // Ek her zaman yazılır (sorgu hatasında da): hangi bağlantının kullanıldığı raporda görünür (ad; parola asla).
+  await testInfo.attach(`SQL sonucu - ${adimBasligi}`, {
+    contentType: 'application/json',
+    body: JSON.stringify({ ...kullanilan, beklenen: r.beklenen, gorulen: r.gorulen, deneme: r.deneme, sureMs: r.sureMs, ...(r.ozet ?? {}) }, null, 2)
+  });
   if (r.durum !== 'basarili') throw new Error(r.mesaj ?? `${adimBasligi}: SQL adımı başarısız.`);
   Object.assign(d.degerler, r.okunanlar);
   for (const ad of r.gizliOkunanlar) { const v = r.okunanlar[ad]; if (v && !d.gizliler.includes(v)) d.gizliler.push(v); }

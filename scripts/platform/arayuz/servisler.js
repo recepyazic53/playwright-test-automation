@@ -21,6 +21,7 @@ import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sa
 import { metotKutulari } from './servis-alanlari.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { akislarSekmesi } from './servis-akislari.js';
+import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { senaryoSayfasi } from './akis-senaryo-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
@@ -453,10 +454,13 @@ const SERVIS_KOSU_NOTU = 'Seçilen ortamdaki servis adresine istekler sırayla g
  */
 async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
   if (!ortamlar.length) { bildir('Projede ortam yok (Ayarlar > Ortamlar).', 'hata'); return; }
+  const denetim = await sqlKosuDenetimiAl(proje.id);
   const y = await kosuOnayi({
     baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', esZamanli: false,
     hesapla: (o) => ({
       senaryolar: senaryolar.filter((x) => ortamdaDahil(s, x, o)),
+      // Akış senaryolarının SQL adımı: veritabanı bu ortamda eşli değilse uyarı (koşu engellenmez).
+      uyarilar: sqlKosuUyarilari(denetim, denetim?.servisSenaryolari, senaryolar.filter((x) => ortamdaDahil(s, x, o)), o),
       haricSayisi: senaryolar.filter((x) => ortamdaKosar(s, x, o) && !ortamdaDahil(s, x, o)).length,
       atlananlar: senaryolar.filter((x) => x.kosuyaDahil && !ortamdaKosar(s, x, o)).map((x) => ({ baslik: x.baslik, neden: atlamaNedeni(s, x, o) }))
     }),
@@ -562,11 +566,13 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
     let ortam = tekil && ilgili.length === 1 && !riskliOrtamMi(ilgili[0]) ? ilgili[0] : null;
     let kosacak = secilenler;
     if (!ortam) {
+      const denetim = await sqlKosuDenetimiAl(proje.id);
       const y = await kosuOnayi({
         baslik: tekil ? 'Senaryoyu çalıştır?' : 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu',
         esZamanli: false, ...(tekil ? { dugme: 'Çalıştır' } : {}), not: SERVIS_KOSU_NOTU,
         hesapla: (o) => ({
           senaryolar: secilenler.filter((x) => ortamdaKosar(s, x, o)),
+          uyarilar: sqlKosuUyarilari(denetim, denetim?.servisSenaryolari, secilenler.filter((x) => ortamdaKosar(s, x, o)), o),
           atlananlar: secilenler.filter((x) => !ortamdaKosar(s, x, o)).map((x) => ({ baslik: x.baslik, neden: atlamaNedeni(s, x, o) }))
         })
       });

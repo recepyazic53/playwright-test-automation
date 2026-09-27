@@ -3,25 +3,89 @@
 // beklenen sonuç, yeniden deneme, zaman aşımı ve sonuçtan okunan değerler (${akis:Ad}). Tanım nesnesi yerinde değiştirilir;
 // her değişiklikte degisti() çağrılır (form yeniden çizilmez, odak korunur). Kurallar: sql-adimi.mjs (sunucuyla ortak).
 // Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
-import { alan, api, h, ikon } from './ortak.js';
+import { alan, api, h, ikon, yerlestir } from './ortak.js';
 import { SQL_BEKLENEN_ETIKETLERI, SQL_BEKLENEN_TURLERI, sqlYerTutuculari } from './sql-adimi.mjs';
 
-/** @type {Map<string, Promise<any[]>>} */
-const baglantiOnbellegi = new Map();
+/**
+ * @typedef {{ id: string; ad: string; etkin: boolean; surucu: string; yalnizOkuma: boolean; ortamIdleri?: string[] }} SqlBaglantisi
+ * @typedef {{ id: string; ad: string; aciklama?: string; eslemeler: Record<string, string> }} SqlVeritabani
+ * @typedef {{ baglantilar: SqlBaglantisi[]; veritabanlari: SqlVeritabani[]; ortamlar: Array<{ id: string; ad: string; canli?: boolean; varsayilan?: boolean }> }} SqlKaynaklari
+ */
 
-/** Projenin veritabanı bağlantıları (sayfa başına bir kez). @param {string} projeId @returns {Promise<Array<{ id: string; ad: string; etkin: boolean; surucu: string; yalnizOkuma: boolean }>>} */
-export function sqlBaglantilariniAl(projeId) {
-  if (!baglantiOnbellegi.has(projeId)) {
-    baglantiOnbellegi.set(projeId, api(`/platform/sql/baglantilar?projeId=${encodeURIComponent(projeId)}`).then((y) => y.baglantilar || []).catch(() => {
-      baglantiOnbellegi.delete(projeId);
-      return [];
-    }));
+/** @type {Map<string, Promise<SqlKaynaklari>>} */
+const kaynakOnbellegi = new Map();
+
+/**
+ * Projenin SQL hedefleri (sayfa başına bir kez): mantıksal veritabanları (Ayarlar > Entegrasyonlar > Veritabanları; önerilen),
+ * doğrudan bağlantılar (eski) ve ortamlar (eşleme özeti için).
+ * @param {string} projeId @returns {Promise<SqlKaynaklari>}
+ */
+export function sqlKaynaklariniAl(projeId) {
+  if (!kaynakOnbellegi.has(projeId)) {
+    kaynakOnbellegi.set(projeId, api(`/platform/sql/baglantilar?projeId=${encodeURIComponent(projeId)}`)
+      .then((y) => ({ baglantilar: y.baglantilar || [], veritabanlari: y.veritabanlari || [], ortamlar: y.ortamlar || [] }))
+      .catch(() => { kaynakOnbellegi.delete(projeId); return { baglantilar: [], veritabanlari: [], ortamlar: [] }; }));
   }
-  return /** @type {Promise<any[]>} */ (baglantiOnbellegi.get(projeId));
+  return /** @type {Promise<SqlKaynaklari>} */ (kaynakOnbellegi.get(projeId));
 }
 
-/** Yeni SQL adımının boş tanımı. @param {Array<{ id: string; etkin: boolean }>} baglantilar */
-export const yeniSqlTanimi = (baglantilar) => ({ baglantiId: (baglantilar.find((b) => b.etkin) || baglantilar[0])?.id ?? '', sql: '', beklenen: { tur: 'bosDegil' } });
+/** Önbelleği boşaltır (Ayarlar'da veritabanı / bağlantı değişince). @param {string} [projeId] */
+export function sqlKaynaklariniUnut(projeId) { if (projeId) kaynakOnbellegi.delete(projeId); else kaynakOnbellegi.clear(); }
+
+/** Projenin veritabanı bağlantıları (eski imza). @param {string} projeId @returns {Promise<SqlBaglantisi[]>} */
+export const sqlBaglantilariniAl = (projeId) => sqlKaynaklariniAl(projeId).then((k) => k.baglantilar);
+
+/**
+ * Yeni SQL adımının boş tanımı: önce ilk veritabanı (önerilen), yoksa ilk etkin bağlantı.
+ * @param {SqlKaynaklari | SqlBaglantisi[]} k
+ */
+export function yeniSqlTanimi(k) {
+  const kaynak = Array.isArray(k) ? { baglantilar: k, veritabanlari: [] } : k;
+  const v = kaynak.veritabanlari[0];
+  if (v) return { veritabaniId: v.id, sql: '', beklenen: { tur: 'bosDegil' } };
+  return { baglantiId: (kaynak.baglantilar.find((b) => b.etkin) || kaynak.baglantilar[0])?.id ?? '', sql: '', beklenen: { tur: 'bosDegil' } };
+}
+
+/**
+ * Adımın hedef adı (diyagram / onay listesi): veritabanı adı ya da doğrudan bağlantı adı ("?" bulunamazsa). ortamId verilirse
+ * veritabanının o ortamdaki bağlantısı da eklenir ("Kayıt veritabanı → kayit-TEST" / "… → bu ortamda bağlantı yok").
+ * @param {any} t @param {SqlKaynaklari} k @param {string} [ortamId]
+ */
+export function sqlHedefAdi(t, k, ortamId) {
+  if (t?.veritabaniId) {
+    const v = k.veritabanlari.find((x) => x.id === t.veritabaniId);
+    if (!v) return 'Veritabanı bulunamadı';
+    if (!ortamId) return v.ad;
+    const b = v.eslemeler[ortamId] ? k.baglantilar.find((x) => x.id === v.eslemeler[ortamId]) : null;
+    return `${v.ad} → ${b ? b.ad : 'bu ortamda bağlantı yok'}`;
+  }
+  return k.baglantilar.find((b) => b.id === t?.baglantiId)?.ad ?? '?';
+}
+
+/**
+ * Koşu diyaloğunun SQL uyarıları: senaryoların kullandığı veritabanlarından seçilen ortamda eşlemesi olmayanlar (koşu engellenmez;
+ * senaryo o SQL adımında kalır). denetim: GET /platform/sql/kosu-denetimi; harita: ekranSenaryolari / servisSenaryolari.
+ * @param {{ veritabanlari: SqlVeritabani[] } | null} denetim @param {Record<string, string[]> | undefined} harita
+ * @param {Array<{ id: string; baslik: string }>} senaryolar @param {{ id: string; ad: string }} ortam
+ * @returns {Array<{ baslik: string; neden: string }>}
+ */
+export function sqlKosuUyarilari(denetim, harita, senaryolar, ortam) {
+  if (!denetim || !harita) return [];
+  /** @type {Array<{ baslik: string; neden: string }>} */
+  const uyarilar = [];
+  for (const x of senaryolar) {
+    const eksik = (harita[x.id] || []).map((id) => {
+      const v = denetim.veritabanlari.find((y) => y.id === id);
+      if (!v) return 'SQL adımının veritabanı bulunamadı';
+      return v.eslemeler[ortam.id] ? null : `“${v.ad}” için ${ortam.ad} ortamında bağlantı tanımlı değil`;
+    }).filter(Boolean);
+    if (eksik.length) uyarilar.push({ baslik: x.baslik, neden: `${[...new Set(eksik)].join('; ')} — senaryo o SQL adımında kalır (Ayarlar > Entegrasyonlar > Veritabanları).` });
+  }
+  return uyarilar;
+}
+
+/** Koşu denetimi verisi (hata olursa null; uyarı gösterilmez, koşu yine başlar). @param {string} projeId */
+export const sqlKosuDenetimiAl = (projeId) => api(`/platform/sql/kosu-denetimi?projeId=${encodeURIComponent(projeId)}`).catch(() => null);
 
 /** Kutuda görünen kısa özet: bağlantı adı, SQL'in ilk satırı, beklenen. @param {any} t @param {Array<{ id: string; ad: string }>} baglantilar */
 export function sqlOzeti(t) {
@@ -36,17 +100,55 @@ export function sqlOzeti(t) {
 
 /**
  * @param {any} t SQL tanımı (yerinde değişir)
- * @param {{ baglantilar: Array<{ id: string; ad: string; etkin: boolean; surucu: string; yalnizOkuma: boolean }>; onek?: string;
+ * @param {{ baglantilar: SqlBaglantisi[]; veritabanlari?: SqlVeritabani[]; ortamlar?: SqlKaynaklari['ortamlar']; onek?: string;
  *   degisti: () => void; gizliMi?: (ad: string) => boolean; yerTutucuOrnegi?: string }} s
  */
 export function sqlAdimiFormu(t, s) {
   const onek = s.onek ?? '';
   const degisti = () => s.degisti();
-  const baglanti = h('select', { 'aria-label': `${onek}Veritabanı bağlantısı` },
-    h('option', { value: '' }, s.baglantilar.length ? '— bağlantı seçin —' : '— bağlantı yok —'),
-    s.baglantilar.map((b) => h('option', { value: b.id, selected: b.id === t.baglantiId }, `${b.ad} (${b.surucu}${b.etkin ? '' : ', kapalı'}${b.yalnizOkuma ? ', yalnız okuma' : ''})`)),
-    t.baglantiId && !s.baglantilar.some((b) => b.id === t.baglantiId) ? h('option', { value: t.baglantiId, selected: true }, 'Kayıtlı bağlantı bulunamadı') : null);
-  baglanti.addEventListener('change', () => { t.baglantiId = baglanti.value; degisti(); });
+  const veritabanlari = s.veritabanlari ?? [];
+  const ortamlar = s.ortamlar ?? [];
+  // Hedef seçimi: önce Veritabanları (önerilen; ortama göre bağlantı), sonra doğrudan bağlantı (eski). Değer "v:<id>" / "b:<id>".
+  const secili = t.veritabaniId ? `v:${t.veritabaniId}` : t.baglantiId ? `b:${t.baglantiId}` : '';
+  const baglanti = h('select', { 'aria-label': `${onek}Veritabanı` },
+    h('option', { value: '' }, veritabanlari.length || s.baglantilar.length ? '— veritabanı seçin —' : '— veritabanı yok —'),
+    veritabanlari.length ? h('optgroup', { label: 'Veritabanları (önerilen)' },
+      veritabanlari.map((v) => h('option', { value: `v:${v.id}`, selected: secili === `v:${v.id}` }, v.ad))) : null,
+    s.baglantilar.length ? h('optgroup', { label: 'Doğrudan bağlantı (eski)' },
+      s.baglantilar.map((b) => h('option', { value: `b:${b.id}`, selected: secili === `b:${b.id}` }, `${b.ad} (${b.surucu}${b.etkin ? '' : ', kapalı'}${b.yalnizOkuma ? ', yalnız okuma' : ''})`))) : null,
+    t.veritabaniId && !veritabanlari.some((v) => v.id === t.veritabaniId) ? h('option', { value: secili, selected: true }, 'Kayıtlı veritabanı bulunamadı') : null,
+    t.baglantiId && !s.baglantilar.some((b) => b.id === t.baglantiId) ? h('option', { value: secili, selected: true }, 'Kayıtlı bağlantı bulunamadı') : null);
+  // Seçimin altı: veritabanında ortam eşlemeleri; doğrudan bağlantıda "Veritabanına çevir…" (bağlantının eşli olduğu veritabanları).
+  const hedefBilgisi = h('div', { class: 'sql-hedef-bilgisi kucuk', 'aria-live': 'polite' });
+  const bagAdi = (id) => s.baglantilar.find((b) => b.id === id)?.ad ?? 'bulunamadı';
+  const hedefBilgisiCiz = () => {
+    if (t.veritabaniId) {
+      const v = veritabanlari.find((x) => x.id === t.veritabaniId);
+      yerlestir(hedefBilgisi, v && ortamlar.length ? h('ul', { class: 'sql-eslemeler', 'aria-label': `${onek}Ortam eşlemeleri` },
+        ortamlar.map((o) => h('li', { class: v.eslemeler[o.id] ? null : 'eslemesiz' }, h('b', {}, o.ad), ' → ', v.eslemeler[o.id] ? bagAdi(v.eslemeler[o.id]) : 'bu ortamda kullanılmaz'))) : null);
+      return;
+    }
+    if (!t.baglantiId) { yerlestir(hedefBilgisi); return; }
+    const adaylar = veritabanlari.filter((v) => Object.values(v.eslemeler).includes(t.baglantiId));
+    const panel = h('div', { class: 'sql-cevir-paneli', hidden: true },
+      adaylar.length
+        ? [h('p', { class: 'soluk' }, 'Bu bağlantının eşli olduğu veritabanları:'),
+          h('div', { class: 'dugmeler' }, adaylar.map((v) => h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {
+            delete t.baglantiId; t.veritabaniId = v.id; baglanti.value = `v:${v.id}`; hedefBilgisiCiz(); degisti();
+          } }, `→ ${v.ad} (${ortamlar.filter((o) => v.eslemeler[o.id] === t.baglantiId).map((o) => o.ad).join(', ') || 'eşli'})`)))]
+        : h('p', { class: 'soluk' }, 'Bu bağlantı hiçbir veritabanında eşli değil. Ayarlar > Entegrasyonlar > Veritabanları’ndan bir veritabanı ekleyip ortamlara bağlantı seçin.'));
+    const cevir = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-expanded': 'false', onclick: () => {
+      panel.hidden = !panel.hidden; cevir.setAttribute('aria-expanded', String(!panel.hidden));
+    } }, 'Veritabanına çevir…');
+    yerlestir(hedefBilgisi, h('p', { class: 'soluk' }, 'Doğrudan bağlantı her ortamda aynı bağlantıya gider. Ortama göre doğru veritabanı için bir “Veritabanı” seçin. ', cevir), panel);
+  };
+  baglanti.addEventListener('change', () => {
+    const [tur, id] = [baglanti.value.slice(0, 2), baglanti.value.slice(2)];
+    delete t.veritabaniId; delete t.baglantiId;
+    if (tur === 'v:') t.veritabaniId = id; else if (tur === 'b:') t.baglantiId = id; else t.baglantiId = '';
+    hedefBilgisiCiz(); degisti();
+  });
+  hedefBilgisiCiz();
 
   const sql = h('textarea', { rows: '5', spellcheck: 'false', class: 'kod-girdisi', maxlength: '20000', 'aria-label': `${onek}SQL sorgusu`,
     placeholder: `SELECT durum FROM kayitlar WHERE no = ${s.yerTutucuOrnegi ?? '${akis:KayitNo}'}` });
@@ -132,7 +234,10 @@ export function sqlAdimiFormu(t, s) {
   okumalariCiz();
 
   return h('div', { class: 'sql-adimi-formu' },
-    alan('Veritabanı bağlantısı', baglanti, { yardim: s.baglantilar.length ? 'Ayarlar > Entegrasyonlar’daki “Veritabanı bağlantısı” kayıtları.' : 'Henüz veritabanı bağlantısı yok: Ayarlar > Entegrasyonlar’dan ekleyin.' }),
+    alan('Veritabanı', baglanti, { yardim: veritabanlari.length || s.baglantilar.length
+      ? 'Veritabanları (Ayarlar > Entegrasyonlar > Veritabanları) koşunun ortamına göre doğru bağlantıya gider; doğrudan bağlantı her ortamda aynıdır.'
+      : 'Henüz veritabanı yok: Ayarlar > Entegrasyonlar’dan bağlantı ekleyip Veritabanları’nda ortamlara eşleyin.' }),
+    hedefBilgisi,
     alan('SQL sorgusu', sql, { yardim: `Değerleri ${s.yerTutucuOrnegi ?? '${akis:Ad}'} gibi tırnaksız yazın; SQL’e metin olarak eklenmez, parametre olarak bağlanır. “Yalnız okuma” açık bağlantıda yalnız SELECT / WITH çalışır.` }),
     sqlUyarisi,
     alan('Beklenen sonuç', tur), beklenenKap,

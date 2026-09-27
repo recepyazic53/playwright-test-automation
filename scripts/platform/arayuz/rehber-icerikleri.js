@@ -332,7 +332,14 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Tür', alt: 'webhook / hata kaydı / veritabanı', ikon: 'liste' }, { baslik: 'Ayarlar', alt: 'gizliler kasada', ikon: 'kilit' }, { baslik: 'Dene', alt: 'onayınızla', ikon: 'simsek' }, { baslik: 'Bağlı', ikon: 'onay' }] }
       },
       { baslik: 'Bağlama sırası', sira: ['"Yeni bağlantı" ile türü seçin.', 'Alanları doldurun; hangi olaylarda ve hangi ortamlarda çalışacağını seçin.', '"Bağlantıyı dene": önce hangi adrese deneme isteği gideceği gösterilir, onaylarsanız gider.', 'Kaydedin; durum rozeti bağlı / denenmedi / hata olarak görünür.'] },
-      { baslik: 'Veritabanı ve DBeaver', metin: 'Veritabanı bağlantıları varsayılan olarak yalnız okuma kipindedir (yalnız SELECT). DBeaver kullanıyorsanız bağlantı tanımlarını "DBeaver\'dan içe aktar" ile alabilirsiniz; parolalar alınmaz, siz girersiniz.', ipucu: 'Veritabanı sürücüleri ayrıca kurulur: npm install mssql oracledb pg mysql2' }
+      { baslik: 'Veritabanı ve DBeaver', metin: 'Veritabanı bağlantıları varsayılan olarak yalnız okuma kipindedir (yalnız SELECT). DBeaver kullanıyorsanız bağlantı tanımlarını "DBeaver\'dan içe aktar" ile alabilirsiniz; parolalar alınmaz, siz girersiniz.', ipucu: 'Veritabanı sürücüleri ayrıca kurulur: npm install mssql oracledb pg mysql2' },
+      {
+        baslik: 'Veritabanları (ortama göre)',
+        metin: ['SQL adımı bir bağlantıya değil, bir veritabanına bağlanır; koşu, seçtiğiniz ortamdaki bağlantıya gider. Tabloda satır veritabanı, sütun ortamdır; boş hücre o ortamda kullanılmaz (adım sorgu atmadan hatayla kalır, koşu diyaloğu önceden uyarır).',
+          'Örnek: "Kayıt veritabanı" → TEST ortamında kayit-TEST (192.0.2.10), CANLI ortamında kayit-CANLI (192.0.2.20). Aynı senaryo TEST koşusunda TEST veritabanını, CANLI koşusunda CANLI veritabanını sorgular.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'SQL adımı', alt: 'Kayıt veritabanı', ikon: 'veri' }, { baslik: 'Koşunun ortamı', alt: 'TEST / CANLI', ikon: 'ag' }, { baslik: 'Bağlantı', alt: 'kayit-TEST / kayit-CANLI', ikon: 'kilit' }] },
+        ipucu: 'Eski adımlar (doğrudan bağlantı) aynen çalışır; SQL adımında "Veritabanına çevir…" ile bağlantının eşlendiği veritabanına geçebilirsiniz.'
+      }
     ]
   },
   'ayarlar-arayuz': {

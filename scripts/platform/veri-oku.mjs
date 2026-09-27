@@ -30,7 +30,7 @@ import { medyaKlasoru } from './medya.mjs';
 import { referansCoz, referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
-import { kosuBaglantiAyarlari, modeldekiSqlBaglantilari } from './sql/sorgu-bagdastirici.mjs';
+import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
@@ -296,10 +296,20 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
   const canli = ayarlar.canli === true;
   // SQL adımlarının veritabanı bağlantıları (Ayarlar > Entegrasyonlar): yalnız modellerde kullanılanlar; parola çözülmüş, giriş
   // bilgisi gibi yalnız bu borudan koşu belleğine gider (loglara / rapora yazılmaz). Kullanılamayan bağlantı { hata }.
-  const sqlIdleri = new Set();
-  for (const mb of modeller.values()) if (mb) for (const id of modeldekiSqlBaglantilari([mb.model, mb.altModeller])) sqlIdleri.add(id);
-  const sqlBaglantilari = sqlIdleri.size ? kosuBaglantiAyarlari(vt, projeId, ortamId, sqlIdleri) : {};
-  return { ortam: 'genel', ortamId, tabanUrl: ortam.tabanUrl, canli, senaryolar, baglamProfilleri, kimlikProfilleri: kimlikProfilleriniCoz(vt, projeId, ortamId, havuzlar), sqlBaglantilari };
+  // Mantıksal veritabanları (Ayarlar > Entegrasyonlar > Veritabanları) bu ortamın eşlemesiyle bağlantıya çözülür; eşleme yoksa
+  // { hata } (adım sorgu atmadan kalır). sqlBaglantiAdlari: raporda kullanılan bağlantının adı.
+  /** @type {Set<string>} */
+  const baglantiIdleri = new Set();
+  /** @type {Set<string>} */
+  const veritabaniIdleri = new Set();
+  for (const mb of modeller.values()) {
+    if (!mb) continue;
+    const h = modeldekiSqlHedefleri([mb.model, mb.altModeller]);
+    for (const id of h.baglantiIdleri) baglantiIdleri.add(id);
+    for (const id of h.veritabaniIdleri) veritabaniIdleri.add(id);
+  }
+  const sql = baglantiIdleri.size || veritabaniIdleri.size ? kosuSqlVerisi(vt, projeId, ortamId, { baglantiIdleri, veritabaniIdleri }) : { sqlBaglantilari: {} };
+  return { ortam: 'genel', ortamId, tabanUrl: ortam.tabanUrl, canli, senaryolar, baglamProfilleri, kimlikProfilleri: kimlikProfilleriniCoz(vt, projeId, ortamId, havuzlar), ...sql };
 }
 
 /**

@@ -5,6 +5,8 @@
 // Ayrıca: Sonuçlar'daki test ayrıntısı için "Hata kaydı aç" düğmesi (hataKaydiDugmesi) ve DBeaver bağlantılarını içe aktarma.
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, parolaAlani, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { diyalogAc, onayIste } from './ekran-ortak.js';
+import { sqlKaynaklariniUnut } from './sql-adimi-formu.js';
+import { veritabanlariBolumu } from './veritabanlari.js';
 
 const DURUM = {
   bagli: ['Bağlı', 'basari'],
@@ -38,6 +40,8 @@ async function onayliDene(govde) {
  */
 export async function entegrasyonlarBolumu(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
+  // SQL adımı seçim listeleri (sayfa önbelleği) bu bölümde yapılan değişikliklerden sonra yeniden okunsun.
+  sqlKaynaklariniUnut(proje.id);
   const [{ turler, baglantilar }, { ortamlar }] = await Promise.all([
     api(`/platform/entegrasyonlar?projeId=${encodeURIComponent(proje.id)}`),
     api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
@@ -73,8 +77,20 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
     });
     const silDugmesi = h('button', { type: 'button', class: 'kucuk-dugme tehlike', 'aria-label': `${b.ad}: sil` }, ikon('cop'), 'Sil');
     silDugmesi.addEventListener('click', async () => {
+      // Veritabanı bağlantısı: eşli olduğu veritabanları ve doğrudan kullanan SQL adımları önce gösterilir (adımlar kırılmasın).
+      /** @type {string[]} */
+      let etki = [];
+      if (b.tur === 'veritabani') {
+        try {
+          const k = await api(`/platform/sql/baglanti-kullanimi?projeId=${encodeURIComponent(proje.id)}&baglantiId=${encodeURIComponent(b.id)}`);
+          etki = [...k.veritabanlari.map((v) => `Veritabanı “${v.ad}”: ${v.ortamlar.join(', ')} ortamında eşli — eşleme kalkar, o ortamda SQL adımı çalışmaz`),
+            ...k.adimlar.map((a) => `SQL adımı (doğrudan bağlantı): ${a}`)];
+        } catch { etki = []; }
+      }
       const tamam = await onayIste({
-        baslik: 'Bağlantıyı sil', metin: `"${b.ad}" bağlantısı ve kasadaki gizli değerleri kalıcı olarak silinecek. Bu işlem geri alınamaz.`, dugme: 'Kalıcı olarak sil', tehlikeli: true
+        baslik: 'Bağlantıyı sil',
+        metin: `"${b.ad}" bağlantısı ve kasadaki gizli değerleri kalıcı olarak silinecek. Bu işlem geri alınamaz.${etki.length ? ' Şu veritabanları / SQL adımları etkilenir:' : ''}`,
+        liste: etki, dugme: 'Kalıcı olarak sil', tehlikeli: true
       });
       if (!tamam) return;
       try {
@@ -100,6 +116,8 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
 
   const dbeaver = h('button', { type: 'button', class: 'hayalet' }, ikon('veri'), 'DBeaver\'dan içe aktar');
   dbeaver.addEventListener('click', () => dbeaverIceAktar(proje, yenile));
+  // Veritabanları (mantıksal; ortama göre bağlantı): SQL adımlarının önerilen hedefi (veritabanlari.js).
+  const veritabanlari = await veritabanlariBolumu(proje, ortamlar, baglantilar, yenile);
 
   yerlestir(govde,
     h('div', { class: 'bolum-basligi' },
@@ -108,6 +126,7 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
     formAlani,
     baglantilar.length ? h('ul', { class: 'kayit-listesi' }, satirlar)
       : bosDurum('Henüz bağlantı yok.', 'Bir uygulamayı bağlamak için "+ Bağlantı ekle"ye basın. Bağlantılar kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.', { ikon: 'ag', rol: 'status' }),
+    veritabanlari,
     h('h3', { class: 'entegrasyon-katalog-basligi' }, 'Kullanılabilir türler'),
     h('ul', { class: 'entegrasyon-katalogu' }, turler.map((t) => h('li', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h4', {}, ikon(t.ikon), t.ad)),

@@ -633,14 +633,16 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
         else b.ortakAkislar.push([`${adYer}.ortakAkis`, adim.ortakAkis.dosya]);
         if (adim.kosu !== undefined) h.ekle(adYer, 'ortak akış adımının kendi koşu tanımı olmaz (adımları ortak akıştadır)');
       }
-      // SQL ADIMI: { baglantiId, sql, beklenen: { tur, … }, yenidenDeneme?, zamanAsimiSn?, okumalar? } — koşuda veritabanında sorgu
+      // SQL ADIMI: { veritabaniId | baglantiId, sql, beklenen: { tur, … }, yenidenDeneme?, zamanAsimiSn?, okumalar? } — koşuda veritabanında sorgu
       // çalışır, sonuç beklenenle karşılaştırılır (ayrıntılı kurallar platform/sql/sql-adimi.mjs; burada yapı).
       if (sqlVar) {
         const q = adim.sqlKontrolu;
         const qYer = `${adYer}.sqlKontrolu`;
         if (!nesneMi(q)) h.ekle(qYer, '"sqlKontrolu" bir nesne olmalı');
         else {
-          if (!metinMi(q.baglantiId)) h.ekle(qYer, '"baglantiId" zorunlu');
+          // Hedef: "veritabaniId" (mantıksal veritabanı; ortama göre bağlantı) ya da "baglantiId" (doğrudan bağlantı, eski) — yalnız biri.
+          if (metinMi(q.veritabaniId) && metinMi(q.baglantiId)) h.ekle(qYer, '"veritabaniId" ve "baglantiId"den yalnız biri olmalı');
+          else if (!metinMi(q.veritabaniId) && !metinMi(q.baglantiId)) h.ekle(qYer, '"veritabaniId" ya da "baglantiId" zorunlu');
           if (!metinMi(q.sql)) h.ekle(qYer, '"sql" zorunlu');
           if (!nesneMi(q.beklenen) || !SQL_BEKLENEN_TURLERI.includes(q.beklenen.tur)) h.ekle(qYer, `"beklenen.tur" şunlardan biri olmalı: ${SQL_BEKLENEN_TURLERI.join(', ')}`);
           if (q.okumalar !== undefined && !Array.isArray(q.okumalar)) h.ekle(qYer, '"okumalar" dizi olmalı');

@@ -7,7 +7,10 @@ export type SqlBeklenen =
   | { tur: 'tabloEsit'; sutunlar: string[]; satirlar: string[][] };
 export type SqlOkuma = { ad: string; sutun: string; gizli?: boolean };
 export type SqlTanimi = {
-  baglantiId: string;
+  /** Mantıksal veritabanı (koşuda ortamın eşlemesiyle bağlantıya çözülür; önerilen). baglantiId ile ikisinden biri bulunur. */
+  veritabaniId?: string;
+  /** Doğrudan bağlantı (eski; her ortamda aynı bağlantı). */
+  baglantiId?: string;
   sql: string;
   beklenen: SqlBeklenen;
   yenidenDeneme?: { sureSn: number; aralikSn: number };
