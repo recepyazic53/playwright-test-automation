@@ -13,7 +13,7 @@
 // Çıktı her zaman tek satır JSON'dur; hata durumunda { hata, kod } (çıkış kodu 0). Gizli değerler yalnızca stdout'ta
 // bulunur; loglara ASLA yazılmaz.
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { veritabaniAc, veritabaniYolu } from './veritabani/baglanti.mjs';
 import { gocleriUygula } from './veritabani/gocler.mjs';
@@ -27,15 +27,29 @@ import { modelSenaryosuMu } from './senaryolar/model-kosusu.mjs';
 import { senaryoGirisi, senaryoGirisiniAyikla } from './senaryolar/senaryo-girisi.mjs';
 import { etkinGirisTarifi } from './giris/tarif-deposu.mjs';
 import { medyaKlasoru } from './medya.mjs';
-import { referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
+import { referansCoz, referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
 import { kosuBaglantiAyarlari, modeldekiSqlBaglantilari } from './sql/sorgu-bagdastirici.mjs';
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
+import { YUKLEME_KLASORU_DEGISKENI, yuklemeDosyasiYolu } from './senaryolar/model-kosusu.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+/**
+ * Tablodan gelen dosya adı (${Tablo.Sütun} → dosya alanı): koşucunun kuralıyla (tests/support/model-kosucu.ts yuklenecekDosya)
+ * izinli klasördeki bir dosyanın adı olmalı ve dosya var olmalı; şifreli senaryo dosyası referansı (nobetci-dosya://) aynen
+ * geçer. Sorun varsa kullanıcıya dönük metin (koşu tarayıcı açılmadan durur), yoksa null. @param {string} ad
+ */
+function tablodanDosyaDenetle(ad) {
+  if (referansCoz(ad)) return null;
+  const klasor = resolve(process.env[YUKLEME_KLASORU_DEGISKENI] || join(PROJE_KOKU, 'veri', 'yuklenecek-dosyalar'));
+  const r = yuklemeDosyasiYolu(ad, klasor, join);
+  if ('hata' in r) return r.hata;
+  return existsSync(r.yol) ? null : `"${ad}" dosyası izinli klasörde yok (${YUKLEME_KLASORU_DEGISKENI} ya da veri/yuklenecek-dosyalar/)`;
+}
 
 /** @param {unknown} veri */
 function yaz(veri) {
@@ -203,7 +217,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
     if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, ekranAlanBaglari(vt, ekranId));
     const r = ekranBasvurulariniCoz(veri, {
-      tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId,
+      tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId, dosyaDenetle: tablodanDosyaDenetle,
       ...(tabloSecimleri && typeof tabloSecimleri === 'object' ? { tabloSecimleri: /** @type {Record<string, Record<string, string>>} */ (tabloSecimleri) } : {})
     });
     return { veri: r.veri, tabloGizliDegerleri: r.gizliDegerler, veriHatalari: r.hatalar };
@@ -244,7 +258,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     const ekran = ekranlar.get(deneme.ekranId);
     if (mb) {
       modeller.set(`${deneme.ekranId}\u0000deneme`, mb);
-      const cozum = basvurulariCoz(deneme.veri, deneme.ekranId, mb, null);
+      const cozum = basvurulariCoz(deneme.veri, deneme.ekranId, mb, deneme.tabloSecimleri);
       senaryolar.push({
         id: deneme.id, baslik: deneme.baslik, kosuyaDahil: true, ekranEtkin: true,
         ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: deneme.ekranId, anahtar: '', ad: '' },
@@ -302,7 +316,9 @@ function modelDenemeSenaryosu(ortamId) {
     return {
       id: d.id, ekranId: d.ekranId, akisId: typeof d.akisId === 'string' ? d.akisId : null, baslik: d.baslik, veri: d.veri,
       mutlakaGorunmeli: Array.isArray(d.mutlakaGorunmeli) ? d.mutlakaGorunmeli.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
-      giris: senaryoGirisiniAyikla(d.giris).giris
+      giris: senaryoGirisiniAyikla(d.giris).giris,
+      // Formdaki satır seçimleri (sunucu ekran-basvurulari.mjs > tabloSecimleriniAyikla ile denetledi).
+      tabloSecimleri: d.tabloSecimleri && typeof d.tabloSecimleri === 'object' && !Array.isArray(d.tabloSecimleri) ? d.tabloSecimleri : null
     };
   } catch {
     return null;

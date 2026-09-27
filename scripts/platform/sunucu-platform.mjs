@@ -79,6 +79,8 @@
 //   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
 //   POST /platform/ekran/analiz/uygula { projeId, ekranId, analizId, kabul, red } yalnızca kabul edilenlerle yeni sürüm
 //   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
+//   POST /platform/ekran/senaryolar/tablo-donusumu { projeId, ekranId?, onay?, secimler?: [{ senaryoId, alan }] }  tabloya bağlı
+//        alanların düz değerleri → ${Tablo.Sütun} (+ satır seçimi); onay yoksa yalnız plan, onayla yalnız seçilenler (tablolar/ekran-donusumu.mjs)
 //   POST /platform/ekran/claude-dosyasi { projeId, ekranId, tur, baglamProfilleri? } → <veritabanı klasörü>/analiz/*.json
 //        (gizli değer içermez; Claude API KULLANILMAZ — dosya kullanıcı tarafından Claude Code'a verilir)
 // Ekran yönetimi (Ekranlar > ⋯; bkz. ekranlar/ekran-yonetimi.mjs; geçmiş: GET /platform/gecmis?varlikTuru=ekran&varlikId=):
@@ -187,6 +189,7 @@ import {
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
 import { TABLO_GET_UCLARI, TABLO_POST_UCLARI } from './tablolar/tablo-uclari.mjs';
+import { ekranTabloDonusumu } from './tablolar/ekran-donusumu.mjs';
 import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
 import { AKIS_SENARYO_GET_UCLARI, AKIS_SENARYO_POST_UCLARI } from './servisler/akis-senaryosu.mjs';
 import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
@@ -1286,6 +1289,10 @@ const POST_UCLARI = new Map([
   })],
   ['/platform/ekran/akis/sil', (db, g) => akisSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
   ['/platform/ekran/reddedilenleri-unut', (db, g) => reddedilenleriUnut(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'))],
+  // Düz değer → tablo başvurusu: onay yoksa yalnız plan (hiçbir şey yazılmaz); onayla yalnız seçilen senaryo + alanlar.
+  ['/platform/ekran/senaryolar/tablo-donusumu', (db, g) => ekranTabloDonusumu(db, kimlikAl(g.projeId, 'projeId'), {
+    ekranId: secimliKimlik(g.ekranId) ?? null, onay: g.onay === true, secimler: g.secimler
+  }, { kosuyorMu })],
   ['/platform/ekran/toplu-ata', (db, g) => topluDegerAta(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { anahtar: g.anahtar, deger: g.deger, senaryoIdler: g.senaryoIdler })],
   ['/platform/ekran/claude-dosyasi', (db, g) => {
     const s = claudeDosyasiYaz(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
@@ -1329,7 +1336,9 @@ const POST_UCLARI = new Map([
       ...(g.veri !== undefined ? { veri: g.veri } : {}), ortamIdleri: g.ortamIdleri, kosuyaDahil: g.kosuyaDahil, mutlakaGorunmeli: g.mutlakaGorunmeli,
       ...(typeof g.akisId === 'string' ? { akisId: g.akisId } : {}),
       // Giriş seçimi (senaryo-girisi.mjs): verilmezse mevcut korunur.
-      ...(g.giris !== undefined ? { giris: g.giris } : {})
+      ...(g.giris !== undefined ? { giris: g.giris } : {}),
+      // Satır seçimleri (${Tablo.Sütun} değerlerinin koşuda kullanılacak satırı): verilmezse mevcut korunur.
+      ...(g.tabloSecimleri !== undefined ? { tabloSecimleri: g.tabloSecimleri } : {})
     }, { kosuyorMu });
     // Formda yüklenen (henüz sahipsiz) şifreli dosyalar bu senaryoya bağlanır (sahipsiz temizliği silmesin).
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);

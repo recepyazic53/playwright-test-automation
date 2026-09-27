@@ -22,7 +22,7 @@ export const TABLO_GET_UCLARI = [
   ['/platform/ekran/alan-baglari', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const ekranId = kimlik(q.get('ekranId'), 'ekranId');
-    const { girdiler } = ekranGirdileri(db, projeId, ekranId);
+    const { girdiler } = ekranGirdileri(db, projeId, ekranId, { tumTipler: true });
     return { baglar: ekranAlanBaglari(db, ekranId), girdiler: girdiler.map((g) => ({ id: g.id, etiket: g.etiket, tip: g.tip })), tablolar: tablolariListele(db, projeId) };
   }]
 ];

@@ -24,6 +24,10 @@ function bosMu(d) {
 function kopya(d) {
   return d === undefined ? undefined : JSON.parse(JSON.stringify(d));
 }
+/** Değerin tamamı test verisi tablosu başvurusu mu ("${Tablo.Sütun}"; tam ayrıştırma senaryo-dogrulayici.mjs'dedir). */
+function tabloBasvurusuMu(d) {
+  return typeof d === 'string' && /^\s*\$\{[^{}]+\.[^{}]+\}\s*$/u.test(d);
+}
 function senaryoAnahtarlari(alan) {
   const s = alan && alan.eslesme && alan.eslesme.senaryo;
   if (s === undefined || s === null) return [];
@@ -520,7 +524,8 @@ export function formDegerleriniKur(sema, veri = {}) {
         d[`${alan.anahtar}.${a.anahtar}`] = a.tip === 'secim' ? secimMetni(ham) : typeof ham === 'string' ? ham : '';
       }
     } else if (alan.tip === 'onayKutusu') {
-      d[alan.anahtar] = v[alan.anahtar] === true;
+      // Değeri tablodan (${Tablo.Sütun}; koşuda evet / hayır olarak çözülür) gelen onay kutusu başvuruyu korur.
+      d[alan.anahtar] = tabloBasvurusuMu(v[alan.anahtar]) ? v[alan.anahtar] : v[alan.anahtar] === true;
     } else if (alan.tip === 'sayi') {
       d[alan.anahtar] = typeof v[alan.anahtar] === 'number' ? String(v[alan.anahtar]) : typeof v[alan.anahtar] === 'string' ? v[alan.anahtar] : '';
     } else {
@@ -595,6 +600,7 @@ function taslakOlustur(sema, d, onceki, gorunurluk) {
         // Onay kutusu: işaretliyse true; işaretsiz + zorunlu ise false; işaretsiz + isteğe bağlı: yazılmaz
         // (ekrandaki mevcut duruma dokunulmaz).
         if (d[alan.anahtar] === true) sonuc[alan.anahtar] = true;
+        else if (tabloBasvurusuMu(d[alan.anahtar])) sonuc[alan.anahtar] = String(d[alan.anahtar]).trim();
         else if (alan.zorunlu === true) sonuc[alan.anahtar] = false;
         break;
       case 'sayi': {

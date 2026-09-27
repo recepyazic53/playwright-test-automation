@@ -114,7 +114,8 @@ export const MESAJLAR = Object.freeze({
   tabloBasvurusuAlamaz: (etiket) => `${adGoster(etiket)} test verisi tablosundan değer (\${Tablo.Sütun}) alamaz; değeri doğrudan seçin.`,
   tabloYok: (etiket, tablo) => `${adGoster(etiket)} için "${tablo}" adında test verisi tablosu yok (Ayarlar > Test verisi).`,
   tabloSutunuYok: (etiket, tablo, sutun) => `${adGoster(etiket)} için "${tablo}" tablosunda "${sutun}" sütunu yok.`,
-  gizliSutunSecimde: (etiket, sutun) => `${adGoster(etiket)} bir seçim alanı; gizli "${sutun}" sütunundan değer alamaz.`
+  gizliSutunSecimde: (etiket, sutun) => `${adGoster(etiket)} bir seçim alanı; gizli "${sutun}" sütunundan değer alamaz.`,
+  gizliSutunDosyada: (etiket, sutun) => `${adGoster(etiket)} bir dosya alanı; gizli "${sutun}" sütunundan dosya adı alamaz.`
 });
 
 // ---- Tablo başvurusu (ekran senaryosunda değer: ${Tablo.Sütun} / ${Tablo[etiket].Sütun|biçim}) ----
@@ -122,8 +123,11 @@ export const MESAJLAR = Object.freeze({
 // ayrıştırıcının aynı sonucu verdiğini denetler). Değer koşuda senaryonun seçtiği satırdan çözülür (tablolar/ekran-basvurulari.mjs).
 const TABLO_ADI_KALIBI = '[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}';
 const TABLO_BASVURUSU = new RegExp(`^\\s*\\$\\{\\s*(${TABLO_ADI_KALIBI})(?:\\[([\\p{L}\\p{N} _-]{1,40})\\])?\\.(${TABLO_ADI_KALIBI})\\s*(?:\\|([^{}$\\u0000-\\u001f]{1,60}))?\\}\\s*$`, 'u');
-/** Tablo başvurusu alabilen alan tipleri. */
-const TABLODAN_ALABILIR = ['secim', 'okluSecim', 'radyo', 'metin', 'sayi', 'tarih', 'telefon'];
+/**
+ * Tablo başvurusu alabilen alan tipleri. Onay kutusunda tablodaki değer evet / hayır olarak okunur (true/false, evet/hayır, 1/0,
+ * E/H); dosya alanında değer izinli klasördeki dosyanın adıdır (ikisi de koşuda denetlenir; ekran-basvurulari.mjs ekrandakiDeger).
+ */
+const TABLODAN_ALABILIR = ['secim', 'okluSecim', 'radyo', 'metin', 'sayi', 'tarih', 'telefon', 'onayKutusu', 'dosya'];
 
 /** Değerin tamamı "${Tablo.Sütun}" ise { tablo, etiket, sutun, bicim }, değilse null. */
 export function tabloBasvurusuCoz(deger) {
@@ -146,6 +150,7 @@ function tabloBasvurusunuDogrula(alan, anahtar, b, tablolar, rapor) {
   const s = (Array.isArray(t.sutunlar) ? t.sutunlar : []).find((x) => x && kucuk(x.ad) === kucuk(b.sutun));
   if (!s) { rapor.hata(anahtar, MESAJLAR.tabloSutunuYok(etiket, t.ad, b.sutun)); return; }
   if (s.gizli === true && ['secim', 'okluSecim', 'radyo'].includes(alan.tip)) rapor.hata(anahtar, MESAJLAR.gizliSutunSecimde(etiket, s.ad));
+  if (s.gizli === true && alan.tip === 'dosya') rapor.hata(anahtar, MESAJLAR.gizliSutunDosyada(etiket, s.ad));
 }
 
 // ---- Küçük yardımcılar ----

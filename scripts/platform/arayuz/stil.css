@@ -3240,3 +3240,33 @@ dialog.karsilastir-diyalogu { width: min(40rem, calc(100vw - 2rem)); }
 .tablo-listesi .tablo-ogesi small { color: var(--metin-3); font-size: 11.5px; font-weight: 400; }
 .tablo-listesi .tablo-ogesi .tablo-adi { overflow-wrap: anywhere; }
 .tablo-grubu-bos { margin: 2px 8px; }
+/* Senaryo formu > Satır seçimi (tablo başvurularının koşudaki satırı; senaryo-formu.js) ve "Tablodan" onay kutusu. */
+.satir-secimi-karti { display: grid; gap: 12px; min-width: 0; }
+.satir-secimi-grubu { display: grid; gap: 6px; min-width: 0; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
+.satir-secimi-grubu h4 { margin: 0; overflow-wrap: anywhere; }
+.satir-secimi-grubu select { width: 100%; min-width: 0; max-width: 100%; }
+.kosul-izgarasi { display: grid; grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr)); gap: 8px 12px; margin-top: 6px; min-width: 0; }
+.kosul-satiri { display: grid; gap: 3px; min-width: 0; font-size: 12.5px; }
+.kosul-satiri span { overflow-wrap: anywhere; color: var(--metin-2); }
+.tablodan-deger { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; padding: 6px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 13px; }
+.tablodan-deger > span { flex: 1 1 10rem; min-width: 0; overflow-wrap: anywhere; }
+
+/* Ekran > Test verisi > "Değerleri tabloya bağla…": dönüşüm planı (ekran-baglari.js). */
+.donusum-plani { display: grid; gap: 10px; min-width: 0; margin-top: 10px; }
+.donusum-ozeti { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 12.5px; }
+.donusum-tablosu-kap { max-height: 22rem; overflow: auto; border-radius: var(--yaricap-m); box-shadow: inset 0 0 0 1px var(--cizgi); min-width: 0; }
+.donusum-tablosu { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.donusum-tablosu th, .donusum-tablosu td { padding: 6px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--cizgi); overflow-wrap: break-word; }
+.donusum-tablosu th { white-space: nowrap; }
+.donusum-tablosu th:first-child, .donusum-tablosu td:first-child { width: 2rem; }
+.donusum-tablosu thead th { position: sticky; top: 0; background: var(--panel); z-index: 1; font-weight: 600; }
+.donusum-tablosu tr.atlandi td { color: var(--metin-3); }
+.donusum-tablosu code { font-size: 12px; overflow-wrap: anywhere; word-break: break-word; }
+.donusum-tablosu .neden { display: block; font-size: 11.5px; color: var(--metin-3); }
+@media (max-width: 640px) {
+  .donusum-tablosu thead { display: none; }
+  .donusum-tablosu, .donusum-tablosu tbody, .donusum-tablosu tr, .donusum-tablosu td { display: block; width: 100%; }
+  .donusum-tablosu tr { padding: 6px 0; border-bottom: 1px solid var(--cizgi); }
+  .donusum-tablosu td { border: 0; padding: 2px 8px; }
+  .donusum-tablosu td[data-baslik]::before { content: attr(data-baslik) ": "; color: var(--metin-3); }
+}
