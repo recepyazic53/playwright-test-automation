@@ -228,7 +228,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
           govde: { projeId: s.proje.id, ekranId: s.ekranId, analizId: a.id, kabul: kabulListesi.map((b) => b.id), red: redListesi.map((b) => b.id) }
         }));
         taslakSil(a.id);
-        bildir(r.yeniSurum ? `Model v${r.surum} oluşturuldu (${r.kabul} kabul, ${r.red} red).` : `${r.red} bulgu reddedildi; model değişmedi.`);
+        bildir(`${r.yeniSurum ? `Model v${r.surum} oluşturuldu (${r.kabul} kabul, ${r.red} red).` : `${r.red} bulgu reddedildi; model değişmedi.`}${r.baglanan ? ` ${r.baglanan} alan test verisi tablosuna bağlandı.` : ''}`);
         await bulgularEkrani(icerik, s, secili);
       } catch (e) {
         if (e.durum === 423) return;

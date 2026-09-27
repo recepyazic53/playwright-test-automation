@@ -9,7 +9,7 @@
 //   ekranları göster"); silinmiş ekranlar (mezar taşı) "Tüm ekranlar"ın altında listelenir (geri yükle / temizle).
 // Adresler: #/ekranlar · #/ekranlar/yeni[/tara] · #/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /yukle | /bulgular] ·
 //   #/ekranlar/tarama/<iş kimliği> (otomatik taramanın ilerlemesi → önizleme/kabul)
-// Ekran keşfinin ana yolu: kullanıcı sayfa bağlantısını Claude Code'a verir, Claude sayfayı düğme kurallarına göre (INCELEME_KURALLARI)
+// Ekran keşfinin ana yolu: kullanıcı sayfa bağlantısını Claude Code'a verir, Claude sayfayı düğme kurallarına göre (paket-istekleri.mjs > INCELEME_KURALLARI)
 // inceleyip bir "sayfa paketi" (docs/sayfa-paketi.md) üretir; paket burada yüklenir. Claude API kullanılmaz.
 import { TOKEN, api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import {
@@ -25,6 +25,7 @@ import { ekranBaglariSekmesi } from './ekran-baglari.js';
 import { ekranlarGrubu, navGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
 import { girisAkislariniAl, girisBaglantisi, girisKarti } from './giris-akisi.js';
+import { paketIstekCumlesi } from './paket-istekleri.mjs';
 
 /** Otomatik tarama modülü isteğe bağlı yüklenir (yüklenemezse yalnızca tarama çalışmaz). */
 let taramaSozu = null;
@@ -41,10 +42,8 @@ function kayitBaslat(proje, ekran) {
 }
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
-/** Claude'un inceleme kuralları (düğme grupları; docs/sayfa-paketi.md ve sayfa-paketi.js / ekran-servisi.mjs ile aynı metin). */
-export const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. Alanlara kart, parola, kimlik no gibi bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. Tüm seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini testVerisi.tablolar\'a yaz: bağımlı listelerde her satır geçerli bir kombinasyon olsun (üst seçim + alt seçenek); hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar\'ına ekle; alanları testVerisi.baglantilar ile sütunlara bağla, senaryo önerilerinde bu alanlara tablodaki değeri yaz. Kişisel ya da gizli değerleri (parola, kart, kimlik no) hiçbir yere yazma; böyle bir sütun gerekiyorsa "gizli": true işaretle ve boş bırak.';
-export const CLAUDE_ISTEK_CUMLESI = (adres) =>
-  `${adres || '<sayfa bağlantısı>'} sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI}`;
+// Claude'un inceleme kuralları ve istek cümlesi: TEK kaynak paket-istekleri.mjs (sayfa-paketi.js ve sunucu da aynısını kullanır).
+export const CLAUDE_ISTEK_CUMLESI = (adres) => paketIstekCumlesi(adres);
 
 /**
  * @param {HTMLElement} main

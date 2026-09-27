@@ -31,6 +31,9 @@ import { referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
 import { kosuBaglantiAyarlari, modeldekiSqlBaglantilari } from './sql/sorgu-bagdastirici.mjs';
+import { tablolariListele } from './tablolar/tablo-deposu.mjs';
+import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
+import { ekranBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -185,6 +188,26 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
   const ekranlar = new Map(ekranlariListele(vt, projeId).map((e) => [e.id, e]));
   /** @type {Map<string, ReturnType<typeof modelBaglami>>} */
   const modeller = new Map();
+  // Ekran senaryosundaki ${Tablo.Sütun} başvuruları (tablolar/ekran-basvurulari.mjs): tablolar (değerler çözülmüş; yalnızca koşu
+  // belleğinde) yalnız başvuru varsa bir kez okunur. Gizli sütun değerleri koşucuya "tabloGizliDegerleri" ile gider (maskelenir);
+  // çözülemeyen başvuru "veriHatalari" olur (koşucu tarayıcıyı açmadan açık hatayla durur).
+  /** @type {import('./tablolar/tablo-deposu.mjs').Tablo[] | null} */
+  let tablolar = null;
+  /** @type {Map<string, ReturnType<typeof ekranAlanBaglari>>} */
+  const baglarOnbellegi = new Map();
+  /**
+   * @param {Record<string, unknown>} veri @param {string} ekranId @param {ReturnType<typeof modelBaglami>} mb @param {unknown} tabloSecimleri
+   */
+  const basvurulariCoz = (veri, ekranId, mb, tabloSecimleri) => {
+    if (!tabloBasvurusuVarMi(veri)) return { veri, tabloGizliDegerleri: [], veriHatalari: [] };
+    tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
+    if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, ekranAlanBaglari(vt, ekranId));
+    const r = ekranBasvurulariniCoz(veri, {
+      tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId,
+      ...(tabloSecimleri && typeof tabloSecimleri === 'object' ? { tabloSecimleri: /** @type {Record<string, Record<string, string>>} */ (tabloSecimleri) } : {})
+    });
+    return { veri: r.veri, tabloGizliDegerleri: r.gizliDegerler, veriHatalari: r.hatalar };
+  };
   const senaryolar = [];
   for (const s of vt.tumu('SELECT id, ekran_id, baslik, icerik_json, kosuya_dahil FROM senaryolar WHERE proje_id = ? ORDER BY rowid', [projeId])) {
     const icerik = JSON.parse(String(s.icerik_json));
@@ -199,6 +222,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     const mb = modeller.get(modelAnahtari);
     const ekran = ekranlar.get(ekranId);
     const kurallar = icerik.alanKurallari && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli) ? icerik.alanKurallari.mutlakaGorunmeli.filter((x) => typeof x === 'string') : [];
+    const cozum = basvurulariCoz('veri' in buOrtam ? /** @type {Record<string, unknown>} */ (zarflariCoz(vt, buOrtam.veri)) : {}, ekranId, mb, icerik.tabloSecimleri);
     senaryolar.push({
       // Koşuda ORTAM BAŞINA (senaryo-servisi.mjs > ortamdaKosuyaDahil).
       id: String(s.id), baslik: String(s.baslik), kosuyaDahil: ortamdaKosuyaDahil(icerik, s.kosuya_dahil === 1, ortamId),
@@ -206,7 +230,9 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
       ekranEtkin: ekran ? ekran.durum === 'etkin' : false,
       ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: ekranId, anahtar: '', ad: '' },
       model: mb ? mb.model : null, modelSurumu: mb ? mb.surum : null, altModeller: mb ? mb.altModeller : {},
-      veri: 'veri' in buOrtam ? zarflariCoz(vt, buOrtam.veri) : {}, mutlakaGorunmeli: kurallar,
+      veri: cozum.veri, mutlakaGorunmeli: kurallar,
+      ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
+      ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
       // Senaryonun giriş seçimi (senaryo-girisi.mjs; null = ortamın girişiyle, bugünkü davranış).
       giris: senaryoGirisi(icerik)
     });
@@ -218,10 +244,13 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     const ekran = ekranlar.get(deneme.ekranId);
     if (mb) {
       modeller.set(`${deneme.ekranId}\u0000deneme`, mb);
+      const cozum = basvurulariCoz(deneme.veri, deneme.ekranId, mb, null);
       senaryolar.push({
         id: deneme.id, baslik: deneme.baslik, kosuyaDahil: true, ekranEtkin: true,
         ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: deneme.ekranId, anahtar: '', ad: '' },
-        model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: deneme.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true,
+        model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: cozum.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true,
+        ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
+        ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
         giris: deneme.giris
       });
     }

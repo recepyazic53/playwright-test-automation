@@ -21,6 +21,7 @@ import { senaryoAkisi } from '../senaryolar/senaryo-servisi.mjs';
 import { akisPaleti, akistanKayitEnvanteri, bloklariAyikla } from '../tarama/akis-tasarimi.mjs';
 import { kayitPaketiOlustur, kimlikUret } from '../tarama/paket-olusturucu.mjs';
 import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
+import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Nesne */
@@ -502,7 +503,11 @@ function akisKimligi(ad, kullanilan) {
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
  * kayitEnvanteri: akış kaydından ("yeni akış olarak ekle" / "şu akışı güncelle"): sağ liste ve koşul çıkarımı kaydın gerçek
  * okumalarından; yoksa modelden (sentetik envanter).
- * @param {{ akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri }} g
+ * Akış kaydında (kayitEnvanteri) yakalanan seçenek listeleri paket yoluyla AYNI biçimde test verisine önerilir: onaysız çağrı
+ * "testVerisi" önizlemesini de döner (paketTestVerisiOnizle; tablo "<Ekran> — <Alan>", tür "liste"); onaylı çağrıda yalnız
+ * g.testVerisi seçimi (tablo başına yeni / birleştir / yeni ad / atla + bağlanacak alanlar) yazılır — seçim yoksa test verisine
+ * hiçbir şey yazılmaz. Model sürümüyle aynı işlemde.
+ * @param {{ akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri; testVerisi?: unknown }} g
  */
 export function akisKaydet(vt, projeId, ekranId, g) {
   const { ekran, model: tam } = ekranModeli(vt, projeId, ekranId);
@@ -568,9 +573,19 @@ export function akisKaydet(vt, projeId, ekranId, g) {
 
   const varsayilan = liste[0]?.id ?? ANA_AKIS_ID;
   const etkilenen = mevcutAkis ? akisSenaryolari(vt, ekranId, akisId, varsayilan) : [];
-  if (g.onay !== true) return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen, ...(ortakAkis ? { ekranlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}) }, akisId };
-  const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Akış ${mevcutAkis ? 'düzenlendi' : 'eklendi'}: ${ad}` });
-  return { akisId, surum };
+  // Kayıttan yazılan akış: yakalanan seçenek listeleri (paketin testVerisi bölümü) tam modelle birlikte önizlenir / yazılır.
+  const tvPaketi = g.kayitEnvanteri && nesneMi(paket.testVerisi) ? { meta: paket.meta, model: yeni, testVerisi: paket.testVerisi } : null;
+  if (g.onay !== true) {
+    const onizleme = tvPaketi ? paketTestVerisiOnizle(vt, projeId, tvPaketi, ekranId) : null;
+    // Bağlantılar yeni model sürümüyle birlikte yazılır (bulgu beklemez): alanlar yazıldığında modelde olur.
+    const testVerisi = onizleme ? { ...onizleme, baglantilar: onizleme.baglantilar.map((b) => ({ ...b, modeldeVar: true })) } : null;
+    return { etki: { yeni: !mevcutAkis, senaryolar: etkilenen, ...(ortakAkis ? { ekranlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}) }, akisId, ...(testVerisi ? { testVerisi } : {}) };
+  }
+  return vt.islem(() => {
+    const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Akış ${mevcutAkis ? 'düzenlendi' : 'eklendi'}: ${ad}` });
+    const tv = tvPaketi ? paketTestVerisiniYaz(vt, projeId, ekranId, tvPaketi, g.testVerisi) : null;
+    return { akisId, surum, ...(tv ? { testVerisi: { tablolar: tv.tablolar, baglanan: tv.baglanan } } : {}) };
+  });
 }
 
 /**

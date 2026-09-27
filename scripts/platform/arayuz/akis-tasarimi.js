@@ -15,12 +15,15 @@
 // sekmesinden: bir akışı düzenle / kopyala / boş yeni akış; sağ liste YALNIZCA bu ekranın modelindeki alanlar; akışın adı
 // yazılır, kaydetmeden önce etkilenen senaryolar onaya gelir, kaydedince yeni model sürümü — /platform/ekran/akis/*).
 // Mevcut ekranın kaydında "Kayıt nereye yazılsın?": varsayılan akışı güncelle (sayfa paketi → Bulgular), yeni akış olarak ekle
-// ya da seçilen akışı güncelle (etki onayı → yeni model sürümü; POST /platform/tarama/akis { hedef: { tur: 'akis' } }).
+// ya da seçilen akışı güncelle (etki onayı → yeni model sürümü; POST /platform/tarama/akis { hedef: { tur: 'akis' } }). Bu yolda
+// kayıtta yakalanan seçenek listeleri onay penceresinde "Test verisine yazılacaklar" bölümüyle (sayfa-paketi.js > testVerisiSecimi)
+// gösterilir; yalnız seçilen tablolar / bağlantılar yazılır, aynı adlı tablo için seçim yapılmadan onaylanamaz.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { sqlAdimiFormu, sqlBaglantilariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
 import { girisAyrintisi } from './senaryo-diyagrami.js';
+import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
 
 const TURLER = {
   alanlar: { etiket: 'Alan grubu', ikonAd: 'liste' },
@@ -386,7 +389,7 @@ export async function akisTasarimi(icerik, s) {
       return [
         tur,
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, b.desen ? 'Kalıp (düzenli ifade)' : 'Aranacak metin'), metin),
-        b.uyari ? null : h('label', { class: 'onay-satiri kucuk', title: 'Ör. [1-9]: mesajın yerindeki metinde sıfırdan farklı bir rakam (prim hesaplandı).' }, desenKutu, 'Metin bir kalıp (düzenli ifade)'),
+        b.uyari ? null : h('label', { class: 'onay-satiri kucuk', title: 'Ör. [1-9]: mesajın yerindeki metinde sıfırdan farklı bir rakam (tutar hesaplandı).' }, desenKutu, 'Metin bir kalıp (düzenli ifade)'),
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Mesajın yeri'), secim),
         h('p', { class: 'soluk kucuk' }, b.uyari
           ? 'Kabul edilen iş kuralı uyarısı: senaryo “uyarı bekleniyor” derken bunu seçer; başarı bekleyen senaryoda görünürse test başarısız olur.'
@@ -578,14 +581,19 @@ export async function akisTasarimi(icerik, s) {
         hatalar = new Map();
         ciz();
         const sen = on.etki.senaryolar;
+        // Kayıtta yakalanan seçenek listeleri: paket önizlemesindeki gibi test verisine yazılacaklar (onaysız hiçbir şey yazılmaz).
+        let tvYenile = () => {};
+        const tv = on.testVerisi ? testVerisiSecimi(on.testVerisi, () => tvYenile()) : null;
         const onay = await onayIste({
           baslik: on.etki.yeni ? `“${hedef.ad}” akışı eklensin mi?` : `“${hedef.ad}” akışı bu kayıtla güncellensin mi?`,
           metin: `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`,
-          liste: sen.map((x) => x.baslik), dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: false, ikonAd: 'uyari'
+          liste: sen.map((x) => x.baslik), dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: false, ikonAd: 'uyari',
+          ek: tv ? tv.bolum : null, hazir: tv ? tv.hazir : null, baglan: (fn) => { tvYenile = fn; }
         });
         if (!onay) return;
-        const y = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/tarama/akis', { govde: { id: s.isId, bloklar, hedef, onay: true } }));
+        const y = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/tarama/akis', { govde: { id: s.isId, bloklar, hedef, onay: true, ...(tv ? { testVerisi: tv.govde() } : {}) } }));
         bildir(`Akış kaydedildi (model v${y.surum}).`);
+        testVerisiBildir(y.testVerisi);
         location.hash = `#/ekranlar/e/${encodeURIComponent(veri.ekran.id)}/akis/${encodeURIComponent(y.akisId)}`;
         return;
       }

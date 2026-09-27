@@ -19,7 +19,11 @@ export declare function gizliDegerleriBul(deger: unknown, yol?: string, atla?: (
 /** Kanıtın base64 verisini çözer (geçersizse null). */
 export declare function kanitVerisiniCoz(veri: unknown): Buffer | null;
 
-export declare function sayfaPaketiniDogrula(ham: unknown, secenekler?: { altModelKaynagi?: (dosyaAdi: string) => unknown }): {
+export declare function sayfaPaketiniDogrula(ham: unknown, secenekler?: {
+  altModelKaynagi?: (dosyaAdi: string) => unknown;
+  /** Projenin tabloları (ad + sütunlar): öneri değerlerindeki ${Tablo.Sütun} başvuruları bunlara (ve paketin tablolarına) göre denetlenir. */
+  tablolar?: Array<{ ad: string; sutunlar: Array<{ ad: string; gizli?: boolean }> }>;
+}): {
   gecerli: boolean;
   hatalar: PaketSorunu[];
   uyarilar: PaketSorunu[];

@@ -140,19 +140,28 @@ export const kosuOrtamiId = () => (durum.oturum ? durum.oturum.ortam.id : null);
 
 /**
  * Genel onay (silme vb.): Promise<boolean>.
- * @param {{ baslik: string; metin: string; liste?: string[]; dugme: string; tehlikeli?: boolean; ikonAd?: string }} s
+ * @param {{ baslik: string; metin: string; liste?: string[]; dugme: string; tehlikeli?: boolean; ikonAd?: string; ek?: Node | null;
+ *   hazir?: (() => boolean) | null; baglan?: (guncelle: () => void) => void }} s
  */
 export function onayIste(s) {
   return new Promise((coz) => {
     const tamam = h('button', { type: 'button', class: s.tehlikeli ? 'tehlike onay-bekliyor' : 'birincil' }, s.tehlikeli ? ikon('cop') : null, s.dugme);
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
-    const diyalog = h('dialog', { class: `onay-diyalogu ${s.tehlikeli ? 'tehlikeli' : ''}`, 'aria-labelledby': 'onay-basligi' },
+    // İsteğe bağlı ek bölüm (ör. test verisi seçimi): s.ek (öğe); s.hazir() false iken onay düğmesi kapalı, s.baglan(fn) ek bölüm
+    // değişince çağrılacak yenileyiciyi alır.
+    const diyalog = h('dialog', { class: `onay-diyalogu ${s.tehlikeli ? 'tehlikeli' : ''} ${s.ek ? 'genis-onay' : ''}`.trim(), 'aria-labelledby': 'onay-basligi' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon(s.ikonAd || (s.tehlikeli ? 'cop' : 'uyari'))), s.baslik),
         h('p', { class: 'soluk' }, s.metin),
         s.liste && s.liste.length ? h('ul', { class: 'onay-listesi' }, s.liste.slice(0, 30).map((x) => h('li', {}, x)),
-          s.liste.length > 30 ? h('li', {}, `… ve ${s.liste.length - 30} daha`) : null) : null),
+          s.liste.length > 30 ? h('li', {}, `… ve ${s.liste.length - 30} daha`) : null) : null,
+        s.ek || null),
       h('div', { class: 'diyalog-alt' }, vazgec, tamam));
+    if (typeof s.hazir === 'function') {
+      const guncelle = () => { tamam.disabled = !s.hazir(); };
+      if (typeof s.baglan === 'function') s.baglan(guncelle);
+      guncelle();
+    }
     let sonuc = false;
     tamam.addEventListener('click', () => { sonuc = true; diyalog.close(); });
     vazgec.addEventListener('click', () => diyalog.close());

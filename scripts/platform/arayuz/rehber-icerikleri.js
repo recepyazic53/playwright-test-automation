@@ -114,7 +114,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Doldurma sırası',
-        sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için test verisi profili seçin (değer senaryoya yazılmaz).', 'Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
+        sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir) ya da kimlik alanında kayıt adı.', 'Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
       },
       { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinize göre koşacak adımları kutular hâlinde gösterir; seçili ortamdaki son koşu varsa adımlar yeşil / kırmızı boyanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Alanlar', ikon: 'duzenle' }, { baslik: 'Gönder', ikon: 'ok' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
       { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
@@ -233,7 +233,7 @@ export const REHBERLER = {
     baslik: 'Sayfa ekle',
     adimlar: [
       { baslik: 'Sayfa paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
-      { baslik: 'Adımlar', sira: ['Paketi yükleyin ya da "Ekranı tara"yı seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', '"Ekle": ekran, model sürüm 1 ve seçilen senaryolar oluşur.'] },
+      { baslik: 'Adımlar', sira: ['Paketi yükleyin ya da "Ekranı tara"yı seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
       { baslik: 'Güvenlik', metin: 'Tarama sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Yasak adreslere (Ayarlar > Güvenlik) hiç gidilmez.' }
     ]
   },
@@ -273,7 +273,7 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Ayarlar', hedef: '.alt-nav', metin: 'Ayarlar bölümleri solda. Buradaki her seçim sizin kararınızdır; Nöbetçi\'nin kodunda sizin yerinize verilmiş bir tercih yoktur.' },
       { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). "Canlı" işaretli ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'adres + giriş' }, { baslik: 'CANLI ortamı', alt: 'yalnız güvenli adımlar' }] } },
-      { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (tablolar, kayıtlar) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
+      { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (ekran listeleri, kişi ve kayıt tabloları) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
     ]
   },
   'ayarlar-giris': {
@@ -289,8 +289,8 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Tablolar', metin: 'Her satır birlikte geçerli değerlerdir (ör. kanal | kullanıcı | ürün kodu). Ekran ve servis alanları sütunlara bağlanır; senaryoda seçim yaptıkça diğer seçenekler süzülür.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Satırlar birlikte geçerli değerler' } },
       { baslik: 'Tablo grupları', metin: 'Soldaki liste iki gruptur: "Kişi ve kayıt verileri" (sizin tablolarınız) ve "Ekran listeleri" (ekranlardan içe alınan seçenek listeleri; ekran başına alt grup). Grupları açıp kapatabilirsiniz; tercih bu tarayıcıda hatırlanır. Arama tüm gruplarda çalışır.', cizim: { tur: 'maket', bolge: 'sol', etiket: 'Gruplar ve arama' } },
-      { baslik: 'Kayıtlar (profiller)', metin: 'Kişi, kart, adres gibi kayıtlar profil adıyla seçilir; değer senaryoya yazılmaz. Hassas işaretli alanlar kasada şifrelidir ve maskeli gösterilir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Tür', alt: 'ör. Kişi' }, { baslik: 'Profil', alt: 'ör. Test kişisi 1' }, { baslik: 'Alanlar', alt: 'hassas olanlar şifreli' }] } },
-      { baslik: 'Sıra', sira: ['Türü / tabloyu oluşturun (sütunlar).', 'Satırları ya da profilleri ekleyin (ortama özel olabilir).', 'Ekranın ya da servisin alanlarını sütunlara bağlayın.'] }
+      { baslik: 'Kişi ve kayıt verileri', metin: 'Kişi, kart, adres gibi kayıtlar tablolarda satırdır. Senaryo değeri tablodan alır: ${Tablo.Sütun} (aynı tablo iki kez gerekiyorsa ${Tablo[etiket].Sütun}); koşuda seçilen satırdan gelir, değer senaryoya yazılmaz. Gizli sütunlar kasada şifrelidir ve maskeli gösterilir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Tablo', alt: 'ör. Kişi' }, { baslik: 'Satır', alt: 'ör. Test kişisi 1' }, { baslik: 'Sütunlar', alt: 'gizli olanlar şifreli' }] } },
+      { baslik: 'Sıra', sira: ['Tabloyu oluşturun (sütunlar).', 'Satırları ekleyin (ortama özel olabilir).', 'Ekranın ya da servisin alanlarını sütunlara bağlayın; kişi / kayıt değerini senaryoda ${Tablo.Sütun} ile alın.'] }
     ]
   },
   'ayarlar-kosu': {

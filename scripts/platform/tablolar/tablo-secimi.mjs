@@ -32,6 +32,20 @@ export function basvuruCoz(ad) {
   return m ? { tablo: m[1].trim(), etiket: (m[2] || '').trim(), sutun: m[3].trim(), bicim: (m[4] || '').trim() } : null;
 }
 
+/**
+ * Senaryo DEĞERİ olarak tablo başvurusu: değerin tamamı "${Tablo.Sütun}" / "${Tablo[etiket].Sütun|biçim}" ise başvuru, değilse null
+ * (düz metin değer aynen kullanılır). Ekran senaryolarında alan değeri böyle verilebilir (koşuda seçilen satırdan çözülür).
+ * @param {unknown} deger @returns {Basvuru | null}
+ */
+export function degerBasvurusu(deger) {
+  if (typeof deger !== 'string') return null;
+  const m = /^\s*\$\{([^{}]+)\}\s*$/u.exec(deger);
+  return m ? basvuruCoz(m[1]) : null;
+}
+
+/** Başvurunun senaryo değeri biçimi: "${Tablo.Sütun}". @param {string} tablo @param {string} sutun @param {string} [etiket] */
+export const degerBasvurusuYaz = (tablo, sutun, etiket = '') => `\${${basvuru(tablo, sutun, etiket)}}`;
+
 /** @param {string} tablo @param {string} sutun @param {string} [etiket] @param {string} [bicim] tarih biçimi */
 export const basvuru = (tablo, sutun, etiket = '', bicim = '') => `${tablo}${etiket ? `[${etiket}]` : ''}.${sutun}${bicim ? `|${bicim}` : ''}`;
 
@@ -82,6 +96,31 @@ export function secilenSatir(tablo, secim, ortamId) {
   return uyanSatirlar(tablo, secim, { ortamId })[0];
 }
 
+/** Değerin sayfadaki (seçenek value) karşılığı (tanımsızsa değerin kendisi). @param {Sutun} sutun @param {string} deger */
+export const sayfaDegeri = (sutun, deger) => sutun.karsiliklar?.[deger]?.sayfa || deger;
+
+/**
+ * Başvurunun (Tablo.Sütun / Tablo[etiket].Sütun) koşudaki değeri: senaryonun seçimleriyle (tabloSecimleri["<tabloId>|<etiket>"])
+ * ve ortamla uyan İLK satırdan (satırın ortamı boşsa her ortamda geçerli). SERVİS gövdesi ve EKRAN senaryosu koşusu bu tek
+ * kuralı kullanır (servis-islemleri.mjs, ekran-basvurulari.mjs). Çözülemezse kullanıcıya dönük hata metni (tabloYok: tablo yok).
+ * @param {Tablo[]} tablolar değerleri çözülmüş tablolar @param {Basvuru} b @param {Record<string, Record<string, string>> | undefined} tabloSecimleri
+ * @param {string | null} [ortamId]
+ * @returns {{ tablo: Tablo; sutun: Sutun; satir: Satir; deger: string } | { hata: string; tabloYok?: boolean }}
+ */
+export function basvuruyuCoz(tablolar, b, tabloSecimleri, ortamId) {
+  const t = tabloBul(tablolar, b.tablo);
+  if (!t) return { hata: `"${b.tablo}" adında tablo yok`, tabloYok: true };
+  const sutun = sutunBul(t, b.sutun);
+  if (!sutun) return { hata: `"${t.ad}" tablosunda "${b.sutun}" sütunu yok` };
+  const secim = tabloSecimleri?.[grupAnahtari(t.id, b.etiket)] ?? {};
+  const satir = secilenSatir(t, secim, ortamId);
+  const grup = `"${t.ad}${b.etiket ? ` (${b.etiket})` : ''}"`;
+  if (!satir) return { hata: Object.keys(secim).length ? `${grup} tablosunda seçimlerle uyan satır yok` : `${grup} tablosunda bu ortamda satır yok` };
+  const d = satir.degerler[sutun.ad];
+  if (d === null || d === undefined || d === '') return { hata: `${grup} tablosunun seçilen satırında "${sutun.ad}" boş` };
+  return { tablo: t, sutun, satir, deger: String(d) };
+}
+
 const dolu = (/** @type {unknown} */ v) => v !== null && v !== undefined && v !== '';
 
 /**
@@ -105,7 +144,7 @@ export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
     if (!gruplar.has(k)) gruplar.set(k, []);
     /** @type {Array<{ alan: string; t: Tablo; s: Sutun }>} */ (gruplar.get(k)).push({ alan, t, s });
   }
-  /** @type {Array<{ id: string; ad: string; tur: 'liste'; kullanim: 'ekran'; hedef: { ekranId: string; alan: string }; kosullar: Array<{ alan: string; deger: string }>; degerler: Array<{ deger: string; ekranDegeri?: string }> }>} */
+  /** @type {Array<{ id: string; ad: string; tur: 'liste'; kullanim: 'ekran'; hedef: { ekranId: string; alan: string }; baglanti: { tablo: string; sutun: string; etiket?: string }; kosullar: Array<{ alan: string; deger: string }>; degerler: Array<{ deger: string; ekranDegeri?: string }> }>} */
   const sonuc = [];
   for (const uyeler of gruplar.values()) {
     for (const u of uyeler) {
@@ -140,7 +179,9 @@ export function tabloDegerListeleri(baglar, tablolar, ekranId, sira) {
       const k = u.s.karsiliklar || {};
       for (const { kosullar, degerler } of harita.values()) {
         sonuc.push({
-          id: `tablo:${u.alan}:${n++}`, ad: `${u.t.ad} → ${u.s.ad}`, tur: 'liste', kullanim: 'ekran', hedef: { ekranId, alan: u.alan }, kosullar,
+          id: `tablo:${u.alan}:${n++}`, ad: `${u.t.ad} → ${u.s.ad}`, tur: 'liste', kullanim: 'ekran', hedef: { ekranId, alan: u.alan },
+          // Senaryo formunun "Tablodan" seçeneği bununla ${Tablo.Sütun} başvurusu üretir.
+          baglanti: { tablo: u.t.ad, sutun: u.s.ad, ...(baglar[u.alan]?.etiket ? { etiket: String(baglar[u.alan].etiket) } : {}) }, kosullar,
           degerler: degerler.map((deger) => ({ deger, ...(k[deger]?.sayfa ? { ekranDegeri: k[deger].sayfa } : {}) }))
         });
       }

@@ -697,9 +697,18 @@ test('mevcut ekranın kaydı: varsayılan akış güncellenebilir (paket geçerl
   const hedef = { tur: 'akis', ad: 'Kayıttan akış' };
   const on = await basarili('/platform/tarama/akis', { id: isId, bloklar: tasarim, hedef });
   expect(on.etki).toEqual({ yeni: true, senaryolar: [] });
+  // Kayıtta yakalanan seçenek listeleri bu yolda da önerilir ("<Ekran> — <Alan>", tür liste); seçim gönderilmezse yazılmaz.
+  const tvOnizleme = on.testVerisi as Nesne | undefined;
+  if (tvOnizleme) {
+    expect(tvOnizleme.kaynak).toBe('kayit');
+    expect((tvOnizleme.tablolar as Nesne[]).every((t) => String(t.ad).startsWith('Açık Teklif — ') && t.tur === 'liste')).toBe(true);
+  }
+  const tabloSayisi = ((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).length;
   expect(((await api(`/platform/ekran/akislar?projeId=${projeId}&ekranId=${ekranId}`)).akislar as Nesne[]).length).toBe(2);
   const y = await basarili('/platform/tarama/akis', { id: isId, bloklar: tasarim, hedef, onay: true });
   expect(y.akisId).toBe('kayittanAkis');
+  if (tvOnizleme) expect(y.testVerisi).toEqual({ tablolar: [], baglanan: 0 });
+  expect(((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).length).toBe(tabloSayisi);
   const akislar = (await api(`/platform/ekran/akislar?projeId=${projeId}&ekranId=${ekranId}`)).akislar as Nesne[];
   expect(akislar.map((a) => [a.ad, a.adimSayisi])).toEqual([['Kurumsal teklif', 5], ['Ana akış', 5], ['Kayıttan akış', 2]]);
   // Kaydın alanları mevcut alanlarla seçiciyle eşleşti (kimlikler korunur); yeni akışta koşul gerçek okumalardan.

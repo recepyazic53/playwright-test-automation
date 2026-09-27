@@ -23,6 +23,7 @@ import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
+import { tabloBasvurusuVarMi } from '../tablolar/ekran-basvurulari.mjs';
 
 /**
  * Ekranın seçim listeleri: tablo sütununa bağlı alanlar tablodan (Test verisi > Tablolar; aynı tablodaki alanlar birbirini
@@ -492,6 +493,10 @@ function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ proje
   /** @type {Nesne} */ veri, /** @type {string[]} */ ortamIdleri, /** @type {Map<string, string>} */ ortamAdlari) {
   const sema = formSemasiOlustur(mb.model, mb.altModeller);
   let sonuc = kopya(veri);
+  // Değeri ${Tablo.Sütun} olan alanlar: tablo ve sütun projede olmalı (değer koşuda seçilen satırdan gelir; ekran-basvurulari.mjs).
+  const tablolar = tabloBasvurusuVarMi(veri)
+    ? tablolariListele(vt, projeId).map((t) => ({ ad: t.ad, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli })) }))
+    : undefined;
   /** @type {Array<{ alan: string; mesaj: string }>} */
   const hatalar = [];
   /** @type {Array<{ alan: string; mesaj: string }>} */
@@ -506,14 +511,14 @@ function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ proje
       if (alan.tip !== 'altModel' || !nesneMi(sonuc[alan.anahtar])) continue;
       // Alt model alanları modelde "eslesme.kayitAlani" (eski adı eslesme.kart) ile tanımlıdır (kayıt kuralları doğrulayıcıdadır).
       if (!alan.alanlar.length) continue;
-      const on = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit' });
+      const on = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit', tablolar });
       if (on.hatalar.some((h) => h.alan.startsWith(`${alan.anahtar}.`) || h.alan === alan.anahtar)) continue;
       const varsayilan = profiller && nesneMi(profiller.varsayilanKayit) ? profiller.varsayilanKayit : null;
       const kart = kartiNormallestir(/** @type {Nesne} */ (sonuc[alan.anahtar]), varsayilan);
       if (varsayilan && krediKartlariAyniMi(kart, varsayilan)) delete sonuc[alan.anahtar];
       else sonuc[alan.anahtar] = kart;
     }
-    const d = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit' });
+    const d = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit', tablolar });
     const onEk = birden ? `[${ortamAdlari.get(ortamId) ?? ortamId}] ` : '';
     for (const h of d.hatalar) if (!hatalar.some((x) => x.alan === h.alan && x.mesaj.endsWith(h.mesaj))) hatalar.push({ alan: h.alan, mesaj: `${onEk}${h.mesaj}` });
     for (const u of d.uyarilar) if (!uyarilar.some((x) => x.alan === u.alan && x.mesaj.endsWith(u.mesaj))) uyarilar.push({ alan: u.alan, mesaj: `${onEk}${u.mesaj}` });

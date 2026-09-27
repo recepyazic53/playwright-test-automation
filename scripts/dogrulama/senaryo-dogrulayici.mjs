@@ -110,8 +110,43 @@ export const MESAJLAR = Object.freeze({
   varsayilanKayitSuresiGecmis: (etiket, aaYyyy) =>
     `${adGoster(etiket)} için kullanılacak varsayılan test verisi kaydının son kullanma tarihi (${aaYyyy}) geçmiş; adım bu kayıtla reddedilebilir. Test verisindeki kaydı güncelleyin ya da senaryoya özel değer girin.`,
   eskiBeklenenSonucAlanlari: (alanlar) =>
-    `Eski ${alanlar.map((a) => `"${a}"`).join('/')} alanları artık desteklenmiyor; "beklenenSonuc": { "tip": "isKuraliHatasi", "adim": "...", "mesaj": "..." } kullanın.`
+    `Eski ${alanlar.map((a) => `"${a}"`).join('/')} alanları artık desteklenmiyor; "beklenenSonuc": { "tip": "isKuraliHatasi", "adim": "...", "mesaj": "..." } kullanın.`,
+  tabloBasvurusuAlamaz: (etiket) => `${adGoster(etiket)} test verisi tablosundan değer (\${Tablo.Sütun}) alamaz; değeri doğrudan seçin.`,
+  tabloYok: (etiket, tablo) => `${adGoster(etiket)} için "${tablo}" adında test verisi tablosu yok (Ayarlar > Test verisi).`,
+  tabloSutunuYok: (etiket, tablo, sutun) => `${adGoster(etiket)} için "${tablo}" tablosunda "${sutun}" sütunu yok.`,
+  gizliSutunSecimde: (etiket, sutun) => `${adGoster(etiket)} bir seçim alanı; gizli "${sutun}" sütunundan değer alamaz.`
 });
+
+// ---- Tablo başvurusu (ekran senaryosunda değer: ${Tablo.Sütun} / ${Tablo[etiket].Sütun|biçim}) ----
+// Biçim scripts/platform/tablolar/tablo-secimi.mjs > degerBasvurusu ile AYNIDIR (bu dosya modül içe aktarmaz; birim testi iki
+// ayrıştırıcının aynı sonucu verdiğini denetler). Değer koşuda senaryonun seçtiği satırdan çözülür (tablolar/ekran-basvurulari.mjs).
+const TABLO_ADI_KALIBI = '[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}';
+const TABLO_BASVURUSU = new RegExp(`^\\s*\\$\\{\\s*(${TABLO_ADI_KALIBI})(?:\\[([\\p{L}\\p{N} _-]{1,40})\\])?\\.(${TABLO_ADI_KALIBI})\\s*(?:\\|([^{}$\\u0000-\\u001f]{1,60}))?\\}\\s*$`, 'u');
+/** Tablo başvurusu alabilen alan tipleri. */
+const TABLODAN_ALABILIR = ['secim', 'okluSecim', 'radyo', 'metin', 'sayi', 'tarih', 'telefon'];
+
+/** Değerin tamamı "${Tablo.Sütun}" ise { tablo, etiket, sutun, bicim }, değilse null. */
+export function tabloBasvurusuCoz(deger) {
+  if (typeof deger !== 'string') return null;
+  const m = TABLO_BASVURUSU.exec(deger);
+  return m ? { tablo: m[1].trim(), etiket: (m[2] || '').trim(), sutun: m[3].trim(), bicim: (m[4] || '').trim() } : null;
+}
+
+/**
+ * Başvuruyu alan tipine ve (verildiyse) projenin tablolarına göre denetler. tablolar: [{ ad, sutunlar: [{ ad, gizli }] }]; verilmezse
+ * tablo / sütun varlığı denetlenmez (ör. tarayıcıda; sunucu kaydederken denetler).
+ */
+function tabloBasvurusunuDogrula(alan, anahtar, b, tablolar, rapor) {
+  const etiket = etiketi(alan);
+  if (!TABLODAN_ALABILIR.includes(alan.tip)) { rapor.hata(anahtar, MESAJLAR.tabloBasvurusuAlamaz(etiket)); return; }
+  if (!Array.isArray(tablolar)) return;
+  const kucuk = (x) => String(x || '').trim().toLocaleLowerCase('tr');
+  const t = tablolar.find((x) => x && kucuk(x.ad) === kucuk(b.tablo));
+  if (!t) { rapor.hata(anahtar, MESAJLAR.tabloYok(etiket, b.tablo)); return; }
+  const s = (Array.isArray(t.sutunlar) ? t.sutunlar : []).find((x) => x && kucuk(x.ad) === kucuk(b.sutun));
+  if (!s) { rapor.hata(anahtar, MESAJLAR.tabloSutunuYok(etiket, t.ad, b.sutun)); return; }
+  if (s.gizli === true && ['secim', 'okluSecim', 'radyo'].includes(alan.tip)) rapor.hata(anahtar, MESAJLAR.gizliSutunSecimde(etiket, s.ad));
+}
 
 // ---- Küçük yardımcılar ----
 
@@ -437,6 +472,8 @@ function kosulIfadesiniDegerlendir(ifade, b, bilinenDurumlar) {
   }
   if (typeof ifade.alan === 'string') {
     const deger = b.alanDegeri(ifade.alan);
+    // Değeri tablodan (${Tablo.Sütun}) gelen alan: değer koşuda belli olur, koşul bilinmiyor.
+    if (tabloBasvurusuCoz(deger)) return null;
     if (Array.isArray(ifade.icinde)) return ifade.icinde.includes(deger);
     return deger === ifade.esit;
   }
@@ -735,6 +772,8 @@ const BIRLIKTE_VERILENLER = [['cokluSorguDosyasi', 'cokluSorguKisiSayisi']];
  *  - baglam.kaynak: 'kayit' (kayıtlı senaryo; varsayılan) | 'girdi' (dashboard
  *    formunun gönderdiği gövde: başlık sonradan verilebilir, baglamKodu/baglamKullanicisi olabilir).
  *  - baglam.simdi: tarih kontrolleri için "şimdi" (testlerde sabitlenir).
+ *  - baglam.tablolar: [{ ad, sutunlar: [{ ad, gizli }] }] — değeri ${Tablo.Sütun} olan alanlarda tablo / sütun varlığı buna göre
+ *    denetlenir (verilmezse yalnız alan tipi denetlenir).
  * hatalar: kaydı/koşuyu engeller. uyarilar: engellemez (ör. varsayılan kaydın süresi geçmiş,
  * ekranda görünmeyen alana değer verilmiş).
  */
@@ -780,6 +819,13 @@ export function senaryoyuDogrula(senaryo, baglam) {
       const sonradanVerilir = b.kaynak === 'girdi' && alan.id === 'baslik' && !(anahtar in senaryo);
       // Görünmeyen alan zorunlu değildir; görünürlüğü bilinmiyorsa (null) zorunlu kalır.
       if (alan.zorunlu === true && gorunur !== false && !sonradanVerilir) rapor.hata(anahtar, MESAJLAR.zorunlu(etiketi(alan)));
+      continue;
+    }
+    // Değer tablodan: ${Tablo.Sütun} (seçenek / biçim denetimi koşuda çözülen değere kalır).
+    const tb = tabloBasvurusuCoz(deger);
+    if (tb) {
+      tabloBasvurusunuDogrula(alan, anahtar, tb, baglam.tablolar, rapor);
+      if (gorunur === false) rapor.uyari(anahtar, MESAJLAR.gorunmeyenAlan(etiketi(alan)));
       continue;
     }
     // Girdide bağlam kodu elle yazıldıysa (baglamKodu) profil anahtarı kullanılmaz.

@@ -173,9 +173,11 @@ test.describe('ekran alanları tablolardan', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto(`/#/senaryolar/yeni/${ekranId}`);
     const secim = (id: string) => page.locator(`[data-alan="${id}"] select`);
-    const degerler = async (id: string) => (await secim(id).locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value))).filter(Boolean);
+    // Tablodan seçenekleri (${Tablo.Sütun}) ayrı grupta: satırdan süzülen değerler onlarsız karşılaştırılır.
+    const degerler = async (id: string) => (await secim(id).locator('option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value))).filter((v) => v && !v.startsWith('${'));
     await expect(secim('kapsam')).toBeVisible();
     expect(await degerler('kapsam')).toEqual(K);
+    await expect(secim('kapsam').locator('optgroup[label="Test verisi tablosundan"] option')).toHaveAttribute('value', '${Rota seçenekleri.Kapsam}');
     await secim('kapsam').selectOption(K[0]);
     await expect.poll(() => degerler('alternatif')).toEqual([A[0], A[1]]);
     await secim('alternatif').selectOption(A[0]);

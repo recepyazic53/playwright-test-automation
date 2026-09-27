@@ -21,7 +21,8 @@ import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
-import { gorunurlukleriHesapla, senaryoyuDogrula } from './senaryo-dogrulayici.mjs';
+import { gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
+import { degerBasvurusuYaz } from './tablo-secimi.mjs';
 import { onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
@@ -150,6 +151,14 @@ function modelFormu(icerik, s, senaryo, baglam) {
     const metinler = new Map([...(alan.secenekler || []), ...Object.values(alan.bagimlilik?.harita || {}).flat()].map((x) => [x.deger, x.metin]));
     return birlesikDegerler(eslesen).map((x) => ({ deger: x.deger, metin: x.aciklama || metinler.get(x.deger) || x.deger }));
   };
+  // "Tablodan": tablo sütununa bağlı alanın değeri ${Tablo.Sütun} olabilir — koşuda senaryonun seçtiği satırdan (aynı tablodaki
+  // diğer seçimler ve ortamla uyan ilk satır) çözülür (tablolar/ekran-basvurulari.mjs). Bağlı değilse null.
+  const tabloSecenegi = (alan) => {
+    const l = degerListeleri.find((x) => x.hedef?.alan === alan.id && x.baglanti);
+    if (!l) return null;
+    const b = l.baglanti;
+    return { deger: degerBasvurusuYaz(b.tablo, b.sutun, b.etiket || ''), metin: `Tablodan: ${b.tablo} → ${b.sutun}${b.etiket ? ` [${b.etiket}]` : ''} (koşuda seçilen satır)` };
+  };
   /** kontrol anahtarı → { el, hata, uyari, odak } */
   const kontroller = new Map();
   /** alan kimliği → { kap, ciz } */
@@ -241,7 +250,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       if (!bagli) continue;
       if (alan.tip === 'secim') {
         const liste = alanSecenekleri(alan);
-        if (degerler[alan.anahtar] && !liste.some((x) => x.deger === degerler[alan.anahtar])) degerler[alan.anahtar] = '';
+        // Tablo başvurusu (${Tablo.Sütun}) üst seçime göre temizlenmez: satır koşuda seçimlerle bulunur.
+        if (degerler[alan.anahtar] && !tabloBasvurusuCoz(degerler[alan.anahtar]) && !liste.some((x) => x.deger === degerler[alan.anahtar])) degerler[alan.anahtar] = '';
       }
       k.ciz();
     }
@@ -277,10 +287,14 @@ function modelFormu(icerik, s, senaryo, baglam) {
     };
   }
 
-  function secimGirdisi(secenekler, deger, bosMetin = 'Seçin…') {
+  function secimGirdisi(secenekler, deger, bosMetin = 'Seçin…', tablodan = null) {
     const sel = h('select', {}, h('option', { value: '' }, bosMetin),
-      secenekler.map((x) => h('option', { value: x.deger, selected: x.deger === deger }, x.metin)));
-    if (deger && !secenekler.some((x) => x.deger === deger)) sel.append(h('option', { value: deger, selected: true }, `${deger} (listede yok)`));
+      secenekler.map((x) => h('option', { value: x.deger, selected: x.deger === deger }, x.metin)),
+      tablodan ? h('optgroup', { label: 'Test verisi tablosundan' }, h('option', { value: tablodan.deger, selected: tablodan.deger === deger }, tablodan.metin)) : null);
+    if (deger && !secenekler.some((x) => x.deger === deger) && !(tablodan && tablodan.deger === deger)) {
+      const b = tabloBasvurusuCoz(deger);
+      sel.append(h('option', { value: deger, selected: true }, b ? `Tablodan: ${b.tablo} → ${b.sutun}` : `${deger} (listede yok)`));
+    }
     return sel;
   }
 
@@ -297,7 +311,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       let ust;
       switch (alan.tip) {
         case 'secim': {
-          const liste = alanSecenekleri(alan);
+          const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+          const liste = alan.gorunum === 'radyo' && tablodan ? [...alanSecenekleri(alan), tablodan] : alanSecenekleri(alan);
           if (alan.gorunum === 'radyo') {
             const ad = yeniId(`${alan.id}-r`);
             const radyolar = liste.map((x) => h('input', { type: 'radio', name: ad, value: x.deger, checked: degerler[alan.anahtar] === x.deger }));
@@ -309,7 +324,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
             ust.el.querySelector('label').removeAttribute('for');
             kontrolKaydet(alan.anahtar, radyolar, hata, uyari);
           } else {
-            const sel = bagla(secimGirdisi(liste, String(degerler[alan.anahtar] || ''), alan.bagimlilik && !liste.length ? 'Önce bağlı alanı seçin' : 'Seçin…'), id);
+            const sel = bagla(secimGirdisi(liste, String(degerler[alan.anahtar] || ''), alan.bagimlilik && !liste.length ? 'Önce bağlı alanı seçin' : 'Seçin…', tablodan), id);
             sel.addEventListener('change', () => degerYaz(alan.anahtar, sel.value));
             govde = sel;
             ust = alanUst(alan, id);
@@ -348,7 +363,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
           ({ govde, ust } = altModelCiz(alan, id, hata, uyari));
           break;
         default: {
-          const tip = alan.tip === 'sayi' ? 'number' : alan.hassas ? 'password' : 'text';
+          // Değeri tablo başvurusu (${Tablo.Sütun}) olan sayı alanı metin olarak gösterilir.
+          const tip = alan.tip === 'sayi' && !tabloBasvurusuCoz(degerler[alan.anahtar]) ? 'number' : alan.hassas ? 'password' : 'text';
           const girdi = bagla(h('input', {
             type: tip, value: String(degerler[alan.anahtar] ?? ''), autocomplete: 'off', spellcheck: 'false',
             placeholder: alan.tip === 'tarih' ? (alan.bicim || '') : alan.tip === 'dosya' ? `proje köküne göre yol${alan.kabul ? ` (${alan.kabul})` : ''}` : ''
@@ -361,7 +377,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
           girdi.addEventListener('input', () => degerYaz(alan.anahtar, girdi.value, { dokun: false }));
           girdi.addEventListener('change', () => { dokunulan.add(alan.anahtar); planla(); });
           govde = girdi;
-          ust = alanUst(alan, id);
+          // Tabloya bağlı alan: "Tablodan" değeri ${Tablo.Sütun} yapar (koşuda seçilen satırdan gelir).
+          const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+          const tablodanDugmesi = tablodan ? h('button', {
+            type: 'button', class: 'kucuk-dugme hayalet', title: tablodan.metin, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
+            onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
+          }, ikon('veri'), 'Tablodan') : null;
+          ust = alanUst(alan, id, tablodanDugmesi ? [tablodanDugmesi] : []);
           kontrolKaydet(alan.anahtar, [girdi], hata, uyari);
         }
       }

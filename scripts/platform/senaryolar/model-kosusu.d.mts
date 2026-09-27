@@ -99,3 +99,8 @@ export declare function yuklemeDosyasiYolu(
   klasor: string,
   birlestir: (a: string, b: string) => string
 ): { yol: string } | { hata: string };
+
+/** Metindeki bilinen gizli değerleri maskeler (3 karakterden kısalar atlanır). */
+export declare function gizliDegerleriMaskele(metin: string, gizliler: ReadonlyArray<unknown>): string;
+/** Çözülemeyen tablo başvuruları → koşuyu durduran hata metni. */
+export declare function veriHatalariMetni(baslik: string, hatalar: ReadonlyArray<{ alan: string; mesaj: string }>): string;

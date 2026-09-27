@@ -1,6 +1,7 @@
 // scripts/platform/ekranlar/akis-servisi.mjs için tip bildirimi.
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 import type { AkisBlogu, AkisEnvanteri, AkisPaleti } from '../tarama/akis-tasarimi.mjs';
+import type { PaketTestVerisiOnizlemesi } from '../tablolar/paket-test-verisi.mjs';
 
 type AkisSatiri = { id: string; ad: string; varsayilan: boolean; adimSayisi: number; senaryoSayisi: number };
 export declare function akisDuzenlenebilirMi(model: Record<string, unknown>): { duzenlenebilir: boolean; neden: string | null };
@@ -25,7 +26,8 @@ export declare function akisTasarimi(vt: Veritabani, projeId: string, ekranId: s
   ekran: { id: string; anahtar: string; ad: string }; bloklar: AkisBlogu[]; palet: AkisPaleti; ortakAkislar: OrtakAkisOzeti[]; ortakAkis: boolean; kullananlar?: OrtakAkisKullanani[];
   akis: { id: string; ad: string; varsayilan: boolean } | null; kopyaKaynagi: string | null;
 };
-export declare function akisKaydet(vt: Veritabani, projeId: string, ekranId: string, g: { akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: AkisEnvanteri }):
-  { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; ekranlar?: OrtakAkisKullanani[] }; akisId: string } | { akisId: string; surum: number };
+export declare function akisKaydet(vt: Veritabani, projeId: string, ekranId: string, g: { akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: AkisEnvanteri; testVerisi?: unknown }):
+  { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; ekranlar?: OrtakAkisKullanani[] }; akisId: string; testVerisi?: PaketTestVerisiOnizlemesi }
+  | { akisId: string; surum: number; testVerisi?: { tablolar: Array<{ ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number }>; baglanan: number } };
 export declare function akisVarsayilanYap(vt: Veritabani, projeId: string, ekranId: string, akisId: string, yapan?: string): { surum: number | null; tasinan: number };
 export declare function akisSil(vt: Veritabani, projeId: string, ekranId: string, akisId: string): { surum: number };

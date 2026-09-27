@@ -1,5 +1,5 @@
 // UÇTAN UCA (yerel) — Ayarlar > Test verisi > Tablolar listesinin GRUPLARI (yalnız görünüm; veri değişmez): "Kişi ve kayıt
-// verileri" ve "Ekran listeleri" (kaynaklı tablolar + tek sütunlu "<Ekran> — <Alan>" adları; ekran başına alt grup), grup sayıları,
+// verileri" ve "Ekran listeleri" (ölçüt önce tablo türü; yoksa kaynaklı tablolar + tek sütunlu "<Ekran> — <Alan>" adları; ekran başına alt grup), grup sayıları,
 // tüm gruplarda arama, açık / kapalı durumunun tarayıcıda hatırlanması, telefonda taşma yok. Ayrı Nöbetçi (127.0.0.1), geçici DB.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -30,6 +30,10 @@ test.beforeAll(async () => {
   tabloKaydet(vt, { projeId, ad: 'Başvuru — İl', sutunlar: [{ ad: 'Değer' }], satirlar: [{ degerler: { Değer: 'Ankara' } }] });
   tabloKaydet(vt, { projeId, ad: 'Başvuru — Kanal', sutunlar: [{ ad: 'Değer' }] });
   tabloKaydet(vt, { projeId, ad: 'Liste A', sutunlar: [{ ad: 'Değer' }], kaynak: { tur: 'paket', ekran: 'Poliçe' } });
+  // Tablo türü sezgiden önce gelir: paketten gelen kişi / kayıt tablosu (adı ve kaynağı ekran listesine benzese de) kayıt grubunda;
+  // çok sütunlu ama türü "liste" olan tablo ekran listesidir.
+  tabloKaydet(vt, { projeId, ad: 'Başvuru — Müşteri kayıtları', sutunlar: [{ ad: 'Ad' }], kaynak: { tur: 'paket', ekran: 'Başvuru', tabloTuru: 'kayit' } });
+  tabloKaydet(vt, { projeId, ad: 'Adres kodları', sutunlar: [{ ad: 'İl' }, { ad: 'Kod' }], kaynak: { tur: 'kayit', ekran: 'Adres', tabloTuru: 'liste' } });
   vt.kapat();
   nobetci = await nobetciBaslat(klasor, vtYolu, {});
   const y = await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA });
@@ -52,8 +56,10 @@ test('gruplar, sayılar, arama ve hatırlanan açık / kapalı durumu; telefonda
   const liste = page.getByRole('navigation', { name: 'Tablolar' });
   const kayit = liste.getByRole('button', { name: /Kişi ve kayıt verileri/ });
   const ekran = liste.getByRole('button', { name: /^Ekran listeleri/ });
-  await expect(kayit).toContainText('1');
-  await expect(ekran).toContainText('3');
+  await expect(kayit).toContainText('2');
+  await expect(ekran).toContainText('4');
+  await expect(liste.getByRole('group', { name: 'Kişi ve kayıt verileri' })).toContainText('Başvuru — Müşteri kayıtları');
+  await expect(liste.getByRole('group', { name: 'Adres' })).toContainText('Adres kodları');
   await expect(liste.getByRole('group', { name: 'Kişi ve kayıt verileri' })).toContainText('Test kişileri');
   const basvuru = liste.getByRole('button', { name: /^Başvuru\s*2$/ });
   await expect(basvuru).toBeVisible();

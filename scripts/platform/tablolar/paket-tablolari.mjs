@@ -2,9 +2,12 @@
 // (tablo-deposu.mjs: sütunlar + satırlar, satır = birlikte geçerli değerler) ve ekran alanı → sütun BAĞLANTILARININ
 // (ekran-baglari.mjs: alanBaglari) paket biçimidir:
 //   testVerisi: {
-//     tablolar:    [{ ad, aciklama?, sutunlar: [{ ad, gizli?, karsiliklar?: { <hücre değeri>: { sayfa?, servis? } } }], satirlar: [[hücre, …]] }],
+//     tablolar:    [{ ad, tur?: 'liste' | 'kayit', aciklama?, sutunlar: [{ ad, gizli?, karsiliklar?: { <hücre değeri>: { sayfa?, servis? } } }], satirlar: [[hücre, …]] }],
 //     baglantilar: [{ alanId, tablo, sutun, etiket? }]
 //   }
+// Tablo türü (isteğe bağlı): 'liste' = ekran listesi (seçim alanının seçenekleri; adı "<Ekran adı> — <Alan>"), 'kayit' = kişi ve
+// kayıt verisi (satır = kayıt; senaryo ${Tablo.Sütun} ile başvurur). Tabloda kaynak.tabloTuru olarak saklanır; Test verisi
+// ekranı grubu buna göre seçer (yoksa ad / kaynak sezgisi).
 // Seçim alanlarının seçenekleri tablo satırları olur; bağımlı listelerde (üst seçime göre alt seçenekler) satır = geçerli
 // kombinasyon. Hücreye seçeneğin görünen metni yazılır; sayfadaki değeri (value) farklıysa sütunun karşılıklarına "sayfa"
 // olarak girer (bağlı alanda modelin seçeneklerinden kendiliğinden de tamamlanır).
@@ -27,7 +30,9 @@ export const PAKET_HUCRE_EN_UZUN = 500;
 const TABLO_ADI = new RegExp(`^${AD_KALIBI}$`, 'u');
 const ETIKET = /^[\p{L}\p{N} _-]{1,40}$/u;
 const UST_ANAHTARLAR = new Set(['tablolar', 'baglantilar']);
-const TABLO_ANAHTARLARI = new Set(['ad', 'aciklama', 'sutunlar', 'satirlar']);
+const TABLO_ANAHTARLARI = new Set(['ad', 'tur', 'aciklama', 'sutunlar', 'satirlar']);
+/** Paket tablosunun türü: ekran listesi (seçenekler) ya da kişi / kayıt verisi. */
+export const TABLO_TURLERI = Object.freeze(['liste', 'kayit']);
 const SUTUN_ANAHTARLARI = new Set(['ad', 'gizli', 'karsiliklar']);
 const BAG_ANAHTARLARI = new Set(['alanId', 'tablo', 'sutun', 'etiket']);
 /** Tabloya bağlanabilen alan tipleri (senaryoda değeri ayarlanan). */
@@ -37,7 +42,7 @@ const SECIM_TIPLERI = new Set(['secim', 'okluSecim', 'radyo']);
 /** @typedef {Record<string, any>} Nesne */
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; karsiliklar: Record<string, Karsilik> }} PaketSutunu */
-/** @typedef {{ ad: string; aciklama: string | null; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number }} PaketTablosu */
+/** @typedef {{ ad: string; tur: 'liste' | 'kayit' | null; aciklama: string | null; sutunlar: PaketSutunu[]; satirlar: Array<Record<string, string | null>>; tekrarSayisi: number }} PaketTablosu */
 /** @typedef {{ alanId: string; tablo: string; sutun: string; etiket?: string }} PaketBaglantisi */
 
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
@@ -98,6 +103,7 @@ export function testVerisiniDogrula(tv, model) {
     else if (tablolar.has(kucuk(ad))) hata(`${yer}.ad`, `"${ad}" tablosu pakette birden fazla kez var.`);
     else tablolar.set(kucuk(ad), tb);
     if (tb.aciklama !== undefined && typeof tb.aciklama !== 'string') hata(`${yer}.aciklama`, 'metin olmalı.');
+    if (tb.tur !== undefined && !TABLO_TURLERI.includes(tb.tur)) hata(`${yer}.tur`, '"liste" (ekran listesi: seçim alanının seçenekleri) ya da "kayit" (kişi / kayıt verisi) olmalı.');
     if (!Array.isArray(tb.sutunlar) || !tb.sutunlar.length) { hata(`${yer}.sutunlar`, 'en az bir sütun olmalı.'); return; }
     if (tb.sutunlar.length > PAKET_SUTUN_EN_COK) hata(`${yer}.sutunlar`, `en çok ${PAKET_SUTUN_EN_COK} sütun olabilir.`);
     const adlar = new Set();
@@ -162,7 +168,7 @@ export function testVerisiniDogrula(tv, model) {
         const alan = typeof b.alanId === 'string' ? alanlar.get(b.alanId) : undefined;
         if (!alan) hata(`${yer}.alanId`, `modelde "${String(b.alanId)}" kimlikli alan yok.`);
         else if (alan.yapilandirma !== 'senaryo' || !BAGLANABILIR.has(alan.tip)) hata(`${yer}.alanId`, `"${alanEtiketi(alan)}" senaryoda değeri ayarlanan bir seçim / metin alanı değil; tabloya bağlanamaz.`);
-        else if (alan.hassas === true || gizliAdMi(String(alan.id)) || gizliAdMi(alanEtiketi(alan))) hata(`${yer}.alanId`, `"${alanEtiketi(alan)}" gizli bilgi alanı; tabloya bağlanmaz (değer giriş/test verisi profilinden gelir).`);
+        else if (alan.hassas === true || gizliAdMi(String(alan.id)) || gizliAdMi(alanEtiketi(alan))) hata(`${yer}.alanId`, `"${alanEtiketi(alan)}" gizli bilgi alanı; tabloya bağlanmaz (değer giriş bilgisinden ya da gizli tablo sütunundan gelir).`);
         if (typeof b.alanId === 'string') {
           if (gorulen.has(b.alanId)) hata(`${yer}.alanId`, `"${b.alanId}" alanı birden fazla kez bağlanmış.`);
           gorulen.add(b.alanId);
@@ -239,7 +245,7 @@ export function paketTablolari(tv, model) {
       imzalar.add(imza);
       satirlar.push(degerler);
     }
-    return { ad: String(tb.ad).trim(), aciklama: typeof tb.aciklama === 'string' && tb.aciklama.trim() ? tb.aciklama.trim().slice(0, 300) : null, sutunlar, satirlar, tekrarSayisi };
+    return { ad: String(tb.ad).trim(), tur: TABLO_TURLERI.includes(tb.tur) ? tb.tur : null, aciklama: typeof tb.aciklama === 'string' && tb.aciklama.trim() ? tb.aciklama.trim().slice(0, 300) : null, sutunlar, satirlar, tekrarSayisi };
   });
   // Bağlı seçim alanı: tablodaki görünen metnin sayfa değeri modelden (yalnız eksik olanlar).
   for (const b of baglantilar) {
@@ -290,15 +296,34 @@ export function paketListeleri(tv, model) {
  */
 
 const imzaOf = (/** @type {Secenek[]} */ l) => JSON.stringify(l.map((s) => s.deger));
-/** Tablo adı karakterleri dışındakiler atılır. @param {string} m */
-const adTemizle = (m) => m.replace(/[.[\]{}$<>&|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+/** Tablo adı karakterleri dışındakiler atılır (kısaltmadan). @param {string} m */
+const temizle = (m) => String(m ?? '').replace(/[.[\]{}$<>&|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').trim();
+/** Tablo adı karakterleri dışındakiler atılır, en çok 60. @param {string} m */
+const adTemizle = (m) => temizle(m).slice(0, 60).trim();
+const AD_EN_UZUN = 60;
+const EKRAN_AYRACI = ' — ';
+
+/**
+ * Ekran listesi tablosunun adı: "<Ekran adı> — <Alan>" (bağımlı listede "<Ekran adı> — <Üst alan> - <Alt alan>"), en çok 60
+ * karakter. Sığmazsa önce ekran adı kısaltılır (en az 20 karakteri kalır), sonra tamamı 60'ta kesilir. Ekran adı yoksa yalnız alan.
+ * @param {string | null | undefined} ekranAdi @param {string[]} alanEtiketleri
+ */
+export function ekranListesiTabloAdi(ekranAdi, alanEtiketleri) {
+  const alan = temizle(alanEtiketleri.join(' - '));
+  const ekran = temizle(ekranAdi ?? '');
+  if (!ekran) return alan.slice(0, AD_EN_UZUN).trim();
+  if (!alan) return ekran.slice(0, AD_EN_UZUN).trim();
+  const yer = Math.max(Math.min(ekran.length, AD_EN_UZUN - EKRAN_AYRACI.length - alan.length), Math.min(ekran.length, 20));
+  return `${ekran.slice(0, yer).trim()}${EKRAN_AYRACI}${alan}`.slice(0, AD_EN_UZUN).trim();
+}
 
 /**
  * Seçim alanlarının seçenek gözlemlerinden (tarama keşfi / kayıt okumaları / açılan listeler) testVerisi bölümü: her bağımsız
  * seçim alanı tek sütunlu bir tablo; seçenekleri başka bir seçimin değerine göre değişen alanlar üst alanlarıyla aynı
  * tabloda (satır = geçerli kombinasyon). Hücre görünen metindir; sayfa değeri farklıysa karşılık olarak yazılır (aynı metin
  * farklı değerlere karşılık geliyorsa sütun değerle yazılır). Adı gizli bilgi taşıyan alanlar alınmaz.
- * @param {{ alanlar: UretimAlani[]; gozlemler: SecenekGozlemi[] }} girdi
+ * Tablo adı "<Ekran adı> — <Alan>" (ekranListesiTabloAdi); tablo türü "liste" (Test verisi > Ekran listeleri).
+ * @param {{ alanlar: UretimAlani[]; gozlemler: SecenekGozlemi[]; ekranAdi?: string | null }} girdi
  * @returns {{ testVerisi: { tablolar: Nesne[]; baglantilar: PaketBaglantisi[] } | null; notlar: string[] }}
  */
 export function secenekTablolariUret(girdi) {
@@ -405,11 +430,12 @@ export function secenekTablolariUret(girdi) {
       if (!degerle) for (const [metin, v] of m) { const d = [...v][0]; if (d !== metin) karsiliklar[metin] = { sayfa: d }; }
       return { a, ad, degerle, karsiliklar };
     });
-    let tabloAdi = adTemizle(grup.map((a) => a.etiket).join(' - ')) || kok.id;
-    for (let i = 2; tabloAdlari.has(kucuk(tabloAdi)); i++) tabloAdi = `${tabloAdi.slice(0, 55)} ${i}`;
+    const temel = ekranListesiTabloAdi(girdi.ekranAdi, grup.map((a) => a.etiket)) || adTemizle(kok.id);
+    let tabloAdi = temel;
+    for (let i = 2; tabloAdlari.has(kucuk(tabloAdi)); i++) tabloAdi = `${temel.slice(0, 55).trim()} ${i}`;
     tabloAdlari.add(kucuk(tabloAdi));
     tablolar.push({
-      ad: tabloAdi,
+      ad: tabloAdi, tur: 'liste',
       sutunlar: sutunlar.map((s) => ({ ad: s.ad, ...(Object.keys(s.karsiliklar).length ? { karsiliklar: s.karsiliklar } : {}) })),
       satirlar: satirlar.map((r) => sutunlar.map((s) => { const x = r[s.a.anahtar]; return x ? (s.degerle ? x.deger : x.metin).slice(0, PAKET_HUCRE_EN_UZUN) : null; }))
     });

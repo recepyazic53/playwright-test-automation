@@ -2193,6 +2193,10 @@ a.son-sonuc { text-decoration: none; }
 .karsilik-dugmesi.dolu { color: var(--vurgu); }
 .karsilik-sayisi { position: absolute; top: -4px; right: -6px; min-width: 16px; padding: 0 4px; border-radius: 8px; font-size: 10px; line-height: 16px; background: var(--vurgu); color: var(--vurgu-metin); }
 dialog.karsilik-diyalogu { width: min(52rem, calc(100vw - 2rem)); }
+/* Ek bölümlü onay (ör. akış kaydında test verisi seçimi): geniş, gövde kaydırılır. */
+dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
+.onay-diyalogu.genis-onay .diyalog-govde { max-height: calc(100vh - 11rem); overflow: auto; }
+.onay-diyalogu.genis-onay .test-verisi-onizleme { margin-top: 12px; }
 .karsilik-diyalogu .arama-kutusu { margin: 10px 0 8px; }
 .karsilik-tablosu { max-height: min(55vh, 520px); overflow: auto; margin-bottom: 6px; }
 .karsilik-tablosu th[scope="row"] { font-weight: 500; white-space: nowrap; }
