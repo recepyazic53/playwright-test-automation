@@ -19,6 +19,7 @@
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { riskliOrtamMi } from './platform/guvenlik/ortam-riski.mjs';
 
 const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
 const TABAN = `http://127.0.0.1:${PORT}`;
@@ -67,7 +68,7 @@ async function main() {
       ? { method: 'POST', headers: { 'X-Test-Sunucu-Token': token, 'Content-Type': 'application/json' }, body: JSON.stringify({ ...govde, token }) }
       : { headers: { 'X-Test-Sunucu-Token': token } });
     const veri = await yanit.json().catch(() => ({}));
-    if (!yanit.ok || veri.basarili === false) throw new Error(veri.mesaj || `${yol}: HTTP ${yanit.status}`);
+    if (!yanit.ok || veri.basarili === false) throw Object.assign(new Error(veri.mesaj || `${yol}: HTTP ${yanit.status}`), { kod: veri.kod });
     return veri;
   };
 
@@ -81,7 +82,9 @@ async function main() {
   const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`);
   const ortam = bul(ortamlar, a.ortam);
   if (!ortam) { console.error(`Ortam bulunamadı: ${a.ortam} (var olanlar: ${ortamlar.map((o) => o.ad).join(', ')})`); return 2; }
-  const riskli = Boolean(ortam.canli) || !ortam.varsayilan || /canl|prod|uretim|üretim/i.test(String(ortam.ad || ''));
+  // Riskli ortam: tek tanım (platform/guvenlik/ortam-riski.mjs). Sunucu ayrıca Ayarlar > İzinler > "Canlı / riskli ortamda
+  // çalıştırma" iznini ve istekteki açık onayı (canliOnay) denetler; izin kapalıysa koşu başlamaz ve mesaj yazılır.
+  const riskli = riskliOrtamMi(ortam);
   if (riskli && !a.canliOnay && !a.liste) {
     console.error(`"${ortam.ad}" canlı / riskli işaretli bir ortam. Koşmak için --canli-onay seçeneğini açıkça verin.`);
     return 2;
@@ -118,11 +121,15 @@ async function main() {
     try {
       const y = await api('/platform/senaryolar/calistir', {
         projeId: proje.id, ortamId: ortam.id, senaryoId: s.id, kosuId: randomUUID(),
-        kosuTuru: tam ? 'tam' : 'tekil', kosuKimligi, ...(tam ? { kosuKapsami: 'Genel' } : {})
+        kosuTuru: tam ? 'tam' : 'tekil', kosuKimligi, ...(tam ? { kosuKapsami: 'Genel' } : {}), ...(riskli ? { canliOnay: true } : {})
       });
       durumAdi = y.durum === 'passed' ? 'basarili' : y.durum === 'skipped' ? 'atlanan' : y.durum === 'iptal' ? 'durduruldu' : 'basarisiz';
       mesaj = y.durum === 'passed' ? '' : String(y.hata || y.mesaj || '').split('\n')[0].slice(0, 300);
-    } catch (hata) { mesaj = hata.message; }
+    } catch (hata) {
+      mesaj = hata.message;
+      // Kapalı izin / eksik canlı onayı: diğer senaryolar da aynı nedenle başlamaz — koşu burada kesilir.
+      if (hata.kod === 'IZIN_KAPALI' || hata.kod === 'CANLI_ONAY_GEREKLI') { console.error(mesaj); durduruldu = true; }
+    }
     const sureMs = Date.now() - bas;
     sonuclar.push({ baslik: s.baslik, ekran: ekranAdi.get(s.ekranId) || '', durum: durumAdi, sureMs, mesaj });
     const isaret = { basarili: '✓', basarisiz: '✗', atlanan: '−', durduruldu: '■', hata: '!' }[durumAdi];

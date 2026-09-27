@@ -13,6 +13,7 @@ import { tabanAdresleriBolumu } from './taban-adresler.js';
 import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
 import { entegrasyonlarBolumu } from './entegrasyonlar.js';
 import { kasayiKilitleSecimli, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
+import { izinlerBolumu } from './izinler.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
@@ -21,6 +22,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi, ekran taraması / akış kaydı süreleri ve zamanlanmış koşular. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
+  { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; açtığınız izinler kasada saklanır.' },
   { ad: 'entegrasyonlar', etiket: 'Entegrasyonlar', ikon: 'ag', aciklama: 'Dış uygulamalarla bağlantılar: koşu bitince webhook bildirimi, testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantıları. Token, parola ve gizli adresler kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.' },
   { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları.' }
 ];
@@ -35,7 +37,8 @@ const ISLEM_ETIKETI = {
 /**
  * @param {HTMLElement} kapsayici
  * @param {string} bolum
- * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void> }} baglam
+ * @param {{ durum: any; yonlendir: () => void; projeSec: (id: string) => void; projeleriYenile: () => Promise<void>; odak?: string | null }} baglam
+ *   odak: bölüm içinde odaklanılacak öğe (İzinler: #/ayarlar/izinler/<izin anahtarı>).
  */
 export function ayarlarBolumu(kapsayici, bolum, baglam) {
   if (bolum === 'baglam') bolum = 'test-verisi';
@@ -50,7 +53,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
-    entegrasyonlar: entegrasyonlarBolumu,
+    entegrasyonlar: entegrasyonlarBolumu, izinler: izinlerBolumu,
     'test-verisi': testVerisi, kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {

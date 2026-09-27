@@ -14,7 +14,7 @@ import { kosuKaydet, sonucKaydet } from '../../scripts/platform/veritabani/sonuc
 import { korumaliTarayici, SIRKET_DESENI } from './giris-fikstur';
 import { ornekBasvuruModeli } from './model-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 
 const EKRAN_KLASORU = process.env.EKRAN_YONETIMI_EKRAN_KLASORU;
 
@@ -35,6 +35,8 @@ test.beforeAll(async () => {
   const parola = randomBytes(18).toString('base64url');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   projeId = projeKaydet(vt, { ad: 'Örnek Proje' });
   ortamId = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true });
   // Nötr ekranlar: hepsi örnek başvuru modelinin kopyası (anahtar + URL yolu farklı), her birinde model senaryoları.

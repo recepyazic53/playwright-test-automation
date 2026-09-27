@@ -12,7 +12,7 @@
 import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc } from './rest-sihirbazi.js';
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste } from './kosu-paneli.js';
+import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
@@ -45,7 +45,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`),
     api(`/platform/tablolar?projeId=${encodeURIComponent(proje.id)}`)
   ]);
-  const testOrtamlari = ortamlar.filter((o) => !o.canli);
+  const testOrtamlari = ortamlar.filter((o) => !riskliOrtamMi(o));
   /** Sihirbaz durumu (kaydedene kadar yalnız tarayıcıda). varsayilanlar: yalnız tarih kuralı önerileri (BEGIN_DATE / END_DATE). */
   const d = {
     adim: 0, ad: '', anahtar: '', anahtarElle: false, soapSurumu: '1.1', tls: true,

@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 import { MODEL_SPEC_DOSYASI } from './scripts/platform/senaryolar/model-kosusu.mjs';
 import { genelOturumDosyasi, genelVeri } from './tests/support/genel-veri';
+import { oturumuSifreliOku } from './tests/support/oturum-kasasi';
 import { ekranGoruntusuAyari, izAyari, videoAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
 
 // MODEL KOŞUSU — Nöbetçi'deki senaryolar (test kodu yok; her senaryo ekran modeliyle genel model koşucusunda koşar).
@@ -37,7 +37,8 @@ export default defineConfig({
 
   use: {
     baseURL: veri.model?.tabanUrl,
-    storageState: existsSync(oturumDosyasi) ? oturumDosyasi : undefined,
+    // Paylaşılan giriş oturumu kasa anahtarıyla şifreli saklanır (tests/support/oturum-kasasi.ts); burada bellekte çözülür.
+    storageState: oturumuSifreliOku(oturumDosyasi),
     // Kayıt kuralları: Ayarlar > Koşu (bkz. tests/support/kosu-ayarlari.ts).
     video: videoAyari(),
     screenshot: ekranGoruntusuAyari(),

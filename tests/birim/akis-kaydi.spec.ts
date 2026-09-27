@@ -19,7 +19,7 @@ import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs'
 import { SIRKET_DESENI, korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { ORNEK_KULLANICI, ORNEK_PAROLA, ORNEK_TOTP_ANAHTARI, OrnekBasvuruUygulamasi, ornekGirisTarifi } from './model-fikstur';
 import { bosPort, nobetciApi, nobetciBaslat, type Nobetci, type Yanit } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 
 type Nesne = Record<string, any>;
 const PAROLA = `Gecici-Kayit-${randomBytes(6).toString('hex')}`;
@@ -70,6 +70,8 @@ test.beforeAll(async () => {
   const vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   vt.kapat();
   cdpPortu = await bosPort();
   nobetci = await nobetciBaslat(klasor, vtYolu, {
@@ -101,7 +103,7 @@ test('başlatma kuralları: onay, canlı işaretli ortam ve tek bağlam profili 
   expect(ortamlar.find((o) => o.id === canliOrtamId)?.canli).toBe(true);
   expect(ortamlar.find((o) => o.id === ortamId)?.canli).toBe(false);
   expect(await api('/platform/tarama/baslat', kayitGovdesi({ onay: false }))).toMatchObject({ basarili: false, kod: 'ONAY_GEREKLI' });
-  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId }))).toMatchObject({ basarili: false, kod: 'CANLI_ORTAM' });
+  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId, canliOnay: true }))).toMatchObject({ basarili: false, kod: 'CANLI_ORTAM' });
   expect(await api('/platform/tarama/baslat', kayitGovdesi({ baglamProfilleri: ['Merkez', 'Yetkili'] }))).toMatchObject({ basarili: false, kod: 'PROFIL' });
   expect(uygulama.olaylar).toEqual([]);
 });

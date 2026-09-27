@@ -47,6 +47,12 @@ export type GirisSecenekleri = {
   log?: (mesaj: string) => void;
   /** Giriş alanlarının görünmesi için bekleme (varsayılan 15 sn). */
   alanBeklemeMs?: number;
+  /**
+   * Giriş bilgisinin yazılabileceği kökenler (tarif.mjs > girisKokenleri: ortamın taban adresi + tarifteki tam giriş adresi).
+   * Verilirse kullanıcı adı, parola, ek alan ve doğrulama kodu YALNIZ sayfa bu kökenlerden birindeyken yazılır; aksi hâlde
+   * KOKEN_UYUSMAZ (alan doldurulmaz). Nöbetçi'nin koşucuları (model koşucusu, tarama, akış kaydı) her zaman verir.
+   */
+  izinliKokenler?: readonly string[];
 };
 
 export class GirisHatasi extends Error {
@@ -262,6 +268,17 @@ async function sayfayaGit(page: Page, adres: string, neden: string): Promise<voi
   }
 }
 
+/** Sayfa izinli bir kökende değilse giriş bilgisi yazılmaz (KOKEN_UYUSMAZ). */
+function kokenDenetle(page: Page, izinli: readonly string[] | undefined, ne: string): void {
+  if (!izinli) return;
+  let koken = '';
+  try { koken = new URL(page.url()).origin; } catch { koken = ''; }
+  if (!izinli.includes(koken)) {
+    throw new GirisHatasi('KOKEN_UYUSMAZ', `${ne} yazılmadı: sayfa ortamın adresinden farklı bir siteye (${koken || 'bilinmeyen adres'}) geçti. ` +
+      'Giriş bilgisi yalnız ortamın taban adresinin ya da giriş tarifindeki giriş adresinin kökenine yazılır (Ayarlar > Ortamlar / Giriş tarifi).');
+  }
+}
+
 async function captchaKontrol(page: Page): Promise<void> {
   const kanit = await captchaAlgila(page);
   if (kanit.length) throw new GirisHatasi('CAPTCHA', `${CAPTCHA_MESAJI} (kanıt: ${kanit.slice(0, 3).join('; ')})`);
@@ -307,15 +324,21 @@ export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKiml
   for (const [i, a] of adimlar.entries()) {
     const sure = a.zamanAsimiSn ? a.zamanAsimiSn * 1000 : bekleme;
     if (a.islem === 'kullaniciAdi') {
-      await (await alaniBekle(page, tarif.kullaniciAlani, 'Kullanıcı adı alanı', sure)).fill(kimlik.kullaniciAdi);
+      const l = await alaniBekle(page, tarif.kullaniciAlani, 'Kullanıcı adı alanı', sure);
+      kokenDenetle(page, secenekler.izinliKokenler, 'Kullanıcı adı');
+      await l.fill(kimlik.kullaniciAdi);
     } else if (a.islem === 'parola') {
-      await (await alaniBekle(page, tarif.parolaAlani, 'Parola alanı', sure)).fill(kimlik.parola);
+      const l = await alaniBekle(page, tarif.parolaAlani, 'Parola alanı', sure);
+      kokenDenetle(page, secenekler.izinliKokenler, 'Parola');
+      await l.fill(kimlik.parola);
     } else if (a.islem === 'gonder') {
       await (await alaniBekle(page, tarif.gonderDugmesi, 'Giriş düğmesi', sure)).click();
       gonderildi = true;
       secenekler.log?.('Kullanıcı adı ve parola gönderildi.');
     } else {
       try {
+        // Ek alan adımları da giriş profilinin (gizli olabilen) değerlerini yazar.
+        kokenDenetle(page, secenekler.izinliKokenler, 'Giriş adımı');
         await adimiUygula(page, a, ekAlanlar, 'Giriş adımındaki sayfa');
       } catch (hata) {
         if (hata instanceof GirisHatasi && hata.kod !== 'SITE_ERISILEMEDI') throw hata;
@@ -356,6 +379,7 @@ export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKiml
 
   // İkinci adım: kod o anda üretilir/alınır (TOTP penceresi 30 sn).
   const kod = await koduAl(kaynak, tarif, secenekler);
+  kokenDenetle(page, secenekler.izinliKokenler, 'Doğrulama kodu');
   await ilkOge(page, ilk.secici).fill(kod);
   await (await alaniBekle(page, ikinci.gonderDugmesi || tarif.gonderDugmesi, 'Kod gönder düğmesi', bekleme)).click();
   secenekler.log?.('Doğrulama kodu gönderildi.');

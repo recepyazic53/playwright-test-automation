@@ -11,7 +11,8 @@ import { DepoHatasi, ortamlariListele } from '../veritabani/depo.mjs';
 import { baglantiGetir, tumBaglantilar } from '../entegrasyonlar/depo.mjs';
 import { eslemedenBaglanti, veritabaniGetir, veritabanlariListele } from './veritabanlari.mjs';
 import { veritabaniAyari } from '../entegrasyonlar/katalog.mjs';
-import { SURUCULER, veritabaniSorgusu } from '../entegrasyonlar/veritabani-suruculeri.mjs';
+import { SURUCULER, sorguIzinleri, veritabaniSorgusu } from '../entegrasyonlar/veritabani-suruculeri.mjs';
+import { izinDurumundanDenetle, izinGerekli } from '../guvenlik/izinler.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { yasakDesenleri, YASAK_ADRES_DEGISKENI } from '../senaryolar/model-kosusu.mjs';
 
@@ -43,7 +44,10 @@ function kullanilabilirBaglanti(vt, baglantiId, s = {}) {
  */
 export async function sorguCalistir(vt, baglantiId, sql, parametreler, secenekler = {}) {
   const b = kullanilabilirBaglanti(vt, baglantiId, secenekler);
-  return veritabaniSorgusu(veritabaniAyari(b.alanlar), sql, parametreler, {
+  const ayar = veritabaniAyari(b.alanlar);
+  // İzinler (Ayarlar > İzinler): okuma; "Yalnız okuma" kapalı bağlantıda yazma sorgusu ayrıca yazma — bağlanmadan önce.
+  for (const a of sorguIzinleri(ayar, sql)) izinGerekli(vt, a, 'sorguCalistir');
+  return veritabaniSorgusu(ayar, sql, parametreler, {
     zamanAsimiMs: secenekler.zamanAsimiMs, satirSiniri: secenekler.satirSiniri, yasakDesenleri: etkinYasakDesenleri(vt)
   });
 }
@@ -70,19 +74,24 @@ export function sqlHedefi(vt, tanim, s = {}) {
  */
 export async function sqlTanimiylaSorgula(vt, tanim, sql, parametreler, secenekler = {}) {
   const { baglanti } = sqlHedefi(vt, tanim, secenekler);
-  return veritabaniSorgusu(veritabaniAyari(baglanti.alanlar), sql, parametreler, {
+  const ayar = veritabaniAyari(baglanti.alanlar);
+  for (const a of sorguIzinleri(ayar, sql)) izinGerekli(vt, a, 'sqlTanimiylaSorgula');
+  return veritabaniSorgusu(ayar, sql, parametreler, {
     zamanAsimiMs: secenekler.zamanAsimiMs, satirSiniri: secenekler.satirSiniri, yasakDesenleri: etkinYasakDesenleri(vt)
   });
 }
 
 /**
  * Model koşucusu için: çözülmüş ayarla sorgu (veritabanı açılmaz). Yasak adresler ortam değişkeninden (koşuyu başlatan sunucu
- * Ayarlar'dakileri de buraya yazar).
+ * Ayarlar'dakileri de buraya yazar). İzinler: koşucu kasayı açmaz — izin durumu veri-oku.mjs çıktısından gelir (izinler);
+ * verilmezse kapalı sayılır.
  * @param {VeritabaniAyari} ayar @param {string} sql @param {Record<string, unknown>} parametreler
- * @param {{ zamanAsimiMs?: number; satirSiniri?: number }} [secenekler]
+ * @param {{ zamanAsimiMs?: number; satirSiniri?: number; izinler?: Record<string, unknown> | null }} [secenekler]
  */
 export function ayarlaSorgula(ayar, sql, parametreler, secenekler = {}) {
-  return veritabaniSorgusu(ayar, sql, parametreler, { ...secenekler, yasakDesenleri: yasakDesenleri(process.env[YASAK_ADRES_DEGISKENI]) });
+  const { izinler, ...kalan } = secenekler;
+  for (const a of sorguIzinleri(ayar, sql)) izinDurumundanDenetle(izinler, a, 'ayarlaSorgula');
+  return veritabaniSorgusu(ayar, sql, parametreler, { ...kalan, yasakDesenleri: yasakDesenleri(process.env[YASAK_ADRES_DEGISKENI]) });
 }
 
 /** Arayüz seçim listesi (gizli alan yok). @param {Veritabani} vt @param {string} projeId */

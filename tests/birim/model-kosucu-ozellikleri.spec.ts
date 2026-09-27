@@ -23,7 +23,7 @@ import {
   AKIS_YOLU, AkisUygulamasi, HAVUZLAR, HESAPLAMA_UYARILARI, KIMLIK_UYARISI, ONAY_AKIS_ANAHTARI, ONAY_RED, PLAN_UYARISI, akisModeli, akisPaketi, onayAkisPaketi
 } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 
 type Nesne = Record<string, unknown>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- model JSON'u serbestçe gezilir (test verisi)
@@ -59,7 +59,7 @@ async function kaydetVeKos(baslik: string, veri: Nesne, s: { ekran?: string; aki
   const yeni = await basarili('/platform/senaryo/kaydet', {
     projeId, ekranId: s.ekran ?? ekranId, ...(s.akisId ? { akisId: s.akisId } : {}), baslik, ortamIdleri: [ortam], veri: { baslik, ...veri }
   });
-  const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: yeni.id, ortamId: ortam });
+  const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId: yeni.id, ortamId: ortam, canliOnay: true });
   expect(y.basarili, `${baslik}: ${y.mesaj ?? ''}`).toBe(true);
   return (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
 }
@@ -76,6 +76,8 @@ test.beforeAll(async () => {
   const vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   vt.kapat();
   nobetci = await nobetciBaslat(klasor, vtYolu, {});
   await basarili('/platform/kasa/ac', { parola: PAROLA });

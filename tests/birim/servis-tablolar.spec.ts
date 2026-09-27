@@ -14,7 +14,7 @@ import { kullanilanParametreler, tarihDegeriBicimle, yerTutuculariDoldur } from 
 import { wsdlSemalari } from '../../scripts/platform/servisler/wsdl-semasi.mjs';
 import { basvuru, basvuruCoz, secilenSatir, sutunSecenekleri, uyanSatirlar } from '../../scripts/platform/tablolar/tablo-secimi.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { SAHTE_TC, WSDL, sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
@@ -97,6 +97,8 @@ test.describe('servis alanları tablolardan', () => {
     const vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });

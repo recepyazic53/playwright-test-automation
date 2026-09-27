@@ -822,7 +822,7 @@ function anaDuzen() {
       main.className = 'ana-icerik';
       sayfaBasligi('Ayarlar');
       // Eski "Bağlam profilleri" adresi: bağlam kayıtları artık Test verisi > Kayıtlar'da.
-      ayarlarEkrani(main, alt === 'baglam' ? 'test-verisi' : AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje');
+      ayarlarEkrani(main, alt === 'baglam' ? 'test-verisi' : AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje', kalan[0] ? decodeURIComponent(kalan[0]) : null);
     } else {
       // #/sonuclar ve bilinmeyen adresler (ör. eski #/gorunum yer imleri) → Sonuçlar.
       navSonuclar.setAttribute('aria-current', 'page');
@@ -866,7 +866,7 @@ let ekranlarSozu = null;
 const ekranlarModulu = () => (ekranlarSozu ??= import('./ekranlar.js').catch((e) => { ekranlarSozu = null; throw e; }));
 const mesajKutusuHata = (metin) => h('div', { class: 'not-kutusu hata', role: 'alert' }, metin);
 
-function ayarlarEkrani(main, bolum) {
+function ayarlarEkrani(main, bolum, odak = null) {
   const icerik = h('section', { class: 'icerik-alani dar-icerik', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));
   const altNav = h('nav', { class: 'alt-nav', 'aria-label': 'Ayarlar bölümleri' },
     AYAR_BOLUMLERI.map((b) => h('a', { href: `#/ayarlar/${b.ad}`, 'aria-current': b.ad === bolum ? 'page' : null }, ikon(b.ikon), b.etiket)));
@@ -875,7 +875,7 @@ function ayarlarEkrani(main, bolum) {
       h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav,
         h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
       icerik));
-  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile });
+  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak });
 }
 
 cikisKorumasiniKur();

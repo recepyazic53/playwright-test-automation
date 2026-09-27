@@ -55,6 +55,7 @@ import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { baglamAlanlari, girisTarifiniDogrula } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
+import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
 import { EKRAN_ANAHTARI_DESENI, sayfaPaketiniDogrula } from '../ekranlar/sayfa-paketi.mjs';
 import { HedefHatasi, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji } from './koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './paket-olusturucu.mjs';
@@ -822,6 +823,9 @@ export async function taramaIsteginiIsle(req, res, b) {
     if (govde.token !== b.token && !b.disTokenGecerli) { tokenYok(); return true; }
     if (yol === '/platform/tarama/baslat') {
       const db = await b.acikVeritabani();
+      // İzinler (web erişimi; giriş tarifi varsa giriş bilgisi; riskli ortamda canlı ortam + açık onay): tarayıcı AÇILMADAN
+      // denetlenir (tek merkez: guvenlik/uc-denetimi.mjs). Kapalıysa IzinHatasi → sunucu 403 IZIN_KAPALI döner.
+      ucDenetle(db, yol, govde);
       const port = req.socket.localPort;
       const sonuc = y.baslat(db, govde, { sunucuAdresi: `http://127.0.0.1:${port}` });
       console.log(`[platform] ${govde.kip === 'kayit' ? 'Akış kaydı' : 'Ekran taraması'} başlatıldı (${sonuc.isId}).`);

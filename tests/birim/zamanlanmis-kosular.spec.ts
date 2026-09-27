@@ -17,7 +17,7 @@ import {
 } from '../../scripts/platform/zamanlama/kurallar.mjs';
 import { ATLANDI_MESAJI, zamanlayiciOlustur, zamanliKosuyuYurut, type YurutmeBagimliliklari } from '../../scripts/platform/zamanlama/zamanlayici.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 
 /** Yerel saat (zamanlar bu bilgisayarın saatine göredir). 2026-09-28 Pazartesi. */
 const an = (gun: number, saat: number, dakika = 0, saniye = 0) => new Date(2026, 8, gun, saat, dakika, saniye);
@@ -88,6 +88,8 @@ test('kurallar kasada şifreli; canlı ortam onayı; zamanlayıcı SAHTE koşucu
   const vt: Veritabani = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
   try {
     await kasaOlustur(vt, 'Gecici-Zamanlama-1', { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
     const testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
     const canliOrtam = ortamKaydet(vt, { projeId, ad: 'Ana sistem', tabanUrl: 'https://ana.ornek.invalid', varsayilan: false, ayarlar: { canli: true } });
@@ -227,6 +229,8 @@ test('yalnız servis akışı kapsamı: sahte akış koşucusu çağrılır, sen
   const vt: Veritabani = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
   try {
     await kasaOlustur(vt, 'Gecici-Zamanlama-2', { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
     const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
     const s = sahteBagimliliklar([{ id: 's1', baslik: 'Giriş', ekranId: 'e1', kosuyaDahil: true }]);
@@ -264,6 +268,8 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     const vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA });

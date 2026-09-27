@@ -11,6 +11,7 @@
 //   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { riskliOrtamMi } from './ortam-riski.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -30,8 +31,29 @@ export const KOSU_DURUMLARI = Object.freeze({
 
 const sureMetni = (ms) => (ms == null ? '' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
 
-/** Ortam "gerçek işlem" riski taşıyor mu? (CANLI işaretliyse, varsayılan test ortamı değilse ya da adı canlı/üretim çağrıştırıyorsa) */
-export const riskliOrtamMi = (ortam) => Boolean(ortam) && (ortam.canli === true || !ortam.varsayilan || /canl|prod|uretim|üretim/i.test(String(ortam.ad || '')));
+/** Ortam "gerçek işlem" riski taşıyor mu? TEK TANIM sunucuyla ortak: ortam-riski.mjs (canlı işaretli, varsayılan değil ya da adı canlı / üretim). */
+export { riskliOrtamMi };
+
+/**
+ * Riskli ortam onayı: koşu diyaloğunda (kosuOnayi) ya da canliOnayIste ile ONAYLANAN riskli ortamın kimliği. Sunucu riskli ortamda
+ * her çalıştırmada istekte açık onay (canliOnay: true) ister; onay yalnız bu diyaloglardan gelir (son onay geçerlidir).
+ */
+let onayliRiskliOrtam = null;
+/** İsteğe eklenecek açık onay (ortam riskli ve diyalogda onaylandıysa). @param {string} ortamId */
+export const canliOnayEki = (ortamId) => (ortamId && ortamId === onayliRiskliOrtam ? { canliOnay: true } : {});
+/**
+ * Riskli ortam için (diyalogsuz akışlarda: Dene, tarama, öneri) açık onay ister; riskli değilse hemen true. Onaylanırsa canliOnayEki
+ * o ortam için { canliOnay: true } verir. @param {{ id: string; ad: string; canli?: boolean; varsayilan?: boolean }} ortam @param {string} [ne]
+ */
+export async function canliOnayIste(ortam, ne = 'Bu işlem') {
+  if (!riskliOrtamMi(ortam)) return true;
+  const tamam = await onayIste({
+    baslik: `${ortam.ad} ortamında çalıştırılsın mı?`, ikonAd: 'uyari', dugme: 'Onayla ve çalıştır',
+    metin: `${ne} canlı / riskli bir ortamda (canlı işaretli ya da varsayılan test ortamı değil) çalışacak; gerçek işlem oluşturabilir.`
+  });
+  onayliRiskliOrtam = tamam ? ortam.id : null;
+  return tamam;
+}
 
 // ---------------------------------------------------------------------------------------
 // Durum
@@ -133,7 +155,12 @@ export function kosuOnayi(s) {
     let sonuc = false;
     baslat.addEventListener('click', () => { sonuc = true; diyalog.close(); });
     vazgec.addEventListener('click', () => diyalog.close());
-    diyalog.addEventListener('close', () => { diyalog.remove(); coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar } : null) : sonuc); });
+    diyalog.addEventListener('close', () => {
+      diyalog.remove();
+      // Riskli ortamda "Başlat" = açık canlı onayı (sunucuya canliOnay: true gider).
+      onayliRiskliOrtam = sonuc && ortam && riskliOrtamMi(ortam) ? ortam.id : null;
+      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar } : null) : sonuc);
+    });
     document.body.append(diyalog);
     diyalog.showModal();
     (ortamSecimi || baslat).focus();
@@ -224,11 +251,12 @@ export function kosuBaslat(s) {
     durum.oturum.bitti = false;
     durum.secili = satir.senaryoId;
     durum.kucuk = false;
-    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}`, ...(s.tekBasina ? { tekBasina: true } : {}) }).then(() => oturumuBitirGerekirse(durum.oturum));
+    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}`, ...(s.tekBasina ? { tekBasina: true } : {}), ...canliOnayEki(s.ortam.id) }).then(() => oturumuBitirGerekirse(durum.oturum));
     yay();
     return true;
   }
   const oturum = {
+    canliOnay: canliOnayEki(s.ortam.id),
     baslik: s.baslik, tur: s.tur, kapsam: s.kapsam || 'Genel', esZamanli: s.esZamanli, ortam: s.ortam, projeId: s.projeId,
     kosuKimligi: `platform-${kimlikUret()}`, satirlar: yeniler.map(satirOlustur), iptal: false, bitti: false, baslangic: Date.now()
   };
@@ -265,7 +293,7 @@ async function birTaneCalistir(oturum, satir, ek) {
   let yanit;
   try {
     yanit = await api('/platform/senaryolar/calistir', {
-      govde: { projeId: oturum.projeId, ortamId: oturum.ortam.id, senaryoId: satir.senaryoId, kosuId: satir.kosuId, ...ek }
+      govde: { projeId: oturum.projeId, ortamId: oturum.ortam.id, senaryoId: satir.senaryoId, kosuId: satir.kosuId, ...(oturum.canliOnay || {}), ...ek }
     });
   } catch (hata) {
     yanit = { basarili: false, mesaj: hata.message };

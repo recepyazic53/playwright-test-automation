@@ -25,7 +25,7 @@ import { senaryoKaydet } from '../../scripts/platform/senaryolar/senaryo-servisi
 import { ekranModeliGetir } from '../../scripts/platform/veritabani/depo.mjs';
 import { akistanKayitEnvanteri, type AkisEnvanteri } from '../../scripts/platform/tarama/akis-tasarimi.mjs';
 import { kayitPaketiOlustur, type HamAlan } from '../../scripts/platform/tarama/paket-olusturucu.mjs';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 
 type Cagri = { host: string; sorgu: unknown };
 
@@ -62,6 +62,8 @@ test.describe('SQL veritabanları (ortama göre bağlantı)', () => {
     });
     vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
     await kasaOlustur(vt, 'Gecici-SqlVt-1', { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     projeId = projeKaydet(vt, { ad: 'Veritabanı projesi' });
     TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
     CANLI = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'http://127.0.0.1:9', ayarlar: { canli: true } });
@@ -144,9 +146,10 @@ test.describe('SQL veritabanları (ortama göre bağlantı)', () => {
     expect(c.adimlar[1]).toMatchObject({ durum: 'hata' });
     expect(String(c.adimlar[1].neden)).toContain('bu ortamda kullanılamaz');
     expect(cagrilar.filter((x) => !String(x.sorgu).includes('READ ONLY')).map((x) => x.host)).toEqual(['192.0.2.10', '192.0.2.10', '192.0.2.20']);
-    // Eşlemesi olmayan ortam: sorgu atılmaz, adım anlaşılır hatayla kalır (Dene de aynı yoldan geçer).
+    // Eşlemesi olmayan ortam: sorgu atılmaz, adım anlaşılır hatayla kalır. (HAZIRLIK varsayılan test ortamı olmadığından riskli
+    // sayılır — tek tanım ortam-riski.mjs — Dene yalnız test ortamında; koşu aynı yoldan geçer.)
     const once = cagrilar.length;
-    const h = await servisAkisiCalistir(vt, projeId, { akisId, ortamId: HAZIRLIK, tur: 'dene' });
+    const h = await servisAkisiCalistir(vt, projeId, { akisId, ortamId: HAZIRLIK, tur: 'kosu' });
     expect(h.adimlar[0]).toMatchObject({ durum: 'hata', neden: '"Kayıt veritabanı" için HAZIRLIK ortamında bağlantı tanımlı değil (Ayarlar > Entegrasyonlar > Veritabanları).' });
     expect(cagrilar.length).toBe(once);
     expect(JSON.stringify([t, c, h])).not.toContain(PAROLA);

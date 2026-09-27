@@ -207,7 +207,7 @@ function baglantiSihirbazi(s) {
   const ayarlariKur = () => {
     girdiler = tur.alanlar.map((t) => ({ t, ...alanGirdisi(t, duzenleme) }));
     olayKutulari = tur.olaylar.map((o) => {
-      const k = h('input', { type: 'checkbox', id: yeniKimlik('ent-olay'), value: o.ad, checked: duzenleme ? duzenleme.olaylar.includes(o.ad) : true });
+      const k = h('input', { type: 'checkbox', id: yeniKimlik('ent-olay'), value: o.ad, checked: duzenleme ? duzenleme.olaylar.includes(o.ad) : false });
       return { o, k };
     });
     ortamKutulari = s.ortamlar.map((o) => ({ o, k: h('input', { type: 'checkbox', id: yeniKimlik('ent-ortam'), value: o.id, checked: duzenleme ? duzenleme.ortamIdleri.includes(o.id) : false }) }));

@@ -12,6 +12,9 @@ import { randomUUID } from 'node:crypto';
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { TOLERANS_MS, vadesiGelenZaman } from './takvim.mjs';
 import { ortamRiskliMi, tetiklemeYaz, tumGecmis, tumKurallar, tuketilenYaz } from './kurallar.mjs';
+import { izinAcikMi } from '../guvenlik/izinler.mjs';
+import { izinKapaliNotu, izinMesaji } from '../guvenlik/izin-tanimlari.mjs';
+import { kapaliIzinler } from '../guvenlik/uc-denetimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./kurallar.d.mts').Kural} Kural */
@@ -33,6 +36,11 @@ const hataMetni = (hata) => String(/** @type {Error} */ (hata)?.message ?? hata)
 export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   const ortam = ortamGetir(vt, kural.ortamId);
   if (!ortam || ortam.projeId !== kural.projeId) throw new DepoHatasi('Ortam bulunamadı (silinmiş olabilir).');
+  // İzinler (Ayarlar > İzinler; tek merkez guvenlik/izinler.mjs + uc-denetimi.mjs): kullanıcı yokken pencere açılamaz — kapalı
+  // izne tabi işlem ATLANIR ve geçmişte "izin kapalı: X" olarak görünür.
+  if (!izinAcikMi(vt, 'arka-plan')) {
+    return { durum: 'atlandi', mesaj: `Atlandı: ${izinKapaliNotu('arka-plan')}. ${izinMesaji('arka-plan')}`, kosuId: null, ozet: null, akisKosulari: [] };
+  }
   if (ortamRiskliMi(ortam) && !kural.canliOnay) throw new DepoHatasi('Ortam canlı / riskli işaretli ama kuralda canlı ortam onayı yok; koşu başlatılmadı.');
   const { senaryolar: kapsam, ekranIdleri, servisAkisIdleri } = kural.kapsam;
   const secilen = kapsam === 'yok' ? [] : bag.senaryolar(vt, kural.projeId, kural.ortamId)
@@ -45,10 +53,23 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   let yarida = false;
   let ilkHata = '';
   const devam = () => (bag.devamMi ? bag.devamMi() : true);
+  /** Kapalı izin yüzünden atlanan işlemler ("izin kapalı: X"). @type {Set<string>} */
+  const izinNotlari = new Set();
+  let izinleAtlananSenaryo = 0;
+  let izinleAtlananAkis = 0;
+  /** @param {string} yol @param {Record<string, unknown>} govde */
+  const kapali = (yol, govde) => kapaliIzinler(vt, yol, govde);
 
   for (const s of secilen) {
     if (!devam()) { yarida = true; break; }
     ozet.toplam++;
+    const eksik = kapali('/platform/senaryolar/calistir', { projeId: kural.projeId, ortamId: kural.ortamId, senaryoId: s.id });
+    if (eksik.length) {
+      ozet.atlanan++;
+      izinleAtlananSenaryo++;
+      for (const a of eksik) izinNotlari.add(izinKapaliNotu(a));
+      continue;
+    }
     try {
       const y = await bag.senaryoCalistir(vt, {
         projeId: kural.projeId, ortamId: kural.ortamId, senaryoId: s.id, kosuId: randomUUID(),
@@ -68,6 +89,13 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   for (const akisId of servisAkisIdleri) {
     if (yarida || !devam()) { yarida = true; break; }
     if (!bag.servisAkisiCalistir) break;
+    const eksik = kapali('/platform/servis-akisi/kos', { projeId: kural.projeId, ortamId: kural.ortamId, akisId });
+    if (eksik.length) {
+      akisKosulari.push({ akisId, kosuId: null, durum: 'atlandi' });
+      izinleAtlananAkis++;
+      for (const a of eksik) izinNotlari.add(izinKapaliNotu(a));
+      continue;
+    }
     try {
       const r = await bag.servisAkisiCalistir(vt, kural.projeId, { akisId, ortamId: kural.ortamId, tur: 'kosu' });
       akisKosulari.push({ akisId, kosuId: r.kosuId ?? null, durum: r.durum });
@@ -78,18 +106,24 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   }
 
   const senaryoKostu = ozet.toplam > 0;
-  if (kural.bildirimBaglantiId && senaryoKostu && bag.bildir && devam()) {
-    try { await bag.bildir(vt, kosuKimligi, [kural.bildirimBaglantiId]); } catch { /* bildirim hatası koşuyu etkilemez */ }
+  const kosanSenaryo = ozet.toplam - izinleAtlananSenaryo > 0;
+  if (kural.bildirimBaglantiId && kosanSenaryo && bag.bildir && devam()) {
+    // Dış gönderim izni kapalıysa bildirim gönderilmez (kosuBittiBildir de denetler); kayda not düşülür.
+    if (!izinAcikMi(vt, 'dis-gonderim')) izinNotlari.add(izinKapaliNotu('dis-gonderim'));
+    else { try { await bag.bildir(vt, kosuKimligi, [kural.bildirimBaglantiId]); } catch { /* bildirim hatası koşuyu etkilemez */ } }
   }
   const akisSorunu = akisKosulari.filter((a) => a.durum !== 'basarili').length;
-  const durum = yarida ? 'yarida' : ozet.basarisiz || ozet.hata || akisSorunu ? 'basarisiz' : 'tamamlandi';
+  const hepsiIzinle = izinleAtlananSenaryo + izinleAtlananAkis > 0 && izinleAtlananSenaryo === ozet.toplam && izinleAtlananAkis === akisKosulari.length && !yarida;
+  const durum = hepsiIzinle ? 'atlandi' : yarida ? 'yarida' : ozet.basarisiz || ozet.hata || akisSorunu ? 'basarisiz' : 'tamamlandi';
   const parcalar = [
-    senaryoKostu ? `${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız${ozet.atlanan ? `, ${ozet.atlanan} atlandı` : ''}${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}` : null,
-    akisKosulari.length ? `${akisKosulari.length - akisSorunu}/${akisKosulari.length} servis akışı başarılı` : null,
+    hepsiIzinle ? 'Atlandı' : null,
+    senaryoKostu && !hepsiIzinle ? `${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız${ozet.atlanan ? `, ${ozet.atlanan} atlandı` : ''}${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}` : null,
+    akisKosulari.length && !hepsiIzinle ? `${akisKosulari.length - akisSorunu}/${akisKosulari.length} servis akışı başarılı` : null,
+    izinNotlari.size ? `${[...izinNotlari].join(', ')} (Ayarlar > İzinler)` : null,
     yarida ? 'yarıda kaldı (kasa kilitlendi ya da çalışma alanı değişti)' : null,
     ilkHata || null
   ].filter(Boolean);
-  return { durum, mesaj: parcalar.join(' · '), kosuId: senaryoKostu ? kosuKimligi : null, ozet: senaryoKostu ? ozet : null, akisKosulari };
+  return { durum, mesaj: parcalar.join(' · '), kosuId: kosanSenaryo ? kosuKimligi : null, ozet: senaryoKostu && !hepsiIzinle ? ozet : null, akisKosulari };
 }
 
 /**
@@ -161,6 +195,12 @@ export function zamanlayiciOlustur(bag) {
       if (suren || bag.mesgulMu()) {
         yaz(vt, k.id, { id: randomUUID(), zaman, baslangic, bitis: baslangic, durum: 'atlandi', mesaj: ATLANDI_MESAJI, kosuId: null, ozet: null, akisKosulari: [] });
         log(`[zamanlama] "${k.ad}" atlandı: koşu sürüyordu.`);
+        continue;
+      }
+      // Arka plan çalışması izni (Ayarlar > İzinler) kapalıysa hiçbir şey başlatılmaz; geçmişte "izin kapalı" görünür.
+      if (!izinAcikMi(vt, 'arka-plan')) {
+        yaz(vt, k.id, { id: randomUUID(), zaman, baslangic, bitis: baslangic, durum: 'atlandi', mesaj: `Atlandı: ${izinKapaliNotu('arka-plan')}. ${izinMesaji('arka-plan')}`, kosuId: null, ozet: null, akisKosulari: [] });
+        log(`[zamanlama] "${k.ad}" atlandı: arka plan çalışması izni kapalı.`);
         continue;
       }
       const kosuKimligi = `zamanli-${randomUUID()}`;

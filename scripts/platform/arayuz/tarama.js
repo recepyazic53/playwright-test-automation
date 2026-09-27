@@ -16,6 +16,7 @@ import { alan, api, bildir, h, ikon, mesgulIken, rozet, tarihMetni, yerlestir } 
 import { baglamProfiliSecimi, diyalogAc } from './ekran-ortak.js';
 import { taranmisPaketAkisi } from './sayfa-paketi.js';
 import { akisTasarimi } from './akis-tasarimi.js';
+import { canliOnayEki, canliOnayIste } from './kosu-paneli.js';
 
 const YOKLAMA_MS = 1000;
 const sonSecimAnahtari = (projeId) => `nobetci-tarama-son-${projeId}`;
@@ -168,6 +169,10 @@ export async function taramaDiyalogu(s) {
       ekranAnahtari: s.ekran ? undefined : anahtar.value.trim() || anahtarOner(ad.value), ortamId: ortamSecimi.value,
       baglamProfilleri: [...secili], hedef: hedef.value.trim(), kesif: kesif.checked, onay: onay.checked, girissiz: girissiz.checked
     };
+    // Riskli ortam: ayrıca açık onay (sunucu canliOnay: true ister; canlı ortam izni de gerekir).
+    const o = secilenOrtam();
+    if (o && !(await canliOnayIste(o, 'Tarama'))) return;
+    Object.assign(govdeVerisi, canliOnayEki(govdeVerisi.ortamId));
     try {
       const r = await mesgulIken(baslat, 'Başlatılıyor…', () => api('/platform/tarama/baslat', { govde: govdeVerisi }));
       if (!s.ekran) yerelYaz(sonSecimAnahtari(s.proje.id), { ortamId: govdeVerisi.ortamId, hedef: govdeVerisi.hedef, baglamProfilleri: govdeVerisi.baglamProfilleri, kesif: govdeVerisi.kesif });
@@ -277,6 +282,9 @@ export async function kayitDiyalogu(s) {
       ekranAnahtari: s.ekran ? undefined : anahtar.value.trim() || anahtarOner(ad.value), ortamId: ortamSecimi.value,
       baglamProfilleri: profilSecimi.value ? [profilSecimi.value] : [], hedef: hedef.value.trim(), onay: onay.checked, girissiz: girissiz.checked
     };
+    const o = secilenOrtam();
+    if (o && !(await canliOnayIste(o, 'Akış kaydı'))) return;
+    Object.assign(govdeVerisi, canliOnayEki(govdeVerisi.ortamId));
     try {
       const r = await mesgulIken(baslat, 'Başlatılıyor…', () => api('/platform/tarama/baslat', { govde: govdeVerisi }));
       if (!s.ekran) yerelYaz(sonSecimAnahtari(s.proje.id), { ...(yerelOku(sonSecimAnahtari(s.proje.id)) || {}), ortamId: govdeVerisi.ortamId, hedef: govdeVerisi.hedef, baglamProfilleri: govdeVerisi.baglamProfilleri });

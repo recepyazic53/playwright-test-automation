@@ -6,6 +6,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from '@playwright/test';
+import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
+import { IZIN_ANAHTARLARI } from '../../scripts/platform/guvenlik/izin-tanimlari.mjs';
+import { izinDegistir } from '../../scripts/platform/guvenlik/izinler.mjs';
 
 /**
  * POSIX dosya izinleri (0600/0700) yalnız macOS/Linux'ta anlamlıdır; Windows mode bitlerini uygulamaz (her zaman
@@ -59,4 +62,12 @@ export function loglariYakala(): LogYakalayici {
       for (const gizli of gizliler) expect(tum.includes(gizli), `Gizli değer loglarda görünmemeli`).toBe(false);
     }
   };
+}
+
+/**
+ * İZİNLERİ AÇAN KURULUM YARDIMCISI (Ayarlar > İzinler; varsayılan KAPALI). İzinlerden bağımsız davranışı sınayan testler, geçici
+ * veritabanında (kasa açık) izinleri açarak eski davranışı korur. anahtarlar verilmezse tüm izinler açılır.
+ */
+export function izinleriAc(vt: Veritabani, anahtarlar: readonly string[] = IZIN_ANAHTARLARI): void {
+  for (const a of anahtarlar) izinDegistir(vt, a, true, { onay: true });
 }

@@ -10,6 +10,7 @@ import { servisAkisiGetir } from '../servisler/servis-deposu.mjs';
 import { tumBaglantilar } from '../entegrasyonlar/depo.mjs';
 import { turBul } from '../entegrasyonlar/katalog.mjs';
 import { sonrakiZaman, zamanDogrula, zamanMetni } from './takvim.mjs';
+import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./kurallar.d.mts').Kural} Kural */
@@ -22,11 +23,11 @@ export const EN_COK_KURAL = 50;
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
 
 /**
- * Canlı / riskli ortam mı? (Arayüzdeki koşu onayı ve "npm run kos" ile aynı kural: ortamda "canlı" işareti, varsayılan
- * olmayan ortam ya da adında canlı / prod / üretim geçmesi.)
+ * Canlı / riskli ortam mı? TEK TANIM: guvenlik/ortam-riski.mjs (arayüzdeki koşu onayı, "npm run kos", servis ortam türü ve
+ * sunucu denetimi aynı fonksiyonu kullanır).
  * @param {{ ad: string; varsayilan: boolean; ayarlar?: Record<string, unknown> }} o
  */
-export const ortamRiskliMi = (o) => o.ayarlar?.canli === true || !o.varsayilan || /canl|prod|uretim|üretim/i.test(String(o.ad || ''));
+export const ortamRiskliMi = (o) => riskliOrtamMi(o);
 
 /** @param {Veritabani} vt @returns {Kural[]} */
 export function tumKurallar(vt) {

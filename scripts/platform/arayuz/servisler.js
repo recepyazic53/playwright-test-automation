@@ -49,7 +49,7 @@ const ORTAM_ANAHTARI = 'platform.servisOrtami';
 function sonOrtam(ortamlar) {
   let id = null;
   try { id = localStorage.getItem(ORTAM_ANAHTARI); } catch { /* yok sayılır */ }
-  return ortamlar.find((o) => o.id === id) || ortamlar.find((o) => !o.canli && o.varsayilan) || ortamlar.find((o) => !o.canli) || ortamlar[0] || null;
+  return ortamlar.find((o) => o.id === id) || ortamlar.find((o) => !riskliOrtamMi(o)) || ortamlar[0] || null;
 }
 /** @param {{ id: string }} o */
 const ortamiHatirla = (o) => { try { localStorage.setItem(ORTAM_ANAHTARI, o.id); } catch { /* yok sayılır */ } };
@@ -59,8 +59,9 @@ async function ortamlariAl(proje) {
   const { ortamlar } = await api(`/platform/ortamlar?projeId=${q(proje.id)}`);
   return ortamlar;
 }
-const testOrtamlari = (ortamlar) => ortamlar.filter((o) => !o.canli);
-const ortamEtiketi = (o) => `${o.ad}${o.canli ? ' (CANLI)' : ' (TEST)'}`;
+// Test ortamı = riskli OLMAYAN ortam (tek tanım: ortam-riski.mjs; sunucunun servis ortam türüyle aynı).
+const testOrtamlari = (ortamlar) => ortamlar.filter((o) => !riskliOrtamMi(o));
+const ortamEtiketi = (o) => `${o.ad}${riskliOrtamMi(o) ? ' (CANLI)' : ' (TEST)'}`;
 
 /**
  * @param {HTMLElement} main

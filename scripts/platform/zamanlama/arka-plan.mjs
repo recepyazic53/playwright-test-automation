@@ -207,7 +207,8 @@ export function arkaPlanYoneticisi(bag) {
   }
 
   /**
-   * Tercih değiştir (kasa açık). B'yi açmak parola + onay; C'yi açmak / kapatmak onay ister.
+   * Tercih değiştir (kasa açık). A'yı açmak onay; B'yi açmak parola + onay; C'yi açmak / kapatmak onay ister. İzinler (A: arka plan
+   * çalışması, B / C açarken: sistem değişikliği) sunucu ucunda denetlenir (guvenlik/uc-denetimi.mjs).
    * @param {Veritabani} db @param {Record<string, unknown>} g { ad, acik, parola?, onay? }
    */
   async function tercihDegistir(db, g) {
@@ -217,6 +218,8 @@ export function arkaPlanYoneticisi(bag) {
     const acik = g.acik;
     let t = tercihleriOku(db);
     if (ad === 'kilitliyken') {
+      // Açmak (diğer iki tercih gibi) riskin onaylanmasını ister: kasa kilitliyken anahtar bellekte kalır. Kapatmak serbest.
+      if (acik && g.onay !== true) throw new DepoHatasi('Bu seçeneği açmak için riski onaylamalısınız (kasa kilitliyken anahtar bellekte kalır).');
       t = { ...t, kilitliyken: acik };
       tercihleriYaz(db, t);
       if (!acik && !t.dpapi) emanetiSil(db);

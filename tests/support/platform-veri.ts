@@ -151,4 +151,6 @@ export type PlatformModelVerisi = {
   sqlVeritabanlari?: Record<string, import('../../scripts/platform/sql/sorgu-bagdastirici.mjs').KosuSqlVeritabani>;
   /** Rapor için bağlantı adları (kimlik → ad; parola yok). */
   sqlBaglantiAdlari?: Record<string, string>;
+  /** Ayarlar > İzinler durumu (izin anahtarı → açık mı). Koşucu kasayı açmaz; yoksa hepsi kapalı sayılır. */
+  izinler?: Record<string, boolean>;
 };

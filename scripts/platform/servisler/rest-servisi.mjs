@@ -11,6 +11,7 @@ import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
+import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { adresYasakliMi } from '../senaryolar/model-kosusu.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { basvuru } from '../tablolar/tablo-secimi.mjs';
@@ -189,7 +190,7 @@ export function restServisiKaydet(vt, projeId, girdi) {
 export async function restUcuDene(vt, projeId, girdi) {
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
-  if (ortam.ayarlar.canli === true) throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır (seçilen ortam canlı işaretli).');
+  if (riskliOrtamMi(ortam)) throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır (seçilen ortam canlı / riskli: canlı işaretli ya da varsayılan test ortamı değil).');
   const u = restUcuDogrula(girdi.uc, 0);
   const taban = girdi.taban === undefined || girdi.taban === null ? ortam.tabanUrl : String(girdi.taban);
   if (!taban) throw new DepoHatasi('Bu ortam için taban adres yok.');
@@ -205,7 +206,7 @@ export async function restUcuDene(vt, projeId, girdi) {
   try {
     const y = await restIstegi({
       adres, metot: u.metot, ...(u.govdeOrnegi ? { govde: u.govdeOrnegi, icerikTuru: u.icerikTuru } : {}), ekBasliklar: basliklar,
-      zamanAsimiMs: 30_000, ...(girdi.tlsDogrulama === false ? { tlsDogrulama: false } : {})
+      zamanAsimiMs: 30_000, ...(girdi.tlsDogrulama === false ? { tlsDogrulama: false } : {}), yasakDesenleri: etkinYasakDesenleri(vt)
     });
     return { basarili: true, adres, metot: u.metot, durumKodu: y.durumKodu, sureMs: y.sureMs, atlananBasliklar: atlanan, yanit: gizlileriMaskele(y.govde.slice(0, 4000), gizliler) };
   } catch (e) {

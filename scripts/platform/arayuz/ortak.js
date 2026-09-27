@@ -1,5 +1,6 @@
 // Platform arayüzü — ortak yardımcılar: API istemcisi, DOM oluşturucu, form bileşenleri.
 // Kullanıcı verisi DOM'a YALNIZCA metin düğümü/özellik olarak yazılır (innerHTML kullanılmaz).
+import { izinAdresi, izinTanimi } from './izin-tanimlari.mjs';
 
 const tokenMeta = document.querySelector('meta[name="oturum-tokeni"]');
 /** Sunucunun bu yanıta enjekte ettiği oturum token'ı (yalnızca bellekte tutulur). */
@@ -200,12 +201,42 @@ export async function api(yol, secenekler = {}) {
   if (!yanit.ok || (veri && veri.basarili === false)) {
     const hata = new ApiHatasi((veri && veri.mesaj) || `İstek başarısız oldu (${yanit.status}).`, yanit.status, veri);
     if (yanit.status === 423 && !secenekler.kilitOlayiYok) window.dispatchEvent(new CustomEvent('kasa-kilitli', { detail: hata.message }));
+    // Kapalı izin (Ayarlar > İzinler): işlem yapılmadı. Her ekranda aynı standart uyarı + "İzinlere git" (izin satırına odaklanır).
+    if (hata.kod === 'IZIN_KAPALI' && veri && typeof veri.izin === 'string') izinUyarisiGoster(veri.izin, hata.message);
     // 401: sayfanın oturum token'ı sunucuyu tutmuyor → Nöbetçi yeniden başlatılmış (her başlatmada token değişir).
     if (yanit.status === 401) window.dispatchEvent(new CustomEvent('sunucu-yenilendi'));
     throw hata;
   }
   if (secenekler.govde && KAYIT_UCU.test(yol)) degisiklikleriBirak();
   return veri || {};
+}
+
+/**
+ * Kapalı izin uyarısı (tek pencere; aynı anda gelen birden çok 403 yeni pencere açmaz). Metin sunucudan gelir (izin-tanimlari.mjs >
+ * izinMesaji); izin tanımındaki "kapalıyken" açıklaması eklenir. "İzinlere git" → Ayarlar > İzinler, izin satırına odak.
+ * @param {string} anahtar @param {string} mesaj
+ */
+export function izinUyarisiGoster(anahtar, mesaj) {
+  if (document.querySelector('dialog.izin-uyarisi[open]')) return;
+  const t = izinTanimi(anahtar);
+  const git = h('button', { type: 'button', class: 'birincil' }, ikon('kalkan'), 'İzinlere git');
+  const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+  const diyalog = h('dialog', { class: 'onay-diyalogu izin-uyarisi', 'aria-labelledby': 'izin-uyarisi-basligi', 'aria-describedby': 'izin-uyarisi-metni' },
+    h('div', { class: 'diyalog-govde' },
+      h('h2', { id: 'izin-uyarisi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kilit')), 'İzin gerekli'),
+      h('p', { id: 'izin-uyarisi-metni' }, mesaj),
+      t ? h('p', { class: 'soluk kucuk' }, t.kapaliyken) : null),
+    h('div', { class: 'diyalog-alt' }, kapat, git));
+  let gidilecek = false;
+  git.addEventListener('click', () => { gidilecek = true; diyalog.close(); });
+  kapat.addEventListener('click', () => diyalog.close());
+  diyalog.addEventListener('close', () => {
+    diyalog.remove();
+    if (gidilecek) location.hash = izinAdresi(anahtar);
+  });
+  document.body.append(diyalog);
+  diyalog.showModal();
+  git.focus();
 }
 
 /**

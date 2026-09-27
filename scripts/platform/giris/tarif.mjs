@@ -418,8 +418,25 @@ export const GIRIS_HATA_KODLARI = Object.freeze({
   ZAMAN_ASIMI: 'Giriş zaman aşımına uğradı',
   BAGLAM_ADIMI: 'Bağlam değiştirme adımı başarısız',
   GIRIS_ADIMI: 'Giriş adımı başarısız',
-  TARIF_GECERSIZ: 'Giriş tarifi geçersiz'
+  TARIF_GECERSIZ: 'Giriş tarifi geçersiz',
+  KOKEN_UYUSMAZ: 'Giriş bilgisi farklı bir siteye yazılmadı'
 });
+
+/**
+ * Giriş bilgisinin (parola, kod) YAZILABİLECEĞİ kökenler: ortamın taban adresinin kökeni ve giriş tarifinde açıkça tanımlı
+ * giriş adresinin kökeni (tam adres verilmişse). Sayfa başka bir kökene yönlenmişse giriş motoru alan doldurmaz.
+ * @param {string | null | undefined} tabanUrl @param {{ girisAdresi?: string } | null | undefined} tarif @returns {string[]}
+ */
+export function girisKokenleri(tabanUrl, tarif) {
+  /** @type {string[]} */
+  const kokenler = [];
+  const ekle = (/** @type {string} */ adres, /** @type {string | undefined} */ taban) => {
+    try { const o = new URL(adres, taban).origin; if (o && o !== 'null' && !kokenler.includes(o)) kokenler.push(o); } catch { /* geçersiz: eklenmez */ }
+  };
+  if (tabanUrl) ekle(tabanUrl, undefined);
+  if (tarif?.girisAdresi) ekle(tarif.girisAdresi, tabanUrl ?? undefined);
+  return kokenler;
+}
 
 /** Tarayıcı/ağ hata metni "site erişilemedi" türünden mi? @param {string} mesaj */
 export function agHatasiMi(mesaj) {

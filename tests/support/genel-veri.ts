@@ -4,7 +4,9 @@
 // kullanılmaz. Veri platform veritabanından veri-oku.mjs'nin "genel" kipiyle okunur (kasa anahtarı gerekir;
 // Nöbetçi koşularında PLATFORM_KASA_ANAHTARI). Giriş bilgisi ve giriş tarifi ortamın kendi kayıtlarıdır.
 import { dirname, join } from 'node:path';
+import { OTURUM_UZANTISI, eskiOturumDosyalariniSil } from './oturum-kasasi';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
+import { izinMesaji } from '../../scripts/platform/guvenlik/izin-tanimlari.mjs';
 import { tarifiHazirla, type GirisKimligi } from './giris-motoru';
 import {
   PlatformVeriHatasi, hataMi, platformOkuyucusunuCalistir, platformVeritabaniYolu, yasakAdresleriniBirlestir,
@@ -22,6 +24,8 @@ export type GenelVeri = {
   /** Senaryoların / "Yeniden giriş" adımlarının ADIYLA seçtiği giriş profilleri (yalnızca kullanılanlar). */
   girisProfilleri: Record<string, PlatformGirisBilgisi>;
   girisTarifi: PlatformGirisTarifi | null;
+  /** Ayarlar > İzinler durumu (koşucu kasayı açmaz; veri-oku.mjs verir). Yoksa hepsi kapalı. */
+  izinler: Record<string, boolean>;
 };
 
 /** Bu süreç genel yol koşusu mu (sunucu proje ve ortam kimliğini verdi mi)? */
@@ -45,7 +49,7 @@ export function genelVeri(): GenelVeri {
   const cikti = sonuc as Partial<GenelVeri> & { durum?: string; yasakAdresler?: PlatformYasakAdresleri };
   if (cikti.durum !== 'hazir') throw new PlatformVeriHatasi('veritabanı bulunamadı');
   yasakAdresleriniBirlestir(cikti.yasakAdresler);
-  onbellek = { projeId, ortamId, model: cikti.model ?? null, giris: cikti.giris ?? null, girisProfilleri: cikti.girisProfilleri ?? {}, girisTarifi: cikti.girisTarifi ?? null };
+  onbellek = { projeId, ortamId, model: cikti.model ?? null, giris: cikti.giris ?? null, girisProfilleri: cikti.girisProfilleri ?? {}, girisTarifi: cikti.girisTarifi ?? null, izinler: cikti.izinler ?? {} };
   return onbellek;
 }
 
@@ -60,6 +64,8 @@ export function genelGirisTarifi(): GirisTarifi {
  */
 export function genelGirisKimligi(profil?: string | null): GirisKimligi {
   const v = genelVeri();
+  // Giriş bilgisi kullanımı izni (Ayarlar > İzinler): kapalıysa parola / kod hiçbir forma yazılmaz (veri-oku.mjs gizlileri zaten vermez).
+  if (v.izinler['giris-bilgisi'] !== true) throw new Error(izinMesaji('giris-bilgisi'));
   const giris = profil ? v.girisProfilleri[profil] ?? null : v.giris;
   if (profil && !giris) throw new Error(`"${profil}" giriş profili bu ortamda tanımlı değil (Nöbetçi > Ayarlar > Giriş profilleri).`);
   if (!giris?.kullaniciAdi || !giris.parola) {
@@ -79,5 +85,8 @@ export function genelGirisKimligi(profil?: string | null): GirisKimligi {
 export function genelOturumDosyasi(): string {
   const v = genelVeri();
   const temiz = (d: string): string => d.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36);
-  return join(dirname(platformVeritabaniYolu()), 'oturumlar', `genel-${temiz(v.ortamId)}-${v.giris?.profilKimligi ? temiz(v.giris.profilKimligi) : 'profil-yok'}.json`);
+  const klasor = join(dirname(platformVeritabaniYolu()), 'oturumlar');
+  // Eski düz metin oturum dosyaları (.json) silinir; oturum artık kasa anahtarıyla şifreli (.oturum) saklanır.
+  eskiOturumDosyalariniSil(klasor);
+  return join(klasor, `genel-${temiz(v.ortamId)}-${v.giris?.profilKimligi ? temiz(v.giris.profilKimligi) : 'profil-yok'}${OTURUM_UZANTISI}`);
 }

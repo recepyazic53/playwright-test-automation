@@ -9,7 +9,7 @@
 // Kayıt: POST /platform/servis/akis-senaryosu/kaydet (içerik: { tur: 'akis', akisId, adimlar: { <adımId>: tek istekli içerik } }).
 // Dene: kaydedilmemiş hâli TEST ortamında (onayla; canlı koşu paneli). Kullanıcı verisi DOM'a yalnız metin olarak yazılır.
 import { alan, alanHatasi, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste } from './kosu-paneli.js';
+import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi } from './servis-govdesi.mjs';
 import { basvuru } from './tablo-secimi.mjs';
@@ -281,7 +281,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
       location.hash = `#/servisler/s/${q(senaryo?.servisId ?? s.id)}/senaryo/${q(r.id)}`;
     } catch (e) { mesaj.goster(e.message); }
   });
-  const test = ortamlar.find((o) => !o.canli && o.varsayilan) || ortamlar.find((o) => !o.canli);
+  const test = ortamlar.find((o) => !riskliOrtamMi(o));
   const dene = h('button', { type: 'button', disabled: !test, title: 'Kaydedilmemiş hâliyle TEST ortamında dener; senaryo kaydedilmez' }, ikon('oynat'), 'Dene (TEST)');
   dene.addEventListener('click', async () => {
     mesaj.temizle();

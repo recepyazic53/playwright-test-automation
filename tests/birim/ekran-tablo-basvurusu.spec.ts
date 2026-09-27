@@ -19,7 +19,7 @@ import { INCELEME_KURALLARI, MEVCUT_TABLO_KURALI, paketIstekCumlesi } from '../.
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { AkisUygulamasi, HAVUZLAR, akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 
 type Nesne = Record<string, any>;
 const KOK = resolve(__dirname, '..', '..');
@@ -196,6 +196,8 @@ test.describe('uçtan uca: ${Tablo.Sütun} ile ekran senaryosu (127.0.0.1)', () 
     const vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });

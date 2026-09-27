@@ -360,6 +360,10 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Sayfa paketi istek metinleri (inceleme kuralları + "Paket nasıl üretilir?" cümlesi): sunucunun istek dosyasıyla ORTAK.
   ['/arayuz/paket-istekleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ekranlar', 'paket-istekleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // İzin tanımları (Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) ve riskli ortam tanımı: sunucuyla ORTAK tek kaynak.
+  ['/arayuz/izin-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'izin-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/ortam-riski.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'ortam-riski.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/izinler.js', { dosya: 'izinler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-icerigi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'akis-senaryo-icerigi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-formu.js', { dosya: 'akis-senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],

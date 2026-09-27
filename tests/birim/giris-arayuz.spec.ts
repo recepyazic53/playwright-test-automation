@@ -18,7 +18,7 @@ import {
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { girisSayfalari, korumaliTarayici, yerelSunucu, SIRKET_DESENI } from './giris-fikstur';
 import { ornekBasvuruModeli, ornekGirisTarifi } from './model-fikstur';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
 const EKRAN_KLASORU = process.env.GIRIS_EKRAN_KLASORU;
@@ -100,6 +100,8 @@ test.beforeAll(async () => {
   const parola = randomBytes(18).toString('base64url');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   projeId = projeKaydet(vt, { ad: 'Örnek proje' });
   const testId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: site.adres, varsayilan: true });
   const canliId = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid' });

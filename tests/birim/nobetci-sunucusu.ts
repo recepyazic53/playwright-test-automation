@@ -4,6 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { expect } from '@playwright/test';
+import { IZIN_ANAHTARLARI } from '../../scripts/platform/guvenlik/izin-tanimlari.mjs';
 
 const KOK = resolve(__dirname, '..', '..');
 
@@ -61,6 +62,17 @@ export async function nobetciBaslat(klasor: string, vtYolu: string, ekOrtam: Rec
   const token = /name="oturum-tokeni" content="([^"]+)"/.exec(html)?.[1] ?? '';
   expect(token, 'oturum token').not.toBe('');
   return { adres, token, surec };
+}
+
+/**
+ * İzinleri açan kurulum yardımcısı (sunucu üzerinden; kasa açık olmalı). Ayarlar > İzinler varsayılan KAPALI; izinlerden bağımsız
+ * davranışı sınayan testler bunu kasayı açtıktan sonra çağırır. anahtarlar verilmezse tüm izinler.
+ */
+export async function izinleriAcApi(n: Nobetci, anahtarlar: readonly string[] = IZIN_ANAHTARLARI): Promise<void> {
+  for (const anahtar of anahtarlar) {
+    const r = await nobetciApi(n, '/platform/izin/degistir', { anahtar, acik: true, onay: true });
+    expect(r.basarili, `izin açılamadı: ${anahtar} (${r.mesaj ?? ''})`).toBe(true);
+  }
 }
 
 /** Nöbetçi uç noktası çağrısı (POST: gövde + token; GET: başlıkta token). */

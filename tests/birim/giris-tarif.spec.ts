@@ -19,7 +19,7 @@ import {
 import { girisHazirMi, kodKaynagi, tarifiHazirla, GirisHatasi, type GirisKimligi } from '../support/giris-motoru';
 import { hataMi, platformOkuyucusunuCalistir, type PlatformGirisBilgisi, type PlatformGirisTarifi } from '../support/platform-veri';
 import { ornekGirisTarifi } from './model-fikstur';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 
 const gecerliTarif = (): Record<string, unknown> => ({
   kullaniciAlani: '#k', parolaAlani: '#p', gonderDugmesi: 'button[type=submit]', basariGostergesi: { tur: 'metin', deger: 'Çıkış' }
@@ -150,6 +150,8 @@ test.describe('Giriş tarifi deposu — ortam ayarlarında, şifreli; ortam gün
       const parola = randomBytes(24).toString('base64url');
       const vt = await veritabaniniHazirla(yol);
       await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
+      // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+      izinleriAc(vt);
       const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
       const testId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { digerAyar: 'korunur' } });
       const canliId = ortamKaydet(vt, { projeId, ad: 'Canlı', tabanUrl: 'https://canli.ornek.invalid', ayarlar: { canli: true } });
@@ -293,6 +295,8 @@ test.describe('Giriş adımları (girisAdimlari) ve giriş profilinin ek alanlar
       const parola = randomBytes(24).toString('base64url');
       const vt = await veritabaniniHazirla(yol);
       await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
+      // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+      izinleriAc(vt);
       const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
       const ortamId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
       const id = girisProfiliKaydet(vt, {

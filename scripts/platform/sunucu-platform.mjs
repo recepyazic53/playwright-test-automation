@@ -165,7 +165,7 @@ import {
   modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryolariCogalt, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
-import { YASAK_ADRES_DEGISKENI } from './senaryolar/model-kosusu.mjs';
+import { YASAK_ADRES_DEGISKENI, adresYasakliMi } from './senaryolar/model-kosusu.mjs';
 import {
   etkinYasakAdresler, etkinYasakDesenleri, ayarlardakiYasakAdresler, ortamdakiYasakAdresler, yasakAdresleriKaydet, YASAK_ADRES_EN_COK
 } from './guvenlik/yasak-adresler.mjs';
@@ -177,6 +177,8 @@ import { formSemasiOlustur, tumFormAlanlari } from './senaryolar/model-formu.mjs
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
 import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, GIRIS_ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
 import { girisSayfasiniOner } from './giris/algilama.mjs';
+import { IzinHatasi, izinDegisiklikleri, izinDegistir, izinleriOku } from './guvenlik/izinler.mjs';
+import { CanliOnayHatasi, denetlenenUclar, ucDenetle } from './guvenlik/uc-denetimi.mjs';
 import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta, modeliPaketleDegistir
@@ -796,6 +798,9 @@ function calismaAlaniListesi() {
 
 /** Hata → HTTP durum kodu + güvenli (gizli bilgi içermeyen) mesaj. @param {unknown} hata */
 function hataYaniti(hata) {
+  // Kapalı izin (Ayarlar > İzinler): işlem yapılmadı; arayüz standart uyarıyı + "İzinlere git" düğmesini gösterir (ortak.js > api).
+  if (hata instanceof IzinHatasi) return { durum: 403, govde: { basarili: false, kod: hata.kod, izin: hata.izin, etiket: hata.etiket, mesaj: hata.message } };
+  if (hata instanceof CanliOnayHatasi) return { durum: 409, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
   if (hata instanceof KasaHatasi) {
     const kodlar = { PAROLA_KISA: 400, PAROLA_YANLIS: 403, KASA_KILITLI: 423, KASA_YOK: 409, KASA_VAR: 409, ZARF_BOZUK: 400, COK_DENEME: 429 };
     return {
@@ -990,7 +995,7 @@ function ortamSec(db, projeId, d) {
 function girisTarifiGorunumu(db, projeId, o) {
   const etkin = etkinGirisTarifi(db, projeId, o.id);
   return {
-    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar
+    ortamId: o.id, ortamAd: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, canli: o.ayarlar?.canli === true, kaynak: etkin.kaynak, tarif: etkin.tarif, hatalar: etkin.hatalar
   };
 }
 /** "Varsayılanları öner" aynı anda tek bir tarayıcı açsın. */
@@ -1215,6 +1220,11 @@ const GET_UCLARI = new Map([
   ['/platform/maskeleme', (db) => ({ cekirdek: CEKIRDEK_GIZLI_ADLAR, ekAdlar: ekGizliAdlar(db) })],
   // Ayarlar > Koşu > Hata sınıflandırma: kullanıcının kuralları + seçilebilen kategoriler.
   ['/platform/siniflandirma', (db) => ({ kurallar: siniflandirmaKurallari(db), kategoriler: KATEGORI_SECENEKLERI })],
+  // Ayarlar > İzinler: durum (kayıt yoksa kapalı) + son değişiklikler (yapan makine adları kasada şifreli → eşleme).
+  ['/platform/izinler', (db) => ({
+    izinler: izinleriOku(db), degisiklikler: izinDegisiklikleri(db),
+    makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad]))
+  })],
   ['/platform/guvenlik', (db) => ({
     otomatikKilitDakika, enAz: OTOMATIK_KILIT_EN_AZ_DK, enCok: OTOMATIK_KILIT_EN_COK_DK, varsayilan: OTOMATIK_KILIT_VARSAYILAN_DK,
     videoSaklamaGun: videoSaklamaGunu(db), videoSaklamaVarsayilan: VIDEO_SAKLAMA_VARSAYILAN_GUN,
@@ -1383,6 +1393,12 @@ const POST_UCLARI = new Map([
     for (const dosya of r.medyaDosyalari) medyaDosyasiniSil(medyaKlasoruYolu(), dosya);
     console.log(`[platform] Geçmiş sonuçlar silindi: ${r.kosu} koşu, ${r.sonuc} sonuç, ${r.medyaDosyalari.length} medya dosyası, ${r.servisKosusu} servis ve ${r.akisKosusu} akış koşusu.`);
     return { silinen: { kosu: r.kosu, sonuc: r.sonuc, medya: r.medyaDosyalari.length, servisKosusu: r.servisKosusu, akisKosusu: r.akisKosusu } };
+  }],
+  // Ayarlar > İzinler: aç (onay: true — arayüz "ne yapar / riski" penceresinde onaylatır) / kapat (serbest). Geçmişe yazılır.
+  ['/platform/izin/degistir', (db, g) => {
+    const r = izinDegistir(db, g.anahtar, g.acik, { onay: g.onay });
+    if (r.degisti) console.log(`[platform] İzin ${g.acik === true ? 'açıldı' : 'kapatıldı'}: ${String(g.anahtar)}.`);
+    return { izinler: r.izinler, degisiklikler: izinDegisiklikleri(db) };
   }],
   ['/platform/guvenlik/kaydet', (db, g) => {
     /** @type {Record<string, unknown>} */
@@ -1563,6 +1579,8 @@ for (const [yol, islem] of SQL_KULLANIM_POST_UCLARI) POST_UCLARI.set(yol, islem)
 // Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs; hiçbir uç koşu başlatmaz).
 for (const [yol, islem] of ZAMANLAMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 POST_UCLARI.set('/platform/zamanlama/tercih', (db, g) => arkaPlan.tercihDegistir(db, g));
+/** İzin denetimine tabi uçlar (izin-tanimlari.mjs > islemler[].uclar). */
+const IZIN_DENETIMLI_UCLAR = denetlenenUclar();
 
 /**
  * @param {import('node:http').IncomingMessage} req
@@ -1944,6 +1962,10 @@ export async function platformIsteginiIsle(req, res, baglam) {
       return true;
     }
 
+    // İzin denetimi (TEK MERKEZ: guvenlik/uc-denetimi.mjs; uç → izin eşlemesi izin-tanimlari.mjs'den). Kapalı izne tabi işlem
+    // hiç başlatılmaz: 403 IZIN_KAPALI. Riskli ortamda açık onay (canliOnay: true) yoksa 409 CANLI_ONAY_GEREKLI.
+    if (IZIN_DENETIMLI_UCLAR.has(yol)) ucDenetle(await acikVeritabani(), yol, govde);
+
     const postIslemi = POST_UCLARI.get(yol);
     if (postIslemi) {
       const db = await acikVeritabani();
@@ -1963,12 +1985,19 @@ export async function platformIsteginiIsle(req, res, baglam) {
         if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
         const yolHam = metin(govde.girisAdresi).trim() || '/';
         if (!yolHam.startsWith('/') && !/^https?:\/\//i.test(yolHam)) throw new DepoHatasi('Giriş adresi "/" ile başlayan bir yol ya da http(s) adresi olmalıdır.');
+        // Açık onay (arayüz sorar: "giriş sayfası tarayıcıda açılacak"); izin + riskli ortam onayı yukarıda (ucDenetle) denetlendi.
+        if (govde.onay !== true) throw new DepoHatasi('Giriş sayfası tarayıcıda açılacak: önce uyarıyı onaylayın.');
         const adres = new URL(yolHam, ortam.tabanUrl).toString();
+        // Yasak adresler (Ayarlar > Güvenlik + ortam değişkeni): tarayıcı açılmadan reddedilir; sayfanın yasaklı host'a
+        // yönlendirmesi / istekleri de tarayıcıda iptal edilir.
+        const desenler = etkinYasakDesenleri(db);
+        const yasakKalibi = adresYasakliMi(adres, desenler) ?? adresYasakliMi(ortam.tabanUrl, desenler);
+        if (yasakKalibi) throw new DepoHatasi(`Öneri reddedildi: adres yasaklı adres kalıbına ("${yasakKalibi}") uyuyor (Ayarlar > Güvenlik > Yasak adresler). Tarayıcı açılmadı.`);
         if (girisOnerisiSuruyor) throw new DepoHatasi('Başka bir öneri sürüyor; bitmesini bekleyin.');
         girisOnerisiSuruyor = true;
         try {
           console.log('[platform] Giriş sayfası algılanıyor (kullanıcı isteği; alanlar doldurulmaz).');
-          const oneri = await girisSayfasiniOner(adres);
+          const oneri = await girisSayfasiniOner(adres, { yasakDesenleri: desenler });
           jsonGonder(res, 200, { basarili: true, oneri: { ...oneri, sonAdres: oneri.sonAdres ? new URL(oneri.sonAdres).pathname : null } });
         } finally {
           girisOnerisiSuruyor = false;

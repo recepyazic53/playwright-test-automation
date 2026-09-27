@@ -205,15 +205,21 @@ export const CAPTCHA_MESAJI = 'Giriş sayfasında CAPTCHA algılandı. Test orta
  * Nöbetçi > Ayarlar > "Varsayılanları öner": adresi başsız tarayıcıda açar, formu ALGILAR (doldurmaz,
  * göndermez) ve tarif alanları için öneri döner. Yalnızca kullanıcı açıkça isteyince çağrılır.
  * @param {string} adres tam http(s) adresi
- * @param {{ zamanAsimiSn?: number; tarayiciSecenekleri?: import('@playwright/test').LaunchOptions }} [secenekler]
+ * @param {{ zamanAsimiSn?: number; tarayiciSecenekleri?: import("@playwright/test").LaunchOptions; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }> }} [secenekler]
  */
 export async function girisSayfasiniOner(adres, secenekler = {}) {
   const u = new URL(adres);
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('Adres http(s) olmalıdır.');
+  // Yasak adresler (Ayarlar > Güvenlik + ortam değişkeni): hedefin kendisi çağıran tarafından denetlenir; sayfanın yasaklı
+  // host'a yönlendirmesi ya da oradan kaynak istemesi ağ katmanında iptal edilir.
+  const desenler = secenekler.yasakDesenleri ?? [];
+  const yasakli = (/** @type {string} */ a) => { try { const h = new URL(a).hostname.toLowerCase(); return desenler.some((d) => d.desen.test(h)); } catch { return false; } };
+  if (yasakli(u.toString())) throw new Error(`${u.hostname} yasaklı adres kalıbına uyuyor (Ayarlar > Güvenlik > Yasak adresler).`);
   const { chromium } = await import('@playwright/test');
   const tarayici = await chromium.launch({ headless: true, ...(secenekler.tarayiciSecenekleri ?? {}) });
   try {
     const baglam = await tarayici.newContext();
+    if (desenler.length) await baglam.route('**/*', (r) => (yasakli(r.request().url()) ? r.abort('blockedbyclient') : r.continue()));
     const page = await baglam.newPage();
     const sure = (secenekler.zamanAsimiSn ?? 20) * 1000;
     try {
