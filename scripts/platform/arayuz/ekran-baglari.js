@@ -58,7 +58,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         degisti();
       });
       const etiket = b ? h('input', { type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${g.etiket} etiketi`,
-        title: 'Aynı tablo bu ekranda iki kez gerekiyorsa (ör. sigortalı / ettiren) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.' }) : null;
+        title: 'Aynı tablo bu ekranda iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.' }) : null;
       etiket?.addEventListener('change', () => { const e = etiket.value.trim(); if (e) b.etiket = e; else delete b.etiket; degisti(); });
       let alt = null;
       if (sutun) {

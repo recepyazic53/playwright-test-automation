@@ -1,7 +1,6 @@
 // scripts/platform/senaryolar/senaryo-servisi.mjs için tip bildirimi (birim testleri import eder).
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 import type { DepoHatasi } from '../veritabani/depo.mjs';
-import type { AktarimAdaptoru } from '../../../projeler/index.d.mts';
 
 export type Bulgu = { alan: string; mesaj: string };
 
@@ -19,7 +18,6 @@ export declare class SenaryoCakismaHatasi extends DepoHatasi {
 export declare function senaryoKaynagi(icerik: unknown): { dosya: string; ad: string } | null;
 export declare function senaryoKaynakAnahtari(icerik: unknown): string | null;
 export declare function veriGudumluMu(icerik: unknown): boolean;
-export declare function ortamAnahtariBul(vt: Veritabani, projeId: string, ortamId: string): string | null;
 export type AkisOzeti = { id: string; ad: string; varsayilan: boolean; adimSayisi: number };
 export declare function senaryoAkisi(icerik: unknown): string | null;
 export declare function modelBaglami(vt: Veritabani, ekranId: string, akisId?: string | null): {
@@ -28,8 +26,8 @@ export declare function modelBaglami(vt: Veritabani, ekranId: string, akisId?: s
   /** Bulunamayan ortak akış dosyaları (açılamayan adımlar modelden düşer). */ eksikOrtakAkislar: string[];
 } | null;
 export declare function ekranVeriKaynagi(
-  vt: Veritabani, projeId: string, ekran: { id: string; anahtar: string }, adaptor: AktarimAdaptoru | null | undefined
-): { spec: string; dosya: string; yol: string; /** Test kodu yok: yeni senaryo model koşucusuyla çalışır. */ model: boolean } | null;
+  vt: Veritabani, projeId: string, ekran: { id: string; anahtar: string }
+): { spec: string; dosya: string; yol: string; model: boolean } | null;
 
 export interface SenaryoSatiri {
   id: string; baslik: string; ekranId: string | null; ekranAdi: string | null; kosuyaDahil: boolean; veriGudumlu: boolean;
@@ -40,21 +38,15 @@ export interface SenaryoSatiri {
   mutlakaGorunmeliSayisi: number;
   /** Sayfa paketindeki bir öneriden eklendi mi (icerik.paket). */
   paketten: boolean;
-  /** Test kodu olmadan model koşucusuyla çalışır mı (bkz. model-kosusu.mjs). */
+  /** Model koşucusuyla çalışır mı (bkz. model-kosusu.mjs). */
   modelKosusu: boolean;
-  /** Kodu kaldırılmış mı (spec dosyası diskte yok)? Başlık denetimi kodKaldirilmisSenaryolar ile yapılır. */
-  kodDurumu: 'dosya-yok' | 'baslik-yok' | null;
   /** Birden çok akışlı ekranda senaryonun akışı (tek akışta null). */
   akis: { id: string; ad: string } | null;
   /** Ekranı devre dışıysa false: senaryo hiçbir koşuya girmez. */
   ekranEtkin: boolean;
   guncellenme: string;
 }
-export type ModelSecenekleri = { kodDosyasiVar?: (dosya: string) => boolean };
-export declare function modelKosusuMu(
-  vt: Veritabani, projeId: string, s: { id: string; icerik: unknown }, secenekler?: ModelSecenekleri & { eslemeliler?: Set<string> }
-): boolean;
-export declare function senaryoListesi(vt: Veritabani, projeId: string, ortamId: string, adaptor?: AktarimAdaptoru | null, secenekler?: ModelSecenekleri): {
+export declare function senaryoListesi(vt: Veritabani, projeId: string, ortamId: string): {
   ekranlar: Array<{ id: string; anahtar: string; ad: string; senaryoSayisi: number; durum: 'etkin' | 'devre_disi' | 'silindi'; modelVar: boolean; olusturulabilir: boolean }>;
   senaryolar: SenaryoSatiri[];
 };
@@ -66,7 +58,7 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   akis: string | null;
 };
 export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
-export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, adaptor: AktarimAdaptoru | null | undefined, akisId?: string | null): {
+export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null): {
   ekran: { id: string; anahtar: string; ad: string };
   ortamlar: Array<{ id: string; ad: string; varsayilan: boolean }>;
   model: Record<string, unknown> | null;
@@ -87,7 +79,7 @@ export declare function senaryoKaydet(
     id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown;
     kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; yapan?: string;
   },
-  secenekler?: { adaptor?: AktarimAdaptoru | null; kosuyorMu?: (dosya: string, ad: string) => boolean }
+  secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
 ): { id: string; uyarilar: Bulgu[] };
 export declare function kosuyaDahilAyarla(vt: Veritabani, projeId: string, idler: unknown, dahil: boolean, yapan?: string): { degisen: number };
 export declare function senaryolariSil(
@@ -100,43 +92,24 @@ export declare function senaryoGecmisi(vt: Veritabani, id: string): Array<{
   id: string; zaman: string; islem: string; yapan: string; makineId: string | null; aciklama: string | null; baslik: string; degisenler: string[];
 }>;
 export type CalistirmaHedefi = {
-  senaryoId: string; baslik: string; dosya: string;
-  /** Kodlu testin güncel başlığı; model senaryosunda null (test etiketle bulunur). */
-  ad: string | null;
-  /** Çalıştırıcı ortam anahtarı (aktarım eşlemesi; ör. "test"); genel yolda null. */
-  ortamAnahtari: string | null; ekranId: string | null;
-  /** Model koşucusuyla mı (model spec'i + etiket)? */
-  model: boolean;
-  etiket: string | null;
-  grepDeseni: string | null;
-  /** Genel yol (eşlenmemiş ortamda model senaryosu): koşu proje + ortam kimlikleriyle (playwright.model.config.ts). */
-  genel: { projeId: string; ortamId: string } | null;
+  senaryoId: string; baslik: string;
+  /** Model spec'i (test etiketle bulunur; ad her zaman null). */
+  dosya: string; ad: null; ekranId: string | null;
+  model: true;
+  etiket: string;
+  grepDeseni: string;
+  /** Koşu proje + ortam kimlikleriyle (playwright.config.ts). */
+  genel: { projeId: string; ortamId: string };
 };
 export declare function calistirmaHedefiCoz(
   vt: Veritabani, projeId: string, senaryoId: unknown, ortamId: unknown,
-  secenekler?: ModelSecenekleri & { yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> }
+  secenekler?: { yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> }
 ): CalistirmaHedefi;
 export declare function denemePaketiOlustur(
   vt: Veritabani,
   girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown },
-  secenekler: { adaptor?: AktarimAdaptoru | null; geciciEk: string }
+  secenekler: { geciciEk: string }
 ): {
-  ortamAnahtari: string; spec: string; geciciBaslik: string; uyarilar: Bulgu[];
-  ekVeri: { ortam: string; ekVeriler: Array<{ dosya: string; yol: string[]; ogeler: unknown[] }> };
-} | {
-  model: true; ortamAnahtari: string | null; genel: { projeId: string; ortamId: string } | null; spec: string; geciciBaslik: string;
+  model: true; genel: { projeId: string; ortamId: string }; spec: string; geciciBaslik: string;
   etiket: string; grepDeseni: string; uyarilar: Bulgu[]; denemeSenaryosu: Record<string, unknown>;
 };
-
-export type KodKaldirilmaNedeni = 'dosya-yok' | 'baslik-yok';
-export declare function kodKaldirilmaNedeni(
-  s: { id: string; icerik: unknown },
-  b: { eslemeliler: Set<string>; eslemeAnahtarlari: Map<string, string>; kodDosyasiVar?: (dosya: string) => boolean; testVar?: (dosya: string, ad: string) => boolean }
-): KodKaldirilmaNedeni | null;
-export declare function kodKaldirilmisSenaryolar(vt: Veritabani, projeId: string, ortamId: string, secenekler: {
-  kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null;
-}): { senaryolar: Array<{ id: string; baslik: string; neden: KodKaldirilmaNedeni; dosya: string | null; ad: string | null }>; baslikDenetlendi: boolean };
-export declare function kodKaldirilmisSenaryolariSil(vt: Veritabani, projeId: string, ortamId: string, idler: unknown, secenekler: {
-  kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null;
-  kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string;
-}): { silinen: number };

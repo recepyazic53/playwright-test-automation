@@ -1,40 +1,21 @@
-// MODEL SENARYOLARI — test kodu OLMAYAN her platform senaryosu için (sayfa paketinden/modelden oluşturulmuş;
-// kodlu bir teste eşlenmemiş) bir Playwright testi üretir ve genel model koşucusuyla koşturur
-// (tests/support/model-kosucu.ts). Kodda tanımlı (Galaksi) testler burada ÜRETİLMEZ — tekrar koşmazlar.
+// MODEL SENARYOLARI — Nöbetçi'deki her senaryo için bir Playwright testi üretir ve genel model koşucusuyla koşturur
+// (tests/support/model-kosucu.ts).
 //
 //  - Başlık: senaryo başlığı (aynı başlık tekrar ederse kimliğin ilk 8 karakteri eklenir).
 //  - Etiket: "@model-<senaryo UUID>" — Nöbetçi tek senaryo koşusunu bu etiketle daraltır (grep).
-//  - Koşuda kapalı senaryolar "npm run test"te üretilmez; Nöbetçi'nin listesi (TEST_SUNUCU_TUM_LISTE=1) ve
-//    tek senaryo koşusu (TEST_SUNUCU_GREP_DESENI) hepsini görür (playwright.config.ts > grepInvert ile aynı kural).
-//  - Veri kaynağı iki yoldan biri:
-//      aktarılmış ortam (TEST_ENV "test"/"canli"; playwright.config.ts) → platform-veri.ts + environments.ts,
-//      GENEL YOL (elle oluşturulan proje/ortam; playwright.model.config.ts, NOBETCI_PROJE_ID + NOBETCI_ORTAM_ID)
-//      → genel-veri.ts (adaptörsüz; proje ve ortam kimlikleriyle).
+//  - Koşuda kapalı senaryolar toplu koşuda üretilmez; Nöbetçi'nin listesi (TEST_SUNUCU_TUM_LISTE=1) ve tek senaryo
+//    koşusu (TEST_SUNUCU_GREP_DESENI) hepsini görür.
+//  - Veri: genel-veri.ts (proje ve ortam kimlikleriyle, NOBETCI_PROJE_ID + NOBETCI_ORTAM_ID; bkz. playwright.config.ts).
 import { test } from '../support/fixtures';
-import { getEnvironment, getEnvironmentName, girisKimligi, girisTarifi } from '../support/environments';
-import { genelGirisKimligi, genelGirisTarifi, genelKosuMu, genelOturumDosyasi, genelVeri } from '../support/genel-veri';
+import { genelGirisKimligi, genelGirisTarifi, genelOturumDosyasi, genelVeri } from '../support/genel-veri';
 import { modelSenaryosunuKos, type ModelKosuOrtami } from '../support/model-kosucu';
-import { platformModelVerisi, type PlatformModelVerisi } from '../support/platform-veri';
+import type { PlatformModelVerisi } from '../support/platform-veri';
 import { modelEtiketi, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
 
-/** Bu sürecin model verisi ve (yalnızca test koşarken istenen) giriş kaynakları. */
-function kosuOrtami(): { veri: PlatformModelVerisi | null; ortam: (veri: PlatformModelVerisi) => ModelKosuOrtami } {
-  if (genelKosuMu()) {
-    return {
-      veri: genelVeri().model,
-      ortam: (veri) => ({ veri, tarif: genelGirisTarifi, kimlik: genelGirisKimligi, oturumDosyasi: genelOturumDosyasi })
-    };
-  }
-  const ad = getEnvironmentName();
-  return {
-    veri: platformModelVerisi(ad),
-    ortam: (veri) => ({ veri, tarif: () => girisTarifi(ad), kimlik: () => girisKimligi(ad), oturumDosyasi: () => getEnvironment(ad).login.storageState })
-  };
-}
-
-const kaynak = kosuOrtami();
-const modelVerisi = kaynak.veri;
+const modelVerisi = genelVeri().model;
+/** Koşucunun ortamı: veri ve (yalnızca test koşarken istenen) giriş kaynakları. */
+const kosuOrtami = (veri: PlatformModelVerisi): ModelKosuOrtami => ({ veri, tarif: genelGirisTarifi, kimlik: genelGirisKimligi, oturumDosyasi: genelOturumDosyasi });
 const hepsi = process.env.TEST_SUNUCU_TUM_LISTE === '1' || Boolean(process.env.TEST_SUNUCU_GREP_DESENI);
 // Ekranı devre dışı olan senaryolar da (ekran düzeyinde "Koşuda kapalı") yalnızca tam listede/tek koşuda üretilir.
 const senaryolar = (modelVerisi?.senaryolar ?? []).filter((s) => hepsi || (s.kosuyaDahil && s.ekranEtkin !== false));
@@ -64,6 +45,6 @@ for (const senaryo of senaryolar) {
     // Giriş + bağlam + adım başına en fazla 30 sn bekleme; adım sayısıyla ölçeklenir.
     const adimSayisi = Array.isArray(senaryo.model?.adimlar) ? (senaryo.model?.adimlar as unknown[]).length : 1;
     test.setTimeout(120_000 + adimSayisi * 30_000);
-    await modelSenaryosunuKos(page, testInfo, senaryo, kaynak.ortam(modelVerisi as PlatformModelVerisi));
+    await modelSenaryosunuKos(page, testInfo, senaryo, kosuOrtami(modelVerisi as PlatformModelVerisi));
   });
 }

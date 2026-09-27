@@ -1,7 +1,7 @@
 // SERVİS TESTLERİ — SoapUI proje dosyasından (XML) servis ve senaryo taslakları çıkarır. Ağ isteği YOKTUR; dosya yalnızca okunur.
 // - Arayüz (interface) → servis: yol (endpoint'in yolu; ana makine ortamdan gelir), SOAP sürümü, operasyonlar (SOAPAction ile).
 // - İstek adımı → senaryo: başlık = adım adı, gövde = istek, kontroller = SoapUI doğrulamaları.
-// - Gövdede parametreler SoapUI'deki adıyla kalır, yalnız yazımı sadeleşir: ${#TestCase#SIGORTALI_TC} → ${SIGORTALI_TC}.
+// - Gövdede parametreler SoapUI'deki adıyla kalır, yalnız yazımı sadeleşir: ${#TestCase#MUSTERI_TC} → ${MUSTERI_TC}.
 //   Değerler gövdeye YAZILMAZ; nereden geldikleri parametre türüne göre ayrı döner:
 //   · giriş bilgisi (USERNAME / PASSWORD / CHANNEL) → giriş bilgisi profili adayları (kullanıcı onayıyla kasaya),
 //   · Groovy ile üretilen tarihler (şimdi, +1 yıl, +60 gün) → servis parametre kuralı ("tarih"),

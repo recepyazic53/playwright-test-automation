@@ -3,23 +3,24 @@
 // (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
-  adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, mesajKutusu, mesgulIken,
+  adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
   onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
-import { aktarimAkisi } from './aktarim.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
 import { tablolarBolumu } from './tablolar.js';
+import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
-  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (acente) senaryoda satır adıyla seçilir.' },
+  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
   { ad: 'dosyalar', etiket: 'Dosyalar', ikon: 'dosya', aciklama: 'Ekranların varsayılan dosyaları (ör. ürünün çoklu sorgu Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici olarak çözülür ve koşu bitince silinir.' },
-  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı ve varsayılan tarih biçimi. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
+  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi ve ekran taraması / akış kaydı süreleri. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
-  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar, açık dosyaların şifreli depoya taşınması ve kasa parolası.' }
+  { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
+  { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları. Rehberler her ekranda üst çubuktaki "?" düğmesiyle yeniden açılır.' }
 ];
 
 const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
@@ -47,7 +48,7 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
   const ciz = {
     proje: projeVeOrtamlar, giris: girisProfilleri,
-    'test-verisi': testVerisi, dosyalar, kosu: kosuAyarlari, yedekleme, guvenlik
+    'test-verisi': testVerisi, dosyalar, kosu: kosuAyarlari, yedekleme, guvenlik, arayuz: arayuzAyarlari
   }[bolum] || projeVeOrtamlar;
   Promise.resolve(ciz(govde, baglam, yenile)).catch((hata) => {
     if (hata && hata.durum === 423) return; // kabuk kilit ekranına geçti
@@ -433,9 +434,8 @@ export function disaAktarmaFormu(tahmin, ayar = {}) {
 }
 
 async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, aktarimDurumu, tahmin, saklamaFormu] = await Promise.all([
+  const [{ klasor, dosyalar }, tahmin, saklamaFormu] = await Promise.all([
     api('/platform/yedek/otomatik-liste'),
-    api('/platform/aktarim/durum').catch(() => ({ adaptorler: [] })),
     api('/platform/yedek/tahmin').catch(() => null),
     ayarFormu('yedekleme', 'Saklama ayarları', 'Saklama ayarları kaydedildi; günlük yedek ve temizlikte geçerli.')
   ]);
@@ -449,35 +449,14 @@ async function yedekleme(govde, baglam, yenile) {
   const iceKart = h('div', { class: 'kart' }, h('h3', {}, ikon('yukle'), 'İçe aktar'),
     h('p', { class: 'soluk' }, 'Bir yedekteki kayıtları bu bilgisayardakilerle karşılaştırır; neyin ekleneceğini ve değişeceğini seçersiniz. Bu bilgisayardaki kayıtlar silinmez.'),
     h('div', { class: 'dugmeler' }, iceBaslat));
-  // Eski proje dosyalarından yeniden aktar (eski dosya klasörü — ör. veri/eski-dosyalar/<zaman> — varsa)
-  const aktarimAlani = h('div', {});
-  const aktarilabilir = (aktarimDurumu.adaptorler || []).find((a) => a.dosyalarVar);
-  let aktarimKart = null;
-  if (aktarilabilir) {
-    const baslat = h('button', { type: 'button', class: 'birincil' }, 'Önizle ve aktar…');
-    aktarimKart = h('div', { class: 'kart' }, h('h3', {}, ikon('klasor'), 'Eski proje dosyalarından yeniden aktar'),
-      h('p', { class: 'soluk' }, `${aktarilabilir.etiket}. Kaynak anahtarına göre birleştirir: dosyada değişen kayıtlar güncellenir, yeni kayıtlar eklenir; önce önizleme gösterilir. Dosyalardan veritabanına otomatik aktarım yapılmaz.`),
-      h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, aktarilabilir.kaynakKlasoru || '')),
-      h('p', { class: 'soluk kucuk' }, aktarilabilir.sonAktarim ? `Son aktarım: ${tarihMetni(aktarilabilir.sonAktarim)}` : 'Bu proje henüz dosyalardan aktarılmadı.'),
-      h('div', { class: 'dugmeler' }, baslat));
-    baslat.addEventListener('click', () => {
-      for (const k of [aktarimKart, ...digerKartlar(), iceKart]) k.hidden = true;
-      aktarimAkisi(aktarimAlani, {
-        mod: 'ayarlar', adaptor: aktarilabilir,
-        bitti: async () => { await baglam.projeleriYenile(); yenile(); },
-        vazgec: () => { aktarimAlani.replaceChildren(); for (const k of [aktarimKart, ...digerKartlar(), iceKart]) k.hidden = false; baslat.focus(); }
-      });
-    });
-  }
   const digerKartlar = () => [disaForm, otomatikKart];
   iceBaslat.addEventListener('click', () => {
     iceKart.hidden = true;
     for (const k of digerKartlar()) k.hidden = true;
-    if (aktarimKart) aktarimKart.hidden = true;
     iceAktarmaAkisi(iceAlani, {
       mod: 'ayarlar',
       bitti: async () => { await baglam.projeleriYenile(); yenile(); },
-      vazgec: () => { iceAlani.replaceChildren(); iceKart.hidden = false; for (const k of digerKartlar()) k.hidden = false; if (aktarimKart) aktarimKart.hidden = false; iceBaslat.focus(); }
+      vazgec: () => { iceAlani.replaceChildren(); iceKart.hidden = false; for (const k of digerKartlar()) k.hidden = false; iceBaslat.focus(); }
     });
   });
 
@@ -497,7 +476,7 @@ async function yedekleme(govde, baglam, yenile) {
     h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; kaç tanesinin saklanacağını aşağıdaki "Saklama ayarları"ndan belirlersiniz.'),
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
     liste);
-  govde.replaceChildren(disaForm, iceKart, iceAlani, ...(aktarimKart ? [aktarimKart, aktarimAlani] : []), otomatikKart, saklamaFormu);
+  govde.replaceChildren(disaForm, iceKart, iceAlani, otomatikKart, saklamaFormu, sonucTemizlemeKarti());
 }
 
 // ---------------------------------------------------------------------------------------
@@ -538,7 +517,7 @@ async function dosyalar(govde, baglam, yenile) {
       });
       const dosyaMetni = d.dosya
         ? [h('strong', {}, d.dosya.ad), ' ', rozet([ikon('kilit'), 'şifreli'], 'basari'), d.dosya.eksik ? rozet('şifreli depoda yok', 'hata') : null]
-        : [h('code', {}, d.eskiYol), ' ', rozet([ikon('uyari'), 'düz metin yol'], 'uyari', { title: 'Eski düz metin dosya yolu: dosyayı yükleyin ya da Güvenlik > "Açık dosyaları şifreli depoya taşı"yı kullanın.' })];
+        : [h('code', {}, d.eskiYol), ' ', rozet([ikon('uyari'), 'düz metin yol'], 'uyari', { title: 'Eski düz metin dosya yolu: dosyayı yükleyip şifreleyin.' })];
       satirlar.push(kayitSatiri(
         h('span', {}, e.ad, h('span', { class: 'soluk kucuk' }, ` · ${d.anahtar}`)),
         [h('span', {}, ...dosyaMetni), h('br', {}), h('span', {}, `${d.ortamAd || 'tüm ortamlar'}${d.dosya && d.dosya.boyut !== null ? ` · ${boyutMetni(d.dosya.boyut)}` : ''}`), mesaj],
@@ -554,6 +533,43 @@ async function dosyalar(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 // Güvenlik
 // ---------------------------------------------------------------------------------------
+
+/**
+ * Geçmiş sonuçları sil (geri alınamaz): tümü ya da N günden eski koşular — sonuçlar, adımlar, ekran görüntüleri, videolar, izler
+ * ile servis / akış koşuları. Önce sayım gösterilir; silme düğmesi sayımdan sonra açılır.
+ */
+function sonucTemizlemeKarti() {
+  const kapsam = h('select', {}, h('option', { value: 'tumu' }, 'Tüm geçmiş sonuçlar'), h('option', { value: 'gun' }, 'Şu kadar günden eski olanlar'));
+  const gun = h('input', { type: 'number', min: '1', max: '3650', step: '1', value: '30', inputmode: 'numeric', 'aria-label': 'Gün' });
+  const gunAlani = alan('Gün', gun);
+  gunAlani.hidden = true;
+  const mesaj = mesajKutusu();
+  const say = h('button', { type: 'button' }, 'Neler silinecek?');
+  const sil = h('button', { type: 'button', class: 'tehlike', disabled: true }, ikon('cop'), 'Kalıcı olarak sil');
+  const govdeAl = () => (kapsam.value === 'tumu' ? { tumu: true } : { gun: Number(gun.value) });
+  const sifirla = () => { sil.disabled = true; mesaj.temizle(); };
+  kapsam.addEventListener('change', () => { gunAlani.hidden = kapsam.value === 'tumu'; sifirla(); });
+  gun.addEventListener('input', sifirla);
+  say.addEventListener('click', async () => {
+    mesaj.temizle();
+    try {
+      const { onizleme: o } = await mesgulIken(say, 'Sayılıyor…', () => api('/platform/sonuclar/temizle', { govde: govdeAl() }));
+      const toplam = o.kosu + o.servisKosusu + o.akisKosusu;
+      mesaj.goster(toplam ? `Silinecek: ${o.kosu} ekran koşusu (${o.sonuc} sonuç, ${o.medya} ekran görüntüsü / video / iz), ${o.servisKosusu} servis koşusu, ${o.akisKosusu} akış koşusu. Bu işlem geri alınamaz.` : 'Silinecek sonuç yok.', toplam ? 'uyari' : 'basari');
+      sil.disabled = !toplam;
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  sil.addEventListener('click', async () => {
+    try {
+      const { silinen: s } = await mesgulIken(sil, 'Siliniyor…', () => api('/platform/sonuclar/temizle', { govde: { ...govdeAl(), onay: true } }));
+      mesaj.goster(`Silindi: ${s.kosu} ekran koşusu (${s.sonuc} sonuç, ${s.medya} medya dosyası), ${s.servisKosusu} servis koşusu, ${s.akisKosusu} akış koşusu.`, 'basari');
+      sil.disabled = true;
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return h('div', { class: 'kart form-paneli', role: 'group', 'aria-label': 'Geçmiş sonuçları sil' }, h('h3', {}, ikon('cop'), 'Geçmiş sonuçları sil'),
+    h('p', { class: 'soluk' }, 'Koşu sonuçlarını, adımlarını, ekran görüntülerini, videolarını ve izlerini; servis ve akış koşularını siler. Senaryolar, ekranlar ve test verisi silinmez. Çalışmakta olan koşular etkilenmez.'),
+    mesaj.kutu, alan('Kapsam', kapsam), gunAlani, h('div', { class: 'dugmeler' }, say, sil));
+}
 
 /** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları. */
 async function kosuAyarlari(govde) {
@@ -638,6 +654,7 @@ async function ayarFormu(bolum, ad, basariMetni) {
     }
     try {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/kosu-ayarlari/kaydet', { govde: { ayarlar: yeni } }));
+      kullaniciAyarlariniTazele();
       mesaj.goster(basariMetni, 'basari');
     } catch (hata) { mesaj.goster(hata.message); }
   });
@@ -733,9 +750,6 @@ async function guvenlik(govde, baglam) {
     } catch (hata) { alanHatasi(yasakMetni, hata.message); }
   });
 
-  // Açık (düz metin) dosyaları şifreli depoya taşıma — TEK SEFERLİK, önce önizleme.
-  const tasimaKarti = acikDosyaTasimaKarti(baglam);
-
   const kilitle = h('button', { type: 'button' }, ikon('kilit'), 'Kasayı kilitle');
   kilitle.addEventListener('click', async () => {
     await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
@@ -780,72 +794,45 @@ async function guvenlik(govde, baglam) {
     h('div', { class: 'ayar-izgarasi' }, kilitForm, saklamaForm),
     yasakForm,
     maskeleme,
-    tasimaKarti,
     form);
 }
 
-/**
- * "Açık dosyaları şifreli depoya taşı": proje adaptörünün bildiği düz metin dosyalar (ör. tests/fixtures/**.xlsx ve
- * eski dosya yedeklerindeki kopyaları) listelenir; kullanıcı seçip onaylayınca dosyalar şifreli depoya alınır, senaryo
- * ve ekran ayarlarındaki yollar referansa çevrilir, şifreli kopya doğrulanınca düz metin ezilip silinir.
- */
-function acikDosyaTasimaKarti(baglam) {
-  const proje = baglam.durum.proje;
-  const govde = h('div', {});
-  const onizle = h('button', { type: 'button' }, ikon('ara'), 'Dosyaları listele');
-  const kart = h('section', { class: 'kart acik-dosya-karti' },
-    h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('dosya'), 'Açık dosyaları şifreli depoya taşı'), h('div', { class: 'sag' }, onizle)),
-    h('p', { class: 'soluk' }, 'Eski proje düzeninde senaryoların kullandığı dosyalar (ör. çoklu sorgu Excel\'leri) diskte düz metin durur. Bu işlem onları şifreli depoya alır, senaryo ve ekran ayarlarındaki yolları şifreli dosyaya bağlar ve şifreli kopya doğrulanınca düz metin dosyaları ezip siler. Önce liste gösterilir; hiçbir şey onayınız olmadan değişmez.'),
-    govde);
-  onizle.addEventListener('click', async () => {
+// ---------------------------------------------------------------------------------------
+// Ayarlar > Arayüz: ekran rehberleri (kullanıcı kararı: ilk girişte kendiliğinden açılsın mı)
+// ---------------------------------------------------------------------------------------
+
+async function arayuzAyarlari(govde) {
+  const [{ rehber }, listeFormu] = await Promise.all([api('/platform/rehber'), ayarFormu('arayuz', 'Arayüz ayarları', 'Arayüz ayarları kaydedildi.')]);
+  const otomatik = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', id: yeniKimlik('rehber-otomatik'), checked: rehber.otomatik, disabled: rehber.ortamKapali });
+  const mesaj = mesajKutusu();
+  const sifirla = h('button', { type: 'button' }, ikon('yenile'), 'Tüm rehberleri yeniden göster');
+  const tanitim = h('button', { type: 'button', class: 'hayalet' }, ikon('pusula'), 'Genel tanıtımı şimdi aç');
+  otomatik.addEventListener('change', async () => {
+    mesaj.temizle();
     try {
-      const { dosyalar } = await mesgulIken(onizle, 'Listeleniyor…', () => api('/platform/acik-dosyalar/onizle', { govde: { projeId: proje.id } }));
-      listeCiz(dosyalar);
-    } catch (hata) { if (hata.durum !== 423) yerlestirHata(hata); }
+      const y = await api('/platform/rehber/kaydet', { govde: { otomatik: otomatik.checked } });
+      rehberAyarlariniGuncelle(y.rehber);
+      mesaj.goster(otomatik.checked ? 'Rehberler her ekranın ilk açılışında kendiliğinden başlayacak.' : 'Rehberler artık kendiliğinden açılmayacak; "?" düğmesi çalışmaya devam eder.', 'basari');
+    } catch (hata) { otomatik.checked = !otomatik.checked; mesaj.goster(hata.message); }
   });
-  function yerlestirHata(hata) { govde.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); }
-  function listeCiz(dosyalar) {
-    if (!dosyalar.length) {
-      govde.replaceChildren(h('div', { class: 'not-kutusu basari' }, h('p', {}, 'Düz metin dosya bulunamadı: taşınacak bir şey yok.')));
-      return;
-    }
-    const secim = new Set(dosyalar.map((d) => d.kimlik));
-    const tasi = h('button', { type: 'button', class: 'tehlike' }, ikon('kilit'), 'Şifreli depoya taşı ve düz metinleri sil');
-    const ozet = h('span', { class: 'kucuk soluk' });
-    const guncelle = () => { ozet.textContent = `${secim.size} / ${dosyalar.length} dosya seçili`; tasi.disabled = !secim.size; };
-    const satirlar = dosyalar.map((d) => {
-      const kutu = h('input', { type: 'checkbox', checked: true, 'aria-label': `Seç: ${d.goreliYol} (${d.konum})` });
-      kutu.addEventListener('change', () => { if (kutu.checked) secim.add(d.kimlik); else secim.delete(d.kimlik); guncelle(); });
-      return h('li', {}, h('label', { class: 'acik-dosya-satiri' }, kutu,
-        h('span', { class: 'acik-dosya-ana' }, h('code', {}, d.goreliYol),
-          h('small', { class: 'soluk' }, `${d.konum === 'proje' ? 'proje klasörü' : d.konum.replace('eski-dosyalar/', 'eski dosya yedeği ')} · ${boyutMetni(d.boyut)}`)),
-        d.sifreliKopyaVar ? rozet([ikon('kilit'), 'şifreli kopyası var'], 'basari') : rozet('yalnızca düz metin', 'uyari')));
-    });
-    const onayAlani = h('div', {});
-    tasi.addEventListener('click', () => {
-      const secilenler = dosyalar.filter((d) => secim.has(d.kimlik));
-      const evet = h('button', { type: 'button', class: 'tehlike' }, ikon('cop'), `Evet, ${secilenler.length} dosyayı taşı`);
-      const vazgec = h('button', { type: 'button', class: 'hayalet', onclick: () => onayAlani.replaceChildren() }, 'Vazgeç');
-      onayAlani.replaceChildren(h('div', { class: 'not-kutusu uyari', role: 'alertdialog', 'aria-label': 'Taşımayı onayla' },
-        h('p', {}, h('b', {}, 'Düz metin dosyalar silinecek. '), 'Her dosya önce şifreli depoya alınır ve şifreli kopyası doğrulanır; doğrulanamayan dosya silinmez. Silme en iyi çabayla yapılır (dosya ezilip kaldırılır; SSD\'lerde eski bloklar fiziksel olarak kalabilir). Yedeğiniz yoksa önce Yedekleme\'den şifreli yedek alın.'),
-        h('div', { class: 'dugmeler' }, vazgec, evet)));
-      evet.focus();
-      evet.addEventListener('click', async () => {
-        try {
-          const { sonuc } = await mesgulIken(evet, 'Taşınıyor…', () => api('/platform/acik-dosyalar/tasi', { govde: { projeId: proje.id, kimlikler: [...secim], onay: true } }));
-          govde.replaceChildren(h('div', { class: `not-kutusu ${sonuc.atlanan.length ? 'uyari' : 'basari'}` },
-            h('p', {}, h('b', {}, `${sonuc.silinen} düz metin dosya silindi. `),
-              `${sonuc.aktarilan} dosya şifreli depoya alındı${sonuc.zatenVardi ? `, ${sonuc.zatenVardi} dosyanın şifreli kopyası zaten vardı` : ''}; ${sonuc.referans.senaryo} senaryo ve ${sonuc.referans.ekran} ekran ayarı şifreli dosyaya bağlandı.`),
-            sonuc.atlanan.length ? h('ul', {}, sonuc.atlanan.map((a) => h('li', {}, h('code', {}, a.goreliYol), ` (${a.konum}): ${a.neden}`))) : null));
-          bildir('Açık dosyalar şifreli depoya taşındı.', 'basari');
-        } catch (hata) { if (hata.durum !== 423) yerlestirHata(hata); }
-      });
-    });
-    govde.replaceChildren(
-      h('ul', { class: 'acik-dosya-listesi' }, satirlar),
-      h('div', { class: 'dugmeler' }, ozet, tasi),
-      onayAlani);
-    guncelle();
-  }
-  return kart;
+  sifirla.addEventListener('click', async () => {
+    mesaj.temizle();
+    try {
+      const y = await mesgulIken(sifirla, 'Sıfırlanıyor…', () => api('/platform/rehber/kaydet', { govde: { sifirla: true } }));
+      rehberAyarlariniGuncelle(y.rehber);
+      mesaj.goster('Tüm rehberler yeniden "görülmemiş" sayıldı; ekranları açtıkça tekrar gösterilecek.', 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  tanitim.addEventListener('click', () => rehberBaslat('genel'));
+  yerlestir(govde, h('div', { class: 'kart form-paneli', role: 'group', 'aria-label': 'Rehberler' },
+    h('h3', {}, ikon('soru'), 'Rehberler'),
+    h('p', { class: 'soluk' }, 'Her ekranın, o ekranda işlerin hangi sırayla ve nasıl yapılacağını anlatan bir rehberi vardır. Rehber bitince ya da kapatılınca "görüldü" sayılır.'),
+    mesaj.kutu,
+    h('label', { class: 'onay-satiri', for: otomatik.id }, otomatik,
+      h('span', {}, h('b', {}, 'Rehberleri ilk girişte kendiliğinden göster'),
+        h('small', { class: 'blok soluk' }, rehber.ortamKapali
+          ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
+          : 'Kapalıysa rehberler yalnızca üst çubuktaki "?" düğmesiyle açılır.'))),
+    h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
+    h('div', { class: 'dugmeler' }, sifirla, tanitim)), listeFormu);
 }

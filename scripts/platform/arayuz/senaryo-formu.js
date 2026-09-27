@@ -4,8 +4,8 @@
 // kapsamı", beklenen sonuç varyantları, profil havuzları). Görünürlük ve doğrulama TEK doğrulayıcıyla
 // (senaryo-dogrulayici.mjs — sunucu ve testler de aynısını kullanır) yapılır; hatalar alanların altında.
 // Kayıt veritabanına yazılır (POST /platform/senaryo/kaydet; değişiklik geçmişiyle). "Dene", taslağı
-// kaydetmeden geçici ek veriyle koşar (POST /platform/senaryo/dene).
-// Modeli olmayan ekranlarda ve kodda tanımlı senaryolarda yalnızca özet + başlık + Koşuda düzenlenir.
+// kaydetmeden geçici bir deneme senaryosu olarak koşar (POST /platform/senaryo/dene).
+// Modeli olmayan ekranlarda yalnızca özet + başlık + Koşuda düzenlenir.
 // "Akış diyagramı" sekmesi (salt okunur): formdaki güncel seçimlerle akış + seçili ortamdaki son koşunun adım renkleri
 // (senaryo-diyagrami.js). Kayıt paneli (sağ sütun) iki sekmede de görünür.
 // Çoklu akış: ekranın birden çok akışı varsa senaryo kartında "Akış" seçilir (yeni senaryoda varsayılan akış önde); akış
@@ -47,7 +47,7 @@ export async function senaryoFormu(icerik, s) {
     const baglam = ekranId
       ? await api(`/platform/senaryo/form?projeId=${encodeURIComponent(s.proje.id)}&ekranId=${encodeURIComponent(ekranId)}&ortamId=${encodeURIComponent(s.ortam.id)}${akisId ? `&akisId=${encodeURIComponent(akisId)}` : ''}`)
       : null;
-    if (!baglam || !baglam.model || (senaryo && !senaryo.veriGudumlu)) {
+    if (!baglam || !baglam.model) {
       if (s.mod === 'yeni') {
         yerlestir(icerik, sayfaBasligi(s, 'Yeni senaryo', null), hataKutusu(new Error('Bu ekranın modeli (ya da senaryo veri kaynağı) yok; yeni senaryo yalnızca ekran modeli olan ekranlarda oluşturulabilir.')));
         return;
@@ -78,7 +78,7 @@ function sayfaBasligi(s, baslik, meta, ...eylemler) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Modelsiz / kodda tanımlı senaryo: özet + başlık + Koşuda
+// Modelsiz senaryo: özet + başlık + Koşuda
 // ---------------------------------------------------------------------------------------
 
 function ozetDuzenleyici(icerik, s, senaryo, baglam) {
@@ -87,20 +87,15 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
   baslik.setAttribute('aria-describedby', `${baslik.id}-hata`);
   const kosuda = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: senaryo.kosuyaDahil, id: yeniId('kosuda') });
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, ikon('onay'), 'Kaydet');
-  const kodda = !senaryo.veriGudumlu;
   const form = h('form', { class: 'kart form-paneli model-yok-karti', novalidate: true },
     h('h3', {}, 'Senaryo özeti'),
     h('div', { class: 'not-kutusu bilgi' },
-      h('p', {}, kodda
-        ? 'Bu senaryo kodda tanımlı bir test; verisi yok. Burada yalnızca platformda görünen ad ve Koşuda ayarı değişir — testin koddaki adı değişmez.'
-        : 'Bu ekranın ekran modeli yok. Başlık ve Koşuda ayarı düzenlenebilir; alanların tam düzenlenmesi için ekran modeli gerekir.'),
-      h('p', { class: 'kucuk' }, 'Tam düzenleme için ekranın modeli tanımlanmalı ("Sayfa ekle" — yakında).')),
-    h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', { for: baslik.id }, kodda ? 'Görünen ad' : 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslik, baslikHata),
-    h('label', { class: 'onay-satiri', for: kosuda.id }, kosuda, 'Koşuda (Koşuyu başlat ve npm run test bu senaryoyu koşar)'),
+      h('p', {}, 'Bu ekranın ekran modeli yok. Başlık ve Koşuda ayarı düzenlenebilir; alanların tam düzenlenmesi için ekran modeli gerekir.'),
+      h('p', { class: 'kucuk' }, 'Ekranın modelini Ekranlar > ekran > "Paket yükle" ya da "Ekranı tara" ile ekleyin.')),
+    h('div', { class: 'model-alani' }, h('div', { class: 'alan-ust' }, h('label', { for: baslik.id }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslik, baslikHata),
+    h('label', { class: 'onay-satiri', for: kosuda.id }, kosuda, 'Koşuda (Koşuyu başlat bu senaryoyu koşar)'),
     h('dl', { class: 'ozet-satirlari' },
       h('dt', {}, 'Ekran'), h('dd', {}, baglam?.ekran?.ad || s.ekranAdi || '—'),
-      h('dt', {}, 'Test dosyası'), h('dd', { class: 'mono' }, senaryo.kaynak?.dosya || '—'),
-      h('dt', {}, 'Koddaki test adı'), h('dd', {}, senaryo.kaynak?.ad || '—'),
       h('dt', {}, 'Kimlik'), h('dd', { class: 'mono cok-soluk' }, senaryo.id),
       senaryo.veri ? [h('dt', {}, 'Veri alanları'), h('dd', {}, Object.keys(senaryo.veri).join(', '))] : null),
     h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', class: 'hayalet', onclick: s.geri }, 'Vazgeç')));
@@ -117,7 +112,7 @@ function ozetDuzenleyici(icerik, s, senaryo, baglam) {
       baslikHata.textContent = e.message;
     } finally { kaydet.disabled = false; }
   });
-  yerlestir(icerik, sayfaBasligi(s, senaryo.baslik, [h('span', {}, ikon('ekran'), baglam?.ekran?.ad || s.ekranAdi || 'Ekran yok'), kodda ? h('span', {}, rozet('kodda')) : null]), form);
+  yerlestir(icerik, sayfaBasligi(s, senaryo.baslik, [h('span', {}, ikon('ekran'), baglam?.ekran?.ad || s.ekranAdi || 'Ekran yok')]), form);
 }
 
 // ---------------------------------------------------------------------------------------

@@ -140,7 +140,7 @@ export async function tablolarBolumu(govde, proje) {
       liste.map((t) => h('button', {
         type: 'button', 'aria-current': t.id === seciliId && is?.id ? 'true' : 'false',
         onclick: async () => { if (t.id === seciliId && is?.id) return; if (!(await gecebilirMi())) return; seciliId = t.id; is = kopya(t); ara = ''; gorunur = GORUNUR_ADIM; ciz(); }
-      }, h('span', { class: 'tablo-adi' }, t.ad, t.baglam ? h('span', { class: 'rozet kucuk-rozet', title: 'Kullanıcı / acente değiştirme profilleri: senaryoda satır adıyla seçilir' }, 'bağlam') : null),
+      }, h('span', { class: 'tablo-adi' }, t.ad, t.baglam ? h('span', { class: 'rozet kucuk-rozet', title: 'Kullanıcı / şube değiştirme profilleri: senaryoda satır adıyla seçilir' }, 'bağlam') : null),
         h('small', {}, `${t.sutunlar.length} sütun · ${t.satirlar.length} satır`))),
       h('button', { type: 'button', class: 'kucuk-dugme yeni-tablo', onclick: async () => { if (!(await gecebilirMi())) return; seciliId = ''; is = kopya(null); ciz(); } },
         ikon('arti'), 'Yeni tablo')));

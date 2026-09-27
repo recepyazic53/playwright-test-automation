@@ -1,27 +1,22 @@
 // SENARYO SERVİSİ (genel) — platform "Senaryolar" ekranının veritabanı işlemleri: liste (son sonuç,
 // bağlam profili, beklenen sonuç rozeti), ayrıntı, model tabanlı form bağlamı, kaydet (tek
 // doğrulayıcı + değişiklik geçmişi), kopyala, sil, koşuya dahil et, geçmiş, koşu hedefi çözümü
-// (senaryo UUID → Playwright dosyası + güncel test başlığı) ve "Dene" (geçici ek veri) paketi.
+// (senaryo UUID → model spec'i + etiket) ve "Dene" (geçici deneme senaryosu) paketi.
 //
 // Senaryo KİMLİĞİ veritabanı UUID'sidir. Senaryo içeriği (senaryolar.icerik_json):
-//   { kaynak: { dosya, ad },                 → Playwright spec dosyası + GÜNCEL test başlığı
-//     veri?: { dosya, yol },                 → veri güdümlü senaryolarda testlerin okuduğu veri dizisi
+//   { kosucu: 'model' | paket,               → ekran modeliyle koşar (bkz. model-kosusu.mjs)
+//     kaynak: { dosya, ad },                 → sanal spec yolu + GÜNCEL başlık (başlık tekilliği ve sonuç anahtarı)
+//     veri: { dosya, yol },                  → senaryo verisinin grubu (ekran anahtarı)
 //     ortamlar: { <ortamId>: { sira?, veri? } },   → senaryonun var olduğu ortamlar (+ ortama göre veri)
-//     alanKurallari?: { mutlakaGorunmeli: [alanId] } }
-// "veri" olan (veri güdümlü) senaryoların sahibi veritabanıdır: testler bu satırlardan üretilir
-// (projeler/<proje>/aktarim.mjs > yenidenKur); oluşturma/düzenleme/silme yalnızca bunlarda yapılır.
-// Kodda tanımlı senaryolarda (veri yok) yalnızca görünen başlık ve "Koşuda" değişir.
-// Senaryo verisindeki hassas adlı alanlar (test verisi türlerinde hassas işaretli alan adları)
-// aktarım motoruyla aynı kuralla kasa zarfı olarak yazılır.
+//     alanKurallari?: { mutlakaGorunmeli: [alanId] }, akis? }
+// Senaryo verisindeki hassas adlı alanlar (test verisi türlerinde hassas işaretli alan adları) kasa zarfı olarak yazılır.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: senaryo-servisi.d.mts.
 
 import {
-  DepoHatasi, baglamProfilleriniListele, degisiklikGecmisiListele, ekranModeliGetir, ekranlariListele, kaynakEslemeleriniListele,
+  DepoHatasi, baglamProfilleriniListele, degisiklikGecmisiListele, ekranModeliGetir, ekranlariListele,
   ortamlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet, senaryoSil, testVerisiProfilleriniListele, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
-import { acikAnahtar, sifrele } from '../kasa.mjs';
-import { adliAlanlariDonustur, zarflariCoz } from '../aktarim/motor.mjs';
-import { mezarTasiOku } from '../ekranlar/mezar-tasi.mjs';
+import { acikAnahtar, adliAlanlariDonustur, sifrele, zarflariCoz } from '../kasa.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari } from './model-formu.mjs';
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
@@ -46,7 +41,6 @@ import {
 } from './model-kosusu.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
-/** @typedef {import('../../../projeler/index.d.mts').AktarimAdaptoru} AktarimAdaptoru */
 /** @typedef {Record<string, unknown>} Nesne */
 
 /** "Dene" denemelerinin geçici başlık öneki (kalıcı başlık bununla başlayamaz). */
@@ -94,30 +88,15 @@ export function senaryoKaynakAnahtari(icerik) {
   return k ? `${k.dosya}::${k.ad}` : null;
 }
 
-/** Veri güdümlü mü (testler bu satırın verisinden üretilir)? @param {unknown} icerik */
+/** Senaryonun verisi var mı (veri grubu tanımlı)? @param {unknown} icerik */
 export function veriGudumluMu(icerik) {
   return nesneMi(icerik) && nesneMi(icerik.veri) && typeof icerik.veri.dosya === 'string' && typeof icerik.veri.yol === 'string';
-}
-
-/**
- * Model koşucusuyla mı çalışır? (kodda karşılığı yok: sayfa paketinden/modelden; bkz. model-kosusu.mjs)
- * @param {Veritabani} vt @param {string} projeId @param {{ id: string; icerik: unknown }} s
- * @param {{ kodDosyasiVar?: (dosya: string) => boolean; eslemeliler?: Set<string> }} [secenekler]
- */
-export function modelKosusuMu(vt, projeId, s, secenekler = {}) {
-  const eslemeliler = secenekler.eslemeliler ?? new Set(kaynakEslemeleriniListele(vt, projeId, 'senaryo').map((e) => e.varlikId));
-  return modelSenaryosuMu(s.icerik, { kodEslemesiVar: eslemeliler.has(s.id), kodDosyasiVar: secenekler.kodDosyasiVar });
 }
 
 /** @param {unknown} icerik @returns {string[]} */
 const ortamKimlikleri = (icerik) => (nesneMi(icerik) && nesneMi(icerik.ortamlar) ? Object.keys(icerik.ortamlar) : []);
 
-/** Ortam kimliği → test çalıştırıcısının ortam anahtarı (aktarım eşlemesi; ör. "test"). */
-export function ortamAnahtariBul(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {string} */ ortamId) {
-  return kaynakEslemeleriniListele(vt, projeId, 'ortam').find((e) => e.varlikId === ortamId)?.kaynakAnahtari ?? null;
-}
-
-/** Test verisi türlerinde hassas işaretli alan adları (aktarım motoruyla aynı kural: hassas !== false). */
+/** Test verisi türlerinde hassas işaretli alan adları (hassas !== false). */
 function hassasAdlar(/** @type {Veritabani} */ vt, /** @type {string} */ projeId) {
   return new Set(testVerisiTurleriniListele(vt, projeId).flatMap((t) => t.alanlar.filter((a) => a.hassas !== false).map((a) => a.ad)));
 }
@@ -206,17 +185,12 @@ function ekranGetir(vt, projeId, ekranId) {
 }
 
 /**
- * Yeni senaryonun veri kaynağı (spec + veri dosyası/yolu): adaptör biliyorsa ondan, yoksa aynı
- * ekranın mevcut veri güdümlü bir senaryosundan; o da yoksa ve ekranın modeli varsa MODEL kaynağı (test kodu
- * olmayan ekran — ör. elle oluşturulan projede tarama/sayfa paketiyle gelen ekran; spec adı taramanın kuralıyla,
- * diskte yoktur). Bulunamazsa null (bu ekranda senaryo oluşturulamaz).
- * model: true → yeni senaryo model koşucusuyla çalışır (icerik.kosucu = 'model'; bkz. senaryoKaydet).
- * @param {Veritabani} vt @param {string} projeId @param {{ id: string; anahtar: string }} ekran @param {AktarimAdaptoru | null | undefined} adaptor
+ * Yeni senaryonun veri kaynağı (sanal spec yolu + veri grubu): aynı ekranın mevcut bir senaryosundan; yoksa ve ekranın
+ * modeli varsa ekran anahtarından türetilir (spec diskte yoktur). Bulunamazsa null (bu ekranda senaryo oluşturulamaz).
+ * @param {Veritabani} vt @param {string} projeId @param {{ id: string; anahtar: string }} ekran
  * @returns {{ spec: string; dosya: string; yol: string; model: boolean } | null}
  */
-export function ekranVeriKaynagi(vt, projeId, ekran, adaptor) {
-  const a = adaptor?.senaryoVeriKaynagi?.(ekran.anahtar);
-  if (a) return { spec: a.spec, dosya: a.dosya, yol: a.yol, model: false };
+export function ekranVeriKaynagi(vt, projeId, ekran) {
   for (const s of vt.tumu('SELECT icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ? ORDER BY rowid', [projeId, ekran.id])) {
     const icerik = JSON.parse(String(s.icerik_json));
     const kaynak = senaryoKaynagi(icerik);
@@ -247,15 +221,11 @@ function baglamAlani(/** @type {ReturnType<typeof formSemasiOlustur>} */ sema) {
 
 /**
  * Senaryolar ekranının listesi (seçili ortamda var olan senaryolar) + sol ekran listesi.
- * modelKosusu: senaryo test kodu olmadan model koşucusuyla çalışır (rozet "model"; bkz. model-kosusu.mjs).
- * @param {Veritabani} vt @param {string} projeId @param {string} ortamId @param {AktarimAdaptoru | null} [adaptor]
- * @param {{ kodDosyasiVar?: (dosya: string) => boolean }} [secenekler]
+ * modelKosusu: senaryo model koşucusuyla çalışır (rozet "model"; bkz. model-kosusu.mjs).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamId
  */
-export function senaryoListesi(vt, projeId, ortamId, adaptor = null, secenekler = {}) {
+export function senaryoListesi(vt, projeId, ortamId) {
   acikAnahtar(vt);
-  const senaryoEslemeleri = kaynakEslemeleriniListele(vt, projeId, 'senaryo');
-  const eslemeliler = new Set(senaryoEslemeleri.map((e) => e.varlikId));
-  const eslemeAnahtarlari = new Map(senaryoEslemeleri.map((e) => [e.varlikId, e.kaynakAnahtari]));
   /** @type {Map<string, { sema: ReturnType<typeof formSemasiOlustur> | null; model: boolean; akislar: Array<{ id: string; ad: string }> }>} */
   const semalar = new Map();
   const ekranlar = ekranlariListele(vt, projeId);
@@ -330,16 +300,14 @@ export function senaryoListesi(vt, projeId, ortamId, adaptor = null, secenekler 
       beklenenSonuc: sema && veri ? beklenenSonucEtiketi(sema, veri) : null,
       sonSonuc: sonuc, mutlakaGorunmeliSayisi: kurallar.length, paketten: nesneMi(icerik.paket),
       akis: akis ? { id: akis.id, ad: akis.ad } : null,
-      modelKosusu: modelSenaryosuMu(icerik, { kodEslemesiVar: eslemeliler.has(String(s.id)), kodDosyasiVar: secenekler.kodDosyasiVar }),
-      // "Kodu kaldırılmış": spec dosyası diskte yok (hızlı denetim; başlık denetimi kodKaldirilmisSenaryolar ile).
-      kodDurumu: kodKaldirilmaNedeni({ id: String(s.id), icerik }, { eslemeliler, eslemeAnahtarlari, kodDosyasiVar: secenekler.kodDosyasiVar }),
+      modelKosusu: modelSenaryosuMu(icerik),
       guncellenme: String(s.guncellenme)
     });
   }
   return {
     ekranlar: ekranlar.filter((e) => !altModelEkranlari.has(e.id)).map((e) => ({
       id: e.id, anahtar: e.anahtar, ad: e.ad, senaryoSayisi: sayilar.get(e.id) ?? 0, durum: e.durum,
-      modelVar: Boolean(semalar.get(e.id)?.model), olusturulabilir: Boolean(semalar.get(e.id)?.sema) && Boolean(ekranVeriKaynagi(vt, projeId, e, adaptor))
+      modelVar: Boolean(semalar.get(e.id)?.model), olusturulabilir: Boolean(semalar.get(e.id)?.sema) && Boolean(ekranVeriKaynagi(vt, projeId, e))
     })),
     senaryolar: satirlar
   };
@@ -385,48 +353,18 @@ export function senaryoSonSonucu(vt, id, ortamId) {
 }
 
 /**
- * Doğrulayıcının "ortak" bağlamı (tam; YALNIZCA sunucuda kullanılır). Adaptör sağlamıyorsa
- * undefined (profil varlığı / bağlama göre görünürlük kontrolleri atlanır).
- * @param {Veritabani} vt @param {string} projeId @param {string} ortamId @param {AktarimAdaptoru | null | undefined} adaptor
- */
-function dogrulamaOrtagi(vt, projeId, ortamId, adaptor) {
-  const anahtar = ortamAnahtariBul(vt, projeId, ortamId);
-  if (!anahtar || !adaptor?.dogrulamaBaglami) return undefined;
-  return adaptor.dogrulamaBaglami(vt, projeId, anahtar) ?? undefined;
-}
-
-/**
- * Tarayıcıya gidecek doğrulama bağlamı: profil ANAHTARLARI (değerler değil), bağlam profillerinin
- * görünürlüğü belirleyen kodları ve ortak kartın yalnızca son kullanma tarihi (süre uyarısı için).
- * @param {Nesne | undefined} ortak
- */
-function tarayiciOrtagi(ortak) {
-  if (!ortak) return null;
-  /** @type {Nesne} */
-  const sonuc = {};
-  if (nesneMi(ortak.kimlikProfilleri)) {
-    sonuc.kimlikProfilleri = Object.fromEntries(Object.entries(ortak.kimlikProfilleri).map(([tur, havuz]) =>
-      [tur, nesneMi(havuz) ? Object.fromEntries(Object.keys(havuz).map((k) => [k, {}])) : {}]));
-  }
-  if (nesneMi(ortak.acenteProfilleri)) sonuc.acenteProfilleri = kopya(ortak.acenteProfilleri);
-  const kart = nesneMi(ortak.varsayilanKrediKarti) ? ortak.varsayilanKrediKarti : null;
-  if (kart) sonuc.varsayilanKrediKarti = { sonKullanmaAyi: kart.sonKullanmaAyi ?? null, sonKullanmaYili: kart.sonKullanmaYili ?? null };
-  return sonuc;
-}
-
-/**
  * Model tabanlı formun bağlamı: model + alt modeller, profil havuzlarının seçenekleri (bağlam
  * profilleri: ad + alanlar; test verisi profilleri: ad + MASKELİ önizleme), tarayıcı doğrulama
  * bağlamı ve ekranın veri kaynağı. Modeli olmayan ekranda model: null.
- * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string} ortamId @param {AktarimAdaptoru | null | undefined} adaptor
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string} ortamId @param {string | null} [akisId]
  */
-export function formBaglami(vt, projeId, ekranId, ortamId, adaptor, akisId = null) {
+export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
   acikAnahtar(vt);
   const ekran = ekranGetir(vt, projeId, ekranId);
   const ortamlar = ortamlariListele(vt, projeId).map((o) => ({ id: o.id, ad: o.ad, varsayilan: o.varsayilan }));
   if (!ortamlar.some((o) => o.id === ortamId)) throw new DepoHatasi('Ortam bulunamadı.');
   const mb = modelBaglami(vt, ekranId, akisId);
-  const veriKaynagi = ekranVeriKaynagi(vt, projeId, ekran, adaptor);
+  const veriKaynagi = ekranVeriKaynagi(vt, projeId, ekran);
   if (!mb) return { ekran, ortamlar, model: null, altModeller: {}, profiller: {}, ortak: null, veriKaynagi, olusturulabilir: false, akislar: [], akisId: null };
   const sema = formSemasiOlustur(mb.model, mb.altModeller);
   /** @type {Set<string>} */
@@ -438,15 +376,13 @@ export function formBaglami(vt, projeId, ekranId, ortamId, adaptor, akisId = nul
       else Object.values(a.profilHavuzu).forEach((h) => havuzlar.add(h));
     }
   }
-  const tanimlar = adaptor?.profilHavuzlari?.() ?? {};
   const turler = testVerisiTurleriniListele(vt, projeId);
   const ortamdaMi = (/** @type {string | null} */ o) => o === null || o === ortamId;
   /** @type {Record<string, Array<{ ad: string; tur: 'baglam' | 'testVerisi'; kapsam: 'tum' | 'ortam'; alanlar: Array<{ etiket: string; deger?: string; dolu: boolean }> }>>} */
   const profiller = {};
   for (const havuz of havuzlar) {
-    // Adaptörün tanımı yoksa (elle oluşturulan proje) havuzun adı bağlam türüdür (ör. akış kaydının "Şube" alanı).
-    // Tanım yoksa (elle oluşturulan proje): aynı adlı test verisi türü varsa test verisi (ör. kimlik profilleri), yoksa bağlam türü.
-    const t = tanimlar[havuz] ?? (turler.some((x) => x.ad === havuz) ? { tur: 'testVerisi', ad: havuz } : { tur: 'baglam', ad: havuz });
+    // Havuz adı: aynı adlı test verisi türü varsa test verisi (ör. kimlik profilleri), yoksa bağlam türü (ör. "Şube").
+    const t = turler.some((x) => x.ad === havuz) ? { tur: 'testVerisi', ad: havuz } : { tur: 'baglam', ad: havuz };
     /** @type {Map<string, (typeof profiller)[string][number]>} */
     const liste = new Map();
     if (t.tur === 'baglam') {
@@ -474,7 +410,7 @@ export function formBaglami(vt, projeId, ekranId, ortamId, adaptor, akisId = nul
   }
   return {
     ekran, ortamlar, model: mb.model, altModeller: mb.altModeller, modelSurumu: mb.surum, profiller, akislar: mb.akislar, akisId: mb.akisId,
-    ortak: tarayiciOrtagi(dogrulamaOrtagi(vt, projeId, ortamId, adaptor)), veriKaynagi,
+    ortak: null, veriKaynagi,
     olusturulabilir: Boolean(veriKaynagi),
     // Bu ekranın seçim listeleri (tablo bağlantıları + değer listeleri): seçim alanlarının seçeneklerini süzer.
     degerListeleri: ekranListeleri(vt, projeId, ekranId, ortamId, tumFormAlanlari(sema).map((a) => String(a.id)))
@@ -515,7 +451,7 @@ export function ekranGirdileri(vt, projeId, ekranId) {
  * @returns {{ veri: Nesne; uyarilar: Array<{ alan: string; mesaj: string }> }}
  */
 function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ projeId, /** @type {{ model: Nesne; altModeller: Record<string, Nesne> }} */ mb,
-  /** @type {Nesne} */ veri, /** @type {string[]} */ ortamIdleri, /** @type {AktarimAdaptoru | null | undefined} */ adaptor, /** @type {Map<string, string>} */ ortamAdlari) {
+  /** @type {Nesne} */ veri, /** @type {string[]} */ ortamIdleri, /** @type {Map<string, string>} */ ortamAdlari) {
   const sema = formSemasiOlustur(mb.model, mb.altModeller);
   let sonuc = kopya(veri);
   /** @type {Array<{ alan: string; mesaj: string }>} */
@@ -524,7 +460,8 @@ function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ proje
   const uyarilar = [];
   const birden = ortamIdleri.length > 1;
   for (const ortamId of ortamIdleri) {
-    const ortak = dogrulamaOrtagi(vt, projeId, ortamId, adaptor);
+    /** @type {Nesne | undefined} */
+    const ortak = undefined;
     // Alt model ezme (ör. senaryoya özel kart): tek biçim + ortak değerle aynıysa yazılmaz.
     for (const alan of tumFormAlanlari(sema)) {
       if (alan.tip !== 'altModel' || !nesneMi(sonuc[alan.anahtar])) continue;
@@ -584,17 +521,15 @@ function sonrakiSira(/** @type {Veritabani} */ vt, /** @type {string} */ projeId
 
 /**
  * Senaryoyu kaydeder (yeni ya da mevcut). Kurallar:
- *  - Veri güdümlü + model: veri seçilen her ortam için tek doğrulayıcıyla doğrulanır; kaynak.ad ve
- *    verideki başlık yeni başlıkla eşitlenir (test başlığı = senaryo başlığı); ortam kapsamı
- *    ortamIdleri ile belirlenir (en az bir ortam).
- *  - Veri güdümlü, modelsiz: yalnızca başlık (+ verideki başlık) ve Koşuda.
- *  - Kodda tanımlı: yalnızca görünen başlık ve Koşuda (testin koddaki adı değişmez).
+ *  - Model: veri seçilen her ortam için tek doğrulayıcıyla doğrulanır; kaynak.ad ve verideki başlık yeni başlıkla
+ *    eşitlenir; ortam kapsamı ortamIdleri ile belirlenir (en az bir ortam).
+ *  - Modelsiz: yalnızca başlık (+ verideki başlık) ve Koşuda.
  *  - O an koşan senaryo (kosuyorMu) değiştirilemez.
  * @param {Veritabani} vt
  * Çoklu akış: senaryo bir akışa bağlıdır (akisId; verilmezse mevcut akışı, yeni senaryoda varsayılan akış); veri o akışın
  * modeliyle doğrulanır, akış içerikte (icerik.akis) saklanır (tek, örtük akışta yazılmaz).
  * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; yapan?: string }} girdi
- * @param {{ adaptor?: AktarimAdaptoru | null; kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
+ * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
  * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }> }}
  */
 export function senaryoKaydet(vt, girdi, secenekler = {}) {
@@ -608,11 +543,7 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
     throw new SenaryoCakismaHatasi('Bu senaryo şu anda koşuyor (ya da sırada); bitmesini bekleyin veya durdurun.');
   }
 
-  // Kodda tanımlı senaryo: yalnızca görünen başlık + Koşuda.
-  if (mevcut && !veriGudumluMu(mevcut.icerik)) {
-    depoSenaryoKaydet(vt, { ...mevcut, baslik, kosuyaDahil, yapan: girdi.yapan });
-    return { id: mevcut.id, uyarilar: [] };
-  }
+  if (mevcut && (!veriGudumluMu(mevcut.icerik) || !eskiKaynak)) throw new DepoHatasi('Bu senaryonun biçimi desteklenmiyor (kodlu testlerden kalma).');
 
   const ekranId = mevcut ? mevcut.ekranId : typeof girdi.ekranId === 'string' ? girdi.ekranId : null;
   if (!ekranId) throw new DepoHatasi('Ekran seçilmedi.');
@@ -626,7 +557,7 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
   for (const o of ortamIdleri) if (!ortamAdlari.has(o)) throw new DepoHatasi('Seçilen ortam bu projede yok.');
 
   const kaynakVeri = mevcut ? { spec: /** @type {{ dosya: string }} */ (eskiKaynak).dosya, dosya: String(/** @type {Nesne} */ (mevcut.icerik.veri).dosya), yol: String(/** @type {Nesne} */ (mevcut.icerik.veri).yol), model: false }
-    : ekranVeriKaynagi(vt, girdi.projeId, ekran, secenekler.adaptor);
+    : ekranVeriKaynagi(vt, girdi.projeId, ekran);
   if (!kaynakVeri) throw new DepoHatasi('Bu ekran için senaryo verisi kaynağı bilinmiyor; yeni senaryo oluşturulamaz.');
   if (baslikCakisiyorMu(vt, girdi.projeId, kaynakVeri.spec, baslik, mevcut?.id ?? null)) {
     throw new SenaryoDogrulamaHatasi('Bu başlıkta bir senaryo zaten var.', [{ alan: 'baslik', mesaj: 'Bu ekranda bu başlıkta bir senaryo zaten var; başka bir başlık seçin.' }]);
@@ -643,7 +574,7 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
     if (!mb) throw new DepoHatasi('Bu ekranın modeli yok; senaryo verisi yalnızca ekran modeliyle düzenlenebilir.');
     if (!nesneMi(girdi.veri)) throw new DepoHatasi('"veri" bir nesne olmalıdır.');
     const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
-    const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: baslik }, ortamIdleri, secenekler.adaptor, ortamAdlari);
+    const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: baslik }, ortamIdleri, ortamAdlari);
     uyarilar = d.uyarilar;
     for (const o of ortamIdleri) ortamVerileri[o] = d.veri;
   } else {
@@ -671,8 +602,8 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
   /** @type {Nesne} */
   const icerik = {
     ...(mevcut ? kopya(mevcut.icerik) : {}),
-    // Test kodu olmayan ekranda (model kaynağı) yeni senaryo model koşucusuyla çalışır (bkz. model-kosusu.mjs > modelSenaryosuMu).
-    ...(!mevcut && kaynakVeri.model ? { kosucu: 'model' } : {}),
+    // Yeni senaryo model koşucusuyla çalışır (bkz. model-kosusu.mjs > modelSenaryosuMu).
+    ...(!mevcut ? { kosucu: 'model' } : {}),
     kaynak: { dosya: kaynakVeri.spec, ad: baslik },
     veri: { dosya: kaynakVeri.dosya, yol: kaynakVeri.yol },
     ortamlar: yeniOrtamlar
@@ -716,8 +647,7 @@ function kimlikListesi(idler) {
 }
 
 /**
- * Senaryoları siler — yalnızca veri güdümlü (sahibi veritabanı olan) senaryolar. Kodda tanımlı bir
- * senaryo listede varsa HİÇBİRİ silinmez. Koşan senaryo silinmez.
+ * Senaryoları siler. Koşan senaryo silinmez (listede biri koşuyorsa HİÇBİRİ silinmez).
  * @param {Veritabani} vt @param {string} projeId @param {unknown} idler
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string }} [secenekler]
  */
@@ -728,10 +658,6 @@ export function senaryolariSil(vt, projeId, idler, secenekler = {}) {
     if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
     return s;
   });
-  const kodda = senaryolar.filter((s) => !veriGudumluMu(s.icerik));
-  if (kodda.length) {
-    throw new DepoHatasi(`${kodda.length} senaryo kodda tanımlı (ör. "${kodda[0].baslik}"); bunlar silinemez, koşudan çıkarmak için Koşuda anahtarını kapatın.`);
-  }
   for (const s of senaryolar) {
     const k = senaryoKaynagi(s.icerik);
     if (k && secenekler.kosuyorMu?.(k.dosya, k.ad)) throw new SenaryoCakismaHatasi(`"${s.baslik}" şu anda koşuyor; bitmesini bekleyin veya durdurun.`);
@@ -740,109 +666,8 @@ export function senaryolariSil(vt, projeId, idler, secenekler = {}) {
   return { silinen: senaryolar.length };
 }
 
-// ---------------------------------------------------------------------------------------
-// Kodu kaldırılmış senaryolar (spec dosyası ya da test başlığı artık yok)
-// ---------------------------------------------------------------------------------------
-
 /**
- * Senaryonun Playwright kaynağı: içerikteki (dosya + güncel başlık) ya da aktarım eşlemesindeki "<dosya>::<başlık>".
- * @param {{ id: string; icerik: unknown }} s @param {Map<string, string>} eslemeAnahtarlari
- */
-function kodKaynagi(s, eslemeAnahtarlari) {
-  const k = senaryoKaynagi(s.icerik);
-  if (k) return k;
-  const a = eslemeAnahtarlari.get(s.id);
-  const i = a ? a.indexOf('::') : -1;
-  return a && i > 0 ? { dosya: a.slice(0, i), ad: a.slice(i + 2) } : null;
-}
-
-/**
- * Kodla çalışan (model koşucusu senaryosu OLMAYAN) senaryonun kodu kaldırılmış mı?
- *  - 'dosya-yok'  : kaynaktaki spec dosyası diskte yok,
- *  - 'baslik-yok' : spec dosyası var ama kodda tanımlı (veri güdümlü olmayan) testin başlığı güncel Playwright
- *                   listesinde yok (yalnızca testVar verildiyse denetlenir; veri güdümlü testler veritabanından
- *                   üretildiği için dosya varsa her zaman vardır).
- * Model senaryoları (sayfa paketinden; kodu hiç olmayan) hiçbir zaman "kodu kaldırılmış" sayılmaz.
- * @param {{ id: string; icerik: unknown }} s
- * @param {{ eslemeliler: Set<string>; eslemeAnahtarlari: Map<string, string>; kodDosyasiVar?: (dosya: string) => boolean; testVar?: (dosya: string, ad: string) => boolean }} b
- * @returns {'dosya-yok' | 'baslik-yok' | null}
- */
-export function kodKaldirilmaNedeni(s, b) {
-  if (!b.kodDosyasiVar) return null;
-  if (modelSenaryosuMu(s.icerik, { kodEslemesiVar: b.eslemeliler.has(s.id), kodDosyasiVar: b.kodDosyasiVar })) return null;
-  const k = kodKaynagi(s, b.eslemeAnahtarlari);
-  if (!k || k.dosya === MODEL_SPEC_DOSYASI) return null;
-  if (!b.kodDosyasiVar(k.dosya)) return 'dosya-yok';
-  if (b.testVar && !veriGudumluMu(s.icerik) && !b.testVar(k.dosya, k.ad)) return 'baslik-yok';
-  return null;
-}
-
-/**
- * Ortamdaki "kodu kaldırılmış" senaryolar. testListesi verilirse (Playwright'ın güncel listesi) başlığı listede
- * olmayan kodlu testler de bulunur; alınamazsa yalnızca dosya denetimi yapılır (baslikDenetlendi: false).
- * @param {Veritabani} vt @param {string} projeId @param {string} ortamId
- * @param {{ kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null }} secenekler
- */
-export function kodKaldirilmisSenaryolar(vt, projeId, ortamId, secenekler) {
-  const senaryoEslemeleri = kaynakEslemeleriniListele(vt, projeId, 'senaryo');
-  const b = {
-    eslemeliler: new Set(senaryoEslemeleri.map((e) => e.varlikId)),
-    eslemeAnahtarlari: new Map(senaryoEslemeleri.map((e) => [e.varlikId, e.kaynakAnahtari])),
-    kodDosyasiVar: secenekler.kodDosyasiVar,
-    ...(secenekler.testListesi ? { testVar: ((liste) => (/** @type {string} */ d, /** @type {string} */ a) => liste.has(`${d}::${a}`))(new Set(secenekler.testListesi.map((t) => `${t.dosya}::${t.ad}`))) } : {})
-  };
-  // Silinmiş ekranların (mezar taşı) kodu kaldırılan / hariç tutulan dosyaları: bu dosyalara bağlı (ör. yedekten ya da
-  // aktarımdan gelen) kalıntı satırlar "kodu kaldırılmış" uyarısı üretmez — ekran bilerek silindi.
-  /** @type {Set<string>} */
-  const silinmisDosyalar = new Set();
-  for (const e of vt.tumu("SELECT silinme_json FROM ekranlar WHERE proje_id = ? AND durum = 'silindi'", [projeId])) {
-    const m = mezarTasiOku(e.silinme_json);
-    if (m) for (const d of [...m.kaldirilanDosyalar, ...m.kod.dosyalar]) silinmisDosyalar.add(d);
-  }
-  /** @type {Array<{ id: string; baslik: string; neden: 'dosya-yok' | 'baslik-yok'; dosya: string | null; ad: string | null }>} */
-  const sonuc = [];
-  for (const r of vt.tumu(
-    "SELECT s.id, s.baslik, s.icerik_json FROM senaryolar s LEFT JOIN ekranlar e ON e.id = s.ekran_id WHERE s.proje_id = ? AND (e.durum IS NULL OR e.durum <> 'silindi') ORDER BY s.baslik",
-    [projeId]
-  )) {
-    const s = { id: String(r.id), icerik: JSON.parse(String(r.icerik_json)) };
-    if (!ortamKimlikleri(s.icerik).includes(ortamId)) continue;
-    const neden = kodKaldirilmaNedeni(s, b);
-    if (!neden) continue;
-    const k = kodKaynagi(s, b.eslemeAnahtarlari);
-    if (k && silinmisDosyalar.has(k.dosya)) continue;
-    sonuc.push({ id: s.id, baslik: String(r.baslik), neden, dosya: k?.dosya ?? null, ad: k?.ad ?? null });
-  }
-  return { senaryolar: sonuc, baslikDenetlendi: Boolean(secenekler.testListesi) };
-}
-
-/**
- * Kodu kaldırılmış senaryoları veritabanından siler (değişiklik geçmişi KORUNUR: silinen kaydın son hali geçmişe
- * yazılır; eski koşu sonuçları kalır). Her kimlik SUNUCUDA yeniden denetlenir: kodu hâlâ duran bir senaryo
- * listedeyse HİÇBİRİ silinmez. Koşan senaryo silinmez.
- * @param {Veritabani} vt @param {string} projeId @param {string} ortamId @param {unknown} idler
- * @param {{ kodDosyasiVar: (dosya: string) => boolean; testListesi?: Array<{ dosya: string; ad: string }> | null; kosuyorMu?: (dosya: string, ad: string) => boolean; yapan?: string }} secenekler
- */
-export function kodKaldirilmisSenaryolariSil(vt, projeId, ortamId, idler, secenekler) {
-  const liste = kimlikListesi(idler);
-  const denetim = kodKaldirilmisSenaryolar(vt, projeId, ortamId, secenekler);
-  const kaldirilmis = new Map(denetim.senaryolar.map((x) => [x.id, x]));
-  const kodu = liste.filter((id) => !kaldirilmis.has(id));
-  if (kodu.length) {
-    const s = senaryoGetir(vt, kodu[0]);
-    if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
-    throw new DepoHatasi(`"${s.baslik}" senaryosunun kodu hâlâ duruyor (ya da bu ortamda denetlenemedi); kaldırılmadı. Yalnızca "kodu kaldırılmış" senaryolar silinebilir.`);
-  }
-  for (const id of liste) {
-    const x = /** @type {{ dosya: string | null; ad: string | null; baslik: string }} */ (kaldirilmis.get(id));
-    if (x.dosya && x.ad && secenekler.kosuyorMu?.(x.dosya, x.ad)) throw new SenaryoCakismaHatasi(`"${x.baslik}" şu anda koşuyor; bitmesini bekleyin veya durdurun.`);
-  }
-  vt.islem(() => { for (const id of liste) senaryoSil(vt, id, secenekler.yapan); });
-  return { silinen: liste.length };
-}
-
-/**
- * Veri güdümlü senaryonun kopyası: "<başlık> (kopya[ N])", aynı ortamlar, verinin kopyası, sıranın
+ * Senaryonun kopyası: "<başlık> (kopya[ N])", aynı ortamlar, verinin kopyası, sıranın
  * sonuna eklenir. Kopya Koşuda KAPALI başlar (aynı testin çift koşmaması için).
  * @param {Veritabani} vt @param {string} projeId @param {string} id @param {string} [yapan]
  */
@@ -850,7 +675,7 @@ export function senaryoKopyala(vt, projeId, id, yapan) {
   acikAnahtar(vt);
   const s = senaryoGetir(vt, id);
   if (!s || s.projeId !== projeId) throw new DepoHatasi('Senaryo bulunamadı.');
-  if (!veriGudumluMu(s.icerik)) throw new DepoHatasi('Kodda tanımlı senaryolar kopyalanamaz.');
+  if (!veriGudumluMu(s.icerik) || !senaryoKaynagi(s.icerik)) throw new DepoHatasi('Bu senaryonun biçimi desteklenmiyor (kodlu testlerden kalma).');
   const kaynak = /** @type {{ dosya: string; ad: string }} */ (senaryoKaynagi(s.icerik));
   let baslik = '';
   for (let n = 1; n < 1000; n++) {
@@ -959,15 +784,10 @@ export function senaryoGecmisi(vt, id) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * Senaryo kimliğini çalıştırılacak Playwright testine çözer: içerikteki kaynak (dosya + GÜNCEL
- * test başlığı; yoksa aktarım eşlemesindeki "<dosya>::<başlık>") ve ortamın çalıştırıcı anahtarı.
- * Kasa gerekmez (kaynak ve eşlemeler açık metindir) — yasaklı adres deseni verildiyse gerekir (ortam adresi şifreli).
- * Model senaryosunda (kodda karşılığı yok) hedef model spec'idir: ad yerine etiket + grep deseni döner.
- * GENEL YOL: model senaryosunun ortamı aktarımla bir çalıştırıcı anahtarına ("test"/"canli") eşlenmemişse (elle
- * oluşturulan proje/ortam) ortamAnahtari null, genel = { projeId, ortamId } döner — koşu genel model yapılandırmasıyla
- * (playwright.model.config.ts) proje ve ortam KİMLİKLERİYLE yapılır; hiçbir adaptöre bağlı değildir.
+ * Senaryo kimliğini koşu hedefine çözer: model spec'i + senaryonun etiketi (UUID) ve grep deseni; koşu proje + ortam
+ * KİMLİKLERİYLE yapılır (genel). Kasa gerekmez — yasaklı adres deseni verildiyse gerekir (ortam adresi şifreli).
  * @param {Veritabani} vt @param {string} projeId @param {unknown} senaryoId @param {unknown} ortamId
- * @param {{ kodDosyasiVar?: (dosya: string) => boolean; yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> }} [secenekler]
+ * @param {{ yasakDesenleri?: Array<{ kalip: string; desen: RegExp }> }} [secenekler]
  */
 export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId, secenekler = {}) {
   if (typeof senaryoId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(senaryoId)) throw new DepoHatasi('Geçersiz senaryo kimliği.');
@@ -981,28 +801,16 @@ export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId, secenekler 
     const kalip = ortam ? adresYasakliMi(ortam.tabanUrl, secenekler.yasakDesenleri) : null;
     if (ortam && kalip) throw new DepoHatasi(yasakliAdresMesaji(ortam.tabanUrl, kalip));
   }
-  if (modelKosusuMu(vt, projeId, s, { kodDosyasiVar: secenekler.kodDosyasiVar })) {
-    // Model senaryosu: tek model spec'i, senaryonun etiketiyle (UUID) daraltılır; test kodu gerekmez.
-    if (!s.ekranId || !modelBaglami(vt, s.ekranId)) throw new DepoHatasi(`"${s.baslik}" senaryosunun ekran modeli yok; model koşucusuyla çalıştırılamaz.`);
-    if (!ortamKimlikleri(s.icerik).includes(ortamId)) throw new DepoHatasi(`"${s.baslik}" seçilen ortamda tanımlı değil.`);
-    const ortamAnahtari = ortamAnahtariBul(vt, projeId, ortamId);
-    return {
-      senaryoId: s.id, baslik: s.baslik, dosya: MODEL_SPEC_DOSYASI, ad: null, ortamAnahtari, ekranId: s.ekranId,
-      model: true, etiket: modelEtiketi(s.id), grepDeseni: modelGrepDeseni(s.id),
-      genel: ortamAnahtari ? null : { projeId, ortamId }
-    };
-  }
-  let kaynak = senaryoKaynagi(s.icerik);
-  if (!kaynak) {
-    const e = kaynakEslemeleriniListele(vt, projeId, 'senaryo').find((x) => x.varlikId === s.id);
-    const i = e ? e.kaynakAnahtari.indexOf('::') : -1;
-    if (e && i > 0) kaynak = { dosya: e.kaynakAnahtari.slice(0, i), ad: e.kaynakAnahtari.slice(i + 2) };
-  }
-  if (!kaynak) throw new DepoHatasi(`"${s.baslik}" senaryosunun test dosyası bilinmiyor; çalıştırılamaz.`);
+  if (!modelSenaryosuMu(s.icerik)) throw new DepoHatasi(`"${s.baslik}" kodlu testlerden kalma bir senaryo; çalıştırılamaz. Senaryoyu ekran modeliyle yeniden oluşturun.`);
+  // Tek model spec'i, senaryonun etiketiyle (UUID) daraltılır.
+  if (!s.ekranId || !modelBaglami(vt, s.ekranId)) throw new DepoHatasi(`"${s.baslik}" senaryosunun ekran modeli yok; model koşucusuyla çalıştırılamaz.`);
   if (!ortamKimlikleri(s.icerik).includes(ortamId)) throw new DepoHatasi(`"${s.baslik}" seçilen ortamda tanımlı değil.`);
-  const ortamAnahtari = ortamAnahtariBul(vt, projeId, ortamId);
-  if (!ortamAnahtari) throw new DepoHatasi('Seçilen ortam test çalıştırıcısına eşlenmemiş (proje dosyalarından aktarılmış bir ortam olmalı).');
-  return { senaryoId: s.id, baslik: s.baslik, dosya: kaynak.dosya, ad: kaynak.ad, ortamAnahtari, ekranId: s.ekranId, model: false, etiket: null, grepDeseni: null, genel: null };
+  return {
+    senaryoId: s.id, baslik: s.baslik, dosya: MODEL_SPEC_DOSYASI, ad: null, ekranId: s.ekranId,
+    model: true, etiket: modelEtiketi(s.id), grepDeseni: modelGrepDeseni(s.id),
+    genel: { projeId, ortamId }
+  };
+
 }
 
 /**
@@ -1010,31 +818,30 @@ export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId, secenekler 
  * bunu geçici bir dosyayla veri okuyucuya verir (TEST_SUNUCU_MODEL_DENEME_DOSYASI), model spec'i onu "@model-deneme-…"
  * etiketiyle tek test olarak üretir. Veritabanına senaryo YAZILMAZ (koşu sonucu, kodlu Dene gibi senaryosuz kaydedilir).
  * @param {Veritabani} vt @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; akisId?: string | null; mutlakaGorunmeli?: unknown }} girdi
- * @param {NonNullable<ReturnType<typeof modelBaglami>>} mb @param {{ adaptor?: AktarimAdaptoru | null; geciciEk: string }} secenekler
+ * @param {NonNullable<ReturnType<typeof modelBaglami>>} mb @param {{ geciciEk: string }} secenekler
  */
 function modelDenemePaketi(vt, girdi, mb, secenekler) {
   const ortamlar = ortamlariListele(vt, girdi.projeId);
   if (!ortamlar.some((o) => o.id === girdi.ortamId)) throw new DepoHatasi('Seçilen ortam bu projede yok.');
   const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
   const geciciBaslik = `${DENEME_BASLIK_ON_EKI}${secenekler.geciciEk}`;
-  const d = veriyiDogrula(vt, girdi.projeId, mb, { .../** @type {Nesne} */ (girdi.veri), [baslikAnahtari]: geciciBaslik }, [girdi.ortamId], secenekler.adaptor,
+  const d = veriyiDogrula(vt, girdi.projeId, mb, { .../** @type {Nesne} */ (girdi.veri), [baslikAnahtari]: geciciBaslik }, [girdi.ortamId],
     new Map(ortamlar.map((o) => [o.id, o.ad])));
-  const ortamAnahtari = ortamAnahtariBul(vt, girdi.projeId, girdi.ortamId);
   const denemeId = `deneme-${secenekler.geciciEk}`;
   const mutlaka = Array.isArray(girdi.mutlakaGorunmeli) ? girdi.mutlakaGorunmeli.filter((x) => typeof x === 'string').slice(0, 500) : [];
   return {
-    model: /** @type {const} */ (true), ortamAnahtari, genel: ortamAnahtari ? null : { projeId: girdi.projeId, ortamId: girdi.ortamId },
+    model: /** @type {const} */ (true), genel: { projeId: girdi.projeId, ortamId: girdi.ortamId },
     spec: MODEL_SPEC_DOSYASI, geciciBaslik, etiket: modelEtiketi(denemeId), grepDeseni: modelGrepDeseni(denemeId), uyarilar: d.uyarilar,
     denemeSenaryosu: { id: denemeId, ekranId: girdi.ekranId, akisId: mb.akisId, ortamId: girdi.ortamId, baslik: geciciBaslik, veri: d.veri, mutlakaGorunmeli: mutlaka }
   };
 }
 
 /**
- * "Dene" (deneme koşusu) paketi: taslak senaryo modelle doğrulanır ve GEÇİCİ bir başlıkla, testlerin
- * kalıcı veriye eklediği bir "ek veri" (overlay) nesnesi olarak döner. Veritabanına YAZILMAZ.
+ * "Dene" (deneme koşusu) paketi: taslak senaryo ekranın (akışın) modeliyle doğrulanır ve geçici bir deneme senaryosu
+ * olarak döner (bkz. modelDenemePaketi). Veritabanına YAZILMAZ.
  * @param {Veritabani} vt
  * @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown }} girdi
- * @param {{ adaptor?: AktarimAdaptoru | null; geciciEk: string }} secenekler geciciEk: geçici başlığın rastgele son eki
+ * @param {{ geciciEk: string }} secenekler geciciEk: geçici başlığın rastgele son eki
  */
 export function denemePaketiOlustur(vt, girdi, secenekler) {
   acikAnahtar(vt);
@@ -1042,24 +849,5 @@ export function denemePaketiOlustur(vt, girdi, secenekler) {
   const mb = modelBaglami(vt, ekran.id, girdi.akisId ?? null);
   if (!mb) throw new DepoHatasi('Bu ekranın modeli yok; deneme yapılamaz.');
   if (!nesneMi(girdi.veri)) throw new DepoHatasi('"veri" bir nesne olmalıdır.');
-  const mevcut = girdi.id ? senaryoGetir(vt, girdi.id) : undefined;
-  const modelSenaryosu = mevcut
-    ? modelKosusuMu(vt, girdi.projeId, mevcut, {})
-    : Boolean(ekranVeriKaynagi(vt, girdi.projeId, ekran, secenekler.adaptor)?.model);
-  if (modelSenaryosu) return modelDenemePaketi(vt, girdi, mb, secenekler);
-  const kaynakVeri = mevcut && veriGudumluMu(mevcut.icerik) && senaryoKaynagi(mevcut.icerik)
-    ? { spec: /** @type {{ dosya: string }} */ (senaryoKaynagi(mevcut.icerik)).dosya, dosya: String(/** @type {Nesne} */ (mevcut.icerik.veri).dosya), yol: String(/** @type {Nesne} */ (mevcut.icerik.veri).yol) }
-    : ekranVeriKaynagi(vt, girdi.projeId, ekran, secenekler.adaptor);
-  if (!kaynakVeri) throw new DepoHatasi('Bu ekran için senaryo verisi kaynağı bilinmiyor; deneme yapılamaz.');
-  const ortamAnahtari = ortamAnahtariBul(vt, girdi.projeId, girdi.ortamId);
-  if (!ortamAnahtari) throw new DepoHatasi('Seçilen ortam test çalıştırıcısına eşlenmemiş.');
-  const ortamlar = ortamlariListele(vt, girdi.projeId);
-  const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
-  const geciciBaslik = `${DENEME_BASLIK_ON_EKI}${secenekler.geciciEk}`;
-  const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: geciciBaslik }, [girdi.ortamId], secenekler.adaptor,
-    new Map(ortamlar.map((o) => [o.id, o.ad])));
-  return {
-    ortamAnahtari, spec: kaynakVeri.spec, geciciBaslik, uyarilar: d.uyarilar,
-    ekVeri: { ortam: ortamAnahtari, ekVeriler: [{ dosya: kaynakVeri.dosya, yol: kaynakVeri.yol.split('.'), ogeler: [d.veri] }] }
-  };
+  return modelDenemePaketi(vt, girdi, mb, secenekler);
 }

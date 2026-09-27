@@ -581,7 +581,7 @@ function turAlanlariniDogrula(alanlar) {
 
 /** Servis parametresi adı (servis gövdesinde ${AD}): harf ya da "_" ile başlar. */
 export const SERVIS_PARAMETRESI_ADI = /^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/;
-/** Rol: aynı türün farklı kişileri (ör. sigortalı / sigorta ettiren) için ayrı profil seçilebilsin diye. */
+/** Rol: aynı türün farklı kişileri (ör. başvuran / kefil) için ayrı profil seçilebilsin diye. */
 const ROL_ADI = /^[\p{L}\p{N}_-]{1,40}$/u;
 
 /**
@@ -1005,53 +1005,3 @@ export function kosuSonuclariniListele(vt, kosuId) {
   }));
 }
 
-// ---------------------------------------------------------------------------------------
-// Kaynak eşlemeleri (dış kaynaktan aktarılan kayıtlar: kaynak anahtarı → varlık kimliği)
-// ---------------------------------------------------------------------------------------
-// kaynak_anahtari ve varlik_id AÇIKTIR (ör. senaryo için "<dosya>::<başlık>"; koşu listesi kasa
-// kilitliyken de çözülebilsin diye). kaynak_ozeti şifrelidir (kaynağın içeriğinden türetilen özet;
-// düz özet, düşük entropili değerlerde tahmin edilebilirdi).
-
-/** @param {Record<string, unknown>} s */
-const eslemeCevir = (s) => ({
-  id: String(s.id), projeId: String(s.proje_id), varlikTuru: String(s.varlik_turu), kaynakAnahtari: String(s.kaynak_anahtari),
-  varlikId: String(s.varlik_id), kaynakOzetiZarfi: s.kaynak_ozeti == null ? null : String(s.kaynak_ozeti),
-  olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
-});
-
-/** Kasa gerektirmez (özet zarfı çözülmeden döner). @param {Veritabani} vt @param {string} projeId @param {string} [varlikTuru] */
-export function kaynakEslemeleriniListele(vt, projeId, varlikTuru) {
-  const satirlar = varlikTuru
-    ? vt.tumu('SELECT * FROM kaynak_eslemeleri WHERE proje_id = ? AND varlik_turu = ? ORDER BY rowid', [projeId, varlikTuru])
-    : vt.tumu('SELECT * FROM kaynak_eslemeleri WHERE proje_id = ? ORDER BY rowid', [projeId]);
-  return satirlar.map(eslemeCevir);
-}
-
-/**
- * Eşlemeyi ekler/günceller (kasa açık olmalı: özet şifrelenir).
- * @param {Veritabani} vt
- * @param {{ id: string; projeId: string; varlikTuru: string; kaynakAnahtari: string; varlikId: string; kaynakOzeti: string | null }} girdi
- */
-export function kaynakEslemesiYaz(vt, girdi) {
-  const zaman = simdi();
-  vt.calistir(
-    `INSERT INTO kaynak_eslemeleri (id, proje_id, varlik_turu, kaynak_anahtari, varlik_id, kaynak_ozeti, olusturulma, guncellenme)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(proje_id, varlik_turu, kaynak_anahtari) DO UPDATE SET
-       varlik_id = excluded.varlik_id, kaynak_ozeti = excluded.kaynak_ozeti, guncellenme = excluded.guncellenme`,
-    [kimlikKontrol(girdi.id), kimlikKontrol(girdi.projeId, 'projeId'), zorunluMetin(girdi.varlikTuru, 'varlikTuru'),
-      zorunluMetin(girdi.kaynakAnahtari, 'kaynakAnahtari'), kimlikKontrol(girdi.varlikId, 'varlikId'),
-      girdi.kaynakOzeti === null ? null : sifrele(vt, girdi.kaynakOzeti), zaman, zaman]
-  );
-}
-
-/** @param {Veritabani} vt @param {string} projeId @param {string} varlikTuru @param {string} kaynakAnahtari */
-export function kaynakEslemesiSil(vt, projeId, varlikTuru, kaynakAnahtari) {
-  vt.calistir('DELETE FROM kaynak_eslemeleri WHERE proje_id = ? AND varlik_turu = ? AND kaynak_anahtari = ?', [projeId, varlikTuru, kaynakAnahtari]);
-}
-
-/** Şifreli özet zarfını çözer (kasa açık olmalı). @param {Veritabani} vt @param {string | null} zarf */
-export function kaynakOzetiniCoz(vt, zarf) {
-  if (!zarf) return null;
-  return zarfMi(zarf) ? coz(vt, zarf) : zarf;
-}

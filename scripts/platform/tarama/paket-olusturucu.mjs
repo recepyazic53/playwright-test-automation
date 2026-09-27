@@ -579,7 +579,7 @@ export function secimKosuluCikar(okumalar, hedef, adaylar, gecerliDegerler) {
 }
 
 /**
- * Başarı göstergesinin SABİT kısmı: rakam içeren ilk kelimeden öncesi (poliçe/başvuru numarası, tarih, tutar her koşuda değişir),
+ * Başarı göstergesinin SABİT kısmı: rakam içeren ilk kelimeden öncesi (kayıt/başvuru numarası, tarih, tutar her koşuda değişir),
  * sondaki noktalama atılır. 3 karakterden kısa kalırsa null (gösterge "öğe görünür" olur).
  * @param {string | null} m
  */

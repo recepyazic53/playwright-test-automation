@@ -2,8 +2,7 @@
 // (tests/support/giris-motoru.ts) bu tarifi Playwright ile uygular; hiçbir proje adı/kavramı burada
 // yoktur. Tarif ortam ayarlarında saklanır (ortamlar.ayarlar_json > girisTarifi — sütun kasada ŞİFRELİ,
 // 'ozel'); tarifte GİZLİ DEĞER YOKTUR: kullanıcı adı, parola, TOTP anahtarı ve sabit SMS kodu giriş
-// profilinde (şifreli) durur. Kaydedilmiş tarif yoksa projenin aktarım adaptörünün varsayılanı kullanılır
-// (bkz. tarif-deposu.mjs).
+// profilinde (şifreli) durur. Kaydedilmiş tarif yoksa giriş yapılamaz (bkz. tarif-deposu.mjs).
 //
 // Alanlar:
 //   girisAdresi          giriş sayfası (taban adrese göre yol ya da tam http(s) adresi; varsayılan "/")
@@ -19,7 +18,7 @@
 //                        sorulur (Nöbetçi koşu paneli ya da terminal), null → giriş profilindeki ayar.
 //                        kodAlani boşsa kod alanı sayfadan otomatik bulunur (algilama.mjs).
 //   zamanAsimiSn         giriş sonrası başarı/hata göstergesini bekleme süresi (varsayılan 45)
-//   baglamDegistirme     null ya da { baglamTuru, adimlar: [...] } — giriş SONRASI bağlam (rol/şube/acente…)
+//   baglamDegistirme     null ya da { baglamTuru, adimlar: [...] } — giriş SONRASI bağlam (rol/şube…)
 //                        seçimi; adımlardaki "{alan}" yer tutucuları seçilen bağlam profilinin alanlarıyla dolar.
 // Bağlam adımları (islem): git {adres} · adresBekle {desen} · kosulBekle {ifade} · tikla {hedef, yanitBekle?,
 //   adresBekle?} · doldur {hedef, deger} · sec {hedef, deger} · gorunurBekle {hedef} · degerBekle {hedef, deger}

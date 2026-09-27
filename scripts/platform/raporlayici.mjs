@@ -1,9 +1,8 @@
 // PLATFORM PLAYWRIGHT RAPORLAYICISI (genel) — koşu sonuçlarını DOĞRUDAN platform veritabanına,
 // ekran görüntüsü/video/iz dosyalarını ŞİFRELİ medya deposuna (medya.mjs) yazar.
-// playwright.config.ts: reporter: [['./scripts/platform/raporlayici.mjs', { adaptor: '<ad>', ortam: '<ortam>' }]]
+// playwright.config.ts: reporter: [['./tests/support/platform-raporlayici.ts', { projeId: '<id>', ortamId: '<id>' }]]
 //
-// Etkinlik: platform veritabanı var VE adaptörün projesi aktarılmışsa etkindir; aksi halde HİÇBİR
-// ŞEY yapmaz (testler de veritabanı olmadan çalışmaz). "--list" koşularında da hiçbir şey yazmaz
+// Etkinlik: platform veritabanı var VE proje veritabanında ise etkindir; aksi halde HİÇBİR ŞEY yapmaz. "--list" koşularında da hiçbir şey yazmaz
 // (koşu kaydı ilk test sonucu geldiğinde oluşturulur).
 //
 // Yazma yolu (veritabanı dosyasının TEK sahibi kuralı — bkz. veritabani/baglanti.mjs):
@@ -14,8 +13,7 @@
 //   2) Aksi halde veritabanı dosyası bu süreçte açılıp doğrudan yazılır.
 // Medya dosyalarını her iki durumda da bu süreç şifreler ve medya klasörüne yazar.
 //
-// Kasa anahtarı: PLATFORM_KASA_ANAHTARI (Nöbetçi koşularında sunucu verir; terminalde
-// global-setup parolayı gizli girişle sorar). Anahtar yoksa sonuçlar yine yazılır ama medya
+// Kasa anahtarı: PLATFORM_KASA_ANAHTARI (Nöbetçi koşularında sunucu verir). Anahtar yoksa sonuçlar yine yazılır ama medya
 // ŞİFRELENEMEDİĞİ için kayda alınmaz ve düz metin dosyalara dokunulmaz (açık uyarı yazılır).
 //
 // Düz metin silme: şifrelenen her ek dosyası, YALNIZCA bu koşunun çıktı klasörü (projelerin
@@ -33,7 +31,6 @@ import { kosuKaydet, kosuyuBitir, sonucKaydet } from './veritabani/sonuc-deposu.
 import { MEDYA_ANAHTARI_META, medyaAnahtariniAc, yeniMedyaAnahtari } from './kasa.mjs';
 import { medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi, medyaSifrele } from './medya.mjs';
 import { adimGurultuMu, ansiTemizle, playwrightDurumuEsle } from './sonuclar/siniflandirma.mjs';
-import { aktarilmisProjeyiBul, ortamKimligiBul } from './aktarim/motor.mjs';
 
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
 const VARSAYILAN_VIDEO_SAKLAMA_GUN = 30;
@@ -108,7 +105,7 @@ class SunucuYazici {
     return veri;
   }
 
-  /** @param {{ adaptor: string | null; projeId: string | null; ortam: string }} secim @param {number} [zamanAsimi] */
+  /** @param {{ projeId: string | null; ortamId: string | null }} secim @param {number} [zamanAsimi] */
   durum(secim, zamanAsimi) {
     return this.istek('/platform/sonuc/durum', secim, zamanAsimi);
   }
@@ -189,15 +186,12 @@ class DogrudanYazici {
 
 export default class PlatformRaporlayici {
   /**
-   * ortamId: genel yol (playwright.model.config.ts) — ortam aktarımla bir anahtara eşlenmediği için doğrudan kimlikle
-   * verilir (ortam anahtarından çözülmez).
-   * @param {{ adaptor?: string; projeId?: string; ortam?: string; ortamId?: string; projeKoku?: string }} [secenekler]
+   * Koşunun proje ve ortam kimlikleri (playwright.config.ts verir).
+   * @param {{ projeId?: string; ortamId?: string; projeKoku?: string }} [secenekler]
    */
   constructor(secenekler = {}) {
-    this.adaptor = secenekler.adaptor ?? null;
     this.projeIdSecimi = secenekler.projeId ?? null;
     this.ortamIdSecimi = secenekler.ortamId ?? null;
-    this.ortam = secenekler.ortam ?? process.env.TEST_ENV ?? 'test';
     this.projeKoku = secenekler.projeKoku ? resolve(secenekler.projeKoku) : process.cwd();
     /** @type {Promise<void>} */
     this.sira = Promise.resolve();
@@ -275,7 +269,7 @@ export default class PlatformRaporlayici {
   /** @returns {Promise<Baglam | null>} */
   async hazirla() {
     const dbYolu = veritabaniYolu(this.projeKoku);
-    const secim = { adaptor: this.adaptor, projeId: this.projeIdSecimi, ortam: this.ortam, ortamId: this.ortamIdSecimi };
+    const secim = { projeId: this.projeIdSecimi, ortamId: this.ortamIdSecimi };
     // 1) Sunucu (verildiyse ya da aynı veritabanıyla çalışıyorsa).
     const verilenAdres = process.env.PLATFORM_SONUC_ADRESI;
     const verilenToken = process.env.PLATFORM_SONUC_TOKENI;
@@ -319,18 +313,17 @@ export default class PlatformRaporlayici {
     if (!proje) { vt.kapat(); return null; }
     return {
       yazici: new DogrudanYazici(vt, medyaKlasoru(dbYolu)), projeId: proje.id,
-      ortamId: this.ortamIdSecimi ?? ortamKimligiBul(vt, proje.id, this.ortam) ?? null, medyaKlasoru: medyaKlasoru(dbYolu),
+      ortamId: this.ortamIdSecimi && vt.tek('SELECT id FROM ortamlar WHERE id = ? AND proje_id = ?', [this.ortamIdSecimi, proje.id]) ? this.ortamIdSecimi : null,
+      medyaKlasoru: medyaKlasoru(dbYolu),
       medyaZarfi: vt.metaOku(MEDYA_ANAHTARI_META) ?? null
     };
   }
 
   /** @param {import('./veritabani/baglanti.mjs').Veritabani} vt */
   projeyiBul(vt) {
-    if (this.projeIdSecimi) {
-      const s = vt.tek('SELECT id FROM projeler WHERE id = ?', [this.projeIdSecimi]);
-      return s ? { id: String(s.id) } : undefined;
-    }
-    return this.adaptor ? aktarilmisProjeyiBul(vt, this.adaptor) : undefined;
+    if (!this.projeIdSecimi) return undefined;
+    const s = vt.tek('SELECT id FROM projeler WHERE id = ?', [this.projeIdSecimi]);
+    return s ? { id: String(s.id) } : undefined;
   }
 
   /** @param {Baglam} baglam @returns {Promise<Buffer | null>} */

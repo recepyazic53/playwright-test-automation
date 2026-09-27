@@ -9,11 +9,8 @@ export function mezarTasiOku(ham) {
   try {
     const d = JSON.parse(ham);
     if (!nesneMi(d)) return null;
-    const kod = nesneMi(d.kod) ? d.kod : {};
-    const liste = (/** @type {unknown} */ x) => (Array.isArray(x) ? x.filter((y) => typeof y === 'string') : []);
     return /** @type {import('./ekran-yonetimi.d.mts').MezarTasi} */ ({
-      zaman: typeof d.zaman === 'string' ? d.zaman : '', kod: { dosyalar: liste(kod.dosyalar), anahtarlar: liste(kod.anahtarlar) },
-      kaldirilanDosyalar: liste(d.kaldirilanDosyalar), sonuclarSilindi: d.sonuclarSilindi === true, onceki: nesneMi(d.onceki) ? d.onceki : {}
+      zaman: typeof d.zaman === 'string' ? d.zaman : '', sonuclarSilindi: d.sonuclarSilindi === true, onceki: nesneMi(d.onceki) ? d.onceki : {}
     });
   } catch {
     return null;

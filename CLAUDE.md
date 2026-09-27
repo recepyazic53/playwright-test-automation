@@ -1,4 +1,4 @@
-# Playwright & TypeScript Test Otomasyonu - Claude Yönergeleri
+# Nöbetçi (Playwright & TypeScript Test Platformu) - Claude Yönergeleri
 
 ## 1. İletişim ve Davranış Kuralları
 - **Tüm yanıtları, kod açıklamalarını ve rapor analizlerini Türkçe yap.**
@@ -9,15 +9,12 @@
 ## 2. Proje Mimarisi ve Teknoloji Yığını
 - **Test Framework:** Playwright (`@playwright/test`)
 - **Dil:** TypeScript (Strict typing uygulanmalı, zorunlu kalmadıkça `any` kullanılmamalıdır)
-- **Çevre Yönetimi:** `dotenv` ile `.env` dosyaları üzerinden ortam değişkenleri yönetilir. `TEST_ENV` değişkeni (`canli` veya `test`) kontrol edilmelidir.
+- **Veri:** Projeler, ortamlar, giriş bilgileri, test verisi, ekran modelleri ve senaryolar YALNIZCA Nöbetçi'nin şifreli veritabanındadır (`veri/`, Git'e girmez). Kodda kullanıcıya ait veri, kural ya da seçim bulunmaz; kullanıcı kararları Ayarlar'da ya da ilgili ekranda durur.
+- **Koşu:** Senaryolar ekran modeliyle tek spec'te (`tests/model-kosucu/model-senaryolari.spec.ts`) koşar; koşuyu Nöbetçi proje + ortam kimliğiyle (`NOBETCI_PROJE_ID` / `NOBETCI_ORTAM_ID`) başlatır. İsteğe bağlı ortam değişkenleri `.env.example`'dadır.
 
 ## 3. Kullanılabilir Komutlar (NPM Scripts)
-- Testleri çalıştırma: `npm run test`
-- Arayüz modunda test çalıştırma: `npm run test:ui`
-- Başlıklı (Headed) tarayıcıda çalıştırma: `npm run test:headed`
-- Debug modunda çalıştırma: `npm run test:debug`
-- **Canlı ortamda test çalıştırma:** `npm run test:canli`
-- **Test ortamında çalıştırma:** `npm run test:test-ortami`
+- Nöbetçi'yi başlatma (sunucu + tarayıcı): `npm run baslat` (yalnız sunucu: `npm run test-sunucu`)
+- Koruma (birim) testleri: `npm test` (yalnızca 127.0.0.1'deki sahte uygulamalar; uçtan uca model koşusu için `MODEL_UCTAN_UCA=1`)
 - TypeScript tip kontrolü: `npm run typecheck`
 
 ## 4. Test Yazım ve Kodlama Standartları
@@ -25,7 +22,7 @@
 - **Locator Hiyerarşisi:** 
   1. Öncelikle esnek ve kullanıcı odaklı seçicileri tercih et (`page.getByRole`, `page.getByText`, `page.getByTestId`).
   2. Özel bir ID veya Role bulunmayan dinamik elemanlarda esnek CSS veya XPath seçicilerini yedek seçenek (fallback) olarak kullanabilirsin.
-- **Modüler Yapı & POM:** Projenin Page Object Model (POM) mimarisine sadık kal. İhtiyaç halinde yeni Page veya Utility dosyaları oluşturabilirsin.
+- **Modüler Yapı:** Motor genel kalmalı (ürün/şirket adı, kurala özgü sabit içermez); ekrana özgü davranış ekran modelinde, kullanıcı seçimleri Ayarlar'da durur.
 - **Dinamik İçerik:** Sayfa geçişleri ve iframe yüklemeleri için explicit wait/assertion kullan (`expect(locator).toBeVisible()`).
 - **Tip Güvenliği:** Kod yazdıktan veya düzenledikten sonra kodun `npm run typecheck` komutundan hatasız geçtiğinden emin ol.
 

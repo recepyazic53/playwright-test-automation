@@ -14,7 +14,7 @@ export declare function modelAgaci(model: Nesne, altModeller?: Record<string, Ne
 export declare function ekranListesi(vt: Veritabani, projeId: string): {
   ekranlar: Array<{ id: string; anahtar: string; ad: string; modelTuru: 'ekran' | 'altModel' | null; modelSurumu: number | null; adimSayisi: number; alanSayisi: number; senaryoSayisi: number; bekleyenAnaliz: { id: string; bulguSayisi: number; zaman: string } | null; durum: 'etkin' | 'devre_disi'; sira: number | null } & Nesne>;
   /** Silinmiş ekranlar (mezar taşı; bkz. ekran-yonetimi.mjs). */
-  silinmisEkranlar: Array<{ id: string; anahtar: string; ad: string; silinme: string; sonucSayisi: number; haricKodDosyasi: number; haricTest: number; kaldirilanDosya: number }>;
+  silinmisEkranlar: Array<{ id: string; anahtar: string; ad: string; silinme: string; sonucSayisi: number }>;
   baglamProfilleri: Array<{ tur: string; ad: string }>;
 };
 /** Modeli ortak doğrulayıcıdan geçirir; hatalıysa EkranDogrulamaHatasi. */

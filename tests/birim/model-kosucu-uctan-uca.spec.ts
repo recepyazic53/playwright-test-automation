@@ -4,7 +4,7 @@
 //
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez. Ortamın (TEST) adresi 127.0.0.1'deki örnek başvuru fikstürüdür
 // (model-fikstur.ts); CANLI ortamın adresi yasaklı kalıba uyan SAHTE bir .invalid adrestir ve yasaklı adres
-// koruması (NOBETCI_YASAK_ADRESLER: "*nippon*" + yerel .env'deki gerçek ortam host'ları) koşuyu tarayıcı açılmadan
+// koruması (NOBETCI_YASAK_ADRESLER: "*yasak-ornek*") koşuyu tarayıcı açılmadan
 // reddeder. Geçici veritabanı/medya kendi klasöründedir (MODEL_UCTAN_UCA_KLASORU verilirse onun altında).
 //
 // Yavaş (her senaryo ayrı "playwright test" süreci) olduğu için isteğe bağlıdır: MODEL_UCTAN_UCA=1 ile koşar.
@@ -15,10 +15,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { parse as envAyristir } from 'dotenv';
 import { expect, test, type Browser } from '@playwright/test';
-import { adaptorBul } from '../../projeler/index.mjs';
-import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
 import { kasaOlustur, parolayiDogrula } from '../../scripts/platform/kasa.mjs';
 import { veritabaniAc } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
@@ -29,7 +26,7 @@ import { SIRKET_DESENI, korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import {
   IS_KURALI_MESAJI, ORNEK_KULLANICI, ORNEK_PAROLA, ORNEK_TOTP_ANAHTARI, OrnekBasvuruUygulamasi, ornekBasvuruPaketi, ornekGirisTarifi
 } from './model-fikstur';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI } from './platform-ortak';
+import { HIZLI_KDF } from './platform-ortak';
 
 type Nesne = Record<string, unknown>;
 type Yanit = Nesne & { basarili?: boolean; mesaj?: string };
@@ -37,24 +34,16 @@ const KOK = resolve(__dirname, '..', '..');
 const ETKIN = process.env.MODEL_UCTAN_UCA === '1';
 const PORT = Number(process.env.MODEL_UCTAN_UCA_PORT) || 5581;
 const EKRAN_KLASORU = process.env.MODEL_EKRAN_KLASORU;
-/** CANLI ortamın SAHTE adresi: yasaklı kalıba ("*nippon*") uyar, .invalid olduğu için hiçbir zaman çözülmez. */
-const YASAKLI_SAHTE_ADRES = 'https://galaksi-deneme.nippon.invalid';
+/** CANLI ortamın SAHTE adresi: yasaklı kalıba ("*yasak-ornek*") uyar, .invalid olduğu için hiçbir zaman çözülmez. */
+const YASAKLI_SAHTE_ADRES = 'https://portal.yasak-ornek.invalid';
 const PAROLA = `Gecici-Model-${randomBytes(6).toString('hex')}`;
 const BELGE = 'Sahte belge içeriği.\n';
 /** Şifreli depoya yüklenen (senaryo dosyası) sahte belge: koşuda geçici klasöre çözülür, koşu bitince silinir. */
 const SIFRELI_BELGE = 'SAHTE-SIFRELI-BELGE-ICERIGI\n'.repeat(5);
 
-/** "*nippon*" + yerel .env'deki gerçek ortam host'ları (değerler dosyaya/loga yazılmaz). */
+/** Yasaklı adres kalıbı: "*yasak-ornek*" (sahte CANLI adresi buna uyar). */
 function yasakliKaliplar(): string {
-  const kaliplar = ['*nippon*'];
-  const env = join(KOK, '.env');
-  if (existsSync(env)) {
-    const d = envAyristir(readFileSync(env));
-    for (const a of [d.TEST_BASE_URL, d.CANLI_BASE_URL]) {
-      try { if (a) kaliplar.push(new URL(/^https?:\/\//.test(a) ? a : `http://${a}`).hostname); } catch { /* yok */ }
-    }
-  }
-  return kaliplar.join(',');
+  return '*yasak-ornek*';
 }
 
 type Nobetci = { adres: string; token: string; surec: ChildProcess; cikti: string[] };
@@ -124,34 +113,39 @@ test.beforeAll(async () => {
 
   uygulama = new OrnekBasvuruUygulamasi({ totp: true });
   fikstur = await yerelSunucu(uygulama.isle);
-  const adaptor = adaptorBul('galaksi');
-  if (!adaptor) throw new Error('galaksi adaptörü yok');
-  const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, {
-    projeKoku: KOK, testListesi: async () => [],
-    ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI, TEST_BASE_URL: fikstur.adres, CANLI_BASE_URL: YASAKLI_SAHTE_ADRES }
-  });
+  // Yalnızca kasa: proje, ortamlar, giriş profili ve her şey kullanıcının yapacağı gibi Nöbetçi'nin uçlarıyla kurulur.
   vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
-  projeId = aktarimiUygula(vt, paket).projeId;
   vt.kapat();
 
   nobetci = await nobetciBaslat(klasor, vtYolu, yukleme);
   expect((await api('/platform/kasa/ac', { parola: PAROLA })).basarili).toBe(true);
-  const { ortamlar } = await api(`/platform/ortamlar?projeId=${projeId}`) as { ortamlar: Array<{ id: string; ad: string }> };
-  testOrtami = ortamlar.find((o) => o.ad === 'TEST')?.id ?? '';
-  canliOrtami = ortamlar.find((o) => o.ad === 'CANLI')?.id ?? '';
-  // Giriş profili (TOTP varyantı), giriş tarifi (şube bağlamı) ve bağlam profilleri — hepsi Ayarlar uçlarıyla.
-  const { profiller } = await api(`/platform/giris-profilleri?projeId=${projeId}`) as { profiller: Array<{ id: string; ortamId: string | null; ad: string }> };
-  const girisProfili = profiller.find((p) => p.ortamId === testOrtami);
-  if (!girisProfili) throw new Error('TEST giriş profili yok');
-  oturumDosyasi = join(KOK, 'playwright', '.auth', `test-${girisProfili.id.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36)}.json`);
-  rmSync(oturumDosyasi, { force: true });
+  const proje = await api('/platform/proje/kaydet', { ad: 'Model Uçtan Uca Projesi' });
+  expect(proje.basarili, proje.mesaj).toBe(true);
+  projeId = String((proje.proje as Nesne).id);
+  const ortam = async (govde: Nesne): Promise<string> => {
+    const y = await api('/platform/ortam/kaydet', { projeId, ...govde });
+    expect(y.basarili, y.mesaj).toBe(true);
+    return String((y.ortam as Nesne).id);
+  };
+  testOrtami = await ortam({ ad: 'TEST', tabanUrl: fikstur.adres, varsayilan: true });
+  canliOrtami = await ortam({ ad: 'CANLI', tabanUrl: YASAKLI_SAHTE_ADRES, canli: true });
+  // Giriş profili (TOTP), giriş tarifi (şube bağlamı) ve bağlam profilleri — hepsi Ayarlar uçlarıyla.
   expect((await api('/platform/giris-profili/kaydet', {
-    id: girisProfili.id, projeId, ortamId: testOrtami, ad: girisProfili.ad, kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA,
+    projeId, ortamId: testOrtami, ad: 'TEST kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA,
     ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI
   })).basarili).toBe(true);
-  expect((await api('/platform/giris-tarifi/kaydet', { projeId, ortamId: testOrtami, tarif: ornekGirisTarifi() })).basarili).toBe(true);
+  const { profiller } = await api(`/platform/giris-profilleri?projeId=${projeId}`) as { profiller: Array<{ id: string; ortamId: string | null }> };
+  const girisProfili = profiller.find((p) => p.ortamId === testOrtami);
+  if (!girisProfili) throw new Error('TEST giriş profili yok');
+  const temiz = (x: string): string => x.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36);
+  oturumDosyasi = join(klasor, 'oturumlar', `genel-${temiz(testOrtami)}-${temiz(girisProfili.id)}.json`);
+  rmSync(oturumDosyasi, { force: true });
+  // Tarif her iki ortamda da tanımlı: CANLI koşusu tarif eksikliğinden değil, yalnız yasaklı adres korumasıyla durmalı.
+  for (const ortamId of [testOrtami, canliOrtami]) {
+    expect((await api('/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: ornekGirisTarifi() })).basarili).toBe(true);
+  }
   for (const [ad, subeKodu] of [['Merkez', 'S01'], ['Yetkili', 'S02']]) {
     expect((await api('/platform/baglam-profili/kaydet', { projeId, tur: 'Şube', ad, alanlar: { subeKodu } })).basarili).toBe(true);
   }
@@ -164,7 +158,7 @@ test.beforeAll(async () => {
   const modelSatirlari = liste.senaryolar.filter((x) => x.modelKosusu);
   expect(modelSatirlari.map((x) => x.baslik).sort()).toEqual([...senaryolar.keys()].sort());
   expect(modelSatirlari.every((x) => x.paketten && !x.kosuyaDahil)).toBe(true); // paketten: Koşuda kapalı başlar
-  expect(liste.senaryolar.filter((x) => !x.modelKosusu).length).toBeGreaterThan(0); // kodlu Galaksi örnekleri model değil
+  expect(liste.senaryolar.every((x) => x.modelKosusu)).toBe(true); // her senaryo model senaryosudur
   // "Mutlaka görünmeli" (senaryo kuralı) + Koşuda açık.
   const mutlaka = senaryolar.get('Merkez / indirim mutlaka görünmeli') as string;
   expect((await api('/platform/senaryo/kaydet', { projeId, id: mutlaka, baslik: 'Merkez / indirim mutlaka görünmeli', mutlakaGorunmeli: ['indirimOrani'] })).basarili).toBe(true);
@@ -275,17 +269,17 @@ test('isteğe bağlı adım hariç: prim hesaplanınca biter, onay isteği gitme
   expect(uygulama.hesaplamalar).toHaveLength(4); // "mutlaka görünmeli" senaryosu hesaplamaya ulaşmadı
 });
 
-test('yasaklı adres: CANLI (…nippon… host) koşusu sunucuda ve doğrudan CLI\'da tarayıcı açılmadan reddedilir', async () => {
+test('yasaklı adres: CANLI (…yasak-ornek… host) koşusu sunucuda ve doğrudan CLI\'da tarayıcı açılmadan reddedilir', async () => {
   test.setTimeout(180_000);
   const baslik = 'Yetkili / onay adımı hariç';
   const onceki = uygulama.olaylar.length;
   const y = await calistir(baslik, canliOrtami, `yasak-${Date.now()}`);
   expect(y.basarili).toBe(false);
-  expect(y.mesaj).toMatch(/^Koşu reddedildi: ortamın adresi \(galaksi-deneme\.nippon\.invalid\) yasaklı adres kalıbına \("\*nippon\*"\)/);
+  expect(y.mesaj).toMatch(/^Koşu reddedildi: ortamın adresi \(portal\.yasak-ornek\.invalid\) yasaklı adres kalıbına \("\*yasak-ornek\*"\)/);
   const log = readFileSync(join(klasor, 'sunucu.log'), 'utf8');
   expect(log).not.toContain('▶ [CANLI]'); // hiç süreç başlatılmadı
 
-  // Doğrudan CLI (sunucu atlanırsa): global-setup ve model koşucusu aynı korumayla tarayıcı açmadan durur.
+  // Doğrudan CLI (sunucu atlanırsa): model koşucusu aynı korumayla tarayıcı açmadan durur.
   const bakis = await veritabaniAc(vtYolu, { saltOkunur: true });
   const anahtar = await parolayiDogrula(bakis, PAROLA);
   bakis.kapat();
@@ -297,7 +291,7 @@ test('yasaklı adres: CANLI (…nippon… host) koşusu sunucuda ve doğrudan CL
       `--output=${join(klasor, 'cli-cikti')}`], {
       cwd: KOK,
       env: {
-        ...env, TEST_ENV: 'canli', PLATFORM_VERITABANI: vtYolu, PLATFORM_KASA_ANAHTARI: anahtar.toString('base64url'),
+        ...env, NOBETCI_PROJE_ID: projeId, NOBETCI_ORTAM_ID: canliOrtami, PLATFORM_VERITABANI: vtYolu, PLATFORM_KASA_ANAHTARI: anahtar.toString('base64url'),
         TEST_SUNUCU_GREP_DESENI: modelGrepDeseni(senaryolar.get(baslik) as string), NOBETCI_YASAK_ADRESLER: yasakliKaliplar()
       },
       stdio: ['ignore', 'pipe', 'pipe']
@@ -309,19 +303,19 @@ test('yasaklı adres: CANLI (…nippon… host) koşusu sunucuda ve doğrudan CL
   });
   anahtar.fill(0);
   expect(cikti.kod).not.toBe(0);
-  expect(cikti.metin).toContain('Koşu reddedildi: ortamın adresi (galaksi-deneme.nippon.invalid)');
+  expect(cikti.metin).toContain('Koşu reddedildi: ortamın adresi (portal.yasak-ornek.invalid)');
   expect(cikti.metin).toContain('Tarayıcı hiçbir yere gitmedi');
   expect(uygulama.olaylar.length).toBe(onceki); // fikstüre de hiçbir istek gitmedi
 });
 
-test('ağ: tüm koşuların istekleri yalnızca 127.0.0.1 fikstürüne gitti; şirket alan adına istek yok', () => {
+test('ağ: tüm koşuların istekleri yalnızca 127.0.0.1 fikstürüne gitti; yasak örnek alan adına istek yok', () => {
   expect(uygulama.olaylar.length).toBeGreaterThan(20);
   expect(uygulama.olaylar.filter((o) => SIRKET_DESENI.test(o))).toEqual([]);
   const log = readFileSync(join(klasor, 'sunucu.log'), 'utf8');
   expect(log).not.toMatch(/Yasaklı adrese istek engellendi/);
 });
 
-test('arayüz: Senaryolar listesinde "model" rozetleri ve bir fikstür koşusunun paneli', async () => {
+test('arayüz: Senaryolar listesi (model rozeti yok; her senaryo model) ve bir fikstür koşusunun paneli', async () => {
   test.setTimeout(180_000);
   const tarayici: Browser = await korumaliTarayici();
   try {
@@ -336,14 +330,14 @@ test('arayüz: Senaryolar listesinde "model" rozetleri ve bir fikstür koşusunu
     await page.goto(`/#/senaryolar/u/${encodeURIComponent(ekranId)}`);
     const tablo = page.locator('.senaryo-karti');
     await expect(tablo.locator('tbody tr')).toHaveCount(5, { timeout: 15_000 });
-    await expect(tablo.locator('.rozet', { hasText: /^model$/ })).toHaveCount(5);
-    await expect(tablo.locator('.rozet', { hasText: /^paketten$/ })).toHaveCount(0);
+    await expect(tablo.locator('.rozet', { hasText: /^model$/ })).toHaveCount(0);
+    await expect(tablo.locator('.rozet', { hasText: /^paketten$/ })).toHaveCount(5); // beşi de sayfa paketinden
     if (EKRAN_KLASORU) {
       mkdirSync(EKRAN_KLASORU, { recursive: true });
       for (const renk of ['dark', 'light'] as const) {
         await page.emulateMedia({ colorScheme: renk });
         await page.waitForTimeout(150);
-        await page.locator('main').screenshot({ path: join(EKRAN_KLASORU, `01-senaryolar-model-rozetleri-${renk === 'dark' ? 'koyu' : 'acik'}.png`) });
+        await page.locator('main').screenshot({ path: join(EKRAN_KLASORU, `01-senaryolar-listesi-${renk === 'dark' ? 'koyu' : 'acik'}.png`) });
       }
       await page.emulateMedia({ colorScheme: 'dark' });
     }

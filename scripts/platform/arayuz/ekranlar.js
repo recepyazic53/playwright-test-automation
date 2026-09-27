@@ -193,14 +193,12 @@ function silinmisEkranlar(proje, liste) {
   if (!liste.length) return null;
   return h('details', { class: 'kart silinmis-ekranlar' },
     h('summary', {}, ikon('arsiv'), h('b', {}, 'Silinmiş ekranlar'), rozet(String(liste.length), ''),
-      h('span', { class: 'kucuk cok-soluk' }, 'geçmiş sonuçları ya da kodu duran testleri için tutulur')),
+      h('span', { class: 'kucuk cok-soluk' }, 'geçmiş sonuçları için tutulur')),
     h('ul', { class: 'silinmis-listesi' }, liste.map((e) => h('li', {},
       h('div', { class: 'silinmis-ad' }, h('b', {}, e.ad), h('code', {}, e.anahtar), rozet('silinmiş ekran', 'hata')),
       h('div', { class: 'kucuk soluk' }, [
         `silinme ${tarihMetni(e.silinme)}`,
-        e.sonucSayisi ? `${e.sonucSayisi} geçmiş sonuç korunuyor` : null,
-        e.haricKodDosyasi || e.haricTest ? `kodu duran ${e.haricKodDosyasi + e.haricTest} test/dosya koşulardan hariç` : null,
-        e.kaldirilanDosya ? `${e.kaldirilanDosya} test dosyası kaldırıldı` : null
+        e.sonucSayisi ? `${e.sonucSayisi} geçmiş sonuç korunuyor` : null
       ].filter(Boolean).join(' · ')),
       h('div', { class: 'dugmeler' },
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => geriYukle({ proje, ekran: e }) }, ikon('yenile'), 'Geri yükle'),
@@ -277,10 +275,9 @@ async function ekranAyrintisi(icerik, s) {
       h('div', { class: 'eylemler' }, d.surum && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? yorumla : null, d.surum && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? tekrar : null,
         !EKRAN_DISI_TURLER.includes(d.modelTuru) ? tara : null, !EKRAN_DISI_TURLER.includes(d.modelTuru) ? kaydet : null,
         !EKRAN_DISI_TURLER.includes(d.modelTuru) ? h('a', { class: 'dugme birincil', href: `${adres}/yukle` }, ikon('yukle'), d.surum ? 'Paket yükle' : 'Model ekle') : null,
-        d.akisTasimasi ? h('button', { type: 'button', onclick: () => kodluSenaryolariTasi(s.proje, e, () => ekranAyrintisi(icerik, s)) }, ikon('kopya'), 'Kodlu senaryoları taşı…') : null,
         menu)),
     devreDisi ? h('div', { class: 'not-kutusu uyari devre-disi-seridi', role: 'status' },
-      h('span', {}, h('b', {}, 'Bu ekran devre dışı. '), 'Senaryoları Koşuyu başlat, ▷ ve npm run test koşularına girmez; geçmiş sonuçlar görünür kalır.'),
+      h('span', {}, h('b', {}, 'Bu ekran devre dışı. '), 'Senaryoları Koşuyu başlat ile toplu koşuya girmez (tek başına ▷ ile çalıştırılabilir); geçmiş sonuçlar görünür kalır.'),
       h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => durumDegistir({ proje: s.proje, ekran: e }) }, ikon('oynat'), 'Etkinleştir')) : null,
     d.analiz.bekleyen ? h('a', { class: 'bekleyen-bant genis', href: `${adres}/bulgular` }, ikon('uyari'),
       h('span', {}, h('b', {}, `${d.analiz.bekleyen.bulguSayisi} bulgu`), ` karar bekliyor · paket ${goreliZaman(d.analiz.bekleyen.zaman)} yüklendi`),
@@ -407,56 +404,6 @@ async function akisSekmesi(kap, s, d, icerik) {
           secili.varsayilan || liste.ortakAkis ? null : varsayilanYap,
           secili.varsayilan || liste.ortakAkis ? null : sil) : null),
       diyagram)));
-}
-
-/**
- * "Kodlu senaryoları taşı…": kodlu testin senaryoları (ürün verisinden, sunucuda) bu akış ekranına senaryo olarak kurulur.
- * Önizleme: her taslak senaryo kaydıyla aynı doğrulamadan geçer (yeni / zaten var / hata); seçilen yeniler onayla yazılır.
- * Senaryolar yalnızca seçilen ortamda ve "Koşuda" kapalı oluşur.
- */
-async function kodluSenaryolariTasi(proje, ekran, yeniden) {
-  let ortamlar;
-  try { ({ ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)); } catch (hataNesnesi) { bildir(hataNesnesi.message, 'hata'); return; }
-  const ortam = h('select', { 'aria-label': 'Ortam' }, ortamlar.map((o) => h('option', { value: o.id, selected: Boolean(o.varsayilan) }, o.canli ? `${o.ad} (canlı)` : o.ad)));
-  const liste = h('div', { class: 'tasima-listesi', 'aria-live': 'polite' });
-  let kutular = [];
-  const yukle = async () => {
-    kutular = [];
-    yerlestir(liste, h('p', { class: 'soluk' }, 'Önizleme hazırlanıyor…'));
-    try {
-      const o = await api(`/platform/akis-tasima?projeId=${encodeURIComponent(proje.id)}&ekranId=${encodeURIComponent(ekran.id)}&ortamId=${encodeURIComponent(ortam.value)}`);
-      const durumMetni = { yeni: 'yeni', var: 'zaten var', hata: 'hata' };
-      yerlestir(liste,
-        h('p', { class: 'kucuk soluk' }, `Kaynak: ${o.kaynakEkran} (kodlu) · ${o.taslaklar.length} senaryo`),
-        o.notlar.length ? h('ul', { class: 'duz-liste kucuk tasima-notlari' }, o.notlar.map((n) => h('li', {}, n))) : null,
-        h('ul', { class: 'duz-liste tasima-taslaklari', 'aria-label': 'Taşınacak senaryolar' }, o.taslaklar.map((x) => {
-          const kutu = h('input', { type: 'checkbox', value: x.baslik, checked: x.durum === 'yeni', disabled: x.durum !== 'yeni' });
-          kutular.push(kutu);
-          return h('li', {},
-            h('label', {}, kutu, h('b', {}, x.baslik), rozet(durumMetni[x.durum], x.durum === 'yeni' ? 'basari' : x.durum === 'var' ? '' : 'hata')),
-            x.hatalar.length ? h('ul', { class: 'kucuk hata-metni' }, x.hatalar.map((m) => h('li', {}, m))) : null,
-            h('details', { class: 'kucuk' }, h('summary', {}, 'Değerler'),
-              h('dl', { class: 'ozet-satirlari' }, Object.entries(x.veri).flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, typeof v === 'object' ? JSON.stringify(v) : String(v))]))));
-        })));
-    } catch (hataNesnesi) {
-      yerlestir(liste, h('div', { class: 'not-kutusu hata', role: 'alert' }, hataNesnesi.message));
-    }
-  };
-  ortam.addEventListener('change', yukle);
-  formDiyalogu({
-    baslik: `Kodlu senaryoları “${ekran.ad}” ekranına taşı`, ikonAd: 'kopya', dugme: 'Taşı',
-    aciklama: 'Değerler kodlu testin ürün verisinden (sunucuda) alınır; kimlikler profil adıyla yazılır. Senaryolar yalnızca seçilen ortamda ve "Koşuda" kapalı oluşur.',
-    govde: [h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Ortam'), ortam), liste],
-    gonder: async () => {
-      const basliklar = kutular.filter((k) => k.checked && !k.disabled).map((k) => k.value);
-      if (!basliklar.length) throw new Error('Taşınacak senaryo seçin.');
-      const y = await api('/platform/akis-tasima/uygula', { govde: { projeId: proje.id, ekranId: ekran.id, ortamId: ortam.value, basliklar } });
-      bildir(`${y.eklenen} senaryo taşındı${y.atlanan ? ` (${y.atlanan} atlandı)` : ''}.`);
-      yeniden();
-      return true;
-    }
-  });
-  await yukle();
 }
 
 /** Ortak akışı kullanan ekranlar (Akışlar sekmesinin sol kartında). */

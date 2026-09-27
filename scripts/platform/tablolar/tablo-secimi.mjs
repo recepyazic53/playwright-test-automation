@@ -12,7 +12,7 @@
 export const AD_KALIBI = '[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}';
 /** Tarih biçimi (yyyy, MM, dd, HH, mm, ss; tek tırnak içi sabit): { } $ yok, en çok 60. */
 export const BICIM_KALIBI = "[^{}$\\u0000-\\u001f]{1,60}";
-/** Etiket (sigortalı / ettiren): harf, rakam, boşluk, "_", "-". */
+/** Etiket (başvuran / kefil): harf, rakam, boşluk, "_", "-". */
 export const ETIKET_KALIBI = '[\\p{L}\\p{N} _-]{1,40}';
 const BASVURU = new RegExp(`^\\s*(${AD_KALIBI})(?:\\[(${ETIKET_KALIBI})\\])?\\.(${AD_KALIBI})\\s*(?:\\|(${BICIM_KALIBI}))?$`, 'u');
 

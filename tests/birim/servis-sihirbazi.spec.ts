@@ -114,7 +114,7 @@ test.describe('sihirbaz uçtan uca', () => {
     await expect(page.getByLabel('Teklif Input/Password tablo sütunu')).toHaveValue(`${girisId}\u0001Password`);
     await expect(page.getByLabel('Teklif Input/BeginDate tablo sütunu')).toHaveValue('');
     await page.getByLabel('Teklif Input/CitizenshipNumber tablo sütunu').selectOption(`${kisiId}\u0001tcKimlikNo`);
-    await page.getByLabel('Teklif Input/CitizenshipNumber etiketi').fill('sigortalı');
+    await page.getByLabel('Teklif Input/CitizenshipNumber etiketi').fill('başvuran');
     await page.getByLabel('Teklif Input/CitizenshipNumber etiketi').blur();
     // Zorunluluk: WSDL'e göre gelir (BeginDate minOccurs=1 → işaretli, CitizenshipNumber minOccurs=0 → boş); iş kuralına göre düzeltilir.
     await expect(page.getByLabel('Teklif Input/BeginDate zorunlu')).toBeChecked();
@@ -146,7 +146,7 @@ test.describe('sihirbaz uçtan uca', () => {
     });
     expect(s.ayarlar.alanBaglari.Teklif).toEqual({
       'Input/Channel': { tablo: girisId, sutun: 'Channel' }, 'Input/Username': { tablo: girisId, sutun: 'Username' }, 'Input/Password': { tablo: girisId, sutun: 'Password' },
-      'Input/CitizenshipNumber': { tablo: kisiId, sutun: 'tcKimlikNo', etiket: 'sigortalı' }
+      'Input/CitizenshipNumber': { tablo: kisiId, sutun: 'tcKimlikNo', etiket: 'başvuran' }
     });
     // Yeni taban adres ortamın listesine kaydedildi; giriş profili kasada.
     const { ortamlar } = await basarili(`/platform/ortamlar?projeId=${projeId}`);
@@ -158,7 +158,7 @@ test.describe('sihirbaz uçtan uca', () => {
     await page.goto(`/#/servisler/s/${s.id}/senaryo/yeni`);
     const satir = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^CitizenshipNumber/ }) });
     await expect(satir.getByLabel('CitizenshipNumber değer kaynağı')).toHaveValue('tablo');
-    await expect(satir).toContainText('Kişi (sigortalı) → tcKimlikNo');
+    await expect(satir).toContainText('Kişi (başvuran) → tcKimlikNo');
     // Zorunlu alanlar servisin listesinden: CitizenshipNumber vurgulu, IsSkiing değil; "Yalnız zorunlular" süzer; gönderilmeyen zorunlu alan uyarır.
     await expect(satir).toHaveClass(/zorunlu/);
     const kayak = page.locator('.alan-formu .alan-satiri').filter({ has: page.locator('.alan-adi', { hasText: /^IsSkiing/ }) });

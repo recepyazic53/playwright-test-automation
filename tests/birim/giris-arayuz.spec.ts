@@ -1,8 +1,9 @@
 // ENTEGRASYON (yerel) — Nöbetçi arayüzü: Ayarlar > Giriş profilleri > "Giriş tarifi" ve koşu panelindeki elle
-// SMS kodu formu. Geçici bir veritabanı (sahte örnek dosyalardan aktarılmış) ile AYRI bir Nöbetçi sunucusu
+// SMS kodu formu. Geçici bir veritabanı (depo işlevleriyle kurulan nötr örnek proje) ile AYRI bir Nöbetçi sunucusu
 // örneği boş bir portta başlatılır (TEST_SUNUCU_KOSU_KAPALI=1: hiçbir test koşusu başlatamaz; kendi log
-// dosyası). Ortamın taban adresi 127.0.0.1'deki SAHTE Galaksi fikstürüdür: "Varsayılanları öner" yalnızca
-// ona gider. Arayüz sayfasının ve sunucunun tüm istekleri 127.0.0.1'dedir; şirket alan adına istek yoktur.
+// dosyası). TEST ortamının taban adresi 127.0.0.1'deki SAHTE giriş sayfalarıdır (giris-fikstur.ts > girisSayfalari):
+// "Varsayılanları öner" yalnızca ona gider. CANLI ortamın adresi .invalid'dir ve hiç istek almaz. Arayüz sayfasının
+// ve sunucunun tüm istekleri 127.0.0.1'dedir.
 // GIRIS_EKRAN_KLASORU verilirse tarif formunun ve kod formunun koyu/açık tema ekran görüntüleri oraya yazılır.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
@@ -10,15 +11,20 @@ import { mkdirSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { adaptorBul } from '../../projeler/index.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
-import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
-import { SahteGalaksi, korumaliTarayici, yerelSunucu, SIRKET_DESENI } from './giris-fikstur';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
+import { girisTarifiKaydet } from '../../scripts/platform/giris/tarif-deposu.mjs';
+import {
+  baglamProfiliKaydet, ekranKaydet, ekranModeliEkle, girisProfiliKaydet, ortamKaydet, projeKaydet, senaryoKaydet, veritabaniniHazirla
+} from '../../scripts/platform/veritabani/depo.mjs';
+import { girisSayfalari, korumaliTarayici, yerelSunucu, SIRKET_DESENI } from './giris-fikstur';
+import { ornekBasvuruModeli, ornekGirisTarifi } from './model-fikstur';
+import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
 const EKRAN_KLASORU = process.env.GIRIS_EKRAN_KLASORU;
+/** Giriş profilinin SAHTE parolası (tarif listesinde görünmemeli). */
+const SAHTE_PAROLA = 'Ornek-Arayuz-Parolasi-7';
+const SENARYO_BASLIGI = 'Elle kodlu başvuru';
 
 function bosPort(): Promise<number> {
   return new Promise((coz, reddet) => {
@@ -76,26 +82,38 @@ async function api(n: Nobetci, yol: string, govde?: Record<string, unknown>): Pr
 
 let tarayici: Browser;
 let nobetci: Nobetci;
-let galaksi: Awaited<ReturnType<typeof yerelSunucu>>;
+let site: Awaited<ReturnType<typeof yerelSunucu>>;
 let klasor: ReturnType<typeof geciciKlasor>;
 let projeId = '';
 
 test.describe.configure({ mode: 'serial' });
 
+/**
+ * Nötr örnek proje: TEST (sahte giriş sayfaları; tarif: klasik form + SMS elle + şube bağlam adımları), CANLI (.invalid;
+ * kayıtlı TOTP tarifi), şube bağlam profili, giriş profili ve ekran modeliyle bir model senaryosu (koşu paneli için).
+ */
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   klasor = geciciKlasor('giris-arayuz');
-  galaksi = await yerelSunucu(new SahteGalaksi({ kullanici: 'ornek.kullanici', parola: 'x', partajlar: [] }).isle);
-  const adaptor = adaptorBul('galaksi');
-  if (!adaptor) throw new Error('galaksi adaptörü yok');
-  const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, {
-    projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI, TEST_BASE_URL: galaksi.adres }, testListesi: async () => []
-  });
+  site = await yerelSunucu(girisSayfalari());
   const vtYolu = join(klasor.yol, 'platform.db');
   const parola = randomBytes(18).toString('base64url');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
-  projeId = aktarimiUygula(vt, paket).projeId;
+  projeId = projeKaydet(vt, { ad: 'Örnek proje' });
+  const testId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: site.adres, varsayilan: true });
+  const canliId = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid' });
+  girisTarifiKaydet(vt, projeId, testId, {
+    ...ornekGirisTarifi(), girisAdresi: '/klasik', oturumKontrolAdresi: '/ana',
+    kullaniciAlani: '#eski-kullanici', parolaAlani: '#eski-parola', gonderDugmesi: '#eski-gonder',
+    ikinciAdim: { tur: 'sms', smsKipi: 'elle', kodAlani: '#kod', gonderDugmesi: '#dogrula' }
+  });
+  girisTarifiKaydet(vt, projeId, canliId, ornekGirisTarifi());
+  baglamProfiliKaydet(vt, { projeId, tur: 'Şube', ad: 'Merkez', alanlar: { subeKodu: 'S01' }, ortamId: null });
+  girisProfiliKaydet(vt, { projeId, ortamId: null, ad: 'Ortak giriş', kullaniciAdi: 'kullanici', parola: SAHTE_PAROLA, ikiAsamaliTur: 'sms', smsAyari: { yontem: 'elle' } });
+  const ekranId = ekranKaydet(vt, { projeId, anahtar: 'ornek-basvuru', ad: 'Örnek Başvuru' });
+  ekranModeliEkle(vt, { ekranId, model: ornekBasvuruModeli() });
+  senaryoKaydet(vt, { projeId, ekranId, baslik: SENARYO_BASLIGI, icerik: { kosucu: 'model', ortamlar: { [testId]: { veri: { baslik: SENARYO_BASLIGI, urun: 'A' } } } } });
   vt.kapat();
   nobetci = await nobetciBaslat(klasor.yol, vtYolu);
   expect((await api(nobetci, '/platform/kasa/ac', { parola })).basarili).toBe(true);
@@ -105,7 +123,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await tarayici?.close();
   nobetci?.surec.kill('SIGTERM');
-  await galaksi?.kapat();
+  await site?.kapat();
   klasor?.temizle();
 });
 
@@ -140,19 +158,21 @@ async function ekranGoruntusu(page: Page, ad: string, hedef = page.locator('main
 }
 
 test('API: tarif listesi, doğrulama hataları, kaydet/sıfırla; elle kod uçları token ister', async () => {
-  const liste = await api(nobetci, `/platform/giris-tarifleri?projeId=${projeId}`) as { ortamlar: Array<{ ortamAd: string; kaynak: string; varsayilanVar: boolean; tarif: { kullaniciAlani: string } }>; baglamTurleri: Array<{ tur: string; alanlar: string[] }> };
-  expect(liste.ortamlar.map((o) => [o.ortamAd, o.kaynak, o.varsayilanVar])).toEqual([['CANLI', 'kayitli', true], ['TEST', 'kayitli', true]]);
-  expect(liste.baglamTurleri.find((t) => t.tur === 'Acente')?.alanlar).toEqual(expect.arrayContaining(['acentePartaji', 'acenteKullanicisi']));
-  expect(JSON.stringify(liste)).not.toContain(SAHTE_ORTAM_DEGISKENLERI.TEST_PASSWORD); // tarifte gizli değer yok
+  type Liste = { ortamlar: Array<{ ortamId: string; ortamAd: string; kaynak: string; tarif: { kullaniciAlani: string } | null }>; baglamTurleri: Array<{ tur: string; alanlar: string[] }> };
+  const liste = await api(nobetci, `/platform/giris-tarifleri?projeId=${projeId}`) as unknown as Liste;
+  expect(liste.ortamlar.map((o) => [o.ortamAd, o.kaynak]).sort()).toEqual([['CANLI', 'kayitli'], ['TEST', 'kayitli']]);
+  expect(liste.ortamlar.every((o) => !('varsayilanVar' in o))).toBe(true); // proje varsayılanı kavramı yok
+  expect(liste.baglamTurleri.find((t) => t.tur === 'Şube')?.alanlar).toEqual(['subeKodu']);
+  expect(JSON.stringify(liste)).not.toContain(SAHTE_PAROLA); // tarifte gizli değer yok
   const dogrula = await api(nobetci, '/platform/giris-tarifi/dogrula', { tarif: { kullaniciAlani: '' } }) as { gecerli: boolean; hatalar: string[] };
   expect(dogrula.gecerli).toBe(false);
   expect(dogrula.hatalar.join(' ')).toMatch(/Kullanıcı adı alanı boş olamaz/);
-  const ortamId = (liste.ortamlar as unknown as Array<{ ortamId: string; ortamAd: string }>).find((o) => o.ortamAd === 'CANLI')?.ortamId;
+  const ortamId = liste.ortamlar.find((o) => o.ortamAd === 'CANLI')?.ortamId;
   const hatali = await api(nobetci, '/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: { kullaniciAlani: '#a' } });
   expect(hatali.basarili).toBe(false);
   expect(hatali.mesaj).toMatch(/Giriş tarifi kaydedilemedi/);
-  const sifir = await api(nobetci, '/platform/giris-tarifi/sifirla', { projeId, ortamId }) as { kaldirildi: boolean; tarif: { kaynak: string } };
-  expect(sifir).toMatchObject({ kaldirildi: true, tarif: { kaynak: 'proje-varsayilani' } });
+  const sifir = await api(nobetci, '/platform/giris-tarifi/sifirla', { projeId, ortamId }) as { kaldirildi: boolean; tarif: { kaynak: string; tarif: unknown } };
+  expect(sifir).toMatchObject({ kaldirildi: true, tarif: { kaynak: 'yok', tarif: null } });
   // Elle kod uçları: token yoksa 401, koşu yoksa bekleyen istek yok / 404.
   expect((await fetch(`${nobetci.adres}/kod-istegi?kosuId=x`)).status).toBe(401);
   expect(await api(nobetci, `/kod-istegi?kosuId=yok&token=${nobetci.token}`)).toMatchObject({ basarili: true, bekliyor: false });
@@ -167,49 +187,55 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   const bolum = page.locator('.giris-tarifi-bolumu');
   await expect(bolum.locator('h3')).toContainText('Giriş tarifi');
   await expect(bolum.locator('li[data-ortam]')).toHaveCount(2);
-  await expect(bolum.getByText('Proje varsayılanı')).toBeVisible(); // CANLI (önceki testte sıfırlandı)
+  // CANLI önceki testte sıfırlandı: "Tanımlı değil" (proje varsayılanına dönüş yok).
+  await expect(bolum.locator('li[data-ortam]').filter({ hasText: 'CANLI' })).toContainText('Tanımlı değil');
+  await expect(bolum.locator('li[data-ortam]').filter({ hasText: 'TEST' })).toContainText('Kaydedilmiş');
+  await expect(bolum.getByText(/Proje varsayılanı/)).toHaveCount(0);
   await ekranGoruntusu(page, '01-giris-profilleri-tarif-listesi');
 
   const onceki = (await api(nobetci, `/platform/giris-tarifleri?projeId=${projeId}`) as { ortamlar: Array<{ ortamAd: string; tarif: Record<string, unknown> }> }).ortamlar.find((o) => o.ortamAd === 'TEST')?.tarif;
   await bolum.getByRole('button', { name: 'TEST: giriş tarifini düzenle' }).click();
   const form = page.locator('form.tarif-formu');
   await expect(form.getByRole('heading', { name: 'Giriş tarifi: TEST' })).toBeVisible();
-  await expect(form.getByLabel('Kullanıcı adı alanı')).toHaveValue('input[type="text"]');
-  await expect(form.locator('.tarif-adim')).toHaveCount(16);
+  await expect(form.getByLabel('Kullanıcı adı alanı')).toHaveValue('#eski-kullanici');
+  await expect(form.getByRole('button', { name: /Proje varsayılanına dön/ })).toHaveCount(0);
+  await expect(form.getByRole('button', { name: 'Kayıtlı tarifi sil' })).toBeVisible();
 
   // Vazgeç → hiçbir istek gitmez.
   await form.getByRole('button', { name: 'Varsayılanları öner' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Vazgeç' }).click();
-  expect(galaksi.istekler).toEqual([]);
+  expect(site.istekler).toEqual([]);
 
   await form.getByRole('button', { name: 'Varsayılanları öner' }).click();
   const diyalog = page.getByRole('dialog');
-  await expect(diyalog).toContainText(`${galaksi.adres}/ adresini bu bilgisayarda görünmez bir tarayıcıda açıp`);
+  await expect(diyalog).toContainText(`${site.adres}/klasik adresini bu bilgisayarda görünmez bir tarayıcıda açıp`);
   await ekranGoruntusu(page, '02-oner-onay-penceresi', diyalog);
   await diyalog.getByRole('button', { name: 'Sayfayı aç ve öner' }).click();
   await expect(form.getByText('Öneriler alanlara yazıldı')).toBeVisible({ timeout: 30_000 });
-  await expect(form.getByLabel('Kullanıcı adı alanı')).toHaveValue('#UserName');
-  await expect(form.getByLabel('Parola alanı')).toHaveValue('#Password');
-  await expect(form.getByLabel('Giriş düğmesi')).toHaveValue('#DoLogin');
-  // Sahte Galaksi yalnızca sayfayı sundu: form doldurulmadı, gönderilmedi.
-  expect(galaksi.istekler.filter((i) => i !== 'GET /favicon.ico')).toEqual(['GET /']);
+  await expect(form.getByLabel('Kullanıcı adı alanı')).toHaveValue('#eposta');
+  await expect(form.getByLabel('Parola alanı')).toHaveValue('#parola');
+  const onerilenGonder = await form.getByLabel('Giriş düğmesi').inputValue();
+  expect(onerilenGonder).not.toBe('#eski-gonder');
+  // Sahte site yalnızca sayfayı sundu: form doldurulmadı, gönderilmedi.
+  expect(site.istekler.filter((i) => i !== 'GET /favicon.ico')).toEqual(['GET /klasik']);
 
-  await form.getByRole('radio', { name: /^SMS/ }).check();
-  await form.getByRole('radio', { name: 'Koşu sırasında elle girilir' }).check();
+  // İkinci adım (SMS, elle) ve bağlam adımları formda.
+  await expect(form.getByRole('radio', { name: /^SMS/ })).toBeChecked();
+  await expect(form.getByRole('radio', { name: 'Koşu sırasında elle girilir' })).toBeChecked();
   await expect(form.getByText('Elle kipi:')).toBeVisible();
   await ekranGoruntusu(page, '03-giris-tarifi-formu', form);
-  await form.getByText(/^Adımlar \(16\)$/).click();
+  await expect(form.getByText(/^Adımlar \(4\)$/)).toBeVisible(); // 6 ya da daha az adım: kutu açık gelir
+  await expect(form.locator('.tarif-adim')).toHaveCount(4);
   await expect(form.locator('.tarif-adim').first()).toBeVisible();
-  await expect(form.locator('.yer-tutucu-cipleri code')).toContainText(['{acentePartaji}']);
+  await expect(form.locator('.yer-tutucu-cipleri code')).toContainText(['{subeKodu}']);
   await ekranGoruntusu(page, '04-baglam-adimlari', form.locator('fieldset').last());
-  await form.getByRole('radio', { name: /^Yok/ }).check();
 
   await form.getByRole('button', { name: 'Tarifi kaydet' }).click();
   await expect(page.getByText('Giriş tarifi kaydedildi.')).toBeVisible();
   const sonraki = (await api(nobetci, `/platform/giris-tarifleri?projeId=${projeId}`) as { ortamlar: Array<{ ortamAd: string; kaynak: string; tarif: Record<string, unknown> }> }).ortamlar.find((o) => o.ortamAd === 'TEST');
   expect(sonraki?.kaynak).toBe('kayitli');
-  // Yalnızca önerilen üç seçici değişti; bağlam adımları ve göstergeler arayüzden gidip gelince aynı kaldı.
-  expect(sonraki?.tarif).toEqual({ ...onceki, kullaniciAlani: '#UserName', parolaAlani: '#Password', gonderDugmesi: '#DoLogin' });
+  // Yalnızca önerilen üç seçici değişti; ikinci adım, bağlam adımları ve göstergeler arayüzden gidip gelince aynı kaldı.
+  expect(sonraki?.tarif).toEqual({ ...onceki, kullaniciAlani: '#eposta', parolaAlani: '#parola', gonderDugmesi: onerilenGonder });
   agKontrol(istekler);
 });
 

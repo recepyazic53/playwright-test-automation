@@ -29,8 +29,8 @@ const model = {
   ],
   kosullar: {
     vknGorunur: { ifade: { alan: 'tip', esit: 'k' } },
-    // Okunamayan ifade (acenteye bağlı) → açıklama; okunabilen ifadede açıklama yerine kısa okunuş.
-    aciklamali: { ifade: { acente: { alanSeti: 'x' } }, aciklama: 'Acenteye göre görünür' },
+    // Okunamayan ifade (bağlama bağlı) → açıklama; okunabilen ifadede açıklama yerine kısa okunuş.
+    aciklamali: { ifade: { sube: { alanSeti: 'x' } }, aciklama: 'Şubeye göre görünür' },
     ikiSecenek: { ifade: { alan: 'tip', icinde: ['b', 'k'] }, aciklama: 'Tip seçilince görünür (akış kaydı).' },
     ekKosulu: { ifade: { senaryoAyari: 'ekDahil', esit: true } }
   },
@@ -47,7 +47,7 @@ test('akış: adımlar, koşullu alanların okunuşu, bu senaryonun kapsamı, il
   expect(bilgi.alanlar).toEqual([
     { id: 'tip', etiket: 'Müşteri tipi', kosul: null, buSenaryoda: true, zorunlu: false },
     { id: 'vkn', etiket: 'Vergi no', kosul: 'Müşteri tipi = Kurumsal', buSenaryoda: false, zorunlu: false },
-    { id: 'not', etiket: 'Not', kosul: 'Acenteye göre görünür', buSenaryoda: true, zorunlu: false },
+    { id: 'not', etiket: 'Not', kosul: 'Şubeye göre görünür', buSenaryoda: true, zorunlu: false },
     { id: 'eposta', etiket: 'E-posta', kosul: 'Müşteri tipi = Bireysel ya da Kurumsal', buSenaryoda: true, zorunlu: false }
   ]);
   expect(bilgi.ilerleme).toEqual(['Devam']);
@@ -107,7 +107,7 @@ test('koşul ifadelerinin okunuşu (ve / ya da / değil, onay kutusu, senaryo ay
   expect(ifadeMetni({ ve: [{ alan: 'tip', esit: 'X1' }, { alan: 'onay', esit: true }] }, m)).toBe('Tip = İks ve Sözleşme işaretli');
   expect(ifadeMetni({ veya: [{ senaryoAyari: 'odemeDahil', esit: false }, { calismaZamani: 'gorunurse' }] }, m)).toBe('Ödeme dahil işaretsiz ya da ekranda görünürse');
   expect(ifadeMetni({ degil: { alan: 'bilinmeyen', esit: 'v' } }, m)).toBe('bilinmeyen = v değilse');
-  expect(ifadeMetni({ acente: { alanSeti: 'x' } }, m)).toBe('koşullu');
+  expect(ifadeMetni({ sube: { alanSeti: 'x' } }, m)).toBe('koşullu');
 });
 
 test('başlangıç adımı başlıkları model koşucusunun test.step başlıklarıyla aynı', () => {

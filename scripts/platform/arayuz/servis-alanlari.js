@@ -62,7 +62,7 @@ export function metotAlanTablosu(s) {
     });
     const etiket = b ? h('input', {
       type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${s.ad} ${st.yol} etiketi`,
-      title: 'Aynı tablo bu istekte iki kez gerekiyorsa (ör. sigortalı / ettiren) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.'
+      title: 'Aynı tablo bu istekte iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.'
     }) : null;
     etiket?.addEventListener('change', () => {
       const e = etiket.value.trim();

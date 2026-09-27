@@ -1,7 +1,7 @@
 // Ekran yönetimi (Ekranlar > ekran kartı ve ayrıntı başlığındaki ⋯ menüsü):
 //   Yeniden adlandır (görünen ad + açıklama; ekran anahtarı değişmez) · Düzenle (URL yolu → yeni model sürümü) ·
 //   Yukarı / Aşağı taşı (sol listelerdeki sıra) · Devre dışı bırak / Etkinleştir · Sil (kalıcı; sayfa içi onay: ekran adını
-//   yazın, sayılar, "Geçmiş sonuçları da sil", "Bu ekranın test kodu da projeden kaldırılsın" + tam dosya listesi) ·
+//   yazın, sayılar, "Geçmiş sonuçları da sil") ·
 //   Silinmiş ekranı geri yükle. Sunucu tarafı: scripts/platform/ekranlar/ekran-yonetimi.mjs.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, h, ikon, mesgulIken, rozet, yeniKimlik } from './ortak.js';
@@ -142,13 +142,13 @@ export async function tasi(s, idler, yon) {
 export async function geriYukle(s) {
   try {
     await api('/platform/ekran/geri-yukle', { govde: { projeId: s.proje.id, ekranId: s.ekran.id } });
-    bildir(`"${s.ekran.ad}" geri yüklendi (modelsiz ve senaryosuz; kodu duran testler bir sonraki aktarımda yeniden görünür).`);
+    bildir(`"${s.ekran.ad}" geri yüklendi (modelsiz ve senaryosuz).`);
     yenile();
   } catch (e) { hata(e); }
 }
 
 /**
- * KALICI SİL: önce kuru çalıştırma (sayılar + dosya listesi), onay için ekran adını yazmak gerekir.
+ * KALICI SİL: önce kuru çalıştırma (sayılar), onay için ekran adını yazmak gerekir.
  * @param {{ proje: { id: string }; ekran: { id: string; ad: string }; sonra?: () => void }} s
  */
 export async function silDiyalogu(s) {
@@ -161,24 +161,13 @@ export async function silDiyalogu(s) {
   const sayi = (etiket, deger, aciklama) => h('div', { title: aciklama || null }, h('dt', {}, etiket), h('dd', {}, String(deger)));
   const onay = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', 'aria-describedby': null });
   const sonuclar = h('input', { type: 'checkbox', id: yeniKimlik('sonuclar') });
-  const kod = h('input', { type: 'checkbox', id: yeniKimlik('kod') });
-  const kodVar = o.kod.dosyalar.length > 0;
-  const kodListesi = h('div', { class: 'kod-plani', hidden: true },
-    o.kod.klasor ? h('p', { class: 'kucuk' }, 'Klasörün tamamı kaldırılır: ', h('code', {}, `${o.kod.klasor}/`)) : h('p', { class: 'kucuk' }, 'Kaldırılacak dosyalar:'),
-    h('ul', { class: 'onay-listesi mono kod-dosyalari' }, o.kod.dosyalar.map((d) => h('li', { title: d }, d))),
-    h('p', { class: 'kucuk cok-soluk' }, 'Dosyalar diskten silinir; git bunları "deleted" gösterir, gerekirse git ile geri alabilirsiniz. Yalnızca tests/scenarios altındaki dosyalara dokunulur.'));
-  const kodUyarisi = h('div', { class: 'not-kutusu uyari kucuk', role: 'status' },
-    h('b', {}, 'Test kodu projede kalıyor. '),
-    'Ekran silinmiş olarak işaretlenir ve kodundaki testler koşulardan (Koşuyu başlat, npm run test) hariç tutulur; kod kaldırılana ya da ekran geri yüklenene kadar. Yalnızca geçici olarak durdurmak istiyorsanız "Devre dışı bırak" daha uygundur.');
   const guncelle = () => {
-    kodListesi.hidden = !kod.checked;
-    kodUyarisi.hidden = !(o.kod.testVar && !kod.checked);
     tamam.disabled = onay.value.replace(/\s+/g, ' ').trim() !== o.ekran.ad;
   };
   const d = formDiyalogu({
     baslik: silinmis ? `Silinmiş ekranı temizle: ${o.ekran.ad}` : `Ekranı kalıcı sil: ${o.ekran.ad}`, ikonAd: 'cop', dugme: 'Kalıcı olarak sil', tehlikeli: true,
     aciklama: silinmis
-      ? 'Ekran zaten silinmiş (mezar taşı). Burada geçmiş sonuçlarını ve/veya hâlâ duran test kodunu da kaldırabilirsiniz.'
+      ? 'Ekran zaten silinmiş (mezar taşı). Burada geçmiş sonuçlarını da kaldırabilirsiniz.'
       : 'Ekran, tüm model sürümleri, senaryoları (değişiklik geçmişi korunur) ve şifreli ekran/senaryo dosyaları silinir. Bu işlem geri alınamaz.',
     govde: [
       h('dl', { class: 'onay-ozeti dortlu' },
@@ -189,15 +178,6 @@ export async function silDiyalogu(s) {
           h('small', { class: 'blok soluk' }, n.sonuc
             ? `${n.sonuc} sonuç ve ${n.sonucMedyasi} şifreli medyası güvenle silinir. Kapalıysa sonuçlar Sonuçlar'da "silinmiş ekran" etiketiyle kalır.`
             : 'Bu ekranın koşu sonucu yok.'))),
-      o.kod.testVar ? h('label', { class: 'onay-satiri', for: kod.id }, kod,
-        h('span', {}, h('b', {}, 'Bu ekranın test kodu da projeden kaldırılsın'),
-          h('small', { class: 'blok soluk' }, kodVar ? `${o.kod.dosyalar.length} dosya (tests/scenarios altında).` : 'Kaldırılabilir dosya yok.'))) : null,
-      o.kod.testVar ? kodListesi : null,
-      o.kod.paylasilanlar.length ? h('p', { class: 'kucuk soluk' }, 'Başka ekranlarla paylaşılan (silinmeyecek) dosyalar: ', o.kod.paylasilanlar.join(', '),
-        ' — bu ekranın bu dosyalardaki testleri koşulardan hariç tutulur.') : null,
-      o.kod.reddedilenler.length ? h('p', { class: 'kucuk soluk' }, 'tests/scenarios dışında olduğu için kaldırılmayacak: ',
-        o.kod.reddedilenler.map((r) => `${r.yol} (${r.neden})`).join(', ')) : null,
-      o.kod.testVar ? kodUyarisi : null,
       h('div', { class: 'alan ust-bosluk' },
         h('label', { for: onay.id = yeniKimlik('onay') }, 'Onaylamak için ekranın adını yazın: ', h('b', {}, o.ekran.ad)),
         onay)
@@ -205,23 +185,18 @@ export async function silDiyalogu(s) {
     gonder: async () => {
       const r = await api('/platform/ekran/sil', {
         govde: {
-          projeId: s.proje.id, ekranId: s.ekran.id, onayAdi: onay.value, sonuclariSil: sonuclar.checked, koduKaldir: kod.checked,
-          beklenenDosyalar: kod.checked ? o.kod.dosyalar : undefined
+          projeId: s.proje.id, ekranId: s.ekran.id, onayAdi: onay.value, sonuclariSil: sonuclar.checked
         }
       });
       const parcalar = [`${r.silinen.senaryo} senaryo`, `${r.silinen.modelSurumu} model sürümü`];
       if (r.silinen.sonuc) parcalar.push(`${r.silinen.sonuc} sonuç`);
-      if (r.kod.kaldirilanlar.length) parcalar.push(`${r.kod.kaldirilanlar.length} test dosyası`);
       bildir(`"${o.ekran.ad}" silindi (${parcalar.join(', ')}).${r.korunanSonuc ? ` ${r.korunanSonuc} geçmiş sonuç korundu.` : ''}`);
-      if (r.kod.hatalar.length) bildir(`${r.kod.hatalar.length} dosya kaldırılamadı: ${r.kod.hatalar.map((x) => x.yol).join(', ')}`, 'hata');
       if (s.sonra) s.sonra(); else yenile();
     }
   });
   const tamam = d.tamam;
   onay.addEventListener('input', guncelle);
   sonuclar.addEventListener('change', guncelle);
-  kod.addEventListener('change', guncelle);
-  kod.disabled = !kodVar;
   sonuclar.disabled = !n.sonuc;
   guncelle();
   onay.focus();

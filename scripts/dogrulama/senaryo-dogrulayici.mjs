@@ -1,5 +1,5 @@
 // TEK SENARYO DOĞRULAYICISI — ekran modeli tabanlı (modeller platform veritabanında; şema:
-// tests/birim/fixtures/ornek-eski-dosyalar/tests/ekran-modelleri/README.md).
+// docs/sayfa-paketi.md).
 //
 // Aynı kod üç yerde çalışır (kurallar ve Türkçe mesajlar TEK kaynaktan gelir):
 //  - Playwright spec'i (TS): tests/support/senaryo-dogrulama.ts + beklenen-sonuc.ts
@@ -90,7 +90,7 @@ function bosMu(deger) {
 }
 
 function etiketi(alan) {
-  return (alan.etiket && alan.etiket.form) || (alan.form && alan.form.etiket) || alan.id;
+  return (alan.etiket && (alan.etiket.form || alan.etiket.ekran)) || (alan.form && alan.form.etiket) || alan.id;
 }
 
 function senaryoAnahtarlari(alan) {

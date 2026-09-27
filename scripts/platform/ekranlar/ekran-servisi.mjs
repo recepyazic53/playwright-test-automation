@@ -18,9 +18,8 @@ import {
   DepoHatasi, baglamProfilleriniListele, ekranAyarlariniGetir, ekranKaydet, ekranModeliEkle, ekranModeliGetir, ekranlariListele,
   girisProfilleriniListele, ortamlariListele, projeGetir, senaryoGetir, senaryoKaydet as depoSenaryoKaydet, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
-import { acikAnahtar, medyaAnahtariniHazirla, sifrele } from '../kasa.mjs';
+import { acikAnahtar, adliAlanlariDonustur, medyaAnahtariniHazirla, sifrele, zarflariCoz } from '../kasa.mjs';
 import { medyaSifrele } from '../medya.mjs';
-import { adliAlanlariDonustur, zarflariCoz } from '../aktarim/motor.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
@@ -210,13 +209,12 @@ export function ekranListesi(vt, projeId) {
       guncellenme: e.guncellenme, durum: e.durum, sira: e.sira
     };
   });
-  // Silinmiş ekranlar (mezar taşı): geçmiş sonuçları ya da kodu duran testleri için tutulur; geri yüklenebilir.
+  // Silinmiş ekranlar (mezar taşı): geçmiş sonuçları için tutulur; geri yüklenebilir.
   const silinmisler = ekranlariListele(vt, projeId, { silinenlerDahil: true }).filter((e) => e.durum === 'silindi').map((e) => {
     const m = mezarTasiOku(vt.tek('SELECT silinme_json FROM ekranlar WHERE id = ?', [e.id])?.silinme_json);
     return {
       id: e.id, anahtar: e.anahtar, ad: e.ad, silinme: m?.zaman ?? e.guncellenme,
-      sonucSayisi: Number(vt.tek('SELECT COUNT(*) AS n FROM kosu_sonuclari WHERE ekran_id = ?', [e.id])?.n ?? 0),
-      haricKodDosyasi: m ? m.kod.dosyalar.length : 0, haricTest: m ? m.kod.anahtarlar.length : 0, kaldirilanDosya: m ? m.kaldirilanDosyalar.length : 0
+      sonucSayisi: Number(vt.tek('SELECT COUNT(*) AS n FROM kosu_sonuclari WHERE ekran_id = ?', [e.id])?.n ?? 0)
     };
   });
   return { ekranlar, silinmisEkranlar: silinmisler, baglamProfilleri: baglamProfilAdlari(vt, projeId) };
@@ -858,7 +856,7 @@ export function topluDegerAta(vt, projeId, ekranId, girdi) {
     for (const id of idler) {
       const s = senaryoGetir(vt, id);
       if (!s || s.projeId !== projeId || s.ekranId !== ekranId) throw new DepoHatasi('Senaryo bu ekrana ait değil.');
-      if (!veriGudumluMu(s.icerik)) throw new DepoHatasi(`"${s.baslik}" kodda tanımlı; verisi platformdan düzenlenemez.`);
+      if (!veriGudumluMu(s.icerik)) throw new DepoHatasi(`"${s.baslik}" senaryosunun biçimi desteklenmiyor (kodlu testlerden kalma).`);
       const icerik = kopya(s.icerik);
       let degisti = false;
       for (const o of Object.values(/** @type {Record<string, Nesne>} */ (icerik.ortamlar ?? {}))) {

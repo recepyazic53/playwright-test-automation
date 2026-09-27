@@ -1,12 +1,13 @@
 // GENEL YOL VERİSİ — hiçbir aktarım adaptörüne bağlı OLMAYAN model koşusu: elle oluşturulan proje/ortamların test kodu
-// olmayan senaryoları Nöbetçi'den playwright.model.config.ts ile koşar. Proje ve ortam KİMLİKLERİ sunucudan ortam
+// olmayan senaryoları Nöbetçi'den playwright.config.ts ile koşar. Proje ve ortam KİMLİKLERİ sunucudan ortam
 // değişkenleriyle gelir (NOBETCI_PROJE_ID, NOBETCI_ORTAM_ID); "test"/"canli" ortam adları ve aktarım eşlemesi
 // kullanılmaz. Veri platform veritabanından veri-oku.mjs'nin "genel" kipiyle okunur (kasa anahtarı gerekir;
 // Nöbetçi koşularında PLATFORM_KASA_ANAHTARI). Giriş bilgisi ve giriş tarifi ortamın kendi kayıtlarıdır.
+import { dirname, join } from 'node:path';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { tarifiHazirla, type GirisKimligi } from './giris-motoru';
 import {
-  PlatformVeriHatasi, hataMi, platformOkuyucusunuCalistir, yasakAdresleriniBirlestir,
+  PlatformVeriHatasi, hataMi, platformOkuyucusunuCalistir, platformVeritabaniYolu, yasakAdresleriniBirlestir,
   type PlatformGirisBilgisi, type PlatformGirisTarifi, type PlatformModelVerisi, type PlatformYasakAdresleri
 } from './platform-veri';
 
@@ -34,7 +35,7 @@ export function genelVeri(): GenelVeri {
   const projeId = process.env[GENEL_PROJE_DEGISKENI];
   const ortamId = process.env[GENEL_ORTAM_DEGISKENI];
   if (!projeId || !ortamId) throw new PlatformVeriHatasi(`genel koşu için ${GENEL_PROJE_DEGISKENI} ve ${GENEL_ORTAM_DEGISKENI} gerekir (koşuyu Nöbetçi'den başlatın)`);
-  const sonuc = platformOkuyucusunuCalistir(['genel', '--proje', projeId, '--ortam-id', ortamId], {}, false);
+  const sonuc = platformOkuyucusunuCalistir(['genel', '--proje', projeId, '--ortam-id', ortamId]);
   if (hataMi(sonuc)) {
     if (sonuc.kod === 'PAROLA_YANLIS') throw new Error(`Platform kasası açılamadı: ${sonuc.hata}`);
     throw new PlatformVeriHatasi(`platform veritabanı okunamadı: ${sonuc.hata}`);
@@ -61,11 +62,12 @@ export function genelGirisKimligi(): GirisKimligi {
 }
 
 /**
- * Paylaşılan oturum dosyası: ortam + giriş profili başına (environments.ts > oturumDosyasi ile aynı kural; ada
- * "genel-" öneki ve ortam KİMLİĞİ girer — ortamın adı şifreli saklandığı için dosya adına yazılmaz).
+ * Paylaşılan oturum dosyası: ortam + giriş profili başına, ÇALIŞMA ALANININ veri klasöründe (<veritabanı klasörü>/oturumlar/;
+ * Git dışında, çalışma alanları birbirinin oturumunu görmez). Ada "genel-" öneki ve ortam KİMLİĞİ girer — ortamın adı şifreli
+ * saklandığı için dosya adına yazılmaz.
  */
 export function genelOturumDosyasi(): string {
   const v = genelVeri();
   const temiz = (d: string): string => d.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36);
-  return `playwright/.auth/genel-${temiz(v.ortamId)}-${v.giris?.profilKimligi ? temiz(v.giris.profilKimligi) : 'profil-yok'}.json`;
+  return join(dirname(platformVeritabaniYolu()), 'oturumlar', `genel-${temiz(v.ortamId)}-${v.giris?.profilKimligi ? temiz(v.giris.profilKimligi) : 'profil-yok'}.json`);
 }

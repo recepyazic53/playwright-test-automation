@@ -1,9 +1,9 @@
 // KORUMA TESTİ — giriş tarifi modeli (scripts/platform/giris/tarif.mjs), hata sınıflandırma, kod kaynağı,
 // elle kod dosya protokolü ve tarif deposu (ortam ayarlarında, şifreli). Tarayıcı AÇMAZ, ağa çıkmaz;
-// veritabanı testleri geçici klasörde, sahte örnek dosyalarla çalışır.
+// veritabanı testleri geçici klasörde, nötr örnek projeyle (depo işlevleriyle kurulur) çalışır.
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import {
   GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula, girisTarifiOlmali,
@@ -11,16 +11,13 @@ import {
 } from '../../scripts/platform/giris/tarif.mjs';
 import { KOD_DESENI, kodIstegiOku, kodIstegiYaz, kodYanitiniBekle, koduYanitla } from '../../scripts/platform/giris/elle-kod.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from '../../scripts/platform/giris/tarif-deposu.mjs';
-import { galaksiGirisTarifi, GALAKSI_HATALI_GIRIS_METNI } from '../../projeler/galaksi/giris-tarifi.mjs';
-import { adaptorBul } from '../../projeler/index.mjs';
 import { kasaOlustur, parolayiDogrula } from '../../scripts/platform/kasa.mjs';
-import { ortamGetir, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
-import { aktarimiUygula, ortamKimligiBul } from '../../scripts/platform/aktarim/motor.mjs';
+import { girisProfiliKaydet, ortamGetir, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { girisHazirMi, kodKaynagi, tarifiHazirla, GirisHatasi, type GirisKimligi } from '../support/giris-motoru';
-import { platformOnbelleginiSifirla, platformVerisi } from '../support/platform-veri';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
+import { hataMi, platformOkuyucusunuCalistir, type PlatformGirisBilgisi, type PlatformGirisTarifi } from '../support/platform-veri';
+import { ornekGirisTarifi } from './model-fikstur';
+import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
-const KOK = resolve(__dirname, '..', '..');
 const gecerliTarif = (): Record<string, unknown> => ({
   kullaniciAlani: '#k', parolaAlani: '#p', gonderDugmesi: 'button[type=submit]', basariGostergesi: { tur: 'metin', deger: 'Çıkış' }
 });
@@ -37,21 +34,12 @@ test.describe('Giriş tarifi — model ve doğrulama', () => {
     });
   });
 
-  test('Galaksi tarifleri (TEST ve CANLI) geçerli; eski davranışın seçicileri', () => {
-    const testTarifi = girisTarifiOlmali(galaksiGirisTarifi({ ortamAnahtari: 'test', basariMetni: 'Oturumu Kapat' }));
-    expect(testTarifi.kullaniciAlani).toBe('input[type="text"]');
-    expect(testTarifi.parolaAlani).toBe('input[type="password"]');
-    expect(testTarifi.gonderDugmesi).toBe('button, input[type="submit"], input[type="image"]');
-    expect(testTarifi.basariGostergesi).toEqual({ tur: 'metin', deger: 'Oturumu Kapat' });
-    expect(testTarifi.hataGostergeleri).toEqual([{ tur: 'metin', deger: GALAKSI_HATALI_GIRIS_METNI }]);
-    expect(testTarifi.ikinciAdim).toEqual({ tur: 'yok' });
-    expect(testTarifi.zamanAsimiSn).toBe(45);
-    expect(testTarifi.baglamDegistirme?.baglamTuru).toBe('Acente');
-    expect(baglamAlanlari(testTarifi).sort()).toEqual(['acenteKullanicisi', 'acentePartaji', 'acentePartajiSecenegi']);
-    const canli = girisTarifiOlmali(galaksiGirisTarifi({ ortamAnahtari: 'canli', basariMetni: null, ikiAsamaliTur: 'totp' }));
-    expect(canli.basariGostergesi.deger).toBe('Oturumu Kapat');
-    expect(canli.ikinciAdim).toMatchObject({ tur: 'totp', kodAlani: '#Gauthcode', gonderDugmesi: testTarifi.gonderDugmesi, smsKipi: null });
-    expect(girisTarifiOlmali(galaksiGirisTarifi({ ortamAnahtari: 'canli', ikiAsamaliTur: 'sms' })).ikinciAdim.tur).toBe('sms');
+  test('örnek tarif (TOTP + bağlam değiştirme) geçerli; bağlam alanları yer tutuculardan çıkar', () => {
+    const t = girisTarifiOlmali(ornekGirisTarifi());
+    expect(t).toMatchObject({ girisAdresi: '/giris', oturumKontrolAdresi: '/panel', zamanAsimiSn: 20 });
+    expect(t.ikinciAdim).toMatchObject({ tur: 'totp', kodAlani: '#kod', gonderDugmesi: '#dogrula' });
+    expect(t.baglamDegistirme?.baglamTuru).toBe('Şube');
+    expect(baglamAlanlari(t)).toEqual(['subeKodu']);
   });
 
   test('geçersiz tarif: tüm hatalar Türkçe ve alan adıyla listelenir', () => {
@@ -149,71 +137,67 @@ test.describe('Elle doğrulama kodu — dosya protokolü (motor ↔ Nöbetçi)',
   });
 });
 
-test.describe('Giriş tarifi deposu — ortam ayarlarında, şifreli; aktarım kullanıcının tarifini ezmez', () => {
-  test.describe.configure({ mode: 'serial' });
 
-  test('kaydet / etkin / proje varsayılanı / sıfırla / yeniden aktarım; veri-oku tarifi testlere verir', async () => {
+test.describe('Giriş tarifi deposu — ortam ayarlarında, şifreli; ortam güncellemesi kullanıcının tarifini ezmez', () => {
+  test('etkin (yok / kayitli) / kaydet / sıfırla / ortam güncellemesi; veri okuyucu (genel kip) tarifi testlere verir', async () => {
     test.setTimeout(120_000);
     const klasor = geciciKlasor('tarif-deposu');
-    const eskiEnv = { ...process.env };
     try {
-      for (const k of Object.keys(process.env)) if (k.startsWith('PLATFORM_')) delete process.env[k];
-      const adaptor = adaptorBul('galaksi');
-      if (!adaptor) throw new Error('galaksi adaptörü yok');
-      const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, { projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI }, testListesi: async () => [] });
       const yol = join(klasor.yol, 'platform.db');
       const parola = randomBytes(24).toString('base64url');
       const vt = await veritabaniniHazirla(yol);
       await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
-      const { projeId } = aktarimiUygula(vt, paket);
-      const testId = ortamKimligiBul(vt, projeId, 'test') as string;
+      const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
+      const testId = ortamKaydet(vt, { projeId, ad: 'Test', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { digerAyar: 'korunur' } });
+      const canliId = ortamKaydet(vt, { projeId, ad: 'Canlı', tabanUrl: 'https://canli.ornek.invalid', ayarlar: { canli: true } });
+      girisProfiliKaydet(vt, { projeId, ortamId: testId, ad: 'Test girişi', kullaniciAdi: 'ornek.kullanici', parola: 'Ornek-Parola-1', ikiAsamaliTur: 'sms', smsAyari: { yontem: 'elle' } });
 
-      // 1) Aktarım tarifi ortam ayarlarına yazdı (kaynak: kayitli).
-      const ilk = etkinGirisTarifi(vt, projeId, testId, adaptor);
-      expect(ilk.kaynak).toBe('kayitli');
-      expect(ilk.tarif?.basariGostergesi.tur).toBe('metin');
+      // 1) Yeni ortamda tarif yok (proje varsayılanı kavramı yok).
+      expect(etkinGirisTarifi(vt, projeId, testId)).toEqual({ tarif: null, kaynak: 'yok', hatalar: [] });
+      expect(() => etkinGirisTarifi(vt, 'baska-proje', testId)).toThrow(/Ortam bulunamadı/);
 
-      // 2) Tarif özelliğinden ÖNCEKİ aktarım (tarif yok) → adaptör varsayılanı = aynı tarif.
-      expect(girisTarifiniSifirla(vt, projeId, testId)).toBe(true);
-      const varsayilan = etkinGirisTarifi(vt, projeId, testId, adaptor);
-      expect(varsayilan.kaynak).toBe('proje-varsayilani');
-      expect(varsayilan.tarif).toEqual(ilk.tarif);
-      expect(etkinGirisTarifi(vt, projeId, testId, null).kaynak).toBe('yok');
-
-      // 3) Kullanıcı tarifi: geçersizse kaydedilmez; geçerliyse ortam ayarları korunarak yazılır.
+      // 2) Kullanıcı tarifi: geçersizse kaydedilmez; geçerliyse ortam ayarları korunarak yazılır.
       expect(() => girisTarifiKaydet(vt, projeId, testId, { kullaniciAlani: '' })).toThrow(/Giriş tarifi kaydedilemedi/);
+      expect(etkinGirisTarifi(vt, projeId, testId).kaynak).toBe('yok');
       const ozel = { ...gecerliTarif(), kullaniciAlani: '#ozel-kullanici-alani-benzersiz', ikinciAdim: { tur: 'sms', smsKipi: 'elle' } };
       girisTarifiKaydet(vt, projeId, testId, ozel);
-      expect(etkinGirisTarifi(vt, projeId, testId, adaptor)).toMatchObject({ kaynak: 'kayitli', tarif: { kullaniciAlani: '#ozel-kullanici-alani-benzersiz', ikinciAdim: { tur: 'sms', smsKipi: 'elle' } } });
-      expect(ortamGetir(vt, testId)?.ayarlar.aktarim).toBeTruthy(); // diğer ayarlar korunur
+      expect(etkinGirisTarifi(vt, projeId, testId)).toMatchObject({ kaynak: 'kayitli', hatalar: [], tarif: { kullaniciAlani: '#ozel-kullanici-alani-benzersiz', ikinciAdim: { tur: 'sms', smsKipi: 'elle' } } });
+      expect(ortamGetir(vt, testId)?.ayarlar.digerAyar).toBe('korunur'); // diğer ayarlar korunur
       expect(() => girisTarifiKaydet(vt, 'baska-proje', testId, ozel)).toThrow(/Ortam bulunamadı/);
 
-      // 4) Kaynağı değişen yeniden aktarım ortamı günceller ama kullanıcının tarifini EZMEZ.
-      const yeniPaket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, {
-        projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI, TEST_BASE_URL: 'https://test-2.ornek.invalid' }, testListesi: async () => []
-      });
-      const sonuc = aktarimiUygula(vt, yeniPaket);
-      expect(sonuc.sayimlar.ortam.guncellenecek).toBe(1);
+      // 3) Sıfırla → yok; yeniden kaydedilir.
+      expect(girisTarifiniSifirla(vt, projeId, testId)).toBe(true);
+      expect(etkinGirisTarifi(vt, projeId, testId).kaynak).toBe('yok');
+      girisTarifiKaydet(vt, projeId, testId, ozel);
+
+      // 4) Ortamın adresi değişir (ayarlar verilmeden) → kullanıcının tarifi EZİLMEZ.
+      const ortam = ortamGetir(vt, testId);
+      ortamKaydet(vt, { id: testId, projeId, ad: String(ortam?.ad), tabanUrl: 'https://test-2.ornek.invalid', varsayilan: true });
       expect(ortamGetir(vt, testId)?.tabanUrl).toBe('https://test-2.ornek.invalid');
-      expect(etkinGirisTarifi(vt, projeId, testId, adaptor).tarif?.kullaniciAlani).toBe('#ozel-kullanici-alani-benzersiz');
+      expect(etkinGirisTarifi(vt, projeId, testId).tarif?.kullaniciAlani).toBe('#ozel-kullanici-alani-benzersiz');
+      girisTarifiKaydet(vt, projeId, canliId, ornekGirisTarifi());
 
       // 5) Tarif diskte şifreli (sütun 'ozel'): benzersiz seçici düz metin olarak geçmez.
-      const anahtar = (await parolayiDogrula(vt, parola))?.toString('base64url');
+      const anahtar = (await parolayiDogrula(vt, parola))?.toString('base64url') ?? '';
       vt.kapat();
       expect(readFileSync(yol).includes(Buffer.from('#ozel-kullanici-alani-benzersiz'))).toBe(false);
 
-      // 6) Testlerin veri okuyucusu (ayrı süreç) etkin tarifi ve giriş profilinin SMS kipini verir.
-      process.env.PLATFORM_VERITABANI = yol;
-      process.env.PLATFORM_KASA_ANAHTARI = anahtar as string;
-      platformOnbelleginiSifirla();
-      const veri = platformVerisi('test');
-      expect(veri.girisTarifi).toMatchObject({ kaynak: 'kayitli', hatalar: [], tarif: { kullaniciAlani: '#ozel-kullanici-alani-benzersiz' } });
-      expect(veri.giris?.profilKimligi).toMatch(/^[0-9a-f-]{36}$/);
-      expect(platformVerisi('canli').girisTarifi?.tarif.ikinciAdim).toMatchObject({ tur: 'totp', kodAlani: '#Gauthcode' });
+      // 6) Testlerin veri okuyucusu (ayrı süreç, genel kip) ortamın kayıtlı tarifini ve giriş profilinin SMS kipini verir.
+      type Cikti = { durum?: string; girisTarifi: PlatformGirisTarifi | null; giris: PlatformGirisBilgisi | null };
+      const oku = (ortamId: string): Cikti => {
+        const d = platformOkuyucusunuCalistir(['genel', '--proje', projeId, '--ortam-id', ortamId], { PLATFORM_VERITABANI: yol, PLATFORM_KASA_ANAHTARI: anahtar });
+        if (hataMi(d)) throw new Error(d.hata);
+        return d as Cikti;
+      };
+      const testCiktisi = oku(testId);
+      expect(testCiktisi.durum).toBe('hazir');
+      expect(testCiktisi.girisTarifi).toMatchObject({ kaynak: 'kayitli', hatalar: [], tarif: { kullaniciAlani: '#ozel-kullanici-alani-benzersiz' } });
+      expect(testCiktisi.giris).toMatchObject({ kullaniciAdi: 'ornek.kullanici', smsKipi: 'elle', totpGizli: null });
+      expect(testCiktisi.giris?.profilKimligi).toMatch(/^[0-9a-f-]{36}$/);
+      const canli = oku(canliId);
+      expect(canli.girisTarifi?.tarif.ikinciAdim).toMatchObject({ tur: 'totp', kodAlani: '#kod' });
+      expect(canli.giris).toBeNull(); // bu ortama özel ya da tüm ortamlar için profil yok
     } finally {
-      for (const k of Object.keys(process.env)) if (!(k in eskiEnv)) delete process.env[k];
-      Object.assign(process.env, eskiEnv);
-      platformOnbelleginiSifirla();
       klasor.temizle();
     }
   });

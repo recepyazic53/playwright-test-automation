@@ -43,7 +43,7 @@ test('model ↔ değer listeleri: koşulsuz liste seçenekleri değiştirir, tek
 
 
 test('karşılıklar: tablo listesi sayfa değerini taşır; modelde seçenek olmasa da koşu sayfa değeriyle seçer; servise servis değeri', () => {
-  const tablo: Tablo = { id: 't', ad: 'Seyahat', satirlar: [['DÜNYA', 'ALMANYA'], ['DÜNYA', 'A.B.D'], ['AVRUPA', 'ALMANYA']].map(([k, u]) => ({ ortamId: null, degerler: { Kapsam: k, Ülke: u } })),
+  const tablo: Tablo = { id: 't', ad: 'Rota', satirlar: [['DÜNYA', 'ALMANYA'], ['DÜNYA', 'A.B.D'], ['AVRUPA', 'ALMANYA']].map(([k, u]) => ({ ortamId: null, degerler: { Kapsam: k, Ülke: u } })),
     sutunlar: [{ ad: 'Kapsam', gizli: false, karsiliklar: { 'DÜNYA': { sayfa: 'D1', servis: 'WORLD' } } }, { ad: 'Ülke', gizli: false, karsiliklar: { 'A.B.D': { sayfa: '1' }, 'ALMANYA': { sayfa: '15' } } }] };
   const listeler = tabloDegerListeleri({ kapsam: { tablo: 't', sutun: 'Kapsam' }, ulke: { tablo: 't', sutun: 'Ülke' } }, [tablo], 'e', ['kapsam', 'ulke']);
   expect(listeler.find((l) => l.hedef.alan === 'kapsam')?.degerler).toEqual([{ deger: 'DÜNYA', ekranDegeri: 'D1' }, { deger: 'AVRUPA' }]);

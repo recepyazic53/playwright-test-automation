@@ -531,8 +531,7 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
 }
 
 /**
- * Koşunun ortamı: model verisi + giriş tarifi, kimlik ve paylaşılan oturum dosyası. Kaynağı çağırana aittir —
- * aktarılmış (Galaksi) ortamlarda environments.ts, genel yolda genel-veri.ts. Kimlik ve oturum dosyası yalnızca
+ * Koşunun ortamı: model verisi + giriş tarifi, kimlik ve paylaşılan oturum dosyası (kaynak: genel-veri.ts). Kimlik ve oturum dosyası yalnızca
  * gerektiğinde (giriş yapılırken) istenir.
  */
 export type ModelKosuOrtami = {
@@ -556,7 +555,12 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   // değiştirme adımları atlanır; tarif istenmez.
   const girissiz = s.model.girisGerekmez === true;
   // 1) Yasaklı adres koruması: ortamın taban adresi + tarifteki/modeldeki tam adresler (tarayıcı henüz hiçbir
-  //    yere gitmedi), sonra yasaklı host'a her isteği iptal eden yakalayıcı.
+  //    yere gitmedi), sonra yasaklı host'a her isteği iptal eden yakalayıcı. Taban ve ekran adresi tariften ÖNCE denetlenir:
+  //    tarif tanımlı olmasa da yasaklı ortamda yasaklı adres hatası verilir.
+  for (const adres of denetlenecekAdresler(ortam.veri.tabanUrl, null, plan.ekranUrl)) {
+    const kalip = adresYasakliMi(adres, yasakDesenleri(process.env[YASAK_ADRES_DEGISKENI]));
+    if (kalip) throw new Error(yasakliAdresMesaji(adres, kalip));
+  }
   const tarif = girissiz ? null : ortam.tarif();
   const engellenen = await yasakliAdresKorumasi(page, denetlenecekAdresler(ortam.veri.tabanUrl, tarif, plan.ekranUrl));
   tarayiciUyarilariniDinle(page);

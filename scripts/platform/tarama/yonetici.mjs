@@ -45,6 +45,7 @@ import {
   girisProfilleriniListele, ortamlariListele, projeGetir
 } from '../veritabani/depo.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
+import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { baglamAlanlari } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
@@ -149,9 +150,15 @@ export function taramaYoneticisiOlustur(secenekler) {
   const ortam = secenekler.ortamDegiskenleri ?? process.env;
   const cli = secenekler.playwrightCli ?? join(secenekler.projeKoku, 'node_modules', '@playwright', 'test', 'cli.js');
   const yapilandirma = join(secenekler.projeKoku, 'scripts', 'platform', 'tarama', 'tarama.config.ts');
-  const zamanAsimiMs = () => secenekler.zamanAsimiMs
-    ?? (Number(ortam[TARAMA_ZAMAN_ASIMI_DEGISKENI]) > 0 ? Number(ortam[TARAMA_ZAMAN_ASIMI_DEGISKENI]) * 1000 : VARSAYILAN_ZAMAN_ASIMI_SN * 1000);
-  const kayitZamanAsimiMs = () => (Number(ortam[KAYIT_ZAMAN_ASIMI_DEGISKENI]) > 0 ? Number(ortam[KAYIT_ZAMAN_ASIMI_DEGISKENI]) * 1000 : VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN * 1000);
+  // Süre: açık seçenek / ortam değişkeni (testler) > kullanıcının kararı (Ayarlar > Koşu > Tarama ve akış kaydı) > varsayılan.
+  const kullaniciAyari = (/** @type {Veritabani | undefined} */ vt, /** @type {'taramaZamanAsimiDk' | 'kayitZamanAsimiDk'} */ ad) => {
+    if (!vt) return null;
+    try { return kosuAyarlariniOku(vt)[ad] * 60_000; } catch { return null; }
+  };
+  const zamanAsimiMs = (/** @type {Veritabani | undefined} */ vt) => secenekler.zamanAsimiMs
+    ?? (Number(ortam[TARAMA_ZAMAN_ASIMI_DEGISKENI]) > 0 ? Number(ortam[TARAMA_ZAMAN_ASIMI_DEGISKENI]) * 1000 : kullaniciAyari(vt, 'taramaZamanAsimiDk') ?? VARSAYILAN_ZAMAN_ASIMI_SN * 1000);
+  const kayitZamanAsimiMs = (/** @type {Veritabani | undefined} */ vt) => (Number(ortam[KAYIT_ZAMAN_ASIMI_DEGISKENI]) > 0 ? Number(ortam[KAYIT_ZAMAN_ASIMI_DEGISKENI]) * 1000
+    : kullaniciAyari(vt, 'kayitZamanAsimiDk') ?? VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN * 1000);
   const saklamaMs = secenekler.saklamaMs ?? IS_SAKLAMA_MS;
   const hataAyiklama = secenekler.hataAyiklama ?? ortam.NOBETCI_TARAMA_HATA_AYIKLA === '1';
   /** @type {Map<string, Nesne>} */
@@ -221,13 +228,11 @@ export function taramaYoneticisiOlustur(secenekler) {
 
   /**
    * Başlatma diyaloğunun verisi. @param {Veritabani} vt @param {string} projeId @param {string | null} ekranId
-   * @param {(vt: Veritabani, projeId: string) => unknown} adaptorBul
    */
-  function taramaSecenekleri(vt, projeId, ekranId, adaptorBul) {
+  function taramaSecenekleri(vt, projeId, ekranId) {
     temizle();
-    const adaptor = /** @type {any} */ (adaptorBul(vt, projeId));
     const ortamlar = ortamlariListele(vt, projeId).map((o) => {
-      const t = etkinGirisTarifi(vt, projeId, o.id, adaptor);
+      const t = etkinGirisTarifi(vt, projeId, o.id);
       const g = girisProfilleriniListele(vt, projeId).find((x) => x.ortamId === o.id) ?? girisProfilleriniListele(vt, projeId).find((x) => x.ortamId === null);
       return {
         id: o.id, ad: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, canli: o.ayarlar.canli === true,
@@ -260,7 +265,7 @@ export function taramaYoneticisiOlustur(secenekler) {
 
   /**
    * Taramayı başlatır. @param {Veritabani} vt @param {Nesne} g gövde
-   * @param {{ adaptor: unknown; sunucuAdresi: string }} s
+   * @param {{ sunucuAdresi: string }} s
    */
   function baslat(vt, g, s) {
     temizle();
@@ -321,7 +326,7 @@ export function taramaYoneticisiOlustur(secenekler) {
 
     // Giriş tarifi, giriş profili, bağlam profilleri ("Giriş yapmadan aç": hiçbiri kullanılmaz).
     const girissiz = g.girissiz === true;
-    const tarifSonucu = girissiz ? { tarif: null, hatalar: [] } : etkinGirisTarifi(vt, projeId, ortamId, /** @type {any} */ (s.adaptor));
+    const tarifSonucu = girissiz ? { tarif: null, hatalar: [] } : etkinGirisTarifi(vt, projeId, ortamId);
     if (tarifSonucu.hatalar.length) throw new TaramaHatasi('TARIF_GECERSIZ', `Bu ortamın giriş tarifi geçersiz: ${tarifSonucu.hatalar.join(' ')} (Ayarlar > Giriş profilleri > Giriş tarifi).`);
     const tarif = tarifSonucu.tarif;
     /** @type {import('./protokol.d.mts').TaramaKimligi | null} */
@@ -387,7 +392,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     const kodYolu = join(tmpdir(), `nobetci-tarama-kod-${randomBytes(8).toString('hex')}`);
     const ciktiKlasoru = join(tmpdir(), `nobetci-tarama-${id}`);
     const izinliKokenler = String(ortam[TARAMA_IZINLI_KOKENLER_DEGISKENI] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
-    const sure = kayit ? kayitZamanAsimiMs() : zamanAsimiMs();
+    const sure = kayit ? kayitZamanAsimiMs(vt) : zamanAsimiMs(vt);
     /** @type {Nesne} */
     const is = {
       id, token, kip: kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
@@ -724,7 +729,7 @@ export async function taramaIsteginiIsle(req, res, b) {
       if (yol === '/platform/tarama/secenekler') {
         const db = await b.acikVeritabani();
         const ekranId = q.get('ekranId');
-        gonder(200, { basarili: true, ...y.secenekler(db, kimlikAl(q.get('projeId'), 'projeId'), ekranId ? kimlikAl(ekranId, 'ekranId') : null, b.projeAdaptoru) });
+        gonder(200, { basarili: true, ...y.secenekler(db, kimlikAl(q.get('projeId'), 'projeId'), ekranId ? kimlikAl(ekranId, 'ekranId') : null) });
         return true;
       }
       if (yol === '/platform/tarama/durum') { gonder(200, { basarili: true, is: y.durum(String(q.get('id') ?? '')) }); return true; }
@@ -746,9 +751,8 @@ export async function taramaIsteginiIsle(req, res, b) {
     if (govde.token !== b.token && !b.disTokenGecerli) { tokenYok(); return true; }
     if (yol === '/platform/tarama/baslat') {
       const db = await b.acikVeritabani();
-      const projeId = kimlikAl(govde.projeId, 'projeId');
       const port = req.socket.localPort;
-      const sonuc = y.baslat(db, govde, { adaptor: b.projeAdaptoru(db, projeId), sunucuAdresi: `http://127.0.0.1:${port}` });
+      const sonuc = y.baslat(db, govde, { sunucuAdresi: `http://127.0.0.1:${port}` });
       console.log(`[platform] ${govde.kip === 'kayit' ? 'Akış kaydı' : 'Ekran taraması'} başlatıldı (${sonuc.isId}).`);
       gonder(202, { basarili: true, ...sonuc });
       return true;

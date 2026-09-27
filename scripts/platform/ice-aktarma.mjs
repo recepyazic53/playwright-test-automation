@@ -55,7 +55,6 @@ export const ONIZLEME_TABLOLARI = Object.freeze({
   ekranlar: 'Ekranlar',
   ekran_modelleri: 'Ekran modeli sürümleri',
   senaryolar: 'Senaryolar',
-  kaynak_eslemeleri: 'Aktarım kaynak eşlemeleri',
   servisler: 'Servisler',
   servis_senaryolari: 'Servis senaryoları',
   servis_kimlikleri: 'Servis giriş bilgileri',

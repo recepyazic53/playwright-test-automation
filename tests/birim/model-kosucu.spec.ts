@@ -1,14 +1,12 @@
 // KORUMA TESTLERİ — model koşucusu (test kodu olmayan senaryolar): model şeması sürüm 2 (adım koşu tanımı,
 // okluSecim ok düğmeleri; sürüm 1 aynen geçerli), koşu planı (adım kapsamı, alanlar, beklenen sonuç, bağlam
 // profili), model senaryosu tespiti, test başlıkları, yasaklı adres kalıpları, tekrar analizde koşu tanımı
-// bulgusu, koşu hedefi (model spec'i + etiket; kodlu testler aynen; yasaklı adres reddi) ve tarayıcıdaki
+// bulgusu, koşu hedefi (model spec'i + etiket; kodlu testlerden kalan senaryo reddi; yasaklı adres reddi) ve tarayıcıdaki
 // yasaklı adres koruması (tarayıcı hiçbir yere gitmeden hata; yasaklı host'a istek iptal). Şirket sitesine
 // bağlanmaz: tarayıcı testleri yalnızca 127.0.0.1'deki fikstürle ve DNS kapalı tarayıcıyla çalışır.
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
-import { adaptorBul } from '../../projeler/index.mjs';
 import { ekranModeliniDogrula } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
-import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
 import { bulgulariUygula, modelFarki } from '../../scripts/platform/ekranlar/model-farki.mjs';
 import { sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
@@ -19,15 +17,15 @@ import {
   yasakDesenleri, yuklemeDosyasiYolu
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { calistirmaHedefiCoz, senaryoListesi } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
-import { ortamlariListele, senaryoGetir, veritabaniniHazirla, kaynakEslemeleriniListele } from '../../scripts/platform/veritabani/depo.mjs';
+import {
+  ortamKaydet, projeKaydet, senaryoGetir, senaryoKaydet as depoSenaryoKaydet, veritabaniniHazirla
+} from '../../scripts/platform/veritabani/depo.mjs';
 import { yasakliAdresKorumasi } from '../support/model-kosucu';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { OrnekBasvuruUygulamasi, ornekBasvuruModeli, ornekBasvuruPaketi } from './model-fikstur';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, ORNEK_MODEL_DOSYASI, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
-import { readFileSync } from 'node:fs';
+import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
 type Nesne = Record<string, unknown>;
-const KOK = resolve(__dirname, '..', '..');
 const kopya = <T>(d: T): T => JSON.parse(JSON.stringify(d)) as T;
 const dogrula = (model: unknown) => ekranModeliniDogrula('model', model, () => { throw new Error('alt model yok'); });
 const oneriVerisi = (i: number): Nesne => {
@@ -37,12 +35,18 @@ const oneriVerisi = (i: number): Nesne => {
 };
 
 test.describe('Model şeması sürüm 2', () => {
-  test('v2 fikstür modeli geçerli; v1 modeller (Galaksi örneği) aynen geçerli', () => {
+  test('v2 fikstür modeli geçerli; koşu tanımsız v1 model aynen geçerli', () => {
     expect(() => dogrula(ornekBasvuruModeli())).not.toThrow();
-    const v1 = JSON.parse(readFileSync(ORNEK_MODEL_DOSYASI, 'utf-8')) as Nesne;
-    expect(v1.semaSurumu).toBe(1);
-    const alt = JSON.parse(readFileSync(join(ORNEK_MODEL_DOSYASI, '..', 'odeme-kredi-karti.model.json'), 'utf-8')) as Nesne;
-    expect(() => ekranModeliniDogrula('v1', v1, () => alt)).not.toThrow();
+    // Sürüm 1: koşu tanımı ve ok düğmeli seçici (yalnızca v2) olmadan aynı ekran.
+    const v1 = ornekBasvuruModeli();
+    v1.semaSurumu = 1;
+    for (const a of v1.adimlar as Nesne[]) delete a.kosu;
+    const kapsam = (((v1.adimlar as Nesne[])[0].bolumler as Nesne[])[0].alanlar as Nesne[]).find((a) => a.id === 'kapsam') as Nesne;
+    kapsam.tip = 'secim';
+    delete kapsam.doldurucu;
+    delete kapsam.doldurucuParametreleri;
+    kapsam.konum = { secici: '#kapsam-deger', kirilganlik: 'orta' };
+    expect(() => dogrula(v1)).not.toThrow();
   });
 
   test('koşu tanımı yalnızca sürüm 2; aksiyon/gösterge/okluSecim kuralları', () => {
@@ -144,14 +148,13 @@ test.describe('Koşu planı (saf)', () => {
 });
 
 test.describe('Model senaryosu tespiti, başlıklar, yasaklı adresler', () => {
-  test('yalnızca kodda karşılığı olmayan paket/model senaryoları', () => {
+  test('model senaryosu: paketten ya da kosucu "model"; kodlu testlerden kalan içerik değil', () => {
     const paketli = { kaynak: { dosya: 'scenarios/ornek/x.spec.ts', ad: 'A' }, paket: { kaynak: 'sayfa-paketi' } };
     expect(modelSenaryosuMu(paketli)).toBe(true);
-    expect(modelSenaryosuMu(paketli, { kodEslemesiVar: true })).toBe(false);
-    expect(modelSenaryosuMu(paketli, { kodDosyasiVar: () => true })).toBe(false);
     expect(modelSenaryosuMu({ ...paketli, kosucu: 'kod' })).toBe(false);
-    expect(modelSenaryosuMu({ kaynak: { dosya: 'scenarios/jet-seyahat/prim-hesaplama.spec.ts', ad: 'B' }, veri: { dosya: 'jet-seyahat', yol: 'x' } })).toBe(false);
+    expect(modelSenaryosuMu({ kaynak: { dosya: 'scenarios/ornek/y.spec.ts', ad: 'B' }, veri: { dosya: 'ornek', yol: 'x' } })).toBe(false);
     expect(modelSenaryosuMu({ kosucu: 'model' })).toBe(true);
+    expect(modelSenaryosuMu(null)).toBe(false);
     expect(modelEtiketi('ab-12')).toBe('@model-ab-12');
     expect(new RegExp(modelGrepDeseni('ab-12')).test('baslik @model-ab-12')).toBe(true);
     expect(new RegExp(modelGrepDeseni('ab-12')).test('baslik @model-ab-123')).toBe(false);
@@ -159,61 +162,59 @@ test.describe('Model senaryosu tespiti, başlıklar, yasaklı adresler', () => {
     expect([...b.entries()].sort()).toEqual([['a1', 'Aynı'], ['b2', 'Aynı (b2)'], ['c3', 'Farklı']]);
   });
 
-  test('yasaklı host kalıpları (*nippon* ve tam host)', () => {
-    const d = yasakDesenleri('*nippon*, galaksi-test.ornek.local ;  ');
-    expect(d.map((x) => x.kalip)).toEqual(['*nippon*', 'galaksi-test.ornek.local']);
-    expect(adresYasakliMi('https://portal.ornek-sirket-nippon.invalid/a', d)).toBe('*nippon*');
-    expect(adresYasakliMi('http://test.ornek-sirket-nippon.local/', d)).toBe('*nippon*');
-    expect(adresYasakliMi('http://GALAKSI-TEST.ornek.local:8080/x', d)).toBe('galaksi-test.ornek.local');
+  test('yasaklı host kalıpları (*yasakli* ve tam host)', () => {
+    const d = yasakDesenleri('*yasakli*, eski-test.ornek.local ;  ');
+    expect(d.map((x) => x.kalip)).toEqual(['*yasakli*', 'eski-test.ornek.local']);
+    expect(adresYasakliMi('https://portal.ornek-sirket-yasakli.invalid/a', d)).toBe('*yasakli*');
+    expect(adresYasakliMi('http://test.ornek-sirket-yasakli.local/', d)).toBe('*yasakli*');
+    expect(adresYasakliMi('http://ESKI-TEST.ornek.local:8080/x', d)).toBe('eski-test.ornek.local');
     expect(adresYasakliMi('http://127.0.0.1:5581/', d)).toBeNull();
     expect(adresYasakliMi('/goreli/yol', d)).toBeNull();
-    expect(adresYasakliMi('https://x.nippon.invalid', [])).toBeNull();
+    expect(adresYasakliMi('https://x.yasakli.invalid', [])).toBeNull();
   });
 });
 
 test.describe('Koşu hedefi ve liste (geçici veritabanı)', () => {
-  test('model senaryosu model spec + etikete çözülür; kodlu test aynen; yasaklı adres reddedilir; liste rozeti', async () => {
+  test('model senaryosu model spec + etikete çözülür; kodlu testlerden kalan reddedilir; yasaklı adres reddedilir; liste', async () => {
     test.setTimeout(90_000);
     const klasor = geciciKlasor('model-hedef');
     try {
-      const adaptor = adaptorBul('galaksi');
-      if (!adaptor) throw new Error('galaksi adaptörü yok');
-      const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, { projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI }, testListesi: async () => [] });
       const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
       await kasaOlustur(vt, 'Gecici-Model-Kasa-1', { kdf: HIZLI_KDF });
-      const { projeId } = aktarimiUygula(vt, paket);
-      const ortamlar = ortamlariListele(vt, projeId);
-      const test_ = ortamlar.find((o) => o.ad === 'TEST');
-      if (!test_) throw new Error('TEST ortamı yok');
-      const ek = await sayfaEkle(vt, projeId, ornekBasvuruPaketi(), { senaryoIndeksleri: [0, 1], ortamIdleri: [test_.id], medyaKlasoru: join(klasor.yol, 'medya') });
+      // Nötr proje: elle kurulan proje + ortam, ekran ve senaryolar sayfa paketinden.
+      const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
+      const ortamId = ortamKaydet(vt, { projeId, ad: 'DENEME', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+      const ek = await sayfaEkle(vt, projeId, ornekBasvuruPaketi(), { senaryoIndeksleri: [0, 1], ortamIdleri: [ortamId], medyaKlasoru: join(klasor.yol, 'medya') });
       expect(ek.senaryoIdleri).toHaveLength(2);
       const s0 = senaryoGetir(vt, ek.senaryoIdleri[0]);
       expect(s0?.kosuyaDahil).toBe(false); // paketten: Koşuda kapalı başlar (kullanıcı karar verir)
 
-      const kodDosyasiVar = (d: string) => d.startsWith('scenarios/jet-');
-      const hedef = calistirmaHedefiCoz(vt, projeId, ek.senaryoIdleri[0], test_.id, { kodDosyasiVar });
+      const hedef = calistirmaHedefiCoz(vt, projeId, ek.senaryoIdleri[0], ortamId);
       expect(hedef).toMatchObject({
-        model: true, dosya: MODEL_SPEC_DOSYASI, ad: null, ortamAnahtari: 'test', etiket: modelEtiketi(ek.senaryoIdleri[0]),
-        grepDeseni: modelGrepDeseni(ek.senaryoIdleri[0])
+        model: true, dosya: MODEL_SPEC_DOSYASI, ad: null, etiket: modelEtiketi(ek.senaryoIdleri[0]),
+        grepDeseni: modelGrepDeseni(ek.senaryoIdleri[0]), genel: { projeId, ortamId }
       });
-      // Kodlu (aktarılmış) bir senaryo: eski yol, model değil.
-      const kodlu = kaynakEslemeleriniListele(vt, projeId, 'senaryo')[0];
-      const kodluHedef = calistirmaHedefiCoz(vt, projeId, kodlu.varlikId, test_.id, { kodDosyasiVar });
-      expect(kodluHedef.model).toBe(false);
-      expect(kodluHedef.dosya).toBe(kodlu.kaynakAnahtari.split('::')[0]);
+      expect(hedef).not.toHaveProperty('ortamAnahtari');
+      // Kodlu testlerden kalma içerik (kosucu 'model' / paket yok): çalıştırılamaz.
+      const kalinti = depoSenaryoKaydet(vt, {
+        projeId, ekranId: s0?.ekranId ?? null, baslik: 'Eski kodlu test',
+        icerik: { kaynak: { dosya: 'scenarios/ornek/eski.spec.ts', ad: 'Eski kodlu test' }, veri: { dosya: 'ornek', yol: 'x' }, ortamlar: { [ortamId]: {} } }
+      });
+      expect(() => calistirmaHedefiCoz(vt, projeId, kalinti, ortamId)).toThrow(/kodlu testlerden kalma/);
 
-      // Liste: paket senaryoları "model" rozeti alır; kodlu senaryolar almaz.
-      const liste = senaryoListesi(vt, projeId, test_.id, adaptor, { kodDosyasiVar });
-      const modelSatirlari = liste.senaryolar.filter((x) => x.modelKosusu);
-      expect(modelSatirlari.map((x) => x.id).sort()).toEqual([...ek.senaryoIdleri].sort());
-      expect(liste.senaryolar.filter((x) => !x.modelKosusu).length).toBeGreaterThan(0);
+      // Liste: paket senaryoları model koşusu; kalıntı değil.
+      const liste = senaryoListesi(vt, projeId, ortamId);
+      expect(liste.senaryolar.filter((x) => x.modelKosusu).map((x) => x.id).sort()).toEqual([...ek.senaryoIdleri].sort());
+      expect(liste.senaryolar.find((x) => x.id === kalinti)?.modelKosusu).toBe(false);
 
-      // Yasaklı adres: ortam adresi kalıba uyarsa koşu hiç başlatılmaz (kodlu ya da model).
-      const yasak = yasakDesenleri('*nippon*, test.ornek.invalid');
-      const govde = { projeId, kosuId: 'k1', senaryoId: ek.senaryoIdleri[0], ortamId: test_.id };
-      expect(() => calistirmaIsteginiHazirla(vt, govde, { kodDosyasiVar, yasakDesenleri: yasak })).toThrow(/Koşu reddedildi: ortamın adresi \(test\.ornek\.invalid\) yasaklı adres kalıbına \("test\.ornek\.invalid"\)/);
-      expect(() => calistirmaIsteginiHazirla(vt, { ...govde, senaryoId: kodlu.varlikId }, { kodDosyasiVar, yasakDesenleri: yasak })).toThrow(/Koşu reddedildi/);
-      expect(calistirmaIsteginiHazirla(vt, govde, { kodDosyasiVar, yasakDesenleri: yasakDesenleri('*nippon*') }).hedef.model).toBe(true);
+      // Yasaklı adres: ortam adresi kalıba uyarsa koşu hiç başlatılmaz.
+      const yasak = yasakDesenleri('*yasakli*, test.ornek.invalid');
+      const govde = { projeId, kosuId: 'k1', senaryoId: ek.senaryoIdleri[0], ortamId };
+      expect(() => calistirmaIsteginiHazirla(vt, govde, { yasakDesenleri: yasak })).toThrow(/Koşu reddedildi: ortamın adresi \(test\.ornek\.invalid\) yasaklı adres kalıbına \("test\.ornek\.invalid"\)/);
+      expect(() => calistirmaIsteginiHazirla(vt, { ...govde, senaryoId: kalinti }, { yasakDesenleri: yasak })).toThrow(/Koşu reddedildi/);
+      const hazir = calistirmaIsteginiHazirla(vt, govde, { yasakDesenleri: yasakDesenleri('*yasakli*') });
+      expect(hazir.hedef.model).toBe(true);
+      expect(hazir).toMatchObject({ projeId, kosuId: 'k1', kosuTuru: null });
       vt.kapat();
     } finally {
       klasor.temizle();
@@ -230,15 +231,15 @@ test.describe('Tarayıcıda yasaklı adres koruması (yerel fikstür, DNS kapal�
       const istekler: string[] = [];
       baglam.on('request', (r) => { istekler.push(r.url()); });
       const page = await baglam.newPage();
-      const desenler = yasakDesenleri('*nippon*');
-      await expect(yasakliAdresKorumasi(page, ['https://test.ornek-sirket-nippon.local/'], desenler)).rejects.toThrow(/Tarayıcı hiçbir yere gitmedi/);
+      const desenler = yasakDesenleri('*yasakli*');
+      await expect(yasakliAdresKorumasi(page, ['https://test.ornek-sirket-yasakli.local/'], desenler)).rejects.toThrow(/Tarayıcı hiçbir yere gitmedi/);
       expect(istekler).toEqual([]);
 
       const engellenen = await yasakliAdresKorumasi(page, [uygulama.adres], desenler);
       await page.goto(`${uygulama.adres}/giris`);
-      await page.evaluate(() => fetch('https://ornek.nippon.invalid/izleme').catch(() => null));
-      expect(engellenen).toEqual(['ornek.nippon.invalid']);
-      expect(istekler.filter((u) => /nippon/i.test(u))).toEqual(['https://ornek.nippon.invalid/izleme']); // istek başladı ama iptal edildi (ağa çıkmadı)
+      await page.evaluate(() => fetch('https://ornek.yasakli.invalid/izleme').catch(() => null));
+      expect(engellenen).toEqual(['ornek.yasakli.invalid']);
+      expect(istekler.filter((u) => /yasakli/i.test(u))).toEqual(['https://ornek.yasakli.invalid/izleme']); // istek başladı ama iptal edildi (ağa çıkmadı)
       expect(uygulama.istekler).toEqual(['GET /giris']);
     } finally {
       await tarayici.close();

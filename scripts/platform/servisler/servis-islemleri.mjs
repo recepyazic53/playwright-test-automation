@@ -33,7 +33,7 @@ import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 /** @typedef {import('./servis-deposu.mjs').ServisAyarlari} ServisAyarlari */
 /** @typedef {import('./servis-deposu.mjs').ServisSenaryoIcerigi} ServisSenaryoIcerigi */
 
-/** Alan yolu (grup/alan): WSDL öğe adları Türkçe harf de içerebilir (ör. "sigortali-detayları"). */
+/** Alan yolu (grup/alan): WSDL öğe adları Türkçe harf de içerebilir (ör. "müşteri-detayları"). */
 const ALAN_YOLU = /^[\p{L}_][\p{L}\p{N}_.-]*(\/[\p{L}_][\p{L}\p{N}_.-]*)*$/u;
 
 /** Başarılı erişim kontrolünün geçerlilik süresi (bu sürede "Kaydet" yapılmalı). */
@@ -238,7 +238,7 @@ function alanListeleriniDogrula(v) {
 
 /**
  * Alan → tablo sütunu bağlantıları: { <operasyon>: { <yol>: { tablo: tabloId, sutun, etiket?, bicim? } } }. Aynı tablo bir istekte
- * iki kez gerekiyorsa etiket (sigortalı / ettiren) iki ayrı satır seçimi demektir. bicim: değer tarih olarak okunup bu biçimde
+ * iki kez gerekiyorsa etiket (başvuran / kefil) iki ayrı satır seçimi demektir. bicim: değer tarih olarak okunup bu biçimde
  * gönderilir (ör. yyyy-MM-dd'T'HH:mm:ss).
  * @param {unknown} v @returns {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>}
  */

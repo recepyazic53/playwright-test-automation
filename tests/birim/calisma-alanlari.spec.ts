@@ -18,17 +18,13 @@ import {
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { hataKaliplari, kosuKaydet, sonucKaydet, sonucOzeti } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
 import { ekranListesi } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
-import { kodKaldirilmisSenaryolar, senaryoListesi } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
+import { senaryoListesi } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
 import { projeSilmeOnizlemesi, projeyiSil, varsayilanProjeAyarla, varsayilanProjeKimligi } from '../../scripts/platform/proje-yonetimi.mjs';
-import { aktarimiUygula } from '../../scripts/platform/aktarim/motor.mjs';
-import { adaptorBul } from '../../projeler/index.mjs';
-import { HIZLI_KDF, ORNEK_ESKI_DOSYALAR, POSIX_IZINLERI, SAHTE_ORTAM_DEGISKENLERI, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, POSIX_IZINLERI, geciciKlasor } from './platform-ortak';
 
 const KOK = resolve(__dirname, '..', '..');
 const PAROLA_A = 'Alan-A-Kasa-Parolasi-1';
 const PAROLA_B = 'Alan-B-Kasa-Parolasi-2';
-/** Örnek projenin "kodda tanımlı" testleri (Playwright listesi yerine). */
-const KOD_TESTLERI = [{ dosya: 'scenarios/trafik/jet-trafik.spec.ts', ad: 'Trafik kod testi' }];
 
 /** Klasördeki her dosyanın göreli yolu + SHA-256'sı (taşınma/değişme denetimi). */
 function dosyaIzi(kok: string): Record<string, string> {
@@ -191,17 +187,20 @@ test.describe('Değişiklik sayacı', () => {
 });
 
 test.describe('Aynı çalışma alanında birden çok proje', () => {
-  test('listeler proje kapsamlı; kod testleri yalnızca kendi projesinde; proje silme yalnızca kendi verisini siler', async () => {
+  test('listeler proje kapsamlı; proje silme yalnızca kendi verisini siler', async () => {
     const k = geciciKlasor('alan-projeler');
     try {
       const vt = await veritabaniniHazirla(join(k.yol, 'platform.db'));
       await kasaOlustur(vt, PAROLA_A, { kdf: HIZLI_KDF });
-      // Proje A: örnek eski dosyalardan aktarılan (kodda tanımlı testler dahil).
-      const adaptor = adaptorBul('galaksi');
-      if (!adaptor) throw new Error('adaptör yok');
-      const paket = await adaptor.paketOlustur(ORNEK_ESKI_DOSYALAR, { projeKoku: KOK, ortamDegiskenleri: { ...SAHTE_ORTAM_DEGISKENLERI }, testListesi: async () => KOD_TESTLERI });
-      const a = aktarimiUygula(vt, paket).projeId;
-      const ortamA = String(vt.tek("SELECT varlik_id FROM kaynak_eslemeleri WHERE proje_id = ? AND varlik_turu = 'ortam' AND kaynak_anahtari = 'test'", [a])?.varlik_id);
+      // Proje A: elle (ortam, iki ekran, dört senaryo).
+      const a = projeKaydet(vt, { ad: 'Proje A' });
+      const ortamA = ortamKaydet(vt, { projeId: a, ad: 'TEST', tabanUrl: 'https://a.ornek.invalid', varsayilan: true });
+      for (const [anahtar, ad] of [['basvuru', 'Başvuru ekranı'], ['musteri', 'Müşteri ekranı']] as const) {
+        const ekran = ekranKaydet(vt, { projeId: a, anahtar, ad });
+        for (const n of [1, 2]) {
+          senaryoKaydet(vt, { projeId: a, ekranId: ekran, baslik: `${ad} senaryo ${n}`, icerik: { ortamlar: { [ortamA]: { veri: {} } } } });
+        }
+      }
       // Proje B: elle (ortam, ekran, bir senaryo).
       const b = projeKaydet(vt, { ad: 'Proje B' });
       const ortamB = ortamKaydet(vt, { projeId: b, ad: 'TEST', tabanUrl: 'https://b.ornek.invalid', varsayilan: true });
@@ -222,17 +221,15 @@ test.describe('Aynı çalışma alanında birden çok proje', () => {
         medya: [{ tur: 'ekran_goruntusu', ad: 'b.png', icerikTuru: 'image/png', boyut: 40, dosya: dosyaB }] });
 
       const aBasliklari = new Set(vt.tumu('SELECT baslik FROM senaryolar WHERE proje_id = ?', [a]).map((s) => String(s.baslik)));
-      expect(aBasliklari.size).toBeGreaterThan(3);
-      // Senaryolar: B'nin listesinde A'nın (kodda tanımlı dahil) hiçbir senaryosu yok; tersi de.
-      const listeB = senaryoListesi(vt, b, ortamB, null, { kodDosyasiVar: () => true });
+      expect(aBasliklari.size).toBe(4);
+      // Senaryolar: B'nin listesinde A'nın hiçbir senaryosu yok; tersi de.
+      const listeB = senaryoListesi(vt, b, ortamB);
       expect(listeB.senaryolar.map((s) => s.baslik)).toEqual(['B senaryosu']);
       expect(listeB.ekranlar.map((e) => e.ad)).toEqual(['Giriş ekranı']);
-      const listeA = senaryoListesi(vt, a, ortamA, adaptor, { kodDosyasiVar: () => true });
+      const listeA = senaryoListesi(vt, a, ortamA);
       expect(listeA.senaryolar.some((s) => s.baslik === 'B senaryosu')).toBe(false);
-      expect(listeA.senaryolar.some((s) => !s.veriGudumlu), 'A projesinde kodda tanımlı testler var').toBe(true);
-      // "Kodu kaldırılmış" denetimi yalnızca kendi projesinin kod testlerine bakar.
-      const kodB = kodKaldirilmisSenaryolar(vt, b, ortamB, { kodDosyasiVar: () => false, testListesi: [] });
-      expect(kodB.senaryolar.every((s) => !aBasliklari.has(s.baslik))).toBe(true);
+      expect(new Set(listeA.senaryolar.map((s) => s.baslik))).toEqual(aBasliklari);
+      expect(listeA.ekranlar.map((e) => e.ad).sort()).toEqual(['Başvuru ekranı', 'Müşteri ekranı']);
       // Ekranlar, Sonuçlar, hata kalıpları.
       expect(ekranListesi(vt, b).ekranlar.map((e) => e.ad)).toEqual(['Giriş ekranı']);
       expect(ekranListesi(vt, a).ekranlar.some((e) => e.ad === 'Giriş ekranı')).toBe(false);

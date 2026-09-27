@@ -860,7 +860,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     if (mod === 'alanlar' && sm) { yerlestir(govdeAlani, formCiz()); return; }
     yerlestir(govdeAlani,
       sm ? null : h('div', { class: 'not-kutusu', role: 'status' }, `"${operasyon.value}" operasyonunun alan listesi yok; gövde XML olarak düzenlenir. `, semaAl),
-      h('div', { class: 'govde-duzen' }, alan('İstek gövdesi (SOAP zarfı)', govde, { yardim: 'Parametreler adıyla yazılır: ${SIGORTALI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()));
+      h('div', { class: 'govde-duzen' }, alan('İstek gövdesi (SOAP zarfı)', govde, { yardim: 'Parametreler adıyla yazılır: ${MUSTERI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()));
   };
   const parametrePaneli = () => {
     const ekle = (ad) => { govde.setRangeText(`\${${ad}}`, govde.selectionStart, govde.selectionEnd, 'end'); govde.focus(); };
@@ -1029,7 +1029,7 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
   const metotKarti = h('div', { class: 'kart form-paneli' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, 'Metot alanları'), h('span', { class: 'sag' }, kayitDurumu,
       h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/ayarlar/test-verisi' }, 'Test verisi tabloları'))),
-    metotlar.length ? h('p', { class: 'soluk kucuk' }, 'Metodu seçin. Her alanı bir test verisi tablosunun sütununa bağlayın (ör. Channel → Servis girişi → Kanal). Aynı tabloya bağlı alanlar senaryoda aynı satırdan dolar ve seçtikçe birbirini süzer. Aynı tablo iki kez gerekiyorsa (sigortalı / ettiren) etiket verin. Bağlı olmayan alan senaryoda elle yazılır ya da gönderilmez. Değişiklikler anında kaydedilir.') : null,
+    metotlar.length ? h('p', { class: 'soluk kucuk' }, 'Metodu seçin. Her alanı bir test verisi tablosunun sütununa bağlayın (ör. Channel → Servis girişi → Kanal). Aynı tabloya bağlı alanlar senaryoda aynı satırdan dolar ve seçtikçe birbirini süzer. Aynı tablo iki kez gerekiyorsa (başvuran / kefil) etiket verin. Bağlı olmayan alan senaryoda elle yazılır ya da gönderilmez. Değişiklikler anında kaydedilir.') : null,
     metotlar.length && !tablolar.length ? h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/ayarlar/test-verisi' }, 'Ayarlar > Test verisi > Tablolar'), ' bölümünden ekleyin.') : null,
     metotlar.length
       ? metotKutulari(metotlar.map((m) => ({

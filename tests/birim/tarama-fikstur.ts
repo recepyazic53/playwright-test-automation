@@ -20,7 +20,7 @@ export const TARAMA_SMS_KODU = '123456';
 export const SALT_OKUNUR_DEGER = 'MUSTERI-DEGERI-9931';
 export const PROFILLER: Record<string, string> = { P1: 'Standart', P2: 'Yetkili' };
 /** Fikstür sayfasındaki yasaklı host (hiç çözülmez; .invalid). */
-export const YASAKLI_GORSEL_HOST = 'cdn.nippon-ornek.invalid';
+export const YASAKLI_GORSEL_HOST = 'cdn.yasak-ornek.invalid';
 
 export type FiksturKaydi = { yontem: string; yol: string; oturum: boolean; profil: string | null };
 

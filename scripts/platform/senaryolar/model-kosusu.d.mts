@@ -6,10 +6,7 @@ export declare const YASAK_ADRES_DEGISKENI: string;
 export declare const YUKLEME_KLASORU_DEGISKENI: string;
 export declare const DOLDURULABILIR_TIPLER: readonly string[];
 
-export declare function modelSenaryosuMu(
-  icerik: unknown,
-  s?: { kodEslemesiVar?: boolean; kodDosyasiVar?: (dosya: string) => boolean }
-): boolean;
+export declare function modelSenaryosuMu(icerik: unknown): boolean;
 export declare function modelEtiketi(senaryoId: string): string;
 export declare function modelGrepDeseni(senaryoId: string): string;
 export declare function modelTestBasliklari(senaryolar: Array<{ id: string; baslik: string }>): Map<string, string>;

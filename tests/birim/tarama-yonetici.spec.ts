@@ -22,7 +22,7 @@ import { taramaIsteginiIsle, taramaYoneticisiOlustur, type IsGorunumu, type Tara
 import { TARAMA_TOKEN_BASLIGI } from '../../scripts/platform/tarama/protokol.mjs';
 import { SIRKET_DESENI, yerelSunucu } from './giris-fikstur';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
-import { TARAMA_KULLANICI, TARAMA_PAROLA, TARAMA_SMS_KODU, TaramaFiksturu, taramaGirisTarifi } from './tarama-fikstur';
+import { TARAMA_KULLANICI, TARAMA_PAROLA, TARAMA_SMS_KODU, TaramaFiksturu, YASAKLI_GORSEL_HOST, taramaGirisTarifi } from './tarama-fikstur';
 
 type Yanit = Record<string, unknown> & { basarili?: boolean; mesaj?: string; kod?: string };
 const KOK = resolve(__dirname, '..', '..');
@@ -73,7 +73,6 @@ async function yoneticiyiKur(y: TaramaYoneticisi): Promise<void> {
         return m ? JSON.parse(m) as Record<string, unknown> : {};
       },
       acikVeritabani: async () => vt,
-      projeAdaptoru: () => null,
       projeKoku: KOK,
       yonetici: y
     }).then((eslesti) => { if (!eslesti) jsonGonder(res, 404, { basarili: false }); }).catch((h: unknown) => {
@@ -87,7 +86,7 @@ async function yoneticiyiKur(y: TaramaYoneticisi): Promise<void> {
 function yeniYonetici(ek: { zamanAsimiMs?: number; yasak?: string } = {}): TaramaYoneticisi {
   return taramaYoneticisiOlustur({
     projeKoku: KOK, zamanAsimiMs: ek.zamanAsimiMs ?? 120_000,
-    ortamDegiskenleri: { ...process.env, NOBETCI_TARAMA_IZINLI_KOKENLER: `${fs1.adres},${fs2.adres}`, NOBETCI_YASAK_ADRESLER: ek.yasak ?? '*nippon*' }
+    ortamDegiskenleri: { ...process.env, NOBETCI_TARAMA_IZINLI_KOKENLER: `${fs1.adres},${fs2.adres}`, NOBETCI_YASAK_ADRESLER: ek.yasak ?? `*yasak-ornek*,${YASAKLI_GORSEL_HOST}` }
   });
 }
 
@@ -123,7 +122,7 @@ test.beforeAll(async () => {
   projeId = projeKaydet(vt, { ad: 'Tarama Deneme' });
   ortamlar.TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: fs1.adres, varsayilan: true });
   ortamlar.SMS = ortamKaydet(vt, { projeId, ad: 'SMS', tabanUrl: fs2.adres });
-  ortamlar.YASAKLI = ortamKaydet(vt, { projeId, ad: 'YASAKLI', tabanUrl: 'https://portal.nippon-deneme.invalid' });
+  ortamlar.YASAKLI = ortamKaydet(vt, { projeId, ad: 'YASAKLI', tabanUrl: 'https://portal.yasak-ornek.invalid' });
   for (const [ad, id] of Object.entries(ortamlar)) {
     girisProfiliKaydet(vt, { projeId, ortamId: id, ad: `${ad} kullanıcısı`, kullaniciAdi: TARAMA_KULLANICI, parola: TARAMA_PAROLA, ikiAsamaliTur: ad === 'SMS' ? 'sms' : 'yok', smsAyari: ad === 'SMS' ? { yontem: 'elle' } : {} });
     girisTarifiKaydet(vt, projeId, id, taramaGirisTarifi({ sms: ad === 'SMS' }));
@@ -264,7 +263,7 @@ test('yasaklı adres (ortam değişkeni ve Ayarlar > Güvenlik) ve geçersiz hed
   const once = fikstur.kayitlar.length;
   const y1 = await api('/platform/tarama/baslat', { projeId, ekranAdi: 'Yasaklı', ortamId: ortamlar.YASAKLI, hedef: '/x/', onay: true });
   expect(y1).toMatchObject({ durum: 400, y: { kod: 'YASAKLI_ADRES' } });
-  expect(y1.y.mesaj).toMatch(/^Tarama reddedildi: portal\.nippon-deneme\.invalid adresi yasaklı adres kalıbına \("\*nippon\*"\) uyuyor/);
+  expect(y1.y.mesaj).toMatch(/^Tarama reddedildi: portal\.yasak-ornek\.invalid adresi yasaklı adres kalıbına \("\*yasak-ornek\*"\) uyuyor/);
 
   yasakAdresleriKaydet(vt, ['127.0.0.*']);
   try {

@@ -34,8 +34,8 @@ test('WSDL şeması: kalıtım, iç içe grup, zorunluluk, nillable, tip ve seç
 
 test('form ↔ gövde: üretilen gövde geri çözülür; boş / nil / gönderme / parametre / sabit (kaçışlı); grup yalnız doluysa yazılır', () => {
   const sema = wsdlSemalari(WSDL).Teklif;
-  const bas = baslangicDegerleri(sema, { 'Input/CitizenshipNumber': { kaynak: 'parametre', deger: 'SIGORTALI_TC' } });
-  expect(bas['Input/CitizenshipNumber']).toEqual({ kaynak: 'parametre', deger: 'SIGORTALI_TC' });
+  const bas = baslangicDegerleri(sema, { 'Input/CitizenshipNumber': { kaynak: 'parametre', deger: 'MUSTERI_TC' } });
+  expect(bas['Input/CitizenshipNumber']).toEqual({ kaynak: 'parametre', deger: 'MUSTERI_TC' });
   expect(bas['Input/IsSkiing']).toEqual({ kaynak: 'nil' });
   expect(bas['Input/BeginDate']).toEqual({ kaynak: 'bos' });
   expect(bas['Input/Channel']).toEqual({ kaynak: 'gonderme' });
@@ -107,7 +107,7 @@ test.describe('alan formu uçtan uca', () => {
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Alan Projesi' })).proje.id);
     testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
     canli = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'CANLI', tabanUrl: soap.adres, canli: true })).ortam.id);
-    await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'SIGORTALI_TC', rol: 'sigortali' }] }] });
+    await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }] }] });
     tarayici = await chromium.launch();
   });
 

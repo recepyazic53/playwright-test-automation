@@ -1,13 +1,13 @@
 // KORUMA TESTLERİ — tek senaryo doğrulayıcısı (scripts/dogrulama/senaryo-dogrulayici.mjs).
-// Tarayıcı AÇMAZ, şirket ortamına BAĞLANMAZ. Çalıştırma: npm run test:birim
-// Kontroller:
-//  - Her kural için geçerli/geçersiz örnekler (kapsam/alternatif, acenteye göre COVID, TC/VKN,
-//    telefon, doğum tarihi, kart alanları + son kullanma ay/yıl, ortak kart uyarısı, profil
-//    havuzları, beklenen sonuç, "ikisi birlikte" kuralları, girdi ↔ kayıt farkları).
+// Tarayıcı AÇMAZ, hiçbir siteye BAĞLANMAZ. Çalıştırma: npm run test:birim
+// Kontroller (genel, modelden okunan kurallar):
+//  - Her kural için geçerli/geçersiz örnekler (seçenek listesi, bağımlı seçenek, görünürlük koşulu,
+//    TC/VKN, telefon, doğum tarihi, kart alanları + son kullanma ay/yıl, profil ↔ kimlik, beklenen
+//    sonuç, başlık, dosya uzantısı / pozitif sayı, girdi ↔ kayıt farkları).
 //  - Mesaj şablonları birbirinden farklı; hiçbir mesaj kart numarası/CVV içermiyor.
-//  - Her hata alanı dashboard formunda bir kontrole eşleniyor (modelin form karşılıkları).
-//  - Örnek (sahte değerli) veri dosyalarındaki tüm senaryolar hatasız (bkz. ayrıca ekran-modeli.spec.ts > c).
-// Model ve ortak veri: tests/birim/fixtures/ornek-eski-dosyalar/ (gerçek veri platform veritabanında).
+//  - Her hata alanı formda bir kontrole eşleniyor (modelin form karşılıkları).
+//  - Örnek sayfa paketinin (model-fikstur.ts) önerileri hatasız.
+// Model: bu dosyadaki NÖTR "Örnek talep" ekran modeli + kart alt modeli (değerler sahte).
 import { expect, test } from '@playwright/test';
 import {
   MESAJLAR,
@@ -16,7 +16,6 @@ import {
   kartSuresiGectiMi,
   kartiNormallestir,
   krediKartlariAyniMi,
-  ortakBaglaminiOlustur,
   senaryoyuDogrula,
   tcKimlikNoGecerliMi,
   type DogrulamaBaglami,
@@ -24,35 +23,179 @@ import {
   type DogrulamaKarti,
   type DogrulamaSonucu
 } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
-import { ekranModeliniYukle, modelFormKontrolleri, type YuklenmisEkranModeli } from '../support/ekran-modeli';
-import type { JetSeyahatTestData, OrtakTestData } from '../support/test-data';
-import { ORNEK_MODEL_DOSYASI, ornekVeri } from './platform-ortak';
+import { modelFormKontrolleri, type YuklenmisEkranModeli } from '../support/ekran-modeli';
+import { ornekBasvuruModeli, ornekBasvuruPaketi } from './model-fikstur';
 
-const ORTAMLAR = ['test', 'canli'] as const;
-let modelOnbellegi: YuklenmisEkranModeli | undefined;
-const jetSeyahatModeliniYukle = (): YuklenmisEkranModeli => (modelOnbellegi ??= ekranModeliniYukle(ORNEK_MODEL_DOSYASI));
+type Nesne = Record<string, unknown>;
+/** Örnek kimlik profilleri (sahte; kuralların kabul etmesi gereken biçimler). */
+type OrnekKimlikler = { ozel: Record<string, Nesne>; tuzel: Record<string, Nesne> };
+
 /** Sabit "şimdi": 24.09.2026 (tarih kuralları buna göre). */
 const SIMDI = new Date(2026, 8, 24, 12, 0, 0);
+const KART_DOSYASI = 'ornek-kart.model.json';
+const ONAY_KOSULU = 'onay adımı dahil (onayAdimiDahil: true)';
 
-function ortakOku(ortam: (typeof ORTAMLAR)[number]): OrtakTestData {
-  return ornekVeri<OrtakTestData>(ortam, 'ortak');
+// ---------------------------------------------------------------------------------------
+// Nötr örnek model (yalnızca doğrulayıcının okuduğu anahtarlar + form karşılıkları)
+// ---------------------------------------------------------------------------------------
+
+const form = (id: string, kontrol: string, yardimcilar: Array<[string, string, string]> = []): Nesne => ({
+  id, kontrol, ...(yardimcilar.length ? { yardimciKontroller: yardimcilar.map(([yid, yk, amac]) => ({ id: yid, kontrol: yk, amac })) } : {})
+});
+const alan = (id: string, tip: string, etiket: string, ek: Nesne = {}): Nesne => ({
+  id, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { senaryo: id }, form: form(`f_${id}`, tip), ...ek
+});
+const kimlikParcalari = (onEk: string): Nesne[] => [
+  { id: `${onEk}No`, tip: 'metin', etiket: { ekran: 'Kimlik no', form: 'Kimlik no' }, eslesme: { kimlikAlani: 'tcKimlikNo' }, form: form(`f_${onEk}No`, 'metin') },
+  { id: `${onEk}Dogum`, tip: 'tarih', bicim: 'gg.aa.yyyy', etiket: { ekran: 'Doğum', form: 'Doğum' }, eslesme: { kimlikAlani: 'dogumTarihi' }, form: form(`f_${onEk}Dogum`, 'metin') },
+  { id: `${onEk}Telefon`, tip: 'metin', etiket: { ekran: 'Telefon', form: 'Telefon' }, eslesme: { kimlikAlani: 'cepTelefonu' }, form: form(`f_${onEk}Telefon`, 'metin') }
+];
+const kartAlani = (kart: string, etiket: string, tip = 'metin', ek: Nesne = {}): Nesne => ({
+  id: `kart_${kart}`, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { kart }, form: form(`f_kart_${kart}`, tip), ...ek
+});
+
+function ornekTalepModeli(): Nesne {
+  return {
+    semaSurumu: 1, tur: 'ekran', id: 'ornek-talep', ad: 'Örnek talep',
+    kosullar: {
+      onayDahil: { aciklama: ONAY_KOSULU, ifade: { senaryoAyari: 'onayAdimiDahil', esit: true } },
+      ekHizmetGorunur: { aciklama: 'kapsam DÜNYA', ifade: { alan: 'kapsam', esit: 'DÜNYA' } },
+      tekliTalep: { aciklama: 'tekli talep', ifade: { alan: 'talepTipi', esit: 'tekli' } },
+      cokluTalep: { aciklama: 'çoklu talep', ifade: { alan: 'talepTipi', esit: 'coklu' } },
+      farkliSahip: { aciklama: 'hesap sahibi farklı', ifade: { alan: 'sahip', icinde: ['farkliBireysel', 'farkliKurumsal'] } }
+    },
+    adimlar: [
+      { id: 'giris', sira: 1, baslik: 'Ekran açılır', bolumler: [] },
+      {
+        id: 'bilgiler', sira: 2, baslik: 'Talep bilgileri girilir',
+        bolumler: [
+          {
+            id: 'temel', alanlar: [
+              alan('kapsam', 'secim', 'Kapsam', { zorunlu: true, secenekler: [{ deger: 'DÜNYA' }, { deger: 'AVRUPA' }] }),
+              alan('plan', 'secim', 'Plan', {
+                zorunlu: true,
+                bagimlilik: { alan: 'kapsam', secenekHaritasi: { 'DÜNYA': [{ deger: 'PLAN A' }, { deger: 'PLAN B' }], AVRUPA: [{ deger: 'PLAN C' }] } }
+              }),
+              alan('ekHizmet', 'secim', 'Ek hizmet', { zorunlu: true, secenekler: [{ deger: 'E' }, { deger: 'H' }], gorunurluk: { kosul: 'ekHizmetGorunur' } }),
+              alan('talepTipi', 'secim', 'Talep tipi', { zorunlu: true, secenekler: [{ deger: 'tekli' }, { deger: 'coklu' }] }),
+              alan('talepDosyasi', 'dosya', 'Talep dosyası', { kabul: '.xlsx', gorunurluk: { kosul: 'cokluTalep' } }),
+              alan('kisiSayisi', 'sayi', 'Kişi sayısı', { gorunurluk: { kosul: 'cokluTalep' } })
+            ]
+          },
+          {
+            id: 'kisi', gorunurluk: { kosul: 'tekliTalep' }, alanlar: [{
+              ...alan('kisiKimlik', 'kimlikProfili', 'Kişi kimliği', {
+                zorunlu: false, kimlikTuru: 'ozel', eslesme: { senaryo: ['kisiProfili', 'kisiKimligi'], profilHavuzu: 'Bireysel müşteri' },
+                form: form('f_kisiKip', 'radyo', [['f_kisiProfil', 'secim', 'profil']])
+              }),
+              altAlanlar: kimlikParcalari('kisi')
+            }]
+          },
+          {
+            id: 'sahipBilgileri', alanlar: [
+              alan('sahip', 'radyo', 'Hesap sahibi', { zorunlu: true, secenekler: [{ deger: 'ayni' }, { deger: 'farkliBireysel' }, { deger: 'farkliKurumsal' }] }),
+              {
+                ...alan('sahipKimlik', 'kimlikProfili', 'Hesap sahibi kimliği', {
+                  zorunlu: true, gorunurluk: { kosul: 'farkliSahip' }, bagimlilik: { alan: 'sahip' },
+                  kimlikTuru: { farkliBireysel: 'ozel', farkliKurumsal: 'tuzel' },
+                  eslesme: {
+                    senaryo: ['sahipProfili', 'sahipOzelKimligi', 'sahipTuzelKimligi'],
+                    profilHavuzu: { farkliBireysel: 'Bireysel müşteri', farkliKurumsal: 'Kurumsal müşteri' }
+                  },
+                  form: form('f_sahipKip', 'radyo', [['f_sahipProfil', 'secim', 'profil']])
+                }),
+                altAlanlar: [
+                  {
+                    id: 'sahipNo', tip: 'metin', etiket: { ekran: 'Kimlik no', form: 'Kimlik no' },
+                    eslesme: { kimlikAlani: { ozel: 'tcKimlikNo', tuzel: 'vergiKimlikNo' } },
+                    form: form('f_sahipNo', 'metin', [['f_sahipVkn', 'metin', 'vergiKimlikNo']])
+                  },
+                  {
+                    id: 'sahipDogum', tip: 'tarih', bicim: 'gg.aa.yyyy', etiket: { ekran: 'Doğum', form: 'Doğum' }, eslesme: { kimlikAlani: 'dogumTarihi' },
+                    gorunurluk: { ifade: { alan: 'sahip', esit: 'farkliBireysel' } }, form: form('f_sahipDogum', 'metin')
+                  },
+                  { id: 'sahipTelefon', tip: 'metin', etiket: { ekran: 'Telefon', form: 'Telefon' }, eslesme: { kimlikAlani: 'cepTelefonu' }, form: form('f_sahipTelefon', 'metin') }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      { id: 'hesaplama', sira: 3, baslik: 'Tutar hesaplanır', bolumler: [] },
+      { id: 'onay', sira: 4, baslik: 'Talep onaylanır', gorunurluk: { kosul: 'onayDahil' }, bolumler: [] },
+      { id: 'odeme', sira: 5, baslik: 'Ödeme yapılır', gorunurluk: { kosul: 'onayDahil' }, altModel: { dosya: KART_DOSYASI, bolum: 'kartFormu' } }
+    ],
+    senaryoDuzeyi: {
+      alanlar: [
+        { ...alan('baslik', 'metin', 'Senaryo Başlığı', { zorunlu: true }) },
+        { ...alan('subeProfili', 'secim', 'Şube', { eslesme: { senaryo: 'subeProfili', profilHavuzu: 'Şube' }, varsayilan: { deger: 'Merkez' } }) },
+        alan('onayAdimiDahil', 'onayKutusu', 'Onay adımını dahil et', { zorunlu: true }),
+        {
+          ...alan('odemeKarti', 'altModelGecersizKilma', 'Ödeme kartı', { gorunurluk: { kosul: 'onayDahil' }, altModel: { dosya: KART_DOSYASI, bolum: 'kartFormu' } }),
+          form: null
+        },
+        {
+          ...alan('beklenenSonuc', 'birlesim', 'Beklenen sonuç', {
+            form: form('f_beklenen', 'secim', [['f_beklenenAdim', 'secim', 'isKuraliHatasi.adim'], ['f_beklenenMesaj', 'metin', 'isKuraliHatasi.mesaj']])
+          }),
+          varyantlar: [
+            { tip: 'basarili' },
+            {
+              tip: 'isKuraliHatasi',
+              alanlar: {
+                adim: {
+                  etiket: 'Hatanın Beklendiği Adım',
+                  secenekler: [
+                    { deger: 'hesaplama', metin: 'Tutar hesaplama' }, { deger: 'onay', metin: 'Onay', kosul: 'onayDahil' },
+                    { deger: 'odeme', metin: 'Ödeme', kosul: 'onayDahil' }
+                  ]
+                },
+                mesaj: { etiket: 'Beklenen Mesaj', tip: 'metin', zorunlu: true }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  };
 }
+
+function ornekKartModeli(): Nesne {
+  const ay = Array.from({ length: 12 }, (_, i) => ({ deger: String(i + 1), metin: String(i + 1).padStart(2, '0') }));
+  return {
+    tur: 'altModel', id: 'ornek-kart', ad: 'Ödeme kartı',
+    bolumler: [{
+      id: 'kartFormu', alanlar: [
+        kartAlani('isim', 'Kart üzerindeki ad', 'metin', { zorunlu: true }),
+        kartAlani('soyisim', 'Kart üzerindeki soyad'),
+        kartAlani('kartNo', 'Kart numarası', 'metin', { zorunlu: true, hassas: true }),
+        kartAlani('guvenlikKodu', 'Güvenlik kodu', 'metin', { zorunlu: true, hassas: true }),
+        kartAlani('sonKullanmaAyi', 'Son kullanma ayı', 'secim', { zorunlu: true, secenekler: ay }),
+        kartAlani('sonKullanmaYili', 'Son kullanma yılı', 'secim', { zorunlu: true }),
+        kartAlani('taksit', 'Taksit', 'secim')
+      ]
+    }]
+  };
+}
+
+const MODEL = ornekTalepModeli();
+const ALT_MODELLER: Record<string, Nesne> = { [KART_DOSYASI]: ornekKartModeli() };
+const YUKLENMIS = { model: MODEL, altModeller: ALT_MODELLER, dosyaYolu: 'ornek-talep.model.json' } as unknown as YuklenmisEkranModeli;
 
 function baglam(ek: Partial<DogrulamaBaglami> = {}): DogrulamaBaglami {
-  const { model, altModeller } = jetSeyahatModeliniYukle();
-  return { model, altModeller, ortak: ortakBaglaminiOlustur(ortakOku('test')), ortam: 'test', simdi: SIMDI, kaynak: 'kayit', ...ek };
+  return { ...(YUKLENMIS as unknown as Pick<DogrulamaBaglami, 'model' | 'altModeller'>), ortam: 'test', simdi: SIMDI, kaynak: 'kayit', ...ek };
 }
 
-/** Geçerli bir 90002 (COVID görünür) kaydı; vakalar bunun üzerine değişiklik yapar. */
-const TEMEL: Readonly<Record<string, unknown>> = Object.freeze({
+/** Geçerli bir kayıt (kapsam DÜNYA: ek hizmet görünür); vakalar bunun üzerine değişiklik yapar. */
+const TEMEL: Readonly<Nesne> = Object.freeze({
   baslik: 'Birim testi senaryosu',
   kapsam: 'DÜNYA',
-  alternatif: 'VİZE TÜM DÜNYA',
-  covidTeminati: 'E',
-  sorguTipi: 'tekli',
-  ettiren: 'ayni',
-  odemeAdimiDahil: true,
-  acenteProfili: 'JetSeyahatÖzelTanımlıAcente'
+  plan: 'PLAN A',
+  ekHizmet: 'E',
+  talepTipi: 'tekli',
+  sahip: 'ayni',
+  onayAdimiDahil: true,
+  subeProfili: 'Yetkili'
 });
 
 const GECERLI_KART = Object.freeze({
@@ -64,194 +207,177 @@ const GECERLI_KART = Object.freeze({
   sonKullanmaYili: { deger: '2026', metin: '2026' },
   taksit: { deger: '3', metin: '3 Taksit' }
 });
+/** Örnek varsayılan kart (sahte; normalleştirme / karşılaştırma için). */
+const VARSAYILAN_KART = Object.freeze({
+  isim: 'ORNEK', soyisim: 'KART', kartNo: '4000000000000002', guvenlikKodu: '456',
+  sonKullanmaAyi: { deger: '1', metin: '01' }, sonKullanmaYili: { deger: '2030', metin: '2030' }, taksit: { deger: '1', metin: 'Tek Çekim' }
+});
 const HASSAS_DEGERLER = ['4111111111111111', '4111 1111 1111 1111', '987', '123456789012', '12'];
+const ORNEK_KIMLIKLER: OrnekKimlikler = {
+  ozel: {
+    k1: { tcKimlikNo: '10000000146', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' },
+    k2: { tcKimlikNo: '10000000214', dogumTarihi: '29.02.2000', cepTelefonu: '5550000002' }
+  },
+  tuzel: { t1: { vergiKimlikNo: '1000000001', cepTelefonu: '5550000005' } }
+};
 
-function senaryo(degisiklik: Record<string, unknown>, silinecekler: string[] = []): Record<string, unknown> {
-  const s: Record<string, unknown> = { ...TEMEL, ...degisiklik };
+function senaryo(degisiklik: Nesne, silinecekler: string[] = []): Nesne {
+  const s: Nesne = { ...TEMEL, ...degisiklik };
   for (const a of silinecekler) delete s[a];
   return s;
 }
 
 type Vaka = {
   ad: string;
-  senaryo: Record<string, unknown>;
+  senaryo: Nesne;
   baglam?: Partial<DogrulamaBaglami>;
   /** Beklenen HATA: alan + mesaj (tam eşleşme). Boşsa geçerli olmalı. */
   hatalar: DogrulamaBulgusu[];
   uyarilar?: DogrulamaBulgusu[];
 };
 
-const kart = (ek: Partial<Record<keyof DogrulamaKarti, unknown>>): Record<string, unknown> => ({ ...GECERLI_KART, ...ek });
+const kart = (ek: Partial<Record<keyof DogrulamaKarti, unknown>>): Nesne => ({ ...GECERLI_KART, ...ek });
+const kisi = (ek: Nesne): Nesne => ({ kisiKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001', ...ek } });
 
 const VAKALAR: Vaka[] = [
   { ad: 'geçerli temel kayıt', senaryo: senaryo({}), hatalar: [] },
-  // Kapsam / alternatif (modelin seçenekleri, alternatif kapsama bağlı)
+  // Seçenek listesi / bağımlı seçenek (modelin seçenekleri, plan kapsama bağlı)
   { ad: 'kapsam listede değil', senaryo: senaryo({ kapsam: 'ASYA' }), hatalar: [{ alan: 'kapsam', mesaj: MESAJLAR.secenekDisi('Kapsam', 'ASYA', ['DÜNYA', 'AVRUPA']) }] },
   {
-    ad: 'alternatif kapsama uymuyor',
-    senaryo: senaryo({ alternatif: 'VİZE SCHENGEN' }),
-    hatalar: [{ alan: 'alternatif', mesaj: MESAJLAR.bagimliSecenekDisi('Alternatif', 'VİZE SCHENGEN', 'Kapsam', 'DÜNYA', ['VİZE TÜM DÜNYA', 'SEYAHAT PAKET']) }]
+    ad: 'plan kapsama uymuyor',
+    senaryo: senaryo({ plan: 'PLAN C' }),
+    hatalar: [{ alan: 'plan', mesaj: MESAJLAR.bagimliSecenekDisi('Plan', 'PLAN C', 'Kapsam', 'DÜNYA', ['PLAN A', 'PLAN B']) }]
   },
-  { ad: 'AVRUPA + VİZE SCHENGEN geçerli', senaryo: senaryo({ kapsam: 'AVRUPA', alternatif: 'VİZE SCHENGEN' }), hatalar: [] },
-  { ad: 'sorguTipi listede değil', senaryo: senaryo({ sorguTipi: 'toplu' }), hatalar: [{ alan: 'sorguTipi', mesaj: MESAJLAR.secenekDisi('Sorgu Tipi', 'toplu', ['tekli', 'coklu']) }] },
-  // COVID: yalnızca acentede görünürse (ya da bilinmiyorsa) zorunlu
-  { ad: 'COVID eksik, 90002 (görünür) → hata', senaryo: senaryo({}, ['covidTeminati']), hatalar: [{ alan: 'covidTeminati', mesaj: MESAJLAR.zorunlu('COVID Teminatı') }] },
-  { ad: 'COVID eksik, varsayılan acente 90001 (gizli) → geçerli', senaryo: senaryo({}, ['covidTeminati', 'acenteProfili']), hatalar: [] },
+  { ad: 'AVRUPA + PLAN C geçerli', senaryo: senaryo({ kapsam: 'AVRUPA', plan: 'PLAN C' }, ['ekHizmet']), hatalar: [] },
+  { ad: 'talep tipi listede değil', senaryo: senaryo({ talepTipi: 'toplu' }), hatalar: [{ alan: 'talepTipi', mesaj: MESAJLAR.secenekDisi('Talep tipi', 'toplu', ['tekli', 'coklu']) }] },
+  // Görünürlük koşulu: alan yalnızca görünürse zorunlu; görünmeyen alana değer → uyarı
+  { ad: 'ek hizmet eksik, görünür → hata', senaryo: senaryo({}, ['ekHizmet']), hatalar: [{ alan: 'ekHizmet', mesaj: MESAJLAR.zorunlu('Ek hizmet') }] },
+  { ad: 'ek hizmet eksik, gizli → geçerli', senaryo: senaryo({ kapsam: 'AVRUPA', plan: 'PLAN C' }, ['ekHizmet']), hatalar: [] },
   {
-    ad: 'COVID verilmiş, 90001 → uyarı (değer kullanılmaz)',
-    senaryo: senaryo({}, ['acenteProfili']),
+    ad: 'ek hizmet verilmiş, gizli → uyarı (değer kullanılmaz)',
+    senaryo: senaryo({ kapsam: 'AVRUPA', plan: 'PLAN C' }),
     hatalar: [],
-    uyarilar: [{ alan: 'covidTeminati', mesaj: MESAJLAR.gorunmeyenAlan('COVID Teminatı') }]
+    uyarilar: [{ alan: 'ekHizmet', mesaj: MESAJLAR.gorunmeyenAlan('Ek hizmet') }]
   },
-  { ad: 'COVID eksik, girdide acenteKodu 90001 → geçerli', senaryo: senaryo({ acenteKodu: '90001', acenteKullanicisi: '90000001' }, ['covidTeminati', 'acenteProfili']), baglam: { kaynak: 'girdi' }, hatalar: [] },
-  {
-    ad: 'COVID eksik, bilinmeyen acente → zorunlu kalır',
-    senaryo: senaryo({ acenteKodu: '99999', acenteKullanicisi: '1' }, ['covidTeminati', 'acenteProfili']),
-    baglam: { kaynak: 'girdi' },
-    hatalar: [{ alan: 'covidTeminati', mesaj: MESAJLAR.zorunlu('COVID Teminatı') }]
-  },
-  { ad: 'COVID geçersiz değer', senaryo: senaryo({ covidTeminati: 'X' }), hatalar: [{ alan: 'covidTeminati', mesaj: MESAJLAR.secenekDisi('COVID Teminatı', 'X', ['E', 'H']) }] },
+  { ad: 'ek hizmet geçersiz değer', senaryo: senaryo({ ekHizmet: 'X' }), hatalar: [{ alan: 'ekHizmet', mesaj: MESAJLAR.secenekDisi('Ek hizmet', 'X', ['E', 'H']) }] },
   // Serbest kimlik: TC (11 hane + kontrol haneleri), telefon, doğum tarihi
-  {
-    ad: 'serbest sigortalı geçerli',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '24.09.2026', cepTelefonu: '5550000001' } }),
-    hatalar: []
-  },
-  {
-    ad: 'TC kontrol hanesi yanlış',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000147', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' } }),
-    hatalar: [{ alan: 'sigortaliKimligi.tcKimlikNo', mesaj: MESAJLAR.tcKontrolHanesi() }]
-  },
-  {
-    ad: 'TC 0 ile başlıyor / 10 hane',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '0100000001', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' } }),
-    hatalar: [{ alan: 'sigortaliKimligi.tcKimlikNo', mesaj: MESAJLAR.tcBicim() }]
-  },
-  {
-    ad: 'telefon başında 0',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '01.02.1985', cepTelefonu: '05550000001' } }),
-    hatalar: [{ alan: 'sigortaliKimligi.cepTelefonu', mesaj: MESAJLAR.telefonBicim() }]
-  },
+  { ad: 'serbest kişi kimliği geçerli', senaryo: senaryo(kisi({ dogumTarihi: '24.09.2026' })), hatalar: [] },
+  { ad: 'TC kontrol hanesi yanlış', senaryo: senaryo(kisi({ tcKimlikNo: '10000000147' })), hatalar: [{ alan: 'kisiKimligi.tcKimlikNo', mesaj: MESAJLAR.tcKontrolHanesi() }] },
+  { ad: 'TC 0 ile başlıyor / 10 hane', senaryo: senaryo(kisi({ tcKimlikNo: '0100000001' })), hatalar: [{ alan: 'kisiKimligi.tcKimlikNo', mesaj: MESAJLAR.tcBicim() }] },
+  { ad: 'telefon başında 0', senaryo: senaryo(kisi({ cepTelefonu: '05550000001' })), hatalar: [{ alan: 'kisiKimligi.cepTelefonu', mesaj: MESAJLAR.telefonBicim() }] },
   {
     ad: 'doğum tarihi gelecekte (yarın)',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '25.09.2026', cepTelefonu: '5550000001' } }),
-    hatalar: [{ alan: 'sigortaliKimligi.dogumTarihi', mesaj: MESAJLAR.tarihGelecekte('Doğum Tarihi') }]
+    senaryo: senaryo(kisi({ dogumTarihi: '25.09.2026' })),
+    hatalar: [{ alan: 'kisiKimligi.dogumTarihi', mesaj: MESAJLAR.tarihGelecekte('Doğum Tarihi') }]
   },
   {
     ad: 'doğum tarihi takvimde yok / yanlış biçim',
     senaryo: senaryo({
-      ettiren: 'farkliOzel',
-      ettirenOzelKimligi: { tcKimlikNo: '10000000214', dogumTarihi: '31.02.2000', cepTelefonu: '5550000002' },
-      sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '1985-02-01', cepTelefonu: '5550000001' }
+      sahip: 'farkliBireysel',
+      sahipOzelKimligi: { tcKimlikNo: '10000000214', dogumTarihi: '31.02.2000', cepTelefonu: '5550000002' },
+      ...kisi({ dogumTarihi: '1985-02-01' })
     }),
     hatalar: [
-      { alan: 'sigortaliKimligi.dogumTarihi', mesaj: MESAJLAR.tarihBicim('Doğum Tarihi', 'gg.aa.yyyy') },
-      { alan: 'ettirenOzelKimligi.dogumTarihi', mesaj: MESAJLAR.tarihBicim('Doğum Tarihi', 'gg.aa.yyyy') }
+      { alan: 'kisiKimligi.dogumTarihi', mesaj: MESAJLAR.tarihBicim('Doğum Tarihi', 'gg.aa.yyyy') },
+      { alan: 'sahipOzelKimligi.dogumTarihi', mesaj: MESAJLAR.tarihBicim('Doğum Tarihi', 'gg.aa.yyyy') }
     ]
   },
+  { ad: 'serbest kimlikte alan eksik', senaryo: senaryo(kisi({ dogumTarihi: '' })), hatalar: [{ alan: 'kisiKimligi.dogumTarihi', mesaj: MESAJLAR.zorunlu('Doğum Tarihi') }] },
   {
-    ad: 'serbest kimlikte alan eksik',
-    senaryo: senaryo({ sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '', cepTelefonu: '5550000001' } }),
-    hatalar: [{ alan: 'sigortaliKimligi.dogumTarihi', mesaj: MESAJLAR.zorunlu('Doğum Tarihi') }]
+    ad: 'kurumsal sahip: VKN 10 hane, doğum tarihi istenmez',
+    senaryo: senaryo({ sahip: 'farkliKurumsal', sahipTuzelKimligi: { vergiKimlikNo: '123', cepTelefonu: '5550000005' } }),
+    hatalar: [{ alan: 'sahipTuzelKimligi.vergiKimlikNo', mesaj: MESAJLAR.vknBicim() }]
+  },
+  { ad: 'kurumsal sahip geçerli', senaryo: senaryo({ sahip: 'farkliKurumsal', sahipTuzelKimligi: { vergiKimlikNo: '1000000001', cepTelefonu: '5550000005' } }), hatalar: [] },
+  // Profil ↔ kimlik
+  {
+    ad: 'farklı sahip, profil de kimlik de yok',
+    senaryo: senaryo({ sahip: 'farkliBireysel' }),
+    hatalar: [{ alan: 'sahipProfili', mesaj: MESAJLAR.profilYaDaKimlikZorunlu('Hesap sahibi kimliği') }]
+  },
+  { ad: 'farklı sahip, hazır profil geçerli', senaryo: senaryo({ sahip: 'farkliKurumsal', sahipProfili: 't1' }), hatalar: [] },
+  {
+    ad: 'kişi profil + kimlik birlikte',
+    senaryo: senaryo({ kisiProfili: 'k2', ...kisi({}) }),
+    hatalar: [{ alan: 'kisiProfili', mesaj: MESAJLAR.profilVeKimlikBirlikte('Kişi kimliği') }]
   },
   {
-    ad: 'tüzel ettiren: VKN 10 hane, doğum tarihi istenmez',
-    senaryo: senaryo({ ettiren: 'farkliTuzel', ettirenTuzelKimligi: { vergiKimlikNo: '123', cepTelefonu: '5550000005' } }),
-    hatalar: [{ alan: 'ettirenTuzelKimligi.vergiKimlikNo', mesaj: MESAJLAR.vknBicim() }]
-  },
-  { ad: 'tüzel ettiren geçerli', senaryo: senaryo({ ettiren: 'farkliTuzel', ettirenTuzelKimligi: { vergiKimlikNo: '1000000001', cepTelefonu: '5550000005' } }), hatalar: [] },
-  // Profiller (modeldeki profilHavuzu)
-  {
-    ad: 'farklı ettiren, profil de kimlik de yok',
-    senaryo: senaryo({ ettiren: 'farkliOzel' }),
-    hatalar: [{ alan: 'ettirenProfili', mesaj: MESAJLAR.profilYaDaKimlikZorunlu('Sigorta ettiren kimliği') }]
-  },
-  {
-    ad: 'ettiren profili havuzda yok (tüzel havuzunda özel anahtar)',
-    senaryo: senaryo({ ettiren: 'farkliTuzel', ettirenProfili: 'tc1' }),
-    hatalar: [{ alan: 'ettirenProfili', mesaj: MESAJLAR.profilYok('Sigorta ettiren kimliği', 'tc1') }]
-  },
-  {
-    ad: 'sigortalı profil + kimlik birlikte',
-    senaryo: senaryo({ sigortaliProfili: 'tc2', sigortaliKimligi: { tcKimlikNo: '10000000146', dogumTarihi: '01.02.1985', cepTelefonu: '5550000001' } }),
-    hatalar: [{ alan: 'sigortaliProfili', mesaj: MESAJLAR.profilVeKimlikBirlikte('Sigortalı') }]
-  },
-  { ad: 'acente profili ortak veride yok', senaryo: senaryo({ acenteProfili: 'YokBoyleAcente' }), hatalar: [{ alan: 'acenteProfili', mesaj: MESAJLAR.profilYok('Acente Kodu', 'YokBoyleAcente') }] },
-  {
-    ad: 'girdide acente kodu var, kullanıcı yok',
-    senaryo: senaryo({ acenteKodu: '90002' }, ['acenteProfili']),
-    baglam: { kaynak: 'girdi' },
-    hatalar: [{ alan: 'acenteKullanicisi', mesaj: MESAJLAR.birlikteZorunlu('Acente Kodu', 'Acente Kullanıcı Kodu') }]
+    ad: 'aynı sahipken verilen sahip kimliği → uyarı',
+    senaryo: senaryo({ sahipProfili: 'k1' }),
+    hatalar: [],
+    uyarilar: [{ alan: 'sahipProfili', mesaj: MESAJLAR.gorunmeyenAlan('Hesap sahibi kimliği') }]
   },
   // Başlık: kayıtta zorunlu, girdide sonradan verilebilir
   { ad: 'kayıtta başlık yok', senaryo: senaryo({}, ['baslik']), hatalar: [{ alan: 'baslik', mesaj: MESAJLAR.zorunlu('Senaryo Başlığı') }] },
   { ad: 'girdide başlık yok (Dene)', senaryo: senaryo({}, ['baslik']), baglam: { kaynak: 'girdi' }, hatalar: [] },
   { ad: 'girdide başlık boş (Düzenle)', senaryo: senaryo({ baslik: '  ' }), baglam: { kaynak: 'girdi' }, hatalar: [{ alan: 'baslik', mesaj: MESAJLAR.zorunlu('Senaryo Başlığı') }] },
-  // Çoklu sorgu dosyası ↔ kişi sayısı
-  {
-    ad: 'çoklu dosya var, kişi sayısı yok',
-    senaryo: senaryo({ sorguTipi: 'coklu', cokluSorguDosyasi: 'tests/fixtures/jet-seyahat/yuklenen/a.xlsx' }),
-    hatalar: [{ alan: 'cokluSorguKisiSayisi', mesaj: MESAJLAR.birlikteZorunlu('Özel Excel Yükle', 'Kişi Sayısı') }]
-  },
+  // Dosya uzantısı / pozitif tam sayı (yalnızca çoklu talepte görünen alanlar)
   {
     ad: 'çoklu dosya uzantısı yanlış, kişi sayısı 0',
-    senaryo: senaryo({ sorguTipi: 'coklu', cokluSorguDosyasi: 'a.xls', cokluSorguKisiSayisi: 0 }),
+    senaryo: senaryo({ talepTipi: 'coklu', talepDosyasi: 'a.xls', kisiSayisi: 0 }),
     hatalar: [
-      { alan: 'cokluSorguDosyasi', mesaj: MESAJLAR.dosyaUzantisi('Özel Excel Yükle', '.xlsx') },
-      { alan: 'cokluSorguKisiSayisi', mesaj: MESAJLAR.pozitifTamSayi('Kişi Sayısı') }
+      { alan: 'talepDosyasi', mesaj: MESAJLAR.dosyaUzantisi('Talep dosyası', '.xlsx') },
+      { alan: 'kisiSayisi', mesaj: MESAJLAR.pozitifTamSayi('Kişi sayısı') }
     ]
   },
-  // Beklenen sonuç (modelin varyantları + adım seçeneği koşulu)
-  { ad: 'odemeAdimiDahil eksik', senaryo: senaryo({}, ['odemeAdimiDahil']), hatalar: [{ alan: 'odemeAdimiDahil', mesaj: MESAJLAR.zorunlu('Ödeme adımını dahil et') }] },
+  { ad: 'çoklu dosya ve kişi sayısı geçerli', senaryo: senaryo({ talepTipi: 'coklu', talepDosyasi: 'liste.xlsx', kisiSayisi: '3' }), hatalar: [] },
   {
-    ad: 'poliçeleştirmede hata, ödeme dahil değil',
-    senaryo: senaryo({ odemeAdimiDahil: false, beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'policelestirme', mesaj: 'x' } }),
-    hatalar: [{ alan: 'beklenenSonuc.adim', mesaj: MESAJLAR.kosulluSecenek('Hatanın Beklendiği Adım', 'Poliçeleştirme', 'ödeme adımı dahil (odemeAdimiDahil: true)') }]
+    ad: 'tekli talepte çoklu dosya → uyarı',
+    senaryo: senaryo({ talepDosyasi: 'liste.xlsx' }),
+    hatalar: [],
+    uyarilar: [{ alan: 'talepDosyasi', mesaj: MESAJLAR.gorunmeyenAlan('Talep dosyası') }]
+  },
+  // Beklenen sonuç (modelin varyantları + adım seçeneği koşulu)
+  { ad: 'onayAdimiDahil eksik', senaryo: senaryo({}, ['onayAdimiDahil']), hatalar: [{ alan: 'onayAdimiDahil', mesaj: MESAJLAR.zorunlu('Onay adımını dahil et') }] },
+  { ad: 'onayAdimiDahil boolean değil', senaryo: senaryo({ onayAdimiDahil: 'evet' }), hatalar: [{ alan: 'onayAdimiDahil', mesaj: MESAJLAR.booleanOlmali('Onay adımını dahil et') }] },
+  {
+    ad: 'onayda hata, onay dahil değil',
+    senaryo: senaryo({ onayAdimiDahil: false, beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'onay', mesaj: 'x' } }),
+    hatalar: [{ alan: 'beklenenSonuc.adim', mesaj: MESAJLAR.kosulluSecenek('Hatanın Beklendiği Adım', 'Onay', ONAY_KOSULU) }]
   },
   {
     ad: 'iş kuralı hatası, mesaj boş',
-    senaryo: senaryo({ beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'primHesaplama', mesaj: '  ' } }),
+    senaryo: senaryo({ beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'hesaplama', mesaj: '  ' } }),
     hatalar: [{ alan: 'beklenenSonuc.mesaj', mesaj: MESAJLAR.zorunlu('Beklenen Mesaj') }]
+  },
+  {
+    ad: 'beklenen sonuç tipi bilinmiyor',
+    senaryo: senaryo({ beklenenSonuc: { tip: 'zamanAsimi' } }),
+    hatalar: [{ alan: 'beklenenSonuc.tip', mesaj: MESAJLAR.secenekDisi('Beklenen Sonuç tipi', 'zamanAsimi', ['basarili', 'isKuraliHatasi']) }]
   },
   {
     ad: 'eski beklenenHataMesaji alanı',
     senaryo: senaryo({ beklenenHataMesaji: 'm' }),
     hatalar: [{ alan: 'beklenenSonuc', mesaj: MESAJLAR.eskiBeklenenSonucAlanlari(['beklenenHataMesaji']) }]
   },
-  // Kart: tek kural kümesi, son kullanma AY + YIL
-  { ad: 'senaryo kartı geçerli (bu ay)', senaryo: senaryo({ krediKarti: kart({}) }), hatalar: [] },
+  // Kart (alt model ezme): tek kural kümesi, son kullanma AY + YIL
+  { ad: 'senaryo kartı geçerli (bu ay)', senaryo: senaryo({ odemeKarti: kart({}) }), hatalar: [] },
   {
     ad: 'senaryo kartının süresi geçmiş (geçen ay)',
-    senaryo: senaryo({ krediKarti: kart({ sonKullanmaAyi: { deger: '8', metin: '08' } }) }),
-    hatalar: [{ alan: 'krediKarti.sonKullanmaYili', mesaj: MESAJLAR.kartSuresiGecmis('08/2026') }]
+    senaryo: senaryo({ odemeKarti: kart({ sonKullanmaAyi: { deger: '8', metin: '08' } }) }),
+    hatalar: [{ alan: 'odemeKarti.sonKullanmaYili', mesaj: MESAJLAR.kartSuresiGecmis('08/2026') }]
   },
   {
     ad: 'kart alanları biçim dışı',
     senaryo: senaryo({
-      krediKarti: kart({ isim: ' ', kartNo: '123456789012', guvenlikKodu: '12', sonKullanmaAyi: { deger: '13' }, sonKullanmaYili: { deger: '26' }, taksit: { deger: String(TAKSIT_UST_SINIRI + 1) } })
+      odemeKarti: kart({ isim: ' ', kartNo: '123456789012', guvenlikKodu: '12', sonKullanmaAyi: { deger: '13' }, sonKullanmaYili: { deger: '26' }, taksit: { deger: String(TAKSIT_UST_SINIRI + 1) } })
     }),
     hatalar: [
-      { alan: 'krediKarti.isim', mesaj: MESAJLAR.zorunlu('Kart üzerindeki ad') },
-      { alan: 'krediKarti.kartNo', mesaj: MESAJLAR.kartNoBicim() },
-      { alan: 'krediKarti.guvenlikKodu', mesaj: MESAJLAR.cvvBicim() },
-      { alan: 'krediKarti.sonKullanmaAyi', mesaj: MESAJLAR.kartAyBicim() },
-      { alan: 'krediKarti.sonKullanmaYili', mesaj: MESAJLAR.kartYilBicim() },
-      { alan: 'krediKarti.taksit', mesaj: MESAJLAR.kartTaksitBicim(TAKSIT_UST_SINIRI) }
+      { alan: 'odemeKarti.isim', mesaj: MESAJLAR.zorunlu('Kart üzerindeki ad') },
+      { alan: 'odemeKarti.kartNo', mesaj: MESAJLAR.kartNoBicim() },
+      { alan: 'odemeKarti.guvenlikKodu', mesaj: MESAJLAR.cvvBicim() },
+      { alan: 'odemeKarti.sonKullanmaAyi', mesaj: MESAJLAR.kartAyBicim() },
+      { alan: 'odemeKarti.sonKullanmaYili', mesaj: MESAJLAR.kartYilBicim() },
+      { alan: 'odemeKarti.taksit', mesaj: MESAJLAR.kartTaksitBicim(TAKSIT_UST_SINIRI) }
     ]
   },
   {
-    ad: 'ödeme dahil değilken kart',
-    senaryo: senaryo({ odemeAdimiDahil: false, krediKarti: kart({}) }),
-    hatalar: [{ alan: 'krediKarti', mesaj: MESAJLAR.kosulluAlan('Ödeme kartı', 'ödeme adımı dahil (odemeAdimiDahil: true)') }]
+    ad: 'onay dahil değilken kart',
+    senaryo: senaryo({ onayAdimiDahil: false, odemeKarti: kart({}) }),
+    hatalar: [{ alan: 'odemeKarti', mesaj: MESAJLAR.kosulluAlan('Ödeme kartı', ONAY_KOSULU) }]
   },
-  {
-    ad: 'ortak kartın süresi geçmiş → yalnızca uyarı',
-    senaryo: senaryo({}),
-    baglam: { ortak: { ...ortakBaglaminiOlustur(ortakOku('test')), varsayilanKrediKarti: { ...GECERLI_KART, sonKullanmaAyi: { deger: '1' }, sonKullanmaYili: { deger: '2026' } } } },
-    hatalar: [],
-    uyarilar: [{ alan: 'krediKarti', mesaj: MESAJLAR.ortakKartSuresiGecmis('01/2026') }]
-  },
-  { ad: 'senaryo nesne değil', senaryo: null as unknown as Record<string, unknown>, hatalar: [{ alan: '', mesaj: MESAJLAR.senaryoNesneDegil() }] }
+  { ad: 'kart nesne değil', senaryo: senaryo({ odemeKarti: 'kart' }), hatalar: [{ alan: 'odemeKarti', mesaj: MESAJLAR.nesneOlmali('Ödeme kartı') }] },
+  { ad: 'senaryo nesne değil', senaryo: null as unknown as Nesne, hatalar: [{ alan: '', mesaj: MESAJLAR.senaryoNesneDegil() }] }
 ];
 
 function dogrula(vaka: Vaka): DogrulamaSonucu {
@@ -264,35 +390,33 @@ test.describe('Tek senaryo doğrulayıcısı — kurallar', () => {
       const sonuc = dogrula(vaka);
       expect(sonuc.hatalar).toEqual(vaka.hatalar);
       expect(sonuc.gecerli).toBe(vaka.hatalar.length === 0);
-      // (Test ortamının ortak kartı 01/2026 — SIMDI'de süresi geçmiş; o uyarı her ödemeli vakada da bulunur.)
-      if (vaka.uyarilar) expect(sonuc.uyarilar).toEqual(expect.arrayContaining(vaka.uyarilar));
+      if (vaka.uyarilar) expect(sonuc.uyarilar).toEqual(vaka.uyarilar);
     });
   }
 
-  test('kayıt ile aynı değerler girdide de aynı sonucu verir (spec ↔ sunucu/form)', () => {
+  test('kayıt ile aynı değerler girdide de aynı sonucu verir (form ↔ sunucu)', () => {
     for (const vaka of VAKALAR.filter((v) => !v.baglam?.kaynak && v.senaryo && 'baslik' in v.senaryo)) {
       expect(senaryoyuDogrula(vaka.senaryo, baglam({ ...vaka.baglam, kaynak: 'girdi' })).hatalar, vaka.ad).toEqual(vaka.hatalar);
     }
   });
+
+  test('model olmadan doğrulama yapılmaz', () => {
+    expect(() => senaryoyuDogrula({}, {} as DogrulamaBaglami)).toThrow(/baglam\.model/);
+  });
 });
 
 test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () => {
-  test('TC kontrol hanesi algoritması; ortak profillerin TC, telefon ve doğum tarihleri kurallara uyuyor', () => {
+  test('TC kontrol hanesi algoritması; örnek profillerin TC, telefon ve doğum tarihleri kurallara uyuyor', () => {
     expect(tcKimlikNoGecerliMi('10000000146')).toBe(true);
     expect(tcKimlikNoGecerliMi('10000000147')).toBe(false);
     expect(tcKimlikNoGecerliMi('00000000000')).toBe(false);
-    // Kurallar mevcut verinin TAMAMINI kabul etmeli (telefon kuralı buradan seçildi).
+    expect(tcKimlikNoGecerliMi(10000000146)).toBe(false);
     const sorunlar: string[] = [];
-    for (const ortam of ORTAMLAR) {
-      const ortak = ortakOku(ortam);
-      for (const [anahtar, kimlik] of Object.entries(ortak.kimlikBilgileri.ozel)) {
-        const s = senaryo({ sigortaliKimligi: kimlik });
-        for (const h of senaryoyuDogrula(s, baglam()).hatalar) sorunlar.push(`${ortam} ozel.${anahtar} > ${h.alan}: ${h.mesaj}`);
-      }
-      for (const [anahtar, kimlik] of Object.entries(ortak.kimlikBilgileri.tuzel)) {
-        const s = senaryo({ ettiren: 'farkliTuzel', ettirenTuzelKimligi: kimlik });
-        for (const h of senaryoyuDogrula(s, baglam()).hatalar) sorunlar.push(`${ortam} tuzel.${anahtar} > ${h.alan}: ${h.mesaj}`);
-      }
+    for (const [anahtar, kimlik] of Object.entries(ORNEK_KIMLIKLER.ozel)) {
+      for (const h of senaryoyuDogrula(senaryo({ kisiKimligi: kimlik }), baglam()).hatalar) sorunlar.push(`ozel.${anahtar} > ${h.alan}: ${h.mesaj}`);
+    }
+    for (const [anahtar, kimlik] of Object.entries(ORNEK_KIMLIKLER.tuzel)) {
+      for (const h of senaryoyuDogrula(senaryo({ sahip: 'farkliKurumsal', sahipTuzelKimligi: kimlik }), baglam()).hatalar) sorunlar.push(`tuzel.${anahtar} > ${h.alan}: ${h.mesaj}`);
     }
     expect(sorunlar, sorunlar.join('\n')).toEqual([]);
   });
@@ -302,12 +426,12 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
     expect(kartSuresiGectiMi({ sonKullanmaAyi: { deger: '8' }, sonKullanmaYili: { deger: '2026' } }, SIMDI)).toBe(true);
     expect(kartSuresiGectiMi({ sonKullanmaAyi: { deger: '1' }, sonKullanmaYili: { deger: '2027' } }, SIMDI)).toBe(false);
     expect(kartSuresiGectiMi({ sonKullanmaAyi: { deger: 'x' }, sonKullanmaYili: { deger: '2027' } }, SIMDI)).toBeNull();
-    const ortakKart = ortakOku('test').odeme.krediKarti;
-    const normal = kartiNormallestir({ ...ortakKart, kartNo: ortakKart.kartNo.replace(/(\d{4})/g, '$1 ') }, ortakKart);
-    expect(normal.kartNo).toBe(ortakKart.kartNo);
+    const normal = kartiNormallestir({ ...VARSAYILAN_KART, kartNo: VARSAYILAN_KART.kartNo.replace(/(\d{4})/g, '$1 ') }, VARSAYILAN_KART);
+    expect(normal.kartNo).toBe(VARSAYILAN_KART.kartNo);
     expect(normal.taksit).toEqual({ deger: '1', metin: 'Tek Çekim' });
-    expect(krediKartlariAyniMi(normal, ortakKart)).toBe(true);
-    expect(kartiNormallestir(GECERLI_KART, ortakKart).sonKullanmaAyi).toEqual({ deger: '9', metin: '09' });
+    expect(krediKartlariAyniMi(normal, VARSAYILAN_KART)).toBe(true);
+    expect(krediKartlariAyniMi(normal, { ...VARSAYILAN_KART, guvenlikKodu: '457' })).toBe(false);
+    expect(kartiNormallestir(GECERLI_KART, VARSAYILAN_KART)).toMatchObject({ sonKullanmaAyi: { deger: '9', metin: '09' }, taksit: { deger: '3', metin: '3 Taksit' } });
   });
 
   test('mesaj şablonları benzersiz, kart numarası/CVV hiçbir mesajda yok', () => {
@@ -335,43 +459,37 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
       for (const hassas of HASSAS_DEGERLER) {
         if (hassas.length >= 3) expect(mesaj, `mesaj hassas değer içeriyor: ${mesaj}`).not.toContain(hassas);
       }
-    }
-    // Ortak kartın numarası/CVV'si de sızmamalı.
-    const ortakKart = ortakOku('test').odeme.krediKarti;
-    for (const mesaj of tumMesajlar) {
-      expect(mesaj).not.toContain(ortakKart.kartNo);
-      expect(mesaj.includes(` ${ortakKart.guvenlikKodu} `)).toBe(false);
+      expect(mesaj).not.toContain(VARSAYILAN_KART.kartNo);
+      expect(mesaj.includes(` ${VARSAYILAN_KART.guvenlikKodu} `)).toBe(false);
     }
   });
 
-  test('her hata alanı dashboard formunda bir kontrole eşleniyor', () => {
-    const yuklenmis = jetSeyahatModeliniYukle();
-    const formIdleri = new Set(modelFormKontrolleri(yuklenmis).keys());
+  test('her hata alanı formda bir kontrole eşleniyor', () => {
+    const formIdleri = new Set(modelFormKontrolleri(YUKLENMIS).keys());
     const alanlar = new Set(VAKALAR.flatMap((v) => dogrula(v).hatalar.map((h) => h.alan)).filter((a) => a !== ''));
     expect(alanlar.size).toBeGreaterThan(15);
+    const b = baglam();
     const sorunlar: string[] = [];
-    for (const alan of alanlar) {
-      const adaylar = alanFormKimlikleri(alan, yuklenmis);
-      if (!adaylar.length) sorunlar.push(`${alan}: form kontrolü bulunamadı`);
-      for (const id of adaylar) if (!formIdleri.has(id)) sorunlar.push(`${alan}: ${id} modelin form karşılıklarında yok`);
+    for (const a of alanlar) {
+      const adaylar = alanFormKimlikleri(a, b);
+      if (!adaylar.length) sorunlar.push(`${a}: form kontrolü bulunamadı`);
+      for (const id of adaylar) if (!formIdleri.has(id)) sorunlar.push(`${a}: ${id} modelin form karşılıklarında yok`);
     }
     expect(sorunlar, sorunlar.join('\n')).toEqual([]);
-    expect(alanFormKimlikleri('ettirenTuzelKimligi.vergiKimlikNo', yuklenmis)).toEqual(['sof_ettirenTc', 'sof_ettirenVkn']);
-    expect(alanFormKimlikleri('krediKarti.sonKullanmaYili', yuklenmis)).toEqual(['sof_kartYil']);
-    expect(alanFormKimlikleri('acenteKullanicisi', yuklenmis)).toEqual(['sof_acenteKullanicisi']);
-    expect(alanFormKimlikleri('beklenenSonuc.mesaj', yuklenmis)).toEqual(['sof_beklenenHata']);
+    expect(alanFormKimlikleri('sahipTuzelKimligi.vergiKimlikNo', b)).toEqual(['f_sahipNo', 'f_sahipVkn']);
+    expect(alanFormKimlikleri('sahipProfili', b)).toEqual(['f_sahipKip', 'f_sahipProfil']);
+    expect(alanFormKimlikleri('odemeKarti.sonKullanmaYili', b)).toEqual(['f_kart_sonKullanmaYili']);
+    expect(alanFormKimlikleri('beklenenSonuc.mesaj', b)).toEqual(['f_beklenenMesaj']);
+    expect(alanFormKimlikleri('olmayanAlan', b)).toEqual([]);
   });
 
-  test('örnek veri dosyalarındaki tüm senaryolar hatasız (gerçek tarih; ortak kart uyarısı serbest)', () => {
-    const { model, altModeller } = jetSeyahatModeliniYukle();
+  test('örnek sayfa paketinin önerileri hatasız (gerçek tarih)', () => {
+    const model = ornekBasvuruModeli() as unknown as DogrulamaBaglami['model'];
+    const oneriler = (ornekBasvuruPaketi().senaryoOnerileri as Array<{ veri: Nesne }>);
+    expect(oneriler.length).toBeGreaterThan(0);
     const sorunlar: string[] = [];
-    for (const ortam of ORTAMLAR) {
-      const urun = ornekVeri<JetSeyahatTestData>(ortam, 'jet-seyahat').jetSeyahat;
-      const ortak = ortakBaglaminiOlustur(ortakOku(ortam));
-      for (const s of urun.senaryolar) {
-        const sonuc = senaryoyuDogrula(s, { model, altModeller, ortak, ortam, simdi: new Date() });
-        for (const h of sonuc.hatalar) sorunlar.push(`${ortam} > "${s.baslik}" > ${h.alan}: ${h.mesaj}`);
-      }
+    for (const o of oneriler) {
+      for (const h of senaryoyuDogrula(o.veri, { model, altModeller: {}, simdi: new Date() }).hatalar) sorunlar.push(`"${String(o.veri.baslik)}" > ${h.alan}: ${h.mesaj}`);
     }
     expect(sorunlar, sorunlar.join('\n')).toEqual([]);
   });

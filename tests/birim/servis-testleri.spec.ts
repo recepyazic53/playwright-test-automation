@@ -40,14 +40,14 @@ test('SoapUI: parametreler sade yazımla kalır; giriş bilgisi / tarih / test v
   const t = servisTaslaklari(soapuiCozumle(SOAPUI), { takim: 'Takim', durum: 'OrnekDurum' });
   expect(t.kimlikAdaylari).toEqual({ CHANNEL: '100', USERNAME: 'kullanici100', PASSWORD: SAHTE_PAROLA });
   expect(t.tarihKurallari).toEqual({ BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" });
-  expect(t.veriParametreleri).toEqual(['SIGORTALI_TC']);
+  expect(t.veriParametreleri).toEqual(['MUSTERI_TC']);
   expect(t.durum.uyarilar.join(' ')).toContain('Aktarım');
   const [s] = t.servisler;
   expect(s).toMatchObject({ anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', soapSurumu: '1.1', operasyonlar: [{ ad: 'Teklif', eylem: 'Ornek/Teklif' }] });
   const [gecersiz, gecerli, baska] = s.senaryolar;
   expect(gecersiz.govde).toContain('<Channel>${CHANNEL}</Channel><Username>${USERNAME}</Username><Password>${PASSWORD}</Password>');
   expect(gecersiz.govde).toContain('<BeginDate>${BEGIN_DATE}</BeginDate>');
-  expect(gecerli.govde).toContain('<CitizenshipNumber>${SIGORTALI_TC}</CitizenshipNumber>');
+  expect(gecerli.govde).toContain('<CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber>');
   // Değerler gövdeye yazılmaz (ne parola ne dosyadaki test verisi).
   for (const x of s.senaryolar) { expect(x.govde).not.toContain(SAHTE_PAROLA); expect(x.govde).not.toContain('55555555555'); }
   expect(gecersiz.kontroller).toEqual([{ tur: 'soapYaniti' }, { tur: 'icerir', deger: '<Durum>HATA</Durum>' }]);
@@ -120,13 +120,13 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     testOrtami = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: adres, varsayilan: true });
     canliOrtam = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: adres, ayarlar: { canli: true } });
     turId = testVerisiTuruKaydet(vt, { projeId, ad: 'Kişi', alanlar: [
-      { ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'SIGORTALI_TC', rol: 'sigortali' }, { ad: 'SIGORTA_ETTIREN_TC', rol: 'ettiren' }] },
+      { ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }, { ad: 'KEFIL_TC', rol: 'kefil' }] },
       { ad: 'adi', hassas: false }
     ] });
     // Koddan aktarım gibi eşleme vermeden kaydetmek mevcut eşlemeyi silmez.
     testVerisiTuruKaydet(vt, { id: turId, projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo' }, { ad: 'adi', hassas: false }] });
-    expect(testVerisiTurleriniListele(vt, projeId)[0].alanlar[0].servisParametreleri).toEqual([{ ad: 'SIGORTALI_TC', rol: 'sigortali' }, { ad: 'SIGORTA_ETTIREN_TC', rol: 'ettiren' }]);
-    expect(() => testVerisiTuruKaydet(vt, { projeId, ad: 'Başka', alanlar: [{ ad: 'no', servisParametreleri: [{ ad: 'SIGORTALI_TC' }] }] })).toThrow(/zaten "Kişi" türünün "tcKimlikNo"/);
+    expect(testVerisiTurleriniListele(vt, projeId)[0].alanlar[0].servisParametreleri).toEqual([{ ad: 'MUSTERI_TC', rol: 'musteri' }, { ad: 'KEFIL_TC', rol: 'kefil' }]);
+    expect(() => testVerisiTuruKaydet(vt, { projeId, ad: 'Başka', alanlar: [{ ad: 'no', servisParametreleri: [{ ad: 'MUSTERI_TC' }] }] })).toThrow(/zaten "Kişi" türünün "tcKimlikNo"/);
     expect(() => testVerisiTuruKaydet(vt, { projeId, ad: 'Bozuk', alanlar: [{ ad: 'no', servisParametreleri: [{ ad: '1AD' }] }] })).toThrow(DepoHatasi);
     profilId = testVerisiProfiliKaydet(vt, { projeId, turId, ad: 'k1', degerler: { tcKimlikNo: SAHTE_TC, adi: 'Deneme' } });
   });
@@ -149,7 +149,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     const girisTablosu = tabloKaydet(vt, { projeId, ad: 'Giriş', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }] });
     const onizleme = soapuiOnizle(vt, projeId, SOAPUI, { takim: 'Takim', durum: 'OrnekDurum' });
     expect(JSON.stringify(onizleme)).not.toContain(SAHTE_PAROLA);
-    expect(onizleme.veriParametreleri).toEqual([{ ad: 'SIGORTALI_TC', esleme: { turAd: 'Kişi', alan: 'tcKimlikNo', rol: 'sigortali' } }]);
+    expect(onizleme.veriParametreleri).toEqual([{ ad: 'MUSTERI_TC', esleme: { turAd: 'Kişi', alan: 'tcKimlikNo', rol: 'musteri' } }]);
     const r = soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: e.erisimKimligi, girisEkle: true });
     expect(r).toMatchObject({ yeniServis: true, eklenen: 3, atlanan: [], baglananAlan: 3, girisSatiriEklendi: true, eksikSatirlar: [], eslenmemisParametreler: [] });
     servisId = r.servisId;
@@ -162,7 +162,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
       'Input/Channel': { tablo: girisTablosu, sutun: 'Channel' }, 'Input/Username': { tablo: girisTablosu, sutun: 'Username' }, 'Input/Password': { tablo: girisTablosu, sutun: 'Password' } });
     // Gövdede giriş parametreleri tablo başvurusu; dosyadaki kanal / kullanıcı senaryonun tablo seçimi; giriş satırı tabloya eklendi.
     const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
-    expect(gecerli?.icerik.govde).toContain('<Channel>${Giriş.Channel}</Channel><Username>${Giriş.Username}</Username><Password>${Giriş.Password}</Password><CitizenshipNumber>${SIGORTALI_TC}</CitizenshipNumber>');
+    expect(gecerli?.icerik.govde).toContain('<Channel>${Giriş.Channel}</Channel><Username>${Giriş.Username}</Username><Password>${Giriş.Password}</Password><CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber>');
     expect(gecerli?.icerik.tabloSecimleri).toEqual({ [`${girisTablosu}|`]: { Channel: '100', Username: 'kullanici100' } });
     expect(tablolariListele(vt, projeId, { tabloId: girisTablosu })[0].satirlar.map((x) => [x.degerler.Channel, x.degerler.Username, x.doluGizli])).toEqual([['100', 'kullanici100', ['Password']]]);
     expect(s?.ayarlar.tarihKurallari).toEqual({ BEGIN_DATE: "bugun|yyyy-MM-dd'T'HH:mm:ss", END_DATE: "bugun+1y|yyyy-MM-dd'T'HH:mm:ss" });
@@ -176,17 +176,17 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
   test('Parametreler görünümü: her parametrenin kaynağı; rol için profil seçilmeden koşu açık nedenle hata verir', async () => {
     const p = servisParametreleri(vt, projeId, servisId);
     const kaynak = Object.fromEntries(p.parametreler.map((x) => [x.ad, x.kaynak.tur]));
-    expect(kaynak).toEqual({ BEGIN_DATE: 'tarih', END_DATE: 'tarih', SIGORTALI_TC: 'veri' });
-    expect(p.roller).toEqual([{ anahtar: `${turId}:sigortali`, turId, turAd: 'Kişi', rol: 'sigortali', profilId: null }]);
+    expect(kaynak).toEqual({ BEGIN_DATE: 'tarih', END_DATE: 'tarih', MUSTERI_TC: 'veri' });
+    expect(p.roller).toEqual([{ anahtar: `${turId}:musteri`, turId, turAd: 'Kişi', rol: 'musteri', profilId: null }]);
     const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
     const r = await servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: testOrtami, tur: 'dene', senaryoId: gecerli?.id });
     expect(r.durum).toBe('hata');
-    expect(r.hata).toContain('SIGORTALI_TC ("Kişi" türü, "sigortali" rolü için profil seçilmedi)');
+    expect(r.hata).toContain('MUSTERI_TC ("Kişi" türü, "musteri" rolü için profil seçilmedi)');
   });
 
   test('Dene (test): değerler çözülür, SOAPAction gönderilir; raporda parola ve hassas veri maskelidir; ekran koşularına yazılmaz', async () => {
     const s = servisGetir(vt, servisId);
-    servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', veriProfilleri: { [`${turId}:sigortali`]: profilId } });
+    servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx', veriProfilleri: { [`${turId}:musteri`]: profilId } });
     expect(servisGetir(vt, servisId)?.ayarlar.erisim).toEqual(s?.ayarlar.erisim);
     const senaryolar = servisSenaryolariniListele(vt, servisId);
     const gecerli = senaryolar.find((x) => x.baslik === 'Geçerli kimlik');
@@ -251,7 +251,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     const tur = testVerisiTurleriniListele(vt, projeId).find((x) => x.ad === 'Servis girişi');
     expect(tur?.alanlar.map((a) => [a.ad, a.hassas, a.servisParametreleri])).toEqual([
       ['kanal', false, [{ ad: 'CHANNEL', rol: 'giris' }]], ['parola', true, [{ ad: 'PASSWORD', rol: 'giris' }]], ['kullanici', true, [{ ad: 'USERNAME', rol: 'giris' }]]]);
-    expect(Object.keys(s?.ayarlar.veriProfilleri ?? {}).sort()).toEqual([`${tur?.id}:giris`, `${tur?.id}:giris@${canliOrtam}`, `${turId}:sigortali`].sort());
+    expect(Object.keys(s?.ayarlar.veriProfilleri ?? {}).sort()).toEqual([`${tur?.id}:giris`, `${tur?.id}:giris@${canliOrtam}`, `${turId}:musteri`].sort());
     // Dene (TEST): değerler artık test verisinden gelir — gövde öncekiyle aynı; parola raporda maskeli.
     const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
     const once = istekler.length;
