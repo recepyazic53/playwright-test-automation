@@ -186,7 +186,7 @@ function ekAlanlariDogrula(v) {
  * Senaryo düzenleyicide vurgulanır ve süzülür; koşuyu ENGELLEMEZ (olumsuz senaryolar bilerek göndermeyebilir).
  * @param {unknown} v @returns {Record<string, string[]>}
  */
-function alanZorunluluklariniDogrula(v) {
+export function alanZorunluluklariniDogrula(v) {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanZorunluluklari" bir nesne olmalıdır.');
   /** @type {Record<string, string[]>} */
   const s = {};
@@ -244,7 +244,7 @@ function alanListeleriniDogrula(v) {
  * gönderilir (ör. yyyy-MM-dd'T'HH:mm:ss).
  * @param {unknown} v @returns {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>}
  */
-function alanBaglariniDogrula(v) {
+export function alanBaglariniDogrula(v) {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new DepoHatasi('"alanBaglari" bir nesne olmalıdır.');
   /** @type {Record<string, Record<string, { tablo: string; sutun: string; etiket?: string; bicim?: string }>>} */
   const s = {};

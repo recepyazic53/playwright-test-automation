@@ -32,7 +32,8 @@ import { tmpdir } from 'node:os';
 import {
   platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
   platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformZamanlanmisKosulariBaslat,
-  platformKosuSureLimitiMs, platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu
+  platformKosuSureLimitiMs, platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu,
+  platformArayuzKilitliMi
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
@@ -317,6 +318,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/taban-adresler.js', { dosya: 'taban-adresler.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/rest-sihirbazi.js', { dosya: 'rest-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
@@ -351,6 +353,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ekran-baglari.js', { dosya: 'ekran-baglari.js', tur: 'text/javascript; charset=utf-8' }],
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/servis-govdesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-govdesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/rest-semasi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'rest-semasi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -1031,6 +1034,14 @@ async function istegiIsle(req, res) {
   // kuralları scripts/platform/sunucu-platform.mjs içinde.
   if (req.url && req.url.startsWith('/platform/')) {
     await platformIsteginiIsle(req, res, { token: OTURUM_TOKEN, raporlayiciTokeni: RAPORLAYICI_TOKENI, jsonGonder });
+    return;
+  }
+
+  // Arka plan kipi (kasa kilitliyken kullanıcı tercihiyle süren zamanlanmış koşu): arayüz kilitli olduğundan canlı görüntü,
+  // canlı adımlar, elle kod ve durdurma uçları da 423 döner (koşu kendi başına sürer; ekranda veri görünmez).
+  if (platformArayuzKilitliMi() && req.url && /^\/(canli|adim-durumu|kod-istegi|kod-gonder|durdur)(\?|$)/.test(req.url)) {
+    req.resume();
+    jsonGonder(res, 423, { basarili: false, kod: 'KASA_KILITLI', mesaj: 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.' });
     return;
   }
 

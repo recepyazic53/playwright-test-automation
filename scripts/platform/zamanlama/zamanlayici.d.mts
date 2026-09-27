@@ -30,6 +30,11 @@ export interface ZamanlayiciBagimliliklari {
   yurut(vt: Veritabani, kural: Kural, kosuKimligi: string, devamMi: () => boolean): Promise<YurutmeSonucu>;
   simdi?(): Date;
   log?(mesaj: string): void;
+  /**
+   * Kasa kilitliyken anahtar emanetteyse (kullanıcı tercihi) arka plan işini başlatır: anahtar arayüz kilitli kalarak
+   * yerleştirilir; dönen fonksiyon denetim ve başlatılan koşular bitince çağrılır. Anahtar yoksa null.
+   */
+  arkaPlanIsi?(): (() => void) | null;
 }
 
 export declare const KONTROL_ARALIGI_MS: number;

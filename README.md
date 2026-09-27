@@ -84,6 +84,19 @@ Koşular yalnızca Nöbetçi'den başlatılır: sunucu Playwright'ı (`playwrigh
 çalıştırır; veri, giriş bilgisi ve giriş tarifi şifreli veritabanından okunur, sonuçlar şifreli olarak yazılır.
 Playwright HTML raporu üretilmez.
 
+### Zamanlanmış koşular ve kilitli kasa
+
+**Ayarlar > Koşu > Zamanlanmış koşular**: kurallar varsayılan olarak yalnız Nöbetçi açıkken ve kasa açıkken çalışır.
+"Kasa kilitliyken ve açılışta" bölümündeki üç seçenek **varsayılan kapalıdır** ve ayrı ayrı açılır:
+
+- **Kilitliyken çalışsın (anahtar yalnız bellekte)** — kilitlemede arayüz kilitlenir (veri uçları 423), anahtarın kopyası
+  yalnız zamanlayıcının belleğinde kalır; Nöbetçi kapanınca gider. Kilitlerken "Tamamen kilitle" anahtarı da siler.
+- **Windows oturumuna bağlı otomatik açma (DPAPI)** — parola yeniden sorulur; anahtar DPAPI (CurrentUser) ile şifrelenip
+  çalışma alanının klasörüne yazılır (`<veritabanı>.zamanlayici.dpapi`; yedeğe/pakete girmez). Açılışta yalnız zamanlayıcıya
+  verilir, arayüz kilitli başlar. Risk: Windows oturumunuzu ele geçiren biri zamanlanmış koşuların kullandığı verilere erişebilir.
+- **Bilgisayar açılınca arka planda başlasın** — Görev Zamanlayıcı'ya kendi hesabınızla, yönetici izni gerektirmeyen
+  "Nöbetçi (arka plan)" görevi eklenir (`baslat.mjs --arka-plan`; pakette `Nöbetçi.exe --arka-plan`, pencere açılmaz).
+
 ## Yapı
 
 ```text

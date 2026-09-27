@@ -24,6 +24,7 @@ import { cikisKorumasiniKur } from './cikis-korumasi.js';
 import { tabloSiralamaKur } from './tablo-siralama.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
+import { kasayiKilitleSecimli } from './zamanlanmis-kosular.js';
 
 // Çalışma alanı ve proje ⋯ modülleri DİNAMİK yüklenir: eski sürüm bir sunucu (yeniden başlatılmamış) bu dosyaları sunmuyorsa
 // kabuk yine açılır, yalnızca bu özellikler görünmez. (Eski sunucunun /platform/durum yanıtında "calismaAlani" alanı yoktur.)
@@ -668,6 +669,8 @@ function kilitEkrani(beklemeSaniye) {
       cokluAlan ? h('p', { class: 'kilit-alan-adi' }, h('span', { class: 'ca-avatar kucuk', 'aria-hidden': 'true' }, basHarf(alan.ad)), h('span', {}, alan.ad)) : null,
       h('p', { class: 'soluk' }, cokluAlan ? 'Devam etmek için bu çalışma alanının kasa parolasını girin.' : 'Devam etmek için kasa parolasını girin.')),
     mesaj.kutu, halka.kutu, parola.kapsayici, h('div', { class: 'dugmeler' }, gonder),
+    durum.sunucu && durum.sunucu.zamanlama && durum.sunucu.zamanlama.anahtarBellekte
+      ? h('p', { class: 'soluk kucuk', role: 'status' }, 'Zamanlanmış koşular arka planda sürebilir: kasa anahtarı yalnız zamanlayıcı için bellekte (Ayarlar > Koşu).') : null,
     baska ? h('div', { class: 'kilit-alt' }, baska) : null);
   let durdur = () => {};
   const bekle = (saniye, onMetin) => {
@@ -764,8 +767,9 @@ function anaDuzen() {
   const navAyarlar = h('a', { href: '#/ayarlar/proje' }, ikon('ayar'), 'Ayarlar');
   const kilitle = h('button', { type: 'button', class: 'kilitle-dugmesi', 'aria-label': 'Kilitle' }, ikon('kilit'), h('span', { class: 'dugme-metni' }, 'Kilitle'));
   const kilitleVeDon = async () => {
-    await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
-    bildir('Kasa kilitlendi.');
+    const secim = await mesgulIken(kilitle, 'Kilitleniyor…', () => kasayiKilitleSecimli());
+    if (!secim) return;
+    bildir(secim === 'surdur' ? 'Kasa kilitlendi; zamanlanmış koşular sürüyor.' : 'Kasa kilitlendi.');
     yonlendir();
   };
   kilitle.addEventListener('click', kilitleVeDon);

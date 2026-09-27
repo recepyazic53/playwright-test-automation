@@ -12,7 +12,7 @@ import { tablolarBolumu } from './tablolar.js';
 import { tabanAdresleriBolumu } from './taban-adresler.js';
 import { rehberAyarlariniGuncelle, rehberBaslat } from './rehber.js';
 import { entegrasyonlarBolumu } from './entegrasyonlar.js';
-import { zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
+import { kasayiKilitleSecimli, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
 
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
@@ -748,8 +748,9 @@ async function guvenlik(govde, baglam) {
 
   const kilitle = h('button', { type: 'button' }, ikon('kilit'), 'Kasayı kilitle');
   kilitle.addEventListener('click', async () => {
-    await mesgulIken(kilitle, 'Kilitleniyor…', () => api('/platform/kasa/kilitle', { govde: {} }));
-    bildir('Kasa kilitlendi.');
+    const secim = await mesgulIken(kilitle, 'Kilitleniyor…', () => kasayiKilitleSecimli());
+    if (!secim) return;
+    bildir(secim === 'surdur' ? 'Kasa kilitlendi; zamanlanmış koşular sürüyor.' : 'Kasa kilitlendi.');
     baglam.yonlendir();
   });
 

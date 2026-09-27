@@ -13,6 +13,7 @@ import {
 } from './servis-islemleri.mjs';
 import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu } from './servis-isleri.mjs';
 import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
+import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -281,6 +282,23 @@ export const SERVIS_POST_UCLARI = [
       throw new DepoHatasi(/** @type {Error} */ (e).message);
     }
   }],
+  // REST servisi (Adım adım > REST ve İşlemler): uçlarla kayıt (ağ isteği yok) ve isteğe bağlı "Dene" (yalnız TEST, kullanıcı onayıyla).
+  ['/platform/servis/rest/kaydet', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return restServisiKaydet(db, projeId, {
+      id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), uclar: Array.isArray(g.uclar) ? g.uclar : [],
+      ...(g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {}),
+      ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
+      ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
+      senaryolar: Array.isArray(g.senaryolar) ? g.senaryolar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
+      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {})
+    });
+  }],
+  ['/platform/servis/rest/dene', async (db, g) => restUcuDene(db, kimlik(g.projeId, 'projeId'), {
+    ortamId: kimlik(g.ortamId, 'ortamId'), ...(typeof g.taban === 'string' ? { taban: g.taban } : {}), uc: g.uc,
+    ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {})
+  })],
   // Taban adresleri toplu düzenle: onay yoksa yalnız etki önizlemesi; onay: true ile yazılır. Ağ isteği yok.
   ['/platform/servis-tabanlari/uygula', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');

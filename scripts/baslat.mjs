@@ -9,6 +9,7 @@
 //   Ortam değişkeni önceliklidir: NOBETCI_ACILIS=pencere|tarayici. Hiç açmamak için BASLAT_TARAYICI_ACMA=1.
 // - Sunucu bu portta zaten çalışıyorsa yenisi başlatılmaz; yalnızca arayüz açılır.
 // - Port: TEST_SUNUCU_PORT (varsayılan 5566). Chromium bulunamazsa varsayılan tarayıcıya düşülür (hiçbir şey indirilmez).
+// - --arka-plan: arayüz açılmaz, sunucu zaten çalışıyorsa hiçbir şey yapılmaz (Windows oturum açılışı görevi; bkz. arkaPlandaBaslat).
 // Sunucunun çıktısı bu terminalde görünür; kapatmak için Ctrl+C.
 import 'dotenv/config';
 import { spawn } from 'node:child_process';
@@ -23,6 +24,8 @@ const KOK = join(klasor, '..');
 const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
 const ADRES = `http://127.0.0.1:${PORT}/`;
 const VERI = veriKoku(KOK);
+/** Oturum açılışı görevinden: pencere/tarayıcı açmadan yalnız sunucu (bkz. arkaPlandaBaslat). */
+const ARKA_PLAN = process.argv.includes('--arka-plan');
 
 async function sunucuHazirMi() {
   try {
@@ -42,6 +45,29 @@ async function chromiumYolu() {
   } catch {
     return null;
   }
+}
+
+/**
+ * --arka-plan (Ayarlar > Koşu > "Bilgisayar açılınca Nöbetçi arka planda başlasın" görevi): arayüz / pencere AÇILMAZ; sunucu
+ * zaten çalışıyorsa hiçbir şey yapılmaz. Windows'ta Görev Zamanlayıcı node.exe'yi görünür bir konsolla başlatır: bu süreç
+ * kendini konsolsuz (windowsHide + detached; ek araç gerekmez) yeniden başlatıp hemen çıkar — konsol yalnız bir an görünür.
+ * Paketli sürümde Nöbetçi.exe node'u zaten penceresiz başlatır (NOBETCI_ARKA_PLAN_GIZLI=1) ve bu adım atlanır.
+ */
+async function arkaPlandaBaslat() {
+  if (await sunucuHazirMi()) return;
+  if (process.platform === 'win32' && process.env.NOBETCI_ARKA_PLAN_GIZLI !== '1') {
+    const gizli = spawn(process.execPath, [fileURLToPath(import.meta.url), '--arka-plan'], {
+      cwd: KOK, detached: true, windowsHide: true, stdio: 'ignore', shell: false, env: { ...process.env, NOBETCI_ARKA_PLAN_GIZLI: '1' }
+    });
+    gizli.unref();
+    return;
+  }
+  // Çıktı görünmez: sunucu kendi günlüğünü (test-sunucu.log) yazar.
+  const sunucu = spawn(process.execPath, [join(klasor, 'test-sunucu.mjs')], { cwd: KOK, stdio: 'ignore', shell: false, windowsHide: true, env: process.env });
+  sunucu.on('exit', (kod) => process.exit(kod ?? 0));
+  const kapat = (/** @type {NodeJS.Signals} */ sinyal) => { if (!sunucu.killed) sunucu.kill(sinyal); };
+  process.on('SIGINT', () => kapat('SIGINT'));
+  process.on('SIGTERM', () => kapat('SIGTERM'));
 }
 
 function varsayilanTarayicidaAc() {
@@ -77,7 +103,9 @@ async function arayuzuAc() {
   return null;
 }
 
-if (await sunucuHazirMi()) {
+if (ARKA_PLAN) {
+  await arkaPlandaBaslat();
+} else if (await sunucuHazirMi()) {
   console.log(`Sunucu ${PORT} portunda zaten çalışıyor; arayüz açılıyor.`);
   await arayuzuAc();
 } else {

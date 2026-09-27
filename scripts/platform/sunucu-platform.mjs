@@ -99,6 +99,12 @@
 // Otomatik kilit: kasa, kimliği doğrulanmış API etkinliği olmadan ayarlanan süre (Ayarlar >
 // Güvenlik, 5–120 dk, varsayılan 15) geçince kilitlenir. GET /platform/durum etkinlik SAYILMAZ.
 //   GET /platform/guvenlik, POST /platform/guvenlik/kaydet { otomatikKilitDakika }
+// Zamanlanmış koşular kilitliyken / açılışta (zamanlama/arka-plan.mjs; üç tercih de varsayılan KAPALI):
+//   GET  /platform/zamanlama/tercihler                    tercihler + DPAPI dosyası + Windows görevinin varlığı (schtasks /Query)
+//   POST /platform/zamanlama/tercih { ad, acik, parola?, onay? }   ad: kilitliyken | dpapi (parola + onay) | oturumAcilisi (onay)
+//   POST /platform/kasa/kilitle { tamamen? }               tercih açıkken varsayılan "arayüzü kilitle, anahtar zamanlayıcıda kalsın"
+//   Arka plan kipinde (anahtar yalnız zamanlanmış koşunun işi için bellekte) arayüz KİLİTLİDİR: arayuzKilidindeIzinliMi dışındaki
+//   her /platform/* isteği 423 döner; acikVeritabani da arayuzAcikMi'ye bakar.
 // Gizli değerler (giriş parolası, TOTP anahtarı, hassas test verisi alanları) listelerde ve
 // kaydet yanıtlarında ASLA dönmez: { dolu: true|false, maske: '••••••' } döner. Kaydederken
 // alan gönderilmezse (veya boşsa) mevcut değer korunur.
@@ -140,8 +146,8 @@ import {
   testVerisiTuruKaydet, testVerisiTuruSil, testVerisiTurleriniListele, veritabaniniHazirla, yerelMakine
 } from './veritabani/depo.mjs';
 import {
-  KasaHatasi, MEDYA_ANAHTARI_META, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, acikAnahtar, kasaAc, kasaAcikMi, kasaDurumu, kasaKilitle,
-  kasaOlustur, medyaAnahtariniAc, medyaAnahtariniHazirla, parolaDegistir, parolayiDogrula, zarfMi
+  KasaHatasi, MEDYA_ANAHTARI_META, MIN_PAROLA_UZUNLUGU, ParolaDenemeSiniri, acikAnahtar, arayuzAcikMi, arkaPlanKipindeMi, kasaAc, kasaAcikMi,
+  kasaDurumu, kasaKilitle, kasaOlustur, medyaAnahtariniAc, medyaAnahtariniHazirla, parolaDegistir, parolayiDogrula, zarfMi
 } from './kasa.mjs';
 import {
   eskiSonuclariSil, hataKaliplari, kosuDetayi, kosuKaydet, kosudakiSonucuBul, kosuyuBitir, medyaGetir, sonucDetayi, sonucKaydet, sonucOzeti
@@ -186,6 +192,8 @@ import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
 import { servisAkisiCalistir } from './servisler/servis-akislari.mjs';
 import { zamanlayiciOlustur, zamanliKosuyuYurut } from './zamanlama/zamanlayici.mjs';
 import { ZAMANLAMA_POST_UCLARI, zamanlamaGetUclari } from './zamanlama/uclar.mjs';
+import { arayuzKilidindeIzinliMi, arkaPlanIsiBaslat, emanetiSil } from './zamanlama/anahtar-emaneti.mjs';
+import { arkaPlanYoneticisi } from './zamanlama/arka-plan.mjs';
 import { SERVIS_SONUC_UCLARI } from './sonuclar/servis-sonuclari.mjs';
 import { sorgudanAralik } from './sonuclar/aralik.mjs';
 import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
@@ -321,9 +329,10 @@ function guvenlikAyariniYukle(db) {
 }
 
 setInterval(() => {
-  if (!vt || !kasaAcikMi(vt)) return;
+  if (!vt || !arayuzAcikMi(vt)) return;
   if (Date.now() - sonEtkinlik < otomatikKilitDakika * DAKIKA_MS) return;
-  kasaKilitle(vt);
+  // Tercih ("kilitliyken de çalışsın" / DPAPI) açıksa arayüz kilitlenir, anahtar yalnız zamanlayıcının emanetinde kalır.
+  arkaPlan.kilitle(vt);
   otomatikKilitZamani = new Date().toISOString();
   console.log(`[platform] Kasa ${otomatikKilitDakika} dakika işlem yapılmadığı için otomatik kilitlendi.`);
 }, Math.min(5_000, DAKIKA_MS)).unref();
@@ -344,10 +353,12 @@ const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
 
 /**
  * Zamanlanmış koşular (Ayarlar > Koşu; bkz. zamanlama/*.mjs): kasa AÇIKKEN dakikada bir denetlenir; vakti gelen kural
- * "Koşuyu başlat" ile aynı yoldan (senaryoCalistir + bu koşucu) koşar. Kasa kilitliyse hiçbir şey yapılmaz.
+ * "Koşuyu başlat" ile aynı yoldan (senaryoCalistir + bu koşucu) koşar. Kasa kilitliyse hiçbir şey yapılmaz — kullanıcı
+ * "kilitliyken de çalışsın" / DPAPI tercihini açtıysa anahtar emanetten arka plan kipinde (arayüz kilitli) kullanılır.
  */
 const zamanlayici = zamanlayiciOlustur({
   veritabani: () => (vt && kasaAcikMi(vt) ? vt : null),
+  arkaPlanIsi: () => (vt ? arkaPlanIsiBaslat(vt) : null),
   mesgulMu: () => Boolean(kosucu?.mesgulMu?.()),
   yurut: (db, kural, kosuKimligi, devamMi) => zamanliKosuyuYurut(db, kural, kosuKimligi, {
     senaryolar: (d, projeId, ortamId) => senaryoListesi(d, projeId, ortamId).senaryolar,
@@ -362,6 +373,13 @@ const zamanlayici = zamanlayiciOlustur({
 /** Test sunucusu başlarken çağırır: zamanlanmış koşuların dakikalık denetimi. */
 export function platformZamanlanmisKosulariBaslat() {
   zamanlayici.baslat();
+  // Windows oturumuna bağlı otomatik açma (DPAPI dosyası varsa): anahtar YALNIZ zamanlayıcının emanetine; arayüz kilitli başlar.
+  void platformVeritabani().then((db) => arkaPlan.acilistaYukle(db)).catch(() => { /* ayrıntı Ayarlar > Koşu'da */ });
+}
+
+/** Arka plan kipi mi (anahtar yalnız zamanlayıcının işi için bellekte, arayüz kilitli)? test-sunucu canlı görüntü uçlarını kapatır. */
+export function platformArayuzKilitliMi() {
+  return Boolean(vt && arkaPlanKipindeMi(vt));
 }
 
 /**
@@ -519,6 +537,14 @@ const denemeSiniri = /** @type {ParolaDenemeSiniri} */ (/** @type {unknown} */ (
   basarili: () => aktifSinir().basarili(),
   dene: (/** @type {() => Promise<unknown>} */ fn) => aktifSinir().dene(fn)
 }));
+/** Zamanlanmış koşuların kilitliyken / açılışta çalışma tercihleri (A: bellek, B: DPAPI, C: oturum açılışı görevi). */
+const arkaPlan = arkaPlanYoneticisi({
+  veritabaniYolu, projeKoku: PROJE_KOKU, denemeSiniri,
+  // YALNIZCA doğrulama örnekleri (birim testlerinin geçici sunucusu): Windows Görev Zamanlayıcı'ya hiç dokunulmaz (schtasks çağrılmaz).
+  ...(process.env.TEST_SUNUCU_WINDOWS_GOREVI_KAPALI === '1'
+    ? { gorevYurutucu: async () => { throw new Error('Bu sunucu örneğinde Windows görevi kapalı (TEST_SUNUCU_WINDOWS_GOREVI_KAPALI=1).'); } }
+    : {})
+});
 const iceAktarma = new IceAktarmaYoneticisi({
   veritabani: (olustur) => platformVeritabani({ olustur }),
   medyaKlasoru: medyaKlasoruYolu,
@@ -613,6 +639,7 @@ function baglantiDosyasiniYaz() {
 export function platformKapanirken() {
   const yol = veritabaniYolu();
   if (yol) sunucuBaglantisiniSil(yol);
+  if (vt) emanetiSil(vt);
   if (vt && kasaAcikMi(vt)) kasaKilitle(vt);
 }
 
@@ -653,6 +680,7 @@ function alaniKapat(secenekler = {}) {
   const eski = aktifAlan;
   if (vt) {
     projeSayisiniKaydet(vt);
+    emanetiSil(vt);
     if (kasaAcikMi(vt)) kasaKilitle(vt);
     vt.kapat();
     vt = null;
@@ -692,7 +720,8 @@ async function alaniAc(id, parola) {
     sinir.kontrolEt();
     aday = zatenAcik && vt ? vt : await veritabaniniHazirla(yollar.veritabani);
     try {
-      if (kasaDurumu(aday).olusturuldu && !kasaAcikMi(aday)) {
+      // Arka plan kipinde (anahtar yalnız zamanlayıcının işi için bellekte) de parola sorulur.
+      if (kasaDurumu(aday).olusturuldu && !arayuzAcikMi(aday)) {
         const acilan = aday;
         await sinir.dene(() => kasaAc(acilan, parola));
       }
@@ -711,9 +740,10 @@ async function alaniAc(id, parola) {
     vt = aday;
     aktifAlan = { id: alan.id, ad: alan.ad, veritabani: yollar.veritabani, sabit: false };
   }
-  if (vt && kasaAcikMi(vt)) {
+  if (vt && arayuzAcikMi(vt)) {
     yerelMakine(vt);
     guvenlikAyariniYukle(vt);
+    arkaPlan.kasaAcildi(vt);
   }
   alanAcildi(VERI_KOKU, alan.id, vt ? { projeSayisi: Number(vt.tek('SELECT COUNT(*) AS n FROM projeler')?.n ?? 0) } : {});
   baglantiDosyasiniYaz();
@@ -853,6 +883,8 @@ async function acikVeritabani() {
   const db = await platformVeritabani();
   if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
   acikAnahtar(db);
+  // Arka plan kipi (anahtar yalnız zamanlanmış koşunun işi için bellekte): arayüz için kasa KİLİTLİDİR.
+  if (!arayuzAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.');
   return db;
 }
 
@@ -1038,7 +1070,7 @@ function dosyaAlaniKabulu(db, ekranId, alan) {
   throw new DepoHatasi('Modelde bu adla bir dosya alanı yok.');
 }
 
-/** @type {Map<string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>>} */
+/** @type {Map<string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const GET_UCLARI = new Map([
   // Giriş tarifleri (ortam başına; kaydedilmiş ya da projenin varsayılanı) + bağlam türlerinin ALAN ADLARI (değer yok).
   ['/platform/giris-tarifleri', (db, q) => {
@@ -1198,6 +1230,8 @@ for (const [yol, islem] of SQL_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of ENTEGRASYON_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs).
 for (const [yol, islem] of zamanlamaGetUclari(zamanlayici)) GET_UCLARI.set(yol, islem);
+// Zamanlanmış koşuların kilitliyken / açılışta çalışma tercihleri (A/B/C; görev durumu schtasks /Query ile).
+GET_UCLARI.set('/platform/zamanlama/tercihler', (db) => arkaPlan.durum(db));
 // Servis sonuçları ekranı (yalnız okuma): sonuclar/servis-sonuclari.mjs.
 for (const [yol, islem] of SERVIS_SONUC_UCLARI) GET_UCLARI.set(yol, islem);
 
@@ -1485,6 +1519,7 @@ for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of entegrasyonPostUclari({ medyaKlasoruYolu })) POST_UCLARI.set(yol, islem);
 // Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs; hiçbir uç koşu başlatmaz).
 for (const [yol, islem] of ZAMANLAMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
+POST_UCLARI.set('/platform/zamanlama/tercih', (db, g) => arkaPlan.tercihDegistir(db, g));
 
 /**
  * @param {import('node:http').IncomingMessage} req
@@ -1530,6 +1565,14 @@ export async function platformIsteginiIsle(req, res, baglam) {
   // Kimliği doğrulanmış her istek (durum sorgusu hariç) otomatik kilit sayacını sıfırlar.
   if (disTokenGecerli && yol !== '/platform/durum') platformEtkinligiBildir();
 
+  // Arka plan kipi (kullanıcı tercihiyle kasa kilitliyken zamanlanmış koşu için anahtar bellekte): arayüz KİLİTLİDİR. Varsayılan
+  // reddet — yalnız durum, kasayı açma/kilitleme, çalışma alanı seçimi ve raporlayıcının yazma uçları geçer; diğer her uç 423.
+  if (vt && arkaPlanKipindeMi(vt) && !arayuzKilidindeIzinliMi(req.method ?? '', yol)) {
+    req.resume();
+    jsonGonder(res, 423, { basarili: false, kod: 'KASA_KILITLI', mesaj: 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.' });
+    return true;
+  }
+
   try {
     // --- GET /platform/durum (kasa kilitliyken de çalışır; YALNIZCA gizli olmayan bilgi) -----
     if (req.method === 'GET' && yol === '/platform/durum') {
@@ -1551,7 +1594,9 @@ export async function platformIsteginiIsle(req, res, baglam) {
         otomatikKilit: { dakika: otomatikKilitDakika, sonKilitlenme: otomatikKilitZamani },
         // Açık çalışma alanı (yalnızca görünen ad; seçim ekranında da görünür) ve son dışa aktarımdan beri değişiklik.
         calismaAlani: aktifAlan ? { id: aktifAlan.id, ad: aktifAlan.ad, sabit: aktifAlan.sabit } : null,
-        degisiklik: db ? degisiklikDurumu(db) : null
+        degisiklik: db ? degisiklikDurumu(db) : null,
+        // Zamanlanmış koşular (gizli olmayan): anahtar zamanlayıcı için bellekte mi, DPAPI dosyası var mı, kilit menüsü iki seçenekli mi.
+        zamanlama: arkaPlan.kilitDurumu(db)
       });
       return true;
     }
@@ -1611,7 +1656,10 @@ export async function platformIsteginiIsle(req, res, baglam) {
         default: {
           const id = alanKimligi();
           if (aktifAlan?.id === id) throw new CalismaAlaniHatasi('ACIK', 'Açık çalışma alanı kaldırılamaz. Önce kapatın (sağ üst menü > Çalışma alanını kapat).');
+          const kaldirilan = kayitDefteriniHazirla(VERI_KOKU).defter.alanlar.find((a) => a.id === id);
           const sonuc = alanKaldir(VERI_KOKU, id, g.onayAdi);
+          // Windows oturumuna bağlı otomatik açma dosyası (veritabanının yanında) da silinir.
+          if (kaldirilan) { try { arkaPlan.alanKaldirildi(alanYollari(VERI_KOKU, kaldirilan).veritabani); } catch { /* yok sayılır */ } }
           denemeSinirlari.delete(id);
           console.log(`[platform] Çalışma alanı bu bilgisayardan kaldırıldı (${sonuc.silinenDosya} dosya silindi).`);
           jsonGonder(res, 200, { basarili: true, silinenDosya: sonuc.silinenDosya });
@@ -1711,7 +1759,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
       if (!disTokenGecerli) { tokenYok(); return true; }
       const db = await acikVeritabani();
       res.setHeader('Cache-Control', 'no-store');
-      jsonGonder(res, 200, { basarili: true, ...getIslemi(db, url.searchParams) });
+      jsonGonder(res, 200, { basarili: true, ...(await getIslemi(db, url.searchParams)) });
       return true;
     }
 
@@ -1735,7 +1783,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
         denemeSiniri.kontrolEt();
         if (iceAktarma.aktifIs()) throw new YedekHatasi('MESGUL', 'Başka bir içe aktarma sürüyor; bitmesini bekleyin.');
         const mevcutDb = await platformVeritabani();
-        if (mevcutDb && kasaDurumu(mevcutDb).olusturuldu && !kasaAcikMi(mevcutDb)) {
+        if (mevcutDb && kasaDurumu(mevcutDb).olusturuldu && !arayuzAcikMi(mevcutDb)) {
           throw new KasaHatasi('KASA_KILITLI', 'İçe aktarma için önce bu makinedeki kasayı açın.');
         }
       } catch (hata) {
@@ -1836,6 +1884,8 @@ export async function platformIsteginiIsle(req, res, baglam) {
         try { alanAcildi(VERI_KOKU, aktifAlan.id, { projeSayisi: Number(vt.tek('SELECT COUNT(*) AS n FROM projeler')?.n ?? 0) }); } catch { /* yalnızca gösterim */ }
         baglantiDosyasiniYaz();
       }
+      // Tam yükleme kasayı yeniden anahtarlayabilir / tercihleri değiştirebilir: DPAPI dosyası ve tercih uzlaştırılır.
+      if (vt && arayuzAcikMi(vt)) arkaPlan.kasaAcildi(vt);
       console.log(`[platform] Yedek içe aktarıldı (${sonuc.tamYukleme ? 'tam yükleme' : 'seçmeli'}), üzerine yazılan sürüm geçmişe: ${sonuc.gecmiseYazilan}.`);
       jsonGonder(res, 200, { basarili: true, sonuc });
       return true;
@@ -1896,6 +1946,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
         const db = /** @type {import('./veritabani/baglanti.mjs').Veritabani} */ (await platformVeritabani({ olustur: true }));
         const kasa = await kasaOlustur(db, metin(govde.parola));
         guvenlikAyariniYukle(db);
+        arkaPlan.kasaAcildi(db);
         if (aktifAlan && !aktifAlan.sabit) alanAcildi(VERI_KOKU, aktifAlan.id, { projeSayisi: 0 });
         baglantiDosyasiniYaz();
         console.log('[platform] Kasa oluşturuldu.');
@@ -1908,6 +1959,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
         const kasa = await denemeSiniri.dene(() => kasaAc(db, metin(govde.parola)));
         yerelMakine(db);
         guvenlikAyariniYukle(db);
+        arkaPlan.kasaAcildi(db);
         if (aktifAlan && !aktifAlan.sabit) {
           try { alanAcildi(VERI_KOKU, aktifAlan.id, { projeSayisi: Number(db.tek('SELECT COUNT(*) AS n FROM projeler')?.n ?? 0) }); } catch { /* yalnızca gösterim */ }
         }
@@ -1915,8 +1967,11 @@ export async function platformIsteginiIsle(req, res, baglam) {
         return true;
       }
       case '/platform/kasa/kilitle': {
+        // { tamamen?: true } — tercih (A/B) açıkken "Kilitle (zamanlanmış koşular sürsün)" varsayılandır; "Tamamen kilitle"
+        // bellekteki anahtarı da siler. Tercihler kapalıyken bugünkü gibi tamamen kilitlenir.
         const db = await platformVeritabani();
-        jsonGonder(res, 200, { basarili: true, kasa: db ? kasaKilitle(db) : { olusturuldu: false, acik: false } });
+        const sonuc = db ? arkaPlan.kilitle(db, { tamamen: govde.tamamen === true }) : { arkaPlan: false };
+        jsonGonder(res, 200, { basarili: true, kasa: db ? kasaDurumu(db) : { olusturuldu: false, acik: false }, arkaPlan: sonuc.arkaPlan });
         return true;
       }
       case '/platform/kasa/parola-degistir': {
@@ -1924,13 +1979,15 @@ export async function platformIsteginiIsle(req, res, baglam) {
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
         const kasa = await denemeSiniri.dene(() => parolaDegistir(db, metin(govde.eskiParola), metin(govde.yeniParola)));
         console.log(`[platform] Kasa parolası değiştirildi (${kasa.yenidenSifrelenen} değer yeniden şifrelendi).`);
+        // Zamanlayıcının bellekteki anahtarı ve (varsa) DPAPI dosyası yeni anahtarla yenilenir; yenilenemezse silinip uyarılır.
+        await arkaPlan.parolaDegisti(db);
         jsonGonder(res, 200, { basarili: true, kasa });
         return true;
       }
       case '/platform/yedek/disa-aktar': {
         const db = await platformVeritabani();
         if (!db) throw new KasaHatasi('KASA_YOK', 'Kasa henüz oluşturulmamış.');
-        if (!kasaAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.');
+        if (!arayuzAcikMi(db)) throw new KasaHatasi('KASA_KILITLI', 'Kasa kilitli. Önce kasa parolasıyla kasayı açın.');
         const secim = medyaSeciminiCoz({
           ekranGoruntuleriDahil: /** @type {boolean | undefined} */ (govde.ekranGoruntuleriDahil),
           videolarDahil: /** @type {boolean | undefined} */ (govde.videolarDahil),

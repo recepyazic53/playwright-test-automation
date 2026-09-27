@@ -1,4 +1,5 @@
-// ZAMANLANMIŞ KOŞULAR — çalıştırıcı. Nöbetçi sunucusu çalışırken ve kasa AÇIKKEN dakikada bir kuralları denetler; vakti gelen
+// ZAMANLANMIŞ KOŞULAR — çalıştırıcı. Nöbetçi sunucusu çalışırken ve kasa AÇIKKEN (ya da kullanıcı tercihiyle kilitliyken
+// anahtar emanetteyse: bag.arkaPlanIsi, bkz. anahtar-emaneti.mjs) dakikada bir kuralları denetler; vakti gelen
 // kural için arayüzdeki "Koşuyu başlat" ile AYNI yoldan (senaryo başına /platform/senaryolar/calistir mantığı: senaryoCalistir)
 // koşu başlatır; koşu kimliği "zamanli-<uuid>". Kurallar:
 //  - Aynı anda başka bir koşu sürüyorsa (arayüzden ya da başka bir zamanlanmış koşu) tetikleme ATLANIR: "Atlandı: koşu sürüyordu".
@@ -125,8 +126,21 @@ export function zamanlayiciOlustur(bag) {
    * @returns {Promise<Array<Promise<void>>>}
    */
   async function kontrolEt() {
+    // Kasa kilitliyken ve kullanıcı "kilitliyken de çalışsın" dediyse (anahtar emanette): anahtar arka plan kipinde (arayüz
+    // kilitli) yerleştirilir; denetim ve başlattığı koşular bitince kaldırılır (bkz. anahtar-emaneti.mjs).
+    const bitir = bag.arkaPlanIsi ? bag.arkaPlanIsi() : null;
     const vt = bag.veritabani();
-    if (!vt) return [];
+    if (!vt) { bitir?.(); return []; }
+    const baslatilan = await denetle(vt);
+    if (bitir) {
+      if (baslatilan.length) void Promise.allSettled(baslatilan).then(() => bitir());
+      else bitir();
+    }
+    return baslatilan;
+  }
+
+  /** @param {Veritabani} vt @returns {Promise<Array<Promise<void>>>} */
+  async function denetle(vt) {
     while (bekleyen.length) {
       const x = /** @type {{ kuralId: string; t: Tetikleme }} */ (bekleyen[0]);
       try { tetiklemeYaz(vt, x.kuralId, x.t); bekleyen.shift(); } catch { break; }

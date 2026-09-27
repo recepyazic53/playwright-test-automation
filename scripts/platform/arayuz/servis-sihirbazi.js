@@ -5,13 +5,19 @@
 //   3 · Alanlar    — seçilen metotların alanları; her alan bir test verisi tablosunun sütununa bağlanır (öneriler: başka
 //                    serviste aynı adlı alanın bağlantısı, yoksa adı aynı sütun). Giriş bilgisi de bir tablodur (Servis girişi).
 //   4 · Özet → Kaydet. Yeni yazılan taban adresler ortamlara kaydedilir (sonraki servislerde listede hazır olur).
+// REST türünde (en başta seçilir) 2. adım "İstekler": uçlar (ad, HTTP işlemi, yol, sorgu, içerik türü, başlıklar, gövde örneği);
+// 3. adım uçların alanları (yol / sorgu / gövde); 4. adımda uç başına başlangıç senaryosu seçilir (rest-sihirbazi.js). WSDL yok;
+// "Dene" isteğe bağlı ve onaylıdır. Tam adres yapıştırılırsa köken taban adres, kalanı ilk isteğin yolu / sorgusu olur.
 // Hiçbir ağ isteği kullanıcı onayı olmadan atılmaz; kaydetmeden önce hiçbir şey veritabanına yazılmaz.
+import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc } from './rest-sihirbazi.js';
+import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 
 const ADIMLAR = ['Adresler', 'Metotlar', 'Alanlar', 'Özet'];
+const REST_ADIMLARI = ['Adresler', 'İstekler', 'Alanlar', 'Özet'];
 /** Kayıt oluşturan / belge üreten metot adları: "CANLI'da çağrılmasın" işaretli gelir (kullanıcı değiştirebilir). */
 const YALNIZ_TEST_DESENI = /approve|onay|print|basim|cancel|iptal|delete|sil|create|kaydet|save|pay|odeme|purchase|issue/i;
 /** WSDL "date" tipinin zorunlu biçimi; tarih-saat alanlarında biçim yazılmaz → kullanıcının varsayılanı (Ayarlar > Koşu). */
@@ -44,8 +50,12 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     adim: 0, ad: '', anahtar: '', anahtarElle: false, soapSurumu: '1.1', tls: true,
     tabanlar: Object.fromEntries(ortamlar.map((o) => [o.id, o.canli ? '' : o.tabanUrl])),
     yol: '', kontrolOrtami: (testOrtamlari.find((o) => o.varsayilan) || testOrtamlari[0])?.id ?? '',
-    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, baglar: {}, zorunlu: {}, ekAlanlar: {}
+    erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, baglar: {}, zorunlu: {}, ekAlanlar: {},
+    // REST: tür, uçlar, uç kimliğine göre alan bağları / zorunluluklar, başlangıç senaryosu istenen uçlar (kimlik).
+    tur: 'soap', uclar: [yeniUc()], restBaglar: {}, restZorunlu: {}, senaryoIstenen: null, kapsam: 'test'
   };
+  const rest = () => d.tur === 'rest';
+  const adimAdlari = () => (rest() ? REST_ADIMLARI : ADIMLAR);
 
   // Öneriler (3. adım): başka serviste aynı adlı alanın tablo bağlantısı; yoksa adı aynı (gizli olmayan) sütun.
   const kucuk = (x) => String(x ?? '').toLocaleLowerCase('tr');
@@ -100,6 +110,28 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   };
 
   // --- Adım çizimleri --------------------------------------------------------------------------------------------------
+  const turSecimi = () => {
+    const secim = h('div', { class: 'segment tur-secimi', role: 'radiogroup', 'aria-label': 'Servis türü' },
+      [['soap', 'SOAP (WSDL)'], ['rest', 'REST (JSON)']].map(([t, m]) => h('button', {
+        type: 'button', role: 'radio', 'aria-checked': d.tur === t ? 'true' : 'false',
+        onclick: () => { if (d.tur === t) return; d.tur = t; ciz(); }
+      }, m)));
+    return h('div', { class: 'alan' }, h('div', { class: 'alan-etiketi' }, 'Servis türü'), secim,
+      rest() ? h('p', { class: 'soluk kucuk' }, 'Yalnız adresiniz varsa buradan ilerleyin: taban adres kaydedilir, sonraki adımda yolun devamı ve HTTP işlemi (GET / POST / PUT…) sorulur. Postman koleksiyonunuz varsa "Postman koleksiyonu" sekmesini kullanın.') : null);
+  };
+  /** REST tam adres: köken TEST ortamının taban adresi, kalan yol / sorgu ilk (boşsa) ya da yeni isteğe gider. */
+  const restYapistir = (deger) => {
+    let a;
+    try { a = adresAyir(deger); } catch (e) { d.yapistirNotu = e.message; ciz(); return; }
+    const test = ortamlar.find((o) => o.id === d.kontrolOrtami) || testOrtamlari[0];
+    if (test) d.tabanlar[test.id] = a.koken;
+    const bos = d.uclar.find((u) => !u.yol && !u.sorgu.length);
+    const u = bos || yeniUc();
+    if (!bos) d.uclar.push(u);
+    Object.assign(u, { yol: a.yol, sorgu: a.sorgu, ...(u.adElle ? {} : { ad: ucAdiOner(a.yol) }) });
+    d.yapistirNotu = `Taban: ${a.koken}${a.semaEklendi ? ' (şema yazılmadığı için https:// varsayıldı)' : ''} · İstek yolu: ${a.yol || '/'}${a.sorgu.length ? ` · ${a.sorgu.length} sorgu parametresi` : ''} (sonraki adımda HTTP işlemini seçin)`;
+    ciz();
+  };
   const adim1 = () => {
     const ad = h('input', { type: 'text', autocomplete: 'off', value: d.ad, placeholder: 'ör. TravelService' });
     const anahtar = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: d.anahtar, placeholder: 'ör. travel-service' });
@@ -107,8 +139,10 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     anahtar.addEventListener('input', () => { d.anahtar = anahtar.value.trim(); d.anahtarElle = Boolean(anahtar.value); durumGuncelle(); });
     // Tam adres yapıştır: bilinen bir taban adresiyle başlıyorsa taban + yol ayrılır, değilse adresin kökü yeni taban olur.
     const yapistir = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://ornek.com/servisler/ornek.asmx', 'aria-label': 'Servisin tam adresi (TEST)' });
-    const yapistirNotu = h('span', { class: 'soluk kucuk', 'aria-live': 'polite' });
+    const yapistirNotu = h('span', { class: 'soluk kucuk', 'aria-live': 'polite' }, rest() ? d.yapistirNotu || '' : '');
+    if (rest()) yapistir.placeholder = 'xxx.com/api/rest/v1/authenticate';
     yapistir.addEventListener('change', () => {
+      if (rest()) { restYapistir(yapistir.value); return; }
       let u;
       try { u = new URL(yapistir.value.trim().replace(/\?wsdl$/i, '')); } catch { yapistirNotu.textContent = 'Adres anlaşılamadı (http:// ya da https:// ile başlamalı).'; return; }
       const tam = u.href.replace(/\/$/, '');
@@ -126,12 +160,13 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     const tls = h('input', { type: 'checkbox', id: yeniKimlik('tls'), checked: d.tls });
     tls.addEventListener('change', () => { d.tls = tls.checked; d.erisim = null; });
     return [
+      turSecimi(),
       alan('Servis adı', ad, { zorunlu: true }), alan('Anahtar', anahtar, { yardim: 'Küçük harf, rakam ve "-". Addan önerilir.' }),
       h('fieldset', {}, h('legend', {}, 'Taban adresler (adresin başı)'),
         h('p', { class: 'soluk kucuk' }, 'Her ortam için servisin adresinin başını seçin ya da yazın. Yeni yazılan adres ortama kaydedilir; sonraki servislerde listede hazır olur. Yol bir sonraki adımda.'),
         ...ortamlar.map(ortamSatiri),
-        h('details', { class: 'yapistir' }, h('summary', {}, 'Tam adresi biliyorum (yapıştır, ayrılsın)'), alan('Servisin TEST adresi', yapistir), yapistirNotu)),
-      h('div', { class: 'satir-duzen' }, alan('SOAP sürümü', surum), h('label', { class: 'secenek', for: tls.id }, tls, 'TLS sertifikasını doğrula (iç ortam sertifikası tanınmıyorsa kapatın)'))
+        h('details', { class: 'yapistir', open: rest() && Boolean(d.yapistirNotu) }, h('summary', {}, 'Tam adresi biliyorum (yapıştır, ayrılsın)'), alan('Servisin TEST adresi', yapistir), yapistirNotu)),
+      h('div', { class: 'satir-duzen' }, rest() ? null : alan('SOAP sürümü', surum), h('label', { class: 'secenek', for: tls.id }, tls, 'TLS sertifikasını doğrula (iç ortam sertifikası tanınmıyorsa kapatın)'))
     ];
   };
 
@@ -231,6 +266,36 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       h('dt', {}, 'Tarih kuralları'), h('dd', {}, Object.entries(tarihKurallari).map(([a, k]) => `${a} = ${k}`).join(' · ') || 'yok'))];
   };
 
+  // --- REST adımları ------------------------------------------------------------------------------------------------
+  const restAdim2 = () => [
+    h('p', { class: 'soluk' }, 'Her istek (uç) için adını, HTTP işlemini ve yolunu yazın; yol taban adrese eklenir. POST / PUT / PATCH için gövde örneği yapıştırabilirsiniz. "Dene" isteğe bağlıdır: seçilen TEST ortamında ucu gerçekten çağırır (önce onay sorulur); denemeden de kaydedebilirsiniz.'),
+    restUclariFormu(d.uclar, { proje, ortamlar, tabanlar: () => d.tabanlar, tls: () => d.tls, degisti: () => durumGuncelle() })
+  ];
+  const restAdim3 = () => [
+    h('p', { class: 'soluk' }, 'İsteklerin alanları: yol yer tutucuları ({id}), sorgu parametreleri ve gövde örneğindeki alanlar. Her alanı bir test verisi tablosunun sütununa bağlayın; senaryoda değer o sütundan gelir. Öneriler hazır geldi (başka serviste aynı adlı alanın bağlantısı ya da adı aynı sütun).'),
+    tablolar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok; alanları sonra Parametreler sekmesinden bağlayabilirsiniz.'),
+    ...restAlanlari(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu, tablolar, bagOnerisi })
+  ];
+  const restAdim4 = () => {
+    d.senaryoIstenen ??= new Set(d.uclar.map((u) => u.kimlik));
+    const bagli = d.uclar.reduce((n, u) => n + Object.keys(d.restBaglar[u.kimlik] || {}).length, 0);
+    const kapsam = h('select', {}, [['test', 'TEST'], ['canli', 'CANLI'], ['ikisi', 'TEST + CANLI']].map(([k, m]) => h('option', { value: k, selected: d.kapsam === k }, m)));
+    kapsam.addEventListener('change', () => { d.kapsam = kapsam.value; });
+    return [h('dl', { class: 'ozet-listesi' },
+      h('dt', {}, 'Servis'), h('dd', {}, `${d.ad} (${d.anahtar}) `, rozet('REST', 'vurgu')),
+      h('dt', {}, 'Taban adresler'), h('dd', {}, h('ul', {}, ortamlar.map((o) => h('li', {}, `${o.ad}: `, d.tabanlar[o.id] ? h('code', { class: 'duz' }, temizTaban(d.tabanlar[o.id])) : h('span', { class: 'soluk' }, 'yok (bu ortamda koşmaz)'))))),
+      h('dt', {}, 'İstekler'), h('dd', {}, h('ul', {}, d.uclar.map((u) => h('li', {}, rozet(u.metot, 'vurgu'), ' ', h('b', {}, u.ad), ' ', h('code', { class: 'duz' }, u.yol || '/'), u.yalnizTest ? ' (CANLI\'da çağrılmaz)' : '')))),
+      h('dt', {}, 'Tabloya bağlı alanlar'), h('dd', {}, `${bagli} alan`)),
+      h('fieldset', {}, h('legend', {}, 'Başlangıç senaryoları'),
+        h('p', { class: 'soluk kucuk' }, 'İşaretli her istek için bir senaryo oluşturulur: gövde / yol / sorgu şablonu bağlı alanlarda tablo sütununa başvurur, diğer alanlarda örnek değer durur (gizli alanlarınki yazılmaz). Kontrol: HTTP 200-299.'),
+        d.uclar.map((u) => {
+          const c = h('input', { type: 'checkbox', id: yeniKimlik('sn'), checked: d.senaryoIstenen.has(u.kimlik) });
+          c.addEventListener('change', () => { if (c.checked) d.senaryoIstenen.add(u.kimlik); else d.senaryoIstenen.delete(u.kimlik); });
+          return h('label', { class: 'secenek', for: c.id }, c, `${u.ad} (${u.metot})`);
+        }),
+        alan('Senaryoların kapsamı', kapsam))];
+  };
+
   /** 3. adımda seçilen BEGIN_DATE / END_DATE için tarih kuralı (alan tipine göre biçim). */
   function tarihKuraliOnerileri() {
     const k = {};
@@ -256,6 +321,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       for (const o of ortamlar) { const a = d.tabanlar[o.id]; if (a && !/^https?:\/\/\S+$/.test(a)) return `${o.ad} taban adresi http:// ya da https:// ile başlamalı.`; }
       if (servisler.some((s) => s.anahtar === d.anahtar)) return `"${d.anahtar}" anahtarlı servis zaten var.`;
     }
+    if (d.adim >= 1 && rest()) return uclarEksik(d.uclar);
     if (d.adim === 1) {
       if (!d.erisim) return 'Yolu yazıp "Denetle" ile erişimi kontrol edin.';
       if (!d.secilen.size) return 'En az bir metot seçin.';
@@ -270,8 +336,22 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
 
   ileri.addEventListener('click', async () => {
     if (eksik()) return;
-    if (d.adim < ADIMLAR.length - 1) { d.adim++; mesaj.temizle(); ciz(); return; }
+    if (d.adim < adimAdlari().length - 1) { d.adim++; mesaj.temizle(); ciz(); return; }
     mesaj.temizle();
+    if (rest()) {
+      try {
+        await mesgulIken(ileri, 'Kaydediliyor…', async () => {
+          const r = await api('/platform/servis/rest/kaydet', { govde: {
+            projeId: proje.id, anahtar: d.anahtar, ad: d.ad.trim(), tabanlar: d.tabanlar, tlsDogrulama: d.tls, uclar: d.uclar.map(ucGovdesi),
+            ...adaGore(d.uclar, { baglar: d.restBaglar, zorunlu: d.restZorunlu }),
+            senaryolar: d.uclar.filter((u) => (d.senaryoIstenen ?? new Set(d.uclar.map((x) => x.kimlik))).has(u.kimlik)).map((u) => u.ad.trim()), kapsam: d.kapsam
+          } });
+          bildir(`REST servisi eklendi${r.eklenenSenaryolar.length ? `; ${r.eklenenSenaryolar.length} başlangıç senaryosu oluşturuldu` : ''}.`);
+          location.hash = `#/servisler/s/${encodeURIComponent(r.id)}`;
+        });
+      } catch (e) { mesaj.goster(e.message); }
+      return;
+    }
     try {
       await mesgulIken(ileri, 'Kaydediliyor…', async () => {
         const alanVarsayilanlari = Object.fromEntries(Object.entries(d.varsayilanlar)
@@ -292,10 +372,10 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   });
 
   const ciz = () => {
-    yerlestir(adimCubugu, ...ADIMLAR.map((a, i) => h('li', { class: i === d.adim ? 'simdiki' : i < d.adim ? 'bitti' : '', 'aria-current': i === d.adim ? 'step' : null }, h('span', { class: 'adim-no' }, String(i + 1)), a)));
-    yerlestir(govde, ...[adim1, adim2, adim3, adim4][d.adim]());
+    yerlestir(adimCubugu, ...adimAdlari().map((a, i) => h('li', { class: i === d.adim ? 'simdiki' : i < d.adim ? 'bitti' : '', 'aria-current': i === d.adim ? 'step' : null }, h('span', { class: 'adim-no' }, String(i + 1)), a)));
+    yerlestir(govde, ...(rest() ? [adim1, restAdim2, restAdim3, restAdim4] : [adim1, adim2, adim3, adim4])[d.adim]());
     geri.disabled = d.adim === 0;
-    ileri.textContent = d.adim === ADIMLAR.length - 1 ? 'Kaydet' : 'İleri';
+    ileri.textContent = d.adim === adimAdlari().length - 1 ? 'Kaydet' : 'İleri';
     durumGuncelle();
   };
   yerlestir(kap, h('div', { class: 'kart form-paneli sihirbaz' }, adimCubugu, mesaj.kutu, govde,
@@ -345,7 +425,7 @@ export function postmanAktarimi(kap, proje, ortamlar) {
   koleksiyonDosyasi.addEventListener('change', onizle);
   ortamDosyasi.addEventListener('change', () => { if (koleksiyonDosyasi.files && koleksiyonDosyasi.files[0]) onizle(); });
   yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Postman koleksiyonu (REST)'), mesaj.kutu,
-    h('p', { class: 'soluk kucuk' }, 'Postman\'den "Collection v2.1" (ya da v2.0) olarak dışa aktarılan JSON. Dosyalar yalnızca okunur; hiçbir servise istek atılmaz. Her klasör ayrı bir servis, klasördeki istekler o servisin senaryoları olur; klasörsüz istekler koleksiyon adıyla tek serviste toplanır. {{değişken}} değerleri bir test verisi tablosuna gider; gizli değerler yalnız siz onaylarsanız şifreli sütuna yazılır.'),
+    h('p', { class: 'soluk kucuk' }, 'Postman\'den "Collection v2.1" (ya da v2.0) olarak dışa aktarılan JSON. Koleksiyonunuz yoksa, yalnız adresiniz varsa "Adım adım" sekmesinde "REST (JSON)" türünü seçin. Dosyalar yalnızca okunur; hiçbir servise istek atılmaz. Her klasör ayrı bir servis, klasördeki istekler o servisin senaryoları olur; klasörsüz istekler koleksiyon adıyla tek serviste toplanır. {{değişken}} değerleri bir test verisi tablosuna gider; gizli değerler yalnız siz onaylarsanız şifreli sütuna yazılır.'),
     alan('Koleksiyon dosyası', koleksiyonDosyasi, { zorunlu: true }),
     alan('Ortam dosyası (isteğe bağlı)', ortamDosyasi, { yardim: 'Postman environment JSON: {{değişken}} değerleri buradan çözülür (koleksiyon değişkenlerini ezer).' })), sonuc);
 }

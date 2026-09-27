@@ -13,6 +13,7 @@ import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu,
 import { onayIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
+import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-sihirbazi.js';
 import { AKIS_DEGERI, alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, semaBirlestir } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
@@ -280,6 +281,12 @@ function kapsamOrtamlari(s, x, ortamlar) {
     && (x.kapsam === 'ikisi' || x.kapsam === (o.canli ? 'canli' : 'test'))
     && !(o.canli && yalnizTest.has(x.icerik.operasyon)));
 }
+/** REST operasyonunun senaryo yolu: {id} → ${id}, sorgu parametreleri eklenir. */
+const restOpYolu = (op) => {
+  if (!op) return '';
+  const sorgu = (op.sorgu || []).filter((x) => x.ad).map((x) => `${encodeURIComponent(x.ad)}=${encodeURIComponent(x.deger || '')}`).join('&');
+  return `${String(op.yol || '').replace(/{([^}]+)}/g, '${$1}')}${sorgu ? `?${sorgu}` : ''}`;
+};
 const kapsamEtiketi = (liste) => (liste.length ? liste.map((o) => o.ad).join(' + ') : 'Hiçbir ortam');
 
 async function kosuDiyalogu(proje, s, ortamlar, secili, senaryolar, bitti) {
@@ -610,7 +617,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const rest = s.tur === 'rest';
   const ilkOp = (s.ayarlar.operasyonlar || [])[0];
   const i = senaryo ? senaryo.icerik : rest
-    ? { operasyon: ilkOp?.ad || '', govde: '', kontroller: [{ tur: 'durumKodu', deger: '200-299' }], http: { metot: ilkOp?.metot || 'GET', yol: ilkOp?.yol || '' } }
+    ? { operasyon: ilkOp?.ad || '', govde: '', kontroller: [{ tur: 'durumKodu', deger: '200-299' }], http: { metot: ilkOp?.metot || 'GET', yol: restOpYolu(ilkOp), ...(ilkOp?.icerikTuru ? { icerikTuru: ilkOp.icerikTuru } : {}) } }
     : { operasyon: ilkOp?.ad || '', govde: '', kontroller: [{ tur: 'soapYaniti' }] };
   const httpMetot = h('select', {}, HTTP_METOTLARI.map((m) => h('option', { value: m, selected: (i.http?.metot || 'GET') === m }, m)));
   const httpYol = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', value: i.http?.yol || '', placeholder: '/kullanicilar/${Tablo.id}?sayfa=1' });
@@ -656,7 +663,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   govde.value = i.govde;
   let mod = 'xml';
   let degerler = {};
-  const sema = () => (semalar[operasyon.value] ? semaBirlestir(semalar[operasyon.value], (s.ayarlar.ekAlanlar || {})[operasyon.value] || []) : null);
+  // REST'te alan şeması yalnız tablo bağlama içindir; gövde metin olarak düzenlenir (XML alan formu yok).
+  const sema = () => (!rest && semalar[operasyon.value] ? semaBirlestir(semalar[operasyon.value], (s.ayarlar.ekAlanlar || {})[operasyon.value] || []) : null);
   const govdeUretFormdan = () => govdeUret(sema(), degerler, { soapSurumu: s.ayarlar.soapSurumu });
   const sekmeKap = h('div', { class: 'segment', role: 'tablist', 'aria-label': 'Gövde görünümü' });
   const govdeAlani = h('div', {});
@@ -915,7 +923,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   operasyon.addEventListener('change', () => {
     const op = (s.ayarlar.operasyonlar || []).find((x) => x.ad === operasyon.value);
-    if (rest && op?.metot) { httpMetot.value = op.metot; httpYol.value = op.yol || ''; }
+    if (rest && op?.metot) { httpMetot.value = op.metot; httpYol.value = restOpYolu(op); }
     const sm = sema();
     if (mod === 'alanlar' || !govde.value.trim()) {
       if (sm) { degerler = baslangic(sm); mod = 'alanlar'; } else { govde.value = ''; mod = 'xml'; }
@@ -1252,16 +1260,42 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
   });
   yerlestir(kap,
     h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Servis ayarları'), mesaj.kutu,
-      alan('Servis adı', ad), alan('Yol', yol), s.tur === 'rest' ? null : alan('SOAP sürümü', surum),
+      alan('Servis adı', ad), s.tur === 'rest' ? null : alan('Yol', yol), s.tur === 'rest' ? null : alan('SOAP sürümü', surum),
       h('label', { class: 'secenek', for: tls.id }, tls, 'TLS sertifikasını doğrula'),
       h('label', { class: 'secenek', for: durum.id }, durum, 'Etkin (kapalıysa koşulara girmez)'),
       h('fieldset', {}, h('legend', {}, 'Taban adresler (adresin başı)'), h('p', { class: 'soluk kucuk' }, 'Yol bu adresin arkasına eklenir. Yeni yazılan adres ortama kaydedilir. "Bu ortamda yok" seçilirse servis o ortamda koşmaz.'), ...tabanlar.map((x) => x.el)),
-      yalnizTest.length ? h('fieldset', {}, h('legend', {}, 'Yalnız TEST\'te koşan operasyonlar'),
+      yalnizTest.length && s.tur !== 'rest' ? h('fieldset', {}, h('legend', {}, 'Yalnız TEST\'te koşan operasyonlar'),
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       s.tur === 'rest' ? null : kontrol, h('div', { class: 'dugmeler' }, kaydet)),
-    s.tur === 'rest' ? null : semaKarti(proje, s, ortamlar),
+    s.tur === 'rest' ? restUclariKarti(proje, s, ortamlar) : semaKarti(proje, s, ortamlar),
     h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('cop'), 'Tehlikeli bölge')), sil));
+}
+
+/**
+ * REST servisinin istekleri (uçlar): sihirbazdaki alanlarla ekle / düzenle / kaldır. Uç adı değişince alan bağları ve senaryolar
+ * yeni ada taşınır (sunucu). Taban adresler yukarıdaki ayarlardan; ağ isteği yalnız "Dene" ile ve onayla.
+ */
+function restUclariKarti(proje, s, ortamlar) {
+  const yalnizTest = new Set(s.ayarlar.yalnizTestOperasyonlari || []);
+  const uclar = (s.ayarlar.operasyonlar || []).map((op) => operasyondanUc(op, yalnizTest.has(op.ad)));
+  const mesaj = mesajKutusu();
+  const kaydet = h('button', { type: 'button', class: 'birincil' }, 'İstekleri kaydet');
+  const neden = h('span', { class: 'soluk kucuk', 'aria-live': 'polite' });
+  const guncelle = () => { const n = uclarEksik(uclar); kaydet.disabled = Boolean(n); neden.textContent = n || ''; };
+  kaydet.addEventListener('click', async () => {
+    mesaj.temizle();
+    try {
+      await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/rest/kaydet', { govde: { projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: s.ad, uclar: uclar.map(ucGovdesi) } }));
+      bildir('İstekler kaydedildi.');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    } catch (e) { mesaj.goster(e.message); }
+  });
+  const form = restUclariFormu(uclar, { proje, ortamlar, tabanlar: () => s.ayarlar.tabanlar || {}, tls: () => s.ayarlar.tlsDogrulama !== false, degisti: guncelle });
+  guncelle();
+  return h('div', { class: 'kart form-paneli' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'İstekler (uçlar)')), mesaj.kutu,
+    h('p', { class: 'soluk kucuk' }, 'Her istek bir metottur: HTTP işlemi, yol (taban adrese eklenir), sorgu parametreleri, başlıklar ve gövde örneği. Alanları test verisi sütunlarına Parametreler sekmesinden bağlayın.'),
+    form, h('div', { class: 'dugmeler' }, kaydet, neden));
 }
 
 /** Operasyon alan listeleri (WSDL şeması): hangi operasyonların formu var; TEST'ten yeniden alma. */

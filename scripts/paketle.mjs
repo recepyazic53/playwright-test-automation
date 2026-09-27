@@ -108,7 +108,8 @@ const csc = [join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framewo
   join(process.env.WINDIR || 'C:\\Windows', 'Microsoft.NET', 'Framework', 'v4.0.30319', 'csc.exe')].find((y) => existsSync(y));
 if (!csc) { console.error('.NET Framework derleyicisi (csc.exe) bulunamadı; başlatıcı derlenemedi.'); process.exit(1); }
 const exe = join(HEDEF, 'Nöbetçi.exe');
-execFileSync(csc, ['/nologo', '/target:exe', '/codepage:65001', `/out:${exe}`, join(KOK, 'scripts', 'paket', 'Nobetci.cs')], { stdio: 'inherit' });
+// /target:winexe: arka plan açılışında (--arka-plan) konsol hiç oluşmaz; normal açılışta başlatıcı konsolu kendisi açar (Nobetci.cs).
+execFileSync(csc, ['/nologo', '/target:winexe', '/codepage:65001', `/out:${exe}`, join(KOK, 'scripts', 'paket', 'Nobetci.cs')], { stdio: 'inherit' });
 adim(`Başlatıcı derlendi: ${basename(exe)}`);
 
 // 6) Kullanım notu.

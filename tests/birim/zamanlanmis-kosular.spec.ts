@@ -325,4 +325,55 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
+
+  test('kilitliyken çalışma tercihleri: varsayılan kapalı, risk yazılı, onayla açılır; kilitlerken iki seçenek; Windows görevi sorgulanmaz', async () => {
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/ayarlar/kosu');
+    const bolum = page.getByRole('region', { name: 'Kasa kilitliyken ve açılışta' });
+    await expect(bolum.getByText('varsayılan olarak kapalıdır', { exact: false })).toBeVisible();
+    const a = bolum.getByRole('switch', { name: 'Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)' });
+    await expect(a).not.toBeChecked();
+    if (process.platform === 'win32') {
+      await expect(bolum.getByRole('switch', { name: 'Windows oturumuna bağlı otomatik açma (DPAPI)' })).not.toBeChecked();
+      await expect(bolum.getByText('Risk: Windows oturumunuzu ele geçiren biri zamanlanmış koşuların kullandığı verilere erişebilir.', { exact: false })).toBeVisible();
+      // Test sunucusu Windows Görev Zamanlayıcı'yı sorgulamaz (TEST_SUNUCU_WINDOWS_GOREVI_KAPALI=1).
+      await expect(bolum.getByText('Görev: sorgulanamadı', { exact: false })).toBeVisible();
+    } else {
+      await expect(bolum.getByRole('switch', { name: 'Windows oturumuna bağlı otomatik açma (DPAPI)' })).toHaveCount(0);
+    }
+    // Kilitle: tercih kapalıyken seçim sorulmaz (bugünkü davranış) — burada açmadan önce yalnız tercihi açıyoruz.
+    await a.click();
+    const diyalog = page.getByRole('dialog');
+    await diyalog.getByRole('button', { name: 'Aç' }).click();
+    await expect(diyalog.getByText('riski okuduğunuzu onaylayın', { exact: false })).toBeVisible();
+    await diyalog.getByLabel('Ne yaptığını ve riskini okudum; açmak istiyorum').check();
+    await diyalog.getByRole('button', { name: 'Aç' }).click();
+    await expect(bolum.getByRole('switch', { name: 'Kasa kilitlense de zamanlanmış koşular çalışsın (anahtar yalnız bellekte)' })).toBeChecked();
+
+    // Üst çubuktaki Kilitle: iki seçenek; "sürsün" → kilit ekranında not.
+    await page.getByRole('button', { name: 'Kilitle', exact: true }).click();
+    const secim = page.getByRole('dialog', { name: 'Kasayı kilitle' });
+    await expect(secim.getByRole('button', { name: 'Tamamen kilitle (anahtarı da sil)' })).toBeVisible();
+    await secim.getByRole('button', { name: 'Kilitle (zamanlanmış koşular sürsün)' }).click();
+    await expect(page.getByRole('heading', { name: 'Kasa kilitli' })).toBeVisible();
+    await expect(page.getByText('Zamanlanmış koşular arka planda sürebilir', { exact: false })).toBeVisible();
+    expect((await nobetciApi(nobetci, `/platform/ortamlar?projeId=${projeId}`)).kod).toBe('KASA_KILITLI');
+    await page.getByRole('textbox', { name: /^Kasa parolası/ }).fill(PAROLA);
+    await page.getByRole('button', { name: 'Kilidi aç' }).click();
+    await expect(page.getByRole('button', { name: 'Kilitle', exact: true })).toBeVisible();
+
+    // "Tamamen kilitle": bellekteki anahtar da silinir.
+    await page.getByRole('button', { name: 'Kilitle', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Kasayı kilitle' }).getByRole('button', { name: 'Tamamen kilitle (anahtarı da sil)' }).click();
+    await expect(page.getByRole('heading', { name: 'Kasa kilitli' })).toBeVisible();
+    await expect(page.getByText('Zamanlanmış koşular arka planda sürebilir', { exact: false })).toHaveCount(0);
+    expect(((await nobetciApi(nobetci, '/platform/durum')).zamanlama as { anahtarBellekte: boolean }).anahtarBellekte).toBe(false);
+    await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA });
+    await nobetciApi(nobetci, '/platform/zamanlama/tercih', { ad: 'kilitliyken', acik: false });
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
 });

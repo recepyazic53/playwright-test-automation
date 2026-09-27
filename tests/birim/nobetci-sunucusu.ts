@@ -39,7 +39,9 @@ export async function nobetciBaslat(klasor: string, vtYolu: string, ekOrtam: Rec
     cwd: KOK,
     env: {
       ...env, TEST_SUNUCU_PORT: String(port), PLATFORM_VERITABANI: vtYolu, PLATFORM_YEDEK_KLASORU: join(klasor, 'yedekler'),
-      TEST_SUNUCU_LOG_DOSYASI: join(klasor, 'sunucu.log'), NOBETCI_YASAK_ADRESLER: yasakliKaliplar(), ...ekOrtam
+      TEST_SUNUCU_LOG_DOSYASI: join(klasor, 'sunucu.log'), NOBETCI_YASAK_ADRESLER: yasakliKaliplar(),
+      // Ayarlar > Koşu açıldığında bile Windows Görev Zamanlayıcı sorgulanmaz (schtasks çalıştırılmaz).
+      TEST_SUNUCU_WINDOWS_GOREVI_KAPALI: '1', ...ekOrtam
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
