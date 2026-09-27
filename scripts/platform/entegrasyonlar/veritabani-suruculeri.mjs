@@ -20,7 +20,8 @@ export const SURUCULER = Object.freeze({
   mssql: { etiket: 'Microsoft SQL Server', paket: 'mssql', port: 1433, deneme: 'SELECT 1' },
   oracle: { etiket: 'Oracle', paket: 'oracledb', port: 1521, deneme: 'SELECT 1 FROM DUAL' },
   postgres: { etiket: 'PostgreSQL', paket: 'pg', port: 5432, deneme: 'SELECT 1' },
-  mysql: { etiket: 'MySQL / MariaDB', paket: 'mysql2', port: 3306, deneme: 'SELECT 1' }
+  // modul: yüklenecek giriş noktası (mysql2'nin varsayılanı geri çağrılı arayüzdür; promise sürümü "mysql2/promise").
+  mysql: { etiket: 'MySQL / MariaDB', paket: 'mysql2', modul: 'mysql2/promise', port: 3306, deneme: 'SELECT 1' }
 });
 
 /** @type {(paket: string) => Promise<any>} */
@@ -36,7 +37,7 @@ async function surucuYukle(surucu) {
   const t = SURUCULER[surucu];
   if (!t) throw new EntegrasyonHatasi('Bilinmeyen veritabanı sürücüsü.');
   try {
-    const m = await yukleyici(t.paket);
+    const m = await yukleyici(/** @type {{ modul?: string }} */ (t).modul ?? t.paket);
     return m && m.default ? m.default : m;
   } catch {
     throw new EntegrasyonHatasi(`${t.etiket} sürücüsü kurulu değil. Proje klasöründe "npm install ${t.paket}" çalıştırıp Nöbetçi'yi yeniden başlatın.`);
@@ -176,6 +177,7 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
       host: a.sunucu, port, database: a.veritabani || undefined, user: a.kullanici || undefined, password: a.parola || undefined,
       ssl: tls ? { rejectUnauthorized: dogrula } : false, connectionTimeoutMillis: s.zamanAsimiMs, query_timeout: s.zamanAsimiMs, statement_timeout: s.zamanAsimiMs
     });
+    c.on?.('error', () => { /* bağlantı düştü: sorgu hatası olarak döner; süreç çökmez */ });
     await c.connect();
     try {
       if (salt) await c.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY');
@@ -190,6 +192,7 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
       host: a.sunucu, port, database: a.veritabani || undefined, user: a.kullanici || undefined, password: a.parola || undefined,
       ssl: tls ? { rejectUnauthorized: dogrula } : undefined, connectTimeout: s.zamanAsimiMs
     });
+    c.on?.('error', () => { /* bağlantı düştü: sorgu hatası olarak döner; süreç çökmez */ });
     try {
       if (salt) await c.query('SET SESSION TRANSACTION READ ONLY');
       const [rows, fields] = await c.query({ sql: metin, values: degerler, timeout: s.zamanAsimiMs, rowsAsArray: true });
@@ -204,6 +207,7 @@ async function surucuyleSorgula(a, sql, parametreler, s) {
       options: { encrypt: tls, trustServerCertificate: !dogrula }, connectionTimeout: s.zamanAsimiMs, requestTimeout: s.zamanAsimiMs,
       pool: { max: 1, min: 0 }
     });
+    havuz.on?.('error', () => { /* bağlantı düştü: sorgu hatası olarak döner; süreç çökmez */ });
     await havuz.connect();
     try {
       const istek = havuz.request();

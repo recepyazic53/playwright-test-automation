@@ -18,6 +18,10 @@
     "typescript": "^5.9.0"
   },
   "dependencies": {
+    "mssql": "^12.7.2",
+    "mysql2": "^3.24.4",
+    "oracledb": "^7.0.1",
+    "pg": "^8.23.0",
     "sql.js": "1.14.2"
   }
 }
