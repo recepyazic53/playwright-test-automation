@@ -18,6 +18,7 @@ import {
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { rehberAnahtari, rehberDugmesi, rehberOtomatikDene } from './rehber.js';
+import { yedekUyarisiniGoster } from './yedek-uyarisi.js';
 import { hizliAramaDugmesi, hizliAramaKisayolu } from './hizli-arama.js';
 import { olusturMenusu } from './olustur-menusu.js';
 import { cikisKorumasiniKur } from './cikis-korumasi.js';
@@ -867,6 +868,8 @@ function anaDuzen() {
   }, 15_000);
   ekranTemizle = () => { window.removeEventListener('hashchange', cizVeRehber); clearInterval(kilitKontrolu); };
   cizVeRehber();
+  // Ana sayfa (açılış / yeniden yükleme / kilit açma): yedekten yükleme izinleri değiştirdiyse bir kez uyarı penceresi.
+  void yedekUyarisiniGoster({ izinlereGit: () => { location.hash = '#/ayarlar/izinler'; } });
 }
 
 /** Senaryolar modülü (bir kez yüklenir). */

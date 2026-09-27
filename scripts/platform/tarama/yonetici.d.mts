@@ -37,6 +37,11 @@ export type IsGorunumu = {
   tasarim: boolean;
   /** Giriş kaydı: taslak işaretlenip tarif önizlenecek. */
   girisTaslagi: boolean;
+  /**
+   * Giriş (tarif yoksa / girişsiz işte null): kip (Ayarlar > Koşu > Tarama ve akış kaydı), gerçekleşen yöntem (giriş bitince),
+   * saklanan oturum bulundu mu (yalnız saklananOturum kipinde), oturum dosyası güncellendi mi.
+   */
+  giris: { kip: 'bastan' | 'saklananOturum'; yontem: 'saklananOturum' | 'bastanGiris' | null; oturumSaklandi: boolean | null; oturumGuncellendi: boolean } | null;
 };
 
 export type TaramaYoneticisi = {
@@ -62,6 +67,7 @@ export type TaramaYoneticisi = {
   kodGonder(id: string, kod: unknown): { iletildi: true };
   girdiVer(id: string, token: string): unknown;
   olayAl(id: string, token: string, olay: Record<string, unknown>): Record<string, unknown>;
+  oturumAl(id: string, token: string, durum: unknown): { kaydedildi: boolean };
   sonucAl(id: string, token: string, sonuc: Record<string, unknown>): Record<string, unknown>;
   kapat(): void;
 };

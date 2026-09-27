@@ -158,11 +158,12 @@ export const IZIN_TANIMLARI = Object.freeze([
   {
     anahtar: 'giris-bilgisi',
     etiket: 'Giriş bilgisi kullanımı',
-    aciklama: 'Kasadaki kullanıcı adı, parola ve doğrulama kodunu (TOTP / SMS) test ettiğiniz sitenin giriş formuna yazar.',
+    aciklama: 'Kasadaki kullanıcı adı, parola ve doğrulama kodunu (TOTP / SMS) test ettiğiniz sitenin giriş formuna yazar. Tarama ve akış kaydında koşunun saklanan oturumunu kullanmak da giriş sayılır (bu izin gerekir).',
     yapabilecekleri: [
       'Giriş profilindeki kullanıcı adı ve parolayı giriş formuna yazmak.',
       'TOTP ya da SMS doğrulama kodunu doldurmak.',
-      'Senaryodaki "Yeniden giriş" adımında başka bir giriş profiliyle girmek.'
+      'Senaryodaki "Yeniden giriş" adımında başka bir giriş profiliyle girmek.',
+      'Tarama ve akış kaydında koşunun saklanan oturumunu kullanmak ve başarılı girişin oturumunu saklamak (Ayarlar > Koşu > Tarama ve akış kaydı > "Koşunun saklanan oturumunu kullan" seçiliyse).'
     ],
     yerler: [
       'Senaryo koşuları ve Dene (giriş tarifi olan ortamlarda)',
@@ -170,7 +171,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     ],
     islemler: [
       { ad: 'Koşu ve Dene sırasında giriş yapma', uclar: EKRAN_KOSU_UCLARI, kosul: 'ortamın giriş tarifi varsa ve senaryo girişsiz değilse' },
-      { ad: 'Tarama ve akış kaydında giriş yapma', uclar: ['/platform/tarama/baslat'], kosul: 'ortamın giriş tarifi varsa ve "Giriş yapmadan aç" seçilmemişse' },
+      { ad: 'Tarama ve akış kaydında giriş yapma', uclar: ['/platform/tarama/baslat'], kosul: 'ortamın giriş tarifi varsa ve "Giriş yapmadan aç" seçilmemişse (saklanan oturumla girişi atlamak da dahil)' },
       { ad: '"Yeniden giriş" adımı', uclar: [] }
     ],
     risk: 'Parola yanlış siteye yazılırsa ele geçebilir. Doldurma yalnız ortamın taban adresinin ya da giriş tarifindeki giriş adresinin kökenine yapılır.',

@@ -35,11 +35,15 @@ export declare const SQL_BEKLENEN_TURLERI: readonly string[];
 export declare const SQL_BEKLENEN_ETIKETLERI: Readonly<Record<string, string>>;
 export declare const SQL_RAPOR_SATIR_SINIRI: number;
 export declare const SQL_SORGU_SATIR_SINIRI: number;
+export declare const SQL_SATIR_SINIRI_EN_COK: number;
 export declare const SQL_EN_UZUN: number;
+export declare function satirSiniriCoz(v: unknown): number;
+export declare function satirSiniriUyarisi(beklenen: unknown, satirSiniri: number): string | null;
 export declare const SQL_MASKE: string;
 export declare function sqlYerTutuculari(sql: string): { kodda: string[]; metinde: string[] };
 export declare function sqlAkisDegerleri(tanim: unknown): string[];
-export declare function sqlTanimiDogrula(ham: unknown): { tanim: SqlTanimi; hatalar: string[] };
+/** s.satirSiniri: Ayarlar > Koşu > Gelişmiş > SQL sorgusunda okunan en çok satır (verilmezse varsayılan). */
+export declare function sqlTanimiDogrula(ham: unknown, s?: { satirSiniri?: number }): { tanim: SqlTanimi; hatalar: string[] };
 export declare function sqlBagla(sql: string, coz: (ifade: string) => string | undefined): { sql: string; parametreler: Record<string, string>; eksikler: string[] };
 export declare function hucreMetni(v: unknown): string;
 export declare function sonucOzeti(sonuc: SqlSonucu, s?: { gizliSutunMu?: (ad: string) => boolean; gizliDegerler?: string[] }): SqlOzeti;

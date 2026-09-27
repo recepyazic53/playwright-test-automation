@@ -122,6 +122,7 @@ export declare function girisProfiliKaydet(vt: Veritabani, girdi: {
 }): string;
 export declare function girisProfiliGetir(vt: Veritabani, id: string, secenekler?: { coz?: boolean }): GirisProfili | undefined;
 export declare function girisProfilleriniListele(vt: Veritabani, projeId: string): GirisProfili[];
+export declare function ortamVarsayilanGirisProfiliId(vt: Veritabani, projeId: string, ortamId: string): string | null;
 export declare function girisProfiliSil(vt: Veritabani, id: string, yapan?: string): boolean;
 
 export declare function baglamProfiliKaydet(vt: Veritabani, girdi: { id?: string; projeId: string; ortamId?: string | null; tur: string; ad: string; alanlar?: Record<string, unknown>; yapan?: string }): string;

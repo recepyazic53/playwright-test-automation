@@ -34,6 +34,10 @@
 //   POST /platform/tarama/kod { id, kod } SMS "elle" doğrulama kodunu işe iletir (kod loglanmaz)
 // Alt süreç uçları (işe özel tek kullanımlık token, başlık: protokol.mjs > TARAMA_TOKEN_BASLIGI):
 //   GET  /platform/tarama/is/<id>/girdi  (BİR KEZ; sonra sunucu belleğinden silinir) · POST …/olay · POST …/sonuc
+//   POST …/oturum  başarılı girişin oturumu (YALNIZ "Koşunun saklanan oturumunu kullan" kipinde; koşunun şifreli dosyasına yazılır)
+// GİRİŞ KİPİ (Ayarlar > Koşu > Tarama ve akış kaydı > Tarama ve akış kaydında giriş): "bastan" (varsayılan; boş tarayıcı, her
+// seferinde giriş) ya da "saklananOturum": koşunun ortam + giriş profili için saklanan şifreli oturumu girdiye konur (ortamın
+// kökenlerine sınırlı); girişsiz işte hiç kullanılmaz. Dosya kuralları koşuyla ortak: giris/oturum-dosyasi.mjs.
 //
 // Gizli değerler (parola, TOTP anahtarı, sabit kod, bağlam profili değerleri) yalnızca sunucu belleğinde ve alt
 // sürecin belleğinde bulunur; diske/loga yazılmaz, ortam değişkeniyle verilmez. Sonuçtaki ekran görüntüleri iş
@@ -48,11 +52,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DepoHatasi, baglamProfilleriniListele, ekranAyarlariniGetir, ekranKaydet, ekranModeliGetir, ekranlariListele, girisProfiliGetir,
-  girisProfilleriniListele, ortamlariListele, projeGetir
+  girisProfilleriniListele, ortamVarsayilanGirisProfiliId, ortamlariListele, projeGetir
 } from '../veritabani/depo.mjs';
+import { acikAnahtar } from '../kasa.mjs';
+import {
+  oturumAnahtariTuret, oturumDosyaYolu, oturumDosyasiniOku, oturumDosyasinaYaz, oturumDurumuMu, oturumuKokenlereSinirla
+} from '../giris/oturum-dosyasi.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
-import { kosuAyarlariniOku, varsayilanKosuAyarlari } from '../ayarlar/kosu-ayarlari.mjs';
-import { baglamAlanlari, girisTarifiniDogrula } from '../giris/tarif.mjs';
+import { kosuAyarlariniOku, sqlSatirSiniriOku, varsayilanKosuAyarlari } from '../ayarlar/kosu-ayarlari.mjs';
+import { baglamAlanlari, girisKokenleri, girisTarifiniDogrula } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
@@ -64,7 +72,7 @@ import { akisEnvanteriMi, akisPaleti, akisTaslagi, akistanKayitEnvanteri, blokla
 import { akisKaydet as ekranAkisiKaydet, akislariListele } from '../ekranlar/akis-servisi.mjs';
 import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../giris/giris-kaydi.mjs';
 import {
-  KAYIT_BASSIZ_DEGISKENI, KAYIT_ZAMAN_ASIMI_DEGISKENI, OLAY_GOVDE_SINIRI, SONUC_GOVDE_SINIRI, TARAMA_ADRES_DEGISKENI, TARAMA_CIKTI_DEGISKENI,
+  KAYIT_BASSIZ_DEGISKENI, KAYIT_ZAMAN_ASIMI_DEGISKENI, OLAY_GOVDE_SINIRI, OTURUM_GOVDE_SINIRI, SONUC_GOVDE_SINIRI, TARAMA_GIRIS_KIPLERI, TARAMA_ADRES_DEGISKENI, TARAMA_CIKTI_DEGISKENI,
   TARAMA_DNS_KAPALI_DEGISKENI, TARAMA_GORUNUR_DEGISKENI, TARAMA_IZINLI_KOKENLER_DEGISKENI, TARAMA_TEST_SURESI_DEGISKENI, TARAMA_TOKEN_BASLIGI,
   TARAMA_TOKEN_DEGISKENI, TARAMA_ZAMAN_ASIMI_DEGISKENI, VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN, VARSAYILAN_ZAMAN_ASIMI_SN
 } from './protokol.mjs';
@@ -106,13 +114,30 @@ function tokenEsit(a, b) {
 }
 
 /**
- * Ortamın giriş profili (şifresi çözülmüş): önce ortama özgü, yoksa tüm ortamlar için olan.
+ * Ortamın giriş profili (şifresi çözülmüş): koşunun varsayılan profiliyle AYNI kural (depo.mjs > ortamVarsayilanGirisProfiliId;
+ * önce ortama özgü, yoksa tüm ortamlar için olan) — saklanan oturum ortam + bu profille anahtarlanır.
  * @param {Veritabani} vt @param {string} projeId @param {string} ortamId
  */
 function girisProfiliSec(vt, projeId, ortamId) {
-  const liste = girisProfilleriniListele(vt, projeId);
-  const p = liste.find((x) => x.ortamId === ortamId) ?? liste.find((x) => x.ortamId === null);
-  return p ? girisProfiliGetir(vt, p.id, { coz: true }) : undefined;
+  const id = ortamVarsayilanGirisProfiliId(vt, projeId, ortamId);
+  return id ? girisProfiliGetir(vt, id, { coz: true }) : undefined;
+}
+
+/**
+ * "Koşunun saklanan oturumunu kullan" (Ayarlar > Koşu > Tarama ve akış kaydı): koşunun bu ortam + giriş profili için saklanan
+ * şifreli oturumu (ortamın kökenlerine sınırlanmış) ve güncelleme hedefi (dosya + türetilmiş anahtar; yalnız sunucu belleğinde).
+ * Kasa anahtarı / veritabanı yolu yoksa oturum okunmaz ve yazılmaz (baştan giriş). Ortak kurallar: giris/oturum-dosyasi.mjs.
+ * @param {Veritabani} vt @param {string} ortamId @param {string} profilId @param {string} tabanUrl @param {{ girisAdresi?: string }} tarif
+ */
+function saklananOturumHazirla(vt, ortamId, profilId, tabanUrl, tarif) {
+  let anahtar = null;
+  try { anahtar = oturumAnahtariTuret(acikAnahtar(vt)); } catch { anahtar = null; }
+  const dosya = vt.yol ? oturumDosyaYolu(vt.yol, ortamId, profilId) : null;
+  const durum = dosya && anahtar ? oturumDosyasiniOku(dosya, anahtar) : undefined;
+  const girdi = { durum: durum ? oturumuKokenlereSinirla(durum, girisKokenleri(tabanUrl, tarif)) : null };
+  if (dosya && anahtar) return { girdi, yazim: { dosya, anahtar } };
+  anahtar?.fill(0);
+  return { girdi, yazim: null };
 }
 
 /**
@@ -160,8 +185,17 @@ function taramaTarayiciGirdisi(vt) {
   try { a = vt ? kosuAyarlariniOku(vt) : varsayilanKosuAyarlari(); } catch { a = varsayilanKosuAyarlari(); }
   return {
     genislik: a.taramaEkranGenisligi, yukseklik: a.taramaEkranYuksekligi, dil: a.taramaDili,
-    saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri
+    saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri,
+    // Giriş beklemeleri: koşudaki Gelişmiş > Giriş ayarlarından AYRI (Ayarlar > Koşu > Tarama ve akış kaydı).
+    oturumKontrolMs: a.taramaOturumKontrolSn * 1000, girisAlanBeklemeMs: a.taramaGirisAlanBeklemeSn * 1000
   };
+}
+
+/** Tarama ve akış kaydında giriş kipi (Ayarlar > Koşu; kasa okunamazsa / bilinmeyen değerde varsayılan "bastan"). @param {Veritabani | undefined} vt */
+function taramaGirisKipi(vt) {
+  let k;
+  try { k = vt ? kosuAyarlariniOku(vt).taramaGirisKipi : undefined; } catch { k = undefined; }
+  return /** @type {readonly string[]} */ (TARAMA_GIRIS_KIPLERI).includes(String(k)) ? String(k) : 'bastan';
 }
 
 /**
@@ -220,6 +254,8 @@ export function taramaYoneticisiOlustur(secenekler) {
     is.hata = hata;
     is.bitis = simdi();
     is.girdi = null;
+    // Oturum dosyası anahtarı bellekten silinir (iş bittikten sonra gelen oturum yazılmaz).
+    if (is.oturumYazimi) { is.oturumYazimi.anahtar.fill(0); is.oturumYazimi = null; }
     clearTimeout(is.zamanlayici);
     for (const [ad, a] of Object.entries(is.adimlar)) if (a.durum === 'suruyor') is.adimlar[ad] = { ...a, durum: durum === 'tamam' ? 'tamam' : durum === 'iptal' ? 'atlandi' : 'hata' };
     for (const p of is.profiller) if (p.durum === 'suruyor') p.durum = durum === 'iptal' ? 'bekliyor' : 'hata';
@@ -235,6 +271,8 @@ export function taramaYoneticisiOlustur(secenekler) {
       engellenenSayisi: is.engellenenSayisi, engellenenler: is.engellenenler.slice(-50), olaylar: is.olaylar.slice(-30),
       hata: is.hata, kodIstegi: is.durum === 'suruyor' ? kodIstegiOku(is.kodYolu) : null,
       baslangic: is.baslangic, bitis: is.bitis ?? null, paketHazir: Boolean(is.paket), ozet: is.ozet ?? null, uyarilar: is.uyarilar ?? [],
+      // Giriş: kip (bastan / saklananOturum), gerçekleşen yöntem (saklananOturum / bastanGiris), oturum dosyası güncellendi mi.
+      giris: is.giris ? { ...is.giris } : null,
       // Akış kaydı: diyagramı kurulacak (topla → tasarla).
       tasarim: Boolean(is.akis),
       // Giriş kaydı: taslak işaretlenip tarif önizlenecek.
@@ -257,7 +295,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     temizle();
     const ortamlar = ortamlariListele(vt, projeId).map((o) => {
       const t = etkinGirisTarifi(vt, projeId, o.id);
-      const g = girisProfilleriniListele(vt, projeId).find((x) => x.ortamId === o.id) ?? girisProfilleriniListele(vt, projeId).find((x) => x.ortamId === null);
+      // Taramanın kullanacağı profil (koşunun varsayılanıyla aynı kural).
+      const varsayilanId = ortamVarsayilanGirisProfiliId(vt, projeId, o.id);
+      const g = varsayilanId ? girisProfilleriniListele(vt, projeId).find((x) => x.id === varsayilanId) : undefined;
       return {
         id: o.id, ad: o.ad, tabanUrl: o.tabanUrl, varsayilan: o.varsayilan, riskli: riskliSecimi(o), canli: riskliOrtamMi(o),
         tarif: t.tarif ? { kaynak: t.kaynak, baglamTuru: t.tarif.baglamDegistirme?.baglamTuru ?? null, ikinciAdim: t.tarif.ikinciAdim.tur, smsElle: t.tarif.ikinciAdim.tur === 'sms' } : null,
@@ -361,11 +401,14 @@ export function taramaYoneticisiOlustur(secenekler) {
     const tarif = tarifSonucu.tarif;
     /** @type {import('./protokol.d.mts').TaramaKimligi | null} */
     let kimlik = null;
+    /** @type {string | null} */
+    let girisProfiliId = null;
     if (tarif) {
       const gp = girisProfiliSec(vt, projeId, ortamId);
       if (!gp || !gp.kullaniciAdi || !gp.parola) {
         throw new TaramaHatasi('GIRIS_PROFILI', `"${ortamKaydi.ad}" ortamı için kullanıcı adı ve parolası tanımlı bir giriş profili yok (Ayarlar > Giriş profilleri).`);
       }
+      girisProfiliId = gp.id;
       const sms = nesneMi(gp.smsAyari) ? gp.smsAyari : {};
       kimlik = {
         kullaniciAdi: gp.kullaniciAdi, parola: gp.parola,
@@ -425,6 +468,11 @@ export function taramaYoneticisiOlustur(secenekler) {
     const ciktiKlasoru = join(tmpdir(), `nobetci-tarama-${id}`);
     const izinliKokenler = String(ortam[TARAMA_IZINLI_KOKENLER_DEGISKENI] ?? '').split(',').map((x) => x.trim()).filter(Boolean);
     const sure = kayit ? kayitZamanAsimiMs(vt) : zamanAsimiMs(vt);
+    // Giriş kipi (Ayarlar > Koşu > Tarama ve akış kaydı): "Koşunun saklanan oturumunu kullan" YALNIZ giriş yapılan işte (tarif var,
+    // "Giriş yapmadan aç" değil) uygulanır; girişsiz iş saklanan oturumu hiç okumaz ve güncellemez.
+    const girisKipi = tarif ? taramaGirisKipi(vt) : null;
+    const saklanan = tarif && girisProfiliId && girisKipi === 'saklananOturum'
+      ? saklananOturumHazirla(vt, ortamId, girisProfiliId, ortamKaydi.tabanUrl, tarif) : null;
     /** @type {Nesne} */
     const is = {
       id, token, kip: girisKaydi ? 'girisKaydi' : kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
@@ -441,13 +489,20 @@ export function taramaYoneticisiOlustur(secenekler) {
         kip: kayit ? 'kayit' : 'tarama', tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
         yasakKaliplari: etkinYasakAdresler(vt, ortam), izinliKokenler: izinliKokenler.length ? izinliKokenler : null, zamanAsimiMs: sure,
         // Tarayıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
-        tarayici: taramaTarayiciGirdisi(vt)
+        tarayici: taramaTarayiciGirdisi(vt),
+        ...(saklanan ? { oturum: saklanan.girdi } : {})
       },
+      // Giriş bilgisi (iş durumunda / raporda): kip, gerçekleşen yöntem, oturum dosyası güncellendi mi.
+      giris: tarif ? { kip: girisKipi, yontem: null, oturumSaklandi: saklanan ? Boolean(saklanan.girdi.durum) : null, oturumGuncellendi: false } : null,
+      // Oturum dosyasına yazım hedefi (dosya + türetilmiş anahtar; YALNIZ sunucu belleğinde, iş bitince silinir).
+      oturumYazimi: saklanan?.yazim ?? null,
       meta: {
         ekranAnahtari: ekran.anahtar, ekranAdi: ekran.ad, urlYolu: hedef.yol, proje: proje.ad, girisGerekli: Boolean(tarif), girissiz,
         ikiAsamali: tarif ? tarif.ikinciAdim.tur : 'yok', baglamTuru: tarif?.baglamDegistirme?.baglamTuru ?? null, mevcutModel
       },
       altModeller: mevcutModel ? altModelAnlikGoruntusu(vt, projeId, mevcutModel) : {},
+      // Diyagramdaki SQL bloklarının beklenen satır sayısı sınırı (Ayarlar > Koşu > Gelişmiş; akisKaydet kasaya erişmeden doğrular).
+      sqlSatirSiniri: sqlSatirSiniriOku(vt),
       paket: null, ozet: null, uyarilar: [], kodYolu, ciktiKlasoru, surec: null, zamanlayici: null, cikti: ''
     };
     isler.set(id, is);
@@ -458,7 +513,12 @@ export function taramaYoneticisiOlustur(secenekler) {
       if (/^(TEST_WORKER_INDEX|TEST_PARALLEL_INDEX|PW_|PLATFORM_|TEST_SUNUCU_|KOSU_KIMLIGI|NOBETCI_TARAMA_|TEST_ENV$|FORCE_COLOR)/.test(k)) continue;
       env[k] = v;
     }
+    // Giriş motorunun varsayılanları (tests/support/giris-motoru.ts) tarama sürecinde TARAMA ayarlarını kullanır; sunucunun
+    // ortamından gelen koşu değerleri geçmez.
+    const girisBeklemeleri = /** @type {{ oturumKontrolMs: number; girisAlanBeklemeMs: number }} */ (is.girdi.tarayici);
     Object.assign(env, {
+      NOBETCI_OTURUM_KONTROL_MS: String(girisBeklemeleri.oturumKontrolMs),
+      NOBETCI_GIRIS_ALAN_BEKLEME_MS: String(girisBeklemeleri.girisAlanBeklemeMs),
       [TARAMA_ADRES_DEGISKENI]: `${s.sunucuAdresi}/platform/tarama/is/${id}`,
       [TARAMA_TOKEN_DEGISKENI]: token,
       [KOD_YOLU_DEGISKENI]: kodYolu,
@@ -540,7 +600,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     const metin = (/** @type {unknown} */ d, n = 300) => (typeof d === 'string' ? d.slice(0, n) : null);
     const DURUMLAR = ['bekliyor', 'suruyor', 'tamam', 'hata', 'atlandi'];
     if (o.tur === 'adim' && typeof o.adim === 'string' && o.adim in is.adimlar && DURUMLAR.includes(o.durum)) {
-      is.adimlar[o.adim] = { durum: o.durum, mesaj: metin(o.mesaj) };
+      // Giriş adımı: saklanan oturum dosyası güncellendiyse (sunucu yazdı) mesaja eklenir.
+      const ek = o.adim === 'giris' && o.durum === 'tamam' && is.giris?.oturumGuncellendi ? ' Oturum saklandı (koşu da kullanır).' : '';
+      is.adimlar[o.adim] = { durum: o.durum, mesaj: metin(o.mesaj) === null && !ek ? null : `${metin(o.mesaj) ?? ''}${ek}`.trim() };
     } else if (o.tur === 'profil' && Number.isInteger(o.sira) && is.profiller[o.sira] && DURUMLAR.includes(o.durum)) {
       const p = is.profiller[o.sira];
       p.durum = o.durum;
@@ -553,8 +615,26 @@ export function taramaYoneticisiOlustur(secenekler) {
     } else if (o.tur === 'bilgi' && typeof o.mesaj === 'string') {
       is.olaylar.push({ zaman: simdi(), mesaj: o.mesaj.slice(0, 300) });
       if (is.olaylar.length > 100) is.olaylar.splice(0, is.olaylar.length - 100);
+    } else if (o.tur === 'giris' && is.giris && ['saklananOturum', 'bastanGiris'].includes(o.yontem)) {
+      // Saklanan oturum ancak bu kipte ve oturum verildiyse kullanılabilir (alt süreç başka bir şey bildiremez).
+      is.giris.yontem = o.yontem === 'saklananOturum' && !(is.giris.kip === 'saklananOturum' && is.giris.oturumSaklandi) ? 'bastanGiris' : o.yontem;
+      console.log(`[platform] ${is.kip === 'kayit' ? 'Akış kaydı' : 'Tarama'} (${is.id}): ${is.giris.yontem === 'saklananOturum' ? 'saklanan oturum kullanıldı' : 'baştan giriş yapıldı'}.`);
     }
     return { alindi: true };
+  }
+
+  /**
+   * Alt süreç: başarılı girişin oturumu ("Koşunun saklanan oturumunu kullan"). Koşunun şifreli oturum dosyasına ATOMİK yazılır
+   * (son yazan kazanır, dosya bozulmaz). Kip kapalıysa, "Giriş yapmadan aç" ise ya da kasa anahtarı yoksa yazılmaz.
+   * @param {string} id @param {string} token @param {unknown} durum
+   */
+  function oturumAl(id, token, durum) {
+    const is = tokenliIs(id, token);
+    if (is.durum !== 'suruyor' || !is.oturumYazimi) return { kaydedildi: false };
+    if (!oturumDurumuMu(durum)) throw new TaramaHatasi('OTURUM', 'Oturum biçimi geçersiz.');
+    const kaydedildi = oturumDosyasinaYaz(is.oturumYazimi.dosya, is.oturumYazimi.anahtar, durum);
+    if (kaydedildi && is.giris) is.giris.oturumGuncellendi = true;
+    return { kaydedildi };
   }
 
   /** Alt süreç: sonuç (envanter → sayfa paketi). @param {string} id @param {string} token @param {Nesne} s */
@@ -728,7 +808,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       if (!bicim.length) is.akis.bloklar = bloklar;
       return { kaydedildi: !bicim.length, palet: akisPaleti(is.akis.envanter, is.akis.bloklar) };
     }
-    const { envanter, hatalar } = bicim.length ? { envanter: null, hatalar: bicim } : akistanKayitEnvanteri(is.akis.envanter, bloklar);
+    const { envanter, hatalar } = bicim.length ? { envanter: null, hatalar: bicim } : akistanKayitEnvanteri(is.akis.envanter, bloklar, { satirSiniri: is.sqlSatirSiniri });
     if (!envanter) throw new TaramaHatasi('AKIS_GECERSIZ', `Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, 400, { hatalar });
     is.akis.bloklar = bloklar;
     const { paket, ozet } = kayitPaketiOlustur(is.meta, envanter);
@@ -765,6 +845,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     kodGonder,
     girdiVer,
     olayAl,
+    oturumAl,
     sonucAl,
     /** Tüm çalışan süreçleri kapatır (sunucu kapanırken / testler). */
     kapat() {
@@ -798,16 +879,17 @@ export async function taramaIsteginiIsle(req, res, b) {
   const tokenYok = () => gonder(401, { basarili: false, mesaj: 'Geçersiz token.' });
   try {
     // Alt süreç uçları (işe özel token).
-    const isEslesme = /^\/platform\/tarama\/is\/([a-f0-9]{24})\/(girdi|olay|sonuc)$/.exec(yol);
+    const isEslesme = /^\/platform\/tarama\/is\/([a-f0-9]{24})\/(girdi|olay|sonuc|oturum)$/.exec(yol);
     if (isEslesme) {
       const baslik = req.headers[TARAMA_TOKEN_BASLIGI];
       const token = typeof baslik === 'string' ? baslik : '';
       if (isEslesme[2] === 'girdi' && req.method === 'GET') { gonder(200, y.girdiVer(isEslesme[1], token)); return true; }
       if (req.method !== 'POST') { gonder(405, { basarili: false, mesaj: 'Yöntem desteklenmiyor.' }); return true; }
       y.durum(isEslesme[1]); // iş var mı (gövdeyi okumadan önce)
-      const govde = await b.jsonGovde(isEslesme[2] === 'sonuc' ? SONUC_GOVDE_SINIRI : OLAY_GOVDE_SINIRI);
+      const govde = await b.jsonGovde(isEslesme[2] === 'sonuc' ? SONUC_GOVDE_SINIRI : isEslesme[2] === 'oturum' ? OTURUM_GOVDE_SINIRI : OLAY_GOVDE_SINIRI);
       if (!govde) return true;
-      gonder(200, { basarili: true, ...(isEslesme[2] === 'olay' ? y.olayAl(isEslesme[1], token, govde) : y.sonucAl(isEslesme[1], token, govde)) });
+      const islem = { olay: y.olayAl, oturum: y.oturumAl, sonuc: y.sonucAl }[/** @type {'olay' | 'oturum' | 'sonuc'} */ (isEslesme[2])];
+      gonder(200, { basarili: true, ...islem(isEslesme[1], token, govde) });
       return true;
     }
 

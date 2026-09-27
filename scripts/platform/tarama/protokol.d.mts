@@ -2,6 +2,7 @@
 import type { GirisTarifi } from '../giris/tarif.mjs';
 import type { KayitEnvanteri, TaramaEnvanteri } from './paket-olusturucu.mjs';
 import type { AkisEnvanteri } from './akis-tasarimi.mjs';
+import type { OturumDurumu } from '../giris/oturum-dosyasi.mjs';
 
 export declare const TARAMA_ADRES_DEGISKENI: string;
 export declare const TARAMA_TOKEN_DEGISKENI: string;
@@ -14,6 +15,8 @@ export declare const TARAMA_TOKEN_BASLIGI: string;
 export declare const VARSAYILAN_ZAMAN_ASIMI_SN: number;
 export declare const SONUC_GOVDE_SINIRI: number;
 export declare const OLAY_GOVDE_SINIRI: number;
+export declare const OTURUM_GOVDE_SINIRI: number;
+export declare const TARAMA_GIRIS_KIPLERI: readonly ['bastan', 'saklananOturum'];
 export declare const KAYIT_ZAMAN_ASIMI_DEGISKENI: string;
 export declare const VARSAYILAN_KAYIT_ZAMAN_ASIMI_SN: number;
 export declare const TARAMA_GORUNUR_DEGISKENI: string;
@@ -52,13 +55,24 @@ export type TaramaGirdisi = {
   izinliKokenler: string[] | null;
   zamanAsimiMs: number;
   /** Tarayıcı kararları (Ayarlar > Koşu); yoksa önceki sabitler (bkz. taramaTarayiciAyarlari). dil null: verilmez. */
-  tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number };
+  tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number;
+    oturumKontrolMs?: number; girisAlanBeklemeMs?: number };
+  /**
+   * YALNIZ "Koşunun saklanan oturumunu kullan" seçiliyken, giriş tarifi varken ve "Giriş yapmadan aç" seçilmemişken: koşunun bu
+   * ortam + giriş profili için saklanan oturumu (ortamın kökenlerine sınırlanmış; yoksa / açılamadıysa null). Alan yoksa: her
+   * seferinde baştan giriş, oturum gönderilmez.
+   */
+  oturum?: { durum: OturumDurumu | null } | null;
 };
 
 export declare function taramaTarayiciAyarlari(g: { tarayici?: TaramaGirdisi['tarayici'] }): {
   baglam: { viewport: { width: number; height: number }; locale?: string; timezoneId?: string };
   sayfaAcilmaMs: number;
   kesifSecenekSiniri: number;
+  /** Girişte oturum kontrolü (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 15 sn). */
+  oturumKontrolMs: number;
+  /** Girişte giriş alanı beklemesi (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 15 sn). */
+  girisAlanBeklemeMs: number;
 };
 
 export type TaramaAdimi = 'hazirlik' | 'giris' | 'profiller' | 'kayit' | 'paket';
@@ -69,7 +83,12 @@ export type TaramaOlayi =
   | { tur: 'adim'; adim: TaramaAdimi; durum: AdimDurumu; mesaj?: string }
   | { tur: 'profil'; sira: number; durum: AdimDurumu; adim?: ProfilAdimi | null; alanSayisi?: number; mesaj?: string }
   | { tur: 'engellendi'; yontem: string; adres: string; asama: string; neden: string }
-  | { tur: 'bilgi'; mesaj: string };
+  | { tur: 'bilgi'; mesaj: string }
+  /** Girişin nasıl yapıldığı (iş durumunda / raporda görünür). */
+  | { tur: 'giris'; yontem: TaramaGirisYontemi };
+
+/** saklananOturum: saklanan oturum geçerliydi, giriş atlandı; bastanGiris: giriş formu dolduruldu. */
+export type TaramaGirisYontemi = 'saklananOturum' | 'bastanGiris';
 
 export type TaramaHataKodu =
   | 'YASAKLI_ADRES' | 'SITE_ERISILEMEDI' | 'KIMLIK_HATALI' | 'IKI_ASAMALI_HATALI' | 'KOD_GEREKLI' | 'CAPTCHA' | 'ALAN_BULUNAMADI'

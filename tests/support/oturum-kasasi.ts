@@ -1,16 +1,16 @@
 // ŞİFRELİ OTURUM DOSYASI — model koşucusunun paylaşılan giriş oturumu (Playwright storageState: çerezler + yerel depolama).
 // Oturum koşular arasında YENİDEN KULLANILIR (her senaryo ayrı süreçte koşar; geçerli oturum varsa yeniden giriş yapılmaz), bu
-// yüzden silinmez; kasa anahtarından türetilen anahtarla (HKDF, AES-256-GCM zarfı) şifreli yazılır. Düz metin çerez diske
-// YAZILMAZ: kasa anahtarı yoksa (PLATFORM_KASA_ANAHTARI) oturum hiç kaydedilmez. Açılamayan (kasa parolası değişti) ya da eski
-// düz metin (.json) dosya silinir; bir sonraki koşu yeniden giriş yapar.
-import { hkdfSync } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+// yüzden silinmez; kasa anahtarından türetilen anahtarla (HKDF, AES-256-GCM zarfı) şifreli ve ATOMİK yazılır. Düz metin çerez
+// diske YAZILMAZ: kasa anahtarı yoksa (PLATFORM_KASA_ANAHTARI) oturum hiç kaydedilmez. Açılamayan (kasa parolası değişti) ya da
+// eski düz metin (.json) dosya silinir; bir sonraki koşu yeniden giriş yapar. Kurallar (yer, ad, şifre, atomik yazım) tarama /
+// akış kaydıyla ORTAK: scripts/platform/giris/oturum-dosyasi.mjs ("Koşunun saklanan oturumunu kullan" aynı dosyayı okur/yazar).
+import { existsSync, readdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 import type { BrowserContext } from '@playwright/test';
-import { zarfCoz, zarfMi, zarfSifrele } from '../../scripts/platform/kasa.mjs';
+import { OTURUM_UZANTISI as ORTAK_UZANTI, oturumAnahtariTuret, oturumDosyasiniOku, oturumDosyasinaYaz } from '../../scripts/platform/giris/oturum-dosyasi.mjs';
 
 /** Şifreli oturum dosyasının uzantısı (eski düz metin dosyalar ".json"du). */
-export const OTURUM_UZANTISI = '.oturum';
+export const OTURUM_UZANTISI = ORTAK_UZANTI;
 type OturumDurumu = Awaited<ReturnType<BrowserContext['storageState']>>;
 
 /** Kasa anahtarından türetilmiş oturum anahtarı (yoksa null). */
@@ -18,8 +18,11 @@ function oturumAnahtari(): Buffer | null {
   const ham = process.env.PLATFORM_KASA_ANAHTARI;
   if (!ham) return null;
   const kasa = Buffer.from(ham, 'base64url');
-  if (kasa.length !== 32) return null;
-  return Buffer.from(hkdfSync('sha256', kasa, Buffer.alloc(0), Buffer.from('nobetci-oturum-dosyasi-v1'), 32));
+  try {
+    return oturumAnahtariTuret(kasa);
+  } finally {
+    kasa.fill(0);
+  }
 }
 
 /** Klasördeki eski (düz metin) oturum dosyalarını siler. */
@@ -30,15 +33,12 @@ export function eskiOturumDosyalariniSil(klasor: string): void {
   }
 }
 
-/** Oturumu şifreli yazar (anahtar yoksa hiçbir şey yazılmaz). */
+/** Oturumu şifreli ve atomik yazar (anahtar yoksa hiçbir şey yazılmaz). */
 export async function oturumuSifreliYaz(baglam: BrowserContext, dosya: string): Promise<boolean> {
   const anahtar = oturumAnahtari();
   if (!anahtar) return false;
   try {
-    const durum = await baglam.storageState();
-    mkdirSync(dirname(dosya), { recursive: true });
-    writeFileSync(dosya, zarfSifrele(anahtar, JSON.stringify(durum)), { encoding: 'utf8', mode: 0o600 });
-    return true;
+    return oturumDosyasinaYaz(dosya, anahtar, await baglam.storageState());
   } finally {
     anahtar.fill(0);
   }
@@ -46,18 +46,10 @@ export async function oturumuSifreliYaz(baglam: BrowserContext, dosya: string): 
 
 /** Şifreli oturumu çözer (Playwright storageState nesnesi). Yoksa / açılamazsa undefined (açılamayan dosya silinir). */
 export function oturumuSifreliOku(dosya: string): OturumDurumu | undefined {
-  if (!existsSync(dosya)) return undefined;
   const anahtar = oturumAnahtari();
   if (!anahtar) return undefined;
   try {
-    const metin = readFileSync(dosya, 'utf8').trim();
-    if (!zarfMi(metin)) throw new Error('biçim');
-    const durum = JSON.parse(zarfCoz(anahtar, metin)) as OturumDurumu;
-    if (!durum || !Array.isArray(durum.cookies)) throw new Error('biçim');
-    return durum;
-  } catch {
-    try { rmSync(dosya, { force: true }); } catch { /* yok sayılır */ }
-    return undefined;
+    return oturumDosyasiniOku(dosya, anahtar) as OturumDurumu | undefined;
   } finally {
     anahtar.fill(0);
   }

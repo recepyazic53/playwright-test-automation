@@ -6,6 +6,7 @@ import { acikAnahtar, coz, sifrele, zarfMi } from '../kasa.mjs';
 import { DepoHatasi, gecmisYaz, jsonMetni, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
 import { TANIM_TURLERI } from './parametre-tanimlari.mjs';
 import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
+import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './akis-senaryo-icerigi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -531,9 +532,10 @@ export const TOKEN_YENILEME = /** @type {const} */ (['suresiDolunca', 'herIstekt
 
 /**
  * Akış içeriğinin yapısal doğrulaması (servis / senaryo varlığı ve ${akis:} kullanımı servis-akislari.mjs'de).
- * @param {unknown} icerik @param {'akis' | 'oturum'} tur @returns {ServisAkisIcerigi}
+ * s.satirSiniri: SQL adımlarının beklenen satır sayısı için kullanıcının satır sınırı (bkz. kosu-ayarlari.mjs > sqlSatirSiniriOku).
+ * @param {unknown} icerik @param {'akis' | 'oturum'} tur @param {{ satirSiniri?: number }} [s] @returns {ServisAkisIcerigi}
  */
-export function akisIceriginiDogrula(icerik, tur) {
+export function akisIceriginiDogrula(icerik, tur, s = {}) {
   if (!icerik || typeof icerik !== 'object' || Array.isArray(icerik)) throw new DepoHatasi('"icerik" bir nesne olmalıdır.');
   const i = /** @type {Record<string, unknown>} */ (icerik);
   if (!Array.isArray(i.adimlar) || !i.adimlar.length) throw new DepoHatasi('Akışta en az bir adım olmalıdır.');
@@ -546,7 +548,7 @@ export function akisIceriginiDogrula(icerik, tur) {
     kimlikler.add(id);
     // SQL adımı (sql/sql-adimi.mjs): servis / senaryo yok; sorgudan okunan değerler tanımın okumalarında (sql.okumalar).
     if (a.tur === 'sql') {
-      const d = sqlTanimiDogrula(a.sql);
+      const d = sqlTanimiDogrula(a.sql, { satirSiniri: s.satirSiniri });
       if (d.hatalar.length) throw new DepoHatasi(`${yer} (SQL): ${d.hatalar.join(' ')}`);
       return { id, ad: typeof a.ad === 'string' && a.ad.trim() ? a.ad.trim().slice(0, 100) : yer, tur: 'sql', sql: d.tanim, okumalar: [], ...(a.hataOlursaDevam === true ? { hataOlursaDevam: true } : {}) };
     }
@@ -602,7 +604,7 @@ export function servisAkisiKaydet(vt, girdi) {
       kapsam: secenek(girdi.kapsam ?? mevcut?.kapsam ?? 'test', SENARYO_KAPSAMLARI, 'kapsam'),
       kosuya_dahil: (girdi.kosuyaDahil ?? (mevcut ? mevcut.kosuya_dahil === 1 : true)) ? 1 : 0,
       sira: girdi.sira === undefined ? (mevcut?.sira ?? null) : girdi.sira,
-      icerik_json: sifreliJson(vt, akisIceriginiDogrula(girdi.icerik, tur), 'icerik')
+      icerik_json: sifreliJson(vt, akisIceriginiDogrula(girdi.icerik, tur, { satirSiniri: sqlSatirSiniriOku(vt) }), 'icerik')
     }, { id: girdi.id, gecmisTuru: 'servis_akisi', yapan: girdi.yapan });
   });
 }

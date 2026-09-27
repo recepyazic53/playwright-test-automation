@@ -91,7 +91,7 @@ export interface ServisAkisi {
   id: string; projeId: string; baslik: string; tur: 'akis' | 'oturum'; kapsam: ServisKapsami; kosuyaDahil: boolean;
   sira: number | null; icerik: ServisAkisIcerigi; olusturulma: string; guncellenme: string;
 }
-export declare function akisIceriginiDogrula(icerik: unknown, tur: 'akis' | 'oturum'): ServisAkisIcerigi;
+export declare function akisIceriginiDogrula(icerik: unknown, tur: 'akis' | 'oturum', s?: { satirSiniri?: number }): ServisAkisIcerigi;
 export declare function servisAkisiKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; baslik: string; tur?: 'akis' | 'oturum'; kapsam?: ServisKapsami; kosuyaDahil?: boolean; sira?: number | null; icerik: unknown; yapan?: string;
 }): string;

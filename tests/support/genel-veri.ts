@@ -3,8 +3,8 @@
 // değişkenleriyle gelir (NOBETCI_PROJE_ID, NOBETCI_ORTAM_ID); "test"/"canli" ortam adları ve aktarım eşlemesi
 // kullanılmaz. Veri platform veritabanından veri-oku.mjs'nin "genel" kipiyle okunur (kasa anahtarı gerekir;
 // Nöbetçi koşularında PLATFORM_KASA_ANAHTARI). Giriş bilgisi ve giriş tarifi ortamın kendi kayıtlarıdır.
-import { dirname, join } from 'node:path';
-import { OTURUM_UZANTISI, eskiOturumDosyalariniSil } from './oturum-kasasi';
+import { eskiOturumDosyalariniSil } from './oturum-kasasi';
+import { oturumDosyaYolu, oturumKlasoru } from '../../scripts/platform/giris/oturum-dosyasi.mjs';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { izinMesaji } from '../../scripts/platform/guvenlik/izin-tanimlari.mjs';
 import { tarifiHazirla, type GirisKimligi } from './giris-motoru';
@@ -87,9 +87,8 @@ export function genelGirisKimligi(profil?: string | null): GirisKimligi {
  */
 export function genelOturumDosyasi(): string {
   const v = genelVeri();
-  const temiz = (d: string): string => d.replace(/[^A-Za-z0-9-]/g, '').slice(0, 36);
-  const klasor = join(dirname(platformVeritabaniYolu()), 'oturumlar');
   // Eski düz metin oturum dosyaları (.json) silinir; oturum artık kasa anahtarıyla şifreli (.oturum) saklanır.
-  eskiOturumDosyalariniSil(klasor);
-  return join(klasor, `genel-${temiz(v.ortamId)}-${v.giris?.profilKimligi ? temiz(v.giris.profilKimligi) : 'profil-yok'}${OTURUM_UZANTISI}`);
+  eskiOturumDosyalariniSil(oturumKlasoru(platformVeritabaniYolu()));
+  // Yer ve ad (ortam + giriş profili) tarama / akış kaydıyla ORTAK kuraldan (giris/oturum-dosyasi.mjs).
+  return oturumDosyaYolu(platformVeritabaniYolu(), v.ortamId, v.giris?.profilKimligi ?? null);
 }

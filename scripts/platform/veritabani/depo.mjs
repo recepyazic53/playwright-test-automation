@@ -542,6 +542,16 @@ export function girisProfilleriniListele(vt, projeId) {
     .map((s) => girisProfiliCevir(vt, s, false));
 }
 
+/**
+ * Ortamın VARSAYILAN giriş profilinin kimliği (tek kaynak: koşu, tarama ve akış kaydı aynı profili kullanır; saklanan oturum
+ * ortam + bu profille anahtarlanır): önce ortama özgü profil, yoksa tüm ortamlar için olan; aynı türden birden çoksa ilk eklenen.
+ * Profil yoksa null. @param {Veritabani} vt @param {string} projeId @param {string} ortamId @returns {string | null}
+ */
+export function ortamVarsayilanGirisProfiliId(vt, projeId, ortamId) {
+  const satir = vt.tek('SELECT id FROM giris_profilleri WHERE proje_id = ? AND (ortam_id = ? OR ortam_id IS NULL) ORDER BY (ortam_id IS NULL), rowid LIMIT 1', [projeId, ortamId]);
+  return satir ? String(satir.id) : null;
+}
+
 /** @param {Veritabani} vt @param {string} id @param {string} [yapan] */
 export function girisProfiliSil(vt, id, yapan) {
   return silGenel(vt, 'giris_profilleri', id, { gecmisTuru: 'giris_profili', yapan });

@@ -16,6 +16,7 @@ import {
 } from '../../scripts/platform/veritabani/depo.mjs';
 import { girisTarifiKaydet } from '../../scripts/platform/giris/tarif-deposu.mjs';
 import { yasakAdresleriKaydet } from '../../scripts/platform/guvenlik/yasak-adresler.mjs';
+import { kosuAyarlariniKaydet } from '../../scripts/platform/ayarlar/kosu-ayarlari.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
 import { analizGetir, analizYukle, paketOnizle, sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { taramaIsteginiIsle, taramaYoneticisiOlustur, type IsGorunumu, type TaramaYoneticisi } from '../../scripts/platform/tarama/yonetici.mjs';
@@ -279,4 +280,30 @@ test('yasaklı adres (ortam değişkeni ve Ayarlar > Güvenlik) ve geçersiz hed
   expect(y3).toMatchObject({ durum: 400, y: { kod: 'HEDEF' } });
   expect((await api('/platform/tarama/aktif')).y.is).toBeNull();
   expect(fikstur.kayitlar.length).toBe(once);
+});
+
+test('girişte giriş alanı beklemesi / oturum kontrolü: Ayarlar > Koşu > Tarama ve akış kaydı (koşudaki giriş ayarlarından ayrı) alt sürece gider', async () => {
+  test.setTimeout(120_000);
+  // Giriş sayfasında olmayan kullanıcı adı alanı: bekleme süresi dolunca anlaşılır hata (süre ayardan).
+  const tarif = { ...taramaGirisTarifi(), kullaniciAlani: '#olmayan-kullanici' };
+  const ortamId = ortamKaydet(vt, { projeId, ad: 'BEKLEME', tabanUrl: fs1.adres, ayarlar: { riskli: false } });
+  girisProfiliKaydet(vt, { projeId, ortamId, ad: 'BEKLEME kullanıcısı', kullaniciAdi: TARAMA_KULLANICI, parola: TARAMA_PAROLA, ikiAsamaliTur: 'yok', smsAyari: {} });
+  girisTarifiKaydet(vt, projeId, ortamId, tarif);
+  kosuAyarlariniKaydet(vt, { taramaGirisAlanBeklemeSn: 1, taramaOturumKontrolSn: 7, girisAlanBeklemeSn: 40 });
+  try {
+    const b = await api('/platform/tarama/baslat', { projeId, ekranAdi: 'Bekleme Denemesi', ortamId, hedef: '/basvuru/', kesif: false, onay: true });
+    expect(b.durum, JSON.stringify(b.y)).toBe(202);
+    const isId = String(b.y.isId);
+    const kayit = yonetici.isler.get(isId) as { girdi: { tarayici: Record<string, unknown> } };
+    expect(kayit.girdi.tarayici).toMatchObject({ oturumKontrolMs: 7_000, girisAlanBeklemeMs: 1_000 });
+    const bas = Date.now();
+    const son = await bekle(isId, (d) => d.durum !== 'suruyor');
+    expect(son).toMatchObject({ durum: 'hata' });
+    // Koşudaki "Giriş alanı beklemesi" (40 sn) değil, taramanınki (1 sn) kullanıldı.
+    expect(son.hata?.mesaj).toContain('Kullanıcı adı alanı (#olmayan-kullanici) 1 sn içinde görünmedi');
+    expect(Date.now() - bas).toBeLessThan(40_000);
+    expect(son.adimlar.find((a) => a.anahtar === 'giris')?.durum).toBe('hata');
+  } finally {
+    kosuAyarlariniKaydet(vt, { taramaGirisAlanBeklemeSn: 15, taramaOturumKontrolSn: 15, girisAlanBeklemeSn: 15 });
+  }
 });

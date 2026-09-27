@@ -20,8 +20,11 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * env: alt sürece verilen ortam değişkeni (yoksa yalnız sunucuda kullanılır). carpan: ortam değişkenine yazılırken çarpan.
  * bolum 'zamanlama': Ayarlar > Koşu > Zamanlanmış koşular kartındaki form. altBolum 'gelismis': bölümün açılır "Gelişmiş koşu davranışı" kısmı.
  * Her ayarın varsayılanı, ayar eklenmeden önceki davranıştır.
+ * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) kullanılır; arayüz aksi hâlde alanı pasif gösterir
+ * (pasifAciklama). Kaydedilen değer korunur.
  * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin';
- *   varsayilan: string | number; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number }>}
+ *   varsayilan: string | number; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
+ *   etkinKosul?: { anahtar: string; deger: string; pasifAciklama: string } }>}
  */
 export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'video', grup: 'Kayıt', etiket: 'Video', aciklama: 'Nöbetçi\'den başlatılan koşularda video kaydı.', tur: 'secim', varsayilan: 'her',
@@ -54,6 +57,17 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 900, enAz: 240, enCok: 2160, birim: 'px' },
   { anahtar: 'taramaDili', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı dili', aciklama: 'Tarama ve akış kaydında tarayıcının dili (sayfanın dil algılaması, tarih / sayı biçimi).',
     tur: 'secim', varsayilan: 'tr-TR', secenekler: DIL_SECENEKLERI },
+  { anahtar: 'taramaGirisKipi', grup: 'Tarama ve akış kaydı', etiket: 'Tarama ve akış kaydında giriş',
+    aciklama: 'Her seferinde baştan giriş yap: tarama ve akış kaydı boş tarayıcıyla açılır ve giriş yapar; oturum saklanmaz. Koşunun saklanan oturumunu kullan: koşunun bu ortam ve giriş profili için şifreli sakladığı oturum yüklenir; geçerliyse giriş atlanır, değilse baştan giriş yapılır ve başarılı girişin oturumu aynı şifreli dosyaya yazılır (koşu da kullanır). Yalnız aynı ortam ve giriş profilinin oturumu kullanılır; "Giriş yapmadan aç" ile başlatılan iş saklanan oturumu kullanmaz ve güncellemez. Kasa anahtarı yoksa oturum okunmaz, yazılmaz.',
+    tur: 'secim', varsayilan: 'bastan', secenekler: [['bastan', 'Her seferinde baştan giriş yap'], ['saklananOturum', 'Koşunun saklanan oturumunu kullan']] },
+  { anahtar: 'taramaOturumKontrolSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte oturum kontrolü',
+    aciklama: 'Saklanan oturum yüklendiğinde geçerli olup olmadığı en çok bu kadar denetlenir; süre dolarsa baştan giriş yapılır. Koşudaki "Oturum kontrolü"nden (Gelişmiş koşu davranışı) ayrıdır.',
+    tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn',
+    // Arayüz: bağlı ayar bu değerde değilken alan pasif ve bu açıklama gösterilir (değer korunur).
+    etkinKosul: { anahtar: 'taramaGirisKipi', deger: 'saklananOturum', pasifAciklama: 'Yalnız "Koşunun saklanan oturumunu kullan" seçiliyken kullanılır.' } },
+  { anahtar: 'taramaGirisAlanBeklemeSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte giriş alanı beklemesi',
+    aciklama: 'Tarama ve akış kaydındaki girişte giriş sayfasının alanlarının (kullanıcı adı, parola, giriş düğmesi, doğrulama kodu düğmesi) görünmesi için en çok bekleme. Giriş tarifindeki adımda süre verilmişse o kullanılır. Koşudaki "Giriş alanı beklemesi"nden ayrıdır.',
+    tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn' },
   // ---- Gelişmiş koşu davranışı (Ayarlar > Koşu altında ayrı, açılır bölüm) ----
   { anahtar: 'gorunmeyenAlanBeklemeSn', altBolum: 'gelismis', grup: 'Alanlar', etiket: 'Alanın görünmesi için bekleme',
     aciklama: 'Senaryoda değeri olan alan ekranda bu süre içinde görünmezse görünmüyor sayılır (koşullu alanlar önceki seçimden sonra çizilebilir).',
@@ -83,7 +97,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     aciklama: 'Senaryonun seçimleriyle birden çok satır uyduğunda hangisi kullanılsın (ekran ve servis senaryoları). Aynı tablo grubundaki tüm değerler aynı satırdan gelir. Ortamı boş satır her ortamda geçerlidir.',
     tur: 'secim', varsayilan: 'ilk', secenekler: [['ilk', 'İlk uyan satır'], ['rastgele', 'Rastgele']] },
   { anahtar: 'sqlSatirSiniri', altBolum: 'gelismis', grup: 'Test verisi', etiket: 'SQL sorgusunda okunan en çok satır',
-    aciklama: 'SQL adımında sorgudan okunan en çok satır (satır sayısı ve tablo eşitliği kontrolleri bunun içinde yapılır; fazlası okunmaz).',
+    aciklama: 'SQL adımında sorgudan okunan en çok satır (satır sayısı ve tablo eşitliği kontrolleri bunun içinde yapılır; fazlası okunmaz). SQL adımındaki beklenen satır sayısı (ve beklenen tablo satırları) bu sınırı aşamaz: adım kaydedilirken uyarı verilir. Sınırı düşürürseniz, sınırı aşan beklenen sayıya sahip kayıtlı adımlar koşuda sorgu çalıştırılmadan anlaşılır bir hatayla kalır ve yeniden kaydedilirken uyarı verir.',
     tur: 'sayi', varsayilan: 1000, enAz: 1, enCok: 100_000, birim: 'satır', env: 'NOBETCI_SQL_SATIR_SINIRI' },
   { anahtar: 'kosuEkranGenisligi', altBolum: 'gelismis', grup: 'Tarayıcı', etiket: 'Koşu ekran genişliği', aciklama: 'Koşudaki tarayıcı penceresinin genişliği.',
     tur: 'sayi', varsayilan: 1280, enAz: 320, enCok: 3840, birim: 'px', env: 'NOBETCI_EKRAN_GENISLIGI' },
@@ -118,7 +132,8 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 /** @typedef {{ video: string; ekranGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
  *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
- *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; gorunmeyenAlanBeklemeSn: number;
+ *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
+ *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
  *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number }} KosuAyarlari */
@@ -169,6 +184,14 @@ export function kosuAyarlariniKaydet(vt, girdi) {
   for (const t of KOSU_AYAR_TANIMLARI) if (g[t.anahtar] !== undefined) yeni[t.anahtar] = degerDogrula(t, g[t.anahtar]);
   ayarYaz(vt, KOSU_AYAR_ANAHTARI, yeni);
   return kosuAyarlariniOku(vt);
+}
+
+/**
+ * SQL adımının satır sınırı (Ayarlar > Koşu > Gelişmiş > SQL sorgusunda okunan en çok satır) — beklenen satır sayısı doğrulamasının
+ * TEK kaynağı (akış kaydetme / doğrulama ve koşu). Kasa okunamazsa varsayılan. @param {Veritabani} vt @returns {number}
+ */
+export function sqlSatirSiniriOku(vt) {
+  try { return kosuAyarlariniOku(vt).sqlSatirSiniri; } catch { return /** @type {number} */ (KOSU_AYAR_TANIMLARI.find((t) => t.anahtar === 'sqlSatirSiniri')?.varsayilan); }
 }
 
 /** Alt sürece verilecek ortam değişkenleri. @param {KosuAyarlari} a @returns {Record<string, string>} */

@@ -181,6 +181,7 @@ import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './gir
 import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, GIRIS_ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
 import { girisSayfasiniOner } from './giris/algilama.mjs';
 import { IzinHatasi, izinDegisiklikleri, izinDegistir, izinleriOku } from './guvenlik/izinler.mjs';
+import { yedekUyarisi, yedekUyarisiniKapat } from './guvenlik/yedek-uyarisi.mjs';
 import { CanliOnayHatasi, denetlenenUclar, ucDenetle } from './guvenlik/uc-denetimi.mjs';
 import { adCanliyiCagristiriyorMu, riskliOrtamMi, riskliSecimi } from './guvenlik/ortam-riski.mjs';
 import {
@@ -1227,6 +1228,8 @@ const GET_UCLARI = new Map([
     izinler: izinleriOku(db), degisiklikler: izinDegisiklikleri(db),
     makineler: Object.fromEntries(makineleriListele(db).map((m) => [m.id, m.ad]))
   })],
+  // Yedekten yükleme izinleri değiştirdiyse ana sayfada bir kez gösterilen uyarı (bayrak yoksa uyari: null; guvenlik/yedek-uyarisi.mjs).
+  ['/platform/yedek-uyarisi', (db) => ({ uyari: yedekUyarisi(db) })],
   ['/platform/guvenlik', (db) => ({
     otomatikKilitDakika, enAz: OTOMATIK_KILIT_EN_AZ_DK, enCok: OTOMATIK_KILIT_EN_COK_DK, varsayilan: OTOMATIK_KILIT_VARSAYILAN_DK,
     videoSaklamaGun: videoSaklamaGunu(db), videoSaklamaVarsayilan: VIDEO_SAKLAMA_VARSAYILAN_GUN,
@@ -1370,6 +1373,8 @@ const POST_UCLARI = new Map([
   // Toplu çoğaltma: onaysız çağrı önizleme döner (hiçbir şey yazılmaz).
   ['/platform/senaryolar/cogalt', (db, g) => senaryolariCogalt(db, kimlikAl(g.projeId, 'projeId'), { idler: g.idler, adet: g.adet, sablon: g.sablon, onay: g.onay === true })],
   ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
+  // Yedek yükleme uyarısı kapatıldı ("Tamam" / "İzinlere git"): bayrak silinir, kimse için bir daha gösterilmez.
+  ['/platform/yedek-uyarisi/kapat', (db) => ({ kapatildi: yedekUyarisiniKapat(db) })],
   ['/platform/acilis/kaydet', (db, g) => ({ acilis: acilisTercihiniKaydet(VERI_KOKU, g.bicim) })],
   ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],
   ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
