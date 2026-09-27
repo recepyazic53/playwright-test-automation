@@ -4,7 +4,8 @@
 // Aynı tablo + etiketteki alanlar bir seçim grubudur: senaryodaki seçimler (tabloSecimleri["<tabloId>|<etiket>"] =
 // { Sütun: değer }) satırları süzer. Formda süzme YUKARIDAN AŞAĞIDIR: bir alanın seçenekleri, formda kendinden ÖNCEKİ alanların
 // seçimleriyle uyuşan satırlardaki değerlerdir (üstteki seçim değişince alttaki uyumsuz seçim temizlenir). Koşuda tüm
-// seçimlerle uyan ilk satır kullanılır; satırın ortamı boşsa (Tümü) her ortamda geçerlidir.
+// seçimlerle uyan ilk satır kullanılır (Ayarlar > Koşu > Gelişmiş'te "Rastgele" seçilirse uyanlardan biri; bir grubun tüm değerleri
+// aynı satırdan gelir); satırın ortamı boşsa (Tümü) her ortamda geçerlidir.
 // Karşılıklar: sütun değerinin sayfadaki (seçenek değeri) ve servisteki karşılığı; senaryoya tablodaki değer yazılır, ekran
 // koşusu sayfa değeriyle seçer, servis gövdesine servis değeri gider (tanımsızsa tablodaki değer).
 
@@ -91,9 +92,31 @@ export function sutunSecenekleri(tablo, secim, sutun, ortamId) {
 /** Değerin servis gövdesine yazılacak karşılığı (tanımsızsa değerin kendisi). @param {Sutun} sutun @param {string} deger */
 export const servisDegeri = (sutun, deger) => sutun.karsiliklar?.[deger]?.servis || deger;
 
-/** Koşuda kullanılacak satır: uyan ilk satır (yoksa undefined). @param {Tablo} tablo @param {Record<string, string>} secim @param {string | null} [ortamId] */
-export function secilenSatir(tablo, secim, ortamId) {
-  return uyanSatirlar(tablo, secim, { ortamId })[0];
+/**
+ * Satır seçimi (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi): 'ilk' (varsayılan) uyan ilk satır; 'rastgele' uyanlardan biri.
+ * onbellek: aynı koşuda aynı grup + seçim + ortam için seçilen satır — grubun tüm değerleri AYNI satırdan gelir. rastgele: [0, 1)
+ * üreteci (testlerde tohumlu; verilmezse Math.random).
+ * @typedef {{ kip?: string; rastgele?: () => number; onbellek?: Map<string, Satir | undefined> }} SatirSecimi
+ */
+
+/** Satır seçimi (ayar değerinden; tanınmayan değer 'ilk'). @param {unknown} kip @param {() => number} [rastgele] @returns {SatirSecimi} */
+export const satirSecimiOlustur = (kip, rastgele = Math.random) => ({ kip: kip === 'rastgele' ? 'rastgele' : 'ilk', rastgele, onbellek: new Map() });
+
+/**
+ * Koşuda kullanılacak satır: uyan ilk satır (satirSecimi 'rastgele' ise uyanlardan biri); yoksa undefined.
+ * @param {Tablo} tablo @param {Record<string, string>} secim @param {string | null} [ortamId] @param {SatirSecimi} [satirSecimi]
+ * @param {string} [grup] önbellek anahtarı eki (başvurunun etiketi)
+ */
+export function secilenSatir(tablo, secim, ortamId, satirSecimi, grup = '') {
+  const uyan = uyanSatirlar(tablo, secim, { ortamId });
+  if (!satirSecimi || satirSecimi.kip !== 'rastgele' || uyan.length < 2) return uyan[0];
+  const kosullar = Object.entries(secim).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const anahtar = JSON.stringify([tablo.id, grup, ortamId ?? null, kosullar]);
+  if (satirSecimi.onbellek?.has(anahtar)) return satirSecimi.onbellek.get(anahtar);
+  const r = (satirSecimi.rastgele ?? Math.random)();
+  const satir = uyan[Math.min(uyan.length - 1, Math.max(0, Math.floor(r * uyan.length)))];
+  satirSecimi.onbellek?.set(anahtar, satir);
+  return satir;
 }
 
 /** Değerin sayfadaki (seçenek value) karşılığı (tanımsızsa değerin kendisi). @param {Sutun} sutun @param {string} deger */
@@ -104,16 +127,16 @@ export const sayfaDegeri = (sutun, deger) => sutun.karsiliklar?.[deger]?.sayfa |
  * ve ortamla uyan İLK satırdan (satırın ortamı boşsa her ortamda geçerli). SERVİS gövdesi ve EKRAN senaryosu koşusu bu tek
  * kuralı kullanır (servis-islemleri.mjs, ekran-basvurulari.mjs). Çözülemezse kullanıcıya dönük hata metni (tabloYok: tablo yok).
  * @param {Tablo[]} tablolar değerleri çözülmüş tablolar @param {Basvuru} b @param {Record<string, Record<string, string>> | undefined} tabloSecimleri
- * @param {string | null} [ortamId]
+ * @param {string | null} [ortamId] @param {SatirSecimi} [satirSecimi] birden çok satır uyduğunda seçim (verilmezse ilk uyan)
  * @returns {{ tablo: Tablo; sutun: Sutun; satir: Satir; deger: string } | { hata: string; tabloYok?: boolean }}
  */
-export function basvuruyuCoz(tablolar, b, tabloSecimleri, ortamId) {
+export function basvuruyuCoz(tablolar, b, tabloSecimleri, ortamId, satirSecimi) {
   const t = tabloBul(tablolar, b.tablo);
   if (!t) return { hata: `"${b.tablo}" adında tablo yok`, tabloYok: true };
   const sutun = sutunBul(t, b.sutun);
   if (!sutun) return { hata: `"${t.ad}" tablosunda "${b.sutun}" sütunu yok` };
   const secim = tabloSecimleri?.[grupAnahtari(t.id, b.etiket)] ?? {};
-  const satir = secilenSatir(t, secim, ortamId);
+  const satir = secilenSatir(t, secim, ortamId, satirSecimi, b.etiket);
   const grup = `"${t.ad}${b.etiket ? ` (${b.etiket})` : ''}"`;
   if (!satir) return { hata: Object.keys(secim).length ? `${grup} tablosunda seçimlerle uyan satır yok` : `${grup} tablosunda bu ortamda satır yok` };
   const d = satir.degerler[sutun.ad];

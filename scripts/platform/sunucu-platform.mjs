@@ -126,6 +126,8 @@
 import { KATEGORI_SECENEKLERI, siniflandirmaKurallari, siniflandirmaKurallariniKaydet } from './ayarlar/siniflandirma-kurallari.mjs';
 import { CEKIRDEK_GIZLI_ADLAR, ekGizliAdlar, ekGizliAdlariKaydet } from './ayarlar/maskeleme.mjs';
 import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from './ayarlar/kosu-ayarlari.mjs';
+import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } from './ayarlar/video-saklama.mjs';
+import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
 import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
@@ -375,6 +377,8 @@ const zamanlayici = zamanlayiciOlustur({
   veritabani: () => (vt && kasaAcikMi(vt) ? vt : null),
   arkaPlanIsi: () => (vt ? arkaPlanIsiBaslat(vt) : null),
   mesgulMu: () => Boolean(kosucu?.mesgulMu?.()),
+  // Ayarlar > Koşu > Zamanlanmış koşu davranışı (kaçan zaman / koşu sürerken gelen zaman; varsayılan ikisi de "Atla").
+  davranis: (db) => { const a = kosuAyarlariniOku(db); return { kacan: a.zamanliKacan, cakisma: a.zamanliCakisma }; },
   yurut: (db, kural, kosuKimligi, devamMi) => zamanliKosuyuYurut(db, kural, kosuKimligi, {
     senaryolar: (d, projeId, ortamId) => senaryoListesi(d, projeId, ortamId).senaryolar,
     senaryoCalistir: (d, govde) => senaryoCalistir(d, govde, kosucu, calistirmaSecenekleri(d)),
@@ -419,9 +423,11 @@ export function platformTestOrtami() {
   const yol = veritabaniYolu();
   /** @type {Record<string, string>} */
   const alan = yol ? { PLATFORM_VERITABANI: yol } : {};
-  if (!vt || !kasaAcikMi(vt)) return { ...alan, ...kosuOrtamDegiskenleri(varsayilanKosuAyarlari()) };
+  // Koşu süre limiti: sunucunun süreci durdurduğu değer (TEST_SUNUCU_SURE_LIMITI_DK ezmesi dahil); test süresi buna göre ayarlanır.
+  const limit = { NOBETCI_KOSU_SURE_LIMITI_MS: String(Math.round(platformKosuSureLimitiMs())) };
+  if (!vt || !kasaAcikMi(vt)) return { ...alan, ...kosuOrtamDegiskenleri(varsayilanKosuAyarlari()), ...limit };
   try {
-    Object.assign(alan, kosuOrtamDegiskenleri(kosuAyarlariniOku(vt)));
+    Object.assign(alan, kosuOrtamDegiskenleri(kosuAyarlariniOku(vt)), limit);
     // Yasak adresler (ayarlar + ortam değişkeni): alt süreçteki koşu koruması (global-setup, model koşucusu) okur.
     const yasak = etkinYasakAdresler(vt);
     return { ...alan, PLATFORM_KASA_ANAHTARI: acikAnahtar(vt).toString('base64url'), ...(yasak.length ? { [YASAK_ADRES_DEGISKENI]: yasak.join(',') } : {}) };
@@ -433,27 +439,9 @@ export function platformTestOrtami() {
 // ---------------------------------------------------------------------------------------
 // Koşu sonuçları ve şifreli medya
 // ---------------------------------------------------------------------------------------
-const MEDYA_AYAR_ANAHTARI = 'medya';
-export const VIDEO_SAKLAMA_VARSAYILAN_GUN = 30;
-
-/**
- * Video saklama süresi (gün): Ayarlar > Güvenlik'te kaydedilen değer (kasa açıkken okunur),
- * yoksa .env VIDEO_SAKLAMA_GUN, yoksa 30.
- * @param {import('./veritabani/baglanti.mjs').Veritabani | null} db
- */
-export function videoSaklamaGunu(db) {
-  if (db && kasaAcikMi(db)) {
-    try {
-      const ayar = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(db, MEDYA_AYAR_ANAHTARI));
-      const gun = Number(ayar?.videoSaklamaGun);
-      // Okuma eski üst sınırla (3650) kalır: önceden kaydedilmiş uzun süre geçersiz sayılıp varsayılana (daha kısa) düşülürse
-      // videolar erken silinirdi. Yeni kayıt 365 günle sınırlıdır (/platform/ayarlar/medya).
-      if (Number.isInteger(gun) && gun >= 1 && gun <= 3650) return gun;
-    } catch { /* varsayılana düşülür */ }
-  }
-  const ortam = Number(process.env.VIDEO_SAKLAMA_GUN);
-  return Number.isFinite(ortam) && ortam > 0 ? ortam : VIDEO_SAKLAMA_VARSAYILAN_GUN;
-}
+// Video saklama süresi (gün): Ayarlar > Güvenlik'te kaydedilen değer (kasa açıkken okunur), yoksa .env VIDEO_SAKLAMA_GUN, yoksa 30.
+// Kural ortak modülde (ayarlar/video-saklama.mjs): doğrudan yazan raporlayıcı da aynısını kullanır. Yeni kayıt 365 günle sınırlıdır.
+export { VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu };
 
 /**
  * Sonuçlar veritabanına mı yazılıyor? (Veritabanı + kasa var ve proje — verilmezse herhangi bir proje — veritabanında.)
@@ -1214,6 +1202,8 @@ const GET_UCLARI = new Map([
   }],
   // Ayarlar > Koşu: tanımlar (form) + kayıtlı değerler.
   ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
+  // Ayarlar > Arayüz > Sağlık noktası (proje başına): Sonuçlar ekranındaki noktanın renk eşikleri.
+  ['/platform/saglik-esikleri', (db, q) => ({ esikler: saglikEsikleriniOku(db, kimlikAl(q.get('projeId'), 'projeId')), varsayilan: VARSAYILAN_SAGLIK_ESIKLERI })],
   // Ekran rehberleri: ilk girişte otomatik açılsın mı (kullanıcı kararı) + görülenler (bkz. ayarlar/rehber-ayarlari.mjs).
   ['/platform/rehber', (db) => ({ rehber: rehberAyarlariniOku(db) })],
   // Ayarlar > Arayüz > Nöbetçi nasıl açılsın (kendi penceresi / varsayılan tarayıcı; başlatıcı okur, bkz. ayarlar/acilis-tercihi.mjs).
@@ -1374,6 +1364,7 @@ const POST_UCLARI = new Map([
   ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],
   ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
+  ['/platform/saglik-esikleri/kaydet', (db, g) => ({ esikler: saglikEsikleriniKaydet(db, kimlikAl(g.projeId, 'projeId'), g.esikler) })],
   // Sonuçlar > Geçmiş sonuçları sil: tümü ya da "gun" günden eski bitmiş koşular (sonuç, adım, ekran görüntüsü, video, iz) ile
   // servis / akış koşuları. onay: true olmadan yalnızca sayar. Şifreli medya dosyaları hemen silinir. Geri alınamaz.
   ['/platform/sonuclar/temizle', (db, g) => {

@@ -28,6 +28,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { bagAdi, baglariUygula } from './akis-senaryo-icerigi.mjs';
 import { baslangicDegerleri, govdeCoz, govdeUret, semaBirlestir } from './servis-govdesi.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').ServisAkisIcerigi} ServisAkisIcerigi */
@@ -137,6 +138,8 @@ async function sqlAdimiKos(vt, projeId, ortamId, a, degerler, gizliler, sinyal) 
   const kullanilan = { baglanti: hedef.baglanti.ad, ...(hedef.veritabani ? { veritabani: hedef.veritabani.ad } : {}) };
   const r = await sqlAdiminiKos(a.sql, {
     adimAdi: a.ad, sinyal, gizliDegerler: gizliler, gizliSutunMu: (ad) => gizliAdMi(ad, ekler),
+    // Sorguda okunan en çok satır: Ayarlar > Koşu > Gelişmiş.
+    satirSiniri: (() => { try { return kosuAyarlariniOku(vt).sqlSatirSiniri; } catch { return undefined; } })(),
     coz: (ifade) => (ifade.startsWith('akis:') ? degerler[ifade.slice(5).trim()] : undefined),
     yurutucu: (sql, parametreler, o) => sqlTanimiylaSorgula(vt, { baglantiId: hedef.baglanti.id }, sql, parametreler, { ...o, projeId, ortamId })
   });

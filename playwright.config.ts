@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { MODEL_SPEC_DOSYASI } from './scripts/platform/senaryolar/model-kosusu.mjs';
 import { genelOturumDosyasi, genelVeri } from './tests/support/genel-veri';
 import { oturumuSifreliOku } from './tests/support/oturum-kasasi';
-import { ekranGoruntusuAyari, izAyari, videoAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
+import { ekranGoruntusuAyari, izAyari, kosuTarayiciAyarlari, videoAyari, yenidenDenemeAyari } from './tests/support/kosu-ayarlari';
 
 // MODEL KOŞUSU — Nöbetçi'deki senaryolar (test kodu yok; her senaryo ekran modeliyle genel model koşucusunda koşar).
 // Nöbetçi koşuyu proje ve ortam KİMLİKLERİYLE başlatır (NOBETCI_PROJE_ID / NOBETCI_ORTAM_ID; scripts/test-sunucu.mjs).
@@ -22,6 +22,7 @@ export default defineConfig({
   // Tek senaryo koşusu: Nöbetçi senaryonun etiketini "--grep" argümanı yerine bu ortam değişkeniyle verir.
   grep: process.env.TEST_SUNUCU_GREP_DESENI ? new RegExp(process.env.TEST_SUNUCU_GREP_DESENI) : undefined,
 
+  // Senaryolar sırayla koşar (Ayarlar > Koşu > Gelişmiş > Eşzamanlı senaryo: paylaşılan giriş oturumu nedeniyle yalnız 1).
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: yenidenDenemeAyari(),
@@ -49,7 +50,10 @@ export default defineConfig({
     {
       name: 'Chromium',
       use: {
-        ...devices['Desktop Chrome']
+        ...devices['Desktop Chrome'],
+        // Ekran boyutu / dil / saat dilimi: Ayarlar > Koşu > Gelişmiş > Tarayıcı (varsayılanlar Desktop Chrome 1280×720, dil ve saat
+        // dilimi verilmez — önceki davranış).
+        ...kosuTarayiciAyarlari()
       }
     }
   ]

@@ -28,23 +28,32 @@ import { sunucuBaglantisiniOku } from './sunucu-baglantisi.mjs';
 import { gocleriUygula } from './veritabani/gocler.mjs';
 import { veritabaniniHazirla } from './veritabani/depo.mjs';
 import { kosuKaydet, kosuyuBitir, sonucKaydet } from './veritabani/sonuc-deposu.mjs';
-import { MEDYA_ANAHTARI_META, medyaAnahtariniAc, yeniMedyaAnahtari } from './kasa.mjs';
+import { MEDYA_ANAHTARI_META, kasaAcikMi, kasaKilitle, kasayiArkaPlandaAc, medyaAnahtariniAc, yeniMedyaAnahtari } from './kasa.mjs';
+import { videoSaklamaGunu as ortakVideoSaklamaGunu } from './ayarlar/video-saklama.mjs';
 import { medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi, medyaSifrele } from './medya.mjs';
 import { adimGurultuMu, ansiTemizle, playwrightDurumuEsle } from './sonuclar/siniflandirma.mjs';
 import { yakalananMesajlariAyristir } from './sonuclar/yakalanan-mesajlar.mjs';
 
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
-const VARSAYILAN_VIDEO_SAKLAMA_GUN = 30;
 
 /** @param {string} mesaj */
 function uyar(mesaj) {
   process.stderr.write(`[platform-raporlayici] ${mesaj}\n`);
 }
 
-/** Saklama süresi (gün): VIDEO_SAKLAMA_GUN, yoksa 30. */
-export function videoSaklamaGunu() {
-  const d = Number(process.env.VIDEO_SAKLAMA_GUN);
-  return Number.isFinite(d) && d > 0 ? d : VARSAYILAN_VIDEO_SAKLAMA_GUN;
+/**
+ * Saklama süresi (gün): veritabanı verildiyse ve kasa açılabiliyorsa Ayarlar > Güvenlik'te kaydedilen değer (sunucuyla aynı kural;
+ * ayarlar/video-saklama.mjs), yoksa VIDEO_SAKLAMA_GUN, yoksa 30. Kasa açık değilse PLATFORM_KASA_ANAHTARI ile ARKA PLAN kipinde
+ * (yalnız okuma; şifreli alan tamamlama gibi yazma yapılmaz) açılır, değer okunur ve anahtar hemen bellekten kaldırılır; olmazsa
+ * ortam değişkenine düşülür.
+ * @param {import('./veritabani/baglanti.mjs').Veritabani | null} [vt]
+ */
+export function videoSaklamaGunu(vt = null) {
+  if (!vt || kasaAcikMi(vt) || !process.env.PLATFORM_KASA_ANAHTARI) return ortakVideoSaklamaGunu(vt);
+  const anahtar = Buffer.from(process.env.PLATFORM_KASA_ANAHTARI, 'base64url');
+  let acildi = false;
+  try { acildi = kasayiArkaPlandaAc(vt, anahtar); } catch { /* anahtar bu kasaya uymuyor: ortam değişkenine düşülür */ } finally { anahtar.fill(0); }
+  try { return ortakVideoSaklamaGunu(vt); } finally { if (acildi) kasaKilitle(vt); }
 }
 
 /** Ek türü → medya türü. @param {{ name: string; contentType: string }} ek */
@@ -165,8 +174,9 @@ class DogrudanYazici {
   async kosuyuBitir(kosuId, girdi) {
     kosuyuBitir(this.vt, kosuId, girdi);
     try {
-      const s = medyaSaklamaTemizligi(this.vt, this.klasor, { videoGun: videoSaklamaGunu() });
-      if (s.silinenVideo) uyar(`${videoSaklamaGunu()} günden eski ${s.silinenVideo} şifreli video silindi.`);
+      const gun = videoSaklamaGunu(this.vt);
+      const s = medyaSaklamaTemizligi(this.vt, this.klasor, { videoGun: gun });
+      if (s.silinenVideo) uyar(`${gun} günden eski ${s.silinenVideo} şifreli video silindi.`);
     } catch (hata) {
       uyar(`Medya saklama temizliği yapılamadı: ${/** @type {Error} */ (hata).message}`);
     }

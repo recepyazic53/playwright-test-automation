@@ -9,6 +9,7 @@
 import { test } from '../support/fixtures';
 import { genelGirisKimligi, genelGirisTarifi, genelOturumDosyasi, genelVeri } from '../support/genel-veri';
 import { modelSenaryosunuKos, type ModelKosuOrtami } from '../support/model-kosucu';
+import { modelTestSuresiMs } from '../support/kosu-ayarlari';
 import type { PlatformModelVerisi } from '../support/platform-veri';
 import { modelEtiketi, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
@@ -42,9 +43,10 @@ for (const senaryo of senaryolar) {
       ...(rozet ? [{ type: 'beklenenSonuc', description: rozet }] : [])
     ]
   }, async ({ page }, testInfo) => {
-    // Giriş + bağlam + adım başına en fazla 30 sn bekleme; adım sayısıyla ölçeklenir.
+    // Test süresi: Ayarlar > Koşu > Koşu süre limiti biliniyorsa limitten 30 sn önce dolar (limiti aşmaz; limit büyükse kullanılabilir);
+    // bilinmiyorsa giriş + bağlam + adım başına 30 sn (kosu-ayarlari.ts > modelTestSuresiMs).
     const adimSayisi = Array.isArray(senaryo.model?.adimlar) ? (senaryo.model?.adimlar as unknown[]).length : 1;
-    test.setTimeout(120_000 + adimSayisi * 30_000);
+    test.setTimeout(modelTestSuresiMs(adimSayisi));
     await modelSenaryosunuKos(page, testInfo, senaryo, kosuOrtami(modelVerisi as PlatformModelVerisi));
   });
 }

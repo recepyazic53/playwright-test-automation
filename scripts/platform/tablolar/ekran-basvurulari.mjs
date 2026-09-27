@@ -96,7 +96,8 @@ export function ekrandakiDeger(c, s = {}) {
  * @param {Record<string, unknown>} veri senaryonun bu ortamdaki verisi (çözülmüş)
  * @param {{ tablolar: Tablo[]; baglar?: EkranBaglari; alanAnahtarlari?: Record<string, string>; secenekDegerleri?: Record<string, string[]>;
  *   alanTipleri?: Record<string, string>; kabuller?: Record<string, string>; dosyaDenetle?: (ad: string) => string | null;
- *   ortamId: string | null; tabloSecimleri?: Record<string, Record<string, string>> }} s
+ *   ortamId: string | null; tabloSecimleri?: Record<string, Record<string, string>>; satirSecimi?: import('./tablo-secimi.mjs').SatirSecimi }} s
+ *   satirSecimi: birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş; verilmezse ilk uyan satır)
  * @returns {{ veri: Record<string, unknown>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }>; cozulen: number }}
  */
 export function ekranBasvurulariniCoz(veri, s) {
@@ -126,7 +127,7 @@ export function ekranBasvurulariniCoz(veri, s) {
   }
   for (const [anahtar, ham] of basvurulu) {
     const b = /** @type {import('./tablo-secimi.mjs').Basvuru} */ (degerBasvurusu(ham));
-    const c = basvuruyuCoz(s.tablolar, b, secimler, s.ortamId);
+    const c = basvuruyuCoz(s.tablolar, b, secimler, s.ortamId, s.satirSecimi);
     if (!('deger' in c)) {
       hatalar.push({ alan: anahtar, mesaj: `"${anahtar}" alanının değeri (${String(ham).trim()}) test verisinden alınamadı: ${c.hata}.` });
       continue;

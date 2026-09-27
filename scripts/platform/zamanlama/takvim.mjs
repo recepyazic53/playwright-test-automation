@@ -4,7 +4,8 @@
 //   { tur: 'haftalik', saat: 'HH:MM', gunler: [1..7] }                haftanın seçili günleri (1 = Pazartesi … 7 = Pazar)
 //   { tur: 'aralik',   saatAraligi: 1|2|3|4|6|8|12, baslangic: 'HH:MM' }   her N saatte bir (gün içinde başlangıçtan itibaren)
 // Kaçan zamanlar (sunucu kapalı / kasa kilitli) sonradan TOPLU koşulmaz: bir zaman yalnızca geçtikten sonraki kısa pencerede
-// (TOLERANS_MS) tetiklenir; pencere kaçarsa bir sonraki zaman beklenir.
+// (TOLERANS_MS) tetiklenir; pencere kaçarsa bir sonraki zaman beklenir (varsayılan). Ayarlar > Koşu > Zamanlanmış koşu davranışı
+// "Sonra bir kez koş" ise kaçan zamanlardan yalnız SONUNCUSU (en çok 8 gün geriye) bir kez tetiklenir.
 // NOT: import.meta KULLANILMAZ. Tipler: takvim.d.mts.
 import { DepoHatasi } from '../veritabani/depo.mjs';
 
@@ -99,14 +100,16 @@ export function oncekiZaman(z, simdi) {
  * Vakti gelen çalışma zamanı: simdi'den önceki son zaman, (1) "tuketilen"den (son tetiklenen ya da kuralın kaydedildiği an)
  * SONRA ve (2) en çok toleransMs kadar önce ise o zaman döner; değilse null. Böylece aynı zaman iki kez tetiklenmez, kaçan
  * zamanlar sonradan toplu koşulmaz ve kural kaydedilmeden önceki bir zaman tetiklenmez.
+ * kacanlariKos: tolerans aşılmış olsa da (kaçan zaman) son zaman bir kez döner — "tuketilen" koruması aynı kalır (kural
+ * kaydedilmeden önceki ya da zaten tetiklenmiş zaman dönmez).
  * @param {Zaman} z @param {Date} simdi @param {string | null | undefined} tuketilen ISO zaman
- * @param {number} [toleransMs]
+ * @param {number} [toleransMs] @param {{ kacanlariKos?: boolean }} [s]
  * @returns {Date | null}
  */
-export function vadesiGelenZaman(z, simdi, tuketilen, toleransMs = TOLERANS_MS) {
+export function vadesiGelenZaman(z, simdi, tuketilen, toleransMs = TOLERANS_MS, s = {}) {
   const onceki = oncekiZaman(z, simdi);
   if (!onceki) return null;
-  if (simdi.getTime() - onceki.getTime() > toleransMs) return null;
+  if (!s.kacanlariKos && simdi.getTime() - onceki.getTime() > toleransMs) return null;
   const sinir = tuketilen ? Date.parse(tuketilen) : NaN;
   if (Number.isFinite(sinir) && onceki.getTime() <= sinir) return null;
   return onceki;

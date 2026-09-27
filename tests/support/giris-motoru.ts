@@ -23,6 +23,7 @@ import {
 import { CAPTCHA_MESAJI, captchaAlgila, kodAlaniniAlgila } from '../../scripts/platform/giris/algilama.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiYaz, kodYanitiniBekle } from '../../scripts/platform/giris/elle-kod.mjs';
 import { totpKoduUret } from './totp';
+import { sureAyari } from './kosu-ayarlari';
 
 /** Giriş için gereken kimlik bilgisi (giriş profilinden; şifre çözülmüş — yalnızca bellekte). */
 export type GirisKimligi = {
@@ -64,8 +65,9 @@ export class GirisHatasi extends Error {
   }
 }
 
-const OTURUM_KONTROL_SURESI_MS = 15_000;
-const ALAN_BEKLEME_SURESI_MS = 15_000;
+// Ayarlar > Koşu > Gelişmiş > Giriş (varsayılan 15 sn; ortam değişkeni yoksa — ör. tarama — varsayılan). Çağrı anında okunur.
+const oturumKontrolSuresiMs = (): number => sureAyari('NOBETCI_OTURUM_KONTROL_MS', 15_000, 1_000, 300_000);
+const alanBeklemeSuresiMs = (): number => sureAyari('NOBETCI_GIRIS_ALAN_BEKLEME_MS', 15_000, 1_000, 300_000);
 const YOKLAMA_ARALIGI_MS = 250;
 
 const ilkSatir = (hata: unknown): string => String(hata instanceof Error ? hata.message : hata).split('\n')[0].slice(0, 300);
@@ -284,7 +286,7 @@ async function captchaKontrol(page: Page): Promise<void> {
   if (kanit.length) throw new GirisHatasi('CAPTCHA', `${CAPTCHA_MESAJI} (kanıt: ${kanit.slice(0, 3).join('; ')})`);
 }
 
-async function alaniBekle(page: Page, secici: string, ad: string, sureMs = ALAN_BEKLEME_SURESI_MS): Promise<Locator> {
+async function alaniBekle(page: Page, secici: string, ad: string, sureMs = alanBeklemeSuresiMs()): Promise<Locator> {
   const l = ilkOge(page, secici);
   try {
     await l.waitFor({ state: 'visible', timeout: sureMs });
@@ -399,7 +401,7 @@ export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKiml
  * Kayıtlı oturum (storageState) hâlâ geçerli mi? Form DOLDURULMAZ: oturum kontrol adresine gidilir,
  * başarı göstergesi kısa sürede görünürse geçerlidir.
  */
-export async function oturumGecerliMi(page: Page, tarif: GirisTarifi, sureMs = OTURUM_KONTROL_SURESI_MS): Promise<boolean> {
+export async function oturumGecerliMi(page: Page, tarif: GirisTarifi, sureMs = oturumKontrolSuresiMs()): Promise<boolean> {
   try {
     await sayfayaGit(page, tarif.oturumKontrolAdresi, 'Oturum kontrol sayfası');
   } catch (hata) {

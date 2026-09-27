@@ -305,11 +305,12 @@ export const REHBERLER = {
   'ayarlar-kosu': {
     baslik: 'Koşu ayarları',
     adimlar: [
-      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi ve tarama / akış kaydı süreleri. Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
+      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi ve tarama / akış kaydı (süreler, ekran boyutu, dil, açılır liste keşif sınırı). Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
+      { baslik: 'Gelişmiş koşu davranışı', metin: 'Açılır bölümde koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı, koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
       { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
       {
         baslik: 'Zamanlanmış koşular',
-        metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır; kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır.',
+        metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır. Varsayılan olarak kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır; kartın "Zamanlanmış koşu davranışı" bölümünden "Sonra bir kez koş" / "Bitince koş" seçebilirsiniz.',
         cizim: { tur: 'akis', kutular: [{ baslik: 'Zaman', alt: 'her gün 07:00', ikon: 'saat' }, { baslik: 'Kasa açık mı?', ikon: 'kilit' }, { baslik: 'Koşu', alt: '"Koşuda" senaryolar', ikon: 'oynat' }, { baslik: 'Bildirim', alt: 'isteğe bağlı', ikon: 'simsek' }] },
         ipucu: 'Canlı ortam için ayrıca açık onay gerekir. Her kuralın son 20 çalışması ve sonuç bağlantıları "Geçmiş"te durur. '
           + '"Kasa kilitliyken ve açılışta" bölümündeki üç seçenek (kilitliyken çalışma, Windows oturumuna bağlı açma, açılışta arka planda başlatma) varsayılan kapalıdır; her birinin ne yaptığı ve riski yanında yazar. '
@@ -369,6 +370,7 @@ export const REHBERLER = {
   },
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
-    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı ve listelerin sayfa boyları. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } }]
+    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı ve listelerin sayfa boyları. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
+      { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' }]
   }
 };

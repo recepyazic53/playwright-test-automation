@@ -3,7 +3,7 @@
 // hata mesajları (varsayılan açık), ortam adresi (varsayılan kapalı). Rapor sunucuda üretilir ve maskelenir
 // (/platform/sonuclar/html-rapor; bkz. sonuclar/html-rapor.mjs). Önizleme betiksiz, korumalı bir iframe'dedir (sandbox=""):
 // arayüzün CSP'si satır içi stile izin vermediğinden srcdoc değil, sunucunun tek kullanımlık önizleme adresi (kendi CSP'si) yüklenir.
-import { TOKEN, api, boyutMetni, h, ikon, yeniKimlik } from './ortak.js';
+import { TOKEN, api, boyutMetni, h, ikon, kullaniciAyarlari, yeniKimlik } from './ortak.js';
 
 /** Bu boyutun üstündeki raporlarda uyarı gösterilir (e-posta ekleri çoğunlukla 10–25 MB ile sınırlı). */
 const UYARI_BAYT = 10 * 1024 * 1024;
@@ -24,6 +24,11 @@ function raporDiyalogu(hedef) {
     return { girdi, satir: h('label', { class: 'onay-satiri', for: girdi.id }, girdi, h('span', {}, etiket, aciklama ? h('span', { class: 'soluk kucuk rapor-secenek-notu' }, aciklama) : null)) };
   };
   const goruntu = kutu('Ekran görüntülerini ekle', false, 'Kasadaki şifreli görüntüler çözülüp rapora gömülür (en çok 25 MB). Dosya büyür.');
+  // Sınır kullanıcının kararıdır (Ayarlar > Arayüz > Raporlar); metin ayar gelince güncellenir.
+  void kullaniciAyarlari().then((a) => {
+    const not = goruntu.satir.querySelector('.rapor-secenek-notu');
+    if (not && Number(a.raporGoruntuSiniriMb) > 0) not.textContent = `Kasadaki şifreli görüntüler çözülüp rapora gömülür (en çok ${a.raporGoruntuSiniriMb} MB; Ayarlar > Arayüz). Dosya büyür.`;
+  });
   const hatalar = kutu('Hata mesajlarını ekle', true, 'İlk satırlar, Beklenen / Görülen ve hata kalıpları (maskeli).');
   const adres = kutu('Ortam adresini göster', false, 'Kapalıyken hata metinlerindeki ortam adresi de gizlenir.');
   const bilgi = h('p', { class: 'soluk kucuk', role: 'status', 'aria-live': 'polite' }, 'Önizleme hazırlanıyor…');

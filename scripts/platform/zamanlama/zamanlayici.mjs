@@ -2,8 +2,11 @@
 // anahtar emanetteyse: bag.arkaPlanIsi, bkz. anahtar-emaneti.mjs) dakikada bir kuralları denetler; vakti gelen
 // kural için arayüzdeki "Koşuyu başlat" ile AYNI yoldan (senaryo başına /platform/senaryolar/calistir mantığı: senaryoCalistir)
 // koşu başlatır; koşu kimliği "zamanli-<uuid>". Kurallar:
-//  - Aynı anda başka bir koşu sürüyorsa (arayüzden ya da başka bir zamanlanmış koşu) tetikleme ATLANIR: "Atlandı: koşu sürüyordu".
-//  - Kasa kilitliyken / sunucu kapalıyken kaçan zamanlar sonradan toplu koşulmaz (bkz. takvim.mjs > vadesiGelenZaman).
+//  - Aynı anda başka bir koşu sürüyorsa (arayüzden ya da başka bir zamanlanmış koşu) tetikleme ATLANIR: "Atlandı: koşu sürüyordu"
+//    (varsayılan). Ayarlar > Koşu > Zamanlanmış koşu davranışı "Bitince koş": tetikleme bellekte bekletilir, koşu bitince (sonraki
+//    denetimde) bir kez başlatılır; sunucu o arada kapanırsa unutulur.
+//  - Kasa kilitliyken / sunucu kapalıyken kaçan zamanlar sonradan toplu koşulmaz (bkz. takvim.mjs > vadesiGelenZaman); "Sonra bir
+//    kez koş" seçiliyse kaçanlardan yalnız sonuncusu bir kez koşulur.
 //  - Koşu sırasında kasa kilitlenir ya da çalışma alanı değişirse kalan senaryolar başlatılmaz ("yarıda").
 //  - Canlı / riskli ortamda kural onaysız ise (ör. ortam sonradan canlı işaretlendi) koşu başlatılmaz.
 // Bağımlılıklar (koşucu, senaryo listesi, servis akışı, bildirim) dışarıdan verilir; birim testleri sahte koşucu verir.
@@ -139,6 +142,12 @@ export function zamanlayiciOlustur(bag) {
   const bekleyen = [];
   /** @type {ReturnType<typeof setInterval> | null} */
   let aralik = null;
+  /** "Bitince koş": koşu sürerken vakti gelen kurallar (kural kimliği → zaman), sırayla. @type {Map<string, string>} */
+  const sonraKosulacak = new Map();
+  /** Kullanıcının kararları (Ayarlar > Koşu > Zamanlanmış koşu davranışı); okunamazsa önceki davranış. @param {Veritabani} vt */
+  const davranis = (vt) => {
+    try { return bag.davranis ? bag.davranis(vt) : { kacan: 'atla', cakisma: 'atla' }; } catch { return { kacan: 'atla', cakisma: 'atla' }; }
+  };
 
   /** @param {Veritabani | null} vt @param {string} kuralId @param {Tetikleme} t */
   const yaz = (vt, kuralId, t) => {
@@ -183,20 +192,41 @@ export function zamanlayiciOlustur(bag) {
     let kurallar;
     try { kalintilariKapat(vt); kurallar = tumKurallar(vt); } catch { return []; }
     const simdi = saat();
+    const d = davranis(vt);
     /** @type {Array<Promise<void>>} */
     const baslatilan = [];
+    /** Vakti gelen (kural, zaman) çiftleri: önce "bitince koş" ile bekleyenler (silinmiş / kapatılmış kural atılır), sonra yeniler. */
+    /** @type {Array<{ k: Kural; zaman: string; bekleyen: boolean }>} */
+    const vadesiGelenler = [];
+    for (const [kuralId, zaman] of [...sonraKosulacak]) {
+      const k = kurallar.find((x) => x.id === kuralId && x.etkin);
+      if (!k || d.cakisma !== 'bitinceKos') { sonraKosulacak.delete(kuralId); continue; }
+      vadesiGelenler.push({ k, zaman, bekleyen: true });
+    }
     for (const k of kurallar) {
       if (!k.etkin) continue;
-      const vakit = vadesiGelenZaman(k.zaman, simdi, k.tuketilen, TOLERANS_MS);
+      const vakit = vadesiGelenZaman(k.zaman, simdi, k.tuketilen, TOLERANS_MS, { kacanlariKos: d.kacan === 'sonraKos' });
       if (!vakit) continue;
       const zaman = vakit.toISOString();
       try { tuketilenYaz(vt, k.id, zaman); } catch { continue; }
+      // Aynı kuralın bekleyen eski zamanı varsa yenisi onun yerini alır (kural bir kez koşulur).
+      const eski = vadesiGelenler.findIndex((x) => x.bekleyen && x.k.id === k.id);
+      if (eski >= 0) vadesiGelenler.splice(eski, 1);
+      vadesiGelenler.push({ k, zaman, bekleyen: false });
+    }
+    for (const { k, zaman, bekleyen } of vadesiGelenler) {
       const baslangic = saat().toISOString();
       if (suren || bag.mesgulMu()) {
+        // "Bitince koş": atlanmaz, bellekte bekler (aynı kuralın yeni zamanı eskisinin yerini alır — yine bir kez koşulur).
+        if (d.cakisma === 'bitinceKos') {
+          if (!bekleyen) { sonraKosulacak.set(k.id, zaman); log(`[zamanlama] "${k.ad}" bekliyor: koşu sürüyor, bitince başlatılacak.`); }
+          continue;
+        }
         yaz(vt, k.id, { id: randomUUID(), zaman, baslangic, bitis: baslangic, durum: 'atlandi', mesaj: ATLANDI_MESAJI, kosuId: null, ozet: null, akisKosulari: [] });
         log(`[zamanlama] "${k.ad}" atlandı: koşu sürüyordu.`);
         continue;
       }
+      sonraKosulacak.delete(k.id);
       // Arka plan çalışması izni (Ayarlar > İzinler) kapalıysa hiçbir şey başlatılmaz; geçmişte "izin kapalı" görünür.
       if (!izinAcikMi(vt, 'arka-plan')) {
         yaz(vt, k.id, { id: randomUUID(), zaman, baslangic, bitis: baslangic, durum: 'atlandi', mesaj: `Atlandı: ${izinKapaliNotu('arka-plan')}. ${izinMesaji('arka-plan')}`, kosuId: null, ozet: null, akisKosulari: [] });

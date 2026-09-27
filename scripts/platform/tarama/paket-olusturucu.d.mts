@@ -76,6 +76,8 @@ export type TaramaEnvanteri = {
   hataliProfiller: Array<{ profil: string | null; mesaj: string }>;
   engellenenler: EngellenenIstek[];
   kesifYapildi: boolean;
+  /** Taramada kullanılan açılır liste keşif sınırı (Ayarlar > Koşu); yoksa KESIF_SECENEK_SINIRI. */
+  kesifSecenekSiniri?: number;
 };
 
 /** Akış kaydında bir öğe: adımın ilerleme düğmesi ya da başarı göstergesi (seçici + ekrandaki metni; değer değil). */

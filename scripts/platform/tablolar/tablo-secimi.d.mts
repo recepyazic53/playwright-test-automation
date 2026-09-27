@@ -18,10 +18,13 @@ export declare function tabloDegerListeleri(baglar: Record<string, { tablo: stri
   id: string; ad: string; tur: 'liste'; kullanim: 'ekran'; hedef: { ekranId: string; alan: string }; baglanti: { tablo: string; sutun: string; etiket?: string }; kosullar: Array<{ alan: string; deger: string }>; degerler: Array<{ deger: string; ekranDegeri?: string }>;
 }>;
 export declare function servisDegeri(sutun: Sutun, deger: string): string;
-export declare function secilenSatir<T extends Satir>(tablo: { sutunlar: Sutun[]; satirlar: T[] }, secim: Record<string, string>, ortamId?: string | null): T | undefined;
+export interface SatirSecimi { kip?: string; rastgele?: () => number; onbellek?: Map<string, Satir | undefined> }
+export declare function satirSecimiOlustur(kip: unknown, rastgele?: () => number): SatirSecimi;
+export declare function secilenSatir<T extends Satir>(tablo: { id?: string; sutunlar: Sutun[]; satirlar: T[] }, secim: Record<string, string>, ortamId?: string | null,
+  satirSecimi?: SatirSecimi, grup?: string): T | undefined;
 export declare function sayfaDegeri(sutun: Sutun, deger: string): string;
 /** Senaryo değerinin tamamı "${Tablo.Sütun}" ise başvuru, değilse null. */
 export declare function degerBasvurusu(deger: unknown): Basvuru | null;
 export declare function degerBasvurusuYaz(tablo: string, sutun: string, etiket?: string): string;
-export declare function basvuruyuCoz<T extends Tablo>(tablolar: T[], b: Basvuru, tabloSecimleri: Record<string, Record<string, string>> | undefined, ortamId?: string | null):
+export declare function basvuruyuCoz<T extends Tablo>(tablolar: T[], b: Basvuru, tabloSecimleri: Record<string, Record<string, string>> | undefined, ortamId?: string | null, satirSecimi?: SatirSecimi):
   { tablo: T; sutun: Sutun; satir: T['satirlar'][number]; deger: string } | { hata: string; tabloYok?: boolean };

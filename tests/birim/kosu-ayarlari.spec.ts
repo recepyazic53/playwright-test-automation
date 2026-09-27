@@ -39,8 +39,10 @@ test('varsayılanlar, doğrulama, kasada saklama ve alt sürece giden ortam değ
     expect(kosuAyarlariniKaydet(vt, { zorlaIsaretlemeSn: 5 })).toMatchObject({ video: 'kapali', zorlaIsaretlemeSn: 5 });
     // Diskte şifreli.
     expect(String(vt.tek("SELECT deger_json FROM ayarlar WHERE anahtar = 'kosu'")?.deger_json)).toMatch(/^kasa:v1:/);
-    expect(kosuOrtamDegiskenleri(kosuAyarlariniOku(vt))).toEqual({
-      NOBETCI_VIDEO: 'kapali', NOBETCI_EKRAN_GORUNTUSU: 'yalnizHata', NOBETCI_IZ: 'her', NOBETCI_YENIDEN_DENEME: '2', NOBETCI_ALAN_BEKLEME_MS: '40000', NOBETCI_ZORLA_BEKLEME_MS: '5000'
+    // Gelişmiş koşu davranışı ayarları da (varsayılanlarıyla) geçer: gelismis-kosu-ayarlari.spec.ts.
+    expect(kosuOrtamDegiskenleri(kosuAyarlariniOku(vt))).toMatchObject({
+      NOBETCI_VIDEO: 'kapali', NOBETCI_EKRAN_GORUNTUSU: 'yalnizHata', NOBETCI_IZ: 'her', NOBETCI_YENIDEN_DENEME: '2', NOBETCI_ALAN_BEKLEME_MS: '40000', NOBETCI_ZORLA_BEKLEME_MS: '5000',
+      NOBETCI_KOSU_SURE_LIMITI_MS: '600000'
     });
     // Servis: biçimsiz tarih ifadesi kullanıcının biçimini kullanır.
     expect(yerTutuculariDoldur('${tarih:bugun}', { degerler: {}, simdi: new Date(2026, 8, 27), varsayilanTarihBicimi: 'dd.MM.yyyy' })).toBe('27.09.2026');
@@ -124,6 +126,84 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     expect(await nobetciApi(nobetci, '/platform/sonuclar/temizle', { tumu: true, onay: true })).toMatchObject({ silinen: { kosu: 0, sonuc: 0 } });
     const red = await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { kosuSureLimitiDk: 0 } }) as { mesaj?: string };
     expect(String(red.mesaj)).toContain('1–120');
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('Gelişmiş koşu davranışı (açılır), zamanlanmış koşu davranışı, rapor sınırı ve sağlık noktası; masaüstü ve 390 px taşmasız', async ({}, testInfo) => {
+    test.setTimeout(90_000);
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    const tasma = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    await page.goto('/#/ayarlar/kosu');
+    const form = page.getByRole('form', { name: 'Koşu ayarları' });
+    // Gelişmiş bölüm kapalı gelir; açılınca varsayılanlar bugünkü davranış.
+    const gelismis = form.locator('details.gelismis-ayarlar');
+    await expect(gelismis).not.toHaveAttribute('open', '');
+    await gelismis.locator('summary').click();
+    await expect(form.getByLabel('Alan görünmezse')).toHaveValue('atla');
+    await expect(form.getByLabel('Tarayıcı onay pencereleri')).toHaveValue('iptal');
+    await expect(form.getByLabel('Alanın görünmesi için bekleme (sn)')).toHaveValue('2');
+    await expect(form.getByLabel('Tablodan satır seçimi')).toHaveValue('ilk');
+    await expect(form.getByLabel('Koşu ekran genişliği (px)')).toHaveValue('1280');
+    await expect(form.getByLabel('Açılır liste keşif sınırı (seçenek)')).toHaveValue('8');
+    await form.getByLabel('Tarayıcı onay pencereleri').selectOption('onayla');
+    await form.getByLabel('Alanın görünmesi için bekleme (sn)').fill('90');
+    await form.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(form.getByText('1 ile 60 arasında bir tam sayı girin.')).toBeVisible();
+    await form.getByLabel('Alanın görünmesi için bekleme (sn)').fill('4');
+    await form.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(form.getByText('Koşu ayarları kaydedildi')).toBeVisible();
+    // Zamanlanmış koşu davranışı: Zamanlanmış koşular kartının içinde.
+    const zamanli = page.getByRole('form', { name: 'Zamanlanmış koşu davranışı' });
+    await expect(page.locator('.zamanlanmis-kosular').getByRole('form', { name: 'Zamanlanmış koşu davranışı' })).toBeVisible();
+    await expect(zamanli.getByLabel('Kaçan zaman')).toHaveValue('atla');
+    await zamanli.getByLabel('Kaçan zaman').selectOption('sonraKos');
+    await zamanli.getByLabel('Koşu sürerken gelen zaman').selectOption('bitinceKos');
+    await zamanli.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(zamanli.getByText('Zamanlanmış koşu davranışı kaydedildi.')).toBeVisible();
+    const y = await nobetciApi(nobetci, '/platform/kosu-ayarlari') as { ayarlar: Record<string, unknown> };
+    expect(y.ayarlar).toMatchObject({ onayPenceresi: 'onayla', gorunmeyenAlanBeklemeSn: 4, zamanliKacan: 'sonraKos', zamanliCakisma: 'bitinceKos', gorunmeyenAlan: 'atla' });
+    expect(await tasma()).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath('kosu-gelismis-masaustu.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(300);
+    expect(await tasma()).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath('kosu-gelismis-390.png'), fullPage: true });
+
+    // Ayarlar > Arayüz: rapor görüntü sınırı ve sağlık noktası (proje başına).
+    await page.setViewportSize({ width: 1400, height: 1000 });
+    await page.goto('/#/ayarlar/arayuz');
+    const arayuz = page.getByRole('form', { name: 'Arayüz ayarları' });
+    await expect(arayuz.getByLabel('HTML rapora gömülen görüntü sınırı (MB)')).toHaveValue('25');
+    const saglik = page.getByRole('form', { name: 'Sağlık noktası' });
+    await expect(saglik.getByLabel('Yeşil: başarı oranı en az (%)')).toHaveValue('90');
+    await expect(saglik.getByLabel('Sarı: başarı oranı en az (%)')).toHaveValue('75');
+    await saglik.getByLabel('Sarı: başarı oranı en az (%)').fill('95');
+    await saglik.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(saglik.getByText('1 ile 89 arasında bir tam sayı girin.')).toBeVisible();
+    await saglik.getByLabel('Yeşil: başarı oranı en az (%)').fill('80');
+    await saglik.getByLabel('Sarı: başarı oranı en az (%)').fill('60');
+    await saglik.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(saglik.getByText('Sağlık noktası eşikleri kaydedildi.')).toBeVisible();
+    const { projeler } = await nobetciApi(nobetci, '/platform/projeler') as { projeler: Array<{ id: string }> };
+    expect(await nobetciApi(nobetci, `/platform/saglik-esikleri?projeId=${projeler[0].id}`)).toMatchObject({ esikler: { yesil: 80, sari: 60 } });
+    // Sonuçlar ekranındaki not eşikleri gösterir.
+    await page.goto('/#/sonuclar');
+    await expect(page.locator('.yan-not')).toContainText('yeşil ≥ %80, sarı ≥ %60');
+    await page.goto('/#/ayarlar/arayuz');
+    await expect(saglik).toBeVisible();
+    expect(await tasma()).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath('arayuz-masaustu.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(300);
+    expect(await tasma()).toBeLessThanOrEqual(0);
+    await page.screenshot({ path: testInfo.outputPath('arayuz-390.png'), fullPage: true });
+    for (const ad of ['kosu-gelismis-masaustu', 'kosu-gelismis-390', 'arayuz-masaustu', 'arayuz-390']) {
+      await testInfo.attach(ad, { path: testInfo.outputPath(`${ad}.png`), contentType: 'image/png' });
+    }
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

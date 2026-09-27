@@ -600,12 +600,14 @@ function sonucTemizlemeKarti() {
 /** Ayarlar > Koşu: koşu ayarları + hata sınıflandırma kuralları + zamanlanmış koşular. */
 async function kosuAyarlari(govde, baglam) {
   const proje = baglam && baglam.durum ? baglam.durum.proje : null;
+  // Zamanlanmış koşu davranışı (kaçan zaman / koşu sürerken gelen zaman): tüm kurallar için; kartın içinde (proje yoksa ayrı kart).
+  const zamanlamaFormu = () => ayarFormu('zamanlama', 'Zamanlanmış koşu davranışı', 'Zamanlanmış koşu davranışı kaydedildi.', { baslik: 'Tüm zamanlanmış koşular için' });
   const [form, kurallar, zamanli] = await Promise.all([
     ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'), siniflandirmaKarti(),
-    proje ? zamanlanmisKosularKarti(proje).catch((hata) => {
+    proje ? zamanlanmisKosularKarti(proje, { davranisFormu: zamanlamaFormu }).catch((hata) => {
       if (hata && hata.durum === 423) throw hata;
       return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Zamanlanmış koşular yüklenemedi: ${hata.message || hata}`);
-    }) : null
+    }) : zamanlamaFormu().then((f) => h('section', { class: 'kart form-paneli', 'aria-label': 'Zamanlanmış koşular' }, h('h3', {}, ikon('tarih'), 'Zamanlanmış koşular'), f))
   ]);
   yerlestir(govde, form, kurallar, zamanli);
 }
@@ -647,18 +649,19 @@ async function siniflandirmaKarti() {
 
 /**
  * Kullanıcı kararları formu (tanımlar sunucudan: scripts/platform/ayarlar/kosu-ayarlari.mjs): bölümün ayarları gruplar hâlinde.
- * @param {'kosu' | 'yedekleme'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
+ * altBolum 'gelismis' tanımları açılır "Gelişmiş koşu davranışı" kısmındadır (varsayılan kapalı; her ayarın varsayılanı önceki davranış).
+ * @param {'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
+ * @param {{ baslik?: string }} [secenek] baslik: formun üstünde başlık (kart içinde gömülü form)
  */
-async function ayarFormu(bolum, ad, basariMetni) {
+async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const { ayarlar, tanimlar: tumu } = await api('/platform/kosu-ayarlari');
   const tanimlar = tumu.filter((t) => (t.bolum || 'kosu') === bolum);
   const mesaj = mesajKutusu();
   /** @type {Map<string, HTMLElement>} */
   const girdiler = new Map();
-  const gruplar = [...new Set(tanimlar.map((t) => t.grup))];
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
-  const form = h('form', { class: 'kart form-paneli kosu-ayarlari', novalidate: true, 'aria-label': ad }, mesaj.kutu,
-    ...gruplar.map((g) => h('fieldset', {}, h('legend', {}, g), ...tanimlar.filter((t) => t.grup === g).map((t) => {
+  /** @param {Array<Record<string, any>>} liste */
+  const grupAlanlari = (liste) => [...new Set(liste.map((t) => t.grup))].map((g) => h('fieldset', {}, h('legend', {}, g), ...liste.filter((t) => t.grup === g).map((t) => {
       let girdi;
       if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
       else if (t.tur === 'sayi') girdi = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', value: String(ayarlar[t.anahtar]) });
@@ -667,7 +670,16 @@ async function ayarFormu(bolum, ad, basariMetni) {
       const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
       const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
       return alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: `${t.aciklama} ${sinir}Varsayılan: ${varsayilan}.` });
-    }))),
+    })));
+  const temel = tanimlar.filter((t) => t.altBolum !== 'gelismis');
+  const gelismis = tanimlar.filter((t) => t.altBolum === 'gelismis');
+  const form = h('form', { class: `${secenek.baslik ? '' : 'kart '}form-paneli kosu-ayarlari`, novalidate: true, 'aria-label': ad },
+    secenek.baslik ? h('p', { class: 'soluk kucuk' }, secenek.baslik) : null, mesaj.kutu,
+    ...grupAlanlari(temel),
+    gelismis.length ? h('details', { class: 'gelismis-ayarlar' },
+      h('summary', {}, 'Gelişmiş koşu davranışı'),
+      h('p', { class: 'soluk kucuk' }, `Koşucunun bekleme süreleri ve kararları. Her ayarın varsayılanı Nöbetçi'nin bugüne kadarki davranışıdır; değiştirmediğiniz sürece koşular aynı çalışır.`),
+      ...grupAlanlari(gelismis)) : null,
     h('div', { class: 'dugmeler' }, kaydet));
   form.addEventListener('submit', async (o) => {
     o.preventDefault();
@@ -679,7 +691,13 @@ async function ayarFormu(bolum, ad, basariMetni) {
       const g = girdiler.get(t.anahtar);
       if (t.tur === 'sayi') {
         const n = Number(g.value);
-        if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) { alanHatasi(g, `${t.enAz} ile ${t.enCok} arasında bir tam sayı girin.`); g.focus(); return; }
+        if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) {
+          alanHatasi(g, `${t.enAz} ile ${t.enCok} arasında bir tam sayı girin.`);
+          const acilir = g.closest('details');
+          if (acilir) acilir.open = true;
+          g.focus();
+          return;
+        }
         yeni[t.anahtar] = n;
       } else yeni[t.anahtar] = g.value.trim();
     }
@@ -833,8 +851,10 @@ async function guvenlik(govde, baglam) {
 // Ayarlar > Arayüz: ekran rehberleri (kullanıcı kararı: ilk girişte kendiliğinden açılsın mı)
 // ---------------------------------------------------------------------------------------
 
-async function arayuzAyarlari(govde) {
-  const [{ rehber }, listeFormu, { acilis }] = await Promise.all([api('/platform/rehber'), ayarFormu('arayuz', 'Arayüz ayarları', 'Arayüz ayarları kaydedildi.'), api('/platform/acilis')]);
+async function arayuzAyarlari(govde, baglam) {
+  const proje = baglam && baglam.durum ? baglam.durum.proje : null;
+  const [{ rehber }, listeFormu, { acilis }, saglik] = await Promise.all([api('/platform/rehber'), ayarFormu('arayuz', 'Arayüz ayarları', 'Arayüz ayarları kaydedildi.'), api('/platform/acilis'),
+    proje ? saglikEsikleriKarti(proje) : null]);
   const otomatik = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', id: yeniKimlik('rehber-otomatik'), checked: rehber.otomatik, disabled: rehber.ortamKapali });
   const mesaj = mesajKutusu();
   const sifirla = h('button', { type: 'button' }, ikon('yenile'), 'Tüm rehberleri yeniden göster');
@@ -866,7 +886,39 @@ async function arayuzAyarlari(govde) {
           ? 'Bu sunucuda NOBETCI_REHBER_OTOMATIK=0 ortam değişkeniyle kapatılmış.'
           : 'Kapalıysa rehberler yalnızca üst çubuktaki "?" düğmesiyle açılır.'))),
     h('p', { class: 'soluk kucuk' }, `Görülen rehber: ${rehber.gorulenler.length}`),
-    h('div', { class: 'dugmeler' }, sifirla, tanitim)), temaKarti(), acilisKarti(acilis), listeFormu);
+    h('div', { class: 'dugmeler' }, sifirla, tanitim)), temaKarti(), acilisKarti(acilis), listeFormu, saglik);
+}
+
+/** Sağlık noktası eşikleri (proje başına; Sonuçlar ekranındaki noktanın rengi — ayarlar/saglik-esikleri.mjs). */
+async function saglikEsikleriKarti(proje) {
+  const { esikler, varsayilan } = await api(`/platform/saglik-esikleri?projeId=${encodeURIComponent(proje.id)}`);
+  const sayi = (deger) => h('input', { type: 'number', min: '1', max: '100', step: '1', inputmode: 'numeric', value: String(deger) });
+  const yesil = sayi(esikler.yesil);
+  const sari = sayi(esikler.sari);
+  const mesaj = mesajKutusu();
+  const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+  const form = h('form', { class: 'kart form-paneli', novalidate: true, 'aria-label': 'Sağlık noktası' },
+    h('h3', {}, ikon('grafik'), 'Sağlık noktası'),
+    h('p', { class: 'soluk' }, `Sonuçlar ekranında her ekranın yanındaki nokta son tam koşunun başarı oranına göre renklenir. Bu eşikler yalnız "${proje.ad}" projesi içindir.`),
+    mesaj.kutu,
+    alan('Yeşil: başarı oranı en az (%)', yesil, { yardim: `1–100. Varsayılan: ${varsayilan.yesil}.` }),
+    alan('Sarı: başarı oranı en az (%)', sari, { yardim: `Yeşil eşiğinden küçük olmalı; altı kırmızı. Varsayılan: ${varsayilan.sari}.` }),
+    h('div', { class: 'dugmeler' }, kaydet));
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    mesaj.temizle();
+    alanHatasi(yesil, '');
+    alanHatasi(sari, '');
+    const y = Number(yesil.value);
+    const s = Number(sari.value);
+    if (!Number.isInteger(y) || y < 2 || y > 100) { alanHatasi(yesil, '2 ile 100 arasında bir tam sayı girin.'); yesil.focus(); return; }
+    if (!Number.isInteger(s) || s < 1 || s >= y) { alanHatasi(sari, `1 ile ${y - 1} arasında bir tam sayı girin.`); sari.focus(); return; }
+    try {
+      await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/saglik-esikleri/kaydet', { govde: { projeId: proje.id, esikler: { yesil: y, sari: s } } }));
+      mesaj.goster('Sağlık noktası eşikleri kaydedildi.', 'basari');
+    } catch (hata) { mesaj.goster(hata.message); }
+  });
+  return form;
 }
 
 /** Tema seçimi (renk ailesi + biçim); açık / koyu seçimi üst çubuktaki düğmededir. Seçim hemen uygulanır. */

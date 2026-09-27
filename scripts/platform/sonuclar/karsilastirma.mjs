@@ -19,7 +19,7 @@ import { sayilariTopla } from './hesaplama.mjs';
 import { beklenenGorulenCikar } from './siniflandirma.mjs';
 import { servisSonucKosusu, servisSonucOzeti } from './servis-sonuclari.mjs';
 import {
-  adMaskeleyici, bilinenGizliDegerler, goruntuleriCoz, ilkSatirlar, karsilastirmaRaporuUret, raporDosyaAdi, raporMaskeleyici
+  adMaskeleyici, bilinenGizliDegerler, goruntuleriCoz, ilkSatirlar, karsilastirmaRaporuUret, raporDosyaAdi, raporGoruntuSiniriBayt, raporMaskeleyici
 } from './html-rapor.mjs';
 import { adimlariKarsilastir, kontrolleriKarsilastir, ozetFarki, senaryolariKarsilastir, yakalananlariKarsilastir } from './karsilastirma-hesabi.mjs';
 
@@ -368,7 +368,7 @@ export async function karsilastirmaRaporuOlustur(vt, q, ortamlar) {
   });
   const html = karsilastirmaRaporuUret({
     tur: tur === 'ekran' ? 'ekran' : v.a.kosuTuru === 'akis' ? 'akis' : 'servis', proje, ortamAdresi: adresler[1] ?? adresler[0],
-    a: kosu(v.a), b: kosu(v.b), sayim: v.sayim, senaryolar, atlananGoruntu: cozulen.atlanan
+    a: kosu(v.a), b: kosu(v.b), sayim: v.sayim, senaryolar, atlananGoruntu: cozulen.atlanan, goruntuSiniriBayt: raporGoruntuSiniriBayt(vt)
   }, { ...secenekler, ekAdlar, gizliDegerler });
   const tarih = v.b.baslangic ? new Date(v.b.baslangic) : new Date();
   return {

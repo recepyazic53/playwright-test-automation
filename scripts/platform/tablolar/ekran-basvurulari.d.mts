@@ -18,7 +18,7 @@ export declare function ekrandakiDeger(c: { sutun: Sutun; deger: string }, s?: {
 export declare function ekranBasvurulariniCoz(veri: Record<string, unknown>, s: {
   tablolar: Tablo[]; baglar?: EkranBaglari; alanAnahtarlari?: Record<string, string>; secenekDegerleri?: Record<string, string[]>;
   alanTipleri?: Record<string, string>; kabuller?: Record<string, string>; dosyaDenetle?: (ad: string) => string | null;
-  ortamId: string | null; tabloSecimleri?: Record<string, Record<string, string>>;
+  ortamId: string | null; tabloSecimleri?: Record<string, Record<string, string>>; satirSecimi?: import('./tablo-secimi.mjs').SatirSecimi;
 }): { veri: Record<string, unknown>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }>; cozulen: number };
 /** Ekran senaryosunun satır seçimlerini doğrular / temizler (gizli sütun ve olmayan tablo / sütun hata). */
 export declare function tabloSecimleriniAyikla(v: unknown, tablolar: ReadonlyArray<{ id: string; ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }>):

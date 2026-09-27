@@ -26,7 +26,7 @@ import { ortakYol, postmanCozumle, postmanOzeti, sablonCevir, sablonDegiskenleri
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
-import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, servisDegeri } from '../tablolar/tablo-secimi.mjs';
+import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, satirSecimiOlustur, servisDegeri } from '../tablolar/tablo-secimi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
@@ -508,6 +508,8 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
   let tablolar = null;
   /** Kullanılan tablo satırları (raporda: hangi satırla koştu). @type {Array<{ tablo: string; etiket: string; satir: Record<string, string | null> }>} */
   const kullanilanSatirlar = [];
+  // Birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi); bu çalıştırmada grubun değerleri aynı satırdan.
+  const satirSecimi = satirSecimiOlustur((() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })());
   for (const ad of adlar) {
     if (tarih[ad]) continue;
     // ${Tablo.Sütun} / ${Tablo[etiket].Sütun}: senaryonun seçimleriyle (ve ortamla) uyan ilk satırdan.
@@ -515,7 +517,7 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     if (b) {
       tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
       // Ortak kural (ekran senaryosu koşusuyla aynı): tablo-secimi.mjs > basvuruyuCoz.
-      const c = basvuruyuCoz(tablolar, b, icerik.tabloSecimleri, ortamId);
+      const c = basvuruyuCoz(tablolar, b, icerik.tabloSecimleri, ortamId, satirSecimi);
       if ('deger' in c) {
         const { tablo: t, sutun, satir: r, deger: d } = c;
         // Değerin servis karşılığı tanımlıysa gövdeye o yazılır (ör. EKSPRES → EXPRESS).

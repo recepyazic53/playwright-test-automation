@@ -16,15 +16,17 @@ const DURUM = {
 const durumRozeti = (d) => { const [m, t] = DURUM[d] || [d, '']; return rozet(m, t); };
 const ortamRiskli = (o) => riskliOrtamMi(o);
 const KILAVUZ = 'Zamanlanmış koşular yalnız Nöbetçi açıkken (sunucu çalışırken) ve kasa AÇIKKEN çalışır (aşağıdaki "Kasa kilitliyken ve açılışta" tercihleriyle değiştirebilirsiniz); zamanlar bu bilgisayarın saatine göredir. '
-  + 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar sonradan toplu koşulmaz: bir sonraki zaman beklenir. Otomatik kilit süresi '
-  + '(Ayarlar > Güvenlik) dolunca kasa kilitlenir. Vakti geldiğinde başka bir koşu sürüyorsa o zaman atlanır ("Atlandı: koşu sürüyordu"). '
+  + 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar sonradan toplu koşulmaz; varsayılan olarak bir sonraki zaman beklenir. Otomatik kilit süresi '
+  + '(Ayarlar > Güvenlik) dolunca kasa kilitlenir. Vakti geldiğinde başka bir koşu sürüyorsa o zaman varsayılan olarak atlanır ("Atlandı: koşu sürüyordu"). '
+  + 'Bu iki davranışı aşağıdaki "Zamanlanmış koşu davranışı" bölümünden değiştirebilirsiniz. '
   + 'Koşular "Koşuyu başlat" ile aynı yoldan yapılır; sonuçlar Sonuçlar\'a düşer.';
 
 /**
  * Ayarlar > Koşu içindeki "Zamanlanmış koşular" kartı.
  * @param {{ id: string; ad: string }} proje
+ * @param {{ davranisFormu?: () => Promise<HTMLElement> }} [secenek] davranisFormu: kaçan / çakışan zaman kararları formu (ayarlar.js; tüm kurallar için)
  */
-export async function zamanlanmisKosularKarti(proje) {
+export async function zamanlanmisKosularKarti(proje, secenek = {}) {
   const kart = h('section', { class: 'kart form-paneli zamanlanmis-kosular', 'aria-label': 'Zamanlanmış koşular' });
   const ciz = async () => {
     const q = `projeId=${encodeURIComponent(proje.id)}`;
@@ -52,6 +54,7 @@ export async function zamanlanmisKosularKarti(proje) {
       formAlani,
       veri.kurallar.length ? h('ul', { class: 'kayit-listesi zamanlama-listesi' }, veri.kurallar.map((k) => kuralSatiri(k, { ...secenekler, duzenle: formAc, yenile: ciz })))
         : bosDurum('Zamanlanmış koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "+ Zamanlanmış koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
+      secenek.davranisFormu ? h('div', { class: 'zamanlama-davranisi' }, h('h4', {}, 'Zamanlanmış koşu davranışı'), await secenek.davranisFormu()) : null,
       await arkaPlanBolumu().catch((hata) => {
         if (hata && hata.durum === 423) throw hata;
         return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Kilitliyken çalışma tercihleri yüklenemedi: ${hata.message || hata}`);
@@ -370,7 +373,7 @@ function kuralFormu(s) {
     alan('Ad', ad, { zorunlu: true }), alan('Ortam', ortam, { zorunlu: true }), canliKutusu,
     h('fieldset', {}, h('legend', {}, 'Ne koşulsun?'), alan('Senaryolar', kapsamTuru), ekranKutulari.el, s.akislar.length ? akisKutulari.el : null),
     h('fieldset', {}, h('legend', {}, 'Ne zaman?'), alan('Tekrar', zamanTuru), saatAlani, gunKutulari.el, aralikAlani, baslangicAlani, onizleme,
-      h('p', { class: 'soluk kucuk' }, 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar sonradan koşulmaz; bir sonraki zaman beklenir.')),
+      h('p', { class: 'soluk kucuk' }, 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar varsayılan olarak koşulmaz; bir sonraki zaman beklenir (Zamanlanmış koşu davranışı > Kaçan zaman).')),
     bildirimAlani,
     h('label', { class: 'onay-satiri', for: etkin.id }, etkin, 'Etkin'),
     h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'hayalet', onclick: () => s.kapat() }, 'Vazgeç'), kaydet));

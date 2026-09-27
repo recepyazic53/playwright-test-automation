@@ -15,8 +15,8 @@ import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi, girisKokenleri } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
-import { KESIF_SECENEK_SINIRI, type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
-import type { TaramaGirdisi, TaramaHataKodu, TaramaOlayi } from './protokol.mjs';
+import { type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
+import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaHataKodu, type TaramaOlayi } from './protokol.mjs';
 import { formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
 
 export class TaramaHatasi extends Error {
@@ -30,7 +30,6 @@ export class TaramaHatasi extends Error {
 
 export type OlayGonderici = (olay: TaramaOlayi) => Promise<void>;
 
-const SAYFA_ACILMA_MS = 30_000;
 const SECIM_BEKLEME_MS = 2_500;
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g;
@@ -77,8 +76,9 @@ export async function taramayiYurut(browser: Browser, g: TaramaGirdisi, olay: Ol
   const yasak = yasakliAdresBul(taramaAdresleri(g.tabanUrl, g.hedefAdres, g.tarif, g.profiller.map((p) => p.degerler)), desenler);
   if (yasak) throw new TaramaHatasi('YASAKLI_ADRES', yasakliTaramaMesaji(yasak));
 
+  // Ekran boyutu, dil, saat dilimi: Ayarlar > Koşu > Tarama ve akış kaydı (varsayılan 1366×900, tr-TR, bilgisayarın saat dilimi).
   const baglam = await browser.newContext({
-    baseURL: g.tabanUrl, viewport: { width: 1366, height: 900 }, acceptDownloads: false, serviceWorkers: 'block', locale: 'tr-TR'
+    baseURL: g.tabanUrl, ...taramaTarayiciAyarlari(g).baglam, acceptDownloads: false, serviceWorkers: 'block'
   });
   const durum: { asama: TaramaAsamasi } = { asama: 'hazirlik' };
   const engellenenler: EngellenenIstek[] = [];
@@ -177,7 +177,7 @@ export async function taramayiYurut(browser: Browser, g: TaramaGirdisi, olay: Ol
       throw new TaramaHatasi('BAGLAM_ADIMI', `Hiçbir bağlam profili taranamadı: ${hataliProfiller.map((h) => h.mesaj).join(' · ')}`);
     }
     await olay({ tur: 'adim', adim: 'profiller', durum: 'tamam' });
-    return { profiller, hataliProfiller, engellenenler, kesifYapildi: g.kesif };
+    return { profiller, hataliProfiller, engellenenler, kesifYapildi: g.kesif, kesifSecenekSiniri: taramaTarayiciAyarlari(g).kesifSecenekSiniri };
   } finally {
     await baglam.close().catch(() => undefined);
   }
@@ -187,13 +187,14 @@ async function profilTara(
   sayfa: Page, g: TaramaGirdisi, profil: string | null, notlar: string[],
   sakinles: (page: Page, ms: number) => Promise<void>, adimBildir: (adim: 'tarama' | 'kesif') => Promise<void>
 ): Promise<ProfilEnvanteri> {
+  const { sayfaAcilmaMs, kesifSecenekSiniri } = taramaTarayiciAyarlari(g);
   const git = async (): Promise<void> => {
     try {
-      await sayfa.goto(g.hedefAdres, { waitUntil: 'domcontentloaded', timeout: SAYFA_ACILMA_MS });
+      await sayfa.goto(g.hedefAdres, { waitUntil: 'domcontentloaded', timeout: sayfaAcilmaMs });
     } catch (hata) {
       const m = ilkSatir(hata);
       if (agHatasiMi(m) && !/Timeout/i.test(m)) throw new TaramaHatasi('SITE_ERISILEMEDI', `Hedef sayfa açılamadı (${adreslerGizli(m)}).`);
-      if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${g.hedefYol}) ${SAYFA_ACILMA_MS / 1000} sn içinde açılmadı.`);
+      if (/Timeout/i.test(m)) throw new TaramaHatasi('ZAMAN_ASIMI', `Hedef sayfa (${g.hedefYol}) ${sayfaAcilmaMs / 1000} sn içinde açılmadı.`);
       throw hata;
     }
     await sayfa.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => undefined);
@@ -222,24 +223,24 @@ async function profilTara(
   const kesifler: Kesif[] = [];
   if (g.kesif) {
     await adimBildir('kesif');
-    kesifler.push(...(await secimleriKesfet(sayfa, envanter, notlar, git, sakinles)));
+    kesifler.push(...(await secimleriKesfet(sayfa, envanter, notlar, git, sakinles, kesifSecenekSiniri)));
   }
   return { profil, yol: acilan, baslik: envanter.baslik, alanlar: envanter.alanlar, kesifler, ekranGoruntusu, notlar };
 }
 
 /**
- * Seçim keşfi: ≤ 8 seçenekli, etkin, tekli her açılır listede diğer seçenekler sırayla seçilir; beliren/kaybolan
+ * Seçim keşfi: ≤ sinir (Ayarlar > Koşu > Açılır liste keşif sınırı; varsayılan 8) seçenekli, etkin, tekli her açılır listede diğer seçenekler sırayla seçilir; beliren/kaybolan
  * alanlar ve seçenekleri DEĞİŞEN diğer seçim alanları (bağımlı listeler; yalnız seçenek etiketi/değeri) kaydedilir; sonunda
  * ilk değer geri yüklenir. Seçim sayfayı başka adrese götürürse not düşülür ve hedefe
  * dönülür. (selectOption yalnızca sayfa içi durumu değiştirir; buna bağlı yazma istekleri ağ katmanında iptal edilir.)
  */
 async function secimleriKesfet(
   sayfa: Page, temel: SayfaEnvanteri, notlar: string[], git: () => Promise<void>,
-  sakinles: (page: Page, ms: number) => Promise<void>
+  sakinles: (page: Page, ms: number) => Promise<void>, sinir: number
 ): Promise<Kesif[]> {
   const kesifler: Kesif[] = [];
   const adaylar = temel.alanlar.filter((a) => a.tur === 'select' && !a.coklu && !a.devreDisi && !a.saltOkunur
-    && (a.secenekler?.length ?? 0) >= 2 && (a.secenekler?.length ?? 0) <= KESIF_SECENEK_SINIRI);
+    && (a.secenekler?.length ?? 0) >= 2 && (a.secenekler?.length ?? 0) <= sinir);
   const anahtarlar = async (): Promise<SayfaEnvanteri> => sayfa.evaluate(sayfadakiAlanlar);
   const adresAyni = (a: string, b: string): boolean => kokVeYol(a) === kokVeYol(b);
   for (const s of adaylar) {
