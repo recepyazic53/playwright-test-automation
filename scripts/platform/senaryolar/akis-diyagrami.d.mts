@@ -14,6 +14,10 @@ export interface DiyagramAdimi {
   kapsamEtiketi: string | null;
   kosulur: boolean | null;
   altAkis: string | null;
+  /** SQL sorgusu adımının kısa açıklaması (yoksa null). */
+  sqlOzeti: string | null;
+  /** Yeniden giriş adımı (profil: giriş profilinin adı; null = ortamın varsayılanı); değilse null. */
+  yenidenGiris: { profil: string | null } | null;
   alanlar: DiyagramAlani[];
   ilerleme: string[];
   aksiyonMetinleri: string[];
@@ -22,7 +26,8 @@ export interface DiyagramAdimi {
   sonuc: DiyagramAdimSonucu | null;
 }
 export interface AkisDiyagrami {
-  baslangic: { girisVar: boolean; metin: string; sonuc: DiyagramAdimSonucu | null };
+  /** kip: etkin giriş (ortam | girissiz | temiz); profil: senaryonun seçtiği giriş profili. */
+  baslangic: { girisVar: boolean; kip: 'ortam' | 'girissiz' | 'temiz'; profil: string | null; metin: string; sonuc: DiyagramAdimSonucu | null };
   adimlar: DiyagramAdimi[];
   bitis: { tur: 'basari' | 'hata'; metin: string; durum: string | null };
   eslesmeyenler: string[];
@@ -31,6 +36,8 @@ export interface DiyagramSecenekleri {
   gorunurluk?: { adimlar?: Record<string, boolean | null>; alanlar?: Record<string, boolean | null> } | null;
   beklenen?: { hataAdimi?: string | null; mesaj?: string | null } | null;
   sonuc?: { durum: string; adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }> } | null;
+  /** Senaryonun giriş seçimi (senaryo-girisi.mjs); yoksa ortamın girişiyle. */
+  giris?: { kip: string; profil?: string | null } | null;
 }
 
 export declare function ifadeMetni(ifade: unknown, model: object): string;

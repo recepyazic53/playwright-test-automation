@@ -3,19 +3,24 @@
 //   filtreler (ekran, Koşuda, beklenen sonuç, son durum), seçim + toplu işlemler (Seçilenleri
 //   çalıştır, Koşuya ekle/çıkar, Sil), satır eylemleri (▷ / Düzenle / ⋯: Kopyala, Geçmiş, Sil),
 //   "Koşuyu başlat" (tam: Genel ya da ürün, filtresiz; aksi halde kısmi) ve canlı koşu paneli.
+//   ORTAMLAR: tüm senaryolar tek listede (birleşik liste: GET /platform/senaryolar?projeId, ortamId'siz). "Kapsam" sütunu
+//   senaryonun tanımlı olduğu ortamların adları ("TEST + CANLI"; adlar kullanıcının verisinden). "Koşuda" ve "Son sonuç"
+//   ORTAM BAŞINA. Ortam yalnız çalıştırırken (Koşuyu başlat / ▷ / Seçilenleri çalıştır) koşu diyaloğunda seçilir; koşuya o
+//   ortamda tanımlı ve o ortamda Koşuda açık senaryolar girer.
+//   Sıralama: başlığa tıklayınca VERİDE (sayfalı tablo; bkz. tablo-siralama.js, data-siralama="veri").
 //   Oluşturma/düzenleme: model tabanlı form (senaryo-formu.js).
 //   DEVRE DIŞI EKRANLAR (Ekranlar > ⋯): sol listede ve Genel listede varsayılan olarak gizli ("Devre dışı ekranları göster");
 //   senaryoları "Koşuyu başlat"a / ▷'ye girmez (sunucu da reddeder), satırda "ekran devre dışı" rozeti.
 // Adresler: #/senaryolar, #/senaryolar/u/<ekranId>, #/senaryolar/yeni/<ekranId>, #/senaryolar/duzenle/<id>
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, yerlestir, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet } from './ortak.js';
+import { api, yerlestir, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, mesgulIken, rozet, yeniKimlik } from './ortak.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
-import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuSuruyorMu, onayIste, riskliOrtamMi } from './kosu-paneli.js';
+import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuOrtamiId, kosuSuruyorMu, onayIste, onerilenOrtam, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { senaryoFormu } from './senaryo-formu.js';
 import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
-import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
+import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
+import { veriyiSirala } from './tablo-siralama.js';
 
-const ORTAM_ANAHTARI = 'platform.senaryoOrtami';
 /** Bir sayfadaki satır (Ayarlar > Arayüz > Senaryolar sayfa boyu; kullanıcı kararı). */
 let SAYFA_BOYU = 50;
 const SON_DURUM = {
@@ -28,15 +33,21 @@ const iki = (n) => String(n).padStart(2, '0');
 const kisaTarih = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '—' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
 
-/** Oturum boyunca korunan liste durumu (filtreler, sayfa). Seçim ekran değişince temizlenir. */
-const liste = { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', sayfa: 0, secim: new Set(), secimEkrani: null };
+/** Son durumun kısa simgesi (Son sonuç sütununda ortam etiketinin yanında). */
+const DURUM_SIMGESI = { basarili: '✓', basarisiz: '✗', atlanan: '↷', durduruldu: '■' };
+const gunAy = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
 
-export function seciliOrtamOku() {
-  try { return localStorage.getItem(ORTAM_ANAHTARI) || null; } catch { return null; }
-}
-function seciliOrtamYaz(id) {
-  try { localStorage.setItem(ORTAM_ANAHTARI, id); } catch { /* yok sayılır */ }
-}
+/** Oturum boyunca korunan liste durumu (filtreler, sayfa, sıralama). Seçim ekran değişince temizlenir. */
+const liste = { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kapsam: '', sayfa: 0, secim: new Set(), secimEkrani: null, siralama: { anahtar: null, yon: null } };
+
+const birlesikListe = (proje) => api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}`);
+/** Satırın ortam kaydı ({ ortamId, tanimli, kosuyaDahil, sonSonuc }) ya da undefined. */
+const ortamKaydi = (x, ortamId) => (x.ortamlar || []).find((o) => o.ortamId === ortamId);
+/** Senaryonun tanımlı olduğu ortamlar (proje ortam sırasıyla). */
+const tanimliOrtamlar = (x, ortamlar) => ortamlar.filter((o) => ortamKaydi(x, o.id)?.tanimli);
+/** Kapsam etiketi: tanımlı ortamların adları " + " ile (servis senaryolarındaki gibi). */
+const kapsamEtiketi = (liste2) => (liste2.length ? liste2.map((o) => o.ad).join(' + ') : 'Hiçbir ortam');
+const ortamdaDahil = (x, ortamId) => Boolean(ortamKaydi(x, ortamId)?.kosuyaDahil);
 
 /**
  * @param {HTMLElement} main
@@ -61,12 +72,10 @@ export function senaryolarEkrani(main, parcalar, baglam) {
     const [{ ortamlar }, ayar] = await Promise.all([api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`), kullaniciAyarlari()]);
     if (Number.isInteger(ayar.senaryoSayfaBoyu)) SAYFA_BOYU = ayar.senaryoSayfaBoyu;
     if (!ortamlar.length) { yerlestir(icerik, bosDurum('Projede ortam yok.', 'Ayarlar > Ortamlar bölümünden bir ortam ekleyin.', { ikon: 'ag' })); return; }
-    const kayitli = seciliOrtamOku();
-    const ortam = ortamlar.find((o) => o.id === kayitli) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
-    const [veri, servisler] = await Promise.all([
-      api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`),
-      servisleriAl(proje)
-    ]);
+    const [veri, servisler] = await Promise.all([birlesikListe(proje), servisleriAl(proje)]);
+    // Formun doğrulama bağlamı: düzenlenen senaryonun tanımlı olduğu ortam (varsayılan önce), yoksa önerilen ortam.
+    const duzenlenen = tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || '')) : null;
+    const ortam = (duzenlenen && onerilenOrtam(tanimliOrtamlar(duzenlenen, ortamlar))) || onerilenOrtam(ortamlar);
     const navCiz = () => ekranListesi(nav, veri, servisler, null, tur === 'u' || tur === undefined ? secili : null, tur === 'duzenle' ? veri.senaryolar.find((s) => s.id === decodeURIComponent(kimlik || ''))?.ekranId : tur === 'yeni' ? decodeURIComponent(kimlik || '') : null,
       () => { navCiz(); if (tur !== 'yeni' && tur !== 'duzenle') window.dispatchEvent(new HashChangeEvent('hashchange')); });
     navCiz();
@@ -80,22 +89,16 @@ export function senaryolarEkrani(main, parcalar, baglam) {
       });
       return;
     }
-    listeGorunumu(icerik, { proje, ortamlar, ortam, veri, secili });
+    listeGorunumu(icerik, { proje, ortamlar, veri, secili });
   })().catch(hata);
 }
 
 /**
- * Sol panel "ÜRÜNLER" (Servisler sayfası da kullanır): 1 · Ekranlar, 2 · Servisler.
+ * Sol panel "ÜRÜNLER" (Servisler sayfası da kullanır): açılır-kapanır Ekranlar ve Servisler grupları.
  * @param {HTMLElement} nav @param {{ id: string }} proje @param {{ servisId?: string | null }} secim
  */
 export async function urunlerPaneli(nav, proje, secim) {
-  const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`);
-  const kayitli = seciliOrtamOku();
-  const ortam = ortamlar.find((o) => o.id === kayitli) || ortamlar.find((o) => o.varsayilan) || ortamlar[0];
-  const [veri, servisler] = await Promise.all([
-    ortam ? api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`) : { ekranlar: [], senaryolar: [] },
-    servisleriAl(proje)
-  ]);
+  const [veri, servisler] = await Promise.all([birlesikListe(proje), servisleriAl(proje)]);
   const ciz = () => ekranListesi(nav, veri, servisler, secim.servisId ?? null, null, null, ciz);
   ciz();
 }
@@ -106,13 +109,14 @@ function ekranListesi(nav, veri, servisler, seciliServis, secili, formEkrani, de
   const toplam = veri.senaryolar.filter((x) => goster || !pasif.has(x.ekranId)).length;
   const baglanti = (id, ad, adet, ikonAd) => h('a', {
     href: id ? `#/senaryolar/u/${encodeURIComponent(id)}` : '#/senaryolar',
-    'aria-current': (secili !== null && (secili || '') === (id || '')) || (formEkrani && formEkrani === id) ? 'page' : null
-  }, ikonAd ? ikon(ikonAd) : h('span', { class: 'saglik', 'aria-hidden': 'true' }), ad, adet ? h('span', { class: 'adet' }, String(adet)) : null);
+    'aria-current': (secili !== null && (secili || '') === (id || '')) || (formEkrani && formEkrani === id) ? 'page' : null,
+    title: ad
+  }, ikonAd ? ikon(ikonAd) : h('span', { class: 'saglik', 'aria-hidden': 'true' }), h('span', { class: 'nav-metni' }, ad), adet ? h('span', { class: 'adet' }, String(adet)) : null);
   const ekranlar = veri.ekranlar.filter((e) => (e.senaryoSayisi || e.olusturulabilir) && (goster || !pasif.has(e.id) || e.id === secili || e.id === formEkrani));
   yerlestir(nav,
     baglanti('', 'Genel', toplam, 'izgara'),
-    ...ekranlarBasligi(),
-    ...ekranlar.map((e) => {
+    ...urunlerBasligi(),
+    ekranlarGrubu(ekranlar.map((e) => {
       const a = baglanti(e.id, e.ad, e.senaryoSayisi, e.modelVar ? 'katman' : null);
       if (pasif.has(e.id)) {
         a.classList.add('devre-disi');
@@ -120,7 +124,7 @@ function ekranListesi(nav, veri, servisler, seciliServis, secili, formEkrani, de
         a.insertBefore(h('span', { class: 'nav-etiketi' }, 'kapalı'), a.querySelector('.adet'));
       }
       return a;
-    }),
+    })),
     devreDisiAnahtari(veri.ekranlar.filter((e) => pasif.has(e.id) && e.senaryoSayisi).length, degisti),
     ...servislerBolumu(servisler, { seciliServis }));
 }
@@ -131,8 +135,22 @@ function ekranListesi(nav, veri, servisler, seciliServis, secili, formEkrani, de
 
 function listeGorunumu(icerik, s) {
   const { proje, ortamlar } = s;
-  let ortam = s.ortam;
   let veri = s.veri;
+  const kapsamOf = (x) => kapsamEtiketi(tanimliOrtamlar(x, ortamlar));
+  /** Koşu diyaloğunda önce seçili ortam: sürmekte olan koşu varsa onun ortamı (tek ▷ aynı panele eklenebilsin). */
+  const surenOrtam = () => (kosuSuruyorMu() && kosuOrtamiId() ? { id: kosuOrtamiId() } : undefined);
+  /** Tanımlı ortamlardaki son sonuçlar (null: o ortamda koşulmadı). */
+  const ortamSonuclari = (x) => (x.ortamlar || []).filter((o) => o.tanimli).map((o) => o.sonSonuc);
+  /** Veride sıralama alanları (th[data-sirala-anahtar]). */
+  const SIRALAMA_ALANLARI = {
+    baslik: (x) => x.baslik,
+    ekran: (x) => x.ekranAdi || '',
+    profil: (x) => x.baglamProfili?.ad || '',
+    beklenen: (x) => x.beklenenSonuc?.metin || '',
+    kapsam: kapsamOf,
+    son: (x) => { const t = x.sonSonuc ? Date.parse(x.sonSonuc.zaman) : NaN; return Number.isNaN(t) ? 0 : t; },
+    kosuda: (x) => (x.ortamlar || []).filter((o) => o.kosuyaDahil).length
+  };
   const ekran = s.secili ? veri.ekranlar.find((e) => e.id === s.secili) || null : null;
   // Ekran değişince seçim ve arama sıfırlanır (filtre seçimleri korunur).
   if (liste.secimEkrani !== (s.secili || '')) { liste.secim = new Set(); liste.sayfa = 0; liste.arama = ''; liste.secimEkrani = s.secili || ''; }
@@ -154,12 +172,17 @@ function listeGorunumu(icerik, s) {
   };
   const ekranSecimi = ekran ? null : secimKutusu('Ekran', 'ekran', [['', 'Tümü'], ...veri.ekranlar.filter((e) => e.senaryoSayisi).map((e) => [e.id, e.ad])]);
   const kosudaSecimi = secimKutusu('Koşuda', 'kosuda', [['', 'Tümü'], ['evet', 'Koşuda'], ['hayir', 'Hariç']]);
+  kosudaSecimi.sel.title = 'Koşuda: en az bir ortamda koşuda · Hariç: hiçbir ortamda koşuda değil';
+  // Kapsam: veride bulunan ortam kombinasyonları (liste yenilenince ciz() seçenekleri günceller).
+  const kapsamSecenekleri = () => [...new Set(veri.senaryolar.map(kapsamOf))].sort((a, b) => a.localeCompare(b, 'tr'));
+  const kapsamSecimi = secimKutusu('Kapsam', 'kapsam', [['', 'Tümü'], ...kapsamSecenekleri().map((k) => [k, k])]);
   const beklenenSecimi = secimKutusu('Beklenen', 'beklenen', [['', 'Tümü'], ['basari', 'Başarılı akış'], ['hata', 'İş kuralı hatası'], ['yok', 'Tanımsız']]);
   const sonSecimi = secimKutusu('Son durum', 'son', [['', 'Tümü'], ['basarili', 'Başarılı'], ['basarisiz', 'Başarısız'], ['atlanan', 'Atlandı'], ['durduruldu', 'Durduruldu'], ['yok', 'Koşulmadı']]);
+  sonSecimi.sel.title = 'Herhangi bir ortamdaki son sonuca göre';
   const temizle = h('button', { type: 'button', class: 'kucuk-dugme hayalet filtre-temizle', onclick: () => {
-    Object.assign(liste, { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', sayfa: 0 });
+    Object.assign(liste, { arama: '', ekran: '', kosuda: '', beklenen: '', son: '', kapsam: '', sayfa: 0 });
     arama.value = '';
-    for (const x of [ekranSecimi, kosudaSecimi, beklenenSecimi, sonSecimi]) if (x) { x.sel.value = ''; x.kap.classList.remove('etkin'); }
+    for (const x of [ekranSecimi, kosudaSecimi, kapsamSecimi, beklenenSecimi, sonSecimi]) if (x) { x.sel.value = ''; x.kap.classList.remove('etkin'); }
     ciz();
   } }, ikon('carpi'), 'Filtreleri temizle');
   let aramaZamanlayici = null;
@@ -168,7 +191,7 @@ function listeGorunumu(icerik, s) {
     aramaZamanlayici = setTimeout(() => { liste.arama = arama.value; liste.sayfa = 0; ciz(); }, 120);
   });
 
-  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.beklenen || liste.son || (!ekran && liste.ekran));
+  const filtreliMi = () => Boolean(liste.arama.trim() || liste.kosuda || liste.beklenen || liste.son || liste.kapsam || (!ekran && liste.ekran));
   const gorunenler = () => veri.senaryolar.filter((x) => {
     // Devre dışı ekranın senaryoları Genel listede gizli (anahtar açıksa ya da o ekran seçiliyse görünür).
     if (!ekran && x.ekranEtkin === false && !devreDisiGoster()) return false;
@@ -179,23 +202,18 @@ function listeGorunumu(icerik, s) {
     if (liste.beklenen === 'basari' && x.beklenenSonuc?.tur !== 'basari') return false;
     if (liste.beklenen === 'hata' && x.beklenenSonuc?.tur !== 'hata') return false;
     if (liste.beklenen === 'yok' && x.beklenenSonuc) return false;
-    if (liste.son === 'yok' && x.sonSonuc) return false;
-    if (liste.son && liste.son !== 'yok' && x.sonSonuc?.durum !== liste.son) return false;
+    if (liste.kapsam && kapsamOf(x) !== liste.kapsam) return false;
+    if (liste.son === 'yok' && ortamSonuclari(x).some(Boolean)) return false;
+    if (liste.son && liste.son !== 'yok' && !ortamSonuclari(x).some((r) => r?.durum === liste.son)) return false;
     return aramaEslesiyorMu(liste.arama, x.baslik, x.ekranAdi, x.baglamProfili?.ad, x.beklenenSonuc?.metin, x.kaynak?.dosya);
   });
+  /** Görünenler, liste durumundaki sıralamayla (sayfalamadan önce). */
+  const siraliGorunenler = () => {
+    const alan = liste.siralama.anahtar ? SIRALAMA_ALANLARI[liste.siralama.anahtar] : null;
+    return alan ? veriyiSirala(gorunenler(), alan, liste.siralama.yon) : gorunenler();
+  };
 
   // --- Başlık ve eylemler ---
-  const ortamSegmenti = ortamlar.length > 1 ? h('div', { class: 'segment', role: 'group', 'aria-label': 'Ortam' },
-    ortamlar.map((o) => h('button', {
-      type: 'button', 'aria-pressed': o.id === ortam.id ? 'true' : 'false', title: riskliOrtamMi(o) ? `${o.ad}: varsayılan test ortamı değil` : o.ad,
-      onclick: async () => {
-        if (o.id === ortam.id) return;
-        seciliOrtamYaz(o.id);
-        ortam = o;
-        for (const b of ortamSegmenti.children) b.setAttribute('aria-pressed', b.textContent === o.ad ? 'true' : 'false');
-        await yenile();
-      }
-    }, o.ad))) : null;
   const olusturulabilirler = veri.ekranlar.filter((e) => e.olusturulabilir);
   const yeniDugmesi = ekran
     ? (ekran.olusturulabilir ? h('a', { class: 'dugme', href: `#/senaryolar/yeni/${encodeURIComponent(ekran.id)}` }, ikon('artiYalin'), 'Yeni senaryo') : null)
@@ -211,10 +229,10 @@ function listeGorunumu(icerik, s) {
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, baslikMetni)),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Senaryolar — '), baslikMetni), baslikRozeti),
         metaAlani),
-      h('div', { class: 'eylemler' }, ortamSegmenti, yeniDugmesi, kosuDugmesi)),
+      h('div', { class: 'eylemler' }, yeniDugmesi, kosuDugmesi)),
     h('div', { class: 'senaryo-arac-cubugu' },
       h('div', { class: 'arama-kutusu' }, ikon('ara'), arama, h('kbd', { 'aria-hidden': 'true' }, '/')),
-      ekranSecimi ? ekranSecimi.kap : null, kosudaSecimi.kap, beklenenSecimi.kap, sonSecimi.kap, temizle, ozetAlani),
+      ekranSecimi ? ekranSecimi.kap : null, kosudaSecimi.kap, kapsamSecimi.kap, beklenenSecimi.kap, sonSecimi.kap, temizle, ozetAlani),
     topluAlani,
     tabloAlani);
   const kisayol = (o) => {
@@ -224,7 +242,7 @@ function listeGorunumu(icerik, s) {
 
   async function yenile() {
     try {
-      veri = await api(`/platform/senaryolar?projeId=${encodeURIComponent(proje.id)}&ortamId=${encodeURIComponent(ortam.id)}`);
+      veri = await birlesikListe(proje);
       const gecerli = new Set(veri.senaryolar.map((x) => x.id));
       for (const id of [...liste.secim]) if (!gecerli.has(id)) liste.secim.delete(id);
       ciz();
@@ -242,21 +260,93 @@ function listeGorunumu(icerik, s) {
     else ciz();
   });
 
+  // Başlığa tıklayınca sıralama (tablo-siralama.js olayı): durum listede tutulur, veri sıralanıp ilk sayfaya dönülür.
+  tabloAlani.addEventListener('tablo-sirala', (o) => {
+    const { anahtar, yon } = /** @type {CustomEvent} */ (o).detail || {};
+    liste.siralama = yon && SIRALAMA_ALANLARI[anahtar] ? { anahtar, yon } : { anahtar: null, yon: null };
+    liste.sayfa = 0;
+    ciz();
+  });
+
+  /** Kapsam süzgecinin seçenekleri veriden (liste yenilenince yeni kombinasyonlar görünsün; geçersiz seçim sıfırlanır). */
+  function kapsamSecenekleriniGuncelle() {
+    const secenekler = kapsamSecenekleri();
+    if (liste.kapsam && !secenekler.includes(liste.kapsam)) liste.kapsam = '';
+    yerlestir(kapsamSecimi.sel, [['', 'Tümü'], ...secenekler.map((k) => [k, k])].map(([d, m]) => h('option', { value: d, selected: liste.kapsam === d }, m)));
+    kapsamSecimi.sel.value = liste.kapsam;
+    kapsamSecimi.kap.classList.toggle('etkin', Boolean(liste.kapsam));
+  }
+
   function ciz() {
-    const liste2 = gorunenler();
+    kapsamSecenekleriniGuncelle();
+    const liste2 = siraliGorunenler();
     const kapsam = ekran ? veri.senaryolar.filter((x) => x.ekranId === ekran.id) : veri.senaryolar.filter((x) => x.ekranEtkin !== false || devreDisiGoster());
     const dahil = kapsam.filter((x) => x.kosuyaDahil && x.ekranEtkin !== false).length;
     yerlestir(baslikRozeti, rozet(`${kapsam.length} senaryo`, 'vurgu'));
-    yerlestir(metaAlani, 
-      h('span', {}, ikon('liste'), `${dahil} / ${kapsam.length} koşuda`),
-      h('span', {}, ikon('ag'), `ortam: ${ortam.ad}`),
+    yerlestir(metaAlani,
+      h('span', { title: 'En az bir ortamda Koşuda açık olan senaryolar' }, ikon('liste'), `${dahil} / ${kapsam.length} koşuda`),
       ekran ? h('span', {}, ikon(ekran.modelVar ? 'katman' : 'ekran'), ekran.modelVar ? 'ekran modeli var' : 'ekran modeli yok') : h('span', {}, ikon('ekran'), `${veri.ekranlar.filter((e) => e.senaryoSayisi).length} ürün / ekran`));
     yerlestir(ozetAlani, liste2.length !== kapsam.length ? h('span', {}, h('b', {}, String(liste2.length)), ` / ${kapsam.length} gösteriliyor`) : '');
     temizle.hidden = !filtreliMi();
     kosuDugmesi.disabled = kosuSuruyorMu() || !liste2.some((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id));
+    // Pasifken nedeni söylenir (düğmenin üstüne gelince ve ekran okuyucuda).
+    kosuDugmesi.title = !kosuDugmesi.disabled ? 'Koşuda açık senaryoları sırayla koşar (ortam sorulur)'
+      : kosuSuruyorMu() ? 'Sürmekte olan bir koşu var; bitmesini bekleyin ya da durdurun.'
+        : 'Koşuda açık senaryo yok: tablodaki "Koşuda" anahtarını açın ya da senaryoları seçip "Koşuya ekle"yi kullanın.';
     kosuDugmesi.title = kosuSuruyorMu() ? 'Sürmekte olan bir koşu var' : ekran && ekran.durum === 'devre_disi' ? 'Ekran devre dışı: senaryoları koşulara girmez (Ekranlar > ⋯ > Etkinleştir)' : '';
     topluCubukCiz(liste2);
     tabloCiz(liste2);
+  }
+
+  /** Toplu çoğaltma: adet + başlık şablonu → önizleme (yeni başlıklar, çakışanlar) → onay. Kopyalar "Koşuda" kapalı gelir. */
+  async function cogalt(secilenler) {
+    const adet = h('input', { type: 'number', min: '1', max: '50', value: '1', id: yeniKimlik('cogalt-adet'), inputmode: 'numeric' });
+    const sablon = h('input', { type: 'text', value: '{baslik} ({n})', id: yeniKimlik('cogalt-sablon'), spellcheck: 'false' });
+    const onizleme = h('div', { class: 'cogalt-onizleme', 'aria-live': 'polite' });
+    const hata = h('p', { class: 'hata-metni', role: 'alert' });
+    const tamam = h('button', { type: 'button', class: 'birincil', disabled: true }, ikon('kopya'), 'Oluştur');
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    const diyalog = h('dialog', { class: 'onay-diyalogu genis', 'aria-labelledby': 'cogalt-basligi' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'cogalt-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kopya')), `${secilenler.length} senaryoyu çoğalt`),
+        h('p', { class: 'soluk' }, 'Her seçili senaryodan istediğiniz sayıda kopya oluşur; kopyalar "Koşuda" kapalı gelir. Değerlerini sonra satırdan ya da toplu değer atamayla değiştirebilirsiniz.'),
+        h('div', { class: 'satir-duzen' },
+          h('div', { class: 'alan' }, h('label', { for: adet.id }, 'Her senaryodan kopya'), adet),
+          h('div', { class: 'alan' }, h('label', { for: sablon.id }, 'Başlık şablonu'), sablon, h('small', { class: 'yardim' }, '{baslik} = asıl başlık, {n} = kopya numarası'))),
+        hata, onizleme),
+      h('div', { class: 'diyalog-alt' }, vazgec, tamam));
+    let plan = null;
+    const govde = (onay) => ({ projeId: proje.id, idler: secilenler.map((x) => x.id), adet: Number(adet.value), sablon: sablon.value, onay });
+    let zaman = null;
+    const onizle = async () => {
+      hata.textContent = '';
+      tamam.disabled = true;
+      try {
+        const y = await api('/platform/senaryolar/cogalt', { govde: govde(false) });
+        plan = y.plan;
+        yerlestir(onizleme, h('p', { class: 'kucuk' }, h('b', {}, String(y.plan.length)), ' yeni senaryo', y.cakisanlar ? h('span', { class: 'hata-metni' }, ` · ${y.cakisanlar} başlık çakışıyor`) : null),
+          h('ul', { class: 'onay-listesi' }, y.plan.slice(0, 30).map((p) => h('li', { class: p.cakisma ? 'hata-metni' : null }, p.baslik, p.cakisma ? ' (zaten var)' : '')),
+            y.plan.length > 30 ? h('li', {}, `… ve ${y.plan.length - 30} daha`) : null));
+        tamam.disabled = y.cakisanlar > 0;
+      } catch (e) { plan = null; yerlestir(onizleme); hata.textContent = e.message; }
+    };
+    for (const g of [adet, sablon]) g.addEventListener('input', () => { clearTimeout(zaman); zaman = setTimeout(onizle, 250); });
+    tamam.addEventListener('click', async () => {
+      if (!plan) return;
+      try {
+        const y = await mesgulIken(tamam, 'Oluşturuluyor…', () => api('/platform/senaryolar/cogalt', { govde: govde(true) }));
+        diyalog.close();
+        bildir(`${y.olusanlar.length} kopya oluşturuldu ("Koşuda" kapalı).`);
+        liste.secim.clear();
+        yenile();
+      } catch (e) { hata.textContent = e.message; }
+    });
+    vazgec.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => diyalog.remove());
+    document.body.append(diyalog);
+    diyalog.showModal();
+    adet.focus();
+    onizle();
   }
 
   function topluCubukCiz(gorunen) {
@@ -269,8 +359,9 @@ function listeGorunumu(icerik, s) {
         gizliSecili ? h('span', { class: 'soluk kucuk' }, `(+${gizliSecili} filtre dışında; işlemlere dahil edilmez)`) : null),
       h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: !secilenler.length, onclick: () => seciliCalistir(secilenler) }, ikon('oynat'), 'Seçilenleri çalıştır'),
       h('span', { class: 'ayrac', 'aria-hidden': 'true' }),
-      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => !x.kosuyaDahil), onclick: () => kosuyaDahilEt(secilenler, true) }, ikon('onay'), 'Koşuya ekle'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => tanimliOrtamlar(x, ortamlar).some((o) => !ortamdaDahil(x, o.id))), onclick: () => kosuyaDahilEt(secilenler, true) }, ikon('onay'), 'Koşuya ekle'),
       h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => x.kosuyaDahil), onclick: () => kosuyaDahilEt(secilenler, false) }, ikon('eksi'), 'Koşudan çıkar'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.length, onclick: () => cogalt(secilenler) }, ikon('kopya'), 'Çoğalt…'),
       h('button', {
         type: 'button', class: 'kucuk-dugme tehlike', disabled: !secilenler.length,
         onclick: () => sil(secilenler)
@@ -282,9 +373,14 @@ function listeGorunumu(icerik, s) {
     if (!gorunen.length) {
       yerlestir(tabloAlani, h('section', { class: 'kart' }, veri.senaryolar.length
         ? bosDurum('Filtreyle eşleşen senaryo yok.', 'Aramayı ya da filtreleri değiştirin.', { ikon: 'ara', eylem: h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => temizle.click() }, 'Filtreleri temizle') })
-        : bosDurum('Bu ortamda senaryo yok.', 'Proje dosyalarını aktarın ya da ekran modeli olan bir ekranda yeni senaryo oluşturun.', { ikon: 'liste' })));
+        : bosDurum('Henüz senaryo yok.', 'Ekran modeli olan bir ekranda yeni senaryo oluşturun.', { ikon: 'liste' })));
       return;
     }
+    /** Veride sıralanan başlık: aria-sort liste durumundan çizilir (tablo-siralama.js düğmeyi ekler, olayı yayar). */
+    const sth = (anahtar, metin, sinif = null) => h('th', {
+      scope: 'col', class: sinif, 'data-sirala-anahtar': anahtar,
+      'aria-sort': liste.siralama.anahtar === anahtar && liste.siralama.yon ? (liste.siralama.yon === 'artan' ? 'ascending' : 'descending') : 'none'
+    }, metin);
     const sayfaSayisi = Math.max(1, Math.ceil(gorunen.length / SAYFA_BOYU));
     if (liste.sayfa >= sayfaSayisi) liste.sayfa = sayfaSayisi - 1;
     const dilim = gorunen.slice(liste.sayfa * SAYFA_BOYU, (liste.sayfa + 1) * SAYFA_BOYU);
@@ -296,16 +392,17 @@ function listeGorunumu(icerik, s) {
       for (const x of gorunen) { if (tumu.checked) liste.secim.add(x.id); else liste.secim.delete(x.id); }
       ciz();
     });
-    const tablo = h('table', { class: 'senaryo-tablosu' },
+    const tablo = h('table', { class: 'senaryo-tablosu ortamli-senaryo-tablosu', 'data-siralama': 'veri' },
       h('caption', { class: 'gorunmez' }, 'Senaryolar'),
       h('thead', {}, h('tr', {},
         h('th', { scope: 'col', class: 'secim' }, tumu),
-        h('th', { scope: 'col' }, 'Senaryo'),
-        ekran ? null : h('th', { scope: 'col', class: 'ekran-sutunu' }, 'Ekran'),
-        h('th', { scope: 'col', class: 'profil-sutunu' }, 'Bağlam profili'),
-        h('th', { scope: 'col', class: 'beklenen-sutunu' }, 'Beklenen'),
-        h('th', { scope: 'col' }, 'Son sonuç'),
-        h('th', { scope: 'col', class: 'kosuda' }, 'Koşuda'),
+        sth('baslik', 'Senaryo'),
+        ekran ? null : sth('ekran', 'Ekran', 'ekran-sutunu'),
+        sth('profil', 'Bağlam profili', 'profil-sutunu'),
+        sth('beklenen', 'Beklenen', 'beklenen-sutunu'),
+        sth('kapsam', 'Kapsam', 'kapsam-sutunu'),
+        sth('son', 'Son sonuç', 'son-sutunu'),
+        sth('kosuda', 'Koşuda', 'kosuda'),
         h('th', { scope: 'col', class: 'eylemler' }, h('span', { class: 'gorunmez' }, 'Eylemler')))),
       h('tbody', {}, dilim.map((x) => satir(x))));
     yerlestir(tabloAlani, h('section', { class: 'kart senaryo-karti' },
@@ -321,41 +418,60 @@ function listeGorunumu(icerik, s) {
     const kosu = kosuDurumu(x.id);
     const secim = h('input', { type: 'checkbox', 'aria-label': `Seç: ${x.baslik}`, checked: liste.secim.has(x.id) });
     secim.addEventListener('change', () => { if (secim.checked) liste.secim.add(x.id); else liste.secim.delete(x.id); ciz(); });
-    const kosuda = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: x.kosuyaDahil, 'aria-label': `Koşuda: ${x.baslik}` });
-    kosuda.addEventListener('change', async () => {
-      const yeni = kosuda.checked;
-      kosuda.disabled = true;
-      try {
-        await api('/platform/senaryo/kosuya-dahil', { govde: { projeId: proje.id, idler: [x.id], dahil: yeni } });
-        x.kosuyaDahil = yeni;
-        bildir(yeni ? 'Senaryo koşuya eklendi.' : 'Senaryo koşudan çıkarıldı.');
-      } catch (e) {
-        kosuda.checked = !yeni;
-        bildir(`Koşu listesi güncellenemedi: ${e.message}`, 'hata');
-      } finally {
-        kosuda.disabled = false;
-        ciz();
-      }
-    });
+    const tanimli = tanimliOrtamlar(x, ortamlar);
+    const kapsamMetni = kapsamOf(x);
+    // Koşuda: ORTAM BAŞINA ayrı anahtar (ortam adıyla etiketli).
+    const kosudaHucresi = tanimli.length ? h('div', { class: 'ortam-anahtarlari' }, tanimli.map((o) => {
+      const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: ortamdaDahil(x, o.id), 'aria-label': `Koşuda (${o.ad}): ${x.baslik}` });
+      kutu.addEventListener('change', async () => {
+        const yeni = kutu.checked;
+        kutu.disabled = true;
+        try {
+          await api('/platform/senaryo/kosuya-dahil', { govde: { projeId: proje.id, idler: [x.id], dahil: yeni, ortamId: o.id } });
+          const kayit = ortamKaydi(x, o.id);
+          if (kayit) kayit.kosuyaDahil = yeni;
+          x.kosuyaDahil = (x.ortamlar || []).some((k) => k.kosuyaDahil);
+          bildir(yeni ? `Senaryo ${o.ad} ortamında koşuya eklendi.` : `Senaryo ${o.ad} ortamında koşudan çıkarıldı.`);
+        } catch (e) {
+          kutu.checked = !yeni;
+          bildir(`Koşu listesi güncellenemedi: ${e.message}`, 'hata');
+        } finally {
+          kutu.disabled = false;
+          ciz();
+        }
+      });
+      return h('label', { class: 'ortam-anahtari', title: `${o.ad} ortamında koşuda` }, kutu, h('span', { class: 'ortam-adi', 'aria-hidden': 'true' }, o.ad));
+    })) : h('span', { class: 'cok-soluk', title: 'Senaryo hiçbir ortamda tanımlı değil' }, '—');
     const bs = x.beklenenSonuc;
     const altBilgi = [
+      // Dar ekranda Ekran sütunu gizlenir; ekran adı başlığın altında görünür (yalnız Genel listede).
+      !ekran && x.ekranAdi ? h('span', { class: 'ekran-alt-bilgi' }, x.ekranAdi) : null,
       x.akis ? rozet(`akış: ${x.akis.ad}`, '', { title: 'Senaryonun koştuğu akış (ekranın birden çok akışı var)' }) : null,
       x.paketten ? rozet('paketten', 'vurgu', { title: 'Sayfa paketindeki öneriden eklendi' }) : null,
-      !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
+      !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.ekranEtkin === false ? rozet('ekran devre dışı', 'atlanan', { title: 'Ekran devre dışı: senaryo toplu koşulara girmez; ▷ ile tek başına çalıştırılabilir (Ekranlar > ⋯ > Etkinleştir)' }) : null,
       x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null
     ].filter(Boolean);
-    let sonHucre;
-    if (kosu) {
-      sonHucre = h('span', { class: 'son-sonuc calisiyor' }, kosu.durum === 'calisiyor' ? h('span', { class: 'donen-halka', 'aria-hidden': 'true' }) : ikon('saat'),
-        h('span', { class: 'etiket' }, kosu.durum === 'calisiyor' ? 'Çalışıyor' : 'Sırada'));
-    } else if (x.sonSonuc) {
-      const g = SON_DURUM[x.sonSonuc.durum] || { etiket: x.sonSonuc.durum, sinif: '' };
-      sonHucre = h('a', { class: `son-sonuc ${g.sinif}`, href: `#/sonuclar/sonuc/${encodeURIComponent(x.sonSonuc.sonucId)}`, title: 'Sonuç ayrıntısını aç' },
-        h('span', { class: `nokta ${g.sinif}`, 'aria-hidden': 'true' }), h('span', { class: 'etiket' }, g.etiket), h('span', { class: 'zaman' }, kisaTarih(x.sonSonuc.zaman)));
-    } else {
-      sonHucre = h('span', { class: 'son-sonuc yok' }, '— koşulmadı');
-    }
+    // Son sonuç: ORTAM BAŞINA nokta + kısa etiket ("TEST ✓ 27.09", "CANLI —"); çalışan ortamda "Çalışıyor / Sırada".
+    const kosuOrtami = kosu ? kosuOrtamiId() : null;
+    const sonHucre = tanimli.length ? h('div', { class: 'ortam-sonuclari' }, tanimli.map((o) => {
+      if (kosu && kosuOrtami === o.id) {
+        const metin = kosu.durum === 'calisiyor' ? 'Çalışıyor' : 'Sırada';
+        return h('span', { class: 'son-sonuc ortam-sonucu calisiyor', title: `${o.ad}: ${metin}` },
+          kosu.durum === 'calisiyor' ? h('span', { class: 'donen-halka', 'aria-hidden': 'true' }) : ikon('saat'),
+          h('span', { class: 'etiket' }, o.ad), h('span', { class: 'zaman' }, metin));
+      }
+      const r = ortamKaydi(x, o.id)?.sonSonuc;
+      if (!r) {
+        return h('span', { class: 'son-sonuc ortam-sonucu yok', title: `${o.ad}: koşulmadı`, 'aria-label': `${o.ad}: koşulmadı` },
+          h('span', { class: 'nokta', 'aria-hidden': 'true' }), h('span', { class: 'etiket' }, o.ad), h('span', { class: 'zaman', 'aria-hidden': 'true' }, '—'));
+      }
+      const g = SON_DURUM[r.durum] || { etiket: r.durum, sinif: '' };
+      const tam = `${o.ad}: ${g.etiket} · ${kisaTarih(r.zaman)}`;
+      return h('a', { class: `son-sonuc ortam-sonucu ${g.sinif}`, href: `#/sonuclar/sonuc/${encodeURIComponent(r.sonucId)}`, title: `${tam} — sonuç ayrıntısını aç`, 'aria-label': tam },
+        h('span', { class: `nokta ${g.sinif}`, 'aria-hidden': 'true' }), h('span', { class: 'etiket' }, o.ad),
+        h('span', { class: 'zaman', 'aria-hidden': 'true' }, `${DURUM_SIMGESI[r.durum] || ''} ${gunAy(r.zaman)}`.trim()));
+    })) : h('span', { class: 'son-sonuc yok' }, '—');
     const calistir = kosu
       ? h('button', {
         type: 'button', class: 'ikon-dugme durdur-dugmesi', disabled: Boolean(kosu.durduruluyor), title: kosu.durduruluyor ? 'Durduruluyor…' : 'Durdur',
@@ -368,14 +484,16 @@ function listeGorunumu(icerik, s) {
       }, ikon('oynat'));
     return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', kosu ? 'calisiyor' : '', x.kosuyaDahil ? '' : 'haric'].join(' ').trim() || null, 'data-senaryo': x.id },
       h('td', { class: 'secim' }, secim),
-      h('td', {}, h('div', { class: 'senaryo-adi' }, h('strong', {}, x.baslik), altBilgi.length ? h('small', {}, altBilgi) : null)),
+      h('td', {}, h('div', { class: 'senaryo-adi' }, h('a', { class: 'senaryo-adi-baglantisi', href: `#/senaryolar/duzenle/${encodeURIComponent(x.id)}`, title: 'Senaryoyu aç' }, h('strong', {}, x.baslik)), altBilgi.length ? h('small', {}, altBilgi) : null)),
       ekran ? null : h('td', { class: 'ekran-hucresi' }, x.ekranAdi || '—'),
       h('td', { class: 'profil-sutunu' }, x.baglamProfili
         ? h('span', { class: `profil-hapi ${x.baglamProfili.varsayilan ? 'varsayilan' : ''}`, title: x.baglamProfili.varsayilan ? 'Varsayılan bağlam profili' : 'Bağlam profili' }, ikon('kullanici'), x.baglamProfili.ad || 'varsayılan')
         : h('span', { class: 'cok-soluk' }, '—')),
       h('td', { class: 'beklenen-hucresi' }, bs ? rozet(bs.metin, bs.tur === 'hata' ? 'hata' : 'basari', { title: bs.aciklama }) : h('span', { class: 'cok-soluk' }, '—')),
-      h('td', {}, sonHucre),
-      h('td', { class: 'kosuda' }, kosuda),
+      h('td', { class: 'kapsam-hucresi', 'data-deger': kapsamMetni },
+        rozet(kapsamMetni, tanimli.length ? 'durdu' : 'atlanan', { title: 'Kapsam: senaryonun tanımlı olduğu ortamlar' })),
+      h('td', { class: 'son-hucresi' }, sonHucre),
+      h('td', { class: 'kosuda' }, kosudaHucresi),
       h('td', { class: 'eylemler' }, h('span', { class: 'satir-eylemleri' },
         calistir,
         h('a', { class: 'dugme ikon-dugme', href: `#/senaryolar/duzenle/${encodeURIComponent(x.id)}`, title: 'Düzenle', 'aria-label': `Düzenle: ${x.baslik}` }, ikon('duzenle')),
@@ -409,44 +527,84 @@ function listeGorunumu(icerik, s) {
   }
 
   // --- İşlemler ---
+  // Ortam yalnız burada, koşu diyaloğunda seçilir (kosuOnayi: ortam seçimli). Riskli ortam uyarısı diyalogda.
   async function tekCalistir(x) {
-    if (riskliOrtamMi(ortam) && !(await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', senaryolar: [x], ortam, tur: 'tekil', esZamanli: true, dugme: 'Çalıştır' }))) return;
+    const secenek = tanimliOrtamlar(x, ortamlar);
+    if (!secenek.length) { bildir(`"${x.baslik}" hiçbir ortamda tanımlı değil.`, 'hata'); return; }
+    let ortam = secenek[0];
+    // Tek, riskli olmayan ortamda tanımlıysa sormadan çalışır; aksi halde ortam diyalogda seçilir.
+    if (secenek.length > 1 || riskliOrtamMi(ortam)) {
+      const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hesapla: () => ({ senaryolar: [x] }), tur: 'tekil', esZamanli: true, dugme: 'Çalıştır' });
+      if (!y) return;
+      ortam = y.ortam;
+    }
     kosuBaslat({ projeId: proje.id, ortam, senaryolar: [x], tur: 'tekil', esZamanli: true, baslik: x.baslik, tekBasina: true });
   }
 
   async function seciliCalistir(secilenler) {
     const calisabilir = secilenler.filter((x) => !kosuDurumu(x.id) && x.ekranEtkin !== false);
     if (!calisabilir.length) return;
-    const onay = await kosuOnayi({ baslik: 'Seçilenleri çalıştır?', senaryolar: calisabilir, ortam, tur: 'tekil', esZamanli: true });
-    if (!onay) return;
-    kosuBaslat({ projeId: proje.id, ortam, senaryolar: calisabilir, tur: 'tekil', esZamanli: true, baslik: `${calisabilir.length} seçili senaryo` });
+    const ilgili = ortamlar.filter((o) => calisabilir.some((x) => ortamKaydi(x, o.id)?.tanimli));
+    if (!ilgili.length) { bildir('Seçilen senaryolar hiçbir ortamda tanımlı değil.', 'hata'); return; }
+    const y = await kosuOnayi({
+      baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), tur: 'tekil', esZamanli: true,
+      hesapla: (o) => {
+        const k = calisabilir.filter((x) => ortamKaydi(x, o.id)?.tanimli);
+        return { senaryolar: k, tanimsizSayisi: calisabilir.length - k.length };
+      }
+    });
+    if (!y) return;
+    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: 'tekil', esZamanli: true, baslik: `${y.senaryolar.length} seçili senaryo` });
   }
 
   async function kosuyuBaslat() {
     const gorunen = gorunenler();
-    const kosacaklar = gorunen.filter((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id));
-    if (!kosacaklar.length) return;
+    if (!gorunen.some((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id))) return;
     const tam = !filtreliMi();
     const kapsam = ekran ? ekran.ad : 'Genel';
-    const onay = await kosuOnayi({
-      baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', senaryolar: kosacaklar, ortam, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false,
-      haricSayisi: gorunen.filter((x) => !x.kosuyaDahil || x.ekranEtkin === false).length,
+    const y = await kosuOnayi({
+      baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false,
+      // Koşuya o ortamda tanımlı ve o ortamda Koşuda açık senaryolar girer.
+      hesapla: (o) => {
+        const tanimli = gorunen.filter((x) => ortamKaydi(x, o.id)?.tanimli);
+        return {
+          senaryolar: tanimli.filter((x) => ortamdaDahil(x, o.id) && x.ekranEtkin !== false && !kosuDurumu(x.id)),
+          haricSayisi: tanimli.filter((x) => !ortamdaDahil(x, o.id) || x.ekranEtkin === false).length,
+          tanimsizSayisi: gorunen.length - tanimli.length
+        };
+      },
       not: tam
         ? (kapsam === 'Genel'
           ? 'Tam koşu olarak kaydedilir; bitince Genel kartlar, Genel trend ve koşulan her ürünün kartları güncellenir.'
           : `Tam koşu olarak kaydedilir; bitince ${kapsam} kartları ve trendi güncellenir (Genel trend değişmez).`)
         : 'Arama ya da filtre etkin: yalnızca listelenenler koşar. Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez.'
     });
-    if (!onay) return;
-    kosuBaslat({ projeId: proje.id, ortam, senaryolar: kosacaklar, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, baslik: tam ? `${kapsam} koşusu` : `${kapsam} (kısmi)` });
+    if (!y) return;
+    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, baslik: tam ? `${kapsam} koşusu` : `${kapsam} (kısmi)` });
   }
 
+  /** Toplu Koşuya ekle / çıkar: birden çok ortam varsa hangi ortamda (ya da tüm tanımlı ortamlarda) olduğu sorulur. */
   async function kosuyaDahilEt(secilenler, dahil) {
-    const hedef = secilenler.filter((x) => x.kosuyaDahil !== dahil);
-    if (!hedef.length) return;
+    const ilgili = ortamlar.filter((o) => secilenler.some((x) => ortamKaydi(x, o.id)?.tanimli));
+    if (!ilgili.length) return;
+    let ortamId = null;
+    if (ilgili.length > 1) {
+      const secim = await secenekIste({
+        baslik: dahil ? 'Hangi ortamda koşuya eklensin?' : 'Hangi ortamda koşudan çıkarılsın?',
+        metin: `${secilenler.length} seçili senaryo. Senaryo seçilen ortamda tanımlı değilse atlanır.`,
+        ikonAd: dahil ? 'onay' : 'eksi',
+        secenekler: [
+          { deger: '*', etiket: 'Tüm ortamlar', aciklama: 'Her senaryonun tanımlı olduğu tüm ortamlarda', ikonAd: 'ag' },
+          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (varsayılan test ortamı değil)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
+        ]
+      });
+      if (secim === null) return;
+      ortamId = secim === '*' ? null : secim;
+    }
+    const ortamAdi = ortamId ? ilgili.find((o) => o.id === ortamId)?.ad : null;
     try {
-      const { degisen } = await api('/platform/senaryo/kosuya-dahil', { govde: { projeId: proje.id, idler: hedef.map((x) => x.id), dahil } });
-      bildir(`${degisen} senaryo ${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.`);
+      const { degisen } = await api('/platform/senaryo/kosuya-dahil', { govde: { projeId: proje.id, idler: secilenler.map((x) => x.id), dahil, ...(ortamId ? { ortamId } : {}) } });
+      bildir(`${degisen} senaryo ${ortamAdi ? `${ortamAdi} ortamında ` : ''}${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.`);
       await yenile();
     } catch (e) { bildir(e.message, 'hata'); }
   }

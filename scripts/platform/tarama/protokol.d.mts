@@ -29,6 +29,10 @@ export type TaramaKimligi = {
   totpGizli: string | null;
   sabitKod: string | null;
   smsKipi: 'sabit' | 'elle' | null;
+  /** Giriş profilinin ek alanları (giriş adımlarındaki "{ad}" yer tutucuları). */
+  ekAlanlar?: Record<string, string>;
+  /** Gizli ek alanların adları (hata metinlerinde maskelenir). */
+  gizliEkAlanlar?: string[];
 };
 
 /** Alt sürecin sunucudan BİR KEZ aldığı girdi (gizli değer içerir; diske yazılmaz). */
@@ -61,7 +65,7 @@ export type TaramaOlayi =
 
 export type TaramaHataKodu =
   | 'YASAKLI_ADRES' | 'SITE_ERISILEMEDI' | 'KIMLIK_HATALI' | 'IKI_ASAMALI_HATALI' | 'KOD_GEREKLI' | 'CAPTCHA' | 'ALAN_BULUNAMADI'
-  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'TARIF_GECERSIZ' | 'OTURUM_GECERSIZ' | 'ALAN_YOK' | 'SUREC' | 'IPTAL' | 'BEKLENMEYEN';
+  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ' | 'OTURUM_GECERSIZ' | 'ALAN_YOK' | 'SUREC' | 'IPTAL' | 'BEKLENMEYEN';
 
 export type TaramaSonucu =
   | { basarili: true; envanter: TaramaEnvanteri | KayitEnvanteri | AkisEnvanteri }

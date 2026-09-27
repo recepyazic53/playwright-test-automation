@@ -25,10 +25,15 @@ import {
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { beklenenGorulenMetni, beklenenMesajiBekle, mesajIceriyorMu, mesajiNormallestir } from './beklenen-sonuc';
-import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKaydetmeyeHazirla, type GirisKimligi } from './giris-motoru';
+import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKapat, oturumuKaydetmeyeHazirla, type GirisKimligi } from './giris-motoru';
+import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
 import { sureAyari } from './kosu-ayarlari';
+import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
+import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
+import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
+import { ayarlaSorgula } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
 /** Alanın ekranda görünmesi için beklenen süre (koşullu alanlar önceki seçimden sonra çizilebilir). */
@@ -350,14 +355,18 @@ async function hataMetni(page: Page, kosu: PlanKosuTanimi | null): Promise<strin
   return (await hataMesajlari(page, kosu)).join(' ').trim();
 }
 
-/** Hata göstergesinin görünen metinleri ve adım başladığından beri çıkan tarayıcı uyarıları (alert/confirm), ayrı ayrı. */
-async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Promise<string[]> {
+/**
+ * Hata göstergesinin görünen metinleri ve adım başladığından beri çıkan tarayıcı uyarıları (alert/confirm), ayrı ayrı. Göstergenin
+ * metinleri koşuda yakalanan mesajlara da bildirilir (mesaj-yakalayici.ts; yoklamada aynı metin bir kez sayılır).
+ */
+export async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Promise<string[]> {
   const secici = kosu?.hataGostergesi?.secici;
   const metinler: string[] = [];
   if (secici) {
     const l = page.locator(secici).filter({ visible: true });
     const n = await l.count().catch(() => 0);
     for (let i = 0; i < n; i++) metinler.push(await l.nth(i).innerText().catch(() => ''));
+    mesajYakalayicisi(page)?.gostergeMetinleri(`hata:${secici}`, metinler);
   }
   metinler.push(...(tarayiciUyarilari.get(page) ?? []));
   return metinler.map((m) => m.trim()).filter(Boolean);
@@ -368,12 +377,13 @@ async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Promise<s
  * Playwright'ın dinleyicisiz varsayılanıyla aynı; confirm onaylanmaz). Hata göstergesi ve beklenen mesaj bunları da okur.
  */
 const tarayiciUyarilari = new WeakMap<Page, string[]>();
-function tarayiciUyarilariniDinle(page: Page): void {
+export function tarayiciUyarilariniDinle(page: Page): void {
   if (tarayiciUyarilari.has(page)) return;
   const liste: string[] = [];
   tarayiciUyarilari.set(page, liste);
   page.on('dialog', (d) => {
     liste.push(d.message());
+    mesajYakalayicisi(page)?.yakala('diyalog', d.message());
     void d.dismiss().catch(() => undefined);
   });
 }
@@ -445,9 +455,14 @@ async function kabulEdilenUyari(page: Page, kosu: PlanKosuTanimi): Promise<strin
   if (!kosu.uyarilar?.length) return '';
   let sayfa: string | null = null;
   for (const u of kosu.uyarilar) {
-    const metin = u.secici
-      ? (await Promise.all((await page.locator(u.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
-      : (sayfa ??= await sayfaMetni(page));
+    let metin: string;
+    if (u.secici) {
+      const ogeler = await Promise.all((await page.locator(u.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')));
+      mesajYakalayicisi(page)?.gostergeMetinleri(`uyari:${u.secici}`, ogeler);
+      metin = ogeler.join(' ');
+    } else {
+      metin = (sayfa ??= await sayfaMetni(page));
+    }
     if (mesajIceriyorMu(metin, u.metin)) return `uyarı: "${u.metin}"`;
   }
   return '';
@@ -534,12 +549,80 @@ async function adimSonucunuDogrula(page: Page, adim: PlanAdimi, plan: ModelKosuP
  * Koşunun ortamı: model verisi + giriş tarifi, kimlik ve paylaşılan oturum dosyası (kaynak: genel-veri.ts). Kimlik ve oturum dosyası yalnızca
  * gerektiğinde (giriş yapılırken) istenir.
  */
+/** Koşu boyunca SQL adımlarında okunan değerler (${akis:Ad}; açık değerler yalnız bellekte) ve gizli olanların değerleri. */
+type SqlDegerleri = { degerler: Record<string, string>; gizliler: string[] };
+
+/**
+ * SQL sorgusu adımı: bağlantı ayarı koşu verisinden (veri-oku.mjs; parola yalnız bellekte), yer tutucular sürücü parametresi
+ * (${akis:Ad} → önceki SQL okumaları, ${alan} → senaryo değeri). Sonuç (en çok 20 satır, gizliler maskeli) ek olarak rapora;
+ * uyuşmazsa "Beklenen / Görülen" hatası.
+ */
+async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: SqlTanimi, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami, d: SqlDegerleri): Promise<void> {
+  const ayar = ortam.veri.sqlBaglantilari?.[tanim.baglantiId];
+  if (!ayar) throw new Error(`${adimBasligi}: SQL adımının veritabanı bağlantısı koşu verisinde yok (Ayarlar > Entegrasyonlar).`);
+  if ('hata' in ayar) throw new Error(`${adimBasligi}: ${ayar.hata}`);
+  const r = await sqlAdiminiKos(tanim, {
+    adimAdi: adimBasligi,
+    gizliDegerler: d.gizliler,
+    gizliSutunMu: (ad) => gizliAdMi(ad),
+    coz: (ifade) => {
+      if (ifade.startsWith('akis:')) return d.degerler[ifade.slice(5).trim()];
+      const v = s.veri[ifade];
+      return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : undefined;
+    },
+    yurutucu: (sql, parametreler, o) => ayarlaSorgula(ayar, sql, parametreler, o)
+  });
+  if (r.ozet) {
+    await testInfo.attach(`SQL sonucu - ${adimBasligi}`, {
+      contentType: 'application/json',
+      body: JSON.stringify({ beklenen: r.beklenen, gorulen: r.gorulen, deneme: r.deneme, sureMs: r.sureMs, ...r.ozet }, null, 2)
+    });
+  }
+  if (r.durum !== 'basarili') throw new Error(r.mesaj ?? `${adimBasligi}: SQL adımı başarısız.`);
+  Object.assign(d.degerler, r.okunanlar);
+  for (const ad of r.gizliOkunanlar) { const v = r.okunanlar[ad]; if (v && !d.gizliler.includes(v)) d.gizliler.push(v); }
+}
+
 export type ModelKosuOrtami = {
   veri: PlatformModelVerisi;
   tarif: () => GirisTarifi;
-  kimlik: () => GirisKimligi;
+  /** profil: giriş profilinin ADI (senaryonun giriş seçimi / "Yeniden giriş" adımı); verilmezse ortamın varsayılan profili. */
+  kimlik: (profil?: string | null) => GirisKimligi;
   oturumDosyasi: () => string;
 };
+
+/**
+ * Koşuda yakalanan mesajlar (mesaj-yakalayici.ts): kullanıcının beklediği mesajlar (senaryonun beklenen hata mesajları ve
+ * başarı göstergelerinin metinleri) "beklenen" işaretlenir; bilinen gizli değerler (giriş kimliği, adı gizli sayılan senaryo
+ * alanlarının değerleri) maskelenir. Kimlik yalnızca zaten okunabiliyorsa kullanılır (yoksa hata vermez).
+ */
+function kosuMesajlariniHazirla(page: Page, plan: ModelKosuPlani, ortam: ModelKosuOrtami | null): void {
+  const y = mesajYakalayicisiKur(page);
+  if (plan.beklenen.tur === 'hata') y.beklenenEkle(plan.beklenen.mesaj, ...plan.beklenen.mesajlar);
+  for (const a of plan.adimlar) {
+    if (!a.dahil || !a.kosu) continue;
+    for (const g of basariSecenekleri(a.kosu)) if (g.tur === 'metin') y.beklenenEkle(g.deger);
+    for (const alan of a.alanlar) if (gizliAdMi(alan.etiket) || gizliAdMi(alan.anahtar)) y.gizliDegerEkle(alan.deger);
+  }
+  if (ortam) {
+    try {
+      const k = ortam.kimlik();
+      y.gizliDegerEkle(k.kullaniciAdi, k.parola, k.totpGizli, k.sabitKod, ...(k.gizliEkAlanlar ?? []).map((ad) => k.ekAlanlar?.[ad]));
+    } catch { /* kimlik tanımlı değil: giriş adımı kendi hatasını verir */ }
+  }
+}
+
+/** Yakalanan mesajların adım adı. */
+function adimAdiniBildir(page: Page, ad: string): void {
+  const y = mesajYakalayicisi(page);
+  if (y) y.adim = ad;
+}
+
+/** Parola tipindeki alanın değeri yakalanan mesajlarda maskelenir. */
+async function parolaAlaniysaGizle(page: Page, alan: PlanAlani, l: Locator): Promise<void> {
+  const y = mesajYakalayicisi(page);
+  if (y && (await l.getAttribute('type', { timeout: 1_000 }).catch(() => null)) === 'password') y.gizliDegerEkle(alan.deger);
+}
 
 /**
  * Model senaryosunu koşturur. Atlanan alanlar "atlananAlanlar" annotation'ı olarak eklenir (raporlayıcı
@@ -551,9 +634,12 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   if (plan.hatalar.length) throw new Error(`"${s.baslik}" model koşu planı kurulamadı: ${plan.hatalar.join(' ')}`);
   testInfo.annotations.push({ type: 'urun', description: s.ekran.ad || 'Diğer' });
 
-  // Model "giriş gerekmez" diyorsa (ekran girişsiz açılır; akış kaydı/tarama "Giriş yapmadan aç") giriş ve bağlam
-  // değiştirme adımları atlanır; tarif istenmez.
-  const girissiz = s.model.girisGerekmez === true;
+  // Model "giriş gerekmez" diyorsa (ekran girişsiz açılır; akış kaydı/tarama "Giriş yapmadan aç") ya da senaryonun giriş
+  // seçimi "Girişsiz" ise giriş ve bağlam değiştirme adımları atlanır; tarif istenmez. "Temiz oturum" ya da varsayılan dışı
+  // bir giriş profili: kayıtlı oturum kullanılmaz (çerezler temizlenip o profille girilir). Bkz. senaryo-girisi.mjs.
+  const giris = etkinSenaryoGirisi(s.giris ?? null, s.model);
+  const girissiz = giris.kip === 'girissiz';
+  const temizGiris = giris.kip === 'temiz' || giris.profil !== null;
   // 1) Yasaklı adres koruması: ortamın taban adresi + tarifteki/modeldeki tam adresler (tarayıcı henüz hiçbir
   //    yere gitmedi), sonra yasaklı host'a her isteği iptal eden yakalayıcı. Taban ve ekran adresi tariften ÖNCE denetlenir:
   //    tarif tanımlı olmasa da yasaklı ortamda yasaklı adres hatası verilir.
@@ -565,39 +651,70 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   const engellenen = await yasakliAdresKorumasi(page, denetlenecekAdresler(ortam.veri.tabanUrl, tarif, plan.ekranUrl));
   tarayiciUyarilariniDinle(page);
   agIzle(page);
+  kosuMesajlariniHazirla(page, plan, tarif ? ortam : null);
+  // Seçilen / yeniden girişte kullanılacak diğer giriş profillerinin gizli değerleri de yakalanan mesajlarda maskelenir.
+  const yakalayici = mesajYakalayicisi(page);
+  for (const profil of new Set([giris.profil, ...plan.adimlar.map((a) => a.yenidenGiris?.profil ?? null)])) {
+    if (!profil || !yakalayici) continue;
+    try {
+      const k = ortam.kimlik(profil);
+      yakalayici.gizliDegerEkle(k.kullaniciAdi, k.parola, k.totpGizli, k.sabitKod, ...(k.gizliEkAlanlar ?? []).map((ad) => k.ekAlanlar?.[ad]));
+    } catch { /* profil yok: giriş adımı kendi hatasını verir */ }
+  }
 
   const atlanan: AtlananAlan[] = [];
   let sira = 1;
   const ekranGoruntusu = (ad: string): Promise<void> => attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${ad}`);
+  /** Bağlam değiştirme (tarifte varsa; senaryonun bağlam profiliyle) — ilk girişten ve yeniden girişten sonra. */
+  const baglamiUygula = async (t: GirisTarifi): Promise<void> => {
+    if (!t.baglamDegistirme) return;
+    const tur = t.baglamDegistirme.baglamTuru;
+    const profil = plan.baglamProfili;
+    await test.step(`Bağlam değiştirilir (${profil ?? '—'})`, async () => {
+      adimAdiniBildir(page, `Bağlam değiştirilir (${profil ?? '—'})`);
+      if (!profil) throw new Error(`Giriş tarifi "${tur}" bağlamını değiştiriyor ama senaryonun bağlam profili yok (modelde profil havuzlu alan ya da varsayılanı yok).`);
+      const degerler = ortam.veri.baglamProfilleri[tur]?.[profil];
+      if (!degerler) throw new Error(`"${profil}" ${tur} bağlam profili bu ortamda tanımlı değil (Ayarlar > Bağlam profilleri).`);
+      await baglamiDegistir(page, t, degerler);
+      await ekranGoruntusu(`Bağlam değiştirildi (${profil})`);
+    });
+  };
+  const profilEki = (profil: string | null): string => (profil ? ` (${profil})` : '');
   try {
+    // Senaryo "Girişsiz" seçtiyse kayıtlı oturumun çerezleri de kullanılmaz (sayfa gerçekten girişsiz açılır).
+    if (girissiz && s.giris?.kip === 'girissiz' && s.model.girisGerekmez !== true) await oturumuKapat(page);
+    // Adım başlığı SABİT (akis-diyagrami.mjs > BASLANGIC_ADIMLARI ile eşleşir); profil / temiz oturum ekran görüntüsünün adında.
     if (tarif) await test.step('Sisteme giriş yapılır', async () => {
-      if (!(await oturumGecerliMi(page, tarif))) {
+      adimAdiniBildir(page, 'Sisteme giriş yapılır');
+      if (temizGiris) {
+        // Kayıtlı oturum kullanılmaz: çerezler temizlenir, seçilen (ya da varsayılan) profille girilir. Varsayılan dışı profilin
+        // oturumu paylaşılan oturum dosyasına YAZILMAZ (diğer senaryolar varsayılan profille devam eder).
+        await oturumuKapat(page);
+        await girisYap(page, tarif, ortam.kimlik(giris.profil));
+        if (giris.profil === null) {
+          const oturumDosyasi = ortam.oturumDosyasi();
+          oturumuKaydetmeyeHazirla(oturumDosyasi);
+          await page.context().storageState({ path: oturumDosyasi });
+        }
+      } else if (!(await oturumGecerliMi(page, tarif))) {
         await girisYap(page, tarif, ortam.kimlik());
         const oturumDosyasi = ortam.oturumDosyasi();
         oturumuKaydetmeyeHazirla(oturumDosyasi);
         await page.context().storageState({ path: oturumDosyasi });
       }
-      await ekranGoruntusu('Sisteme giriş yapıldı');
+      await ekranGoruntusu(`Sisteme giriş yapıldı${temizGiris ? ' (temiz oturum)' : ''}${profilEki(giris.profil)}`);
     });
 
-    if (tarif?.baglamDegistirme) {
-      const tur = tarif.baglamDegistirme.baglamTuru;
-      const profil = plan.baglamProfili;
-      await test.step(`Bağlam değiştirilir (${profil ?? '—'})`, async () => {
-        if (!profil) throw new Error(`Giriş tarifi "${tur}" bağlamını değiştiriyor ama senaryonun bağlam profili yok (modelde profil havuzlu alan ya da varsayılanı yok).`);
-        const degerler = ortam.veri.baglamProfilleri[tur]?.[profil];
-        if (!degerler) throw new Error(`"${profil}" ${tur} bağlam profili bu ortamda tanımlı değil (Ayarlar > Bağlam profilleri).`);
-        await baglamiDegistir(page, tarif, degerler);
-        await ekranGoruntusu(`Bağlam değiştirildi (${profil})`);
-      });
-    }
+    if (tarif) await baglamiUygula(tarif);
 
     await test.step('Ekran açılır', async () => {
+      adimAdiniBildir(page, 'Ekran açılır');
       await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
       await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
     });
 
     let canlidaDurdu = false;
+    const sqlDegerleri: SqlDegerleri = { degerler: {}, gizliler: [] };
     for (const adim of plan.adimlar) {
       if (!adim.dahil) continue;
       if ((adim.yalnizTest || canlidaDurdu) && ortam.veri.canli === true) {
@@ -612,6 +729,21 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         continue;
       }
       await test.step(adim.baslik, async () => {
+        adimAdiniBildir(page, adim.baslik);
+        // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
+        if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
+        // Yeniden giriş: oturum kapatılır (çerezler/depolama temizlenir), ortamın tarifiyle (seçilen profille) yeniden girilir,
+        // bağlam yeniden değiştirilir ve akış kaldığı sayfadan sürer. Paylaşılan oturum dosyasına yazılmaz.
+        if (adim.yenidenGiris) {
+          const t = tarif ?? ortam.tarif();
+          const donus = page.url();
+          await oturumuKapat(page);
+          await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil));
+          await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`);
+          await baglamiUygula(t);
+          if (/^https?:/i.test(donus)) await page.goto(donus, { waitUntil: 'domcontentloaded' });
+          return;
+        }
         tarayiciUyarilari.get(page)?.splice(0);
         const sureSn = adim.kosu?.zamanAsimiSn ?? ADIM_SURESI_SN;
         for (const alan of adim.alanlar) {
@@ -639,6 +771,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             continue;
           }
           const baslangic = Date.now();
+          await parolaAlaniysaGizle(page, alan, l);
           await alaniDoldur(page, alan, l, adim.baslik);
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null);
           await arkaPlanIstekleriniBekle(page, baslangic);

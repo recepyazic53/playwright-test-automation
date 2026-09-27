@@ -54,6 +54,8 @@ export type KosulIfadesi =
   | { ve: KosulIfadesi[] }
   | { veya: KosulIfadesi[] }
   | { degil: KosulIfadesi }
+  | { baglam: { alanSeti: string } }
+  /** Eski adı (hâlâ okunur): { baglam: { alanSeti } }. */
   | { acente: { alanSeti: string } }
   | { calismaZamani: 'gorunurse' };
 
@@ -64,8 +66,11 @@ export type AdlandirilmisKosul = {
   ifade: KosulIfadesi;
   aciklama?: string;
   hedefIfade?: KosulIfadesi;
-  /** Acente bazında bilinen görünürlük; doğrulayıcı acentePartaji ile eşleştirir. */
-  bilinenDurumlar?: Array<{ acente: string; acentePartaji?: string; gorunur: boolean | null; kaynak: string }>;
+  /**
+   * Bağlam profili bazında bilinen görünürlük; doğrulayıcı profilKodu'nu bağlam profilinin kod'uyla eşleştirir.
+   * Eski adları hâlâ okunur: acente (profil), acentePartaji (profilKodu).
+   */
+  bilinenDurumlar?: Array<{ profil?: string; profilKodu?: string; acente?: string; acentePartaji?: string; gorunur: boolean | null; kaynak: string }>;
   not?: string;
 };
 
@@ -77,6 +82,9 @@ export type Eslesme = {
   /** Ürün verisindeki yol (<yol>, noktalı). */
   urun?: string | null;
   /** Kart nesnesi içindeki anahtar (yalnızca odemeKrediKarti alt modelinde). */
+  /** Alt model alanının kayıt (ör. test verisi kaydı) içindeki adı. */
+  kayitAlani?: string;
+  /** Eski adı (hâlâ okunur): kayitAlani. */
   kart?: string;
   /** Kimlik nesnesi içindeki anahtar (kimlikProfili alt alanları); türe göre farklıysa tür → anahtar. */
   kimlikAlani?: string | Record<string, string>;
@@ -194,6 +202,8 @@ export type Adim = {
   gorunurluk?: Gorunurluk | null;
   bolumler?: Bolum[];
   altModel?: AltModelBasvurusu;
+  /** SQL adımı (platform/sql/sql-adimi.mjs SqlTanimi): koşuda veritabanı sorgusu beklenenle karşılaştırılır. */
+  sqlKontrolu?: Record<string, unknown>;
   /** Sürüm 2: aksiyonlar ve başarı/hata göstergesi. */
   kosu?: AdimKosuTanimi;
 };
@@ -242,17 +252,23 @@ export type EkranModeli = {
   adimlar: Adim[];
   senaryoDuzeyi: { aciklama: string; alanlar: Alan[] };
   urunDuzeyi: Record<string, UrunDuzeyiAlani>;
-  acenteBaglami?: {
-    aciklama: string;
-    pageObject?: string;
-    veriKaynagi: string;
-    alanlar: Alan[];
-    bilinenProfiller: string[];
-  };
+  /** Bağlam profili ekranı (ayrı ekran; alan kimlikleri ayrı ad alanında). */
+  baglam?: BaglamEkrani;
+  /** Eski adı (hâlâ okunur): baglam. */
+  acenteBaglami?: BaglamEkrani;
   isKurallari: IsKurali[];
   bilinmeyenler: string[];
   /** Bağlam profiline göre alan görünürlüğü (gözlem; sayfa paketinden gelir). */
   baglamGorunurlugu?: BaglamGorunurlugu;
+};
+
+/** Modelin bağlam profili ekranı (model.baglam; eski adı acenteBaglami). */
+export type BaglamEkrani = {
+  aciklama: string;
+  pageObject?: string;
+  veriKaynagi: string;
+  alanlar: Alan[];
+  bilinenProfiller: string[];
 };
 
 /**

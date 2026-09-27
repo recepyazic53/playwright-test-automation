@@ -91,16 +91,19 @@ export const VARSAYILAN_TARIH_BICIMI = "yyyy-MM-dd'T'HH:mm:ss";
  * Gövdedeki ${AD} başvurularını doldurur: önce tarih kuralı (tarihKurallari[AD]), sonra değer (degerler[AD]; XML için
  * kaçışlanır). ${akis:Ad} akisDegerleri'nden (servis akışı / oturum). Değeri bulunamayan parametreler tek hatada listelenir
  * (nereden dolacağı "eksikAciklamasi" ile söylenir). kacis: 'xml' (gövde; varsayılan) · 'baslik' (HTTP başlığı: kaçış yok,
- * satır sonu içeren değer reddedilir).
+ * satır sonu içeren değer reddedilir) · 'json' (JSON metin kaçışı; REST gövdesi) · 'url' (URL kodlaması; REST yolu / form) · 'yok'.
  * @param {string} govde
  * @param {{ degerler: Record<string, string>; tarihKurallari?: Record<string, string>; simdi?: Date; eksikAciklamasi?: (ad: string) => string;
- *   akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik'; varsayilanTarihBicimi?: string }} baglam
+ *   akisDegerleri?: Record<string, string>; kacis?: 'xml' | 'baslik' | 'json' | 'url' | 'yok'; varsayilanTarihBicimi?: string }} baglam
  */
 export function yerTutuculariDoldur(govde, baglam) {
   const simdi = baglam.simdi ?? new Date();
   /** @type {Set<string>} */
   const eksik = new Set();
   const kacis = (/** @type {string} */ v, /** @type {string} */ ad) => {
+    if (baglam.kacis === 'json') return JSON.stringify(v).slice(1, -1);
+    if (baglam.kacis === 'url') return encodeURIComponent(v);
+    if (baglam.kacis === 'yok') return v;
     if (baglam.kacis !== 'baslik') return xmlKacis(v);
     if (/[\r\n]/.test(v)) throw new ServisHatasi(`"${ad}" değeri satır sonu içeriyor; başlıkta kullanılamaz.`);
     return v;
@@ -168,13 +171,13 @@ export const xmlKacis = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 export const xmlKacisCoz = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 
 /**
- * Saklanacak metinde gizli değerleri (parola vb.) maskeler (kaçışlı ve düz hâlleri).
+ * Saklanacak metinde gizli değerleri (parola vb.) maskeler (XML / JSON kaçışlı, URL kodlu ve düz hâlleri).
  * @param {string} metin @param {string[]} gizliler
  */
 export function gizlileriMaskele(metin, gizliler) {
   let m = metin;
   for (const d of gizliler.filter((x) => x && x.length >= 2).sort((a, b) => b.length - a.length)) {
-    m = m.split(xmlKacis(d)).join(MASKE).split(d).join(MASKE);
+    for (const bicim of [xmlKacis(d), JSON.stringify(d).slice(1, -1), encodeURIComponent(d), d]) m = m.split(bicim).join(MASKE);
   }
   return m;
 }
@@ -188,7 +191,7 @@ export function gizlileriMaskele(metin, gizliler) {
  */
 
 /**
- * @param {{ adres: string; yontem?: 'GET' | 'POST'; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
+ * @param {{ adres: string; yontem?: string; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
  *   sinyal?: AbortSignal; gonderildi?: () => void }} istek  gonderildi: istek gövdesi karşıya yazılınca çağrılır.
  * @returns {Promise<HamYanit>}
  */
@@ -413,6 +416,7 @@ export function kontrolAdi(k) {
     case 'icerir': return `Yanıtta geçer: "${k.deger}"`;
     case 'icermez': return `Yanıtta geçmez: "${k.deger}"`;
     case 'xpathEsit': return `${k.xpath} = "${k.deger}"`;
+    case 'jsonEsit': return `JSON ${k.yol} = "${k.deger}"`;
     case 'veya': return `Şunlardan biri: ${(k.alt ?? []).map(kontrolAdi).join(' | ')}`;
     default: return String(k.tur);
   }
@@ -456,6 +460,11 @@ export function kontrolleriDegerlendir(yanit, kontroller) {
       case 'xpathEsit': {
         const m = agac ? xpathMetni(agac, String(k.xpath)) : undefined;
         if (m === undefined) return s(false, agac ? 'Düğüm bulunamadı' : 'Yanıt XML değil');
+        return m === k.deger ? s(true, `"${m}"`) : s(false, `Görülen: "${m.slice(0, 300)}"`);
+      }
+      case 'jsonEsit': {
+        const m = degerOku(yanit, { kaynak: 'json', yol: String(k.yol ?? '') });
+        if (m === undefined) return s(false, 'Değer bulunamadı (yanıt JSON değil ya da yol yok)');
         return m === k.deger ? s(true, `"${m}"`) : s(false, `Görülen: "${m.slice(0, 300)}"`);
       }
       case 'veya': {

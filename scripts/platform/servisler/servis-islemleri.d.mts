@@ -68,10 +68,23 @@ export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: {
   xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: ServisKapsami;
   girisEkle?: boolean; yapan?: string;
 }): { servisId: string; yeniServis: boolean; eklenen: number; atlanan: string[]; baglananAlan: number; girisSatiriEklendi: boolean; eksikSatirlar: string[]; eslenmemisParametreler: string[] };
+export declare function postmanOnizle(vt: Veritabani, projeId: string, girdi: { koleksiyon: string; ortam?: string }):
+  ReturnType<typeof import('./postman-ice-aktarma.mjs').postmanOzeti> & {
+    klasorler: Array<ReturnType<typeof import('./postman-ice-aktarma.mjs').postmanOzeti>['klasorler'][number] & { mevcutServis: { id: string; ad: string; tur: 'soap' | 'rest' } | null }>;
+    varsayilanTabloAdi: string; tablolar: string[];
+  };
+export declare function postmanAktar(vt: Veritabani, projeId: string, girdi: {
+  koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
+  akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: ServisKapsami; yapan?: string;
+}): {
+  servisler: Array<{ servisId: string; anahtar: string; ad: string; yeniServis: boolean; yol: string; eklenen: number; atlanan: string[] }>;
+  tablo: { ad: string; yeni: boolean; sutunSayisi: number; sifreliYazilan: string[]; bosBirakilan: string[] } | null;
+  akisDegerleri: string[];
+};
 
 export interface CalistirmaSonucu {
   kosuId: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; baslik: string;
-  operasyon: string; ortam: string; ortamTuru: 'test' | 'canli'; adres?: string; kimlikProfili?: string; istek?: string;
+  operasyon: string; ortam: string; ortamTuru: 'test' | 'canli'; adres?: string; metot?: string; kimlikProfili?: string; istek?: string;
   durumKodu?: number; yanitSureMs?: number; kontroller?: KontrolSonucu[]; ozet?: string; yanit?: string; hata?: string; durduruldu?: boolean;
   istekBasliklari?: Record<string, string>; okunanlar?: Record<string, string>; akis?: Record<string, unknown>;
   oturum?: { akis: string; durum: 'alindi' | 'onbellek' | 'yenilendi' };

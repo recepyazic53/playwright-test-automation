@@ -106,7 +106,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     ad.addEventListener('input', () => { d.ad = ad.value; if (!d.anahtarElle) { d.anahtar = anahtarUret(ad.value); anahtar.value = d.anahtar; } durumGuncelle(); });
     anahtar.addEventListener('input', () => { d.anahtar = anahtar.value.trim(); d.anahtarElle = Boolean(anahtar.value); durumGuncelle(); });
     // Tam adres yapıştır: bilinen bir taban adresiyle başlıyorsa taban + yol ayrılır, değilse adresin kökü yeni taban olur.
-    const yapistir = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://ornek.com/servisler/ahmet.asmx', 'aria-label': 'Servisin tam adresi (TEST)' });
+    const yapistir = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://ornek.com/servisler/ornek.asmx', 'aria-label': 'Servisin tam adresi (TEST)' });
     const yapistirNotu = h('span', { class: 'soluk kucuk', 'aria-live': 'polite' });
     yapistir.addEventListener('change', () => {
       let u;
@@ -151,7 +151,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       const hepsi = h('input', { type: 'checkbox', id: yeniKimlik('hepsi'), checked: d.erisim.operasyonlar.every((o) => d.secilen.has(o.ad)) });
       hepsi.addEventListener('change', () => { for (const o of d.erisim.operasyonlar) hepsi.checked ? d.secilen.add(o.ad) : d.secilen.delete(o.ad); metotAlani(); durumGuncelle(); });
       yerlestir(sonuc,
-        h('div', { class: 'not-kutusu basari', role: 'status' }, ikon('onay'), ` Erişildi (${d.erisim.durumKodu}, ${d.erisim.sureMs} ms): ${d.erisim.operasyonlar.length} metot.`),
+        h('div', { class: 'not-kutusu basari', role: 'status' }, `Erişildi (${d.erisim.durumKodu}, ${d.erisim.sureMs} ms): ${d.erisim.operasyonlar.length} metot.`),
         h('div', { class: 'metot-listesi', role: 'table', 'aria-label': 'Metotlar' },
           h('div', { class: 'metot-satiri baslik', role: 'row' }, h('label', { class: 'secenek', for: hepsi.id }, hepsi, 'Hepsini seç'), h('span', { role: 'columnheader' }, 'Alan'), h('span', { role: 'columnheader' }, 'CANLI\'da çağrılmasın')),
           ...d.erisim.operasyonlar.map((o) => {
@@ -301,4 +301,143 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   yerlestir(kap, h('div', { class: 'kart form-paneli sihirbaz' }, adimCubugu, mesaj.kutu, govde,
     h('div', { class: 'dugmeler' }, geri, ileri, nedenMetni)));
   ciz();
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Postman koleksiyonu (REST) — Servisler > Servis ekle > "Postman koleksiyonu". Akış: dosya(lar) seç → önizleme (klasör = servis,
+// istekler, değişkenler; gizli değerler arayüze GELMEZ) → kullanıcı seçer (klasörler, gizli / şifreli kaydet, tablo / akış değeri,
+// değerlerin ortamı, taban adres) → "İçe aktar". Hiçbir servise istek atılmaz; onaydan önce veritabanına bir şey yazılmaz.
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const KAPSAMLAR = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
+const KAYNAK_ETIKETI = { koleksiyon: 'koleksiyon', ortam: 'ortam dosyası', istek: 'istekte düz yazılı', tanimsiz: 'tanımsız' };
+
+/**
+ * @param {HTMLElement} kap
+ * @param {{ id: string; ad: string }} proje
+ * @param {Array<{ id: string; ad: string; canli: boolean; varsayilan: boolean }>} ortamlar
+ */
+export function postmanAktarimi(kap, proje, ortamlar) {
+  const koleksiyonDosyasi = h('input', { type: 'file', accept: '.json,application/json' });
+  const ortamDosyasi = h('input', { type: 'file', accept: '.json,application/json' });
+  const mesaj = mesajKutusu();
+  const sonuc = h('div', { 'aria-live': 'polite' });
+  /** Dosya metinleri tarayıcıda kalır; yalnız önizleme / aktarım isteğinde sunucuya gider (diske yazılmaz). */
+  const dosyalar = { koleksiyon: '', ortam: '' };
+  const oku = async (girdi) => {
+    const f = girdi.files && girdi.files[0];
+    if (!f) return '';
+    if (f.size > 15 * 1024 * 1024) throw new Error('Dosya en fazla 15 MB olabilir.');
+    return f.text();
+  };
+  const onizle = async () => {
+    mesaj.temizle();
+    yerlestir(sonuc);
+    try {
+      dosyalar.koleksiyon = await oku(koleksiyonDosyasi);
+      dosyalar.ortam = await oku(ortamDosyasi);
+      if (!dosyalar.koleksiyon) return;
+      const { onizleme } = await api('/platform/servis/postman/onizle', { govde: { projeId: proje.id, koleksiyon: dosyalar.koleksiyon, ...(dosyalar.ortam ? { ortam: dosyalar.ortam } : {}) } });
+      if (!onizleme.klasorler.length) { yerlestir(sonuc, h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Koleksiyonda istek yok.')); return; }
+      postmanOnizlemesi(sonuc, proje, ortamlar, onizleme, dosyalar);
+    } catch (e) { mesaj.goster(e.message); }
+  };
+  koleksiyonDosyasi.addEventListener('change', onizle);
+  ortamDosyasi.addEventListener('change', () => { if (koleksiyonDosyasi.files && koleksiyonDosyasi.files[0]) onizle(); });
+  yerlestir(kap, h('div', { class: 'kart form-paneli' }, h('h3', {}, 'Postman koleksiyonu (REST)'), mesaj.kutu,
+    h('p', { class: 'soluk kucuk' }, 'Postman\'den "Collection v2.1" (ya da v2.0) olarak dışa aktarılan JSON. Dosyalar yalnızca okunur; hiçbir servise istek atılmaz. Her klasör ayrı bir servis, klasördeki istekler o servisin senaryoları olur; klasörsüz istekler koleksiyon adıyla tek serviste toplanır. {{değişken}} değerleri bir test verisi tablosuna gider; gizli değerler yalnız siz onaylarsanız şifreli sütuna yazılır.'),
+    alan('Koleksiyon dosyası', koleksiyonDosyasi, { zorunlu: true }),
+    alan('Ortam dosyası (isteğe bağlı)', ortamDosyasi, { yardim: 'Postman environment JSON: {{değişken}} değerleri buradan çözülür (koleksiyon değişkenlerini ezer).' })), sonuc);
+}
+
+function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
+  // Kullanıcı seçimleri (varsayılanlar önizlemeden; karar kullanıcının).
+  const secili = new Set(o.klasorler.filter((k) => !k.mevcutServis || k.mevcutServis.tur === 'rest').map((k) => k.anahtar));
+  const gizli = new Set(o.degiskenler.filter((v) => v.gizli).map((v) => v.ad));
+  const sifreli = new Set();
+  const akis = new Set(o.degiskenler.filter((v) => v.betikle).map((v) => v.ad));
+  const mesaj = mesajKutusu();
+
+  const klasorSatiri = (k) => {
+    const soapVar = k.mevcutServis && k.mevcutServis.tur !== 'rest';
+    const c = h('input', { type: 'checkbox', checked: secili.has(k.anahtar), disabled: soapVar, 'aria-label': `${k.ad} klasörünü içe al` });
+    c.addEventListener('change', () => { if (c.checked) secili.add(k.anahtar); else secili.delete(k.anahtar); });
+    const uyariSayisi = k.istekler.reduce((n, i) => n + i.uyarilar.length, 0);
+    return h('tr', {},
+      h('td', {}, c),
+      h('td', {}, h('b', {}, k.ad), ' ', h('code', { class: 'duz' }, k.anahtar),
+        h('details', {}, h('summary', { class: 'kucuk' }, `${k.istekler.length} istek`),
+          h('ul', { class: 'onay-listesi' }, k.istekler.map((i) => h('li', {}, rozet(i.metot, 'vurgu'), ' ', i.baslik, ' ',
+            h('span', { class: 'soluk kucuk' }, `(${i.operasyon}; ${i.kontrolSayisi} kontrol)`),
+            i.uyarilar.length ? h('div', { class: 'soluk kucuk' }, ikon('uyari'), ' ', i.uyarilar.join(' ')) : null))))),
+      h('td', {}, k.kokenler.length ? k.kokenler.map((x) => h('div', {}, h('code', { class: 'duz' }, x))) : h('span', { class: 'soluk' }, '—')),
+      h('td', {}, soapVar ? rozet('Aynı anahtarlı SOAP servisi var', 'hata')
+        : k.mevcutServis ? rozet('Var: senaryolar eklenir', '') : rozet('Yeni servis', 'basari'),
+        uyariSayisi ? h('div', {}, rozet(`${uyariSayisi} uyarı`, 'durdu')) : null));
+  };
+
+  const degiskenSatiri = (v) => {
+    const g = h('input', { type: 'checkbox', checked: gizli.has(v.ad), 'aria-label': `${v.ad} gizli` });
+    const s = h('input', { type: 'checkbox', checked: false, disabled: !gizli.has(v.ad) || !v.tanimli || akis.has(v.ad), 'aria-label': `${v.ad} değerini şifreli kaydet` });
+    const kaynak = h('select', { 'aria-label': `${v.ad} nereden dolsun` },
+      h('option', { value: 'tablo', selected: !akis.has(v.ad) }, 'Tablo sütunu'), h('option', { value: 'akis', selected: akis.has(v.ad) }, 'Akış değeri (${akis:…})'));
+    const guncelle = () => {
+      s.disabled = !gizli.has(v.ad) || !v.tanimli || akis.has(v.ad);
+      if (s.disabled) { s.checked = false; sifreli.delete(v.ad); }
+    };
+    g.addEventListener('change', () => { if (g.checked) gizli.add(v.ad); else gizli.delete(v.ad); guncelle(); });
+    s.addEventListener('change', () => { if (s.checked) sifreli.add(v.ad); else sifreli.delete(v.ad); });
+    kaynak.addEventListener('change', () => { if (kaynak.value === 'akis') akis.add(v.ad); else akis.delete(v.ad); guncelle(); });
+    return h('tr', {},
+      h('td', {}, h('code', { class: 'duz' }, v.ad), v.betikle ? h('div', { class: 'soluk kucuk' }, 'betikle atanıyor') : null),
+      h('td', {}, v.gizli ? h('span', { class: 'soluk' }, v.tanimli ? 'gizli (gösterilmez)' : 'değer yok')
+        : v.deger ? h('code', { class: 'duz' }, v.deger) : h('span', { class: 'soluk' }, 'değer yok')),
+      h('td', {}, KAYNAK_ETIKETI[v.kaynak] || v.kaynak),
+      h('td', { class: 'sayi' }, String(v.kullanim)),
+      h('td', {}, g), h('td', {}, s), h('td', {}, kaynak));
+  };
+
+  const tabloAdi = h('input', { type: 'text', autocomplete: 'off', value: o.varsayilanTabloAdi, maxlength: '60' });
+  const degerOrtami = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'), ortamlar.map((x) => h('option', { value: x.id }, `${x.ad}${x.canli ? ' (CANLI)' : ' (TEST)'}`)));
+  const kokenler = [...new Set(o.klasorler.flatMap((k) => k.kokenler))];
+  const tabanOrtami = h('select', {}, h('option', { value: '' }, 'Hiçbiri (taban adresi sonra verilir)'), ortamlar.map((x) => h('option', { value: x.id }, x.ad)));
+  const kapsam = h('select', {}, Object.entries(KAPSAMLAR).map(([k, m]) => h('option', { value: k }, m)));
+  const aktar = h('button', { type: 'button', class: 'birincil' }, ikon('yukle'), 'İçe aktar');
+  aktar.addEventListener('click', async () => {
+    mesaj.temizle();
+    if (!secili.size) { mesaj.goster('En az bir klasör seçin.'); return; }
+    try {
+      const r = await mesgulIken(aktar, 'Aktarılıyor…', () => api('/platform/servis/postman/aktar', { govde: {
+        projeId: proje.id, koleksiyon: dosyalar.koleksiyon, ...(dosyalar.ortam ? { ortam: dosyalar.ortam } : {}),
+        klasorler: [...secili], tabloAdi: tabloAdi.value.trim(), gizliler: [...gizli], sifreliKaydet: [...sifreli], akisDegiskenleri: [...akis],
+        degerOrtami: degerOrtami.value || null, tabanOrtami: tabanOrtami.value || null, kapsam: kapsam.value
+      } }));
+      const eklenen = r.servisler.reduce((n, s) => n + s.eklenen, 0);
+      bildir(`${r.servisler.length} servis, ${eklenen} senaryo aktarıldı${r.tablo ? `; değişkenler "${r.tablo.ad}" tablosunda` : ''}.`);
+      if (r.tablo && r.tablo.bosBirakilan.length) bildir(`Gizli değeri boş bırakılanlar (tabloda doldurun): ${r.tablo.bosBirakilan.join(', ')}`, 'hata');
+      if (r.akisDegerleri.length) bildir(`Akış değerleri (oturum akışı ya da servis akışında okunmalı): ${r.akisDegerleri.join(', ')}`);
+      if (r.servisler[0]) location.hash = `#/servisler/s/${encodeURIComponent(r.servisler[0].servisId)}`;
+    } catch (e) { mesaj.goster(e.message); }
+  });
+
+  yerlestir(kap, h('div', { class: 'kart form-paneli' },
+    h('h3', {}, ikon('liste'), ` ${o.koleksiyon} `, rozet(`Postman v${o.surum}`, 'vurgu')), mesaj.kutu,
+    o.uyarilar.length ? h('div', { class: 'not-kutusu uyari' }, o.uyarilar.map((u) => h('div', {}, u))) : null,
+    h('fieldset', {}, h('legend', {}, `Klasörler → servisler (${o.klasorler.length})`),
+      h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu', 'aria-label': 'Klasörler' },
+        h('thead', {}, h('tr', {}, ['İçe al', 'Klasör (servis anahtarı)', 'Adres', 'Durum'].map((x) => h('th', { scope: 'col' }, x)))),
+        h('tbody', {}, o.klasorler.map(klasorSatiri))))),
+    h('fieldset', {}, h('legend', {}, `Değişkenler (${o.degiskenler.length})`),
+      o.tabanDegiskenleri.length ? h('p', { class: 'soluk kucuk' }, `Adresin başı (ana makine): ${o.tabanDegiskenleri.map((x) => `{{${x}}}`).join(', ')} — tabloya girmez; aşağıdan bir ortamın taban adresi yapılabilir.`) : null,
+      o.degiskenler.length ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu', 'aria-label': 'Değişkenler' },
+        h('thead', {}, h('tr', {}, ['Ad', 'Değer', 'Kaynak', 'Kullanım', 'Gizli', 'Şifreli kaydet', 'Nereden dolsun'].map((x) => h('th', { scope: 'col' }, x)))),
+        h('tbody', {}, o.degiskenler.map(degiskenSatiri)))) : h('p', { class: 'soluk' }, 'İsteklerde değişken yok.'),
+      h('p', { class: 'soluk kucuk' }, '"Gizli" sütun şifreli saklanır ve raporlarda maskelenir. Gizli değer yalnız "Şifreli kaydet" işaretliyse yazılır; değilse boş kalır, koşudan önce tabloda doldurulur. "Akış değeri": değer tabloya değil, oturum akışı ya da servis akışında yanıttan okunan değere (${akis:ad}) bağlanır.')),
+    h('div', { class: 'satir-duzen' },
+      alan('Değişken tablosu', tabloAdi, { yardim: 'Değişkenler bu test verisi tablosunun sütunları olur (varsa eksik sütunlar eklenir).' }),
+      alan('Değerler hangi ortam için', degerOrtami)),
+    h('div', { class: 'satir-duzen' },
+      kokenler.length ? alan(`Koleksiyondaki adres (${kokenler.join(', ')}) taban adresi olsun`, tabanOrtami, { yardim: 'Seçilen ortamda servislerin taban adresi yapılır (ortamın adres listesine de eklenir).' }) : null,
+      alan('Senaryoların kapsamı', kapsam)),
+    h('div', { class: 'dugmeler' }, aktar)));
 }

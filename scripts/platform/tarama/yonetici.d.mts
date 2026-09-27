@@ -35,6 +35,8 @@ export type IsGorunumu = {
   uyarilar: Array<{ yer: string; mesaj: string }>;
   /** Akış kaydı: diyagramı kurulacak (topla → tasarla). */
   tasarim: boolean;
+  /** Giriş kaydı: taslak işaretlenip tarif önizlenecek. */
+  girisTaslagi: boolean;
 };
 
 export type TaramaYoneticisi = {
@@ -45,10 +47,16 @@ export type TaramaYoneticisi = {
   paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
   akis(id: string): {
     bloklar: import('./akis-tasarimi.mjs').AkisBlogu[]; palet: import('./akis-tasarimi.mjs').AkisPaleti; ekran: IsGorunumu['ekran']; mod: 'yeni' | 'analiz'; paketHazir: boolean;
-    projeId: string; akisaYazildi: { akisId: string; surum: number } | null;
+    projeId: string; akisaYazildi: { akisId: string; surum: number } | null; girissiz: boolean;
   };
   akisaYaz(vt: Veritabani, id: string, govde: Record<string, unknown>): { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }> }; akisId: string } | { akisId: string; surum: number };
   akisKaydet(id: string, govde: Record<string, unknown>): { kaydedildi: boolean; palet: import('./akis-tasarimi.mjs').AkisPaleti } | { ozet: IsGorunumu['ozet'] };
+  girisTaslagi(id: string): {
+    taslak: import('../giris/giris-kaydi.mjs').GirisTaslagi; ortam: IsGorunumu['ortam']; projeId: string; hedefYol: string; oneriler: Array<string | null>;
+  };
+  girisTarifiOnizle(vt: Veritabani, id: string, isaretler: unknown): import('../giris/giris-kaydi.mjs').KayittanTarifSonucu & {
+    dogrulamaHatalari: string[]; ortam: IsGorunumu['ortam'];
+  };
   aktif(): { id: string; ekran: IsGorunumu['ekran']; projeId: string } | null;
   iptal(id: string): { iptal: true };
   kodGonder(id: string, kod: unknown): { iletildi: true };

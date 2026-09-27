@@ -1,7 +1,9 @@
 // EKRAN REHBERİ İÇERİKLERİ (bkz. rehber.js). Her rehber: { baslik, adimlar: [{ baslik, metin, hedef?, sira?, cizim?, ipucu? }] }.
-//   hedef: vurgulanacak öğenin CSS seçicisi (ya da seçici listesi; ilk bulunan). Sayfada yoksa kart ortada açılır.
-//   sira: numaralı iş listesi ("hangi sırayla"). cizim: { tur: 'akis', kutular } — örnek veri kurmadan anlatım çizimi.
-// Metinler geneldir: hiçbir ürün / şirket adı içermez.
+//   hedef: vurgulanacak öğenin CSS seçicisi (ya da seçici listesi; ilk bulunan). Sayfada yoksa kart ortada, geniş açılır.
+//   sira: numaralı iş listesi ("hangi sırayla"). cizim: canlandırılmış anlatım (tür: akis | maket | form | istek | katman;
+//   ayrıntı rehber.js'te) — örnek veri kurulmaz.
+// Yazım ilkesi: her adım "bu nedir → ne işe yarar → ne yapmalıyım" sorularını kısa cümlelerle cevaplar. Metinler geneldir:
+// hiçbir ürün / şirket adı içermez.
 
 const ANA_AKIS = {
   tur: 'akis',
@@ -9,8 +11,8 @@ const ANA_AKIS = {
     { baslik: 'Ortam + giriş', alt: 'Ayarlar', ikon: 'ayar' },
     { baslik: 'Ekran', alt: 'paket / tarama', ikon: 'ekran' },
     { baslik: 'Senaryo', alt: 'formdan', ikon: 'liste' },
-    { baslik: 'Koşu', alt: 'Koşuyu başlat', ikon: 'oynat' },
-    { baslik: 'Sonuç', alt: 'hata kalıpları', ikon: 'grafik' }
+    { baslik: 'Koşu', alt: 'tarayıcıda', ikon: 'oynat' },
+    { baslik: 'Sonuç', alt: 'kanıtlarıyla', ikon: 'grafik' }
   ]
 };
 
@@ -19,189 +21,287 @@ export const REHBERLER = {
   genel: {
     baslik: 'Nöbetçi',
     adimlar: [
-      { baslik: "Nöbetçi'ye hoş geldiniz", metin: ['Nöbetçi, web ekranlarınızı ve servislerinizi kod yazmadan test etmenizi sağlar. Her şey bu bilgisayarda, şifreli bir kasada kalır.', 'Bir işe başlarken izlenecek sıra aşağıdadır; her ekranın kendi rehberi de vardır.'], cizim: ANA_AKIS },
-      { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelindedir.' },
-      { baslik: 'Proje seçici', hedef: '.proje-secici-kap', metin: 'Birden çok projeniz varsa aralarında buradan geçersiniz; "+ Yeni proje" aynı kasada yeni bir proje açar.' },
-      { baslik: 'Rehberi tekrar açmak', hedef: '.rehber-dugmesi', metin: 'Hangi ekrandaysanız o ekranın rehberini bu "?" düğmesiyle istediğiniz zaman yeniden başlatabilirsiniz. Rehberlerin ilk girişte kendiliğinden açılmasını Ayarlar > Arayüz\'den kapatabilirsiniz.' }
+      {
+        baslik: "Nöbetçi'ye hoş geldiniz",
+        metin: ['Nöbetçi, web ekranlarınızı ve servislerinizi kod yazmadan test eder: ekranı tanıtırsınız, senaryoyu formdan yazarsınız, Nöbetçi tarayıcıda sizin yerinize dener ve sonucu kanıtlarıyla (ekran görüntüsü, video) saklar.',
+          'Soldaki çizim bir işin baştan sona yolunu gösteriyor. Her ekranın kendi rehberi, o ekrandaki adımları ayrıca anlatır.'],
+        cizim: ANA_AKIS
+      },
+      {
+        baslik: 'Verileriniz kasada',
+        metin: ['Projeler, ortam adresleri, parolalar, test verisi ve sonuçlar yalnızca bu bilgisayarda, sizin parolanızla şifrelenmiş bir kasada durur. Kasa kilitliyken hiçbiri okunamaz.'],
+        cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'parolanızla şifreli' }, { baslik: 'Proje', alt: 'ekranlar, senaryolar, servisler' }, { baslik: 'Ortamlar', alt: 'test, canlı… ve giriş bilgileri' }] },
+        ipucu: 'Kasa parolası unutulursa veriler kurtarılamaz. Ayarlar > Yedekleme\'den düzenli yedek alın.'
+      },
+      { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelinde yer alır.' },
+      { baslik: 'Proje seçici', hedef: '.proje-secici-kap', metin: 'Birden çok uygulamayı test ediyorsanız her biri ayrı bir projedir. Aralarında buradan geçersiniz; "+ Yeni proje" aynı kasada yeni bir proje açar.' },
+      { baslik: 'Rehberi tekrar açmak', hedef: '.rehber-dugmesi', metin: 'Hangi ekrandaysanız o ekranın rehberini bu "?" düğmesiyle istediğiniz an yeniden açabilirsiniz. Kendiliğinden açılmasını Ayarlar > Arayüz\'den kapatabilirsiniz.', ipucu: 'Rehberde ← / → tuşlarıyla gezinebilir, Esc ile kapatabilirsiniz.' }
     ]
   },
 
   sonuclar: {
     baslik: 'Sonuçlar',
     adimlar: [
-      { baslik: 'Sonuçlar ekranı', metin: 'Koşuların özetini, eğilimi ve kalan testleri burada izlersiniz. Soldan bir ürün / ekran seçerek yalnızca onun sonuçlarına bakabilirsiniz.', hedef: '.alt-nav' },
-      { baslik: 'Kartlar', hedef: ['.sonuc-kartlari', '.sonuc-kartlari-bos'], metin: 'Son tam koşunun başarı oranı, kalan ve atlanan testler. Kalan testlerin hata kategorisi, Ayarlar > Koşu > Hata sınıflandırma kurallarıyla belirlenir.' },
-      { baslik: 'Eğilim', hedef: '.trend-kapsayici', metin: 'Tam koşuların zaman içindeki başarı oranı. Bir noktanın üzerine gelince o koşunun ayrıntısı görünür.' },
-      { baslik: 'Sıra', metin: 'Bir koşuyu incelemek için:', sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata, adımlar, ekran görüntüleri ve video açılır.', 'Aynı hatanın başka testlerde de olup olmadığını "Hata kalıpları"nda görün.'] }
+      {
+        baslik: 'Sonuçlar ekranı',
+        metin: ['Koşuların sonucu burada toplanır: ne kadar başarılı, hangi testler kaldı, zaman içinde iyiye mi kötüye mi gidiyor.', 'Bir testin neden kaldığını görmek için koşuyu, sonra testi açarsınız; her testin adım adım ekran görüntüleri ve videosu saklanır.'],
+        cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Özet kartlar ve eğilim' }
+      },
+      { baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav', metin: 'Soldan bir ekran seçerseniz kartlar, eğilim ve geçmiş yalnızca onun sonuçlarını gösterir. "Tümü" bütün projeyi gösterir.' },
+      { baslik: 'Özet kartlar', hedef: ['.sonuc-kartlari', '.sonuc-kartlari-bos'], metin: 'Son tam koşunun başarı oranı, kalan ve atlanan test sayısı. Kalan testlerin hata türü (ör. ortam hatası, iş kuralı uyarısı) Ayarlar > Koşu > Hata sınıflandırma kurallarına göre belirlenir.' },
+      { baslik: 'Eğilim', hedef: '.trend-kapsayici', metin: 'Tam koşuların zaman içindeki başarı oranı. Bir noktanın üzerine gelince o koşunun özeti görünür; tıklayınca koşu açılır.' },
+      {
+        baslik: 'Kalan bir testi incelemek',
+        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan testin satırına tıklayın: hata mesajı, "Beklenen / Görülen", adımlar, ekran görüntüleri ve video açılır.', 'Aynı hata başka testlerde de var mı, "Hata kalıpları"na bakın: tek bir sorun birçok testi düşürüyor olabilir.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Koşu', ikon: 'liste' }, { baslik: 'Kalan test', ikon: 'uyari' }, { baslik: 'Kanıtlar', alt: 'görüntü, video', ikon: 'video' }, { baslik: 'Karar', alt: 'düzelt / tekrarla', ikon: 'onay' }] }
+      }
     ]
   },
   'sonuclar-kosu': {
     baslik: 'Koşu ayrıntısı',
     adimlar: [
-      { baslik: 'Koşu ayrıntısı', metin: 'Bu koşudaki tüm testler, durumları ve süreleri. Kalan bir testi açarak hatasını, adımlarını ve kayıtlarını inceleyin.' },
-      { baslik: 'Önceki koşuyla karşılaştırma', metin: 'Tam koşularda yeni kalan ya da düzelen testler ayrıca işaretlenir; böylece yalnızca değişene odaklanırsınız.' }
+      { baslik: 'Koşu ayrıntısı', metin: ['Bu koşudaki tüm testler, durumları ve süreleri. Kalan bir testi açarak hatasını, adımlarını ve kayıtlarını inceleyin.'], cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Koşudaki testler' } },
+      { baslik: 'Önceki koşuyla karşılaştırma', metin: 'Tam koşularda "yeni kalan" ve "düzelen" testler ayrıca işaretlenir; böylece yalnızca değişene odaklanırsınız.', ipucu: 'Bir test bir koşuda kalıp sonrakinde geçiyorsa ortamdan kaynaklı (kararsız) olabilir.' },
+      { baslik: 'Raporu paylaşmak', metin: '"Raporu indir (HTML)" tek dosyalık, internet gerektirmeyen bir rapor üretir; e-postayla gönderebilir ya da yazdırabilirsiniz. Gizli bilgiler her zaman maskelenir; ekran görüntüleri ve ortam adresi yalnızca siz seçerseniz eklenir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Seçenekler', ikon: 'ayar' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: '.html', alt: 'tek dosya', ikon: 'indir' }] } }
     ]
   },
   'sonuclar-sonuc': {
     baslik: 'Test ayrıntısı',
     adimlar: [
-      { baslik: 'Test ayrıntısı', metin: 'Hata mesajı, "Beklenen / Görülen" karşılaştırması, adım adım ekran görüntüleri, video ve iz (trace) burada. Medya şifrelidir; yalnızca kasa açıkken gösterilir.' },
-      { baslik: 'Ne yapmalı?', sira: ['Hangi adımda kaldığına bakın (kırmızı adım).', 'Ekran değiştiyse Ekranlar\'da ekranı yeniden tarayın ya da yeni paket yükleyin (tekrar analiz).', 'Beklenen sonuç değiştiyse senaryoyu düzenleyin.', 'Ortamdan kaynaklı bir hataysa senaryoyu tekrar çalıştırın.'] }
+      { baslik: 'Test ayrıntısı', metin: 'Hata mesajı, "Beklenen / Görülen" karşılaştırması, adım adım ekran görüntüleri, video ve iz kaydı (trace) burada. Görüntüler ve video şifrelidir; yalnızca kasa açıkken gösterilir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adımlar', ikon: 'liste' }, { baslik: 'Kalınan adım', alt: 'kırmızı', ikon: 'uyari' }, { baslik: 'Görüntü + video', ikon: 'video' }] } },
+      {
+        baslik: 'Test kaldıysa ne yapmalı?',
+        sira: ['Hangi adımda kaldığına bakın (kırmızı adım) ve o anın ekran görüntüsünü açın.', 'Ekran değiştiyse Ekranlar\'da ekranı yeniden tarayın ya da yeni paket yükleyin (tekrar analiz).', 'Beklenen sonuç değiştiyse senaryoyu düzenleyin.', 'Ortamdan kaynaklı geçici bir hataysa senaryoyu tekrar çalıştırın.']
+      }
     ]
   },
 
   senaryolar: {
     baslik: 'Senaryolar',
     adimlar: [
-      { baslik: 'Senaryolar ekranı', metin: 'Bir ekranın test durumları (senaryolar) burada listelenir. Her senaryo, ekranın modelindeki alanlara verdiğiniz değerlerden oluşur ve Nöbetçi onu tarayıcıda koşar.', cizim: { tur: 'akis', kutular: [{ baslik: 'Ekran modeli', ikon: 'katman' }, { baslik: 'Senaryo formu', ikon: 'duzenle' }, { baslik: 'Dene / Çalıştır', ikon: 'oynat' }] } },
-      { baslik: 'Ürünler ve ekranlar', hedef: '.alt-nav', metin: 'Soldan bir ekran seçin; yalnızca onun senaryoları görünür. Servisler de bu panelin altındadır.' },
-      { baslik: 'Arama ve filtreler', hedef: '.senaryo-arac-cubugu', metin: 'Başlıkta arayın; Koşuda, beklenen sonuç ve son duruma göre süzün. Klavyede "/" aramaya gider.' },
-      { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Yeni senaryo" ekran modelinden bir form açar. "Koşuyu başlat" Koşuda açık tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
-      { baslik: 'Tablo', hedef: '.senaryo-tablosu', metin: 'Satırdaki ▷ tek senaryoyu çalıştırır, kalem düzenler, ⋯ kopyalar / geçmişi gösterir / siler. Birden çok satır seçince toplu işlemler çıkar.' },
-      { baslik: 'Önerilen sıra', sira: ['Ekranlar\'dan ekranın modelini ekleyin (paket ya da tarama).', 'Bu ekranda "Yeni senaryo" ile senaryoyu oluşturun; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile koşun; sonuçlar Sonuçlar\'a düşer.'] }
+      {
+        baslik: 'Senaryolar ekranı',
+        metin: ['Senaryo, bir ekranda denenecek tek bir durumdur: hangi alana ne yazılacağı ve sonunda ne görülmesi gerektiği. Örneğin "zorunlu alan boşken uyarı çıkmalı" bir senaryodur.', 'Senaryolar ekranın modelinden üretilen bir formla yazılır; Nöbetçi onları tarayıcıda sırayla dener.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Ekran modeli', alt: 'alanlar, kurallar', ikon: 'katman' }, { baslik: 'Senaryo formu', alt: 'değerler', ikon: 'duzenle' }, { baslik: 'Dene / Çalıştır', alt: 'tarayıcıda', ikon: 'oynat' }, { baslik: 'Sonuç', ikon: 'grafik' }] }
+      },
+      { baslik: 'Ekran seçimi', hedef: '.alt-nav', metin: 'Soldan bir ekran seçin; yalnızca onun senaryoları listelenir. Servisler de bu panelin altındadır.' },
+      { baslik: 'Arama ve süzgeçler', hedef: '.senaryo-arac-cubugu', metin: 'Başlıkta arayın; "Koşuda", beklenen sonuç ve son duruma göre süzün.', ipucu: 'Klavyede "/" tuşu doğrudan aramaya gider.' },
+      { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Yeni senaryo" ekran modelinden bir form açar. "Koşuyu başlat", "Koşuda" açık olan tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
+      { baslik: 'Senaryo tablosu', hedef: '.senaryo-tablosu', metin: 'Satırdaki ▷ tek senaryoyu çalıştırır, kalem düzenler, ⋯ kopyalar / geçmişi gösterir / siler. Birden çok satır seçince toplu işlemler (ör. toplu değer atama) çıkar.' },
+      {
+        baslik: 'Önerilen çalışma sırası',
+        sira: ['Ekranlar\'dan ekranı ekleyin (sayfa paketi, tarama ya da akış kaydı).', 'Bu ekranda "Yeni senaryo" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
+        cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Yeni senaryo" ve "Koşuyu başlat" sağ üstte' }
+      }
     ]
   },
   'senaryo-formu': {
     baslik: 'Senaryo formu',
     adimlar: [
-      { baslik: 'Senaryo formu', metin: 'Form, ekranın modelinden çizilir: adımlar akış sırasıyla, alanlar bölümler hâlinde. Görünürlük ve zorunluluk kuralları siz doldurdukça uygulanır; hatalar alanın altında görünür.' },
-      { baslik: 'Doldurma sırası', sira: ['Başlığı yazın (senaryonun ne sınadığını anlatsın).', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için test verisi profili seçin (değer yazılmaz).', 'Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.'] },
-      { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinizle koşacak adımları ve seçili ortamdaki son koşunun adım renklerini gösterir.' },
-      { baslik: 'İpuçları', metin: 'Boş bıraktığınız alan modelin varsayılanını alır. "Mutlaka görünmeli" işaretli alan ekranda görünmezse test düşer.', ipucu: 'Dene sonucu kaydedilmez; yalnızca Sonuçlar\'da "deneme" olarak görünür.' }
+      {
+        baslik: 'Senaryo formu',
+        metin: ['Form, ekranın modelinden çizilir: alanlar ekrandaki sırasıyla, bölümler hâlinde. Bir alanı doldurdukça ona bağlı alanlar görünür ya da gizlenir, zorunluluk kuralları hemen uygulanır.'],
+        cizim: { tur: 'form', alanlar: ['Başlık', 'Akış', 'Alanlar', 'Beklenen sonuç'], dugme: 'Dene' }
+      },
+      {
+        baslik: 'Doldurma sırası',
+        sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için test verisi profili seçin (değer senaryoya yazılmaz).', 'Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
+      },
+      { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinize göre koşacak adımları kutular hâlinde gösterir; seçili ortamdaki son koşu varsa adımlar yeşil / kırmızı boyanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Alanlar', ikon: 'duzenle' }, { baslik: 'Gönder', ikon: 'ok' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
+      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
     ]
   },
 
   servisler: {
     baslik: 'Servisler',
     adimlar: [
-      { baslik: 'Servisler', metin: 'SOAP / REST servislerinizi tarayıcısız test edersiniz: istek gönderilir, yanıt kontrollerle doğrulanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Servis', alt: 'WSDL / adres' }, { baslik: 'Senaryo', alt: 'istek + kontroller' }, { baslik: 'Akış', alt: 'yanıt → sonraki istek' }] } },
-      { baslik: 'Sıra', sira: ['"Servis ekle" ile servisi tanımlayın (WSDL, SoapUI projesi ya da elle).', 'Metodu seçip senaryo oluşturun; alanları test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin (ör. hata yok, alan şu değere eşit).', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'] }
+      {
+        baslik: 'Servis testleri',
+        metin: ['Servis testleri tarayıcı açmadan çalışır: Nöbetçi servise bir istek gönderir, gelen yanıtı sizin tanımladığınız kontrollerle doğrular (ör. "hata yok", "numara alanı dolu").'],
+        cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Servis', gidis: 'istek', donus: 'yanıt', kontroller: ['Hata yok', 'Numara alanı dolu', 'Tutar > 0'] }
+      },
+      {
+        baslik: 'Çalışma sırası',
+        sira: ['"Servis ekle" ile servisi tanımlayın: WSDL adresi, SoapUI projesi, Postman koleksiyonu ya da elle.', 'Metodu seçip senaryo oluşturun; alanları sabit değer ya da test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin.', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Servis', alt: 'ekle', ikon: 'ag' }, { baslik: 'Senaryo', alt: 'istek', ikon: 'duzenle' }, { baslik: 'Kontroller', ikon: 'onay' }, { baslik: 'Akış', alt: 'zincir', ikon: 'katman' }] }
+      }
     ]
   },
   'servis-ekle': {
     baslik: 'Servis ekle',
     adimlar: [
-      { baslik: 'Servis ekleme', metin: 'Servisi WSDL adresinden, bir SoapUI projesinden ya da elle ekleyebilirsiniz. Gizli değerler (ör. parola) kasaya şifreli yazılır.' },
-      { baslik: 'Sonra', sira: ['Servisin ortam adreslerini kontrol edin.', 'Giriş gerekiyorsa servis giriş bilgisini ekleyin.', 'Senaryolar sekmesinden ilk senaryoyu oluşturun.'] }
+      {
+        baslik: 'Servis ekleme yolları',
+        metin: ['Servisi WSDL adresinden, bir SoapUI projesinden, bir Postman koleksiyonundan ya da elle ekleyebilirsiniz. Her yolda önce önizleme gösterilir; onayınız olmadan hiçbir şey kaydedilmez.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / SoapUI / Postman', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'metotlar', ikon: 'goz' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Servis', ikon: 'ag' }] }
+      },
+      { baslik: 'Gizli değerler', metin: 'Parola, anahtar ya da token gibi gizli değerler kasaya şifreli yazılır ve ekranda maskeli görünür. Postman ortamındaki gizli değerler yalnızca siz onaylarsanız alınır.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'şifreli' }, { baslik: 'Servis giriş bilgisi', alt: 'maskeli gösterilir' }] } },
+      { baslik: 'Ekledikten sonra', sira: ['Servisin her ortamdaki adresini kontrol edin.', 'Giriş gerekiyorsa servis giriş bilgisini ekleyin.', 'Senaryolar sekmesinden ilk senaryoyu oluşturun.'] }
     ]
   },
   servis: {
     baslik: 'Servis',
     adimlar: [
-      { baslik: 'Servis sayfası', metin: 'Sekmeler: Senaryolar (istekler ve kontroller), Akışlar (istekleri zincirleme), Parametreler (değer tanımları), Raporlar (koşu geçmişi), İşlemler (metotlar).' },
-      { baslik: 'Senaryo oluşturma sırası', sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, tarih kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'] },
+      { baslik: 'Servis sayfası', metin: 'Sekmeler: Senaryolar (istekler ve kontroller), Akışlar (istekleri zincirleme), Parametreler (değer tanımları), Raporlar (koşu geçmişi), İşlemler (metotlar).', cizim: { tur: 'maket', bolge: 'arac', etiket: 'Sekmeler ekranın üstünde' } },
+      {
+        baslik: 'Senaryo oluşturma sırası',
+        sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, tarih kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'],
+        cizim: { tur: 'form', alanlar: ['Metot', 'Alanlar', 'Kontroller'], dugme: 'Dene' }
+      },
       { baslik: 'Gizli bilgiler', metin: 'Yanıtlarda ve raporlarda gizli adlı alanlar maskelenir. Maskelenecek ek adları Ayarlar > Güvenlik > Maskeleme\'den ekleyebilirsiniz.' }
+    ]
+  },
+  'servis-sonuclari': {
+    baslik: 'Servis sonuçları',
+    adimlar: [
+      {
+        baslik: 'Servis sonuçları',
+        metin: ['Servis koşularının özeti: başarı oranı, kalan ve atlanan senaryolar, süre ve zaman içindeki eğilim. Soldan tek bir servisi ya da akışı seçerek yalnızca onun sonuçlarına bakabilirsiniz.'],
+        cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Kartlar, eğilim ve koşu geçmişi' }
+      },
+      { baslik: 'Tarih aralığı ve ortam', metin: 'Üstteki tarih aralığıyla (Son 1 saat, Bugün, Son 7 gün…) ve ortam seçimiyle süzün. "Denemeleri de say" açıkken "Dene" ile yapılan tek çalıştırmalar da hesaba girer.' },
+      {
+        baslik: 'Kalan bir senaryoyu incelemek',
+        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan senaryoya tıklayın: kontroller, istek ve yanıt (gizli alanlar maskeli), HTTP kodu ve süre açılır.', 'Aynı hata başka senaryolarda da var mı, "Hata kalıpları"na bakın.'],
+        cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Servis', gidis: 'istek', donus: 'yanıt', kontroller: ['Kontroller', 'Maskeli yanıt'] }
+      }
     ]
   },
   'servis-akislari': {
     baslik: 'Servis akışları',
     adimlar: [
-      { baslik: 'Akış nedir?', metin: 'Bir akış birden çok servis senaryosunu sırayla koşar. Bir adımın yanıtından okunan değer sonraki adımlarda ${akis:Ad} ile kullanılır.', cizim: { tur: 'akis', kutular: [{ baslik: '1. istek', alt: 'yanıttan No oku' }, { baslik: '2. istek', alt: '${akis:No} kullan' }] } },
-      { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın; token süresi dolana kadar mı yoksa her istekte mi yeniden alınacağını akışta siz seçersiniz.' },
-      { baslik: 'Sıra', sira: ['"Yeni akış" ile adımları ekleyin (her adım kayıtlı bir servis senaryosu).', 'Okunacak değerleri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).', 'Sonraki adımın alanında akış değerini seçin.', 'Test ortamında deneyin, sonra kaydedin.'] }
+      {
+        baslik: 'Akış nedir?',
+        metin: ['Akış, birden çok servis isteğini sırayla çalıştırır. Bir isteğin yanıtından okunan değer (ör. oluşan kayıt numarası) sonraki isteklerde ${akis:Ad} yazılarak kullanılır.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: '1. istek', alt: 'kayıt oluştur', ikon: 'ag' }, { baslik: 'Değer oku', alt: '${akis:No}', ikon: 'hedef' }, { baslik: '2. istek', alt: 'No ile sorgula', ikon: 'ag' }, { baslik: 'Kontrol', ikon: 'onay' }] }
+      },
+      { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın. Token\'ın süresi dolana kadar mı kullanılacağını, yoksa her istekte yeniden mi alınacağını akışta siz seçersiniz.', cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Giriş servisi', gidis: 'giriş', donus: 'token', kontroller: ['Token alındı', 'Sonraki isteklere eklendi'] } },
+      { baslik: 'Akış kurma sırası', sira: ['"Yeni akış" ile adımları ekleyin (her adım kayıtlı bir servis senaryosu).', 'Okunacak değerleri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).', 'Sonraki adımın alanında akış değerini seçin.', 'Test ortamında deneyin, sonra kaydedin.'] }
     ]
   },
 
   ekranlar: {
     baslik: 'Ekranlar',
     adimlar: [
-      { baslik: 'Ekranlar', metin: 'Test edeceğiniz her sayfa bir "ekran"dır. Ekranın modeli (alanlar, adımlar, kurallar) senaryo formunu ve koşuyu belirler.', cizim: { tur: 'akis', kutular: [{ baslik: 'Sayfa paketi', alt: 'ya da tarama' }, { baslik: 'Ekran modeli', alt: 'sürümlü' }, { baslik: 'Senaryolar' }] } },
-      { baslik: 'Ekran ekleme yolları', sira: ['Sayfa ekle: Claude Code\'un sayfayı yalnızca okuyarak ürettiği paketi yükleyin.', 'Ekranı tara: Nöbetçi sayfayı seçtiğiniz ortamda kendisi okur.', 'Akışı kaydet: işlemi siz yaparken Nöbetçi adımları kaydeder.'] },
-      { baslik: 'Sol panel', hedef: '.alt-nav', metin: 'Ekranlar, alt modeller (ör. kart bloğu) ve ortak akışlar burada. Devre dışı ekranlar varsayılan olarak gizlidir.' },
-      { baslik: 'Ekran değişince', metin: 'Sayfa değiştiyse aynı ekrana yeni paket yükleyin ya da yeniden tarayın: farklar "bulgular" olarak gelir, kabul ettikleriniz yeni sürüm olur.' }
+      {
+        baslik: 'Ekranlar',
+        metin: ['Test edeceğiniz her sayfa bir "ekran"dır. Ekranın modeli; alanları, adımları ve kuralları (hangi alan ne zaman görünür, hangisi zorunlu) tutar. Senaryo formu ve koşu bu modelden çalışır.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Sayfa', alt: 'uygulamanızda', ikon: 'ekran' }, { baslik: 'Paket / tarama', alt: 'yalnız okur', ikon: 'ara' }, { baslik: 'Ekran modeli', alt: 'sürümlü', ikon: 'katman' }, { baslik: 'Senaryolar', ikon: 'liste' }] }
+      },
+      {
+        baslik: 'Ekran eklemenin üç yolu',
+        sira: ['Sayfa ekle: bir yapay zekâ aracının sayfayı yalnızca okuyarak ürettiği paketi yükleyin.', 'Ekranı tara: Nöbetçi sayfayı seçtiğiniz ortamda kendisi açıp okur.', 'Akışı kaydet: işlemi siz görünür bir tarayıcıda yaparken Nöbetçi adımları kaydeder.'],
+        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Ekleme düğmeleri sağ üstte' }
+      },
+      { baslik: 'Sol panel', hedef: '.alt-nav', metin: 'Ekranlar, alt modeller (ör. bir kart bloğu) ve ortak akışlar (birden çok ekranın kullandığı adımlar, ör. ödeme) burada. Devre dışı ekranlar varsayılan olarak gizlidir.' },
+      { baslik: 'Ekran değişince', metin: 'Sayfa değiştiyse aynı ekrana yeni paket yükleyin ya da yeniden tarayın. Farklar "bulgular" olarak gelir; kabul ettikleriniz yeni model sürümü olur, eski senaryolar korunur.', cizim: { tur: 'akis', kutular: [{ baslik: 'Yeni tarama', ikon: 'yenile' }, { baslik: 'Bulgular', alt: 'farklar', ikon: 'uyari' }, { baslik: 'Kabul / ret', ikon: 'onay' }, { baslik: 'Yeni sürüm', ikon: 'katman' }] } }
     ]
   },
   'ekran-ekle': {
     baslik: 'Sayfa ekle',
     adimlar: [
-      { baslik: 'Sayfa paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.' },
-      { baslik: 'Sıra', sira: ['Paketi yükleyin ya da "Ekranı tara"yı seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Ekle: ekran, model sürüm 1 ve seçilen senaryolar oluşur.'] },
+      { baslik: 'Sayfa paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
+      { baslik: 'Adımlar', sira: ['Paketi yükleyin ya da "Ekranı tara"yı seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', '"Ekle": ekran, model sürüm 1 ve seçilen senaryolar oluşur.'] },
       { baslik: 'Güvenlik', metin: 'Tarama sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Yasak adreslere (Ayarlar > Güvenlik) hiç gidilmez.' }
     ]
   },
   ekran: {
     baslik: 'Ekran ayrıntısı',
     adimlar: [
-      { baslik: 'Ekran ayrıntısı', metin: 'Modelin adımları, alanları ve kuralları; sürüm geçmişi; akışlar ve senaryolar bu sayfada.', hedef: '.sayfa-basligi' },
+      { baslik: 'Ekran ayrıntısı', metin: 'Modelin adımları, alanları ve kuralları; sürüm geçmişi; akışlar ve senaryolar bu sayfada toplanır.', hedef: '.sayfa-basligi' },
       { baslik: 'Eylemler', hedef: '.sayfa-basligi .eylemler', metin: 'Tekrar analiz (yeni paket), ekranı yeniden tara, akışı kaydet ve ⋯ menüsü (yeniden adlandır, URL yolunu düzenle, devre dışı bırak, sil).' },
-      { baslik: 'Akışlar', metin: 'Bir ekranda birden çok akış olabilir (ör. farklı yollar). Akış diyagramında adımları sürükleyip düzenler, ortak akış bloklarını (ör. ödeme) eklersiniz.' },
+      { baslik: 'Akışlar', metin: 'Bir ekranda birden çok akış olabilir (ör. bireysel ve kurumsal yol). Akış diyagramında adımları sürükleyip sıralar, ortak akış bloklarını eklersiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Form', ikon: 'duzenle' }, { baslik: 'Ortak akış', alt: 'ör. ödeme', ikon: 'pusula' }, { baslik: 'Sonuç', ikon: 'onay' }] } },
       { baslik: 'Önerilen sıra', sira: ['Modeli kontrol edin (alan etiketleri, zorunluluk, seçenekler).', 'Gerekirse seçim alanlarını test verisi tablolarına bağlayın.', 'Senaryolar\'dan senaryo oluşturun.'] }
     ]
   },
   'akis-tasarimi': {
     baslik: 'Akış tasarımı',
     adimlar: [
-      { baslik: 'Akış diyagramı', metin: 'Ekranın adımları kutular hâlinde, akış sırasıyla. Adımları sürükleyerek sıralar, koşullu adımları ve ortak akışları eklersiniz.' },
-      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Yeni akış" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenen senaryolar önce gösterilir.'] }
+      { baslik: 'Akış diyagramı', metin: 'Ekranın adımları kutular hâlinde, çalışma sırasıyla. Kutuları sürükleyerek sıralar, "+" ile koşullu adım ya da ortak akış eklersiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adım 1', ikon: 'duzenle' }, { baslik: 'Koşullu', alt: 'ör. Kurumsal ise', ikon: 'isaret' }, { baslik: 'Ortak akış', ikon: 'pusula' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
+      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Yeni akış" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] }
     ]
   },
   bulgular: {
     baslik: 'Bulgular',
     adimlar: [
-      { baslik: 'Tekrar analiz bulguları', metin: 'Yeni paket ya da tarama ile model arasındaki farklar: eklenen / kaldırılan alanlar, değişen seçenekler, seçiciler ve koşu tanımları.' },
+      { baslik: 'Tekrar analiz bulguları', metin: 'Yeni paket ya da tarama ile mevcut model arasındaki farklar: eklenen / kaldırılan alanlar, değişen seçenekler, seçiciler ve koşu tanımları.', cizim: { tur: 'akis', kutular: [{ baslik: 'Eski model', ikon: 'arsiv' }, { baslik: 'Farklar', ikon: 'uyari' }, { baslik: 'Kararınız', ikon: 'kullanici' }, { baslik: 'Yeni sürüm', ikon: 'katman' }] } },
       { baslik: 'Sıra', sira: ['Her bulguyu inceleyin (etkilenen senaryolar gösterilir).', 'Kabul ya da reddedin.', '"Uygula": yalnızca kabul edilenlerle yeni model sürümü oluşur. Reddedilenler bir sonraki analizde tekrar sorulmaz.'] }
     ]
   },
   tarama: {
     baslik: 'Ekran taraması',
     adimlar: [
-      { baslik: 'Tarama', metin: 'Nöbetçi sayfayı seçili ortamda açar, alanları ve seçenekleri okur, bir sayfa paketi üretir. İlerlemeyi burada izlersiniz; bitince paket önizlemesine geçilir.' },
-      { baslik: 'Dikkat', metin: 'Tarama yalnızca okur ve bilgi amaçlı düğmelere basar (sekme, ok, sorgula). Kayıt oluşturan düğmelere basılmaz.' }
+      { baslik: 'Tarama', metin: 'Nöbetçi sayfayı seçili ortamda açar, alanları ve seçenekleri okur ve bir sayfa paketi üretir. İlerlemeyi burada izlersiniz; bitince paket önizlemesine geçilir.', cizim: { tur: 'maket', bolge: 'form', etiket: 'Alanlar tek tek okunur' } },
+      { baslik: 'Dikkat', metin: 'Tarama yalnızca okur ve bilgi amaçlı düğmelere basar (sekme, ok, sorgula). Kayıt oluşturan düğmelere basılmaz. Süre sınırı Ayarlar > Koşu\'dadır.' }
     ]
   },
 
   'ayarlar-proje': {
     baslik: 'Proje ve ortamlar',
     adimlar: [
-      { baslik: 'Ayarlar', hedef: '.alt-nav', metin: 'Ayarlar bölümleri solda. Buradaki her seçim sizin kararınızdır; kodda sabit bir tercih yoktur.' },
-      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). "Canlı" işaretli ortamda yalnızca test ortamına özel adımlar atlanır. Adresler kasada şifrelidir.' },
-      { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (tablolar, kayıtlar) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'] }
+      { baslik: 'Ayarlar', hedef: '.alt-nav', metin: 'Ayarlar bölümleri solda. Buradaki her seçim sizin kararınızdır; Nöbetçi\'nin kodunda sizin yerinize verilmiş bir tercih yoktur.' },
+      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). "Canlı" işaretli ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'adres + giriş' }, { baslik: 'CANLI ortamı', alt: 'yalnız güvenli adımlar' }] } },
+      { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (tablolar, kayıtlar) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
     ]
   },
   'ayarlar-giris': {
     baslik: 'Giriş profilleri',
     adimlar: [
-      { baslik: 'Giriş profili', metin: 'Testlerin uygulamaya hangi kullanıcıyla gireceği. Parola, TOTP anahtarı ve sabit SMS kodu kasada şifreli saklanır, burada gösterilmez.' },
-      { baslik: 'Giriş tarifi', metin: 'Her ortam için giriş sayfasının tarifi: kullanıcı / parola alanı, giriş düğmesi, başarı ve hata göstergeleri, iki aşamalı doğrulama ve girişten sonra bağlam seçimi (rol, şube…).' },
+      { baslik: 'Giriş profili', metin: 'Testlerin uygulamaya hangi kullanıcıyla gireceği. Parola, doğrulama (TOTP) anahtarı ve sabit SMS kodu kasada şifreli saklanır; burada gösterilmez.', cizim: { tur: 'form', alanlar: ['Kullanıcı adı', 'Parola', 'Doğrulama'], dugme: 'Giriş' } },
+      { baslik: 'Giriş tarifi', metin: 'Her ortam için giriş sayfasının tarifi: kullanıcı / parola alanı, giriş düğmesi, başarı ve hata göstergeleri, iki aşamalı doğrulama ve girişten sonra bağlam seçimi (rol, şube…). Tüm senaryolar bu tarifle giriş yapar; giriş değişirse tek yerde düzeltirsiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş sayfası', ikon: 'ekran' }, { baslik: 'Kimlik', alt: 'kasadan', ikon: 'anahtar' }, { baslik: 'Doğrulama', alt: 'varsa', ikon: 'kalkan' }, { baslik: 'Bağlam', alt: 'rol / şube', ikon: 'kullanici' }] } },
       { baslik: 'Sıra', sira: ['Giriş profilini ekleyin.', 'Ortamın giriş tarifinde "Varsayılanları öner" ile alanları algılatın (yalnızca siz basınca).', 'Önerileri kontrol edip kaydedin.'] }
     ]
   },
   'ayarlar-test-verisi': {
     baslik: 'Test verisi',
     adimlar: [
-      { baslik: 'Tablolar', metin: 'Her satır birlikte geçerli değerlerdir (ör. kanal | kullanıcı | parola). Ekran alanları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür.' },
-      { baslik: 'Kayıtlar (profiller)', metin: 'Kişi, kart, adres gibi kayıtlar profil adıyla seçilir (değer senaryoya yazılmaz). Hassas işaretli alanlar kasada şifrelidir ve maskeli gösterilir.' },
+      { baslik: 'Tablolar', metin: 'Her satır birlikte geçerli değerlerdir (ör. kanal | kullanıcı | ürün kodu). Ekran ve servis alanları sütunlara bağlanır; senaryoda seçim yaptıkça diğer seçenekler süzülür.', cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Satırlar birlikte geçerli değerler' } },
+      { baslik: 'Kayıtlar (profiller)', metin: 'Kişi, kart, adres gibi kayıtlar profil adıyla seçilir; değer senaryoya yazılmaz. Hassas işaretli alanlar kasada şifrelidir ve maskeli gösterilir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Tür', alt: 'ör. Kişi' }, { baslik: 'Profil', alt: 'ör. Test kişisi 1' }, { baslik: 'Alanlar', alt: 'hassas olanlar şifreli' }] } },
       { baslik: 'Sıra', sira: ['Türü / tabloyu oluşturun (sütunlar).', 'Satırları ya da profilleri ekleyin (ortama özel olabilir).', 'Ekranın ya da servisin alanlarını sütunlara bağlayın.'] }
     ]
-  },
-  'ayarlar-dosyalar': {
-    baslik: 'Dosyalar',
-    adimlar: [{ baslik: 'Ekran dosyaları', metin: 'Ekranların varsayılan dosyaları (ör. toplu yükleme Excel\'i). Dosyalar yalnızca şifreli saklanır; koşuda geçici bir klasöre çözülür ve koşu bitince silinir.' }]
   },
   'ayarlar-kosu': {
     baslik: 'Koşu ayarları',
     adimlar: [
-      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı ve tarih biçimi. Değişiklik sonraki koşulardan itibaren geçerlidir.' },
-      { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı).' }
+      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi ve tarama / akış kaydı süreleri. Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
+      { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
+      {
+        baslik: 'Zamanlanmış koşular',
+        metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır; kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Zaman', alt: 'her gün 07:00', ikon: 'saat' }, { baslik: 'Kasa açık mı?', ikon: 'kilit' }, { baslik: 'Koşu', alt: '"Koşuda" senaryolar', ikon: 'oynat' }, { baslik: 'Bildirim', alt: 'isteğe bağlı', ikon: 'simsek' }] },
+        ipucu: 'Canlı ortam için ayrıca açık onay gerekir. Her kuralın son 20 çalışması ve sonuç bağlantıları "Geçmiş"te durur.'
+      }
     ]
   },
   'ayarlar-yedekleme': {
     baslik: 'Yedekleme',
     adimlar: [
-      { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır.' },
-      { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce sayım gösterilir).' }
+      { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Kasa', ikon: 'kilit' }, { baslik: '.tayedek', alt: 'şifreli', ikon: 'arsiv' }, { baslik: 'Başka bilgisayar', ikon: 'bilgisayar' }] } },
+      { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' }
     ]
   },
   'ayarlar-guvenlik': {
     baslik: 'Güvenlik',
     adimlar: [
-      { baslik: 'Kasa', metin: 'Kasa kilitlenince şifreli bilgiler okunamaz. İşlem yapılmazsa kasa ayarladığınız sürede kendiliğinden kilitlenir.' },
-      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı host kalıpları: bu adreslere koşu ve tarama hiç başlamaz.' },
-      { baslik: 'Maskeleme', metin: 'Raporlarda ve yanıtlarda maskelenecek ek gizli adlar.' }
+      { baslik: 'Kasa', metin: 'Kasa kilitlenince şifreli bilgiler okunamaz. İşlem yapılmazsa kasa ayarladığınız sürede kendiliğinden kilitlenir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'kilitli / açık' }, { baslik: 'Otomatik kilit', alt: 'boşta kalınca' }] } },
+      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı adres kalıpları: bu adreslere koşu ve tarama hiç başlamaz.' },
+      { baslik: 'Maskeleme', metin: 'Raporlarda ve yanıtlarda maskelenecek ek gizli alan adları.' }
+    ]
+  },
+  'ayarlar-entegrasyonlar': {
+    baslik: 'Entegrasyonlar',
+    adimlar: [
+      {
+        baslik: 'Entegrasyonlar',
+        metin: ['Nöbetçi\'yi başka uygulamalara bağlarsınız: koşu bitince sohbet kanalına bildirim (webhook), kalan bir testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantısı.', 'Token, parola ve gizli adresler kasada şifreli durur; siz denemeden ya da seçtiğiniz olay gerçekleşmeden hiçbir istek gönderilmez.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Tür', alt: 'webhook / hata kaydı / veritabanı', ikon: 'liste' }, { baslik: 'Ayarlar', alt: 'gizliler kasada', ikon: 'kilit' }, { baslik: 'Dene', alt: 'onayınızla', ikon: 'simsek' }, { baslik: 'Bağlı', ikon: 'onay' }] }
+      },
+      { baslik: 'Bağlama sırası', sira: ['"Yeni bağlantı" ile türü seçin.', 'Alanları doldurun; hangi olaylarda ve hangi ortamlarda çalışacağını seçin.', '"Bağlantıyı dene": önce hangi adrese deneme isteği gideceği gösterilir, onaylarsanız gider.', 'Kaydedin; durum rozeti bağlı / denenmedi / hata olarak görünür.'] },
+      { baslik: 'Veritabanı ve DBeaver', metin: 'Veritabanı bağlantıları varsayılan olarak yalnız okuma kipindedir (yalnız SELECT). DBeaver kullanıyorsanız bağlantı tanımlarını "DBeaver\'dan içe aktar" ile alabilirsiniz; parolalar alınmaz, siz girersiniz.', ipucu: 'Veritabanı sürücüleri ayrıca kurulur: npm install mssql oracledb pg mysql2' }
     ]
   },
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
-    adimlar: [{ baslik: 'Rehberler', metin: 'Rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağını seçin. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar. "?" düğmesi her zaman çalışır.' }]
+    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı ve listelerin sayfa boyları. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } }]
   }
 };

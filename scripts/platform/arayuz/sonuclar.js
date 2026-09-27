@@ -4,12 +4,17 @@
 // başarısız / Tekrar eden / Düzeldi"), koşu geçmişi, hata kalıpları ve sağda başarısız test paneli
 // (ekran görüntüsü, video, hata, adımlar, atlanan alanlar). Koşu detayı ve test detayı aynı
 // ekranda açılır.
-// Adresler: #/sonuclar, #/sonuclar/u/<ürün>, #/sonuclar/kosu/<id>, #/sonuclar/sonuc/<id>
+// Adresler: #/sonuclar (Genel > Ekranlar), #/sonuclar/servisler (Genel > Servisler: servis-sonuclari.js),
+// #/sonuclar/u/<ürün>, #/sonuclar/kosu/<id>, #/sonuclar/sonuc/<id>. Tarih aralığı: ortak süzgeç (tarih-araligi.js; oturumda).
 // Medya (ekran görüntüsü/video/iz) şifrelidir; sunucu /platform/medya/<id> ile kasa açıkken
 // çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
 import { api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, s, TOKEN, tarihMetni, yerlestir } from './ortak.js';
-import { ekranlarBasligi, servisleriAl, servislerBolumu } from './urunler.js';
+import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
+import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
+import { hataKaydiDugmesi } from './entegrasyonlar.js';
+import { veriyiSirala } from './tablo-siralama.js';
+import { htmlRaporDugmesi } from './html-rapor.js';
 
 /** Koşu geçmişinde bir sayfadaki koşu (Ayarlar > Arayüz; kullanıcı kararı). */
 let SAYFA_BOYU = 15;
@@ -27,11 +32,10 @@ const DEGISIM = {
   tekrar: { etiket: 'Tekrar eden', sinif: 'atlanan' },
   duzeldi: { etiket: 'Düzeldi', sinif: 'basari' }
 };
-const ARALIKLAR = [['14', 'Son 14'], ['30', 'Son 30'], ['tumu', 'Tümü']];
 
 const medyaUrl = (id, indir = false) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}${indir ? '&indir=1' : ''}`;
 const durumRozeti = (d) => rozet((DURUM[d] || { etiket: d }).etiket, (DURUM[d] || {}).sinif || '');
-const sureMetni = (ms) => (ms === null || ms === undefined ? '—' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
+export const sureMetni = (ms) => (ms === null || ms === undefined ? '—' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
 const toplam = (x) => (x ? x.basarili + x.basarisiz + x.atlanan + (x.durduruldu || 0) : 0);
 const oran = (x) => {
   const payda = x.basarili + x.basarisiz + x.atlanan;
@@ -43,7 +47,7 @@ const tarihNesnesi = (d) => (d instanceof Date ? d : new Date(typeof d === 'numb
 /** "24.09" */
 const gunAy = (d) => { const t = tarihNesnesi(d); return Number.isNaN(t.getTime()) ? '—' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
 /** "24.09.2026 17:12" */
-const kisaTarih = (d) => { const t = tarihNesnesi(d); return d == null || Number.isNaN(t.getTime()) ? '—' : `${gunAy(t)}.${t.getFullYear()} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
+export const kisaTarih = (d) => { const t = tarihNesnesi(d); return d == null || Number.isNaN(t.getTime()) ? '—' : `${gunAy(t)}.${t.getFullYear()} ${iki(t.getHours())}:${iki(t.getMinutes())}`; };
 const saatMetni = (d) => { const t = tarihNesnesi(d); return d == null || Number.isNaN(t.getTime()) ? '—' : `${iki(t.getHours())}:${iki(t.getMinutes())}:${iki(t.getSeconds())}`; };
 const kategoriSinifi = (k) => {
   const m = String(k || '').toLocaleLowerCase('tr');
@@ -56,8 +60,17 @@ const kategoriSinifi = (k) => {
 const KATEGORI_IKONU = { 'k-zaman': 'zamanlayici', 'k-secici': 'ara', 'k-popup': 'uyari', 'k-dogrulama': 'hedef', 'k-diger': 'ag' };
 const kisaKategori = (k) => String(k || 'Diğer').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+Hatası$/, '').trim();
 
-let aralikSecimi = '14';
-try { aralikSecimi = localStorage.getItem('platform.trendAraligi') || '14'; } catch { /* yok sayılır */ }
+/** Trend grafiğinde en çok bu kadar koşu çizilir (aralıktaki en yeniler; daha fazlası okunmaz). */
+const TREND_EN_COK = 60;
+
+/** Genel görünümün "Ekranlar | Servisler" sekmeleri (#/sonuclar ve #/sonuclar/servisler). */
+function genelSekmeleri(secili) {
+  return h('div', { class: 'segment sekme-cubugu sonuc-sekmeleri', role: 'tablist', 'aria-label': 'Genel rapor' },
+    [['ekranlar', 'Ekranlar', '#/sonuclar', 'ekran'], ['servisler', 'Servisler', '#/sonuclar/servisler', 'ag']].map(([a, etiket, adres, ikonAd]) => h('button', {
+      type: 'button', role: 'tab', 'aria-selected': a === secili ? 'true' : 'false',
+      onclick: () => { if (a !== secili) location.hash = adres; }
+    }, ikon(ikonAd), etiket)));
+}
 
 /**
  * @param {HTMLElement} main
@@ -75,19 +88,35 @@ export function sonuclarEkrani(main, parcalar, baglam) {
         h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}),
           'Son tam koşunun başarı oranı: yeşil ≥ %90, sarı ≥ %75, kırmızı altı.')),
       icerik));
-  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur ? null : '';
+  // "servisler": Genel'in Servisler sekmesi (Genel seçili kalır).
+  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && tur !== 'servisler' ? null : '';
   const hata = (e) => { if (e && e.durum === 423) return; icerik.replaceChildren(hataKutusu(e)); };
+  // Tarih aralığı (ortak süzgeç; oturumda saklanır): kartlar, trend ve koşu geçmişi sunucuda aralığa göre hesaplanır.
+  const sorgu = araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), kayitliAralik());
+  if (secili) sorgu.set('urun', secili);
 
   // Sol liste her görünümde aynı özetten gelir (koşu/sonuç detayında seçili ürün yok).
-  Promise.all([api(`/platform/sonuclar/ozet?projeId=${encodeURIComponent(proje.id)}${secili ? `&urun=${encodeURIComponent(secili)}` : ''}`), kullaniciAyarlari()])
+  Promise.all([api(`/platform/sonuclar/ozet?${sorgu}`), kullaniciAyarlari()])
     .then(([ozet, ayar]) => {
       if (Number.isInteger(ayar.kosuGecmisiSayfaBoyu)) SAYFA_BOYU = ayar.kosuGecmisiSayfaBoyu;
       urunListesi(liste, ozet.ekranlar, secili);
       servisleriAl(proje).then((servisler) => { if (servisler.length) urunListesi(liste, ozet.ekranlar, secili, servisler); });
       if (tur === 'kosu' && kimlik) return kosuDetayi(icerik, decodeURIComponent(kimlik), proje);
       if (tur === 'sonuc' && kimlik) return sonucDetayi(icerik, decodeURIComponent(kimlik), proje);
+      // Genel > Servisler: servis sonuçlarının genel görünümü (servis-sonuclari.js; ayrıntılar #/servisler/sonuclar altında).
+      if (tur === 'servisler') {
+        return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { ust: genelSekmeleri('servisler'), gomulu: true }));
+      }
       const ekran = secili ? ozet.ekranlar.find((e) => e.anahtar === secili) : null;
-      return genelBakis(icerik, ozet, proje, secili || null, ekran ? ekran.ad : secili ? secili.replace(/^ad:/, '') : null, ekran);
+      const yenile = () => sonuclarEkrani(main, parcalar, baglam);
+      genelBakis(icerik, ozet, proje, secili || null, ekran ? ekran.ad : secili ? secili.replace(/^ad:/, '') : null, ekran, yenile);
+      if (!secili) {
+        // Sekmeler sayfa başlığının hemen altında (başlık yoksa en üstte).
+        const sekmeler = genelSekmeleri('ekranlar');
+        const baslik = icerik.querySelector(':scope > .sayfa-basligi');
+        if (baslik) baslik.after(sekmeler); else icerik.prepend(sekmeler);
+      }
+      return undefined;
     })
     .catch(hata);
 }
@@ -123,8 +152,8 @@ function urunListesi(nav, ekranlar, secili, servisler = []) {
   };
   nav.replaceChildren(
     baglanti('', 'Genel', toplamSenaryo, null, 'izgara'),
-    ...ekranlarBasligi(),
-    ...ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu)),
+    ...urunlerBasligi(),
+    ekranlarGrubu(ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu))),
     // Servis sonuçları ekran sonuçlarına karışmaz: bağlantı servisin kendi Raporlar sekmesini açar.
     ...servislerBolumu(servisler, { sekme: 'raporlar', saglik: true }));
 }
@@ -133,7 +162,7 @@ function urunListesi(nav, ekranlar, secili, servisler = []) {
 // Genel bakış / ürün sayfası
 // ---------------------------------------------------------------------------------------
 
-function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
+function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran, aralikDegisti) {
   const kart = ozet.kart;
   const sonKosuId = urun ? kart && kart.son && kart.son.kosuId : (ozet.trend.length ? ozet.trend[ozet.trend.length - 1].kosuId : null);
   const sonKosu = sonKosuId ? ozet.kosuGecmisi.find((k) => k.id === sonKosuId) : null;
@@ -155,11 +184,9 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
     kartAlani.replaceChildren(kartlar(kart, ozet.trend, urun));
     trendAlani.replaceChildren(trendKarti(ozet.trend, urun));
   };
-  const aralikSegmenti = segment(ARALIKLAR, aralikSecimi, (d) => {
-    aralikSecimi = d;
-    try { localStorage.setItem('platform.trendAraligi', d); } catch { /* yok sayılır */ }
-    ciz();
-  }, 'Trend aralığı (tam koşu sayısı)');
+  // Tarih aralığı süzgeci (ortak bileşen): seçim oturumda saklanır, ekran sunucudan aralığa göre yeniden yüklenir.
+  const aralikSatiri = h('section', { class: 'kart sonuc-araligi', 'aria-label': 'Tarih aralığı süzgeci' },
+    tarihAraligiSecici({ degisti: () => aralikDegisti() }));
   const basarisizSayisi = kart ? kart.son.basarisiz : 0;
   const meta = [];
   if (kart) {
@@ -184,11 +211,11 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
           h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Sonuçlar — '), urunAdi || 'Genel'),
           basarisizSayisi ? rozet([ikon('uyari'), `${basarisizSayisi} başarısız`], 'hata') : kart ? rozet([ikon('onay'), 'hepsi geçti'], 'basari') : null),
         h('div', { class: 'meta' }, meta)),
-      h('div', { class: 'eylemler' }, aralikSegmenti,
+      h('div', { class: 'eylemler' },
         // Silinmiş / devre dışı ekranın koşusu başlatılamaz (sonuçları yalnızca görüntülenir).
         ekran && (ekran.ekranDurumu === 'silindi' || ekran.ekranDurumu === 'devre_disi') ? null
           : h('a', { class: 'dugme birincil', href: urun && !urun.startsWith('ad:') ? `#/senaryolar/u/${encodeURIComponent(urun)}` : '#/senaryolar', title: 'Senaryolar ekranında onayla başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),
-    kartAlani, izgara,
+    aralikSatiri, kartAlani, izgara,
     h('div', { class: 'sonuc-sutunu alt-bolumler' }, kosuGecmisi(ozet.kosuGecmisi, urun), kalipAlani));
   ciz();
   hataKaliplariBolumu(kalipAlani, proje, urun, (id) => panel.ac(id, true));
@@ -196,7 +223,7 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran) {
 }
 
 /** Segment denetimi (aria-pressed düğmeler). */
-function segment(secenekler, secili, degisti, etiket) {
+export function segment(secenekler, secili, degisti, etiket) {
   const kap = h('div', { class: 'segment', role: 'group', 'aria-label': etiket });
   const ciz = (d) => kap.replaceChildren(...secenekler.map(([deger, metin]) => h('button', {
     type: 'button', 'aria-pressed': deger === d ? 'true' : 'false',
@@ -206,11 +233,12 @@ function segment(secenekler, secili, degisti, etiket) {
   return kap;
 }
 
-const aralikUygula = (noktalar) => (aralikSecimi === 'tumu' ? noktalar : noktalar.slice(-Number(aralikSecimi)));
+/** Aralık sunucuda uygulanır; grafik okunaklı kalsın diye en yeni TREND_EN_COK nokta çizilir. */
+const aralikUygula = (noktalar) => noktalar.slice(-TREND_EN_COK);
 
 let kivilcimSayaci = 0;
 /** Kıvılcım (sparkline): alan + çizgi; renk kartın --k değişkeninden. */
-function kivilcim(degerler) {
+export function kivilcim(degerler) {
   if (degerler.length < 2) return null;
   const G = 120; const Y = 40; const en = Math.max(...degerler, 1);
   const noktalar = degerler.map((v, i) => [(i * G) / (degerler.length - 1), Y - 4 - (v / en) * (Y - 12)]);
@@ -222,7 +250,7 @@ function kivilcim(degerler) {
     s('path', { class: 'cizgi', d, fill: 'none', 'vector-effect': 'non-scaling-stroke' }));
 }
 
-function farkHapi(fark, iyiMi, birim = '') {
+export function farkHapi(fark, iyiMi, birim = '') {
   if (fark === 0) return h('span', { class: 'fark notr' }, '= 0', h('span', { class: 'gorunmez' }, ' değişim yok'));
   return h('span', { class: `fark ${iyiMi ? 'iyi' : 'kotu'}` }, `${fark > 0 ? '▲' : '▼'} ${Math.abs(fark)}${birim}`,
     h('span', { class: 'gorunmez' }, fark > 0 ? ' arttı' : ' azaldı'));
@@ -231,7 +259,7 @@ function farkHapi(fark, iyiMi, birim = '') {
 function kartlar(kart, trend, urun) {
   if (!kart) {
     return h('div', { class: 'sonuc-kartlari-bos' },
-      bosDurum('Henüz koşu yok.', 'Kartlar yalnızca tam koşulardan (Koşuyu başlat) hesaplanır. Tekil ▷ koşuları koşu geçmişinde görünür.', { ikon: 'grafik' }));
+      bosDurum(kayitliAralik().hizli === 'tumu' ? 'Henüz koşu yok.' : `Bu aralıkta tam koşu yok (${aralikMetni(kayitliAralik())}).`, 'Kartlar yalnızca tam koşulardan (Koşuyu başlat) hesaplanır. Tekil ▷ koşuları koşu geçmişinde görünür.', { ikon: 'grafik' }));
   }
   const son = kart.son;
   const onceki = kart.onceki;
@@ -271,18 +299,23 @@ function kartlar(kart, trend, urun) {
 // ---------------------------------------------------------------------------------------
 
 let trendKipi = 'adet';
-function trendKarti(tumNoktalar, urun) {
+/**
+ * Trend kartı. Noktalar: { z, kosuId, basarili, basarisiz, atlanan, durduruldu, kapsam? }. secenek (servis sonuçları için):
+ * altYazi, aciklama, bosBaslik, bosAciklama, grafikEtiketi ("tam koşunun"), kosuAdresi(nokta) → hash.
+ */
+export function trendKarti(tumNoktalar, urun, secenek = {}) {
   const kap = h('div', { class: 'trend-kapsayici' });
   const kipSegmenti = segment([['adet', 'Adet'], ['oran', 'Oran']], trendKipi, (d) => { trendKipi = d; ciz(); }, 'Grafik birimi');
   const noktalar = aralikUygula(tumNoktalar);
-  const ciz = () => kap.replaceChildren(...trendGrafigi(noktalar, kap));
+  const ciz = () => kap.replaceChildren(...trendGrafigi(noktalar, kap, secenek));
   const kart = h('section', { class: 'kart', 'aria-labelledby': 'trend-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'trend-basligi' }, ikon('grafik'), 'Koşu trendi'),
-      h('span', { class: 'alt' }, urun ? `Bu ürünü içeren tam koşular · son ${noktalar.length}` : `Genel kapsamlı tam koşular · son ${noktalar.length}`),
+      h('span', { class: 'alt' }, `${secenek.altYazi || `${urun ? 'Bu ürünü içeren tam koşular' : 'Genel kapsamlı tam koşular'} · ${aralikMetni(kayitliAralik())}`} · `
+        + (tumNoktalar.length > noktalar.length ? `en yeni ${noktalar.length} / ${tumNoktalar.length}` : `${noktalar.length} koşu`)),
       noktalar.length ? h('div', { class: 'sag' }, kipSegmenti) : null),
-    h('p', { class: 'gorunmez' }, urun ? 'Bu ürünü içeren tam koşular (yalnızca bu ürünün sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.'),
+    h('p', { class: 'gorunmez' }, secenek.aciklama || (urun ? 'Bu ürünü içeren tam koşular (yalnızca bu ürünün sonuçları).' : 'Genel kapsamlı tam koşular. Tekil koşular trende girmez.')),
     kap);
-  if (!noktalar.length) { kap.append(bosDurum('Henüz tam koşu yok.', 'Tam koşular (Koşuyu başlat) burada günlük çubuklar olarak görünür.', { ikon: 'grafik' })); return kart; }
+  if (!noktalar.length) { kap.append(bosDurum(secenek.bosBaslik || 'Henüz tam koşu yok.', secenek.bosAciklama || 'Tam koşular (Koşuyu başlat) burada günlük çubuklar olarak görünür.', { ikon: 'grafik' })); return kart; }
   // Genişlik kapsayıcıya göre; boyut değişince yeniden çizilir.
   requestAnimationFrame(ciz);
   if (window.ResizeObserver) {
@@ -293,7 +326,7 @@ function trendKarti(tumNoktalar, urun) {
 }
 
 let trendSayaci = 0;
-function trendGrafigi(noktalar, kap) {
+function trendGrafigi(noktalar, kap, secenek = {}) {
   const W = Math.max(320, kap.clientWidth || 640); const H = 232;
   const L = 36; const R = 10; const T = 14; const B = 28;
   const ih = H - T - B; const iw = W - L - R; const n = noktalar.length;
@@ -304,7 +337,7 @@ function trendGrafigi(noktalar, kap) {
   const ustSinir = oranKipi ? 100 : adim * Math.ceil(enCok / adim);
   const y = (v) => (ih * v) / ustSinir;
   const filtreId = `trend-parilti-${++trendSayaci}`;
-  const svg = s('svg', { class: 'trend-grafigi', viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': `Son ${n} tam koşunun durum dağılımı (${oranKipi ? 'yüzde' : 'adet'})` },
+  const svg = s('svg', { class: 'trend-grafigi', viewBox: `0 0 ${W} ${H}`, role: 'group', 'aria-label': `Son ${n} ${secenek.grafikEtiketi || 'tam koşunun'} durum dağılımı (${oranKipi ? 'yüzde' : 'adet'})` },
     s('defs', {}, s('filter', { id: filtreId, x: '-50%', y: '-20%', width: '200%', height: '140%' },
       s('feGaussianBlur', { stdDeviation: '4', result: 'b' }), s('feMerge', {}, s('feMergeNode', { in: 'b' }), s('feMergeNode', { in: 'SourceGraphic' })))));
   for (let t = 0; t <= ustSinir; t += adim) {
@@ -346,7 +379,7 @@ function trendGrafigi(noktalar, kap) {
       grup.append(s('rect', { class: sinif, x, y: yy, width: bw, height: yuk, rx: j === dilimler.length - 1 ? Math.min(4, bw / 3) : 1.5, filter: son ? `url(#${filtreId})` : null }));
     });
     grup.append(s('rect', { class: 'dokunma', x: L + slot * i, y: T, width: slot, height: ih, fill: 'transparent' }));
-    const ac = () => { location.hash = `#/sonuclar/kosu/${encodeURIComponent(nk.kosuId)}`; };
+    const ac = () => { location.hash = secenek.kosuAdresi ? secenek.kosuAdresi(nk) : `#/sonuclar/kosu/${encodeURIComponent(nk.kosuId)}`; };
     grup.addEventListener('mouseenter', () => ipucuGoster(nk, x + bw / 2));
     grup.addEventListener('focus', () => ipucuGoster(nk, x + bw / 2));
     grup.addEventListener('mouseleave', () => { ipucu.hidden = true; });
@@ -464,7 +497,7 @@ function kosuNoktasi(k) {
   return h('span', { class: `nokta ${sinif}`, 'aria-hidden': 'true', title: KOSU_DURUMU[k.durum] || k.durum });
 }
 
-function dagilimCubugu(x, genislik = null) {
+export function dagilimCubugu(x, genislik = null) {
   const t = toplam(x) || 1;
   const w = (v) => `${((v / t) * 100).toFixed(1)}%`;
   return h('span', { class: 'dagilim', 'aria-hidden': 'true', style: genislik ? { width: genislik } : null },
@@ -477,9 +510,25 @@ function kosuGecmisi(kosular, urun) {
   const sayfalama = h('div', { class: 'sayfalama' });
   let sayfa = 0;
   let filtre = 'tumu';
+  // Sıralama VERİDE (sayfalı tablo; tablo-siralama.js 'tablo-sirala' olayı → { anahtar, yon }).
+  /** @type {{ anahtar: string | null; yon: 'artan' | 'azalan' | null }} */
+  let siralama = { anahtar: null, yon: null };
+  const SIRALAMA_ALANLARI = {
+    zaman: (k) => { const t = Date.parse(k.bitis || k.baslangic); return Number.isNaN(t) ? 0 : t; },
+    tur: (k) => `${k.tur === 'tam' ? 'tam' : 'tekil'} ${k.kapsam || ''}`,
+    toplam: (k) => toplam(k), basarili: (k) => k.basarili || 0, basarisiz: (k) => k.basarisiz || 0,
+    atlanan: (k) => k.atlanan || 0, durduruldu: (k) => k.durduruldu || 0, oran: (k) => oran(k) ?? -1
+  };
+  const basliklar = [['Koşu', 'zaman'], ['Tür / kapsam', 'tur'], ['Dağılım', null], ['Top.', 'toplam', 1], ['Başarılı', 'basarili', 1], ['Başarısız', 'basarisiz', 1], ['Atlanan', 'atlanan', 1], ['Durd.', 'durduruldu', 1], ['Oran', 'oran', 1]]
+    .map(([b, anahtar, sag]) => h('th', { scope: 'col', class: sag ? 'sayi' : null, ...(anahtar ? { 'data-sirala-anahtar': anahtar, 'aria-sort': 'none' } : { 'data-sirala': 'yok' }) }, b));
   const sayiHucresi = (v, ek = '') => h('td', { class: `sayi ${v ? ek : 'sifir'}`.trim() }, String(v));
   const ciz = () => {
-    const secilen = filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre);
+    const suzulen = filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre);
+    const secilen = siralama.anahtar ? veriyiSirala(suzulen, SIRALAMA_ALANLARI[siralama.anahtar], siralama.yon) : suzulen;
+    for (const th of basliklar) {
+      const a = th.getAttribute('data-sirala-anahtar');
+      if (a) th.setAttribute('aria-sort', a === siralama.anahtar && siralama.yon ? (siralama.yon === 'artan' ? 'ascending' : 'descending') : 'none');
+    }
     const dilim = secilen.slice(sayfa * SAYFA_BOYU, (sayfa + 1) * SAYFA_BOYU);
     govde.replaceChildren(...dilim.map((k) => {
       const o = oran(k);
@@ -502,16 +551,22 @@ function kosuGecmisi(kosular, urun) {
   };
   ciz();
   const filtreSegmenti = segment([['tumu', 'Tümü'], ['tam', 'Tam'], ['tekil', 'Tekil']], filtre, (d) => { filtre = d; sayfa = 0; ciz(); }, 'Koşu türü');
+  const tablo = h('table', { class: 'ozet-tablosu gecmis-tablosu', 'data-siralama': 'veri' },
+    h('caption', { class: 'gorunmez' }, 'Koşu geçmişi'),
+    h('thead', {}, h('tr', {}, basliklar)),
+    govde);
+  tablo.addEventListener('tablo-sirala', (o) => {
+    const { anahtar, yon } = /** @type {CustomEvent} */ (o).detail || {};
+    siralama = yon && SIRALAMA_ALANLARI[anahtar] ? { anahtar, yon } : { anahtar: null, yon: null };
+    sayfa = 0;
+    ciz();
+  });
   return h('section', { class: 'kart', 'aria-labelledby': 'gecmis-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'gecmis-basligi' }, ikon('liste'), 'Koşu geçmişi'),
       h('span', { class: 'alt' }, urun ? 'Bu ürünü içeren tüm koşular; sayılar yalnızca bu ürün için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
       kosular.length ? h('div', { class: 'sag' }, filtreSegmenti) : null),
     kosular.length
-      ? [h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu gecmis-tablosu' },
-        h('caption', { class: 'gorunmez' }, 'Koşu geçmişi'),
-        h('thead', {}, h('tr', {}, ...[['Koşu'], ['Tür / kapsam'], ['Dağılım'], ['Top.', 1], ['Başarılı', 1], ['Başarısız', 1], ['Atlanan', 1], ['Durd.', 1], ['Oran', 1]]
-          .map(([b, sag]) => h('th', { scope: 'col', class: sag ? 'sayi' : null }, b)))),
-        govde)), sayfalama]
+      ? [h('div', { class: 'tablo-kaydirma' }, tablo), sayfalama]
       : h('p', { class: 'bos-liste' }, 'Henüz koşu yok.'));
 }
 
@@ -519,14 +574,8 @@ function kosuGecmisi(kosular, urun) {
 // Hata kalıpları
 // ---------------------------------------------------------------------------------------
 
-function yerelDegerdenIso(deger) {
-  if (!deger) return '';
-  const t = new Date(deger);
-  return Number.isNaN(t.getTime()) ? '' : t.toISOString();
-}
-
 /** Kalıp metnindeki "#" yer tutucularını vurgular (metin düğümleriyle). */
-function kalipMetni(kalip) {
+export function kalipMetni(kalip) {
   const parcalar = String(kalip).split('#');
   const cikti = [];
   parcalar.forEach((p, i) => { if (p) cikti.push(p); if (i < parcalar.length - 1) cikti.push(h('em', {}, '#')); });
@@ -584,20 +633,107 @@ function kalipTestleri(k, proje, ornekAc) {
           ikon('oynat'), 'Tekrar çalıştır') : null)))));
 }
 
+// --- Koşuda yakalanan mesajlar (geçen testler dahil; sonuclar/yakalanan-mesajlar.mjs) ---
+
+const YAKALAMA_KAYNAGI = { diyalog: 'Diyalog', 'hata-gostergesi': 'Hata göstergesi', konsol: 'Konsol', 'sayfa-hatasi': 'Sayfa hatası', ag: 'Ağ' };
+/** Hata kalıpları bölümünün son seçilen görünümü (sayfa içinde korunur). */
+let kalipGorunumu = 'kalan';
+let yakalananKaynakSuzgeci = 'tumu';
+
+const kaynakRozeti = (k) => rozet(YAKALAMA_KAYNAGI[k] || k, 'yakalanan-kaynak');
+const beklenenRozeti = (beklenen) => (beklenen
+  ? rozet('beklenen', 'atlanan', { title: 'Senaryonun beklediği mesajla eşleşti' })
+  : rozet('beklenmeyen', 'hata', { title: 'Senaryoda beklenmeyen mesaj' }));
+
+/** Grubun testleri: senaryo, adım, zaman, testin durumu; Ayrıntı ve Koşu. */
+function yakalananTestleri(k, ornekAc) {
+  const sonuclar = k.sonuclar || [];
+  if (!sonuclar.length) return h('p', { class: 'soluk kucuk' }, 'Test bilgisi yok.');
+  return h('ul', { class: 'kalip-test-listesi', 'aria-label': 'Mesajın yakalandığı testler' }, sonuclar.map((x) => h('li', {},
+    h('span', { class: 'kalip-test-adi' }, h('b', { title: x.senaryoBaslik }, x.senaryoBaslik),
+      h('small', {}, [x.adim ? `"${x.adim}" adımında` : null, x.sayi > 1 ? `${x.sayi} kez` : null, kisaTarih(x.zaman)].filter(Boolean).join(' · '))),
+    h('span', { class: 'kalip-test-eylemleri' }, durumRozeti(x.durum),
+      h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => ornekAc(x.sonucId), 'aria-label': `Ayrıntı: ${x.senaryoBaslik}` }, 'Ayrıntı'),
+      h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/sonuclar/kosu/${encodeURIComponent(x.kosuId)}`, 'aria-label': `Koşu: ${x.senaryoBaslik}` }, 'Koşu')))));
+}
+
+/** "Koşuda yakalanan mesajlar" görünümü: kaynak süzgeci; satırlar önce beklenmeyen (sunucu sıralar). */
+function yakalananMesajlarGorunumu(y, urun, ornekAc) {
+  if (!y.kaliplar.length) {
+    return h('p', { class: 'bos-liste' }, 'Bu aralıkta koşuda yakalanan mesaj yok (diyalog, hata göstergesi, konsol, sayfa hatası, ağ 4xx/5xx).');
+  }
+  const listeAlani = h('div', {});
+  const ciz = () => {
+    const secilen = y.kaliplar.filter((k) => yakalananKaynakSuzgeci === 'tumu' || k.kaynak === yakalananKaynakSuzgeci);
+    if (!secilen.length) { listeAlani.replaceChildren(h('p', { class: 'bos-liste' }, 'Bu kaynakta mesaj yok.')); return; }
+    listeAlani.replaceChildren(sinirliListe(secilen.map((k) => {
+      const testler = h('div', { class: 'kalip-testleri', hidden: true });
+      const ac = h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-expanded': 'false', 'aria-label': `Mesajın yakalandığı testler: ${YAKALAMA_KAYNAGI[k.kaynak] || k.kaynak}` },
+        ikon('liste'), `Testler (${(k.sonuclar || []).length})`);
+      const degistir = () => {
+        const acik = testler.hidden;
+        testler.hidden = !acik;
+        ac.setAttribute('aria-expanded', String(acik));
+        if (acik && !testler.childElementCount) yerlestir(testler, yakalananTestleri(k, ornekAc));
+      };
+      ac.addEventListener('click', (o) => { o.stopPropagation(); degistir(); });
+      const gecenKalan = [k.kalanTestSayisi ? `${k.kalanTestSayisi} kalan` : null, k.gecenTestSayisi ? `${k.gecenTestSayisi} geçen` : null].filter(Boolean).join(' · ');
+      const satir = h('div', { class: `kalip-satiri yakalanan-satiri ${k.beklenen ? 'beklenen' : 'beklenmeyen'}`, role: 'listitem' },
+        h('span', { class: 'kalip-ikon', 'aria-hidden': 'true' }, ikon(k.beklenen ? 'onay' : 'uyari')),
+        h('div', { class: 'kalip-baslik' }, kaynakRozeti(k.kaynak), beklenenRozeti(k.beklenen), rozet(`${k.senaryoSayisi} senaryo`),
+          gecenKalan ? rozet(gecenKalan) : null, urun ? null : (k.urunler || []).slice(0, 3).map((u) => rozet(u, 'vurgu')),
+          h('span', { class: 'cok-soluk' }, `ilk ${gunAy(k.ilk)} · son ${kisaTarih(k.son)}`)),
+        h('div', { class: 'kalip-sayi' }, h('span', {}, String(k.sayi), h('small', {}, ' kez')), ac),
+        kalipMetni(k.kalip),
+        k.ornekMetin && k.ornekMetin !== k.kalip ? h('p', { class: 'yakalanan-ornek soluk kucuk', title: 'Son örnek (maskeli)' }, k.ornekMetin) : null,
+        testler);
+      satir.addEventListener('click', (o) => { if (!(o.target instanceof Element) || !o.target.closest('button, a, .kalip-testleri')) degistir(); });
+      return satir;
+    }), 8, 'kalip-listesi', { role: 'list', 'aria-label': 'Koşuda yakalanan mesajlar' }));
+  };
+  const kaynaklar = Object.entries(y.kaynaklar || {}).filter(([, n]) => n > 0);
+  if (yakalananKaynakSuzgeci !== 'tumu' && !kaynaklar.some(([k]) => k === yakalananKaynakSuzgeci)) yakalananKaynakSuzgeci = 'tumu';
+  const suzgec = segment([['tumu', `Tümü (${y.toplam})`], ...kaynaklar.map(([k, n]) => [k, `${YAKALAMA_KAYNAGI[k] || k} (${n})`])],
+    yakalananKaynakSuzgeci, (d) => { yakalananKaynakSuzgeci = d; ciz(); }, 'Kaynak süzgeci');
+  ciz();
+  return h('div', {},
+    h('div', { class: 'kategori-cipleri' }, h('span', { class: 'rozet hap hata' }, h('b', {}, String(y.beklenmeyen)), 'beklenmeyen'),
+      h('span', { class: 'rozet hap' }, h('b', {}, String(y.toplam - y.beklenmeyen)), 'beklenen')),
+    h('div', { class: 'yakalanan-suzgec' }, suzgec),
+    listeAlani);
+}
+
+/** Test ayrıntısı: testin koşuda yakalanan mesajları (önce beklenmeyen). */
+function yakalananMesajListesi(liste) {
+  if (!liste || !liste.length) return h('p', { class: 'soluk kucuk' }, 'Yok (bu testte diyalog, hata göstergesi, konsol / sayfa hatası ya da ağ 4xx/5xx yakalanmadı).');
+  return h('ul', { class: 'yakalanan-listesi', 'aria-label': 'Testin yakalanan mesajları' }, ...liste.map((m) => h('li', { class: m.beklenen ? 'beklenen' : 'beklenmeyen' },
+    h('span', { class: 'satir' }, kaynakRozeti(m.kaynak), beklenenRozeti(m.beklenen), m.sayi > 1 ? rozet(`${m.sayi} kez`) : null,
+      m.adim ? h('small', { class: 'soluk' }, `"${m.adim}" adımında`) : null),
+    h('span', { class: 'yakalanan-metin' }, m.metin))));
+}
+
+/** Hata kalıpları sayfanın tarih aralığı süzgecini izler (ayrı alan yok; aralık değişince sayfa yeniden yüklenir). */
 function hataKaliplariBolumu(alan, proje, urun, ornekAc) {
-  const baslangic = h('input', { type: 'datetime-local', id: 'kalip-baslangic' });
-  const bitis = h('input', { type: 'datetime-local', id: 'kalip-bitis' });
   const sonucAlani = h('div', {}, iskelet('liste'));
+  const aralik = kayitliAralik();
   const yukle = async () => {
-    const q = new URLSearchParams({ projeId: proje.id });
+    const q = araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), aralik);
     if (urun) q.set('urun', urun);
-    if (baslangic.value) q.set('baslangic', yerelDegerdenIso(baslangic.value));
-    if (bitis.value) q.set('bitis', yerelDegerdenIso(bitis.value));
     sonucAlani.replaceChildren(iskelet('liste'));
     try {
       const v = await api(`/platform/sonuclar/kaliplar?${q}`);
-      if (!v.kaliplar.length) { sonucAlani.replaceChildren(h('p', { class: 'bos-liste' }, 'Bu aralıkta başarısız sonuç yok.')); return; }
-      sonucAlani.replaceChildren(
+      // İki görünüm: "Kalan testlerin hataları" (Playwright hata mesajı) ve "Koşuda yakalanan mesajlar" (geçen testler dahil).
+      const y = v.yakalanan || { toplam: 0, beklenmeyen: 0, kaynaklar: {}, kaliplar: [] };
+      const kalanAlani = h('div', { class: 'kalip-gorunumu', hidden: kalipGorunumu !== 'kalan' });
+      const yakalananAlani = h('div', { class: 'kalip-gorunumu', hidden: kalipGorunumu !== 'yakalanan' }, yakalananMesajlarGorunumu(y, urun, ornekAc));
+      const sekmeler = segment([['kalan', `Kalan testlerin hataları (${v.toplam})`], ['yakalanan', `Koşuda yakalanan mesajlar (${y.toplam})`]], kalipGorunumu, (d) => {
+        kalipGorunumu = d;
+        kalanAlani.hidden = d !== 'kalan';
+        yakalananAlani.hidden = d !== 'yakalanan';
+      }, 'Hata kalıpları görünümü');
+      sonucAlani.replaceChildren(sekmeler, kalanAlani, yakalananAlani);
+      if (!v.kaliplar.length) { kalanAlani.replaceChildren(h('p', { class: 'bos-liste' }, 'Bu aralıkta başarısız sonuç yok.')); return; }
+      kalanAlani.replaceChildren(
         h('div', { class: 'kategori-cipleri' }, h('span', { class: 'rozet hap hata' }, h('b', {}, String(v.toplam)), 'başarısız sonuç'),
           ...Object.entries(v.kategoriler).map(([k, n]) => h('span', { class: 'rozet hap' }, kisaKategori(k), h('b', {}, String(n))))),
         kalipListesi(v.kaliplar.map((k) => {
@@ -628,14 +764,9 @@ function hataKaliplariBolumu(alan, proje, urun, ornekAc) {
       sonucAlani.replaceChildren(hataKutusu(e));
     }
   };
-  const uygula = h('button', { type: 'button', class: 'kucuk-dugme', onclick: yukle }, 'Uygula');
-  const tumu = h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { baslangic.value = ''; bitis.value = ''; yukle(); } }, ikon('takvim'), 'Tüm zamanlar');
   alan.replaceChildren(h('section', { class: 'kart', 'aria-labelledby': 'kalip-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'kalip-basligi' }, ikon('uyari'), 'Hata kalıpları'),
-      h('span', { class: 'alt' }, 'Değişken sayılar # ile tek satırda toplanır')),
-    h('div', { class: 'filtre-satiri' },
-      h('div', { class: 'alan' }, h('label', { for: baslangic.id }, 'Başlangıç'), baslangic),
-      h('div', { class: 'alan' }, h('label', { for: bitis.id }, 'Bitiş'), bitis), uygula, tumu),
+      h('span', { class: 'alt' }, `${aralikMetni(aralik)} (sayfanın tarih aralığı) · değişken sayılar # ile tek satırda toplanır · koşuda yakalanan mesajlar geçen testleri de kapsar`)),
     sonucAlani));
   yukle();
 }
@@ -784,6 +915,8 @@ async function testPaneli(alan, id, kapat) {
     s2.hataMesaji ? h('div', { class: 'bolum' }, hataOzeti(s2)) : null,
     h('div', { class: 'bolum' }, h('h4', { class: 'bolum-etiketi' }, 'Adımlar', h('span', { class: 'mono' }, adimOzeti(s2.adimlar))), adimCizelgesi(s2.adimlar)),
     h('div', { class: 'bolum' }, h('h4', { class: 'bolum-etiketi' }, 'Atlanan / doldurulamayan alanlar', h('span', { class: 'mono' }, String(s2.atlananAlanlar.length))), alanCipleri(s2.atlananAlanlar)),
+    h('div', { class: 'bolum' }, h('h4', { class: 'bolum-etiketi' }, 'Koşuda yakalanan mesajlar', h('span', { class: 'mono' }, String((s2.yakalananMesajlar || []).length))),
+      yakalananMesajListesi(s2.yakalananMesajlar)),
     h('div', { class: 'bolum' }, h('a', { class: 'dugme hayalet kucuk-dugme', href: `#/sonuclar/sonuc/${encodeURIComponent(s2.id)}` }, 'Tüm ayrıntılar', ikon('ok'))),
     dg.diyalog);
 }
@@ -824,7 +957,8 @@ async function kosuDetayi(icerik, id, proje) {
           h('span', {}, kosuNoktasi(kosu), KOSU_DURUMU[kosu.durum] || kosu.durum),
           h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} → ${kosu.bitis ? saatMetni(kosu.bitis) : '—'}`)),
           sure !== null ? h('span', {}, h('span', { class: 'mono' }, sureMetni(sure))) : null)),
-      h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: '#/sonuclar' }, ikon('geri'), 'Sonuçlar'))),
+      h('div', { class: 'eylemler' }, htmlRaporDugmesi({ tur: 'ekran', projeId: proje.id, id: kosu.id }),
+        h('a', { class: 'dugme hayalet', href: '#/sonuclar' }, ikon('geri'), 'Sonuçlar'))),
     h('div', { class: 'sonuc-kartlari mini' },
       ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Başarısız', kosu.basarisiz, 'basarisiz'),
       ozetKarti('Atlanan', kosu.atlanan, 'atlanan'), ozetKarti('Durduruldu', kosu.durduruldu, 'durduruldu'),
@@ -911,6 +1045,10 @@ async function sonucDetayi(icerik, id, proje) {
   sag.push(h('section', { class: 'kart', 'aria-labelledby': 'atlanan-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'atlanan-basligi' }, ikon('eksi'), 'Atlanan / doldurulamayan alanlar'), h('span', { class: 'alt mono' }, String(s2.atlananAlanlar.length))),
     alanCipleri(s2.atlananAlanlar)));
+  sag.push(h('section', { class: 'kart', 'aria-labelledby': 'yakalanan-basligi' },
+    h('div', { class: 'kart-basligi' }, h('h3', { id: 'yakalanan-basligi' }, ikon('uyari'), 'Koşuda yakalanan mesajlar'),
+      h('span', { class: 'alt mono' }, String((s2.yakalananMesajlar || []).length))),
+    yakalananMesajListesi(s2.yakalananMesajlar)));
 
   icerik.replaceChildren(
     h('div', { class: 'sayfa-basligi' },
@@ -925,6 +1063,9 @@ async function sonucDetayi(icerik, id, proje) {
           s2.deneme ? h('span', {}, rozet(`${s2.deneme}. yeniden deneme`, 'atlanan')) : null,
           h('span', {}, ikon('takvim'), h('span', { class: 'mono' }, `${kisaTarih(s2.baslangic)} → ${saatMetni(s2.bitis)}`)),
           null)),
-      h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: `#/sonuclar/kosu/${encodeURIComponent(s2.kosuId)}` }, ikon('geri'), 'Koşuya dön'))),
+      h('div', { class: 'eylemler' },
+        // Entegrasyonlar: yalnız kullanıcı basınca, önizleme + onayla iş takip sisteminde hata kaydı (entegrasyonlar.js).
+        s2.durum !== 'basarili' ? hataKaydiDugmesi(s2, proje) : null,
+        h('a', { class: 'dugme hayalet', href: `#/sonuclar/kosu/${encodeURIComponent(s2.kosuId)}` }, ikon('geri'), 'Koşuya dön'))),
     h('div', { class: 'detay-izgarasi' }, h('div', {}, sol), h('div', {}, sag)));
 }

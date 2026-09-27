@@ -31,6 +31,33 @@ export function temaUygula(tema) {
 }
 temaUygula(kayitliTema());
 
+// ---------------------------------------------------------------------------------------
+// Görünüm teması (renk ailesi + biçim): <html data-stil="kurumsal|canli">; "komuta" varsayılandır (özellik yok).
+// Açık / koyu seçiminden bağımsızdır. Kullanıcı kararı: Ayarlar > Arayüz > Tema; seçim 'platform.stil' anahtarında durur
+// (kilit ekranında da geçerli olsun diye tarayıcıda; gizli bilgi değildir).
+// ---------------------------------------------------------------------------------------
+export const STILLER = /** @type {const} */ ([
+  { ad: 'komuta', etiket: 'Komuta merkezi', aciklama: 'Yazılımsal: koyu ızgara, camgöbeği parıltı, cam paneller.' },
+  { ad: 'kurumsal', etiket: 'Kurumsal', aciklama: 'Sade ve ciddi: lacivert-gri, düz paneller, keskin köşeler.' },
+  { ad: 'canli', etiket: 'Canlı', aciklama: 'Renkli: mor-pembe-turuncu geçişler, yumuşak köşeler.' }
+]);
+const STIL_ANAHTARI = 'platform.stil';
+export function kayitliStil() {
+  try { const s = localStorage.getItem(STIL_ANAHTARI); return STILLER.some((x) => x.ad === s) ? s : 'komuta'; } catch { return 'komuta'; }
+}
+/** @param {string} stil */
+export function stilUygula(stil) {
+  const gecerli = STILLER.some((x) => x.ad === stil) ? stil : 'komuta';
+  if (gecerli === 'komuta') delete document.documentElement.dataset.stil;
+  else document.documentElement.dataset.stil = gecerli;
+  try { localStorage.setItem(STIL_ANAHTARI, gecerli); } catch { /* yok sayılır */ }
+  window.dispatchEvent(new CustomEvent('tema-degisti', { detail: etkinTema() }));
+}
+{
+  const s = kayitliStil();
+  if (s !== 'komuta') document.documentElement.dataset.stil = s;
+}
+
 /** Başlık çubuklarındaki tema düğmesi (güneş/ay). Seçim hatırlanır. */
 export function temaDugmesi() {
   const dugme = h('button', { type: 'button', class: 'ikon-dugme tema-dugmesi' });

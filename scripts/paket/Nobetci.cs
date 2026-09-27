@@ -1,6 +1,6 @@
 // Nöbetçi.exe — taşınabilir paketin başlatıcısı (scripts/paketle.mjs derler; Windows'un kendi .NET Framework derleyicisiyle).
-// Paketteki Node'u (runtime\node.exe) ve tarayıcıları (tarayicilar\) kullanarak Nöbetçi'yi başlatır ve arayüzü varsayılan
-// tarayıcıda açar. Bu pencere açık kaldığı sürece Nöbetçi çalışır; pencere kapanınca sunucu da kapanır. Veriler
+// Paketteki Node'u (runtime\node.exe) ve tarayıcıları (tarayicilar\) kullanarak Nöbetçi'yi başlatır; arayüz kullanıcının
+// seçimine göre (Ayarlar > Arayüz) kendi penceresinde ya da varsayılan tarayıcıda açılır. Bu pencere açık kaldığı sürece Nöbetçi çalışır; pencere kapanınca sunucu da kapanır. Veriler
 // uygulama\veri klasöründe, şifreli kasada durur. İnternete hiçbir şey göndermez; sunucu yalnızca 127.0.0.1'e bağlanır.
 using System;
 using System.Diagnostics;
@@ -25,7 +25,7 @@ internal static class Nobetci
             return 1;
         }
         Console.WriteLine("Nöbetçi başlatılıyor…");
-        Console.WriteLine("Bu pencere açık kaldığı sürece Nöbetçi çalışır. Kapatmak için pencereyi kapatın.");
+        Console.WriteLine("Bu pencere açık kaldığı sürece Nöbetçi çalışır. Nöbetçi penceresini ya da bu pencereyi kapatınca Nöbetçi kapanır.");
         Console.WriteLine();
         var bilgi = new ProcessStartInfo(node, "\"" + baslat + "\"")
         {

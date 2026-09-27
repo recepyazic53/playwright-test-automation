@@ -12,6 +12,11 @@
 //   mesaj    { mesaj: sıra | null, metin }          beklenen mesaj (aranacak metin; öğe seçildiyse onun içinde aranır)
 //   bekle    { saniye }                              süreli bekleme (1–120 sn): önceki düğmeden sonra (düğme yoksa alanlardan
 //            sonra) bekler. Bekleme konmasa da koşucu sonraki alan / beklenen mesaj görünene kadar bekler.
+//   sql      { ad, sql: SqlTanimi }                 SQL sorgusu adımı (sql/sql-adimi.mjs): kendi adımıdır; koşuda seçilen
+//            veritabanı bağlantısında sorgu çalışır, sonuç beklenenle karşılaştırılır. Bir aksiyondan (ya da ortak akıştan)
+//            sonra ya da akışın başında gelir; ardındaki beklenen mesaj / bekleme önceki ekran adımına aittir.
+//   giris    { ad, profil }                         Yeniden giriş: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle
+//            (profil: giriş profilinin adı; boşsa ortamın varsayılanı) yeniden girilir; kendi adımıdır, aksiyondan sonra gelir.
 //   bitir    {}                                     akışın sonu (zorunlu, son blok)
 //
 //   akisTaslagi(envanter)                    kayıttaki olay sırasından HAZIR taslak: her düğme basışı bir aksiyon, aradaki
@@ -29,6 +34,7 @@
 
 import { UYARI_EN_COK, VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { sabitGostergeMetni, secimKosuluCikar } from './paket-olusturucu.mjs';
+import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
 
 export const BLOK_EN_COK = 200;
 export const BEKLEME_EN_COK_SN = 120;
@@ -43,6 +49,30 @@ const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const metin = (d, n) => (typeof d === 'string' && d.trim() ? d.replace(/\s+/g, ' ').trim().slice(0, n) : '');
 /** @param {import('./paket-olusturucu.d.mts').HamAlan} a */
 const alanEtiketi = (a) => a.etiket || a.ad || a.anahtar;
+
+/** Gözlem başına en çok seçenek ve toplam gözlem (kayıt motoru da aynı sınırları uygular). */
+const GOZLEM_EN_COK = 2000;
+const GOZLEM_SECENEK_EN_COK = 300;
+
+/**
+ * Alt süreçten gelen seçenek gözlemlerini süzer (biçimsiz olanlar atılır; metinler kısaltılır).
+ * @param {unknown} ham @returns {import('./paket-olusturucu.d.mts').SecenekGozlemi[]}
+ */
+export function secenekGozlemleriniAyikla(ham) {
+  if (!Array.isArray(ham)) return [];
+  /** @type {import('./paket-olusturucu.d.mts').SecenekGozlemi[]} */
+  const sonuc = [];
+  for (const g of ham.slice(0, GOZLEM_EN_COK)) {
+    if (!nesneMi(g) || typeof g.anahtar !== 'string' || !g.anahtar || !Array.isArray(g.secenekler)) continue;
+    /** @type {Record<string, string>} */
+    const secimler = {};
+    for (const [k, v] of Object.entries(nesneMi(g.secimler) ? g.secimler : {})) if (typeof v === 'string' && k.length <= 300) secimler[k] = v.slice(0, 200);
+    const secenekler = g.secenekler.slice(0, GOZLEM_SECENEK_EN_COK).filter((x) => nesneMi(x) && typeof x.deger === 'string')
+      .map((x) => ({ deger: String(x.deger).slice(0, 200), metin: typeof x.metin === 'string' ? x.metin.slice(0, 200) : String(x.deger).slice(0, 200) }));
+    if (secenekler.length) sonuc.push({ anahtar: g.anahtar.slice(0, 300), secimler, secenekler, ...(g.kaynak === 'acilir' ? { kaynak: 'acilir' } : { kaynak: 'liste' }) });
+  }
+  return sonuc;
+}
 
 /** Alt süreçten gelen akış envanterinin biçimi geçerli mi? (içerik ayrıca süzülür) @param {unknown} e */
 export function akisEnvanteriMi(e) {
@@ -216,6 +246,8 @@ export function bloklariAyikla(ham) {
     }
     else if (b.tur === 'mesaj') bloklar.push({ tur: 'mesaj', mesaj: b.mesaj === null || b.mesaj === undefined ? null : sayi(b.mesaj), metin: metin(b.metin, METIN_EN_COK), ...(b.uyari === true ? { uyari: true } : {}), ...(b.desen === true ? { desen: true } : {}) });
     else if (b.tur === 'bitir') bloklar.push({ tur: 'bitir' });
+    else if (b.tur === 'sql') bloklar.push({ tur: 'sql', ad: metin(b.ad, AD_EN_COK), sql: nesneMi(b.sql) ? b.sql : {} });
+    else if (b.tur === 'giris') bloklar.push({ tur: 'giris', ad: metin(b.ad, AD_EN_COK), profil: metin(b.profil, 120) || null });
     else hatalar.push({ blok: i, mesaj: 'Bilinmeyen blok türü.' });
   });
   return { bloklar, hatalar };
@@ -246,6 +278,7 @@ export function akistanKayitEnvanteri(env, bloklar) {
   let kapali = false; // son adımın ilerleme düğmesi var (sonraki alan grubu yeni adım)
   let bekleyen = false; // isteğe bağlı aksiyon: sonraki alan grubu onun parçası
   let sure = 0; // düğmeden önce (alanlardan sonra) bekleme: sonraki düğmeye bağlanır, düğme yoksa adımın sonuna
+  let sqlSonrasi = false; // son blok(lar) SQL sorgusu: ardından bekleme / ara mesaj konmaz
   /** @type {Map<string, number>} */
   const kullanilan = new Map();
   /** @type {Array<{ blok: number; alan: string; kosul: { secim: string; degerler: string[] } | null }>} */
@@ -326,6 +359,38 @@ export function akistanKayitEnvanteri(env, bloklar) {
       bekleyen = false;
       return;
     }
+    if (b.tur === 'sql') {
+      const d = sqlTanimiDogrula(b.sql);
+      if (d.hatalar.length) { for (const m of d.hatalar) hata(i, m); return; }
+      if (bekleyen) { hata(i, 'SQL sorgusu isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+      if (cur && !kapali) { hata(i, 'SQL sorgusu bir aksiyondan (düğmeye basma) sonra gelmeli: önce alan grubunun ilerleme düğmesini koyun.'); return; }
+      const ad = b.ad || 'SQL sorgusu';
+      if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
+      adlar.add(ad);
+      sureyiBirak();
+      // Kendi adımıdır; önceki ekran adımı (cur) açık kalır: ardındaki son beklenen mesaj ona bağlanır.
+      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], sqlKontrolu: d.tanim });
+      sqlSonrasi = true;
+      return;
+    }
+    if (b.tur === 'giris') {
+      // Yeniden giriş: kendi adımıdır (oturum kapatılır, ortamın tarifiyle yeniden girilir); önceki adım kapanır.
+      if (bekleyen) { hata(i, 'Yeniden giriş isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+      if (cur && !kapali) { hata(i, 'Yeniden giriş bir aksiyondan (düğmeye basma) sonra gelmeli: önce alan grubunun ilerleme düğmesini koyun.'); return; }
+      const ad = b.ad || 'Yeniden giriş';
+      if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
+      adlar.add(ad);
+      sureyiBirak();
+      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], yenidenGiris: b.profil ? { profil: b.profil } : {} });
+      cur = null;
+      kapali = false;
+      bekleyen = false;
+      sqlSonrasi = false;
+      return;
+    }
+    if (b.tur === 'bekle' && sqlSonrasi) { hata(i, 'SQL sorgusundan sonra bekleme konmaz; veri geç yazılıyorsa SQL adımındaki “yeniden dene” süresini kullanın.'); return; }
+    if (b.tur === 'mesaj' && sqlSonrasi && !etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql')) { hata(i, 'Beklenen mesaj SQL sorgusundan önce gelmeli (mesaj ekran adımının sonucudur).'); return; }
+    if (b.tur !== 'mesaj') sqlSonrasi = false;
     if (b.tur === 'bekle') {
       if (!(Number.isInteger(b.saniye) && b.saniye >= 1 && b.saniye <= BEKLEME_EN_COK_SN)) { hata(i, `Bekleme süresi 1–${BEKLEME_EN_COK_SN} saniye arasında tam sayı olmalı.`); return; }
       if (!cur) { hata(i, 'Bekleme bir alan grubundan ya da aksiyondan sonra gelmeli.'); return; }
@@ -347,7 +412,7 @@ export function akistanKayitEnvanteri(env, bloklar) {
       }
       /** @type {import('./paket-olusturucu.d.mts').KayitGostergesi} */
       const g = { secici: m ? m.secici : null, metin: m ? m.metin : b.metin, ...(b.metin ? { aranan: b.metin } : {}), ...(b.desen ? { desen: true } : {}) };
-      const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj');
+      const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql');
       if (!cur) { hata(i, 'Beklenen mesajdan önce bir alan grubu ya da aksiyon olmalı.'); return; }
       if (bekleyen) { hata(i, 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).'); return; }
       if (!sonMu && !kapali) { hata(i, 'Beklenen mesaj bir aksiyondan (düğmeye basma) sonra gelmeli.'); return; }
@@ -398,7 +463,10 @@ export function akistanKayitEnvanteri(env, bloklar) {
     if (!a.acicilar.length) { delete (/** @type {Partial<typeof a>} */ (a)).acicilar; delete (/** @type {Partial<typeof a>} */ (a)).parcalar; }
   }
   return {
-    envanter: { kip: 'kayit', profil: env.profil, adimlar, basariGostergesi, engellenenler: env.engellenenler, notlar: env.notlar },
+    envanter: {
+      kip: 'kayit', profil: env.profil, adimlar, basariGostergesi, engellenenler: env.engellenenler, notlar: env.notlar,
+      secenekGozlemleri: secenekGozlemleriniAyikla(env.secenekGozlemleri)
+    },
     hatalar
   };
 }

@@ -22,13 +22,15 @@ import {
   baglamProfilleriniListele, ekranlariListele, girisProfiliGetir, ortamGetir,
   testVerisiProfiliGetir, testVerisiProfilleriniListele, testVerisiTurleriniListele
 } from './veritabani/depo.mjs';
-import { modelBaglami, senaryoAkisi } from './senaryolar/senaryo-servisi.mjs';
+import { modelBaglami, ortamdaKosuyaDahil, senaryoAkisi } from './senaryolar/senaryo-servisi.mjs';
 import { modelSenaryosuMu } from './senaryolar/model-kosusu.mjs';
+import { senaryoGirisi, senaryoGirisiniAyikla } from './senaryolar/senaryo-girisi.mjs';
 import { etkinGirisTarifi } from './giris/tarif-deposu.mjs';
 import { medyaKlasoru } from './medya.mjs';
 import { referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
+import { kosuBaglantiAyarlari, modeldekiSqlBaglantilari } from './sql/sorgu-bagdastirici.mjs';
 
 const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -102,11 +104,48 @@ async function genelKip() {
     return {
       durum: 'hazir', projeId, ortamId, yasakAdresler: ayarlardakiYasakAdresler(vt), model,
       giris: ortamGirisBilgisi(vt, projeId, ortamId),
+      // Senaryoların ("Giriş" seçimi) ve akışların ("Yeniden giriş" adımı) ADIYLA seçtiği giriş profilleri — yalnızca
+      // kullanılanlar (şifreler yalnızca bu sürecin çıktısında).
+      girisProfilleri: adliGirisProfilleri(vt, projeId, ortamId, kullanilanGirisProfilleri(model)),
       girisTarifi: t.tarif ? { tarif: t.tarif, kaynak: t.kaynak, hatalar: t.hatalar } : null
     };
   } finally {
     vt.kapat();
   }
+}
+
+/**
+ * Senaryoların giriş seçimindeki ve modellerin "yeniden giriş" adımlarındaki giriş profili adları.
+ * @param {{ senaryolar: Array<{ giris?: { profil: string | null } | null; model: Record<string, unknown> | null }> } | null} model
+ */
+function kullanilanGirisProfilleri(model) {
+  /** @type {Set<string>} */
+  const adlar = new Set();
+  for (const s of model?.senaryolar ?? []) {
+    if (s.giris && typeof s.giris.profil === 'string') adlar.add(s.giris.profil);
+    const adimlar = s.model && Array.isArray(s.model.adimlar) ? s.model.adimlar : [];
+    for (const a of adimlar) {
+      const p = a && typeof a === 'object' && a.yenidenGiris && typeof a.yenidenGiris === 'object' ? a.yenidenGiris.profil : null;
+      if (typeof p === 'string' && p) adlar.add(p);
+    }
+  }
+  return adlar;
+}
+
+/**
+ * Ortamda ADIYLA seçilebilen giriş profilleri (ortama özgü profil aynı adlı tüm-ortam profilini ezer); yalnızca istenen adlar.
+ * @param {import('./veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ortamId @param {Set<string>} adlar
+ */
+function adliGirisProfilleri(vt, projeId, ortamId, adlar) {
+  /** @type {Record<string, ReturnType<typeof girisBilgisi>>} */
+  const sonuc = {};
+  if (!adlar.size) return sonuc;
+  const satirlar = vt.tumu('SELECT id, ortam_id FROM giris_profilleri WHERE proje_id = ? AND (ortam_id = ? OR ortam_id IS NULL) ORDER BY (ortam_id IS NOT NULL), rowid', [projeId, ortamId]);
+  for (const s of satirlar) {
+    const p = girisProfiliGetir(vt, String(s.id), { coz: true });
+    if (p && adlar.has(p.ad)) sonuc[p.ad] = girisBilgisi(p);
+  }
+  return sonuc;
 }
 
 /**
@@ -117,7 +156,11 @@ async function genelKip() {
 function ortamGirisBilgisi(vt, projeId, ortamId) {
   const satir = vt.tek('SELECT id FROM giris_profilleri WHERE proje_id = ? AND (ortam_id = ? OR ortam_id IS NULL) ORDER BY (ortam_id IS NULL), rowid LIMIT 1', [projeId, ortamId]);
   const giris = satir ? girisProfiliGetir(vt, String(satir.id), { coz: true }) : undefined;
-  if (!giris) return null;
+  return giris ? girisBilgisi(giris) : null;
+}
+
+/** @param {import('./veritabani/depo.d.mts').GirisProfili} giris */
+function girisBilgisi(giris) {
   const sms = /** @type {Record<string, unknown>} */ (giris.smsAyari ?? {});
   return {
     profilKimligi: giris.id,
@@ -125,7 +168,10 @@ function ortamGirisBilgisi(vt, projeId, ortamId) {
     parola: giris.parola,
     totpGizli: giris.ikiAsamaliTur === 'totp' ? giris.totpGizli : null,
     sabitKod: giris.ikiAsamaliTur === 'sms' && sms.yontem === 'sabit' && typeof sms.kod === 'string' ? sms.kod : null,
-    smsKipi: giris.ikiAsamaliTur === 'sms' ? (sms.yontem === 'elle' ? 'elle' : 'sabit') : null
+    smsKipi: giris.ikiAsamaliTur === 'sms' ? (sms.yontem === 'elle' ? 'elle' : 'sabit') : null,
+    // Giriş adımlarının "{ad}" yer tutucuları (gizli olanların adları hata metinlerinde maskelensin diye ayrıca verilir).
+    ekAlanlar: Object.fromEntries(giris.ekAlanlar.filter((e) => e.deger !== null).map((e) => [e.ad, e.deger])),
+    gizliEkAlanlar: giris.ekAlanlar.filter((e) => e.gizli).map((e) => e.ad)
   };
 }
 
@@ -154,12 +200,15 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     const ekran = ekranlar.get(ekranId);
     const kurallar = icerik.alanKurallari && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli) ? icerik.alanKurallari.mutlakaGorunmeli.filter((x) => typeof x === 'string') : [];
     senaryolar.push({
-      id: String(s.id), baslik: String(s.baslik), kosuyaDahil: s.kosuya_dahil === 1,
+      // Koşuda ORTAM BAŞINA (senaryo-servisi.mjs > ortamdaKosuyaDahil).
+      id: String(s.id), baslik: String(s.baslik), kosuyaDahil: ortamdaKosuyaDahil(icerik, s.kosuya_dahil === 1, ortamId),
       // Devre dışı ekranın senaryosu koşuya girmez (model spec'i süzer; Nöbetçi'nin tam listesi yine görür).
       ekranEtkin: ekran ? ekran.durum === 'etkin' : false,
       ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: ekranId, anahtar: '', ad: '' },
       model: mb ? mb.model : null, modelSurumu: mb ? mb.surum : null, altModeller: mb ? mb.altModeller : {},
-      veri: 'veri' in buOrtam ? zarflariCoz(vt, buOrtam.veri) : {}, mutlakaGorunmeli: kurallar
+      veri: 'veri' in buOrtam ? zarflariCoz(vt, buOrtam.veri) : {}, mutlakaGorunmeli: kurallar,
+      // Senaryonun giriş seçimi (senaryo-girisi.mjs; null = ortamın girişiyle, bugünkü davranış).
+      giris: senaryoGirisi(icerik)
     });
   }
   // Model senaryosu "Dene": taslak, geçici dosyadan (veritabanında yok) tek deneme senaryosu olarak eklenir.
@@ -172,7 +221,8 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
       senaryolar.push({
         id: deneme.id, baslik: deneme.baslik, kosuyaDahil: true, ekranEtkin: true,
         ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: deneme.ekranId, anahtar: '', ad: '' },
-        model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: deneme.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true
+        model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: deneme.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true,
+        giris: deneme.giris
       });
     }
   }
@@ -201,7 +251,12 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
   // Canlı ortam (Ayarlar > ortam "canlı"): "yalnızca test ortamı" ortak akış adımları atlanır.
   const ayarlar = ortam.ayarlar && typeof ortam.ayarlar === 'object' ? /** @type {Record<string, unknown>} */ (ortam.ayarlar) : {};
   const canli = ayarlar.canli === true;
-  return { ortam: 'genel', ortamId, tabanUrl: ortam.tabanUrl, canli, senaryolar, baglamProfilleri, kimlikProfilleri: kimlikProfilleriniCoz(vt, projeId, ortamId, havuzlar) };
+  // SQL adımlarının veritabanı bağlantıları (Ayarlar > Entegrasyonlar): yalnız modellerde kullanılanlar; parola çözülmüş, giriş
+  // bilgisi gibi yalnız bu borudan koşu belleğine gider (loglara / rapora yazılmaz). Kullanılamayan bağlantı { hata }.
+  const sqlIdleri = new Set();
+  for (const mb of modeller.values()) if (mb) for (const id of modeldekiSqlBaglantilari([mb.model, mb.altModeller])) sqlIdleri.add(id);
+  const sqlBaglantilari = sqlIdleri.size ? kosuBaglantiAyarlari(vt, projeId, ortamId, sqlIdleri) : {};
+  return { ortam: 'genel', ortamId, tabanUrl: ortam.tabanUrl, canli, senaryolar, baglamProfilleri, kimlikProfilleri: kimlikProfilleriniCoz(vt, projeId, ortamId, havuzlar), sqlBaglantilari };
 }
 
 /**
@@ -217,7 +272,8 @@ function modelDenemeSenaryosu(ortamId) {
     if (typeof d.ekranId !== 'string' || typeof d.baslik !== 'string' || !d.veri || typeof d.veri !== 'object') return null;
     return {
       id: d.id, ekranId: d.ekranId, akisId: typeof d.akisId === 'string' ? d.akisId : null, baslik: d.baslik, veri: d.veri,
-      mutlakaGorunmeli: Array.isArray(d.mutlakaGorunmeli) ? d.mutlakaGorunmeli.filter((/** @type {unknown} */ x) => typeof x === 'string') : []
+      mutlakaGorunmeli: Array.isArray(d.mutlakaGorunmeli) ? d.mutlakaGorunmeli.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
+      giris: senaryoGirisiniAyikla(d.giris).giris
     };
   } catch {
     return null;

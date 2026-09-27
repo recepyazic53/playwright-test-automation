@@ -20,6 +20,14 @@
 //   zamanAsimiSn         giriş sonrası başarı/hata göstergesini bekleme süresi (varsayılan 45)
 //   baglamDegistirme     null ya da { baglamTuru, adimlar: [...] } — giriş SONRASI bağlam (rol/şube…)
 //                        seçimi; adımlardaki "{alan}" yer tutucuları seçilen bağlam profilinin alanlarıyla dolar.
+//   girisAdimlari        İSTEĞE BAĞLI sıralı giriş formu adımları. Özel adımlar: kullaniciAdi (kullaniciAlani'na
+//                        profildeki kullanıcı adı), parola (parolaAlani'na parola), gonder (gonderDugmesi'ne tıkla);
+//                        bunların ÖNCESİNE, ARASINA ve SONRASINA bağlam adımlarıyla aynı genel adımlar (doldur, seç,
+//                        tıkla, bekle…) konabilir (ör. ek kod alanı, seçim listesi, "Devam" ile iki sayfalı giriş, çerez
+//                        onayı). Genel adımlardaki "{alan}" yer tutucuları GİRİŞ PROFİLİNİN EK ALANLARIYLA dolar (gizli
+//                        işaretli ek alan kasada şifreli durur, loga/hataya yazılmaz). Her özel adım tam bir kez olur;
+//                        kullaniciAdi ve parola gonder'den önce gelir. ALAN YOKSA (eski tarifler) adımlar
+//                        [kullaniciAdi, parola, gonder] sayılır (girisAdimlariniCoz) — kayıtlı tarif yeniden yazılmaz.
 // Bağlam adımları (islem): git {adres} · adresBekle {desen} · kosulBekle {ifade} · tikla {hedef, yanitBekle?,
 //   adresBekle?} · doldur {hedef, deger} · sec {hedef, deger} · gorunurBekle {hedef} · degerBekle {hedef, deger}
 //   · sayiBekle {hedef, sayi} · metinBekle {hedef, metin}
@@ -38,11 +46,19 @@ export const HATA_GOSTERGE_TURLERI = Object.freeze(['metin', 'eleman']);
 export const ADIM_ISLEMLERI = Object.freeze([
   'git', 'adresBekle', 'kosulBekle', 'tikla', 'doldur', 'sec', 'gorunurBekle', 'degerBekle', 'sayiBekle', 'metinBekle'
 ]);
+/** Giriş adımlarına özel işlemler (tarifin kullaniciAlani / parolaAlani / gonderDugmesi seçicilerini kullanır). */
+export const OZEL_GIRIS_ISLEMLERI = Object.freeze(['kullaniciAdi', 'parola', 'gonder']);
+/** Giriş adımlarında kullanılabilen tüm işlemler. */
+export const GIRIS_ADIM_ISLEMLERI = Object.freeze([...OZEL_GIRIS_ISLEMLERI, ...ADIM_ISLEMLERI]);
+/** Eski (girisAdimlari olmayan) tariflerin denk sayıldığı sıra. */
+export const VARSAYILAN_GIRIS_ADIMLARI = Object.freeze([
+  Object.freeze({ islem: 'kullaniciAdi' }), Object.freeze({ islem: 'parola' }), Object.freeze({ islem: 'gonder' })
+]);
 /** Adım işlemlerinin arayüzdeki adları. */
 export const ADIM_ETIKETLERI = Object.freeze({
   git: 'Sayfaya git', adresBekle: 'Adresi bekle', kosulBekle: 'Sayfa koşulunu bekle', tikla: 'Tıkla', doldur: 'Doldur',
   sec: 'Seçenek seç', gorunurBekle: 'Görünmesini bekle', degerBekle: 'Değerini doğrula', sayiBekle: 'Sayısını doğrula',
-  metinBekle: 'Metni doğrula'
+  metinBekle: 'Metni doğrula', kullaniciAdi: 'Kullanıcı adını yaz', parola: 'Parolayı yaz', gonder: 'Giriş düğmesine bas'
 });
 export const VARSAYILAN_ZAMAN_ASIMI_SN = 45;
 export const VARSAYILAN_ELLE_BEKLEME_SN = 180;
@@ -181,6 +197,17 @@ export function girisTarifiniDogrula(ham) {
     }
   }
 
+  // Giriş adımları (isteğe bağlı; yoksa varsayılan sıra — normalleştirilmiş tarife EKLENMEZ).
+  let girisAdimlari = null;
+  if (ham.girisAdimlari !== undefined && ham.girisAdimlari !== null) {
+    if (!Array.isArray(ham.girisAdimlari)) hatalar.push('Giriş adımları bir liste olmalıdır.');
+    else {
+      if (ham.girisAdimlari.length > EN_FAZLA_ADIM) hatalar.push(`En fazla ${EN_FAZLA_ADIM} giriş adımı olabilir.`);
+      girisAdimlari = ham.girisAdimlari.slice(0, EN_FAZLA_ADIM).map((a, i) => girisAdiminiDogrula(a, i + 1, hatalar));
+      girisAdimSirasiniDenetle(girisAdimlari, hatalar);
+    }
+  }
+
   const tarif = {
     surum: TARIF_SURUMU,
     girisAdresi,
@@ -192,9 +219,62 @@ export function girisTarifiniDogrula(ham) {
     hataGostergeleri: hataListesi(ham.hataGostergeleri, 'Hata göstergeleri'),
     ikinciAdim,
     zamanAsimiSn: sure(ham.zamanAsimiSn, 'Giriş bekleme süresi (sn)', VARSAYILAN_ZAMAN_ASIMI_SN, 5, 600),
-    baglamDegistirme
+    baglamDegistirme,
+    ...(girisAdimlari ? { girisAdimlari } : {})
   };
   return { gecerli: hatalar.length === 0, tarif: /** @type {any} */ (tarif), hatalar };
+}
+
+/**
+ * Tek giriş adımı: özel adım (kullaniciAdi / parola / gonder; yalnızca açıklama ve bekleme süresi alır) ya da genel adım.
+ * @param {unknown} a @param {number} sira @param {string[]} hatalar
+ * @returns {import('./tarif.d.mts').GirisAdimi}
+ */
+function girisAdiminiDogrula(a, sira, hatalar) {
+  if (nesneMi(a) && typeof a.islem === 'string' && OZEL_GIRIS_ISLEMLERI.includes(a.islem)) {
+    /** @type {Record<string, unknown>} */
+    const sonuc = { islem: a.islem };
+    if (typeof a.aciklama === 'string' && a.aciklama.trim()) sonuc.aciklama = a.aciklama.trim().slice(0, 200);
+    if (a.zamanAsimiSn !== undefined && a.zamanAsimiSn !== null && a.zamanAsimiSn !== '') {
+      const n = Number(a.zamanAsimiSn);
+      if (!Number.isInteger(n) || n < 1 || n > 600) hatalar.push(`Giriş adımı ${sira}: bekleme süresi 1–600 sn olmalıdır.`);
+      else sonuc.zamanAsimiSn = n;
+    }
+    return /** @type {any} */ (sonuc);
+  }
+  const once = hatalar.length;
+  const adim = adimiDogrula(a, sira, hatalar);
+  // Hata metinleri "Adım n" der; giriş adımında "Giriş adımı n" olsun (bağlam adımlarıyla karışmasın).
+  for (let i = once; i < hatalar.length; i++) hatalar[i] = hatalar[i].replace(/^Adım (\d+)/, 'Giriş adımı $1');
+  return adim;
+}
+
+/** Özel adımlar tam bir kez; kullanıcı adı ve parola gönderden önce. @param {import('./tarif.d.mts').GirisAdimi[]} adimlar @param {string[]} hatalar */
+function girisAdimSirasiniDenetle(adimlar, hatalar) {
+  const sira = (/** @type {string} */ islem) => adimlar.findIndex((a) => a.islem === islem);
+  for (const islem of OZEL_GIRIS_ISLEMLERI) {
+    const adet = adimlar.filter((a) => a.islem === islem).length;
+    if (adet !== 1) hatalar.push(`Giriş adımlarında "${ADIM_ETIKETLERI[/** @type {'kullaniciAdi'} */ (islem)]}" adımı tam bir kez olmalıdır (şu an ${adet}).`);
+  }
+  const g = sira('gonder');
+  if (g >= 0) {
+    if (sira('kullaniciAdi') > g) hatalar.push('Giriş adımlarında kullanıcı adı, giriş düğmesinden önce yazılmalıdır.');
+    if (sira('parola') > g) hatalar.push('Giriş adımlarında parola, giriş düğmesinden önce yazılmalıdır.');
+  }
+}
+
+/**
+ * Tarifin etkin giriş adımları: tarifte girisAdimlari yoksa (eski tarifler) varsayılan sıra [kullaniciAdi, parola, gonder].
+ * Tarifi DEĞİŞTİRMEZ. @param {import('./tarif.d.mts').GirisTarifi} tarif @returns {import('./tarif.d.mts').GirisAdimi[]}
+ */
+export function girisAdimlariniCoz(tarif) {
+  return tarif.girisAdimlari && tarif.girisAdimlari.length ? tarif.girisAdimlari : /** @type {any} */ (VARSAYILAN_GIRIS_ADIMLARI);
+}
+
+/** Giriş adımları varsayılan sırayla (açıklamasız, süresiz) aynı mı? (Aynıysa tarife yazılmasına gerek yok.) @param {unknown} adimlar */
+export function varsayilanGirisAdimlariMi(adimlar) {
+  return Array.isArray(adimlar) && adimlar.length === 3
+    && adimlar.every((a, i) => nesneMi(a) && Object.keys(a).length === 1 && a.islem === VARSAYILAN_GIRIS_ADIMLARI[i].islem);
 }
 
 /**
@@ -288,9 +368,10 @@ export function girisTarifiOlmali(ham) {
   return tarif;
 }
 
-/** Adımın kısa, gizli değer İÇERMEYEN açıklaması (hata mesajları için; yer tutucular doldurulmamış hâliyle). @param {import('./tarif.d.mts').BaglamAdimi} a @param {number} sira */
+/** Adımın kısa, gizli değer İÇERMEYEN açıklaması (hata mesajları için; yer tutucular doldurulmamış hâliyle). @param {import('./tarif.d.mts').GirisAdimi} a @param {number} sira */
 export function adimOzeti(a, sira) {
   if (a.aciklama) return `Adım ${sira} (${a.aciklama})`;
+  if (a.islem === 'kullaniciAdi' || a.islem === 'parola' || a.islem === 'gonder') return `Adım ${sira} (${ADIM_ETIKETLERI[a.islem]})`;
   const h = 'hedef' in a && a.hedef ? ('rol' in a.hedef ? `${a.hedef.rol} "${a.hedef.ad}"` : a.hedef.secici) : '';
   const ek = a.islem === 'git' ? a.adres : a.islem === 'adresBekle' ? a.desen : a.islem === 'kosulBekle' ? a.ifade : h;
   return `Adım ${sira} (${ADIM_ETIKETLERI[a.islem]}: ${ek})`;
@@ -298,9 +379,19 @@ export function adimOzeti(a, sira) {
 
 /** Tarifin bağlam adımlarının kullandığı bağlam profili alan adları. @param {import('./tarif.d.mts').GirisTarifi} tarif */
 export function baglamAlanlari(tarif) {
+  return adimAlanlari(tarif.baglamDegistirme?.adimlar ?? []);
+}
+
+/** Tarifin giriş adımlarının kullandığı GİRİŞ PROFİLİ ek alan adları. @param {import('./tarif.d.mts').GirisTarifi} tarif */
+export function girisAlanlari(tarif) {
+  return adimAlanlari(tarif.girisAdimlari ?? []);
+}
+
+/** Adımlardaki yer tutucu adları (sırayla, tekrarsız). @param {ReadonlyArray<import('./tarif.d.mts').GirisAdimi>} liste */
+function adimAlanlari(liste) {
   /** @type {string[]} */
   const adlar = [];
-  for (const a of tarif.baglamDegistirme?.adimlar ?? []) {
+  for (const a of liste) {
     const metinler = [
       'adres' in a ? a.adres : '', 'desen' in a ? a.desen : '', 'deger' in a ? a.deger : '', 'metin' in a ? a.metin : '',
       'adresBekle' in a && a.adresBekle ? a.adresBekle : '', 'yanitBekle' in a && a.yanitBekle ? a.yanitBekle.yol : '',
@@ -326,6 +417,7 @@ export const GIRIS_HATA_KODLARI = Object.freeze({
   ALAN_BULUNAMADI: 'Giriş sayfasında alan bulunamadı',
   ZAMAN_ASIMI: 'Giriş zaman aşımına uğradı',
   BAGLAM_ADIMI: 'Bağlam değiştirme adımı başarısız',
+  GIRIS_ADIMI: 'Giriş adımı başarısız',
   TARIF_GECERSIZ: 'Giriş tarifi geçersiz'
 });
 

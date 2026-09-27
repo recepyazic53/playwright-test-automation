@@ -3,6 +3,12 @@
 export type Kirilganlik = 'dusuk' | 'orta' | 'yuksek';
 export type HamSecenek = { deger: string; metin: string };
 export type HamRadyo = { deger: string; metin: string | null; secici: string | null };
+/**
+ * Bir seçim alanının bir anda gözlenen seçenekleri (yalnız seçenek etiketi / değeri; kullanıcının yazdığı metin değil) ve o
+ * andaki DİĞER seçim alanlarının seçili değerleri. kaynak: 'liste' (select / radyo okuması) | 'acilir' (tıklanınca açılan
+ * listbox / combobox öğeleri). Test verisi tablolarına (bağımlı listelerde kombinasyon satırları) çevrilir.
+ */
+export type SecenekGozlemi = { anahtar: string; secimler: Record<string, string>; secenekler: HamSecenek[]; kaynak?: 'liste' | 'acilir' };
 
 /** Sayfadaki GÖRÜNÜR bir form alanının yapısı (değer İÇERMEZ). */
 export type HamAlan = {
@@ -44,6 +50,8 @@ export type KesifDegeri = {
   /** Seçim sayfayı başka adrese götürdüyse gidilen yol. */
   gezinme: string | null;
   hata?: string | null;
+  /** Bu seçenekte seçenekleri DEĞİŞEN (bağımlı) diğer seçim alanları: anahtar → yeni seçenekler. */
+  secenekler?: Record<string, HamSecenek[]>;
 };
 export type Kesif = { secim: string; ilkDeger: string | null; degerler: KesifDegeri[]; geriAlindi: boolean; atlandi?: string | null };
 
@@ -107,6 +115,10 @@ export type KayitAdimi = {
   zamanAsimiSn?: number;
   /** Ortak akış adımı (akış tasarımında "+ > Ortak akış"): alanı yoktur; istegeBagli ise senaryoda "“ad” dahil" ile seçilir. */
   ortakAkis?: { dosya: string; istegeBagli: boolean };
+  /** SQL sorgusu adımı (akış tasarımında "+ > SQL sorgusu"): alanı yoktur; modelde adımın sqlKontrolu olur. */
+  sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi;
+  /** Yeniden giriş adımı (akış tasarımında "+ > Yeniden giriş"): alanı yoktur; modelde adımın yenidenGiris'i olur. */
+  yenidenGiris?: { profil?: string };
 };
 /** "Akışı kaydet" sonucu (ekran görüntüsü YOKTUR: kullanıcının girdiği bilgileri içerirdi). */
 export type KayitEnvanteri = {
@@ -116,6 +128,8 @@ export type KayitEnvanteri = {
   basariGostergesi: KayitGostergesi | null;
   engellenenler: EngellenenIstek[];
   notlar: string[];
+  /** Kayıtta gözlenen seçim listeleri (test verisi tablolarına çevrilir). */
+  secenekGozlemleri?: SecenekGozlemi[];
 };
 
 export type PaketMetasi = {

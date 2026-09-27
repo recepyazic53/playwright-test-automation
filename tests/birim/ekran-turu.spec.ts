@@ -132,6 +132,8 @@ const EKRANLAR: EkranTanimi[] = [
   { ad: 'senaryo-duzenle', adres: () => `#/senaryolar/duzenle/${encodeURIComponent(senaryoId)}` },
   { ad: 'servisler', adres: () => '#/servisler' },
   { ad: 'servis-ekle', adres: () => '#/servisler/yeni' },
+  { ad: 'servis-sonuclari', adres: () => '#/servisler/sonuclar' },
+  { ad: 'sonuclar-servisler', adres: () => '#/sonuclar/servisler' },
   { ad: 'ekranlar', adres: () => '#/ekranlar' },
   { ad: 'ekran-ekle', adres: () => '#/ekranlar/yeni' },
   { ad: 'ekran', adres: () => `#/ekranlar/e/${encodeURIComponent(ekranId)}` },
@@ -140,10 +142,10 @@ const EKRANLAR: EkranTanimi[] = [
   { ad: 'ayarlar-proje', adres: () => '#/ayarlar/proje' },
   { ad: 'ayarlar-giris', adres: () => '#/ayarlar/giris' },
   { ad: 'ayarlar-test-verisi', adres: () => '#/ayarlar/test-verisi' },
-  { ad: 'ayarlar-dosyalar', adres: () => '#/ayarlar/dosyalar' },
   { ad: 'ayarlar-kosu', adres: () => '#/ayarlar/kosu' },
   { ad: 'ayarlar-yedekleme', adres: () => '#/ayarlar/yedekleme' },
   { ad: 'ayarlar-guvenlik', adres: () => '#/ayarlar/guvenlik' },
+  { ad: 'ayarlar-entegrasyonlar', adres: () => '#/ayarlar/entegrasyonlar' },
   { ad: 'ayarlar-arayuz', adres: () => '#/ayarlar/arayuz' }
 ];
 
@@ -163,7 +165,7 @@ async function ekraniAc(page: Page, adres: string): Promise<void> {
   await expect(page.locator('main h1, main h2').first()).toBeAttached();
 }
 
-for (const [genislik, yukseklik, cihaz] of [[1440, 960, 'masaustu'], [390, 844, 'telefon']] as const) {
+for (const [genislik, yukseklik, cihaz] of [[1440, 960, 'masaustu'], [1100, 800, 'orta'], [390, 844, 'telefon']] as const) {
   test(`tüm ekranlar (${cihaz}): hatasız açılır, erişilebilir adlar, yinelenen kimlik yok, taşma yok`, async () => {
     test.setTimeout(300_000);
     const { baglam, page, hatalar } = await baglamAc(genislik, yukseklik, 'dark');
@@ -175,7 +177,7 @@ for (const [genislik, yukseklik, cihaz] of [[1440, 960, 'masaustu'], [390, 844, 
       const d = await denetle(page);
       for (const a of d.adsiz) sorunlar.push(`${cihaz}/${e.ad}: adı olmayan öğe ${a}`);
       for (const id of d.yinelenenId) sorunlar.push(`${cihaz}/${e.ad}: yinelenen id "${id}"`);
-      if (cihaz === 'telefon' && d.tasma > 2) sorunlar.push(`${cihaz}/${e.ad}: yatay taşma ${d.tasma}px — ${d.tasanlar.join(', ')}`);
+      if (d.tasma > 2) sorunlar.push(`${cihaz}/${e.ad}: yatay taşma ${d.tasma}px — ${d.tasanlar.join(', ')}`);
       // Ekranın rehberi "?" ile açılır ve kapanır.
       await page.getByRole('button', { name: 'Bu ekranın rehberini aç' }).click();
       const kart = page.getByRole('dialog').filter({ has: page.locator('.rehber-sayac') });

@@ -19,6 +19,8 @@
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
+import { sqlAdimiFormu, sqlBaglantilariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
+import { girisAyrintisi } from './senaryo-diyagrami.js';
 
 const TURLER = {
   alanlar: { etiket: 'Alan grubu', ikonAd: 'liste' },
@@ -26,6 +28,8 @@ const TURLER = {
   mesaj: { etiket: 'Beklenen mesaj', ikonAd: 'hedef' },
   bekle: { etiket: 'Bekleme süresi', ikonAd: 'saat' },
   ortak: { etiket: 'Ortak akış', ikonAd: 'pusula' },
+  sql: { etiket: 'SQL sorgusu', ikonAd: 'veri' },
+  giris: { etiket: 'Yeniden giriş', ikonAd: 'kilit' },
   bitir: { etiket: 'Bitir', ikonAd: 'onay' }
 };
 const SURUKLEME_TURU = 'application/x-nobetci-alan';
@@ -56,6 +60,13 @@ export async function akisTasarimi(icerik, s) {
   const palet = veri.palet;
   /** Projenin ortak akışları ("+ > Ortak akış"; ör. ödeme): [{ dosya, ad, adimlar, yalnizTest }]. */
   const ortakAkislar = Array.isArray(veri.ortakAkislar) ? veri.ortakAkislar : [];
+  /** SQL sorgusu adımlarının seçebileceği veritabanı bağlantıları (Ayarlar > Entegrasyonlar). */
+  const sqlBaglantilari = await sqlBaglantilariniAl(s.proje.id);
+  /** Ekran girişsiz açılıyor mu (akışın başı "Girişsiz"; "Yeniden giriş" sunulmaz). */
+  const girissiz = veri.girissiz === true;
+  /** "Yeniden giriş" bloğunun seçebileceği giriş profili ADLARI (Ayarlar > Giriş profilleri; değer yok). */
+  const girisProfilAdlari = girissiz ? [] : await api(`/platform/giris-profilleri?projeId=${encodeURIComponent(s.proje.id)}`)
+    .then((v) => [...new Set((v.profiller || []).map((p) => p.ad))]).catch(() => []);
   /** @type {Array<Record<string, any>>} */
   let bloklar = veri.bloklar.map((b) => ({ ...b, ...(b.tur === 'alanlar' ? { alanlar: [...b.alanlar], zorunlu: [...(b.zorunlu || [])], kosullar: { ...(b.kosullar || {}) } } : {}) }));
   /** Koşulu düzenlenen alan: { blok, alan } */
@@ -198,6 +209,8 @@ export async function akisTasarimi(icerik, s) {
         ortakAkislar.length ? h('button', {
           type: 'button', onclick: () => blokEkle(konum, { tur: 'ortak', dosya: ortakAkislar[0].dosya, ad: ortakAkislar[0].ad, istegeBagli: false })
         }, ikon('pusula'), 'Ortak akış') : null,
+        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlBaglantilari) }) }, ikon('veri'), 'SQL sorgusu'),
+        girissiz ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'giris', ad: '', profil: null }) }, ikon('kilit'), 'Yeniden giriş'),
         bitirVar ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'bitir' }) }, ikon('onay'), 'Bitir')) : null);
   }
 
@@ -413,6 +426,32 @@ export async function akisTasarimi(icerik, s) {
         h('p', { class: 'soluk kucuk' }, `Adımları ortak akışın kendi yerinde tanımlıdır; koşuda buraya açılır (hep son sürümü).${o && o.yalnizTest ? ' Yalnızca test ortamında koşar; canlı ortamda atlanır.' : ''}`)
       ];
     }
+    if (b.tur === 'giris') {
+      // Yeniden giriş: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle (seçilen profille) yeniden girilir.
+      const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Onaycı olarak gir', 'aria-label': 'Yeniden giriş adımının adı' });
+      ad.addEventListener('input', () => { b.ad = ad.value; sakla(); });
+      ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
+      const profil = h('select', { 'aria-label': 'Giriş profili' }, h('option', { value: '' }, 'Ortamın varsayılan profili'),
+        [...new Set([...girisProfilAdlari, ...(b.profil ? [b.profil] : [])])].map((p) => h('option', { value: p, selected: p === b.profil }, girisProfilAdlari.includes(p) ? p : `${p} (tanımlı değil)`)));
+      profil.addEventListener('change', () => { b.profil = profil.value || null; degisti(); });
+      return [
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Giriş profili'), profil),
+        h('p', { class: 'soluk kucuk' }, 'Oturum kapatılır ve ortamın giriş tarifiyle yeniden girilir (ör. başka bir kullanıcıyla onay); bağlam yeniden seçilir, akış aynı sayfadan sürer. Bir aksiyondan sonra gelir.'),
+        girisAyrintisi({ projeId: s.proje.id })
+      ];
+    }
+    if (b.tur === 'sql') {
+      // SQL sorgusu: adıma gelindiğinde veritabanında sorgu çalışır; sonuç beklenene uymazsa adım kalır.
+      const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Kayıt veritabanına yazıldı', 'aria-label': 'SQL adımının adı' });
+      ad.addEventListener('input', () => { b.ad = ad.value; sakla(); });
+      ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
+      return [
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        sqlAdimiFormu(b.sql, { baglantilar: sqlBaglantilari, degisti: sakla, yerTutucuOrnegi: '${alanAnahtari}' }),
+        h('p', { class: 'soluk kucuk' }, 'SQL’de senaryonun değerleri ${alanAnahtari}, önceki SQL adımlarında okunan değerler ${akis:Ad} ile yazılır. Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar.')
+      ];
+    }
     return [h('p', { class: 'soluk kucuk' }, 'Akış burada biter; son beklenen mesaj (art arda birden çoksa herhangi biri) başarı sayılır.')];
   }
 
@@ -428,6 +467,8 @@ export async function akisTasarimi(icerik, s) {
       h('h4', {}, tur.etiket),
       b.tur === 'aksiyon' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
       b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu') : null,
+      b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
+      b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
       b.tur === 'ortak' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.yalnizTest ? rozet('yalnızca test', 'uyari') : null,
       b.tur === 'mesaj' && b.uyari ? rozet('uyarı', 'uyari') : null,
@@ -511,8 +552,9 @@ export async function akisTasarimi(icerik, s) {
 
   function ciz() {
     const ogeler = [h('li', { class: 'diyagram-dugumu uc baslangic' },
-      h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon('oynat')), h('h4', {}, 'Başlangıç')),
-      h('p', { class: 'dugum-aciklamasi' }, 'Ekran açılır (giriş ve bağlam, ortamın ayarlarından).'))];
+      h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(girissiz ? 'oynat' : 'kilit')), h('h4', {}, girissiz ? 'Girişsiz' : 'Giriş (ortam tarifi)')),
+      h('p', { class: 'dugum-aciklamasi' }, girissiz ? 'Ekran giriş yapılmadan açılır.' : 'Önce ortamın giriş tarifiyle giriş yapılır (bağlam, senaryonun bağlam profiliyle), sonra ekran açılır. Senaryo “Girişsiz” ya da “Temiz oturum” seçebilir.'),
+      girissiz ? null : girisAyrintisi({ projeId: s.proje.id }))];
     bloklar.forEach((b, i) => { ogeler.push(ekleNoktasi(i), blokCiz(b, i)); });
     if (!bloklar.length || bloklar[bloklar.length - 1].tur !== 'bitir') ogeler.push(ekleNoktasi(bloklar.length));
     yerlestir(akis, ...ogeler);

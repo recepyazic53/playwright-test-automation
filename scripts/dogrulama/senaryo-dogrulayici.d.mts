@@ -24,6 +24,9 @@ export interface DogrulamaAlani {
   yapilandirma?: string;
   eslesme?: {
     senaryo?: string | readonly string[];
+    /** Alt model alanının kayıt içindeki adı. */
+    kayitAlani?: string;
+    /** Eski adı (hâlâ okunur): kayitAlani. */
     kart?: string;
     kimlikAlani?: string | Readonly<Record<string, string>>;
     profilHavuzu?: string | Readonly<Record<string, string>>;
@@ -44,7 +47,8 @@ export interface DogrulamaModeli {
   kosullar?: Readonly<Record<string, {
     ifade: DogrulamaKosulIfadesi;
     aciklama?: string;
-    bilinenDurumlar?: ReadonlyArray<{ acentePartaji?: string; gorunur: boolean | null }>;
+    /** Bağlam profili bazında bilinen görünürlük; profilKodu bağlam profilinin kod'uyla eşleşir (eski adı acentePartaji hâlâ okunur). */
+    bilinenDurumlar?: ReadonlyArray<{ profil?: string; profilKodu?: string; acentePartaji?: string; gorunur: boolean | null }>;
   }>>;
   adimlar: ReadonlyArray<{
     gorunurluk?: DogrulamaGorunurlugu | null;
@@ -80,17 +84,21 @@ export interface NormallesmisKart {
   taksit: { deger: string; metin: string };
 }
 
-export interface OrtakDogrulamaBaglami {
-  kimlikProfilleri?: { ozel?: Readonly<Record<string, unknown>>; tuzel?: Readonly<Record<string, unknown>> };
-  acenteProfilleri?: Readonly<Record<string, { acentePartaji?: string }>>;
-  varsayilanKrediKarti?: DogrulamaKarti | null;
+/** Profil kontrolleri için bağlam (verilmeyen parçanın kontrolü atlanır). */
+export interface ProfilDogrulamaBaglami {
+  /** Profil havuzu adı (modelde eslesme.profilHavuzu) → profil adı → kayıt. */
+  havuzlar?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  /** Bağlam profili adı → { kod } (bilinenDurumlar[].profilKodu ile eşleşir). */
+  baglamProfilleri?: Readonly<Record<string, { kod?: string }>>;
+  /** Alt model ezme alanında senaryo değer vermezse kullanılan varsayılan kayıt. */
+  varsayilanKayit?: DogrulamaKarti | null;
 }
 
 export interface DogrulamaBaglami {
   model: DogrulamaModeli;
   /** Alt model dosya adı → alt model (ör. "odeme-kredi-karti.model.json"). */
   altModeller?: Readonly<Record<string, DogrulamaAltModeli>>;
-  ortak?: OrtakDogrulamaBaglami;
+  profiller?: ProfilDogrulamaBaglami;
   /** Bilgi amaçlı (şu an kural seçiminde kullanılmıyor). */
   ortam?: string;
   /** Tarih kontrolleri için "şimdi" (varsayılan new Date()). */
@@ -118,6 +126,17 @@ export type CozulmusBeklenenSonucGirdisi = {
 
 export declare const TAKSIT_UST_SINIRI: number;
 export declare const ESKI_BEKLENEN_SONUC_ALANLARI: readonly string[];
+export declare const ESKI_ANAHTARLAR: Readonly<{
+  kayitAlani: string;
+  durumKodu: string;
+  baglamProfiliAlani: string;
+  baglamKodu: string;
+  baglamKullanicisi: string;
+  profiller: string;
+  baglamProfilleri: string;
+  varsayilanKayit: string;
+  havuzYollari: Readonly<Record<string, string>>;
+}>;
 export declare const GIRDI_ALANLARI: Readonly<Record<string, { readonly modelAlani: string; readonly formSirasi: number }>>;
 
 export declare const MESAJLAR: {
@@ -149,7 +168,7 @@ export declare const MESAJLAR: {
   readonly kartYilBicim: () => string;
   readonly kartTaksitBicim: (ust: number) => string;
   readonly kartSuresiGecmis: (aaYyyy: string) => string;
-  readonly ortakKartSuresiGecmis: (aaYyyy: string) => string;
+  readonly varsayilanKayitSuresiGecmis: (etiket: string, aaYyyy: string) => string;
   readonly eskiBeklenenSonucAlanlari: (alanlar: readonly string[]) => string;
 };
 
@@ -158,7 +177,6 @@ export declare function kartSuresiGectiMi(kart: unknown, simdi: Date): boolean |
 export declare function taksitMetni(sayi: number): string;
 export declare function kartiNormallestir(ham: DogrulamaKarti, varsayilanKart?: DogrulamaKarti | null): NormallesmisKart;
 export declare function krediKartlariAyniMi(a: unknown, b: unknown): boolean;
-export declare function ortakBaglaminiOlustur(ortak: unknown): OrtakDogrulamaBaglami;
 export declare function senaryoyuDogrula(senaryo: unknown, baglam: DogrulamaBaglami): DogrulamaSonucu;
 /** Üç değerli görünürlük: true / false / null (bilinmiyor). */
 export type UcDegerli = boolean | null;

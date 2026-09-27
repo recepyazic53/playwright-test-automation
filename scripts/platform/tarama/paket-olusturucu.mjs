@@ -10,10 +10,14 @@
 //    KALDIRILMAZ (başka adımda/koşulda olabilir) — bilinmeyenlere yazılır. Böylece fark (bulgular) anlamlı kalır.
 //  - Seçim keşfi (≤ 8 seçenekli açılır listeler): bir seçenekte beliren/kaybolan alanlar adlandırılmış koşul +
 //    gorunurluk olur.
+//  - Test verisi: seçim alanlarının seçenekleri paketin "testVerisi" bölümüne tablo olarak yazılır (bağımlı listelerde —
+//    keşifte / kayıtta üst seçime göre seçenekleri değişen alanlar — satır = geçerli kombinasyon) ve alanlar sütunlara
+//    bağlanır (paket-tablolari.mjs > secenekTablolariUret). Yalnız seçenek etiketi / değeri; kullanıcının yazdığı metin yok.
 // Hiçbir proje/ürün adı içermez. NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir).
 // Tipler: paket-olusturucu.d.mts.
 
 import { KANIT_BOYUT_SINIRI, KANIT_EN_COK, SAYFA_PAKETI_SURUMU, SAYFA_PAKETI_TURU, gizliKalipBul, kanitVerisiniCoz } from '../ekranlar/sayfa-paketi.mjs';
+import { alanEtiketi, modelAlanlari, secenekTablolariUret } from '../tablolar/paket-tablolari.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
@@ -69,6 +73,71 @@ function temizMetin(m, sayac, uzunluk = 200) {
   if (!t) return null;
   if (gizliKalipBul(t)) { sayac.gizlenen++; return null; }
   return t;
+}
+
+/** @typedef {import('./paket-olusturucu.d.mts').SecenekGozlemi} SecenekGozlemi */
+const SECENEKLI_TIPLER = new Set(['secim', 'radyo', 'okluSecim']);
+
+/**
+ * Seçenek gözlemlerinden paketin testVerisi bölümü (yoksa null). Yalnız modelde senaryoda ayarlanan seçim alanları (ya da
+ * tıklanınca açılan listesi gözlenen metin alanları); gizli / hassas alanlar ve gizli veri kalıbına benzeyen seçenekler alınmaz.
+ * @param {Record<string, any>} model @param {Map<string, string>} anahtardanId ham alan anahtarı → modeldeki alan kimliği
+ * @param {SecenekGozlemi[]} gozlemler @param {string[]} bilinmeyenler @param {{ gizlenen: number }} sayac
+ */
+function testVerisiOlustur(model, anahtardanId, gozlemler, bilinmeyenler, sayac) {
+  const alanlar = modelAlanlari(model);
+  const temiz = gozlemler.map((g) => ({
+    anahtar: g.anahtar, secimler: g.secimler,
+    secenekler: g.secenekler.filter((x) => x && x.deger !== '' && !gizliKalipBul(String(x.deger)))
+      .map((x) => ({ deger: String(x.deger).slice(0, 200), metin: temizMetin(x.metin, sayac) ?? String(x.deger).slice(0, 200) }))
+  })).filter((g) => g.secenekler.length);
+  const gozlenen = new Set(temiz.map((g) => g.anahtar));
+  /** @type {import('../tablolar/paket-tablolari.d.mts').UretimAlani[]} */
+  const uretim = [];
+  for (const [anahtar, id] of anahtardanId) {
+    const a = alanlar.get(id);
+    if (!a || a.yapilandirma !== 'senaryo' || a.hassas === true || (nesneMi(a.eslesme) && a.eslesme.profilHavuzu !== undefined)) continue;
+    if (!SECENEKLI_TIPLER.has(a.tip) && !(a.tip === 'metin' && gozlenen.has(anahtar))) continue;
+    const secenekler = (Array.isArray(a.secenekler) ? a.secenekler : []).filter(nesneMi).map((x) => ({ deger: String(x.deger), metin: String(x.metin ?? x.deger) }));
+    if (secenekler.length < 2 && !gozlenen.has(anahtar)) continue;
+    uretim.push({ anahtar, id, etiket: alanEtiketi(a), secenekler });
+  }
+  if (!uretim.length) return null;
+  const { testVerisi, notlar } = secenekTablolariUret({ alanlar: uretim, gozlemler: temiz });
+  bilinmeyenler.push(...notlar);
+  return testVerisi;
+}
+
+/**
+ * Tarama envanterinden seçenek gözlemleri: her profilde ilk ekran (keşfedilen seçimler ilk değerlerinde) ve her keşif
+ * değeri (o seçim değiştirilmişken: beliren alanlar, seçenekleri değişen / değişmeyen görünür seçim alanları).
+ * @param {import('./paket-olusturucu.d.mts').ProfilEnvanteri[]} profiller @returns {SecenekGozlemi[]}
+ */
+function taramaGozlemleri(profiller) {
+  /** @type {SecenekGozlemi[]} */
+  const sonuc = [];
+  /** @param {import('./paket-olusturucu.d.mts').HamAlan} a */
+  const secenekleri = (a) => a.secenekler ?? (a.radyolar ?? []).map((x) => ({ deger: x.deger, metin: x.metin ?? x.deger }));
+  const haric = (/** @type {Record<string, string>} */ o, /** @type {string} */ k) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+  for (const p of profiller) {
+    const secimli = p.alanlar.filter((a) => a.secenekler || a.radyolar);
+    /** @type {Record<string, string>} */
+    const temel = Object.fromEntries(p.kesifler.filter((k) => typeof k.ilkDeger === 'string' && k.ilkDeger !== '').map((k) => [k.secim, /** @type {string} */ (k.ilkDeger)]));
+    for (const a of secimli) sonuc.push({ anahtar: a.anahtar, secimler: haric(temel, a.anahtar), secenekler: secenekleri(a) });
+    for (const k of p.kesifler) {
+      for (const d of k.degerler) {
+        if (d.gezinme || d.hata) continue;
+        const secimler = { ...temel, [k.secim]: d.deger };
+        const kaybolan = new Set(d.kaybolanlar);
+        for (const a of secimli) {
+          if (a.anahtar === k.secim || kaybolan.has(a.anahtar)) continue;
+          sonuc.push({ anahtar: a.anahtar, secimler: haric(secimler, a.anahtar), secenekler: d.secenekler?.[a.anahtar] ?? secenekleri(a) });
+        }
+        for (const a of d.gorunenler) if (a.secenekler || a.radyolar) sonuc.push({ anahtar: a.anahtar, secimler: haric(secimler, a.anahtar), secenekler: secenekleri(a) });
+      }
+    }
+  }
+  return sonuc;
 }
 
 /** Seçicileri karşılaştırmak için sadeleştirme (tırnak ve boşluk farkları yok sayılır). @param {string} s */
@@ -514,6 +583,8 @@ export function taramaPaketiOlustur(meta, envanter) {
   const olusturulma = meta.olusturulma ?? new Date().toISOString();
   const yazmaSayisi = yazma.length;
   varsayilanAkisiEsitle(model);
+  // 8) Test verisi: seçim alanlarının seçenekleri (keşifte değişen bağımlı listeler dahil) → tablolar + alan bağlantıları.
+  const testVerisi = testVerisiOlustur(model, kimlikler, taramaGozlemleri(profiller), bilinmeyenler, sayac);
   const paket = {
     tur: SAYFA_PAKETI_TURU,
     surum: SAYFA_PAKETI_SURUMU,
@@ -532,7 +603,8 @@ export function taramaPaketiOlustur(meta, envanter) {
       ...(meta.baglamTuru && profilAdlari.length ? { baglamTurleri: [meta.baglamTuru] } : {})
     },
     bilinmeyenler: [...new Set(bilinmeyenler)],
-    ...(kanitlar.length ? { kanitlar } : {})
+    ...(kanitlar.length ? { kanitlar } : {}),
+    ...(testVerisi ? { testVerisi } : {})
   };
   return {
     paket,
@@ -694,7 +766,7 @@ export function kayitPaketiOlustur(meta, envanter) {
 
   // Adımlar. Hiçbir şey kaydedilmemiş adım (alan, ilerleme/alan açan düğme, son adımda gösterge yok) atlanır.
   const kayitlar = envanter.adimlar.filter((k, i, tum) => {
-    const dolu = Boolean(k.ortakAkis) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi));
+    const dolu = Boolean(k.ortakAkis) || Boolean(k.sqlKontrolu) || Boolean(k.yenidenGiris) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi));
     if (!dolu) bilinmeyenler.push(`"${temizMetin(k.ad, sayac, 120) || `${i + 1}. adım`}" adımında alan, ilerleme düğmesi ya da gösterge kaydedilmediği için modele eklenmedi.`);
     return dolu;
   });
@@ -702,7 +774,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   // Alt adımlar. Model koşucusu bir adımda önce alanları doldurur, sonra düğmelere basar; bu yüzden alan AÇAN düğmesi olan
   // adım parçalara bölünür: [ilk alanlar] → [düğme] → [açılan alanlar] … → [ilerleme]. "Her senaryoda basılmaz" işaretli
   // düğmenin parçaları senaryo ayarına ("“<düğme>” dahil") bağlı isteğe bağlı adımlardır (senaryo formunda onay kutusu).
-  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; once?: number; sonra?: number; ortakAkis?: string }} AltAdim */
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; yenidenGiris?: { profil?: string } }} AltAdim */
   const kosulAdlari = new Set(mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar) : []);
   /** @type {Record<string, Record<string, unknown>>} */
   const yeniKosullar = {};
@@ -737,6 +809,16 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (k.ortakAkis) {
       // Ortak akış adımı: alanı yok; koşuda ortak akışın adımlarıyla açılır.
       altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: k.ortakAkis.istegeBagli ? dahilKosulu(ad, 'ortakAkis') : null, ortakAkis: k.ortakAkis.dosya });
+      continue;
+    }
+    if (k.sqlKontrolu) {
+      // SQL sorgusu adımı: alanı / düğmesi yok; koşuda veritabanı sorgusu beklenenle karşılaştırılır.
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, sqlKontrolu: k.sqlKontrolu });
+      continue;
+    }
+    if (k.yenidenGiris) {
+      // Yeniden giriş adımı: alanı / düğmesi yok; koşuda oturum kapatılıp ortamın tarifiyle yeniden girilir.
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, yenidenGiris: typeof k.yenidenGiris.profil === 'string' && k.yenidenGiris.profil ? { profil: k.yenidenGiris.profil } : {} });
       continue;
     }
     const parca = (/** @type {number} */ j) => k.alanlar.filter((_, x) => (k.parcalar?.[x] ?? 0) === j);
@@ -816,6 +898,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (p.ortakAkis) {
       return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}), ortakAkis: { dosya: p.ortakAkis } };
     }
+    if (p.sqlKontrolu) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, sqlKontrolu: p.sqlKontrolu };
+    if (p.yenidenGiris) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, yenidenGiris: p.yenidenGiris };
     /** @type {Map<string, { baslik: string; alanlar: Array<Record<string, unknown>> }>} */
     const bolumler = new Map();
     // Diyagramdaki sıra = doldurma sırası: bölüm değişince yeni bölüm parçası açılır (ardışık olmayan aynı bölümün alanları
@@ -828,7 +912,8 @@ export function kayitPaketiOlustur(meta, envanter) {
       const b = bolumler.get(k) ?? bolumler.set(k, { baslik: temizMetin(h.bolum.baslik, sayac, 120) || 'Genel', alanlar: [] }).get(k);
       b?.alanlar.push(modelAlani(h));
     }
-    const sonAdimMi = i === altAdimlar.length - 1;
+    // Son EKRAN adımı (ardından yalnız SQL adımları gelebilir): başarı göstergesi onda.
+    const sonAdimMi = i === altAdimlar.length - 1 || altAdimlar.slice(i + 1).every((x) => x.sqlKontrolu);
     // "İşlemler" bölümü: adımın düğmesi (buton/aksiyon) ve son adımda sonucu gösteren öğe (cikti) — model koşucusu bunları
     // doldurmaz (koşu tanımı ayrıca aşağıda); modelde adımın ne yaptığı görünür, alansız adım geçerli olur.
     /** @type {Array<Record<string, unknown>>} */
@@ -857,7 +942,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (aksiyonlar.length) kosu.aksiyonlar = aksiyonlar;
     if (p.tikla) {
       // Başarı: sonraki (atlanmayacak) adımın ilk alanı ya da düğmesi görünür.
-      const sonraki = altAdimlar.slice(i + 1).find((x) => x.kosul === null || x.kosul === p.kosul);
+      const sonraki = altAdimlar.slice(i + 1).find((x) => !x.sqlKontrolu && (x.kosul === null || x.kosul === p.kosul));
       const hedef = sonraki ? ilkSecici(sonraki) : null;
       if (hedef) kosu.basariGostergesi = { tur: 'eleman', deger: hedef };
       // Akış tasarımında düğmeden sonra beklenen mesaj verildiyse: o metin görünür.
@@ -1053,6 +1138,8 @@ export function kayitPaketiOlustur(meta, envanter) {
   if (yasakli.length) bilinmeyenler.push(`Yasaklı adres kalıbına uyan ${yasakli.length} istek engellendi (${[...new Set(yasakli.map((e) => e.adres))].slice(0, 3).join(', ')}).`);
   if (etiketsizler.length) bilinmeyenler.push(`Etiketi bulunamayan ${etiketsizler.length} alan: ${etiketsizler.slice(0, 10).join(', ')} (etiketi ekrandan kontrol edin).`);
   if (cokluDegerliler.length) bilinmeyenler.push(`Çoklu seçim listeleri: ${cokluDegerliler.join(', ')} — model tek değer bekler.`);
+  // Test verisi: kayıtta gözlenen seçim listeleri (okumalar + tıklanınca açılan listeler) → tablolar + alan bağlantıları.
+  const testVerisi = testVerisiOlustur(model, new Map([...hamdanModel].map(([k, a]) => [k, String(a.id)])), envanter.secenekGozlemleri ?? [], bilinmeyenler, sayac);
   if (sayac.gizlenen) bilinmeyenler.push(`${sayac.gizlenen} metin gizli/kişisel veri kalıbına (kart, kimlik no, IBAN…) benzediği için pakete yazılmadı.`);
 
   varsayilanAkisiEsitle(model);
@@ -1073,7 +1160,8 @@ export function kayitPaketiOlustur(meta, envanter) {
       girisGerekli: meta.girisGerekli, ikiAsamaliDogrulama: meta.ikiAsamali, captchaGoruldu: false, testVerisiTurleri: [],
       ...(meta.baglamTuru && envanter.profil ? { baglamTurleri: [meta.baglamTuru] } : {})
     },
-    bilinmeyenler: [...new Set(bilinmeyenler)]
+    bilinmeyenler: [...new Set(bilinmeyenler)],
+    ...(testVerisi ? { testVerisi } : {})
   };
   return {
     paket,

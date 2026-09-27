@@ -23,7 +23,8 @@ import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }} TabloSutunu */
 /** @typedef {{ id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[] }} TabloSatiri */
-/** @typedef {{ id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean }} Tablo */
+/** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string }} TabloKaynagi */
+/** @typedef {{ id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean; kaynak?: TabloKaynagi | null }} Tablo */
 
 export const BAGLAM_ONEKI = 'baglam_';
 /** @param {string} tur */
@@ -148,7 +149,7 @@ export function tablolariListele(vt, projeId, secenekler = {}) {
       doluGizli: sutunlar.filter((x) => x.gizli && d[x.ad] !== undefined && d[x.ad] !== null && d[x.ad] !== '').map((x) => x.ad)
     });
   }
-  const tablolar = turler.map((t) => ({ id: t.id, ad: t.ad, sutunlar: sutunlari.get(t.id) ?? [], satirlar: satirlar.get(t.id) ?? [], guncellenme: t.guncellenme }));
+  const tablolar = turler.map((t) => ({ id: t.id, ad: t.ad, sutunlar: sutunlari.get(t.id) ?? [], satirlar: satirlar.get(t.id) ?? [], guncellenme: t.guncellenme, kaynak: t.kaynak ?? null }));
   return secenekler.baglamDahil && !secenekler.tabloId ? [...tablolar, ...baglamTablolari(vt, projeId)] : tablolar;
 }
 
@@ -170,8 +171,9 @@ const sutunlarOku = (vt, alanlar) => alanlar.map((a) => {
  * - satirlar: yalnız yeni / değişen satırlar [{ id?, ad?, ortamId, degerler }]. Gizli sütunda değer verilmezse (undefined / null)
  *   kayıtlı değer korunur; '' siler. ad boşsa mevcut ad korunur (yeni satırda değerlerden üretilir).
  * - silinenSatirlar: satır kimlikleri.
+ * - kaynak: sayfa paketinden içe aktarımda tablonun kaynağı (verilmezse mevcut kaynak korunur).
  * @param {Veritabani} vt
- * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean }} girdi
+ * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi }} girdi
  * @returns {string} tablo kimliği
  */
 export function tabloKaydet(vt, girdi) {
@@ -233,7 +235,7 @@ export function tabloKaydet(vt, girdi) {
         }
       }
     }
-    const tabloId = testVerisiTuruKaydet(vt, { id: mevcut?.id, projeId: girdi.projeId, ad, alanlar });
+    const tabloId = testVerisiTuruKaydet(vt, { id: mevcut?.id, projeId: girdi.projeId, ad, alanlar, ...(girdi.kaynak ? { kaynak: /** @type {Record<string, string>} */ (girdi.kaynak) } : {}) });
     // Mevcut satırın adı korunur: ekran senaryoları eski kayıtları adıyla (ör. tc1) seçiyor olabilir.
     const satirAdlari = new Map(vt.tumu('SELECT id, ad FROM test_verisi_profilleri WHERE tur_id = ?', [tabloId]).map((x) => [String(x.id), String(x.ad)]));
     const mevcutSatirlar = new Set(satirAdlari.keys());

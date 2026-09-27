@@ -15,7 +15,7 @@ import { geciciKlasor } from './platform-ortak';
 
 const KOKEN = 'https://giris-ornegi.invalid';
 const KIMLIK: GirisKimligi = { kullaniciAdi: 'kullanici', parola: 'Parola-1', totpGizli: null, sabitKod: null, smsKipi: null };
-const GIZLILER = ['Parola-1', '123456', '654321'];
+const GIZLILER = ['Parola-1', '123456', '654321', '4321'];
 
 let tarayici: Browser;
 let baglam: BrowserContext;
@@ -211,6 +211,48 @@ test.describe('Giriş motoru (yerel fikstür sayfaları)', () => {
     expect(mesaj).toMatch(/Şube profilinde yok: subeAdi/);
     const adim = await hataBekle(baglamiDegistir(page, t, { subeKodu: '1', subeAdi: 'Merkez' }), 'BAGLAM_ADIMI');
     expect(adim).toMatch(/Adım 2 \(Metni doğrula: body\) başarısız/);
+  });
+});
+
+test.describe('Giriş adımları: önce / ara / sonra adımlar ve ek alanlar (yerel fikstür /iki-sayfa)', () => {
+  const PIN = '4321';
+  const ekKimlik: GirisKimligi = { ...KIMLIK, ekAlanlar: { kod: 'F-77', secim: 'B2', pin: PIN }, gizliEkAlanlar: ['pin'] };
+  const adimli = (araya: Array<Record<string, unknown>> = []) => tarifiHazirla({
+    girisAdresi: '/iki-sayfa', kullaniciAlani: '#kad', parolaAlani: '#sif', gonderDugmesi: '#gir',
+    basariGostergesi: { tur: 'metin', deger: 'Çıkış yap' }, hataGostergeleri: [{ tur: 'metin', deger: 'Bilgiler hatalı' }], zamanAsimiSn: 5,
+    girisAdimlari: [
+      { islem: 'tikla', hedef: { rol: 'button', ad: 'Kabul et' }, aciklama: 'Çerez onayı' },
+      { islem: 'doldur', hedef: { secici: '#kod' }, deger: '{kod}' },
+      { islem: 'sec', hedef: { secici: '#secim' }, deger: '{secim}' },
+      { islem: 'kullaniciAdi' },
+      { islem: 'tikla', hedef: { secici: 'button', metin: 'Devam' } },
+      { islem: 'parola' },
+      ...araya,
+      { islem: 'doldur', hedef: { secici: '#pin' }, deger: '{pin}' },
+      { islem: 'gonder' }
+    ]
+  });
+
+  test('iki sayfalı giriş: çerez → ek alan + seçim → kullanıcı adı → Devam → parola + gizli PIN → Giriş', async () => {
+    const page = await baglam.newPage();
+    const log: string[] = [];
+    await girisYap(page, adimli(), ekKimlik, { alanBeklemeMs: 3000, log: (m) => log.push(m) });
+    await expect(page.getByText('Çıkış yap')).toBeVisible();
+    expect(log.join(' ')).not.toContain(PIN);
+  });
+
+  test('ek alan profilde yoksa sayfaya gitmeden açık hata; yanlış PIN → kullanıcı adı/parola hatalı; başarısız adımda gizli değer maskelenir', async () => {
+    const eksik = await hataBekle(girisYap(await baglam.newPage(), adimli(), { ...KIMLIK, ekAlanlar: { kod: 'F-77' } }), 'TARIF_GECERSIZ');
+    expect(eksik).toMatch(/giriş profilinde yok: secim, pin/);
+    expect(ag.istekler.some((u) => u.includes('/iki-sayfa'))).toBe(false);
+
+    await hataBekle(girisYap(await baglam.newPage(), adimli(), { ...ekKimlik, ekAlanlar: { kod: 'F-77', secim: 'B2', pin: '9999' } }, { alanBeklemeMs: 3000 }), 'KIMLIK_HATALI');
+
+    // PIN alanının değerini (henüz yazılmamışken) doğrulayan adım başarısız olur: hata adımı söyler, PIN'i yazmaz.
+    const adim = await hataBekle(girisYap(await baglam.newPage(),
+      adimli([{ islem: 'degerBekle', hedef: { secici: '#pin' }, deger: '{pin}', zamanAsimiSn: 1 }]), ekKimlik, { alanBeklemeMs: 3000 }), 'GIRIS_ADIMI');
+    expect(adim).toMatch(/Adım 7 \(Değerini doğrula: #pin\) başarısız \(sayfa: \/iki-sayfa\)/);
+    expect(adim).not.toContain(PIN);
   });
 });
 

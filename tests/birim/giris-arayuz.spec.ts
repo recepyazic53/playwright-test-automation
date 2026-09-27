@@ -239,6 +239,27 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   agKontrol(istekler);
 });
 
+test('Ekranlar > Ortak akışlar: her ortamın girişi okunur adımlarla görünür; Düzenle ilgili tarif formunu açar', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  await page.goto('/#/ekranlar');
+  const kart = page.locator('.giris-akisi-karti[data-ortam]').filter({ hasText: 'Giriş (TEST)' });
+  await expect(kart).toBeVisible();
+  await expect(kart.locator('.giris-ozet-adimlari li').first()).toHaveText('Kullanıcı adını yaz');
+  await expect(kart).toContainText('SMS kodu gir (koşuda elle)');
+  await expect(page.locator('.yan-panel a.giris-akisi-baglantisi').filter({ hasText: 'Giriş (CANLI)' })).toBeVisible();
+  await kart.getByRole('link', { name: 'Giriş (TEST): düzenle' }).click();
+  const form = page.locator('form.tarif-formu');
+  await expect(form.getByRole('heading', { name: 'Giriş tarifi: TEST' })).toBeVisible();
+  await expect(form.locator('.giris-ozet li')).toContainText(['Kullanıcı adını yaz', 'Parolayı yaz']);
+  // Varsayılan sırada düzenleyici kapalı gelir; açılıp adım eklenince okunur özet hemen güncellenir (kaydetmeden).
+  await form.getByText('Adımları düzenle (3)').click();
+  await form.getByRole('button', { name: 'Giriş adımı ekle' }).click();
+  await expect(form.locator('.giris-adimi')).toHaveCount(4);
+  await expect(form.getByText('Adımları düzenle (4)')).toBeVisible();
+  agKontrol(istekler);
+});
+
 test('Koşu paneli: SMS kodu elle istenince kod formu açılır ve kod koşuya iletilir', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();

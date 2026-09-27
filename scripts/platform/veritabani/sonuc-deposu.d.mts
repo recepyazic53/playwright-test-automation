@@ -10,6 +10,17 @@ export interface SonucGirdisi {
   atlananAlanlar?: Array<{ alan: string; neden?: string | null }>; deneme?: number; baslangic?: string | null; bitis?: string | null;
   adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }>;
   medya?: Array<{ id?: string; tur: string; ad: string; icerikTuru: string; boyut: number; dosya: string; olusturulma?: string }>;
+  yakalananMesajlar?: Array<{ kaynak: string; metin: string; adim?: string | null; sayi?: number; ilk?: string; son?: string; beklenen?: boolean }>;
+}
+export interface YakalananMesajOgesi { kaynak: string; metin: string; kalip: string; adim: string | null; sayi: number; beklenen: boolean; ilk: string; son: string }
+export interface YakalananMesajKaliplari {
+  toplam: number; beklenmeyen: number; kaynaklar: Record<string, number>;
+  kaliplar: Array<{
+    kaynak: string; kalip: string; ornekMetin: string; sayi: number; beklenen: boolean; beklenenSayisi: number; beklenmeyenSayisi: number;
+    senaryoSayisi: number; gecenTestSayisi: number; kalanTestSayisi: number; urunler: string[]; ilk: string; son: string;
+    sonuclar: Array<{ sonucId: string; kosuId: string; senaryoId: string | null; senaryoBaslik: string; ortamId: string | null; adim: string | null;
+      zaman: string; durum: string; sayi: number; beklenen: boolean }>;
+  }>;
 }
 export interface MedyaOgesi { id: string; tur: string; ad: string; icerikTuru: string; boyut: number; olusturulma: string; silinme: string | null; yedekDisi: boolean }
 export interface SonucDetayi {
@@ -20,6 +31,7 @@ export interface SonucDetayi {
   kosuTuru: string; kosuKapsami: string | null;
   adimlar: Array<{ ad: string; durum: string; sureMs: number | null; hataMesaji: string | null }>;
   medya: MedyaOgesi[];
+  yakalananMesajlar: YakalananMesajOgesi[];
 }
 export interface KosuGecmisiSatiri extends Sayilar {
   id: string; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string; urunSayisi: number;
@@ -36,7 +48,7 @@ export declare function kosulariHesapIcinOku(vt: Veritabani, projeId: string): A
   id: string; tur: string; kapsam: string | null; durum: string; baslangic: string; bitis: string | null; kaynak: string; ortamId: string | null;
   z: number; urunler: Record<string, Sayilar>;
 }>;
-export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { urun?: string | null }): {
+export declare function sonucOzeti(vt: Veritabani, projeId: string, secim?: { urun?: string | null; baslangic?: string | null; bitis?: string | null }): {
   ekranlar: Array<{ anahtar: string; ad: string; senaryoSayisi: number; ekranDurumu: string | null; son: { basarili: number; basarisiz: number; atlanan: number; durduruldu: number } | null }>;
   kart: { son: KartOzeti; onceki: KartOzeti | null; enYeniZ?: number; enEskiZ?: number; urunSayisi?: number } | null;
   trend: Array<Sayilar & { kosuId: string; z: number; kapsam: string | null }>;
@@ -55,7 +67,9 @@ export declare function hataKaliplari(vt: Veritabani, projeId: string, filtre?: 
   toplam: number; kategoriler: Record<string, number>;
   kaliplar: Array<{ urun: string; kategori: string; kalip: string; sayi: number; senaryoSayisi: number; ilk: string; son: string; ornekSonucId: string;
     sonuclar: Array<{ sonucId: string; kosuId: string; senaryoId: string | null; senaryoBaslik: string; ortamId: string | null; adim: string | null; zaman: string }> }>;
+  yakalanan: YakalananMesajKaliplari;
 };
+export declare function yakalananMesajKaliplari(vt: Veritabani, projeId: string, filtre?: { urun?: string | null; baslangic?: string | null; bitis?: string | null; limit?: number }): YakalananMesajKaliplari;
 export declare function medyaGetir(vt: Veritabani, id: string): (MedyaOgesi & { dosya: string; senaryoBaslik: string | null; sonucZamani: string | null }) | null;
 export declare function kosudakiSonucuBul(vt: Veritabani, kosuId: string, arama: { senaryoAnahtari?: string; senaryoBaslik?: string }): {
   detay: SonucDetayi; sonEkranGoruntusuId: string | null; videoId: string | null; basarisizAdim: string | null;

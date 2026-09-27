@@ -540,6 +540,54 @@ export const GOCLER = [
     sql: `
       DROP TABLE IF EXISTS kaynak_eslemeleri;
     `
+  },
+  {
+    // Sürüm 13 — giriş profilinin EK ALANLARI (giriş tarifinin giriş adımlarındaki "{ad}" yer tutucuları; ör. ek kod
+    // alanı, seçim listesi). ek_alanlar_json (şifreli, 'ozel'): [{ ad, gizli, deger? , degerVar }] — gizli olmayanların
+    // değeri burada; ek_gizli_json (şifreli, 'gizli'): { ad: deger } — gizli işaretlilerin değeri, yalnızca açıkça
+    // çözülür. İkisi de NULL = ek alan yok (mevcut profiller aynen çalışır).
+    surum: 13,
+    ad: 'giris_profili_ek_alanlari',
+    sql: `
+      ALTER TABLE giris_profilleri ADD COLUMN ek_alanlar_json TEXT;
+      ALTER TABLE giris_profilleri ADD COLUMN ek_gizli_json TEXT;
+    `
+  },
+  {
+    // Sürüm 14 — koşuda yakalanan mesajlar (bkz. sonuclar/yakalanan-mesajlar.mjs): test geçse de kalsa da sayfada görülen
+    // diyalog, hata göstergesi / uyarı, konsol hatası, sayfa hatası ve aynı kökendeki HTTP 4xx-5xx. metin: kayıttan önce
+    // maskelenmiş (gizli değerler, adı gizli alanlar, uzun rakam dizileri, e-posta, sorgu dizesi), en çok 500 karakter; sonuç
+    // satırlarındaki diğer metinler gibi düz metindir. kalip: kalipCikar(metin). beklenen: senaryonun beklediği mesajla eşleşti.
+    // Sonuç silinince satırları da silinir (ON DELETE CASCADE).
+    surum: 14,
+    ad: 'yakalanan_mesajlar',
+    sql: `
+      CREATE TABLE yakalanan_mesajlar (
+        id        TEXT PRIMARY KEY,
+        sonuc_id  TEXT NOT NULL REFERENCES kosu_sonuclari(id) ON DELETE CASCADE,
+        sira      INTEGER NOT NULL,
+        kaynak    TEXT NOT NULL CHECK (kaynak IN ('diyalog', 'hata-gostergesi', 'konsol', 'sayfa-hatasi', 'ag')),
+        metin     TEXT NOT NULL,
+        kalip     TEXT NOT NULL,
+        adim      TEXT,
+        sayi      INTEGER NOT NULL DEFAULT 1,
+        beklenen  INTEGER NOT NULL DEFAULT 0,
+        ilk       TEXT NOT NULL,
+        son       TEXT NOT NULL
+      );
+      CREATE INDEX ix_yakalanan_mesajlar_sonuc ON yakalanan_mesajlar(sonuc_id, sira);
+      CREATE INDEX ix_yakalanan_mesajlar_kalip ON yakalanan_mesajlar(kaynak, kalip);
+    `
+  },
+  {
+    // Sürüm 15 — test verisi tablosunun KAYNAĞI (sayfa paketinden içe aktarılan tablolar): kaynak_json =
+    // { tur: 'paket' | 'tarama' | 'kayit', olusturan, olusturulma, ekran?, yazilma }. Değer içermez (düz metin).
+    // NULL = elle oluşturulan tablo (mevcut tablolar aynen çalışır).
+    surum: 15,
+    ad: 'test_verisi_tablo_kaynagi',
+    sql: `
+      ALTER TABLE test_verisi_turleri ADD COLUMN kaynak_json TEXT;
+    `
   }
 ];
 
@@ -564,7 +612,7 @@ export const SIFRELI_ALANLAR = Object.freeze({
   makineler: Object.freeze({ ad: 'ozel' }),
   ayarlar: Object.freeze({ deger_json: 'ozel' }),
   ortamlar: Object.freeze({ ad: 'ozel', taban_url: 'ozel', ayarlar_json: 'ozel' }),
-  giris_profilleri: Object.freeze({ kullanici_adi: 'ozel', sms_ayari_json: 'ozel', parola: 'gizli', totp_gizli: 'gizli' }),
+  giris_profilleri: Object.freeze({ kullanici_adi: 'ozel', sms_ayari_json: 'ozel', parola: 'gizli', totp_gizli: 'gizli', ek_alanlar_json: 'ozel', ek_gizli_json: 'gizli' }),
   baglam_profilleri: Object.freeze({ alanlar_json: 'ozel' }),
   ekranlar: Object.freeze({ ayarlar_json: 'ozel' }),
   servisler: Object.freeze({ ayarlar_json: 'ozel' }),
@@ -595,9 +643,9 @@ export const TABLOLAR = [
   { ad: 'ayarlar', birincilAnahtar: 'anahtar', json: ['deger_json'], guncellenme: true, baslikAlani: 'anahtar' },
   { ad: 'projeler', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'ortamlar', birincilAnahtar: 'id', json: ['ayarlar_json'], guncellenme: true, baslikAlani: 'ad' },
-  { ad: 'giris_profilleri', birincilAnahtar: 'id', json: ['sms_ayari_json'], guncellenme: true, gecmisTuru: 'giris_profili', baslikAlani: 'ad' },
+  { ad: 'giris_profilleri', birincilAnahtar: 'id', json: ['sms_ayari_json', 'ek_alanlar_json', 'ek_gizli_json'], guncellenme: true, gecmisTuru: 'giris_profili', baslikAlani: 'ad' },
   { ad: 'baglam_profilleri', birincilAnahtar: 'id', json: ['alanlar_json'], guncellenme: true, gecmisTuru: 'baglam_profili', baslikAlani: 'ad' },
-  { ad: 'test_verisi_turleri', birincilAnahtar: 'id', json: ['alanlar_json'], guncellenme: true, baslikAlani: 'ad' },
+  { ad: 'test_verisi_turleri', birincilAnahtar: 'id', json: ['alanlar_json', 'kaynak_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'test_verisi_profilleri', birincilAnahtar: 'id', json: ['degerler_json'], guncellenme: true, gecmisTuru: 'test_verisi_profili', baslikAlani: 'ad' },
   { ad: 'ekranlar', birincilAnahtar: 'id', json: ['ayarlar_json', 'silinme_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'ekran_modelleri', birincilAnahtar: 'id', json: ['model_json'], guncellenme: false, baslikAlani: 'surum' },
@@ -611,6 +659,7 @@ export const TABLOLAR = [
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
   { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json'], guncellenme: false },
   { ad: 'adim_sonuclari', birincilAnahtar: 'id', json: [], guncellenme: false },
+  { ad: 'yakalanan_mesajlar', birincilAnahtar: 'id', json: [], guncellenme: false },
   { ad: 'servis_kosulari', birincilAnahtar: 'id', json: ['sonuc_json'], guncellenme: false },
   { ad: 'servis_akis_kosulari', birincilAnahtar: 'id', json: ['sonuc_json'], guncellenme: false },
   // Medya satırları yedeğe her zaman girer; şifreli dosyalar kullanıcının dışa aktarma seçimine

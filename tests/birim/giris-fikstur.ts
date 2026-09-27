@@ -140,6 +140,24 @@ export function girisSayfalari(): FiksturUygulamasi {
         <div class="g-recaptcha" data-sitekey="ornek-anahtar"><iframe title="reCAPTCHA" src="https://www.google.com/recaptcha/api2/anchor?k=ornek" width="300" height="78"></iframe></div>
         <button type="submit">Giriş</button></form>`);
     }
+    if (temiz === '/iki-sayfa') {
+      // Giriş adımları: çerez penceresi → ek kod alanı + seçim → kullanıcı adı → "Devam" → parola + gizli ek alan (PIN) →
+      // Giriş. Doğrulama sayfa içinde (istek yok): kod F-77, seçim B2, kullanici / Parola-1, PIN 4321.
+      return html('Giriş', `<div id="cerez" role="dialog"><p>Çerezler</p><button id="cerez-tamam">Kabul et</button></div>
+        <section id="bir" hidden><input id="kod" aria-label="Kod"><select id="secim"><option value="">—</option><option value="A1">A</option><option value="B2">B</option></select>
+          <input id="kad" aria-label="Kullanıcı"><button id="devam">Devam</button></section>
+        <section id="iki" hidden><input type="password" id="sif" aria-label="Parola"><input type="password" id="pin" aria-label="PIN"><button id="gir">Giriş</button></section>
+        <p id="hata" role="alert" hidden>Bilgiler hatalı</p>
+        <script>
+          const $ = (x) => document.getElementById(x);
+          $('cerez-tamam').onclick = () => { $('cerez').remove(); $('bir').hidden = false; };
+          $('devam').onclick = () => { $('bir').hidden = true; $('iki').hidden = false; };
+          $('gir').onclick = () => {
+            const tamam = $('kod').value === 'F-77' && $('secim').value === 'B2' && $('kad').value === 'kullanici' && $('sif').value === 'Parola-1' && $('pin').value === '4321';
+            if (tamam) document.body.innerHTML = '<header><a href="/cikis">Çıkış yap</a></header>'; else $('hata').hidden = false;
+          };
+        </script>`);
+    }
     return bulunamadi();
   };
 }

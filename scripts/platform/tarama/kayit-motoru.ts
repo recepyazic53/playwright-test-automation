@@ -8,6 +8,9 @@
 //   seçeneklerden biri olmalı — "şu seçilince görünür" koşulları bundan çıkarılır),
 //   kullanıcının listede işaretledikleri (varsayılan: dokunulan alanlar), basılan düğmeler (seçici + görünen metni),
 //   "Mesaj seç" ile seçilen mesajlar, "Sıfırla" / "Bitir" / "İptal".
+//   Seçenek gözlemleri (arka planda): her okumada seçim alanlarının (select/radyo) SEÇENEKLERİ ve o andaki diğer seçimler;
+//   kullanıcı bir alana tıklayınca açılan listbox / combobox listesinin seçenekleri. Yalnız seçenek etiketi / değeri —
+//   kullanıcının yazdığı metin kaydedilmez. Paketin test verisi tablolarına (bağımlı listelerde kombinasyonlar) çevrilir.
 // Sonuç akış envanteridir (AkisEnvanteri); diyagram Nöbetçi'de taslaktan kurulur (akis-tasarimi.mjs) ve sayfa paketine
 // çevrilir.
 //
@@ -21,10 +24,10 @@ import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
-import type { EngellenenIstek, HamAlan, KayitOgesi } from './paket-olusturucu.mjs';
+import type { EngellenenIstek, HamAlan, KayitOgesi, SecenekGozlemi } from './paket-olusturucu.mjs';
 import type { AkisEnvanteri, AkisOkumasi, AkisOlayi } from './akis-tasarimi.mjs';
 import { KAYIT_KOPRUSU, KAYIT_PANELI_KIMLIGI, type TaramaGirdisi, type TaramaOlayi } from './protokol.mjs';
-import { dokunulanlariBul, kayitPaneliniKur, secimDegerleri, type PanelDurumu } from './kayit-paneli';
+import { acikListeSecenekleri, dokunulanlariBul, kayitPaneliniKur, secimDegerleri, type PanelDurumu } from './kayit-paneli';
 import { sayfadakiAlanlar } from './sayfa-envanteri';
 import { TaramaHatasi, hataBilgisi, type OlayGonderici } from './tarama-motoru';
 
@@ -90,6 +93,20 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
   const dugmeler: KayitOgesi[] = [];
   const mesajlar: KayitOgesi[] = [];
   const olaylar: AkisOlayi[] = [];
+  // Seçenek gözlemleri (tekil; en çok 2000): alanın seçenekleri + o andaki diğer seçimler.
+  const gozlemler: SecenekGozlemi[] = [];
+  const gozlemImzalari = new Set<string>();
+  const gozlemEkle = (g: SecenekGozlemi): void => {
+    if (gozlemler.length >= 2000 || !g.secenekler.length) return;
+    const imza = JSON.stringify([g.anahtar, g.secimler, g.secenekler]);
+    if (gozlemImzalari.has(imza)) return;
+    gozlemImzalari.add(imza);
+    gozlemler.push(g);
+  };
+  /** Seçim alanının kayıtlı seçenekleri (select / radyo). */
+  const alanSecenekleri = (a: HamAlan): Array<{ deger: string; metin: string }> =>
+    (a.secenekler ?? (a.radyolar ?? []).map((x) => ({ deger: x.deger, metin: x.metin ?? x.deger }))).filter((x) => x.deger !== '').slice(0, 300);
+  const haric = (o: Record<string, string>, k: string): Record<string, string> => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
   let ilkBaslik = '';
   /** Son okumada görünen alanlar ve bir önceki okumada görünenler ("yeni" işareti için). */
   let sonGorunen = new Set<string>();
@@ -106,7 +123,8 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
       gorunuyor: sonGorunen.has(alan.anahtar), yeni: sonGorunen.has(alan.anahtar) && oncekiGorunen.size > 0 && !oncekiGorunen.has(alan.anahtar)
     })),
     dugmeler: dugmeler.map((d) => d.metin ?? d.secici),
-    mesajlar: mesajlar.map((m) => m.metin ?? m.secici)
+    mesajlar: mesajlar.map((m) => m.metin ?? m.secici),
+    listeler: new Set(gozlemler.map((g) => g.anahtar)).size
   });
 
   /**
@@ -137,6 +155,9 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
       const bilinen = new Set([...(alan.secenekler ?? []).map((s) => s.deger), ...(alan.radyolar ?? []).map((r) => r.deger)]);
       if (typeof v === 'string' && v !== '' && bilinen.has(v)) secimler[alan.anahtar] = v;
     }
+    for (const alan of gecerli) {
+      if (alan.tur === 'select' || alan.tur === 'radio') gozlemEkle({ anahtar: alan.anahtar, secimler: haric(secimler, alan.anahtar), secenekler: alanSecenekleri(alan), kaynak: 'liste' });
+    }
     oncekiGorunen = sonGorunen;
     sonGorunen = new Set(gecerli.map((x) => x.anahtar));
     return { yol: metin(a.yol, 300) ?? '', gorunen: gecerli.map((x) => x.anahtar), dokunulan: [...dokunulan].filter((x) => sonGorunen.has(x)), secimler };
@@ -152,7 +173,8 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
   };
   const envanter = (profil: string | null): AkisEnvanteri => ({
     kip: 'kayit', bicim: 'akis', profil, baslik: ilkBaslik,
-    alanlar: [...alanlar.values()].map(({ alan, secili }) => ({ alan, secili })), dugmeler, mesajlar, olaylar, engellenenler, notlar
+    alanlar: [...alanlar.values()].map(({ alan, secili }) => ({ alan, secili })), dugmeler, mesajlar, olaylar, engellenenler, notlar,
+    secenekGozlemleri: gozlemler
   });
 
   try {
@@ -189,6 +211,23 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
             bildir({ tur: 'bilgi', mesaj: `Mesaj seçildi: ${m.metin ?? m.secici}` });
             return panelDurumu();
           }
+          case 'secenekler': {
+            // Tıklanınca açılan listenin seçenekleri (yalnız görülmüş bir alan için; değer değil, seçenek etiketi / değeri).
+            const k = typeof veri.anahtar === 'string' ? alanlar.get(veri.anahtar) : undefined;
+            if (!k || !Array.isArray(veri.secenekler)) return panelDurumu();
+            const secenekler = veri.secenekler.slice(0, 300).filter((x): x is { deger: string; metin: string } => typeof x === 'object' && x !== null
+              && typeof (x as { deger?: unknown }).deger === 'string' && typeof (x as { metin?: unknown }).metin === 'string')
+              .map((x) => ({ deger: x.deger.slice(0, 200), metin: x.metin.slice(0, 200) })).filter((x) => x.deger !== '');
+            const hamSecim = typeof veri.secimler === 'object' && veri.secimler !== null ? veri.secimler as Record<string, unknown> : {};
+            const secimler: Record<string, string> = {};
+            for (const [an, v] of Object.entries(hamSecim)) {
+              const a = alanlar.get(an)?.alan;
+              if (!a || an === k.alan.anahtar || typeof v !== 'string' || !alanSecenekleri(a).some((x) => x.deger === v)) continue;
+              secimler[an] = v;
+            }
+            gozlemEkle({ anahtar: k.alan.anahtar, secimler, secenekler, kaynak: 'acilir' });
+            return panelDurumu();
+          }
           case 'sec': {
             const k = typeof veri.anahtar === 'string' ? alanlar.get(veri.anahtar) : undefined;
             if (!k) throw new Error('Alan bulunamadı.');
@@ -207,6 +246,8 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
             dugmeler.splice(0);
             mesajlar.splice(0);
             olaylar.splice(0);
+            gozlemler.splice(0);
+            gozlemImzalari.clear();
             sonGorunen = new Set();
             oncekiGorunen = new Set();
             bildir({ tur: 'bilgi', mesaj: 'Kayıt sıfırlandı.' });
@@ -222,6 +263,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
         `window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`,
         `window.__nobetciDokunulanlariBul = ${dokunulanlariBul.toString()};`,
         `window.__nobetciSecimDegerleri = ${secimDegerleri.toString()};`,
+        `window.__nobetciAcikListe = ${acikListeSecenekleri.toString()};`,
         `(${kayitPaneliniKur.toString()})(${JSON.stringify({ kopru: KAYIT_KOPRUSU, kimlik: KAYIT_PANELI_KIMLIGI })});`
       ].join('\n');
       await baglam.addInitScript({ content: betik });

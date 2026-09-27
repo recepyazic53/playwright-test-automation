@@ -4,7 +4,8 @@
 // (GET /platform/senaryo/son-sonuc). Dikey düzen: başlangıç → adımlar (alanlar, ilerleme düğmesi) → bitiş.
 // Ekran sayfasının "Akış" sekmesi de aynı çizimi kullanır (bilgi.durum 'ekran': senaryo seçimi ve koşu rengi yok).
 // Dış kütüphane yok; kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { h, ikon, rozet, tarihMetni, yerlestir } from './ortak.js';
+import { api, h, ikon, rozet, tarihMetni, yerlestir } from './ortak.js';
+import { girisAdimlariOzeti, tarifFormuAdresi } from './giris-ozeti.mjs';
 
 const DURUMLAR = {
   basarili: { etiket: 'Geçti', sinif: 'basari', ikonAd: 'onay' },
@@ -56,6 +57,34 @@ function dugumSinifi(sonuc, ek = '') {
   return ['diyagram-dugumu', ek, d ? `durum-${d.sinif}` : ''].join(' ').replace(/\s+/g, ' ').trim();
 }
 
+/**
+ * Akışın başındaki giriş bloğunun ayrıntısı: açılınca ortamın giriş tarifi okunur adımlarla gösterilir (tarif ayrıca yüklenir;
+ * gizli değer yok) ve tarif formuna bağlantı verilir (#/ayarlar/giris/tarif/<ortamId>).
+ */
+export function girisAyrintisi(bilgi) {
+  const govde = h('div', { class: 'giris-diyagram-ayrinti' }, h('p', { class: 'soluk kucuk' }, 'Yükleniyor…'));
+  const adres = bilgi.ortamId ? tarifFormuAdresi(bilgi.ortamId) : '#/ayarlar/giris';
+  let yuklendi = false;
+  const kutu = h('details', { class: 'giris-diyagram' }, h('summary', {}, 'Giriş adımları'), govde,
+    h('a', { class: 'dugme hayalet kucuk-dugme', href: adres }, ikon('duzenle'), 'Giriş tarifini düzenle'));
+  kutu.addEventListener('toggle', async () => {
+    if (!kutu.open || yuklendi) return;
+    yuklendi = true;
+    if (!bilgi.projeId) { govde.replaceChildren(h('p', { class: 'soluk kucuk' }, 'Giriş ortam başına tanımlanır (Ayarlar > Giriş profilleri > Giriş tarifi).')); return; }
+    try {
+      const v = await api(`/platform/giris-tarifleri?projeId=${encodeURIComponent(bilgi.projeId)}`);
+      const o = (v.ortamlar || []).find((x) => x.ortamId === bilgi.ortamId) || (v.ortamlar || []).find((x) => x.varsayilan) || null;
+      const liste = o && o.tarif ? girisAdimlariOzeti(o.tarif) : [];
+      govde.replaceChildren(liste.length
+        ? h('ol', { class: 'giris-ozet-adimlari kucuk' }, liste.map((x) => h('li', {}, x.metin)))
+        : h('p', { class: 'kucuk hata-metni' }, `${o ? o.ortamAd : 'Bu'} ortamında giriş tarifi tanımlı değil.`));
+    } catch (e) {
+      govde.replaceChildren(h('p', { class: 'kucuk hata-metni' }, e.message || String(e)));
+    }
+  });
+  return kutu;
+}
+
 function baglanti(etiketler, kapali = false) {
   return h('li', { class: `diyagram-baglantisi${kapali ? ' kapali' : ''}`, 'aria-hidden': etiketler.length ? null : 'true' },
     h('span', { class: 'cizgi', 'aria-hidden': 'true' }),
@@ -65,7 +94,8 @@ function baglanti(etiketler, kapali = false) {
 /**
  * @param {HTMLElement} kap
  * @param {import('../senaryolar/akis-diyagrami.d.mts').AkisDiyagrami} d akisDiyagrami() sonucu
- * @param {{ durum: 'yeni' | 'yukleniyor' | 'hazir' | 'hata' | 'ekran'; sonuc?: { id: string; durum: string; zaman: string } | null; hata?: string; ortamAdi: string; not?: string }} bilgi
+ * @param {{ durum: 'yeni' | 'yukleniyor' | 'hazir' | 'hata' | 'ekran'; sonuc?: { id: string; durum: string; zaman: string } | null; hata?: string; ortamAdi: string; not?: string;
+ *   projeId?: string; ortamId?: string | null }} bilgi projeId/ortamId: giriş bloğunda tarifin okunur adımları ve tarif formu bağlantısı
  */
 export function akisDiyagramiCiz(kap, d, bilgi) {
   const sonucVar = bilgi.durum === 'hazir' && bilgi.sonuc;
@@ -87,8 +117,9 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
   const akis = h('ol', { class: 'diyagram-akisi', 'aria-label': 'Senaryo akışı' });
   akis.append(h('li', { class: dugumSinifi(d.baslangic.sonuc, 'uc baslangic') },
     h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(d.baslangic.girisVar ? 'kilit' : 'oynat')),
-      h('h4', {}, 'Başlangıç'), durumCipi(d.baslangic.sonuc)),
+      h('h4', {}, d.baslangic.girisVar ? 'Giriş (ortam tarifi)' : 'Girişsiz'), durumCipi(d.baslangic.sonuc)),
     h('p', { class: 'dugum-aciklamasi' }, d.baslangic.metin),
+    d.baslangic.girisVar ? girisAyrintisi(bilgi) : null,
     hataSatiri(d.baslangic.sonuc)));
 
   let onceki = [];
@@ -106,8 +137,11 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
       h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-no', 'aria-hidden': 'true' }, String(a.no)),
         h('h4', {}, a.baslik), ...rozetler, disarida ? null : durumCipi(a.sonuc)),
       a.altAkis ? h('p', { class: 'dugum-aciklamasi' }, `Alt akış: ${a.altAkis}`) : null,
+      a.sqlOzeti ? h('p', { class: 'dugum-aciklamasi' }, ikon('veri'), ' ', a.sqlOzeti) : null,
+      a.yenidenGiris ? h('p', { class: 'dugum-aciklamasi' }, ikon('kilit'), ' ', `Yeniden giriş: oturum kapatılır, ortamın giriş tarifiyle ${a.yenidenGiris.profil ? `“${a.yenidenGiris.profil}” profiliyle` : 'varsayılan profille'} girilir; akış aynı sayfadan sürer.`) : null,
+      a.yenidenGiris ? girisAyrintisi(bilgi) : null,
       alanListesi(a.alanlar),
-      !a.alanlar.length && !a.altAkis ? h('p', { class: 'dugum-aciklamasi soluk' }, 'Bu adımda doldurulan alan yok.') : null,
+      !a.alanlar.length && !a.altAkis && !a.sqlOzeti && !a.yenidenGiris ? h('p', { class: 'dugum-aciklamasi soluk' }, 'Bu adımda doldurulan alan yok.') : null,
       disarida ? null : hataSatiri(a.sonuc)));
     if (!disarida) { onceki = a.aksiyonMetinleri; oncekiKapali = false; }
   }

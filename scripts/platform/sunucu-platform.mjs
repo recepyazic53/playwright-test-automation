@@ -21,7 +21,10 @@
 //   GET  /platform/yedek/disa-aktar/<id>/indir?token=   hazır yedeği indirir (indirme bitince geçici dosya silinir)
 // Giriş tarifleri (ortam ayarlarında, şifreli; gizli değer içermez — bkz. giris/tarif.mjs):
 //   GET  /platform/giris-tarifleri?projeId=     ortam başına etkin tarif (kaydedilmiş | proje varsayılanı) +
-//                                               bağlam türlerinin alan ADLARI (değer yok)
+//                                               bağlam türlerinin alan ADLARI (değer yok) + giriş profillerinin
+//                                               ek alan ADLARI (giriş adımlarının "{ad}" yer tutucuları)
+//   POST /platform/giris-profili/kaydet { …, ekAlanlar?: [{ ad, gizli, deger?, sil? }] }  gizli ek alan şifreli ('gizli')
+//        saklanır, yanıtta maskelidir; "goster" ile alan: "ek:<ad>"
 //   POST /platform/giris-tarifi/kaydet | dogrula | sifirla   { projeId, ortamId, tarif }
 //   POST /platform/giris-tarifi/oner { projeId, ortamId, girisAdresi? } → YALNIZCA kullanıcı isteyince ortamın
 //        giriş sayfasını başsız tarayıcıda açıp seçici önerir (alan doldurmaz, göndermez)
@@ -30,17 +33,23 @@
 //   POST /platform/giris-profili/goster, /platform/test-verisi-profili/goster
 //        — AÇIK göster: tek bir gizli değeri düz metin döner (yalnızca kullanıcı isteyince).
 // Koşu sonuçları (şema v5; Playwright raporlayıcısı: scripts/platform/raporlayici.mjs):
-//   GET  /platform/sonuclar/ozet?projeId=&urun=       ürün listesi, kartlar, trend, koşu geçmişi
+//   GET  /platform/sonuclar/ozet?projeId=&urun=&baslangic=&bitis=(|&gun=)   ürün listesi, kartlar, trend, koşu geçmişi (aralıkta)
 //   GET  /platform/sonuclar/kosu?id=                  koşu detayı (senaryo bazında sonuçlar)
 //   GET  /platform/sonuclar/sonuc?id=                 test detayı (hata, adımlar, medya listesi)
 //   GET  /platform/sonuclar/kaliplar?projeId=&urun=&baslangic=&bitis=   hata kalıpları
+//   GET  /platform/sonuclar/html-rapor?projeId=&tur=ekran|servis&id=&goruntuler=1&hatalar=0|1&adres=1   paylaşılabilir HTML rapor
+//        (tek dosya, maskeli; görüntüler kasada çözülüp data: URI olarak gömülür — sonuclar/html-rapor.mjs)
+//   GET  /platform/sonuclar/html-rapor/onizleme/<id>?token=   son üretilen raporun tek kullanımlık önizlemesi (kendi CSP'si)
+//   GET  /platform/servis-sonuclari?projeId=&servisId=&akisId=&ortamId=&denemeler=1   servis / akış koşuları, kalıplar
+//   GET  /platform/servis-sonuclari/kosu?projeId=&id=   koşu ayrıntısı · /senaryo?projeId=&id=   istek / yanıt (maskeli)
 //   GET  /platform/medya/<id>[?indir=1]               şifreli medyayı ÇÖZEREK akıtır (Range destekli;
 //        kasa açık + oturum token'ı gerekir; düz metin diske YAZILMAZ). indir=1 → Content-Disposition.
 //   POST /platform/sonuc/durum|medya-anahtari|kosu|kaydet|bitir — YALNIZCA raporlayıcı için: oturum
 //        token'ı ya da raporlayıcı token'ı (sunucu belleğinde; koşu alt sürecine verilir) kabul edilir; kasa GEREKMEZ
 //        (sonuç metinleri düz, medya dosyaları raporlayıcı sürecinde şifrelenmiş olarak gelir).
 // Senaryolar (genel; kimlik = senaryo UUID'si; kasa açık olmalı — bkz. senaryolar/senaryo-servisi.mjs):
-//   GET  /platform/senaryolar?projeId=&ortamId=        liste (son sonuç, bağlam profili, beklenen sonuç) + ekranlar
+//   GET  /platform/senaryolar?projeId=&ortamId=        liste (son sonuç, bağlam profili, beklenen sonuç) + ekranlar;
+//        ortamId yoksa birleşik liste (satırda ortamlar: [{ ortamId, tanimli, kosuyaDahil, sonSonuc }])
 //   GET  /platform/senaryo?id=&ortamId=                 ayrıntı (verinin hassas alanları çözülmüş — düzenleme formu)
 //   GET  /platform/senaryo/form?projeId=&ekranId=&ortamId=&akisId=   seçilen akışın modeli (yoksa varsayılan) + akış listesi +
 //        alt modeller + profil seçenekleri (maskeli)
@@ -64,7 +73,8 @@
 //   POST /platform/ortak-akis/ekle { projeId, ekranId, ekranIdleri, istegeBagli, onay }  ortak akışı seçilen ekranların
 //        varsayılan akışının sonuna ekler; onay yoksa etki
 //   POST /platform/sayfa-paketi/onizle { projeId, paket, ekranId?, mod? }   doğrulama + önizleme (gövde en fazla 16 MB)
-//   POST /platform/sayfa-paketi/ekle   { projeId, paket, senaryoIndeksleri, ortamIdleri }  ekran + model v1 + öneriler
+//   POST /platform/sayfa-paketi/ekle   { projeId, paket, senaryoIndeksleri, ortamIdleri, testVerisi? }  ekran + model v1 + öneriler
+//                                      (+ onaylanan test verisi tabloları / alan bağlantıları; değiştir ve analiz/yukle da alır)
 //   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
 //   POST /platform/ekran/analiz/uygula { projeId, ekranId, analizId, kabul, red } yalnızca kabul edilenlerle yeni sürüm
 //   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
@@ -108,6 +118,7 @@ import { KATEGORI_SECENEKLERI, siniflandirmaKurallari, siniflandirmaKurallariniK
 import { CEKIRDEK_GIZLI_ADLAR, ekGizliAdlar, ekGizliAdlariKaydet } from './ayarlar/maskeleme.mjs';
 import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtamDegiskenleri, varsayilanKosuAyarlari } from './ayarlar/kosu-ayarlari.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
+import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
@@ -142,7 +153,7 @@ import {
 import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import {
   SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kosuyaDahilAyarla,
-  modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryoListesi, senaryoSonSonucu, senaryolariSil
+  modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryolariCogalt, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
 import { YASAK_ADRES_DEGISKENI } from './senaryolar/model-kosusu.mjs';
@@ -155,7 +166,7 @@ import {
 } from './dosyalar/senaryo-dosyalari.mjs';
 import { formSemasiOlustur, tumFormAlanlari } from './senaryolar/model-formu.mjs';
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
-import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
+import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, GIRIS_ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
 import { girisSayfasiniOner } from './giris/algilama.mjs';
 import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
@@ -169,10 +180,20 @@ import {
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
 import { TABLO_GET_UCLARI, TABLO_POST_UCLARI } from './tablolar/tablo-uclari.mjs';
+import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
+import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
+import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
+import { servisAkisiCalistir } from './servisler/servis-akislari.mjs';
+import { zamanlayiciOlustur, zamanliKosuyuYurut } from './zamanlama/zamanlayici.mjs';
+import { ZAMANLAMA_POST_UCLARI, zamanlamaGetUclari } from './zamanlama/uclar.mjs';
+import { SERVIS_SONUC_UCLARI } from './sonuclar/servis-sonuclari.mjs';
+import { sorgudanAralik } from './sonuclar/aralik.mjs';
+import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Sayfa paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
 const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', '/platform/tablo/kaydet', ...SERVIS_BUYUK_GOVDE_UCLARI]);
+for (const u of ENTEGRASYON_BUYUK_GOVDE_UCLARI) PAKET_UCLARI.add(u);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
 export const SONUC_GOVDE_SINIRI = 4 * 1024 * 1024;
 /** İçe aktarılacak yedeğin üst sınırı (videolu yedekler büyük olabilir; gövde diske akıtılır). */
@@ -320,6 +341,28 @@ export function platformKosucusunuAyarla(yeni) {
 }
 /** @param {string} dosya @param {string} ad */
 const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
+
+/**
+ * Zamanlanmış koşular (Ayarlar > Koşu; bkz. zamanlama/*.mjs): kasa AÇIKKEN dakikada bir denetlenir; vakti gelen kural
+ * "Koşuyu başlat" ile aynı yoldan (senaryoCalistir + bu koşucu) koşar. Kasa kilitliyse hiçbir şey yapılmaz.
+ */
+const zamanlayici = zamanlayiciOlustur({
+  veritabani: () => (vt && kasaAcikMi(vt) ? vt : null),
+  mesgulMu: () => Boolean(kosucu?.mesgulMu?.()),
+  yurut: (db, kural, kosuKimligi, devamMi) => zamanliKosuyuYurut(db, kural, kosuKimligi, {
+    senaryolar: (d, projeId, ortamId) => senaryoListesi(d, projeId, ortamId).senaryolar,
+    senaryoCalistir: (d, govde) => senaryoCalistir(d, govde, kosucu, calistirmaSecenekleri(d)),
+    servisAkisiCalistir: (d, projeId, girdi) => servisAkisiCalistir(d, projeId, girdi),
+    bildir: (d, kosuId, baglantiIdleri) => kosuBittiBildir(d, kosuId, { baglantiIdleri }),
+    devamMi
+  }),
+  log: (m) => console.log(m)
+});
+
+/** Test sunucusu başlarken çağırır: zamanlanmış koşuların dakikalık denetimi. */
+export function platformZamanlanmisKosulariBaslat() {
+  zamanlayici.baslat();
+}
 
 /**
  * Nöbetçi'nin başlattığı test süreçlerine verilecek ortam değişkenleri: kasa AÇIKSA türetilmiş
@@ -800,6 +843,11 @@ function dosyaZamani(t) {
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 
+/** "Koşu bitti" bildirimi: aynı koşudan bu süre yeni "bitir" gelmezse gönderilir (toplu koşuda tek özet). */
+const KOSU_BILDIRIM_BEKLEMESI_MS = 60_000;
+/** @type {Map<string, ReturnType<typeof setTimeout>>} */
+const bekleyenKosuBildirimleri = new Map();
+
 /** Kasa açık veritabanı; değilse KasaHatasi (KASA_YOK / KASA_KILITLI). */
 async function acikVeritabani() {
   const db = await platformVeritabani();
@@ -849,6 +897,8 @@ function girisProfiliGorunumu(p) {
     parola: maskeli(p.parolaVar), totpGizli: maskeli(p.totpGizliVar),
     // SMS: "sabit" = sabit test kodu (şifreli sütunda, gizli değil), "elle" = koşu sırasında elle girilir.
     sms: { yontem: sms.yontem === 'elle' ? 'elle' : sms.yontem === 'sabit' ? 'sabit' : null, kod: typeof sms.kod === 'string' ? sms.kod : '' },
+    // Ek alanlar (giriş adımlarının "{ad}" değerleri): gizli olanın değeri gelmez, yalnızca maske.
+    ekAlanlar: (p.ekAlanlar ?? []).map((e) => (e.gizli ? { ad: e.ad, gizli: true, deger: maskeli(e.degerVar) } : { ad: e.ad, gizli: false, deger: e.deger ?? '' })),
     guncellenme: p.guncellenme
   };
 }
@@ -1002,12 +1052,18 @@ const GET_UCLARI = new Map([
     return {
       ortamlar: ortamlariListele(db, projeId).map((o) => girisTarifiGorunumu(db, projeId, o)),
       baglamTurleri: [...turler].map(([tur, alanlar]) => ({ tur, alanlar: [...alanlar] })),
-      adimIslemleri: ADIM_ISLEMLERI.map((islem) => ({ islem, etiket: ADIM_ETIKETLERI[islem] }))
+      adimIslemleri: ADIM_ISLEMLERI.map((islem) => ({ islem, etiket: ADIM_ETIKETLERI[islem] })),
+      // Giriş adımları: özel adımlar (kullanıcı adı / parola / giriş düğmesi) + genel adımlar; "{ad}" = giriş profilinin ek alanı.
+      girisAdimIslemleri: GIRIS_ADIM_ISLEMLERI.map((islem) => ({ islem, etiket: ADIM_ETIKETLERI[islem] })),
+      ekAlanAdlari: [...new Set(girisProfilleriniListele(db, projeId).flatMap((p) => p.ekAlanlar.map((e) => e.ad)))]
     };
   }],
   ['/platform/senaryolar', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
-    const ortamId = ortamSec(db, projeId, q.get('ortamId'));
+    // ortamId verilmezse BİRLEŞİK liste (tüm senaryolar; satırda ortam başına tanım / Koşuda / son sonuç).
+    const ham = q.get('ortamId');
+    if (ham === null || ham === '') return { ortamId: null, ...senaryoListesi(db, projeId, null) };
+    const ortamId = ortamSec(db, projeId, ham);
     return { ortamId, ...senaryoListesi(db, projeId, ortamId) };
   }],
   ['/platform/senaryo', (db, q) => {
@@ -1095,6 +1151,8 @@ const GET_UCLARI = new Map([
   ['/platform/kosu-ayarlari', (db) => ({ ayarlar: kosuAyarlariniOku(db), tanimlar: KOSU_AYAR_TANIMLARI })],
   // Ekran rehberleri: ilk girişte otomatik açılsın mı (kullanıcı kararı) + görülenler (bkz. ayarlar/rehber-ayarlari.mjs).
   ['/platform/rehber', (db) => ({ rehber: rehberAyarlariniOku(db) })],
+  // Ayarlar > Arayüz > Nöbetçi nasıl açılsın (kendi penceresi / varsayılan tarayıcı; başlatıcı okur, bkz. ayarlar/acilis-tercihi.mjs).
+  ['/platform/acilis', () => ({ acilis: acilisTercihiniOku(VERI_KOKU) })],
   // Ayarlar > Güvenlik > Maskeleme: çekirdek gizli ad listesi (değiştirilemez) + kullanıcının ek adları.
   ['/platform/maskeleme', (db) => ({ cekirdek: CEKIRDEK_GIZLI_ADLAR, ekAdlar: ekGizliAdlar(db) })],
   // Ayarlar > Koşu > Hata sınıflandırma: kullanıcının kuralları + seçilebilen kategoriler.
@@ -1105,7 +1163,8 @@ const GET_UCLARI = new Map([
     // Yasak adresler: ayarlardakiler (düzenlenir) + NOBETCI_YASAK_ADRESLER ortam değişkenindekiler (yalnızca gösterilir).
     yasakAdresler: ayarlardakiYasakAdresler(db), ortamYasakAdresleri: ortamdakiYasakAdresler(), yasakAdresEnCok: YASAK_ADRES_EN_COK
   })],
-  ['/platform/sonuclar/ozet', (db, q) => sonucOzeti(db, kimlikAl(q.get('projeId'), 'projeId'), { urun: urunSecimi(q.get('urun')) })],
+  // Tarih aralığı: baslangic / bitis (ISO) ya da geriye uyum için gun (son N gün) — sonuclar/aralik.mjs.
+  ['/platform/sonuclar/ozet', (db, q) => sonucOzeti(db, kimlikAl(q.get('projeId'), 'projeId'), { urun: urunSecimi(q.get('urun')), ...sorgudanAralik(q) })],
   ['/platform/sonuclar/kosu', (db, q) => {
     const d = kosuDetayi(db, kimlikAl(q.get('id')));
     if (!d) throw new DepoHatasi('Koşu bulunamadı.');
@@ -1117,7 +1176,7 @@ const GET_UCLARI = new Map([
     return { sonuc: d };
   }],
   ['/platform/sonuclar/kaliplar', (db, q) => hataKaliplari(db, kimlikAl(q.get('projeId'), 'projeId'), {
-    urun: urunSecimi(q.get('urun')), baslangic: q.get('baslangic') || null, bitis: q.get('bitis') || null
+    urun: urunSecimi(q.get('urun')), ...sorgudanAralik(q)
   })],
   ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
   ['/platform/yedek/otomatik-liste', (db) => {
@@ -1133,6 +1192,14 @@ const GET_UCLARI = new Map([
 ]);
 for (const [yol, islem] of SERVIS_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of TABLO_GET_UCLARI) GET_UCLARI.set(yol, islem);
+// SQL adımları: veritabanı bağlantısı seçim listesi (sql/sorgu-bagdastirici.mjs).
+for (const [yol, islem] of SQL_GET_UCLARI) GET_UCLARI.set(yol, islem);
+// Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
+for (const [yol, islem] of ENTEGRASYON_GET_UCLARI) GET_UCLARI.set(yol, islem);
+// Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs).
+for (const [yol, islem] of zamanlamaGetUclari(zamanlayici)) GET_UCLARI.set(yol, islem);
+// Servis sonuçları ekranı (yalnız okuma): sonuclar/servis-sonuclari.mjs.
+for (const [yol, islem] of SERVIS_SONUC_UCLARI) GET_UCLARI.set(yol, islem);
 
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const POST_UCLARI = new Map([
@@ -1140,12 +1207,12 @@ const POST_UCLARI = new Map([
     ekranId: secimliKimlik(g.ekranId) ?? null, mod: g.mod === 'analiz' ? 'analiz' : g.mod === 'degistir' ? 'degistir' : 'yeni'
   })],
   ['/platform/ekran/model/degistir', (db, g) => modeliPaketleDegistir(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, {
-    onay: g.onay === true, senaryoIndeksleri: g.senaryoIndeksleri, ortamIdleri: g.ortamIdleri, medyaKlasoru: medyaKlasoruYolu()
+    onay: g.onay === true, senaryoIndeksleri: g.senaryoIndeksleri, ortamIdleri: g.ortamIdleri, medyaKlasoru: medyaKlasoruYolu(), testVerisi: g.testVerisi
   })],
   ['/platform/sayfa-paketi/ekle', (db, g) => sayfaEkle(db, kimlikAl(g.projeId, 'projeId'), g.paket, {
-    senaryoIndeksleri: g.senaryoIndeksleri, ortamIdleri: g.ortamIdleri, medyaKlasoru: medyaKlasoruYolu()
+    senaryoIndeksleri: g.senaryoIndeksleri, ortamIdleri: g.ortamIdleri, medyaKlasoru: medyaKlasoruYolu(), testVerisi: g.testVerisi
   })],
-  ['/platform/ekran/analiz/yukle', (db, g) => analizYukle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, { medyaKlasoru: medyaKlasoruYolu() })],
+  ['/platform/ekran/analiz/yukle', (db, g) => analizYukle(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, { medyaKlasoru: medyaKlasoruYolu(), testVerisi: g.testVerisi })],
   ['/platform/ekran/analiz/uygula', (db, g) => analizUygula(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { analizId: g.analizId, kabul: g.kabul, red: g.red })],
   ['/platform/ekran/analiz/iptal', (db, g) => analizIptal(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.analizId)],
   ['/platform/ekran/akis/kaydet', (db, g) => akisKaydet(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
@@ -1198,7 +1265,9 @@ const POST_UCLARI = new Map([
     const sonuc = senaryoKaydet(db, {
       id: secimliKimlik(g.id) ?? null, projeId, ekranId: secimliKimlik(g.ekranId) ?? null, baslik: g.baslik,
       ...(g.veri !== undefined ? { veri: g.veri } : {}), ortamIdleri: g.ortamIdleri, kosuyaDahil: g.kosuyaDahil, mutlakaGorunmeli: g.mutlakaGorunmeli,
-      ...(typeof g.akisId === 'string' ? { akisId: g.akisId } : {})
+      ...(typeof g.akisId === 'string' ? { akisId: g.akisId } : {}),
+      // Giriş seçimi (senaryo-girisi.mjs): verilmezse mevcut korunur.
+      ...(g.giris !== undefined ? { giris: g.giris } : {})
     }, { kosuyorMu });
     // Formda yüklenen (henüz sahipsiz) şifreli dosyalar bu senaryoya bağlanır (sahipsiz temizliği silmesin).
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
@@ -1206,10 +1275,15 @@ const POST_UCLARI = new Map([
   }],
   // Senaryoların değişiklik geçmişini siler (geri alınamaz; onay: true olmadan yalnızca sayar).
   ['/platform/senaryo/gecmis/sil', (db, g) => senaryoGecmisiniSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { onay: g.onay === true })],
-  ['/platform/senaryo/kosuya-dahil', (db, g) => kosuyaDahilAyarla(db, kimlikAl(g.projeId, 'projeId'), g.idler, g.dahil === true)],
+  // ortamId verilirse yalnız o ortamda; verilmezse senaryonun tanımlı olduğu tüm ortamlarda.
+  ['/platform/senaryo/kosuya-dahil', (db, g) => kosuyaDahilAyarla(db, kimlikAl(g.projeId, 'projeId'), g.idler, g.dahil === true, undefined,
+    g.ortamId === undefined || g.ortamId === null ? null : kimlikAl(g.ortamId, 'ortamId'))],
   ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
   ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],
+  // Toplu çoğaltma: onaysız çağrı önizleme döner (hiçbir şey yazılmaz).
+  ['/platform/senaryolar/cogalt', (db, g) => senaryolariCogalt(db, kimlikAl(g.projeId, 'projeId'), { idler: g.idler, adet: g.adet, sablon: g.sablon, onay: g.onay === true })],
   ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
+  ['/platform/acilis/kaydet', (db, g) => ({ acilis: acilisTercihiniKaydet(VERI_KOKU, g.bicim) })],
   ['/platform/rehber/kaydet', (db, g) => ({ rehber: rehberAyarlariniKaydet(db, { otomatik: g.otomatik, gorulen: g.gorulen, sifirla: g.sifirla }) })],
   ['/platform/maskeleme/kaydet', (db, g) => ({ ekAdlar: ekGizliAdlariKaydet(db, g.ekAdlar) })],
   ['/platform/siniflandirma/kaydet', (db, g) => ({ kurallar: siniflandirmaKurallariniKaydet(db, g.kurallar) })],
@@ -1329,7 +1403,14 @@ const POST_UCLARI = new Map([
       parola: g.parolaSil === true ? null : secimliMetin(g.parola),
       ikiAsamaliTur: tur,
       totpGizli: tur === 'totp' ? secimliMetin(g.totpGizli) ?? (mevcut?.totpGizliVar ? undefined : null) : null,
-      smsAyari
+      smsAyari,
+      // Ek alanlar: verilmezse mevcutlar korunur; gizli alanda "deger" gönderilmezse kayıtlı değer korunur.
+      ekAlanlar: Array.isArray(g.ekAlanlar)
+        ? g.ekAlanlar.map((/** @type {any} */ e) => ({
+          ad: metinAl(e?.ad), gizli: e?.gizli === true,
+          deger: e?.gizli === true ? (typeof e?.deger === 'string' && e.deger !== '' ? e.deger : e?.sil === true ? null : undefined) : metinAl(e?.deger)
+        }))
+        : undefined
     });
     return { profil: girisProfiliGorunumu(/** @type {import('./veritabani/depo.mjs').GirisProfili} */ (girisProfiliGetir(db, kayitId))) };
   }],
@@ -1355,7 +1436,13 @@ const POST_UCLARI = new Map([
     if (!p) throw new DepoHatasi('Giriş profili bulunamadı.');
     if (g.alan === 'parola') return { deger: p.parola ?? '' };
     if (g.alan === 'totpGizli') return { deger: p.totpGizli ?? '' };
-    throw new DepoHatasi('"alan" yalnızca parola veya totpGizli olabilir.');
+    // Gizli ek alan: "ek:<ad>".
+    if (typeof g.alan === 'string' && g.alan.startsWith('ek:')) {
+      const e = p.ekAlanlar.find((x) => x.ad === /** @type {string} */ (g.alan).slice(3));
+      if (!e) throw new DepoHatasi('Ek alan bulunamadı.');
+      return { deger: e.deger ?? '' };
+    }
+    throw new DepoHatasi('"alan" yalnızca parola, totpGizli veya ek:<ad> olabilir.');
   }],
   ['/platform/baglam-profili/kaydet', (db, g) => {
     const alanlar = typeof g.alanlar === 'object' && g.alanlar !== null && !Array.isArray(g.alanlar) ? g.alanlar : {};
@@ -1394,6 +1481,10 @@ const POST_UCLARI = new Map([
 for (const [yol, islem] of SERVIS_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Test verisi tabloları (tablolar/tablo-uclari.mjs).
 for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
+// Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
+for (const [yol, islem] of entegrasyonPostUclari({ medyaKlasoruYolu })) POST_UCLARI.set(yol, islem);
+// Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs; hiçbir uç koşu başlatmaz).
+for (const [yol, islem] of ZAMANLAMA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 
 /**
  * @param {import('node:http').IncomingMessage} req
@@ -1591,6 +1682,27 @@ export async function platformIsteginiIsle(req, res, baglam) {
       return await taramaIsteginiIsle(req, res, {
         token: baglam.token, disTokenGecerli, jsonGonder, jsonGovde, acikVeritabani, projeKoku: PROJE_KOKU
       });
+    }
+
+    // --- GET /platform/sonuclar/html-rapor — paylaşılabilir HTML rapor (kasa açık olmalı; görüntü çözme asenkron) ---
+    if (req.method === 'GET' && yol === '/platform/sonuclar/html-rapor') {
+      if (!disTokenGecerli) { tokenYok(); return true; }
+      const db = await acikVeritabani();
+      res.setHeader('Cache-Control', 'no-store');
+      const rapor = await htmlRaporuOlustur(db, url.searchParams, { medyaKlasoru: medyaKlasoruYolu() });
+      jsonGonder(res, 200, { basarili: true, ...rapor, onizlemeId: onizlemeSakla(rapor.html) });
+      return true;
+    }
+    // Önizleme: tek kullanımlık, kendi CSP'siyle (betik yok); arayüzde iframe sandbox="" içinde açılır.
+    const raporOnizleme = /^\/platform\/sonuclar\/html-rapor\/onizleme\/([a-f0-9]{32})$/.exec(yol);
+    if (req.method === 'GET' && raporOnizleme) {
+      if (!disTokenGecerli) { tokenYok(); return true; }
+      await acikVeritabani();
+      const html = onizlemeAl(raporOnizleme[1]);
+      if (html === null) { jsonGonder(res, 404, { basarili: false, mesaj: 'Önizlemenin süresi doldu; seçeneği değiştirerek yeniden hazırlayın.' }); return true; }
+      res.writeHead(200, { ...ONIZLEME_BASLIKLARI });
+      res.end(html);
+      return true;
     }
 
     // --- GET ayarlar uçları (kasa açık olmalı) -----------------------------------------------
@@ -2100,10 +2212,20 @@ async function raporlayiciIsteginiIsle(req, res, islem, baglam) {
       jsonGonder(res, 200, { basarili: true, id });
       return;
     }
-    case 'bitir':
-      kosuyuBitir(db, kimlikAl(govde.kosuId, 'kosuId'), { durum: metinAl(govde.durum), bitis: typeof govde.bitis === 'string' ? govde.bitis : undefined });
+    case 'bitir': {
+      const bitenKosu = kimlikAl(govde.kosuId, 'kosuId');
+      kosuyuBitir(db, bitenKosu, { durum: metinAl(govde.durum), bitis: typeof govde.bitis === 'string' ? govde.bitis : undefined });
       jsonGonder(res, 200, { basarili: true });
+      // Entegrasyonlar: "koşu bitti" bildirimleri (arka planda; hata koşuyu etkilemez, yalnız bağlantı durumuna yazılır).
+      // Toplu koşuda her senaryo aynı koşu kimliğiyle "bitir" der: bildirim, o koşudan KOSU_BILDIRIM_BEKLEMESI_MS boyunca yeni
+      // "bitir" gelmezse bir kez (son özetle) gönderilir.
+      clearTimeout(bekleyenKosuBildirimleri.get(bitenKosu));
+      bekleyenKosuBildirimleri.set(bitenKosu, setTimeout(() => {
+        bekleyenKosuBildirimleri.delete(bitenKosu);
+        platformVeritabani().then((acik) => { if (acik) return kosuBittiBildir(acik, bitenKosu); }).catch(() => { /* bildirim koşuyu etkilemez */ });
+      }, KOSU_BILDIRIM_BEKLEMESI_MS).unref());
       return;
+    }
     default:
       jsonGonder(res, 404, { basarili: false, mesaj: 'Bilinmeyen uç nokta.' });
   }

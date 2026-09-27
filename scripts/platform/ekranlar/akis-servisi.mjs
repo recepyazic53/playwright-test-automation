@@ -100,7 +100,7 @@ function diyagramdaKaybolan(model, adimlar, i, env) {
   const g = kosu.basariGostergesi;
   const secenekler = !nesneMi(g) ? [] : g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler.filter(nesneMi) : [g];
   if (secenekler.some((s) => s.tur === 'url')) return 'adres (url) başarı göstergesi';
-  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis));
+  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu));
   if (sonAdim && secenekler.some((s) => s.tur === 'eleman')) return 'öğe (eleman) başarı göstergesi';
   // Hata göstergesi (uyarısız da olsa) ve öğe "veya" göstergesi kaydederken adımın mevcut tanımından korunur (paket-olusturucu).
   // İsteğe bağlı adım: diyagramda yalnızca "her senaryoda basılmaz" düğmenin açtığı alanlar olarak (önceki adım o düğme).
@@ -255,6 +255,16 @@ export function adimlardanBloklar(model, adimlar, env) {
     // Ortak akış adımı: tek blok (içi ortak akışın kendi yerinde düzenlenir).
     if (nesneMi(adim.ortakAkis) && typeof adim.ortakAkis.dosya === 'string') {
       bloklar.push({ tur: 'ortak', dosya: adim.ortakAkis.dosya, ad: String(adim.baslik || adim.id), istegeBagli });
+      continue;
+    }
+    // SQL sorgusu adımı: tek blok (tanım aynen).
+    if (nesneMi(adim.sqlKontrolu)) {
+      bloklar.push({ tur: 'sql', ad: String(adim.baslik || adim.id), sql: kopya(adim.sqlKontrolu) });
+      continue;
+    }
+    // Yeniden giriş adımı: tek blok (profil: giriş profilinin adı; yoksa ortamın varsayılanı).
+    if (nesneMi(adim.yenidenGiris)) {
+      bloklar.push({ tur: 'giris', ad: String(adim.baslik || adim.id), profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil ? adim.yenidenGiris.profil : null });
       continue;
     }
     // Adım düzeyindeki koşul (düğmesiz adım) alanlara taşınır: alanın kendi koşulu yoksa adımınki yazılır.
@@ -443,7 +453,9 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
     ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar: ortakAkis ? [] : ortakAkislariListele(vt, projeId), ortakAkis,
     ...(ortakAkis ? { kullananlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}),
     akis: s.akisId && kaynak ? { id: kaynak.id, ad: kaynak.ad, varsayilan: kaynak.varsayilan } : null,
-    kopyaKaynagi: s.kopya && kaynak ? kaynak.ad : null
+    kopyaKaynagi: s.kopya && kaynak ? kaynak.ad : null,
+    // Ekran girişsiz açılıyorsa diyagramın başı "Girişsiz" olur ve "Yeniden giriş" bloğu sunulmaz.
+    girissiz: model.girisGerekmez === true
   };
 }
 

@@ -296,9 +296,11 @@ function alanCevir(alan, konum, altModeller) {
     }
     case 'altModelGecersizKilma': {
       const bolum = altModelBolumu(altModeller, alan.altModel);
-      const alanlar = bolum ? (bolum.alanlar || []).filter((a) => a.yapilandirma === 'senaryo' && a.eslesme && typeof a.eslesme.kart === 'string')
+      // Kayıt alanının adı: eslesme.kayitAlani (eski adı eslesme.kart hâlâ okunur).
+      const kayitAdi = (a) => (a.eslesme ? (a.eslesme.kayitAlani !== undefined ? a.eslesme.kayitAlani : a.eslesme.kart) : undefined);
+      const alanlar = bolum ? (bolum.alanlar || []).filter((a) => a.yapilandirma === 'senaryo' && typeof kayitAdi(a) === 'string')
         .map((a) => ({
-          id: a.id, anahtar: a.eslesme.kart, etiket: etiketi(a), zorunlu: a.zorunlu === true,
+          id: a.id, anahtar: kayitAdi(a), etiket: etiketi(a), zorunlu: a.zorunlu === true,
           tip: a.tip === 'secim' ? 'secim' : 'metin', secenekler: secenekListesi(a.secenekler), hassas: a.hassas === true
         })) : [];
       return { ...ortak, tip: 'altModel', anahtar: anahtarlar[0] || alan.id, altModel: alan.altModel ? { ...alan.altModel } : null, alanlar };

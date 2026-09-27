@@ -1,5 +1,5 @@
 // scripts/platform/tarama/akis-tasarimi.mjs için tip bildirimi.
-import type { EngellenenIstek, HamAlan, KayitEnvanteri, KayitOgesi } from './paket-olusturucu.mjs';
+import type { EngellenenIstek, HamAlan, KayitEnvanteri, KayitOgesi, SecenekGozlemi } from './paket-olusturucu.mjs';
 
 /**
  * Kayıtta ekranın bir okunuşu: görünen alanların anahtarları, o ana kadar DOKUNULAN alanlar (son düğme basışından beri),
@@ -28,6 +28,8 @@ export type AkisEnvanteri = {
   olaylar: AkisOlayi[];
   engellenenler: EngellenenIstek[];
   notlar: string[];
+  /** Seçim alanlarının gözlenen seçenekleri (okumalar + tıklanınca açılan listeler; yalnız seçenek etiketi / değeri). */
+  secenekGozlemleri?: SecenekGozlemi[];
 };
 export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */
@@ -41,6 +43,10 @@ export type AkisBlogu =
   | { tur: 'mesaj'; mesaj: number | null; metin: string; uyari?: boolean; desen?: boolean }
   /** Ortak akış (ör. ödeme): dosya = "<ortak akış anahtarı>.model.json"; ad adımın başlığı; istegeBagli: senaryoda "“ad” dahil". */
   | { tur: 'ortak'; dosya: string; ad: string; istegeBagli: boolean }
+  /** SQL sorgusu adımı (sql/sql-adimi.mjs SqlTanimi; kaydederken doğrulanır). */
+  | { tur: 'sql'; ad: string; sql: Record<string, unknown> }
+  /** Yeniden giriş: oturum kapatılıp ortamın tarifiyle yeniden girilir (profil: giriş profili adı; null = varsayılan). */
+  | { tur: 'giris'; ad: string; profil: string | null }
   | { tur: 'bitir' };
 /** Alanın görünürlük koşulu: seçim alanı (anahtar) bu değerlerden birindeyken görünür. */
 export type AkisKosulu = { secim: string; degerler: string[] };
@@ -59,4 +65,5 @@ export declare function akisEnvanteriMi(e: unknown): e is AkisEnvanteri;
 export declare function akisTaslagi(env: AkisEnvanteri): AkisBlogu[];
 export declare function akisPaleti(env: AkisEnvanteri, bloklar: AkisBlogu[]): AkisPaleti;
 export declare function bloklariAyikla(ham: unknown): { bloklar: AkisBlogu[]; hatalar: AkisHatasi[] };
+export declare function secenekGozlemleriniAyikla(ham: unknown): SecenekGozlemi[];
 export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[]): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };

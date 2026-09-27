@@ -63,43 +63,74 @@ export const kosuSuruyorMu = () => Boolean(durum.oturum && !durum.oturum.bitti);
 // Onay penceresi
 // ---------------------------------------------------------------------------------------
 
+/** Koşu diyaloğunda önce seçilecek ortam: varsayılan, yoksa riskli olmayan ilk ortam, yoksa ilki. */
+export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) || ortamlar.find((o) => !riskliOrtamMi(o)) || ortamlar[0] || null;
+
 /**
  * Sayfa içi onay: kaç senaryo, hangi ortamda, nasıl (sırayla/aynı anda), koşu türü/kapsamı; riskli
- * ortamda uyarı. Promise<boolean> döner.
- * @param {{ baslik: string; senaryolar: Array<{ baslik: string }>; ortam: { ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; not?: string; haricSayisi?: number; dugme?: string }} s
+ * ortamda uyarı.
+ *  - Sabit ortam (s.ortam, s.senaryolar): Promise<boolean>.
+ *  - ORTAM SEÇİMLİ (s.ortamlar + s.hesapla): ortam diyalogda seçilir; her seçimde hesapla(ortam) koşacak senaryoları
+ *    (ve o ortamda Koşuda kapalı / tanımsız olanların sayısını) verir. Promise<{ ortam, senaryolar } | null>.
+ * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; not?: string; haricSayisi?: number; dugme?: string;
+ *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number } }} s
  */
 export function kosuOnayi(s) {
   return new Promise((coz) => {
-    const riskli = riskliOrtamMi(s.ortam);
-    const baslat = h('button', { type: 'button', class: 'birincil' }, ikon('oynat'), s.dugme || `${s.senaryolar.length} senaryoyu başlat`);
+    const secimli = Array.isArray(s.ortamlar) && s.ortamlar.length > 0 && typeof s.hesapla === 'function';
+    let ortam = secimli ? (s.ortam && s.ortamlar.find((o) => o.id === s.ortam.id)) || onerilenOrtam(s.ortamlar) : s.ortam;
+    /** @type {{ senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number }} */
+    let hesap = { senaryolar: s.senaryolar || [], haricSayisi: s.haricSayisi };
+    const baslat = h('button', { type: 'button', class: 'birincil' });
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const turMetni = s.tur === 'tam' ? `Tam koşu · ${s.kapsam || 'Genel'}` : 'Kısmi (tekil)';
-    const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'kosu-onay-basligi' },
-      h('div', { class: 'diyalog-govde' },
-        h('h2', { id: 'kosu-onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('oynat')), s.baslik),
-        h('p', { class: 'soluk' }, `${s.senaryolar.length} senaryo ${s.ortam.ad} ortamında ${s.esZamanli ? 'aynı anda' : 'sırayla'} çalıştırılacak.`),
+    const ortamSecimi = secimli ? h('select', { id: `kosu-ortami-${kimlikUret()}` },
+      s.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ortam.id }, riskliOrtamMi(o) ? `${o.ad} (dikkat: test ortamı değil)` : o.ad))) : null;
+    const degisken = h('div', {});
+    const ciz = () => {
+      if (secimli) hesap = s.hesapla(ortam);
+      const riskli = riskliOrtamMi(ortam);
+      const adet = hesap.senaryolar.length;
+      yerlestir(baslat, ikon('oynat'), s.dugme || `${adet} senaryoyu başlat`);
+      baslat.disabled = adet === 0;
+      yerlestir(degisken,
+        h('p', { class: 'soluk' }, adet
+          ? `${adet} senaryo ${ortam.ad} ortamında ${s.esZamanli ? 'aynı anda' : 'sırayla'} çalıştırılacak.`
+          : `${ortam.ad} ortamında çalıştırılacak senaryo yok.`),
         h('dl', { class: 'onay-ozeti' },
-          h('div', {}, h('dt', {}, 'Senaryo'), h('dd', {}, String(s.senaryolar.length))),
-          h('div', {}, h('dt', {}, 'Ortam'), h('dd', { class: riskli ? 'canli' : null }, s.ortam.ad)),
+          h('div', {}, h('dt', {}, 'Senaryo'), h('dd', {}, String(adet))),
+          h('div', {}, h('dt', {}, 'Ortam'), h('dd', { class: riskli ? 'canli' : null }, ortam.ad)),
           h('div', {}, h('dt', {}, 'Kapsam'), h('dd', { title: turMetni }, s.tur === 'tam' ? s.kapsam || 'Genel' : 'Kısmi'))),
-        h('ul', { class: 'onay-listesi', 'aria-label': 'Çalıştırılacak senaryolar' },
-          s.senaryolar.slice(0, 40).map((x) => h('li', {}, x.baslik)),
-          s.senaryolar.length > 40 ? h('li', {}, `… ve ${s.senaryolar.length - 40} senaryo daha`) : null),
-        s.haricSayisi ? h('p', { class: 'soluk kucuk' }, `${s.haricSayisi} senaryo koşu listesinde olmadığı (Koşuda kapalı) için dahil edilmedi.`) : null,
+        adet ? h('ul', { class: 'onay-listesi', 'aria-label': 'Çalıştırılacak senaryolar' },
+          hesap.senaryolar.slice(0, 40).map((x) => h('li', {}, x.baslik)),
+          adet > 40 ? h('li', {}, `… ve ${adet - 40} senaryo daha`) : null) : null,
+        hesap.haricSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.haricSayisi} senaryo ${secimli ? `${ortam.ad} ortamında ` : ''}koşu listesinde olmadığı (Koşuda kapalı) için dahil edilmedi.`) : null,
+        hesap.tanimsizSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.tanimsizSayisi} senaryo ${ortam.ad} ortamında tanımlı olmadığı için dahil edilmedi.`) : null,
         h('p', { class: 'soluk kucuk' }, s.not || (s.tur === 'tam'
           ? 'Tam koşu olarak kaydedilir; bitince Sonuçlar kartları ve trendi güncellenir.'
           : 'Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez, koşu geçmişinde "tekil" görünür.')),
-        riskli ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('strong', {}, `Dikkat: ${s.ortam.ad} ortamı. `), 'Bu ortam varsayılan test ortamı değil; testler gerçek işlem oluşturabilir.') : null),
+        riskli ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('strong', {}, `Dikkat: ${ortam.ad} ortamı. `), 'Bu ortam varsayılan test ortamı değil; testler gerçek işlem oluşturabilir.') : null);
+    };
+    const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'kosu-onay-basligi' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'kosu-onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('oynat')), s.baslik),
+        ortamSecimi ? h('div', { class: 'alan kosu-ortam-secimi' }, h('label', { for: ortamSecimi.id }, 'Ortam'), ortamSecimi) : null,
+        degisken),
       h('div', { class: 'diyalog-alt' }, vazgec, baslat));
+    ortamSecimi?.addEventListener('change', () => { ortam = s.ortamlar.find((o) => o.id === ortamSecimi.value) || ortam; ciz(); });
+    ciz();
     let sonuc = false;
     baslat.addEventListener('click', () => { sonuc = true; diyalog.close(); });
     vazgec.addEventListener('click', () => diyalog.close());
-    diyalog.addEventListener('close', () => { diyalog.remove(); coz(sonuc); });
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar } : null) : sonuc); });
     document.body.append(diyalog);
     diyalog.showModal();
-    baslat.focus();
+    (ortamSecimi || baslat).focus();
   });
 }
+
+/** Son koşu oturumunun ortam kimliği (kosuDurumu'nun döndürdüğü satırlar bu ortamda koşar; oturum yoksa null). */
+export const kosuOrtamiId = () => (durum.oturum ? durum.oturum.ortam.id : null);
 
 /**
  * Genel onay (silme vb.): Promise<boolean>.
@@ -123,6 +154,31 @@ export function onayIste(s) {
     document.body.append(diyalog);
     diyalog.showModal();
     vazgec.focus();
+  });
+}
+
+/**
+ * Seçenekli soru (ör. "Ne eklemek istiyorsunuz?"): Promise<string | null> (Vazgeç / Esc → null).
+ * @param {{ baslik: string; metin?: string; ikonAd?: string; secenekler: Array<{ deger: string; etiket: string; aciklama?: string; ikonAd?: string }> }} s
+ */
+export function secenekIste(s) {
+  return new Promise((coz) => {
+    let sonuc = null;
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    const kartlar = s.secenekler.map((x) => h('button', {
+      type: 'button', class: 'secenek-karti', onclick: () => { sonuc = x.deger; diyalog.close(); }
+    }, h('span', { class: 'secenek-karti-ikon', 'aria-hidden': 'true' }, ikon(x.ikonAd || 'arti')), h('b', {}, x.etiket), x.aciklama ? h('small', {}, x.aciklama) : null));
+    const diyalog = h('dialog', { class: 'onay-diyalogu secenek-diyalogu', 'aria-labelledby': 'secenek-basligi' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'secenek-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon(s.ikonAd || 'soru')), s.baslik),
+        s.metin ? h('p', { class: 'soluk' }, s.metin) : null,
+        h('div', { class: 'secenek-kartlari' }, kartlar)),
+      h('div', { class: 'diyalog-alt' }, vazgec));
+    vazgec.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(sonuc); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    kartlar[0]?.focus();
   });
 }
 
@@ -369,12 +425,12 @@ function izlemeAlani(oturum) {
   if (!satir) return alan;
   const g = KOSU_DURUMLARI[satir.durum] || KOSU_DURUMLARI.hata;
   alan.append(h('div', { class: 'izleme-basligi' }, h('span', { title: satir.baslik }, satir.baslik),
-    satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti' }, 'CANLI') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)));
+    satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti', title: 'Anlık ekran görüntüsü (koşu sürerken yenilenir)' }, 'ANLIK') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)));
   if (satir.durum === 'calisiyor') {
     if (satir.kodIstegi) alan.append(kodFormu(satir));
     const img = h('img', { alt: `Canlı ekran görüntüsü: ${satir.baslik}` });
     const bos = h('div', { class: 'medya-bos' }, h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), 'Canlı görüntü bekleniyor…');
-    const kap = h('div', { class: 'goruntuleyici' }, h('div', { class: 'tarayici-cubugu', 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {}), h('span', {}, 'canlı')), bos);
+    const kap = h('div', { class: 'goruntuleyici' }, h('div', { class: 'tarayici-cubugu', 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {}), h('span', {}, 'anlık görüntü')), bos);
     alan.append(kap);
     // Önceki kare yeni çizimde de gösterilir (yenileme sırasında titreme olmasın).
     if (sonCanliKare && sonCanliKare.kosuId === satir.kosuId) { img.src = sonCanliKare.src; bos.replaceWith(img); }

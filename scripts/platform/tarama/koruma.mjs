@@ -65,6 +65,8 @@ export function taramaAdresleri(tabanUrl, hedefAdres, tarif, profilDegerleri) {
   const adresler = [tabanUrl, hedefAdres];
   if (tarif) {
     adresler.push(tarif.girisAdresi, tarif.oturumKontrolAdresi);
+    // Giriş adımlarındaki "Sayfaya git" (yer tutucusuz hâli; ek alan değerleri burada yok) da denetlenir.
+    for (const a of tarif.girisAdimlari ?? []) if (a.islem === 'git') adresler.push(a.adres);
     for (const a of tarif.baglamDegistirme?.adimlar ?? []) {
       if (a.islem !== 'git') continue;
       adresler.push(a.adres);

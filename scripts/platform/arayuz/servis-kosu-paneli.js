@@ -138,7 +138,7 @@ function ciz() {
   const kontroller = satir.sonuc && Array.isArray(satir.sonuc.kontroller) ? satir.sonuc.kontroller : [];
   const izleme = h('div', { class: 'kosu-izleme' },
     h('div', { class: 'izleme-basligi' }, h('span', { title: satir.baslik }, satir.baslik),
-      satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti' }, 'CANLI') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)),
+      satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti', title: 'Koşu sürüyor' }, 'SÜRÜYOR') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)),
     satir.durum === 'atlandi' ? h('p', { class: 'soluk kucuk' }, satir.neden || 'Atlandı.') : adimlar(satir),
     kontroller.length ? h('ul', { class: 'kontrol-listesi' }, kontroller.map((k) => h('li', { class: k.gecti ? 'gecti' : 'kaldi' },
       h('div', {}, ikon(k.gecti ? 'onay' : 'carpi'), ` ${k.tur === 'veya' ? 'Şunlardan biri (VEYA)' : k.ad} — `, h('span', { class: 'soluk' }, k.aciklama))))) : null,

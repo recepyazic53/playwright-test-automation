@@ -31,7 +31,7 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
-  platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi,
+  platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformZamanlanmisKosulariBaslat,
   platformKosuSureLimitiMs, platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
@@ -310,15 +310,26 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ice-aktarma.js', { dosya: 'ice-aktarma.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ayarlar.js', { dosya: 'ayarlar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-tarifi.js', { dosya: 'giris-tarifi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/giris-ozeti.mjs', { dosya: 'giris-ozeti.mjs', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/giris-akisi.js', { dosya: 'giris-akisi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/taban-adresler.js', { dosya: 'taban-adresler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimi-formu.js', { dosya: 'parametre-tanimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-kosu-paneli.js', { dosya: 'servis-kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-akislari.js', { dosya: 'servis-akislari.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-sonuclari.js', { dosya: 'servis-sonuclari.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/html-rapor.js', { dosya: 'html-rapor.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/tarih-araligi.js', { dosya: 'tarih-araligi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/entegrasyonlar.js', { dosya: 'entegrasyonlar.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/zamanlanmis-kosular.js', { dosya: 'zamanlanmis-kosular.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-akis-diyagrami.js', { dosya: 'servis-akis-diyagrami.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rehber.js', { dosya: 'rehber.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/hizli-arama.js', { dosya: 'hizli-arama.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/olustur-menusu.js', { dosya: 'olustur-menusu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rehber-icerikleri.js', { dosya: 'rehber-icerikleri.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/cikis-korumasi.js', { dosya: 'cikis-korumasi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
@@ -335,12 +346,15 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/dosya-yukleme.js', { dosya: 'dosya-yukleme.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tarama.js', { dosya: 'tarama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-tasarimi.js', { dosya: 'akis-tasarimi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/tablo-siralama.js', { dosya: 'tablo-siralama.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablolar.js', { dosya: 'tablolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekran-baglari.js', { dosya: 'ekran-baglari.js', tur: 'text/javascript; charset=utf-8' }],
   // Genel, saf modüller arayüzle PAYLAŞILIR (kopya yok): model tabanlı form ve tek senaryo doğrulayıcısı.
   ['/arayuz/servis-govdesi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'servis-govdesi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -1224,6 +1238,9 @@ if (dogrudanCalistirildi) {
 
   // Platform veritabanı: kasa açıkken günde bir yerel otomatik yedek (veri/yedekler/, son 30).
   platformOtomatikYedekZamanla();
+
+  // Zamanlanmış koşular (Ayarlar > Koşu): kasa açıkken dakikada bir denetlenir; kilitliyken kaçan zamanlar koşulmaz.
+  platformZamanlanmisKosulariBaslat();
 
   // Dinleme hatası (ör. port zaten kullanımda) yukarıdaki uncaughtException dinleyicisine
   // düşüp sunucu "ayakta ama dinlemiyor" halde kalmasın diye açıkça ele alınır.

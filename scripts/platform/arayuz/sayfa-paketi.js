@@ -1,6 +1,7 @@
 // Sayfa paketi yükleme akışı (genel):
 //   mod 'yeni'   — "Sayfa ekle": yükle → doğrulama hataları → önizleme (alanlar, adımlar, isteğe bağlı adımlar,
-//                  senaryo önerileri [seçmeli], gereken ayarlar [Ayarlar bağlantılı], bilinmeyenler, kanıtlar) →
+//                  senaryo önerileri [seçmeli], gereken ayarlar [Ayarlar bağlantılı], test verisine yazılacaklar [tablo başına
+//                  yaz / birleştir / yeni ad / atla + alan bağlantıları], bilinmeyenler, kanıtlar) →
 //                  kabul: ekran + model v1 + seçilen senaryolar (Koşuda KAPALI) → bildirim + ekrana git.
 //   mod 'analiz' — mevcut ekran için yeni paket (tekrar analiz): yükle → doğrula/önizle → "Bulguları hesapla".
 // Paketin iki kaynağı vardır: yüklenen JSON dosyası ya da "Ekranı otomatik tara" (tarama.js; s.tara verilirse yükleme
@@ -13,7 +14,7 @@ import { onayIste } from './kosu-paneli.js';
 
 const PAKET_EN_BUYUK = 16 * 1024 * 1024;
 // Claude'un inceleme kuralları: ekranlar.js > INCELEME_KURALLARI ile aynı metin (docs/sayfa-paketi.md > "Düğme grupları").
-const CUMLE = '<sayfa bağlantısı> sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. Seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere basıp sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, onaylayan ya da ödeme yapan bir düğmeye gelince dur ve bana sor (yalnızca TEST ortamında, onayımla basılır). Kart, şifre gibi bilgileri girme. Bir düğmenin ne yaptığından emin değilsen basmadan önce sor.';
+const CUMLE = '<sayfa bağlantısı> sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. Alanlara kart, parola, kimlik no gibi bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. Tüm seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini testVerisi.tablolar\'a yaz: bağımlı listelerde her satır geçerli bir kombinasyon olsun (üst seçim + alt seçenek); hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar\'ına ekle; alanları testVerisi.baglantilar ile sütunlara bağla, senaryo önerilerinde bu alanlara tablodaki değeri yaz. Kişisel ya da gizli değerleri (parola, kart, kimlik no) hiçbir yere yazma; böyle bir sütun gerekiyorsa "gizli": true işaretle ve boş bırak.';
 
 /**
  * @typedef {{ mod: 'yeni' | 'analiz'; proje: { id: string; ad: string }; ekran?: { id: string; ad: string; anahtar: string } | null;
@@ -134,9 +135,100 @@ function yuklemeAdimi(govde, s, onceki = null) {
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('simsek'), 'Paket nasıl üretilir?')),
       h('ol', { class: 'kesif-adimlari dikey' },
         h('li', {}, h('b', {}, 'Claude Code sohbetini açın'), h('span', {}, 'Bu projenin klasöründe (docs/sayfa-paketi.md okunabilsin).')),
-        h('li', {}, h('b', {}, 'Bağlantıyı ve isteği yazın'), h('span', {}, s.mod === 'analiz' ? 'Ekran sayfasındaki "Tekrar analiz et" hangi bağlam profilleriyle inceleneceğini sorar ve hazır bir istek dosyası yazar.' : 'Claude seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan ya da ödeme yapan düğmeden önce durup size sorar (yalnızca TEST\'te, onayınızla). Kart ve şifre girmez.')),
-        h('li', {}, h('b', {}, 'Üretilen JSON\'u buraya yükleyin'), h('span', {}, 'Önizleyip kabul edene kadar hiçbir şey kaydedilmez.'))),
+        h('li', {}, h('b', {}, 'Bağlantıyı ve isteği yazın'), h('span', {}, s.mod === 'analiz' ? 'Ekran sayfasındaki "Tekrar analiz et" hangi bağlam profilleriyle inceleneceğini sorar ve hazır bir istek dosyası yazar.' : 'Claude sayfayı yalnızca okur: seçimleri değiştirip koşullu alanları ve bağımlı listeleri çıkarır, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan, gönderen ya da ödeme yapan düğmelere basmaz. Seçim alanlarının seçeneklerini test verisi tablosu olarak pakete yazar; kişisel / gizli değer yazmaz.')),
+        h('li', {}, h('b', {}, 'Üretilen JSON\'u buraya yükleyin'), h('span', {}, 'Önizleyip kabul edene kadar hiçbir şey kaydedilmez; test verisi tablolarını ve alan bağlantılarını önizlemede siz seçersiniz.'))),
       h('div', { class: 'kesif-cumlesi dikey' }, h('code', {}, CUMLE), kopyalaDugmesi(CUMLE, 'Cümleyi kopyala')))));
+}
+
+// ---------------------------------------------------------------------------------------
+// Test verisine yazılacaklar (paketin testVerisi bölümü): tablo başına yaz / birleştir / yeni ad / atla, alan bağlantıları.
+// Aynı adlı tablo varken seçim yapılmadan kabul edilemez; onaylanmayan hiçbir şey yazılmaz.
+// ---------------------------------------------------------------------------------------
+
+const TV_KAYNAK = { paket: 'Sayfa paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
+
+/** @param {object | null} t önizlemenin testVerisi bölümü @param {() => void} degisti */
+function testVerisiSecimi(t, degisti) {
+  if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, govde: () => undefined };
+  /** @type {Map<string, { islem: string | null; yeniAd: string }>} */
+  const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? null : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60) }]));
+  const baglar = new Set(t.baglantilar.map((b) => b.alanId));
+  const yazilir = (ad) => { const d = durum.get(ad); return Boolean(d && d.islem && d.islem !== 'atla'); };
+  const bagListesi = h('ul', { class: 'tv-baglar' });
+  const bagCiz = () => yerlestir(bagListesi, t.baglantilar.map((b) => {
+    const acik = yazilir(b.tablo);
+    const k = h('input', { type: 'checkbox', checked: acik && baglar.has(b.alanId), disabled: !acik, 'aria-label': `${b.alanEtiketi} alanını bağla` });
+    k.addEventListener('change', () => { if (k.checked) baglar.add(b.alanId); else baglar.delete(b.alanId); degisti(); });
+    const degisir = b.mevcut && (b.mevcut.tablo !== b.tablo || b.mevcut.sutun !== b.sutun);
+    return h('li', { class: acik ? '' : 'soluk' }, h('label', {}, k,
+      h('span', {}, h('b', {}, b.alanEtiketi), ' → ', h('code', {}, `${b.tablo} → ${b.sutun}`)),
+      degisir ? rozet(`şu an: ${b.mevcut.tablo} → ${b.mevcut.sutun} (değişir)`, 'uyari') : null,
+      b.modeldeVar ? null : rozet('alan bulgu kabul edilince modele girer', '', { title: 'Bağlantı yine yazılır; alan modele eklenince geçerli olur.' })));
+  }));
+  const tabloSatiri = (x) => {
+    const d = durum.get(x.ad);
+    const gizliVar = x.sutunlar.some((s) => s.gizli);
+    let secim;
+    if (!x.mevcut) {
+      const k = h('input', { type: 'checkbox', checked: d.islem === 'yeni', 'aria-label': `${x.ad} tablosunu yaz` });
+      k.addEventListener('change', () => { d.islem = k.checked ? 'yeni' : 'atla'; bagCiz(); degisti(); });
+      secim = h('label', { class: 'tv-yaz' }, k, h('span', {}, 'Yeni tablo olarak yaz'));
+    } else {
+      const ad = `tv-${Math.random().toString(36).slice(2, 9)}`;
+      const adGirdisi = h('input', { type: 'text', value: d.yeniAd, maxlength: '60', 'aria-label': `${x.ad} için yeni tablo adı`, disabled: d.islem !== 'yeniAd' });
+      adGirdisi.addEventListener('input', () => { d.yeniAd = adGirdisi.value; degisti(); });
+      const secenek = (deger, etiket, ek = null) => {
+        const r = h('input', { type: 'radio', name: ad, value: deger, checked: d.islem === deger });
+        r.addEventListener('change', () => { d.islem = deger; adGirdisi.disabled = deger !== 'yeniAd'; bagCiz(); degisti(); });
+        return h('label', {}, r, h('span', {}, etiket), ek);
+      };
+      const m = x.mevcut;
+      secim = h('div', { class: 'tv-cakisma' },
+        h('div', { class: 'not-kutusu uyari kucuk' }, `“${m.ad}” adında bir tablo zaten var (${m.sutunSayisi} sütun, ${m.satirSayisi} satır). Ne yapılsın? Seçmeden kabul edilemez.`),
+        h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': `${x.ad}: aynı adlı tablo` },
+          secenek('birlestir', `Birleştir — ${m.eklenecekSatir} yeni satır${m.yeniSutunlar.length ? `, ${m.yeniSutunlar.length} yeni sütun (${m.yeniSutunlar.join(', ')})` : ''}; mevcut satırlar değişmez`),
+          secenek('yeniAd', 'Yeni adla yaz:', adGirdisi),
+          secenek('atla', 'Atla (yazma)')));
+    }
+    const sutunlar = x.sutunlar.map((s) => h('th', { scope: 'col' }, s.gizli ? ikon('kilit') : null, s.ad));
+    return h('li', { class: 'tv-tablo' },
+      h('div', { class: 'tv-tablo-ust' }, h('strong', {}, x.ad),
+        h('span', { class: 'kucuk soluk' }, `${x.sutunlar.length} sütun · ${x.satirSayisi} satır${x.tekrarSayisi ? ` (${x.tekrarSayisi} tekrar atıldı)` : ''}`),
+        gizliVar ? rozet('gizli sütun: değeri Nöbetçi\'de şifreli girilir', 'uyari') : null),
+      x.aciklama ? h('p', { class: 'kucuk soluk' }, x.aciklama) : null,
+      x.bagliAlanlar.length ? h('p', { class: 'kucuk' }, 'Bağlanacak alanlar: ', x.bagliAlanlar.join(', ')) : null,
+      h('div', { class: 'tablo-kaydirma tv-ornek' }, h('table', { class: 'veri-tablosu' }, h('thead', {}, h('tr', {}, sutunlar)),
+        h('tbody', {}, x.ornek.map((r) => h('tr', {}, r.map((v, i) => h('td', {}, x.sutunlar[i].gizli ? '—' : v ?? ''))))))),
+      x.satirSayisi > x.ornek.length ? h('small', { class: 'cok-soluk' }, `… ve ${x.satirSayisi - x.ornek.length} satır daha`) : null,
+      secim);
+  };
+  const bolum = h('section', { class: 'kart test-verisi-onizleme', 'aria-label': 'Test verisine yazılacaklar' },
+    h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Test verisine yazılacaklar'),
+      h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Sayfa paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
+    h('p', { class: 'kucuk soluk' }, 'Seçim alanlarının seçenekleri Ayarlar > Test verisi > Tablolar\'a Excel sayfası gibi yazılır (satır = birlikte geçerli değerler) ve alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
+    h('ul', { class: 'tv-tablolar' }, t.tablolar.map(tabloSatiri)),
+    t.baglantilar.length ? [h('div', { class: 'ara-baslik' }, `Alan bağlantıları (${t.baglantilar.length})`), bagListesi] : null);
+  bagCiz();
+  return {
+    bolum,
+    hazir: () => [...durum.values()].every((d) => d.islem && (d.islem !== 'yeniAd' || d.yeniAd.trim())),
+    ozet: () => {
+      const n = t.tablolar.filter((x) => yazilir(x.ad)).length;
+      const b = t.baglantilar.filter((x) => yazilir(x.tablo) && baglar.has(x.alanId)).length;
+      const bekleyen = [...durum.values()].some((d) => !d.islem);
+      return `${n ? `${n} tablo yazılır${b ? `, ${b} alan bağlanır` : ''}` : 'yazılmaz'}${bekleyen ? ' — aynı adlı tablo için seçim bekleniyor' : ''}`;
+    },
+    govde: () => ({
+      tablolar: Object.fromEntries([...durum].map(([ad, d]) => [ad, { islem: d.islem || 'atla', ...(d.islem === 'yeniAd' ? { yeniAd: d.yeniAd.trim() } : {}) }])),
+      baglantilar: t.baglantilar.filter((x) => yazilir(x.tablo) && baglar.has(x.alanId)).map((x) => x.alanId)
+    })
+  };
+}
+
+/** Yazılan test verisinin bildirimi. @param {{ tablolar: Array<{ ad: string; islem: string; eklenenSatir: number }>; baglanan: number } | undefined} r */
+function testVerisiBildir(r) {
+  if (!r || !r.tablolar.length) return;
+  bildir(`Test verisi: ${r.tablolar.map((x) => `${x.ad} (${x.islem === 'birlestir' ? `+${x.eklenenSatir} satır` : `${x.eklenenSatir} satır`})`).join(', ')}${r.baglanan ? `; ${r.baglanan} alan bağlandı` : ''}.`);
 }
 
 function hataListesi(baslik, hatalar, dosyaAdi) {
@@ -165,16 +257,19 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
   const kabulDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon(analiz ? 'yenile' : 'onay'),
     analiz ? 'Bulguları hesapla' : degistir ? 'Modeli değiştir' : o.hedef ? 'Modeli ekle' : 'Ekranı oluştur');
   const hataAlani = h('div', {});
+  const tv = testVerisiSecimi(p.testVerisi, () => ozetCiz());
 
   const ozetCiz = () => {
     const a = p.agac.sayilar;
+    const tvOzet = tv.ozet();
     yerlestir(ozetAlani,
       h('div', { class: 'mini-sayilar' }, [['Adım', a.adim], ['Alan', a.alan], ['Öneri', p.senaryolar.length]].map(([e, v]) => h('div', {}, h('b', {}, String(v)), h('span', {}, e)))),
-      analiz ? null : h('dl', { class: 'ozet-satirlari' },
-        h('dt', {}, 'Ekran'), h('dd', {}, o.hedef ? `mevcut: ${o.hedef.ad}` : `yeni: ${p.meta.ekran.ad}`),
-        h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`),
-        h('dt', {}, 'Kanıt'), h('dd', {}, `${kanitlar.length} ekran görüntüsü (şifreli saklanır)`)));
-    kabulDugmesi.disabled = !analiz && secim.size > 0 && ortamSecimi.size === 0;
+      h('dl', { class: 'ozet-satirlari' },
+        analiz ? null : [h('dt', {}, 'Ekran'), h('dd', {}, o.hedef ? `mevcut: ${o.hedef.ad}` : `yeni: ${p.meta.ekran.ad}`),
+          h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`),
+          h('dt', {}, 'Kanıt'), h('dd', {}, `${kanitlar.length} ekran görüntüsü (şifreli saklanır)`)],
+        tvOzet ? [h('dt', {}, 'Test verisi'), h('dd', {}, tvOzet)] : null));
+    kabulDugmesi.disabled = (!analiz && secim.size > 0 && ortamSecimi.size === 0) || !tv.hazir();
   };
 
   const senaryoSatiri = (x) => {
@@ -237,7 +332,8 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
     yerlestir(hataAlani);
     try {
       if (analiz) {
-        const r = await mesgulIken(kabulDugmesi, 'Hesaplanıyor…', () => api('/platform/ekran/analiz/yukle', { govde: { projeId: s.proje.id, ekranId: s.ekran.id, paket } }));
+        const r = await mesgulIken(kabulDugmesi, 'Hesaplanıyor…', () => api('/platform/ekran/analiz/yukle', { govde: { projeId: s.proje.id, ekranId: s.ekran.id, paket, testVerisi: tv.govde() } }));
+        testVerisiBildir(r.testVerisi);
         if (!r.bulguSayisi) {
           bildir(r.gizlenenSayisi ? `Yeni bulgu yok (${r.gizlenenSayisi} daha önce reddedilen bulgu gizlendi).` : 'Paket mevcut modelle aynı: yeni bulgu yok.');
           s.bitti(s.ekran.id, false);
@@ -255,16 +351,18 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
           dugme: 'Modeli değiştir', ikonAd: 'uyari'
         }))) return;
         const r = await mesgulIken(kabulDugmesi, 'Değiştiriliyor…', () => api('/platform/ekran/model/degistir', {
-          govde: { projeId: s.proje.id, ekranId: s.ekran.id, paket, onay: true, senaryoIndeksleri: [...secim].sort((a, b) => a - b), ortamIdleri: [...ortamSecimi] }
+          govde: { projeId: s.proje.id, ekranId: s.ekran.id, paket, onay: true, senaryoIndeksleri: [...secim].sort((a, b) => a - b), ortamIdleri: [...ortamSecimi], testVerisi: tv.govde() }
         }));
         bildir(`${s.ekran.ad}: model v${r.surum} yazıldı${r.senaryoIdleri.length ? `, ${r.senaryoIdleri.length} yeni senaryo (Koşuda kapalı)` : ''}.`);
+        testVerisiBildir(r.testVerisi);
         s.bitti(s.ekran.id, false);
         return;
       }
       const r = await mesgulIken(kabulDugmesi, 'Ekleniyor…', () => api('/platform/sayfa-paketi/ekle', {
-        govde: { projeId: s.proje.id, paket, senaryoIndeksleri: [...secim].sort((a, b) => a - b), ortamIdleri: [...ortamSecimi] }
+        govde: { projeId: s.proje.id, paket, senaryoIndeksleri: [...secim].sort((a, b) => a - b), ortamIdleri: [...ortamSecimi], testVerisi: tv.govde() }
       }));
       bildir(`${p.meta.ekran.ad} eklendi: model v${r.surum}, ${r.senaryoIdleri.length} senaryo (Koşuda kapalı)${r.kanitSayisi ? `, ${r.kanitSayisi} kanıt` : ''}.`);
+      testVerisiBildir(r.testVerisi);
       s.bitti(r.ekranId, false);
     } catch (e) {
       if (e.durum === 423) return;
@@ -298,6 +396,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
       analiz && p.senaryolar.length ? h('div', { class: 'not-kutusu bilgi' }, `Pakette ${p.senaryolar.length} senaryo önerisi var; tekrar analizde yalnızca model farkları değerlendirilir.`) : null,
       h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('ayar'), 'Gereken ayarlar')),
       ayarListesi,
+      tv.bolum,
       kanitlar.length ? [
         h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('ekran'), 'Kanıtlar', rozet(String(kanitlar.length), 'vurgu')), h('span', { class: 'kucuk cok-soluk' }, 'kabul edilince şifreli saklanır')),
         h('ul', { class: 'gorsel-izgarasi genis-gorseller kart' }, kanitlar.map((k) => {
@@ -320,7 +419,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         ozetAlani,
         analiz ? h('p', { class: 'kucuk soluk' }, 'Paket mevcut modelle karşılaştırılır; her değişiklik bir bulgu olur ve siz kabul edene kadar model değişmez. Daha önce reddettiğiniz aynı değişiklikler gösterilmez.')
           : [h('div', { class: 'ara-baslik' }, 'Senaryoların ortamları'), ortamSecimleri,
-            h('p', { class: 'kucuk soluk' }, 'Senaryolar Koşuda KAPALI eklenir: test kodu yazılıp öneriler gözden geçirilmeden koşuya girmez.')],
+            h('p', { class: 'kucuk soluk' }, 'Senaryolar "Koşuda" KAPALI eklenir: siz gözden geçirip açana kadar toplu koşuya girmez.')],
         hataAlani,
         h('div', { class: 'form-eylemleri' }, kabulDugmesi,
           h('button', { type: 'button', class: 'hayalet', onclick: () => yuklemeAdimi(govde, s) }, 'Başka dosya'),

@@ -1,0 +1,187 @@
+// ZAMANLANMIŞ KOŞULAR — çalıştırıcı. Nöbetçi sunucusu çalışırken ve kasa AÇIKKEN dakikada bir kuralları denetler; vakti gelen
+// kural için arayüzdeki "Koşuyu başlat" ile AYNI yoldan (senaryo başına /platform/senaryolar/calistir mantığı: senaryoCalistir)
+// koşu başlatır; koşu kimliği "zamanli-<uuid>". Kurallar:
+//  - Aynı anda başka bir koşu sürüyorsa (arayüzden ya da başka bir zamanlanmış koşu) tetikleme ATLANIR: "Atlandı: koşu sürüyordu".
+//  - Kasa kilitliyken / sunucu kapalıyken kaçan zamanlar sonradan toplu koşulmaz (bkz. takvim.mjs > vadesiGelenZaman).
+//  - Koşu sırasında kasa kilitlenir ya da çalışma alanı değişirse kalan senaryolar başlatılmaz ("yarıda").
+//  - Canlı / riskli ortamda kural onaysız ise (ör. ortam sonradan canlı işaretlendi) koşu başlatılmaz.
+// Bağımlılıklar (koşucu, senaryo listesi, servis akışı, bildirim) dışarıdan verilir; birim testleri sahte koşucu verir.
+// NOT: import.meta KULLANILMAZ. Tipler: zamanlayici.d.mts.
+import { randomUUID } from 'node:crypto';
+import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
+import { TOLERANS_MS, vadesiGelenZaman } from './takvim.mjs';
+import { ortamRiskliMi, tetiklemeYaz, tumGecmis, tumKurallar, tuketilenYaz } from './kurallar.mjs';
+
+/** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
+/** @typedef {import('./kurallar.d.mts').Kural} Kural */
+/** @typedef {import('./kurallar.d.mts').Tetikleme} Tetikleme */
+/** @typedef {import('./zamanlayici.d.mts').YurutmeBagimliliklari} YurutmeBagimliliklari */
+/** @typedef {import('./zamanlayici.d.mts').YurutmeSonucu} YurutmeSonucu */
+
+export const KONTROL_ARALIGI_MS = 60_000;
+export const ATLANDI_MESAJI = 'Atlandı: koşu sürüyordu.';
+
+/** @param {unknown} hata */
+const hataMetni = (hata) => String(/** @type {Error} */ (hata)?.message ?? hata).split('\n')[0].slice(0, 300);
+
+/**
+ * Kuralın koşusunu yürütür (bekler): senaryolar sırayla, sonra seçili servis akışları; en sonda (seçildiyse) bildirim.
+ * @param {Veritabani} vt @param {Kural} kural @param {string} kosuKimligi @param {YurutmeBagimliliklari} bag
+ * @returns {Promise<YurutmeSonucu>}
+ */
+export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
+  const ortam = ortamGetir(vt, kural.ortamId);
+  if (!ortam || ortam.projeId !== kural.projeId) throw new DepoHatasi('Ortam bulunamadı (silinmiş olabilir).');
+  if (ortamRiskliMi(ortam) && !kural.canliOnay) throw new DepoHatasi('Ortam canlı / riskli işaretli ama kuralda canlı ortam onayı yok; koşu başlatılmadı.');
+  const { senaryolar: kapsam, ekranIdleri, servisAkisIdleri } = kural.kapsam;
+  const secilen = kapsam === 'yok' ? [] : bag.senaryolar(vt, kural.projeId, kural.ortamId)
+    .filter((s) => s.kosuyaDahil && s.ekranEtkin !== false && (kapsam === 'tum' || (s.ekranId !== null && ekranIdleri.includes(s.ekranId))));
+  if (!secilen.length && !servisAkisIdleri.length) throw new DepoHatasi('Kapsama uyan "Koşuda" senaryo yok.');
+  const tam = kapsam === 'tum';
+  const ozet = { toplam: 0, basarili: 0, basarisiz: 0, atlanan: 0, hata: 0 };
+  /** @type {YurutmeSonucu['akisKosulari']} */
+  const akisKosulari = [];
+  let yarida = false;
+  let ilkHata = '';
+  const devam = () => (bag.devamMi ? bag.devamMi() : true);
+
+  for (const s of secilen) {
+    if (!devam()) { yarida = true; break; }
+    ozet.toplam++;
+    try {
+      const y = await bag.senaryoCalistir(vt, {
+        projeId: kural.projeId, ortamId: kural.ortamId, senaryoId: s.id, kosuId: randomUUID(),
+        kosuTuru: tam ? 'tam' : 'tekil', kosuKimligi, ...(tam ? { kosuKapsami: 'Genel' } : {})
+      });
+      const d = y.govde.durum;
+      if (y.govde.basarili === false) { ozet.hata++; ilkHata ||= `${s.baslik}: ${hataMetni(y.govde.mesaj ?? y.govde.hata ?? 'çalıştırılamadı')}`; }
+      else if (d === 'passed') ozet.basarili++;
+      else if (d === 'skipped' || d === 'iptal') ozet.atlanan++;
+      else ozet.basarisiz++;
+    } catch (hata) {
+      ozet.hata++;
+      ilkHata ||= `${s.baslik}: ${hataMetni(hata)}`;
+    }
+  }
+
+  for (const akisId of servisAkisIdleri) {
+    if (yarida || !devam()) { yarida = true; break; }
+    if (!bag.servisAkisiCalistir) break;
+    try {
+      const r = await bag.servisAkisiCalistir(vt, kural.projeId, { akisId, ortamId: kural.ortamId, tur: 'kosu' });
+      akisKosulari.push({ akisId, kosuId: r.kosuId ?? null, durum: r.durum });
+    } catch (hata) {
+      akisKosulari.push({ akisId, kosuId: null, durum: 'hata' });
+      ilkHata ||= `Servis akışı: ${hataMetni(hata)}`;
+    }
+  }
+
+  const senaryoKostu = ozet.toplam > 0;
+  if (kural.bildirimBaglantiId && senaryoKostu && bag.bildir && devam()) {
+    try { await bag.bildir(vt, kosuKimligi, [kural.bildirimBaglantiId]); } catch { /* bildirim hatası koşuyu etkilemez */ }
+  }
+  const akisSorunu = akisKosulari.filter((a) => a.durum !== 'basarili').length;
+  const durum = yarida ? 'yarida' : ozet.basarisiz || ozet.hata || akisSorunu ? 'basarisiz' : 'tamamlandi';
+  const parcalar = [
+    senaryoKostu ? `${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız${ozet.atlanan ? `, ${ozet.atlanan} atlandı` : ''}${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}` : null,
+    akisKosulari.length ? `${akisKosulari.length - akisSorunu}/${akisKosulari.length} servis akışı başarılı` : null,
+    yarida ? 'yarıda kaldı (kasa kilitlendi ya da çalışma alanı değişti)' : null,
+    ilkHata || null
+  ].filter(Boolean);
+  return { durum, mesaj: parcalar.join(' · '), kosuId: senaryoKostu ? kosuKimligi : null, ozet: senaryoKostu ? ozet : null, akisKosulari };
+}
+
+/**
+ * Zamanlayıcı: dakikada bir kontrolEt(). bag.veritabani() kasa açıksa veritabanını, değilse null döner.
+ * @param {import('./zamanlayici.d.mts').ZamanlayiciBagimliliklari} bag
+ */
+export function zamanlayiciOlustur(bag) {
+  const saat = bag.simdi ?? (() => new Date());
+  const log = bag.log ?? (() => {});
+  /** @type {{ kuralId: string; tetiklemeId: string; ad: string } | null} */
+  let suren = null;
+  /** Kasa kilitliyken yazılamayan tetikleme sonuçları (kasa açılınca yazılır). @type {Array<{ kuralId: string; t: Tetikleme }>} */
+  const bekleyen = [];
+  /** @type {ReturnType<typeof setInterval> | null} */
+  let aralik = null;
+
+  /** @param {Veritabani | null} vt @param {string} kuralId @param {Tetikleme} t */
+  const yaz = (vt, kuralId, t) => {
+    try { if (!vt) throw new Error('kasa kilitli'); tetiklemeYaz(vt, kuralId, t); } catch { bekleyen.push({ kuralId, t }); }
+  };
+
+  /** Önceki süreçten "çalışıyor" kalmış tetiklemeler (sunucu koşu sırasında kapandı) "yarıda" olur. @param {Veritabani} vt */
+  const kalintilariKapat = (vt) => {
+    for (const [kuralId, liste] of Object.entries(tumGecmis(vt))) {
+      for (const t of liste) {
+        if (t.durum !== 'calisiyor' || (suren && suren.tetiklemeId === t.id)) continue;
+        tetiklemeYaz(vt, kuralId, { ...t, durum: 'yarida', bitis: t.bitis ?? saat().toISOString(), mesaj: t.mesaj || 'Yarıda kaldı: sunucu koşu sırasında kapandı.' });
+      }
+    }
+  };
+
+  /**
+   * Vakti gelen kuralları tetikler. Başlatılan koşuların sözlerini döner (testler bekleyebilir; sunucu beklemez).
+   * @returns {Promise<Array<Promise<void>>>}
+   */
+  async function kontrolEt() {
+    const vt = bag.veritabani();
+    if (!vt) return [];
+    while (bekleyen.length) {
+      const x = /** @type {{ kuralId: string; t: Tetikleme }} */ (bekleyen[0]);
+      try { tetiklemeYaz(vt, x.kuralId, x.t); bekleyen.shift(); } catch { break; }
+    }
+    /** @type {Kural[]} */
+    let kurallar;
+    try { kalintilariKapat(vt); kurallar = tumKurallar(vt); } catch { return []; }
+    const simdi = saat();
+    /** @type {Array<Promise<void>>} */
+    const baslatilan = [];
+    for (const k of kurallar) {
+      if (!k.etkin) continue;
+      const vakit = vadesiGelenZaman(k.zaman, simdi, k.tuketilen, TOLERANS_MS);
+      if (!vakit) continue;
+      const zaman = vakit.toISOString();
+      try { tuketilenYaz(vt, k.id, zaman); } catch { continue; }
+      const baslangic = saat().toISOString();
+      if (suren || bag.mesgulMu()) {
+        yaz(vt, k.id, { id: randomUUID(), zaman, baslangic, bitis: baslangic, durum: 'atlandi', mesaj: ATLANDI_MESAJI, kosuId: null, ozet: null, akisKosulari: [] });
+        log(`[zamanlama] "${k.ad}" atlandı: koşu sürüyordu.`);
+        continue;
+      }
+      const kosuKimligi = `zamanli-${randomUUID()}`;
+      /** @type {Tetikleme} */
+      const t = { id: randomUUID(), zaman, baslangic, bitis: null, durum: 'calisiyor', mesaj: '', kosuId: null, ozet: null, akisKosulari: [] };
+      yaz(vt, k.id, t);
+      suren = { kuralId: k.id, tetiklemeId: t.id, ad: k.ad };
+      log(`[zamanlama] "${k.ad}" başladı (${kosuKimligi}).`);
+      const kural = k;
+      baslatilan.push((async () => {
+        /** @type {Tetikleme} */
+        let son;
+        try {
+          const r = await bag.yurut(vt, kural, kosuKimligi, () => bag.veritabani() === vt);
+          son = { ...t, ...r, bitis: saat().toISOString() };
+        } catch (hata) {
+          son = { ...t, durum: 'hata', mesaj: hataMetni(hata), bitis: saat().toISOString() };
+        }
+        suren = null;
+        yaz(bag.veritabani() === vt ? vt : null, kural.id, son);
+        log(`[zamanlama] "${kural.ad}" bitti: ${son.durum}.`);
+      })());
+    }
+    return baslatilan;
+  }
+
+  return {
+    kontrolEt,
+    /** Şu an süren zamanlanmış koşu (arayüzde gösterilir). */
+    suren: () => (suren ? { kuralId: suren.kuralId, ad: suren.ad } : null),
+    baslat() {
+      if (aralik) return;
+      aralik = setInterval(() => { void kontrolEt().catch(() => {}); }, KONTROL_ARALIGI_MS);
+      aralik.unref?.();
+    },
+    durdur() { if (aralik) clearInterval(aralik); aralik = null; }
+  };
+}

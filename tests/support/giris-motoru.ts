@@ -1,6 +1,8 @@
 // GENEL GİRİŞ MOTORU — bir projenin/ortamın "giriş tarifini" (scripts/platform/giris/tarif.mjs) Playwright
 // ile uygular. Hiçbir proje adı/seçicisi burada yoktur; tarif ortamın ayarlarındadır (Ayarlar > Giriş tarifi).
-//   girisYap          kullanıcı adı + parola → (varsa) ikinci adım (TOTP / SMS sabit kod / SMS elle) → başarı
+//   girisYap          giriş adımları (tarifte yoksa: kullanıcı adı → parola → giriş düğmesi; varsa aralarına ek alan /
+//                     seçim / "Devam" gibi adımlar, "{alan}" = giriş profilinin ek alanı) → (varsa) ikinci adım
+//                     (TOTP / SMS sabit kod / SMS elle) → başarı
 //   oturumGecerliMi   kayıtlı oturum (storageState) hâlâ geçerli mi (form DOLDURULMAZ)
 //   oturumuHazirla    global-setup: geçerli oturum dosyası varsa kullanır, yoksa giriş yapıp kaydeder
 //   baglamiDegistir   giriş sonrası bağlam (rol/şube…) adımları, bağlam profili değerleriyle
@@ -14,7 +16,8 @@ import { dirname } from 'node:path';
 import { createInterface } from 'node:readline';
 import { ReadStream, WriteStream } from 'node:tty';
 import {
-  GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula, regexKacis, yerTutuculariDoldur,
+  GIRIS_HATA_KODLARI, adimOzeti, agHatasiMi, baglamAlanlari, girisAdimlariniCoz, girisAlanlari, girisSonucunuSiniflandir, girisTarifiniDogrula,
+  regexKacis, yerTutuculariDoldur,
   type BaglamAdimi, type GirisHataKodu, type GirisTarifi, type HataGostergesi, type Hedef
 } from '../../scripts/platform/giris/tarif.mjs';
 import { CAPTCHA_MESAJI, captchaAlgila, kodAlaniniAlgila } from '../../scripts/platform/giris/algilama.mjs';
@@ -28,6 +31,10 @@ export type GirisKimligi = {
   totpGizli: string | null;
   sabitKod: string | null;
   smsKipi: 'sabit' | 'elle' | null;
+  /** Giriş profilinin ek alanları (ad → değer): tarifin giriş adımlarındaki "{ad}" yer tutucuları bunlarla dolar. */
+  ekAlanlar?: Record<string, string>;
+  /** Ek alanlardan gizli olanların ADLARI (değerleri hata/log metinlerinde maskelenir). */
+  gizliEkAlanlar?: string[];
 };
 
 /** Elle kod sağlayıcı (test için değiştirilebilir). null = süre doldu. */
@@ -284,18 +291,53 @@ export async function girisYap(page: Page, tarif: GirisTarifi, kimlik: GirisKiml
   const kaynak = kodKaynagi(tarif, kimlik);
   if (ikinci.tur !== 'yok' && kaynak.tur === 'yok') throw new GirisHatasi('KOD_GEREKLI', kaynak.neden);
 
+  // Giriş adımlarının kullandığı ek alanlar giriş profilinde olmalı (siteye gitmeden önce; değer yazılmaz).
+  const ekAlanlar = kimlik.ekAlanlar ?? {};
+  const eksik = girisAlanlari(tarif).filter((ad) => ekAlanlar[ad] === undefined || ekAlanlar[ad] === null);
+  if (eksik.length) {
+    throw new GirisHatasi('TARIF_GECERSIZ', `giriş adımları şu ek alanları kullanıyor ama giriş profilinde yok: ${eksik.join(', ')} (Ayarlar > Giriş profilleri > Ek alanlar).`);
+  }
+  const gizliler = [kimlik.parola, ...(kimlik.gizliEkAlanlar ?? []).map((ad) => ekAlanlar[ad])].filter((d): d is string => typeof d === 'string' && d.length > 0);
+
   await sayfayaGit(page, tarif.girisAdresi, 'Giriş sayfası');
   await captchaKontrol(page);
   const bekleme = secenekler.alanBeklemeMs;
-  const kullanici = await alaniBekle(page, tarif.kullaniciAlani, 'Kullanıcı adı alanı', bekleme);
-  await kullanici.fill(kimlik.kullaniciAdi);
-  const parola = await alaniBekle(page, tarif.parolaAlani, 'Parola alanı', bekleme);
-  await parola.fill(kimlik.parola);
-  await (await alaniBekle(page, tarif.gonderDugmesi, 'Giriş düğmesi', bekleme)).click();
-  secenekler.log?.('Kullanıcı adı ve parola gönderildi.');
+  const adimlar = girisAdimlariniCoz(tarif);
+  let gonderildi = false;
+  for (const [i, a] of adimlar.entries()) {
+    const sure = a.zamanAsimiSn ? a.zamanAsimiSn * 1000 : bekleme;
+    if (a.islem === 'kullaniciAdi') {
+      await (await alaniBekle(page, tarif.kullaniciAlani, 'Kullanıcı adı alanı', sure)).fill(kimlik.kullaniciAdi);
+    } else if (a.islem === 'parola') {
+      await (await alaniBekle(page, tarif.parolaAlani, 'Parola alanı', sure)).fill(kimlik.parola);
+    } else if (a.islem === 'gonder') {
+      await (await alaniBekle(page, tarif.gonderDugmesi, 'Giriş düğmesi', sure)).click();
+      gonderildi = true;
+      secenekler.log?.('Kullanıcı adı ve parola gönderildi.');
+    } else {
+      try {
+        await adimiUygula(page, a, ekAlanlar, 'Giriş adımındaki sayfa');
+      } catch (hata) {
+        if (hata instanceof GirisHatasi && hata.kod !== 'SITE_ERISILEMEDI') throw hata;
+        // Gönderden sonraki adım başarısızsa önce "kullanıcı adı/parola hatalı" göstergesine bakılır.
+        if (gonderildi) {
+          for (const g of tarif.hataGostergeleri) {
+            if (await hataGorunurMu(page, g)) {
+              throw new GirisHatasi('KIMLIK_HATALI', `sayfada hata göstergesi göründü: ${gostergeMetni(g)}. Giriş profilindeki kullanıcı adı/parolayı kontrol edin.`);
+            }
+          }
+          await captchaKontrol(page);
+        }
+        const neden = gizliMaskele(hata instanceof GirisHatasi ? hata.message : ilkSatir(hata), gizliler);
+        throw new GirisHatasi('GIRIS_ADIMI', `${adimOzeti(a, i + 1)} başarısız (sayfa: ${yol(page)}): ${neden}`);
+      }
+    }
+  }
 
   const sureMs = tarif.zamanAsimiSn * 1000;
-  const haric = [tarif.kullaniciAlani, tarif.parolaAlani];
+  // Otomatik kod alanı algılaması giriş formunun kendi alanlarını (ek alanlar dahil) kod alanı sanmasın.
+  const haric = [tarif.kullaniciAlani, tarif.parolaAlani,
+    ...adimlar.flatMap((a) => ('hedef' in a && 'secici' in a.hedef && !a.hedef.secici.includes('{') ? [a.hedef.secici] : []))];
   const ilk = await gozle(page, tarif, {
     hatalar: tarif.hataGostergeleri,
     kodAlani: ikinci.tur === 'yok' ? null : ikinci.kodAlani || 'otomatik',
@@ -379,6 +421,17 @@ export function oturumuKaydetmeyeHazirla(oturumDosyasi: string): void {
   mkdirSync(dirname(oturumDosyasi), { recursive: true });
 }
 
+/**
+ * Oturumu kapatır ("temiz oturum" / "yeniden giriş"): bağlamın TÜM çerezleri silinir, açık sayfanın kökeninde yerel ve oturum
+ * depolaması temizlenir. Sayfa yeni bir girişe hazırdır (kayıtlı oturum dosyasına dokunulmaz).
+ */
+export async function oturumuKapat(page: Page): Promise<void> {
+  await page.context().clearCookies();
+  if (/^https?:/i.test(page.url())) {
+    await page.evaluate(() => { try { localStorage.clear(); sessionStorage.clear(); } catch { /* depolama kapalı */ } }).catch(() => undefined);
+  }
+}
+
 // ---------------------------------------------------------------------------------------
 // Bağlam değiştirme
 // ---------------------------------------------------------------------------------------
@@ -395,12 +448,19 @@ function hedefLocator(page: Page, hedef: Hedef, degerler: Record<string, unknown
   return l.first();
 }
 
-async function adimiUygula(page: Page, a: BaglamAdimi, degerler: Record<string, unknown>): Promise<void> {
+/** Metindeki gizli değerleri (parola, gizli ek alanlar) maskeler (3 karakterden kısa değerler metni bozmasın diye atlanır). */
+export function gizliMaskele(metin: string, gizliler: readonly string[]): string {
+  let sonuc = metin;
+  for (const g of [...gizliler].filter((x) => x.length >= 3).sort((x, y) => y.length - x.length)) sonuc = sonuc.split(g).join('•••');
+  return sonuc;
+}
+
+async function adimiUygula(page: Page, a: BaglamAdimi, degerler: Record<string, unknown>, sayfaAdi = 'Bağlam sayfası'): Promise<void> {
   const doldur = (m: string): string => yerTutuculariDoldur(m, degerler);
   const zaman = a.zamanAsimiSn ? { timeout: a.zamanAsimiSn * 1000 } : {};
   switch (a.islem) {
     case 'git':
-      await sayfayaGit(page, doldur(a.adres), 'Bağlam sayfası');
+      await sayfayaGit(page, doldur(a.adres), sayfaAdi);
       return;
     case 'adresBekle':
       await expect(page).toHaveURL(new RegExp(yerTutuculariDoldur(a.desen, degerler, { kacis: regexKacis })), zaman);

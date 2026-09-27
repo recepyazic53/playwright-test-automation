@@ -24,6 +24,12 @@
 //        yazar (yeni akış ya da seçilen akışı güncelle; ekranlar/akis-servisi.mjs > akisKaydet, kaydın gerçek okumalarıyla):
 //        onay yoksa etki (etkilenen senaryolar), varsa yeni model sürümü. GET …/akis mevcut ekranın akışlarını da döner.
 //   GET  /platform/tarama/aktif          çalışan işin kimliği (yoksa null)
+// GİRİŞ KAYDI ("Girişi kaydet"; kip: 'girisKaydi'): aynı kayıt altyapısı; ekran yok, giriş YAPILMADAN ortamın giriş sayfası
+// (hedef ya da kayıtlı tarifin giriş adresi) görünür tarayıcıda açılır, kullanıcı girişi kendisi yapar; panel alanları ve
+// düğmeleri toplar (DEĞER yok). Sonuç: taslak adımlar (giris/giris-kaydi.mjs). CANLI işaretli ortamda reddedilir.
+//   GET  /platform/tarama/giris?id=      taslak adımlar + ek alan adı önerileri
+//   POST /platform/tarama/giris { id, isaretler }  kullanıcının işaretlerinden tarif ÖNİZLEMESİ (kaydetmez; mevcut tarifin
+//        göstergeleri/bağlam adımları korunur) + doğrulama hataları + profile eklenecek ek alanlar
 //   POST /platform/tarama/iptal { id }   süreç grubunu kapatır
 //   POST /platform/tarama/kod { id, kod } SMS "elle" doğrulama kodunu işe iletir (kod loglanmaz)
 // Alt süreç uçları (işe özel tek kullanımlık token, başlık: protokol.mjs > TARAMA_TOKEN_BASLIGI):
@@ -46,7 +52,7 @@ import {
 } from '../veritabani/depo.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
-import { baglamAlanlari } from '../giris/tarif.mjs';
+import { baglamAlanlari, girisTarifiniDogrula } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { EKRAN_ANAHTARI_DESENI, sayfaPaketiniDogrula } from '../ekranlar/sayfa-paketi.mjs';
@@ -54,6 +60,7 @@ import { HedefHatasi, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaM
 import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './paket-olusturucu.mjs';
 import { akisEnvanteriMi, akisPaleti, akisTaslagi, akistanKayitEnvanteri, bloklariAyikla } from './akis-tasarimi.mjs';
 import { akisKaydet as ekranAkisiKaydet, akislariListele } from '../ekranlar/akis-servisi.mjs';
+import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../giris/giris-kaydi.mjs';
 import {
   KAYIT_BASSIZ_DEGISKENI, KAYIT_ZAMAN_ASIMI_DEGISKENI, OLAY_GOVDE_SINIRI, SONUC_GOVDE_SINIRI, TARAMA_ADRES_DEGISKENI, TARAMA_CIKTI_DEGISKENI,
   TARAMA_DNS_KAPALI_DEGISKENI, TARAMA_GORUNUR_DEGISKENI, TARAMA_IZINLI_KOKENLER_DEGISKENI, TARAMA_TEST_SURESI_DEGISKENI, TARAMA_TOKEN_BASLIGI,
@@ -170,7 +177,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     for (const [id, is] of isler) {
       if (!is.bitis) continue;
       const son = Date.parse(is.sonErisim ?? is.bitis);
-      if (son < (is.akis ? tasarimSiniri : sinir)) isler.delete(id);
+      if (son < (is.akis || is.girisTaslagi ? tasarimSiniri : sinir)) isler.delete(id);
     }
   };
   const calisan = () => [...isler.values()].find((is) => is.durum === 'suruyor') ?? null;
@@ -214,7 +221,9 @@ export function taramaYoneticisiOlustur(secenekler) {
       hata: is.hata, kodIstegi: is.durum === 'suruyor' ? kodIstegiOku(is.kodYolu) : null,
       baslangic: is.baslangic, bitis: is.bitis ?? null, paketHazir: Boolean(is.paket), ozet: is.ozet ?? null, uyarilar: is.uyarilar ?? [],
       // Akış kaydı: diyagramı kurulacak (topla → tasarla).
-      tasarim: Boolean(is.akis)
+      tasarim: Boolean(is.akis),
+      // Giriş kaydı: taslak işaretlenip tarif önizlenecek.
+      girisTaslagi: Boolean(is.girisTaslagi)
     };
   }
 
@@ -270,11 +279,13 @@ export function taramaYoneticisiOlustur(secenekler) {
   function baslat(vt, g, s) {
     temizle();
     const c = calisan();
-    if (c) throw new TaramaHatasi('MESGUL', `Başka bir ${c.kip === 'kayit' ? 'akış kaydı' : 'tarama'} sürüyor (${c.ekran.ad}); bitmesini bekleyin ya da iptal edin.`, 409, { isId: c.id });
-    const kayit = g.kip === 'kayit';
+    if (c) throw new TaramaHatasi('MESGUL', `Başka bir ${c.kip === 'kayit' ? 'akış kaydı' : c.kip === 'girisKaydi' ? 'giriş kaydı' : 'tarama'} sürüyor (${c.ekran.ad}); bitmesini bekleyin ya da iptal edin.`, 409, { isId: c.id });
+    // "Girişi kaydet": akış kaydıyla aynı altyapı; ekran yok, giriş YAPILMADAN giriş sayfası açılır, kullanıcı girişi kendisi yapar.
+    const girisKaydi = g.kip === 'girisKaydi';
+    const kayit = g.kip === 'kayit' || girisKaydi;
     if (g.onay !== true) {
       throw new TaramaHatasi('ONAY_GEREKLI', kayit
-        ? 'Akış kaydında bastığınız düğmeler siteye gerçek istek gönderir: başlatmadan önce uyarıyı onaylayın.'
+        ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydında bastığınız düğmeler siteye gerçek istek gönderir: başlatmadan önce uyarıyı onaylayın.`
         : 'Tarama seçilen ortama bağlanır: başlatmadan önce uyarıyı onaylayın.');
     }
     const projeId = kimlikAl(g.projeId, 'projeId');
@@ -284,16 +295,18 @@ export function taramaYoneticisiOlustur(secenekler) {
     const ortamKaydi = ortamlariListele(vt, projeId).find((o) => o.id === ortamId);
     if (!ortamKaydi) throw new DepoHatasi('Ortam bulunamadı.');
     if (kayit && ortamKaydi.ayarlar.canli === true) {
-      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı canlı olarak işaretli; akış kaydı bu ortamda yapılamaz (Ayarlar > Ortamlar).`);
+      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı canlı olarak işaretli; ${girisKaydi ? 'giriş' : 'akış'} kaydı bu ortamda yapılamaz (Ayarlar > Ortamlar).`);
     }
 
-    // Ekran: mevcut (tekrar analiz ya da modelsiz ekrana ilk model) ya da yeni (ad + anahtar).
+    // Ekran: mevcut (tekrar analiz ya da modelsiz ekrana ilk model) ya da yeni (ad + anahtar). Giriş kaydında ekran yoktur.
     const ekranlar = ekranlariListele(vt, projeId);
     /** @type {{ id: string | null; ad: string; anahtar: string }} */
     let ekran;
     /** @type {Nesne | null} */
     let mevcutModel = null;
-    if (g.ekranId !== undefined && g.ekranId !== null && g.ekranId !== '') {
+    if (girisKaydi) {
+      ekran = { id: null, ad: `Giriş (${ortamKaydi.ad})`, anahtar: '' };
+    } else if (g.ekranId !== undefined && g.ekranId !== null && g.ekranId !== '') {
       const e = ekranlar.find((x) => x.id === kimlikAl(g.ekranId, 'ekranId'));
       if (!e) throw new DepoHatasi('Ekran bulunamadı.');
       ekran = { id: e.id, ad: e.ad, anahtar: e.anahtar };
@@ -315,17 +328,18 @@ export function taramaYoneticisiOlustur(secenekler) {
       ekran = ayni ? { id: ayni.id, ad: ayni.ad, anahtar } : { id: null, ad, anahtar };
     }
 
-    // Hedef (ortamın kökeninde bir yol).
+    // Hedef (ortamın kökeninde bir yol). Giriş kaydında: verilen yol, yoksa kayıtlı tarifin giriş adresi, yoksa "/".
+    const mevcutGirisAdresi = girisKaydi ? (etkinGirisTarifi(vt, projeId, ortamId).tarif?.girisAdresi ?? '/') : null;
     let hedef;
     try {
-      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : mevcutModel?.ekranUrl);
+      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : girisKaydi ? mevcutGirisAdresi : mevcutModel?.ekranUrl);
     } catch (e) {
       if (e instanceof HedefHatasi) throw new TaramaHatasi('HEDEF', e.message);
       throw e;
     }
 
-    // Giriş tarifi, giriş profili, bağlam profilleri ("Giriş yapmadan aç": hiçbiri kullanılmaz).
-    const girissiz = g.girissiz === true;
+    // Giriş tarifi, giriş profili, bağlam profilleri ("Giriş yapmadan aç": hiçbiri kullanılmaz; giriş kaydında da).
+    const girissiz = g.girissiz === true || girisKaydi;
     const tarifSonucu = girissiz ? { tarif: null, hatalar: [] } : etkinGirisTarifi(vt, projeId, ortamId);
     if (tarifSonucu.hatalar.length) throw new TaramaHatasi('TARIF_GECERSIZ', `Bu ortamın giriş tarifi geçersiz: ${tarifSonucu.hatalar.join(' ')} (Ayarlar > Giriş profilleri > Giriş tarifi).`);
     const tarif = tarifSonucu.tarif;
@@ -341,7 +355,9 @@ export function taramaYoneticisiOlustur(secenekler) {
         kullaniciAdi: gp.kullaniciAdi, parola: gp.parola,
         totpGizli: gp.ikiAsamaliTur === 'totp' ? gp.totpGizli : null,
         sabitKod: gp.ikiAsamaliTur === 'sms' && sms.yontem === 'sabit' && typeof sms.kod === 'string' ? sms.kod : null,
-        smsKipi: gp.ikiAsamaliTur === 'sms' ? (sms.yontem === 'elle' ? 'elle' : 'sabit') : null
+        smsKipi: gp.ikiAsamaliTur === 'sms' ? (sms.yontem === 'elle' ? 'elle' : 'sabit') : null,
+        ekAlanlar: Object.fromEntries(gp.ekAlanlar.filter((e) => e.deger !== null).map((e) => [e.ad, /** @type {string} */ (e.deger)])),
+        gizliEkAlanlar: gp.ekAlanlar.filter((e) => e.gizli).map((e) => e.ad)
       };
     }
     const istenen = Array.isArray(g.baglamProfilleri) ? [...new Set(g.baglamProfilleri.filter((x) => typeof x === 'string' && x.trim()))] : [];
@@ -395,9 +411,11 @@ export function taramaYoneticisiOlustur(secenekler) {
     const sure = kayit ? kayitZamanAsimiMs(vt) : zamanAsimiMs(vt);
     /** @type {Nesne} */
     const is = {
-      id, token, kip: kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
+      id, token, kip: girisKaydi ? 'girisKaydi' : kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
       durum: 'suruyor', hata: null, baslangic: simdi(), bitis: null,
-      adimlar: kayit
+      adimlar: girisKaydi
+        ? { hazirlik: { durum: 'bekliyor' }, kayit: { durum: 'bekliyor' } }
+        : kayit
         ? { hazirlik: { durum: 'bekliyor' }, giris: { durum: tarif ? 'bekliyor' : 'atlandi' }, kayit: { durum: 'bekliyor' }, paket: { durum: 'bekliyor' } }
         : { hazirlik: { durum: 'bekliyor' }, giris: { durum: tarif ? 'bekliyor' : 'atlandi' }, profiller: { durum: 'bekliyor' }, paket: { durum: 'bekliyor' } },
       profiller: kayit ? [] : profiller.map((p) => ({ ad: p.ad ?? 'Varsayılan bağlam', durum: 'bekliyor' })),
@@ -453,7 +471,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     is.zamanlayici = setTimeout(() => {
       bitir(is, 'hata', {
         kod: 'ZAMAN_ASIMI',
-        mesaj: kayit ? `Akış kaydı ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; kaydı yeniden başlatın.` : `Tarama ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu (sayfa çok yavaş olabilir).`
+        mesaj: kayit ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydı ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; kaydı yeniden başlatın.` : `Tarama ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu (sayfa çok yavaş olabilir).`
       });
       sureciKapat(is);
     }, sure);
@@ -464,8 +482,9 @@ export function taramaYoneticisiOlustur(secenekler) {
   /** @param {string} id */
   function iptal(id) {
     const is = isGetir(id);
-    if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', is.kip === 'kayit' ? 'Akış kaydı zaten bitti.' : 'Tarama zaten bitti.', 409);
-    bitir(is, 'iptal', { kod: 'IPTAL', mesaj: is.kip === 'kayit' ? 'Akış kaydı kullanıcı tarafından iptal edildi.' : 'Tarama kullanıcı tarafından iptal edildi.' });
+    const ad = is.kip === 'kayit' ? 'Akış kaydı' : is.kip === 'girisKaydi' ? 'Giriş kaydı' : 'Tarama';
+    if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', `${ad} zaten bitti.`, 409);
+    bitir(is, 'iptal', { kod: 'IPTAL', mesaj: `${ad} kullanıcı tarafından iptal edildi.` });
     sureciKapat(is);
     return { iptal: true };
   }
@@ -530,6 +549,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       bitir(is, h.kod === 'IPTAL' ? 'iptal' : 'hata', { kod: typeof h.kod === 'string' ? h.kod.slice(0, 40) : 'BEKLENMEYEN', mesaj: typeof h.mesaj === 'string' ? h.mesaj.slice(0, 1000) : 'Tarama başarısız oldu.' });
       return { alindi: true };
     }
+    if (is.kip === 'girisKaydi') return girisKaydiSonucunuIsle(is, s.envanter);
     is.adimlar.paket = { durum: 'suruyor' };
     if (is.kip === 'kayit') return kayitSonucunuIsle(is, s.envanter);
     try {
@@ -596,6 +616,49 @@ export function taramaYoneticisiOlustur(secenekler) {
     return { alindi: true };
   }
 
+  /**
+   * Giriş kaydı sonucu: akış envanterinden (değer yok) taslak adımlar; envanterin kendisi saklanmaz. @param {Nesne} is @param {unknown} envanter
+   */
+  function girisKaydiSonucunuIsle(is, envanter) {
+    if (!akisEnvanteriMi(envanter)) {
+      bitir(is, 'hata', { kod: 'PAKET', mesaj: 'Giriş kaydının sonucu okunamadı; kaydı yeniden başlatın.' });
+      return { alindi: true };
+    }
+    const taslak = girisKaydiTaslagi(envanter);
+    if (!taslak.adimlar.length) {
+      bitir(is, 'hata', { kod: 'ALAN_YOK', mesaj: 'Kayıtta dokunulan alan ya da basılan düğme yok; girişi yapıp “Bitir”e basın.' });
+      return { alindi: true };
+    }
+    is.girisTaslagi = taslak;
+    bitir(is, 'tamam');
+    return { alindi: true };
+  }
+
+  /** Giriş kaydının taslağı (işaretlemek için). @param {string} id */
+  function girisTaslagiGetir(id) {
+    const is = isGetir(id);
+    if (!is.girisTaslagi) throw new TaramaHatasi('TASLAK_YOK', 'Bu işte giriş kaydı taslağı yok (kayıt bitmedi ya da başarısız oldu).', 409);
+    is.sonErisim = simdi();
+    return {
+      taslak: is.girisTaslagi, ortam: is.ortam, projeId: is.projeId, hedefYol: is.hedefYol,
+      oneriler: is.girisTaslagi.adimlar.map((/** @type {Nesne} */ a) => (a.tur === 'alan' ? ekAlanAdiOner(a.etiket) : null))
+    };
+  }
+
+  /**
+   * Kullanıcının işaretlerinden tarif ÖNİZLEMESİ (kaydetmez): mevcut tarifin göstergeleri/bağlam adımları korunur.
+   * @param {Veritabani} vt @param {string} id @param {unknown} isaretler
+   */
+  function girisTarifiOnizle(vt, id, isaretler) {
+    const is = isGetir(id);
+    if (!is.girisTaslagi) throw new TaramaHatasi('TASLAK_YOK', 'Bu işte giriş kaydı taslağı yok.', 409);
+    is.sonErisim = simdi();
+    const mevcut = etkinGirisTarifi(vt, is.projeId, is.ortam.id).tarif;
+    const sonuc = kayittanTarif(is.girisTaslagi, isaretler, mevcut, is.hedefYol);
+    const d = girisTarifiniDogrula(sonuc.tarif);
+    return { ...sonuc, dogrulamaHatalari: d.hatalar, ortam: is.ortam };
+  }
+
   /** Tasarım bekleyen akış kaydı. @param {string} id */
   function akisIsi(id) {
     const is = isGetir(id);
@@ -609,7 +672,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     const is = akisIsi(id);
     return {
       bloklar: is.akis.bloklar, palet: akisPaleti(is.akis.envanter, is.akis.bloklar), ekran: is.ekran, mod: is.mod, paketHazir: Boolean(is.paket),
-      projeId: is.projeId, akisaYazildi: is.akisaYazildi ?? null
+      projeId: is.projeId, akisaYazildi: is.akisaYazildi ?? null,
+      // Kayıt "Giriş yapmadan aç" ile yapıldıysa diyagramın başı "Girişsiz" olur.
+      girissiz: is.meta.girissiz === true
     };
   }
 
@@ -665,6 +730,8 @@ export function taramaYoneticisiOlustur(secenekler) {
     akis: akisGetir,
     akisKaydet,
     akisaYaz,
+    girisTaslagi: girisTaslagiGetir,
+    girisTarifiOnizle,
     baslat,
     durum: (/** @type {string} */ id) => gorunum(isGetir(id)),
     paket: (/** @type {string} */ id) => {
@@ -735,6 +802,7 @@ export async function taramaIsteginiIsle(req, res, b) {
       if (yol === '/platform/tarama/durum') { gonder(200, { basarili: true, is: y.durum(String(q.get('id') ?? '')) }); return true; }
       if (yol === '/platform/tarama/paket') { gonder(200, { basarili: true, ...y.paket(String(q.get('id') ?? '')) }); return true; }
       if (yol === '/platform/tarama/aktif') { gonder(200, { basarili: true, is: y.aktif() }); return true; }
+      if (yol === '/platform/tarama/giris') { gonder(200, { basarili: true, ...y.girisTaslagi(String(q.get('id') ?? '')) }); return true; }
       if (yol === '/platform/tarama/akis') {
         const v = y.akis(String(q.get('id') ?? ''));
         // Mevcut ekran: kayıt yeni akış olarak eklenebilir ya da bir akışı güncelleyebilir (akış listesi).
@@ -760,6 +828,10 @@ export async function taramaIsteginiIsle(req, res, b) {
     if (yol === '/platform/tarama/akis') {
       if (nesneMi(govde.hedef) && govde.hedef.tur === 'akis') { gonder(200, { basarili: true, ...y.akisaYaz(await b.acikVeritabani(), String(govde.id ?? ''), govde) }); return true; }
       gonder(200, { basarili: true, ...y.akisKaydet(String(govde.id ?? ''), govde) });
+      return true;
+    }
+    if (yol === '/platform/tarama/giris') {
+      gonder(200, { basarili: true, ...y.girisTarifiOnizle(await b.acikVeritabani(), String(govde.id ?? ''), govde.isaretler) });
       return true;
     }
     if (yol === '/platform/tarama/iptal') { gonder(200, { basarili: true, ...y.iptal(String(govde.id ?? '')) }); return true; }

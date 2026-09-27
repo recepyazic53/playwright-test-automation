@@ -15,6 +15,8 @@ import { DepoHatasi, yerelMakine } from './depo.mjs';
 import { beklenenGorulenCikar, kalipCikar, kategoriBul } from '../sonuclar/siniflandirma.mjs';
 import { kartlariHesapla, sayilariTopla, trendHesapla } from '../sonuclar/hesaplama.mjs';
 import { siniflandirmaKurallari } from '../ayarlar/siniflandirma-kurallari.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { YAKALAMA_KAYNAKLARI, yakalananMesajlariAyristir, yakalananMetniMaskele } from '../sonuclar/yakalanan-mesajlar.mjs';
 
 /** @typedef {import('./baglanti.mjs').Veritabani} Veritabani */
 
@@ -105,6 +107,7 @@ function kosuOzetiHesapla(vt, kosuId) {
  *   atlananAlanlar?: Array<{ alan: string; neden?: string | null }>; deneme?: number; baslangic?: string | null; bitis?: string | null;
  *   adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }>;
  *   medya?: Array<{ id?: string; tur: string; ad: string; icerikTuru: string; boyut: number; dosya: string; olusturulma?: string }>;
+ *   yakalananMesajlar?: Array<{ kaynak: string; metin: string; adim?: string | null; sayi?: number; ilk?: string; son?: string; beklenen?: boolean }>;
  * }} SonucGirdisi
  */
 
@@ -161,6 +164,19 @@ export function sonucKaydet(vt, g) {
         randomUUID(), id, sira, ad, a.durum, tamSayi(a.sureMs), metin(a.hataMesaji)
       ]);
     });
+    // Koşuda yakalanan mesajlar (koşu sürecinde maskelenmiş); Ayarlar > Güvenlik > Maskeleme ek adlarıyla bir kez daha.
+    const yakalanan = yakalananMesajlariAyristir(Array.isArray(g.yakalananMesajlar) ? g.yakalananMesajlar : []);
+    if (yakalanan.length) {
+      const ekAdlar = ekGizliAdlar(vt);
+      yakalanan.forEach((m, sira) => {
+        const metinM = yakalananMetniMaskele(m.metin, { ekAdlar });
+        if (!metinM) return;
+        vt.calistir(
+          'INSERT INTO yakalanan_mesajlar (id, sonuc_id, sira, kaynak, metin, kalip, adim, sayi, beklenen, ilk, son) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [randomUUID(), id, sira, m.kaynak, metinM, kalipCikar(metinM), m.adim, m.sayi, m.beklenen ? 1 : 0, m.ilk, m.son]
+        );
+      });
+    }
     (g.medya ?? []).slice(0, 500).forEach((m, sira) => {
       if (!MEDYA_TURLERI.includes(m?.tur) || !/^[a-f0-9]{32}\.medya$/.test(String(m.dosya))) throw new DepoHatasi('Geçersiz medya kaydı.');
       vt.calistir(
@@ -211,12 +227,19 @@ export function kosulariHesapIcinOku(vt, projeId) {
 
 /**
  * Sonuçlar ekranının üst bölümü: ürün listesi, kartlar (Genel ya da ürün), trend, koşu geçmişi.
- * @param {Veritabani} vt @param {string} projeId @param {{ urun?: string | null }} [secim] urun: ekran kimliği ya da "ad:<ad>"
+ * Tarih aralığı (baslangic / bitis, ISO) verilirse kartlar, trend ve koşu geçmişi yalnız aralıktaki koşulardan (bitiş zamanı;
+ * sürüyorsa başlangıç) hesaplanır; sol listedeki sağlık noktası her zaman ürünün en son tam koşusundandır.
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {{ urun?: string | null; baslangic?: string | null; bitis?: string | null }} [secim] urun: ekran kimliği ya da "ad:<ad>"
  */
 export function sonucOzeti(vt, projeId, secim = {}) {
   const urun = secim.urun || null;
-  const kosular = kosulariHesapIcinOku(vt, projeId);
-  const kartlar = kartlariHesapla(kosular);
+  const tumKosular = kosulariHesapIcinOku(vt, projeId);
+  const tumKartlar = kartlariHesapla(tumKosular);
+  const bas = secim.baslangic ? new Date(secim.baslangic).getTime() : null;
+  const bit = secim.bitis ? new Date(secim.bitis).getTime() : null;
+  const kosular = bas === null && bit === null ? tumKosular : tumKosular.filter((k) => (bas === null || k.z >= bas) && (bit === null || k.z <= bit));
+  const kartlar = kosular === tumKosular ? tumKartlar : kartlariHesapla(kosular);
   const ekranlar = vt.tumu(
     `SELECT e.id, e.ad, e.durum, (SELECT COUNT(*) FROM senaryolar s WHERE s.ekran_id = e.id) AS senaryo_sayisi
        FROM ekranlar e WHERE e.proje_id = ? ORDER BY (e.sira IS NULL), e.sira, e.ad`, [projeId]
@@ -228,14 +251,14 @@ export function sonucOzeti(vt, projeId, secim = {}) {
   }));
   // Ekranı olmayan sonuç ürünleri (ör. eşleşmeyen eski sonuçlar) de listede görünür.
   const bilinen = new Set(ekranlar.map((e) => e.anahtar));
-  for (const k of kosular) {
+  for (const k of tumKosular) {
     for (const a of Object.keys(k.urunler)) {
       if (!bilinen.has(a)) { bilinen.add(a); ekranlar.push({ anahtar: a, ad: a.slice(3), senaryoSayisi: 0, ekranDurumu: null, son: null }); }
     }
   }
   // Sol listedeki sağlık noktası için: her ürünün son tam koşusundaki sayılar (yoksa null).
   for (const e of ekranlar) {
-    const k = kartlar.urunler[e.anahtar];
+    const k = tumKartlar.urunler[e.anahtar];
     e.son = k ? sayilariTopla([k.son]) : null;
   }
   const secilenKosular = urun ? kosular.filter((k) => k.urunler[urun]) : kosular;
@@ -246,7 +269,7 @@ export function sonucOzeti(vt, projeId, secim = {}) {
   }));
   return {
     // Silinmiş ekran (mezar taşı) yalnızca sonucu varsa listelenir.
-    ekranlar: ekranlar.filter((e) => e.ekranDurumu !== 'silindi' || kosular.some((k) => k.urunler[e.anahtar])),
+    ekranlar: ekranlar.filter((e) => e.ekranDurumu !== 'silindi' || tumKosular.some((k) => k.urunler[e.anahtar])),
     kart: urun ? kartlar.urunler[urun] ?? null : kartlar.genel,
     trend: trendHesapla(kosular, urun),
     kosuGecmisi: gecmis
@@ -320,8 +343,21 @@ export function sonucDetayi(vt, sonucId) {
     adimlar: vt.tumu('SELECT ad, durum, sure_ms, hata_mesaji FROM adim_sonuclari WHERE sonuc_id = ? ORDER BY sira', [sonucId]).map((a) => ({
       ad: String(a.ad), durum: String(a.durum), sureMs: a.sure_ms == null ? null : Number(a.sure_ms), hataMesaji: a.hata_mesaji == null ? null : String(a.hata_mesaji)
     })),
-    medya: vt.tumu('SELECT * FROM medya WHERE sonuc_id = ? ORDER BY sira, rowid', [sonucId]).map(medyaGorunumu)
+    medya: vt.tumu('SELECT * FROM medya WHERE sonuc_id = ? ORDER BY sira, rowid', [sonucId]).map(medyaGorunumu),
+    yakalananMesajlar: yakalananMesajlariOku(vt, sonucId)
   };
+}
+
+/**
+ * Sonucun koşuda yakalanan mesajları (beklenmeyenler önce, sonra ilk görülme sırası). Okurken de güncel ek gizli adlarla maskelenir.
+ * @param {Veritabani} vt @param {string} sonucId
+ */
+function yakalananMesajlariOku(vt, sonucId) {
+  const ekAdlar = ekGizliAdlar(vt);
+  return vt.tumu('SELECT kaynak, metin, kalip, adim, sayi, beklenen, ilk, son FROM yakalanan_mesajlar WHERE sonuc_id = ? ORDER BY beklenen, sira', [sonucId]).map((m) => ({
+    kaynak: String(m.kaynak), metin: yakalananMetniMaskele(String(m.metin), { ekAdlar }), kalip: String(m.kalip), adim: m.adim == null ? null : String(m.adim),
+    sayi: Number(m.sayi), beklenen: Number(m.beklenen) === 1, ilk: String(m.ilk), son: String(m.son)
+  }));
 }
 
 /**
@@ -378,7 +414,91 @@ export function hataKaliplari(vt, projeId, filtre = {}) {
   /** @type {Record<string, number>} */
   const kategoriler = {};
   for (const k of kaliplar) kategoriler[k.kategori] = (kategoriler[k.kategori] ?? 0) + k.sayi;
-  return { toplam: satirlar.length, kategoriler, kaliplar: kaliplar.slice(0, Math.max(1, Math.min(filtre.limit ?? 200, 1000))) };
+  return {
+    toplam: satirlar.length, kategoriler, kaliplar: kaliplar.slice(0, Math.max(1, Math.min(filtre.limit ?? 200, 1000))),
+    // İkinci küme: koşuda yakalanan mesajlar (geçen testler dahil).
+    yakalanan: yakalananMesajKaliplari(vt, projeId, filtre)
+  };
+}
+
+/**
+ * "Koşuda yakalanan mesajlar": tarih aralığındaki TÜM sonuçların (geçen ve kalan) yakalanan mesajları kaynak + kalıp ile
+ * gruplanır. Senaryonun beklediği mesajla eşleşen kayıtlar "beklenen"dir; grup yalnız beklenen kayıtlardan oluşuyorsa
+ * beklenen sayılır. Sıra: önce beklenmeyen, sonra sayı, sonra son görülme. Her grubun testleri (en yeniden eskiye, en çok 100).
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {{ urun?: string | null; baslangic?: string | null; bitis?: string | null; limit?: number }} [filtre]
+ */
+export function yakalananMesajKaliplari(vt, projeId, filtre = {}) {
+  const kosullar = ['k.proje_id = ?'];
+  /** @type {unknown[]} */
+  const p = [projeId];
+  const bas = isoZaman(filtre.baslangic);
+  const bit = isoZaman(filtre.bitis);
+  if (bas) { kosullar.push('COALESCE(r.bitis, k.bitis, k.baslangic) >= ?'); p.push(bas); }
+  if (bit) { kosullar.push('COALESCE(r.bitis, k.bitis, k.baslangic) <= ?'); p.push(bit); }
+  if (filtre.urun) {
+    if (filtre.urun.startsWith('ad:')) { kosullar.push('r.ekran_id IS NULL AND COALESCE(r.urun_adi, \'Diğer\') = ?'); p.push(filtre.urun.slice(3)); }
+    else { kosullar.push('r.ekran_id = ?'); p.push(filtre.urun); }
+  }
+  const satirlar = vt.tumu(
+    `SELECT m.kaynak, m.metin, m.kalip, m.adim, m.sayi, m.beklenen, m.ilk, m.son,
+            r.id AS sonuc_id, r.durum, r.senaryo_baslik, r.senaryo_id, r.kosu_id, r.ekran_id, r.urun_adi, e.ad AS ekran_adi, k.ortam_id,
+            COALESCE(r.bitis, k.bitis, k.baslangic) AS zaman
+       FROM yakalanan_mesajlar m JOIN kosu_sonuclari r ON r.id = m.sonuc_id JOIN kosular k ON k.id = r.kosu_id
+       LEFT JOIN ekranlar e ON e.id = r.ekran_id
+      WHERE ${kosullar.join(' AND ')} ORDER BY zaman, m.sira`, p
+  );
+  const ekAdlar = satirlar.length ? ekGizliAdlar(vt) : [];
+  /**
+   * @typedef {{ sonucId: string; kosuId: string; senaryoId: string | null; senaryoBaslik: string; ortamId: string | null; adim: string | null;
+   *   zaman: string; durum: string; sayi: number; beklenen: boolean }} YakalananSonuc
+   */
+  /** @type {Map<string, { kaynak: string; kalip: string; ornekMetin: string; sayi: number; beklenenSayisi: number; beklenmeyenSayisi: number;
+   *   senaryolar: Set<string>; gecen: Set<string>; kalan: Set<string>; urunler: Set<string>; ilk: string; son: string; sonuclar: YakalananSonuc[] }>} */
+  const gruplar = new Map();
+  /** @type {Record<string, number>} */
+  const kaynaklar = Object.fromEntries(YAKALAMA_KAYNAKLARI.map((k) => [k, 0]));
+  for (const s of satirlar) {
+    const kaynak = String(s.kaynak);
+    const kalip = String(s.kalip);
+    const anahtar = `${kaynak}\u0000${kalip}`;
+    const ilk = String(s.ilk);
+    const son = String(s.son);
+    const g = gruplar.get(anahtar) ?? { kaynak, kalip, ornekMetin: '', sayi: 0, beklenenSayisi: 0, beklenmeyenSayisi: 0, senaryolar: new Set(),
+      gecen: new Set(), kalan: new Set(), urunler: new Set(), ilk, son, sonuclar: [] };
+    gruplar.set(anahtar, g);
+    const sayi = Math.max(1, Number(s.sayi) || 1);
+    const beklenen = Number(s.beklenen) === 1;
+    g.sayi += sayi;
+    kaynaklar[kaynak] = (kaynaklar[kaynak] ?? 0) + sayi;
+    if (beklenen) g.beklenenSayisi += sayi; else g.beklenmeyenSayisi += sayi;
+    g.senaryolar.add(String(s.senaryo_baslik));
+    const sonucId = String(s.sonuc_id);
+    if (s.durum === 'basarisiz') g.kalan.add(sonucId); else if (s.durum === 'basarili') g.gecen.add(sonucId);
+    g.urunler.add(s.ekran_adi != null ? String(s.ekran_adi) : s.urun_adi != null ? String(s.urun_adi) : 'Diğer');
+    if (ilk < g.ilk) g.ilk = ilk;
+    if (son > g.son) g.son = son;
+    g.ornekMetin = String(s.metin);
+    g.sonuclar.push({
+      sonucId, kosuId: String(s.kosu_id), senaryoId: s.senaryo_id == null ? null : String(s.senaryo_id), senaryoBaslik: String(s.senaryo_baslik),
+      ortamId: s.ortam_id == null ? null : String(s.ortam_id), adim: s.adim == null ? null : String(s.adim), zaman: String(s.zaman),
+      durum: String(s.durum), sayi, beklenen
+    });
+  }
+  const kaliplar = [...gruplar.values()]
+    .map((g) => ({
+      kaynak: g.kaynak, kalip: g.kalip, ornekMetin: yakalananMetniMaskele(g.ornekMetin, { ekAdlar }), sayi: g.sayi,
+      beklenen: g.beklenmeyenSayisi === 0, beklenenSayisi: g.beklenenSayisi, beklenmeyenSayisi: g.beklenmeyenSayisi,
+      senaryoSayisi: g.senaryolar.size, gecenTestSayisi: g.gecen.size, kalanTestSayisi: g.kalan.size, urunler: [...g.urunler].sort((a, b) => a.localeCompare(b, 'tr')),
+      ilk: g.ilk, son: g.son, sonuclar: g.sonuclar.slice(-100).reverse()
+    }))
+    .sort((a, b) => Number(a.beklenen) - Number(b.beklenen) || b.sayi - a.sayi || b.son.localeCompare(a.son));
+  return {
+    toplam: satirlar.reduce((t, s) => t + Math.max(1, Number(s.sayi) || 1), 0),
+    beklenmeyen: kaliplar.reduce((t, k) => t + k.beklenmeyenSayisi, 0),
+    kaynaklar,
+    kaliplar: kaliplar.slice(0, Math.max(1, Math.min(filtre.limit ?? 200, 1000)))
+  };
 }
 
 /** Medya satırı (+ indirme adı için senaryo başlığı ve zaman). @param {Veritabani} vt @param {string} id */
