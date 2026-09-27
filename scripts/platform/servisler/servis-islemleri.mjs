@@ -73,16 +73,23 @@ export const adresBirlestir = (taban, yol) => `${taban.replace(/\/+$/, '')}/${yo
  * - ayarlar.adresler[ortamId] (eski: servise özel TAM adres) varsa o;
  * - ayarlar.tabanlar[ortamId] tanımlıysa taban + yol; boş metinse servis bu ortamda TANIMLI DEĞİL (hata);
  * - yoksa ortamın taban adresi + yol.
- * @param {{ yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string> }} ayarlar @param {{ id: string; ad?: string; tabanUrl: string }} ortam
+ * @param {{ yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string>; tabanGrubu?: string }} ayarlar @param {{ id: string; ad?: string; tabanUrl: string }} ortam
  */
 export function servisAdresi(ayarlar, ortam) {
   const ozel = ayarlar.adresler?.[ortam.id];
   if (ozel) return ozel;
   if (!ayarlar.yol) throw new DepoHatasi('Servisin yolu tanımlı değil (ör. /AppService/servis.asmx).');
   const taban = ayarlar.tabanlar?.[ortam.id];
-  if (taban === '') throw new DepoHatasi(`Servis ${ortam.ad ? `"${ortam.ad}"` : 'bu'} ortamında tanımlı değil (taban adres boş).`);
+  if (taban === '') throw new DepoHatasi(tanimsizNedeni(ayarlar, ortam.ad));
   return adresBirlestir(taban || ortam.tabanUrl, ayarlar.yol);
 }
+
+/**
+ * Servisin taban adresi bu ortamda boşken koşunun / atlamanın anlaşılır nedeni (bağlı olduğu adlandırılmış taban adresiyle).
+ * @param {{ tabanGrubu?: string }} ayarlar @param {string} [ortamAd]
+ */
+export const tanimsizNedeni = (ayarlar, ortamAd) => `Servis ${ortamAd ? `"${ortamAd}"` : 'bu'} ortamında tanımlı değil: taban adresi tanımlı değil${
+  ayarlar.tabanGrubu ? ` ("${ayarlar.tabanGrubu}" taban adresinin bu ortamda adresi yok)` : ''}.`;
 
 /** Servis bu ortamda tanımlı mı (taban adresi bilerek boş bırakılmadıysa). @param {{ tabanlar?: Record<string, string> }} ayarlar @param {string} ortamId */
 export const ortamdaTanimli = (ayarlar, ortamId) => ayarlar.tabanlar?.[ortamId] !== '';
@@ -359,7 +366,7 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
  *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown;
- *   oturumAkisi?: string | null }} girdi  oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
+ *   oturumAkisi?: string | null; tabanGrubu?: string | null }} girdi oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
@@ -384,6 +391,11 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {}),
     ...(girdi.oturumAkisi !== undefined ? { oturumAkisi: oturumAkisiDogrula(vt, projeId, girdi.oturumAkisi) } : {})
   };
+  // Adlandırılmış taban adres (null: servise özel adres). Adresleri çağıran taban adresinden verir (servis-uclari.mjs).
+  if (girdi.tabanGrubu !== undefined) {
+    if (girdi.tabanGrubu) ayarlar.tabanGrubu = girdi.tabanGrubu;
+    else delete ayarlar.tabanGrubu;
+  }
   kuralBaglariniDenetle(ayarlar);
   // REST servisinde WSDL yoktur: adres değişikliği erişim kontrolü (WSDL isteği) gerektirmez.
   if (adresDegisti && mevcut?.tur !== 'rest') {
@@ -1075,7 +1087,7 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
     sonuclar.push({ senaryoId: s.id, baslik: s.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') });
   }
   return {
-    ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, ...(tanimli ? {} : { atlamaNedeni: `Servis "${ortam.ad}" ortamında tanımlı değil (taban adres boş).` }), sonuclar,
+    ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, ...(tanimli ? {} : { atlamaNedeni: tanimsizNedeni(servis.ayarlar, ortam.ad) }), sonuclar,
     ozet: { basarili: sonuclar.filter((x) => x.durum === 'basarili').length, basarisiz: sonuclar.filter((x) => x.durum === 'basarisiz').length, hata: sonuclar.filter((x) => x.durum === 'hata').length }
   };
 }

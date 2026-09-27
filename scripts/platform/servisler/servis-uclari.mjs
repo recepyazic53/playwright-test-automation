@@ -12,7 +12,7 @@ import {
   erisimKontrolu, eskiParametreleriDonustur, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle, postmanAktar, postmanOnizle
 } from './servis-islemleri.mjs';
 import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu, servisSenaryoAtlamaNedeni } from './servis-isleri.mjs';
-import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
+import { servisTabanBaglantisi, tabanAdresiIslemi, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
@@ -172,11 +172,15 @@ export const SERVIS_POST_UCLARI = [
   })],
   ['/platform/servis/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
+    // Servis sayfasında adlandırılmış taban adresi seçildiyse adresler o tabandan gelir (null / '': servise özel adres).
+    const grup = typeof g.tabanGrubu === 'string' && g.tabanGrubu.trim() ? g.tabanGrubu.trim() : g.tabanGrubu === null || g.tabanGrubu === '' ? null : undefined;
+    const bagli = grup ? servisTabanBaglantisi(db, projeId, secimli(g.id), grup) : null;
     const id = servisiKaydet(db, projeId, {
+      ...(grup !== undefined ? { tabanGrubu: grup } : {}),
       id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), yol: metin(g.yol),
       ...(g.soapSurumu === '1.2' || g.soapSurumu === '1.1' ? { soapSurumu: g.soapSurumu } : {}),
       ...(g.adresler !== undefined ? { adresler: metinNesnesi(g.adresler) } : {}),
-      ...(g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(bagli ? { tabanlar: bagli.tabanlar } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
       ...(Array.isArray(g.secilenOperasyonlar) ? { secilenOperasyonlar: g.secilenOperasyonlar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
       ...(typeof g.kimlikProfili === 'string' ? { kimlikProfili: g.kimlikProfili } : {}),
       ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
@@ -358,6 +362,14 @@ export const SERVIS_POST_UCLARI = [
     ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {})
   })],
   // Taban adresleri toplu düzenle: onay yoksa yalnız etki önizlemesi; onay: true ile yazılır. Ağ isteği yok.
+  // Adlandırılmış taban adresi ekle / değiştir / sil: onay yoksa etki önizlemesi (boş kalacak servisler dahil). Ağ isteği yok.
+  ['/platform/servis-tabanlari/taban', (db, g) => tabanAdresiIslemi(db, kimlik(g.projeId, 'projeId'), {
+    islem: /** @type {'ekle' | 'degistir' | 'sil'} */ (metin(g.islem)), ad: metin(g.ad),
+    ...(typeof g.yeniAd === 'string' ? { yeniAd: g.yeniAd } : {}),
+    ...(g.adresler !== undefined ? { adresler: metinNesnesi(g.adresler) } : {}),
+    ...(Array.isArray(g.baglanacaklar) ? { baglanacaklar: g.baglanacaklar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+    onay: g.onay === true
+  })],
   ['/platform/servis-tabanlari/uygula', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (!g.degisiklikler || typeof g.degisiklikler !== 'object' || Array.isArray(g.degisiklikler)) throw new DepoHatasi('"degisiklikler" bir nesne olmalıdır.');
