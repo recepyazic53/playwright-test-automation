@@ -17,16 +17,18 @@
 // GÜVENLİK / GİZLİLİK: kullanıcının bastığı düğmeler siteye GERÇEK istek gönderir (kayıt aşamasında yazma engeli yok;
 // kullanıcı başlatırken onaylar, CANLI işaretli ortamda kayıt sunucuda reddedilir). Yasaklı host ve izinli köken engeli
 // her aşamada sürer. Alan DEĞERLERİ hiçbir zaman okunmaz; kayıtta EKRAN GÖRÜNTÜSÜ ALINMAZ (kullanıcının girdiği bilgileri
-// içerirdi). Oturum diske yazılmaz.
+// içerirdi). Oturum alt süreçte diske yazılmaz ("Koşunun saklanan oturumunu kullan" seçiliyse sunucu koşunun şifreli oturum
+// dosyasını okur / günceller; bkz. tarama-girisi.ts).
 import type { Browser, Page } from '@playwright/test';
-import { baglamiDegistir, girisYap } from '../../../tests/support/giris-motoru';
+import { baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
-import { agHatasiMi, girisKokenleri } from '../giris/tarif.mjs';
+import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import type { EngellenenIstek, HamAlan, KayitOgesi, SecenekGozlemi } from './paket-olusturucu.mjs';
 import type { AkisEnvanteri, AkisOkumasi, AkisOlayi } from './akis-tasarimi.mjs';
-import { KAYIT_KOPRUSU, KAYIT_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaOlayi } from './protokol.mjs';
+import { KAYIT_KOPRUSU, KAYIT_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi } from './protokol.mjs';
+import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { acikListeSecenekleri, dokunulanlariBul, kayitPaneliniKur, secimDegerleri, type PanelDurumu } from './kayit-paneli';
 import { sayfadakiAlanlar } from './sayfa-envanteri';
 import { TaramaHatasi, hataBilgisi, type OlayGonderici } from './tarama-motoru';
@@ -47,7 +49,7 @@ function oge(veri: Record<string, unknown>): KayitOgesi {
 }
 
 /** Akışı kaydeder ve kayıt envanterini döner. Hata/iptal durumunda TaramaHatasi/GirisHatasi fırlatır. */
-export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: OlayGonderici): Promise<AkisEnvanteri> {
+export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: OlayGonderici, oturumGonder?: OturumGonderici): Promise<AkisEnvanteri> {
   const bildir = (o: TaramaOlayi): void => { void olay(o).catch(() => undefined); };
   await olay({ tur: 'adim', adim: 'hazirlik', durum: 'suruyor' });
   if (g.profiller.length > 1) throw new TaramaHatasi('BAGLAM_ADIMI', 'Akış kaydı en fazla bir bağlam profiliyle yapılır.');
@@ -58,7 +60,9 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
   const baglam = await browser.newContext({
     // Sabit ekran boyutu (taramayla aynı düzen; dar pencerede menüler daralıp giriş göstergesi gizlenmesin). Boyut, dil ve saat
     // dilimi: Ayarlar > Koşu > Tarama ve akış kaydı (varsayılan 1366×900, tr-TR, bilgisayarın saat dilimi).
-    baseURL: g.tabanUrl, ...taramaTarayiciAyarlari(g).baglam, acceptDownloads: false, serviceWorkers: 'block'
+    baseURL: g.tabanUrl, ...taramaTarayiciAyarlari(g).baglam, acceptDownloads: false, serviceWorkers: 'block',
+    // Yalnız "Koşunun saklanan oturumunu kullan" seçiliyken: koşunun oturumu (sunucu ortamın kökenlerine sınırladı).
+    ...oturumBaglamSecenegi(g)
   });
   const durum: { asama: TaramaAsamasi } = { asama: 'hazirlik' };
   const engellenenler: EngellenenIstek[] = [];
@@ -269,7 +273,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
       await baglam.addInitScript({ content: betik });
     };
 
-    // Giriş (tarif güdümlü).
+    // Giriş (tarif güdümlü; saklanan oturum ya da baştan giriş — kullanıcının seçimi).
     const islem = await baglam.newPage();
     // Sitenin açtığı iletişim kutuları: kullanıcı düğmeye basarak eylemi istemiştir → kabul (onay/uyarı); metni kaydedilmez.
     baglam.on('page', (p: Page) => {
@@ -288,18 +292,16 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
       durum.asama = 'giris';
       await olay({ tur: 'adim', adim: 'giris', durum: 'suruyor' });
       if (!g.kimlik) throw new TaramaHatasi('TARIF_GECERSIZ', 'Bu ortam için giriş profili tanımlı değil (Ayarlar > Giriş profilleri).');
+      let yontem: TaramaGirisYontemi;
       try {
-        // Giriş bilgisi yalnız ortamın taban adresinin / tarifteki giriş adresinin kökenine yazılır.
-        await girisYap(islem, g.tarif, g.kimlik, {
-          log: (mesaj) => bildir({ tur: 'bilgi', mesaj }), izinliKokenler: girisKokenleri(g.tabanUrl, g.tarif),
-          // Ayarlar > Koşu > Tarama ve akış kaydı > Girişte giriş alanı beklemesi.
-          alanBeklemeMs: taramaTarayiciAyarlari(g).girisAlanBeklemeMs
-        });
+        // Seçime göre saklanan oturum ya da baştan giriş (tarama-girisi.ts); giriş bilgisi yalnız ortamın kökenlerine yazılır.
+        yontem = await taramaGirisiYap(islem, g, bildir, oturumGonder);
       } catch (hata) {
         await olay({ tur: 'adim', adim: 'giris', durum: 'hata', mesaj: hataBilgisi(hata).mesaj });
         throw hata;
       }
-      await olay({ tur: 'adim', adim: 'giris', durum: 'tamam' });
+      await olay({ tur: 'giris', yontem });
+      await olay({ tur: 'adim', adim: 'giris', durum: 'tamam', mesaj: girisYontemiMesaji(yontem) });
     } else {
       await olay({ tur: 'adim', adim: 'giris', durum: 'atlandi', mesaj: 'Giriş tarifi yok; sayfa girişsiz açılıyor.' });
     }

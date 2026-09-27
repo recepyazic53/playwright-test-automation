@@ -148,6 +148,8 @@ export function gerekenIzinler(vt, yol, g) {
   }
 
   // Tarama / akış kaydı: giriş tarifi varsa ve "Giriş yapmadan aç" değilse (giriş kaydında kullanıcı kendisi girer).
+  // Tarama / akış kaydı: giriş tarifi varsa giriş bilgisi izni — "Koşunun saklanan oturumunu kullan" seçiliyken de (oturumla
+  // girişi atlamak da giriş sayılır; oturum geçersizse zaten form doldurulur).
   if (yol === '/platform/tarama/baslat' && g.kip !== 'girisKaydi' && g.girissiz !== true) {
     const projeId = metin(g.projeId);
     const ortamId = metin(g.ortamId);

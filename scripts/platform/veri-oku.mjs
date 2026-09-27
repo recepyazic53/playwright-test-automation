@@ -19,7 +19,7 @@ import { veritabaniAc, veritabaniYolu } from './veritabani/baglanti.mjs';
 import { gocleriUygula } from './veritabani/gocler.mjs';
 import { KasaHatasi, kasaDurumu, kasayiAnahtarlaAc, parolayiDogrula, zarflariCoz } from './kasa.mjs';
 import {
-  baglamProfilleriniListele, ekranlariListele, girisProfiliGetir, ortamGetir,
+  baglamProfilleriniListele, ekranlariListele, girisProfiliGetir, ortamGetir, ortamVarsayilanGirisProfiliId,
   testVerisiProfiliGetir, testVerisiProfilleriniListele, testVerisiTurleriniListele
 } from './veritabani/depo.mjs';
 import { modelBaglami, ortamdaKosuyaDahil, senaryoAkisi } from './senaryolar/senaryo-servisi.mjs';
@@ -191,8 +191,9 @@ function adliGirisProfilleri(vt, projeId, ortamId, adlar) {
  * @param {import('./veritabani/baglanti.mjs').Veritabani} vt @param {string} projeId @param {string} ortamId
  */
 function ortamGirisBilgisi(vt, projeId, ortamId) {
-  const satir = vt.tek('SELECT id FROM giris_profilleri WHERE proje_id = ? AND (ortam_id = ? OR ortam_id IS NULL) ORDER BY (ortam_id IS NULL), rowid LIMIT 1', [projeId, ortamId]);
-  const giris = satir ? girisProfiliGetir(vt, String(satir.id), { coz: true }) : undefined;
+  // Tarama / akış kaydıyla aynı varsayılan profil (saklanan oturum ortam + bu profille anahtarlanır).
+  const id = ortamVarsayilanGirisProfiliId(vt, projeId, ortamId);
+  const giris = id ? girisProfiliGetir(vt, id, { coz: true }) : undefined;
   return giris ? girisBilgisi(giris) : null;
 }
 

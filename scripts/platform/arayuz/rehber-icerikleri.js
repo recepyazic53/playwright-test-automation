@@ -267,7 +267,7 @@ export const REHBERLER = {
     baslik: 'Ekran taraması',
     adimlar: [
       { baslik: 'Tarama', metin: 'Nöbetçi sayfayı seçili ortamda açar, alanları ve seçenekleri okur ve bir sayfa paketi üretir. İlerlemeyi burada izlersiniz; bitince paket önizlemesine geçilir.', cizim: { tur: 'maket', bolge: 'form', etiket: 'Alanlar tek tek okunur' } },
-      { baslik: 'Dikkat', metin: 'Tarama yalnızca okur ve bilgi amaçlı düğmelere basar (sekme, ok, sorgula). Kayıt oluşturan düğmelere basılmaz. Süre sınırı Ayarlar > Koşu\'dadır.' }
+      { baslik: 'Dikkat', metin: 'Tarama yalnızca okur ve bilgi amaçlı düğmelere basar (sekme, ok, sorgula). Kayıt oluşturan düğmelere basılmaz. Süre sınırı ve girişte saklanan oturumun kullanılıp kullanılmayacağı Ayarlar > Koşu\'dadır; Giriş adımında hangisinin yapıldığı (saklanan oturum / baştan giriş) yazar.' }
     ]
   },
 
@@ -305,7 +305,7 @@ export const REHBERLER = {
   'ayarlar-kosu': {
     baslik: 'Koşu ayarları',
     adimlar: [
-      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi ve tarama / akış kaydı (süreler, ekran boyutu, dil, açılır liste keşif sınırı, girişte oturum kontrolü ve giriş alanı beklemesi; koşudaki giriş beklemelerinden ayrı). Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
+      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi ve tarama / akış kaydı (süreler, ekran boyutu, dil, açılır liste keşif sınırı, girişte giriş alanı beklemesi; koşudaki giriş beklemelerinden ayrı). Tarama ve akış kaydında giriş: varsayılan her seferinde baştan giriş; "Koşunun saklanan oturumunu kullan" seçilirse koşunun aynı ortam ve giriş profili için şifreli sakladığı oturum denenir ("Girişte oturum kontrolü" süresiyle), geçersizse baştan girilip oturum güncellenir; "Giriş yapmadan aç" saklanan oturumu hiç kullanmaz. Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
       { baslik: 'Gelişmiş koşu davranışı', metin: 'Açılır bölümde koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı (SQL adımındaki beklenen satır sayısı bunu aşamaz: kaydederken uyarı verilir; sınırı düşürürseniz aşan adımlar koşuda anlaşılır bir hatayla kalır), koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
       { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
       {

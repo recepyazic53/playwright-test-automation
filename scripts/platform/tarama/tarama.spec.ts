@@ -26,9 +26,11 @@ test('Nöbetçi otomatik ekran taraması', async ({ browser }) => {
   const girdi = (await (await istek('/girdi')).json()) as TaramaGirdisi;
   test.setTimeout(girdi.zamanAsimiMs + 30_000);
   const olay = async (o: TaramaOlayi): Promise<void> => { await istek('/olay', o).catch(() => undefined); };
+  // "Koşunun saklanan oturumunu kullan": başarılı girişin oturumu sunucuya (sunucu koşunun şifreli dosyasına yazar).
+  const oturumGonder = async (durum: unknown): Promise<void> => { await istek('/oturum', durum); };
   let sonuc: TaramaSonucu;
   try {
-    sonuc = { basarili: true, envanter: girdi.kip === 'kayit' ? await akisiKaydet(browser, girdi, olay) : await taramayiYurut(browser, girdi, olay) };
+    sonuc = { basarili: true, envanter: girdi.kip === 'kayit' ? await akisiKaydet(browser, girdi, olay, oturumGonder) : await taramayiYurut(browser, girdi, olay, oturumGonder) };
   } catch (hata) {
     sonuc = { basarili: false, hata: hataBilgisi(hata) };
   }

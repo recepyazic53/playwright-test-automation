@@ -669,8 +669,18 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       girdiler.set(t.anahtar, girdi);
       const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
       const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
-      return alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: `${t.aciklama} ${sinir}Varsayılan: ${varsayilan}.` });
+      const kutu = alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: `${t.aciklama} ${sinir}Varsayılan: ${varsayilan}.` });
+      if (t.etkinKosul) {
+        // Bağlı ayar (etkinKosul) bu değerde değilken alan pasif; neden alanın altında yazar (değer korunur, kaydedilir).
+        const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);
+        girdi.setAttribute('aria-describedby', `${girdi.getAttribute('aria-describedby')} ${not.id}`);
+        kutu.insertBefore(not, kutu.querySelector('.yardim'));
+        kosulluAlanlar.push({ t, girdi, kutu, not });
+      }
+      return kutu;
     })));
+  /** @type {Array<{ t: Record<string, any>; girdi: HTMLElement; kutu: HTMLElement; not: HTMLElement }>} */
+  const kosulluAlanlar = [];
   const temel = tanimlar.filter((t) => t.altBolum !== 'gelismis');
   const gelismis = tanimlar.filter((t) => t.altBolum === 'gelismis');
   const form = h('form', { class: `${secenek.baslik ? '' : 'kart '}form-paneli kosu-ayarlari`, novalidate: true, 'aria-label': ad },
@@ -681,6 +691,17 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       h('p', { class: 'soluk kucuk' }, `Koşucunun bekleme süreleri ve kararları. Her ayarın varsayılanı Nöbetçi'nin bugüne kadarki davranışıdır; değiştirmediğiniz sürece koşular aynı çalışır.`),
       ...grupAlanlari(gelismis)) : null,
     h('div', { class: 'dugmeler' }, kaydet));
+  for (const k of kosulluAlanlar) {
+    const bagli = girdiler.get(k.t.etkinKosul.anahtar);
+    const guncelle = () => {
+      const pasif = !bagli || bagli.value !== k.t.etkinKosul.deger;
+      k.girdi.disabled = pasif;
+      k.kutu.classList.toggle('pasif', pasif);
+      k.not.hidden = !pasif;
+    };
+    if (bagli) bagli.addEventListener('change', guncelle);
+    guncelle();
+  }
   form.addEventListener('submit', async (o) => {
     o.preventDefault();
     mesaj.temizle();
@@ -692,6 +713,8 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       if (t.tur === 'sayi') {
         const n = Number(g.value);
         if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) {
+          // Pasif (kullanılmayan) alan: geçersiz değer gönderilmez; kayıtlı değer korunur.
+          if (g.disabled) continue;
           alanHatasi(g, `${t.enAz} ile ${t.enCok} arasında bir tam sayı girin.`);
           const acilir = g.closest('details');
           if (acilir) acilir.open = true;

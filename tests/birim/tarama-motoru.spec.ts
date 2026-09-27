@@ -108,7 +108,8 @@ test('iki profille tam tarama: alanlar, etiketler, bölümler, keşif, geri alma
   expect(fikstur.kayitlar.filter((k) => SIRKET_DESENI.test(k.yol))).toEqual([]);
   // İlerleme olayları.
   expect(olaylar).toEqual(expect.arrayContaining([
-    { tur: 'adim', adim: 'giris', durum: 'tamam' }, { tur: 'profil', sira: 1, durum: 'suruyor', adim: 'kesif' },
+    // Varsayılan giriş kipi (Ayarlar > Koşu > Tarama ve akış kaydı): her seferinde baştan giriş; yöntem olayda ve adım mesajında.
+    { tur: 'giris', yontem: 'bastanGiris' }, { tur: 'adim', adim: 'giris', durum: 'tamam', mesaj: 'Baştan giriş yapıldı.' }, { tur: 'profil', sira: 1, durum: 'suruyor', adim: 'kesif' },
     expect.objectContaining({ tur: 'profil', sira: 0, durum: 'tamam', alanSayisi: 14 }), expect.objectContaining({ tur: 'profil', sira: 1, durum: 'tamam', alanSayisi: 15 })
   ]));
 

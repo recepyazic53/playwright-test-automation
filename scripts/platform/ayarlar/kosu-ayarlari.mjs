@@ -20,8 +20,11 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * env: alt sürece verilen ortam değişkeni (yoksa yalnız sunucuda kullanılır). carpan: ortam değişkenine yazılırken çarpan.
  * bolum 'zamanlama': Ayarlar > Koşu > Zamanlanmış koşular kartındaki form. altBolum 'gelismis': bölümün açılır "Gelişmiş koşu davranışı" kısmı.
  * Her ayarın varsayılanı, ayar eklenmeden önceki davranıştır.
+ * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) kullanılır; arayüz aksi hâlde alanı pasif gösterir
+ * (pasifAciklama). Kaydedilen değer korunur.
  * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin';
- *   varsayilan: string | number; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number }>}
+ *   varsayilan: string | number; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
+ *   etkinKosul?: { anahtar: string; deger: string; pasifAciklama: string } }>}
  */
 export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'video', grup: 'Kayıt', etiket: 'Video', aciklama: 'Nöbetçi\'den başlatılan koşularda video kaydı.', tur: 'secim', varsayilan: 'her',
@@ -54,9 +57,14 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 900, enAz: 240, enCok: 2160, birim: 'px' },
   { anahtar: 'taramaDili', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı dili', aciklama: 'Tarama ve akış kaydında tarayıcının dili (sayfanın dil algılaması, tarih / sayı biçimi).',
     tur: 'secim', varsayilan: 'tr-TR', secenekler: DIL_SECENEKLERI },
+  { anahtar: 'taramaGirisKipi', grup: 'Tarama ve akış kaydı', etiket: 'Tarama ve akış kaydında giriş',
+    aciklama: 'Her seferinde baştan giriş yap: tarama ve akış kaydı boş tarayıcıyla açılır ve giriş yapar; oturum saklanmaz. Koşunun saklanan oturumunu kullan: koşunun bu ortam ve giriş profili için şifreli sakladığı oturum yüklenir; geçerliyse giriş atlanır, değilse baştan giriş yapılır ve başarılı girişin oturumu aynı şifreli dosyaya yazılır (koşu da kullanır). Yalnız aynı ortam ve giriş profilinin oturumu kullanılır; "Giriş yapmadan aç" ile başlatılan iş saklanan oturumu kullanmaz ve güncellemez. Kasa anahtarı yoksa oturum okunmaz, yazılmaz.',
+    tur: 'secim', varsayilan: 'bastan', secenekler: [['bastan', 'Her seferinde baştan giriş yap'], ['saklananOturum', 'Koşunun saklanan oturumunu kullan']] },
   { anahtar: 'taramaOturumKontrolSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte oturum kontrolü',
-    aciklama: 'Tarama ve akış kaydında giriş motoru oturumun geçerli olup olmadığını denetlediğinde en çok bu kadar bekler. Tarama ve akış kaydı her başlatmada yeniden giriş yapar (oturum saklanmaz). Koşudaki "Oturum kontrolü"nden (Gelişmiş koşu davranışı) ayrıdır.',
-    tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn' },
+    aciklama: 'Saklanan oturum yüklendiğinde geçerli olup olmadığı en çok bu kadar denetlenir; süre dolarsa baştan giriş yapılır. Koşudaki "Oturum kontrolü"nden (Gelişmiş koşu davranışı) ayrıdır.',
+    tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn',
+    // Arayüz: bağlı ayar bu değerde değilken alan pasif ve bu açıklama gösterilir (değer korunur).
+    etkinKosul: { anahtar: 'taramaGirisKipi', deger: 'saklananOturum', pasifAciklama: 'Yalnız "Koşunun saklanan oturumunu kullan" seçiliyken kullanılır.' } },
   { anahtar: 'taramaGirisAlanBeklemeSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte giriş alanı beklemesi',
     aciklama: 'Tarama ve akış kaydındaki girişte giriş sayfasının alanlarının (kullanıcı adı, parola, giriş düğmesi, doğrulama kodu düğmesi) görünmesi için en çok bekleme. Giriş tarifindeki adımda süre verilmişse o kullanılır. Koşudaki "Giriş alanı beklemesi"nden ayrıdır.',
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn' },
@@ -124,7 +132,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 /** @typedef {{ video: string; ekranGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
  *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
- *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaOturumKontrolSn: number;
+ *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;

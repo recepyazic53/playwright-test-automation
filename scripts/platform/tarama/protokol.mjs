@@ -7,6 +7,7 @@
 //   GET  <adres>/girdi   → TaramaGirdisi (yalnızca bir kez)
 //   POST <adres>/olay    ← TaramaOlayi
 //   POST <adres>/sonuc   ← TaramaSonucu (envanter + ekran görüntüleri ya da hata)
+//   POST <adres>/oturum  ← başarılı girişin oturumu (YALNIZ "Koşunun saklanan oturumunu kullan" seçiliyken; sunucu şifreli yazar)
 // Token başlıkta taşınır (TARAMA_TOKEN_BASLIGI). SMS "elle" kodu mevcut dosya protokolüyle (giris/elle-kod.mjs,
 // TEST_SUNUCU_KOD_YOLU) istenir; sunucu isteği iş durumunda gösterir, kullanıcının kodunu yanıt dosyasına yazar.
 // NOT: import.meta KULLANILMAZ. Tipler: protokol.d.mts.
@@ -52,6 +53,14 @@ export const KAYIT_PANELI_KIMLIGI = 'nobetci-kayit-paneli';
 export const SONUC_GOVDE_SINIRI = 72 * 1024 * 1024;
 /** Olay gövdesi sınırı. */
 export const OLAY_GOVDE_SINIRI = 64 * 1024;
+/**
+ * "Koşunun saklanan oturumunu kullan" (Ayarlar > Koşu > Tarama ve akış kaydı): alt süreç başarılı girişten sonra oturumu
+ * (storageState) POST <adres>/oturum ile sunucuya verir; sunucu koşunun şifreli oturum dosyasına ATOMİK yazar (alt süreç kasa
+ * anahtarını hiç görmez, diske yazmaz). Gövde sınırı.
+ */
+export const OTURUM_GOVDE_SINIRI = 2 * 1024 * 1024;
+/** Taramada giriş kipleri (Ayarlar > Koşu > Tarama ve akış kaydı > Tarama ve akış kaydında giriş). */
+export const TARAMA_GIRIS_KIPLERI = Object.freeze(['bastan', 'saklananOturum']);
 
 /**
  * Tarama / akış kaydı tarayıcısının kullanıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
