@@ -12,6 +12,8 @@ import { servisSenaryosuKosuyorMu } from '../servisler/servis-isleri.mjs';
 let kosuyorMu = (/** @type {string} */ _dosya, /** @type {string} */ _ad) => false;
 /** @param {(dosya: string, ad: string) => boolean} fn */
 export function tabloKosuDenetimiAyarla(fn) { kosuyorMu = fn; }
+/** Tablo değerini değiştiren diğer yollar (aktarımlar) için koşu denetimleri. */
+export const tabloKosuDenetimi = () => ({ kosuyorMu, servisKosuyorMu: servisSenaryosuKosuyorMu });
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 

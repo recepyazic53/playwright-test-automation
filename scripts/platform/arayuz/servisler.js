@@ -13,6 +13,7 @@ import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu,
 import { kosuOnayi, onayIste, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
+import { etkiDenetimiyleGonder, etkiOnayi, guncellemeMetni } from './tablolar.js';
 import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-sihirbazi.js';
 import { hesapKurallariKarti } from './hesap-kurali-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
@@ -333,11 +334,14 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
     mesaj.temizle();
     const sc = secim();
     try {
-      const r = await mesgulIken(aktar, 'Aktarılıyor…', () => api('/platform/servis/soapui/aktar', { govde: {
+      // Tablodaki değerleri değiştiriyorsa önce etki gösterilir (tablolar.js etkiDenetimiyleGonder); vazgeçilirse hiçbir şey yazılmaz.
+      const r = await etkiDenetimiyleGonder(aktar, '/platform/servis/soapui/aktar', {
         projeId: proje.id, xml, takim: d.takim, durum: d.durum, servis: servisSec.value, kapsam: kapsam.value, erisimKimligi: erisim?.erisimKimligi,
         girisEkle: girisEkle.checked, ozellikler: Object.fromEntries(sc.hedef), tabloAdi: tabloAdi.value.trim(), degerOrtami: degerOrtami.value || null,
         gizliler: [...sc.gizli], sifreliKaydet: [...sc.sifreli], baglar: [...sc.baglar]
-      } }));
+      }, { baslik: 'Aktarım tablodaki değerleri değiştiriyor', yalniz: 'Yalnız aktar', guncelle: 'Aktar ve seçili senaryoları güncelle' });
+      if (!r) return;
+      if (guncellemeMetni(r)) bildir(guncellemeMetni(r), r.guncelleme.atlananlar.length ? 'hata' : undefined);
       bildir(`${r.eklenen} senaryo aktarıldı${r.atlanan.length ? `, ${r.atlanan.length} atlandı` : ''}; ${r.baglananAlan} alan bağlandı${r.tablo ? `; özellikler "${r.tablo.ad}" tablosunda` : ''}${r.eklenenKurallar.length ? `; ${r.eklenenKurallar.length} hesaplama kuralı eklendi` : ''}${r.girisSatiriEklendi ? '; bağlı tabloya satır eklendi' : ''}.`);
       if (r.tablo && r.tablo.bosBirakilan.length) bildir(`Gizli değeri boş bırakılanlar (tabloda doldurun): ${r.tablo.bosBirakilan.join(', ')}`, 'hata');
       if (r.eksikSatirlar.length) bildir(`Tabloda satırı olmayan seçimler (senaryo koşmaz, satır ekleyin): ${r.eksikSatirlar.join(' · ')}`, 'hata');
@@ -1420,8 +1424,18 @@ function kimlikYonetimi(proje, s, yenile) {
         `Bağlanacak servisler: ${o.servisler.join(', ') || '—'}`
       ];
       if (!(await onayIste({ baslik: `"${s.ayarlar.kimlikProfili}" test verisine taşınsın mı?`, metin: 'Değerler kasada şifreli kalır; eski kayıt silinmez, yalnız servislerden ayrılır.', liste, dugme: 'Taşı', ikonAd: 'veri' }))) return;
-      await mesgulIken(tasi, 'Taşınıyor…', () => api('/platform/servis-kimligi/test-verisine-tasi', { govde: { projeId: proje.id, ad: s.ayarlar.kimlikProfili, onay: true } }));
-      bildir('Giriş bilgileri test verisine taşındı.');
+      // Aynı adlı profilin değerleri değişiyor ve düz metin kullanan senaryolar varsa: hangileri güncellensin (tablo-etkisi.mjs).
+      const govde = { projeId: proje.id, ad: s.ayarlar.kimlikProfili, onay: true };
+      const etkiSor = (etki) => etkiOnayi(etki, { degisenler: true, baslik: 'Taşıma tablodaki değerleri değiştiriyor', yalniz: 'Yalnız taşı', guncelle: 'Taşı ve seçili senaryoları güncelle' });
+      let secim = o.etki && o.etki.etkilenenler.length ? await etkiSor(o.etki) : undefined;
+      if (secim === null) return;
+      let r = await mesgulIken(tasi, 'Taşınıyor…', () => api('/platform/servis-kimligi/test-verisine-tasi', { govde: { ...govde, ...(secim ? { guncellenecekler: secim } : {}) } }));
+      if (r.onayGerekli) {
+        secim = await etkiSor(r.etki);
+        if (secim === null) return;
+        r = await mesgulIken(tasi, 'Taşınıyor…', () => api('/platform/servis-kimligi/test-verisine-tasi', { govde: { ...govde, guncellenecekler: secim } }));
+      }
+      bildir(`Giriş bilgileri test verisine taşındı.${guncellemeMetni(r) ? ` ${guncellemeMetni(r)}` : ''}`);
       yenile();
     } catch (e) { yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message)); }
   });

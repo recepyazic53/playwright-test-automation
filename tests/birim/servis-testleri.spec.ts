@@ -246,7 +246,9 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
       tur: 'Servis girişi', yeniTur: true, rol: 'giris',
       eklenecekAlanlar: [{ alan: 'kanal', parametre: 'CHANNEL', hassas: false }, { alan: 'parola', parametre: 'PASSWORD', hassas: true }, { alan: 'kullanici', parametre: 'USERNAME', hassas: true }],
       profiller: [{ ad: 'Kanal 100', ortam: null, alanlar: ['kanal', 'parola', 'kullanici'] }, { ad: 'Kanal 100 · CANLI', ortam: 'CANLI', alanlar: ['kanal', 'parola', 'kullanici'] }],
-      servisler: ['OrnekService']
+      servisler: ['OrnekService'],
+      // Yeni tablo: var olan değer değişmez, senaryolara etki yok (tablo-etkisi.mjs).
+      etki: { degisiklikler: [], etkilenenler: [], karsiliklar: [] }
     } });
     expect(servisGetir(vt, servisId)?.ayarlar.kimlikProfili).toBe('Kanal 100');
     expect(girisProfiliniTestVerisineTasi(vt, projeId, { ad: 'Kanal 100', onay: true })).toMatchObject({ tasindi: true });

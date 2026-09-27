@@ -16,7 +16,9 @@
 //     değişiklik geçmişi); servis senaryosu servisSenaryosuKaydet ile, gövdede YALNIZ ilgili öğenin metni değişir (govde-degeri.mjs;
 //     bulunamaz / birden çok eşleşirse senaryo atlanır ve bildirilir). Koşan senaryo atlanır. Tablo + senaryolar TEK işlemde: biri
 //     hata verirse hiçbiri yazılmaz.
-// Uç: tablo-uclari.mjs POST /platform/tablo/kaydet { …, etki: 'denetle' | 'uygula', guncellenecekler?: [anahtar] }.
+// Uç: tablo-uclari.mjs POST /platform/tablo/kaydet { …, etki: 'denetle' | 'uygula', guncellenecekler?: [anahtar] }. Tablo değerini
+// değiştiren diğer yollar da aynı onaydan geçer (etkiDenetimiyle): SoapUI / Postman aktarımı (+ mevcutDegerleriKoru), "Test verisine
+// taşı" (önizlemede etki). REST servis kaydı başlık tablosunun gizli değerini yazar; senaryolar onu yalnız ${…} ile kullanır.
 import { DepoHatasi, ekranlariListele, ortamlariListele } from '../veritabani/depo.mjs';
 import { acikAnahtar, zarflariCoz } from '../kasa.mjs';
 import { modelBaglami, senaryoAkisi, senaryoKaynagi, senaryoOrtamVerileriniYaz, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
@@ -485,51 +487,105 @@ function etkiyiUygula(vt, projeId, plan, secilen, secenekler) {
 
 const GERI_AL = Symbol('geri-al');
 
+/** @typedef {'denetle' | 'uygula' | 'onizle' | null} EtkiKipi */
 /**
- * Tabloyu kaydeder; etki: 'denetle' → etkilenen senaryo varsa HİÇBİR ŞEY yazılmaz, { onayGerekli, etki } döner (yoksa kaydeder);
- * 'uygula' → tablo + guncellenecekler'deki (etkilenen anahtarları) senaryolar tek işlemde yazılır ([] = yalnız tablo). etki
- * verilmezse yalnız tablo (eski davranış). Her durumda karşılıklar değişen değere taşınır.
- * @param {Veritabani} vt
- * @param {Parameters<typeof tabloKaydet>[1] & { etki?: unknown; guncellenecekler?: unknown }} girdi
- * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string }} [secenekler]
+ * @typedef {{ etki?: unknown; guncellenecekler?: unknown; kosuyorMu?: (dosya: string, ad: string) => boolean;
+ *   servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string }} EtkiSecenekleri
+ * @typedef {{ degisiklikler: Array<{ tablo: string; satir: string; sutun: string; gizli: boolean; eski: string; yeni: string | null }>; etkilenenler: Etkilenen[];
+ *   karsiliklar: Array<{ tablo: string; sutun: string; eski: string; yeni: string }> }} TabloEtkisi
+ * @typedef {{ tabloKaydet: (girdi: Parameters<typeof tabloKaydet>[1]) => string; izle: <T>(projeId: string, tabloId: string | null | undefined, yaz: () => T) => T }} EtkiliYazici
  */
-export function tabloKaydetEtkiyle(vt, girdi, secenekler = {}) {
-  const mod = girdi.etki === 'denetle' || girdi.etki === 'uygula' ? girdi.etki : null;
-  const { etki: _e, guncellenecekler: _g, ...kayit } = girdi;
-  if (!kayit.id || kayit.id.startsWith(BAGLAM_ONEKI)) return { id: tabloKaydet(vt, kayit), etki: bosEtki() };
-  acikAnahtar(vt);
-  const [eski] = tablolariListele(vt, kayit.projeId, { cozulsun: true, tabloId: kayit.id });
-  if (!eski) throw new DepoHatasi('Tablo bulunamadı.');
-  const tasima = sutunTasimasi(eski, kayit.sutunlar);
-  const secilen = new Set(Array.isArray(girdi.guncellenecekler) ? girdi.guncellenecekler.filter((x) => typeof x === 'string') : []);
+
+/** @returns {TabloEtkisi} */
+function bosEtki() { return { degisiklikler: [], etkilenenler: [], karsiliklar: [] }; }
+
+/**
+ * Tablo yazan bir işlemi (tablo kaydı, SoapUI / Postman aktarımı, test verisine taşıma) ETKİ DENETİMİYLE çalıştırır. fn içinde
+ * var olan tabloya yazımlar yazici.tabloKaydet(girdi) ya da yazici.izle(projeId, tabloId, () => yazım) ile yapılır: her yazımdan
+ * önce ve sonra tablo okunur, değişen değerler ve (kip verildiyse) senaryolara etkisi toplanır, karşılıklar taşınır.
+ *   · etki 'denetle': etkilenen senaryo varsa HİÇBİR ŞEY yazılmaz (tüm işlem geri alınır), { onayGerekli, etki } döner; yoksa yazılır.
+ *   · etki 'uygula': işlem + guncellenecekler'deki (etkilenen anahtarları) senaryolar TEK işlemde yazılır ([] = yalnız işlem).
+ *   · etki 'onizle': her durumda geri alınır; yalnız etki döner (önizleme adımı).
+ *   · etki yoksa: işlem eskisi gibi (karşılıklar yine taşınır).
+ * @template T @param {Veritabani} vt @param {EtkiSecenekleri} s @param {(yazici: EtkiliYazici) => T} fn
+ * @returns {{ onayGerekli?: true; sonuc?: T; etki: TabloEtkisi; guncelleme?: ReturnType<typeof etkiyiUygula> }}
+ */
+export function etkiDenetimiyle(vt, s, fn) {
+  /** @type {EtkiKipi} */
+  const kip = s.etki === 'denetle' || s.etki === 'uygula' || s.etki === 'onizle' ? s.etki : null;
+  const secilen = new Set(Array.isArray(s.guncellenecekler) ? s.guncellenecekler.filter((x) => typeof x === 'string') : []);
+  const etki = bosEtki();
+  /** @type {{ satirlar: Etkilenen[]; islemler: Map<string, Islem> }} */
+  const plan = { satirlar: [], islemler: new Map() };
+  /** @type {string | null} */
+  let projeKimligi = null;
+  /** @type {EtkiliYazici['izle']} */
+  const izle = (projeId, tabloId, yaz) => {
+    const eski = tabloId && !tabloId.startsWith(BAGLAM_ONEKI) ? tablolariListele(vt, projeId, { cozulsun: true, tabloId })[0] : undefined;
+    const sonuc = yaz();
+    if (!eski) return sonuc;
+    return etkiyiTopla(projeId, eski, sutunTasimasi(eski, eski.sutunlar.map((c) => ({ ad: c.ad }))), sonuc);
+  };
+  /** @template R @param {string} projeId @param {Tablo} eski @param {Map<string, string>} tasima @param {R} sonuc @returns {R} */
+  const etkiyiTopla = (projeId, eski, tasima, sonuc) => {
+    projeKimligi = projeId;
+    let [yeni] = tablolariListele(vt, projeId, { cozulsun: true, tabloId: eski.id });
+    if (!yeni) return sonuc;
+    const degisiklikler = hucreDegisiklikleri(eski, yeni, tasima);
+    if (!degisiklikler.length) return sonuc;
+    const k = karsiliklariTasi(yeni, degisiklikler);
+    if (k.sutunlar.size) {
+      tabloKaydet(vt, { projeId, id: yeni.id, ad: yeni.ad,
+        sutunlar: yeni.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: c.gizli, ...(k.sutunlar.has(c.ad) ? { karsiliklar: k.sutunlar.get(c.ad) } : {}) })) });
+      [yeni] = tablolariListele(vt, projeId, { cozulsun: true, tabloId: yeni.id });
+    }
+    etki.degisiklikler.push(...degisiklikler.map((d) => ({ tablo: yeni.ad, satir: d.satirAdi, sutun: d.sutun, gizli: d.gizli, eski: d.gizli ? MASKE : d.eski, yeni: d.yeni === null ? null : d.gizli ? MASKE : d.yeni })));
+    etki.karsiliklar.push(...k.bilgi.map((b) => ({ tablo: yeni.ad, ...b })));
+    if (kip) {
+      const p = etkiPlani(vt, projeId, { eski, yeni, tasima, degisiklikler }, s);
+      for (const x of p.satirlar) { if (!plan.satirlar.some((y) => y.anahtar === x.anahtar)) plan.satirlar.push(x); }
+      for (const [a, i] of p.islemler) plan.islemler.set(a, i);
+    }
+    return sonuc;
+  };
+  /** @type {EtkiliYazici} */
+  const yazici = {
+    izle,
+    tabloKaydet: (girdi) => {
+      if (!girdi.id || girdi.id.startsWith(BAGLAM_ONEKI)) return tabloKaydet(vt, girdi);
+      acikAnahtar(vt);
+      const [eski] = tablolariListele(vt, girdi.projeId, { cozulsun: true, tabloId: girdi.id });
+      if (!eski) throw new DepoHatasi('Tablo bulunamadı.');
+      return etkiyiTopla(girdi.projeId, eski, sutunTasimasi(eski, girdi.sutunlar), tabloKaydet(vt, girdi));
+    }
+  };
   /** @type {any} */
-  let sonuc = null;
+  let cikti = null;
   try {
     vt.islem(() => {
-      const id = tabloKaydet(vt, kayit);
-      let [yeni] = tablolariListele(vt, kayit.projeId, { cozulsun: true, tabloId: id });
-      const degisiklikler = hucreDegisiklikleri(eski, yeni, tasima);
-      const k = karsiliklariTasi(yeni, degisiklikler);
-      if (k.sutunlar.size) {
-        tabloKaydet(vt, { projeId: kayit.projeId, id, ad: yeni.ad,
-          sutunlar: yeni.sutunlar.map((s) => ({ ad: s.ad, eskiAd: s.ad, gizli: s.gizli, ...(k.sutunlar.has(s.ad) ? { karsiliklar: k.sutunlar.get(s.ad) } : {}) })) });
-        [yeni] = tablolariListele(vt, kayit.projeId, { cozulsun: true, tabloId: id });
-      }
-      const plan = mod ? etkiPlani(vt, kayit.projeId, { eski, yeni, tasima, degisiklikler }, secenekler) : { satirlar: [], islemler: new Map() };
-      const etki = {
-        degisiklikler: degisiklikler.map((d) => ({ satir: d.satirAdi, sutun: d.sutun, gizli: d.gizli, eski: d.gizli ? MASKE : d.eski, yeni: d.yeni === null ? null : d.gizli ? MASKE : d.yeni })),
-        etkilenenler: plan.satirlar, karsiliklar: k.bilgi
-      };
-      if (mod === 'denetle' && plan.satirlar.length) { sonuc = { id, onayGerekli: true, etki }; throw GERI_AL; }
-      const guncelleme = mod === 'uygula' ? etkiyiUygula(vt, kayit.projeId, plan, secilen, secenekler) : null;
-      sonuc = { id, etki, ...(guncelleme ? { guncelleme } : {}) };
+      const sonuc = fn(yazici);
+      etki.etkilenenler = plan.satirlar;
+      if (kip === 'onizle' || (kip === 'denetle' && plan.satirlar.length)) { cikti = { ...(kip === 'denetle' ? { onayGerekli: true } : {}), etki }; throw GERI_AL; }
+      const guncelleme = kip === 'uygula' && projeKimligi ? etkiyiUygula(vt, projeKimligi, plan, secilen, s)
+        : kip === 'uygula' ? { guncellenenSenaryo: 0, guncellenenAlan: 0, atlananlar: [], uyari: 0 } : null;
+      cikti = { sonuc, etki, ...(guncelleme ? { guncelleme } : {}) };
     });
   } catch (e) {
     if (e !== GERI_AL) throw e;
   }
-  return /** @type {{ id: string; onayGerekli?: true; etki: ReturnType<typeof bosEtki>; guncelleme?: ReturnType<typeof etkiyiUygula> }} */ (sonuc);
+  return cikti;
 }
 
-/** @returns {{ degisiklikler: Array<{ satir: string; sutun: string; gizli: boolean; eski: string; yeni: string | null }>; etkilenenler: Etkilenen[]; karsiliklar: Array<{ sutun: string; eski: string; yeni: string }> }} */
-function bosEtki() { return { degisiklikler: [], etkilenenler: [], karsiliklar: [] }; }
-
+/**
+ * Tabloyu kaydeder (etkiDenetimiyle; etki: 'denetle' | 'uygula', guncellenecekler). etki verilmezse yalnız tablo (eski davranış).
+ * @param {Veritabani} vt
+ * @param {Parameters<typeof tabloKaydet>[1] & { etki?: unknown; guncellenecekler?: unknown }} girdi
+ * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string }} [secenekler]
+ * @returns {{ id: string; onayGerekli?: true; etki: TabloEtkisi; guncelleme?: ReturnType<typeof etkiyiUygula> }}
+ */
+export function tabloKaydetEtkiyle(vt, girdi, secenekler = {}) {
+  const { etki, guncellenecekler, ...kayit } = girdi;
+  const kip = etki === 'denetle' || etki === 'uygula' ? etki : undefined;
+  const r = etkiDenetimiyle(vt, { ...secenekler, etki: kip, guncellenecekler }, (y) => y.tabloKaydet(kayit));
+  return { id: /** @type {string} */ (r.sonuc ?? kayit.id), ...(r.onayGerekli ? { onayGerekli: /** @type {const} */ (true) } : {}), etki: r.etki, ...(r.guncelleme ? { guncelleme: r.guncelleme } : {}) };
+}

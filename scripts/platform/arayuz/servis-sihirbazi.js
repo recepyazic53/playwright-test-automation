@@ -13,6 +13,7 @@ import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc }
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
+import { etkiDenetimiyleGonder, guncellemeMetni } from './tablolar.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 
@@ -489,11 +490,14 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
     mesaj.temizle();
     if (!secili.size) { mesaj.goster('En az bir klasör seçin.'); return; }
     try {
-      const r = await mesgulIken(aktar, 'Aktarılıyor…', () => api('/platform/servis/postman/aktar', { govde: {
+      // Tablodaki değerleri değiştiriyorsa önce etki gösterilir (tablolar.js etkiDenetimiyleGonder); vazgeçilirse hiçbir şey yazılmaz.
+      const r = await etkiDenetimiyleGonder(aktar, '/platform/servis/postman/aktar', {
         projeId: proje.id, koleksiyon: dosyalar.koleksiyon, ...(dosyalar.ortam ? { ortam: dosyalar.ortam } : {}),
         klasorler: [...secili], tabloAdi: tabloAdi.value.trim(), gizliler: [...gizli], sifreliKaydet: [...sifreli], akisDegiskenleri: [...akis],
         degerOrtami: degerOrtami.value || null, tabanOrtami: tabanOrtami.value || null, kapsam: kapsam.value
-      } }));
+      }, { baslik: 'Aktarım tablodaki değerleri değiştiriyor', yalniz: 'Yalnız aktar', guncelle: 'Aktar ve seçili senaryoları güncelle' });
+      if (!r) return;
+      if (guncellemeMetni(r)) bildir(guncellemeMetni(r), r.guncelleme.atlananlar.length ? 'hata' : undefined);
       const eklenen = r.servisler.reduce((n, s) => n + s.eklenen, 0);
       bildir(`${r.servisler.length} servis, ${eklenen} senaryo aktarıldı${r.tablo ? `; değişkenler "${r.tablo.ad}" tablosunda` : ''}.`);
       if (r.tablo && r.tablo.bosBirakilan.length) bildir(`Gizli değeri boş bırakılanlar (tabloda doldurun): ${r.tablo.bosBirakilan.join(', ')}`, 'hata');

@@ -2,6 +2,8 @@
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 import type { ServisKapsami } from './servis-deposu.mjs';
 import type { ServisTaslagi } from './soapui-ice-aktarma.mjs';
+import type { EtkiGuncellemesi, TabloEtkisi } from '../tablolar/tablo-etkisi.mjs';
+import type { EtkiGuncellemesi, TabloEtkisi } from '../tablolar/tablo-etkisi.mjs';
 
 export type OzellikHedefi = 'tablo' | 'bag' | 'kural' | 'birak';
 export declare const OZELLIK_HEDEFLERI: readonly OzellikHedefi[];
@@ -25,15 +27,22 @@ export declare function soapuiOnizle(vt: Veritabani, projeId: string, xml: strin
     senaryolar: (Omit<ServisTaslagi['senaryolar'][number], 'govde'> & { govdeUzunlugu: number })[];
   })[];
 };
-export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: {
+export interface SoapuiAktarimGirdisi {
   xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: ServisKapsami;
   ozellikler?: Record<string, string>; tabloAdi?: string; degerOrtami?: string | null; gizliler?: string[]; sifreliKaydet?: string[]; baglar?: string[];
-  girisEkle?: boolean; yapan?: string;
-}): {
+  girisEkle?: boolean; mevcutDegerleriKoru?: boolean; guncellenecekler?: unknown; yapan?: string;
+}
+export interface SoapuiAktarimSonucu {
+  etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi;
   servisId: string; yeniServis: boolean; eklenen: number; atlanan: string[]; baglananAlan: number; kurulanBaglar: string[]; eklenenKurallar: string[];
   tablo: { ad: string; yeni: boolean; sutunSayisi: number; sifreliYazilan: string[]; bosBirakilan: string[] } | null;
   girisSatiriEklendi: boolean; eksikSatirlar: string[]; eslenmemisParametreler: string[];
-};
+}
+type KosuDenetimi = { kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean };
+/** etki verilmezse eski davranış (yalnız aktarım); 'denetle' etkilenen varsa onay ister, 'uygula' seçili senaryoları da yazar. */
+export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: SoapuiAktarimGirdisi & { etki?: undefined }, secenekler?: KosuDenetimi): SoapuiAktarimSonucu;
+export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: SoapuiAktarimGirdisi & { etki: unknown }, secenekler?: KosuDenetimi):
+  { onayGerekli: true; etki: TabloEtkisi } | (SoapuiAktarimSonucu & { onayGerekli?: undefined });
 export interface EskiDonusumPlani {
   parametreler: { ad: string; hedef: string; tablo: string; sutun: string; etiket: string; rol: string; satir: string | null; senaryoSayisi: number }[];
   senaryolar: { id: string; baslik: string; parametreler: string[] }[];

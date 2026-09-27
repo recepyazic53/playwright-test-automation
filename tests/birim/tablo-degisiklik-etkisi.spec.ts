@@ -217,13 +217,13 @@ test.describe('geçici veritabanı: etki ve onaylı güncelleme', () => {
     const gecmisOnce = Object.values(f.senaryo).map((id) => gecmis(vt, id));
     const s = tabloKaydetEtkiyle(vt, urunDegistir({ etki: 'denetle' }));
     expect(s.onayGerekli).toBe(true);
-    expect(s.etki.degisiklikler).toEqual([{ satir: 'r1', sutun: 'Ürün', gizli: false, eski: 'Ürün A', yeni: 'Ürün X' }]);
+    expect(s.etki.degisiklikler).toEqual([{ tablo: 'Ürünler', satir: 'r1', sutun: 'Ürün', gizli: false, eski: 'Ürün A', yeni: 'Ürün X' }]);
     const e = s.etki.etkilenenler;
     expect(e.map((x) => [x.baslik, x.nitelik]).sort()).toEqual([['K1 ürün A', 'alan'], ['Satır seçimli', 'secim']]);
     expect(bul(e, f.senaryo.S1)).toMatchObject({ tur: 'ekran', kaynakAdi: 'Başvuru (akış)', eski: 'Ürün A', yeni: 'Ürün X', durum: 'guncellenebilir', ortamlar: ['Deneme', 'Diğer'] });
     expect(bul(e, f.senaryo.S4, 'secim')).toMatchObject({ alan: 'Satır seçimi: Ürünler', eski: 'Ürün = Ürün A', yeni: 'Ürün = Ürün X', durum: 'guncellenebilir' });
     // Karşılık: "Ürün A" r2'de kaldığı için eski anahtar da kalır, yeni değere kopyalanır.
-    expect(s.etki.karsiliklar).toEqual([{ sutun: 'Ürün', eski: 'Ürün A', yeni: 'Ürün X' }]);
+    expect(s.etki.karsiliklar).toEqual([{ tablo: 'Ürünler', sutun: 'Ürün', eski: 'Ürün A', yeni: 'Ürün X' }]);
     expect(JSON.stringify(tablolariListele(vt, f.projeId))).toBe(onceki);
     expect(Object.values(f.senaryo).map((id) => gecmis(vt, id))).toEqual(gecmisOnce);
   });
@@ -299,7 +299,7 @@ test.describe('geçici veritabanı: etki ve onaylı güncelleme', () => {
     const metin = JSON.stringify(d);
     expect(metin).not.toContain(GIZLI_ESKI);
     expect(metin).not.toContain(GIZLI_YENI);
-    expect(d.etki.degisiklikler).toEqual([{ satir: 'u1', sutun: 'Kod', gizli: true, eski: MASKE, yeni: MASKE }]);
+    expect(d.etki.degisiklikler).toEqual([{ tablo: 'Üyeler', satir: 'u1', sutun: 'Kod', gizli: true, eski: MASKE, yeni: MASKE }]);
     const x = bul(d.etki.etkilenenler, f.senaryo.S5) as Etkilenen;
     expect(x).toMatchObject({ gizli: true, eski: MASKE, yeni: MASKE, durum: 'guncellenebilir' });
     const s = tabloKaydetEtkiyle(vt, { ...g, etki: 'uygula', guncellenecekler: [x.anahtar] });

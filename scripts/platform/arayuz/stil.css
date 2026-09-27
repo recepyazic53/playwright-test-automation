@@ -3282,3 +3282,4 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
   .etki-diyalogu .diyalog-alt { padding: 12px 14px 14px; }
   .etki-diyalogu .diyalog-alt button { flex: 1 1 100%; }
 }
+.etki-diyalogu h3.kucuk-baslik { font-size: 13px; margin: 12px 0 0; color: var(--metin-2); }

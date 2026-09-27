@@ -20,7 +20,8 @@ import { servisTaslaklari, soapuiCozumle, soapuiOzeti } from './soapui-ice-aktar
 import { alanBaglariniDogrula, kuralBaglariniDenetle, parametreEslemeleri, servisiKaydet } from './servis-islemleri.mjs';
 import { kullanilanParametreler } from './soap-istemcisi.mjs';
 import { govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
-import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, secilenSatir } from '../tablolar/tablo-secimi.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
@@ -40,6 +41,8 @@ export const OZELLIK_HEDEFLERI = /** @type {const} */ (['tablo', 'bag', 'kural',
 const PARAMETRE = /\$\{([A-Za-z_][\w.-]*)\}/g;
 /** @param {unknown} x */
 const kucuk = (x) => String(x ?? '').toLocaleLowerCase('tr');
+/** @param {unknown} v */
+const dolu = (v) => v !== null && v !== undefined && v !== '';
 /** Tablo / sütun adında kullanılamayan karakterler → "_". @param {string} ad */
 const adTemizle = (ad) => ad.replace(/[.[\]{}$<>&|\u0000-\u001f]/g, '_').trim().slice(0, 60);
 /** Rolün etiketi (eski eşlemede "giris" / "varsayilan" rolü etiketsiz). @param {string | undefined} rol */
@@ -168,9 +171,23 @@ export function soapuiOnizle(vt, projeId, xml, secim = {}) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: 'test' | 'canli' | 'ikisi';
  *   ozellikler?: Record<string, string>; tabloAdi?: string; degerOrtami?: string | null; gizliler?: string[]; sifreliKaydet?: string[];
- *   baglar?: string[]; girisEkle?: boolean; yapan?: string }} girdi
+ *   baglar?: string[]; girisEkle?: boolean; mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; yapan?: string }} girdi
+ * - Tablo değer değişikliği (tablolar/tablo-etkisi.mjs): var olan satırın değeri değişiyorsa etki: 'denetle' iken etkilenen senaryo
+ *   varsa HİÇBİR ŞEY yazılmaz, { onayGerekli, etki } döner; 'uygula' + guncellenecekler ile aktarım ve seçili senaryo güncellemeleri
+ *   tek işlemde yazılır. mevcutDegerleriKoru: var olan satırda dolu hücrenin üzerine yazılmaz (dosyadaki değer yalnız boş hücreye).
+ * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean }} [secenekler]
  */
-export function soapuiAktar(vt, projeId, girdi) {
+export function soapuiAktar(vt, projeId, girdi, secenekler = {}) {
+  const r = etkiDenetimiyle(vt, { ...secenekler, etki: girdi.etki, guncellenecekler: girdi.guncellenecekler, yapan: girdi.yapan }, (y) => soapuiAktarimi(vt, projeId, girdi, y));
+  if (r.onayGerekli) return { onayGerekli: true, etki: r.etki };
+  return { .../** @type {ReturnType<typeof soapuiAktarimi>} */ (r.sonuc), etki: r.etki, ...(r.guncelleme ? { guncelleme: r.guncelleme } : {}) };
+}
+
+/**
+ * @param {Veritabani} vt @param {string} projeId @param {Parameters<typeof soapuiAktar>[2]} girdi
+ * @param {import('../tablolar/tablo-etkisi.mjs').EtkiliYazici} yazici
+ */
+function soapuiAktarimi(vt, projeId, girdi, yazici) {
   const t = servisTaslaklari(soapuiCozumle(girdi.xml), { takim: girdi.takim, durum: girdi.durum });
   const taslak = t.servisler.find((s) => s.anahtar === girdi.servis);
   if (!taslak) throw new DepoHatasi(`Test durumunda "${girdi.servis}" servisi yok.`);
@@ -233,12 +250,14 @@ export function soapuiAktar(vt, projeId, girdi) {
         const c = /** @type {string} */ (sutunAdi.get(ad));
         const d = plan.degerler.get(ad) ?? '';
         const gizliSutun = var_?.sutunlar.find((x) => x.ad === c)?.gizli ?? gizliler.has(ad);
+        // Mevcut değeri koru: satırdaki dolu hücre (gizli: kayıtlı değer) aynen kalır.
+        if (girdi.mevcutDegerleriKoru && satir && (dolu(satir.degerler[c]) || satir.doluGizli.includes(c))) continue;
         if (gizliSutun) {
           // Gizli değer yalnız kullanıcı onayladıysa (şifreli sütuna); onay yoksa hiç yazılmaz (boş kalır / mevcut korunur).
           if (sifreli.has(ad) && d) { yeniDegerler[c] = d; sifreliYazilan.push(ad); } else bosBirakilan.push(ad);
         } else yeniDegerler[c] = d;
       }
-      const id = tabloKaydet(vt, {
+      const id = yazici.tabloKaydet({
         projeId, ...(var_ ? { id: var_.id } : {}), ad: var_?.ad ?? tabloAdi, sutunlar: [...eskiSutunlar, ...yeniSutunlar],
         satirlar: [{ ...(satir ? { id: satir.id } : {}), ortamId, degerler: yeniDegerler }], ortamVar: (x) => Boolean(ortamGetir(vt, x))
       });
@@ -314,7 +333,7 @@ export function soapuiAktar(vt, projeId, girdi) {
       for (const { t: tablo, degerler } of girisler.values()) {
         const acik = tablo.sutunlar.filter((c) => !c.gizli && degerler[c.ad] !== undefined);
         if (!acik.length || tablo.satirlar.some((r) => acik.every((c) => r.degerler[c.ad] === degerler[c.ad]))) continue;
-        tabloKaydet(vt, { projeId, id: tablo.id, ad: tablo.ad, sutunlar: tablo.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: c.gizli })), satirlar: [{ ortamId: null, degerler }] });
+        yazici.tabloKaydet({ projeId, id: tablo.id, ad: tablo.ad, sutunlar: tablo.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: c.gizli })), satirlar: [{ ortamId: null, degerler }] });
         girisSatiriEklendi = true;
       }
       if (girisSatiriEklendi) tablolar = tablolariListele(vt, projeId);

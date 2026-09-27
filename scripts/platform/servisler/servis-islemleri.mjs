@@ -24,7 +24,8 @@ import {
 import { adresBirlestirRest, govdeKacisi, restIstegi } from './rest-istemcisi.mjs';
 import { ortakYol, postmanCozumle, postmanOzeti, sablonCevir, sablonDegiskenleri } from './postman-ice-aktarma.mjs';
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
-import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, servisDegeri } from '../tablolar/tablo-secimi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
@@ -560,10 +561,11 @@ export const SERVIS_GIRISI_TURU = 'Servis girişi';
  * bir test verisi türünün alanlarına eşlenir (zaten eşliyse o tür, değilse "Servis girişi" türü; rol "giris"), profilin genel
  * değerleri aynı adla bir test verisi profili, ortama özel değerleri "<ad> · <ortam>" profilleri olur; profili kullanan servisler
  * bu test verisi profillerine bağlanır (ortama özel olan "<tür>:<rol>@<ortam>" ile). Eski kayıt SİLİNMEZ (yalnız servislerden ayrılır).
- * onay verilmezse yalnız ne yapılacağı döner.
- * @param {Veritabani} vt @param {string} projeId @param {{ ad: string; onay?: boolean }} girdi
+ * onay verilmezse yalnız ne yapılacağı (ve tablo değer değişikliğinin senaryolara etkisi) döner.
+ * @param {Veritabani} vt @param {string} projeId @param {{ ad: string; onay?: boolean; guncellenecekler?: unknown }} girdi
+ * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean }} [secenekler]
  */
-export function girisProfiliniTestVerisineTasi(vt, projeId, girdi) {
+export function girisProfiliniTestVerisineTasi(vt, projeId, girdi, secenekler = {}) {
   const ozet = servisKimlikOzeti(vt, projeId).find((p) => p.ad === girdi.ad);
   if (!ozet) throw new DepoHatasi(`"${girdi.ad}" servis giriş profili bulunamadı.`);
   const ortamlar = ortamlariListele(vt, projeId);
@@ -589,8 +591,22 @@ export function girisProfiliniTestVerisineTasi(vt, projeId, girdi) {
     profiller: [{ ad: girdi.ad, ortam: null, alanlar: ozet.alanlar.map(alanAdi) }, ...ozelProfiller.map((o) => ({ ad: `${girdi.ad} · ${o.ortam}`, ortam: o.ortam, alanlar: [...new Set([...ozet.alanlar, ...o.alanlar])].map(alanAdi) }))],
     servisler: kullanan.map((s) => s.ad)
   };
-  if (!girdi.onay) return { onizleme: plan };
-  return vt.islem(() => {
+  // Tablo değer değişikliği (aynı adlı profil varsa değerleri üzerine yazılır; tablolar/tablo-etkisi.mjs): önizlemede etki (hiçbir
+  // şey yazılmaz), onayda guncellenecekler verilirse taşıma + seçili senaryolar tek işlemde; verilmezse etkilenen varsa onay istenir.
+  const guncellenecekler = Array.isArray(girdi.guncellenecekler) ? girdi.guncellenecekler : undefined;
+  const calistir = () => etkiDenetimiyle(vt, { ...secenekler, etki: !girdi.onay ? 'onizle' : guncellenecekler ? 'uygula' : 'denetle', guncellenecekler },
+    (y) => y.izle(projeId, mevcutTur?.id, () => tasi()));
+  if (!girdi.onay) {
+    // Önizleme eskisi gibi yalnız planı gösterebilmeli: deneme yazımı hata verirse etki boş döner (hata onayda görünür).
+    let etki = { degisiklikler: [], etkilenenler: [], karsiliklar: [] };
+    try { etki = calistir().etki; } catch (e) { if (!(e instanceof DepoHatasi)) throw e; }
+    return { onizleme: { ...plan, etki } };
+  }
+  const r = calistir();
+  if (r.onayGerekli) return { onayGerekli: true, etki: r.etki };
+  return { .../** @type {ReturnType<typeof tasi>} */ (r.sonuc), etki: r.etki, ...(r.guncelleme ? { guncelleme: r.guncelleme } : {}) };
+
+  function tasi() {
     const turId = testVerisiTuruKaydet(vt, {
       ...(mevcutTur ? { id: mevcutTur.id } : {}), projeId, ad: plan.tur,
       alanlar: [
@@ -611,8 +627,8 @@ export function girisProfiliniTestVerisineTasi(vt, projeId, girdi) {
       const { kimlikProfili: _eski, ...ayarlar } = s.ayarlar;
       servisKaydet(vt, { id: s.id, projeId, anahtar: s.anahtar, ad: s.ad, ayarlar: { ...ayarlar, veriProfilleri: { ...(ayarlar.veriProfilleri ?? {}), ...secim } } });
     }
-    return { tasindi: true, ...plan, turId, profilId: genelId };
-  });
+    return { tasindi: /** @type {const} */ (true), ...plan, turId, profilId: genelId };
+  }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -664,9 +680,24 @@ export function postmanOnizle(vt, projeId, girdi) {
  * Ağ isteği atılmaz (REST servisinde WSDL / erişim kontrolü yok).
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
- *   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string }} girdi
+ *   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: 'test' | 'canli' | 'ikisi';
+ *   mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; yapan?: string }} girdi
+ * - Tablo değer değişikliği (tablolar/tablo-etkisi.mjs): var olan satırın değeri değişiyorsa etki: 'denetle' iken etkilenen senaryo
+ *   varsa HİÇBİR ŞEY yazılmaz, { onayGerekli, etki } döner; 'uygula' + guncellenecekler ile aktarım ve seçili senaryo güncellemeleri
+ *   tek işlemde yazılır. mevcutDegerleriKoru: var olan satırda dolu hücrenin üzerine yazılmaz.
+ * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean }} [secenekler]
  */
-export function postmanAktar(vt, projeId, girdi) {
+export function postmanAktar(vt, projeId, girdi, secenekler = {}) {
+  const r = etkiDenetimiyle(vt, { ...secenekler, etki: girdi.etki, guncellenecekler: girdi.guncellenecekler, yapan: girdi.yapan }, (y) => postmanAktarimi(vt, projeId, girdi, y));
+  if (r.onayGerekli) return { onayGerekli: true, etki: r.etki };
+  return { .../** @type {ReturnType<typeof postmanAktarimi>} */ (r.sonuc), etki: r.etki, ...(r.guncelleme ? { guncelleme: r.guncelleme } : {}) };
+}
+
+/**
+ * @param {Veritabani} vt @param {string} projeId @param {Parameters<typeof postmanAktar>[2]} girdi
+ * @param {import('../tablolar/tablo-etkisi.mjs').EtkiliYazici} yazici
+ */
+function postmanAktarimi(vt, projeId, girdi, yazici) {
   const c = postmanCozumle(girdi.koleksiyon, { ...(girdi.ortam ? { ortamMetni: girdi.ortam } : {}), ekGizliAdlar: ekGizliAdlar(vt) });
   const secilen = c.klasorler.filter((kl) => girdi.klasorler.includes(kl.anahtar));
   if (!secilen.length) throw new DepoHatasi('En az bir klasör (servis) seçin.');
@@ -713,18 +744,25 @@ export function postmanAktar(vt, projeId, girdi) {
       const sifreliYazilan = [];
       /** @type {string[]} */
       const bosBirakilan = [];
+      const ortamId = girdi.degerOrtami || null;
+      const satir = mevcut?.satirlar.find((r) => (r.ortamId ?? null) === ortamId);
       for (const ad of tabloya) {
         const d = degiskenler.get(ad)?.deger ?? '';
         const sutun = /** @type {string} */ (sutunAdi.get(ad));
-        const gizliSutun = mevcut?.sutunlar.find((x) => x.ad.toLocaleLowerCase('tr') === sutun.toLocaleLowerCase('tr'))?.gizli ?? gizliler.has(ad);
+        const var_ = mevcut?.sutunlar.find((x) => x.ad.toLocaleLowerCase('tr') === sutun.toLocaleLowerCase('tr'));
+        const gizliSutun = var_?.gizli ?? gizliler.has(ad);
+        // Mevcut değeri koru: satırdaki dolu hücre aynen kalır (gizli: kayıtlı değer; açık: aynı değer yeniden yazılır).
+        if (girdi.mevcutDegerleriKoru && satir && var_) {
+          const eski = satir.degerler[var_.ad];
+          if (satir.doluGizli.includes(var_.ad)) continue;
+          if (eski !== null && eski !== undefined && eski !== '') { degerler[sutun] = eski; continue; }
+        }
         if (gizliSutun) {
           // Gizli değer yalnız kullanıcı onayladıysa (şifreli sütuna); onay yoksa satıra hiç yazılmaz (boş kalır / mevcut korunur).
           if (sifreli.has(ad) && d) { degerler[sutun] = d; sifreliYazilan.push(ad); } else bosBirakilan.push(ad);
         } else degerler[sutun] = d;
       }
-      const ortamId = girdi.degerOrtami || null;
-      const satir = mevcut?.satirlar.find((r) => (r.ortamId ?? null) === ortamId);
-      tabloKaydet(vt, {
+      yazici.tabloKaydet({
         projeId, ...(mevcut ? { id: mevcut.id } : {}), ad: mevcut?.ad ?? tabloAdi, sutunlar: [...eskiSutunlar, ...yeniSutunlar],
         satirlar: [{ ...(satir ? { id: satir.id } : {}), ortamId, degerler }], ortamVar: (id) => Boolean(ortamGetir(vt, id))
       });
