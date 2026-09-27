@@ -70,9 +70,11 @@ test('SoapUI önizle → erişimi kontrol et → aktar → parametreler → Dene
   const erisim = await basarili('/platform/servis/erisim', { projeId, ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
   expect(erisim).toMatchObject({ erisilebilir: true, durumKodu: 200 });
   const aktar = await basarili('/platform/servis/soapui/aktar', {
-    projeId, xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: erisim.erisimKimligi, girisEkle: true
+    projeId, xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: erisim.erisimKimligi, girisEkle: true,
+    // Önizlemedeki kullanıcı seçimleri: MUSTERI_TC gövdede kalır (eski eşleme — geriye uyum); parola onayla şifreli yazılır.
+    ozellikler: { MUSTERI_TC: 'birak' }, sifreliKaydet: ['PASSWORD']
   });
-  expect(aktar).toMatchObject({ yeniServis: true, eklenen: 3, baglananAlan: 3, girisSatiriEklendi: true, eksikSatirlar: [] });
+  expect(aktar).toMatchObject({ yeniServis: true, eklenen: 3, baglananAlan: 5, girisSatiriEklendi: true, eksikSatirlar: [] });
   const servisId = String(aktar.servisId);
 
   const liste = await basarili(`/platform/servisler?projeId=${projeId}`);

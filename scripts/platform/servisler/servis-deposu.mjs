@@ -302,19 +302,49 @@ const senaryoCevir = (vt, s) => ({
  */
 export function servisSenaryosuKaydet(vt, girdi) {
   acikAnahtar(vt);
-  const icerik = senaryoIceriginiDogrula(girdi.icerik);
+  // "Koşuda" ORTAM BAŞINA (icerik.kosuOrtamlari: { ortamId: boolean }) içerik doğrulamasından ayrı ele alınır:
+  //  - verilirse (nesne) o yazılır; null verilirse silinir (tüm ortamlarda genel değer geçerli olur);
+  //  - verilmezse mevcut korunur; ama genel "Koşuda" değeri açıkça DEĞİŞTİRİLDİYSE (düzenleyicideki anahtar) ortam ezmeleri silinir.
+  const ham = girdi.icerik && typeof girdi.icerik === 'object' && !Array.isArray(girdi.icerik) ? /** @type {Record<string, unknown>} */ (girdi.icerik) : null;
+  const { kosuOrtamlari: gelenOrtamlar, ...hamKalan } = ham ?? {};
+  const temel = senaryoIceriginiDogrula(ham ? hamKalan : girdi.icerik);
   return vt.islem(() => {
     const servis = vt.tek('SELECT proje_id FROM servisler WHERE id = ?', [kimlik(girdi.servisId, 'servisId')]);
     if (!servis || servis.proje_id !== girdi.projeId) throw new DepoHatasi('Servis bulunamadı.');
     const mevcut = girdi.id ? vt.tek('SELECT * FROM servis_senaryolari WHERE id = ?', [girdi.id]) : undefined;
+    const genelDegisti = mevcut && typeof girdi.kosuyaDahil === 'boolean' && girdi.kosuyaDahil !== (mevcut.kosuya_dahil === 1);
+    const genel = girdi.kosuyaDahil ?? (mevcut ? mevcut.kosuya_dahil === 1 : true);
+    // Genel değer "en az bir ortamda koşuda"dır; genel kapalıysa ezme tutulmaz (hiçbir ortamda koşmaz).
+    const ortamlar = !genel ? undefined : gelenOrtamlar !== undefined ? kosuOrtamlariDogrula(gelenOrtamlar)
+      : mevcut && !genelDegisti ? kosuOrtamlariDogrula(/** @type {any} */ (sifreliJsonOku(vt, mevcut.icerik_json))?.kosuOrtamlari) : undefined;
+    const icerik = { ...temel, ...(ortamlar ? { kosuOrtamlari: ortamlar } : {}) };
     return kaydet(vt, 'servis_senaryolari', {
       proje_id: girdi.projeId, servis_id: girdi.servisId, baslik: zorunluMetin(girdi.baslik, 'baslik'),
       kapsam: secenek(girdi.kapsam ?? mevcut?.kapsam ?? 'test', SENARYO_KAPSAMLARI, 'kapsam'),
-      kosuya_dahil: (girdi.kosuyaDahil ?? (mevcut ? mevcut.kosuya_dahil === 1 : true)) ? 1 : 0,
+      kosuya_dahil: genel ? 1 : 0,
       sira: girdi.sira === undefined ? (mevcut?.sira ?? null) : girdi.sira,
       icerik_json: sifreliJson(vt, icerik, 'icerik')
     }, { id: girdi.id, gecmisTuru: 'servis_senaryosu', yapan: girdi.yapan });
   });
+}
+
+/**
+ * Ortam başına "Koşuda" ezmeleri: { ortamId: boolean } (en çok 50; geçersiz girdiler atılır). Boş ya da null → undefined.
+ * @param {unknown} v @returns {Record<string, boolean> | undefined}
+ */
+export function kosuOrtamlariDogrula(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  const s = Object.fromEntries(Object.entries(v).filter(([k, d]) => /^[A-Za-z0-9_-]{1,100}$/.test(k) && typeof d === 'boolean').slice(0, 50));
+  return Object.keys(s).length ? s : undefined;
+}
+
+/**
+ * Senaryo bu ortamda "Koşuda" mı: ortam ezmesi varsa o, yoksa genel değer (kosuya_dahil). Eski kayıtlarda ezme yoktur → genel.
+ * @param {{ kosuyaDahil: boolean; icerik: unknown }} s @param {string} ortamId
+ */
+export function servisOrtamdaKosuyaDahil(s, ortamId) {
+  const o = /** @type {any} */ (s.icerik)?.kosuOrtamlari;
+  return o && typeof o === 'object' && typeof o[ortamId] === 'boolean' ? o[ortamId] : s.kosuyaDahil;
 }
 
 /** @param {Veritabani} vt @param {string} id */

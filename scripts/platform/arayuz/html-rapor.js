@@ -1,5 +1,5 @@
 // "Raporu indir (HTML)": koşu ayrıntısından (ekran sonuçları: sonuclar.js, servis sonuçları: servis-sonuclari.js) tek dosyalık,
-// paylaşılabilir HTML rapor. Seçenekler kullanıcı kararıdır (diyalog; önizlemeli): ekran görüntüleri (varsayılan kapalı),
+// paylaşılabilir HTML rapor (karşılaştırma ekranında iki koşunun karşılaştırma raporu: hedef.b). Seçenekler kullanıcı kararıdır (diyalog; önizlemeli): ekran görüntüleri (varsayılan kapalı),
 // hata mesajları (varsayılan açık), ortam adresi (varsayılan kapalı). Rapor sunucuda üretilir ve maskelenir
 // (/platform/sonuclar/html-rapor; bkz. sonuclar/html-rapor.mjs). Önizleme betiksiz, korumalı bir iframe'dedir (sandbox=""):
 // arayüzün CSP'si satır içi stile izin vermediğinden srcdoc değil, sunucunun tek kullanımlık önizleme adresi (kendi CSP'si) yüklenir.
@@ -9,14 +9,15 @@ import { TOKEN, api, boyutMetni, h, ikon, yeniKimlik } from './ortak.js';
 const UYARI_BAYT = 10 * 1024 * 1024;
 
 /**
- * @param {{ tur: 'ekran' | 'servis'; projeId: string; id: string }} hedef
+ * b verilirse iki koşunun karşılaştırma raporu (id = A, b = B; karsilastirma.js).
+ * @param {{ tur: 'ekran' | 'servis'; projeId: string; id: string; b?: string }} hedef
  * @returns {HTMLButtonElement}
  */
 export function htmlRaporDugmesi(hedef) {
-  return h('button', { type: 'button', class: 'dugme hayalet', onclick: () => raporDiyalogu(hedef) }, ikon('indir'), 'Raporu indir (HTML)');
+  return h('button', { type: 'button', class: 'dugme hayalet', onclick: () => raporDiyalogu(hedef) }, ikon('indir'), hedef.b ? 'Karşılaştırmayı indir (HTML)' : 'Raporu indir (HTML)');
 }
 
-/** @param {{ tur: 'ekran' | 'servis'; projeId: string; id: string }} hedef */
+/** @param {{ tur: 'ekran' | 'servis'; projeId: string; id: string; b?: string }} hedef */
 function raporDiyalogu(hedef) {
   const kutu = (etiket, acik, aciklama) => {
     const girdi = h('input', { type: 'checkbox', id: yeniKimlik('rapor-secenek'), checked: acik });
@@ -31,7 +32,7 @@ function raporDiyalogu(hedef) {
   const kapat = h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Kapat' }, ikon('carpi'));
   const diyalog = h('dialog', { class: 'onay-diyalogu html-rapor-diyalogu', 'aria-labelledby': 'html-rapor-basligi' },
     h('div', { class: 'diyalog-govde' },
-      h('div', { class: 'diyalog-baslik-satiri' }, h('h2', { id: 'html-rapor-basligi' }, 'Raporu indir (HTML)'), kapat),
+      h('div', { class: 'diyalog-baslik-satiri' }, h('h2', { id: 'html-rapor-basligi' }, hedef.b ? 'Karşılaştırmayı indir (HTML)' : 'Raporu indir (HTML)'), kapat),
       h('p', { class: 'soluk' }, 'Tek dosya; internet bağlantısı gerektirmez, yazdırılabilir. Gizli değerler her zaman maskelenir; giriş bilgisi, '
         + 'istek / yanıt gövdesi ve test verisinin gizli sütunları rapora girmez.'),
       h('fieldset', { class: 'html-rapor-secenekleri' }, h('legend', {}, 'Rapora eklenecekler'), goruntu.satir, hatalar.satir, adres.satir),
@@ -48,7 +49,7 @@ function raporDiyalogu(hedef) {
     indir.disabled = true;
     bilgi.textContent = goruntu.girdi.checked ? 'Rapor hazırlanıyor (görüntüler çözülüyor)…' : 'Rapor hazırlanıyor…';
     const q = new URLSearchParams({
-      projeId: hedef.projeId, tur: hedef.tur, id: hedef.id,
+      projeId: hedef.projeId, tur: hedef.tur, id: hedef.id, ...(hedef.b ? { b: hedef.b } : {}),
       goruntuler: goruntu.girdi.checked ? '1' : '0', hatalar: hatalar.girdi.checked ? '1' : '0', adres: adres.girdi.checked ? '1' : '0'
     });
     try {

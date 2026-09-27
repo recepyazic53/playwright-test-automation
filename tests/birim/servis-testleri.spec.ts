@@ -150,16 +150,20 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     const onizleme = soapuiOnizle(vt, projeId, SOAPUI, { takim: 'Takim', durum: 'OrnekDurum' });
     expect(JSON.stringify(onizleme)).not.toContain(SAHTE_PAROLA);
     expect(onizleme.veriParametreleri).toEqual([{ ad: 'MUSTERI_TC', esleme: { turAd: 'Kişi', alan: 'tcKimlikNo', rol: 'musteri' } }]);
-    const r = soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: e.erisimKimligi, girisEkle: true });
-    expect(r).toMatchObject({ yeniServis: true, eklenen: 3, atlanan: [], baglananAlan: 3, girisSatiriEklendi: true, eksikSatirlar: [], eslenmemisParametreler: [] });
+    // Yeni bağlama modeli: MUSTERI_TC bilerek gövdede bırakılır (eski eşlemeyle çözülür — geriye uyum testleri aşağıda); parola
+    // yalnız kullanıcı onayıyla (sifreliKaydet) şifreli sütuna yazılır; tarihler hesaplama kuralı olur ve alanlara kural bağı kurulur.
+    const r = soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service', erisimKimligi: e.erisimKimligi, girisEkle: true,
+      ozellikler: { MUSTERI_TC: 'birak' }, sifreliKaydet: ['PASSWORD'] });
+    expect(r).toMatchObject({ yeniServis: true, eklenen: 3, atlanan: [], baglananAlan: 5, tablo: null, girisSatiriEklendi: true, eksikSatirlar: [], eslenmemisParametreler: [] });
     servisId = r.servisId;
     // İkinci aktarım aynı başlıkları eklemez.
-    expect(soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service' })).toMatchObject({ yeniServis: false, eklenen: 0 });
+    expect(soapuiAktar(vt, projeId, { xml: SOAPUI, takim: 'Takim', durum: 'OrnekDurum', servis: 'ornek-service' })).toMatchObject({ yeniServis: false, eklenen: 0, tablo: null, baglananAlan: 0 });
     const s = servisGetir(vt, servisId);
     expect(s?.ayarlar).toMatchObject({ yol: '/Servis/ornek.asmx', erisim: { ortamId: testOrtami, durumKodu: 200 } });
     expect(s?.ayarlar.kimlikProfili).toBeUndefined();
     expect(s?.ayarlar.alanBaglari?.Teklif).toEqual({
-      'Input/Channel': { tablo: girisTablosu, sutun: 'Channel' }, 'Input/Username': { tablo: girisTablosu, sutun: 'Username' }, 'Input/Password': { tablo: girisTablosu, sutun: 'Password' } });
+      'Input/Channel': { tablo: girisTablosu, sutun: 'Channel' }, 'Input/Username': { tablo: girisTablosu, sutun: 'Username' }, 'Input/Password': { tablo: girisTablosu, sutun: 'Password' },
+      'Input/BeginDate': { kural: 'BEGIN_DATE' }, 'Input/EndDate': { kural: 'END_DATE' } });
     // Gövdede giriş parametreleri tablo başvurusu; dosyadaki kanal / kullanıcı senaryonun tablo seçimi; giriş satırı tabloya eklendi.
     const gecerli = servisSenaryolariniListele(vt, servisId).find((x) => x.baslik === 'Geçerli kimlik');
     expect(gecerli?.icerik.govde).toContain('<Channel>${Giriş.Channel}</Channel><Username>${Giriş.Username}</Username><Password>${Giriş.Password}</Password><CitizenshipNumber>${MUSTERI_TC}</CitizenshipNumber>');

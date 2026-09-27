@@ -36,7 +36,7 @@ export interface ServisKontrolu {
 export interface ServisSenaryoIcerigi {
   operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>; basliklar?: Record<string, string>;
-  http?: ServisHttpTanimi;
+  http?: ServisHttpTanimi; kosuOrtamlari?: Record<string, boolean>;
 }
 export interface ServisSenaryosu {
   id: string; projeId: string; servisId: string; baslik: string; kapsam: ServisKapsami; kosuyaDahil: boolean;
@@ -59,6 +59,8 @@ export declare function servisSenaryosuKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; servisId: string; baslik: string; kapsam?: ServisKapsami; kosuyaDahil?: boolean; sira?: number | null; icerik: unknown; yapan?: string;
 }): string;
 export declare function servisSenaryosuGetir(vt: Veritabani, id: string): ServisSenaryosu | undefined;
+export declare function kosuOrtamlariDogrula(v: unknown): Record<string, boolean> | undefined;
+export declare function servisOrtamdaKosuyaDahil(s: { kosuyaDahil: boolean; icerik: unknown }, ortamId: string): boolean;
 export declare function servisSenaryolariniListele(vt: Veritabani, servisId: string): ServisSenaryosu[];
 export declare function servisSenaryosuSil(vt: Veritabani, id: string, yapan?: string): boolean;
 

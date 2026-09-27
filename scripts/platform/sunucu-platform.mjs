@@ -38,7 +38,8 @@
 //   GET  /platform/sonuclar/sonuc?id=                 test detayı (hata, adımlar, medya listesi)
 //   GET  /platform/sonuclar/kaliplar?projeId=&urun=&baslangic=&bitis=   hata kalıpları
 //   GET  /platform/sonuclar/html-rapor?projeId=&tur=ekran|servis&id=&goruntuler=1&hatalar=0|1&adres=1   paylaşılabilir HTML rapor
-//        (tek dosya, maskeli; görüntüler kasada çözülüp data: URI olarak gömülür — sonuclar/html-rapor.mjs)
+//        (tek dosya, maskeli; görüntüler kasada çözülüp data: URI olarak gömülür — sonuclar/html-rapor.mjs); &b=<koşu B>: karşılaştırma raporu
+//   GET  /platform/sonuclar/karsilastir?projeId=&tur=ekran|servis&a=&b=   iki koşunun yan yana karşılaştırması (+ /senaryo, /adaylar)
 //   GET  /platform/sonuclar/html-rapor/onizleme/<id>?token=   son üretilen raporun tek kullanımlık önizlemesi (kendi CSP'si)
 //   GET  /platform/servis-sonuclari?projeId=&servisId=&akisId=&ortamId=&denemeler=1   servis / akış koşuları, kalıplar
 //   GET  /platform/servis-sonuclari/kosu?projeId=&id=   koşu ayrıntısı · /senaryo?projeId=&id=   istek / yanıt (maskeli)
@@ -196,6 +197,10 @@ import { ZAMANLAMA_POST_UCLARI, zamanlamaGetUclari } from './zamanlama/uclar.mjs
 import { arayuzKilidindeIzinliMi, arkaPlanIsiBaslat, emanetiSil } from './zamanlama/anahtar-emaneti.mjs';
 import { arkaPlanYoneticisi } from './zamanlama/arka-plan.mjs';
 import { SERVIS_SONUC_UCLARI } from './sonuclar/servis-sonuclari.mjs';
+import { KARSILASTIRMA_UCLARI, karsilastirmaRaporuOlustur } from './sonuclar/karsilastirma.mjs';
+import {
+  gosterimMaskesi, hataKaliplariniMaskele, kosuDetayiniMaskele, servisSonucunuMaskele, sonucDetayiniMaskele
+} from './sonuclar/gosterim-maskesi.mjs';
 import { sorgudanAralik } from './sonuclar/aralik.mjs';
 import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
 
@@ -468,11 +473,24 @@ export async function platformKosuSonucu(kosuId, senaryoAnahtari) {
   if (!db) return null;
   const bulunan = kosudakiSonucuBul(db, kosuId, { senaryoAnahtari });
   if (!bulunan) return null;
-  const d = bulunan.detay;
+  // Gösterim maskesi (bilinen gizli değerler, adı gizli alanlar …): saklanan sonuç değişmez.
+  const m = gosterimMaskesi(db, bulunan.detay.projeId);
+  const d = sonucDetayiniMaskele(bulunan.detay, m);
   return {
     durum: d.hamDurum ?? d.durum, platformDurumu: d.durum, sureMs: d.sureMs, hataMesaji: d.hataMesaji,
-    basarisizAdim: bulunan.basarisizAdim, ekranGoruntusuId: bulunan.sonEkranGoruntusuId, videoId: bulunan.videoId, sonucId: d.id
+    basarisizAdim: bulunan.basarisizAdim ? m.ad(bulunan.basarisizAdim) : null, ekranGoruntusuId: bulunan.sonEkranGoruntusuId, videoId: bulunan.videoId, sonucId: d.id
   };
+}
+
+/**
+ * Koşu sonucu okunamadığında gösterilen çıktı hata özeti: koşunun projesinin gizli değerleriyle maskelenir.
+ * @param {string | null | undefined} metin @param {string} kosuId @returns {Promise<string | null>}
+ */
+export async function platformHataOzetiniMaskele(metin, kosuId) {
+  if (!metin) return metin ?? null;
+  const db = await platformVeritabani();
+  const projeId = db && kasaAcikMi(db) ? db.tek('SELECT proje_id FROM kosular WHERE id = ?', [kosuId])?.proje_id : null;
+  return db ? gosterimMaskesi(db, projeId == null ? null : String(projeId)).metin(metin) : metin;
 }
 
 /**
@@ -1125,7 +1143,8 @@ const GET_UCLARI = new Map([
   ['/platform/senaryo/son-sonuc', (db, q) => {
     const id = kimlikAl(q.get('id'));
     const son = senaryoSonSonucu(db, id, kimlikAl(q.get('ortamId'), 'ortamId'));
-    const d = son ? sonucDetayi(db, son.sonucId) : null;
+    const ham = son ? sonucDetayi(db, son.sonucId) : null;
+    const d = ham ? sonucDetayiniMaskele(ham, gosterimMaskesi(db, ham.projeId)) : null;
     // Yalnızca diyagramın gereksindiği özet: adım adları/durumları ve hata metni (medya ve veri yok).
     return {
       sonuc: son && d ? {
@@ -1201,16 +1220,17 @@ const GET_UCLARI = new Map([
   ['/platform/sonuclar/kosu', (db, q) => {
     const d = kosuDetayi(db, kimlikAl(q.get('id')));
     if (!d) throw new DepoHatasi('Koşu bulunamadı.');
-    return d;
+    return kosuDetayiniMaskele(d, gosterimMaskesi(db, d.kosu.projeId));
   }],
   ['/platform/sonuclar/sonuc', (db, q) => {
     const d = sonucDetayi(db, kimlikAl(q.get('id')));
     if (!d) throw new DepoHatasi('Sonuç bulunamadı.');
-    return { sonuc: d };
+    return { sonuc: sonucDetayiniMaskele(d, gosterimMaskesi(db, d.projeId)) };
   }],
-  ['/platform/sonuclar/kaliplar', (db, q) => hataKaliplari(db, kimlikAl(q.get('projeId'), 'projeId'), {
-    urun: urunSecimi(q.get('urun')), ...sorgudanAralik(q)
-  })],
+  ['/platform/sonuclar/kaliplar', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    return hataKaliplariniMaskele(hataKaliplari(db, projeId, { urun: urunSecimi(q.get('urun')), ...sorgudanAralik(q) }), gosterimMaskesi(db, projeId));
+  }],
   ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
   ['/platform/yedek/otomatik-liste', (db) => {
     const klasor = varsayilanYedekKlasoru(db);
@@ -1236,7 +1256,12 @@ for (const [yol, islem] of zamanlamaGetUclari(zamanlayici)) GET_UCLARI.set(yol, 
 // Zamanlanmış koşuların kilitliyken / açılışta çalışma tercihleri (A/B/C; görev durumu schtasks /Query ile).
 GET_UCLARI.set('/platform/zamanlama/tercihler', (db) => arkaPlan.durum(db));
 // Servis sonuçları ekranı (yalnız okuma): sonuclar/servis-sonuclari.mjs.
-for (const [yol, islem] of SERVIS_SONUC_UCLARI) GET_UCLARI.set(yol, islem);
+// Hata / kontrol metinleri gösterimde maskelenir (sonuclar/gosterim-maskesi.mjs; saklanan veri değişmez).
+for (const [yol, islem] of SERVIS_SONUC_UCLARI) {
+  GET_UCLARI.set(yol, (db, q) => servisSonucunuMaskele(yol, islem(db, q), gosterimMaskesi(db, q.get('projeId'))));
+}
+// Yan yana koşu karşılaştırması (yalnız okuma): sonuclar/karsilastirma.mjs.
+for (const [yol, islem] of KARSILASTIRMA_UCLARI) GET_UCLARI.set(yol, islem);
 
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const POST_UCLARI = new Map([
@@ -1741,7 +1766,10 @@ export async function platformIsteginiIsle(req, res, baglam) {
       if (!disTokenGecerli) { tokenYok(); return true; }
       const db = await acikVeritabani();
       res.setHeader('Cache-Control', 'no-store');
-      const rapor = await htmlRaporuOlustur(db, url.searchParams, { medyaKlasoru: medyaKlasoruYolu() });
+      // b verilirse iki koşunun karşılaştırma raporu (sonuclar/karsilastirma.mjs).
+      const rapor = url.searchParams.get('b')
+        ? await karsilastirmaRaporuOlustur(db, url.searchParams, { medyaKlasoru: medyaKlasoruYolu() })
+        : await htmlRaporuOlustur(db, url.searchParams, { medyaKlasoru: medyaKlasoruYolu() });
       jsonGonder(res, 200, { basarili: true, ...rapor, onizlemeId: onizlemeSakla(rapor.html) });
       return true;
     }

@@ -15,11 +15,11 @@ export function rehberAnahtari(hash) {
   const [, bolum = 'sonuclar', alt = '', , dorduncu = ''] = String(hash || '#/sonuclar').split('/');
   const parca = alt ? decodeURIComponent(alt) : '';
   let anahtar = null;
-  if (bolum === 'sonuclar' || !bolum) anahtar = parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : 'sonuclar';
+  if (bolum === 'sonuclar' || !bolum) anahtar = parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : parca === 'karsilastir' ? 'sonuclar-karsilastir' : 'sonuclar';
   else if (bolum === 'senaryolar') anahtar = parca === 'yeni' || parca === 'duzenle' ? 'senaryo-formu' : 'senaryolar';
   else if (bolum === 'servisler') {
     const sekme = String(hash).split('/')[4] || '';
-    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 'sonuclar' ? 'servis-sonuclari' : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : 'servis') : 'servisler';
+    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 'sonuclar' ? (String(hash).split('/')[3] === 'karsilastir' ? 'sonuclar-karsilastir' : 'servis-sonuclari') : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : 'servis') : 'servisler';
   } else if (bolum === 'ekranlar') {
     if (parca === 'yeni') anahtar = 'ekran-ekle';
     else if (parca === 'tarama') anahtar = 'tarama';

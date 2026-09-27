@@ -136,8 +136,9 @@ akisSenaryoKancasiAyarla({ kos: akisSenaryosunuKos, gecenler: gecenAkisSenaryola
  * Servis sayfasının senaryo listesi: akış senaryolarına akış adı; akışı bu servisten geçen başka servislerin akış senaryoları
  * (gecen: true, sahip servis); akış senaryolarının son sonucu (akış koşularından).
  * @param {Veritabani} vt @param {string} projeId @param {string} servisId @param {any[]} senaryolar @param {Record<string, any>} sonSonuclar
+ * @param {Record<string, Record<string, any>>} [ortamSonuclari] senaryo → ortam → son sonuç (akış koşularından eklenir)
  */
-export function servisSenaryoGorunumu(vt, projeId, servisId, senaryolar, sonSonuclar) {
+export function servisSenaryoGorunumu(vt, projeId, servisId, senaryolar, sonSonuclar, ortamSonuclari = {}) {
   const gecen = gecenAkisSenaryolari(vt, projeId, servisId);
   const tumu = [...senaryolar, ...gecen.map((s) => ({ ...s, gecen: true }))];
   const akislar = new Map(servisAkislariniListele(vt, projeId).map((a) => [a.id, a]));
@@ -156,15 +157,21 @@ export function servisSenaryoGorunumu(vt, projeId, servisId, senaryolar, sonSonu
     }
     if (!a) continue;
     if (!kosular.has(a.id)) kosular.set(a.id, servisAkisKosulariniListele(vt, { projeId, akisId: a.id, sinir: 50 }));
+    // Koşular en yeniden eskiye: senaryonun en son sonucu ve ORTAM BAŞINA en son sonucu.
+    let ilk = true;
     for (const k of kosular.get(a.id) ?? []) {
       if (k.tur !== 'kosu' || k.baslik !== s.baslik) continue;
       const tam = servisAkisKosusuGetir(vt, k.id);
       if (/** @type {any} */ (tam?.sonuc)?.senaryo?.id !== s.id) continue;
-      son[s.id] = { durum: k.durum, baslangic: k.baslangic, kosuId: null, akisKosuId: k.id, akisId: a.id };
-      break;
+      const kayit = { durum: k.durum, baslangic: k.baslangic, kosuId: null, akisKosuId: k.id, akisId: a.id, ortamId: k.ortamId ?? null };
+      if (ilk) { son[s.id] = kayit; ilk = false; }
+      if (k.ortamId) {
+        const o = (ortamSonuclari[s.id] ??= {});
+        if (!o[k.ortamId]) o[k.ortamId] = kayit;
+      }
     }
   }
-  return { senaryolar: tumu, sonSonuclar: son };
+  return { senaryolar: tumu, sonSonuclar: son, ortamSonuclari };
 }
 
 /**

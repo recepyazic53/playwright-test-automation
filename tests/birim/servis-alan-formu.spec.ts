@@ -296,7 +296,9 @@ test.describe('alan formu uçtan uca', () => {
     await page.goto(`/#/servisler/s/${servisId}`);
     const satir = (baslik: string) => page.locator('.servis-senaryo-tablosu tbody tr').filter({ has: page.getByRole('link', { name: baslik, exact: true }) });
     await expect(satir('VEYA senaryosu').locator('td.beklenen-hucresi')).toContainText('biri: "<Durum>HATA</Durum>" | "<Durum>OK</Durum>"');
-    await expect(satir('Hızlı').locator('.son-sonuc')).toContainText('Başarılı');
+    // Son sonuç ortam başına: nokta + ortam adı + simge ve tarih; tam metin aria-label'da.
+    await expect(satir('Hızlı').locator('.son-sonuc')).toHaveAttribute('aria-label', /^TEST: Başarılı · /);
+    await expect(satir('Hızlı').locator('.son-sonuc')).toContainText('TEST');
     // ▷ → canlı panel: adımlar ve yanıt.
     await satir('Yavaş').getByRole('button', { name: 'Çalıştır: Yavaş' }).click();
     const panel = page.getByRole('region', { name: 'Servis koşu paneli' });
@@ -307,11 +309,15 @@ test.describe('alan formu uçtan uca', () => {
     await panel.getByText('Yanıt (HTTP 200)').click();
     await expect(panel.locator('pre').last()).toContainText('<Durum>HATA</Durum>');
     await panel.getByRole('button', { name: 'Paneli kapat' }).click();
-    await expect(satir('Yavaş').locator('.son-sonuc')).toContainText('Başarılı');
+    await expect(satir('Yavaş').locator('.son-sonuc')).toHaveAttribute('aria-label', /^TEST: Başarılı · /);
     // Çoklu seçim.
     await satir('Hızlı').getByLabel('Seç: Hızlı').check();
     await satir('Formdan senaryo').getByLabel('Seç: Formdan senaryo').check();
     await page.getByRole('button', { name: 'Seçilenleri çalıştır (2)' }).click();
+    // Ortam diyalogda sorulur (başlıkta ortam segmenti yok).
+    const diyalog = page.getByRole('dialog', { name: 'Seçilenleri çalıştır?' });
+    await expect(diyalog.getByLabel('Ortam')).toHaveValue(testOrtami);
+    await diyalog.getByRole('button', { name: '2 senaryoyu başlat' }).click();
     await expect(panel.locator('.kosu-listesi li')).toHaveCount(2);
     await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
     expect(hatalar).toEqual([]);
@@ -422,7 +428,7 @@ test.describe('alan formu uçtan uca', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     const dahiller = async () => ((await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar as Nesne[]).map((x) => x.kosuyaDahil);
     await page.goto(`/#/servisler/s/${servisId}`);
-    const anahtar = page.getByRole('switch', { name: 'Koşuda: Formdan senaryo' });
+    const anahtar = page.getByRole('switch', { name: 'Koşuda (TEST): Formdan senaryo' });
     await expect(anahtar).toBeChecked();
     await anahtar.click();
     await expect.poll(async () => (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).senaryolar.find((x: Nesne) => x.baslik === 'Formdan senaryo').kosuyaDahil).toBe(false);

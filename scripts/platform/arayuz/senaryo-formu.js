@@ -6,8 +6,12 @@
 // Kayıt veritabanına yazılır (POST /platform/senaryo/kaydet; değişiklik geçmişiyle). "Dene", taslağı
 // kaydetmeden geçici bir deneme senaryosu olarak koşar (POST /platform/senaryo/dene).
 // Modeli olmayan ekranlarda yalnızca özet + başlık + Koşuda düzenlenir.
-// "Akış diyagramı" sekmesi (salt okunur): formdaki güncel seçimlerle akış + seçili ortamdaki son koşunun adım renkleri
-// (senaryo-diyagrami.js). Kayıt paneli (sağ sütun) iki sekmede de görünür.
+// "Akış diyagramı" sekmesi: formdaki güncel seçimlerle akış + seçili ortamdaki son koşunun adım renkleri
+// (senaryo-diyagrami.js). Diyagramdan SENARYO düzeyi düzenlenir (aşama 3b): kutu seçilince formun kendi bileşenleri (adımın
+// alanları, senaryo kartı / giriş, beklenen sonuç kartı) kutunun altındaki düzenleme alanına TAŞINIR — tek taslak, tek doğrulama,
+// kaydetme formun "Kaydet"iyle; Form sekmesine dönünce yerlerine geri konur. İsteğe bağlı adımın "dahil" anahtarı, "Burada hata
+// beklenir" ve kutulardaki hata rozetleri de aynı değerleri yazar/okur. Akış yapısı buradan değişmez. Kayıt paneli (sağ sütun) iki
+// sekmede de görünür.
 // Çoklu akış: ekranın birden çok akışı varsa senaryo kartında "Akış" seçilir (yeni senaryoda varsayılan akış önde); akış
 // değişince form o akışın modeliyle yeniden çizilir, girilen değerler korunur (yeni akışta olmayanlar uyarıyla kaldırılır).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
@@ -19,7 +23,7 @@ import {
 } from './model-formu.mjs';
 import { gorunurlukleriHesapla, senaryoyuDogrula } from './senaryo-dogrulayici.mjs';
 import { onayIste } from './kosu-paneli.js';
-import { akisDiyagrami } from './akis-diyagrami.mjs';
+import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 
@@ -553,7 +557,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
         h('div', {}, h('h3', { id: `adim-${adim.id}` }, adim.baslik), alt),
         adim.ayar ? h('div', { class: 'sag' }, kapsamAnahtari(adim)) : null),
       govde);
-    adimKartlari.set(adim.id, { el, alt, altMetin });
+    adimKartlari.set(adim.id, { el, alt, altMetin, govde, alanSayisi });
     adimAkisi.append(el);
   });
 
@@ -571,7 +575,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (akisSecimi) {
     akisSecimi.addEventListener('change', () => {
       const d = hesapla();
-      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi } });
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
     });
   }
   // Giriş: ortamın girişiyle (varsayılan) / girişsiz / temiz oturumla yeniden giriş; birden çok giriş profili varsa profil. Ekran
@@ -755,9 +759,22 @@ function modelFormu(icerik, s, senaryo, baglam) {
       d.uyarilar.length ? rozet(`${d.uyarilar.length} uyarı`, 'atlanan', { title: d.uyarilar.map((u) => u.mesaj).join('\n') }) : null);
   }
 
-  function ilkHatayaGit() {
+  function gorunenHatayaOdaklan() {
     for (const [, k] of kontroller) {
-      if (k.hata && k.hata.textContent && k.girdiler[0] && k.girdiler[0].offsetParent !== null) { k.girdiler[0].focus(); k.girdiler[0].scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+      if (k.hata && k.hata.textContent && k.girdiler[0] && k.girdiler[0].offsetParent !== null) { k.girdiler[0].focus(); k.girdiler[0].scrollIntoView({ block: 'center', behavior: 'smooth' }); return true; }
+    }
+    return false;
+  }
+  function ilkHatayaGit() {
+    if (gorunenHatayaOdaklan()) return;
+    // Diyagram açıksa: hatası olan ilk kutunun düzenleme alanı açılır, hatalı alana gidilir.
+    if (!diyagramAlani.hidden) {
+      const dagilim = hataDugumleri(hatalariDagit(sonDurum.hatalar, sema).alanlar, sema);
+      const ilk = [GIRIS_DUGUMU, ...sema.adimlar.map((a) => adimDugumu(a.id)), SONUC_DUGUMU].find((x) => (dagilim[x] || []).length);
+      if (ilk) {
+        if (seciliDugum !== ilk) dugumSec(ilk);
+        if (gorunenHatayaOdaklan()) return;
+      }
     }
     if (!genelHatalar.hidden) genelHatalar.scrollIntoView({ block: 'center' });
   }
@@ -923,6 +940,147 @@ function modelFormu(icerik, s, senaryo, baglam) {
   /** @type {{ durum: 'yeni' | 'yukleniyor' | 'hazir' | 'hata'; sonuc?: any; hata?: string }} */
   let sonKosu = { durum: senaryo ? 'yukleniyor' : 'yeni' };
   let sonKosuIstendi = false;
+
+  // Diyagramdan düzenleme: seçili kutunun altındaki kalıcı alan (li). İçeriği formun kendi öğeleridir (taşınır, kopyalanmaz):
+  // adımın alan gövdesi, senaryo kartı (giriş, başlık, senaryo ayarları) ya da beklenen sonuç kartı.
+  /** @type {string | null} */
+  let seciliDugum = null;
+  /** @type {{ el: HTMLElement; ebeveyn: Node | null; sonraki: Node | null } | null} */
+  let tasinan = null;
+  const panelBasligi = h('h3', { tabindex: '-1', id: yeniId('dp-baslik') });
+  const panelBilgisi = h('div', { class: 'diyagram-paneli-bilgi' });
+  const panelIcerigi = h('div', { class: 'diyagram-paneli-icerik' });
+  const diyagramPaneli = h('li', { class: 'diyagram-paneli', id: yeniId('diyagram-paneli'), hidden: true },
+    h('section', { 'aria-labelledby': panelBasligi.id },
+      h('div', { class: 'diyagram-paneli-ust' }, ikon('duzenle'), panelBasligi,
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'data-odak': 'panel-kapat', onclick: () => dugumSec(null) }, ikon('carpi'), 'Kapat')),
+      panelBilgisi, panelIcerigi));
+  diyagramPaneli.addEventListener('keydown', (o) => {
+    if (o.key !== 'Escape' || /** @type {HTMLElement} */ (o.target).tagName === 'SELECT') return;
+    o.stopPropagation();
+    dugumSec(null);
+  });
+  function tasi(el) {
+    tasinan = { el, ebeveyn: el.parentNode, sonraki: el.nextSibling };
+    panelIcerigi.append(el);
+  }
+  function geriVer() {
+    if (!tasinan) return;
+    const { el, ebeveyn, sonraki } = tasinan;
+    tasinan = null;
+    if (ebeveyn) ebeveyn.insertBefore(el, sonraki && sonraki.parentNode === ebeveyn ? sonraki : null);
+  }
+  const seciliAdim = () => (seciliDugum && seciliDugum.startsWith('adim:') ? sema.adimlar.find((a) => adimDugumu(a.id) === seciliDugum) || null : null);
+  function panelDoldur() {
+    geriVer();
+    if (seciliDugum === GIRIS_DUGUMU) { panelBasligi.textContent = 'Giriş ve senaryo ayarları'; tasi(senaryoKarti); return; }
+    if (seciliDugum === SONUC_DUGUMU) { panelBasligi.textContent = 'Beklenen sonuç'; tasi(beklenenKarti); return; }
+    const adim = seciliAdim();
+    const kart = adim ? adimKartlari.get(adim.id) : null;
+    if (!adim || !kart) { seciliDugum = null; return; }
+    panelBasligi.textContent = `${sema.adimlar.indexOf(adim) + 1}. ${adim.baslik}`;
+    tasi(kart.govde);
+  }
+  /** Kutuyu seçer (null: kapatır); odak düzenleme alanının başlığına, kapatınca kutunun "Düzenle" düğmesine döner. */
+  function dugumSec(id) {
+    const onceki = seciliDugum;
+    seciliDugum = id;
+    if (id) panelDoldur(); else geriVer();
+    diyagramiCiz();
+    if (seciliDugum) {
+      diyagramPaneli.scrollIntoView({ block: 'nearest' });
+      panelBasligi.focus({ preventScroll: true });
+    } else if (onceki) {
+      /** @type {HTMLElement | null} */ (diyagramAlani.querySelector(`[data-odak="${CSS.escape(`ac:${onceki}`)}"]`))?.focus();
+    }
+  }
+  /** İsteğe bağlı adımın "Bu senaryoda dahil" anahtarı (diyagram kutusunda; formdaki anahtarla aynı değeri yazar). */
+  function diyagramKapsamAnahtari(adimId) {
+    const adim = sema.adimlar.find((a) => a.id === adimId);
+    if (!adim || !adim.ayar) return null;
+    const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: degerler[adim.ayar] === true, 'data-odak': `kapsam:${adimId}`, 'aria-label': `${adim.baslik}: bu senaryoda dahil` });
+    kutu.addEventListener('change', () => {
+      degerYaz(adim.ayar, kutu.checked);
+      for (const k of adimAkisi.querySelectorAll(`input[data-ayar="${CSS.escape(adim.ayar)}"]`)) k.checked = kutu.checked;
+    });
+    return h('label', { class: 'kapsam-anahtari' }, kutu, 'Bu senaryoda dahil');
+  }
+  /** Beklenen hatayı bu adıma kurar ve beklenen sonucun düzenleme alanını açar (mesaj orada yazılır / seçilir). */
+  function buradaHataBekle(adimId) {
+    const tipA = `${bs.anahtar}.tip`;
+    const adimA = `${bs.anahtar}.adim`;
+    const degisti2 = degerler[adimA] !== adimId || degerler[tipA] !== bs.hataTipi;
+    degerYaz(tipA, bs.hataTipi, { dokun: false });
+    degerYaz(adimA, adimId, { dokun: false });
+    const uyarilar = (bs.uyarilar || []).filter((u) => u.adim === adimId);
+    if (degisti2 && uyarilar.length) { degerYaz(`${bs.anahtar}.mesajlar`, [], { dokun: false }); degerYaz(`${bs.anahtar}.mesaj`, '', { dokun: false }); }
+    beklenenElle = !uyarilar.length;
+    // İsteğe bağlı adımsa senaryoya dahil edilir (hata o adımda beklenir).
+    const grup = sema.adimKapsami.find((k) => k.adimlar.includes(adimId));
+    if (grup && degerler[grup.ayar] !== true) {
+      degerYaz(grup.ayar, true);
+      for (const k of adimAkisi.querySelectorAll(`input[data-ayar="${CSS.escape(grup.ayar)}"]`)) k.checked = true;
+    }
+    beklenenCiz();
+    guncelle();
+    dugumSec(SONUC_DUGUMU);
+    const ilkGirdi = /** @type {HTMLElement | null} */ (beklenenKarti.querySelector('.hata-ayrintisi textarea, .hata-ayrintisi input'));
+    if (ilkGirdi) ilkGirdi.focus();
+    bildir('Beklenen sonuç: bu adımda iş kuralı hatası. Beklenen mesajı yazın ya da seçin.');
+  }
+  function basariBekle() {
+    degerYaz(`${bs.anahtar}.tip`, bs.basariTipi, { dokun: false });
+    beklenenCiz();
+    guncelle();
+    /** @type {HTMLElement | null} */ (diyagramAlani.querySelector('[data-odak="panel-hata"]'))?.focus();
+  }
+  /** Düzenleme alanının üst bilgisi: koşulmama nedeni, hata beklentisi düğmeleri. */
+  function panelBilgisiniCiz(diyagram) {
+    const parcalar = [];
+    const adim = seciliAdim();
+    if (adim) {
+      const da = diyagram.adimlar.find((x) => x.id === adim.id);
+      const kart = adimKartlari.get(adim.id);
+      if (da && da.kosulur === false) {
+        parcalar.push(h('p', { class: 'not-kutusu uyari' }, `Bu senaryoda koşulmaz: ${da.neden || ''} Bu adımın alanları kayda yazılmaz.`));
+      }
+      if (kart && !kart.alanSayisi) parcalar.push(h('p', { class: 'soluk kucuk' }, 'Bu adımda senaryoya özel alan yok.'));
+      const secilebilir = bs && bs.hataTipi && bs.adimlar.some((x) => x.deger === adim.id);
+      if (secilebilir) {
+        const burada = degerler[`${bs.anahtar}.tip`] === bs.hataTipi && degerler[`${bs.anahtar}.adim`] === adim.id;
+        const kosulKapali = sonDurum.gorunurluk && sonDurum.gorunurluk.adimlar[adim.id] === false && !adim.ayar;
+        parcalar.push(h('div', { class: 'diyagram-paneli-hedef' }, burada
+          ? [h('span', { class: 'rozet hata' }, ikon('uyari'), 'Bu adımda iş kuralı hatası beklenir'),
+            h('button', { type: 'button', class: 'kucuk-dugme', 'data-odak': 'panel-mesaj', onclick: () => dugumSec(SONUC_DUGUMU) }, ikon('hedef'), 'Beklenen mesajı düzenle'),
+            h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'data-odak': 'panel-basari', onclick: basariBekle }, 'Hata beklentisini kaldır')]
+          : kosulKapali ? h('span', { class: 'soluk kucuk' }, 'Adım bu senaryoda koşulmadığı için burada hata beklenemez.')
+            : h('button', { type: 'button', class: 'kucuk-dugme', 'data-odak': 'panel-hata', onclick: () => buradaHataBekle(adim.id) }, ikon('uyari'), 'Burada hata beklenir')));
+      }
+    } else if (seciliDugum === SONUC_DUGUMU && !bs) {
+      parcalar.push(h('p', { class: 'soluk kucuk' }, 'Bu ekranın modelinde beklenen sonuç seçimi yok: kapsamdaki son adımın başarı göstergesi beklenir.'));
+    }
+    yerlestir(panelBilgisi, ...parcalar);
+    panelBilgisi.hidden = !parcalar.length;
+  }
+  /** Diyagram kutularında gösterilecek değer okunuşları (hassas değer maskeli; dosyada yalnız ad). */
+  function degerOzetleri() {
+    /** @type {Record<string, string | null>} */
+    const o = {};
+    const kisa = (m) => (m.length > 60 ? `${m.slice(0, 59)}…` : m);
+    for (const alan of tumAlanlar) {
+      if (!alan.adimId) continue;
+      let m = null;
+      const v = degerler[alan.anahtar];
+      if (alan.tip === 'secim') { const x = String(v ?? ''); m = x ? (alanSecenekleri(alan).find((y) => y.deger === x)?.metin ?? x) : null; }
+      else if (alan.tip === 'onayKutusu') m = v === true ? 'işaretli' : null;
+      else if (alan.tip === 'dosya') { const x = String(v ?? ''); m = x ? (dosyaBilgileri[x]?.ad || dosyaReferansiCoz(x)?.ad || x) : null; }
+      else if (alan.tip === 'kimlik') { const kip = degerler[`${alan.id}#kip`]; m = kip === 'profil' ? String(degerler[`${alan.id}#profil`] || '') || 'profil seçilmedi' : kip === 'yeni' ? 'yeni kimlik' : null; }
+      else if (alan.tip === 'altModel') m = degerler[`${alan.anahtar}#ozel`] === true ? 'senaryoya özel' : null;
+      else { const x = String(v ?? '').trim(); m = x ? (alan.hassas ? '••••' : x) : null; }
+      o[alan.id] = m ? kisa(String(m)) : null;
+    }
+    return o;
+  }
   function diyagramiCiz() {
     const d = sonDurum.gorunurluk ? sonDurum : hesapla();
     const tip = bs ? degerler[`${bs.anahtar}.tip`] : null;
@@ -933,13 +1091,32 @@ function modelFormu(icerik, s, senaryo, baglam) {
         gorunurluk: d.gorunurluk,
         beklenen: hataAdimi ? { hataAdimi, mesaj: String(degerler[`${bs.anahtar}.mesaj`] || '') || null } : null,
         sonuc: sonKosu.durum === 'hazir' ? sonKosu.sonuc : null,
-        giris: girisSecimi
+        giris: girisSecimi,
+        degerler: degerOzetleri()
       });
     } catch (e) {
+      geriVer();
+      seciliDugum = null;
       yerlestir(diyagramAlani, hataKutusu(e));
       return;
     }
-    akisDiyagramiCiz(diyagramAlani, diyagram, { ...sonKosu, ortamAdi: s.ortam.ad, projeId: s.proje.id, ortamId: s.ortam.id });
+    // Yeniden çizimde kutular yenilenir; odak kutudaki bir denetimdeyse (anahtar, Düzenle) yeni karşılığına döner.
+    const odak = /** @type {HTMLElement | null} */ (document.activeElement);
+    const odakAnahtari = odak && diyagramAlani.contains(odak) ? odak.dataset.odak || null : null;
+    panelBilgisiniCiz(diyagram);
+    const ekranId = baglam.ekran?.id || s.ekranId;
+    akisDiyagramiCiz(diyagramAlani, diyagram, {
+      ...sonKosu, ortamAdi: s.ortam.ad, projeId: s.proje.id, ortamId: s.ortam.id,
+      duzenleme: {
+        secili: seciliDugum, sec: dugumSec, panel: diyagramPaneli, panelId: diyagramPaneli.id,
+        hatalar: hataDugumleri(hatalariDagit(d.hatalar, sema).alanlar, sema),
+        kapsamAnahtari: diyagramKapsamAnahtari,
+        akisAdresi: ekranId ? `#/ekranlar/e/${encodeURIComponent(ekranId)}/akis${baglam.akisId ? `/${encodeURIComponent(baglam.akisId)}` : ''}` : null
+      }
+    });
+    if (odakAnahtari && odak && !odak.isConnected) {
+      /** @type {HTMLElement | null} */ (diyagramAlani.querySelector(`[data-odak="${CSS.escape(odakAnahtari)}"]`))?.focus();
+    }
   }
   async function sonKosuyuOku() {
     if (!senaryo || sonKosuIstendi) return;
@@ -960,9 +1137,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
   }, ikon(ad === 'form' ? 'liste' : 'katman'), etiket));
   function sekmeSec(ad) {
     for (const b of sekmeDugmeleri) b.setAttribute('aria-selected', b.dataset.sekme === ad ? 'true' : 'false');
+    // Form sekmesine dönünce diyagramın düzenleme alanına taşınan öğeler yerlerine geri konur (seçim korunur; diyagram
+    // yeniden açılınca aynı kutu açık gelir).
+    if (ad === 'form') geriVer();
     formAlani.hidden = ad !== 'form';
     diyagramAlani.hidden = ad !== 'akis';
-    if (ad === 'akis') { diyagramiCiz(); sonKosuyuOku(); }
+    if (ad === 'akis') { if (seciliDugum) panelDoldur(); diyagramiCiz(); sonKosuyuOku(); }
   }
   const sekmeCubugu = h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Senaryo görünümü' }, sekmeDugmeleri);
 
@@ -997,4 +1177,6 @@ function modelFormu(icerik, s, senaryo, baglam) {
     bildir(kayip.length ? `Akış değişti; yeni akışta olmayan ${kayip.length} alanın değeri kaldırıldı.` : 'Akış değişti; form yeni akışa göre güncellendi.', kayip.length ? 'hata' : 'basari');
   }
   (s.mod === 'yeni' ? baslikGirdisi : icerik.querySelector('h2'))?.focus();
+  // Akış seçimi diyagramdan değiştirildiyse diyagram sekmesi açık kalır.
+  if (s.taslak?.sekme === 'akis') sekmeSec('akis');
 }

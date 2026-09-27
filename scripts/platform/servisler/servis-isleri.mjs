@@ -25,6 +25,24 @@ function temizle() {
 }
 
 /**
+ * Senaryo bu ortamda neden koşmaz ('' = koşar): servis ortamda tanımlı değil (taban adres boş), kapsam ortam türüne uymuyor,
+ * CANLI'da çağrılmayan metot; akış senaryosunda akışın adımlarından (akis-senaryosu.mjs). Servis sayfasındaki Kapsam sütunu,
+ * ortam başına "Koşuda" / "Son sonuç" ve koşu diyaloğundaki atlama nedenleri de bu kuralı kullanır.
+ * @param {Veritabani} vt @param {import('./servis-deposu.mjs').Servis} servis @param {any} s senaryo @param {any} ortam
+ */
+export function servisSenaryoAtlamaNedeni(vt, servis, s, ortam) {
+  const tur = ortamTuru(ortam);
+  if (s.icerik?.tur === 'akis') {
+    const kanca = akisSenaryoKancasiAl();
+    return kanca ? kanca.atlamaNedeni(vt, s, ortam) : 'Akış senaryoları bu sunucuda koşamaz.';
+  }
+  if (!ortamdaTanimli(servis.ayarlar, ortam.id)) return `Servis "${ortam.ad}" ortamında tanımlı değil.`;
+  if (s.kapsam !== 'ikisi' && s.kapsam !== tur) return `Senaryo yalnız ${s.kapsam === 'test' ? 'TEST' : 'CANLI'} ortamda koşar.`;
+  if (tur === 'canli' && (servis.ayarlar.yalnizTestOperasyonlari ?? []).includes(s.icerik?.operasyon)) return `"${s.icerik.operasyon}" CANLI'da çağrılmaz.`;
+  return '';
+}
+
+/**
  * İşi başlatır (hemen döner; koşu arka planda sürer). Senaryolar sırayla; kapsamı ortama uymayan / servisin bu ortamda
  * tanımlı olmadığı / CANLI'da çağrılmayan metodu kullanan senaryo "atlandi" olur (nedeniyle).
  * Taslak verilirse (düzenleyicideki "Dene"): kaydedilmemiş tek senaryo, yalnız TEST ortamında, "dene" olarak koşar.
@@ -41,7 +59,6 @@ export function servisIsiBaslat(vt, projeId, girdi) {
   if (!taslak && (!Array.isArray(girdi.senaryoIdleri) || !girdi.senaryoIdleri.length)) throw new DepoHatasi('En az bir senaryo seçin.');
   const tur = ortamTuru(ortam);
   if (taslak && tur !== 'test') throw new DepoHatasi('Deneme yalnızca test ortamında yapılır.');
-  const yalnizTest = new Set(servis.ayarlar.yalnizTestOperasyonlari ?? []);
   const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
   const satirlar = taslak ? [/** @type {IsSatiri} */ ({
     senaryoId: 'taslak', baslik: taslak.baslik || 'Taslak', durum: tanimli ? 'sirada' : 'atlandi', olaylar: [], istek: null, yanit: null,
@@ -52,9 +69,7 @@ export function servisIsiBaslat(vt, projeId, girdi) {
     const kanca = akisSenaryoKancasiAl();
     const akis = s && /** @type {any} */ (s.icerik).tur === 'akis' && kanca && (s.servisId === servis.id || kanca.gecenler(vt, projeId, servis.id).some((x) => x.id === s.id));
     if (!s || (s.servisId !== servis.id && !akis)) throw new DepoHatasi('Senaryo bulunamadı.');
-    const neden = akis ? (kanca?.atlamaNedeni(vt, s, ortam) ?? '') : !tanimli ? `Servis "${ortam.ad}" ortamında tanımlı değil.`
-      : s.kapsam !== 'ikisi' && s.kapsam !== tur ? `Senaryo yalnız ${s.kapsam === 'test' ? 'TEST' : 'CANLI'} ortamda koşar.`
-        : tur === 'canli' && yalnizTest.has(s.icerik.operasyon) ? `"${s.icerik.operasyon}" CANLI'da çağrılmaz.` : '';
+    const neden = servisSenaryoAtlamaNedeni(vt, servis, s, ortam);
     return /** @type {IsSatiri} */ ({
       senaryoId: s.id, baslik: s.baslik, durum: neden ? 'atlandi' : 'sirada', olaylar: [], istek: null, yanit: null,
       baslangic: null, bitis: null, sonuc: null, ...(neden ? { neden } : {})

@@ -1,6 +1,7 @@
 // SENARYO AKIŞ DİYAGRAMI (genel, saf) — ekran modelinden ve senaryonun güncel görünürlüklerinden
 // senaryonun akışını (başlangıç → adımlar → bitiş) çıkarır; son koşunun adım sonuçlarını adımlara eşler.
-// Diyagram SALT OKUNURDUR (aşama 3a): akışı değiştirmek ekran modelinin işidir.
+// Akış YAPISI buradan değişmez (adım sırası, koşullar: ekran modelinin işi). Senaryo sayfasında diyagram senaryo düzeyinde
+// düzenlenir (aşama 3b: değerler, dahil adımlar, giriş, beklenen sonuç); kutuların doğrulama hataları: hataDugumleri().
 //
 //  - Import YOK, DOM YOK: platform arayüzü bu dosyayı /arayuz/akis-diyagrami.mjs olarak yükler; birim
 //    testleri aynı dosyayı kullanır. Görünürlük burada HESAPLANMAZ: tek doğrulayıcının
@@ -130,6 +131,7 @@ export function akisDiyagrami(model, s = {}) {
   const gAdim = g.adimlar || {};
   const gAlan = g.alanlar || {};
   const hataAdimi = s.beklenen && s.beklenen.hataAdimi ? s.beklenen.hataAdimi : null;
+  const degerler = nesneMi(s.degerler) ? s.degerler : null;
   const sirali = model.adimlar.slice().sort((a, b) => (a.sira || 0) - (b.sira || 0));
   const hataSirasi = hataAdimi ? sirali.findIndex((a) => a.id === hataAdimi) : -1;
 
@@ -144,18 +146,26 @@ export function akisDiyagrami(model, s = {}) {
         if (!a || !a.id || ALAN_DISI_TIPLER.has(a.tip)) continue;
         const kosul = a.gorunurluk ? gorunurlukMetni(a.gorunurluk, model, harita) : bolum.gorunurluk ? gorunurlukMetni(bolum.gorunurluk, model, harita) : null;
         const v = gAlan[a.id];
-        alanlar.push({ id: a.id, etiket: String(etiketi(a)), kosul, buSenaryoda: v === undefined ? true : v, zorunlu: a.mutlakaGorunmeli === true });
+        const deger = degerler && typeof degerler[a.id] === 'string' && degerler[a.id] ? degerler[a.id] : null;
+        alanlar.push({ id: a.id, etiket: String(etiketi(a)), kosul, buSenaryoda: v === undefined ? true : v, zorunlu: a.mutlakaGorunmeli === true, ...(degerler ? { deger } : {}) });
       }
     }
     const kosu = nesneMi(adim.kosu) ? adim.kosu : {};
     const aksiyonlar = Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar.filter(nesneMi) : [];
     const tikla = aksiyonlar.filter((x) => x.tur === 'tikla');
+    const kapsamEtiketi = ayar ? String(ayarAlani ? etiketi(ayarAlani) : ayar) : !ayar && adim.gorunurluk ? gorunurlukMetni(adim.gorunurluk, model, harita) : null;
+    const kosulur = hedefSonrasi ? false : kapsamda === undefined ? true : kapsamda;
     return {
       id: adim.id, no: i + 1, baslik: String(adim.baslik || adim.id),
       istegeBagli: Boolean(ayar),
-      kapsamEtiketi: ayar ? String(ayarAlani ? etiketi(ayarAlani) : ayar) : !ayar && adim.gorunurluk ? gorunurlukMetni(adim.gorunurluk, model, harita) : null,
+      kapsamEtiketi,
       // Bu senaryoda koşulur mu? false: kapsam dışı ya da beklenen hata adımından sonra; null: bilinmiyor.
-      kosulur: hedefSonrasi ? false : kapsamda === undefined ? true : kapsamda,
+      kosulur,
+      // Koşulmuyorsa nedeni (diyagramda soluk kutunun altında yazılır).
+      neden: kosulur !== false ? null
+        : hedefSonrasi ? 'Beklenen hata daha önceki bir adımda: akış orada biter.'
+          : ayar ? `${tirnak(kapsamEtiketi)} bu senaryoda işaretli değil.`
+            : kapsamEtiketi ? `Koşul sağlanmıyor: ${kapsamEtiketi}.` : 'Koşul sağlanmıyor.',
       altAkis: nesneMi(adim.altModel) ? String(adim.altModel.bolum || adim.altModel.dosya || '') || null : null,
       // SQL sorgusu adımı: veritabanı sorgusu beklenenle karşılaştırılır (alan yok).
       sqlOzeti: nesneMi(adim.sqlKontrolu) ? `SQL sorgusu: ${SQL_BEKLENEN_METNI[adim.sqlKontrolu.beklenen?.tur] ?? 'sonuç beklenenle karşılaştırılır'}` : null,
@@ -229,3 +239,47 @@ export function akisDiyagrami(model, s = {}) {
     eslesmeyenler: kalan.map((x) => x.ad)
   };
 }
+
+/** Diyagram düğüm kimlikleri: başlangıç (giriş + senaryo ayarları), adımlar ("adim:<id>"), bitiş (beklenen sonuç). */
+export const GIRIS_DUGUMU = 'giris';
+export const SONUC_DUGUMU = 'sonuc';
+export const adimDugumu = (adimId) => `adim:${adimId}`;
+
+/** Form kontrol anahtarı (model-formu.mjs: "<anahtar>", "<id>#kip", "<id>.<alt>", "<anahtar>#ozel" …) bu alana mı ait? */
+function alanaAit(anahtar, alan) {
+  return [alan.anahtar, alan.id].filter((x) => typeof x === 'string' && x)
+    .some((on) => anahtar === on || anahtar.startsWith(`${on}.`) || anahtar.startsWith(`${on}#`));
+}
+
+/**
+ * Form kontrol anahtarının diyagramdaki düğümleri (form şeması: formSemasiOlustur). Başlık ve senaryo düzeyi alanlar giriş
+ * düğümünde, beklenen sonuç bitişte, adım alanları kendi adımında; isteğe bağlı adım ayarı grubundaki her adımda. Eşleşmezse [].
+ * @param {string} anahtar @param {any} sema @returns {string[]}
+ */
+export function kontrolDugumleri(anahtar, sema) {
+  const k = String(anahtar || '');
+  if (!k || !nesneMi(sema)) return [];
+  if (k === sema.baslik) return [GIRIS_DUGUMU];
+  const bs = sema.beklenenSonuc;
+  if (nesneMi(bs) && (k === bs.anahtar || k.startsWith(`${bs.anahtar}.`))) return [SONUC_DUGUMU];
+  const grup = (sema.adimKapsami || []).find((g) => g.ayar === k);
+  if (grup) return grup.adimlar.map(adimDugumu);
+  for (const adim of sema.adimlar || []) {
+    for (const b of adim.bolumler || []) if ((b.alanlar || []).some((a) => alanaAit(k, a))) return [adimDugumu(adim.id)];
+  }
+  if ((sema.senaryoAlanlari || []).some((a) => alanaAit(k, a))) return [GIRIS_DUGUMU];
+  return [];
+}
+
+/**
+ * Doğrulama hatalarının düğümlere dağılımı: hatalariDagit(...).alanlar (kontrol → mesajlar) → düğüm → mesajlar.
+ * @param {Record<string, string[]>} alanHatalari @param {any} sema @returns {Record<string, string[]>}
+ */
+export function hataDugumleri(alanHatalari, sema) {
+  /** @type {Record<string, string[]>} */
+  const sonuc = {};
+  for (const [anahtar, mesajlar] of Object.entries(alanHatalari || {})) {
+    for (const d of kontrolDugumleri(anahtar, sema)) (sonuc[d] = sonuc[d] || []).push(...(Array.isArray(mesajlar) ? mesajlar : []));
+  }
+  return sonuc;
+}

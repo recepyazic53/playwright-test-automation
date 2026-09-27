@@ -711,7 +711,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
             const kosu = await kosuyuGoster(k, k.tur === 'dene' ? 'Dene' : 'koşu');
             if (kosu) yerlestir(sonucKap, sonucKarti({ ...kosu.sonuc, baslik: kosu.baslik, durum: kosu.durum, sureMs: kosu.sureMs }));
           } catch (e) { bildir(e.message, 'hata'); }
-        } }, durumRozeti(k.durum), ` ${tarihMetni(k.baslangic)} · ${k.tur === 'dene' ? 'Dene' : 'Koşu'}`))))) : null);
+        } }, durumRozeti(k.durum), ` ${tarihMetni(k.baslangic)} · ${k.tur === 'dene' ? 'Dene' : 'Koşu'}${(() => { const o = k.ortamId ? ortamlar.find((x) => x.id === k.ortamId) : null; return o ? ` · ${o.ad}` : ''; })()}`))))) : null);
     } catch { /* liste yoksa gösterilmez */ }
   }
 
