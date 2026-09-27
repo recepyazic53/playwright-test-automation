@@ -47,7 +47,7 @@ export interface DogrulamaModeli {
   kosullar?: Readonly<Record<string, {
     ifade: DogrulamaKosulIfadesi;
     aciklama?: string;
-    /** Bağlam profili bazında bilinen görünürlük; profilKodu bağlam profilinin kod'uyla eşleşir (eski adı da okunur: eski-anahtarlar.mjs). */
+    /** Bağlam profili bazında bilinen görünürlük; profilKodu bağlam profilinin kod'uyla eşleşir. */
     bilinenDurumlar?: ReadonlyArray<{ profil?: string; profilKodu?: string; gorunur: boolean | null }>;
   }>>;
   adimlar: ReadonlyArray<{
@@ -127,17 +127,6 @@ export type CozulmusBeklenenSonucGirdisi = {
 };
 
 export declare const ESKI_BEKLENEN_SONUC_ALANLARI: readonly string[];
-export declare const ESKI_ANAHTARLAR: Readonly<{
-  kayitAlani: string;
-  durumKodu: string;
-  baglamProfiliAlani: string;
-  baglamKodu: string;
-  baglamKullanicisi: string;
-  profiller: string;
-  baglamProfilleri: string;
-  varsayilanKayit: string;
-  havuzYollari: Readonly<Record<string, string>>;
-}>;
 export declare const GIRDI_ALANLARI: Readonly<Record<string, { readonly modelAlani: string; readonly formSirasi: number }>>;
 
 export declare const MESAJLAR: {

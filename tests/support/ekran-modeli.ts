@@ -54,7 +54,7 @@ export type KosulIfadesi =
   | { ve: KosulIfadesi[] }
   | { veya: KosulIfadesi[] }
   | { degil: KosulIfadesi }
-  /** Bağlam profiline göre alan seti (eski adı da okunur: scripts/dogrulama/eski-anahtarlar.mjs). */
+  /** Bağlam profiline göre alan seti. */
   | { baglam: { alanSeti: string } }
   | { calismaZamani: 'gorunurse' };
 
@@ -65,10 +65,7 @@ export type AdlandirilmisKosul = {
   ifade: KosulIfadesi;
   aciklama?: string;
   hedefIfade?: KosulIfadesi;
-  /**
-   * Bağlam profili bazında bilinen görünürlük; doğrulayıcı profilKodu'nu bağlam profilinin kod'uyla eşleştirir.
-   * Eski adları hâlâ okunur (scripts/dogrulama/eski-anahtarlar.mjs).
-   */
+  /** Bağlam profili bazında bilinen görünürlük; doğrulayıcı profilKodu'nu bağlam profilinin kod'uyla eşleştirir. */
   bilinenDurumlar?: Array<{ profil?: string; profilKodu?: string; gorunur: boolean | null; kaynak: string }>;
   not?: string;
 };
@@ -251,7 +248,7 @@ export type EkranModeli = {
   adimlar: Adim[];
   senaryoDuzeyi: { aciklama: string; alanlar: Alan[] };
   urunDuzeyi: Record<string, UrunDuzeyiAlani>;
-  /** Bağlam profili ekranı (ayrı ekran; alan kimlikleri ayrı ad alanında; eski adı da okunur: eski-anahtarlar.mjs). */
+  /** Bağlam profili ekranı (ayrı ekran; alan kimlikleri ayrı ad alanında). */
   baglam?: BaglamEkrani;
   isKurallari: IsKurali[];
   bilinmeyenler: string[];
@@ -259,7 +256,7 @@ export type EkranModeli = {
   baglamGorunurlugu?: BaglamGorunurlugu;
 };
 
-/** Modelin bağlam profili ekranı (model.baglam; eski adı da okunur). */
+/** Modelin bağlam profili ekranı (model.baglam). */
 export type BaglamEkrani = {
   aciklama: string;
   pageObject?: string;

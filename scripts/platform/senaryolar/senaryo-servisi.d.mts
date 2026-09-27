@@ -71,7 +71,6 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   altModeller: Record<string, Record<string, unknown>>;
   modelSurumu?: number;
   profiller: Record<string, Array<{ ad: string; tur: 'baglam' | 'testVerisi'; kapsam: 'tum' | 'ortam'; alanlar: Array<{ etiket: string; deger?: string; dolu: boolean }> }>>;
-  ortak: Record<string, unknown> | null;
   veriKaynagi: { spec: string; dosya: string; yol: string; model: boolean } | null;
   olusturulabilir: boolean;
   degerListeleri?: import('../servisler/parametre-tanimlari.mjs').ParametreTanimi[];

@@ -109,10 +109,7 @@ tutulmaz.
 
 ### Bağlam profili ve kayıt alanı anahtarları
 
-Şema genel adlar kullanır. Önceki sürümlerin eski anahtar adları **hâlâ okunur** (eşdeğer yeni anahtar gibi
-yorumlanır); eski → yeni eşlemesi yalnızca `scripts/dogrulama/eski-anahtarlar.mjs` geriye uyum tablosundadır. Yeni
-kayıtlar (sayfa paketiyle eklenen ya da değiştirilen model) yeni adla yazılır; yeni paketlerde eski adlar kullanılmaz.
-Kaydedilmiş modeller kendiliğinden yeniden yazılmaz. Aynı yerde eski ve yeni ad birlikte olamaz.
+Şema yalnızca aşağıdaki genel adları tanır; önceki sürümlerin anahtar adları okunmaz.
 
 | Ad | Anlamı |
 |---|---|

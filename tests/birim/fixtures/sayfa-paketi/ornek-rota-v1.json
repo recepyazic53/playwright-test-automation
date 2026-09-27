@@ -28,7 +28,7 @@
   "pageObject": "tests/support/pages/ornek-rota.page.ts#OrnekRotaPage",
   "veriKaynaklari": {
    "senaryo": "Nöbetçi > Senaryolar (ornek-rota)",
-   "ortak": "Nöbetçi > Ayarlar (bağlam ve test verisi profilleri)"
+   "profiller": "Nöbetçi > Ayarlar (bağlam ve test verisi profilleri)"
   },
   "kosullar": {
    "subeAlanSetiTam": {
@@ -43,13 +43,13 @@
     },
     "bilinenDurumlar": [
      {
-      "profil": "90001 (ortak.kullaniciDegistir.varsayilan)",
+      "profil": "90001 (baglam.varsayilan)",
       "profilKodu": "90001",
       "gorunur": false,
       "kaynak": "ornek-rota.page.ts yorumu"
      },
      {
-      "profil": "90002 (ortak.kullaniciDegistir.ÖzelTanımlıŞube)",
+      "profil": "90002 (baglam.ÖzelTanımlıŞube)",
       "profilKodu": "90002",
       "gorunur": true,
       "kaynak": "senaryo başlıkları + hediye senaryosu; canlıda doğrulanmadı"
@@ -717,8 +717,8 @@
           "musteriProfili"
          ],
          "urun": "musteriProfili",
-         "profilHavuzu": "ortak.kimlikBilgileri.ozel",
-         "donusum": "spec: senaryo.musteriKimligi ?? ortak.ozel[senaryo.musteriProfili] ?? ortak.ozel[urun.musteriProfili]"
+         "profilHavuzu": "ozel",
+         "donusum": "spec: senaryo.musteriKimligi ?? profiller.ozel[senaryo.musteriProfili] ?? profiller.ozel[urun.musteriProfili]"
         },
         "varsayilan": {
          "deger": "tc1",
@@ -747,7 +747,7 @@
           {
            "id": "sof_musteriProfili",
            "kontrol": "select",
-           "amac": "hazır profil anahtarı (ortak.kimlikBilgileri.ozel)"
+           "amac": "hazır profil anahtarı (ozel)"
           }
          ],
          "not": "Alt blok kimlikAltBlokCiz(blok, 'ozel', 'sof_musteri') ile çiziliyor."
@@ -964,8 +964,8 @@
           "odeyenTuzelKimligi"
          ],
          "profilHavuzu": {
-          "farkliOzel": "ortak.kimlikBilgileri.ozel",
-          "farkliTuzel": "ortak.kimlikBilgileri.tuzel"
+          "farkliOzel": "ozel",
+          "farkliTuzel": "tuzel"
          },
          "donusum": "spec: odeyenOzelKimligi | odeyenTuzelKimligi ?? havuz[odeyenProfili]"
         },
@@ -977,7 +977,7 @@
           {
            "id": "sof_odeyenProfili",
            "kontrol": "select",
-           "amac": "hazır profil anahtarı (ortak.kimlikBilgileri.ozel|tuzel)"
+           "amac": "hazır profil anahtarı (ozel|tuzel)"
           }
          ],
          "not": "Alt blok (#sof_odeyenAltBlok) kimlikAltBlokCiz(blok, 'ozel'|'tuzel', 'sof_odeyen') ile çiziliyor."
@@ -1239,7 +1239,7 @@
     {
      "id": "subeProfili",
      "tip": "secim",
-     "seceneklerKaynagi": "ortak.kullaniciDegistir anahtarları (bkz. baglam)",
+     "seceneklerKaynagi": "baglam anahtarları (bkz. baglam)",
      "varsayilan": {
       "deger": "varsayilan",
       "kaynak": "testBaslangiciniHazirla"
@@ -1248,7 +1248,7 @@
      "yapilandirma": "senaryo",
      "eslesme": {
       "senaryo": "subeProfili",
-      "profilHavuzu": "ortak.kullaniciDegistir"
+      "profilHavuzu": "baglam"
      },
      "form": {
       "id": "sof_subeKodu",
@@ -1261,10 +1261,10 @@
         "amac": "Şube Kullanıcı Kodu"
        }
       ],
-      "not": "Form anahtar değil ham kod+kullanıcı alıyor; sunucu eşleşen profili buluyor ya da 'Şube<kod>' anahtarıyla ortak.json'a ekliyor."
+      "not": "Form anahtar değil ham kod+kullanıcı alıyor; sunucu eşleşen profili buluyor ya da 'Şube<kod>' anahtarıyla profillere ekliyor."
      },
      "dogrulama": {
-      "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): girdide kod ↔ kullanıcı birlikte; kayıttaki profil anahtarı ortak.kullaniciDegistir içinde olmalı",
+      "istemci": "senaryo-dogrulayici.mjs (istemci, sunucu ve spec aynı kural): girdide kod ↔ kullanıcı birlikte; kayıttaki profil anahtarı baglam içinde olmalı",
       "sunucu": "aynı",
       "ts": "aynı"
      }
@@ -1444,7 +1444,7 @@
   "baglam": {
    "aciklama": "Giriş sonrası 'Kullanıcı Değiştir' ekranı (kullanici-degistir.page.ts). Bu ekranın parçası değil, senaryo bağlamı; ama alan seti görünürlüğünü belirliyor.",
    "pageObject": "tests/support/pages/kullanici-degistir.page.ts",
-   "veriKaynagi": "ortak.kullaniciDegistir[<senaryo.subeProfili ?? 'varsayilan'>]",
+   "veriKaynagi": "baglam[<senaryo.subeProfili ?? 'varsayilan'>]",
    "alanlar": [
     {
      "id": "subePartaji",

@@ -404,7 +404,7 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
   if (!ortamlar.some((o) => o.id === ortamId)) throw new DepoHatasi('Ortam bulunamadı.');
   const mb = modelBaglami(vt, ekranId, akisId);
   const veriKaynagi = ekranVeriKaynagi(vt, projeId, ekran);
-  if (!mb) return { ekran, ortamlar, model: null, altModeller: {}, profiller: {}, ortak: null, veriKaynagi, olusturulabilir: false, akislar: [], akisId: null };
+  if (!mb) return { ekran, ortamlar, model: null, altModeller: {}, profiller: {}, veriKaynagi, olusturulabilir: false, akislar: [], akisId: null };
   const sema = formSemasiOlustur(mb.model, mb.altModeller);
   /** @type {Set<string>} */
   const havuzlar = new Set();
@@ -449,7 +449,7 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
   }
   return {
     ekran, ortamlar, model: mb.model, altModeller: mb.altModeller, modelSurumu: mb.surum, profiller, akislar: mb.akislar, akisId: mb.akisId,
-    ortak: null, veriKaynagi,
+    veriKaynagi,
     olusturulabilir: Boolean(veriKaynagi),
     // Senaryonun "Giriş" seçimi için giriş profillerinin ADLARI (değer yok; ortamId null = tüm ortamlar).
     girisProfilleri: girisProfilleriniListele(vt, projeId).map((p) => ({ ad: p.ad, ortamId: p.ortamId })),
@@ -513,7 +513,7 @@ function veriyiDogrula(/** @type {Veritabani} */ vt, /** @type {string} */ proje
     // Alt model ezme (ör. senaryoya özel kayıt): tek biçim + varsayılan kayıtla aynıysa yazılmaz.
     for (const alan of tumFormAlanlari(sema)) {
       if (alan.tip !== 'altModel' || !nesneMi(sonuc[alan.anahtar])) continue;
-      // Alt model alanları modelde "eslesme.kayitAlani" (eski adı eslesme.kart) ile tanımlıdır (kayıt kuralları doğrulayıcıdadır).
+      // Alt model alanları modelde "eslesme.kayitAlani" ile tanımlıdır (kayıt kuralları doğrulayıcıdadır).
       if (!alan.alanlar.length) continue;
       const on = senaryoyuDogrula(sonuc, { model: mb.model, altModeller: mb.altModeller, profiller, kaynak: 'kayit', tablolar });
       if (on.hatalar.some((h) => h.alan.startsWith(`${alan.anahtar}.`) || h.alan === alan.anahtar)) continue;

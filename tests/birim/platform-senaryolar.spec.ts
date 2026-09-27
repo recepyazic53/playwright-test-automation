@@ -46,7 +46,7 @@ const kimlikParcalari = (onEk: string): Nesne[] => [
   { id: `${onEk}Telefon`, tip: 'metin', etiket: { ekran: 'Telefon' }, eslesme: { kimlikAlani: 'cepTelefonu' } }
 ];
 const kartAlani = (kart: string, etiket: string, tip = 'metin', ek: Nesne = {}): Nesne => ({
-  id: `kart_${kart}`, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { kart }, ...ek
+  id: `kart_${kart}`, tip, etiket: { ekran: etiket, form: etiket }, yapilandirma: 'senaryo', eslesme: { kayitAlani: kart }, ...ek
 });
 
 function ornekTalepModeli(): Nesne {
@@ -400,7 +400,7 @@ test.describe('Senaryo servisi (nötr proje)', () => {
       expect(fb.profiller['Şube'].map((p) => p.ad)).toEqual(['Merkez', 'Yetkili']);
       expect(fb.profiller['Şube'][1]).toMatchObject({ tur: 'baglam', alanlar: [{ etiket: 'subeKodu', deger: 'S02', dolu: true }] });
       expect(JSON.stringify(fb)).not.toContain(TC);
-      expect(fb).toMatchObject({ ortak: null, olusturulabilir: true, veriKaynagi: { spec: SPEC, dosya: 'ornek', yol: 'senaryolar' } });
+      expect(fb).toMatchObject({ olusturulabilir: true, veriKaynagi: { spec: SPEC, dosya: 'ornek', yol: 'senaryolar' } });
       expect(() => formBaglami(vt, projeId, ekranId, 'olmayan-ortam')).toThrow(/Ortam bulunamadı/);
     } finally { o.temizle(); }
   });

@@ -373,9 +373,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-diyagrami.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'akis-diyagrami.mjs'), tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/senaryo-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'senaryo-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],
-  // Doğrulayıcının geriye uyum tablosu (eski anahtar adları; senaryo-dogrulayici.mjs içe aktarır).
-  ['/arayuz/eski-anahtarlar.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'eski-anahtarlar.mjs'), tur: 'text/javascript; charset=utf-8' }]
+  ['/arayuz/senaryo-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'dogrulama', 'senaryo-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }]
 ]);
 const KABUK_GUVENLIK_BASLIKLARI = {
   'Cache-Control': 'no-store',

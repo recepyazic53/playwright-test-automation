@@ -87,9 +87,7 @@ export const MOTOR_YASAK_OZETLERI: readonly YasakGirdisi[] = [
 /** Denetimden BİLEREK muaf dosyalar (depo köküne göre, / ayraçlı). */
 export const DENETIM_MUAFLARI: readonly string[] = [
   // Bu dosya (yalnızca özet içerir; yine de kendini denetlemez).
-  'tests/birim/yasak-sozcukler.ts',
-  // Geriye uyum tablosu: kasadaki eski kayıtların anahtar adları (veri göç edildikten sonra kaldırılabilir).
-  'scripts/dogrulama/eski-anahtarlar.mjs'
+  'tests/birim/yasak-sozcukler.ts'
 ];
 
 /** Küçük harf + Türkçe karakter sadeleştirme (ç→c ğ→g ı→i ö→o ş→s ü→u; diğer aksanlar atılır). */
