@@ -13,7 +13,7 @@
 /**
  * @typedef {'metin' | 'tamsayi' | 'ondalik' | 'mantiksal' | 'tarih' | 'tarihSaat'} AlanTipi
  * @typedef {{ ad: string; tip?: AlanTipi; zorunlu?: boolean; nillable?: boolean; coklu?: boolean; secenekler?: string[]; cocuklar?: Alan[]; ek?: boolean }} Alan
- * @typedef {{ ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[] }} OperasyonSemasi
+ * @typedef {{ ad: string; eylem?: string; kok: string; ns: string; alanlar: Alan[]; yanit?: { kok: string; ns: string; alanlar: Alan[] } }} OperasyonSemasi  yanit: WSDL'deki yanıt öğesi (sözleşme)
  * @typedef {{ kaynak: 'tablo' | 'akis' | 'sabit' | 'parametre' | 'hesap' | 'bos' | 'nil' | 'gonderme'; deger?: string }} AlanDegeri  hesap: <A>${hesap: ifade}</A> (satır içi hesap)
  * @typedef {{ ad: string; yerel: string; oz: Record<string, string>; cocuklar: XmlOgesi[]; metin: string }} XmlOgesi
  */

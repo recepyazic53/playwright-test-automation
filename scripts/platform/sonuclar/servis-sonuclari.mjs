@@ -69,7 +69,9 @@ function basliklariMaskele(b, ekler) {
 function hataMetni(sonuc) {
   if (sonuc.hata) return String(sonuc.hata);
   const kalan = Array.isArray(sonuc.kontroller) ? sonuc.kontroller.filter((k) => k && !k.gecti) : [];
-  if (kalan.length) return kalan.map((k) => `${k.ad}${k.aciklama ? ` — ${k.aciklama}` : ''}`).join('\n');
+  // Sözleşme uyumsuzlukları yol bazında (alt satırlar) eklenir.
+  const altlar = (/** @type {any} */ k) => (k.tur === 'sozlesme' && Array.isArray(k.alt) ? k.alt.map((/** @type {any} */ a) => `\n  ${a.ad}: ${a.aciklama ?? ''}`).join('') : '');
+  if (kalan.length) return kalan.map((k) => `${k.ad}${k.aciklama ? ` — ${k.aciklama}` : ''}${altlar(k)}`).join('\n');
   return sonuc.durumKodu ? `HTTP ${sonuc.durumKodu}` : '';
 }
 
@@ -353,7 +355,7 @@ export function servisSonucKosusu(vt, q) {
     const ekler = ekGizliAdlar(vt);
     const adimlar = (Array.isArray(a.sonuc.adimlar) ? a.sonuc.adimlar : []).map((/** @type {Record<string, any>} */ x) => ({
       no: Number(x.no) || 0, ad: String(x.ad ?? ''), servis: String(x.servis ?? ''), senaryo: String(x.senaryo ?? ''), durum: String(x.durum ?? ''),
-      sureMs: Number(x.sureMs) || 0, satirId: x.kosuId ? String(x.kosuId) : null, hata: x.neden ? String(x.neden) : '',
+      sureMs: Number(x.sureMs) || 0, satirId: x.kosuId ? String(x.kosuId) : null, hata: x.neden ? String(x.neden) : '', ...(x.not ? { not: String(x.not) } : {}),
       okunanlar: x.okunanlar && typeof x.okunanlar === 'object'
         ? Object.fromEntries(Object.entries(x.okunanlar).map(([ad, d]) => [ad, gizliAdMi(ad, ekler) ? MASKE : String(d)])) : undefined
     }));
@@ -404,7 +406,8 @@ export function servisSonucSenaryosu(vt, q) {
       okunanlar: s.okunanlar && typeof s.okunanlar === 'object'
         ? Object.fromEntries(Object.entries(s.okunanlar).map(([ad, d]) => [ad, gizliAdMi(ad, ekler) ? MASKE : String(d)])) : null,
       akis: s.akis && typeof s.akis === 'object' ? { akisId: s.akis.akisId ?? null, akisBaslik: String(s.akis.akisBaslik ?? ''), adimNo: Number(s.akis.adimNo) || null, adimAd: String(s.akis.adimAd ?? '') } : null,
-      oturum: s.oturum && typeof s.oturum === 'object' ? { akis: String(s.oturum.akis ?? ''), durum: String(s.oturum.durum ?? '') } : null
+      oturum: s.oturum && typeof s.oturum === 'object' ? { akis: String(s.oturum.akis ?? ''), durum: String(s.oturum.durum ?? '') } : null,
+      yetkiTekrari: s.yetkiTekrari && typeof s.yetkiTekrari === 'object' ? { not: String(s.yetkiTekrari.not ?? '') } : null
     }
   };
 }

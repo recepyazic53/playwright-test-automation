@@ -408,8 +408,10 @@ function servisKosusuVerisi(vt, projeId, id) {
       return {
         baslik: x.baslik, grup: String(k.baslik ?? ''), durum: x.durduruldu ? 'durduruldu' : durumu(x.durum), sureMs: x.sureMs, kalinanAdim: null,
         hata: x.hata || null,
+        // Sözleşme uyumsuzlukları (alt) yol bazında ayrı satır.
         kontroller: kontroller.filter((/** @type {any} */ c) => c && typeof c.ad === 'string')
-          .map((/** @type {any} */ c) => ({ ad: String(c.ad), gecti: c.gecti === true, aciklama: c.aciklama ? String(c.aciklama) : '' }))
+          .flatMap((/** @type {any} */ c) => [{ ad: String(c.ad), gecti: c.gecti === true, aciklama: c.aciklama ? String(c.aciklama) : '' },
+            ...(c.tur === 'sozlesme' && Array.isArray(c.alt) ? c.alt.map((/** @type {any} */ a) => ({ ad: `↳ ${String(a.ad ?? '')}`, gecti: false, aciklama: String(a.aciklama ?? '') })) : [])])
       };
     });
   return {

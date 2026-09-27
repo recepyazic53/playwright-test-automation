@@ -43,6 +43,9 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'servisZamanAsimiSn', grup: 'Servisler', etiket: 'Servis isteği zaman aşımı', aciklama: 'Servis yanıtı bu sürede gelmezse istek kesilir.', tur: 'sayi', varsayilan: 60, enAz: 5, enCok: 600, birim: 'sn' },
   { anahtar: 'tarihBicimi', grup: 'Servisler', etiket: 'Varsayılan tarih biçimi', aciklama: 'Biçim verilmemiş tarih kurallarında ve ${tarih:…} ifadelerinde kullanılır. yyyy yıl, MM ay, dd gün, HH saat, mm dakika, ss saniye; sabitler tek tırnakta.',
     tur: 'metin', varsayilan: "yyyy-MM-dd'T'HH:mm:ss" },
+  { anahtar: 'yetkiHatasinda', grup: 'Servisler', etiket: 'Yetki hatasında (401 / 403)',
+    aciklama: 'Oturum akışı ya da token adımı olan servis isteği HTTP 401 / 403 dönerse. Tekrar deneme: istek tekrarlanmaz, sonuç olduğu gibi değerlendirilir. Token\'ı yenile, bir kez tekrar dene: oturum / token adımı yeniden çalıştırılır ve istek bir kez daha gönderilir (raporda not olarak görünür; ikinci deneme de reddedilirse normal hata). Akışta ayrıca seçim yapılmadıysa bu değer kullanılır. Tekrar da "Servis istekleri" iznine tabidir.',
+    tur: 'secim', varsayilan: 'tekrarYok', secenekler: [['tekrarYok', 'Tekrar deneme'], ['yenileVeTekrar', 'Token\'ı yenile, bir kez tekrar dene']] },
   { anahtar: 'taramaZamanAsimiDk', grup: 'Tarama ve akış kaydı', etiket: 'Ekran taraması süre limiti', aciklama: 'Ekran taraması bu sürede bitmezse durdurulur.',
     tur: 'sayi', varsayilan: 5, enAz: 1, enCok: 60, birim: 'dk' },
   { anahtar: 'kayitZamanAsimiDk', grup: 'Tarama ve akış kaydı', etiket: 'Akış kaydı süre limiti', aciklama: 'Akışı kaydederken siz işlemi yaparken en çok bu kadar beklenir.',
@@ -130,7 +133,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 ]);
 
 /** @typedef {{ video: string; ekranGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
- *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
+ *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
  *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;

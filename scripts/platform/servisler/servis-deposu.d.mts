@@ -25,6 +25,9 @@ export interface ServisAyarlari {
   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string;
   /** Adlandırılmış taban adres: aynı adlı servislerin taban adresleri hep aynıdır (taban-adresleri.mjs). */
   tabanGrubu?: string;
+  /** Operasyon / uç başına yanıt sözleşmesi ve değişiklik geçmişi (servis-sozlesmesi.mjs). */
+  sozlesmeler?: Record<string, import('./servis-sozlesmesi.mjs').Sozlesme>;
+  sozlesmeGecmisi?: Record<string, import('./servis-sozlesmesi.mjs').SozlesmeGecmisi[]>;
 }
 export interface Servis {
   id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
@@ -37,6 +40,8 @@ export interface ServisSenaryoIcerigi {
   operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>; basliklar?: Record<string, string>;
   http?: ServisHttpTanimi; kosuOrtamlari?: Record<string, boolean>;
+  /** "Yanıt sözleşmeye uymalı" (varsayılan kapalı). */
+  sozlesmeDogrula?: boolean;
 }
 export interface ServisSenaryosu {
   id: string; projeId: string; servisId: string; baslik: string; kapsam: ServisKapsami; kosuyaDahil: boolean;
@@ -86,7 +91,11 @@ export interface AkisOkumaTanimi { ad: string; kaynak: 'xml' | 'json' | 'baslik'
 /** tur "operasyon": servisin operasyonu (senaryoId yok; baglar: alan yolu → ${akis:Ad}); tur "sql": SQL sorgusu. */
 export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon'; operasyon?: string; baglar?: Record<string, string>; sql?: import('../sql/sql-adimi.mjs').SqlTanimi }
 export declare const TOKEN_YENILEME: readonly ['suresiDolunca', 'herIstekte'];
-export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }
+export declare const YETKI_HATASI_SECENEKLERI: readonly ['genel', 'tekrarYok', 'yenileVeTekrar'];
+export type YetkiHatasiSecimi = (typeof YETKI_HATASI_SECENEKLERI)[number];
+export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string; yetkiHatasinda?: YetkiHatasiSecimi }
+export declare function yetkiHatasiSecimi(akis: { tur: 'akis' | 'oturum'; icerik: { yetkiHatasinda?: string } } | undefined | null): YetkiHatasiSecimi;
+export declare function yetkiTekrariAcik(vt: Veritabani, akis: { tur: 'akis' | 'oturum'; icerik: { yetkiHatasinda?: string } } | undefined | null): boolean;
 export interface ServisAkisi {
   id: string; projeId: string; baslik: string; tur: 'akis' | 'oturum'; kapsam: ServisKapsami; kosuyaDahil: boolean;
   sira: number | null; icerik: ServisAkisIcerigi; olusturulma: string; guncellenme: string;

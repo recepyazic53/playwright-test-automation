@@ -9,6 +9,7 @@ Nöbetçi'de ekran testlerinin yanında SOAP servis testleri. Servis kayıtları
 - Servis sayfasının sekmeleri:
   - **Senaryolar:** liste, Dene, düzenleyici.
   - **Akışlar:** sonraki aşama; ör. önce token al, sonra çağır.
+  - **Sözleşme:** operasyon / uç başına yanıt sözleşmesi (aşağıda).
   - **Parametreler**
   - **Raporlar:** servis koşuları.
   - **İşlemler:** ayarlar, silme.
@@ -138,3 +139,21 @@ REST koşusu: gövdedeki değerler içerik türüne göre kaçışlanır (JSON /
 | `scripts/platform/arayuz/servisler.js` | Arayüz |
 
 Testler (sahte SOAP sunucusu, 127.0.0.1): `tests/birim/servis-testleri.spec.ts`, `tests/birim/servis-uclari.spec.ts`.
+
+## Yanıt sözleşmesi
+
+Servis sayfasının **Sözleşme** sekmesinde her operasyon (REST'te uç) için yanıtın beklenen yapısı tanımlanır. Hiçbir kaynak ağ isteği atmaz.
+
+- **Kaynaklar:** WSDL / XSD (kayıtlı WSDL'deki yanıt öğesi ya da yüklenen dosyalar), OpenAPI / Swagger (yerel JSON / YAML; yalnız başarılı yanıt şeması, belge içi `$ref` çözülür, dış `$ref` indirilmez), JSON Schema (dosya ya da yapıştırma), **başarılı yanıttan taslak** (seçilen kayıtlı başarılı yanıtlardan: zorunlu = tüm örneklerde var, null görüldüyse null izinli; tek örnekte zorunluluk kesin değildir uyarısı).
+- **Önizleme / taslak** alan alan düzenlenir (tür, zorunlu, null izinli, kaldır); "Onayla ve kaydet" ile servis ayarlarına (kasada şifreli) yazılır. Var olan sözleşmeyi değiştirmek ve silmek onay ister (fark gösterilir); değişiklikler geçmişe yazılır.
+- **Senaryo:** "Yanıt sözleşmeye uymalı" (varsayılan kapalı). Açıkken yanıt doğrulanır; uyumsuzluk senaryoyu kaldırır. Rapor: `Sözleşme: Kaldı — N uyumsuzluk` ve yol bazında liste — SOAP'ta XML yolları (`/SiparisResponse/Kalemler/Kalem[2]/Adet: zorunlu alan yok`), REST'te JSON yolları (`response.orderId: sayı bekleniyordu, metin geldi`). Mesajlar değer içermez; gizli değerler maskelenir.
+- Desteklenen alt küme: `type` (dizi ve `null` dahil), `required`, `properties`, `items`, `enum`, `nullable`, `format` (date, date-time, email), `anyOf` / `oneOf`, `allOf` (birleştirilir). Fazla alan uyumsuzluk sayılmaz.
+
+## Yetki hatasında (401 / 403)
+
+Oturum akışı ya da token adımı olan akışlarda "Yetki hatasında (401 / 403)" seçimi: **Tekrar deneme** ya da **Token'ı yenile, bir kez tekrar dene**. Akışta seçilmediyse Ayarlar > Koşu'daki genel değer kullanılır (varsayılan: Tekrar deneme).
+
+- Açıkken istek 401 / 403 dönerse oturum akışı / akıştaki token adımı yeniden çalışır ve istek **bir kez** tekrarlanır. İlk deneme ayrı sonuç olarak kaydedilmez; raporda not görünür: "401 alındı, token yenilendi, tekrar denendi". İkinci deneme de 401 / 403 ise sonuç olduğu gibi değerlendirilir (not: "tekrar da 401 döndü").
+- Yalnız HTTP durum kodu dikkate alınır (SOAP Fault içeriği yetki hatası sayılmaz).
+- Tekrar da "Servis istekleri" iznine tabidir (aynı çalıştırmanın parçasıdır).
+- Bu ayardan önce kaydedilmiş oturum akışları o zamanki davranışı korur (bir kez yenileyip tekrar dener); düzenleyicide öyle görünür.

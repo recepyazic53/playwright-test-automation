@@ -90,6 +90,10 @@ export interface CalistirmaSonucu {
   durumKodu?: number; yanitSureMs?: number; kontroller?: KontrolSonucu[]; ozet?: string; yanit?: string; hata?: string; durduruldu?: boolean;
   istekBasliklari?: Record<string, string>; okunanlar?: Record<string, string>; akis?: Record<string, unknown>;
   oturum?: { akis: string; durum: 'alindi' | 'onbellek' | 'yenilendi' };
+  /** 401 / 403 sonrası token yenilenip bir kez tekrar denendiyse (ilk deneme ayrı kaydedilmez). */
+  yetkiTekrari?: { ilkDurumKodu: number; not: string; ikinciDurumKodu?: number };
+  /** "Yanıt sözleşmeye uymalı" açıkken doğrulama özeti. */
+  sozlesme?: { durum: 'gecti' | 'kaldi' | 'yok'; toplam: number; uyumsuzluklar: Array<{ yol: string; mesaj: string }> };
 }
 export interface AkisOkumasi { ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
 export declare function okumaGizliMi(o: AkisOkumasi, ekler?: ReadonlyArray<string>): boolean;
@@ -100,6 +104,10 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
   /** Yanıttan okunan AÇIK değerler ve maskelenen değerler: yalnız bellekte (akış motoru); kayda / dönüşe yazılmaz. */
   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+  /** İç kullanım: 401 / 403 sonrası tekrar. */
+  yetkiTekrari?: { ilkDurumKodu: number; not: string };
+  /** Akış motoru: token adımını yeniden çalıştırıp yeni değerleri verir (yalnız ayar açıksa). */
+  yetkiYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null>;
 }): Promise<CalistirmaSonucu>;
 export type OturumSaglayici = (vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
   Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>;

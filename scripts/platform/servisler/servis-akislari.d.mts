@@ -5,7 +5,7 @@ import type { OturumSaglayici } from './servis-islemleri.mjs';
 
 export interface AkisAdimSonucu {
   no: number; ad: string; servis: string; senaryo: string; durum: 'basarili' | 'basarisiz' | 'hata' | 'atlandi' | 'durduruldu';
-  sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; tur?: 'sql' | 'operasyon'; sql?: Record<string, unknown>; sqlHedefi?: { baglanti: string; veritabani?: string };
+  sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; /** 401 / 403 sonrası tekrar notu. */ not?: string; tur?: 'sql' | 'operasyon'; sql?: Record<string, unknown>; sqlHedefi?: { baglanti: string; veritabani?: string };
 }
 export declare function servisAkisiDenetle(vt: Veritabani, projeId: string, icerik: ServisAkisIcerigi, adimIcerikleri?: Record<string, unknown>): string[];
 export declare function oturumlariTemizle(akisId?: string): void;

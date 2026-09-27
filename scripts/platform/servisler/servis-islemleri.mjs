@@ -9,6 +9,8 @@
 //   (kasada; ör. USERNAME / PASSWORD / CHANNEL) ya da test verisi türü alanının "servis parametreleri" eşlemesi + servisin
 //   (senaryo ezebilir) o tür + rol için seçtiği profilden (veriProfilleri) gelir. Dönüşüm: soapui-aktarimi.mjs eskiParametreleriDonustur.
 // - Saklanan istek / yanıtta parola ve hassas test verisi değerleri maskelenir.
+// - "Yanıt sözleşmeye uymalı" (senaryo; varsayılan kapalı) açıksa yanıt servisin sözleşmesine göre doğrulanır (servis-sozlesmesi.mjs).
+// - 401 / 403: yalnız kullanıcı "Token'ı yenile, bir kez tekrar dene" seçtiyse oturum / token yenilenip istek bir kez tekrarlanır.
 import { randomUUID } from 'node:crypto';
 import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
@@ -19,8 +21,9 @@ import {
 } from './soap-istemcisi.mjs';
 import {
   senaryoIceriginiDogrula, servisAkisiGetir, servisGetir, servisKaydet, servisKimliginiCoz, servisKosusuKaydet,
-  servisKimlikOzeti, servisleriListele, servisOrtamdaKosuyaDahil, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
+  servisKimlikOzeti, servisleriListele, servisOrtamdaKosuyaDahil, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet, yetkiTekrariAcik
 } from './servis-deposu.mjs';
+import { yanitSozlesmesiniDenetle } from './servis-sozlesmesi.mjs';
 import { adresBirlestirRest, govdeKacisi, restIstegi } from './rest-istemcisi.mjs';
 import { ortakYol, postmanCozumle, postmanOzeti, sablonCevir, sablonDegiskenleri } from './postman-ice-aktarma.mjs';
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
@@ -864,8 +867,12 @@ export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
  *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
  *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
  *   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
- *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean }} girdi
+ *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+ *   yetkiTekrari?: { ilkDurumKodu: number; not: string };
+ *   yetkiYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null> }} girdi
  *   oturumYenile: oturum akışı önbelleği yok sayılıp yeniden koşulur (401 / 403 sonrası iç kullanım).
+ *   yetkiTekrari: bu çalıştırma 401 / 403 sonrası tekrardır (iç kullanım; raporda not). yetkiYenile: akıştaki token adımını yeniden
+ *   çalıştırıp yeni akış değerlerini veren geri çağırma (akış motoru, yalnız kullanıcı "Token'ı yenile, bir kez tekrar dene" seçtiyse verir).
  *   olay: canlı panel için adım bildirimi (istek / yanıt maskeli). sinyal: durdurma (bekleyen istek kesilir).
  *   Servis akışı: akisDegerleri (${akis:Ad} değerleri), ekGizliler (maskelenecek önceki değerler), okumalar (yanıttan okunacak
  *   değerler; açık değerler YALNIZ acikDegerler geri çağırmasıyla, bellekte; kayıtta ve dönüşte gizliler maskeli), akis (kayda
@@ -913,7 +920,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
   /** @type {Record<string, unknown>} */
-  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}) };
+  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}), ...(girdi.yetkiTekrari ? { yetkiTekrari: girdi.yetkiTekrari } : {}) };
   /** @type {'basarili' | 'basarisiz' | 'hata'} */
   let durum = 'hata';
   /** @type {'hazirlik' | 'gonderim' | 'yanit' | 'kontroller'} */
@@ -972,9 +979,24 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const yanit = http
       ? await restIstegi({ ...ortak, metot: http.metot, ...(http.icerikTuru ? { icerikTuru: http.icerikTuru } : {}) })
       : await soapIstegi({ ...ortak, eylem, soapSurumu: servis.ayarlar.soapSurumu });
-    // Oturum değeri (token) sunucuca reddedildiyse: oturum bir kez yenilenip senaryo yeniden denenir (bu deneme kaydedilmez).
-    if (oturumKullanildi && !girdi.oturumYenile && (yanit.durumKodu === 401 || yanit.durumKodu === 403)) {
-      return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true });
+    // Yetki hatası (YALNIZ HTTP 401 / 403): kullanıcının seçimi (akışın "Yetki hatasında" ayarı; seçilmediyse Ayarlar > Koşu) "Token'ı
+    // yenile, bir kez tekrar dene" ise oturum akışı / akıştaki token adımı yeniden çalışır ve istek BİR KEZ tekrarlanır. İlk deneme
+    // ayrı sonuç olarak kaydedilmez; tekrarın sonucunda not olarak görünür. İkinci deneme de reddedilirse sonuç olduğu gibi değerlendirilir.
+    const yetkiHatasi = yanit.durumKodu === 401 || yanit.durumKodu === 403;
+    if (yetkiHatasi && girdi.yetkiTekrari) {
+      sonuc.yetkiTekrari = { ...girdi.yetkiTekrari, ikinciDurumKodu: yanit.durumKodu, not: `${girdi.yetkiTekrari.not}; tekrar da ${yanit.durumKodu} döndü` };
+    }
+    if (yetkiHatasi && !girdi.yetkiTekrari) {
+      const not = `${yanit.durumKodu} alındı, token yenilendi, tekrar denendi`;
+      if (oturumKullanildi && servis.ayarlar.oturumAkisi && yetkiTekrariAcik(vt, servisAkisiGetir(vt, servis.ayarlar.oturumAkisi))) {
+        return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true, yetkiTekrari: { ilkDurumKodu: yanit.durumKodu, not } });
+      }
+      const yeni = girdi.yetkiYenile ? await girdi.yetkiYenile() : null;
+      if (yeni) {
+        return await servisSenaryosuCalistir(vt, projeId, {
+          ...girdi, akisDegerleri: yeni.akisDegerleri, ekGizliler: [...(girdi.ekGizliler ?? []), ...yeni.gizliler], yetkiTekrari: { ilkDurumKodu: yanit.durumKodu, not }
+        });
+      }
     }
     adim = 'kontroller';
     // Yanıttan okuma (akış): gizli değerler kayda / panele yazılmadan önce maskeleme listesine girer.
@@ -994,6 +1016,12 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki SiparisNo = önceki adımda okunan) çözülür.
     const kontrolListesi = akisDegerleri ? akisKontrolleriniCoz(icerik.kontroller, akisDegerleri) : icerik.kontroller;
     const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi), ...okumaSonuclari];
+    // "Yanıt sözleşmeye uymalı" (senaryo ayarı; varsayılan kapalı): uyumsuzluk senaryoyu kaldırır (servis-sozlesmesi.mjs).
+    if (icerik.sozlesmeDogrula === true) {
+      const sz = yanitSozlesmesiniDenetle(servis, icerik.operasyon, yanit, (m) => gizlileriMaskele(m, gizliler));
+      kontroller.push(sz.kontrol);
+      sonuc.sozlesme = sz.ozet;
+    }
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';
     if (Object.keys(okunan).length) {
       sonuc.okunanlar = Object.fromEntries((girdi.okumalar ?? []).filter((o) => okunan[o.ad] !== undefined).map((o) => [o.ad, okumaGizliMi(o, ekAdlar) ? MASKE : okunan[o.ad]]));

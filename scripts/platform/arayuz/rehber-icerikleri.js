@@ -172,7 +172,7 @@ export const REHBERLER = {
   servis: {
     baslik: 'Servis',
     adimlar: [
-      { baslik: 'Servis sayfası', metin: 'Sekmeler: Senaryolar (istekler ve kontroller), Akışlar (istekleri zincirleme), Parametreler (değer tanımları), Raporlar (koşu geçmişi), İşlemler (metotlar).', cizim: { tur: 'maket', bolge: 'arac', etiket: 'Sekmeler ekranın üstünde' } },
+      { baslik: 'Servis sayfası', metin: 'Sekmeler: Senaryolar (istekler ve kontroller), Akışlar (istekleri zincirleme), Sözleşme (yanıtın beklenen yapısı), Parametreler (değer tanımları), Raporlar (koşu geçmişi), İşlemler (metotlar).', cizim: { tur: 'maket', bolge: 'arac', etiket: 'Sekmeler ekranın üstünde' } },
       {
         baslik: 'Senaryo türü: tek istek ya da akış',
         metin: ['"Senaryo ekle"de önce türü seçin. Tek istek: bir operasyona istek atılır. Akış: bir servis akışının operasyonları sırayla çağrılır (ör. önce sipariş, sonra fatura); akış başka servislerin operasyonlarını da içerebilir.',
@@ -190,7 +190,25 @@ export const REHBERLER = {
           'Önceki adımdan gelen alanlar kilitlidir ("1. adımdan gelir") ve sorulmaz.', 'Her adımın beklenen sonucunu kontrol edin (ör. bu adım bir hata vermeli).', 'Dene ile TEST’te deneyin, sonra kaydedin. Akış senaryosu, akışın geçtiği her serviste "akış: <ad>" rozetiyle listelenir.'],
         cizim: { tur: 'form', alanlar: ['Akış', '1. adımın alanları', '2. adımın alanları (kilitliler hariç)', 'Beklenen sonuçlar'], dugme: 'Dene' }
       },
+      { baslik: 'Yanıt sözleşmesi', metin: 'Senaryonun Kontroller bölümündeki "Yanıt sözleşmeye uymalı" kutusu (varsayılan kapalı) işaretlenirse yanıt, metodun Sözleşme sekmesindeki yapıya göre de doğrulanır; uymayan alanlar raporda yol yol listelenir ve senaryo kalır.' },
       { baslik: 'Gizli bilgiler', metin: 'Yanıtlarda ve raporlarda gizli adlı alanlar maskelenir. Maskelenecek ek adları Ayarlar > Güvenlik > Maskeleme\'den ekleyebilirsiniz.' }
+    ]
+  },
+  'servis-sozlesmesi': {
+    baslik: 'Servis sözleşmesi',
+    adimlar: [
+      {
+        baslik: 'Sözleşme nedir?',
+        metin: ['Sözleşme, bir metodun (REST\'te ucun) yanıtının beklenen yapısıdır: hangi alanların geleceği, türleri (metin, sayı, tam sayı, evet/hayır, nesne, dizi), hangilerinin zorunlu olduğu ve boş (null) gelip gelemeyeceği.',
+          'Senaryoda "Yanıt sözleşmeye uymalı" açıksa (varsayılan kapalı) koşuda yanıt buna göre denetlenir. Uymazsa senaryo kalır; raporda "Sözleşme: Kaldı — N uyumsuzluk" ve yol yol liste görünür (ör. response.orderId: sayı bekleniyordu, metin geldi). Rapora değer yazılmaz.'],
+        cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Servis', gidis: 'istek', donus: 'yanıt', kontroller: ['Alanlar tam', 'Türler doğru', 'Null izinli mi'] }
+      },
+      {
+        baslik: 'Sözleşmenin kaynağı',
+        sira: ['WSDL / XSD\'den al (SOAP): servisin kayıtlı WSDL\'indeki yanıt öğesi ya da yüklediğiniz WSDL / XSD dosyaları.', 'OpenAPI / Swagger yükle: yerel JSON / YAML dosyası; yalnız başarılı yanıt şeması alınır, dış başvurular indirilmez.', 'JSON Schema yükle: dosya ya da yapıştırma.', 'Başarılı yanıttan taslak: kayıtlı bir ya da birkaç başarılı yanıttan türler çıkarılır.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / OpenAPI / JSON Schema / yanıt', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'alan alan düzenle', ikon: 'duzenle' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Sözleşme', ikon: 'kalkan' }] }
+      },
+      { baslik: 'Taslak ve onay', metin: 'Önizleme ya da taslakta türü, zorunluluğu ve null iznini alan alan değiştirip gereksiz alanı kaldırabilirsiniz; "Onayla ve kaydet" demeden hiçbir şey yazılmaz. Tek yanıttan çıkan taslakta zorunluluk kesin değildir: birkaç başarılı yanıt seçin ya da gözden geçirin. Var olan sözleşmeyi değiştirmek ve silmek ayrıca onay ister; değişiklikler geçmişte görünür.' }
     ]
   },
   'servis-sonuclari': {
@@ -218,7 +236,7 @@ export const REHBERLER = {
           'Alan DEĞERLERİ akışta değil, akışı kullanan senaryodadır (ekranlardaki akış ↔ senaryo ayrımıyla aynı).'],
         cizim: { tur: 'akis', kutular: [{ baslik: '1. operasyon', alt: 'kayıt oluştur', ikon: 'ag' }, { baslik: 'Değer oku', alt: '${akis:No}', ikon: 'hedef' }, { baslik: '2. operasyon', alt: 'No alanı ← akış', ikon: 'ag' }, { baslik: 'Senaryo', alt: 'verileri doldurur', ikon: 'liste' }] }
       },
-      { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın. Token\'ın süresi dolana kadar mı kullanılacağını, yoksa her istekte yeniden mi alınacağını akışta siz seçersiniz.', cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Giriş servisi', gidis: 'giriş', donus: 'token', kontroller: ['Token alındı', 'Sonraki isteklere eklendi'] } },
+      { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın. Token\'ın süresi dolana kadar mı kullanılacağını, yoksa her istekte yeniden mi alınacağını akışta siz seçersiniz. "Yetki hatasında (401 / 403)": Tekrar deneme ya da Token\'ı yenile, bir kez tekrar dene (oturum / token adımı yeniden çalışır, istek bir kez daha gönderilir; raporda not olarak görünür). Seçmezseniz Ayarlar > Koşu\'daki genel değer (varsayılan: Tekrar deneme) kullanılır.', cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Giriş servisi', gidis: 'giriş', donus: 'token', kontroller: ['Token alındı', 'Sonraki isteklere eklendi'] } },
       {
         baslik: 'Akış kurma sırası',
         sira: ['"Yeni akış"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" ile değeri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).',
@@ -325,7 +343,7 @@ export const REHBERLER = {
   'ayarlar-kosu': {
     baslik: 'Koşu ayarları',
     adimlar: [
-      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi ve tarama / akış kaydı (süreler, ekran boyutu, dil, açılır liste keşif sınırı, girişte giriş alanı beklemesi; koşudaki giriş beklemelerinden ayrı). Tarama ve akış kaydında giriş: varsayılan her seferinde baştan giriş; "Koşunun saklanan oturumunu kullan" seçilirse koşunun aynı ortam ve giriş profili için şifreli sakladığı oturum denenir ("Girişte oturum kontrolü" süresiyle), geçersizse baştan girilip oturum güncellenir; "Giriş yapmadan aç" saklanan oturumu hiç kullanmaz. Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
+      { baslik: 'Koşu ayarları', metin: 'Video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, tarih biçimi, servislerde yetki hatasında (401 / 403) ne yapılacağı ve tarama / akış kaydı (süreler, ekran boyutu, dil, açılır liste keşif sınırı, girişte giriş alanı beklemesi; koşudaki giriş beklemelerinden ayrı). Tarama ve akış kaydında giriş: varsayılan her seferinde baştan giriş; "Koşunun saklanan oturumunu kullan" seçilirse koşunun aynı ortam ve giriş profili için şifreli sakladığı oturum denenir ("Girişte oturum kontrolü" süresiyle), geçersizse baştan girilip oturum güncellenir; "Giriş yapmadan aç" saklanan oturumu hiç kullanmaz. Değişiklik sonraki koşulardan itibaren geçerlidir.', cizim: { tur: 'form', alanlar: ['Video', 'Yeniden deneme', 'Süre limiti'], dugme: 'Kaydet' } },
       { baslik: 'Gelişmiş koşu davranışı', metin: 'Açılır bölümde koşucunun kararları: alan görünmezse ne kadar beklenip atlanacağı ya da testin kalacağı, tarayıcı onay pencerelerine verilecek yanıt, adım / giriş beklemeleri, tablodan satır seçimi (ilk uyan ya da rastgele; ortamı boş satır her ortamda geçerli), SQL satır sınırı (SQL adımındaki beklenen satır sayısı bunu aşamaz: kaydederken uyarı verilir; sınırı düşürürseniz aşan adımlar koşuda anlaşılır bir hatayla kalır), koşu tarayıcısının boyutu, dili ve saat dilimi. Her ayarın varsayılanı Nöbetçi\'nin bugüne kadarki davranışıdır.', ipucu: 'Senaryolar her zaman sırayla koşar: giriş oturumu paylaşıldığı için eşzamanlı koşu sunulmaz.' },
       { baslik: 'Hata sınıflandırma', metin: 'Kalan testin hata mesajında belirli bir metin geçerse hangi kategoride görüneceğini siz tanımlarsınız (ör. uygulamanızın iş kuralı uyarısı "iş kuralı" sayılsın).' },
       {
