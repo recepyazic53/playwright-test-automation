@@ -15,7 +15,8 @@ import { ekranBasvurulariniCoz, modelAlanBilgisi } from '../../scripts/platform/
 import { MESAJLAR, senaryoyuDogrula, tabloBasvurusuCoz } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
 import { gizliDegerleriMaskele, veriHatalariMetni } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
-import { INCELEME_KURALLARI, MEVCUT_TABLO_KURALI, paketIstekCumlesi } from '../../scripts/platform/ekranlar/paket-istekleri.mjs';
+import { BICIM_ATFI, BICIM_DOSYASI_ADI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI, PAKET_OZU, paketIstekCumlesi } from '../../scripts/platform/ekranlar/paket-istekleri.mjs';
+import { paketBicimiBelgesi } from '../../scripts/platform/ekranlar/paket-bicimi.mjs';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { AkisUygulamasi, HAVUZLAR, akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
@@ -146,7 +147,19 @@ test.describe('paket istek metinleri', () => {
     for (const parca of ['"<Ekran adı> — <Alan>"', '"tur": "liste"', '"tur": "kayit"', '${Tablo.Sütun}', '${Tablo[etiket].Sütun}', 'gerekenAyarlar.testVerisiTurleri', '"gizli": true']) {
       expect(INCELEME_KURALLARI, parca).toContain(parca);
     }
-    expect(paketIstekCumlesi('https://ornek.invalid/sayfa')).toBe(`https://ornek.invalid/sayfa sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI}`);
+    expect(paketIstekCumlesi('https://ornek.invalid/sayfa')).toBe(`https://ornek.invalid/sayfa sayfasını incele ve ${BICIM_ATFI} bir sayfa paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`);
+    // Metin depo dosyasına değil, istekle verilen biçim dosyasına atıf yapar; zarfın zorunlu anahtarları metnin içindedir.
+    expect(BICIM_ATFI).toContain(BICIM_DOSYASI_ADI);
+    for (const anahtar of ['"tur": "sayfa-paketi"', '"surum": 1', 'meta', 'model', 'senaryoOnerileri', 'gerekenAyarlar', 'bilinmeyenler']) expect(PAKET_OZU, anahtar).toContain(anahtar);
+    // Sunucunun tekrar analiz istek dosyası aynı atfı ve kuralları kullanır (kopya yok); biçim dosyası yerel uçtan tek dosya olarak verilir.
+    const servis = oku('scripts/platform/ekranlar/ekran-servisi.mjs');
+    expect(servis).toContain('${BICIM_ATFI}');
+    expect(servis).not.toContain('docs/sayfa-paketi.md');
+    expect(oku('scripts/test-sunucu.mjs')).toMatch(/yol === BICIM_ADRESI[\s\S]{0,400}paketBicimiBelgesi\(/);
+    const bicim = paketBicimiBelgesi(KOK);
+    expect(bicim).toContain(oku('docs/sayfa-paketi.md').replace(/\r\n/g, '\n').trimEnd());
+    expect(bicim).toContain('"$id": "nobetci:sayfa-paketi:1"');
+    expect(bicim).toContain('## Ek B — Ekran modelinin tip tanımı');
     expect(MEVCUT_TABLO_KURALI).toContain('AYNEN');
   });
 

@@ -19,6 +19,7 @@ import {
   closeSync, existsSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmdirSync, unlinkSync, writeSync
 } from 'node:fs';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { veriAyariniOku } from './ayarlar/klasor-secimi.mjs';
 
 export const KAYIT_DEFTERI_DOSYASI = 'calisma-alanlari.json';
 export const CALISMA_ALANLARI_KLASORU = 'calisma-alanlari';
@@ -42,12 +43,16 @@ export class CalismaAlaniHatasi extends Error {
 }
 
 /**
- * Veri kökü: NOBETCI_VERI_KOKU (testler geçici bir kök verir) ya da <proje kökü>/veri.
+ * Veri kökü: NOBETCI_VERI_KOKU (testler geçici bir kök verir; başlatıcılar seçili veri klasörünü buna yazar) → kullanıcının
+ * seçtiği veri klasörü (başlatıcının verdiği ayar dosyası, NOBETCI_AYAR_DOSYASI; bkz. ayarlar/klasor-secimi.mjs) → <proje kökü>/veri.
+ * Seçim yoksa bugünkü davranış (Windows paketi: uygulama\veri; macOS: başlatıcının verdiği Application Support klasörü).
  * @param {string} [projeKoku] verilmezse çalışma klasörü
  */
 export function veriKoku(projeKoku = process.cwd()) {
   const ortam = process.env[VERI_KOKU_DEGISKENI];
-  return ortam && ortam.trim() ? resolve(ortam.trim()) : resolve(projeKoku, 'veri');
+  if (ortam && ortam.trim()) return resolve(ortam.trim());
+  const secili = veriAyariniOku().veriKoku;
+  return secili && isAbsolute(secili) ? resolve(secili) : resolve(projeKoku, 'veri');
 }
 
 const simdi = () => new Date().toISOString();

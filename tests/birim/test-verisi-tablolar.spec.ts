@@ -162,6 +162,10 @@ test.describe('test verisi tabloları', () => {
     await expect(duz.getByLabel('1. satır Parola')).toHaveAttribute('placeholder', '•••• kayıtlı');
     // Hücre düzenle + satır ekle → Kaydet.
     await duz.getByLabel('2. satır Kullanıcı adı').fill('10002002');
+    // "+ Satır" araç çubuğunda değil, tablonun en sağında "+ Sütun"un yanındadır.
+    await expect(duz.locator('.tablo-arac-cubugu').getByRole('button', { name: 'Satır', exact: true })).toHaveCount(0);
+    await expect(duz.locator('th.ekle-sutunu').getByRole('button')).toHaveText(['Sütun', 'Satır']);
+    await expect(duz.locator('th.ortam-sutunu')).toHaveText('Geçerli ortam');
     await duz.getByRole('button', { name: 'Satır', exact: true }).click();
     await duz.getByLabel('3. satır Kanal').fill('10003');
     await duz.getByLabel('3. satır Kullanıcı adı').fill('10003001');
@@ -217,6 +221,8 @@ test.describe('test verisi tabloları', () => {
     await nav.getByRole('button', { name: /^Servis girişi/ }).click();
     await expect(duz.getByRole('button', { name: /^3\. sütunun karşılıkları/ })).toHaveCount(0);   // Parola: gizli
     await nav.getByRole('button', { name: /^Ülke seçenekleri/ }).click();
+    // Düğme anlaşılır: ⇄ ikon + görünür "Karşılıklar" metni (sayı rozeti yalnız tanımlıysa).
+    await expect(duz.getByRole('button', { name: '1. sütunun karşılıkları' })).toHaveText('Karşılıklar');
     await duz.getByRole('button', { name: '1. sütunun karşılıkları' }).click();
     const p = page.getByRole('dialog', { name: '"Kapsam" değerlerinin karşılıkları' });
     await expect(p.locator('tbody th')).toHaveText(['EKSPRES', 'STANDART']);
@@ -227,7 +233,8 @@ test.describe('test verisi tabloları', () => {
     await p.getByLabel('STANDART sayfa değeri').fill('2');
     await expect(p.getByText('2 değer · 2 karşılık tanımlı')).toBeVisible();
     await p.getByRole('button', { name: 'Tamam' }).click();
-    await expect(duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' })).toBeVisible();
+    await expect(duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' })).toHaveText('Karşılıklar2');
+    await expect(duz.getByRole('button', { name: '1. sütunun karşılıkları (2)' }).locator('.karsilik-sayisi')).toHaveText('2');
     await expect(duz.getByText('kaydedilmemiş değişiklik')).toBeVisible();
     await duz.getByRole('button', { name: 'Kaydet' }).click();
     await expect(duz.getByText('kayıtlı', { exact: true })).toBeVisible();

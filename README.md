@@ -33,9 +33,14 @@ Karşılama ekranında iki seçenek vardır:
 
 1. **Yedek yükle** — başka bir bilgisayardan alınmış `.tayedek` dosyası (yedeğin parolası bu bilgisayarın kasa
    parolası olur).
-2. **Yeni proje başlat** — önce birkaç soru (ne test edeceksiniz, ortamlar, giriş, iki aşamalı doğrulama, ekranları nasıl
-   tanıtacaksınız), sonra kasa parolası, proje, ortamlar ve giriş profili. Son adımda cevaplarınıza göre sıralanmış bir
-   yapılacaklar listesi gösterilir.
+2. **Yeni proje başlat** — önce birkaç soru (ne test edeceksiniz, hangi ortamlar, giriş var mı), sonra kasa parolası, proje
+   ve ortamlar (Ortam adı | Adres | Riskli mi?). Son adımda kısa bir "Proje hazır" özeti (kaydedilen ortamlar) gösterilir.
+   Giriş profilleri ve iki aşamalı doğrulama Ayarlar > Giriş profilleri'nden, ekranlar Ekranlar sayfasından eklenir.
+
+Karşılama ekranının altında **veri klasörü** görünür ("Değiştir…", "Var olan veri klasörünü aç…"); aynı seçim Ayarlar >
+Yedekleme > "Veri klasörü"ndedir. Paketli sürümde seçim paketin dışındaki bir ayar dosyasında saklanır (Windows:
+`%LOCALAPPDATA%\Nöbetçi\ayar.json`, macOS: `~/Library/Application Support/Nöbetçi/ayar.json`); taşımada veri kopyalanır,
+doğrulanır ve eski klasör silinmez. Nöbetçi varsayılan olarak varsayılan tarayıcıda açılır (Ayarlar > Arayüz).
 
 Kasa parolasını unutmayın: parola unutulursa veriler kurtarılamaz.
 

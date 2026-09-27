@@ -1,6 +1,9 @@
 // Platform arayüzü — ortak yardımcılar: API istemcisi, DOM oluşturucu, form bileşenleri.
 // Kullanıcı verisi DOM'a YALNIZCA metin düğümü/özellik olarak yazılır (innerHTML kullanılmaz).
-import { izinAdresi, izinTanimi } from './izin-tanimlari.mjs';
+import { IZIN_TANIMLARI, izinAdresi, izinTanimi } from './izin-tanimlari.mjs';
+
+/** İzin penceresinden art arda yeniden deneme sınırı (en çok izin sayısı kadar farklı izin). */
+const IZIN_ANAHTAR_SAYISI = IZIN_TANIMLARI.length;
 
 const tokenMeta = document.querySelector('meta[name="oturum-tokeni"]');
 /** Sunucunun bu yanıta enjekte ettiği oturum token'ı (yalnızca bellekte tutulur). */
@@ -105,6 +108,9 @@ const IKONLAR = {
   hedef: ['c:12,12,8', 'c:12,12,3'],
   izgara: ['r:3,3,7,7,1.5', 'r:14,3,7,7,1.5', 'r:3,14,7,7,1.5', 'r:14,14,7,7,1.5'],
   asagi: ['M8 10l4 4 4-4'],
+  solCentik: ['M14 8l-4 4 4 4'],
+  sagCentik: ['M10 8l4 4-4 4'],
+  esle: ['M4 8h14', 'M15 5l3 3-3 3', 'M20 16H6', 'M9 13l-3 3 3 3'],
   video: ['r:2.5,6,13,12,2', 'M15.5 10.5L21 7.5v9l-5.5-3'],
   genislet: ['M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'],
   yukle: ['M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4', 'M12 15V3M7 8l5-5 5 5'],
@@ -201,8 +207,16 @@ export async function api(yol, secenekler = {}) {
   if (!yanit.ok || (veri && veri.basarili === false)) {
     const hata = new ApiHatasi((veri && veri.mesaj) || `İstek başarısız oldu (${yanit.status}).`, yanit.status, veri);
     if (yanit.status === 423 && !secenekler.kilitOlayiYok) window.dispatchEvent(new CustomEvent('kasa-kilitli', { detail: hata.message }));
-    // Kapalı izin (Ayarlar > İzinler): işlem yapılmadı. Her ekranda aynı standart uyarı + "İzinlere git" (izin satırına odaklanır).
-    if (hata.kod === 'IZIN_KAPALI' && veri && typeof veri.izin === 'string') izinUyarisiGoster(veri.izin, hata.message);
+    // Kapalı izin (Ayarlar > İzinler): sunucu izin denetimini uçta HER yan etkiden önce yapar (guvenlik/uc-denetimi.mjs, izinler.mjs:
+    // reddedilen istekte hiçbir şey yapılmamıştır). Her ekranda aynı standart pencere: "İzin ver ve devam et" izni Ayarlar > İzinler'deki
+    // açmayla aynı uçtan açar ve AYNI isteği bir kez yeniden gönderir (çağıran başarılı yanıtı alır); "Kapat" / "İzinlere git" hatayı
+    // olduğu gibi döndürür. Yeniden denemede başka bir izin kapalıysa pencere o izin için açılır (en çok izin sayısı kadar).
+    if (hata.kod === 'IZIN_KAPALI' && veri && typeof veri.izin === 'string') {
+      const deneme = secenekler.izinDenemesi || 0;
+      if (deneme < IZIN_ANAHTAR_SAYISI && await izinUyarisiGoster(veri.izin, hata.message)) {
+        return api(yol, { ...secenekler, izinDenemesi: deneme + 1 });
+      }
+    }
     // 401: sayfanın oturum token'ı sunucuyu tutmuyor → Nöbetçi yeniden başlatılmış (her başlatmada token değişir).
     if (yanit.status === 401) window.dispatchEvent(new CustomEvent('sunucu-yenilendi'));
     throw hata;
@@ -211,32 +225,83 @@ export async function api(yol, secenekler = {}) {
   return veri || {};
 }
 
+/** Pencerede bekleyen izin kararları (aynı izin için aynı anda gelen 403'ler tek pencereyi bekler). @type {Map<string, Promise<boolean>>} */
+const bekleyenIzinKararlari = new Map();
+
 /**
- * Kapalı izin uyarısı (tek pencere; aynı anda gelen birden çok 403 yeni pencere açmaz). Metin sunucudan gelir (izin-tanimlari.mjs >
- * izinMesaji); izin tanımındaki "kapalıyken" açıklaması eklenir. "İzinlere git" → Ayarlar > İzinler, izin satırına odak.
+ * Kapalı izin penceresi (izin başına tek pencere). Metin sunucudan gelir (izin-tanimlari.mjs > izinMesaji); iznin ne yaptığı, riski
+ * ve kapalıyken ne olduğu tek kaynaktan (izin-tanimlari.mjs) eklenir. Düğmeler: "Kapat", "İzinlere git" (Ayarlar > İzinler, izin
+ * satırına odak) ve — kasa açıkken — birincil "İzin ver ve devam et": izni Ayarlar > İzinler'deki açmayla AYNI uçtan
+ * (/platform/izin/degistir, onay: true; değişiklik geçmişine "açıldı (izin penceresinden)") açar. Pencerenin kendisi bilinçli onaydır:
+ * ek onay penceresi açılmaz. Riskli ortam izninde, izin açılsa da işlem başına canlı onayı ayrıca istenir (atlanmaz).
  * @param {string} anahtar @param {string} mesaj
+ * @returns {Promise<boolean>} izin verildiyse true (çağıran isteği yeniden dener)
  */
 export function izinUyarisiGoster(anahtar, mesaj) {
-  if (document.querySelector('dialog.izin-uyarisi[open]')) return;
+  const bekleyen = bekleyenIzinKararlari.get(anahtar);
+  if (bekleyen) return bekleyen;
+  const karar = izinPenceresi(anahtar, mesaj).finally(() => bekleyenIzinKararlari.delete(anahtar));
+  bekleyenIzinKararlari.set(anahtar, karar);
+  return karar;
+}
+
+/** @param {string} anahtar @param {string} mesaj @returns {Promise<boolean>} */
+async function izinPenceresi(anahtar, mesaj) {
+  // Başka bir izin penceresi açıksa önce o kapanır (pencereler üst üste binmez).
+  while (document.querySelector('dialog.izin-uyarisi[open]')) await new Promise((c) => setTimeout(c, 150));
+  /** Kasa kilitliyken izin açılamaz: düğme gösterilmez (Kapat + kilidi açma yönlendirmesi). */
+  let kasaAcik = false;
+  try {
+    const r = await fetch('/platform/durum', { headers: { 'X-Test-Sunucu-Token': TOKEN }, cache: 'no-store' });
+    const d = await r.json();
+    kasaAcik = Boolean(d && d.kasa && d.kasa.acik);
+  } catch { kasaAcik = false; }
   const t = izinTanimi(anahtar);
-  const git = h('button', { type: 'button', class: 'birincil' }, ikon('kalkan'), 'İzinlere git');
-  const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
-  const diyalog = h('dialog', { class: 'onay-diyalogu izin-uyarisi', 'aria-labelledby': 'izin-uyarisi-basligi', 'aria-describedby': 'izin-uyarisi-metni' },
-    h('div', { class: 'diyalog-govde' },
-      h('h2', { id: 'izin-uyarisi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kilit')), 'İzin gerekli'),
-      h('p', { id: 'izin-uyarisi-metni' }, mesaj),
-      t ? h('p', { class: 'soluk kucuk' }, t.kapaliyken) : null),
-    h('div', { class: 'diyalog-alt' }, kapat, git));
-  let gidilecek = false;
-  git.addEventListener('click', () => { gidilecek = true; diyalog.close(); });
-  kapat.addEventListener('click', () => diyalog.close());
-  diyalog.addEventListener('close', () => {
-    diyalog.remove();
-    if (gidilecek) location.hash = izinAdresi(anahtar);
+  return new Promise((coz) => {
+    const git = h('button', { type: 'button', class: kasaAcik ? '' : 'birincil' }, ikon('kalkan'), 'İzinlere git');
+    const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+    const ver = kasaAcik ? h('button', { type: 'button', class: 'birincil izin-ver' }, ikon('onay'), 'İzin ver ve devam et') : null;
+    const hataKutusu = h('p', { class: 'alan-hatasi', role: 'alert' });
+    const diyalog = h('dialog', { class: 'onay-diyalogu izin-uyarisi', 'aria-labelledby': 'izin-uyarisi-basligi', 'aria-describedby': 'izin-uyarisi-metni' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'izin-uyarisi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kilit')), 'İzin gerekli'),
+        h('p', { id: 'izin-uyarisi-metni' }, mesaj),
+        t ? h('div', { class: 'izin-ozeti' },
+          h('p', {}, h('b', {}, `${t.etiket}: `), t.aciklama),
+          h('p', { class: 'kucuk' }, h('b', {}, 'Risk: '), t.risk),
+          h('p', { class: 'soluk kucuk' }, t.kapaliyken)) : null,
+        anahtar === 'canli-ortam' ? h('p', { class: 'soluk kucuk' }, 'İzin açılsa da riskli ortamdaki her çalıştırma ayrıca onay ister.') : null,
+        kasaAcik ? null : h('p', { class: 'soluk kucuk' }, 'Kasa kilitli: izni açmak için önce kasanın kilidini açın.'),
+        hataKutusu),
+      h('div', { class: 'diyalog-alt' }, kapat, git, ver));
+    let sonuc = false;
+    let gidilecek = false;
+    git.addEventListener('click', () => { gidilecek = true; diyalog.close(); });
+    kapat.addEventListener('click', () => diyalog.close());
+    if (ver) {
+      ver.addEventListener('click', async () => {
+        hataKutusu.textContent = '';
+        ver.disabled = true;
+        try {
+          await api('/platform/izin/degistir', { govde: { anahtar, acik: true, onay: true, kaynak: 'izin-penceresi' } });
+          sonuc = true;
+          diyalog.close();
+          bildir(`"${t ? t.etiket : anahtar}" izni açıldı; işlem sürdürülüyor.`);
+        } catch (e) {
+          hataKutusu.textContent = e && e.message ? e.message : String(e);
+          ver.disabled = false;
+        }
+      });
+    }
+    diyalog.addEventListener('close', () => {
+      diyalog.remove();
+      if (gidilecek) location.hash = izinAdresi(anahtar);
+      coz(sonuc);
+    });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    (ver || git).focus();
   });
-  document.body.append(diyalog);
-  diyalog.showModal();
-  git.focus();
 }
 
 /**

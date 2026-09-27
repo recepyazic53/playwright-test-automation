@@ -212,12 +212,13 @@ test('açık tema: tüm ekranlar hatasız açılır', async () => {
   await baglam.close();
 });
 
-test('ilk kurulum ekranları (kasa yok): karşılama → tanışma soruları → kasa; hatasız, erişilebilir, telefonda taşmasız', async () => {
-  test.setTimeout(120_000);
-  const bosKlasor = mkdtempSync(join(tmpdir(), 'ekran-turu-ilk-'));
-  const bos = await nobetciBaslat(bosKlasor, join(bosKlasor, 'platform.db'), {});
-  try {
-    for (const [genislik, yukseklik, cihaz] of [[1440, 960, 'masaustu'], [390, 844, 'telefon']] as const) {
+test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → ortamlar (TEST + riskli CANLI) → proje hazır; hatasız, erişilebilir, telefonda taşmasız', async () => {
+  test.setTimeout(180_000);
+  for (const [genislik, yukseklik, cihaz] of [[1440, 960, 'masaustu'], [390, 844, 'telefon']] as const) {
+    // Her genişlik için ayrı, boş bir Nöbetçi (ilk kurulum baştan).
+    const bosKlasor = mkdtempSync(join(tmpdir(), 'ekran-turu-ilk-'));
+    const bos = await nobetciBaslat(bosKlasor, join(bosKlasor, 'platform.db'), {});
+    try {
       const baglam = await tarayici.newContext({ baseURL: bos.adres, viewport: { width: genislik, height: yukseklik } });
       const page = await baglam.newPage();
       const hatalar: string[] = [];
@@ -226,7 +227,7 @@ test('ilk kurulum ekranları (kasa yok): karşılama → tanışma soruları →
         const d = await denetle(page);
         expect(d.adsiz, `${cihaz}/${ad}: adsız öğe`).toEqual([]);
         expect(d.yinelenenId, `${cihaz}/${ad}: yinelenen id`).toEqual([]);
-        if (cihaz === 'telefon') expect(d.tasma, `${cihaz}/${ad}: taşma ${d.tasanlar.join(', ')}`).toBeLessThanOrEqual(2);
+        expect(d.tasma, `${cihaz}/${ad}: taşma ${d.tasanlar.join(', ')}`).toBeLessThanOrEqual(2);
         if (GORUNTU_KLASORU) await page.screenshot({ path: join(GORUNTU_KLASORU, `${cihaz}-ilk-${ad}.png`), fullPage: true });
       };
       await page.goto('/');
@@ -235,17 +236,71 @@ test('ilk kurulum ekranları (kasa yok): karşılama → tanışma soruları →
       await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
       const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
       await expect(tanisma).toBeVisible();
-      await tanisma.getByRole('radio', { name: /Hayır/ }).check();
+      // İki aşamalı doğrulama ve ekran tanıtma yöntemi sihirbazda sorulmaz (ortamın giriş tarifinde / ekranı eklerken seçilir).
       await expect(tanisma.getByText('Girişte iki aşamalı doğrulama var mı?')).toHaveCount(0);
+      await expect(tanisma.getByText(/nasıl tanıtmak istersiniz/)).toHaveCount(0);
+      await expect(tanisma.locator('fieldset.tanisma-sorusu')).toHaveCount(3);
+      await tanisma.getByRole('radio', { name: /Test ve canlı/ }).check();
       await kontrol('tanisma');
       await tanisma.getByRole('button', { name: 'Devam' }).click();
       await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
+      // Giriş profili adımı yok: Tanışalım · Kasa parolası · Proje · Ortamlar · Tamam.
+      await expect(page.locator('.adimlar li')).toHaveText([/^Tanışalım/, /^Kasa parolası/, 'Proje', 'Ortamlar', 'Tamam']);
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 2 / 5');
       await kontrol('kasa');
+      await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA);
+      await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(PAROLA);
+      await page.getByText('Parolayı unutursam').click();
+      await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
+      await page.getByLabel('Proje adı').fill('İlk kurulum projesi');
+      await page.getByRole('button', { name: 'Devam' }).click();
+      // Ortamlar: satır = Ortam adı | Adres | Riskli mi? | × (yalnız ikon, TEST'te yok). CANLI hazır ve riskli işaretli gelir.
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 5');
+      await expect(page.getByLabel('Ortam adı').nth(1)).toHaveValue('CANLI');
+      await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1)).toBeChecked();
+      await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').first()).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Ortamı kaldır' })).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Ortamı kaldır' })).toHaveText('');
+      await page.getByLabel('Adres (link)').first().fill('https://test.ornek.invalid');
+      await page.getByLabel('Adres (link)').nth(1).fill('https://canli.ornek.invalid');
+      // Satır hizası: riskli kutusu ve × aynı hizada; masaüstünde girdiyle de aynı satırda (× kutunun altına kaymaz).
+      const satir = page.locator('.ortam-satiri').nth(1);
+      const kutu = await satir.locator('.ortam-riski .secenek').boundingBox();
+      const kaldir = await satir.getByRole('button', { name: 'Ortamı kaldır' }).boundingBox();
+      const girdi = await satir.getByLabel('Adres (link)').boundingBox();
+      expect(kutu && kaldir && girdi).toBeTruthy();
+      if (kutu && kaldir && girdi) {
+        expect(Math.abs((kaldir.y + kaldir.height / 2) - (kutu.y + kutu.height / 2)), 'riskli kutusu ve × aynı hizada').toBeLessThanOrEqual(4);
+        if (cihaz === 'masaustu') expect(Math.abs((girdi.y + girdi.height / 2) - (kutu.y + kutu.height / 2)), 'girdi ve riskli kutusu aynı satırda').toBeLessThanOrEqual(4);
+      }
+      await kontrol('ortamlar');
+      await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+      // Proje hazır: kısa özet (kaydedilen ortamlar) + "Ana sayfaya geç"; yapılacaklar / sıradaki kartlar yok.
+      await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
+      const ozet = page.getByRole('region', { name: 'Proje özeti' });
+      await expect(ozet.locator('.ozet-ortamlar li')).toHaveCount(2);
+      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'CANLI' }).locator('.rozet.hata')).toHaveText('Riskli');
+      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'TEST' })).toContainText('Riskli değil');
+      await expect(page.getByText('Sizin için yapılacaklar')).toHaveCount(0);
+      await expect(page.getByText('Sırada ne var?')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toHaveCount(0);
+      await kontrol('tamam');
+      // Kayıt doğrulaması: iki ortam da sunucuda, riskli seçimleri doğru.
+      const { projeler } = (await nobetciApi(bos, '/platform/projeler')) as unknown as { projeler: Array<{ id: string }> };
+      const { ortamlar } = (await nobetciApi(bos, `/platform/ortamlar?projeId=${projeler[0].id}`)) as unknown as { ortamlar: Array<{ ad: string; riskli: boolean | null }> };
+      expect(ortamlar.map((o) => `${o.ad}:${String(o.riskli)}`).sort()).toEqual(['CANLI:true', 'TEST:false']);
+      await page.getByRole('button', { name: 'Ana sayfaya geç' }).click();
+      await expect(page).toHaveURL(/#\/sonuclar/);
+      // Ayarlar > Proje ve ortamlar: iki ortam listelenir, "null" metni yok.
+      await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) (d as HTMLDialogElement).close(); location.hash = '#/ayarlar/proje'; });
+      await expect(page.locator('.bolum-basligi h3').filter({ hasText: 'Ortamlar' })).toContainText('2');
+      await expect(page.locator('.kayit-listesi li')).toHaveCount(2);
+      expect(await page.locator('#ana').innerText()).not.toMatch(/\bnull\b|\bundefined\b/);
       expect(hatalar).toEqual([]);
       await baglam.close();
+    } finally {
+      bos.surec.kill('SIGTERM');
+      rmSync(bosKlasor, { recursive: true, force: true });
     }
-  } finally {
-    bos.surec.kill('SIGTERM');
-    rmSync(bosKlasor, { recursive: true, force: true });
   }
 });

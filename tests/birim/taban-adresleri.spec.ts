@@ -58,5 +58,11 @@ test.describe('servis taban adresleri', () => {
     expect(sa?.ayarlar.tabanGrubu).toBe('Çekirdek');
     expect(sb?.ayarlar.adresler).toEqual({});
     expect(sb?.tur).toBe('rest');
+
+    // "Bu ortamda yok" olan servis adı bozmaz: yalnız tanımlı ortamlarda aynı olmalı ("yok" korunur).
+    const c = servisKaydet(vt, { projeId, anahtar: 'c', ad: 'C', ayarlar: { yol: '/c', tabanlar: { [test1]: 'https://yeni.ornek.test', [canli]: '' } } });
+    tabanlariUygula(vt, projeId, { degisiklikler: { [c]: { grup: 'Çekirdek' } }, onay: true });
+    expect(servisGetir(vt, c)?.ayarlar).toMatchObject({ tabanGrubu: 'Çekirdek', tabanlar: { [test1]: 'https://yeni.ornek.test', [canli]: '' } });
+    expect(() => tabanlariUygula(vt, projeId, { degisiklikler: { [c]: { tabanlar: { [test1]: 'https://baska.ornek.test' } } } })).toThrow(/aynı olmalı/);
   });
 });

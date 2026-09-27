@@ -77,16 +77,43 @@ if [ "${mimari}" = "x64" ] && [ "$MAKINE" = "arm64" ] && ! /usr/bin/arch -x86_64
   exit 1
 fi
 
-VERI="\${NOBETCI_VERI_KOKU:-$HOME/${MAC_VERI_KLASORU}}"
+# Veri klasörü: kullanıcı Nöbetçi'de başka bir klasör seçtiyse (Ayarlar > Yedekleme > Veri klasörü) seçim uygulamanın DIŞINDAKİ
+# ayar dosyasındadır: ~/${MAC_VERI_KLASORU}/ayar.json > "veriKoku". Seçim yoksa (ya da klasör yoksa) varsayılan ~/${MAC_VERI_KLASORU}.
+AYAR_KLASORU="$HOME/${MAC_VERI_KLASORU}"
+export NOBETCI_AYAR_DOSYASI="$AYAR_KLASORU/ayar.json"
+secili_veri() {
+  [ -f "$NOBETCI_AYAR_DOSYASI" ] || return 0
+  /usr/bin/sed -n 's/.*"veriKoku"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' "$NOBETCI_AYAR_DOSYASI" | /usr/bin/head -n 1
+}
 ONBELLEK="$HOME/Library/Caches/${UYGULAMA_ADI}"
-/bin/mkdir -p "$VERI" "$ONBELLEK" && /bin/chmod 700 "$VERI" || { uyari "Veri klasörü oluşturulamadı: $VERI"; exit 1; }
+ILK_VERI="\${NOBETCI_VERI_KOKU:-}"
+veri_ortami() {
+  SECILI="$(secili_veri)"
+  if [ -n "$ILK_VERI" ]; then VERI="$ILK_VERI"; elif [ -n "$SECILI" ] && [ -d "$SECILI" ]; then VERI="$SECILI"; else VERI="$AYAR_KLASORU"; fi
+  /bin/mkdir -p "$VERI" "$AYAR_KLASORU" "$ONBELLEK" && /bin/chmod 700 "$VERI" || { uyari "Veri klasörü oluşturulamadı: $VERI"; exit 1; }
+  export NOBETCI_VERI_KOKU="$VERI"
+  export NOBETCI_YUKLEME_KLASORU="$VERI/yuklenecek-dosyalar"
+  export TEST_SUNUCU_LOG_DOSYASI="$VERI/test-sunucu.log"
+}
+veri_ortami
 
 export PLAYWRIGHT_BROWSERS_PATH="$KAYNAK/tarayicilar"
-export NOBETCI_VERI_KOKU="$VERI"
-export NOBETCI_YUKLEME_KLASORU="\${NOBETCI_YUKLEME_KLASORU:-$VERI/yuklenecek-dosyalar}"
-export TEST_SUNUCU_LOG_DOSYASI="\${TEST_SUNUCU_LOG_DOSYASI:-$VERI/test-sunucu.log}"
 export NOBETCI_CIKTI_KLASORU="\${NOBETCI_CIKTI_KLASORU:-$ONBELLEK/test-results}"
 cd "$UYGULAMA" || exit 1
+
+# Veri klasörü değişince Nöbetçi "yeniden başlat" ister: sunucu 75 koduyla çıkar, döngü seçimi yeniden okuyup başlatır (arayüz açık
+# sekmeyi kendisi yeniler; yeniden açmak gerekmez).
+calistir() {
+  export NOBETCI_YENIDEN_BASLATILABILIR=1
+  while :; do
+    "$NODE" "$BASLAT" "$@"
+    KOD=$?
+    [ "$KOD" -eq 75 ] || return "$KOD"
+    ILK_VERI=""
+    veri_ortami
+    export BASLAT_TARAYICI_ACMA=1
+  done
+}
 
 if [ "\${1:-}" = "--arka-plan" ]; then
   exec "$NODE" "$BASLAT" --arka-plan
@@ -97,7 +124,8 @@ if [ ! -t 0 ] && [ -z "\${NOBETCI_TERMINALSIZ:-}" ]; then
   if /usr/bin/open -a Terminal "$BURASI/${BASLATICI_ADI}"; then
     exit 0
   fi
-  exec "$NODE" "$BASLAT" >>"$VERI/baslatici.log" 2>&1
+  calistir >>"$VERI/baslatici.log" 2>&1
+  exit $?
 fi
 
 printf '\\033]0;%s\\007' "${UYGULAMA_ADI}"
@@ -105,7 +133,8 @@ echo "Nöbetçi başlatılıyor…"
 echo "Bu pencere açık kaldığı sürece Nöbetçi çalışır. Nöbetçi penceresini ya da bu pencereyi kapatınca Nöbetçi kapanır."
 echo "Verileriniz: $VERI"
 echo
-exec "$NODE" "$BASLAT"
+calistir
+exit $?
 `;
 }
 
@@ -169,14 +198,16 @@ export function okubeni(g) {
     '   (Uygulamayı başka bir klasöre koyduysanız o yolu yazın.)',
     '',
     'KULLANIM',
-    `"${APP_KLASORU}" uygulamasına çift tıklayın. Bir Terminal penceresi açılır ve Nöbetçi kendi penceresinde açılır (Ayarlar >`,
-    'Arayüz bölümünden varsayılan tarayıcıyı da seçebilirsiniz). Terminal penceresi açık kaldığı sürece Nöbetçi çalışır;',
-    'Nöbetçi penceresini ya da Terminal penceresini kapatınca Nöbetçi kapanır. Nöbetçi yalnızca bu bilgisayardan erişilebilir.',
+    `"${APP_KLASORU}" uygulamasına çift tıklayın. Bir Terminal penceresi açılır ve Nöbetçi varsayılan tarayıcınızda açılır (Ayarlar >`,
+    'Arayüz bölümünden "Kendi penceresinde" de seçebilirsiniz). Terminal penceresi açık kaldığı sürece Nöbetçi çalışır;',
+    'Terminal penceresini kapatınca Nöbetçi kapanır. Nöbetçi yalnızca bu bilgisayardan erişilebilir.',
     '',
     'VERİLERİNİZ',
     `Verileriniz uygulamanın İÇİNDE DEĞİL, "~/${MAC_VERI_KLASORU}" klasöründe, sizin belirlediğiniz kasa parolasıyla`,
     'şifreli durur (Finder > Git > Klasöre Git ile açabilirsiniz). Uygulamayı silmek ya da yeni sürümle değiştirmek verilerinizi',
-    'silmez. Yine de yeni bir sürüme geçmeden önce Ayarlar > Yedekleme\'den yedek alın. Koşu sırasındaki geçici çıktılar',
+    'silmez. Başka bir klasör kullanmak için: Ayarlar > Yedekleme > "Veri klasörü" > "Değiştir…" (seçim bu klasördeki "ayar.json"',
+    'dosyasında saklanır; taşımada eski klasör silinmez). Yine de yeni bir sürüme geçmeden önce Ayarlar > Yedekleme\'den yedek alın.',
+    'Koşu sırasındaki geçici çıktılar',
     `"~/Library/Caches/${UYGULAMA_ADI}" altındadır.`,
     '',
     'MAC\'TE OLMAYANLAR',

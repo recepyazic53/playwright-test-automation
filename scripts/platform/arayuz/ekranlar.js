@@ -3,17 +3,17 @@
 //   Ayrıntı: güncel model (adım › bölüm › alan; seçenekler, görünürlük, bağlam profiline göre görünürlük),
 //   Model geçmişi (sürümler ve sürümler arası fark), Kanıtlar (şifreli ekran görüntüleri), eylemler:
 //   "Paket yükle", "Ekranı tara" (otomatik tarama — tarama.js), "Akışı kaydet" (kullanıcı akışı tarayıcıda yürütür; tarama.js),
-//   "Tekrar analiz et" (bağlam profili seçimi), "Claude ile yorumla".
+//   "Tekrar analiz et" (bağlam profili seçimi), "Yapay zekâ ile yorumla".
 //   Kartta ve ayrıntı başlığında ⋯ menüsü (ekran-yonetimi.js): yeniden adlandır, düzenle (URL yolu), yukarı/aşağı taşı,
 //   devre dışı bırak / etkinleştir, kalıcı sil. Devre dışı ekranlar sol listede varsayılan olarak gizlidir ("Devre dışı
 //   ekranları göster"); silinmiş ekranlar (mezar taşı) "Tüm ekranlar"ın altında listelenir (geri yükle / temizle).
 // Adresler: #/ekranlar · #/ekranlar/yeni[/tara] · #/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /yukle | /bulgular] ·
 //   #/ekranlar/tarama/<iş kimliği> (otomatik taramanın ilerlemesi → önizleme/kabul)
-// Ekran keşfinin ana yolu: kullanıcı sayfa bağlantısını Claude Code'a verir, Claude sayfayı düğme kurallarına göre (paket-istekleri.mjs > INCELEME_KURALLARI)
-// inceleyip bir "sayfa paketi" (docs/sayfa-paketi.md) üretir; paket burada yüklenir. Claude API kullanılmaz.
+// Ekran keşfinin yolları: sayfa paketi (kullanıcı istek metnini ve biçim dosyasını sayfa bağlantısıyla yapay zekâ aracına verir; araç sayfayı
+// düğme kurallarına göre — paket-istekleri.mjs > INCELEME_KURALLARI — inceleyip paketi üretir, paket burada yüklenir), "Ekranı tara", "Akışı kaydet".
 import { TOKEN, api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import {
-  BULGU_TURLERI, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, kopyalaDugmesi, modelAgaciCiz, tekrarAnalizDiyalogu
+  BULGU_TURLERI, bicimIndirBaglantisi, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz, tekrarAnalizDiyalogu
 } from './ekran-ortak.js';
 import { sayfaPaketiAkisi } from './sayfa-paketi.js';
 import { akisDiyagrami } from './akis-diyagrami.mjs';
@@ -42,7 +42,7 @@ function kayitBaslat(proje, ekran) {
 }
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
-// Claude'un inceleme kuralları ve istek cümlesi: TEK kaynak paket-istekleri.mjs (sayfa-paketi.js ve sunucu da aynısını kullanır).
+// İnceleme kuralları ve istek metni: TEK kaynak paket-istekleri.mjs (sayfa-paketi.js ve sunucu da aynısını kullanır).
 export const CLAUDE_ISTEK_CUMLESI = (adres) => paketIstekCumlesi(adres);
 
 /**
@@ -59,7 +59,7 @@ export function ekranlarEkrani(main, parcalar, baglam) {
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,
         h('div', { class: 'yan-not' }, h('b', {}, 'Sayfa paketi'), h('br', {}),
-          'Yeni sayfaları Claude Code inceler (yalnızca okuma) ve bir paket üretir; paketi "Sayfa ekle" ile yükleyin — ya da Nöbetçi ekranı kendisi tarasın ("Ekranı tara"). Aynı ekran için yeni paket = tekrar analiz.')),
+          'Yeni sayfayı "Sayfa ekle"de ekleyin: Nöbetçi taratsın ("Ekranı tara"), akışı siz kaydedin ya da yapay zekâ aracınızın ürettiği paketi yükleyin. Aynı ekran için yeni paket = tekrar analiz.')),
       icerik));
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
 
@@ -164,10 +164,10 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('artiYalin'), 'Sayfa ekle'))),
     h('section', { class: 'kesif-seridi', 'aria-label': 'Yeni sayfa nasıl eklenir' },
       h('ol', { class: 'kesif-adimlari' },
-        h('li', {}, h('b', {}, 'Bağlantıyı Claude Code\'a verin'), h('span', {}, 'Seçimler değiştirilir, ekran açan ve hesaplayan düğmelere basılır; kayıt oluşturan düğmeden önce size sorulur.')),
-        h('li', {}, h('b', {}, 'Sayfa paketi üretilir'), h('span', {}, 'Model, senaryo önerileri, gereken ayarlar, bilinmeyenler — gizli değer yok.')),
-        h('li', {}, h('b', {}, 'Paketi yükleyin'), h('span', {}, 'Önizleyin, seçin, kabul edin. Aynı ekran için yeni paket = tekrar analiz.'))),
-      h('div', { class: 'kesif-cumlesi' }, h('code', {}, cumle), kopyalaDugmesi(cumle, 'Cümleyi kopyala'))),
+        h('li', {}, h('b', {}, 'İstek metnini kopyalayın'), h('span', {}, 'Sayfanın bağlantısıyla birlikte yapay zekâ aracınıza (tarayıcıyı kullanabilen bir kodlama asistanı) verin.')),
+        h('li', {}, h('b', {}, 'Sayfa paketi üretilir'), h('span', {}, 'Araç sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Model, senaryo önerileri, bilinmeyenler — gizli değer yok.')),
+        h('li', {}, h('b', {}, 'Paketi yükleyin'), h('span', {}, '"Sayfa ekle"de önizleyin, seçin, kabul edin. Ekranı taratmak ya da akışı kaydetmek de oradadır.'))),
+      h('div', { class: 'kesif-cumlesi' }, istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
       : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('artiYalin'), 'Sayfa ekle') }),
@@ -177,17 +177,34 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
 
 /**
  * Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. Her ortamın GİRİŞİ
- * de burada "Giriş (<ortam>)" kartıdır (adımlar okunur dille; Düzenle → Ayarlar > Giriş profilleri > Giriş tarifi).
+ * de burada "Giriş (<ortam>)" kartıdır (tek satır özet; adımlar Düzenle → Ayarlar > Giriş profilleri > Giriş tarifi'nde).
+ * Kartlar ekran kartlarıyla aynı düzende (ortakAkisKarti, giris-akisi.js > girisKarti).
  */
 function ortakAkisBolumu(liste, girisler = []) {
   if (!liste.length && !girisler.length) return null;
   return h('section', { class: 'ortak-akis-bolumu', 'aria-labelledby': 'ortak-akislar-baslik' },
     h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length + girisler.length), 'vurgu')),
       h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar. Giriş her koşuda ortamın giriş tarifiyle yapılır.')),
-    h('div', { class: 'ekran-izgarasi' }, ...girisler.map(girisKarti), ...liste.map((e) => h('a', { class: 'kart ortak-akis-karti', href: `#/ekranlar/e/${encodeURIComponent(e.id)}` },
-      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('pusula'), e.ad), e.modelSurumu ? rozet(`model v${e.modelSurumu}`, 'vurgu') : null),
-      h('code', { class: 'duz kucuk' }, e.anahtar),
-      h('p', { class: 'kucuk soluk' }, `${e.adimSayisi ?? 0} adım · ${e.alanSayisi ?? 0} alan`)))));
+    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...girisler.map(girisKarti), ...liste.map(ortakAkisKarti)));
+}
+
+/**
+ * Ortak akış kartı: ekran kartıyla AYNI düzen — başlık + tür rozeti üstte, tek satır özet, kullanım, altta hizalı eylemler.
+ * Adım listesi ana ekranda gösterilmez (Aç / Düzenle'de görünür); iç anahtar küçük soluk ikincil metindir.
+ */
+function ortakAkisKarti(e) {
+  const adres = `#/ekranlar/e/${encodeURIComponent(e.id)}`;
+  const kullanan = typeof e.kullananSayisi === 'number' ? e.kullananSayisi : null;
+  return h('article', { class: 'ekran-karti ortak-akis-karti', 'data-ekran': e.id, 'aria-label': e.ad },
+    h('div', { class: 'ekran-karti-ust' },
+      h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('pusula')),
+      h('div', { class: 'ekran-karti-ad' }, h('h3', {}, h('a', { href: adres, title: e.ad }, e.ad)), h('code', { title: e.anahtar }, e.anahtar)),
+      h('div', { class: 'ekran-karti-rozetler' }, rozet('ortak akış', 'durdu'), e.modelSurumu ? rozet(`model v${e.modelSurumu}`, 'vurgu') : rozet('model yok', ''))),
+    h('p', { class: 'ortak-akis-ozeti' }, `${e.adimSayisi ?? 0} adım · ${e.alanSayisi ?? 0} alan`),
+    kullanan !== null ? h('p', { class: 'ortak-akis-kullanimi kucuk soluk' }, kullanan ? `${kullanan} ekranda kullanılıyor` : 'Henüz hiçbir ekranda kullanılmıyor') : null,
+    h('div', { class: 'ekran-karti-alt' },
+      h('a', { class: 'dugme kucuk-dugme', href: adres, 'aria-label': `${e.ad}: aç` }, ikon('goz'), 'Aç'),
+      h('a', { class: 'dugme kucuk-dugme', href: `${adres}/akis`, 'aria-label': `${e.ad}: düzenle` }, ikon('duzenle'), 'Düzenle')));
 }
 
 /** Silinmiş ekranlar (mezar taşı): geçmiş sonuçları ve/veya kodu hâlâ duran testleri için tutulur. */
@@ -214,7 +231,7 @@ function ekranKarti(e, s) {
   return h('article', { class: `ekran-karti ${e.modelSurumu ? '' : 'modelsiz'} ${e.bekleyenAnaliz ? 'bekleyen' : ''} ${devreDisi ? 'devre-disi' : ''}`.replace(/\s+/g, ' ').trim(), 'data-ekran': e.id },
     h('div', { class: 'ekran-karti-ust' },
       h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon(e.modelSurumu ? 'katman' : 'ekran')),
-      h('div', { class: 'ekran-karti-ad' }, h('h3', {}, h('a', { href: adres }, e.ad)), h('code', {}, e.anahtar),
+      h('div', { class: 'ekran-karti-ad' }, h('h3', {}, h('a', { href: adres, title: e.ad }, e.ad)), h('code', { title: e.anahtar }, e.anahtar),
         devreDisi ? h('div', { class: 'ekran-karti-durum' }, devreDisiRozeti()) : null),
       h('div', { class: 'ekran-karti-rozetler' },
         e.modelSurumu ? rozet(`model v${e.modelSurumu}`, 'vurgu') : rozet('model yok', ''),
@@ -226,7 +243,7 @@ function ekranKarti(e, s) {
       ? h('a', { class: 'bekleyen-bant', href: `${adres}/bulgular` }, ikon('uyari'), h('span', {}, h('b', {}, String(e.bekleyenAnaliz.bulguSayisi)), ' bulgu karar bekliyor'), ikon('ok'))
       : null,
     h('div', { class: 'ekran-karti-alt' },
-      e.urlYolu ? h('span', { class: 'mono cok-soluk' }, e.urlYolu) : null,
+      e.urlYolu ? h('span', { class: 'mono cok-soluk', title: e.urlYolu }, e.urlYolu) : null,
       e.modelTarihi ? h('span', { class: 'cok-soluk zaman', title: tarihMetni(e.modelTarihi) }, goreliZaman(e.modelTarihi)) : null,
       h('a', { class: 'dugme kucuk-dugme', href: `${adres}/yukle` }, ikon('yukle'), e.modelSurumu ? 'Paket yükle' : 'Model ekle')));
 }
@@ -246,7 +263,7 @@ async function ekranAyrintisi(icerik, s) {
   });
   const adres = `#/ekranlar/e/${encodeURIComponent(e.id)}`;
   const paketYukle = () => { location.hash = `${adres}/yukle`; };
-  const yorumla = h('button', { type: 'button', class: 'hayalet', title: 'Model, bulgular ve senaryo özetlerini Claude Code için dosyaya yazar' }, ikon('simsek'), 'Claude ile yorumla');
+  const yorumla = h('button', { type: 'button', class: 'hayalet', title: 'Model, bulgular ve senaryo özetlerini yapay zekâ aracınız için dosyaya yazar' }, ikon('simsek'), 'Yapay zekâ ile yorumla');
   yorumla.addEventListener('click', () => claudeDosyasiOlustur({ proje: s.proje, ekranId: e.id, tur: 'yorumla' }, yorumla));
   const tekrar = h('button', { type: 'button' }, ikon('yenile'), 'Tekrar analiz et');
   const tara = h('button', { type: 'button', title: 'Nöbetçi sayfayı seçilen ortamda yalnızca okuyarak tarar ve bir sayfa paketi üretir' }, ikon('ara'), 'Ekranı tara');
@@ -299,7 +316,7 @@ async function ekranAyrintisi(icerik, s) {
   if (s.sekme === 'akis' && d.model) { await akisSekmesi(sekmeAlani, s, d, icerik); return; }
   if (s.sekme === 'veri' && d.model) { await ekranBaglariSekmesi(sekmeAlani, s, e); return; }
   if (!agac) {
-    yerlestir(sekmeAlani, bosDurum('Bu ekranın modeli yok.', 'Claude Code ile üretilen bir sayfa paketini yükleyerek ya da ekranı otomatik tarayarak model oluşturun. Mevcut senaryolar korunur.', {
+    yerlestir(sekmeAlani, bosDurum('Bu ekranın modeli yok.', 'Yapay zekâ aracınızın ürettiği bir sayfa paketini yükleyerek, ekranı tarayarak ya da akışı kaydederek model oluşturun. Mevcut senaryolar korunur.', {
       ikon: 'katman', eylem: h('div', { class: 'dugmeler' },
         h('a', { class: 'dugme birincil', href: `${adres}/yukle` }, ikon('yukle'), 'Sayfa paketi yükle'),
         h('button', { type: 'button', onclick: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) }, ikon('ara'), 'Ekranı tara'),

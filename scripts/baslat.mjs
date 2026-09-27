@@ -26,6 +26,8 @@ const ADRES = `http://127.0.0.1:${PORT}/`;
 const VERI = veriKoku(KOK);
 /** Oturum açılışı görevinden: pencere/tarayıcı açmadan yalnız sunucu (bkz. arkaPlandaBaslat). */
 const ARKA_PLAN = process.argv.includes('--arka-plan');
+/** Tarayıcı açılamayıp pencereye düşülünce: pencere kapanınca yapılacak iş (aşağıda sunucuyu başlatan dal ayarlar). */
+let yedekPencereKapaninca = (/** @type {import('node:child_process').ChildProcess} */ _p) => {};
 
 async function sunucuHazirMi() {
   try {
@@ -70,9 +72,36 @@ async function arkaPlandaBaslat() {
   process.on('SIGTERM', () => kapat('SIGTERM'));
 }
 
-function varsayilanTarayicidaAc() {
+/**
+ * Varsayılan tarayıcıda açar. Açılamazsa (ör. Windows'ta "start" hatası: varsayılan tarayıcı tanımlı değil) yedek çağrılır — başlatıcı
+ * paketteki Chromium penceresine düşer ve bunu günlüğe yazar. @param {() => void} [yedek]
+ */
+function varsayilanTarayicidaAc(yedek) {
   const alt = spawn(process.execPath, [join(klasor, 'dosya-ac.mjs'), ADRES], { stdio: 'inherit', shell: false });
-  alt.on('error', (hata) => console.error(`Tarayıcı açılamadı (${hata.message}); adresi elle açın: ${ADRES}`));
+  let dustu = false;
+  const dus = (neden) => {
+    if (dustu) return;
+    dustu = true;
+    console.error(`Varsayılan tarayıcı açılamadı (${neden}).${yedek ? ' Nöbetçi penceresi (Chromium) deneniyor.' : ` Adresi elle açın: ${ADRES}`}`);
+    if (yedek) yedek();
+  };
+  alt.on('error', (hata) => dus(hata.message));
+  alt.on('exit', (kod) => { if (kod) dus(`çıkış kodu ${kod}`); });
+}
+
+/** Kendi penceresi: Chromium uygulama kipi (--app). Chromium yoksa null. @returns {Promise<import('node:child_process').ChildProcess | null>} */
+async function pencereAc() {
+  const yol = await chromiumYolu();
+  if (!yol) return null;
+  const profil = join(VERI, 'pencere-profili');
+  mkdirSync(profil, { recursive: true });
+  const pencere = spawn(yol, [
+    `--app=${ADRES}`, `--user-data-dir=${profil}`, '--no-first-run', '--no-default-browser-check',
+    '--window-size=1440,920', '--disable-features=Translate'
+  ], { stdio: 'ignore', shell: false, detached: false });
+  pencere.on('error', (hata) => { console.error(`Pencere açılamadı (${hata.message}); varsayılan tarayıcı kullanılıyor.`); varsayilanTarayicidaAc(); });
+  console.log(`Nöbetçi kendi penceresinde açıldı (${ADRES}).`);
+  return pencere;
 }
 
 /**
@@ -84,22 +113,16 @@ async function arayuzuAc() {
     console.log(`Nöbetçi arayüzü: ${ADRES}`);
     return null;
   }
+  // Varsayılan (tercih kaydedilmemişse; ilk kurulum dahil): varsayılan tarayıcı. Açıkça "pencere" seçildiyse Chromium penceresi.
   if (acilisTercihiniOku(VERI).bicim === 'pencere') {
-    const yol = await chromiumYolu();
-    if (yol) {
-      const profil = join(VERI, 'pencere-profili');
-      mkdirSync(profil, { recursive: true });
-      const pencere = spawn(yol, [
-        `--app=${ADRES}`, `--user-data-dir=${profil}`, '--no-first-run', '--no-default-browser-check',
-        '--window-size=1440,920', '--disable-features=Translate'
-      ], { stdio: 'ignore', shell: false, detached: false });
-      pencere.on('error', (hata) => { console.error(`Pencere açılamadı (${hata.message}); varsayılan tarayıcı kullanılıyor.`); varsayilanTarayicidaAc(); });
-      console.log(`Nöbetçi kendi penceresinde açıldı (${ADRES}).`);
-      return pencere;
-    }
+    const pencere = await pencereAc();
+    if (pencere) return pencere;
     console.log('Chromium bulunamadı ("npx playwright install chromium"); varsayılan tarayıcı kullanılıyor.');
+    varsayilanTarayicidaAc();
+    return null;
   }
-  varsayilanTarayicidaAc();
+  // Tarayıcı açılamazsa pencereye düşülür; o pencere kapanınca (sunucuyu bu komut başlattıysa) Nöbetçi de kapanır.
+  varsayilanTarayicidaAc(() => { void pencereAc().then((p) => { if (p) yedekPencereKapaninca(p); }); });
   return null;
 }
 
@@ -121,8 +144,10 @@ if (ARKA_PLAN) {
   }
   if (!hazir) console.error(`Sunucu 20 saniye içinde hazır olmadı; çıktıyı kontrol edin. Adres: ${ADRES}`);
   else {
+    const kapanincaKapat = (/** @type {import('node:child_process').ChildProcess} */ p) => p.on('exit', () => { console.log('Nöbetçi penceresi kapandı; sunucu kapatılıyor.'); kapat('SIGTERM'); });
+    yedekPencereKapaninca = kapanincaKapat;
     const pencere = await arayuzuAc();
     // Pencere kipinde pencere kapanınca Nöbetçi de kapanır (sunucuyu bu komut başlattığı için).
-    pencere?.on('exit', () => { console.log('Nöbetçi penceresi kapandı; sunucu kapatılıyor.'); kapat('SIGTERM'); });
+    if (pencere) kapanincaKapat(pencere);
   }
 }

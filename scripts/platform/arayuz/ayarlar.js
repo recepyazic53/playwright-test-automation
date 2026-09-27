@@ -7,6 +7,7 @@ import {
   onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
+import { veriKlasoruKarti, yedekKlasoruBolumu } from './veri-klasoru.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
 import { tablolarBolumu } from './tablolar.js';
 import { tabanAdresleriBolumu } from './taban-adresler.js';
@@ -229,7 +230,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
         ? h('button', { type: 'button', class: 'kucuk-dugme', disabled: true, title: 'Varsayılan ortam silinemez; önce başka bir ortamı varsayılan yapın.' }, 'Sil')
         : silDugmesi(o.ad, async () => { await api('/platform/ortam/sil', { govde: { id: o.id } }); bildir('Ortam silindi.'); yenile(); })], 'ag'));
 
-  govde.replaceChildren(
+  yerlestir(govde,
     projeFormu,
     bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, '+ Ortam ekle')),
     formAlani,
@@ -511,10 +512,12 @@ export function disaAktarmaFormu(tahmin, ayar = {}) {
 }
 
 async function yedekleme(govde, baglam, yenile) {
-  const [{ klasor, dosyalar }, tahmin, saklamaFormu] = await Promise.all([
+  const [{ klasor, dosyalar }, tahmin, saklamaFormu, { klasor: yedekKlasoru }, veriKarti] = await Promise.all([
     api('/platform/yedek/otomatik-liste'),
     api('/platform/yedek/tahmin').catch(() => null),
-    ayarFormu('yedekleme', 'Saklama ayarları', 'Saklama ayarları kaydedildi; günlük yedek ve temizlikte geçerli.')
+    ayarFormu('yedekleme', 'Saklama ayarları', 'Saklama ayarları kaydedildi; günlük yedek ve temizlikte geçerli.'),
+    api('/platform/yedek/klasor'),
+    veriKlasoruKarti()
   ]);
 
   // Dışa aktar (ortak form — "Çalışma alanını kapat" > "Dışa aktar ve kapat" da bunu kullanır)
@@ -552,8 +555,9 @@ async function yedekleme(govde, baglam, yenile) {
   const otomatikKart = h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('saat'), 'Otomatik yedekler'), h('div', { class: 'sag' }, simdi)),
     h('p', { class: 'soluk' }, 'Sunucu açıkken ve kasa açıkken günde bir yerel yedek alınır; kaç tanesinin saklanacağını aşağıdaki "Saklama ayarları"ndan belirlersiniz.'),
     h('p', { class: 'soluk kucuk' }, 'Klasör: ', h('code', {}, klasor)),
+    yedekKlasoruBolumu(yedekKlasoru, yenile),
     liste);
-  govde.replaceChildren(disaForm, iceKart, iceAlani, otomatikKart, saklamaFormu, sonucTemizlemeKarti());
+  govde.replaceChildren(disaForm, iceKart, iceAlani, otomatikKart, saklamaFormu, veriKarti, sonucTemizlemeKarti());
 }
 
 // ---------------------------------------------------------------------------------------
@@ -661,7 +665,11 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const girdiler = new Map();
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
   /** @param {Array<Record<string, any>>} liste */
-  const grupAlanlari = (liste) => [...new Set(liste.map((t) => t.grup))].map((g) => h('fieldset', {}, h('legend', {}, g), ...liste.filter((t) => t.grup === g).map((t) => {
+  // Başka bir kartın içine gömülen form (secenek.baslik): kart çerçevesi / parıltısı yok; tek grup varsa grup başlığı (legend)
+  // tekrar edilmez — başlığı dıştaki bölüm verir.
+  const gomulu = Boolean(secenek.baslik);
+  const grupKabi = (g, tekGrup, ...cocuklar) => (gomulu && tekGrup ? h('div', { class: 'ayar-grubu' }, ...cocuklar) : h('fieldset', {}, h('legend', {}, g), ...cocuklar));
+  const grupAlanlari = (liste) => [...new Set(liste.map((t) => t.grup))].map((g, _i, gruplar) => grupKabi(g, gruplar.length === 1, ...liste.filter((t) => t.grup === g).map((t) => {
       let girdi;
       if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
       else if (t.tur === 'sayi') girdi = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', value: String(ayarlar[t.anahtar]) });
@@ -683,7 +691,7 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const kosulluAlanlar = [];
   const temel = tanimlar.filter((t) => t.altBolum !== 'gelismis');
   const gelismis = tanimlar.filter((t) => t.altBolum === 'gelismis');
-  const form = h('form', { class: `${secenek.baslik ? '' : 'kart '}form-paneli kosu-ayarlari`, novalidate: true, 'aria-label': ad },
+  const form = h('form', { class: gomulu ? 'gomulu-ayar-formu kosu-ayarlari' : 'kart form-paneli kosu-ayarlari', novalidate: true, 'aria-label': ad },
     secenek.baslik ? h('p', { class: 'soluk kucuk' }, secenek.baslik) : null, mesaj.kutu,
     ...grupAlanlari(temel),
     gelismis.length ? h('details', { class: 'gelismis-ayarlar' },
@@ -980,6 +988,6 @@ function acilisKarti(acilis) {
     h('h3', {}, ikon('bilgisayar'), 'Nöbetçi nasıl açılsın'),
     h('p', { class: 'soluk' }, acilis.ortamdan ? 'Bu bilgisayarda NOBETCI_ACILIS ortam değişkeniyle belirlenmiş; buradan değiştirilemez.' : 'Seçiminiz bir sonraki açılışta ("npm run baslat" ya da Nöbetçi.exe) geçerli olur.'),
     mesaj.kutu,
-    secenek('pencere', 'Kendi penceresinde (masaüstü uygulaması gibi)', 'Adres çubuğu ve sekmeler olmadan ayrı bir pencere. Bu bilgisayardaki Chromium kullanılır; pencere kapanınca Nöbetçi de kapanır.'),
-    secenek('tarayici', 'Varsayılan tarayıcıda', 'Her zamanki tarayıcınızda yeni bir sekme açılır; sekme kapansa da Nöbetçi arka planda çalışmaya devam eder.'));
+    secenek('tarayici', 'Varsayılan tarayıcıda', 'Her zamanki tarayıcınızda yeni bir sekme açılır; sekme kapansa da Nöbetçi arka planda çalışmaya devam eder. Varsayılan budur; varsayılan tarayıcı açılamazsa Nöbetçi penceresi kullanılır.'),
+    secenek('pencere', 'Kendi penceresinde (masaüstü uygulaması gibi)', 'Adres çubuğu ve sekmeler olmadan ayrı bir pencere. Bu bilgisayardaki Chromium kullanılır; pencere kapanınca Nöbetçi de kapanır.'));
 }

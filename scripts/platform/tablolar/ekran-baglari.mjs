@@ -15,6 +15,24 @@ export function ekranAlanBaglari(vt, ekranId) {
 }
 
 /**
+ * Projedeki ekranların adları ve her tablonun hangi ekranların alan bağlarında kullanıldığı (Tablolar ekranının liste gruplaması
+ * için; yalnız gösterim). Kasa açık olmalı. @param {Veritabani} vt @param {string} projeId
+ * @returns {{ ekranAdlari: string[]; ekranKullanimi: Record<string, string[]> }}
+ */
+export function tabloEkranKullanimi(vt, projeId) {
+  /** @type {Record<string, string[]>} */
+  const ekranKullanimi = {};
+  const ekranlar = ekranlariListele(vt, projeId);
+  for (const e of ekranlar) {
+    for (const b of Object.values(ekranAlanBaglari(vt, e.id))) {
+      const liste = (ekranKullanimi[b.tablo] ??= []);
+      if (!liste.includes(e.ad)) liste.push(e.ad);
+    }
+  }
+  return { ekranAdlari: ekranlar.map((e) => e.ad), ekranKullanimi };
+}
+
+/**
  * Bağlantıları doğrular ve ekranın ayarlarına yazar (diğer ayarlar korunur).
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} baglar @returns {EkranBaglari}
  */

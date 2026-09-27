@@ -225,6 +225,19 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   await expect(form.getByRole('radio', { name: /^SMS/ })).toBeChecked();
   await expect(form.getByRole('radio', { name: 'Koşu sırasında elle girilir' })).toBeChecked();
   await expect(form.getByText('Elle kipi:')).toBeVisible();
+  // Kodun kaynağı giriş profilindedir: SMS / Authenticator seçiliyken not + "Profili aç" (bu ortamın ya da tüm ortamların profili).
+  const smsNotu = form.locator('.ikinci-adim-notu').filter({ hasText: 'SMS kodunun kaynağı giriş profilinde tanımlanır' });
+  const totpNotu = form.locator('.ikinci-adim-notu').filter({ hasText: 'Gizli anahtar giriş profilinde tanımlanır' });
+  await expect(smsNotu).toBeVisible();
+  await expect(totpNotu).toBeHidden();
+  await form.getByRole('radio', { name: /^Authenticator/ }).check();
+  await expect(totpNotu).toBeVisible();
+  await expect(totpNotu).toContainText('elle gir');
+  await expect(smsNotu).toBeHidden();
+  await ekranGoruntusu(page, '03b-totp-notu', totpNotu);
+  await form.getByRole('radio', { name: /^SMS/ }).check();
+  await expect(smsNotu).toBeVisible();
+  await expect(smsNotu.getByRole('button', { name: 'Profili aç' })).toBeVisible();
   await ekranGoruntusu(page, '03-giris-tarifi-formu', form);
   await expect(form.getByText(/^Adımlar \(4\)$/)).toBeVisible(); // 6 ya da daha az adım: kutu açık gelir
   await expect(form.locator('.tarif-adim')).toHaveCount(4);
@@ -241,14 +254,14 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   agKontrol(istekler);
 });
 
-test('Ekranlar > Ortak akışlar: her ortamın girişi okunur adımlarla görünür; Düzenle ilgili tarif formunu açar', async () => {
+test('Ekranlar > Ortak akışlar: her ortamın girişi tek satır özetle görünür (adım listesi yok); Düzenle ilgili tarif formunu açar', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
   const kart = page.locator('.giris-akisi-karti[data-ortam]').filter({ hasText: 'Giriş (TEST)' });
   await expect(kart).toBeVisible();
-  await expect(kart.locator('.giris-ozet-adimlari li').first()).toHaveText('Kullanıcı adını yaz');
-  await expect(kart).toContainText('SMS kodu gir (koşuda elle)');
+  await expect(kart.locator('.giris-ozet-adimlari')).toHaveCount(0);
+  await expect(kart.locator('.ortak-akis-ozeti')).toContainText('SMS kodu (elle)');
   await expect(page.locator('.yan-panel a.giris-akisi-baglantisi').filter({ hasText: 'Giriş (CANLI)' })).toBeVisible();
   await kart.getByRole('link', { name: 'Giriş (TEST): düzenle' }).click();
   const form = page.locator('form.tarif-formu');

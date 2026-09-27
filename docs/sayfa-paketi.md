@@ -2,31 +2,39 @@
 
 Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **sayfa paketi** ile yapılır:
 
-1. Kullanıcı sayfanın bağlantısını bir Claude Code sohbetine verir.
-2. Claude sayfayı aşağıdaki **düğme gruplarına** göre inceler ve bu belgedeki biçimde bir JSON dosyası üretir.
+1. Kullanıcı Nöbetçi > **Ekranlar > Sayfa ekle > Yapay zekâ ile oluştur** kutusundaki **İstek metnini kopyala** ile istek
+   metnini, **Paket biçimini indir** ile bu belgeyi (tek dosya: `sayfa-paketi-bicimi.md`) alır ve ikisini sayfanın bağlantısıyla
+   birlikte yapay zekâ aracına (tarayıcıyı kullanabilen bir kodlama asistanı) verir. Araç belirli bir ürün olmak zorunda değildir.
+2. Araç sayfayı aşağıdaki **düğme gruplarına** göre inceler ve bu belgedeki biçimde bir JSON dosyası üretir.
 3. Kullanıcı dosyayı Nöbetçi > **Ekranlar > Sayfa ekle** (yeni ekran) ya da ekranın **Paket yükle**
    düğmesiyle (tekrar analiz) yükler. Önizleyip kabul edene kadar hiçbir şey kaydedilmez.
 
-### Düğme grupları (Claude'un incelemesi)
+### Düğme grupları (aracın incelemesi)
 
 | Grup | Örnek | Kural |
 |---|---|---|
 | Açan / ilerleten (kayıt yok) | Devam, Ek adres ekle, sekmeler, oklar, seçim değiştirme | Serbestçe basılır; koşullu alanlar, bağımlı listeler ve sonraki ekranın alanları böyle çıkarılır. |
 | Hesaplayan / sorgulayan | Tutar hesapla, Kimlik sorgula | Basılır; sonuç alanları ve uyarılar (tarayıcı uyarıları — alert — dahil) toplanır. Kimlik sorgusunda yalnızca kullanıcının verdiği test kaydı kullanılır. |
-| Kayıt oluşturan / gönderen / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | **Basılmaz.** Claude orada durur; o noktadan sonrası pakete "bilinmiyor" olarak yazılır. |
+| Kayıt oluşturan / gönderen / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | **Basılmaz.** Araç orada durur; o noktadan sonrası pakete "bilinmiyor" olarak yazılır. |
 
 Ne yaptığından emin olunamayan düğme üçüncü gruptan sayılır (basılmaz, kullanıcıya sorulur). Kart, parola, kimlik no gibi
 bilgiler hiçbir zaman girilmez; ödeme ekranında alanlar yalnızca okunur. Kayıt oluşturan adımlardan sonraki ekranlar için
 **Akışı kaydet** (düğmelere kullanıcı basar, panel toplar) kullanılır. Nöbetçi'nin kendi "Ekranı otomatik tara" özelliği
 yalnızca okur (düğmelere hiç basmaz).
 
-### Claude Code'a verilecek istek
+### Yapay zekâ aracına verilecek istek
 
-Ekranlar listesindeki ve **Sayfa ekle** sayfasındaki "Paket nasıl üretilir?" kartı bu cümleyi kopyalatır. Metnin TEK kaynağı
-`scripts/platform/ekranlar/paket-istekleri.mjs`'dir (`INCELEME_KURALLARI`, `paketIstekCumlesi`): arayüz aynı dosyayı
-`/arayuz/paket-istekleri.mjs` olarak alır, sunucu "Tekrar analiz et" istek dosyasına aynı kuralları yazar. Özeti:
+Ekranlar listesindeki ve **Sayfa ekle** sayfasındaki **İstek metnini kopyala** düğmesi bu metni kopyalar (metin ekranda
+varsayılan olarak gösterilmez; "Metni göster" ile açılır). Metnin TEK kaynağı `scripts/platform/ekranlar/paket-istekleri.mjs`'dir
+(`PAKET_OZU`, `INCELEME_KURALLARI`, `paketIstekCumlesi`): arayüz aynı dosyayı `/arayuz/paket-istekleri.mjs` olarak alır, sunucu
+"Tekrar analiz et" istek dosyasına aynı kuralları yazar. Metin depo dosyasına değil, istekle birlikte verilen biçim dosyasına
+(`sayfa-paketi-bicimi.md`) atıf yapar; zarfın özü (zorunlu anahtarlar) metnin içindedir, ayrıntı biçim dosyasındadır. Biçim
+dosyasını Nöbetçi yerel olarak sunar (`GET /arayuz/sayfa-paketi-bicimi.md`, `scripts/platform/ekranlar/paket-bicimi.mjs`): bu
+belge + zarf şeması + ekran modelinin tip tanımı (`tests/support/ekran-modeli.ts`), her istekte kaynaklardan birleştirilir. Özeti:
 
-> `<sayfa bağlantısı>` sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. Sayfayı yalnızca
+> `<sayfa bağlantısı>` sayfasını incele ve ekteki sayfa-paketi-bicimi.md dosyasındaki biçimde bir sayfa paketi JSON dosyası üret.
+> Paket tek bir JSON nesnesidir (`tur`, `surum`, `meta`, `model`, `senaryoOnerileri`, `gerekenAyarlar`, `bilinmeyenler` zorunlu;
+> `kanitlar`, `testVerisi` isteğe bağlı). Sayfayı yalnızca
 > okuyarak incele (düğme grupları yukarıda); kayıt oluşturan / gönderen / onaylayan / ödeme yapan düğmelere basma; kart, parola,
 > kimlik no girme; iş kuralı uyarısının öğesini `kosu.hataGostergesi`'ne, metinlerini `kosu.uyarilar`'a yaz. Test verisini
 > `testVerisi.tablolar`'a tablo olarak yaz: **(1) Ekran listeleri** — seçim alanlarının seçenekleri `"tur": "liste"` olan,
@@ -38,10 +46,10 @@ Ekranlar listesindeki ve **Sayfa ekle** sayfasındaki "Paket nasıl üretilir?" 
 > yazılır. Kişisel / gizli değer hiçbir yere yazılmaz; böyle bir sütun `"gizli": true` ve boştur.
 
 Tekrar analiz istek dosyası ayrıca ekranın **mevcut alan bağlantılarını** ve bağlı tabloların **adlarını / sütunlarını**
-(`testVerisi.alanBaglari`, `testVerisi.tablolar`; değer yok, gizli sütunun yalnız adı) içerir ve Claude'dan bu adları aynen
+(`testVerisi.alanBaglari`, `testVerisi.tablolar`; değer yok, gizli sütunun yalnız adı) içerir ve araçtan bu adları aynen
 kullanmasını ister (`MEVCUT_TABLO_KURALI`).
 
-Claude API kullanılmaz. Nöbetçi'nin "Claude ile yorumla" / "Tekrar analiz et" düğmeleri, Claude Code'a
+Nöbetçi hiçbir yapay zekâ servisine istek atmaz. "Yapay zekâ ile yorumla" / "Tekrar analiz et" düğmeleri, yapay zekâ aracınıza
 verilecek **gizli değer içermeyen** bir analiz/istek dosyası yazar (`veri/analiz/<ekran>-<tarih>.json`).
 
 Makine tarafından okunabilir zarf şeması: [`sayfa-paketi.schema.json`](sayfa-paketi.schema.json).
@@ -75,7 +83,7 @@ yoksa boş dizi yazılır — "bilinmeyen yok" açıkça söylenmiş olur).
 | `ekran.anahtar` | metin | Kalıcı ekran anahtarı: küçük harf, rakam, `-` (ör. `odeme-formu`). `model.id` ile **aynı** olmalı. |
 | `ekran.ad` | metin | Görünen ad (en fazla 120 karakter). |
 | `ekran.urlYolu` | metin | `/` ile başlayan **yol** (ör. `/satis/odeme/`). Tam adres yazılmaz; ortam adresi Ayarlar > Ortamlar'dan gelir. |
-| `olusturan` | metin | Paketi üreten (ör. `Claude Code`). |
+| `olusturan` | metin | Paketi üreten (ör. yapay zekâ aracının adı). |
 | `olusturulma` | ISO-8601 | Üretim zamanı. |
 | `baglamProfilleri` | metin dizisi | İncelemede kullanılan bağlam profillerinin **adları** (rol/şube/müşteri tipi…). Değer yazılmaz. |
 | `not` | metin (isteğe bağlı) | İnceleme notu. |
@@ -289,7 +297,7 @@ Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Sayfa ek
   korunur), etiket/zorunluluk/seçenek güncellenir, yeni alanlar en yakın eşleşen alanın bölümüne eklenir; taramada
   görülmeyen alanlar **kaldırılmaz** (başka adımda/koşulda olabilir) ve bilinmeyenlere yazılır.
 * `senaryoOnerileri: []`, `gerekenAyarlar` (giriş, iki aşamalı tür, bağlam türü), `bilinmeyenler` (her zaman
-  *"Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — Claude ile tamamlayın."* + gezinmeler,
+  *"Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (sayfa paketi) ya da akış kaydıyla tamamlayın."* + gezinmeler,
   engellenen yazma istekleri, keşfedilmeyen uzun listeler, etiketsiz alanlar, özel bileşenler/çerçeveler…),
   `kanitlar` (profil başına görünür alan ekran görüntüsü).
 * Alan **değerleri** pakete hiç yazılmaz; sayfadan gelen metinlerde gizli veri kalıbı varsa metin atılır.
@@ -437,7 +445,7 @@ alanlar sütunlara **bağlanır** (ekranın Test verisi sekmesi). İki tür tabl
 
 * **Ekran listesi** (`"tur": "liste"`): seçim alanının seçenekleri. Ad **"<Ekran adı> — <Alan>"** (bağımlı listede
   "<Ekran adı> — <Üst alan> - <Alt alan>"; en çok 60 karakter — sığmazsa ekran adı kısaltılır). Test verisi ekranında "Ekran
-  listeleri" grubunda, ekran başına alt grupta görünür. Otomatik tarama ve akış kaydı bu adla ve bu türle üretir; Claude'un
+  listeleri" grubunda, ekran başına alt grupta görünür. Otomatik tarama ve akış kaydı bu adla ve bu türle üretir; yapay zekâ aracının
   paketinde ad farklı gelirse Nöbetçi adı değiştirmez.
 * **Kişi ve kayıt verisi** (`"tur": "kayit"`): her satır bir kayıt (müşteri, araç, adres…); senaryo değeri `${Tablo.Sütun}`
   ile alır. "Kişi ve kayıt verileri" grubunda görünür.

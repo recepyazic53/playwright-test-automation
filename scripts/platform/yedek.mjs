@@ -59,7 +59,7 @@ import { open, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { atomikIkiliYaz } from './veritabani/baglanti.mjs';
 import { GUNCEL_SEMA_SURUMU, KALDIRILAN_TABLOLAR, TABLOLAR, mevcutSemaSurumu } from './veritabani/gocler.mjs';
-import { gecmisYapaniniNormallestir, sayimlar, yerelMakine } from './veritabani/depo.mjs';
+import { ayarGetir, gecmisYapaniniNormallestir, sayimlar, yerelMakine } from './veritabani/depo.mjs';
 import {
   KasaHatasi, MEDYA_ANAHTARI_META, acikAnahtar, anahtarDogrulayiciyaUyarMi, anahtarTuret, kasaDurumu, kasaKdfOku,
   kasayiAnahtarlaAc, medyaAnahtariniAc, medyaAnahtariniHazirla, zarfCoz, zarfMi
@@ -112,11 +112,34 @@ export class YedekHatasi extends Error {
   }
 }
 
-/** @param {Veritabani} vt */
+/** Kullanıcının seçtiği yedek klasörü (Ayarlar > Yedekleme; kasada). Boşsa veri klasörü altındaki varsayılan. */
+export const YEDEK_KLASORU_AYARI = 'yedek-klasoru';
+
+/** Çalışma alanının varsayılan yedek klasörü (veritabanının yanında). @param {Veritabani} vt */
+export function veriKlasoruYedekYolu(vt) {
+  return join(vt.yol ? dirname(vt.yol) : process.cwd(), 'yedekler');
+}
+
+/** Kasadaki yedek klasörü seçimi (kasa kilitliyse ya da seçim yoksa null). @param {Veritabani} vt @returns {string | null} */
+export function seciliYedekKlasoru(vt) {
+  try {
+    const a = /** @type {{ klasor?: unknown } | undefined} */ (ayarGetir(vt, YEDEK_KLASORU_AYARI));
+    return a && typeof a.klasor === 'string' && a.klasor.trim() ? a.klasor.trim() : null;
+  } catch { return null; }
+}
+
+/**
+ * Otomatik ve elle alınan yerel yedeklerin klasörü: PLATFORM_YEDEK_KLASORU (testler) → kullanıcının seçtiği klasör (kasada;
+ * Ayarlar > Yedekleme) → veritabanının yanındaki yedekler. Mevcut yedekler seçim değişince taşınmaz.
+ * @param {Veritabani} vt
+ */
 export function varsayilanYedekKlasoru(vt) {
   const ortam = process.env.PLATFORM_YEDEK_KLASORU;
   if (ortam && ortam.trim()) return ortam.trim();
-  return join(vt.yol ? dirname(vt.yol) : process.cwd(), 'yedekler');
+  // Seçili klasör artık yoksa (ör. çıkarılmış disk, başka bilgisayardan gelen yedekle yüklenen seçim) varsayılana düşülür;
+  // Ayarlar > Yedekleme bunu uyarı olarak gösterir.
+  const secili = seciliYedekKlasoru(vt);
+  return secili && existsSync(secili) ? secili : veriKlasoruYedekYolu(vt);
 }
 
 /** @param {Buffer} kasaAnahtari @param {Buffer} dosyaTuzu @param {1 | 2} surum */

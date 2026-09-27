@@ -1,9 +1,11 @@
 // "Ekranlar" bölümünün ortak arayüz parçaları: model ağacı (adım › bölüm › alan), bulgu türü rozetleri
-// ve fark gösterimi, bağlam profili görünürlük matrisi, kopyala düğmesi, Claude dosyası diyalogları
-// ("Claude ile yorumla", "Tekrar analiz et" — bağlam profili seçimi her seferinde sorulur), bağlam profili seçimi
-// (tekrar analiz ve "Ekranı otomatik tara" diyaloglarında ortak).
+// ve fark gösterimi, bağlam profili görünürlük matrisi, kopyala düğmesi, istek metni kutusu (tam metin yerine "İstek metnini
+// kopyala" + varsayılan kapalı "Metni göster"), yapay zekâ aracı için istek dosyası diyalogları ("Yapay zekâ ile yorumla",
+// "Tekrar analiz et" — bağlam profili seçimi her seferinde sorulur), bağlam profili seçimi (tekrar analiz ve "Ekranı otomatik
+// tara" diyaloglarında ortak). Metinler belirli bir yapay zekâ aracına bağlı değildir.
 // Genel: projeye özgü hiçbir ad içermez. Kullanıcı verisi DOM'a yalnızca metin olarak yazılır.
-import { api, bildir, h, ikon, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
+import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './paket-istekleri.mjs';
 
 export const TIP_ETIKETLERI = {
   secim: 'seçim', okluSecim: 'oklu seçim', metin: 'metin', sayi: 'sayı', tarih: 'tarih', telefon: 'telefon', onayKutusu: 'onay',
@@ -119,31 +121,52 @@ export function modelAgaciCiz(agac, secenekler = {}) {
     }));
 }
 
-/** Panoya kopyala düğmesi. */
-export function kopyalaDugmesi(metin, etiket = 'Kopyala') {
-  const dugme = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('kopya'), etiket);
+/**
+ * Panoya kopyala düğmesi. s.bildirim: kopyalanınca ayrıca bildirim; s.sinif: ek sınıf; s.kopyalanamazsa: pano yoksa çağrılır.
+ * @param {string} metin @param {string} [etiket] @param {{ bildirim?: string; sinif?: string; kopyalanamazsa?: () => void }} [s]
+ */
+export function kopyalaDugmesi(metin, etiket = 'Kopyala', s = {}) {
+  const dugme = h('button', { type: 'button', class: `kucuk-dugme ${s.sinif || ''}`.trim() }, ikon('kopya'), etiket);
   dugme.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(metin);
       dugme.replaceChildren(ikon('onay'), 'Kopyalandı');
+      if (s.bildirim) bildir(s.bildirim);
       setTimeout(() => dugme.replaceChildren(ikon('kopya'), etiket), 2000);
     } catch {
+      if (s.kopyalanamazsa) s.kopyalanamazsa();
       bildir('Panoya kopyalanamadı; metni seçip kopyalayın.', 'hata');
     }
   });
   return dugme;
 }
 
-/** Claude Code'a verilecek dosyanın sonucu: yol + yapıştırılacak cümle. */
-function claudeSonucu(sonuc, ekEylem) {
-  const cumle = h('textarea', { class: 'claude-cumlesi', id: yeniKimlik('claude-cumlesi'), readOnly: true, rows: 4 });
-  cumle.value = sonuc.cumle;
+/**
+ * İstek metni (yapay zekâ aracına verilecek): ekranda tam metin GÖSTERİLMEZ; tek "İstek metnini kopyala" düğmesi (kopyalandı
+ * bildirimi) + varsayılan kapalı "Metni göster" açılır bölümü. Sayfa ekle, Ekranlar listesi ve istek dosyası diyalogları ortak kullanır.
+ * @param {string} metin @param {{ etiket?: string; birincil?: boolean; ek?: Node | null }} [s]
+ */
+export function istekMetniKutusu(metin, s = {}) {
+  const acilir = h('details', { class: 'istek-metni-acilir' }, h('summary', {}, 'Metni göster'), h('pre', { class: 'istek-metni', tabindex: '0' }, metin));
+  const dugme = kopyalaDugmesi(metin, s.etiket || 'İstek metnini kopyala', {
+    bildirim: 'İstek metni kopyalandı.', sinif: s.birincil ? 'birincil' : '', kopyalanamazsa: () => { acilir.open = true; }
+  });
+  return h('div', { class: 'istek-metni-kutusu' }, h('div', { class: 'istek-metni-eylemleri' }, dugme, s.ek || null), acilir);
+}
+
+/** "Paket biçimini indir": istek metniyle birlikte yapay zekâ aracına verilecek tek biçim dosyası (yerel sunucudan). */
+export function bicimIndirBaglantisi() {
+  return h('a', { class: 'dugme kucuk-dugme hayalet bicim-indir', href: BICIM_ADRESI, download: BICIM_DOSYASI_ADI, title: 'Paketin biçimi (kurallar, şema, model yapısı): istek metniyle birlikte aracınıza verin' },
+    ikon('indir'), 'Paket biçimini indir');
+}
+
+/** Yapay zekâ aracına verilecek dosyanın sonucu: yol + istek metni (kopyala düğmesiyle; tam metin açılır bölümde). */
+function istekDosyasiSonucu(sonuc, ekEylem, bicim = true) {
   return h('div', { class: 'claude-sonucu' },
     h('div', { class: 'not-kutusu basari' }, 'Dosya yazıldı. Gizli değer içermez: model, bulgular, senaryo özetleri (yalnızca seçenek değerleri ve profil adları).'),
     h('div', { class: 'dosya-yolu' }, h('span', { class: 'etiket' }, 'Dosya'), h('code', {}, sonuc.yol), kopyalaDugmesi(sonuc.yol, 'Yolu kopyala')),
-    h('label', { for: cumle.id }, 'Claude Code\'a yapıştırın'),
-    cumle,
-    h('div', { class: 'dugmeler' }, kopyalaDugmesi(sonuc.cumle, 'Cümleyi kopyala'), ekEylem || null));
+    h('p', { class: 'kucuk soluk' }, bicim ? 'İstek metnini kopyalayıp dosyayla ve paket biçim dosyasıyla birlikte yapay zekâ aracınıza verin.' : 'İstek metnini kopyalayıp dosyayla birlikte yapay zekâ aracınıza verin.'),
+    istekMetniKutusu(sonuc.cumle, { birincil: true, ek: h('span', { class: 'dugmeler' }, bicim ? bicimIndirBaglantisi() : null, ekEylem || null) }));
 }
 
 /** Başlıklı, kapatılabilir modal diyalog (kapanınca DOM'dan kaldırılır). */
@@ -163,16 +186,16 @@ export function diyalogAc(baslik, altMetin, govde, ikonAd = 'simsek') {
 }
 
 /**
- * "Claude ile yorumla" / "Eksik kombinasyonlara senaryo öner": dosyayı yazar ve yolu + cümleyi gösterir.
+ * "Yapay zekâ ile yorumla" / "Eksik kombinasyonlara senaryo öner": dosyayı yazar ve yolu + istek metnini gösterir.
  * @param {{ proje: { id: string }; ekranId: string; tur: 'yorumla' | 'eksik-kombinasyon'; bulguId?: string }} s
  */
 export async function claudeDosyasiOlustur(s, dugme) {
   const calis = () => api('/platform/ekran/claude-dosyasi', { govde: { projeId: s.proje.id, ekranId: s.ekranId, tur: s.tur, bulguId: s.bulguId } });
   try {
     const sonuc = dugme ? await mesgulIken(dugme, 'Hazırlanıyor…', calis) : await calis();
-    diyalogAc(s.tur === 'eksik-kombinasyon' ? 'Eksik kombinasyonlar için öneri isteği' : 'Claude ile yorumla',
-      'Claude API kullanılmaz: dosyayı Claude Code sohbetinde kullanın. Claude\'un ürettiği yeni senaryo önerileri bir sayfa paketi olarak yüklenebilir.',
-      claudeSonucu(sonuc));
+    diyalogAc(s.tur === 'eksik-kombinasyon' ? 'Eksik kombinasyonlar için öneri isteği' : 'Yapay zekâ ile yorumla',
+      'Nöbetçi hiçbir yapay zekâ servisine bağlanmaz: dosyayı kendi yapay zekâ aracınızda (tarayıcıyı kullanabilen bir kodlama asistanı) kullanın. Aracın ürettiği yeni senaryo önerileri bir sayfa paketi olarak yüklenebilir.',
+      istekDosyasiSonucu(sonuc, null, s.tur !== 'yorumla'));
   } catch (e) {
     if (e.durum !== 423) bildir(e.message, 'hata');
   }
@@ -223,8 +246,8 @@ export function tekrarAnalizDiyalogu(s) {
         govde: { projeId: s.proje.id, ekranId: s.ekran.id, tur: 'tekrar-analiz', baglamProfilleri: [...secili] }
       }));
       const yukle = h('button', { type: 'button', class: 'birincil', onclick: () => { diyalog.close(); s.paketYukle(); } }, ikon('yukle'), 'Paketi yükle');
-      yerlestir(govde, h('p', { class: 'kucuk soluk' }, 'Claude Code sayfayı inceleyip (seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan düğmeden önce sorar) yeni bir sayfa paketi üretir; paketi yükleyince bulgular hesaplanır.'),
-        claudeSonucu(sonuc, yukle));
+      yerlestir(govde, h('p', { class: 'kucuk soluk' }, 'Yapay zekâ aracınız sayfayı inceleyip (seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan düğmeden önce sorar) yeni bir sayfa paketi üretir; paketi yükleyince bulgular hesaplanır.'),
+        istekDosyasiSonucu(sonuc, yukle));
     } catch (e) {
       if (e.durum === 423) { diyalog.close(); return; }
       hataKutusu.textContent = e.message;

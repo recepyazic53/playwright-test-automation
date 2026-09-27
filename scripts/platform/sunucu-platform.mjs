@@ -133,7 +133,7 @@ import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-terc
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir, hostname } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEGISIKLIK_SAYACI_META } from './veritabani/baglanti.mjs';
 import {
@@ -160,8 +160,13 @@ import {
 } from './veritabani/sonuc-deposu.mjs';
 import { MedyaHatasi, medyaBoyutu, medyaCoz, medyaDosyaAdiGecerliMi, medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi } from './medya.mjs';
 import {
-  YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, varsayilanYedekKlasoru, yedekBoyutTahmini, yedekDosyasiYaz
+  YEDEK_KLASORU_AYARI, YEDEK_UZANTISI, YedekHatasi, medyaSeciminiCoz, otomatikYedekAl, seciliYedekKlasoru, varsayilanYedekKlasoru, veriKlasoruYedekYolu,
+  yedekBoyutTahmini, yedekDosyasiYaz
 } from './yedek.mjs';
+import {
+  KlasorHatasi, YENIDEN_BASLATMA_DEGISKENI, ayarDosyasiYolu, klasorYoluDogrula, veriAyariniOku, veriAyariniYaz, veriKlasoruDurumu,
+  veriyiKopyalaVeDogrula, yazilabilirOlmali
+} from './ayarlar/klasor-secimi.mjs';
 import { IceAktarmaYoneticisi, MASKE } from './ice-aktarma.mjs';
 import {
   SenaryoCakismaHatasi, SenaryoDogrulamaHatasi, ekranGirdileri, formBaglami, senaryoGecmisiniSil, kosuyaDahilAyarla,
@@ -232,8 +237,40 @@ const PROJE_KOKU = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 // ---------------------------------------------------------------------------------------
 const SABIT_VERITABANI = process.env.PLATFORM_VERITABANI && process.env.PLATFORM_VERITABANI.trim()
   ? resolve(process.env.PLATFORM_VERITABANI.trim()) : null;
-/** Veri kökü (NOBETCI_VERI_KOKU ya da <proje kökü>/veri): kayıt defteri + çalışma alanları. */
+/** Veri kökü (NOBETCI_VERI_KOKU → seçili veri klasörü → <proje kökü>/veri): kayıt defteri + çalışma alanları. */
 const VERI_KOKU = veriKoku(PROJE_KOKU);
+/**
+ * Seçilemeyecek kökler: Nöbetçi'nin program klasörü ve (paketliyse) paket klasörü — yeni sürüme geçerken silinebilir.
+ * Paket: <paket>/uygulama (Windows) ya da <…>.app/Contents/Resources/uygulama (macOS); paket kökü uygulama klasörünün üstüdür.
+ */
+const YASAK_KOKLER = [PROJE_KOKU, ...(basename(PROJE_KOKU) === 'uygulama' ? [dirname(PROJE_KOKU)] : [])];
+
+/** Ayarlar > Yedekleme > Yedek klasörü bilgisi (kasa açık). @param {import('./veritabani/baglanti.mjs').Veritabani} db */
+function yedekKlasoruBilgisi(db) {
+  const secili = seciliYedekKlasoru(db);
+  const ortamdan = Boolean(process.env.PLATFORM_YEDEK_KLASORU && process.env.PLATFORM_YEDEK_KLASORU.trim());
+  return { etkin: varsayilanYedekKlasoru(db), secili, varsayilan: veriKlasoruYedekYolu(db), ortamdan, seciliBulunamadi: Boolean(secili && !existsSync(secili)) };
+}
+
+/** Veri klasörü bilgisi (kasa GEREKMEZ; gizli bilgi yok). */
+function veriKlasoruBilgisi() {
+  const ayarDosyasi = ayarDosyasiYolu();
+  return {
+    etkin: VERI_KOKU, varsayilan: resolve(PROJE_KOKU, 'veri'), secili: veriAyariniOku().veriKoku ?? null,
+    secilebilir: Boolean(ayarDosyasi) && !SABIT_VERITABANI, ayarDosyasi,
+    yenidenBaslatilabilir: process.env[YENIDEN_BASLATMA_DEGISKENI] === '1',
+    uyarilar: (() => { try { return klasorYoluDogrula(VERI_KOKU).uyarilar; } catch { return []; } })()
+  };
+}
+
+/** Seçilen klasörün denetimi: doğrulama + yazılabilirlik + durum. @param {unknown} klasor */
+function veriKlasoruIncele(klasor) {
+  const { yol, uyarilar } = klasorYoluDogrula(klasor, { yasakKokler: YASAK_KOKLER });
+  const durum = veriKlasoruDurumu(yol);
+  const ayni = resolve(yol).toLowerCase() === resolve(VERI_KOKU).toLowerCase();
+  if (!ayni && durum !== 'nobetci') yazilabilirOlmali(yol);
+  return { yol, durum, ayni, uyarilar };
+}
 /** @type {{ id: string; ad: string; veritabani: string; sabit: boolean } | null} */
 let aktifAlan = null;
 let alanlarHazir = false;
@@ -822,6 +859,7 @@ function hataYaniti(hata) {
     const kodlar = { GECERSIZ: 400, BULUNAMADI: 404, AYNI_AD: 409, BOZUK: 500, ACIK: 409, ONAY: 400, MESGUL: 409, SABIT: 409, KAPALI: 409 };
     return { durum: kodlar[hata.kod] ?? 400, govde: { basarili: false, kod: hata.kod === 'KAPALI' ? 'CALISMA_ALANI_YOK' : hata.kod, mesaj: hata.message } };
   }
+  if (hata instanceof KlasorHatasi) return { durum: hata.kod === 'DOLU' || hata.kod === 'AYNI' ? 409 : 400, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
   return null;
 }
 
@@ -1253,6 +1291,7 @@ const GET_UCLARI = new Map([
     return hataKaliplariniMaskele(hataKaliplari(db, projeId, { urun: urunSecimi(q.get('urun')), ...sorgudanAralik(q) }), gosterimMaskesi(db, projeId));
   }],
   ['/platform/yedek/tahmin', (db) => yedekBoyutTahmini(db)],
+  ['/platform/yedek/klasor', (db) => ({ klasor: yedekKlasoruBilgisi(db) })],
   ['/platform/yedek/otomatik-liste', (db) => {
     const klasor = varsayilanYedekKlasoru(db);
     const dosyalar = existsSync(klasor)
@@ -1317,7 +1356,7 @@ const POST_UCLARI = new Map([
     const s = claudeDosyasiYaz(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
       tur: g.tur, baglamProfilleri: g.baglamProfilleri, bulguId: g.bulguId, klasor: analizKlasoruYolu(), projeKoku: PROJE_KOKU
     });
-    console.log(`[platform] Claude analiz dosyası yazıldı: ${s.yol}`);
+    console.log(`[platform] Yapay zekâ aracı için analiz/istek dosyası yazıldı: ${s.yol}`);
     return { yol: s.yol, cumle: s.cumle };
   }],
   // Ekran yönetimi (Ekranlar > ⋯; bkz. ekranlar/ekran-yonetimi.mjs). Her işlem degisiklik_gecmisi'ne yazılır.
@@ -1403,8 +1442,28 @@ const POST_UCLARI = new Map([
     return { silinen: { kosu: r.kosu, sonuc: r.sonuc, medya: r.medyaDosyalari.length, servisKosusu: r.servisKosusu, akisKosusu: r.akisKosusu } };
   }],
   // Ayarlar > İzinler: aç (onay: true — arayüz "ne yapar / riski" penceresinde onaylatır) / kapat (serbest). Geçmişe yazılır.
+  // Yedek klasörü (Ayarlar > Yedekleme): boş = veri klasörü altındaki varsayılan. Doğrulanır, yazılabilirliği denenir; mevcut yedekler
+  // TAŞINMAZ (eski klasörde kalır; yanıt kaç yedeğin kaldığını söyler).
+  ['/platform/yedek/klasor/kaydet', (db, g) => {
+    const onceki = varsayilanYedekKlasoru(db);
+    /** @type {string[]} */
+    let uyarilar = [];
+    if (typeof g.klasor === 'string' && g.klasor.trim()) {
+      const d = klasorYoluDogrula(g.klasor, { yasakKokler: YASAK_KOKLER });
+      yazilabilirOlmali(d.yol);
+      uyarilar = d.uyarilar;
+      ayarYaz(db, YEDEK_KLASORU_AYARI, { klasor: d.yol });
+    } else {
+      ayarYaz(db, YEDEK_KLASORU_AYARI, { klasor: null });
+    }
+    const bilgi = yedekKlasoruBilgisi(db);
+    const kalan = bilgi.etkin !== onceki && existsSync(onceki) ? readdirSync(onceki).filter((ad) => ad.endsWith(YEDEK_UZANTISI)).length : 0;
+    console.log('[platform] Yedek klasörü değişti.');
+    return { klasor: bilgi, uyarilar, eskiKlasor: bilgi.etkin !== onceki ? onceki : null, eskiYedekSayisi: kalan };
+  }],
   ['/platform/izin/degistir', (db, g) => {
-    const r = izinDegistir(db, g.anahtar, g.acik, { onay: g.onay });
+    // kaynak: 'izin-penceresi' → işlem sırasında açılan "İzin gerekli" penceresinden ("İzin ver ve devam et"); geçmişe yazılır.
+    const r = izinDegistir(db, g.anahtar, g.acik, { onay: g.onay, kaynak: g.kaynak === 'izin-penceresi' ? 'izin-penceresi' : undefined });
     if (r.degisti) console.log(`[platform] İzin ${g.acik === true ? 'açıldı' : 'kapatıldı'}: ${String(g.anahtar)}.`);
     return { izinler: r.izinler, degisiklikler: izinDegisiklikleri(db) };
   }],
@@ -1752,6 +1811,60 @@ export async function platformIsteginiIsle(req, res, baglam) {
           return true;
         }
       }
+    }
+
+    // --- Veri klasörü (kasa GEREKMEZ; gizli bilgi yok; bkz. ayarlar/klasor-secimi.mjs) ------------------------------------
+    //   GET  /platform/veri-klasoru                                       etkin / varsayılan / seçili klasör, seçim yapılabilir mi
+    //   POST /platform/veri-klasoru/incele { klasor }                     doğrulama + yazılabilirlik + durum (bos | yok | nobetci | dolu)
+    //   POST /platform/veri-klasoru/degistir { klasor, kip, onay: true }  kip: tasi (kopyala + doğrula; eski SİLİNMEZ) | bos | ac
+    //   POST /platform/yeniden-baslat {}                                  başlatıcı destekliyorsa sunucu 75 koduyla çıkar, yeniden açılır
+    if (req.method === 'GET' && yol === '/platform/veri-klasoru') {
+      if (!disTokenGecerli) { tokenYok(); return true; }
+      res.setHeader('Cache-Control', 'no-store');
+      jsonGonder(res, 200, { basarili: true, veriKlasoru: veriKlasoruBilgisi() });
+      return true;
+    }
+    const veriEslesme = req.method === 'POST' ? /^\/platform\/(?:veri-klasoru\/(incele|degistir)|(yeniden-baslat))$/.exec(yol) : null;
+    if (veriEslesme) {
+      const g = await jsonGovde();
+      if (!g) return true;
+      if (g.token !== baglam.token && !disTokenGecerli) { tokenYok(); return true; }
+      if (veriEslesme[2]) {
+        if (process.env[YENIDEN_BASLATMA_DEGISKENI] !== '1') throw new KlasorHatasi('SECIM_YOK', 'Bu kurulum kendini yeniden başlatamaz: Nöbetçi\'yi kapatıp yeniden açın.');
+        mesgulDegilOlmali();
+        jsonGonder(res, 200, { basarili: true, mesaj: 'Nöbetçi yeniden başlatılıyor…' });
+        console.log('[platform] Yeniden başlatılıyor (veri klasörü değişti).');
+        setTimeout(() => process.emit(/** @type {any} */ ('nobetci-yeniden-baslat')), 150);
+        return true;
+      }
+      const bilgi = veriKlasoruBilgisi();
+      if (!bilgi.secilebilir) throw new KlasorHatasi('SECIM_YOK', 'Bu kurulumda veri klasörü seçilemez (geliştirme kurulumu ya da sabit veritabanı).');
+      const inceleme = veriKlasoruIncele(g.klasor);
+      if (veriEslesme[1] === 'incele') { jsonGonder(res, 200, { basarili: true, inceleme }); return true; }
+      if (g.onay !== true) throw new KlasorHatasi('GECERSIZ', 'Veri klasörünü değiştirmek için onaylayın.');
+      if (inceleme.ayni) throw new KlasorHatasi('AYNI', 'Bu klasör zaten kullanılıyor.');
+      const kip = g.kip;
+      /** @type {{ dosya: number; bayt: number } | null} */
+      let kopya = null;
+      if (kip === 'ac') {
+        if (inceleme.durum !== 'nobetci') throw new KlasorHatasi('NOBETCI_DEGIL', 'Bu klasörde Nöbetçi verisi (calisma-alanlari.json ya da platform.db) bulunamadı.');
+      } else if (kip === 'bos') {
+        if (inceleme.durum !== 'bos' && inceleme.durum !== 'yok') throw new KlasorHatasi('DOLU', 'Yeni klasörde boş başlamak için klasör boş olmalı. Nöbetçi verisi varsa "Mevcut veriyi aç"ı seçin.');
+      } else if (kip === 'tasi') {
+        if (inceleme.durum !== 'bos' && inceleme.durum !== 'yok') throw new KlasorHatasi('DOLU', 'Taşıma için hedef klasör boş olmalı.');
+        // Taşıma kasa kilitliyken ve sunucu işi yokken: açık çalışma alanı kapatılır (kasa kilitlenir, veritabanı diske yazılıp bırakılır).
+        mesgulDegilOlmali();
+        if (aktifAlan && !aktifAlan.sabit) alaniKapat();
+        kopya = veriyiKopyalaVeDogrula(VERI_KOKU, inceleme.yol);
+      } else {
+        throw new KlasorHatasi('GECERSIZ', '"kip" tasi, bos ya da ac olmalıdır.');
+      }
+      veriAyariniYaz(inceleme.yol);
+      console.log(`[platform] Veri klasörü seçildi (${kip}); yeniden başlatınca kullanılacak.`);
+      jsonGonder(res, 200, {
+        basarili: true, yenidenBaslatGerekli: true, yenidenBaslatilabilir: bilgi.yenidenBaslatilabilir, kopya, eskiKlasor: VERI_KOKU, yeniKlasor: inceleme.yol, uyarilar: inceleme.uyarilar
+      });
+      return true;
     }
 
     // --- GET /platform/yedek/ice-aktar/<id> — ilerleme + (hazırsa) önizleme ------------------

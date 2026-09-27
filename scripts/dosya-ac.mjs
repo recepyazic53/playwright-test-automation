@@ -25,9 +25,11 @@ function acmaKomutunuOlustur(platform) {
 
 const { komut, argumanlar } = acmaKomutunuOlustur(process.platform);
 
-const alt = spawn(komut, argumanlar, { stdio: 'ignore', detached: true, shell: false });
+// Çıkış kodu çağırana iletilir (0 = açıldı): "start" / "open" / "xdg-open" hemen döner; varsayılan uygulama bulunamazsa sıfır
+// olmayan kodla biter. Çağıran (baslat.mjs) buna göre başka bir yola düşebilir.
+const alt = spawn(komut, argumanlar, { stdio: 'ignore', detached: true, shell: false, windowsHide: true });
 alt.on('error', (hata) => {
   console.error(`"${hedefDosya}" açılamadı: ${hata.message}`);
   process.exit(1);
 });
-alt.unref();
+alt.on('exit', (kod) => process.exit(kod ?? 0));

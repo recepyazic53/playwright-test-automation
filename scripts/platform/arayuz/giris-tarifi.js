@@ -8,7 +8,7 @@
 // kullanıcı girişi kendisi yapar, yazılan değerler kaydedilmez; kullanıcı alanları işaretler, tarif önizlenir ve formda
 // kontrol edilip kaydedilir. Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
 // #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (Ekranlar > Ortak akışlar > Giriş).
-import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { girisAdimlariOzeti } from './giris-ozeti.mjs';
 
@@ -286,9 +286,29 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       alan('Kod alanı', kodAlani, { yardim: `Boş bırakılırsa kod alanı giriş sonrası sayfadan otomatik bulunur (tek kullanımlık kod alanına benzeyen alan). ${SECICI_YARDIMI}` }),
       alan('Kod gönder düğmesi', kodGonder, { yardim: 'Boş bırakılırsa giriş düğmesi kullanılır.' }),
       smsAlani);
+    // Kodun kaynağı giriş PROFİLİNDEDİR (kasada şifreli): tarif yalnız kod alanını ve düğmesini tanımlar. "Profili aç" bu ortamın
+    // (yoksa tüm ortamların) giriş profilini düzenlemeye açar; profil yoksa profil ekleme düğmesine götürür.
+    const profiliAc = () => {
+      const bolum = kapsayici;
+      const satirlar = [...(bolum?.parentElement?.querySelectorAll(':scope > .kayit-listesi > li') || [])];
+      const uygun = satirlar.find((li) => (li.querySelector('.kayit-meta')?.textContent || '').startsWith(`${o.ortamAd} ·`))
+        || satirlar.find((li) => (li.querySelector('.kayit-meta')?.textContent || '').startsWith('Tüm ortamlar ·'));
+      const dugme = /** @type {HTMLButtonElement | null} */ (uygun ? uygun.querySelector('button[aria-label$=": düzenle"]') : bolum?.parentElement?.querySelector('.bolum-basligi .birincil'));
+      if (dugme) { dugme.scrollIntoView({ block: 'center' }); dugme.click(); }
+    };
+    const profilBaglantisi = (metin) => h('button', { type: 'button', class: 'bag-dugme', onclick: profiliAc }, metin);
+    const totpNotu = h('div', { class: 'not-kutusu bilgi kucuk ikinci-adim-notu', role: 'note' },
+      h('p', {}, h('strong', {}, 'Gizli anahtar giriş profilinde tanımlanır '), '(kasada şifreli): Ayarlar > Giriş profilleri > profil > "Authenticator gizli anahtarı". ',
+        profilBaglantisi('Profili aç')),
+      h('p', { class: 'soluk' }, 'Anahtarı bulmak için: uygulamanın iki aşamalı doğrulama kurulumunda QR kodun altındaki "elle gir" / "kodu tarayamıyorum" bağlantısının gösterdiği metin.'));
+    const smsNotu = h('div', { class: 'not-kutusu bilgi kucuk ikinci-adim-notu', role: 'note' },
+      h('p', {}, h('strong', {}, 'SMS kodunun kaynağı giriş profilinde tanımlanır: '), 'Ayarlar > Giriş profilleri > profil > "İki aşamalı doğrulama: SMS" (sabit test kodu ya da koşu sırasında elle girilir). Aşağıdaki seçim bu ortam için profildeki ayarı geçersiz kılabilir. ',
+        profilBaglantisi('Profili aç')));
     const ikinciGorunum = () => {
       kodAlanlari.hidden = rYok.r.checked;
       smsAlani.hidden = !rSms.r.checked;
+      totpNotu.hidden = !rTotp.r.checked;
+      smsNotu.hidden = !rSms.r.checked;
       ozetiCiz();
     };
     [rYok.r, rTotp.r, rSms.r].forEach((r) => r.addEventListener('change', ikinciGorunum));
@@ -391,7 +411,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         alan('Giriş bekleme süresi (sn)', zamanAsimi, { yardim: 'Giriş düğmesinden sonra başarı/hata göstergesi için beklenen süre (5–600).' })),
       h('fieldset', {}, h('legend', {}, 'İki aşamalı doğrulama'),
         h('div', { role: 'radiogroup', 'aria-label': 'İkinci adım türü' }, rYok.etiket, rTotp.etiket, rSms.etiket),
-        kodAlanlari),
+        totpNotu, smsNotu, kodAlanlari),
       h('fieldset', {}, h('legend', {}, 'Bağlam değiştirme (isteğe bağlı)'),
         h('label', { class: 'secenek', for: baglamVar.id }, baglamVar, 'Girişten sonra bağlam seç (rol, şube…)'),
         baglamAlani),
@@ -525,7 +545,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         const ekNot = r.ekAlanlar.length ? ` Giriş profiline şu ek alanları ekleyin: ${r.ekAlanlar.map((e) => `${e.ad}${e.gizli ? ' (gizli)' : ''}`).join(', ')}.` : '';
         tarifFormu(o, { tarif: r.tarif, not: `Bu tarif girişi kaydından hazırlandı ve henüz KAYDEDİLMEDİ: kontrol edip “Tarifi kaydet”e basın.${ekNot}` });
       });
-      sonucAlani.replaceChildren(
+      yerlestir(sonucAlani,
         h('h4', {}, 'Önizleme'),
         okunurAdimlar(r.tarif),
         hatalar.length ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('ul', {}, hatalar.map((x) => h('li', {}, x)))) : null,

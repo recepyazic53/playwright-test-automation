@@ -1,5 +1,5 @@
-// SAYFA PAKETİ (sürüm 1) DOĞRULAYICISI — genel. Kullanıcı bir sayfanın bağlantısını Claude Code'a verir;
-// Claude sayfayı YALNIZCA OKUYARAK inceler ve bu biçimde bir JSON dosyası üretir; kullanıcı dosyayı
+// SAYFA PAKETİ (sürüm 1) DOĞRULAYICISI — genel. Kullanıcı bir sayfanın bağlantısını yapay zekâ aracına verir;
+// araç sayfayı YALNIZCA OKUYARAK inceler ve bu biçimde bir JSON dosyası üretir; kullanıcı dosyayı
 // Nöbetçi > Ekranlar > "Sayfa ekle" (yeni ekran) ya da "Paket yükle" (tekrar analiz) ile yükler.
 // Biçim: docs/sayfa-paketi.md (+ docs/sayfa-paketi.schema.json).
 //
@@ -193,7 +193,7 @@ export function sayfaPaketiniDogrula(ham, secenekler = {}) {
       }
     }
     if (meta.proje !== undefined && typeof meta.proje !== 'string') hata('meta.proje', 'metin olmalı.');
-    if (!metinMi(meta.olusturan)) hata('meta.olusturan', 'paketi kimin/neyin ürettiği yazılmalı (ör. "Claude Code").');
+    if (!metinMi(meta.olusturan)) hata('meta.olusturan', 'paketi kimin/neyin ürettiği yazılmalı (ör. yapay zekâ aracının adı).');
     if (typeof meta.olusturulma !== 'string' || Number.isNaN(Date.parse(meta.olusturulma))) hata('meta.olusturulma', 'ISO-8601 tarih olmalı (ör. "2026-09-25T10:30:00Z").');
     if (!metinDizisiMi(meta.baglamProfilleri)) hata('meta.baglamProfilleri', 'incelemede kullanılan bağlam profillerinin ADLARI (metin dizisi; yoksa []) olmalı.');
     if (meta.not !== undefined && typeof meta.not !== 'string') hata('meta.not', 'metin olmalı.');

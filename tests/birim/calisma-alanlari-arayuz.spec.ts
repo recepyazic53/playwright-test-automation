@@ -157,14 +157,14 @@ test('kilit ekranı çalışma alanının adını ve "Başka çalışma alanı"n
   await page.keyboard.press('Escape');
 });
 
-test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → giriş profili isteğe bağlı → sonraki adımlar)', async () => {
+test('aynı kasada yeni proje: sihirbaz (tanışma → proje → ortamlar → proje hazır özeti)', async () => {
   const menu = await projeMenusu();
   await expect(menu.getByRole('menuitem', { name: 'Yeni proje' })).toBeVisible();
   await goruntu('03-proje-secici', undefined, { x: 0, y: 0, width: 760, height: 300 });
   await menu.getByRole('menuitem', { name: 'Yeni proje' }).click();
   await expect(page.getByRole('heading', { name: 'Yeni proje', level: 1 })).toBeVisible();
-  await expect(page.locator('.adimlar li')).toHaveText(['Tanışalım', 'Proje', 'Ortamlar', 'Giriş profili', 'Tamam']);
-  // Tanışma: yalnız servisler + test ve canlı → canlı ortam satırı hazır gelir; ekran adımı yapılacaklarda yok.
+  await expect(page.locator('.adimlar li')).toHaveText(['Tanışalım', 'Proje', 'Ortamlar', 'Tamam']);
+  // Tanışma: yalnız servisler + test ve canlı → canlı ortam satırı (riskli işaretli) hazır gelir.
   const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
   await tanisma.getByRole('radio', { name: /Servisler/ }).check();
   await tanisma.getByRole('radio', { name: /Test ve canlı/ }).check();
@@ -173,17 +173,15 @@ test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → giriş profili i
   await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Adres (link)').first().fill('https://ikinci.ornek.invalid');
   await expect(page.getByLabel('Ortam adı').nth(1)).toHaveValue('CANLI');
-  await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)')).toBeChecked();
+  await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1)).toBeChecked();
   await page.getByLabel('Adres (link)').nth(1).fill('https://canli-ikinci.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
-  await expect(page.getByRole('heading', { name: 'Giriş profili' })).toBeVisible();
-  await goruntu('04-sihirbaz-giris-profili');
-  await page.getByRole('button', { name: 'Şimdilik atla' }).click();
   await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toHaveCount(0);
-  await expect(page.locator('.yapilacaklar-listesi li')).toHaveText([/Giriş tarifini/, /Test verisini/, /Servis ekleyin/, /Koşun ve sonuçları/]);
+  await expect(page.locator('.ozet-ortamlar li')).toHaveCount(2);
+  await expect(page.locator('.yapilacaklar-listesi')).toHaveCount(0);
   await goruntu('05-sihirbaz-tamam');
-  await page.getByRole('button', { name: 'Ayarlara git' }).click();
+  await page.getByRole('button', { name: 'Ana sayfaya geç' }).click();
+  await page.evaluate(() => { location.hash = '#/ayarlar/proje'; });
   await expect(page.locator('#proje-rozeti')).toHaveText('İkinci proje');
   // Kapsam: yeni projenin ortamı yalnızca kendisinde; Sonuçlar boş.
   await expect(page.locator('.kayit-listesi').filter({ hasText: 'ikinci.ornek.invalid' }).first()).toBeVisible();
@@ -270,8 +268,7 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Adres (link)').fill('https://deneme.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
-  await page.getByRole('button', { name: 'Şimdilik atla' }).click();
-  await page.getByRole('button', { name: 'Ayarlara git' }).click();
+  await page.getByRole('button', { name: 'Ana sayfaya geç' }).click();
   await expect(page.locator('#proje-rozeti')).toHaveText('Deneme');
   await expect(page.locator('.hesap-adi')).toHaveText('İş');
 });
