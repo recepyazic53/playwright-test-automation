@@ -209,6 +209,32 @@ test('telefon genişliği: A / B alt alta, yatay taşma yok', async () => {
   await kapat();
 });
 
+for (const [genislik, yukseklik] of [[1440, 960], [390, 844]] as const) {
+  test(`Sonuçlar sol paneli: servis bağlantısı Sonuçlar içinde servise süzülmüş sonuçları açar (ekranlarla aynı; ${genislik}px)`, async () => {
+    const { page, hatalar, kapat } = await sayfaAc(genislik, yukseklik);
+    await git(page, '#/sonuclar');
+    const nav = page.getByRole('navigation', { name: 'Ürünler' });
+    const baglanti = nav.getByRole('link', { name: /Kayıt Servisi/ });
+    await expect(baglanti).toHaveAttribute('href', `#/sonuclar/s/${encodeURIComponent(f.servisId)}`);
+    // Telefonda yan panel daraltılmış olabilir: bağlantıya adresiyle gidilir (aynı rota).
+    if (await baglanti.isVisible()) await baglanti.click(); else await git(page, `#/sonuclar/s/${encodeURIComponent(f.servisId)}`);
+    await expect(page).toHaveURL(new RegExp(`#/sonuclar/s/${encodeURIComponent(f.servisId)}$`));
+    await expect(page.locator('main .iskelet')).toHaveCount(0, { timeout: 15_000 });
+    // Servisin Raporlar sekmesi değil: Servis sonuçları görünümü (koşu geçmişi), Sonuçlar ekranının sol paneliyle.
+    await expect(page.getByRole('heading', { name: /Kayıt Servisi/, level: 2 })).toBeVisible();
+    await expect(page.locator('main .kirinti')).toContainText('Sonuçlar');
+    await expect(page.getByRole('region', { name: 'Koşu geçmişi' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /Kayıt Servisi/ })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('tab', { name: 'Raporlar' })).toHaveCount(0);
+    const d = await denetle(page);
+    expect(d.tasma, `yatay taşma: ${d.tasanlar.join(', ')}`).toBeLessThanOrEqual(2);
+    expect(d.adsiz, d.adsiz.join('\n')).toEqual([]);
+    expect(d.yinelenenId).toEqual([]);
+    expect(hatalar, hatalar.join('\n')).toEqual([]);
+    await kapat();
+  });
+}
+
 test('servis karşılaştırması: geçmişte grup kilidi (servis ↔ akış), HTTP kodu ve kontrol farkı; gövde ve gizli değer yok', async () => {
   const { page, hatalar, kapat } = await sayfaAc();
   await git(page, '#/servisler/sonuclar');

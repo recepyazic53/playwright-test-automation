@@ -4,6 +4,8 @@
 // çalışma zamanı paketleri ve Playwright'ın indirilmiş tarayıcıları kopyalanır; başlatıcı Windows'un kendi .NET Framework
 // derleyicisiyle (csc.exe) derlenir.
 //
+// Hedef klasör yeniden üretilmeden önce silinir; bu klasörden çalışan bir Nöbetçi varsa silme reddedilir, içinde kullanıcı
+// verisi (uygulama\veri) varsa --zorla olmadan silinmez.
 // Çıktı (varsayılan dist/Nöbetçi/; ilk argümanla değişir):
 //   Nöbetçi.exe          başlatıcı (scripts/paket/Nobetci.cs)
 //   runtime/node.exe     Node
@@ -17,9 +19,16 @@ import { execFileSync } from 'node:child_process';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PaketHatasi, UYGULAMA_GIRDILERI, calismaZamaniModulleri, haricMi } from './paket/paket-ortak.mjs';
+import { hedefDenetimi, paketArgumanlari } from './paket/hedef-korumasi.mjs';
 
 const KOK = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const HEDEF = resolve(process.argv[2] || join(KOK, 'dist', 'Nöbetçi'));
+// Kullanım: npm run paketle -- [hedef klasör] [--zorla]   (--zorla: hedefteki uygulama\veri klasörü de silinir)
+const ARGUMANLAR = paketArgumanlari(process.argv.slice(2));
+if (ARGUMANLAR.bilinmeyen.length) {
+  console.error(`Bilinmeyen seçenek: ${ARGUMANLAR.bilinmeyen.join(', ')} (yalnız --zorla).`);
+  process.exit(1);
+}
+const HEDEF = resolve(ARGUMANLAR.hedef || join(KOK, 'dist', 'Nöbetçi'));
 const UYGULAMA = join(HEDEF, 'uygulama');
 
 if (process.platform !== 'win32') {
@@ -42,6 +51,13 @@ const boyut = (yol) => {
 const mb = (b) => `${Math.round(b / 1024 / 1024)} MB`;
 
 adim(`Hedef: ${HEDEF}`);
+// Hedefi silmeden önce: bu klasörden çalışan bir Nöbetçi varsa reddedilir (--zorla da aşmaz); içinde kullanıcı verisi
+// (uygulama\veri) varsa uyarılıp durulur (yalnız --zorla ile silinir). Kurallar: scripts/paket/hedef-korumasi.mjs.
+const denetim = hedefDenetimi(HEDEF, { zorla: ARGUMANLAR.zorla });
+if (!denetim.silinebilir) {
+  console.error(denetim.mesaj);
+  process.exit(2);
+}
 if (existsSync(HEDEF)) rmSync(HEDEF, { recursive: true, force: true });
 mkdirSync(UYGULAMA, { recursive: true });
 

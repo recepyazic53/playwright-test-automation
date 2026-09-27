@@ -27,13 +27,17 @@ Chromium tarayıcısı ve `Nöbetçi.exe` başlatıcısı vardır. Klasörü (ya
 bu bilgisayarda zaten olan dosyalardan üretilir (hiçbir şey indirilmez); başlatıcı Windows'un .NET Framework derleyicisiyle
 derlenir ve imzasızdır (Windows ilk açılışta uyarı gösterebilir).
 
+Hedef klasör her paketlemede yeniden oluşturulur, ama önce denetlenir: o klasörden çalışan bir Nöbetçi varsa (`runtime\node.exe`
+/ `Nöbetçi.exe`) silme reddedilir ("önce kapatın"); içinde kullanıcı verisi (`uygulama\veri`) varsa uyarı verilip durulur.
+Veriyi de silmek bilinçli bir kararsa: `npm run paketle -- [hedef] --zorla` (çalışan Nöbetçi'yi `--zorla` da aşmaz).
+
 ## İlk açılış
 
 Karşılama ekranında iki seçenek vardır:
 
 1. **Yedek yükle** — başka bir bilgisayardan alınmış `.tayedek` dosyası (yedeğin parolası bu bilgisayarın kasa
    parolası olur).
-2. **Yeni proje başlat** — önce birkaç soru (ne test edeceksiniz, hangi ortamlar, giriş var mı), sonra kasa parolası, proje
+2. **Yeni proje başlat** — önce kısa bir soru (testler hangi ortamlarda çalışacak), sonra kasa parolası, proje
    ve ortamlar (Ortam adı | Adres | Riskli mi?). Son adımda kısa bir "Proje hazır" özeti (kaydedilen ortamlar) gösterilir.
    Giriş profilleri ve iki aşamalı doğrulama Ayarlar > Giriş profilleri'nden, ekranlar Ekranlar sayfasından eklenir.
 

@@ -177,13 +177,13 @@ function sayfaBasligi(veri, proje, secenek, ad) {
     h('div', {},
       h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(),
         secenek.gomulu ? h('a', { href: '#/sonuclar' }, 'Sonuçlar') : h('a', { href: TABAN }, 'Servis sonuçları'), ayrac(),
-        h('span', { class: 'simdiki' }, secenek.gomulu ? 'Servisler' : ad)),
+        h('span', { class: 'simdiki' }, secenek.gomulu && !secenek.servisId ? 'Servisler' : ad)),
       h('div', { class: 'baslik-satiri' },
         h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Servis sonuçları — '), ad),
         son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} kalan`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
       h('div', { class: 'meta' }, meta)),
     h('div', { class: 'eylemler' },
-      secenek.gomulu ? h('a', { class: 'dugme hayalet', href: TABAN }, ikon('ag'), 'Servis sonuçları ekranı') : null,
+      secenek.gomulu ? h('a', { class: 'dugme hayalet', href: secenek.servisId ? `${TABAN}/s/${q(secenek.servisId)}` : TABAN }, ikon('ag'), 'Servis sonuçları ekranı') : null,
       h('a', {
         class: 'dugme birincil', href: secenek.servisId ? `#/servisler/s/${q(secenek.servisId)}/senaryolar` : '#/servisler',
         title: 'Servis sayfasında onayla başlatılır'

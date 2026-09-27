@@ -107,8 +107,9 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       if (Number.isInteger(ayar.kosuGecmisiSayfaBoyu)) SAYFA_BOYU = ayar.kosuGecmisiSayfaBoyu;
       ESIKLER = esikler && Number.isInteger(esikler.yesil) && Number.isInteger(esikler.sari) ? esikler : VARSAYILAN_ESIKLER;
       saglikMetni.textContent = esikMetni(ESIKLER);
-      urunListesi(liste, ozet.ekranlar, secili);
-      servisleriAl(proje).then((servisler) => { if (servisler.length) urunListesi(liste, ozet.ekranlar, secili, servisler); });
+      const seciliServis = tur === 's' && kimlik ? decodeURIComponent(kimlik) : null;
+      urunListesi(liste, ozet.ekranlar, secili, [], seciliServis);
+      servisleriAl(proje).then((servisler) => { if (servisler.length) urunListesi(liste, ozet.ekranlar, secili, servisler, seciliServis); });
       if (tur === 'kosu' && kimlik) return kosuDetayi(icerik, decodeURIComponent(kimlik), proje);
       if (tur === 'sonuc' && kimlik) return sonucDetayi(icerik, decodeURIComponent(kimlik), proje);
       if (tur === 'karsilastir' && kimlik && parcalar[2]) {
@@ -118,6 +119,10 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       // Genel > Servisler: servis sonuçlarının genel görünümü (servis-sonuclari.js; ayrıntılar #/servisler/sonuclar altında).
       if (tur === 'servisler') {
         return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { ust: genelSekmeleri('servisler'), gomulu: true }));
+      }
+      // Sol paneldeki servis: Servis sonuçlarının o servise süzülmüş görünümü, Sonuçlar ekranının içinde (ekranlarla aynı).
+      if (tur === 's' && seciliServis) {
+        return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { servisId: seciliServis, gomulu: true }));
       }
       const ekran = secili ? ozet.ekranlar.find((e) => e.anahtar === secili) : null;
       const yenile = () => sonuclarEkrani(main, parcalar, baglam);
@@ -152,7 +157,7 @@ function ekranDurumRozeti(durum) {
   return null;
 }
 
-function urunListesi(nav, ekranlar, secili, servisler = []) {
+function urunListesi(nav, ekranlar, secili, servisler = [], seciliServis = null) {
   const toplamSenaryo = ekranlar.reduce((a, e) => a + (e.senaryoSayisi || 0), 0);
   const baglanti = (anahtar, ad, adet, son, ikonAd, durum) => {
     const o = son ? oran(son) : null;
@@ -171,9 +176,12 @@ function urunListesi(nav, ekranlar, secili, servisler = []) {
     baglanti('', 'Genel', toplamSenaryo, null, 'izgara'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranlar.map((e) => baglanti(e.anahtar, e.ad, e.senaryoSayisi, e.son, null, e.ekranDurumu))),
-    // Servis sonuçları ekran sonuçlarına karışmaz: bağlantı servisin kendi Raporlar sekmesini açar.
-    ...servislerBolumu(servisler, { sekme: 'raporlar', saglik: true }));
+    // Ekranlarla aynı davranış: servis bağlantısı Sonuçlar ekranında kalır ve Servis sonuçlarının o servise süzülmüş
+    // görünümünü açar (#/sonuclar/s/<servisId>; servis sonuçları ekran sonuçlarına karışmaz).
+    ...servislerBolumu(servisler, { adres: servisSonucAdresi, seciliServis: seciliServis ?? null, saglik: true }));
 }
+/** Sonuçlar ekranında bir servisin süzülmüş sonuç görünümü. @param {string} id */
+export const servisSonucAdresi = (id) => `#/sonuclar/s/${encodeURIComponent(id)}`;
 
 // ---------------------------------------------------------------------------------------
 // Genel bakış / ürün sayfası
