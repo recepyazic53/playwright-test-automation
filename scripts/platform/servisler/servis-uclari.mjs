@@ -16,6 +16,18 @@ import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
+import { tabloKosuDenetimi } from '../tablolar/tablo-uclari.mjs';
+
+/**
+ * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
+ * önizlemedeki etkinin imzası (farklıysa yazılmaz), mevcut değerleri koru. @param {Record<string, any>} g
+ */
+const etkiGirdisi = (g) => ({
+  ...(g.etki === 'denetle' || g.etki === 'uygula' || g.etki === 'onizle' ? { etki: g.etki } : {}),
+  ...(typeof g.beklenenImza === 'string' ? { beklenenImza: g.beklenenImza } : {}),
+  ...(Array.isArray(g.guncellenecekler) ? { guncellenecekler: g.guncellenecekler.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+  ...(g.mevcutDegerleriKoru === true ? { mevcutDegerleriKoru: true } : {})
+});
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
@@ -273,7 +285,10 @@ export const SERVIS_POST_UCLARI = [
     return { id: servisKimligiKaydet(db, { projeId, ad: metin(g.ad), ortamId: secimli(g.ortamId) ?? null, degerler }) };
   }],
   // Eski servis giriş profilini test verisine taşı (onay: false → yalnız önizleme).
-  ['/platform/servis-kimligi/test-verisine-tasi', (db, g) => girisProfiliniTestVerisineTasi(db, kimlik(g.projeId, 'projeId'), { ad: metin(g.ad), onay: g.onay === true })],
+  ['/platform/servis-kimligi/test-verisine-tasi', (db, g) => girisProfiliniTestVerisineTasi(db, kimlik(g.projeId, 'projeId'), {
+    ad: metin(g.ad), onay: g.onay === true, ...(Array.isArray(g.guncellenecekler) ? { guncellenecekler: g.guncellenecekler.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+    ...(typeof g.beklenenImza === 'string' ? { beklenenImza: g.beklenenImza } : {})
+  }, tabloKosuDenetimi())],
   ['/platform/servis-kimligi/sil', (db, g) => ({ silindi: servisKimligiSil(db, kimlik(g.projeId, 'projeId'), metin(g.ad)) })],
   // Akış kaydı: yapısal + anlamsal denetim (servis / senaryo projede; ${akis:X} önceki adımda okunuyor) geçmeden kaydedilmez.
   ['/platform/servis-akisi/kaydet', (db, g) => {
@@ -368,8 +383,8 @@ export const SERVIS_POST_UCLARI = [
         klasorler: metinler(g.klasorler) ?? [], tabloAdi: metin(g.tabloAdi),
         gizliler: metinler(g.gizliler), sifreliKaydet: metinler(g.sifreliKaydet) ?? [], akisDegiskenleri: metinler(g.akisDegiskenleri) ?? [],
         degerOrtami: secimli(g.degerOrtami) ?? null, tabanOrtami: secimli(g.tabanOrtami) ?? null,
-        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {})
-      });
+        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}), ...etkiGirdisi(g)
+      }, tabloKosuDenetimi());
     } catch (e) {
       if (e instanceof DepoHatasi) throw e;
       throw new DepoHatasi(/** @type {Error} */ (e).message);
@@ -390,8 +405,8 @@ export const SERVIS_POST_UCLARI = [
         ...(g.degerOrtami ? { degerOrtami: kimlik(g.degerOrtami, 'degerOrtami') } : {}),
         ...(Array.isArray(g.gizliler) ? { gizliler: g.gizliler.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
         ...(Array.isArray(g.sifreliKaydet) ? { sifreliKaydet: g.sifreliKaydet.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
-        ...(Array.isArray(g.baglar) ? { baglar: g.baglar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {})
-      });
+        ...(Array.isArray(g.baglar) ? { baglar: g.baglar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}), ...etkiGirdisi(g)
+      }, tabloKosuDenetimi());
     } catch (e) {
       if (e instanceof DepoHatasi) throw e;
       throw new DepoHatasi(/** @type {Error} */ (e).message);

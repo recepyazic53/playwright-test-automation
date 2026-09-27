@@ -136,3 +136,15 @@ export function servisIsiDurdur(projeId, id, senaryoId) {
   if (is.aktif && (!senaryoId || is.aktif.senaryoId === senaryoId)) is.aktif.kontrol.abort();
   return { durduruldu: true };
 }
+
+/**
+ * Servis senaryosu şu an bir işte koşuyor ya da sırada mı (bellekteki işler; ör. tablo değişikliğinde senaryo güncellemesi atlanır).
+ * @param {string} senaryoId
+ */
+export function servisSenaryosuKosuyorMu(senaryoId) {
+  for (const is of isler.values()) {
+    if (is.bitti) continue;
+    if (is.satirlar.some((s) => s.senaryoId === senaryoId && (s.durum === 'sirada' || s.durum === 'calisiyor'))) return true;
+  }
+  return false;
+}

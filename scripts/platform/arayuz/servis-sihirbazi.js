@@ -13,6 +13,7 @@ import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc }
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
+import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 
@@ -443,7 +444,7 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
   const klasorSatiri = (k) => {
     const soapVar = k.mevcutServis && k.mevcutServis.tur !== 'rest';
     const c = h('input', { type: 'checkbox', checked: secili.has(k.anahtar), disabled: soapVar, 'aria-label': `${k.ad} klasörünü içe al` });
-    c.addEventListener('change', () => { if (c.checked) secili.add(k.anahtar); else secili.delete(k.anahtar); });
+    c.addEventListener('change', () => { if (c.checked) secili.add(k.anahtar); else secili.delete(k.anahtar); etkiBolumu.yenile(); });
     const uyariSayisi = k.istekler.reduce((n, i) => n + i.uyarilar.length, 0);
     return h('tr', {},
       h('td', {}, c),
@@ -467,9 +468,9 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
       s.disabled = !gizli.has(v.ad) || !v.tanimli || akis.has(v.ad);
       if (s.disabled) { s.checked = false; sifreli.delete(v.ad); }
     };
-    g.addEventListener('change', () => { if (g.checked) gizli.add(v.ad); else gizli.delete(v.ad); guncelle(); });
-    s.addEventListener('change', () => { if (s.checked) sifreli.add(v.ad); else sifreli.delete(v.ad); });
-    kaynak.addEventListener('change', () => { if (kaynak.value === 'akis') akis.add(v.ad); else akis.delete(v.ad); guncelle(); });
+    g.addEventListener('change', () => { if (g.checked) gizli.add(v.ad); else gizli.delete(v.ad); guncelle(); etkiBolumu.yenile(); });
+    s.addEventListener('change', () => { if (s.checked) sifreli.add(v.ad); else sifreli.delete(v.ad); etkiBolumu.yenile(); });
+    kaynak.addEventListener('change', () => { if (kaynak.value === 'akis') akis.add(v.ad); else akis.delete(v.ad); guncelle(); etkiBolumu.yenile(); });
     return h('tr', {},
       h('td', {}, h('code', { class: 'duz' }, v.ad), v.betikle ? h('div', { class: 'soluk kucuk' }, 'betikle atanıyor') : null),
       h('td', {}, v.gizli ? h('span', { class: 'soluk' }, v.tanimli ? 'gizli (gösterilmez)' : 'değer yok')
@@ -485,15 +486,25 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
   const tabanOrtami = h('select', {}, h('option', { value: '' }, 'Hiçbiri (taban adresi sonra verilir)'), ortamlar.map((x) => h('option', { value: x.id }, x.ad)));
   const kapsam = h('select', {}, Object.entries(KAPSAMLAR).map(([k, m]) => h('option', { value: k }, m)));
   const aktar = h('button', { type: 'button', class: 'birincil' }, ikon('yukle'), 'İçe aktar');
+  /** Aktarım gövdesi (önizlemedeki seçimler): etki önizlemesi ve İçe aktar aynı gövdeyi gönderir. */
+  const govdeYap = () => ({
+    projeId: proje.id, koleksiyon: dosyalar.koleksiyon, ...(dosyalar.ortam ? { ortam: dosyalar.ortam } : {}),
+    klasorler: [...secili], tabloAdi: tabloAdi.value.trim(), gizliler: [...gizli], sifreliKaydet: [...sifreli], akisDegiskenleri: [...akis],
+    degerOrtami: degerOrtami.value || null, tabanOrtami: tabanOrtami.value || null, kapsam: kapsam.value
+  });
+  // Tabloda değişecek değerler ve etkilenen senaryolar: seçimler değiştikçe sunucuda 'onizle' ile yeniden hesaplanır (yazılmaz).
+  const etkiBolumu = aktarimEtkisiBolumu(async (koru) => (!secili.size ? { degisiklikler: [], etkilenenler: [], karsiliklar: [] }
+    : (await api('/platform/servis/postman/aktar', { govde: { ...govdeYap(), etki: 'onizle', ...(koru ? { mevcutDegerleriKoru: true } : {}) } })).etki));
+  for (const g of [tabloAdi, degerOrtami, tabanOrtami, kapsam]) g.addEventListener(g === tabloAdi ? 'input' : 'change', () => etkiBolumu.yenile());
   aktar.addEventListener('click', async () => {
     mesaj.temizle();
     if (!secili.size) { mesaj.goster('En az bir klasör seçin.'); return; }
     try {
-      const r = await mesgulIken(aktar, 'Aktarılıyor…', () => api('/platform/servis/postman/aktar', { govde: {
-        projeId: proje.id, koleksiyon: dosyalar.koleksiyon, ...(dosyalar.ortam ? { ortam: dosyalar.ortam } : {}),
-        klasorler: [...secili], tabloAdi: tabloAdi.value.trim(), gizliler: [...gizli], sifreliKaydet: [...sifreli], akisDegiskenleri: [...akis],
-        degerOrtami: degerOrtami.value || null, tabanOrtami: tabanOrtami.value || null, kapsam: kapsam.value
-      } }));
+      // Önizlemede işaretli senaryolarla tek işlemde; arada veri değiştiyse yazılmaz, güncel etki gösterilip yeniden onay istenir.
+      const r = await onizlemeyleAktar(aktar, '/platform/servis/postman/aktar', govdeYap(), etkiBolumu,
+        { yalniz: 'Yalnız aktar', guncelle: 'Aktar ve seçili senaryoları güncelle' });
+      if (!r) return;
+      if (guncellemeMetni(r)) bildir(guncellemeMetni(r), r.guncelleme.atlananlar.length ? 'hata' : undefined);
       const eklenen = r.servisler.reduce((n, s) => n + s.eklenen, 0);
       bildir(`${r.servisler.length} servis, ${eklenen} senaryo aktarıldı${r.tablo ? `; değişkenler "${r.tablo.ad}" tablosunda` : ''}.`);
       if (r.tablo && r.tablo.bosBirakilan.length) bildir(`Gizli değeri boş bırakılanlar (tabloda doldurun): ${r.tablo.bosBirakilan.join(', ')}`, 'hata');
@@ -521,5 +532,7 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
     h('div', { class: 'satir-duzen' },
       kokenler.length ? alan(`Koleksiyondaki adres (${kokenler.join(', ')}) taban adresi olsun`, tabanOrtami, { yardim: 'Seçilen ortamda servislerin taban adresi yapılır (ortamın adres listesine de eklenir).' }) : null,
       alan('Senaryoların kapsamı', kapsam)),
+    etkiBolumu.kok,
     h('div', { class: 'dugmeler' }, aktar)));
+  etkiBolumu.yenile(0);
 }

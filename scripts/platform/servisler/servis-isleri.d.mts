@@ -14,3 +14,5 @@ export declare function servisIsiBaslat(vt: Veritabani, projeId: string, girdi: 
 export declare function servisSenaryoAtlamaNedeni(vt: Veritabani, servis: any, s: any, ortam: any): string;
 export declare function servisIsiDurumu(projeId: string, id: string): ServisIsiGorunumu;
 export declare function servisIsiDurdur(projeId: string, id: string, senaryoId?: string): { durduruldu: true };
+/** Servis senaryosu şu an bir işte koşuyor ya da sırada mı. */
+export declare function servisSenaryosuKosuyorMu(senaryoId: string): boolean;

@@ -188,7 +188,7 @@ import {
 } from './ekranlar/ekran-yonetimi.mjs';
 import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
-import { TABLO_GET_UCLARI, TABLO_POST_UCLARI } from './tablolar/tablo-uclari.mjs';
+import { TABLO_GET_UCLARI, TABLO_POST_UCLARI, tabloKosuDenetimiAyarla } from './tablolar/tablo-uclari.mjs';
 import { ekranTabloDonusumu } from './tablolar/ekran-donusumu.mjs';
 import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
 import { AKIS_SENARYO_GET_UCLARI, AKIS_SENARYO_POST_UCLARI } from './servisler/akis-senaryosu.mjs';
@@ -359,6 +359,8 @@ export function platformKosucusunuAyarla(yeni) {
 }
 /** @param {string} dosya @param {string} ad */
 const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
+// Tablo değeri değişince senaryo güncellemesinde koşan senaryolar atlanır (tablolar/tablo-etkisi.mjs).
+tabloKosuDenetimiAyarla(kosuyorMu);
 
 /**
  * Zamanlanmış koşular (Ayarlar > Koşu; bkz. zamanlama/*.mjs): kasa AÇIKKEN dakikada bir denetlenir; vakti gelen kural
