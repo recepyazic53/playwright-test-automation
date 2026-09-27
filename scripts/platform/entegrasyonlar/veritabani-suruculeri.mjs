@@ -114,6 +114,22 @@ export function yalnizOkumaDenetle(sql) {
 }
 
 /**
+ * Sorgu "yalnız okuma" kuralını geçmiyor mu (veri / şema değiştiren ya da birden çok ifadeli sorgu)? @param {string} sql
+ */
+export function yazmaSorgusuMu(sql) {
+  try { yalnizOkumaDenetle(sql); return false; } catch { return true; }
+}
+
+/**
+ * Sorgunun gerektirdiği izinler (Ayarlar > İzinler): her sorgu "veritabani-okuma"; "Yalnız okuma" kapalı bağlantıda yazma
+ * sorgusu ayrıca "veritabani-yazma". (Yalnız okuma açık bağlantıda yazma sorgusu zaten reddedilir.)
+ * @param {{ yalnizOkuma?: boolean }} ayar @param {string} sql @returns {string[]}
+ */
+export function sorguIzinleri(ayar, sql) {
+  return ayar.yalnizOkuma === false && yazmaSorgusuMu(sql) ? ['veritabani-okuma', 'veritabani-yazma'] : ['veritabani-okuma'];
+}
+
+/**
  * ":ad" parametrelerini sürücü biçimine çevirir. pg: $1…, mysql: ?, mssql: @ad, oracle: :ad (değişmez).
  * Dizgi / yorum içindekiler ve "::" (tür dönüşümü) dokunulmaz.
  * @param {SurucuAdi} surucu @param {string} sql @param {Record<string, unknown>} parametreler

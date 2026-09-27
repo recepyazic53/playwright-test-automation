@@ -10,6 +10,9 @@ import { ortamGetir, projeGetir } from '../veritabani/depo.mjs';
 import { medyaGetir, sonucDetayi } from '../veritabani/sonuc-deposu.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
+import { izinAcikMi, izinGerekli } from '../guvenlik/izinler.mjs';
+import { izinKapaliNotu, izinMesaji } from '../guvenlik/izin-tanimlari.mjs';
+import { sorguIzinleri } from './veritabani-suruculeri.mjs';
 import { EntegrasyonHatasi, gizlileriMaskele } from './istek.mjs';
 import { gizliDegerler, turBul, veritabaniAyari } from './katalog.mjs';
 import { alanlariHazirla, baglantiGetir, baglantiKaydet, durumYaz, tumBaglantilar } from './depo.mjs';
@@ -64,6 +67,8 @@ export function denemeHedefi(vt, projeId, g) {
 export async function baglantiDene(vt, projeId, g) {
   if (g.onay !== true) throw new EntegrasyonHatasi('Bağlantı denemesi için onay gerekir.');
   const { t, alanlar, mevcut, kayitli } = denenecekAlanlar(vt, projeId, g);
+  // İzin (uç denetimine ek, merkezden): veritabanı bağlantısı → okuma; webhook / iş takip → dış gönderim.
+  izinGerekli(vt, t.tur === 'veritabani' ? 'veritabani-okuma' : 'dis-gonderim', 'baglantiDene');
   const gizliler = gizliDegerler(t, alanlar);
   /** @type {{ basarili: boolean; mesaj: string }} */
   let s;
@@ -98,6 +103,15 @@ export async function kosuBittiBildir(vt, kosuId, s = {}) {
     const hedefler = tumBaglantilar(vt).filter((b) => b.projeId === projeId && b.etkin && (secili ? secili.includes(b.id)
       : b.olaylar.includes('kosu-bitti') && (!b.ortamIdleri.length || (ortamId !== null && b.ortamIdleri.includes(ortamId)))));
     if (!hedefler.length) return sonuclar;
+    // Dış gönderim izni (Ayarlar > İzinler) kapalıysa HİÇBİR istek gönderilmez; bağlantının durumuna "izin kapalı" yazılır.
+    if (!izinAcikMi(vt, 'dis-gonderim')) {
+      const mesaj = `Koşu bildirimi gönderilmedi (${izinKapaliNotu('dis-gonderim')}). ${izinMesaji('dis-gonderim')}`;
+      for (const b of hedefler) {
+        try { durumYaz(vt, b.id, { basarili: false, mesaj }); } catch { /* kasa bu arada kilitlendiyse yazılamaz */ }
+        sonuclar.push({ baglantiId: b.id, basarili: false, mesaj });
+      }
+      return sonuclar;
+    }
     /** @type {Record<string, number>} */
     let ozet = {};
     try { ozet = JSON.parse(String(k.ozet_json ?? '{}')); } catch { ozet = {}; }
@@ -190,6 +204,7 @@ export function hataKaydiOnizle(vt, projeId, sonucId, baglantiId) {
  */
 export async function hataKaydiAc(vt, projeId, g, secenekler) {
   if (g.onay !== true) throw new EntegrasyonHatasi('Hata kaydı açmak için onay gerekir.');
+  izinGerekli(vt, 'dis-gonderim', 'hataKaydiAc');
   const { b, t } = takipBaglantisi(vt, projeId, String(g.baglantiId ?? ''));
   const s = sonucAl(vt, projeId, String(g.sonucId ?? ''));
   const baslik = typeof g.baslik === 'string' ? g.baslik.replace(/[\u0000-\u001f]/g, ' ').trim() : '';
@@ -245,7 +260,10 @@ export async function sorguCalistir(vt, baglantiId, sql, parametreler, secenekle
   const b = baglantiGetir(vt, baglantiId);
   if (b.tur !== 'veritabani') throw new EntegrasyonHatasi('Bu bağlantı bir veritabanı bağlantısı değil.');
   if (!b.etkin) throw new EntegrasyonHatasi(`"${b.ad}" bağlantısı devre dışı (Ayarlar > Entegrasyonlar).`);
-  return veritabaniSorgusu(veritabaniAyari(b.alanlar), sql, parametreler, { ...secenekler, yasakDesenleri: etkinYasakDesenleri(vt) });
+  const ayar = veritabaniAyari(b.alanlar);
+  // İzinler: okuma; "Yalnız okuma" kapalı bağlantıda yazma sorgusu ayrıca yazma izni (bağlanmadan önce).
+  for (const a of sorguIzinleri(ayar, sql)) izinGerekli(vt, a, 'sorguCalistir');
+  return veritabaniSorgusu(ayar, sql, parametreler, { ...secenekler, yasakDesenleri: etkinYasakDesenleri(vt) });
 }
 
 // ---------------------------------------------------------------------------------------

@@ -21,7 +21,7 @@ import { formDegerleriniKur, formSemasiOlustur, senaryoNesnesiOlustur } from '..
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { AkisUygulamasi, HAVUZLAR, akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 
 type Nesne = Record<string, any>;
 
@@ -123,7 +123,7 @@ test.describe('uçtan uca: değerleri tabloya bağla + satır seçimi (127.0.0.1
   const detay = async (id: string, ortamId = ortamA) => (await api(`/platform/senaryo?id=${id}&ortamId=${ortamId}`)).senaryo as Nesne;
   const gecmisSayisi = async (id: string) => ((await api(`/platform/senaryo/gecmis?id=${id}`)).kayitlar as Nesne[]).length;
   const kos = async (senaryoId: string, ortamId = ortamA) => {
-    const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId, ortamId });
+    const y = await api('/platform/senaryolar/calistir', { projeId, kosuId: `kosu-${randomUUID()}`, senaryoId, ortamId, canliOnay: true });
     expect(y.basarili, String(y.mesaj ?? '')).toBe(true);
     return (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
   };
@@ -142,12 +142,14 @@ test.describe('uçtan uca: değerleri tabloya bağla + satır seçimi (127.0.0.1
     const vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, { NOBETCI_YUKLEME_KLASORU: join(klasor, 'yuklenecek') });
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Dönüşüm Projesi' })).proje as Nesne).id);
-    ortamA = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true })).ortam as Nesne).id);
-    ortamB = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Diğer', tabanUrl: fikstur.adres })).ortam as Nesne).id);
+    ortamA = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
+    ortamB = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Diğer', tabanUrl: fikstur.adres, riskli: false })).ortam as Nesne).id);
     const tur = String((await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: HAVUZLAR.ozel, alanlar: ['kimlikNo', 'dogumTarihi', 'cepTelefonu'].map((ad) => ({ ad, hassas: true })) })).id);
     await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: tur, ad: 'k1', degerler: { kimlikNo: '10000000146', dogumTarihi: '01.02.1990', cepTelefonu: '5321112233' } });
     await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: akisPaketi(), senaryoIndeksleri: [], ortamIdleri: [ortamA] });

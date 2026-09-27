@@ -28,7 +28,7 @@ test.describe('hata kalıbından testlere', () => {
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
     const proje = projeKaydet(vt, { ad: 'Kalıp Projesi' });
-    const ortam = ortamKaydet(vt, { projeId: proje, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true });
+    const ortam = ortamKaydet(vt, { projeId: proje, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, ayarlar: { riskli: false } });
     const ekran = ekranKaydet(vt, { projeId: proje, anahtar: 'rota', ad: 'Rota' });
     s1 = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Avrupa paket', icerik: {} });
     s2 = senaryoKaydet(vt, { projeId: proje, ekranId: ekran, baslik: 'Dünya vize', icerik: {} });

@@ -28,7 +28,7 @@ import {
 } from '../../scripts/platform/zamanlama/oturum-gorevi.mjs';
 import { TERCIH_AYAR_ANAHTARI, arkaPlanYoneticisi } from '../../scripts/platform/zamanlama/arka-plan.mjs';
 import { nobetciApi, nobetciBaslat } from './nobetci-sunucusu';
-import { HIZLI_KDF, geciciKlasor, loglariYakala } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, loglariYakala, izinleriAc } from './platform-ortak';
 
 const PAROLA = 'Arka-Plan-Kasa-2026';
 const YENI_PAROLA = 'Arka-Plan-Kasa-Yeni-2027';
@@ -80,8 +80,10 @@ function sahteSchtasks(secenek: { olusturmaKodu?: number } = {}) {
 async function hazirVeritabani(klasor: string): Promise<{ vt: Veritabani; projeId: string; ortamId: string }> {
   const vt = await veritabaniniHazirla(join(klasor, 'platform.db'));
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-  const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+  const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
   return { vt, projeId, ortamId };
 }
 
@@ -104,7 +106,7 @@ test('A: tercih kapalıyken kilitleme bugünkü gibi; açıkken arayüz kilitli,
     expect(arkaPlanIsiBaslat(vt)).toBeNull();
 
     await kasaAc(vt, PAROLA);
-    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true });
+    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true, onay: true });
     // Tercih kasada ŞİFRELİ ayar.
     expect(String(vt.tek('SELECT deger_json FROM ayarlar WHERE anahtar = ?', [TERCIH_AYAR_ANAHTARI])?.deger_json)).toMatch(/^kasa:v1:/);
     expect(yonetici.kilitSecimiVarMi(vt)).toBe(true);
@@ -153,7 +155,7 @@ test('A: tercih kapalıyken kilitleme bugünkü gibi; açıkken arayüz kilitli,
 
     // Emanetteki anahtar kasaya artık uymuyorsa (parola başka yoldan değişti) kullanılmaz ve silinir.
     await kasaAc(vt, PAROLA);
-    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true });
+    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true, onay: true });
     yonetici.kilitle(vt);
     await kasaAc(vt, PAROLA);
     await parolaDegistir(vt, PAROLA, YENI_PAROLA, { kdf: HIZLI_KDF });
@@ -191,7 +193,7 @@ test('A: kasa kilitliyken zamanlayıcı emanetteki anahtarla SAHTE koşucuyu ça
   try {
     const an = (saat: number, dakika = 0) => new Date(2026, 8, 28, saat, dakika);
     kuralKaydet(vt, projeId, { ad: 'Sabah koşusu', ortamId, kapsam: { senaryolar: 'tum' }, zaman: { tur: 'gunluk', saat: '09:00' } }, { simdi: an(8) });
-    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true });
+    await yonetici.tercihDegistir(vt, { ad: 'kilitliyken', acik: true, onay: true });
     yonetici.kilitle(vt);
     expect(kasaAcikMi(vt)).toBe(false);
 
@@ -241,6 +243,8 @@ test('A (uçtan uca, geçici sunucu): kilitleme seçimi, arayüz kilidinde veri 
   // Tercih doğrudan kasaya yazılır (Ayarlar uçları Windows'ta schtasks /Query çağırdığı için burada kullanılmaz).
   const hazir = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(hazir, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(hazir);
   projeKaydet(hazir, { ad: 'Örnek proje' });
   hazir.kapat();
   const n = await nobetciBaslat(klasor.yol, vtYolu);

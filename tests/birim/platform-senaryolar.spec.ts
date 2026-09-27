@@ -288,8 +288,8 @@ async function ortamKur(): Promise<Ortam> {
   const vt = await veritabaniniHazirla(join(k.yol, 'platform.db'));
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
   const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-  const ortamId = ortamKaydet(vt, { projeId, ad: 'DENEME', tabanUrl: 'http://ornek.invalid', varsayilan: true });
-  const digerOrtamId = ortamKaydet(vt, { projeId, ad: 'IKINCI', tabanUrl: 'http://ikinci.invalid' });
+  const ortamId = ortamKaydet(vt, { projeId, ad: 'DENEME', tabanUrl: 'http://ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
+  const digerOrtamId = ortamKaydet(vt, { projeId, ad: 'IKINCI', tabanUrl: 'http://ikinci.invalid', ayarlar: { riskli: false } });
   const ekranId = ekranKaydet(vt, { projeId, anahtar: 'ornek', ad: 'Örnek ekran' });
   ekranModeliEkle(vt, { ekranId, model: MODEL });
   const altId = ekranKaydet(vt, { projeId, anahtar: 'ornek-kart', ad: 'Ödeme kartı' });

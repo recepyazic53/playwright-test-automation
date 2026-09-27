@@ -30,6 +30,9 @@ import { medyaKlasoru } from './medya.mjs';
 import { referansCoz, referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
+import { izinleriOku } from './guvenlik/izinler.mjs';
+import { riskliOrtamMi } from './guvenlik/ortam-riski.mjs';
+import { izinMesaji } from './guvenlik/izin-tanimlari.mjs';
 import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
@@ -112,18 +115,30 @@ async function genelKip() {
     anahtar.fill(0);
     const ortam = ortamGetir(vt, ortamId);
     if (!ortam || ortam.projeId !== projeId) return { hata: 'Ortam bu projede bulunamadı.', kod: 'ORTAM_YOK' };
+    // İzinler (Ayarlar > İzinler): koşucu kasayı açmaz, durum bu çıktıyla gider. Kapalı izne ait gizli değerler HİÇ verilmez:
+    // giriş bilgisi kapalıysa parola / TOTP / sabit kod / gizli ek alanlar, veritabanı okuma kapalıysa bağlantı ayarları (parola).
+    const izinler = izinleriOku(vt);
     const model = ortamModelSenaryolari(vt, projeId, ortamId);
+    if (model) {
+      model.izinler = izinler;
+      if (!izinler['veritabani-okuma'] && model.sqlBaglantilari) {
+        model.sqlBaglantilari = Object.fromEntries(Object.keys(model.sqlBaglantilari).map((id) => [id, { hata: izinMesaji('veritabani-okuma') }]));
+      }
+    }
     const dosyaHedefi = dosyaKlasoru(yol);
     if (model && dosyaHedefi) {
       for (const s of model.senaryolar) s.veri = /** @type {Record<string, unknown>} */ ((await referanslariCoz(vt, s.veri, { medyaKlasoru: medyaKlasoru(yol), hedefKlasor: dosyaHedefi })).deger);
     }
     const t = etkinGirisTarifi(vt, projeId, ortamId);
+    const girisIzni = izinler['giris-bilgisi'] === true;
+    const giris = ortamGirisBilgisi(vt, projeId, ortamId);
+    const girisProfilleri = adliGirisProfilleri(vt, projeId, ortamId, kullanilanGirisProfilleri(model));
     return {
-      durum: 'hazir', projeId, ortamId, yasakAdresler: ayarlardakiYasakAdresler(vt), model,
-      giris: ortamGirisBilgisi(vt, projeId, ortamId),
+      durum: 'hazir', projeId, ortamId, yasakAdresler: ayarlardakiYasakAdresler(vt), model, izinler,
+      giris: giris && !girisIzni ? gizlisiz(giris) : giris,
       // Senaryoların ("Giriş" seçimi) ve akışların ("Yeniden giriş" adımı) ADIYLA seçtiği giriş profilleri — yalnızca
-      // kullanılanlar (şifreler yalnızca bu sürecin çıktısında).
-      girisProfilleri: adliGirisProfilleri(vt, projeId, ortamId, kullanilanGirisProfilleri(model)),
+      // kullanılanlar (şifreler yalnızca bu sürecin çıktısında; giriş bilgisi izni kapalıysa hiç verilmez).
+      girisProfilleri: girisIzni ? girisProfilleri : Object.fromEntries(Object.entries(girisProfilleri).map(([ad, g]) => [ad, gizlisiz(g)])),
       girisTarifi: t.tarif ? { tarif: t.tarif, kaynak: t.kaynak, hatalar: t.hatalar } : null
     };
   } finally {
@@ -174,6 +189,15 @@ function ortamGirisBilgisi(vt, projeId, ortamId) {
   const satir = vt.tek('SELECT id FROM giris_profilleri WHERE proje_id = ? AND (ortam_id = ? OR ortam_id IS NULL) ORDER BY (ortam_id IS NULL), rowid LIMIT 1', [projeId, ortamId]);
   const giris = satir ? girisProfiliGetir(vt, String(satir.id), { coz: true }) : undefined;
   return giris ? girisBilgisi(giris) : null;
+}
+
+/**
+ * Giriş bilgisi izni kapalıyken: gizli değerler çıkarılır (kullanıcı adı ve açık ek alanlar kalır; profil kimliği oturum dosyası adı için).
+ * @param {ReturnType<typeof girisBilgisi>} g
+ */
+function gizlisiz(g) {
+  const gizli = new Set(g.gizliEkAlanlar);
+  return { ...g, parola: null, totpGizli: null, sabitKod: null, ekAlanlar: Object.fromEntries(Object.entries(g.ekAlanlar).filter(([ad]) => !gizli.has(ad))) };
 }
 
 /** @param {import('./veritabani/depo.d.mts').GirisProfili} giris */
@@ -291,9 +315,8 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
       for (const x of typeof h === 'string' ? [h] : h && typeof h === 'object' ? Object.values(h) : []) if (typeof x === 'string') havuzlar.add(x);
     }
   }
-  // Canlı ortam (Ayarlar > ortam "canlı"): "yalnızca test ortamı" ortak akış adımları atlanır.
-  const ayarlar = ortam.ayarlar && typeof ortam.ayarlar === 'object' ? /** @type {Record<string, unknown>} */ (ortam.ayarlar) : {};
-  const canli = ayarlar.canli === true;
+  // Riskli ortam (Ayarlar > ortam "Bu ortam riskli mi?"; belirtilmemiş = riskli): "yalnızca test ortamı" ortak akış adımları atlanır.
+  const canli = riskliOrtamMi(ortam);
   // SQL adımlarının veritabanı bağlantıları (Ayarlar > Entegrasyonlar): yalnız modellerde kullanılanlar; parola çözülmüş, giriş
   // bilgisi gibi yalnız bu borudan koşu belleğine gider (loglara / rapora yazılmaz). Kullanılamayan bağlantı { hata }.
   // Mantıksal veritabanları (Ayarlar > Entegrasyonlar > Veritabanları) bu ortamın eşlemesiyle bağlantıya çözülür; eşleme yoksa

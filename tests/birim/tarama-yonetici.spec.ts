@@ -21,7 +21,7 @@ import { analizGetir, analizYukle, paketOnizle, sayfaEkle } from '../../scripts/
 import { taramaIsteginiIsle, taramaYoneticisiOlustur, type IsGorunumu, type TaramaYoneticisi } from '../../scripts/platform/tarama/yonetici.mjs';
 import { TARAMA_TOKEN_BASLIGI } from '../../scripts/platform/tarama/protokol.mjs';
 import { SIRKET_DESENI, yerelSunucu } from './giris-fikstur';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 import { TARAMA_KULLANICI, TARAMA_PAROLA, TARAMA_SMS_KODU, TaramaFiksturu, YASAKLI_GORSEL_HOST, taramaGirisTarifi } from './tarama-fikstur';
 
 type Yanit = Record<string, unknown> & { basarili?: boolean; mesaj?: string; kod?: string };
@@ -119,9 +119,11 @@ test.beforeAll(async () => {
   fs2 = await yerelSunucu(smsFikstur.isle);
   vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
   await kasaOlustur(vt, 'Gecici-Tarama-Parolasi-1', { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   projeId = projeKaydet(vt, { ad: 'Tarama Deneme' });
-  ortamlar.TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: fs1.adres, varsayilan: true });
-  ortamlar.SMS = ortamKaydet(vt, { projeId, ad: 'SMS', tabanUrl: fs2.adres });
+  ortamlar.TEST = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: fs1.adres, varsayilan: true, ayarlar: { riskli: false } });
+  ortamlar.SMS = ortamKaydet(vt, { projeId, ad: 'SMS', tabanUrl: fs2.adres, ayarlar: { riskli: false } });
   ortamlar.YASAKLI = ortamKaydet(vt, { projeId, ad: 'YASAKLI', tabanUrl: 'https://portal.yasak-ornek.invalid' });
   for (const [ad, id] of Object.entries(ortamlar)) {
     girisProfiliKaydet(vt, { projeId, ortamId: id, ad: `${ad} kullanıcısı`, kullaniciAdi: TARAMA_KULLANICI, parola: TARAMA_PAROLA, ikiAsamaliTur: ad === 'SMS' ? 'sms' : 'yok', smsAyari: ad === 'SMS' ? { yontem: 'elle' } : {} });
@@ -223,7 +225,7 @@ test('mevcut ekran: son seçim hatırlanır, paket tekrar analize girer (yeni al
 
 test('SMS "elle" kodu iş durumunda istenir ve iletilir; iptal süreci kapatır; süre sınırı', async () => {
   test.setTimeout(240_000);
-  const govde = { projeId, ekranAdi: 'SMS Başvuru', ortamId: ortamlar.SMS, baglamProfilleri: ['Standart'], hedef: `${fs2.adres}/basvuru/`, kesif: false, onay: true };
+  const govde = { projeId, ekranAdi: 'SMS Başvuru', ortamId: ortamlar.SMS, baglamProfilleri: ['Standart'], hedef: `${fs2.adres}/basvuru/`, kesif: false, onay: true, canliOnay: true };
   const b = await api('/platform/tarama/baslat', govde);
   expect(b.durum, JSON.stringify(b.y)).toBe(202);
   const isId = String(b.y.isId);
@@ -261,7 +263,7 @@ test('SMS "elle" kodu iş durumunda istenir ve iletilir; iptal süreci kapatır;
 
 test('yasaklı adres (ortam değişkeni ve Ayarlar > Güvenlik) ve geçersiz hedef: tarayıcı açılmadan red', async () => {
   const once = fikstur.kayitlar.length;
-  const y1 = await api('/platform/tarama/baslat', { projeId, ekranAdi: 'Yasaklı', ortamId: ortamlar.YASAKLI, hedef: '/x/', onay: true });
+  const y1 = await api('/platform/tarama/baslat', { projeId, ekranAdi: 'Yasaklı', ortamId: ortamlar.YASAKLI, hedef: '/x/', onay: true, canliOnay: true });
   expect(y1).toMatchObject({ durum: 400, y: { kod: 'YASAKLI_ADRES' } });
   expect(y1.y.mesaj).toMatch(/^Tarama reddedildi: portal\.yasak-ornek\.invalid adresi yasaklı adres kalıbına \("\*yasak-ornek\*"\) uyuyor/);
 

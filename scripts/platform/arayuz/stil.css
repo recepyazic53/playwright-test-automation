@@ -3311,3 +3311,28 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .sql-uyarilari summary { color: var(--hata); }
 .veritabani-tablosu td.eylem .kucuk-dugme + .kucuk-dugme { margin-left: 6px; }
 .veritabanlari-bolumu + .entegrasyon-katalog-basligi { margin-top: 22px; }
+
+/* Ayarlar > İzinler (izinler.js): izin satırları, "?" açıklaması, son değişiklikler; kapalı izin uyarısı (ortak.js). */
+.izin-listesi { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+.izin-satiri { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); padding: 10px 12px; background: var(--panel-2); min-width: 0; }
+.izin-satiri.acik { border-color: color-mix(in srgb, var(--atlanan) 45%, var(--cizgi)); }
+.izin-satiri.vurgulu { outline: 2px solid var(--odak); outline-offset: 2px; }
+.izin-ust { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.izin-ust .bosluk { flex: 1; }
+.izin-baslik { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; cursor: pointer; min-width: 0; overflow-wrap: anywhere; }
+.izin-soru { width: 28px; height: 28px; }
+.izin-satiri > p { margin: 6px 0 0; overflow-wrap: anywhere; }
+.izin-risk { color: var(--metin-2); }
+.izin-aciklama { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--panel); border: 1px solid var(--cizgi); font-size: 13px; overflow-wrap: anywhere; }
+.izin-aciklama h4 { margin: 10px 0 4px; font-size: 12.5px; }
+.izin-aciklama h4:first-child { margin-top: 0; }
+.izin-aciklama ul { margin: 0; padding-left: 18px; }
+.izin-aciklama p { margin: 0; }
+.izin-gecmisi { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: 13px; }
+.izin-gecmisi li { overflow-wrap: anywhere; }
+.izin-onayi h4 { margin: 10px 0 4px; font-size: 13px; }
+@media (max-width: 520px) {
+  .izin-ust .bosluk { display: none; }
+  .izin-baslik { flex: 1 1 55%; }
+  .izin-ust .rozet { margin-left: auto; }
+}

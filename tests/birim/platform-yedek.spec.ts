@@ -59,7 +59,7 @@ async function ornekVeritabani(yol: string | null, parola = PAROLA): Promise<{ v
   const vt = await veritabaniniHazirla(yol);
   await kasaOlustur(vt, parola, { kdf: HIZLI_KDF });
   const proje = projeKaydet(vt, { ad: 'Örnek Proje', ayarlar: { dil: 'tr' } });
-  const ortam = ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://ornek.test', varsayilan: true });
+  const ortam = ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://ornek.test', varsayilan: true, ayarlar: { riskli: false } });
   const profil = girisProfiliKaydet(vt, {
     projeId: proje, ortamId: ortam, ad: 'Ana', kullaniciAdi: 'kullanici', parola: GIRIS_PAROLASI,
     ikiAsamaliTur: 'totp', totpGizli: TOTP_GIZLI

@@ -183,7 +183,7 @@ test.describe('Koşu hedefi ve liste (geçici veritabanı)', () => {
       await kasaOlustur(vt, 'Gecici-Model-Kasa-1', { kdf: HIZLI_KDF });
       // Nötr proje: elle kurulan proje + ortam, ekran ve senaryolar sayfa paketinden.
       const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-      const ortamId = ortamKaydet(vt, { projeId, ad: 'DENEME', tabanUrl: 'https://test.ornek.invalid', varsayilan: true });
+      const ortamId = ortamKaydet(vt, { projeId, ad: 'DENEME', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
       const ek = await sayfaEkle(vt, projeId, ornekBasvuruPaketi(), { senaryoIndeksleri: [0, 1], ortamIdleri: [ortamId], medyaKlasoru: join(klasor.yol, 'medya') });
       expect(ek.senaryoIdleri).toHaveLength(2);
       const s0 = senaryoGetir(vt, ek.senaryoIdleri[0]);

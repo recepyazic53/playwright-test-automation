@@ -27,14 +27,14 @@ export declare function gizlileriMaskele(metin: string, gizliler: string[]): str
 export interface HamYanit { durumKodu: number; basliklar: Record<string, string>; govde: string; sureMs: number }
 export declare function httpIstegi(istek: {
   adres: string; yontem?: string; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
-  sinyal?: AbortSignal; gonderildi?: () => void;
+  sinyal?: AbortSignal; gonderildi?: () => void; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }>;
 }): Promise<HamYanit>;
 export declare function soapIstegi(istek: {
   adres: string; eylem?: string; soapSurumu?: '1.1' | '1.2'; govde: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
-  sinyal?: AbortSignal; gonderildi?: () => void; ekBasliklar?: Record<string, string>;
+  sinyal?: AbortSignal; gonderildi?: () => void; ekBasliklar?: Record<string, string>; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }>;
 }): Promise<HamYanit>;
 export declare function wsdlOperasyonlari(wsdl: string): { ad: string; eylem?: string }[];
-export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }): Promise<{
+export declare function erisimiDenetle(girdi: { adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }> }): Promise<{
   durumKodu: number; sureMs: number; operasyonlar: { ad: string; eylem?: string }[]; semalar: Record<string, import('./servis-govdesi.mjs').OperasyonSemasi>;
   iceAktarilan?: number; alinamayan?: string[];
 }>;

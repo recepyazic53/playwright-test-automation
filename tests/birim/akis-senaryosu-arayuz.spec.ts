@@ -8,7 +8,7 @@ import { chromium, expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { nobetciApi, nobetciBaslat } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { sahteSoapSunucusu } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
@@ -21,6 +21,8 @@ test('akış senaryosu formu: adım bölümleri, kilitli bağ, kayıt ve öteki 
   const vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   vt.kapat();
   const nobetci = await nobetciBaslat(klasor, vtYolu, {});
   const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
@@ -28,7 +30,7 @@ test('akış senaryosu formu: adım bölümleri, kilitli bağ, kayıt ve öteki 
   try {
     await api('/platform/kasa/ac', { parola: PAROLA });
     const projeId = String((await api('/platform/proje/kaydet', { ad: 'Akış senaryosu arayüzü' })).proje.id);
-    const ortamId = String((await api('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
+    const ortamId = String((await api('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, riskli: false })).ortam.id);
     const servis = async (anahtar: string, ad: string) => {
       const e = await api('/platform/servis/erisim', { projeId, ortamId, yol: '/Servis/ornek.asmx' });
       const id = String((await api('/platform/servis/kaydet', { projeId, anahtar, ad, yol: '/Servis/ornek.asmx', erisimKimligi: e.erisimKimligi })).id);

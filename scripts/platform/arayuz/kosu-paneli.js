@@ -11,6 +11,7 @@
 //   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { riskBelirtilmemisMi, riskliOrtamMi } from './ortam-riski.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -30,8 +31,39 @@ export const KOSU_DURUMLARI = Object.freeze({
 
 const sureMetni = (ms) => (ms == null ? '' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
 
-/** Ortam "gerçek işlem" riski taşıyor mu? (CANLI işaretliyse, varsayılan test ortamı değilse ya da adı canlı/üretim çağrıştırıyorsa) */
-export const riskliOrtamMi = (ortam) => Boolean(ortam) && (ortam.canli === true || !ortam.varsayilan || /canl|prod|uretim|üretim/i.test(String(ortam.ad || '')));
+/** Ortam "gerçek işlem" riski taşıyor mu? TEK TANIM sunucuyla ortak: ortam-riski.mjs (kullanıcı seçimi; belirtilmemiş = riskli). */
+export { riskliOrtamMi };
+
+/**
+ * "Riskli mi? belirtin" uyarısı: ortamın riskli olup olmadığı seçilmemiş (riskli sayılır) → Ayarlar > Proje ve ortamlar bağlantısı.
+ * Koşu diyaloğu, servis sayfası ve ortam listesi kullanır.
+ */
+export function riskBelirtinNotu() {
+  return h('div', { class: 'not-kutusu uyari risk-belirtin', role: 'note' }, h('strong', {}, 'Riskli mi? belirtin. '),
+    'Bu ortamın riskli olup olmadığı seçilmemiş; seçilene kadar riskli sayılır (her çalıştırmada onay, canlı ortam izni). ',
+    h('a', { href: '#/ayarlar/proje', onclick: () => { for (const d of document.querySelectorAll('dialog[open]')) d.close(); } }, 'Ayarlar > Proje ve ortamlar'));
+}
+
+/**
+ * Riskli ortam onayı: koşu diyaloğunda (kosuOnayi) ya da canliOnayIste ile ONAYLANAN riskli ortamın kimliği. Sunucu riskli ortamda
+ * her çalıştırmada istekte açık onay (canliOnay: true) ister; onay yalnız bu diyaloglardan gelir (son onay geçerlidir).
+ */
+let onayliRiskliOrtam = null;
+/** İsteğe eklenecek açık onay (ortam riskli ve diyalogda onaylandıysa). @param {string} ortamId */
+export const canliOnayEki = (ortamId) => (ortamId && ortamId === onayliRiskliOrtam ? { canliOnay: true } : {});
+/**
+ * Riskli ortam için (diyalogsuz akışlarda: Dene, tarama, öneri) açık onay ister; riskli değilse hemen true. Onaylanırsa canliOnayEki
+ * o ortam için { canliOnay: true } verir. @param {{ id: string; ad: string; canli?: boolean; varsayilan?: boolean }} ortam @param {string} [ne]
+ */
+export async function canliOnayIste(ortam, ne = 'Bu işlem') {
+  if (!riskliOrtamMi(ortam)) return true;
+  const tamam = await onayIste({
+    baslik: `${ortam.ad} ortamında çalıştırılsın mı?`, ikonAd: 'uyari', dugme: 'Onayla ve çalıştır',
+    metin: `${ne} riskli bir ortamda${riskBelirtilmemisMi(ortam) ? ' (riskli olup olmadığı belirtilmemiş; Ayarlar > Proje ve ortamlar)' : ''} çalışacak; gerçek işlem oluşturabilir.`
+  });
+  onayliRiskliOrtam = tamam ? ortam.id : null;
+  return tamam;
+}
 
 // ---------------------------------------------------------------------------------------
 // Durum
@@ -87,7 +119,7 @@ export function kosuOnayi(s) {
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const turMetni = s.tur === 'tam' ? `Tam koşu · ${s.kapsam || 'Genel'}` : 'Kısmi (tekil)';
     const ortamSecimi = secimli ? h('select', { id: `kosu-ortami-${kimlikUret()}` },
-      s.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ortam.id }, riskliOrtamMi(o) ? `${o.ad} (dikkat: test ortamı değil)` : o.ad))) : null;
+      s.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ortam.id }, riskliOrtamMi(o) ? `${o.ad} (${riskBelirtilmemisMi(o) ? 'riskli mi? belirtin' : 'riskli'})` : o.ad))) : null;
     const degisken = h('div', {});
     const ciz = () => {
       if (secimli) hesap = s.hesapla(ortam);
@@ -120,7 +152,8 @@ export function kosuOnayi(s) {
         h('p', { class: 'soluk kucuk' }, s.not || (s.tur === 'tam'
           ? 'Tam koşu olarak kaydedilir; bitince Sonuçlar kartları ve trendi güncellenir.'
           : 'Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez, koşu geçmişinde "tekil" görünür.')),
-        riskli ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('strong', {}, `Dikkat: ${ortam.ad} ortamı. `), 'Bu ortam varsayılan test ortamı değil; testler gerçek işlem oluşturabilir.') : null);
+        riskli ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('strong', {}, `Dikkat: ${ortam.ad} ortamı. `), 'Bu ortam riskli; testler gerçek işlem oluşturabilir.') : null,
+        riskBelirtilmemisMi(ortam) ? riskBelirtinNotu() : null);
     };
     const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'kosu-onay-basligi' },
       h('div', { class: 'diyalog-govde' },
@@ -133,7 +166,12 @@ export function kosuOnayi(s) {
     let sonuc = false;
     baslat.addEventListener('click', () => { sonuc = true; diyalog.close(); });
     vazgec.addEventListener('click', () => diyalog.close());
-    diyalog.addEventListener('close', () => { diyalog.remove(); coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar } : null) : sonuc); });
+    diyalog.addEventListener('close', () => {
+      diyalog.remove();
+      // Riskli ortamda "Başlat" = açık canlı onayı (sunucuya canliOnay: true gider).
+      onayliRiskliOrtam = sonuc && ortam && riskliOrtamMi(ortam) ? ortam.id : null;
+      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar } : null) : sonuc);
+    });
     document.body.append(diyalog);
     diyalog.showModal();
     (ortamSecimi || baslat).focus();
@@ -224,11 +262,12 @@ export function kosuBaslat(s) {
     durum.oturum.bitti = false;
     durum.secili = satir.senaryoId;
     durum.kucuk = false;
-    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}`, ...(s.tekBasina ? { tekBasina: true } : {}) }).then(() => oturumuBitirGerekirse(durum.oturum));
+    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}`, ...(s.tekBasina ? { tekBasina: true } : {}), ...canliOnayEki(s.ortam.id) }).then(() => oturumuBitirGerekirse(durum.oturum));
     yay();
     return true;
   }
   const oturum = {
+    canliOnay: canliOnayEki(s.ortam.id),
     baslik: s.baslik, tur: s.tur, kapsam: s.kapsam || 'Genel', esZamanli: s.esZamanli, ortam: s.ortam, projeId: s.projeId,
     kosuKimligi: `platform-${kimlikUret()}`, satirlar: yeniler.map(satirOlustur), iptal: false, bitti: false, baslangic: Date.now()
   };
@@ -265,7 +304,7 @@ async function birTaneCalistir(oturum, satir, ek) {
   let yanit;
   try {
     yanit = await api('/platform/senaryolar/calistir', {
-      govde: { projeId: oturum.projeId, ortamId: oturum.ortam.id, senaryoId: satir.senaryoId, kosuId: satir.kosuId, ...ek }
+      govde: { projeId: oturum.projeId, ortamId: oturum.ortam.id, senaryoId: satir.senaryoId, kosuId: satir.kosuId, ...(oturum.canliOnay || {}), ...ek }
     });
   } catch (hata) {
     yanit = { basarili: false, mesaj: hata.message };

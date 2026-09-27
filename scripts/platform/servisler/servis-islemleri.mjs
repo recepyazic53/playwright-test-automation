@@ -28,6 +28,8 @@ import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, servisDegeri } from '../tablolar/tablo-secimi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
+import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
@@ -49,8 +51,12 @@ export const ERISIM_GECERLILIK_MS = 30 * 60_000;
 /** @type {Map<string, ErisimKaydi>} */
 const erisimler = new Map();
 
-/** @param {{ ayarlar: Record<string, unknown> }} ortam */
-export const ortamTuru = (ortam) => (ortam.ayarlar.canli === true ? 'canli' : 'test');
+/**
+ * Ortam türü (servis kapsamı, Dene / erişim kontrolü yalnız test'te). TEK TANIM: guvenlik/ortam-riski.mjs > riskliOrtamMi — canlı
+ * ortam — kullanıcının "Bu ortam riskli mi?" seçimi; belirtilmemiş = riskli — 'canli' sayılır (arayüz ve sunucu aynı kural).
+ * @param {{ ayarlar: Record<string, unknown>; varsayilan?: boolean; ad?: string }} ortam
+ */
+export const ortamTuru = (ortam) => (riskliOrtamMi(ortam) ? 'canli' : 'test');
 
 /** @param {Veritabani} vt @param {string} projeId @param {string} ortamId */
 function ortamiAl(vt, projeId, ortamId) {
@@ -293,7 +299,7 @@ export async function semaYenile(vt, projeId, girdi) {
   if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('WSDL yalnızca test ortamından alınır.');
   const adres = servisAdresi(servis.ayarlar, ortam);
   let s;
-  try { s = await erisimiDenetle({ adres, tlsDogrulama: servis.ayarlar.tlsDogrulama }); } catch (e) {
+  try { s = await erisimiDenetle({ adres, tlsDogrulama: servis.ayarlar.tlsDogrulama, yasakDesenleri: etkinYasakDesenleri(vt) }); } catch (e) {
     if (e instanceof ServisHatasi) throw new DepoHatasi(e.message);
     throw e;
   }
@@ -319,10 +325,10 @@ function veriProfilleriniDogrula(secim) {
  */
 export async function erisimKontrolu(vt, projeId, girdi) {
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
-  if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('Erişim kontrolü yalnızca test ortamında yapılır (seçilen ortam canlı işaretli).');
+  if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('Erişim kontrolü yalnızca test ortamında yapılır (seçilen ortam riskli; Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").');
   const adres = servisAdresi({ yol: yolDogrula(girdi.yol), adresler: adresleriDogrula(girdi.adresler), tabanlar: tabanlariDogrula(girdi.tabanlar) }, ortam);
   try {
-    const s = await erisimiDenetle({ adres, tlsDogrulama: girdi.tlsDogrulama });
+    const s = await erisimiDenetle({ adres, tlsDogrulama: girdi.tlsDogrulama, yasakDesenleri: etkinYasakDesenleri(vt) });
     const erisimKimligi = randomUUID();
     for (const [k, e] of erisimler) if (Date.now() - e.zaman > ERISIM_GECERLILIK_MS) erisimler.delete(k);
     erisimler.set(erisimKimligi, { adres, ortamId: ortam.id, projeId, zaman: Date.now(), durumKodu: s.durumKodu, operasyonlar: s.operasyonlar, semalar: s.semalar });
@@ -957,6 +963,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     if (girdi.sinyal?.aborted) throw new ServisHatasi('Kullanıcı durdurdu.');
     const ortak = {
       adres, govde, zamanAsimiMs: girdi.zamanAsimiMs ?? kosu.servisZamanAsimiSn * 1000, tlsDogrulama: servis.ayarlar.tlsDogrulama, sinyal: girdi.sinyal,
+      // Yasak adresler (Ayarlar > Güvenlik + ortam değişkeni): host uyuyorsa istek gönderilmez (servis koşusu, Dene, akışlar).
+      yasakDesenleri: etkinYasakDesenleri(vt),
       ekBasliklar, gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
     };
     const yanit = http

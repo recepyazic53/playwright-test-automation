@@ -10,7 +10,7 @@ import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { adresBirlestir, ortamdaTanimli, servisAdresi } from '../../scripts/platform/servisler/servis-islemleri.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
@@ -49,12 +49,14 @@ test.describe('sihirbaz uçtan uca', () => {
     const vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Sihirbaz Projesi' })).proje.id);
     // TEST ortamının asıl adresi servisin makinesi DEĞİL: servis yeni taban adresle eklenecek.
-    testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true })).ortam.id);
+    testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true, riskli: false })).ortam.id);
     canli = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid/', canli: true })).ortam.id);
     // Test verisi tabloları: sütun adı alan adıyla aynıysa sihirbaz kendiliğinden bağlar (Channel / Username / Password).
     girisId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Servis girişi', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }],
@@ -221,7 +223,7 @@ test.describe('sihirbaz uçtan uca', () => {
     const s = servisler[0];
     await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId: s.id, baslik: 'İkisi', kapsam: 'ikisi', icerik: { operasyon: 'Teklif', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] } });
     const once = soap.istekler.length;
-    const kos = await basarili('/platform/servis/kos', { projeId, servisId: s.id, ortamId: canli });
+    const kos = await basarili('/platform/servis/kos', { projeId, servisId: s.id, ortamId: canli, canliOnay: true });
     expect(kos.kosu).toMatchObject({ ortamTuru: 'canli', sonuclar: [], atlamaNedeni: 'Servis "CANLI" ortamında tanımlı değil (taban adres boş).' });
     expect(soap.istekler.length).toBe(once);
     const red = await api('/platform/servis/senaryo/dene', { projeId, servisId: s.id, ortamId: canli, baslik: 'x', icerik: { operasyon: 'Teklif', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] } });

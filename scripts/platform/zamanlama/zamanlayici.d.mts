@@ -15,7 +15,7 @@ export interface YurutmeBagimliliklari {
   devamMi?(): boolean;
 }
 export interface YurutmeSonucu {
-  durum: 'tamamlandi' | 'basarisiz' | 'yarida';
+  durum: 'tamamlandi' | 'basarisiz' | 'yarida' | 'atlandi';
   mesaj: string;
   kosuId: string | null;
   ozet: TetiklemeOzeti | null;

@@ -173,7 +173,8 @@ export function baglantiKaydet(vt, projeId, girdi) {
     throw new EntegrasyonHatasi(`Bu projede "${ad}" adında bir bağlantı zaten var.`);
   }
   const alanlar = alanlariHazirla(tur, g.alanlar, mevcut?.alanlar);
-  const olaylar = Array.isArray(g.olaylar) ? [...new Set(g.olaylar.filter((o) => typeof o === 'string'))] : mevcut?.olaylar ?? t.olaylar.map((o) => o.ad);
+  // Yeni bağlantıda olay aboneliği varsayılan KAPALI: kullanıcı hangi olayda tetikleneceğini kendisi seçer (dış gönderim izni ayrıca).
+  const olaylar = Array.isArray(g.olaylar) ? [...new Set(g.olaylar.filter((o) => typeof o === 'string'))] : mevcut?.olaylar ?? [];
   for (const o of olaylar) if (!t.olaylar.some((x) => x.ad === o)) throw new EntegrasyonHatasi('Geçersiz olay.');
   const projeOrtamlari = new Set(ortamlariListele(vt, projeId).map((o) => o.id));
   const ortamIdleri = Array.isArray(g.ortamIdleri)

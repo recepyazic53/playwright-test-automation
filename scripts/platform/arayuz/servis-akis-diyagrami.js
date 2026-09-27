@@ -18,7 +18,7 @@
 // Veri modeli değişmedi (adımlar = { id, ad, servisId, senaryoId, okumalar, hataOlursaDevam? } | { id, ad, tur: 'sql', sql, … }); kayıt var olan
 // /platform/servis-akisi/kaydet ucundan (yapısal + anlamsal denetim) geçer. Kullanıcı verisi DOM'a yalnız metin olarak yazılır.
 import { alan, api, bildir, degisiklikleriBirak, h, ikon, kayitIzi, mesajKutusu, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
-import { onayIste } from './kosu-paneli.js';
+import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
 import { sqlAkisDegerleri, sqlTanimiDogrula } from './sql-adimi.mjs';
 import { sqlAdimiFormu, sqlHedefAdi, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
@@ -646,7 +646,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
       location.hash = `${adres}/${q(r.id)}`;
     } catch (e2) { mesaj.goster(e2.message); }
   });
-  const test = ortamlar.find((o) => !o.canli && o.varsayilan) || ortamlar.find((o) => !o.canli);
+  const test = ortamlar.find((o) => !riskliOrtamMi(o));
   const dene = h('button', { type: 'button', disabled: !test, title: 'Kaydedilmemiş hâliyle TEST ortamında dener' }, ikon('oynat'), 'Dene (TEST)');
   dene.addEventListener('click', async () => {
     mesaj.temizle();

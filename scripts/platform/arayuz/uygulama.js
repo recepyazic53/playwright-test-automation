@@ -25,6 +25,7 @@ import { tabloSiralamaKur } from './tablo-siralama.js';
 import { ayarlarBolumu, AYAR_BOLUMLERI } from './ayarlar.js';
 import { sonuclarEkrani } from './sonuclar.js';
 import { kasayiKilitleSecimli } from './zamanlanmis-kosular.js';
+import { adCanliyiCagristiriyorMu } from './ortam-riski.mjs';
 
 // Çalışma alanı ve proje ⋯ modülleri DİNAMİK yüklenir: eski sürüm bir sunucu (yeniden başlatılmamış) bu dosyaları sunmuyorsa
 // kabuk yine açılır, yalnızca bu özellikler görünmez. (Eski sunucunun /platform/durum yanıtında "calismaAlani" alanı yoktur.)
@@ -408,7 +409,7 @@ function sihirbazTanisma() {
     ], ciz),
     soruGrubu('Testler hangi ortamlarda çalışacak?', 'ortam', [
       ['test', 'Yalnızca test ortamı', 'Önerilen başlangıç.'],
-      ['testCanli', 'Test ve canlı', 'Canlı işaretli ortamda kayıt oluşturan "yalnızca test ortamı" adımları atlanır.']
+      ['testCanli', 'Test ve canlı', 'Riskli ortamda kayıt oluşturan "yalnızca test ortamı" adımları atlanır.']
     ]),
     soruGrubu('Uygulamanıza giriş yaparak mı erişiliyor?', 'giris', [
       ['evet', 'Evet', 'Kullanıcı adı ve parola ile giriş.'],
@@ -508,7 +509,7 @@ function sihirbazOrtamlar() {
       alan('Ortam adı', ad, { zorunlu: true }),
       alan('Adres (link)', adres, { zorunlu: true }),
       zorunlu ? h('span', { class: 'rozet vurgu' }, 'Zorunlu') : h('div', { class: 'ortam-satiri-sag' },
-        h('label', { class: 'secenek kucuk', for: canli.id }, canli, 'Canlı ortam'), kaldir));
+        h('label', { class: 'secenek kucuk', for: canli.id }, canli, 'Riskli ortam (gerçek işlem oluşturabilir)'), kaldir));
     satirlar.push(satir);
     liste.append(satir.el);
     return satir;
@@ -533,10 +534,20 @@ function sihirbazOrtamlar() {
       if (!adresGecerliMi(s2.adres.value.trim())) { alanHatasi(s2.adres, 'Geçerli bir http(s) adresi girin.'); ilkHata ??= s2.adres; }
     }
     if (ilkHata) { ilkHata.focus(); return; }
+    // İlk kurulum: "Riskli ortam" kutusu kullanıcının "Bu ortam riskli mi?" yanıtıdır (işaretli = Evet, değil = Hayır). Adı canlıyı
+    // çağrıştıran ortama "Hayır" yalnızca onayla (ad riski belirlemez; uyarıdır).
+    const adUyarisi = satirlar.filter((s2) => !s2.canli.checked && adCanliyiCagristiriyorMu(s2.ad.value));
+    let adOnayi = false;
+    if (adUyarisi.length) {
+      const { onayIste } = await import('./kosu-paneli.js');
+      adOnayi = await onayIste({ baslik: 'Bu ortamın adı canlıyı çağrıştırıyor, emin misiniz?', ikonAd: 'uyari', dugme: 'Evet, riskli değil',
+        metin: `${adUyarisi.map((s2) => `"${s2.ad.value.trim()}"`).join(', ')} riskli değil olarak kaydedilecek: koşular bu ortamda ek onay olmadan başlayabilir.` });
+      if (!adOnayi) return;
+    }
     try {
       await mesgulIken(gonder, 'Kaydediliyor…', async () => {
         for (const s2 of satirlar) {
-          await api('/platform/ortam/kaydet', { govde: { projeId: durum.proje.id, ad: s2.ad.value.trim(), tabanUrl: s2.adres.value.trim(), varsayilan: s2.zorunlu, canli: s2.canli.checked } });
+          await api('/platform/ortam/kaydet', { govde: { projeId: durum.proje.id, ad: s2.ad.value.trim(), tabanUrl: s2.adres.value.trim(), varsayilan: s2.zorunlu, riskli: s2.canli.checked, ...(adOnayi ? { onay: true } : {}) } });
         }
       });
       if (cevaplar.giris === 'hayir') sihirbazTamam(); else sihirbazGiris();
@@ -822,7 +833,7 @@ function anaDuzen() {
       main.className = 'ana-icerik';
       sayfaBasligi('Ayarlar');
       // Eski "Bağlam profilleri" adresi: bağlam kayıtları artık Test verisi > Kayıtlar'da.
-      ayarlarEkrani(main, alt === 'baglam' ? 'test-verisi' : AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje');
+      ayarlarEkrani(main, alt === 'baglam' ? 'test-verisi' : AYAR_BOLUMLERI.some((b) => b.ad === alt) ? alt : 'proje', kalan[0] ? decodeURIComponent(kalan[0]) : null);
     } else {
       // #/sonuclar ve bilinmeyen adresler (ör. eski #/gorunum yer imleri) → Sonuçlar.
       navSonuclar.setAttribute('aria-current', 'page');
@@ -866,7 +877,7 @@ let ekranlarSozu = null;
 const ekranlarModulu = () => (ekranlarSozu ??= import('./ekranlar.js').catch((e) => { ekranlarSozu = null; throw e; }));
 const mesajKutusuHata = (metin) => h('div', { class: 'not-kutusu hata', role: 'alert' }, metin);
 
-function ayarlarEkrani(main, bolum) {
+function ayarlarEkrani(main, bolum, odak = null) {
   const icerik = h('section', { class: 'icerik-alani dar-icerik', 'aria-labelledby': 'bolum-basligi' }, iskelet('sayfa'));
   const altNav = h('nav', { class: 'alt-nav', 'aria-label': 'Ayarlar bölümleri' },
     AYAR_BOLUMLERI.map((b) => h('a', { href: `#/ayarlar/${b.ad}`, 'aria-current': b.ad === bolum ? 'page' : null }, ikon(b.ikon), b.etiket)));
@@ -875,7 +886,7 @@ function ayarlarEkrani(main, bolum) {
       h('aside', { class: 'yan-panel' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ayarlar'), altNav,
         h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
       icerik));
-  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile });
+  ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak });
 }
 
 cikisKorumasiniKur();

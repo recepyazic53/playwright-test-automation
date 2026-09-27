@@ -51,7 +51,7 @@ test.beforeAll(async () => {
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Diyagram Projesi' })).proje.id);
   // Adres hiç çağrılmaz (senaryo koşulmaz); yine de yalnızca yerel, kapalı bir port.
-  ortamId = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true })).ortam.id);
+  ortamId = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: 'http://127.0.0.1:9', varsayilan: true, riskli: false })).ortam.id);
   for (const [ad, subeKodu] of [['Merkez', 'S01'], ['Yetkili', 'S02']]) await basarili('/platform/baglam-profili/kaydet', { projeId, tur: 'Şube', ad, alanlar: { subeKodu } });
   // Öneri 4: "Yetkili / onay adımı hariç" (isteğe bağlı onay adımı kapalı, beklenen sonuç başarı).
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: ornekBasvuruPaketi(), senaryoIndeksleri: [4], ortamIdleri: [ortamId] });

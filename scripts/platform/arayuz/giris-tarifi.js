@@ -9,7 +9,7 @@
 // kontrol edilip kaydedilir. Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
 // #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (Ekranlar > Ortak akışlar > Giriş).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik } from './ortak.js';
-import { onayIste } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { girisAdimlariOzeti } from './giris-ozeti.mjs';
 
 const IKINCI_ADIM_ETIKETI = { yok: 'Yok', totp: 'Authenticator (TOTP)', sms: 'SMS' };
@@ -196,10 +196,11 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         dugme: 'Sayfayı aç ve öner', ikonAd: 'ag'
       });
       if (!tamam) return;
+      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, riskli: o.riskli, canli: o.canli }, 'Giriş sayfası önerisi'))) return;
       oneriNotu.replaceChildren();
       try {
         const { oneri } = await mesgulIken(oner, 'Sayfa inceleniyor…', () => api('/platform/giris-tarifi/oner', {
-          govde: { projeId: proje.id, ortamId: o.ortamId, girisAdresi: girisAdresi.value.trim() }
+          govde: { projeId: proje.id, ortamId: o.ortamId, girisAdresi: girisAdresi.value.trim(), onay: true, ...canliOnayEki(o.ortamId) }
         }));
         if (oneri.captcha && oneri.captcha.length) {
           oneriNotu.replaceChildren(h('div', { class: 'not-kutusu hata' }, 'Sayfada CAPTCHA algılandı. Test ortamında CAPTCHA kapatılmalı; otomasyon CAPTCHA çözmez.'));
@@ -457,7 +458,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       bildir('Giriş kaydı iptal edildi.');
     });
     try {
-      const r = await api('/platform/tarama/baslat', { govde: { kip: 'girisKaydi', projeId: proje.id, ortamId: o.ortamId, onay: true } });
+      if (!(await canliOnayIste({ id: o.ortamId, ad: o.ortamAd, riskli: o.riskli, canli: o.canli }, 'Giriş kaydı'))) { formAlani.replaceChildren(); return; }
+      const r = await api('/platform/tarama/baslat', { govde: { kip: 'girisKaydi', projeId: proje.id, ortamId: o.ortamId, onay: true, ...canliOnayEki(o.ortamId) } });
       isId = r.isId;
     } catch (hata) {
       kutu.replaceChildren(h('h3', {}, `Giriş kaydı: ${o.ortamAd}`), h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message),

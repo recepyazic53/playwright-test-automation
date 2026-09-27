@@ -12,7 +12,7 @@
 import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { GirisHatasi, baglamiDegistir, girisYap } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
-import { agHatasiMi } from '../giris/tarif.mjs';
+import { agHatasiMi, girisKokenleri } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import { KESIF_SECENEK_SINIRI, type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type KesifDegeri, type ProfilEnvanteri, type SayfaEnvanteri, type TaramaEnvanteri } from './paket-olusturucu.mjs';
@@ -125,7 +125,8 @@ export async function taramayiYurut(browser: Browser, g: TaramaGirdisi, olay: Ol
       await olay({ tur: 'adim', adim: 'giris', durum: 'suruyor' });
       if (!g.kimlik) throw new TaramaHatasi('TARIF_GECERSIZ', 'Bu ortam için giriş profili tanımlı değil (Ayarlar > Giriş profilleri).');
       try {
-        await girisYap(islem, g.tarif, g.kimlik, { log: (mesaj) => bildir({ tur: 'bilgi', mesaj }) });
+        // Giriş bilgisi yalnız ortamın taban adresinin / tarifteki giriş adresinin kökenine yazılır.
+        await girisYap(islem, g.tarif, g.kimlik, { log: (mesaj) => bildir({ tur: 'bilgi', mesaj }), izinliKokenler: girisKokenleri(g.tabanUrl, g.tarif) });
       } catch (hata) {
         await olay({ tur: 'adim', adim: 'giris', durum: 'hata', mesaj: hataBilgisi(hata).mesaj });
         throw hata;

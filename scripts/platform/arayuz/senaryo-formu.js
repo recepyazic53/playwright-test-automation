@@ -23,7 +23,7 @@ import {
 } from './model-formu.mjs';
 import { gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
 import { degerBasvurusuYaz, grupAnahtari, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
-import { onayIste } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
@@ -1005,7 +1005,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
     if (baslikDisi.length) { ilkHatayaGit(); return; }
     const ortamId = ortamSecimi.has(s.ortam.id) ? s.ortam.id : [...ortamSecimi][0] || s.ortam.id;
     const ortam = s.ortamlar.find((o) => o.id === ortamId) || s.ortam;
-    if (!ortam.varsayilan && !(await onayIste({ baslik: `${ortam.ad} ortamında denensin mi?`, metin: 'Bu ortam varsayılan test ortamı değil; deneme gerçek işlem oluşturabilir.', dugme: 'Dene', ikonAd: 'uyari' }))) return;
+    // Riskli ortam (tek tanım: ortam-riski.mjs): açık onay; sunucu istekte canliOnay: true ister (+ canlı ortam izni).
+    if (!(await canliOnayIste(ortam, 'Deneme'))) return;
     const kosuId = kimlikUret();
     deneme = { kosuId, bitti: false };
     deneDugmesi.disabled = true;
@@ -1014,7 +1015,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     try {
       const yanit = await api('/platform/senaryo/dene', {
         govde: {
-          projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}),
+          projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}), ...canliOnayEki(ortamId),
           ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi,
           tabloSecimleri: kaydedilecekSecimler()
         }

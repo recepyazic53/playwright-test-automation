@@ -4,7 +4,7 @@
 // "CANLI'da çağrılmasın". Alanlar (yol / sorgu / gövde) SOAP'taki alan tablosuyla test verisi sütunlarına bağlanır.
 // "Dene" isteğe bağlıdır: seçilen TEST ortamında ucu GERÇEKTEN çağırır; önce yöntem + tam adres onaya sunulur.
 import { alan, alanHatasi, api, h, ikon, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste } from './kosu-paneli.js';
+import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
@@ -90,7 +90,7 @@ function anahtarDegerListesi(satirlar, s) {
  */
 export function restUclariFormu(uclar, s) {
   const kap = h('div', { class: 'rest-uclari' });
-  const testler = s.ortamlar.filter((o) => !o.canli);
+  const testler = s.ortamlar.filter((o) => !riskliOrtamMi(o));
   const taban = (o) => {
     const t = s.tabanlar()[o.id];
     return t === '' ? '' : temizTaban(t || o.tabanUrl);

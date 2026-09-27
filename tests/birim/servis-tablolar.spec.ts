@@ -14,7 +14,7 @@ import { kullanilanParametreler, tarihDegeriBicimle, yerTutuculariDoldur } from 
 import { wsdlSemalari } from '../../scripts/platform/servisler/wsdl-semasi.mjs';
 import { basvuru, basvuruCoz, secilenSatir, sutunSecenekleri, uyanSatirlar } from '../../scripts/platform/tablolar/tablo-secimi.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { SAHTE_TC, WSDL, sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
@@ -97,11 +97,13 @@ test.describe('servis alanları tablolardan', () => {
     const vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Servis Tablo Projesi' })).proje.id);
-    testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
+    testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, riskli: false })).ortam.id);
     const e = await basarili('/platform/servis/erisim', { projeId, ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
     servisId = String((await basarili('/platform/servis/kaydet', { projeId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', erisimKimligi: e.erisimKimligi })).id);
     girisId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Servis girişi', sutunlar: [{ ad: 'Kanal' }, { ad: 'Kullanıcı' }, { ad: 'Parola', gizli: true }], satirlar: [

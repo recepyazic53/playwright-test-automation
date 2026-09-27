@@ -12,7 +12,7 @@ import { yasakAdresleriKaydet } from '../../scripts/platform/guvenlik/yasak-adre
 import { baglantiKaydet, baglantilariListele, baglantiSil } from '../../scripts/platform/entegrasyonlar/depo.mjs';
 import { baglantiDene, dbeaverEkle, dbeaverOnizle, hataKaydiAc, hataKaydiOnizle, kosuBittiBildir, sorguCalistir } from '../../scripts/platform/entegrasyonlar/servis.mjs';
 import { parametreleriDonustur, surucuYukleyiciAyarla, yalnizOkumaDenetle } from '../../scripts/platform/entegrasyonlar/veritabani-suruculeri.mjs';
-import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
+import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 
 type Alinan = { yontem: string; yol: string; basliklar: IncomingMessage['headers']; govde: string };
 
@@ -44,8 +44,10 @@ test('şifreli saklama, maskeli görünüm, webhook koşu bildirimi, hata kaydı
     : a.yol === '/rest/api/2/issue' ? { kod: 201, govde: '{"key":"HATA-12"}' } : { kod: 404, govde: `{"errorMessages":["yok ${TOKEN}"]}` }));
   try {
     await kasaOlustur(vt, 'Gecici-Entegrasyon-1', { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
-    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://uygulama.ornek.invalid', varsayilan: true });
+    const ortamId = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://uygulama.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
 
     // Webhook: adres gizli alan → görünümde maskeli, diskte şifreli.
     const w = baglantiKaydet(vt, projeId, { tur: 'webhook', ad: 'Ekip kanalı', alanlar: { adres: `${webhook.adres}${GIZLI_YOL}`, bicim: 'ayrintili' }, olaylar: ['kosu-bitti'] });
@@ -148,6 +150,8 @@ test('veritabanı bağlantısı: yalnız okuma, parametre bağlama, taklit sür�
   });
   try {
     await kasaOlustur(vt, 'Gecici-Entegrasyon-2', { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
     const b = baglantiKaydet(vt, projeId, { tur: 'veritabani', ad: 'Test veritabanı', alanlar: { surucu: 'postgres', sunucu: 'db.ornek.invalid', veritabani: 'uyg', kullanici: 'okur', parola: PAROLA } });
     expect(b.alanlar.yalnizOkuma).toBe(true);

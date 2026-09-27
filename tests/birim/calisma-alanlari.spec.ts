@@ -194,7 +194,7 @@ test.describe('Aynı çalışma alanında birden çok proje', () => {
       await kasaOlustur(vt, PAROLA_A, { kdf: HIZLI_KDF });
       // Proje A: elle (ortam, iki ekran, dört senaryo).
       const a = projeKaydet(vt, { ad: 'Proje A' });
-      const ortamA = ortamKaydet(vt, { projeId: a, ad: 'TEST', tabanUrl: 'https://a.ornek.invalid', varsayilan: true });
+      const ortamA = ortamKaydet(vt, { projeId: a, ad: 'TEST', tabanUrl: 'https://a.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
       for (const [anahtar, ad] of [['basvuru', 'Başvuru ekranı'], ['musteri', 'Müşteri ekranı']] as const) {
         const ekran = ekranKaydet(vt, { projeId: a, anahtar, ad });
         for (const n of [1, 2]) {
@@ -203,7 +203,7 @@ test.describe('Aynı çalışma alanında birden çok proje', () => {
       }
       // Proje B: elle (ortam, ekran, bir senaryo).
       const b = projeKaydet(vt, { ad: 'Proje B' });
-      const ortamB = ortamKaydet(vt, { projeId: b, ad: 'TEST', tabanUrl: 'https://b.ornek.invalid', varsayilan: true });
+      const ortamB = ortamKaydet(vt, { projeId: b, ad: 'TEST', tabanUrl: 'https://b.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
       const ekranB = ekranKaydet(vt, { projeId: b, anahtar: 'giris', ad: 'Giriş ekranı' });
       const senaryoB = senaryoKaydet(vt, { projeId: b, ekranId: ekranB, baslik: 'B senaryosu', icerik: { ortamlar: { [ortamB]: { veri: {} } } } });
       // Sonuçlar ve medya: her projede bir koşu.

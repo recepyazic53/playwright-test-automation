@@ -3,7 +3,7 @@
 // adımlarını gösterir: Parametreler hazırlandı → İstek gönderiliyor (sarı) → gönderildi (yeşil) → Cevap bekleniyor → Cevap geldi →
 // Kontroller. İstek ve yanıt (gizli değerler maskeli) açılır kutularda. "Durdur" bekleyen isteği keser; "Tümünü durdur" işi durdurur.
 import { api, h, ikon, rozet, yerlestir } from './ortak.js';
-import { KOSU_DURUMLARI } from './kosu-paneli.js';
+import { KOSU_DURUMLARI, canliOnayEki } from './kosu-paneli.js';
 
 const SORGU_MS = 400;
 const DURUMLAR = { ...KOSU_DURUMLARI, atlandi: KOSU_DURUMLARI.atlanan };
@@ -30,7 +30,8 @@ export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
  */
 export async function servisKosusuBaslat(s) {
   if (servisKosusuSuruyorMu()) throw new Error('Süren bir servis koşusu var; bitmesini bekleyin ya da durdurun.');
-  const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...(s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }) } });
+  // Riskli ortamda açık onay: koşu diyaloğunda onaylandıysa canliOnay: true gider (kosu-paneli.js > canliOnayEki).
+  const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...canliOnayEki(s.ortamId), ...(s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }) } });
   durum = { projeId: s.proje.id, is, secili: is.satirlar.find((x) => x.durum !== 'atlandi')?.senaryoId ?? is.satirlar[0]?.senaryoId, kucuk: false, bitti: s.bitti };
   acikKutular.clear();
   ciz();

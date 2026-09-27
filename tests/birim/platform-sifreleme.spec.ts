@@ -113,7 +113,7 @@ function tabloDokumu(vt: Veritabani): Record<string, Record<string, unknown>[]> 
 
 async function ornekVeri(vt: Veritabani): Promise<{ proje: string; ortam: string; profil: string; baglam: string }> {
   const proje = projeKaydet(vt, { ad: 'Açık Proje Adı' });
-  const ortam = ortamKaydet(vt, { projeId: proje, ad: ORTAM_ADI, tabanUrl: ORTAM_URL, varsayilan: true });
+  const ortam = ortamKaydet(vt, { projeId: proje, ad: ORTAM_ADI, tabanUrl: ORTAM_URL, varsayilan: true, ayarlar: { riskli: false } });
   const profil = girisProfiliKaydet(vt, {
     projeId: proje, ortamId: ortam, ad: 'Profil', kullaniciAdi: KULLANICI, parola: GIRIS_PAROLASI,
     ikiAsamaliTur: 'sms', smsAyari: { telefon: SMS_NO }

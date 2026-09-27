@@ -11,7 +11,7 @@ import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs'
 import { baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi, type AlanDegeri } from '../../scripts/platform/servisler/servis-govdesi.mjs';
 import { wsdlSemalari } from '../../scripts/platform/servisler/wsdl-semasi.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { WSDL, sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
@@ -101,11 +101,13 @@ test.describe('alan formu uçtan uca', () => {
     const vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+    izinleriAc(vt);
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     await basarili('/platform/kasa/ac', { parola: PAROLA });
     projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Alan Projesi' })).proje.id);
-    testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
+    testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, riskli: false })).ortam.id);
     canli = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'CANLI', tabanUrl: soap.adres, canli: true })).ortam.id);
     await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }] }] });
     tarayici = await chromium.launch();

@@ -208,9 +208,23 @@ export function gizlileriMaskele(metin, gizliler) {
  * @typedef {{ durumKodu: number; basliklar: Record<string, string>; govde: string; sureMs: number }} HamYanit
  */
 
+/** @typedef {ReadonlyArray<{ kalip: string; desen: RegExp }>} YasakDesenleri */
+
+/**
+ * Ortam değişkenindeki yasak adres kalıpları (NOBETCI_YASAK_ADRESLER; "*" joker) — çağıran Ayarlar'dakileri vermediyse yedek.
+ * @returns {YasakDesenleri}
+ */
+function ortamYasakDesenleri() {
+  const kac = (/** @type {string} */ x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(process.env.NOBETCI_YASAK_ADRESLER ?? '').split(/[\s,;]+/).map((k) => k.trim().toLowerCase()).filter(Boolean)
+    .map((kalip) => ({ kalip, desen: new RegExp(`^${kalip.split('*').map(kac).join('.*')}$`, 'i') }));
+}
+
 /**
  * @param {{ adres: string; yontem?: string; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
- *   sinyal?: AbortSignal; gonderildi?: () => void }} istek  gonderildi: istek gövdesi karşıya yazılınca çağrılır.
+ *   sinyal?: AbortSignal; gonderildi?: () => void; yasakDesenleri?: YasakDesenleri }} istek  gonderildi: istek gövdesi karşıya yazılınca çağrılır.
+ *   yasakDesenleri: Ayarlar > Güvenlik > Yasak adresler + ortam değişkeni (sunucu etkinYasakDesenleri ile verir; verilmezse yalnız
+ *   ortam değişkeni). Host yasak kalıba uyuyorsa istek HİÇ gönderilmez.
  * @returns {Promise<HamYanit>}
  */
 export function httpIstegi(istek) {
@@ -221,6 +235,8 @@ export function httpIstegi(istek) {
     return Promise.reject(new ServisHatasi(`Geçersiz adres: ${istek.adres}`));
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return Promise.reject(new ServisHatasi('Adres http(s) olmalıdır.'));
+  const yasak = (istek.yasakDesenleri ?? ortamYasakDesenleri()).find((x) => x.desen.test(url.hostname.toLowerCase()));
+  if (yasak) return Promise.reject(new ServisHatasi(`İstek gönderilmedi: ${url.hostname} yasaklı adres kalıbına ("${yasak.kalip}") uyuyor (Ayarlar > Güvenlik > Yasak adresler).`));
   const modul = url.protocol === 'https:' ? https : http;
   const bas = Date.now();
   const zamanAsimi = istek.zamanAsimiMs ?? VARSAYILAN_ZAMAN_ASIMI_MS;
@@ -267,7 +283,7 @@ function agHatasiMetni(e) {
  * SOAP isteği. 1.1: text/xml + SOAPAction; 1.2: application/soap+xml; action=... ekBasliklar (ör. Authorization) eklenir;
  * Content-Type / SOAPAction ezilemez.
  * @param {{ adres: string; eylem?: string; soapSurumu?: '1.1' | '1.2'; govde: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
- *   sinyal?: AbortSignal; gonderildi?: () => void; ekBasliklar?: Record<string, string> }} istek
+ *   sinyal?: AbortSignal; gonderildi?: () => void; ekBasliklar?: Record<string, string>; yasakDesenleri?: YasakDesenleri }} istek
  */
 export function soapIstegi(istek) {
   const soapBasliklari = istek.soapSurumu === '1.2'
@@ -277,7 +293,7 @@ export function soapIstegi(istek) {
   const ek = Object.fromEntries(Object.entries(istek.ekBasliklar ?? {}).filter(([a]) => !korunan.has(a.toLowerCase())));
   const basliklar = { ...ek, ...soapBasliklari };
   return httpIstegi({ adres: istek.adres, yontem: 'POST', basliklar, govde: istek.govde, zamanAsimiMs: istek.zamanAsimiMs, tlsDogrulama: istek.tlsDogrulama,
-    sinyal: istek.sinyal, gonderildi: istek.gonderildi });
+    sinyal: istek.sinyal, gonderildi: istek.gonderildi, ...(istek.yasakDesenleri ? { yasakDesenleri: istek.yasakDesenleri } : {}) });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -323,11 +339,12 @@ export function iceAktarmaAdresleri(metin, taban) {
  * Servise erişimi denetler: WSDL'i (GET <adres>?wsdl) ister, operasyonları ve alan şemalarını çıkarır. WSDL ayrı şema ya da WSDL
  * dosyalarını içe aktarıyorsa (ör. Java JAX-WS: "?xsd=1", "?wsdl=1") bunlar da — yalnız AYNI sunucudan, en çok 3 kat derinlik ve
  * 15 belge — alınıp ana belgeye eklenir. Başarısızsa açık mesajlı ServisHatasi.
- * @param {{ adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean }} girdi
+ * @param {{ adres: string; zamanAsimiMs?: number; tlsDogrulama?: boolean; yasakDesenleri?: YasakDesenleri }} girdi
  */
 export async function erisimiDenetle(girdi) {
   const wsdlAdresi = /\?wsdl$/i.test(girdi.adres) ? girdi.adres : `${girdi.adres}?wsdl`;
-  const y = await httpIstegi({ adres: wsdlAdresi, yontem: 'GET', zamanAsimiMs: girdi.zamanAsimiMs ?? 20_000, tlsDogrulama: girdi.tlsDogrulama });
+  const yd = girdi.yasakDesenleri ? { yasakDesenleri: girdi.yasakDesenleri } : {};
+  const y = await httpIstegi({ adres: wsdlAdresi, yontem: 'GET', zamanAsimiMs: girdi.zamanAsimiMs ?? 20_000, tlsDogrulama: girdi.tlsDogrulama, ...yd });
   if (y.durumKodu < 200 || y.durumKodu >= 300) throw new ServisHatasi(`Servis ${y.durumKodu} döndü (${wsdlAdresi}).`);
   if (!/<(?:\w+:)?definitions\b/.test(y.govde)) throw new ServisHatasi('Yanıt bir WSDL değil (adres ya da yol yanlış olabilir).');
   const koken = new URL(wsdlAdresi).origin;
@@ -342,7 +359,7 @@ export async function erisimiDenetle(girdi) {
     if (alinan.has(adres) || new URL(adres).origin !== koken) continue;
     alinan.add(adres);
     try {
-      const e = await httpIstegi({ adres, yontem: 'GET', zamanAsimiMs: girdi.zamanAsimiMs ?? 20_000, tlsDogrulama: girdi.tlsDogrulama });
+      const e = await httpIstegi({ adres, yontem: 'GET', zamanAsimiMs: girdi.zamanAsimiMs ?? 20_000, tlsDogrulama: girdi.tlsDogrulama, ...yd });
       if (e.durumKodu < 200 || e.durumKodu >= 300) { alinamayan.push(`${adres} (${e.durumKodu})`); continue; }
       ekler.push(e.govde.replace(/^\s*<\?xml[^>]*\?>/, ''));
       if (derinlik < ICE_AKTARMA_DERINLIGI) kuyruk = [...kuyruk, ...iceAktarmaAdresleri(e.govde, adres).map((a) => ({ adres: a, derinlik: derinlik + 1 }))];

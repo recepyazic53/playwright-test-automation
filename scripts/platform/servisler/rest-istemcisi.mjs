@@ -34,7 +34,7 @@ export function govdeKacisi(icerikTuru) {
  * REST isteği. ekBasliklar (ör. Authorization) eklenir; Content-Type içerik türünden yazılır (ezilemez). Accept verilmemişse
  * "application/json, *\/*".
  * @param {{ adres: string; metot: string; govde?: string; icerikTuru?: string; ekBasliklar?: Record<string, string>; zamanAsimiMs?: number;
- *   tlsDogrulama?: boolean; sinyal?: AbortSignal; gonderildi?: () => void }} istek
+ *   tlsDogrulama?: boolean; sinyal?: AbortSignal; gonderildi?: () => void; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }> }} istek
  */
 export function restIstegi(istek) {
   const metot = istek.metot.toUpperCase();
@@ -49,6 +49,6 @@ export function restIstegi(istek) {
   };
   return httpIstegi({
     adres: istek.adres, yontem: metot, basliklar, ...(govdeVar ? { govde: istek.govde } : {}), zamanAsimiMs: istek.zamanAsimiMs,
-    tlsDogrulama: istek.tlsDogrulama, sinyal: istek.sinyal, gonderildi: istek.gonderildi
+    tlsDogrulama: istek.tlsDogrulama, sinyal: istek.sinyal, gonderildi: istek.gonderildi, ...(istek.yasakDesenleri ? { yasakDesenleri: istek.yasakDesenleri } : {})
   });
 }

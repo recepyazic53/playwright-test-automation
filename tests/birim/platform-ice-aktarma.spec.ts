@@ -61,7 +61,7 @@ async function kaynakOlustur(yol: string | null = null): Promise<{ vt: Veritaban
   const vt = await veritabaniniHazirla(yol);
   await kasaOlustur(vt, PAROLA_A, { kdf: HIZLI_KDF });
   const proje = projeKaydet(vt, { ad: 'Ortak Proje' });
-  const ortam = ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://ilk-ortam.ornek.test', varsayilan: true });
+  const ortam = ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://ilk-ortam.ornek.test', varsayilan: true, ayarlar: { riskli: false } });
   const profil = girisProfiliKaydet(vt, {
     projeId: proje, ortamId: ortam, ad: 'Ana', kullaniciAdi: 'kullanici', parola: GIRIS_PAROLASI, ikiAsamaliTur: 'totp', totpGizli: TOTP
   });
@@ -153,7 +153,7 @@ test.describe('Yedek içe aktarma — önizleme → seçim → uygulama', () => 
       girisProfiliKaydet(a, { id: ids.profil, projeId: ids.proje, ortamId: ids.ortam, ad: 'Ana', kullaniciAdi: 'kullanici', parola: YENI_GIRIS_PAROLASI });
       const tur = String(a.tek('SELECT tur_id FROM test_verisi_profilleri WHERE id = ?', [ids.veri])?.tur_id);
       testVerisiProfiliKaydet(a, { id: ids.veri, projeId: ids.proje, turId: tur, ad: 'Hesap 1', degerler: { iban: YENI_IBAN, ad: 'Deneme' } });
-      ortamKaydet(a, { id: ids.ortam, projeId: ids.proje, ad: 'Test', tabanUrl: YENI_URL, varsayilan: true });
+      ortamKaydet(a, { id: ids.ortam, projeId: ids.proje, ad: 'Test', tabanUrl: YENI_URL, varsayilan: true, ayarlar: { riskli: false } });
       kosuOlustur(a, { projeId: ids.proje });
       const s3 = senaryoKaydet(b, { projeId: ids.proje, baslik: 'Yalnızca B', icerik: {} });
       senaryoKaydet(b, { id: ids.s1, projeId: ids.proje, ekranId: ids.ekran, baslik: 'Senaryo 1', icerik: { adim: 'B', not: 'aynı' } });

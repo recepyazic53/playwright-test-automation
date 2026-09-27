@@ -9,7 +9,7 @@ import { expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 import { SAHTE_PAROLA, SAHTE_TC, SOAPUI, sahteSoapSunucusu, type SahteIstek } from './servis-fikstur';
 
 type Nesne = Record<string, any>;
@@ -37,11 +37,13 @@ test.beforeAll(async () => {
   const vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   vt.kapat();
   nobetci = await nobetciBaslat(klasor, vtYolu, {});
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String((await basarili('/platform/proje/kaydet', { ad: 'Servis Projesi' })).proje.id);
-  testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true })).ortam.id);
+  testOrtami = String((await basarili('/platform/ortam/kaydet', { projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, riskli: false })).ortam.id);
   await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Kişi', alanlar: [{ ad: 'tcKimlikNo', servisParametreleri: [{ ad: 'MUSTERI_TC', rol: 'musteri' }] }] });
   // Giriş bilgisi tablosu (sütun adları WSDL alanlarıyla aynı): aktarım bağlar, dosyadaki giriş bilgisini satır olarak ekler.
   await basarili('/platform/tablo/kaydet', { projeId, ad: 'Giriş', sutunlar: [{ ad: 'Channel' }, { ad: 'Username' }, { ad: 'Password', gizli: true }] });

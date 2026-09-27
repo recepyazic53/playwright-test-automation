@@ -23,9 +23,10 @@ import {
   YASAK_ADRES_DEGISKENI, YUKLEME_KLASORU_DEGISKENI, adresYasakliMi, gizliDegerleriMaskele, modelKosuPlani, secenekBul, veriHatalariMetni, yasakDesenleri, yasakliAdresMesaji,
   yuklemeDosyasiYolu, type ModelKosuPlani, type PlanAdimi, type PlanAlani, type PlanBasariGostergesi, type PlanKosuTanimi
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
-import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
+import { girisKokenleri, type GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { beklenenGorulenMetni, beklenenMesajiBekle, mesajIceriyorMu, mesajiNormallestir } from './beklenen-sonuc';
-import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKapat, oturumuKaydetmeyeHazirla, type GirisKimligi } from './giris-motoru';
+import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKapat, type GirisKimligi } from './giris-motoru';
+import { oturumuSifreliYaz } from './oturum-kasasi';
 import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
@@ -572,7 +573,8 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
       const v = s.veri[ifade];
       return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : undefined;
     },
-    yurutucu: (sql, parametreler, o) => ayarlaSorgula(ayar, sql, parametreler, o)
+    // İzinler (veritabanı okuma / yazma): koşucu kasayı açmaz; durum veri-oku.mjs çıktısından gelir.
+    yurutucu: (sql, parametreler, o) => ayarlaSorgula(ayar, sql, parametreler, { ...o, izinler: ortam.veri.izinler ?? null })
   });
   // Ek her zaman yazılır (sorgu hatasında da): hangi bağlantının kullanıldığı raporda görünür (ad; parola asla).
   await testInfo.attach(`SQL sonucu - ${adimBasligi}`, {
@@ -696,17 +698,12 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         // Kayıtlı oturum kullanılmaz: çerezler temizlenir, seçilen (ya da varsayılan) profille girilir. Varsayılan dışı profilin
         // oturumu paylaşılan oturum dosyasına YAZILMAZ (diğer senaryolar varsayılan profille devam eder).
         await oturumuKapat(page);
-        await girisYap(page, tarif, ortam.kimlik(giris.profil));
-        if (giris.profil === null) {
-          const oturumDosyasi = ortam.oturumDosyasi();
-          oturumuKaydetmeyeHazirla(oturumDosyasi);
-          await page.context().storageState({ path: oturumDosyasi });
-        }
+        await girisYap(page, tarif, ortam.kimlik(giris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif) });
+        // Oturum dosyası kasa anahtarından türetilen anahtarla ŞİFRELİ yazılır (oturum-kasasi.ts; düz metin çerez diske yazılmaz).
+        if (giris.profil === null) await oturumuSifreliYaz(page.context(), ortam.oturumDosyasi());
       } else if (!(await oturumGecerliMi(page, tarif))) {
-        await girisYap(page, tarif, ortam.kimlik());
-        const oturumDosyasi = ortam.oturumDosyasi();
-        oturumuKaydetmeyeHazirla(oturumDosyasi);
-        await page.context().storageState({ path: oturumDosyasi });
+        await girisYap(page, tarif, ortam.kimlik(), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif) });
+        await oturumuSifreliYaz(page.context(), ortam.oturumDosyasi());
       }
       await ekranGoruntusu(`Sisteme giriş yapıldı${temizGiris ? ' (temiz oturum)' : ''}${profilEki(giris.profil)}`);
     });
@@ -744,7 +741,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           const t = tarif ?? ortam.tarif();
           const donus = page.url();
           await oturumuKapat(page);
-          await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil));
+          await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
           await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`);
           await baglamiUygula(t);
           if (/^https?:/i.test(donus)) await page.goto(donus, { waitUntil: 'domcontentloaded' });

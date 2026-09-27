@@ -19,7 +19,7 @@ import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs'
 import { SIRKET_DESENI, korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { ORNEK_KULLANICI, ORNEK_PAROLA, ORNEK_TOTP_ANAHTARI, OrnekBasvuruUygulamasi, ornekGirisTarifi } from './model-fikstur';
 import { bosPort, nobetciApi, nobetciBaslat, type Nobetci, type Yanit } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 
 type Nesne = Record<string, any>;
 const PAROLA = `Gecici-Kayit-${randomBytes(6).toString('hex')}`;
@@ -70,6 +70,8 @@ test.beforeAll(async () => {
   const vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   vt.kapat();
   cdpPortu = await bosPort();
   nobetci = await nobetciBaslat(klasor, vtYolu, {
@@ -77,7 +79,7 @@ test.beforeAll(async () => {
   });
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Kayıt Projesi' })).proje as Nesne).id);
-  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true })).ortam as Nesne).id);
+  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
   canliOrtamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Üretim', tabanUrl: 'https://uretim.ornek.invalid', canli: true })).ortam as Nesne).id);
   await basarili('/platform/giris-profili/kaydet', {
     projeId, ad: 'Deneme kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA, ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI
@@ -101,7 +103,7 @@ test('başlatma kuralları: onay, canlı işaretli ortam ve tek bağlam profili 
   expect(ortamlar.find((o) => o.id === canliOrtamId)?.canli).toBe(true);
   expect(ortamlar.find((o) => o.id === ortamId)?.canli).toBe(false);
   expect(await api('/platform/tarama/baslat', kayitGovdesi({ onay: false }))).toMatchObject({ basarili: false, kod: 'ONAY_GEREKLI' });
-  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId }))).toMatchObject({ basarili: false, kod: 'CANLI_ORTAM' });
+  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId, canliOnay: true }))).toMatchObject({ basarili: false, kod: 'CANLI_ORTAM' });
   expect(await api('/platform/tarama/baslat', kayitGovdesi({ baglamProfilleri: ['Merkez', 'Yetkili'] }))).toMatchObject({ basarili: false, kod: 'PROFIL' });
   expect(uygulama.olaylar).toEqual([]);
 });
@@ -269,7 +271,7 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (canlı ortam seçilemez, ona
     await page.getByRole('button', { name: 'Akışı kaydet' }).first().click();
     const diyalog = page.locator('dialog[open]');
     await expect(diyalog.getByText('Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.')).toBeVisible();
-    await expect(diyalog.locator('option', { hasText: 'Üretim (canlı — kayıt kapalı)' })).toBeDisabled();
+    await expect(diyalog.locator('option', { hasText: 'Üretim (riskli — kayıt kapalı)' })).toBeDisabled();
     const baslat = diyalog.getByRole('button', { name: 'Kaydı başlat' });
     await expect(baslat).toBeDisabled();
     // "Giriş yapmadan aç": bağlam profili seçilemez.

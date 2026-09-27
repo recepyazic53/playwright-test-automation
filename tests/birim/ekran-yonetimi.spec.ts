@@ -36,7 +36,7 @@ async function kur(): Promise<Ortam> {
   const vt = await veritabaniniHazirla(join(k.yol, 'platform.db'));
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
   const projeId = projeKaydet(vt, { ad: 'Örnek Proje' });
-  const ortamId = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true });
+  const ortamId = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'http://127.0.0.1:9/', varsayilan: true, ayarlar: { riskli: false } });
   const ekran = (anahtar: string, ad: string, model?: Record<string, unknown>) => {
     const id = ekranKaydet(vt, { projeId, anahtar, ad });
     if (model) ekranModeliEkle(vt, { ekranId: id, model });

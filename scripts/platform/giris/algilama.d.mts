@@ -14,4 +14,4 @@ export declare const CAPTCHA_MESAJI: string;
 export declare function girisFormunuAlgila(page: Page, secenekler?: { beklemeSn?: number }): Promise<GirisFormuOnerisi>;
 export declare function kodAlaniniAlgila(page: Page, haric?: string[]): Promise<string | null>;
 export declare function captchaAlgila(page: Page): Promise<string[]>;
-export declare function girisSayfasiniOner(adres: string, secenekler?: { zamanAsimiSn?: number; tarayiciSecenekleri?: LaunchOptions }): Promise<GirisFormuOnerisi & { captcha: string[]; sonAdres: string | null }>;
+export declare function girisSayfasiniOner(adres: string, secenekler?: { zamanAsimiSn?: number; tarayiciSecenekleri?: LaunchOptions; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }> }): Promise<GirisFormuOnerisi & { captcha: string[]; sonAdres: string | null }>;

@@ -5,6 +5,9 @@
 // Yazım ilkesi: her adım "bu nedir → ne işe yarar → ne yapmalıyım" sorularını kısa cümlelerle cevaplar. Metinler geneldir:
 // hiçbir ürün / şirket adı içermez.
 
+import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
+import { RISKLI_ORTAM_TANIMI } from './ortam-riski.mjs';
+
 const ANA_AKIS = {
   tur: 'akis',
   kutular: [
@@ -272,7 +275,12 @@ export const REHBERLER = {
     baslik: 'Proje ve ortamlar',
     adimlar: [
       { baslik: 'Ayarlar', hedef: '.alt-nav', metin: 'Ayarlar bölümleri solda. Buradaki her seçim sizin kararınızdır; Nöbetçi\'nin kodunda sizin yerinize verilmiş bir tercih yoktur.' },
-      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). "Canlı" işaretli ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'adres + giriş' }, { baslik: 'CANLI ortamı', alt: 'yalnız güvenli adımlar' }] } },
+      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). Riskli ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'riskli değil' }, { baslik: 'CANLI ortamı', alt: 'riskli: yalnız güvenli adımlar' }] } },
+      {
+        baslik: 'Bu ortam riskli mi?',
+        metin: [RISKLI_ORTAM_TANIMI, 'Riskli ortamda her çalıştırma ayrıca onay ve Ayarlar > İzinler\'de "Canlı / riskli ortamda çalıştırma" izni ister; akış / giriş kaydı yapılamaz; servis "Dene"si yapılamaz.'],
+        ipucu: 'Yanıtlanmamış ortamlar listede "Riskli mi? belirtin" olarak görünür. "Evet"ten "Hayır"a geçmek onay ister; her değişiklik ortamın "Geçmiş"inde durur.'
+      },
       { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (ekran listeleri, kişi ve kayıt tabloları) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
     ]
   },
@@ -304,7 +312,8 @@ export const REHBERLER = {
         metin: 'Nöbetçi\'nin belirli saatlerde kendiliğinden koşu başlatmasını ayarlayın: her gün, haftanın seçili günleri ya da her N saatte bir. Koşular yalnızca Nöbetçi açıkken ve kasa açıkken çalışır; kaçan zamanlar sonradan koşulmaz, başka bir koşu sürerken gelen zaman atlanır.',
         cizim: { tur: 'akis', kutular: [{ baslik: 'Zaman', alt: 'her gün 07:00', ikon: 'saat' }, { baslik: 'Kasa açık mı?', ikon: 'kilit' }, { baslik: 'Koşu', alt: '"Koşuda" senaryolar', ikon: 'oynat' }, { baslik: 'Bildirim', alt: 'isteğe bağlı', ikon: 'simsek' }] },
         ipucu: 'Canlı ortam için ayrıca açık onay gerekir. Her kuralın son 20 çalışması ve sonuç bağlantıları "Geçmiş"te durur. '
-          + '"Kasa kilitliyken ve açılışta" bölümündeki üç seçenek (kilitliyken çalışma, Windows oturumuna bağlı açma, açılışta arka planda başlatma) varsayılan kapalıdır; her birinin ne yaptığı ve riski yanında yazar.'
+          + '"Kasa kilitliyken ve açılışta" bölümündeki üç seçenek (kilitliyken çalışma, Windows oturumuna bağlı açma, açılışta arka planda başlatma) varsayılan kapalıdır; her birinin ne yaptığı ve riski yanında yazar. '
+          + 'Zamanlanmış koşular için Ayarlar > İzinler\'de "Arka plan çalışması" izni gerekir; Windows seçenekleri "Sistem değişikliği" izni ister.'
       }
     ]
   },
@@ -315,11 +324,27 @@ export const REHBERLER = {
       { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' }
     ]
   },
+  // İzin metinleri izin tanımlarından gelir (izin-tanimlari.mjs; Ayarlar > İzinler ve kapalı izin uyarısıyla aynı kaynak).
+  'ayarlar-izinler': {
+    baslik: 'İzinler',
+    adimlar: [
+      {
+        baslik: 'İzinler nedir?',
+        metin: ['Nöbetçi\'nin sizin adınıza yaptığı her işlem (tarayıcıyla siteye girmek, servise istek atmak, veritabanını sorgulamak, dışarıya bildirim göndermek…) bir izne bağlıdır.',
+          'Tüm izinler varsayılan olarak KAPALIDIR. Kapalı bir izne bağlı işlem denenirse yapılmaz; ekranda "Bu işlem için Ayarlar > İzinler\'de … iznini açmalısınız." uyarısı ve "İzinlere git" düğmesi çıkar.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'İşlem', alt: 'ör. Koşuyu başlat', ikon: 'oynat' }, { baslik: 'İzin açık mı?', ikon: 'kalkan' }, { baslik: 'Yapılır', alt: 'mevcut onaylarla', ikon: 'onay' }] }
+      },
+      { baslik: 'İzin listesi', hedef: '.izin-listesi', sira: IZIN_TANIMLARI.map((t) => `${t.etiket}: ${t.aciklama}`) },
+      { baslik: 'Ne yapar, nerede kullanılır?', hedef: '.izin-soru', metin: 'Her iznin yanındaki "?" düğmesi o iznin neler yapabildiğini, hangi ekranlarda ve hangi işlemlerde kullanıldığını, riskini ve kapalıyken ne olduğunu açar. Klavyeyle de açılır; Esc kapatır.' },
+      { baslik: 'Açmak ve kapatmak', hedef: '.izin-anahtari', metin: 'Açarken kısa bir onay penceresi iznin ne yaptığını ve riskini gösterir. Kapatmak her zaman serbesttir. İzin açıkken de işlem başına onaylar (ör. canlı ortam onayı) sorulmaya devam eder.', ipucu: 'Zamanlanmış koşularda kapalı izne bağlı işlem atlanır ve geçmişte "izin kapalı: …" olarak görünür.' },
+      { baslik: 'Son değişiklikler', metin: 'Hangi iznin kim tarafından, ne zaman açılıp kapandığı bu bölümün altında listelenir.' }
+    ]
+  },
   'ayarlar-guvenlik': {
     baslik: 'Güvenlik',
     adimlar: [
       { baslik: 'Kasa', metin: 'Kasa kilitlenince şifreli bilgiler okunamaz. İşlem yapılmazsa kasa ayarladığınız sürede kendiliğinden kilitlenir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'kilitli / açık' }, { baslik: 'Otomatik kilit', alt: 'boşta kalınca' }] } },
-      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı adres kalıpları: bu adreslere koşu ve tarama hiç başlamaz.' },
+      { baslik: 'Yasak adresler', metin: 'Nöbetçi\'nin hiçbir zaman bağlanmayacağı adres kalıpları: bu adreslere koşu, tarama, servis istekleri (WSDL / şema dahil), entegrasyonlar ve "Varsayılanları öner" hiç bağlanmaz.', ipucu: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler ayrıca Ayarlar > İzinler\'e bağlıdır (varsayılan kapalı).' },
       { baslik: 'Maskeleme', metin: 'Raporlarda ve yanıtlarda maskelenecek ek gizli alan adları.' }
     ]
   },
@@ -332,7 +357,7 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Tür', alt: 'webhook / hata kaydı / veritabanı', ikon: 'liste' }, { baslik: 'Ayarlar', alt: 'gizliler kasada', ikon: 'kilit' }, { baslik: 'Dene', alt: 'onayınızla', ikon: 'simsek' }, { baslik: 'Bağlı', ikon: 'onay' }] }
       },
       { baslik: 'Bağlama sırası', sira: ['"Yeni bağlantı" ile türü seçin.', 'Alanları doldurun; hangi olaylarda ve hangi ortamlarda çalışacağını seçin.', '"Bağlantıyı dene": önce hangi adrese deneme isteği gideceği gösterilir, onaylarsanız gider.', 'Kaydedin; durum rozeti bağlı / denenmedi / hata olarak görünür.'] },
-      { baslik: 'Veritabanı ve DBeaver', metin: 'Veritabanı bağlantıları varsayılan olarak yalnız okuma kipindedir (yalnız SELECT). DBeaver kullanıyorsanız bağlantı tanımlarını "DBeaver\'dan içe aktar" ile alabilirsiniz; parolalar alınmaz, siz girersiniz.', ipucu: 'Veritabanı sürücüleri ayrıca kurulur: npm install mssql oracledb pg mysql2' },
+      { baslik: 'Veritabanı ve DBeaver', metin: 'Veritabanı bağlantıları varsayılan olarak yalnız okuma kipindedir (yalnız SELECT). DBeaver kullanıyorsanız bağlantı tanımlarını "DBeaver\'dan içe aktar" ile alabilirsiniz; parolalar alınmaz, siz girersiniz. Bildirim / hata kaydı için "Dış gönderim", veritabanı için "Veritabanı okuma" (yazma sorgusu için ayrıca "Veritabanına yazma") izni gerekir (Ayarlar > İzinler). Yeni bağlantıda olay seçimi kapalı başlar.', ipucu: 'Veritabanı sürücüleri ayrıca kurulur: npm install mssql oracledb pg mysql2' },
       {
         baslik: 'Veritabanları (ortama göre)',
         metin: ['SQL adımı bir bağlantıya değil, bir veritabanına bağlanır; koşu, seçtiğiniz ortamdaki bağlantıya gider. Tabloda satır veritabanı, sütun ortamdır; boş hücre o ortamda kullanılmaz (adım sorgu atmadan hatayla kalır, koşu diyaloğu önceden uyarır).',

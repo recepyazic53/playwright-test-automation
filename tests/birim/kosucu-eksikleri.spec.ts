@@ -12,7 +12,7 @@ import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { yerelSunucu, type FiksturIstegi, type FiksturYaniti } from './giris-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
-import { HIZLI_KDF } from './platform-ortak';
+import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 
 type Nesne = Record<string, unknown>;
 const PAROLA = `Gecici-Kosucu-${randomBytes(6).toString('hex')}`;
@@ -128,11 +128,13 @@ test.beforeAll(async () => {
   const vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
   await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+  // İzinlerden bağımsız davranış sınanıyor: Ayarlar > İzinler (varsayılan kapalı) açılır.
+  izinleriAc(vt);
   vt.kapat();
   nobetci = await nobetciBaslat(klasor, vtYolu, {});
   await basarili('/platform/kasa/ac', { parola: PAROLA });
   projeId = String(((await basarili('/platform/proje/kaydet', { ad: 'Koşucu Projesi' })).proje as Nesne).id);
-  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true })).ortam as Nesne).id);
+  ortamId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Deneme', tabanUrl: fikstur.adres, varsayilan: true, riskli: false })).ortam as Nesne).id);
   const tur = String((await basarili('/platform/test-verisi-turu/kaydet', { projeId, ad: 'Özel kişi', alanlar: ['tcKimlikNo', 'cepTelefonu'].map((ad) => ({ ad, hassas: true })) })).id);
   await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: tur, ad: 'k1', degerler: KISI });
   await basarili('/platform/test-verisi-profili/kaydet', { projeId, turId: tur, ad: 'hatali', degerler: { ...KISI, tcKimlikNo: '99000000012' } });

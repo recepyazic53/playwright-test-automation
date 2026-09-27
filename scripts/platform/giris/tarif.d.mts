@@ -59,7 +59,7 @@ export interface GirisTarifi {
 
 export type GirisHataKodu =
   | 'SITE_ERISILEMEDI' | 'KIMLIK_HATALI' | 'IKI_ASAMALI_HATALI' | 'KOD_GEREKLI' | 'CAPTCHA' | 'ALAN_BULUNAMADI'
-  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ';
+  | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ' | 'KOKEN_UYUSMAZ';
 
 export declare const TARIF_SURUMU: 1;
 export declare const IKINCI_ADIM_TURLERI: readonly IkinciAdimTuru[];
@@ -77,6 +77,7 @@ export declare function girisAlanlari(tarif: GirisTarifi): string[];
 export declare const VARSAYILAN_ZAMAN_ASIMI_SN: number;
 export declare const VARSAYILAN_ELLE_BEKLEME_SN: number;
 export declare const GIRIS_HATA_KODLARI: Readonly<Record<GirisHataKodu, string>>;
+export declare function girisKokenleri(tabanUrl: string | null | undefined, tarif: { girisAdresi?: string } | null | undefined): string[];
 
 export declare class TarifHatasi extends Error {
   constructor(hatalar: string[]);
