@@ -156,6 +156,101 @@ function karsilikPenceresi(s, degerler) {
   });
 }
 
+const ETKI_DURUMU = { guncellenebilir: 'güncellenebilir', 'silindi-uyari': 'silinen değer', kosuyor: 'koşuyor', belirsiz: 'belirsiz', atlanacak: 'atlanacak' };
+const TUR_ADI = { ekran: 'Ekran', servis: 'Servis' };
+
+/**
+ * Tablo değişikliğinin senaryolara etkisi → onay penceresi (sunucu: tablo-etkisi.mjs). Güncellenebilen senaryolar işaretlenebilir
+ * (varsayılan hepsi işaretli); silinen değeri kullananlar uyarı olarak, güncellenemeyenler nedenleriyle listelenir. Gizli / hassas
+ * değerler sunucudan zaten "•••" gelir.
+ * @param {{ etkilenenler: Array<Record<string, any>>; karsiliklar: Array<{ sutun: string; eski: string; yeni: string }> }} etki
+ * @returns {Promise<string[] | null>} seçilen anahtarlar ([] = yalnız tablo) ya da null (vazgeç)
+ */
+export function etkiOnayi(etki) {
+  return new Promise((coz) => {
+    const liste = etki.etkilenenler;
+    const guncel = liste.filter((x) => x.durum === 'guncellenebilir');
+    const silinen = liste.filter((x) => x.durum === 'silindi-uyari');
+    const diger = liste.filter((x) => x.durum !== 'guncellenebilir' && x.durum !== 'silindi-uyari');
+    const secili = new Set(guncel.map((x) => x.anahtar));
+    const senaryoSayisi = (xs) => new Set(xs.map((x) => `${x.tur}|${x.senaryoId}`)).size;
+    // Özet: her (eski → yeni) için kaç senaryo, hangi ekran / serviste.
+    /** @type {Map<string, Array<Record<string, any>>>} */
+    const gruplar = new Map();
+    for (const x of guncel) {
+      const k = JSON.stringify([x.nitelik, x.eski, x.yeni]);
+      if (!gruplar.has(k)) gruplar.set(k, []);
+      gruplar.get(k).push(x);
+    }
+    const kaynaklar = (xs) => {
+      /** @type {Map<string, Set<string>>} */
+      const m = new Map();
+      for (const x of xs) { const a = `${TUR_ADI[x.tur] || x.tur} ${x.kaynakAdi}`; if (!m.has(a)) m.set(a, new Set()); m.get(a).add(x.senaryoId); }
+      return [...m].map(([a, s]) => `${a}: ${s.size}`).join(', ');
+    };
+    const ozet = [...gruplar.values()].map((xs) => (xs[0].nitelik === 'secim'
+      ? h('li', {}, 'Satır seçimi ', h('b', {}, xs[0].eski), ` ${senaryoSayisi(xs)} senaryoda (${kaynaklar(xs)}) — `, h('b', {}, xs[0].yeni), ' olarak güncelleyeyim mi?')
+      : h('li', {}, h('b', {}, `"${xs[0].eski}"`), ` değeri ${senaryoSayisi(xs)} senaryoda kullanılıyor (${kaynaklar(xs)}) — bunları da `, h('b', {}, `"${xs[0].yeni}"`), ' yapayım mı?')));
+    const kaydetGuncelle = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Tabloyu kaydet ve seçili senaryoları güncelle');
+    const yalniz = h('button', { type: 'button', class: guncel.length ? '' : 'birincil' }, 'Yalnız tabloyu kaydet');
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    const sayac = h('span', { class: 'soluk', 'aria-live': 'polite' });
+    const tumu = h('input', { type: 'checkbox', checked: guncel.length > 0, 'aria-label': 'Güncellenebilen tüm senaryoları seç' });
+    /** @type {Array<[HTMLInputElement, string]>} */
+    const kutular = [];
+    const sayacYaz = () => {
+      sayac.textContent = `${secili.size} / ${guncel.length} seçili`;
+      tumu.checked = guncel.length > 0 && secili.size === guncel.length;
+      kaydetGuncelle.disabled = !secili.size;
+    };
+    const satir = (x) => {
+      const kutu = x.durum === 'guncellenebilir' ? h('input', { type: 'checkbox', checked: true, 'aria-label': `${x.baslik} · ${x.alan}: güncelle` }) : null;
+      if (kutu) {
+        kutular.push([kutu, x.anahtar]);
+        kutu.addEventListener('change', () => { if (kutu.checked) secili.add(x.anahtar); else secili.delete(x.anahtar); sayacYaz(); });
+      }
+      return h('tr', { class: x.durum === 'guncellenebilir' ? '' : 'atlandi', 'data-anahtar': x.anahtar },
+        h('td', {}, kutu),
+        h('td', { 'data-baslik': 'Senaryo' }, x.baslik, h('span', { class: 'neden' }, `${TUR_ADI[x.tur] || x.tur}: ${x.kaynakAdi}`)),
+        h('td', { 'data-baslik': 'Alan' }, x.alan, x.ortamlar && x.ortamlar.length ? h('span', { class: 'neden' }, x.ortamlar.join(', ')) : null),
+        h('td', { 'data-baslik': 'Eski' }, x.gizli ? h('span', { title: 'Gizli / hassas değer gösterilmez' }, '•••') : x.eski),
+        h('td', { 'data-baslik': 'Yeni' }, x.yeni === null || x.yeni === undefined ? '—' : x.gizli ? '•••' : x.yeni),
+        h('td', { 'data-baslik': 'Durum' }, ETKI_DURUMU[x.durum] || x.durum, x.neden ? h('span', { class: 'neden' }, x.neden) : null));
+    };
+    const tablo = (baslik, xs, secimli) => h('div', { class: 'donusum-tablosu-kap' }, h('table', { class: 'donusum-tablosu', 'aria-label': baslik },
+      h('thead', {}, h('tr', {}, h('th', {}, secimli ? tumu : ''), h('th', {}, 'Senaryo'), h('th', {}, 'Alan'), h('th', {}, 'Eski'), h('th', {}, 'Yeni'), h('th', {}, 'Durum'))),
+      h('tbody', {}, xs.map(satir))));
+    tumu.addEventListener('change', () => {
+      for (const [k, a] of kutular) { k.checked = tumu.checked; if (tumu.checked) secili.add(a); else secili.delete(a); }
+      sayacYaz();
+    });
+    const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay etki-diyalogu', 'aria-labelledby': 'etki-basligi' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'etki-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('uyari')), 'Değişen değerler senaryolarda kullanılıyor'),
+        guncel.length ? h('ul', { class: 'etki-ozeti' }, ozet) : null,
+        guncel.length ? h('div', { class: 'donusum-plani' },
+          h('div', { class: 'donusum-ozeti' }, h('b', {}, `${senaryoSayisi(guncel)} senaryo güncellenebilir`), sayac),
+          tablo('Güncellenebilen senaryolar', [...guncel, ...diger], true)) : null,
+        silinen.length ? h('div', { class: 'donusum-plani' },
+          h('div', { class: 'not-kutusu uyari kucuk' }, h('b', {}, `${senaryoSayisi(silinen)} senaryo silinen değeri kullanıyor; `), 'koşuda hata verebilir. Bu senaryolar güncellenmez; tabloyu kaydettikten sonra elle düzenleyin.'),
+          tablo('Silinen değeri kullanan senaryolar', silinen, false)) : null,
+        !guncel.length && diger.length ? tablo('Güncellenemeyen senaryolar', diger, false) : null,
+        etki.karsiliklar && etki.karsiliklar.length ? h('p', { class: 'soluk kucuk' }, `Karşılıklar yeni değere taşınır: ${etki.karsiliklar.map((k) => `${k.sutun}: ${k.eski} → ${k.yeni}`).join(', ')}.`) : null,
+        h('p', { class: 'soluk kucuk' }, 'Senaryolar düz değer olarak kalır. Tablo ve seçtiğiniz senaryolar birlikte kaydedilir (biri hata verirse hiçbiri); her senaryonun önceki hâli değişiklik geçmişinde kalır.')),
+      h('div', { class: 'diyalog-alt' }, vazgec, yalniz, guncel.length ? kaydetGuncelle : null));
+    sayacYaz();
+    /** @type {string[] | null} */
+    let sonuc = null;
+    kaydetGuncelle.addEventListener('click', () => { sonuc = [...secili]; diyalog.close(); });
+    yalniz.addEventListener('click', () => { sonuc = []; diyalog.close(); });
+    vazgec.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(sonuc); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    vazgec.focus();
+  });
+}
+
 /**
  * @param {HTMLElement} govde @param {{ id: string }} proje
  */
@@ -297,13 +392,29 @@ export async function tablolarBolumu(govde, proje) {
       })),
       silinenSatirlar: [...is.silinen]
     };
+    // Var olan tabloda önce etki denetlenir: değişen değeri düz metin olarak kullanan senaryo varsa sunucu hiçbir şey yazmaz ve
+    // onay ister (tablo-etkisi.mjs); yoksa doğrudan kaydeder.
+    const denetle = Boolean(is.id) && !is.baglam;
     try {
-      const { tablo } = await mesgulIken(dugme, 'Kaydediliyor…', () => api('/platform/tablo/kaydet', { govde }));
+      let y = await mesgulIken(dugme, 'Kaydediliyor…', () => api('/platform/tablo/kaydet', { govde: denetle ? { ...govde, etki: 'denetle' } : govde }));
+      if (y.onayGerekli) {
+        const guncellenecekler = await etkiOnayi(y.etki);
+        if (!guncellenecekler) return;
+        y = await mesgulIken(dugme, 'Kaydediliyor…', () => api('/platform/tablo/kaydet', { govde: { ...govde, etki: 'uygula', guncellenecekler } }));
+      }
+      const { tablo } = y;
       const i = liste.findIndex((t) => t.id === tablo.id);
       liste = i >= 0 ? liste.map((t) => (t.id === tablo.id ? tablo : t)) : [...liste, tablo].sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
       seciliId = tablo.id;
       is = kopya(tablo);
-      bildir(`"${tablo.ad}" kaydedildi.`);
+      const g = y.guncelleme;
+      const atlanan = g ? g.atlananlar.length : 0;
+      const k = y.etki && y.etki.karsiliklar ? y.etki.karsiliklar.length : 0;
+      bildir([
+        g && (g.guncellenenSenaryo || atlanan) ? `"${tablo.ad}" kaydedildi; ${g.guncellenenSenaryo} senaryo güncellendi${atlanan ? `, ${atlanan} atlandı (${[...new Set(g.atlananlar.map((x) => x.neden).filter(Boolean))].join('; ')})` : ''}.` : `"${tablo.ad}" kaydedildi.`,
+        g && g.uyari ? `${g.uyari} senaryo silinen değeri kullanıyor.` : '',
+        k ? `${k} karşılık yeni değere taşındı.` : ''
+      ].filter(Boolean).join(' '), atlanan ? 'hata' : undefined);
       ciz();
     } catch (e) { bildir(e.message, 'hata'); }
   }

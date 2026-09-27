@@ -3270,3 +3270,15 @@ dialog.karsilastir-diyalogu { width: min(40rem, calc(100vw - 2rem)); }
   .donusum-tablosu td { border: 0; padding: 2px 8px; }
   .donusum-tablosu td[data-baslik]::before { content: attr(data-baslik) ": "; color: var(--metin-3); }
 }
+
+/* Test verisi > Tablolar > Kaydet: değişen değerleri kullanan senaryolar (tablolar.js etkiOnayi; tablo-etkisi.mjs). */
+.etki-ozeti { margin: 8px 0 0; padding-left: 1.2rem; display: grid; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: calc(100dvh - 1.5rem); }
+.onay-diyalogu.etki-diyalogu .diyalog-govde { max-height: none; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.etki-diyalogu .diyalog-alt { flex: 0 0 auto; flex-wrap: wrap; margin-top: 0; }
+.etki-diyalogu .donusum-tablosu td { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .etki-diyalogu .diyalog-govde { padding: 16px 14px 8px; }
+  .etki-diyalogu .diyalog-alt { padding: 12px 14px 14px; }
+  .etki-diyalogu .diyalog-alt button { flex: 1 1 100%; }
+}

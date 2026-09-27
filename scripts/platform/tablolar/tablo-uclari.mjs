@@ -1,10 +1,17 @@
 // TEST VERİSİ TABLOLARI — HTTP uçları (sunucu-platform.mjs GET_UCLARI / POST_UCLARI'na eklenir). Belirteç, gövde ve kasa
 // kilidi sunucuda denetlenir. Gizli sütun değerleri hiçbir yanıtta dönmez.
 import { DepoHatasi } from '../veritabani/depo.mjs';
-import { tabloKaydet, tabloSil, tablolariListele } from './tablo-deposu.mjs';
+import { tabloSil, tablolariListele } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from './ekran-baglari.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
+import { tabloKaydetEtkiyle } from './tablo-etkisi.mjs';
+import { servisSenaryosuKosuyorMu } from '../servisler/servis-isleri.mjs';
+
+/** O an koşan ekran senaryosu denetimi (sunucu-platform.mjs koşucuyu verince ayarlar; tablo değişikliğinde koşan senaryo atlanır). */
+let kosuyorMu = (/** @type {string} */ _dosya, /** @type {string} */ _ad) => false;
+/** @param {(dosya: string, ad: string) => boolean} fn */
+export function tabloKosuDenetimiAyarla(fn) { kosuyorMu = fn; }
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -29,13 +36,17 @@ export const TABLO_GET_UCLARI = [
 
 /** @type {Array<[string, (db: Veritabani, g: Record<string, any>) => Record<string, unknown>]>} */
 export const TABLO_POST_UCLARI = [
+  // etki: 'denetle' → değişen değeri düz kullanan senaryo varsa hiçbir şey yazılmaz, { onayGerekli, etki } döner; 'uygula' → tablo +
+  // guncellenecekler'deki senaryolar tek işlemde ([] = yalnız tablo). Verilmezse yalnız tablo. Bkz. tablo-etkisi.mjs.
   ['/platform/tablo/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
-    const id = tabloKaydet(db, {
-      projeId, id: g.id ? kimlik(g.id) : undefined, ad: typeof g.ad === 'string' ? g.ad : '', sutunlar: g.sutunlar, satirlar: g.satirlar, silinenSatirlar: g.silinenSatirlar
-    });
-    const [tablo] = tablolariListele(db, projeId, { tabloId: id, baglamDahil: true });
-    return { tablo };
+    const s = tabloKaydetEtkiyle(db, {
+      projeId, id: g.id ? kimlik(g.id) : undefined, ad: typeof g.ad === 'string' ? g.ad : '', sutunlar: g.sutunlar, satirlar: g.satirlar, silinenSatirlar: g.silinenSatirlar,
+      etki: g.etki, guncellenecekler: g.guncellenecekler
+    }, { kosuyorMu, servisKosuyorMu: servisSenaryosuKosuyorMu });
+    if (s.onayGerekli) return { onayGerekli: true, etki: s.etki };
+    const [tablo] = tablolariListele(db, projeId, { tabloId: s.id, baglamDahil: true });
+    return { tablo, etki: s.etki, ...(s.guncelleme ? { guncelleme: s.guncelleme } : {}) };
   }],
   // Bağlantı kaydedilince bağlı sütunlara ekran modelindeki eksik sayfa değerleri eklenir (karsiliklar.mjs).
   ['/platform/ekran/alan-baglari/kaydet', (db, g) => {
