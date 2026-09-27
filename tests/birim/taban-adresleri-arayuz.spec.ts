@@ -1,8 +1,9 @@
-// KORUMA TESTLERİ — Ayarlar > Proje ve ortamlar > Servis taban adresleri arayüzü (scripts/platform/arayuz/taban-adresler.js).
-// Varsayılan "adrese göre" görünüm: aynı adres kombinasyonu tek satır, farklı olan ayrı satır; "bu ortamda yok" grubu bölmez;
-// grup hücresi değişince etki önizlemesi tüm servisleri gösterir ve onayla hepsine yazılır ("yok" korunur); "Gruptan ayır";
-// "Servis bazında" görünüm önceki tablo (seçim hatırlanır); bul-değiştir. Masaüstü + 390px yatay taşma yok.
-// Yalnız yerel Nöbetçi (127.0.0.1, geçici veri); adresler *.ornek.invalid — hiçbir servise istek atılmaz.
+// KORUMA TESTLERİ — Ayarlar > Proje ve ortamlar > Servis taban adresleri arayüzü (scripts/platform/arayuz/taban-adresler.js) ve
+// servis sayfasındaki taban adresi seçimi. Ana liste = adlandırılmış taban adresleri ("Kullanan: N servis"); düzenle → etki
+// penceresi (eski → yeni, senaryo sayısı) + onay, Vazgeç hiçbir şey değiştirmez; yeni taban → "Hangi servisler bu adresi
+// kullansın?" (önce taban adresi boş olanlar, işaretsiz) → seçilenler bağlanır; sil → adresi boş kalacak servis listesi + onay,
+// koşuda anlaşılır neden; eski veri (kaydı olmayan ad, adsız servisler) görünür; "Servis bazında" görünüm; masaüstü + 390px
+// yatay taşma yok. Yalnız yerel Nöbetçi (127.0.0.1, geçici veri); adresler *.ornek.invalid — hiçbir servise istek atılmaz.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -14,13 +15,15 @@ import { servisKaydet, servisSenaryosuKaydet } from '../../scripts/platform/serv
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF } from './platform-ortak';
 
-type Satir = { servisId: string; ad: string; grup: string | null; tabanlar: Record<string, { deger: string; kaynak: string }> };
+type Hucre = { deger: string; kaynak: string };
+type Satir = { servisId: string; ad: string; grup: string | null; tabanlar: Record<string, Hucre> };
+type TabanAdi = { ad: string; adresler: Record<string, string>; kullanan: string[] };
 
 /** Sayfa yatay taşmıyor mu (kendi kaydırma kutusundaki öğeler sayılmaz). */
-async function tasmaYok(page: Page): Promise<void> {
-  const o = await page.evaluate(() => {
+async function tasmaYok(page: Page, kok = 'main'): Promise<void> {
+  const o = await page.evaluate((secici) => {
     const gorunen = document.documentElement.clientWidth;
-    const ana = document.querySelector('main');
+    const ana = document.querySelector(secici);
     const kaydirmaIcinde = (e: Element) => {
       for (let p = e.parentElement; p && p !== ana; p = p.parentElement) if (['auto', 'scroll', 'hidden', 'clip'].includes(getComputedStyle(p).overflowX)) return true;
       return false;
@@ -28,7 +31,7 @@ async function tasmaYok(page: Page): Promise<void> {
     const tasanlar = [...(ana?.querySelectorAll('*') ?? [])].filter((e) => !kaydirmaIcinde(e) && e.getBoundingClientRect().right > gorunen + 0.5)
       .slice(0, 5).map((e) => `${e.tagName.toLowerCase()}.${String((e as HTMLElement).className).replace(/\s+/g, '.')}`);
     return { tasanlar, gorunen, belge: document.documentElement.scrollWidth };
-  });
+  }, kok);
   expect(o.tasanlar, `görünen ${o.gorunen}px; taşan: ${o.tasanlar.join(', ')}`).toEqual([]);
   expect(o.belge).toBeLessThanOrEqual(o.gorunen);
 }
@@ -43,18 +46,19 @@ test.describe('servis taban adresleri arayüzü', () => {
   let T = '';
   let C = '';
   const id: Record<string, string> = {};
+  const ortak = () => ({ [T]: 'https://api-test.ornek.invalid', [C]: 'https://api.ornek.invalid' });
 
-  const tablo = async (): Promise<Map<string, Satir>> => {
+  const tablo = async (): Promise<{ satirlar: Map<string, Satir>; tabanlar: TabanAdi[] }> => {
     const y = await nobetciApi(nobetci, `/platform/servis-tabanlari?projeId=${projeId}`);
-    return new Map((y.satirlar as Satir[]).map((s) => [s.ad, s]));
+    return { satirlar: new Map((y.satirlar as Satir[]).map((s) => [s.ad, s])), tabanlar: y.tabanAdlari as TabanAdi[] };
   };
-  const sayfaAc = async (genislik = 1400): Promise<{ page: Page; hatalar: string[]; kapat: () => Promise<void> }> => {
+  const sayfaAc = async (genislik = 1400, adres = '/#/ayarlar/proje'): Promise<{ page: Page; hatalar: string[]; kapat: () => Promise<void> }> => {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: genislik, height: 1000 } });
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/proje');
-    await expect(page.getByRole('heading', { name: /Servis taban adresleri/ })).toBeVisible();
+    await page.goto(adres);
+    if (adres.includes('ayarlar')) await expect(page.getByRole('heading', { name: /Servis taban adresleri/ })).toBeVisible();
     return { page, hatalar, kapat: () => baglam.close() };
   };
 
@@ -67,16 +71,19 @@ test.describe('servis taban adresleri arayüzü', () => {
     projeId = projeKaydet(vt, { ad: 'Taban Arayüz Projesi' });
     T = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
     C = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.invalid', ayarlar: { canli: true } });
-    const ortak = { [T]: 'https://api-test.ornek.invalid', [C]: 'https://api.ornek.invalid' };
-    const sv = (anahtar: string, ad: string, ayarlar: Record<string, unknown>) => { id[ad] = servisKaydet(vt, { projeId, anahtar, ad, ayarlar: { yol: `/${anahtar}.asmx`, ...ayarlar } }); };
-    sv('a1', 'Sipariş', { tabanlar: ortak, tabanGrubu: 'Çekirdek' });
-    sv('a2', 'Fatura', { tabanlar: ortak, tabanGrubu: 'Çekirdek' });
-    sv('a3', 'Hasar', { tabanlar: ortak });
+    const sv = (anahtar: string, ad: string, ayarlar: Record<string, unknown>, tur: 'soap' | 'rest' = 'soap') => {
+      id[ad] = servisKaydet(vt, { projeId, anahtar, ad, tur, ayarlar: { yol: tur === 'rest' ? '/' : `/${anahtar}.asmx`, ...ayarlar } });
+    };
+    // Eski veri: "Çekirdek" adı yalnız servislerde (kayıtlı taban adresi yok); diğerleri adsız (özel / ortamın adresi / yok).
+    sv('a1', 'Sipariş', { tabanlar: ortak(), tabanGrubu: 'Çekirdek' });
+    sv('a2', 'Fatura', { tabanlar: ortak(), tabanGrubu: 'Çekirdek' });
+    sv('a3', 'Hasar', { tabanlar: ortak() });
     sv('a4', 'Kampanya', { tabanlar: { [T]: 'https://api-test.ornek.invalid', [C]: '' } });
     sv('o1', 'Rapor', {});
-    sv('o2', 'Belge', {});
     sv('b1', 'Diğer', { tabanlar: { [T]: 'https://diger-test.ornek.invalid', [C]: 'https://api.ornek.invalid' } });
+    sv('r1', 'Uç', { tabanlar: { [T]: 'https://uc-test.ornek.invalid' } }, 'rest');
     servisSenaryosuKaydet(vt, { projeId, servisId: id['Sipariş'], baslik: 'S1', icerik: { operasyon: 'Op', govde: '<x/>', kontroller: [] } });
+    servisSenaryosuKaydet(vt, { projeId, servisId: id['Kampanya'], baslik: 'K1', kapsam: 'ikisi', icerik: { operasyon: 'Op', govde: '<x/>', kontroller: [] } });
     vt.kapat();
     nobetci = await nobetciBaslat(klasor, vtYolu, {});
     const y = await nobetciApi(nobetci, '/platform/kasa/ac', { parola: PAROLA });
@@ -90,120 +97,184 @@ test.describe('servis taban adresleri arayüzü', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('adrese göre (varsayılan): aynı kombinasyon tek satır, farklı olan ayrı; "yok" grubu bölmez; 390px taşma yok', async ({}, testInfo) => {
+  test('ana liste: taban adresleri ve "Kullanan: N servis"; eski veri (kaydı olmayan ad, adsız servisler); 390px taşma yok', async ({}, testInfo) => {
     const { page, hatalar, kapat } = await sayfaAc();
-    const t = page.getByRole('table', { name: 'Servis taban adresleri (adrese göre)' });
-    await expect(t).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'Adrese göre (varsayılan)' })).toHaveAttribute('aria-checked', 'true');
-    await expect(t.locator('tbody > tr')).toHaveCount(3);
-    // Çekirdek: aynı adresli 3 servis + CANLI'da "yok" olan Kampanya (grubu bölmez).
-    await expect(page.getByRole('button', { name: 'Çekirdek — Kullanan: 4 servis' })).toBeVisible();
-    await expect(page.getByLabel('Çekirdek · CANLI: taban adres')).toHaveValue('https://api.ornek.invalid');
-    await expect(page.getByLabel('Çekirdek · TEST: taban adres')).toHaveValue('https://api-test.ornek.invalid');
-    await expect(t.locator('tbody > tr').first()).toContainText('1 serviste yok');
-    await expect(page.getByRole('button', { name: 'Ortamın adresi — Kullanan: 2 servis' })).toBeVisible();
-    // CANLI aynı, TEST farklı: ayrı satır.
-    await expect(t.locator('tbody > tr').filter({ hasText: 'diger-test.ornek.invalid' })).toContainText('Kullanan: 1 servis');
-    // Üye listesi: ad, tür, yol, senaryo sayısı; "yok" notu.
-    await page.getByRole('button', { name: 'Çekirdek — Kullanan: 4 servis' }).click();
+    await expect(page.getByRole('radio', { name: 'Taban adresleri' })).toHaveAttribute('aria-checked', 'true');
+    const t = page.getByRole('table', { name: 'Taban adresleri' });
+    await expect(t.locator('tbody > tr')).toHaveCount(1);
+    const satir = t.locator('tbody > tr').first();
+    await expect(satir).toContainText('Çekirdek');
+    await expect(satir).toContainText('https://api-test.ornek.invalid');
+    await expect(satir).toContainText('https://api.ornek.invalid');
+    await page.getByRole('button', { name: 'Çekirdek — Kullanan: 2 servis' }).click();
     const uyeler = page.getByRole('list', { name: 'Çekirdek: servisler' });
-    await expect(uyeler.getByRole('listitem')).toHaveCount(4);
+    await expect(uyeler.getByRole('listitem')).toHaveCount(2);
     await expect(uyeler.getByRole('listitem').filter({ hasText: 'Sipariş' })).toContainText('/a1.asmx · 1 senaryo');
-    await expect(uyeler.getByRole('listitem').filter({ hasText: 'Kampanya' })).toContainText('CANLI ortamında yok');
-    await page.screenshot({ path: testInfo.outputPath('taban-gruplu-masaustu.png'), fullPage: true });
+    await page.getByText('Adlandırılmamış adres kullanan 5 servis').click();
+    const adsiz = page.getByRole('list', { name: 'Adlandırılmamış adres kullanan servisler' });
+    await expect(adsiz.getByRole('listitem')).toHaveCount(5);
+    await expect(adsiz.getByRole('listitem').filter({ hasText: 'Kampanya' })).toContainText('CANLI: bu ortamda yok');
+    await expect(adsiz.getByRole('listitem').filter({ hasText: 'Rapor' })).toContainText('https://test.ornek.invalid (ortamın adresi)');
+    // "Gruptan ayır" gibi ek kavram yok.
+    await expect(page.getByRole('button', { name: /gruptan ayır/i })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath('taban-adlari-masaustu.png'), fullPage: true });
     await tasmaYok(page);
     await page.setViewportSize({ width: 390, height: 900 });
     await expect(t).toBeVisible();
     await tasmaYok(page);
-    await page.screenshot({ path: testInfo.outputPath('taban-gruplu-390.png'), fullPage: true });
+    await page.screenshot({ path: testInfo.outputPath('taban-adlari-390.png'), fullPage: true });
     expect(hatalar).toEqual([]);
     await kapat();
   });
 
-  test('grup hücresi: etki tüm servisleri gösterir, onayla hepsine yazılır; "yok" korunur', async () => {
+  test('değiştir: etki penceresi (servisler, eski → yeni, senaryo sayısı); Vazgeç hiçbir şey değiştirmez; onayla yazılır', async () => {
     const { page, hatalar, kapat } = await sayfaAc();
-    await page.getByLabel('Çekirdek · CANLI: taban adres').fill('https://api2.ornek.invalid');
-    await page.getByLabel('Çekirdek · CANLI: taban adres').press('Tab');
-    await page.getByLabel('Çekirdek · TEST: taban adres').fill('https://api2-test.ornek.invalid');
-    await page.getByLabel('Çekirdek · TEST: taban adres').press('Tab');
-    await expect(page.getByText('4 serviste kaydedilmemiş değişiklik var.')).toBeVisible();
-    await page.getByRole('button', { name: 'Etkiyi göster' }).click();
-    const etki = page.getByRole('region', { name: 'Değişikliğin etkisi' });
-    await expect(etki).toContainText('Bu değişiklik 4 servisin 1 senaryosunu');
-    for (const ad of ['Sipariş', 'Fatura', 'Hasar', 'Kampanya']) await expect(etki.locator('.onay-listesi > li').filter({ hasText: ad })).toHaveCount(1);
-    await expect(etki.locator('.onay-listesi > li').filter({ hasText: 'Kampanya' })).not.toContainText('CANLI:');
-    await etki.getByRole('button', { name: 'Onayla ve kaydet' }).click();
-    await expect(page.getByRole('button', { name: 'Çekirdek — Kullanan: 4 servis' })).toBeVisible();
-    const s = await tablo();
-    for (const ad of ['Sipariş', 'Fatura', 'Hasar']) {
-      expect(s.get(ad)?.tabanlar[C]).toEqual({ deger: 'https://api2.ornek.invalid', kaynak: 'servis' });
-      expect(s.get(ad)?.tabanlar[T]).toEqual({ deger: 'https://api2-test.ornek.invalid', kaynak: 'servis' });
+    const once = await tablo();
+    await page.getByRole('button', { name: 'Çekirdek: düzenle' }).click();
+    const pencere = page.getByRole('dialog', { name: '"Çekirdek" taban adresini düzenle' });
+    await expect(pencere.getByLabel('TEST adresi')).toHaveValue('https://api-test.ornek.invalid');
+    await pencere.getByLabel('TEST adresi').fill('https://api2-test.ornek.invalid');
+    await pencere.getByRole('button', { name: 'Etkiyi göster' }).click();
+    const etki = pencere.getByRole('region', { name: 'Değişikliğin etkisi' });
+    await expect(etki).toContainText('Bu değişiklik şu 2 servisi etkiler (1 senaryo)');
+    const liste = etki.getByRole('list', { name: 'Etkilenen servisler' });
+    await expect(liste.locator(':scope > li')).toHaveCount(2);
+    await expect(liste.locator(':scope > li').filter({ hasText: 'Sipariş' })).toContainText('TEST: https://api-test.ornek.invalid → https://api2-test.ornek.invalid');
+    await expect(etki.getByRole('list', { name: 'Adresi boş kalacak servisler' })).toHaveCount(0);
+    // Vazgeç: hiçbir şey yazılmaz.
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(pencere).toHaveCount(0);
+    expect(await tablo()).toEqual(once);
+    // Onay: bağlı iki servis birlikte değişir; adsız aynı adresli servis (Hasar) değişmez.
+    await page.getByRole('button', { name: 'Çekirdek: düzenle' }).click();
+    await pencere.getByLabel('TEST adresi').fill('https://api2-test.ornek.invalid');
+    await pencere.getByRole('button', { name: 'Etkiyi göster' }).click();
+    await pencere.getByRole('button', { name: 'Onayla ve kaydet' }).click();
+    await expect(pencere).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Taban adresleri' })).toContainText('https://api2-test.ornek.invalid');
+    const { satirlar, tabanlar } = await tablo();
+    for (const ad of ['Sipariş', 'Fatura']) expect(satirlar.get(ad)?.tabanlar[T]).toEqual({ deger: 'https://api2-test.ornek.invalid', kaynak: 'servis' });
+    expect(satirlar.get('Hasar')?.tabanlar[T]).toEqual({ deger: 'https://api-test.ornek.invalid', kaynak: 'servis' });
+    expect(tabanlar.find((x) => x.ad === 'Çekirdek')?.adresler[T]).toBe('https://api2-test.ornek.invalid');
+    expect(hatalar).toEqual([]);
+    await kapat();
+  });
+
+  test('yeni taban: "Hangi servisler bu adresi kullansın?" — boşlar önce, işaretsiz; seçilenler bağlanır; 390px taşma yok', async ({}, testInfo) => {
+    const { page, hatalar, kapat } = await sayfaAc(390);
+    await page.getByRole('button', { name: 'Yeni taban adresi' }).click();
+    const pencere = page.getByRole('dialog', { name: 'Yeni taban adresi' });
+    await pencere.getByLabel('Taban adresinin adı').fill('Kampanya sunucusu');
+    await pencere.getByLabel('TEST adresi').fill('https://kampanya-test.ornek.invalid');
+    await pencere.getByLabel('CANLI adresi').fill('https://kampanya.ornek.invalid');
+    await pencere.getByRole('button', { name: 'İleri: servisleri seç' }).click();
+    await expect(pencere).toContainText('Hangi servisler bu adresi kullansın?');
+    const gruplar = pencere.locator('fieldset.taban-secim-grubu > legend');
+    await expect(gruplar.first()).toContainText('Taban adresi boş olan servisler');
+    await expect(gruplar.nth(1)).toContainText('Diğer servisler (şu anki adresleriyle)');
+    const boslar = pencere.getByRole('list', { name: 'Taban adresi boş olan servisler' });
+    await expect(boslar.getByRole('listitem')).toHaveCount(1);
+    await expect(boslar.getByRole('listitem')).toContainText('Kampanya');
+    await expect(boslar.getByRole('listitem')).toContainText('CANLI: boş');
+    const digerleri = pencere.getByRole('list', { name: 'Diğer servisler (şu anki adresleriyle)' });
+    await expect(digerleri.getByRole('listitem')).toHaveCount(6);
+    await expect(digerleri.getByRole('listitem').filter({ hasText: 'Sipariş' })).toContainText('şu an: Çekirdek');
+    for (const c of await pencere.getByRole('checkbox').all()) await expect(c).not.toBeChecked();
+    await tasmaYok(page, 'dialog');
+    await page.screenshot({ path: testInfo.outputPath('taban-yeni-secim-390.png') });
+    await pencere.getByRole('checkbox', { name: 'Kampanya' }).check();
+    await pencere.getByRole('checkbox', { name: 'Hasar' }).check();
+    await pencere.getByRole('button', { name: 'Etkiyi göster' }).click();
+    const etki = pencere.getByRole('region', { name: 'Değişikliğin etkisi' });
+    await expect(etki).toContainText('Bu değişiklik şu 2 servisi etkiler');
+    await expect(etki.getByRole('list', { name: 'Etkilenen servisler' }).locator(':scope > li').filter({ hasText: /^Kampanya \d/ }))
+      .toContainText('CANLI: bu ortamda yok → https://kampanya.ornek.invalid');
+    await pencere.getByRole('button', { name: 'Onayla ve kaydet' }).click();
+    await expect(pencere).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Kampanya sunucusu — Kullanan: 2 servis' })).toBeVisible();
+    await tasmaYok(page);
+    const { satirlar } = await tablo();
+    for (const ad of ['Kampanya', 'Hasar']) {
+      expect(satirlar.get(ad)?.grup).toBe('Kampanya sunucusu');
+      expect(satirlar.get(ad)?.tabanlar[T]).toEqual({ deger: 'https://kampanya-test.ornek.invalid', kaynak: 'servis' });
+      expect(satirlar.get(ad)?.tabanlar[C]).toEqual({ deger: 'https://kampanya.ornek.invalid', kaynak: 'servis' });
     }
-    expect(s.get('Kampanya')?.tabanlar[C]).toEqual({ deger: '', kaynak: 'yok' });
-    expect(s.get('Kampanya')?.tabanlar[T]).toEqual({ deger: 'https://api2-test.ornek.invalid', kaynak: 'servis' });
-    // Farklı TEST adresli servis ayrı satırdaydı: değişmedi.
-    expect(s.get('Diğer')?.tabanlar[C]).toEqual({ deger: 'https://api.ornek.invalid', kaynak: 'servis' });
+    expect(satirlar.get('Rapor')?.grup).toBeNull();
     expect(hatalar).toEqual([]);
     await kapat();
   });
 
-  test('gruptan ayır: servis kendi özel adresine geçer, ayrı satır olur; kaydedilince ayrı kalır', async () => {
+  test('sil: adresi boş kalacak servislerin listesi + onay (Vazgeç değiştirmez); koşuda "taban adresi tanımlı değil"', async () => {
     const { page, hatalar, kapat } = await sayfaAc();
-    await page.getByRole('button', { name: 'Ortamın adresi — Kullanan: 2 servis' }).click();
-    await page.getByRole('button', { name: 'Belge: gruptan ayır' }).click();
-    await expect(page.getByRole('button', { name: 'Ortamın adresi — Kullanan: 1 servis' })).toBeVisible();
-    const t = page.getByRole('table', { name: 'Servis taban adresleri (adrese göre)' });
-    const ayrik = t.locator('tbody > tr.taban-ayrik');
-    await expect(ayrik).toHaveCount(1);
-    await expect(ayrik).toContainText('ayrıldı');
-    await expect(ayrik.locator('select').first()).toHaveValue('servis');
-    await page.getByRole('button', { name: 'Etkiyi göster' }).click();
-    const etki = page.getByRole('region', { name: 'Değişikliğin etkisi' });
-    await expect(etki).toContainText('Bu değişiklik 1 servisin');
-    await expect(etki).toContainText('Belge');
-    await expect(etki).toContainText('https://test.ornek.invalid (ortamın adresi) → https://test.ornek.invalid');
-    await etki.getByRole('button', { name: 'Onayla ve kaydet' }).click();
-    await expect(page.getByRole('button', { name: 'Ortamın adresi — Kullanan: 1 servis' })).toBeVisible();
-    const s = await tablo();
-    expect(s.get('Belge')?.tabanlar[T]).toEqual({ deger: 'https://test.ornek.invalid', kaynak: 'servis' });
-    expect(s.get('Belge')?.tabanlar[C]).toEqual({ deger: 'https://canli.ornek.invalid', kaynak: 'servis' });
-    expect(s.get('Rapor')?.tabanlar[T]?.kaynak).toBe('ortam');
-    // Yeniden yüklendikten sonra da ayrı satır (özel adres ≠ ortamın adresi).
-    await expect(t.locator('tbody > tr')).toHaveCount(4);
+    const once = await tablo();
+    await page.getByRole('button', { name: 'Kampanya sunucusu: sil' }).click();
+    const pencere = page.getByRole('dialog', { name: '"Kampanya sunucusu" taban adresi silinsin mi?' });
+    await expect(pencere).toContainText('Şu 2 servisin taban adresi BOŞ kalacak');
+    const bos = pencere.getByRole('list', { name: 'Adresi boş kalacak servisler' });
+    await expect(bos.getByRole('listitem')).toHaveText(['Hasar — CANLI, TEST', 'Kampanya — CANLI, TEST']);
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    expect(await tablo()).toEqual(once);
+    await page.getByRole('button', { name: 'Kampanya sunucusu: sil' }).click();
+    await pencere.getByRole('button', { name: 'Onayla ve sil' }).click();
+    await expect(pencere).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Kampanya sunucusu — Kullanan/ })).toHaveCount(0);
+    const { satirlar, tabanlar } = await tablo();
+    expect(tabanlar.map((x) => x.ad)).toEqual(['Çekirdek']);
+    expect(satirlar.get('Kampanya')?.grup).toBeNull();
+    expect(satirlar.get('Kampanya')?.tabanlar[T]).toEqual({ deger: '', kaynak: 'yok' });
+    // Koşu: senaryo bu ortamda koşmaz, neden anlaşılır (koşu diyaloğu / senaryo tablosu aynı nedeni kullanır; istek atılmaz).
+    const s = await nobetciApi(nobetci, `/platform/servis?projeId=${projeId}&id=${id['Kampanya']}`);
+    const senaryolar = s.senaryolar as Array<{ ortamlar: Array<{ ortamId: string; tanimli: boolean; neden: string }> }>;
+    expect(senaryolar[0]?.ortamlar.find((o) => o.ortamId === T)).toMatchObject({ tanimli: false, neden: 'Servis "TEST" ortamında tanımlı değil: taban adresi tanımlı değil.' });
     expect(hatalar).toEqual([]);
     await kapat();
   });
 
-  test('servis bazında görünüm önceki tablo (seçim hatırlanır); bul-değiştir iki görünümde; 390px taşma yok', async ({}, testInfo) => {
+  test('servis bazında görünüm (seçim hatırlanır); 390px taşma yok', async ({}, testInfo) => {
     const { page, hatalar, kapat } = await sayfaAc();
-    // Adrese göre görünümde bul-değiştir: satırdaki "yok" hücresi değişmez.
-    await page.getByText('Toplu düzenle (seçili satırlar; seçim yoksa tümü)').click();
-    await page.getByLabel('Bul', { exact: true }).fill('api2-test');
-    await page.getByLabel('Yerine', { exact: true }).fill('api3-test');
-    await page.getByRole('button', { name: 'Değiştir' }).click();
-    await expect(page.getByLabel('Çekirdek · TEST: taban adres')).toHaveValue('https://api3-test.ornek.invalid');
-    await expect(page.getByText('4 serviste kaydedilmemiş değişiklik var.')).toBeVisible();
-    // Servis bazında: satır = servis; taslak korunur.
     await page.getByRole('radio', { name: 'Servis bazında' }).click();
     const t = page.getByRole('table', { name: 'Servis taban adresleri', exact: true });
     await expect(t.locator('tbody > tr')).toHaveCount(7);
-    await expect(page.getByLabel('Kampanya · TEST: taban adres')).toHaveValue('https://api3-test.ornek.invalid');
-    await expect(page.getByLabel('Kampanya · CANLI: adres türü')).toHaveValue('yok');
     await expect(page.getByLabel('Sipariş: taban adres adı')).toHaveValue('Çekirdek');
-    // Servis bazında bul-değiştir.
-    await page.getByLabel('Bul', { exact: true }).fill('diger-test');
-    await page.getByLabel('Yerine', { exact: true }).fill('diger2-test');
-    await page.getByRole('button', { name: 'Değiştir' }).click();
-    await expect(page.getByLabel('Diğer · TEST: taban adres')).toHaveValue('https://diger2-test.ornek.invalid');
+    await expect(page.getByLabel('Kampanya · CANLI: adres türü')).toHaveValue('yok');
     await tasmaYok(page);
     await page.setViewportSize({ width: 390, height: 900 });
     await tasmaYok(page);
     await page.screenshot({ path: testInfo.outputPath('taban-servis-bazinda-390.png'), fullPage: true });
-    await page.getByRole('button', { name: 'Değişiklikleri geri al' }).click();
-    // Seçim hatırlanır (yalnız görünüm).
     await page.reload();
     await expect(page.getByRole('table', { name: 'Servis taban adresleri', exact: true })).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Servis bazında' })).toHaveAttribute('aria-checked', 'true');
+    await page.getByRole('radio', { name: 'Taban adresleri' }).click();
+    expect(hatalar).toEqual([]);
+    await kapat();
+  });
+
+  test('servis sayfası: taban adresi adlandırılmış tabanlardan seçilir, adres oradan gelir; "Ayarlar\'da yönet"', async ({}, testInfo) => {
+    // Bağlı servis: seçim ve kaynağı gösterilir.
+    const bagli = await sayfaAc(1400, `/#/servisler/s/${id['Sipariş']}/islemler`);
+    const secim = bagli.page.getByRole('combobox', { name: 'Taban adresi', exact: true });
+    await expect(secim).toHaveValue('Çekirdek');
+    await expect(bagli.page.getByText('Adresler "Çekirdek" taban adresinden gelir')).toBeVisible();
+    await expect(bagli.page.getByRole('link', { name: 'Ayarlar\'da yönet' })).toHaveAttribute('href', '#/ayarlar/proje');
+    expect(bagli.hatalar).toEqual([]);
+    await bagli.kapat();
+    // REST servis (erişim kontrolü gerekmez): özel adresten tabana bağlanır; kaydedilince adresleri tabandan.
+    const { page, hatalar, kapat } = await sayfaAc(390, `/#/servisler/s/${id['Uç']}/islemler`);
+    const sec = page.getByRole('combobox', { name: 'Taban adresi', exact: true });
+    await expect(sec).toHaveValue('');
+    await expect(sec.locator('option')).toHaveText(['— Servise özel adres —', 'Çekirdek']);
+    await sec.selectOption('Çekirdek');
+    await expect(page.getByText('Adresler "Çekirdek" taban adresinden gelir')).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'TEST taban adresi' })).toBeHidden();
+    await tasmaYok(page);
+    await page.screenshot({ path: testInfo.outputPath('servis-taban-secimi-390.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await expect(page.getByText('Servis kaydedildi.')).toBeVisible();
+    const { satirlar, tabanlar } = await tablo();
+    expect(satirlar.get('Uç')?.grup).toBe('Çekirdek');
+    expect(satirlar.get('Uç')?.tabanlar[T]).toEqual({ deger: 'https://api2-test.ornek.invalid', kaynak: 'servis' });
+    expect(satirlar.get('Uç')?.tabanlar[C]).toEqual({ deger: 'https://api.ornek.invalid', kaynak: 'servis' });
+    expect(tabanlar.find((x) => x.ad === 'Çekirdek')?.kullanan).toHaveLength(3);
     expect(hatalar).toEqual([]);
     await kapat();
   });

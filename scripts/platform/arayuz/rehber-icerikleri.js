@@ -295,6 +295,14 @@ export const REHBERLER = {
         metin: [RISKLI_ORTAM_TANIMI, 'Riskli ortamda her çalıştırma ayrıca onay ve Ayarlar > İzinler\'de "Canlı / riskli ortamda çalıştırma" izni ister; akış / giriş kaydı yapılamaz; servis "Dene"si yapılamaz.'],
         ipucu: 'Yanıtlanmamış ortamlar listede "Riskli mi? belirtin" olarak görünür. "Evet"ten "Hayır"a geçmek onay ister; her değişiklik ortamın "Geçmiş"inde durur.'
       },
+      {
+        baslik: 'Servis taban adresleri',
+        metin: ['Aynı sunucuyu kullanan servisler bir taban adresine bağlanır (ör. "Çekirdek": TEST ve CANLI adresleri). Listede her taban adresinin kaç servis tarafından kullanıldığı görünür; "Kullanan: N servis" açılınca servisler listelenir.',
+          'Taban adresini değiştirince kaydetmeden önce etkilenen servisler (eski → yeni adres, senaryo / akış sayısı) gösterilir; onaylamadan yazılmaz. Bir ortamın adresini silmek ya da taban adresini silmek bağlı servislerin o ortamdaki adresini boş bırakır: servis o ortamda koşmaz ("taban adresi tanımlı değil"); onay penceresi bu servisleri listeler.',
+          'Yeni taban adresi eklerken "Hangi servisler bu adresi kullansın?" sorulur: önce taban adresi boş olan servisler, sonra diğerleri şu anki adresleriyle; hiçbiri işaretli gelmez.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Taban adresi', alt: 'TEST / CANLI', ikon: 'ag' }, { baslik: 'Etki', alt: 'servisler, senaryolar', ikon: 'liste' }, { baslik: 'Onay', ikon: 'onay' }] },
+        ipucu: 'Servis sayfasında (İşlemler) taban adresi bu listeden seçilir; "Ayarlar\'da yönet" buraya getirir. "Servis bazında" görünüm servislerin adreslerini tek tek ve toplu düzenler. Hiçbir adrese istek atılmaz.'
+      },
       { baslik: 'Kurulum sırası', sira: ['Ortamları ekleyin.', 'Giriş profillerini ve her ortamın giriş tarifini tanımlayın.', 'Test verisini (ekran listeleri, kişi ve kayıt tabloları) ekleyin.', 'Koşu ayarlarını (video, yeniden deneme, süreler) gözden geçirin.'], cizim: { tur: 'akis', kutular: [{ baslik: 'Ortamlar', ikon: 'ag' }, { baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Test verisi', ikon: 'veri' }, { baslik: 'Koşu', ikon: 'ayar' }] } }
     ]
   },
