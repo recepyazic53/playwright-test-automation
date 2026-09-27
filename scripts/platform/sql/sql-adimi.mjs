@@ -26,7 +26,29 @@ export const SQL_BEKLENEN_ETIKETLERI = Object.freeze({
 export const SQL_RAPOR_SATIR_SINIRI = 20;
 /** Sorguda okunan en çok satırın varsayılanı (tablo eşitliği / satır sayısı için; Ayarlar > Koşu > Gelişmiş > SQL sorgusunda okunan en çok satır). */
 export const SQL_SORGU_SATIR_SINIRI = 1000;
+/** Ayarın alabileceği en büyük değer (kosu-ayarlari.mjs > sqlSatirSiniri.enCok ile aynı). */
+export const SQL_SATIR_SINIRI_EN_COK = 100_000;
 export const SQL_EN_UZUN = 20_000;
+
+/** Geçerli satır sınırı: verilmemiş / geçersizse varsayılan. @param {unknown} v @returns {number} */
+export const satirSiniriCoz = (v) => (Number.isInteger(v) && Number(v) >= 1 ? Math.min(SQL_SATIR_SINIRI_EN_COK, Number(v)) : SQL_SORGU_SATIR_SINIRI);
+
+/**
+ * Beklenen sonuç satır sınırını aşıyor mu (Ayarlar > Koşu > Gelişmiş koşu davranışı > SQL sorgusunda okunan en çok satır)?
+ * Sınırdan fazla satır okunmadığı için beklenen satır sayısı / beklenen tablo satırları sınırı aşarsa adım hiçbir zaman geçemez.
+ * @param {any} beklenen @param {number} satirSiniri @returns {string | null} anlaşılır uyarı ya da null
+ */
+export function satirSiniriUyarisi(beklenen, satirSiniri) {
+  if (!beklenen || typeof beklenen !== 'object') return null;
+  const cozum = 'Sınırı Ayarlar > Koşu > Gelişmiş koşu davranışı > "SQL sorgusunda okunan en çok satır"dan yükseltin ya da';
+  if (beklenen.tur === 'satirSayisi' && Number.isInteger(beklenen.deger) && beklenen.deger > satirSiniri) {
+    return `Beklenen satır sayısı (${beklenen.deger}), Ayarlar'daki SQL satır sınırından (${satirSiniri}) büyük. ${cozum} beklenen sayıyı düşürün.`;
+  }
+  if (beklenen.tur === 'tabloEsit' && Array.isArray(beklenen.satirlar) && beklenen.satirlar.length > satirSiniri) {
+    return `Beklenen tablodaki satır sayısı (${beklenen.satirlar.length}), Ayarlar'daki SQL satır sınırından (${satirSiniri}) büyük. ${cozum} beklenen satırları azaltın.`;
+  }
+  return null;
+}
 export const SQL_MASKE = '••••••';
 const AD = /^[A-Za-z_][A-Za-z0-9_-]{0,59}$/;
 /** ${…} yer tutucusu (iç ifade: akis:Ad, alan anahtarı, Tür[etiket].alan …). */
@@ -100,9 +122,12 @@ export function sqlAkisDegerleri(tanim) {
 
 /**
  * Tanımın yapısal doğrulaması (bağlantının varlığı ayrıca). Hata fırlatmaz: { tanim (temiz), hatalar }.
- * @param {unknown} ham @returns {{ tanim: any; hatalar: string[] }}
+ * s.satirSiniri: kullanıcının SQL satır sınırı (Ayarlar > Koşu > Gelişmiş; verilmezse varsayılan). Beklenen satır sayısı /
+ * beklenen tablo satırları bunu aşamaz (sınırdan fazla satır okunmaz).
+ * @param {unknown} ham @param {{ satirSiniri?: number }} [s] @returns {{ tanim: any; hatalar: string[] }}
  */
-export function sqlTanimiDogrula(ham) {
+export function sqlTanimiDogrula(ham, s = {}) {
+  const satirSiniri = satirSiniriCoz(s.satirSiniri);
   /** @type {string[]} */
   const hatalar = [];
   const h = nesneMi(ham) ? ham : {};
@@ -124,7 +149,7 @@ export function sqlTanimiDogrula(ham) {
   if (!SQL_BEKLENEN_TURLERI.includes(b.tur)) hatalar.push('Beklenen sonucu seçin.');
   else if (b.tur === 'satirSayisi') {
     const n = typeof b.deger === 'string' && b.deger.trim() !== '' ? Number(b.deger) : b.deger;
-    if (!tamSayi(n, 0, SQL_SORGU_SATIR_SINIRI)) hatalar.push(`Beklenen satır sayısı 0–${SQL_SORGU_SATIR_SINIRI} arasında tam sayı olmalı.`);
+    if (!tamSayi(n, 0, Number.MAX_SAFE_INTEGER)) hatalar.push('Beklenen satır sayısı 0 ya da daha büyük bir tam sayı olmalı.');
     beklenen = { tur: 'satirSayisi', deger: Number(n) };
   } else if (b.tur === 'sutunDegeri') {
     const sutun = typeof b.sutun === 'string' ? b.sutun.trim().slice(0, 128) : '';
@@ -137,6 +162,8 @@ export function sqlTanimiDogrula(ham) {
     if (sutunlar.length && satirlar.some((r) => r.length !== sutunlar.length)) hatalar.push('Beklenen tablodaki her satırda sütun sayısı kadar değer olmalı.');
     beklenen = { tur: 'tabloEsit', sutunlar, satirlar };
   } else beklenen = { tur: b.tur };
+  const sinirUyarisi = satirSiniriUyarisi(beklenen, satirSiniri);
+  if (sinirUyarisi) hatalar.push(sinirUyarisi);
   /** @type {Record<string, unknown>} */
   const tanim = { ...(veritabaniId ? { veritabaniId } : { baglantiId }), sql, beklenen };
   const yd = nesneMi(h.yenidenDeneme) ? h.yenidenDeneme : null;
@@ -302,7 +329,10 @@ export async function sqlAdiminiKos(tanim, g) {
   // Adımda süre verilmemişse sürücü bağlantının zaman aşımını kullanır (Ayarlar > Entegrasyonlar; o da yoksa 30 sn —
   // veritabani-suruculeri.mjs > veritabaniSorgusu). Önceden adım boşken 30 sn sabitti ve bağlantının ayarı hiç kullanılmıyordu.
   const zamanAsimiMs = Number(tanim.zamanAsimiSn) > 0 ? Number(tanim.zamanAsimiSn) * 1000 : undefined;
-  const satirSiniri = Number.isInteger(g.satirSiniri) && Number(g.satirSiniri) >= 1 ? Math.min(100_000, Number(g.satirSiniri)) : SQL_SORGU_SATIR_SINIRI;
+  const satirSiniri = satirSiniriCoz(g.satirSiniri);
+  // Ayar sonradan düşürüldüyse kayıtlı adımın beklenen sayısı sınırı aşabilir: sorgu çalıştırılmadan anlaşılır hatayla kalır.
+  const sinirUyarisi = satirSiniriUyarisi(tanim.beklenen, satirSiniri);
+  if (sinirUyarisi) return { durum: 'hata', mesaj: `${g.adimAdi}: ${sinirUyarisi}`, ...bos, deneme: 0, sureMs: simdi() - bas };
   const bitis = bas + (tanim.yenidenDeneme ? tanim.yenidenDeneme.sureSn * 1000 : 0);
   let deneme = 0;
   for (;;) {

@@ -17,7 +17,7 @@
 //     Girdileri bağlardan, çıktıları yanıttan okumalardan. "Bu akışın senaryoları" sayfanın altında.
 // Veri modeli değişmedi (adımlar = { id, ad, servisId, senaryoId, okumalar, hataOlursaDevam? } | { id, ad, tur: 'sql', sql, … }); kayıt var olan
 // /platform/servis-akisi/kaydet ucundan (yapısal + anlamsal denetim) geçer. Kullanıcı verisi DOM'a yalnız metin olarak yazılır.
-import { alan, api, bildir, degisiklikleriBirak, h, ikon, kayitIzi, mesajKutusu, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
+import { alan, api, bildir, degisiklikleriBirak, h, ikon, kayitIzi, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
 import { sqlAkisDegerleri, sqlTanimiDogrula } from './sql-adimi.mjs';
@@ -609,14 +609,15 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
     adimlar: is.adimlar.map((x) => ({ ...x, okumalar: x.okumalar.filter((o) => o.ad || o.yol) })),
     ...(is.tur === 'oturum' ? { omurSaniye: is.omur, tokenYenileme: is.yenileme } : {})
   });
-  const eksik = () => {
+  /** @param {number | undefined} satirSiniri SQL satır sınırı (Ayarlar > Koşu > Gelişmiş; sunucuyla aynı kural) */
+  const eksik = (satirSiniri) => {
     if (!is.baslik.trim()) return 'Başlık boş olamaz.';
     const n = is.adimlar.findIndex((x) => x.tur !== 'sql' && (!x.servisId || (x.tur === 'operasyon' ? !x.operasyon : !x.senaryoId)));
     if (n >= 0) { sec(n); return `${n + 1}. adımda servis ve ${is.adimlar[n].tur === 'operasyon' ? 'operasyon' : 'senaryo'} seçin.`; }
     // SQL adımı: bağlantı, sorgu ve beklenen sonuç (sunucuyla aynı kurallar: sql-adimi.mjs).
     for (const [j, x] of is.adimlar.entries()) {
       if (x.tur !== 'sql') continue;
-      const d = sqlTanimiDogrula(x.sql);
+      const d = sqlTanimiDogrula(x.sql, { satirSiniri });
       if (d.hatalar.length) { sec(j); return `${j + 1}. adım (SQL): ${d.hatalar.join(' ')}`; }
     }
     const t = iz();
@@ -627,7 +628,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Kaydet');
   kaydet.addEventListener('click', async () => {
     mesaj.temizle();
-    const e = eksik();
+    const e = eksik((await kullaniciAyarlari()).sqlSatirSiniri);
     if (e) { mesaj.goster(e); return; }
     // Etki onayı: kayıtlı oturum akışını kullanan servisler (önbellekteki değerler yenilenir).
     const kullanan = akisId ? (tumAkislar.find((x) => x.id === akisId)?.kullananServisler ?? []) : [];
@@ -650,7 +651,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   const dene = h('button', { type: 'button', disabled: !test, title: 'Kaydedilmemiş hâliyle TEST ortamında dener' }, ikon('oynat'), 'Dene (TEST)');
   dene.addEventListener('click', async () => {
     mesaj.temizle();
-    const e = eksik();
+    const e = eksik((await kullaniciAyarlari()).sqlSatirSiniri);
     if (e) { mesaj.goster(e); return; }
     const liste = is.adimlar.map((x, n) => (x.tur === 'sql'
       ? `${n + 1}. SQL sorgusu › ${sqlHedefAdi(x.sql, sqlKaynaklari, test.id)}`

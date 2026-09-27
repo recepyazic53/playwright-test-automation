@@ -65,6 +65,7 @@ import {
   kasayiAnahtarlaAc, medyaAnahtariniAc, medyaAnahtariniHazirla, zarfCoz, zarfMi
 } from './kasa.mjs';
 import { MEDYA_SIHIRLI, medyaCoz, medyaDosyaAdiGecerliMi, medyaKlasoru, medyaSifrele } from './medya.mjs';
+import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -933,6 +934,9 @@ export function tamYukleYaz(vt, tablolar, kasa, kasaAnahtari, ilerleme = () => {
   // sütundur; eski anahtarla şifrelenmesin).
   kasayiAnahtarlaAc(vt, kasaAnahtari);
   yerelMakine(vt);
+  // İzinler (Ayarlar > İzinler) ve riskli ortam seçimleri yedektekiyle olduğu gibi geçerli: ana sayfada bir kez uyarı gösterilir
+  // (guvenlik/yedek-uyarisi.mjs; bayrak meta tablosunda, yedeğe girmez).
+  yedekUyarisiniKur(vt, { tur: 'tamYukleme' });
 }
 
 /**

@@ -20,6 +20,7 @@ import { ANA_AKIS_ID, akisListesi, akisModeli } from '../senaryolar/model-formu.
 import { senaryoAkisi } from '../senaryolar/senaryo-servisi.mjs';
 import { akisPaleti, akistanKayitEnvanteri, bloklariAyikla } from '../tarama/akis-tasarimi.mjs';
 import { kayitPaketiOlustur, kimlikUret } from '../tarama/paket-olusturucu.mjs';
+import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 
@@ -527,7 +528,7 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const ayik = bloklariAyikla(g.bloklar);
   hatalar.push(...ayik.hatalar);
   if (ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak') hatalar.push({ blok: i, mesaj: 'Ortak akışın içine ortak akış eklenemez.' }); });
-  const cevrim = ayik.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar);
+  const cevrim = ayik.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar, { satirSiniri: sqlSatirSiniriOku(vt) });
   hatalar.push(...cevrim.hatalar);
   if (hatalar.length || !cevrim.envanter) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, hatalar);
 

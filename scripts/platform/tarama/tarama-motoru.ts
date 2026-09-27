@@ -126,7 +126,11 @@ export async function taramayiYurut(browser: Browser, g: TaramaGirdisi, olay: Ol
       if (!g.kimlik) throw new TaramaHatasi('TARIF_GECERSIZ', 'Bu ortam için giriş profili tanımlı değil (Ayarlar > Giriş profilleri).');
       try {
         // Giriş bilgisi yalnız ortamın taban adresinin / tarifteki giriş adresinin kökenine yazılır.
-        await girisYap(islem, g.tarif, g.kimlik, { log: (mesaj) => bildir({ tur: 'bilgi', mesaj }), izinliKokenler: girisKokenleri(g.tabanUrl, g.tarif) });
+        await girisYap(islem, g.tarif, g.kimlik, {
+          log: (mesaj) => bildir({ tur: 'bilgi', mesaj }), izinliKokenler: girisKokenleri(g.tabanUrl, g.tarif),
+          // Ayarlar > Koşu > Tarama ve akış kaydı > Girişte giriş alanı beklemesi.
+          alanBeklemeMs: taramaTarayiciAyarlari(g).girisAlanBeklemeMs
+        });
       } catch (hata) {
         await olay({ tur: 'adim', adim: 'giris', durum: 'hata', mesaj: hataBilgisi(hata).mesaj });
         throw hata;

@@ -51,7 +51,7 @@ import {
   girisProfilleriniListele, ortamlariListele, projeGetir
 } from '../veritabani/depo.mjs';
 import { etkinGirisTarifi } from '../giris/tarif-deposu.mjs';
-import { kosuAyarlariniOku, varsayilanKosuAyarlari } from '../ayarlar/kosu-ayarlari.mjs';
+import { kosuAyarlariniOku, sqlSatirSiniriOku, varsayilanKosuAyarlari } from '../ayarlar/kosu-ayarlari.mjs';
 import { baglamAlanlari, girisTarifiniDogrula } from '../giris/tarif.mjs';
 import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from '../giris/elle-kod.mjs';
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
@@ -160,7 +160,9 @@ function taramaTarayiciGirdisi(vt) {
   try { a = vt ? kosuAyarlariniOku(vt) : varsayilanKosuAyarlari(); } catch { a = varsayilanKosuAyarlari(); }
   return {
     genislik: a.taramaEkranGenisligi, yukseklik: a.taramaEkranYuksekligi, dil: a.taramaDili,
-    saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri
+    saatDilimi: a.saatDilimi === 'bilgisayar' ? null : a.saatDilimi, sayfaAcilmaMs: a.taramaSayfaAcilmaSn * 1000, kesifSecenekSiniri: a.kesifSecenekSiniri,
+    // Giriş beklemeleri: koşudaki Gelişmiş > Giriş ayarlarından AYRI (Ayarlar > Koşu > Tarama ve akış kaydı).
+    oturumKontrolMs: a.taramaOturumKontrolSn * 1000, girisAlanBeklemeMs: a.taramaGirisAlanBeklemeSn * 1000
   };
 }
 
@@ -448,6 +450,8 @@ export function taramaYoneticisiOlustur(secenekler) {
         ikiAsamali: tarif ? tarif.ikinciAdim.tur : 'yok', baglamTuru: tarif?.baglamDegistirme?.baglamTuru ?? null, mevcutModel
       },
       altModeller: mevcutModel ? altModelAnlikGoruntusu(vt, projeId, mevcutModel) : {},
+      // Diyagramdaki SQL bloklarının beklenen satır sayısı sınırı (Ayarlar > Koşu > Gelişmiş; akisKaydet kasaya erişmeden doğrular).
+      sqlSatirSiniri: sqlSatirSiniriOku(vt),
       paket: null, ozet: null, uyarilar: [], kodYolu, ciktiKlasoru, surec: null, zamanlayici: null, cikti: ''
     };
     isler.set(id, is);
@@ -458,7 +462,12 @@ export function taramaYoneticisiOlustur(secenekler) {
       if (/^(TEST_WORKER_INDEX|TEST_PARALLEL_INDEX|PW_|PLATFORM_|TEST_SUNUCU_|KOSU_KIMLIGI|NOBETCI_TARAMA_|TEST_ENV$|FORCE_COLOR)/.test(k)) continue;
       env[k] = v;
     }
+    // Giriş motorunun varsayılanları (tests/support/giris-motoru.ts) tarama sürecinde TARAMA ayarlarını kullanır; sunucunun
+    // ortamından gelen koşu değerleri geçmez.
+    const girisBeklemeleri = /** @type {{ oturumKontrolMs: number; girisAlanBeklemeMs: number }} */ (is.girdi.tarayici);
     Object.assign(env, {
+      NOBETCI_OTURUM_KONTROL_MS: String(girisBeklemeleri.oturumKontrolMs),
+      NOBETCI_GIRIS_ALAN_BEKLEME_MS: String(girisBeklemeleri.girisAlanBeklemeMs),
       [TARAMA_ADRES_DEGISKENI]: `${s.sunucuAdresi}/platform/tarama/is/${id}`,
       [TARAMA_TOKEN_DEGISKENI]: token,
       [KOD_YOLU_DEGISKENI]: kodYolu,
@@ -728,7 +737,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       if (!bicim.length) is.akis.bloklar = bloklar;
       return { kaydedildi: !bicim.length, palet: akisPaleti(is.akis.envanter, is.akis.bloklar) };
     }
-    const { envanter, hatalar } = bicim.length ? { envanter: null, hatalar: bicim } : akistanKayitEnvanteri(is.akis.envanter, bloklar);
+    const { envanter, hatalar } = bicim.length ? { envanter: null, hatalar: bicim } : akistanKayitEnvanteri(is.akis.envanter, bloklar, { satirSiniri: is.sqlSatirSiniri });
     if (!envanter) throw new TaramaHatasi('AKIS_GECERSIZ', `Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, 400, { hatalar });
     is.akis.bloklar = bloklar;
     const { paket, ozet } = kayitPaketiOlustur(is.meta, envanter);

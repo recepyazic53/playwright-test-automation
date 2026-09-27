@@ -3,8 +3,8 @@
 // beklenen sonuç, yeniden deneme, zaman aşımı ve sonuçtan okunan değerler (${akis:Ad}). Tanım nesnesi yerinde değiştirilir;
 // her değişiklikte degisti() çağrılır (form yeniden çizilmez, odak korunur). Kurallar: sql-adimi.mjs (sunucuyla ortak).
 // Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
-import { alan, api, h, ikon, yerlestir } from './ortak.js';
-import { SQL_BEKLENEN_ETIKETLERI, SQL_BEKLENEN_TURLERI, sqlYerTutuculari } from './sql-adimi.mjs';
+import { alan, api, h, ikon, kullaniciAyarlari, yerlestir } from './ortak.js';
+import { SQL_BEKLENEN_ETIKETLERI, SQL_BEKLENEN_TURLERI, SQL_SORGU_SATIR_SINIRI, satirSiniriCoz, satirSiniriUyarisi, sqlYerTutuculari } from './sql-adimi.mjs';
 
 /**
  * @typedef {{ id: string; ad: string; etkin: boolean; surucu: string; yalnizOkuma: boolean; ortamIdleri?: string[] }} SqlBaglantisi
@@ -161,16 +161,20 @@ export function sqlAdimiFormu(t, s) {
   sql.addEventListener('input', () => { t.sql = sql.value; sqlDenetle(); degisti(); });
   sqlDenetle();
 
-  // Beklenen sonuç: tür + türe göre alanlar.
+  // Beklenen sonuç: tür + türe göre alanlar. Satır sınırı kullanıcının kararı (Ayarlar > Koşu > Gelişmiş koşu davranışı >
+  // SQL sorgusunda okunan en çok satır; tek kaynak): beklenen satır sayısı / tablo satırları onu aşarsa uyarı (kaydetmede sunucu da reddeder).
+  let satirSiniri = SQL_SORGU_SATIR_SINIRI;
+  const sinirUyarisi = h('p', { class: 'hata-metni kucuk', role: 'status' });
+  const sinirDenetle = () => { sinirUyarisi.textContent = satirSiniriUyarisi(t.beklenen, satirSiniri) ?? ''; };
   const beklenenKap = h('div', { class: 'sql-beklenen' });
   const tur = h('select', { 'aria-label': `${onek}Beklenen sonuç` },
     SQL_BEKLENEN_TURLERI.map((d) => h('option', { value: d, selected: (t.beklenen?.tur ?? 'bosDegil') === d }, SQL_BEKLENEN_ETIKETLERI[d])));
   const beklenenCiz = () => {
     const b = t.beklenen;
     if (b.tur === 'satirSayisi') {
-      const n = h('input', { type: 'number', min: '0', max: '1000', step: '1', value: String(b.deger ?? 1), 'aria-label': `${onek}Beklenen satır sayısı` });
-      n.addEventListener('input', () => { b.deger = n.value === '' ? '' : Number(n.value); degisti(); });
-      return [alan('Satır sayısı', n)];
+      const n = h('input', { type: 'number', min: '0', max: String(satirSiniri), step: '1', value: String(b.deger ?? 1), 'aria-label': `${onek}Beklenen satır sayısı`, class: 'sql-satir-sayisi' });
+      n.addEventListener('input', () => { b.deger = n.value === '' ? '' : Number(n.value); sinirDenetle(); degisti(); });
+      return [alan('Satır sayısı', n, { yardim: `En çok ${satirSiniri} (Ayarlar > Koşu > Gelişmiş koşu davranışı > SQL sorgusunda okunan en çok satır).` })];
     }
     if (b.tur === 'sutunDegeri') {
       const sutun = h('input', { type: 'text', value: b.sutun ?? '', maxlength: '128', spellcheck: 'false', placeholder: 'DURUM', 'aria-label': `${onek}Beklenen sütun` });
@@ -184,12 +188,12 @@ export function sqlAdimiFormu(t, s) {
       const satirlar = h('textarea', { rows: '4', spellcheck: 'false', class: 'kod-girdisi', 'aria-label': `${onek}Beklenen satırlar`, placeholder: '1 | ONAYLANDI\n2 | BEKLIYOR' });
       satirlar.value = (b.satirlar || []).map((r) => r.join(' | ')).join('\n');
       sutunlar.addEventListener('input', () => { b.sutunlar = sutunlar.value.split(',').map((x) => x.trim()).filter(Boolean); degisti(); });
-      satirlar.addEventListener('input', () => { b.satirlar = satirlar.value.split('\n').filter((x) => x.trim()).map((x) => x.split('|').map((y) => y.trim())); degisti(); });
+      satirlar.addEventListener('input', () => { b.satirlar = satirlar.value.split('\n').filter((x) => x.trim()).map((x) => x.split('|').map((y) => y.trim())); sinirDenetle(); degisti(); });
       return [alan('Sütunlar', sutunlar), alan('Beklenen satırlar', satirlar, { yardim: 'Her satır bir kayıt; değerler “|” ile ayrılır. Sıra önemlidir (sorguda ORDER BY kullanın).' })];
     }
     return [h('p', { class: 'soluk kucuk' }, b.tur === 'bos' ? 'Sorgu hiç satır döndürmezse adım geçer.' : 'Sorgu en az bir satır döndürürse adım geçer.')];
   };
-  const beklenenYenile = () => { const odak = document.activeElement; beklenenKap.replaceChildren(...beklenenCiz()); if (odak === tur) tur.focus(); };
+  const beklenenYenile = () => { const odak = document.activeElement; beklenenKap.replaceChildren(...beklenenCiz()); sinirDenetle(); if (odak === tur) tur.focus(); };
   tur.addEventListener('change', () => {
     const eski = t.beklenen || {};
     t.beklenen = tur.value === 'satirSayisi' ? { tur: 'satirSayisi', deger: 1 } : tur.value === 'sutunDegeri' ? { tur: 'sutunDegeri', sutun: eski.sutun ?? '', deger: eski.deger ?? '' }
@@ -199,6 +203,13 @@ export function sqlAdimiFormu(t, s) {
   });
   if (!t.beklenen || !SQL_BEKLENEN_TURLERI.includes(t.beklenen.tur)) t.beklenen = { tur: 'bosDegil' };
   beklenenYenile();
+  kullaniciAyarlari().then((a) => {
+    const yeni = satirSiniriCoz(a.sqlSatirSiniri);
+    if (yeni === satirSiniri) return;
+    satirSiniri = yeni;
+    const odakta = beklenenKap.contains(document.activeElement);
+    if (!odakta) beklenenYenile(); else { const n = beklenenKap.querySelector('.sql-satir-sayisi'); if (n) n.max = String(satirSiniri); sinirDenetle(); }
+  });
 
   // Yeniden deneme ve zaman aşımı.
   const tekrar = h('input', { type: 'checkbox', checked: Boolean(t.yenidenDeneme) });
@@ -240,7 +251,7 @@ export function sqlAdimiFormu(t, s) {
     hedefBilgisi,
     alan('SQL sorgusu', sql, { yardim: `Değerleri ${s.yerTutucuOrnegi ?? '${akis:Ad}'} gibi tırnaksız yazın; SQL’e metin olarak eklenmez, parametre olarak bağlanır. “Yalnız okuma” açık bağlantıda yalnız SELECT / WITH çalışır.` }),
     sqlUyarisi,
-    alan('Beklenen sonuç', tur), beklenenKap,
+    alan('Beklenen sonuç', tur), beklenenKap, sinirUyarisi,
     h('label', { class: 'secenek' }, tekrar, 'Sonuç uymazsa tekrar sorgula (veri geç yazılıyorsa)'),
     tekrarAlanlari,
     alan('Sorgu zaman aşımı (sn)', zaman),

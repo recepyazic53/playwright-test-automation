@@ -28,7 +28,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { bagAdi, baglariUygula } from './akis-senaryo-icerigi.mjs';
 import { baslangicDegerleri, govdeCoz, govdeUret, semaBirlestir } from './servis-govdesi.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
-import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').ServisAkisIcerigi} ServisAkisIcerigi */
@@ -139,7 +139,7 @@ async function sqlAdimiKos(vt, projeId, ortamId, a, degerler, gizliler, sinyal) 
   const r = await sqlAdiminiKos(a.sql, {
     adimAdi: a.ad, sinyal, gizliDegerler: gizliler, gizliSutunMu: (ad) => gizliAdMi(ad, ekler),
     // Sorguda okunan en çok satır: Ayarlar > Koşu > Gelişmiş.
-    satirSiniri: (() => { try { return kosuAyarlariniOku(vt).sqlSatirSiniri; } catch { return undefined; } })(),
+    satirSiniri: sqlSatirSiniriOku(vt),
     coz: (ifade) => (ifade.startsWith('akis:') ? degerler[ifade.slice(5).trim()] : undefined),
     yurutucu: (sql, parametreler, o) => sqlTanimiylaSorgula(vt, { baglantiId: hedef.baglanti.id }, sql, parametreler, { ...o, projeId, ortamId })
   });
@@ -239,7 +239,7 @@ export async function servisAkisiCalistir(vt, projeId, girdi) {
   if (!kayitli && !girdi.taslak) throw new DepoHatasi('"akisId" ya da "taslak" gerekli.');
   // Taslak verilirse (düzenleyicide kaydedilmemiş hâl) o koşulur; akisId de verildiyse koşu kaydı o akışa bağlanır.
   const akisTuru = girdi.taslak?.tur ?? kayitli?.tur ?? 'akis';
-  const akis = kayitli && !girdi.taslak ? kayitli : { id: kayitli?.id, baslik: girdi.taslak?.baslik || kayitli?.baslik || 'Taslak akış', tur: akisTuru, kapsam: girdi.taslak?.kapsam ?? kayitli?.kapsam ?? 'test', icerik: akisIceriginiDogrula(girdi.taslak?.icerik, akisTuru) };
+  const akis = kayitli && !girdi.taslak ? kayitli : { id: kayitli?.id, baslik: girdi.taslak?.baslik || kayitli?.baslik || 'Taslak akış', tur: akisTuru, kapsam: girdi.taslak?.kapsam ?? kayitli?.kapsam ?? 'test', icerik: akisIceriginiDogrula(girdi.taslak?.icerik, akisTuru, { satirSiniri: sqlSatirSiniriOku(vt) }) };
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
   const tur = ortamTuru(ortam);

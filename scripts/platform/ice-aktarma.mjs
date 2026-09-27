@@ -39,6 +39,8 @@ import {
   satirEkle, sutunlariDogrula, tamYukleYaz, veritabaniBosMu, yedekAc
 } from './yedek.mjs';
 import { medyaDosyaAdiGecerliMi, medyaKlasoru as medyaKlasoruBul } from './medya.mjs';
+import { IZIN_AYAR_ANAHTARI } from './guvenlik/izinler.mjs';
+import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -582,6 +584,9 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
   /** @type {UygulamaSonucu['atlananlar']} */
   const atlananlar = [];
   let gecmiseYazilan = 0;
+  // Seçmeli içe aktarma izinleri yalnız Ayarlar'daki "izinler" kaydı eklenir / üzerine yazılırsa değiştirir (uyarı o zaman).
+  let izinlerYazildi = false;
+  const izinKaydiMi = (/** @type {string} */ tablo, /** @type {string} */ id) => tablo === 'ayarlar' && id === IZIN_AYAR_ANAHTARI;
   const yapan = secenekler.yapan ?? `ice-aktarma:${hazirlik.manifest.makine?.id ?? 'bilinmeyen'}`;
 
   /**
@@ -635,6 +640,7 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
             }
             satirEkle(vt, t.ad, gelen, tSutun);
             o.eklenen++;
+            if (izinKaydiMi(t.ad, id)) izinlerYazildi = true;
             continue;
           }
           const yerelK = satirGorunumu(t.ad, zamanlariAt(yerel), hedefAnahtar);
@@ -655,6 +661,7 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
           });
           gecmiseYazilan++;
           o.uzerineYazilan++;
+          if (izinKaydiMi(t.ad, id)) izinlerYazildi = true;
         }
       } else {
         const o = (eklenenler[t.ad] = { eklenen: 0, mevcut: 0, atlanan: 0, baglantisiKaldirilan: 0 });
@@ -685,6 +692,7 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
   if (hazirlik.benimsenecekKasa) kasayiAnahtarlaAc(vt, hedefAnahtar);
   else sifreliAlanlariTamamla(vt);
   yerelMakine(vt);
+  if (izinlerYazildi) yedekUyarisiniKur(vt, { tur: 'secmeli' });
   return { tamYukleme: false, varliklar, eklenenler, otomatikEklenenUstKayitlar: otomatik, atlananlar, gecmiseYazilan, sayimlar: sayimlar(vt) };
 }
 

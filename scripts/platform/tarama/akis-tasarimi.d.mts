@@ -66,4 +66,4 @@ export declare function akisTaslagi(env: AkisEnvanteri): AkisBlogu[];
 export declare function akisPaleti(env: AkisEnvanteri, bloklar: AkisBlogu[]): AkisPaleti;
 export declare function bloklariAyikla(ham: unknown): { bloklar: AkisBlogu[]; hatalar: AkisHatasi[] };
 export declare function secenekGozlemleriniAyikla(ham: unknown): SecenekGozlemi[];
-export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[]): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };
+export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[], s?: { satirSiniri?: number }): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };

@@ -256,9 +256,11 @@ export function bloklariAyikla(ham) {
 /**
  * Blokları doğrular ve kayıt envanterine (adım biçimi) çevirir. Hata varsa envanter null.
  * @param {import('./akis-tasarimi.d.mts').AkisEnvanteri} env @param {import('./akis-tasarimi.d.mts').AkisBlogu[]} bloklar
+ * s.satirSiniri: SQL bloklarının beklenen satır sayısı için kullanıcının satır sınırı (Ayarlar > Koşu > Gelişmiş; verilmezse varsayılan).
+ * @param {{ satirSiniri?: number }} [s]
  * @returns {{ envanter: import('./paket-olusturucu.d.mts').KayitEnvanteri | null; hatalar: import('./akis-tasarimi.d.mts').AkisHatasi[] }}
  */
-export function akistanKayitEnvanteri(env, bloklar) {
+export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   /** @type {import('./akis-tasarimi.d.mts').AkisHatasi[]} */
   const hatalar = [];
   const hata = (/** @type {number | null} */ blok, /** @type {string} */ mesaj) => { hatalar.push({ blok, mesaj }); };
@@ -360,7 +362,7 @@ export function akistanKayitEnvanteri(env, bloklar) {
       return;
     }
     if (b.tur === 'sql') {
-      const d = sqlTanimiDogrula(b.sql);
+      const d = sqlTanimiDogrula(b.sql, { satirSiniri: s.satirSiniri });
       if (d.hatalar.length) { for (const m of d.hatalar) hata(i, m); return; }
       if (bekleyen) { hata(i, 'SQL sorgusu isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
       if (cur && !kapali) { hata(i, 'SQL sorgusu bir aksiyondan (düğmeye basma) sonra gelmeli: önce alan grubunun ilerleme düğmesini koyun.'); return; }

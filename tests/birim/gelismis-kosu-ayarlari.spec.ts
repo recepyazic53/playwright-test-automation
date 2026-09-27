@@ -371,9 +371,11 @@ test('zamanlanmış koşular: varsayılan kaçanı ve çakışanı atlar; "sonra
 });
 
 test('tarama / akış kaydı tarayıcısı: girdide ayar yoksa önceki sabitler; verilince kullanılır', () => {
-  expect(taramaTarayiciAyarlari({})).toEqual({ baglam: { viewport: { width: 1366, height: 900 }, locale: 'tr-TR' }, sayfaAcilmaMs: 30_000, kesifSecenekSiniri: 8 });
+  expect(taramaTarayiciAyarlari({})).toEqual({ baglam: { viewport: { width: 1366, height: 900 }, locale: 'tr-TR' }, sayfaAcilmaMs: 30_000, kesifSecenekSiniri: 8,
+    oturumKontrolMs: 15_000, girisAlanBeklemeMs: 15_000 });
   expect(taramaTarayiciAyarlari({ tarayici: { genislik: 1920, yukseklik: 1080, dil: 'en-GB', saatDilimi: 'UTC', sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20 } }))
-    .toEqual({ baglam: { viewport: { width: 1920, height: 1080 }, locale: 'en-GB', timezoneId: 'UTC' }, sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20 });
+    .toEqual({ baglam: { viewport: { width: 1920, height: 1080 }, locale: 'en-GB', timezoneId: 'UTC' }, sayfaAcilmaMs: 60_000, kesifSecenekSiniri: 20,
+      oturumKontrolMs: 15_000, girisAlanBeklemeMs: 15_000 });
 });
 
 test('HTML rapor görüntü sınırı, sağlık noktası eşikleri (proje başına) ve video saklama (doğrudan yazan raporlayıcı kasadan okur)', async () => {

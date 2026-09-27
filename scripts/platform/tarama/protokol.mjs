@@ -55,8 +55,10 @@ export const OLAY_GOVDE_SINIRI = 64 * 1024;
 
 /**
  * Tarama / akış kaydı tarayıcısının kullanıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
- * Girdide yoksa (eski sunucu / testler) önceki sabitler: 1366×900, tr-TR, bilgisayarın saat dilimi, 30 sn sayfa açılma, 8 seçenek.
- * @param {{ tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number } }} g
+ * Girdide yoksa (eski sunucu / testler) önceki sabitler: 1366×900, tr-TR, bilgisayarın saat dilimi, 30 sn sayfa açılma, 8 seçenek,
+ * girişte 15 sn oturum kontrolü ve 15 sn giriş alanı beklemesi.
+ * @param {{ tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number;
+ *   oturumKontrolMs?: number; girisAlanBeklemeMs?: number } }} g
  */
 export function taramaTarayiciAyarlari(g) {
   const t = g.tarayici ?? {};
@@ -70,6 +72,9 @@ export function taramaTarayiciAyarlari(g) {
       ...(t.saatDilimi ? { timezoneId: t.saatDilimi } : {})
     },
     sayfaAcilmaMs: tam(t.sayfaAcilmaMs, 30_000, 5_000, 300_000),
-    kesifSecenekSiniri: tam(t.kesifSecenekSiniri, 8, 2, 50)
+    kesifSecenekSiniri: tam(t.kesifSecenekSiniri, 8, 2, 50),
+    // Girişte (Ayarlar > Koşu > Tarama ve akış kaydı; koşudaki giriş ayarlarından ayrı): giriş motoruna verilir.
+    oturumKontrolMs: tam(t.oturumKontrolMs, 15_000, 1_000, 300_000),
+    girisAlanBeklemeMs: tam(t.girisAlanBeklemeMs, 15_000, 1_000, 300_000)
   };
 }

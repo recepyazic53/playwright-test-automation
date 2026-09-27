@@ -17,6 +17,7 @@ import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 import { tabloKosuDenetimi } from '../tablolar/tablo-uclari.mjs';
+import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 
 /**
  * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
@@ -296,7 +297,7 @@ export const SERVIS_POST_UCLARI = [
     const id = secimli(g.id);
     const mevcut = id ? akisAl(db, projeId, id) : undefined;
     const tur = g.tur === 'oturum' || g.tur === 'akis' ? g.tur : (mevcut?.tur ?? 'akis');
-    const hatalar = servisAkisiDenetle(db, projeId, akisIceriginiDogrula(g.icerik, tur));
+    const hatalar = servisAkisiDenetle(db, projeId, akisIceriginiDogrula(g.icerik, tur, { satirSiniri: sqlSatirSiniriOku(db) }));
     if (hatalar.length) throw new DepoHatasi(hatalar.join(' '));
     const yeniId = servisAkisiKaydet(db, {
       id, projeId, baslik: metin(g.baslik), tur,

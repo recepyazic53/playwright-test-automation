@@ -9,6 +9,7 @@ export interface KosuAyarlari {
   video: string; ekranGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number;
   taramaSayfaAcilmaSn: number; kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string;
+  taramaOturumKontrolSn: number; taramaGirisAlanBeklemeSn: number;
   gorunmeyenAlanBeklemeSn: number; gorunmeyenAlan: 'atla' | 'kaldir'; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number;
   onayPenceresi: 'iptal' | 'onayla'; oturumKontrolSn: number; girisAlanBeklemeSn: number; tabloSatirSecimi: 'ilk' | 'rastgele'; sqlSatirSiniri: number;
   kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string; saatDilimi: string; eszamanliKosu: 'sirayla';
@@ -18,6 +19,7 @@ export declare const KOSU_AYAR_ANAHTARI: string;
 export declare const KOSU_AYAR_TANIMLARI: ReadonlyArray<KosuAyarTanimi>;
 export declare function varsayilanKosuAyarlari(): KosuAyarlari;
 export declare function kosuAyarlariniOku(vt: Veritabani): KosuAyarlari;
+export declare function sqlSatirSiniriOku(vt: Veritabani): number;
 export declare function kosuAyarlariniKaydet(vt: Veritabani, girdi: unknown): KosuAyarlari;
 export declare function kosuOrtamDegiskenleri(a: KosuAyarlari): Record<string, string>;
 export declare function kayitliKosuOrtamDegiskenleri(vt: Veritabani): Record<string, string>;

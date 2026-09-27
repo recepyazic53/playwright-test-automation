@@ -364,6 +364,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/izin-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'izin-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortam-riski.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'ortam-riski.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/izinler.js', { dosya: 'izinler.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/yedek-uyarisi.js', { dosya: 'yedek-uyarisi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-icerigi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'akis-senaryo-icerigi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-formu.js', { dosya: 'akis-senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],

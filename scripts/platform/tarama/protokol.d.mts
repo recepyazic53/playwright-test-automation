@@ -52,13 +52,18 @@ export type TaramaGirdisi = {
   izinliKokenler: string[] | null;
   zamanAsimiMs: number;
   /** Tarayıcı kararları (Ayarlar > Koşu); yoksa önceki sabitler (bkz. taramaTarayiciAyarlari). dil null: verilmez. */
-  tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number };
+  tarayici?: { genislik?: number; yukseklik?: number; dil?: string | null; saatDilimi?: string | null; sayfaAcilmaMs?: number; kesifSecenekSiniri?: number;
+    oturumKontrolMs?: number; girisAlanBeklemeMs?: number };
 };
 
 export declare function taramaTarayiciAyarlari(g: { tarayici?: TaramaGirdisi['tarayici'] }): {
   baglam: { viewport: { width: number; height: number }; locale?: string; timezoneId?: string };
   sayfaAcilmaMs: number;
   kesifSecenekSiniri: number;
+  /** Girişte oturum kontrolü (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 15 sn). */
+  oturumKontrolMs: number;
+  /** Girişte giriş alanı beklemesi (Ayarlar > Koşu > Tarama ve akış kaydı; varsayılan 15 sn). */
+  girisAlanBeklemeMs: number;
 };
 
 export type TaramaAdimi = 'hazirlik' | 'giris' | 'profiller' | 'kayit' | 'paket';
