@@ -18,7 +18,8 @@
 //     hata verirse hiçbiri yazılmaz.
 // Uç: tablo-uclari.mjs POST /platform/tablo/kaydet { …, etki: 'denetle' | 'uygula', guncellenecekler?: [anahtar] }. Tablo değerini
 // değiştiren diğer yollar da aynı onaydan geçer (etkiDenetimiyle): SoapUI / Postman aktarımı (+ mevcutDegerleriKoru), "Test verisine
-// taşı" (önizlemede etki). REST servis kaydı başlık tablosunun gizli değerini yazar; senaryolar onu yalnız ${…} ile kullanır.
+// taşı": etki önizlemede 'onizle' kipiyle gösterilir, 'uygula' önizlemedeki etkinin imzasıyla yapılır (fark → yazılmaz). REST servis kaydı başlık tablosunun gizli değerini yazar; senaryolar onu yalnız ${…} ile kullanır.
+import { createHash } from 'node:crypto';
 import { DepoHatasi, ekranlariListele, ortamlariListele } from '../veritabani/depo.mjs';
 import { acikAnahtar, zarflariCoz } from '../kasa.mjs';
 import { modelBaglami, senaryoAkisi, senaryoKaynagi, senaryoOrtamVerileriniYaz, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
@@ -490,14 +491,24 @@ const GERI_AL = Symbol('geri-al');
 /** @typedef {'denetle' | 'uygula' | 'onizle' | null} EtkiKipi */
 /**
  * @typedef {{ etki?: unknown; guncellenecekler?: unknown; kosuyorMu?: (dosya: string, ad: string) => boolean;
- *   servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string }} EtkiSecenekleri
+ *   servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string; beklenenImza?: unknown }} EtkiSecenekleri
  * @typedef {{ degisiklikler: Array<{ tablo: string; satir: string; sutun: string; gizli: boolean; eski: string; yeni: string | null }>; etkilenenler: Etkilenen[];
- *   karsiliklar: Array<{ tablo: string; sutun: string; eski: string; yeni: string }> }} TabloEtkisi
+ *   karsiliklar: Array<{ tablo: string; sutun: string; eski: string; yeni: string }>; imza?: string }} TabloEtkisi
  * @typedef {{ tabloKaydet: (girdi: Parameters<typeof tabloKaydet>[1]) => string; izle: <T>(projeId: string, tabloId: string | null | undefined, yaz: () => T) => T }} EtkiliYazici
  */
 
 /** @returns {TabloEtkisi} */
 function bosEtki() { return { degisiklikler: [], etkilenenler: [], karsiliklar: [] }; }
+
+/**
+ * Etkinin imzası: önizlemede gösterilenle uygulama anındaki etki aynı mı (değişen hücreler, etkilenen senaryolar, durum ve yeni
+ * değerler; gizliler zaten maskeli). Önizlemeden sonra veri değiştiyse imza farklıdır → yazılmaz, yeniden onay istenir.
+ * @param {TabloEtkisi} e
+ */
+export function etkiImzasi(e) {
+  const oz = { d: e.degisiklikler, e: e.etkilenenler.map((x) => [x.anahtar, x.durum, x.eski, x.yeni]) };
+  return createHash('sha256').update(JSON.stringify(oz)).digest('hex').slice(0, 32);
+}
 
 /**
  * Tablo yazan bir işlemi (tablo kaydı, SoapUI / Postman aktarımı, test verisine taşıma) ETKİ DENETİMİYLE çalıştırır. fn içinde
@@ -506,9 +517,11 @@ function bosEtki() { return { degisiklikler: [], etkilenenler: [], karsiliklar: 
  *   · etki 'denetle': etkilenen senaryo varsa HİÇBİR ŞEY yazılmaz (tüm işlem geri alınır), { onayGerekli, etki } döner; yoksa yazılır.
  *   · etki 'uygula': işlem + guncellenecekler'deki (etkilenen anahtarları) senaryolar TEK işlemde yazılır ([] = yalnız işlem).
  *   · etki 'onizle': her durumda geri alınır; yalnız etki döner (önizleme adımı).
+ *   · beklenenImza ('uygula' ile): önizlemede gösterilen etkinin imzası (etki.imza). Uygulama anındaki etki farklıysa HİÇBİR ŞEY
+ *     yazılmaz, { onayGerekli, farkli, etki } döner (kullanıcıya güncel etki gösterilip yeniden onay istenir).
  *   · etki yoksa: işlem eskisi gibi (karşılıklar yine taşınır).
  * @template T @param {Veritabani} vt @param {EtkiSecenekleri} s @param {(yazici: EtkiliYazici) => T} fn
- * @returns {{ onayGerekli?: true; sonuc?: T; etki: TabloEtkisi; guncelleme?: ReturnType<typeof etkiyiUygula> }}
+ * @returns {{ onayGerekli?: true; farkli?: true; sonuc?: T; etki: TabloEtkisi; guncelleme?: ReturnType<typeof etkiyiUygula> }}
  */
 export function etkiDenetimiyle(vt, s, fn) {
   /** @type {EtkiKipi} */
@@ -565,6 +578,8 @@ export function etkiDenetimiyle(vt, s, fn) {
     vt.islem(() => {
       const sonuc = fn(yazici);
       etki.etkilenenler = plan.satirlar;
+      etki.imza = etkiImzasi(etki);
+      if (kip === 'uygula' && typeof s.beklenenImza === 'string' && s.beklenenImza !== etki.imza) { cikti = { onayGerekli: true, farkli: true, etki }; throw GERI_AL; }
       if (kip === 'onizle' || (kip === 'denetle' && plan.satirlar.length)) { cikti = { ...(kip === 'denetle' ? { onayGerekli: true } : {}), etki }; throw GERI_AL; }
       const guncelleme = kip === 'uygula' && projeKimligi ? etkiyiUygula(vt, projeKimligi, plan, secilen, s)
         : kip === 'uygula' ? { guncellenenSenaryo: 0, guncellenenAlan: 0, atlananlar: [], uyari: 0 } : null;

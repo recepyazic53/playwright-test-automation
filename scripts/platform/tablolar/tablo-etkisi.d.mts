@@ -20,6 +20,8 @@ export interface TabloEtkisi {
   degisiklikler: Array<{ tablo: string; satir: string; sutun: string; gizli: boolean; eski: string; yeni: string | null }>;
   etkilenenler: Etkilenen[];
   karsiliklar: Array<{ tablo: string; sutun: string; eski: string; yeni: string }>;
+  /** Önizleme ↔ uygulama karşılaştırması için imza (etkiDenetimiyle). */
+  imza?: string;
 }
 export interface EtkiGuncellemesi { guncellenenSenaryo: number; guncellenenAlan: number; atlananlar: Array<{ baslik: string; alan: string; neden: string }>; uyari: number }
 export declare const MASKE: string;
@@ -42,11 +44,12 @@ export declare function tabloKaydetEtkiyle(
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string }
 ): { id: string; onayGerekli?: true; etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi };
 export interface EtkiSecenekleri {
-  etki?: unknown; guncellenecekler?: unknown; kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string;
+  etki?: unknown; guncellenecekler?: unknown; kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean; yapan?: string; beklenenImza?: unknown;
 }
 export interface EtkiliYazici {
   tabloKaydet(girdi: { projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi }): string;
   izle<T>(projeId: string, tabloId: string | null | undefined, yaz: () => T): T;
 }
 /** Tablo yazan işlemi etki denetimiyle çalıştırır (etki: 'denetle' | 'uygula' | 'onizle'). */
-export declare function etkiDenetimiyle<T>(vt: Veritabani, s: EtkiSecenekleri, fn: (yazici: EtkiliYazici) => T): { onayGerekli?: true; sonuc?: T; etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi };
+export declare function etkiDenetimiyle<T>(vt: Veritabani, s: EtkiSecenekleri, fn: (yazici: EtkiliYazici) => T): { onayGerekli?: true; farkli?: true; sonuc?: T; etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi };
+export declare function etkiImzasi(e: TabloEtkisi): string;

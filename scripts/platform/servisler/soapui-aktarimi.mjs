@@ -171,15 +171,20 @@ export function soapuiOnizle(vt, projeId, xml, secim = {}) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: 'test' | 'canli' | 'ikisi';
  *   ozellikler?: Record<string, string>; tabloAdi?: string; degerOrtami?: string | null; gizliler?: string[]; sifreliKaydet?: string[];
- *   baglar?: string[]; girisEkle?: boolean; mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; yapan?: string }} girdi
+ *   baglar?: string[]; girisEkle?: boolean; mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; beklenenImza?: unknown; yapan?: string }} girdi
+ * - etki: 'onizle' → aktarım denenir ve geri alınır, yalnız etki döner (önizleme ekranı; yeni servis erişim kontrolü olmadan geçici
+ *   yazılır). 'uygula' + beklenenImza: önizlemedeki etki değiştiyse yazılmaz, { onayGerekli, farkli, etki } döner.
  * - Tablo değer değişikliği (tablolar/tablo-etkisi.mjs): var olan satırın değeri değişiyorsa etki: 'denetle' iken etkilenen senaryo
  *   varsa HİÇBİR ŞEY yazılmaz, { onayGerekli, etki } döner; 'uygula' + guncellenecekler ile aktarım ve seçili senaryo güncellemeleri
  *   tek işlemde yazılır. mevcutDegerleriKoru: var olan satırda dolu hücrenin üzerine yazılmaz (dosyadaki değer yalnız boş hücreye).
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean }} [secenekler]
  */
 export function soapuiAktar(vt, projeId, girdi, secenekler = {}) {
-  const r = etkiDenetimiyle(vt, { ...secenekler, etki: girdi.etki, guncellenecekler: girdi.guncellenecekler, yapan: girdi.yapan }, (y) => soapuiAktarimi(vt, projeId, girdi, y));
-  if (r.onayGerekli) return { onayGerekli: true, etki: r.etki };
+  const r = etkiDenetimiyle(vt, { ...secenekler, etki: girdi.etki, guncellenecekler: girdi.guncellenecekler, beklenenImza: girdi.beklenenImza, yapan: girdi.yapan },
+    (y) => soapuiAktarimi(vt, projeId, girdi, y));
+  // Önizleme: aktarım geri alınır, yalnız tablo değişikliği etkisi döner. Onay / fark: hiçbir şey yazılmadı.
+  if (girdi.etki === 'onizle') return { onizleme: true, etki: r.etki };
+  if (r.onayGerekli) return { onayGerekli: true, ...(r.farkli ? { farkli: true } : {}), etki: r.etki };
   return { .../** @type {ReturnType<typeof soapuiAktarimi>} */ (r.sonuc), etki: r.etki, ...(r.guncelleme ? { guncelleme: r.guncelleme } : {}) };
 }
 
@@ -197,7 +202,9 @@ function soapuiAktarimi(vt, projeId, girdi, yazici) {
   }
   return vt.islem(() => {
     const mevcut = vt.tek('SELECT id FROM servisler WHERE proje_id = ? AND anahtar = ?', [projeId, taslak.anahtar]);
-    const servisId = mevcut ? String(mevcut.id) : servisiKaydet(vt, projeId, {
+    const servisId = mevcut ? String(mevcut.id) : girdi.etki === 'onizle'
+      ? servisKaydet(vt, { projeId, anahtar: taslak.anahtar, ad: taslak.ad, ayarlar: { yol: taslak.yol, soapSurumu: taslak.soapSurumu } })
+      : servisiKaydet(vt, projeId, {
       anahtar: taslak.anahtar, ad: taslak.ad, yol: taslak.yol, soapSurumu: taslak.soapSurumu, erisimKimligi: girdi.erisimKimligi, yapan: girdi.yapan
     });
     let s = /** @type {Servis} */ (servisGetir(vt, servisId));

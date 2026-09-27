@@ -30,7 +30,7 @@ export declare function soapuiOnizle(vt: Veritabani, projeId: string, xml: strin
 export interface SoapuiAktarimGirdisi {
   xml: string; takim: string; durum: string; servis: string; erisimKimligi?: string; kapsam?: ServisKapsami;
   ozellikler?: Record<string, string>; tabloAdi?: string; degerOrtami?: string | null; gizliler?: string[]; sifreliKaydet?: string[]; baglar?: string[];
-  girisEkle?: boolean; mevcutDegerleriKoru?: boolean; guncellenecekler?: unknown; yapan?: string;
+  girisEkle?: boolean; mevcutDegerleriKoru?: boolean; guncellenecekler?: unknown; beklenenImza?: string; yapan?: string;
 }
 export interface SoapuiAktarimSonucu {
   etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi;
@@ -41,8 +41,10 @@ export interface SoapuiAktarimSonucu {
 type KosuDenetimi = { kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean };
 /** etki verilmezse eski davranış (yalnız aktarım); 'denetle' etkilenen varsa onay ister, 'uygula' seçili senaryoları da yazar. */
 export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: SoapuiAktarimGirdisi & { etki?: undefined }, secenekler?: KosuDenetimi): SoapuiAktarimSonucu;
+/** Önizleme: aktarım denenir ve geri alınır, yalnız tablo değişikliği etkisi döner. */
+export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: SoapuiAktarimGirdisi & { etki: 'onizle' }, secenekler?: KosuDenetimi): { onizleme: true; etki: TabloEtkisi };
 export declare function soapuiAktar(vt: Veritabani, projeId: string, girdi: SoapuiAktarimGirdisi & { etki: unknown }, secenekler?: KosuDenetimi):
-  { onayGerekli: true; etki: TabloEtkisi } | (SoapuiAktarimSonucu & { onayGerekli?: undefined });
+  { onayGerekli: true; farkli?: true; etki: TabloEtkisi } | (SoapuiAktarimSonucu & { onayGerekli?: undefined });
 export interface EskiDonusumPlani {
   parametreler: { ad: string; hedef: string; tablo: string; sutun: string; etiket: string; rol: string; satir: string | null; senaryoSayisi: number }[];
   senaryolar: { id: string; baslik: string; parametreler: string[] }[];

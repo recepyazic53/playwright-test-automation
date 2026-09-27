@@ -18,9 +18,13 @@ import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './se
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 import { tabloKosuDenetimi } from '../tablolar/tablo-uclari.mjs';
 
-/** Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi, güncellenecek senaryolar, mevcut değerleri koru. @param {Record<string, any>} g */
+/**
+ * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
+ * önizlemedeki etkinin imzası (farklıysa yazılmaz), mevcut değerleri koru. @param {Record<string, any>} g
+ */
 const etkiGirdisi = (g) => ({
-  ...(g.etki === 'denetle' || g.etki === 'uygula' ? { etki: g.etki } : {}),
+  ...(g.etki === 'denetle' || g.etki === 'uygula' || g.etki === 'onizle' ? { etki: g.etki } : {}),
+  ...(typeof g.beklenenImza === 'string' ? { beklenenImza: g.beklenenImza } : {}),
   ...(Array.isArray(g.guncellenecekler) ? { guncellenecekler: g.guncellenecekler.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
   ...(g.mevcutDegerleriKoru === true ? { mevcutDegerleriKoru: true } : {})
 });
@@ -282,7 +286,8 @@ export const SERVIS_POST_UCLARI = [
   }],
   // Eski servis giriş profilini test verisine taşı (onay: false → yalnız önizleme).
   ['/platform/servis-kimligi/test-verisine-tasi', (db, g) => girisProfiliniTestVerisineTasi(db, kimlik(g.projeId, 'projeId'), {
-    ad: metin(g.ad), onay: g.onay === true, ...(Array.isArray(g.guncellenecekler) ? { guncellenecekler: g.guncellenecekler.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {})
+    ad: metin(g.ad), onay: g.onay === true, ...(Array.isArray(g.guncellenecekler) ? { guncellenecekler: g.guncellenecekler.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+    ...(typeof g.beklenenImza === 'string' ? { beklenenImza: g.beklenenImza } : {})
   }, tabloKosuDenetimi())],
   ['/platform/servis-kimligi/sil', (db, g) => ({ silindi: servisKimligiSil(db, kimlik(g.projeId, 'projeId'), metin(g.ad)) })],
   // Akış kaydı: yapısal + anlamsal denetim (servis / senaryo projede; ${akis:X} önceki adımda okunuyor) geçmeden kaydedilmez.

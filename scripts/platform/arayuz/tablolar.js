@@ -263,19 +263,131 @@ export function etkiOnayi(etki, s = {}) {
 }
 
 /**
- * Tablo değerini değiştirebilen bir işlemi (SoapUI / Postman aktarımı) önce etki denetimiyle gönderir: sunucu etkilenen senaryo
- * bulursa hiçbir şey yazmaz; pencerede değişecek değerler ve etkilenen senaryolar gösterilir, seçime göre "uygula" ile yeniden
- * gönderilir ("Mevcut değerleri koru": dolu hücrelerin üzerine yazılmaz). Vazgeçilirse null.
- * @param {HTMLButtonElement} dugme @param {string} yol @param {Record<string, unknown>} govde
+ * Aktarım önizlemesindeki "Tabloda değişecek değerler ve etkilenen senaryolar" bölümü (SoapUI / Postman aktarımı, test verisine
+ * taşı). hesapla(koru) sunucuda etkiyi 'onizle' kipiyle hesaplar (hiçbir şey yazılmaz); yenile() kullanıcının önizlemedeki her
+ * seçim değişikliğinde çağrılır (gecikmeli, son istek geçerli). Etkilenen senaryolar işaretlenebilir (varsayılan hepsi; kaldırılan
+ * işaret yeniden hesaplamada korunur); "Mevcut değerleri koru" dolu hücrenin üzerine yazmaz. Değişen değer yoksa bölüm gizlenir.
+ * Gizli değerler sunucudan zaten "•••" gelir.
+ * @param {((koru: boolean) => Promise<any>) | null} hesapla null: etki dışarıdan verilir (ayarla)
+ * @param {{ koruVar?: boolean }} [s]
+ */
+export function aktarimEtkisiBolumu(hesapla, s = {}) {
+  const koruVar = s.koruVar !== false;
+  const kok = h('section', { class: 'kart etki-bolumu', 'aria-label': 'Tabloda değişecek değerler ve etkilenen senaryolar', hidden: true });
+  /** @type {any} */
+  let etki = null;
+  let hata = '';
+  let koru = false;
+  let hesaplaniyor = false;
+  /** Kullanıcının işaretini kaldırdığı senaryolar (yeniden hesaplamada korunur). */
+  const kaldirilan = new Set();
+  let zaman = null;
+  let sira = 0;
+  /** @type {Promise<void>} */
+  let bekleyen = Promise.resolve();
+  const guncelleri = () => (etki ? etki.etkilenenler.filter((x) => x.durum === 'guncellenebilir') : []);
+  function ciz() {
+    const degisen = etki ? etki.degisiklikler : [];
+    kok.hidden = !hata && !degisen.length && !koru;
+    if (kok.hidden) { yerlestir(kok); return; }
+    const guncel = guncelleri();
+    const silinen = etki ? etki.etkilenenler.filter((x) => x.durum === 'silindi-uyari') : [];
+    const kutular = [];
+    const sayac = h('span', { class: 'soluk', 'aria-live': 'polite' });
+    const tumu = h('input', { type: 'checkbox', 'aria-label': 'Güncellenebilen tüm senaryoları seç' });
+    const sayacYaz = () => {
+      const n = guncel.filter((x) => !kaldirilan.has(x.anahtar)).length;
+      sayac.textContent = `${n} / ${guncel.length} seçili`;
+      tumu.checked = guncel.length > 0 && n === guncel.length;
+    };
+    const satir = (x) => {
+      const kutu = x.durum === 'guncellenebilir' ? h('input', { type: 'checkbox', checked: !kaldirilan.has(x.anahtar), 'aria-label': `${x.baslik} · ${x.alan}: güncelle` }) : null;
+      if (kutu) {
+        kutular.push([kutu, x.anahtar]);
+        kutu.addEventListener('change', () => { if (kutu.checked) kaldirilan.delete(x.anahtar); else kaldirilan.add(x.anahtar); sayacYaz(); });
+      }
+      return h('tr', { class: x.durum === 'guncellenebilir' ? '' : 'atlandi' },
+        h('td', {}, kutu),
+        h('td', { 'data-baslik': 'Senaryo' }, x.baslik, h('span', { class: 'neden' }, `${TUR_ADI[x.tur] || x.tur}: ${x.kaynakAdi}`)),
+        h('td', { 'data-baslik': 'Alan' }, x.alan),
+        h('td', { 'data-baslik': 'Eski' }, x.eski),
+        h('td', { 'data-baslik': 'Yeni' }, x.yeni === null || x.yeni === undefined ? '—' : x.yeni),
+        h('td', { 'data-baslik': 'Durum' }, ETKI_DURUMU[x.durum] || x.durum, x.neden ? h('span', { class: 'neden' }, x.neden) : null));
+    };
+    tumu.addEventListener('change', () => {
+      for (const [k, a] of kutular) { k.checked = tumu.checked; if (tumu.checked) kaldirilan.delete(a); else kaldirilan.add(a); }
+      sayacYaz();
+    });
+    const koruKutusu = koruVar ? h('input', { type: 'checkbox', checked: koru, id: `koru-${++grupSayaci}` }) : null;
+    if (koruKutusu) koruKutusu.addEventListener('change', () => { koru = koruKutusu.checked; yenile(0); });
+    const liste = etki ? etki.etkilenenler : [];
+    yerlestir(kok,
+      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('uyari'), 'Tabloda değişecek değerler ve etkilenen senaryolar'),
+        hesaplaniyor ? h('span', { class: 'sag soluk kucuk' }, 'Hesaplanıyor…') : null),
+      hata ? h('div', { class: 'not-kutusu hata', role: 'alert' }, `Etki hesaplanamadı: ${hata}`) : null,
+      degisen.length ? h('ul', { class: 'etki-ozeti' }, degisen.map((d) => h('li', {}, `${d.tablo ? `${d.tablo} · ` : ''}${d.satir} · ${d.sutun}: `,
+        h('b', {}, d.eski), ' → ', d.yeni === null ? h('i', {}, 'silinir') : h('b', {}, d.yeni))))
+        : h('p', { class: 'soluk kucuk' }, koru ? 'Mevcut değerler korunuyor: tabloda değişen değer yok.' : 'Tabloda değişen değer yok.'),
+      koruKutusu ? h('label', { class: 'secenek', for: koruKutusu.id }, koruKutusu, 'Mevcut değerleri koru (dosyadaki değer dolu hücrenin üzerine yazılmaz; yalnız boş hücreye yazılır)') : null,
+      degisen.length && !liste.length ? h('p', { class: 'soluk kucuk' }, 'Etkilenen senaryo yok.') : null,
+      guncel.length ? h('div', { class: 'donusum-ozeti' }, h('b', {}, 'Aktarımla birlikte güncellenecek senaryolar'), sayac) : null,
+      liste.length ? h('div', { class: 'donusum-tablosu-kap' }, h('table', { class: 'donusum-tablosu', 'aria-label': 'Etkilenen senaryolar' },
+        h('thead', {}, h('tr', {}, h('th', {}, guncel.length ? tumu : ''), h('th', {}, 'Senaryo'), h('th', {}, 'Alan'), h('th', {}, 'Eski'), h('th', {}, 'Yeni'), h('th', {}, 'Durum'))),
+        h('tbody', {}, liste.map(satir)))) : null,
+      silinen.length ? h('div', { class: 'not-kutusu uyari kucuk' }, `${silinen.length} senaryo silinen değeri kullanıyor; koşuda hata verebilir (güncellenmez).`) : null);
+    sayacYaz();
+  }
+  /** @param {any} e */
+  function ayarla(e) { etki = e; hata = ''; ciz(); }
+  /** Etkiyi yeniden hesaplar (gecikmeli; son istek geçerli). @param {number} [gecikme] */
+  function yenile(gecikme = 300) {
+    if (!hesapla) return bekleyen;
+    clearTimeout(zaman);
+    const n = ++sira;
+    bekleyen = new Promise((coz) => {
+      zaman = setTimeout(async () => {
+        hesaplaniyor = true;
+        if (!kok.hidden) ciz();
+        try { const e = await hesapla(koru); if (n === sira) { etki = e; hata = ''; } } catch (err) { if (n === sira) { etki = null; hata = err.message; } }
+        if (n === sira) { hesaplaniyor = false; ciz(); }
+        coz();
+      }, gecikme);
+    });
+    return bekleyen;
+  }
+  return {
+    kok, yenile, ayarla,
+    /** Bekleyen hesaplama bitince (Aktar'dan önce). */
+    bekle: () => bekleyen,
+    /** Aktarım gövdesine eklenecek seçimler. */
+    secimler: () => ({
+      guncellenecekler: guncelleri().filter((x) => !kaldirilan.has(x.anahtar)).map((x) => x.anahtar),
+      ...(etki && etki.imza ? { beklenenImza: etki.imza } : {}), ...(koru ? { mevcutDegerleriKoru: true } : {})
+    })
+  };
+}
+
+/**
+ * Önizlemedeki seçimlerle aktarır ('uygula'; işaretli senaryolar tek işlemde güncellenir). Önizlemeden sonra veri değiştiyse
+ * (sunucu imzayı tutmaz bulur) hiçbir şey yazılmaz: güncel etki pencerede gösterilir ve yeniden onay istenir. Vazgeçilirse null.
+ * @param {HTMLButtonElement} dugme @param {string} yol @param {Record<string, unknown>} govde @param {ReturnType<typeof aktarimEtkisiBolumu>} bolum
  * @param {{ baslik?: string; yalniz?: string; guncelle?: string; mesgul?: string }} [s]
  */
-export async function etkiDenetimiyleGonder(dugme, yol, govde, s = {}) {
+export async function onizlemeyleAktar(dugme, yol, govde, bolum, s = {}) {
   const mesgul = s.mesgul || 'Aktarılıyor…';
-  const r = await mesgulIken(dugme, mesgul, () => api(yol, { govde: { ...govde, etki: 'denetle' } }));
-  if (!r.onayGerekli) return r;
-  const secim = await etkiOnayi(r.etki, { degisenler: true, koru: true, ...s });
-  if (secim === null) return null;
-  return mesgulIken(dugme, mesgul, () => api(yol, { govde: { ...govde, etki: 'uygula', guncellenecekler: secim === 'koru' ? [] : secim, ...(secim === 'koru' ? { mevcutDegerleriKoru: true } : {}) } }));
+  await bolum.bekle();
+  let secim = bolum.secimler();
+  for (let deneme = 0; deneme < 3; deneme++) {
+    const r = await mesgulIken(dugme, mesgul, () => api(yol, { govde: { ...govde, etki: 'uygula', ...secim } }));
+    if (!r.onayGerekli) return r;
+    // Arada tablo / senaryolar değişti: güncel etkiyi göster, yeniden onay iste.
+    bolum.ayarla(r.etki);
+    const c = await etkiOnayi(r.etki, { degisenler: true, koru: true, baslik: 'Önizlemeden sonra değerler değişti', ...s });
+    if (c === null) return null;
+    secim = c === 'koru' ? { guncellenecekler: [], mevcutDegerleriKoru: true } : { guncellenecekler: c, ...(r.etki.imza ? { beklenenImza: r.etki.imza } : {}) };
+    if (c === 'koru') bolum.yenile(0);
+  }
+  throw new Error('Veriler aktarım sırasında değişmeye devam ediyor; önizlemeyi yenileyip yeniden deneyin.');
 }
 
 /** Senaryo güncellemesi bildirimi ("2 senaryo güncellendi, 1 atlandı (neden)"); güncelleme yoksa boş. @param {{ guncelleme?: any } | null | undefined} r */

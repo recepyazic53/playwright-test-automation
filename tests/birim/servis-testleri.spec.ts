@@ -248,7 +248,7 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
       profiller: [{ ad: 'Kanal 100', ortam: null, alanlar: ['kanal', 'parola', 'kullanici'] }, { ad: 'Kanal 100 · CANLI', ortam: 'CANLI', alanlar: ['kanal', 'parola', 'kullanici'] }],
       servisler: ['OrnekService'],
       // Yeni tablo: var olan değer değişmez, senaryolara etki yok (tablo-etkisi.mjs).
-      etki: { degisiklikler: [], etkilenenler: [], karsiliklar: [] }
+      etki: { degisiklikler: [], etkilenenler: [], karsiliklar: [], imza: expect.any(String) }
     } });
     expect(servisGetir(vt, servisId)?.ayarlar.kimlikProfili).toBe('Kanal 100');
     expect(girisProfiliniTestVerisineTasi(vt, projeId, { ad: 'Kanal 100', onay: true })).toMatchObject({ tasindi: true });

@@ -13,7 +13,7 @@ import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu,
 import { kosuOnayi, onayIste, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
-import { etkiDenetimiyleGonder, etkiOnayi, guncellemeMetni } from './tablolar.js';
+import { aktarimEtkisiBolumu, etkiOnayi, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-sihirbazi.js';
 import { hesapKurallariKarti } from './hesap-kurali-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
@@ -220,6 +220,19 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
   const senaryoListesi = h('div', {});
   const ozellikKap = h('div', {});
   const ozetKap = h('div', { 'aria-live': 'polite' });
+  /** Aktarım gövdesi (önizlemedeki seçimler): etki önizlemesi ve Aktar aynı gövdeyi gönderir. */
+  const govdeYap = () => {
+    const sc = secim();
+    return {
+      projeId: proje.id, xml, takim: d.takim, durum: d.durum, servis: servisSec.value, kapsam: kapsam.value, erisimKimligi: erisim?.erisimKimligi,
+      girisEkle: girisEkle.checked, ozellikler: Object.fromEntries(sc.hedef), tabloAdi: tabloAdi.value.trim(), degerOrtami: degerOrtami.value || null,
+      gizliler: [...sc.gizli], sifreliKaydet: [...sc.sifreli], baglar: [...sc.baglar]
+    };
+  };
+  // Tabloda değişecek değerler ve etkilenen senaryolar: seçimler değiştikçe sunucuda 'onizle' ile yeniden hesaplanır (yazılmaz).
+  const etkiBolumu = aktarimEtkisiBolumu((koru) => api('/platform/servis/soapui/aktar', { govde: { ...govdeYap(), etki: 'onizle', ...(koru ? { mevcutDegerleriKoru: true } : {}) } }).then((r) => r.etki));
+  degerOrtami.addEventListener('change', () => etkiBolumu.yenile());
+  girisEkle.addEventListener('change', () => etkiBolumu.yenile());
 
   /** Özelliğin hedef metni ("SoapUI Takım.SUBE", "kural: BEGIN_DATE", "gövdede ${AD}"). */
   const hedefMetni = (x, sc) => {
@@ -273,6 +286,7 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
         yeniBaglar.length ? h('ul', { class: 'soapui-bag-listesi' }, yeniBaglar.map(bagSatiri)) : h('p', { class: 'soluk kucuk' }, 'Kurulacak yeni bağ yok.'),
         mevcutBaglar.length ? h('details', {}, h('summary', { class: 'kucuk' }, `${mevcutBaglar.length} alanın bağı zaten var (korunur)`),
           h('ul', { class: 'onay-listesi' }, mevcutBaglar.map((a) => h('li', {}, `${a.operasyon} · ${a.yol} → ${a.mevcut}`)))) : null));
+    etkiBolumu.yenile();
   };
 
   const ozellikCiz = () => {
@@ -332,14 +346,10 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
   tabloAdi.addEventListener('input', () => { secim().tabloAdi = tabloAdi.value; ozetCiz(); });
   aktar.addEventListener('click', async () => {
     mesaj.temizle();
-    const sc = secim();
     try {
-      // Tablodaki değerleri değiştiriyorsa önce etki gösterilir (tablolar.js etkiDenetimiyleGonder); vazgeçilirse hiçbir şey yazılmaz.
-      const r = await etkiDenetimiyleGonder(aktar, '/platform/servis/soapui/aktar', {
-        projeId: proje.id, xml, takim: d.takim, durum: d.durum, servis: servisSec.value, kapsam: kapsam.value, erisimKimligi: erisim?.erisimKimligi,
-        girisEkle: girisEkle.checked, ozellikler: Object.fromEntries(sc.hedef), tabloAdi: tabloAdi.value.trim(), degerOrtami: degerOrtami.value || null,
-        gizliler: [...sc.gizli], sifreliKaydet: [...sc.sifreli], baglar: [...sc.baglar]
-      }, { baslik: 'Aktarım tablodaki değerleri değiştiriyor', yalniz: 'Yalnız aktar', guncelle: 'Aktar ve seçili senaryoları güncelle' });
+      // Önizlemede işaretli senaryolarla tek işlemde; arada veri değiştiyse yazılmaz, güncel etki gösterilip yeniden onay istenir.
+      const r = await onizlemeyleAktar(aktar, '/platform/servis/soapui/aktar', govdeYap(), etkiBolumu,
+        { yalniz: 'Yalnız aktar', guncelle: 'Aktar ve seçili senaryoları güncelle' });
       if (!r) return;
       if (guncellemeMetni(r)) bildir(guncellemeMetni(r), r.guncelleme.atlananlar.length ? 'hata' : undefined);
       bildir(`${r.eklenen} senaryo aktarıldı${r.atlanan.length ? `, ${r.atlanan.length} atlandı` : ''}; ${r.baglananAlan} alan bağlandı${r.tablo ? `; özellikler "${r.tablo.ad}" tablosunda` : ''}${r.eklenenKurallar.length ? `; ${r.eklenenKurallar.length} hesaplama kuralı eklendi` : ''}${r.girisSatiriEklendi ? '; bağlı tabloya satır eklendi' : ''}.`);
@@ -356,6 +366,7 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
     ozellikKap, ozetKap,
     h('label', { class: 'secenek', for: girisEkle.id }, girisEkle,
       'Bağlı sütuna giden değerler (ör. kanal / kullanıcı) bağlı tabloda yoksa satır olarak ekle (gizli değer yalnız "Şifreli kaydet" işaretliyse)'),
+    etkiBolumu.kok,
     alan('Senaryoların kapsamı', kapsam),
     kontrolKap, h('div', { class: 'dugmeler' }, aktar)));
   kontrolCiz();
@@ -1423,17 +1434,18 @@ function kimlikYonetimi(proje, s, yenile) {
         ...o.profiller.map((p) => `Profil: ${p.ad}${p.ortam ? ` (yalnız ${p.ortam})` : ''}`),
         `Bağlanacak servisler: ${o.servisler.join(', ') || '—'}`
       ];
-      if (!(await onayIste({ baslik: `"${s.ayarlar.kimlikProfili}" test verisine taşınsın mı?`, metin: 'Değerler kasada şifreli kalır; eski kayıt silinmez, yalnız servislerden ayrılır.', liste, dugme: 'Taşı', ikonAd: 'veri' }))) return;
-      // Aynı adlı profilin değerleri değişiyor ve düz metin kullanan senaryolar varsa: hangileri güncellensin (tablo-etkisi.mjs).
+      // Önizlemede (onay penceresinde) tabloda değişecek değerler ve etkilenen senaryolar; işaretliler taşımayla tek işlemde güncellenir.
+      const etkiBolumu = aktarimEtkisiBolumu(null, { koruVar: false });
+      if (o.etki) etkiBolumu.ayarla(o.etki);
+      if (!(await onayIste({ baslik: `"${s.ayarlar.kimlikProfili}" test verisine taşınsın mı?`, metin: 'Değerler kasada şifreli kalır; eski kayıt silinmez, yalnız servislerden ayrılır.', liste, dugme: 'Taşı', ikonAd: 'veri', ek: etkiBolumu.kok }))) return;
       const govde = { projeId: proje.id, ad: s.ayarlar.kimlikProfili, onay: true };
-      const etkiSor = (etki) => etkiOnayi(etki, { degisenler: true, baslik: 'Taşıma tablodaki değerleri değiştiriyor', yalniz: 'Yalnız taşı', guncelle: 'Taşı ve seçili senaryoları güncelle' });
-      let secim = o.etki && o.etki.etkilenenler.length ? await etkiSor(o.etki) : undefined;
-      if (secim === null) return;
-      let r = await mesgulIken(tasi, 'Taşınıyor…', () => api('/platform/servis-kimligi/test-verisine-tasi', { govde: { ...govde, ...(secim ? { guncellenecekler: secim } : {}) } }));
+      let r = await mesgulIken(tasi, 'Taşınıyor…', () => api('/platform/servis-kimligi/test-verisine-tasi', { govde: { ...govde, ...etkiBolumu.secimler() } }));
       if (r.onayGerekli) {
-        secim = await etkiSor(r.etki);
-        if (secim === null) return;
-        r = await mesgulIken(tasi, 'Taşınıyor…', () => api('/platform/servis-kimligi/test-verisine-tasi', { govde: { ...govde, guncellenecekler: secim } }));
+        // Önizlemeden sonra değerler değişti: güncel etki gösterilir, yeniden onay istenir.
+        const secim = await etkiOnayi(r.etki, { degisenler: true, baslik: 'Önizlemeden sonra değerler değişti', yalniz: 'Yalnız taşı', guncelle: 'Taşı ve seçili senaryoları güncelle' });
+        if (secim === null || secim === 'koru') return;
+        r = await mesgulIken(tasi, 'Taşınıyor…', () => api('/platform/servis-kimligi/test-verisine-tasi', { govde: { ...govde, guncellenecekler: secim, ...(r.etki.imza ? { beklenenImza: r.etki.imza } : {}) } }));
+        if (r.onayGerekli) throw new Error('Veriler taşıma sırasında değişmeye devam ediyor; yeniden deneyin.');
       }
       bildir(`Giriş bilgileri test verisine taşındı.${guncellemeMetni(r) ? ` ${guncellemeMetni(r)}` : ''}`);
       yenile();

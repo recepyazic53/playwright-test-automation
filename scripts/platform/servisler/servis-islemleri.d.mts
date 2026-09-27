@@ -55,9 +55,9 @@ export interface GirisTasimaPlani {
   profiller: { ad: string; ortam: string | null; alanlar: string[] }[];
   servisler: string[];
 }
-export declare function girisProfiliniTestVerisineTasi(vt: Veritabani, projeId: string, girdi: { ad: string; onay?: boolean; guncellenecekler?: unknown },
+export declare function girisProfiliniTestVerisineTasi(vt: Veritabani, projeId: string, girdi: { ad: string; onay?: boolean; guncellenecekler?: unknown; beklenenImza?: string },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean }):
-  { onizleme: GirisTasimaPlani & { etki: TabloEtkisi } } | { onayGerekli: true; etki: TabloEtkisi }
+  { onizleme: GirisTasimaPlani & { etki: TabloEtkisi } } | { onayGerekli: true; farkli?: true; etki: TabloEtkisi }
   | (GirisTasimaPlani & { tasindi: true; turId: string; profilId: string; etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi });
 export { eskiParametreleriDonustur, soapuiAktar, soapuiOnizle } from './soapui-aktarimi.mjs';
 export declare function postmanOnizle(vt: Veritabani, projeId: string, girdi: { koleksiyon: string; ortam?: string }):
@@ -68,7 +68,7 @@ export declare function postmanOnizle(vt: Veritabani, projeId: string, girdi: { 
 export interface PostmanAktarimGirdisi {
   koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: ServisKapsami;
-  mevcutDegerleriKoru?: boolean; guncellenecekler?: unknown; yapan?: string;
+  mevcutDegerleriKoru?: boolean; guncellenecekler?: unknown; beklenenImza?: string; yapan?: string;
 }
 export interface PostmanAktarimSonucu {
   etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi;
@@ -79,8 +79,10 @@ export interface PostmanAktarimSonucu {
 type KosuDenetimi = { kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean };
 /** etki verilmezse eski davranış (yalnız aktarım); 'denetle' etkilenen varsa onay ister, 'uygula' seçili senaryoları da yazar. */
 export declare function postmanAktar(vt: Veritabani, projeId: string, girdi: PostmanAktarimGirdisi & { etki?: undefined }, secenekler?: KosuDenetimi): PostmanAktarimSonucu;
+/** Önizleme: aktarım denenir ve geri alınır, yalnız tablo değişikliği etkisi döner. */
+export declare function postmanAktar(vt: Veritabani, projeId: string, girdi: PostmanAktarimGirdisi & { etki: 'onizle' }, secenekler?: KosuDenetimi): { onizleme: true; etki: TabloEtkisi };
 export declare function postmanAktar(vt: Veritabani, projeId: string, girdi: PostmanAktarimGirdisi & { etki: unknown }, secenekler?: KosuDenetimi):
-  { onayGerekli: true; etki: TabloEtkisi } | (PostmanAktarimSonucu & { onayGerekli?: undefined });
+  { onayGerekli: true; farkli?: true; etki: TabloEtkisi } | (PostmanAktarimSonucu & { onayGerekli?: undefined });
 
 export interface CalistirmaSonucu {
   kosuId: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; baslik: string;

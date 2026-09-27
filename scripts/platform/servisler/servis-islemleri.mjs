@@ -562,7 +562,7 @@ export const SERVIS_GIRISI_TURU = 'Servis girişi';
  * değerleri aynı adla bir test verisi profili, ortama özel değerleri "<ad> · <ortam>" profilleri olur; profili kullanan servisler
  * bu test verisi profillerine bağlanır (ortama özel olan "<tür>:<rol>@<ortam>" ile). Eski kayıt SİLİNMEZ (yalnız servislerden ayrılır).
  * onay verilmezse yalnız ne yapılacağı (ve tablo değer değişikliğinin senaryolara etkisi) döner.
- * @param {Veritabani} vt @param {string} projeId @param {{ ad: string; onay?: boolean; guncellenecekler?: unknown }} girdi
+ * @param {Veritabani} vt @param {string} projeId @param {{ ad: string; onay?: boolean; guncellenecekler?: unknown; beklenenImza?: unknown }} girdi
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean }} [secenekler]
  */
 export function girisProfiliniTestVerisineTasi(vt, projeId, girdi, secenekler = {}) {
@@ -594,7 +594,7 @@ export function girisProfiliniTestVerisineTasi(vt, projeId, girdi, secenekler = 
   // Tablo değer değişikliği (aynı adlı profil varsa değerleri üzerine yazılır; tablolar/tablo-etkisi.mjs): önizlemede etki (hiçbir
   // şey yazılmaz), onayda guncellenecekler verilirse taşıma + seçili senaryolar tek işlemde; verilmezse etkilenen varsa onay istenir.
   const guncellenecekler = Array.isArray(girdi.guncellenecekler) ? girdi.guncellenecekler : undefined;
-  const calistir = () => etkiDenetimiyle(vt, { ...secenekler, etki: !girdi.onay ? 'onizle' : guncellenecekler ? 'uygula' : 'denetle', guncellenecekler },
+  const calistir = () => etkiDenetimiyle(vt, { ...secenekler, etki: !girdi.onay ? 'onizle' : guncellenecekler ? 'uygula' : 'denetle', guncellenecekler, beklenenImza: girdi.beklenenImza },
     (y) => y.izle(projeId, mevcutTur?.id, () => tasi()));
   if (!girdi.onay) {
     // Önizleme eskisi gibi yalnız planı gösterebilmeli: deneme yazımı hata verirse etki boş döner (hata onayda görünür).
@@ -603,7 +603,7 @@ export function girisProfiliniTestVerisineTasi(vt, projeId, girdi, secenekler = 
     return { onizleme: { ...plan, etki } };
   }
   const r = calistir();
-  if (r.onayGerekli) return { onayGerekli: true, etki: r.etki };
+  if (r.onayGerekli) return { onayGerekli: true, ...(r.farkli ? { farkli: true } : {}), etki: r.etki };
   return { .../** @type {ReturnType<typeof tasi>} */ (r.sonuc), etki: r.etki, ...(r.guncelleme ? { guncelleme: r.guncelleme } : {}) };
 
   function tasi() {
@@ -681,15 +681,19 @@ export function postmanOnizle(vt, projeId, girdi) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
  *   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: 'test' | 'canli' | 'ikisi';
- *   mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; yapan?: string }} girdi
+ *   mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; beklenenImza?: unknown; yapan?: string }} girdi
+ * - etki: 'onizle' → aktarım denenir ve geri alınır, yalnız etki döner; 'uygula' + beklenenImza: etki değiştiyse yazılmaz (farkli).
  * - Tablo değer değişikliği (tablolar/tablo-etkisi.mjs): var olan satırın değeri değişiyorsa etki: 'denetle' iken etkilenen senaryo
  *   varsa HİÇBİR ŞEY yazılmaz, { onayGerekli, etki } döner; 'uygula' + guncellenecekler ile aktarım ve seçili senaryo güncellemeleri
  *   tek işlemde yazılır. mevcutDegerleriKoru: var olan satırda dolu hücrenin üzerine yazılmaz.
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean; servisKosuyorMu?: (senaryoId: string) => boolean }} [secenekler]
  */
 export function postmanAktar(vt, projeId, girdi, secenekler = {}) {
-  const r = etkiDenetimiyle(vt, { ...secenekler, etki: girdi.etki, guncellenecekler: girdi.guncellenecekler, yapan: girdi.yapan }, (y) => postmanAktarimi(vt, projeId, girdi, y));
-  if (r.onayGerekli) return { onayGerekli: true, etki: r.etki };
+  const r = etkiDenetimiyle(vt, { ...secenekler, etki: girdi.etki, guncellenecekler: girdi.guncellenecekler, beklenenImza: girdi.beklenenImza, yapan: girdi.yapan },
+    (y) => postmanAktarimi(vt, projeId, girdi, y));
+  // Önizleme: aktarım geri alınır, yalnız tablo değişikliği etkisi döner. Onay / fark: hiçbir şey yazılmadı.
+  if (girdi.etki === 'onizle') return { onizleme: true, etki: r.etki };
+  if (r.onayGerekli) return { onayGerekli: true, ...(r.farkli ? { farkli: true } : {}), etki: r.etki };
   return { .../** @type {ReturnType<typeof postmanAktarimi>} */ (r.sonuc), etki: r.etki, ...(r.guncelleme ? { guncelleme: r.guncelleme } : {}) };
 }
 

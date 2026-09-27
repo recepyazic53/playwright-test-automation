@@ -3283,3 +3283,7 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
   .etki-diyalogu .diyalog-alt button { flex: 1 1 100%; }
 }
 .etki-diyalogu h3.kucuk-baslik { font-size: 13px; margin: 12px 0 0; color: var(--metin-2); }
+/* Aktarım önizlemesi: tabloda değişecek değerler ve etkilenen senaryolar (tablolar.js aktarimEtkisiBolumu). */
+.etki-bolumu { display: grid; gap: 10px; min-width: 0; }
+.etki-bolumu .kart-basligi h3 { overflow-wrap: anywhere; }
+.genis-onay .etki-bolumu { margin-top: 12px; }

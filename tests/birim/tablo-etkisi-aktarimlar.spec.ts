@@ -3,8 +3,10 @@
 //    değerleri değişir): denetle → hiçbir şey yazılmaz; onayla yalnız seçilen senaryolar güncellenir; "yalnız aktar" senaryolara
 //    dokunmaz; "mevcut değerleri koru" dolu hücrenin üzerine yazmaz; tek işlem (hata → aktarım da yazılmaz); etki yoksa eski davranış.
 //  · REST servis kaydı: başlık tablosunun gizli değeri değişir ama senaryolar yalnız ${…} başvurusu kullanır (düz metin etkisi yok).
-//  · arayüz (ayrı Nöbetçi 127.0.0.1, geçici veritabanı): SoapUI "Aktar" → pencerede değişecek değerler + etkilenen senaryolar
-//    (masaüstü + 390px, taşma yok), onayla aktarım ve seçili senaryo güncellemesi.
+//  · önizleme ('onizle'): yazmaz, seçimlere göre değişir; 'uygula' önizlemedeki etkinin imzasıyla — arada veri değiştiyse yazılmaz.
+//  · arayüz (ayrı Nöbetçi 127.0.0.1, geçici veritabanı): SoapUI önizlemesinde "Tabloda değişecek değerler ve etkilenen senaryolar"
+//    (seçimle / koru ile değişir; masaüstü + 390px, taşma yok); Aktar pencere açmadan yalnız işaretlileri günceller; arada veri
+//    değişirse yazılmaz, güncel etki gösterilip yeniden onay istenir.
 // Ağ isteği yok (servisler doğrudan veritabanına yazılır); dosyalar SENTETİKTİR.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -126,6 +128,35 @@ test.describe('aktarımlar: etki denetimi (geçici veritabanı)', () => {
     expect(senaryoSayisi()).toBe(n + 1);
   });
 
+  test('SoapUI önizleme: yazmaz, seçimlere göre değişir; imza tutarsa uygulanır, arada veri değiştiyse yazılmaz (farkli)', () => {
+    const n = senaryoSayisi();
+    const o = soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), etki: 'onizle' });
+    expect(o.onizleme).toBe(true);
+    expect(o.etki.degisiklikler).toHaveLength(1);
+    expect(o.etki.etkilenenler).toHaveLength(2);
+    expect(o.etki.imza).toMatch(/^[0-9a-f]{32}$/);
+    expect(deger(vt, k.projeId, k.soapuiTablo, 'SUBE')).toBe('5');
+    expect(senaryoSayisi()).toBe(n);
+    // Seçime göre: gövdede bırak → tabloya yazılmaz; koru → değer değişmez.
+    expect(soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), ozellikler: { SUBE: 'birak' }, etki: 'onizle' }).etki.degisiklikler).toEqual([]);
+    expect(soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), mevcutDegerleriKoru: true, etki: 'onizle' }).etki.degisiklikler).toEqual([]);
+    // Arada tablo değişti (5 → 6): önizlemenin imzası tutmaz → hiçbir şey yazılmaz, güncel etki döner.
+    const satirId = tablolariListele(vt, k.projeId, { tabloId: k.soapuiTablo })[0].satirlar[0].id;
+    tabloKaydet(vt, { projeId: k.projeId, id: k.soapuiTablo, ad: SOAPUI_TABLOSU, sutunlar: [{ ad: 'SUBE', eskiAd: 'SUBE' }], satirlar: [{ id: satirId, degerler: { SUBE: '6' } }] });
+    const f = soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), etki: 'uygula', guncellenecekler: o.etki.etkilenenler.map((x) => x.anahtar), beklenenImza: o.etki.imza });
+    if (!f.onayGerekli) throw new Error('fark beklenirdi');
+    expect(f.farkli).toBe(true);
+    expect(f.etki.degisiklikler[0]).toMatchObject({ eski: '6', yeni: '7' });
+    expect(f.etki.etkilenenler).toEqual([]);
+    expect(deger(vt, k.projeId, k.soapuiTablo, 'SUBE')).toBe('6');
+    expect(senaryoSayisi()).toBe(n);
+    // Güncel imzayla: yazılır.
+    const r = soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), etki: 'uygula', guncellenecekler: [], beklenenImza: f.etki.imza });
+    if (r.onayGerekli) throw new Error('onay beklenmezdi');
+    expect(deger(vt, k.projeId, k.soapuiTablo, 'SUBE')).toBe('7');
+    expect(senaryoSayisi()).toBe(n + 1);
+  });
+
   test('SoapUI: yalnız aktar senaryolara dokunmaz; mevcut değerleri koru üzerine yazmaz; etki yoksa (etki verilmeden) eski davranış', () => {
     const yalniz = soapuiAktar(vt, k.projeId, { ...soapuiGirdisi(), etki: 'uygula', guncellenecekler: [] });
     expect(yalniz).toMatchObject({ eklenen: 1, guncelleme: { guncellenenSenaryo: 0 } });
@@ -218,13 +249,21 @@ test.describe('aktarımlar: etki denetimi (geçici veritabanı)', () => {
   });
 });
 
-test.describe('arayüz: SoapUI aktarımında etki penceresi', () => {
+test.describe('arayüz: SoapUI aktarım önizlemesinde etki', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Aktarim-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
   let tarayici: Browser;
   let klasor = '';
   let k: Kurulum;
+  const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
+  const senaryolar = async () => (await api(`/platform/servis?projeId=${k.projeId}&id=${k.servisId}`)).senaryolar as Nesne[];
+  /** Tabloyu API'den (etki denetimi olmadan) değiştirir: önizlemeden sonra veri değişti. */
+  const subeYaz = async (deger: string) => {
+    const t = ((await api(`/platform/tablolar?projeId=${k.projeId}`)).tablolar as Nesne[]).find((x) => x.id === k.soapuiTablo) as Nesne;
+    const y = await api('/platform/tablo/kaydet', { projeId: k.projeId, id: t.id, ad: t.ad, sutunlar: [{ ad: 'SUBE', eskiAd: 'SUBE' }], satirlar: [{ id: t.satirlar[0].id, degerler: { SUBE: deger } }] });
+    expect(y.basarili, String(y.mesaj ?? '')).not.toBe(false);
+  };
 
   test.beforeAll(async () => {
     test.setTimeout(120_000);
@@ -246,49 +285,90 @@ test.describe('arayüz: SoapUI aktarımında etki penceresi', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('Aktar → değişecek değerler + etkilenen senaryolar (masaüstü + 390px, taşma yok) → onayla seçili senaryo güncellenir', async () => {
-    test.setTimeout(90_000);
+  const onizlemeyiAc = async (xml = SOAPUI) => {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } });
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/servisler/yeni');
     await page.getByRole('tab', { name: 'SoapUI dosyasından' }).click();
-    await page.getByLabel('SoapUI proje dosyası').setInputFiles({ name: 'proje.xml', mimeType: 'text/xml', buffer: Buffer.from(SOAPUI) });
+    await page.getByLabel('SoapUI proje dosyası').setInputFiles({ name: 'proje.xml', mimeType: 'text/xml', buffer: Buffer.from(xml) });
     await page.getByRole('button', { name: 'Seç' }).click();
+    const bolum = page.getByRole('region', { name: 'Tabloda değişecek değerler ve etkilenen senaryolar' });
+    return { baglam, page, hatalar, bolum };
+  };
+
+  test('önizlemede etki: seçimle değişir, koru ile kalkar; işareti kaldırılan yazılmaz; Aktar pencere açmaz (masaüstü + 390px)', async () => {
+    test.setTimeout(90_000);
+    const { baglam, page, hatalar, bolum } = await onizlemeyiAc();
+    // Varsayılan: SUBE servisin bağlı sütununa gider → tabloda değişen değer yok, bölüm gizli.
+    await expect(page.getByLabel('SUBE nereden dolsun')).toHaveValue('bag');
+    await expect(bolum).toBeHidden();
+    // Tabloya → önizlemede değişecek değer ve etkilenen iki senaryo (varsayılan işaretli).
     await page.getByLabel('SUBE nereden dolsun').selectOption('tablo');
-    await page.getByRole('button', { name: 'Aktar', exact: true }).click();
-    const diyalog = page.getByRole('dialog', { name: 'Aktarım tablodaki değerleri değiştiriyor' });
-    await expect(diyalog).toBeVisible();
-    await expect(diyalog).toContainText('Tabloda değişecek değerler');
-    await expect(diyalog).toContainText(`${SOAPUI_TABLOSU} · s1 · SUBE: 5 → 7`);
-    await expect(diyalog).toContainText('"5" değeri 2 senaryoda kullanılıyor (Servis Ornek: 2) — bunları da "7" yapayım mı?');
-    await expect(diyalog.getByRole('button', { name: 'Mevcut değerleri koru' })).toBeVisible();
-    await page.waitForTimeout(400);
-    await page.screenshot({ path: test.info().outputPath('aktarim-etkisi.png') });
-    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(bolum).toBeVisible();
+    await expect(bolum).toContainText(`${SOAPUI_TABLOSU} · s1 · SUBE: 5 → 7`);
+    await expect(bolum.getByRole('table', { name: 'Etkilenen senaryolar' })).toContainText('Şube 5 (ikinci)');
+    await expect(bolum).toContainText('2 / 2 seçili');
+    // Koru: değer değişmez, etkilenen yok; kaldırınca geri gelir.
+    await bolum.getByLabel(/Mevcut değerleri koru/).check();
+    await expect(bolum).toContainText('Mevcut değerler korunuyor: tabloda değişen değer yok.');
+    await expect(bolum.getByRole('table', { name: 'Etkilenen senaryolar' })).toHaveCount(0);
+    await bolum.getByLabel(/Mevcut değerleri koru/).uncheck();
+    await expect(bolum).toContainText('SUBE: 5 → 7');
+    await bolum.getByRole('checkbox', { name: /^Şube 5 \(ikinci\) · / }).uncheck();
+    await expect(bolum).toContainText('1 / 2 seçili');
     await page.waitForTimeout(200);
-    await page.screenshot({ path: test.info().outputPath('aktarim-etkisi-telefon.png') });
+    await bolum.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: test.info().outputPath('aktarim-onizleme-etkisi.png') });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(400);
+    await bolum.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(200);
+    await bolum.screenshot({ path: test.info().outputPath('aktarim-onizleme-etkisi-telefon.png') });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(2);
-    expect(await diyalog.evaluate((d) => d.scrollWidth - d.clientWidth)).toBeLessThanOrEqual(2);
-    for (const ad of ['Aktar ve seçili senaryoları güncelle', 'Yalnız aktar', 'Mevcut değerleri koru', 'Vazgeç']) {
-      const b = await diyalog.getByRole('button', { name: ad }).boundingBox();
-      expect(b && b.x >= 0 && b.x + b.width <= 390 && b.y >= 0 && b.y + b.height <= 844, ad).toBe(true);
-    }
+    expect(await bolum.evaluate((d) => d.scrollWidth - d.clientWidth)).toBeLessThanOrEqual(2);
     await page.setViewportSize({ width: 1280, height: 900 });
-    // Vazgeç: hiçbir şey yazılmaz.
-    await diyalog.getByRole('button', { name: 'Vazgeç' }).click();
-    const servis = async () => nobetciApi(nobetci, `/platform/servis?projeId=${k.projeId}&id=${k.servisId}`) as Promise<Nesne>;
-    expect(((await servis()).senaryolar as Nesne[]).length).toBe(4);
-    // Yeniden Aktar → ikinci senaryonun işaretini kaldır → onayla.
+    // Önizlemede hiçbir şey yazılmadı.
+    expect((await senaryolar()).length).toBe(4);
+    // Aktar: pencere yok; yalnız işaretli senaryo güncellenir, aktarım aynı işlemde.
     await page.getByRole('button', { name: 'Aktar', exact: true }).click();
-    await diyalog.getByRole('checkbox', { name: /^Şube 5 \(ikinci\) · / }).uncheck();
-    await diyalog.getByRole('button', { name: 'Aktar ve seçili senaryoları güncelle' }).click();
     await expect(page).toHaveURL(/#\/servisler\/s\/[^/]+\/(senaryolar|parametreler)$/);
-    const senaryolar = (await servis()).senaryolar as Nesne[];
-    expect(senaryolar.length).toBe(5);
-    expect(senaryolar.find((x) => x.baslik === 'Şube 5')?.icerik.govde).toBe(zarf('<Channel>7</Channel>'));
-    expect(senaryolar.find((x) => x.baslik === 'Şube 5 (ikinci)')?.icerik.govde).toBe(zarf('<Channel>5</Channel>'));
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    const liste = await senaryolar();
+    expect(liste.length).toBe(5);
+    expect(liste.find((x) => x.baslik === 'Şube 5')?.icerik.govde).toBe(zarf('<Channel>7</Channel>'));
+    expect(liste.find((x) => x.baslik === 'Şube 5 (ikinci)')?.icerik.govde).toBe(zarf('<Channel>5</Channel>'));
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('önizlemeden sonra veri değişirse yazılmaz: güncel etki gösterilir, yeniden onay istenir', async () => {
+    test.setTimeout(90_000);
+    // Önceki testten sonra tablo 7 ve "Yeni teklif" var: yeni adlı senaryoyla, tablo yeniden 5.
+    await subeYaz('5');
+    const { baglam, page, hatalar, bolum } = await onizlemeyiAc(SOAPUI.replace(/Yeni teklif/g, 'Yeni teklif 2'));
+    await page.getByLabel('SUBE nereden dolsun').selectOption('tablo');
+    await expect(bolum).toContainText('SUBE: 5 → 7');
+    // Arada tablo başka yerden değişti (5 → 6): önizlemedeki etki artık geçerli değil.
+    await subeYaz('6');
+    const once = (await senaryolar()).length;
+    await page.getByRole('button', { name: 'Aktar', exact: true }).click();
+    const diyalog = page.getByRole('dialog', { name: 'Önizlemeden sonra değerler değişti' });
+    await expect(diyalog).toBeVisible();
+    await expect(diyalog).toContainText(`${SOAPUI_TABLOSU} · s1 · SUBE: 6 → 7`);
+    // Bölüm de güncel etkiyi gösterir.
+    await expect(bolum).toContainText('SUBE: 6 → 7');
+    await diyalog.getByRole('button', { name: 'Vazgeç' }).click();
+    expect((await senaryolar()).length).toBe(once);
+    const t = ((await api(`/platform/tablolar?projeId=${k.projeId}`)).tablolar as Nesne[]).find((x) => x.id === k.soapuiTablo) as Nesne;
+    expect(t.satirlar[0].degerler.SUBE).toBe('6');
+    // Bölüm artık güncel etkiyi gösteriyor (etkilenen yok): Aktar pencere açmadan yazar.
+    await expect(bolum).toContainText('Etkilenen senaryo yok.');
+    await page.getByRole('button', { name: 'Aktar', exact: true }).click();
+    await expect(page).toHaveURL(/#\/servisler\/s\/[^/]+\/(senaryolar|parametreler)$/);
+    const t2 = ((await api(`/platform/tablolar?projeId=${k.projeId}`)).tablolar as Nesne[]).find((x) => x.id === k.soapuiTablo) as Nesne;
+    expect(t2.satirlar[0].degerler.SUBE).toBe('7');
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
