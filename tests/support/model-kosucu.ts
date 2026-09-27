@@ -15,8 +15,10 @@
 //   4) adım ekran görüntüsü.
 // Planın kendisi (hangi adımlar, hangi alanlar, beklenen sonuç) saftır: scripts/platform/senaryolar/model-kosusu.mjs.
 import { expect, test, type Locator, type Page, type Request, type TestInfo } from '@playwright/test';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
+import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
@@ -30,7 +32,7 @@ import { oturumuSifreliYaz } from './oturum-kasasi';
 import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
-import { sayiAyari, secimAyari, sureAyari } from './kosu-ayarlari';
+import { indirilenDosyaAyari, sayiAyari, secimAyari, sureAyari } from './kosu-ayarlari';
 import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
@@ -597,6 +599,62 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
   for (const ad of r.gizliOkunanlar) { const v = r.okunanlar[ad]; if (v && !d.gizliler.includes(v)) d.gizliler.push(v); }
 }
 
+/**
+ * İndirilen dosyayı doğrulama adımı: tetikleyici düğmeye basılır, indirme (Playwright download olayı) beklenir; dosya koşunun geçici
+ * klasörüne (NOBETCI_DOSYA_KLASORU; yoksa işletim sisteminin geçici klasörü) yazılır, okunup doğrulanır ve HEMEN silinir.
+ * Beklentilerdeki başvurular: ${akis:Ad} → önceki SQL okumaları, ${Tablo.Sütun} → veri okuyucunun çözdüğü değerler, ${alan} → senaryo
+ * değeri. Özet (her beklenti: geçti / kaldı, Beklenen / Görülen; gizliler maskeli) her zaman rapora ek olarak yazılır; dosyanın kendisi
+ * yalnız Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (varsayılan: saklanmaz). Kalan beklenti → Beklenen / Görülen hatası.
+ */
+async function dosyaAdiminiUygula(page: Page, testInfo: TestInfo, adimBasligi: string, tanim: DosyaTanimi, s: PlatformModelSenaryosu, d: SqlDegerleri): Promise<void> {
+  const tetik = tanim.tetikleyici;
+  if (!tetik?.secici) throw new Error(`${adimBasligi}: indirmeyi başlatan düğme modelde yok (dosyaKontrolu.tetikleyici).`);
+  const sureMs = (tanim.zamanAsimiSn ?? adimSuresiSn()) * 1000;
+  const dugme = page.locator(tetik.secici).filter({ visible: true }).first();
+  const indirme = page.waitForEvent('download', { timeout: sureMs }).catch(() => null);
+  try {
+    await dugme.click({ timeout: sureMs });
+  } catch {
+    throw new Error(beklenenGorulenMetni(adimBasligi, `"${tetik.aciklama ?? tetik.secici}" düğmesine basılır`, `${Math.round(sureMs / 1000)} sn içinde tıklanamadı (görünmüyor ya da üstünü başka bir öğe kapatıyor)`));
+  }
+  const indirilen = await indirme;
+  if (!indirilen) throw new Error(beklenenGorulenMetni(adimBasligi, 'dosya indirilir', `${Math.round(sureMs / 1000)} sn içinde indirme başlamadı`));
+  const ad = indirilen.suggestedFilename();
+  const kok = process.env[DOSYA_KLASORU_DEGISKENI];
+  const klasor = mkdtempSync(join(kok && existsSync(kok) ? kok : tmpdir(), 'indirilen-'));
+  let veri: Buffer;
+  try {
+    const yol = join(klasor, 'dosya');
+    await indirilen.saveAs(yol);
+    veri = readFileSync(yol);
+  } catch (e) {
+    throw new Error(beklenenGorulenMetni(adimBasligi, 'dosya indirilir', `indirme tamamlanmadı (${indirilen.url().startsWith('blob:') ? 'sayfa içi dosya' : 'ağ'}: ${(await indirilen.failure().catch(() => null)) ?? (e as Error).message})`));
+  } finally {
+    rmSync(klasor, { recursive: true, force: true });
+    await indirilen.delete().catch(() => undefined);
+  }
+  const gizliler = [...d.gizliler, ...(s.tabloGizliDegerleri ?? [])];
+  const coz = (ifade: string): string | undefined => {
+    if (ifade.startsWith('akis:')) return d.degerler[ifade.slice(5).trim()];
+    if (s.dosyaBasvurulari && Object.prototype.hasOwnProperty.call(s.dosyaBasvurulari, ifade)) return s.dosyaBasvurulari[ifade];
+    const v = s.veri[ifade];
+    return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : undefined;
+  };
+  const r = dosyayiDogrula({ ad, veri }, tanim, { coz, gizliler });
+  await testInfo.attach(`Dosya doğrulama - ${adimBasligi}`, { contentType: 'application/json', body: JSON.stringify(r, null, 2) });
+  const sakla = indirilenDosyaAyari();
+  if (sakla === 'her' || (sakla === 'yalnizHata' && !r.gecti)) {
+    await testInfo.attach(`İndirilen dosya - ${r.dosya.ad}`, { contentType: DOSYA_ICERIK_TURLERI[r.dosya.bicim] ?? 'application/octet-stream', body: veri });
+  }
+  veri.fill(0);
+  if (!r.gecti) throw new Error(kalanlarMetni(adimBasligi, r));
+}
+
+/** Rapora eklenen dosyanın içerik türü (ekin görüntülenmesi için; görüntü / video / iz türü değildir). */
+const DOSYA_ICERIK_TURLERI: Record<string, string> = {
+  csv: 'text/csv', metin: 'text/plain', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+
 export type ModelKosuOrtami = {
   veri: PlatformModelVerisi;
   tarif: () => GirisTarifi;
@@ -746,6 +804,13 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         adimAdiniBildir(page, adim.baslik);
         // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
         if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
+        // İndirilen dosyayı doğrulama adımı: düğmeye basılır, indirilen dosya beklentilerle doğrulanır.
+        if (adim.dosya) {
+          tarayiciUyarilari.get(page)?.splice(0);
+          await dosyaAdiminiUygula(page, testInfo, adim.baslik, adim.dosya, s, sqlDegerleri);
+          await ekranGoruntusu(adim.baslik);
+          return;
+        }
         // Yeniden giriş: oturum kapatılır (çerezler/depolama temizlenir), ortamın tarifiyle (seçilen profille) yeniden girilir,
         // bağlam yeniden değiştirilir ve akış kaldığı sayfadan sürer. Paylaşılan oturum dosyasına yazılmaz.
         if (adim.yenidenGiris) {

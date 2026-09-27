@@ -24,7 +24,7 @@ export declare function xmlKacis(s: string): string;
 export declare function xmlKacisCoz(s: string): string;
 export declare function gizlileriMaskele(metin: string, gizliler: string[]): string;
 
-export interface HamYanit { durumKodu: number; basliklar: Record<string, string>; govde: string; sureMs: number }
+export interface HamYanit { durumKodu: number; basliklar: Record<string, string>; govde: string; ham?: Buffer; sureMs: number }
 export declare function httpIstegi(istek: {
   adres: string; yontem?: string; basliklar?: Record<string, string>; govde?: string; zamanAsimiMs?: number; tlsDogrulama?: boolean;
   sinyal?: AbortSignal; gonderildi?: () => void; yasakDesenleri?: ReadonlyArray<{ kalip: string; desen: RegExp }>;
@@ -45,5 +45,10 @@ export declare function xmlAgaci(xml: string): XmlDugumu | null;
 export declare function xpathMetni(kok: XmlDugumu, yol: string): string | undefined;
 export interface KontrolSonucu { tur: string; ad: string; gecti: boolean; aciklama: string; alt?: KontrolSonucu[] }
 export declare function kontrolAdi(k: ServisKontrolu): string;
-export declare function kontrolleriDegerlendir(yanit: { durumKodu: number; govde: string }, kontroller: ServisKontrolu[]): KontrolSonucu[];
+export interface DosyaKontrolSecenekleri {
+  coz?: (ifade: string) => string | undefined; gizliler?: string[]; ekGizliAdlar?: ReadonlyArray<string>; adres?: string;
+  sonuc?: (r: import('../dosyalar/dosya-icerigi.mjs').DosyaKontrolSonucu, veri: Buffer) => void;
+}
+export declare function kontrolleriDegerlendir(yanit: { durumKodu: number; govde: string; ham?: Buffer; basliklar?: Record<string, string> }, kontroller: ServisKontrolu[],
+  dosyaSecenekleri?: DosyaKontrolSecenekleri): KontrolSonucu[];
 export declare function yanitOzeti(govde: string): string;

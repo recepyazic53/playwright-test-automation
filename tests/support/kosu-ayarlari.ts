@@ -45,6 +45,14 @@ export function izAyari(): 'on' | 'retain-on-failure' | 'off' {
   return v === 'her' ? 'on' : v === 'yalnizHata' ? 'retain-on-failure' : 'off';
 }
 
+/**
+ * Doğrulanan (indirilen) dosya rapora ek olarak saklansın mı (Ayarlar > Koşu > Kayıt > Doğrulanan dosya): varsayılan saklanmaz
+ * (yalnız özet); 'yalnizHata' yalnız beklentisi kalan dosya; 'her' her zaman.
+ */
+export function indirilenDosyaAyari(): Kayit {
+  return kayit('NOBETCI_INDIRILEN_DOSYA') ?? 'kapali';
+}
+
 /** Yeniden deneme sayısı (0–3): ortam değişkeni > kasadaki kayıtlı ayar > CI'da 2, diğerlerinde 0. */
 export function yenidenDenemeAyari(): number {
   const ham = ayarDegeri('NOBETCI_YENIDEN_DENEME');

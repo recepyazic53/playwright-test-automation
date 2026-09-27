@@ -22,6 +22,7 @@
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { sqlAdimiFormu, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
+import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { girisAyrintisi } from './senaryo-diyagrami.js';
 import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
 
@@ -32,6 +33,7 @@ const TURLER = {
   bekle: { etiket: 'Bekleme süresi', ikonAd: 'saat' },
   ortak: { etiket: 'Ortak akış', ikonAd: 'pusula' },
   sql: { etiket: 'SQL sorgusu', ikonAd: 'veri' },
+  dosya: { etiket: 'İndirilen dosyayı doğrula', ikonAd: 'indir' },
   giris: { etiket: 'Yeniden giriş', ikonAd: 'kilit' },
   bitir: { etiket: 'Bitir', ikonAd: 'onay' }
 };
@@ -213,6 +215,7 @@ export async function akisTasarimi(icerik, s) {
           type: 'button', onclick: () => blokEkle(konum, { tur: 'ortak', dosya: ortakAkislar[0].dosya, ad: ortakAkislar[0].ad, istegeBagli: false })
         }, ikon('pusula'), 'Ortak akış') : null,
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlKaynaklari) }) }, ikon('veri'), 'SQL sorgusu'),
+        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'dosya', ad: '', dugme: -1, dosya: yeniDosyaTanimi() }) }, ikon('indir'), 'İndirilen dosyayı doğrula'),
         girissiz ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'giris', ad: '', profil: null }) }, ikon('kilit'), 'Yeniden giriş'),
         bitirVar ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'bitir' }) }, ikon('onay'), 'Bitir')) : null);
   }
@@ -455,6 +458,22 @@ export async function akisTasarimi(icerik, s) {
         h('p', { class: 'soluk kucuk' }, 'SQL’de senaryonun değerleri ${alanAnahtari}, önceki SQL adımlarında okunan değerler ${akis:Ad} ile yazılır. Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar.')
       ];
     }
+    if (b.tur === 'dosya') {
+      // İndirilen dosyayı doğrula: düğmeye basılır, indirilen dosya (CSV / XLSX / PDF / metin) beklentilerle doğrulanır.
+      const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Sipariş raporu indirilir', 'aria-label': 'Dosya adımının adı' });
+      ad.addEventListener('input', () => { b.ad = ad.value; sakla(); });
+      ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
+      const dugme = h('select', { 'aria-label': 'İndirmeyi başlatan düğme' },
+        h('option', { value: '-1' }, 'Düğme seçin…'),
+        palet.dugmeler.map((d) => h('option', { value: String(d.sira), selected: d.sira === b.dugme }, `“${d.metin}”`)));
+      dugme.addEventListener('change', () => { b.dugme = Number(dugme.value); sakla(); });
+      return [
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'İndirmeyi başlatan düğme'), dugme),
+        dosyaKontroluFormu(b.dosya, { degisti: sakla, ekran: true }),
+        h('p', { class: 'soluk kucuk' }, 'Koşuda düğmeye basılır, indirilen dosya koşunun geçici klasörüne yazılır, doğrulanır ve silinir. Bir aksiyondan sonra (ya da akışın başında) gelir.')
+      ];
+    }
     return [h('p', { class: 'soluk kucuk' }, 'Akış burada biter; son beklenen mesaj (art arda birden çoksa herhangi biri) başarı sayılır.')];
   }
 
@@ -472,6 +491,7 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu') : null,
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
+      b.tur === 'dosya' ? rozet(dosyaOzeti(b.dosya), 'vurgu') : null,
       b.tur === 'ortak' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.yalnizTest ? rozet('yalnızca test', 'uyari') : null,
       b.tur === 'mesaj' && b.uyari ? rozet('uyarı', 'uyari') : null,

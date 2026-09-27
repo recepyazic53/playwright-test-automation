@@ -373,6 +373,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/akis-senaryo-formu.js', { dosya: 'akis-senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/dosya-kontrolu-formu.js', { dosya: 'dosya-kontrolu-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veritabanlari.js', { dosya: 'veritabanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],

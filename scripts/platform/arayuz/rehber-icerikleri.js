@@ -190,6 +190,11 @@ export const REHBERLER = {
           'Önceki adımdan gelen alanlar kilitlidir ("1. adımdan gelir") ve sorulmaz.', 'Her adımın beklenen sonucunu kontrol edin (ör. bu adım bir hata vermeli).', 'Dene ile TEST’te deneyin, sonra kaydedin. Akış senaryosu, akışın geçtiği her serviste "akış: <ad>" rozetiyle listelenir.'],
         cizim: { tur: 'form', alanlar: ['Akış', '1. adımın alanları', '2. adımın alanları (kilitliler hariç)', 'Beklenen sonuçlar'], dugme: 'Dene' }
       },
+      {
+        baslik: 'Yanıt bir dosyaysa',
+        metin: 'Servis rapor, liste ya da belge döndürüyorsa (CSV, XLSX, PDF, metin) kontrollere "Yanıttaki dosyayı doğrula"yı ekleyin. Dosya adı yanıt başlığından (Content-Disposition) ya da adresten, biçimi içerik türünden bulunur; beklentiler ekrandaki "İndirilen dosyayı doğrula" ile aynıdır ve her biri sonuçta ayrı satırdır. Beklentide ${Parametre}, ${Tablo.Sütun} ve ${akis:Ad} kullanılabilir.',
+        ipucu: 'İkili yanıt (XLSX / PDF) raporda metin olarak saklanmaz; yalnız özet durur. Dosyanın kendisi Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse saklanır.'
+      },
       { baslik: 'Gizli bilgiler', metin: 'Yanıtlarda ve raporlarda gizli adlı alanlar maskelenir. Maskelenecek ek adları Ayarlar > Güvenlik > Maskeleme\'den ekleyebilirsiniz.' }
     ]
   },
@@ -267,7 +272,15 @@ export const REHBERLER = {
     baslik: 'Akış tasarımı',
     adimlar: [
       { baslik: 'Akış diyagramı', metin: 'Ekranın adımları kutular hâlinde, çalışma sırasıyla. Kutuları sürükleyerek sıralar, "+" ile koşullu adım ya da ortak akış eklersiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adım 1', ikon: 'duzenle' }, { baslik: 'Koşullu', alt: 'ör. Kurumsal ise', ikon: 'isaret' }, { baslik: 'Ortak akış', ikon: 'pusula' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
-      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Yeni akış" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] }
+      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Yeni akış" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] },
+      {
+        baslik: 'İndirilen dosyayı doğrula',
+        metin: ['Ekrandaki bir düğme dosya indiriyorsa (ör. sipariş listesi, fatura) "+ > İndirilen dosyayı doğrula" bloğunu ekleyin: düğmeyi seçin, beklentileri yazın. Koşuda düğmeye basılır, indirilen dosya okunur ve her beklenti ayrı ayrı denetlenir.',
+          'Biçimler: CSV (ayraç ve kodlama otomatik bulunur: UTF-8, UTF-8-BOM, Windows-1254), Excel XLSX, PDF (metni olan PDF; şifreli ya da taranmış PDF açık bir hatayla kalır) ve düz metin. Beklentiler: dosya adı deseni (* ve ?), en az boyut, metin içeriyor / içermiyor, sütun var, satır sayısı (= ya da ≥; başlık hariç) ve "şu satırda şu sütun şu değer".',
+          'Metinlerde ${Tablo.Sütun} (test verisi), ${akis:Ad} (önceki SQL adımında okunan) ve senaryo alanı yazılabilir. Karşılaştırma büyük / küçük harf farkını yok sayar.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Düğme', alt: 'indir', ikon: 'indir' }, { baslik: 'Dosya', alt: 'geçici klasör', ikon: 'dosya' }, { baslik: 'Beklentiler', alt: 'geçti / kaldı', ikon: 'onay' }, { baslik: 'Silinir', ikon: 'cop' }] },
+        ipucu: 'Sonuçta her beklenti için Beklenen / Görülen yazar; gizli değerler maskelenir. Dosyanın kendisi varsayılan olarak saklanmaz; Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" ile değiştirebilirsiniz.'
+      }
     ]
   },
   bulgular: {

@@ -102,7 +102,7 @@ function diyagramdaKaybolan(model, adimlar, i, env) {
   const g = kosu.basariGostergesi;
   const secenekler = !nesneMi(g) ? [] : g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler.filter(nesneMi) : [g];
   if (secenekler.some((s) => s.tur === 'url')) return 'adres (url) başarı göstergesi';
-  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu));
+  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.dosyaKontrolu));
   if (sonAdim && secenekler.some((s) => s.tur === 'eleman')) return 'öğe (eleman) başarı göstergesi';
   // Hata göstergesi (uyarısız da olsa) ve öğe "veya" göstergesi kaydederken adımın mevcut tanımından korunur (paket-olusturucu).
   // İsteğe bağlı adım: diyagramda yalnızca "her senaryoda basılmaz" düğmenin açtığı alanlar olarak (önceki adım o düğme).
@@ -207,6 +207,9 @@ export function modeldenAkisEnvanteri(model) {
     for (const x of Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar : []) {
       if (nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string') ekle(dugmeler, { secici: x.secici, metin: typeof x.aciklama === 'string' ? x.aciklama : null });
     }
+    // Dosya adımının indirmeyi başlatan düğmesi de sağ listede (diyagramdaki dosya bloğu onu seçer).
+    const t = nesneMi(adim.dosyaKontrolu) && nesneMi(adim.dosyaKontrolu.tetikleyici) ? adim.dosyaKontrolu.tetikleyici : null;
+    if (t && typeof t.secici === 'string') ekle(dugmeler, { secici: t.secici, metin: typeof t.aciklama === 'string' ? t.aciklama : null });
     for (const g of metinGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger });
     for (const g of desenGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger });
     for (const u of uyariListesi(kosu)) ekle(mesajlar, { secici: typeof u.secici === 'string' ? u.secici : '', metin: u.metin });
@@ -262,6 +265,13 @@ export function adimlardanBloklar(model, adimlar, env) {
     // SQL sorgusu adımı: tek blok (tanım aynen).
     if (nesneMi(adim.sqlKontrolu)) {
       bloklar.push({ tur: 'sql', ad: String(adim.baslik || adim.id), sql: kopya(adim.sqlKontrolu) });
+      continue;
+    }
+    // Dosya doğrulama adımı: tek blok (tetikleyici düğme sağ listedeki sırasıyla; tanım aynen).
+    if (nesneMi(adim.dosyaKontrolu)) {
+      const { tetikleyici, ...tanim } = kopya(adim.dosyaKontrolu);
+      const d = nesneMi(tetikleyici) ? env.dugmeler.findIndex((o) => o.secici === tetikleyici.secici && o.metin === (typeof tetikleyici.aciklama === 'string' ? tetikleyici.aciklama : null)) : -1;
+      bloklar.push({ tur: 'dosya', ad: String(adim.baslik || adim.id), dugme: d, dosya: tanim });
       continue;
     }
     // Yeniden giriş adımı: tek blok (profil: giriş profilinin adı; yoksa ortamın varsayılanı).

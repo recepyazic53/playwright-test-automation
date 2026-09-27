@@ -62,6 +62,8 @@ export type PlanAdimi = {
   ortakAkisAdi?: string;
   /** SQL sorgusu adımı: koşucu veritabanı sorgusunu beklenenle karşılaştırır. */
   sql?: import('../sql/sql-adimi.mjs').SqlTanimi;
+  /** İndirilen dosyayı doğrulama adımı: tetikleyici düğmeye basılır, indirilen dosya beklentilerle doğrulanır. */
+  dosya?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi;
   /** Yeniden giriş adımı: oturum kapatılıp ortamın tarifiyle yeniden girilir (profil: giriş profilinin adı; null = ortamın varsayılanı). */
   yenidenGiris?: { profil: string | null };
   id: string;

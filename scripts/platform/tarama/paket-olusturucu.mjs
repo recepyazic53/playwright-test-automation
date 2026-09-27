@@ -770,7 +770,7 @@ export function kayitPaketiOlustur(meta, envanter) {
 
   // Adımlar. Hiçbir şey kaydedilmemiş adım (alan, ilerleme/alan açan düğme, son adımda gösterge yok) atlanır.
   const kayitlar = envanter.adimlar.filter((k, i, tum) => {
-    const dolu = Boolean(k.ortakAkis) || Boolean(k.sqlKontrolu) || Boolean(k.yenidenGiris) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi));
+    const dolu = Boolean(k.ortakAkis) || Boolean(k.sqlKontrolu) || Boolean(k.dosyaKontrolu) || Boolean(k.yenidenGiris) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi));
     if (!dolu) bilinmeyenler.push(`"${temizMetin(k.ad, sayac, 120) || `${i + 1}. adım`}" adımında alan, ilerleme düğmesi ya da gösterge kaydedilmediği için modele eklenmedi.`);
     return dolu;
   });
@@ -778,7 +778,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   // Alt adımlar. Model koşucusu bir adımda önce alanları doldurur, sonra düğmelere basar; bu yüzden alan AÇAN düğmesi olan
   // adım parçalara bölünür: [ilk alanlar] → [düğme] → [açılan alanlar] … → [ilerleme]. "Her senaryoda basılmaz" işaretli
   // düğmenin parçaları senaryo ayarına ("“<düğme>” dahil") bağlı isteğe bağlı adımlardır (senaryo formunda onay kutusu).
-  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; yenidenGiris?: { profil?: string } }} AltAdim */
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string } }} AltAdim */
   const kosulAdlari = new Set(mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar) : []);
   /** @type {Record<string, Record<string, unknown>>} */
   const yeniKosullar = {};
@@ -818,6 +818,11 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (k.sqlKontrolu) {
       // SQL sorgusu adımı: alanı / düğmesi yok; koşuda veritabanı sorgusu beklenenle karşılaştırılır.
       altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, sqlKontrolu: k.sqlKontrolu });
+      continue;
+    }
+    if (k.dosyaKontrolu) {
+      // İndirilen dosyayı doğrulama adımı: alanı yok; koşuda tetikleyici düğmeye basılır, indirilen dosya doğrulanır.
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, dosyaKontrolu: k.dosyaKontrolu });
       continue;
     }
     if (k.yenidenGiris) {
@@ -895,7 +900,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       const alt = e && Array.isArray(e.altAlanlar) ? e.altAlanlar.find((/** @type {any} */ y) => nesneMi(y) && nesneMi(y.konum) && typeof y.konum.secici === 'string' && y.konum.secici) : undefined;
       if (alt) return String(alt.konum.secici);
     }
-    return x.tikla?.secici ?? null;
+    return x.tikla?.secici ?? x.dosyaKontrolu?.tetikleyici?.secici ?? null;
   };
   /** @type {Array<Record<string, any>>} */
   const adimlar = altAdimlar.map((p, i) => {
@@ -903,6 +908,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}), ortakAkis: { dosya: p.ortakAkis } };
     }
     if (p.sqlKontrolu) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, sqlKontrolu: p.sqlKontrolu };
+    if (p.dosyaKontrolu) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, dosyaKontrolu: p.dosyaKontrolu };
     if (p.yenidenGiris) return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, yenidenGiris: p.yenidenGiris };
     /** @type {Map<string, { baslik: string; alanlar: Array<Record<string, unknown>> }>} */
     const bolumler = new Map();
@@ -917,7 +923,7 @@ export function kayitPaketiOlustur(meta, envanter) {
       b?.alanlar.push(modelAlani(h));
     }
     // Son EKRAN adımı (ardından yalnız SQL adımları gelebilir): başarı göstergesi onda.
-    const sonAdimMi = i === altAdimlar.length - 1 || altAdimlar.slice(i + 1).every((x) => x.sqlKontrolu);
+    const sonAdimMi = i === altAdimlar.length - 1 || altAdimlar.slice(i + 1).every((x) => x.sqlKontrolu || x.dosyaKontrolu);
     // "İşlemler" bölümü: adımın düğmesi (buton/aksiyon) ve son adımda sonucu gösteren öğe (cikti) — model koşucusu bunları
     // doldurmaz (koşu tanımı ayrıca aşağıda); modelde adımın ne yaptığı görünür, alansız adım geçerli olur.
     /** @type {Array<Record<string, unknown>>} */
@@ -946,6 +952,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (aksiyonlar.length) kosu.aksiyonlar = aksiyonlar;
     if (p.tikla) {
       // Başarı: sonraki (atlanmayacak) adımın ilk alanı ya da düğmesi görünür.
+      // Dosya adımının düğmesi sonraki ekran öğesidir (indirme aynı sayfada başlar); SQL adımı sayfaya dokunmaz, atlanır.
       const sonraki = altAdimlar.slice(i + 1).find((x) => !x.sqlKontrolu && (x.kosul === null || x.kosul === p.kosul));
       const hedef = sonraki ? ilkSecici(sonraki) : null;
       if (hedef) kosu.basariGostergesi = { tur: 'eleman', deger: hedef };

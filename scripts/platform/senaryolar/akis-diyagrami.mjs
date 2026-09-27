@@ -169,6 +169,10 @@ export function akisDiyagrami(model, s = {}) {
       altAkis: nesneMi(adim.altModel) ? String(adim.altModel.bolum || adim.altModel.dosya || '') || null : null,
       // SQL sorgusu adımı: veritabanı sorgusu beklenenle karşılaştırılır (alan yok).
       sqlOzeti: nesneMi(adim.sqlKontrolu) ? `SQL sorgusu: ${SQL_BEKLENEN_METNI[adim.sqlKontrolu.beklenen?.tur] ?? 'sonuç beklenenle karşılaştırılır'}` : null,
+      // İndirilen dosyayı doğrulama adımı: düğmeye basılır, dosya beklentilerle doğrulanır (alan yok).
+      dosyaOzeti: nesneMi(adim.dosyaKontrolu)
+        ? `İndirilen dosya doğrulanır: ${Array.isArray(adim.dosyaKontrolu.beklentiler) ? adim.dosyaKontrolu.beklentiler.length : 0} beklenti${nesneMi(adim.dosyaKontrolu.tetikleyici) && typeof adim.dosyaKontrolu.tetikleyici.aciklama === 'string' ? ` (“${adim.dosyaKontrolu.tetikleyici.aciklama}” düğmesiyle)` : ''}`
+        : null,
       // Yeniden giriş adımı: oturum kapatılır, ortamın giriş tarifiyle (isteğe bağlı başka profille) yeniden girilir.
       yenidenGiris: nesneMi(adim.yenidenGiris) ? { profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil ? adim.yenidenGiris.profil : null } : null,
       alanlar,

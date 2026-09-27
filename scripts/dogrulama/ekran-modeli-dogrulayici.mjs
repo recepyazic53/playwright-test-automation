@@ -70,7 +70,9 @@ const ALAN_ANAHTARLARI = new Set([
 const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kayitAlani', 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
 const FORM_ANAHTARLARI = new Set(['id', 'kontrol', 'etiket', 'secenekler', 'yardimciKontroller', 'not']);
 const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDegeri', 'ekranDegerleri', 'secici', 'kosul']);
-const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'yenidenGiris', 'kosu']);
+const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'dosyaKontrolu', 'yenidenGiris', 'kosu']);
+/** Dosya adımının beklenti türleri (platform/dosyalar/dosya-icerigi.mjs ile aynı; bu dosya modül içe aktarmaz). */
+export const DOSYA_BEKLENTI_TURLERI = Object.freeze(['adDeseni', 'enAzBoyut', 'icerir', 'icermez', 'sutunVar', 'satirSayisi', 'hucre']);
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
 const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'not']);
@@ -555,8 +557,9 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
       const ortakVar = adim.ortakAkis !== undefined;
       const sqlVar = adim.sqlKontrolu !== undefined;
       const girisVar = adim.yenidenGiris !== undefined;
-      if ([bolumVar, altModelVar, ortakVar, sqlVar, girisVar].filter(Boolean).length !== 1) {
-        h.ekle(adYer, ortakVar || sqlVar || girisVar ? 'adımda "bolumler", "altModel", "ortakAkis", "sqlKontrolu" ve "yenidenGiris"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
+      const dosyaVar = adim.dosyaKontrolu !== undefined;
+      if ([bolumVar, altModelVar, ortakVar, sqlVar, girisVar, dosyaVar].filter(Boolean).length !== 1) {
+        h.ekle(adYer, ortakVar || sqlVar || girisVar || dosyaVar ? 'adımda "bolumler", "altModel", "ortakAkis", "sqlKontrolu", "dosyaKontrolu" ve "yenidenGiris"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
       }
       // YENİDEN GİRİŞ ADIMI: { profil? } — koşuda oturum kapatılır (çerezler temizlenir) ve ortamın giriş tarifiyle yeniden
       // girilir; profil = giriş profilinin adı (yoksa ortamın varsayılan profili). Girişsiz modelde olmaz.
@@ -589,6 +592,20 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
           if (q.okumalar !== undefined && !Array.isArray(q.okumalar)) h.ekle(qYer, '"okumalar" dizi olmalı');
         }
         if (adim.kosu !== undefined) h.ekle(adYer, 'SQL adımının koşu tanımı ("kosu") olmaz');
+      }
+      // DOSYA ADIMI: { tetikleyici: { secici, metin? }, bicim?, beklentiler: [{ tur, … }], … } — koşuda düğmeye basılır, indirilen
+      // dosya beklentilerle doğrulanır (ayrıntılı kurallar platform/dosyalar/dosya-icerigi.mjs; burada yapı).
+      if (dosyaVar) {
+        const d = adim.dosyaKontrolu;
+        const dYer = `${adYer}.dosyaKontrolu`;
+        if (!nesneMi(d)) h.ekle(dYer, '"dosyaKontrolu" bir nesne olmalı');
+        else {
+          if (!nesneMi(d.tetikleyici) || !metinMi(d.tetikleyici.secici)) h.ekle(dYer, '"tetikleyici.secici" (indirmeyi başlatan düğme) zorunlu');
+          if (!Array.isArray(d.beklentiler) || !d.beklentiler.length || !d.beklentiler.every((x) => nesneMi(x) && DOSYA_BEKLENTI_TURLERI.includes(x.tur))) {
+            h.ekle(dYer, `"beklentiler" boş olmayan dizi olmalı; türler: ${DOSYA_BEKLENTI_TURLERI.join(', ')}`);
+          }
+        }
+        if (adim.kosu !== undefined) h.ekle(adYer, 'dosya adımının koşu tanımı ("kosu") olmaz');
       }
       if (bolumVar) {
         if (!Array.isArray(adim.bolumler) || adim.bolumler.length === 0) h.ekle(adYer, '"bolumler" boş olmayan dizi olmalı');

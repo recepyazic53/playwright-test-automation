@@ -8,6 +8,7 @@ import { TANIM_TURLERI } from './parametre-tanimlari.mjs';
 import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './akis-senaryo-icerigi.mjs';
+import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -172,8 +173,10 @@ export function servisSil(vt, id, yapan) {
  * - xpathEsit: xpath ile bulunan ilk düğümün metni "deger"e eşit (basit yol: /a/b/c, önekler yok sayılır)
  * - jsonEsit: JSON yanıtta "yol"daki değer (a.b[0].c; baştaki "$." isteğe bağlı) "deger"e eşit (REST)
  * - veya: alt kontrollerden EN AZ BİRİ geçerse geçer (alt: kontroller; iç içe VEYA yok). Senaryonun kontrol listesi VE'dir.
- * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'jsonEsit' | 'veya';
- *   deger?: string; xpath?: string; yol?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[] }} ServisKontrolu
+ * - dosya: yanıt gövdesi dosya olarak (CSV / XLSX / PDF / metin) "dosya" tanımındaki beklentilerle doğrulanır (dosyalar/dosya-icerigi.mjs).
+ * @typedef {{ tur: 'durumKodu' | 'soapYaniti' | 'soapHatasiYok' | 'soapHatasi' | 'icerir' | 'icermez' | 'xpathEsit' | 'jsonEsit' | 'veya' | 'dosya';
+ *   deger?: string; xpath?: string; yol?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[];
+ *   dosya?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi }} ServisKontrolu
  * @typedef {{ operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
  *   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>;
  *   basliklar?: Record<string, string>; http?: ServisHttpTanimi }} ServisSenaryoIcerigi
@@ -183,7 +186,7 @@ export function servisSil(vt, id, yapan) {
  *   sira: number | null; icerik: ServisSenaryoIcerigi; olusturulma: string; guncellenme: string }} ServisSenaryosu
  */
 
-export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya']);
+export const KONTROL_TURLERI = /** @type {const} */ (['durumKodu', 'soapYaniti', 'soapHatasiYok', 'soapHatasi', 'icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'veya', 'dosya']);
 
 /**
  * Tek kontrolü doğrular (VEYA'nın alt kontrolleri de; iç içe VEYA kabul edilmez).
@@ -196,6 +199,14 @@ function kontrolDogrula(k, yer, altMi) {
     if (altMi) throw new DepoHatasi(`${yer} kontrol: VEYA içinde VEYA kullanılamaz.`);
     if (!Array.isArray(k.alt) || k.alt.length < 2) throw new DepoHatasi(`${yer} kontrol (VEYA) en az iki alt kontrol içermeli.`);
     return { tur, alt: k.alt.map((/** @type {unknown} */ a, /** @type {number} */ n) => kontrolDogrula(a, `${yer}${n + 1}.`, true)), ...(typeof k.ad === 'string' && k.ad ? { ad: k.ad } : {}) };
+  }
+  if (tur === 'dosya') {
+    // Yanıttaki dosya (dosyalar/dosya-icerigi.mjs): beklentiler tanımda; VEYA içinde kullanılmaz (sonucu kendi beklentileridir).
+    if (altMi) throw new DepoHatasi(`${yer} kontrol: dosya kontrolü VEYA içinde kullanılamaz.`);
+    const d = dosyaTanimiDogrula(k.dosya);
+    if (d.hatalar.length) throw new DepoHatasi(`${yer} kontrol (dosya): ${d.hatalar.join(' ')}`);
+    const { tetikleyici: _t, zamanAsimiSn: _z, ...tanim } = d.tanim;
+    return { tur, dosya: tanim, ...(typeof k.ad === 'string' && k.ad ? { ad: k.ad } : {}) };
   }
   if ((tur === 'icerir' || tur === 'icermez' || tur === 'xpathEsit' || tur === 'jsonEsit' || tur === 'durumKodu') && (typeof k.deger !== 'string' || !k.deger)) {
     throw new DepoHatasi(`${yer} kontrol (${tur}) için "deger" gerekli.`);
