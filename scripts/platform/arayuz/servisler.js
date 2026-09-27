@@ -26,6 +26,7 @@ import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { senaryoSayfasi } from './akis-senaryo-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { calistirmaBicimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -1254,6 +1255,41 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       h('div', { class: 'kontrol-listesi-duzen' }, ...satirlar, ekle));
   };
   kontrolCiz();
+  // --- Veri koşusu (tablodan çoklu satır; tablolar/veri-kosulari.mjs): gövde / header / yoldaki ${Tablo.Sütun} gruplarının çalıştırma
+  // biçimi. Varsayılan "Tek satır" (bugünkü davranış); tahmini çalıştırma sayısı varsayılan (yoksa ilk) ortam için gösterilir.
+  const veriKosulari = JSON.parse(JSON.stringify(i.veriKosulari || {}));
+  veriKosulari.gruplar ??= {};
+  const veriKutusu = h('div', { class: 'veri-kosusu-kutusu' });
+  const veriOrtami = ortamlar.find((o) => o.varsayilan) || ortamlar[0] || null;
+  /** Senaryodaki tablo grupları (formdaki metinlerden; sırayla, tekrarsız). */
+  const veriGruplari = () => {
+    let metinler = [];
+    const govdeMetni = mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value;
+    metinler = [govdeMetni, basliklar.value, rest ? httpYol.value : ''];
+    const gruplar = new Map();
+    for (const m of metinler.join('\n').matchAll(/\$\{([^{}]+)\}/g)) {
+      const b = basvuruCoz(m[1]);
+      const t = b ? tabloBul(tablolar, b.tablo) : null;
+      if (!t) continue;
+      const anahtar = grupAnahtari(t.id, b.etiket);
+      if (!gruplar.has(anahtar)) gruplar.set(anahtar, { anahtar, tablo: t, etiket: b.etiket });
+    }
+    return [...gruplar.values()];
+  };
+  let veriImzasi = null;
+  const veriCiz = (zorla = false) => {
+    const gruplar = veriGruplari();
+    const imza = JSON.stringify(gruplar.map((g) => g.anahtar));
+    if (!zorla && imza === veriImzasi) return;
+    veriImzasi = imza;
+    if (!gruplar.length || !veriOrtami) { yerlestir(veriKutusu, h('p', { class: 'soluk kucuk' }, 'Senaryo tablodan değer almıyor; her koşuda bir kez çalışır.')); return; }
+    const d = { veriKosulari, ortam: veriOrtami, ortamAdi: (id) => (ortamlar.find((o) => o.id === id) || {}).ad || 'başka ortam', tablolar, tabloSecimleri, degisti: () => veriCiz(true) };
+    yerlestir(veriKutusu,
+      gruplar.map((g) => h('div', { class: 'satir-secimi-grubu' }, h('h4', {}, `${g.tablo.ad}${g.etiket ? ` [${g.etiket}]` : ''}`),
+        calistirmaBicimi(g.tablo, g.anahtar, tabloSecimleri[g.anahtar] || {}, d))),
+      veriKosusuOzeti(gruplar, d));
+  };
+  const veriBolumu = h('fieldset', {}, h('legend', {}, 'Veri koşusu'), veriKutusu);
   const mesaj = mesajKutusu();
   /** Boş seçimler atılır (yalnız seçilmiş sütunlar saklanır). */
   const tabloSecimleriAl = () => {
@@ -1261,7 +1297,9 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     return Object.keys(temiz).length ? temiz : undefined;
   };
   const icerikAl = () => ({
-    ...i, tabloSecimleri: tabloSecimleriAl(), operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value, basliklar: basliklarAl(),
+    ...i, tabloSecimleri: tabloSecimleriAl(),
+    // Çalıştırma biçimi: yalnız senaryoda kullanılan çoklu gruplar; hiçbiri yoksa alan kaldırılır (bugünkü davranış).
+    veriKosulari: kaydedilecekVeriKosulari(veriKosulari, veriGruplari().map((g) => g.anahtar)) ?? undefined, operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value, basliklar: basliklarAl(),
     ...(rest ? { http: { ...(i.http || {}), metot: httpMetot.value, yol: httpYol.value.trim() } } : {}),
     kontroller: kontrolYapisi().map(function temiz(k) {
       const t = Object.fromEntries(Object.entries(k).filter(([a, v]) => a !== 'alt' && v !== '' && v !== false && v !== undefined));
@@ -1304,7 +1342,12 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       rest ? null : sekmeKap, uyari, govdeAlani,
       alan('HTTP header', basliklar, { yardim: 'İsteğe eklenecek header satırları, her satırda "Ad: değer". Servis akışında okunan değer ${akis:Ad} ile kullanılır (ör. Authorization: Bearer ${akis:Token}); değer servisin oturum akışından da gelebilir.' })),
     h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu),
+    veriBolumu,
     h('div', { class: 'dugmeler' }, kaydet, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
+  // Gövde / header / yol değişince çalıştırma biçimi grupları yeniden hesaplanır (yalnız gruplar değiştiyse çizilir).
+  kap.addEventListener('input', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); });
+  kap.addEventListener('change', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); });
+  veriCiz(true);
 }
 
 // ---------------------------------------------------------------------------------------

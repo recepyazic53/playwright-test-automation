@@ -189,7 +189,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Tek istek senaryosu',
-        sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, hesaplama kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'],
+        sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, hesaplama kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', 'Tablodan değer alıyorsa "Veri koşusu" bölümünde çalıştırma biçimini seçin: tek satır (varsayılan), seçili satırların her biri ya da uyan tüm satırlar; her satır ayrı çalıştırma olur ("Senaryo [satır adı]").', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'],
         cizim: { tur: 'form', alanlar: ['Metot', 'Alanlar', 'Kontroller'], dugme: 'Dene' }
       },
       {
@@ -212,7 +212,7 @@ export const REHBERLER = {
       { baslik: 'Tarih aralığı ve ortam', metin: 'Üstteki tarih aralığıyla (Son 1 saat, Bugün, Son 7 gün…) ve ortam seçimiyle süzün. "Denemeleri de say" açıkken "Dene" ile yapılan tek çalıştırmalar da hesaba girer.' },
       {
         baslik: 'Kalan bir senaryoyu incelemek',
-        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan senaryoya tıklayın: kontroller, istek ve yanıt (gizli alanlar maskeli), HTTP kodu ve süre açılır.', 'Aynı hata başka senaryolarda da var mı, "Hata kalıpları"na bakın.'],
+        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan senaryoya tıklayın: kontroller, istek ve yanıt (gizli alanlar maskeli), HTTP kodu ve süre açılır.', 'Aynı hata başka senaryolarda da var mı, "Hata kalıpları"na bakın.', 'Düzelttikten sonra koşu ayrıntısında "Başarısızları tekrar çalıştır": yalnız kalan çalıştırmalar aynı ortamda, o koşudaki tablo satırlarıyla koşar; yeni koşu "Tekrar: önceki koşu" bağı taşır.'],
         cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Servis', gidis: 'istek', donus: 'yanıt', kontroller: ['Kontroller', 'Maskeli yanıt'] }
       }
     ]

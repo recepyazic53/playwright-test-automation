@@ -14,6 +14,8 @@ import { tabloBasvurusuVarMi } from '../tablolar/ekran-basvurulari.mjs';
 import { VARSAYILAN_VERI_KOSUSU_SINIRI, basvuruGruplari, veriKosusuSayisi } from '../tablolar/veri-kosulari.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { veriKosusuTemizle } from '../veritabani/sonuc-deposu.mjs';
+import { servisKosusuGetir, servisSenaryosuGetir } from '../servisler/servis-deposu.mjs';
+import { servisSonucKosusu } from '../sonuclar/servis-sonuclari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('../tablolar/tablo-deposu.mjs').Tablo} Tablo */
@@ -169,6 +171,46 @@ export function tekrarPlani(vt, kosuId, projeId = null) {
     // Senaryoya bağlı olmayan (ör. Dene) kalan sonuçlar tekrar çalıştırılamaz.
     bagsiz
   };
+}
+
+/**
+ * SERVİS koşusunda "Başarısızları tekrar çalıştır": koşunun kalan (başarısız / hata) çalıştırmaları, her birinin o koşudaki satırları
+ * ve o koşudan bu yana değişen satırlar. Akış koşusu ve senaryosu silinmiş / akışa dönmüş çalıştırmalar atlanır. veri 'kosudaki' ise
+ * gizli sütunsuz tablolarda o koşudaki değerler plana eklenir (servis-isleri.mjs kullanır).
+ * @param {Veritabani} vt @param {string} projeId @param {string} kosuId "s-<satır>" @param {{ veri?: unknown }} [s]
+ */
+export function servisTekrarPlani(vt, projeId, kosuId, s = {}) {
+  const k = servisSonucKosusu(vt, new URLSearchParams({ projeId, id: kosuId }));
+  if (k.kosu.tur !== 'servis') throw new DepoHatasi('Akış koşusunda başarısızları tekrar çalıştırma yok; akışı yeniden çalıştırın.');
+  /** @type {Tablo[] | null} */
+  let tablolar = null;
+  /** @type {Array<{ baslik: string; neden: string }>} */
+  const atlananlar = [];
+  const testler = [];
+  /** @type {Array<{ tablo: string; satirAdi: string; durum: 'degisti' | 'silindi'; kosudakiVeri: boolean }>} */
+  const satirDegisiklikleri = [];
+  const gorulen = new Set();
+  for (const x of k.senaryolar.filter((y) => y.durum === 'basarisiz' || y.durum === 'hata')) {
+    const sen = x.senaryoId ? servisSenaryosuGetir(vt, x.senaryoId) : undefined;
+    if (!sen) { atlananlar.push({ baslik: x.baslik, neden: x.senaryoId ? 'senaryo silinmiş' : 'kayıtlı senaryo değil (Dene)' }); continue; }
+    if (/** @type {any} */ (sen.icerik).tur === 'akis') { atlananlar.push({ baslik: x.baslik, neden: 'senaryo artık akış senaryosu' }); continue; }
+    const r = servisKosusuGetir(vt, x.satirId);
+    const vk = veriKosusuTemizle(r?.sonuc?.veriKosusu);
+    /** @type {Record<string, Record<string, string | null>>} */
+    const veriler = {};
+    for (const sat of vk?.satirlar ?? []) {
+      tablolar ??= tablolariListele(vt, projeId);
+      const d = satirDurumu(sat, tablolar);
+      if (s.veri === 'kosudaki' && d.kosudakiVeri) veriler[sat.grup] = sat.degerler;
+      const imza = `${sat.grup}\u0000${sat.satirId}`;
+      if (d.durum !== 'ayni' && !gorulen.has(imza)) { gorulen.add(imza); satirDegisiklikleri.push({ tablo: sat.tablo, satirAdi: sat.satirAdi, durum: d.durum, kosudakiVeri: d.kosudakiVeri }); }
+    }
+    testler.push({
+      satirId: x.satirId, senaryoId: sen.id, baslik: x.baslik, senaryoBaslik: sen.baslik,
+      veriKosusu: { anahtar: vk?.anahtar ?? null, ad: vk?.ad ?? null, sabit: Object.fromEntries((vk?.satirlar ?? []).map((sat) => [sat.grup, sat.satirId])), ...(Object.keys(veriler).length ? { veriler } : {}) }
+    });
+  }
+  return { kosu: { id: String(k.kosu.id), servisId: String(k.kosu.kaynakId ?? ''), ortamId: k.kosu.ortamId ?? null }, sayi: testler.length, testler, satirDegisiklikleri, atlananlar };
 }
 
 /**

@@ -131,7 +131,8 @@ function servisKosulariniGrupla(satirlar, servisAdlari, ortamAdlari) {
     const basMs = new Date(s.baslangic).getTime();
     const bitisMs = basMs + s.sureMs;
     let g = acik.get(anahtar);
-    const senaryoAnahtari = s.senaryoId ?? `baslik:${s.baslik}`;
+    // Veri koşuları (tablodan çoklu satır) aynı senaryonun farklı başlıklı ("Senaryo [satır]") çalıştırmalarıdır: aynı koşuda kalırlar.
+    const senaryoAnahtari = s.senaryoId ? `${s.senaryoId}\u0000${s.baslik}` : `baslik:${s.baslik}`;
     if (!g || basMs - g.bitisMs > ARDISIKLIK_MS || g.senaryolar.has(senaryoAnahtari)) {
       g = {
         k: {
@@ -374,9 +375,15 @@ export function servisSonucKosusu(vt, q) {
   const senaryolar = satirlar.map((sid) => servisKosusuGetir(vt, sid)).filter((r) => r !== undefined).map((r) => ({
     satirId: r.id, senaryoId: r.senaryoId, baslik: r.baslik, durum: r.durum, sureMs: r.sureMs, baslangic: r.baslangic,
     durumKodu: typeof r.sonuc.durumKodu === 'number' ? r.sonuc.durumKodu : null, hata: r.durum === 'basarili' ? '' : hataMetni(r.sonuc),
-    durduruldu: Boolean(r.sonuc.durduruldu)
+    durduruldu: Boolean(r.sonuc.durduruldu),
+    // Veri koşusu (tablodan çoklu satır): anahtar / ad; tekrar koşusunun kaynağı.
+    veriAnahtari: r.sonuc.veriKosusu && typeof r.sonuc.veriKosusu.anahtar === 'string' ? r.sonuc.veriKosusu.anahtar : null,
+    veriKosusu: r.sonuc.veriKosusu && typeof r.sonuc.veriKosusu.ad === 'string' ? r.sonuc.veriKosusu.ad : null,
+    tekrarKaynagi: typeof r.sonuc.tekrarKaynagi === 'string' ? r.sonuc.tekrarKaynagi : null
   }));
-  return { kosu: { ...ozet, id: kosu.id }, senaryolar, adimlar: [] };
+  // "Tekrar: <önceki koşu>" (başarısızları tekrar çalıştırmayla başlatıldıysa).
+  const tekrarKaynagi = senaryolar.map((x) => x.tekrarKaynagi).find(Boolean) ?? null;
+  return { kosu: { ...ozet, id: kosu.id, tekrarKaynagi }, senaryolar, adimlar: [] };
 }
 
 /**

@@ -5,13 +5,15 @@
 import { randomUUID } from 'node:crypto';
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { servisGetir, servisSenaryosuGetir } from './servis-deposu.mjs';
-import { akisSenaryoKancasiAl, ortamTuru, ortamdaTanimli, servisSenaryosuCalistir } from './servis-islemleri.mjs';
+import { akisSenaryoKancasiAl, ortamTuru, ortamdaTanimli, servisCalistirmalari, servisSenaryosuCalistir } from './servis-islemleri.mjs';
+import { servisTekrarPlani } from '../senaryolar/veri-kosusu-plani.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
  * @typedef {{ adim: string; durum: 'basladi' | 'tamam' | 'hata'; zaman: number; bilgi?: Record<string, unknown> }} IsOlayi
  * @typedef {{ senaryoId: string; baslik: string; durum: 'sirada' | 'calisiyor' | 'basarili' | 'basarisiz' | 'hata' | 'durduruldu' | 'atlandi';
- *   olaylar: IsOlayi[]; istek: string | null; yanit: string | null; baslangic: number | null; bitis: number | null; sonuc: Record<string, unknown> | null; neden?: string }} IsSatiri
+ *   olaylar: IsOlayi[]; istek: string | null; yanit: string | null; baslangic: number | null; bitis: number | null; sonuc: Record<string, unknown> | null; neden?: string;
+ *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> } | null }} IsSatiri
  * @typedef {{ id: string; projeId: string; servisId: string; servisAd: string; ortam: string; ortamTuru: string; baslangic: number; bitis: number | null;
  *   bitti: boolean; durdur: boolean; satirlar: IsSatiri[] }} ServisIsi
  */
@@ -46,8 +48,12 @@ export function servisSenaryoAtlamaNedeni(vt, servis, s, ortam) {
  * İşi başlatır (hemen döner; koşu arka planda sürer). Senaryolar sırayla; kapsamı ortama uymayan / servisin bu ortamda
  * tanımlı olmadığı / CANLI'da çağrılmayan metodu kullanan senaryo "atlandi" olur (nedeniyle).
  * Taslak verilirse (düzenleyicideki "Dene"): kaydedilmemiş tek senaryo, yalnız TEST ortamında, "dene" olarak koşar.
+ * VERİ KOŞULARI: tablodan çoklu satırla koşan senaryonun her satırı / kombinasyonu ayrı satır ("Senaryo [ad]"); tek senaryodaki üst
+ * sınır (Ayarlar > Koşu) aşılırsa iş başlatılmaz; bu ortamda koşulacak satır yoksa senaryo nedeniyle atlanır.
+ * TEKRAR: tekrar = { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — yalnız o koşuda kalan çalıştırmalar, o koşudaki satırlarla
+ * (senaryoIdleri yok sayılır); kayıtlar "Tekrar:" bağı taşır. Servis ve ortam o koşununkiyle aynı olmalı.
  * @param {Veritabani} vt @param {string} projeId
- * @param {{ servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown } }} girdi
+ * @param {{ servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string } }} girdi
  */
 export function servisIsiBaslat(vt, projeId, girdi) {
   temizle();
@@ -56,11 +62,23 @@ export function servisIsiBaslat(vt, projeId, girdi) {
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
   const taslak = girdi.taslak ?? null;
-  if (!taslak && (!Array.isArray(girdi.senaryoIdleri) || !girdi.senaryoIdleri.length)) throw new DepoHatasi('En az bir senaryo seçin.');
+  const tekrar = !taslak && girdi.tekrar ? girdi.tekrar : null;
+  if (!taslak && !tekrar && (!Array.isArray(girdi.senaryoIdleri) || !girdi.senaryoIdleri.length)) throw new DepoHatasi('En az bir senaryo seçin.');
   const tur = ortamTuru(ortam);
   if (taslak && tur !== 'test') throw new DepoHatasi('Deneme yalnızca test ortamında yapılır.');
   const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
-  const satirlar = taslak ? [/** @type {IsSatiri} */ ({
+  /** @param {{ senaryoId: string; baslik: string; veriKosusu?: IsSatiri['veriKosusu'] }} x @returns {IsSatiri} */
+  const sirada = (x) => ({ senaryoId: x.senaryoId, baslik: x.baslik, durum: 'sirada', olaylar: [], istek: null, yanit: null, baslangic: null, bitis: null, sonuc: null,
+    ...(x.veriKosusu ? { veriKosusu: x.veriKosusu } : {}) });
+  /** @type {IsSatiri[] | null} */
+  let tekrarSatirlari = null;
+  if (tekrar) {
+    const plan = servisTekrarPlani(vt, projeId, String(tekrar.kaynakKosuId), { veri: tekrar.veri });
+    if (plan.kosu.servisId !== servis.id || plan.kosu.ortamId !== ortam.id) throw new DepoHatasi('Başarısızlar yalnız o koşunun servisi ve ortamında tekrar çalıştırılabilir.');
+    if (!plan.testler.length) throw new DepoHatasi('Bu koşuda tekrar çalıştırılacak kalan senaryo yok.');
+    tekrarSatirlari = plan.testler.map((t) => sirada({ senaryoId: t.senaryoId, baslik: t.baslik, veriKosusu: t.veriKosusu }));
+  }
+  const satirlar = tekrarSatirlari ?? (taslak ? [/** @type {IsSatiri} */ ({
     senaryoId: 'taslak', baslik: taslak.baslik || 'Taslak', durum: tanimli ? 'sirada' : 'atlandi', olaylar: [], istek: null, yanit: null,
     baslangic: null, bitis: null, sonuc: null, ...(tanimli ? {} : { neden: `Servis "${ortam.ad}" ortamında tanımlı değil.` })
   })] : (girdi.senaryoIdleri ?? []).map((id) => {
@@ -70,11 +88,17 @@ export function servisIsiBaslat(vt, projeId, girdi) {
     const akis = s && /** @type {any} */ (s.icerik).tur === 'akis' && kanca && (s.servisId === servis.id || kanca.gecenler(vt, projeId, servis.id).some((x) => x.id === s.id));
     if (!s || (s.servisId !== servis.id && !akis)) throw new DepoHatasi('Senaryo bulunamadı.');
     const neden = servisSenaryoAtlamaNedeni(vt, servis, s, ortam);
-    return /** @type {IsSatiri} */ ({
-      senaryoId: s.id, baslik: s.baslik, durum: neden ? 'atlandi' : 'sirada', olaylar: [], istek: null, yanit: null,
-      baslangic: null, bitis: null, sonuc: null, ...(neden ? { neden } : {})
-    });
-  });
+    const atla = (/** @type {string} */ n) => [/** @type {IsSatiri} */ ({
+      senaryoId: s.id, baslik: s.baslik, durum: 'atlandi', olaylar: [], istek: null, yanit: null, baslangic: null, bitis: null, sonuc: null, neden: n
+    })];
+    if (neden) return atla(neden);
+    if (akis) return [sirada({ senaryoId: s.id, baslik: s.baslik })];
+    // Veri koşuları (tablodan çoklu satır): her satır / kombinasyon ayrı çalıştırma; çoklu değilse tek (bugünkü).
+    const c = servisCalistirmalari(vt, projeId, s, ortam.id);
+    if (c.sinirAsildi) throw new DepoHatasi(/** @type {string} */ (c.hata));
+    if (c.hata) return atla(c.hata);
+    return c.calistirmalar.map((k) => sirada({ senaryoId: s.id, baslik: k.baslik, veriKosusu: k.veriKosusu }));
+  }).flat());
   const is = {
     id: randomUUID(), projeId, servisId: servis.id, servisAd: servis.ad, ortam: ortam.ad, ortamTuru: tur,
     baslangic: Date.now(), bitis: /** @type {number | null} */ (null), bitti: false, durdur: false, satirlar,
@@ -93,6 +117,7 @@ export function servisIsiBaslat(vt, projeId, girdi) {
         const r = await servisSenaryosuCalistir(vt, projeId, {
           servisId: servis.id, ortamId: ortam.id, sinyal: kontrol.signal,
           ...(taslak ? { tur: 'dene', taslak: { baslik: taslak.baslik || 'Taslak', icerik: taslak.icerik } } : { tur: 'kosu', senaryoId: satir.senaryoId }),
+          ...(satir.veriKosusu ? { veriKosusu: satir.veriKosusu } : {}), ...(tekrar ? { tekrarKaynagi: String(tekrar.kaynakKosuId) } : {}),
           olay: (adim, durum, bilgi) => {
             const kisa = bilgi ? Object.fromEntries(Object.entries(bilgi).filter(([a]) => a !== 'istek' && a !== 'yanit')) : null;
             satir.olaylar.push({ adim, durum, zaman: Date.now(), ...(kisa && Object.keys(kisa).length ? { bilgi: kisa } : {}) });

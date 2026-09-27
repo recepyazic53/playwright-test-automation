@@ -26,7 +26,8 @@ import { ortakYol, postmanCozumle, postmanOzeti, sablonCevir, sablonDegiskenleri
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
-import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, satirSecimiOlustur, servisDegeri } from '../tablolar/tablo-secimi.mjs';
+import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, grupAnahtari, satirSecimiOlustur, servisDegeri, tabloBul } from '../tablolar/tablo-secimi.mjs';
+import { satirOzeti, veriKosulariniAc } from '../tablolar/veri-kosulari.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
@@ -487,9 +488,11 @@ export function servisParametreleri(vt, projeId, servisId) {
 
 /**
  * Bir gövdenin parametre değerlerini çözer (yalnız sunucu içinde). Bulunamayanlar yerTutuculariDoldur'da açıklamayla listelenir.
+ * sabit: veri koşusu / tekrar — grup → satır (ve istenirse o koşudaki değerler); verilmezse bugünkü kural (uyan ilk satır).
  * @param {Veritabani} vt @param {string} projeId @param {Servis} servis @param {ServisSenaryoIcerigi} icerik @param {string} ortamId
+ * @param {{ sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }} [sabit]
  */
-function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
+function parametreDegerleri(vt, projeId, servis, icerik, ortamId, sabit = {}) {
   const adlar = kullanilanParametreler(icerik.govde);
   const tarih = { ...(servis.ayarlar.tarihKurallari ?? {}) };
   const kimlikProfili = icerik.kimlikProfili || servis.ayarlar.kimlikProfili;
@@ -509,7 +512,7 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
   /** Kullanılan tablo satırları (raporda: hangi satırla koştu). @type {Array<{ tablo: string; etiket: string; satir: Record<string, string | null> }>} */
   const kullanilanSatirlar = [];
   // Birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi); bu çalıştırmada grubun değerleri aynı satırdan.
-  const satirSecimi = satirSecimiOlustur((() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })());
+  const satirSecimi = { ...satirSecimiOlustur((() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })()), ...sabit, kullanilan: new Map() };
   for (const ad of adlar) {
     if (tarih[ad]) continue;
     // ${Tablo.Sütun} / ${Tablo[etiket].Sütun}: senaryonun seçimleriyle (ve ortamla) uyan ilk satırdan.
@@ -549,7 +552,53 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     degerler[ad] = String(d);
     if (e.hassas) gizliler.push(String(d));
   }
-  return { degerler, tarihKurallari: tarih, gizliler, eksikNedeni, kimlikProfili, kullanilanSatirlar };
+  // Veri koşusu / tekrar için: kullanılan satırların kimliği, adı, güncellenme zamanı ve açık sütunları (gizli sütunun yalnız adı).
+  const satirOzetleri = tablolar ? [...satirSecimi.kullanilan.entries()].map(([g, r]) => {
+    const t = /** @type {import('../tablolar/tablo-deposu.mjs').Tablo[]} */ (tablolar).find((x) => x.id === g.split('|')[0]);
+    return t ? satirOzeti(g, t, /** @type {any} */ (r)) : null;
+  }).filter((x) => x !== null) : [];
+  return { degerler, tarihKurallari: tarih, gizliler, eksikNedeni, kimlikProfili, kullanilanSatirlar, satirOzetleri };
+}
+
+/**
+ * VERİ KOŞULARI (tablolar/veri-kosulari.mjs): tek istekli servis senaryosunun bu ortamdaki veri koşuları — senaryonun gövde / başlık /
+ * yolundaki ${Tablo.Sütun} gruplarından ve içerikteki çalıştırma biçiminden (icerik.veriKosulari). Çoklu yoksa kosular boş (bugünkü
+ * gibi tek çalıştırma). Akış senaryosunda boş.
+ * @param {Veritabani} vt @param {string} projeId @param {{ icerik: any }} s @param {string} ortamId @param {string | null} [kip] koşu anı ezmesi
+ */
+export function servisVeriKosulari(vt, projeId, s, ortamId, kip = null) {
+  const icerik = s.icerik ?? {};
+  if (icerik.tur === 'akis') return { kosular: [], hatalar: [], cokluGruplar: [] };
+  const metin = [icerik.govde ?? '', ...Object.values(icerik.basliklar ?? {}), icerik.http?.yol ?? ''].join('\n');
+  const refler = kullanilanParametreler(metin).map((ad) => (/[.[]/.test(ad) ? basvuruCoz(ad) : null)).filter((b) => b !== null);
+  if (!refler.length) return { kosular: [], hatalar: [], cokluGruplar: [] };
+  const tablolar = tablolariListele(vt, projeId);
+  /** @type {Map<string, { anahtar: string; tablo: any; etiket: string }>} */
+  const gruplar = new Map();
+  for (const b of refler) {
+    const t = tabloBul(tablolar, b.tablo);
+    if (!t) continue;
+    const anahtar = grupAnahtari(t.id, b.etiket);
+    if (!gruplar.has(anahtar)) gruplar.set(anahtar, { anahtar, tablo: t, etiket: b.etiket });
+  }
+  return veriKosulariniAc(icerik.veriKosulari, { tablolar, gruplar: [...gruplar.values()], ortamId, kip, tabloSecimleri: icerik.tabloSecimleri ?? null });
+}
+
+/**
+ * Senaryonun bu ortamdaki çalıştırmaları: çoklu değilse tek (bugünkü), çoklu ise her veri koşusu ("Senaryo [ad]"). Bu ortamda
+ * koşulacak satır yoksa hata; tek senaryodaki üst sınır (Ayarlar > Koşu) aşılırsa sinirAsildi (koşu başlatılmaz).
+ * @param {Veritabani} vt @param {string} projeId @param {{ baslik: string; icerik: any }} s @param {string} ortamId
+ * @returns {{ hata: string | null; sinirAsildi: boolean; calistirmalar: Array<{ baslik: string; veriKosusu: { anahtar: string; ad: string; sabit: Record<string, string> } | null }> }}
+ */
+export function servisCalistirmalari(vt, projeId, s, ortamId) {
+  const r = servisVeriKosulari(vt, projeId, s, ortamId);
+  if (r.hatalar.length) return { hata: r.hatalar.join(' '), sinirAsildi: false, calistirmalar: [] };
+  const sinir = (() => { try { return kosuAyarlariniOku(vt).enCokVeriKosusu; } catch { return 50; } })();
+  if (r.kosular.length > sinir) {
+    return { hata: `"${s.baslik}" bu ortamda ${r.kosular.length} veri koşusu çıkarıyor; tek senaryoda en çok ${sinir} olabilir (Ayarlar > Koşu). Senaryonun satır seçimini daraltın.`, sinirAsildi: true, calistirmalar: [] };
+  }
+  if (!r.kosular.length) return { hata: null, sinirAsildi: false, calistirmalar: [{ baslik: s.baslik, veriKosusu: null }] };
+  return { hata: null, sinirAsildi: false, calistirmalar: r.kosular.map((k) => ({ baslik: `${s.baslik} [${k.ad}]`, veriKosusu: { anahtar: k.anahtar, ad: k.ad, sabit: k.satirlar } })) };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -864,7 +913,10 @@ export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
  *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
  *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
  *   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
- *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean }} girdi
+ *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+ *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }; tekrarKaynagi?: string }} girdi
+ *   veriKosusu: tablodan çoklu satırla koşuda bu çalıştırmanın satırları (başlık "Senaryo [ad]"); tekrarKaynagi: başarısızları tekrar
+ *   çalıştırmada önceki koşu (kayda "Tekrar:" bağı olarak yazılır).
  *   oturumYenile: oturum akışı önbelleği yok sayılıp yeniden koşulur (401 / 403 sonrası iç kullanım).
  *   olay: canlı panel için adım bildirimi (istek / yanıt maskeli). sinyal: durdurma (bekleyen istek kesilir).
  *   Servis akışı: akisDegerleri (${akis:Ad} değerleri), ekGizliler (maskelenecek önceki değerler), okumalar (yanıttan okunacak
@@ -888,7 +940,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   if (girdi.senaryoId && (!kayitli || kayitli.servisId !== servis.id)) throw new DepoHatasi('Senaryo bulunamadı.');
   if (!kayitli && !girdi.taslak) throw new DepoHatasi('"senaryoId" ya da "taslak" gerekli.');
   const icerik = kayitli ? kayitli.icerik : senaryoIceriginiDogrula(girdi.taslak?.icerik);
-  const baslik = kayitli?.baslik ?? girdi.taslak?.baslik ?? 'Taslak';
+  const temelBaslik = kayitli?.baslik ?? girdi.taslak?.baslik ?? 'Taslak';
+  const baslik = girdi.veriKosusu?.ad ? `${temelBaslik} [${girdi.veriKosusu.ad}]` : temelBaslik;
   const kapsam = kayitli?.kapsam ?? girdi.taslak?.kapsam ?? 'test';
   if (girdi.tur === 'dene' && tur !== 'test') throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır.');
   if (girdi.tur === 'kosu' && kapsam !== 'ikisi' && kapsam !== tur) throw new DepoHatasi(`Bu senaryo yalnızca ${kapsam === 'test' ? 'test' : 'canlı'} ortamda koşar.`);
@@ -913,7 +966,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
   /** @type {Record<string, unknown>} */
-  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}) };
+  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}),
+    ...(girdi.tekrarKaynagi ? { tekrarKaynagi: girdi.tekrarKaynagi } : {}) };
   /** @type {'basarili' | 'basarisiz' | 'hata'} */
   let durum = 'hata';
   /** @type {'hazirlik' | 'gonderim' | 'yanit' | 'kontroller'} */
@@ -941,10 +995,13 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const hamMetin = [icerik.govde, ...Object.values(basliklarHam), http?.yol ?? ''].join('\n');
     const kurallar = servis.ayarlar.tarihKurallari ?? {};
     const kuralRefleri = kuralParametreleri(kullanilanParametreler(hamMetin).filter((a) => Object.hasOwn(kurallar, a)), kurallar).refler.map((r) => `\${${r}}`);
-    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortam.id);
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortam.id,
+      girdi.veriKosusu?.sabit ? { sabit: girdi.veriKosusu.sabit, ...(girdi.veriKosusu.veriler ? { veriler: girdi.veriKosusu.veriler } : {}) } : {});
     gizliler = [...gizliler, ...p.gizliler];
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
+    // Veri koşusu (anahtar / ad) ve kullanılan satırların kimlikleri: sonuç ekranı ve başarısızları tekrar çalıştırma için.
+    if (p.satirOzetleri.length || girdi.veriKosusu?.anahtar) sonuc.veriKosusu = { anahtar: girdi.veriKosusu?.anahtar ?? null, ad: girdi.veriKosusu?.ad ?? null, satirlar: p.satirOzetleri };
     // Aynı "şimdi" ve önbellek gövde / yol / başlık doldurmalarında paylaşılır: zincirli kurallar aynı anı temel alır.
     const doldurma = {
       degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi ?? baslangic, tarihOnbellegi: new Map(), gizliler, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
@@ -1071,8 +1128,13 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
     : tanimli && (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))));
   const sonuclar = [];
   for (const s of kosulacak) {
-    const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs });
-    sonuclar.push({ senaryoId: s.id, baslik: s.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') });
+    // Veri koşuları (tablodan çoklu satır): her satır / kombinasyon ayrı çalıştırma; çoklu değilse tek (bugünkü).
+    const c = akisMi(s) ? { hata: null, calistirmalar: [{ baslik: s.baslik, veriKosusu: null }] } : servisCalistirmalari(vt, projeId, s, ortam.id);
+    if (c.hata) { sonuclar.push({ senaryoId: s.id, baslik: s.baslik, durum: 'hata', sureMs: 0, kosuId: null, ozet: c.hata }); continue; }
+    for (const k of c.calistirmalar) {
+      const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs, ...(k.veriKosusu ? { veriKosusu: k.veriKosusu } : {}) });
+      sonuclar.push({ senaryoId: s.id, baslik: k.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') });
+    }
   }
   return {
     ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, ...(tanimli ? {} : { atlamaNedeni: `Servis "${ortam.ad}" ortamında tanımlı değil (taban adres boş).` }), sonuclar,

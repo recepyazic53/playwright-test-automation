@@ -12,6 +12,23 @@ import {
   erisimKontrolu, eskiParametreleriDonustur, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle, postmanAktar, postmanOnizle
 } from './servis-islemleri.mjs';
 import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu, servisSenaryoAtlamaNedeni } from './servis-isleri.mjs';
+import { servisTekrarPlani } from '../senaryolar/veri-kosusu-plani.mjs';
+import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
+
+/**
+ * Tek istekli servis senaryosunun çalıştırma biçimi (icerik.veriKosulari; tablolar/veri-kosulari.mjs): projenin tablolarına göre denetlenir;
+ * boş / hepsi "Tek satır" ise içerikten kaldırılır (bugünkü davranış). @param {any} db @param {string} projeId @param {unknown} icerik
+ */
+function veriKosulariniDenetle(db, projeId, icerik) {
+  if (!icerik || typeof icerik !== 'object' || Array.isArray(icerik) || !('veriKosulari' in icerik)) return icerik;
+  const { veriKosulari, ...kalan } = /** @type {Record<string, unknown>} */ (icerik);
+  const v = veriKosulariniAyikla(veriKosulari, tablolariListele(db, projeId));
+  if (v.hatalar.length) throw new DepoHatasi(v.hatalar[0]);
+  return v.ayar ? { ...kalan, veriKosulari: v.ayar } : kalan;
+}
+import { raporMetniniMaskele } from '../sonuclar/servis-sonuclari.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
@@ -83,6 +100,12 @@ function servisOzeti(vt, s) {
 
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const SERVIS_GET_UCLARI = [
+  // Servis koşusunda "Başarısızları tekrar çalıştır" önizlemesi (yalnız okuma): kalan çalıştırmalar ve o koşudan bu yana değişen satırlar.
+  ['/platform/servis-sonuclari/tekrar-plani', (db, q) => {
+    const p = servisTekrarPlani(db, kimlik(q.get('projeId'), 'projeId'), String(q.get('id') ?? ''));
+    const ekler = ekGizliAdlar(db);
+    return { plan: { ...p, testler: p.testler.map((t) => ({ satirId: t.satirId, senaryoId: t.senaryoId, baslik: raporMetniniMaskele(t.baslik, ekler) })) } };
+  }],
   ['/platform/servisler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     return { servisler: servisleriListele(db, projeId).map((s) => servisOzeti(db, s)) };
@@ -210,7 +233,7 @@ export const SERVIS_POST_UCLARI = [
     const s = servisAl(db, projeId, g.servisId);
     if (g.id) senaryoAl(db, projeId, g.id);
     const id = servisSenaryosuKaydet(db, {
-      id: secimli(g.id), projeId, servisId: s.id, baslik: metin(g.baslik), icerik: g.icerik,
+      id: secimli(g.id), projeId, servisId: s.id, baslik: metin(g.baslik), icerik: veriKosulariniDenetle(db, projeId, g.icerik),
       ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
       ...(typeof g.kosuyaDahil === 'boolean' ? { kosuyaDahil: g.kosuyaDahil } : {})
     });
@@ -269,6 +292,13 @@ export const SERVIS_POST_UCLARI = [
     const s = servisAl(db, projeId, g.servisId);
     if (g.taslak && typeof g.taslak === 'object') {
       return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), taslak: { baslik: metin(g.taslak.baslik) || 'Taslak', icerik: g.taslak.icerik } }) };
+    }
+    // Başarısızları tekrar çalıştır: { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — kalan çalıştırmalar sunucunun kaydından kurulur.
+    if (g.tekrar !== undefined && g.tekrar !== null) {
+      const t = /** @type {Record<string, unknown>} */ (g.tekrar && typeof g.tekrar === 'object' ? g.tekrar : {});
+      if (typeof t.kaynakKosuId !== 'string' || !/^s-[A-Za-z0-9_-]{1,100}$/.test(t.kaynakKosuId)) throw new DepoHatasi('"tekrar.kaynakKosuId" geçersiz.');
+      if (t.veri !== undefined && t.veri !== 'guncel' && t.veri !== 'kosudaki') throw new DepoHatasi('"tekrar.veri" "guncel" ya da "kosudaki" olmalıdır.');
+      return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), tekrar: { kaynakKosuId: t.kaynakKosuId, ...(t.veri ? { veri: String(t.veri) } : {}) } }) };
     }
     if (!Array.isArray(g.senaryoIdleri)) throw new DepoHatasi('"senaryoIdleri" bir dizi olmalıdır.');
     return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), senaryoIdleri: g.senaryoIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'senaryoId')) }) };

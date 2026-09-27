@@ -124,7 +124,8 @@ function servisKosusu(vt, projeId, id, m) {
     };
   }
   const senaryolar = r.senaryolar.map((x) => ({
-    anahtar: x.senaryoId ? `id:${x.senaryoId}` : `baslik:${x.baslik}`, baslik: m.ad(x.baslik), grup: m.ad(k.baslik),
+    // Veri koşusu: aynı senaryonun her satırı ayrı eşlenir (id + veri anahtarı).
+    anahtar: x.senaryoId ? `id:${x.senaryoId}${x.veriAnahtari ? `#${x.veriAnahtari}` : ''}` : `baslik:${x.baslik}`, baslik: m.ad(x.baslik), grup: m.ad(k.baslik),
     durum: x.durduruldu ? 'durduruldu' : durumu(x.durum), sureMs: x.sureMs, ref: x.satirId, httpKodu: x.durumKodu
   }));
   return { kosu, senaryolar };

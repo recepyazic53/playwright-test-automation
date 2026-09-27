@@ -100,7 +100,18 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
   /** Yanıttan okunan AÇIK değerler ve maskelenen değerler: yalnız bellekte (akış motoru); kayda / dönüşe yazılmaz. */
   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+  /** Veri koşusu (tablodan çoklu satır): bu çalıştırmanın satırları; başlık "Senaryo [ad]". */
+  veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> };
+  /** Başarısızları tekrar çalıştırmada önceki koşu ("Tekrar:" bağı). */
+  tekrarKaynagi?: string;
 }): Promise<CalistirmaSonucu>;
+export declare function servisVeriKosulari(vt: Veritabani, projeId: string, s: { icerik: unknown }, ortamId: string, kip?: string | null): {
+  kosular: Array<{ anahtar: string; ad: string; satirlar: Record<string, string> }>; hatalar: string[]; cokluGruplar: string[];
+};
+export declare function servisCalistirmalari(vt: Veritabani, projeId: string, s: { baslik: string; icerik: unknown }, ortamId: string): {
+  hata: string | null; sinirAsildi: boolean;
+  calistirmalar: Array<{ baslik: string; veriKosusu: { anahtar: string; ad: string; sabit: Record<string, string> } | null }>;
+};
 export type OturumSaglayici = (vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
   Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>;
 export declare function oturumSaglayicisiAyarla(fn: OturumSaglayici | null): void;
@@ -112,7 +123,7 @@ export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, 
   servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number;
 }): Promise<{
   ortam: string; ortamTuru: 'test' | 'canli'; atlanan: number; atlamaNedeni?: string;
-  sonuclar: { senaryoId: string; baslik: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; kosuId: string; ozet: string }[];
+  sonuclar: { senaryoId: string; baslik: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; kosuId: string | null; ozet: string }[];
   ozet: { basarili: number; basarisiz: number; hata: number };
 }>;
 
