@@ -103,6 +103,24 @@ export function adresYasakliMi(adres, desenler) {
   return desenler.find((d) => d.desen.test(host))?.kalip ?? null;
 }
 
+/**
+ * Metindeki bilinen gizli değerleri (ör. ${Tablo.Sütun} ile gizli tablo sütunundan gelen değer) "•••" ile maskeler; 3 karakterden
+ * kısa değerler metni bozmasın diye atlanır, uzundan kısaya uygulanır. @param {string} metin @param {ReadonlyArray<unknown>} gizliler
+ */
+export function gizliDegerleriMaskele(metin, gizliler) {
+  let m = String(metin ?? '');
+  for (const g of [...new Set(gizliler.map((x) => String(x ?? '')))].filter((x) => x.length >= 3).sort((a, b) => b.length - a.length)) m = m.split(g).join('•••');
+  return m;
+}
+
+/**
+ * Senaryonun çözülemeyen tablo başvuruları (${Tablo.Sütun}; veri-oku.mjs) → koşuyu durduran hata metni.
+ * @param {string} baslik @param {ReadonlyArray<{ alan: string; mesaj: string }>} hatalar
+ */
+export function veriHatalariMetni(baslik, hatalar) {
+  return `"${baslik}": senaryonun test verisi başvurusu çözülemedi — ${hatalar.map((h) => h.mesaj).join(' ')} Tabloyu Ayarlar > Test verisi'nde tamamlayın ya da senaryoda başka bir değer seçin. Tarayıcı açılmadı.`;
+}
+
 /** Yasaklı host'a giden koşunun hata metni (host yazılır; adresin yolu/sorgusu yazılmaz). @param {string} adres @param {string} kalip */
 export function yasakliAdresMesaji(adres, kalip) {
   let host = '?';
@@ -220,7 +238,7 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       const havuz = profilHavuzuBul(f, formDegerleri, sema);
       const bulunan = profil && havuz ? secenekler.kimlikProfilleri?.[havuz]?.[profil] : undefined;
       if (nesneMi(bulunan)) kimlik = bulunan;
-      else neden = profil ? `"${profil}" kimlik profili bulunamadı (Ayarlar > Test verisi profilleri)` : 'kimlik bilgisi (profil ya da yeni kimlik) yok';
+      else neden = profil ? `"${profil}" kimlik kaydı bulunamadı (Ayarlar > Test verisi > Kişi ve kayıt verileri: "${havuz ?? '?'}" tablosunda bu adla satır yok)` : 'kimlik bilgisi (kayıt ya da yeni kimlik) yok';
     }
     if (!kimlik) return [{ ...planAlani(alan, null), atla: neden }];
     const altlar = (Array.isArray(alan.altAlanlar) ? alan.altAlanlar : []).filter((a) => nesneMi(a) && nesneMi(a.eslesme) && a.eslesme.kimlikAlani !== undefined)

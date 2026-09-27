@@ -131,7 +131,7 @@ test('plan: boşlar varsayılanla dolar, koşullar varsayılanla hesaplanır; g�
   expect(coklu).not.toHaveProperty('basvuranKimlikNo');
   // Olmayan profil: alan açık nedenle atlanır.
   const eksik = modelKosuPlani(model, { baslik: 'x', kategori: 'K1', urun: 'Ürün A', basvuranProfili: 'yok' }, { kimlikProfilleri, simdi });
-  expect(eksik.adimlar[1].alanlar[1]).toMatchObject({ id: 'basvuranKimlik', atla: expect.stringContaining('"yok" kimlik profili bulunamadı') });
+  expect(eksik.adimlar[1].alanlar[1]).toMatchObject({ id: 'basvuranKimlik', atla: expect.stringContaining('"yok" kimlik kaydı bulunamadı') });
   // Göreli tarih: biçim ve geri gün.
   expect(goreliTarih('bugun-3', 'yyyy-aa-gg', simdi)).toBe('2026-12-28');
   expect(goreliTarih('yarın', 'gg.aa.yyyy', simdi)).toBeNull();

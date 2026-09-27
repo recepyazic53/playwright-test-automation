@@ -11,10 +11,11 @@
 import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { gorselDiyalogu, kopyalaDugmesi, modelAgaciCiz } from './ekran-ortak.js';
 import { onayIste } from './kosu-paneli.js';
+import { paketIstekCumlesi } from './paket-istekleri.mjs';
 
 const PAKET_EN_BUYUK = 16 * 1024 * 1024;
-// Claude'un inceleme kuralları: ekranlar.js > INCELEME_KURALLARI ile aynı metin (docs/sayfa-paketi.md > "Düğme grupları").
-const CUMLE = '<sayfa bağlantısı> sayfasını incele ve docs/sayfa-paketi.md biçiminde bir sayfa paketi JSON dosyası üret. Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. Alanlara kart, parola, kimlik no gibi bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. Tüm seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini testVerisi.tablolar\'a yaz: bağımlı listelerde her satır geçerli bir kombinasyon olsun (üst seçim + alt seçenek); hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar\'ına ekle; alanları testVerisi.baglantilar ile sütunlara bağla, senaryo önerilerinde bu alanlara tablodaki değeri yaz. Kişisel ya da gizli değerleri (parola, kart, kimlik no) hiçbir yere yazma; böyle bir sütun gerekiyorsa "gizli": true işaretle ve boş bırak.';
+// Claude'a verilecek cümle: TEK kaynak paket-istekleri.mjs (sunucunun istek dosyası ve Ekranlar listesi de aynı metni kullanır).
+const CUMLE = paketIstekCumlesi();
 
 /**
  * @typedef {{ mod: 'yeni' | 'analiz'; proje: { id: string; ad: string }; ekran?: { id: string; ad: string; anahtar: string } | null;
@@ -146,9 +147,13 @@ function yuklemeAdimi(govde, s, onceki = null) {
 // ---------------------------------------------------------------------------------------
 
 const TV_KAYNAK = { paket: 'Sayfa paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
+const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
 
-/** @param {object | null} t önizlemenin testVerisi bölümü @param {() => void} degisti */
-function testVerisiSecimi(t, degisti) {
+/**
+ * Test verisine yazılacaklar bölümü (paket önizlemesi ve akış kaydının "akışa yaz" onayı ortak kullanır).
+ * @param {object | null} t önizlemenin testVerisi bölümü @param {() => void} degisti
+ */
+export function testVerisiSecimi(t, degisti) {
   if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, govde: () => undefined };
   /** @type {Map<string, { islem: string | null; yeniAd: string }>} */
   const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? null : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60) }]));
@@ -163,7 +168,7 @@ function testVerisiSecimi(t, degisti) {
     return h('li', { class: acik ? '' : 'soluk' }, h('label', {}, k,
       h('span', {}, h('b', {}, b.alanEtiketi), ' → ', h('code', {}, `${b.tablo} → ${b.sutun}`)),
       degisir ? rozet(`şu an: ${b.mevcut.tablo} → ${b.mevcut.sutun} (değişir)`, 'uyari') : null,
-      b.modeldeVar ? null : rozet('alan bulgu kabul edilince modele girer', '', { title: 'Bağlantı yine yazılır; alan modele eklenince geçerli olur.' })));
+      b.modeldeVar ? null : rozet('bulgu kabul edilince bağlanır', '', { title: 'Alan henüz modelde değil: bağlantı, alanın bulgusu kabul edilince yazılır; reddedilirse yazılmaz.' })));
   }));
   const tabloSatiri = (x) => {
     const d = durum.get(x.ad);
@@ -193,6 +198,7 @@ function testVerisiSecimi(t, degisti) {
     const sutunlar = x.sutunlar.map((s) => h('th', { scope: 'col' }, s.gizli ? ikon('kilit') : null, s.ad));
     return h('li', { class: 'tv-tablo' },
       h('div', { class: 'tv-tablo-ust' }, h('strong', {}, x.ad),
+        x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listeleri grubunda görünür.' }) : null,
         h('span', { class: 'kucuk soluk' }, `${x.sutunlar.length} sütun · ${x.satirSayisi} satır${x.tekrarSayisi ? ` (${x.tekrarSayisi} tekrar atıldı)` : ''}`),
         gizliVar ? rozet('gizli sütun: değeri Nöbetçi\'de şifreli girilir', 'uyari') : null),
       x.aciklama ? h('p', { class: 'kucuk soluk' }, x.aciklama) : null,
@@ -205,7 +211,7 @@ function testVerisiSecimi(t, degisti) {
   const bolum = h('section', { class: 'kart test-verisi-onizleme', 'aria-label': 'Test verisine yazılacaklar' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Test verisine yazılacaklar'),
       h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Sayfa paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
-    h('p', { class: 'kucuk soluk' }, 'Seçim alanlarının seçenekleri Ayarlar > Test verisi > Tablolar\'a Excel sayfası gibi yazılır (satır = birlikte geçerli değerler) ve alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
+    h('p', { class: 'kucuk soluk' }, 'Tablolar Ayarlar > Test verisi\'ne Excel sayfası gibi yazılır (satır = birlikte geçerli değerler): seçim alanlarının seçenekleri "Ekran listeleri"ne ("<Ekran> — <Alan>"), kişi ve kayıt verileri "Kişi ve kayıt verileri"ne. Alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
     h('ul', { class: 'tv-tablolar' }, t.tablolar.map(tabloSatiri)),
     t.baglantilar.length ? [h('div', { class: 'ara-baslik' }, `Alan bağlantıları (${t.baglantilar.length})`), bagListesi] : null);
   bagCiz();
@@ -225,10 +231,13 @@ function testVerisiSecimi(t, degisti) {
   };
 }
 
-/** Yazılan test verisinin bildirimi. @param {{ tablolar: Array<{ ad: string; islem: string; eklenenSatir: number }>; baglanan: number } | undefined} r */
-function testVerisiBildir(r) {
+/**
+ * Yazılan test verisinin bildirimi.
+ * @param {{ tablolar: Array<{ ad: string; islem: string; eklenenSatir: number }>; baglanan: number; bekleyenBaglanti?: number } | undefined} r
+ */
+export function testVerisiBildir(r) {
   if (!r || !r.tablolar.length) return;
-  bildir(`Test verisi: ${r.tablolar.map((x) => `${x.ad} (${x.islem === 'birlestir' ? `+${x.eklenenSatir} satır` : `${x.eklenenSatir} satır`})`).join(', ')}${r.baglanan ? `; ${r.baglanan} alan bağlandı` : ''}.`);
+  bildir(`Test verisi: ${r.tablolar.map((x) => `${x.ad} (${x.islem === 'birlestir' ? `+${x.eklenenSatir} satır` : `${x.eklenenSatir} satır`})`).join(', ')}${r.baglanan ? `; ${r.baglanan} alan bağlandı` : ''}${r.bekleyenBaglanti ? `; ${r.bekleyenBaglanti} bağlantı bulgu kabul edilince yazılır` : ''}.`);
 }
 
 function hataListesi(baslik, hatalar, dosyaAdi) {

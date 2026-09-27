@@ -375,7 +375,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       const gerekli = baglamAlanlari(tarif);
       profiller = istenen.map((ad) => {
         const degerler = havuz[ad];
-        if (!degerler) throw new TaramaHatasi('PROFIL', `"${ad}" adlı ${tur} bağlam profili bu ortamda yok (Ayarlar > Test verisi > Kayıtlar).`);
+        if (!degerler) throw new TaramaHatasi('PROFIL', `"${ad}" adlı ${tur} bağlam profili bu ortamda yok (Ayarlar > Test verisi > Kişi ve kayıt verileri).`);
         const eksik = gerekli.filter((a) => degerler[a] === undefined || degerler[a] === null || degerler[a] === '');
         if (eksik.length) throw new TaramaHatasi('PROFIL', `"${ad}" bağlam profilinde tarifin kullandığı alan(lar) boş: ${eksik.join(', ')}.`);
         return { ad, degerler };
@@ -680,7 +680,8 @@ export function taramaYoneticisiOlustur(secenekler) {
 
   /**
    * Mevcut ekranda kaydı bir AKIŞA yazar (yeni akış ya da seçilen akışı güncelle): kaydın gerçek okumalarıyla (koşul
-   * çıkarımı) ekran akış servisine verilir. onay yoksa etki döner. @param {Veritabani} vt @param {string} id @param {Nesne} g
+   * çıkarımı) ekran akış servisine verilir. onay yoksa etki (+ yakalanan seçenek listelerinin test verisi önizlemesi) döner;
+   * onaylı çağrıda g.testVerisi seçimi (paket önizlemesindekiyle aynı biçim) yazılır. @param {Veritabani} vt @param {string} id @param {Nesne} g
    */
   function akisaYaz(vt, id, g) {
     const is = akisIsi(id);
@@ -690,7 +691,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     if (hatalar.length) throw new TaramaHatasi('AKIS_GECERSIZ', `Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, 400, { hatalar });
     is.akis.bloklar = bloklar;
     const sonuc = ekranAkisiKaydet(vt, is.projeId, is.ekran.id, {
-      akisId: typeof h.akisId === 'string' && h.akisId ? h.akisId : null, ad: h.ad, bloklar, onay: g.onay === true, kayitEnvanteri: is.akis.envanter
+      akisId: typeof h.akisId === 'string' && h.akisId ? h.akisId : null, ad: h.ad, bloklar, onay: g.onay === true, kayitEnvanteri: is.akis.envanter,
+      // Yakalanan seçenek listeleri: yalnız kullanıcının önizlemede seçtikleri yazılır (seçim yoksa test verisine yazılmaz).
+      testVerisi: g.testVerisi
     });
     if ('surum' in sonuc) is.akisaYazildi = { akisId: sonuc.akisId, surum: sonuc.surum };
     return sonuc;

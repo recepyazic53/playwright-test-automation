@@ -121,8 +121,12 @@ export type PlatformModelSenaryosu = {
   model: Record<string, unknown> | null;
   modelSurumu: number | null;
   altModeller: Record<string, Record<string, unknown>>;
-  /** Senaryonun bu ortamdaki verisi (hassas alanlar çözülmüş; yalnızca bellekte). */
+  /** Senaryonun bu ortamdaki verisi (hassas alanlar ve ${Tablo.Sütun} başvuruları çözülmüş; yalnızca bellekte). */
   veri: Record<string, unknown>;
+  /** ${Tablo.Sütun} ile gizli tablo sütunundan gelen değerler: yakalanan mesajlarda ve hata metinlerinde maskelenir. */
+  tabloGizliDegerleri?: string[];
+  /** Çözülemeyen tablo başvuruları (ör. tabloda bu ortamda satır yok): koşu tarayıcı açılmadan bu hatayla durur. */
+  veriHatalari?: Array<{ alan: string; mesaj: string }>;
   mutlakaGorunmeli: string[];
   /** Nöbetçi "Dene" taslağı (veritabanında yok; sonucu senaryosuz kaydedilir). */
   deneme?: boolean;

@@ -6,7 +6,10 @@
 //   paketTestVerisiniYaz    seçim: { tablolar: { <paket tablo adı>: { islem: 'yeni' | 'birlestir' | 'yeniAd' | 'atla', yeniAd? } },
 //                           baglantilar: [alanId] }. Seçimi olmayan tablo YAZILMAZ (atla); aynı adlı tablo varken 'yeni'
 //                           reddedilir. Birleştirme mevcut sütun / satırları değiştirmez: eksik sütunlar ve tabloda olmayan
-//                           satırlar eklenir, karşılıklar tamamlanır. Tablonun kaynağı (paket / tarama / kayıt, tarih) yazılır.
+//                           satırlar eklenir, karşılıklar tamamlanır; mevcut tablonun KAYNAĞI da değişmez (varsa korunur,
+//                           yoksa yok kalır). Kaynak (paket / tarama / kayıt, ekran, tarih, tablo türü) yalnız yeni tabloya yazılır.
+//                           ertele(alanId): true dönen alanların bağlantısı yazılmaz, "ertelenen" olarak döner (tekrar analizde
+//                           bulgu kararına kadar bekler; ekran-servisi.mjs > analizUygula yazar).
 // Çağıran veritabanı işleminin içinde çalışır (ekran + model ile birlikte ya hep ya hiç). Kasa AÇIK olmalıdır.
 
 import { DepoHatasi, ekranModeliGetir } from '../veritabani/depo.mjs';
@@ -68,7 +71,7 @@ export function paketTestVerisiOnizle(vt, projeId, paket, ekranId) {
       const m = mevcutlar.find((x) => kucuk(x.ad) === kucuk(t.ad));
       const plan = m ? birlestirmePlani(m, t) : null;
       return {
-        ad: t.ad, aciklama: t.aciklama, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli, karsilikSayisi: Object.keys(s.karsiliklar).length })),
+        ad: t.ad, tur: t.tur, aciklama: t.aciklama, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli, karsilikSayisi: Object.keys(s.karsiliklar).length })),
         satirSayisi: t.satirlar.length, tekrarSayisi: t.tekrarSayisi,
         ornek: t.satirlar.slice(0, 5).map((d) => t.sutunlar.map((s) => (s.gizli ? null : d[s.ad] ?? null))),
         bagliAlanlar: baglantilar.filter((b) => kucuk(b.tablo) === kucuk(t.ad)).map((b) => { const a = alanlar.get(b.alanId); return a ? alanEtiketi(a) : b.alanId; }),
@@ -83,7 +86,7 @@ export function paketTestVerisiOnizle(vt, projeId, paket, ekranId) {
       const eski = mevcutBaglar[b.alanId];
       return {
         alanId: b.alanId, alanEtiketi: a ? alanEtiketi(a) : b.alanId, tablo: tablolar.find((t) => kucuk(t.ad) === kucuk(b.tablo))?.ad ?? b.tablo, sutun: b.sutun,
-        // Mevcut ekranda (tekrar analiz) alan henüz modelde değilse bağlantı yine yazılır; bulgu kabul edilince geçerli olur.
+        // Mevcut ekranda (tekrar analiz) alan henüz modelde değilse bağlantı bulguyla birlikte bekler; bulgu kabul edilince yazılır.
         modeldeVar: ekranAlanlari ? ekranAlanlari.has(b.alanId) : true,
         mevcut: eski ? { tablo: tabloAdi(eski.tablo) ?? '(silinmiş tablo)', sutun: eski.sutun } : null
       };
@@ -111,21 +114,26 @@ function secimiOku(secim) {
 /**
  * Onaylanan seçimle tabloları ve bağlantıları yazar (çağıranın işleminde). Seçim yoksa hiçbir şey yazılmaz.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} paket @param {unknown} secim
- * @returns {{ tablolar: Array<{ ad: string; id: string; islem: TabloIslemi; eklenenSatir: number; eklenenSutun: number }>; baglanan: number }}
+ * @param {{ ertele?: (alanId: string) => boolean }} [secenekler]
+ * @returns {{ tablolar: Array<{ ad: string; id: string; islem: TabloIslemi; eklenenSatir: number; eklenenSutun: number }>; baglanan: number;
+ *   ertelenen: Record<string, { tablo: string; sutun: string; etiket?: string }> }}
  */
-export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim) {
+export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim, secenekler = {}) {
   const p = /** @type {Nesne} */ (nesneMi(paket) ? paket : {});
   /** @type {ReturnType<typeof paketTestVerisiniYaz>} */
-  const sonuc = { tablolar: [], baglanan: 0 };
+  const sonuc = { tablolar: [], baglanan: 0, ertelenen: {} };
   if (!nesneMi(p.testVerisi) || secim === undefined || secim === null) return sonuc;
   const s = secimiOku(secim);
   const { tablolar, baglantilar } = paketTablolari(p.testVerisi, p.model);
   const meta = /** @type {Nesne} */ (nesneMi(p.meta) ? p.meta : {});
-  const kaynak = {
-    tur: paketKaynakTuru(meta), olusturan: String(meta.olusturan ?? '').slice(0, 120), olusturulma: String(meta.olusturulma ?? '').slice(0, 40),
+  const kaynakTuru = paketKaynakTuru(meta);
+  /** Yeni tablonun kaynağı; tablo türü paketten, yoksa tarama / kayıt tablosu ekran listesidir. @param {import('./paket-tablolari.mjs').PaketTablosu} t */
+  const kaynak = (t) => ({
+    tur: kaynakTuru, olusturan: String(meta.olusturan ?? '').slice(0, 120), olusturulma: String(meta.olusturulma ?? '').slice(0, 40),
     ...(nesneMi(meta.ekran) && typeof meta.ekran.ad === 'string' ? { ekran: meta.ekran.ad.slice(0, 120) } : {}),
+    ...(t.tur ? { tabloTuru: t.tur } : kaynakTuru !== 'paket' ? { tabloTuru: 'liste' } : {}),
     yazilma: new Date().toISOString()
-  };
+  });
   /** @type {Map<string, { id: string; sutun: (ad: string) => string }>} paket tablo adı (küçük) → yazılan tablo */
   const yazilan = new Map();
   for (const t of tablolar) {
@@ -138,7 +146,7 @@ export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim) {
       if (!ad) throw new DepoHatasi(`"${t.ad}" tablosu için yeni ad yazın.`);
       if (sec.islem === 'yeni' && mevcut) throw new DepoHatasi(`"${t.ad}" adında bir tablo zaten var: birleştir, yeni ad ya da atla seçin.`);
       const id = tabloKaydet(vt, {
-        projeId, ad, kaynak,
+        projeId, ad, kaynak: kaynak(t),
         sutunlar: t.sutunlar.map((x) => ({ ad: x.ad, gizli: x.gizli, ...(x.gizli ? {} : { karsiliklar: x.karsiliklar }) })),
         satirlar: t.satirlar.map((degerler) => ({ degerler: Object.fromEntries(Object.entries(degerler).filter(([, v]) => v !== null)) }))
       });
@@ -159,8 +167,9 @@ export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim) {
       ...plan.yeniSutunlar.map((x) => ({ ad: x.ad, gizli: x.gizli, ...(x.gizli ? {} : { karsiliklar: x.karsiliklar }) }))
     ];
     const hedef = (/** @type {string} */ ad) => plan.eslesme.get(ad) ?? ad;
+    // Kaynak verilmez: mevcut tablonun kaynağı (varsa da yoksa da) olduğu gibi kalır.
     const id = tabloKaydet(vt, {
-      projeId, id: mevcut.id, ad: mevcut.ad, kaynak, sutunlar,
+      projeId, id: mevcut.id, ad: mevcut.ad, sutunlar,
       satirlar: plan.eklenecek.map((d) => ({ degerler: Object.fromEntries(Object.entries(d).filter(([, v]) => v !== null).map(([k, v]) => [hedef(k), v])) }))
     });
     yazilan.set(kucuk(t.ad), { id, sutun: hedef });
@@ -175,7 +184,9 @@ export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim) {
     const t = tablolar.find((x) => kucuk(x.ad) === kucuk(b.tablo));
     const su = t?.sutunlar.find((x) => kucuk(x.ad) === kucuk(b.sutun));
     if (!su || su.gizli) continue;
-    yeni[b.alanId] = { tablo: w.id, sutun: w.sutun(su.ad), ...(b.etiket ? { etiket: b.etiket } : {}) };
+    const bag = { tablo: w.id, sutun: w.sutun(su.ad), ...(b.etiket ? { etiket: b.etiket } : {}) };
+    if (secenekler.ertele?.(b.alanId)) sonuc.ertelenen[b.alanId] = bag;
+    else yeni[b.alanId] = bag;
   }
   if (Object.keys(yeni).length) {
     ekranAlanBaglariniKaydet(vt, projeId, ekranId, { ...ekranAlanBaglari(vt, ekranId), ...yeni });

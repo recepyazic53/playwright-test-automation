@@ -12,7 +12,8 @@
 //    gorunurluk olur.
 //  - Test verisi: seçim alanlarının seçenekleri paketin "testVerisi" bölümüne tablo olarak yazılır (bağımlı listelerde —
 //    keşifte / kayıtta üst seçime göre seçenekleri değişen alanlar — satır = geçerli kombinasyon) ve alanlar sütunlara
-//    bağlanır (paket-tablolari.mjs > secenekTablolariUret). Yalnız seçenek etiketi / değeri; kullanıcının yazdığı metin yok.
+//    bağlanır (paket-tablolari.mjs > secenekTablolariUret). Tablo adı "<Ekran adı> — <Alan>", türü "liste" (Ekran listeleri).
+//    Yalnız seçenek etiketi / değeri; kullanıcının yazdığı metin yok.
 // Hiçbir proje/ürün adı içermez. NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir).
 // Tipler: paket-olusturucu.d.mts.
 
@@ -103,7 +104,8 @@ function testVerisiOlustur(model, anahtardanId, gozlemler, bilinmeyenler, sayac)
     uretim.push({ anahtar, id, etiket: alanEtiketi(a), secenekler });
   }
   if (!uretim.length) return null;
-  const { testVerisi, notlar } = secenekTablolariUret({ alanlar: uretim, gozlemler: temiz });
+  // Tablo adı "<Ekran adı> — <Alan>" (model adı = ekranın adı: tarama / kayıt metası).
+  const { testVerisi, notlar } = secenekTablolariUret({ alanlar: uretim, gozlemler: temiz, ekranAdi: typeof model.ad === 'string' ? model.ad : null });
   bilinmeyenler.push(...notlar);
   return testVerisi;
 }

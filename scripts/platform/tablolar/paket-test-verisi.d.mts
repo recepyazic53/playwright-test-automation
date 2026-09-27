@@ -5,7 +5,7 @@ export type PaketTestVerisiSecimi = { tablolar?: Record<string, { islem: TabloIs
 export type PaketTestVerisiOnizlemesi = {
   kaynak: 'paket' | 'tarama' | 'kayit';
   tablolar: Array<{
-    ad: string; aciklama: string | null; sutunlar: Array<{ ad: string; gizli: boolean; karsilikSayisi: number }>; satirSayisi: number; tekrarSayisi: number;
+    ad: string; tur: 'liste' | 'kayit' | null; aciklama: string | null; sutunlar: Array<{ ad: string; gizli: boolean; karsilikSayisi: number }>; satirSayisi: number; tekrarSayisi: number;
     ornek: Array<Array<string | null>>; bagliAlanlar: string[];
     mevcut: { id: string; ad: string; sutunSayisi: number; satirSayisi: number; yeniSutunlar: string[]; eklenecekSatir: number } | null;
   }>;
@@ -14,6 +14,7 @@ export type PaketTestVerisiOnizlemesi = {
 
 export declare function paketKaynakTuru(meta: Record<string, unknown> | null | undefined): 'paket' | 'tarama' | 'kayit';
 export declare function paketTestVerisiOnizle(vt: Veritabani, projeId: string, paket: unknown, ekranId: string | null): PaketTestVerisiOnizlemesi | null;
-export declare function paketTestVerisiniYaz(vt: Veritabani, projeId: string, ekranId: string, paket: unknown, secim: unknown): {
+export declare function paketTestVerisiniYaz(vt: Veritabani, projeId: string, ekranId: string, paket: unknown, secim: unknown, secenekler?: { ertele?: (alanId: string) => boolean }): {
   tablolar: Array<{ ad: string; id: string; islem: TabloIslemi; eklenenSatir: number; eklenenSutun: number }>; baglanan: number;
+  ertelenen: Record<string, { tablo: string; sutun: string; etiket?: string }>;
 };

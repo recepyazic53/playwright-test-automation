@@ -3,7 +3,7 @@ import type { Veritabani } from '../veritabani/baglanti.mjs';
 export interface Karsilik { sayfa?: string; servis?: string }
 export interface TabloSutunu { ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }
 export interface TabloSatiri { id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[] }
-export interface TabloKaynagi { tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string }
+export interface TabloKaynagi { tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string; tabloTuru?: 'liste' | 'kayit' }
 export interface Tablo { id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean; kaynak?: TabloKaynagi | null }
 export declare const BAGLAM_ONEKI: string;
 

@@ -68,7 +68,7 @@
         "required": ["baslik", "veri", "beklenenSonuc", "gerekce"],
         "properties": {
           "baslik": { "type": "string", "minLength": 1, "maxLength": 300 },
-          "veri": { "type": "object", "description": "Modelin senaryo biçimi (alan.eslesme.senaryo anahtarları). Kişi/kart verisi yerine profil ADI." },
+          "veri": { "type": "object", "description": "Modelin senaryo biçimi (alan.eslesme.senaryo anahtarları). Kişi / kayıt verisi değer olarak yazılmaz: ${Tablo.Sütun} ya da ${Tablo[etiket].Sütun} tablo başvurusu (kimlik bloğunda kayıt adı)." },
           "adimKapsami": { "type": "array", "items": { "type": "string" }, "description": "Dahil edilen isteğe bağlı adımların kimlikleri." },
           "beklenenSonuc": {
             "type": "object",
@@ -87,7 +87,7 @@
         "girisGerekli": { "type": "boolean" },
         "ikiAsamaliDogrulama": { "enum": ["yok", "totp", "sms", "bilinmiyor"] },
         "captchaGoruldu": { "type": "boolean" },
-        "testVerisiTurleri": { "type": "array", "items": { "type": "string" } },
+        "testVerisiTurleri": { "type": "array", "items": { "type": "string" }, "description": "Senaryoların gerektirdiği test verisi TABLOLARININ adları (anahtar adı geriye uyum için korunur)." },
         "baglamTurleri": { "type": "array", "items": { "type": "string" } },
         "not": { "type": "string" }
       }
@@ -110,7 +110,7 @@
     },
     "testVerisi": {
       "type": "object",
-      "description": "İsteğe bağlı: seçim alanlarının seçenekleri Test verisi tabloları olarak (satır = birlikte geçerli değerler; bağımlı listelerde kombinasyon) ve alan → sütun bağlantıları. Önizlemede kullanıcı onaylamadan yazılmaz. Gizli sütuna değer yazılmaz.",
+      "description": "İsteğe bağlı: test verisi tabloları (satır = birlikte geçerli değerler) — ekran listeleri (tur liste; seçim alanlarının seçenekleri, ad \"<Ekran adı> — <Alan>\", bağımlı listelerde kombinasyon) ve kişi / kayıt tabloları (tur kayit; satır = kayıt) — ve alan → sütun bağlantıları. Önizlemede kullanıcı onaylamadan yazılmaz. Gizli sütuna değer yazılmaz.",
       "additionalProperties": false,
       "required": ["tablolar"],
       "properties": {
@@ -123,6 +123,7 @@
             "required": ["ad", "sutunlar", "satirlar"],
             "properties": {
               "ad": { "type": "string", "pattern": "^[^.\\[\\]{}$<>&|\\u0000-\\u001f]{1,60}$" },
+              "tur": { "enum": ["liste", "kayit"], "description": "liste = ekran listesi (seçim alanının seçenekleri); kayit = kişi ve kayıt verisi (satır = kayıt; senaryo ${Tablo.Sütun} ile başvurur)." },
               "aciklama": { "type": "string" },
               "sutunlar": {
                 "type": "array",

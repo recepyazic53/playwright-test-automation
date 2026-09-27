@@ -105,6 +105,8 @@ export interface DogrulamaBaglami {
   simdi?: Date;
   /** 'kayit' (varsayılan): kayıtlı senaryo. 'girdi': dashboard formunun gövdesi. */
   kaynak?: 'kayit' | 'girdi';
+  /** Değeri ${Tablo.Sütun} olan alanlarda tablo / sütun varlığı buna göre denetlenir (verilmezse yalnız alan tipi). */
+  tablolar?: ReadonlyArray<{ ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }>;
 }
 
 export interface DogrulamaBulgusu {
@@ -170,7 +172,13 @@ export declare const MESAJLAR: {
   readonly kartSuresiGecmis: (aaYyyy: string) => string;
   readonly varsayilanKayitSuresiGecmis: (etiket: string, aaYyyy: string) => string;
   readonly eskiBeklenenSonucAlanlari: (alanlar: readonly string[]) => string;
+  readonly tabloBasvurusuAlamaz: (etiket: string) => string;
+  readonly tabloYok: (etiket: string, tablo: string) => string;
+  readonly tabloSutunuYok: (etiket: string, tablo: string, sutun: string) => string;
+  readonly gizliSutunSecimde: (etiket: string, sutun: string) => string;
 };
+/** Değerin tamamı "${Tablo.Sütun}" ise başvuru (tablo-secimi.mjs > degerBasvurusu ile aynı biçim), değilse null. */
+export declare function tabloBasvurusuCoz(deger: unknown): { tablo: string; etiket: string; sutun: string; bicim: string } | null;
 
 export declare function tcKimlikNoGecerliMi(no: unknown): boolean;
 export declare function kartSuresiGectiMi(kart: unknown, simdi: Date): boolean | null;

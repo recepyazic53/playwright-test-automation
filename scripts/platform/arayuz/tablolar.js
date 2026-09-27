@@ -54,9 +54,10 @@ function kaynakMetni(k) {
 }
 
 // --- Liste grupları (yalnız görünüm; veri değişmez) ---------------------------------------------------------------------
-// "Kişi ve kayıt verileri": kaynağı ekran listesi olmayan tablolar. "Ekran listeleri": ekranlardan içe alınmış seçenek listeleri
-// (tablo kaynağı: sayfa paketi / tarama / akış kaydı; kaynağı yoksa tek sütunlu "<Ekran> — <Alan>" adlı tablolar), ekran başına
-// alt grup. Açık / kapalı durumu tarayıcıda (localStorage) hatırlanır.
+// Ölçüt önce TABLO TÜRÜdür (kaynak.tabloTuru: paketin testVerisi.tablolar[].tur; tarama / akış kaydı tabloları "liste"):
+// "kayit" → "Kişi ve kayıt verileri", "liste" → "Ekran listeleri". Tür yoksa (eski kayıtlar) sezgi: kaynağı olan (sayfa paketi /
+// tarama / akış kaydı) ya da tek sütunlu "<Ekran> — <Alan>" adlı tablolar ekran listesidir, diğerleri kişi ve kayıt verisi.
+// Ekran listeleri ekran başına alt gruptur. Açık / kapalı durumu tarayıcıda (localStorage) hatırlanır.
 const GRUP_ANAHTARI = 'platform.tabloGruplari.kapali';
 const AD_DESENI = /^(.+?)\s+—\s+(.+)$/;
 let grupSayaci = 0;
@@ -71,7 +72,7 @@ function tabloGrubuDurumuYaz(anahtar, kapali) {
   try { localStorage.setItem(GRUP_ANAHTARI, JSON.stringify([...k].slice(-200))); } catch { /* yok sayılır */ }
 }
 /**
- * @template {{ ad: string; baglam?: boolean; sutunlar: unknown[]; kaynak?: { tur?: string; ekran?: string } | null }} T
+ * @template {{ ad: string; baglam?: boolean; sutunlar: unknown[]; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null }} T
  * @param {T[]} liste @returns {{ kayitlar: T[]; ekranlar: Map<string, T[]> }}
  */
 export function tablolariGrupla(liste) {
@@ -81,8 +82,10 @@ export function tablolariGrupla(liste) {
   const ekranlar = new Map();
   for (const t of liste) {
     const desen = AD_DESENI.exec(String(t.ad || ''));
+    const tur = t.kaynak && t.kaynak.tabloTuru;
     const kaynakli = Boolean(t.kaynak && t.kaynak.tur);
-    if (t.baglam || (!kaynakli && !(desen && t.sutunlar.length === 1))) { kayitlar.push(t); continue; }
+    const ekranListesi = tur === 'liste' || (tur !== 'kayit' && (kaynakli || Boolean(desen && t.sutunlar.length === 1)));
+    if (t.baglam || !ekranListesi) { kayitlar.push(t); continue; }
     const ekran = (t.kaynak && t.kaynak.ekran) || (desen ? desen[1].trim() : '') || 'Diğer ekranlar';
     if (!ekranlar.has(ekran)) ekranlar.set(ekran, []);
     /** @type {T[]} */ (ekranlar.get(ekran)).push(t);

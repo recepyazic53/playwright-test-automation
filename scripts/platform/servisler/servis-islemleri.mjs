@@ -25,7 +25,7 @@ import { adresBirlestirRest, govdeKacisi, restIstegi } from './rest-istemcisi.mj
 import { ortakYol, postmanCozumle, postmanOzeti, sablonCevir, sablonDegiskenleri } from './postman-ice-aktarma.mjs';
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { BICIM_KALIBI, basvuru, basvuruCoz, grupAnahtari, secilenSatir, servisDegeri, sutunBul, tabloBul } from '../tablolar/tablo-secimi.mjs';
+import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, servisDegeri } from '../tablolar/tablo-secimi.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
@@ -507,16 +507,10 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     const b = /[.[]/.test(ad) ? basvuruCoz(ad) : null;
     if (b) {
       tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
-      const t = tabloBul(tablolar, b.tablo);
-      if (t) {
-        const sutun = sutunBul(t, b.sutun);
-        if (!sutun) { eksikNedeni[ad] = `"${t.ad}" tablosunda "${b.sutun}" sütunu yok`; continue; }
-        const secim = icerik.tabloSecimleri?.[grupAnahtari(t.id, b.etiket)] ?? {};
-        const r = secilenSatir(t, secim, ortamId);
-        const grup = `"${t.ad}${b.etiket ? ` (${b.etiket})` : ''}"`;
-        if (!r) { eksikNedeni[ad] = Object.keys(secim).length ? `${grup} tablosunda seçimlerle uyan satır yok` : `${grup} tablosunda bu ortamda satır yok`; continue; }
-        const d = r.degerler[sutun.ad];
-        if (d === null || d === undefined || d === '') { eksikNedeni[ad] = `${grup} tablosunun seçilen satırında "${sutun.ad}" boş`; continue; }
+      // Ortak kural (ekran senaryosu koşusuyla aynı): tablo-secimi.mjs > basvuruyuCoz.
+      const c = basvuruyuCoz(tablolar, b, icerik.tabloSecimleri, ortamId);
+      if ('deger' in c) {
+        const { tablo: t, sutun, satir: r, deger: d } = c;
         // Değerin servis karşılığı tanımlıysa gövdeye o yazılır (ör. DÜNYA → WORLD).
         degerler[ad] = servisDegeri(sutun, d);
         if (sutun.gizli) gizliler.push(d);
@@ -525,7 +519,7 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
         }
         continue;
       }
-      if (!/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) { eksikNedeni[ad] = `"${b.tablo}" adında tablo yok`; continue; }
+      if (!c.tabloYok || !/^[A-Za-z_][A-Za-z0-9_.-]{0,79}$/.test(ad)) { eksikNedeni[ad] = c.hata; continue; }
     }
     if (kimlik[ad] !== undefined) {
       degerler[ad] = kimlik[ad];

@@ -7,11 +7,14 @@ import { join, resolve } from 'node:path';
 import { chromium, expect, test } from '@playwright/test';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { ekranAyarlariniGetir, ekranModeliGetir, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
-import { paketOnizle, sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
-import { paketListeleri, paketTablolari, secenekTablolariUret } from '../../scripts/platform/tablolar/paket-tablolari.mjs';
-import { tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
+import { analizGetir, analizUygula, analizYukle, claudeDosyasiYaz, modeliPaketleDegistir, paketOnizle, sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
+import { MEVCUT_TABLO_KURALI } from '../../scripts/platform/ekranlar/paket-istekleri.mjs';
+import { adimlardanBloklar, akisKaydet, modeldenAkisEnvanteri } from '../../scripts/platform/ekranlar/akis-servisi.mjs';
+import { akisPaketi } from './model-kosucu-ozellikleri-fikstur';
+import { ekranListesiTabloAdi, paketListeleri, paketTablolari, secenekTablolariUret } from '../../scripts/platform/tablolar/paket-tablolari.mjs';
+import { tabloKaydet, tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from '../../scripts/platform/tablolar/ekran-baglari.mjs';
 import { modeleListeleriUygula } from '../../scripts/platform/senaryolar/deger-listesi-modeli.mjs';
 import { kayitPaketiOlustur, taramaPaketiOlustur, type HamAlan, type PaketMetasi } from '../../scripts/platform/tarama/paket-olusturucu.mjs';
@@ -21,6 +24,7 @@ import { nobetciApi, nobetciBaslat } from './nobetci-sunucusu';
 
 type Nesne = Record<string, any>;
 const V1 = JSON.parse(readFileSync(resolve(__dirname, 'fixtures', 'sayfa-paketi', 'ornek-rota-v1.json'), 'utf-8')) as Nesne;
+const V2 = JSON.parse(readFileSync(resolve(__dirname, 'fixtures', 'sayfa-paketi', 'ornek-rota-v2.json'), 'utf-8')) as Nesne;
 const kopya = <T>(d: T): T => JSON.parse(JSON.stringify(d)) as T;
 
 const TEST_VERISI = {
@@ -109,20 +113,48 @@ test.describe('Seçenek gözlemlerinden tablolar', () => {
     { anahtar: '#tip', secimler: { '#il': '06' }, secenekler: [{ deger: 'B', metin: 'Bireysel' }, { deger: 'K', metin: 'Kurumsal' }] }
   ];
 
-  test('bağımlı liste üst seçimle aynı tabloda (satır = kombinasyon); bağımsız liste tek sütun; gizli alan alınmaz', () => {
-    const { testVerisi, notlar } = secenekTablolariUret({ alanlar, gozlemler });
+  test('bağımlı liste üst seçimle aynı tabloda (satır = kombinasyon); bağımsız liste tek sütun; gizli alan alınmaz; ad "<Ekran> — <Alan>", tür liste', () => {
+    const { testVerisi, notlar } = secenekTablolariUret({ alanlar, gozlemler, ekranAdi: 'Adres formu' });
     expect(testVerisi?.tablolar).toEqual([
       {
-        ad: 'İl - İlçe',
+        ad: 'Adres formu — İl - İlçe', tur: 'liste',
         sutunlar: [{ ad: 'İl', karsiliklar: { İstanbul: { sayfa: '34' }, Ankara: { sayfa: '06' } } }, { ad: 'İlçe', karsiliklar: { Kadıköy: { sayfa: '34-1' }, Üsküdar: { sayfa: '34-2' }, Çankaya: { sayfa: '06-1' } } }],
         satirlar: [['İstanbul', 'Kadıköy'], ['İstanbul', 'Üsküdar'], ['Ankara', 'Çankaya']]
       },
-      { ad: 'Müşteri tipi', sutunlar: [{ ad: 'Müşteri tipi', karsiliklar: { Bireysel: { sayfa: 'B' }, Kurumsal: { sayfa: 'K' } } }], satirlar: [['Bireysel'], ['Kurumsal']] }
+      { ad: 'Adres formu — Müşteri tipi', tur: 'liste', sutunlar: [{ ad: 'Müşteri tipi', karsiliklar: { Bireysel: { sayfa: 'B' }, Kurumsal: { sayfa: 'K' } } }], satirlar: [['Bireysel'], ['Kurumsal']] }
     ]);
     expect(testVerisi?.baglantilar).toEqual([
-      { alanId: 'il', tablo: 'İl - İlçe', sutun: 'İl' }, { alanId: 'ilce', tablo: 'İl - İlçe', sutun: 'İlçe' }, { alanId: 'tip', tablo: 'Müşteri tipi', sutun: 'Müşteri tipi' }
+      { alanId: 'il', tablo: 'Adres formu — İl - İlçe', sutun: 'İl' }, { alanId: 'ilce', tablo: 'Adres formu — İl - İlçe', sutun: 'İlçe' },
+      { alanId: 'tip', tablo: 'Adres formu — Müşteri tipi', sutun: 'Müşteri tipi' }
     ]);
     expect(notlar.some((n) => /Güvenlik sorusu/.test(n))).toBe(true);
+    // Ekran adı verilmezse yalnız alan etiketi (eski çağıranlar).
+    expect(secenekTablolariUret({ alanlar, gozlemler }).testVerisi?.tablolar.map((t) => t.ad)).toEqual(['İl - İlçe', 'Müşteri tipi']);
+  });
+
+  test('tablo adı: "<Ekran> — <Alan>", 60 karakter sınırı (önce ekran adı kısalır), yasak karakterler atılır; aynı ad tekilleşir', () => {
+    expect(ekranListesiTabloAdi('Başvuru', ['İl'])).toBe('Başvuru — İl');
+    expect(ekranListesiTabloAdi('Başvuru', ['İl', 'İlçe'])).toBe('Başvuru — İl - İlçe');
+    expect(ekranListesiTabloAdi('', ['İl'])).toBe('İl');
+    expect(ekranListesiTabloAdi('Ekran {1}. [x]', ['Alan.Adı'])).toBe('Ekran 1 x — Alan Adı');
+    const uzunEkran = 'Çok uzun bir ekran adı olan başvuru ve teklif sayfası (deneme)';
+    const ad = ekranListesiTabloAdi(uzunEkran, ['Başvuranın doğum yeri bilgisi']);
+    expect(ad.length).toBeLessThanOrEqual(60);
+    expect(ad.endsWith(' — Başvuranın doğum yeri bilgisi')).toBe(true);
+    expect(ad.startsWith('Çok uzun bir ekran')).toBe(true);
+    // Alan adı da çok uzunsa ekran adının en az 20 karakteri kalır, tamamı 60'ta kesilir.
+    const ikisi = ekranListesiTabloAdi(uzunEkran, ['Alan '.repeat(20)]);
+    expect(ikisi.length).toBeLessThanOrEqual(60);
+    expect(ikisi.startsWith(uzunEkran.slice(0, 20).trim())).toBe(true);
+    // Paket şemasına uyar (adı tablo deposu da kabul eder).
+    expect(/^[^.[\]{}$<>&|\u0000-\u001f]{1,60}$/u.test(ikisi)).toBe(true);
+    // Aynı adı üreten iki grup: ikinci "… 2".
+    const { testVerisi } = secenekTablolariUret({
+      ekranAdi: 'Form', gozlemler: [],
+      alanlar: [{ anahtar: '#a', id: 'a', etiket: 'Tür', secenekler: [{ deger: '1', metin: 'Bir' }, { deger: '2', metin: 'İki' }] },
+        { anahtar: '#b', id: 'b', etiket: 'Tür', secenekler: [{ deger: '3', metin: 'Üç' }, { deger: '4', metin: 'Dört' }] }]
+    });
+    expect(testVerisi?.tablolar.map((t) => t.ad)).toEqual(['Form — Tür', 'Form — Tür 2']);
   });
 
   test('aynı görünen metin farklı değerlere denk geliyorsa sütun değerle yazılır', () => {
@@ -163,7 +195,7 @@ test('otomatik tarama: keşifte seçenekleri değişen liste üst seçimle kombi
   expect(sayfaPaketiniDogrula(paket).hatalar).toEqual([]);
   const tv = paket.testVerisi as Nesne;
   expect(tv.tablolar).toHaveLength(1);
-  expect(tv.tablolar[0]).toMatchObject({ ad: 'İl - İlçe', satirlar: [['İstanbul', 'Kadıköy'], ['İstanbul', 'Üsküdar'], ['Ankara', 'Çankaya']] });
+  expect(tv.tablolar[0]).toMatchObject({ ad: 'Adres formu — İl - İlçe', tur: 'liste', satirlar: [['İstanbul', 'Kadıköy'], ['İstanbul', 'Üsküdar'], ['Ankara', 'Çankaya']] });
   expect(tv.baglantilar.map((b: Nesne) => b.alanId)).toEqual(['il', 'ilce']);
 });
 
@@ -182,9 +214,9 @@ test('akış kaydı: okumalardaki listeler ve tıklanınca açılan liste (metin
   });
   expect(sayfaPaketiniDogrula(paket).hatalar).toEqual([]);
   const tv = paket.testVerisi as Nesne;
-  expect(tv.tablolar.map((t: Nesne) => [t.ad, t.satirlar])).toEqual([
-    ['İl - İlçe', [['İstanbul', 'Kadıköy'], ['Ankara', 'Çankaya']]],
-    ['Şehir', [['Bursa'], ['İzmir']]]
+  expect(tv.tablolar.map((t: Nesne) => [t.ad, t.tur, t.satirlar])).toEqual([
+    ['Adres formu — İl - İlçe', 'liste', [['İstanbul', 'Kadıköy'], ['Ankara', 'Çankaya']]],
+    ['Adres formu — Şehir', 'liste', [['Bursa'], ['İzmir']]]
   ]);
   expect(tv.baglantilar.map((b: Nesne) => b.alanId)).toEqual(['il', 'ilce', 'sehirAra']);
 });
@@ -270,8 +302,136 @@ test.describe('Onaylanan test verisinin yazılması', () => {
     expect(ka?.sutunlar.map((s) => s.ad)).toEqual(['Kapsam', 'Alternatif', 'Bölge']);
     expect(ka?.satirlar).toHaveLength(5);
     expect(ekranAlanBaglari(vt, ek2.ekranId)).toEqual({ alternatif: { tablo: ka?.id, sutun: 'Alternatif' }, taksitSayisi: { tablo: son.find((t) => t.ad === 'Taksit 2')?.id, sutun: 'Taksit' } });
+    // Birleştirme mevcut tablonun KAYNAĞINI değiştirmez (ilk yazımdaki kaynak aynen; yazılma zamanı dahil).
+    expect(ka?.kaynak).toEqual(tablolar.find((t) => t.ad === 'Kapsam - Alternatif')?.kaynak);
+  });
+
+  test('birleştirme: kaynağı olmayan (elle oluşturulmuş) tablonun kaynağı yok kalır; paket tablosunun türü kaynakta saklanır', async () => {
+    const medya = join(klasor.yol, 'medya');
+    tabloKaydet(vt, { projeId, ad: 'Taksit', sutunlar: [{ ad: 'Taksit' }], satirlar: [{ degerler: { Taksit: 'Tek çekim' } }] });
+    const p = paketTV();
+    p.testVerisi.tablolar[0].tur = 'liste';
+    p.testVerisi.tablolar[2].tur = 'kayit';
+    const o = paketOnizle(vt, projeId, p);
+    expect(((o.onizleme as Nesne).testVerisi as Nesne).tablolar.map((t: Nesne) => t.tur)).toEqual(['liste', null, 'kayit']);
+    await sayfaEkle(vt, projeId, p, {
+      senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: medya,
+      testVerisi: { tablolar: { 'Kapsam - Alternatif': { islem: 'yeni' }, Taksit: { islem: 'birlestir' }, 'Servis girişi': { islem: 'yeni' } }, baglantilar: [] }
+    });
+    const t = (ad: string) => tablolariListele(vt, projeId).find((x) => x.ad === ad);
+    expect(t('Taksit')?.kaynak).toBeNull();
+    expect(t('Taksit')?.satirlar).toHaveLength(3);
+    expect(t('Kapsam - Alternatif')?.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'liste' });
+    expect(t('Servis girişi')?.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'kayit' });
+    // Geçersiz tür reddedilir.
+    const q = paketTV();
+    q.testVerisi.tablolar[0].tur = 'tablo';
+    expect(sayfaPaketiniDogrula(q).hatalar.map((h) => h.yer)).toContain('testVerisi.tablolar[0].tur');
+  });
+
+  test('tekrar analiz: tablolar hemen, bağlantılar bulgu kararına göre (kabul → yazılır, red → yazılmaz; bulgusuz alan hemen)', async () => {
+    const medya = join(klasor.yol, 'medya');
+    const ek = await sayfaEkle(vt, projeId, kopya(V1), { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: medya });
+    const { paket, secim } = v2TestVerisi();
+    const o = paketOnizle(vt, projeId, paket, { ekranId: ek.ekranId, mod: 'analiz' });
+    expect(o.gecerli, JSON.stringify(o.hatalar)).toBe(true);
+    const onizleme = (o.onizleme as Nesne).testVerisi as Nesne;
+    expect(Object.fromEntries(onizleme.baglantilar.map((b: Nesne) => [b.alanId, b.modeldeVar]))).toEqual({ rotaAmaci: false, kapsam: true, taksitSayisi: true });
+    const y = await analizYukle(vt, projeId, ek.ekranId, paket, { medyaKlasoru: medya, testVerisi: secim });
+    expect(y.bulguSayisi).toBeGreaterThan(0);
+    // Taksit (bulgusu yok, modelde var) hemen; Rota amacı (yeni alan) ve Kapsam (yeni seçenek bulgusu) bulgu kararını bekler.
+    expect(y.testVerisi).toMatchObject({ baglanan: 1, bekleyenBaglanti: 2 });
+    const tablo = (ad: string) => tablolariListele(vt, projeId).find((x) => x.ad === ad);
+    expect(tablolariListele(vt, projeId)).toHaveLength(3);
+    expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({ taksitSayisi: { tablo: tablo('Örnek Rota — Taksit')?.id, sutun: 'Taksit' } });
+    const a = analizGetir(vt, projeId, ek.ekranId).analiz as Nesne;
+    const bulgu = (tur: string) => (a.bulgular as Nesne[]).find((b) => b.tur === tur) as Nesne;
+    const r = analizUygula(vt, projeId, ek.ekranId, { analizId: a.id, kabul: [bulgu('yeniAlan').id], red: [bulgu('yeniSecenek').id] });
+    expect(r).toMatchObject({ yeniSurum: true, kabul: 1, red: 1, baglanan: 1 });
+    expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({
+      taksitSayisi: { tablo: tablo('Örnek Rota — Taksit')?.id, sutun: 'Taksit' },
+      rotaAmaci: { tablo: tablo('Örnek Rota — Rota amacı')?.id, sutun: 'Rota amacı' }
+    });
+    // Uygulanan analizde bekleyen bağlantılar kalmaz (bir sonraki analizde yeniden yazılmaz).
+    const durum = ekranAyarlariniGetir(vt, ek.ekranId) as Nesne;
+    expect(durum.analiz.son.baglantilar).toBeUndefined();
+    // Tekrar analiz istek dosyası: mevcut bağlantılar + bağlı tabloların adı / sütunları (değer yok) ve "aynı adları kullan" talimatı.
+    const dosya = claudeDosyasiYaz(vt, projeId, ek.ekranId, { tur: 'tekrar-analiz', klasor: join(klasor.yol, 'analiz'), projeKoku: klasor.yol });
+    const metin = readFileSync(dosya.tamYol, 'utf8');
+    const icerik = JSON.parse(metin) as Nesne;
+    expect(icerik.testVerisi.alanBaglari).toEqual(expect.arrayContaining([
+      { alanId: 'rotaAmaci', alanEtiketi: expect.any(String), tablo: 'Örnek Rota — Rota amacı', sutun: 'Rota amacı' },
+      { alanId: 'taksitSayisi', alanEtiketi: expect.any(String), tablo: 'Örnek Rota — Taksit', sutun: 'Taksit' }
+    ]));
+    expect(icerik.testVerisi.tablolar.map((t: Nesne) => [t.ad, t.tur, t.sutunlar])).toEqual(expect.arrayContaining([['Örnek Rota — Rota amacı', 'liste', [{ ad: 'Rota amacı' }]]]));
+    expect(metin).not.toContain('Yalnız tablo değeri'); // tablo değeri yazılmaz (yalnız ad / sütun)
+    expect(icerik.talimat).toContain(MEVCUT_TABLO_KURALI);
+    expect(dosya.cumle).toContain(MEVCUT_TABLO_KURALI);
+  });
+
+  test('modeli değiştir: onaylanan tablolar ve bağlantılar yeni model sürümüyle yazılır', async () => {
+    const medya = join(klasor.yol, 'medya');
+    const ek = await sayfaEkle(vt, projeId, kopya(V1), { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: medya });
+    const { paket, secim } = v2TestVerisi();
+    const r = await modeliPaketleDegistir(vt, projeId, ek.ekranId, paket, { onay: true, medyaKlasoru: medya, testVerisi: secim });
+    expect((r as Nesne).testVerisi).toEqual({ tablolar: expect.any(Array), baglanan: 3 });
+    expect(tablolariListele(vt, projeId).map((t) => [t.ad, t.kaynak?.tabloTuru]).sort()).toEqual([
+      ['Örnek Rota — Kapsam', 'liste'], ['Örnek Rota — Rota amacı', 'liste'], ['Örnek Rota — Taksit', 'liste']
+    ]);
+    expect(Object.keys(ekranAlanBaglari(vt, ek.ekranId)).sort()).toEqual(['kapsam', 'rotaAmaci', 'taksitSayisi']);
+  });
+
+  test('akış kaydı → doğrudan akışa yaz: seçenek listeleri önizlenir; seçimsiz yazılmaz; onaylanan tablo + bağlantı yeni sürümle yazılır', async () => {
+    const medya = join(klasor.yol, 'medya');
+    const ek = await sayfaEkle(vt, projeId, akisPaketi(), { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: medya });
+    const model = (ekranModeliGetir(vt, ek.ekranId) as { model: Nesne }).model;
+    const env = modeldenAkisEnvanteri(model);
+    const bloklar = adimlardanBloklar(model, model.adimlar, env);
+    const on = akisKaydet(vt, projeId, ek.ekranId, { ad: 'Kayıttan akış', bloklar, kayitEnvanteri: env }) as Nesne;
+    expect(on.etki).toEqual({ yeni: true, senaryolar: [] });
+    const tv = on.testVerisi as Nesne;
+    expect(tv.kaynak).toBe('kayit');
+    const kategori = (tv.tablolar as Nesne[]).find((t) => t.ad === 'Başvuru (akış) — Kategori') as Nesne;
+    expect(kategori).toMatchObject({ tur: 'liste', satirSayisi: 2, mevcut: null });
+    expect((tv.baglantilar as Nesne[]).every((b) => b.modeldeVar === true)).toBe(true);
+    // Seçim yok: model yazılır, test verisine hiçbir şey yazılmaz.
+    const y1 = akisKaydet(vt, projeId, ek.ekranId, { ad: 'Kayıttan akış', bloklar, kayitEnvanteri: env, onay: true }) as Nesne;
+    expect(y1.testVerisi).toEqual({ tablolar: [], baglanan: 0 });
+    expect(tablolariListele(vt, projeId)).toEqual([]);
+    expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({});
+    // Onaylanan seçim: yalnız seçilen tablo ve bağlantı.
+    const y2 = akisKaydet(vt, projeId, ek.ekranId, {
+      ad: 'Kayıttan akış 2', bloklar, kayitEnvanteri: env, onay: true,
+      testVerisi: { tablolar: { 'Başvuru (akış) — Kategori': { islem: 'yeni' } }, baglantilar: ['kategori'] }
+    }) as Nesne;
+    expect((y2.testVerisi as Nesne).tablolar.map((t: Nesne) => [t.ad, t.islem, t.eklenenSatir])).toEqual([['Başvuru (akış) — Kategori', 'yeni', 2]]);
+    const t = tablolariListele(vt, projeId);
+    expect(t).toHaveLength(1);
+    expect(t[0].kaynak).toMatchObject({ tur: 'kayit', tabloTuru: 'liste', ekran: 'Başvuru (akış)' });
+    expect(t[0].sutunlar[0].karsiliklar).toEqual({ Bireysel: { sayfa: 'K1' }, Kurumsal: { sayfa: 'K2' } });
+    expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({ kategori: { tablo: t[0].id, sutun: 'Kategori' } });
+    // Ekranın Akışlar sekmesinden (kayıt yok) düzenleme test verisi önermez.
+    expect('testVerisi' in (akisKaydet(vt, projeId, ek.ekranId, { ad: 'Elle akış', bloklar }) as Nesne)).toBe(false);
   });
 });
+
+/** V2 paketi + üç tablo (Rota amacı: yeni alan, Kapsam: yeni seçenek bulgusu olan alan, Taksit: bulgusuz alan) ve tümünü yazan seçim. */
+function v2TestVerisi(): { paket: Nesne; secim: Nesne } {
+  const tablolar = [
+    { ad: 'Örnek Rota — Rota amacı', tur: 'liste', sutunlar: [{ ad: 'Rota amacı' }], satirlar: [['Turistik'], ['İş']] },
+    { ad: 'Örnek Rota — Kapsam', tur: 'liste', sutunlar: [{ ad: 'Kapsam' }], satirlar: [['DÜNYA'], ['ASYA']] },
+    { ad: 'Örnek Rota — Taksit', tur: 'liste', sutunlar: [{ ad: 'Taksit' }], satirlar: [['Tek çekim'], ['3 taksit'], ['Yalnız tablo değeri']] }
+  ];
+  const paket = {
+    ...kopya(V2), testVerisi: {
+      tablolar, baglantilar: [
+        { alanId: 'rotaAmaci', tablo: tablolar[0].ad, sutun: 'Rota amacı' }, { alanId: 'kapsam', tablo: tablolar[1].ad, sutun: 'Kapsam' },
+        { alanId: 'taksitSayisi', tablo: tablolar[2].ad, sutun: 'Taksit' }
+      ]
+    }
+  };
+  return { paket, secim: { tablolar: Object.fromEntries(tablolar.map((t) => [t.ad, { islem: 'yeni' }])), baglantilar: ['rotaAmaci', 'kapsam', 'taksitSayisi'] } };
+}
 
 test.describe('Arayüz: paket önizlemesinde test verisi', () => {
   test('bölüm tablo / bağlantıları gösterir; seçilen tablolar yazılır, kaynak Tablolar ekranında görünür', async () => {

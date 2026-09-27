@@ -20,7 +20,7 @@ import { basename, join, relative, resolve, isAbsolute } from 'node:path';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
-  YASAK_ADRES_DEGISKENI, YUKLEME_KLASORU_DEGISKENI, adresYasakliMi, modelKosuPlani, secenekBul, yasakDesenleri, yasakliAdresMesaji,
+  YASAK_ADRES_DEGISKENI, YUKLEME_KLASORU_DEGISKENI, adresYasakliMi, gizliDegerleriMaskele, modelKosuPlani, secenekBul, veriHatalariMetni, yasakDesenleri, yasakliAdresMesaji,
   yuklemeDosyasiYolu, type ModelKosuPlani, type PlanAdimi, type PlanAlani, type PlanBasariGostergesi, type PlanKosuTanimi
 } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import type { GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
@@ -630,7 +630,10 @@ async function parolaAlaniysaGizle(page: Page, alan: PlanAlani, l: Locator): Pro
  */
 export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: PlatformModelSenaryosu, ortam: ModelKosuOrtami): Promise<void> {
   if (!s.model) throw new Error(`"${s.baslik}": "${s.ekran.ad || s.ekran.id}" ekranının modeli yok; model koşucusu çalışamaz.`);
-  const plan = modelKosuPlani(s.model, s.veri, { altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli, kimlikProfilleri: ortam.veri.kimlikProfilleri ?? {} });
+  // ${Tablo.Sütun} başvurusu çözülemediyse (ör. tabloda bu ortamda satır yok) tarayıcı açılmadan açık hatayla durulur.
+  if (s.veriHatalari?.length) throw new Error(veriHatalariMetni(s.baslik, s.veriHatalari));
+  const tabloGizlileri = s.tabloGizliDegerleri ?? [];
+  const plan =modelKosuPlani(s.model, s.veri, { altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli, kimlikProfilleri: ortam.veri.kimlikProfilleri ?? {} });
   if (plan.hatalar.length) throw new Error(`"${s.baslik}" model koşu planı kurulamadı: ${plan.hatalar.join(' ')}`);
   testInfo.annotations.push({ type: 'urun', description: s.ekran.ad || 'Diğer' });
 
@@ -654,6 +657,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   kosuMesajlariniHazirla(page, plan, tarif ? ortam : null);
   // Seçilen / yeniden girişte kullanılacak diğer giriş profillerinin gizli değerleri de yakalanan mesajlarda maskelenir.
   const yakalayici = mesajYakalayicisi(page);
+  // Gizli tablo sütunlarından gelen değerler de maskelenir.
+  if (tabloGizlileri.length) yakalayici?.gizliDegerEkle(...tabloGizlileri);
   for (const profil of new Set([giris.profil, ...plan.adimlar.map((a) => a.yenidenGiris?.profil ?? null)])) {
     if (!profil || !yakalayici) continue;
     try {
@@ -783,6 +788,13 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
       });
       if (adim.sonAdim) break;
     }
+  } catch (hata) {
+    // Hata metninde (ör. seçenek bulunamadı) gizli tablo sütunundan gelen değer görünmesin.
+    if (hata instanceof Error && tabloGizlileri.length) {
+      hata.message = gizliDegerleriMaskele(hata.message, tabloGizlileri);
+      if (hata.stack) hata.stack = gizliDegerleriMaskele(hata.stack, tabloGizlileri);
+    }
+    throw hata;
   } finally {
     if (atlanan.length) testInfo.annotations.push({ type: 'atlananAlanlar', description: JSON.stringify(atlanan) });
   }

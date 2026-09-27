@@ -23,7 +23,7 @@ import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 /** @typedef {{ sayfa?: string; servis?: string }} Karsilik */
 /** @typedef {{ ad: string; gizli: boolean; tip: string; karsiliklar?: Record<string, Karsilik> }} TabloSutunu */
 /** @typedef {{ id: string; ad: string; ortamId: string | null; degerler: Record<string, string | null>; doluGizli: string[] }} TabloSatiri */
-/** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string }} TabloKaynagi */
+/** @typedef {{ tur?: string; olusturan?: string; olusturulma?: string; ekran?: string; yazilma?: string; tabloTuru?: 'liste' | 'kayit' }} TabloKaynagi */
 /** @typedef {{ id: string; ad: string; sutunlar: TabloSutunu[]; satirlar: TabloSatiri[]; guncellenme: string; baglam?: boolean; kaynak?: TabloKaynagi | null }} Tablo */
 
 export const BAGLAM_ONEKI = 'baglam_';

@@ -26,10 +26,13 @@ import { ekranModeliniDogrula, dogrulamaMaddeleri, eskiModelAnahtarlariniCevir }
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
+import { INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-istekleri.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
+import { modelAlanlari, alanEtiketi as paketAlanEtiketi } from '../tablolar/paket-tablolari.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
-/** Claude'un inceleme kuralları (düğme grupları; arayüz ekranlar.js > INCELEME_KURALLARI ve docs/sayfa-paketi.md ile aynı metin). */
-const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. Alanlara kart, parola, kimlik no gibi bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. Tüm seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini testVerisi.tablolar\'a yaz: bağımlı listelerde her satır geçerli bir kombinasyon olsun (üst seçim + alt seçenek); hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar\'ına ekle; alanları testVerisi.baglantilar ile sütunlara bağla, senaryo önerilerinde bu alanlara tablodaki değeri yaz. Kişisel ya da gizli değerleri (parola, kart, kimlik no) hiçbir yere yazma; böyle bir sütun gerekiyorsa "gizli": true işaretle ve boş bırak.';
+/** Claude'un inceleme kuralları ve tekrar analiz ek kuralı: TEK kaynak paket-istekleri.mjs (arayüz de aynı dosyayı kullanır). */
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, unknown>} Nesne */
@@ -303,7 +306,9 @@ function bulguGorunumu(b) {
  */
 export function paketOnizle(vt, projeId, paket, secenekler = {}) {
   acikAnahtar(vt);
-  const d = sayfaPaketiniDogrula(paket, { altModelKaynagi: altModelKaynagi(vt, projeId) });
+  // Projenin tabloları (ad + sütun; değer yok): öneri değerlerindeki ${Tablo.Sütun} başvuruları ve "Gereken tablo" durumu için.
+  const projeTablolari = tablolariListele(vt, projeId).map((t) => ({ ad: t.ad, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli })) }));
+  const d = sayfaPaketiniDogrula(paket, { altModelKaynagi: altModelKaynagi(vt, projeId), tablolar: projeTablolari });
   const hatalar = [...d.hatalar];
   const p = /** @type {Nesne} */ (nesneMi(paket) ? paket : {});
   const meta = /** @type {Nesne} */ (nesneMi(p.meta) ? p.meta : {});
@@ -363,7 +368,9 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
   });
   const ayar = /** @type {Nesne} */ (nesneMi(p.gerekenAyarlar) ? p.gerekenAyarlar : {});
   const girisler = girisProfilleriniListele(vt, projeId);
-  const turler = testVerisiTurleriniListele(vt, projeId).map((t) => t.ad);
+  const tabloAdlari = new Set(projeTablolari.map((t) => t.ad.toLocaleLowerCase('tr')));
+  const paketTabloAdlari = new Set((nesneMi(p.testVerisi) && Array.isArray(p.testVerisi.tablolar) ? p.testVerisi.tablolar : [])
+    .filter(nesneMi).map((t) => String(t.ad ?? '').trim().toLocaleLowerCase('tr')));
   const baglamAdlari = new Set(baglamProfilAdlari(vt, projeId).map((b) => b.ad));
   /** @type {Array<{ anahtar: string; etiket: string; deger: string; durum: 'tamam' | 'eksik' | 'bilgi' | 'uyari'; aciklama: string; baglanti: string | null }>} */
   const gerekenAyarlar = [];
@@ -388,9 +395,16 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
   if (ayar.captchaGoruldu === true) {
     gerekenAyarlar.push({ anahtar: 'captcha', etiket: 'CAPTCHA', deger: 'Görüldü', durum: 'uyari', aciklama: 'Otomasyon CAPTCHA\'yı geçmez: test ortamında kapatılmalı ya da muaf kullanıcı tanımlanmalı.', baglanti: '#/ayarlar/giris' });
   }
+  // gerekenAyarlar.testVerisiTurleri (adı geriye uyum için korunur) = senaryoların gerektirdiği test verisi TABLOLARININ adları.
   for (const t of /** @type {string[]} */ (Array.isArray(ayar.testVerisiTurleri) ? ayar.testVerisiTurleri : [])) {
-    const var_ = turler.includes(t);
-    gerekenAyarlar.push({ anahtar: `tur:${t}`, etiket: 'Test verisi türü', deger: t, durum: var_ ? 'tamam' : 'eksik', aciklama: var_ ? 'Projede tanımlı.' : 'Projede bu türde test verisi yok.', baglanti: '#/ayarlar/test-verisi' });
+    const k = String(t).trim().toLocaleLowerCase('tr');
+    const var_ = tabloAdlari.has(k);
+    const paketle = !var_ && paketTabloAdlari.has(k);
+    gerekenAyarlar.push({
+      anahtar: `tur:${t}`, etiket: 'Gereken tablo', deger: t, durum: var_ ? 'tamam' : paketle ? 'bilgi' : 'eksik',
+      aciklama: var_ ? 'Projede bu adla tablo var.' : paketle ? 'Paketin test verisi bölümünde; onaylarsanız yazılır.' : 'Projede bu adla test verisi tablosu yok.',
+      baglanti: '#/ayarlar/test-verisi'
+    });
   }
   const baglamTurleri = new Set(baglamProfilAdlari(vt, projeId).map((b) => b.tur));
   for (const t of /** @type {string[]} */ (Array.isArray(ayar.baglamTurleri) ? ayar.baglamTurleri : [])) {
@@ -520,8 +534,8 @@ export async function modeliPaketleDegistir(vt, projeId, ekranId, paket, secenek
       kanitlar: [...analiz.kanitlar, ...kanitKayitlari]
     });
     const senaryoIdleri = senaryoOnerileriniEkle(vt, projeId, ekranId, yeni, /** @type {Nesne[]} */ (p.senaryoOnerileri ?? []), /** @type {number[]} */ (indeksler), ortamIdleri, meta, secenekler.yapan);
-    const testVerisi = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
-    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length, testVerisi };
+    const { tablolar, baglanan } = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
+    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length, testVerisi: { tablolar, baglanan } };
   });
 }
 
@@ -604,8 +618,8 @@ export async function sayfaEkle(vt, projeId, paket, secenekler) {
       kanitlar: [...analiz.kanitlar, ...kanitKayitlari]
     });
     const senaryoIdleri = senaryoOnerileriniEkle(vt, projeId, ekranId, model, /** @type {Nesne[]} */ (p.senaryoOnerileri), /** @type {number[]} */ (indeksler), ortamIdleri, meta, secenekler.yapan);
-    const testVerisi = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
-    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length, testVerisi };
+    const { tablolar, baglanan } = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
+    return { ekranId, surum, senaryoIdleri, kanitSayisi: kanitKayitlari.length, testVerisi: { tablolar, baglanan } };
   });
 }
 
@@ -657,8 +671,10 @@ function senaryoOnerileriniEkle(vt, projeId, ekranId, model, oneriler, indeksler
 /**
  * Mevcut ekran için yeni paketi yükler: bulgular hesaplanır, daha önce REDDEDİLEN (aynı imzalı)
  * bulgular gizlenir, analiz "bekleyen" olarak saklanır (öncekinin yerine geçer).
- * testVerisi: önizlemede onaylanan test verisi seçimi; tablolar ve bağlantılar hemen yazılır (bağlanan alan henüz modelde
- * değilse bulgu kabul edilince geçerli olur).
+ * testVerisi: önizlemede onaylanan test verisi seçimi. Tablolar hemen yazılır (kullanıcı test verisi bölümünde onayladı); alan
+ * BAĞLANTILARI bulgu kararına tabidir: bu analizde bulgusu olan ya da henüz modelde olmayan alanın bağlantısı bekleyen analizle
+ * saklanır (baglantilar) ve analizUygula'da yalnız o alanın bir bulgusu KABUL edilirse yazılır (reddedilen alanın bağı yazılmaz).
+ * Bulgusu olmayan, modelde zaten var olan alanın bağlantısı hemen yazılır.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} paket @param {{ medyaKlasoru: string; testVerisi?: unknown }} secenekler
  */
 export async function analizYukle(vt, projeId, ekranId, paket, secenekler) {
@@ -675,8 +691,13 @@ export async function analizYukle(vt, projeId, ekranId, paket, secenekler) {
   const bulgular = tum.filter((b) => !reddedilen.has(b.imza));
   const kanitDosyalari = await kanitDosyalariniYaz(vt, Array.isArray(p.kanitlar) ? /** @type {Nesne[]} */ (p.kanitlar) : [], secenekler.medyaKlasoru);
   const ekran = ekranGetir(vt, projeId, ekranId);
+  // Bulgusu olan ya da güncel modelde olmayan alanların bağlantıları bulgu kararını bekler.
+  const bulguluAlanlar = new Set(bulgular.map((b) => b.alanId).filter((x) => typeof x === 'string'));
+  const mevcutAlanlar = modelAlanlari(mevcut.model);
+  const ertele = (/** @type {string} */ alanId) => bulguluAlanlar.has(alanId) || !mevcutAlanlar.has(alanId);
   return vt.islem(() => {
     const kanitKayitlari = kanitSatirlariniEkle(vt, kanitDosyalari, `Tekrar analiz (${paketKaynagi(meta)})`);
+    const testVerisi = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi, { ertele });
     const { ayarlar, analiz: guncel } = analizDurumu(vt, ekranId);
     const kayit = {
       id: randomUUID(), zaman: simdi(), tabanSurum: mevcut.surum, durum: 'bekliyor',
@@ -685,15 +706,21 @@ export async function analizYukle(vt, projeId, ekranId, paket, secenekler) {
       gizlenenler: gizlenen.map((b) => ({ id: b.id, baslik: b.baslik, tur: b.tur })),
       gerekenAyarlar: o.onizleme ? o.onizleme.gerekenAyarlar : [], bilinmeyenler: Array.isArray(p.bilinmeyenler) ? p.bilinmeyenler : [],
       senaryoOneriSayisi: Array.isArray(p.senaryoOnerileri) ? p.senaryoOnerileri.length : 0,
-      kanitlar: kanitKayitlari.map((k) => k.medyaId)
+      kanitlar: kanitKayitlari.map((k) => k.medyaId),
+      // Bulgu kararını bekleyen alan → tablo sütunu bağlantıları (tablo kimliğiyle; analizUygula yazar).
+      baglantilar: testVerisi.ertelenen
     };
-    // Bulgu yoksa bekleyen analiz oluşmaz (model güncel; önceki bekleyen de geçersiz olur); kanıtlar ve profil seçimi yine saklanır.
+    // Bulgu yoksa bekleyen analiz oluşmaz (model güncel; önceki bekleyen de geçersiz olur; bekleyen bağlantılar da düşer);
+    // kanıtlar ve profil seçimi yine saklanır.
     analizYaz(vt, ekran, ayarlar, {
       ...guncel, bekleyen: bulgular.length ? kayit : null, sonBaglamProfilleri: Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : guncel.sonBaglamProfilleri,
       kanitlar: [...guncel.kanitlar, ...kanitKayitlari]
     });
-    const testVerisi = paketTestVerisiniYaz(vt, projeId, ekranId, p, secenekler.testVerisi);
-    return { analizId: bulgular.length ? kayit.id : null, bulguSayisi: bulgular.length, gizlenenSayisi: gizlenen.length, uyarilar: o.uyarilar, testVerisi };
+    const bekleyenBag = bulgular.length ? Object.keys(testVerisi.ertelenen).length : 0;
+    return {
+      analizId: bulgular.length ? kayit.id : null, bulguSayisi: bulgular.length, gizlenenSayisi: gizlenen.length, uyarilar: o.uyarilar,
+      testVerisi: { tablolar: testVerisi.tablolar, baglanan: testVerisi.baglanan, bekleyenBaglanti: bekleyenBag }
+    };
   });
 }
 
@@ -803,9 +830,20 @@ export function analizUygula(vt, projeId, ekranId, girdi) {
     const kararlar = {};
     for (const id of kabul) kararlar[id] = 'kabul';
     for (const id of red) kararlar[id] = 'red';
-    const son = { ...a, durum: 'uygulandi', uygulanma: zaman, sonucSurum: sonuc ? sonuc.surum : null, kararlar };
+    const { baglantilar: bekleyenBaglar, ...kalan } = a;
+    const son = { ...kalan, durum: 'uygulandi', uygulanma: zaman, sonucSurum: sonuc ? sonuc.surum : null, kararlar };
     analizYaz(vt, ekran, ayarlar, { ...analiz, bekleyen: null, son, reddedilenler: [...eskiRed, ...yeniRed].slice(-REDDEDILEN_EN_COK) });
-    return { surum: sonuc ? sonuc.surum : mevcut.surum, yeniSurum: Boolean(sonuc), kabul: kabul.length, red: red.length, kararsiz: bulgular.length - kabul.length - red.length };
+    // Bulgu kararını bekleyen alan bağlantıları: yalnız alanının bir bulgusu KABUL edilen ve yeni modelde bulunan alanlar yazılır
+    // (reddedilen / karar verilmeyen alanın bağı yazılmaz). analizYaz'dan SONRA: ayarlar ekran ayarlarını yeniden yazar.
+    const kabulAlanlari = new Set(kabul.map((id) => bulgular.find((b) => b.id === id)?.alanId).filter((x) => typeof x === 'string'));
+    const sonAlanlar = modelAlanlari(uygulama ? uygulama.model : mevcut.model);
+    const yazilacak = Object.fromEntries(Object.entries(nesneMi(bekleyenBaglar) ? /** @type {Record<string, Nesne>} */ (bekleyenBaglar) : {})
+      .filter(([alanId]) => kabulAlanlari.has(alanId) && sonAlanlar.has(alanId)));
+    if (Object.keys(yazilacak).length) ekranAlanBaglariniKaydet(vt, projeId, ekranId, { ...ekranAlanBaglari(vt, ekranId), ...yazilacak });
+    return {
+      surum: sonuc ? sonuc.surum : mevcut.surum, yeniSurum: Boolean(sonuc), kabul: kabul.length, red: red.length, kararsiz: bulgular.length - kabul.length - red.length,
+      baglanan: Object.keys(yazilacak).length
+    };
   });
 }
 
@@ -944,6 +982,23 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const senaryolar = senaryoOzetleri(vt, ekranId, model);
   const etki = a && model && Array.isArray(a.bulgular) ? etkiHesapla(/** @type {Nesne[]} */ (a.bulgular), model, /** @type {Nesne} */ (a.model), senaryolar) : [];
   const proje = projeGetir(vt, projeId);
+  // Ekranın mevcut alan bağlantıları ve bağlı tabloların adları / sütunları (DEĞER YOK; gizli sütunun yalnız adı ve işareti):
+  // Claude yeni pakette aynı tablo ve sütun adlarını kullansın.
+  const baglar = ekranAlanBaglari(vt, ekranId);
+  const tumTablolar = Object.keys(baglar).length ? tablolariListele(vt, projeId) : [];
+  const alanHaritasi = model ? modelAlanlari(model) : new Map();
+  const bagliTablolar = tumTablolar.filter((t) => Object.values(baglar).some((b) => b.tablo === t.id));
+  const testVerisi = {
+    alanBaglari: Object.entries(baglar).map(([alanId, b]) => {
+      const t = tumTablolar.find((x) => x.id === b.tablo);
+      const a = alanHaritasi.get(alanId);
+      return { alanId, alanEtiketi: a ? paketAlanEtiketi(a) : alanId, tablo: t ? t.ad : '(silinmiş tablo)', sutun: b.sutun, ...(b.etiket ? { etiket: b.etiket } : {}) };
+    }),
+    tablolar: bagliTablolar.map((t) => ({
+      ad: t.ad, ...(t.kaynak?.tabloTuru ? { tur: t.kaynak.tabloTuru } : {}),
+      sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, ...(s.gizli ? { gizli: true } : {}) })), satirSayisi: t.satirlar.length
+    }))
+  };
   const zaman = new Date();
   const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
   const damga = `${zaman.getFullYear()}${iki(zaman.getMonth() + 1)}${iki(zaman.getDate())}-${iki(zaman.getHours())}${iki(zaman.getMinutes())}${iki(zaman.getSeconds())}`;
@@ -951,7 +1006,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
     tur: 'nobetci-analiz-dosyasi', surum: 1, olusturulma: zaman.toISOString(),
     istek: { tur, aciklama: DOSYA_TURLERI[tur], baglamProfilleri: secilen ?? analiz.sonBaglamProfilleri },
     talimat: tur === 'tekrar-analiz'
-      ? `Sayfayı listelenen bağlam profilleriyle yeniden incele ve docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi üret. ${INCELEME_KURALLARI} Paket gizli/kişisel veri içermemeli.`
+      ? `Sayfayı listelenen bağlam profilleriyle yeniden incele ve docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI} Paket gizli/kişisel veri içermemeli.`
       : tur === 'eksik-kombinasyon'
         ? 'Modeldeki seçenek/koşul kombinasyonlarını mevcut senaryolarla karşılaştır; kapsanmayan anlamlı kombinasyonlar için docs/sayfa-paketi.md > senaryoOnerileri biçiminde öneriler üret (yalnızca öneri; gizli değer yok).'
         : 'Bulguları ve etkilerini değerlendir: hangileri gerçek ekran değişikliği, hangileri inceleme hatası olabilir; kabul/red ve senaryo güncellemesi için öneri yaz.',
@@ -964,6 +1019,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
       etki: etki.map((x) => ({ bulguId: x.bulguId, tur: x.tur, mesaj: x.mesaj, senaryoSayisi: x.senaryolar.length, senaryolar: x.senaryolar.map((s) => s.baslik) }))
     } : null,
     senaryolar: senaryolar.map(senaryoGizliDegersizOzet),
+    testVerisi,
     ...(girdi.bulguId ? { odakBulgu: String(girdi.bulguId) } : {})
   };
   mkdirSync(girdi.klasor, { recursive: true });
@@ -974,7 +1030,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const goreli = relative(girdi.projeKoku, yol);
   const gosterilen = goreli.startsWith('..') ? yol : goreli.split(sep).join('/');
   const cumle = tur === 'tekrar-analiz'
-    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI}`
+    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. docs/sayfa-paketi.md biçiminde yeni bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
     : tur === 'eksik-kombinasyon'
       ? `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının modelini ve mevcut senaryolarını karşılaştırıp eksik kombinasyonlar için docs/sayfa-paketi.md biçiminde senaryo önerileri üret.`
       : `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının bulgularını, etkilerini ve senaryo özetlerini yorumla; kabul/red ve senaryo güncellemesi için önerilerini yaz.`;

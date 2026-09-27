@@ -1414,7 +1414,7 @@ function kimlikYonetimi(proje, s, yenile) {
     try {
       const { onizleme: o } = await api('/platform/servis-kimligi/test-verisine-tasi', { govde: { projeId: proje.id, ad: s.ayarlar.kimlikProfili } });
       const liste = [
-        `Test verisi türü: ${o.tur}${o.yeniTur ? ' (yeni)' : ''}, rol "${o.rol}"`,
+        `Tablo: ${o.tur}${o.yeniTur ? ' (yeni)' : ''}, rol "${o.rol}"`,
         ...o.eklenecekAlanlar.map((a) => `Alan: ${a.alan} ← ${a.parametre}${a.hassas ? ' (hassas)' : ''}`),
         ...o.profiller.map((p) => `Profil: ${p.ad}${p.ortam ? ` (yalnız ${p.ortam})` : ''}`),
         `Bağlanacak servisler: ${o.servisler.join(', ') || '—'}`
@@ -1426,7 +1426,7 @@ function kimlikYonetimi(proje, s, yenile) {
     } catch (e) { yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message)); }
   });
   return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('anahtar'), 'Eski giriş profili'), h('span', { class: 'sag' }, tasi)),
-    h('p', {}, `Bu servis giriş bilgilerini eski ayrı profilden ("${s.ayarlar.kimlikProfili}") alıyor. Giriş bilgileri artık Ayarlar > Test verisi'nde tutuluyor; taşıyınca kanal / kullanıcı / parola orada görünür ve senaryoda değer listesinden seçilebilir.`),
+    h('p', {}, `Bu servis giriş bilgilerini eski ayrı profilden ("${s.ayarlar.kimlikProfili}") alıyor. Giriş bilgileri artık Ayarlar > Test verisi'nde tutuluyor; taşıyınca kanal / kullanıcı / parola orada görünür ve senaryoda tablodan seçilebilir.`),
     sonuc);
 }
 
