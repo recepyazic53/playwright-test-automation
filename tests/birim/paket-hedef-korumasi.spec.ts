@@ -16,9 +16,10 @@ test('var olmayan ya da boş hedef silinebilir; argümanlar: hedef + --zorla, bi
   try {
     expect(hedefDenetimi(join(g.yol, 'yok'), { surecler: [] })).toEqual({ silinebilir: true });
     expect(hedefDenetimi(g.yol, { surecler: [] })).toEqual({ silinebilir: true });
-    expect(paketArgumanlari(['C:\\x', '--zorla'])).toEqual({ hedef: 'C:\\x', zorla: true, bilinmeyen: [] });
-    expect(paketArgumanlari([])).toEqual({ hedef: null, zorla: false, bilinmeyen: [] });
-    expect(paketArgumanlari(['--sil', 'd'])).toEqual({ hedef: 'd', zorla: false, bilinmeyen: ['--sil'] });
+    expect(paketArgumanlari(['C:\\x', '--zorla'])).toEqual({ hedef: 'C:\\x', zorla: true, acilisDenemesi: true, bilinmeyen: [] });
+    expect(paketArgumanlari([])).toEqual({ hedef: null, zorla: false, acilisDenemesi: true, bilinmeyen: [] });
+    expect(paketArgumanlari(['--acilis-denemesi-yok'])).toEqual({ hedef: null, zorla: false, acilisDenemesi: false, bilinmeyen: [] });
+    expect(paketArgumanlari(['--sil', 'd'])).toEqual({ hedef: 'd', zorla: false, acilisDenemesi: true, bilinmeyen: ['--sil'] });
   } finally { g.temizle(); }
 });
 

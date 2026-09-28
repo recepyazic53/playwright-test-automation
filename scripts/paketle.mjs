@@ -18,14 +18,19 @@ import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statS
 import { execFileSync } from 'node:child_process';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PaketHatasi, UYGULAMA_GIRDILERI, calismaZamaniModulleri, haricMi } from './paket/paket-ortak.mjs';
+import { builtinModules } from 'node:module';
+import { PaketHatasi, UYGULAMA_GIRDILERI, calismaZamaniModulleri, haricMi, iceAktarmaCozumlemesi } from './paket/paket-ortak.mjs';
 import { hedefDenetimi, paketArgumanlari } from './paket/hedef-korumasi.mjs';
+import { acilisDenemesi } from './paket/acilis-denemesi.mjs';
 
 const KOK = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-// Kullanım: npm run paketle -- [hedef klasör] [--zorla]   (--zorla: hedefteki uygulama\veri klasörü de silinir)
+// Kullanım: npm run paketle -- [hedef klasör] [--zorla] [--acilis-denemesi-yok]
+//   --zorla: hedefteki uygulama\veri klasörü de silinir · --acilis-denemesi-yok: sondaki açılış denemesi atlanır.
+// Sonda AÇILIŞ DENEMESİ (scripts/paket/acilis-denemesi.mjs): paketin runtime\node.exe'siyle sunucu geçici veri kökü ve boş portla
+// başlatılır (tarayıcı açılmaz); ana sayfa ve tüm arayüz dosyaları 200 dönmeli, süreç kapatılır. Başarısızsa "Paket hazır" denmez.
 const ARGUMANLAR = paketArgumanlari(process.argv.slice(2));
 if (ARGUMANLAR.bilinmeyen.length) {
-  console.error(`Bilinmeyen seçenek: ${ARGUMANLAR.bilinmeyen.join(', ')} (yalnız --zorla).`);
+  console.error(`Bilinmeyen seçenek: ${ARGUMANLAR.bilinmeyen.join(', ')} (yalnız --zorla, --acilis-denemesi-yok).`);
   process.exit(1);
 }
 const HEDEF = resolve(ARGUMANLAR.hedef || join(KOK, 'dist', 'Nöbetçi'));
@@ -131,6 +136,34 @@ writeFileSync(join(HEDEF, 'OKUBENI.txt'), [
   '"Ek bilgi" > "Yine de çalıştır" ile açabilirsiniz.',
   ''
 ].join('\r\n'), 'utf8');
+
+// 7) Denetimler: içe aktarma çözümlemesi (pakete kopyalanan dosyalar üzerinde) ve açılış denemesi.
+const kopyalananlar = [];
+const gez = (y, goreli) => {
+  for (const a of readdirSync(y, { withFileTypes: true })) {
+    const g = goreli ? `${goreli}/${a.name}` : a.name;
+    kopyalananlar.push({ goreli: g, klasor: a.isDirectory() });
+    // node_modules içinde yalnız paket kökleri (ve @kapsam/paket) listelenir; paketlerin içi gezilmez.
+    const paketIci = g.startsWith('node_modules/') && !(g.split('/').length === 2 && a.name.startsWith('@'));
+    if (a.isDirectory() && !paketIci) gez(join(y, a.name), g);
+  }
+};
+gez(UYGULAMA, '');
+const cozulmeyen = iceAktarmaCozumlemesi(kopyalananlar, (g) => readFileSync(join(UYGULAMA, g), 'utf8'), builtinModules);
+if (cozulmeyen.length) {
+  console.error(`\nPAKET HATALI: içe aktarılan modül pakette yok:\n  ${cozulmeyen.join('\n  ')}`);
+  process.exit(3);
+}
+adim('İçe aktarma çözümlemesi: tüm modüller pakette.');
+if (ARGUMANLAR.acilisDenemesi) {
+  adim('Açılış denemesi: paketin Node\'uyla sunucu başlatılıyor (geçici veri kökü, boş port; tarayıcı açılmaz)…');
+  const d = await acilisDenemesi({ hedef: HEDEF, log: adim });
+  if (!d.basarili) {
+    console.error(`\nPAKET AÇILMADI (açılış denemesi başarısız):\n  ${d.hatalar.join('\n  ')}`);
+    process.exit(4);
+  }
+  adim(`Açılış denemesi başarılı: ana sayfa ve ${d.dosyaSayisi} arayüz dosyası 200 (port ${d.port}); süreç kapatıldı.`);
+} else adim('Açılış denemesi atlandı (--acilis-denemesi-yok).');
 
 console.log(`\nPaket hazır: ${HEDEF} (${mb(boyut(HEDEF))}).`);
 console.log(`Göreli: ${relative(KOK, HEDEF) || '.'}`);

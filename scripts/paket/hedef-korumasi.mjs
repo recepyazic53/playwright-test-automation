@@ -79,9 +79,12 @@ export function hedefDenetimi(hedef, secenek = {}) {
   return { silinebilir: true };
 }
 
-/** Komut satırı: ilk bayraksız argüman hedef; --zorla bayrağı. @param {string[]} argumanlar process.argv.slice(2) */
+/** Tanınan bayraklar: --zorla (hedefteki veri de silinir), --acilis-denemesi-yok (paket sonunda açılış denemesi atlanır). */
+export const PAKET_BAYRAKLARI = Object.freeze(['--zorla', '--acilis-denemesi-yok']);
+
+/** Komut satırı: ilk bayraksız argüman hedef; bayraklar PAKET_BAYRAKLARI. @param {string[]} argumanlar process.argv.slice(2) */
 export function paketArgumanlari(argumanlar) {
   const bayraklar = new Set(argumanlar.filter((a) => a.startsWith('--')));
-  const bilinmeyen = [...bayraklar].filter((b) => b !== '--zorla');
-  return { hedef: argumanlar.find((a) => !a.startsWith('--')) ?? null, zorla: bayraklar.has('--zorla'), bilinmeyen };
+  const bilinmeyen = [...bayraklar].filter((b) => !PAKET_BAYRAKLARI.includes(b));
+  return { hedef: argumanlar.find((a) => !a.startsWith('--')) ?? null, zorla: bayraklar.has('--zorla'), acilisDenemesi: !bayraklar.has('--acilis-denemesi-yok'), bilinmeyen };
 }

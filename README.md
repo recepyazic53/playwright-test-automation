@@ -31,6 +31,12 @@ Hedef klasör her paketlemede yeniden oluşturulur, ama önce denetlenir: o klas
 / `Nöbetçi.exe`) silme reddedilir ("önce kapatın"); içinde kullanıcı verisi (`uygulama\veri`) varsa uyarı verilip durulur.
 Veriyi de silmek bilinçli bir kararsa: `npm run paketle -- [hedef] --zorla` (çalışan Nöbetçi'yi `--zorla` da aşmaz).
 
+Paketin sonunda iki denetim yapılır: pakete giren modüllerin içe aktardığı her modül pakette var mı, ve **açılış denemesi**:
+paketin kendi `runtime\node.exe`'siyle sunucu geçici bir veri kökü ve boş bir portla başlatılır (tarayıcı açılmaz), ana sayfa ve
+tüm arayüz dosyaları 200 dönmeli; süreç kapatılır. Biri başarısızsa "Paket hazır" denmez ve komut hata koduyla biter.
+Açılış denemesini atlamak: `npm run paketle -- --acilis-denemesi-yok`. macOS arşivinde (`npm run paketle:mac`) arşiv burada
+açılamadığından yalnız içe aktarma çözümlemesi yapılır (indirmelerden önce).
+
 ## İlk açılış
 
 Karşılama ekranında iki seçenek vardır:

@@ -9,4 +9,5 @@ export declare function hedefDenetimi(
   hedef: string,
   secenek?: { zorla?: boolean; surecler?: Array<{ pid: number; yol: string }>; kilitDenemesi?: boolean }
 ): HedefDenetimi;
-export declare function paketArgumanlari(argumanlar: string[]): { hedef: string | null; zorla: boolean; bilinmeyen: string[] };
+export declare const PAKET_BAYRAKLARI: readonly string[];
+export declare function paketArgumanlari(argumanlar: string[]): { hedef: string | null; zorla: boolean; acilisDenemesi: boolean; bilinmeyen: string[] };

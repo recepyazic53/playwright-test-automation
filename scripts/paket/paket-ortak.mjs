@@ -93,3 +93,45 @@ export function* uygulamaIcerigi(kok) {
   }
   for (const m of calismaZamaniModulleri(kok).moduller) yield* gez(join(kok, 'node_modules', m), `node_modules/${m}`, false);
 }
+
+/** Paketleyici betikleri (geliştirme aracı; pakete kopyalansa da paketin içinden çalıştırılmaz). */
+const PAKETLEYICILER = Object.freeze(['scripts/paketle.mjs', 'scripts/paketle-mac.mjs']);
+
+/**
+ * Platformdan bağımsız hafif denetim (macOS arşivi Windows'ta açılamaz): pakete girecek Node modüllerinin (.mjs / .js / .cjs;
+ * tarayıcı modülleri — scripts/platform/arayuz/ — hariç, onlar sunucunun adres eşlemesiyle sunulur) içe aktardığı göreli
+ * modüller pakette var mı, paket adları (node_modules) pakette ya da Node'un yerleşik modülü mü? Eksikleri döner ("a → b").
+ * @param {Iterable<{ goreli: string; klasor: boolean }>} girdiler uygulamaIcerigi(kok) ya da eşdeğeri
+ * @param {(goreli: string) => string} oku dosya içeriği
+ * @param {readonly string[]} yerlesikler Node'un yerleşik modülleri (node:module > builtinModules)
+ * @returns {string[]}
+ */
+export function iceAktarmaCozumlemesi(girdiler, oku, yerlesikler) {
+  const liste = [...girdiler];
+  const var_ = new Set(liste.map((x) => x.goreli));
+  const yerlesik = new Set(yerlesikler);
+  const desenler = [/^\s*(?:import|export)\b[^;'"`]*?\bfrom\s*['"]([^'"]+)['"]/gm, /^\s*import\s*['"]([^'"]+)['"]/gm, /\bimport\(\s*['"]([^'"]+)['"]\s*\)/g];
+  /** @type {string[]} */
+  const eksik = [];
+  for (const x of liste) {
+    if (x.klasor || !/\.(mjs|js|cjs)$/.test(x.goreli) || x.goreli.startsWith('scripts/platform/arayuz/') || x.goreli.startsWith('node_modules/')
+      || PAKETLEYICILER.includes(x.goreli)) continue;
+    const metin = oku(x.goreli);
+    const klasor = x.goreli.split('/').slice(0, -1);
+    for (const d of desenler) {
+      for (const m of metin.matchAll(d)) {
+        const s = m[1];
+        if (s.startsWith('.')) {
+          const parca = [...klasor];
+          for (const p of s.split('/')) { if (p === '..') parca.pop(); else if (p !== '.') parca.push(p); }
+          const hedef = parca.join('/');
+          if (!hedef.endsWith('.d.mts') && !var_.has(hedef)) eksik.push(`${x.goreli} → ${hedef}`);
+        } else if (!s.startsWith('node:') && !yerlesik.has(s.split('/')[0])) {
+          const paket = s.startsWith('@') ? s.split('/').slice(0, 2).join('/') : s.split('/')[0];
+          if (!var_.has(`node_modules/${paket}`)) eksik.push(`${x.goreli} → ${s} (paket pakette yok)`);
+        }
+      }
+    }
+  }
+  return [...new Set(eksik)];
+}
