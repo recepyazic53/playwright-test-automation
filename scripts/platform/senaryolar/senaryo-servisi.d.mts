@@ -79,6 +79,8 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   veriKaynagi: { spec: string; dosya: string; yol: string; model: boolean } | null;
   olusturulabilir: boolean;
   degerListeleri?: import('../servisler/parametre-tanimlari.mjs').ParametreTanimi[];
+  /** Gizli sütuna bağlı alanlar (değer yok): alan kimliği → tablo / sütun adı. */
+  gizliBaglar?: Record<string, { tablo: string; sutun: string; etiket?: string }>;
   akislar: AkisOzeti[];
   akisId: string | null;
 };

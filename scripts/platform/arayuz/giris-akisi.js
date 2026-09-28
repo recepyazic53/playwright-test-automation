@@ -1,15 +1,20 @@
-// Ekranlar > Ortak akışlar'da her ortamın GİRİŞİ ("Giriş (<ortam>)"): giriş bir ortak akıştır ama tarifi ortam başına
+// Ekranlar > Ortak akışlar'da giriş tarifi TANIMLI her ortamın GİRİŞİ ("Giriş (<ortam>)"): giriş bir ortak akıştır ama tarifi ortam başına
 // Ayarlar > Giriş profilleri > Giriş tarifi'nde durur. Kartta tek satır özet (adım sayısı, iki aşamalı doğrulama, bağlam seçimi)
 // görünür; adımların okunur listesi (giris-ozeti.mjs) tarif formundadır;
 // "Düzenle" ilgili ortamın tarif formunu doğrudan açar (#/ayarlar/giris/tarif/<ortamId>). Gizli değer yoktur.
 import { api, h, ikon, rozet } from './ortak.js';
 import { girisAdimlariOzeti, tarifFormuAdresi } from './giris-ozeti.mjs';
+import { girisiDeneDugmesi } from './giris-denemesi.js';
 
-/** Ortam başına giriş tarifleri (yüklenemezse boş liste; Ekranlar sayfası yine açılır). @param {{ id: string }} proje */
+/**
+ * Ortam başına TANIMLI giriş tarifleri (yüklenemezse boş liste; Ekranlar sayfası yine açılır). Tarifi olmayan ortam ortak akışlarda
+ * listelenmez (kullanıcının oluşturmadığı boş bir kalem olurdu); "tanımlı değil" durumu Ayarlar > Giriş'te görünür.
+ * @param {{ id: string }} proje
+ */
 export async function girisAkislariniAl(proje) {
   try {
     const v = await api(`/platform/giris-tarifleri?projeId=${encodeURIComponent(proje.id)}`);
-    return Array.isArray(v.ortamlar) ? v.ortamlar : [];
+    return Array.isArray(v.ortamlar) ? v.ortamlar.filter((o) => o && o.tarif) : [];
   } catch (hata) {
     if (hata && hata.durum === 423) throw hata;
     return [];
@@ -44,9 +49,9 @@ export function girisOzetSatiri(tarif) {
 
 /**
  * Ortak akışlar bölümündeki giriş kartı: ekran kartıyla AYNI düzen — başlık + "giriş tarifi" rozeti, ortam adı (ikincil),
- * tek satır özet, kullanım, altta Düzenle. Adımlar burada listelenmez; Düzenle'de (tarif formu) görünür.
+ * tek satır özet, kullanım, altta "Girişi dene" (yalnız giriş; giris-denemesi.js) ve Düzenle. Adımlar burada listelenmez; Düzenle'de (tarif formu) görünür.
  */
-export function girisKarti(o) {
+export function girisKarti(o, projeId) {
   const duzenle = tarifFormuAdresi(o.ortamId);
   return h('article', { class: 'ekran-karti ortak-akis-karti giris-akisi-karti', 'data-ortam': o.ortamId, 'aria-label': baslik(o) },
     h('div', { class: 'ekran-karti-ust' },
@@ -57,6 +62,7 @@ export function girisKarti(o) {
     o.tarif ? h('p', { class: 'ortak-akis-kullanimi kucuk soluk' }, `${o.ortamAd} ortamındaki her koşuda kullanılır`) : null,
     o.hatalar && o.hatalar.length ? h('p', { class: 'kucuk hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null,
     h('div', { class: 'ekran-karti-alt' },
+      o.tarif ? girisiDeneDugmesi(o, projeId) : null,
       (o.tarif ? h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: düzenle` }, ikon('duzenle'), 'Düzenle')
         : h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: giriş akışı ekle` }, ikon('arti'), 'Giriş akışı ekle'))));
 }

@@ -41,7 +41,7 @@ export type TaramaKimligi = {
 /** Alt sürecin sunucudan BİR KEZ aldığı girdi (gizli değer içerir; diske yazılmaz). */
 export type TaramaGirdisi = {
   /** 'tarama' (salt okuma, otomatik) ya da 'kayit' (kullanıcı akışı görünür tarayıcıda yürütür; en fazla bir profil). */
-  kip?: 'tarama' | 'kayit';
+  kip?: 'tarama' | 'kayit' | 'girisDenemesi';
   tabanUrl: string;
   /** Hedefin tam adresi (ortamın kökeninde). */
   hedefAdres: string;
@@ -94,6 +94,19 @@ export type TaramaHataKodu =
   | 'YASAKLI_ADRES' | 'SITE_ERISILEMEDI' | 'KIMLIK_HATALI' | 'IKI_ASAMALI_HATALI' | 'KOD_GEREKLI' | 'CAPTCHA' | 'ALAN_BULUNAMADI'
   | 'ZAMAN_ASIMI' | 'BAGLAM_ADIMI' | 'GIRIS_ADIMI' | 'TARIF_GECERSIZ' | 'KOKEN_UYUSMAZ' | 'OTURUM_GECERSIZ' | 'ALAN_YOK' | 'SUREC' | 'IPTAL' | 'BEKLENMEYEN';
 
+/** "Girişi dene" (girdi.kip = 'girisDenemesi'): yalnız giriş; sonuç başarılı ya da hangi adımda neden takıldığı. */
+export type GirisDenemesiSonucu = {
+  kip: 'girisDenemesi';
+  basarili: boolean;
+  /** Girişin bittiği (ya da takıldığı) sayfanın yolu. */
+  yol: string;
+  hata: { kod: TaramaHataKodu; mesaj: string } | null;
+  /** O anki sayfanın ekran görüntüsü (JPEG, base64; yalnız bellekte). */
+  goruntu: string | null;
+  /** Giriş motorunun adım günlüğü (değer yok). */
+  gunluk: string[];
+};
+
 export type TaramaSonucu =
-  | { basarili: true; envanter: TaramaEnvanteri | KayitEnvanteri | AkisEnvanteri }
+  | { basarili: true; envanter: TaramaEnvanteri | KayitEnvanteri | AkisEnvanteri | GirisDenemesiSonucu }
   | { basarili: false; hata: { kod: TaramaHataKodu; mesaj: string } };

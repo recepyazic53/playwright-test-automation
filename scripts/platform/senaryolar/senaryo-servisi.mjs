@@ -470,8 +470,29 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
     // Senaryonun "Giriş" seçimi için giriş profillerinin ADLARI (değer yok; ortamId null = tüm ortamlar).
     girisProfilleri: girisProfilleriniListele(vt, projeId).map((p) => ({ ad: p.ad, ortamId: p.ortamId })),
     // Bu ekranın seçim listeleri (tablo bağlantıları + değer listeleri): seçim alanlarının seçeneklerini süzer.
-    degerListeleri: ekranListeleri(vt, projeId, ekranId, ortamId, tumFormAlanlari(sema).map((a) => String(a.id)))
+    degerListeleri: ekranListeleri(vt, projeId, ekranId, ortamId, tumFormAlanlari(sema).map((a) => String(a.id))),
+    // Gizli sütuna (ör. CVV, parola) bağlı alanlar: değer listesine girmez; formun "Tablodan" başvurusu için yalnız tablo ve sütun ADI.
+    gizliBaglar: gizliSutunBaglari(vt, projeId, ekranId)
   };
+}
+
+/**
+ * Ekranın gizli sütuna bağlı alanları (değer YOK): alan kimliği → { tablo adı, sütun adı, etiket? }.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
+ * @returns {Record<string, { tablo: string; sutun: string; etiket?: string }>}
+ */
+function gizliSutunBaglari(vt, projeId, ekranId) {
+  const baglar = ekranAlanBaglari(vt, ekranId);
+  if (!Object.keys(baglar).length) return {};
+  const tablolar = tablolariListele(vt, projeId);
+  /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
+  const sonuc = {};
+  for (const [alan, b] of Object.entries(baglar)) {
+    const t = tablolar.find((x) => x.id === b.tablo);
+    const s = t ? t.sutunlar.find((c) => c.ad === b.sutun) : undefined;
+    if (t && s && s.gizli) sonuc[alan] = { tablo: t.ad, sutun: s.ad, ...(b.etiket ? { etiket: String(b.etiket) } : {}) };
+  }
+  return sonuc;
 }
 
 /**

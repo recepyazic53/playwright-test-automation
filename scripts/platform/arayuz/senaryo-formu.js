@@ -167,11 +167,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
     return birlesikDegerler(eslesen).map((x) => ({ deger: x.deger, metin: x.aciklama || metinler.get(x.deger) || x.deger }));
   };
   // "Tablodan": tablo sütununa bağlı alanın değeri ${Tablo.Sütun} olabilir — koşuda senaryonun seçtiği satırdan (aynı tablodaki
-  // diğer seçimler ve ortamla uyan ilk satır) çözülür (tablolar/ekran-basvurulari.mjs). Bağlı değilse null.
+  // diğer seçimler ve ortamla uyan ilk satır) çözülür (tablolar/ekran-basvurulari.mjs). Bağlı değilse null. Gizli sütuna bağlı alan
+  // (ör. CVV) değer listesinde yoktur; başvuru baglam.gizliBaglar'dan (yalnız tablo / sütun adı) kurulur, değer gösterilmez.
   const tabloSecenegi = (alan) => {
     const l = degerListeleri.find((x) => x.hedef?.alan === alan.id && x.baglanti);
-    if (!l) return null;
-    const b = l.baglanti;
+    const b = l ? l.baglanti : (baglam.gizliBaglar || {})[alan.id];
+    if (!b) return null;
     return { deger: degerBasvurusuYaz(b.tablo, b.sutun, b.etiket || ''), metin: `Tablodan: ${b.tablo} → ${b.sutun}${b.etiket ? ` [${b.etiket}]` : ''} (koşuda seçilen satır)` };
   };
   /** kontrol anahtarı → { el, hata, uyari, odak } */
@@ -398,8 +399,10 @@ function modelFormu(icerik, s, senaryo, baglam) {
           ({ govde, ust } = altModelCiz(alan, id, hata, uyari));
           break;
         default: {
-          // Değeri tablo başvurusu (${Tablo.Sütun}) olan sayı alanı metin olarak gösterilir.
-          const tip = alan.tip === 'sayi' && !tabloBasvurusuCoz(degerler[alan.anahtar]) ? 'number' : alan.hassas ? 'password' : 'text';
+          // Değeri tablo başvurusu (${Tablo.Sütun}) olan sayı alanı metin olarak gösterilir; hassas alanda başvuru (değer değil)
+          // açık gösterilir, düz değer maskelenir.
+          const basvuru = Boolean(tabloBasvurusuCoz(degerler[alan.anahtar]));
+          const tip = alan.tip === 'sayi' && !basvuru ? 'number' : alan.hassas && !basvuru ? 'password' : 'text';
           const girdi = bagla(h('input', {
             type: tip, value: String(degerler[alan.anahtar] ?? ''), autocomplete: 'off', spellcheck: 'false',
             placeholder: alan.tip === 'tarih' ? (alan.bicim || '') : alan.tip === 'dosya' ? `proje köküne göre yol${alan.kabul ? ` (${alan.kabul})` : ''}` : ''
@@ -412,11 +415,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
           girdi.addEventListener('input', () => degerYaz(alan.anahtar, girdi.value, { dokun: false }));
           girdi.addEventListener('change', () => { dokunulan.add(alan.anahtar); planla(); });
           govde = girdi;
-          // Tabloya bağlı alan: "Tablodan" değeri ${Tablo.Sütun} yapar (koşuda seçilen satırdan gelir).
-          const tablodan = alan.hassas ? null : tabloSecenegi(alan);
+          // Tabloya bağlı alan: "Tablodan" değeri ${Tablo.Sütun} yapar (koşuda seçilen satırdan gelir). Hassas alanda da olur:
+          // yazılan yalnız başvurudur, değer (ör. gizli sütundaki CVV) kasada kalır.
+          const tablodan = tabloSecenegi(alan);
           const tablodanDugmesi = tablodan ? h('button', {
             type: 'button', class: 'kucuk-dugme hayalet', title: tablodan.metin, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
-            onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
+            onclick: () => { degerYaz(alan.anahtar, tablodan.deger); girdi.type = 'text'; girdi.value = tablodan.deger; kayit.ciz(); }
           }, ikon('veri'), 'Tablodan') : null;
           ust = alanUst(alan, id, tablodanDugmesi ? [tablodanDugmesi] : []);
           kontrolKaydet(alan.anahtar, [girdi], hata, uyari);

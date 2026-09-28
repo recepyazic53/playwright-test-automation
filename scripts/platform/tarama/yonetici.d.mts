@@ -37,6 +37,8 @@ export type IsGorunumu = {
   tasarim: boolean;
   /** Giriş kaydı: taslak işaretlenip tarif önizlenecek. */
   girisTaslagi: boolean;
+  /** Giriş denemesi sonucu ("Girişi dene"; ekran görüntüsü JPEG base64, yalnız bellekte). */
+  deneme: { basarili: boolean; yol: string; hata: { kod: string; mesaj: string } | null; goruntu: string | null; gunluk: string[] } | null;
   /**
    * Giriş (tarif yoksa / girişsiz işte null): kip (Ayarlar > Koşu > Tarama ve akış kaydı), gerçekleşen yöntem (giriş bitince),
    * saklanan oturum bulundu mu (yalnız saklananOturum kipinde), oturum dosyası güncellendi mi.

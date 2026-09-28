@@ -56,7 +56,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     islemler: [
       { ad: 'Ekran senaryosu koşusu', uclar: ['/platform/senaryolar/calistir'] },
       { ad: 'Ekran senaryosu denemesi (Dene)', uclar: ['/platform/senaryo/dene'] },
-      { ad: 'Ekran taraması, akış kaydı ve giriş kaydı', uclar: ['/platform/tarama/baslat'] },
+      { ad: 'Ekran taraması, akış kaydı, giriş kaydı ve giriş denemesi', uclar: ['/platform/tarama/baslat'] },
       { ad: 'Giriş sayfası önerisi (Varsayılanları öner)', uclar: ['/platform/giris-tarifi/oner'] },
       { ad: 'Uçtan uca akışta ekran adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta ekran adımı varsa' },
       { ad: 'Zamanlanmış koşudaki ekran senaryoları', uclar: [] }
@@ -181,7 +181,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     ],
     islemler: [
       { ad: 'Koşu ve Dene sırasında giriş yapma', uclar: EKRAN_KOSU_UCLARI, kosul: 'ortamın giriş tarifi varsa ve senaryo girişsiz değilse' },
-      { ad: 'Tarama ve akış kaydında giriş yapma', uclar: ['/platform/tarama/baslat'], kosul: 'ortamın giriş tarifi varsa ve "Giriş yapmadan aç" seçilmemişse (saklanan oturumla girişi atlamak da dahil)' },
+      { ad: 'Tarama, akış kaydı ve giriş denemesinde giriş yapma', uclar: ['/platform/tarama/baslat'], kosul: 'ortamın giriş tarifi varsa ve "Giriş yapmadan aç" seçilmemişse (saklanan oturumla girişi atlamak da dahil)' },
       { ad: 'Uçtan uca akışın ekran adımında giriş yapma', uclar: UCTAN_UCA_UCLARI, kosul: 'ortamın giriş tarifi varsa ve ekran adımının senaryosu girişsiz değilse' },
       { ad: '"Yeniden giriş" adımı', uclar: [] }
     ],
