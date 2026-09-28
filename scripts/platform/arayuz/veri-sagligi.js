@@ -25,15 +25,19 @@ export function kullanimMetni(k) {
 }
 
 /**
- * Veri sağlığı kartı. secTablo(id): Tablolar listesinde o tabloyu açar; yenile(): bölümü yeniden yükler (birleştirme / geri alma sonrası).
- * @param {{ id: string }} proje @param {{ secTablo: (id: string) => void; yenile: () => void; tablolar: () => Array<{ id: string; ad: string }>; veri?: Promise<any> }} c
+ * Veri sağlığı kartı. secTablo(id): Tablolar listesinde o tabloyu açar; yenile(): bölümü yeniden yükler (birleştirme / geri alma sonrası);
+ * ayarlarFormu(kaydedildi): başlıktaki ayarlar (dişli) düğmesinin diyalogda açtığı "Test verisi ayarları" formu (verilmezse düğme yok).
+ * @param {{ id: string }} proje @param {{ secTablo: (id: string) => void; yenile: () => void; tablolar: () => Array<{ id: string; ad: string }>; veri?: Promise<any>;
+ *   ayarlarFormu?: (kaydedildi: () => void) => Promise<HTMLElement> }} c
  */
 export function veriSagligiKarti(proje, c) {
   const kok = h('section', { class: 'kart veri-sagligi', 'aria-label': 'Veri sağlığı' }, h('p', { class: 'soluk kucuk' }, 'Veri sağlığı denetleniyor…'));
-  (async () => {
+  // Ayarlar kaydedilince yalnız bu kart yeniden okunur (tablo düzenleyicideki kaydedilmemiş değişiklikler korunur).
+  const ayarlariAc = async () => { if (c.ayarlarFormu && (await testVerisiAyarlariPenceresi(c.ayarlarFormu))) ciz(null); };
+  const ciz = async (/** @type {Promise<any> | null | undefined} */ veri) => {
     let s;
     // Önceden yüklendiyse (Test verisi bölümü tablolarla birlikte ister) kart hemen çizilir: sayfa sonradan kaymaz.
-    try { s = c.veri ? await c.veri : await api(`/platform/tablolar/veri-sagligi?projeId=${q(proje.id)}`); } catch (e) { yerlestir(kok, h('p', { class: 'soluk kucuk' }, `Veri sağlığı okunamadı: ${e.message}`)); return; }
+    try { s = veri ? await veri : await api(`/platform/tablolar/veri-sagligi?projeId=${q(proje.id)}`); } catch (e) { yerlestir(kok, h('p', { class: 'soluk kucuk' }, `Veri sağlığı okunamadı: ${e.message}`)); return; }
     if (!s) { kok.remove(); return; }
     const bolum = (baslik, sayi, icerik, acik = false) => h('details', { class: 'saglik-bolumu', open: acik && sayi > 0 },
       h('summary', {}, h('span', {}, baslik), rozet(String(sayi), sayi ? 'uyari' : '')), sayi ? icerik : h('p', { class: 'soluk kucuk' }, 'Sorun yok.'));
@@ -54,7 +58,8 @@ export function veriSagligiKarti(proje, c) {
       title: gs.toplam ? `Birleştirme geçmişi (${gs.toplam})` : 'Henüz birleştirme yok',
       onclick: async () => { if (await birlestirmeGecmisiPenceresi(proje)) c.yenile(); }
     }, ikon('tarih'));
-    // Öneriler puana göre sıralı gelir; eşik altı olanlar (Ayarlar > Test verisi) varsayılan gizli.
+    const ayarDugmesi = c.ayarlarFormu ? h('button', { type: 'button', class: 'ikon-dugme ayar-dugmesi', 'aria-label': 'Test verisi ayarları', title: 'Test verisi ayarları', onclick: ayarlariAc }, ikon('ayar')) : null;
+    // Öneriler puana göre sıralı gelir; eşik altı olanlar (Test verisi ayarları) varsayılan gizli.
     const esik = typeof s.benzerlikEsigi === 'number' ? s.benzerlikEsigi : 50;
     const yuksek = s.benzer.filter((o) => o.puan >= esik);
     const dusuk = s.benzer.filter((o) => o.puan < esik);
@@ -67,14 +72,14 @@ export function veriSagligiKarti(proje, c) {
       if (dusuk.length) {
         const goster = h('button', { type: 'button', class: 'kucuk-dugme hayalet dusuk-benzerlik-dugmesi', 'aria-expanded': 'false' }, `Düşük benzerlikleri de göster (${dusuk.length})`);
         goster.addEventListener('click', () => { goster.replaceWith(h('p', { class: 'soluk kucuk' }, `Eşik (%${esik}) altındaki öneriler:`), liste(dusuk.map(oneriSatiri))); });
-        kap.append(h('p', { class: 'dugmeler' }, goster, h('a', { class: 'kucuk', href: '#/ayarlar/test-verisi' }, 'Eşiği değiştir')));
+        kap.append(h('p', { class: 'dugmeler' }, goster, c.ayarlarFormu ? h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: ayarlariAc }, 'Eşiği değiştir') : null));
       }
       return kap;
     };
     const toplam = yuksek.length + s.kullanilmayan.length + s.bosSutunlar.length + s.kirikBasvurular.length;
     yerlestir(kok,
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon(toplam ? 'uyari' : 'onay'), 'Veri sağlığı'),
-        h('span', { class: 'sag kucuk soluk' }, toplam ? `${toplam} madde` : 'sorun yok', gecmisDugmesi)),
+        h('span', { class: 'sag kucuk soluk' }, toplam ? `${toplam} madde` : 'sorun yok', gecmisDugmesi, ayarDugmesi)),
       h('div', { class: 'saglik-bolumleri' },
         yuksek.length || !dusuk.length ? bolum('Birleştirilebilecek tablolar', yuksek.length, oneriIcerigi(), true)
           : h('details', { class: 'saglik-bolumu' }, h('summary', {}, h('span', {}, 'Birleştirilebilecek tablolar'), rozet('0', '')), oneriIcerigi()),
@@ -84,8 +89,32 @@ export function veriSagligiKarti(proje, c) {
           h('span', { class: 'soluk kucuk' }, 'hiçbir satırda değer yok'))))),
         bolum('Kırık başvurular', s.kirikBasvurular.length, liste(s.kirikBasvurular.map((k) => h('li', {},
           h('a', { href: k.git }, k.yer), h('code', { class: 'duz' }, k.basvuru), h('span', { class: 'soluk kucuk' }, k.neden)))), true)));
-  })();
+  };
+  ciz(c.veri);
   return kok;
+}
+
+/**
+ * "Test verisi ayarları" diyaloğu (Veri sağlığı başlığındaki dişli): form ayarlar.js'ten gelir (açıklamalar ve "?" ipuçları formda).
+ * @param {(kaydedildi: () => void) => Promise<HTMLElement>} formu @returns {Promise<boolean>} kaydedildiyse true
+ */
+function testVerisiAyarlariPenceresi(formu) {
+  return new Promise((coz) => {
+    let kaydedildi = false;
+    const govde = h('div', { class: 'diyalog-govde' },
+      h('h2', { id: 'test-verisi-ayarlari-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('ayar')), 'Test verisi ayarları'),
+      h('p', { class: 'soluk kucuk' }, 'Ayarlar yükleniyor…'));
+    const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+    const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay test-verisi-ayarlari-diyalogu', 'aria-labelledby': 'test-verisi-ayarlari-basligi' },
+      govde, h('div', { class: 'diyalog-alt' }, kapat));
+    kapat.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(kaydedildi); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    formu(() => { kaydedildi = true; })
+      .then((form) => { govde.lastChild?.replaceWith(form); })
+      .catch((e) => { govde.lastChild?.replaceWith(h('div', { class: 'not-kutusu hata kucuk', role: 'alert' }, `Ayarlar okunamadı: ${e.message}`)); });
+  });
 }
 
 /** "28.09.2026 14:05" (tarayıcının yerel saati). @param {string} iso */

@@ -393,13 +393,13 @@ async function girisProfilleri(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 
 async function testVerisi(govde, baglam) {
-  // Tablolar (kendi içinde yeniden çizilir) + altta "Test verisi ayarları" (Kullanıcı kararları; ör. birleştirme önerisi eşiği).
+  // Tablolar (kendi içinde yeniden çizilir). "Test verisi ayarları" (kullanıcı kararları; ör. birleştirme önerisi eşiği) Veri sağlığı
+  // kartının başlığındaki ayarlar (dişli) düğmesiyle diyalogda açılır (veri-sagligi.js); sayfada ayrı kart yok.
   const tablolarKap = h('div', { class: 'test-verisi-tablolari' });
-  const ayarKap = h('section', { class: 'kart form-paneli test-verisi-ayarlari', 'aria-labelledby': 'test-verisi-ayarlari-basligi' },
-    h('h3', { id: 'test-verisi-ayarlari-basligi' }, ikon('ayar'), 'Test verisi ayarları'));
-  yerlestir(govde, tablolarKap, ayarKap);
-  const [, form] = await Promise.all([tablolarBolumu(tablolarKap, baglam.durum.proje), ayarFormu('testVerisi', 'Test verisi ayarları', 'Test verisi ayarları kaydedildi.', { baslik: 'Veri sağlığı önerileri' })]);
-  ayarKap.append(form);
+  yerlestir(govde, tablolarKap);
+  await tablolarBolumu(tablolarKap, baglam.durum.proje, {
+    ayarlarFormu: (kaydedildi) => ayarFormu('testVerisi', 'Test verisi ayarları', 'Test verisi ayarları kaydedildi.', { baslik: 'Veri sağlığı önerileri', kaydedildi })
+  });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -662,8 +662,9 @@ async function siniflandirmaKarti() {
 /**
  * Kullanıcı kararları formu (tanımlar sunucudan: scripts/platform/ayarlar/kosu-ayarlari.mjs): bölümün ayarları gruplar hâlinde.
  * altBolum 'gelismis' tanımları açılır "Gelişmiş koşu davranışı" kısmındadır (varsayılan kapalı; her ayarın varsayılanı önceki davranış).
- * @param {'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
- * @param {{ baslik?: string }} [secenek] baslik: formun üstünde başlık (kart içinde gömülü form)
+ * @param {'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
+ * @param {{ baslik?: string; kaydedildi?: (ayarlar: Record<string, unknown>) => void }} [secenek] baslik: formun üstünde başlık (kart /
+ *   diyalog içinde gömülü form); kaydedildi: kayıt başarılı olunca çağrılır
  */
 async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const { ayarlar, tanimlar: tumu } = await api('/platform/kosu-ayarlari');
@@ -765,6 +766,7 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/kosu-ayarlari/kaydet', { govde: { ayarlar: yeni } }));
       kullaniciAyarlariniTazele();
       mesaj.goster(basariMetni, 'basari');
+      if (secenek.kaydedildi) secenek.kaydedildi(yeni);
     } catch (hata) { mesaj.goster(hata.message); }
   });
   return form;

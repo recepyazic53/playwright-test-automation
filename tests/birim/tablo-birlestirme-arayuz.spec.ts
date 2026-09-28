@@ -167,15 +167,42 @@ test('veri sağlığı: öneriler puana göre; eşik altı (genel sütun adları
   await expect(kart).not.toContainText('“Durum kodları”');
   await kart.getByRole('button', { name: 'Düşük benzerlikleri de göster (1)' }).click();
   await expect(kart).toContainText('“Durum kodları” + “Hata kodları”');
-  // Eşik Ayarlar > Test verisi'nde (sayfanın altındaki form).
-  const form = page.getByRole('form', { name: 'Test verisi ayarları' });
+  // Eşik: Veri sağlığı başlığındaki ayarlar (dişli) düğmesi → "Test verisi ayarları" diyaloğu; sayfada ayrı ayar kartı yok.
+  await expect(page.getByRole('form', { name: 'Test verisi ayarları' })).toHaveCount(0);
+  await kart.getByRole('button', { name: 'Test verisi ayarları' }).click();
+  const d = page.getByRole('dialog', { name: 'Test verisi ayarları' });
+  const form = d.getByRole('form', { name: 'Test verisi ayarları' });
+  // Açıklama (kısa; uzunsa ayrıntı "?" ipucunda) ve varsayılan diyalogda korunur.
+  await expect(form).toContainText('Benzerlik puanı bunun altındaki');
+  await expect(form).toContainText('Varsayılan: 50');
   await form.getByLabel(/Birleştirme önerisi eşiği/).fill('10');
   await form.getByRole('button', { name: 'Kaydet' }).click();
-  await expect(page.getByText('Test verisi ayarları kaydedildi.')).toBeVisible();
+  await expect(d.getByText('Test verisi ayarları kaydedildi.')).toBeVisible();
+  await d.getByRole('button', { name: 'Kapat' }).click();
+  // Kapatınca Veri sağlığı yeni eşikle yeniden okunur (sayfa yenilenmeden).
+  await expect(kart).toContainText('“Durum kodları” + “Hata kodları”');
+  await expect(kart.getByRole('button', { name: /Düşük benzerlikleri de göster/ })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('region', { name: 'Veri sağlığı' })).toContainText('“Durum kodları” + “Hata kodları”');
-  await expect(page.getByRole('button', { name: /Düşük benzerlikleri de göster/ })).toHaveCount(0);
   await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { benzerlikEsigi: 50 } });
+  await baglam.close();
+});
+
+test('Test verisi ayarları diyaloğu 390px: dişli düğmesi görünür, diyalog taşmaz; "Eşiği değiştir" de diyaloğu açar', async () => {
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 390, height: 844 } });
+  const page = await baglam.newPage();
+  await page.goto('/#/ayarlar/test-verisi');
+  const kart = page.getByRole('region', { name: 'Veri sağlığı' });
+  await expect(kart.getByRole('button', { name: 'Test verisi ayarları' })).toBeVisible();
+  await expect(kart.getByRole('button', { name: 'Birleştirme geçmişi' })).toBeVisible();
+  await kart.getByRole('button', { name: 'Eşiği değiştir' }).click();
+  const d = page.getByRole('dialog', { name: 'Test verisi ayarları' });
+  await expect(d.getByLabel(/Birleştirme önerisi eşiği/)).toHaveValue('50');
+  const o = await tasma(page);
+  expect(o.sayfa, '390px sayfa').toBeLessThanOrEqual(2);
+  expect(o.diyalog, '390px diyalog').toBeLessThanOrEqual(2);
+  await d.getByRole('button', { name: 'Kapat' }).click();
+  await expect(d).toHaveCount(0);
   await baglam.close();
 });
 
