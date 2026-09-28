@@ -111,7 +111,7 @@ export async function yonlendir() {
   const { projeler, varsayilanId } = await api('/platform/projeler');
   durum.projeler = projeler;
   durum.varsayilanProjeId = varsayilanId || null;
-  if (!projeler.length) { sihirbaz('tanisma'); return; }
+  if (!projeler.length) { sihirbaz('proje'); return; }
   let secili = null;
   try { secili = localStorage.getItem(seciliProjeAnahtari()); } catch { secili = null; }
   durum.proje = projeler.find((p) => p.id === secili) || projeler.find((p) => p.id === durum.varsayilanProjeId) || projeler[0];
@@ -224,7 +224,7 @@ function baslangicKartlari(yeniAlan) {
       altIkon: 'dosya', altMetin: '.tayedek · şifreli', git: 'Seç'
     }),
     secimKarti({
-      sinif: 'k-basari', ikonAd: 'arti', no: 2, baslik: 'Yeni proje başlat', onerilen: !yeniAlan, onclick: once('kasa parolası ve proje', () => sihirbaz('tanisma', 'ilk')),
+      sinif: 'k-basari', ikonAd: 'arti', no: 2, baslik: 'Yeni proje başlat', onerilen: !yeniAlan, onclick: once('kasa parolası ve proje', () => sihirbaz('kasa', 'ilk')),
       aciklama: 'Kasa parolası belirleyin, projenizi ve test ortamlarınızı tanımlayın.',
       altIkon: 'saat', altMetin: 'yaklaşık 3 dakika', git: 'Başla'
     })
@@ -308,13 +308,12 @@ function yedekYukleEkrani() {
 // Yeni proje sihirbazı
 // ---------------------------------------------------------------------------------------
 
-// İki kip: 'ilk' (tanışma → kasa parolası → proje → ortamlar → tamam; yeni çalışma alanı) ve 'ek' (AYNI kasada yeni proje:
-// tanışma → proje → ortamlar → tamam; üst çubuktaki proje seçici > "+ Yeni proje"). Giriş profili, iki aşamalı doğrulama ve
+// İki kip: 'ilk' (kasa parolası → proje → ortamlar → tamam; yeni çalışma alanı) ve 'ek' (AYNI kasada yeni proje:
+// proje → ortamlar → tamam; üst çubuktaki proje seçici > "+ Yeni proje"). Giriş profili, iki aşamalı doğrulama ve
 // ekranların nasıl tanıtılacağı sihirbazda SORULMAZ: giriş profili / tarifi Ayarlar > Giriş profilleri'nde (ortam başına), ekran
-// ekleme yöntemi her ekranı eklerken seçilir. TANIŞMA cevapları yalnızca bu sihirbaz boyunca bellekte tutulur (kalıcı olan,
-// kullanıcının oluşturduğu proje / ortam kayıtlarıdır); "Test ve canlı" cevabı ortamlar adımına hazır bir riskli CANLI satırı ekler.
+// ekleme yöntemi her ekranı eklerken seçilir. Eski "Sizi tanıyalım" adımı kaldırıldı: tek sorusu (hangi ortamlar) Ortamlar adımında
+// satır eklenerek zaten cevaplanıyordu; cevabı yalnız bellekteydi (kalıcı bir kaydı yoktu).
 const ILK_ADIMLAR = [
-  { ad: 'tanisma', etiket: 'Tanışalım' },
   { ad: 'kasa', etiket: 'Kasa parolası' },
   { ad: 'proje', etiket: 'Proje' },
   { ad: 'ortamlar', etiket: 'Ortamlar' },
@@ -322,10 +321,6 @@ const ILK_ADIMLAR = [
 ];
 const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa');
 let sihirbazModu = 'ilk';
-/** Tanışma cevabı (varsayılan: en yaygın kurulum). Yalnız ortam sorusu kalır (hazır CANLI satırını belirler); eski sürümlerin
- * "ne test edeceksiniz" / "giriş var mı" soruları hiçbir şeyi etkilemediği için kaldırıldı, eski cevaplar yok sayılır. */
-const VARSAYILAN_CEVAPLAR = Object.freeze({ ortam: 'test' });
-const cevaplar = { ...VARSAYILAN_CEVAPLAR };
 const sihirbazAdimlari = () => (sihirbazModu === 'ek' ? EK_ADIMLAR : ILK_ADIMLAR);
 
 function adimListesi(aktif) {
@@ -360,8 +355,9 @@ export function sihirbaz(adim, mod) {
   history.replaceState(null, '', '/');
   if (mod) sihirbazModu = mod;
   else if (adim === 'kasa' || !durum.projeler.length) sihirbazModu = 'ilk';
-  if (adim === 'tanisma') return sihirbazTanisma();
-  if (adim === 'kasa') return sihirbazKasa();
+  // Eski "tanisma" adımı (kaldırıldı; eski çağrı / yer imi): sihirbazın ilk adımına düşer.
+  if (adim === 'tanisma') return sihirbazModu === 'ilk' && kasaYok() ? sihirbazKasa() : sihirbazProje();
+  if (adim === 'kasa') return kasaYok() ? sihirbazKasa() : sihirbazProje();
   if (adim === 'proje') return sihirbazProje();
   if (adim === 'ortamlar') return sihirbazOrtamlar();
   // Eski "giris" adımı kaldırıldı: bu adla gelen çağrı (eski yer imi / kayıtlı durum) hata vermeden özet sayfasına düşer.
@@ -371,40 +367,8 @@ export function sihirbaz(adim, mod) {
 /** Kasa henüz oluşturulmadı mı (yeni çalışma alanı / ilk kurulum)? */
 const kasaYok = () => !(durum.sunucu && durum.sunucu.kasa && durum.sunucu.kasa.olusturuldu);
 
-/** Tek seçimli soru (radyo grubu). @param {string} soru @param {keyof typeof cevaplar} anahtar @param {Array<[string, string, string?]>} secenekler */
-function soruGrubu(soru, anahtar, secenekler) {
-  const ad = yeniKimlikAdi(anahtar);
-  // Bilinmeyen / eski bir cevap değeri kayıtlıysa (ör. eski sürümden kalan) varsayılan ilk seçenek işaretlenir.
-  if (!secenekler.some(([deger]) => deger === cevaplar[anahtar])) cevaplar[anahtar] = VARSAYILAN_CEVAPLAR[anahtar];
-  return h('fieldset', { class: 'tanisma-sorusu' }, h('legend', {}, soru),
-    h('div', { class: 'tanisma-secenekleri' }, secenekler.map(([deger, etiket, aciklama]) => {
-      const girdi = h('input', { type: 'radio', name: ad, value: deger, checked: cevaplar[anahtar] === deger });
-      girdi.addEventListener('change', () => { if (girdi.checked) cevaplar[anahtar] = deger; });
-      return h('label', { class: 'tanisma-secenegi' }, girdi, h('span', {}, h('b', {}, etiket), aciklama ? h('small', {}, aciklama) : null));
-    })));
-}
 let adSayaci = 0;
 const yeniKimlikAdi = (onEk) => `${onEk}-${++adSayaci}`;
-
-/** TANIŞMA: testlerin hangi ortamlarda çalışacağı. */
-function sihirbazTanisma() {
-  const devam = h('button', { type: 'submit', class: 'birincil' }, 'Devam', ikon('ok'));
-  const form = h('form', { class: 'kart tanisma-karti', novalidate: true, 'aria-label': 'Tanışma soruları' },
-    h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sizi tanıyalım')),
-    h('p', { class: 'soluk' }, 'Kurulumu size göre hazırlayalım. Ortamları sonra Ayarlar\'dan istediğiniz gibi değiştirebilirsiniz.'),
-    soruGrubu('Testler hangi ortamlarda çalışacak?', 'ortam', [
-      ['test', 'Yalnızca test ortamı', 'Önerilen başlangıç.'],
-      ['testCanli', 'Test ve canlı', 'Riskli ortamda kayıt oluşturan "yalnızca test ortamı" adımları atlanır.']
-    ]),
-    h('div', { class: 'dugmeler' }, devam, sihirbazModu === 'ilk' && kasaYok()
-      ? h('button', { type: 'button', class: 'hayalet', onclick: () => hosgeldin() }, ikon('geri'), 'Geri')
-      : sihirbazModu === 'ek' && durum.projeler.length ? h('button', { type: 'button', class: 'hayalet', onclick: () => { location.hash = '#/sonuclar'; yonlendir(); } }, 'Vazgeç') : null));
-  form.addEventListener('submit', (olay) => {
-    olay.preventDefault();
-    if (sihirbazModu === 'ilk' && kasaYok()) sihirbazKasa(); else sihirbazProje();
-  });
-  sihirbazEkrani('tanisma', sihirbazBasligi(), 'Kurulumu size göre hazırlamak için kısa bir soru.', form);
-}
 
 function sihirbazKasa() {
   const p1 = parolaAlani('Kasa parolası', { zorunlu: true, otomatik: 'new-password', yardim: 'En az 8 karakter. Tüm gizli bilgiler (parolalar, anahtarlar, adresler) bu parolayla şifrelenir.' });
@@ -418,7 +382,7 @@ function sihirbazKasa() {
       h('p', {}, h('strong', {}, 'Bu parolayı unutmayın. '), 'Parola unutulursa veriler kurtarılamaz; parolanın bir kopyası hiçbir yerde saklanmaz.')),
     mesaj.kutu, p1.kapsayici, p2.kapsayici,
     h('label', { class: 'secenek', for: 'parola-anladim' }, anladim, 'Parolayı unutursam verilerin kurtarılamayacağını anladım.'),
-    h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: () => sihirbazTanisma() }, ikon('geri'), 'Geri')));
+    h('div', { class: 'dugmeler' }, gonder, h('button', { type: 'button', class: 'hayalet', onclick: () => hosgeldin() }, ikon('geri'), 'Geri')));
   form.addEventListener('submit', async (olay) => {
     olay.preventDefault();
     mesaj.temizle();
@@ -498,20 +462,22 @@ function sihirbazOrtamlar() {
       : h('button', { type: 'button', class: 'ikon-dugme ortam-kaldir', 'aria-label': 'Ortamı kaldır', title: 'Ortamı kaldır', onclick: () => {
         satirlar.splice(satirlar.indexOf(satir), 1); satir.el.remove();
       } }, ikon('carpi'));
+    // × (ortamı kaldır) satırın EN SOLUNDA, Ortam adı alanının solunda.
+    const adAlani = alan('Ortam adı', ad, { zorunlu: true });
+    adAlani.classList.add('ortam-adi-alani');
+    const adresAlani = alan('Adres (link)', adres, { zorunlu: true });
+    adresAlani.classList.add('ortam-adresi-alani');
     satir.el = h('div', { class: `ortam-satiri${zorunlu ? ' zorunlu' : ''}` },
-      alan('Ortam adı', ad, { zorunlu: true }),
-      alan('Adres (link)', adres, { zorunlu: true }),
+      kaldir, adAlani, adresAlani,
       h('div', { class: 'alan ortam-riski' },
         h('span', { class: 'alan-etiketi', 'aria-hidden': 'true' }, 'Riskli mi?'),
         h('label', { class: 'secenek', for: canli.id, title: zorunlu ? 'TEST ortamı riskli değildir.' : 'Gerçek işlem oluşturabilir: her çalıştırmada onay istenir.' },
-          canli, zorunlu ? 'Hayır' : 'Riskli')),
-      kaldir);
+          canli, zorunlu ? 'Hayır' : 'Riskli')));
     satirlar.push(satir);
     liste.append(satir.el);
     return satir;
   };
   ortamSatiri(true);
-  if (cevaplar.ortam === 'testCanli') ortamSatiri(false, 'CANLI', true);
   const ekleDugmesi = h('button', { type: 'button', onclick: () => ortamSatiri(false).ad.focus() }, ikon('arti'), 'Ortam ekle');
   const mesaj = mesajKutusu();
   const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve devam', ikon('ok'));
@@ -704,7 +670,7 @@ function projeSecici() {
     h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, alan && !alan.sabit ? `Projeler · ${alan.ad}` : 'Projeler'),
     durum.projeler.map(satir),
     h('hr', {}),
-    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('tanisma', 'ek'); } }, ikon('arti'), 'Proje ekle'),
+    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('proje', 'ek'); } }, ikon('arti'), 'Proje ekle'),
     h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); location.hash = '#/ayarlar/proje'; } }, ikon('duzenle'), 'Projeyi düzenle'));
   dugme.addEventListener('click', () => {
     if (acik()) { kapat(); return; }
@@ -801,7 +767,7 @@ function anaDuzen() {
     markaOgesi(),
     projeSecici(),
     h('nav', { class: 'ust-nav', 'aria-label': 'Ana menü' }, navSonuclar, navSenaryolar, navEkranlar, navAyarlar),
-    olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('tanisma', 'ek') })),
+    olusturMenusu(() => ({ proje: durum.proje, ayarBolumleri: AYAR_BOLUMLERI, yeniProje: () => sihirbaz('proje', 'ek') })),
     h('span', { class: 'bosluk' }),
     hizliAramaDugmesi(aramaBaglami), sunucu, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
   hizliAramaKisayolu(aramaBaglami);

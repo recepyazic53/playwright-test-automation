@@ -157,22 +157,20 @@ test('kilit ekranı çalışma alanının adını ve "Başka çalışma alanı"n
   await page.keyboard.press('Escape');
 });
 
-test('aynı kasada yeni proje: sihirbaz (tanışma → proje → ortamlar → proje hazır özeti)', async () => {
+test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → proje hazır özeti)', async () => {
   const menu = await projeMenusu();
   await expect(menu.getByRole('menuitem', { name: 'Proje ekle' })).toBeVisible();
   await goruntu('03-proje-secici', undefined, { x: 0, y: 0, width: 760, height: 300 });
   await menu.getByRole('menuitem', { name: 'Proje ekle' }).click();
   await expect(page.getByRole('heading', { name: 'Yeni proje', level: 1 })).toBeVisible();
-  await expect(page.locator('.adimlar li')).toHaveText(['Tanışalım', 'Proje', 'Ortamlar', 'Tamam']);
-  // Tanışma: test ve canlı → canlı ortam satırı (riskli işaretli) hazır gelir.
-  const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
-  await tanisma.getByRole('radio', { name: /Test ve canlı/ }).check();
-  await tanisma.getByRole('button', { name: 'Devam' }).click();
+  // "Sizi tanıyalım" adımı yok: doğrudan proje; canlı ortam Ortamlar adımında "Ortam ekle" ile eklenir.
+  await expect(page.locator('.adimlar li')).toHaveText(['Proje', 'Ortamlar', 'Tamam']);
   await page.getByLabel('Proje adı').fill('İkinci proje');
   await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Adres (link)').first().fill('https://ikinci.ornek.invalid');
-  await expect(page.getByLabel('Ortam adı').nth(1)).toHaveValue('CANLI');
-  await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1)).toBeChecked();
+  await page.getByRole('button', { name: 'Ortam ekle' }).click();
+  await page.getByLabel('Ortam adı').nth(1).fill('CANLI');
+  await page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1).check();
   await page.getByLabel('Adres (link)').nth(1).fill('https://canli-ikinci.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
   await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
@@ -252,13 +250,9 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   await d.getByLabel('Çalışma alanı adı').fill('İş');
   await goruntu('11-yeni-calisma-alani-adi', d);
   await d.getByRole('button', { name: 'Oluştur ve devam et' }).click();
-  // Tanışma soruları (varsayılan cevaplarla devam).
-  const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
-  await expect(tanisma.getByRole('heading', { name: 'Sizi tanıyalım' })).toBeVisible();
-  await expect(tanisma.getByRole('radio', { name: /Yalnızca test ortamı/ })).toBeChecked();
-  await expect(tanisma.getByRole('radio')).toHaveCount(2);
-  await tanisma.getByRole('button', { name: 'Devam' }).click();
+  // "Sizi tanıyalım" adımı yok: doğrudan kasa parolası.
   await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sizi tanıyalım' })).toHaveCount(0);
   await expect(page.locator('.odak-ust')).toContainText('İş');
   await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA_B);
   await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(PAROLA_B);

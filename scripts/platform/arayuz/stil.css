@@ -2488,17 +2488,6 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
   .mk-imlec { left: var(--x); top: var(--y); } .ri-paket.gidis { left: 50%; opacity: 1; top: 30%; } .ri-paket.donus { left: 50%; opacity: 1; top: 72%; }
 }
 
-/* Kurulum sihirbazı: tanışma soruları ve kişiye özel yapılacaklar. */
-.tanisma-sorusu { border: 0; padding: 0; margin: 0 0 var(--b4); }
-.tanisma-sorusu legend { font-weight: 640; margin-bottom: var(--b2); }
-.tanisma-secenekleri { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--b2); }
-.tanisma-secenegi { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: 0 0 0 1px var(--cizgi); cursor: pointer; }
-.tanisma-secenegi:has(input:checked) { box-shadow: 0 0 0 1.5px var(--vurgu); background: var(--vurgu-zemin); }
-.tanisma-secenegi:focus-within { outline: 2px solid var(--odak); outline-offset: 2px; }
-.tanisma-secenegi input { margin-top: 3px; }
-.tanisma-secenegi span { display: grid; gap: 2px; }
-.tanisma-secenegi small { color: var(--metin-3); line-height: 1.4; }
-
 /* Dar ekran: sekme çubukları ve geniş tablolar sayfayı yatay taşırmaz; kendi içinde kaydırılır. */
 .sekme-cubugu { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
 .sekme-cubugu button { flex: none; }
@@ -3043,14 +3032,14 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .zamanlama-gecmisi table { margin-top: 6px; }
 .zamanlama-listesi .kayit-eylemleri .onay-satiri { min-height: 32px; }
 
-/* İlk kurulum > Ortamlar: satır = Ortam adı | Adres | Riskli mi? | ×. Tüm satırlar aynı sütunlarda; "Riskli mi?" etiketi alan
-   etiketleriyle, onay kutusu ve × düğmesi girdiyle aynı hizada. Dar ekranda ad ve adres tam genişlik, altında Riskli + ×. */
+/* İlk kurulum > Ortamlar: satır = × | Ortam adı | Adres | Riskli mi?. Tüm satırlar aynı sütunlarda; "Riskli mi?" etiketi alan
+   etiketleriyle, onay kutusu ve × düğmesi girdiyle aynı hizada. Dar ekranda × + ad, altında tam genişlik adres ve Riskli. */
 .ortam-satirlari { display: grid; gap: var(--b2); margin-bottom: var(--b3); }
-.ortam-satiri { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) max-content 38px; grid-template-areas: "ad adres risk sil";
+.ortam-satiri { display: grid; grid-template-columns: 38px minmax(0, 1fr) minmax(0, 2fr) max-content; grid-template-areas: "sil ad adres risk";
   column-gap: var(--b3); align-items: start; margin: 0; }
 .ortam-satiri > .alan { margin-bottom: 0; min-width: 0; }
-.ortam-satiri > .alan:nth-child(1) { grid-area: ad; }
-.ortam-satiri > .alan:nth-child(2) { grid-area: adres; }
+.ortam-satiri > .ortam-adi-alani { grid-area: ad; }
+.ortam-satiri > .ortam-adresi-alani { grid-area: adres; }
 .ortam-satiri > .ortam-riski { grid-area: risk; }
 .ortam-satiri > .ortam-kaldir, .ortam-satiri > .ortam-satiri-bos { grid-area: sil; }
 .ortam-riski .alan-etiketi { display: block; font-size: 13px; font-weight: 560; margin-bottom: 6px; white-space: nowrap; }
@@ -3059,12 +3048,11 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .ortam-kaldir { margin-top: 25px; width: 38px; height: 40px; min-height: 40px; padding: 0; display: grid; place-items: center; }
 .ortam-kaldir .ikon { margin: 0; }
 @media (max-width: 860px) {
-  .ortam-satiri { grid-template-columns: minmax(0, 1fr) 38px; grid-template-areas: "ad ad" "adres adres" "risk sil"; row-gap: var(--b2);
+  .ortam-satiri { grid-template-columns: 38px minmax(0, 1fr); grid-template-areas: "sil ad" "adres adres" "risk risk"; row-gap: var(--b2);
     padding-bottom: var(--b3); border-bottom: 1px solid var(--cizgi); }
   .ortam-satiri:last-child { border-bottom: 0; padding-bottom: 0; }
   .ortam-riski { display: flex; align-items: center; gap: var(--b2); }
   .ortam-riski .alan-etiketi { margin: 0; }
-  .ortam-kaldir { margin-top: 0; }
 }
 /* Kurulum tamamlandı: kısa proje özeti (taşmasız). */
 .sihirbaz-alani, .sihirbaz-alani > * { min-width: 0; }
