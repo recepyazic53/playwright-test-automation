@@ -120,7 +120,7 @@ function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
       : e.modelSurumu ? h('span', { class: 'adet', title: `model sürümü ${e.modelSurumu}` }, `v${e.modelSurumu}`) : null);
   yerlestir(nav,
     h('a', { href: '#/ekranlar', 'aria-current': secili === '' ? 'page' : null }, ikon('izgara'), 'Tüm ekranlar', h('span', { class: 'adet' }, String(tumu.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru)).length))),
-    h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('artiYalin'), 'Sayfa ekle'),
+    h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Sayfa ekle'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranModelli.map(baglanti)),
     navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: [...girisler.map(girisBaglantisi), ...ortakAkislar.map(baglanti)], bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }),
@@ -161,7 +161,7 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
           h('span', {}, ikon('uyari'), bekleyen.length ? `${bekleyen.length} ekranda karar bekleyen bulgu` : 'bekleyen bulgu yok'),
           h('span', {}, ikon('liste'), `${ekranlar.reduce((t, e) => t + e.senaryoSayisi, 0)} senaryo`),
           devreDisi ? h('span', {}, ikon('eksi'), `${devreDisi} devre dışı`) : null)),
-      h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('artiYalin'), 'Sayfa ekle'))),
+      h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Sayfa ekle'))),
     h('section', { class: 'kesif-seridi', 'aria-label': 'Yeni sayfa nasıl eklenir' },
       h('ol', { class: 'kesif-adimlari' },
         h('li', {}, h('b', {}, 'İstek metnini kopyalayın'), h('span', {}, 'Sayfanın bağlantısıyla birlikte yapay zekâ aracınıza (tarayıcıyı kullanabilen bir kodlama asistanı) verin.')),
@@ -170,7 +170,7 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
       h('div', { class: 'kesif-cumlesi' }, istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
-      : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('artiYalin'), 'Sayfa ekle') }),
+      : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Sayfa ekle') }),
     ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }
@@ -407,7 +407,7 @@ async function akisSekmesi(kap, s, d, icerik) {
   yerlestir(kap, h('div', { class: 'gecmis-duzeni' },
     h('section', { class: 'kart surum-listesi-karti akis-listesi-karti' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('pusula'), 'Akışlar'),
-        cokluAkis ? h('button', { type: 'button', class: 'kucuk-dugme sag', onclick: () => { yeniForm.hidden = false; yeniForm.querySelector('input')?.focus(); } }, ikon('artiYalin'), 'Yeni akış oluştur') : null),
+        cokluAkis ? h('button', { type: 'button', class: 'kucuk-dugme sag', onclick: () => { yeniForm.hidden = false; yeniForm.querySelector('input')?.focus(); } }, ikon('arti'), 'Akış ekle') : null),
       yeniForm,
       h('ol', { class: 'surum-listesi', 'aria-label': 'Akışlar' }, liste.akislar.map((a, i) => h('li', { class: a.id === secili.id ? 'secili' : null },
         h('a', { href: `${adres}/${encodeURIComponent(a.id)}`, 'aria-current': a.id === secili.id ? 'true' : null },
@@ -487,7 +487,8 @@ function modelOzetKarti(agac, d) {
     h('section', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('katman'), 'Model özeti'), h('span', { class: 'sag' }, d.surum ? rozet(`v${d.surum}`, 'vurgu') : null)),
       h('div', { class: 'mini-sayilar' },
-        [['Adım', sayilar.adim], ['Alan', sayilar.alan], ['Senaryoda', sayilar.senaryoAlani]].map(([e, v]) => h('div', {}, h('b', {}, String(v)), h('span', {}, e)))),
+        [['Adım', sayilar.adim, null], ['Alan', sayilar.alan, null], ['alan senaryodan', sayilar.senaryoAlani, 'Değeri senaryoda verilen alan sayısı']]
+          .map(([e, v, t]) => h('div', t ? { title: t } : {}, h('b', {}, String(v)), h('span', {}, e)))),
       h('dl', { class: 'ozet-satirlari' }, satir('Zorunlu alan', sayilar.zorunlu), satir('Koşullu alan', sayilar.kosullu), satir('Bölüm', sayilar.bolum))),
     agac.adimKapsami.length ? h('section', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('pusula'), 'İsteğe bağlı adımlar')),

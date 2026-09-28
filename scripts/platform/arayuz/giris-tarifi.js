@@ -164,7 +164,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
           o.hatalar && o.hatalar.length ? h('div', { class: 'kayit-meta hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null),
         h('div', { class: 'kayit-eylemleri' },
           h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${o.ortamAd}: girişi kaydet`, onclick: () => girisiKaydet(o) }, ikon('oynat'), 'Girişi kaydet'),
-          h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifini düzenle`, onclick: () => tarifFormu(o) }, ikon('duzenle'), o.tarif ? 'Düzenle' : 'Tanımla')));
+          (o.tarif ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifini düzenle`, onclick: () => tarifFormu(o) }, ikon('duzenle'), 'Düzenle')
+            : h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifi ekle`, onclick: () => tarifFormu(o) }, ikon('arti'), 'Giriş tarifi ekle'))));
     }));
   };
   const guncelle = (yeni) => {

@@ -572,7 +572,7 @@ test('çoklu akış: Akışlar sekmesinde kopyadan yeni akış; senaryo akışı
     await expect(liste.getByRole('listitem')).toHaveCount(1);
     await expect(liste).toContainText('Ana akış');
     // Yeni akış: ad + "Şu akıştan kopyala" → diyagram düzenleyicisi (yalnızca bu ekranın alanları).
-    await page.getByRole('button', { name: 'Yeni akış oluştur' }).click();
+    await page.getByRole('button', { name: 'Akış ekle' }).click();
     await page.getByRole('textbox', { name: 'Yeni akışın adı' }).fill('Kurumsal siparis');
     await page.getByText('Şu akıştan kopyala').click();
     await page.getByRole('button', { name: 'Oluştur', exact: true }).click();

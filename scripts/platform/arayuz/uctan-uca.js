@@ -76,17 +76,17 @@ async function listeSayfasi(icerik, proje, ortamlar) {
         if (r) { yenile(); location.hash = `#/sonuclar/uctan-uca/${q(r.kosuId)}`; }
       } }, ikon('oynat'), 'Koş…'),
       h('a', { class: 'dugme ikon-dugme', href: `${ADRES}/${q(a.id)}`, title: 'Düzenle', 'aria-label': `Düzenle: ${a.baslik}` }, ikon('duzenle')),
-      h('button', { type: 'button', class: 'ikon-dugme hayalet', title: 'Sil', 'aria-label': `Sil: ${a.baslik}`, onclick: async () => {
+      h('button', { type: 'button', class: 'kucuk-dugme tehlike', 'aria-label': `Sil: ${a.baslik}`, onclick: async () => {
         if (!(await onayIste({ baslik: `"${a.baslik}" silinsin mi?`, metin: 'Akış silinir; geçmiş koşu kayıtları kalır.', dugme: 'Sil', tehlikeli: true }))) return;
         try { await api('/platform/servis-akisi/sil', { govde: { projeId: proje.id, id: a.id } }); bildir('Akış silindi.'); yenile(); } catch (e) { bildir(e.message, 'hata'); }
-      } }, ikon('cop')))));
+      } }, ikon('cop'), 'Sil'))));
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' }, h('div', {},
       h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Uçtan uca akışlar')),
       h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Uçtan uca akışlar'))),
     h('div', { class: 'eylemler' },
       h('a', { class: 'dugme hayalet', href: '#/sonuclar/uctan-uca' }, ikon('grafik'), 'Sonuçlar'),
-      h('a', { class: 'dugme birincil', href: `${ADRES}/yeni` }, ikon('arti'), 'Yeni uçtan uca akış'))),
+      h('a', { class: 'dugme birincil', href: `${ADRES}/yeni` }, ikon('arti'), 'Uçtan uca akış ekle'))),
     h('div', { class: 'kart' },
       h('p', { class: 'soluk' }, 'Bir iş akışını baştan sona sınar: örneğin servisle sipariş oluşturulur, sipariş numarası ekranda aranır ve veritabanında durumu denetlenir. ',
         'Bir adımda okunan değer (servis yanıtı, ekran, sorgu sonucu) sonraki adımlarda ', h('code', {}, '${akis:Ad}'), ' ile kullanılır; gizli değerler raporda maskelenir.'),
@@ -94,7 +94,7 @@ async function listeSayfasi(icerik, proje, ortamlar) {
         ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'veri-tablosu', 'aria-label': 'Uçtan uca akışlar' },
           h('thead', {}, h('tr', {}, ...['Akış', 'Adımlar', 'Kapsam', 'Son koşu', ''].map((x) => h('th', { scope: 'col' }, x)))), h('tbody', {}, satirlar)))
         : bosDurum('Henüz uçtan uca akış yok.', 'Örnek: 1. adım servis (yanıttan SiparisNo okunur), 2. adım ekran (arama alanı ← ${akis:SiparisNo}), 3. adım SQL (durum denetlenir).',
-          { ikon: 'katman', eylem: h('a', { class: 'dugme birincil', href: `${ADRES}/yeni` }, ikon('arti'), 'Yeni uçtan uca akış') })));
+          { ikon: 'katman', eylem: h('a', { class: 'dugme birincil', href: `${ADRES}/yeni` }, ikon('arti'), 'Uçtan uca akış ekle') })));
 }
 
 /**

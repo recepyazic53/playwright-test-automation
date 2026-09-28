@@ -27,7 +27,7 @@ async function ogeleriTopla(proje, ayarBolumleri) {
   const ekranAdi = new Map(ekranlar.map((e) => [e.id, e.ad]));
   /** @type {Sonuc[]} */
   const ogeler = [
-    { tur: 'İşler', baslik: 'Yeni senaryo', alt: 'Senaryolar', ikonAd: 'arti', hedef: '#/senaryolar' },
+    { tur: 'İşler', baslik: 'Senaryo ekle', alt: 'Senaryolar', ikonAd: 'arti', hedef: '#/senaryolar' },
     { tur: 'İşler', baslik: 'Sayfa ekle', alt: 'Ekranlar · paket, tarama ya da akış kaydı', ikonAd: 'arti', hedef: '#/ekranlar/yeni' },
     { tur: 'İşler', baslik: 'Servis ekle', alt: 'WSDL, SoapUI, Postman ya da elle', ikonAd: 'arti', hedef: '#/servisler/yeni' },
     { tur: 'İşler', baslik: 'Sonuçlar', alt: 'Koşu geçmişi, eğilim, hata kalıpları', ikonAd: 'grafik', hedef: '#/sonuclar' }

@@ -37,7 +37,7 @@ export const REHBERLER = {
         ipucu: 'Kasa parolası unutulursa veriler kurtarılamaz. Ayarlar > Yedekleme\'den düzenli yedek alın.'
       },
       { baslik: 'Ana menü', hedef: '.ust-nav', metin: 'Sonuçlar, Senaryolar, Ekranlar ve Ayarlar buradan açılır. Servisler, Senaryolar bölümünün sol panelinde yer alır.' },
-      { baslik: 'Proje seçici', hedef: '.proje-secici-kap', metin: 'Birden çok uygulamayı test ediyorsanız her biri ayrı bir projedir. Aralarında buradan geçersiniz; "+ Yeni proje" aynı kasada yeni bir proje açar.' },
+      { baslik: 'Proje seçici', hedef: '.proje-secici-kap', metin: 'Birden çok uygulamayı test ediyorsanız her biri ayrı bir projedir. Aralarında buradan geçersiniz; "Proje ekle" aynı kasada yeni bir proje açar.' },
       { baslik: 'Rehberi tekrar açmak', hedef: '.rehber-dugmesi', metin: 'Hangi ekrandaysanız o ekranın rehberini bu "?" düğmesiyle istediğiniz an yeniden açabilirsiniz. Kendiliğinden açılmasını Ayarlar > Arayüz\'den kapatabilirsiniz.', ipucu: 'Rehberde ← / → tuşlarıyla gezinebilir, Esc ile kapatabilirsiniz.' }
     ]
   },
@@ -113,7 +113,7 @@ export const REHBERLER = {
       },
       { baslik: 'Ekran seçimi', hedef: '.alt-nav', metin: 'Soldan bir ekran seçin; yalnızca onun senaryoları listelenir. Servisler de bu panelin altındadır.' },
       { baslik: 'Arama ve süzgeçler', hedef: '.senaryo-arac-cubugu', metin: 'Başlıkta arayın; "Koşuda", beklenen sonuç ve son duruma göre süzün.', ipucu: 'Klavyede "/" tuşu doğrudan aramaya gider.' },
-      { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Yeni senaryo" ekran modelinden bir form açar. "Koşuyu başlat", "Koşuda" açık olan tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
+      { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Senaryo ekle" ekran modelinden bir form açar. "Koşuyu başlat", "Koşuda" açık olan tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
       { baslik: 'Senaryo tablosu', hedef: '.senaryo-tablosu', metin: 'Satırdaki ▷ tek senaryoyu çalıştırır, kalem düzenler, ⋯ kopyalar / geçmişi gösterir / Playwright koduna dışa aktarır / siler. Birden çok satır seçince toplu işlemler (ör. toplu değer atama) çıkar.' },
       {
         baslik: 'Playwright koduna dışa aktar',
@@ -130,8 +130,8 @@ export const REHBERLER = {
       },
       {
         baslik: 'Önerilen çalışma sırası',
-        sira: ['Ekranlar\'dan ekranı ekleyin (sayfa paketi, tarama ya da akış kaydı).', 'Bu ekranda "Yeni senaryo" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
-        cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Yeni senaryo" ve "Koşuyu başlat" sağ üstte' }
+        sira: ['Ekranlar\'dan ekranı ekleyin (sayfa paketi, tarama ya da akış kaydı).', 'Bu ekranda "Senaryo ekle" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
+        cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Senaryo ekle" ve "Koşuyu başlat" sağ üstte' }
       }
     ]
   },
@@ -265,7 +265,7 @@ export const REHBERLER = {
       { baslik: 'Oturum (token) akışı', metin: 'Giriş gerektiren servisler için bir oturum akışı tanımlayın. Token\'ın süresi dolana kadar mı kullanılacağını, yoksa her istekte yeniden mi alınacağını akışta siz seçersiniz. "Yetki hatasında (401 / 403)": Tekrar deneme ya da Token\'ı yenile, bir kez tekrar dene (oturum / token adımı yeniden çalışır, istek bir kez daha gönderilir; raporda not olarak görünür). "Genel ayarı kullan" seçiliyse Ayarlar > Koşu\'daki genel değer (varsayılan: Token\'ı yenile, bir kez tekrar dene) kullanılır.', cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Giriş servisi', gidis: 'giriş', donus: 'token', kontroller: ['Token alındı', 'Sonraki isteklere eklendi'] } },
       {
         baslik: 'Akış kurma sırası',
-        sira: ['"Yeni akış"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" ile değeri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).',
+        sira: ['"Akış ekle"ta "+" ile adım koyun: bir servisin operasyonu (varsayılan), kayıtlı senaryo (eski tür) ya da SQL sorgusu.', 'Değer üreten adımda "Yanıttan oku" ile değeri tanımlayın (XPath / JSON yolu / başlık; gizliyse işaretleyin).',
           'Sonraki adımda "Alan bağla" ile o değeri operasyonun alanına bağlayın; diyagramdaki oklar taşınan değerleri gösterir.', 'Kaydedin; sayfanın altındaki "Bu akışın senaryoları"ndan "Senaryo ekle" ile verileri girin.'],
         cizim: { tur: 'akis', kutular: [{ baslik: '+ Operasyon', ikon: 'artiYalin' }, { baslik: 'Yanıttan oku', ikon: 'hedef' }, { baslik: 'Alan bağla', ikon: 'ok' }, { baslik: 'Senaryo ekle', ikon: 'liste' }] }
       }
@@ -283,7 +283,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Akış kurma sırası',
-        sira: ['"Yeni uçtan uca akış"ta "+" ile adım koyun: ekran senaryosu, bir servisin operasyonu (ya da kayıtlı senaryosu) veya SQL sorgusu.',
+        sira: ['"Uçtan uca akış ekle"ta "+" ile adım koyun: ekran senaryosu, bir servisin operasyonu (ya da kayıtlı senaryosu) veya SQL sorgusu.',
           'Değer üreten adımda okumayı tanımlayın: serviste "Yanıttan oku", ekranda "Değer oku" (seçici + ad), SQL\'de sonuç sütunu. Gizli değerleri işaretleyin.',
           'Sonraki adımda değeri kullanın: ekranda "Alan doldur" ile senaryonun bir alanına, serviste "Alan bağla" ile, SQL\'de sorgunun içinde ${akis:Ad}.',
           'Kaydedin ve "Koş…" ile ortam seçip çalıştırın.'],
@@ -342,7 +342,7 @@ export const REHBERLER = {
     baslik: 'Akış tasarımı',
     adimlar: [
       { baslik: 'Akış diyagramı', metin: 'Ekranın adımları kutular hâlinde, çalışma sırasıyla. Kutuları sürükleyerek sıralar, "+" ile koşullu adım ya da ortak akış eklersiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adım 1', ikon: 'duzenle' }, { baslik: 'Koşullu', alt: 'ör. Kurumsal ise', ikon: 'isaret' }, { baslik: 'Ortak akış', ikon: 'pusula' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
-      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Yeni akış" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] },
+      { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Akış ekle" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] },
       { baslik: 'Ekran görüntüsü al', metin: 'Alan grubunda (ya da aksiyonda) "Ekran görüntüsü al" işaretli adımların sonunda görüntü alınır — adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu). Diğer seçimlerde işaret etkisizdir.' },
       {
         baslik: 'İndirilen dosyayı doğrula',
@@ -431,7 +431,7 @@ export const REHBERLER = {
         baslik: 'Kişi alanlarını tabloya bağlama',
         metin: ['Ekran > Test verisi sekmesindeki "Kişi alanlarını tabloya bağla…", ekrandaki kişi / kimlik alanlarını (kimlik no, vergi no, pasaport, doğum tarihi, telefon, e-posta, ad soyad) bir kişi / kayıt tablosunun sütunlarına bağlamayı önerir; eşlemeyi siz onaylarsınız.',
           'Her senaryo için sonuç gösterilir (değer gösterilmez): "eşleşti" (kişinin değerleri tablodaki bir satırla aynı), "yeni satır" (tabloda yok: satır adı önerilir, ortama özel olup olmayacağını seçersiniz) ya da "atlandı" ve nedeni (ör. kişinin alanları tabloda farklı satırlarda). Bir kişinin alanları hep aynı satırdan gelir. Koşuda ekrana giden değer değişecek alan çevrilmez. Onaylayınca bağlar, yeni satırlar ve senaryolar tek işlemde yazılır.',
-          'Aynı türden ikinci bir kişi alanı varsa (ör. ikinci telefon, "ettiren / ödeyen" ön ekli alanlar, ayrı bölümdeki kişiler) o alanlar ayrı bir ETİKETLE bağlanmak üzere önerilir (etiket alanın ya da bölümün adından, ör. "ödeyen"); iki kişi tablonun ayrı satırlarından gelir. Etiketi pencerede değiştirebilirsiniz.'],
+          'Aynı türden ikinci bir kişi alanı varsa (ör. ikinci telefon, "alıcı / ödeyen" ön ekli alanlar, ayrı bölümdeki kişiler) o alanlar ayrı bir ETİKETLE bağlanmak üzere önerilir (etiket alanın ya da bölümün adından, ör. "ödeyen"); iki kişi tablonun ayrı satırlarından gelir. Etiketi pencerede değiştirebilirsiniz.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Kişi alanları', ikon: 'kullanici' }, { baslik: 'Sütun eşleme', alt: 'öneri + onay', ikon: 'esle' }, { baslik: 'Satır', alt: 'eşleşti / yeni', ikon: 'veri' }, { baslik: 'Senaryo', alt: '${Tablo.Sütun}', ikon: 'onay' }] }
       }
     ]
@@ -505,7 +505,7 @@ export const REHBERLER = {
         metin: ['Nöbetçi\'yi başka uygulamalara bağlarsınız: koşu bitince sohbet kanalına bildirim (webhook), kalan bir testten iş takip sisteminde hata kaydı açma ve SQL adımları için veritabanı bağlantısı.', 'Token, parola ve gizli adresler kasada şifreli durur; siz denemeden ya da seçtiğiniz olay gerçekleşmeden hiçbir istek gönderilmez.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Tür', alt: 'webhook / hata kaydı / veritabanı', ikon: 'liste' }, { baslik: 'Ayarlar', alt: 'gizliler kasada', ikon: 'kilit' }, { baslik: 'Dene', alt: 'onayınızla', ikon: 'simsek' }, { baslik: 'Bağlı', ikon: 'onay' }] }
       },
-      { baslik: 'Bağlama sırası', sira: ['"Yeni bağlantı" ile türü seçin.', 'Alanları doldurun; hangi olaylarda ve hangi ortamlarda çalışacağını seçin.', '"Bağlantıyı dene": önce hangi adrese deneme isteği gideceği gösterilir, onaylarsanız gider.', 'Kaydedin; durum rozeti bağlı / denenmedi / hata olarak görünür.'] },
+      { baslik: 'Bağlama sırası', sira: ['"Bağlantı ekle" ile türü seçin.', 'Alanları doldurun; hangi olaylarda ve hangi ortamlarda çalışacağını seçin.', '"Bağlantıyı dene": önce hangi adrese deneme isteği gideceği gösterilir, onaylarsanız gider.', 'Kaydedin; durum rozeti bağlı / denenmedi / hata olarak görünür.'] },
       { baslik: 'Veritabanı ve DBeaver', metin: 'Veritabanı bağlantıları varsayılan olarak yalnız okuma kipindedir (yalnız SELECT). DBeaver kullanıyorsanız bağlantı tanımlarını "DBeaver\'dan içe aktar" ile alabilirsiniz; parolalar alınmaz, siz girersiniz. Bildirim / hata kaydı için "Dış gönderim", veritabanı için "Veritabanı okuma" (yazma sorgusu için ayrıca "Veritabanına yazma") izni gerekir (Ayarlar > İzinler). Yeni bağlantıda olay seçimi kapalı başlar.', ipucu: 'Veritabanı sürücüleri ayrıca kurulur: npm install mssql oracledb pg mysql2' },
       {
         baslik: 'Veritabanları (ortama göre)',

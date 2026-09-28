@@ -272,7 +272,7 @@ function tabanGorunumu(proje, veri, yenile) {
   };
 
   const adsizlar = satirlar.filter((s) => !s.grup).sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
-  const yeni = h('button', { type: 'button', class: 'birincil' }, ikon('arti'), 'Yeni taban adresi');
+  const yeni = h('button', { type: 'button', class: 'birincil' }, ikon('arti'), 'Taban adresi ekle');
   yeni.addEventListener('click', () => tabanFormu(null));
   ciz();
   return h('div', {},

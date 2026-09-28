@@ -54,13 +54,13 @@ export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile)
         ortamAd ? h('span', { class: 'soluk kucuk' }, ortamAd) : null);
     })() : h('span', { class: 'cok-soluk' }, '—')),
     h('td', { class: 'eylem' }, h('a', { class: 'dugme ikon-dugme', href: `${adres}/${q(a.id)}`, title: 'Düzenle', 'aria-label': `Düzenle: ${a.baslik}` }, ikon('duzenle')),
-      h('button', { type: 'button', class: 'ikon-dugme hayalet', title: 'Sil', 'aria-label': `Sil: ${a.baslik}`, onclick: async () => {
+      h('button', { type: 'button', class: 'kucuk-dugme tehlike', 'aria-label': `Sil: ${a.baslik}`, onclick: async () => {
         if (!(await onayIste({ baslik: `"${a.baslik}" silinsin mi?`, metin: 'Akış silinir; geçmiş koşu kayıtları kalır.', dugme: 'Sil', tehlikeli: true }))) return;
         try { await api('/platform/servis-akisi/sil', { govde: { projeId: proje.id, id: a.id } }); bildir('Akış silindi.'); yenile(); } catch (e) { bildir(e.message, 'hata'); }
-      } }, ikon('cop')))));
+      } }, ikon('cop'), 'Sil'))));
   yerlestir(kap, oturumKarti,
     h('div', { class: 'kart' },
-      h('div', { class: 'kart-basligi' }, h('h3', {}, 'Servis akışları'), h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: `${adres}/yeni` }, ikon('arti'), 'Yeni akış'))),
+      h('div', { class: 'kart-basligi' }, h('h3', {}, 'Servis akışları'), h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: `${adres}/yeni` }, ikon('arti'), 'Akış ekle'))),
       h('p', { class: 'soluk kucuk' }, 'Akış, kayıtlı senaryoları sırayla koşar (başka servislerin senaryoları da olabilir). Bir adımın yanıtından okunan değer sonraki adımlarda ',
         h('code', {}, '${akis:Ad}'), ' ile gövdede, başlıkta ve kontrollerde kullanılır.'),
       akislar.length

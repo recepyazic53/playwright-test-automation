@@ -138,7 +138,7 @@ export function dosyaKontroluFormu(t, s) {
       s.degisti();
       /** @type {HTMLElement | null} */ (liste.querySelector('li:last-child input'))?.focus();
     }
-  }, ikon('artiYalin'), 'Beklenti ekle');
+  }, ikon('arti'), 'Beklenti ekle');
 
   const sure = s.ekran ? sayiGirdisi(t.zamanAsimiSn ?? '', 'İndirmeyi en çok bekleme (sn)', 1, (v) => { if (v === '') delete t.zamanAsimiSn; else t.zamanAsimiSn = v; }) : null;
   if (sure) sure.setAttribute('placeholder', 'varsayılan');

@@ -162,7 +162,7 @@ tek, örtük "Ana akış" (`id: "ana"`) vardır. Alanlar, koşullar ve senaryo d
 (aynı kimlik) birden çok akışta olabilir. Her akış, `adimlar`ı o akışın adımlarıyla değiştirilmiş model olarak doğrulanır
 (`model-formu.mjs > akisModeli`: o akışta olmayan adımlara bağlı iş kuralları, alanlara bağlı bağlam görünürlükleri ve başka
 akışların isteğe bağlı adım ayarları/koşulları çıkarılır). Senaryo akışını içeriğinde tutar (`icerik.akis`; yoksa varsayılan).
-Ekranlar > ekran > **Akışlar** sekmesi (Model geçmişi düzeni): akış listesi (adım / senaryo sayısı), "Yeni akış oluştur" (ad; boş
+Ekranlar > ekran > **Akışlar** sekmesi (Model geçmişi düzeni): akış listesi (adım / senaryo sayısı), "Akış ekle" (ad; boş
 ya da bir akıştan kopya), seçilen akışın diyagramı; **Düzenle** / **Kopyala** / **Varsayılan yap** / **Sil** (senaryosu olan ya da
 varsayılan akış silinemez; varsayılan değişince akışı yazılı olmayan senaryolara eski varsayılan yazılır). Düzenleme diyagram
 düzenleyicisiyle yapılır (sağ liste YALNIZCA bu ekranın modelindeki alanlar); kaydetmeden önce etkilenen senaryolar gösterilir,

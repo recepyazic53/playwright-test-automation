@@ -230,7 +230,7 @@ function listeGorunumu(icerik, s) {
   // --- Başlık ve eylemler ---
   const olusturulabilirler = veri.ekranlar.filter((e) => e.olusturulabilir);
   const yeniDugmesi = ekran
-    ? (ekran.olusturulabilir ? h('a', { class: 'dugme', href: `#/senaryolar/yeni/${encodeURIComponent(ekran.id)}` }, ikon('artiYalin'), 'Yeni senaryo') : null)
+    ? (ekran.olusturulabilir ? h('a', { class: 'dugme', href: `#/senaryolar/yeni/${encodeURIComponent(ekran.id)}` }, ikon('arti'), 'Senaryo ekle') : null)
     : olusturulabilirler.length ? yeniMenusu(olusturulabilirler) : null;
   // Senaryo tasarım yardımcısı: modelden öneri (kaydetmez; kullanıcı seçip ekler).
   const oneriDugmesi = ekran && ekran.olusturulabilir && ekran.modelVar
@@ -679,7 +679,7 @@ function listeGorunumu(icerik, s) {
 }
 
 function yeniMenusu(ekranlar) {
-  const dugme = h('button', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, ikon('artiYalin'), 'Yeni senaryo', ikon('asagi'));
+  const dugme = h('button', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, ikon('arti'), 'Senaryo ekle', ikon('asagi'));
   const menu = h('div', { class: 'acilir-menu', role: 'menu', hidden: true },
     h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, 'Ekran modeli olan ekranlar'),
     ekranlar.map((e) => h('button', { type: 'button', role: 'menuitem', onclick: () => { location.hash = `#/senaryolar/yeni/${encodeURIComponent(e.id)}`; } }, ikon('katman'), e.ad)));

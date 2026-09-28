@@ -110,7 +110,7 @@ test('yeni tablo kaydı: "Benzer tablo var" — onu kullan satırları o tabloya
   const page = await baglam.newPage();
   await page.goto('/#/ayarlar/test-verisi');
   const liste = page.getByRole('navigation', { name: 'Tablolar' });
-  await liste.getByRole('button', { name: 'Yeni tablo' }).click();
+  await liste.getByRole('button', { name: 'Tablo ekle' }).click();
   const duz = page.getByRole('region', { name: 'Tablo düzenleyici' });
   await duz.getByRole('textbox', { name: 'Tablo adı' }).fill('Ödeme yöntemleri');
   await duz.getByText('Excel\'den yapıştır').click();

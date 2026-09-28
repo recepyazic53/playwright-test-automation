@@ -232,7 +232,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
 
   yerlestir(govde,
     projeFormu,
-    bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, '+ Ortam ekle')),
+    bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, ikon('arti'), 'Ortam ekle')),
     formAlani,
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
@@ -376,7 +376,7 @@ async function girisProfilleri(govde, baglam, yenile) {
 
   const tarifAlani = h('section', { class: 'giris-tarifi-bolumu', 'aria-label': 'Giriş tarifi' }, iskelet('liste'));
   govde.replaceChildren(
-    bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Giriş profili ekle')),
+    bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, ikon('arti'), 'Giriş profili ekle')),
     formAlani,
     kayitListesi(satirlar, 'Henüz giriş profili yok.', 'kullanici'),
     tarifAlani);

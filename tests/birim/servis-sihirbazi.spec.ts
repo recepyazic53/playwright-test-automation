@@ -189,7 +189,7 @@ test.describe('sihirbaz uçtan uca', () => {
     await page.getByLabel('Siparis Input/IsGiftWrap zorunlu').check();
     // Alan ekleme formu gizli; "+ Alan ekle" açar, eklenince kapanır.
     await expect(page.getByLabel('Siparis yeni alan yolu')).toBeHidden();
-    await page.getByRole('button', { name: '+ Alan ekle' }).click();
+    await page.getByRole('button', { name: 'Alan ekle' }).click();
     await page.getByLabel('Siparis yeni alan yolu').fill('Input/EkAlan');
     await page.getByLabel('Siparis yeni alan zorunlu').check();
     await page.getByRole('button', { name: 'Ekle', exact: true }).click();

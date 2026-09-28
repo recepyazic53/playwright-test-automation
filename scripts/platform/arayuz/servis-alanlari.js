@@ -171,7 +171,7 @@ export function metotAlanTablosu(s) {
     const zor = h('input', { type: 'checkbox', 'aria-label': `${s.ad} yeni alan zorunlu` });
     const not = h('span', { class: 'alan-uyarisi', 'aria-live': 'polite' });
     const ekle = h('button', { type: 'button', class: 'kucuk-dugme birincil' }, 'Ekle');
-    const ac = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-expanded': 'false' }, '+ Alan ekle');
+    const ac = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-expanded': 'false' }, ikon('arti'), 'Alan ekle');
     const form = h('div', { class: 'alan-ekle-formu', hidden: true });
     const goster = (acik) => {
       form.hidden = !acik; ac.hidden = acik; ac.setAttribute('aria-expanded', String(acik));

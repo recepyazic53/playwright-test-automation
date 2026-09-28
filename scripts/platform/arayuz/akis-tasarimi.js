@@ -504,7 +504,7 @@ export async function akisTasarimi(icerik, s) {
           h('button', {
             type: 'button', class: 'kucuk-dugme', 'aria-label': 'Kabul edilen bir uyarı ekle',
             onclick: (o) => { o.stopPropagation(); blokEkle(i + 1, { tur: 'mesaj', mesaj: null, metin: '', uyari: true }); }
-          }, ikon('artiYalin'), 'Uyarı ekle'),
+          }, ikon('arti'), 'Uyarı ekle'),
           h('span', { class: 'soluk kucuk' }, grupBoyu > 1
             ? `Bu ${grupBoyu} başarı mesajından herhangi biri görünürse başarılı sayılır (en fazla ${MESAJ_GRUBU_EN_COK}).`
             : 'Başarıyı gösteren başka bir mesaj ya da kabul ettiğiniz bir uyarı varsa ekleyin.')) : null

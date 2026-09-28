@@ -500,15 +500,15 @@ export async function tablolarBolumu(govde, proje) {
         h('div', { class: 'arama-kutusu tablo-listesi-arama', hidden: !liste.length }, ikon('ara'), listeAramaG),
         listeKap,
         h('button', { type: 'button', class: 'kucuk-dugme yeni-tablo', onclick: async () => { if (!(await gecebilirMi())) return; seciliId = ''; is = kopya(null); ciz(); } },
-          ikon('arti'), 'Yeni tablo')));
+          ikon('arti'), 'Tablo ekle')));
     }
   }
 
   function ciz() {
     solCiz();
     if (!is) {
-      yerlestir(sagKap, h('section', { class: 'kart' }, bosDurum('Henüz tablo yok.', 'Yeni tablo ekleyin ya da Excel / CSV dosyasından yükleyin.', {
-        ikon: 'liste', eylem: h('button', { type: 'button', class: 'birincil', onclick: () => { is = kopya(null); ciz(); } }, ikon('arti'), 'Yeni tablo')
+      yerlestir(sagKap, h('section', { class: 'kart' }, bosDurum('Henüz tablo yok.', '"Tablo ekle" ile ekleyin ya da Excel / CSV dosyasından yükleyin.', {
+        ikon: 'liste', eylem: h('button', { type: 'button', class: 'birincil', onclick: () => { is = kopya(null); ciz(); } }, ikon('arti'), 'Tablo ekle')
       })));
       return;
     }

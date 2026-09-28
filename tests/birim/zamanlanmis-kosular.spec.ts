@@ -349,7 +349,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     const kart = page.getByRole('region', { name: 'Zamanlanmış koşular' });
     await expect(kart.getByText('kaçan zamanlar sonradan toplu koşulmaz')).toBeVisible();
     await expect(kart.getByText('Zamanlanmış koşu yok.')).toBeVisible();
-    await kart.getByRole('button', { name: '+ Zamanlanmış koşu ekle' }).click();
+    await kart.getByRole('button', { name: 'Zamanlanmış koşu ekle' }).click();
     const form = page.getByRole('form', { name: 'Yeni zamanlanmış koşu' });
     await form.getByLabel('Ad').fill('Gece tam koşu');
     await form.getByRole('combobox', { name: /^Ortam/ }).selectOption({ label: 'Ana sistem' });
@@ -398,7 +398,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/ayarlar/kosu');
     const kart = page.getByRole('region', { name: 'Zamanlanmış koşular' });
-    await kart.getByRole('button', { name: '+ Zamanlanmış koşu ekle' }).click();
+    await kart.getByRole('button', { name: 'Zamanlanmış koşu ekle' }).click();
     const form = page.getByRole('form', { name: 'Yeni zamanlanmış koşu' });
     await form.getByLabel('Ad').fill('Gece uçtan uca');
     await form.getByRole('combobox', { name: 'Senaryolar' }).selectOption('yok');

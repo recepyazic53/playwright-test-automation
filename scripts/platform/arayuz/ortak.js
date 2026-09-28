@@ -523,18 +523,20 @@ export function parolaAlani(etiket, secenekler = {}) {
 
 /** İki adımlı onay: ilk tıklama düğmeyi "…onayla" durumuna getirir, 5 sn içinde ikinci tıklama çalıştırır. */
 export function onayliDugme(metin, onayMetni, fn, secenekler = {}) {
-  const dugme = h('button', { type: 'button', class: `tehlike ${secenekler.kucuk ? 'kucuk-dugme' : ''}`, 'aria-label': secenekler.etiket || metin }, metin);
+  // Silme düğmeleri tek stil: çöp ikonu + metin (tehlike). Onay beklerken yalnız metin değişir.
+  const yazi = h('span', {}, metin);
+  const dugme = h('button', { type: 'button', class: `tehlike ${secenekler.kucuk ? 'kucuk-dugme' : ''}`, 'aria-label': secenekler.etiket || metin }, ikon('cop'), yazi);
   let zamanlayici = null;
   dugme.addEventListener('click', async () => {
     if (!dugme.classList.contains('onay-bekliyor')) {
       dugme.classList.add('onay-bekliyor');
-      dugme.textContent = onayMetni;
-      zamanlayici = setTimeout(() => { dugme.classList.remove('onay-bekliyor'); dugme.textContent = metin; }, 5000);
+      yazi.textContent = onayMetni;
+      zamanlayici = setTimeout(() => { dugme.classList.remove('onay-bekliyor'); yazi.textContent = metin; }, 5000);
       return;
     }
     clearTimeout(zamanlayici);
     dugme.disabled = true;
-    try { await fn(); } finally { dugme.disabled = false; dugme.classList.remove('onay-bekliyor'); dugme.textContent = metin; }
+    try { await fn(); } finally { dugme.disabled = false; dugme.classList.remove('onay-bekliyor'); yazi.textContent = metin; }
   });
   return dugme;
 }

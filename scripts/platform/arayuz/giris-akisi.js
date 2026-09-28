@@ -57,5 +57,6 @@ export function girisKarti(o) {
     o.tarif ? h('p', { class: 'ortak-akis-kullanimi kucuk soluk' }, `${o.ortamAd} ortamındaki her koşuda kullanılır`) : null,
     o.hatalar && o.hatalar.length ? h('p', { class: 'kucuk hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null,
     h('div', { class: 'ekran-karti-alt' },
-      h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: düzenle` }, ikon('duzenle'), o.tarif ? 'Düzenle' : 'Tanımla')));
+      (o.tarif ? h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: düzenle` }, ikon('duzenle'), 'Düzenle')
+        : h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: giriş akışı ekle` }, ikon('arti'), 'Giriş akışı ekle'))));
 }

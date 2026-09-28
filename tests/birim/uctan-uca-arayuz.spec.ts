@@ -98,7 +98,7 @@ test.describe('uçtan uca akış arayüzü ve koşusu', () => {
     await expect(page.getByText('Henüz uçtan uca akış yok.')).toBeVisible();
     // Sol panelde (Senaryolar bölümü) bağlantı.
     await expect(page.locator('.yan-panel').getByRole('link', { name: 'Uçtan uca akışlar' })).toHaveAttribute('aria-current', 'page');
-    await page.getByRole('link', { name: 'Yeni uçtan uca akış' }).first().click();
+    await page.getByRole('link', { name: 'Uçtan uca akış ekle' }).first().click();
     await expect(page.getByRole('heading', { name: 'Yeni uçtan uca akış' }).first()).toBeVisible();
     await page.getByLabel('Başlık').fill('Sipariş uçtan uca');
     // 1. adım: projedeki ekran senaryosu hazır gelir; alan akıştan doldurulur, onay numarası ekrandan okunur.

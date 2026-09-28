@@ -48,14 +48,14 @@ export async function zamanlanmisKosularKarti(proje, secenek = {}) {
       yerlestir(formAlani, kuralFormu({ ...secenekler, kural, kapat: () => formAlani.replaceChildren(), kaydedildi: () => { void ciz(); } }));
       formAlani.scrollIntoView({ block: 'nearest' });
     };
-    const ekle = h('button', { type: 'button', class: 'birincil', onclick: () => formAc(null) }, '+ Zamanlanmış koşu ekle');
+    const ekle = h('button', { type: 'button', class: 'birincil', onclick: () => formAc(null) }, ikon('arti'), 'Zamanlanmış koşu ekle');
     yerlestir(kart,
       h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('tarih'), 'Zamanlanmış koşular', rozet(String(veri.kurallar.length))), ekle),
       h('p', { class: 'soluk' }, KILAVUZ),
       veri.suren ? h('div', { class: 'not-kutusu uyari', role: 'status' }, `Şu an zamanlanmış koşu sürüyor: "${veri.suren.ad}".`) : null,
       formAlani,
       veri.kurallar.length ? h('ul', { class: 'kayit-listesi zamanlama-listesi' }, veri.kurallar.map((k) => kuralSatiri(k, { ...secenekler, duzenle: formAc, yenile: ciz })))
-        : bosDurum('Zamanlanmış koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "+ Zamanlanmış koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
+        : bosDurum('Zamanlanmış koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "Zamanlanmış koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
       secenek.davranisFormu ? h('div', { class: 'zamanlama-davranisi' }, h('h4', {}, 'Zamanlanmış koşu davranışı'), await secenek.davranisFormu()) : null,
       await arkaPlanBolumu().catch((hata) => {
         if (hata && hata.durum === 423) throw hata;

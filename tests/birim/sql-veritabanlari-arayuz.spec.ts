@@ -93,7 +93,7 @@ test.describe('veritabanları arayüzü', () => {
     await page.goto('/#/ayarlar/entegrasyonlar');
     const bolum = page.getByRole('region', { name: /Veritabanları/ });
     await expect(bolum.getByText('Henüz veritabanı yok.')).toBeVisible();
-    await bolum.getByRole('button', { name: '+ Veritabanı ekle' }).click();
+    await bolum.getByRole('button', { name: 'Veritabanı ekle' }).click();
     const form = page.getByRole('group', { name: 'Yeni veritabanı' });
     await form.getByLabel('Ad').fill('Kayıt veritabanı');
     // Ortam kısıtı: kayit-TEST yalnız TEST'e açık → CANLI listesinde seçilemez.

@@ -162,7 +162,7 @@ test.describe('servis taban adresleri arayüzü', () => {
 
   test('yeni taban: "Hangi servisler bu adresi kullansın?" — boşlar önce, işaretsiz; seçilenler bağlanır; 390px taşma yok', async ({}, testInfo) => {
     const { page, hatalar, kapat } = await sayfaAc(390);
-    await page.getByRole('button', { name: 'Yeni taban adresi' }).click();
+    await page.getByRole('button', { name: 'Taban adresi ekle' }).click();
     const pencere = page.getByRole('dialog', { name: 'Yeni taban adresi' });
     await pencere.getByLabel('Taban adresinin adı').fill('Kampanya sunucusu');
     await pencere.getByLabel('TEST adresi').fill('https://kampanya-test.ornek.invalid');

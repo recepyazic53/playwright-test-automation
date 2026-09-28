@@ -512,7 +512,7 @@ function sihirbazOrtamlar() {
   };
   ortamSatiri(true);
   if (cevaplar.ortam === 'testCanli') ortamSatiri(false, 'CANLI', true);
-  const ekleDugmesi = h('button', { type: 'button', onclick: () => ortamSatiri(false).ad.focus() }, '+ Ortam ekle');
+  const ekleDugmesi = h('button', { type: 'button', onclick: () => ortamSatiri(false).ad.focus() }, ikon('arti'), 'Ortam ekle');
   const mesaj = mesajKutusu();
   const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve devam', ikon('ok'));
   const form = h('form', { class: 'kart', novalidate: true },
@@ -704,7 +704,7 @@ function projeSecici() {
     h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, alan && !alan.sabit ? `Projeler · ${alan.ad}` : 'Projeler'),
     durum.projeler.map(satir),
     h('hr', {}),
-    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('tanisma', 'ek'); } }, ikon('artiYalin'), 'Yeni proje'),
+    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('tanisma', 'ek'); } }, ikon('arti'), 'Proje ekle'),
     h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); location.hash = '#/ayarlar/proje'; } }, ikon('duzenle'), 'Projeyi düzenle'));
   dugme.addEventListener('click', () => {
     if (acik()) { kapat(); return; }

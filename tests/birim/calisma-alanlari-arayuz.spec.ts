@@ -159,9 +159,9 @@ test('kilit ekranı çalışma alanının adını ve "Başka çalışma alanı"n
 
 test('aynı kasada yeni proje: sihirbaz (tanışma → proje → ortamlar → proje hazır özeti)', async () => {
   const menu = await projeMenusu();
-  await expect(menu.getByRole('menuitem', { name: 'Yeni proje' })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Proje ekle' })).toBeVisible();
   await goruntu('03-proje-secici', undefined, { x: 0, y: 0, width: 760, height: 300 });
-  await menu.getByRole('menuitem', { name: 'Yeni proje' }).click();
+  await menu.getByRole('menuitem', { name: 'Proje ekle' }).click();
   await expect(page.getByRole('heading', { name: 'Yeni proje', level: 1 })).toBeVisible();
   await expect(page.locator('.adimlar li')).toHaveText(['Tanışalım', 'Proje', 'Ortamlar', 'Tamam']);
   // Tanışma: test ve canlı → canlı ortam satırı (riskli işaretli) hazır gelir.
