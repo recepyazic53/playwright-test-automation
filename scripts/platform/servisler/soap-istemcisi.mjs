@@ -5,6 +5,7 @@ import https from 'node:https';
 import { wsdlSemalari } from './wsdl-semasi.mjs';
 import { AD_KALIBI, BICIM_KALIBI, ETIKET_KALIBI } from '../tablolar/tablo-secimi.mjs';
 import * as hesap from './hesap-kurallari.mjs';
+import { dosyayiDogrula, sonucOzeti, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
 import { tarihBicimle, VARSAYILAN_TARIH_BICIMI } from './hesap-kurallari.mjs';
 
 export { tarihBicimle, VARSAYILAN_TARIH_BICIMI };
@@ -205,7 +206,7 @@ export function gizlileriMaskele(metin, gizliler) {
 // ---------------------------------------------------------------------------------------
 
 /**
- * @typedef {{ durumKodu: number; basliklar: Record<string, string>; govde: string; sureMs: number }} HamYanit
+ * @typedef {{ durumKodu: number; basliklar: Record<string, string>; govde: string; ham?: Buffer; sureMs: number }} HamYanit
  */
 
 /** @typedef {ReadonlyArray<{ kalip: string; desen: RegExp }>} YasakDesenleri */
@@ -251,11 +252,15 @@ export function httpIstegi(istek) {
       /** @type {Buffer[]} */
       const parcalar = [];
       y.on('data', (p) => parcalar.push(p));
-      y.on('end', () => coz({
-        durumKodu: y.statusCode ?? 0,
-        basliklar: Object.fromEntries(Object.entries(y.headers).map(([a, d]) => [a, Array.isArray(d) ? d.join(', ') : String(d ?? '')])),
-        govde: Buffer.concat(parcalar).toString('utf8'), sureMs: Date.now() - bas
-      }));
+      y.on('end', () => {
+        const ham = Buffer.concat(parcalar);
+        coz({
+          durumKodu: y.statusCode ?? 0,
+          basliklar: Object.fromEntries(Object.entries(y.headers).map(([a, d]) => [a, Array.isArray(d) ? d.join(', ') : String(d ?? '')])),
+          // ham: gövdenin baytları (dosya kontrolü: XLSX / PDF gibi ikili yanıtlar metne çevrilmeden okunur).
+          govde: ham.toString('utf8'), ham, sureMs: Date.now() - bas
+        });
+      });
       y.on('error', red);
     });
     r.on('timeout', () => r.destroy(new ServisHatasi(`Yanıt ${Math.round(zamanAsimi / 1000)} sn içinde gelmedi.`)));
@@ -453,6 +458,7 @@ export function kontrolAdi(k) {
     case 'xpathEsit': return `${k.xpath} = "${k.deger}"`;
     case 'jsonEsit': return `JSON ${k.yol} = "${k.deger}"`;
     case 'veya': return `Şunlardan biri: ${(k.alt ?? []).map(kontrolAdi).join(' | ')}`;
+    case 'dosya': return `Yanıttaki dosya doğrulanır (${k.dosya?.beklentiler?.length ?? 0} beklenti)`;
     default: return String(k.tur);
   }
 }
@@ -473,9 +479,35 @@ function durumKoduUyar(kod, ifade) {
 }
 
 /**
- * @param {{ durumKodu: number; govde: string }} yanit @param {ServisKontrolu[]} kontroller @returns {KontrolSonucu[]}
+ * Dosya kontrolü: yanıt gövdesi (baytları) dosya olarak okunur (dosyalar/dosya-icerigi.mjs); adı Content-Disposition'dan ya da adresten,
+ * biçimi içerik türünden / imzadan. Sonuç: her beklenti bir alt sonuç (geçti / kaldı, Beklenen / Görülen; gizliler maskeli).
+ * @param {{ govde: string; ham?: Buffer; basliklar?: Record<string, string> }} yanit @param {ServisKontrolu} k @param {string} ad
+ * @param {DosyaKontrolSecenekleri} s @returns {KontrolSonucu}
  */
-export function kontrolleriDegerlendir(yanit, kontroller) {
+function dosyaKontrolu(yanit, k, ad, s) {
+  const veri = yanit.ham ?? Buffer.from(yanit.govde, 'utf8');
+  const icerikTuru = Object.entries(yanit.basliklar ?? {}).find(([a]) => a.toLowerCase() === 'content-type')?.[1] ?? null;
+  const dosyaAdi = yanitDosyaAdi(yanit.basliklar, s.adres);
+  const tanim = /** @type {import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi} */ (k.dosya);
+  const r = dosyayiDogrula({ ad: dosyaAdi, icerikTuru, veri }, tanim, { coz: s.coz, gizliler: s.gizliler, ekGizliAdlar: s.ekGizliAdlar });
+  s.sonuc?.(r, veri);
+  const alt = r.beklentiler.map((b) => ({ tur: 'dosyaBeklentisi', ad: b.ad, gecti: b.gecti, aciklama: b.gecti ? b.gorulen : `Beklenen: ${b.beklenen} — Görülen: ${b.gorulen}` }));
+  return { tur: 'dosya', ad, gecti: r.gecti, aciklama: sonucOzeti(r), alt };
+}
+
+/**
+ * Dosya kontrolünün bağlamı: coz — beklentilerdeki ${…} başvuruları (parametre, ${Tablo.Sütun}, ${akis:Ad}); gizliler — maskelenecek
+ * değerler; adres — dosya adı Content-Disposition'da yoksa adresin son parçası; sonuc — dosya okunduktan sonra (ek saklama kararı için).
+ * @typedef {{ coz?: (ifade: string) => string | undefined; gizliler?: string[]; ekGizliAdlar?: ReadonlyArray<string>; adres?: string;
+ *   sonuc?: (r: import('../dosyalar/dosya-icerigi.mjs').DosyaKontrolSonucu, veri: Buffer) => void }} DosyaKontrolSecenekleri
+ */
+
+/**
+ * @param {{ durumKodu: number; govde: string; ham?: Buffer; basliklar?: Record<string, string> }} yanit @param {ServisKontrolu[]} kontroller
+ * @param {DosyaKontrolSecenekleri} [dosyaSecenekleri] dosya kontrolü varsa
+ * @returns {KontrolSonucu[]}
+ */
+export function kontrolleriDegerlendir(yanit, kontroller, dosyaSecenekleri = {}) {
   const agac = xmlAgaci(yanit.govde);
   const zarf = agac && agac.ad === 'Envelope' ? agac : null;
   const govdeDugumu = zarf?.cocuklar.find((c) => c.ad === 'Body');
@@ -507,6 +539,7 @@ export function kontrolleriDegerlendir(yanit, kontroller) {
         const gecen = altlar.filter((a) => a.gecti);
         return { ...s(gecen.length > 0, gecen.length ? `Geçen: ${gecen.map((a) => a.ad).join(' | ')}` : 'Hiçbiri geçmedi'), alt: altlar };
       }
+      case 'dosya': return dosyaKontrolu(yanit, k, ad, dosyaSecenekleri);
       default: return s(false, 'Bilinmeyen kontrol türü');
     }
   };

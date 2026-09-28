@@ -42,6 +42,9 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     aciklama: 'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı (DOM) ve ekran anları, konsol mesajları. Sonuç ayrıntısından indirilip Playwright iz görüntüleyicisiyle (npx playwright show-trace <dosya> ya da trace.playwright.dev) açılır. "Yalnız başarılı testlerde": iz her testte alınır, kalan testlerinki kaydedilmeden silinir.',
     tur: 'secim', varsayilan: 'yalnizHata',
     secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_IZ' },
+  { anahtar: 'indirilenDosya', grup: 'Kayıt', etiket: 'Doğrulanan dosya (ek)',
+    aciklama: 'İndirilen dosyayı doğrulama adımında (ekran) ve servis yanıtının dosya kontrolünde dosyanın kendisi rapora ek olarak (şifreli) saklansın mı. Saklanmazsa raporda yalnız özet durur: dosyanın adı, boyutu, biçimi ve her beklentinin sonucu. İndirilen dosya koşunun geçici klasörüne yazılır ve doğrulamadan sonra silinir.',
+    tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Saklanmaz (yalnız özet)'], ['yalnizHata', 'Yalnız kalan doğrulamalarda'], ['her', 'Her zaman']], env: 'NOBETCI_INDIRILEN_DOSYA' },
   { anahtar: 'yenidenDeneme', grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Kalan test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
   { anahtar: 'kosuSureLimitiDk', grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',
     tur: 'sayi', varsayilan: 10, enAz: 1, enCok: 120, birim: 'dk', env: 'NOBETCI_KOSU_SURE_LIMITI_MS', carpan: 60_000 },
@@ -153,7 +156,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     etkinKosul: { anahtar: 'medyaInceltme', degerler: ['hatali', 'ikisi'], pasifAciklama: 'Yalnız kalan testlerin medyası inceltilirken kullanılır.' } }
 ]);
 
-/** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
+/** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
  *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
  *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;

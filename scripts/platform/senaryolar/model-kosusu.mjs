@@ -285,6 +285,9 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       ...(typeof adim.ortakAkisAdi === 'string' ? { ortakAkisAdi: adim.ortakAkisAdi } : {}),
       // SQL sorgusu adımı (sql/sql-adimi.mjs): koşucu sorguyu çalıştırıp beklenenle karşılaştırır (alan / aksiyon yok).
       ...(nesneMi(adim.sqlKontrolu) ? { sql: adim.sqlKontrolu } : {}),
+      // İndirilen dosyayı doğrulama adımı (dosyalar/dosya-icerigi.mjs): tetikleyici düğmeye basılır, indirilen dosya beklentilerle
+      // doğrulanır (alan yok).
+      ...(nesneMi(adim.dosyaKontrolu) ? { dosya: adim.dosyaKontrolu } : {}),
       // Yeniden giriş adımı: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle (isteğe bağlı başka giriş
       // profiliyle) yeniden girilir; alan / aksiyon yok.
       ...(nesneMi(adim.yenidenGiris) ? { yenidenGiris: { profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil.trim() ? adim.yenidenGiris.profil.trim() : null } } : {})

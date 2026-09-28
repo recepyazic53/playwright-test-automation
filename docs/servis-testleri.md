@@ -128,6 +128,15 @@ Servis ekle > Postman koleksiyonu. Postman Collection v2.1 (v2.0 da olur) JSON; 
 
 REST koşusu: gövdedeki değerler içerik türüne göre kaçışlanır (JSON / form / XML), yoldaki değerler URL kodlanır; Content-Type içerik türünden yazılır. Yanıtta `jsonEsit` kontrolü (`yol: data.id`) ve akışta `json` okuması kullanılır. REST servisinde WSDL olmadığından erişim kontrolü istenmez.
 
+## Yanıttaki dosyayı doğrula
+
+Kontrol türü `dosya`: yanıt gövdesi (baytları) dosya olarak okunur. Ad `Content-Disposition`'dan ya da adresin son parçasından, biçim içerik türünden / imzadan bulunur (CSV, XLSX, PDF, düz metin; bkz. `scripts/platform/dosyalar/dosya-icerigi.mjs`).
+
+- Beklentiler: dosya adı deseni, en az boyut, metin içeriyor / içermiyor, sütun var, satır sayısı (= / ≥), hücre değeri (sütun + satır koşulu). Her beklenti sonuçta ayrı satırdır (Beklenen / Görülen; gizli değerler ve gizli tablo sütunları maskeli).
+- Metinlerde `${Parametre}`, `${Tablo.Sütun}`, `${akis:Ad}` çözülür. VEYA içinde kullanılmaz.
+- İkili yanıt raporda metin olarak saklanmaz (yalnız özet). Dosyanın kendisi Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (varsayılan: saklanmaz) koşu kaydına eklenir.
+- Ekranlarda karşılığı akış tasarımındaki "İndirilen dosyayı doğrula" bloğudur (düğmeye basılır, Playwright indirmesi koşunun geçici klasörüne yazılır, doğrulanır ve silinir).
+
 ## Kod
 
 | Dosya | İçerik |

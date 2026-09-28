@@ -46,6 +46,8 @@ export type AkisBlogu =
   | { tur: 'ortak'; dosya: string; ad: string; istegeBagli: boolean }
   /** SQL sorgusu adımı (sql/sql-adimi.mjs SqlTanimi; kaydederken doğrulanır). */
   | { tur: 'sql'; ad: string; sql: Record<string, unknown> }
+  /** İndirilen dosyayı doğrula: dugme (sağ listedeki düğmenin sırası) indirmeyi başlatır; dosya: DosyaTanimi (kaydederken doğrulanır). */
+  | { tur: 'dosya'; ad: string; dugme: number; dosya: Record<string, unknown> }
   /** Yeniden giriş: oturum kapatılıp ortamın tarifiyle yeniden girilir (profil: giriş profili adı; null = varsayılan). */
   | { tur: 'giris'; ad: string; profil: string | null }
   | { tur: 'bitir' };

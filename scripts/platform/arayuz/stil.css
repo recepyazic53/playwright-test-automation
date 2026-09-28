@@ -2924,6 +2924,20 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .tablo-listesi > button small.tablo-kaynagi { color: var(--metin-3); font-style: italic; }
 .tablo-duzenleyici .tablo-kaynagi { margin: 0 0 6px; }
 
+/* Dosya doğrulama (dosya-kontrolu-formu.js; ekran akış tasarımı ve servis kontrolü). Dar ekranda satırlar alta kayar (taşma yok). */
+.dosya-kontrolu { display: grid; gap: 8px; min-width: 0; }
+.dosya-ust, .dosya-ayarlari { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; min-width: 0; }
+.dosya-ust > label, .dosya-ayarlari > label.tasarim-etiketi { flex: 1 1 160px; min-width: 0; }
+.dosya-ust select, .dosya-ust input, .dosya-ayarlari select, .dosya-ayarlari input[type="text"] { width: 100%; min-width: 0; }
+.dosya-baslik { font-size: 12.5px; }
+.dosya-beklentileri { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.dosya-beklentisi { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; padding: 6px; border-radius: 7px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); }
+.dosya-beklentisi select { flex: 0 1 200px; min-width: 0; }
+.dosya-beklentisi input[type="text"] { flex: 1 1 160px; min-width: 0; }
+.dosya-beklentisi input[type="number"] { flex: 0 1 96px; min-width: 0; }
+.dosya-beklenti-no { font: 700 10.5px var(--yazi-mono); color: var(--metin-3); min-width: 14px; }
+.dosya-kontrolu > .kucuk-dugme { justify-self: start; }
+.kontrol-dosyasi { grid-column: 1 / -1; flex: 1 1 100%; min-width: 0; }
 /* SQL sorgusu adımı (sql-adimi-formu.js; ekran ve servis akışı tasarımında ortak). */
 .sql-adimi-formu { display: grid; gap: 4px; min-width: 0; }
 .sql-adimi-formu textarea.kod-girdisi { font-family: var(--yazi-mono); font-size: 12.5px; min-height: 5.5em; resize: vertical; }

@@ -5,6 +5,7 @@ export declare const DESTEKLENEN_SEMA_SURUMU: number;
 export declare const SEMA_SURUMLERI: readonly number[];
 export declare const AKSIYON_TURLERI: readonly ['tikla', 'bekle'];
 export declare const SQL_BEKLENEN_TURLERI: readonly string[];
+export declare const DOSYA_BEKLENTI_TURLERI: readonly string[];
 export declare const BASARI_GOSTERGESI_TURLERI: readonly ['metin', 'eleman', 'url'];
 export declare const ALAN_TIPLERI: readonly [
   'secim', 'okluSecim', 'metin', 'sayi', 'tarih', 'telefon', 'onayKutusu', 'radyo', 'dosya',

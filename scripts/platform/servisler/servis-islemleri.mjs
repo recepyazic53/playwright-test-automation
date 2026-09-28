@@ -36,6 +36,32 @@ import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { tanimMetinleri, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
+
+/** Dosya kontrolünde rapora eklenecek (Ayarlar izin verirse) dosyanın en büyük boyutu; daha büyüğü yalnız özetle kalır. */
+const DOSYA_EKI_SINIRI = 5 * 1024 * 1024;
+
+/** Projedeki test verisi tablolarının gizli sütun değerleri (okunamazsa boş). @param {Veritabani} vt @param {string} projeId @returns {string[]} */
+function gizliTabloDegerleri(vt, projeId) {
+  try {
+    return tablolariListele(vt, projeId, { cozulsun: true }).flatMap((t) => {
+      const gizli = t.sutunlar.filter((s) => s.gizli).map((s) => s.ad);
+      return t.satirlar.flatMap((r) => gizli.map((ad) => r.degerler[ad]).filter((v) => typeof v === 'string' && v.length > 0));
+    });
+  } catch { return []; }
+}
+
+/**
+ * Yanıt ikili mi (metin olarak gösterilemez): NUL baytı, geçersiz UTF-8 ya da bilinen ikili imza (ZIP / PDF / eski Office).
+ * @param {Buffer} v
+ */
+function ikiliMi(v) {
+  const bas = v.subarray(0, 8);
+  if (bas.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) || bas.subarray(0, 4).toString('latin1') === '%PDF' || bas.subarray(0, 4).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0]))) return true;
+  if (v.subarray(0, 8192).includes(0)) return true;
+  // Windows-1254 metin de UTF-8 değildir: ham hâliyle bozuk görüneceğinden ikili gibi yalnız özetle kalır.
+  try { new TextDecoder('utf-8', { fatal: true }).decode(v.subarray(0, 65536), { stream: true }); return false; } catch { return true; }
+}
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -962,7 +988,9 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const hamMetin = [icerik.govde, ...Object.values(basliklarHam), http?.yol ?? ''].join('\n');
     const kurallar = servis.ayarlar.tarihKurallari ?? {};
     const kuralRefleri = kuralParametreleri(kullanilanParametreler(hamMetin).filter((a) => Object.hasOwn(kurallar, a)), kurallar).refler.map((r) => `\${${r}}`);
-    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortam.id);
+    // Dosya kontrollerinin beklentilerindeki ${Parametre} / ${Tablo.Sütun} başvuruları da aynı kurallarla çözülür.
+    const dosyaMetinleri = icerik.kontroller.flatMap((k) => (k.tur === 'dosya' ? tanimMetinleri(k.dosya) : []));
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri, ...dosyaMetinleri].join('\n') }, ortam.id);
     gizliler = [...gizliler, ...p.gizliler];
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
@@ -1026,10 +1054,30 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       if (okumaGizliMi(o, ekAdlar)) gizliler.push(v);
       okumaSonuclari.push({ tur: 'okuma', ad: `Değer okundu: ${o.ad}`, gecti: true, aciklama: okumaGizliMi(o, ekAdlar) ? 'gizli (maskelendi)' : '' });
     }
-    olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
+    // Dosya kontrolü olan senaryoda ikili yanıt (XLSX / PDF…) metin olarak gösterilmez / saklanmaz (yalnız özet).
+    const dosyaVar = icerik.kontroller.some((k) => k.tur === 'dosya');
+    const ikiliYanit = dosyaVar && ikiliMi(yanit.ham ?? Buffer.from(yanit.govde, 'utf8'));
+    const gosterilecekYanit = ikiliYanit ? `(ikili dosya yanıtı: ${yanitDosyaAdi(yanit.basliklar, adres)}, ${(yanit.ham ?? Buffer.alloc(0)).length} bayt — içerik metin olarak saklanmaz)` : yanit.govde;
+    olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(gosterilecekYanit.slice(0, 20_000), gizliler) });
     // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki SiparisNo = önceki adımda okunan) çözülür.
     const kontrolListesi = akisDegerleri ? akisKontrolleriniCoz(icerik.kontroller, akisDegerleri) : icerik.kontroller;
-    const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi), ...okumaSonuclari];
+    /** @type {Array<Record<string, unknown>>} */
+    const dosyaEkleri = [];
+    const indirilenDosya = kosu.indirilenDosya;
+    const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi, dosyaVar ? {
+      // Dosya dış veridir: bu çalıştırmanın gizlileri + projedeki gizli tablo sütunlarının tüm değerleri kesitlerde maskelenir.
+      adres, gizliler: [...gizliler, ...gizliTabloDegerleri(vt, projeId)], ekGizliAdlar: ekAdlar,
+      // Beklentilerdeki başvurular: ${akis:Ad}, ${Parametre}, ${Tablo.Sütun}, ${tarih:…} — gövdeyle aynı kural; çözülemeyen → undefined.
+      coz: (ifade) => {
+        try { return yerTutuculariDoldur(`\${${ifade}}`, { ...doldurma, kacis: 'yok' }); } catch { return undefined; }
+      },
+      // Dosyanın kendisi yalnız Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (şifreli koşu kaydında) saklanır.
+      sonuc: (r, veri) => {
+        const ek = indirilenDosya === 'her' || (indirilenDosya === 'yalnizHata' && !r.gecti);
+        dosyaEkleri.push({ ...r.dosya, gecti: r.gecti, ...(ek && veri.length <= DOSYA_EKI_SINIRI ? { icerikBase64: veri.toString('base64') } : {}) });
+      }
+    } : {}), ...okumaSonuclari];
+    if (dosyaEkleri.length) sonuc.dosyalar = dosyaEkleri;
     // "Yanıt sözleşmeye uymalı" (senaryo ayarı; varsayılan kapalı): uyumsuzluk senaryoyu kaldırır (servis-sozlesmesi.mjs).
     if (icerik.sozlesmeDogrula === true) {
       const sz = yanitSozlesmesiniDenetle(servis, icerik.operasyon, yanit, (m) => gizlileriMaskele(m, gizliler));
@@ -1042,8 +1090,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     }
     olay('kontroller', durum === 'basarili' ? 'tamam' : 'hata', { gecen: kontroller.filter((k) => k.gecti).length, toplam: kontroller.length });
     Object.assign(sonuc, {
-      durumKodu: yanit.durumKodu, yanitSureMs: yanit.sureMs, kontroller, ozet: gizlileriMaskele(yanitOzeti(yanit.govde), gizliler),
-      yanit: gizlileriMaskele(yanit.govde.length > YANIT_SAKLAMA_SINIRI ? `${yanit.govde.slice(0, YANIT_SAKLAMA_SINIRI)}\n…(kırpıldı)` : yanit.govde, gizliler)
+      durumKodu: yanit.durumKodu, yanitSureMs: yanit.sureMs, kontroller, ozet: ikiliYanit ? '' : gizlileriMaskele(yanitOzeti(yanit.govde), gizliler),
+      yanit: gizlileriMaskele(gosterilecekYanit.length > YANIT_SAKLAMA_SINIRI ? `${gosterilecekYanit.slice(0, YANIT_SAKLAMA_SINIRI)}\n…(kırpıldı)` : gosterilecekYanit, gizliler)
     });
   } catch (e) {
     if (!(e instanceof ServisHatasi) && !(e instanceof DepoHatasi)) throw e;

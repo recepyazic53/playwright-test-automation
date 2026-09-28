@@ -82,6 +82,14 @@ export function adimGoruntusuAyari(senaryoSecimi?: string | null): AdimGoruntusu
   return adimGoruntusuSecimi(senaryoSecimi) ?? secimAyari('NOBETCI_ADIM_GORUNTUSU', ADIM_GORUNTUSU_SECIMLERI, 'her');
 }
 
+/**
+ * Doğrulanan (indirilen) dosya rapora ek olarak saklansın mı (Ayarlar > Koşu > Kayıt > Doğrulanan dosya): varsayılan saklanmaz
+ * (yalnız özet); 'yalnizHata' yalnız beklentisi kalan dosya; 'her' her zaman.
+ */
+export function indirilenDosyaAyari(): 'her' | 'yalnizHata' | 'kapali' {
+  return secimAyari('NOBETCI_INDIRILEN_DOSYA', ['her', 'yalnizHata', 'kapali'] as const, 'kapali');
+}
+
 /** Yeniden deneme sayısı (0–3): ortam değişkeni > kasadaki kayıtlı ayar > CI'da 2, diğerlerinde 0. */
 export function yenidenDenemeAyari(): number {
   const ham = ayarDegeri('NOBETCI_YENIDEN_DENEME');

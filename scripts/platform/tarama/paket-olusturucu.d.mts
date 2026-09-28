@@ -121,6 +121,8 @@ export type KayitAdimi = {
   ortakAkis?: { dosya: string; istegeBagli: boolean };
   /** SQL sorgusu adımı (akış tasarımında "+ > SQL sorgusu"): alanı yoktur; modelde adımın sqlKontrolu olur. */
   sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi;
+  /** İndirilen dosyayı doğrulama adımı (akış tasarımında "+ > Dosya doğrula"): alanı yoktur; modelde adımın dosyaKontrolu olur. */
+  dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi;
   /** Yeniden giriş adımı (akış tasarımında "+ > Yeniden giriş"): alanı yoktur; modelde adımın yenidenGiris'i olur. */
   yenidenGiris?: { profil?: string };
 };

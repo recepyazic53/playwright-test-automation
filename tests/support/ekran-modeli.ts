@@ -215,6 +215,8 @@ export type Adim = {
   altModel?: AltModelBasvurusu;
   /** SQL adımı (platform/sql/sql-adimi.mjs SqlTanimi): koşuda veritabanı sorgusu beklenenle karşılaştırılır. */
   sqlKontrolu?: Record<string, unknown>;
+  /** İndirilen dosyayı doğrulama adımı (platform/dosyalar/dosya-icerigi.mjs DosyaTanimi + tetikleyici düğme). */
+  dosyaKontrolu?: Record<string, unknown>;
   /** Sürüm 2: aksiyonlar ve başarı/hata göstergesi. */
   kosu?: AdimKosuTanimi;
 };

@@ -37,7 +37,8 @@ import { izinMesaji } from './guvenlik/izin-tanimlari.mjs';
 import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
-import { ekranBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
+import { ekranBasvurulariniCoz, metinBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
+import { tanimMetinleri } from './dosyalar/dosya-icerigi.mjs';
 import { satirSecimiOlustur } from './tablolar/tablo-secimi.mjs';
 import { kayitliKosuOrtamDegiskenleri, kosuAyarlariniOku } from './ayarlar/kosu-ayarlari.mjs';
 import { YUKLEME_KLASORU_DEGISKENI, yuklemeDosyasiYolu } from './senaryolar/model-kosusu.mjs';
@@ -55,6 +56,12 @@ function tablodanDosyaDenetle(ad) {
   const r = yuklemeDosyasiYolu(ad, klasor, join);
   if ('hata' in r) return r.hata;
   return existsSync(r.yol) ? null : `"${ad}" dosyası izinli klasörde yok (${YUKLEME_KLASORU_DEGISKENI} ya da veri/yuklenecek-dosyalar/)`;
+}
+
+/** Modelin indirilen dosya adımlarındaki beklenti metinleri (tablo başvurularının çözümü için). @param {any} model @returns {string[]} */
+function dosyaBeklentiMetinleri(model) {
+  const adimlar = model && Array.isArray(model.adimlar) ? model.adimlar : [];
+  return adimlar.flatMap((/** @type {any} */ a) => (a && a.dosyaKontrolu ? tanimMetinleri(a.dosyaKontrolu) : []));
 }
 
 /** @param {unknown} veri */
@@ -246,15 +253,20 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
    * @param {Record<string, unknown>} veri @param {string} ekranId @param {ReturnType<typeof modelBaglami>} mb @param {unknown} tabloSecimleri
    */
   const basvurulariCoz = (veri, ekranId, mb, tabloSecimleri) => {
-    if (!tabloBasvurusuVarMi(veri)) return { veri, tabloGizliDegerleri: [], veriHatalari: [] };
+    // İndirilen dosya adımlarının beklentilerindeki ${Tablo.Sütun} başvuruları (metnin içinde) da aynı seçimlerle çözülür.
+    const dosyaMetinleri = mb ? dosyaBeklentiMetinleri(mb.model) : [];
+    const dosyadaBasvuru = dosyaMetinleri.some((m) => /\$\{\s*(?!akis:)[^{}]*\.[^{}]*\}/.test(m));
+    if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru) return { veri, tabloGizliDegerleri: [], veriHatalari: [], dosyaBasvurulari: {} };
     tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
     if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, ekranAlanBaglari(vt, ekranId));
-    const r = ekranBasvurulariniCoz(veri, {
+    const s = {
       tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId, dosyaDenetle: tablodanDosyaDenetle,
       satirSecimi: satirSecimiOlustur(satirSecimKipi),
       ...(tabloSecimleri && typeof tabloSecimleri === 'object' ? { tabloSecimleri: /** @type {Record<string, Record<string, string>>} */ (tabloSecimleri) } : {})
-    });
-    return { veri: r.veri, tabloGizliDegerleri: r.gizliDegerler, veriHatalari: r.hatalar };
+    };
+    const r = ekranBasvurulariniCoz(veri, s);
+    const d = dosyadaBasvuru ? metinBasvurulariniCoz(dosyaMetinleri, veri, s) : { degerler: {}, gizliDegerler: [], hatalar: [] };
+    return { veri: r.veri, tabloGizliDegerleri: [...r.gizliDegerler, ...d.gizliDegerler], veriHatalari: [...r.hatalar, ...d.hatalar], dosyaBasvurulari: d.degerler };
   };
   const senaryolar = [];
   for (const s of vt.tumu('SELECT id, ekran_id, baslik, icerik_json, kosuya_dahil FROM senaryolar WHERE proje_id = ? ORDER BY rowid', [projeId])) {
@@ -281,6 +293,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
       veri: cozum.veri, mutlakaGorunmeli: kurallar,
       ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
       ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
+      ...(Object.keys(cozum.dosyaBasvurulari).length ? { dosyaBasvurulari: cozum.dosyaBasvurulari } : {}),
       // Senaryonun giriş seçimi (senaryo-girisi.mjs; null = ortamın girişiyle, bugünkü davranış).
       giris: senaryoGirisi(icerik),
       // Senaryonun adım ekran görüntüsü seçimi (null = Ayarlar > Koşu > Kayıt'a uyar; bugünkü davranış).
@@ -301,6 +314,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
         model: mb.model, modelSurumu: mb.surum, altModeller: mb.altModeller, veri: cozum.veri, mutlakaGorunmeli: deneme.mutlakaGorunmeli, deneme: true,
         ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
         ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
+        ...(Object.keys(cozum.dosyaBasvurulari).length ? { dosyaBasvurulari: cozum.dosyaBasvurulari } : {}),
         giris: deneme.giris, adimGoruntusu: deneme.adimGoruntusu
       });
     }

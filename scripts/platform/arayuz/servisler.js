@@ -26,6 +26,7 @@ import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { akislarSekmesi } from './servis-akislari.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { senaryoSayfasi } from './akis-senaryo-formu.js';
+import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 
@@ -35,7 +36,7 @@ const DURUM = { basarili: ['Başarılı', 'basari'], basarisiz: ['Başarısız',
 const KONTROL_TURLERI = [
   ['soapYaniti', 'Yanıt geçerli SOAP zarfı'], ['soapHatasiYok', 'SOAP hatası (Fault) yok'], ['soapHatasi', 'SOAP hatası (Fault) döner'],
   ['icerir', 'Yanıtta geçer'], ['icermez', 'Yanıtta geçmez'], ['xpathEsit', 'XPath değeri eşit'], ['jsonEsit', 'JSON değeri eşit'], ['durumKodu', 'HTTP durum kodu'],
-  ['veya', 'Şunlardan biri (VEYA)']
+  ['dosya', 'Yanıttaki dosyayı doğrula'], ['veya', 'Şunlardan biri (VEYA)']
 ];
 const DEGERLI_KONTROLLER = new Set(['icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'durumKodu']);
 const HTTP_METOTLARI = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
@@ -496,7 +497,7 @@ function beklenenOzeti(kontroller) {
   const tek = (k) => k.tur === 'icerir' ? `"${kisalt(k.deger || '')}"` : k.tur === 'icermez' ? `içermez "${kisalt(k.deger || '')}"`
     : k.tur === 'xpathEsit' ? `${k.xpath} = ${kisalt(k.deger || '')}` : k.tur === 'durumKodu' ? `HTTP ${k.deger}`
       : k.tur === 'soapHatasi' ? 'SOAP hatası (Fault)' : k.tur === 'soapHatasiYok' ? 'SOAP hatası yok'
-        : k.tur === 'veya' ? `biri: ${(k.alt || []).map(tek).join(' | ')}` : k.tur;
+        : k.tur === 'veya' ? `biri: ${(k.alt || []).map(tek).join(' | ')}` : k.tur === 'dosya' ? `dosya: ${dosyaOzeti(k.dosya)}` : k.tur;
   return `${tek(anlamli[0])}${anlamli.length > 1 ? ` (+${anlamli.length - 1})` : ''}`;
 }
 
@@ -1210,7 +1211,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   ciz();
 
   const kontrolKutusu = h('div', {});
-  const kopya = (k) => ({ ...k, ...(k.alt ? { alt: k.alt.map(kopya) } : {}) });
+  const kopya = (k) => ({ ...k, ...(k.alt ? { alt: k.alt.map(kopya) } : {}), ...(k.dosya ? { dosya: JSON.parse(JSON.stringify(k.dosya)) } : {}) });
   // Kontroller düz satırlar olarak düzenlenir; her satırın başında VE / VEYA seçilir. VEYA ile bağlanan ardışık satırlar
   // bir grup olur (en az biri tutması yeter); gruplar arası VE: "A VE B VEYA C" = A ve (B ya da C). Kayıtta grup
   // { tur: 'veya', alt: [...] } olarak saklanır (sunucu biçimi değişmez).
@@ -1238,7 +1239,12 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
           h('option', { value: 'VE', selected: x.bag === 'VE' }, 'VE'), h('option', { value: 'VEYA', selected: x.bag === 'VEYA' }, 'VEYA'));
       if (n > 0) bag.addEventListener('change', () => { x.bag = bag.value; kontrolCiz(); });
       const tur = h('select', { 'aria-label': `${no} kontrol türü` }, KONTROL_TURLERI.filter(([d]) => d !== 'veya').map(([d, m]) => h('option', { value: d, selected: k.tur === d }, m)));
-      tur.addEventListener('change', () => { k.tur = tur.value; kontrolCiz(); });
+      tur.addEventListener('change', () => {
+        k.tur = tur.value;
+        // Dosya kontrolü: yanıt gövdesi dosya olarak beklentilerle doğrulanır (tanım k.dosya); başka türe geçince tanım atılır.
+        if (k.tur === 'dosya') k.dosya ||= yeniDosyaTanimi(); else delete k.dosya;
+        kontrolCiz();
+      });
       const kaldir = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${no} kontrolü kaldır`, onclick: () => {
         kontrolSatirlari.splice(n, 1);
         if (kontrolSatirlari[0]) kontrolSatirlari[0].bag = 'VE';
@@ -1258,7 +1264,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       return h('div', { class: `kontrol-satiri${grupta ? ' veya-grubunda' : ''}${grupta && bas ? ' grup-basi' : ''}${grupta && son ? ' grup-sonu' : ''}` }, bag, tur,
         k.tur === 'xpathEsit' ? xpath : null, k.tur === 'jsonEsit' ? jsonYolu : null, DEGERLI_KONTROLLER.has(k.tur) ? deger : null,
         k.tur === 'icerir' || k.tur === 'icermez' ? h('label', { class: 'secenek', for: buyuk.id }, buyuk, 'büyük/küçük duyarsız') : null,
-        kaldir);
+        kaldir,
+        k.tur === 'dosya' ? h('div', { class: 'kontrol-dosyasi' }, dosyaKontroluFormu(k.dosya ||= yeniDosyaTanimi(), { degisti: () => undefined, ad: `${no} kontrol` })) : null);
     });
     const ekle = h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => { kontrolSatirlari.push({ k: { tur: 'icerir', deger: '' }, bag: 'VE' }); kontrolCiz(); } }, ikon('arti'), 'Kontrol ekle');
     yerlestir(kontrolKutusu,

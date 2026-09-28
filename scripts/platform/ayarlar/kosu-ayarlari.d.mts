@@ -8,7 +8,7 @@ export interface KosuAyarTanimi {
   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string };
 }
 export interface KosuAyarlari {
-  video: string; videoBoyutu: 'kucuk' | 'ekran'; ekranGoruntusu: string; adimGoruntusu: 'her' | 'yalnizKalan' | 'secili' | 'kapali'; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
+  video: string; videoBoyutu: 'kucuk' | 'ekran'; ekranGoruntusu: string; adimGoruntusu: 'her' | 'yalnizKalan' | 'secili' | 'kapali'; iz: string; indirilenDosya: 'kapali' | 'yalnizHata' | 'her'; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; yetkiHatasinda: 'tekrarYok' | 'yenileVeTekrar'; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number;
   taramaSayfaAcilmaSn: number; kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string;
   taramaGirisKipi: 'bastan' | 'saklananOturum'; taramaOturumKontrolSn: number; taramaGirisAlanBeklemeSn: number;
