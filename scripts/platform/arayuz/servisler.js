@@ -1620,8 +1620,9 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
   let erisim = null;
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
-  // Adlandırılmış taban adresi (Ayarlar > Proje ve ortamlar > Servis taban adresleri): seçilirse adresler oradan gelir
-  // (servise özel "bu ortamda yok" korunur); "Servise özel adres" seçilirse yukarıdaki ortam satırları kullanılır.
+  // Adlandırılmış taban adresi (Ayarlar > Proje ve ortamlar > Servis taban adresleri): başka bir taban seçilirse adresler oradan gelir
+  // (servise özel "bu ortamda yok" korunur); "Servise özel adres" seçilirse ortam satırları kullanılır. Bağlı olduğu tabanda kalırken
+  // ortam satırları düzenlenebilir: tabandan farklı adres yazılırsa kaydederken karar penceresi açılır (ayır / tabanı güncelle / vazgeç).
   let tabanAdlari = [];
   const tabanSecimi = h('select', { 'aria-label': 'Taban adresi' },
     h('option', { value: '' }, '— Servise özel adres —'),
@@ -1633,10 +1634,14 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
     const a = t.adresler[o.id] || '';
     return a && !(s.ayarlar.tabanGrubu === t.ad && s.ayarlar.tabanlar?.[o.id] === '') ? a : '';
   };
+  /** Servisin bağlı olduğu tabanda kalıyor mu (ortam satırları düzenlenebilir). */
+  const ayniTaban = () => Boolean(tabanSecimi.value) && tabanSecimi.value === s.ayarlar.tabanGrubu;
   const tabanCiz = () => {
     const t = seciliTaban();
-    ozelSatirlar.hidden = Boolean(tabanSecimi.value);
-    yerlestir(tabanOzeti, t ? [
+    ozelSatirlar.hidden = Boolean(tabanSecimi.value) && !ayniTaban();
+    yerlestir(tabanOzeti, ayniTaban() ? h('p', { class: 'soluk kucuk' },
+      `Adresler "${tabanSecimi.value}" taban adresinden gelir. Aşağıda farklı bir adres yazarsanız kaydederken servisi tabandan ayırmak, tabanın adresini (bağlı tüm servisler) güncellemek ya da vazgeçmek arasında seçim yaparsınız.`)
+      : t ? [
       h('p', { class: 'soluk kucuk' }, `Adresler "${t.ad}" taban adresinden gelir; değiştirmek için Ayarlar'da taban adresini düzenleyin.`),
       h('ul', { class: 'taban-bagli-adresler' }, ortamlar.map((o) => h('li', {}, h('b', {}, `${o.ad}: `),
         tabandanDeger(t, o) ? h('code', { class: 'duz' }, tabandanDeger(t, o)) : h('span', { class: 'soluk' }, 'bu ortamda yok (koşmaz)'))))
@@ -1652,7 +1657,7 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
     tabanCiz();
   }).catch(() => { /* liste gelmezse servise özel adres düzenlenir */ });
   const tabanDegerleri = () => {
-    const t = seciliTaban();
+    const t = ayniTaban() ? null : seciliTaban();
     return Object.fromEntries(tabanlar.map((x) => [x.o.id, t ? tabandanDeger(t, x.o) : x.deger()]));
   };
   const adresDegisti = () => {

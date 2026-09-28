@@ -20,7 +20,24 @@ export interface TabanEtkisi {
 }
 export declare function tabanlariUygula(vt: Veritabani, projeId: string, girdi: {
   degisiklikler: Record<string, { tabanlar?: Record<string, string | null>; grup?: string | null }>; onay?: boolean; yapan?: string;
-}): { onizleme: TabanEtkisi; uygulandi?: true };
+  tabanKararlari?: Record<string, TabanKarari>; tabanDegisikligi?: boolean;
+}): { onizleme: TabanEtkisi; uygulandi?: true; tabanKararlari?: Record<string, TabanKarari> };
+
+/** Bağlı servisin adresi tabandan farklılaşırken kararlar: ayır / tabanın adresini güncelle / vazgeç. */
+export declare const TABAN_KARARLARI: readonly ['ayir', 'tabaniGuncelle', 'vazgec'];
+export type TabanKarari = typeof TABAN_KARARLARI[number];
+export interface TabanCakismasi { ortamId: string; ortam: string; eski: string; yeni: string }
+export declare class TabanKarariHatasi extends Error {
+  kod: 'TABAN_KARARI';
+  karar: { servisId: string; servis: string; taban: string; cakismalar: TabanCakismasi[]; etki: TabanAdiEtkisi };
+  constructor(mesaj: string, karar: TabanKarariHatasi['karar']);
+}
+export declare function tabanKararlariniDogrula(x: unknown): Record<string, TabanKarari>;
+export interface TekServisTabanKarari { tabanlar: Record<string, string>; ayir: boolean; guncelle: { ad: string; adresler: Record<string, string> } | null }
+export declare function tabanKarari(vt: Veritabani, projeId: string, g: {
+  servis: Servis | undefined; tabanlar: Record<string, string>; kararlar?: Record<string, TabanKarari>; onizleme?: boolean;
+}): TekServisTabanKarari;
+export declare function tabanKarariUygula(vt: Veritabani, projeId: string, k: TekServisTabanKarari, yapan?: string): void;
 export declare function servisTabanBaglantisi(vt: Veritabani, projeId: string, servisId: string | undefined, ad: string): { tabanlar: Record<string, string> };
 export interface TabanAdiEtkisi extends TabanEtkisi {
   /** Adresi boş kalacak (bu ortamda koşamayacak) servisler ve ortam adları. */

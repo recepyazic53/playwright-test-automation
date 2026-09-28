@@ -10,6 +10,12 @@
 //   tabanGrubu) bağlı servislerin adresinden türetilir; ilk değişiklikte kayda geçer. Taban adresi değişince / silinince bağlı
 //   servislerin servis.ayarlar.tabanlar'ı birlikte yazılır (koşu yine yalnız servisin adreslerini okur). tabanAdresiIslemi.
 // - Önce etki önizlemesi (hangi servisler, kaç senaryo / akış, eski → yeni adres); YALNIZ onay: true ile yazılır.
+// - Taban adresine BAĞLI bir servisin adresi başka yoldan (içe aktarma, sihirbaz, servis sayfası, "Servis bazında" görünüm) tabanın
+//   adresinden farklı bir değere değişecekse kayıttan ÖNCE kullanıcı karar verir (TabanKarariHatasi → HTTP 409 "TABAN_KARARI";
+//   karar verilmeden HİÇBİR ŞEY yazılmaz). Kararlar (tabanKararlari: { <servisId>: karar }):
+//     ayir: yalnız bu servis yeni adresi kullanır, bağı kalkar · tabaniGuncelle: tabanın adresi değişir (bağlı TÜM servisler) ·
+//     vazgec: yeni adres kullanılmaz, servis tabandaki adreste kalır (içe aktarmada diğer içerik yine yazılır).
+//   "Bu ortamda yok" servise özeldir, bağı bozmaz (karar sorulmaz). tabanKarari / tabanKarariUygula (tek servis), tabanlariUygula (toplu).
 // - Adres http(s) olmalı ve yasak adres kalıplarına (Ayarlar > Güvenlik) uymamalı. Ağ isteği YOK (SOAP'ta da erişim kontrolü
 //   yapılmaz; kullanıcı isterse servis sayfasından kendisi kontrol eder). Adresi değişen ortamın eski erişim kaydı silinir.
 import { DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele } from '../veritabani/depo.mjs';
@@ -25,6 +31,153 @@ import { tabanlariDogrula, tabanlariOrtamlaraKaydet } from './servis-islemleri.m
 
 const GRUP_ADI = /^[^\u0000-\u001f]{1,60}$/u;
 const temiz = (/** @type {string} */ a) => a.trim().replace(/\/+$/, '');
+
+/** Bağlı servisin adresi tabandan farklılaşırken verilebilecek kararlar. */
+export const TABAN_KARARLARI = /** @type {const} */ (['ayir', 'tabaniGuncelle', 'vazgec']);
+/** @typedef {typeof TABAN_KARARLARI[number]} TabanKarari */
+/** @typedef {{ ortamId: string; ortam: string; eski: string; yeni: string }} TabanCakismasi  eski: tabanın adresi ('' = bu ortamda yok) */
+
+/**
+ * Karar gerekiyor: bağlı servisin yeni adresi tabanınkinden farklı ve karar verilmemiş. Hiçbir şey yazılmamıştır.
+ * karar: arayüzün penceresi için (servis, taban, eski → yeni, "Tabanın adresini güncelle"nin etki önizlemesi).
+ */
+export class TabanKarariHatasi extends DepoHatasi {
+  /** @param {string} mesaj @param {{ servisId: string; servis: string; taban: string; cakismalar: TabanCakismasi[]; etki: unknown }} karar */
+  constructor(mesaj, karar) {
+    super(mesaj);
+    this.name = 'TabanKarariHatasi';
+    this.kod = 'TABAN_KARARI';
+    this.karar = karar;
+  }
+}
+
+/** { <servisId>: karar } doğrulaması (verilmezse boş). @param {unknown} x @returns {Record<string, TabanKarari>} */
+export function tabanKararlariniDogrula(x) {
+  if (x === undefined || x === null) return {};
+  if (typeof x !== 'object' || Array.isArray(x)) throw new DepoHatasi('"tabanKararlari" bir nesne olmalıdır.');
+  /** @type {Record<string, TabanKarari>} */
+  const s = {};
+  for (const [id, k] of Object.entries(x)) {
+    if (!TABAN_KARARLARI.includes(/** @type {any} */ (k))) throw new DepoHatasi(`Taban adresi kararı geçersiz: ${String(k)} (ayir, tabaniGuncelle ya da vazgec).`);
+    s[id] = /** @type {TabanKarari} */ (k);
+  }
+  return s;
+}
+
+/**
+ * Bağlı servisin yazılacak adresleri ile tabanın adresleri arasındaki farklar ('' = servise özel "bu ortamda yok": fark sayılmaz).
+ * @param {Array<{ id: string; ad: string; tabanUrl: string }>} ortamlar @param {Record<string, string>} tabanAdresleri
+ * @param {Record<string, string | null | undefined>} yeniler null: ortamın asıl adresi
+ * @returns {TabanCakismasi[]}
+ */
+function cakismalar(ortamlar, tabanAdresleri, yeniler) {
+  /** @type {TabanCakismasi[]} */
+  const c = [];
+  for (const o of ortamlar) {
+    if (!(o.id in yeniler)) continue;
+    const v = yeniler[o.id];
+    const yeni = v === null ? temiz(o.tabanUrl) : typeof v === 'string' ? temiz(v) : '';
+    if (!yeni) continue;
+    const eski = tabanAdresleri[o.id] ?? '';
+    if (yeni !== eski) c.push({ ortamId: o.id, ortam: o.ad, eski, yeni });
+  }
+  return c;
+}
+
+/**
+ * Karar penceresinin hatası: mesaj + "Tabanın adresini güncelle"nin etki önizlemesi (bağlı tüm servisler; yazmaz).
+ * @param {Veritabani} vt @param {string} projeId @param {{ id: string; ad: string }} servis @param {string} taban @param {TabanCakismasi[]} c
+ */
+function kararHatasi(vt, projeId, servis, taban, c) {
+  const { onizleme } = tabanAdresiIslemi(vt, projeId, { islem: 'degistir', ad: taban, adresler: Object.fromEntries(c.map((x) => [x.ortamId, x.yeni])) });
+  const farklar = c.map((x) => `${x.ortam}: ${x.eski || 'adres yok'} → ${x.yeni}`).join('; ');
+  return new TabanKarariHatasi(`"${servis.ad}" "${taban}" taban adresine bağlı; yeni adres farklı (${farklar}).`,
+    { servisId: servis.id, servis: servis.ad, taban, cakismalar: c, etki: onizleme });
+}
+
+/**
+ * Tek servis yazımında (içe aktarma, sihirbaz, servis sayfası) bağ kararı. Servis bir tabana bağlıysa ve bağlı kalacaksa, yazılacak
+ * adresleri tabanınkinden farklıysa: karar yoksa TabanKarariHatasi (onizleme: true ise — yalnız etki hesabı — yeni adres yok sayılır);
+ * ayir → bağ kalkar; vazgec → farklı adresler tabandakine döner; tabaniGuncelle → tabanKarariUygula ile tabanın adresi değişir.
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {{ servis: Servis | undefined; tabanlar: Record<string, string>; kararlar?: Record<string, TabanKarari>; onizleme?: boolean }} g
+ * @returns {{ tabanlar: Record<string, string>; ayir: boolean; guncelle: { ad: string; adresler: Record<string, string> } | null }}
+ */
+export function tabanKarari(vt, projeId, g) {
+  const s = g.servis;
+  const ad = s?.ayarlar.tabanGrubu;
+  const bos = { tabanlar: g.tabanlar, ayir: false, guncelle: null };
+  if (!s || !ad) return bos;
+  const ortamlar = ortamlariListele(vt, projeId);
+  const taban = tabanAdlari(ortamlar, servisleriListele(vt, projeId)).find((t) => t.ad === ad);
+  if (!taban) return bos;
+  const c = cakismalar(ortamlar, taban.adresler, g.tabanlar);
+  if (!c.length) return bos;
+  const karar = g.kararlar?.[s.id] ?? (g.onizleme ? 'vazgec' : undefined);
+  if (!karar) throw kararHatasi(vt, projeId, s, ad, c);
+  if (karar === 'ayir') return { tabanlar: g.tabanlar, ayir: true, guncelle: null };
+  if (karar === 'vazgec') return { tabanlar: { ...g.tabanlar, ...Object.fromEntries(c.map((x) => [x.ortamId, x.eski])) }, ayir: false, guncelle: null };
+  return { tabanlar: g.tabanlar, ayir: false, guncelle: { ad, adresler: Object.fromEntries(c.map((x) => [x.ortamId, x.yeni])) } };
+}
+
+/**
+ * "Tabanın adresini güncelle" kararının yazımı: tabanın adresi ve bağlı tüm servislerin adresi birlikte değişir (servisin kendi
+ * kaydından ÖNCE, aynı işlemde çağrılır).
+ * @param {Veritabani} vt @param {string} projeId @param {ReturnType<typeof tabanKarari>} k @param {string} [yapan]
+ */
+export function tabanKarariUygula(vt, projeId, k, yapan) {
+  if (k.guncelle) tabanAdresiIslemi(vt, projeId, { islem: 'degistir', ad: k.guncelle.ad, adresler: k.guncelle.adresler, onay: true, yapan });
+}
+
+/**
+ * "Servis bazında" toplu düzenlemede bağ kararları: değişiklikler kararlara göre düzenlenir (ayir: bağ kalkar; vazgec: farklı hücre
+ * değişmez; tabaniGuncelle: bağlı diğer servisler de yeni adresi alır — servise özel "yok" korunur). Karar yoksa TabanKarariHatasi.
+ * Servisler sırayla değerlendirilir: bir servisin "Tabanın adresini güncelle" kararından sonra aynı adresi alan diğer bağlı servisler
+ * için ayrıca sorulmaz.
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {Record<string, { tabanlar?: Record<string, string | null>; grup?: string | null }>} degisiklikler
+ * @param {Record<string, TabanKarari>} kararlar
+ */
+function toplubagKararlari(vt, projeId, degisiklikler, kararlar) {
+  const ortamlar = ortamlariListele(vt, projeId);
+  const servisler = servisleriListele(vt, projeId);
+  const guncel = new Map(tabanAdlari(ortamlar, servisler).map((t) => [t.ad, { ...t.adresler }]));
+  /** @type {typeof degisiklikler} */
+  const d = Object.fromEntries(Object.entries(degisiklikler).map(([id, x]) => [id, x && typeof x === 'object' ? { ...x, ...(x.tabanlar ? { tabanlar: { ...x.tabanlar } } : {}) } : x]));
+  /** @type {Map<string, Record<string, string>>} */
+  const guncellenen = new Map();
+  for (const [servisId, x] of Object.entries(d)) {
+    const s = servisler.find((y) => y.id === servisId);
+    const ad = s?.ayarlar.tabanGrubu;
+    if (!s || !ad || !x || typeof x !== 'object' || !x.tabanlar || typeof x.tabanlar !== 'object') continue;
+    if (x.grup !== undefined && (typeof x.grup === 'string' ? x.grup.trim() : '') !== ad) continue; // bağ değişiyor: karar gerekmez
+    const adresler = guncel.get(ad);
+    if (!adresler) continue;
+    const c = cakismalar(ortamlar, adresler, x.tabanlar);
+    if (!c.length) continue;
+    const karar = kararlar[servisId];
+    if (!karar) throw kararHatasi(vt, projeId, s, ad, c);
+    if (karar === 'ayir') x.grup = null;
+    else if (karar === 'vazgec') for (const y of c) delete x.tabanlar[y.ortamId];
+    else {
+      for (const y of c) adresler[y.ortamId] = y.yeni;
+      guncellenen.set(ad, { ...(guncellenen.get(ad) ?? {}), ...Object.fromEntries(c.map((y) => [y.ortamId, y.yeni])) });
+    }
+  }
+  for (const [ad, adresler] of guncellenen) {
+    for (const m of servisler.filter((y) => y.ayarlar.tabanGrubu === ad)) {
+      const x = (d[m.id] ??= {});
+      if (x.grup !== undefined && x.grup !== ad) continue;
+      const t = (x.tabanlar = { ...(x.tabanlar ?? {}) });
+      for (const [ortamId, a] of Object.entries(adresler)) {
+        const o = ortamlar.find((y) => y.id === ortamId);
+        if (!o || ortamId in t || tabanHucresi(m.ayarlar, o).kaynak === 'yok') continue;
+        t[ortamId] = a;
+      }
+    }
+  }
+  return d;
+}
 
 /**
  * Bir servisin bir ortamdaki taban hücresi.
@@ -73,17 +226,22 @@ export function tabanTablosu(vt, projeId) {
 /**
  * Toplu değişiklik: önizleme (onay yok) ya da uygulama (onay: true).
  * degisiklikler: { <servisId>: { tabanlar?: { <ortamId>: adres | '' (bu ortamda yok) | null (ortamın asıl adresi) }, grup?: ad | null } }
+ * tabanKararlari: bağlı servisin adresi tabandan farklılaşırken kullanıcının kararı (yoksa TabanKarariHatasi; önizlemede de sorulur,
+ * verilen kararlar yanıtta döner ve kayıtta aynen gönderilir). tabanDegisikligi: tabanın kendisi değişiyor (tabanAdresiIslemi; sorulmaz).
  * @param {Veritabani} vt @param {string} projeId
- * @param {{ degisiklikler: Record<string, { tabanlar?: Record<string, string | null>; grup?: string | null }>; onay?: boolean; yapan?: string }} girdi
+ * @param {{ degisiklikler: Record<string, { tabanlar?: Record<string, string | null>; grup?: string | null }>; onay?: boolean; yapan?: string;
+ *   tabanKararlari?: Record<string, TabanKarari>; tabanDegisikligi?: boolean }} girdi
  */
 export function tabanlariUygula(vt, projeId, girdi) {
   if (!girdi.degisiklikler || typeof girdi.degisiklikler !== 'object' || Array.isArray(girdi.degisiklikler)) throw new DepoHatasi('"degisiklikler" bir nesne olmalıdır.');
+  const kararlar = tabanKararlariniDogrula(girdi.tabanKararlari);
+  const degisiklikler = girdi.tabanDegisikligi ? girdi.degisiklikler : toplubagKararlari(vt, projeId, girdi.degisiklikler, kararlar);
   const { ortamlar, akislari } = baglam(vt, projeId);
   const servisler = servisleriListele(vt, projeId);
   const desenler = etkinYasakDesenleri(vt);
   /** Yeni ayarlar (yalnız değişenler). @type {Map<string, { s: Servis; ayarlar: Servis['ayarlar']; degisenOrtamlar: string[] }>} */
   const yeniler = new Map();
-  for (const [servisId, d] of Object.entries(girdi.degisiklikler)) {
+  for (const [servisId, d] of Object.entries(degisiklikler)) {
     const s = servisler.find((x) => x.id === servisId);
     if (!s) throw new DepoHatasi('Servis bulunamadı.');
     if (!d || typeof d !== 'object') throw new DepoHatasi(`"${s.ad}" için değişiklik geçersiz.`);
@@ -149,7 +307,8 @@ export function tabanlariUygula(vt, projeId, girdi) {
     servisler: onizleme,
     toplam: { servis: onizleme.length, senaryo: onizleme.reduce((n, x) => n + x.senaryoSayisi, 0), akis: new Set(onizleme.flatMap((x) => x.akislar)).size }
   };
-  if (girdi.onay !== true) return { onizleme: ozet };
+  const kararYaniti = Object.keys(kararlar).length ? { tabanKararlari: kararlar } : {};
+  if (girdi.onay !== true) return { onizleme: ozet, ...kararYaniti };
   vt.islem(() => {
     for (const { s, ayarlar, degisenOrtamlar } of yeniler.values()) {
       tabanlariOrtamlaraKaydet(vt, projeId, ayarlar.tabanlar ?? {});
@@ -168,7 +327,7 @@ export function tabanlariUygula(vt, projeId, girdi) {
       });
     }
   });
-  return { uygulandi: true, onizleme: ozet };
+  return { uygulandi: true, onizleme: ozet, ...kararYaniti };
 }
 
 // --- Adlandırılmış taban adresleri (ana liste) -----------------------------------------------------------------------------
@@ -344,7 +503,7 @@ export function tabanAdresiIslemi(vt, projeId, girdi) {
   } else {
     for (const s of uyeler) d[s.id] = { grup: null, tabanlar: Object.fromEntries(ortamlar.map((o) => [o.id, ''])) };
   }
-  const { onizleme } = tabanlariUygula(vt, projeId, { degisiklikler: d });
+  const { onizleme } = tabanlariUygula(vt, projeId, { degisiklikler: d, tabanDegisikligi: true });
   const bosKalacaklar = onizleme.servisler.map((s) => ({
     servisId: s.servisId, ad: s.ad,
     ortamlar: s.adresler.filter((a) => a.yeni.kaynak === 'yok' && a.eski.kaynak !== 'yok').map((a) => a.ortam)
@@ -352,7 +511,7 @@ export function tabanAdresiIslemi(vt, projeId, girdi) {
   const ozet = { ...onizleme, bosKalacaklar, taban: { islem, ad, yeniAd, eski: mevcut ? eski : null, yeni } };
   if (girdi.onay !== true) return { onizleme: ozet };
   vt.islem(() => {
-    tabanlariUygula(vt, projeId, { degisiklikler: d, onay: true, yapan: girdi.yapan });
+    tabanlariUygula(vt, projeId, { degisiklikler: d, onay: true, yapan: girdi.yapan, tabanDegisikligi: true });
     if (yeni) tabanlariOrtamlaraKaydet(vt, projeId, yeni);
     kayitliAdlariGuncelle(vt, projeId, (ta, o) => {
       delete ta[ad];

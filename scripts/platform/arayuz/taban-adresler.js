@@ -70,6 +70,41 @@ function pencere(baslik, secenekler = {}) {
   return { d, govde, alt, kapat: () => d.close() };
 }
 
+/**
+ * Taban adresine bağlı servisin adresi başka yoldan (içe aktarma, sihirbaz, servis sayfası, "Servis bazında") tabanınkinden farklı bir
+ * değere değişecekken kayıttan ÖNCE açılan karar penceresi (ortak.js > api, sunucunun 409 "TABAN_KARARI" yanıtında çağırır).
+ * Seçenekler: "Servisi tabandan ayır" / "Tabanın adresini güncelle" (bağlı tüm servisler; etki listesiyle) / "Vazgeç" (yeni adres
+ * kullanılmaz, servis tabandaki adreste kalır). Pencere kapatılırsa (Esc / ×) işlem yapılmaz (null).
+ * @param {{ servisId: string; servis: string; taban: string; cakismalar: Array<{ ortam: string; eski: string; yeni: string }>; etki: any }} k
+ * @returns {Promise<'ayir' | 'tabaniGuncelle' | 'vazgec' | null>}
+ */
+export function tabanKarariSor(k) {
+  return new Promise((coz) => {
+    let sonuc = null;
+    const p = pencere('Taban adresine bağlı servis', { ikonAd: 'ag' });
+    const ayir = h('button', { type: 'button' }, 'Servisi tabandan ayır');
+    const guncelle = h('button', { type: 'button', class: 'birincil' }, 'Tabanın adresini güncelle');
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    const sec = (x) => { sonuc = x; p.kapat(); };
+    ayir.addEventListener('click', () => sec('ayir'));
+    guncelle.addEventListener('click', () => sec('tabaniGuncelle'));
+    vazgec.addEventListener('click', () => sec('vazgec'));
+    const etki = k.etki && k.etki.toplam ? k.etki : null;
+    yerlestir(p.govde,
+      h('p', { class: 'taban-karari-metni' }, `"${k.servis}" "${k.taban}" taban adresine bağlı; yeni adres farklı:`),
+      h('ul', { class: 'taban-karari-farklari', 'aria-label': 'Farklı adresler' }, k.cakismalar.map((c) => h('li', {}, h('b', {}, `${c.ortam}: `),
+        c.eski ? h('code', { class: 'duz' }, c.eski) : h('span', { class: 'soluk' }, 'adres yok'), ' → ', h('code', { class: 'duz' }, c.yeni)))),
+      h('dl', { class: 'taban-karari-secenekleri' },
+        h('dt', {}, 'Servisi tabandan ayır'), h('dd', { class: 'soluk kucuk' }, `Yalnız "${k.servis}" yeni adresi kullanır; "${k.taban}" bağı kalkar. Diğer servisler değişmez.`),
+        h('dt', {}, 'Tabanın adresini güncelle'), h('dd', { class: 'soluk kucuk' }, `"${k.taban}" taban adresi değişir; ona bağlı TÜM servisler yeni adresi kullanır.`),
+        h('dt', {}, 'Vazgeç'), h('dd', { class: 'soluk kucuk' }, 'Yeni adres kullanılmaz; servis tabandaki adreste kalır. Diğer değişiklikler (ör. içe aktarılan istekler) yine kaydedilir.')),
+      etki ? h('details', { class: 'taban-karari-etki' }, h('summary', {}, `"Tabanın adresini güncelle" etkisi (${etki.toplam.servis} servis)`), ...etkiGovdesi(etki)) : null);
+    yerlestir(p.alt, vazgec, ayir, guncelle);
+    p.d.addEventListener('close', () => coz(sonuc));
+    guncelle.focus();
+  });
+}
+
 /** Etki: etkilenen servisler (eski → yeni, senaryo / akış) ve adresi boş kalacak servisler. */
 function etkiGovdesi(e) {
   const bos = e.bosKalacaklar || [];
@@ -417,13 +452,16 @@ function servisGorunumu(proje, veri, yenile) {
       }
     }
     try {
-      const { onizleme: e } = await mesgulIken(etkiGoster, 'Hesaplanıyor…', () => api('/platform/servis-tabanlari/uygula', { govde: { projeId: proje.id, degisiklikler: d } }));
+      const on = await mesgulIken(etkiGoster, 'Hesaplanıyor…', () => api('/platform/servis-tabanlari/uygula', { govde: { projeId: proje.id, degisiklikler: d } }));
+      const e = on.onizleme;
+      // Bağlı servislerin kararları önizlemede verildi (taban karar penceresi); kayıtta aynen gönderilir.
+      const kararlar = on.tabanKararlari ? { tabanKararlari: on.tabanKararlari } : {};
       const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), 'Onayla ve kaydet');
       const vazgec = h('button', { type: 'button' }, 'Vazgeç');
       vazgec.addEventListener('click', () => yerlestir(etkiKap));
       kaydet.addEventListener('click', async () => {
         try {
-          await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis-tabanlari/uygula', { govde: { projeId: proje.id, degisiklikler: d, onay: true } }));
+          await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis-tabanlari/uygula', { govde: { projeId: proje.id, degisiklikler: d, onay: true, ...kararlar } }));
           bildir(`${e.toplam.servis} servisin taban adresi güncellendi.`);
           await yenile();
         } catch (h2) { mesaj.goster(h2.message); }

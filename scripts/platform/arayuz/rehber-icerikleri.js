@@ -383,7 +383,8 @@ export const REHBERLER = {
         baslik: 'Servis taban adresleri',
         metin: ['Aynı sunucuyu kullanan servisler bir taban adresine bağlanır (ör. "Çekirdek": TEST ve CANLI adresleri). Listede her taban adresinin kaç servis tarafından kullanıldığı görünür; "Kullanan: N servis" açılınca servisler listelenir.',
           'Taban adresini değiştirince kaydetmeden önce etkilenen servisler (eski → yeni adres, senaryo / akış sayısı) gösterilir; onaylamadan yazılmaz. Bir ortamın adresini silmek ya da taban adresini silmek bağlı servislerin o ortamdaki adresini boş bırakır: servis o ortamda koşmaz ("taban adresi tanımlı değil"); onay penceresi bu servisleri listeler.',
-          'Yeni taban adresi eklerken "Hangi servisler bu adresi kullansın?" sorulur: önce taban adresi boş olan servisler, sonra diğerleri şu anki adresleriyle; hiçbiri işaretli gelmez.'],
+          'Yeni taban adresi eklerken "Hangi servisler bu adresi kullansın?" sorulur: önce taban adresi boş olan servisler, sonra diğerleri şu anki adresleriyle; hiçbiri işaretli gelmez.',
+          'Bağlı bir servisin adresi başka yoldan (içe aktarma, sihirbaz, servis sayfası, "Servis bazında") tabanınkinden farklı olacaksa kaydetmeden önce sorulur: "Servisi tabandan ayır" (yalnız bu servis), "Tabanın adresini güncelle" (bağlı tüm servisler; etki listesiyle) ya da "Vazgeç" (servis tabandaki adreste kalır).'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Taban adresi', alt: 'TEST / CANLI', ikon: 'ag' }, { baslik: 'Etki', alt: 'servisler, senaryolar', ikon: 'liste' }, { baslik: 'Onay', ikon: 'onay' }] },
         ipucu: 'Servis sayfasında (İşlemler) taban adresi bu listeden seçilir; "Ayarlar\'da yönet" buraya getirir. "Servis bazında" görünüm servislerin adreslerini tek tek ve toplu düzenler. Hiçbir adrese istek atılmaz.'
       },

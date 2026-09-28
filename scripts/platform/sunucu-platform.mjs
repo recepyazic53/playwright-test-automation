@@ -196,6 +196,7 @@ import { girisSayfasiniOner } from './giris/algilama.mjs';
 import { IzinHatasi, izinDegisiklikleri, izinDegistir, izinleriOku } from './guvenlik/izinler.mjs';
 import { yedekUyarisi, yedekUyarisiniKapat } from './guvenlik/yedek-uyarisi.mjs';
 import { CanliOnayHatasi, denetlenenUclar, ucDenetle } from './guvenlik/uc-denetimi.mjs';
+import { TabanKarariHatasi } from './servisler/taban-adresleri.mjs';
 import { adCanliyiCagristiriyorMu, riskliOrtamMi, riskliSecimi } from './guvenlik/ortam-riski.mjs';
 import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
@@ -892,6 +893,8 @@ function hataYaniti(hata) {
   // Kapalı izin (Ayarlar > İzinler): işlem yapılmadı; arayüz standart uyarıyı + "İzinlere git" düğmesini gösterir (ortak.js > api).
   if (hata instanceof IzinHatasi) return { durum: 403, govde: { basarili: false, kod: hata.kod, izin: hata.izin, etiket: hata.etiket, mesaj: hata.message } };
   if (hata instanceof CanliOnayHatasi) return { durum: 409, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
+  // Taban adresine bağlı servisin adresi farklılaşıyor: hiçbir şey yazılmadı; arayüz karar penceresini açar, isteği kararla yineler (ortak.js > api).
+  if (hata instanceof TabanKarariHatasi) return { durum: 409, govde: { basarili: false, kod: hata.kod, mesaj: hata.message, karar: hata.karar } };
   if (hata instanceof KasaHatasi) {
     const kodlar = { PAROLA_KISA: 400, PAROLA_YANLIS: 403, KASA_KILITLI: 423, KASA_YOK: 409, KASA_VAR: 409, ZARF_BOZUK: 400, COK_DENEME: 429 };
     return {

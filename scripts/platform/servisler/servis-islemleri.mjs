@@ -38,6 +38,8 @@ import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.m
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { tanimMetinleri, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
+// Döngüsel içe aktarma (taban-adresleri bu modülün taban doğrulamasını kullanır): yalnız çağrı anında kullanılan işlevler.
+import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
 
 /** Dosya kontrolünde rapora eklenecek (Ayarlar izin verirse) dosyanın en büyük boyutu; daha büyüğü yalnız özetle kalır. */
 const DOSYA_EKI_SINIRI = 5 * 1024 * 1024;
@@ -396,14 +398,22 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
  *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown;
- *   oturumAkisi?: string | null; tabanGrubu?: string | null }} girdi oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
+ *   oturumAkisi?: string | null; tabanGrubu?: string | null; tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari> }} girdi
+ *   oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
+ *   tabanKararlari: bağlı olduğu taban adresinden farklı adres yazılıyorsa kullanıcının kararı (yoksa TabanKarariHatasi; taban-adresleri.mjs).
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
   if (girdi.id && (!mevcut || mevcut.projeId !== projeId)) throw new DepoHatasi('Servis bulunamadı.');
   const yol = yolDogrula(girdi.yol);
   const adresler = girdi.adresler === undefined && mevcut ? (mevcut.ayarlar.adresler ?? {}) : adresleriDogrula(girdi.adresler);
-  const tabanlar = girdi.tabanlar === undefined && mevcut ? (mevcut.ayarlar.tabanlar ?? {}) : tabanlariDogrula(girdi.tabanlar);
+  const verilen = girdi.tabanlar === undefined && mevcut ? (mevcut.ayarlar.tabanlar ?? {}) : tabanlariDogrula(girdi.tabanlar);
+  // Bağlı kaldığı tabandan farklı adres: kullanıcının kararı (bağ değişiyorsa — başka tabana bağlanma / ayrılma — sorulmaz).
+  const bagKalir = mevcut?.ayarlar.tabanGrubu && (girdi.tabanGrubu === undefined || girdi.tabanGrubu === mevcut.ayarlar.tabanGrubu);
+  const karar = bagKalir && girdi.tabanlar !== undefined
+    ? tabanKarari(vt, projeId, { servis: mevcut, tabanlar: verilen, kararlar: girdi.tabanKararlari })
+    : { tabanlar: verilen, ayir: false, guncelle: null };
+  const tabanlar = karar.tabanlar;
   const adresDegisti = !mevcut || mevcut.ayarlar.yol !== yol || JSON.stringify(mevcut.ayarlar.adresler ?? {}) !== JSON.stringify(adresler)
     || JSON.stringify(mevcut.ayarlar.tabanlar ?? {}) !== JSON.stringify(tabanlar);
   /** @type {ServisAyarlari} */
@@ -426,6 +436,7 @@ export function servisiKaydet(vt, projeId, girdi) {
     if (girdi.tabanGrubu) ayarlar.tabanGrubu = girdi.tabanGrubu;
     else delete ayarlar.tabanGrubu;
   }
+  if (karar.ayir) delete ayarlar.tabanGrubu;
   kuralBaglariniDenetle(ayarlar);
   // REST servisinde WSDL yoktur: adres değişikliği erişim kontrolü (WSDL isteği) gerektirmez.
   if (adresDegisti && mevcut?.tur !== 'rest') {
@@ -440,6 +451,7 @@ export function servisiKaydet(vt, projeId, girdi) {
     if (Object.keys(semalar).length) ayarlar.operasyonSemalari = semalar;
   }
   return vt.islem(() => {
+    tabanKarariUygula(vt, projeId, karar, girdi.yapan);
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
     return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: mevcut?.tur ?? 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
   });
@@ -783,8 +795,11 @@ export function postmanOnizle(vt, projeId, girdi) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
  *   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: 'test' | 'canli' | 'ikisi';
- *   mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; beklenenImza?: unknown; yapan?: string }} girdi
+ *   mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; beklenenImza?: unknown; yapan?: string;
+ *   tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari> }} girdi
  * - etki: 'onizle' → aktarım denenir ve geri alınır, yalnız etki döner; 'uygula' + beklenenImza: etki değiştiyse yazılmaz (farkli).
+ * - tabanKararlari: var olan servis bir taban adresine bağlıysa ve koleksiyondaki köken farklıysa kullanıcının kararı (yoksa
+ *   TabanKarariHatasi; hiçbir şey yazılmaz). Vazgeç: servisin adresi değişmez, istekler / senaryolar yine aktarılır.
  * - Tablo değer değişikliği (tablolar/tablo-etkisi.mjs): var olan satırın değeri değişiyorsa etki: 'denetle' iken etkilenen senaryo
  *   varsa HİÇBİR ŞEY yazılmaz, { onayGerekli, etki } döner; 'uygula' + guncellenecekler ile aktarım ve seçili senaryo güncellemeleri
  *   tek işlemde yazılır. mevcutDegerleriKoru: var olan satırda dolu hücrenin üzerine yazılmaz.
@@ -888,7 +903,14 @@ function postmanAktarimi(vt, projeId, girdi, yazici) {
         return y && !/^[/?]/.test(y) ? `/${y}` : y;
       };
       const koken = istekler.map((i) => i.koken).find(Boolean);
-      const tabanlar = { ...(mevcut?.ayarlar.tabanlar ?? {}), ...(girdi.tabanOrtami && koken ? { [girdi.tabanOrtami]: koken } : {}) };
+      // Taban adresine bağlı servisin adresi değişecekse kullanıcının kararı (Vazgeç: adres değişmez, diğer içerik yine aktarılır).
+      // Yalnız etki hesabında (onizle) sorulmaz; yeni adres yok sayılır.
+      const karar = tabanKarari(vt, projeId, {
+        servis: mevcut, tabanlar: { ...(mevcut?.ayarlar.tabanlar ?? {}), ...(girdi.tabanOrtami && koken ? { [girdi.tabanOrtami]: koken } : {}) },
+        kararlar: girdi.tabanKararlari, onizleme: girdi.etki === 'onizle'
+      });
+      tabanKarariUygula(vt, projeId, karar, girdi.yapan);
+      const tabanlar = karar.tabanlar;
       /** @type {import('./servis-deposu.mjs').ServisOperasyonu[]} */
       const operasyonlar = [...(mevcut?.ayarlar.operasyonlar ?? [])];
       for (const i of istekler) {
@@ -897,7 +919,8 @@ function postmanAktarimi(vt, projeId, girdi, yazici) {
       if (Object.keys(tabanlar).length) tabanlariOrtamlaraKaydet(vt, projeId, tabanlariDogrula(tabanlar));
       const servisId = servisKaydet(vt, {
         ...(mevcut ? { id: mevcut.id } : {}), projeId, anahtar: kl.anahtar, ad: mevcut?.ad ?? kl.ad, tur: 'rest', yapan: girdi.yapan,
-        ayarlar: { ...(mevcut?.ayarlar ?? {}), yol: yolDogrula(yol), adresler: mevcut?.ayarlar.adresler ?? {}, ...(Object.keys(tabanlar).length ? { tabanlar } : {}), operasyonlar }
+        ayarlar: { ...(mevcut?.ayarlar ?? {}), yol: yolDogrula(yol), adresler: mevcut?.ayarlar.adresler ?? {}, ...(Object.keys(tabanlar).length ? { tabanlar } : {}), operasyonlar,
+          ...(karar.ayir ? { tabanGrubu: undefined } : {}) }
       });
       const basliklar = new Set(servisSenaryolariniListele(vt, servisId).map((x) => x.baslik));
       let eklenen = 0;

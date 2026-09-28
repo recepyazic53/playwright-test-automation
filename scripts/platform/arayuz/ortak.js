@@ -217,6 +217,19 @@ export async function api(yol, secenekler = {}) {
         return api(yol, { ...secenekler, izinDenemesi: deneme + 1 });
       }
     }
+    // Taban adresine bağlı servisin adresi farklılaşıyor (sunucu hiçbir şey yazmadı): karar penceresi (taban-adresler.js > tabanKarariSor);
+    // seçilen karar (tabanKararlari[servisId]) ile AYNI istek yeniden gönderilir. Pencere kapatılırsa hata olduğu gibi döner.
+    if (hata.kod === 'TABAN_KARARI' && veri && veri.karar && secenekler.govde) {
+      const deneme = secenekler.tabanDenemesi || 0;
+      if (deneme < 20) {
+        const { tabanKarariSor } = await import('./taban-adresler.js');
+        const karar = await tabanKarariSor(veri.karar);
+        if (karar) {
+          const govde = { ...secenekler.govde, tabanKararlari: { ...(secenekler.govde.tabanKararlari || {}), [veri.karar.servisId]: karar } };
+          return api(yol, { ...secenekler, govde, tabanDenemesi: deneme + 1 });
+        }
+      }
+    }
     // 401: sayfanın oturum token'ı sunucuyu tutmuyor → Nöbetçi yeniden başlatılmış (her başlatmada token değişir).
     if (yanit.status === 401) window.dispatchEvent(new CustomEvent('sunucu-yenilendi'));
     throw hata;

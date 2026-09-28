@@ -31,6 +31,7 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: string }>>;
   alanListeleri?: Record<string, Record<string, string>>; oturumAkisi?: string | null; tabanGrubu?: string | null;
   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
+  tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari>;
 }): string;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
   adres: string; durumKodu: number; operasyonSayisi: number; alanliOperasyonlar: string[];
@@ -70,6 +71,7 @@ export interface PostmanAktarimGirdisi {
   koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: ServisKapsami;
   mevcutDegerleriKoru?: boolean; guncellenecekler?: unknown; beklenenImza?: string; yapan?: string;
+  tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari>;
 }
 export interface PostmanAktarimSonucu {
   etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi;

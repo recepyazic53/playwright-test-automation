@@ -7,8 +7,9 @@ import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { servisGetir, servisKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
-import { servisTabanBaglantisi, tabanAdresiIslemi, tabanlariUygula, tabanTablosu } from '../../scripts/platform/servisler/taban-adresleri.mjs';
-import { servisAdresi } from '../../scripts/platform/servisler/servis-islemleri.mjs';
+import { TabanKarariHatasi, servisTabanBaglantisi, tabanAdresiIslemi, tabanlariUygula, tabanTablosu } from '../../scripts/platform/servisler/taban-adresleri.mjs';
+import { postmanAktar, servisAdresi, servisiKaydet } from '../../scripts/platform/servisler/servis-islemleri.mjs';
+import { restServisiKaydet } from '../../scripts/platform/servisler/rest-servisi.mjs';
 import { yasakAdresleriKaydet } from '../../scripts/platform/guvenlik/yasak-adresler.mjs';
 import { geciciKlasor, HIZLI_KDF } from './platform-ortak';
 
@@ -64,7 +65,9 @@ test.describe('servis taban adresleri', () => {
     const c = servisKaydet(vt, { projeId, anahtar: 'c', ad: 'C', ayarlar: { yol: '/c', tabanlar: { [test1]: 'https://yeni.ornek.test', [canli]: '' } } });
     tabanlariUygula(vt, projeId, { degisiklikler: { [c]: { grup: 'Çekirdek' } }, onay: true });
     expect(servisGetir(vt, c)?.ayarlar).toMatchObject({ tabanGrubu: 'Çekirdek', tabanlar: { [test1]: 'https://yeni.ornek.test', [canli]: '' } });
-    expect(() => tabanlariUygula(vt, projeId, { degisiklikler: { [c]: { tabanlar: { [test1]: 'https://baska.ornek.test' } } } })).toThrow(/aynı olmalı/);
+    // Bağlı servisin adresi tabandan farklılaşıyor: karar sorulur (sessizce yazılmaz).
+    expect(() => tabanlariUygula(vt, projeId, { degisiklikler: { [c]: { tabanlar: { [test1]: 'https://baska.ornek.test' } } } }))
+      .toThrow('"C" "Çekirdek" taban adresine bağlı; yeni adres farklı (TEST: https://yeni.ornek.test → https://baska.ornek.test).');
   });
 });
 
@@ -139,8 +142,9 @@ test.describe('adlandırılmış taban adresleri (ana liste)', () => {
     tabanAdresiIslemi(vt, projeId, { islem: 'ekle', ad: 'Boş taban', adresler: { [T]: 'https://bos.ornek.invalid' }, onay: true });
     expect(tabanTablosu(vt, projeId).tabanAdlari.find((t) => t.ad === 'Boş taban')).toMatchObject({ kayitli: true, kullanan: [], adresler: { [T]: 'https://bos.ornek.invalid', [C]: '' } });
 
-    // Servis bazında düzenleme kayıtlı tabanı da günceller.
-    tabanlariUygula(vt, projeId, { degisiklikler: { [d]: { tabanlar: { [T]: 'https://yeni2-test.ornek.invalid' } } }, onay: true });
+    // Servis bazında düzenleme: bağlı servisin adresi tabandan farklılaşırsa karar sorulur; "Tabanın adresini güncelle" kayıtlı tabanı da günceller.
+    expect(() => tabanlariUygula(vt, projeId, { degisiklikler: { [d]: { tabanlar: { [T]: 'https://yeni2-test.ornek.invalid' } } }, onay: true })).toThrow(TabanKarariHatasi);
+    tabanlariUygula(vt, projeId, { degisiklikler: { [d]: { tabanlar: { [T]: 'https://yeni2-test.ornek.invalid' } } }, onay: true, tabanKararlari: { [d]: 'tabaniGuncelle' } });
     expect(tabanTablosu(vt, projeId).tabanAdlari.find((t) => t.ad === 'Yeni')?.adresler[T]).toBe('https://yeni2-test.ornek.invalid');
 
     // Sil: önizleme boş kalacak servisleri listeler, onaysız hiçbir şey değişmez; onayla tüm ortam adresleri boş kalır, bağlar kalkar.
@@ -156,5 +160,89 @@ test.describe('adlandırılmış taban adresleri (ana liste)', () => {
     // Servis sayfası bağlantısı: adresler seçilen tabandan gelir.
     expect(servisTabanBaglantisi(vt, projeId, c, 'Yeni')).toEqual({ tabanlar: { [T]: 'https://yeni2-test.ornek.invalid', [C]: '' } });
     expect(() => servisTabanBaglantisi(vt, projeId, c, 'Yok böyle')).toThrow(/bulunamadı/);
+  });
+});
+
+test.describe('taban adresine bağlı servisin adresi başka yoldan değişirken karar', () => {
+  const klasor = geciciKlasor('taban-karari');
+  let vt: Veritabani;
+  let projeId = '';
+  let T = '';
+  let C = '';
+  const ortak = () => ({ [T]: 'https://api-test.ornek.invalid', [C]: 'https://api.ornek.invalid' });
+  test.afterAll(() => { vt?.kapat(); klasor.temizle(); });
+  const ay = (id: string) => servisGetir(vt, id)?.ayarlar;
+  /** Karar hatası (yoksa test düşer). */
+  const kararHatasi = (fn: () => unknown): TabanKarariHatasi => {
+    try { fn(); } catch (e) { if (e instanceof TabanKarariHatasi) return e; throw e; }
+    throw new Error('karar sorulmadı');
+  };
+
+  test.beforeAll(async () => {
+    vt = await veritabaniniHazirla(join(klasor.yol, 'p.db'));
+    await kasaOlustur(vt, 'Deneme-Parola-123!', { kdf: HIZLI_KDF });
+    projeId = projeKaydet(vt, { ad: 'P' });
+    T = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
+    C = ortamKaydet(vt, { projeId, ad: 'Üretim', tabanUrl: 'https://canli.ornek.invalid', ayarlar: { riskli: true } });
+  });
+
+  test('servis sayfası / sihirbaz (REST): karar yoksa yazılmaz; ayır, vazgeç, tabanın adresini güncelle', async () => {
+    const uc = [{ ad: 'liste', metot: 'GET', yol: '/liste' }];
+    const a = restServisiKaydet(vt, projeId, { anahtar: 'ra', ad: 'RA', tabanlar: ortak(), uclar: uc }).id;
+    const b = restServisiKaydet(vt, projeId, { anahtar: 'rb', ad: 'RB', tabanlar: ortak(), uclar: uc }).id;
+    const c = restServisiKaydet(vt, projeId, { anahtar: 'rc', ad: 'RC', tabanlar: { [T]: 'https://api-test.ornek.invalid', [C]: '' }, uclar: uc }).id;
+    tabanAdresiIslemi(vt, projeId, { islem: 'ekle', ad: 'Ortak', adresler: ortak(), baglanacaklar: [a, b], onay: true });
+    tabanlariUygula(vt, projeId, { degisiklikler: { [c]: { grup: 'Ortak', tabanlar: { [T]: 'https://api-test.ornek.invalid', [C]: '' } } }, onay: true });
+    const yeni = { [T]: 'https://api2-test.ornek.invalid', [C]: 'https://api.ornek.invalid' };
+
+    // Karar yok: TabanKarariHatasi, hiçbir şey yazılmaz; hata pencere bilgisini ve "Tabanın adresini güncelle" etkisini taşır.
+    const h = kararHatasi(() => servisiKaydet(vt, projeId, { id: a, anahtar: 'ra', ad: 'RA', yol: '/', tabanlar: yeni }));
+    expect(h.message).toBe('"RA" "Ortak" taban adresine bağlı; yeni adres farklı (Deneme: https://api-test.ornek.invalid → https://api2-test.ornek.invalid).');
+    expect(h.karar).toMatchObject({ servisId: a, servis: 'RA', taban: 'Ortak', cakismalar: [{ ortamId: T, ortam: 'Deneme', eski: 'https://api-test.ornek.invalid', yeni: 'https://api2-test.ornek.invalid' }] });
+    expect(h.karar.etki.servisler.map((s) => s.ad).sort()).toEqual(['RA', 'RB', 'RC']);
+    expect(ay(a)?.tabanlar?.[T]).toBe('https://api-test.ornek.invalid');
+    // "Bu ortamda yok" servise özeldir: karar sorulmaz.
+    servisiKaydet(vt, projeId, { id: b, anahtar: 'rb', ad: 'RB', yol: '/', tabanlar: { [T]: 'https://api-test.ornek.invalid', [C]: '' } });
+    expect(ay(b)).toMatchObject({ tabanGrubu: 'Ortak', tabanlar: { [C]: '' } });
+    servisiKaydet(vt, projeId, { id: b, anahtar: 'rb', ad: 'RB', yol: '/', tabanlar: ortak() });
+
+    // Vazgeç: yeni adres kullanılmaz, servis tabandaki adreste kalır; diğer değişiklik (ad) yazılır.
+    servisiKaydet(vt, projeId, { id: a, anahtar: 'ra', ad: 'RA yeni', yol: '/', tabanlar: yeni, tabanKararlari: { [a]: 'vazgec' } });
+    expect(servisGetir(vt, a)?.ad).toBe('RA yeni');
+    expect(ay(a)).toMatchObject({ tabanGrubu: 'Ortak', tabanlar: ortak() });
+
+    // Ayır: yalnız bu servis yeni adresi kullanır, bağ kalkar; diğer bağlı servisler ve taban değişmez.
+    servisiKaydet(vt, projeId, { id: a, anahtar: 'ra', ad: 'RA', yol: '/', tabanlar: yeni, tabanKararlari: { [a]: 'ayir' } });
+    expect(ay(a)?.tabanGrubu).toBeUndefined();
+    expect(ay(a)?.tabanlar).toEqual(yeni);
+    expect(ay(b)?.tabanlar).toEqual(ortak());
+    expect(tabanTablosu(vt, projeId).tabanAdlari.find((t) => t.ad === 'Ortak')?.adresler).toEqual(ortak());
+
+    // Tabanın adresini güncelle (REST sihirbazı / uç kaydı): taban ve bağlı TÜM servisler değişir; servise özel "yok" korunur.
+    expect(() => restServisiKaydet(vt, projeId, { id: b, anahtar: 'rb', ad: 'RB', tabanlar: yeni, uclar: uc })).toThrow(TabanKarariHatasi);
+    restServisiKaydet(vt, projeId, { id: b, anahtar: 'rb', ad: 'RB', tabanlar: yeni, uclar: uc, tabanKararlari: { [b]: 'tabaniGuncelle' } });
+    expect(tabanTablosu(vt, projeId).tabanAdlari.find((t) => t.ad === 'Ortak')?.adresler).toEqual(yeni);
+    expect(ay(b)).toMatchObject({ tabanGrubu: 'Ortak', tabanlar: yeni });
+    expect(ay(c)).toMatchObject({ tabanGrubu: 'Ortak', tabanlar: { [T]: yeni[T], [C]: '' } });
+    // Aynı adres: karar sorulmaz.
+    servisiKaydet(vt, projeId, { id: b, anahtar: 'rb', ad: 'RB', yol: '/', tabanlar: yeni });
+  });
+
+  test('Postman içe aktarma: köken farklıysa karar; önizlemede sorulmaz; Vazgeç diğer içeriği yine aktarır', async () => {
+    const koleksiyon = JSON.stringify({
+      info: { name: 'K', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
+      item: [{ name: 'Stok', item: [{ name: 'Stok listesi', request: { method: 'GET', url: 'https://yeni-stok.ornek.invalid/stok/liste' } }] }]
+    });
+    const s = restServisiKaydet(vt, projeId, { anahtar: 'stok', ad: 'Stok', tabanlar: { [T]: 'https://stok-test.ornek.invalid' }, uclar: [{ ad: 'eski', metot: 'GET', yol: '/stok/eski' }] }).id;
+    tabanAdresiIslemi(vt, projeId, { islem: 'ekle', ad: 'Stok sunucusu', adresler: { [T]: 'https://stok-test.ornek.invalid' }, baglanacaklar: [s], onay: true });
+    const girdi = { koleksiyon, klasorler: ['stok'], tabanOrtami: T, tabloAdi: 'Stok değişkenleri' };
+    // Etki hesabı (onizle) karar sormaz.
+    expect(postmanAktar(vt, projeId, { ...girdi, etki: 'onizle' }).onizleme).toBe(true);
+    const h = kararHatasi(() => postmanAktar(vt, projeId, girdi));
+    expect(h.karar).toMatchObject({ servisId: s, taban: 'Stok sunucusu', cakismalar: [{ eski: 'https://stok-test.ornek.invalid', yeni: 'https://yeni-stok.ornek.invalid' }] });
+    expect(servisGetir(vt, s)?.ayarlar.operasyonlar?.map((o) => o.ad)).toEqual(['eski']);
+    postmanAktar(vt, projeId, { ...girdi, tabanKararlari: { [s]: 'vazgec' } });
+    expect(ay(s)).toMatchObject({ tabanGrubu: 'Stok sunucusu', tabanlar: { [T]: 'https://stok-test.ornek.invalid' } });
+    expect(servisGetir(vt, s)?.ayarlar.operasyonlar?.length).toBe(2);
   });
 });

@@ -29,7 +29,7 @@ function veriKosulariniDenetle(db, projeId, icerik) {
 }
 import { raporMetniniMaskele } from '../sonuclar/servis-sonuclari.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
-import { servisTabanBaglantisi, tabanAdresiIslemi, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
+import { servisTabanBaglantisi, tabanAdresiIslemi, tabanKararlariniDogrula, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
@@ -203,8 +203,10 @@ export const SERVIS_POST_UCLARI = [
   ['/platform/servis/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     // Servis sayfasında adlandırılmış taban adresi seçildiyse adresler o tabandan gelir (null / '': servise özel adres).
+    // Aynı tabana bağlı kalınıyorsa formdaki adresler gönderilir: tabandan farklıysa kullanıcının kararı sorulur (tabanKararlari).
     const grup = typeof g.tabanGrubu === 'string' && g.tabanGrubu.trim() ? g.tabanGrubu.trim() : g.tabanGrubu === null || g.tabanGrubu === '' ? null : undefined;
-    const bagli = grup ? servisTabanBaglantisi(db, projeId, secimli(g.id), grup) : null;
+    const onceki = secimli(g.id) ? servisGetir(db, String(g.id)) : undefined;
+    const bagli = grup && !(onceki?.ayarlar.tabanGrubu === grup && g.tabanlar !== undefined) ? servisTabanBaglantisi(db, projeId, secimli(g.id), grup) : null;
     const id = servisiKaydet(db, projeId, {
       ...(grup !== undefined ? { tabanGrubu: grup } : {}),
       id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), yol: metin(g.yol),
@@ -224,6 +226,7 @@ export const SERVIS_POST_UCLARI = [
       ...(g.alanListeleri !== undefined ? { alanListeleri: g.alanListeleri } : {}),
       ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
       ...(g.oturumAkisi !== undefined ? { oturumAkisi: g.oturumAkisi === null || g.oturumAkisi === '' ? null : kimlik(g.oturumAkisi, 'oturumAkisi') } : {}),
+      tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari),
       erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
     });
     return { id };
@@ -410,7 +413,8 @@ export const SERVIS_POST_UCLARI = [
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
       ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
       senaryolar: Array.isArray(g.senaryolar) ? g.senaryolar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
-      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {})
+      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
+      tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari)
     });
   }],
   ['/platform/servis/rest/dene', async (db, g) => restUcuDene(db, kimlik(g.projeId, 'projeId'), {
@@ -429,7 +433,7 @@ export const SERVIS_POST_UCLARI = [
   ['/platform/servis-tabanlari/uygula', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (!g.degisiklikler || typeof g.degisiklikler !== 'object' || Array.isArray(g.degisiklikler)) throw new DepoHatasi('"degisiklikler" bir nesne olmalıdır.');
-    return tabanlariUygula(db, projeId, { degisiklikler: g.degisiklikler, onay: g.onay === true });
+    return tabanlariUygula(db, projeId, { degisiklikler: g.degisiklikler, onay: g.onay === true, tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari) });
   }],
   // Postman koleksiyonu (REST): önizleme (gizli değişken DEĞERLERİ dönmez) ve kullanıcı seçimleriyle aktarım. Ağ isteği yok.
   ['/platform/servis/postman/onizle', (db, g) => {
@@ -452,7 +456,8 @@ export const SERVIS_POST_UCLARI = [
         klasorler: metinler(g.klasorler) ?? [], tabloAdi: metin(g.tabloAdi),
         gizliler: metinler(g.gizliler), sifreliKaydet: metinler(g.sifreliKaydet) ?? [], akisDegiskenleri: metinler(g.akisDegiskenleri) ?? [],
         degerOrtami: secimli(g.degerOrtami) ?? null, tabanOrtami: secimli(g.tabanOrtami) ?? null,
-        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}), ...etkiGirdisi(g)
+        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}), ...etkiGirdisi(g),
+        tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari)
       }, tabloKosuDenetimi());
     } catch (e) {
       if (e instanceof DepoHatasi) throw e;

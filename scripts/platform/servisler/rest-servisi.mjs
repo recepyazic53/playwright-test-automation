@@ -21,6 +21,7 @@ import { adresBirlestirRest, restIstegi } from './rest-istemcisi.mjs';
 import { baslangicSablonu, govdeOrnegiCoz, GOVDELI_METOTLAR, REST_METOTLARI, restSemasi } from './rest-semasi.mjs';
 import { servisGetir, servisKaydet, servisSenaryolariniListele, servisSenaryosuKaydet } from './servis-deposu.mjs';
 import { alanBaglariniDogrula, alanZorunluluklariniDogrula, kuralBaglariniDenetle, tabanlariDogrula, tabanlariOrtamlaraKaydet, tarihKurallariniDogrula } from './servis-islemleri.mjs';
+import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -91,7 +92,10 @@ export function restServisiKaydet(vt, projeId, girdi) {
     if (adlar.has(u.ad)) throw new DepoHatasi(`"${u.ad}" adlı iki istek var; adlar tekil olmalı.`);
     adlar.add(u.ad);
   }
-  const tabanlar = girdi.tabanlar === undefined ? (mevcut?.ayarlar.tabanlar ?? {}) : tabanlariDogrula(girdi.tabanlar);
+  // Taban adresine bağlı servisin adresi farklılaşıyorsa kullanıcının kararı (taban-adresleri.mjs > tabanKarari).
+  const karar = girdi.tabanlar === undefined ? { tabanlar: mevcut?.ayarlar.tabanlar ?? {}, ayir: false, guncelle: null }
+    : tabanKarari(vt, projeId, { servis: mevcut, tabanlar: tabanlariDogrula(girdi.tabanlar), kararlar: girdi.tabanKararlari });
+  const tabanlar = karar.tabanlar;
   const desenler = etkinYasakDesenleri(vt);
   for (const a of Object.values(tabanlar)) {
     const kalip = a ? adresYasakliMi(a, desenler) : null;
@@ -127,6 +131,7 @@ export function restServisiKaydet(vt, projeId, girdi) {
       const satir = t?.satirlar.find((r) => r.ortamId === null);
       tabloKaydet(vt, { projeId, ...(t ? { id: t.id } : {}), ad: t?.ad ?? tabloAdi, sutunlar: [...eski, ...yeni], satirlar: [{ ...(satir ? { id: satir.id } : {}), ortamId: null, degerler: gizliDegerler }] });
     }
+    tabanKarariUygula(vt, projeId, karar, girdi.yapan);
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
     const operasyonlar = uclar.map((u) => ({
       ad: u.ad, metot: u.metot, yol: u.yol, sorgu: u.sorgu, icerikTuru: u.icerikTuru, basliklar: u.basliklar, govdeOrnegi: u.govdeOrnegi, gizliAlanlar: u.gizliAlanlar
@@ -136,7 +141,7 @@ export function restServisiKaydet(vt, projeId, girdi) {
     const servisId = servisKaydet(vt, {
       id: mevcut?.id, projeId, anahtar: girdi.anahtar, ad, tur: 'rest', yapan: girdi.yapan,
       ayarlar: {
-        ...(mevcut?.ayarlar ?? {}), yol: '/', adresler: mevcut?.ayarlar.adresler ?? {}, tabanlar,
+        ...(mevcut?.ayarlar ?? {}), yol: '/', adresler: mevcut?.ayarlar.adresler ?? {}, tabanlar, ...(karar.ayir ? { tabanGrubu: undefined } : {}),
         ...(typeof girdi.tlsDogrulama === 'boolean' ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
         operasyonlar, operasyonSemalari: Object.fromEntries(uclar.map((u) => [u.ad, restSemasi(u)])),
         yalnizTestOperasyonlari: uclar.filter((u) => u.yalnizTest).map((u) => u.ad),

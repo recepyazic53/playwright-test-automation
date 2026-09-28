@@ -278,4 +278,59 @@ test.describe('servis taban adresleri arayüzü', () => {
     expect(hatalar).toEqual([]);
     await kapat();
   });
+
+  test('bağlı servisin adresi farklılaşırken karar penceresi: servis sayfası (Vazgeç, Ayır) ve servis bazında (Tabanın adresini güncelle)', async ({}, testInfo) => {
+    test.setTimeout(90_000);
+    const { page, hatalar, kapat } = await sayfaAc(1400, `/#/servisler/s/${id['Uç']}/islemler`);
+    await expect(page.getByRole('combobox', { name: 'Taban adresi', exact: true })).toHaveValue('Çekirdek');
+    const adresYaz = async (adres: string) => {
+      await page.getByRole('combobox', { name: 'TEST taban adresi' }).selectOption('__yeni');
+      await page.getByRole('textbox', { name: 'TEST yeni taban adresi' }).fill(adres);
+      await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    };
+    await adresYaz('https://uc2-test.ornek.invalid');
+    const pencere = page.getByRole('dialog', { name: 'Taban adresine bağlı servis' });
+    await expect(pencere).toContainText('"Uç" "Çekirdek" taban adresine bağlı; yeni adres farklı');
+    await expect(pencere).toContainText('https://api2-test.ornek.invalid');
+    await expect(pencere.getByRole('button')).toContainText(['Vazgeç', 'Servisi tabandan ayır', 'Tabanın adresini güncelle']);
+    await pencere.getByText(/"Tabanın adresini güncelle" etkisi/).click();
+    await expect(pencere.getByRole('list', { name: 'Etkilenen servisler' })).toContainText('Sipariş');
+    await page.screenshot({ path: testInfo.outputPath('taban-karari-pencere.png') });
+    await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(page.getByText('Servis kaydedildi.')).toBeVisible();
+    let { satirlar } = await tablo();
+    expect(satirlar.get('Uç')).toMatchObject({ grup: 'Çekirdek', tabanlar: { [T]: { deger: 'https://api2-test.ornek.invalid', kaynak: 'servis' } } });
+    // Ayır: yalnız bu servis yeni adresi kullanır.
+    await page.reload();
+    await adresYaz('https://uc2-test.ornek.invalid');
+    await page.getByRole('dialog', { name: 'Taban adresine bağlı servis' }).getByRole('button', { name: 'Servisi tabandan ayır' }).click();
+    await expect(page.getByText('Servis kaydedildi.')).toBeVisible();
+    ({ satirlar } = await tablo());
+    expect(satirlar.get('Uç')).toMatchObject({ grup: null, tabanlar: { [T]: { deger: 'https://uc2-test.ornek.invalid', kaynak: 'servis' } } });
+    expect(satirlar.get('Sipariş')?.tabanlar[T]?.deger).toBe('https://api2-test.ornek.invalid');
+    expect(hatalar).toEqual([]);
+    await kapat();
+
+    // Servis bazında: bağlı servisin hücresi değişince "Etkiyi göster"de pencere; "Tabanın adresini güncelle" → bağlı tüm servisler.
+    const s2 = await sayfaAc(1400);
+    await s2.page.getByRole('radio', { name: 'Servis bazında' }).click();
+    await s2.page.getByLabel('Fatura · TEST: taban adres').fill('https://api3-test.ornek.invalid');
+    await s2.page.getByLabel('Fatura · TEST: taban adres').press('Tab');
+    await s2.page.getByRole('button', { name: 'Etkiyi göster' }).click();
+    const p2 = s2.page.getByRole('dialog', { name: 'Taban adresine bağlı servis' });
+    await expect(p2).toContainText('"Fatura" "Çekirdek" taban adresine bağlı');
+    await p2.getByRole('button', { name: 'Tabanın adresini güncelle' }).click();
+    const etki = s2.page.getByRole('region', { name: 'Değişikliğin etkisi' });
+    await expect(etki).toContainText('Sipariş');
+    await etki.getByRole('button', { name: 'Onayla ve kaydet' }).click();
+    await expect(s2.page.getByText(/servisin taban adresi güncellendi/)).toBeVisible();
+    await expect(p2).toBeHidden();
+    const son = await tablo();
+    for (const ad of ['Sipariş', 'Fatura']) expect(son.satirlar.get(ad)?.tabanlar[T]?.deger).toBe('https://api3-test.ornek.invalid');
+    expect(son.tabanlar.find((x) => x.ad === 'Çekirdek')?.adresler[T]).toBe('https://api3-test.ornek.invalid');
+    await s2.page.setViewportSize({ width: 390, height: 900 });
+    await tasmaYok(s2.page);
+    expect(s2.hatalar).toEqual([]);
+    await s2.kapat();
+  });
 });
