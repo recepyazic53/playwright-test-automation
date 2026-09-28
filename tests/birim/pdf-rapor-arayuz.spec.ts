@@ -1,7 +1,7 @@
 // UÇTAN UCA (yerel) — DÖNEM RAPORU (PDF) uçları ve arayüzü: geçici veritabanına iki dönemlik sahte ekran / servis koşuları yazılır
 // (gerçek Playwright koşusu, dış istek YOK), ayrı bir Nöbetçi (127.0.0.1) başlatılır. Denetlenenler: POST /platform/rapor/pdf
 // (application/pdf, %PDF, sayfa > 0, dosya adı, girdi doğrulama, token), POST /platform/rapor/onizle; Sonuçlar'da "Rapor al (PDF)"
-// düğmesi → diyalog (kapsam: Tek ekran / Tek servis, diğerleri "yakında" pasif; seçim listesi; dönem + özel aralık; ortam; bölümler),
+// düğmesi → diyalog (kapsam: tek öğe ve çoklu kapsamlar etkin, "Genel" "yakında" pasif; seçim listesi; dönem + özel aralık; ortam; bölümler),
 // önizleme (korumalı iframe), PDF indir (Raporlar'a kaydet); ekran / servis sayfalarından kısayol (kapsam ve seçim dolu);
 // Sonuçlar > Raporlar (boş durum, İndir, Aynı seçimlerle yeniden oluştur, Sil); 390 px'te yatay taşma yok.
 import { randomBytes } from 'node:crypto';
@@ -94,7 +94,7 @@ test('uç: POST /platform/rapor/pdf → application/pdf, %PDF, sayfa > 0, güven
   // Geçersiz kapsam: JSON hata (PDF yok).
   const hatali = await pdfIstegi({ ...raporGirdisi(f, 'ekran'), kapsam: 'genel' });
   expect(hatali.status).toBe(400);
-  expect(((await hatali.json()) as { mesaj: string }).mesaj).toContain('Tek ekran');
+  expect(((await hatali.json()) as { mesaj: string }).mesaj).toContain('"Genel" sonraki aşamada');
   // Token yok: 401.
   const tokensiz = await fetch(`${nobetci.adres}/platform/rapor/pdf`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(raporGirdisi(f, 'ekran')) });
   expect(tokensiz.status).toBe(401);
@@ -125,12 +125,12 @@ test('Sonuçlar: "Rapor al (PDF)" → diyalog seçimleri, önizleme, PDF indir (
   await page.getByRole('button', { name: 'Rapor al (PDF)' }).first().click();
   const d = page.getByRole('dialog', { name: 'Rapor al (PDF)' });
   await expect(d).toBeVisible();
-  // Kapsam: tek ekran / tek servis etkin; diğerleri görünür ama "yakında" pasif.
+  // Kapsam: tek öğe ve çoklu kapsamlar (A2) etkin; yalnız "Genel" görünür ama "yakında" pasif.
   await expect(d.getByRole('radio', { name: 'Tek ekran' })).toBeChecked();
-  await expect(d.getByRole('radio', { name: 'Tek servis' })).toBeEnabled();
-  for (const ad of ['Birden çok ekran', 'Birden çok servis', 'Ekran + servis', 'Genel']) {
-    await expect(d.getByRole('radio', { name: new RegExp(`^${ad.replace('+', '\\+')}`) })).toBeDisabled();
+  for (const ad of ['Tek servis', 'Birden çok ekran', 'Birden çok servis', 'Ekran + servis']) {
+    await expect(d.getByRole('radio', { name: new RegExp(`^${ad.replace('+', '\\+')}`) })).toBeEnabled();
   }
+  await expect(d.getByRole('radio', { name: /^Genel/ })).toBeDisabled();
   await expect(d).toContainText('(yakında)');
   const secim = d.getByLabel('Ekran', { exact: true });
   await expect(secim.locator('option:checked')).toHaveText('Başvuru');

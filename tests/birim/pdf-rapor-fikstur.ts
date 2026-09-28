@@ -151,6 +151,66 @@ export function raporVerisiKur(vt: Veritabani): RaporFiksturu {
   return { projeId, baskaProjeId, ortamId, ekranId, servisId, akisId, senaryolar, servisSenaryolari };
 }
 
+export type CokluFikstur = RaporFiksturu & { ekran2Id: string; servis2Id: string };
+
+/**
+ * A2 (çoklu / karma rapor) eki: aynı projeye ikinci ekran ("Talep") ve ikinci servis ("Bildirim Servisi", SOAP) yazar.
+ *   Talep: günde bir tam koşu × 2 senaryo; "Talep gönder" bu dönemin 2. ve 3. gününde zaman aşımıyla kalır (YENİ; önceki dönem
+ *     hatasız) — "Kayıt Servisi" POST /kayit HTTP 500 ile AYNI GÜNLER: bağlantılı sorun çifti (Jaccard 1).
+ *   Bildirim Servisi: günde iki çağrı, bu dönem hatasız; önceki dönemde bir kontrol hatası (ÇÖZÜLEN).
+ * Beklenen toplamlar (bu dönem / önceki): ekran testi 118 / 112, başarısız 20 / 13, başarı 84/118 / 85/112; servis çağrısı 85 / 84,
+ * başarısız + hata 5 / 4, başarı 80/85 / 80/84.
+ */
+export function cokluVeriKur(vt: Veritabani, f: RaporFiksturu): CokluFikstur {
+  const { projeId, ortamId } = f;
+  const ekran2Id = ekranKaydet(vt, { projeId, anahtar: 'talep', ad: 'Talep' });
+  const ac = senaryoKaydet(vt, { projeId, ekranId: ekran2Id, baslik: 'Talep aç', icerik: {} });
+  const gonder = senaryoKaydet(vt, { projeId, ekranId: ekran2Id, baslik: 'Talep gönder', icerik: {} });
+  const hata = `TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Gönder' }) ${EPOSTA} ${KART}`;
+  let sayac = 0;
+  for (const kaydir of [-14, 0]) {
+    for (let g = 0; g < 14; g++) {
+      const zaman = gunZamani(kaydir + g, 11);
+      const id = `t${++sayac}`;
+      kosuKaydet(vt, { id, projeId, ortamId, tur: 'tam', baslangic: iso(zaman) });
+      const kaldi = kaydir === 0 && (g === 2 || g === 3);
+      sonucKaydet(vt, { kosuId: id, projeId, senaryoId: ac, senaryoBaslik: 'Talep aç', durum: 'basarili', testKimligi: `ac-${id}`, bitis: iso(new Date(zaman.getTime() + 10_000)), sureMs: 800 });
+      sonucKaydet(vt, {
+        kosuId: id, projeId, senaryoId: gonder, senaryoBaslik: 'Talep gönder', durum: kaldi ? 'basarisiz' : 'basarili', testKimligi: `gonder-${id}`,
+        bitis: iso(new Date(zaman.getTime() + 20_000)), sureMs: 1200, ...(kaldi ? {
+          hataMesaji: hata, adimlar: [{ ad: 'Formu doldur', durum: 'basarili', sureMs: 300 }, { ad: 'Gönder', durum: 'basarisiz', sureMs: 900, hataMesaji: hata }]
+        } : {})
+      });
+      kosuyuBitir(vt, id, { durum: 'tamamlandi', bitis: iso(new Date(zaman.getTime() + 60_000)) });
+    }
+  }
+  const servis2Id = servisKaydet(vt, { projeId, anahtar: 'bildirim-servisi', ad: 'Bildirim Servisi', tur: 'soap' });
+  const senaryo = servisSenaryosuKaydet(vt, { projeId, servisId: servis2Id, baslik: 'Bildirim gönder', icerik: {
+    operasyon: 'bildirimGonder', govde: '<istek/>', kontroller: [{ tur: 'soapHatasiYok' }] } });
+  for (const kaydir of [-14, 0]) {
+    for (let g = 0; g < 14; g++) {
+      for (const dk of [0, 30]) {
+        const kaldi = kaydir === -14 && g === 4 && dk === 0;
+        servisKosusuKaydet(vt, {
+          projeId, servisId: servis2Id, senaryoId: senaryo, ortamId, tur: 'kosu', durum: kaldi ? 'basarisiz' : 'basarili', baslangic: iso(gunZamani(kaydir + g, 13, dk)),
+          sureMs: 100, baslik: 'Bildirim gönder', sonuc: {
+            istek: `<parola>${GIZLI_PAROLA}</parola>`, yanit: `<sonuc>${GOVDE_ICERIGI}</sonuc>`, durumKodu: 200,
+            kontroller: [{ tur: 'soapHatasiYok', ad: 'SOAP hatası yok', gecti: !kaldi, aciklama: kaldi ? `Görülen: ${GOVDE_ICERIGI}` : 'Fault yok' }]
+          }
+        });
+      }
+    }
+  }
+  return { ...f, ekran2Id, servis2Id };
+}
+
+/** Çoklu rapor isteği gövdesi (son 14 gün, karşılaştırmalı, tüm ortamlar). */
+export const cokluGirdi = (f: CokluFikstur, kapsam: 'coklu-ekran' | 'coklu-servis' | 'karisik', ek: Record<string, unknown> = {}): Record<string, unknown> => ({
+  projeId: f.projeId, kapsam, ekranIdleri: kapsam === 'coklu-servis' ? [] : [f.ekranId, f.ekran2Id],
+  servisIdleri: kapsam === 'coklu-ekran' ? [] : [f.servisId, f.servis2Id], donem: { tur: 'son14' }, karsilastir: true, ortamId: null,
+  secenekler: { hatalar: true, adres: false, goruntuler: false }, ...ek
+});
+
 /** Rapor isteği gövdesi (son 14 gün, önceki dönemle karşılaştırmalı, tüm ortamlar). */
 export const raporGirdisi = (f: RaporFiksturu, kapsam: 'ekran' | 'servis', ek: Record<string, unknown> = {}): Record<string, unknown> => ({
   projeId: f.projeId, kapsam, id: kapsam === 'ekran' ? f.ekranId : f.servisId, donem: { tur: 'son14' }, karsilastir: true, ortamId: null,

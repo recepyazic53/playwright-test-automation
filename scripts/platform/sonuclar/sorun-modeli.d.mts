@@ -24,3 +24,7 @@ export declare function kategoriKisaAdi(kategori: string): string;
 export declare function sinifTahmini(g: { tur: 'ekran' | 'servis'; kategori?: string | null; hataTuru?: string | null; durum?: string }): {
   sinif: 'uygulama' | 'veri' | 'bakim' | 'ortam' | 'kararsiz'; dayanak: string;
 };
+export declare const BAGLANTI_ESIKLERI: Readonly<{ jaccard: number; enAzOrtak: number }>;
+export declare function baglantiliSorunlar<T extends { imza: string; seri: number[]; n: number }>(
+  ekranSorunlari: ReadonlyArray<T>, servisSorunlari: ReadonlyArray<T>, e?: Readonly<{ jaccard: number; enAzOrtak: number }>
+): Array<{ ekran: T; servis: T; ortak: number; birlesim: number; jaccard: number }>;

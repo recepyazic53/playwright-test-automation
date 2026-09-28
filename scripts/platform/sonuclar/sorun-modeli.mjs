@@ -206,3 +206,33 @@ export function sinifTahmini(g) {
     default: return { sinif: 'uygulama', dayanak: 'Sınıflandırılamadı (varsayılan).' };
   }
 }
+
+/** Bağlantılı sorun eşikleri: kova (günlük kırılımda gün) kümelerinin Jaccard örtüşmesi ve en az ortak kova. */
+export const BAGLANTI_ESIKLERI = Object.freeze({ jaccard: 0.6, enAzOrtak: 2 });
+
+/**
+ * Bağlantılı sorunlar (ekran ↔ servis): aynı dönemde bir ekran sorunu ile bir servis sorununun görüldüğü kovaların kesişimi ÷
+ * birleşimi (Jaccard) eşik üstündeyse ve en az iki ortak kova varsa çift önerilir. Yalnız bu dönemde görülen (n > 0) sorunlar
+ * eşlenir. Öneri niteliğindedir: aynı kök neden OLASI (ör. tek ortam kesintisi iki yerde görünür). En yüksek örtüşme önce.
+ * @template {{ imza: string; seri: number[]; n: number }} T
+ * @param {ReadonlyArray<T>} ekranSorunlari @param {ReadonlyArray<T>} servisSorunlari @param {typeof BAGLANTI_ESIKLERI} [e]
+ * @returns {Array<{ ekran: T; servis: T; ortak: number; birlesim: number; jaccard: number }>}
+ */
+export function baglantiliSorunlar(ekranSorunlari, servisSorunlari, e = BAGLANTI_ESIKLERI) {
+  const kume = (/** @type {number[]} */ seri) => new Set(seri.flatMap((v, i) => (v > 0 ? [i] : [])));
+  const servisler = servisSorunlari.filter((s) => s.n > 0).map((s) => ({ s, k: kume(s.seri) }));
+  /** @type {Array<{ ekran: T; servis: T; ortak: number; birlesim: number; jaccard: number }>} */
+  const ciftler = [];
+  for (const ekran of ekranSorunlari) {
+    if (!(ekran.n > 0)) continue;
+    const a = kume(ekran.seri);
+    for (const { s, k } of servisler) {
+      let ortak = 0;
+      for (const i of a) if (k.has(i)) ortak++;
+      const birlesim = a.size + k.size - ortak;
+      const jaccard = birlesim ? ortak / birlesim : 0;
+      if (ortak >= e.enAzOrtak && jaccard >= e.jaccard) ciftler.push({ ekran, servis: s, ortak, birlesim, jaccard });
+    }
+  }
+  return ciftler.sort((x, y) => y.jaccard - x.jaccard || y.ortak - x.ortak);
+}
