@@ -61,6 +61,8 @@
 //        → sunucu UUID'yi güncel test dosyası + başlığına çözer ve mevcut koşu altyapısıyla çalıştırır
 //          (koşucu test-sunucu.mjs tarafından platformKosucusunuAyarla ile verilir); koşu bitince yanıt döner.
 //   POST /platform/senaryo/dene { projeId, ekranId, ortamId, veri, kosuId, id? } → taslak, geçici ek veriyle denenir.
+//   GET  /platform/senaryo/playwright-kodu?projeId=&id=&ortamId=   Playwright koduna dışa aktarma: { dosyaAdi, icerik,
+//        ortamDegiskenleri } (koşucunun planıyla; gizli değerler ortam değişkeni; dosya yazılmaz — senaryolar/disa-aktarma-servisi.mjs)
 // Ekranlar (genel; kasa açık olmalı — bkz. ekranlar/ekran-servisi.mjs, sayfa paketi biçimi: docs/sayfa-paketi.md):
 //   GET  /platform/ekranlar?projeId=                    ekran listesi (model sürümü, alan/senaryo sayısı, bekleyen analiz)
 //   GET  /platform/ekran?projeId=&id=                   ayrıntı: güncel model ağacı, sürüm geçmişi, analiz durumu, kanıtlar
@@ -174,6 +176,8 @@ import {
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
 import { YASAK_ADRES_DEGISKENI, adresYasakliMi } from './senaryolar/model-kosusu.mjs';
+import { senaryoyuPlaywrightKodunaAktar } from './senaryolar/disa-aktarma-servisi.mjs';
+import { execFile } from 'node:child_process';
 import {
   etkinYasakAdresler, etkinYasakDesenleri, ayarlardakiYasakAdresler, ortamdakiYasakAdresler, yasakAdresleriKaydet, YASAK_ADRES_EN_COK
 } from './guvenlik/yasak-adresler.mjs';
@@ -482,6 +486,31 @@ export function platformTestOrtami() {
   } catch {
     return alan;
   }
+}
+
+/**
+ * Senaryoların bu ortamdaki koşu verisi — koşucunun okuduğu AYNI kaynak (veri-oku.mjs "genel"; ayrı süreçte, salt okunur).
+ * Playwright koduna dışa aktarma kullanır; gizli değerler yalnızca bu borudan bellekte gelir, dosyaya/loga yazılmaz. Deneme
+ * taslağı ve şifreli dosya çözümü (geçici klasör) bu okumada KAPALI.
+ * @param {string} projeId @param {string} ortamId @returns {Promise<unknown>}
+ */
+function kosuVerisiOku(projeId, ortamId) {
+  /** @type {NodeJS.ProcessEnv} */
+  const env = { ...process.env, ...platformTestOrtami() };
+  delete env.TEST_SUNUCU_MODEL_DENEME_DOSYASI;
+  delete env.NOBETCI_DOSYA_KLASORU;
+  return new Promise((coz) => {
+    execFile(process.execPath, [join(PROJE_KOKU, 'scripts', 'platform', 'veri-oku.mjs'), 'genel', '--proje', projeId, '--ortam-id', ortamId],
+      { cwd: PROJE_KOKU, env, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, windowsHide: true, timeout: 120_000 }, (hata, cikti) => {
+        if (hata) { coz({ hata: 'veri okuyucu çalıştırılamadı', kod: 'SUREC' }); return; }
+        try {
+          const satirlar = String(cikti).trim().split('\n');
+          coz(JSON.parse(satirlar[satirlar.length - 1]));
+        } catch {
+          coz({ hata: 'veri okuyucu çıktısı okunamadı', kod: 'SUREC' });
+        }
+      });
+  });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1178,6 +1207,12 @@ const GET_UCLARI = new Map([
     const senaryo = senaryoDetayi(db, id, ortamId);
     // Dosya alanlarının üst bilgisi (ad, boyut): form dosyanın adını/boyutunu gösterir; içerik dönmez.
     return { senaryo, dosyalar: dosyaBilgileri(db, senaryo.veri) };
+  }],
+  // Playwright koduna dışa aktarma: üretilen ".spec.ts" metni (arayüz tarayıcıda indirir; sunucu dosya yazmaz, dışarı istek yok).
+  ['/platform/senaryo/playwright-kodu', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    return senaryoyuPlaywrightKodunaAktar(db, { projeId, senaryoId: kimlikAl(q.get('id')), ortamId: ortamSec(db, projeId, q.get('ortamId')) },
+      { kosuVerisi: kosuVerisiOku });
   }],
   ['/platform/senaryo-dosyalari', (db, q) => {
     /** @type {Record<string, { id: string; ad: string; boyut: number }>} */

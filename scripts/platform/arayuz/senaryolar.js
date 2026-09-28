@@ -1,7 +1,7 @@
 // "Senaryolar" ekranı (genel, veritabanı kaynaklı; senaryo kimliği = UUID).
 //   Solda ürün/ekran listesi (Sonuçlar ile aynı düzen), sağda senaryo tablosu: Türkçe duyarsız arama,
 //   filtreler (ekran, Koşuda, beklenen sonuç, son durum), seçim + toplu işlemler (Seçilenleri
-//   çalıştır, Koşuya ekle/çıkar, Sil), satır eylemleri (▷ / Düzenle / ⋯: Kopyala, Geçmiş, Sil),
+//   çalıştır, Koşuya ekle/çıkar, Sil), satır eylemleri (▷ / Düzenle / ⋯: Kopyala, Geçmiş, Playwright koduna dışa aktar, Sil),
 //   "Koşuyu başlat" (tam: Genel ya da ürün, filtresiz; aksi halde kısmi) ve canlı koşu paneli.
 //   ORTAMLAR: tüm senaryolar tek listede (birleşik liste: GET /platform/senaryolar?projeId, ortamId'siz). "Kapsam" sütunu
 //   senaryonun tanımlı olduğu ortamların adları ("TEST + CANLI"; adlar kullanıcının verisinden). "Koşuda" ve "Son sonuç"
@@ -21,6 +21,7 @@ import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
 import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { veriyiSirala } from './tablo-siralama.js';
+import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 
 /** Bir sayfadaki satır (Ayarlar > Arayüz > Senaryolar sayfa boyu; kullanıcı kararı). */
 let SAYFA_BOYU = 50;
@@ -506,6 +507,11 @@ function listeGorunumu(icerik, s) {
     const menu = h('div', { class: 'acilir-menu', role: 'menu', hidden: true },
       h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); kopyala(x); } }, ikon('kopya'), 'Kopyala'),
       h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); gecmisCekmecesi(x); } }, ikon('tarih'), 'Geçmiş'),
+      h('button', {
+        type: 'button', role: 'menuitem', disabled: !tanimliOrtamlar(x, ortamlar).length || x.modelKosusu === false,
+        title: 'Seçilen ortam için çalıştırılabilir tek bir .spec.ts dosyası indirir (gizli değerler ortam değişkeniyle)',
+        onclick: () => { kapat(); playwrightKodunaAktar({ projeId: proje.id, senaryo: x, ortamlar: tanimliOrtamlar(x, ortamlar) }); }
+      }, ikon('indir'), 'Playwright koduna dışa aktar'),
       h('hr', {}),
       h('button', { type: 'button', role: 'menuitem', class: 'tehlikeli', onclick: () => { kapat(); sil([x]); } }, ikon('cop'), 'Sil'));
     const kap = h('span', { class: 'satir-menusu-kap' }, dugme, menu);
