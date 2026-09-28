@@ -17,6 +17,9 @@
 //    HEDEF PROJE: önizleme yedekteki projeleri ve önerilen hedefleri (projeEslemesi) taşır; kullanıcı bir projeyi mevcut
 //    bir projeye (ortamlarını o projenin ortamlarına) eşlerse eslemeOnizlemesi önizlemeyi yeniden üretir ve uygulama aynı
 //    eşlemeyle (secim.esleme) yapılır — kurallar: ice-aktarma-esleme.mjs. Eşleme verilmezse bugünkü davranış.
+//    Başka projeye aktarılan yedek projesi ASLA "üst kayıt" olarak eklenmez; transaction sonunda o proje kimliğiyle yeni kayıt
+//    yazılmadığı / proje kaydı oluşmadığı denetlenir (aksi halde her şey geri alınır). Silinmiş bir projeden kalan öksüz koşu
+//    kayıtları eşlenmiş sürümleriyle hedef projeye taşınır; seçilmediği için kalanlar sonuçta "kalintilar" olarak bildirilir.
 // 3) Hazırlık alanı uygulamadan sonra, iptalde veya 1 saat sonra atılır (anahtar sıfırlanır).
 // MEDYA: biçim 2 yedekteki (şifreli) medya dosyaları hazırlıkta medya klasörünün içindeki
 //    .hazirlik-<kimlik>/ klasörüne OLDUĞU GİBİ çıkarılır (düz metin yazılmaz); önizleme tür
@@ -45,6 +48,7 @@ import { medyaDosyaAdiGecerliMi, medyaKlasoru as medyaKlasoruBul } from './medya
 import { IZIN_AYAR_ANAHTARI } from './guvenlik/izinler.mjs';
 import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
 import { eslemeyiUygula, projeEslemesiBilgisi } from './ice-aktarma-esleme.mjs';
+import { projeKalintilari } from './proje-yonetimi.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -500,6 +504,8 @@ function yabanciAnahtarlar(vt, tablo) {
  *   medya?: import('./yedek.mjs').MedyaYerlestirmeSonucu;
  *   medyaHatasi?: string;
  *   projeEslemesi?: { ozet: ReturnType<typeof eslemeyiUygula>['ozet']; kimlikDegisimleri: ReturnType<typeof eslemeyiUygula>['kimlikDegisimleri'] };
+ *   kalintilar?: Record<string, Record<string, number>>;
+ *   kalintiTasinan?: number;
  * }} UygulamaSonucu
  */
 
@@ -529,6 +535,11 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
   const eslenmis = secim.esleme != null ? eslemeyiUygula(vt, hazirlik.tablolar, hedefAnahtar, secim.esleme) : null;
   const tablolar = eslenmis ? eslenmis.tablolar : hazirlik.tablolar;
   const eslemeSonucu = eslenmis ? { projeEslemesi: { ozet: eslenmis.ozet, kimlikDegisimleri: eslenmis.kimlikDegisimleri } } : {};
+  // Kimliği değişen yedek projeleri: bu kimlikle HİÇBİR kayıt yazılmamalı / proje kaydı oluşmamalı (uygulama sonu denetimi).
+  const kaynakProjeler = new Set(eslenmis?.kaynakProjeler ?? []);
+  // Mevcut projeye aktarılan ama bu bilgisayarda proje kaydı olmayan kaynaklar: onlara bağlı öksüz kayıtlar hedefe taşınabilir.
+  const kalintiProjeler = new Set(eslenmis?.kalintiProjeler ?? []);
+  const kaynakAdi = (/** @type {string} */ p) => eslenmis?.ozet.find((o) => o.kaynak.id === p)?.kaynak.ad ?? p;
 
   // --- seçim kümesi ---
   /** @type {Map<string, Set<string>>} */
@@ -569,6 +580,9 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
           if (deger === null || deger === undefined) continue;
           const ustSecim = secilen.get(fk.ust);
           const ustDosya = dosyaHaritasi.get(fk.ust);
+          if (fk.ust === 'projeler' && kaynakProjeler.has(String(deger))) {
+            throw new YedekHatasi('VERI', `"${kaynakAdi(String(deger))}" projesi başka projeye aktarılıyor ama bir kayıt (${t}) hâlâ ona başvuruyor; proje yeniden oluşturulmadı, hiçbir şey yazılmadı.`);
+          }
           if (!ustSecim || !ustDosya || ustSecim.has(String(deger))) continue;
           if (vt.tek(`SELECT 1 AS var FROM ${fk.ust} WHERE ${fk.ustSutun} = ?`, [deger])) continue;
           if (!ustDosya.has(String(deger))) continue;
@@ -626,7 +640,10 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
     return { satir: sonuc, atla: null, kaldirilan };
   };
 
+  let kalintiTasinan = 0;
   vt.islem(() => {
+    /** @type {Map<string, Record<string, number>>} kaynak proje → uygulamadan önceki bağlı kayıtlar (kalıntılar) */
+    const onceki = new Map([...kaynakProjeler].map((p) => [p, projeKalintilari(vt, p)]));
     if (hazirlik.benimsenecekKasa) {
       medyaAnahtariniBenimse(vt, hazirlik.benimsenecekKasa.medyaAnahtari, [hedefAnahtar]);
       vt.metaYaz('kasa_surum', '1');
@@ -685,7 +702,17 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
         const o = (eklenenler[t.ad] = { eklenen: 0, mevcut: 0, atlanan: 0, baglantisiKaldirilan: 0 });
         for (const gelenHam of tablolar[t.ad] ?? []) {
           const id = String(gelenHam[pk]);
-          if (vt.tek(`SELECT 1 AS var FROM ${t.ad} WHERE ${pk} = ?`, [id])) {
+          const mevcut = vt.tek(`SELECT * FROM ${t.ad} WHERE ${pk} = ?`, [id]);
+          if (mevcut) {
+            // Silinmiş kaynak projeden kalan öksüz kayıt (ör. servis koşusu) → eşlenmiş sürümüyle hedef projeye taşınır.
+            if (mevcut.proje_id != null && kalintiProjeler.has(String(mevcut.proje_id)) && gelenHam.proje_id !== mevcut.proje_id) {
+              const { satir, atla } = ustKayitlariDuzelt(t.ad, gelenHam);
+              if (!atla) {
+                const guncel = tSutun.filter((s) => s in satir && s !== pk);
+                vt.calistir(`UPDATE ${t.ad} SET ${guncel.map((s) => `${s} = ?`).join(', ')} WHERE ${pk} = ?`, [...guncel.map((s) => satir[s]), id]);
+                kalintiTasinan++;
+              }
+            }
             o.mevcut++;
             continue;
           }
@@ -706,12 +733,30 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
         }
       }
     }
+    // DENETİM (aynı transaction): kimliği değişen yedek projesinin kimliğiyle yeni kayıt yazılmadı, proje kaydı oluşmadı.
+    // Aksi halde her şey geri alınır (hata transaction'ı ROLLBACK eder).
+    for (const [p, once] of onceki) {
+      const sonra = projeKalintilari(vt, p);
+      const artan = Object.entries(sonra).filter(([tablo, n]) => n > (once[tablo] ?? 0));
+      if (artan.length) {
+        throw new YedekHatasi('VERI', `İçe aktarma geri alındı: "${kaynakAdi(p)}" projesi başka projeye aktarılırken kimliği şu kayıtlarda kaldı — ${artan.map(([tablo, n]) => `${tablo}: ${n - (once[tablo] ?? 0)}`).join(', ')}. Hiçbir şey yazılmadı.`);
+      }
+    }
   });
+  /** @type {Record<string, Record<string, number>>} uygulamadan sonra hâlâ kalan (önceden var olan) kalıntılar */
+  const kalintilar = {};
+  for (const p of kalintiProjeler) {
+    const k = projeKalintilari(vt, p);
+    if (Object.keys(k).length) kalintilar[p] = k;
+  }
   if (hazirlik.benimsenecekKasa) kasayiAnahtarlaAc(vt, hedefAnahtar);
   else sifreliAlanlariTamamla(vt);
   yerelMakine(vt);
   if (izinlerYazildi) yedekUyarisiniKur(vt, { tur: 'secmeli' });
-  return { tamYukleme: false, varliklar, eklenenler, otomatikEklenenUstKayitlar: otomatik, atlananlar, gecmiseYazilan, sayimlar: sayimlar(vt), ...eslemeSonucu };
+  return {
+    tamYukleme: false, varliklar, eklenenler, otomatikEklenenUstKayitlar: otomatik, atlananlar, gecmiseYazilan, sayimlar: sayimlar(vt), ...eslemeSonucu,
+    ...(eslenmis ? { kalintilar, kalintiTasinan } : {})
+  };
 }
 
 /**
