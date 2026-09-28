@@ -161,7 +161,7 @@ test.describe('servis sözleşmesi arayüzü', () => {
     await expect(yetki.locator('option')).toHaveText(['Genel ayarı kullan (Ayarlar > Koşu)', 'Tekrar deneme', 'Token\'ı yenile, bir kez tekrar dene']);
     await page.goto('/#/ayarlar/kosu');
     const genel = page.getByLabel('Yetki hatasında (401 / 403)');
-    await expect(genel).toHaveValue('tekrarYok');
+    await expect(genel).toHaveValue('yenileVeTekrar');
     expect(hatalar).toEqual([]);
     await kapat();
   });

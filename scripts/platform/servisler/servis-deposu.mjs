@@ -554,7 +554,7 @@ export function yetkiHatasiSecimi(akis) {
 }
 
 /**
- * 401 / 403 sonrası token yenilenip bir kez tekrar denensin mi: akışın seçimi, "genel" ise Ayarlar > Koşu (varsayılan: Tekrar deneme).
+ * 401 / 403 sonrası token yenilenip bir kez tekrar denensin mi: akışın seçimi, "genel" ise Ayarlar > Koşu (varsayılan: Token'ı yenile, bir kez tekrar dene).
  * @param {Veritabani} vt @param {Parameters<typeof yetkiHatasiSecimi>[0]} akis
  */
 export function yetkiTekrariAcik(vt, akis) {

@@ -207,7 +207,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
     h('option', { value: 'suresiDolunca', selected: is.yenileme === 'suresiDolunca' }, 'Süresi dolunca yeniden al (koşular arasında paylaşılır)'),
     h('option', { value: 'herIstekte', selected: is.yenileme === 'herIstekte' }, 'Her istekte yeniden al'));
   const yenilemeAlani = alan('Token', yenileme, { yardim: 'Token ne zaman yeniden alınsın. 401 / 403 sonrası davranış "Yetki hatasında" seçimindedir.' });
-  // Yetki hatası (HTTP 401 / 403): kullanıcının seçimi; "Genel ayar" = Ayarlar > Koşu > Yetki hatasında (varsayılan: Tekrar deneme).
+  // Yetki hatası (HTTP 401 / 403): kullanıcının seçimi; "Genel ayar" = Ayarlar > Koşu > Yetki hatasında (varsayılan: Token'ı yenile, bir kez tekrar dene).
   const yetki = h('select', {},
     h('option', { value: 'genel', selected: is.yetki === 'genel' }, 'Genel ayarı kullan (Ayarlar > Koşu)'),
     h('option', { value: 'tekrarYok', selected: is.yetki === 'tekrarYok' }, 'Tekrar deneme'),

@@ -1,5 +1,5 @@
-// KORUMA TESTLERİ — yetki hatasında (HTTP 401 / 403) tekrar: akışın "Yetki hatasında" seçimi, seçilmediyse Ayarlar > Koşu (varsayılan
-// "Tekrar deneme"). Kapalıyken tek istek ve normal sonuç; açıkken oturum akışı / akıştaki token adımı yeniden çalışır, istek BİR KEZ
+// KORUMA TESTLERİ — yetki hatasında (HTTP 401 / 403) tekrar: akışın "Yetki hatasında" seçimi, "Genel ayar" ise Ayarlar > Koşu (varsayılan
+// "Token'ı yenile, bir kez tekrar dene"). Kapalıyken tek istek ve normal sonuç; açıkken oturum akışı / akıştaki token adımı yeniden çalışır, istek BİR KEZ
 // tekrarlanır, raporda not ("401 alındı, token yenilendi, tekrar denendi"), ilk deneme ayrı kayıt olmaz; ikinci deneme de reddedilirse
 // normal hata. Bu ayardan önce kaydedilmiş oturum akışı (alan yok) o zamanki davranışı (bir kez yenile) korur. Yalnız 127.0.0.1.
 import { join } from 'node:path';
@@ -61,9 +61,22 @@ test.describe('yetki hatasında tekrar', () => {
   });
   test.afterAll(async () => { vt?.kapat(); await m?.kapat(); klasor.temizle(); });
 
-  test('varsayılan: yeni oturum akışı "genel", Ayarlar > Koşu "Tekrar deneme" → 401 sonrası tek istek, normal sonuç', async () => {
+  test('varsayılan: yeni oturum akışı "genel", Ayarlar > Koşu varsayılanı "Token\'ı yenile, bir kez tekrar dene"', async () => {
     expect(servisAkisiGetir(vt, oturum)!.icerik.yetkiHatasinda).toBe('genel');
-    expect(kosuAyarlariniOku(vt).yetkiHatasinda).toBe('tekrarYok');
+    expect(kosuAyarlariniOku(vt).yetkiHatasinda).toBe('yenileVeTekrar');
+    oturumlariTemizle();
+    await kos(guvenli);
+    tokenEskit();
+    const o = { guvenli: m.sayi('/api/guvenli'), giris: m.sayi('/api/giris') };
+    const r = await kos(guvenli);
+    expect(r.durum).toBe('basarili');
+    expect(r.yetkiTekrari?.not).toBe(NOT);
+    expect([m.sayi('/api/guvenli') - o.guvenli, m.sayi('/api/giris') - o.giris]).toEqual([2, 1]);
+  });
+
+  test('Ayarlar > Koşu "Tekrar deneme" → 401 sonrası tek istek, normal sonuç', async () => {
+    kosuAyarlariniKaydet(vt, { yetkiHatasinda: 'tekrarYok' });
+    expect(servisAkisiGetir(vt, oturum)!.icerik.yetkiHatasinda).toBe('genel');
     oturumlariTemizle();
     expect((await kos(guvenli)).durum).toBe('basarili');
     tokenEskit();
@@ -147,6 +160,7 @@ test.describe('yetki hatasında tekrar', () => {
       { ad: 'Giriş', servisId, senaryoId: giris, okumalar: [{ ad: 'Token', kaynak: 'json', yol: 'token' }] },
       { ad: 'Güvenli', servisId, senaryoId: guvenli }
     ], ...(yetkiHatasinda ? { yetkiHatasinda } : {}) });
+    kosuAyarlariniKaydet(vt, { yetkiHatasinda: 'tekrarYok' });
     const kapali = servisAkisiKaydet(vt, { projeId, baslik: 'Akış (genel)', icerik: icerik() });
     expect(servisAkisiGetir(vt, kapali)!.icerik).not.toHaveProperty('yetkiHatasinda');   // akışta "genel" yazılmaz
     m.durum.reddet = 1;

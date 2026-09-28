@@ -164,7 +164,7 @@ Servis sayfasının **Sözleşme** sekmesinde her operasyon (REST'te uç) için 
 
 ## Yetki hatasında (401 / 403)
 
-Oturum akışı ya da token adımı olan akışlarda "Yetki hatasında (401 / 403)" seçimi: **Tekrar deneme** ya da **Token'ı yenile, bir kez tekrar dene**. Akışta seçilmediyse Ayarlar > Koşu'daki genel değer kullanılır (varsayılan: Tekrar deneme).
+Oturum akışı ya da token adımı olan akışlarda "Yetki hatasında (401 / 403)" seçimi: **Tekrar deneme** ya da **Token'ı yenile, bir kez tekrar dene**. Akışta "Genel ayarı kullan" seçiliyse Ayarlar > Koşu'daki genel değer kullanılır (varsayılan: **Token'ı yenile, bir kez tekrar dene**). Akışta ayrıca seçim yapılmışsa o geçerlidir.
 
 - Açıkken istek 401 / 403 dönerse oturum akışı / akıştaki token adımı yeniden çalışır ve istek **bir kez** tekrarlanır. İlk deneme ayrı sonuç olarak kaydedilmez; raporda not görünür: "401 alındı, token yenilendi, tekrar denendi". İkinci deneme de 401 / 403 ise sonuç olduğu gibi değerlendirilir (not: "tekrar da 401 döndü").
 - Yalnız HTTP durum kodu dikkate alınır (SOAP Fault içeriği yetki hatası sayılmaz).
