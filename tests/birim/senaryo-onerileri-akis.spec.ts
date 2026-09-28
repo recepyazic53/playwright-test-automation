@@ -166,7 +166,7 @@ test('senaryo formu: "Bilerek boş bırak" alanı temizler ve kapatır; kayıtta
   await page.getByPlaceholder('ör. bağlam / kapsam / beklenen sonuç…').fill('Adet boş bırakılır');
   await page.locator('[data-alan="urunAdi"] input:not([type="checkbox"])').fill('Kalem');
   await page.locator('[data-alan="kategori"] select').selectOption('kitap');
-  await page.locator('[data-alan="teslimatTarihi"] input:not([type="checkbox"])').fill(tarih());
+  await page.locator('[data-alan="teslimatTarihi"] input[type="text"]').fill(tarih());
   await page.locator('[data-alan="telefon"] input:not([type="checkbox"])').fill(TELEFON);
   await page.getByRole('button', { name: 'Senaryoyu oluştur' }).click();
   await expect(page.getByRole('heading', { name: /Sipariş akışı/, level: 2 })).toBeVisible();

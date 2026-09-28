@@ -152,6 +152,7 @@ export declare const MESAJLAR: {
   readonly telefonBicim: () => string;
   readonly tarihBicim: (etiket: string, bicim: string) => string;
   readonly tarihGelecekte: (etiket: string) => string;
+  readonly goreliTarihAnlasilamadi: (etiket: string, deger: string) => string;
   readonly kartNoBicim: () => string;
   readonly cvvBicim: () => string;
   readonly kartAyBicim: () => string;
@@ -198,3 +199,8 @@ export declare function beklenenSonucuNormallestir(senaryo: {
 }): CozulmusBeklenenSonucGirdisi;
 export declare function hatalariMetneCevir(hatalar: readonly DogrulamaBulgusu[]): string;
 export declare function alanFormKimlikleri(alanYolu: string, baglam: Pick<DogrulamaBaglami, 'model' | 'altModeller'>): string[];
+
+/** Değer geçerli bir göreli tarih ifadesi mi ("bugün", "bugün+7", "ay sonu"…)? */
+export declare function goreliTarihGecerliMi(deger: unknown): boolean;
+/** Göreli tarih yazılmak istenmiş ama anlaşılamamış mı ("bugün+x")? */
+export declare function goreliTarihHataliMi(deger: unknown): boolean;

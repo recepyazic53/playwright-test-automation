@@ -13,6 +13,14 @@ import { onayIste, secenekIste } from './kosu-paneli.js';
 import { tabloOku } from './parametre-tanimi-formu.js';
 import { veriSagligiKarti } from './veri-sagligi.js';
 import { baslikNormal } from './tablo-benzerligi.mjs';
+import { goreliHataMesaji, goreliIfadeHataliMi, goreliOzet, tarihDegeriCoz } from './goreli-tarih.mjs';
+
+/** Tarih hücresinin önizlemesi: "bugün+7 → 05.10.2026" · anlaşılamayan göreli yazımda örnek · diğerlerinde boş. @param {string} v */
+function tarihHucreOnizlemesi(v) {
+  const o = goreliOzet(v);
+  if (o) return `${o} (bugün koşulursa)`;
+  return goreliIfadeHataliMi(v) ? goreliHataMesaji(v) : '';
+}
 
 const q = encodeURIComponent;
 /** Oturum boyunca seçili tablo. */
@@ -744,6 +752,11 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
         }
       }, ikon('esle'), h('span', { class: 'karsilik-metni' }, 'Karşılıklar'), n ? h('span', { class: 'karsilik-sayisi' }, String(n)) : null);
     }
+    /** Sütun tarih olarak anlaşılıyor mu: adı "tarih" / "date" içeriyor ya da dolu hücrelerinden biri tarih / göreli ifade. */
+    function tarihSutunuMu(s) {
+      if (/tarih|date/i.test(kucuk(s.ad))) return true;
+      return is.satirlar.some((r) => { const v = r.degerler[s.ad] ?? r.degerler[s.eskiAd]; return typeof v === 'string' && v.trim() !== '' && tarihDegeriCoz(v) !== null; });
+    }
     function satirCiz(r, no) {
       const hucreler = is.sutunlar.map((s) => {
         const anahtar = s.eskiAd && s.eskiAd !== s.ad && !(s.ad in r.degerler) ? s.eskiAd : s.ad;
@@ -754,6 +767,16 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
           placeholder: s.gizli && r.doluGizli.has(s.eskiAd || s.ad) ? '•••• kayıtlı' : '', 'aria-label': `${no}. satır ${s.ad}`
         });
         g.addEventListener('input', () => { r.degerler[s.ad] = secim ? secimYaz(g.value) : g.value; if (anahtar !== s.ad) delete r.degerler[anahtar]; r.degisti = true; durumCiz(); });
+        // Tarih sütunu: hücreye sabit tarih ya da bugüne göre ifade ("bugün", "bugün+7", "ay sonu") yazılır; altında bugünkü karşılığı.
+        if (!secim && !s.gizli && tarihSutunuMu(s)) {
+          const onizleme = h('small', { class: 'tarih-hucre-onizleme', 'aria-live': 'polite' });
+          const guncelle = () => { onizleme.textContent = tarihHucreOnizlemesi(g.value); };
+          g.placeholder = g.placeholder || 'gg.aa.yyyy ya da bugün+7';
+          g.title = 'Sabit tarih (gg.aa.yyyy) ya da bugüne göre: bugün, bugün+7, bugün-3, ay sonu, ay başı+1 — koşuda o günün tarihi yazılır';
+          g.addEventListener('input', guncelle);
+          guncelle();
+          return h('td', {}, h('div', { class: 'tarih-hucresi' }, g, onizleme));
+        }
         return h('td', {}, g);
       });
       const ortam = h('select', { 'aria-label': `${no}. satır ortamı` }, h('option', { value: '' }, 'Tümü'),

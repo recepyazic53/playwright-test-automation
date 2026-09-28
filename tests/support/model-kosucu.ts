@@ -752,6 +752,8 @@ export type ModelKosuOrtami = {
   /** profil: giriş profilinin ADI (senaryonun giriş seçimi / "Yeniden giriş" adımı); verilmezse ortamın varsayılan profili. */
   kimlik: (profil?: string | null) => GirisKimligi;
   oturumDosyasi: () => string;
+  /** Göreli tarihlerin ("bugün+7") hesaplandığı an (verilmezse koşunun anı; testler sabitler). */
+  simdi?: () => Date;
 };
 
 /**
@@ -796,7 +798,9 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
   // ${Tablo.Sütun} başvurusu çözülemediyse (ör. tabloda bu ortamda satır yok) tarayıcı açılmadan açık hatayla durulur.
   if (s.veriHatalari?.length) throw new Error(veriHatalariMetni(s.baslik, s.veriHatalari));
   const tabloGizlileri = s.tabloGizliDegerleri ?? [];
-  const plan =modelKosuPlani(s.model, s.veri, { altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli, kimlikProfilleri: ortam.veri.kimlikProfilleri ?? {} });
+  const plan = modelKosuPlani(s.model, s.veri, {
+    altModeller: s.altModeller, mutlakaGorunmeli: s.mutlakaGorunmeli, kimlikProfilleri: ortam.veri.kimlikProfilleri ?? {}, ...(ortam.simdi ? { simdi: ortam.simdi() } : {})
+  });
   if (plan.hatalar.length) throw new Error(`"${s.baslik}" model koşu planı kurulamadı: ${plan.hatalar.join(' ')}`);
   testInfo.annotations.push({ type: 'urun', description: s.ekran.ad || 'Diğer' });
 
@@ -887,6 +891,14 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
       await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
       await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
     });
+
+    // Göreli tarihler (senaryo / tablo / model değeri "bugün+7" …): raporda hem ifade hem bu koşuda yazılan tarih görünür.
+    const goreliler = plan.adimlar.filter((a) => a.dahil).flatMap((a) => a.alanlar).filter((a) => a.goreliIfade && !a.atla && !gizliAdMi(a.etiket) && !gizliAdMi(a.anahtar))
+      .map((a) => `${a.etiket}: ${a.goreliIfade} → ${String(a.deger)}`);
+    if (goreliler.length) {
+      testInfo.annotations.push({ type: 'goreliTarihler', description: goreliler.join(' · ') });
+      await test.step(`Göreli tarihler — ${goreliler.join(' · ')}`, async () => undefined);
+    }
 
     let canlidaDurdu = false;
     const sqlDegerleri: SqlDegerleri = { degerler: {}, gizliler: [] };

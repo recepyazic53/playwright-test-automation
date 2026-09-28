@@ -69,7 +69,8 @@ function tarihYaz(t, bicim) {
 function tarihCoz(d, simdi) {
   if (typeof d !== 'string') return null;
   const m = d.trim();
-  const g = /^bugun(?:\s*([+-])\s*(\d{1,5}))?$/.exec(m);
+  // "bugün" / "bugun" (büyük-küçük harf ve boşluk fark etmez; ortak dilbilgisi: goreli-tarih.mjs).
+  const g = /^bug[uü]n(?:\s*([+-])\s*(\d{1,5}))?$/iu.exec(m);
   if (g) return { tarih: gunEkle(simdi, g[1] ? (g[1] === '-' ? -1 : 1) * Number(g[2]) : 0), goreli: true };
   const tr = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(m);
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(m);
@@ -285,7 +286,7 @@ export function senaryoOnerileri(g) {
       const gosterilen = gosterim(fa, a.deger);
       oneriEkle({
         tur: 'sinir', kimlik: `sinir:${fa.anahtar}:${duz(a.deger)}`, baslik: `Sınır: ${fa.etiket} = ${gosterilen.length > 40 ? `${gosterilen.length} karakter` : gosterilen} (${a.etiket})`,
-        ozet: `"${fa.etiket}" ${a.aciklama}; kural: ${a.kural}.${a.goreli ? ` Tarih bugüne göre hesaplandı (${tarihYaz(simdi, fa.bicim)}); ileride güncelleyin.` : ''}`,
+        ozet: `"${fa.etiket}" ${a.aciklama}; kural: ${a.kural}.${a.goreli ? ` Tarih bugüne göre yazıldı (${a.deger}); her koşuda o günün tarihiyle hesaplanır, eskimez.` : ''}`,
         degisiklikler: [{ etiket: fa.etiket, deger: gosterilen }],
         beklenen: a.gecerli ? { tur: 'basari' } : hataBeklentisi(fa, false), veri, eksikler,
         mevcut: mevcutBul((v) => !bosMu(v[fa.anahtar]) && duz(v[fa.anahtar]) === duz(a.deger))
@@ -331,8 +332,11 @@ export function senaryoOnerileri(g) {
         ...(ust ? [[gunEkle(ust.tarih, -1), 'en geç − 1 gün', ust.goreli], [ust.tarih, 'en geç', ust.goreli], [gunEkle(ust.tarih, 1), 'en geç + 1 gün', ust.goreli]] : [])
       ];
       for (const [t, etiket, goreli] of noktalar) {
-        const d = tarihYaz(t, fa.bicim);
-        ekle({ deger: d, etiket, aciklama: `= ${d} (${etiket}; ${gecerli(t) ? 'geçerli' : 'geçersiz'})`, kural, gecerli: gecerli(t), goreli });
+        // Sınır bugüne göreyse öneri de bugüne göre yazılır ("bugün+1"): tarih geçince senaryo kırılmaz.
+        const fark = gunSayisi(t) - gunSayisi(simdi);
+        const d = goreli ? (fark === 0 ? 'bugün' : `bugün${fark > 0 ? '+' : '-'}${Math.abs(fark)}`) : tarihYaz(t, fa.bicim);
+        const durum = `${etiket}; ${gecerli(t) ? 'geçerli' : 'geçersiz'}`;
+        ekle({ deger: d, etiket, aciklama: goreli ? `= ${d} → ${tarihYaz(t, fa.bicim)} (${durum})` : `= ${d} (${durum})`, kural, gecerli: gecerli(t), goreli });
       }
       return liste;
     }

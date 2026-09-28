@@ -68,6 +68,7 @@ export const MESAJLAR = Object.freeze({
   telefonBicim: () => 'Cep Telefonu 5XXXXXXXXX biçiminde 10 haneli olmalıdır (başında 0 ya da +90 olmadan, boşluksuz).',
   tarihBicim: (etiket, bicim) => `"${etiket}" ${bicim} biçiminde geçerli bir tarih olmalıdır.`,
   tarihGelecekte: (etiket) => `"${etiket}" bugünden ileri bir tarih olamaz.`,
+  goreliTarihAnlasilamadi: (etiket, deger) => `${adGoster(etiket)}: '${String(deger).trim()}' anlaşılamadı; örnek: bugün+7 (ya da bugün, bugün-3, ay sonu, ay başı+1).`,
   kartNoBicim: () => 'Kart numarası 16 haneli olmalıdır (yalnızca rakam; boşluk bırakılabilir).',
   cvvBicim: () => 'Güvenlik kodu (CVV) 3 ya da 4 haneli olmalıdır.',
   kartAyBicim: () => 'Son kullanma ayı 01-12 arasında olmalıdır.',
@@ -537,8 +538,31 @@ function basitAlaniDogrula(alan, anahtar, deger, b, rapor) {
       if (typeof deger !== 'string') rapor.hata(anahtar, MESAJLAR.metinOlmali(etiket));
       else if (alan.kabul && !deger.toLowerCase().endsWith(alan.kabul.toLowerCase())) rapor.hata(anahtar, MESAJLAR.dosyaUzantisi(etiket, alan.kabul));
       return;
+    case 'tarih':
+      // Göreli tarih ("bugün", "bugün+7", "ay sonu"…) geçerli tarihtir (koşuda çözülür); "bugün+x" gibi anlaşılamayan yazım hata.
+      if (typeof deger === 'string' && goreliTarihHataliMi(deger)) rapor.hata(anahtar, MESAJLAR.goreliTarihAnlasilamadi(etiket, deger));
+      return;
     default:
   }
+}
+
+// ---- Göreli tarih (tarih alanında "bugün", "bugün+7", "bugün-3", "ay başı", "ay sonu+2"; Türkçe / ASCII, boşluk toleranslı) ----
+// Dilbilgisi scripts/platform/senaryolar/goreli-tarih.mjs > goreliIfadeAyristir ile AYNIDIR (bu dosya modül içe aktarmaz; birim testi
+// iki ayrıştırıcının aynı sonucu verdiğini denetler). Tarihe çevirme koşucuda ve formda o modülle yapılır.
+const GORELI_TARIH = /^(bugun|aybasi|aysonu)(?:([+-])(\d{1,5})(?:g|gun)?)?$/;
+const GORELI_TR = { ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', â: 'a', î: 'i', û: 'u' };
+function goreliSade(m) {
+  return String(m).toLocaleLowerCase('tr').normalize('NFC').replace(/[çğıöşüâîû]/g, (k) => GORELI_TR[k] || k).replace(/i̇/g, 'i').replace(/[\s_]+/g, '');
+}
+/** Değer geçerli bir göreli tarih ifadesi mi? */
+export function goreliTarihGecerliMi(deger) {
+  if (typeof deger !== 'string') return false;
+  const e = GORELI_TARIH.exec(goreliSade(deger));
+  return Boolean(e) && (!e[3] || Number(e[3]) <= 36600);
+}
+/** Göreli tarih yazılmak istenmiş ama anlaşılamamış mı ("bugün+x", "bugün 7")? */
+export function goreliTarihHataliMi(deger) {
+  return typeof deger === 'string' && /^(bugun|aybasi|aysonu)/.test(goreliSade(deger)) && !goreliTarihGecerliMi(deger);
 }
 
 function havuzuDogrula(alan, anahtar, deger, havuzYolu, b, rapor) {

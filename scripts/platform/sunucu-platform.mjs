@@ -83,6 +83,7 @@
 //   POST /platform/ekran/analiz/yukle  { projeId, ekranId, paket }            tekrar analiz → bekleyen bulgular
 //   POST /platform/ekran/analiz/uygula { projeId, ekranId, analizId, kabul, red } yalnızca kabul edilenlerle yeni sürüm
 //   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
+//   POST /platform/senaryolar/tarih-donusumu { projeId, senaryoIdleri, onay? }  eskimiş sabit tarihler → "bugün+N" (onaysız önizleme)
 //   POST /platform/ekran/senaryolar/tablo-donusumu { projeId, ekranId?, onay?, secimler?: [{ senaryoId, alan }] }  tabloya bağlı
 //        alanların düz değerleri → ${Tablo.Sütun} (+ satır seçimi); onay yoksa yalnız plan, onayla yalnız seçilenler (tablolar/ekran-donusumu.mjs)
 //   POST /platform/ekran/claude-dosyasi { projeId, ekranId, tur, baglamProfilleri?, baslangicEkranId? } → <veritabanı klasörü>/analiz/*.json
@@ -212,6 +213,7 @@ import { taramaIsteginiIsle, taramaSuruyorMu } from './tarama/yonetici.mjs';
 import { SERVIS_BUYUK_GOVDE_UCLARI, SERVIS_GET_UCLARI, SERVIS_POST_UCLARI } from './servisler/servis-uclari.mjs';
 import { TABLO_GET_UCLARI, TABLO_POST_UCLARI, tabloKosuDenetimiAyarla } from './tablolar/tablo-uclari.mjs';
 import { ekranTabloDonusumu } from './tablolar/ekran-donusumu.mjs';
+import { goreliTarihDonusumu } from './senaryolar/tarih-donusumu.mjs';
 import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
 import { SQL_KULLANIM_GET_UCLARI, SQL_KULLANIM_POST_UCLARI } from './sql/sql-kullanimi.mjs';
 import { AKIS_SENARYO_GET_UCLARI, AKIS_SENARYO_POST_UCLARI } from './servisler/akis-senaryosu.mjs';
@@ -1435,6 +1437,8 @@ const POST_UCLARI = new Map([
   ['/platform/ekran/akis/sil', (db, g) => akisSil(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
   ['/platform/ekran/reddedilenleri-unut', (db, g) => reddedilenleriUnut(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'))],
   // Düz değer → tablo başvurusu: onay yoksa yalnız plan (hiçbir şey yazılmaz); onayla yalnız seçilen senaryo + alanlar.
+  // Eskimiş sabit tarihler → bugüne göre ("bugün+N"); onay yoksa yalnız önizleme (senaryolar/tarih-donusumu.mjs).
+  ['/platform/senaryolar/tarih-donusumu', (db, g) => goreliTarihDonusumu(db, kimlikAl(g.projeId, 'projeId'), { senaryoIdleri: g.senaryoIdleri, onay: g.onay === true }, { kosuyorMu })],
   ['/platform/ekran/senaryolar/tablo-donusumu', (db, g) => ekranTabloDonusumu(db, kimlikAl(g.projeId, 'projeId'), {
     ekranId: secimliKimlik(g.ekranId) ?? null, onay: g.onay === true, secimler: g.secimler
   }, { kosuyorMu })],

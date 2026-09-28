@@ -176,6 +176,12 @@ export const REHBERLER = {
         baslik: 'Doldurma sırası',
         sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.', 'Senaryo birden çok satırla koşacaksa "Çalıştırma biçimi"ni seçin: tek satır (varsayılan), seçili satırların her biri ya da uyan tüm satırlar; her satır ayrı test olur.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
       },
+      {
+        baslik: 'Tarih alanları: sabit ya da bugüne göre',
+        metin: 'Tarih alanında "Sabit tarih" ya da "Bugüne göre" seçilir. Bugüne göre: "Bugün / Ay başı / Ay sonu" + / − N gün (ör. bugün+7); altında "Bugün koşulursa: …" önizlemesi görünür, alanın sınırı dışındaysa uyarır. Senaryo her koşuda o günün tarihini (Türkiye saati) alanın biçimiyle yazar; tarih geçince senaryo kırılmaz. Sabit tarih geçmişte kaldıysa alanın altında "Bugüne göre yap" önerisi çıkar; Senaryolar listesinde "tarih eskidi" rozeti görünür ve seçilenler "Tarihleri bugüne göre yap…" ile topluca düzeltilir.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Bugüne göre', alt: 'bugün+7', ikon: 'takvim' }, { baslik: 'Önizleme', alt: 'bugün koşulursa', ikon: 'gorunum' }, { baslik: 'Her koşu', alt: 'o günün tarihi', ikon: 'oynat' }] },
+        ipucu: 'Test verisi tablosunun tarih hücresine de "bugün", "bugün+7", "ay sonu" yazabilirsiniz; hücrenin altında bugünkü karşılığı görünür.'
+      },
       { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinize göre koşacak adımları kutular hâlinde gösterir; seçili ortamdaki son koşu varsa adımlar yeşil / kırmızı boyanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Alanlar', ikon: 'duzenle' }, { baslik: 'Gönder', ikon: 'ok' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
       {
         baslik: 'Birden çok satırla çalıştırma',

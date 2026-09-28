@@ -21,6 +21,7 @@ import { senaryoAdimGoruntusuAyikla } from '../ayarlar/kayit-kurallari.mjs';
 import { acikAnahtar, adliAlanlariDonustur, sifrele, zarflariCoz } from '../kasa.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari } from './model-formu.mjs';
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
+import { eskiyenTarihAlanlari } from './goreli-tarih.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
@@ -347,6 +348,8 @@ export function senaryoListesi(vt, projeId, ortamId) {
       sonSonuc: sonuc, mutlakaGorunmeliSayisi: kurallar.length, paketten: nesneMi(icerik.paket),
       akis: akis ? { id: akis.id, ad: akis.ad } : null,
       modelKosusu: modelSenaryosuMu(icerik),
+      // Tarihi geçmiş (ya da bugün koşulursa sınır dışında kalan) SABİT tarih değerleri: listede "tarih eskidi" rozeti.
+      eskiyenTarihler: sema && veri ? eskiyenTarihAlanlari(tumFormAlanlari(sema), veri, new Date(), String(s.guncellenme)).map((e) => ({ anahtar: e.anahtar, etiket: e.etiket, deger: e.deger, mesaj: e.mesaj })) : [],
       guncellenme: String(s.guncellenme),
       ...(ortamId ? {} : { ortamlar })
     });

@@ -29,6 +29,7 @@ import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } 
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
 import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
+import { tarihGirdisi } from './goreli-tarih-girdisi.js';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -398,6 +399,20 @@ function modelFormu(icerik, s, senaryo, baglam) {
         case 'altModel':
           ({ govde, ust } = altModelCiz(alan, id, hata, uyari));
           break;
+        case 'tarih':
+          // Hassas tarih alanı (maskeli) düz metin girdisiyle kalır (aşağıdaki varsayılan).
+          if (!alan.hassas) {
+            const tg = tarihGirdisi({
+              id, etiket: alan.etiket, deger: degerler[alan.anahtar], bicim: alan.bicim, sinirlar: alan.sinirlar ?? null,
+              referans: senaryo?.guncellenme ?? null, tablodan: tabloSecenegi(alan), tabloBasvurusu: tabloBasvurusuCoz,
+              degistir: (d) => degerYaz(alan.anahtar, d, { dokun: false })
+            });
+            govde = tg.el;
+            ust = alanUst(alan, id);
+            kontrolKaydet(alan.anahtar, tg.girdiler, hata, uyari);
+            break;
+          }
+        // falls through
         default: {
           // Değeri tablo başvurusu (${Tablo.Sütun}) olan sayı alanı metin olarak gösterilir; hassas alanda başvuru (değer değil)
           // açık gösterilir, düz değer maskelenir.

@@ -252,7 +252,7 @@ Koşucunun diğer alan olanakları:
 
 | Olanak | Açıklama |
 |---|---|
-| `sabitDeger` | Senaryo alanı olmayan (`yapilandirma` `sabit`/`turetilmis`) alan her koşuda bu değerle doldurulur. Tarihte `bugun`, `bugun+7`, `bugun-3` (İstanbul günü, alanın `bicim`iyle). |
+| `sabitDeger` | Senaryo alanı olmayan (`yapilandirma` `sabit`/`turetilmis`) alan her koşuda bu değerle doldurulur. Tarihte `bugun`, `bugun+7`, `bugun-3`, `ay sonu`, `ay başı+1` (İstanbul günü, alanın `bicim`iyle; aynı ifadeler senaryo değerinde ve tablo hücresinde de geçerlidir). |
 | Varsayılan | Senaryoda boş bırakılan alan modelin `varsayilan.deger`ini alır; görünürlük koşulları da bu değerle hesaplanır (dosya hariç). Senaryonun `bilerekBos` listesindeki alanlar (olumsuz senaryo: "zorunlu alan boşken uyarı çıkmalı") varsayılanı almaz ve doldurulmaz; doğrulayıcı bu alanların boşluğunu hata değil uyarı sayar. |
 | `sinirlar` | Alanın uygulamadaki değer kuralları — senaryo verisini kısıtlamaz, yalnızca senaryo tasarım yardımcısının sınır değer önerileri bundan üretilir (kural yoksa öneri yok). Sayı: `enAz`, `enCok` (sayı), `artis` (varsayılan 1). Tarih: `enAz`, `enCok` (`bugun`, `bugun+30`, `gg.aa.yyyy` ya da `yyyy-aa-gg`). Metin: `enAzUzunluk`, `enCokUzunluk` (tam sayı), `desen` (düzenli ifade; değerin tamamı uymalı). Ör. `"sinirlar": { "enAz": 1, "enCok": 10 }`. Paket yalnızca sayfada belli olan sınırları yazar (tahmin yok); kullanıcı ekranın Akışlar sekmesinde alanın "Sınırlar" düğmesiyle ekler / değiştirir / kaldırır (akışı yeniden kaydetmek mevcut kuralları ve alanın diğer anahtarlarını korur). Senaryo formunda zorunlu alanın "Bilerek boş bırak" işareti `bilerekBos` listesini yönetir. |
 | `kimlikProfili` | Senaryoya özel kimlik ya da seçilen (yoksa varsayılan) hazır kayıt (Ayarlar > Test verisi > Kişi ve kayıt verileri; havuz = aynı adlı tablo, kayıt = satır adı) `altAlanlar`a `sira` ile açılır; `eslesme.kimlikAlani` metin ya da kimlik türüne göre harita (türde karşılığı yoksa alt alan atlanır). |
@@ -458,6 +458,10 @@ artık var olmayan alan/adımlara bağlı koşullar ve iş kuralları çıkarıl
   `"${Tablo[etiket].Sütun}"` (ör. `"musteriAdi": "${Kişi.Ad}"`); kimlik bloğunda kayıt (satır) adı (ör. `"musteriProfili": "ozel1"`).
   Başvurulan tablo ve sütun pakette ya da projede olmalıdır (önizlemede denetlenir; seçim alanı gizli sütundan değer alamaz).
   Tabloya bağlı seçim alanında tablodaki değer ya da aynı sütuna başvuru yazılır. Koşuda çözümü: [Model koşucusu](#model-koşucusu).
+* **Tarih alanı öneri değerinde sabit tarih yerine `bugün` / `bugün+N` kullanın** (ör. `"teslimatTarihi": "bugün+7"`; ayrıca
+  `bugün-3`, `ay sonu`, `ay başı+1`; Türkçe ya da ASCII yazım, boşluk fark etmez). Koşucu her koşuda o günün tarihini (Europe/Istanbul)
+  alanın `bicim`iyle yazar; sabit tarih geçince senaryo kırılır. Paket doğrulayıcısı **geçmiş sabit tarihli** öneride uyarı verir.
+  Aynı ifade test verisi tablosu hücresine de yazılabilir.
 * `adimKapsami`: dahil edilen isteğe bağlı adımların kimlikleri (modelin adım kapsamı ayarlarına çevrilir).
 * `beklenenSonuc.tur`: `basari` | `hata` (iş kuralı hatası beklenir — ayrıntısı `veri`deki beklenen sonuç alanında).
 * Öneriler tek senaryo doğrulayıcısından geçirilir; modele uymayan öneri önizlemede sorunlarıyla

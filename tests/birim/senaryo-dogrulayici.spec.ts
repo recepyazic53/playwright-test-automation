@@ -448,7 +448,7 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
       bagimliSecenekDisi: ['E', 'D', 'B', 'BD', liste], kosulluAlan: ['E', 'K'], kosulluSecenek: ['E', 'D', 'K'],
       gorunmeyenAlan: ['E'], birlikteZorunlu: ['E', 'F'], profilYok: ['E', 'P'], profilVeKimlikBirlikte: ['E'],
       profilYaDaKimlikZorunlu: ['E'], tcBicim: [], tcKontrolHanesi: [], vknBicim: [], telefonBicim: [],
-      tarihBicim: ['E', 'B'], tarihGelecekte: ['E'], kartNoBicim: [], cvvBicim: [], kartAyBicim: [], kartYilBicim: [],
+      tarihBicim: ['E', 'B'], tarihGelecekte: ['E'], goreliTarihAnlasilamadi: ['E', 'bugün+x'], kartNoBicim: [], cvvBicim: [], kartAyBicim: [], kartYilBicim: [],
       kartSuresiGecmis: ['01/2026'], varsayilanKayitSuresiGecmis: ['E', '01/2026'], eskiBeklenenSonucAlanlari: [liste],
       tabloBasvurusuAlamaz: ['E'], tabloYok: ['E', 'T'], tabloSutunuYok: ['E', 'T', 'S'], gizliSutunSecimde: ['E', 'S'], gizliSutunDosyada: ['E', 'S'],
       bilerekBos: ['E']

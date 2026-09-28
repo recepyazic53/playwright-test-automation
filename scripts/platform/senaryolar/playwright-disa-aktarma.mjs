@@ -19,6 +19,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { girisAdimlariniCoz } from '../giris/tarif.mjs';
 import { referansCoz } from '../dosyalar/referans.mjs';
 import { secenekBul } from './model-kosusu.mjs';
+import { goreliIfadeAyristir } from './goreli-tarih.mjs';
 import { beklentiAdi } from '../dosyalar/dosya-icerigi.mjs';
 
 /** Üretilen dosyanın ortam değişkenlerinin öneki. */
@@ -328,6 +329,20 @@ function maskeUygula(maske: string, deger: string): string {
   regexKacis: {
     kod: `const regexKacis = (m: string): string => m.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&');`
   },
+  goreliTarih: {
+    kod: `/** Göreli tarih ("bugün+7", "ay sonu" …): koşu anındaki Europe/Istanbul gününe göre hesaplanır, alanın biçimiyle yazılır. */
+function goreliTarih(taban: 'bugun' | 'ayBasi' | 'aySonu', gun: number, bicim: string): string {
+  const [y, a, g] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date()).split('-').map(Number);
+  const baslangic = taban === 'ayBasi' ? 1 : taban === 'aySonu' ? new Date(Date.UTC(y, a, 0)).getUTCDate() : g;
+  const t = new Date(Date.UTC(y, a - 1, baslangic + gun));
+  const iki = (n: number): string => String(n).padStart(2, '0');
+  return bicim.replace(/yyyy|yy|gg|dd|aa|mm/gi, (p) => {
+    const k = p.toLowerCase();
+    return k === 'yyyy' ? String(t.getUTCFullYear()) : k === 'yy' ? iki(t.getUTCFullYear() % 100) : k === 'gg' || k === 'dd' ? iki(t.getUTCDate()) : iki(t.getUTCMonth() + 1);
+  });
+}`
+  },
   totp: {
     kod: `/** RFC 6238 TOTP (30 sn, SHA-1, 6 hane) — authenticator uygulamalarıyla aynı; anahtar base32. */
 function totpKodu(anahtar: string, zaman = Date.now()): string {
@@ -349,7 +364,7 @@ function totpKodu(anahtar: string, zaman = Date.now()): string {
 }`
   }
 };
-const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge', 'okluSec', 'secimYap', 'degerJs', 'zorla', 'doluBekle', 'maske', 'regexKacis', 'totp'];
+const YARDIMCI_SIRASI = ['ortamDegeri', 'sayfa', 'degerOku', 'metin', 'gosterge', 'okluSec', 'secimYap', 'degerJs', 'zorla', 'doluBekle', 'maske', 'regexKacis', 'goreliTarih', 'totp'];
 
 // ---------------------------------------------------------------------------------------
 // Üretici
@@ -648,7 +663,13 @@ export function playwrightKoduUret(g) {
         break;
       }
       case 'tarih': {
-        const v = degerIfadesi(a).ifade;
+        // Göreli tarih ("bugün+7"): dışa aktarılan kod da tarihi koşu anında hesaplar (sabit tarih yazılmaz; tarih geçince kırılmaz).
+        const gi = !gizli && a.goreliIfade ? goreliIfadeAyristir(a.goreliIfade) : null;
+        if (gi) {
+          yardimcilar.add('goreliTarih');
+          satirlar.push(`${i2}// ${yorum(a.etiket)}: ${yorum(a.goreliIfade)} (koşu gününe göre)`);
+        }
+        const v = gi ? `goreliTarih(${s(gi.taban)}, ${gi.gun}, ${s(a.tarihBicimi || 'gg.aa.yyyy')})` : degerIfadesi(a).ifade;
         if (a.doldurucu === 'tarihJs') {
           satirlar.push(`${i2}await l.evaluate((e, v) => {`, `${i2}  (e as HTMLInputElement).value = v;`,
             `${i2}  e.dispatchEvent(new Event('input', { bubbles: true }));`, `${i2}  e.dispatchEvent(new Event('change', { bubbles: true }));`, `${i2}}, ${v});`);

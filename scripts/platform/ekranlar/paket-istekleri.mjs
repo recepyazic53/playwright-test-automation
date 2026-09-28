@@ -30,6 +30,7 @@ export const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimler
   + 'Gerçek <select>\'i gizli olan özel açılır listelerde (aramalı kutu) konum.secici\'ye gerçek <select>\'in seçicisini, doldurucu\'ya "ozelSecim" yaz. '
   + 'Alanın sayı / uzunluk / tarih sınırları sayfada belliyse (min, max, maxlength, pattern ya da yardım metni) alanın sinirlar\'ına yaz '
   + '(sayıda enAz / enCok / artis, metinde enAzUzunluk / enCokUzunluk / desen, tarihte enAz / enCok: gg.aa.yyyy ya da bugun+N); belli değilse yazma, tahmin etme. '
+  + 'Senaryo önerilerinde tarih alanına sabit tarih değil bugün ya da bugün+N yaz (ör. bugün+7; koşu günü hesaplanır, tarih geçince kırılmaz). '
   + 'Test verisini testVerisi.tablolar\'a tablo olarak yaz (sütun = alan, satır = birlikte geçerli değerler). '
   + '(1) Ekran listeleri: seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini "tur": "liste" olan, "<Ekran adı> — <Alan>" adlı tablolara yaz; '
   + 'bağımlı listeler tek tabloda olur ("<Ekran adı> — <Üst alan> - <Alt alan>"; her satır geçerli bir kombinasyon: üst seçim + alt seçenek); '

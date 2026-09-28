@@ -43,6 +43,10 @@ export type PlanAlani = {
    * (doldurucuParametreleri.tus; alandan çıkınca çıkan uyarı için). Alan görünmüyorsa sessizce atlanır.
    */
   yalnizTus?: string;
+  /** Tarih alanının değeri göreli ifadeden hesaplandıysa ifadenin kanonik yazımı ("bugün+7"); deger çözülen tarihtir. */
+  goreliIfade?: string;
+  /** goreliIfade varsa alanın tarih biçimi (dışa aktarılan kod tarihi koşu anında bu biçimle hesaplar). */
+  tarihBicimi?: string;
 };
 
 /** secici yoksa ve sureSn varsa süreli bekleme (koşucu sureSn saniye bekler). */
