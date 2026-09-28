@@ -266,16 +266,18 @@ async function ekranAyrintisi(icerik, s) {
   const paketYukle = () => { location.hash = `${adres}/yukle`; };
   // Model eylemleri tek menüde ("Modeli güncelle ▾"; modeli yoksa "Model ekle ▾"): her seçenekte bir satırlık "ne zaman kullanılır".
   const modelVar = Boolean(d.surum);
+  // Ortak akış / alt model: ekran taranmaz ve kaydedilmez; model yalnız paketle güncellenir (menüde yalnız Paket yükle).
+  const ekranDisi = EKRAN_DISI_TURLER.includes(d.modelTuru);
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({
     dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
       { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği sayfa paketi elinizdeyse.', fn: paketYukle },
-      { ikon: 'ara', metin: 'Ekranı tara', aciklama: 'Sayfa değiştiyse: Nöbetçi yalnızca okuyarak tarar, yeni paket üretir.', fn: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
-      { ikon: 'video', metin: 'Akışı kaydet', aciklama: 'Çok adımlı / koşullu akışlarda: işlemi siz yaparsınız, Nöbetçi adımları kaydeder.', fn: () => kayitBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
-      modelVar ? 'ayrac' : null,
-      modelVar ? { ikon: 'yenile', metin: 'Tekrar analiz et', aciklama: 'Modeli yapay zekâ aracınızla yeniden inceletmek için istek metni (bağlam profilleriyle).',
+      ekranDisi ? null : { ikon: 'ara', metin: 'Ekranı tara', aciklama: 'Sayfa değiştiyse: Nöbetçi yalnızca okuyarak tarar, yeni paket üretir.', fn: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
+      ekranDisi ? null : { ikon: 'video', metin: 'Akışı kaydet', aciklama: 'Çok adımlı / koşullu akışlarda: işlemi siz yaparsınız, Nöbetçi adımları kaydeder.', fn: () => kayitBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
+      modelVar && !ekranDisi ? 'ayrac' : null,
+      modelVar && !ekranDisi ? { ikon: 'yenile', metin: 'Tekrar analiz et', aciklama: 'Modeli yapay zekâ aracınızla yeniden inceletmek için istek metni (bağlam profilleriyle).',
         fn: () => tekrarAnalizDiyalogu({ proje: s.proje, ekran: e, baglamProfilleri: d.baglamProfilleri, sonSecim: d.analiz.sonBaglamProfilleri, paketYukle }) } : null,
-      modelVar ? { ikon: 'simsek', metin: 'Yapay zekâ ile yorumla', aciklama: 'Model, bulgular ve senaryo özetlerini yorum için dosyaya yazar (gizli değer yok).',
+      modelVar && !ekranDisi ? { ikon: 'simsek', metin: 'Yapay zekâ ile yorumla', aciklama: 'Model, bulgular ve senaryo özetlerini yorum için dosyaya yazar (gizli değer yok).',
         fn: () => claudeDosyasiOlustur({ proje: s.proje, ekranId: e.id, tur: 'yorumla' }, null) } : null
     ]
   });
@@ -302,7 +304,7 @@ async function ekranAyrintisi(icerik, s) {
           d.model && !EKRAN_DISI_TURLER.includes(d.modelTuru)
             ? h('span', {}, ikon('simsek'), h('a', { href: `#/senaryolar/oneriler/${encodeURIComponent(e.id)}`, class: 'senaryo-onerileri-baglantisi' }, 'Senaryo önerileri')) : null,
           d.gecmis[0] ? h('span', { title: tarihMetni(d.gecmis[0].olusturulma) }, ikon('saat'), `son sürüm ${goreliZaman(d.gecmis[0].olusturulma)}`) : null)),
-      h('div', { class: 'eylemler' }, !EKRAN_DISI_TURLER.includes(d.modelTuru) ? modelMenusu : null, menu)),
+      h('div', { class: 'eylemler' }, modelMenusu, menu)),
     devreDisi ? h('div', { class: 'not-kutusu uyari devre-disi-seridi', role: 'status' },
       h('span', {}, h('b', {}, 'Bu ekran devre dışı. '), 'Senaryoları Koşuyu başlat ile toplu koşuya girmez (tek başına ▷ ile çalıştırılabilir); geçmiş sonuçlar görünür kalır.'),
       h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => durumDegistir({ proje: s.proje, ekran: e }) }, ikon('oynat'), 'Etkinleştir')) : null,
