@@ -2642,6 +2642,9 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .giris-gelismis { margin-top: var(--b2); }
 .ek-alan-listesi { display: grid; gap: var(--b2); margin: var(--b2) 0; }
 .ek-alan-satiri { display: grid; grid-template-columns: minmax(8rem, .8fr) minmax(8rem, 1fr) auto auto; gap: var(--b2); align-items: center; }
+/* Ayarlar > Giriş profili formu: tarifin istediği ama eklenmemiş ek alan düğmeleri (yoksa yer kaplamaz). */
+.giris-profili-ek .yer-tutucu-cipleri { margin: 0 0 var(--b2); }
+.giris-profili-ek .yer-tutucu-cipleri:empty { display: none; }
 .giris-kaydi-listesi { list-style: none; margin: var(--b2) 0; padding: 0; display: grid; gap: var(--b2); }
 .giris-kaydi-adimi { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(12rem, auto); gap: var(--b2) var(--b3); align-items: center;
   border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel); padding: 8px 12px; }
