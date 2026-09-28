@@ -3,7 +3,7 @@
 // ölçülür: (1) sayfa yatay taşmaz, (2) kaydırmasız bir kart / kutunun içinden dışarı taşan öğe yok, (3) etkileşimli öğeler (düğme,
 // bağlantı, alan) birbirinin üstüne binmez. Üst çubuk ara genişliklerde de (1024–1360) taşmaz.
 // Güvenlik: yalnız 127.0.0.1 (sahte SOAP sunucusu) ve geçici veritabanı; gerçek Nöbetçi'ye ve veri/ klasörüne dokunulmaz.
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
@@ -113,6 +113,11 @@ test.describe('tüm ekranlar taşmasız', () => {
         await page.goto(`/${rota}`);
         await bekle(page);
         for (const s of await page.evaluate(olc)) sorunlar.push(`${genislik}px ${rota}: ${s}`);
+        // İsteğe bağlı görsel denetim: ARAYUZ_EKRAN_KLASORU verilirse her rota için tam sayfa görüntü (varsayılan yok).
+        if (process.env.ARAYUZ_EKRAN_KLASORU) {
+          mkdirSync(process.env.ARAYUZ_EKRAN_KLASORU, { recursive: true });
+          await page.screenshot({ path: join(process.env.ARAYUZ_EKRAN_KLASORU, `${genislik}-${rota.replace(/[^a-z0-9]+/gi, '_').slice(0, 60)}.png`), fullPage: true });
+        }
       }
       // Sonuç ayrıntısı (uzun ekran adlı rozet) ve satır ⋯ menüsü pencere içinde.
       await page.goto(`/#/sonuclar/kosu/${z.kosuIdleri[3]}`);
@@ -126,6 +131,13 @@ test.describe('tüm ekranlar taşmasız', () => {
       const menu = page.locator('.acilir-menu:not([hidden])').first();
       await expect(menu).toBeVisible();
       await expect.poll(async () => menu.evaluate((m) => { const b = m.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; }), `${genislik}px ⋯ menüsü pencere içinde`).toBe(true);
+      await page.keyboard.press('Escape');
+      // "Modeli güncelle" menüsü (açıklamalı seçenekler) de pencere içinde.
+      await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+      const modelMenusu = page.locator('.model-menusu .acilir-menu:not([hidden])');
+      await expect(modelMenusu).toBeVisible();
+      await expect.poll(async () => modelMenusu.evaluate((m) => { const b = m.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; }), `${genislik}px model menüsü pencere içinde`).toBe(true);
+      if (process.env.ARAYUZ_EKRAN_KLASORU) await page.screenshot({ path: join(process.env.ARAYUZ_EKRAN_KLASORU, `${genislik}-model-menusu.png`) });
       await baglam.close();
     }
     expect(sorunlar).toEqual([]);
