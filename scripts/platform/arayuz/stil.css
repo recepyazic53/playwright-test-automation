@@ -2958,6 +2958,9 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .test-verisi-onizleme .tv-tablo-ust .rozet { max-width: 100%; height: auto; min-height: 21px; padding-block: 4px; white-space: normal; line-height: 1.3; overflow-wrap: anywhere; }
 /* Kabul düğmesi kapalıyken nedenler (düğmenin hemen altında) ve "Bölüme git" ile gidilen yerin kısa vurgusu. */
 .form-eylemleri .kabul-nedenleri { grid-column: 1 / -1; min-width: 0; font-size: 12.5px; color: var(--metin-2); }
+/* Onay penceresi: kapalı düğmenin nedenleri düğmelerin altında, tam genişlikte. */
+.onay-diyalogu .diyalog-alt.nedenli { flex-wrap: wrap; }
+.diyalog-alt .kabul-nedenleri { flex: 1 1 100%; min-width: 0; font-size: 12.5px; color: var(--metin-2); }
 .kabul-nedenleri ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .kabul-nedenleri li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
 .kabul-nedenleri li > span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }

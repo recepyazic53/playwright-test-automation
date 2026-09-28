@@ -372,6 +372,47 @@ export function h(etiket, ozellikler, ...cocuklar) {
   return el;
 }
 
+/** @typedef {{ metin: string; satir?: HTMLElement | null; odak?: () => HTMLElement | null }} KapatmaNedeni */
+
+/**
+ * Kapalı düğmenin nedenleri (ekran paketi önizlemesi, akış kaydı onay penceresi): düğme kapalıyken nedenler listesi ve her
+ * nedende ilgili bölüme götüren "Bölüme git"; düğmenin title / aria-describedby'ı nedenlere bağlanır, neden kalmayınca kalkar.
+ * guncelle(nedenler): düğmeyi nedenler boşsa açar, değilse kapatır.
+ * @param {HTMLButtonElement} dugme
+ * @returns {{ alan: HTMLElement; guncelle: (nedenler: KapatmaNedeni[]) => void }}
+ */
+export function kapaliDugmeNedenleri(dugme) {
+  const alan = h('div', { id: `kabul-nedeni-${Math.random().toString(36).slice(2, 9)}`, class: 'kabul-nedenleri', 'aria-live': 'polite', hidden: true });
+  const guncelle = (/** @type {KapatmaNedeni[]} */ nedenler) => {
+    dugme.disabled = nedenler.length > 0;
+    yerlestir(alan, nedenler.length ? h('ul', {}, nedenler.map((n) => h('li', {},
+      h('span', {}, n.metin),
+      n.satir ? h('button', { type: 'button', class: 'baglanti-dugmesi', onclick: () => bolumeGit(n) }, 'Bölüme git') : null))) : null);
+    alan.hidden = !nedenler.length;
+    if (nedenler.length) {
+      dugme.title = `Kapalı: ${nedenler.map((n) => n.metin).join('; ')}`;
+      dugme.setAttribute('aria-describedby', alan.id);
+    } else {
+      dugme.removeAttribute('title');
+      dugme.removeAttribute('aria-describedby');
+    }
+  };
+  return { alan, guncelle };
+}
+
+/** Nedenin bölümüne kaydırır, ilgili denetimi odaklar ve bölümü kısa süre vurgular. @param {KapatmaNedeni} n */
+export function bolumeGit(n) {
+  const hedef = n.satir;
+  if (!hedef || !hedef.isConnected) return;
+  hedef.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  const odak = n.odak ? n.odak() : null;
+  if (odak) odak.focus({ preventScroll: true });
+  hedef.classList.remove('dikkat-vurgusu');
+  void hedef.offsetWidth;
+  hedef.classList.add('dikkat-vurgusu');
+  setTimeout(() => hedef.classList.remove('dikkat-vurgusu'), 2400);
+}
+
 /** replaceChildren'ın null/false/dizi güvenli karşılığı (h() ile aynı kurallar). */
 export function yerlestir(el, ...cocuklar) {
   el.replaceChildren();

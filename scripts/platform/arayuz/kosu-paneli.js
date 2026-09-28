@@ -10,7 +10,7 @@
 // - Elle doğrulama kodu (giriş tarifinde SMS "elle" kipi): çalışan satırlar için /kod-istegi yoklanır; kod
 //   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, canliOnayPenceresi, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { api, canliOnayPenceresi, kapaliDugmeNedenleri, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
 import { riskBelirtilmemisMi, riskliOrtamMi } from './ortam-riski.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
@@ -251,7 +251,9 @@ export function onayIste(s) {
     const tamam = h('button', { type: 'button', class: s.tehlikeli ? 'tehlike onay-bekliyor' : 'birincil' }, s.tehlikeli ? ikon('cop') : null, s.dugme);
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     // İsteğe bağlı ek bölüm (ör. test verisi seçimi): s.ek (öğe); s.hazir() false iken onay düğmesi kapalı, s.baglan(fn) ek bölüm
-    // değişince çağrılacak yenileyiciyi alır.
+    // değişince çağrılacak yenileyiciyi alır. s.nedenler() verilirse (s.hazir yerine) düğme neden varken kapalıdır ve nedenler
+    // düğmelerin altında "Bölüme git" bağlantılarıyla yazar (ortak.js > kapaliDugmeNedenleri).
+    const nedenler = typeof s.nedenler === 'function' ? kapaliDugmeNedenleri(tamam) : null;
     const diyalog = h('dialog', { class: `onay-diyalogu ${s.tehlikeli ? 'tehlikeli' : ''} ${s.ek ? 'genis-onay' : ''}`.trim(), 'aria-labelledby': 'onay-basligi' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon(s.ikonAd || (s.tehlikeli ? 'cop' : 'uyari'))), s.baslik),
@@ -259,8 +261,12 @@ export function onayIste(s) {
         s.liste && s.liste.length ? h('ul', { class: 'onay-listesi' }, s.liste.slice(0, 30).map((x) => h('li', {}, x)),
           s.liste.length > 30 ? h('li', {}, `… ve ${s.liste.length - 30} daha`) : null) : null,
         s.ek || null),
-      h('div', { class: 'diyalog-alt' }, vazgec, tamam));
-    if (typeof s.hazir === 'function') {
+      h('div', { class: `diyalog-alt${nedenler ? ' nedenli' : ''}` }, vazgec, tamam, nedenler ? nedenler.alan : null));
+    if (nedenler) {
+      const guncelle = () => nedenler.guncelle(s.nedenler());
+      if (typeof s.baglan === 'function') s.baglan(guncelle);
+      guncelle();
+    } else if (typeof s.hazir === 'function') {
       const guncelle = () => { tamam.disabled = !s.hazir(); };
       if (typeof s.baglan === 'function') s.baglan(guncelle);
       guncelle();

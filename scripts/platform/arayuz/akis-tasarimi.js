@@ -815,7 +815,8 @@ export async function akisTasarimi(icerik, s) {
             ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
             : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
           liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))], dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari',
-          ek: tv ? tv.bolum : null, hazir: tv ? tv.hazir : null, baglan: (fn) => { tvYenile = fn; }
+          // Kapalı düğmenin nedeni (aynı adlı tablo için karar / boş yeni ad) düğmelerin altında, "Bölüme git" ile.
+          ek: tv ? tv.bolum : null, nedenler: tv ? () => (tv.hazir() ? [] : tv.bekleyenler()) : null, baglan: (fn) => { tvYenile = fn; }
         });
         if (!onay) return;
         const y = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/tarama/akis', { govde: { id: s.isId, bloklar, hedef, onay: true, ...(tv ? { testVerisi: tv.govde() } : {}) } }));
