@@ -1,6 +1,6 @@
-// OTOMATİK TARAMA → SAYFA PAKETİ (genel, saf fonksiyonlar). Tarama işinin (tarama.spec.ts) sayfadan topladığı
+// OTOMATİK TARAMA → EKRAN PAKETİ (genel, saf fonksiyonlar). Tarama işinin (tarama.spec.ts) sayfadan topladığı
 // YAPISAL envanteri (alanlar, etiketler, seçenekler, bölümler, bağlam profiline göre görünürlük, seçim keşfi)
-// docs/sayfa-paketi.md biçiminde bir sayfa paketine (sürüm 1, model şema sürümü 1) çevirir.
+// docs/sayfa-paketi.md biçiminde bir ekran paketine (sürüm 1, model şema sürümü 1) çevirir.
 //
 //  - Alan DEĞERLERİ pakete hiçbir zaman yazılmaz (envanter de değer taşımaz); sayfadan gelen metinlerde gizli
 //    veri kalıbı (kart no, T.C. kimlik no, IBAN, JWT…) varsa metin atılır ve bilinmeyenlere yazılır.
@@ -19,10 +19,11 @@
 
 import { KANIT_BOYUT_SINIRI, KANIT_EN_COK, SAYFA_PAKETI_SURUMU, SAYFA_PAKETI_TURU, gizliKalipBul, kanitVerisiniCoz } from '../ekranlar/sayfa-paketi.mjs';
 import { alanEtiketi, modelAlanlari, secenekTablolariUret } from '../tablolar/paket-tablolari.mjs';
+import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
-export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (sayfa paketi) ya da akış kaydıyla tamamlayın.';
+export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (ekran paketi) ya da akış kaydıyla tamamlayın.';
 /** Keşfedilen açılır listelerin en fazla seçenek sayısı. */
 export const KESIF_SECENEK_SINIRI = 8;
 /** Mevcut modelde taramayla eşleştirilebilen alan tipleri. */
@@ -305,7 +306,7 @@ function alanDonusturucu(sayac) {
 }
 
 /**
- * Tarama envanterinden sayfa paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
+ * Tarama envanterinden ekran paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
  * @param {import('./paket-olusturucu.d.mts').PaketMetasi} meta
  * @param {import('./paket-olusturucu.d.mts').TaramaEnvanteri} envanter
  * @returns {import('./paket-olusturucu.d.mts').PaketSonucu}
@@ -632,7 +633,7 @@ export function taramaPaketiOlustur(meta, envanter) {
 }
 
 // ---------------------------------------------------------------------------------------
-// AKIŞ KAYDI → SAYFA PAKETİ ("Akışı kaydet")
+// AKIŞ KAYDI → EKRAN PAKETİ ("Akışı kaydet")
 // ---------------------------------------------------------------------------------------
 
 export const KAYIT_OLUSTURANI = 'Nöbetçi akış kaydı';
@@ -680,7 +681,36 @@ export function sabitGostergeMetni(m) {
 }
 
 /**
- * Akış kaydından sayfa paketi (model şema sürümü 2: adım koşu tanımlarıyla). Adımlar kullanıcının kaydettiği sırayla ve
+ * Korunan parçanın ('ek': akış diyagramında düzenlenemeyen) özelliklerini kurulan adıma AYNEN yazar: adım özellikleri
+ * (görünürlük, kod yöntemi), bölüm özellikleri (aynı kimlikli bölüme) ve gösterilemeyen alanlar (aynı kimlikli bölüme — yoksa
+ * aynı başlıklıya, o da yoksa yeni bölüme — önceki alanın ardına; önceki alan yoksa bölümün başına).
+ * @param {Record<string, any>} adim @param {Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>} k @param {Set<string>} bolumIdleri
+ */
+function korunanlariYaz(adim, k, bolumIdleri) {
+  if (k.adimEk) Object.assign(adim, kopya(k.adimEk));
+  /** @type {Array<{ id: string; baslik: string; alanlar: Array<Record<string, unknown>> }>} */
+  const bolumler = adim.bolumler;
+  for (const ka of k.alanlar ?? []) {
+    let b = bolumler.find((x) => x.id === ka.bolum.id) ?? bolumler.find((x) => x.baslik === ka.bolum.baslik && x.baslik !== 'İşlemler');
+    if (!b) {
+      const id = bolumIdleri.has(ka.bolum.id) ? benzersiz(kimlikUret(ka.bolum.baslik || 'bolum', 'bolum'), bolumIdleri) : ka.bolum.id;
+      bolumIdleri.add(id);
+      b = { id, baslik: ka.bolum.baslik || 'Genel', alanlar: [] };
+      // İşlemler bölümünden önce.
+      const islem = bolumler.findIndex((x) => x.baslik === 'İşlemler');
+      if (islem >= 0) bolumler.splice(islem, 0, b); else bolumler.push(b);
+    }
+    const yer = ka.onceki === null ? 0 : b.alanlar.findIndex((x) => x.id === ka.onceki) + 1;
+    b.alanlar.splice(yer > 0 || ka.onceki === null ? yer : b.alanlar.length, 0, kopya(ka.alan));
+  }
+  for (const [id, ozellik] of Object.entries(k.bolumEk ?? {})) {
+    const b = bolumler.find((x) => x.id === id);
+    if (b) Object.assign(b, kopya(ozellik));
+  }
+}
+
+/**
+ * Akış kaydından ekran paketi (model şema sürümü 2: adım koşu tanımlarıyla). Adımlar kullanıcının kaydettiği sırayla ve
  * adlarıyla gelir; her adımın alanları kullanıcının seçtikleridir. Adımın koşu tanımı:
  *   aksiyonlar       ilerleme düğmesine tıkla (kaydedildiyse),
  *   basariGostergesi sonraki adımın ilk alanı (yoksa ilerleme düğmesi) görünür; son adımda kullanıcının seçtiği
@@ -750,6 +780,12 @@ export function kayitPaketiOlustur(meta, envanter) {
     // Akışta "zorunlu": senaryoda değer şart ve koşuda ekranda görünmezse test başarısız (koşullu alanda koşul sağlanınca).
     if (h.zorunlu) alan.mutlakaGorunmeli = true;
     else delete alan.mutlakaGorunmeli;
+    // Akışta "Doldurduktan sonra" tuşu (doldurucuParametreleri.tus): null kaldırır, verilmezse mevcut tanımınki korunur.
+    if (h.tus !== undefined && !(h.tur === 'kimlik' && h.anahtar.startsWith('kimlik:'))) {
+      const p = nesneMi(alan.doldurucuParametreleri) ? { ...alan.doldurucuParametreleri } : {};
+      if (h.tus) p.tus = h.tus; else delete p.tus;
+      if (Object.keys(p).length) alan.doldurucuParametreleri = p; else delete alan.doldurucuParametreleri;
+    }
     hamdanModel.set(h.anahtar, alan);
     return alan;
   };
@@ -785,7 +821,8 @@ export function kayitPaketiOlustur(meta, envanter) {
 
   // Adımlar. Hiçbir şey kaydedilmemiş adım (alan, ilerleme/alan açan düğme, son adımda gösterge yok) atlanır.
   const kayitlar = envanter.adimlar.filter((k, i, tum) => {
-    const dolu = Boolean(k.ortakAkis) || Boolean(k.sqlKontrolu) || Boolean(k.dosyaKontrolu) || Boolean(k.yenidenGiris) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi));
+    const dolu = Boolean(k.ortakAkis) || Boolean(k.sqlKontrolu) || Boolean(k.dosyaKontrolu) || Boolean(k.yenidenGiris) || k.alanlar.length > 0 || Boolean(k.ilerleme) || Boolean(k.acicilar?.length) || (i === tum.length - 1 && Boolean(envanter.basariGostergesi))
+      || Boolean(k.korunanAdim) || Boolean(k.korunanlar?.some(Boolean)) || Boolean(k.aksiyonlarAynen);
     if (!dolu) bilinmeyenler.push(`"${temizMetin(k.ad, sayac, 120) || `${i + 1}. adım`}" adımında alan, ilerleme düğmesi ya da gösterge kaydedilmediği için modele eklenmedi.`);
     return dolu;
   });
@@ -793,7 +830,17 @@ export function kayitPaketiOlustur(meta, envanter) {
   // Alt adımlar. Model koşucusu bir adımda önce alanları doldurur, sonra düğmelere basar; bu yüzden alan AÇAN düğmesi olan
   // adım parçalara bölünür: [ilk alanlar] → [düğme] → [açılan alanlar] … → [ilerleme]. "Her senaryoda basılmaz" işaretli
   // düğmenin parçaları senaryo ayarına ("“<düğme>” dahil") bağlı isteğe bağlı adımlardır (senaryo formunda onay kutusu).
-  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; ekranGoruntusu?: boolean; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string } }} AltAdim */
+  // Korunan parçalar (akış diyagramında düzenlenemeyen; akis-servisi.mjs): korunanAdim adımın tamamı aynen, korunan ('ek')
+  // parçanın gösterilemeyen özellikleri aynen geri yazılır (kimliğiyle), aksiyonlarAynen koşu aksiyonlarının yerine geçer.
+  // korunanKosul: parçanın korunan görünürlüğü (sonraki adımın göstergesi seçilirken atlanabilir adım sayılır).
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; ekranGoruntusu?: boolean; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string }; korunanAdim?: Record<string, any>; korunan?: Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>; aksiyonlarAynen?: Array<Record<string, unknown>>; korunanKosul?: string | null }} AltAdim */
+  /** Korunan parçanın görünürlüğü (karşılaştırma anahtarı) ya da null. @param {unknown} p */
+  const korunanKosulu = (p) => {
+    const g = nesneMi(p) && nesneMi(p.adimEk) ? p.adimEk.gorunurluk : undefined;
+    return nesneMi(g) ? JSON.stringify(g) : null;
+  };
+  /** 'ek' türündeki korunan parça (değilse undefined). @param {unknown} p */
+  const ekParca = (p) => (nesneMi(p) && p.tur === 'ek' ? /** @type {Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>} */ (p) : undefined);
   const kosulAdlari = new Set(mevcut && nesneMi(mevcut.kosullar) ? Object.keys(mevcut.kosullar) : []);
   /** @type {Record<string, Record<string, unknown>>} */
   const yeniKosullar = {};
@@ -845,9 +892,16 @@ export function kayitPaketiOlustur(meta, envanter) {
       altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, yenidenGiris: typeof k.yenidenGiris.profil === 'string' && k.yenidenGiris.profil ? { profil: k.yenidenGiris.profil } : {} });
       continue;
     }
+    if (k.korunanAdim) {
+      // Akış diyagramında düzenlenemeyen adım: modeldeki tanımı aynen (yalnız sırası değişir).
+      altAdimlar.push({ ad, alanlar: [], tikla: null, kosul: null, korunanAdim: k.korunanAdim, korunanKosul: nesneMi(k.korunanAdim.gorunurluk) ? JSON.stringify(k.korunanAdim.gorunurluk) : null });
+      continue;
+    }
     const parca = (/** @type {number} */ j) => k.alanlar.filter((_, x) => (k.parcalar?.[x] ?? 0) === j);
+    /** Parçanın korunan özellikleri (varsa). @param {unknown} p */
+    const korunanEk = (p) => { const e = ekParca(p); return e ? { korunan: e, korunanKosul: korunanKosulu(e) } : {}; };
     /** @type {AltAdim[]} */
-    const parcalar = [{ ad, alanlar: parca(0), tikla: null, kosul: null }];
+    const parcalar = [{ ad, alanlar: parca(0), tikla: null, kosul: null, ...korunanEk(k.korunanlar?.[0]) }];
     for (const [j, a] of (k.acicilar ?? []).entries()) {
       const dugme = temizMetin(a.metin, sayac, 80) || 'alan açan düğme';
       /** @type {string | null} */
@@ -855,8 +909,8 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (a.secimli) {
         kosul = dahilKosulu(dugme, 'ekAdim');
       }
-      parcalar.push({ ad: `${ad}: ${dugme}`, alanlar: [], tikla: a, kosul, once: a.onceBekle, sonra: a.sonraBekle });
-      parcalar.push({ ad: `${ad}: ${dugme} sonrası`, alanlar: parca(j + 1), tikla: null, kosul });
+      parcalar.push({ ad: `${ad}: ${dugme}`, alanlar: [], tikla: a, kosul, once: a.onceBekle, sonra: a.sonraBekle, ...korunanEk(a.korunan) });
+      parcalar.push({ ad: `${ad}: ${dugme} sonrası`, alanlar: parca(j + 1), tikla: null, kosul, ...korunanEk(k.korunanlar?.[j + 1]) });
     }
     if (k.ilerleme) {
       const son = parcalar[parcalar.length - 1];
@@ -870,14 +924,23 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (son.tikla) son.sonra = (son.sonra ?? 0) + k.onceBekle;
       else son.once = (son.once ?? 0) + k.onceBekle;
     }
-    if (!k.ilerleme && i < kayitlar.length - 1) {
+    // Düğmesiz adımın beklenen mesajı (akışta alan grubundan sonra; alandan çıkınca beklenir) adımın son parçasına bağlanır.
+    const alanSonrasiMesaj = !k.ilerleme && Boolean(k.gosterge || k.uyarilar?.length);
+    if (!k.ilerleme && i < kayitlar.length - 1 && !alanSonrasiMesaj) {
       bilinmeyenler.push(`"${ad}" adımının ilerleme düğmesi kaydedilmedi; model koşucusu bu adımdan sonrakine geçemez (modelde "kosu.aksiyonlar" ekleyin ya da akışı yeniden kaydedin).`);
     }
+    // Korunan aksiyonlar: ilerleme parçasına (düğmesizse alanı / düğmesi olan son parçaya) — oradaki düğme ve beklemelerin yerine.
+    if (k.aksiyonlarAynen) {
+      const hedef = (k.ilerleme ? parcalar.find((p) => p.tikla === k.ilerleme) : undefined)
+        ?? [...parcalar].reverse().find((p) => p.alanlar.length || p.tikla || p.korunan) ?? parcalar[0];
+      hedef.aksiyonlarAynen = k.aksiyonlarAynen;
+    }
     // Boş parçalar (alan da düğme de yok) atılır; adımın hiç parçası kalmazsa (yalnızca gösterge) ilk parça kalır.
-    const dolu = parcalar.filter((p) => p.alanlar.length || p.tikla || p.once);
+    const dolu = parcalar.filter((p) => p.alanlar.length || p.tikla || p.once || p.korunan || p.aksiyonlarAynen);
     const eklenen = dolu.length ? dolu : [parcalar[0]];
     // Kabul edilen uyarılar: ilerleme düğmesinin parçasına (düğme yoksa son parçaya).
     if (k.uyarilar?.length) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).uyarilar = k.uyarilar;
+    if (!k.ilerleme && k.gosterge) eklenen[eklenen.length - 1].gosterge = k.gosterge;
     // "Ekran görüntüsü al" (akış tasarımı): adımın sonu — ilerleme düğmesinin parçası (düğme yoksa son parça).
     if (k.ekranGoruntusu) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).ekranGoruntusu = true;
     altAdimlar.push(...eklenen);
@@ -920,11 +983,30 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (alt) return { secici: String(alt.konum.secici), ...cerceveEki(alt.konum.cerceve) };
     }
     if (x.tikla) return { secici: x.tikla.secici, ...cerceveEki(x.tikla.cerceve) };
+    if (x.korunanAdim) {
+      // Korunan adım: ilk seçicili alanı (özel açılır liste hariç), yoksa ilk tıklanan düğmesi; alt model adımında yok.
+      for (const b of Array.isArray(x.korunanAdim.bolumler) ? x.korunanAdim.bolumler : []) {
+        for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) {
+          if (nesneMi(a) && a.doldurucu !== OZEL_SECIM_DOLDURUCUSU && nesneMi(a.konum) && typeof a.konum.secici === 'string' && a.konum.secici) return { secici: a.konum.secici, ...cerceveEki(a.konum.cerceve) };
+        }
+      }
+      const t = (nesneMi(x.korunanAdim.kosu) && Array.isArray(x.korunanAdim.kosu.aksiyonlar) ? x.korunanAdim.kosu.aksiyonlar : [])
+        .find((/** @type {unknown} */ y) => nesneMi(y) && y.tur === 'tikla' && typeof y.secici === 'string' && y.secici);
+      return t ? { secici: String(t.secici), ...cerceveEki(t.cerceve) } : null;
+    }
     const t = x.dosyaKontrolu?.tetikleyici?.secici;
     return t ? { secici: t } : null;
   };
+  // Korunan parçaların adım kimlikleri önceden ayrılır (başka adım aynı başlıkla o kimliği almasın).
+  for (const p of altAdimlar) {
+    const id = p.korunan?.id ?? (p.korunanAdim ? String(p.korunanAdim.id) : null);
+    if (id) adimIdleri.add(id);
+  }
+  /** Bu parçadan sonraki adım (göstergesi için) atlanabilir mi: aynı koşula bağlı değilse. @param {AltAdim} x @param {AltAdim} p */
+  const ayniKosulda = (x, p) => (x.kosul === null || x.kosul === p.kosul) && ((x.korunanKosul ?? null) === null || x.korunanKosul === p.korunanKosul);
   /** @type {Array<Record<string, any>>} */
   const adimlar = altAdimlar.map((p, i) => {
+    if (p.korunanAdim) return { ...kopya(p.korunanAdim), sira: i + 1 };
     if (p.ortakAkis) {
       return { id: adimKimligi(p.ad), sira: i + 1, baslik: p.ad, ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}), ortakAkis: { dosya: p.ortakAkis } };
     }
@@ -974,17 +1056,29 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (p.tikla) {
       // Başarı: sonraki (atlanmayacak) adımın ilk alanı ya da düğmesi görünür.
       // Dosya adımının düğmesi sonraki ekran öğesidir (indirme aynı sayfada başlar); SQL adımı sayfaya dokunmaz, atlanır.
-      const sonraki = altAdimlar.slice(i + 1).find((x) => !x.sqlKontrolu && (x.kosul === null || x.kosul === p.kosul));
-      const hedef = sonraki ? ilkSecici(sonraki) : null;
-      if (hedef) kosu.basariGostergesi = { tur: 'eleman', deger: hedef.secici, ...cerceveEki(hedef.cerceve) };
-      // Akış tasarımında düğmeden sonra beklenen mesaj verildiyse: o metin görünür.
-      const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
-        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
-        const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
-        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
-      }) : null;
-      if (ara) kosu.basariGostergesi = ara;
+      // Aradaki korunan koşullu adımlar (ör. seçime bağlı dallar) da olası sonraki adımdır: ilk öğelerinden herhangi biri
+      // görünürse başarılı (öğe "veya"; aynı koşulun yalnız ilk adımı).
+      /** @type {AltAdim[]} */
+      const olasi = [];
+      for (const x of altAdimlar.slice(i + 1)) {
+        if (x.sqlKontrolu) continue;
+        if (ayniKosulda(x, p)) { olasi.push(x); break; }
+        if (x.korunanKosul && (x.kosul === null || x.kosul === p.kosul) && !olasi.some((y) => y.korunanKosul === x.korunanKosul)) olasi.push(x);
+      }
+      const hedefler = olasi.map(ilkSecici).filter((h) => h !== null)
+        .filter((h, j, l) => l.findIndex((y) => y?.secici === h?.secici) === j).slice(0, VEYA_EN_COK);
+      const oge = (/** @type {{ secici: string; cerceve?: unknown }} */ h) => ({ tur: 'eleman', deger: h.secici, ...cerceveEki(h.cerceve) });
+      if (hedefler.length > 1) kosu.basariGostergesi = { tur: 'veya', secenekler: hedefler.map((h) => oge(/** @type {{ secici: string }} */ (h))) };
+      else if (hedefler.length) kosu.basariGostergesi = oge(/** @type {{ secici: string }} */ (hedefler[0]));
     }
+    // Akış tasarımında düğmeden (ya da düğmesiz adımda alanlardan) sonra beklenen mesaj verildiyse: o metin görünür. Düğmesiz
+    // adımda koşucu alanları doldurup (alanın "Doldurduktan sonra" tuşuna basıp) mesajı bekler.
+    const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
+      if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
+      const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
+      return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
+    }) : null;
+    if (ara) kosu.basariGostergesi = ara;
     const uyarilar = (p.uyarilar ?? []).map((x) => {
       const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
       return m ? { metin: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
@@ -997,7 +1091,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     }
     if (p.zamanAsimiSn) kosu.zamanAsimiSn = p.zamanAsimiSn;
     if (p.ekranGoruntusu) kosu.ekranGoruntusu = true;
-    const id = adimKimligi(p.ad);
+    const id = p.korunan?.id ?? adimKimligi(p.ad);
     // Mevcut modeldeki aynı adımın diyagramda gösterilmeyen koşu ayarları korunur: hata penceresi (uyarısız) ve öğe
     // "veya" göstergesi (diyagramın yazdığı öğeyi içeriyorsa; ör. "kart seçeneği YA DA doğrudan kart formu açılır").
     const eskiAdim = mevcut ? /** @type {Array<Record<string, any>>} */ (mevcut.adimlar).find((a) => nesneMi(a) && a.id === id) : undefined;
@@ -1026,12 +1120,22 @@ export function kayitPaketiOlustur(meta, envanter) {
       });
       if (son) kosu.basariGostergesi = son;
     }
-    return {
+    // Korunan aksiyonlar (diyagramda düzenlenemeyen): düğme aksiyonunun yerine aynen; süreli beklemeler önüne / ardına.
+    if (p.aksiyonlarAynen) {
+      kosu.aksiyonlar = [...(p.once ? [{ tur: 'bekle', sureSn: p.once }] : []), ...kopya(p.aksiyonlarAynen), ...(p.sonra ? [{ tur: 'bekle', sureSn: p.sonra }] : [])];
+      if (!kosu.aksiyonlar.length) delete kosu.aksiyonlar;
+    }
+    const k = p.korunan;
+    if (k?.kosuEk) Object.assign(kosu, kopya(k.kosuEk));
+    /** @type {Record<string, any>} */
+    const adim = {
       id, sira: i + 1, baslik: p.ad,
       ...(p.kosul ? { gorunurluk: { kosul: p.kosul } } : {}),
       bolumler: [...bolumler.values()].map((b) => ({ id: bolumKimligi(b.baslik), baslik: b.baslik, alanlar: b.alanlar })),
       ...(Object.keys(kosu).length ? { kosu } : {})
     };
+    if (k) korunanlariYaz(adim, k, bolumIdleri);
+    return adim;
   });
   // Seçime göre görünen alanlar (akış kaydının ekran okumaları): alan adımın bazı okumalarında görünüp
   // bazılarında görünmüyorsa ve bu okumalar arasında değeri AYRIŞAN tek bir seçim alanı (select/radyo) varsa, alan o seçimin

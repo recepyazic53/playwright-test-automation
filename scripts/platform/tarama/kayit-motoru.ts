@@ -14,7 +14,7 @@
 // Çerçeveler (iframe): aynı kökenli çerçevelerin alanları ekran okumasına girer (alanın "cerceve"si), çerçevedeki dokunuşlar /
 // düğmeler / açılan listeler panele iletilir (kayit-paneli.ts); başka kökenli çerçevelerin içi okunamaz (notlara yazılır).
 // Gizli <select>'e bağlı özel açılır listeler (aramalı liste) görülen alan olarak listelenir (sayfa-envanteri.ts).
-// Sonuç akış envanteridir (AkisEnvanteri); diyagram Nöbetçi'de taslaktan kurulur (akis-tasarimi.mjs) ve sayfa paketine
+// Sonuç akış envanteridir (AkisEnvanteri); diyagram Nöbetçi'de taslaktan kurulur (akis-tasarimi.mjs) ve ekran paketine
 // çevrilir.
 //
 // GÜVENLİK / GİZLİLİK: kullanıcının bastığı düğmeler siteye GERÇEK istek gönderir (kayıt aşamasında yazma engeli yok;

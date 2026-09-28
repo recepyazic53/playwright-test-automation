@@ -24,6 +24,8 @@ const UZUN_ORTAK_AKISLAR: ReadonlyArray<readonly [string, string, number]> = [
   ['odeme-siparis-kaydet-kredi-karti', 'Ödeme (sipariş kaydet + kredi kartı)', 3],
   ['adres-iletisim-dogrulama', 'Adres ve iletişim bilgilerinin doğrulanması (ortak adımlar, çok bölümlü)', 2]
 ];
+/** Ekranlar > Ortak akışlar'daki kart sayısı: Onay (ortak) + uzun adlı ortak akışlar (giriş tarifleri burada listelenmez). */
+const ORTAK_AKIS_SAYISI = 1 + UZUN_ORTAK_AKISLAR.length;
 const UZUN_EKRAN_ADI = 'Kurumsal müşteri başvurusu ve sipariş hazırlama ekranı (çok adımlı)';
 let tarayici: Browser;
 let nobetci: Nobetci;
@@ -177,15 +179,20 @@ test('Ekranlar: istek metni tam gösterilmez (kopyala düğmesi); ortak akış k
 
   const bolum = page.locator('.ortak-akis-bolumu');
   const kartlar = bolum.locator('article.ekran-karti.ortak-akis-karti');
-  await expect(kartlar).toHaveCount(2 + 1 + UZUN_ORTAK_AKISLAR.length);
+  await expect(kartlar).toHaveCount(ORTAK_AKIS_SAYISI);
   await expect(bolum.locator('.giris-ozet-adimlari, ol, ul')).toHaveCount(0);
-  for (let i = 0; i < 2 + 1 + UZUN_ORTAK_AKISLAR.length; i++) {
+  for (let i = 0; i < ORTAK_AKIS_SAYISI; i++) {
     await expect(kartlar.nth(i).locator('.ekran-karti-ust .ekran-karti-rozetler .rozet').first()).toBeVisible();
     await expect(kartlar.nth(i).locator('.ekran-karti-alt .dugme').first()).toBeVisible();
   }
-  const giris = kartlar.filter({ hasText: 'Giriş (TEST)' });
-  await expect(giris.locator('.ortak-akis-ozeti')).toHaveText('3 adım · Authenticator kodu · bağlam seçimi: Şube');
-  await expect(giris.locator('.ekran-karti-rozetler')).toHaveText('giriş tarifi');
+  // Giriş (her iki ortamda tarif tanımlı) Ekranlar'da listelenmez: ne kart ne sol menü kalemi; sayaçlar yalnız ortak akışları sayar.
+  await expect(bolum).not.toContainText('Giriş (');
+  await expect(bolum.locator('.bolum-basligi .rozet')).toHaveText(String(ORTAK_AKIS_SAYISI));
+  await expect(bolum.locator('.bolum-basligi')).not.toContainText('giriş tarifiyle');
+  const yanGrup = page.locator('.yan-panel .nav-grup[data-grup="ortak-akislar"]');
+  await expect(yanGrup).not.toContainText('Giriş (');
+  await expect(yanGrup.locator('.nav-grup-baslik .adet')).toHaveText(String(ORTAK_AKIS_SAYISI));
+  await expect(page.locator('.yan-panel')).not.toContainText('Giriş (');
   const ortak = kartlar.filter({ hasText: 'Onay (ortak)' });
   await expect(ortak.locator('.ekran-karti-rozetler')).toContainText('ortak akış');
   await expect(ortak.locator('.ortak-akis-ozeti')).toHaveText(/^\d+ adım · \d+ alan$/);
@@ -240,14 +247,14 @@ test('kart ızgaraları (ekran + ortak akış): uzun başlık ve iki rozetle kar
   test.setTimeout(90_000);
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
-  await expect(page.locator('.ortak-akis-bolumu article.ortak-akis-karti')).toHaveCount(2 + 1 + UZUN_ORTAK_AKISLAR.length);
+  await expect(page.locator('.ortak-akis-bolumu article.ortak-akis-karti')).toHaveCount(ORTAK_AKIS_SAYISI);
   const uzun = page.locator('.ortak-akis-karti').filter({ hasText: UZUN_ORTAK_AKISLAR[1][1] });
   await expect.soft(uzun.locator('h3 a')).toHaveAttribute('title', UZUN_ORTAK_AKISLAR[1][1]);
   // Üç tema (Ayarlar > Arayüz) yazı ve boşlukları değiştirir: her birinde ölçülür.
   for (const stil of ['komuta', 'kurumsal', 'canli']) {
   await page.evaluate((x) => { localStorage.setItem('platform.stil', x); }, stil);
   await page.reload();
-  await expect(page.locator('.ortak-akis-izgarasi > article')).toHaveCount(2 + 1 + UZUN_ORTAK_AKISLAR.length);
+  await expect(page.locator('.ortak-akis-izgarasi > article')).toHaveCount(ORTAK_AKIS_SAYISI);
   for (const genislik of [1920, 1400, 1024, 390]) {
     await page.setViewportSize({ width: genislik, height: 1000 });
     await page.waitForTimeout(250);

@@ -65,7 +65,7 @@
 //   POST /platform/senaryo/dene { projeId, ekranId, ortamId, veri, kosuId, id? } → taslak, geçici ek veriyle denenir.
 //   GET  /platform/senaryo/playwright-kodu?projeId=&id=&ortamId=   Playwright koduna dışa aktarma: { dosyaAdi, icerik,
 //        ortamDegiskenleri } (koşucunun planıyla; gizli değerler ortam değişkeni; dosya yazılmaz — senaryolar/disa-aktarma-servisi.mjs)
-// Ekranlar (genel; kasa açık olmalı — bkz. ekranlar/ekran-servisi.mjs, sayfa paketi biçimi: docs/sayfa-paketi.md):
+// Ekranlar (genel; kasa açık olmalı — bkz. ekranlar/ekran-servisi.mjs, ekran paketi biçimi: docs/sayfa-paketi.md):
 //   GET  /platform/ekranlar?projeId=                    ekran listesi (model sürümü, alan/senaryo sayısı, bekleyen analiz)
 //   GET  /platform/ekran?projeId=&id=                   ayrıntı: güncel model ağacı, sürüm geçmişi, analiz durumu, kanıtlar
 //   GET  /platform/ekran/surum?projeId=&id=&surum=      sürümün ağacı + bir önceki sürüme göre fark
@@ -232,7 +232,7 @@ import { sorgudanAralik } from './sonuclar/aralik.mjs';
 import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
-/** Sayfa paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
+/** Ekran paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
 const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', '/platform/tablo/kaydet', ...SERVIS_BUYUK_GOVDE_UCLARI]);
 for (const u of ENTEGRASYON_BUYUK_GOVDE_UCLARI) PAKET_UCLARI.add(u);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */

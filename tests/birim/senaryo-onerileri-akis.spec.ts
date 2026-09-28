@@ -1,4 +1,4 @@
-// UÇTAN UCA (yerel) — senaryo tasarım yardımcısının model tarafı: sayfa paketi "sinirlar"ı kabul eder (istek metni ister);
+// UÇTAN UCA (yerel) — senaryo tasarım yardımcısının model tarafı: ekran paketi "sinirlar"ı kabul eder (istek metni ister);
 // akış tasarımcısında yeniden kaydetmek sınırları ve modelin diğer alan anahtarlarını korur; "Sınırlar" düzenleyicisi (anında
 // doğrulama, kayıt, kaldırma); ekran ayrıntısında "Senaryo önerileri" bağlantısı; senaryo formunda "Bilerek boş bırak".
 // Ayrı Nöbetçi (127.0.0.1), geçici veritabanı; dış istek yok.
@@ -59,7 +59,7 @@ test.afterAll(async () => {
   if (klasor) rmSync(klasor, { recursive: true, force: true });
 });
 
-test('sayfa paketi "sinirlar"ı kabul eder; istek metni sınırları yalnız sayfada belliyse ister', async () => {
+test('ekran paketi "sinirlar"ı kabul eder; istek metni sınırları yalnız sayfada belliyse ister', async () => {
   expect(INCELEME_KURALLARI).toContain('sinirlar\'ına yaz');
   expect(INCELEME_KURALLARI).toContain('belli değilse yazma, tahmin etme');
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: siparisPaketi(akisSiparisModeli()), senaryoIndeksleri: [], ortamIdleri: [ortamId] });

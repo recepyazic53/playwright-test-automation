@@ -159,7 +159,7 @@ export async function taramaDiyalogu(s) {
     hataKutusu,
     h('div', { class: 'diyalog-alt' }, sayac, h('span', { class: 'bosluk' }), h('button', { type: 'button', class: 'hayalet', onclick: () => diyalog.close() }, 'Vazgeç'), baslat));
   const diyalog = diyalogAc(s.ekran ? `Ekranı otomatik tara: ${s.ekran.ad}` : 'Yeni ekranı otomatik tara',
-    'Nöbetçi sayfayı başsız bir tarayıcıda yalnızca okuyarak tarar ve bir sayfa paketi üretir; önizleyip kabul edene kadar hiçbir şey kaydedilmez.', govde, 'ara');
+    'Nöbetçi sayfayı başsız bir tarayıcıda yalnızca okuyarak tarar ve bir ekran paketi üretir; önizleyip kabul edene kadar hiçbir şey kaydedilmez.', govde, 'ara');
   ortamCiz();
 
   baslat.addEventListener('click', async () => {

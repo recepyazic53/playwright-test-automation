@@ -31,6 +31,12 @@ export const bulguRozeti = (tur) => {
   return h('span', { class: `rozet bulgu-rozeti ${t.sinif}` }, ikon(t.ikon), t.etiket);
 };
 
+/**
+ * Veritabanında saklanmış ESKİ metinlerdeki paket adını ("Sayfa paketi (…)", "Sayfa paketiyle oluşturuldu …") gösterirken
+ * güncel adla ("Ekran paketi") verir; saklanan kayıt değiştirilmez. @param {unknown} metin
+ */
+export const paketAdiniGuncelle = (metin) => (typeof metin === 'string' ? metin.replace(/\b([Ss])ayfa paket/g, (_, s) => `${s === 'S' ? 'E' : 'e'}kran paket`) : metin);
+
 const evetHayir = (v) => (v === true ? 'zorunlu' : v === false ? 'isteğe bağlı' : 'bilinmiyor');
 
 /** Bulgunun eski/yeni değerinin kısa metni. */
@@ -194,7 +200,7 @@ export async function claudeDosyasiOlustur(s, dugme) {
   try {
     const sonuc = dugme ? await mesgulIken(dugme, 'Hazırlanıyor…', calis) : await calis();
     diyalogAc(s.tur === 'eksik-kombinasyon' ? 'Eksik kombinasyonlar için öneri isteği' : 'Yapay zekâ ile yorumla',
-      'Nöbetçi hiçbir yapay zekâ servisine bağlanmaz: dosyayı kendi yapay zekâ aracınızda (tarayıcıyı kullanabilen bir kodlama asistanı) kullanın. Aracın ürettiği yeni senaryo önerileri bir sayfa paketi olarak yüklenebilir.',
+      'Nöbetçi hiçbir yapay zekâ servisine bağlanmaz: dosyayı kendi yapay zekâ aracınızda (tarayıcıyı kullanabilen bir kodlama asistanı) kullanın. Aracın ürettiği yeni senaryo önerileri bir ekran paketi olarak yüklenebilir.',
       istekDosyasiSonucu(sonuc, null, s.tur !== 'yorumla'));
   } catch (e) {
     if (e.durum !== 423) bildir(e.message, 'hata');
@@ -279,7 +285,7 @@ export function tekrarAnalizDiyalogu(s) {
         govde: { projeId: s.proje.id, ekranId: s.ekran.id, tur: 'tekrar-analiz', baglamProfilleri: [...secili], ...(baslangic && baslangic.secim.value ? { baslangicEkranId: baslangic.secim.value } : {}) }
       }));
       const yukle = h('button', { type: 'button', class: 'birincil', onclick: () => { diyalog.close(); s.paketYukle(); } }, ikon('yukle'), 'Paketi yükle');
-      yerlestir(govde, h('p', { class: 'kucuk soluk' }, 'Yapay zekâ aracınız sayfayı inceleyip (seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan düğmeden önce sorar) yeni bir sayfa paketi üretir; paketi yükleyince bulgular hesaplanır.'),
+      yerlestir(govde, h('p', { class: 'kucuk soluk' }, 'Yapay zekâ aracınız sayfayı inceleyip (seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan düğmeden önce sorar) yeni bir ekran paketi üretir; paketi yükleyince bulgular hesaplanır.'),
         istekDosyasiSonucu(sonuc, yukle));
     } catch (e) {
       if (e.durum === 423) { diyalog.close(); return; }

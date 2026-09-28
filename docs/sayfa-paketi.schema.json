@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "nobetci:sayfa-paketi:1",
-  "title": "Nöbetçi sayfa paketi (sürüm 1)",
+  "title": "Nöbetçi ekran paketi (sürüm 1)",
   "description": "Bir sayfanın yalnızca okunarak incelenmesiyle üretilen paket: ekran modeli, senaryo önerileri, gereken ayarlar, bilinmeyenler, isteğe bağlı ekran görüntüleri. Ayrıntılar ve kurallar: docs/sayfa-paketi.md. Model içeriği ortak model doğrulayıcısıyla (scripts/dogrulama/ekran-modeli-dogrulayici.mjs) denetlenir; bu şema yalnızca paket zarfını tanımlar. GİZLİ/KİŞİSEL veri içeren paket reddedilir.",
   "type": "object",
   "additionalProperties": false,

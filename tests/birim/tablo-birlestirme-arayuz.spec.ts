@@ -84,6 +84,15 @@ test('veri sağlığı özeti, birleştirme penceresi, onaylı birleştirme ve g
     expect(o.sayfa, `${genislik}px sayfa`).toBeLessThanOrEqual(2);
     expect(o.diyalog, `${genislik}px diyalog`).toBeLessThanOrEqual(2);
     if (genislik === 390) { await d.getByRole('button', { name: 'Kapat' }).click(); await baglam.close(); continue; }
+    // Ad kutusu: yazarken önizleme yeniden hesaplanır ama kutu yeniden çizilmez; harfler kaybolmaz, odak kalır.
+    const adKutusu = d.getByRole('textbox', { name: 'Kalan tablonun adı' });
+    await adKutusu.click();
+    await adKutusu.pressSequentially('Kargo ana', { delay: 150 });
+    await expect(d.getByText('Önizleme hesaplanıyor…')).toHaveCount(0);
+    await expect(adKutusu).toHaveValue('Kargo ana');
+    await expect(adKutusu).toBeFocused();
+    await adKutusu.fill('');
+    await expect(d.getByText('Önizleme hesaplanıyor…')).toHaveCount(0);
     await d.getByRole('combobox', { name: 'k1 satırı için seçim' }).selectOption('kalan');
     await expect(d).toContainText('2 satır kalır, 1 satır eklenir');
     await expect(d.getByRole('button', { name: 'Birleştir', exact: true })).toBeEnabled();
@@ -177,5 +186,29 @@ test('Ayarlar açıklamaları kısa (1–2 cümle), ayrıntı "?" ipucunda; Test
   const form = page.getByRole('form', { name: 'Koşu ayarları' });
   await expect(form.getByText(/Varsayılan: Token'ı yenile, bir kez tekrar dene\./)).toBeVisible();
   await expect(form.getByRole('button', { name: 'Ayrıntıyı göster' }).first()).toBeVisible();
+  await baglam.close();
+});
+
+test('yeni tek sütunlu tablo: ayırt edici başlık + örtüşen satırlar → "Benzer tablo var"; satırsız yeni tabloda sorulmaz', async () => {
+  const y = await nobetciApi(nobetci, '/platform/tablo/kaydet', { projeId, ad: 'İade formu — Müşteri tipi', sutunlar: [{ ad: 'Müşteri tipi' }],
+    satirlar: [{ degerler: { 'Müşteri tipi': 'Bireysel' } }, { degerler: { 'Müşteri tipi': 'Kurumsal' } }] });
+  expect(y.basarili, String(y.mesaj ?? '')).not.toBe(false);
+  // Satırsız yeni tek sütunlu tablo: başlık aynı olsa da öneri yok.
+  expect((await nobetciApi(nobetci, '/platform/tablo/benzer', { projeId, sutunlar: ['MÜŞTERİ TİPİ'], satirlar: [] })).benzerler).toEqual([]);
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } });
+  const page = await baglam.newPage();
+  await page.goto('/#/ayarlar/test-verisi');
+  await page.getByRole('navigation', { name: 'Tablolar' }).getByRole('button', { name: 'Tablo ekle' }).click();
+  const duz = page.getByRole('region', { name: 'Tablo düzenleyici' });
+  await duz.getByRole('textbox', { name: 'Tablo adı' }).fill('Fatura formu — Müşteri tipi');
+  await duz.getByText('Excel\'den yapıştır').click();
+  await duz.getByRole('textbox', { name: 'Yapıştırılacak satırlar' }).fill('Müşteri tipi\nBireysel\nKurumsal\nYabancı');
+  await duz.getByRole('button', { name: 'Yapıştırılanları ekle' }).click();
+  await duz.getByRole('button', { name: 'Kaydet' }).click();
+  const soru = page.getByRole('dialog', { name: 'Benzer tablo var' });
+  await expect(soru).toContainText('“İade formu — Müşteri tipi”');
+  await soru.getByRole('button', { name: /Onu kullan: “İade formu — Müşteri tipi”/ }).click();
+  await expect(duz.getByRole('textbox', { name: 'Tablo adı' })).toHaveValue('İade formu — Müşteri tipi');
+  await expect(duz.getByText('kaydedilmemiş değişiklik')).toBeVisible();
   await baglam.close();
 });

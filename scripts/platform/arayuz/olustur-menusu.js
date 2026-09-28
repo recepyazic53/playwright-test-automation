@@ -43,7 +43,7 @@ function gruplar(ayarBolumleri) {
       grup: 'Ekran testleri',
       ogeler: [
         { baslik: 'Senaryo', aciklama: 'Bir ekranda yeni test durumu', ikonAd: 'liste', git: ekranSec },
-        { baslik: 'Ekran (sayfa paketi)', aciklama: 'Tara, akışı kaydet ya da yapay zekâ ile oluştur', ikonAd: 'ekran', git: () => '#/ekranlar/yeni' },
+        { baslik: 'Ekran', aciklama: 'Tara, akışı kaydet ya da yapay zekâ ile oluştur', ikonAd: 'ekran', git: () => '#/ekranlar/yeni' },
         { baslik: 'Ekranı tara', aciklama: 'Nöbetçi sayfayı kendisi okusun', ikonAd: 'ara', git: () => '#/ekranlar/yeni/tara' },
         { baslik: 'Akış kaydı', aciklama: 'İşlemi siz yapın, Nöbetçi adımları kaydetsin', ikonAd: 'video', git: () => '#/ekranlar/yeni' },
         { baslik: 'Ortak akış', aciklama: 'Birden çok ekranın kullandığı adımlar (ör. ödeme)', ikonAd: 'pusula', git: () => '#/ekranlar/yeni' }

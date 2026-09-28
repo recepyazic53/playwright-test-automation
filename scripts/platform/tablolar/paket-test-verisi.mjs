@@ -1,4 +1,4 @@
-// SAYFA PAKETİNDEN TEST VERİSİ — paketin "testVerisi" bölümü (paket-tablolari.mjs) Test verisi tablolarına ve ekranın alan
+// EKRAN PAKETİNDEN TEST VERİSİ — paketin "testVerisi" bölümü (paket-tablolari.mjs) Test verisi tablolarına ve ekranın alan
 // bağlantılarına YALNIZCA kullanıcının önizlemede onayladığı seçimle yazılır:
 //   paketTestVerisiOnizle   hangi tablolar (sütun / satır sayısı, örnek satırlar — gizli sütun değeri yok), aynı adlı mevcut
 //                           tablo (birleştirilirse eklenecek satır / sütun), hangi alanlar hangi sütuna bağlanacak (mevcut
@@ -78,8 +78,9 @@ export function paketTestVerisiOnizle(vt, projeId, paket, ekranId) {
         satirSayisi: t.satirlar.length, tekrarSayisi: t.tekrarSayisi,
         ornek: t.satirlar.slice(0, 5).map((d) => t.sutunlar.map((s) => (s.gizli ? null : d[s.ad] ?? null))),
         bagliAlanlar: baglantilar.filter((b) => kucuk(b.tablo) === kucuk(t.ad)).map((b) => { const a = alanlar.get(b.alanId); return a ? alanEtiketi(a) : b.alanId; }),
-        // Önleme: aynı adlı tablo yoksa başlıkları aynı (esnek) mevcut tablolar — "onu kullan / yine de yeni oluştur".
-        benzer: m ? [] : benzerTablolar(t.sutunlar, mevcutlar, { ad: t.ad }).slice(0, 3).map((b) => {
+        // Önleme: aynı adlı tablo yoksa başlıkları aynı (esnek) mevcut tablolar — "onu kullan / yine de yeni oluştur"
+        // (tek sütunluda ayırt edici başlık + örtüşen satırlar gerekir; tablo-benzerligi.mjs).
+        benzer: m ? [] : benzerTablolar(t.sutunlar, mevcutlar, { ad: t.ad, satirlar: t.satirlar }).slice(0, 3).map((b) => {
           const x = /** @type {import('./tablo-deposu.mjs').Tablo} */ (mevcutlar.find((y) => y.id === b.id));
           return { id: b.id, ad: b.ad, puan: b.puan, eklenecekSatir: birlestirmePlani(x, t).eklenecek.length };
         }),

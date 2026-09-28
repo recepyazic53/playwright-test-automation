@@ -90,6 +90,8 @@ test('modelden diyagram ve geri: bloklar adımların aynısını verir (koşul, 
   expect(ozet(yeni)).toEqual(ozet(m));
   // Aynı düğmenin "… dahil" ayarı yeniden kullanılır (ikinci ayar üretilmez).
   expect(yeni.senaryoDuzeyi.alanlar.map((a: Nesne) => a.id)).toEqual(['ekAdresEkleDahil']);
-  // Alt model adımı olan model düzenlenemez.
-  expect(akisDuzenlenebilirMi({ ...m, adimlar: [...m.adimlar, { id: 'odeme', sira: 6, baslik: 'Ödeme', altModel: { dosya: 'x.model.json', bolum: 'kart' } }] }).duzenlenebilir).toBe(false);
+  // Alt model adımı olan model de düzenlenebilir: adım salt okunur "korunan adım" bloğudur (aynen korunur; akis-korunan.spec.ts).
+  const altModelli = { ...m, adimlar: [...m.adimlar, { id: 'odeme', sira: 6, baslik: 'Ödeme', altModel: { dosya: 'x.model.json', bolum: 'kart' } }] };
+  expect(akisDuzenlenebilirMi(altModelli).duzenlenebilir).toBe(true);
+  expect(adimlardanBloklar(altModelli, altModelli.adimlar, modeldenAkisEnvanteri(altModelli)).at(-2)).toMatchObject({ tur: 'korunan', kapsam: 'adim', ad: 'Ödeme' });
 });

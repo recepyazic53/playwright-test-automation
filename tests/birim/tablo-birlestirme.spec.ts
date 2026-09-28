@@ -26,6 +26,30 @@ import { HIZLI_KDF, izinleriAc } from './platform-ortak';
 type Nesne = Record<string, any>;
 
 test.describe('tablo benzerliği (saf)', () => {
+  test('benzer tablo (tek sütun): ayırt edici başlık + örtüşen satırlar önerilir; genel başlık, örtüşmeyen / boş satırlar önerilmez', () => {
+    const t = (id: string, ad: string, sutun: string, degerler: string[]) => ({ id, ad, sutunlar: [{ ad: sutun }], satirlar: degerler.map((d) => ({ degerler: { [sutun]: d } })) });
+    const mevcut = [
+      t('ilk', 'Sipariş formu — Müşteri tipi', 'Müşteri tipi', ['Bireysel', 'Kurumsal']),
+      t('baska', 'Kargo — Müşteri tipi', 'MÜŞTERİ TİPİ', ['Filo', 'Bayi', 'Kurum']),
+      t('deger', 'Ekran — Durum', 'Değer', ['Bireysel', 'Kurumsal']),
+      { id: 'cok', ad: 'Kişiler', sutunlar: [{ ad: 'Müşteri tipi' }, { ad: 'Ad' }], satirlar: [{ degerler: { 'Müşteri tipi': 'Bireysel', Ad: 'x' } }] }
+    ];
+    const satirlar = ['Bireysel', 'Kurumsal', 'Yabancı'].map((d) => ({ 'Müşteri tipi': d }));
+    // Küçük tablonun (2 satır) tamamı ötekinde: örtüşme 1 → puan 100; esnek başlık ("musteri tipi"); çok sütunlu tablo önerilmez.
+    expect(benzerTablolar([{ ad: 'Müşteri tipi' }], mevcut, { ad: 'İade formu — Müşteri tipi', satirlar })).toEqual([{ id: 'ilk', ad: 'Sipariş formu — Müşteri tipi', puan: 100, ayni: true }]);
+    // Yarısı örtüşüyor (%50): önerilir, puan düşük.
+    expect(benzerTablolar(['musteri tipi'], mevcut, { satirlar: [{ 'musteri tipi': 'Bireysel' }, { 'musteri tipi': 'Yabancı' }] }).map((x) => [x.id, x.puan])).toEqual([['ilk', 80]]);
+    // Örtüşmeyen satırlar, satırı olmayan yeni tablo (Tablolar ekranında boş yeni tablo), aynı ad, hariç tutulan tablo: önerilmez.
+    expect(benzerTablolar(['Müşteri tipi'], mevcut, { satirlar: [{ 'Müşteri tipi': 'Yabancı' }, { 'Müşteri tipi': 'Diğer' }] })).toEqual([]);
+    expect(benzerTablolar(['Müşteri tipi'], mevcut)).toEqual([]);
+    expect(benzerTablolar(['Müşteri tipi'], mevcut, { satirlar: [{ 'Müşteri tipi': '' }] })).toEqual([]);
+    expect(benzerTablolar(['Müşteri tipi'], mevcut, { ad: 'SİPARİŞ FORMU — MÜŞTERİ TİPİ', satirlar })).toEqual([]);
+    expect(benzerTablolar(['Müşteri tipi'], mevcut, { haricId: 'ilk', satirlar })).toEqual([]);
+    // Genel başlık ("Değer", "Kod" …): satırlar aynı olsa da önerilmez.
+    expect(benzerTablolar(['Değer'], mevcut, { satirlar: [{ Değer: 'Bireysel' }, { Değer: 'Kurumsal' }] })).toEqual([]);
+    expect(benzerTablolar(['DEĞER'], mevcut, { satirlar: [{ DEĞER: 'Bireysel' }] })).toEqual([]);
+  });
+
   test('esnek başlık: harf, Türkçe karakter, noktalama ve sıra fark etmez; benzeyen başlık öneridir', () => {
     expect(baslikNormal('tcKimlikNo')).toBe(baslikNormal('T.C. kimlik no'));
     expect(baslikNormal('Müşteri Adı')).toBe(baslikNormal('musteri_adi'));
@@ -221,6 +245,9 @@ test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', 
     const y = await basarili('/platform/tablo/benzer', { projeId, sutunlar: ['KOD', 'ad', 'parola', 'e-posta'] });
     expect((y.benzerler as Nesne[]).map((x) => x.ad)).toContain('Müşteriler');
     expect((await basarili('/platform/tablo/benzer', { projeId, sutunlar: ['Ürün', 'Fiyat'] })).benzerler).toEqual([]);
+    // Tek sütun: genel başlık ("Kod") satırı ortak olsa da önerilmez; boş yeni tabloda da öneri yok.
+    expect((await basarili('/platform/tablo/benzer', { projeId, sutunlar: ['KOD'], satirlar: [{ KOD: 'YAZ' }] })).benzerler).toEqual([]);
+    expect((await basarili('/platform/tablo/benzer', { projeId, sutunlar: ['Takip adresi'] })).benzerler).toEqual([]);
   });
 
   test('önizleme: emin olunamayan sütun onay bekler; çakışmalar maskeli; kuru doğrulama; hiçbir şey yazılmaz', async () => {
@@ -336,7 +363,7 @@ test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', 
   });
 });
 
-test.describe('önleme: sayfa paketinde "benzer tablo var — onu kullan"', () => {
+test.describe('önleme: ekran paketinde "benzer tablo var — onu kullan"', () => {
   test('aynı başlıklı (esnek) tablo önerilir; hedefId ile ona birleştirilir, yeni tablo oluşmaz, bağ oraya kurulur', async () => {
     const klasor = mkdtempSync(join(tmpdir(), 'paket-onleme-'));
     const vt = await veritabaniniHazirla(join(klasor, 'platform.db'));
@@ -356,6 +383,42 @@ test.describe('önleme: sayfa paketinde "benzer tablo var — onu kullan"', () =
       const ts = tablolariListele(vt, projeId);
       expect(ts.map((t) => t.ad)).toEqual(['Teslimat seçenekleri']);
       expect(ts[0].satirlar.map((r) => r.degerler.KAPSAM)).toEqual(['EKSPRES', 'STANDART']);
+      expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({ kapsam: { tablo: hedef, sutun: 'KAPSAM' } });
+    } finally { vt.kapat(); rmSync(klasor, { recursive: true, force: true }); }
+  });
+
+  test('tek sütunlu tablo: ayırt edici başlık + örtüşen satırlar önerilir; onu kullan → eksik satır ve karşılıklar eklenir, bağ oraya kurulur', async () => {
+    const klasor = mkdtempSync(join(tmpdir(), 'paket-onleme-tek-'));
+    const vt = await veritabaniniHazirla(join(klasor, 'platform.db'));
+    try {
+      await kasaOlustur(vt, `Gecici-Onleme-${randomBytes(4).toString('hex')}`, { kdf: HIZLI_KDF });
+      const projeId = projeKaydet(vt, { ad: 'Önleme tek sütun' });
+      const V1 = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'sayfa-paketi', 'ornek-rota-v1.json'), 'utf-8')) as Nesne;
+      const hedef = tabloKaydet(vt, { projeId, ad: 'Eski rota — Kapsam', kaynak: { tur: 'paket', tabloTuru: 'liste' },
+        sutunlar: [{ ad: 'KAPSAM', karsiliklar: { EKSPRES: { sayfa: 'E-ESKI' } } }],
+        satirlar: [{ degerler: { KAPSAM: 'EKSPRES' } }, { degerler: { KAPSAM: 'STANDART' } }] });
+      const genel = tabloKaydet(vt, { projeId, ad: 'Başka ekran — Durum', sutunlar: [{ ad: 'Değer' }], satirlar: [{ degerler: { Değer: 'EKSPRES' } }] });
+      const tablo = (ad: string, sutun: string) => ({ ad, tur: 'liste', sutunlar: [{ ad: sutun, karsiliklar: { EKSPRES: { sayfa: 'E-YENI' }, KURYE: { sayfa: 'K-1' } } }],
+        satirlar: [['EKSPRES'], ['STANDART'], ['KURYE']] });
+      const paket = { ...V1, testVerisi: { tablolar: [tablo('Örnek Rota — Kapsam', 'Kapsam'), tablo('Örnek Rota — Genel', 'Değer')],
+        baglantilar: [{ alanId: 'kapsam', tablo: 'Örnek Rota — Kapsam', sutun: 'Kapsam' }] } };
+      const tv = (paketOnizle(vt, projeId, paket).onizleme as Nesne).testVerisi as Nesne;
+      expect(tv.tablolar[0].mevcut).toBeNull();
+      expect(tv.tablolar[0].benzer).toEqual([{ id: hedef, ad: 'Eski rota — Kapsam', puan: 100, eklenecekSatir: 1 }]);
+      // Genel başlıklı ("Değer") tek sütunlu liste satırı ortak olsa da önerilmez.
+      expect(tv.tablolar[1].benzer).toEqual([]);
+      expect(JSON.stringify(tv.tablolar[0].benzer)).not.toContain(genel);
+      const ek = await sayfaEkle(vt, projeId, paket, { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: join(klasor, 'medya'),
+        testVerisi: { tablolar: { 'Örnek Rota — Kapsam': { islem: 'birlestir', hedefId: hedef } }, baglantilar: ['kapsam'] } });
+      expect(ek.testVerisi.tablolar.map((t) => [t.ad, t.islem, t.eklenenSatir, t.eklenenSutun])).toEqual([['Eski rota — Kapsam', 'birlestir', 1, 0]]);
+      const ts = tablolariListele(vt, projeId);
+      expect(ts.map((t) => t.ad).sort()).toEqual(['Başka ekran — Durum', 'Eski rota — Kapsam']);
+      const h = ts.find((t) => t.id === hedef) as Nesne;
+      expect(h.satirlar.map((r: Nesne) => r.degerler.KAPSAM)).toEqual(['EKSPRES', 'STANDART', 'KURYE']);
+      expect(h.sutunlar.map((s: Nesne) => s.ad)).toEqual(['KAPSAM']);
+      // Mevcut karşılık korunur, eksik olan eklenir.
+      expect(h.sutunlar[0].karsiliklar).toMatchObject({ EKSPRES: { sayfa: 'E-ESKI' }, KURYE: { sayfa: 'K-1' } });
+      expect(h.kaynak).toMatchObject({ tur: 'paket', tabloTuru: 'liste' });
       expect(ekranAlanBaglari(vt, ek.ekranId)).toEqual({ kapsam: { tablo: hedef, sutun: 'KAPSAM' } });
     } finally { vt.kapat(); rmSync(klasor, { recursive: true, force: true }); }
   });

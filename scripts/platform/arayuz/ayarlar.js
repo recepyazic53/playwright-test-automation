@@ -783,7 +783,7 @@ async function maskelemeKarti() {
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
   const form = h('form', { class: 'kart', novalidate: true, 'aria-label': 'Maskeleme' }, h('h3', {}, ikon('goz'), 'Maskeleme'),
-    h('p', { class: 'soluk' }, 'Adı bu listede geçen alanların, başlıkların ve servis okumalarının değerleri raporlarda maskelenir, sayfa paketlerinde reddedilir. Çekirdek liste güvenlik gereği değiştirilemez; kendi adlarınızı ekleyebilirsiniz.'),
+    h('p', { class: 'soluk' }, 'Adı bu listede geçen alanların, başlıkların ve servis okumalarının değerleri raporlarda maskelenir, ekran paketlerinde reddedilir. Çekirdek liste güvenlik gereği değiştirilemez; kendi adlarınızı ekleyebilirsiniz.'),
     h('p', { class: 'kucuk' }, h('b', {}, 'Çekirdek: '), cekirdek.join(', ')),
     mesaj.kutu,
     alan('Ek gizli adlar (her satıra bir ad)', liste, { yardim: 'Harf, rakam, "-", "_"; 2–40 karakter. Büyük/küçük harf ve "-", "_" yok sayılır (ör. musteriAnahtari → Musteri_Anahtari da gizli).' }),

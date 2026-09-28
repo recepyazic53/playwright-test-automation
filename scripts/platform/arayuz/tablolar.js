@@ -47,8 +47,8 @@ function kopya(t) {
   };
 }
 
-/** Sayfa paketinden içe aktarılan tablonun kaynağı: "Akış kaydı · “Ekran” · 27.09.2026 10:30". */
-const KAYNAK_TURU = { paket: 'Sayfa paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
+/** Ekran paketinden içe aktarılan tablonun kaynağı: "Akış kaydı · “Ekran” · 27.09.2026 10:30". */
+const KAYNAK_TURU = { paket: 'Ekran paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
 function kaynakMetni(k) {
   if (!k || !k.tur) return '';
   const z = Date.parse(k.yazilma || k.olusturulma || '');
@@ -57,7 +57,7 @@ function kaynakMetni(k) {
 
 // --- Liste grupları (yalnız görünüm; veri değişmez) ---------------------------------------------------------------------
 // Ölçüt önce TABLO TÜRÜdür (kaynak.tabloTuru: paketin testVerisi.tablolar[].tur; tarama / akış kaydı tabloları "liste"):
-// "kayit" → "Kişi ve kayıt verileri", "liste" → "Ekran listeleri". Tür yoksa (eski kayıtlar) sezgi: kaynağı olan (sayfa paketi /
+// "kayit" → "Kişi ve kayıt verileri", "liste" → "Ekran listeleri". Tür yoksa (eski kayıtlar) sezgi: kaynağı olan (ekran paketi /
 // tarama / akış kaydı) tablolar ile "<Ekran> — <Alan…>" adlı tablolardan tek sütunlu olanlar, bir ekranın alan bağlarında
 // kullanılanlar ya da "<Ekran>" kısmı projedeki bir ekranın adı olanlar (çok sütunlu bağımlı listeler dahil) ekran listesidir;
 // diğerleri kişi ve kayıt verisi. Ekran listeleri ekran başına alt gruptur. Açık / kapalı durumu tarayıcıda (localStorage) hatırlanır.
@@ -573,7 +573,10 @@ export async function tablolarBolumu(govde, proje) {
     // Önleme: yeni tablo kaydedilmeden önce başlıkları aynı (esnek) tablo varsa "onu kullan / yine de yeni oluştur" sorulur.
     if (!is.id && !is.baglam) {
       let benzerler = [];
-      try { benzerler = (await api('/platform/tablo/benzer', { govde: { projeId: proje.id, sutunlar: adlar, ad: is.ad.trim() } })).benzerler; } catch { benzerler = []; }
+      // Tek sütunlu tabloda başlık az ayırt edicidir: satır değerleri de gönderilir (örtüşme sunucuda bakılır; değer geri dönmez).
+      const tekSutun = is.sutunlar.length === 1 ? is.sutunlar[0].ad : null;
+      const satirlar = tekSutun === null ? undefined : is.satirlar.slice(0, 500).map((r) => ({ [adlar[0]]: r.degerler[tekSutun] ?? null }));
+      try { benzerler = (await api('/platform/tablo/benzer', { govde: { projeId: proje.id, sutunlar: adlar, ad: is.ad.trim(), satirlar } })).benzerler; } catch { benzerler = []; }
       if (benzerler.length) {
         const secim = await secenekIste({
           baslik: 'Benzer tablo var', ikonAd: 'uyari',
@@ -779,7 +782,7 @@ export async function tablolarBolumu(govde, proje) {
       h('div', { class: 'kart-basligi' }, adG, durum,
         h('span', { class: 'sag' },
           is.id ? h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => tabloyuSil() }, ikon('cop'), 'Tabloyu sil') : null)),
-      (() => { const k = is.id ? liste.find((x) => x.id === is.id)?.kaynak : null; return k && k.tur ? h('p', { class: 'kucuk soluk tablo-kaynagi' }, h('b', {}, 'Kaynak: '), kaynakMetni(k), ' — sayfa paketinden içe aktarıldı (seçim alanlarının seçenekleri).') : null; })(),
+      (() => { const k = is.id ? liste.find((x) => x.id === is.id)?.kaynak : null; return k && k.tur ? h('p', { class: 'kucuk soluk tablo-kaynagi' }, h('b', {}, 'Kaynak: '), kaynakMetni(k), ' — ekran paketinden içe aktarıldı (seçim alanlarının seçenekleri).') : null; })(),
       h('div', { class: 'tablo-arac-cubugu' },
         h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => dosya.click() }, ikon('yukle'), 'Excel / CSV yükle'), dosya,

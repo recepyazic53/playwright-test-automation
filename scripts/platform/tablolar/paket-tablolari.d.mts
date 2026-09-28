@@ -1,4 +1,4 @@
-// scripts/platform/tablolar/paket-tablolari.mjs için tip bildirimi (sayfa paketinin testVerisi bölümü).
+// scripts/platform/tablolar/paket-tablolari.mjs için tip bildirimi (ekran paketinin testVerisi bölümü).
 
 export type Karsilik = { sayfa?: string; servis?: string };
 export type PaketSutunu = { ad: string; gizli: boolean; karsiliklar: Record<string, Karsilik> };

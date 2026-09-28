@@ -1,4 +1,4 @@
-// Sayfa paketi yükleme akışı (genel):
+// Ekran paketi yükleme akışı (genel):
 //   mod 'yeni'   — "Ekran ekle": yükle → doğrulama hataları → önizleme (alanlar, adımlar, isteğe bağlı adımlar,
 //                  senaryo önerileri [seçmeli], gereken ayarlar [Ayarlar bağlantılı], test verisine yazılacaklar [tablo başına
 //                  yaz / birleştir / yeni ad / atla + alan bağlantıları], bilinmeyenler, kanıtlar) →
@@ -41,7 +41,7 @@ function akisCercevesi(icerik, s, kaynak = null) {
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, taramadan ? kaynakAdi : analiz ? 'Paket yükle' : 'Ekran ekle')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, baslik)),
         h('div', { class: 'meta' },
-          h('span', {}, ikon(kaynak === 'kayit' ? 'video' : taramadan ? 'ara' : 'dosya'), taramadan ? `${kaynakAdi.toLocaleLowerCase('tr-TR')} sonucu (sayfa paketi, sürüm 1)` : 'sayfa paketi (JSON, sürüm 1)'),
+          h('span', {}, ikon(kaynak === 'kayit' ? 'video' : taramadan ? 'ara' : 'dosya'), taramadan ? `${kaynakAdi.toLocaleLowerCase('tr-TR')} sonucu (ekran paketi, sürüm 1)` : 'ekran paketi (JSON, sürüm 1)'),
           h('span', {}, ikon('kalkan'), taramadan ? 'alan değerleri pakete yazılmadı' : 'gizli değer içeren paket reddedilir'))),
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: s.ekran ? `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` : '#/ekranlar' }, ikon('geri'), 'Vazgeç'))),
     govde);
@@ -83,7 +83,7 @@ function yuklemeAdimi(govde, s, onceki = null) {
   const girdi = h('input', { type: 'file', accept: '.json,application/json', id: 'paket-dosyasi', class: 'gorunmez-dosya' });
   const alan = h('label', { class: 'yukleme-alani', for: 'paket-dosyasi' },
     h('span', { class: 'bos-ikon' }, ikon('yukle')),
-    h('strong', {}, 'Sayfa paketini sürükleyip bırakın ya da seçin'),
+    h('strong', {}, 'Ekran paketini sürükleyip bırakın ya da seçin'),
     h('span', { class: 'soluk kucuk' }, '.json · en fazla 16 MB (ekran görüntüleri dahil)'),
     h('span', { class: 'dugme kucuk-dugme' }, ikon('klasor'), 'Dosya seç'));
   const durumAlani = h('div', { 'aria-live': 'polite' });
@@ -172,7 +172,7 @@ function eklemeKutulari(s) {
 // Aynı adlı tablo varken seçim yapılmadan kabul edilemez; onaylanmayan hiçbir şey yazılmaz.
 // ---------------------------------------------------------------------------------------
 
-const TV_KAYNAK = { paket: 'Sayfa paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
+const TV_KAYNAK = { paket: 'Ekran paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
 const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
 
 /**
@@ -180,7 +180,9 @@ const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
  * @param {object | null} t önizlemenin testVerisi bölümü @param {() => void} degisti
  */
 export function testVerisiSecimi(t, degisti) {
-  if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, govde: () => undefined };
+  if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, bekleyenler: () => [], govde: () => undefined };
+  /** Tablo adı → satırı ve odaklanacak ilk denetim (kararsız tabloya "Bölüme git" için). @type {Map<string, { satir: HTMLElement; odak: () => HTMLElement | null }>} */
+  const satirlar = new Map();
   /** @type {Map<string, { islem: string | null; yeniAd: string; hedefId?: string }>} */
   const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? null : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60), hedefId: '' }]));
   const baglar = new Set(t.baglantilar.map((b) => b.alanId));
@@ -236,7 +238,7 @@ export function testVerisiSecimi(t, degisti) {
           secenek('atla', 'Atla (yazma)')));
     }
     const sutunlar = x.sutunlar.map((s) => h('th', { scope: 'col' }, s.gizli ? ikon('kilit') : null, s.ad));
-    return h('li', { class: 'tv-tablo' },
+    const satir = h('li', { class: 'tv-tablo' },
       h('div', { class: 'tv-tablo-ust' }, h('strong', {}, x.ad),
         x.tur ? rozet(TV_TUR[x.tur] || x.tur, '', { title: x.tur === 'kayit' ? 'Kişi ve kayıt verileri grubunda görünür; senaryo ${Tablo.Sütun} ile satırdan alır.' : 'Ekran listeleri grubunda görünür.' }) : null,
         h('span', { class: 'kucuk soluk' }, `${x.sutunlar.length} sütun · ${x.satirSayisi} satır${x.tekrarSayisi ? ` (${x.tekrarSayisi} tekrar atıldı)` : ''}`),
@@ -247,10 +249,13 @@ export function testVerisiSecimi(t, degisti) {
         h('tbody', {}, x.ornek.map((r) => h('tr', {}, r.map((v, i) => h('td', {}, x.sutunlar[i].gizli ? '—' : v ?? ''))))))),
       x.satirSayisi > x.ornek.length ? h('small', { class: 'cok-soluk' }, `… ve ${x.satirSayisi - x.ornek.length} satır daha`) : null,
       secim);
+    // Karar bekleyen tabloda ilk seçenek; yeni ad boşsa ad girdisi odaklanır.
+    satirlar.set(x.ad, { satir, odak: () => (d.islem === 'yeniAd' ? satir.querySelector('.tv-cakisma input[type="text"]') : satir.querySelector('.tv-cakisma input[type="radio"]')) });
+    return satir;
   };
   const bolum = h('section', { class: 'kart test-verisi-onizleme', 'aria-label': 'Test verisine yazılacaklar' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Test verisine yazılacaklar'),
-      h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Sayfa paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
+      h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Ekran paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
     h('p', { class: 'kucuk soluk' }, 'Tablolar Ayarlar > Test verisi\'ne Excel sayfası gibi yazılır (satır = birlikte geçerli değerler): seçim alanlarının seçenekleri "Ekran listeleri"ne ("<Ekran> — <Alan>"), kişi ve kayıt verileri "Kişi ve kayıt verileri"ne. Alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
     h('ul', { class: 'tv-tablolar' }, t.tablolar.map(tabloSatiri)),
     t.baglantilar.length ? [h('div', { class: 'ara-baslik' }, `Alan bağlantıları (${t.baglantilar.length})`), bagListesi] : null);
@@ -258,6 +263,16 @@ export function testVerisiSecimi(t, degisti) {
   return {
     bolum,
     hazir: () => [...durum.values()].every((d) => d.islem && (d.islem !== 'yeniAd' || d.yeniAd.trim())),
+    // Kabulü kapatan test verisi nedenleri (hazir() false iken boş olmaz): metin + ilk ilgili tablonun satırı/denetimi.
+    bekleyenler: () => {
+      const kararsiz = t.tablolar.filter((x) => !durum.get(x.ad).islem);
+      const adsiz = t.tablolar.filter((x) => { const d = durum.get(x.ad); return d.islem === 'yeniAd' && !d.yeniAd.trim(); });
+      const neden = (liste, metin) => (liste.length ? [{ metin, ...satirlar.get(liste[0].ad) }] : []);
+      return [
+        ...neden(kararsiz, `Test verisi: ${kararsiz.length} tablo için karar bekleniyor (Birleştir / Yeni adla yaz / Atla)`),
+        ...neden(adsiz, `Test verisi: ${adsiz.length} tablo için yeni ad boş`)
+      ];
+    },
     ozet: () => {
       const n = t.tablolar.filter((x) => yazilir(x.ad)).length;
       const b = t.baglantilar.filter((x) => yazilir(x.tablo) && baglar.has(x.alanId)).length;
@@ -306,6 +321,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
   const kabulDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon(analiz ? 'yenile' : 'onay'),
     analiz ? 'Bulguları hesapla' : degistir ? 'Modeli değiştir' : o.hedef ? 'Modeli ekle' : 'Ekranı oluştur');
   const hataAlani = h('div', {});
+  const nedenAlani = h('div', { id: `kabul-nedeni-${Math.random().toString(36).slice(2, 9)}`, class: 'kabul-nedenleri', 'aria-live': 'polite', hidden: true });
   const tv = testVerisiSecimi(p.testVerisi, () => ozetCiz());
 
   const ozetCiz = () => {
@@ -318,8 +334,46 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
           h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`),
           h('dt', {}, 'Kanıt'), h('dd', {}, `${kanitlar.length} ekran görüntüsü (şifreli saklanır)`)],
         tvOzet ? [h('dt', {}, 'Test verisi'), h('dd', {}, tvOzet)] : null));
-    kabulDugmesi.disabled = (!analiz && secim.size > 0 && ortamSecimi.size === 0) || !tv.hazir();
+    const nedenler = kapatmaNedenleri();
+    kabulDugmesi.disabled = nedenler.length > 0;
+    // Düğme kapalıyken neden hemen altında yazar; her nedende ilgili bölüme götüren "Bölüme git".
+    yerlestir(nedenAlani, nedenler.length ? h('ul', {}, nedenler.map((n) => h('li', {},
+      h('span', {}, n.metin),
+      n.satir ? h('button', { type: 'button', class: 'baglanti-dugmesi', onclick: () => bolumeGit(n) }, 'Bölüme git') : null))) : null);
+    nedenAlani.hidden = !nedenler.length;
+    if (nedenler.length) {
+      kabulDugmesi.title = `Kapalı: ${nedenler.map((n) => n.metin).join('; ')}`;
+      kabulDugmesi.setAttribute('aria-describedby', nedenAlani.id);
+    } else {
+      kabulDugmesi.removeAttribute('title');
+      kabulDugmesi.removeAttribute('aria-describedby');
+    }
   };
+
+  /** Kabul düğmesini kapatan her neden: metin + gidilecek satır ve odaklanacak denetim. */
+  function kapatmaNedenleri() {
+    /** @type {Array<{ metin: string; satir?: HTMLElement | null; odak?: () => HTMLElement | null }>} */
+    const nedenler = [];
+    if (!analiz && secim.size > 0 && ortamSecimi.size === 0) {
+      nedenler.push(p.ortamlar.length
+        ? { metin: `Ortam: ${secim.size} seçili senaryo için en az bir ortam seçin`, satir: ortamSecimleri, odak: () => ortamSecimleri.querySelector('input') }
+        : { metin: `Senaryo: projede ortam yok; ${secim.size} seçili senaryonun seçimini kaldırın`, satir: senaryoBasligi, odak: () => senaryoBasligi.querySelector('.sag button:last-child') });
+    }
+    if (!tv.hazir()) nedenler.push(...tv.bekleyenler());
+    return nedenler;
+  }
+
+  function bolumeGit(n) {
+    const hedef = n.satir;
+    if (!hedef || !hedef.isConnected) return;
+    hedef.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    const odak = n.odak ? n.odak() : null;
+    if (odak) odak.focus({ preventScroll: true });
+    hedef.classList.remove('dikkat-vurgusu');
+    void hedef.offsetWidth;
+    hedef.classList.add('dikkat-vurgusu');
+    setTimeout(() => hedef.classList.remove('dikkat-vurgusu'), 2400);
+  }
 
   const senaryoSatiri = (x) => {
     const kutu = h('input', { type: 'checkbox', checked: secim.has(x.indeks), disabled: x.sorunlar.length > 0, 'aria-label': `Seç: ${x.baslik}` });
@@ -420,6 +474,10 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
   });
 
   const bilinmeyen = p.bilinmeyenler;
+  const senaryoBasligi = h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('liste'), 'Senaryo önerileri', rozet(String(p.senaryolar.length), 'vurgu')),
+    p.senaryolar.length ? h('span', { class: 'sag' },
+      h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { for (const x of p.senaryolar) if (!x.sorunlar.length) secim.add(x.indeks); onizlemeYenile(); } }, 'Tümünü seç'),
+      h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { secim.clear(); onizlemeYenile(); } }, 'Hiçbiri')) : null);
   yerlestir(govde, ust, h('div', { class: 'form-duzeni onizleme-duzeni' },
     h('div', { class: 'form-sutunu' },
       h('section', { class: 'kart paket-ozeti' },
@@ -436,10 +494,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
       o.uyarilar.length ? h('div', { class: 'not-kutusu uyari' }, h('b', {}, `${o.uyarilar.length} uyarı`),
         h('ul', {}, o.uyarilar.map((u) => h('li', {}, u.mesaj)))) : null,
       analiz ? null : [
-        h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('liste'), 'Senaryo önerileri', rozet(String(p.senaryolar.length), 'vurgu')),
-          p.senaryolar.length ? h('span', { class: 'sag' },
-            h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { for (const x of p.senaryolar) if (!x.sorunlar.length) secim.add(x.indeks); onizlemeYenile(); } }, 'Tümünü seç'),
-            h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { secim.clear(); onizlemeYenile(); } }, 'Hiçbiri')) : null),
+        senaryoBasligi,
         p.senaryolar.length ? h('ul', { class: 'oneri-listesi kart' }, p.senaryolar.map(senaryoSatiri)) : h('div', { class: 'bos-liste' }, 'Pakette senaryo önerisi yok.')
       ],
       analiz && p.senaryolar.length ? h('div', { class: 'not-kutusu bilgi' }, `Pakette ${p.senaryolar.length} senaryo önerisi var; tekrar analizde yalnızca model farkları değerlendirilir.`) : null,
@@ -470,7 +525,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
           : [h('div', { class: 'ara-baslik' }, 'Senaryoların ortamları'), ortamSecimleri,
             h('p', { class: 'kucuk soluk' }, 'Senaryolar "Koşuda" KAPALI eklenir: siz gözden geçirip açana kadar toplu koşuya girmez.')],
         hataAlani,
-        h('div', { class: 'form-eylemleri' }, kabulDugmesi,
+        h('div', { class: 'form-eylemleri' }, kabulDugmesi, nedenAlani,
           h('button', { type: 'button', class: 'hayalet', onclick: () => yuklemeAdimi(govde, s) }, 'Başka dosya'),
           h('a', { class: 'dugme hayalet', href: s.ekran ? `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` : '#/ekranlar' }, 'Vazgeç'))))));
   ozetCiz();

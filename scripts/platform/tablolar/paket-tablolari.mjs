@@ -1,4 +1,4 @@
-// SAYFA PAKETİNİN TEST VERİSİ BÖLÜMÜ (saf; vt yok) — paketin isteğe bağlı "testVerisi" bölümü, Test verisi TABLOLARININ
+// EKRAN PAKETİNİN TEST VERİSİ BÖLÜMÜ (saf; vt yok) — paketin isteğe bağlı "testVerisi" bölümü, Test verisi TABLOLARININ
 // (tablo-deposu.mjs: sütunlar + satırlar, satır = birlikte geçerli değerler) ve ekran alanı → sütun BAĞLANTILARININ
 // (ekran-baglari.mjs: alanBaglari) paket biçimidir:
 //   testVerisi: {
@@ -13,7 +13,7 @@
 // olarak girer (bağlı alanda modelin seçeneklerinden kendiliğinden de tamamlanır).
 // GİZLİLİK: gizli sütuna değer yazılmaz (değeri kullanıcı Nöbetçi'de girer; diskte şifreli); adı gizli bilgi taşıyan
 // (parola, şifre, token, PIN…) sütun gizli işaretli değilse uyarı, değer taşıyorsa hata. Hücrelerdeki kart / kimlik no gibi
-// kalıplar sayfa paketinin genel gizli değer taramasında reddedilir.
+// kalıplar ekran paketinin genel gizli değer taramasında reddedilir.
 //   testVerisiniDogrula(tv, model)       biçim + bağlantı denetimi ({ hatalar, uyarilar }).
 //   paketTablolari(tv, model)            yazılacak tablolar (satırlar nesne, tekrarlar atılmış) + bağlantılar.
 //   paketListeleri(tv, model)            bağlantılardan koşullu değer listeleri (senaryo önerilerini tablolarla doğrulamak için).

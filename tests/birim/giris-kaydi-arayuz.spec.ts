@@ -218,9 +218,11 @@ test('"Girişi dene": yalnız giriş yapılır (ekran/senaryo yok); başarı, ha
   expect(uygulama.olaylar.length).toBe(onceki);
   await sonuc.getByRole('button', { name: 'Kapat' }).click();
 
-  // Ortak akışlardaki giriş kartında da aynı düğme var.
+  // Giriş Ekranlar'da listelenmez: "Girişi dene" yalnız Ayarlar > Giriş profilleri > Giriş tarifi'ndedir.
   await page.goto('/#/ekranlar');
-  await expect(page.getByRole('article', { name: 'Giriş (Deneme)' }).getByRole('button', { name: 'Deneme: girişi dene' })).toBeEnabled();
+  await expect(page.getByRole('heading', { level: 2, name: 'Ekranlar' })).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Giriş (Deneme)' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Deneme: girişi dene' })).toHaveCount(0);
   // Gizlilik: parola logda yok.
   expect(readFileSync(join(klasor, 'sunucu.log'), 'utf8')).not.toContain(ORNEK_PAROLA);
   await baglam.close();

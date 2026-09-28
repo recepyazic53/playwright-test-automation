@@ -95,9 +95,11 @@ export const TABLO_POST_UCLARI = [
     const projeId = kimlik(g.projeId, 'projeId');
     const sutunlar = Array.isArray(g.sutunlar) ? g.sutunlar.filter((x) => typeof x === 'string').slice(0, 60) : [];
     const ad = typeof g.ad === 'string' ? g.ad.trim().toLocaleLowerCase('tr') : '';
+    // Satırlar (yalnız tek sütunlu tabloda örtüşme için; sütun adı → değer): değerler yanıtta dönmez.
+    const satirlar = Array.isArray(g.satirlar) ? g.satirlar.filter((x) => x && typeof x === 'object' && !Array.isArray(x)).slice(0, 500) : [];
     const tablolar = tablolariListele(db, projeId);
     // adVar: yazılacak ad zaten bir tablonun adı (o tabloya yazılacak; uyarı gerekmez).
-    return { benzerler: benzerTablolar(sutunlar, tablolar, { ad, haricId: typeof g.haricId === 'string' ? g.haricId : '' }), adVar: Boolean(ad) && tablolar.some((t) => t.ad.toLocaleLowerCase('tr') === ad) };
+    return { benzerler: benzerTablolar(sutunlar, tablolar, { ad, haricId: typeof g.haricId === 'string' ? g.haricId : '', satirlar }), adVar: Boolean(ad) && tablolar.some((t) => t.ad.toLocaleLowerCase('tr') === ad) };
   }],
   // Kişi alanlarını tabloya bağlama (kisi-baglama.mjs): onay yoksa yalnız plan (değer gösterilmez); onayla bağlar + yeni satırlar +
   // senaryo dönüşümü tek işlemde.

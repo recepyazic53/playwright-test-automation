@@ -18,7 +18,7 @@ type Nesne = Record<string, any>;
 
 const ROTA_EKRANI = 'Rota seçimi';
 
-/** Küçük nötr sayfa paketi: Kapsam / Alternatif seçenekleri modelde, Ülke listesi yalnız tablodan; Sorgu tipi sayfa değerli. */
+/** Küçük nötr ekran paketi: Kapsam / Alternatif seçenekleri modelde, Ülke listesi yalnız tablodan; Sorgu tipi sayfa değerli. */
 function rotaPaketi(): Nesne {
   const secim = (deger: string, metin: string, ek: Nesne = {}) => ({ deger, metin, ...ek });
   const alan = (id: string, etiket: string, secici: string, ek: Nesne = {}) => ({

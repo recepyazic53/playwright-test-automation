@@ -135,7 +135,7 @@ test('iki profille tam tarama: alanlar, etiketler, bölümler, keşif, geri alma
   expect(tumAlanlar.find((x) => x.id === 'musteriNo')).toMatchObject({ yapilandirma: 'dokunulmuyor' });
   expect(tumAlanlar.find((x) => x.id === 'dogum')).toMatchObject({ tip: 'tarih' });
   expect(paket.bilinmeyenler).toEqual(expect.arrayContaining([
-    'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (sayfa paketi) ya da akış kaydıyla tamamlayın.',
+    'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (ekran paketi) ya da akış kaydıyla tamamlayın.',
     expect.stringContaining('"Dil" = "English" seçilince sayfa başka bir adrese gitti (/basvuru/?dil=en)'),
     expect.stringContaining('yazma isteği engellendi')
   ]));
