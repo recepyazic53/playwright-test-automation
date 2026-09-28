@@ -3087,7 +3087,8 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 }
 
 /* Senaryo tablosu dar alanda kaydırmaya düşmesin: rozetler kırılabilir; 1280px altında Ekran sütunu gizlenir (ad başlığın altında). */
-.senaryo-tablosu .beklenen-hucresi .rozet { white-space: normal; max-width: 160px; text-align: left; }
+/* Uzun beklenen metni rozetin içinde satır kaydırır: sabit yükseklik yerine en az yükseklik (metin kutudan taşmaz). */
+.senaryo-tablosu .beklenen-hucresi .rozet { white-space: normal; max-width: 160px; text-align: left; height: auto; min-height: 21px; padding: 3px 8px; line-height: 1.35; overflow-wrap: anywhere; }
 .senaryo-tablosu .ekran-alt-bilgi { display: none; font-size: 11.5px; color: var(--metin-3); }
 @media (max-width: 1280px) {
   .senaryo-tablosu .ekran-sutunu, .senaryo-tablosu .ekran-hucresi { display: none; }

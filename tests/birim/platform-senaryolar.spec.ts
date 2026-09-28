@@ -17,7 +17,7 @@ import { kosuKaydet, sonucKaydet } from '../../scripts/platform/veritabani/sonuc
 import { gorunurlukleriHesapla, senaryoyuDogrula } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
 import {
   aramaEslesiyorMu, beklenenHataOnerisi, beklenenSonucEtiketi, formDegerleriniKur, formSemasiOlustur, hataKontrolu, hatalariDagit,
-  senaryoNesnesiOlustur, tumFormAlanlari
+  ortakAkislariAc, senaryoNesnesiOlustur, tumFormAlanlari
 } from '../../scripts/platform/senaryolar/model-formu.mjs';
 import { MODEL_SPEC_DOSYASI, modelEtiketi, modelGrepDeseni } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import {
@@ -266,6 +266,31 @@ test.describe('Model tabanlı form — şema', () => {
     expect(beklenenSonucEtiketi(sema, { ...TEMEL, onayAdimiDahil: true })).toMatchObject({ tur: 'basari', metin: 'Ödeme' });
     expect(beklenenSonucEtiketi(sema, TEMEL)).toMatchObject({ tur: 'basari', metin: 'Tutar hesaplama' });
     expect(beklenenSonucEtiketi(sema, { ...TEMEL, beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'onay', mesaj: 'm' } })).toMatchObject({ tur: 'hata', metin: 'Hata: Onay' });
+    // Ortak akış: kapsam dışıysa ya da adımın kendi koşulu (ödeme şekli) sağlanmıyorsa son adım sayılmaz.
+    const ekran = {
+      id: 'e', ad: 'E', kosullar: { odemeDahil: { ifade: { senaryoAyari: 'odemeDahil', esit: true } } },
+      adimlar: [
+        { id: 'giris', sira: 1, baslik: 'Giriş', bolumler: [] },
+        { id: 'od', sira: 2, baslik: 'Ödeme', ortakAkis: { dosya: 'odeme.json' }, gorunurluk: { kosul: 'odemeDahil' } }
+      ],
+      senaryoDuzeyi: { alanlar: [
+        alan('odemeDahil', 'onayKutusu', 'Ödeme dahil'),
+        alan('odemeSekli', 'secim', 'Ödeme şekli', { secenekler: ['kart', 'acik'] }),
+        { id: 'beklenenSonuc', tip: 'birlesim', yapilandirma: 'senaryo', eslesme: { senaryo: 'beklenenSonuc' }, varyantlar: [{ tip: 'basarili' }] }
+      ] }
+    };
+    const odeme = {
+      tur: 'ortakAkis', id: 'odeme', ad: 'Ödeme',
+      kosullar: { kart: { ifade: { alan: 'odemeSekli', esit: 'kart' } }, acik: { ifade: { alan: 'odemeSekli', esit: 'acik' } } },
+      adimlar: [
+        { id: 'kartla', sira: 1, baslik: 'Kartla öde', gorunurluk: { kosul: 'kart' }, bolumler: [] },
+        { id: 'acikHesap', sira: 2, baslik: 'Açık hesap olarak poliçeleştirilir', gorunurluk: { kosul: 'acik' }, bolumler: [] }
+      ]
+    };
+    const ortakSema = formSemasiOlustur(ortakAkislariAc(ekran, { 'odeme.json': odeme }).model);
+    expect(beklenenSonucEtiketi(ortakSema, { odemeDahil: false, odemeSekli: 'acik' })).toMatchObject({ metin: 'Giriş' });
+    expect(beklenenSonucEtiketi(ortakSema, { odemeDahil: true, odemeSekli: 'kart' })).toMatchObject({ metin: 'Kartla öde' });
+    expect(beklenenSonucEtiketi(ortakSema, { odemeDahil: true, odemeSekli: 'acik' })).toMatchObject({ metin: 'Açık hesap olarak poliçeleştirilir' });
     expect(beklenenHataOnerisi({ hataMesaji: 'Tutar hesaplama adımında beklenen sonuç doğrulanamadı. Beklenen: x — Görülen: "Limit aşıldı"', basarisizAdim: 'Tutar hesaplanır ve sonuç gösterilir' }, sema))
       .toEqual({ mesaj: 'Limit aşıldı', adim: 'hesaplama' });
     expect(beklenenHataOnerisi({ hataMesaji: 'Error: "Onay" adımından sonra beklenmeyen bir hata pop-up\'ı görüntülendi, senaryo burada durduruldu: Kart reddedildi Tamam', basarisizAdim: 'Talep onaylanır ve kart bilgileri girilir' }, sema))

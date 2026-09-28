@@ -144,6 +144,23 @@ test.describe('tüm ekranlar taşmasız', () => {
     expect(hatalar).toEqual([]);
   });
 
+  test('Senaryolar: uzun "Beklenen" rozeti satır kaydırır, kutusundan taşmaz', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto(`/#/senaryolar/u/${encodeURIComponent(z.ekranIdleri[1])}`);
+    await bekle(page);
+    const rozet = page.locator('.senaryo-tablosu td.beklenen-hucresi .rozet').first();
+    await expect(rozet).toBeVisible();
+    const olcum = await rozet.evaluate((r) => {
+      r.textContent = 'Ödeme: Açık hesap olarak poliçeleştirilir ve belge üretilir';
+      return { yukseklik: r.getBoundingClientRect().height, tasmaY: r.scrollHeight - r.clientHeight, tasmaX: r.scrollWidth - r.clientWidth };
+    });
+    expect(olcum.yukseklik, 'uzun metin birden çok satıra kayar').toBeGreaterThan(24);
+    expect(olcum.tasmaY).toBeLessThanOrEqual(1);
+    expect(olcum.tasmaX).toBeLessThanOrEqual(1);
+    await baglam.close();
+  });
+
   test('üst çubuk ara genişliklerde taşmaz (uzun proje adı)', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 800 } });
     const page = await baglam.newPage();

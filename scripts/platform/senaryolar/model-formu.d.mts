@@ -55,6 +55,8 @@ export interface FormSemasi {
   baslik: string;
   adimlar: Array<{
     id: string; baslik: string; sira: number; ayar: string | null;
+    /** Adımın çözülmüş görünürlük ifadesi (koşullu adım; ör. ortak akış "dahil" ve "ödeme şekli = kart"). */
+    kosul?: Record<string, unknown>;
     bolumler: Array<{ id: string; baslik: string; gorunurlukVar: boolean; alanlar: FormAlani[] }>;
   }>;
   senaryoAlanlari: FormAlani[];
@@ -67,6 +69,8 @@ export interface FormSemasi {
     uyarilar: Array<{ adim: string; adimBasligi: string; metin: string }>;
     basariMesajlari: string[];
   } | null;
+  /** Koşullardaki model alan kimliği → senaryo anahtarı (+ varsayılan değer). */
+  alanAnahtarlari?: Record<string, { anahtar: string; varsayilan?: unknown }>;
 }
 
 export type FormDegerleri = Record<string, unknown>;
