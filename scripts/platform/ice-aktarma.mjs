@@ -14,6 +14,9 @@
 //    kaydedilir (anlık görüntüde şifreli sütunlar şifreli kalır). Seçilen bir kaydın ihtiyaç
 //    duyduğu üst kayıt (ör. yeni senaryonun yeni projesi) yerelde yoksa otomatik eklenir ve
 //    raporlanır. Boş veritabanına "tümü" uygulanırsa tam yükleme (kasa dahil) yapılır.
+//    HEDEF PROJE: önizleme yedekteki projeleri ve önerilen hedefleri (projeEslemesi) taşır; kullanıcı bir projeyi mevcut
+//    bir projeye (ortamlarını o projenin ortamlarına) eşlerse eslemeOnizlemesi önizlemeyi yeniden üretir ve uygulama aynı
+//    eşlemeyle (secim.esleme) yapılır — kurallar: ice-aktarma-esleme.mjs. Eşleme verilmezse bugünkü davranış.
 // 3) Hazırlık alanı uygulamadan sonra, iptalde veya 1 saat sonra atılır (anahtar sıfırlanır).
 // MEDYA: biçim 2 yedekteki (şifreli) medya dosyaları hazırlıkta medya klasörünün içindeki
 //    .hazirlik-<kimlik>/ klasörüne OLDUĞU GİBİ çıkarılır (düz metin yazılmaz); önizleme tür
@@ -41,6 +44,7 @@ import {
 import { medyaDosyaAdiGecerliMi, medyaKlasoru as medyaKlasoruBul } from './medya.mjs';
 import { IZIN_AYAR_ANAHTARI } from './guvenlik/izinler.mjs';
 import { yedekUyarisiniKur } from './guvenlik/yedek-uyarisi.mjs';
+import { eslemeyiUygula, projeEslemesiBilgisi } from './ice-aktarma-esleme.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {(asama: string, yuzde: number, bayt?: { islenen: number; toplam: number }) => void} IlerlemeFn */
@@ -218,7 +222,13 @@ function yerelHarita(vt, tablo) {
  *   eklenecekler: Record<string, { dosyada: number; yeni: number }>;
  *   medya: MedyaOnizlemesi;
  *   toplam: { yeni: number; degisen: number; yalnizBurada: number; ayni: number };
+ *   projeEslemesi?: ProjeEslemesiOnizlemesi;
  * }} Onizleme
+ * @typedef {ReturnType<typeof projeEslemesiBilgisi> & {
+ *   uygulanan: import('./ice-aktarma-esleme.mjs').Esleme | null;
+ *   ozet: ReturnType<typeof eslemeyiUygula>['ozet'] | null;
+ *   kimlikDegisimleri: ReturnType<typeof eslemeyiUygula>['kimlikDegisimleri'];
+ * }} ProjeEslemesiOnizlemesi
  * @typedef {{
  *   bicimSurumu: number;
  *   secim: Record<string, boolean> | null;
@@ -419,6 +429,8 @@ export async function iceAktarmaHazirla(vt, dosya, parola, secenekler = {}) {
     ilerleme('önizleme hazırlanıyor', 75);
     const medya = medyaOnizlemesi(yerel, tablolar.medya ?? [], yedek.medyaDosyalari, klasor, yedek.manifest);
     const onizleme = onizlemeOlustur(yerel, tablolar, hedefAnahtar, yedek.manifest, !kasaVar, medya);
+    // Hedef proje / ortam eşlemesi bilgisi (öneri). Kullanıcı eşleme seçince önizleme eslemeOnizlemesi ile yeniden üretilir.
+    onizleme.projeEslemesi = { ...projeEslemesiBilgisi(kasaVar ? yerel : null, tablolar, hedefAnahtar), uygulanan: null, ozet: null, kimlikDegisimleri: [] };
     ilerleme('önizleme hazır', 100);
     basarili = true;
     return {
@@ -476,7 +488,7 @@ function yabanciAnahtarlar(vt, tablo) {
 }
 
 /**
- * @typedef {{ tumu?: boolean; secimler?: Record<string, readonly string[]> }} Secim
+ * @typedef {{ tumu?: boolean; secimler?: Record<string, readonly string[]>; esleme?: unknown }} Secim  esleme: hedef proje / ortam eşlemesi (ice-aktarma-esleme.mjs)
  * @typedef {{
  *   tamYukleme: boolean;
  *   varliklar: Record<string, { eklenen: number; uzerineYazilan: number; ayni: number; atlanan: number }>;
@@ -487,6 +499,7 @@ function yabanciAnahtarlar(vt, tablo) {
  *   sayimlar: Record<string, number>;
  *   medya?: import('./yedek.mjs').MedyaYerlestirmeSonucu;
  *   medyaHatasi?: string;
+ *   projeEslemesi?: { ozet: ReturnType<typeof eslemeyiUygula>['ozet']; kimlikDegisimleri: ReturnType<typeof eslemeyiUygula>['kimlikDegisimleri'] };
  * }} UygulamaSonucu
  */
 
@@ -502,7 +515,7 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
   if (!hazirlik.tablolar || !Object.keys(hazirlik.tablolar).length) {
     throw new YedekHatasi('BULUNAMADI', 'Hazırlık alanı atılmış; içe aktarmayı yeniden başlatın.');
   }
-  const { hedefAnahtar, tablolar } = hazirlik;
+  const { hedefAnahtar } = hazirlik;
   // Kasa önizlemeden sonra değişmemiş olmalı (zarflar hedef anahtarla hazırlandı).
   if (hazirlik.benimsenecekKasa) {
     if (kasaDurumu(vt).olusturuldu) {
@@ -511,6 +524,11 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
   } else if (!anahtarlarAyni(acikAnahtar(vt), hedefAnahtar)) {
     throw new YedekHatasi('DEGISTI', 'Kasa parolası önizlemeden sonra değişmiş; içe aktarmayı yeniden başlatın.');
   }
+  // Hedef proje / ortam eşlemesi verildiyse kayıtlar eşlenmiş kopyadan yazılır (önizlemeyle aynı kararlı kimlikler).
+  // Verilmezse bugünkü davranış: kayıtlar yedekteki kimlikleriyle yazılır.
+  const eslenmis = secim.esleme != null ? eslemeyiUygula(vt, hazirlik.tablolar, hedefAnahtar, secim.esleme) : null;
+  const tablolar = eslenmis ? eslenmis.tablolar : hazirlik.tablolar;
+  const eslemeSonucu = eslenmis ? { projeEslemesi: { ozet: eslenmis.ozet, kimlikDegisimleri: eslenmis.kimlikDegisimleri } } : {};
 
   // --- seçim kümesi ---
   /** @type {Map<string, Set<string>>} */
@@ -574,7 +592,7 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
     /** @type {UygulamaSonucu['eklenenler']} */
     const eklenenler = {};
     for (const t of EKLEME_TABLOLARI) eklenenler[t] = { eklenen: tablolar[t]?.length ?? 0, mevcut: 0, atlanan: 0, baglantisiKaldirilan: 0 };
-    return { tamYukleme: true, varliklar, eklenenler, otomatikEklenenUstKayitlar: otomatik, atlananlar: [], gecmiseYazilan: 0, sayimlar: sayimlar(vt) };
+    return { tamYukleme: true, varliklar, eklenenler, otomatikEklenenUstKayitlar: otomatik, atlananlar: [], gecmiseYazilan: 0, sayimlar: sayimlar(vt), ...eslemeSonucu };
   }
 
   /** @type {UygulamaSonucu['varliklar']} */
@@ -693,7 +711,44 @@ export function iceAktarmaUygula(vt, hazirlik, secim, secenekler = {}) {
   else sifreliAlanlariTamamla(vt);
   yerelMakine(vt);
   if (izinlerYazildi) yedekUyarisiniKur(vt, { tur: 'secmeli' });
-  return { tamYukleme: false, varliklar, eklenenler, otomatikEklenenUstKayitlar: otomatik, atlananlar, gecmiseYazilan, sayimlar: sayimlar(vt) };
+  return { tamYukleme: false, varliklar, eklenenler, otomatikEklenenUstKayitlar: otomatik, atlananlar, gecmiseYazilan, sayimlar: sayimlar(vt), ...eslemeSonucu };
+}
+
+/**
+ * Hedef proje / ortam eşlemesiyle önizlemeyi yeniden üretir (hiçbir şey YAZMAZ). esleme null ise hazırlıktaki (eşlemesiz)
+ * önizleme döner. Hatalı eşleme → YedekHatasi('VERI').
+ * @param {Veritabani | null} vt @param {Hazirlik} hazirlik @param {unknown} esleme
+ * @returns {Promise<Onizleme>}
+ */
+export async function eslemeOnizlemesi(vt, hazirlik, esleme) {
+  if (!hazirlik.tablolar || !Object.keys(hazirlik.tablolar).length) {
+    throw new YedekHatasi('BULUNAMADI', 'Hazırlık alanı atılmış; içe aktarmayı yeniden başlatın.');
+  }
+  const temel = hazirlik.onizleme;
+  if (esleme == null) return temel;
+  /** @type {Veritabani | null} */
+  let geciciVt = null;
+  let yerel = vt;
+  if (!yerel) {
+    geciciVt = await veritabaniAc(null);
+    gocleriUygula(geciciVt);
+    yerel = geciciVt;
+  }
+  try {
+    const kasaVar = kasaDurumu(yerel).olusturuldu;
+    if (kasaVar && !anahtarlarAyni(acikAnahtar(yerel), hazirlik.hedefAnahtar)) {
+      throw new YedekHatasi('DEGISTI', 'Kasa önizlemeden sonra değişmiş; içe aktarmayı yeniden başlatın.');
+    }
+    const e = eslemeyiUygula(kasaVar ? yerel : null, hazirlik.tablolar, hazirlik.hedefAnahtar, esleme);
+    const o = onizlemeOlustur(yerel, e.tablolar, hazirlik.hedefAnahtar, hazirlik.manifest, temel.kasaBenimsenecek, temel.medya);
+    o.projeEslemesi = {
+      ...(temel.projeEslemesi ?? projeEslemesiBilgisi(kasaVar ? yerel : null, hazirlik.tablolar, hazirlik.hedefAnahtar)),
+      uygulanan: e.esleme, ozet: e.ozet, kimlikDegisimleri: e.kimlikDegisimleri
+    };
+    return o;
+  } finally {
+    geciciVt?.kapat();
+  }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -873,6 +928,22 @@ export class IceAktarmaYoneticisi {
       is.gorunum.asama = 'önizleme hazır';
       throw hata;
     }
+  }
+
+  /**
+   * Hedef proje / ortam eşlemesiyle önizlemeyi yeniler (hiçbir şey yazmaz); iş görünümündeki önizleme de değişir.
+   * @param {string} id @param {unknown} esleme @returns {Promise<Onizleme>}
+   */
+  async esleme(id, esleme) {
+    this.temizle();
+    const is = this.isler.get(id);
+    if (!is) throw new YedekHatasi('BULUNAMADI', 'İçe aktarma bulunamadı (süresi dolmuş veya iptal edilmiş olabilir).');
+    if (is.gorunum.durum !== 'hazir' || !is.hazirlik) {
+      throw new YedekHatasi('DEGISTI', `İçe aktarma önizlenebilir durumda değil (durum: ${is.gorunum.durum}).`);
+    }
+    const onizleme = await eslemeOnizlemesi(await this.veritabani(false), is.hazirlik, esleme);
+    is.gorunum.onizleme = onizleme;
+    return onizleme;
   }
 
   /** @param {string} id @returns {boolean} */

@@ -1,5 +1,6 @@
 // Yedek içe aktarma akışı: dosya + parola → yükleme (ilerleme) → ÖNİZLEME (Yeni / Değişen /
-// Yalnızca bu bilgisayarda) → seçim → uygulama → özet. Hoş geldiniz ekranında (boş veritabanı:
+// Yalnızca bu bilgisayarda) → seçim → uygulama → özet. Önizlemenin başında "Hedef proje": yedekteki her proje yeni proje
+// olarak ya da mevcut bir projeye (ortamları o projenin ortamlarına eşlenerek) aktarılır; seçim değişince önizleme yenilenir. Hoş geldiniz ekranında (boş veritabanı:
 // yedeğin parolası bu bilgisayarın kasa parolası olur) ve Ayarlar > Yedekleme'de kullanılır.
 import {
   ApiHatasi, TOKEN, alan, alanHatasi, api, bosDurum, boyutMetni, geriSayim, h, ikon, mesajKutusu, parolaAlani, rozet, tarihMetni, yeniKimlik
@@ -191,15 +192,94 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
         return;
       }
       if (is.durum === 'hazirlaniyor') { ilerle(is.asama, is.yuzde); continue; }
-      if (is.durum === 'hazir' && is.onizleme) { onizlemeEkrani(is.onizleme); return; }
+      if (is.durum === 'hazir' && is.onizleme) { await onizlemeHazir(is.onizleme); return; }
       isId = null;
       dosyaFormu({ metin: is.mesaj || 'İçe aktarma hazırlanamadı.', tur: 'hata' });
       return;
     }
   }
 
+  // --- 3a) Hedef proje / ortam eşlemesi ---------------------------------------------------
+  // Öneri kimlik dışı bir eşleme içeriyorsa (ör. aynı projenin farklı kimlikli aynı adlı ortamı) önizleme baştan eşlemeyle gelir.
+  async function onizlemeHazir(onizleme) {
+    const pe = onizleme.projeEslemesi;
+    const kimlikDisi = pe && !pe.uygulanan && Object.entries(pe.oneri.projeler).some(([p, e]) => (e.hedef !== 'yeni' && e.hedef !== p)
+      || Object.entries(e.ortamlar || {}).some(([k, v]) => v !== 'yeni' && v !== k));
+    if (kimlikDisi) {
+      try { onizleme = (await api(`/platform/yedek/ice-aktar/${isId}/esleme`, { govde: { esleme: pe.oneri } })).onizleme; } catch { /* eşlemesiz önizleme */ }
+    }
+    onizlemeEkrani(onizleme);
+  }
+
+  const TUR_ETIKETI = { test: 'Test', canli: 'Canlı' };
+  const ortamEtiketi = (o) => (o.tur ? `${o.ad} (${TUR_ETIKETI[o.tur]})` : o.ad);
+
+  /** Yedekteki her proje için hedef seçimi ve (mevcut projeye aktarılırken) ortam eşlemesi; değişince önizleme yenilenir. */
+  function eslemeBolumu(onizleme) {
+    const pe = onizleme.projeEslemesi;
+    if (!pe || !pe.yedekProjeleri.length || !pe.yerelProjeler.length) return null;
+    // Geçerli eşleme: uygulanmış olan, yoksa öneri (öneri kimlik eşlemesidir: bugünkü davranış).
+    const esleme = JSON.parse(JSON.stringify(pe.uygulanan || pe.oneri));
+    const yerel = new Map(pe.yerelProjeler.map((p) => [p.id, p]));
+    const mesaj = mesajKutusu();
+    const secimler = [];
+    const yenile = async (degisen) => {
+      mesaj.temizle();
+      for (const s of secimler) s.disabled = true;
+      try {
+        const { onizleme: yeni } = await api(`/platform/yedek/ice-aktar/${isId}/esleme`, { govde: { esleme } });
+        onizlemeEkrani(yeni, degisen);
+      } catch (hata) {
+        for (const s of secimler) s.disabled = false;
+        mesaj.goster(hata.message);
+      }
+    };
+    const projeler = pe.yedekProjeleri.map((kp) => {
+      const e = esleme.projeler[kp.id] || (esleme.projeler[kp.id] = { hedef: 'yeni' });
+      const hedefSecimi = h('select', { 'data-yedek-proje': kp.id },
+        h('option', { value: 'yeni', selected: e.hedef === 'yeni' }, kp.yerelde ? 'Yeni proje olarak ekle (yeni kimlikle)' : 'Yeni proje olarak ekle (yedekteki adıyla)'),
+        pe.yerelProjeler.map((p) => h('option', { value: p.id, selected: e.hedef === p.id },
+          `Mevcut projeye aktar: ${p.ad}${p.id === kp.onerilenMevcut ? ' (önerilen)' : ''}`)));
+      secimler.push(hedefSecimi);
+      hedefSecimi.addEventListener('change', () => {
+        esleme.projeler[kp.id] = hedefSecimi.value === 'yeni' ? { hedef: 'yeni' } : { hedef: hedefSecimi.value }; // ortamlar: sunucu önerir
+        yenile(`[data-yedek-proje="${kp.id}"]`);
+      });
+      const hedefProje = e.hedef === 'yeni' ? null : yerel.get(e.hedef);
+      const ipucu = !hedefProje && !kp.yerelde && kp.onerilenMevcut && yerel.get(kp.onerilenMevcut)
+        ? h('p', { class: 'not-kutusu bilgi kucuk' }, `Bu bilgisayarda "${yerel.get(kp.onerilenMevcut).ad}" projesi var. Yedekteki kayıtları o projede görmek için "Mevcut projeye aktar"ı seçin; yoksa "${kp.ad}" ayrı bir proje olarak eklenir.`)
+        : null;
+      let ortamlar = null;
+      if (hedefProje && kp.ortamlar.length) {
+        ortamlar = h('div', { class: 'esleme-ortamlari' },
+          h('h5', {}, `Ortam eşlemesi (${kp.ad} → ${hedefProje.ad})`),
+          h('p', { class: 'soluk kucuk' }, 'Yedekteki ortamlara başvuran her şey (servis adresleri, tablo satırları, senaryo ortamları, giriş profilleri, zamanlanmış koşular…) seçtiğiniz ortama yazılır. Eşlenen ortamın bu bilgisayardaki adresi ve ayarları değişmez.'),
+          h('ul', { class: 'esleme-listesi' }, kp.ortamlar.map((ko) => {
+            const secim = h('select', { 'data-yedek-ortam': ko.id },
+              hedefProje.ortamlar.map((yo) => h('option', { value: yo.id, selected: (e.ortamlar || {})[ko.id] === yo.id }, `→ ${ortamEtiketi(yo)}`)),
+              h('option', { value: 'yeni', selected: !(e.ortamlar || {})[ko.id] || e.ortamlar[ko.id] === 'yeni' }, '→ Yeni ortam olarak ekle'));
+            secimler.push(secim);
+            secim.addEventListener('change', () => {
+              e.ortamlar = { ...(e.ortamlar || {}), [ko.id]: secim.value };
+              yenile(`[data-yedek-ortam="${ko.id}"]`);
+            });
+            return h('li', { class: 'esleme-satiri' }, alan(`${ortamEtiketi(ko)} (yedekte)`, secim));
+          })));
+      }
+      const ozet = (pe.ozet || []).find((o) => o.kaynak.id === kp.id);
+      return h('div', { class: 'esleme-projesi', 'data-yedek-proje-kutusu': kp.id },
+        alan(`Yedekteki proje: ${kp.ad}`, hedefSecimi, { yardim: 'Kayıtlarının yazılacağı proje.' }),
+        ipucu, ortamlar,
+        ozet ? h('p', { class: 'esleme-ozeti' }, ozet.metin) : null);
+    });
+    return h('section', { class: 'grup esleme-bolumu', 'aria-label': 'Hedef proje' },
+      h('h3', {}, ikon('klasor'), 'Hedef proje'),
+      h('p', { class: 'soluk kucuk' }, 'Yedekteki kayıtların bu bilgisayarda hangi projeye yazılacağını seçin. Seçim değişince önizleme yenilenir; onaylamadan hiçbir şey yazılmaz.'),
+      mesaj.kutu, projeler);
+  }
+
   // --- 3) Önizleme ve seçim ------------------------------------------------------------
-  function onizlemeEkrani(onizleme) {
+  function onizlemeEkrani(onizleme, odak) {
     /** @type {Map<string, Set<string>>} */
     const secilen = new Map();
     /** @type {Array<{ tablo: string; id: string; kutu: HTMLInputElement }>} */
@@ -330,6 +410,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       onizleme.kasaBenimsenecek
         ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Bu bilgisayarda henüz kasa yok. Uyguladığınızda yedeğin parolası bu bilgisayarın kasa parolası olur.'))
         : null,
+      eslemeBolumu(onizleme),
       bolumler.length ? bolumler : bosDurum('Yedekte bu bilgisayardan farklı bir ayar veya profil yok.', null, { ikon: 'onay' }),
       eklenecekSatirlari.length ? h('section', { class: 'grup', 'aria-label': 'Koşular ve geçmiş' },
         h('h4', {}, ikon('liste'), 'Koşular ve geçmiş kayıtları'),
@@ -341,6 +422,8 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => tumunuSec(true) }, 'Tümünü seç'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => tumunuSec(false) }, 'Hiçbirini seçme')))));
     secimiGuncelle();
+    // Eşleme değişince önizleme yeniden çizilir: odak değiştirilen seçime döner.
+    if (odak) kapsayici.querySelector(odak)?.focus();
   }
 
   async function uygula(onizleme, secilen, dugme, mesaj) {
@@ -350,7 +433,9 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     dugme.disabled = true;
     dugme.textContent = 'Uygulanıyor…';
     try {
-      const { sonuc } = await api(`/platform/yedek/ice-aktar/${isId}/uygula`, { govde: { secimler } });
+      // Eşleme seçildiyse aynı eşlemeyle uygulanır (önizlemedeki kimlikler aynı kalır); yoksa bugünkü davranış.
+      const esleme = onizleme.projeEslemesi && onizleme.projeEslemesi.uygulanan;
+      const { sonuc } = await api(`/platform/yedek/ice-aktar/${isId}/uygula`, { govde: esleme ? { secimler, esleme } : { secimler } });
       isId = null;
       ozetEkrani(onizleme, sonuc);
     } catch (hata) {
@@ -378,6 +463,9 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     goster('ozet', h('div', { class: 'kart' },
       h('h2', {}, ikon('onay'), 'İçe aktarma tamamlandı'),
       sonuc.tamYukleme ? h('p', {}, 'Yedeğin tamamı bu bilgisayara yüklendi.') : null,
+      sonuc.projeEslemesi && sonuc.projeEslemesi.ozet.length
+        ? h('ul', { class: 'duz-liste esleme-sonucu' }, sonuc.projeEslemesi.ozet.map((o) => h('li', {}, o.metin)))
+        : null,
       varlikSatirlari.length ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
         h('caption', { class: 'gorunmez' }, 'Varlık türüne göre uygulanan değişiklikler'),
         h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Tür'), h('th', { scope: 'col' }, 'Eklenen'), h('th', { scope: 'col' }, 'Güncellenen'), h('th', { scope: 'col' }, 'Atlanan'))),

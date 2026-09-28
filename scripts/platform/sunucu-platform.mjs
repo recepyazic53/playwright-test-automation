@@ -6,7 +6,8 @@
 //   POST /platform/yedek/ice-aktar              ham .tayedek gövdesi + X-Kasa-Parola → { isId } (202)
 //                                               (gövde belleğe alınmaz: geçici dosyaya akıtılır, en fazla 20 GB)
 //   GET  /platform/yedek/ice-aktar/<id>         ilerleme; hazır olunca önizleme (yeni/degisen/yalnizBurada)
-//   POST /platform/yedek/ice-aktar/<id>/uygula  { token, tumu: true } veya { token, secimler: { tablo: [id] } }
+//   POST /platform/yedek/ice-aktar/<id>/uygula  { token, tumu: true } veya { token, secimler: { tablo: [id] } } (+ isteğe bağlı esleme)
+//   POST /platform/yedek/ice-aktar/<id>/esleme  { token, esleme } → hedef proje / ortam eşlemesiyle önizleme (yazmaz)
 //   POST /platform/yedek/ice-aktar/<id>/iptal   { token }
 // Ayarlar (proje/ortam/profil CRUD) uç noktaları — hepsi kasa AÇIK olmayı gerektirir
 // (kilitliyse 423 KASA_KILITLI, kasa yoksa 409 KASA_YOK):
@@ -1962,7 +1963,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
     }
 
     // --- GET /platform/yedek/ice-aktar/<id> — ilerleme + (hazırsa) önizleme ------------------
-    const isEslesme = /^\/platform\/yedek\/ice-aktar\/([a-f0-9]{16})(?:\/(uygula|iptal))?$/.exec(yol);
+    const isEslesme = /^\/platform\/yedek\/ice-aktar\/([a-f0-9]{16})(?:\/(uygula|iptal|esleme))?$/.exec(yol);
     if (req.method === 'GET' && isEslesme && !isEslesme[2]) {
       if (!disTokenGecerli) { tokenYok(); return true; }
       const is = iceAktarma.durum(isEslesme[1]);
@@ -2171,9 +2172,10 @@ export async function platformIsteginiIsle(req, res, baglam) {
     const metin = (/** @type {unknown} */ d) => (typeof d === 'string' ? d : '');
 
     if (isEslesme && isEslesme[2] === 'uygula') {
+      const esleme = govde.esleme != null ? { esleme: govde.esleme } : {};
       const secim = govde.tumu === true
-        ? { tumu: true }
-        : { secimler: /** @type {Record<string, string[]>} */ (govde.secimler) };
+        ? { tumu: true, ...esleme }
+        : { secimler: /** @type {Record<string, string[]>} */ (govde.secimler), ...esleme };
       const sonuc = await iceAktarma.uygula(isEslesme[1], secim);
       // Yeni çalışma alanına ilk yükleme: kayıt defteri (son açılan, proje sayısı) ve bağlantı dosyası güncellenir.
       if (vt && aktifAlan && !aktifAlan.sabit) {
@@ -2184,6 +2186,12 @@ export async function platformIsteginiIsle(req, res, baglam) {
       if (vt && arayuzAcikMi(vt)) arkaPlan.kasaAcildi(vt);
       console.log(`[platform] Yedek içe aktarıldı (${sonuc.tamYukleme ? 'tam yükleme' : 'seçmeli'}), üzerine yazılan sürüm geçmişe: ${sonuc.gecmiseYazilan}.`);
       jsonGonder(res, 200, { basarili: true, sonuc });
+      return true;
+    }
+    if (isEslesme && isEslesme[2] === 'esleme') {
+      // Hedef proje / ortam eşlemesiyle önizleme (hiçbir şey yazmaz); esleme: null → eşlemesiz önizleme.
+      const onizleme = await iceAktarma.esleme(isEslesme[1], govde.esleme ?? null);
+      jsonGonder(res, 200, { basarili: true, onizleme });
       return true;
     }
     if (isEslesme && isEslesme[2] === 'iptal') {
