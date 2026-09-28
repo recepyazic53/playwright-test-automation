@@ -3869,3 +3869,7 @@ dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywher
 .oneri-tabani { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; overflow-wrap: anywhere; }
 .oneri-farklari { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
 .oneri-farklari li { overflow-wrap: anywhere; min-width: 0; }
+
+/* Ekran paketi yükleme: "Paket ne yapsın?" (Tekrar analiz / Modeli değiştir) yükleme alanından ayrı dursun. */
+.paket-modu { border: 0; margin: 0 0 16px; padding: 0; min-width: 0; }
+.paket-modu > legend { font-size: 13px; font-weight: 600; margin-bottom: 6px; padding: 0; }

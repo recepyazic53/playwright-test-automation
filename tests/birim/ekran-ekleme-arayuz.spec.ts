@@ -350,6 +350,12 @@ test('ortak akış sayfası: "Modeli güncelle" menüsü Paket yükle / Akışı
   await page.getByRole('menuitem', { name: 'Paket yükle' }).click();
   await expect(page).toHaveURL(new RegExp(`/ekranlar/e/${ortak.id}/yukle$`));
   await expect(page.locator('#paket-dosyasi')).toHaveCount(1);
+  // "Paket ne yapsın?" seçimi başlıklı ve yükleme alanından ayrı (bitişik değil).
+  const mod = page.getByRole('group', { name: 'Paket ne yapsın?' });
+  await expect(mod.getByRole('radio', { name: /Tekrar analiz/ })).toBeChecked();
+  const modKutu = await mod.boundingBox();
+  const alanKutu = await page.locator('.yukleme-alani').boundingBox();
+  expect((alanKutu?.y ?? 0) - ((modKutu?.y ?? 0) + (modKutu?.height ?? 0))).toBeGreaterThanOrEqual(12);
   // Ortak akışın yeni sürümü (adım başlığı değişti) tekrar analizle bulgu olur.
   const paket = onayAkisPaketi();
   (paket.model.adimlar as Array<Record<string, unknown>>)[0].baslik = 'Onay formu açılır (yeni)';
