@@ -110,7 +110,7 @@ function akisKosulari(vt, projeId, f) {
 }
 
 /** Tüm akış koşularının adım satırları (servis koşularına karışmasın). @param {Veritabani} vt @param {string} projeId */
-function akisAdimSatirlari(vt, projeId) {
+export function akisAdimSatirlari(vt, projeId) {
   const idler = new Set();
   for (const k of akisKosulari(vt, projeId, { denemeler: true })) {
     for (const a of Array.isArray(k.sonuc.adimlar) ? k.sonuc.adimlar : []) if (a && a.kosuId) idler.add(String(a.kosuId));

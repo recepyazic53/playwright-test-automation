@@ -588,6 +588,28 @@ export const GOCLER = [
     sql: `
       ALTER TABLE test_verisi_turleri ADD COLUMN kaynak_json TEXT;
     `
+  },
+  {
+    // Sürüm 16 — kaydedilen PDF raporları (Sonuçlar > Raporlar; bkz. sonuclar/rapor-arsivi.mjs). Proje kapsamlıdır (proje
+    // silinince CASCADE). PDF'in kendisi şifreli medya deposundadır: medya satırı (tur 'diger', sonuc_id NULL, sahip_turu 'rapor',
+    // sahip_id = rapor kimliği); medya_id o satırı gösterir (yabancı anahtar değil: rapor silinince medya satırı ve dosyası
+    // uygulamada silinir; sahipsiz kalan rapor medyası günlük temizlikte silinir). meta_json (şifreli, 'ozel'): kapsam, seçim,
+    // dönem, ortam, seçenekler, durum rozeti ve özet sayılar (başarı, test, P1/P2/P3, sorun durumları) — gizli değer ya da test
+    // verisi değeri içermez.
+    surum: 16,
+    ad: 'pdf_raporlari',
+    sql: `
+      CREATE TABLE raporlar (
+        id           TEXT PRIMARY KEY,
+        proje_id     TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        kapsam       TEXT NOT NULL,
+        olusturulma  TEXT NOT NULL,
+        olusturan    TEXT,
+        medya_id     TEXT,
+        meta_json    TEXT NOT NULL DEFAULT '{}'
+      );
+      CREATE INDEX ix_raporlar_proje ON raporlar(proje_id, olusturulma);
+    `
   }
 ];
 
@@ -621,7 +643,8 @@ export const SIFRELI_ALANLAR = Object.freeze({
   servis_parametre_tanimlari: Object.freeze({ icerik_json: 'ozel' }),
   servis_kosulari: Object.freeze({ sonuc_json: 'ozel' }),
   servis_akislari: Object.freeze({ icerik_json: 'ozel' }),
-  servis_akis_kosulari: Object.freeze({ sonuc_json: 'ozel' })
+  servis_akis_kosulari: Object.freeze({ sonuc_json: 'ozel' }),
+  raporlar: Object.freeze({ meta_json: 'ozel' })
 });
 
 /** @param {string} tablo @returns {string[]} */
@@ -664,7 +687,9 @@ export const TABLOLAR = [
   { ad: 'servis_akis_kosulari', birincilAnahtar: 'id', json: ['sonuc_json'], guncellenme: false },
   // Medya satırları yedeğe her zaman girer; şifreli dosyalar kullanıcının dışa aktarma seçimine
   // göre girer (yedek.mjs, biçim 2). Dahil edilmeyenler yedekte yedek_disi = 1 taşır.
-  { ad: 'medya', birincilAnahtar: 'id', json: [], guncellenme: false }
+  { ad: 'medya', birincilAnahtar: 'id', json: [], guncellenme: false },
+  // Kaydedilen PDF raporları (proje kapsamlı; PDF medya deposunda — yedekte medya satırıyla birlikte, dosyası "ekran görüntüleri" seçimiyle).
+  { ad: 'raporlar', birincilAnahtar: 'id', json: ['meta_json'], guncellenme: false }
 ];
 
 /** Veri içeren tabloların adları (meta ve sema_surumu HARİÇ). */

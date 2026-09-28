@@ -75,7 +75,7 @@ export const ONIZLEME_TABLOLARI = Object.freeze({
 /** Her zaman eklenen (kimlik üzerinden tekilleştirilen) ve yalnızca sayılan tablolar. */
 // medya: üst bilgi satırı; dosyası yedekte varsa uygulamada ayrıca yerleştirilir. Sonucu bu
 // makinede olmayan (içe aktarılmayan) medya satırı ATLANIR (bağlantısı kaldırılarak eklenmez).
-export const EKLEME_TABLOLARI = Object.freeze(['makineler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari', 'adim_sonuclari', 'yakalanan_mesajlar', 'medya', 'servis_kosulari', 'servis_akis_kosulari']);
+export const EKLEME_TABLOLARI = Object.freeze(['makineler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari', 'adim_sonuclari', 'yakalanan_mesajlar', 'medya', 'servis_kosulari', 'servis_akis_kosulari', 'raporlar']);
 export const MASKE = '••••••';
 export const HAZIRLIK_SAKLAMA_MS = 60 * 60 * 1000;
 const ZAMAN_SUTUNLARI = new Set(['olusturulma', 'guncellenme']);

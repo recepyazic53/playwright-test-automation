@@ -35,10 +35,21 @@ export function sayilariTopla(liste) {
   return toplam;
 }
 
+/**
+ * Başarı yüzdesi (yuvarlanmamış) — TEK FORMÜL: başarılı ÷ (başarılı + başarısız + atlanan + hata); "durduruldu" paydaya girmez.
+ * "hata" yalnız servis sonuçlarında vardır (yanıt yok); ekran sayılarında 0'dır. Hiç sonuç yoksa null. PDF raporu
+ * (sonuclar/donem-raporu.mjs) ondalıklı gösterim için bunu, Sonuçlar ekranı yuvarlanmış basariOrani'yı kullanır.
+ * @param {Partial<Sayilar> & { hata?: number }} s
+ */
+export function basariYuzdesi(s) {
+  const payda = (s.basarili ?? 0) + (s.basarisiz ?? 0) + (s.atlanan ?? 0) + (s.hata ?? 0);
+  return payda > 0 ? ((s.basarili ?? 0) / payda) * 100 : null;
+}
+
 /** Başarı oranı (yüzde, tam sayı); "durduruldu" paydaya girmez. Hiç sonuç yoksa null. @param {Sayilar} s */
 export function basariOrani(s) {
-  const payda = s.basarili + s.basarisiz + s.atlanan;
-  return payda > 0 ? Math.round((s.basarili / payda) * 100) : null;
+  const o = basariYuzdesi(s);
+  return o === null ? null : Math.round(o);
 }
 
 /** @param {HesapKosusu} kosu @param {string} urun */

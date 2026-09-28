@@ -1,0 +1,188 @@
+// PDF RAPORU UÇLARI (sunucu; kasa açık olmalı — gizli değer listesi kurulamazsa rapor üretilmez: maskeleme garantisi).
+//   GET  /platform/rapor/secenekler?projeId=          diyalog listeleri: ekranlar, servisler, ortamlar (ad; gizli değer yok)
+//   POST /platform/rapor/onizle { girdi }             → { html, onizlemeId, dosyaAdi, boyut } (HTML; saklanmaz; önizleme tek kullanımlık)
+//   POST /platform/rapor/pdf { girdi, kaydet? }       → application/pdf (Content-Disposition); kaydet: true ise Raporlar'a yazılır
+//   GET  /platform/raporlar?projeId=                  kaydedilmiş raporlar (Sonuçlar > Raporlar)
+//   GET  /platform/rapor/indir?projeId=&id=           kaydedilmiş PDF'in aynısı (kasadan çözülür)
+//   POST /platform/rapor/yeniden { projeId, id }      aynı seçimlerle, dönem bugüne kaydırılarak yeni rapor (yeni satır)
+//   POST /platform/rapor/sil { projeId, id, onay }    onay: true olmadan silinmez
+// girdi: { projeId, kapsam: 'ekran' | 'servis', id, donem: { tur: son7 | son14 | son30 | ozel, baslangic?, bitis? }, karsilastir,
+//   ortamId | null, secenekler: { hatalar, adres, goruntuler } }. İzin: mevcut HTML rapor indirmesiyle aynı (oturum token'ı + açık kasa;
+//   dış istek yapılmaz, bu yüzden Ayarlar > İzinler'de ayrı izin yoktur). PDF yerel Chromium ile basılır; tüm ağ istekleri engellidir.
+import { DepoHatasi, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
+import { servisleriListele } from '../servisler/servis-deposu.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { adMaskeleyici, bilinenGizliDegerler, dosyaAdiParcasi, goruntuleriCoz, onizlemeSakla, raporGoruntuSiniriBayt, raporMaskeleyici } from './html-rapor.mjs';
+import { DONEM_TURLERI, DonemHatasi, donemiBuguneKaydir, gunAnahtari } from './donem.mjs';
+import { donemRaporuVerisi } from './donem-raporu.mjs';
+import { pdfRaporHtml } from './pdf-rapor/sablon.mjs';
+import { htmldenPdf, pdfSayfaSayisi } from './pdf-rapor/pdf.mjs';
+import { eskiRaporlariSil, raporGetir, raporKaydet, raporPdfiniAl, raporSil, raporlariListele } from './rapor-arsivi.mjs';
+
+/** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
+/** @typedef {import('./donem-raporu.mjs').RaporGirdisi} RaporGirdisi */
+/** @typedef {{ medyaKlasoru: string; simdi?: Date }} UcBaglami */
+
+/** Bu aşamada desteklenen kapsamlar (diğerleri arayüzde "yakında"). */
+export const RAPOR_KAPSAMLARI = Object.freeze(['ekran', 'servis']);
+
+/** @param {unknown} d @param {string} alan */
+function kimlik(d, alan) {
+  if (typeof d !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(d)) throw new DepoHatasi(`"${alan}" geçersiz.`);
+  return d;
+}
+
+/**
+ * İstek gövdesini doğrular.
+ * @param {Record<string, any>} g @returns {RaporGirdisi}
+ */
+export function raporGirdisiDogrula(g) {
+  if (!g || typeof g !== 'object') throw new DepoHatasi('Rapor seçimleri eksik.');
+  const kapsam = g.kapsam;
+  if (!RAPOR_KAPSAMLARI.includes(kapsam)) throw new DepoHatasi('Bu aşamada yalnız "Tek ekran" ve "Tek servis" raporu alınabilir.');
+  const d = g.donem && typeof g.donem === 'object' ? g.donem : { tur: 'son14' };
+  if (!DONEM_TURLERI.includes(d.tur)) throw new DepoHatasi(`Dönem yalnızca ${DONEM_TURLERI.join(', ')} olabilir.`);
+  const donem = d.tur === 'ozel' ? { tur: 'ozel', baslangic: String(d.baslangic ?? ''), bitis: String(d.bitis ?? '') } : { tur: String(d.tur) };
+  const s = g.secenekler && typeof g.secenekler === 'object' ? g.secenekler : {};
+  const aksiyon = Number(g.aksiyonSayisi);
+  return {
+    projeId: kimlik(g.projeId, 'projeId'), kapsam, id: kimlik(g.id, kapsam === 'ekran' ? 'ekran' : 'servis'), donem,
+    karsilastir: g.karsilastir !== false, ortamId: g.ortamId === null || g.ortamId === undefined || g.ortamId === '' ? null : kimlik(g.ortamId, 'ortamId'),
+    secenekler: { hatalar: s.hatalar !== false, adres: s.adres === true, goruntuler: s.goruntuler === true },
+    ...(Number.isInteger(aksiyon) && aksiyon >= 1 && aksiyon <= 20 ? { aksiyonSayisi: aksiyon } : {})
+  };
+}
+
+/** "nobetci-rapor-<kapsam>-<ad>-<tarih>.pdf" @param {'ekran' | 'servis'} kapsam @param {string} ad @param {Date} tarih */
+export const pdfDosyaAdi = (kapsam, ad, tarih) => `nobetci-rapor-${kapsam}-${dosyaAdiParcasi(ad) || kapsam}-${gunAnahtari(tarih)}.pdf`;
+
+/**
+ * Rapor verisi + HTML (maskeli).
+ * @param {Veritabani} vt @param {RaporGirdisi} girdi @param {UcBaglami} b
+ */
+export async function raporHazirla(vt, girdi, b) {
+  const simdi = b.simdi ?? new Date();
+  const gizliDegerler = bilinenGizliDegerler(vt, girdi.projeId);
+  const ekAdlar = ekGizliAdlar(vt);
+  // Ortam adresi (adres seçeneği kapalıyken metinlerde yer tutucuya dönecek adres) veriden önce gerekir.
+  const ortam = girdi.ortamId ? ortamlariListele(vt, girdi.projeId).find((o) => o.id === girdi.ortamId) : null;
+  const temelMaske = raporMaskeleyici({ ...girdi.secenekler, gizliDegerler, ekAdlar }, ortam?.tabanUrl ?? null);
+  // Tüm ortamlar seçiliyse (tek ortam adresi yok) her ortamın adresi maskelenir — kalıba çevrilmeden ÖNCE (kalıp sayıları "#" yapar).
+  const maskele = girdi.ortamId || girdi.secenekler.adres ? temelMaske : ortamAdresleriniMaskele(vt, girdi.projeId, temelMaske);
+  const adMaskele = adMaskeleyici(gizliDegerler);
+  let veri;
+  try {
+    veri = await donemRaporuVerisi(vt, girdi, {
+      maskele, simdi,
+      goruntuCoz: async (medya) => (await goruntuleriCoz(vt, [medya], b.medyaKlasoru, true, raporGoruntuSiniriBayt(vt))).gruplar[0]
+    });
+  } catch (hata) {
+    if (hata instanceof DonemHatasi) throw new DepoHatasi(hata.message);
+    throw hata;
+  }
+  const { html, baslik } = pdfRaporHtml(veri, { maskele, adMaskele });
+  return { veri, html, baslik, dosyaAdi: pdfDosyaAdi(girdi.kapsam, veri.oge.ad, simdi) };
+}
+
+/**
+ * @param {Veritabani} vt @param {string} projeId @param {(m: unknown) => string} maskele
+ * @returns {(m: unknown) => string}
+ */
+function ortamAdresleriniMaskele(vt, projeId, maskele) {
+  const adresler = ortamlariListele(vt, projeId).flatMap((o) => {
+    const a = typeof o.tabanUrl === 'string' ? o.tabanUrl : '';
+    try { return a ? [a, new URL(a).origin] : []; } catch { return a ? [a] : []; }
+  }).filter((a) => a.length >= 4).sort((x, y) => y.length - x.length);
+  // Sıra raporMaskeleyici ile aynı: önce sorgu dizesi silinir, sonra adresler yer tutucuya döner, sonra diğer kurallar.
+  return (m) => maskele(adresler.reduce((t, a) => t.split(a).join('‹ortam adresi›'),
+    String(m ?? '').replace(/\b(https?:\/\/[^\s?#"'<>]+)[?#][^\s"'<>]*/gi, '$1')));
+}
+
+/** Arşiv meta verisi (gizli değer yok). @param {RaporGirdisi} girdi @param {any} veri */
+function arsivMetasi(girdi, veri) {
+  return {
+    kapsam: girdi.kapsam, secim: { id: girdi.id, ad: veri.oge.ad },
+    donem: { ...girdi.donem, gun: veri.donem.gun, etiket: veri.donem.etiket }, karsilastir: girdi.karsilastir,
+    ortam: veri.ortam ? { id: veri.ortam.id, ad: veri.ortam.ad } : null, secenekler: girdi.secenekler,
+    rozet: veri.rozet.durum, ozet: {
+      basari: veri.ozet.basari, test: girdi.kapsam === 'ekran' ? veri.ozet.test : veri.ozet.cagri, bantlar: veri.bantSayim, durumlar: veri.durumSayim, acikSorun: veri.ozet.acikSorun
+    }
+  };
+}
+
+/** POST /platform/rapor/onizle @param {Veritabani} vt @param {Record<string, any>} g @param {UcBaglami} b */
+export async function raporOnizle(vt, g, b) {
+  const r = await raporHazirla(vt, raporGirdisiDogrula(g), b);
+  return { html: r.html, onizlemeId: onizlemeSakla(r.html), dosyaAdi: r.dosyaAdi, boyut: Buffer.byteLength(r.html, 'utf8'), rozet: r.veri.rozet };
+}
+
+/**
+ * POST /platform/rapor/pdf: PDF + (kaydet: true ise) arşiv kaydı.
+ * @param {Veritabani} vt @param {Record<string, any>} g @param {UcBaglami} b
+ * @returns {Promise<{ pdf: Buffer; dosyaAdi: string; raporId: string | null; sayfa: number; engellenenIstek: number }>}
+ */
+export async function raporPdf(vt, g, b) {
+  const girdi = raporGirdisiDogrula(g);
+  const r = await raporHazirla(vt, girdi, b);
+  const { pdf, engellenenIstek } = await htmldenPdf(r.html, { altBilgi: `Nöbetçi · ${r.baslik}` });
+  const raporId = g.kaydet === true
+    ? await raporKaydet(vt, { projeId: girdi.projeId, kapsam: girdi.kapsam, pdf, dosyaAdi: r.dosyaAdi, meta: arsivMetasi(girdi, r.veri), medyaKlasoru: b.medyaKlasoru,
+      olusturulma: (b.simdi ?? new Date()).toISOString() })
+    : null;
+  return { pdf, dosyaAdi: r.dosyaAdi, raporId, sayfa: pdfSayfaSayisi(pdf), engellenenIstek };
+}
+
+/** GET /platform/raporlar @param {Veritabani} vt @param {URLSearchParams} q */
+export function raporListesi(vt, q) {
+  const projeId = kimlik(q.get('projeId'), 'projeId');
+  if (!projeGetir(vt, projeId)) throw new DepoHatasi('Proje bulunamadı.');
+  return { raporlar: raporlariListele(vt, projeId) };
+}
+
+/** GET /platform/rapor/indir @param {Veritabani} vt @param {URLSearchParams} q @param {UcBaglami} b */
+export function raporIndir(vt, q, b) {
+  return raporPdfiniAl(vt, kimlik(q.get('projeId'), 'projeId'), kimlik(q.get('id'), 'id'), b.medyaKlasoru);
+}
+
+/**
+ * POST /platform/rapor/yeniden: aynı kapsam / seçim / ortam / seçenekler, dönem aynı uzunlukta bugüne kaydırılmış; yeni satır.
+ * @param {Veritabani} vt @param {Record<string, any>} g @param {UcBaglami} b
+ */
+export async function raporYenidenOlustur(vt, g, b) {
+  const projeId = kimlik(g.projeId, 'projeId');
+  const eski = raporGetir(vt, projeId, kimlik(g.id, 'id'));
+  if (!eski) throw new DepoHatasi('Rapor bulunamadı.');
+  const m = eski.meta;
+  const donemSecimi = m.donem && typeof m.donem === 'object' ? m.donem : { tur: 'son14' };
+  const donem = donemiBuguneKaydir(donemSecimi.tur === 'ozel' ? { tur: 'ozel', baslangic: donemSecimi.baslangic, bitis: donemSecimi.bitis } : { tur: donemSecimi.tur }, b.simdi ?? new Date());
+  const r = await raporPdf(vt, {
+    projeId, kapsam: m.kapsam, id: m.secim?.id, donem, karsilastir: m.karsilastir !== false, ortamId: m.ortam?.id ?? null, secenekler: m.secenekler ?? {}, kaydet: true
+  }, b);
+  return { raporId: r.raporId, dosyaAdi: r.dosyaAdi, sayfa: r.sayfa };
+}
+
+/** POST /platform/rapor/sil @param {Veritabani} vt @param {Record<string, any>} g @param {UcBaglami} b */
+export function raporSilUc(vt, g, b) {
+  if (g.onay !== true) throw new DepoHatasi('Raporu silmek için onaylayın.');
+  return raporSil(vt, kimlik(g.projeId, 'projeId'), kimlik(g.id, 'id'), b.medyaKlasoru);
+}
+
+/** GET /platform/rapor/secenekler @param {Veritabani} vt @param {URLSearchParams} q */
+export function raporSecenekleri(vt, q) {
+  const projeId = kimlik(q.get('projeId'), 'projeId');
+  if (!projeGetir(vt, projeId)) throw new DepoHatasi('Proje bulunamadı.');
+  const ekranlar = vt.tumu("SELECT id, ad, durum FROM ekranlar WHERE proje_id = ? AND durum <> 'silindi' ORDER BY (sira IS NULL), sira, ad", [projeId])
+    .map((e) => ({ id: String(e.id), ad: String(e.ad), devreDisi: e.durum === 'devre_disi' }));
+  return {
+    ekranlar, servisler: servisleriListele(vt, projeId).map((s) => ({ id: s.id, ad: s.ad, tur: s.tur })),
+    ortamlar: ortamlariListele(vt, projeId).map((o) => ({ id: o.id, ad: o.ad })), kapsamlar: RAPOR_KAPSAMLARI
+  };
+}
+
+/** Günlük temizlik: Ayarlar > Yedekleme > Rapor saklama süresi. @param {Veritabani} vt @param {{ medyaKlasoru: string; simdi?: number }} s */
+export function raporSaklamaTemizligi(vt, s) {
+  let gun = 90;
+  try { gun = Number(kosuAyarlariniOku(vt).raporSaklamaGun); } catch { gun = 90; }
+  return eskiRaporlariSil(vt, gun, s);
+}
