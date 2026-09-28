@@ -438,25 +438,26 @@ function sihirbazProje() {
 }
 
 /**
- * ORTAMLAR: satır = Ortam adı | Adres | Riskli mi? | ×. TEST (ilk satır) zorunludur, riskli değildir ve kaldırılamaz. "Riskli"
- * kutusu kullanıcının "Bu ortam riskli mi?" yanıtıdır (işaretli = Evet, değil = Hayır); adı canlıyı çağrıştıran ortama "Hayır"
- * yalnızca onayla kaydedilir. Kaydedilen her satırın kimliği saklanır: bir satır sunucuda reddedilip form yeniden gönderilirse
+ * ORTAMLAR: satır = × | Ortam adı | Adres | Ortam türü (Test / Canlı). TEST (ilk satır) zorunludur, türü Test'tir ve kaldırılamaz.
+ * Eklenen satırda "Ortam türü" ZORUNLU seçimdir (seçilmeden kaydedilmez; saklama: riskli true = Canlı, false = Test); adı canlıyı
+ * çağrıştıran ortama Test yalnızca onayla kaydedilir. Kaydedilen her satırın kimliği saklanır: bir satır sunucuda reddedilip form yeniden gönderilirse
  * önceki satırlar YENİDEN oluşturulmaz, güncellenir (yinelenen ortam olmaz). Kayıttan sonra liste sunucudan okunup her satırın
- * gerçekten kaydedildiği (ad + riskli seçimi) doğrulanır.
+ * gerçekten kaydedildiği (ad + ortam türü) doğrulanır.
  */
 function sihirbazOrtamlar() {
-  /** @type {Array<{ ad: HTMLInputElement; adres: HTMLInputElement; zorunlu: boolean; canli: HTMLInputElement; id: string | null; el: HTMLElement }>} */
+  /** @type {Array<{ ad: HTMLInputElement; adres: HTMLInputElement; zorunlu: boolean; test: HTMLInputElement; canli: HTMLInputElement; turHatasi: HTMLElement; tur: () => boolean | null; id: string | null; el: HTMLElement }>} */
   const satirlar = [];
   const liste = h('div', { class: 'ortam-satirlari' });
   const ortamSatiri = (zorunlu, ilkAd = '', canliMi = false) => {
     const ad = h('input', { type: 'text', autocomplete: 'off', value: zorunlu ? 'TEST' : ilkAd });
     const adres = h('input', { type: 'url', autocomplete: 'off', placeholder: 'https://', inputmode: 'url' });
-    const canli = h('input', {
-      type: 'checkbox', checked: zorunlu ? false : canliMi, disabled: zorunlu, id: yeniKimlikAdi('canli'),
-      'aria-label': 'Riskli ortam (gerçek işlem oluşturabilir)'
-    });
+    // Ortam türü: Test / Canlı (radyo). TEST satırı sabit Test; eklenen satırda seçim zorunlu (önceden seçili gelmez).
+    const turAdi = yeniKimlikAdi('ortam-turu');
+    const test = h('input', { type: 'radio', name: turAdi, value: 'test', id: `${turAdi}-test`, checked: zorunlu, disabled: zorunlu });
+    const canli = h('input', { type: 'radio', name: turAdi, value: 'canli', id: `${turAdi}-canli`, checked: !zorunlu && canliMi, disabled: zorunlu });
+    const turHatasi = h('p', { class: 'alan-hatasi', role: 'alert' });
     /** @type {any} */
-    const satir = { ad, adres, zorunlu, canli, id: null, el: null };
+    const satir = { ad, adres, zorunlu, test, canli, turHatasi, tur: () => (zorunlu ? false : canli.checked ? true : test.checked ? false : null), id: null, el: null };
     const kaldir = zorunlu
       ? h('span', { class: 'ortam-satiri-bos', title: 'TEST ortamı zorunludur; kaldırılamaz.' })
       : h('button', { type: 'button', class: 'ikon-dugme ortam-kaldir', 'aria-label': 'Ortamı kaldır', title: 'Ortamı kaldır', onclick: () => {
@@ -469,10 +470,12 @@ function sihirbazOrtamlar() {
     adresAlani.classList.add('ortam-adresi-alani');
     satir.el = h('div', { class: `ortam-satiri${zorunlu ? ' zorunlu' : ''}` },
       kaldir, adAlani, adresAlani,
-      h('div', { class: 'alan ortam-riski' },
-        h('span', { class: 'alan-etiketi', 'aria-hidden': 'true' }, 'Riskli mi?'),
-        h('label', { class: 'secenek', for: canli.id, title: zorunlu ? 'TEST ortamı riskli değildir.' : 'Gerçek işlem oluşturabilir: her çalıştırmada onay istenir.' },
-          canli, zorunlu ? 'Hayır' : 'Riskli')));
+      h('fieldset', { class: 'alan ortam-riski ortam-turu-secimi', 'aria-required': 'true' },
+        h('legend', { class: 'alan-etiketi' }, 'Ortam türü'),
+        h('div', { class: 'secenekler-satiri' },
+          h('label', { class: 'secenek', for: test.id, title: zorunlu ? 'TEST ortamının türü Test\'tir.' : 'Test ortamı: onay sorulmaz.' }, test, 'Test'),
+          h('label', { class: 'secenek', for: canli.id, title: zorunlu ? 'TEST ortamının türü Test\'tir.' : 'Canlı ortam: istek atan her işlemde onay sorulur.' }, canli, 'Canlı')),
+        turHatasi));
     satirlar.push(satir);
     liste.append(satir.el);
     return satir;
@@ -483,7 +486,7 @@ function sihirbazOrtamlar() {
   const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve devam', ikon('ok'));
   const form = h('form', { class: 'kart', novalidate: true },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('ag'), 'Ortamlar')),
-    h('p', { class: 'soluk' }, 'TEST ortamı zorunludur. Diğer ortamları (ör. hazırlık, canlı) şimdi veya daha sonra Ayarlar\'dan ekleyebilirsiniz. "Riskli" işaretli ortamda her çalıştırma onay ister ve kayıt oluşturan "yalnızca test ortamı" adımları atlanır.'),
+    h('p', { class: 'soluk' }, 'TEST ortamı zorunludur. Diğer ortamları (ör. hazırlık, canlı) şimdi veya daha sonra Ayarlar\'dan ekleyebilirsiniz; her ortam için türünü (Test / Canlı) seçin. Canlı ortamda istek atan her işlemde "Bu işlem CANLI ortamda yapılacak, emin misiniz?" diye sorulur ve "yalnızca test ortamı" adımları atlanır.'),
     mesaj.kutu, liste, ekleDugmesi,
     h('div', { class: 'dugmeler' }, gonder));
   form.addEventListener('submit', async (olay) => {
@@ -491,21 +494,22 @@ function sihirbazOrtamlar() {
     mesaj.temizle();
     let ilkHata = null;
     for (const s2 of satirlar) {
-      alanHatasi(s2.ad, ''); alanHatasi(s2.adres, '');
+      alanHatasi(s2.ad, ''); alanHatasi(s2.adres, ''); s2.turHatasi.textContent = '';
       if (!s2.ad.value.trim()) { alanHatasi(s2.ad, 'Ortam adı boş olamaz.'); ilkHata ??= s2.ad; }
       if (!adresGecerliMi(s2.adres.value.trim())) { alanHatasi(s2.adres, 'Geçerli bir http(s) adresi girin.'); ilkHata ??= s2.adres; }
+      if (s2.tur() === null) { s2.turHatasi.textContent = 'Ortam türünü seçin (Test / Canlı).'; ilkHata ??= s2.test; }
     }
     const adlar = satirlar.map((s2) => s2.ad.value.trim().toLocaleLowerCase('tr'));
     satirlar.forEach((s2, i) => {
       if (adlar[i] && adlar.indexOf(adlar[i]) !== i) { alanHatasi(s2.ad, 'Bu ad başka bir satırda da var.'); ilkHata ??= s2.ad; }
     });
     if (ilkHata) { ilkHata.focus(); return; }
-    const adUyarisi = satirlar.filter((s2) => !s2.zorunlu && !s2.canli.checked && adCanliyiCagristiriyorMu(s2.ad.value));
+    const adUyarisi = satirlar.filter((s2) => !s2.zorunlu && s2.tur() === false && adCanliyiCagristiriyorMu(s2.ad.value));
     let adOnayi = false;
     if (adUyarisi.length) {
       const { onayIste } = await import('./kosu-paneli.js');
-      adOnayi = await onayIste({ baslik: 'Bu ortamın adı canlıyı çağrıştırıyor, emin misiniz?', ikonAd: 'uyari', dugme: 'Evet, riskli değil',
-        metin: `${adUyarisi.map((s2) => `"${s2.ad.value.trim()}"`).join(', ')} riskli değil olarak kaydedilecek: koşular bu ortamda ek onay olmadan başlayabilir.` });
+      adOnayi = await onayIste({ baslik: 'Bu ortamın adı canlıyı çağrıştırıyor, emin misiniz?', ikonAd: 'uyari', dugme: 'Evet, Test ortamı',
+        metin: `${adUyarisi.map((s2) => `"${s2.ad.value.trim()}"`).join(', ')} Test ortamı olarak kaydedilecek: bu ortamdaki işlemler CANLI onayı sorulmadan başlar.` });
       if (!adOnayi) return;
     }
     try {
@@ -513,15 +517,15 @@ function sihirbazOrtamlar() {
         for (const s2 of satirlar) {
           const { ortam } = await api('/platform/ortam/kaydet', { govde: {
             id: s2.id || undefined, projeId: durum.proje.id, ad: s2.ad.value.trim(), tabanUrl: s2.adres.value.trim(),
-            varsayilan: s2.zorunlu, riskli: s2.zorunlu ? false : s2.canli.checked, ...(adOnayi ? { onay: true } : {})
+            varsayilan: s2.zorunlu, riskli: s2.tur(), ...(adOnayi ? { onay: true } : {})
           } });
           s2.id = ortam.id;
         }
-        // Doğrulama: her satır sunucuda (ad + riskli seçimi) kayıtlı mı?
+        // Doğrulama: her satır sunucuda (ad + ortam türü) kayıtlı mı?
         const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(durum.proje.id)}`);
         const eksik = satirlar.filter((s2) => {
           const o = ortamlar.find((x) => x.id === s2.id);
-          return !o || o.ad !== s2.ad.value.trim() || riskliSecimi(o) !== (s2.zorunlu ? false : s2.canli.checked);
+          return !o || o.ad !== s2.ad.value.trim() || riskliSecimi(o) !== s2.tur();
         });
         if (eksik.length) throw new Error(`Şu ortamlar kaydedilemedi: ${eksik.map((s2) => s2.ad.value.trim()).join(', ')}. Tekrar "Kaydet ve devam" deneyin.`);
       });
@@ -556,7 +560,7 @@ function sihirbazTamam() {
       h('ul', { class: 'ozet-ortamlar' }, ortamlar.map((o) => h('li', {},
         h('strong', {}, o.ad),
         o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : '',
-        riskliSecimi(o) === true ? h('span', { class: 'rozet hata' }, 'Riskli') : riskliSecimi(o) === null ? h('span', { class: 'rozet uyari' }, 'Riskli mi? belirtin') : null,
+        riskliSecimi(o) === true ? h('span', { class: 'rozet hata' }, 'Canlı') : riskliSecimi(o) === null ? h('span', { class: 'rozet uyari' }, 'Türünü seçin') : null,
         h('span', { class: 'mono soluk' }, o.tabanUrl)))));
   }).catch((hata) => { ozet.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); });
 }

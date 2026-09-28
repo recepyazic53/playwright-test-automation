@@ -12,7 +12,7 @@
 //   --hepsi             "Koşuda" kapalı olanlar da (varsayılan: yalnız "Koşuda" açık senaryolar)
 //   --junit <dosya>     sonuçları JUnit XML olarak yaz (CI sistemleri için)
 //   --json              özet çıktıyı JSON olarak yaz
-//   --canli-onay        riskli ortamda (Ayarlar > "Bu ortam riskli mi?" Evet ya da belirtilmemiş) koşmayı AÇIKÇA onaylar (verilmezse koşu başlamaz)
+//   --canli-onay        CANLI ortamda (Ayarlar > "Ortam türü" Canlı ya da seçilmemiş) koşmayı AÇIKÇA onaylar (verilmezse koşu başlamaz)
 //   --liste             koşmadan, seçilecek senaryoları listeler
 // Çıkış kodu: 0 = hepsi başarılı (ya da --liste), 1 = en az bir senaryo kaldı / çalıştırılamadı, 2 = kullanım / bağlantı hatası.
 // Port: TEST_SUNUCU_PORT (varsayılan 5566).
@@ -82,11 +82,11 @@ async function main() {
   const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`);
   const ortam = bul(ortamlar, a.ortam);
   if (!ortam) { console.error(`Ortam bulunamadı: ${a.ortam} (var olanlar: ${ortamlar.map((o) => o.ad).join(', ')})`); return 2; }
-  // Riskli ortam: tek tanım (platform/guvenlik/ortam-riski.mjs). Sunucu ayrıca Ayarlar > İzinler > "Canlı / riskli ortamda
+  // CANLI ortam: tek tanım (platform/guvenlik/ortam-riski.mjs). Sunucu ayrıca Ayarlar > İzinler > "Canlı ortamda
   // çalıştırma" iznini ve istekteki açık onayı (canliOnay) denetler; izin kapalıysa koşu başlamaz ve mesaj yazılır.
   const riskli = riskliOrtamMi(ortam);
   if (riskli && !a.canliOnay && !a.liste) {
-    console.error(`"${ortam.ad}" riskli bir ortam${ortam.riskli === null ? ' (riskli olup olmadığı belirtilmemiş: Nöbetçi > Ayarlar > Proje ve ortamlar)' : ''}. Koşmak için --canli-onay seçeneğini açıkça verin.`);
+    console.error(`Bu işlem "${ortam.ad}" (CANLI) ortamında yapılacak; istekler gerçek sisteme gider${ortam.riskli === null ? ' (ortam türü seçilmemiş: Nöbetçi > Ayarlar > Proje ve ortamlar)' : ''}. Koşmak için --canli-onay seçeneğini açıkça verin.`);
     return 2;
   }
 

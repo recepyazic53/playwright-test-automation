@@ -2,7 +2,7 @@
 // açık / kapalı bir anahtardır ve VARSAYILANI KAPALIDIR (yeni ve mevcut kurulumlar; kayıt yoksa kapalı sayılır).
 // Bu dosya hem sunucuda (guvenlik/izinler.mjs, guvenlik/uc-denetimi.mjs: uç → izin eşlemesi bu listeden üretilir) hem
 // arayüzde (/arayuz/izin-tanimlari.mjs: Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) kullanılır — metin
-// kopyası yoktur. Saf modül: yalnız saf ortam-riski.mjs'yi (riskli ortam tanımı) içe aktarır.
+// kopyası yoktur. Saf modül: yalnız saf ortam-riski.mjs'yi (canlı ortam tanımı) içe aktarır.
 //
 // Alanlar:
 //   anahtar, etiket, aciklama     kısa tanım
@@ -139,31 +139,34 @@ export const IZIN_TANIMLARI = Object.freeze([
   },
   {
     anahtar: 'canli-ortam',
-    etiket: 'Canlı / riskli ortamda çalıştırma',
-    aciklama: `Riskli ortamlarda koşu, Dene ve tarama yapılmasına izin verir. ${RISKLI_ORTAM_TANIMI}`,
+    etiket: 'Canlı ortamda çalıştırma',
+    aciklama: `Canlı ortamlara istek atan işlemlere (koşu, Dene, tarama, akış / giriş kaydı, servis istekleri) izin verir. ${RISKLI_ORTAM_TANIMI}`,
     yapabilecekleri: [
-      'Canlı / riskli ortamda ekran ve servis senaryolarını koşmak.',
-      'Canlı / riskli ortamda ekran taraması yapmak ve giriş sayfası önermek.',
-      'Zamanlanmış koşuları (kuralında canlı onayı varsa) riskli ortamda başlatmak.'
+      'Canlı ortamda ekran, servis ve uçtan uca senaryoları koşmak ve Dene ile denemek.',
+      'Canlı ortamda ekran taraması, akış kaydı, giriş kaydı ve giriş denemesi yapmak; giriş sayfası önermek.',
+      'Canlı ortamda servis erişim kontrolü, şema yenileme ve REST Dene yapmak.',
+      'Canlı ortamın veritabanı eşlemesindeki bağlantıyı denemek.',
+      'Zamanlanmış koşuları (kuralında canlı onayı varsa) canlı ortamda başlatmak.'
     ],
     yerler: [
-      'Senaryolar > Koşuyu başlat (riskli ortam seçiliyken)',
-      'Servisler > Koş (riskli ortam seçiliyken)',
-      'Uçtan uca akışlar > Koş (riskli ortam seçiliyken)',
-      'Ekranlar > Ekranı tara (riskli ortam seçiliyken)',
-      'Ayarlar > Koşu > Zamanlanmış koşular (riskli ortam kuralı)'
+      'Senaryolar > Koşuyu başlat, Dene (canlı ortam seçiliyken)',
+      'Servisler > Koş, Dene, Erişim kontrolü, Şemayı al (canlı ortam seçiliyken)',
+      'Uçtan uca akışlar > Koş (canlı ortam seçiliyken)',
+      'Ekranlar > Ekranı tara, Akışı kaydet; Ayarlar > Giriş > Girişi kaydet, Girişi dene (canlı ortam seçiliyken)',
+      'Ayarlar > Koşu > Zamanlanmış koşular (canlı ortam kuralı)'
     ],
     islemler: [
-      { ad: 'Riskli ortamda ekran koşusu ve Dene', uclar: EKRAN_KOSU_UCLARI, kosul: 'ortam riskliyse' },
-      { ad: 'Riskli ortamda ekran taraması / kayıt', uclar: ['/platform/tarama/baslat'], kosul: 'ortam riskliyse' },
-      { ad: 'Riskli ortamda giriş sayfası önerisi', uclar: ['/platform/giris-tarifi/oner'], kosul: 'ortam riskliyse' },
-      // Servis Dene / erişim kontrolü / şema zaten YALNIZ test ortamında yapılır (riskli ortamda reddedilir).
-      { ad: 'Riskli ortamda servis ve servis akışı koşusu', uclar: ['/platform/servis/is/baslat', '/platform/servis/kos', '/platform/servis-akisi/kos'], kosul: 'ortam riskliyse' },
-      { ad: 'Riskli ortamda uçtan uca akış koşusu', uclar: UCTAN_UCA_UCLARI, kosul: 'ortam riskliyse' },
-      { ad: 'Riskli ortamda zamanlanmış koşu', uclar: [] }
+      { ad: 'Canlı ortamda ekran koşusu ve Dene', uclar: EKRAN_KOSU_UCLARI, kosul: 'ortam canlıysa' },
+      { ad: 'Canlı ortamda ekran taraması, akış / giriş kaydı ve giriş denemesi', uclar: ['/platform/tarama/baslat'], kosul: 'ortam canlıysa' },
+      { ad: 'Canlı ortamda giriş sayfası önerisi', uclar: ['/platform/giris-tarifi/oner'], kosul: 'ortam canlıysa' },
+      { ad: 'Canlı ortamda servis erişim kontrolü, şema yenileme ve REST Dene', uclar: ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene'], kosul: 'ortam canlıysa' },
+      { ad: 'Canlı ortamda servis ve servis akışı koşusu / Dene', uclar: SERVIS_KOSU_UCLARI, kosul: 'ortam canlıysa' },
+      { ad: 'Canlı ortamda uçtan uca akış koşusu', uclar: UCTAN_UCA_UCLARI, kosul: 'ortam canlıysa' },
+      { ad: 'Canlı ortamın veritabanı bağlantısını dene', uclar: ['/platform/entegrasyon/dene'], kosul: 'bağlantı bir canlı ortamın veritabanı eşlemesindeyse' },
+      { ad: 'Canlı ortamda zamanlanmış koşu', uclar: [] }
     ],
-    risk: 'Gerçek kullanıcıların verisi ve gerçek işlemler etkilenebilir. İzin açıkken de her çalıştırmada ayrıca onay sorulur.',
-    kapaliyken: 'Riskli ortamda hiçbir koşu, Dene ya da tarama başlamaz; test ortamındaki çalışmalar etkilenmez.'
+    risk: 'Gerçek kullanıcıların verisi ve gerçek işlemler etkilenebilir. İzin açıkken de canlı ortama istek atan her işlemde ayrıca onay sorulur.',
+    kapaliyken: 'Canlı ortamda hiçbir koşu, Dene, tarama ya da kayıt başlamaz; test ortamındaki çalışmalar etkilenmez.'
   },
   {
     anahtar: 'giris-bilgisi',

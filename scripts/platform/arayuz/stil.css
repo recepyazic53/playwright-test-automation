@@ -168,6 +168,9 @@ label { font-weight: 560; display: block; margin-bottom: 6px; font-size: 13px; c
 .alan .yardim { font-size: 12.5px; color: var(--metin-2); margin-top: 5px; }
 .alan .alan-hatasi { font-size: 12.5px; color: var(--hata); margin-top: 5px; font-weight: 550; }
 .alan .alan-hatasi:empty { display: none; }
+.ortam-turu-secimi .alan-hatasi { font-size: 12.5px; color: var(--hata); margin: 5px 0 0; font-weight: 550; }
+.ortam-turu-secimi .zorunlu-isaret { color: var(--hata); font-weight: 700; }
+.canli-onay-penceresi strong { color: var(--hata); }
 /* Başka bir ayara bağlı, şu an kullanılmayan ayar (Ayarlar > Koşu; etkinKosul): pasif görünür, nedeni altında yazar. */
 .alan.pasif > label { color: var(--metin-2); }
 .alan .pasif-aciklamasi { color: var(--atlanan); font-weight: 550; }
@@ -3070,6 +3073,10 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .ortam-riski .alan-etiketi { display: block; font-size: 13px; font-weight: 560; margin-bottom: 6px; white-space: nowrap; }
 .ortam-riski .secenek { margin: 0; min-height: 40px; white-space: nowrap; }
 .ortam-satiri.zorunlu .ortam-riski .secenek { color: var(--metin-2); cursor: default; }
+.ortam-satiri > fieldset.ortam-turu-secimi { border: 0; padding: 0; margin: 0; min-width: 0; background: none; }
+.ortam-satiri > fieldset.ortam-turu-secimi > legend { float: left; width: 100%; padding: 0; line-height: inherit; }
+.ortam-satiri > fieldset.ortam-turu-secimi > .secenekler-satiri { clear: both; }
+.ortam-turu-secimi .secenekler-satiri { display: flex; flex-wrap: wrap; gap: var(--b3); }
 .ortam-kaldir { margin-top: 25px; width: 38px; height: 40px; min-height: 40px; padding: 0; display: grid; place-items: center; }
 .ortam-kaldir .ikon { margin: 0; }
 @media (max-width: 860px) {
@@ -3743,7 +3750,6 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .uctan-izin-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 .uctan-izin-listesi li.acik > .ikon { color: var(--basari); }
 .uctan-izin-listesi li.kapali > .ikon { color: var(--atlanan); }
-.uctan-canli-onay { margin-top: 10px; }
 .uctan-izin-ozeti { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
 .uctan-izin-ozeti .rozet { white-space: normal; }
 dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }

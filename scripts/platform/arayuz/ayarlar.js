@@ -170,18 +170,21 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     const oAd = h('input', { type: 'text', autocomplete: 'off', value: ortam ? ortam.ad : '' });
     const oAdres = h('input', { type: 'url', autocomplete: 'off', inputmode: 'url', placeholder: 'https://', value: ortam ? ortam.tabanUrl : '' });
     const oVarsayilan = h('input', { type: 'checkbox', id: yeniKimlik('vars'), checked: ortam ? ortam.varsayilan : false });
-    // "Bu ortam riskli mi?" — kullanıcı seçimi (Evet / Hayır); belirtilmemişse ikisi de seçili gelmez (ortam riskli sayılır).
+    // "Ortam türü: Test / Canlı" — kullanıcı seçimi, ZORUNLU (saklama: riskli true = Canlı, false = Test). Seçilmemiş eski ortamda
+    // ikisi de seçili gelmez (Canlı sayılır) ve "türünü seçin" uyarısı gösterilir; seçmeden kaydedilmez.
     const oncekiRisk = ortam ? riskliSecimi(ortam) : null;
-    const riskAdi = yeniKimlik('riskli');
-    const riskEvet = h('input', { type: 'radio', name: riskAdi, value: 'evet', id: `${riskAdi}-evet`, checked: oncekiRisk === true });
-    const riskHayir = h('input', { type: 'radio', name: riskAdi, value: 'hayir', id: `${riskAdi}-hayir`, checked: oncekiRisk === false });
-    const riskAlani = h('fieldset', { class: 'risk-secimi', 'aria-describedby': `${riskAdi}-aciklama` },
-      h('legend', {}, 'Bu ortam riskli mi? (gerçek işlem oluşturabilir)'),
+    const riskAdi = yeniKimlik('ortam-turu');
+    const turTest = h('input', { type: 'radio', name: riskAdi, value: 'test', id: `${riskAdi}-test`, checked: oncekiRisk === false });
+    const turCanli = h('input', { type: 'radio', name: riskAdi, value: 'canli', id: `${riskAdi}-canli`, checked: oncekiRisk === true });
+    const turHatasi = h('p', { class: 'alan-hatasi', role: 'alert', hidden: true });
+    const riskAlani = h('fieldset', { class: 'risk-secimi ortam-turu-secimi', 'aria-required': 'true', 'aria-describedby': `${riskAdi}-aciklama` },
+      h('legend', {}, 'Ortam türü', h('span', { class: 'zorunlu-isaret', 'aria-hidden': 'true' }, ' *')),
       h('div', { class: 'secenekler-satiri' },
-        h('label', { class: 'secenek', for: riskEvet.id }, riskEvet, 'Evet'),
-        h('label', { class: 'secenek', for: riskHayir.id }, riskHayir, 'Hayır')),
+        h('label', { class: 'secenek', for: turTest.id }, turTest, 'Test'),
+        h('label', { class: 'secenek', for: turCanli.id }, turCanli, 'Canlı')),
+      turHatasi,
       h('p', { class: 'soluk kucuk', id: `${riskAdi}-aciklama` }, RISKLI_ORTAM_TANIMI,
-        ' Riskli ortamda her çalıştırma ayrıca onay ve "Canlı / riskli ortamda çalıştırma" izni ister; akış / giriş kaydı yapılamaz.'),
+        ' Canlı ortamda ayrıca "Canlı ortamda çalıştırma" izni gerekir.'),
       ortam && oncekiRisk === null ? riskBelirtinNotu() : null);
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
@@ -195,15 +198,17 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
       alanHatasi(oAd, ''); alanHatasi(oAdres, '');
       if (!oAd.value.trim()) { alanHatasi(oAd, 'Ortam adı boş olamaz.'); oAd.focus(); return; }
       if (!adresGecerliMi(oAdres.value.trim())) { alanHatasi(oAdres, 'Geçerli bir http(s) adresi girin.'); oAdres.focus(); return; }
-      const riskli = riskEvet.checked ? true : riskHayir.checked ? false : null;
+      const riskli = turCanli.checked ? true : turTest.checked ? false : null;
+      turHatasi.hidden = true;
+      if (riskli === null) { turHatasi.textContent = 'Ortam türünü seçin (Test / Canlı).'; turHatasi.hidden = false; turTest.focus(); return; }
       let onay = false;
       if (riskli === false && oncekiRisk !== false) {
-        // Evet → Hayır onay ister; adı canlıyı çağrıştıran ortama "Hayır" da (yalnız uyarı: ad riski belirlemez).
+        // Canlı → Test onay ister; adı canlıyı çağrıştıran ortama Test de (yalnız onay: ad türü belirlemez).
         const adUyarisi = adCanliyiCagristiriyorMu(oAd.value);
         if (oncekiRisk === true || adUyarisi) {
           onay = await onayIste({
-            baslik: oncekiRisk === true ? 'Ortam "riskli değil" yapılsın mı?' : 'Bu ortamın adı canlıyı çağrıştırıyor, emin misiniz?', ikonAd: 'uyari', dugme: 'Evet, riskli değil',
-            metin: `${oncekiRisk === true ? 'Riskli işaretli ortam "riskli değil" olarak kaydedilecek: koşular bu ortamda ek onay ve canlı ortam izni olmadan başlayabilir. ' : ''}${adUyarisi ? `"${oAd.value.trim()}" adı canlı / üretim ortamını çağrıştırıyor. ` : ''}Değişiklik geçmişe yazılır.`
+            baslik: oncekiRisk === true ? 'Ortam Test yapılsın mı?' : 'Bu ortamın adı canlıyı çağrıştırıyor, emin misiniz?', ikonAd: 'uyari', dugme: 'Evet, Test ortamı',
+            metin: `${oncekiRisk === true ? 'Canlı ortam Test olarak kaydedilecek: bu ortamdaki işlemler CANLI onayı ve canlı ortam izni sorulmadan başlar. ' : ''}${adUyarisi ? `"${oAd.value.trim()}" adı canlı / üretim ortamını çağrıştırıyor. ` : ''}Değişiklik geçmişe yazılır.`
           });
           if (!onay) return;
         }
@@ -222,11 +227,11 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
   const satirlar = ortamlar.map((o) => kayitSatiri(
     [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null,
       riskBelirtilmemisMi(o)
-        ? [' ', h('button', { type: 'button', class: 'rozet uyari risk-belirtin-rozeti', title: 'Riskli olup olmadığı seçilmemiş; seçilene kadar riskli sayılır', onclick: () => ortamFormu(o) }, ikon('uyari'), 'Riskli mi? belirtin')]
-        : riskliOrtamMi(o) ? [' ', h('span', { class: 'rozet hata', title: 'Gerçek işlem oluşturabilir: her çalıştırmada onay; akış kaydı kapalı' }, 'Riskli')] : null],
+        ? [' ', h('button', { type: 'button', class: 'rozet uyari risk-belirtin-rozeti', title: 'Ortam türü seçilmemiş; seçilene kadar Canlı sayılır', onclick: () => ortamFormu(o) }, ikon('uyari'), 'Türünü seçin')]
+        : riskliOrtamMi(o) ? [' ', h('span', { class: 'rozet hata', title: 'Canlı ortam: istek atan her işlemde onay sorulur' }, 'Canlı')] : null],
     h('span', { class: 'mono' }, o.tabanUrl),
     [duzenleDugmesi(o.ad, () => ortamFormu(o)),
-      gecmisDugmesi(`${o.ad} risk seçimi`, () => gecmisGoster('ortam_riski', o.id, `${o.ad} — riskli mi?`, baglam)),
+      gecmisDugmesi(`${o.ad} ortam türü`, () => gecmisGoster('ortam_riski', o.id, `${o.ad} — ortam türü`, baglam)),
       // Silinemeyen (varsayılan) satırda da aynı Sil düğmesi: aynı boy ve biçim, devre dışı ve nedeni ipucunda.
       o.varsayilan
         ? h('button', { type: 'button', class: 'tehlike kucuk-dugme', 'aria-label': `${o.ad}: sil`, disabled: true, title: 'Varsayılan ortam silinemez; önce başka bir ortamı varsayılan yapın.' }, ikon('cop'), h('span', {}, 'Sil'))

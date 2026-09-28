@@ -220,6 +220,15 @@ export async function api(yol, secenekler = {}) {
         return api(yol, { ...secenekler, izinDenemesi: deneme + 1 });
       }
     }
+    // CANLI ortam onayı (TEK KAYNAK sunucuda: guvenlik/uc-denetimi.mjs): CANLI ortama istek atacak işlem istekte canliOnay: true
+    // taşımıyorsa sunucu hiçbir şey yapmadan 409 döner. Ekranlar çoğunlukla onayı işlem başlamadan sorar (kosu-paneli.js >
+    // canliOnayIste); sormayan bir yol kalmışsa burada AYNI standart pencere açılır — "Evet, devam et" → aynı istek canliOnay: true
+    // ile bir kez yeniden gönderilir; "Vazgeç" → hata olduğu gibi döner (CANLI'ya istek gitmez).
+    if (hata.kod === 'CANLI_ONAY_GEREKLI' && secenekler.govde && secenekler.govde.canliOnay !== true && !secenekler.canliDenemesi) {
+      if (await canliOnayPenceresi(typeof veri.ortamAdi === 'string' ? veri.ortamAdi : '')) {
+        return api(yol, { ...secenekler, govde: { ...secenekler.govde, canliOnay: true }, canliDenemesi: true });
+      }
+    }
     // Taban adresine bağlı servisin adresi farklılaşıyor (sunucu hiçbir şey yazmadı): karar penceresi (taban-adresler.js > tabanKarariSor);
     // seçilen karar (tabanKararlari[servisId]) ile AYNI istek yeniden gönderilir. Pencere kapatılırsa hata olduğu gibi döner.
     if (hata.kod === 'TABAN_KARARI' && veri && veri.karar && secenekler.govde) {
@@ -239,6 +248,30 @@ export async function api(yol, secenekler = {}) {
   }
   if (secenekler.govde && KAYIT_UCU.test(yol)) degisiklikleriBirak();
   return veri || {};
+}
+
+/**
+ * CANLI ortam onayı — TEK TİP pencere (her işlemde sorulur, hatırlanmaz). Başlık "CANLI ortam"; düğmeler "Evet, devam et" /
+ * "Vazgeç" (Esc = Vazgeç). Evet → true.
+ * @param {string} ortamAdi @returns {Promise<boolean>}
+ */
+export function canliOnayPenceresi(ortamAdi) {
+  return new Promise((coz) => {
+    const evet = h('button', { type: 'button', class: 'tehlike canli-onay-evet' }, 'Evet, devam et');
+    const vazgec = h('button', { type: 'button', class: 'hayalet canli-onay-vazgec' }, 'Vazgeç');
+    const diyalog = h('dialog', { class: 'onay-diyalogu tehlikeli canli-onay-penceresi', 'aria-labelledby': 'canli-onay-basligi', 'aria-describedby': 'canli-onay-metni' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'canli-onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('uyari')), 'CANLI ortam'),
+        h('p', { id: 'canli-onay-metni' }, 'Bu işlem ', h('strong', {}, ortamAdi || 'seçilen'), ' (CANLI) ortamında yapılacak; istekler gerçek sisteme gider. Emin misiniz?')),
+      h('div', { class: 'diyalog-alt' }, vazgec, evet));
+    let sonuc = false;
+    evet.addEventListener('click', () => { sonuc = true; diyalog.close(); });
+    vazgec.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(sonuc); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    vazgec.focus();
+  });
 }
 
 /** Pencerede bekleyen izin kararları (aynı izin için aynı anda gelen 403'ler tek pencereyi bekler). @type {Map<string, Promise<boolean>>} */
@@ -286,7 +319,7 @@ async function izinPenceresi(anahtar, mesaj) {
           h('p', {}, h('b', {}, `${t.etiket}: `), t.aciklama),
           h('p', { class: 'kucuk' }, h('b', {}, 'Risk: '), t.risk),
           h('p', { class: 'soluk kucuk' }, t.kapaliyken)) : null,
-        anahtar === 'canli-ortam' ? h('p', { class: 'soluk kucuk' }, 'İzin açılsa da riskli ortamdaki her çalıştırma ayrıca onay ister.') : null,
+        anahtar === 'canli-ortam' ? h('p', { class: 'soluk kucuk' }, 'İzin açılsa da CANLI ortama istek atan her işlem ayrıca onay ister.') : null,
         kasaAcik ? null : h('p', { class: 'soluk kucuk' }, 'Kasa kilitli: izni açmak için önce kasanın kilidini açın.'),
         hataKutusu),
       h('div', { class: 'diyalog-alt' }, kapat, git, ver));

@@ -305,7 +305,7 @@ test.describe('yedek uyarısı penceresi (arayüz)', () => {
     await expect(d.locator('#yedek-uyarisi-metni')).toHaveText(
       `Yedekteki izinler geçerli: ${ACIK_IZINLER.map(etiket).join(', ')} açık; diğerleri kapalı. Ayarlar > İzinler'den gözden geçirin.`);
     await expect(d.locator('.yedek-uyarisi-riskler')).toHaveText(
-      'Ortamların riskli seçimleri de yedektekiyle geçerli. Riskli: CANLI; riskli değil: TEST; belirtilmemiş (riskli sayılır): ÖN TEST.');
+      'Ortamların türleri (Test / Canlı) de yedektekiyle geçerli. Canlı: CANLI; Test: TEST; türü seçilmemiş (Canlı sayılır): ÖN TEST.');
     await expect(d.getByRole('button', { name: 'Tamam' })).toBeFocused();
     await expect(d.getByRole('button', { name: 'İzinlere git' })).toBeVisible();
     await tasmaYok(masaustu);

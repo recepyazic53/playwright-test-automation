@@ -321,7 +321,7 @@ export const REHBERLER = {
       {
         baslik: 'Koşu penceresi',
         metin: ['Ortamı seçince Nöbetçi hiçbir istek atmadan akışı denetler: bir adım o ortamda tanımlı değilse (servisin taban adresi yok, ekran senaryosu o ortamda yok, veritabanı eşlemesi yok) koşu başlamaz ve hangi adım olduğu yazılır.',
-          'Gereken izinler (web erişimi, servis istekleri, veritabanı okuma, giriş bilgisi, riskli ortam) toplu listelenir; kapalı olan koşu başlarken sorulur. İzinler her adımdan önce yeniden denetlenir.'],
+          'Gereken izinler (web erişimi, servis istekleri, veritabanı okuma, giriş bilgisi, canlı ortam) toplu listelenir; kapalı olan koşu başlarken sorulur. İzinler her adımdan önce yeniden denetlenir.'],
         ipucu: 'Bir adım kalırsa sonraki adımlar atlanır; adımda "Bu adım kalırsa da sonraki adımlara devam et" işaretliyse akış sürer.'
       },
       {
@@ -402,11 +402,11 @@ export const REHBERLER = {
     baslik: 'Proje ve ortamlar',
     adimlar: [
       { baslik: 'Ayarlar', hedef: '.alt-nav', metin: 'Ayarlar bölümleri solda. Buradaki her seçim sizin kararınızdır; Nöbetçi\'nin kodunda sizin yerinize verilmiş bir tercih yoktur.' },
-      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). Riskli ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'riskli değil' }, { baslik: 'CANLI ortamı', alt: 'riskli: yalnız güvenli adımlar' }] } },
+      { baslik: 'Ortamlar', metin: 'Testlerin çalışacağı adresler (ör. test, hazırlık, canlı). Her ortamın türü Test ya da Canlı\'dır. Canlı ortamda yalnızca test ortamına özel adımlar (ör. ödeme) atlanır. Adresler kasada şifrelidir.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Proje' }, { baslik: 'TEST ortamı', alt: 'türü: Test' }, { baslik: 'CANLI ortamı', alt: 'türü: Canlı — her işlemde onay' }] } },
       {
-        baslik: 'Bu ortam riskli mi?',
-        metin: [RISKLI_ORTAM_TANIMI, 'Riskli ortamda her çalıştırma ayrıca onay ve Ayarlar > İzinler\'de "Canlı / riskli ortamda çalıştırma" izni ister; akış / giriş kaydı yapılamaz; servis "Dene"si yapılamaz.'],
-        ipucu: 'Yanıtlanmamış ortamlar listede "Riskli mi? belirtin" olarak görünür. "Evet"ten "Hayır"a geçmek onay ister; her değişiklik ortamın "Geçmiş"inde durur.'
+        baslik: 'Ortam türü: Test / Canlı',
+        metin: [RISKLI_ORTAM_TANIMI, 'Canlı ortamda koşu, Dene, tarama, akış / giriş kaydı ve servis istekleri yapılabilir; yalnız her işlem başlamadan "CANLI ortam" penceresinde onayınız istenir ("Evet, devam et") ve Ayarlar > İzinler\'de "Canlı ortamda çalıştırma" izni gerekir. Siz onaylamadıkça Canlı ortama istek gitmez.'],
+        ipucu: 'Türü seçilmemiş (eski) ortamlar listede "Türünü seçin" olarak görünür. Canlı\'dan Test\'e geçmek onay ister; her değişiklik ortamın "Geçmiş"inde durur.'
       },
       {
         baslik: 'Servis taban adresleri',
@@ -491,7 +491,7 @@ export const REHBERLER = {
   'ayarlar-yedekleme': {
     baslik: 'Yedekleme',
     adimlar: [
-      { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır. Yedeğin tamamı yüklenince (ya da seçmeli içe aktarmada Ayarlar\'daki "izinler" kaydı alınınca) yedekteki izinler ve ortamların riskli seçimleri olduğu gibi geçerli olur; Nöbetçi açıldığında bir kez hangi izinlerin açık olduğunu gösteren bir uyarı çıkar ("Tamam" ya da "İzinlere git" ile kapatılınca kimse için bir daha çıkmaz).', cizim: { tur: 'akis', kutular: [{ baslik: 'Kasa', ikon: 'kilit' }, { baslik: '.tayedek', alt: 'şifreli', ikon: 'arsiv' }, { baslik: 'Başka bilgisayar', ikon: 'bilgisayar' }] } },
+      { baslik: 'Yedekler', metin: 'Dışa aktar: şifreli .tayedek dosyası. İçe aktar: başka bir bilgisayarın yedeğindeki kayıtları seçerek alın. Otomatik yedek her gün alınır. Yedeğin tamamı yüklenince (ya da seçmeli içe aktarmada Ayarlar\'daki "izinler" kaydı alınınca) yedekteki izinler ve ortamların türleri (Test / Canlı) olduğu gibi geçerli olur; Nöbetçi açıldığında bir kez hangi izinlerin açık olduğunu gösteren bir uyarı çıkar ("Tamam" ya da "İzinlere git" ile kapatılınca kimse için bir daha çıkmaz).', cizim: { tur: 'akis', kutular: [{ baslik: 'Kasa', ikon: 'kilit' }, { baslik: '.tayedek', alt: 'şifreli', ikon: 'arsiv' }, { baslik: 'Başka bilgisayar', ikon: 'bilgisayar' }] } },
       { baslik: 'Saklama', metin: 'Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz. Geçmiş sonuçları buradan silebilirsiniz (önce kaç kayıt silineceği gösterilir).' },
       {
         baslik: 'Medyayı incelt (kademeli saklama)',
@@ -515,7 +515,7 @@ export const REHBERLER = {
       { baslik: 'Ne yapar, nerede kullanılır?', hedef: '.izin-soru', metin: 'Her iznin yanındaki "?" düğmesi o iznin neler yapabildiğini, hangi ekranlarda ve hangi işlemlerde kullanıldığını, riskini ve kapalıyken ne olduğunu açar. Klavyeyle de açılır; Esc kapatır.' },
       { baslik: 'Açmak ve kapatmak', hedef: '.izin-anahtari', metin: 'Açarken kısa bir onay penceresi iznin ne yaptığını ve riskini gösterir. Kapatmak her zaman serbesttir. İzin açıkken de işlem başına onaylar (ör. canlı ortam onayı) sorulmaya devam eder.', ipucu: 'Zamanlanmış koşularda kapalı izne bağlı işlem atlanır ve geçmişte "izin kapalı: …" olarak görünür.' },
       { baslik: 'Son değişiklikler', metin: 'Hangi iznin kim tarafından, ne zaman açılıp kapandığı bu bölümün altında listelenir.' },
-      { baslik: 'Yedekten yüklemede', metin: 'Yedekten tam yüklemede izinler yedektekiyle olduğu gibi geçerli olur (değiştirilmez). Yüklemeden sonra Nöbetçi açılınca bir kez "Yedek yüklendi" penceresi açık izinleri ve ortamların riskli seçimlerini gösterir; buradan gözden geçirin.' }
+      { baslik: 'Yedekten yüklemede', metin: 'Yedekten tam yüklemede izinler yedektekiyle olduğu gibi geçerli olur (değiştirilmez). Yüklemeden sonra Nöbetçi açılınca bir kez "Yedek yüklendi" penceresi açık izinleri ve ortamların türlerini (Test / Canlı) gösterir; buradan gözden geçirin.' }
     ]
   },
   'ayarlar-guvenlik': {

@@ -98,12 +98,17 @@ test.afterAll(async () => {
   else if (klasor) console.log(`[test] klasör: ${klasor}`);
 });
 
-test('başlatma kuralları: onay, canlı işaretli ortam ve tek bağlam profili (tarayıcı açılmadan red)', async () => {
+test('başlatma kuralları: onay, CANLI ortamda açık onay (kesin yasak yok) ve tek bağlam profili (tarayıcı açılmadan red)', async () => {
   const ortamlar = (await api(`/platform/ortamlar?projeId=${projeId}`)).ortamlar as Nesne[];
   expect(ortamlar.find((o) => o.id === canliOrtamId)?.canli).toBe(true);
   expect(ortamlar.find((o) => o.id === ortamId)?.canli).toBe(false);
   expect(await api('/platform/tarama/baslat', kayitGovdesi({ onay: false }))).toMatchObject({ basarili: false, kod: 'ONAY_GEREKLI' });
-  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId, canliOnay: true }))).toMatchObject({ basarili: false, kod: 'CANLI_ORTAM' });
+  // CANLI ortam: akış kaydı artık yapılabilir; yalnız istekte canliOnay: true yoksa hiçbir şey yapılmadan 409 (tarayıcı açılmaz).
+  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId }))).toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI', ortamAdi: 'Üretim' });
+  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId, kip: 'girisKaydi' }))).toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI' });
+  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId, kip: 'girisDenemesi' }))).toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI' });
+  // Onayla CANLI_ORTAM reddi YOK: istek sonraki kurala (tek bağlam profili) kadar ilerler — tarayıcı yine açılmaz.
+  expect(await api('/platform/tarama/baslat', kayitGovdesi({ ortamId: canliOrtamId, canliOnay: true, baglamProfilleri: ['Merkez', 'Yetkili'] }))).toMatchObject({ basarili: false, kod: 'PROFIL' });
   expect(await api('/platform/tarama/baslat', kayitGovdesi({ baglamProfilleri: ['Merkez', 'Yetkili'] }))).toMatchObject({ basarili: false, kod: 'PROFIL' });
   expect(uygulama.olaylar).toEqual([]);
 });
@@ -260,7 +265,7 @@ test('kayıttan çıkan model kabul edilir; formdan senaryo oluşturulur ve Nöb
   expect(uygulama.olaylar.filter((o) => SIRKET_DESENI.test(o))).toEqual([]);
 });
 
-test('arayüz: ekranda "Akışı kaydet" diyaloğu (canlı ortam seçilemez, onaysız başlamaz) ve akış diyagramı oluştur sayfası (taşı, ekle, sil, hata, önizleme)', async () => {
+test('arayüz: ekranda "Akışı kaydet" diyaloğu (CANLI ortam seçilebilir; başlatmadan önce tek tip CANLI onayı — Vazgeç\'te istek yok, Evet\'te canliOnay gider), onaysız başlamaz; akış diyagramı oluştur sayfası (taşı, ekle, sil, hata, önizleme)', async () => {
   test.setTimeout(120_000);
   const tarayici = await korumaliTarayici();
   try {
@@ -273,7 +278,7 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (canlı ortam seçilemez, ona
     await page.getByRole('menuitem', { name: 'Akışı kaydet' }).click();
     const diyalog = page.locator('dialog[open]');
     await expect(diyalog.getByText('Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.')).toBeVisible();
-    await expect(diyalog.locator('option', { hasText: 'Üretim (riskli — kayıt kapalı)' })).toBeDisabled();
+    await expect(diyalog.locator('option', { hasText: 'Üretim (Canlı)' })).toBeEnabled();
     const baslat = diyalog.getByRole('button', { name: 'Kaydı başlat' });
     await expect(baslat).toBeDisabled();
     // "Giriş yapmadan aç": bağlam profili seçilemez.
@@ -284,6 +289,38 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (canlı ortam seçilemez, ona
     await diyalog.getByText('Anladım; bastığım düğmeler siteye gerçek istek gönderecek.').click();
     await expect(baslat).toBeEnabled();
     await goruntu(diyalog, '04-kayit-diyalogu.png');
+    // CANLI ortam: "Kaydı başlat" → tek tip CANLI onayı. Başlatma isteği sayılır; Evet'te gövde yakalanır, kayıt BAŞLATILMAZ (sahte yanıt).
+    const baslatmaGovdeleri: Nesne[] = [];
+    await page.route('**/platform/tarama/baslat', async (r) => {
+      baslatmaGovdeleri.push(JSON.parse(r.request().postData() || '{}') as Nesne);
+      await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ basarili: false, mesaj: 'Test: kayıt başlatılmadı.' }) });
+    });
+    await diyalog.getByLabel('Ortam').selectOption({ label: 'Üretim (Canlı)' });
+    await diyalog.getByLabel('Bağlam profili').selectOption('Yetkili');
+    await baslat.click();
+    const canliPencere = page.getByRole('dialog', { name: 'CANLI ortam' });
+    await expect(canliPencere).toBeVisible();
+    await expect(canliPencere).toContainText('Bu işlem Üretim (CANLI) ortamında yapılacak; istekler gerçek sisteme gider. Emin misiniz?');
+    await canliPencere.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(canliPencere).toHaveCount(0);
+    expect(baslatmaGovdeleri).toHaveLength(0);
+    await baslat.click();
+    await page.getByRole('dialog', { name: 'CANLI ortam' }).getByRole('button', { name: 'Evet, devam et' }).click();
+    await expect.poll(() => baslatmaGovdeleri.length).toBe(1);
+    expect(baslatmaGovdeleri[0]).toMatchObject({ kip: 'kayit', ortamId: canliOrtamId, canliOnay: true });
+    // Onay hatırlanmaz: ikinci başlatma yeniden sorar.
+    await baslat.click();
+    await expect(page.getByRole('dialog', { name: 'CANLI ortam' })).toBeVisible();
+    await page.getByRole('dialog', { name: 'CANLI ortam' }).getByRole('button', { name: 'Vazgeç' }).click();
+    expect(baslatmaGovdeleri).toHaveLength(1);
+    // TEST ortamında CANLI penceresi çıkmaz.
+    await diyalog.getByLabel('Ortam').selectOption({ label: 'Deneme' });
+    await diyalog.getByLabel('Bağlam profili').selectOption('Yetkili');
+    await baslat.click();
+    await expect.poll(() => baslatmaGovdeleri.length).toBe(2);
+    await expect(page.getByRole('dialog', { name: 'CANLI ortam' })).toHaveCount(0);
+    expect(baslatmaGovdeleri[1].canliOnay).toBeUndefined();
+    await page.unroute('**/platform/tarama/baslat');
     await diyalog.getByRole('button', { name: 'Vazgeç' }).click();
     // Tamamlanan kaydın sayfası: akış diyagramı (kaydedilen tasarım) açılır.
     await page.goto(`/#/ekranlar/tarama/${encodeURIComponent(kayitIsId)}`);

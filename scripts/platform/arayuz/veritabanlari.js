@@ -47,7 +47,7 @@ export async function veritabanlariBolumu(proje, ortamlar, baglantilar, yenile) 
       h('thead', {}, h('tr', {},
         h('th', { scope: 'col' }, 'Veritabanı'),
         ortamlar.map((o) => h('th', { scope: 'col', class: riskliOrtamMi(o) ? 'riskli-ortam' : null },
-          o.ad, riskliOrtamMi(o) ? rozet([ikon('uyari'), o.riskli === null ? 'riskli mi?' : 'riskli'], 'hata', { title: 'Riskli ortam: bu sütundaki bağlantıya koşu sırasında gerçek sorgu gider.' }) : null)),
+          o.ad, riskliOrtamMi(o) ? rozet([ikon('uyari'), o.riskli === null ? 'türünü seçin' : 'Canlı'], 'hata', { title: 'Canlı ortam: bu sütundaki bağlantıya koşu sırasında gerçek sorgu gider (koşu başlarken onay sorulur).' }) : null)),
         h('th', { scope: 'col' }, h('span', { class: 'gorunmez' }, 'İşlemler')))),
       h('tbody', {}, veritabanlari.map((v) => h('tr', {},
         h('th', { scope: 'row' }, h('strong', {}, v.ad),
@@ -130,7 +130,7 @@ function veritabaniFormu(s) {
       s.baglantilar.length ? null : h('p', { class: 'soluk kucuk' }, 'Projede “Veritabanı bağlantısı” yok; önce bağlantı ekleyin.'),
       secimler.map((x) => h('div', { class: `alan ${riskliOrtamMi(x.ortam) ? 'riskli-ortam' : ''}` },
         h('label', { for: x.secim.id || (x.secim.id = `vt-esleme-${x.ortam.id}`) }, x.ortam.ad,
-          riskliOrtamMi(x.ortam) ? rozet([ikon('uyari'), x.ortam.riskli === null ? 'riskli mi?' : 'riskli'], 'hata') : null),
+          riskliOrtamMi(x.ortam) ? rozet([ikon('uyari'), x.ortam.riskli === null ? 'türünü seçin' : 'Canlı'], 'hata') : null),
         x.secim))),
     uyari,
     h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'hayalet', onclick: s.kapat }, 'Vazgeç'), kaydet));

@@ -2,7 +2,7 @@
 //
 // AKIŞ KAYDI: aynı iş altyapısı; alt süreç GÖRÜNÜR tarayıcı açar, kullanıcı akışı kendisi yürütür, sayfadaki Nöbetçi paneli
 // alanları/düğmeleri/mesajları TOPLAR (kayit-motoru.ts). Başlatma kuralları: açık onay (bastığı düğmeler siteye gerçek istek
-// gönderir), ortam riskliyse ret (guvenlik/ortam-riski.mjs; kullanıcı seçimi), en fazla bir bağlam profili, süre sınırı varsayılan
+// gönderir), CANLI ortamda ayrıca canlı ortam onayı (canliOnay; guvenlik/uc-denetimi.mjs), en fazla bir bağlam profili, süre sınırı varsayılan
 // 30 dk (NOBETCI_KAYIT_ZAMAN_ASIMI_SN). Kayıt bitince iş "tasarım" bekler: taslak diyagram (akis-tasarimi.mjs > akisTaslagi)
 // Nöbetçi'de düzenlenir; kaydedilen diyagram kayıt envanterine çevrilip kayitPaketiOlustur ile aynı sayfa paketi akışına girer.
 // Tasarım bekleyen iş, son erişimden itibaren TASARIM_SAKLAMA_KATI kat daha uzun saklanır (bellekte; sunucu yeniden
@@ -366,10 +366,8 @@ export function taramaYoneticisiOlustur(secenekler) {
     const ortamId = kimlikAl(g.ortamId, 'ortamId');
     const ortamKaydi = ortamlariListele(vt, projeId).find((o) => o.id === ortamId);
     if (!ortamKaydi) throw new DepoHatasi('Ortam bulunamadı.');
-    // Akış / giriş kaydında bastığınız düğmeler siteye gerçek istek gönderir: riskli ortamda (kullanıcı seçimi; belirtilmemiş = riskli) yapılamaz.
-    if ((kayit || girisDenemesi) && riskliOrtamMi(ortamKaydi)) {
-      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı riskli${riskliSecimi(ortamKaydi) === null ? ' (riskli olup olmadığı belirtilmemiş)' : ''}; ${girisDenemesi ? 'giriş denemesi' : girisKaydi ? 'giriş kaydı' : 'akış kaydı'} bu ortamda yapılamaz (Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").`);
-    }
+    // CANLI ortam: tarama, akış / giriş kaydı ve giriş denemesi yapılabilir; istek yalnız kullanıcı onaylayınca (canliOnay: true)
+    // gider — HTTP ucunda tarayıcı açılmadan denetlenir (guvenlik/uc-denetimi.mjs).
 
     // Ekran: mevcut (tekrar analiz ya da modelsiz ekrana ilk model) ya da yeni (ad + anahtar). Giriş kaydında ekran yoktur.
     const ekranlar = ekranlariListele(vt, projeId);
@@ -992,7 +990,7 @@ export async function taramaIsteginiIsle(req, res, b) {
     if (govde.token !== b.token && !b.disTokenGecerli) { tokenYok(); return true; }
     if (yol === '/platform/tarama/baslat') {
       const db = await b.acikVeritabani();
-      // İzinler (web erişimi; giriş tarifi varsa giriş bilgisi; riskli ortamda canlı ortam + açık onay): tarayıcı AÇILMADAN
+      // İzinler (web erişimi; giriş tarifi varsa giriş bilgisi; CANLI ortamda canlı ortam izni + açık onay): tarayıcı AÇILMADAN
       // denetlenir (tek merkez: guvenlik/uc-denetimi.mjs). Kapalıysa IzinHatasi → sunucu 403 IZIN_KAPALI döner.
       ucDenetle(db, yol, govde);
       const port = req.socket.localPort;

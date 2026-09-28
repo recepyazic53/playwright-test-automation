@@ -225,7 +225,6 @@ export function uctanUcaOnDenetim(vt, projeId, g) {
   if (!akis.taslak && akis.kapsam !== 'ikisi' && akis.kapsam !== (riskli ? 'canli' : 'test')) {
     uyarilar.push(`Akış yalnız ${akis.kapsam === 'test' ? 'TEST' : 'CANLI'} ortamda koşar (Kapsam).`);
   }
-  if (akis.taslak && riskli) uyarilar.push('Kaydedilmemiş akış yalnız TEST ortamında denenir; önce kaydedin.');
   const desenler = calistirici?.secenekler(vt).yasakDesenleri ?? [];
   akis.icerik.adimlar.forEach((a, n) => {
     const yer = `${n + 1}. adım (${a.ad})`;
@@ -247,7 +246,7 @@ export function uctanUcaOnDenetim(vt, projeId, g) {
     const op = a.tur === 'operasyon' ? a.operasyon : servisSenaryosuGetir(vt, a.senaryoId)?.icerik.operasyon;
     if (riskli && op && (sv.ayarlar.yalnizTestOperasyonlari ?? []).includes(op)) uyarilar.push(`${yer}: "${sv.ad} · ${op}" CANLI'da çağrılmaz.`);
   });
-  // Gereken izinler (toplu): adım türlerine göre; riskli ortamda canlı ortam izni (+ her koşuda ayrıca onay).
+  // Gereken izinler (toplu): adım türlerine göre; CANLI ortamda canlı ortam izni (+ her koşuda ayrıca onay).
   const durum = izinleriOku(vt);
   /** @type {Map<string, Set<string>>} */
   const gereken = new Map();
@@ -270,7 +269,7 @@ export function uctanUcaOnDenetim(vt, projeId, g) {
 
 /**
  * Uçtan uca akışı koşar ve kaydeder (tek koşu kaydı). Ön denetimde sorun varsa hiçbir adım koşmaz. Kayıtlı akış "koşu", taslak
- * (kaydedilmemiş hâl) "Dene" (yalnız TEST) olarak yazılır.
+ * (kaydedilmemiş hâl) "Dene" olarak yazılır (CANLI ortamda ikisi de kullanıcı onayıyla; uc-denetimi.mjs).
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ akisId?: unknown; icerik?: unknown; baslik?: unknown; kapsam?: unknown; ortamId: unknown; sinyal?: AbortSignal }} g
  */

@@ -1,18 +1,20 @@
-// RİSKLİ ORTAM — TEK TANIM, KULLANICI SEÇİMİ (sunucu ve arayüz aynı modülü kullanır; arayüze /arayuz/ortam-riski.mjs olarak sunulur).
-// Ortam formundaki soru: "Bu ortam riskli mi? (gerçek işlem oluşturabilir)" → Evet / Hayır. Saklama: ortam.ayarlar.riskli
-// (true | false | yok). Kural YALNIZ seçime bakar:
-//   riskli === true  → riskli
-//   riskli === false → riskli değil
-//   belirtilmemiş    → riskli (güvenli taraf; arayüz "Riskli mi? belirtin" uyarısı gösterir)
-// Geriye uyum: eski "Bu ortam canlı" işareti (ayarlar.canli === true) seçim yoksa "Evet" sayılır (kaydedilince riskli yazılır).
-// "Varsayılan ortam" (yalnız başlangıç ortamı) ve ortamın ADI riski belirlemez; ad canlıyı çağrıştırıyorsa ve "Hayır" seçilirse
+// ORTAM TÜRÜ (TEST / CANLI) — TEK TANIM, KULLANICI SEÇİMİ (sunucu ve arayüz aynı modülü kullanır; arayüze /arayuz/ortam-riski.mjs olarak sunulur).
+// Ortam formundaki soru: "Ortam türü" → Test / Canlı (zorunlu). Saklama GERİYE UYUMLU: ortam.ayarlar.riskli (true = Canlı,
+// false = Test, yok = seçilmemiş). Kural YALNIZ seçime bakar:
+//   riskli === true  → Canlı
+//   riskli === false → Test
+//   belirtilmemiş    → Canlı (güvenli taraf; eski kayıt — arayüz "Ortam türünü seçin" uyarısı gösterir)
+// Geriye uyum: eski "Bu ortam canlı" işareti (ayarlar.canli === true) seçim yoksa Canlı sayılır (kaydedilince riskli yazılır).
+// "Varsayılan ortam" (yalnız başlangıç ortamı) ve ortamın ADI türü belirlemez; ad canlıyı çağrıştırıyorsa ve Test seçilirse
 // kaydederken yalnızca onay istenir (adCanliyiCagristiriyorMu).
-// Arayüz görünümlerinde (ör. /platform/ortamlar) ortam { riskli: true | false | null, canli: <etkin risk> } olarak gelir; bu
+// Canlı ortamda KESİN YASAK YOKTUR: kullanıcının başlattığı her istek "CANLI ortam" onayıyla gider (guvenlik/uc-denetimi.mjs).
+// Arayüz görünümlerinde (ör. /platform/ortamlar) ortam { riskli: true | false | null, canli: <etkin tür> } olarak gelir; bu
 // fonksiyonlar iki biçimi de okur. Saf modül: hiçbir şey içe aktarmaz (tarayıcıda da çalışır).
+// Not: fonksiyon adlarındaki "riskli" = Canlı ortam (tarihsel ad; saklama alanıyla aynı).
 
 /** Kullanıcıya gösterilen tanım (Ayarlar, İzinler "?" açıklaması ve rehber bu metni kullanır). */
-export const RISKLI_ORTAM_TANIMI = 'Riskli ortam: ortam formunda "Bu ortam riskli mi? (gerçek işlem oluşturabilir)" sorusuna "Evet" dediğiniz ortam. '
-  + 'Soru henüz yanıtlanmamışsa ortam riskli sayılır. Varsayılan ortam olması ya da adı riski değiştirmez.';
+export const RISKLI_ORTAM_TANIMI = 'Canlı ortam: ortam formunda "Ortam türü" olarak Canlı seçtiğiniz ortam. Türü henüz seçilmemiş (eski) ortamlar Canlı sayılır. '
+  + 'Canlı ortama istek atan her işlemde "Bu işlem CANLI ortamda yapılacak, emin misiniz?" diye sorulur. Varsayılan ortam olması ya da adı türü değiştirmez.';
 
 const CANLI_AD_DESENI = /canl|prod|uretim|üretim/i;
 
@@ -24,7 +26,7 @@ const CANLI_AD_DESENI = /canl|prod|uretim|üretim/i;
 const ayarlari = (ortam) => (ortam && typeof ortam.ayarlar === 'object' && ortam.ayarlar !== null ? /** @type {Record<string, unknown>} */ (ortam.ayarlar) : {});
 
 /**
- * Kullanıcının seçimi: true (Evet) | false (Hayır) | null (belirtilmemiş). Eski canli işareti "Evet" sayılır.
+ * Kullanıcının seçimi: true (Canlı) | false (Test) | null (seçilmemiş). Eski canli işareti Canlı sayılır.
  * @param {RiskOrtami} ortam @returns {boolean | null}
  */
 export function riskliSecimi(ortam) {
@@ -38,18 +40,18 @@ export function riskliSecimi(ortam) {
   return typeof ortam.canli === 'boolean' ? ortam.canli : null;
 }
 
-/** Ortam riskli mi (gerçek işlem oluşturabilir)? Belirtilmemiş → riskli. @param {RiskOrtami} ortam */
+/** Ortam Canlı mı (Ortam türü: Canlı)? Belirtilmemiş → Canlı. @param {RiskOrtami} ortam */
 export function riskliOrtamMi(ortam) {
   if (!ortam) return false;
   return riskliSecimi(ortam) !== false;
 }
 
-/** Riskli olup olmadığı henüz belirtilmemiş mi? @param {RiskOrtami} ortam */
+/** Ortam türü henüz seçilmemiş mi? @param {RiskOrtami} ortam */
 export function riskBelirtilmemisMi(ortam) {
   return Boolean(ortam) && riskliSecimi(ortam) === null;
 }
 
-/** Ad canlı / üretim çağrıştırıyor mu? (Yalnız "Hayır" seçilirken uyarı; riski belirlemez.) @param {unknown} ad */
+/** Ad canlı / üretim çağrıştırıyor mu? (Yalnız Test seçilirken onay; türü belirlemez.) @param {unknown} ad */
 export function adCanliyiCagristiriyorMu(ad) {
   return CANLI_AD_DESENI.test(String(ad ?? ''));
 }
