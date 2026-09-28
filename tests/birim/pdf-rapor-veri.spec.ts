@@ -279,7 +279,9 @@ test('yedek raporlar tablosunu içerir; proje silinince raporlar gider, sahipsiz
   expect(existsSync(dosya)).toBe(true);
   projeyiSil(vt, f.projeId, { medyaKlasoru: medya });
   expect(Number(vt.tek('SELECT COUNT(*) AS n FROM raporlar')?.n)).toBe(0);
-  // Proje silme zinciri rapor medyasını henüz tanımıyorsa günlük temizlik sahipsiz rapor medyasını ve dosyasını siler.
+  // Proje silme rapor PDF'ini (medya satırı + dosya) hemen siler; günlük temizlik de sahipsiz rapor medyası bırakmaz.
+  expect(Number(vt.tek("SELECT COUNT(*) AS n FROM medya WHERE sahip_turu = 'rapor'")?.n)).toBe(0);
+  expect(existsSync(dosya)).toBe(false);
   raporSaklamaTemizligi(vt, { medyaKlasoru: medya });
   expect(Number(vt.tek("SELECT COUNT(*) AS n FROM medya WHERE sahip_turu = 'rapor'")?.n)).toBe(0);
   expect(existsSync(dosya)).toBe(false);

@@ -21,7 +21,7 @@ const PAROLA_B = 'Kaynak-Proje-Yerel-Parola-2';
 async function kaynakOlustur() {
   const vt = await veritabaniniHazirla(null);
   await kasaOlustur(vt, PAROLA_A, { kdf: HIZLI_KDF });
-  const proje = projeKaydet(vt, { ad: 'Galaksi' });
+  const proje = projeKaydet(vt, { ad: 'Kaynak proje' });
   const test_ = ortamKaydet(vt, { projeId: proje, ad: 'TEST', tabanUrl: 'https://a-test.ornek.test', varsayilan: true, ayarlar: { riskli: false } });
   const canli = ortamKaydet(vt, { projeId: proje, ad: 'CANLI', tabanUrl: 'https://a-canli.ornek.test', ayarlar: { riskli: true } });
   const servisler: string[] = [];
@@ -48,7 +48,7 @@ async function kaynakOlustur() {
 async function yerelOlustur() {
   const vt = await veritabaniniHazirla(null);
   await kasaOlustur(vt, PAROLA_B, { kdf: HIZLI_KDF });
-  const proje = projeKaydet(vt, { ad: 'NİPPON' });
+  const proje = projeKaydet(vt, { ad: 'Hedef proje' });
   const test_ = ortamKaydet(vt, { projeId: proje, ad: 'Test', tabanUrl: 'https://b-test.ornek.test', varsayilan: true, ayarlar: { riskli: false } });
   const canli = ortamKaydet(vt, { projeId: proje, ad: 'Üretim', tabanUrl: 'https://b-canli.ornek.test', ayarlar: { riskli: true } });
   return { vt, proje, test: test_, canli };
@@ -193,11 +193,11 @@ test('uygulama sonu denetimi: kaynak proje kimliği bir kayda yazılırsa her ş
     const esleme = { projeler: { [a.proje]: { hedef: b.proje } } };
     // Hata benzetimi: servis yazılınca kaynak projeyi yeniden oluşturan ve servisi ona bağlayan bir tetikleyici.
     hamSql(b.vt, `CREATE TEMP TRIGGER hata_benzetimi AFTER INSERT ON servisler BEGIN
-      INSERT OR IGNORE INTO projeler (id, ad, ayarlar_json, olusturulma, guncellenme) VALUES ('${a.proje}', 'Galaksi', '{}', 'z', 'z');
+      INSERT OR IGNORE INTO projeler (id, ad, ayarlar_json, olusturulma, guncellenme) VALUES ('${a.proje}', 'Kaynak proje', '{}', 'z', 'z');
       UPDATE servisler SET proje_id = '${a.proje}' WHERE id = NEW.id; END`);
     const onceki = say(b.vt, 'SELECT COUNT(*) AS n FROM ortamlar');
     expect(() => iceAktarmaUygula(b.vt, h, { tumu: true, esleme }, { yapan: 'birim-test' }))
-      .toThrow(/İçe aktarma geri alındı: "Galaksi" projesi başka projeye aktarılırken kimliği şu kayıtlarda kaldı — projeler: 1, servisler: 3/);
+      .toThrow(/İçe aktarma geri alındı: "Kaynak proje" projesi başka projeye aktarılırken kimliği şu kayıtlarda kaldı — projeler: 1, servisler: 3/);
     hamSql(b.vt, 'DROP TRIGGER hata_benzetimi');
     expect(projeyeBagli(b.vt, a.proje)).toEqual({});
     expect(say(b.vt, 'SELECT COUNT(*) AS n FROM servisler')).toBe(0);

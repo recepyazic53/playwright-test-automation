@@ -87,6 +87,8 @@ function projeKayitlari(vt, projeId) {
   };
   sahipli('ekran', ekranIdleri);
   sahipli('senaryo', senaryoIdleri);
+  // Rapor arşivindeki PDF'ler (Sonuçlar > Raporlar; sonuclar/rapor-arsivi.mjs: sahip_turu 'rapor').
+  sahipli('rapor', vt.tumu('SELECT id FROM raporlar WHERE proje_id = ?', [projeId]).map((x) => String(x.id)));
   // Ekran ayarlarındaki kanıt görüntüleri ve dosya referansları (başka projede kullanılmıyorsa).
   /** @type {Set<string>} */
   const referanslar = new Set();
