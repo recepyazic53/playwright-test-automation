@@ -9,7 +9,9 @@
 //    alanlar (çekirdek liste + Ayarlar > Güvenlik > Maskeleme ek adları), kasada şifreli (hassas) senaryo alanları, kimlik
 //    profili alanları ve gizli tablo sütunlarından gelen değerler process.env.NOBETCI_<AD> okumasına çevrilir; gereken
 //    değişkenler dosyanın başında (.env örneğiyle) listelenir.
-//  - Nöbetçi'ye özgü adımlar (SQL kontrolü) "Nöbetçi'de koşar" yorumu + açık TODO olarak kalır.
+//  - Nöbetçi'ye özgü adımlar (SQL kontrolü, indirilen dosyayı doğrulama) "Nöbetçi'de koşar" yorumu + açık TODO olarak kalır
+//    (dosya adımında indirmeyi başlatan düğmeye basılır ve indirme beklenir; içerik beklentileri yorumdadır). Senaryonun bilerek
+//    boş bıraktığı alanlar (olumsuz senaryo) koşu planında zaten yoktur: kod o alanlara değer yazmaz, dosya başında listelenir.
 // Kullanıcının kendi verisi (seçiciler, ekran adı, değerler) üretilen koda yazılır; bu modülün kendisi genel kalır.
 // NOT: import.meta KULLANILMAZ. Tipler: playwright-disa-aktarma.d.mts.
 
@@ -17,6 +19,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { girisAdimlariniCoz } from '../giris/tarif.mjs';
 import { referansCoz } from '../dosyalar/referans.mjs';
 import { secenekBul } from './model-kosusu.mjs';
+import { beklentiAdi } from '../dosyalar/dosya-icerigi.mjs';
 
 /** Üretilen dosyanın ortam değişkenlerinin öneki. */
 export const DISA_AKTARMA_ON_EKI = 'NOBETCI_';
@@ -786,6 +789,27 @@ export function playwrightKoduUret(g) {
       if (adim.sonAdim) break;
       continue;
     }
+    if (adim.dosya) {
+      // İndirilen dosyayı doğrulama (Nöbetçi'ye özgü; dosyalar/dosya-icerigi.mjs): indirme Playwright'la yapılır, içerik beklentileri
+      // (CSV / XLSX / PDF / metin ayrıştırma) Nöbetçi dışında yok → yorum + TODO. Gizli tablo değeri taşıyan beklenti maskelenir.
+      const dosya = adim.dosya;
+      /** @param {unknown} d */
+      const maskeli = (d) => (d !== null && d !== undefined && gizliDegerler.has(String(d)) ? '***' : d);
+      govde.push(`${ic}// Nöbetçi'de koşar: indirilen dosyayı doğrulama (${yorum(dosya.bicim)}) — dosya indirilir, beklentiler tek tek denetlenir.`);
+      const tetik = dosya.tetikleyici?.secici;
+      if (tetik) {
+        govde.push(`${ic}const indirme = page.waitForEvent('download', { timeout: ${(dosya.zamanAsimiSn ?? 30) * 1000} });`,
+          `${ic}await page.locator(${s(tetik)}).filter({ visible: true }).first().click();`,
+          `${ic}const indirilen = await indirme;`,
+          `${ic}expect(indirilen.suggestedFilename()).toBeTruthy();`);
+      } else govde.push(`${ic}// TODO: indirmeyi başlatan düğme tanımlı değil; elle ekleyin.`);
+      for (const b of Array.isArray(dosya.beklentiler) ? dosya.beklentiler : []) {
+        govde.push(`${ic}//   Beklenti: ${yorum(beklentiAdi({ ...b, deger: maskeli(b.deger), ...(b.satir?.deger !== undefined ? { satir: { ...b.satir, deger: maskeli(b.satir.deger) } } : {}) }))}`);
+      }
+      govde.push(`${ic}// TODO: dosya içeriği doğrulaması Nöbetçi dışında yok; gerekiyorsa indirilen.path() ile kendi ayrıştırıcınızla ekleyin.`, '  });');
+      if (adim.sonAdim) break;
+      continue;
+    }
     if (adim.yenidenGiris) {
       const p = adim.yenidenGiris.profil;
       if (tarif) {
@@ -847,6 +871,7 @@ export function playwrightKoduUret(g) {
     '// Bu dosya Nöbetçi DIŞINDADIR: Nöbetçi\'deki değişiklikler (ekran modeli, senaryo, giriş tarifi, test verisi) buraya',
     '// yansımaz. Model değişince senaryoyu yeniden dışa aktarın. Kayıtlı oturum kullanılmaz; her koşuda yeniden giriş yapılır.',
     '// Gizli / kişisel değerler dosyaya yazılmadı: ortam değişkenlerinden okunur.',
+    ...(g.bilerekBos?.length ? ['//', `// Bilerek boş bırakılan alanlar (olumsuz senaryo; kod bu alanlara değer yazmaz): ${yorum(g.bilerekBos.join(', '))}`] : []),
     '//',
     zorunluDegiskenler.length ? '// Gereken ortam değişkenleri (.env örneği — değerleri Nöbetçi\'deki giriş profilinden / test verisinden alın):' : '// Gereken ortam değişkeni yok.',
     ...zorunluDegiskenler.map((d) => `//   ${d.ad}=        # ${d.aciklama}`),

@@ -36,6 +36,7 @@ import { sqlHedefi } from '../sql/sorgu-bagdastirici.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { VERI_KIPI_DEGISKENI } from '../tablolar/veri-kosulari.mjs';
 import { izinleriOku } from '../guvenlik/izinler.mjs';
 import { IZIN_TANIMLARI, izinMesaji } from '../guvenlik/izin-tanimlari.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
@@ -140,7 +141,9 @@ async function ekranAdiminiKos(vt, projeId, g) {
       const y = await k.calistir({
         ortam: GENEL_ORTAM_ETIKETI, dosya: hedef.dosya, ad: hedef.ad, kosuId: `akis-${randomUUID()}`, kosuTuru: null, kosuKimligi: null, kosuKapsami: null,
         senaryoId: hedef.senaryoId, etiket: hedef.etiket, grepDeseni: hedef.grepDeseni, genel: hedef.genel,
-        ekOrtam: { [AKIS_ADIMI_DEGISKENI]: JSON.stringify(adimVerisi), [AKIS_CIKTI_DOSYASI_DEGISKENI]: yol, [AKIS_CIKTI_ANAHTARI_DEGISKENI]: anahtar }
+        // Ekran adımı senaryoyu TEK kez koşar: senaryonun çoklu veri koşusu ayarı (tablodan çoklu satır) burada tek satıra indirilir;
+        // aksi hâlde aynı adım birden çok test olur ve akış çıktı dosyası (okunan değerler) son testinkiyle ezilir.
+        ekOrtam: { [AKIS_ADIMI_DEGISKENI]: JSON.stringify(adimVerisi), [AKIS_CIKTI_DOSYASI_DEGISKENI]: yol, [AKIS_CIKTI_ANAHTARI_DEGISKENI]: anahtar, [VERI_KIPI_DEGISKENI]: 'tek' }
       });
       govde = y.govde ?? {};
     } catch (e) {

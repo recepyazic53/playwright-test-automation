@@ -11,6 +11,7 @@ import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { modelKosuPlani, modelSenaryosuMu, veriHatalariMetni } from './model-kosusu.mjs';
 import { etkinSenaryoGirisi } from './senaryo-girisi.mjs';
 import { playwrightKoduUret } from './playwright-disa-aktarma.mjs';
+import { bilerekBosAnahtarlari } from '../../dogrulama/senaryo-dogrulayici.mjs';
 
 /** @param {unknown} d @returns {d is Record<string, any>} */
 const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
@@ -81,6 +82,7 @@ export async function senaryoyuPlaywrightKodunaAktar(db, istek, s) {
     tarif,
     baglam: tur ? { profil, degerler: profil ? d.model.baglamProfilleri?.[tur]?.[profil] ?? null : null } : null,
     canli: d.model.canli === true,
+    bilerekBos: bilerekBosAnahtarlari(sen.veri),
     gizlilik: {
       hassasAnahtarlar,
       gizliDegerler: Array.isArray(sen.tabloGizliDegerleri) ? sen.tabloGizliDegerleri : [],

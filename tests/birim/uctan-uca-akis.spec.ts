@@ -243,6 +243,8 @@ test.describe('uçtan uca akış motoru', () => {
     expect(JSON.stringify(ayrinti)).not.toMatch(/tok-\d/);
     // Geçici çıktı dosyası silindi.
     expect(existsSync(String(istek.ekOrtam?.NOBETCI_AKIS_CIKTI_DOSYASI))).toBe(false);
+    // Çoklu veri koşusu ile birlikte: ekran adımı senaryoyu tek satırla (tek test) koşturur (NOBETCI_VERI_KIPI=tek; test-sunucu bu adı geçirir).
+    expect(istek.ekOrtam?.NOBETCI_VERI_KIPI).toBe('tek');
   });
 
   test('hata olursa dur / devam: ekran adımı kalırsa sonrakiler atlanır; "kalırsa devam" işaretliyse sonrakiler koşar (eksik değer adımı hata olur)', async () => {

@@ -55,6 +55,16 @@ function genisPlan(): ModelKosuPlani {
         }
       }),
       adim('sql', [], { sql: { veritabaniId: 'vt1', sql: 'SELECT durum\nFROM kayitlar WHERE no = ${akis:No}', beklenen: { tur: 'sutunDegeri', sutun: 'durum', deger: 'TAMAM' }, okumalar: [{ ad: 'No', sutun: 'no' }] } }),
+      // İndirilen dosyayı doğrulama (dosya-icerigi dalı): beklentilerden biri gizli tablo değeri taşır (maskelenmeli).
+      adim('dosya', [], {
+        dosya: {
+          bicim: 'csv', zamanAsimiSn: 15, tetikleyici: { secici: '#indir', aciklama: 'Listeyi indir' },
+          beklentiler: [
+            { tur: 'adDeseni', deger: 'liste-*.csv' }, { tur: 'sutunVar', deger: 'Durum' }, { tur: 'icerir', deger: 'TABLO-GIZLI-DEGERI' },
+            { tur: 'hucre', sutun: 'Durum', deger: 'TAMAM', satir: { tur: 'kosul', sutun: 'No', deger: '${Siparis.No}' } }
+          ]
+        }
+      }),
       adim('yeniden', [], { yenidenGiris: { profil: 'İkinci kullanıcı' } }),
       adim('son', [alan('not', 'metin', 'son not')], { kosu: { basariGostergesi: { tur: 'eleman', deger: '#tamam' } }, sonAdim: true }),
       adim('disarida', [alan('hic', 'metin', 'koşulmaz')], { dahil: false })
@@ -202,6 +212,22 @@ test('SQL adımı: "Nöbetçi\'de koşar" yorumu + açık TODO (test.skip yok); 
   const h = playwrightKoduUret(girdi({ plan }));
   expect(h.icerik).toContain('await beklenenUyariyiBekle(page, { adim: "Adım bilgi", beklenenler: ["Birinci uyarı", "İkinci uyarı"], hataSecici: "#uyari", sureMs: 12000 });');
   expect(h.icerik).not.toContain('await basariBekle(page, { adim: "Adım bilgi"');
+});
+
+test('yeni adım türleri: dosya kontrolü indirmeyi bekler + beklentiler yorum ve TODO; bilerek boş alanlar başta listelenir', () => {
+  const r = playwrightKoduUret(girdi({ bilerekBos: ['musteriNo', 'aciklama'] }));
+  const dosya = r.icerik.slice(r.icerik.indexOf('await test.step("Adım dosya"'), r.icerik.indexOf('await test.step("Adım yeniden"'));
+  expect(dosya).toContain("// Nöbetçi'de koşar: indirilen dosyayı doğrulama (csv)");
+  expect(dosya).toContain("const indirme = page.waitForEvent('download', { timeout: 15000 });");
+  expect(dosya).toContain('await page.locator("#indir").filter({ visible: true }).first().click();');
+  expect(dosya).toContain('//   Beklenti: Dosya adı "liste-*.csv" desenine uyar');
+  expect(dosya).toContain('//   Beklenti: "Durum" = "TAMAM" ("No" = "${Siparis.No}" olan satırda)');
+  expect(dosya).toContain('// TODO: dosya içeriği doğrulaması Nöbetçi dışında yok');
+  // Gizli tablo değeri beklentide de düz yazılmaz.
+  expect(r.icerik).not.toContain('TABLO-GIZLI-DEGERI');
+  expect(dosya).toContain('//   Beklenti: Metin içerir: "***"');
+  expect(r.icerik).toContain('// Bilerek boş bırakılan alanlar (olumsuz senaryo; kod bu alanlara değer yazmaz): musteriNo, aciklama');
+  expect(playwrightKoduUret(girdi()).icerik).not.toContain('Bilerek boş');
 });
 
 test('ortam değişkeni adları ve dosya adı ASCII; çakışan ad sayı eki alır', () => {

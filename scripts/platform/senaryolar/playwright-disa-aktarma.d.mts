@@ -17,6 +17,8 @@ export type DisaAktarmaGirdisi = {
   tarif?: GirisTarifi | null;
   /** Bağlam değiştirme: senaryonun bağlam profili ve bu ortamdaki değerleri (gizli olmayanlar düz yazılır). */
   baglam?: { profil: string | null; degerler: Record<string, unknown> | null } | null;
+  /** Senaryonun bilerek boş bıraktığı alan anahtarları (olumsuz senaryo; dosya başında listelenir). */
+  bilerekBos?: string[];
   /** Riskli / canlı ortam: "yalnızca test ortamı" adımları atlanır (koşucuyla aynı). */
   canli?: boolean;
   gizlilik?: {
