@@ -38,6 +38,8 @@ async function basarili(yol: string, govde: Nesne): Promise<Yanit> {
   return y;
 }
 
+test.describe.configure({ mode: 'serial' });
+
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   klasor = mkdtempSync(join(tmpdir(), 'giris-kaydi-'));
@@ -163,5 +165,59 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
   } finally {
     await giris.close();
   }
+  await baglam.close();
+});
+
+test('"Girişi dene": yalnız giriş yapılır (ekran/senaryo yok); başarı, hatalı parola ve her adrese uyan başarı deseni açıkça bildirilir', async () => {
+  test.setTimeout(180_000);
+  // Değerler giriş profilinde (kasada şifreli); tarif önceki testte kayıttan oluştu.
+  await basarili('/platform/giris-profili/kaydet', { projeId, ortamId, ad: 'Deneme kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA, ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI });
+  const tarifler = async (): Promise<Nesne> => ((await api(`/platform/giris-tarifleri?projeId=${projeId}`)).ortamlar as Nesne[]).find((o) => o.ortamId === ortamId)?.tarif as Nesne;
+  const kayitli = await tarifler();
+  // Başarı göstergesi fikstürde yok ("Çıkış" bağlantısı kayıtta eklenmişti): girişten sonraki başlık yazılır.
+  await basarili('/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: { ...kayitli, basariGostergesi: { tur: 'metin', deger: 'Hoş geldiniz' } } });
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1360, height: 1000 } });
+  const page = await baglam.newPage();
+  const dene = async (): Promise<ReturnType<Page['getByRole']>> => {
+    await page.goto('/#/ayarlar/giris');
+    await page.locator('.giris-tarifi-bolumu li[data-ortam]').filter({ hasText: 'Deneme' }).getByRole('button', { name: 'Deneme: girişi dene' }).click();
+    const onay = page.getByRole('dialog', { name: 'Deneme: giriş denensin mi?' });
+    await expect(onay.getByLabel('Tarayıcıyı göster (girişi izleyin)')).not.toBeChecked();
+    await onay.getByRole('button', { name: 'Girişi dene' }).click();
+    return page.getByRole('dialog', { name: 'Giriş denemesi: Deneme' });
+  };
+
+  // 1) Başarılı: kayıtlı oturum kullanılmadan baştan giriş; giriş sonrası sayfa ve görüntüsü.
+  const once = uygulama.olaylar.length;
+  let sonuc = await dene();
+  await expect(sonuc.getByRole('status').filter({ hasText: 'Giriş başarılı' })).toContainText('Giriş sonrası sayfa: /panel', { timeout: 60_000 });
+  await expect(sonuc.getByRole('img', { name: 'Giriş sonrası sayfanın görüntüsü' })).toBeVisible();
+  await expect(sonuc.getByRole('listitem').filter({ hasText: 'Doğrulama kodu gönderildi.' })).toBeVisible();
+  expect(uygulama.olaylar.slice(once)).toEqual(expect.arrayContaining(['POST /giris', 'POST /dogrulama']));
+  await sonuc.getByRole('button', { name: 'Kapat' }).click();
+  await expect(sonuc).toBeHidden();
+
+  // 2) Hatalı parola: tarifteki hata göstergesi yok, ama girişin nerede takıldığı ve nedeni yazılır.
+  const profil = ((await api(`/platform/giris-profilleri?projeId=${projeId}`)).profiller as Nesne[]).find((p) => p.ad === 'Deneme kullanıcısı') as Nesne;
+  await basarili('/platform/giris-profili/kaydet', { id: profil.id, projeId, ortamId, ad: 'Deneme kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: 'Yanlis-Parola-1', ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI });
+  await basarili('/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: { ...kayitli, basariGostergesi: { tur: 'metin', deger: 'Hoş geldiniz' }, hataGostergeleri: [{ tur: 'metin', deger: 'Kullanıcı adı veya parola hatalı' }], zamanAsimiSn: 10 } });
+  sonuc = await dene();
+  await expect(sonuc.getByRole('alert').filter({ hasText: 'Giriş başarısız' })).toBeVisible({ timeout: 60_000 });
+  await expect(sonuc.getByRole('img', { name: 'Girişin takıldığı sayfanın görüntüsü' })).toBeVisible();
+  await sonuc.getByRole('button', { name: 'Kapat' }).click();
+
+  // 3) Her adrese uyan başarı deseni ("/"): siteye hiç gidilmeden tarif hatası.
+  await basarili('/platform/giris-tarifi/kaydet', { projeId, ortamId, tarif: { ...kayitli, basariGostergesi: { tur: 'url', deger: '/' } } });
+  const onceki = uygulama.olaylar.length;
+  sonuc = await dene();
+  await expect(sonuc.getByRole('alert')).toContainText('giriş sayfasının adresine de uyuyor', { timeout: 60_000 });
+  expect(uygulama.olaylar.length).toBe(onceki);
+  await sonuc.getByRole('button', { name: 'Kapat' }).click();
+
+  // Ortak akışlardaki giriş kartında da aynı düğme var.
+  await page.goto('/#/ekranlar');
+  await expect(page.getByRole('article', { name: 'Giriş (Deneme)' }).getByRole('button', { name: 'Deneme: girişi dene' })).toBeEnabled();
+  // Gizlilik: parola logda yok.
+  expect(readFileSync(join(klasor, 'sunucu.log'), 'utf8')).not.toContain(ORNEK_PAROLA);
   await baglam.close();
 });

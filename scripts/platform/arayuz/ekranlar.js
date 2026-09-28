@@ -172,7 +172,7 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
       : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Sayfa ekle') }),
-    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler),
+    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler, proje.id),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }
 
@@ -181,12 +181,12 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
  * de burada "Giriş (<ortam>)" kartıdır (tek satır özet; adımlar Düzenle → Ayarlar > Giriş profilleri > Giriş tarifi'nde).
  * Kartlar ekran kartlarıyla aynı düzende (ortakAkisKarti, giris-akisi.js > girisKarti).
  */
-function ortakAkisBolumu(liste, girisler = []) {
+function ortakAkisBolumu(liste, girisler = [], projeId = '') {
   if (!liste.length && !girisler.length) return null;
   return h('section', { class: 'ortak-akis-bolumu', 'aria-labelledby': 'ortak-akislar-baslik' },
     h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length + girisler.length), 'vurgu')),
       h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar. Giriş her koşuda ortamın giriş tarifiyle yapılır.')),
-    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...girisler.map(girisKarti), ...liste.map(ortakAkisKarti)));
+    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...girisler.map((o) => girisKarti(o, projeId)), ...liste.map(ortakAkisKarti)));
 }
 
 /**
