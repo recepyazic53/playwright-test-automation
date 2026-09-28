@@ -3861,14 +3861,13 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .sozlesme-secenegi { display: grid; gap: 2px; margin-top: 10px; }
 .sozlesme-notu, .yetki-notu { overflow-wrap: anywhere; }
 .kontrol-listesi li > div { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
-/* Senaryo tasarım yardımcısı (senaryo-onerileri.js): gruplu öneri listesi, kombinasyon alanları, alt eylem çubuğu. */
+/* Senaryo tasarım yardımcısı (senaryo-onerileri.js): kapsam paneli, gerekçeli öneri listesi, ikili kombinasyon alanları, alt eylem çubuğu. */
 .oneri-bilgisi { margin-bottom: var(--b4); }
 .oneri-grubu .kart-basligi > button { margin-left: auto; }
 .oneri-grubu > p.kucuk { margin: -6px 0 10px; }
 .oneri-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .oneri { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
 .oneri > input[type="checkbox"] { margin-top: 3px; }
-.oneri.mevcut { opacity: .72; }
 .oneri-icerigi { min-width: 0; }
 .oneri-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .oneri-basligi { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
@@ -3889,10 +3888,34 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .oneri-secim-sayisi { font-weight: 600; }
 .sayfa-basligi .meta .akis-secimi { display: inline-flex; align-items: center; gap: 6px; }
 .oneri-onizleme-notu { margin-bottom: var(--b4); }
+/* Gerekçe öne çıkar; başlık, rozetler ve puan altında. */
+.oneri-gerekcesi { margin: 0 0 4px; font-weight: 600; overflow-wrap: anywhere; }
+.oneri-ust .oneri-basligi { font-weight: 500; color: var(--metin-2); }
+.oneri-puani { margin-left: auto; font: 11px var(--yazi-mono); white-space: nowrap; }
+.oneri-eylemleri { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.oneri.reddedildi { opacity: .7; }
+.oneri-red-paneli { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel); box-shadow: inset 0 0 0 1px var(--cizgi); }
+.oneri-farklari { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12.5px; overflow-wrap: anywhere; }
+.oneri-elenen { margin: -4px 0 10px; }
+.daha-fazla { margin-top: 10px; }
+.kapsam-olculeri { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.kapsam-olcusu { display: grid; gap: 4px; text-align: left; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); color: inherit; cursor: pointer; min-width: 0; font: inherit; border: 0; }
+.kapsam-olcusu.acik { box-shadow: inset 0 0 0 1px var(--vurgu); }
+.kapsam-adi { font-size: 12px; color: var(--metin-2); overflow-wrap: anywhere; }
+.kapsam-degeri { font: 650 15px var(--yazi-mono); }
+.kapsam-cubugu { display: block; height: 4px; border-radius: 2px; background: var(--cizgi); overflow: hidden; }
+.kapsam-cubugu > span { display: block; height: 100%; background: var(--vurgu); }
+.kapsam-eksikleri { margin-top: 10px; }
+.kapsam-eksikleri ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; font-size: 12.5px; overflow-wrap: anywhere; max-height: 260px; overflow-y: auto; }
+.kapsam-paneli { margin-bottom: 12px; }
+.oneri-notlari-kutusu { margin-top: 12px; font-size: 12.5px; }
+.oneri-notlari-kutusu summary { cursor: pointer; color: var(--metin-2); }
+.oneri-notlari-kutusu .oneri-notlari { margin-top: 8px; }
 @media (max-width: 480px) {
   .oneri { grid-template-columns: auto minmax(0, 1fr); }
-  .oneri > .kucuk-dugme { grid-column: 2; justify-self: start; }
+  .oneri > .oneri-eylemleri { grid-column: 2; flex-direction: row; flex-wrap: wrap; justify-self: start; }
   .oneri-eylem-cubugu > button { width: 100%; justify-content: center; }
+  .kapsam-olculeri { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---- Uçtan uca akışlar (uctan-uca.js; servis + ekran + SQL adımları) ---------------------------------------------------------- */

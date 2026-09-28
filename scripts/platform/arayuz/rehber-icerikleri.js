@@ -153,8 +153,8 @@ export const REHBERLER = {
       {
         baslik: 'Senaryo önerileri',
         hedef: '.senaryo-onerileri-dugmesi',
-        metin: ['Bir ekran seçiliyken "Senaryo önerileri", ekranın modelinden ve mevcut senaryolardan öneri çıkarır: zorunlu alan boş, modeldeki kurallara göre sınır değerleri, koşullu alanların her dalı ve işaretlediğiniz 2–3 seçim alanının eksik kombinasyonları.',
-          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). Eklenenler "Koşuda" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.'],
+        metin: ['Bir ekran seçiliyken "Senaryo önerileri", ekranın modelinden, mevcut senaryolardan ve koşu geçmişinden AZ SAYIDA, gerekçeli öneri çıkarır. Sıra: risk (son dönemde hata veren değerler, test edilmemiş iş kuralı uyarıları) › hiç denenmemiş koşul dalları › eksik ikili kombinasyonlar (pairwise) › modeldeki kurallara göre sınır değerleri › zorunlu alan boş. Mevcut senaryoların zaten denediği şey önerilmez; sayfanın başındaki "Kapsam" ölçülerine tıklayınca eksikler listelenir.',
+          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). "Reddet" (neden isteğe bağlı) öneriyi gizler; kabul ve redleriniz benzer önerilerin sırasını değiştirir. Eklenenler "Koşuda" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.'],
         ipucu: 'Kişisel / gizli alanlarda değer üretilmez; mevcut senaryodaki değer ya da bağlı tablo kullanılır.'
       },
       {
