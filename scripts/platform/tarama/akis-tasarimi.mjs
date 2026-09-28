@@ -22,6 +22,12 @@
 //   giris    { ad, profil }                         Yeniden giriş: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle
 //            (profil: giriş profilinin adı; boşsa ortamın varsayılanı) yeniden girilir; kendi adımıdır, aksiyondan sonra gelir.
 //   bitir    {}                                     akışın sonu (zorunlu, son blok)
+//   korunan  { korunan: anahtar, ad, kapsam }       diyagramda DÜZENLENEMEYEN, modeldeki hâliyle AYNEN korunan parça (salt okunur;
+//            taşınabilir / silinebilir): kapsam 'adim' → adımın tamamı (ör. alt model adımı, yalnız öğe beklemesi), 'aksiyonlar'
+//            → adımın koşu aksiyonları (ör. metinle süzülen tıklama; düğmesi varsa adımın ilerlemesidir). Anahtar sunucudaki
+//            korunan parçaya başvurur (s.korunanlar; akis-servisi.mjs). Alan grubu ve aksiyon da "korunan" anahtarı taşıyabilir:
+//            adımın diyagramda gösterilemeyen özellikleri (görünürlük koşulu, kod yöntemi, başarı göstergesi, gösterilemeyen
+//            alanlar…) kaydedilen adıma aynen geri yazılır (adım kimliği de korunur).
 //
 //   akisTaslagi(envanter)                    kayıttaki olay sırasından HAZIR taslak: her düğme basışı bir aksiyon, aradaki
 //                                            dokunulan (ve listede işaretli) alanlar bir alan grubu, seçilen mesajlar mesaj.
@@ -213,6 +219,10 @@ export function akisPaleti(env, bloklar) {
   };
 }
 
+const KORUNAN_ANAHTAR_EN_COK = 400;
+/** Alan grubu / aksiyonun korunan parça anahtarı (varsa). @param {Record<string, any>} b */
+const korunanEki = (b) => (typeof b.korunan === 'string' && b.korunan && b.korunan.length <= KORUNAN_ANAHTAR_EN_COK ? { korunan: b.korunan } : {});
+
 /** Alan grubundaki değer kurallarının (sinirlar) bilinen anahtarları. */
 const SINIR_ANAHTARLARI = ['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enCokUzunluk', 'desen'];
 
@@ -265,11 +275,15 @@ export function bloklariAyikla(ham) {
           sinirlar[a] = Object.keys(temiz).length ? temiz : null;
         }
       }
-      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
+      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
     else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
     else if (b.tur === 'aksiyon') {
-      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
+      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
+    } else if (b.tur === 'korunan') {
+      // Salt okunur korunan parça: yalnız anahtarı (ve gösterilen adı) alınır; içeriği sunucudaki modelden gelir.
+      if (typeof b.korunan !== 'string' || !b.korunan || b.korunan.length > KORUNAN_ANAHTAR_EN_COK) { hatalar.push({ blok: i, mesaj: 'Korunan parça okunamadı; diyagramı yeniden açın.' }); return; }
+      bloklar.push({ tur: 'korunan', korunan: b.korunan, ad: metin(b.ad, AD_EN_COK), kapsam: b.kapsam === 'aksiyonlar' ? 'aksiyonlar' : 'adim' });
     }
     else if (b.tur === 'mesaj') bloklar.push({ tur: 'mesaj', mesaj: b.mesaj === null || b.mesaj === undefined ? null : sayi(b.mesaj), metin: metin(b.metin, METIN_EN_COK), ...(b.uyari === true ? { uyari: true } : {}), ...(b.desen === true ? { desen: true } : {}) });
     else if (b.tur === 'bitir') bloklar.push({ tur: 'bitir' });
@@ -285,7 +299,9 @@ export function bloklariAyikla(ham) {
  * Blokları doğrular ve kayıt envanterine (adım biçimi) çevirir. Hata varsa envanter null.
  * @param {import('./akis-tasarimi.d.mts').AkisEnvanteri} env @param {import('./akis-tasarimi.d.mts').AkisBlogu[]} bloklar
  * s.satirSiniri: SQL bloklarının beklenen satır sayısı için kullanıcının satır sınırı (Ayarlar > Koşu > Gelişmiş; verilmezse varsayılan).
- * @param {{ satirSiniri?: number }} [s]
+ * s.korunanlar: blokların "korunan" anahtarlarının karşılığı (diyagramda düzenlenemeyen, aynen korunan parçalar; yalnız ekranın
+ * akışı düzenlenirken sunucu verir). Karşılığı olmayan anahtar hatadır; bir parça yalnız bir blokta kullanılabilir.
+ * @param {{ satirSiniri?: number; korunanlar?: Record<string, import('./paket-olusturucu.d.mts').KorunanParca> }} [s]
  * @returns {{ envanter: import('./paket-olusturucu.d.mts').KayitEnvanteri | null; hatalar: import('./akis-tasarimi.d.mts').AkisHatasi[] }}
  */
 export function akistanKayitEnvanteri(env, bloklar, s = {}) {
@@ -297,7 +313,25 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   if (bitir < 0) hata(null, 'Akış “Bitir” bloğuyla bitmeli.');
   else if (bitir !== bloklar.length - 1) hata(bitir, '“Bitir”den sonra blok olamaz.');
   const etkin = bitir < 0 ? bloklar : bloklar.slice(0, bitir);
-  if (!etkin.some((b) => b.tur === 'alanlar' || b.tur === 'aksiyon')) hata(null, 'Akışta en az bir alan grubu ya da aksiyon olmalı.');
+  if (!etkin.some((b) => b.tur === 'alanlar' || b.tur === 'aksiyon' || b.tur === 'korunan')) hata(null, 'Akışta en az bir alan grubu ya da aksiyon olmalı.');
+  /** Kullanılan korunan parça anahtarları. @type {Set<string>} */
+  const kullanilanKorunan = new Set();
+  /** Korunan adımların (aynen) alanları → bloğun sırası ve adımın adı (bir alan iki adımda olamaz). @type {Map<string, { blok: number; ad: string }>} */
+  const korunanAdimAlanlari = new Map();
+  /**
+   * Bloğun korunan parçası (yoksa null; anahtar geçersiz / tekrarlıysa hata). @param {{ korunan?: string }} b @param {number} i
+   * @returns {import('./paket-olusturucu.d.mts').KorunanParca | null}
+   */
+  const korunanAl = (b, i) => {
+    if (typeof b.korunan !== 'string' || !b.korunan) return null;
+    const k = s.korunanlar && Object.prototype.hasOwnProperty.call(s.korunanlar, b.korunan) ? s.korunanlar[b.korunan] : null;
+    if (!k) { hata(i, 'Bu bloğun korunan parçası modelde bulunamadı (model değişmiş olabilir); diyagramı yeniden açın.'); return null; }
+    if (kullanilanKorunan.has(b.korunan)) { hata(i, 'Aynı korunan parça birden çok blokta; fazlasını silin.'); return null; }
+    kullanilanKorunan.add(b.korunan);
+    return k;
+  };
+  /** Adımın (herhangi bir parçasının) başarı göstergesi aynen korunuyor mu? @param {(typeof adimlar)[number]} a */
+  const gostergesiKorunan = (a) => (a.korunanlar ?? []).some((x) => x && x.tur === 'ek' && x.kosuEk && Object.prototype.hasOwnProperty.call(x.kosuEk, 'basariGostergesi'));
 
   /** @type {Array<import('./paket-olusturucu.d.mts').KayitAdimi & { parcalar: number[]; acicilar: import('./paket-olusturucu.d.mts').KayitAcicisi[] }>} */
   const adimlar = [];
@@ -335,8 +369,13 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       if (!b.ad) hata(i, 'Alan grubunun adını yazın.');
       else if (adlar.has(b.ad)) hata(i, `“${b.ad}” adı başka bir alan grubunda da var; adlar tekil olmalı.`);
       adlar.add(b.ad);
+      // Korunan parçalı grup (adımın diyagramda gösterilemeyen özellikleri) alansız da olabilir.
+      const korunan = korunanAl(b, i);
+      if (korunan && korunan.tur !== 'ek') hata(i, 'Bu korunan parça alan grubunda kullanılamaz.');
+      const ek = korunan && korunan.tur === 'ek' ? korunan : null;
       // Alansız grup bir aksiyonun adıdır (aradaki bekleme süreleri o aksiyondan öncedir).
-      if (!b.alanlar.length && etkin.slice(i + 1).find((x) => x.tur !== 'bekle')?.tur !== 'aksiyon') hata(i, 'Alan grubu boş: alan ekleyin (alansız bir adımı adlandırmak için ardından bir aksiyon gelmeli).');
+      const sonraki = etkin.slice(i + 1).find((x) => x.tur !== 'bekle');
+      if (!b.alanlar.length && !ek && sonraki?.tur !== 'aksiyon' && !(sonraki?.tur === 'korunan' && sonraki.kapsam === 'aksiyonlar')) hata(i, 'Alan grubu boş: alan ekleyin (alansız bir adımı adlandırmak için ardından bir aksiyon gelmeli).');
       /** @type {import('./paket-olusturucu.d.mts').HamAlan[]} */
       const hamlar = [];
       for (const a of b.alanlar) {
@@ -347,13 +386,18 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         hamlar.push({ ...h, zorunlu: b.zorunlu.includes(a) });
         if (b.kosullar && Object.prototype.hasOwnProperty.call(b.kosullar, a)) elleKosullar.push({ blok: i, alan: a, kosul: b.kosullar[a] });
       }
-      if (cur && bekleyen) {
+      // Korunan görünürlük koşulu olan adım (ör. seçime bağlı düğmeli adım) her zaman kendi adımıdır.
+      if (cur && bekleyen && !(ek && ek.adimEk && Object.prototype.hasOwnProperty.call(ek.adimEk, 'gorunurluk'))) {
         // İsteğe bağlı aksiyonun açtığı alanlar: aynı adımın o düğmeden sonraki parçası.
         const k = cur.acicilar.length;
         cur.alanlar.push(...hamlar);
         cur.parcalar.push(...hamlar.map(() => k));
+        if (ek) (cur.korunanlar ??= [])[k] = ek;
         bekleyen = false;
-      } else yeniAdim(b.ad || `${adimlar.length + 1}. adım`, hamlar);
+      } else {
+        yeniAdim(b.ad || `${adimlar.length + 1}. adım`, hamlar);
+        if (ek) /** @type {(typeof adimlar)[number]} */ (cur).korunanlar = [ek];
+      }
       // "Ekran görüntüsü al": grubun ait olduğu adım (isteğe bağlı düğmenin açtığı grupta da aynı adım).
       if (b.ekranGoruntusu && cur) /** @type {(typeof adimlar)[number]} */ (cur).ekranGoruntusu = true;
       return;
@@ -367,10 +411,17 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       if (!cur || kapali) yeniAdim(metin(d.metin, AD_EN_COK) || `${adimlar.length + 1}. adım`, []);
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
       if (b.ekranGoruntusu) c.ekranGoruntusu = true;
+      const korunan = korunanAl(b, i);
+      if (korunan && korunan.tur !== 'ek') { hata(i, 'Bu korunan parça aksiyonda kullanılamaz.'); return; }
       if (b.istegeBagli) {
-        c.acicilar.push({ ...og, secimli: true, ...(sure ? { onceBekle: sure } : {}) });
+        c.acicilar.push({ ...og, secimli: true, ...(sure ? { onceBekle: sure } : {}), ...(korunan ? { korunan } : {}) });
         bekleyen = true;
       } else {
+        if (korunan) {
+          // Korunan parçalı zorunlu aksiyon: adımın ilk parçasına yazılır (o parçada başka korunan parça olmamalı).
+          if (c.korunanlar?.[0] || c.acicilar.length) { hata(i, 'Bu aksiyonun korunan parçaları için önce kendi alan grubunu (adım adını) koyun.'); return; }
+          c.korunanlar = [korunan];
+        }
         c.ilerleme = og;
         if (b.zamanAsimiSn !== undefined) c.zamanAsimiSn = b.zamanAsimiSn;
         if (sure) c.onceBekle = (c.onceBekle ?? 0) + sure;
@@ -442,6 +493,44 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       sqlSonrasi = false;
       return;
     }
+    if (b.tur === 'korunan') {
+      const k = korunanAl(b, i);
+      if (!k) { if (!b.korunan) hata(i, 'Korunan parça okunamadı; diyagramı yeniden açın.'); return; }
+      if (k.tur === 'adim') {
+        // Adımın tamamı aynen (ör. alt model adımı): kendi adımıdır; önceki adım kapanır.
+        if (bekleyen) { hata(i, 'Korunan adım isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+        const ad = metin(k.adim.baslik, AD_EN_COK) || String(k.adim.id);
+        if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
+        adlar.add(ad);
+        sureyiBirak();
+        adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], korunanAdim: k.adim });
+        for (const x of k.alanAnahtarlari ?? []) if (!korunanAdimAlanlari.has(x)) korunanAdimAlanlari.set(x, { blok: i, ad });
+        cur = null;
+        kapali = false;
+        bekleyen = false;
+        sqlSonrasi = false;
+        return;
+      }
+      if (k.tur === 'aksiyonlar') {
+        // Adımın koşu aksiyonları aynen: düğmesi varsa adımın ilerlemesidir (adımı kapatır), yoksa adım açık kalır.
+        if (bekleyen) { hata(i, 'Korunan aksiyonlar isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+        sqlSonrasi = false;
+        if (!cur || kapali) yeniAdim(b.ad || `${adimlar.length + 1}. adım`, []);
+        const c = /** @type {(typeof adimlar)[number]} */ (cur);
+        if (c.aksiyonlarAynen) { hata(i, 'Bir adımda yalnız bir korunan aksiyon bloğu olabilir.'); return; }
+        c.aksiyonlarAynen = JSON.parse(JSON.stringify(k.aksiyonlar));
+        const t = k.aksiyonlar.find((x) => nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string' && x.secici);
+        if (t) {
+          c.ilerleme = { secici: String(t.secici), metin: typeof t.aciklama === 'string' ? t.aciklama : null, ...(Array.isArray(t.cerceve) && t.cerceve.length ? { cerceve: t.cerceve.map(String) } : {}) };
+          if (sure) c.onceBekle = (c.onceBekle ?? 0) + sure;
+          sure = 0;
+          kapali = true;
+        }
+        return;
+      }
+      hata(i, 'Bu korunan parça ayrı blok olarak kullanılamaz.');
+      return;
+    }
     if (b.tur === 'bekle' && sqlSonrasi) {
       hata(i, sqlSonrasi === 'sql' ? 'SQL sorgusundan sonra bekleme konmaz; veri geç yazılıyorsa SQL adımındaki “yeniden dene” süresini kullanın.'
         : 'Dosya doğrulamadan sonra bekleme konmaz; indirme geç başlıyorsa adımdaki “indirmeyi bekleme” süresini kullanın.');
@@ -477,10 +566,16 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         ...(m && Array.isArray(m.cerceve) && m.cerceve.length ? { cerceve: m.cerceve } : {})
       };
       const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'dosya');
-      if (!cur) { hata(i, 'Beklenen mesajdan önce bir alan grubu ya da aksiyon olmalı.'); return; }
+      if (!cur) {
+        hata(i, adimlar[adimlar.length - 1]?.korunanAdim ? 'Korunan adımın başarı göstergesi diyagramda değiştirilemez; beklenen mesajı bir alan grubu ya da aksiyondan sonra koyun.'
+          : 'Beklenen mesajdan önce bir alan grubu ya da aksiyon olmalı.');
+        return;
+      }
       if (bekleyen) { hata(i, 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).'); return; }
       if (!sonMu && !kapali) { hata(i, 'Beklenen mesaj bir aksiyondan (düğmeye basma) sonra gelmeli.'); return; }
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
+      // Başarı göstergesi aynen korunan adıma (ör. adres göstergesi) başarı mesajı eklenemez: biri diğerini ezerdi.
+      if (!b.uyari && gostergesiKorunan(c)) { hata(i, `“${c.ad}” adımının başarı göstergesi diyagramda düzenlenemez (aynen korunur); bu adıma beklenen mesaj eklenemez.`); return; }
       // Uyarı: o adımda kabul edilen iş kuralı uyarısı (başarı grubuna girmez; grubu da bölmez).
       if (b.uyari) {
         const liste = (c.uyarilar ??= []);
@@ -501,6 +596,12 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
     }
   });
   sureyiBirak();
+  // Korunan (aynen) adımın alanı başka bir grupta olamaz (modelde aynı alan iki adımda olurdu).
+  for (const [a, k] of korunanAdimAlanlari) {
+    const blok = kullanilan.get(a);
+    const h = alanlar.get(a);
+    if (blok !== undefined) hata(blok, `“${h ? alanEtiketi(h) : a}” alanı korunan “${k.ad}” adımında da var; bir alan yalnızca bir adımda olabilir (alanı gruptan çıkarın ya da korunan adımı silin).`);
+  }
   // Elle koşullar: seçim alanı akışta olmalı, seçim (select/radyo) olmalı, değerler seçeneklerinden olmalı.
   for (const { blok, alan, kosul } of elleKosullar) {
     if (!kosul) continue;
