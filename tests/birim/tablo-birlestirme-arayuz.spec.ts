@@ -156,3 +156,26 @@ test('veri sağlığı: öneriler puana göre; eşik altı (genel sütun adları
   await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { benzerlikEsigi: 50 } });
   await baglam.close();
 });
+
+test('Ayarlar açıklamaları kısa (1–2 cümle), ayrıntı "?" ipucunda; Test verisi bilgisi bir kez (açıklama + bilgi kutusu yinelenmez)', async () => {
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 390, height: 900 } });
+  const page = await baglam.newPage();
+  await page.goto('/#/ayarlar/test-verisi');
+  const aciklama = page.locator('.bolum-aciklamasi');
+  await expect(aciklama).toContainText('Her tablo bir Excel sayfası gibidir');
+  await expect(page.getByText(/Her tablo bir Excel sayfası gibidir/)).toHaveCount(1);
+  const ayrinti = aciklama.locator('.ayrinti-ipucu');
+  await expect(ayrinti).toBeHidden();
+  await aciklama.getByRole('button', { name: 'Ayrıntıyı göster' }).click();
+  await expect(ayrinti).toBeVisible();
+  await expect(ayrinti).toContainText('Bağlam tabloları (ör. şube)');
+  await page.keyboard.press('Escape');
+  await expect(ayrinti).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
+  // Uzun alan açıklamaları da kısalır; varsayılan değer her zaman görünür.
+  await page.goto('/#/ayarlar/kosu');
+  const form = page.getByRole('form', { name: 'Koşu ayarları' });
+  await expect(form.getByText(/Varsayılan: Token'ı yenile, bir kez tekrar dene\./)).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Ayrıntıyı göster' }).first()).toBeVisible();
+  await baglam.close();
+});

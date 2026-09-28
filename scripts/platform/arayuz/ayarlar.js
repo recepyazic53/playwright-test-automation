@@ -4,7 +4,7 @@
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
   adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
-  onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
+  kisaAciklama, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { veriKlasoruKarti, yedekKlasoruBolumu } from './veri-klasoru.js';
@@ -21,7 +21,7 @@ import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, ris
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
-  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
+  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi, ekran taraması / akış kaydı süreleri ve zamanlanmış koşular. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
@@ -50,7 +50,8 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
     h('div', { class: 'kirinti' }, h('span', {}, baglam.durum.proje ? baglam.durum.proje.ad : ''), h('span', { 'aria-hidden': 'true' }, '/'),
       h('span', {}, 'Ayarlar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, tanim.etiket)),
     h('h2', { id: 'bolum-basligi', tabindex: '-1' }, tanim.etiket),
-    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, tanim.aciklama)));
+    // En çok 1–2 cümle; ayrıntı "?" ipucunda ve rehberde (bilgi kaybolmaz).
+    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, kisaAciklama(tanim.aciklama, tanim.etiket))));
   const govde = h('div', {}, iskelet('sayfa'));
   kapsayici.replaceChildren(baslik, govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
@@ -685,7 +686,7 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
         girdi.setAttribute('aria-describedby', `${yardimId} ${girdi.id}-hata`);
         const kutu = h('div', { class: 'alan onay-alani' },
           h('label', { class: 'secenek', for: girdi.id }, girdi, t.etiket),
-          h('div', { class: 'yardim', id: yardimId }, `${t.aciklama} Varsayılan: ${t.varsayilan ? 'açık' : 'kapalı'}.`),
+          h('div', { class: 'yardim', id: yardimId }, kisaAciklama(t.aciklama, t.etiket), ` Varsayılan: ${t.varsayilan ? 'açık' : 'kapalı'}.`),
           h('div', { class: 'alan-hatasi', id: `${girdi.id}-hata`, role: 'alert' }));
         if (t.etkinKosul) {
           const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);
@@ -701,7 +702,8 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       girdiler.set(t.anahtar, girdi);
       const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
       const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
-      const kutu = alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: `${t.aciklama} ${sinir}Varsayılan: ${varsayilan}.` });
+      // Uzun açıklama: 1–2 cümle görünür, ayrıntı "?" ipucunda; sınırlar ve varsayılan her zaman görünür.
+      const kutu = alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: h('span', {}, kisaAciklama(t.aciklama, t.etiket), ` ${sinir}Varsayılan: ${varsayilan}.`) });
       if (t.etkinKosul) {
         // Bağlı ayar (etkinKosul) bu değerde değilken alan pasif; neden alanın altında yazar (değer korunur, kaydedilir).
         const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);

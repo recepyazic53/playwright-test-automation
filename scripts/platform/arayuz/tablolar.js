@@ -442,9 +442,8 @@ export async function tablolarBolumu(govde, proje) {
       sagKap.scrollIntoView({ block: 'start' });
     }
   });
+  // Bu bilginin tamamı sayfa açıklamasında (kısa + "?" ayrıntı); aynı metin burada yinelenmez.
   yerlestir(govde, saglik,
-    h('p', { class: 'not-kutusu bilgi kucuk' }, h('b', {}, 'Her tablo bir Excel sayfası gibidir. '),
-      'Sütunlar alanlardır; her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir.'),
     h('div', { class: 'tablo-duzeni' }, solKap, sagKap));
 
   const degistiMi = () => Boolean(is && (is.degisti || is.silinen.size || is.satirlar.some((r) => r.degisti)));

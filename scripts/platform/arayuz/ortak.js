@@ -457,6 +457,39 @@ export function bildir(mesaj, tur = 'basari') {
 }
 
 /** Etiketli form alanı. input'a id verilir, yardım metni aria-describedby ile bağlanır. */
+/**
+ * Uzun açıklamayı kısa (en çok 1–2 cümle) + ayrıntıya ayırır: ilk cümle (kısaysa ilk iki) kısa kalır, gerisi ayrıntıdır.
+ * @param {string} metin @returns {{ kisa: string; ayrinti: string }}
+ */
+export function aciklamayiBol(metin) {
+  const cumleler = String(metin || '').split(/(?<=[.!?…])\s+(?=[A-ZÇĞİÖŞÜ"“'(0-9])/u);
+  if (cumleler.length <= 2 && String(metin || '').length <= 220) return { kisa: String(metin || ''), ayrinti: '' };
+  const n = cumleler[0].length < 70 && cumleler.length > 2 ? 2 : 1;
+  return { kisa: cumleler.slice(0, n).join(' '), ayrinti: cumleler.slice(n).join(' ') };
+}
+
+/**
+ * Kısa açıklama + "?" ipucu: ayrıntı (bilgi kaybolmaz) "?" düğmesiyle açılır / kapanır (Esc kapatır). Kısa metinse yalnız metin.
+ * @param {string} metin @param {string} [konu] "?" düğmesinin erişilebilir adı için (ör. alan etiketi)
+ */
+export function kisaAciklama(metin, konu = '') {
+  const { kisa, ayrinti } = aciklamayiBol(metin);
+  if (!ayrinti) return h('span', { class: 'kisa-aciklama' }, kisa);
+  const panelId = yeniKimlik('ayrinti');
+  const panel = h('span', { id: panelId, class: 'ayrinti-ipucu', hidden: true }, ayrinti);
+  const soru = h('button', {
+    type: 'button', class: 'ikon-dugme hayalet ayrinti-dugmesi', 'aria-expanded': 'false', 'aria-controls': panelId,
+    // Ad alanın etiketini içermez (etiketle arama alanın kendisini bulsun); konu ipucunda.
+    'aria-label': 'Ayrıntıyı göster', title: konu ? `Ayrıntı: ${konu}` : 'Ayrıntı'
+  }, ikon('soru'));
+  const ac = (/** @type {boolean} */ goster) => { panel.hidden = !goster; soru.setAttribute('aria-expanded', String(goster)); };
+  soru.addEventListener('click', () => ac(panel.hidden));
+  const esc = (/** @type {KeyboardEvent} */ o) => { if (o.key === 'Escape' && !panel.hidden) { o.preventDefault(); o.stopPropagation(); ac(false); soru.focus(); } };
+  soru.addEventListener('keydown', esc);
+  panel.addEventListener('keydown', esc);
+  return h('span', { class: 'kisa-aciklama' }, kisa, ' ', soru, panel);
+}
+
 export function alan(etiket, girdi, secenekler = {}) {
   const id = girdi.id || yeniKimlik('alan');
   girdi.id = id;
