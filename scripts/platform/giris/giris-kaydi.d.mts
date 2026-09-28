@@ -10,7 +10,15 @@ export type TaslakAdimi =
   | { tur: 'alan'; anahtar: string; etiket: string; alanTuru: string; secici: string; oneri: AlanRolu }
   | { tur: 'dugme'; sira: number; metin: string; secici: string; oneri: DugmeRolu };
 
-export type GirisTaslagi = { adimlar: TaslakAdimi[]; ilkYol: string | null; sonYol: string | null };
+export type GirisTaslagi = {
+  adimlar: TaslakAdimi[]; ilkYol: string | null; sonYol: string | null;
+  /** Bitir anındaki sayfa (yol + görünen çıkış yazısı); eski kayıtlarda yok. */
+  sonSayfa?: { yol: string; cikisMetni: string | null } | null;
+};
+
+export type KodKaynagi = 'totp' | 'sabit' | 'elle';
+/** Onay ekranındaki seçimler. */
+export type KayitSecimleri = { kodKaynagi?: KodKaynagi; basariMetni?: string };
 
 /** isaretler[i]: rol (alan/düğme rolü), ek alanda ad + gizli. */
 export type TaslakIsareti = { rol: AlanRolu | DugmeRolu; ad?: string; gizli?: boolean };
@@ -26,6 +34,7 @@ export type KayittanTarifSonucu = {
 
 export declare const ALAN_ROLLERI: readonly AlanRolu[];
 export declare const DUGME_ROLLERI: readonly DugmeRolu[];
+export declare const KOD_KAYNAKLARI: readonly KodKaynagi[];
 export declare function ekAlanAdiOner(etiket: string): string;
 export declare function girisKaydiTaslagi(env: AkisEnvanteri): GirisTaslagi;
-export declare function kayittanTarif(taslak: GirisTaslagi, isaretler: unknown, mevcut: GirisTarifi | null, girisYolu: string | null): KayittanTarifSonucu;
+export declare function kayittanTarif(taslak: GirisTaslagi, isaretler: unknown, mevcut: GirisTarifi | null, girisYolu: string | null, secimler?: unknown): KayittanTarifSonucu;

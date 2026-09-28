@@ -30,7 +30,10 @@ export type AkisEnvanteri = {
   notlar: string[];
   /** Seçim alanlarının gözlenen seçenekleri (okumalar + tıklanınca açılan listeler; yalnız seçenek etiketi / değeri). */
   secenekGozlemleri?: SecenekGozlemi[];
+  /** "Bitir"e basıldığı andaki sayfa: yol ve görünen çıkış bağlantısının yazısı (giriş kaydında başarı göstergesi önerisi). */
+  sonSayfa?: SonSayfa;
 };
+export type SonSayfa = { yol: string; cikisMetni: string | null };
 export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */
   /** ekranGoruntusu: "Ekran görüntüsü al" işareti (alan grubu / aksiyon; adımın kosu.ekranGoruntusu — "Seçili adımlarda" kaydında). sinirlar: alanın değer kuralları. */

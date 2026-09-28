@@ -29,7 +29,7 @@ import { agHatasiMi } from '../giris/tarif.mjs';
 import { adresYasakliMi, yasakDesenleri } from '../senaryolar/model-kosusu.mjs';
 import { adresOzeti, istekKarari, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji, type TaramaAsamasi } from './koruma.mjs';
 import type { EngellenenIstek, HamAlan, KayitOgesi, SecenekGozlemi } from './paket-olusturucu.mjs';
-import type { AkisEnvanteri, AkisOkumasi, AkisOlayi } from './akis-tasarimi.mjs';
+import type { AkisEnvanteri, AkisOkumasi, AkisOlayi, SonSayfa } from './akis-tasarimi.mjs';
 import { KAYIT_KOPRUSU, KAYIT_PANELI_KIMLIGI, taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { acikListeSecenekleri, dokunulanlariBul, kayitPaneliniKur, secimDegerleri, type PanelDurumu } from './kayit-paneli';
@@ -42,6 +42,23 @@ const ilkSatir = (hata: unknown): string => String(hata instanceof Error ? hata.
 const adreslerGizli = (m: string): string => m.replace(/https?:\/\/\S+/g, '<adres>');
 function yolu(adres: string): string {
   try { const u = new URL(adres); return `${u.pathname}${u.search}`; } catch { return '?'; }
+}
+/**
+ * "Bitir" anındaki sayfa: yol + görünen çıkış bağlantısı/düğmesinin yazısı (genel sözcükler; alan değeri okunmaz). Panel
+ * gölge DOM'da olduğu için aramaya girmez.
+ */
+async function sonSayfayiOku(page: Page): Promise<SonSayfa> {
+  const cikisMetni = await page.evaluate(() => {
+    const CIKIS = /^(çıkış( yap)?|güvenli çıkış|oturumu (kapat|sonlandır)|oturumdan çık|log ?out|log ?off|sign ?out)$/iu;
+    for (const e of Array.from(document.querySelectorAll<HTMLElement>('a, button, [role="button"], [role="menuitem"], input[type="submit"], input[type="button"]'))) {
+      const m = (e instanceof HTMLInputElement ? e.value : e.innerText || '').replace(/\s+/g, ' ').trim();
+      if (!m || m.length > 40 || !CIKIS.test(m)) continue;
+      const r = e.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden') return m;
+    }
+    return null;
+  }).catch(() => null);
+  return { yol: yolu(page.url()), cikisMetni };
 }
 const metin = (d: unknown, n: number): string | null => (typeof d === 'string' && d.trim() ? d.replace(/\s+/g, ' ').trim().slice(0, n) : null);
 /** Panelden gelen öğe (seçici zorunlu; metin düğmenin/öğenin görünen yazısı; cerceve: çerçevedeyse çerçeve seçicileri). */
@@ -119,6 +136,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
     (a.secenekler ?? (a.radyolar ?? []).map((x) => ({ deger: x.deger, metin: x.metin ?? x.deger }))).filter((x) => x.deger !== '').slice(0, 300);
   const haric = (o: Record<string, string>, k: string): Record<string, string> => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
   let ilkBaslik = '';
+  let sonSayfa: SonSayfa | null = null;
   /** Son okumada görünen alanlar ve bir önceki okumada görünenler ("yeni" işareti için). */
   let sonGorunen = new Set<string>();
   let oncekiGorunen = new Set<string>();
@@ -187,7 +205,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
   const envanter = (profil: string | null): AkisEnvanteri => ({
     kip: 'kayit', bicim: 'akis', profil, baslik: ilkBaslik,
     alanlar: [...alanlar.values()].map(({ alan, secili }) => ({ alan, secili })), dugmeler, mesajlar, olaylar, engellenenler, notlar,
-    secenekGozlemleri: gozlemler
+    secenekGozlemleri: gozlemler, ...(sonSayfa ? { sonSayfa } : {})
   });
 
   try {
@@ -196,7 +214,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
     // engelleyebilirdi). Hedef sayfaya gidişle birlikte yerleşir. Ekran okuma fonksiyonları (sayfa envanteri, dokunulanlar,
     // seçili seçenekler) panelin eşzamanlı kullanması için pencereye verilir.
     const paneliKur = async (): Promise<void> => {
-      await baglam.exposeBinding(KAYIT_KOPRUSU, async (_kaynak, veri: Record<string, unknown>) => {
+      await baglam.exposeBinding(KAYIT_KOPRUSU, async (kaynak, veri: Record<string, unknown>) => {
         if (veri.tur === 'durum') return panelDurumu();
         if (durum.asama !== 'kayit') throw new Error('Kayıt henüz başlamadı (giriş ve bağlam değiştirme sürüyor).');
         switch (veri.tur) {
@@ -250,6 +268,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
           }
           case 'bitir': {
             if (![...alanlar.values()].some((k) => k.secili) && !dugmeler.length) throw new Error('Listede en az bir alan ya da basılmış bir düğme olmalı.');
+            sonSayfa = await sonSayfayiOku(kaynak.page);
             bitir();
             return { tamam: true };
           }

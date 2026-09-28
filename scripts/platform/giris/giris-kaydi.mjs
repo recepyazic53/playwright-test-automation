@@ -17,6 +17,8 @@ import { regexKacis, varsayilanGirisAdimlariMi } from './tarif.mjs';
 
 export const ALAN_ROLLERI = Object.freeze(['kullaniciAdi', 'parola', 'kod', 'ek', 'yoksay']);
 export const DUGME_ROLLERI = Object.freeze(['gonder', 'tikla', 'kodGonder', 'yoksay']);
+/** Doğrulama kodunun kaynağı: Authenticator (TOTP), SMS sabit test kodu, SMS koşu sırasında elle girilir. */
+export const KOD_KAYNAKLARI = Object.freeze(['totp', 'sabit', 'elle']);
 const EK_ALAN_ADI = /^[\p{L}\p{N}_.-]{1,60}$/u;
 const TR = /** @type {Record<string, string>} */ ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u' });
 
@@ -69,7 +71,11 @@ export function girisKaydiTaslagi(env) {
   // Panelde listeye alınmış ama dokunulduğu görülmemiş alanlar sona (kullanıcı çıkarabilir).
   alanEkle(env.alanlar.filter((a) => a.secili).map((a) => a.alan.anahtar));
   oneriVer(adimlar);
-  return { adimlar, ilkYol: yollar[0] ?? null, sonYol: yollar[yollar.length - 1] ?? null };
+  const son = nesneMi(env.sonSayfa) ? env.sonSayfa : null;
+  return {
+    adimlar, ilkYol: yollar[0] ?? null, sonYol: yollar[yollar.length - 1] ?? null,
+    sonSayfa: son ? { yol: metin(son.yol, 300), cikisMetni: metin(son.cikisMetni, 40) || null } : null
+  };
 }
 
 /** Başlangıç önerileri (sezgisel; kullanıcı değiştirir). @param {import('./giris-kaydi.d.mts').TaslakAdimi[]} adimlar */
@@ -102,9 +108,14 @@ function oneriVer(adimlar) {
  * @param {unknown} isaretlerHam
  * @param {import('./tarif.d.mts').GirisTarifi | null} mevcut
  * @param {string | null} girisYolu kaydın başladığı sayfanın yolu
+ * @param {unknown} [secimlerHam] onay ekranındaki seçimler: kodKaynagi (totp | sabit | elle), basariMetni (girişten sonra
+ *   görünen yazı; kayıttan önerilemediğinde kullanıcı yazar)
  * @returns {import('./giris-kaydi.d.mts').KayittanTarifSonucu}
  */
-export function kayittanTarif(taslak, isaretlerHam, mevcut, girisYolu) {
+export function kayittanTarif(taslak, isaretlerHam, mevcut, girisYolu, secimlerHam) {
+  const secimler = nesneMi(secimlerHam) ? secimlerHam : {};
+  const kodKaynagi = typeof secimler.kodKaynagi === 'string' && KOD_KAYNAKLARI.includes(secimler.kodKaynagi) ? secimler.kodKaynagi : null;
+  const basariMetni = metin(secimler.basariMetni, 200);
   /** @type {string[]} */
   const hatalar = [];
   /** @type {string[]} */
@@ -171,15 +182,21 @@ export function kayittanTarif(taslak, isaretlerHam, mevcut, girisYolu) {
   if (!secici.gonderDugmesi) hatalar.push('Giriş düğmesini işaretleyin.');
 
   const m = mevcut;
+  // Girişten sonraki sayfa: "Bitir" anındaki sayfa (yoksa son okumanın yolu); sorgu parametreleri alınmaz.
+  const yalin = (/** @type {string | null | undefined} */ y) => (y ? y.split(/[?#]/)[0] : '');
+  const sonYol = yalin(taslak.sonSayfa?.yol) || yalin(taslak.sonYol);
+  const yolDegisti = Boolean(sonYol) && sonYol !== (yalin(girisYolu) || yalin(taslak.ilkYol));
+  const cikis = taslak.sonSayfa?.cikisMetni ?? null;
   /** @type {Record<string, unknown>} */
   const tarif = {
     girisAdresi: m?.girisAdresi ?? (girisYolu || '/'),
-    oturumKontrolAdresi: m?.oturumKontrolAdresi ?? (girisYolu || '/'),
+    oturumKontrolAdresi: m?.oturumKontrolAdresi ?? (yolDegisti ? sonYol : girisYolu || '/'),
     kullaniciAlani: secici.kullaniciAlani,
     parolaAlani: secici.parolaAlani,
     gonderDugmesi: secici.gonderDugmesi,
-    basariGostergesi: m?.basariGostergesi
-      ?? (taslak.sonYol && taslak.sonYol !== taslak.ilkYol ? { tur: 'url', deger: regexKacis(taslak.sonYol.split('?')[0]) } : { tur: 'metin', deger: '' }),
+    // Öncelik: kullanıcının yazdığı metin > mevcut tarif > görünen çıkış yazısı > girişten sonraki adres.
+    basariGostergesi: basariMetni ? { tur: 'metin', deger: basariMetni } : m?.basariGostergesi
+      ?? (cikis ? { tur: 'metin', deger: cikis } : yolDegisti ? { tur: 'url', deger: regexKacis(sonYol) } : { tur: 'metin', deger: '' }),
     hataGostergeleri: m?.hataGostergeleri ?? [],
     ikinciAdim: m?.ikinciAdim ?? { tur: 'yok' },
     zamanAsimiSn: m?.zamanAsimiSn ?? 45,
@@ -189,15 +206,13 @@ export function kayittanTarif(taslak, isaretlerHam, mevcut, girisYolu) {
   if (secici.kodAlani) {
     const onceki = m && m.ikinciAdim.tur !== 'yok' ? m.ikinciAdim : null;
     tarif.ikinciAdim = {
-      tur: onceki ? onceki.tur : 'totp', kodAlani: secici.kodAlani, gonderDugmesi: secici.kodGonder,
-      smsKipi: onceki ? onceki.smsKipi : null, hataGostergeleri: onceki ? onceki.hataGostergeleri : [], elleBeklemeSn: onceki ? onceki.elleBeklemeSn : 180
+      tur: kodKaynagi ? (kodKaynagi === 'totp' ? 'totp' : 'sms') : onceki ? onceki.tur : 'totp', kodAlani: secici.kodAlani, gonderDugmesi: secici.kodGonder,
+      smsKipi: kodKaynagi ? (kodKaynagi === 'totp' ? null : kodKaynagi) : onceki ? onceki.smsKipi : null, hataGostergeleri: onceki ? onceki.hataGostergeleri : [], elleBeklemeSn: onceki ? onceki.elleBeklemeSn : 180
     };
-    if (!onceki) notlar.push('Doğrulama kodu alanı işaretlendi: tarif formunda kodun türünü (Authenticator ya da SMS) kontrol edin.');
+    if (!onceki && !kodKaynagi) notlar.push('Doğrulama kodu alanı işaretlendi: tarif formunda kodun türünü (Authenticator ya da SMS) kontrol edin.');
   }
-  if (!m?.basariGostergesi) {
-    notlar.push(tarif.basariGostergesi && /** @type {any} */ (tarif.basariGostergesi).deger
-      ? 'Başarı göstergesi girişten sonraki adresten önerildi; tarif formunda kontrol edin.'
-      : 'Başarı göstergesini (girişten sonra görünen metin ya da öğe) tarif formunda belirleyin.');
+  if (!m?.basariGostergesi && !basariMetni && !/** @type {any} */ (tarif.basariGostergesi).deger) {
+    notlar.push('Girişten sonra ekranda görünen bir yazı (ör. menüdeki bir başlık) belirtin; giriş bununla doğrulanır.');
   }
   return { tarif, ekAlanlar, hatalar, notlar };
 }
