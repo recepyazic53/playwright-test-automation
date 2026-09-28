@@ -9,7 +9,7 @@
 // taranmisPaketAkisi ile AYNI önizleme adımına girer.
 // Dosya tarayıcıda okunur ve sunucuya JSON olarak gönderilir; kanıt görüntüleri önizlemede yerel veriden
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
-import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { api, bildir, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { bicimIndirBaglantisi, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz } from './ekran-ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
@@ -321,7 +321,8 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
   const kabulDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon(analiz ? 'yenile' : 'onay'),
     analiz ? 'Bulguları hesapla' : degistir ? 'Modeli değiştir' : o.hedef ? 'Modeli ekle' : 'Ekranı oluştur');
   const hataAlani = h('div', {});
-  const nedenAlani = h('div', { id: `kabul-nedeni-${Math.random().toString(36).slice(2, 9)}`, class: 'kabul-nedenleri', 'aria-live': 'polite', hidden: true });
+  const kabulNedenleri = kapaliDugmeNedenleri(kabulDugmesi);
+  const nedenAlani = kabulNedenleri.alan;
   const tv = testVerisiSecimi(p.testVerisi, () => ozetCiz());
 
   const ozetCiz = () => {
@@ -334,20 +335,8 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
           h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`),
           h('dt', {}, 'Kanıt'), h('dd', {}, `${kanitlar.length} ekran görüntüsü (şifreli saklanır)`)],
         tvOzet ? [h('dt', {}, 'Test verisi'), h('dd', {}, tvOzet)] : null));
-    const nedenler = kapatmaNedenleri();
-    kabulDugmesi.disabled = nedenler.length > 0;
-    // Düğme kapalıyken neden hemen altında yazar; her nedende ilgili bölüme götüren "Bölüme git".
-    yerlestir(nedenAlani, nedenler.length ? h('ul', {}, nedenler.map((n) => h('li', {},
-      h('span', {}, n.metin),
-      n.satir ? h('button', { type: 'button', class: 'baglanti-dugmesi', onclick: () => bolumeGit(n) }, 'Bölüme git') : null))) : null);
-    nedenAlani.hidden = !nedenler.length;
-    if (nedenler.length) {
-      kabulDugmesi.title = `Kapalı: ${nedenler.map((n) => n.metin).join('; ')}`;
-      kabulDugmesi.setAttribute('aria-describedby', nedenAlani.id);
-    } else {
-      kabulDugmesi.removeAttribute('title');
-      kabulDugmesi.removeAttribute('aria-describedby');
-    }
+    // Düğme kapalıyken neden hemen altında yazar; her nedende ilgili bölüme götüren "Bölüme git" (ortak.js).
+    kabulNedenleri.guncelle(kapatmaNedenleri());
   };
 
   /** Kabul düğmesini kapatan her neden: metin + gidilecek satır ve odaklanacak denetim. */
@@ -361,18 +350,6 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
     }
     if (!tv.hazir()) nedenler.push(...tv.bekleyenler());
     return nedenler;
-  }
-
-  function bolumeGit(n) {
-    const hedef = n.satir;
-    if (!hedef || !hedef.isConnected) return;
-    hedef.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-    const odak = n.odak ? n.odak() : null;
-    if (odak) odak.focus({ preventScroll: true });
-    hedef.classList.remove('dikkat-vurgusu');
-    void hedef.offsetWidth;
-    hedef.classList.add('dikkat-vurgusu');
-    setTimeout(() => hedef.classList.remove('dikkat-vurgusu'), 2400);
   }
 
   const senaryoSatiri = (x) => {
