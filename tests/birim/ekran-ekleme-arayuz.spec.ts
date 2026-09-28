@@ -304,6 +304,32 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await page.close();
 });
 
+test('Paket yükle (tekrar analiz): "Bulguları hesapla" Bulgular\'a geçer; "kaydedilmemiş değişiklik" sorusu çıkmaz', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  const ekran = ((await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>).find((e) => e.anahtar === 'musteri-kaydi')!;
+  const model = { ...ornekBasvuruModeli(), id: 'musteri-kaydi', ad: 'Müşteri Kaydı', ekranUrl: '/musteri/' } as unknown as Record<string, unknown> & { adimlar: Array<Record<string, unknown>> };
+  model.adimlar = model.adimlar.map((a, i) => (i === 0 ? { ...a, baslik: `${String(a.baslik)} (yeni başlık)` } : a));
+  const paket = {
+    tur: 'sayfa-paketi', surum: 1,
+    meta: { ekran: { anahtar: 'musteri-kaydi', ad: 'Müşteri Kaydı', urlYolu: '/musteri/' }, olusturan: 'test', olusturulma: new Date().toISOString(), baglamProfilleri: [] },
+    model, senaryoOnerileri: [], gerekenAyarlar: { girisGerekli: true, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [] }, bilinmeyenler: [],
+    testVerisi: { tablolar: [{ ad: 'Müşteri Kaydı — Deneme listesi', tur: 'liste', sutunlar: [{ ad: 'Deneme' }], satirlar: [['A'], ['B']] }], baglantilar: [] }
+  };
+  await page.goto(`/#/ekranlar/e/${encodeURIComponent(ekran.id)}/yukle`);
+  await page.locator('#paket-dosyasi').setInputFiles({ name: 'paket.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(paket)) });
+  // Test verisi bölümündeki seçim ana içerikte gerçek bir değişikliktir (çıkış korumasını kirletir); hesaplama başarılı
+  // olunca temizlenmeli.
+  const yaz = page.getByRole('checkbox', { name: 'Müşteri Kaydı — Deneme listesi tablosunu yaz' });
+  await yaz.uncheck();
+  await yaz.check();
+  await page.getByRole('button', { name: 'Bulguları hesapla' }).click();
+  await expect(page).toHaveURL(/\/bulgular$/);
+  await expect(page.getByRole('dialog', { name: 'Değişiklikleriniz kaydedilmeyecek' })).toHaveCount(0);
+  agKontrol(istekler);
+  await page.close();
+});
+
 /** Öğe ve TÜM alt öğelerinde yatay taşma (scrollWidth > clientWidth) ya da kutunun dışına çıkan alt öğe listesi. */
 async function yatayTasmalar(kok: Locator): Promise<string[]> {
   return kok.evaluate((d) => {
