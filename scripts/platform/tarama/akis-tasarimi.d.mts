@@ -1,5 +1,5 @@
 // scripts/platform/tarama/akis-tasarimi.mjs için tip bildirimi.
-import type { EngellenenIstek, HamAlan, KayitEnvanteri, KayitOgesi, SecenekGozlemi } from './paket-olusturucu.mjs';
+import type { EngellenenIstek, HamAlan, KayitEnvanteri, KayitOgesi, KorunanParca, SecenekGozlemi } from './paket-olusturucu.mjs';
 
 /**
  * Kayıtta ekranın bir okunuşu: görünen alanların anahtarları, o ana kadar DOKUNULAN alanlar (son düğme basışından beri),
@@ -37,11 +37,13 @@ export type SonSayfa = { yol: string; cikisMetni: string | null };
 export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */
   /** ekranGoruntusu: "Ekran görüntüsü al" işareti (alan grubu / aksiyon; adımın kosu.ekranGoruntusu — "Seçili adımlarda" kaydında). sinirlar: alanın değer kuralları. */
-  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; sinirlar?: Record<string, AkisSinirlari | null>; ekranGoruntusu?: boolean }
+  /** korunan: adımın diyagramda gösterilemeyen, aynen korunan parçalarının anahtarı; korunanOzet / korunanKosullar yalnız gösterim (sunucu verir). */
+  /** tuslar: alan doldurulduktan sonra basılacak tuş ("Tab" / "Enter"; null = yok) — model alan.doldurucuParametreleri.tus. */
+  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; sinirlar?: Record<string, AkisSinirlari | null>; tuslar?: Record<string, string | null>; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[]; korunanKosullar?: Record<string, string> }
   /** Süreli bekleme (saniye). */
   | { tur: 'bekle'; saniye: number }
   /** zamanAsimiSn: düğmeden sonra sonucu (mesaj / sonraki alan) en çok bekleme süresi (1–600 sn; yoksa koşucunun varsayılanı). */
-  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean }
+  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[] }
   /** uyari: kabul edilen iş kuralı uyarısı (başarı değil; senaryo "uyarı bekleniyor" derken seçer). */
   /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı toplam); öğesi seçildiyse onun metninde aranır. */
   | { tur: 'mesaj'; mesaj: number | null; metin: string; uyari?: boolean; desen?: boolean }
@@ -53,6 +55,8 @@ export type AkisBlogu =
   | { tur: 'dosya'; ad: string; dugme: number; dosya: Record<string, unknown> }
   /** Yeniden giriş: oturum kapatılıp ortamın tarifiyle yeniden girilir (profil: giriş profili adı; null = varsayılan). */
   | { tur: 'giris'; ad: string; profil: string | null }
+  /** Diyagramda düzenlenemeyen, modeldeki hâliyle aynen korunan parça (salt okunur): adımın tamamı ya da adımın koşu aksiyonları. ozet yalnız gösterim. */
+  | { tur: 'korunan'; korunan: string; ad: string; kapsam: 'adim' | 'aksiyonlar'; ozet?: string[] }
   | { tur: 'bitir' };
 /** Alanın görünürlük koşulu: seçim alanı (anahtar) bu değerlerden birindeyken görünür. */
 export type AkisKosulu = { secim: string; degerler: string[] };
@@ -65,6 +69,7 @@ export type AkisPaleti = {
 };
 
 export declare const BLOK_EN_COK: number;
+export declare const ALAN_TUSLARI: string[];
 export declare const BEKLEME_EN_COK_SN: number;
 export declare const MESAJ_GRUBU_EN_COK: number;
 export declare function akisEnvanteriMi(e: unknown): e is AkisEnvanteri;
@@ -72,6 +77,6 @@ export declare function akisTaslagi(env: AkisEnvanteri): AkisBlogu[];
 export declare function akisPaleti(env: AkisEnvanteri, bloklar: AkisBlogu[]): AkisPaleti;
 export declare function bloklariAyikla(ham: unknown): { bloklar: AkisBlogu[]; hatalar: AkisHatasi[] };
 export declare function secenekGozlemleriniAyikla(ham: unknown): SecenekGozlemi[];
-export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[], s?: { satirSiniri?: number }): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };
+export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[], s?: { satirSiniri?: number; korunanlar?: Record<string, KorunanParca> }): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };
 /** Alanın değer kuralları (model alan.sinirlar; null = kaldır). */
 export type AkisSinirlari = { enAz?: number | string; enCok?: number | string; artis?: number; enAzUzunluk?: number; enCokUzunluk?: number; desen?: string };

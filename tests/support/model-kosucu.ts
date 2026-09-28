@@ -942,6 +942,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           const k = kapsam(page, alan.cerceve);
           const l = zorla ? await sayfadakiOge(k, alan.secici as string) : await gorunurOge(k, alan.secici as string);
           if (!l) {
+            // Boş bırakılan (yalnız tuşa basılacak) alan görünmüyorsa sessizce geçilir (mutlaka görünmeli değilse).
+            if (alan.yalnizTus && !alan.mutlakaGorunmeli) continue;
             const profil = plan.baglamProfili ? ` (bağlam profili: ${plan.baglamProfili})` : '';
             // "Mutlaka görünmeli" alan ya da Ayarlar > Koşu > Gelişmiş > Alan görünmezse = "Testi kaldır": test kalır.
             if (alan.mutlakaGorunmeli || gorunmeyenKaldirir) {
@@ -955,6 +957,14 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           if (await l.isDisabled().catch(() => false)) {
             if (alan.mutlakaGorunmeli) throw new Error(beklenenGorulenMetni(adim.baslik, `${alan.etiket} alanı doldurulur (mutlaka görünmeli)`, `${alan.etiket} alanı kapalı (disabled)`));
             atlanan.push({ alan: alan.etiket, neden: 'kapalı (disabled)' });
+            continue;
+          }
+          // Boş bırakılan alan (senaryo bu adımda iş kuralı uyarısı bekliyor): doldurulmaz; alana girilip "Doldurduktan sonra"
+          // tuşuna basılır — alan boşken çıkınca çıkan uyarı (ör. "zorunludur") adımın sonucunda denetlenir.
+          if (alan.yalnizTus) {
+            if (zorla) continue;
+            await l.focus();
+            await l.press(alan.yalnizTus);
             continue;
           }
           const baslangic = Date.now();

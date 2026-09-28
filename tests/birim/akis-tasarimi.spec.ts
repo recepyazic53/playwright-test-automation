@@ -238,17 +238,21 @@ test('çoklu akış: bir akış yeniden kaydedilince DİĞER akışın alanları
   expect((yeni.akislar as Nesne[]).find((a) => a.id === 'kurumsal')?.adimlar[0].bolumler[0].alanlar[1].gorunurluk).toEqual({ kosul: 'vknVar' });
 });
 
-test('akış düzenleyici: diyagramın gösteremediği adım özellikleri varsa akış düzenlenemez (kaydedince kaybolmasın)', () => {
+test('akış düzenleyici: diyagramın gösteremediği adım özellikleri akışı kilitlemez (korunan parça olur); yalnız korunamayan adım kilitler', () => {
   const env = envanter();
   const k = akistanKayitEnvanteri(env, [{ tur: 'alanlar', ad: 'Müşteri', alanlar: ['#ad'], zorunlu: [] }, { tur: 'aksiyon', dugme: 1, istegeBagli: false }, { tur: 'bitir' }]).envanter;
   const model = kayitPaketiOlustur(META, k as NonNullable<typeof k>).paket.model as Nesne;
   expect(akisDuzenlenebilirMi(model)).toEqual({ duzenlenebilir: true, neden: null });
   const bozuk = (d: (m: Nesne) => void) => { const m = JSON.parse(JSON.stringify(model)) as Nesne; d(m); return akisDuzenlenebilirMi(m); };
-  expect(bozuk((m) => { m.adimlar[0].kosu.aksiyonlar[0].metin = 'Devam'; }).neden).toContain('metinle süzülen düğme tıklaması');
-  expect(bozuk((m) => { m.adimlar[0].kosu.basariGostergesi = { tur: 'url', deger: '/tamam' }; }).neden).toContain('adres (url)');
+  // Eskiden kilitleyenler artık düzenlenebilir (ayrıntı: akis-korunan.spec.ts).
+  expect(bozuk((m) => { m.adimlar[0].kosu.aksiyonlar[0].metin = 'Devam'; })).toEqual({ duzenlenebilir: true, neden: null });
+  expect(bozuk((m) => { m.adimlar[0].kosu.basariGostergesi = { tur: 'url', deger: '/tamam' }; })).toEqual({ duzenlenebilir: true, neden: null });
   // Hata göstergesi (uyarısız) kaydederken adımdan korunur; ortak akış da düzenlenebilir.
   expect(bozuk((m) => { m.adimlar[0].kosu.hataGostergesi = { secici: '#hata' }; }).duzenlenebilir).toBe(true);
   expect(bozuk((m) => { m.tur = 'ortakAkis'; }).duzenlenebilir).toBe(true);
+  // Korunan parça adıma kimliğiyle bağlanır: kimliksiz / aynı kimlikli adım korunamaz → kilit sürer (nedeniyle).
+  expect(bozuk((m) => { delete m.adimlar[0].id; }).neden).toContain('kimliği olmayan bir adım');
+  expect(bozuk((m) => { m.adimlar.push({ ...m.adimlar[0], sira: 2 }); }).neden).toContain('iki adımda var');
 });
 
 test('doğrulama: Bitir zorunlu ve sonda; boş/tekrarlı grup, aynı alan iki grupta, düğmesiz aksiyon, yersiz mesaj — bloğun sırasıyla', () => {
@@ -275,9 +279,9 @@ test('doğrulama: Bitir zorunlu ve sonda; boş/tekrarlı grup, aynı alan iki gr
     { blok: 5, mesaj: 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).' },
     { blok: 6, mesaj: 'Beklenen mesajın aranacak metnini yazın.' }
   ]);
-  // Mesaj, düğmeye basılmadan (alan grubundan hemen sonra, son değilse) beklenemez.
+  // Alan grubundan hemen sonraki (son olmayan) mesaj geçerlidir: alandan çıkınca beklenir, adımı kapatır (ayrıntı: alan-sonrasi-mesaj.spec.ts).
   expect(hatalari([{ tur: 'alanlar', ad: 'A', alanlar: ['#ad'], zorunlu: [] }, { tur: 'mesaj', mesaj: null, metin: 'x' }, { tur: 'aksiyon', dugme: 1, istegeBagli: false }, { tur: 'bitir' }]))
-    .toEqual([{ blok: 1, mesaj: 'Beklenen mesaj bir aksiyondan (düğmeye basma) sonra gelmeli.' }]);
+    .toEqual([]);
   // Biçim ayıklama: bilinmeyen tür ve bozuk blok hatadır; alanlar/uzunluklar süzülür.
   expect(bloklariAyikla([{ tur: 'x' }, 5, { tur: 'alanlar', ad: '  A  ', alanlar: ['#ad', 3], fazla: 1 }])).toEqual({
     bloklar: [{ tur: 'alanlar', ad: 'A', alanlar: ['#ad'], zorunlu: [], kosullar: {} }],

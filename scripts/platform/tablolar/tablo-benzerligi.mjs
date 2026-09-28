@@ -14,7 +14,7 @@
 //     (Ayarlar > Test verisi > "Birleştirme önerisi eşiği").
 
 /** @typedef {{ ad: string; gizli?: boolean }} BSutun */
-/** @typedef {{ id: string; ad: string; sutunlar: BSutun[]; baglam?: boolean; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null; satirImzalari?: string[] }} BTablo */
+/** @typedef {{ id: string; ad: string; sutunlar: BSutun[]; baglam?: boolean; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null; satirImzalari?: string[]; satirlar?: Array<{ degerler: Record<string, unknown> }> }} BTablo */
 
 const HARFLER = /** @type {Record<string, string>} */ ({ ı: 'i', i: 'i', ş: 's', ğ: 'g', ü: 'u', ö: 'o', ç: 'c', â: 'a', î: 'i', û: 'u' });
 
@@ -200,17 +200,37 @@ export function birlestirmeOnerileri(tablolar, ek = {}) {
   return sonuc.sort((x, y) => y.puan - x.puan || sira[x.grup] - sira[y.grup]);
 }
 
+/** Hücre değerinin karşılaştırma biçimi (paket birleştirmesiyle aynı: birebir değer; boş / null yok sayılır). @param {unknown} v */
+const hucre = (v) => (v === null || v === undefined || v === '' ? null : String(v));
+
 /**
  * Yeni oluşturulacak tabloya benzeyen mevcut tablolar (önleme: "Benzer tablo var: X — onu kullan / yine de yeni oluştur"):
  * başlıkları aynı (esnek, sıradan bağımsız) ya da çoğu aynı (≥ %80) tablolar; ad aynıysa zaten aynı tablo sayılır, listelenmez.
- * @param {BSutun[] | string[]} sutunlar @param {BTablo[]} tablolar @param {{ ad?: string; haricId?: string }} [s]
+ * Tek sütunlu tablo: başlık tek başına az ayırt edicidir. Yalnız başlığın normal adı eşit VE genel ad değilse (GENEL_SUTUNLAR;
+ * "Değer" listeleri önerilmez) VE satırlar örtüşüyorsa (küçük tablonun değerlerinin en az %50'si ötekinde; satirOrtusmesi) tek
+ * sütunlu mevcut tablo önerilir. Değerler birebir karşılaştırılır (paket birleştirmesindeki satır eşlemesiyle aynı); yeni tablonun
+ * dolu satırı yoksa öneri çıkmaz. Sonuçta değer dönmez (gizli sütun değerleri dahil).
+ * @param {BSutun[] | string[]} sutunlar @param {BTablo[]} tablolar
+ * @param {{ ad?: string; haricId?: string; satirlar?: Array<Record<string, unknown>> }} [s] satirlar: yeni tablonun satırları (sütun adı → değer)
  * @returns {Array<{ id: string; ad: string; puan: number; ayni: boolean }>}
  */
 export function benzerTablolar(sutunlar, tablolar, s = {}) {
   const yeni = sutunlar.map((x) => (typeof x === 'string' ? { ad: x } : x)).filter((x) => baslikNormal(x.ad));
-  // Tek sütunlu genel listeler (ör. "Değer") başlıktan ayırt edilemez: uyarı yalnız çok sütunlu tablolarda.
+  const adaylar = tablolar.filter((t) => !t.baglam && t.id !== s.haricId && (!s.ad || kucuk(t.ad) !== kucuk(s.ad)));
+  if (yeni.length === 1) {
+    const n = baslikNormal(yeni[0].ad);
+    if (GENEL_SUTUNLAR.includes(n)) return [];
+    const kume = (/** @type {unknown[]} */ l) => [...new Set(l.map(hucre).filter((v) => v !== null))].map(String);
+    const degerler = kume((s.satirlar ?? []).map((d) => d?.[yeni[0].ad]));
+    if (!degerler.length) return [];
+    return adaylar.filter((t) => t.sutunlar.length === 1 && baslikNormal(t.sutunlar[0].ad) === n)
+      .map((t) => ({ t, o: satirOrtusmesi(degerler, kume((t.satirlar ?? []).map((r) => r.degerler?.[t.sutunlar[0].ad]))) }))
+      .filter((x) => x.o >= 0.5)
+      .map((x) => ({ id: x.t.id, ad: x.t.ad, puan: Math.round(100 * (0.6 + 0.4 * x.o)), ayni: true }))
+      .sort((a, b) => b.puan - a.puan);
+  }
   if (yeni.length < 2) return [];
-  return tablolar.filter((t) => !t.baglam && t.id !== s.haricId && (!s.ad || kucuk(t.ad) !== kucuk(s.ad)))
+  return adaylar
     .map((t) => ({ id: t.id, ad: t.ad, puan: Math.round(100 * baslikBenzerligi(yeni, t.sutunlar)) }))
     .filter((x) => x.puan >= 80).map((x) => ({ ...x, ayni: x.puan === 100 })).sort((a, b) => b.puan - a.puan);
 }
