@@ -166,7 +166,7 @@ function listeGorunumu(icerik, proje, liste) {
     h('section', { class: 'kesif-seridi', 'aria-label': 'Yeni sayfa nasıl eklenir' },
       h('ol', { class: 'kesif-adimlari' },
         h('li', {}, h('b', {}, 'İstek metnini kopyalayın'), h('span', {}, 'Sayfanın bağlantısıyla birlikte yapay zekâ aracınıza (tarayıcıyı kullanabilen bir kodlama asistanı) verin.')),
-        h('li', {}, h('b', {}, 'Ekran paketi üretilir'), h('span', {}, 'Araç sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Model, senaryo önerileri, bilinmeyenler — gizli değer yok.')),
+        h('li', {}, h('b', {}, 'Ekran paketi üretilir'), h('span', {}, 'Araç sayfayı sizinle adım adım inceler: veri gereken yerde size girdirir, hesaplamadan önce onay ister, kayıt oluşturan düğmelere basmaz. Model, senaryo önerileri — gizli değer yok.')),
         h('li', {}, h('b', {}, 'Paketi yükleyin'), h('span', {}, '"Ekran ekle"de önizleyin, seçin, kabul edin. Ekranı taratmak ya da akışı kaydetmek de oradadır.'))),
       h('div', { class: 'kesif-cumlesi' }, istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))),
     ekranlar.length

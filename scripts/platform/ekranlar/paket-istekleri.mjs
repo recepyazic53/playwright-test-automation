@@ -20,10 +20,19 @@ export const PAKET_OZU = 'Paket tek bir JSON nesnesidir: "tur": "sayfa-paketi", 
 export const TABLO_ADI_EN_UZUN = 60;
 
 /** Yapay zekâ aracının inceleme kuralları (düğme grupları + test verisi tabloları). */
-export const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimleri ve okları değiştirerek koşullu alanları ve bağımlı listeleri çıkar; '
-  + 'yalnızca ekran açan / ilerleten ve hesaplayan düğmelere bas, sonraki alanları ve uyarıları (tarayıcı uyarıları dahil) topla. '
-  + 'Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere BASMA: orada dur, sonrasını bilinmeyenlere yaz. '
-  + 'Alanlara kart, parola, kimlik no gibi bilgi girme; bir düğmenin ne yaptığından emin değilsen basma, bana sor. '
+export const INCELEME_KURALLARI = 'Sayfayı benimle birlikte, adım adım incele ve analizi tek seferde bitir; bilmediğin dalı "bilinmiyor" diye bırakma. '
+  + 'Önce sayfayı okuyup veri gerektiren dalları (ör. kimlik / vergi no / pasaport sorgusu, kayıt ya da belge numarasıyla sorgu, adres kodu) '
+  + 've basılması gereken düğmeleri sırayla listele. Seçimleri ve okları kendin değiştirerek koşullu alanları ve bağımlı listeleri çıkar. '
+  + 'Veri gereken her dalda DUR ve bana hangi alana ne gireceğimi söyle ("şuraya … gir ve sorgula, bitince tamam yaz"); '
+  + 'ben girip "tamam" deyince açılan alanları, etiketleri ve uyarıları oku, sonra sıradaki dala geç. '
+  + 'Kart no, CVV, parola, kimlik / vergi no gibi kişisel ya da gizli bilgileri alanlara ASLA sen yazma (ben onaylasam da); ben yazarım. '
+  + 'Hassas olmayan ve önceden verdiğim test verisini (ör. adres kodu) kendin girebilirsin. '
+  + 'Hesaplayan ya da ekran açan düğmelere (ör. Hesapla, Sorgula, Fiyat al) basmadan önce HER SEFERİNDE onayımı iste; '
+  + 'hata dallarını da onayla dene (ör. zorunlu alan boşken hesapla) ve çıkan uyarı metinlerini topla. '
+  + 'Kayıt oluşturan, gönderen, onaylayan ya da ödeme yapan düğmelere (ör. Kaydet, Onayla, Ödemeyi tamamla) SEN BASMA: '
+  + 'gerekiyorsa bana bastır, açılan ekranı (ör. ödeme penceresi) yalnızca oku; kart bilgisi girme. '
+  + 'Sayfanın adresi verdiğim ortamdan başka bir ortama (ör. test yerine canlı) geçerse dur, hiçbir şeye dokunma ve bana sor. '
+  + 'Bir düğmenin ne yaptığından emin değilsen basma, bana sor. '
   + 'İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. '
   + 'Alan bir iframe (çerçeve) içindeyse alanın konum.cerceve\'sine iframe seçicisini yaz (dıştan içe dizi, en çok 2; ör. ["iframe#pencere"]); '
   + 'o iframe\'deki düğme ve göstergelerde de (kosu.aksiyonlar, basariGostergesi, hataGostergesi, uyarilar) cerceve\'yi yaz. '
@@ -32,6 +41,9 @@ export const INCELEME_KURALLARI = 'Sayfayı yalnızca okuyarak incele: seçimler
   + '(sayıda enAz / enCok / artis, metinde enAzUzunluk / enCokUzunluk / desen, tarihte enAz / enCok: gg.aa.yyyy ya da bugun+N); belli değilse yazma, tahmin etme. '
   + 'Test verisini testVerisi.tablolar\'a tablo olarak yaz (sütun = alan, satır = birlikte geçerli değerler). '
   + '(1) Ekran listeleri: seçim alanlarının (açılır liste, radyo, oklu seçim) seçeneklerini "tur": "liste" olan, "<Ekran adı> — <Alan>" adlı tablolara yaz; '
+  + 'başka ekranlarda da geçen ortak kavramların listelerini (ör. müşteri tipi, işlem tipi) ekran adı OLMADAN yalnız kavram adıyla yaz ki ekranlar aynı tabloyu kullansın; '
+  + 'tabloya bağlı ve başka alanların görünürlüğünü belirleyen seçim alanında seçeneğin "deger"i görünen metin olsun (sayfadaki seçim seçeneğin seçicisi ya da karşılıkla yapılır) '
+  + 've koşullar da o metinle yazılsın; '
   + 'bağımlı listeler tek tabloda olur ("<Ekran adı> — <Üst alan> - <Alt alan>"; her satır geçerli bir kombinasyon: üst seçim + alt seçenek); '
   + `tablo adı en çok ${TABLO_ADI_EN_UZUN} karakter, . [ ] { } $ < > & | içermez. `
   + 'Hücreye görünen metni yaz, sayfadaki value farklıysa sütunun karsiliklar\'ına ekle; alanları testVerisi.baglantilar ile sütunlara bağla ve '
