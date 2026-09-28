@@ -1808,7 +1808,7 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 .dosya-ilerleme-cubugu { display: block; height: 100%; background: linear-gradient(90deg, var(--vurgu), var(--vurgu-2)); transition: width .15s; }
 
 /* ---- Otomatik tarama ---- */
-/* "Ekranı otomatik tara": başlatma diyaloğu, Sayfa ekle'deki ikinci seçenek, ilerleme ekranı (tarama.js). */
+/* "Ekranı otomatik tara": başlatma diyaloğu, Ekran ekle'deki ikinci seçenek, ilerleme ekranı (tarama.js). */
 dialog.claude-diyalogu:has(.tarama-diyalogu) { width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; }
 .tarama-diyalogu { display: grid; gap: 10px; }
 .tarama-diyalogu .alan { margin-bottom: 0; }
@@ -2496,17 +2496,6 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
   .mk-imlec { left: var(--x); top: var(--y); } .ri-paket.gidis { left: 50%; opacity: 1; top: 30%; } .ri-paket.donus { left: 50%; opacity: 1; top: 72%; }
 }
 
-/* Kurulum sihirbazı: tanışma soruları ve kişiye özel yapılacaklar. */
-.tanisma-sorusu { border: 0; padding: 0; margin: 0 0 var(--b4); }
-.tanisma-sorusu legend { font-weight: 640; margin-bottom: var(--b2); }
-.tanisma-secenekleri { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: var(--b2); }
-.tanisma-secenegi { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: 0 0 0 1px var(--cizgi); cursor: pointer; }
-.tanisma-secenegi:has(input:checked) { box-shadow: 0 0 0 1.5px var(--vurgu); background: var(--vurgu-zemin); }
-.tanisma-secenegi:focus-within { outline: 2px solid var(--odak); outline-offset: 2px; }
-.tanisma-secenegi input { margin-top: 3px; }
-.tanisma-secenegi span { display: grid; gap: 2px; }
-.tanisma-secenegi small { color: var(--metin-3); line-height: 1.4; }
-
 /* Dar ekran: sekme çubukları ve geniş tablolar sayfayı yatay taşırmaz; kendi içinde kaydırılır. */
 .sekme-cubugu { max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
 .sekme-cubugu button { flex: none; }
@@ -3051,14 +3040,14 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .zamanlama-gecmisi table { margin-top: 6px; }
 .zamanlama-listesi .kayit-eylemleri .onay-satiri { min-height: 32px; }
 
-/* İlk kurulum > Ortamlar: satır = Ortam adı | Adres | Riskli mi? | ×. Tüm satırlar aynı sütunlarda; "Riskli mi?" etiketi alan
-   etiketleriyle, onay kutusu ve × düğmesi girdiyle aynı hizada. Dar ekranda ad ve adres tam genişlik, altında Riskli + ×. */
+/* İlk kurulum > Ortamlar: satır = × | Ortam adı | Adres | Riskli mi?. Tüm satırlar aynı sütunlarda; "Riskli mi?" etiketi alan
+   etiketleriyle, onay kutusu ve × düğmesi girdiyle aynı hizada. Dar ekranda × + ad, altında tam genişlik adres ve Riskli. */
 .ortam-satirlari { display: grid; gap: var(--b2); margin-bottom: var(--b3); }
-.ortam-satiri { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) max-content 38px; grid-template-areas: "ad adres risk sil";
+.ortam-satiri { display: grid; grid-template-columns: 38px minmax(0, 1fr) minmax(0, 2fr) max-content; grid-template-areas: "sil ad adres risk";
   column-gap: var(--b3); align-items: start; margin: 0; }
 .ortam-satiri > .alan { margin-bottom: 0; min-width: 0; }
-.ortam-satiri > .alan:nth-child(1) { grid-area: ad; }
-.ortam-satiri > .alan:nth-child(2) { grid-area: adres; }
+.ortam-satiri > .ortam-adi-alani { grid-area: ad; }
+.ortam-satiri > .ortam-adresi-alani { grid-area: adres; }
 .ortam-satiri > .ortam-riski { grid-area: risk; }
 .ortam-satiri > .ortam-kaldir, .ortam-satiri > .ortam-satiri-bos { grid-area: sil; }
 .ortam-riski .alan-etiketi { display: block; font-size: 13px; font-weight: 560; margin-bottom: 6px; white-space: nowrap; }
@@ -3067,12 +3056,11 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .ortam-kaldir { margin-top: 25px; width: 38px; height: 40px; min-height: 40px; padding: 0; display: grid; place-items: center; }
 .ortam-kaldir .ikon { margin: 0; }
 @media (max-width: 860px) {
-  .ortam-satiri { grid-template-columns: minmax(0, 1fr) 38px; grid-template-areas: "ad ad" "adres adres" "risk sil"; row-gap: var(--b2);
+  .ortam-satiri { grid-template-columns: 38px minmax(0, 1fr); grid-template-areas: "sil ad" "adres adres" "risk risk"; row-gap: var(--b2);
     padding-bottom: var(--b3); border-bottom: 1px solid var(--cizgi); }
   .ortam-satiri:last-child { border-bottom: 0; padding-bottom: 0; }
   .ortam-riski { display: flex; align-items: center; gap: var(--b2); }
   .ortam-riski .alan-etiketi { margin: 0; }
-  .ortam-kaldir { margin-top: 0; }
 }
 /* Kurulum tamamlandı: kısa proje özeti (taşmasız). */
 .sihirbaz-alani, .sihirbaz-alani > * { min-width: 0; }
@@ -3095,7 +3083,8 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 }
 
 /* Senaryo tablosu dar alanda kaydırmaya düşmesin: rozetler kırılabilir; 1280px altında Ekran sütunu gizlenir (ad başlığın altında). */
-.senaryo-tablosu .beklenen-hucresi .rozet { white-space: normal; max-width: 160px; text-align: left; }
+/* Uzun beklenen metni rozetin içinde satır kaydırır: sabit yükseklik yerine en az yükseklik (metin kutudan taşmaz). */
+.senaryo-tablosu .beklenen-hucresi .rozet { white-space: normal; max-width: 160px; text-align: left; height: auto; min-height: 21px; padding: 3px 8px; line-height: 1.35; overflow-wrap: anywhere; }
 .senaryo-tablosu .ekran-alt-bilgi { display: none; font-size: 11.5px; color: var(--metin-3); }
 @media (max-width: 1280px) {
   .senaryo-tablosu .ekran-sutunu, .senaryo-tablosu .ekran-hucresi { display: none; }
@@ -3532,7 +3521,10 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .izin-uyarisi .diyalog-alt { flex-wrap: wrap; }
 @media (max-width: 520px) { .izin-uyarisi .diyalog-alt > button { flex: 1 1 100%; justify-content: center; } }
 /* === Servis taban adresleri: adlandırılmış taban adresleri (ana liste) ve pencereler === */
-.taban-gorunum-satiri { align-items: center; justify-content: flex-start; gap: var(--b2); margin: var(--b2) 0; }
+.taban-gorunum-satiri { align-items: center; justify-content: flex-start; gap: var(--b2); margin: var(--b2) 0; flex-wrap: wrap; }
+.taban-gorunum-ipucu { flex: 1 1 240px; min-width: 0; }
+.taban-aciklama p { margin: 0 0 4px; }
+.taban-aciklama code { overflow-wrap: anywhere; }
 .taban-adlari-tablosu th[scope="row"] { min-width: 140px; overflow-wrap: anywhere; }
 .taban-adlari-tablosu td code { overflow-wrap: anywhere; }
 .taban-satir-dugmeleri { margin: 0; flex-wrap: nowrap; }
@@ -3588,7 +3580,7 @@ tr.suzuldu { display: none; }
 .istek-metni { margin: 6px 0 0; max-height: 14rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 11.5px/1.55 var(--yazi-mono);
   padding: 8px 10px; border-radius: var(--yaricap-s); background: color-mix(in srgb, var(--panel-kati) 70%, transparent); color: var(--metin-2); }
 .kesif-seridi .kesif-cumlesi { justify-items: stretch; min-width: 0; }
-/* Sayfa ekle: yükleme alanı üstte tam genişlik; altında yan yana üç eşit kutu (dar ekranda alt alta). */
+/* Ekran ekle: yükleme alanı üstte tam genişlik; altında yan yana üç eşit kutu (dar ekranda alt alta). */
 .yukleme-duzeni.tek-sutun { grid-template-columns: minmax(0, 1fr); }
 .ekleme-secenekleri { display: grid; gap: 10px; min-width: 0; }
 .ekleme-secenekleri > .ara-baslik { margin: 4px 0 0; }

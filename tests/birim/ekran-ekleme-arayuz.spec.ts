@@ -1,4 +1,4 @@
-// ENTEGRASYON (yerel) — Nöbetçi arayüzü: Ekranlar > "Sayfa ekle" (yan yana üç eşit kutu: Ekranı tara / Akışı kaydet /
+// ENTEGRASYON (yerel) — Nöbetçi arayüzü: Ekranlar > "Ekran ekle" (yan yana üç eşit kutu: Ekranı tara / Akışı kaydet /
 // Yapay zekâ ile oluştur), istek metni gösterimi (tam metin yok; tek "İstek metnini kopyala" + kapalı "Metni göster"),
 // "Paket biçimini indir" ve Ekranlar > Ortak akışlar kartları (ekran kartıyla aynı düzen; adım listesi yok).
 // Tek kaynak: arayüzün kopyaladığı metin === paketIstekCumlesi(); biçim dosyası === paketBicimiBelgesi().
@@ -106,9 +106,13 @@ async function kutular(l: Locator): Promise<Array<{ x: number; y: number; width:
   return sonuc;
 }
 
-test('Sayfa ekle: yan yana üç eşit kutu, tek eylem; istek metni gösterilmez, kopyalanan metin tek kaynaktan; 390px taşma yok', async () => {
+test('Ekran ekle: yan yana üç eşit kutu, tek eylem; istek metni gösterilmez, kopyalanan metin tek kaynaktan; 390px taşma yok', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
+  // Ekranlar sayfasının düğmesi "Ekran ekle" (sayfanın adıyla aynı); eski "Sayfa ekle" adı hiçbir yerde kalmaz.
+  await page.goto('/#/ekranlar');
+  await expect(page.locator('.sayfa-basligi .eylemler').getByRole('link', { name: 'Ekran ekle' })).toBeVisible();
+  await expect(page.getByText('Sayfa ekle')).toHaveCount(0);
   await page.goto('/#/ekranlar/yeni');
   const kutu = page.locator('.ekleme-kutusu');
   await expect(kutu).toHaveCount(3);

@@ -1,5 +1,5 @@
 // "Ekranlar" bölümü (genel; ekran = projenin test edilen bir sayfası/ürünü).
-//   Liste: ekran kartları (model sürümü, adım/alan/senaryo sayıları, bekleyen analiz) + "Sayfa ekle".
+//   Liste: ekran kartları (model sürümü, adım/alan/senaryo sayıları, bekleyen analiz) + "Ekran ekle".
 //   Ayrıntı: güncel model (adım › bölüm › alan; seçenekler, görünürlük, bağlam profiline göre görünürlük),
 //   Model geçmişi (sürümler ve sürümler arası fark), Kanıtlar (şifreli ekran görüntüleri), eylemler:
 //   "Paket yükle", "Ekranı tara" (otomatik tarama — tarama.js), "Akışı kaydet" (kullanıcı akışı tarayıcıda yürütür; tarama.js),
@@ -61,7 +61,7 @@ export function ekranlarEkrani(main, parcalar, baglam) {
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,
         h('div', { class: 'yan-not' }, h('b', {}, 'Sayfa paketi'), h('br', {}),
-          'Yeni sayfayı "Sayfa ekle"de ekleyin: Nöbetçi taratsın ("Ekranı tara"), akışı siz kaydedin ya da yapay zekâ aracınızın ürettiği paketi yükleyin. Aynı ekran için yeni paket = tekrar analiz.')),
+          'Yeni ekranı "Ekran ekle"de ekleyin: Nöbetçi taratsın ("Ekranı tara"), akışı siz kaydedin ya da yapay zekâ aracınızın ürettiği paketi yükleyin. Aynı ekran için yeni paket = tekrar analiz.')),
       icerik));
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
 
@@ -122,7 +122,7 @@ function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
       : e.modelSurumu ? h('span', { class: 'adet', title: `model sürümü ${e.modelSurumu}` }, `v${e.modelSurumu}`) : null);
   yerlestir(nav,
     h('a', { href: '#/ekranlar', 'aria-current': secili === '' ? 'page' : null }, ikon('izgara'), 'Tüm ekranlar', h('span', { class: 'adet' }, String(tumu.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru)).length))),
-    h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Sayfa ekle'),
+    h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Ekran ekle'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranModelli.map(baglanti)),
     navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: [...girisler.map(girisBaglantisi), ...ortakAkislar.map(baglanti)], bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }),
@@ -163,16 +163,16 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
           h('span', {}, ikon('uyari'), bekleyen.length ? `${bekleyen.length} ekranda karar bekleyen bulgu` : 'bekleyen bulgu yok'),
           h('span', {}, ikon('liste'), `${ekranlar.reduce((t, e) => t + e.senaryoSayisi, 0)} senaryo`),
           devreDisi ? h('span', {}, ikon('eksi'), `${devreDisi} devre dışı`) : null)),
-      h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Sayfa ekle'))),
+      h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Ekran ekle'))),
     h('section', { class: 'kesif-seridi', 'aria-label': 'Yeni sayfa nasıl eklenir' },
       h('ol', { class: 'kesif-adimlari' },
         h('li', {}, h('b', {}, 'İstek metnini kopyalayın'), h('span', {}, 'Sayfanın bağlantısıyla birlikte yapay zekâ aracınıza (tarayıcıyı kullanabilen bir kodlama asistanı) verin.')),
         h('li', {}, h('b', {}, 'Sayfa paketi üretilir'), h('span', {}, 'Araç sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Model, senaryo önerileri, bilinmeyenler — gizli değer yok.')),
-        h('li', {}, h('b', {}, 'Paketi yükleyin'), h('span', {}, '"Sayfa ekle"de önizleyin, seçin, kabul edin. Ekranı taratmak ya da akışı kaydetmek de oradadır.'))),
+        h('li', {}, h('b', {}, 'Paketi yükleyin'), h('span', {}, '"Ekran ekle"de önizleyin, seçin, kabul edin. Ekranı taratmak ya da akışı kaydetmek de oradadır.'))),
       h('div', { class: 'kesif-cumlesi' }, istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
-      : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Sayfa ekle') }),
+      : bosDurum('Henüz ekran yok.', 'İlk ekranınızı "Ekran ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Ekran ekle') }),
     ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler, proje.id),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }

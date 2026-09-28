@@ -411,8 +411,24 @@ export function formSemasiOlustur(model, altModeller = {}) {
     } else {
       bolumler = [];
     }
-    return { id: adim.id, baslik: adim.baslik || adim.id, sira: adim.sira || 0, ayar: ayar && kapsamAyarlari.has(ayar) ? ayar : null, bolumler };
+    // kosul: adımın çözülmüş görünürlük ifadesi (ör. ortak akış adımı: "ödeme dahil" ve "ödeme şekli = kart"); beklenen
+    // sonuç rozeti, senaryoda sağlanmayan koşullu adımı saymaz.
+    const kosul = gorunurlukIfadesi(model, adim.gorunurluk);
+    return { id: adim.id, baslik: adim.baslik || adim.id, sira: adim.sira || 0, ayar: ayar && kapsamAyarlari.has(ayar) ? ayar : null, ...(nesneMi(kosul) ? { kosul: kopya(kosul) } : {}), bolumler };
   });
+
+  // Koşullardaki model alan kimliği → senaryo anahtarı (+ varsayılan değer): adım koşullarını senaryo verisiyle değerlendirmek için.
+  /** @type {Record<string, { anahtar: string; varsayilan?: unknown }>} */
+  const alanAnahtarlari = {};
+  const anahtarEkle = (/** @type {any} */ alan) => {
+    if (!nesneMi(alan) || typeof alan.id !== 'string') return;
+    const anahtar = senaryoAnahtarlari(alan)[0];
+    if (!anahtar || alanAnahtarlari[alan.id]) return;
+    const v = nesneMi(alan.varsayilan) && alan.varsayilan.deger !== undefined && alan.varsayilan.deger !== null ? { varsayilan: kopya(alan.varsayilan.deger) } : {};
+    alanAnahtarlari[alan.id] = { anahtar, ...v };
+  };
+  for (const adim of adimlarSirali) for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) anahtarEkle(a);
+  for (const a of senaryoDuzeyi) anahtarEkle(a);
 
   // Adımları seçen senaryo ayarı (ör. "Ödeme şekli: kart / açık hesap"): formun başı yerine, o ayara bağlı İLK adımdan hemen
   // önceki ve ayara bağlı OLMAYAN adımın başında gösterilir (seçim, kendi gizlediği adımın içinde kalmaz). Uygun adım yoksa
@@ -464,8 +480,43 @@ export function formSemasiOlustur(model, altModeller = {}) {
   return {
     modelId: model.id || null, modelAdi: model.ad || null,
     baslik: baslikAlani ? senaryoAnahtarlari(baslikAlani)[0] || 'baslik' : 'baslik',
-    adimlar, senaryoAlanlari, adimKapsami, beklenenSonuc
+    adimlar, senaryoAlanlari, adimKapsami, beklenenSonuc, alanAnahtarlari
   };
+}
+
+/**
+ * Adım koşulunun senaryodaki durumu (üç değerli: true / false / null = bilinmiyor; ör. çalışma anında belli olan koşul).
+ * @param {any} ifade @param {Record<string, unknown>} veri @param {Record<string, { anahtar: string; varsayilan?: unknown }>} alanAnahtarlari
+ * @returns {boolean | null}
+ */
+function adimKosuluSaglaniyorMu(ifade, veri, alanAnahtarlari) {
+  if (!nesneMi(ifade)) return null;
+  if (Array.isArray(ifade.ve)) {
+    const s = ifade.ve.map((/** @type {any} */ alt) => adimKosuluSaglaniyorMu(alt, veri, alanAnahtarlari));
+    return s.includes(false) ? false : s.every((x) => x === true) ? true : null;
+  }
+  if (Array.isArray(ifade.veya)) {
+    const s = ifade.veya.map((/** @type {any} */ alt) => adimKosuluSaglaniyorMu(alt, veri, alanAnahtarlari));
+    return s.includes(true) ? true : s.every((x) => x === false) ? false : null;
+  }
+  if ('degil' in ifade) {
+    const s = adimKosuluSaglaniyorMu(ifade.degil, veri, alanAnahtarlari);
+    return s === null ? null : !s;
+  }
+  const deger = (/** @type {string} */ id) => {
+    const t = alanAnahtarlari[id];
+    const anahtar = t ? t.anahtar : id;
+    const v = veri[anahtar];
+    return v === undefined && t && 'varsayilan' in t ? t.varsayilan : v;
+  };
+  if (typeof ifade.alan === 'string') {
+    const d = deger(ifade.alan);
+    if (typeof d === 'string' && /\$\{[^}]+\}/.test(d)) return null; // tablodan gelen değer: koşuda belli olur
+    if (Array.isArray(ifade.icinde)) return ifade.icinde.includes(d);
+    return d === ifade.esit;
+  }
+  if (typeof ifade.senaryoAyari === 'string') return (deger(ifade.senaryoAyari) === true) === (ifade.esit === true);
+  return null;
 }
 
 /** Şemadaki tüm form alanları (adım sırasıyla, sonra senaryo düzeyi). */
@@ -753,7 +804,11 @@ export function beklenenSonucEtiketi(sema, veri) {
     const mesaj = bs.mesajAnahtari ? kayit[bs.mesajAnahtari] : '';
     return { tur: 'hata', metin: `Hata: ${adimAdi(adim)}`, aciklama: `İş kuralı hatası beklenir (${adimAdi(adim)}): ${mesaj || '—'}` };
   }
-  const kapsamdaki = sema.adimlar.filter((a) => !a.ayar || veri[a.ayar] === true);
+  // Kapsam: isteğe bağlı adım senaryoda dahil değilse ya da adımın koşulu (ör. ortak akış "dahil" + "ödeme şekli = kart")
+  // bu senaryoda sağlanmıyorsa adım sayılmaz. Bilinmeyen koşul (çalışma anında belli olur) kapsamda sayılır.
+  const alanAnahtarlari = sema.alanAnahtarlari || {};
+  const kapsamda = (/** @type {any} */ a) => (!a.ayar || veri[a.ayar] === true) && (!a.kosul || adimKosuluSaglaniyorMu(a.kosul, veri, alanAnahtarlari) !== false);
+  const kapsamdaki = sema.adimlar.filter(kapsamda);
   const adaylar = kapsamdaki.filter((a) => bs.adimlar.some((s) => s.deger === a.id));
   const son = adaylar.length ? adaylar[adaylar.length - 1] : kapsamdaki[kapsamdaki.length - 1];
   const dahilOlmayan = sema.adimlar.filter((a) => a.ayar && veri[a.ayar] !== true);

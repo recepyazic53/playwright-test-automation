@@ -42,6 +42,8 @@ export type TaramaKimligi = {
 export type TaramaGirdisi = {
   /** 'tarama' (salt okuma, otomatik) ya da 'kayit' (kullanıcı akışı görünür tarayıcıda yürütür; en fazla bir profil). */
   kip?: 'tarama' | 'kayit' | 'girisDenemesi';
+  /** Kayıt, giriş kaydı ("Girişi kaydet"): panel metinleri diyagram yerine giriş onay ekranını anlatır. */
+  girisKaydi?: boolean;
   tabanUrl: string;
   /** Hedefin tam adresi (ortamın kökeninde). */
   hedefAdres: string;

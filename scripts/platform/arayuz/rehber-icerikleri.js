@@ -44,25 +44,54 @@ export const REHBERLER = {
 
   sonuclar: {
     baslik: 'Sonuçlar',
+    // Sonuçlar ekranının tüm bölümleri, ekrandaki sırayla: sol panel, sağlık noktası, rapor sekmeleri, başlık + Koşuyu başlat,
+    // tarih aralığı, özet kartlar, koşu trendi, başarısız testler, test paneli, koşu geçmişi, hata kalıpları.
     adimlar: [
       {
         baslik: 'Sonuçlar ekranı',
         metin: ['Koşuların sonucu burada toplanır: ne kadar başarılı, hangi testler kaldı, zaman içinde iyiye mi kötüye mi gidiyor.', 'Bir testin neden kaldığını görmek için koşuyu, sonra testi açarsınız; her testin adım adım ekran görüntüleri ve videosu saklanır.'],
         cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Özet kartlar ve eğilim' }
       },
-      { baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav', metin: 'Soldan bir ekran seçerseniz kartlar, eğilim ve geçmiş yalnızca onun sonuçlarını gösterir. "Tümü" bütün projeyi gösterir.' },
-      { baslik: 'Özet kartlar', hedef: ['.sonuc-kartlari', '.sonuc-kartlari-bos'], metin: 'Son tam koşunun başarı oranı, kalan ve atlanan test sayısı. Kalan testlerin hata türü (ör. ortam hatası, iş kuralı uyarısı) Ayarlar > Koşu > Hata sınıflandırma kurallarına göre belirlenir.' },
-      { baslik: 'Eğilim', hedef: '.trend-kapsayici', metin: 'Tam koşuların zaman içindeki başarı oranı. Bir noktanın üzerine gelince o koşunun özeti görünür; tıklayınca koşu açılır.' },
+      {
+        baslik: 'Ürün / ekran seçimi', hedef: '.alt-nav',
+        metin: ['"Genel" bütün projeyi gösterir. Altında her ekran, renkli sağlık noktası ve senaryo sayısıyla listelenir; bir ekran seçerseniz kartlar, eğilim ve geçmiş yalnızca onun sonuçlarını gösterir.',
+          'Devre dışı ("kapalı") ve silinmiş ekranların geçmiş sonuçları görünür kalır. Servisler bölümünden bir servis seçince yalnız o servisin sonuçları açılır.']
+      },
+      { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Arayüz\'e götürür.' },
+      { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde üç rapor vardır: Ekranlar (ekran senaryolarının koşuları), Servisler (servis senaryolarının sonuçları) ve Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar). Sekmeler yalnız "Genel" seçiliyken görünür.' },
+      {
+        baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
+        metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin kaldığını ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
+          '"Koşuyu başlat" Senaryolar ekranına götürür; koşu orada onayla başlar. Devre dışı ya da silinmiş bir ekran seçiliyse düğme görünmez.']
+      },
+      { baslik: 'Tarih aralığı', hedef: '.sonuc-araligi', metin: 'Kartlar, eğilim, koşu geçmişi ve hata kalıpları seçtiğiniz aralığa (Son 1 saat, Bugün, Son 7 / 15 / 30 gün ya da Tümü) göre hesaplanır. Seçim bu oturum boyunca hatırlanır.' },
+      {
+        baslik: 'Özet kartlar', hedef: ['.sonuc-kartlari', '.sonuc-kartlari-bos'],
+        metin: ['Son tam koşunun başarılı, başarısız, atlanan ve durdurulan test sayıları ile başarı oranı. Her kartta önceki tam koşuya göre fark (▲ ▼) ve aralıktaki gidişi gösteren küçük bir çizgi vardır; kartların altındaki satır hangi koşulardan hesaplandığını söyler.',
+          'Kalan testlerin hata türü (ör. ortam hatası, iş kuralı uyarısı) Ayarlar > Koşu > Hata sınıflandırma kurallarına göre belirlenir.'],
+        ipucu: 'Kartlar yalnız tam koşulardan (Koşuyu başlat) hesaplanır; tekil ▷ koşuları koşu geçmişinde görünür.'
+      },
+      { baslik: 'Koşu trendi', hedef: '.trend-kapsayici', metin: 'Tam koşuların zaman içindeki sonucu. "Adet" test sayılarını, "Oran" yüzdeleri gösterir. Bir çubuğun üzerine gelince o koşunun özeti görünür; tıklayınca koşu açılır.' },
+      {
+        baslik: 'Başarısız testler', hedef: ['section[aria-labelledby="basarisiz-basligi"]', '.sonuc-sutunu'],
+        metin: ['Son tam koşu önceki tam koşularla karşılaştırılır: "Yeni başarısız" bu koşuda ilk kez kalanlar, "Tekrar eden" kaç koşudur kaldığıyla birlikte, "Düzeldi" önceki koşuda kalıp bu koşuda geçenler. Satırda ekran, hata türü, görüntü / video simgesi ve süre yazar.',
+          '"Yalnızca başarısızları tekrar çalıştır" kalan senaryoları son koşunun ortamında, onayla, tekil koşu olarak yeniden çalıştırır.'],
+        ipucu: 'Önce "Yeni başarısız" satırlara bakın: son değişiklikten etkilenenler onlardır.'
+      },
+      {
+        baslik: 'Test paneli', hedef: ['.test-paneli', 'section[aria-labelledby="basarisiz-basligi"]'],
+        metin: 'Başarısız bir teste tıklayınca yanda paneli açılır: durum, hata türü ve süre; ekran görüntüleri ("Videoyu izle", İndir, tam ekran), hata özeti (Beklenen / Görülen), adımlar, atlanan / doldurulamayan alanlar ve koşuda yakalanan mesajlar. "Tüm ayrıntılar" testin ayrıntı sayfasını açar.'
+      },
       {
         baslik: 'Koşu geçmişi', hedef: 'section[aria-labelledby="gecmis-basligi"]',
-        metin: ['Yapılan bütün koşuların listesi: tam koşular (Koşuyu başlat) ve tekil ▷ koşuları. Her satırda başlangıç zamanı, ortam, başarı oranı ve süre görünür.',
-          'Bir satıra tıklayınca koşunun ayrıntısı açılır. İki satırı işaretleyip "Karşılaştır" ile iki koşunun farkını görebilirsiniz.'],
-        ipucu: 'Liste üstteki tarih aralığına (Son 1 saat … Tümü) göre süzülür.'
+        metin: ['Yapılan bütün koşuların listesi: tam koşular (Koşuyu başlat) ve tekil ▷ koşuları. Her satırda zaman, tür / kapsam, dağılım çubuğu, sayılar ve başarı oranı görünür; sütun başlığına tıklayınca sıralanır, liste sayfalıdır.',
+          '"Tümü / Tam / Tekil" koşu türüne, "Yalnız kalanlar" başarısız testi olan koşulara süzer. Bir satıra tıklayınca koşunun ayrıntısı açılır; iki satırı işaretleyip "Karşılaştır" ile iki koşunun farkını görebilirsiniz.'],
+        ipucu: 'Liste üstteki tarih aralığına göre süzülür.'
       },
       {
         baslik: 'Hata kalıpları', hedef: 'section[aria-labelledby="kalip-basligi"]',
         metin: ['Kalan testlerin hata mesajları benzerliklerine göre gruplanır: değişken sayılar # ile gösterilir, aynı sorun tek satırda toplanır ve kaç testi etkilediği yazar.',
-          '"Kalan testlerin hataları" kalan testleri, "Koşuda yakalanan mesajlar" ise geçen testlerde de ekranda görülen uyarı / hata mesajlarını kapsar. Bir kalıbı açınca etkilenen testler listelenir.'],
+          '"Kalan testlerin hataları" kalan testleri, "Koşuda yakalanan mesajlar" ise geçen testlerde de ekranda görülen uyarı / hata mesajlarını kapsar. Üstteki çipler hata türlerine göre dağılımı gösterir; bir kalıpta "Örnek" bir sonucu yanda açar, "Testler" etkilenen testleri listeler.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Hata mesajları', ikon: 'uyari' }, { baslik: 'Kalıp', alt: 'sayılar #', ikon: 'liste' }, { baslik: 'Etkilenenler', alt: 'test sayısı', ikon: 'grafik' }] },
         ipucu: 'Önce en çok testi etkileyen kalıba bakın: tek bir düzeltme birçok testi geçirebilir.'
       },
@@ -314,14 +343,14 @@ export const REHBERLER = {
       {
         baslik: 'Ekran eklemenin üç yolu',
         sira: ['Ekranı tara: Nöbetçi sayfayı seçtiğiniz ortamda kendisi açıp yalnızca okur.', 'Akışı kaydet: işlemi siz görünür bir tarayıcıda yaparken Nöbetçi adımları kaydeder.', 'Yapay zekâ ile oluştur: istek metnini kopyalayıp sayfanın bağlantısıyla yapay zekâ aracınıza verin, ürettiği paketi yükleyin.'],
-        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Üçü de "Sayfa ekle"de yan yana' }
+        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Üçü de "Ekran ekle"de yan yana' }
       },
       { baslik: 'Sol panel', hedef: '.alt-nav', metin: 'Ekranlar, alt modeller (ör. bir kart bloğu) ve ortak akışlar (birden çok ekranın kullandığı adımlar, ör. ödeme) burada. Devre dışı ekranlar varsayılan olarak gizlidir.' },
       { baslik: 'Ekran değişince', metin: 'Sayfa değiştiyse aynı ekrana yeni paket yükleyin ya da yeniden tarayın. Farklar "bulgular" olarak gelir; kabul ettikleriniz yeni model sürümü olur, eski senaryolar korunur.', cizim: { tur: 'akis', kutular: [{ baslik: 'Yeni tarama', ikon: 'yenile' }, { baslik: 'Bulgular', alt: 'farklar', ikon: 'uyari' }, { baslik: 'Kabul / ret', ikon: 'onay' }, { baslik: 'Yeni sürüm', ikon: 'katman' }] } }
     ]
   },
   'ekran-ekle': {
-    baslik: 'Sayfa ekle',
+    baslik: 'Ekran ekle',
     adimlar: [
       { baslik: 'Sayfa paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
       { baslik: 'Paketiniz yoksa: üç yol', hedef: '.ekleme-kutulari', sira: ['Ekranı tara: Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).', 'Yapay zekâ ile oluştur: "İstek metnini kopyala" ile metni alın, sayfanın bağlantısıyla (ve "Paket biçimini indir" dosyasıyla) yapay zekâ aracınıza verin; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.'] },

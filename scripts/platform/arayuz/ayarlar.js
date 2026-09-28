@@ -227,8 +227,9 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     h('span', { class: 'mono' }, o.tabanUrl),
     [duzenleDugmesi(o.ad, () => ortamFormu(o)),
       gecmisDugmesi(`${o.ad} risk seçimi`, () => gecmisGoster('ortam_riski', o.id, `${o.ad} — riskli mi?`, baglam)),
+      // Silinemeyen (varsayılan) satırda da aynı Sil düğmesi: aynı boy ve biçim, devre dışı ve nedeni ipucunda.
       o.varsayilan
-        ? h('button', { type: 'button', class: 'kucuk-dugme', disabled: true, title: 'Varsayılan ortam silinemez; önce başka bir ortamı varsayılan yapın.' }, 'Sil')
+        ? h('button', { type: 'button', class: 'tehlike kucuk-dugme', 'aria-label': `${o.ad}: sil`, disabled: true, title: 'Varsayılan ortam silinemez; önce başka bir ortamı varsayılan yapın.' }, ikon('cop'), h('span', {}, 'Sil'))
         : silDugmesi(o.ad, async () => { await api('/platform/ortam/sil', { govde: { id: o.id } }); bildir('Ortam silindi.'); yenile(); })], 'ag'));
 
   yerlestir(govde,

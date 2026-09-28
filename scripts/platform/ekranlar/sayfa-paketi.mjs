@@ -1,6 +1,6 @@
 // SAYFA PAKETİ (sürüm 1) DOĞRULAYICISI — genel. Kullanıcı bir sayfanın bağlantısını yapay zekâ aracına verir;
 // araç sayfayı YALNIZCA OKUYARAK inceler ve bu biçimde bir JSON dosyası üretir; kullanıcı dosyayı
-// Nöbetçi > Ekranlar > "Sayfa ekle" (yeni ekran) ya da "Paket yükle" (tekrar analiz) ile yükler.
+// Nöbetçi > Ekranlar > "Ekran ekle" (yeni ekran) ya da "Paket yükle" (tekrar analiz) ile yükler.
 // Biçim: docs/sayfa-paketi.md (+ docs/sayfa-paketi.schema.json).
 //
 // Doğrulama: üst düzey biçim, meta, ekran modeli (ortak model doğrulayıcısı), senaryo önerileri (tek

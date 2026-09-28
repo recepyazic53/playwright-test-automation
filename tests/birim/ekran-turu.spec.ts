@@ -234,24 +234,11 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await expect(page.locator('.secim-karti')).toHaveCount(2);
       await kontrol('karsilama');
       await page.locator('.secim-karti').filter({ hasText: 'Yeni proje başlat' }).click();
-      const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
-      await expect(tanisma).toBeVisible();
-      // İki aşamalı doğrulama ve ekran tanıtma yöntemi sihirbazda sorulmaz (ortamın giriş tarifinde / ekranı eklerken seçilir).
-      await expect(tanisma.getByText('Girişte iki aşamalı doğrulama var mı?')).toHaveCount(0);
-      await expect(tanisma.getByText(/nasıl tanıtmak istersiniz/)).toHaveCount(0);
-      // Etkisiz iki soru ("Ne test edeceksiniz?", "Giriş yaparak mı erişiliyor?") kaldırıldı; yalnız ortam sorusu kalır.
-      await expect(tanisma.getByText('Ne test edeceksiniz?')).toHaveCount(0);
-      await expect(tanisma.getByText(/giriş yaparak mı erişiliyor/i)).toHaveCount(0);
-      await expect(tanisma.locator('fieldset.tanisma-sorusu')).toHaveCount(1);
-      await expect(tanisma.locator('fieldset.tanisma-sorusu legend')).toHaveText('Testler hangi ortamlarda çalışacak?');
-      await expect(tanisma.getByRole('radio', { name: /Yalnızca test ortamı/ })).toBeChecked();
-      await tanisma.getByRole('radio', { name: /Test ve canlı/ }).check();
-      await kontrol('tanisma');
-      await tanisma.getByRole('button', { name: 'Devam' }).click();
+      // "Sizi tanıyalım" adımı yok (ortamlar Ortamlar adımında / Ayarlar'da); giriş profili adımı da yok.
       await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
-      // Giriş profili adımı yok: Tanışalım · Kasa parolası · Proje · Ortamlar · Tamam.
-      await expect(page.locator('.adimlar li')).toHaveText([/^Tanışalım/, /^Kasa parolası/, 'Proje', 'Ortamlar', 'Tamam']);
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 2 / 5');
+      await expect(page.getByRole('form', { name: 'Tanışma soruları' })).toHaveCount(0);
+      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'Tamam']);
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 4');
       await kontrol('kasa');
       await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA);
       await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(PAROLA);
@@ -259,23 +246,28 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
       await page.getByLabel('Proje adı').fill('İlk kurulum projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
-      // Ortamlar: satır = Ortam adı | Adres | Riskli mi? | × (yalnız ikon, TEST'te yok). CANLI hazır ve riskli işaretli gelir.
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 5');
-      await expect(page.getByLabel('Ortam adı').nth(1)).toHaveValue('CANLI');
-      await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1)).toBeChecked();
+      // Ortamlar: satır = × | Ortam adı | Adres | Riskli mi? (× yalnız ikon, TEST'te yok). CANLI "Ortam ekle" ile eklenir.
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 4');
+      await expect(page.getByLabel('Ortam adı')).toHaveCount(1);
+      await page.getByRole('button', { name: 'Ortam ekle' }).click();
+      await page.getByLabel('Ortam adı').nth(1).fill('CANLI');
+      await page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1).check();
       await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').first()).toBeDisabled();
       await expect(page.getByRole('button', { name: 'Ortamı kaldır' })).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Ortamı kaldır' })).toHaveText('');
       await page.getByLabel('Adres (link)').first().fill('https://test.ornek.invalid');
       await page.getByLabel('Adres (link)').nth(1).fill('https://canli.ornek.invalid');
-      // Satır hizası: riskli kutusu ve × aynı hizada; masaüstünde girdiyle de aynı satırda (× kutunun altına kaymaz).
+      // Satır hizası: × satırın EN SOLUNDA (Ortam adı alanının solunda) ve ad girdisiyle aynı hizada; masaüstünde riskli kutusu
+      // da girdiyle aynı satırda.
       const satir = page.locator('.ortam-satiri').nth(1);
       const kutu = await satir.locator('.ortam-riski .secenek').boundingBox();
       const kaldir = await satir.getByRole('button', { name: 'Ortamı kaldır' }).boundingBox();
+      const adGirdisi = await satir.getByLabel('Ortam adı').boundingBox();
       const girdi = await satir.getByLabel('Adres (link)').boundingBox();
-      expect(kutu && kaldir && girdi).toBeTruthy();
-      if (kutu && kaldir && girdi) {
-        expect(Math.abs((kaldir.y + kaldir.height / 2) - (kutu.y + kutu.height / 2)), 'riskli kutusu ve × aynı hizada').toBeLessThanOrEqual(4);
+      expect(kutu && kaldir && girdi && adGirdisi).toBeTruthy();
+      if (kutu && kaldir && girdi && adGirdisi) {
+        expect(kaldir.x + kaldir.width, '× ortam adının solunda').toBeLessThanOrEqual(adGirdisi.x + 1);
+        expect(Math.abs((kaldir.y + kaldir.height / 2) - (adGirdisi.y + adGirdisi.height / 2)), '× ve ad girdisi aynı hizada').toBeLessThanOrEqual(4);
         if (cihaz === 'masaustu') expect(Math.abs((girdi.y + girdi.height / 2) - (kutu.y + kutu.height / 2)), 'girdi ve riskli kutusu aynı satırda').toBeLessThanOrEqual(4);
       }
       await kontrol('ortamlar');

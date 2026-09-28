@@ -144,6 +144,75 @@ test.describe('tüm ekranlar taşmasız', () => {
     expect(hatalar).toEqual([]);
   });
 
+  test('Senaryolar: uzun "Beklenen" rozeti satır kaydırır, kutusundan taşmaz', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto(`/#/senaryolar/u/${encodeURIComponent(z.ekranIdleri[1])}`);
+    await bekle(page);
+    const rozet = page.locator('.senaryo-tablosu td.beklenen-hucresi .rozet').first();
+    await expect(rozet).toBeVisible();
+    const olcum = await rozet.evaluate((r) => {
+      r.textContent = 'Ödeme: Açık hesapla tamamlanır ve belge üretilir';
+      return { yukseklik: r.getBoundingClientRect().height, tasmaY: r.scrollHeight - r.clientHeight, tasmaX: r.scrollWidth - r.clientWidth };
+    });
+    expect(olcum.yukseklik, 'uzun metin birden çok satıra kayar').toBeGreaterThan(24);
+    expect(olcum.tasmaY).toBeLessThanOrEqual(1);
+    expect(olcum.tasmaX).toBeLessThanOrEqual(1);
+    await baglam.close();
+  });
+
+  test('Ayarlar > Ortamlar: Düzenle / Geçmiş / Sil her satırda aynı boy ve biçimde; varsayılanın Sil düğmesi devre dışı + nedeni', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/ayarlar/proje');
+    await bekle(page);
+    const olcu = async (ad: string) => page.getByRole('button', { name: ad, exact: true }).evaluate((b) => {
+      const r = b.getBoundingClientRect();
+      return { g: Math.round(r.width), y: Math.round(r.height), sinif: b.className, ikon: Boolean(b.querySelector('svg, .ikon')) };
+    });
+    const testSil = page.getByRole('button', { name: 'TEST: sil', exact: true });
+    await expect(testSil).toBeDisabled();
+    await expect(testSil).toHaveAttribute('title', /Varsayılan ortam silinemez/);
+    await expect(page.getByRole('button', { name: 'CANLI: sil', exact: true })).toBeEnabled();
+    for (const tur of ['düzenle', 'sil']) expect(await olcu(`TEST: ${tur}`), tur).toEqual(await olcu(`CANLI: ${tur}`));
+    expect(await olcu('TEST risk seçimi: değişiklik geçmişi')).toEqual(await olcu('CANLI risk seçimi: değişiklik geçmişi'));
+    await baglam.close();
+  });
+
+  test('Sonuçlar rehberi ekrandaki her bölümü sırayla anlatır ve vurgular', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' });
+    const page = await baglam.newPage();
+    await page.goto('/#/sonuclar');
+    await bekle(page);
+    await expect(page.locator('section[aria-labelledby="basarisiz-basligi"]')).toBeVisible();
+    await expect(page.locator('.test-paneli')).toBeVisible();
+    await page.getByRole('button', { name: 'Bu ekranın rehberini aç' }).click();
+    const kart = page.getByRole('dialog').filter({ has: page.locator('.rehber-sayac') });
+    await expect(kart).toBeVisible();
+    // Ekrandaki bölüm → rehber adımı (her biri bu sayfada vurgulanır).
+    const bolumler: Array<[string, string]> = [
+      ['Ürün / ekran seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Rapor sekmeleri', '.sonuc-sekmeleri'],
+      ['Başlık ve "Koşuyu başlat"', '.sonuc-icerik > .sayfa-basligi'], ['Tarih aralığı', '.sonuc-araligi'], ['Özet kartlar', '.sonuc-kartlari'],
+      ['Koşu trendi', '.trend-kapsayici'], ['Başarısız testler', 'section[aria-labelledby="basarisiz-basligi"]'], ['Test paneli', '.test-paneli'],
+      ['Koşu geçmişi', 'section[aria-labelledby="gecmis-basligi"]'], ['Hata kalıpları', 'section[aria-labelledby="kalip-basligi"]']
+    ];
+    for (const [baslik, secici] of bolumler) {
+      await expect(page.locator(secici).first(), `${baslik}: bölüm sayfada`).toBeVisible();
+      await kart.getByRole('button', { name: `Adım ${bolumler.findIndex(([b]) => b === baslik) + 2}: ${baslik}`, exact: true }).click();
+      await expect(kart.getByRole('heading', { name: baslik, exact: true })).toBeVisible();
+      // Vurgu bu bölümün üzerinde (önceki adımın vurgusu değil).
+      await expect.poll(() => page.evaluate((s) => {
+        const v = document.querySelector('.rehber-vurgu') as HTMLElement | null;
+        const t = document.querySelector(s);
+        if (!v || v.hidden || !t) return false;
+        const a = v.getBoundingClientRect(); const b = t.getBoundingClientRect();
+        return Math.abs(a.left + 6 - b.left) < 3 && Math.abs(a.top + 6 - b.top) < 3 && Math.abs(a.width - 12 - b.width) < 3;
+      }, secici), `${baslik}: vurgu bölümün üzerinde`).toBe(true);
+    }
+    await page.keyboard.press('Escape');
+    await baglam.close();
+  });
+
   test('üst çubuk ara genişliklerde taşmaz (uzun proje adı)', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 800 } });
     const page = await baglam.newPage();

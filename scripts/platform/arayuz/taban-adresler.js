@@ -36,16 +36,26 @@ async function yukle(kap, proje) {
   const baslik = h('div', { class: 'bolum-basligi' }, h('h3', { id: 'taban-adresleri-basligi' }, 'Servis taban adresleri', rozet(String(veri.tabanAdlari.length))));
   const gorunumSecimi = h('div', { class: 'segment taban-gorunum', role: 'radiogroup', 'aria-label': 'Taban adres görünümü' });
   const icerik = h('div');
+  // Görünüm anahtarı: yalnız listenin nasıl gösterildiğini değiştirir (veri aynı); seçilenin ne gösterdiği altında yazar.
+  const GORUNUMLER = [
+    ['taban', 'Taban adresleri', 'Her taban adresi ve onu kullanan servisler; adresi buradan değiştirince bağlı servislerin hepsi değişir.'],
+    ['servis', 'Servis bazında', 'Her servisin her ortamdaki adresi tek tabloda (servis başına toplu düzenleme, bul-değiştir).']
+  ];
+  const gorunumIpucu = h('span', { class: 'soluk kucuk taban-gorunum-ipucu' });
   const ciz = () => {
-    yerlestir(gorunumSecimi, [['taban', 'Taban adresleri'], ['servis', 'Servis bazında']].map(([d, m]) => h('button', {
-      type: 'button', role: 'radio', 'aria-checked': gorunum === d ? 'true' : 'false', 'aria-pressed': gorunum === d ? 'true' : 'false',
+    yerlestir(gorunumSecimi, GORUNUMLER.map(([d, m, ipucu]) => h('button', {
+      type: 'button', role: 'radio', title: ipucu, 'aria-checked': gorunum === d ? 'true' : 'false', 'aria-pressed': gorunum === d ? 'true' : 'false',
       onclick: () => { if (gorunum !== d) { gorunum = d; gorunumYaz(d); ciz(); } }
     }, m)));
+    gorunumIpucu.textContent = (GORUNUMLER.find(([d]) => d === gorunum) || GORUNUMLER[0])[2];
     yerlestir(icerik, gorunum === 'servis' ? servisGorunumu(proje, veri, yenile) : tabanGorunumu(proje, veri, yenile));
   };
   yerlestir(kap, baslik,
-    h('p', { class: 'soluk kucuk' }, 'Adlandırılmış taban adresi aynı sunucuyu kullanan servislerin ortam başına adresinin başıdır (yol servis ayarında kalır). Taban adresi değişince ona bağlı tüm servisler birlikte değişir; değişiklik ve silme önce etkisiyle gösterilir, onaylamadan kaydedilmez.'),
-    h('div', { class: 'satir-duzen taban-gorunum-satiri' }, h('span', { class: 'soluk kucuk' }, 'Görünüm'), gorunumSecimi),
+    h('div', { class: 'soluk kucuk taban-aciklama' },
+      h('p', {}, 'Taban adresi, aynı sunucudaki servislerin her ortamdaki ortak adres başıdır; servisler adresin geri kalanını (yolu) kendileri ekler.'),
+      h('p', {}, 'Örnek: ', h('code', { class: 'duz' }, 'TEST: https://test.ornek.local'), ', ', h('code', { class: 'duz' }, 'CANLI: https://ornek.local'),
+        ' — servis ', h('code', { class: 'duz' }, '/siparis/Servis.asmx'), ' yolunu ekler. Taban adresi değişince ona bağlı servislerin hepsi birlikte değişir; kaydetmeden önce etkisi gösterilir.')),
+    h('div', { class: 'satir-duzen taban-gorunum-satiri' }, h('span', { class: 'soluk kucuk' }, 'Listele:'), gorunumSecimi, gorunumIpucu),
     icerik);
   ciz();
 }
@@ -268,7 +278,7 @@ function tabanGorunumu(proje, veri, yenile) {
           h('td', {}, h('div', { class: 'dugmeler taban-satir-dugmeleri' }, duzenle, silDugmesi)));
         return acikMi ? [satir, uyeSatiri(t)] : [satir];
       })));
-    yerlestir(tabloKap, tabanAdlari.length ? tablo : h('p', { class: 'soluk kucuk' }, 'Henüz adlandırılmış taban adresi yok. "Yeni taban adresi" ile ekleyip servisleri ona bağlayın.'));
+    yerlestir(tabloKap, tabanAdlari.length ? tablo : h('p', { class: 'soluk kucuk' }, 'Henüz taban adresi yok. "Taban adresi ekle" ile ekleyip servisleri ona bağlayın.'));
   };
 
   const adsizlar = satirlar.filter((s) => !s.grup).sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));

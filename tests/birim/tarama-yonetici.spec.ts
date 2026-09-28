@@ -145,7 +145,7 @@ test.afterAll(async () => {
   klasor?.temizle();
 });
 
-test('yeni ekran: başlat → ilerleme → sonuç → paket (önizleme ve "Sayfa ekle" akışına girer)', async () => {
+test('yeni ekran: başlat → ilerleme → sonuç → paket (önizleme ve "Ekran ekle" akışına girer)', async () => {
   test.setTimeout(180_000);
   const secenekler = (await api(`/platform/tarama/secenekler?projeId=${projeId}`)).y as { ortamlar: Array<{ ad: string; tarif: { baglamTuru: string } | null; girisProfili: unknown }>; baglamProfilleri: Array<{ tur: string; ad: string }> };
   expect(secenekler.ortamlar.find((o) => o.ad === 'TEST')).toMatchObject({ tarif: { baglamTuru: 'Profil' }, girisProfili: { ad: 'TEST kullanıcısı' } });
