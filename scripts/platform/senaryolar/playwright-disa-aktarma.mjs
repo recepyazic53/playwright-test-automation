@@ -851,6 +851,11 @@ export function playwrightKoduUret(g) {
       const zorla = a.doldurucu === 'radyoZorla' || a.doldurucu === 'onayKutusuZorla' || a.doldurucu === 'degerJs' || a.doldurucu === 'ozelSecim';
       const sec = [a.mutlakaGorunmeli ? 'zorunlu: true' : '', zorla ? 'zorla: true' : '', a.cerceve?.length ? `cerceve: [${a.cerceve.map(s).join(', ')}]` : ''].filter(Boolean);
       const ek = sec.length ? `, { ${sec.join(', ')} }` : '';
+      if (a.yalnizTus) {
+        // Boş bırakılan alan (senaryo bu adımda iş kuralı uyarısı bekliyor): alana girilip tuşa basılır.
+        govde.push(`${ic}// ${yorum(a.etiket)}: boş bırakılır; alandan ${yorum(a.yalnizTus)} ile çıkılır (uyarı beklenir).`, `${ic}await alan(page, ${s(a.secici)}, ${etiket}, async (l) => { await l.focus(); await l.press(${s(a.yalnizTus)}); }${ek});`);
+        continue;
+      }
       if (a.yalnizGorunurluk) { govde.push(`${ic}// ${yorum(a.etiket)}: yalnızca görünürlüğü denetlenir (mutlaka görünmeli).`, `${ic}await alan(page, ${s(a.secici)}, ${etiket}, null${ek});`); continue; }
       const gizli = gizliNedeni(a);
       govde.push(`${ic}// ${yorum(a.etiket)} (${yorum(a.doldurucu ?? a.tip)})${gizli ? ` — değer ortam değişkeninden (${gizli})` : ''}`);

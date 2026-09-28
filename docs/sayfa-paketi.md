@@ -222,6 +222,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 | `uyarilar` | Adımda kabul edilen iş kuralı uyarıları `[{ metin, secici? }]` (en çok 10): senaryo "iş kuralı hatası" beklerken bunlardan seçer; başarı beklenen senaryoda biri görünürse test hemen düşer. |
 | `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
+| (düğmesiz adım) | `aksiyonlar`'da tıklama yoksa `basariGostergesi` / `uyarilar` alanlar doldurulduktan (alanın `doldurucuParametreleri.tus`'una — ör. `Tab` — basıldıktan) sonra denetlenir: alandan çıkınca çıkan mesajlar için (akış diyagramında alan grubundan sonra gelen beklenen mesaj). |
 | `ekranGoruntusu` | `true`: "Ekran görüntüsü al" işareti. Adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır; diğer seçimlerde etkisizdir. |
 
 ### Çerçeve (iframe) içindeki alanlar
@@ -403,7 +404,13 @@ Alanları bir düğmeyle açılan ekranlarda (çok adımlı formlar) otomatik ta
    düğmenin adıyla bir adım olur); **"her senaryoda basılmaz" aksiyon** ve HEMEN ardından gelen alan grubu o düğmeyle açılan
    parçadır — senaryo formunda **"“<düğme>” dahil"** onay kutusu olur (isteğe bağlı adım kapsamı); aksiyondan sonraki
    **beklenen mesaj** o düğmeden sonra aranır, son mesaj akışın başarı göstergesidir (öğe seçilmediyse metin sayfanın
-   tamamında aranır). **Art arda** konan beklenen mesajlar bir **VEYA** grubudur (en çok 5; mesaj bloğundaki "Veya mesaj
+   tamamında aranır). **Alan grubundan sonra** da beklenen mesaj (başarı ya da uyarı) konabilir: alanlar doldurulup
+   alandan çıkınca çıkan mesajlar içindir (ör. telefon boş bırakılıp Tab'a basılınca "zorunludur" uyarısı). Adımın düğmesi
+   yoktur (`kosu.aksiyonlar`'da tıklama yok), mesaj o adımın `kosu.basariGostergesi` / `kosu.uyarilar`'ıdır; koşucu alanları
+   doldurur, tuşa basar ve mesajı bekler (beklenen hata senaryosunda o adımda uyarıyı bekler). Adım orada kapanır: ardından gelen
+   aksiyon yeni bir adımdır. Alan satırındaki **Doldurduktan sonra** seçimi — (yok) / Tab / Enter — alanın
+   `doldurucuParametreleri.tus`'udur (diyagramda düzenlenir, yeniden açılınca korunur); grubun son alanında tuş seçili değilse
+   mesaj bloğunda ipucu görünür (engellemez). **Art arda** konan beklenen mesajlar bir **VEYA** grubudur (en çok 5; mesaj bloğundaki "Veya mesaj
    ekle"): herhangi biri görünürse adım başarılıdır, görünen seçenek ekran görüntüsünün adında yazar; modelde
    `basariGostergesi: { tur: "veya", secenekler: [...] }`. Her beklenen mesaj **Başarı** ya da **Uyarı** işaretlenir: Uyarı
    işaretliler o adımın **kabul edilen iş kuralı uyarılarıdır** (`kosu.uyarilar: [{ metin, secici? }]`, en çok 10; VEYA

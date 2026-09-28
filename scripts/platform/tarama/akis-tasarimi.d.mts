@@ -38,7 +38,8 @@ export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */
   /** ekranGoruntusu: "Ekran görüntüsü al" işareti (alan grubu / aksiyon; adımın kosu.ekranGoruntusu — "Seçili adımlarda" kaydında). sinirlar: alanın değer kuralları. */
   /** korunan: adımın diyagramda gösterilemeyen, aynen korunan parçalarının anahtarı; korunanOzet / korunanKosullar yalnız gösterim (sunucu verir). */
-  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; sinirlar?: Record<string, AkisSinirlari | null>; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[]; korunanKosullar?: Record<string, string> }
+  /** tuslar: alan doldurulduktan sonra basılacak tuş ("Tab" / "Enter"; null = yok) — model alan.doldurucuParametreleri.tus. */
+  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; sinirlar?: Record<string, AkisSinirlari | null>; tuslar?: Record<string, string | null>; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[]; korunanKosullar?: Record<string, string> }
   /** Süreli bekleme (saniye). */
   | { tur: 'bekle'; saniye: number }
   /** zamanAsimiSn: düğmeden sonra sonucu (mesaj / sonraki alan) en çok bekleme süresi (1–600 sn; yoksa koşucunun varsayılanı). */
@@ -68,6 +69,7 @@ export type AkisPaleti = {
 };
 
 export declare const BLOK_EN_COK: number;
+export declare const ALAN_TUSLARI: string[];
 export declare const BEKLEME_EN_COK_SN: number;
 export declare const MESAJ_GRUBU_EN_COK: number;
 export declare function akisEnvanteriMi(e: unknown): e is AkisEnvanteri;

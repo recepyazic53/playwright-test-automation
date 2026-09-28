@@ -279,9 +279,9 @@ test('doğrulama: Bitir zorunlu ve sonda; boş/tekrarlı grup, aynı alan iki gr
     { blok: 5, mesaj: 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).' },
     { blok: 6, mesaj: 'Beklenen mesajın aranacak metnini yazın.' }
   ]);
-  // Mesaj, düğmeye basılmadan (alan grubundan hemen sonra, son değilse) beklenemez.
+  // Alan grubundan hemen sonraki (son olmayan) mesaj geçerlidir: alandan çıkınca beklenir, adımı kapatır (ayrıntı: alan-sonrasi-mesaj.spec.ts).
   expect(hatalari([{ tur: 'alanlar', ad: 'A', alanlar: ['#ad'], zorunlu: [] }, { tur: 'mesaj', mesaj: null, metin: 'x' }, { tur: 'aksiyon', dugme: 1, istegeBagli: false }, { tur: 'bitir' }]))
-    .toEqual([{ blok: 1, mesaj: 'Beklenen mesaj bir aksiyondan (düğmeye basma) sonra gelmeli.' }]);
+    .toEqual([]);
   // Biçim ayıklama: bilinmeyen tür ve bozuk blok hatadır; alanlar/uzunluklar süzülür.
   expect(bloklariAyikla([{ tur: 'x' }, 5, { tur: 'alanlar', ad: '  A  ', alanlar: ['#ad', 3], fazla: 1 }])).toEqual({
     bloklar: [{ tur: 'alanlar', ad: 'A', alanlar: ['#ad'], zorunlu: [], kosullar: {} }],

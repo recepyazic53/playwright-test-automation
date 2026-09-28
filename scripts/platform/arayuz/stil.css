@@ -1336,6 +1336,12 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .tasarim-alani .kosul-dugmesi .ikon, .tasarim-alani .sinir-dugmesi .ikon { width: 11px; height: 11px; }
 .tasarim-alani .kosul-dugmesi.var { color: var(--durdu); background: var(--durdu-zemin); }
 .tasarim-alani .sinir-dugmesi.var { color: var(--vurgu); background: var(--vurgu-zemin); }
+/* "Doldurduktan sonra" tuşu (Tab / Enter): alandan çıkınca çıkan uyarılar için. */
+.tasarim-alani .tus-secimi { display: inline-flex; align-items: center; gap: 4px; font: 600 10.5px var(--yazi-mono); color: var(--metin-3); }
+.tasarim-alani .tus-secimi select { min-height: 20px; height: 20px; padding: 0 4px; font: 600 10.5px var(--yazi-mono); width: auto; }
+.tasarim-alani .tus-secimi.var { color: var(--vurgu); }
+.alan-sonrasi-ipucu { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 6px 8px; border-radius: 7px; font-size: 12px; color: var(--durdu); background: var(--durdu-zemin); }
+.alan-sonrasi-ipucu .ikon { width: 13px; height: 13px; flex: none; margin-top: 2px; }
 /* Korunan parçalar: diyagramda düzenlenemez, kaydederken modeldeki hâliyle aynen korunur (salt okunur; kilit simgeli). */
 .tasarim-blogu.tur-korunan { --serit: var(--cizgi-2); background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--metin-3) 5%, transparent) 10px 20px), var(--panel); }
 .korunan-notu { display: grid; gap: 4px; margin: 0; padding: 8px 10px; border-radius: 7px; font-size: 12px; color: var(--metin-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); }
