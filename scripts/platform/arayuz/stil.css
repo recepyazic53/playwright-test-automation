@@ -387,7 +387,8 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 
 /* ---- 4) Kabuk -------------------------------------------------------------------------- */
 .ust-cubuk {
-  position: sticky; top: 0; z-index: 30; min-height: var(--ust-yukseklik); display: flex; align-items: center; gap: 14px; padding: 0 16px;
+  /* z-index 31: üst çubuğun açılır listeleri (proje seçici vb.) içerikteki sabit yan panel düğmesinin (z 30) ÜSTÜNDE kalır. */
+  position: sticky; top: 0; z-index: 31; min-height: var(--ust-yukseklik); display: flex; align-items: center; gap: 14px; padding: 0 16px;
   background: color-mix(in srgb, var(--zemin) 72%, transparent); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4);
   border-bottom: 1px solid var(--cizgi);
 }
@@ -1988,14 +1989,22 @@ button.bag-dugme:hover:not(:disabled) { background: var(--vurgu-zemin); border: 
 .kapat-diyalogu .disa-aktarma-formu .dugmeler { justify-content: flex-end; }
 .kapat-diyalogu .medya-secimi { margin-top: 6px; }
 dialog.kapat-diyalogu { width: min(38rem, calc(100vw - 2rem)); overflow: auto; }
-.proje-menusu { min-width: 300px; max-height: min(70vh, 560px); overflow: auto; }
-.proje-satiri { display: flex; align-items: center; gap: 2px; }
+/* Proje seçici listesi: yükseklik içeriğe göre; yalnız gerçekten sığmıyorsa dikey kaydırma (yatay asla). */
+.proje-menusu { min-width: 300px; max-width: calc(100vw - 24px); max-height: min(70vh, 560px); overflow-x: hidden; overflow-y: auto; }
+.proje-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; border-radius: var(--yaricap-s, 6px); }
+/* ⋯ işlem satırı (proje-islemleri.js): satırın ALTINDA yer kaplar, hiçbir satırı örtmez; dar ekranda düğmeler sarılır. */
+.proje-islem-kap { display: contents; }
+.proje-satiri.islem-acik { background: color-mix(in srgb, var(--panel-2) 60%, transparent); }
+.proje-satiri > .proje-islem-kap > .proje-islem-dugmesi[aria-expanded="true"] { background: var(--panel-2); color: var(--vurgu); }
+.proje-islemleri { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 6px 8px 34px; min-width: 0; }
+.acilir-menu .proje-islemleri button { min-height: 30px; padding: 0 10px; font-size: 12.5px; gap: 6px; box-shadow: inset 0 0 0 1px var(--cizgi); border-radius: 6px; }
+.acilir-menu .proje-islemleri button:hover:not(:disabled), .acilir-menu .proje-islemleri button:focus-visible { box-shadow: inset 0 0 0 1px var(--cizgi-2); }
+.acilir-menu .proje-islemleri button:disabled { opacity: .55; }
 .proje-satiri > .proje-sec { flex: 1; min-width: 0; gap: 8px; }
 .proje-satiri .proje-adi { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .proje-satiri .avatar { width: 20px; height: 20px; border-radius: 6px; background: linear-gradient(135deg, #f472b6, #fb923c); display: grid; place-items: center; font: 700 10.5px var(--yazi); color: #fff; flex: none; }
 .proje-satiri .varsayilan-rozeti { margin-left: auto; font-size: 10px; }
 .proje-satiri > .proje-sec > .ikon:last-child { margin-left: 4px; color: var(--vurgu); }
-.proje-satiri .satir-menusu-kap .acilir-menu { top: calc(100% + 2px); z-index: 45; }
 .acilir-menu .yeni-proje { color: var(--vurgu); }
 @media (max-width: 1180px) {
   .hesap-adi { display: none; }
