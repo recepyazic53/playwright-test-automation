@@ -1,12 +1,13 @@
 // scripts/platform/sonuclar/rapor-uclari.mjs için tip bildirimi.
 import type { Veritabani } from '../veritabani/baglanti.mjs';
-import type { DonemRaporuVerisi, RaporGirdisi } from './donem-raporu.mjs';
+import type { DonemRaporuVerisi, RaporGirdisi, RaporKapsami } from './donem-raporu.mjs';
 import type { ArsivRaporu } from './rapor-arsivi.mjs';
 
 export type UcBaglami = { medyaKlasoru: string; simdi?: Date };
 export declare const RAPOR_KAPSAMLARI: ReadonlyArray<string>;
+export declare const KAPSAM_ADLARI: Readonly<Record<RaporKapsami, string>>;
 export declare function raporGirdisiDogrula(g: Record<string, unknown>): RaporGirdisi;
-export declare function pdfDosyaAdi(kapsam: 'ekran' | 'servis', ad: string, tarih: Date): string;
+export declare function pdfDosyaAdi(kapsam: RaporKapsami, ad: string, tarih: Date): string;
 export declare function raporHazirla(vt: Veritabani, girdi: RaporGirdisi, b: UcBaglami): Promise<{ veri: DonemRaporuVerisi; html: string; baslik: string; dosyaAdi: string }>;
 export declare function raporOnizle(vt: Veritabani, g: Record<string, unknown>, b: UcBaglami): Promise<{
   html: string; onizlemeId: string; dosyaAdi: string; boyut: number; rozet: { durum: string; gerekce: string };

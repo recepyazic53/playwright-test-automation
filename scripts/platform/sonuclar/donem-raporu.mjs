@@ -1,4 +1,6 @@
-// DÖNEM RAPORU VERİSİ (sunucu; kasa açık olmalı): TEK EKRAN ve TEK SERVİS kapsamı için PDF raporunun bölümlerinin verisi.
+// DÖNEM RAPORU VERİSİ (sunucu; kasa açık olmalı): PDF raporunun bölümlerinin verisi. Kapsamlar: tek ekran, tek servis (A1);
+// birden çok ekran, birden çok servis, ekran + servis (A2). Çoklu kapsamda her öğe TEK ÖĞE hesabıyla (ekranHesabi / servisHesabi)
+// hesaplanır ve coklu.mjs ile toplanır (sayılar toplanır, oran toplamdan; sorunlar birleşir; bağlantılı sorunlar tek aksiyon).
 // Kaynaklar: kosular + kosu_sonuclari + adim_sonuclari + yakalanan_mesajlar (ekran), servis_kosulari (+ şifreli sonuç), servis
 // senaryoları (metot), servis akışları. Hesaplar saf modüllerdedir: donem.mjs (D / D′ / G, kovalar), sorun-modeli.mjs (imza,
 // durum, kararlılık, sınıf), oncelik.mjs (puan, bant, rozet), yuzdelik.mjs (p50 / p95 / p99), hesaplama.mjs (başarı — Sonuçlar
@@ -11,20 +13,24 @@
 //   kritiklik 0, sahip = sınıfın varsayılanı; uydurma değer üretilmez.
 import { DepoHatasi, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
 import { veriKosusuTemizle } from '../veritabani/sonuc-deposu.mjs';
-import { servisAkislariniListele, servisGetir, servisKosusuGetir, servisSenaryolariniListele } from '../servisler/servis-deposu.mjs';
+import { servisAkislariniListele, servisGetir, servisKosusuGetir, servisSenaryolariniListele, servisleriListele } from '../servisler/servis-deposu.mjs';
 import { saglikEsikleriniOku } from '../ayarlar/saglik-esikleri.mjs';
 import { KATEGORI, beklenenGorulenCikar, kalipCikar } from './siniflandirma.mjs';
 import { basariYuzdesi, sayilariTopla } from './hesaplama.mjs';
 import { donemHesapla, donemParcasi, kovaIndeksi } from './donem.mjs';
-import { SORUN_DURUMLARI, SERVIS_HATA_TURLERI, kararlilikHesapla, kategoriKisaAdi, sinifTahmini, sorunlariHesapla } from './sorun-modeli.mjs';
+import { SORUN_DURUMLARI, SERVIS_HATA_TURLERI, baglantiliSorunlar, kararlilikHesapla, kategoriKisaAdi, sinifTahmini, sorunlariHesapla } from './sorun-modeli.mjs';
 import { EK_AKSIYON_PUANI, aksiyonListesi, aksiyonOnerisi, bant, durumRozeti, oncelikPuani, sahipOnerisi } from './oncelik.mjs';
 import { yavasladiMi, yuzdelik, yuzdelikler } from './yuzdelik.mjs';
 import { ilkSatirlar } from './html-rapor.mjs';
 import { akisAdimSatirlari } from './servis-sonuclari.mjs';
+import { aksiyonlariBirlestir, birlesikOzet, kovalariBirlestir, saglikSiralamasi, sinifDagilimi, sorunSayimi } from './coklu.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
- * @typedef {{ projeId: string; kapsam: 'ekran' | 'servis'; id: string; donem: import('./donem.mjs').DonemSecimi; karsilastir: boolean;
+ * Kapsam: 'ekran' | 'servis' (tek öğe; id) · 'coklu-ekran' | 'coklu-servis' | 'karisik' (ekranIdleri / servisIdleri; tumEkranlar /
+ * tumServisler: rapor üretildiği andaki TÜM ekranlar / servisler — "aynı seçimlerle yeniden oluştur" yeni öğeleri de kapsar).
+ * @typedef {{ projeId: string; kapsam: 'ekran' | 'servis' | 'coklu-ekran' | 'coklu-servis' | 'karisik'; id: string; ekranIdleri?: string[];
+ *   servisIdleri?: string[]; tumEkranlar?: boolean; tumServisler?: boolean; donem: import('./donem.mjs').DonemSecimi; karsilastir: boolean;
  *   ortamId: string | null; secenekler: { hatalar: boolean; adres: boolean; goruntuler: boolean }; aksiyonSayisi?: number }} RaporGirdisi
  * @typedef {{ maskele: (m: unknown) => string; simdi?: Date; goruntuCoz?: (medya: Array<{ id: string; ad: string; icerikTuru: string; boyut: number }>) =>
  *   Promise<Array<{ ad: string; icerikTuru: string; base64: string }>> }} RaporBaglami
@@ -49,7 +55,8 @@ const ortalama = (d) => (d.length ? d.reduce((a, b) => a + b, 0) / d.length : nu
 
 /**
  * Sorun → rapor satırı (sınıf, puan, bant, aksiyon, sahip, başlık, "neden şimdi").
- * @param {import('./sorun-modeli.mjs').Sorun} s @param {'ekran' | 'servis'} tur @param {{ baslik: string; nerede: string; kalip: string; kategori?: string; hataTuru?: string }} m
+ * @param {import('./sorun-modeli.mjs').Sorun} s @param {'ekran' | 'servis'} tur
+ * @param {{ baslik: string; nerede: string; kalip: string; kategori?: string; hataTuru?: string; ogeId: string; ogeAd: string }} m
  */
 function sorunSatiri(s, tur, m) {
   const t = sinifTahmini({ tur, kategori: m.kategori ?? null, hataTuru: m.hataTuru ?? null, durum: s.durum });
@@ -57,7 +64,7 @@ function sorunSatiri(s, tur, m) {
     : oncelikPuani({ sinif: t.sinif, durum: s.durum, senaryo: s.senaryolar.length, oran: s.oran, kritiklik: 0, acikGun: s.acikGun });
   const yz = (/** @type {number} */ o) => `%${(o * 100).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}`;
   return {
-    imza: s.imza, tur, baslik: m.baslik, nerede: m.nerede, kalip: m.kalip, kategori: m.kategori ?? null, hataTuru: m.hataTuru ?? null,
+    imza: s.imza, tur, ogeId: m.ogeId, ogeAd: m.ogeAd, baslik: m.baslik, nerede: m.nerede, kalip: m.kalip, kategori: m.kategori ?? null, hataTuru: m.hataTuru ?? null,
     sinif: t.sinif, dayanak: t.dayanak, durum: s.durum, n: s.n, nOnceki: s.nOnceki, maruz: s.maruz, maruzOnceki: s.maruzOnceki, oran: s.oran,
     oranOnceki: s.oranOnceki, senaryo: s.senaryolar.length, seri: s.seri, oncekiSeri: s.oncekiSeri, ilk: iso(s.ilk), son: iso(s.son),
     acikGun: s.acikGun, tekrarRozeti: s.tekrarRozeti, puan, bant: bant(puan), aksiyon: aksiyonOnerisi({ sinif: t.sinif, tur }), sahip: sahipOnerisi(t.sinif),
@@ -70,10 +77,16 @@ function sorunSatiri(s, tur, m) {
 /**
  * Ortak son adım: aksiyonlar, sayımlar, rozet, maddeler.
  * @param {RaporSorunu[]} sorunlar @param {Array<Record<string, unknown> & { puan: number; bant: string; durum: string }>} ekAksiyonlar
- * @param {{ basari: number | null; oncekiBasari: number | null; esikler: { yesil: number; sari: number }; aksiyonSayisi: number; karsilastir: boolean; kosuVar: boolean }} g
+ * @param {{ basari: number | null; oncekiBasari: number | null; esikler: { yesil: number; sari: number }; aksiyonSayisi: number; karsilastir: boolean; kosuVar: boolean;
+ *   birlesme?: { haric: Set<string>; notlar: Map<string, string> } }} g birlesme: bağlantılı sorunlar (coklu.mjs > aksiyonlariBirlestir)
  */
 function ortakSonuc(sorunlar, ekAksiyonlar, g) {
-  const tumAksiyonlar = aksiyonListesi([...sorunlar, ...ekAksiyonlar], Number.MAX_SAFE_INTEGER);
+  const haric = g.birlesme?.haric ?? new Set();
+  for (const s of sorunlar) {
+    const not = g.birlesme?.notlar.get(s.imza);
+    if (not) Object.assign(s, { baglanti: not }); // şablonda maskelenerek yazılır (adım / metot adı içerir)
+  }
+  const tumAksiyonlar = aksiyonListesi([...sorunlar.filter((s) => !haric.has(s.imza)), ...ekAksiyonlar], Number.MAX_SAFE_INTEGER);
   const bantSayim = { P1: 0, P2: 0, P3: 0 };
   for (const a of tumAksiyonlar) bantSayim[/** @type {'P1' | 'P2' | 'P3'} */ (a.bant)]++;
   /** @type {Record<string, number>} */
@@ -131,26 +144,33 @@ export async function donemRaporuVerisi(vt, g, b) {
     }
   };
   const ic = { vt, g, b, donem, ortamAdlari, esikler, aksiyonSayisi: Math.min(20, Math.max(1, g.aksiyonSayisi ?? 8)) };
-  return g.kapsam === 'servis' ? { tur: /** @type {const} */ ('servis'), ...ortak, ...servisBolumleri(ic) } : { tur: /** @type {const} */ ('ekran'), ...ortak, ...(await ekranBolumleri(ic)) };
+  if (g.kapsam === 'servis') return { tur: /** @type {const} */ ('servis'), ...ortak, ...servisHesabi(ic, g.id).bolum };
+  if (g.kapsam === 'ekran') return { tur: /** @type {const} */ ('ekran'), ...ortak, ...(await ekranHesabi(ic, g.id, true)).bolum };
+  return { tur: g.kapsam, ...ortak, ...(await cokluBolumler(ic)) };
 }
 
 /**
  * @typedef {{ vt: Veritabani; g: RaporGirdisi; b: RaporBaglami; donem: import('./donem.mjs').Donem; ortamAdlari: Map<string, string>;
- *   esikler: { yesil: number; sari: number }; aksiyonSayisi: number }} Ic
+ *   esikler: { yesil: number; sari: number }; aksiyonSayisi: number; adimSatirlari?: Set<string> }} Ic
  */
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // TEK EKRAN
 // ---------------------------------------------------------------------------------------------------------------------------
 
-/** @param {Ic} ic */
-async function ekranBolumleri(ic) {
+/**
+ * Tek ekranın rapor bölümleri (bolum) + çoklu raporda toplanacak ham sayılar (ham).
+ * ayrinti: false ise yalnız çoklu raporun kullandığı kısım hesaplanır (senaryo matrisi, ısı haritası, son hata / ekran görüntüsü ve
+ * yakalanan mesajlar atlanır).
+ * @param {Ic} ic @param {string} ekranId @param {boolean} ayrinti
+ */
+async function ekranHesabi(ic, ekranId, ayrinti) {
   const { vt, g, b, donem, ortamAdlari } = ic;
-  const ekran = vt.tek('SELECT id, ad FROM ekranlar WHERE id = ? AND proje_id = ?', [g.id, g.projeId]);
+  const ekran = vt.tek('SELECT id, ad FROM ekranlar WHERE id = ? AND proje_id = ?', [ekranId, g.projeId]);
   if (!ekran) throw new DepoHatasi('Ekran bulunamadı.');
   const ekranAdi = String(ekran.ad);
   const kosullar = ['k.proje_id = ?', 'r.ekran_id = ?', 'COALESCE(r.bitis, k.bitis, k.baslangic) >= ?', 'COALESCE(r.bitis, k.bitis, k.baslangic) < ?'];
-  const p = [g.projeId, g.id, donem.geriBakisBas.toISOString(), donem.bit.toISOString()];
+  const p = [g.projeId, ekranId, donem.geriBakisBas.toISOString(), donem.bit.toISOString()];
   if (g.ortamId) { kosullar.push('k.ortam_id = ?'); p.push(g.ortamId); }
   const satirlar = vt.tumu(
     `SELECT r.id, r.kosu_id, r.senaryo_id, r.senaryo_anahtari, r.senaryo_baslik, r.durum, r.sure_ms, r.hata_kategorisi, r.deneme, r.ekler_json,
@@ -191,7 +211,7 @@ async function ekranBolumleri(ic) {
   /** @type {import('./sorun-modeli.mjs').Gozlem[]} */
   const gozlemler = kayitlar.map((x) => ({
     zaman: x.zaman, durum: x.durum, senaryo: x.senaryo, maruz: x.senaryo, ortam: x.ortamId, surum: x.surum, deneme: x.deneme, tekrarKosusu: x.tekrarKosusu,
-    ...(x.durum === 'basarisiz' ? { imza: { parcalar: ['ekran', g.id, x.adim, x.kategori, x.kalip], bilgi: { adim: x.adim, kategori: x.kategori, kalip: x.kalip } } } : {})
+    ...(x.durum === 'basarisiz' ? { imza: { parcalar: ['ekran', ekranId, x.adim, x.kategori, x.kalip], bilgi: { adim: x.adim, kategori: x.kategori, kalip: x.kalip } } } : {})
   }));
   const kararlilik = kararlilikHesapla(gozlemler.filter((x) => donemParcasi(donem, x.zaman) === 'D'));
   const oncekiKararlilik = kararlilikHesapla(gozlemler.filter((x) => donemParcasi(donem, x.zaman) === 'O'));
@@ -201,7 +221,7 @@ async function ekranBolumleri(ic) {
     const kisa = kategoriKisaAdi(kategori);
     return sorunSatiri(s, 'ekran', {
       baslik: buyukBas(adim ? `"${adim}" adımında ${kisa}` : `${kisa} (adım bilgisi yok)`), nerede: `${ekranAdi}${adim ? ` › ${adim}` : ''}`,
-      kalip: String(s.bilgi.kalip ?? ''), kategori
+      kalip: String(s.bilgi.kalip ?? ''), kategori, ogeId: ekranId, ogeAd: ekranAdi
     });
   });
 
@@ -237,7 +257,7 @@ async function ekranBolumleri(ic) {
   };
 
   // Senaryolar (dönem; tam koşular) + koşuya dahil ama koşmamış senaryolar.
-  const tanimli = vt.tumu('SELECT id, baslik, kosuya_dahil FROM senaryolar WHERE ekran_id = ? AND proje_id = ?', [g.id, g.projeId]);
+  const tanimli = vt.tumu('SELECT id, baslik, kosuya_dahil FROM senaryolar WHERE ekran_id = ? AND proje_id = ?', [ekranId, g.projeId]);
   for (const t of tanimli) if (!senaryoAdlari.has(String(t.id))) senaryoAdlari.set(String(t.id), String(t.baslik));
   const tamD = D.filter((x) => x.kosuTuru === 'tam');
   const tamO = O.filter((x) => x.kosuTuru === 'tam');
@@ -260,28 +280,33 @@ async function ekranBolumleri(ic) {
   /** @type {Map<string, number>} */
   const tamKosular = new Map();
   for (const x of tamD) tamKosular.set(x.kosuId, x.kosuBaslangic);
-  const matrisKosulari = [...tamKosular.entries()].sort((a, c) => a[1] - c[1]).slice(-EN_COK_MATRIS_KOSUSU);
+  const siraliKosular = [...tamKosular.entries()].sort((a, c) => a[1] - c[1]);
+  const matrisKosulari = ayrinti ? siraliKosular.slice(-EN_COK_MATRIS_KOSUSU) : [];
   const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
   const kosuEtiketi = (/** @type {number} */ t) => { const d = new Date(t); return `${iki(d.getDate())}.${iki(d.getMonth() + 1)} ${iki(d.getHours())}:${iki(d.getMinutes())}`; };
+  /** Tek tam koşudaki durum: K (en az biri kaldı) · G · A (hepsi atlandı) · "-" (koşmadı). @param {string} kosuId @param {string | null} senaryo */
+  const kosuDurumu = (kosuId, senaryo) => {
+    const l = tamD.filter((x) => x.kosuId === kosuId && (senaryo === null || x.senaryo === senaryo));
+    if (l.some((x) => x.durum === 'basarisiz')) return 'K';
+    if (l.some((x) => x.durum === 'basarili')) return 'G';
+    if (l.some((x) => x.durum === 'atlanan')) return 'A';
+    return '-';
+  };
   const matris = {
     etiketler: matrisKosulari.map(([, t]) => kosuEtiketi(t)),
-    satirlar: senaryolar.map((s) => {
-      const dizi = matrisKosulari.map(([kosuId]) => {
-        const l = tamD.filter((x) => x.kosuId === kosuId && x.senaryo === s.anahtar);
-        if (l.some((x) => x.durum === 'basarisiz')) return 'K';
-        if (l.some((x) => x.durum === 'basarili')) return 'G';
-        if (l.some((x) => x.durum === 'atlanan')) return 'A';
-        return '-';
-      }).join('');
+    satirlar: ayrinti ? senaryolar.map((s) => {
+      const dizi = matrisKosulari.map(([kosuId]) => kosuDurumu(kosuId, s.anahtar)).join('');
       return { ad: s.ad, dizi, not: matrisNotu(dizi, s) };
-    })
+    }) : []
   };
+  const sonTamKosu = siraliKosular[siraliKosular.length - 1];
+  const sonDurum = sonTamKosu ? kosuDurumu(sonTamKosu[0], null) : null;
 
   // Adım × kova ısı haritası (tüm koşuların kalan sonuçları; her sonuç yalnız ilk başarısız adımına sayılır).
   /** @type {Map<string, number[]>} */
   const isi = new Map();
   for (const x of D) {
-    if (x.durum !== 'basarisiz') continue;
+    if (!ayrinti || x.durum !== 'basarisiz') continue;
     const ad = x.adim || '(adım bilgisi yok)';
     const seri = isi.get(ad) ?? isi.set(ad, donem.kovalar.map(() => 0)).get(ad);
     const i = kovaIndeksi(donem.kovalar, x.zaman);
@@ -293,7 +318,7 @@ async function ekranBolumleri(ic) {
   // Son hata (beklenen / görülen) + isteğe bağlı ekran görüntüsü.
   const sonKalan = [...D].reverse().find((x) => x.durum === 'basarisiz') ?? null;
   let sonHata = null;
-  if (sonKalan && g.secenekler.hatalar) {
+  if (ayrinti && sonKalan && g.secenekler.hatalar) {
     const maskeli = b.maskele(sonKalan.hata ?? '');
     const bg = beklenenGorulenCikar(maskeli);
     let goruntuler = /** @type {Array<{ ad: string; icerikTuru: string; base64: string }>} */ ([]);
@@ -309,11 +334,11 @@ async function ekranBolumleri(ic) {
   }
 
   // Koşuda yakalanan BEKLENMEYEN mesajlar (dönemdeki sonuçlar; kaynak + kalıp).
-  const yakalanan = yakalananMesajlar(vt, D.map((x) => x.id), new Set(D.filter((x) => x.durum === 'basarisiz').map((x) => x.id)), b.maskele);
+  const yakalanan = ayrinti ? yakalananMesajlar(vt, D.map((x) => x.id), new Set(D.filter((x) => x.durum === 'basarisiz').map((x) => x.id)), b.maskele) : [];
 
   // Kapsam.
   const dSenaryolari = new Set(D.map((x) => x.senaryo));
-  const model = vt.tek('SELECT surum, olusturulma FROM ekran_modelleri WHERE ekran_id = ? ORDER BY surum DESC LIMIT 1', [g.id]);
+  const model = vt.tek('SELECT surum, olusturulma FROM ekran_modelleri WHERE ekran_id = ? ORDER BY surum DESC LIMIT 1', [ekranId]);
   const kapsam = {
     senaryo: tanimli.length, kosuyaDahil: tanimli.filter((t) => Number(t.kosuya_dahil) === 1).length,
     hicKosmayan: tanimli.filter((t) => Number(t.kosuya_dahil) === 1 && !dSenaryolari.has(String(t.id))).length,
@@ -329,8 +354,15 @@ async function ekranBolumleri(ic) {
   }));
   const son = ortakSonuc(sorunlar, ekAksiyonlar, { basari, oncekiBasari, esikler: ic.esikler, aksiyonSayisi: ic.aksiyonSayisi, karsilastir: g.karsilastir, kosuVar: D.length > 0 });
   return {
-    oge: { id: g.id, ad: ekranAdi, senaryoSayisi: tanimli.length }, kosuVar: D.length > 0, ozet, sorunlar, ...son, egilim,
-    ekran: { senaryolar, matris, isiHaritasi, sonHata, yakalanan, kapsam }
+    bolum: {
+      oge: { id: ekranId, ad: ekranAdi, senaryoSayisi: tanimli.length }, kosuVar: D.length > 0, ozet, sorunlar, ...son, egilim,
+      ekran: { senaryolar, matris, isiHaritasi, sonHata, yakalanan, kapsam }
+    },
+    // Çoklu rapor için toplanabilir ham değerler (rapora yazılmaz).
+    ham: {
+      sD, sO, oncekiVar: O.length > 0, kovalar: egilimKovalari, sureD: sureler(D), sureO: sureler(O),
+      tamKosuD: new Set(tamD.map((x) => x.kosuId)), tamKosuO: new Set(tamO.map((x) => x.kosuId)), ekAksiyonlar, son: sonDurum
+    }
   };
 }
 
@@ -424,16 +456,20 @@ export function servisHatasi(durum, sonuc, maskele) {
   return { hataTuru, kalip };
 }
 
-/** @param {Ic} ic */
-function servisBolumleri(ic) {
+/**
+ * Tek servisin rapor bölümleri (bolum) + çoklu raporda toplanacak ham sayılar (ham).
+ * @param {Ic} ic @param {string} servisId
+ */
+function servisHesabi(ic, servisId) {
   const { vt, g, b, donem } = ic;
-  const servis = servisGetir(vt, g.id);
+  const servis = servisGetir(vt, servisId);
   if (!servis || servis.projeId !== g.projeId) throw new DepoHatasi('Servis bulunamadı.');
-  const senaryolar = servisSenaryolariniListele(vt, g.id);
+  const senaryolar = servisSenaryolariniListele(vt, servisId);
   const senaryoMetotlari = new Map(senaryolar.map((s) => [s.id, servisMetodu(/** @type {any} */ (s.icerik))]));
-  const adimSatirlari = akisAdimSatirlari(vt, g.projeId);
+  // Akış adımı satırları proje başınadır: çoklu raporda bir kez okunur.
+  const adimSatirlari = ic.adimSatirlari ?? (ic.adimSatirlari = akisAdimSatirlari(vt, g.projeId));
   const kosullar = ['proje_id = ?', 'servis_id = ?', "tur = 'kosu'", 'baslangic >= ?', 'baslangic < ?'];
-  const p = [g.projeId, g.id, donem.geriBakisBas.toISOString(), donem.bit.toISOString()];
+  const p = [g.projeId, servisId, donem.geriBakisBas.toISOString(), donem.bit.toISOString()];
   if (g.ortamId) { kosullar.push('ortam_id = ?'); p.push(g.ortamId); }
   const satirlar = vt.tumu(`SELECT id, senaryo_id, ortam_id, durum, baslangic, sure_ms, baslik FROM servis_kosulari WHERE ${kosullar.join(' AND ')} ORDER BY baslangic`, p)
     .filter((r) => !adimSatirlari.has(String(r.id)));
@@ -473,7 +509,7 @@ function servisBolumleri(ic) {
   /** @type {import('./sorun-modeli.mjs').Gozlem[]} */
   const gozlemler = kayitlar.map((x) => ({
     zaman: x.zaman, durum: x.durum, senaryo: x.senaryo, maruz: x.metot, ortam: x.ortamId,
-    ...(x.hata ? { imza: { parcalar: ['servis', g.id, x.metot, x.hata.hataTuru, x.hata.kalip], bilgi: { metot: x.metot, hataTuru: x.hata.hataTuru, kalip: x.hata.kalip } } } : {})
+    ...(x.hata ? { imza: { parcalar: ['servis', servisId, x.metot, x.hata.hataTuru, x.hata.kalip], bilgi: { metot: x.metot, hataTuru: x.hata.hataTuru, kalip: x.hata.kalip } } } : {})
   }));
   const hataTuruAdi = Object.fromEntries(SERVIS_HATA_TURLERI);
   const kararlilik = kararlilikHesapla(gozlemler.filter((x) => donemParcasi(donem, x.zaman) === 'D'));
@@ -481,7 +517,8 @@ function servisBolumleri(ic) {
     const metot = String(s.bilgi.metot ?? '');
     const hataTuru = String(s.bilgi.hataTuru ?? 'kontrol');
     return sorunSatiri(s, 'servis', {
-      baslik: `${metot}: ${String(hataTuruAdi[hataTuru] ?? 'Hata')}`, nerede: `${servis.ad} › ${metot}`, kalip: String(s.bilgi.kalip ?? ''), hataTuru
+      baslik: `${metot}: ${String(hataTuruAdi[hataTuru] ?? 'Hata')}`, nerede: `${servis.ad} › ${metot}`, kalip: String(s.bilgi.kalip ?? ''), hataTuru,
+      ogeId: servisId, ogeAd: servis.ad
     });
   });
   const sayi = (/** @type {typeof kayitlar} */ l) => {
@@ -530,19 +567,7 @@ function servisBolumleri(ic) {
   };
 
   // Bu servisi kullanan servis akışları (koşu türü).
-  const akislar = servisAkislariniListele(vt, g.projeId).filter((a) => Array.isArray(a.icerik?.adimlar) && a.icerik.adimlar.some((/** @type {any} */ x) => x && x.servisId === g.id))
-    .map((a) => {
-      const k = vt.tumu(`SELECT durum, baslangic, sure_ms FROM servis_akis_kosulari WHERE akis_id = ? AND tur = 'kosu' AND baslangic >= ? AND baslangic < ?${g.ortamId ? ' AND ortam_id = ?' : ''} ORDER BY baslangic`,
-        [a.id, donem.onceki.bas.toISOString(), donem.bit.toISOString(), ...(g.ortamId ? [g.ortamId] : [])]);
-      const d = k.filter((x) => (ms(x.baslangic) ?? 0) >= donem.bas.getTime());
-      const o = k.filter((x) => (ms(x.baslangic) ?? 0) < donem.bas.getTime());
-      const son = d[d.length - 1];
-      return {
-        ad: a.baslik, tur: a.tur === 'oturum' ? 'Oturum akışı' : 'Servis akışı', adim: a.icerik.adimlar.length, kosu: d.length,
-        basari: oranYuzde(d.filter((x) => x.durum === 'basarili').length, d.length), oncekiBasari: oranYuzde(o.filter((x) => x.durum === 'basarili').length, o.length),
-        ortSure: ortalama(d.map((x) => Number(x.sure_ms) || 0)), son: son ? (son.durum === 'basarili' ? 'G' : 'K') : null
-      };
-    });
+  const akislar = akislariHesapla(ic, new Set([servisId]));
 
   const basari = basariYuzdesi(sD);
   const oncekiBasari = basariYuzdesi(sO);
@@ -556,12 +581,235 @@ function servisBolumleri(ic) {
   const son = ortakSonuc(sorunlar, [], { basari, oncekiBasari, esikler: ic.esikler, aksiyonSayisi: ic.aksiyonSayisi, karsilastir: g.karsilastir, kosuVar: D.length > 0 });
   const kontrolListesi = [...kontrolTurleri.entries()].map(([tur, x]) => ({ tur, etiket: x.etiket, toplam: x.toplam, gecen: x.gecen }))
     .sort((a, c) => c.toplam - a.toplam);
+  const sonCagri = D[D.length - 1];
   return {
-    oge: { id: g.id, ad: servis.ad, servisTuru: servis.tur, senaryoSayisi: senaryolar.length, metotSayisi: metotAdlari.length }, kosuVar: D.length > 0, ozet, sorunlar, ...son, egilim,
-    servis: {
-      metotlar, hataMatrisi, sureEgilimi, kontrolTurleri: kontrolListesi,
-      kalanKontroller: [...kalanKontroller.entries()].map(([etiket, sayi]) => ({ etiket, sayi })).sort((a, c) => c.sayi - a.sayi).slice(0, EN_COK_KALAN_KONTROL),
-      akislar
+    bolum: {
+      oge: { id: servisId, ad: servis.ad, servisTuru: servis.tur, senaryoSayisi: senaryolar.length, metotSayisi: metotAdlari.length }, kosuVar: D.length > 0, ozet, sorunlar, ...son, egilim,
+      servis: {
+        metotlar, hataMatrisi, sureEgilimi, kontrolTurleri: kontrolListesi,
+        kalanKontroller: [...kalanKontroller.entries()].map(([etiket, sayi]) => ({ etiket, sayi })).sort((a, c) => c.sayi - a.sayi).slice(0, EN_COK_KALAN_KONTROL),
+        akislar
+      }
+    },
+    // Çoklu rapor için toplanabilir ham değerler (rapora yazılmaz).
+    ham: {
+      sD, sO, oncekiVar: O.length > 0, kovalar: kovaListesi.map((l) => sayi(l)), kovaSureleri: kovaListesi.map((l) => sureListesi(l)),
+      sureO: sureListesi(O), son: sonCagri ? (sonCagri.durum === 'basarili' ? 'G' : 'K') : null
+    }
+  };
+}
+
+/**
+ * Seçilen servislerden en az birini kullanan servis akışları (koşu türü; dönem ve önceki dönem).
+ * @param {Ic} ic @param {Set<string>} servisIdleri
+ */
+function akislariHesapla(ic, servisIdleri) {
+  const { vt, g, donem } = ic;
+  return servisAkislariniListele(vt, g.projeId)
+    .filter((a) => Array.isArray(a.icerik?.adimlar) && a.icerik.adimlar.some((/** @type {any} */ x) => x && servisIdleri.has(x.servisId)))
+    .map((a) => {
+      const k = vt.tumu(`SELECT durum, baslangic, sure_ms FROM servis_akis_kosulari WHERE akis_id = ? AND tur = 'kosu' AND baslangic >= ? AND baslangic < ?${g.ortamId ? ' AND ortam_id = ?' : ''} ORDER BY baslangic`,
+        [a.id, donem.onceki.bas.toISOString(), donem.bit.toISOString(), ...(g.ortamId ? [g.ortamId] : [])]);
+      const d = k.filter((x) => (ms(x.baslangic) ?? 0) >= donem.bas.getTime());
+      const o = k.filter((x) => (ms(x.baslangic) ?? 0) < donem.bas.getTime());
+      const son = d[d.length - 1];
+      return {
+        ad: a.baslik, tur: a.tur === 'oturum' ? 'Oturum akışı' : 'Servis akışı', adim: a.icerik.adimlar.length, kosu: d.length,
+        basarili: d.filter((x) => x.durum === 'basarili').length,
+        basari: oranYuzde(d.filter((x) => x.durum === 'basarili').length, d.length), oncekiBasari: oranYuzde(o.filter((x) => x.durum === 'basarili').length, o.length),
+        ortSure: ortalama(d.map((x) => Number(x.sure_ms) || 0)), son: son ? (son.durum === 'basarili' ? 'G' : 'K') : null
+      };
+    });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// ÇOKLU EKRAN / ÇOKLU SERVİS / EKRAN + SERVİS (A2)
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/** Çoklu raporda en çok öğe (ekran + servis). */
+export const EN_COK_OGE = 100;
+const EN_COK_ADIM = 6;
+
+/**
+ * Seçimin öğeleri. "Tümü" seçiliyse rapor anındaki tüm ekranlar (silinmiş hariç) / servisler; değilse verilen kimliklerden bu
+ * projede bulunanlar (proje sırasıyla). Sonradan silinen öğe atlanır ve "eksik" sayılır (yeniden oluşturmada rapor yine üretilir).
+ * @param {Ic} ic
+ */
+function secimiCoz(ic) {
+  const { vt, g } = ic;
+  const ekranGerek = g.kapsam === 'coklu-ekran' || g.kapsam === 'karisik';
+  const servisGerek = g.kapsam === 'coklu-servis' || g.kapsam === 'karisik';
+  let eksik = 0;
+  /** @template {{ id: string }} T @param {T[]} tum @param {boolean | undefined} hepsi @param {string[] | undefined} idler @returns {T[]} */
+  const sec = (tum, hepsi, idler) => {
+    if (hepsi) return tum;
+    const istenen = new Set(idler ?? []);
+    const bulunan = tum.filter((x) => istenen.has(x.id));
+    eksik += istenen.size - bulunan.length;
+    return bulunan;
+  };
+  const tumEkranlar = ekranGerek
+    ? vt.tumu('SELECT id, ad, durum FROM ekranlar WHERE proje_id = ? ORDER BY (sira IS NULL), sira, ad', [g.projeId])
+      .filter((e) => !g.tumEkranlar || e.durum !== 'silindi').map((e) => ({ id: String(e.id), ad: String(e.ad) }))
+    : [];
+  const tumServisler = servisGerek ? servisleriListele(vt, g.projeId).map((s) => ({ id: s.id, ad: s.ad, tur: s.tur })) : [];
+  const ekranlar = ekranGerek ? sec(tumEkranlar, g.tumEkranlar, g.ekranIdleri) : [];
+  const servisler = servisGerek ? sec(tumServisler, g.tumServisler, g.servisIdleri) : [];
+  if (ekranGerek && !ekranlar.length) throw new DepoHatasi(g.tumEkranlar ? 'Projede ekran yok.' : 'Seçilen ekranlar bulunamadı.');
+  if (servisGerek && !servisler.length) throw new DepoHatasi(g.tumServisler ? 'Projede servis yok.' : 'Seçilen servisler bulunamadı.');
+  if (ekranlar.length + servisler.length > EN_COK_OGE) throw new DepoHatasi(`Bir raporda en çok ${EN_COK_OGE} öğe olabilir.`);
+  return { ekranlar, servisler, eksik };
+}
+
+/** Ölçüm dizilerinin birleşimi. @param {ReadonlyArray<ReadonlyArray<number>>} l */
+const birlestir = (l) => l.flat();
+/** @param {number | null} n */
+const yuzdeMetni = (n) => (n === null ? '—' : `%${n.toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`);
+
+/**
+ * Ekran tarafı: seçilen ekranların toplamı, karşılaştırma tablosu (sağlık sırasıyla) ve kapsam.
+ * @param {Ic} ic @param {Array<Awaited<ReturnType<typeof ekranHesabi>>>} liste
+ */
+function ekranTarafi(ic, liste) {
+  const { donem } = ic;
+  const oz = birlesikOzet(liste.map((x) => x.ham.sD), liste.map((x) => x.ham.sO));
+  const kovalar = kovalariBirlestir(liste.map((x) => x.ham.kovalar), donem.kovalar.length);
+  const birlesim = (/** @type {Array<Set<string>>} */ l) => new Set(l.flatMap((s) => [...s])).size;
+  const oncekiVar = liste.some((x) => x.ham.oncekiVar);
+  const ogeler = saglikSiralamasi(liste.map(({ bolum: v, ham }) => ({
+    id: v.oge.id, ad: v.oge.ad, senaryo: v.oge.senaryoSayisi, test: v.ozet.test, oncekiTest: v.ozet.oncekiTest, basarisiz: v.ozet.basarisiz,
+    oncekiBasarisiz: v.ozet.oncekiBasarisiz, atlanan: v.ozet.atlanan, basari: v.ozet.basari, oncekiBasari: v.ozet.oncekiBasari, tamKosu: v.ozet.tamKosu,
+    oranSeri: v.egilim.kovalar.map((k) => k.oran), son: ham.son, kapsam: v.ekran.kapsam, ...sorunSayimi(v.sorunlar)
+  })), ic.esikler);
+  const hatasiz = (/** @type {'simdi' | 'onceki'} */ d) => ogeler.filter((o) => (d === 'simdi' ? o.test > 0 && o.basarisiz === 0 : (o.oncekiTest ?? 0) > 0 && o.oncekiBasarisiz === 0)).length;
+  const sorunlar = liste.flatMap((x) => x.bolum.sorunlar);
+  const ozet = {
+    basari: oz.basari, oncekiBasari: oz.oncekiBasari, test: oz.adet, oncekiTest: oz.oncekiAdet, basarisiz: oz.sayilar.basarisiz,
+    oncekiBasarisiz: oncekiVar ? oz.oncekiSayilar.basarisiz : null, atlanan: oz.sayilar.atlanan,
+    tamKosu: birlesim(liste.map((x) => x.ham.tamKosuD)), oncekiTamKosu: birlesim(liste.map((x) => x.ham.tamKosuO)),
+    ortSure: ortalama(birlestir(liste.map((x) => x.ham.sureD))), oncekiOrtSure: ortalama(birlestir(liste.map((x) => x.ham.sureO))),
+    kararsizSenaryo: liste.reduce((a, x) => a + x.bolum.ozet.kararsizSenaryo, 0),
+    oncekiKararsizSenaryo: oncekiVar ? liste.reduce((a, x) => a + (x.bolum.ozet.oncekiKararsizSenaryo ?? 0), 0) : null,
+    acikSorun: sorunlar.filter((s) => s.durum !== 'cozulen' && s.durum !== 'dogrulanamadi').length,
+    ogeSayisi: liste.length, senaryoSayisi: liste.reduce((a, x) => a + x.bolum.oge.senaryoSayisi, 0),
+    hatasizOge: hatasiz('simdi'), oncekiHatasizOge: oncekiVar ? hatasiz('onceki') : null,
+    tumSonuc: liste.reduce((a, x) => a + x.bolum.ozet.tumSonuc, 0), tekilSonuc: liste.reduce((a, x) => a + x.bolum.ozet.tekilSonuc, 0)
+  };
+  return {
+    ozet, sorunlar, ekAksiyonlar: liste.flatMap((x) => x.ham.ekAksiyonlar), kosuVar: liste.some((x) => x.bolum.kosuVar), ogeler,
+    egilim: { kovalar: kovalar.map((k, i) => ({ etiket: donem.kovalar[i].etiket, adet: k.adet, kalan: k.kalan, oran: k.oran })), oncekiOrt: oz.oncekiBasari }
+  };
+}
+
+/**
+ * Servis tarafı: seçilen servislerin toplamı, karşılaştırma tablosu (sağlık sırasıyla), metotlar, süre ve hata türleri, akışlar.
+ * @param {Ic} ic @param {Array<ReturnType<typeof servisHesabi>>} liste
+ */
+function servisTarafi(ic, liste) {
+  const { donem } = ic;
+  const oz = birlesikOzet(liste.map((x) => x.ham.sD), liste.map((x) => x.ham.sO));
+  const kovalar = kovalariBirlestir(liste.map((x) => x.ham.kovalar), donem.kovalar.length);
+  const enBuyuk = (/** @type {Array<number | null>} */ l) => { const d = l.filter((v) => v !== null).map(Number); return d.length ? Math.max(...d) : null; };
+  const metotlar = liste.flatMap((x) => x.bolum.servis.metotlar.map((m) => ({ ...m, servis: x.bolum.oge.ad, servisId: x.bolum.oge.id })));
+  const ogeler = saglikSiralamasi(liste.map(({ bolum: v, ham }) => ({
+    id: v.oge.id, ad: v.oge.ad, tur: v.oge.servisTuru, metot: v.oge.metotSayisi, senaryo: v.oge.senaryoSayisi, cagri: v.ozet.cagri, oncekiCagri: v.ozet.oncekiCagri,
+    kalan: v.ozet.kalan, oncekiKalan: v.ozet.oncekiKalan, basari: v.ozet.basari, oncekiBasari: v.ozet.oncekiBasari,
+    p95: enBuyuk(v.servis.metotlar.map((m) => m.p95)), oncekiP95: enBuyuk(v.servis.metotlar.map((m) => m.oncekiP95)), yavaslayan: v.ozet.yavaslayan,
+    oranSeri: v.egilim.kovalar.map((k) => k.oran), son: ham.son, ...sorunSayimi(v.sorunlar)
+  })), ic.esikler);
+  const akislar = akislariHesapla(ic, new Set(liste.map((x) => x.bolum.oge.id)));
+  const akisKosu = akislar.reduce((a, x) => a + x.kosu, 0);
+  const enYavas = metotlar.filter((m) => m.p95 !== null).sort((a, c) => Number(c.p95) - Number(a.p95))[0] ?? null;
+  const sorunlar = liste.flatMap((x) => x.bolum.sorunlar);
+  const oncekiVar = liste.some((x) => x.ham.oncekiVar);
+  const ozet = {
+    basari: oz.basari, oncekiBasari: oz.oncekiBasari, cagri: oz.adet, oncekiCagri: oz.oncekiAdet, kalan: oz.sayilar.basarisiz + oz.sayilar.hata,
+    oncekiKalan: oncekiVar ? oz.oncekiSayilar.basarisiz + oz.oncekiSayilar.hata : null,
+    enYavas: enYavas ? { metot: `${enYavas.servis} › ${enYavas.ad}`, p95: enYavas.p95, oncekiP95: enYavas.oncekiP95 } : null,
+    yavaslayan: metotlar.filter((m) => m.yavas).length, acikSorun: sorunlar.filter((s) => s.durum !== 'cozulen' && s.durum !== 'dogrulanamadi').length,
+    kararsizSenaryo: liste.reduce((a, x) => a + x.bolum.ozet.kararsizSenaryo, 0), ogeSayisi: liste.length,
+    metotSayisi: liste.reduce((a, x) => a + Number(x.bolum.oge.metotSayisi ?? 0), 0), senaryoSayisi: liste.reduce((a, x) => a + x.bolum.oge.senaryoSayisi, 0),
+    hatasizOge: ogeler.filter((o) => o.cagri > 0 && o.kalan === 0).length,
+    akisKosu, akisBasari: oranYuzde(akislar.reduce((a, x) => a + x.basarili, 0), akisKosu)
+  };
+  const sureler = donem.kovalar.map((_, i) => birlestir(liste.map((x) => x.ham.kovaSureleri[i] ?? [])));
+  return {
+    ozet, sorunlar, kosuVar: liste.some((x) => x.bolum.kosuVar), ogeler, metotlar, akislar,
+    yavaslayanlar: metotlar.filter((m) => m.yavas).map((m) => ({ servis: m.servis, metot: m.ad, oncekiP95: m.oncekiP95, p95: m.p95, n: m.n })),
+    hataMatrisi: liste.flatMap((x) => x.bolum.servis.hataMatrisi.map((r) => ({ ...r, servis: x.bolum.oge.ad }))),
+    sureEgilimi: { p50: sureler.map((l) => yuzdelik(l, 50)), p95: sureler.map((l) => yuzdelik(l, 95)), oncekiP95: yuzdelik(birlestir(liste.map((x) => x.ham.sureO)), 95) },
+    egilim: { kovalar: kovalar.map((k, i) => ({ etiket: donem.kovalar[i].etiket, adet: k.adet, kalan: k.kalan, oran: k.oran })), oncekiOrt: oz.oncekiBasari }
+  };
+}
+
+/**
+ * Çoklu kapsamın rapor verisi.
+ * @param {Ic} ic
+ */
+async function cokluBolumler(ic) {
+  const { g } = ic;
+  const secim = secimiCoz(ic);
+  /** @type {Array<Awaited<ReturnType<typeof ekranHesabi>>>} */
+  const ekranListesi = [];
+  for (const e of secim.ekranlar) ekranListesi.push(await ekranHesabi(ic, e.id, false));
+  const servisListesi = secim.servisler.map((s) => servisHesabi(ic, s.id));
+  const et = ekranListesi.length ? ekranTarafi(ic, ekranListesi) : null;
+  const st = servisListesi.length ? servisTarafi(ic, servisListesi) : null;
+  const sira = (/** @type {string} */ d) => SORUN_DURUMLARI.indexOf(d);
+  const sorunlar = [...(et?.sorunlar ?? []), ...(st?.sorunlar ?? [])]
+    .sort((a, b) => sira(a.durum) - sira(b.durum) || b.n - a.n || String(b.son ?? '').localeCompare(String(a.son ?? '')));
+  // Bağlantılı sorunlar (yalnız ekran + servis): tek aksiyonda birleşir.
+  const ciftler = et && st ? baglantiliSorunlar(et.sorunlar, st.sorunlar) : [];
+  const birlesme = aksiyonlariBirlestir(ciftler);
+  // Rozetin başarısı: tek taraflıysa o tarafın; karmada DAHA DÜŞÜK olan taraf (ikisi toplanmaz: birimleri farklı).
+  /** @type {'ekran' | 'servis'} */
+  let taraf = et ? 'ekran' : 'servis';
+  if (et && st && st.ozet.basari !== null && (et.ozet.basari === null || st.ozet.basari < et.ozet.basari)) taraf = 'servis';
+  const esas = taraf === 'ekran' ? /** @type {NonNullable<typeof et>} */ (et).ozet : /** @type {NonNullable<typeof st>} */ (st).ozet;
+  const kosuVar = Boolean(et?.kosuVar || st?.kosuVar);
+  const son = ortakSonuc(sorunlar, et?.ekAksiyonlar ?? [], {
+    basari: esas.basari, oncekiBasari: esas.oncekiBasari, esikler: ic.esikler, aksiyonSayisi: ic.aksiyonSayisi, karsilastir: g.karsilastir, kosuVar, birlesme
+  });
+  if (et && st) {
+    son.rozet = { ...son.rozet, gerekce: son.rozet.gerekce.replace('Dönem başarısı', `${taraf === 'ekran' ? 'Ekran' : 'Servis'} başarısı`) };
+    son.maddeler = son.maddeler.map(([t, m]) => /** @type {['iyi' | 'kotu' | 'oneri', string]} */ ([t, m.replace(/^Başarı önceki/, `${taraf === 'ekran' ? 'Ekran' : 'Servis'} başarısı önceki`)]));
+  }
+  // Sağlık sıralamasından madde: en çok ilgi isteyen ve en sağlıklı öğe.
+  const tumOgeler = [...(et?.ogeler.map((o) => ({ ...o, tur: 'ekran' })) ?? []), ...(st?.ogeler.map((o) => ({ ...o, tur: 'servis' })) ?? [])];
+  if (tumOgeler.length > 1) {
+    const olculen = tumOgeler.filter((o) => o.basari !== null);
+    const zayif = olculen.filter((o) => o.rozet.durum !== 'saglikli').sort((a, b) => (a.basari ?? 0) - (b.basari ?? 0))[0];
+    const saglam = olculen.filter((o) => o.rozet.durum === 'saglikli').sort((a, b) => (b.basari ?? 0) - (a.basari ?? 0))[0];
+    const oneriIndeksi = son.maddeler.findIndex(([t]) => t === 'oneri');
+    /** @type {Array<['iyi' | 'kotu' | 'oneri', string]>} */
+    const ek = [];
+    if (zayif) ek.push(['kotu', `En çok ilgi isteyen ${zayif.tur}: ${zayif.ad} (${yuzdeMetni(zayif.basari)}${zayif.kotulesen ? `, ${zayif.kotulesen} kötüleşen sorun` : ''}).`]);
+    if (saglam) ek.push(['iyi', `En sağlıklı ${saglam.tur}: ${saglam.ad} (${yuzdeMetni(saglam.basari)}).`]);
+    son.maddeler.splice(oneriIndeksi < 0 ? son.maddeler.length : oneriIndeksi, 0, ...ek);
+  }
+  const acik = sorunlar.filter((s) => s.durum !== 'cozulen' && s.durum !== 'dogrulanamadi');
+  const ekranAdi = g.tumEkranlar ? 'Tüm ekranlar' : `Seçilen ${secim.ekranlar.length} ekran`;
+  const servisAdi = g.tumServisler ? 'Tüm servisler' : `Seçilen ${secim.servisler.length} servis`;
+  const ad = g.kapsam === 'coklu-ekran' ? ekranAdi : g.kapsam === 'coklu-servis' ? servisAdi : `${ekranAdi} + ${servisAdi.toLocaleLowerCase('tr')}`;
+  const ozet = g.kapsam === 'karisik'
+    ? { basari: esas.basari, oncekiBasari: esas.oncekiBasari, taraf, ekran: et?.ozet ?? null, servis: st?.ozet ?? null, acikSorun: acik.length, baglantili: ciftler.length }
+    : esas;
+  const kisa = (/** @type {RaporSorunu} */ s) => ({ imza: s.imza, baslik: s.baslik, nerede: s.nerede, durum: s.durum, n: s.n, puan: s.puan, bant: s.bant });
+  return {
+    oge: {
+      id: '', ad, senaryoSayisi: (et?.ozet.senaryoSayisi ?? 0) + (st?.ozet.senaryoSayisi ?? 0), ...(st ? { metotSayisi: st.ozet.metotSayisi } : {})
+    },
+    secilenler: { ekranlar: secim.ekranlar, servisler: secim.servisler, tumEkranlar: g.tumEkranlar === true, tumServisler: g.tumServisler === true, eksik: secim.eksik },
+    kosuVar, ozet, sorunlar, ...son, egilim: (et ?? /** @type {NonNullable<typeof st>} */ (st)).egilim,
+    coklu: {
+      ekranTarafi: et ? { ozet: et.ozet, egilim: et.egilim, ogeler: et.ogeler } : null,
+      servisTarafi: st ? {
+        ozet: st.ozet, egilim: st.egilim, ogeler: st.ogeler, metotlar: st.metotlar, yavaslayanlar: st.yavaslayanlar, hataMatrisi: st.hataMatrisi, sureEgilimi: st.sureEgilimi
+      } : null,
+      akislar: st?.akislar ?? [],
+      sinifDagilimi: sinifDagilimi(sorunlar, tumOgeler.map((o) => ({ id: o.id, ad: o.ad, tur: /** @type {'ekran' | 'servis'} */ (o.tur) }))).filter((x) => x.toplam > 0),
+      enCokAdim: (et?.sorunlar ?? []).filter((s) => s.n > 0 && s.durum !== 'cozulen').sort((a, b) => b.n - a.n).slice(0, EN_COK_ADIM).map(kisa),
+      baglantili: ciftler.map((c) => ({ ekran: kisa(c.ekran), servis: kisa(c.servis), ortak: c.ortak, birlesim: c.birlesim, jaccard: c.jaccard, birlesti: birlesme.haric.has(c.ekran.imza) || birlesme.haric.has(c.servis.imza) }))
     }
   };
 }

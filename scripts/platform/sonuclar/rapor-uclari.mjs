@@ -6,8 +6,9 @@
 //   GET  /platform/rapor/indir?projeId=&id=           kaydedilmiş PDF'in aynısı (kasadan çözülür)
 //   POST /platform/rapor/yeniden { projeId, id }      aynı seçimlerle, dönem bugüne kaydırılarak yeni rapor (yeni satır)
 //   POST /platform/rapor/sil { projeId, id, onay }    onay: true olmadan silinmez
-// girdi: { projeId, kapsam: 'ekran' | 'servis', id, donem: { tur: son7 | son14 | son30 | ozel, baslangic?, bitis? }, karsilastir,
-//   ortamId | null, secenekler: { hatalar, adres, goruntuler } }. İzin: mevcut HTML rapor indirmesiyle aynı (oturum token'ı + açık kasa;
+// girdi: { projeId, kapsam: 'ekran' | 'servis' | 'coklu-ekran' | 'coklu-servis' | 'karisik', id (tek öğe), ekranIdleri[] / servisIdleri[]
+//   ve tumEkranlar / tumServisler (çoklu; "tümü" rapor anındaki tüm öğeler), donem: { tur: son7 | son14 | son30 | ozel, baslangic?, bitis? },
+//   karsilastir, ortamId | null, secenekler: { hatalar, adres, goruntuler } }. İzin: mevcut HTML rapor indirmesiyle aynı (oturum token'ı + açık kasa;
 //   dış istek yapılmaz, bu yüzden Ayarlar > İzinler'de ayrı izin yoktur). PDF yerel Chromium ile basılır; tüm ağ istekleri engellidir.
 import { DepoHatasi, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
 import { servisleriListele } from '../servisler/servis-deposu.mjs';
@@ -15,7 +16,7 @@ import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { adMaskeleyici, bilinenGizliDegerler, dosyaAdiParcasi, goruntuleriCoz, onizlemeSakla, raporGoruntuSiniriBayt, raporMaskeleyici } from './html-rapor.mjs';
 import { DONEM_TURLERI, DonemHatasi, donemiBuguneKaydir, gunAnahtari } from './donem.mjs';
-import { donemRaporuVerisi } from './donem-raporu.mjs';
+import { EN_COK_OGE, donemRaporuVerisi } from './donem-raporu.mjs';
 import { pdfRaporHtml } from './pdf-rapor/sablon.mjs';
 import { htmldenPdf, pdfSayfaSayisi } from './pdf-rapor/pdf.mjs';
 import { eskiRaporlariSil, raporGetir, raporKaydet, raporPdfiniAl, raporSil, raporlariListele } from './rapor-arsivi.mjs';
@@ -24,13 +25,29 @@ import { eskiRaporlariSil, raporGetir, raporKaydet, raporPdfiniAl, raporSil, rap
 /** @typedef {import('./donem-raporu.mjs').RaporGirdisi} RaporGirdisi */
 /** @typedef {{ medyaKlasoru: string; simdi?: Date }} UcBaglami */
 
-/** Bu aşamada desteklenen kapsamlar (diğerleri arayüzde "yakında"). */
-export const RAPOR_KAPSAMLARI = Object.freeze(['ekran', 'servis']);
+/** Bu aşamada desteklenen kapsamlar (Genel arayüzde "yakında"). */
+export const RAPOR_KAPSAMLARI = Object.freeze(['ekran', 'servis', 'coklu-ekran', 'coklu-servis', 'karisik']);
+/** Kapsamların görünen adı (hata mesajı, arşiv). */
+export const KAPSAM_ADLARI = Object.freeze({
+  ekran: 'Tek ekran', servis: 'Tek servis', 'coklu-ekran': 'Birden çok ekran', 'coklu-servis': 'Birden çok servis', karisik: 'Ekran + servis'
+});
 
 /** @param {unknown} d @param {string} alan */
 function kimlik(d, alan) {
   if (typeof d !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(d)) throw new DepoHatasi(`"${alan}" geçersiz.`);
   return d;
+}
+
+/**
+ * Çoklu seçimin kimlik listesi (yinelenenler atılır; en çok EN_COK_OGE).
+ * @param {unknown} d @param {string} alan @returns {string[]}
+ */
+function kimlikListesi(d, alan) {
+  if (d === undefined || d === null) return [];
+  if (!Array.isArray(d)) throw new DepoHatasi(`"${alan}" liste olmalı.`);
+  const l = [...new Set(d.map((x) => kimlik(x, alan)))];
+  if (l.length > EN_COK_OGE) throw new DepoHatasi(`Bir raporda en çok ${EN_COK_OGE} öğe olabilir.`);
+  return l;
 }
 
 /**
@@ -40,21 +57,37 @@ function kimlik(d, alan) {
 export function raporGirdisiDogrula(g) {
   if (!g || typeof g !== 'object') throw new DepoHatasi('Rapor seçimleri eksik.');
   const kapsam = g.kapsam;
-  if (!RAPOR_KAPSAMLARI.includes(kapsam)) throw new DepoHatasi('Bu aşamada yalnız "Tek ekran" ve "Tek servis" raporu alınabilir.');
+  if (!RAPOR_KAPSAMLARI.includes(kapsam)) {
+    throw new DepoHatasi(`Bu aşamada yalnız ${Object.values(KAPSAM_ADLARI).map((a) => `"${a}"`).join(', ')} raporu alınabilir ("Genel" sonraki aşamada).`);
+  }
+  const tek = kapsam === 'ekran' || kapsam === 'servis';
+  const coklu = tek ? null : {
+    ekranIdleri: kapsam === 'coklu-servis' ? [] : kimlikListesi(g.ekranIdleri, 'ekran'), servisIdleri: kapsam === 'coklu-ekran' ? [] : kimlikListesi(g.servisIdleri, 'servis'),
+    tumEkranlar: kapsam !== 'coklu-servis' && g.tumEkranlar === true, tumServisler: kapsam !== 'coklu-ekran' && g.tumServisler === true
+  };
+  if (coklu) {
+    const enAz = kapsam === 'karisik' ? 1 : 2;
+    if ((kapsam === 'coklu-ekran' || kapsam === 'karisik') && !coklu.tumEkranlar && coklu.ekranIdleri.length < enAz) {
+      throw new DepoHatasi(enAz === 1 ? 'En az bir ekran seçin ya da "Tüm ekranlar"ı işaretleyin.' : 'En az iki ekran seçin ya da "Tüm ekranlar"ı işaretleyin.');
+    }
+    if ((kapsam === 'coklu-servis' || kapsam === 'karisik') && !coklu.tumServisler && coklu.servisIdleri.length < enAz) {
+      throw new DepoHatasi(enAz === 1 ? 'En az bir servis seçin ya da "Tüm servisler"i işaretleyin.' : 'En az iki servis seçin ya da "Tüm servisler"i işaretleyin.');
+    }
+  }
   const d = g.donem && typeof g.donem === 'object' ? g.donem : { tur: 'son14' };
   if (!DONEM_TURLERI.includes(d.tur)) throw new DepoHatasi(`Dönem yalnızca ${DONEM_TURLERI.join(', ')} olabilir.`);
   const donem = d.tur === 'ozel' ? { tur: 'ozel', baslangic: String(d.baslangic ?? ''), bitis: String(d.bitis ?? '') } : { tur: String(d.tur) };
   const s = g.secenekler && typeof g.secenekler === 'object' ? g.secenekler : {};
   const aksiyon = Number(g.aksiyonSayisi);
   return {
-    projeId: kimlik(g.projeId, 'projeId'), kapsam, id: kimlik(g.id, kapsam === 'ekran' ? 'ekran' : 'servis'), donem,
+    projeId: kimlik(g.projeId, 'projeId'), kapsam, id: tek ? kimlik(g.id, kapsam === 'ekran' ? 'ekran' : 'servis') : '', ...(coklu ?? {}), donem,
     karsilastir: g.karsilastir !== false, ortamId: g.ortamId === null || g.ortamId === undefined || g.ortamId === '' ? null : kimlik(g.ortamId, 'ortamId'),
     secenekler: { hatalar: s.hatalar !== false, adres: s.adres === true, goruntuler: s.goruntuler === true },
     ...(Number.isInteger(aksiyon) && aksiyon >= 1 && aksiyon <= 20 ? { aksiyonSayisi: aksiyon } : {})
   };
 }
 
-/** "nobetci-rapor-<kapsam>-<ad>-<tarih>.pdf" @param {'ekran' | 'servis'} kapsam @param {string} ad @param {Date} tarih */
+/** "nobetci-rapor-<kapsam>-<ad>-<tarih>.pdf" @param {RaporGirdisi['kapsam']} kapsam @param {string} ad @param {Date} tarih */
 export const pdfDosyaAdi = (kapsam, ad, tarih) => `nobetci-rapor-${kapsam}-${dosyaAdiParcasi(ad) || kapsam}-${gunAnahtari(tarih)}.pdf`;
 
 /**
@@ -101,12 +134,20 @@ function ortamAdresleriniMaskele(vt, projeId, maskele) {
 
 /** Arşiv meta verisi (gizli değer yok). @param {RaporGirdisi} girdi @param {any} veri */
 function arsivMetasi(girdi, veri) {
+  const tek = girdi.kapsam === 'ekran' || girdi.kapsam === 'servis';
+  // Çoklu seçim: kimlikler ve "tümü" işaretleri ("aynı seçimlerle yeniden oluştur" için) + o günkü öğe adları (listede gösterim).
+  const secim = tek ? { id: girdi.id, ad: veri.oge.ad } : {
+    id: '', ad: veri.oge.ad, ekranIdleri: girdi.ekranIdleri ?? [], servisIdleri: girdi.servisIdleri ?? [], tumEkranlar: girdi.tumEkranlar === true,
+    tumServisler: girdi.tumServisler === true, ogeler: [...(veri.secilenler?.ekranlar ?? []), ...(veri.secilenler?.servisler ?? [])].map((/** @type {{ ad: string }} */ o) => o.ad)
+  };
+  const test = girdi.kapsam === 'ekran' || girdi.kapsam === 'coklu-ekran' ? veri.ozet.test
+    : girdi.kapsam === 'karisik' ? (veri.ozet.ekran?.test ?? 0) + (veri.ozet.servis?.cagri ?? 0) : veri.ozet.cagri;
   return {
-    kapsam: girdi.kapsam, secim: { id: girdi.id, ad: veri.oge.ad },
+    kapsam: girdi.kapsam, secim,
     donem: { ...girdi.donem, gun: veri.donem.gun, etiket: veri.donem.etiket }, karsilastir: girdi.karsilastir,
     ortam: veri.ortam ? { id: veri.ortam.id, ad: veri.ortam.ad } : null, secenekler: girdi.secenekler,
     rozet: veri.rozet.durum, ozet: {
-      basari: veri.ozet.basari, test: girdi.kapsam === 'ekran' ? veri.ozet.test : veri.ozet.cagri, bantlar: veri.bantSayim, durumlar: veri.durumSayim, acikSorun: veri.ozet.acikSorun
+      basari: veri.ozet.basari, test, bantlar: veri.bantSayim, durumlar: veri.durumSayim, acikSorun: veri.ozet.acikSorun
     }
   };
 }
@@ -156,8 +197,10 @@ export async function raporYenidenOlustur(vt, g, b) {
   const m = eski.meta;
   const donemSecimi = m.donem && typeof m.donem === 'object' ? m.donem : { tur: 'son14' };
   const donem = donemiBuguneKaydir(donemSecimi.tur === 'ozel' ? { tur: 'ozel', baslangic: donemSecimi.baslangic, bitis: donemSecimi.bitis } : { tur: donemSecimi.tur }, b.simdi ?? new Date());
+  const s = m.secim && typeof m.secim === 'object' ? m.secim : {};
   const r = await raporPdf(vt, {
-    projeId, kapsam: m.kapsam, id: m.secim?.id, donem, karsilastir: m.karsilastir !== false, ortamId: m.ortam?.id ?? null, secenekler: m.secenekler ?? {}, kaydet: true
+    projeId, kapsam: m.kapsam, id: s.id, ekranIdleri: s.ekranIdleri, servisIdleri: s.servisIdleri, tumEkranlar: s.tumEkranlar, tumServisler: s.tumServisler,
+    donem, karsilastir: m.karsilastir !== false, ortamId: m.ortam?.id ?? null, secenekler: m.secenekler ?? {}, kaydet: true
   }, b);
   return { raporId: r.raporId, dosyaAdi: r.dosyaAdi, sayfa: r.sayfa };
 }
