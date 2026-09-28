@@ -636,7 +636,7 @@ function listeGorunumu(icerik, s) {
         ikonAd: dahil ? 'onay' : 'eksi',
         secenekler: [
           { deger: '*', etiket: 'Tüm ortamlar', aciklama: 'Her senaryonun tanımlı olduğu tüm ortamlarda', ikonAd: 'ag' },
-          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (riskli ortam)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
+          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (Canlı ortam)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
         ]
       });
       if (secim === null) return;

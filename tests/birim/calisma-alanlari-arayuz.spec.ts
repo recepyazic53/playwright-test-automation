@@ -170,7 +170,7 @@ test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → proje hazır öz
   await page.getByLabel('Adres (link)').first().fill('https://ikinci.ornek.invalid');
   await page.getByRole('button', { name: 'Ortam ekle' }).click();
   await page.getByLabel('Ortam adı').nth(1).fill('CANLI');
-  await page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1).check();
+  await page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' }).check();
   await page.getByLabel('Adres (link)').nth(1).fill('https://canli-ikinci.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
   await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
