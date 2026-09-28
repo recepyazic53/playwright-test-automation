@@ -5,11 +5,22 @@
 //                         [name=…] → role=…[name=…] → CSS yolu), zorunluluk, seçenekler (değer + metin), radyo ve onay
 //                         kutusu grupları, dosya (accept), devre dışı/salt okunur, bölüm (fieldset/legend, başlıklar).
 //                         Alan DEĞERİ okunmaz/döndürülmez.
+//                         Özel açılır liste (aramalı liste bileşenleri): gerçek <select> gizli, yanında GÖRÜNÜR bir kutu
+//                         (role=combobox, aria-controls/aria-owns, bilinen bileşen kapları, "<select id>_chosen" gibi
+//                         kimlik desenleri) → alan görünür sayılır (ozelBilesen), seçici gerçek <select>'in, seçenekler ondan.
+//                         Çerçeveler (iframe): AYNI KÖKENLİ çerçevelerin içi de okunur (en çok 2 düzey; her alan "cerceve"
+//                         seçicileriyle); başka kökenli (cross-origin) çerçeveler "okunamadı" sayılır. Çerçevenin içi, o
+//                         çerçevenin kendi penceresindeki window.__nobetciSayfadakiAlanlar ile okunur (init betiğiyle verilir;
+//                         sınıf denetimleri o belgenin kendi dünyasında çalışsın diye).
+//   ozelBilesenIsaretle   (model koşucusu) gizli <select>'e bağlı görünür bileşeni aynı kurallarla bulur ve işaretler.
 //   formGonderimKorumasi  tarama sayfasında form gönderimini etkisizleştirir (submit/requestSubmit, submit olayı,
 //                         window.open, sendBeacon) — ağ katmanındaki yazma isteği engeline ek savunma.
 import type { HamAlan, HamRadyo, Kirilganlik, SayfaEnvanteri } from './paket-olusturucu.mjs';
 
-export function sayfadakiAlanlar(): SayfaEnvanteri {
+/** Çerçevelerin içi en çok bu derinliğe kadar okunur (ana sayfa 0; iframe 1; iframe içindeki iframe 2). */
+export const CERCEVE_EN_DERIN = 2;
+
+export function sayfadakiAlanlar(derinlik = 0): SayfaEnvanteri {
   const bosluk = (m: string | null | undefined): string => (m ?? '').replace(/\s+/g, ' ').trim();
   const kacis = (d: string): string => CSS.escape(d);
   const tirnak = (d: string): string => d.replace(/["\\]/g, '\\$&');
@@ -25,6 +36,55 @@ export function sayfadakiAlanlar(): SayfaEnvanteri {
     return r.width > 0 && r.height > 0;
   };
   const KONTROLLER = 'input,select,textarea,button';
+
+  // ---- Özel açılır liste bileşenleri (gizli <select> + görünür kutu). Kural ozelBilesenIsaretle ile AYNIDIR. ----
+  // Bilinen bileşen kapları (kütüphane sınıfları; siteye özgü değil) ve açılır parçaları (arama kutusu, liste).
+  const OZEL_KAP = '.select2-container,.select2,.chosen-container,.bootstrap-select,.ms-parent,.ui-selectmenu-button,.selectize-control,.choices,.ts-wrapper,.dropdown.bootstrap-select';
+  const OZEL_ACILIR = '.select2-dropdown,.select2-search,.chosen-drop,.bs-searchbox,.selectize-dropdown,.choices__list--dropdown,.ts-dropdown,.ms-drop';
+  const OZEL_TIK = '[role="combobox"],[aria-haspopup="listbox"],[aria-haspopup="true"],.select2-selection,.chosen-single,.chosen-choices,.dropdown-toggle,.selectize-input,.choices__inner,.ts-control,button';
+  /** Gizli (display:none / görünmez) ya da 2 pikselden küçük (erişilebilir gizleme) <select>. */
+  const gizliSecimMi = (s: HTMLSelectElement): boolean => {
+    if (!gorunurMu(s)) return true;
+    const r = s.getBoundingClientRect();
+    return r.width <= 2 && r.height <= 2;
+  };
+  /** Gizli <select>'e bağlı görünür bileşen: { kap, tik } ya da null. */
+  const ozelBilesen = (s: HTMLSelectElement): { kap: HTMLElement; tik: HTMLElement } | null => {
+    if (!gizliSecimMi(s)) return null;
+    const guclu: Element[] = [];
+    const zayif: Element[] = [];
+    const id = s.getAttribute('id');
+    if (id) {
+      for (const k of [`${id}_chosen`, `${id}-container`, `select2-${id}-container`, `${id}-button`, `${id}_ms`, `${id}-ts-control`]) {
+        const e = document.getElementById(k);
+        if (e) guclu.push(e.closest(OZEL_KAP) ?? e);
+      }
+      try { guclu.push(...document.querySelectorAll(`[aria-controls~="${tirnak(id)}"],[aria-owns~="${tirnak(id)}"]`)); } catch { /* geçersiz kimlik */ }
+    }
+    for (let k = s.nextElementSibling, i = 0; k && i < 2; k = k.nextElementSibling, i++) zayif.push(k);
+    for (let k = s.previousElementSibling, i = 0; k && i < 2; k = k.previousElementSibling, i++) zayif.push(k);
+    if (s.parentElement) zayif.push(s.parentElement);
+    const bilesenMi = (e: Element): boolean => e.matches(`${OZEL_KAP},[role="combobox"],[aria-haspopup]`) || !!e.querySelector('[role="combobox"],[aria-haspopup]');
+    const adaylar = [...guclu.map((e) => ({ e, guclu: true })), ...zayif.map((e) => ({ e, guclu: false }))];
+    for (const { e, guclu: g } of adaylar) {
+      if (!(e instanceof HTMLElement) || e === s || e.matches('select,input,textarea,label,form,body')) continue;
+      if (!g && !bilesenMi(e)) continue;
+      // Ebeveyn kap: yalnızca bileşen kabıysa (bootstrap-select gibi <select>'i saran) ve içinde başka bir <select> yoksa.
+      if (e.contains(s) && (!e.matches(`${OZEL_KAP},[role="combobox"]`) || e.querySelectorAll('select').length > 1)) continue;
+      if (!gorunurMu(e)) continue;
+      const tik = e.matches(OZEL_TIK) ? e : ([...e.querySelectorAll(OZEL_TIK)].find((x) => x !== s && gorunurMu(x)) as HTMLElement | undefined) ?? e;
+      return { kap: e, tik };
+    }
+    return null;
+  };
+  const ozelKaplar = new Map<HTMLSelectElement, { kap: HTMLElement; tik: HTMLElement }>();
+  for (const s of document.querySelectorAll('select')) {
+    const b = ozelBilesen(s);
+    if (b) ozelKaplar.set(s, b);
+  }
+  const kaplar = [...ozelKaplar.values()].map((b) => b.kap);
+  /** Öğe bir özel bileşenin (kabı ya da açılır parçası) içinde mi? (Bileşenin kendi arama kutusu ayrı alan sayılmaz.) */
+  const ozelIcinde = (el: Element): boolean => kaplar.some((k) => k.contains(el)) || !!el.closest(OZEL_ACILIR);
   const saltMetin = (el: Element): string => {
     const k = el.cloneNode(true) as Element;
     k.querySelectorAll(`${KONTROLLER},script,style,option,noscript,template`).forEach((x) => x.remove());
@@ -40,6 +100,8 @@ export function sayfadakiAlanlar(): SayfaEnvanteri {
     for (let seviye = 0; seviye < 3 && d; seviye++) {
       let o: ChildNode | null = d.previousSibling;
       while (o) {
+        // Özel bileşenin kutusu ("Seçiniz…") etiket değildir: atlanır.
+        if (o instanceof Element && kaplar.includes(o as HTMLElement)) { o = o.previousSibling; continue; }
         if (o instanceof Element && o.querySelector('input,select,textarea')) return null;
         const t = o.nodeType === Node.TEXT_NODE ? bosluk(o.textContent) : o instanceof Element && !o.matches(KONTROLLER) && gorunurMu(o) ? saltMetin(o) : '';
         if (t) return t.length <= 80 ? t : null;
@@ -75,6 +137,14 @@ export function sayfadakiAlanlar(): SayfaEnvanteri {
     if (yakin) return { metin: etiketTemizle(yakin), kaynak: 'yakin', yildiz: yakin.includes('*') };
     const yer = bosluk(el.getAttribute('placeholder')) || bosluk(el.getAttribute('title'));
     if (yer) return { metin: etiketTemizle(yer), kaynak: 'yer-tutucu', yildiz: false };
+    // Özel bileşen: kutunun aria adı ya da kutunun önündeki metin (aria-labelledby çoğu bileşende seçili değeri gösterir; alınmaz).
+    const ozel = el instanceof HTMLSelectElement ? ozelKaplar.get(el) : undefined;
+    if (ozel) {
+      const t = bosluk(ozel.tik.getAttribute('aria-label')) || bosluk(ozel.kap.getAttribute('aria-label'));
+      if (t) return { metin: etiketTemizle(t), kaynak: 'aria', yildiz: t.includes('*') };
+      const y = yakinMetin(ozel.kap);
+      if (y) return { metin: etiketTemizle(y), kaynak: 'yakin', yildiz: y.includes('*') };
+    }
     return { metin: null, kaynak: null, yildiz: false };
   };
 
@@ -168,6 +238,7 @@ export function sayfadakiAlanlar(): SayfaEnvanteri {
     const etiketAdi = el.tagName.toLowerCase();
     const tur = el instanceof HTMLInputElement ? (el.getAttribute('type') || 'text').toLowerCase() : etiketAdi;
     if (['hidden', 'submit', 'button', 'reset', 'image'].includes(tur)) return;
+    if (ozelIcinde(el)) return;
     const devreDisi = el.matches(':disabled');
     const zorunluOzellik = el.required || el.getAttribute('aria-required') === 'true';
 
@@ -217,10 +288,12 @@ export function sayfadakiAlanlar(): SayfaEnvanteri {
       return;
     }
 
-    const gorunur = gorunurMu(el) || ((tur === 'checkbox' || tur === 'file') && el.labels ? [...el.labels].some(gorunurMu) : false);
+    const ozel = el instanceof HTMLSelectElement ? ozelKaplar.get(el) : undefined;
+    const gorunur = Boolean(ozel) || gorunurMu(el) || ((tur === 'checkbox' || tur === 'file') && el.labels ? [...el.labels].some(gorunurMu) : false);
     if (!gorunur) return;
     const e = etiketBul(el, tur === 'checkbox');
-    const { secici, kirilganlik, adaylar } = seciciOner(el, e.metin, rolu(el, tur));
+    // Özel bileşende rol seçicisi (role=combobox[name=…]) gizli <select>'i bulamaz: kimlik / ad / CSS yolu.
+    const { secici, kirilganlik, adaylar } = seciciOner(el, e.metin, ozel ? null : rolu(el, tur));
     const id = el.getAttribute('id');
     const ad = el.getAttribute('name');
     const grup = tur === 'checkbox' && ad && (onayAdlari.get(ad) ?? 0) > 1 ? ad : null;
@@ -235,13 +308,110 @@ export function sayfadakiAlanlar(): SayfaEnvanteri {
       alan.secenekler = [...el.options].slice(0, 300).map((o) => ({ deger: o.value, metin: bosluk(o.label || o.text) }));
     }
     if (tur === 'file') alan.kabul = el.getAttribute('accept') || null;
+    if (ozel) {
+      alan.ozelBilesen = true;
+      alan.bilesen = seciciOner(ozel.kap, null, null).secici;
+    }
     alanlar.push(alan);
   });
 
   const ozelBilesenSayisi = [...document.querySelectorAll('[role="combobox"]:not(input):not(select),[role="listbox"]:not(select),[contenteditable="true"],[role="textbox"]:not(input):not(textarea)')]
-    .filter(gorunurMu).length;
-  const cerceveSayisi = [...document.querySelectorAll('iframe')].filter(gorunurMu).length;
-  return { alanlar, baslik: bosluk(document.title).slice(0, 200), ozelBilesenSayisi, cerceveSayisi };
+    .filter((x) => gorunurMu(x) && !ozelIcinde(x)).length;
+
+  // ---- Çerçeveler (iframe / frame): aynı kökenli olanların içi, çerçevenin kendi penceresindeki okuyucuyla. ----
+  /** Çerçevenin seçicisi (bu belgeye göre): kimlik → ad → src deseni → başlık → CSS yolu. */
+  const cerceveSecici = (f: HTMLIFrameElement | HTMLFrameElement): string => {
+    const t = f.tagName.toLowerCase();
+    const id = f.getAttribute('id');
+    if (id && !/^\d/.test(id) && tekMi(`${t}#${kacis(id)}`)) return `${t}#${kacis(id)}`;
+    const ad = f.getAttribute('name');
+    if (ad && tekMi(`${t}[name="${tirnak(ad)}"]`)) return `${t}[name="${tirnak(ad)}"]`;
+    const src = (f.getAttribute('src') ?? '').split(/[?#]/)[0];
+    const son = src.split('/').filter(Boolean).pop() ?? '';
+    if (son && !/^(about:|javascript:|data:)/i.test(src) && tekMi(`${t}[src*="${tirnak(son)}"]`)) return `${t}[src*="${tirnak(son)}"]`;
+    const baslik = f.getAttribute('title');
+    if (baslik && tekMi(`${t}[title="${tirnak(baslik)}"]`)) return `${t}[title="${tirnak(baslik)}"]`;
+    return seciciOner(f, null, null).secici;
+  };
+  let cerceveSayisi = 0;
+  let okunamayanCerceveSayisi = 0;
+  let icOzel = 0;
+  for (const f of [...document.querySelectorAll('iframe,frame')] as Array<HTMLIFrameElement | HTMLFrameElement>) {
+    if (!gorunurMu(f)) continue;
+    cerceveSayisi++;
+    let alt: SayfaEnvanteri | null = null;
+    try {
+      // Başka kökenli çerçevede contentDocument null'dır (ya da erişim hata verir).
+      const w = f.contentWindow as (Window & { __nobetciSayfadakiAlanlar?: (d: number) => SayfaEnvanteri }) | null;
+      if (f.contentDocument && w && derinlik + 1 <= 2 && typeof w.__nobetciSayfadakiAlanlar === 'function') alt = w.__nobetciSayfadakiAlanlar(derinlik + 1);
+    } catch { alt = null; }
+    if (!alt) { okunamayanCerceveSayisi++; continue; }
+    const cs = cerceveSecici(f);
+    // Kayıt paneli çerçevedeki düğmenin çerçeve zincirini aynı seçiciyle kursun diye (window.__nobetciCerceveSecicileri).
+    try {
+      const w = window as unknown as { __nobetciCerceveSecicileri?: WeakMap<Element, string> };
+      (w.__nobetciCerceveSecicileri ??= new WeakMap()).set(f, cs);
+    } catch { /* yok sayılır */ }
+    for (const a of alt.alanlar) {
+      alanlar.push({
+        ...a, anahtar: anahtarVer(`${cs}::${a.anahtar}`), cerceve: [cs, ...(a.cerceve ?? [])],
+        bolum: { anahtar: `${cs}::${a.bolum.anahtar}`, baslik: a.bolum.baslik }
+      });
+    }
+    cerceveSayisi += alt.cerceveSayisi;
+    okunamayanCerceveSayisi += alt.okunamayanCerceveSayisi ?? 0;
+    icOzel += alt.ozelBilesenSayisi;
+  }
+  return { alanlar, baslik: bosluk(document.title).slice(0, 200), ozelBilesenSayisi: ozelBilesenSayisi + icOzel, cerceveSayisi, okunamayanCerceveSayisi };
+}
+
+/**
+ * Model koşucusu için (sayfa içi; kendi içinde bağımsız): gizli <select>'e bağlı GÖRÜNÜR özel açılır liste bileşenini
+ * (sayfadakiAlanlar ile AYNI kurallar) bulur ve tıklanacak parçasına data-nobetci-ozel="<isaret>" yazar. Bulunamazsa false.
+ */
+export function ozelBilesenIsaretle(s: Element, isaret: string): boolean {
+  if (!s || s.tagName !== 'SELECT') return false;
+  const doc = s.ownerDocument;
+  const gorunurMu = (el: Element | null): boolean => {
+    if (!el || el.nodeType !== 1) return false;
+    const h = el as HTMLElement;
+    if (typeof h.checkVisibility === 'function' && !h.checkVisibility({ checkVisibilityCSS: true })) return false;
+    const st = (doc.defaultView ?? window).getComputedStyle(h);
+    if (st.display === 'none' || st.visibility === 'hidden' || st.visibility === 'collapse') return false;
+    const r = h.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  const tirnak = (d: string): string => d.replace(/["\\]/g, '\\$&');
+  const OZEL_KAP = '.select2-container,.select2,.chosen-container,.bootstrap-select,.ms-parent,.ui-selectmenu-button,.selectize-control,.choices,.ts-wrapper,.dropdown.bootstrap-select';
+  const OZEL_TIK = '[role="combobox"],[aria-haspopup="listbox"],[aria-haspopup="true"],.select2-selection,.chosen-single,.chosen-choices,.dropdown-toggle,.selectize-input,.choices__inner,.ts-control,button';
+  if (gorunurMu(s)) {
+    const r = s.getBoundingClientRect();
+    if (r.width > 2 || r.height > 2) return false;
+  }
+  const guclu: Element[] = [];
+  const zayif: Element[] = [];
+  const id = s.getAttribute('id');
+  if (id) {
+    for (const k of [`${id}_chosen`, `${id}-container`, `select2-${id}-container`, `${id}-button`, `${id}_ms`, `${id}-ts-control`]) {
+      const e = doc.getElementById(k);
+      if (e) guclu.push(e.closest(OZEL_KAP) ?? e);
+    }
+    try { guclu.push(...doc.querySelectorAll(`[aria-controls~="${tirnak(id)}"],[aria-owns~="${tirnak(id)}"]`)); } catch { /* geçersiz kimlik */ }
+  }
+  for (let k = s.nextElementSibling, i = 0; k && i < 2; k = k.nextElementSibling, i++) zayif.push(k);
+  for (let k = s.previousElementSibling, i = 0; k && i < 2; k = k.previousElementSibling, i++) zayif.push(k);
+  if (s.parentElement) zayif.push(s.parentElement);
+  const bilesenMi = (e: Element): boolean => e.matches(`${OZEL_KAP},[role="combobox"],[aria-haspopup]`) || !!e.querySelector('[role="combobox"],[aria-haspopup]');
+  for (const { e, g } of [...guclu.map((e) => ({ e, g: true })), ...zayif.map((e) => ({ e, g: false }))]) {
+    if (e === s || e.matches('select,input,textarea,label,form,body')) continue;
+    if (!g && !bilesenMi(e)) continue;
+    if (e.contains(s) && (!e.matches(`${OZEL_KAP},[role="combobox"]`) || e.querySelectorAll('select').length > 1)) continue;
+    if (!gorunurMu(e)) continue;
+    const tik = e.matches(OZEL_TIK) ? e : [...e.querySelectorAll(OZEL_TIK)].find((x) => x !== s && gorunurMu(x)) ?? e;
+    tik.setAttribute('data-nobetci-ozel', isaret);
+    return true;
+  }
+  return false;
 }
 
 /** Tarama sayfasında (addInitScript) form gönderimini ve yeni pencereleri etkisizleştirir. */

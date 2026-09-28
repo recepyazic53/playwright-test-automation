@@ -125,7 +125,7 @@ test('gizli / kişisel değerler dosyada yok: ortam değişkenine çevrilir ve b
   // Kaynak ve uyarı notu.
   expect(r.icerik).toMatch(/^\/\/ Nöbetçi'den dışa aktarılan Playwright testi\.\n\/\/   Ekran: Örnek Form\n\/\/   Senaryo: Geniş \/ örnek senaryo\n\/\/   Model sürümü: 7\n\/\/   Ortam: TEST\n\/\/   Üretim zamanı: 2026-09-28T10:00:00.000Z/);
   expect(r.icerik).toContain('Bu dosya Nöbetçi DIŞINDADIR');
-  expect(r.icerik).toContain("import { test, expect, type Locator, type Page, type Request } from '@playwright/test';");
+  expect(r.icerik).toContain("import { test, expect, type FrameLocator, type Locator, type Page, type Request } from '@playwright/test';");
   expect(r.dosyaAdi).toBe('genis-ornek-senaryo.spec.ts');
 });
 

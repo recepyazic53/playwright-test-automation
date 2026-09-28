@@ -170,7 +170,7 @@ export function modeldenAkisEnvanteri(model) {
   /** @type {import('../tarama/paket-olusturucu.d.mts').KayitOgesi[]} */
   const mesajlar = [];
   const ekle = (/** @type {import('../tarama/paket-olusturucu.d.mts').KayitOgesi[]} */ liste, /** @type {import('../tarama/paket-olusturucu.d.mts').KayitOgesi} */ o) => {
-    if (!liste.some((x) => x.secici === o.secici && x.metin === o.metin)) liste.push(o);
+    if (!liste.some((x) => x.secici === o.secici && x.metin === o.metin && JSON.stringify(x.cerceve ?? []) === JSON.stringify(o.cerceve ?? []))) liste.push(o);
   };
   for (const adim of tumAdimlar(model)) {
     for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
@@ -202,20 +202,22 @@ export function modeldenAkisEnvanteri(model) {
           ...(tur === 'select' ? { secenekler } : {}),
           ...(tur === 'radio' ? { radyolar: secenekler.map((s) => ({ deger: s.deger, metin: s.metin, secici: null })) } : {}),
           bolum: { anahtar: String(b.id), baslik: String(b.baslik || '') },
-          ...(sabitAlanMi(a) ? { not: `sabit değer: ${String(a.sabitDeger)}` } : {})
+          ...(sabitAlanMi(a) ? { not: `sabit değer: ${String(a.sabitDeger)}` } : {}),
+          // Çerçeve (iframe) ve özel açılır liste bilgisi: yeniden kaydederken alan aynı tanımla eşleşsin.
+          ...cerceveEki(a.konum.cerceve), ...(a.doldurucu === 'ozelSecim' ? { ozelBilesen: true } : {})
         });
       }
     }
     const kosu = nesneMi(adim.kosu) ? adim.kosu : {};
     for (const x of Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar : []) {
-      if (nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string') ekle(dugmeler, { secici: x.secici, metin: typeof x.aciklama === 'string' ? x.aciklama : null });
+      if (nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string') ekle(dugmeler, { secici: x.secici, metin: typeof x.aciklama === 'string' ? x.aciklama : null, ...cerceveEki(x.cerceve) });
     }
     // Dosya adımının indirmeyi başlatan düğmesi de sağ listede (diyagramdaki dosya bloğu onu seçer).
     const t = nesneMi(adim.dosyaKontrolu) && nesneMi(adim.dosyaKontrolu.tetikleyici) ? adim.dosyaKontrolu.tetikleyici : null;
     if (t && typeof t.secici === 'string') ekle(dugmeler, { secici: t.secici, metin: typeof t.aciklama === 'string' ? t.aciklama : null });
-    for (const g of metinGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger });
-    for (const g of desenGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger });
-    for (const u of uyariListesi(kosu)) ekle(mesajlar, { secici: typeof u.secici === 'string' ? u.secici : '', metin: u.metin });
+    for (const g of metinGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger, ...cerceveEki(g.cerceve) });
+    for (const g of desenGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger, ...cerceveEki(g.cerceve) });
+    for (const u of uyariListesi(kosu)) ekle(mesajlar, { secici: typeof u.secici === 'string' ? u.secici : '', metin: u.metin, ...cerceveEki(u.cerceve) });
   }
   return {
     kip: 'kayit', bicim: 'akis', profil: null, baslik: String(model.ad || ''),
@@ -223,19 +225,24 @@ export function modeldenAkisEnvanteri(model) {
   };
 }
 
-/** Başarı göstergesinin metin göstergeleri ("veya" grubunda her seçenek). @param {unknown} g @returns {Array<{ deger: string; secici?: unknown }>} */
+/** Çerçeve (iframe) seçicileri (modelde konum.cerceve / aksiyon / gösterge) → { cerceve } ya da {}. @param {unknown} c */
+function cerceveEki(c) {
+  return Array.isArray(c) && c.length && c.every((x) => typeof x === 'string' && x) ? { cerceve: c.map(String) } : {};
+}
+
+/** Başarı göstergesinin metin göstergeleri ("veya" grubunda her seçenek). @param {unknown} g @returns {Array<{ deger: string; secici?: unknown; cerceve?: unknown }>} */
 function metinGostergeleri(g) {
   const liste = nesneMi(g) && g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
   return liste.filter((x) => nesneMi(x) && x.tur === 'metin' && typeof x.deger === 'string');
 }
 
-/** Başarı göstergesinin kalıp (düzenli ifade) göstergeleri. @param {unknown} g @returns {Array<{ deger: string; secici?: unknown }>} */
+/** Başarı göstergesinin kalıp (düzenli ifade) göstergeleri. @param {unknown} g @returns {Array<{ deger: string; secici?: unknown; cerceve?: unknown }>} */
 function desenGostergeleri(g) {
   const liste = nesneMi(g) && g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler : [g];
   return liste.filter((x) => nesneMi(x) && x.tur === 'desen' && typeof x.deger === 'string');
 }
 
-/** Adımın kabul edilen uyarıları (kosu.uyarilar). @param {Nesne} kosu @returns {Array<{ metin: string; secici?: unknown }>} */
+/** Adımın kabul edilen uyarıları (kosu.uyarilar). @param {Nesne} kosu @returns {Array<{ metin: string; secici?: unknown; cerceve?: unknown }>} */
 function uyariListesi(kosu) {
   return Array.isArray(kosu.uyarilar) ? kosu.uyarilar.filter((u) => nesneMi(u) && typeof u.metin === 'string' && u.metin) : [];
 }

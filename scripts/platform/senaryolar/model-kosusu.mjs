@@ -231,6 +231,8 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
     return {
       id, etiket: ek.etiket ?? etiketi(alan), anahtar: ek.anahtar ?? senaryoAnahtarlari(alan)[0] ?? id, tip, doldurucu: alan.doldurucu ?? null,
       deger, secici: konum ? konum.secici : null, yardimci: konum && nesneMi(konum.yardimci) ? { ...konum.yardimci } : {},
+      // Çerçeve (iframe) seçicileri: koşucu alanı (ve yardımcı seçicilerini) o çerçevede arar.
+      cerceve: konum && Array.isArray(konum.cerceve) && konum.cerceve.length ? konum.cerceve.map(String) : null,
       secenekler: Array.isArray(alan.secenekler) ? alan.secenekler.map((/** @type {any} */ s) => ({ ...s }))
         : alan.bagimlilik && nesneMi(alan.bagimlilik.secenekHaritasi) ? Object.values(alan.bagimlilik.secenekHaritasi).flat().map((/** @type {any} */ s) => ({ ...s })) : [],
       parametreler: nesneMi(alan.doldurucuParametreleri) ? { ...alan.doldurucuParametreleri } : {},
@@ -339,8 +341,11 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
           const hedef = adimlar.find((a) => a.id === adim.id);
           if (hedef && nesneMi(alan.konum) && alan.konum.secici) {
             hedef.alanlar.push({
-              id, etiket: etiketi(alan), anahtar: senaryoAnahtarlari(alan)[0] ?? id, tip: alan.tip, doldurucu: null, deger: null,
-              secici: alan.konum.secici, yardimci: {}, secenekler: [], parametreler: {}, mutlakaGorunmeli: true, atla: null, yalnizGorunurluk: true
+              id, etiket: etiketi(alan), anahtar: senaryoAnahtarlari(alan)[0] ?? id, tip: alan.tip,
+              // Özel açılır listenin gerçek <select>'i gizlidir: görünürlük bileşenle denetlenir (doldurucu korunur).
+              doldurucu: alan.doldurucu === 'ozelSecim' ? 'ozelSecim' : null, deger: null,
+              secici: alan.konum.secici, yardimci: {}, cerceve: Array.isArray(alan.konum.cerceve) && alan.konum.cerceve.length ? alan.konum.cerceve.map(String) : null,
+              secenekler: [], parametreler: {}, mutlakaGorunmeli: true, atla: null, yalnizGorunurluk: true
             });
           }
         }

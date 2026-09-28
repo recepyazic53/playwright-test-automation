@@ -13,8 +13,12 @@
 //   3) beklenen hata adımıysa hata göstergesinde beklenen mesaj (toleranslı eşleşme), değilse başarı
 //      göstergesi (hata göstergesinde beklenmeyen bir uyarı çıkarsa Beklenen/Görülen hatası),
 //   4) adım ekran görüntüsü.
+// Çerçeve (iframe): alanın konum.cerceve'si (aksiyonun / göstergenin cerceve'si) varsa öğe page.frameLocator(...) ile o
+// çerçevede aranır. Özel açılır liste (doldurucu "ozelSecim"): gerçek <select> gizli; görünen kutuya tıklanır, arama kutusu
+// varsa seçeneğin metni yazılır ve görünen seçeneğe tıklanır; olmazsa gizli listeye değer yazılır (input/change) ve
+// sonuç (select.value) doğrulanır.
 // Planın kendisi (hangi adımlar, hangi alanlar, beklenen sonuç) saftır: scripts/platform/senaryolar/model-kosusu.mjs.
-import { expect, test, type Locator, type Page, type Request, type TestInfo } from '@playwright/test';
+import { expect, test, type FrameLocator, type Locator, type Page, type Request, type TestInfo } from '@playwright/test';
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
@@ -38,6 +42,7 @@ import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
+import { ozelBilesenIsaretle } from '../../scripts/platform/tarama/sayfa-envanteri';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
 // Kullanıcı kararları (Ayarlar > Koşu > Gelişmiş koşu davranışı; kosu-ayarlari.ts): ÇAĞRI anında okunur. Varsayılanlar önceki sabitlerdir.
@@ -86,8 +91,17 @@ export async function yasakliAdresKorumasi(page: Page, adresler: string[], desen
   return engellenen;
 }
 
+/** Öğenin arandığı yer: sayfa ya da (öğe bir çerçevedeyse) çerçeve(ler). */
+type Kapsam = Page | FrameLocator;
+/** Çerçeve (iframe) seçicileri dıştan içe (modelde konum.cerceve / aksiyon / gösterge cerceve'si); yoksa sayfanın kendisi. */
+export function kapsam(page: Page, cerceve: readonly string[] | null | undefined): Kapsam {
+  let k: Kapsam = page;
+  for (const c of cerceve ?? []) k = k.frameLocator(c);
+  return k;
+}
+
 /** Seçicinin ekranda GÖRÜNEN ilk öğesi (süre içinde görünmezse null). */
-async function gorunurOge(page: Page, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
+async function gorunurOge(page: Kapsam, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
   const l = page.locator(secici).filter({ visible: true }).first();
   try {
     await l.waitFor({ state: 'visible', timeout: sureMs });
@@ -113,7 +127,7 @@ const cssKacis = (d: string): string => d.replace(/["\\]/g, '\\$&');
  * uçta değer değişmezse ya da halka başa dönerse geri düğmesine basılır. En fazla parametreler.maksDeneme (12)
  * tıklama/yön.
  */
-async function okluSec(page: Page, alan: PlanAlani, gosterge: Locator, hedefMetin: string, adimBasligi: string): Promise<void> {
+async function okluSec(page: Page, alan: PlanAlani, gosterge: Locator, hedefMetin: string, adimBasligi: string, k: Kapsam = page): Promise<void> {
   const oku = async (): Promise<string> => mesajiNormallestir(await degerOku(gosterge));
   const hedef = mesajiNormallestir(hedefMetin);
   const y = alan.yardimci;
@@ -136,7 +150,7 @@ async function okluSec(page: Page, alan: PlanAlani, gosterge: Locator, hedefMeti
   gorulenler.add(ilk);
   if (ilk === hedef) return;
   for (const yon of yonler) {
-    const dugme = page.locator(yon).filter({ visible: true }).first();
+    const dugme = k.locator(yon).filter({ visible: true }).first();
     const baslangic = await oku();
     for (let i = 0; i < maks; i++) {
       const once = await oku();
@@ -179,7 +193,7 @@ function yuklenecekDosya(deger: unknown): string {
 
 /** Görünen alanı tipine/doldurucusuna göre doldurur. */
 /** Gizli olabilen (özel çizimli radyo / onay kutusu) öğe: sayfada varsa ilki. */
-async function sayfadakiOge(page: Page, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
+async function sayfadakiOge(page: Kapsam, secici: string, sureMs = gorunurlukBeklemeMs()): Promise<Locator | null> {
   const l = page.locator(secici).first();
   try {
     await l.waitFor({ state: 'attached', timeout: sureMs });
@@ -190,8 +204,8 @@ async function sayfadakiOge(page: Page, secici: string, sureMs = gorunurlukBekle
 }
 
 /** Öğe dolana kadar (metni ya da değeri boş değil) bekler. */
-async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi: string, icermez?: string, kosu: PlanKosuTanimi | null = null): Promise<void> {
-  const oge = page.locator(secici).first();
+async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi: string, icermez?: string, kosu: PlanKosuTanimi | null = null, k: Kapsam = page): Promise<void> {
+  const oge = k.locator(secici).first();
   const oku = async (): Promise<string> => (await degerOku(oge).catch(() => '')).trim();
   // icermez: geçici metin (ör. sorgu sürerken "Aranıyor…") görünürken dolu sayılmaz.
   const hazir = async (): Promise<boolean> => {
@@ -215,15 +229,15 @@ async function doluBekle(page: Page, secici: string, sureMs: number, adimBasligi
  * bekle { secici, durum: dolu | gorunur | gizli, zamanAsimiSn, icermez? } (ör. sorgulanan ad-soyadın gelmesi; icermez: dolu
  * sayılmayan geçici metin, ör. "Aranıyor").
  */
-async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string, kosu: PlanKosuTanimi | null = null): Promise<void> {
+async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi: string, kosu: PlanKosuTanimi | null = null, kap: Kapsam = page): Promise<void> {
   const p = alan.parametreler;
   if (typeof p.tus === 'string' && p.tus) await l.press(p.tus);
   // gizle: alan doldurulunca açık kalıp sonraki tıklamaları kapatan katman (ör. takvim) gizlenir.
   if (typeof p.gizle === 'string' && p.gizle) {
-    await page.locator(p.gizle).evaluateAll((ogeler) => { for (const e of ogeler) (e as HTMLElement).style.display = 'none'; }).catch(() => undefined);
+    await kap.locator(p.gizle).evaluateAll((ogeler) => { for (const e of ogeler) (e as HTMLElement).style.display = 'none'; }).catch(() => undefined);
   }
   if (typeof p.tikla === 'string' && p.tikla) {
-    const dugme = page.locator(p.tikla).filter({ visible: true }).first();
+    const dugme = kap.locator(p.tikla).filter({ visible: true }).first();
     try {
       await dugme.click({ timeout: alanTiklamaSuresiMs() });
     } catch {
@@ -235,8 +249,8 @@ async function alanSonrasi(page: Page, alan: PlanAlani, l: Locator, adimBasligi:
     const k = b as { secici: string; durum?: string; zamanAsimiSn?: number; icermez?: unknown };
     // Süre verilmemişse Ayarlar > Koşu > Gelişmiş > Alan sonrası koşul beklemesi (varsayılan 20 sn).
     const sureMs = Number(k.zamanAsimiSn) > 0 ? Number(k.zamanAsimiSn) * 1000 : sureAyari('NOBETCI_ALAN_KOSUL_BEKLEME_MS', 20_000, 1_000, 600_000);
-    if (k.durum === 'gorunur' || k.durum === 'gizli') await page.locator(k.secici).first().waitFor({ state: k.durum === 'gizli' ? 'hidden' : 'visible', timeout: sureMs });
-    else await doluBekle(page, k.secici, sureMs, adimBasligi, typeof k.icermez === 'string' && k.icermez ? k.icermez : undefined, kosu);
+    if (k.durum === 'gorunur' || k.durum === 'gizli') await kap.locator(k.secici).first().waitFor({ state: k.durum === 'gizli' ? 'hidden' : 'visible', timeout: sureMs });
+    else await doluBekle(page, k.secici, sureMs, adimBasligi, typeof k.icermez === 'string' && k.icermez ? k.icermez : undefined, kosu, kap);
   }
 }
 
@@ -295,13 +309,78 @@ async function zorlaIsaretle(l: Locator, isaretli: boolean, adimBasligi: string,
   }
 }
 
-async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
+/**
+ * "ozelSecim": gizli <select>'e bağlı görünen aramalı liste (select2 / chosen / bootstrap-select benzeri; bileşen genel
+ * kurallarla bulunur — sayfa-envanteri.ts > ozelBilesenIsaretle). Değer zaten seçiliyse dokunulmaz. Aksi halde görünen kutuya
+ * tıklanır; açılan arama kutusu (odaktaki metin kutusu ya da görünen arama kutusu) varsa seçeneğin metni yazılır ve görünen
+ * seçeneğe (role=option, yoksa metni tam eşleşen öğe) tıklanır. Liste değeri değişmediyse gizli listeye değer yazılır ve
+ * input / change gönderilir (degerJs). Sonunda select.value doğrulanır; tutmazsa Beklenen / Görülen hatası.
+ */
+async function ozelSec(k: Kapsam, alan: PlanAlani, l: Locator, adimBasligi: string): Promise<void> {
+  const s = secenekBul(alan.secenekler, alan.deger);
+  // Hedef değer: seçeneğin değeri; listede yoksa görünen metni aynı olan seçeneğin değeri.
+  const hedef = await l.evaluate((e, a) => {
+    const o = [...(e as HTMLSelectElement).options];
+    return (o.find((x) => x.value === a.deger) ?? o.find((x) => x.text.replace(/\s+/g, ' ').trim() === a.metin))?.value ?? null;
+  }, { deger: s.deger, metin: s.metin }).catch(() => null);
+  if (hedef === null) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s.metin}" seçilir`, 'listede böyle bir seçenek yok'));
+  const deger = async (): Promise<string | null> => l.inputValue({ timeout: 2_000 }).catch(() => null);
+  if ((await deger()) === hedef) return;
+  const isaret = `n${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  if (await l.evaluate(ozelBilesenIsaretle, isaret).catch(() => false)) {
+    const kutu = k.locator(`[data-nobetci-ozel="${isaret}"]`).first();
+    let aramaKutusu: Locator | null = null;
+    try {
+      await kutu.click({ timeout: 5_000 });
+      // Açılan arama kutusu: bileşenin odakladığı metin kutusu ya da görünen bir arama kutusu (aynı belgede).
+      const ara = await l.evaluate((e, i) => {
+        const d = e.ownerDocument;
+        const gorunur = (x: Element | null): boolean => {
+          if (!x) return false;
+          const r = x.getBoundingClientRect();
+          const st = (d.defaultView ?? window).getComputedStyle(x);
+          return r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none';
+        };
+        const metinKutusu = (x: Element | null): x is HTMLInputElement => !!x && x.tagName === 'INPUT' && ['text', 'search', ''].includes((x as HTMLInputElement).type) && gorunur(x);
+        const a = d.activeElement;
+        const bulunan = metinKutusu(a) ? a : [...d.querySelectorAll('input[type="search"],input[role="searchbox"],input[role="combobox"],input[aria-autocomplete]')].find(metinKutusu);
+        if (!bulunan) return false;
+        bulunan.setAttribute('data-nobetci-ozel-ara', i);
+        return true;
+      }, isaret).catch(() => false);
+      if (ara) {
+        aramaKutusu = k.locator(`[data-nobetci-ozel-ara="${isaret}"]`).first();
+        await aramaKutusu.fill('', { timeout: 3_000 });
+        await aramaKutusu.pressSequentially(s.metin, { delay: 20, timeout: 10_000 });
+      }
+      // Görünen seçenek: önce role=option (erişilebilir ad tam), yoksa metni tam eşleşen görünen öğe (gizli <option> değil).
+      const secenek = k.getByRole('option', { name: s.metin, exact: true }).or(k.getByText(s.metin, { exact: true })).filter({ visible: true }).first();
+      if (await secenek.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true, () => false)) await secenek.click({ timeout: 3_000 });
+      await expect.poll(deger, { timeout: 2_000 }).toBe(hedef).catch(() => undefined);
+    } catch { /* görünen bileşenden seçilemedi: yedek yol */ } finally {
+      await kutu.evaluate((e) => e.removeAttribute('data-nobetci-ozel')).catch(() => undefined);
+      await aramaKutusu?.evaluate((e) => e.removeAttribute('data-nobetci-ozel-ara')).catch(() => undefined);
+    }
+    // Seçilemediyse ve liste açık kaldıysa (arama kutusu hâlâ görünüyor) kutuya yeniden tıklanıp kapatılır (Escape pencereyi kapatabilir).
+    if ((await deger()) !== hedef && aramaKutusu && (await aramaKutusu.isVisible().catch(() => false))) {
+      await l.evaluate(ozelBilesenIsaretle, isaret).catch(() => false);
+      await k.locator(`[data-nobetci-ozel="${isaret}"]`).first().click({ timeout: 2_000 }).catch(() => undefined);
+      await k.locator(`[data-nobetci-ozel="${isaret}"]`).first().evaluate((e) => e.removeAttribute('data-nobetci-ozel')).catch(() => undefined);
+    }
+  }
+  if ((await deger()) !== hedef) await degerJsIleYaz({ ...alan, deger: hedef, secenekler: [{ deger: hedef, metin: s.metin }] }, l, adimBasligi);
+  const son = await deger();
+  if (son !== hedef) throw new Error(beklenenGorulenMetni(adimBasligi, `${alan.etiket}: "${s.metin}" seçilir`, `liste değeri "${son ?? '?'}" kaldı (görünen kutudan ve gizli listeye yazılarak denendi)`));
+}
+
+async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: string, k: Kapsam = page): Promise<void> {
   const alan = ham.parametreler.maske ? { ...ham, deger: maskeUygula(ham.parametreler.maske, ham.deger) } : ham;
   const deger = alan.deger;
+  if (alan.doldurucu === 'ozelSecim') { await ozelSec(k, alan, l, adimBasligi); return; }
   if (alan.doldurucu === 'degerJs') { await degerJsIleYaz(alan, l, adimBasligi); return; }
   switch (alan.tip) {
     case 'okluSecim':
-      await okluSec(page, alan, l, secenekBul(alan.secenekler, deger).metin, adimBasligi);
+      await okluSec(page, alan, l, secenekBul(alan.secenekler, deger).metin, adimBasligi, k);
       return;
     case 'secim': {
       const s = secenekBul(alan.secenekler, deger);
@@ -318,14 +397,14 @@ async function alaniDoldur(page: Page, ham: PlanAlani, l: Locator, adimBasligi: 
       }
       // Özel açılır liste: aç, seçeneği görünen metniyle seç.
       await l.click();
-      await page.getByText(s.metin, { exact: true }).filter({ visible: true }).first().click();
+      await k.getByText(s.metin, { exact: true }).filter({ visible: true }).first().click();
       return;
     }
     case 'radyo': {
       const s = secenekBul(alan.secenekler, deger);
       const hedef = s.secici
-        ? page.locator(s.secici)
-        : page.locator(alan.secici as string).and(page.locator(`[value="${cssKacis(s.deger)}"]`));
+        ? k.locator(s.secici)
+        : k.locator(alan.secici as string).and(k.locator(`[value="${cssKacis(s.deger)}"]`));
       if (alan.doldurucu === 'radyoZorla') { await zorlaIsaretle(hedef.first(), true, adimBasligi, alan); return; }
       await hedef.first().check();
       return;
@@ -374,7 +453,7 @@ export async function hataMesajlari(page: Page, kosu: PlanKosuTanimi | null): Pr
   const secici = kosu?.hataGostergesi?.secici;
   const metinler: string[] = [];
   if (secici) {
-    const l = page.locator(secici).filter({ visible: true });
+    const l = kapsam(page, kosu?.hataGostergesi?.cerceve).locator(secici).filter({ visible: true });
     const n = await l.count().catch(() => 0);
     for (let i = 0; i < n; i++) metinler.push(await l.nth(i).innerText().catch(() => ''));
     mesajYakalayicisi(page)?.gostergeMetinleri(`hata:${secici}`, metinler);
@@ -440,10 +519,15 @@ async function arkaPlanIstekleriniBekle(page: Page, baslangic: number): Promise<
   }
 }
 
-/** Sayfa metni + adım boyunca çıkan tarayıcı uyarıları (öğesiz metin aramaları için). */
+/**
+ * Sayfa metni + çerçevelerin (iframe) metni + adım boyunca çıkan tarayıcı uyarıları (öğesiz metin aramaları için; ör. bir
+ * çerçevede açılan pencerenin mesajı).
+ */
 async function sayfaMetni(page: Page): Promise<string> {
   const govde = await page.locator('body').innerText().catch(() => '');
-  return [govde, ...(tarayiciUyarilari.get(page) ?? [])].join('\n');
+  const cerceveler = await Promise.all(page.frames().filter((f) => f !== page.mainFrame()).slice(0, 20)
+    .map((f) => f.locator('body').innerText({ timeout: 1_000 }).catch(() => '')));
+  return [govde, ...cerceveler.filter(Boolean), ...(tarayiciUyarilari.get(page) ?? [])].join('\n');
 }
 
 /** Başarı göstergesinin seçenekleri ("veya" grubunda her biri; tek göstergede kendisi). */
@@ -470,7 +554,7 @@ async function kabulEdilenUyari(page: Page, kosu: PlanKosuTanimi): Promise<strin
   for (const u of kosu.uyarilar) {
     let metin: string;
     if (u.secici) {
-      const ogeler = await Promise.all((await page.locator(u.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')));
+      const ogeler = await Promise.all((await kapsam(page, u.cerceve).locator(u.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')));
       mesajYakalayicisi(page)?.gostergeMetinleri(`uyari:${u.secici}`, ogeler);
       metin = ogeler.join(' ');
     } else {
@@ -493,15 +577,17 @@ async function basariVarMi(page: Page, kosu: PlanKosuTanimi): Promise<boolean> {
 
 async function gostergeVarMi(page: Page, g: PlanBasariGostergesi): Promise<boolean> {
   if (g.tur === 'url') return new RegExp(g.deger).test(page.url());
-  if (g.tur === 'eleman') return (await page.locator(g.deger).filter({ visible: true }).count().catch(() => 0)) > 0;
+  // Gösterge öğesi bir çerçevede olabilir (cerceve).
+  const k = kapsam(page, g.cerceve);
+  if (g.tur === 'eleman') return (await k.locator(g.deger).filter({ visible: true }).count().catch(() => 0)) > 0;
   if (g.tur === 'desen') {
     const metin = g.secici
-      ? (await Promise.all((await page.locator(g.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
+      ? (await Promise.all((await k.locator(g.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
       : await sayfaMetni(page);
     return new RegExp(g.deger).test(metin);
   }
   const metin = g.secici
-    ? (await Promise.all((await page.locator(g.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
+    ? (await Promise.all((await k.locator(g.secici).filter({ visible: true }).all()).map((x) => x.innerText().catch(() => '')))).join(' ')
     : await sayfaMetni(page);
   return mesajIceriyorMu(metin, g.deger);
 }
@@ -511,11 +597,13 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
     // Süreli bekleme (akış diyagramındaki "Bekleme süresi").
     if (a.tur === 'bekle' && a.sureSn && !a.secici) { await page.waitForTimeout(a.sureSn * 1000); continue; }
     if (!a.secici) continue;
-    let l = page.locator(a.secici);
+    // Öğe bir çerçevede olabilir (aksiyonun cerceve'si).
+    const k = kapsam(page, a.cerceve);
+    let l = k.locator(a.secici);
     if (a.metin) l = l.filter({ hasText: a.metin });
     const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
     if (a.tur === 'tikla') await l.filter({ visible: true }).first().click({ timeout: zaman });
-    else if (a.durum === 'dolu') await doluBekle(page, a.secici, zaman, 'Aksiyon');
+    else if (a.durum === 'dolu') await doluBekle(page, a.secici, zaman, 'Aksiyon', undefined, null, k);
     else await l.first().waitFor({ state: a.durum === 'gizli' ? 'hidden' : 'visible', timeout: zaman });
   }
 }
@@ -846,9 +934,11 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
             atlanan.push({ alan: alan.etiket, neden: alan.atla });
             continue;
           }
-          // "Zorla" doldurucular gizli (özel çizimli) girdilere yazar: görünürlük yerine sayfada varlığı yeter.
-          const zorla = alan.doldurucu === 'radyoZorla' || alan.doldurucu === 'onayKutusuZorla' || alan.doldurucu === 'degerJs';
-          const l = zorla ? await sayfadakiOge(page, alan.secici as string) : await gorunurOge(page, alan.secici as string);
+          // "Zorla" doldurucular gizli (özel çizimli) girdilere yazar: görünürlük yerine sayfada varlığı yeter. Özel açılır listenin
+          // (ozelSecim) gerçek <select>'i de gizlidir. Alan bir çerçevedeyse (konum.cerceve) o çerçevede aranır.
+          const zorla = alan.doldurucu === 'radyoZorla' || alan.doldurucu === 'onayKutusuZorla' || alan.doldurucu === 'degerJs' || alan.doldurucu === 'ozelSecim';
+          const k = kapsam(page, alan.cerceve);
+          const l = zorla ? await sayfadakiOge(k, alan.secici as string) : await gorunurOge(k, alan.secici as string);
           if (!l) {
             const profil = plan.baglamProfili ? ` (bağlam profili: ${plan.baglamProfili})` : '';
             // "Mutlaka görünmeli" alan ya da Ayarlar > Koşu > Gelişmiş > Alan görünmezse = "Testi kaldır": test kalır.
@@ -867,8 +957,8 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           }
           const baslangic = Date.now();
           await parolaAlaniysaGizle(page, alan, l);
-          await alaniDoldur(page, alan, l, adim.baslik);
-          await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null);
+          await alaniDoldur(page, alan, l, adim.baslik, k);
+          await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
         }
         await aksiyonlariUygula(page, adim.kosu, sureSn);

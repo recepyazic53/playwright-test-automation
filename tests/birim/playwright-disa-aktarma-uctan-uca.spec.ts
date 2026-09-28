@@ -231,7 +231,7 @@ test('arayüz: satır ⋯ menüsü (masaüstü + 390 px) ve senaryo ayrıntısı
       await expect(page.locator('.senaryo-karti tbody tr')).toHaveCount(4, { timeout: 15_000 });
       const d = await menudenIndir(page, BASLIKLAR.mutlu);
       expect(d.ad).toBe('yetkili-ekspres-pesin-onayli.spec.ts');
-      expect(d.metin).toContain("import { test, expect, type Locator, type Page, type Request } from '@playwright/test';");
+      expect(d.metin).toContain("import { test, expect, type FrameLocator, type Locator, type Page, type Request } from '@playwright/test';");
       expect(d.metin).toContain('test("Yetkili / Ekspres / peşin / onaylı"');
       for (const gizli of [ORNEK_PAROLA, ORNEK_TOTP_ANAHTARI, AD_SOYAD]) expect(d.metin).not.toContain(gizli);
       await expect(page.locator('.bildirim').filter({ hasText: 'indirildi' }).first()).toBeVisible();
