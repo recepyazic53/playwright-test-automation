@@ -56,7 +56,9 @@
 //   GET  /platform/senaryo/form?projeId=&ekranId=&ortamId=&akisId=   seçilen akışın modeli (yoksa varsayılan) + akış listesi +
 //        alt modeller + profil seçenekleri (maskeli)
 //   GET  /platform/senaryo/oneri-baglami?projeId=&ekranId=&ortamId=&akisId=   senaryo tasarım yardımcısı: form bağlamı + ekranın o
-//        ortamda / akışta tanımlı senaryoları (veri, satır seçimleri, son durum); öneriyi tarayıcı üretir, hiçbir şey yazılmaz
+//        ortamda / akışta tanımlı senaryoları (veri, satır seçimleri, son durum, veri güdümlü satır değerleri) + diğer akışların
+//        senaryoları (kapsam) + koşu geçmişi (başarısız sonuçlar, görülen uyarılar) + öneri kararları; öneriyi tarayıcı üretir, hiçbir şey yazılmaz
+//   POST /platform/senaryo/oneri-karari { projeId, ekranId, kimlik, tur, neden?, alanlar?, karar: 'kabul'|'red', redNedeni? }
 //   GET  /platform/senaryo/gecmis?id=                  değişiklik geçmişi (değişen alan ADLARI; değer yok)
 //   GET  /platform/senaryo/son-sonuc?id=&ortamId=       seçili ortamdaki son sonuç + adım sonuçları (akış diyagramı renkleri)
 //   POST /platform/senaryo/kaydet | kosuya-dahil | sil | kopyala
@@ -136,6 +138,7 @@ import { KOSU_AYAR_TANIMLARI, kosuAyarlariniKaydet, kosuAyarlariniOku, kosuOrtam
 import { MEDYA_AYAR_ANAHTARI, VIDEO_SAKLAMA_VARSAYILAN_GUN, videoSaklamaGunu } from './ayarlar/video-saklama.mjs';
 import { VARSAYILAN_SAGLIK_ESIKLERI, saglikEsikleriniKaydet, saglikEsikleriniOku } from './ayarlar/saglik-esikleri.mjs';
 import { rehberAyarlariniKaydet, rehberAyarlariniOku } from './ayarlar/rehber-ayarlari.mjs';
+import { oneriKarariKaydet } from './ayarlar/oneri-kararlari.mjs';
 import { acilisTercihiniKaydet, acilisTercihiniOku } from './ayarlar/acilis-tercihi.mjs';
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
@@ -1509,6 +1512,10 @@ const POST_UCLARI = new Map([
     g.ortamId === undefined || g.ortamId === null ? null : kimlikAl(g.ortamId, 'ortamId'))],
   ['/platform/senaryo/sil', (db, g) => senaryolariSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { kosuyorMu })],
   ['/platform/senaryo/kopyala', (db, g) => senaryoKopyala(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.id))],
+  // Senaryo önerisi kararı (kabul / red + isteğe bağlı red nedeni): kural tabanlı öğrenme; gizli değer yok (ayarlar/oneri-kararlari.mjs).
+  ['/platform/senaryo/oneri-karari', (db, g) => ({ karar: oneriKarariKaydet(db, kimlikAl(g.projeId, 'projeId'), {
+    ekranId: g.ekranId, kimlik: g.kimlik, tur: g.tur, neden: g.neden, alanlar: g.alanlar, karar: g.karar, redNedeni: g.redNedeni
+  }) })],
   // Toplu çoğaltma: onaysız çağrı önizleme döner (hiçbir şey yazılmaz).
   ['/platform/senaryolar/cogalt', (db, g) => senaryolariCogalt(db, kimlikAl(g.projeId, 'projeId'), { idler: g.idler, adet: g.adet, sablon: g.sablon, onay: g.onay === true })],
   ['/platform/kosu-ayarlari/kaydet', (db, g) => ({ ayarlar: kosuAyarlariniKaydet(db, g.ayarlar) })],
