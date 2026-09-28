@@ -199,6 +199,30 @@ test.describe('eşzamanlı servis koşusu', () => {
     kosuAyarlariniKaydet(vt, { servisEszamanli: 1 });
   });
 
+  test('zamanlanmış koşu: ekran senaryoları "Aynı anda en çok N ekran senaryosu" ile (sahte koşucu); ortam ezmesi', async () => {
+    const kural = { id: 'k2', projeId, ad: 'Gece', ortamId, kapsam: { senaryolar: 'tum', ekranIdleri: [], servisAkisIdleri: [] }, canliOnay: false } as unknown as Kural;
+    let aktif = 0;
+    let enCok = 0;
+    const bag = {
+      senaryolar: () => [1, 2, 3, 4, 5].map((n) => ({ id: `s${n}`, baslik: `S${n}`, ekranId: null, kosuyaDahil: true })),
+      senaryoCalistir: async () => { aktif++; enCok = Math.max(enCok, aktif); await new Promise((r) => setTimeout(r, 60)); aktif--; return { govde: { basarili: true, durum: 'passed' } }; }
+    };
+    kosuAyarlariniKaydet(vt, { ekranEszamanli: 1 });
+    expect((await zamanliKosuyuYurut(vt, kural, 'zamanli-e1', bag)).ozet).toMatchObject({ toplam: 5, basarili: 5 });
+    expect(enCok).toBe(1);
+    enCok = 0;
+    kosuAyarlariniKaydet(vt, { ekranEszamanli: 3 });
+    expect((await zamanliKosuyuYurut(vt, kural, 'zamanli-e2', bag)).durum).toBe('tamamlandi');
+    expect(enCok).toBe(3);
+    const ortam = ortamGetir(vt, ortamId);
+    ortamKaydet(vt, { id: ortamId, projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, ayarlar: { ...ortam?.ayarlar, kosuHizi: { ekranEszamanli: 2 } } });
+    enCok = 0;
+    await zamanliKosuyuYurut(vt, kural, 'zamanli-e3', bag);
+    expect(enCok).toBe(2);
+    ortamKaydet(vt, { id: ortamId, projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true, ayarlar: { ...ortam?.ayarlar, kosuHizi: {} } });
+    kosuAyarlariniKaydet(vt, { ekranEszamanli: 1 });
+  });
+
   test('istekler arası bekleme: N = 1 + 300 ms → ardışık istekler arası ≥ 300 ms (akış adımları dahil); 0 → beklenmez; raporda bilgi', async () => {
     const ara = (l: SahteIstek[]) => l.slice(1).map((x, i) => Number(x.geldi) - Number(l[i].bitti));
     kosuAyarlariniKaydet(vt, { servisEszamanli: 1, servisIstekBeklemeMs: 300 });

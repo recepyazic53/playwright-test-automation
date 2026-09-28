@@ -18,7 +18,7 @@ import { ortamRiskliMi, tetiklemeYaz, tumGecmis, tumKurallar, tuketilenYaz } fro
 import { izinAcikMi } from '../guvenlik/izinler.mjs';
 import { izinKapaliNotu, izinMesaji } from '../guvenlik/izin-tanimlari.mjs';
 import { UCTAN_UCA_KOS_UCU, kapaliIzinler } from '../guvenlik/uc-denetimi.mjs';
-import { servisEszamanliOku, sinirliKos } from '../servisler/eszamanli.mjs';
+import { etkinKosuHiziOku, servisEszamanliOku, sinirliKos } from '../servisler/eszamanli.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./kurallar.d.mts').Kural} Kural */
@@ -33,7 +33,8 @@ export const ATLANDI_MESAJI = 'Atlandı: koşu sürüyordu.';
 const hataMetni = (hata) => String(/** @type {Error} */ (hata)?.message ?? hata).split('\n')[0].slice(0, 300);
 
 /**
- * Kuralın koşusunu yürütür (bekler): senaryolar sırayla, sonra seçili servis akışları, sonra seçili uçtan uca akışlar; en sonda
+ * Kuralın koşusunu yürütür (bekler): senaryolar (koşu hızı ayarıyla; varsayılan sırayla), sonra seçili servis akışları (servis
+ * koşu hızıyla), sonra seçili uçtan uca akışlar (sırayla); en sonda
  * (seçildiyse) bildirim. Uçtan uca akışta da kapalı izne tabi akış ATLANIR ve kayda "izin kapalı: X" olarak geçer.
  * @param {Veritabani} vt @param {Kural} kural @param {string} kosuKimligi @param {YurutmeBagimliliklari} bag
  * @returns {Promise<YurutmeSonucu>}
@@ -66,15 +67,18 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   /** @param {string} yol @param {Record<string, unknown>} govde */
   const kapali = (yol, govde) => kapaliIzinler(vt, yol, govde);
 
-  for (const s of secilen) {
-    if (!devam()) { yarida = true; break; }
+  // Ekran senaryoları: Ayarlar > Koşu > Ekran senaryoları > "Aynı anda en çok N" (ortam ezer; 1 = sırayla). Sunucu aynı sınırı ve
+  // senaryolar arası beklemeyi kendi dosya yuvasında da uygular. İlk hata senaryo sırasıyla seçilir.
+  /** @type {Array<string | undefined>} */
+  const senaryoHatalari = [];
+  const baslayan = await sinirliKos(secilen, etkinKosuHiziOku(vt, kural.ortamId).degerler.ekranEszamanli, async (s, i) => {
     ozet.toplam++;
     const eksik = kapali('/platform/senaryolar/calistir', { projeId: kural.projeId, ortamId: kural.ortamId, senaryoId: s.id });
     if (eksik.length) {
       ozet.atlanan++;
       izinleAtlananSenaryo++;
       for (const a of eksik) izinNotlari.add(izinKapaliNotu(a));
-      continue;
+      return true;
     }
     try {
       const y = await bag.senaryoCalistir(vt, {
@@ -82,15 +86,18 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
         kosuTuru: tam ? 'tam' : 'tekil', kosuKimligi, ...(tam ? { kosuKapsami: 'Genel' } : {})
       });
       const d = y.govde.durum;
-      if (y.govde.basarili === false) { ozet.hata++; ilkHata ||= `${s.baslik}: ${hataMetni(y.govde.mesaj ?? y.govde.hata ?? 'çalıştırılamadı')}`; }
+      if (y.govde.basarili === false) { ozet.hata++; senaryoHatalari[i] = `${s.baslik}: ${hataMetni(y.govde.mesaj ?? y.govde.hata ?? 'çalıştırılamadı')}`; }
       else if (d === 'passed') ozet.basarili++;
       else if (d === 'skipped' || d === 'iptal') ozet.atlanan++;
       else ozet.basarisiz++;
     } catch (hata) {
       ozet.hata++;
-      ilkHata ||= `${s.baslik}: ${hataMetni(hata)}`;
+      senaryoHatalari[i] = `${s.baslik}: ${hataMetni(hata)}`;
     }
-  }
+    return true;
+  }, devam);
+  if (baslayan.some((x) => x === undefined)) yarida = true;
+  ilkHata ||= senaryoHatalari.find(Boolean) ?? '';
 
   // Servis akışları: Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu" (1 = sırayla; akışın adımları her zaman
   // sırayla). Kayıtlar akış sırasıyla; kasa kilitlenirse yeni akış başlatılmaz.

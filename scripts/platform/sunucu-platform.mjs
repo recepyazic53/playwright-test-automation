@@ -201,7 +201,8 @@ import { yedekUyarisi, yedekUyarisiniKapat } from './guvenlik/yedek-uyarisi.mjs'
 import { CanliOnayHatasi, denetlenenUclar, ucDenetle } from './guvenlik/uc-denetimi.mjs';
 import { TabanKarariHatasi } from './servisler/taban-adresleri.mjs';
 import { adCanliyiCagristiriyorMu, riskliOrtamMi, riskliSecimi } from './guvenlik/ortam-riski.mjs';
-import { kosuHiziDogrula } from './ayarlar/kosu-hizi.mjs';
+import { etkinKosuHizi, kosuHiziDogrula } from './ayarlar/kosu-hizi.mjs';
+import { etkinKosuHiziOku } from './servisler/eszamanli.mjs';
 import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta, modeliPaketleDegistir
@@ -476,6 +477,15 @@ export function platformArayuzKilitliMi() {
 /** Koşu ayarları (Ayarlar > Koşu); kasa kilitliyse varsayılanlar. */
 function kosuAyarlari() {
   return vt && kasaAcikMi(vt) ? kosuAyarlariniOku(vt) : varsayilanKosuAyarlari();
+}
+
+/**
+ * Etkin koşu hızı (Ayarlar > Koşu > Servis / Ekran senaryoları; ortamın "Koşu hızı" ezer). Kasa kilitliyse varsayılanlar (1, 0 ms).
+ * Ekran koşularında sunucunun dosya yuvası (aynı anda en çok N süreç + senaryolar arası bekleme) bunu kullanır.
+ * @param {string | null | undefined} ortamId @returns {import('./ayarlar/kosu-hizi.mjs').EtkinKosuHizi}
+ */
+export function platformKosuHizi(ortamId) {
+  return vt && kasaAcikMi(vt) ? etkinKosuHiziOku(vt, ortamId ?? null) : etkinKosuHizi(null, null);
 }
 
 /** Tek koşunun süre limiti (ms): Ayarlar > Koşu; TEST_SUNUCU_SURE_LIMITI_DK yalnızca geliştirme / test için ezer. */

@@ -32,7 +32,7 @@ import {
 import { girisKokenleri, type GirisTarifi } from '../../scripts/platform/giris/tarif.mjs';
 import { beklenenGorulenMetni, beklenenMesajiBekle, mesajIceriyorMu, mesajiNormallestir } from './beklenen-sonuc';
 import { baglamiDegistir, girisYap, oturumGecerliMi, oturumuKapat, type GirisKimligi } from './giris-motoru';
-import { oturumuSifreliYaz } from './oturum-kasasi';
+import { oturumKilidiyle, oturumuSifreliYaz, yeniOturumuYukle } from './oturum-kasasi';
 import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
@@ -889,8 +889,13 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         // Oturum dosyası kasa anahtarından türetilen anahtarla ŞİFRELİ yazılır (oturum-kasasi.ts; düz metin çerez diske yazılmaz).
         if (giris.profil === null) await oturumuSifreliYaz(page.context(), ortam.oturumDosyasi());
       } else if (!(await oturumGecerliMi(page, tarif))) {
-        await girisYap(page, tarif, ortam.kimlik(), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif) });
-        await oturumuSifreliYaz(page.context(), ortam.oturumDosyasi());
+        // Eşzamanlı ekran koşusunda (her senaryo ayrı süreç) giriş süreçler arası kilitle yapılır: kilidi alan süreç önce başka
+        // bir sürecin bu arada yazdığı oturumu dener; geçerliyse aynı kullanıcıyla ikinci kez giriş yapılmaz (oturum düşmez).
+        await oturumKilidiyle(ortam.oturumDosyasi(), async () => {
+          if (await yeniOturumuYukle(page.context(), ortam.oturumDosyasi()) && await oturumGecerliMi(page, tarif)) return;
+          await girisYap(page, tarif, ortam.kimlik(), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, tarif) });
+          await oturumuSifreliYaz(page.context(), ortam.oturumDosyasi());
+        });
       }
       await ekranGoruntusu(`Sisteme giriş yapıldı${temizGiris ? ' (temiz oturum)' : ''}${profilEki(giris.profil)}`);
     });

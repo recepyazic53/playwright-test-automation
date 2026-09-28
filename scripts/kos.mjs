@@ -20,6 +20,7 @@ import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { riskliOrtamMi } from './platform/guvenlik/ortam-riski.mjs';
+import { etkinKosuHizi, kosuHiziOzeti } from './platform/ayarlar/kosu-hizi.mjs';
 
 const PORT = Number(process.env.TEST_SUNUCU_PORT) || 5566;
 const TABAN = `http://127.0.0.1:${PORT}`;
@@ -108,13 +109,19 @@ async function main() {
 
   const tam = !a.ekran.length && !a.senaryo.length;
   const kosuKimligi = `cli-${randomUUID()}`;
-  console.log(`Nöbetçi koşusu: ${proje.ad} / ${ortam.ad} · ${secilen.length} senaryo${tam ? ' (tam koşu)' : ''}`);
+  // Koşu hızı: Ayarlar > Koşu > Ekran senaryoları (ortamın "Koşu hızı" ezer) — arayüzdeki "Koşuyu başlat" ile aynı. En çok N senaryo
+  // aynı anda istenir; sunucu aynı sınırı ve senaryolar arası beklemeyi kendisi de uygular.
+  const hiz = etkinKosuHizi((await api('/platform/kosu-ayarlari').catch(() => ({ ayarlar: {} }))).ayarlar, ortam);
+  const n = hiz.degerler.ekranEszamanli;
+  console.log(`Nöbetçi koşusu: ${proje.ad} / ${ortam.ad} · ${secilen.length} senaryo${tam ? ' (tam koşu)' : ''}\nKoşu hızı: ${kosuHiziOzeti(hiz, 'ekran')}`);
   /** @type {Array<{ baslik: string; ekran: string; durum: string; sureMs: number; mesaj: string }>} */
-  const sonuclar = [];
+  const sirali = [];
   let durduruldu = false;
-  process.on('SIGINT', () => { durduruldu = true; console.error('\nDurduruluyor: sürmekte olan senaryo bitince koşu kesilecek.'); });
-  for (const [i, s] of secilen.entries()) {
-    if (durduruldu) break;
+  let biten = 0;
+  process.on('SIGINT', () => { durduruldu = true; console.error('\nDurduruluyor: sürmekte olan senaryolar bitince koşu kesilecek.'); });
+  let siradaki = 0;
+  const isci = async () => { while (siradaki < secilen.length && !durduruldu) { const i = siradaki++; await tekSenaryo(i, secilen[i]); } };
+  const tekSenaryo = async (i, s) => {
     const bas = Date.now();
     let durumAdi = 'hata';
     let mesaj = '';
@@ -131,10 +138,13 @@ async function main() {
       if (hata.kod === 'IZIN_KAPALI' || hata.kod === 'CANLI_ONAY_GEREKLI') { console.error(mesaj); durduruldu = true; }
     }
     const sureMs = Date.now() - bas;
-    sonuclar.push({ baslik: s.baslik, ekran: ekranAdi.get(s.ekranId) || '', durum: durumAdi, sureMs, mesaj });
+    sirali[i] = { baslik: s.baslik, ekran: ekranAdi.get(s.ekranId) || '', durum: durumAdi, sureMs, mesaj };
     const isaret = { basarili: '✓', basarisiz: '✗', atlanan: '−', durduruldu: '■', hata: '!' }[durumAdi];
-    console.log(`${String(i + 1).padStart(3)}/${secilen.length} ${isaret} ${s.baslik} (${(sureMs / 1000).toFixed(1)} sn)${mesaj ? `\n        ${mesaj}` : ''}`);
-  }
+    console.log(`${String(++biten).padStart(3)}/${secilen.length} ${isaret} ${s.baslik} (${(sureMs / 1000).toFixed(1)} sn)${mesaj ? `\n        ${mesaj}` : ''}`);
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(n, secilen.length)) }, isci));
+  // Sonuçlar (JSON / JUnit) senaryo sırasıyla; başlamayanlar yazılmaz.
+  const sonuclar = sirali.filter(Boolean);
 
   const say = (d) => sonuclar.filter((x) => x.durum === d).length;
   const ozet = { proje: proje.ad, ortam: ortam.ad, toplam: sonuclar.length, basarili: say('basarili'), basarisiz: say('basarisiz'), atlanan: say('atlanan'), durduruldu: say('durduruldu'), hata: say('hata') };

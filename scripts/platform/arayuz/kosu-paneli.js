@@ -10,8 +10,9 @@
 // - Elle doğrulama kodu (giriş tarifinde SMS "elle" kipi): çalışan satırlar için /kod-istegi yoklanır; kod
 //   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, canliOnayPenceresi, kapaliDugmeNedenleri, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { api, canliOnayPenceresi, kapaliDugmeNedenleri, kullaniciAyarlari, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
 import { riskBelirtilmemisMi, riskliOrtamMi } from './ortam-riski.mjs';
+import { etkinKosuHizi, kosuHiziOzeti } from './kosu-hizi.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -114,6 +115,19 @@ export const kosuSuruyorMu = () => Boolean(durum.oturum && !durum.oturum.bitti);
 // ---------------------------------------------------------------------------------------
 // Onay penceresi
 // ---------------------------------------------------------------------------------------
+
+/**
+ * Ekran koşusu diyaloğunun "nasıl" bilgisi — seçili ortamın etkin koşu hızı (Ayarlar > Koşu > Ekran senaryoları; ortamın "Koşu
+ * hızı" ezer): kosuOnayi'ye { kosuBicimi, hizOzeti } olarak verilir.
+ */
+export async function ekranKosuBicimi() {
+  const genel = await kullaniciAyarlari();
+  const n = (o) => etkinKosuHizi(genel, o).degerler.ekranEszamanli;
+  return {
+    kosuBicimi: (o) => (n(o) > 1 ? `en çok ${n(o)} tanesi aynı anda` : 'sırayla'),
+    hizOzeti: (o) => kosuHiziOzeti(etkinKosuHizi(genel, o), 'ekran')
+  };
+}
 
 /** Koşu diyaloğunda önce seçilecek ortam: varsayılan, yoksa riskli olmayan ilk ortam, yoksa ilki. */
 export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) || ortamlar.find((o) => !riskliOrtamMi(o)) || ortamlar[0] || null;
@@ -353,12 +367,22 @@ export function kosuBaslat(s) {
   if (s.esZamanli) {
     Promise.all(oturum.satirlar.map((x) => birTaneCalistir(oturum, x, ek))).then(() => oturumuBitirGerekirse(oturum), () => oturumuBitirGerekirse(oturum));
   } else {
+    // Koşu hızı (Ayarlar > Koşu > Ekran senaryoları; ortamın "Koşu hızı" ezer): en çok N senaryo aynı anda (N = 1: sırayla).
+    // Sunucu aynı sınırı ve "senaryolar arası bekleme"yi kendisi de uygular (dosya yuvası); burada panel sırası doğru görünsün diye.
     (async () => {
-      for (const x of oturum.satirlar) {
-        if (oturum.iptal) break;
-        if (x.durum !== 'sirada') continue;
-        await birTaneCalistir(oturum, x, ek);
-      }
+      oturum.hiz = await kullaniciAyarlari().then((g) => etkinKosuHizi(g, s.ortam)).catch(() => null);
+      yay();
+      const n = oturum.hiz ? oturum.hiz.degerler.ekranEszamanli : 1;
+      const kuyruk = [...oturum.satirlar];
+      const isci = async () => {
+        while (kuyruk.length) {
+          if (oturum.iptal) return;
+          const x = kuyruk.shift();
+          if (x.durum !== 'sirada') continue;
+          await birTaneCalistir(oturum, x, ek);
+        }
+      };
+      await Promise.all(Array.from({ length: Math.max(1, Math.min(n, kuyruk.length)) }, isci));
       oturumuBitirGerekirse(oturum);
     })();
   }
@@ -529,7 +553,10 @@ function paneliCiz() {
       h('div', { class: 'satir' },
         h('h2', {}, oturum.bitti ? ikon('onay') : h('span', { class: 'donen-halka', 'aria-hidden': 'true' }), oturum.bitti ? 'Koşu bitti' : 'Koşu sürüyor'),
         h('div', { class: 'dugmeler' }, tumunuDurdurDugmesi, kucult, oturum.bitti ? kapat : null)),
-      h('div', { class: 'alt' }, h('span', {}, oturum.baslik), h('span', {}, `${oturum.ortam.ad} · ${oturum.tur === 'tam' ? `tam · ${oturum.kapsam}` : 'kısmi'} · ${oturum.esZamanli ? 'aynı anda' : 'sırayla'}`)),
+      h('div', { class: 'alt' }, h('span', {}, oturum.baslik), h('span', {}, `${oturum.ortam.ad} · ${oturum.tur === 'tam' ? `tam · ${oturum.kapsam}` : 'kısmi'} · ${oturum.esZamanli ? 'aynı anda'
+        : oturum.hiz && oturum.hiz.degerler.ekranEszamanli > 1 ? `en çok ${oturum.hiz.degerler.ekranEszamanli} aynı anda` : 'sırayla'}`)),
+      // Etkin koşu hızı ve kaynağı ("TEST ortamı: en çok 2 senaryo aynı anda, 300 ms senaryolar arası bekleme (ortam ayarı)").
+      oturum.hiz ? h('p', { class: 'soluk kucuk kosu-hizi-ozeti' }, kosuHiziOzeti(oturum.hiz, 'ekran')) : null,
       h('div', { class: 'ilerleme-satiri' }, ilerleme, h('span', { class: 'yuzde' }, `%${yuzde}`)),
       cipler),
     liste,
