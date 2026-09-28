@@ -60,7 +60,7 @@ export const PROJE_TABLOLARI = Object.freeze({
 });
 /** Proje kaydı olmayan (genel) ve geçmiş/koşu tabloları (ice-aktarma.mjs > EKLEME_TABLOLARI): yalnızca içerikleri eşlenir. */
 const GENEL_TABLOLAR = new Set(['makineler', 'ayarlar', 'projeler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari', 'adim_sonuclari',
-  'yakalanan_mesajlar', 'medya', 'servis_kosulari', 'servis_akis_kosulari']);
+  'yakalanan_mesajlar', 'medya', 'servis_kosulari', 'servis_akis_kosulari', 'raporlar']);
 for (const t of TABLOLAR) {
   if (!(t.ad in PROJE_TABLOLARI) && !GENEL_TABLOLAR.has(t.ad)) {
     throw new Error(`İçe aktarma eşlemesi: "${t.ad}" tablosu için davranış tanımlı değil (PROJE_TABLOLARI).`);

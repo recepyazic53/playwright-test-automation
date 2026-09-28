@@ -145,6 +145,10 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 15, enAz: 5, enCok: 200, birim: 'satır' },
   { anahtar: 'raporGoruntuSiniriMb', bolum: 'arayuz', grup: 'Raporlar', etiket: 'HTML rapora gömülen görüntü sınırı', aciklama: 'HTML rapora ekran görüntüsü eklenirken toplam boyut bu sınırı aşarsa kalan görüntüler eklenmez (raporda sayısı yazılır).',
     tur: 'sayi', varsayilan: 25, enAz: 1, enCok: 200, birim: 'MB' },
+  // Sonuçlar > Raporlar'a kaydedilen PDF raporları (sonuclar/rapor-arsivi.mjs): günlük temizlikte bu süreden eskiler silinir.
+  { anahtar: 'raporSaklamaGun', bolum: 'yedekleme', grup: 'Rapor saklama', etiket: 'Rapor saklama süresi',
+    aciklama: 'Sonuçlar > Raporlar\'a kaydedilen PDF raporlarından bu süreden eski olanlar günlük temizlikte silinir (şifreli PDF dosyası dahil). Sınırsız: hiç silinmez.',
+    tur: 'secim', varsayilan: '90', secenekler: [['30', '30 gün'], ['90', '90 gün'], ['180', '180 gün'], ['0', 'Sınırsız']] },
   { anahtar: 'otomatikYedekSayisi', bolum: 'yedekleme', grup: 'Otomatik yedek', etiket: 'Saklanacak otomatik yedek', aciklama: 'Günlük otomatik yedeklerden en yeni bu kadarı tutulur; eskiler silinir.',
     tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 365, birim: 'adet' },
   { anahtar: 'sonucSaklamaGun', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Koşu sonuçlarını sakla', aciklama: 'Bu süreden eski ekran ve servis koşu sonuçları (adımlar, ekran görüntüleri, videolar dahil) günlük temizlikte silinir. 0: süresiz (hiç silinmez).',
@@ -170,7 +174,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
- *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; benzerlikEsigi: number;
+ *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; raporSaklamaGun: string; benzerlikEsigi: number;
  *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */
