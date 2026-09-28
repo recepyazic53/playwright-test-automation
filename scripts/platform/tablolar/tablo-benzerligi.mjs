@@ -7,8 +7,11 @@
 //     kaynaklı tablo ya da "<Ekran> — <…>" adlı tek sütunlu / bir ekranın alan bağlarında kullanılan / ekran adıyla başlayan tablo
 //     ekran listesidir). Bağlam tabloları önerilmez.
 //   · Gruplar: "birebir" (başlıklar ve satırlar aynı), "cogu" (başlıklar aynı ve satırların çoğu ortak ya da başlıkların çoğu aynı),
-//     "veriFarkli" (başlıklar aynı, veriler farklı). Puan 0–100. Satır karşılaştırması imzayla yapılır (gizli değerler dahil; imza
-//     çağıran tarafından hesaplanır, değer DÖNMEZ).
+//     "veriFarkli" (başlıklar aynı, veriler farklı). Puan 0–100; öneriler puana göre sıralanır. Satır karşılaştırması imzayla yapılır
+//     (gizli değerler dahil; imza çağıran tarafından hesaplanır, değer DÖNMEZ).
+//   · Genel sütun adları ("kod", "açıklama", "ad", "değer", "id" …) az ayırt edicidir: başlık benzerliğinde düşük ağırlık alır
+//     (GENEL_AGIRLIK); yalnız bu adlarda ortak olan tablolar düşük puan alır. Eşik altı öneriler arayüzde varsayılan gizlidir
+//     (Ayarlar > Test verisi > "Birleştirme önerisi eşiği").
 
 /** @typedef {{ ad: string; gizli?: boolean }} BSutun */
 /** @typedef {{ id: string; ad: string; sutunlar: BSutun[]; baglam?: boolean; kaynak?: { tur?: string; ekran?: string; tabloTuru?: string } | null; satirImzalari?: string[] }} BTablo */
@@ -89,13 +92,35 @@ export function tabloTuru(t, ek = {}) {
   return t.kaynak?.tur || (desen && (t.sutunlar.length === 1 || bagli || ekranAdiMi(desen[1].trim()))) ? 'liste' : 'kayit';
 }
 
-/** Başlık kümesi benzerliği (normal adlarla; Jaccard). @param {BSutun[]} a @param {BSutun[]} b */
+/** Az ayırt edici genel sütun adları (normal biçim): benzerlik puanında düşük ağırlık. */
+export const GENEL_SUTUNLAR = Object.freeze(['kod', 'kodu', 'aciklama', 'ad', 'adi', 'isim', 'deger', 'id', 'no', 'tip', 'tur', 'turu', 'durum', 'not', 'sira', 'etiket', 'metin']);
+/** Genel sütun adının ağırlığı (diğerleri 1). */
+export const GENEL_AGIRLIK = 0.3;
+/** @param {string} n normal ad */
+const agirlik = (n) => (GENEL_SUTUNLAR.includes(n) ? GENEL_AGIRLIK : 1);
+
+/** Başlık kümesi benzerliği (normal adlarla; Jaccard). "Başlıkların çoğu aynı mı" kararında kullanılır. @param {BSutun[]} a @param {BSutun[]} b */
 export function baslikBenzerligi(a, b) {
   const x = new Set(a.map((s) => baslikNormal(s.ad)).filter(Boolean));
   const y = new Set(b.map((s) => baslikNormal(s.ad)).filter(Boolean));
   const ortak = [...x].filter((k) => y.has(k)).length;
   const birlesim = new Set([...x, ...y]).size;
   return birlesim ? ortak / birlesim : 0;
+}
+
+/** Puan için ağırlıklı başlık benzerliği (Jaccard; genel adlar GENEL_AGIRLIK). @param {BSutun[]} a @param {BSutun[]} b */
+export function agirlikliBaslikBenzerligi(a, b) {
+  const x = new Set(a.map((s) => baslikNormal(s.ad)).filter(Boolean));
+  const y = new Set(b.map((s) => baslikNormal(s.ad)).filter(Boolean));
+  const topla = (/** @type {Iterable<string>} */ l) => [...l].reduce((t, k) => t + agirlik(k), 0);
+  const birlesim = topla(new Set([...x, ...y]));
+  return birlesim ? topla([...x].filter((k) => y.has(k))) / birlesim : 0;
+}
+
+/** Başlık kümesinin ayırt ediciliği (GENEL_AGIRLIK–1): yalnız genel adlardan oluşan başlıklar düşük. @param {BSutun[]} sutunlar */
+export function baslikAyirtEdiciligi(sutunlar) {
+  const x = [...new Set(sutunlar.map((s) => baslikNormal(s.ad)).filter(Boolean))];
+  return x.length ? x.reduce((t, k) => t + agirlik(k), 0) / x.length : 0;
 }
 
 /** Satır örtüşmesi: küçük tablonun satırlarından kaçı ötekinde de var (imzalarla; 0–1). @param {string[]} a @param {string[]} b */
@@ -155,7 +180,9 @@ export function birlestirmeOnerileri(tablolar, ek = {}) {
     const ayni = ts.every((t) => imzaKumesi(t) === imzaKumesi(ts[0]));
     /** @type {BenzerlikGrubu} */
     const grup = ayni ? 'birebir' : ort >= 0.5 ? 'cogu' : 'veriFarkli';
-    sonuc.push({ tablolar: ts.map((t) => t.id), grup, puan: Math.round(100 * (0.6 + 0.4 * (ayni ? 1 : Math.max(enAz, ort)))), tur: /** @type {'liste' | 'kayit'} */ (tur.get(ts[0].id)), eslemeGerekli: false });
+    // Başlıklar aynı: başlık payı başlıkların ayırt ediciliğiyle (genel adlar düşük); satırlar da aynıysa 100.
+    const baslikPayi = ayni ? 1 : baslikAyirtEdiciligi(ts[0].sutunlar);
+    sonuc.push({ tablolar: ts.map((t) => t.id), grup, puan: Math.round(100 * (0.6 * baslikPayi + 0.4 * (ayni ? 1 : Math.max(enAz, ort)))), tur: /** @type {'liste' | 'kayit'} */ (tur.get(ts[0].id)), eslemeGerekli: false });
   }
   // Başlıkların çoğu aynı (ama tamamı değil): ikili öneri, sütun eşleme gerekir.
   for (let i = 0; i < adaylar.length; i++) {
@@ -166,11 +193,11 @@ export function birlestirmeOnerileri(tablolar, ek = {}) {
       const j2 = baslikBenzerligi(a.sutunlar, b.sutunlar);
       if (j2 < 0.6) continue;
       const o = satirOrtusmesi(a.satirImzalari ?? [], b.satirImzalari ?? []);
-      sonuc.push({ tablolar: [a.id, b.id], grup: 'cogu', puan: Math.round(100 * (0.6 * j2 + 0.4 * o)), tur: /** @type {'liste' | 'kayit'} */ (tur.get(a.id)), eslemeGerekli: true });
+      sonuc.push({ tablolar: [a.id, b.id], grup: 'cogu', puan: Math.round(100 * (0.6 * agirlikliBaslikBenzerligi(a.sutunlar, b.sutunlar) + 0.4 * o)), tur: /** @type {'liste' | 'kayit'} */ (tur.get(a.id)), eslemeGerekli: true });
     }
   }
   const sira = { birebir: 0, cogu: 1, veriFarkli: 2 };
-  return sonuc.sort((x, y) => sira[x.grup] - sira[y.grup] || y.puan - x.puan);
+  return sonuc.sort((x, y) => y.puan - x.puan || sira[x.grup] - sira[y.grup]);
 }
 
 /**

@@ -16,7 +16,7 @@ import { tabloKaydet, tablolariListele } from '../../scripts/platform/tablolar/t
 import { ekranAlanBaglari } from '../../scripts/platform/tablolar/ekran-baglari.mjs';
 import { paketOnizle, sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { servisKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
-import { baslikNormal, birlestirmeOnerileri, benzerTablolar, sutunEslemesiOner, tabloTuru } from '../../scripts/platform/tablolar/tablo-benzerligi.mjs';
+import { agirlikliBaslikBenzerligi, baslikAyirtEdiciligi, baslikBenzerligi, baslikNormal, birlestirmeOnerileri, benzerTablolar, sutunEslemesiOner, tabloTuru } from '../../scripts/platform/tablolar/tablo-benzerligi.mjs';
 import { metniYenidenYaz, secimleriYenidenYaz, tablolariBirlestir } from '../../scripts/platform/tablolar/tablo-birlestirme.mjs';
 import { zarfMi } from '../../scripts/platform/kasa.mjs';
 import { akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
@@ -63,6 +63,13 @@ test.describe('tablo benzerliği (saf)', () => {
     expect(tabloTuru({ id: 'y', ad: 'Müşteriler', sutunlar: [{ ad: 'Kod' }, { ad: 'Ad' }] })).toBe('kayit');
     expect(benzerTablolar(['KOD', 'ad'], [t('a', 'Müşteriler', ['Kod', 'Ad'], [])])).toEqual([{ id: 'a', ad: 'Müşteriler', puan: 100, ayni: true }]);
     expect(benzerTablolar(['Değer'], [t('g', 'Liste', ['Değer'], [])])).toEqual([]);
+    // Genel sütun adları (kod, açıklama …) az ayırt edici: yalnız bunlarda ortak olan tablolar düşük puan; öneriler puana göre sıralı.
+    const g2 = birlestirmeOnerileri([t('p', 'Durum kodları', ['Kod', 'Açıklama'], ['1']), t('r', 'Hata kodları', ['KOD', 'açıklama'], ['9']),
+      t('s', 'Kargo', ['Firma', 'Bölge'], ['x']), t('u', 'Kargo 2', ['firma', 'bölge'], ['q'])]);
+    expect(g2.map((x) => [x.tablolar.join('+'), x.grup, x.puan])).toEqual([['s+u', 'veriFarkli', 60], ['p+r', 'veriFarkli', 18]]);
+    expect(baslikAyirtEdiciligi([{ ad: 'Kod' }, { ad: 'Açıklama' }])).toBeCloseTo(0.3);
+    expect(agirlikliBaslikBenzerligi([{ ad: 'Kod' }, { ad: 'Firma' }], [{ ad: 'Kod' }, { ad: 'Bölge' }])).toBeCloseTo(0.3 / 2.3);
+    expect(baslikBenzerligi([{ ad: 'Kod' }, { ad: 'Firma' }], [{ ad: 'Kod' }, { ad: 'Bölge' }])).toBeCloseTo(1 / 3);
   });
 
   test('başvuru ve satır seçimi yeniden yazımı: etiket ve biçim korunur, sütun adı çevrilir, çelişki bildirilir', () => {

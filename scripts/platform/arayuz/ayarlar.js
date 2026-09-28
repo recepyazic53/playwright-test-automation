@@ -391,7 +391,13 @@ async function girisProfilleri(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 
 async function testVerisi(govde, baglam) {
-  return tablolarBolumu(govde, baglam.durum.proje);
+  // Tablolar (kendi içinde yeniden çizilir) + altta "Test verisi ayarları" (Kullanıcı kararları; ör. birleştirme önerisi eşiği).
+  const tablolarKap = h('div', { class: 'test-verisi-tablolari' });
+  const ayarKap = h('section', { class: 'kart form-paneli test-verisi-ayarlari', 'aria-labelledby': 'test-verisi-ayarlari-basligi' },
+    h('h3', { id: 'test-verisi-ayarlari-basligi' }, ikon('ayar'), 'Test verisi ayarları'));
+  yerlestir(govde, tablolarKap, ayarKap);
+  const [, form] = await Promise.all([tablolarBolumu(tablolarKap, baglam.durum.proje), ayarFormu('testVerisi', 'Test verisi ayarları', 'Test verisi ayarları kaydedildi.', { baslik: 'Veri sağlığı önerileri' })]);
+  ayarKap.append(form);
 }
 
 // ---------------------------------------------------------------------------------------

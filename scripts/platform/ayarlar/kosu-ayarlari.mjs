@@ -23,7 +23,8 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) ya da şu değerlerden birindeyken (degerler) kullanılır; arayüz aksi hâlde alanı pasif gösterir
  * (pasifAciklama). Kaydedilen değer korunur.
  * tur 'onay': açık / kapalı (true / false; onay kutusu).
- * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
+ * bolum 'testVerisi': Ayarlar > Test verisi sayfasının altındaki "Test verisi ayarları" formu.
+ * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
  *   varsayilan: string | number | boolean; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
  *   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string } }>}
  */
@@ -135,6 +136,9 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'zamanliCakisma', bolum: 'zamanlama', grup: 'Zamanlanmış koşu davranışı', etiket: 'Koşu sürerken gelen zaman',
     aciklama: 'Vakti geldiğinde başka bir koşu sürüyorsa. Bitince koş: süren koşu bitince bir kez başlatılır (Nöbetçi o arada kapanırsa bekleyen koşu unutulur).',
     tur: 'secim', varsayilan: 'atla', secenekler: [['atla', 'Atla'], ['bitinceKos', 'Bitince koş']] },
+  { anahtar: 'benzerlikEsigi', bolum: 'testVerisi', grup: 'Veri sağlığı', etiket: 'Birleştirme önerisi eşiği',
+    aciklama: 'Benzerlik puanı bunun altındaki "Birleştirilebilecek tablolar" önerileri varsayılan olarak gizlenir ("Düşük benzerlikleri de göster" ile açılır). "kod, açıklama, ad, değer, id" gibi genel sütun adları puanda düşük ağırlık alır.',
+    tur: 'sayi', varsayilan: 50, enAz: 0, enCok: 100, birim: '%' },
   { anahtar: 'senaryoSayfaBoyu', bolum: 'arayuz', grup: 'Listeler', etiket: 'Senaryolar sayfa boyu', aciklama: 'Senaryolar tablosunda bir sayfada gösterilen satır.',
     tur: 'sayi', varsayilan: 50, enAz: 10, enCok: 500, birim: 'satır' },
   { anahtar: 'kosuGecmisiSayfaBoyu', bolum: 'arayuz', grup: 'Listeler', etiket: 'Koşu geçmişi sayfa boyu', aciklama: 'Sonuçlar > Koşu geçmişinde bir sayfada gösterilen koşu.',
@@ -166,7 +170,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
- *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number;
+ *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; benzerlikEsigi: number;
  *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */

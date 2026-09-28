@@ -54,16 +54,31 @@ export function veriSagligiKarti(proje, c) {
       h('span', { class: 'dugmeler' },
         son.kaynaklarSilindi ? null : h('button', { type: 'button', class: 'kucuk-dugme', onclick: (e) => kaynaklariSil(proje, e.currentTarget, c.yenile) }, ikon('cop'), 'Kaynak tabloları sil…'),
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: (e) => geriAl(proje, e.currentTarget, c.yenile) }, ikon('geri'), 'Son birleştirmeyi geri al…'))) : null;
-    const toplam = s.benzer.length + s.kullanilmayan.length + s.bosSutunlar.length + s.kirikBasvurular.length;
+    // Öneriler puana göre sıralı gelir; eşik altı olanlar (Ayarlar > Test verisi) varsayılan gizli.
+    const esik = typeof s.benzerlikEsigi === 'number' ? s.benzerlikEsigi : 50;
+    const yuksek = s.benzer.filter((o) => o.puan >= esik);
+    const dusuk = s.benzer.filter((o) => o.puan < esik);
+    const oneriSatiri = (o) => h('li', {},
+      h('span', { class: 'saglik-metni' }, o.adlar.map((x) => `“${x}”`).join(' + ')),
+      rozet(GRUP[o.grup] || o.grup, o.grup === 'birebir' ? 'basari' : ''), rozet(`%${o.puan}`, o.puan < esik ? 'soluk-rozet' : ''), o.eslemeGerekli ? rozet('sütun eşleme gerekir', 'uyari') : null,
+      h('button', { type: 'button', class: 'kucuk-dugme', onclick: async () => { if (await birlestirmePenceresi(proje, o.tablolar, s.kullanim, c.tablolar())) c.yenile(); } }, ikon('esle'), 'Birleştir…'));
+    const oneriIcerigi = () => {
+      const kap = h('div', {}, yuksek.length ? liste(yuksek.map(oneriSatiri)) : h('p', { class: 'soluk kucuk' }, `Eşiğin (%${esik}) üstünde öneri yok.`));
+      if (dusuk.length) {
+        const goster = h('button', { type: 'button', class: 'kucuk-dugme hayalet dusuk-benzerlik-dugmesi', 'aria-expanded': 'false' }, `Düşük benzerlikleri de göster (${dusuk.length})`);
+        goster.addEventListener('click', () => { goster.replaceWith(h('p', { class: 'soluk kucuk' }, `Eşik (%${esik}) altındaki öneriler:`), liste(dusuk.map(oneriSatiri))); });
+        kap.append(h('p', { class: 'dugmeler' }, goster, h('a', { class: 'kucuk', href: '#/ayarlar/test-verisi' }, 'Eşiği değiştir')));
+      }
+      return kap;
+    };
+    const toplam = yuksek.length + s.kullanilmayan.length + s.bosSutunlar.length + s.kirikBasvurular.length;
     yerlestir(kok,
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon(toplam ? 'uyari' : 'onay'), 'Veri sağlığı'),
         h('span', { class: 'sag kucuk soluk' }, toplam ? `${toplam} madde` : 'sorun yok')),
       sonBolum,
       h('div', { class: 'saglik-bolumleri' },
-        bolum('Birleştirilebilecek tablolar', s.benzer.length, liste(s.benzer.map((o) => h('li', {},
-          h('span', { class: 'saglik-metni' }, o.adlar.map((x) => `“${x}”`).join(' + ')),
-          rozet(GRUP[o.grup] || o.grup, o.grup === 'birebir' ? 'basari' : ''), rozet(`%${o.puan}`, ''), o.eslemeGerekli ? rozet('sütun eşleme gerekir', 'uyari') : null,
-          h('button', { type: 'button', class: 'kucuk-dugme', onclick: async () => { if (await birlestirmePenceresi(proje, o.tablolar, s.kullanim, c.tablolar())) c.yenile(); } }, ikon('esle'), 'Birleştir…')))), true),
+        yuksek.length || !dusuk.length ? bolum('Birleştirilebilecek tablolar', yuksek.length, oneriIcerigi(), true)
+          : h('details', { class: 'saglik-bolumu' }, h('summary', {}, h('span', {}, 'Birleştirilebilecek tablolar'), rozet('0', '')), oneriIcerigi()),
         bolum('Hiç kullanılmayan tablolar', s.kullanilmayan.length, liste(s.kullanilmayan.map((t) => h('li', {}, tabloDugmesi(t.id, t.ad),
           h('span', { class: 'soluk kucuk' }, 'hiçbir ekran / servis bağında, senaryoda ya da kuralda geçmiyor'))))),
         bolum('Boş sütunlar', s.bosSutunlar.length, liste(s.bosSutunlar.map((b) => h('li', {}, tabloDugmesi(b.tabloId, `${b.tablo} · ${b.sutun}`),

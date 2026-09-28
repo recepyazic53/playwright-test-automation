@@ -2,7 +2,7 @@
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 
 export interface KosuAyarTanimi {
-  anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay'; varsayilan: string | number | boolean;
+  anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay'; varsayilan: string | number | boolean;
   secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
   /** Ayar yalnız başka bir ayar bu değerdeyken (deger) ya da bu değerlerden birindeyken (degerler) kullanılır (arayüzde aksi hâlde pasif + açıklama). */
   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string };
@@ -15,7 +15,7 @@ export interface KosuAyarlari {
   gorunmeyenAlanBeklemeSn: number; gorunmeyenAlan: 'atla' | 'kaldir'; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number;
   onayPenceresi: 'iptal' | 'onayla'; oturumKontrolSn: number; girisAlanBeklemeSn: number; tabloSatirSecimi: 'ilk' | 'rastgele'; sqlSatirSiniri: number;
   kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string; saatDilimi: string; eszamanliKosu: 'sirayla';
-  zamanliKacan: 'atla' | 'sonraKos'; zamanliCakisma: 'atla' | 'bitinceKos'; raporGoruntuSiniriMb: number;
+  zamanliKacan: 'atla' | 'sonraKos'; zamanliCakisma: 'atla' | 'bitinceKos'; raporGoruntuSiniriMb: number; benzerlikEsigi: number;
   medyaInceltme: 'kapali' | 'basarili' | 'hatali' | 'ikisi'; medyaInceltmeGun: number; medyaInceltmeKoru: boolean;
   /** Ayarlar > Koşu > Tek senaryoda en çok veri koşusu (tablodan çoklu satır). */
   enCokVeriKosusu: number;

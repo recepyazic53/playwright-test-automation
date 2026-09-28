@@ -11,3 +11,7 @@ export declare function baslikBenzerligi(a: BSutun[], b: BSutun[]): number;
 export declare function satirOrtusmesi(a: string[], b: string[]): number;
 export declare function birlestirmeOnerileri(tablolar: BTablo[], ek?: { ekranAdlari?: string[]; ekranKullanimi?: Record<string, string[]> }): BirlestirmeOnerisi[];
 export declare function benzerTablolar(sutunlar: BSutun[] | string[], tablolar: BTablo[], s?: { ad?: string; haricId?: string }): Array<{ id: string; ad: string; puan: number; ayni: boolean }>;
+export declare const GENEL_SUTUNLAR: readonly string[];
+export declare const GENEL_AGIRLIK: number;
+export declare function baslikAyirtEdiciligi(sutunlar: BSutun[]): number;
+export declare function agirlikliBaslikBenzerligi(a: BSutun[], b: BSutun[]): number;

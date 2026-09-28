@@ -33,6 +33,7 @@ import { ekranAlanBaglari, ekranAlanBaglariniKaydet, tabloEkranKullanimi } from 
 import { ekranBasvurulariniCoz, modelAlanBilgisi } from './ekran-basvurulari.mjs';
 import { basvuru, basvuruCoz, degerBasvurusu, grupAnahtari, secilenSatir, sutunBul } from './tablo-secimi.mjs';
 import { baslikNormal, birlestirmeOnerileri, sutunEslemesiOner, tabloTuru } from './tablo-benzerligi.mjs';
+import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./tablo-deposu.mjs').Tablo} Tablo */
@@ -265,7 +266,11 @@ export function veriSagligi(vt, projeId) {
   const oneriler = birlestirmeOnerileri(tablolar.map((t) => ({ id: t.id, ad: t.ad, sutunlar: t.sutunlar, kaynak: t.kaynak ?? null, satirImzalari: t.satirlar.map((r) => satirImzasi(r, t.sutunlar)) })), ek);
   const ad = new Map(tablolar.map((t) => [t.id, t.ad]));
   const son = sonBirlestirme(vt, projeId);
+  // Eşik altı öneriler arayüzde varsayılan gizli ("Düşük benzerlikleri de göster"); karar Ayarlar > Test verisi'nde.
+  let benzerlikEsigi = 50;
+  try { benzerlikEsigi = kosuAyarlariniOku(vt).benzerlikEsigi; } catch { /* varsayılan */ }
   return {
+    benzerlikEsigi,
     benzer: oneriler.map((o) => ({ ...o, adlar: o.tablolar.map((id) => ad.get(id) ?? id) })),
     kullanilmayan: tablolar.filter((t) => !kullanim[t.id]?.toplam).map((t) => ({ id: t.id, ad: t.ad, tur: tabloTuru(t, ek) })),
     bosSutunlar: tablolar.filter((t) => t.satirlar.length).flatMap((t) => t.sutunlar.filter((s) => t.satirlar.every((r) => !dolu(r.degerler[s.ad])))

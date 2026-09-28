@@ -125,3 +125,34 @@ test('yeni tablo kaydı: "Benzer tablo var" — onu kullan satırları o tabloya
   await expect(duz.getByText('kaydedilmemiş değişiklik')).toBeVisible();
   await baglam.close();
 });
+
+test('veri sağlığı: öneriler puana göre; eşik altı (genel sütun adları) varsayılan gizli, "Düşük benzerlikleri de göster"; eşik Ayarlar > Test verisi', async () => {
+  test.setTimeout(60_000);
+  for (const [ad, deger] of [['Durum kodları', 'Açık'], ['Hata kodları', 'Zaman aşımı']] as const) {
+    const y = await nobetciApi(nobetci, '/platform/tablo/kaydet', { projeId, ad, sutunlar: [{ ad: 'Kod' }, { ad: 'Açıklama' }], satirlar: [{ degerler: { Kod: '1', Açıklama: deger } }] });
+    expect(y.basarili, String(y.mesaj ?? '')).not.toBe(false);
+  }
+  const s = await nobetciApi(nobetci, `/platform/tablolar/veri-sagligi?projeId=${projeId}`) as { benzerlikEsigi: number; benzer: Array<{ adlar: string[]; puan: number }> };
+  expect(s.benzerlikEsigi).toBe(50);
+  expect(s.benzer.map((b) => b.puan)).toEqual([...s.benzer.map((b) => b.puan)].sort((a, b) => b - a));
+  const dusuk = s.benzer.find((b) => b.adlar.includes('Durum kodları'));
+  expect(dusuk?.puan).toBeLessThan(50);
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } });
+  const page = await baglam.newPage();
+  await page.goto('/#/ayarlar/test-verisi');
+  const kart = page.getByRole('region', { name: 'Veri sağlığı' });
+  await expect(kart).toContainText('“Kargo firmaları” + “Kargo şirketleri (eski)”');
+  await expect(kart).not.toContainText('“Durum kodları”');
+  await kart.getByRole('button', { name: 'Düşük benzerlikleri de göster (1)' }).click();
+  await expect(kart).toContainText('“Durum kodları” + “Hata kodları”');
+  // Eşik Ayarlar > Test verisi'nde (sayfanın altındaki form).
+  const form = page.getByRole('form', { name: 'Test verisi ayarları' });
+  await form.getByLabel(/Birleştirme önerisi eşiği/).fill('10');
+  await form.getByRole('button', { name: 'Kaydet' }).click();
+  await expect(page.getByText('Test verisi ayarları kaydedildi.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Veri sağlığı' })).toContainText('“Durum kodları” + “Hata kodları”');
+  await expect(page.getByRole('button', { name: /Düşük benzerlikleri de göster/ })).toHaveCount(0);
+  await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { benzerlikEsigi: 50 } });
+  await baglam.close();
+});
