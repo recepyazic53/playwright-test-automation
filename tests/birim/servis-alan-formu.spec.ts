@@ -427,9 +427,14 @@ test.describe('alan formu uçtan uca', () => {
     await expect(satir('Onay senaryosu')).toBeVisible();
     await page.getByRole('button', { name: 'Filtreleri temizle' }).first().click();
     // Adresle arama.
+    // Arama 120 ms gecikmeyle uygulanır ve tabloyu yeniden çizer: uygulandığı ("Filtreleri temizle" görünür / gizlenir)
+    // beklenmezse geç gelen çizim, hemen ardından açılan ⋯ menüsünü satırla birlikte siler (Kopyala tıklanamaz).
+    const aramaTemizle = page.locator('.filtre-temizle');
     await page.getByLabel('Senaryo ara').fill('ornek.asmx');
+    await expect(aramaTemizle).toBeVisible();
     await expect(satir('Hızlı')).toBeVisible();
     await page.getByLabel('Senaryo ara').fill('');
+    await expect(aramaTemizle).toBeHidden();
     // ⋯ → Kopyala.
     await satir('Onay senaryosu').getByRole('button', { name: 'Diğer işlemler: Onay senaryosu' }).click();
     await page.getByRole('menuitem', { name: 'Kopyala' }).click();

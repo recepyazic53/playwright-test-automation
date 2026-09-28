@@ -116,8 +116,18 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
     // Giriş kaydı diyagram açmaz: panel, Nöbetçi'deki onay ekranını anlatır.
     await expect(panel.getByText(/girişin adımları onayınıza açılır/)).toBeVisible();
     await expect(panel.getByText(/taslak diyagram|diyagramda elle/)).toHaveCount(0);
+    // Gönderince kayıt süreci pencereyi HEMEN kapatır ("Bu pencere kapanacak"): son bilgi yük altında sayfa kapanmadan
+    // yoklanamayabilir. Bu yüzden panel metni değiştiği anda sayfanın kendisi konsola yazar; olay kapanmadan önce gelir.
+    const gonderildi = sayfa.waitForEvent('console', { predicate: (m) => m.text().startsWith('nobetci-test-paneli:'), timeout: 60_000 });
+    await panel.evaluate((host) => {
+      const kok = host.shadowRoot as ShadowRoot;
+      new MutationObserver(() => {
+        const metin = kok.textContent ?? '';
+        if (metin.includes('Kayıt Nöbetçi’ye gönderildi')) console.log(`nobetci-test-paneli:${metin}`);
+      }).observe(kok, { childList: true, subtree: true, characterData: true });
+    });
     await panel.getByRole('button', { name: 'Bitir ve Nöbetçi’ye gönder' }).click();
-    await expect(panel.getByText(/girişin adımlarını Nöbetçi’de onaylayın/)).toBeVisible();
+    expect((await gonderildi).text()).toMatch(/girişin adımlarını Nöbetçi’de onaylayın/);
   } finally {
     await kayit.close().catch(() => undefined);
   }

@@ -293,7 +293,12 @@ test.describe('Yedekte medya dosyaları', () => {
       // akışla işlenince ilk yarının ve ikinci yarının tepesi aynı düzeyde kalır. Ayrıca tepe dosya boyutunun altında olmalı.
       const BUYUME_SINIRI = 48 * 1024 * 1024;
       setFlagsFromString('--expose-gc');
-      const gc = runInNewContext('gc') as () => void;
+      const vmGc = runInNewContext('gc') as () => void;
+      // V8 ölü ArrayBuffer'ların belleğini ARKA PLAN iş parçacığında süpürür (--concurrent-array-buffer-sweeping):
+      // tek gc() sonrası arrayBuffers, süpürme bitmediyse ölü parçaları da sayar (yerelde tek gc'de ~200 MB'ın hâlâ
+      // sayıldığı görüldü). Paralel takımda CPU yükü süpürmeyi geciktirdiği için ölçüm dalgalanıyordu. İkinci gc,
+      // öncekinin süpürmesinin bitmesini bekler (EnsureFinished): ölçüm yalnız gerçekten tutulan belleği gösterir.
+      const gc = () => { vmGc(); vmGc(); };
       let olcum = 0;
       /** Her 4 çağrıda bir: çöp toplanır, tutulan arrayBuffers örneklenir. */
       const ornekle = (liste: number[]) => { if (++olcum % 4) return; gc(); liste.push(process.memoryUsage().arrayBuffers); };
