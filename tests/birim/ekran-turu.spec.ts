@@ -138,6 +138,7 @@ const EKRANLAR: EkranTanimi[] = [
   { ad: 'sonuclar-servisler', adres: () => '#/sonuclar/servisler' },
   { ad: 'ekranlar', adres: () => '#/ekranlar' },
   { ad: 'ekran-ekle', adres: () => '#/ekranlar/yeni' },
+  { ad: 'ortak-akis-ekle', adres: () => '#/ekranlar/yeni/ortak-akis' },
   { ad: 'ekran', adres: () => `#/ekranlar/e/${encodeURIComponent(ekranId)}` },
   { ad: 'ekran-akis', adres: () => `#/ekranlar/e/${encodeURIComponent(ekranId)}/akis` },
   { ad: 'ekran-gecmis', adres: () => `#/ekranlar/e/${encodeURIComponent(ekranId)}/gecmis` },
