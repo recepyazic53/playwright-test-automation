@@ -65,10 +65,11 @@ const kisaKategori = (k) => String(k || 'Diğer').replace(/\s*\(.*?\)\s*/g, ' ')
 /** Trend grafiğinde en çok bu kadar koşu çizilir (aralıktaki en yeniler; daha fazlası okunmaz). */
 const TREND_EN_COK = 60;
 
-/** Genel görünümün "Ekranlar | Servisler" sekmeleri (#/sonuclar ve #/sonuclar/servisler). */
+/** Genel görünümün "Ekranlar | Servisler | Uçtan uca akışlar" sekmeleri (#/sonuclar, #/sonuclar/servisler, #/sonuclar/uctan-uca). */
 function genelSekmeleri(secili) {
   return h('div', { class: 'segment sekme-cubugu sonuc-sekmeleri', role: 'tablist', 'aria-label': 'Genel rapor' },
-    [['ekranlar', 'Ekranlar', '#/sonuclar', 'ekran'], ['servisler', 'Servisler', '#/sonuclar/servisler', 'ag']].map(([a, etiket, adres, ikonAd]) => h('button', {
+    [['ekranlar', 'Ekranlar', '#/sonuclar', 'ekran'], ['servisler', 'Servisler', '#/sonuclar/servisler', 'ag'],
+      ['uctan', 'Uçtan uca akışlar', '#/sonuclar/uctan-uca', 'katman']].map(([a, etiket, adres, ikonAd]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': a === secili ? 'true' : 'false',
       onclick: () => { if (a !== secili) location.hash = adres; }
     }, ikon(ikonAd), etiket)));
@@ -94,7 +95,7 @@ export function sonuclarEkrani(main, parcalar, baglam) {
         saglikNotu),
       icerik));
   // "servisler": Genel'in Servisler sekmesi (Genel seçili kalır).
-  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && tur !== 'servisler' ? null : '';
+  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && tur !== 'servisler' && tur !== 'uctan-uca' ? null : '';
   const hata = (e) => { if (e && e.durum === 423) return; icerik.replaceChildren(hataKutusu(e)); };
   // Tarih aralığı (ortak süzgeç; oturumda saklanır): kartlar, trend ve koşu geçmişi sunucuda aralığa göre hesaplanır.
   const sorgu = araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), kayitliAralik());
@@ -123,6 +124,10 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       // Sol paneldeki servis: Servis sonuçlarının o servise süzülmüş görünümü, Sonuçlar ekranının içinde (ekranlarla aynı).
       if (tur === 's' && seciliServis) {
         return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { servisId: seciliServis, gomulu: true }));
+      }
+      // Genel > Uçtan uca akışlar: servis + ekran + SQL akışlarının koşuları (uctan-uca.js).
+      if (tur === 'uctan-uca') {
+        return import('./uctan-uca.js').then((m) => m.uctanUcaSonuclari(icerik, proje, { ust: genelSekmeleri('uctan'), kosuId: kimlik ? decodeURIComponent(kimlik) : null }));
       }
       const ekran = secili ? ozet.ekranlar.find((e) => e.anahtar === secili) : null;
       const yenile = () => sonuclarEkrani(main, parcalar, baglam);

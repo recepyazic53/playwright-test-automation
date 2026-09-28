@@ -9,6 +9,7 @@ import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
 import { kosuAyarlariniOku, sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './akis-senaryo-icerigi.mjs';
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
+import { ekranAdimiDogrula } from '../akislar/ekran-adimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -569,7 +570,9 @@ export function yetkiTekrariAcik(vt, akis) {
  *   operasyon?: string; baglar?: Record<string, string> }} AkisAdimi
  *   tur 'sql': SQL sorgusu adımı (servisId / senaryoId yok; sql: sql-adimi.mjs SqlTanimi).
  * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string;
- *   yetkiHatasinda?: 'genel' | 'tekrarYok' | 'yenileVeTekrar' }} ServisAkisIcerigi
+ *   yetkiHatasinda?: 'genel' | 'tekrarYok' | 'yenileVeTekrar'; uctanUca?: boolean }} ServisAkisIcerigi
+ *   uctanUca: uçtan uca akış (servis + ekran + SQL adımları; akislar/uctan-uca.mjs; yalnız tür "akis"). Ekran adımı (tur 'ekran';
+ *   akislar/ekran-adimi.mjs): senaryoId + ezmeler + ekrandan okumalar.
  *   tokenYenileme (oturum akışı): süresiDolunca (varsayılan: değer ömür boyunca koşular arasında yeniden kullanılır) ·
  *   herIstekte (her senaryo çalıştırmasında oturum akışı yeniden koşulur).
  *   yetkiHatasinda: 401 / 403 sonrası davranış (YETKI_HATASI_SECENEKLERI; yetkiHatasiSecimi).
@@ -588,11 +591,20 @@ export function akisIceriginiDogrula(icerik, tur, s = {}) {
   if (!Array.isArray(i.adimlar) || !i.adimlar.length) throw new DepoHatasi('Akışta en az bir adım olmalıdır.');
   if (i.adimlar.length > EN_COK_AKIS_ADIMI) throw new DepoHatasi(`Bir akışta en çok ${EN_COK_AKIS_ADIMI} adım olabilir.`);
   const kimlikler = new Set();
+  // Uçtan uca akış (akislar/uctan-uca.mjs): içerikte "uctanUca: true"; ekran adımı yalnız bu akışlarda olabilir.
+  const uctanUca = i.uctanUca === true && tur === 'akis';
   const adimlar = i.adimlar.map((x, n) => {
     const a = /** @type {Record<string, unknown>} */ (x && typeof x === 'object' ? x : {});
     const yer = `${n + 1}. adım`;
     const id = typeof a.id === 'string' && /^[A-Za-z0-9_-]{1,40}$/.test(a.id) && !kimlikler.has(a.id) ? a.id : `adim${n + 1}`;
     kimlikler.add(id);
+    // Ekran adımı (akislar/ekran-adimi.mjs): ekran senaryosu + alan ezmeleri + ekrandan okumalar; yalnız uçtan uca akışta.
+    if (a.tur === 'ekran') {
+      if (!uctanUca) throw new DepoHatasi(`${yer}: ekran adımı yalnız uçtan uca akışta kullanılır.`);
+      const d = ekranAdimiDogrula(a, yer, id);
+      if (!d.tanim) throw new DepoHatasi(d.hatalar.join(' '));
+      return d.tanim;
+    }
     // SQL adımı (sql/sql-adimi.mjs): servis / senaryo yok; sorgudan okunan değerler tanımın okumalarında (sql.okumalar).
     if (a.tur === 'sql') {
       const d = sqlTanimiDogrula(a.sql, { satirSiniri: s.satirSiniri });
@@ -624,7 +636,7 @@ export function akisIceriginiDogrula(icerik, tur, s = {}) {
   if (tur === 'oturum' && !adimlar.some((a) => a.okumalar.length || a.sql?.okumalar?.length)) throw new DepoHatasi('Oturum akışı en az bir değer okumalıdır (ör. Token).');
   const yetki = secenek(i.yetkiHatasinda ?? 'genel', YETKI_HATASI_SECENEKLERI, 'yetkiHatasinda');
   return {
-    adimlar, ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN, tokenYenileme: secenek(i.tokenYenileme ?? 'suresiDolunca', TOKEN_YENILEME, 'tokenYenileme') } : {}),
+    adimlar, ...(uctanUca ? { uctanUca: true } : {}), ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN, tokenYenileme: secenek(i.tokenYenileme ?? 'suresiDolunca', TOKEN_YENILEME, 'tokenYenileme') } : {}),
     // Oturum akışında her zaman yazılır (alanı olmayan eski kayıt = eski davranış; bkz. yetkiHatasiSecimi); akışta yalnız "genel" değilse.
     ...(tur === 'oturum' || yetki !== 'genel' ? { yetkiHatasinda: yetki } : {}),
     ...(typeof i.aciklama === 'string' && i.aciklama.trim() ? { aciklama: i.aciklama.trim().slice(0, 2000) } : {})

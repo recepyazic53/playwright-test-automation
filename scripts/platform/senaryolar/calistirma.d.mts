@@ -24,8 +24,11 @@ export interface KosuIstegi {
   kosuKimligi?: string | null;
   kosuKapsami?: string | null;
   senaryoId?: string;
-  /** Veri koşusu / tekrar: koşu sürecine eklenecek ortam değişkenleri (NOBETCI_VERI_KIPI, NOBETCI_TEKRAR_PLANI, NOBETCI_TEKRAR_KAYNAGI). */
-  ekOrtam?: Record<string, string>;
+  /**
+   * Koşu sürecine eklenecek ortam değişkenleri: veri koşusu / tekrar (NOBETCI_VERI_KIPI, NOBETCI_TEKRAR_PLANI, NOBETCI_TEKRAR_KAYNAGI)
+   * ya da uçtan uca akışın ekran adımı (NOBETCI_AKIS_*; akislar/uctan-uca-cikti.mjs). Sunucu yalnız bu adları geçirir.
+   */
+  ekOrtam?: Record<string, string> | null;
 }
 export interface KosuYaniti {
   /** HTTP durum kodu (varsayılan 200). */

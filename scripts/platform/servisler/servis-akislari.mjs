@@ -18,7 +18,11 @@
 // varsayılan gövdesi). İstek = adım içeriği + bağlar, tek istekli senaryo gibi (taslak) koşar.
 // Canlı ortam: akış yalnız kullanıcı başlatınca (arayüzdeki onayla) koşar; "yalnız test" operasyonu içeren akış canlıda hiç
 // istek atmadan reddedilir.
+// EKRAN ADIMI (tur "ekran"; yalnız uçtan uca akışta — içerik "uctanUca: true"; akislar/uctan-uca.mjs): bir ekran senaryosu model
+// koşucusuyla (Playwright) koşar; alan ezmelerindeki ${akis:Ad} önceki adımların değeriyle dolar, ekrandan okunan değerler sonraki
+// adımlara taşınır. Koşu ve denetim kanca ile (ekranAdimKancasiAyarla) yapılır; uçtan uca akış yalnız kendi ucundan koşar.
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
+import { ekranAdimiAkisDegerleri } from '../akislar/ekran-adimi.mjs';
 import { ServisHatasi, kullanilanAkisDegerleri } from './soap-istemcisi.mjs';
 import {
   akisIceriginiDogrula, servisAkisiGetir, servisAkisKosusuKaydet, servisGetir, servisSenaryosuGetir, yetkiTekrariAcik
@@ -36,6 +40,18 @@ import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 /** @typedef {import('./servis-deposu.mjs').ServisAkisIcerigi} ServisAkisIcerigi */
 
 /**
+ * Ekran adımı kancası (akislar/uctan-uca.mjs kaydeder): denetim (senaryo projede mi, alanlar modelde mi), adımın rapordaki adı ve
+ * koşusu. Kanca yoksa ekran adımı "koşamaz" hatasıyla kalır.
+ * @typedef {{ denetle: (vt: Veritabani, projeId: string, adim: any) => string | null; etiket: (vt: Veritabani, adim: any) => string;
+ *   kos: (vt: Veritabani, projeId: string, g: { ortamId: string; adim: any; degerler: Record<string, string>; gizliler: string[];
+ *     sinyal?: AbortSignal; akisBaslik: string; adimNo: number }) => Promise<{ sonuc: Record<string, unknown>; acik: { okunan: Record<string, string>; gizliler: string[] } }> }} EkranAdimKancasi
+ */
+/** @type {EkranAdimKancasi | null} */
+let ekranKancasi = null;
+/** @param {EkranAdimKancasi | null} k */
+export function ekranAdimKancasiAyarla(k) { ekranKancasi = k; }
+
+/**
  * Akışın anlamsal doğrulaması: servis / senaryo projede mi; ${akis:X} önceki adımlarda okunuyor ya da adımın servisinin oturum
  * akışından geliyor mu. Hata listesi döner (boşsa geçerli).
  * @param {Veritabani} vt @param {string} projeId @param {ServisAkisIcerigi} icerik
@@ -49,6 +65,14 @@ export function servisAkisiDenetle(vt, projeId, icerik, adimIcerikleri) {
   const okunan = new Set();
   icerik.adimlar.forEach((a, n) => {
     const yer = `${n + 1}. adım (${a.ad})`;
+    if (a.tur === 'ekran') {
+      const b = ekranKancasi ? ekranKancasi.denetle(vt, projeId, a) : null;
+      if (b) hatalar.push(`${yer}: ${b}`);
+      const eksik = ekranAdimiAkisDegerleri(a).filter((x) => !okunan.has(x));
+      if (eksik.length) hatalar.push(`${yer}: ${eksik.map((x) => `\${akis:${x}}`).join(', ')} önceki adımlarda okunmuyor.`);
+      for (const o of a.okumalar ?? []) okunan.add(o.ad);
+      return;
+    }
     if (a.tur === 'sql') {
       const b = sqlTanimDenetle(vt, projeId, a.sql);
       if (b) hatalar.push(`${yer}: ${b}`);
@@ -122,7 +146,8 @@ oturumSaglayicisiAyarla(oturumDegerleriniAl);
 
 /**
  * @typedef {{ no: number; ad: string; servis: string; senaryo: string; durum: 'basarili' | 'basarisiz' | 'hata' | 'atlandi' | 'durduruldu';
- *   sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; not?: string; tur?: 'sql' | 'operasyon'; sqlHedefi?: { baglanti: string; veritabani?: string };
+ *   sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; not?: string; tur?: 'sql' | 'operasyon' | 'ekran'; sqlHedefi?: { baglanti: string; veritabani?: string };
+ *   ekran?: Record<string, unknown>; ezmeler?: Record<string, string>;
  *   sql?: { sutunlar: string[]; satirlar: string[][]; toplamSatir: number; kesildi: boolean; beklenen?: string; gorulen?: string; deneme: number } }} AkisAdimSonucu
  */
 
@@ -158,7 +183,8 @@ async function sqlAdimiKos(vt, projeId, ortamId, a, degerler, gizliler, sinyal) 
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ akis: { id?: string; baslik: string; tur: 'akis' | 'oturum'; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: ServisAkisIcerigi }; ortamId: string;
  *   tur: 'dene' | 'kosu'; sinyal?: AbortSignal; oturumIcinde?: boolean; olay?: (adim: AkisAdimSonucu, durum: 'basladi' | 'bitti') => void;
- *   adimIcerikleri?: Record<string, any> }} g  adimIcerikleri: akış senaryosunun operasyon adımı içerikleri (adım kimliği → içerik)
+ *   adimIcerikleri?: Record<string, any>; adimDenetimi?: (adim: any) => string }} g  adimIcerikleri: akış senaryosunun operasyon adımı içerikleri (adım kimliği → içerik)
+ *   adimDenetimi: her adımdan önce; boş olmayan metin adımı "hata" yapar (adım koşmaz).
  */
 async function akisiKos(vt, projeId, g) {
   /** @type {Record<string, string>} */
@@ -176,11 +202,13 @@ async function akisiKos(vt, projeId, g) {
   for (const [n, a] of tumAdimlar.entries()) {
     const sqlMi = a.tur === 'sql';
     const opMi = a.tur === 'operasyon';
-    const servis = sqlMi ? undefined : servisGetir(vt, a.servisId);
-    const senaryo = sqlMi || opMi ? undefined : servisSenaryosuGetir(vt, a.senaryoId);
+    const ekranMi = a.tur === 'ekran';
+    const servis = sqlMi || ekranMi ? undefined : servisGetir(vt, a.servisId);
+    const senaryo = sqlMi || opMi || ekranMi ? undefined : servisSenaryosuGetir(vt, a.senaryoId);
     /** @type {AkisAdimSonucu} */
-    const s = { no: n + 1, ad: a.ad, servis: sqlMi ? 'SQL' : servis?.ad ?? '?', senaryo: sqlMi ? 'SQL sorgusu' : opMi ? String(a.operasyon) : senaryo?.baslik ?? '?', durum: 'atlandi', sureMs: 0,
-      ...(sqlMi ? { tur: /** @type {const} */ ('sql') } : opMi ? { tur: /** @type {const} */ ('operasyon') } : {}) };
+    const s = { no: n + 1, ad: a.ad, servis: sqlMi ? 'SQL' : ekranMi ? 'Ekran' : servis?.ad ?? '?',
+      senaryo: sqlMi ? 'SQL sorgusu' : ekranMi ? (ekranKancasi?.etiket(vt, a) ?? 'Ekran senaryosu') : opMi ? String(a.operasyon) : senaryo?.baslik ?? '?', durum: 'atlandi', sureMs: 0,
+      ...(sqlMi ? { tur: /** @type {const} */ ('sql') } : opMi ? { tur: /** @type {const} */ ('operasyon') } : ekranMi ? { tur: /** @type {const} */ ('ekran') } : {}) };
     adimlar.push(s);
     if (dur) { s.neden = 'önceki adım başarısız'; continue; }
     if (g.sinyal?.aborted) { s.durum = 'durduruldu'; s.neden = 'kullanıcı durdurdu'; continue; }
@@ -228,7 +256,15 @@ async function akisiKos(vt, projeId, g) {
       return { akisDegerleri: { ...degerler }, gizliler: [...gizliler] };
     };
     try {
-      if (sqlMi) {
+      // Adım başına denetim (uçtan uca akış: izinler ve riskli ortam iznine her adımda yeniden bakılır); sorun varsa adım koşmaz.
+      const engel = g.adimDenetimi ? g.adimDenetimi(a) : '';
+      if (engel) throw new DepoHatasi(engel);
+      if (ekranMi) {
+        if (!ekranKancasi) throw new DepoHatasi('Ekran adımları bu sunucuda koşamaz (test çalıştırıcısı etkin değil).');
+        const r = await ekranKancasi.kos(vt, projeId, { ortamId: g.ortamId, adim: a, degerler: { ...degerler }, gizliler: [...gizliler], sinyal: g.sinyal, akisBaslik: g.akis.baslik, adimNo: n + 1 });
+        Object.assign(s, r.sonuc);
+        acik = r.acik;
+      } else if (sqlMi) {
         const r = await sqlAdimiKos(vt, projeId, g.ortamId, a, degerler, gizliler, g.sinyal);
         Object.assign(s, r.sonuc);
         // Raporda / sonuç kartında kullanılan bağlantı ("SQL sorgusu · Veritabanı → bağlantı"; parola yok).
@@ -280,8 +316,11 @@ async function akisiKos(vt, projeId, g) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ akisId?: string; taslak?: { baslik?: string; tur?: 'akis' | 'oturum'; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: unknown };
  *   ortamId: string; tur: 'dene' | 'kosu'; sinyal?: AbortSignal; olay?: (adim: AkisAdimSonucu, durum: 'basladi' | 'bitti') => void;
- *   adimIcerikleri?: Record<string, any>; senaryo?: { id: string | null; baslik: string; kapsam: 'test' | 'canli' | 'ikisi' } }} girdi
+ *   adimIcerikleri?: Record<string, any>; senaryo?: { id: string | null; baslik: string; kapsam: 'test' | 'canli' | 'ikisi' };
+ *   uctanUca?: boolean; adimDenetimi?: (adim: any) => string; sonucEki?: (adimlar: AkisAdimSonucu[]) => Record<string, unknown> }} girdi
  *   senaryo: akış senaryosu koşusu (akis-senaryosu.mjs) — kapsam senaryonunkidir, koşu kaydı senaryonun başlığıyla yazılır.
+ *   uctanUca: uçtan uca akış koşusu (yalnız akislar/uctan-uca.mjs verir; ön denetim ve izinler orada). adimDenetimi: bkz. akisiKos.
+ *   sonucEki: koşu kaydının sonucuna eklenen alanlar (ör. uçtan uca akışın taşınan değerleri özeti; maskeli).
  */
 export async function servisAkisiCalistir(vt, projeId, girdi) {
   const kayitli = girdi.akisId ? servisAkisiGetir(vt, girdi.akisId) : undefined;
@@ -296,11 +335,13 @@ export async function servisAkisiCalistir(vt, projeId, girdi) {
   if (girdi.tur === 'dene' && tur !== 'test') throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır.');
   const kapsam = girdi.senaryo?.kapsam ?? akis.kapsam ?? 'test';
   if (girdi.tur === 'kosu' && kapsam !== 'ikisi' && kapsam !== tur) throw new DepoHatasi(`Bu ${girdi.senaryo ? 'senaryo' : 'akış'} yalnızca ${kapsam === 'test' ? 'test' : 'canlı'} ortamda koşar.`);
+  // Uçtan uca akış yalnız kendi ucundan (ön denetim, adım başına izin) koşar; zamanlanmış / servis akışı uçları reddeder.
+  if (akis.icerik.uctanUca && !girdi.uctanUca) throw new DepoHatasi(`"${akis.baslik}" bir uçtan uca akış; Uçtan uca akışlar ekranından koşulur.`);
   const hatalar = servisAkisiDenetle(vt, projeId, akis.icerik, girdi.adimIcerikleri);
   if (hatalar.length) throw new DepoHatasi(hatalar.join(' '));
   if (tur === 'canli') {
     for (const a of akis.icerik.adimlar) {
-      if (a.tur === 'sql') continue;
+      if (a.tur === 'sql' || a.tur === 'ekran') continue;
       const s = servisGetir(vt, a.servisId);
       const op = a.tur === 'operasyon' ? a.operasyon : servisSenaryosuGetir(vt, a.senaryoId)?.icerik.operasyon;
       if (s && op && (s.ayarlar.yalnizTestOperasyonlari ?? []).includes(op)) throw new DepoHatasi(`"${a.ad}" adımının "${op}" operasyonu yalnız test ortamında koşar; akış canlıda koşulamaz.`);
@@ -308,10 +349,12 @@ export async function servisAkisiCalistir(vt, projeId, girdi) {
   }
   const baslangic = new Date();
   const bas = Date.now();
-  const r = await akisiKos(vt, projeId, { akis, ortamId: ortam.id, tur: girdi.tur, sinyal: girdi.sinyal, olay: girdi.olay, adimIcerikleri: girdi.adimIcerikleri });
+  const r = await akisiKos(vt, projeId, { akis, ortamId: ortam.id, tur: girdi.tur, sinyal: girdi.sinyal, olay: girdi.olay, adimIcerikleri: girdi.adimIcerikleri,
+    ...(girdi.adimDenetimi ? { adimDenetimi: girdi.adimDenetimi } : {}) });
   const sureMs = Date.now() - bas;
   const sonuc = { ortam: ortam.ad, ortamTuru: tur, adimlar: r.adimlar, ozet: r.ozet, ...(girdi.sinyal?.aborted ? { durduruldu: true } : {}),
-    ...(girdi.senaryo ? { senaryo: { id: girdi.senaryo.id, baslik: girdi.senaryo.baslik }, akisBaslik: akis.baslik } : {}) };
+    ...(girdi.senaryo ? { senaryo: { id: girdi.senaryo.id, baslik: girdi.senaryo.baslik }, akisBaslik: akis.baslik } : {}),
+    ...(akis.icerik.uctanUca ? { uctanUca: true } : {}), ...(girdi.sonucEki ? girdi.sonucEki(r.adimlar) : {}) };
   // Akış senaryosu koşusu senaryonun başlığıyla kaydedilir (Servis sonuçları ekranında senaryo adıyla görünür).
   const kosuId = servisAkisKosusuKaydet(vt, {
     projeId, akisId: kayitli?.id ?? null, ortamId: ortam.id, tur: girdi.tur, durum: r.durum, baslangic: baslangic.toISOString(), sureMs, baslik: girdi.senaryo?.baslik ?? akis.baslik, sonuc

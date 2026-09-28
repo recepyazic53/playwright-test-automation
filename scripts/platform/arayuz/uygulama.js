@@ -826,6 +826,13 @@ function anaDuzen() {
       sayfaBasligi('Servisler');
       servislerModulu().then((m) => m.servislerEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
         .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Servisler yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+    } else if (bolum === 'akislar') {
+      // Uçtan uca akışlar (servis + ekran + SQL; uctan-uca.js): Senaryolar bölümünün sol panelinde.
+      navSenaryolar.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sayfaBasligi('Uçtan uca akışlar');
+      import('./uctan-uca.js').then((m) => m.uctanUcaEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
+        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Uçtan uca akışlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'ekranlar') {
       navEkranlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';

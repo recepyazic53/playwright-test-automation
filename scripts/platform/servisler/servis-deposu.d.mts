@@ -89,13 +89,13 @@ export declare const AKIS_TURLERI: readonly ['akis', 'oturum'];
 export declare const OKUMA_KAYNAKLARI: readonly ['xml', 'json', 'baslik'];
 export declare const EN_COK_AKIS_ADIMI: number;
 export declare const VARSAYILAN_OTURUM_OMRU_SN: number;
-export interface AkisOkumaTanimi { ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
+export interface AkisOkumaTanimi { ad: string; kaynak: 'xml' | 'json' | 'baslik' | 'ekran'; yol: string; gizli?: boolean }
 /** tur "operasyon": servisin operasyonu (senaryoId yok; baglar: alan yolu → ${akis:Ad}); tur "sql": SQL sorgusu. */
-export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon'; operasyon?: string; baglar?: Record<string, string>; sql?: import('../sql/sql-adimi.mjs').SqlTanimi }
+export interface AkisAdimi { id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon' | 'ekran'; operasyon?: string; baglar?: Record<string, string>; sql?: import('../sql/sql-adimi.mjs').SqlTanimi; ezmeler?: Record<string, string> }
 export declare const TOKEN_YENILEME: readonly ['suresiDolunca', 'herIstekte'];
 export declare const YETKI_HATASI_SECENEKLERI: readonly ['genel', 'tekrarYok', 'yenileVeTekrar'];
 export type YetkiHatasiSecimi = (typeof YETKI_HATASI_SECENEKLERI)[number];
-export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string; yetkiHatasinda?: YetkiHatasiSecimi }
+export interface ServisAkisIcerigi { adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string; yetkiHatasinda?: YetkiHatasiSecimi; uctanUca?: boolean }
 export declare function yetkiHatasiSecimi(akis: { tur: 'akis' | 'oturum'; icerik: { yetkiHatasinda?: string } } | undefined | null): YetkiHatasiSecimi;
 export declare function yetkiTekrariAcik(vt: Veritabani, akis: { tur: 'akis' | 'oturum'; icerik: { yetkiHatasinda?: string } } | undefined | null): boolean;
 export interface ServisAkisi {

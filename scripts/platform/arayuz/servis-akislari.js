@@ -18,7 +18,8 @@ const durumRozeti = (d) => rozet(DURUM[d]?.[0] ?? d, DURUM[d]?.[1] ?? '');
  */
 export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile) {
   if (altKimlik) { await servisAkisTasarimi(kap, proje, s, ortamlar, altKimlik === 'yeni' ? null : altKimlik); return; }
-  const { akislar } = await api(`/platform/servis-akislari?projeId=${q(proje.id)}`);
+  // Uçtan uca akışlar (servis + ekran + SQL) kendi ekranında listelenir (#/akislar).
+  const akislar = (await api(`/platform/servis-akislari?projeId=${q(proje.id)}`)).akislar.filter((a) => !a.icerik?.uctanUca);
   const adres = `#/servisler/s/${q(s.id)}/akislar`;
 
   // --- Bu servisin oturum akışı --------------------------------------------------------------------------------------------
