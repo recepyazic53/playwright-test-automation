@@ -460,5 +460,9 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     const liste = senaryoListesi(vt, projeId, null).senaryolar.filter((s) => s.ekranId === ek.ekranId);
     const listeRozeti = Object.fromEntries(liste.map((s) => [s.baslik, (s.beklenenSonuc as { metin?: string } | null)?.metin]));
     (o.onizleme?.senaryolar ?? []).forEach((s) => expect(listeRozeti[s.baslik], s.baslik).toBe(rozetMetni(s)));
+    // Yapay zekâ istek dosyasındaki senaryo özeti de aynı etiketi taşır (ortak akış açılmış modelle).
+    const c = claudeDosyasiYaz(vt, projeId, ek.ekranId, { tur: 'yorumla', klasor: join(klasor.yol, 'analiz-ortak'), projeKoku: klasor.yol });
+    const istek = JSON.parse(readFileSync(c.tamYol, 'utf-8')) as { senaryolar: Array<{ baslik: string; beklenenSonuc: string | null }> };
+    istek.senaryolar.forEach((s) => expect(s.beklenenSonuc, s.baslik).toBe(listeRozeti[s.baslik]));
   });
 });

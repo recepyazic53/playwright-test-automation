@@ -827,7 +827,12 @@ export async function analizYukle(vt, projeId, ekranId, paket, secenekler) {
 function senaryoOzetleri(vt, ekranId, model) {
   /** @type {ReturnType<typeof formSemasiOlustur> | null} */
   let sema = null;
-  try { sema = model ? formSemasiOlustur(model, modelBaglami(vt, ekranId)?.altModeller ?? {}) : null; } catch { sema = null; }
+  // "Beklenen" etiketi Senaryolar listesi ve paket önizlemesiyle aynı kuralla: varsayılan akış, ortak akış adımları açılmış
+  // (alt / ortak akış modelleri modelBaglami'ndan; ortak akışın son adımı / koşulu sağlanmayan adım sayılmaz).
+  try {
+    const altModeller = modelBaglami(vt, ekranId)?.altModeller ?? {};
+    sema = model ? formSemasiOlustur(ortakAkislariAc(/** @type {Nesne} */ (akisModeli(model, null)), altModeller).model, altModeller) : null;
+  } catch { sema = null; }
   const profilAlani = sema ? tumFormAlanlari(sema).find((a) => a.tip === 'profil') ?? null : null;
   return vt.tumu('SELECT id, baslik, icerik_json, kosuya_dahil FROM senaryolar WHERE ekran_id = ? ORDER BY baslik', [ekranId]).map((s) => {
     const icerik = /** @type {Nesne} */ (JSON.parse(String(s.icerik_json)));
