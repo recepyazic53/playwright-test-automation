@@ -684,7 +684,7 @@ function kilitEkrani(beklemeSaniye) {
 
 function projeSecici() {
   const acik = () => menu.hidden === false;
-  const dugme = h('button', { type: 'button', class: 'proje-secici', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: 'Etkin proje' },
+  const dugme = h('button', { type: 'button', class: 'proje-secici', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: `Etkin proje: ${durum.proje.ad}` },
     h('span', { class: 'avatar', 'aria-hidden': 'true' }, basHarf(durum.proje.ad)),
     h('b', { id: 'proje-rozeti' }, durum.proje.ad),
     durum.proje.aciklama ? h('span', { class: 'aciklama' }, durum.proje.aciklama) : null,
@@ -854,7 +854,7 @@ function anaDuzen() {
     }
   };
   // Ekran rehberi: ilk girişte (tercih açıksa) kendiliğinden başlar; "?" her zaman yeniden açar.
-  const cizVeRehber = () => { ciz(); rehberOtomatikDene(rehberAnahtari(location.hash)); };
+  const cizVeRehber = () => { ciz(); etkinGezinmeyiGoster(); rehberOtomatikDene(rehberAnahtari(location.hash)); };
   window.addEventListener('hashchange', cizVeRehber);
   // Otomatik kilit: sunucu kasayı hareketsizlik sonrası kilitler; arayüz bunu periyodik durum
   // sorgusuyla (etkinlik SAYILMAZ) fark edip kilit ekranına döner. Aynı sorgu sunucu hapını da günceller.
@@ -900,6 +900,21 @@ function ayarlarEkrani(main, bolum, odak = null) {
         h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
       icerik));
   ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak });
+}
+
+/** Dar ekranda yatay kayan menülerde (ana menü, Ayarlar bölümleri) etkin öğe görünür alana kaydırılır (sayfa kaymaz). */
+function etkinGezinmeyiGoster() {
+  requestAnimationFrame(() => {
+    for (const nav of document.querySelectorAll('.ust-nav, .alt-nav')) {
+      if (nav.scrollWidth <= nav.clientWidth + 1) continue;
+      const etkin = nav.querySelector('[aria-current="page"]');
+      if (!etkin) continue;
+      const n = nav.getBoundingClientRect();
+      const e = etkin.getBoundingClientRect();
+      if (e.left < n.left) nav.scrollLeft -= n.left - e.left + 8;
+      else if (e.right > n.right) nav.scrollLeft += e.right - n.right + 8;
+    }
+  });
 }
 
 cikisKorumasiniKur();

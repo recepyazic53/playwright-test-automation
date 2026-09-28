@@ -503,7 +503,7 @@ function listeGorunumu(icerik, s) {
     return h('tr', { class: [liste.secim.has(x.id) ? 'secili' : '', kosu ? 'calisiyor' : '', x.kosuyaDahil ? '' : 'haric'].join(' ').trim() || null, 'data-senaryo': x.id },
       h('td', { class: 'secim' }, secim),
       h('td', {}, h('div', { class: 'senaryo-adi' }, h('a', { class: 'senaryo-adi-baglantisi', href: `#/senaryolar/duzenle/${encodeURIComponent(x.id)}`, title: 'Senaryoyu aç' }, h('strong', {}, x.baslik)), altBilgi.length ? h('small', {}, altBilgi) : null)),
-      ekran ? null : h('td', { class: 'ekran-hucresi' }, x.ekranAdi || '—'),
+      ekran ? null : h('td', { class: 'ekran-hucresi' }, x.ekranAdi ? h('span', { class: 'ekran-adi', title: x.ekranAdi }, x.ekranAdi) : '—'),
       h('td', { class: 'profil-sutunu' }, x.baglamProfili
         ? h('span', { class: `profil-hapi ${x.baglamProfili.varsayilan ? 'varsayilan' : ''}`, title: x.baglamProfili.varsayilan ? 'Varsayılan bağlam profili' : 'Bağlam profili' }, ikon('kullanici'), x.baglamProfili.ad || 'varsayılan')
         : h('span', { class: 'cok-soluk' }, '—')),

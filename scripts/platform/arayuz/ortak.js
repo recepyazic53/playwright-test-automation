@@ -612,3 +612,21 @@ export function kullaniciAyarlari() {
   return ayarSozu;
 }
 export function kullaniciAyarlariniTazele() { ayarSozu = null; }
+
+// Satır "⋯" menüleri (.satir-menusu-kap > .acilir-menu; düğmenin sağına hizalı): dar ekranda ya da sol kenardaki düğmede menü
+// pencerenin dışına taşmasın diye açıldığında yatayda pencere içine kaydırılır (davranış aynı; yalnız konum).
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (o) => {
+    const dugme = o.target instanceof Element ? o.target.closest('.satir-menusu-kap > [aria-haspopup="menu"]') : null;
+    if (!dugme) return;
+    requestAnimationFrame(() => {
+      const menu = dugme.parentElement && dugme.parentElement.querySelector(':scope > .acilir-menu');
+      if (!menu || menu.hidden) return;
+      menu.style.removeProperty('transform');
+      const r = menu.getBoundingClientRect();
+      const pay = 8;
+      const kaydir = r.left < pay ? pay - r.left : r.right > innerWidth - pay ? Math.max(pay - r.left, innerWidth - pay - r.right) : 0;
+      if (kaydir) menu.style.transform = `translateX(${Math.round(kaydir)}px)`;
+    });
+  }, true); // yakalama evresi: bazı menü düğmeleri tıklamanın yayılmasını durdurur
+}

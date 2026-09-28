@@ -295,7 +295,7 @@ function kalipBolumu(veri, aralik) {
     });
     return h('div', { class: 'kalip-satiri k-diger', role: 'listitem' },
       h('span', { class: 'kalip-ikon', 'aria-hidden': 'true' }, ikon('uyari')),
-      h('div', { class: 'kalip-baslik' }, rozet(`${k.senaryoSayisi} senaryo`), ...k.kaynaklar.slice(0, 3).map((a) => rozet(a, 'vurgu')),
+      h('div', { class: 'kalip-baslik' }, rozet(`${k.senaryoSayisi} senaryo`), ...k.kaynaklar.slice(0, 3).map((a) => rozet(a, 'vurgu', { title: a })),
         k.kaynaklar.length > 3 ? rozet(`+${k.kaynaklar.length - 3}`) : null,
         h('span', { class: 'cok-soluk' }, `ilk ${kisaTarih(k.ilk)} · son ${kisaTarih(k.son)}`)),
       h('div', { class: 'kalip-sayi' }, h('span', {}, String(k.sayi), h('small', {}, ' adet')), ac),

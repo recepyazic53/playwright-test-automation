@@ -157,6 +157,9 @@ button.ikon-dugme, .dugme.ikon-dugme { min-width: 34px; min-height: 34px; paddin
 button.ikon-dugme:hover:not(:disabled) { color: var(--metin); }
 button[aria-busy="true"] { cursor: progress; }
 .dugmeler { display: flex; flex-wrap: wrap; gap: var(--b2); align-items: center; margin-top: var(--b4); }
+/* Uzun etiketli düğme dar ekranda satırı taşırmasın: sığmazsa kırılır (kısa düğmeler değişmez). */
+.dugmeler > button, .dugmeler > .dugme { max-width: 100%; }
+@media (max-width: 640px) { .dugmeler > button, .dugmeler > .dugme { white-space: normal; line-height: 1.25; padding-top: 6px; padding-bottom: 6px; } }
 .dugmeler.sag { justify-content: flex-end; }
 
 /* 3.2 Form alanları */
@@ -291,7 +294,8 @@ legend { font: 600 11px var(--yazi-mono); letter-spacing: .08em; text-transform:
 .not-kutusu ul { padding-left: 1.1rem; margin: .25rem 0 0; }
 
 /* 3.6 Tablolar */
-.tablo-kaydirma { overflow-x: auto; max-width: 100%; }
+/* position: relative — içindeki görünmez (ekran okuyucu) metinler kaydırma kutusunun dışına taşıp sayfayı yatay kaydırmasın. */
+.tablo-kaydirma { overflow-x: auto; max-width: 100%; position: relative; }
 table.ozet-tablosu, table.fark-tablosu, table.veri-tablosu { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 4px; }
 .ozet-tablosu th, .ozet-tablosu td, .veri-tablosu th, .veri-tablosu td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--cizgi); vertical-align: middle; }
 .ozet-tablosu thead th, .veri-tablosu thead th, .fark-tablosu thead th {
@@ -469,6 +473,8 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 .sayfa-basligi h1, .sayfa-basligi h2 { margin: 4px 0 6px; font-size: 24px; letter-spacing: -.025em; font-weight: 700; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .sayfa-basligi .meta { display: flex; gap: 6px 16px; flex-wrap: wrap; color: var(--metin-2); font-size: 12.5px; }
 .sayfa-basligi .meta span { display: inline-flex; align-items: center; gap: 6px; }
+.sayfa-basligi .meta > span { max-width: 100%; min-width: 0; }
+.sayfa-basligi .meta > span > .rozet { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sayfa-basligi .meta .ikon { color: var(--metin-3); width: 14px; height: 14px; }
 .sayfa-basligi .eylemler { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .bolum-basligi { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--b2); margin: 22px 0 10px; }
@@ -701,6 +707,8 @@ table.fark-tablosu { table-layout: fixed; border-radius: var(--yaricap-m); overf
 .kalip-satiri.k-zaman { --k: var(--atlanan); } .kalip-satiri.k-secici { --k: var(--vurgu); } .kalip-satiri.k-popup { --k: var(--durdu); } .kalip-satiri.k-diger { --k: var(--metin-2); }
 .kalip-satiri .kalip-ikon { grid-row: span 2; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--k); background: color-mix(in srgb, var(--k) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--k) 28%, transparent); }
 .kalip-satiri .kalip-baslik { font-weight: 620; font-size: 12.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.kalip-satiri .kalip-baslik { min-width: 0; }
+.kalip-satiri .kalip-baslik .rozet { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .kalip-satiri .kalip-baslik .cok-soluk { font: 11px var(--yazi-mono); font-weight: 400; }
 .kalip-satiri code { grid-column: 2; font: 12px var(--yazi-mono); color: var(--metin-2); background: none; border: 0; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
 .kalip-satiri code em { font-style: normal; color: var(--vurgu); background: var(--vurgu-zemin); padding: 0 3px; border-radius: 3px; }
@@ -830,7 +838,7 @@ pre.hata-mesaji.kucuk { font-size: 11.5px; padding: 7px 10px; margin-top: 6px; m
 
 /* Sonuç detay sayfası */
 .detay-izgarasi { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 14px; align-items: start; }
-.detay-izgarasi > div { display: grid; gap: 14px; min-width: 0; }
+.detay-izgarasi > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
 .detay-izgarasi .kart { margin-bottom: 0; }
 .video-alani:empty { display: none; }
 .video-alani { margin-top: 12px; border-radius: var(--yaricap-m); overflow: hidden; box-shadow: 0 0 0 1px var(--cizgi-2); }
@@ -962,6 +970,8 @@ a.kucuk .ikon { width: 12px; height: 12px; }
 .filtre-secimi label { margin: 0; font: 600 10px var(--yazi-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--metin-3); white-space: nowrap; }
 .filtre-secimi select { border: 0; background-color: transparent; min-height: 34px; padding: 4px 30px 4px 8px; width: auto; font-size: 13px; box-shadow: none; }
 .filtre-secimi select:focus { box-shadow: none; }
+.filtre-secimi { max-width: 100%; min-width: 0; }
+.filtre-secimi select { min-width: 0; max-width: 100%; text-overflow: ellipsis; }
 .filtre-secimi:focus-within { box-shadow: inset 0 0 0 1px var(--vurgu), 0 0 0 3px color-mix(in srgb, var(--vurgu) 18%, transparent); }
 .filtre-secimi.etkin { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vurgu) 55%, transparent); background: var(--vurgu-zemin); }
 .filtre-secimi.etkin label { color: var(--vurgu); }
@@ -1003,7 +1013,9 @@ table.senaryo-tablosu { border-collapse: separate; border-spacing: 0; width: 100
 .senaryo-adi strong { display: block; font-weight: 580; line-height: 1.35; overflow-wrap: anywhere; }
 .senaryo-adi small { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 3px; font: 11px var(--yazi-mono); color: var(--metin-3); }
 .senaryo-adi small .rozet { height: 18px; font-size: 10px; padding: 0 6px; }
-.senaryo-tablosu td.ekran-hucresi { white-space: nowrap; color: var(--metin-2); }
+/* Uzun ekran adı sütunu genişletip Koşuda / Eylemler sütunlarını yatay kaydırmaya itmesin: en çok iki satır. */
+.senaryo-tablosu td.ekran-hucresi { color: var(--metin-2); min-width: 140px; max-width: 260px; }
+.senaryo-tablosu td.ekran-hucresi .ekran-adi { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
 .profil-hapi { display: inline-flex; align-items: center; gap: 6px; font: 12px var(--yazi-mono); color: var(--metin-2); white-space: nowrap; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; }
 .profil-hapi .ikon { width: 13px; height: 13px; color: var(--metin-3); }
 .profil-hapi.varsayilan { color: var(--metin-3); }
@@ -1045,7 +1057,8 @@ dialog.onay-diyalogu { width: min(34rem, calc(100vw - 2rem)); padding: 0; overfl
 .onay-ozeti dd { margin: 0; font: 650 16px var(--yazi-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .onay-ozeti dd.canli { color: var(--hata); }
 .onay-listesi { max-height: 9.5rem; overflow: auto; margin: 0 0 10px; padding: 6px 10px; list-style: none; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 12.5px; }
-.onay-listesi li { padding: 3px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--metin-2); }
+/* Uzun öğe (ör. uzun servis + senaryo adı) kesilmez, kırılır: onay penceresinde ne yapılacağı tam okunur. */
+.onay-listesi li { padding: 3px 0; overflow-wrap: anywhere; color: var(--metin-2); }
 
 /* Canlı koşu paneli (sağ alt; sayfalar arası kalıcı) */
 .kosu-paneli {
@@ -2093,7 +2106,9 @@ a.satir-baglantisi:hover, a.satir-baglantisi:focus-visible { color: var(--vurgu)
 .servis-senaryo-tablosu td.istek-hucresi { max-width: 320px; }
 .servis-senaryo-tablosu .istek-adresi { display: block; margin-top: 4px; font-size: 11.5px; color: var(--metin-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Satır menüsü açıkken tablo kabı menüyü kırpmasın (az satırlı tabloda menü kaydırma çubuğu açıyordu). */
-.senaryo-karti:has(.acilir-menu:not([hidden])), .senaryo-karti:has(.acilir-menu:not([hidden])) .tablo-kaydirma { overflow: visible; }
+/* Masaüstünde açık ⋯ menüsü tablonun kaydırma kutusunda kırpılmasın. Dar ekranda tablo kutudan geniştir: kutuyu açmak sayfayı yatay
+   taşırıp kaydırırdı; orada menü kutunun içinde kalır (pencere içine hizalanır, bkz. ortak.js). */
+@media (min-width: 861px) { .senaryo-karti:has(.acilir-menu:not([hidden])), .senaryo-karti:has(.acilir-menu:not([hidden])) .tablo-kaydirma { overflow: visible; } }
 a.son-sonuc { text-decoration: none; }
 /* Servis canlı paneli: adım zaman çizelgesi */
 .servis-adimlari { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; font-size: 12.5px; }
@@ -3043,14 +3058,15 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .ozet-ortamlar { list-style: none; margin: 0 0 var(--b3); padding: 0; display: grid; gap: 6px; }
 .ozet-ortamlar li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: 0 0 0 1px var(--cizgi); min-width: 0; }
 .ozet-ortamlar .mono { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; font-size: 12.5px; }
-/* Üst çubuk: hiçbir genişlikte taşmaz, öğeler üst üste binmez. Marka ve proje seçici küçülmez; genişlik azaldıkça önce
+/* Üst çubuk: hiçbir genişlikte taşmaz, öğeler üst üste binmez. Marka küçülmez (proje seçici uzun adda daralır); genişlik azaldıkça önce
    yardımcı yazılar (Ara kısayolu, Kilitle), sonra marka adı ve "Oluştur" yazısı gizlenir (düğmeler erişilebilir adlarını korur);
    1000px altında ana menü kendi satırına iner. */
 .ust-cubuk > .marka, .ust-cubuk > .proje-secici-kap, .ust-cubuk > .olustur-kap, .ust-cubuk > .ikon-dugme, .ust-cubuk > .kilitle-dugmesi, .ust-cubuk > .hizli-arama-dugmesi { flex: none; }
 .ust-cubuk { min-width: 0; }
 @media (max-width: 1640px) { .hizli-arama-dugmesi kbd, .hizli-arama-dugmesi .dugme-metni, .kilitle-dugmesi .dugme-metni { display: none; } }
 @media (max-width: 1280px) { .hesap-menusu .hesap-adi { display: none; } }
-@media (max-width: 1180px) { .marka .marka-adi, .olustur-dugmesi .dugme-metni { display: none; } }
+@media (max-width: 1360px) { .marka { min-width: 0; } .marka .marka-adi { display: none; } }
+@media (max-width: 1180px) { .olustur-dugmesi .dugme-metni { display: none; } }
 @media (max-width: 1000px) {
   .ust-cubuk { flex-wrap: wrap; row-gap: 6px; padding-top: 8px; padding-bottom: 8px; }
   .ust-nav { order: 10; width: 100%; overflow-x: auto; margin: 0; padding-bottom: 2px; }
@@ -3077,6 +3093,10 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .proje-secici .aciklama { display: none; }
 @media (max-width: 1640px) { .sunucu-durumu .adres { display: none; } }
 @media (max-width: 1280px) { .hesap-menusu .hesap-adi { display: none; } }
+/* Uzun proje adı: proje seçici gerektiğinde daralır (ad üç noktayla kısalır, tam ad title'da); üst çubuk hiçbir genişlikte taşmaz. */
+.ust-cubuk > .proje-secici-kap { flex: 0 1 auto; min-width: 64px; }
+.proje-secici-kap > .proje-secici { max-width: min(260px, 100%); min-width: 0; }
+.proje-secici #proje-rozeti { min-width: 0; flex: 0 1 auto; }
 
 /* Yan yana satırda etiketli alan + düğme: düğme alanın GİRDİSİYLE aynı hizada (altındaki yardım metnine göre değil). */
 .satir-duzen:has(> .alan > label) > button { align-self: flex-start; margin-top: 27px; }
