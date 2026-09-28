@@ -92,6 +92,10 @@ export interface UygulamaSonucu {
   medya?: MedyaYerlestirmeSonucu;
   medyaHatasi?: string;
   projeEslemesi?: { ozet: EslemeOzeti[]; kimlikDegisimleri: KimlikDegisimi[] };
+  /** Eşlemeli uygulamada: silinmiş kaynak projeden kalan ve hâlâ duran (öksüz) kayıtlar { kaynak proje: { tablo: sayı } }. */
+  kalintilar?: Record<string, Record<string, number>>;
+  /** Eşlemeli uygulamada: hedef projeye taşınan öksüz koşu / geçmiş kayıtları. */
+  kalintiTasinan?: number;
 }
 export type IsDurumu = 'hazirlaniyor' | 'hazir' | 'uygulaniyor' | 'uygulandi' | 'hata' | 'iptal';
 export interface IsGorunumu {
