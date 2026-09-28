@@ -1,0 +1,147 @@
+// KORUMA TESTİ — Tüm ekranlar taşmasız: gerçekçi SAHTE veriyle (uzun ekran / servis / tablo adları, onlarca senaryo ve tablo,
+// koşu sonuçları; arayuz-tarama-fikstur.ts) dolu geçici bir Nöbetçi'de ana rotalar 1440 ve 390 px genişlikte gezilir; her rotada
+// ölçülür: (1) sayfa yatay taşmaz, (2) kaydırmasız bir kart / kutunun içinden dışarı taşan öğe yok, (3) etkileşimli öğeler (düğme,
+// bağlantı, alan) birbirinin üstüne binmez. Üst çubuk ara genişliklerde de (1024–1360) taşmaz.
+// Güvenlik: yalnız 127.0.0.1 (sahte SOAP sunucusu) ve geçici veritabanı; gerçek Nöbetçi'ye ve veri/ klasörüne dokunulmaz.
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { chromium, expect, test, type Browser, type Page } from '@playwright/test';
+import { zenginNobetciKur, type ZenginNobetci } from './arayuz-tarama-fikstur';
+
+/** Sayfada çalışır: taşma ve binme bulguları (boşsa sorun yok). */
+function olc(): string[] {
+  const out: string[] = [];
+  const vw = document.documentElement.clientWidth;
+  const ad = (e: Element) => `${e.tagName.toLowerCase()}.${String((e as HTMLElement).className).trim().split(/\s+/).slice(0, 2).join('.')} "${((e as HTMLElement).innerText || '').trim().slice(0, 40)}"`;
+  const gorunur = (e: Element) => {
+    const r = e.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return false;
+    const s = getComputedStyle(e);
+    if (s.visibility === 'hidden' || Number(s.opacity) === 0) return false;
+    const kapali = e.closest('details:not([open])');
+    if (kapali && !e.closest('summary')) return false;
+    return !e.closest('[hidden], .gorunmez, [aria-hidden="true"]');
+  };
+  const kaydirmali = (e: Element, dur: Element | null) => {
+    for (let p = e.parentElement; p && p !== dur && p !== document.body; p = p.parentElement) {
+      if (['auto', 'scroll', 'hidden', 'clip'].includes(getComputedStyle(p).overflowX)) return true;
+    }
+    return false;
+  };
+  if (document.documentElement.scrollWidth > vw + 1) out.push(`sayfa yatay taşıyor: ${document.documentElement.scrollWidth} > ${vw}`);
+  for (const k of document.querySelectorAll('main .kart, main section, main fieldset, main .not-kutusu')) {
+    if (!gorunur(k) || ['auto', 'scroll'].includes(getComputedStyle(k).overflowX)) continue;
+    const kr = k.getBoundingClientRect();
+    for (const c of k.querySelectorAll('button, a, input, select, textarea, span, b, code, h2, h3, h4, p, table')) {
+      if (!gorunur(c) || kaydirmali(c, k) || c.closest('.acilir-menu')) continue;
+      const ps = getComputedStyle(c).position;
+      if (ps === 'absolute' || ps === 'fixed') continue;
+      const cr = c.getBoundingClientRect();
+      if (cr.right > kr.right + 2 || cr.left < kr.left - 2) { out.push(`kutudan taşan: ${ad(c)} ⟶ ${ad(k)}`); break; }
+    }
+  }
+  const katmanli = (e: Element) => { for (let p: Element | null = e; p; p = p.parentElement) if (['fixed', 'sticky', 'absolute'].includes(getComputedStyle(p).position)) return true; return false; };
+  const etk = [...document.querySelectorAll('main button, main a[href], main input:not([type=hidden]), main select, main textarea')]
+    .filter((e) => gorunur(e) && !katmanli(e) && !e.closest('.acilir-menu'));
+  // Kaydırma kutusunun (ör. dar ekranda kendi içinde kayan tablo listesi) dışında kalan kısım görünmez: dikdörtgen kutuyla kırpılır.
+  const kirp = (e: Element) => {
+    const b = e.getBoundingClientRect();
+    let [l, t, rr, bb] = [b.left, b.top, b.right, b.bottom];
+    for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+      const s = getComputedStyle(p);
+      if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+      const q = p.getBoundingClientRect();
+      l = Math.max(l, q.left); t = Math.max(t, q.top); rr = Math.min(rr, q.right); bb = Math.min(bb, q.bottom);
+    }
+    return { left: l, top: t, right: rr, bottom: bb };
+  };
+  const r = etk.map(kirp);
+  for (let i = 0; i < etk.length; i++) {
+    for (let j = i + 1; j < etk.length; j++) {
+      const x = Math.min(r[i].right, r[j].right) - Math.max(r[i].left, r[j].left);
+      const y = Math.min(r[i].bottom, r[j].bottom) - Math.max(r[i].top, r[j].top);
+      if (x > 3 && y > 3 && !etk[i].contains(etk[j]) && !etk[j].contains(etk[i]) && !(etk[i].closest('label') && etk[i].closest('label') === etk[j].closest('label'))) {
+        out.push(`binen: ${ad(etk[i])} ∩ ${ad(etk[j])}`);
+      }
+    }
+  }
+  return out.slice(0, 10);
+}
+
+test.describe('tüm ekranlar taşmasız', () => {
+  test.describe.configure({ mode: 'serial' });
+  let z: ZenginNobetci;
+  let tarayici: Browser;
+  let klasor = '';
+
+  test.beforeAll(async () => {
+    test.setTimeout(120_000);
+    klasor = mkdtempSync(join(tmpdir(), 'arayuz-tasma-'));
+    z = await zenginNobetciKur(klasor);
+    tarayici = await chromium.launch();
+  });
+  test.afterAll(async () => {
+    await tarayici?.close();
+    await z?.kapat();
+    if (klasor) rmSync(klasor, { recursive: true, force: true });
+  });
+
+  const bekle = async (page: Page) => {
+    await page.waitForTimeout(200);
+    await page.waitForFunction(() => !document.querySelector('.iskelet, [aria-busy="true"]'), undefined, { timeout: 6000 }).catch(() => undefined);
+    await page.waitForTimeout(150);
+  };
+
+  test('ana rotalar 1440 ve 390 px: yatay taşma, kutudan taşma ve binen öğe yok', async () => {
+    test.setTimeout(90_000);
+    const e = encodeURIComponent(z.ekranIdleri[1]);
+    const rotalar = [
+      '#/sonuclar', '#/sonuclar/servisler', '#/sonuclar/uctan-uca', `#/sonuclar/kosu/${z.kosuIdleri[3]}`, `#/sonuclar/kosu/${z.kosuIdleri[2]}`,
+      `#/sonuclar/karsilastir/${z.kosuIdleri[0]}/${z.kosuIdleri[1]}`, '#/senaryolar', `#/senaryolar/u/${e}`, `#/senaryolar/duzenle/${encodeURIComponent(z.senaryoIdleri[3])}`,
+      '#/servisler', `#/servisler/s/${z.soapServisId}`, `#/servisler/s/${z.restServisId}`, '#/servisler/sonuclar', '#/akislar', `#/akislar/${z.uctanUcaId}`,
+      '#/ekranlar', `#/ekranlar/e/${e}`, '#/ekranlar/yeni',
+      ...['proje', 'giris', 'test-verisi', 'kosu', 'guvenlik', 'izinler', 'entegrasyonlar'].map((b) => `#/ayarlar/${b}`)
+    ];
+    const sorunlar: string[] = [];
+    const hatalar: string[] = [];
+    for (const genislik of [1440, 390]) {
+      const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: genislik, height: 900 }, reducedMotion: 'reduce' });
+      const page = await baglam.newPage();
+      page.on('pageerror', (h) => hatalar.push(`${genislik}px: ${String(h)}`));
+      for (const rota of rotalar) {
+        await page.goto(`/${rota}`);
+        await bekle(page);
+        for (const s of await page.evaluate(olc)) sorunlar.push(`${genislik}px ${rota}: ${s}`);
+      }
+      // Sonuç ayrıntısı (uzun ekran adlı rozet) ve satır ⋯ menüsü pencere içinde.
+      await page.goto(`/#/sonuclar/kosu/${z.kosuIdleri[3]}`);
+      await bekle(page);
+      await page.locator('a[href^="#/sonuclar/sonuc/"]').first().click();
+      await bekle(page);
+      for (const s of await page.evaluate(olc)) sorunlar.push(`${genislik}px sonuç ayrıntısı: ${s}`);
+      await page.goto(`/#/ekranlar/e/${e}`);
+      await bekle(page);
+      await page.getByRole('button', { name: /^Ekran işlemleri:/ }).first().click();
+      const menu = page.locator('.acilir-menu:not([hidden])').first();
+      await expect(menu).toBeVisible();
+      await expect.poll(async () => menu.evaluate((m) => { const b = m.getBoundingClientRect(); return b.left >= 0 && b.right <= innerWidth; }), `${genislik}px ⋯ menüsü pencere içinde`).toBe(true);
+      await baglam.close();
+    }
+    expect(sorunlar).toEqual([]);
+    expect(hatalar).toEqual([]);
+  });
+
+  test('üst çubuk ara genişliklerde taşmaz (uzun proje adı)', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 800 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/sonuclar');
+    await bekle(page);
+    for (const genislik of [1360, 1300, 1200, 1100, 1024]) {
+      await page.setViewportSize({ width: genislik, height: 800 });
+      await page.waitForTimeout(100);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth), `${genislik}px`).toBeLessThanOrEqual(genislik);
+    }
+    await baglam.close();
+  });
+});
