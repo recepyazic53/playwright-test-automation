@@ -283,6 +283,32 @@ test.describe('Giriş adımları (girisAdimlari) ve giriş profilinin ek alanlar
     const sade = kayittanTarif(taslak, [{ rol: 'yoksay' }, { rol: 'kullaniciAdi' }, { rol: 'yoksay' }, { rol: 'parola' }, { rol: 'yoksay' }, { rol: 'gonder' }], null, '/giris');
     expect('girisAdimlari' in sade.tarif).toBe(false);
     expect(sade.tarif.basariGostergesi).toEqual({ tur: 'url', deger: '/panel' });
+    expect(sade.tarif.oturumKontrolAdresi).toBe('/panel');
+    // "Bitir" anındaki sayfada görünen çıkış yazısı başarı göstergesi olur (adresten önce gelir); sorgu parametresi alınmaz.
+    const sonlu = girisKaydiTaslagi({ ...env, sonSayfa: { yol: '/panel?oturum=1', cikisMetni: 'Çıkış yap' } } as typeof env);
+    expect(kayittanTarif(sonlu, isaretler, null, '/giris').tarif).toMatchObject({ basariGostergesi: { tur: 'metin', deger: 'Çıkış yap' }, oturumKontrolAdresi: '/panel' });
+    // Onay ekranındaki seçimler: kodun kaynağı ikinci adıma, kullanıcının yazdığı başarı yazısı göstergeye yazılır.
+    const kodluTaslak = {
+      ilkYol: '/giris', sonYol: '/giris', sonSayfa: { yol: '/giris', cikisMetni: null },
+      adimlar: [
+        { tur: 'alan', anahtar: 'k', etiket: 'Kullanıcı', alanTuru: 'text', secici: '#k', oneri: 'kullaniciAdi' },
+        { tur: 'alan', anahtar: 'p', etiket: 'Şifre', alanTuru: 'password', secici: '#p', oneri: 'parola' },
+        { tur: 'dugme', sira: 0, metin: 'Giriş', secici: '#g', oneri: 'gonder' },
+        { tur: 'alan', anahtar: 'o', etiket: 'Kod', alanTuru: 'text', secici: '#o', oneri: 'kod' },
+        { tur: 'dugme', sira: 1, metin: 'Doğrula', secici: '#d', oneri: 'kodGonder' }
+      ]
+    } as Parameters<typeof kayittanTarif>[0];
+    const roller = kodluTaslak.adimlar.map((a) => ({ rol: a.oneri }));
+    const bos = kayittanTarif(kodluTaslak, roller, null, '/giris');
+    expect(bos.tarif.basariGostergesi).toEqual({ tur: 'metin', deger: '' });
+    expect(bos.notlar.join(' ')).toMatch(/görünen bir yazı/);
+    const tam = kayittanTarif(kodluTaslak, roller, null, '/giris', { kodKaynagi: 'elle', basariMetni: ' Ana sayfa ' });
+    expect(tam.hatalar).toEqual([]);
+    expect(girisTarifiOlmali(tam.tarif)).toMatchObject({
+      basariGostergesi: { tur: 'metin', deger: 'Ana sayfa' }, ikinciAdim: { tur: 'sms', smsKipi: 'elle', kodAlani: '#o', gonderDugmesi: '#d' }
+    });
+    expect(kayittanTarif(kodluTaslak, roller, null, '/giris', { kodKaynagi: 'totp' }).tarif.ikinciAdim).toMatchObject({ tur: 'totp', smsKipi: null });
+    expect(kayittanTarif(kodluTaslak, roller, null, '/giris', { kodKaynagi: 'baska' }).notlar.join(' ')).toMatch(/kodun türünü/);
     expect(kayittanTarif(taslak, [], null, null).hatalar.join(' ')).toMatch(/Kullanıcı adı alanını işaretleyin/);
     expect(kayittanTarif(taslak, [{ rol: 'ek', ad: 'firma kodu' }, ...isaretler.slice(1)], null, null).hatalar.join(' ')).toMatch(/ek alan adı/);
   });

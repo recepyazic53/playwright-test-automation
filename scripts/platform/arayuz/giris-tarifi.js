@@ -5,8 +5,9 @@
 // Tarifte gizli değer yoktur (parola/anahtar/kod ve ek alan değerleri giriş profilindedir). "Varsayılanları öner" YALNIZCA
 // kullanıcı açıkça isteyip onaylayınca ortamın giriş sayfasını sunucuda görünmez bir tarayıcıda açar
 // (alan doldurmaz, göndermez). "Girişi kaydet" YALNIZCA kullanıcı onaylayınca görünür tarayıcıda giriş sayfasını açar;
-// kullanıcı girişi kendisi yapar, yazılan değerler kaydedilmez; kullanıcı alanları işaretler, tarif önizlenir ve formda
-// kontrol edilip kaydedilir. Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
+// kullanıcı girişi kendisi yapar, yazılan değerler kaydedilmez. Ardından TEK onay ekranı: adımların rolü önerilmiş gelir,
+// yalnız gerekenler sorulur (kod kaynağı; başarı yazısı kayıttan çıkmadıysa), tarif doğrudan kaydedilir (tüm ayrıntılar
+// isteğe bağlı olarak formda). Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
 // #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (Ekranlar > Ortak akışlar > Giriş).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
@@ -163,15 +164,26 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
           o.tarif ? h('div', { class: 'kayit-meta giris-ozet-satiri' }, girisAdimlariOzeti(o.tarif).map((x, i) => `${i + 1}. ${x.metin}`).join(' · ')) : null,
           o.hatalar && o.hatalar.length ? h('div', { class: 'kayit-meta hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null),
         h('div', { class: 'kayit-eylemleri' },
-          h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${o.ortamAd}: girişi kaydet`, onclick: () => girisiKaydet(o) }, ikon('oynat'), 'Girişi kaydet'),
+          // Önerilen yol "Girişi kaydet" (tarif yoksa birincil); elle tanımlama gelişmiş seçenek olarak yanında durur.
+          h('button', { type: 'button', class: o.tarif ? 'kucuk-dugme hayalet' : 'kucuk-dugme birincil', 'aria-label': `${o.ortamAd}: girişi kaydet`, onclick: () => girisiKaydet(o) },
+            ikon('oynat'), o.tarif ? 'Yeniden kaydet' : 'Girişi kaydet'),
           (o.tarif ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifini düzenle`, onclick: () => tarifFormu(o) }, ikon('duzenle'), 'Düzenle')
-            : h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifi ekle`, onclick: () => tarifFormu(o) }, ikon('arti'), 'Giriş tarifi ekle'))));
+            : h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${o.ortamAd}: giriş tarifi ekle`, onclick: () => tarifFormu(o) }, 'Elle tanımla'))));
     }));
   };
   const guncelle = (yeni) => {
     const i = veri.ortamlar.findIndex((x) => x.ortamId === yeni.ortamId);
     if (i >= 0) veri.ortamlar[i] = yeni;
     ciz();
+  };
+  /** Bu ortamın (yoksa tüm ortamların) giriş profilini düzenlemeye açar; profil yoksa profil ekleme düğmesine basar. */
+  const profiliAc = (ortamAd) => {
+    const ust = kapsayici.parentElement;
+    const satirlar = [...(ust?.querySelectorAll(':scope > .kayit-listesi > li') || [])];
+    const uygun = satirlar.find((li) => (li.querySelector('.kayit-meta')?.textContent || '').startsWith(`${ortamAd} ·`))
+      || satirlar.find((li) => (li.querySelector('.kayit-meta')?.textContent || '').startsWith('Tüm ortamlar ·'));
+    const dugme = /** @type {HTMLButtonElement | null} */ (uygun ? uygun.querySelector('button[aria-label$=": düzenle"]') : ust?.querySelector('.bolum-basligi .birincil'));
+    if (dugme) { dugme.scrollIntoView({ block: 'center' }); dugme.click(); }
   };
 
   /** @param {any} o ortam satırı @param {{ tarif?: any; not?: string }} [on] kayıttan gelen öneri (kaydedilmemiş) */
@@ -287,17 +299,8 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       alan('Kod alanı', kodAlani, { yardim: `Boş bırakılırsa kod alanı giriş sonrası sayfadan otomatik bulunur (tek kullanımlık kod alanına benzeyen alan). ${SECICI_YARDIMI}` }),
       alan('Kod gönder düğmesi', kodGonder, { yardim: 'Boş bırakılırsa giriş düğmesi kullanılır.' }),
       smsAlani);
-    // Kodun kaynağı giriş PROFİLİNDEDİR (kasada şifreli): tarif yalnız kod alanını ve düğmesini tanımlar. "Profili aç" bu ortamın
-    // (yoksa tüm ortamların) giriş profilini düzenlemeye açar; profil yoksa profil ekleme düğmesine götürür.
-    const profiliAc = () => {
-      const bolum = kapsayici;
-      const satirlar = [...(bolum?.parentElement?.querySelectorAll(':scope > .kayit-listesi > li') || [])];
-      const uygun = satirlar.find((li) => (li.querySelector('.kayit-meta')?.textContent || '').startsWith(`${o.ortamAd} ·`))
-        || satirlar.find((li) => (li.querySelector('.kayit-meta')?.textContent || '').startsWith('Tüm ortamlar ·'));
-      const dugme = /** @type {HTMLButtonElement | null} */ (uygun ? uygun.querySelector('button[aria-label$=": düzenle"]') : bolum?.parentElement?.querySelector('.bolum-basligi .birincil'));
-      if (dugme) { dugme.scrollIntoView({ block: 'center' }); dugme.click(); }
-    };
-    const profilBaglantisi = (metin) => h('button', { type: 'button', class: 'bag-dugme', onclick: profiliAc }, metin);
+    // Kodun kaynağı giriş PROFİLİNDEDİR (kasada şifreli): tarif yalnız kod alanını ve düğmesini tanımlar.
+    const profilBaglantisi = (metin) => h('button', { type: 'button', class: 'bag-dugme', onclick: () => profiliAc(o.ortamAd) }, metin);
     const totpNotu = h('div', { class: 'not-kutusu bilgi kucuk ikinci-adim-notu', role: 'note' },
       h('p', {}, h('strong', {}, 'Gizli anahtar giriş profilinde tanımlanır '), '(kasada şifreli): Ayarlar > Giriş profilleri > profil > "Authenticator gizli anahtarı". ',
         profilBaglantisi('Profili aç')),
@@ -532,43 +535,108 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         isaret: () => ({ rol: secim.value, ad: adGirdi.value.trim(), gizli: gizli.checked })
       };
     });
-    const sonucAlani = h('div', { 'aria-live': 'polite' });
-    const onizle = h('button', { type: 'button', class: 'birincil' }, 'Önizle');
-    onizle.addEventListener('click', async () => {
-      sonucAlani.replaceChildren();
+    // --- Yalnız gerekenler: kodun kaynağı (kod alanı varsa), girişten sonra görünen yazı (kayıttan çıkarılamadıysa) ---
+    const onceki = o.tarif && o.tarif.ikinciAdim && o.tarif.ikinciAdim.tur !== 'yok' ? o.tarif.ikinciAdim : null;
+    const oncekiKaynak = onceki ? (onceki.tur === 'totp' ? 'totp' : onceki.smsKipi || 'sabit') : 'totp';
+    const kodAd = yeniKimlik('kod');
+    const kodRadyo = (deger, metin) => {
+      const r = h('input', { type: 'radio', name: kodAd, value: deger, id: yeniKimlik('k'), checked: deger === oncekiKaynak });
+      return h('label', { class: 'secenek', for: r.id }, r, metin);
+    };
+    const kodKutusu = h('fieldset', { class: 'giris-kaydi-soru' }, h('legend', {}, 'Girişte doğrulama kodu isteniyor. Kod nereden gelsin?'),
+      h('div', { class: 'secenek-grubu', role: 'radiogroup', 'aria-label': 'Doğrulama kodunun kaynağı' },
+        kodRadyo('totp', 'Authenticator uygulaması (kod, giriş profilindeki gizli anahtardan üretilir)'),
+        kodRadyo('sabit', 'SMS: sabit test kodu (giriş profilinde kayıtlı)'),
+        kodRadyo('elle', 'SMS: koşu sırasında kodu elle girerim')));
+    const kodKaynagi = () => /** @type {HTMLInputElement | null} */ (kodKutusu.querySelector('input:checked'))?.value || 'totp';
+    const kodVar = () => satirlar.some((s) => s.isaret().rol === 'kod');
+    const basariGirdi = h('input', { type: 'text', autocomplete: 'off', placeholder: 'ör. Ana sayfa, Hoş geldiniz' });
+    const basariKutusu = alan('Girişten sonra ekranda görünen bir yazı', basariGirdi, { yardim: 'Kayıtta çıkış bağlantısı ya da adres değişikliği görülmedi. Nöbetçi girişin başarılı olduğunu bu yazının görünmesinden anlar (tam eşleşme).' });
+    basariKutusu.hidden = true;
+    const ozetAlani = h('div', { 'aria-live': 'polite' });
+    const kaydet = h('button', { type: 'button', class: 'birincil', disabled: true }, ikon('onay'), 'Doğru, kaydet');
+    const gelismis = h('button', { type: 'button', class: 'hayalet', disabled: true }, 'Ayrıntıları düzenle (gelişmiş)');
+    let son = null;
+    let sayac = 0;
+    let zaman = null;
+    const secimler = () => ({
+      ...(kodVar() ? { kodKaynagi: kodKaynagi() } : {}),
+      ...(!basariKutusu.hidden && basariGirdi.value.trim() ? { basariMetni: basariGirdi.value.trim() } : {})
+    });
+    const basariMetni = (b) => (b.tur === 'metin' ? `ekranda “${b.deger}” yazısı görününce` : b.tur === 'url' ? `adres ${b.deger.replace(/\\/g, '')} olunca` : 'belirlenen öğe görününce');
+    // Önizleme (kaydetmez): her değişiklikte sunucuda tarif yeniden üretilir; eski yanıtlar yok sayılır.
+    const onizle = async () => {
+      kodKutusu.hidden = !kodVar();
+      const no = ++sayac;
       let r;
       try {
-        r = await mesgulIken(onizle, 'Hazırlanıyor…', () => api('/platform/tarama/giris', { govde: { id: isId, isaretler: satirlar.map((s) => s.isaret()) } }));
-      } catch (hata) { sonucAlani.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); return; }
-      const hatalar = [...r.hatalar];
-      const aktar = h('button', { type: 'button', class: 'birincil', disabled: hatalar.length > 0 }, 'Tarif formunda aç');
-      aktar.addEventListener('click', () => {
-        const ekNot = r.ekAlanlar.length ? ` Giriş profiline şu ek alanları ekleyin: ${r.ekAlanlar.map((e) => `${e.ad}${e.gizli ? ' (gizli)' : ''}`).join(', ')}.` : '';
-        tarifFormu(o, { tarif: r.tarif, not: `Bu tarif girişi kaydından hazırlandı ve henüz KAYDEDİLMEDİ: kontrol edip “Tarifi kaydet”e basın.${ekNot}` });
-      });
-      yerlestir(sonucAlani,
-        h('h4', {}, 'Önizleme'),
-        okunurAdimlar(r.tarif),
-        hatalar.length ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('ul', {}, hatalar.map((x) => h('li', {}, x)))) : null,
-        r.dogrulamaHatalari.length && !hatalar.length ? h('div', { class: 'not-kutusu uyari' }, h('p', {}, 'Formda tamamlanacaklar:'), h('ul', {}, r.dogrulamaHatalari.map((x) => h('li', {}, x)))) : null,
-        r.notlar.length ? h('div', { class: 'not-kutusu bilgi' }, h('ul', {}, r.notlar.map((x) => h('li', {}, x)))) : null,
-        r.ekAlanlar.length ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Giriş profiline eklenecek ek alanlar (değerleri siz yazarsınız):'),
-          h('ul', {}, r.ekAlanlar.map((e) => h('li', {}, h('code', {}, `{${e.ad}}`), ` — ${e.etiket}${e.gizli ? ' (gizli)' : ''}`)))) : null,
-        h('div', { class: 'dugmeler' }, aktar));
+        r = await api('/platform/tarama/giris', { govde: { id: isId, isaretler: satirlar.map((s) => s.isaret()), secimler: secimler() } });
+      } catch (hata) {
+        if (no !== sayac) return;
+        son = null;
+        kaydet.disabled = gelismis.disabled = true;
+        ozetAlani.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message));
+        return;
+      }
+      if (no !== sayac) return;
+      son = r;
+      const b = r.tarif.basariGostergesi || { tur: 'metin', deger: '' };
+      if (!b.deger && basariKutusu.hidden) basariKutusu.hidden = false;
+      const eksikler = r.hatalar.length ? r.hatalar : r.dogrulamaHatalari;
+      kaydet.disabled = eksikler.length > 0;
+      gelismis.disabled = r.hatalar.length > 0;
+      yerlestir(ozetAlani,
+        b.deger ? h('div', { class: 'not-kutusu basari' }, ikon('onay'), ` Giriş başarılı sayılacak: ${basariMetni(b)}.`) : null,
+        eksikler.length ? h('div', { class: 'not-kutusu uyari', role: 'alert' }, h('p', {}, 'Kaydetmeden önce:'), h('ul', {}, eksikler.map((x) => h('li', {}, x)))) : null,
+        r.ekAlanlar.length ? h('div', { class: 'not-kutusu bilgi' }, h('p', {}, 'Değerini giriş profilinde gireceğiniz ek bilgiler:'),
+          h('ul', {}, r.ekAlanlar.map((e) => h('li', {}, e.etiket, ' ', h('code', {}, `{${e.ad}}`), e.gizli ? ' (gizli)' : '')))) : null,
+        r.notlar.length ? h('div', { class: 'not-kutusu bilgi' }, h('ul', {}, r.notlar.map((x) => h('li', {}, x)))) : null);
+    };
+    const planla = () => { clearTimeout(zaman); zaman = setTimeout(onizle, 250); };
+    kutu.addEventListener('change', () => planla());
+    kutu.addEventListener('input', () => planla());
+
+    gelismis.addEventListener('click', () => {
+      if (!son) return;
+      tarifFormu(o, { tarif: son.tarif, not: 'Bu tarif girişi kaydından hazırlandı ve henüz KAYDEDİLMEDİ: kontrol edip “Tarifi kaydet”e basın.' });
+    });
+    kaydet.addEventListener('click', async () => {
+      if (!son) return;
+      const r = son;
+      let kayitli;
+      try {
+        ({ tarif: kayitli } = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/giris-tarifi/kaydet', { govde: { projeId: proje.id, ortamId: o.ortamId, tarif: r.tarif } })));
+      } catch (hata) { ozetAlani.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); return; }
+      bildir('Giriş tarifi kaydedildi.');
+      guncelle(kayitli);
+      // Sıradaki adım: giriş profilinde olması gerekenler (değerler kasada; tarifte değer yok).
+      const kod = r.tarif.ikinciAdim && r.tarif.ikinciAdim.tur !== 'yok' ? kodKaynagi() : null;
+      const gerekenler = ['Kullanıcı adı ve parola', ...r.ekAlanlar.map((e) => `${e.etiket} (ek alan adı: ${e.ad}${e.gizli ? ', gizli' : ''})`),
+        ...(kod === 'totp' ? ['Authenticator gizli anahtarı'] : kod === 'sabit' ? ['SMS sabit test kodu'] : [])];
+      formAlani.replaceChildren(h('div', { class: 'kart form-paneli giris-kaydi', 'data-ortam': o.ortamId, role: 'region', 'aria-label': `Giriş kaydı: ${o.ortamAd}` },
+        h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
+        h('div', { class: 'not-kutusu basari', role: 'status' }, ikon('onay'), ` ${o.ortamAd} girişi kaydedildi.`),
+        h('p', {}, 'Sıradaki adım: bu ortamın giriş profilinde şunlar olmalı:'),
+        h('ul', {}, gerekenler.map((x) => h('li', {}, x))),
+        h('div', { class: 'dugmeler' },
+          h('button', { type: 'button', class: 'birincil', onclick: () => { formAlani.replaceChildren(); profiliAc(o.ortamAd); } }, ikon('kullanici'), 'Giriş profilini aç'),
+          h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Kapat'))));
     });
     kutu.replaceChildren(
       h('h3', {}, `Giriş kaydı: ${o.ortamAd}`),
-      h('p', { class: 'soluk kucuk' }, 'Kayıtta değer yok; yalnızca dokunduğunuz alanlar ve bastığınız düğmeler sırayla listelendi. Her birinin ne olduğunu seçin. Kullanıcı adı, parola ve giriş düğmesi zorunludur; diğer alanlar giriş profilinde “ek alan” olur.'),
+      h('p', { class: 'soluk kucuk' }, 'Nöbetçi girişi böyle anladı. Yanlış tanınan bir adım varsa yanındaki seçimi değiştirin. Kayıtta değer yok; yalnızca dokunduğunuz alanlar ve bastığınız düğmeler var.'),
       h('ol', { class: 'giris-kaydi-listesi' }, satirlar.map((s) => s.el)),
-      h('div', { class: 'dugmeler' }, onizle, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')),
-      sonucAlani);
+      kodKutusu, basariKutusu, ozetAlani,
+      h('div', { class: 'dugmeler' }, kaydet, gelismis, h('button', { type: 'button', class: 'hayalet', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
+    kodKutusu.hidden = !kodVar();
+    onizle();
     kutu.scrollIntoView({ block: 'nearest' });
   };
 
   ciz();
   kapsayici.replaceChildren(
     h('div', { class: 'bolum-basligi' }, h('h3', {}, 'Giriş tarifi', rozet(String(veri.ortamlar.length)))),
-    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, 'Testlerin giriş sayfasını nasıl kullanacağı (giriş adımları, başarı/hata göstergeleri, iki aşamalı doğrulama ve bağlam seçimi) ortam başına burada tanımlanır. “Girişi kaydet” ile girişi tarayıcıda kendiniz yapıp tarifi oradan da çıkarabilirsiniz.'),
+    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, 'Testlerin bu ortamda nasıl giriş yapacağı. Önerilen: “Girişi kaydet” ile girişi tarayıcıda bir kez kendiniz yapın; Nöbetçi alanları, düğmeleri ve giriş sonrası sayfayı tanır, size yalnız onay ve gerekenler sorulur. “Elle tanımla” tüm ayrıntıları (seçiciler, göstergeler, bağlam) açar.'),
     formAlani,
     veri.ortamlar.length ? liste : bosDurum('Henüz ortam yok.', 'Önce Proje ve ortamlar bölümünden bir ortam ekleyin.', { ikon: 'ag', rol: 'status' }));
 

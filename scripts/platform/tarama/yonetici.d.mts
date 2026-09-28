@@ -59,7 +59,7 @@ export type TaramaYoneticisi = {
   girisTaslagi(id: string): {
     taslak: import('../giris/giris-kaydi.mjs').GirisTaslagi; ortam: IsGorunumu['ortam']; projeId: string; hedefYol: string; oneriler: Array<string | null>;
   };
-  girisTarifiOnizle(vt: Veritabani, id: string, isaretler: unknown): import('../giris/giris-kaydi.mjs').KayittanTarifSonucu & {
+  girisTarifiOnizle(vt: Veritabani, id: string, isaretler: unknown, secimler?: unknown): import('../giris/giris-kaydi.mjs').KayittanTarifSonucu & {
     dogrulamaHatalari: string[]; ortam: IsGorunumu['ortam'];
   };
   aktif(): { id: string; ekran: IsGorunumu['ekran']; projeId: string } | null;

@@ -28,8 +28,8 @@
 // (hedef ya da kayıtlı tarifin giriş adresi) görünür tarayıcıda açılır, kullanıcı girişi kendisi yapar; panel alanları ve
 // düğmeleri toplar (DEĞER yok). Sonuç: taslak adımlar (giris/giris-kaydi.mjs). CANLI işaretli ortamda reddedilir.
 //   GET  /platform/tarama/giris?id=      taslak adımlar + ek alan adı önerileri
-//   POST /platform/tarama/giris { id, isaretler }  kullanıcının işaretlerinden tarif ÖNİZLEMESİ (kaydetmez; mevcut tarifin
-//        göstergeleri/bağlam adımları korunur) + doğrulama hataları + profile eklenecek ek alanlar
+//   POST /platform/tarama/giris { id, isaretler, secimler? }  kullanıcının işaretlerinden tarif ÖNİZLEMESİ (kaydetmez; mevcut tarifin
+//        göstergeleri/bağlam adımları korunur; secimler: kod kaynağı / başarı yazısı) + doğrulama hataları + profile eklenecek ek alanlar
 //   POST /platform/tarama/iptal { id }   süreç grubunu kapatır
 //   POST /platform/tarama/kod { id, kod } SMS "elle" doğrulama kodunu işe iletir (kod loglanmaz)
 // Alt süreç uçları (işe özel tek kullanımlık token, başlık: protokol.mjs > TARAMA_TOKEN_BASLIGI):
@@ -745,14 +745,14 @@ export function taramaYoneticisiOlustur(secenekler) {
 
   /**
    * Kullanıcının işaretlerinden tarif ÖNİZLEMESİ (kaydetmez): mevcut tarifin göstergeleri/bağlam adımları korunur.
-   * @param {Veritabani} vt @param {string} id @param {unknown} isaretler
+   * @param {Veritabani} vt @param {string} id @param {unknown} isaretler @param {unknown} [secimler] kod kaynağı / başarı metni
    */
-  function girisTarifiOnizle(vt, id, isaretler) {
+  function girisTarifiOnizle(vt, id, isaretler, secimler) {
     const is = isGetir(id);
     if (!is.girisTaslagi) throw new TaramaHatasi('TASLAK_YOK', 'Bu işte giriş kaydı taslağı yok.', 409);
     is.sonErisim = simdi();
     const mevcut = etkinGirisTarifi(vt, is.projeId, is.ortam.id).tarif;
-    const sonuc = kayittanTarif(is.girisTaslagi, isaretler, mevcut, is.hedefYol);
+    const sonuc = kayittanTarif(is.girisTaslagi, isaretler, mevcut, is.hedefYol, secimler);
     const d = girisTarifiniDogrula(sonuc.tarif);
     return { ...sonuc, dogrulamaHatalari: d.hatalar, ortam: is.ortam };
   }
@@ -937,7 +937,7 @@ export async function taramaIsteginiIsle(req, res, b) {
       return true;
     }
     if (yol === '/platform/tarama/giris') {
-      gonder(200, { basarili: true, ...y.girisTarifiOnizle(await b.acikVeritabani(), String(govde.id ?? ''), govde.isaretler) });
+      gonder(200, { basarili: true, ...y.girisTarifiOnizle(await b.acikVeritabani(), String(govde.id ?? ''), govde.isaretler, govde.secimler) });
       return true;
     }
     if (yol === '/platform/tarama/iptal') { gonder(200, { basarili: true, ...y.iptal(String(govde.id ?? '')) }); return true; }
