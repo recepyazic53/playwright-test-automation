@@ -61,7 +61,7 @@ test.describe('Model şeması sürüm 2', () => {
     kapsam.konum = { secici: '#kapsam-deger', kirilganlik: 'orta' };
     let mesaj = '';
     try { dogrula(m); } catch (h) { mesaj = (h as Error).message; }
-    expect(mesaj).toContain('"tur" tikla | bekle olmalı');
+    expect(mesaj).toContain('"tur" tikla | bekle | ekranaDon olmalı');
     expect(mesaj).toContain('"secici" zorunlu');
     expect(mesaj).toContain('"deger" geçerli bir düzenli ifade değil');
     expect(mesaj).toContain('hataGostergesi: { secici } olmalı');

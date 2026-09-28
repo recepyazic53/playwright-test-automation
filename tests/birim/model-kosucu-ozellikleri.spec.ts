@@ -20,7 +20,8 @@ import { kayitPaketiOlustur } from '../../scripts/platform/tarama/paket-olusturu
 import { mesajIceriyorMu } from '../support/beklenen-sonuc';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import {
-  AKIS_YOLU, AkisUygulamasi, HAVUZLAR, HESAPLAMA_UYARILARI, KIMLIK_UYARISI, ONAY_AKIS_ANAHTARI, ONAY_RED, PLAN_UYARISI, akisModeli, akisPaketi, onayAkisPaketi
+  AKIS_YOLU, AkisUygulamasi, DONUS_AKIS_ANAHTARI, HAVUZLAR, HESAPLAMA_UYARILARI, KIMLIK_UYARISI, ONAY_AKIS_ANAHTARI, ONAY_RED, PLAN_UYARISI, akisModeli, akisPaketi,
+  donusAkisPaketi, onayAkisPaketi
 } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
@@ -71,7 +72,7 @@ test.describe.configure({ mode: 'serial' });
 test.beforeAll(async () => {
   test.setTimeout(120_000);
   klasor = mkdtempSync(join(tmpdir(), 'model-ozellik-'));
-  uygulama = new AkisUygulamasi();
+  uygulama = new AkisUygulamasi({ baskaSayfa: true });
   fikstur = await yerelSunucu(uygulama.isle);
   const vtYolu = join(klasor, 'platform.db');
   const vt = await veritabaniniHazirla(vtYolu);
@@ -451,4 +452,50 @@ test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar k
   } finally {
     await tarayici.close();
   }
+});
+
+test('doğrulayıcı: "ekranaDon" aksiyonu seçicisiz geçer; seçici / metin / durum verilirse hata', () => {
+  expect(sayfaPaketiniDogrula(donusAkisPaketi(), {})).toMatchObject({ gecerli: true, hatalar: [] });
+  for (const ek of [{ secici: '#x' }, { metin: 'Ekran' }, { durum: 'gorunur' }]) {
+    const paket = donusAkisPaketi() as Serbest;
+    paket.model.adimlar[1].kosu.aksiyonlar = [{ tur: 'ekranaDon', ...ek }];
+    const d = sayfaPaketiniDogrula(paket, {});
+    expect(d.gecerli, JSON.stringify(ek)).toBe(false);
+    expect(JSON.stringify(d.hatalar)).toContain('\\"ekranaDon\\" aksiyonunda');
+  }
+});
+
+test('ekrana dön: akışın başındaki ortak akış başka sayfaya gidip "Ekrana dön" ile döner, ekran adımları yürür; dönmeyen akış ekranı bulamaz', async () => {
+  test.setTimeout(180_000);
+  const DONMEDEN_ANAHTARI = 'donmeden-ortak-akis';
+  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: donusAkisPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
+  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: donusAkisPaketi({ anahtar: DONMEDEN_ANAHTARI, ad: 'Dönmeden (ortak)', donmeden: true }), senaryoIndeksleri: [], ortamIdleri: [] });
+  // Diğer testlerin ekranından bağımsız ikinci ekran (aynı model).
+  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: akisPaketi({ anahtar: 'basvuru-donus', ad: 'Başvuru (dönüş)' }), senaryoIndeksleri: [], ortamIdleri: [ortamId] });
+  const ekran = await ekranBul('Başvuru (dönüş)');
+  const tasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekran}&kopya=ana`) as Nesne & { bloklar: Nesne[] };
+  expect(tasarim.basarili, String(tasarim.mesaj ?? '')).toBe(true);
+  // Ortak akış akışın EN BAŞINDA (isteğe bağlı değil: her senaryoda koşar).
+  const akisKaydet = async (ad: string, anahtar: string): Promise<string> => String((await basarili('/platform/ekran/akis/kaydet', {
+    projeId, ekranId: ekran, ad, onay: true, bloklar: [{ tur: 'ortak', dosya: `${anahtar}.model.json`, ad: 'Başka sayfa', istegeBagli: false }, ...tasarim.bloklar]
+  })).akisId);
+  const donuslu = await akisKaydet('Dönüşlü akış', DONUS_AKIS_ANAHTARI);
+  const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekran}&ortamId=${ortamId}&akisId=${donuslu}`) as Nesne & { model: Serbest };
+  expect((form.model.adimlar as Serbest[]).slice(0, 2).map((a) => a.kosu.aksiyonlar)).toEqual([
+    [{ tur: 'tikla', secici: '#baskaSayfa', aciklama: 'Başka sayfaya git' }], [{ tur: 'ekranaDon', aciklama: 'Ekrana dön' }]
+  ]);
+
+  const veri = { kategori: 'K1', urun: 'Ürün B' };
+  const hesapOnce = uygulama.hesaplamalar.length;
+  const sonuc = await kaydetVeKos('Dönüşlü / tutar', veri, { ekran, akisId: donuslu });
+  expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
+  expect((sonuc.adimlar as Nesne[]).map((a) => a.ad).slice(0, 3)).toEqual(['Ekran açılır', 'Başka sayfaya gidilir', 'Ekrana dönülür']);
+  expect(uygulama.hesaplamalar).toHaveLength(hesapOnce + 1);
+  expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ kategori: 'K1', urun: 'U12', kimlikNo: K1.kimlikNo });
+
+  // Karşı örnek: aynı akış "Ekrana dön" olmadan — başka sayfada kalınır, ekran öğesi bulunamaz; hesaplama yapılmaz.
+  const donmeden = await akisKaydet('Dönmeden akış', DONMEDEN_ANAHTARI);
+  const dusen = await kaydetVeKos('Dönmeden / tutar', veri, { ekran, akisId: donmeden });
+  expect(dusen.durum).toBe('basarisiz');
+  expect(uygulama.hesaplamalar).toHaveLength(hesapOnce + 1);
 });

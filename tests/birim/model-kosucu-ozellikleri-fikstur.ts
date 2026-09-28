@@ -17,6 +17,8 @@ export const PLAN_UYARISI = 'Seçilen plan bu ürün için kullanılamaz.';
 export const ONAY_RED = 'Onay reddedildi: kod geçersiz.';
 export const ONAY_SONUCU = 'Onay tamamlandı.';
 export const ONAY_AKIS_ANAHTARI = 'onay-ortak-akis';
+export const BASKA_SAYFA_YOLU = '/baska-sayfa';
+export const DONUS_AKIS_ANAHTARI = 'donus-ortak-akis';
 export const HAVUZLAR = { ozel: 'Kişi', tuzel: 'Kurum', onay: 'Onay kodu' } as const;
 
 const URUNLER: Record<string, Array<[string, string]>> = {
@@ -38,8 +40,14 @@ export class AkisUygulamasi {
   readonly sorgular: string[] = [];
   private no = 1000;
 
+  /** baskaSayfa: ekranda ikinci sayfaya (BASKA_SAYFA_YOLU) giden bağlantı gösterilir (varsayılan kapalı; tarayan testler etkilenmez). */
+  private readonly s: { baskaSayfa?: boolean };
+  constructor(s: { baskaSayfa?: boolean } = {}) { this.s = s; }
+
   readonly isle: FiksturUygulamasi = (i: FiksturIstegi) => {
     if (i.yol === AKIS_YOLU || i.yol === AKIS_YOLU.slice(0, -1)) return this.sayfa();
+    // Ekrandan bağımsız ikinci sayfa (ör. ortak akışın götürdüğü ana sayfa; "Ekrana dön" aksiyonu için).
+    if (i.yol === BASKA_SAYFA_YOLU) return html(`<h1>Başka sayfa</h1><button id="baskaSayfaDugmesi" type="button">Başka sayfadaki düğme</button>`);
     if (i.yol === `${AKIS_YOLU}urunler`) {
       const liste = URUNLER[i.sorgu.get('kategori') ?? ''] ?? [];
       return json(liste.map(([deger, metin]) => ({ deger, metin })), 500);
@@ -87,6 +95,7 @@ export class AkisUygulamasi {
         <div id="onayForm" hidden><label>Onay kodu <input id="onayKodu"></label><button id="onayGonder" type="button">Onayla</button></div>
         <p id="onaySonuc"></p>
       </section>
+      ${this.s.baskaSayfa ? `<p><a id="baskaSayfa" href="${BASKA_SAYFA_YOLU}">Başka sayfaya git</a></p>` : ''}
       <script>
         const $ = (id) => document.getElementById(id);
         const pencere = (m) => { $('pencere-metin').textContent = m; $('pencere').hidden = false; };
@@ -291,6 +300,45 @@ export function onayAkisPaketi(): Nesne & { model: Nesne } {
     meta: { ekran: { anahtar: ONAY_AKIS_ANAHTARI, ad: 'Onay (ortak)' }, olusturan: 'test', olusturulma: '2026-09-27T09:00:00Z', baglamProfilleri: [], not: 'Ortak akış (nötr fikstür).' },
     model, senaryoOnerileri: [],
     gerekenAyarlar: { girisGerekli: false, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [HAVUZLAR.onay] },
+    bilinmeyenler: []
+  };
+}
+
+/**
+ * "Dönüş (ortak)" ortak akış paketi: ekrandan başka sayfaya gider, sonra "Ekrana dön" (ekranaDon) aksiyonuyla ekranın
+ * adresini yeniden açar. donmeden: ikinci adımda ekranaDon yerine yalnız bekleme (karşı örnek; ekran öğesi bulunamaz).
+ */
+export function donusAkisPaketi(s: { anahtar?: string; ad?: string; donmeden?: boolean } = {}): Nesne & { model: Nesne } {
+  const anahtar = s.anahtar ?? DONUS_AKIS_ANAHTARI;
+  const ad = s.ad ?? 'Dönüş (ortak)';
+  const model = {
+    semaSurumu: 2, tur: 'ortakAkis', id: anahtar, ad, aciklama: 'Başka sayfaya gidip ekrana döner (nötr fikstür).', kosullar: {},
+    adimlar: [
+      {
+        id: 'baskaSayfayaGit', sira: 1, baslik: 'Başka sayfaya gidilir',
+        bolumler: [{ id: 'gitIslemleri', baslik: 'İşlemler', alanlar: [
+          { id: 'baskaSayfaBaglantisi', tip: 'buton', etiket: { ekran: 'Başka sayfaya git' }, yapilandirma: 'aksiyon', konum: { secici: '#baskaSayfa', kirilganlik: 'orta' } }
+        ] }],
+        kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#baskaSayfa', aciklama: 'Başka sayfaya git' }], basariGostergesi: { tur: 'eleman', deger: '#baskaSayfaDugmesi' }, zamanAsimiSn: 10 }
+      },
+      {
+        id: 'ekranaDonulur', sira: 2, baslik: 'Ekrana dönülür',
+        bolumler: [{ id: 'donusSonucu', baslik: 'Ekran', alanlar: [
+          { id: 'ekranKategorisi', tip: 'cikti', etiket: { ekran: 'Kategori' }, yapilandirma: 'cikti', konum: { secici: '#kategori', kirilganlik: 'orta' } }
+        ] }],
+        kosu: {
+          aksiyonlar: s.donmeden ? [{ tur: 'bekle', sureSn: 1 }] : [{ tur: 'ekranaDon', aciklama: 'Ekrana dön' }],
+          basariGostergesi: { tur: 'eleman', deger: '#kategori' }, zamanAsimiSn: 5
+        }
+      }
+    ],
+    senaryoDuzeyi: { alanlar: [] }, urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
+  };
+  return {
+    tur: 'sayfa-paketi', surum: 1,
+    meta: { ekran: { anahtar, ad }, olusturan: 'test', olusturulma: '2026-09-28T09:00:00Z', baglamProfilleri: [], not: 'Ortak akış (nötr fikstür).' },
+    model, senaryoOnerileri: [],
+    gerekenAyarlar: { girisGerekli: false, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [] },
     bilinmeyenler: []
   };
 }
