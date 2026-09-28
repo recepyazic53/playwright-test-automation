@@ -1461,7 +1461,7 @@ body:has(.kosu-hapi) .bildirimler { bottom: 68px; }
 .tarif-formu { scroll-margin-top: calc(var(--ust-yukseklik) + 16px); }
 
 /* ---- 5.10 Ekranlar (ekranlar.js, ekran-ortak.js, sayfa-paketi.js, bulgular.js) ------------
-   Ekran kartları, model ağacı (adım › bölüm › alan satırları), sayfa paketi yükleme/önizleme, model
+   Ekran kartları, model ağacı (adım › bölüm › alan satırları), ekran paketi yükleme/önizleme, model
    geçmişi, Bulgular (metrikler, bulgu satırları, Kabul/Reddet, etki paneli). Yalnızca belirteçler;
    açık/koyu tema otomatik. */
 code.duz { background: none; border: 0; padding: 0; color: inherit; }
@@ -1698,7 +1698,7 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 .claude-diyalogu .diyalog-alt .bosluk { flex: 1; }
 .claude-diyalogu .diyalog-alt .secim-sayaci { align-self: center; }
 
-/* Sayfa paketi: yükleme */
+/* Ekran paketi: yükleme */
 .yukleme-duzeni { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
 .gorunmez-dosya { position: absolute; left: 0; top: 0; width: 1px; height: 1px; padding: 0; border: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); opacity: 0; pointer-events: none; }
 .yukleme-alani {
@@ -1720,7 +1720,7 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 .dogrulama-hatalari li code { font-size: 11px; color: var(--hata); background: none; border: 0; padding: 0; max-width: 22rem; }
 .dogrulama-hatalari p { margin: 0; }
 
-/* Sayfa paketi: önizleme */
+/* Ekran paketi: önizleme */
 .paket-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 14px; margin: 0 0 8px; font-size: 13px; }
 .paket-meta dt { font: 600 10.5px var(--yazi-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--metin-3); padding-top: 2px; }
 .paket-meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -2629,7 +2629,7 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .secenek-karti b { font-size: 14px; }
 .secenek-karti small { color: var(--metin-3); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
 
-/* 5.y Giriş adımları, ek alanlar ve "Girişi kaydet" (giris-tarifi.js, ayarlar.js, giris-akisi.js) — dosya SONUNA eklendi. */
+/* 5.y Giriş adımları, ek alanlar ve "Girişi kaydet" (giris-tarifi.js, ayarlar.js) — dosya SONUNA eklendi. */
 .giris-adimi { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel); padding: 10px 12px; }
 .giris-ozel-not { margin: 0; grid-column: 1 / -1; }
 .giris-ozet { margin: 0 0 var(--b2); }
@@ -2650,8 +2650,6 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .giris-denemesi-goruntusu { display: block; max-width: 100%; max-height: 22rem; margin-top: var(--b2); border: 1px solid var(--cizgi, currentColor); border-radius: var(--r1, 6px); object-fit: contain; }
 .giris-denemesi-gunlugu { margin: var(--b2) 0 0; padding-left: 1.25rem; }
 .giris-denemesi-gunlugu:empty { display: none; }
-.giris-akisi-karti .giris-ozet-adimlari { font-size: 13px; }
-.giris-akisi-karti .dugmeler { margin-top: auto; }
 @media (max-width: 640px) {
   .ek-alan-satiri { grid-template-columns: 1fr 1fr; }
   .giris-kaydi-adimi { grid-template-columns: auto minmax(0, 1fr); }
@@ -2944,7 +2942,7 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .tema-karti b { font-size: 13.5px; }
 .tema-karti small { color: var(--metin-3); font-size: 12px; line-height: 1.4; }
 
-/* Sayfa paketi önizlemesi: test verisine yazılacaklar (tablolar + alan bağlantıları); Tablolar'da tablonun kaynağı. */
+/* Ekran paketi önizlemesi: test verisine yazılacaklar (tablolar + alan bağlantıları); Tablolar'da tablonun kaynağı. */
 .test-verisi-onizleme .tv-tablolar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .test-verisi-onizleme .tv-tablo { border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .test-verisi-onizleme .tv-tablo-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -3626,7 +3624,7 @@ tr.suzuldu { display: none; }
   .ekleme-kutulari { grid-template-columns: minmax(0, 1fr); }
   .ekleme-kutusu { min-height: 0; }
 }
-/* Ortak akış ve giriş kartları: ekran kartıyla aynı düzen (başlık + rozet, tek satır özet, kullanım, altta eylemler). */
+/* Ortak akış kartları: ekran kartıyla aynı düzen (başlık + rozet, tek satır özet, kullanım, altta eylemler). */
 .ekran-karti.ortak-akis-karti { display: flex; flex-direction: column; gap: 10px; text-decoration: none; }
 .ortak-akis-izgarasi { align-items: stretch; }
 .ortak-akis-ozeti { font-size: 13px; color: var(--metin-2); overflow-wrap: anywhere; }

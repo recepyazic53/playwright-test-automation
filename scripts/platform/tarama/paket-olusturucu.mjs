@@ -1,6 +1,6 @@
-// OTOMATİK TARAMA → SAYFA PAKETİ (genel, saf fonksiyonlar). Tarama işinin (tarama.spec.ts) sayfadan topladığı
+// OTOMATİK TARAMA → EKRAN PAKETİ (genel, saf fonksiyonlar). Tarama işinin (tarama.spec.ts) sayfadan topladığı
 // YAPISAL envanteri (alanlar, etiketler, seçenekler, bölümler, bağlam profiline göre görünürlük, seçim keşfi)
-// docs/sayfa-paketi.md biçiminde bir sayfa paketine (sürüm 1, model şema sürümü 1) çevirir.
+// docs/sayfa-paketi.md biçiminde bir ekran paketine (sürüm 1, model şema sürümü 1) çevirir.
 //
 //  - Alan DEĞERLERİ pakete hiçbir zaman yazılmaz (envanter de değer taşımaz); sayfadan gelen metinlerde gizli
 //    veri kalıbı (kart no, T.C. kimlik no, IBAN, JWT…) varsa metin atılır ve bilinmeyenlere yazılır.
@@ -23,7 +23,7 @@ import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
-export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (sayfa paketi) ya da akış kaydıyla tamamlayın.';
+export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (ekran paketi) ya da akış kaydıyla tamamlayın.';
 /** Keşfedilen açılır listelerin en fazla seçenek sayısı. */
 export const KESIF_SECENEK_SINIRI = 8;
 /** Mevcut modelde taramayla eşleştirilebilen alan tipleri. */
@@ -306,7 +306,7 @@ function alanDonusturucu(sayac) {
 }
 
 /**
- * Tarama envanterinden sayfa paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
+ * Tarama envanterinden ekran paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
  * @param {import('./paket-olusturucu.d.mts').PaketMetasi} meta
  * @param {import('./paket-olusturucu.d.mts').TaramaEnvanteri} envanter
  * @returns {import('./paket-olusturucu.d.mts').PaketSonucu}
@@ -633,7 +633,7 @@ export function taramaPaketiOlustur(meta, envanter) {
 }
 
 // ---------------------------------------------------------------------------------------
-// AKIŞ KAYDI → SAYFA PAKETİ ("Akışı kaydet")
+// AKIŞ KAYDI → EKRAN PAKETİ ("Akışı kaydet")
 // ---------------------------------------------------------------------------------------
 
 export const KAYIT_OLUSTURANI = 'Nöbetçi akış kaydı';
@@ -710,7 +710,7 @@ function korunanlariYaz(adim, k, bolumIdleri) {
 }
 
 /**
- * Akış kaydından sayfa paketi (model şema sürümü 2: adım koşu tanımlarıyla). Adımlar kullanıcının kaydettiği sırayla ve
+ * Akış kaydından ekran paketi (model şema sürümü 2: adım koşu tanımlarıyla). Adımlar kullanıcının kaydettiği sırayla ve
  * adlarıyla gelir; her adımın alanları kullanıcının seçtikleridir. Adımın koşu tanımı:
  *   aksiyonlar       ilerleme düğmesine tıkla (kaydedildiyse),
  *   basariGostergesi sonraki adımın ilk alanı (yoksa ilerleme düğmesi) görünür; son adımda kullanıcının seçtiği

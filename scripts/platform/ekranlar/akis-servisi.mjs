@@ -86,7 +86,7 @@ export function akisDuzenlenebilirMi(model) {
     const gorulen = new Set();
     for (const adim of nesneMi(m) && Array.isArray(m.adimlar) ? m.adimlar : []) {
       if (!nesneMi(adim) || typeof adim.id !== 'string' || !adim.id) {
-        return { duzenlenebilir: false, neden: `“${akis.ad}” akışında kimliği olmayan bir adım var; diyagramda gösterilemediği için korunamaz (kaydedilince kaybolurdu). Bu ekranın akışı görüntülenir, düzenlenmez; sayfa paketiyle güncelleyin.` };
+        return { duzenlenebilir: false, neden: `“${akis.ad}” akışında kimliği olmayan bir adım var; diyagramda gösterilemediği için korunamaz (kaydedilince kaybolurdu). Bu ekranın akışı görüntülenir, düzenlenmez; ekran paketiyle güncelleyin.` };
       }
       if (gorulen.has(adim.id)) {
         return { duzenlenebilir: false, neden: `“${akis.ad}” akışında “${adim.id}” kimliği iki adımda var; korunan parçalar adıma kimliğiyle bağlandığı için bu ekranın akışı görüntülenir, düzenlenmez.` };

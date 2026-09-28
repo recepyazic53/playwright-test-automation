@@ -1,5 +1,5 @@
 // Akış tasarımı (topla → tasarla; saf): kayıttaki olay sırasından taslak diyagram, blok doğrulaması ve blokların adım
-// biçimindeki kayıt envanterine / sayfa paketine çevrilmesi (isteğe bağlı aksiyon, beklenen mesajlar, seçime göre görünürlük).
+// biçimindeki kayıt envanterine / ekran paketine çevrilmesi (isteğe bağlı aksiyon, beklenen mesajlar, seçime göre görünürlük).
 import { expect, test } from '@playwright/test';
 import { akisPaleti, akisTaslagi, akistanKayitEnvanteri, bloklariAyikla } from '../../scripts/platform/tarama/akis-tasarimi.mjs';
 import type { AkisBlogu, AkisEnvanteri, AkisOkumasi } from '../../scripts/platform/tarama/akis-tasarimi.mjs';

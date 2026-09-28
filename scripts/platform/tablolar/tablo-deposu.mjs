@@ -171,7 +171,7 @@ const sutunlarOku = (vt, alanlar) => alanlar.map((a) => {
  * - satirlar: yalnız yeni / değişen satırlar [{ id?, ad?, ortamId, degerler }]. Gizli sütunda değer verilmezse (undefined / null)
  *   kayıtlı değer korunur; '' siler. ad boşsa mevcut ad korunur (yeni satırda değerlerden üretilir).
  * - silinenSatirlar: satır kimlikleri.
- * - kaynak: sayfa paketinden içe aktarımda tablonun kaynağı (verilmezse mevcut kaynak korunur).
+ * - kaynak: ekran paketinden içe aktarımda tablonun kaynağı (verilmezse mevcut kaynak korunur).
  * @param {Veritabani} vt
  * @param {{ projeId: string; id?: string; ad: string; sutunlar: unknown; satirlar?: unknown; silinenSatirlar?: unknown; ortamVar?: (id: string) => boolean; kaynak?: TabloKaynagi }} girdi
  * @returns {string} tablo kimliği

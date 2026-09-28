@@ -679,7 +679,7 @@ function servisParametreleriniDogrula(liste, alanAdi) {
 const turCevir = (s) => ({
   id: String(s.id), projeId: String(s.proje_id), ad: String(s.ad),
   alanlar: /** @type {Array<{ ad: string; etiket: string; tip: string; hassas: boolean; servisParametreleri?: Array<{ ad: string; rol: string }> }>} */ (jsonOku(s.alanlar_json)),
-  // Tablonun kaynağı (sayfa paketinden içe aktarıldıysa; elle oluşturulanda null).
+  // Tablonun kaynağı (ekran paketinden içe aktarıldıysa; elle oluşturulanda null).
   kaynak: /** @type {Record<string, string> | null} */ (s.kaynak_json ? jsonOku(s.kaynak_json) ?? null : null),
   olusturulma: String(s.olusturulma), guncellenme: String(s.guncellenme)
 });

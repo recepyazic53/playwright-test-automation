@@ -240,7 +240,7 @@ export function akisModeli(): Nesne {
   };
 }
 
-/** Ekran modelinin sayfa paketi (girişsiz). anahtar/ad: aynı modelden ikinci ekran için. */
+/** Ekran modelinin ekran paketi (girişsiz). anahtar/ad: aynı modelden ikinci ekran için. */
 export function akisPaketi(s: { anahtar?: string; ad?: string } = {}): Nesne & { model: Nesne } {
   const model = akisModeli();
   if (s.anahtar) model.id = s.anahtar;

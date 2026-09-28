@@ -1,7 +1,7 @@
 # Nöbetçi — yerel test otomasyon platformu
 
 Nöbetçi, web uygulamalarınızın ekranlarını ve servislerini **kod yazmadan** test etmenizi sağlayan, bilgisayarınızda
-çalışan bir platformdur. Ekranı tanıtırsınız (sayfa paketi ya da otomatik tarama), senaryoları formdan oluşturursunuz,
+çalışan bir platformdur. Ekranı tanıtırsınız (ekran paketi ya da otomatik tarama), senaryoları formdan oluşturursunuz,
 Nöbetçi onları Playwright ile koşar; sonuçlar, ekran görüntüleri ve videolar şifreli olarak saklanır.
 
 > **Verileriniz Git'te değildir.** Projeler, ortamlar, giriş bilgileri, test verisi, ekran modelleri, senaryolar ve
@@ -59,7 +59,7 @@ Kasa parolasını unutmayın: parola unutulursa veriler kurtarılamaz.
 Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapılacağını anlatır. İlk açılışta kendiliğinden başlar
 (Ayarlar > Arayüz'den kapatılabilir), sonra üst çubuktaki **?** düğmesiyle istediğiniz zaman yeniden açılır.
 
-- **Ekranlar** — test edilecek ekranlar: sayfa paketi yükleme, otomatik tarama, akış kaydı, akış diyagramı ve ortak
+- **Ekranlar** — test edilecek ekranlar: ekran paketi yükleme, otomatik tarama, akış kaydı, akış diyagramı ve ortak
   akışlar, ekran modeli sürümleri.
 - **Senaryolar** — ekran modelinden üretilen formla senaryo oluşturma/düzenleme, "Koşuda" seçimi, **Dene** (taslak,
   kaydetmeden) ve **Çalıştır** (canlı ekran görüntüsü, durdurma).
@@ -85,8 +85,8 @@ medya inceltme → Güvenlik > Video saklama süresi. Her yeni ayarın varsayıl
 
 ### Giriş
 
-Her ortamın girişi **Ayarlar > Giriş profilleri > Giriş tarifi**'ndedir ve **Ekranlar > Ortak akışlar**'da "Giriş (ortam)"
-olarak adım adım okunur; **Düzenle** o ortamın tarif formunu açar. Kullanıcı adı, parola ve giriş düğmesinin önüne,
+Her ortamın girişi yalnızca **Ayarlar > Giriş profilleri > Giriş tarifi**'nden yönetilir (Ekranlar'da listelenmez);
+adımlar tarif formunda okunur özetle görünür. Kullanıcı adı, parola ve giriş düğmesinin önüne,
 arasına ya da arkasına adım eklenebilir (ek alan, seçim, "Devam" ile iki sayfalı giriş, çerez onayı); bu adımların
 değerleri giriş profilinde **Ek alanlar**'da durur, gizli işaretlenen (PIN gibi) kasada şifreli ve maskelidir.
 **Girişi kaydet** ile girişi görünür tarayıcıda kendiniz yaparsınız (yazdığınız değerler kaydedilmez); alanları
@@ -134,7 +134,7 @@ tests/
 ├── model-kosucu/                     # Senaryoları ekran modeliyle koşan tek spec
 ├── support/                          # Model koşucusu, giriş motoru, veri erişimi
 └── birim/                            # Tarayıcısız ve yerel sahte uygulamalı koruma testleri
-docs/                                 # Sayfa paketi biçimi, servis testleri
+docs/                                 # Ekran paketi biçimi, servis testleri
 ```
 
 ## Komutlar

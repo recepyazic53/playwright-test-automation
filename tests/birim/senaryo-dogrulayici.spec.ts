@@ -6,7 +6,7 @@
 //    sonuç, başlık, dosya uzantısı / pozitif sayı, girdi ↔ kayıt farkları).
 //  - Mesaj şablonları birbirinden farklı; hiçbir mesaj kart numarası/CVV içermiyor.
 //  - Her hata alanı formda bir kontrole eşleniyor (modelin form karşılıkları).
-//  - Örnek sayfa paketinin (model-fikstur.ts) önerileri hatasız.
+//  - Örnek ekran paketinin (model-fikstur.ts) önerileri hatasız.
 //  - Geriye uyum: eski anahtar adlarıyla gelen model aynı sonucu verir; etiketsiz alanda iç anahtar gösterilmez.
 // Model: bu dosyadaki NÖTR "Örnek talep" ekran modeli + kart alt modeli (değerler sahte).
 import { expect, test } from '@playwright/test';
@@ -489,7 +489,7 @@ test.describe('Tek senaryo doğrulayıcısı — yardımcılar ve koruma', () =>
     expect(alanFormKimlikleri('olmayanAlan', b)).toEqual([]);
   });
 
-  test('örnek sayfa paketinin önerileri hatasız (gerçek tarih)', () => {
+  test('örnek ekran paketinin önerileri hatasız (gerçek tarih)', () => {
     const model = ornekBasvuruModeli() as unknown as DogrulamaBaglami['model'];
     const oneriler = (ornekBasvuruPaketi().senaryoOnerileri as Array<{ veri: Nesne }>);
     expect(oneriler.length).toBeGreaterThan(0);

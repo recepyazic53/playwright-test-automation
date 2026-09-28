@@ -2,7 +2,7 @@
 // formun kendi bileşenleri kutunun altındaki düzenleme alanında açılır (tek taslak: form ↔ diyagram eşzamanlı), isteğe bağlı
 // adımın "Bu senaryoda dahil" anahtarı, "Burada hata beklenir" ile beklenen sonuç, giriş seçimi, kutuda doğrulama rozeti,
 // kaydedilen içerik ve dar ekranda dikey düzen. Akış yapısı değişmez.
-// Güvenlik: ayrı Nöbetçi + geçici veritabanı; örnek modelin sayfa paketi; senaryo KOŞULMAZ (ortam adresine istek gitmez).
+// Güvenlik: ayrı Nöbetçi + geçici veritabanı; örnek modelin ekran paketi; senaryo KOŞULMAZ (ortam adresine istek gitmez).
 // DIYAGRAM_EKRAN_KLASORU verilirse ekran görüntüleri oraya yazılır (tasarım incelemesi; üründe yok).
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';

@@ -1,6 +1,6 @@
 // KORUMA TESTLERİ — EKRAN SENARYOSUNDA ${Tablo.Sütun} / ${Tablo[etiket].Sütun}: ayrıştırma (doğrulayıcı ↔ tablo-secimi aynı
 // sonuç), koşu çözümü (seçilen satır, ortam, bağlı alanların seçimleri, etiket, sayfa karşılığı, eksik satır hatası, gizli
-// değer maskesi, düz metin geriye uyum), doğrulama (tablo / sütun varlığı, alan tipi, seçim alanında gizli sütun), sayfa paketi
+// değer maskesi, düz metin geriye uyum), doğrulama (tablo / sütun varlığı, alan tipi, seçim alanında gizli sütun), ekran paketi
 // önerisinde başvuru; paket istek metinlerinin tek kaynağı ve kullanıcı metinlerinde eski terim yok; 127.0.0.1'deki sahte
 // "Başvuru (akış)" uygulamasında uçtan uca koşu (ayrı Nöbetçi, geçici veritabanı; dış siteye istek yok). Değerler SAHTEDİR.
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -113,7 +113,7 @@ test.describe('ayrıştırma ve çözüm (saf)', () => {
     expect(dogrula({ plan: '9' }).hatalar.map((h) => h.alan)).toEqual(['plan']);
   });
 
-  test('sayfa paketi önerisi: ${…} gizli adlı alanda değer sayılmaz; tablo / sütun paket + proje tablolarına göre denetlenir', () => {
+  test('ekran paketi önerisi: ${…} gizli adlı alanda değer sayılmaz; tablo / sütun paket + proje tablolarına göre denetlenir', () => {
     const paket = akisPaketi() as Nesne;
     paket.testVerisi = { tablolar: [{ ad: 'Başvuru (akış) — Plan', tur: 'liste', sutunlar: [{ ad: 'Plan' }], satirlar: [['Plan 1']] }] };
     paket.senaryoOnerileri = [
@@ -147,7 +147,7 @@ test.describe('paket istek metinleri', () => {
     for (const parca of ['"<Ekran adı> — <Alan>"', '"tur": "liste"', '"tur": "kayit"', '${Tablo.Sütun}', '${Tablo[etiket].Sütun}', 'gerekenAyarlar.testVerisiTurleri', '"gizli": true']) {
       expect(INCELEME_KURALLARI, parca).toContain(parca);
     }
-    expect(paketIstekCumlesi('https://ornek.invalid/sayfa')).toBe(`https://ornek.invalid/sayfa sayfasını incele ve ${BICIM_ATFI} bir sayfa paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`);
+    expect(paketIstekCumlesi('https://ornek.invalid/sayfa')).toBe(`https://ornek.invalid/sayfa sayfasını incele ve ${BICIM_ATFI} bir ekran paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`);
     // Metin depo dosyasına değil, istekle verilen biçim dosyasına atıf yapar; zarfın zorunlu anahtarları metnin içindedir.
     expect(BICIM_ATFI).toContain(BICIM_DOSYASI_ADI);
     for (const anahtar of ['"tur": "sayfa-paketi"', '"surum": 1', 'meta', 'model', 'senaryoOnerileri', 'gerekenAyarlar', 'bilinmeyenler']) expect(PAKET_OZU, anahtar).toContain(anahtar);

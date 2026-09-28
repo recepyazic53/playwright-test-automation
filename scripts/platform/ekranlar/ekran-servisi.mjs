@@ -1,5 +1,5 @@
 // EKRAN SERVİSİ (genel) — platform "Ekranlar" bölümünün veritabanı işlemleri:
-//   liste · ayrıntı (güncel model ağacı, sürüm geçmişi, sürümler arası fark) · sayfa paketi önizleme ·
+//   liste · ayrıntı (güncel model ağacı, sürüm geçmişi, sürümler arası fark) · ekran paketi önizleme ·
 //   "Ekran ekle" (ekran + model v1 + seçilen senaryo önerileri + şifreli kanıtlar) · tekrar analiz
 //   (paket yükle → bulgular → kabul/red → yalnızca kabul edilenlerle yeni model sürümü; reddedilenler
 //   imzasıyla hatırlanır) · etki paneli (bulgu → etkilenen senaryolar, toplu değer atama) ·
@@ -370,7 +370,7 @@ function bulguGorunumu(b) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Sayfa paketi: önizleme ve "Ekran ekle"
+// Ekran paketi: önizleme ve "Ekran ekle"
 // ---------------------------------------------------------------------------------------
 
 /**
@@ -600,7 +600,7 @@ export async function modeliPaketleDegistir(vt, projeId, ekranId, paket, secenek
   const kaynak = paketKaynagi(meta);
   const kanitDosyalari = await kanitDosyalariniYaz(vt, kanitlar, secenekler.medyaKlasoru);
   return vt.islem(() => {
-    const kanitKayitlari = kanitSatirlariniEkle(vt, kanitDosyalari, `Sayfa paketi (${kaynak})`);
+    const kanitKayitlari = kanitSatirlariniEkle(vt, kanitDosyalari, `Ekran paketi (${kaynak})`);
     const ekran = ekranGetir(vt, projeId, ekranId);
     const { surum } = ekranModeliEkle(vt, { ekranId, model: yeni, aciklama: `Model paketle değiştirildi (${kaynak})` });
     const { ayarlar, analiz } = analizDurumu(vt, ekranId);
@@ -680,12 +680,12 @@ export async function sayfaEkle(vt, projeId, paket, secenekler) {
   // Önce şifreli kanıt dosyaları (veritabanı işleminin dışında, async); sonra tek işlemde kayıtlar.
   const kanitDosyalari = await kanitDosyalariniYaz(vt, kanitlar, secenekler.medyaKlasoru);
   return vt.islem(() => {
-    const kanitKayitlari = kanitSatirlariniEkle(vt, kanitDosyalari, `Sayfa paketi (${kaynak})`);
+    const kanitKayitlari = kanitSatirlariniEkle(vt, kanitDosyalari, `Ekran paketi (${kaynak})`);
     const ekranId = o.hedef ? o.hedef.id : ekranKaydet(vt, {
       projeId, anahtar: String(ekranMeta.anahtar), ad: String(ekranMeta.ad), aciklama: typeof model.aciklama === 'string' ? model.aciklama : null
     });
     const ekran = ekranGetir(vt, projeId, ekranId);
-    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: `Sayfa paketiyle oluşturuldu (${kaynak})` });
+    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: `Ekran paketiyle oluşturuldu (${kaynak})` });
     const { ayarlar, analiz } = analizDurumu(vt, ekranId);
     analizYaz(vt, ekran, ayarlar, {
       ...analiz, sonBaglamProfilleri: Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : [],
@@ -1005,7 +1005,7 @@ export function topluDegerAta(vt, projeId, ekranId, girdi) {
 
 const DOSYA_TURLERI = Object.freeze({
   yorumla: 'Bulguları ve modeli yorumla',
-  'tekrar-analiz': 'Sayfayı yeniden incele ve yeni sayfa paketi üret',
+  'tekrar-analiz': 'Sayfayı yeniden incele ve yeni ekran paketi üret',
   'eksik-kombinasyon': 'Eksik kombinasyonlar için senaryo öner'
 });
 
@@ -1093,7 +1093,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
     tur: 'nobetci-analiz-dosyasi', surum: 1, olusturulma: zaman.toISOString(),
     istek: { tur, aciklama: DOSYA_TURLERI[tur], baglamProfilleri: secilen ?? analiz.sonBaglamProfilleri },
     talimat: tur === 'tekrar-analiz'
-      ? `${baslangicMetni}Sayfayı listelenen bağlam profilleriyle yeniden incele ve ${BICIM_ATFI} yeni bir sayfa paketi üret. ${ortakPaketKurali}${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI} Paket gizli/kişisel veri içermemeli.`
+      ? `${baslangicMetni}Sayfayı listelenen bağlam profilleriyle yeniden incele ve ${BICIM_ATFI} yeni bir ekran paketi üret. ${ortakPaketKurali}${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI} Paket gizli/kişisel veri içermemeli.`
       : tur === 'eksik-kombinasyon'
         ? `Modeldeki seçenek/koşul kombinasyonlarını mevcut senaryolarla karşılaştır; kapsanmayan anlamlı kombinasyonlar için ${BICIM_ATFI} (senaryoOnerileri bölümü) öneriler üret (yalnızca öneri; gizli değer yok).`
         : 'Bulguları ve etkilerini değerlendir: hangileri gerçek ekran değişikliği, hangileri inceleme hatası olabilir; kabul/red ve senaryo güncellemesi için öneri yaz.',
@@ -1124,9 +1124,9 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const goreli = relative(girdi.projeKoku, yol);
   const gosterilen = goreli.startsWith('..') ? yol : goreli.split(sep).join('/');
   const cumle = tur === 'tekrar-analiz' && ortakAkis
-    ? `${gosterilen} dosyasını oku; ${baslangicMetni}Şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ') || '—'}. ${BICIM_ATFI} yeni bir sayfa paketi JSON dosyası üret. ${ortakPaketKurali}${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
+    ? `${gosterilen} dosyasını oku; ${baslangicMetni}Şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ') || '—'}. ${BICIM_ATFI} yeni bir ekran paketi JSON dosyası üret. ${ortakPaketKurali}${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
     : tur === 'tekrar-analiz'
-    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. ${BICIM_ATFI} yeni bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
+    ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. ${BICIM_ATFI} yeni bir ekran paketi JSON dosyası üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
     : tur === 'eksik-kombinasyon'
       ? `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının modelini ve mevcut senaryolarını karşılaştırıp eksik kombinasyonlar için ${BICIM_ATFI} senaryo önerileri üret.`
       : `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının bulgularını, etkilerini ve senaryo özetlerini yorumla; kabul/red ve senaryo güncellemesi için önerilerini yaz.${ortakAkis ? ` ${baslangicMetni.trim()}` : ''}`;

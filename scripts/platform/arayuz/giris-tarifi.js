@@ -8,7 +8,7 @@
 // kullanıcı girişi kendisi yapar, yazılan değerler kaydedilmez. Ardından TEK onay ekranı: adımların rolü önerilmiş gelir,
 // yalnız gerekenler sorulur (kod kaynağı; başarı yazısı kayıttan çıkmadıysa), tarif doğrudan kaydedilir (tüm ayrıntılar
 // isteğe bağlı olarak formda). Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
-// #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (Ekranlar > Ortak akışlar > Giriş).
+// #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (giriş yalnız buradan yönetilir; Ekranlar'da listelenmez).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { girisAdimlariOzeti } from './giris-ozeti.mjs';

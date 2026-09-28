@@ -363,7 +363,7 @@ test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', 
   });
 });
 
-test.describe('önleme: sayfa paketinde "benzer tablo var — onu kullan"', () => {
+test.describe('önleme: ekran paketinde "benzer tablo var — onu kullan"', () => {
   test('aynı başlıklı (esnek) tablo önerilir; hedefId ile ona birleştirilir, yeni tablo oluşmaz, bağ oraya kurulur', async () => {
     const klasor = mkdtempSync(join(tmpdir(), 'paket-onleme-'));
     const vt = await veritabaniniHazirla(join(klasor, 'platform.db'));

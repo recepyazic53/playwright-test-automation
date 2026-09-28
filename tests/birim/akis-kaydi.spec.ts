@@ -1,5 +1,5 @@
 // UÇTAN UCA (yerel) — "Akışı kaydet" (topla → tasarla): kullanıcı çok adımlı bir akışı tarayıcıda KENDİSİ yürütür, sayfadaki
-// Nöbetçi paneli alanları/düğmeleri/mesajları toplar; Nöbetçi'de taslak diyagram tasarlanır, sayfa paketine çevrilir, kabul
+// Nöbetçi paneli alanları/düğmeleri/mesajları toplar; Nöbetçi'de taslak diyagram tasarlanır, ekran paketine çevrilir, kabul
 // edilir ve kayıttan çıkan modelle bir senaryo Nöbetçi'nin koşu ucundan (genel yol) koşar.
 // Kullanıcının yerini bu test alır: kayıt tarayıcısına (alt süreç, başsız)
 // yerel uzaktan hata ayıklama portundan bağlanıp alanları doldurur ve panelin düğmelerine basar.
@@ -139,7 +139,7 @@ async function kayitBitti(isId: string): Promise<Nesne> {
   return d;
 }
 
-test('kullanıcı akışı yürütür, panel alanları/düğmeleri/mesajı toplar; taslak diyagram tasarlanıp çok adımlı sayfa paketi olur (değer ve ekran görüntüsü yok)', async () => {
+test('kullanıcı akışı yürütür, panel alanları/düğmeleri/mesajı toplar; taslak diyagram tasarlanıp çok adımlı ekran paketi olur (değer ve ekran görüntüsü yok)', async () => {
   test.setTimeout(180_000);
   const isId = String((await basarili('/platform/tarama/baslat', kayitGovdesi())).isId);
   kayitIsId = isId;
@@ -372,7 +372,7 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (CANLI ortam seçilebilir; ba
     await page.getByRole('button', { name: 'Kaydet ve önizle' }).click();
     // Önizleme bandı kayıt özetini gösterir; "Diyagrama dön" düzenlemeye geri götürür.
     await expect(page.getByText(/Kayıt tamamlandı: 2 adım, 6 alan/)).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('akış kaydı sonucu (sayfa paketi, sürüm 1)')).toBeVisible();
+    await expect(page.getByText('akış kaydı sonucu (ekran paketi, sürüm 1)')).toBeVisible();
     await goruntu(page.locator('main'), '05-kayit-onizleme.png');
     const onizlenen = ((await api(`/platform/tarama/paket?id=${kayitIsId}`)).paket as Nesne).model.adimlar[0] as Nesne;
     expect(onizlenen.kosu.aksiyonlar).toEqual([{ tur: 'tikla', secici: '#hesapla', aciklama: 'Hesapla' }, { tur: 'bekle', sureSn: 2 }]);
@@ -730,7 +730,7 @@ test('mevcut ekranın kaydı: varsayılan akış güncellenebilir (paket geçerl
   expect((akis.ekranAkislari as Nesne).akislar.map((a: Nesne) => a.ad)).toEqual(['Kurumsal siparis', 'Ana akış']);
   const b = akis.bloklar as Nesne[];
   const tasarim = [{ ...b[0], ad: 'Kurumsal müşteri' }, ...b.slice(1, -1), { tur: 'mesaj', mesaj: null, metin: 'Siparis oluşturuldu' }, b[b.length - 1]];
-  // Varsayılan akışı güncelleme yolu: sayfa paketi geçerli (akışlı modelde varsayılan kopyası eşitlenir).
+  // Varsayılan akışı güncelleme yolu: ekran paketi geçerli (akışlı modelde varsayılan kopyası eşitlenir).
   expect((await basarili('/platform/tarama/akis', { id: isId, bloklar: tasarim })).ozet).toMatchObject({ adimSayisi: 2 });
   const paketModel = ((await api(`/platform/tarama/paket?id=${isId}`)).paket as Nesne).model as Nesne;
   expect(paketModel.akislar.find((a: Nesne) => a.varsayilan).adimlar).toEqual(paketModel.adimlar);
@@ -844,7 +844,7 @@ test('ortak akışın kaydı: başlangıç ekranının adresinde başlar; başla
   const palet = akis.palet as Nesne;
   expect(b.map((x) => x.tur)).toEqual(['alanlar', 'aksiyon', 'aksiyon', 'mesaj', 'bitir']);
   expect([b[1], b[2]].map((x) => palet.dugmeler[x.dugme].metin)).toEqual(['Hesapla', 'Onayla']);
-  // Sayfa paketi yolu ortak akışta yok (ekran adresli model üretmez).
+  // Ekran paketi yolu ortak akışta yok (ekran adresli model üretmez).
   expect(await api('/platform/tarama/akis', { id: isId, bloklar: b })).toMatchObject({ basarili: false, kod: 'ORTAK_AKIS' });
   // Başlangıç ekranına ait bloklar (alanlar + Hesapla) silinir; yalnız ortak akışın kısmı kalır.
   const tasarim = [{ tur: 'alanlar', ad: 'Başvuru onaylanır', alanlar: [], zorunlu: [], kosullar: {} }, b[2], b[3], b[4]];

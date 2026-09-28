@@ -1,4 +1,4 @@
-// UÇTAN UCA (yerel) — TÜM EKRANLAR: nötr bir proje (ortam, giriş profili ve tarifi, bağlam kayıtları, sayfa paketinden ekran +
+// UÇTAN UCA (yerel) — TÜM EKRANLAR: nötr bir proje (ortam, giriş profili ve tarifi, bağlam kayıtları, ekran paketinden ekran +
 // senaryolar, gerçek bir koşu sonucu) kullanıcının yapacağı gibi Nöbetçi'nin uçlarıyla kurulur; ardından arayüzdeki her ekran
 // masaüstü ve telefon genişliğinde açılır. Her ekranda:
 //   - sayfa hatası (pageerror) ve konsol hatası yok,

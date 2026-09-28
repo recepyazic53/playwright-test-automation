@@ -1,4 +1,4 @@
-// MODEL KOŞUCUSU (genel) — test kodu OLMAYAN senaryoyu (sayfa paketinden/modelden oluşturulmuş) ekran
+// MODEL KOŞUCUSU (genel) — test kodu OLMAYAN senaryoyu (ekran paketinden/modelden oluşturulmuş) ekran
 // modeliyle koşturur. Hiçbir proje/ürün adı ya da seçicisi burada yoktur: seçiciler, adımlar, aksiyonlar,
 // başarı/hata göstergeleri ve seçenekler modelden (platform veritabanı), giriş ve bağlam adımları ortamın
 // giriş tarifinden (giris-motoru.ts) gelir.

@@ -70,7 +70,7 @@ test.describe('Model şeması sürüm 2', () => {
     expect(() => dogrula({ ...ornekBasvuruModeli(), semaSurumu: 3 })).toThrow(/"semaSurumu" 1 ya da 2 olmalı/);
   });
 
-  test('sayfa paketi (v2 modelli) geçerli; beş önerinin hepsi modele uyuyor', () => {
+  test('ekran paketi (v2 modelli) geçerli; beş önerinin hepsi modele uyuyor', () => {
     const d = sayfaPaketiniDogrula(ornekBasvuruPaketi());
     expect(d.hatalar).toEqual([]);
     expect(d.senaryoSorunlari).toEqual([[], [], [], [], []]);
@@ -199,7 +199,7 @@ test.describe('Koşu hedefi ve liste (geçici veritabanı)', () => {
     try {
       const vt = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
       await kasaOlustur(vt, 'Gecici-Model-Kasa-1', { kdf: HIZLI_KDF });
-      // Nötr proje: elle kurulan proje + ortam, ekran ve senaryolar sayfa paketinden.
+      // Nötr proje: elle kurulan proje + ortam, ekran ve senaryolar ekran paketinden.
       const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
       const ortamId = ortamKaydet(vt, { projeId, ad: 'DENEME', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
       const ek = await sayfaEkle(vt, projeId, ornekBasvuruPaketi(), { senaryoIndeksleri: [0, 1], ortamIdleri: [ortamId], medyaKlasoru: join(klasor.yol, 'medya') });
