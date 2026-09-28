@@ -1446,6 +1446,11 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .tasarim-paleti { display: grid; gap: 10px; }
 .tasarim-paleti .sekme-cubugu { margin: 0; justify-self: start; }
 .palet-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 52vh; overflow: auto; }
+/* Akış diyagramı: listede olmayan alan / düğmeyi elle ekleme (etiket + tür / yazı + seçici). */
+.elle-oge { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--cizgi-2); }
+.elle-oge > summary { cursor: pointer; font-size: 12.5px; color: var(--metin-2); }
+.elle-oge-formu { display: grid; gap: 6px; margin-top: 8px; min-width: 0; }
+.elle-oge-formu input, .elle-oge-formu select { width: 100%; min-width: 0; }
 .palet-ogesi { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); cursor: grab; }
 .palet-ogesi.kullanildi { opacity: .78; }
 .palet-ogesi .palet-metni { display: grid; min-width: 0; margin-right: auto; }
@@ -3796,8 +3801,15 @@ button.ikon-dugme.taban-kopyala { flex: none; min-width: 26px; min-height: 26px;
 .ekleme-eylemi > button, .ekleme-eylemi > .dugme { width: 100%; justify-content: center; }
 .ekleme-eylemi .istek-metni-eylemleri > .kucuk-dugme { flex: 1 1 auto; justify-content: center; }
 .ekleme-notu { margin: 0; padding-top: 8px; border-top: 1px dashed var(--cizgi-2); font-size: 11.5px; line-height: 1.45; color: var(--metin-3); }
+/* Ortak akış seçiliyken dördüncü kutu ("Boş başla"): geniş ekranda dört, ortada iki sütun. */
+.ekleme-kutulari.dortlu { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .ekleme-kutulari.dortlu { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bos-baslat-formu { display: grid; gap: 8px; min-width: 0; }
+.bos-baslat-formu input { width: 100%; min-width: 0; }
+.bos-baslat-formu button { width: 100%; justify-content: center; }
+.olusturma-secimi .olusturma-aciklamasi { margin: 6px 0 0; }
 @media (max-width: 900px) {
-  .ekleme-kutulari { grid-template-columns: minmax(0, 1fr); }
+  .ekleme-kutulari, .ekleme-kutulari.dortlu { grid-template-columns: minmax(0, 1fr); }
   .ekleme-kutusu { min-height: 0; }
 }
 /* Ortak akış kartları: ekran kartıyla aynı düzen (başlık + rozet, tek satır özet, kullanım, altta eylemler). */

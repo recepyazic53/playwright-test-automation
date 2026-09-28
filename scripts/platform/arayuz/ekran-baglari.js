@@ -20,7 +20,9 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
   // geçerli); ortakAkis: bu sayfa bir ortak akış (bağları onu kullanan ekranlara geçer; senaryo dönüşümleri yok).
   const { baglar, girdiler, tablolar, ortakBaglar = {}, ortakAkis = false } = await api(`/platform/ekran/alan-baglari?projeId=${q(s.proje.id)}&ekranId=${q(ekran.id)}`);
   if (!girdiler.length) {
-    yerlestir(kap, h('section', { class: 'kart' }, bosDurum('Bu ekranın input\'u yok.', 'Model yüklenince senaryoda ayarlanan alanlar burada listelenir.', { ikon: 'liste' })));
+    yerlestir(kap, h('section', { class: 'kart' }, ortakAkis
+      ? bosDurum('Bu ortak akışın input\'u yok.', 'Akışlar sekmesinde diyagrama alan ekleyince senaryoda ayarlanan alanlar burada listelenir.', { ikon: 'liste' })
+      : bosDurum('Bu ekranın input\'u yok.', 'Model yüklenince senaryoda ayarlanan alanlar burada listelenir.', { ikon: 'liste' })));
     return;
   }
   const durum = h('span', { class: 'kayit-durumu soluk kucuk', 'aria-live': 'polite' });
