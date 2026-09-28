@@ -3128,7 +3128,12 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .pdf-rapor-kapsam .onay-satiri.pasif { cursor: not-allowed; color: var(--metin-3); }
 .pdf-rapor-alanlar, .pdf-rapor-ozel { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 0 12px; }
 .pdf-rapor-alanlar select, .pdf-rapor-ozel input { width: 100%; min-width: 0; }
-.pdf-rapor-ozel[hidden], .pdf-rapor-onizleme[hidden] { display: none; }
+.pdf-rapor-ozel[hidden], .pdf-rapor-onizleme[hidden], .pdf-rapor-alanlar .alan[hidden], .pdf-rapor-coklu[hidden] { display: none; }
+.pdf-rapor-coklu-alanlar { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0 12px; }
+.pdf-rapor-coklu { min-width: 0; }
+.pdf-rapor-coklu-liste { max-height: 12rem; overflow: auto; border: 1px solid var(--cizgi-2); border-radius: 8px; padding: 4px 8px; }
+.pdf-rapor-coklu-liste .onay-satiri span { overflow-wrap: anywhere; }
+.pdf-rapor-coklu-sayac { margin: 4px 0 0; }
 .pdf-rapor-diyalogu .dugmeler { display: flex; flex-wrap: wrap; gap: 8px; }
 .pdf-raporlar-tablosu td { vertical-align: middle; }
 .pdf-rapor-eylemleri { display: flex; flex-wrap: wrap; gap: 4px; }
