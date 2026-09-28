@@ -488,8 +488,10 @@ export function servisParametreleri(vt, projeId, servisId) {
 /**
  * Bir gövdenin parametre değerlerini çözer (yalnız sunucu içinde). Bulunamayanlar yerTutuculariDoldur'da açıklamayla listelenir.
  * @param {Veritabani} vt @param {string} projeId @param {Servis} servis @param {ServisSenaryoIcerigi} icerik @param {string} ortamId
+ * @param {{ tablolar?: import('../tablolar/tablo-deposu.mjs').Tablo[]; satirSecimKipi?: string }} [ek] kuru çözüm: hazır (çözülmüş) tablolar,
+ *   satır seçimi kipi (verilmezse Ayarlar > Koşu)
  */
-function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
+function parametreDegerleri(vt, projeId, servis, icerik, ortamId, ek = {}) {
   const adlar = kullanilanParametreler(icerik.govde);
   const tarih = { ...(servis.ayarlar.tarihKurallari ?? {}) };
   const kimlikProfili = icerik.kimlikProfili || servis.ayarlar.kimlikProfili;
@@ -505,11 +507,11 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
   /** @type {Map<string, Record<string, unknown>>} */
   const profiller = new Map();
   /** @type {import('../tablolar/tablo-deposu.mjs').Tablo[] | null} */
-  let tablolar = null;
+  let tablolar = ek.tablolar ?? null;
   /** Kullanılan tablo satırları (raporda: hangi satırla koştu). @type {Array<{ tablo: string; etiket: string; satir: Record<string, string | null> }>} */
   const kullanilanSatirlar = [];
   // Birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi); bu çalıştırmada grubun değerleri aynı satırdan.
-  const satirSecimi = satirSecimiOlustur((() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })());
+  const satirSecimi = satirSecimiOlustur(ek.satirSecimKipi ?? (() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })());
   for (const ad of adlar) {
     if (tarih[ad]) continue;
     // ${Tablo.Sütun} / ${Tablo[etiket].Sütun}: senaryonun seçimleriyle (ve ortamla) uyan ilk satırdan.
@@ -1017,6 +1019,41 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   // Açık değerler yalnız çağıran akış motoruna (geri çağırma); dönüş / API yanıtı / kayıt maskeli kalır.
   girdi.acikDegerler?.({ okunan, gizliler });
   return { kosuId, durum, sureMs, baslik, ...sonuc };
+}
+
+/**
+ * KURU ÇÖZÜM (istek GÖNDERİLMEZ, oturum akışı koşulmaz, kayıt yazılmaz): senaryonun bir ortamdaki isteğinin (gövde, REST yolu,
+ * başlıklar) koşudakiyle aynı çözümleyicilerle (parametreDegerleri + yerTutuculariDoldur) doldurulmuş hâli. ${akis:…} değerleri
+ * yer tutucu olarak kalır; "şimdi" sabittir. Tablo birleştirmenin kuru doğrulaması eski / yeni hâli karşılaştırır. Dönen metin
+ * gizli değer içerebilir: YALNIZ bellekte karşılaştırma içindir, yanıta yazılmaz.
+ * @param {Veritabani} vt @param {string} projeId @param {Servis} servis @param {ServisSenaryoIcerigi} icerik @param {string} ortamId
+ * @param {{ simdi: Date; tablolar?: import('../tablolar/tablo-deposu.mjs').Tablo[] }} s
+ * @returns {{ metin: string } | { hata: string }}
+ */
+export function servisIstegiKuruCoz(vt, projeId, servis, icerik, ortamId, s) {
+  try {
+    const opTanimi = servis.ayarlar.operasyonlar?.find((o) => o.ad === icerik.operasyon);
+    const rest = servis.tur === 'rest';
+    const http = rest ? (icerik.http ?? (opTanimi?.metot ? { metot: opTanimi.metot, yol: opTanimi.yol ?? '' } : undefined)) : undefined;
+    if (rest && !http) return { hata: 'REST senaryosunda HTTP metodu / yolu tanımlı değil.' };
+    const basliklarHam = icerik.basliklar ?? {};
+    const hamMetin = [icerik.govde ?? '', ...Object.values(basliklarHam), http?.yol ?? ''].join('\n');
+    const kurallar = servis.ayarlar.tarihKurallari ?? {};
+    const kuralRefleri = kuralParametreleri(kullanilanParametreler(hamMetin).filter((a) => Object.hasOwn(kurallar, a)), kurallar).refler.map((r) => `\${${r}}`);
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortamId, { tablolar: s.tablolar, satirSecimKipi: 'ilk' });
+    const akisDegerleri = Object.fromEntries(kullanilanAkisDegerleri(hamMetin).map((a) => [a, `\u0000akis:${a}\u0000`]));
+    const doldurma = {
+      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: s.simdi, tarihOnbellegi: new Map(), gizliler: p.gizliler,
+      eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız', akisDegerleri, varsayilanTarihBicimi: (() => { try { return kosuAyarlariniOku(vt).tarihBicimi; } catch { return undefined; } })()
+    };
+    const govde = yerTutuculariDoldur(icerik.govde ?? '', http ? { ...doldurma, kacis: govdeKacisi(http.icerikTuru) } : doldurma);
+    const yol = http ? yerTutuculariDoldur(http.yol, { ...doldurma, kacis: 'url' }) : '';
+    const basliklar = Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]);
+    return { metin: JSON.stringify([govde, yol, basliklar]) };
+  } catch (e) {
+    if (e instanceof ServisHatasi || e instanceof DepoHatasi) return { hata: e.message };
+    throw e;
+  }
 }
 
 /**

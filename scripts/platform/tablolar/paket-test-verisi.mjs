@@ -4,7 +4,9 @@
 //                           tablo (birleştirilirse eklenecek satır / sütun), hangi alanlar hangi sütuna bağlanacak (mevcut
 //                           bağlantı değişiyorsa o da).
 //   paketTestVerisiniYaz    seçim: { tablolar: { <paket tablo adı>: { islem: 'yeni' | 'birlestir' | 'yeniAd' | 'atla', yeniAd? } },
-//                           baglantilar: [alanId] }. Seçimi olmayan tablo YAZILMAZ (atla); aynı adlı tablo varken 'yeni'
+//                           baglantilar: [alanId] }. 'birlestir' + hedefId: adı farklı ama başlıkları aynı (esnek) mevcut tabloya
+//                           birleştirir (önleme: önizlemede "benzer" tablolar önerilir; kullanıcı "onu kullan" derse).
+//                           Seçimi olmayan tablo YAZILMAZ (atla); aynı adlı tablo varken 'yeni'
 //                           reddedilir. Birleştirme mevcut sütun / satırları değiştirmez: eksik sütunlar ve tabloda olmayan
 //                           satırlar eklenir, karşılıklar tamamlanır; mevcut tablonun KAYNAĞI da değişmez (varsa korunur,
 //                           yoksa yok kalır). Kaynak (paket / tarama / kayıt, ekran, tarih, tablo türü) yalnız yeni tabloya yazılır.
@@ -17,6 +19,7 @@ import { tabloKaydet, tablolariListele } from './tablo-deposu.mjs';
 import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from './ekran-baglari.mjs';
 import { alanEtiketi, modelAlanlari, paketTablolari } from './paket-tablolari.mjs';
 import { KAYIT_OLUSTURANI, TARAMA_OLUSTURANI } from '../tarama/paket-olusturucu.mjs';
+import { baslikNormal, benzerTablolar } from './tablo-benzerligi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Nesne */
@@ -40,7 +43,7 @@ function birlestirmePlani(mevcut, t) {
   /** @type {Map<string, string>} paket sütunu → mevcut sütun adı */
   const eslesme = new Map();
   for (const s of t.sutunlar) {
-    const m = mevcut.sutunlar.find((x) => kucuk(x.ad) === kucuk(s.ad));
+    const m = mevcut.sutunlar.find((x) => kucuk(x.ad) === kucuk(s.ad)) ?? mevcut.sutunlar.find((x) => baslikNormal(x.ad) === baslikNormal(s.ad));
     if (m) eslesme.set(s.ad, m.ad);
   }
   const yeniSutunlar = t.sutunlar.filter((s) => !eslesme.has(s.ad));
@@ -75,6 +78,11 @@ export function paketTestVerisiOnizle(vt, projeId, paket, ekranId) {
         satirSayisi: t.satirlar.length, tekrarSayisi: t.tekrarSayisi,
         ornek: t.satirlar.slice(0, 5).map((d) => t.sutunlar.map((s) => (s.gizli ? null : d[s.ad] ?? null))),
         bagliAlanlar: baglantilar.filter((b) => kucuk(b.tablo) === kucuk(t.ad)).map((b) => { const a = alanlar.get(b.alanId); return a ? alanEtiketi(a) : b.alanId; }),
+        // Önleme: aynı adlı tablo yoksa başlıkları aynı (esnek) mevcut tablolar — "onu kullan / yine de yeni oluştur".
+        benzer: m ? [] : benzerTablolar(t.sutunlar, mevcutlar, { ad: t.ad }).slice(0, 3).map((b) => {
+          const x = /** @type {import('./tablo-deposu.mjs').Tablo} */ (mevcutlar.find((y) => y.id === b.id));
+          return { id: b.id, ad: b.ad, puan: b.puan, eklenecekSatir: birlestirmePlani(x, t).eklenecek.length };
+        }),
         mevcut: m && plan ? {
           id: m.id, ad: m.ad, sutunSayisi: m.sutunlar.length, satirSayisi: m.satirlar.length,
           yeniSutunlar: plan.yeniSutunlar.map((s) => s.ad), eklenecekSatir: plan.eklenecek.length
@@ -100,12 +108,12 @@ export function paketTestVerisiOnizle(vt, projeId, paket, ekranId) {
  */
 function secimiOku(secim) {
   const s = /** @type {Nesne} */ (nesneMi(secim) ? secim : {});
-  /** @type {Map<string, { islem: TabloIslemi; yeniAd: string }>} */
+  /** @type {Map<string, { islem: TabloIslemi; yeniAd: string; hedefId: string }>} */
   const tablolar = new Map();
   for (const [ad, x] of Object.entries(nesneMi(s.tablolar) ? s.tablolar : {})) {
     const o = /** @type {Nesne} */ (nesneMi(x) ? x : {});
     if (!ISLEMLER.has(o.islem)) throw new DepoHatasi(`"${ad}" tablosu için geçersiz işlem (yeni / birlestir / yeniAd / atla).`);
-    tablolar.set(kucuk(ad), { islem: o.islem, yeniAd: typeof o.yeniAd === 'string' ? o.yeniAd.trim() : '' });
+    tablolar.set(kucuk(ad), { islem: o.islem, yeniAd: typeof o.yeniAd === 'string' ? o.yeniAd.trim() : '', hedefId: typeof o.hedefId === 'string' ? o.hedefId : '' });
   }
   const baglantilar = new Set(Array.isArray(s.baglantilar) ? s.baglantilar.filter((x) => typeof x === 'string') : []);
   return { tablolar, baglantilar };
@@ -137,10 +145,10 @@ export function paketTestVerisiniYaz(vt, projeId, ekranId, paket, secim, secenek
   /** @type {Map<string, { id: string; sutun: (ad: string) => string }>} paket tablo adı (küçük) → yazılan tablo */
   const yazilan = new Map();
   for (const t of tablolar) {
-    const sec = s.tablolar.get(kucuk(t.ad)) ?? { islem: /** @type {TabloIslemi} */ ('atla'), yeniAd: '' };
+    const sec = s.tablolar.get(kucuk(t.ad)) ?? { islem: /** @type {TabloIslemi} */ ('atla'), yeniAd: '', hedefId: '' };
     if (sec.islem === 'atla') continue;
     const mevcutlar = tablolariListele(vt, projeId);
-    const mevcut = mevcutlar.find((x) => kucuk(x.ad) === kucuk(t.ad));
+    const mevcut = sec.islem === 'birlestir' && sec.hedefId ? mevcutlar.find((x) => x.id === sec.hedefId) : mevcutlar.find((x) => kucuk(x.ad) === kucuk(t.ad));
     if (sec.islem === 'yeni' || sec.islem === 'yeniAd') {
       const ad = sec.islem === 'yeniAd' ? sec.yeniAd : t.ad;
       if (!ad) throw new DepoHatasi(`"${t.ad}" tablosu için yeni ad yazın.`);

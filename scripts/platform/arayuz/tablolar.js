@@ -9,8 +9,10 @@
 //     seçeneği sayfa değeriyle seçer, servise servis değeri gider; boşsa tablodaki değer kullanılır.
 //   · Kaydet yalnız değişen satırları gönderir. Kaydedilmemiş değişiklik varken başka tabloya geçmek onay ister.
 import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, yerlestir } from './ortak.js';
-import { onayIste } from './kosu-paneli.js';
+import { onayIste, secenekIste } from './kosu-paneli.js';
 import { tabloOku } from './parametre-tanimi-formu.js';
+import { veriSagligiKarti } from './veri-sagligi.js';
+import { baslikNormal } from './tablo-benzerligi.mjs';
 
 const q = encodeURIComponent;
 /** Oturum boyunca seçili tablo. */
@@ -426,7 +428,19 @@ export async function tablolarBolumu(govde, proje) {
 
   const solKap = h('div', {});
   const sagKap = h('div', {});
-  yerlestir(govde,
+  // Veri sağlığı (benzer / kullanılmayan tablolar, boş sütunlar, kırık başvurular; birleştirme ve geri alma): veri-sagligi.js.
+  const saglik = veriSagligiKarti(proje, {
+    tablolar: () => liste,
+    yenile: () => { tablolarBolumu(govde, proje); },
+    secTablo: async (id) => {
+      const t = liste.find((x) => x.id === id);
+      if (!t || (t.id === seciliId && is?.id)) { sagKap.scrollIntoView({ block: 'start' }); return; }
+      if (!(await gecebilirMi())) return;
+      seciliId = t.id; is = kopya(t); ara = ''; gorunur = GORUNUR_ADIM; ciz();
+      sagKap.scrollIntoView({ block: 'start' });
+    }
+  });
+  yerlestir(govde, saglik,
     h('p', { class: 'not-kutusu bilgi kucuk' }, h('b', {}, 'Her tablo bir Excel sayfası gibidir. '),
       'Sütunlar alanlardır; her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir.'),
     h('div', { class: 'tablo-duzeni' }, solKap, sagKap));
@@ -555,6 +569,23 @@ export async function tablolarBolumu(govde, proje) {
     // Var olan tabloda önce etki denetlenir: değişen değeri düz metin olarak kullanan senaryo varsa sunucu hiçbir şey yazmaz ve
     // onay ister (tablo-etkisi.mjs); yoksa doğrudan kaydeder.
     const denetle = Boolean(is.id) && !is.baglam;
+    // Önleme: yeni tablo kaydedilmeden önce başlıkları aynı (esnek) tablo varsa "onu kullan / yine de yeni oluştur" sorulur.
+    if (!is.id && !is.baglam) {
+      let benzerler = [];
+      try { benzerler = (await api('/platform/tablo/benzer', { govde: { projeId: proje.id, sutunlar: adlar, ad: is.ad.trim() } })).benzerler; } catch { benzerler = []; }
+      if (benzerler.length) {
+        const secim = await secenekIste({
+          baslik: 'Benzer tablo var', ikonAd: 'uyari',
+          metin: `Sütun başlıkları ${benzerler.map((b) => `“${b.ad}”`).join(', ')} tablosuyla aynı. Aynı veriyi iki tabloda tutmamak için onu kullanabilirsiniz.`,
+          secenekler: [
+            ...benzerler.slice(0, 3).map((b) => ({ deger: b.id, etiket: `Onu kullan: “${b.ad}”`, aciklama: 'Eklediğiniz satırlar o tabloya taşınır; kaydetmeden önce görürsünüz.', ikonAd: 'esle' })),
+            { deger: '', etiket: 'Yine de yeni oluştur', aciklama: `“${is.ad.trim()}” ayrı bir tablo olarak kaydedilir.`, ikonAd: 'arti' }
+          ]
+        });
+        if (secim === null) return;
+        if (secim) { benzerTabloyaTasi(secim); return; }
+      }
+    }
     try {
       let y = await mesgulIken(dugme, 'Kaydediliyor…', () => api('/platform/tablo/kaydet', { govde: denetle ? { ...govde, etki: 'denetle' } : govde }));
       if (y.onayGerekli) {
@@ -577,6 +608,32 @@ export async function tablolarBolumu(govde, proje) {
       ].filter(Boolean).join(' '), atlanan ? 'hata' : undefined);
       ciz();
     } catch (e) { bildir(e.message, 'hata'); }
+  }
+
+  /**
+   * "Onu kullan": kaydedilmemiş yeni tablonun satırları benzer tabloya taşınır (sütunlar esnek başlıkla eşlenir; eşleşmeyen sütun
+   * yeni sütun olur). Hiçbir şey kaydedilmez; kullanıcı Kaydet'e basınca yazılır.
+   * @param {string} id
+   */
+  function benzerTabloyaTasi(id) {
+    const t = liste.find((x) => x.id === id);
+    if (!t) return;
+    const yeni = kopya(t);
+    const hedef = (ad) => {
+      let s = yeni.sutunlar.find((x) => baslikNormal(x.ad) === baslikNormal(ad));
+      if (!s) { s = { ad, eskiAd: null, gizli: false, tip: 'metin', karsiliklar: {} }; yeni.sutunlar.push(s); yeni.degisti = true; }
+      return s.ad;
+    };
+    for (const r of is.satirlar) {
+      /** @type {Record<string, string | null>} */
+      const degerler = {};
+      for (const s of is.sutunlar) { const v = r.degerler[s.ad]; if (v !== undefined && v !== null && v !== '') degerler[hedef(s.ad)] = v; }
+      yeni.satirlar.push({ id: undefined, ad: r.ad || '', ortamId: r.ortamId, degerler, doluGizli: new Set(), degisti: true });
+    }
+    seciliId = t.id;
+    is = yeni;
+    ciz();
+    bildir(`Satırlar “${t.ad}” tablosuna taşındı. Kontrol edip Kaydet'e basın.`);
   }
 
   async function tabloyuSil() {

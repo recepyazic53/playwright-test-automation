@@ -14,6 +14,7 @@ import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
+import { benzerTabloNotu } from './veri-sagligi.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 
@@ -496,6 +497,12 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
   const etkiBolumu = aktarimEtkisiBolumu(async (koru) => (!secili.size ? { degisiklikler: [], etkilenenler: [], karsiliklar: [] }
     : (await api('/platform/servis/postman/aktar', { govde: { ...govdeYap(), etki: 'onizle', ...(koru ? { mevcutDegerleriKoru: true } : {}) } })).etki));
   for (const g of [tabloAdi, degerOrtami, tabanOrtami, kapsam]) g.addEventListener(g === tabloAdi ? 'input' : 'change', () => etkiBolumu.yenile());
+  // Önleme: değişken tablosu yeni oluşturulacaksa ve başlıkları aynı tablo varsa "onu kullan / yine de yeni oluştur".
+  const benzer = benzerTabloNotu(proje, {
+    sutunlar: () => o.degiskenler.filter((v) => !akis.has(v.ad)).map((v) => v.ad), ad: () => tabloAdi.value.trim(),
+    kullan: (ad) => { tabloAdi.value = ad; etkiBolumu.yenile(); }
+  });
+  tabloAdi.addEventListener('input', () => benzer.yenile());
   aktar.addEventListener('click', async () => {
     mesaj.temizle();
     if (!secili.size) { mesaj.goster('En az bir klasör seçin.'); return; }
@@ -529,10 +536,12 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
     h('div', { class: 'satir-duzen' },
       alan('Değişken tablosu', tabloAdi, { yardim: 'Değişkenler bu test verisi tablosunun sütunları olur (varsa eksik sütunlar eklenir).' }),
       alan('Değerler hangi ortam için', degerOrtami)),
+    benzer.kok,
     h('div', { class: 'satir-duzen' },
       kokenler.length ? alan(`Koleksiyondaki adres (${kokenler.join(', ')}) taban adresi olsun`, tabanOrtami, { yardim: 'Seçilen ortamda servislerin taban adresi yapılır (ortamın adres listesine de eklenir).' }) : null,
       alan('Senaryoların kapsamı', kapsam)),
     etkiBolumu.kok,
     h('div', { class: 'dugmeler' }, aktar)));
   etkiBolumu.yenile(0);
+  benzer.yenile(0);
 }

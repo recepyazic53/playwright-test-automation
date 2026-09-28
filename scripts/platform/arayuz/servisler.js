@@ -15,6 +15,7 @@ import { riskBelirtilmemisMi } from './ortam-riski.mjs';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
 import { aktarimEtkisiBolumu, etkiOnayi, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
+import { benzerTabloNotu } from './veri-sagligi.js';
 import { operasyondanUc, restUclariFormu, ucGovdesi, uclarEksik } from './rest-sihirbazi.js';
 import { hesapKurallariKarti } from './hesap-kurali-formu.js';
 import { kuralOzeti } from './hesap-kurallari.mjs';
@@ -236,6 +237,12 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
   const etkiBolumu = aktarimEtkisiBolumu((koru) => api('/platform/servis/soapui/aktar', { govde: { ...govdeYap(), etki: 'onizle', ...(koru ? { mevcutDegerleriKoru: true } : {}) } }).then((r) => r.etki));
   degerOrtami.addEventListener('change', () => etkiBolumu.yenile());
   girisEkle.addEventListener('change', () => etkiBolumu.yenile());
+  // Önleme: tabloya gidecek özellikler için yeni tablo oluşacaksa ve başlıkları aynı tablo varsa "onu kullan / yine de yeni oluştur".
+  const benzer = benzerTabloNotu(proje, {
+    sutunlar: () => { const t = seciliTaslak(); const sc = secim(); return t.plan.ozellikler.filter((x) => sc.hedef.get(x.ad) === 'tablo').map((x) => x.ad); },
+    ad: () => tabloAdi.value.trim() || secim().tabloAdi,
+    kullan: (ad) => { tabloAdi.value = ad; secim().tabloAdi = ad; ozetCiz(); }
+  });
 
   /** Özelliğin hedef metni ("SoapUI Takım.SUBE", "kural: BEGIN_DATE", "gövdede ${AD}"). */
   const hedefMetni = (x, sc) => {
@@ -272,6 +279,7 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
           h('div', { class: 'satir-duzen' },
             alan('Tablo', tabloAdi, { yardim: tabloVar ? 'Bu adla bir tablo var: eksik sütunlar eklenir, değerler seçilen ortamın satırına yazılır.' : 'Yeni test verisi tablosu oluşturulur.' }),
             alan('Değerler hangi ortam için', degerOrtami)),
+          benzer.kok,
           h('ul', { class: 'onay-listesi soapui-sutunlari' }, tabloya.map((x) => {
             const gizli = sc.gizli.has(x.ad);
             const deger = gizli ? (x.tanimli ? (sc.sifreli.has(x.ad) ? 'değer şifreli yazılır' : 'değer yazılmaz (boş kalır)') : 'değer yok')
@@ -290,6 +298,7 @@ async function durumAyrintisi(kap, proje, ortamlar, xml, d) {
         mevcutBaglar.length ? h('details', {}, h('summary', { class: 'kucuk' }, `${mevcutBaglar.length} alanın bağı zaten var (korunur)`),
           h('ul', { class: 'onay-listesi' }, mevcutBaglar.map((a) => h('li', {}, `${a.operasyon} · ${a.yol} → ${a.mevcut}`)))) : null));
     etkiBolumu.yenile();
+    benzer.yenile();
   };
 
   const ozellikCiz = () => {
