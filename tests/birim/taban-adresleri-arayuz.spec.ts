@@ -340,4 +340,111 @@ test.describe('servis taban adresleri arayüzü', () => {
     expect(s2.hatalar).toEqual([]);
     await s2.kapat();
   });
+
+  test('uzun sorgu dizili adres: uyarı + "Yine de kaydet"; tek satır hücre (ipucu, Kopyala), makul satır yüksekliği; "kaldır" temizler; 390px', async ({}, testInfo) => {
+    test.setTimeout(90_000);
+    const sorgu = `?${Array.from({ length: 40 }, (_, i) => `parametre${i}=deger${i}`).join('&')}`;
+    const uzun = `https://uzun.ornek.invalid/api/v1${sorgu}`;
+    const { page, hatalar, kapat } = await sayfaAc();
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: nobetci.adres });
+    // Yeni taban: sorgu dizili adres → açık uyarı; "Yine de kaydet" ile devam edilir.
+    await page.getByRole('button', { name: 'Taban adresi ekle' }).click();
+    const pencere = page.getByRole('dialog', { name: 'Yeni taban adresi' });
+    await pencere.getByLabel('Taban adresinin adı').fill('Uzun sunucu');
+    await pencere.getByLabel('TEST adresi').fill(uzun);
+    await pencere.getByLabel('CANLI adresi').fill('https://uzun-canli.ornek.invalid');
+    await pencere.getByRole('button', { name: 'İleri: servisleri seç' }).click();
+    const uyari = pencere.getByRole('alert').filter({ hasText: 'Taban adresinde sorgu dizisi var' });
+    await expect(uyari).toContainText('servisler bunun sonuna yol ekler, genelde yanlıştır. Yine de kaydet?');
+    await expect(uyari.getByRole('list', { name: 'Sorgu dizili adresler' })).toContainText('TEST: https://uzun.ornek.invalid/api/v1?parametre0');
+    await expect(pencere).not.toContainText('Hangi servisler bu adresi kullansın?');
+    await page.screenshot({ path: testInfo.outputPath('taban-sorgu-uyarisi.png') });
+    await uyari.getByRole('button', { name: 'Yine de kaydet' }).click();
+    await expect(pencere).toContainText('Hangi servisler bu adresi kullansın?');
+    await pencere.getByRole('checkbox', { name: 'Rapor' }).check();
+    await pencere.getByRole('button', { name: 'Etkiyi göster' }).click();
+    const etki = pencere.getByRole('region', { name: 'Değişikliğin etkisi' });
+    await expect(etki.getByRole('list', { name: 'Sorgu dizili adresler' })).toContainText(uzun);
+    await pencere.getByRole('button', { name: 'Onayla ve kaydet' }).click();
+    await expect(pencere).toHaveCount(0);
+    expect((await tablo()).tabanlar.find((x) => x.ad === 'Uzun sunucu')?.adresler[T]).toBe(uzun);
+
+    // Tablo: satır makul yükseklikte, adres tek satır ("…"), tam adres ipucunda, İşlem düğmeleri görünür ve tek satırda.
+    const t = page.getByRole('table', { name: 'Taban adresleri' });
+    const satir = t.locator('tbody > tr').filter({ hasText: 'Uzun sunucu' });
+    const olc = async () => satir.evaluate((tr) => {
+      const kod = tr.querySelector('code.taban-adres-metni[title^="https://uzun.ornek"]') as HTMLElement;
+      const d = [...tr.querySelectorAll('.taban-satir-dugmeleri button')].map((b) => b.getBoundingClientRect());
+      const r = kod.getBoundingClientRect();
+      return { yukseklik: tr.getBoundingClientRect().height, kodYukseklik: r.height, kesik: kod.scrollWidth > kod.clientWidth, dugmeUstleri: d.map((x) => Math.round(x.top)), dugmeYukseklik: Math.max(...d.map((x) => x.height)) };
+    });
+    let o = await olc();
+    expect(o.yukseklik, 'satır yüksekliği').toBeLessThan(80);
+    expect(o.kodYukseklik).toBeLessThan(30);
+    expect(o.kesik, 'uzun adres "…" ile kesilir').toBe(true);
+    expect(new Set(o.dugmeUstleri).size, 'İşlem düğmeleri tek satırda').toBe(1);
+    await expect(satir.getByRole('button', { name: 'Uzun sunucu: düzenle' })).toBeVisible();
+    await expect(satir.getByRole('button', { name: 'Uzun sunucu: sil' })).toBeVisible();
+    await expect(satir.getByRole('button', { name: 'Uzun sunucu — Kullanan: 1 servis' })).toBeVisible();
+    await expect(satir.locator('code.taban-adres-metni').filter({ hasText: 'uzun.ornek.invalid' })).toHaveAttribute('title', new RegExp(`^${uzun.replace(/[.?*+^$()[\]{}|\\/]/g, '\\$&')}\\n`));
+    await expect(satir.locator('.taban-adres-sorgu').first()).toHaveText(sorgu);
+    // Ortam sütun başlığında ad + tür rozeti.
+    await expect(t.locator('thead th').filter({ hasText: 'TEST' })).toHaveText(/^TEST\s*Test$/);
+    await expect(t.locator('thead th').filter({ hasText: 'CANLI' })).toHaveText(/^CANLI\s*Canlı$/);
+    await page.screenshot({ path: testInfo.outputPath('taban-uzun-adres-masaustu.png'), fullPage: true });
+    // Kopyala: panoya tam adres yazılır.
+    await satir.getByRole('button', { name: 'Uzun sunucu · TEST: tam adresi kopyala' }).click();
+    await expect(page.getByText('Adres panoya kopyalandı.')).toBeVisible();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(uzun);
+    // Pano yoksa: adres metni seçilir ve bildirilir.
+    await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { value: { writeText: () => Promise.reject(new Error('izin yok')) }, configurable: true }); });
+    await satir.getByRole('button', { name: 'Uzun sunucu · TEST: tam adresi kopyala' }).click();
+    await expect(page.getByText('Panoya kopyalanamadı; adres seçildi')).toBeVisible();
+    expect(await page.evaluate(() => String(window.getSelection()))).toBe(uzun);
+
+    // 390 px: kart görünümü, taşma yok; düğmeler görünür, satır yine makul.
+    await page.setViewportSize({ width: 390, height: 900 });
+    await tasmaYok(page);
+    o = await olc();
+    expect(o.kesik).toBe(true);
+    expect(new Set(o.dugmeUstleri).size).toBe(1);
+    expect(o.yukseklik).toBeLessThan(200);
+    await expect(satir.getByRole('button', { name: 'Uzun sunucu: sil' })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('taban-uzun-adres-390.png'), fullPage: true });
+
+    // Servis bazında: aynı kısaltma (girdi tek satır, tam değer ipucunda), sorgu uyarısı + "Sorgu dizisini kaldır"; 390 px taşma yok.
+    await page.setViewportSize({ width: 1400, height: 1000 });
+    await page.getByRole('radio', { name: 'Servis bazında' }).click();
+    const girdi = page.getByLabel('Rapor · TEST: taban adres');
+    await expect(girdi).toHaveValue(uzun);
+    await expect(girdi).toHaveAttribute('title', uzun);
+    const hucre = page.locator('td').filter({ has: girdi });
+    expect((await hucre.boundingBox())?.width ?? 999).toBeLessThan(400);
+    await expect(hucre.getByRole('status')).toContainText('Taban adresinde sorgu dizisi var');
+    await expect(hucre.getByRole('button', { name: 'Sorgu dizisini kaldır' })).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 900 });
+    await tasmaYok(page);
+    await page.setViewportSize({ width: 1400, height: 1000 });
+    await page.getByRole('radio', { name: 'Taban adresleri' }).click();
+
+    // Düzenle: sorgu dizili yeni adres → uyarı → "Sorgu dizisini kaldır" girdiyi temizler; kayıt sorgusuz adresle.
+    await page.getByRole('button', { name: 'Uzun sunucu: düzenle' }).click();
+    const duzenle = page.getByRole('dialog', { name: '"Uzun sunucu" taban adresini düzenle' });
+    await duzenle.getByLabel('CANLI adresi').fill('https://uzun-canli.ornek.invalid/kok/?a=1#b');
+    await duzenle.getByRole('button', { name: 'Etkiyi göster' }).click();
+    const u2 = duzenle.getByRole('alert').filter({ hasText: 'Taban adresinde sorgu dizisi var' });
+    // Kayıtlı (değişmeyen) TEST adresi uyarılmaz; yalnız değişen CANLI.
+    await expect(u2.getByRole('listitem')).toHaveCount(1);
+    await expect(u2.getByRole('listitem')).toContainText('CANLI:');
+    await u2.getByRole('button', { name: 'Sorgu dizisini kaldır' }).click();
+    await expect(duzenle.getByLabel('CANLI adresi')).toHaveValue('https://uzun-canli.ornek.invalid/kok');
+    await expect(u2).toHaveCount(0);
+    await duzenle.getByRole('button', { name: 'Etkiyi göster' }).click();
+    await duzenle.getByRole('button', { name: 'Onayla ve kaydet' }).click();
+    await expect(duzenle).toHaveCount(0);
+    const son = (await tablo()).tabanlar.find((x) => x.ad === 'Uzun sunucu');
+    expect(son?.adresler).toEqual({ [T]: uzun, [C]: 'https://uzun-canli.ornek.invalid/kok' });
+    expect(hatalar).toEqual([]);
+    await kapat();
+  });
 });

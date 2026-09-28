@@ -9,6 +9,8 @@
 //        diğerleri şu anki adresleriyle; hiçbiri işaretli gelmez) → etki → onay.
 //    Adlandırılmamış (servise özel) adres kullanan servisler ayrıca listelenir (servis bazında düzenlenir).
 //  - Servis bazında: satır = servis, sütun = ortam (toplu düzenleme, bul-değiştir; etki önizlemesi + onay).
+// Adres hücreleri tek satırdır (kök öne çıkar, sorgu dizisi soluk, taşan "…"; tam adres ipucunda + Kopyala); dar ekranda kart.
+// Sorgu dizili / parçalı adres kaydında uyarı + onay ya da "Sorgu dizisini kaldır" (engellenmez).
 // Hiçbir servise istek atılmaz (adres yalnız biçim olarak denetlenir; erişim kontrolü servis sayfasından).
 import { adresGecerliMi, alan, api, bildir, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { ortamRiskRozeti } from './kosu-paneli.js';
@@ -21,6 +23,60 @@ const gorunumYaz = (g) => { try { localStorage.setItem(GORUNUM_ANAHTARI, g); } c
 const hucreMetni = (x) => (x.kaynak === 'yok' ? 'bu ortamda yok' : x.kaynak === 'ortam' ? `${x.deger} (ortamın adresi)` : x.deger);
 const turRozeti = (s) => rozet(s.tur === 'rest' ? 'REST' : 'SOAP', 'vurgu');
 const senaryoOzeti = (s) => `${s.senaryoSayisi} senaryo${s.akislar.length ? ` · ${s.akislar.length} akış` : ''}`;
+
+// --- Adres gösterimi ve sorgu dizisi uyarısı ---------------------------------------------------------------------------------
+// Taban adresi bir SUNUCU adresidir (şema + ana makine + isteğe bağlı port ve kök yol). Sorgu dizisi (?…) ya da parça (#…) varsa
+// uyarılır ve onay istenir (engellenmez; sunucu da aynı uyarıyı önizlemede döner: servisler/taban-adresleri.mjs).
+const SORGU_UYARISI = 'Taban adresinde sorgu dizisi var; servisler bunun sonuna yol ekler, genelde yanlıştır.';
+/** Adres = kök (şema + sunucu + yol) + ek (sorgu dizisi / parça; yazıldığı gibi). @param {string} a */
+const adresParcalari = (a) => {
+  const i = String(a || '').search(/[?#]/);
+  return i < 0 ? { kok: String(a || ''), ek: '' } : { kok: a.slice(0, i), ek: a.slice(i) };
+};
+const sorguVarMi = (a) => Boolean(a && adresParcalari(a).ek);
+const sorgusuz = (a) => temiz(adresParcalari(a).kok);
+/** Seçim listesi gibi düz metin yerlerde kısa adres: kök (en çok n karakter) + ek varsa "…". */
+const kisaAdres = (a, n = 48) => {
+  const { kok, ek } = adresParcalari(a);
+  return kok.length > n ? `${kok.slice(0, n - 1)}…` : ek ? `${kok}…` : kok;
+};
+
+/** Kopyala ikon düğmesi: panoya yazar; pano yoksa (izin / tarayıcı) adres metnini seçer ve bildirir. */
+function kopyalaIkonu(metin, etiket, hedef) {
+  const d = h('button', { type: 'button', class: 'ikon-dugme hayalet taban-kopyala', title: 'Tam adresi kopyala', 'aria-label': `${etiket}: tam adresi kopyala` }, ikon('kopya'));
+  d.addEventListener('click', async () => {
+    try {
+      if (!navigator.clipboard) throw new Error('pano yok');
+      await navigator.clipboard.writeText(metin);
+      d.replaceChildren(ikon('onay'));
+      setTimeout(() => d.replaceChildren(ikon('kopya')), 1500);
+      bildir('Adres panoya kopyalandı.');
+    } catch {
+      const secim = window.getSelection();
+      secim?.removeAllRanges();
+      secim?.selectAllChildren(hedef);
+      bildir('Panoya kopyalanamadı; adres seçildi, Ctrl+C ile kopyalayın.', 'hata');
+    }
+  });
+  return d;
+}
+
+/**
+ * Tek satır adres: kök öne çıkar, sorgu dizisi soluk; taşan kısım "…" (CSS). Tam adres ipucunda (title) ve Kopyala düğmesiyle.
+ * @param {string} a @param {string} etiket kopyala düğmesinin erişilebilir adı için (ör. "Çekirdek · TEST")
+ */
+function adresGosterimi(a, etiket) {
+  const { kok, ek } = adresParcalari(a);
+  const metin = h('code', { class: 'duz taban-adres-metni', title: ek ? `${a}\n${SORGU_UYARISI}` : a },
+    h('span', { class: 'taban-adres-kok' }, kok), ek ? h('span', { class: 'taban-adres-sorgu' }, ek) : null);
+  return h('span', { class: `taban-adres${ek ? ' sorgulu' : ''}` }, metin, kopyalaIkonu(a, etiket, metin));
+}
+
+/** Ortam türü rozeti (Test / Canlı; türü seçilmemişse "Türünü seçin"). */
+const ortamTuru = (o) => ortamRiskRozeti(o) || rozet('Test', '', { title: 'Test ortamı' });
+/** Ortam sütun başlığı: ad (taşarsa "…") + tür rozeti. */
+const ortamBasligi = (o) => h('th', { scope: 'col', class: 'taban-ortam-sutunu', title: o.ad },
+  h('span', { class: 'taban-ortam-basligi' }, h('span', { class: 'taban-ortam-adi' }, o.ad), ortamTuru(o)));
 
 /** @param {{ id: string; ad: string }} proje @returns {HTMLElement} */
 export function tabanAdresleriBolumu(proje) {
@@ -119,7 +175,11 @@ export function tabanKarariSor(k) {
 /** Etki: etkilenen servisler (eski → yeni, senaryo / akış) ve adresi boş kalacak servisler. */
 function etkiGovdesi(e) {
   const bos = e.bosKalacaklar || [];
+  const uyarilar = e.uyarilar || [];
   return [
+    uyarilar.length ? h('div', { class: 'not-kutusu uyari taban-sorgu-uyarisi' },
+      h('b', {}, SORGU_UYARISI), ' Onaylarsanız yine de kaydedilir:',
+      h('ul', { 'aria-label': 'Sorgu dizili adresler' }, uyarilar.map((u) => h('li', {}, h('b', {}, `${u.ortam}: `), h('code', { class: 'duz' }, u.adres))))) : null,
     e.toplam.servis
       ? h('div', { class: 'not-kutusu uyari', role: 'alert' },
         `Bu değişiklik şu ${e.toplam.servis} servisi etkiler (${e.toplam.senaryo} senaryo${e.toplam.akis ? `, ${e.toplam.akis} akış` : ''}): sonraki koşular yeni adreslere gider. Onaylamadan hiçbir şey kaydedilmez.`)
@@ -141,9 +201,8 @@ function tabanGorunumu(proje, veri, yenile) {
   const { ortamlar, satirlar, tabanAdlari } = veri;
   const servis = new Map(satirlar.map((s) => [s.servisId, s]));
   const acik = new Set();
-  const tabloKap = h('div', { class: 'tablo-kaydirma' });
-  const adres = (a) => (a ? h('code', { class: 'duz' }, a) : h('span', { class: 'soluk kucuk' }, 'bu ortamda yok'));
-  const ortamBasligi = (o) => h('th', { scope: 'col' }, o.ad, ortamRiskRozeti(o) ? [' ', ortamRiskRozeti(o)] : null);
+  const tabloKap = h('div', { class: 'tablo-kaydirma taban-adlari-kap' });
+  const adres = (a, etiket) => (a ? adresGosterimi(a, etiket) : h('span', { class: 'soluk kucuk' }, 'bu ortamda yok'));
   const islem = (girdi) => api('/platform/servis-tabanlari/taban', { govde: { projeId: proje.id, ...girdi } });
 
   /** Etkiyi pencerede gösterir; "Onayla ve kaydet" yazar. geri: önceki adım. */
@@ -178,8 +237,32 @@ function tabanGorunumu(proje, veri, yenile) {
     const vazgec = h('button', { type: 'button' }, 'Vazgeç');
     vazgec.addEventListener('click', p.kapat);
     const ileri = h('button', { type: 'button', class: 'birincil' }, t ? 'Etkiyi göster' : 'İleri: servisleri seç');
+    // Sorgu dizisi / parça uyarısı (engellemez): "Sorgu dizisini kaldır" ya da "Yine de kaydet" (onay bu adreslere özgüdür).
+    const uyariKap = h('div');
+    let onayliAdresler = '';
+    const sorguUyarisi = (liste, imza) => {
+      const kaldir = h('button', { type: 'button', class: 'birincil' }, 'Sorgu dizisini kaldır');
+      const yineDe = h('button', { type: 'button' }, 'Yine de kaydet');
+      kaldir.addEventListener('click', () => {
+        for (const g of liste) g.el.value = sorgusuz(g.el.value);
+        yerlestir(uyariKap);
+        bildir('Sorgu dizisi adresten kaldırıldı (henüz kaydedilmedi).');
+        ileri.focus();
+      });
+      yineDe.addEventListener('click', () => { onayliAdresler = imza; yerlestir(uyariKap); ileri.click(); });
+      yerlestir(uyariKap, h('div', { class: 'not-kutusu uyari taban-sorgu-uyarisi', role: 'alert' },
+        h('p', {}, h('b', {}, `${SORGU_UYARISI} Yine de kaydet?`)),
+        h('ul', { 'aria-label': 'Sorgu dizili adresler' }, liste.map((g) => {
+          const { kok, ek } = adresParcalari(temiz(g.el.value));
+          return h('li', {}, h('b', {}, `${g.o.ad}: `), h('code', { class: 'duz' }, kok, h('span', { class: 'taban-adres-sorgu' }, ek)));
+        })),
+        h('p', { class: 'soluk kucuk' }, 'Taban adresi yalnız sunucu adresidir (ör. https://ornek.local/api); sorgu parametreleri servisin isteğinde tanımlanır.'),
+        h('div', { class: 'dugmeler' }, kaldir, yineDe)));
+      kaldir.focus();
+    };
     const goster = () => {
-      yerlestir(p.govde, mesaj.kutu, alan('Taban adresinin adı', adGirdisi),
+      yerlestir(uyariKap);
+      yerlestir(p.govde, mesaj.kutu, uyariKap, alan('Taban adresinin adı', adGirdisi),
         ...girdiler.map((g) => alan(`${g.o.ad} adresi`, g.el)),
         h('p', { class: 'soluk kucuk' }, t
           ? 'Adresi boş bırakılan ortamda bu taban adresine bağlı servisler koşamaz (adres boş kalır). Kaydetmeden önce etkisi gösterilir.'
@@ -194,6 +277,11 @@ function tabanGorunumu(proje, veri, yenile) {
       const hatali = girdiler.find((g) => adresler[g.o.id] && !adresGecerliMi(adresler[g.o.id]));
       if (hatali) { mesaj.goster(`${hatali.o.ad}: "${adresler[hatali.o.id]}" geçerli bir http(s) adresi değil.`); return; }
       if (!Object.values(adresler).some(Boolean) && !t) { mesaj.goster('En az bir ortam için adres yazın.'); return; }
+      // Yalnız yeni / değişen adres uyarılır (kayıtlı adresler olduğu gibi kalır).
+      const sorgulu = girdiler.filter((g) => sorguVarMi(adresler[g.o.id]) && adresler[g.o.id] !== (t ? t.adresler[g.o.id] || '' : ''));
+      const imza = JSON.stringify(adresler);
+      if (sorgulu.length && onayliAdresler !== imza) { sorguUyarisi(sorgulu, imza); return; }
+      yerlestir(uyariKap);
       try {
         if (t) await mesgulIken(ileri, 'Hesaplanıyor…', () => etkiAdimi(p, { islem: 'degistir', ad: t.ad, ...(ad !== t.ad ? { yeniAd: ad } : {}), adresler }, goster));
         else servisSecimi(p, ad, adresler, goster);
@@ -260,22 +348,28 @@ function tabanGorunumu(proje, veri, yenile) {
           h('span', { class: 'soluk kucuk' }, h('code', { class: 'duz' }, s.yol || '—'), ` · ${senaryoOzeti(s)}`),
           yoklar.length ? h('span', { class: 'kucuk taban-yok-notu' }, `${yoklar.map((o) => o.ad).join(', ')} ortamında yok`) : null);
       })) : h('p', { class: 'soluk kucuk' }, 'Bu taban adresini kullanan servis yok.')));
-    const tablo = h('table', { class: 'ozet-tablosu taban-tablosu taban-adlari-tablosu', 'aria-label': 'Taban adresleri', 'data-siralama': 'yok' },
+    // Sabit düzen (colgroup): Ad ve ortam sütunları dengeli, Kullanan / İşlem dar; adres hücreleri tek satır ("…" + ipucu + Kopyala).
+    // Dar ekranda (stil.css) satırlar kart olur: her hücrenin üstünde ortam etiketi (taban-hucre-etiketi) görünür.
+    const tablo = h('table', { class: 'ozet-tablosu taban-tablosu taban-adlari-tablosu', role: 'table', 'aria-label': 'Taban adresleri', 'data-siralama': 'yok' },
+      h('colgroup', {}, h('col', { class: 'taban-sutun-ad' }), ortamlar.map(() => h('col', { class: 'taban-sutun-ortam' })),
+        h('col', { class: 'taban-sutun-kullanan' }), h('col', { class: 'taban-sutun-islem' })),
       h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Ad'), ortamlar.map(ortamBasligi), h('th', { scope: 'col' }, 'Kullanan'), h('th', { scope: 'col' }, 'İşlem'))),
       h('tbody', {}, tabanAdlari.flatMap((t) => {
         const acikMi = acik.has(t.ad);
-        const kullanan = h('button', { type: 'button', class: 'taban-kullanan', 'aria-expanded': acikMi ? 'true' : 'false', 'aria-label': `${t.ad} — Kullanan: ${t.kullanan.length} servis` },
-          `Kullanan: ${t.kullanan.length} servis `, h('span', { 'aria-hidden': 'true' }, acikMi ? '▾' : '▸'));
+        const kullanan = h('button', { type: 'button', class: 'taban-kullanan', 'aria-expanded': acikMi ? 'true' : 'false', 'aria-label': `${t.ad} — Kullanan: ${t.kullanan.length} servis`, title: 'Bu taban adresini kullanan servisler' },
+          `${t.kullanan.length} servis `, h('span', { 'aria-hidden': 'true' }, acikMi ? '▾' : '▸'));
         kullanan.addEventListener('click', () => { if (acikMi) acik.delete(t.ad); else acik.add(t.ad); ciz(); });
         const duzenle = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${t.ad}: düzenle` }, ikon('duzenle'), 'Düzenle');
         duzenle.addEventListener('click', () => tabanFormu(t));
         const silDugmesi = h('button', { type: 'button', class: 'kucuk-dugme tehlike', 'aria-label': `${t.ad}: sil` }, ikon('cop'), 'Sil');
         silDugmesi.addEventListener('click', () => sil(t));
-        const satir = h('tr', {},
-          h('th', { scope: 'row' }, h('b', {}, t.ad)),
-          ortamlar.map((o) => h('td', {}, adres(t.adresler[o.id]))),
-          h('td', {}, kullanan),
-          h('td', {}, h('div', { class: 'dugmeler taban-satir-dugmeleri' }, duzenle, silDugmesi)));
+        const satir = h('tr', { class: 'taban-satiri-ana' },
+          h('th', { scope: 'row', class: 'taban-ad-hucresi', title: t.ad }, h('b', {}, t.ad)),
+          ortamlar.map((o) => h('td', { class: 'taban-adres-hucresi' },
+            h('span', { class: 'taban-hucre-etiketi', 'aria-hidden': 'true' }, h('span', { class: 'taban-ortam-adi' }, o.ad), ortamTuru(o)),
+            adres(t.adresler[o.id], `${t.ad} · ${o.ad}`))),
+          h('td', { class: 'taban-kullanan-hucresi' }, kullanan),
+          h('td', { class: 'taban-islem-hucresi' }, h('div', { class: 'dugmeler taban-satir-dugmeleri' }, duzenle, silDugmesi)));
         return acikMi ? [satir, uyeSatiri(t)] : [satir];
       })));
     yerlestir(tabloKap, tabanAdlari.length ? tablo : h('p', { class: 'soluk kucuk' }, 'Henüz taban adresi yok. "Taban adresi ekle" ile ekleyip servisleri ona bağlayın.'));
@@ -293,7 +387,11 @@ function tabanGorunumu(proje, veri, yenile) {
       h('p', { class: 'soluk kucuk' }, 'Bu servisler kendi (servise özel) adreslerini ya da ortamın adresini kullanır. Bir taban adresine bağlamak için yeni taban adresi ekleyip seçin ya da "Servis bazında" görünümde düzenleyin.'),
       h('ul', { class: 'taban-uye-listesi', 'aria-label': 'Adlandırılmamış adres kullanan servisler' }, adsizlar.map((s) => h('li', {},
         h('span', { class: 'taban-uye-adi' }, h('b', {}, s.ad), ' ', turRozeti(s)),
-        h('span', { class: 'soluk kucuk taban-servis-adresleri' }, ortamlar.map((o) => h('span', {}, `${o.ad}: `, h('code', { class: 'duz' }, hucreMetni(s.tabanlar[o.id]))))))))) : null);
+        h('span', { class: 'soluk kucuk taban-servis-adresleri' }, ortamlar.map((o) => {
+          const x = s.tabanlar[o.id];
+          return h('span', { class: 'taban-servis-adresi' }, `${o.ad}: `, x.kaynak === 'yok' || !x.deger ? 'bu ortamda yok'
+            : [adresGosterimi(x.deger, `${s.ad} · ${o.ad}`), x.kaynak === 'ortam' ? ' (ortamın adresi)' : null]);
+        })))))) : null);
 }
 
 // --- Servis bazında (toplu düzenleme) ------------------------------------------------------------------------------------
@@ -362,25 +460,33 @@ function servisGorunumu(proje, veri, yenile) {
   const hucreDegisti = (id, ortamId) => { const a = ozgun.get(id).hucreler[ortamId]; const b = taslak.get(id).hucreler[ortamId]; return a.mod !== b.mod || temiz(a.deger) !== temiz(b.deger); };
 
   const hucreDenetimi = (etiket, o, x, ata) => {
-    const mod = h('select', { 'aria-label': `${etiket}: adres türü` },
-      Object.entries(MOD_ETIKETI).map(([m, e]) => h('option', { value: m, selected: x.mod === m }, m === 'ortam' ? `${e} (${temiz(o.tabanUrl)})` : e)));
+    // Seçim metninde ortamın adresi kısaltılır (tam adres seçimin ipucunda); girdi tek satırdır, tam değer ipucunda.
+    const mod = h('select', { 'aria-label': `${etiket}: adres türü`, title: x.mod === 'ortam' ? temiz(o.tabanUrl) : null },
+      Object.entries(MOD_ETIKETI).map(([m, e]) => h('option', { value: m, selected: x.mod === m }, m === 'ortam' ? `${e} (${kisaAdres(temiz(o.tabanUrl), 36)})` : e)));
     const girdi = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', value: x.deger, placeholder: 'https://', hidden: x.mod !== 'servis', 'aria-label': `${etiket}: taban adres`,
-      list: o.tabanAdresleri.length ? `${grupListesi.id}-${o.id}` : null });
+      title: x.deger || null, list: o.tabanAdresleri.length ? `${grupListesi.id}-${o.id}` : null });
     mod.addEventListener('change', () => { ata({ mod: mod.value, deger: mod.value === 'servis' ? (x.deger || temiz(o.tabanUrl)) : '' }); ciz(); });
     girdi.addEventListener('change', () => { ata({ mod: 'servis', deger: girdi.value.trim() }); ciz(); });
-    return [h('div', { class: 'taban-hucresi' }, mod, girdi),
-      x.mod === 'servis' && x.deger && !adresGecerliMi(x.deger) ? h('div', { class: 'alan-hatasi', role: 'alert' }, 'http:// ya da https:// ile başlamalı') : null];
+    let uyari = null;
+    if (x.mod === 'servis' && x.deger && !adresGecerliMi(x.deger)) uyari = h('div', { class: 'alan-hatasi', role: 'alert' }, 'http:// ya da https:// ile başlamalı');
+    else if (x.mod === 'servis' && sorguVarMi(x.deger)) {
+      const kaldir = h('button', { type: 'button', class: 'kucuk-dugme' }, 'Sorgu dizisini kaldır');
+      kaldir.addEventListener('click', () => { ata({ mod: 'servis', deger: sorgusuz(x.deger) }); ciz(); });
+      uyari = h('div', { class: 'taban-hucre-uyarisi', role: 'status' }, h('span', {}, SORGU_UYARISI), kaldir);
+    }
+    return [h('div', { class: 'taban-hucresi' }, mod, girdi), uyari];
   };
-  const eskiHucre = (x) => [h('code', { class: 'duz', title: 'Eski tam adres ayarı (servis sayfasında İşlemler > Taban adresler ile değiştirilir)' }, x.deger), ' ', rozet('tam adres', 'durdu')];
+  const eskiHucre = (x, etiket) => h('div', { class: 'taban-eski-hucre', title: 'Eski tam adres ayarı (servis sayfasında İşlemler > Taban adresler ile değiştirilir)' },
+    adresGosterimi(x.deger, etiket), rozet('tam adres', 'durdu'));
   const hucre = (s, o) => {
     const x = taslak.get(s.servisId).hucreler[o.id];
-    if (x.mod === 'eski') return h('td', {}, eskiHucre(x));
+    if (x.mod === 'eski') return h('td', { class: 'taban-adres-hucresi' }, eskiHucre(x, `${s.ad} · ${o.ad}`));
     return h('td', { class: hucreDegisti(s.servisId, o.id) ? 'degisti' : null }, hucreDenetimi(`${s.ad} · ${o.ad}`, o, x, (y) => hucreAta(s.servisId, o.id, y)));
   };
 
   const hepsi = h('input', { type: 'checkbox', 'aria-label': 'Tüm servisleri seç' });
   hepsi.addEventListener('change', () => { for (const s of satirlar) if (hepsi.checked) secili.add(s.servisId); else secili.delete(s.servisId); ciz(); });
-  const ortamBasliklari = () => ortamlar.map((o) => h('th', { scope: 'col' }, o.ad, ortamRiskRozeti(o) ? [' ', ortamRiskRozeti(o)] : null));
+  const ortamBasliklari = () => ortamlar.map(ortamBasligi);
 
   const servisTablosu = () => {
     const sirali = [...satirlar].sort((a, b) => (taslak.get(a.servisId).grup || '￿').localeCompare(taslak.get(b.servisId).grup || '￿', 'tr') || a.ad.localeCompare(b.ad, 'tr'));
@@ -394,8 +500,8 @@ function servisGorunumu(proje, veri, yenile) {
         grup.addEventListener('change', () => { grupAta(s.servisId, grup.value); ciz(); });
         return h('tr', {},
           h('td', {}, sec),
-          h('th', { scope: 'row' }, s.ad, ' ', turRozeti(s),
-            h('div', { class: 'soluk kucuk' }, h('code', { class: 'duz' }, s.yol || '—'), ` · ${senaryoOzeti(s)}`)),
+          h('th', { scope: 'row', class: 'taban-servis-hucresi' }, s.ad, ' ', turRozeti(s),
+            h('div', { class: 'soluk kucuk taban-servis-yolu', title: s.yol || null }, h('code', { class: 'duz' }, s.yol || '—'), ` · ${senaryoOzeti(s)}`)),
           h('td', { class: (ozgun.get(s.servisId).grup || '') !== (t.grup || '') ? 'degisti' : null }, grup),
           ortamlar.map((o) => hucre(s, o)));
       })));

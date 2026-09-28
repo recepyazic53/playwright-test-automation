@@ -18,6 +18,7 @@
 //   "Bu ortamda yok" servise özeldir, bağı bozmaz (karar sorulmaz). tabanKarari / tabanKarariUygula (tek servis), tabanlariUygula (toplu).
 // - Adres http(s) olmalı ve yasak adres kalıplarına (Ayarlar > Güvenlik) uymamalı. Ağ isteği YOK (SOAP'ta da erişim kontrolü
 //   yapılmaz; kullanıcı isterse servis sayfasından kendisi kontrol eder). Adresi değişen ortamın eski erişim kaydı silinir.
+//   Sorgu dizisi (?…) / parça (#…) içeren yeni adres ENGELLENMEZ; önizlemede "uyarilar" döner (arayüz onay ister).
 import { DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele } from '../veritabani/depo.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi, riskliSecimi } from '../guvenlik/ortam-riski.mjs';
@@ -31,6 +32,35 @@ import { tabanlariDogrula, tabanlariOrtamlaraKaydet } from './servis-islemleri.m
 
 const GRUP_ADI = /^[^\u0000-\u001f]{1,60}$/u;
 const temiz = (/** @type {string} */ a) => a.trim().replace(/\/+$/, '');
+
+/** Sorgu dizili / parçalı taban adresi uyarısı (arayüzdeki taban-adresler.js ile aynı metin). */
+export const TABAN_SORGU_UYARISI = 'Taban adresinde sorgu dizisi var; servisler bunun sonuna yol ekler, genelde yanlıştır.';
+
+/**
+ * Taban adresi bir SUNUCU adresidir (şema + ana makine + isteğe bağlı port ve kök yol). Adreste sorgu dizisi (?…) ya da parça (#…)
+ * varsa uyarı metni döner; ENGELLEMEZ (kullanıcı onaylayıp kaydedebilir, mevcut kayıtlar olduğu gibi kalır).
+ * @param {string} adres @returns {string | null}
+ */
+export function tabanAdresiUyarisi(adres) {
+  return typeof adres === 'string' && /[?#]/.test(adres) ? TABAN_SORGU_UYARISI : null;
+}
+
+/** @typedef {{ ortamId: string; ortam: string; adres: string; mesaj: string }} TabanAdresUyarisi */
+
+/**
+ * Değişen (ya da yeni) adreslerin uyarıları. @param {Array<{ id: string; ad: string }>} ortamlar
+ * @param {Record<string, string>} yeni @param {Record<string, string>} [eski] @returns {TabanAdresUyarisi[]}
+ */
+function adresUyarilari(ortamlar, yeni, eski = {}) {
+  /** @type {TabanAdresUyarisi[]} */
+  const u = [];
+  for (const o of ortamlar) {
+    const a = yeni[o.id];
+    const mesaj = a && a !== eski[o.id] ? tabanAdresiUyarisi(a) : null;
+    if (mesaj) u.push({ ortamId: o.id, ortam: o.ad, adres: a, mesaj });
+  }
+  return u;
+}
 
 /** Bağlı servisin adresi tabandan farklılaşırken verilebilecek kararlar. */
 export const TABAN_KARARLARI = /** @type {const} */ (['ayir', 'tabaniGuncelle', 'vazgec']);
@@ -303,9 +333,19 @@ export function tabanlariUygula(vt, projeId, girdi) {
     }),
     senaryoSayisi: servisSenaryolariniListele(vt, s.id).length, akislar: akislari(s.id)
   }));
+  // Uyarılar (engellemez): değişen hücrelerdeki sorgu dizili / parçalı adresler (aynı ortam + adres bir kez).
+  /** @type {Map<string, TabanAdresUyarisi>} */
+  const uyarilar = new Map();
+  for (const x of onizleme) {
+    for (const a of x.adresler) {
+      const mesaj = a.yeni.kaynak === 'servis' && a.yeni.deger !== a.eski.deger ? tabanAdresiUyarisi(a.yeni.deger) : null;
+      if (mesaj) uyarilar.set(`${a.ortamId}\n${a.yeni.deger}`, { ortamId: a.ortamId, ortam: a.ortam, adres: a.yeni.deger, mesaj });
+    }
+  }
   const ozet = {
     servisler: onizleme,
-    toplam: { servis: onizleme.length, senaryo: onizleme.reduce((n, x) => n + x.senaryoSayisi, 0), akis: new Set(onizleme.flatMap((x) => x.akislar)).size }
+    toplam: { servis: onizleme.length, senaryo: onizleme.reduce((n, x) => n + x.senaryoSayisi, 0), akis: new Set(onizleme.flatMap((x) => x.akislar)).size },
+    uyarilar: [...uyarilar.values()]
   };
   const kararYaniti = Object.keys(kararlar).length ? { tabanKararlari: kararlar } : {};
   if (girdi.onay !== true) return { onizleme: ozet, ...kararYaniti };
@@ -508,7 +548,9 @@ export function tabanAdresiIslemi(vt, projeId, girdi) {
     servisId: s.servisId, ad: s.ad,
     ortamlar: s.adresler.filter((a) => a.yeni.kaynak === 'yok' && a.eski.kaynak !== 'yok').map((a) => a.ortam)
   })).filter((x) => x.ortamlar.length);
-  const ozet = { ...onizleme, bosKalacaklar, taban: { islem, ad, yeniAd, eski: mevcut ? eski : null, yeni } };
+  // Uyarılar tabanın kendi (değişen) adreslerinden; kayıt engellenmez.
+  const uyarilar = yeni ? adresUyarilari(ortamlar, yeni, eski) : [];
+  const ozet = { ...onizleme, uyarilar, bosKalacaklar, taban: { islem, ad, yeniAd, eski: mevcut ? eski : null, yeni } };
   if (girdi.onay !== true) return { onizleme: ozet };
   vt.islem(() => {
     tabanlariUygula(vt, projeId, { degisiklikler: d, onay: true, yapan: girdi.yapan, tabanDegisikligi: true });

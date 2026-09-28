@@ -7,7 +7,7 @@ import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
 import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { servisGetir, servisKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
-import { TabanKarariHatasi, servisTabanBaglantisi, tabanAdresiIslemi, tabanlariUygula, tabanTablosu } from '../../scripts/platform/servisler/taban-adresleri.mjs';
+import { TABAN_SORGU_UYARISI, TabanKarariHatasi, servisTabanBaglantisi, tabanAdresiIslemi, tabanAdresiUyarisi, tabanlariUygula, tabanTablosu } from '../../scripts/platform/servisler/taban-adresleri.mjs';
 import { postmanAktar, servisAdresi, servisiKaydet } from '../../scripts/platform/servisler/servis-islemleri.mjs';
 import { restServisiKaydet } from '../../scripts/platform/servisler/rest-servisi.mjs';
 import { yasakAdresleriKaydet } from '../../scripts/platform/guvenlik/yasak-adresler.mjs';
@@ -244,5 +244,39 @@ test.describe('taban adresine bağlı servisin adresi başka yoldan değişirken
     postmanAktar(vt, projeId, { ...girdi, tabanKararlari: { [s]: 'vazgec' } });
     expect(ay(s)).toMatchObject({ tabanGrubu: 'Stok sunucusu', tabanlar: { [T]: 'https://stok-test.ornek.invalid' } });
     expect(servisGetir(vt, s)?.ayarlar.operasyonlar?.length).toBe(2);
+  });
+});
+
+test.describe('taban adresinde sorgu dizisi: uyarı (engelleme değil)', () => {
+  const klasor = geciciKlasor('taban-sorgu');
+  let vt: Veritabani;
+  test.afterAll(() => { vt?.kapat(); klasor.temizle(); });
+
+  test('önizlemede uyarı döner, onayla yine yazılır; değişmeyen (kayıtlı) adres uyarılmaz; servis bazında da aynı uyarı', async () => {
+    vt = await veritabaniniHazirla(join(klasor.yol, 'p.db'));
+    await kasaOlustur(vt, 'Deneme-Parola-123!', { kdf: HIZLI_KDF });
+    const projeId = projeKaydet(vt, { ad: 'P' });
+    const T = ortamKaydet(vt, { projeId, ad: 'TEST', tabanUrl: 'https://test.ornek.test', varsayilan: true, ayarlar: { riskli: false } });
+    const C = ortamKaydet(vt, { projeId, ad: 'CANLI', tabanUrl: 'https://canli.ornek.test', ayarlar: { canli: true } });
+    const s = servisKaydet(vt, { projeId, anahtar: 's', ad: 'S', ayarlar: { yol: '/s.asmx' } });
+    expect(tabanAdresiUyarisi('https://ornek.test/api')).toBeNull();
+    expect(tabanAdresiUyarisi('https://ornek.test/api?a=1')).toBe(TABAN_SORGU_UYARISI);
+    expect(tabanAdresiUyarisi('https://ornek.test/api#x')).toBe(TABAN_SORGU_UYARISI);
+    const sorgulu = 'https://api.ornek.test/kok?anahtar=1&b=2';
+    const girdi = { islem: 'ekle' as const, ad: 'Sorgulu', adresler: { [T]: sorgulu, [C]: 'https://api.ornek.test' }, baglanacaklar: [s] };
+    const on = tabanAdresiIslemi(vt, projeId, girdi);
+    expect(on.onizleme.uyarilar).toEqual([{ ortamId: T, ortam: 'TEST', adres: sorgulu, mesaj: TABAN_SORGU_UYARISI }]);
+    // Engellenmez: onayla yazılır (adres olduğu gibi).
+    tabanAdresiIslemi(vt, projeId, { ...girdi, onay: true });
+    expect(servisGetir(vt, s)?.ayarlar.tabanlar).toEqual({ [T]: sorgulu, [C]: 'https://api.ornek.test' });
+    // Kayıtlı (değişmeyen) sorgulu adres yeniden uyarılmaz; yalnız değişen CANLI adresi değerlendirilir.
+    const d = tabanAdresiIslemi(vt, projeId, { islem: 'degistir', ad: 'Sorgulu', adresler: { [C]: 'https://api2.ornek.test' } });
+    expect(d.onizleme.uyarilar).toEqual([]);
+    // Servis bazında (tabanlariUygula): değişen hücredeki sorgulu adres uyarılır, onayla yazılır.
+    const s2 = servisKaydet(vt, { projeId, anahtar: 's2', ad: 'S2', ayarlar: { yol: '/s2.asmx' } });
+    const deg = { [s2]: { tabanlar: { [C]: 'https://x.ornek.test/?y=1' } } };
+    expect(tabanlariUygula(vt, projeId, { degisiklikler: deg }).onizleme.uyarilar).toEqual([{ ortamId: C, ortam: 'CANLI', adres: 'https://x.ornek.test/?y=1', mesaj: TABAN_SORGU_UYARISI }]);
+    expect(tabanlariUygula(vt, projeId, { degisiklikler: deg, onay: true }).uygulandi).toBe(true);
+    expect(servisGetir(vt, s2)?.ayarlar.tabanlar?.[C]).toBe('https://x.ornek.test/?y=1');
   });
 });
