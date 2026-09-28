@@ -14,6 +14,7 @@
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { riskBelirtilmemisMi } from './ortam-riski.mjs';
+import { etkinKosuHizi, kosuHiziOzeti } from './kosu-hizi.mjs';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
 import { aktarimEtkisiBolumu, etkiOnayi, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
@@ -486,14 +487,17 @@ const kapsamEtiketi = (liste) => (liste.length ? liste.map((o) => o.ad).join(' +
 const DURUM_SIMGESI = { basarili: '✓', basarisiz: '✗', hata: '!' };
 const gunAy = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
 /**
- * Servis koşusu diyaloğunun "nasıl" bilgisi (Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu"): N = 1 sırayla,
- * N > 1 en çok N senaryo aynı anda (bir senaryonun kendi adımları yine sırayla).
+ * Servis koşusu diyaloğunun "nasıl" bilgisi — seçili ortamın etkin koşu hızı (Ayarlar > Koşu > Servis senaryoları; ortamın "Koşu
+ * hızı" ezer): N = 1 sırayla, N > 1 en çok N senaryo aynı anda (bir senaryonun kendi adımları yine sırayla); bekleme ve kaynağı özette.
  */
 async function servisKosuBicimi() {
-  const n = Number((await kullaniciAyarlari()).servisEszamanli) || 1;
-  return n > 1
-    ? { kosuBicimi: `en çok ${n} tanesi aynı anda`, not: `Seçilen ortamdaki servis adresine en çok ${n} senaryonun istekleri aynı anda gönderilir (Ayarlar > Koşu > Servisler); sonuçlar Raporlar sekmesine yazılır.` }
-    : { kosuBicimi: 'sırayla', not: 'Seçilen ortamdaki servis adresine istekler sırayla gönderilir; sonuçlar Raporlar sekmesine yazılır.' };
+  const genel = await kullaniciAyarlari();
+  const n = (o) => etkinKosuHizi(genel, o).degerler.servisEszamanli;
+  return {
+    kosuBicimi: (o) => (n(o) > 1 ? `en çok ${n(o)} tanesi aynı anda` : 'sırayla'),
+    hizOzeti: (o) => kosuHiziOzeti(etkinKosuHizi(genel, o), 'servis'),
+    not: 'İstekler seçilen ortamdaki servis adresine gönderilir; sonuçlar Raporlar sekmesine yazılır.'
+  };
 }
 
 /**

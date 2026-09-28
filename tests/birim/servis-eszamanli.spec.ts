@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import type { Veritabani } from '../../scripts/platform/veritabani/baglanti.mjs';
-import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { ortamGetir, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { servisAkisiKaydet, servisKosulariniListele, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
 import { erisimKontrolu, servisiKaydet, servisSenaryolariniKos } from '../../scripts/platform/servisler/servis-islemleri.mjs';
 import { oturumlariTemizle, servisAkisiCalistir } from '../../scripts/platform/servisler/servis-akislari.mjs';
@@ -43,11 +43,11 @@ test('sinirliKos: en çok n iş aynı anda; öğeler sırayla başlar; sonuçlar
 
 test('ayarlar: "Aynı anda en çok servis senaryosu" 1–10 (varsayılan 1) ve "İstekler arası bekleme" 0–60000 ms (varsayılan 0), Servisler grubunda', async () => {
   const t = KOSU_AYAR_TANIMLARI.find((x) => x.anahtar === 'servisEszamanli');
-  expect(t).toMatchObject({ grup: 'Servisler', tur: 'sayi', varsayilan: 1, enAz: 1, enCok: 10 });
+  expect(t).toMatchObject({ grup: 'Servis senaryoları', tur: 'sayi', varsayilan: 1, enAz: 1, enCok: 10 });
   expect(t?.aciklama).toContain('1: sırayla.');
   expect(t?.aciklama).toContain('1\'de bırakın');
   const b = KOSU_AYAR_TANIMLARI.find((x) => x.anahtar === 'servisIstekBeklemeMs');
-  expect(b).toMatchObject({ grup: 'Servisler', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 60_000, birim: 'ms' });
+  expect(b).toMatchObject({ grup: 'Servis senaryoları', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 60_000, birim: 'ms' });
   expect(b?.aciklama).toContain('Servise giden her istekten sonra bu kadar beklenir');
 });
 
@@ -116,6 +116,21 @@ test.describe('eşzamanlı servis koşusu', () => {
     soap.sayaciSifirla();
     const t = await servisSenaryolariniKos(vt, projeId, { servisId, ortamId, senaryoIdleri: senaryolar });
     expect(t.sonuclar.map((x) => x.baslik)).toEqual(['S1', 'S2', 'S3', 'S4']);
+    expect(soap.enCokEszamanli()).toBe(3);
+  });
+
+  test('ortam bazında: ortamın "Koşu hızı" genel ayarı ezer (genel 3, ortam 2 → en çok 2); boş bırakılınca genel', async () => {
+    kosuAyarlariniKaydet(vt, { servisEszamanli: 3 });
+    const ortam = ortamGetir(vt, ortamId);
+    const yaz = (kosuHizi?: Record<string, number>) => ortamKaydet(vt, { id: ortamId, projeId, ad: 'TEST', tabanUrl: soap.adres, varsayilan: true,
+      ayarlar: { ...ortam?.ayarlar, ...(kosuHizi ? { kosuHizi } : { kosuHizi: {} }) } });
+    yaz({ servisEszamanli: 2 });
+    const { son } = await kos(senaryolar);
+    expect(son).toMatchObject({ eszamanli: 2, kosuHizi: 'TEST ortamı: en çok 2 senaryo aynı anda, bekleme yok (ortam ayarı)' });
+    expect(soap.enCokEszamanli()).toBe(2);
+    yaz();
+    const { son: son2 } = await kos(senaryolar);
+    expect(son2).toMatchObject({ eszamanli: 3, kosuHizi: 'TEST ortamı: en çok 3 senaryo aynı anda, bekleme yok (genel ayar)' });
     expect(soap.enCokEszamanli()).toBe(3);
   });
 

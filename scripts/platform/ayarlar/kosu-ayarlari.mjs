@@ -64,18 +64,25 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'zorlaIsaretlemeSn', grup: 'Bekleme süreleri', etiket: 'Zorla işaretlenecek seçenek', aciklama: 'Gizli radyo / onay kutusunun sayfada belirmesi için en çok bekleme.',
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn', env: 'NOBETCI_ZORLA_BEKLEME_MS', carpan: 1000 },
   { anahtar: 'servisZamanAsimiSn', grup: 'Servisler', etiket: 'Servis isteği zaman aşımı', aciklama: 'Servis yanıtı bu sürede gelmezse istek kesilir.', tur: 'sayi', varsayilan: 60, enAz: 5, enCok: 600, birim: 'sn' },
-  // Koşu hızı (servis / ekran): sınırlar ayarlar/kosu-hizi.mjs'de; ortam formundaki "Koşu hızı" bu dört değeri ortam bazında ezer.
-  { anahtar: 'servisEszamanli', grup: 'Servisler', etiket: 'Aynı anda en çok servis senaryosu',
-    aciklama: '1: sırayla. Daha büyük değer testleri hızlandırır ama hedef servise aynı anda daha çok istek gider; ağınız ya da hedef sistem bunu sınırlıyorsa 1\'de bırakın. Bir senaryonun kendi adımları (akış adımları, oturum / token) her zaman sırayla koşar. Ortam bazında Ayarlar > Ortamlar > Koşu hızı\'ndan değiştirilebilir.',
-    tur: 'sayi', ...hizAlani('servisEszamanli'), birim: 'senaryo' },
-  { anahtar: 'servisIstekBeklemeMs', grup: 'Servisler', etiket: 'İstekler arası bekleme',
-    aciklama: 'Servise giden her istekten sonra bu kadar beklenir (akış adımları ve oturum / token isteği dahil). Ağ ya da hedef sistem yoğun istekte uyarı veriyorsa artırın; eşzamanlılığı 1\'de tutmak da yükü azaltır.',
-    tur: 'sayi', ...hizAlani('servisIstekBeklemeMs'), birim: 'ms' },
   { anahtar: 'tarihBicimi', grup: 'Servisler', etiket: 'Varsayılan tarih biçimi', aciklama: 'Biçim verilmemiş tarih kurallarında ve ${tarih:…} ifadelerinde kullanılır. yyyy yıl, MM ay, dd gün, HH saat, mm dakika, ss saniye; sabitler tek tırnakta.',
     tur: 'metin', varsayilan: "yyyy-MM-dd'T'HH:mm:ss" },
   { anahtar: 'yetkiHatasinda', grup: 'Servisler', etiket: 'Yetki hatasında (401 / 403)',
     aciklama: 'Oturum akışı ya da token adımı olan servis isteği HTTP 401 / 403 dönerse. Tekrar deneme: istek tekrarlanmaz, sonuç olduğu gibi değerlendirilir. Token\'ı yenile, bir kez tekrar dene: oturum / token adımı yeniden çalıştırılır ve istek bir kez daha gönderilir (raporda not olarak görünür; ikinci deneme de reddedilirse normal hata). Akışta "Genel ayarı kullan" seçiliyse bu değer kullanılır (akışta ayrıca seçim yapılmışsa o geçerlidir). Tekrar da "Servis istekleri" iznine tabidir.',
     tur: 'secim', varsayilan: 'yenileVeTekrar', secenekler: [['tekrarYok', 'Tekrar deneme'], ['yenileVeTekrar', 'Token\'ı yenile, bir kez tekrar dene']] },
+  // Koşu hızı (servis / ekran): sınırlar ayarlar/kosu-hizi.mjs'de; ortam formundaki "Koşu hızı" bu dört değeri ortam bazında ezer
+  // (boş = bu genel ayar). Varsayılanlar önceki davranış: sırayla, beklemesiz.
+  { anahtar: 'servisEszamanli', grup: 'Servis senaryoları', etiket: 'Aynı anda en çok servis senaryosu',
+    aciklama: '1: sırayla. Daha büyük değer testleri hızlandırır ama hedef servise aynı anda daha çok istek gider; ağınız ya da hedef sistem bunu sınırlıyorsa 1\'de bırakın. Bir senaryonun kendi adımları (akış adımları, oturum / token) her zaman sırayla koşar. Ortam bazında Ayarlar > Proje ve ortamlar > ortam > Koşu hızı\'ndan değiştirilebilir.',
+    tur: 'sayi', ...hizAlani('servisEszamanli'), birim: 'senaryo' },
+  { anahtar: 'servisIstekBeklemeMs', grup: 'Servis senaryoları', etiket: 'İstekler arası bekleme',
+    aciklama: 'Servise giden her istekten sonra bu kadar beklenir (akış adımları ve oturum / token isteği dahil). Ağ ya da hedef sistem yoğun istekte uyarı veriyorsa artırın; eşzamanlılığı 1\'de tutmak da yükü azaltır.',
+    tur: 'sayi', ...hizAlani('servisIstekBeklemeMs'), birim: 'ms' },
+  { anahtar: 'ekranEszamanli', grup: 'Ekran senaryoları', etiket: 'Aynı anda en çok ekran senaryosu',
+    aciklama: '1: sırayla. Daha büyük değer koşuyu hızlandırır ama uygulamaya aynı anda birden çok tarayıcı bağlanır. Aynı kullanıcıyla eşzamanlı girişler birbirinin oturumunu düşürebilir; giriş tarifi olan ortamda 1 önerilir (giriş bir kez yapılır, diğer senaryolar aynı oturumu kullanır). Ortam bazında Ayarlar > Proje ve ortamlar > ortam > Koşu hızı\'ndan değiştirilebilir.',
+    tur: 'sayi', ...hizAlani('ekranEszamanli'), birim: 'senaryo' },
+  { anahtar: 'ekranBeklemeMs', grup: 'Ekran senaryoları', etiket: 'Senaryolar arası bekleme',
+    aciklama: 'Bir ekran senaryosu bitince aynı yuvadaki sıradaki senaryo bu kadar bekledikten sonra başlar. Uygulama yoğun kullanımda uyarı veriyorsa artırın.',
+    tur: 'sayi', ...hizAlani('ekranBeklemeMs'), birim: 'ms' },
   { anahtar: 'taramaZamanAsimiDk', grup: 'Tarama ve akış kaydı', etiket: 'Ekran taraması süre limiti', aciklama: 'Ekran taraması bu sürede bitmezse durdurulur.',
     tur: 'sayi', varsayilan: 5, enAz: 1, enCok: 60, birim: 'dk' },
   { anahtar: 'kayitZamanAsimiDk', grup: 'Tarama ve akış kaydı', etiket: 'Akış kaydı süre limiti', aciklama: 'Akışı kaydederken siz işlemi yaparken en çok bu kadar beklenir.',
@@ -140,9 +147,6 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'secim', varsayilan: 'varsayilan', secenekler: [['varsayilan', 'Tarayıcı varsayılanı'], ...DIL_SECENEKLERI], env: 'NOBETCI_TARAYICI_DILI' },
   { anahtar: 'saatDilimi', altBolum: 'gelismis', grup: 'Tarayıcı', etiket: 'Saat dilimi', aciklama: 'Koşu, tarama ve akış kaydındaki tarayıcının saat dilimi.',
     tur: 'secim', varsayilan: 'bilgisayar', secenekler: SAAT_DILIMI_SECENEKLERI, env: 'NOBETCI_SAAT_DILIMI' },
-  { anahtar: 'eszamanliKosu', altBolum: 'gelismis', grup: 'Tarayıcı', etiket: 'Eşzamanlı senaryo',
-    aciklama: 'Senaryolar her zaman sırayla koşar: aynı ortamın giriş oturumu tek dosyada paylaşılır ve aynı kullanıcıyla eşzamanlı girişler birbirinin oturumunu düşürebilir; bu yüzden birden çok eşzamanlı senaryo sunulmaz.',
-    tur: 'secim', varsayilan: 'sirayla', secenekler: [['sirayla', 'Senaryolar sırayla (1)']] },
   // ---- Zamanlanmış koşular (Ayarlar > Koşu > Zamanlanmış koşular kartında; tüm kurallar için) ----
   { anahtar: 'zamanliKacan', bolum: 'zamanlama', grup: 'Zamanlanmış koşu davranışı', etiket: 'Kaçan zaman',
     aciklama: 'Nöbetçi kapalıyken ya da kasa kilitliyken geçen zaman için. Sonra bir kez koş: Nöbetçi açılıp kasa açılınca, kaçan zamanlardan yalnız sonuncusu bir kez koşulur (8 günden eskiler sayılmaz).',
@@ -184,7 +188,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
- *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; benzerlikEsigi: number;
+ *   saatDilimi: string; ekranEszamanli: number; ekranBeklemeMs: number; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; benzerlikEsigi: number;
  *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */

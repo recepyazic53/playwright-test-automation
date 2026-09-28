@@ -201,6 +201,7 @@ import { yedekUyarisi, yedekUyarisiniKapat } from './guvenlik/yedek-uyarisi.mjs'
 import { CanliOnayHatasi, denetlenenUclar, ucDenetle } from './guvenlik/uc-denetimi.mjs';
 import { TabanKarariHatasi } from './servisler/taban-adresleri.mjs';
 import { adCanliyiCagristiriyorMu, riskliOrtamMi, riskliSecimi } from './guvenlik/ortam-riski.mjs';
+import { kosuHiziDogrula } from './ayarlar/kosu-hizi.mjs';
 import {
   EkranDogrulamaHatasi, analizGetir, analizIptal, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle,
   reddedilenleriUnut, sayfaEkle, surumAyrintisi, topluDegerAta, modeliPaketleDegistir
@@ -1049,7 +1050,9 @@ const ortamSecimi = (d) => (d === undefined ? undefined : d === null || d === ''
 function ortamGorunumu(o) {
   const { ayarlar, ...gorunum } = o;
   const ekler = Array.isArray(ayarlar.tabanAdresleri) ? ayarlar.tabanAdresleri.filter((x) => typeof x === 'string') : [];
-  return { ...gorunum, riskli: riskliSecimi(o), canli: riskliOrtamMi(o), tabanAdresleri: [o.tabanUrl, ...ekler] };
+  // kosuHizi: ortam bazında koşu hızı ezmesi (boş = genel ayar); girisTarifiVar: eşzamanlı ekran koşusu uyarısı için (tarifin kendisi gelmez).
+  const kosuHizi = (() => { try { return kosuHiziDogrula(ayarlar.kosuHizi); } catch { return {}; } })();
+  return { ...gorunum, riskli: riskliSecimi(o), canli: riskliOrtamMi(o), tabanAdresleri: [o.tabanUrl, ...ekler], kosuHizi, girisTarifiVar: Boolean(ayarlar.girisTarifi) };
 }
 
 /** @param {import('./veritabani/depo.mjs').GirisProfili} p */
@@ -1642,7 +1645,13 @@ const POST_UCLARI = new Map([
       if (adCanliyiCagristiriyorMu(ad)) throw new DepoHatasi('Bu ortamın adı canlıyı çağrıştırıyor; Test türünü onaylayın.');
     }
     const { canli: _eskiCanli, riskli: _eskiRiskli, ...kalanAyarlar } = /** @type {Record<string, unknown>} */ (mevcut?.ayarlar ?? {});
-    const ayarlar = { ...kalanAyarlar, ...(yeni === null ? {} : { riskli: yeni }) };
+    // "Koşu hızı" (ortam bazında eşzamanlılık / bekleme; boş alan = genel ayar): gönderilirse doğrulanıp yazılır, gönderilmezse korunur.
+    let kosuHizi;
+    if (g.kosuHizi !== undefined) {
+      try { kosuHizi = kosuHiziDogrula(g.kosuHizi); } catch (e) { throw new DepoHatasi(/** @type {Error} */ (e).message); }
+    }
+    const { kosuHizi: _eskiHiz, ...digerAyarlar } = kalanAyarlar;
+    const ayarlar = { ...(kosuHizi === undefined ? kalanAyarlar : { ...digerAyarlar, ...(Object.keys(kosuHizi).length ? { kosuHizi } : {}) }), ...(yeni === null ? {} : { riskli: yeni }) };
     const id = ortamKaydet(db, {
       id: mevcutId, projeId: kimlikAl(g.projeId, 'projeId'), ad, tabanUrl: metinAl(g.tabanUrl).trim(),
       varsayilan: g.varsayilan === true, ayarlar
