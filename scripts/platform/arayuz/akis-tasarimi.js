@@ -549,8 +549,12 @@ export async function akisTasarimi(icerik, s) {
         palet.dugmeler.map((d) => h('option', { value: String(d.sira), selected: d.sira === b.dugme }, `“${d.metin}”`)));
       secim.addEventListener('change', () => { b.dugme = Number(secim.value); degisti(); });
       const kutu = h('input', { type: 'checkbox', checked: b.istegeBagli });
-      kutu.addEventListener('change', () => { b.istegeBagli = kutu.checked; degisti(); });
-      const sure = h('input', { type: 'number', min: '1', max: '600', step: '1', value: b.zamanAsimiSn ?? '', placeholder: 'varsayılan', 'aria-label': 'Sonucu en çok bekleme (sn)' });
+      kutu.addEventListener('change', () => { b.istegeBagli = kutu.checked; if (kutu.checked) delete b.gorunurse; degisti(); });
+      // "Yalnız görünürse bas": ilerleme düğmesinden sonra bazen açılan ara penceredeki düğme (görünmezse atlanır).
+      const gorunurse = h('input', { type: 'checkbox', checked: Boolean(b.gorunurse), 'aria-label': 'Yalnız görünürse bas' });
+      gorunurse.addEventListener('change', () => { if (gorunurse.checked) { b.gorunurse = true; b.istegeBagli = false; } else delete b.gorunurse; degisti(); });
+      const sureEtiketi = b.gorunurse ? 'Görünmesini en çok bekleme (sn)' : 'Sonucu en çok bekleme (sn)';
+      const sure = h('input', { type: 'number', min: '1', max: '600', step: '1', value: b.zamanAsimiSn ?? '', placeholder: b.gorunurse ? '5' : 'varsayılan', 'aria-label': sureEtiketi });
       sure.addEventListener('change', () => {
         const n = Number(sure.value);
         if (sure.value === '') delete b.zamanAsimiSn; else b.zamanAsimiSn = Number.isInteger(n) ? n : sure.value;
@@ -559,9 +563,11 @@ export async function akisTasarimi(icerik, s) {
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Basılacak düğme'), secim),
         korunanParca,
-        h('label', { class: 'onay-satiri kucuk' }, kutu, 'Her senaryoda basılmaz (senaryoda seçilir)'),
-        b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Sonucu en çok bekleme (sn)'), sure),
-        b.istegeBagli ? null : goruntuIsareti(b),
+        b.gorunurse ? null : h('label', { class: 'onay-satiri kucuk' }, kutu, 'Her senaryoda basılmaz (senaryoda seçilir)'),
+        b.istegeBagli ? null : h('label', { class: 'onay-satiri kucuk' }, gorunurse, 'Yalnız görünürse bas'),
+        b.gorunurse ? h('p', { class: 'soluk kucuk' }, 'Önceki düğmeden sonra bazı ekranlarda açılan (bazılarında açılmayan) ara penceredeki düğme: kısa süre beklenir, görünürse basılır, görünmezse atlanır (raporda not). Adımın ilerleme düğmesinden sonra gelir.') : null,
+        b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, sureEtiketi), sure),
+        b.istegeBagli || b.gorunurse ? null : goruntuIsareti(b),
         b.istegeBagli ? h('p', { class: 'soluk kucuk' }, 'Hemen ardından gelen alan grubu bu düğmeyle açılan alanlardır; senaryoda “dahil” işaretliyse doldurulur.') : null
       ];
     }
@@ -690,6 +696,7 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'korunan' ? rozet('salt okunur', 'uyari', { title: 'Diyagramda düzenlenemez; kaydederken modeldeki hâliyle aynen korunur.' }) : null,
       b.tur !== 'korunan' && b.korunan ? rozet('korunan parça', 'uyari', { title: 'Bu adımın bazı parçaları diyagramda düzenlenemez; kaydederken aynen korunur.' }) : null,
       b.tur === 'aksiyon' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
+      b.tur === 'aksiyon' && b.gorunurse ? rozet('görünürse basılır', 'vurgu', { title: 'Düğme kısa sürede görünmezse atlanır (ör. her ekranda çıkmayan ara pencere).' }) : null,
       b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu', { kisalt: true }) : null,
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,

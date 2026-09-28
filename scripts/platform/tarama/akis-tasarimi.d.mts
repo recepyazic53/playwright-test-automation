@@ -43,7 +43,8 @@ export type AkisBlogu =
   /** Süreli bekleme (saniye). */
   | { tur: 'bekle'; saniye: number }
   /** zamanAsimiSn: düğmeden sonra sonucu (mesaj / sonraki alan) en çok bekleme süresi (1–600 sn; yoksa koşucunun varsayılanı). */
-  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[] }
+  /** gorunurse: "Yalnız görünürse bas" — ilerleme düğmesinden sonra, kısa sürede görünmezse atlanır (zamanAsimiSn: o kısa bekleme). */
+  | { tur: 'aksiyon'; dugme: number; istegeBagli: boolean; gorunurse?: boolean; zamanAsimiSn?: number; ekranGoruntusu?: boolean; korunan?: string; korunanOzet?: string[] }
   /** uyari: kabul edilen iş kuralı uyarısı (başarı değil; senaryo "uyarı bekleniyor" derken seçer). */
   /** desen: metin bir düzenli ifadedir (ör. "[1-9]" — sıfırdan farklı toplam); öğesi seçildiyse onun metninde aranır. */
   | { tur: 'mesaj'; mesaj: number | null; metin: string; uyari?: boolean; desen?: boolean }
