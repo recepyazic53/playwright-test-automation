@@ -281,7 +281,7 @@ test.describe('uçtan uca: ${Tablo.Sütun} ile ekran senaryosu (127.0.0.1)', () 
       await page.goto(`/#/senaryolar/yeni/${ekranId}`);
       const plan = page.locator('[data-alan="plan"] select');
       await expect(plan).toBeVisible({ timeout: 15_000 });
-      await expect(plan.locator('optgroup[label="Test verisi tablosundan"] option')).toHaveText('Tablodan: Plan seçimi → Plan (koşuda seçilen satır)');
+      await expect(plan.locator('optgroup[label="Test verisi tablosundan"] option')).toHaveText('Tablodan: Plan seçimi › Plan');
       await page.getByRole('textbox', { name: 'Başlık', exact: true }).fill('Formdan tablo planı');
       await page.locator('[data-alan="kategori"] select').selectOption('K1');
       await page.locator('[data-alan="urun"] select').selectOption('Ürün A');

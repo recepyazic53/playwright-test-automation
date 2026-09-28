@@ -24,7 +24,8 @@ import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-
 import { eskiyenTarihAlanlari } from './goreli-tarih.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
-import { etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
+import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari.mjs';
+import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
 import { tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
 import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
 
@@ -475,27 +476,34 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
     // Bu ekranın seçim listeleri (tablo bağlantıları + değer listeleri): seçim alanlarının seçeneklerini süzer.
     degerListeleri: ekranListeleri(vt, projeId, ekranId, ortamId, tumFormAlanlari(sema).map((a) => String(a.id))),
     // Gizli sütuna (ör. CVV, parola) bağlı alanlar: değer listesine girmez; formun "Tablodan" başvurusu için yalnız tablo ve sütun ADI.
-    gizliBaglar: gizliSutunBaglari(vt, projeId, ekranId)
+    // Kayıt tablosuna (tür 'kayit') bağlı alanlar ve kayıt tablolarının adları: form aynı tablo + etiketteki alanları tek KAYIT GRUBU
+    // ("Hazır kayıt / Yeni") olarak gösterir (değer yok; satırlar formda /platform/tablolar'dan okunur).
+    ...tabloBaglariOzeti(vt, projeId, ekranId)
   };
 }
 
 /**
- * Ekranın gizli sütuna bağlı alanları (değer YOK): alan kimliği → { tablo adı, sütun adı, etiket? }.
+ * Ekranın tablo bağlarının özeti (değer YOK): gizli sütuna bağlı alanlar (alan → tablo / sütun adı, etiket?), kayıt tablosuna bağlı
+ * alanlar (alan → tablo / sütun adı, etiket?, gizli mi) ve projedeki kayıt tablolarının adları.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
- * @returns {Record<string, { tablo: string; sutun: string; etiket?: string }>}
  */
-function gizliSutunBaglari(vt, projeId, ekranId) {
+function tabloBaglariOzeti(vt, projeId, ekranId) {
   const baglar = etkinAlanBaglari(vt, ekranId);
-  if (!Object.keys(baglar).length) return {};
   const tablolar = tablolariListele(vt, projeId);
+  const kayitIdleri = new Set(tablolar.filter((t) => tabloTuru(t, tabloEkranKullanimi(vt, projeId)) === 'kayit').map((t) => t.id));
   /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
-  const sonuc = {};
+  const gizliBaglar = {};
+  /** @type {Record<string, { tablo: string; sutun: string; etiket?: string; gizli: boolean }>} */
+  const kayitBaglari = {};
   for (const [alan, b] of Object.entries(baglar)) {
     const t = tablolar.find((x) => x.id === b.tablo);
     const s = t ? t.sutunlar.find((c) => c.ad === b.sutun) : undefined;
-    if (t && s && s.gizli) sonuc[alan] = { tablo: t.ad, sutun: s.ad, ...(b.etiket ? { etiket: String(b.etiket) } : {}) };
+    if (!t || !s) continue;
+    const ozet = { tablo: t.ad, sutun: s.ad, ...(b.etiket ? { etiket: String(b.etiket) } : {}) };
+    if (s.gizli) gizliBaglar[alan] = ozet;
+    if (kayitIdleri.has(t.id)) kayitBaglari[alan] = { ...ozet, gizli: s.gizli === true };
   }
-  return sonuc;
+  return { gizliBaglar, kayitBaglari, kayitTablolari: tablolar.filter((t) => kayitIdleri.has(t.id)).map((t) => t.ad) };
 }
 
 /**

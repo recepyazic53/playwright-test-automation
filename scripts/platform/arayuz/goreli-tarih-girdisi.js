@@ -1,4 +1,5 @@
 // TARİH ALANI GİRDİSİ (genel) — senaryo formunun tarih alanları: "Sabit tarih" / "Bugüne göre" (/ bağlı tabloda "Tablodan").
+//  - Kip seçimi tek satır segment kontrolüdür; alan sütunu dar olunca (kapsayıcı sorgusu) aynı seçim açılır liste olarak görünür.
 //  - Bugüne göre: "Bugün | Ay başı | Ay sonu" [+/−] [N] gün; altında önizleme "Bugün koşulursa: 05.10.2026". Saklanan değer göreli
 //    ifade metnidir ("bugün+7"); koşucu her koşuda o günün tarihini (Europe/Istanbul) alanın biçimiyle yazar.
 //  - Alanın sınırları (enAz / enCok; göreli olabilir) varsa önizleme sınır dışında uyarır.
@@ -28,11 +29,13 @@ export function tarihGirdisi(s) {
   let kip = s.tabloBasvurusu && s.tabloBasvurusu(ilkDeger) ? 'tablo' : goreliIfadeAyristir(ilkDeger) ? 'goreli' : 'sabit';
   let sonTablo = kip === 'tablo' ? ilkDeger : s.tablodan?.deger ?? '';
 
-  // --- Kip seçimi (radyo) ---
+  // --- Kip seçimi: tek satır segment (radyo); alan sütunu dar olunca (kapsayıcı sorgusu, stil.css) aynı seçim açılır liste olur ---
   const secenekler = [['sabit', 'Sabit tarih'], ['goreli', 'Bugüne göre'], ...(s.tablodan || kip === 'tablo' ? [['tablo', 'Tablodan']] : [])];
   const radyolar = secenekler.map(([d]) => h('input', { type: 'radio', name: `${on}-kip`, value: d, checked: d === kip }));
   const kipGrubu = h('div', { class: 'tarih-kipi', role: 'radiogroup', 'aria-label': `${s.etiket}: tarih nasıl verilsin` },
-    radyolar.map((r, i) => h('label', {}, r, secenekler[i][1])));
+    radyolar.map((r, i) => h('label', { title: secenekler[i][1] }, r, h('span', {}, secenekler[i][1]))));
+  const kipSecimi = h('select', { class: 'tarih-kipi-secimi', 'aria-label': `${s.etiket}: tarih nasıl verilsin` },
+    secenekler.map(([d, m]) => h('option', { value: d, selected: d === kip }, m)));
 
   // --- Sabit tarih ---
   const sabit = h('input', { type: 'text', id: s.id, value: kip === 'sabit' ? ilkDeger : '', autocomplete: 'off', spellcheck: 'false', placeholder: bicim,
@@ -57,8 +60,7 @@ export function tarihGirdisi(s) {
 
   // --- Tablodan ---
   const tabloMetni = h('span', {});
-  const tabloPanel = h('div', { class: 'tablodan-deger' }, ikon('veri'), tabloMetni,
-    h('small', { class: 'soluk' }, ' · tablo hücresine "bugün+7" gibi göreli tarih de yazılabilir'));
+  const tabloPanel = h('div', { class: 'tablodan-deger' }, ikon('veri'), tabloMetni, h('small', { class: 'soluk' }, 'Koşuda seçilen satırdan gelir.'));
 
   const goreliDeger = () => {
     const n = Math.min(EN_COK_GUN, Math.max(0, Math.trunc(Number(gun.value) || 0)));
@@ -95,8 +97,9 @@ export function tarihGirdisi(s) {
     goreliPanel.hidden = kip !== 'goreli';
     tabloPanel.hidden = kip !== 'tablo';
     for (const r of radyolar) r.checked = r.value === kip;
+    kipSecimi.value = kip;
     const b = s.tabloBasvurusu && sonTablo ? /** @type {any} */ (s.tabloBasvurusu(sonTablo)) : null;
-    tabloMetni.textContent = b ? `Tablodan: ${b.tablo}${b.etiket ? ` [${b.etiket}]` : ''} → ${b.sutun}` : (s.tablodan?.metin ?? '');
+    tabloMetni.textContent = b ? `Tablodan: ${b.tablo}${b.etiket ? ` [${b.etiket}]` : ''} › ${b.sutun}` : (s.tablodan?.metin ?? '');
     if (kip === 'goreli') goreliyiGuncelle();
     eskimeyiGuncelle();
   }
@@ -108,27 +111,28 @@ export function tarihGirdisi(s) {
     gun.value = String(Math.abs(i.gun));
   }
 
-  for (const r of radyolar) {
-    r.addEventListener('change', () => {
-      if (!r.checked) return;
-      const onceki = kip;
-      kip = /** @type {any} */ (r.value);
-      if (kip === 'goreli') {
-        // Sabit tarih yazılıysa bugüne göre farkı alınır (önizleme aynı tarihi gösterir); boşsa "bugün".
-        const t = onceki === 'sabit' ? sabitTarihAyristir(sabit.value, bicim) : null;
-        if (t) goreliyeYaz(goreliIfadeYaz({ taban: 'bugun', gun: gunFarki(istanbulGunu(simdi()), t) }));
-        s.degistir(goreliDeger());
-      } else if (kip === 'sabit') {
-        const t = onceki === 'goreli' ? goreliGun(goreliDeger(), simdi()) : null;
-        if (t) sabit.value = tarihBicimle(t, bicim);
-        s.degistir(sabit.value);
-      } else {
-        if (!sonTablo && s.tablodan) sonTablo = s.tablodan.deger;
-        s.degistir(sonTablo);
-      }
-      goster();
-    });
+  /** @param {string} yeni */
+  function kipDegistir(yeni) {
+    if (yeni === kip) return;
+    const onceki = kip;
+    kip = /** @type {any} */ (yeni);
+    if (kip === 'goreli') {
+      // Sabit tarih yazılıysa bugüne göre farkı alınır (önizleme aynı tarihi gösterir); boşsa "bugün".
+      const t = onceki === 'sabit' ? sabitTarihAyristir(sabit.value, bicim) : null;
+      if (t) goreliyeYaz(goreliIfadeYaz({ taban: 'bugun', gun: gunFarki(istanbulGunu(simdi()), t) }));
+      s.degistir(goreliDeger());
+    } else if (kip === 'sabit') {
+      const t = onceki === 'goreli' ? goreliGun(goreliDeger(), simdi()) : null;
+      if (t) sabit.value = tarihBicimle(t, bicim);
+      s.degistir(sabit.value);
+    } else {
+      if (!sonTablo && s.tablodan) sonTablo = s.tablodan.deger;
+      s.degistir(sonTablo);
+    }
+    goster();
   }
+  for (const r of radyolar) r.addEventListener('change', () => { if (r.checked) kipDegistir(r.value); });
+  kipSecimi.addEventListener('change', () => kipDegistir(kipSecimi.value));
   sabit.addEventListener('input', () => { s.degistir(sabit.value); eskimeyiGuncelle(); });
   sabit.addEventListener('change', () => {
     // "bugün+7" doğrudan yazıldıysa "Bugüne göre"ye geçilir.
@@ -154,7 +158,7 @@ export function tarihGirdisi(s) {
   });
   goster();
   return {
-    el: h('div', { class: 'tarih-girdisi' }, kipGrubu, sabitPanel, goreliPanel, tabloPanel),
+    el: h('div', { class: `tarih-girdisi kip-${secenekler.length}` }, kipGrubu, kipSecimi, sabitPanel, goreliPanel, tabloPanel),
     girdiler: [sabit, gun],
     kip: () => /** @type {any} */ (kip)
   };

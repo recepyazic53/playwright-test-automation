@@ -1196,14 +1196,25 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .radyo-grubu label:has(input:checked) { box-shadow: inset 0 0 0 1px var(--vurgu), 0 0 18px -10px var(--vurgu); background: var(--vurgu-zemin); }
 .onay-satiri { display: flex; align-items: center; gap: 10px; min-height: 38px; margin: 0; font-weight: 500; cursor: pointer; }
 /* Tarih alanı: Sabit tarih / Bugüne göre / Tablodan (goreli-tarih-girdisi.js) */
-.tarih-girdisi { display: grid; gap: 8px; min-width: 0; }
-.tarih-kipi { display: flex; flex-wrap: wrap; gap: 4px; }
+/* Kip seçimi tek satır segment; alan sütunu dar olunca (kapsayıcı sorgusu) aynı seçim açılır liste olur — düğmeler iç içe girmez. */
+.tarih-girdisi { display: grid; gap: 8px; min-width: 0; container-type: inline-size; }
+.tarih-kipi { display: flex; flex-wrap: nowrap; min-width: 0; padding: 2px; gap: 2px; border-radius: 8px; background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
 .tarih-kipi label {
-  margin: 0; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 10px; border-radius: 7px; cursor: pointer; font: 500 12.5px var(--yazi);
-  background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); color: var(--metin-2);
+  flex: 1 1 0; min-width: 0; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px; padding: 0 8px; border-radius: 6px;
+  cursor: pointer; font: 500 12.5px var(--yazi); color: var(--metin-2); white-space: nowrap;
 }
+.tarih-kipi label > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .tarih-kipi label:has(input:checked) { box-shadow: inset 0 0 0 1px var(--vurgu); background: var(--vurgu-zemin); color: var(--metin); }
-.tarih-kipi input { width: 13px; height: 13px; margin: 0; }
+.tarih-kipi input { flex: none; width: 13px; height: 13px; margin: 0; }
+.tarih-kipi-secimi { display: none; width: 100%; min-width: 0; }
+@container (max-width: 13.5rem) {
+  .tarih-girdisi > .tarih-kipi { display: none; }
+  .tarih-girdisi > .tarih-kipi-secimi { display: block; }
+}
+@container (max-width: 19.5rem) {
+  .tarih-girdisi.kip-3 > .tarih-kipi { display: none; }
+  .tarih-girdisi.kip-3 > .tarih-kipi-secimi { display: block; }
+}
 .tarih-sabit, .tarih-goreli { display: grid; gap: 6px; min-width: 0; }
 .tarih-goreli-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .tarih-goreli-satiri select { width: auto; min-width: 0; flex: 0 1 auto; }
@@ -3436,6 +3447,29 @@ dialog.karsilastir-diyalogu { width: min(40rem, calc(100vw - 2rem)); }
 .kosul-satiri span { overflow-wrap: anywhere; color: var(--metin-2); }
 .tablodan-deger { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; padding: 6px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 13px; }
 .tablodan-deger > span { flex: 1 1 10rem; min-width: 0; overflow-wrap: anywhere; }
+/* Kayıt grubu (senaryo formu): aynı kayıt tablosuna bağlı alanlar için "Hazır <tablo> / Yeni" + satır seçimi; hazırda alanlar özet. */
+.kayit-grubu { display: grid; gap: 8px; min-width: 0; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); }
+.kayit-grubu-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.kayit-grubu-adi { display: inline-flex; align-items: center; gap: 6px; min-width: 0; font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.kayit-grubu-adi .ikon { flex: none; color: var(--vurgu); }
+.kayit-kipi { display: flex; flex-wrap: wrap; min-width: 0; max-width: 100%; margin-left: auto; padding: 2px; gap: 2px; border-radius: 8px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--cizgi); }
+.kayit-kipi label { flex: 1 1 auto; min-width: 0; margin: 0; display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 10px; border-radius: 6px; cursor: pointer; font: 500 12.5px var(--yazi); color: var(--metin-2); }
+.kayit-kipi label > span { min-width: 0; overflow-wrap: anywhere; }
+.kayit-kipi label:has(input:checked) { box-shadow: inset 0 0 0 1px var(--vurgu); background: var(--vurgu-zemin); color: var(--metin); }
+.kayit-kipi input { flex: none; width: 13px; height: 13px; margin: 0; }
+.kayit-grubu p { margin: 0; }
+.kayit-karisik { display: flex; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+.kayit-karisik .ikon { flex: none; }
+.kayit-satirlari { display: grid; gap: 6px; min-width: 0; }
+.kayit-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+.kayit-satiri > label, .kayit-satiri-no { flex: none; font-size: 12.5px; font-weight: 600; color: var(--metin-2); }
+.kayit-satiri select { flex: 1 1 12rem; min-width: 0; max-width: 100%; }
+.kayit-ekle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; }
+.kayit-grubu .kosul-duzenleyici summary { cursor: pointer; }
+.kayit-ozeti { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; min-height: 36px; padding: 6px 10px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 13px; }
+.kayit-ozeti .ikon { flex: none; color: var(--vurgu); }
+.kayit-ozeti-deger { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.kayit-ozeti small { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; }
 /* Veri koşuları (tablodan çoklu satır): senaryo formunda çalıştırma biçimi, satır işaretleri, birleşim / eşleşmeler, tahmini test
    sayısı; koşu diyaloğunda veri koşusu seçimi; Sonuçlar > Koşu'da veri koşularının gruplanması ve "Başarısızları tekrar çalıştır". */
 .calistirma-bicimi { display: grid; gap: 4px; min-width: 0; margin-top: 4px; font-size: 13px; }
