@@ -112,7 +112,13 @@ export const REHBERLER = {
       { baslik: 'Ekran seçimi', hedef: '.alt-nav', metin: 'Soldan bir ekran seçin; yalnızca onun senaryoları listelenir. Servisler de bu panelin altındadır.' },
       { baslik: 'Arama ve süzgeçler', hedef: '.senaryo-arac-cubugu', metin: 'Başlıkta arayın; "Koşuda", beklenen sonuç ve son duruma göre süzün.', ipucu: 'Klavyede "/" tuşu doğrudan aramaya gider.' },
       { baslik: 'Yeni senaryo ve koşu', hedef: '.sayfa-basligi .eylemler', metin: '"Yeni senaryo" ekran modelinden bir form açar. "Koşuyu başlat", "Koşuda" açık olan tüm senaryoları sırayla koşar; canlı ekran görüntüsünü panelden izlersiniz.' },
-      { baslik: 'Senaryo tablosu', hedef: '.senaryo-tablosu', metin: 'Satırdaki ▷ tek senaryoyu çalıştırır, kalem düzenler, ⋯ kopyalar / geçmişi gösterir / siler. Birden çok satır seçince toplu işlemler (ör. toplu değer atama) çıkar.' },
+      { baslik: 'Senaryo tablosu', hedef: '.senaryo-tablosu', metin: 'Satırdaki ▷ tek senaryoyu çalıştırır, kalem düzenler, ⋯ kopyalar / geçmişi gösterir / Playwright koduna dışa aktarır / siler. Birden çok satır seçince toplu işlemler (ör. toplu değer atama) çıkar.' },
+      {
+        baslik: 'Playwright koduna dışa aktar',
+        hedef: '.senaryo-tablosu',
+        metin: '⋯ > "Playwright koduna dışa aktar" (ya da senaryo ayrıntısındaki düğme) senaryoyu seçtiğiniz ortam için Nöbetçi\'nin koştuğu adımlarla tek bir .spec.ts dosyası olarak indirir; dosya Nöbetçi olmadan "npx playwright test" ile koşar.',
+        ipucu: 'Parola, TOTP, gizli ve kişisel değerler dosyaya yazılmaz: dosyanın başında listelenen NOBETCI_… ortam değişkenleriyle verilir. SQL kontrolü gibi Nöbetçi\'ye özgü adımlar yorum olarak kalır. Dosya Nöbetçi dışındadır; ekran modeli değişince yeniden dışa aktarın.'
+      },
       {
         baslik: 'Önerilen çalışma sırası',
         sira: ['Ekranlar\'dan ekranı ekleyin (sayfa paketi, tarama ya da akış kaydı).', 'Bu ekranda "Yeni senaryo" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],

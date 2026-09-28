@@ -27,6 +27,7 @@ import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
+import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
@@ -1316,8 +1317,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
     h('span', {}, ikon('ag'), `doğrulama bağlamı: ${s.ortam.ad}`),
     senaryo ? h('span', { class: 'mono cok-soluk' }, senaryo.id) : null
   ];
-  yerlestir(icerik, 
-    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), 'Listeye dön')),
+  // Playwright koduna dışa aktar: KAYDEDİLMİŞ senaryodan (kaydedilmemiş değişiklikler dosyaya girmez); senaryonun kayıtlı ortamlarından biri.
+  const disaAktarDugmesi = senaryo ? h('button', {
+    type: 'button', class: 'hayalet', title: 'Kaydedilmiş senaryoyu seçilen ortam için çalıştırılabilir tek bir .spec.ts dosyası olarak indirir (gizli değerler ortam değişkeniyle)',
+    onclick: () => playwrightKodunaAktar({ projeId: s.proje.id, senaryo: { id: senaryo.id, baslik: senaryo.baslik }, ortamlar: s.ortamlar.filter((o) => senaryo.ortamlar.includes(o.id)) })
+  }, ikon('indir'), 'Playwright koduna dışa aktar') : null;
+  yerlestir(icerik,
+    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, disaAktarDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), 'Listeye dön')),
     h('div', { class: 'form-duzeni' },
       h('div', { class: 'form-sutunu' }, sekmeCubugu, formAlani, diyagramAlani),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıt' },
