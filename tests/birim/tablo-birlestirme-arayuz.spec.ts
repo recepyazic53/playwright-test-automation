@@ -84,6 +84,15 @@ test('veri sağlığı özeti, birleştirme penceresi, onaylı birleştirme ve g
     expect(o.sayfa, `${genislik}px sayfa`).toBeLessThanOrEqual(2);
     expect(o.diyalog, `${genislik}px diyalog`).toBeLessThanOrEqual(2);
     if (genislik === 390) { await d.getByRole('button', { name: 'Kapat' }).click(); await baglam.close(); continue; }
+    // Ad kutusu: yazarken önizleme yeniden hesaplanır ama kutu yeniden çizilmez; harfler kaybolmaz, odak kalır.
+    const adKutusu = d.getByRole('textbox', { name: 'Kalan tablonun adı' });
+    await adKutusu.click();
+    await adKutusu.pressSequentially('Kargo ana', { delay: 150 });
+    await expect(d.getByText('Önizleme hesaplanıyor…')).toHaveCount(0);
+    await expect(adKutusu).toHaveValue('Kargo ana');
+    await expect(adKutusu).toBeFocused();
+    await adKutusu.fill('');
+    await expect(d.getByText('Önizleme hesaplanıyor…')).toHaveCount(0);
     await d.getByRole('combobox', { name: 'k1 satırı için seçim' }).selectOption('kalan');
     await expect(d).toContainText('2 satır kalır, 1 satır eklenir');
     await expect(d.getByRole('button', { name: 'Birleştir', exact: true })).toBeEnabled();

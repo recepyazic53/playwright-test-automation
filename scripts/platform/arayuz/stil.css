@@ -3661,6 +3661,8 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .baglanti-dugmesi { background: none; border: 0; padding: 0; color: var(--vurgu, inherit); text-decoration: underline; cursor: pointer; font: inherit; text-align: left; overflow-wrap: anywhere; }
 .birlestirme-diyalogu .kalan-secenegi { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 8px; min-width: 0; }
 .birlestirme-diyalogu .kalan-secenegi > span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.birlestirme-diyalogu .kalan-secenegi .onerilen { display: block; margin-top: 3px; }
+.birlestirme-diyalogu .kalan-secenegi .onerilen .rozet { max-width: 100%; white-space: normal; }
 .birlestirme-diyalogu .neden { display: block; font-size: 11.5px; color: var(--metin-3); }
 .birlestirme-diyalogu .alan-etiketi { display: grid; gap: 4px; margin-top: 8px; font-size: 13px; }
 .birlestirme-diyalogu .alan-etiketi input { width: 100%; max-width: 100%; min-width: 0; }
