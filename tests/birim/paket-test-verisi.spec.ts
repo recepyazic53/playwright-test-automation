@@ -478,4 +478,55 @@ test.describe('Arayüz: paket önizlemesinde test verisi', () => {
       k.temizle();
     }
   });
+
+  test('tek sütunlu benzer tablo: "Benzer tablo var" seçenekleri görünür; onu kullan → eksik satır mevcut tabloya, bağ oraya', async () => {
+    test.setTimeout(120_000);
+    const k = geciciKlasor('paket-tv-benzer');
+    const vtYolu = join(k.yol, 'platform.db');
+    const PAROLA = 'Paket-Benzer-Kasa-Parolasi-6';
+    const vt = await veritabaniniHazirla(vtYolu);
+    await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    vt.kapat();
+    const nobetci = await nobetciBaslat(k.yol, vtYolu, {});
+    const tarayici = await chromium.launch();
+    try {
+      const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
+      expect((await api('/platform/kasa/ac', { parola: PAROLA })).basarili).toBe(true);
+      const projeId = String((await api('/platform/proje/kaydet', { ad: 'Benzer tablo projesi' })).proje.id);
+      const t = await api('/platform/tablo/kaydet', { projeId, ad: 'Eski rota — Kapsam', sutunlar: [{ ad: 'KAPSAM' }],
+        satirlar: [{ degerler: { KAPSAM: 'EKSPRES' } }, { degerler: { KAPSAM: 'STANDART' } }] });
+      expect(t.basarili, String(t.mesaj ?? '')).not.toBe(false);
+      const paket = { ...kopya(V1), testVerisi: {
+        tablolar: [{ ad: 'Örnek Rota — Kapsam', tur: 'liste', sutunlar: [{ ad: 'Kapsam' }], satirlar: [['EKSPRES'], ['STANDART'], ['KURYE']] }],
+        baglantilar: [{ alanId: 'kapsam', tablo: 'Örnek Rota — Kapsam', sutun: 'Kapsam' }] } };
+      const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+      const page = await baglam.newPage();
+      const hatalar: string[] = [];
+      page.on('pageerror', (e) => hatalar.push(String(e)));
+      await page.goto('/#/ekranlar/yeni');
+      await page.locator('#paket-dosyasi').setInputFiles({ name: 'paket.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(paket)) });
+      const bolum = page.getByRole('region', { name: 'Test verisine yazılacaklar' });
+      await expect(bolum).toContainText('Benzer tablo var: “Eski rota — Kapsam”');
+      const grup = bolum.getByRole('radiogroup', { name: 'Örnek Rota — Kapsam: benzer tablo' });
+      await expect(grup.getByRole('radio')).toHaveCount(3);
+      await expect(grup.getByLabel('Yine de yeni tablo oluştur')).toBeChecked();
+      await expect(grup.getByLabel('Atla (yazma)')).toBeVisible();
+      await expect(bolum.getByLabel('Örnek Rota — Kapsam tablosunu yaz')).toHaveCount(0);
+      await grup.getByLabel(/Onu kullan: “Eski rota — Kapsam” — 1 yeni satır eklenir/).check();
+      await page.getByRole('button', { name: 'Hiçbiri' }).click();
+      await page.getByRole('button', { name: 'Ekranı oluştur' }).click();
+      await expect(page.getByText(/Test verisi: .*Eski rota — Kapsam/)).toBeVisible();
+      const tablolar = (await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[];
+      expect(tablolar.map((x) => x.ad)).toEqual(['Eski rota — Kapsam']);
+      expect(tablolar[0].satirlar.map((r: Nesne) => r.degerler.KAPSAM)).toEqual(['EKSPRES', 'STANDART', 'KURYE']);
+      const ekranlar = (await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Nesne[];
+      const baglar = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${ekranlar[0].id}`)).baglar as Nesne;
+      expect(baglar.kapsam).toEqual({ tablo: tablolar[0].id, sutun: 'KAPSAM' });
+      expect(hatalar).toEqual([]);
+    } finally {
+      await tarayici.close();
+      nobetci.surec.kill('SIGTERM');
+      k.temizle();
+    }
+  });
 });
