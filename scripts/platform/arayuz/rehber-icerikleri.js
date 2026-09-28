@@ -430,7 +430,8 @@ export const REHBERLER = {
       {
         baslik: 'Kişi alanlarını tabloya bağlama',
         metin: ['Ekran > Test verisi sekmesindeki "Kişi alanlarını tabloya bağla…", ekrandaki kişi / kimlik alanlarını (kimlik no, vergi no, pasaport, doğum tarihi, telefon, e-posta, ad soyad) bir kişi / kayıt tablosunun sütunlarına bağlamayı önerir; eşlemeyi siz onaylarsınız.',
-          'Her senaryo için sonuç gösterilir (değer gösterilmez): "eşleşti" (kişinin değerleri tablodaki bir satırla aynı), "yeni satır" (tabloda yok: satır adı önerilir, ortama özel olup olmayacağını seçersiniz) ya da "atlandı" ve nedeni (ör. kişinin alanları tabloda farklı satırlarda). Bir kişinin alanları hep aynı satırdan gelir. Koşuda ekrana giden değer değişecek alan çevrilmez. Onaylayınca bağlar, yeni satırlar ve senaryolar tek işlemde yazılır.'],
+          'Her senaryo için sonuç gösterilir (değer gösterilmez): "eşleşti" (kişinin değerleri tablodaki bir satırla aynı), "yeni satır" (tabloda yok: satır adı önerilir, ortama özel olup olmayacağını seçersiniz) ya da "atlandı" ve nedeni (ör. kişinin alanları tabloda farklı satırlarda). Bir kişinin alanları hep aynı satırdan gelir. Koşuda ekrana giden değer değişecek alan çevrilmez. Onaylayınca bağlar, yeni satırlar ve senaryolar tek işlemde yazılır.',
+          'Aynı türden ikinci bir kişi alanı varsa (ör. ikinci telefon, "ettiren / ödeyen" ön ekli alanlar, ayrı bölümdeki kişiler) o alanlar ayrı bir ETİKETLE bağlanmak üzere önerilir (etiket alanın ya da bölümün adından, ör. "ödeyen"); iki kişi tablonun ayrı satırlarından gelir. Etiketi pencerede değiştirebilirsiniz.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Kişi alanları', ikon: 'kullanici' }, { baslik: 'Sütun eşleme', alt: 'öneri + onay', ikon: 'esle' }, { baslik: 'Satır', alt: 'eşleşti / yeni', ikon: 'veri' }, { baslik: 'Senaryo', alt: '${Tablo.Sütun}', ikon: 'onay' }] }
       }
     ]

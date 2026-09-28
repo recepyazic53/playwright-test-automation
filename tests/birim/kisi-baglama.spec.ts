@@ -11,7 +11,7 @@ import { chromium, expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { tabloKaydet } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
-import { kisiKategorisi } from '../../scripts/platform/tablolar/kisi-baglama.mjs';
+import { kisiEtiketiTuret, kisiEtiketleriOner, kisiKategorisi } from '../../scripts/platform/tablolar/kisi-baglama.mjs';
 import { akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
@@ -32,6 +32,20 @@ test('kişi alanı kategorisi: kimlik / vergi / pasaport / doğum / telefon / e-
   expect(k('Soyadı')).toBe('soyad');
   expect(k('Ürün')).toBeNull();
   expect(k('Kargo firması')).toBeNull();
+});
+
+test('kişi etiketi önerisi: tek kişide yok; ikinci telefon, "ettiren / ödeyen" ön ekleri ve bölüm adları ayrı etiket olur', () => {
+  expect(kisiEtiketiTuret('Ödeyen T.C. Kimlik No')).toBe('ödeyen');
+  expect(kisiEtiketiTuret('Cep telefonu')).toBe('');
+  expect(kisiEtiketiTuret('E-posta')).toBe('');
+  const oner = (x: Array<[string, string, string, string?]>) => Object.fromEntries(kisiEtiketleriOner(x.map(([alanId, etiket, kategori, bolum = '']) => ({ alanId, etiket, kategori, bolum }))));
+  expect(oner([['a', 'Cep telefonu', 'telefon'], ['b', 'E-posta', 'eposta'], ['c', 'Ödeyen kurum', 'ad']])).toEqual({ a: '', b: '', c: '' });
+  expect(oner([['a', 'Telefon', 'telefon'], ['b', 'İkinci telefon', 'telefon'], ['c', 'E-posta', 'eposta']])).toEqual({ a: '', b: 'ikinci', c: '' });
+  expect(oner([['a', 'Telefon', 'telefon'], ['b', 'Telefon 2', 'telefon']])).toEqual({ a: '', b: 'kişi 2' });
+  expect(oner([['a', 'Ettiren adı', 'ad'], ['b', 'Ettiren telefon', 'telefon'], ['c', 'Ödeyen adı', 'ad'], ['d', 'Ödeyen telefon', 'telefon'], ['e', 'Cep telefonu', 'telefon']]))
+    .toEqual({ a: 'ettiren', b: 'ettiren', c: 'ödeyen', d: 'ödeyen', e: '' });
+  // Alt bölümlerdeki kişiler: alan adında ayırt edici söz yoksa bölüm adından.
+  expect(oner([['a', 'Telefon', 'telefon', 'Sigortalı bilgileri'], ['b', 'Telefon', 'telefon', 'Lehtar bilgileri']])).toEqual({ a: 'sigortalı', b: 'lehtar' });
 });
 
 test.describe('uçtan uca: kişi alanlarını bağla (127.0.0.1)', () => {
@@ -137,6 +151,40 @@ test.describe('uçtan uca: kişi alanlarını bağla (127.0.0.1)', () => {
     expect(yeni.veri).toMatchObject({ uyeTelefon: '${Müşteri kişileri.Telefon}', uyeEposta: '${Müşteri kişileri.E-posta}' });
     const tutarsiz = await detay(senaryo.Tutarsiz);
     expect(tutarsiz.veri.uyeTelefon).toBe(DEGERLER[4]);
+  });
+
+  test('ikinci kişi: "ödeyen" alanları ayrı etiketle önerilir, iki kişi ayrı satırlardan gelir; etiket değiştirilebilir', async () => {
+    const paket = akisPaketi({ anahtar: 'odeme-formu', ad: 'Ödeme formu' });
+    const model = akisModeli() as Nesne;
+    model.id = 'odeme-formu';
+    model.ad = 'Ödeme formu';
+    const alan = (id: string, etiket: string): Nesne => ({ id, tip: 'metin', etiket: { ekran: etiket }, yapilandirma: 'senaryo', eslesme: { senaryo: id }, konum: { secici: `#${id}`, kirilganlik: 'orta' }, zorunlu: false });
+    (model.adimlar[0].bolumler[0].alanlar as Nesne[]).push(alan('uyeTelefon', 'Cep telefonu'), alan('uyeEposta', 'E-posta'), alan('odeyenTelefon', 'Ödeyen telefonu'), alan('odeyenEposta', 'Ödeyen e-posta'));
+    paket.model = model;
+    await basarili('/platform/sayfa-paketi/ekle', { projeId, paket, senaryoIndeksleri: [], ortamIdleri: [ortamA] });
+    const odeme = String(((await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamA}`)) as { ekranlar: Nesne[] }).ekranlar.find((e) => e.ad === 'Ödeme formu')?.id);
+    const sid = String((await basarili('/platform/senaryo/kaydet', { projeId, ekranId: odeme, baslik: 'İki kişili ödeme', ortamIdleri: [ortamA],
+      veri: { baslik: 'İki kişili ödeme', kategori: 'K1', urun: 'Ürün A', uyeTelefon: DEGERLER[4], uyeEposta: DEGERLER[8], odeyenTelefon: DEGERLER[5], odeyenEposta: DEGERLER[9] } })).id);
+    const y = await basarili('/platform/ekran/kisi-baglama', { projeId, ekranId: odeme });
+    degerYok(y);
+    const o = y.onizleme as Nesne;
+    expect((o.alanlar as Nesne[]).map((a) => [a.alanId, a.sutun, a.kisiEtiketi, a.neden ?? null])).toEqual([
+      ['uyeTelefon', 'Telefon', '', null], ['uyeEposta', 'E-posta', '', null], ['odeyenTelefon', 'Telefon', 'ödeyen', null], ['odeyenEposta', 'E-posta', 'ödeyen', null]]);
+    expect((o.senaryolar as Nesne[]).map((x) => [x.kisiEtiketi, x.durum, x.satir])).toEqual([['', 'eslesti', 'kisi-1'], ['ödeyen', 'eslesti', 'kisi-2']]);
+    // Etiket kaldırılırsa aynı etikette aynı tür: ikinci alan bağlanmaz (neden).
+    const tek = (await basarili('/platform/ekran/kisi-baglama', { projeId, ekranId: odeme, etiketler: { odeyenTelefon: '', odeyenEposta: '' } })).onizleme as Nesne;
+    expect((tek.alanlar as Nesne[]).find((a) => a.alanId === 'odeyenTelefon')).toMatchObject({ sutun: '', neden: expect.stringContaining('farklı bir etiket') });
+    // Kullanıcı etiketi değiştirir ve onaylar: bağlar etiketli, senaryo iki ayrı satırdan.
+    const etiketler = { odeyenTelefon: 'fatura', odeyenEposta: 'fatura' };
+    const r = await basarili('/platform/ekran/kisi-baglama', { projeId, ekranId: odeme, onay: true, etiketler,
+      eslemeler: { uyeTelefon: 'Telefon', uyeEposta: 'E-posta', odeyenTelefon: 'Telefon', odeyenEposta: 'E-posta' } });
+    degerYok(r);
+    expect(r.baglanan).toBe(4);
+    const baglar = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${odeme}`)).baglar as Nesne;
+    expect(baglar.odeyenTelefon).toEqual({ tablo: tabloId, sutun: 'Telefon', etiket: 'fatura' });
+    expect(baglar.uyeTelefon).toEqual({ tablo: tabloId, sutun: 'Telefon' });
+    const s = await detay(sid);
+    expect(s.veri).toMatchObject({ uyeTelefon: '${Müşteri kişileri.Telefon}', odeyenTelefon: '${Müşteri kişileri[fatura].Telefon}', odeyenEposta: '${Müşteri kişileri[fatura].E-posta}' });
   });
 
   test('arayüz: pencere öneriyi ve durumları gösterir, değer göstermez; 1280 ve 390px taşma yok', async () => {

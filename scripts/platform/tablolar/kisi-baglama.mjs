@@ -11,6 +11,9 @@
 //   · Önizlemede değer GÖSTERİLMEZ (yalnız "eşleşti / yeni satır / atlandı: neden"); gizli sütuna yazılacak değer şifreli saklanır.
 //   · Onay → bağlar + yeni satırlar + senaryolar TEK işlemde; değişiklik geçmişine kayıt. kimlikProfili alanları (hazır profil / kimlik
 //     nesnesi) tablo başvurusu almadığından listelenir ama bağlanmaz.
+//   · Aynı türden ikinci kişi alanı (ör. ikinci telefon, "ettiren / ödeyen" ön ekli alanlar, ayrı bölümdeki kişiler) ayrı ETİKETLE
+//     bağlanmak üzere önerilir (bağ etiketi: ${Tablo[etiket].Sütun}; her etiket kendi satırından gelir). Etiket alanın ya da bölümün
+//     adından türetilir (ör. "Ödeyen telefon" → "ödeyen"); kullanıcı değiştirebilir (etiketler). Tek kişilik ekranda etiket önerilmez.
 import { DepoHatasi, gecmisYaz, ortamlariListele, ekranlariListele, ortamGetir } from '../veritabani/depo.mjs';
 import { acikAnahtar, zarflariCoz } from '../kasa.mjs';
 import { modelBaglami, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
@@ -58,6 +61,55 @@ export function kisiKategorisi(a) {
   return null;
 }
 
+/** Etiket türetirken atılan genel sözcükler (normal biçim; kategori sözcükleri ayrıca atılır). */
+const DOLGU = new Set(['no', 'numara', 'numarasi', 'adres', 'adresi', 'bilgi', 'bilgisi', 'bilgileri', 'cep', 'gsm', 'sabit', 'kisi', 'kisinin', 'tc', 't', 'c', 'e',
+  'posta', 'mail', 'kimlik', 'tarihi', 've', 'ile', 'alani', 'numarasi', 'telefonu', 'iletisim']);
+export const KISI_ETIKETI = /^[\p{L}\p{N} _-]{1,40}$/u;
+
+/**
+ * Alanın (ya da bölümün) adından kişi etiketi: kategori ve genel sözcükler atılır, kalan sözcükler (ör. "Ödeyen telefon" → "ödeyen",
+ * "İkinci telefon" → "ikinci"). Kalan yoksa ''.
+ * @param {unknown} metin @returns {string}
+ */
+export function kisiEtiketiTuret(metin) {
+  const kelimeler = String(metin ?? '').toLocaleLowerCase('tr').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  const kalan = kelimeler.filter((k) => {
+    const n = baslikNormal(k);
+    return n && !DOLGU.has(n) && !KATEGORILER.some(([, , d]) => d.test(n));
+  });
+  return kalan.join(' ').slice(0, 40).trim();
+}
+
+/**
+ * Kişi alanlarının bağ etiketleri (öneri). Hiçbir kategoride birden çok alan yoksa hepsi '' (tek kişi). Varsa: alanın adından (yoksa,
+ * kişiler farklı bölümlerdeyse bölüm adından) türeyen ön ek, iki ya da daha çok alanda geçiyorsa ya da alanın kategorisi tekrarlıyorsa
+ * etiket olur; aynı etikette aynı kategori yine tekrarlıyorsa (ör. "Telefon", "Telefon 2") sonraki "kişi 2", "kişi 3"… olur.
+ * @param {Array<{ alanId: string; etiket: string; kategori: string; bolum: string }>} alanlar @returns {Map<string, string>} alanId → etiket
+ */
+export function kisiEtiketleriOner(alanlar) {
+  /** @type {Map<string, string>} */
+  const sonuc = new Map(alanlar.map((a) => [a.alanId, '']));
+  const kategoriSayisi = new Map();
+  for (const a of alanlar) kategoriSayisi.set(a.kategori, (kategoriSayisi.get(a.kategori) ?? 0) + 1);
+  if (![...kategoriSayisi.values()].some((n) => n > 1)) return sonuc;
+  const bolumler = new Set(alanlar.map((a) => kisiEtiketiTuret(a.bolum)).filter(Boolean));
+  const onek = new Map(alanlar.map((a) => [a.alanId, kisiEtiketiTuret(a.etiket) || (bolumler.size > 1 ? kisiEtiketiTuret(a.bolum) : '')]));
+  const onekSayisi = new Map();
+  for (const x of onek.values()) if (x) onekSayisi.set(x, (onekSayisi.get(x) ?? 0) + 1);
+  /** @type {Set<string>} */
+  const dolu = new Set();
+  let kisiNo = 1;
+  for (const a of alanlar) {
+    const o = /** @type {string} */ (onek.get(a.alanId));
+    let e = o && (onekSayisi.get(o) > 1 || kategoriSayisi.get(a.kategori) > 1) ? o : '';
+    if (/^\d+$/.test(e)) e = `kişi ${e}`;
+    while (dolu.has(`${e}|${a.kategori}`)) e = `kişi ${++kisiNo}`;
+    dolu.add(`${e}|${a.kategori}`);
+    sonuc.set(a.alanId, e);
+  }
+  return sonuc;
+}
+
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const duz = (/** @type {unknown} */ v) => (typeof v === 'string' && v.trim() && !degerBasvurusu(v) ? v.trim() : typeof v === 'number' && Number.isFinite(v) ? String(v) : null);
 const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
@@ -67,7 +119,7 @@ export const NEDENLER = Object.freeze({
   kismen: 'değerlerin bir kısmı tabloda bir satırla uyuşuyor, bir kısmı uyuşmuyor',
   deger: 'kişi alanlarında düz değer yok',
   baskaTablo: 'alan zaten başka bir tabloya bağlı',
-  ayniKategori: 'bu kategoride başka bir alan zaten eşlendi (ikinci kişiyi etiketle ayrıca bağlayın)',
+  ayniKategori: 'bu kategoride aynı etiketle başka bir alan zaten eşlendi (ikinci kişiye farklı bir etiket verin)',
   kimlikProfili: 'kimlik profili alanı: değerler hazır profilden / kimlik nesnesinden gelir; tablo başvurusu almaz'
 });
 
@@ -75,8 +127,9 @@ export const NEDENLER = Object.freeze({
  * Plan (ve onaylıysa uygulama).
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ ekranId: string; tabloId?: string | null; eslemeler?: Record<string, string>; yeniSatirlar?: Record<string, { ad?: string; ortamaOzel?: boolean; ekle?: boolean }>;
- *   onay?: boolean; secimler?: unknown; yapan?: string }} girdi
+ *   etiketler?: Record<string, string>; onay?: boolean; secimler?: unknown; yapan?: string }} girdi
  *   eslemeler: alanId → sütun adı ('' = bağlama). Verilmezse öneri kullanılır (önizleme); onayda verilmesi gerekir.
+ *   etiketler: alanId → kişi etiketi ('' = etiketsiz). Verilmezse öneri (kisiEtiketleriOner) kullanılır.
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
  */
 export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
@@ -85,7 +138,10 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
   if (!ekran) throw new DepoHatasi('Ekran bulunamadı.');
   const mb = modelBaglami(vt, ekran.id, null);
   if (!mb) throw new DepoHatasi('Bu ekranın modeli yok.');
-  const formAlanlari = tumFormAlanlari(formSemasiOlustur(mb.model, mb.altModeller));
+  const sema = formSemasiOlustur(mb.model, mb.altModeller);
+  const formAlanlari = tumFormAlanlari(sema);
+  /** Bölüm kimliği → bölüm başlığı (kişi etiketi önerisi için). */
+  const bolumAdi = new Map(sema.adimlar.flatMap((a) => a.bolumler.map((b) => [b.id, b.baslik || a.baslik])));
   const baglar = ekranAlanBaglari(vt, ekran.id);
   const tablolar = tablolariListele(vt, projeId, { cozulsun: true }).filter((t) => !t.id.startsWith(BAGLAM_ONEKI));
   const ek = tabloEkranKullanimi(vt, projeId);
@@ -93,7 +149,7 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
   const ortamAdi = new Map(ortamlariListele(vt, projeId).map((o) => [o.id, o.ad]));
 
   // --- Kişi alanları ---
-  /** @type {Array<{ alanId: string; anahtar: string; etiket: string; tip: string; kategori: string; kategoriAdi: string; hassas: boolean; bagli: { tablo: string; sutun: string } | null }>} */
+  /** @type {Array<{ alanId: string; anahtar: string; etiket: string; tip: string; kategori: string; kategoriAdi: string; hassas: boolean; bolum: string; bagli: { tablo: string; sutun: string; etiket?: string } | null }>} */
   const alanlar = [];
   /** @type {Array<{ alanId: string; etiket: string; neden: string }>} */
   const kimlikAlanlari = [];
@@ -106,8 +162,16 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
     if (!k) continue;
     const b = baglar[String(fa.id)];
     alanlar.push({ alanId: String(fa.id), anahtar: String(fa.anahtar), etiket: String(fa.etiket ?? fa.id), tip: fa.tip, kategori: k.kategori, kategoriAdi: k.ad, hassas: fa.hassas === true,
-      bagli: b ? { tablo: b.tablo, sutun: b.sutun } : null });
+      bolum: String(bolumAdi.get(String(fa.bolumId ?? '')) ?? ''), bagli: b ? { tablo: b.tablo, sutun: b.sutun, ...(b.etiket ? { etiket: b.etiket } : {}) } : null });
   }
+  // Kişi etiketleri: öneri ya da kullanıcının verdiği (aynı türden ikinci kişi ayrı satırdan gelsin).
+  const etiketOnerisi = kisiEtiketleriOner(alanlar);
+  /** @param {{ alanId: string }} a */
+  const kisiEtiketi = (a) => {
+    const v = girdi.etiketler && Object.hasOwn(girdi.etiketler, a.alanId) ? String(girdi.etiketler[a.alanId] ?? '').trim() : /** @type {string} */ (etiketOnerisi.get(a.alanId));
+    if (v && !KISI_ETIKETI.test(v)) throw new DepoHatasi(`"${v}" etiketi geçersiz (harf, rakam, boşluk, "_", "-"; en çok 40).`);
+    return v;
+  };
 
   // --- Tablo önerisi: kişi alanlarının kategorilerini en çok karşılayan kişi / kayıt tablosu ---
   const sutunKategorisi = (/** @type {{ ad: string }} */ s) => kisiKategorisi({ etiket: s.ad })?.kategori ?? null;
@@ -121,6 +185,7 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
   /** @type {Set<string>} */
   const kullanilanKategori = new Set();
   const eslemeSatirlari = alanlar.map((a) => {
+    let e = kisiEtiketi(a);
     const oneri = tablo ? tablo.sutunlar.find((s) => sutunKategorisi(s) === a.kategori) ?? tablo.sutunlar.find((s) => baslikNormal(s.ad) === baslikNormal(a.etiket)) : undefined;
     const verilen = girdi.eslemeler && Object.hasOwn(girdi.eslemeler, a.alanId) ? String(girdi.eslemeler[a.alanId] ?? '') : undefined;
     let sutun = verilen === undefined ? oneri?.ad ?? '' : verilen;
@@ -128,22 +193,26 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
     let neden;
     if (sutun && tablo && !tablo.sutunlar.some((s) => s.ad === sutun)) throw new DepoHatasi(`"${sutun}" sütunu "${tablo.ad}" tablosunda yok.`);
     if (a.bagli && tablo && a.bagli.tablo !== tablo.id) { neden = NEDENLER.baskaTablo; sutun = ''; }
-    else if (a.bagli && tablo && a.bagli.tablo === tablo.id) sutun = a.bagli.sutun;
-    else if (sutun && verilen === undefined && kullanilanKategori.has(a.kategori)) { neden = NEDENLER.ayniKategori; sutun = ''; }
-    if (sutun) kullanilanKategori.add(a.kategori);
-    return { ...a, onerilen: oneri?.ad ?? null, sutun, zatenBagli: Boolean(a.bagli && tablo && a.bagli.tablo === tablo.id), ...(neden ? { neden } : {}) };
+    else if (a.bagli && tablo && a.bagli.tablo === tablo.id) { sutun = a.bagli.sutun; e = a.bagli.etiket ?? ''; }
+    else if (sutun && kullanilanKategori.has(`${e}|${a.kategori}`)) { neden = NEDENLER.ayniKategori; sutun = ''; }
+    if (sutun) kullanilanKategori.add(`${e}|${a.kategori}`);
+    const { bolum: _b, ...kalan } = a;
+    return { ...kalan, kisiEtiketi: e, ...(etiketOnerisi.get(a.alanId) ? { onerilenEtiket: etiketOnerisi.get(a.alanId) } : {}),
+      onerilen: oneri?.ad ?? null, sutun, zatenBagli: Boolean(a.bagli && tablo && a.bagli.tablo === tablo.id), ...(neden ? { neden } : {}) };
   });
   const eslenen = eslemeSatirlari.filter((a) => a.sutun);
 
   // --- Senaryolar: eşleşen satır / yeni satır / atlanan ---
-  /** @type {Array<{ anahtar: string; senaryoId: string; senaryo: string; ortamlar: string[]; durum: 'eslesti' | 'yeniSatir' | 'atlandi'; satir?: string; onerilenAd?: string; ortamaOzel?: boolean; neden?: string; alanlar: string[] }>} */
+  /** @type {Array<{ anahtar: string; senaryoId: string; senaryo: string; kisiEtiketi: string; ortamlar: string[]; durum: 'eslesti' | 'yeniSatir' | 'atlandi'; satir?: string; onerilenAd?: string; ortamaOzel?: boolean; neden?: string; alanlar: string[] }>} */
   const senaryolar = [];
   /** @type {Array<{ anahtar: string; ad: string; ortamId: string | null; degerler: Record<string, string> }>} */
   const yeniSatirlar = [];
   if (tablo && eslenen.length) {
     const gorunur = (/** @type {{ ortamId: string | null }} */ r, /** @type {string} */ o) => !r.ortamId || r.ortamId === o;
     const kullanilanAdlar = new Set(tablo.satirlar.map((r) => kucuk(r.ad)));
-    for (const s of vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ? ORDER BY baslik', [projeId, ekran.id])) {
+    const kisiler = [...new Set(eslenen.map((a) => a.kisiEtiketi))];
+    for (const s of vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ? ORDER BY baslik', [projeId, ekran.id])) for (const kisi of kisiler) {
+      const eslenenK = eslenen.filter((a) => a.kisiEtiketi === kisi);
       const icerik = /** @type {Nesne} */ (JSON.parse(String(s.icerik_json)));
       if (!modelSenaryosuMu(icerik) || !veriGudumluMu(icerik) || !nesneMi(icerik.ortamlar)) continue;
       const ortamlar = /** @type {Record<string, Nesne>} */ (icerik.ortamlar);
@@ -154,7 +223,7 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
         const veri = /** @type {Nesne} */ (zarflariCoz(vt, ortamlar[o].veri));
         /** @type {Record<string, string>} */
         const degerler = {};
-        for (const a of eslenen) { const v = duz(veri[a.anahtar]); if (v !== null) degerler[a.sutun] = v; }
+        for (const a of eslenenK) { const v = duz(veri[a.anahtar]); if (v !== null) degerler[a.sutun] = v; }
         if (!Object.keys(degerler).length) continue;
         const imza = JSON.stringify(Object.entries(degerler).sort());
         const k = kumeler.get(imza) ?? { ortamlar: [], degerler };
@@ -163,8 +232,9 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
       }
       const coklu = kumeler.size > 1;
       for (const k of kumeler.values()) {
-        const anahtar = `${String(s.id)}|${coklu ? k.ortamlar.join(',') : '*'}`;
-        const ortak = { anahtar, senaryoId: String(s.id), senaryo: String(s.baslik), ortamlar: k.ortamlar.map((o) => ortamAdi.get(o) ?? o), alanlar: eslenen.filter((a) => k.degerler[a.sutun] !== undefined).map((a) => a.etiket) };
+        const anahtar = `${String(s.id)}${kisi ? `#${kisi}` : ''}|${coklu ? k.ortamlar.join(',') : '*'}`;
+        const ortak = { anahtar, senaryoId: String(s.id), senaryo: String(s.baslik), kisiEtiketi: kisi, ortamlar: k.ortamlar.map((o) => ortamAdi.get(o) ?? o),
+          alanlar: eslenenK.filter((a) => k.degerler[a.sutun] !== undefined).map((a) => a.etiket) };
         const esit = (/** @type {import('./tablo-deposu.mjs').TabloSatiri} */ r, /** @type {string} */ c) => String(r.degerler[c] ?? '').trim() === k.degerler[c];
         const sutunlar = Object.keys(k.degerler);
         const tam = k.ortamlar.map((o) => tablo.satirlar.find((r) => gorunur(r, o) && sutunlar.every((c) => esit(r, c))));
@@ -175,8 +245,9 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
         if (kismi) { senaryolar.push({ ...ortak, durum: 'atlandi', neden: NEDENLER.kismen }); continue; }
         const karar = girdi.yeniSatirlar?.[anahtar];
         const ortamaOzel = coklu || karar?.ortamaOzel === true;
-        let ad = (karar?.ad ?? '').trim().replace(/[\u0000-\u001f]/g, ' ').slice(0, 120) || `${String(s.baslik)} — kişi`.slice(0, 120);
-        for (let n = 2; kullanilanAdlar.has(kucuk(ad)); n++) ad = `${String(s.baslik)} — kişi ${n}`.slice(0, 120);
+        const kok = `${String(s.baslik)} — ${kisi || 'kişi'}`;
+        let ad = (karar?.ad ?? '').trim().replace(/[\u0000-\u001f]/g, ' ').slice(0, 120) || kok.slice(0, 120);
+        for (let n = 2; kullanilanAdlar.has(kucuk(ad)); n++) ad = `${kok} ${n}`.slice(0, 120);
         kullanilanAdlar.add(kucuk(ad));
         senaryolar.push({ ...ortak, durum: karar?.ekle === false ? 'atlandi' : 'yeniSatir', onerilenAd: ad, ortamaOzel, ...(karar?.ekle === false ? { neden: 'yeni satır eklenmesin seçildi' } : {}) });
         if (karar?.ekle === false) continue;
@@ -202,7 +273,7 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
   try {
     vt.islem(() => {
       const yeniBaglar = { ...baglar };
-      for (const a of eslenen) yeniBaglar[a.alanId] = { tablo: tablo.id, sutun: a.sutun, ...(baglar[a.alanId]?.etiket ? { etiket: baglar[a.alanId].etiket } : {}) };
+      for (const a of eslenen) yeniBaglar[a.alanId] = { tablo: tablo.id, sutun: a.sutun, ...(a.kisiEtiketi ? { etiket: a.kisiEtiketi } : {}) };
       ekranAlanBaglariniKaydet(vt, projeId, ekran.id, yeniBaglar);
       if (yeniSatirlar.length) {
         tabloKaydet(vt, {

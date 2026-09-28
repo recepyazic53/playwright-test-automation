@@ -100,6 +100,7 @@ export const TABLO_POST_UCLARI = [
     ekranId: kimlik(g.ekranId, 'ekranId'), tabloId: typeof g.tabloId === 'string' && g.tabloId ? kimlik(g.tabloId, 'tabloId') : null,
     eslemeler: g.eslemeler && typeof g.eslemeler === 'object' && !Array.isArray(g.eslemeler) ? g.eslemeler : undefined,
     yeniSatirlar: g.yeniSatirlar && typeof g.yeniSatirlar === 'object' && !Array.isArray(g.yeniSatirlar) ? g.yeniSatirlar : undefined,
+    etiketler: g.etiketler && typeof g.etiketler === 'object' && !Array.isArray(g.etiketler) ? g.etiketler : undefined,
     onay: g.onay === true, secimler: g.secimler
   }, { kosuyorMu })],
   ['/platform/tablo/sil', (db, g) => ({ silindi: tabloSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })]

@@ -1,7 +1,7 @@
 // Ekran sayfası > "Test verisi" sekmesi: ekranın input'ları test verisi tablolarının sütunlarına bağlanır (anında kaydedilir).
 // Bağlı seçim alanının seçenekleri senaryo formunda tablodan gelir; aynı tabloya bağlı alanlar birbirini süzer (ör. Kapsam →
 // Alternatif → Ülke). Aynı tablo iki kez gerekiyorsa etiket verilir (aynı etiketli alanlar aynı satırdan).
-import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, yerlestir } from './ortak.js';
+import { api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { degerCipleri } from './parametre-tanimi-formu.js';
 import { onayIste } from './kosu-paneli.js';
 
@@ -176,13 +176,14 @@ const KISI_DURUMU = { eslesti: 'eşleşti', yeniSatir: 'yeni satır', atlandi: '
  */
 export function kisiAlanlariniBagla(proje, ekran, dugme) {
   return new Promise((coz) => {
-    const is = { tabloId: '', eslemeler: /** @type {Record<string, string> | null} */ (null), yeniSatirlar: /** @type {Record<string, any>} */ ({}), o: /** @type {any} */ (null), hata: '', sira: 0, bekliyor: true };
+    const is = { tabloId: '', eslemeler: /** @type {Record<string, string> | null} */ (null), etiketler: /** @type {Record<string, string> | null} */ (null), yeniSatirlar: /** @type {Record<string, any>} */ ({}), o: /** @type {any} */ (null), hata: '', sira: 0, bekliyor: true };
     let uygulandi = false;
     const govde = h('div', { class: 'diyalog-govde' });
     const uygula = h('button', { type: 'button', class: 'birincil', disabled: true }, ikon('onay'), 'Bağla ve çevir');
     const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
     const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay etki-diyalogu kisi-baglama-diyalogu', 'aria-labelledby': 'kisi-baglama-basligi' }, govde, h('div', { class: 'diyalog-alt' }, kapat, uygula));
-    const girdi = () => ({ projeId: proje.id, ekranId: ekran.id, ...(is.tabloId ? { tabloId: is.tabloId } : {}), ...(is.eslemeler ? { eslemeler: is.eslemeler } : {}), yeniSatirlar: is.yeniSatirlar });
+    const girdi = () => ({ projeId: proje.id, ekranId: ekran.id, ...(is.tabloId ? { tabloId: is.tabloId } : {}), ...(is.eslemeler ? { eslemeler: is.eslemeler } : {}),
+      ...(is.etiketler ? { etiketler: is.etiketler } : {}), yeniSatirlar: is.yeniSatirlar });
     let zaman = null;
     const hesapla = (gecikme = 0) => {
       clearTimeout(zaman);
@@ -196,6 +197,7 @@ export function kisiAlanlariniBagla(proje, ekran, dugme) {
           is.o = r.onizleme; is.hata = '';
           is.tabloId = r.onizleme.tabloId || '';
           is.eslemeler = Object.fromEntries(r.onizleme.alanlar.map((a) => [a.alanId, a.sutun]));
+          is.etiketler = Object.fromEntries(r.onizleme.alanlar.map((a) => [a.alanId, a.kisiEtiketi || '']));
         } catch (e) { if (n === is.sira) is.hata = e.message; }
         if (n === is.sira) { is.bekliyor = false; ciz(); }
       }, gecikme);
@@ -223,20 +225,26 @@ export function kisiAlanlariniBagla(proje, ekran, dugme) {
           ' bölümünde bu türden sütunları olan bir tablo oluşturun (ör. Kimlik no, Telefon, E-posta).'));
       } else if (o) {
         const tabloSec = h('select', { 'aria-label': 'Kişi tablosu' }, o.tablolar.map((t) => h('option', { value: t.id, selected: t.id === o.tabloId }, `${t.ad} (${t.puan} alan türü uyuyor)`)));
-        tabloSec.addEventListener('change', () => { is.tabloId = tabloSec.value; is.eslemeler = null; is.yeniSatirlar = {}; hesapla(); });
+        tabloSec.addEventListener('change', () => { is.tabloId = tabloSec.value; is.eslemeler = null; is.etiketler = null; is.yeniSatirlar = {}; hesapla(); });
+        const etiketli = o.alanlar.some((a) => a.kisiEtiketi || a.onerilenEtiket);
         parcalar.push(h('label', { class: 'kisi-tablo-secimi' }, h('span', {}, 'Kişi tablosu'), tabloSec),
           h('h3', { class: 'kucuk-baslik' }, 'Sütun eşleme (öneri)'),
           h('div', { class: 'donusum-tablosu-kap' }, h('table', { class: 'donusum-tablosu', 'aria-label': 'Kişi alanı eşleme' },
-            h('thead', {}, h('tr', {}, h('th', {}, 'Alan'), h('th', {}, 'Tür'), h('th', {}, 'Tablo sütunu'))),
+            h('thead', {}, h('tr', {}, h('th', {}, 'Alan'), h('th', {}, 'Tür'), h('th', {}, 'Tablo sütunu'), h('th', {}, 'Kişi etiketi'))),
             h('tbody', {}, o.alanlar.map((a) => {
               const sec = h('select', { 'aria-label': `${a.etiket} sütunu`, disabled: a.zatenBagli }, h('option', { value: '' }, '— bağlama —'),
                 o.sutunlar.map((s) => h('option', { value: s.ad, selected: s.ad === a.sutun }, `${s.ad}${s.gizli ? ' (gizli)' : ''}`)));
               sec.addEventListener('change', () => { is.eslemeler = { ...(is.eslemeler || {}), [a.alanId]: sec.value }; hesapla(); });
               const not = a.zatenBagli ? 'zaten bağlı' : a.neden ? a.neden : a.onerilen && a.sutun === a.onerilen ? 'öneri — onaylayın' : '';
+              // Kişi etiketi: aynı türden ikinci kişi ayrı satırdan gelsin diye (ör. "ödeyen"); boş = etiketsiz (ana kişi).
+              const etiket = h('input', { type: 'text', maxlength: '40', value: a.kisiEtiketi || '', placeholder: 'etiketsiz', disabled: a.zatenBagli, 'aria-label': `${a.etiket} kişi etiketi` });
+              etiket.addEventListener('change', () => { is.etiketler = { ...(is.etiketler || {}), [a.alanId]: etiket.value.trim() }; hesapla(); });
               return h('tr', {}, h('td', { 'data-baslik': 'Alan' }, a.etiket, a.hassas ? h('span', { class: 'neden' }, 'hassas alan') : null),
                 h('td', { 'data-baslik': 'Tür' }, a.kategoriAdi),
-                h('td', { 'data-baslik': 'Sütun' }, sec, not ? h('span', { class: 'neden' }, not) : null));
+                h('td', { 'data-baslik': 'Sütun' }, sec, not ? h('span', { class: 'neden' }, not) : null),
+                h('td', { 'data-baslik': 'Kişi etiketi' }, etiket, a.onerilenEtiket && a.kisiEtiketi === a.onerilenEtiket ? h('span', { class: 'neden' }, 'ayrı kişi — öneri') : null));
             })))));
+        if (etiketli) parcalar.push(h('p', { class: 'soluk kucuk' }, 'Etiketli alanlar ayrı bir kişidir: değerleri tablonun başka bir satırından gelir (başvuru: ${Tablo[etiket].Sütun}). Etiketi değiştirebilir ya da silebilirsiniz.'));
         if (o.kimlikAlanlari.length) parcalar.push(h('p', { class: 'soluk kucuk' }, `Bağlanmayan kimlik profili alanları: ${o.kimlikAlanlari.map((k) => k.etiket).join(', ')} — ${o.kimlikAlanlari[0].neden}.`));
         parcalar.push(h('h3', { class: 'kucuk-baslik' }, 'Senaryolar'),
           h('div', { class: 'donusum-ozeti' }, h('b', {}, `${o.ozet.eslesti} eşleşti`), h('span', {}, `${o.ozet.yeniSatir} yeni satır`), h('span', {}, `${o.ozet.atlandi} atlandı`)),
@@ -245,7 +253,7 @@ export function kisiAlanlariniBagla(proje, ekran, dugme) {
             h('tbody', {}, o.senaryolar.map((x) => {
               const yeni = x.durum === 'yeniSatir' || (x.durum === 'atlandi' && is.yeniSatirlar[x.anahtar] && is.yeniSatirlar[x.anahtar].ekle === false);
               return h('tr', { class: x.durum === 'atlandi' ? 'atlandi' : '' },
-                h('td', { 'data-baslik': 'Senaryo' }, x.senaryo, h('span', { class: 'neden' }, x.ortamlar.join(', '))),
+                h('td', { 'data-baslik': 'Senaryo' }, x.senaryo, x.kisiEtiketi ? rozet(x.kisiEtiketi, 'vurgu') : null, h('span', { class: 'neden' }, x.ortamlar.join(', '))),
                 h('td', { 'data-baslik': 'Durum' }, KISI_DURUMU[x.durum] || x.durum, x.neden ? h('span', { class: 'neden' }, x.neden) : null),
                 h('td', { 'data-baslik': 'Satır' }, yeni ? yeniSatirHucresi(x) : x.satir ? x.satir : h('span', { class: 'soluk' }, '—')));
             })))) : h('p', { class: 'soluk kucuk' }, 'Senaryolarda bu alanların düz değeri yok.'));
