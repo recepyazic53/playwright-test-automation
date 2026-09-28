@@ -2,11 +2,11 @@
 // durum rozeti (Sağlıklı / Dikkat / Kritik). Formüller PDF rapor tasarımıyla aynıdır:
 //   Puan = 100 × Sınıf katsayısı × (0,30·Etki + 0,25·Sıklık + 0,20·Eğilim + 0,15·Kritiklik + 0,10·Süreklilik)
 //     Etki = min(1, etkilenen senaryo / 3) · Sıklık = min(1, hata oranı / %50) · Eğilim = duruma göre ağırlık
-//     Kritiklik = kritik işaretli öğe 1, ortak akış 0,5, diğer 0 (işaret henüz yok: çağıran 0 verir) · Süreklilik = min(1, açık gün / 14)
+//     Kritiklik = kritik işaretli öğe 1, diğer 0 (işaret Ayarlar > Raporlar'da; işaret yoksa 0 — önceki davranış) · Süreklilik = min(1, açık gün / 14)
 //   Bantlar: P1 ≥ 60 · P2 35–59 · P3 < 35.
 //   Rozet: Sağlıklı = dönem başarısı ≥ yeşil eşik ve P1 yok · Kritik = başarı < sarı eşik ya da kapsamdaki kritik akış son koşusunda
 //   kaldı ya da ≥ 3 P1 · diğer Dikkat. Eşikler: Ayarlar > Arayüz > Sağlık noktası (proje başına; ayarlar/saglik-esikleri.mjs).
-// Sahip önerisi sınıfın varsayılan ekibidir (ekip eşlemesi henüz yok).
+// Sahip önerisi: öğenin Ayarlar > Raporlar'daki ekibi (ekip eşlemesi; donem-raporu.mjs uygular), eşleme yoksa sınıfın varsayılan ekibi.
 
 /** Sınıflar (kök neden tahmini): katsayı, varsayılan sahip, simge (renk tek başına anlam taşımaz). */
 export const SINIFLAR = Object.freeze({
@@ -27,6 +27,8 @@ export const SIKLIK_ORANI = 0.5;
 export const SUREKLILIK_GUN = 14;
 /** Sabit puanlı ek aksiyonlar (ör. her koşuda atlanan senaryo): P3. */
 export const EK_AKSIYON_PUANI = 30;
+/** Kullanıcı tanımlı süre eşiğini aşan öğe / metot (p95 > eşik): sabit puanlı ek aksiyon, P2 (bu dönem). */
+export const ESIK_AKSIYON_PUANI = 40;
 
 /** @param {number} x */
 const sinirla = (x) => (Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : 0);

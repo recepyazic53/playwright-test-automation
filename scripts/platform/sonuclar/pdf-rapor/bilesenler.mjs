@@ -141,6 +141,7 @@ figure { margin: 4px 0; } figure img { max-width: 100%; max-height: 90mm; border
 .taraf { border: 1px solid #d8dde4; border-radius: 6px; padding: 6px 9px; break-inside: avoid; }
 .taraf h3 { margin-top: 0; }
 .baglanti-notu { color: #3b5b8c; }
+.kritik-hap { display: inline-block; padding: 0 5px; border-radius: 3px; font-size: 7.4pt; font-weight: 700; color: #b42318; border: 1px solid #cf222e; background: #fff0ef; white-space: nowrap; }
 @media screen and (max-width: 640px) { .meta { grid-template-columns: 1fr 1fr; } .bakis, .iki { grid-template-columns: 1fr; } .kartlar { grid-template-columns: 1fr 1fr; } }
 `;
 
@@ -246,14 +247,17 @@ export function trendGrafigi(g) {
 <div class="lejant"><span><span class="kutu-l" style="background:#cfdcee"></span>${kacis(g.adetEtiketi)} (sağ eksen)</span><span><span class="kutu-l" style="background:#f4a3a0"></span>Kalan</span><span>— Başarı oranı (sol eksen): ● ≥ yeşil eşik · ◆ sarı bant · ▲ kırmızı bant</span>${oncekiOrt !== null ? `<span>- - önceki dönem ortalaması ${yz(oncekiOrt)}</span>` : ''}<span style="color:#1a7f37">- - yeşil eşik %${sy(g.esikler.yesil)}</span><span>Sol eksen alt sınırı %${sy(alt0)}.</span></div></div>`;
 }
 
-/** Süre eğilimi: p50 ve p95 çizgileri (ms), önceki dönem p95 kesikli. Ölçüm olmayan kova boş kalır.
- * @param {{ etiketler: string[]; p50: Array<number | null>; p95: Array<number | null>; oncekiP95: number | null; baslik: string }} g */
+/** Süre eğilimi: p50 ve p95 çizgileri (ms), önceki dönem p95 kesikli, (A4) kullanıcı tanımlı süre eşiği kırmızı kesikli çizgi.
+ * Ölçüm olmayan kova boş kalır.
+ * esikNotu: tek çizgi çizilemediğinde (eşikler metot başına) lejanttaki not.
+ * @param {{ etiketler: string[]; p50: Array<number | null>; p95: Array<number | null>; oncekiP95: number | null; baslik: string; esik?: number | null; esikNotu?: string }} g */
 export function sureGrafigi(g) {
   const en = 700, boy = 150, sol = 46, sag = 12, ust = 10, alt = 22;
   const genislik = en - sol - sag, h = boy - ust - alt;
   const n = Math.max(1, g.etiketler.length);
   const x = (/** @type {number} */ i) => sol + (genislik / n) * (i + 0.5);
-  const degerler = [...g.p95, ...g.p50, g.oncekiP95].filter((v) => v !== null).map(Number);
+  const esik = typeof g.esik === 'number' && g.esik > 0 ? g.esik : null;
+  const degerler = [...g.p95, ...g.p50, g.oncekiP95, esik].filter((v) => v !== null && v !== undefined).map(Number);
   const mx = Math.max(500, Math.ceil(Math.max(0, ...degerler) / 500) * 500);
   const y = (/** @type {number} */ v) => ust + h - (v / mx) * h;
   let s = '';
@@ -261,6 +265,7 @@ export function sureGrafigi(g) {
   const etiketAdimi = Math.ceil(n / 16);
   g.etiketler.forEach((d, i) => { if (i % etiketAdimi === 0) s += `<text x="${x(i).toFixed(1)}" y="${boy - 8}" font-size="7.6" text-anchor="middle" fill="#57606a">${kacis(d)}</text>`; });
   if (g.oncekiP95 !== null) s += `<line x1="${sol}" x2="${en - sag}" y1="${y(g.oncekiP95).toFixed(1)}" y2="${y(g.oncekiP95).toFixed(1)}" stroke="#6b7482" stroke-dasharray="6 3"/><text x="${sol + 4}" y="${(y(g.oncekiP95) - 3).toFixed(1)}" font-size="7.5" fill="#57606a">önceki dönem p95 ${kacis(sure(g.oncekiP95))}</text>`;
+  if (esik !== null) s += `<line x1="${sol}" x2="${en - sag}" y1="${y(esik).toFixed(1)}" y2="${y(esik).toFixed(1)}" stroke="#b42318" stroke-width="1.2" stroke-dasharray="2 2"/><text x="${en - sag - 4}" y="${(y(esik) - 3).toFixed(1)}" font-size="7.5" text-anchor="end" fill="#b42318">süre eşiği ${kacis(sure(esik))}</text>`;
   const cizgi = (/** @type {Array<number | null>} */ a, /** @type {string} */ renk, /** @type {number} */ gen) => {
     let yol = '';
     let acik = false;
@@ -271,7 +276,9 @@ export function sureGrafigi(g) {
   g.p95.forEach((v, i) => { if (v !== null) s += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.4" fill="#1f4e8c"/>`; });
   g.p50.forEach((v, i) => { if (v !== null) s += `<rect x="${(x(i) - 2).toFixed(1)}" y="${(y(v) - 2).toFixed(1)}" width="4" height="4" fill="#7aa2d6"/>`; });
   return `<div class="blok"><h3>${kacis(g.baslik)}</h3><svg width="100%" viewBox="0 0 ${en} ${boy}" role="img" aria-label="${kacis(g.baslik)}">${s}</svg>
-<div class="lejant"><span>● p95 (koyu çizgi)</span><span>■ p50 / medyan (açık çizgi)</span><span>- - önceki dönem p95</span><span>Metot süre eşiği henüz tanımlı değil (çizgi yok).</span></div></div>`;
+<div class="lejant"><span>● p95 (koyu çizgi)</span><span>■ p50 / medyan (açık çizgi)</span><span>- - önceki dönem p95</span>${esik !== null
+    ? `<span style="color:#b42318">·· süre eşiği ${kacis(sure(esik))} (Ayarlar &gt; Raporlar)</span>`
+    : `<span>${g.esikNotu ? kacis(g.esikNotu) : 'Süre eşiği tanımlı değil (çizgi yok; Ayarlar &gt; Raporlar).'}</span>`}</div></div>`;
 }
 
 /** Isı haritası: satırlar × kovalar, hücrede adet (0 boş).
@@ -317,8 +324,11 @@ ${g.satirlar.map((r) => {
 
 /**
  * @typedef {{ baslik: string; nerede: string; sinif: string; durum: string; puan: number; bant: string; aksiyon: string; sahip: string; neden: string;
- *   dayanak?: string; tur?: string; baglanti?: string }} AksiyonSatiri
+ *   dayanak?: string; tur?: string; baglanti?: string; kritik?: boolean; ilkSurum?: string | null; esikAsimi?: boolean }} AksiyonSatiri
  */
+
+/** Kritik işaretli öğe hapı (A4; simge + metin, renk tek başına anlam taşımaz). */
+export const KRITIK_HAP = '<span class="kritik-hap">★ kritik</span>';
 
 /** @param {{ no: number; aksiyonlar: AksiyonSatiri[]; bantSayim: { P1: number; P2: number; P3: number }; e: Yazici; m: Yazici }} g */
 export function aksiyonTablosu(g) {
@@ -326,15 +336,16 @@ export function aksiyonTablosu(g) {
 <p class="kucuk">Öncelik puanı sıralı (0–100). <b>P1</b> ≥ 60 bu hafta, <b>P2</b> 35–59 bu dönem, <b>P3</b> &lt; 35 izlenir. Toplam: ${g.bantSayim.P1} P1 · ${g.bantSayim.P2} P2 · ${g.bantSayim.P3} P3; aşağıda ilk ${g.aksiyonlar.length} aksiyon.</p>`;
   if (!g.aksiyonlar.length) return `${bas}<p class="bos">Ele alınması gereken açık sorun yok.</p>`;
   return `${bas}<table><thead><tr><th scope="col" style="width:52px">Öncelik</th><th scope="col">Ne / nerede</th><th scope="col" style="width:150px">Neden şimdi</th><th scope="col" style="width:170px">Önerilen aksiyon</th><th scope="col" style="width:96px">Sahip önerisi</th></tr></thead><tbody>
-${g.aksiyonlar.map((s) => `<tr><td>${puanEtiketi(s.bant, s.puan)}</td><td><b>${g.m(s.baslik)}</b><br><span class="kucuk">${g.m(s.nerede)}</span><br>${s.sinif === 'kararsiz' && s.durum === 'kararsiz' ? durumEtiketi(s.durum) : `${sinifEtiketi(s.sinif)} ${durumEtiketi(s.durum)}`}${s.dayanak ? `<br><span class="kucuk">Tahmin dayanağı: ${kacis(s.dayanak)}</span>` : ''}${s.baglanti ? `<br><span class="kucuk baglanti-notu">⇄ Bağlantılı sorunla birleştirildi: ${g.m(s.baglanti)}</span>` : ''}</td>
-<td class="kucuk">${kacis(s.neden)}</td><td class="kucuk">${kacis(s.aksiyon)}</td><td class="kucuk">${kacis(s.sahip)}</td></tr>`).join('')}
+${g.aksiyonlar.map((s) => `<tr><td>${puanEtiketi(s.bant, s.puan)}</td><td><b>${g.m(s.baslik)}</b>${s.kritik ? ` ${KRITIK_HAP}` : ''}<br><span class="kucuk">${g.m(s.nerede)}</span><br>${s.sinif === 'kararsiz' && s.durum === 'kararsiz' ? durumEtiketi(s.durum) : `${sinifEtiketi(s.sinif)} ${durumEtiketi(s.durum)}`}${s.dayanak ? `<br><span class="kucuk">${s.esikAsimi ? '' : 'Tahmin dayanağı: '}${kacis(s.dayanak)}</span>` : ''}${s.ilkSurum ? `<br><span class="kucuk">Başladığı uygulama sürümü: ${g.e(s.ilkSurum)}</span>` : ''}${s.baglanti ? `<br><span class="kucuk baglanti-notu">⇄ Bağlantılı sorunla birleştirildi: ${g.m(s.baglanti)}</span>` : ''}</td>
+<td class="kucuk">${kacis(s.neden)}</td><td class="kucuk">${kacis(s.aksiyon)}</td><td class="kucuk">${g.e(s.sahip)}</td></tr>`).join('')}
 </tbody></table>`;
 }
 
 /**
  * @param {{ no: number; sorunlar: Array<AksiyonSatiri & { kalip: string; n: number; nOnceki: number; senaryo: number; seri: number[]; oncekiSeri: number[];
  *   ilk: string | null; son: string | null; tekrarRozeti: boolean }>; hatalar: boolean; karsilastir: boolean; kosuVar: boolean; m: Yazici; turSutunu?: boolean }} g
- *   turSutunu: ekran + servis raporunda sorunun kaynağı (Ekran / Servis) ayrı sütunda yazılır.
+ *   turSutunu: ekran + servis raporunda sorunun kaynağı (Ekran / Servis) ayrı sütunda yazılır. A4: kritik öğe "★ kritik", "İlk / son"
+ *   hücresinde sorunun başladığı uygulama sürümü (varsa).
  */
 export function sorunTablosu(g) {
   const turHucresi = (/** @type {{ tur?: string }} */ s) => (g.turSutunu ? `<td class="kucuk">${s.tur === 'servis' ? '⇄ Servis' : '▭ Ekran'}</td>` : '');
@@ -352,8 +363,8 @@ export function sorunTablosu(g) {
     const x = /** @type {Record<string, { ad: string; simge: string; renk: string; aciklama: string }>} */ (DURUMLAR)[d];
     govde += `<tr class="grup"><td colspan="${g.turSutunu ? 6 : 5}" style="color:${x.renk}">${x.simge} ${kacis(x.ad)} (${grup.length}) <span class="kucuk" style="font-weight:400">— ${kacis(x.aciklama)}</span></td></tr>`;
     for (const s of grup) {
-      govde += `<tr><td><b>${g.m(s.baslik)}</b>${s.tekrarRozeti && s.durum !== 'tekrar' ? ` ${durumEtiketi('tekrar')}` : ''}${g.hatalar && s.kalip ? `<br><span class="mono">${g.m(s.kalip)}</span>` : ''}</td>${turHucresi(s)}<td class="kucuk">${g.m(s.nerede)}<br>${sinifEtiketi(s.sinif)}</td>
-<td class="s">${g.karsilastir ? `<span class="notr">${s.nOnceki}</span> → ` : ''}<b>${s.n}</b><br><span class="kucuk">${s.senaryo} senaryo</span></td><td>${kivilcim(g.karsilastir ? s.oncekiSeri : [], s.seri, x.renk)}</td><td class="kucuk">${kisaTarih(s.ilk)}<br>${kisaTarih(s.son)}</td></tr>`;
+      govde += `<tr><td><b>${g.m(s.baslik)}</b>${s.tekrarRozeti && s.durum !== 'tekrar' ? ` ${durumEtiketi('tekrar')}` : ''}${g.hatalar && s.kalip ? `<br><span class="mono">${g.m(s.kalip)}</span>` : ''}</td>${turHucresi(s)}<td class="kucuk">${g.m(s.nerede)}${s.kritik ? ` ${KRITIK_HAP}` : ''}<br>${sinifEtiketi(s.sinif)}</td>
+<td class="s">${g.karsilastir ? `<span class="notr">${s.nOnceki}</span> → ` : ''}<b>${s.n}</b><br><span class="kucuk">${s.senaryo} senaryo</span></td><td>${kivilcim(g.karsilastir ? s.oncekiSeri : [], s.seri, x.renk)}</td><td class="kucuk">${kisaTarih(s.ilk)}<br>${kisaTarih(s.son)}${s.ilkSurum ? `<br>sürüm ${g.m(s.ilkSurum)}` : ''}</td></tr>`;
     }
   }
   return `${bas}<div class="ozet-sayilar">${SORUN_DURUMLARI.filter((d) => sayim[d]).map((d) => {
@@ -493,18 +504,81 @@ ${g.govde}
 /** @param {string} d */
 export const sonHap = (d) => (d === 'G' ? '<span class="durum-hap h-g">✓ Geçti</span>' : d === 'K' ? '<span class="durum-hap h-k">✗ Kaldı</span>' : d === 'A' ? '<span class="durum-hap h-a">○ Atlandı</span>' : '<span class="notr">—</span>');
 
-/** @param {Array<[string, string]>} ek */
-export function yontemKutusu(ek = []) {
+/**
+ * Yöntem notunun "Rapor verileri" satırı (A4): Ayarlar > Raporlar'daki verilerden hangileri tanımlı ve rapora nasıl girdi; tanımsız
+ * olanlarda önceki (varsayılan) davranış.
+ * @param {{ kritik: number; ekip: number; esik: number; surumluSonuc: number } | null | undefined} rv
+ */
+export function raporVerisiNotu(rv) {
+  const r = rv ?? { kritik: 0, ekip: 0, esik: 0, surumluSonuc: 0 };
+  return [
+    r.kritik ? `Kritik işareti: ${r.kritik} öğe — öncelikte kritiklik 1; kapsamdaki kritik öğe / akış son koşusunda kaldıysa rozet Kritik.`
+      : 'Kritik işareti yok: kritiklik 0 alınır.',
+    r.ekip ? `Ekip eşlemesi: ${r.ekip} öğe — sahip önerisi öğenin ekibi; eşlenmeyenlerde sınıfın varsayılan ekibi.` : 'Ekip eşlemesi yok: sahip önerisi sınıfın varsayılan ekibidir.',
+    r.esik ? `Süre eşiği: ${r.esik} öğe — p95 eşiği aşarsa “Süre eşiği aşımları”nda ve P2 ek aksiyon olarak gösterilir.` : 'Süre eşiği yok: süre grafiklerinde eşik çizgisi yoktur.',
+    r.surumluSonuc ? `Uygulama sürümü: ${sy(r.surumluSonuc)} sonuç sürüm etiketli — sürüme göre başarı, sorunun başladığı sürüm; kararsızlıkta aynı sürümdeki koşular karşılaştırılır.`
+      : 'Uygulama sürümü kayıtlı değil: kararsızlıkta sürüm yerine gün + model sürümü kullanılır.',
+    'Bu veriler Ayarlar > Raporlar (kritik, ekip, eşik) ve ortam ayarı / koşu diyaloğunda (sürüm) girilir; Nöbetçi sürümü hiçbir adrese sormaz.'
+  ].join(' ');
+}
+
+/** @param {Array<[string, string]>} ek @param {{ kritik: number; ekip: number; esik: number; surumluSonuc: number } | null} [rv] rapor verileri sayıları (A4) */
+export function yontemKutusu(ek = [], rv = null) {
   const satir = [
     ['Başarı oranı', 'başarılı ÷ (başarılı + başarısız + atlanan [+ hata]); durdurulan paydaya girmez (Sonuçlar ekranıyla aynı formül). Ekran oranları yalnız tam koşulardan; servis oranları “koşu” türünden (“Dene” hariç).'],
     ['Dönem / karşılaştırma', 'Dönem: seçilen aralık (yerel saat, gün sınırı 00:00). Karşılaştırma: hemen önceki eşit uzunlukta dönem. ▲▼ = bu dönem − önceki dönem. ≤ 31 gün günlük, daha uzun haftalık kırılım.'],
     ['Sorun', 'Aynı imza = öğe + ilk başarısız adım (ekran) / metot (servis) + hata kategorisi / türü + hata kalıbı (maskeli metinden; sayılar “#”).'],
-    ['Sorun durumları', 'Yeni: 90 günlük geriye bakışta yok · Artan / Azalan: maruziyete göre oran ≥ 1,5× / ≤ 0,67× ve adet farkı ≥ 2 · Çözülen: bu dönemde senaryoları ≥ 3 kez geçti, hata yok · Tekrar eden: çözülmüştü, geri geldi · Kararsız: başarısızlıkların ≥ %50’si kararsız senaryolardan (aynı senaryo, ortam, gün ve model sürümünde geçti↔kaldı değişimi ≥ %20, ≥ 5 koşu).'],
-    ['Öncelik puanı', '100 × sınıf katsayısı × (0,30 etki + 0,25 sıklık + 0,20 eğilim + 0,15 kritiklik + 0,10 süreklilik). Sınıf: uygulama 1,0 · test verisi 0,8 · test bakımı 0,7 · ortam 0,6 · kararsız 0,5. Sınıf bir tahmindir; dayanağı aksiyon satırında yazar.'],
+    ['Sorun durumları', 'Yeni: 90 günlük geriye bakışta yok · Artan / Azalan: maruziyete göre oran ≥ 1,5× / ≤ 0,67× ve adet farkı ≥ 2 · Çözülen: bu dönemde senaryoları ≥ 3 kez geçti, hata yok · Tekrar eden: çözülmüştü, geri geldi · Kararsız: başarısızlıkların ≥ %50’si kararsız senaryolardan (aynı senaryo, ortam, model sürümü ve uygulama sürümünde — sürüm kayıtlı değilse aynı günde — geçti↔kaldı değişimi ≥ %20, ≥ 5 koşu).'],
+    ['Öncelik puanı', '100 × sınıf katsayısı × (0,30 etki + 0,25 sıklık + 0,20 eğilim + 0,15 kritiklik + 0,10 süreklilik). Sınıf: uygulama 1,0 · test verisi 0,8 · test bakımı 0,7 · ortam 0,6 · kararsız 0,5. Kritiklik: kritik işaretli öğe 1, diğer 0. Sınıf bir tahmindir; dayanağı aksiyon satırında yazar.'],
     ['Durum rozeti', 'Sağlıklı: dönem başarısı ≥ yeşil eşik ve P1 yok · Kritik: < sarı eşik ya da kapsamdaki kritik akış son koşusunda kaldı ya da ≥ 3 P1 · diğer: Dikkat. Eşikler Ayarlar > Arayüz > Sağlık noktası.'],
-    ['Henüz olmayan veri', 'Kritik akış işareti, ekip eşlemesi, uygulama sürümü ve metot süre eşiği tanımlı değil: kritiklik 0 alınır, sahip önerisi sınıfın varsayılan ekibidir, kararsızlıkta sürüm yerine gün + model sürümü kullanılır, süre grafiklerinde eşik çizgisi yoktur.'],
+    ['Rapor verileri', raporVerisiNotu(rv)],
     ...ek
   ];
   return `<div class="yontem"><h3>Yöntem</h3><dl>${satir.map(([a, b]) => `<dt>${kacis(a)}</dt><dd>${kacis(b)}</dd>`).join('')}</dl></div>
 <div class="gizlilik"><b>Gizlilik.</b> Rapor yerel bilgisayarda, Nöbetçi'nin kendi tarayıcı motoruyla üretildi; hiçbir veri dışarı gönderilmedi. Giriş profillerinin gizli değerleri, test verisi tablolarının gizli sütunları, Ayarlar &gt; Güvenlik &gt; Maskeleme'deki adlar, e-posta adresleri, uzun rakam dizileri ve adreslerdeki sorgu dizeleri maskelenir. İstek / yanıt gövdeleri, başlıklar, okunan değerler, giriş bilgileri ve test verisi değerleri rapora hiç girmez; ortam adresi ve ekran görüntüleri yalnız rapor alınırken seçilirse eklenir.</div>`;
+}
+
+// ---------------------------------------------------------------- A4: rapor verileri (kritik akış, uygulama sürümü, süre eşiği)
+
+/**
+ * "Kritik akış" kartı: kapsamdaki kritik işaretli öğe / akışlardan son koşusunda kalanlar. Veri yoksa boş metin (kart eklenmez).
+ * @param {{ toplam: number; kalan: number; ogeler: Array<{ tur: string; ad: string; son: string | null }> } | null | undefined} k @param {Yazici} e
+ */
+export function kritikKarti(k, e) {
+  if (!k) return '';
+  const kalanlar = k.ogeler.filter((o) => o.son === 'K');
+  const alt = kalanlar.length
+    ? `<span class="kotu fk">✗ son koşusunda kaldı:</span> <span class="kucuk">${kalanlar.slice(0, 3).map((o) => e(o.ad)).join(', ')}${kalanlar.length > 3 ? ` ve ${kalanlar.length - 3} diğer` : ''}</span>`
+    : `<span class="iyi fk">✓ hepsi son koşusunda geçti</span> <span class="notr">${k.ogeler.filter((o) => o.son === null).length ? `${k.ogeler.filter((o) => o.son === null).length} koşmadı` : ''}</span>`;
+  return kart('Kritik akış', `${sy(k.kalan)} / ${sy(k.toplam)}`, alt, k.kalan ? 'kotu' : 'iyi');
+}
+
+/**
+ * "Uygulama sürümlerine göre" tablosu: sürüm başına ekran testi / servis çağrısı başarısı, ilk / son görülme, o sürümde başlayan açık
+ * sorun. Sürüm yoksa boş metin.
+ * @param {{ liste: Array<{ surum: string; ekranTest: number; ekranBasari: number | null; cagri: number; servisBasari: number | null; ilk: string | null; son: string | null; baslayanSorun: number }>; toplam: number } | null | undefined} s
+ * @param {{ e: Yazici; esik: { yesil: number; sari: number }; h2: (metin: string, ek?: string) => string }} y
+ */
+export function surumBolumu(s, y) {
+  if (!s || !s.liste.length) return '';
+  const { e, esik } = y;
+  const ekranVar = s.liste.some((x) => x.ekranTest > 0);
+  const servisVar = s.liste.some((x) => x.cagri > 0);
+  return `${y.h2('Uygulama sürümlerine göre')}<table><thead><tr><th scope="col">Sürüm</th>${ekranVar ? '<th scope="col" class="s">Ekran testi</th><th scope="col" class="s">Ekran başarısı</th>' : ''}${servisVar ? '<th scope="col" class="s">Servis çağrısı</th><th scope="col" class="s">Servis başarısı</th>' : ''}<th scope="col">İlk / son görülme</th><th scope="col" class="s">Bu sürümde başlayan açık sorun</th></tr></thead><tbody>
+${s.liste.map((x) => `<tr><td><b>${e(x.surum)}</b></td>${ekranVar ? `<td class="s">${sy(x.ekranTest)}</td><td class="s ${renkOran(x.ekranBasari, esik)}"><b>${yz(x.ekranBasari)}</b></td>` : ''}${servisVar ? `<td class="s">${sy(x.cagri)}</td><td class="s ${renkOran(x.servisBasari, esik)}"><b>${yz(x.servisBasari)}</b></td>` : ''}<td class="kucuk">${kisaTarih(x.ilk)} – ${kisaTarih(x.son)}</td><td class="s ${x.baslayanSorun ? 'kotu' : ''}">${sy(x.baslayanSorun)}</td></tr>`).join('')}
+</tbody></table><p class="kucuk">Sürüm, koşuya bağlanan etikettir (koşu başlatılırken girilen ya da ortam ayarındaki; Nöbetçi sürümü sormaz). Yalnız bu dönemin etiketli sonuçları${s.toplam > s.liste.length ? `; en yeni ${s.liste.length} sürüm (toplam ${s.toplam})` : ''}. “Başlayan sorun” = ilk görüldüğü sonuç bu sürümde olan açık sorun.</p>`;
+}
+
+/**
+ * Süre eşiği aşımları (kullanıcı tanımlı eşik; p95 > eşik = aştı). Eşik yoksa boş metin.
+ * @param {Array<{ tur: string; oge: string; metot: string | null; esik: number; p95: number | null; asan: number; olculen: number; oncekiAsan: number; asti: boolean; kaynak?: string }> | null | undefined} l
+ * @param {{ e: Yazici; k: boolean }} y
+ */
+export function esikTablosu(l, y) {
+  if (!l || !l.length) return '';
+  const { e, k } = y;
+  const asan = l.filter((x) => x.asti).length;
+  return `<h3>Süre eşiği aşımları (${asan} / ${l.length})</h3><table><thead><tr><th scope="col">Öğe › metot</th><th scope="col" class="s">Eşik</th><th scope="col" class="s">Bu dönem p95</th><th scope="col" class="s">Eşiği aşan ölçüm</th>${k ? '' : '<th scope="col" class="s">Önceki dönem aşan</th>'}<th scope="col">Durum</th></tr></thead><tbody>
+${l.map((x) => `<tr><td>${e(x.oge)}${x.metot ? ` › <span class="mono" style="color:#1c2430">${e(x.metot)}</span>` : ` <span class="kucuk">(${x.tur === 'ekran' ? 'test süresi' : 'servis'})</span>`}${x.kaynak === 'servis' && x.metot ? ' <span class="kucuk">(servis eşiği)</span>' : ''}</td><td class="s">${kacis(sure(x.esik))}</td><td class="s ${x.asti ? 'kotu' : ''}"><b>${kacis(sure(x.p95))}</b></td><td class="s">${sy(x.asan)} / ${sy(x.olculen)}</td>${k ? '' : `<td class="s notr">${sy(x.oncekiAsan)}</td>`}<td>${x.asti ? '<span class="durum-hap h-k">✗ Aştı</span>' : x.olculen ? '<span class="durum-hap h-g">✓ Eşik içinde</span>' : '<span class="notr">ölçüm yok</span>'}</td></tr>`).join('')}
+</tbody></table><p class="kucuk">Eşikler Ayarlar &gt; Raporlar'da öğe (ve servis için metot) başına tanımlanır. p95 eşiği aşarsa aksiyon listesine P2 olarak girer. Ekran: tam koşu test süresi; servis: çağrı süresi (yanıt gelmeyen “hata” hariç).</p>`;
 }

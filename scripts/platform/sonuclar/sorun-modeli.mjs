@@ -32,12 +32,14 @@ export const SORUN_DURUM_ETIKETLERI = Object.freeze({
 
 /**
  * Tek sonuç gözlemi (ekran sonucu ya da servis çağrısı).
+ * surum: model sürümü; uygulamaSurumu: test edilen uygulamanın sürümü (koşuya bağlı etiket; PDF rapor A4 — yoksa null).
  * @typedef {{ zaman: number; durum: string; senaryo: string; maruz: string; ortam: string | null; surum?: string | number | null;
- *   deneme?: number; tekrarKosusu?: boolean; imza?: { parcalar: string[]; bilgi: Record<string, unknown> } }} Gozlem
+ *   uygulamaSurumu?: string | null; deneme?: number; tekrarKosusu?: boolean; imza?: { parcalar: string[]; bilgi: Record<string, unknown> } }} Gozlem
  * @typedef {{ kosu: number; degisim: number; oran: number; ekKanit: boolean; durum: 'kararsiz' | 'izlenir' | 'kararli' }} Kararlilik
  * @typedef {{ imza: string; bilgi: Record<string, unknown>; durum: string; n: number; nOnceki: number; maruz: number; maruzOnceki: number;
  *   oran: number; oranOnceki: number; senaryolar: string[]; ilk: number; son: number; seri: number[]; oncekiSeri: number[]; acikGun: number;
- *   tekrarRozeti: boolean; kararsizPay: number; gecis: number }} Sorun
+ *   tekrarRozeti: boolean; kararsizPay: number; gecis: number; ilkSurum: string | null }} Sorun
+ *   ilkSurum: sorunun ilk görüldüğü (geriye bakış dahil) sonucun uygulama sürümü — "hangi sürümde başladı" (sürüm yoksa null).
  */
 
 /** İmza parçalarından kısa, kararlı kimlik (sha1, 16 hane). @param {ReadonlyArray<string>} parcalar */
@@ -60,7 +62,9 @@ export function kararlilikHesapla(gozlemler, e = ESIKLER) {
   const kanit = new Map();
   for (const g of gozlemler) {
     if (!kosanMi(g.durum)) continue;
-    const a = `${g.senaryo}\u0000${g.ortam ?? ''}\u0000${gunAnahtari(g.zaman)}\u0000${g.surum ?? ''}`;
+    // Karşılaştırılabilir koşular: aynı senaryo + ortam + model sürümü ve aynı UYGULAMA SÜRÜMÜ (kayıtlıysa; tasarımın tam tanımı) —
+    // sürüm yoksa aynı gün.
+    const a = `${g.senaryo}\u0000${g.ortam ?? ''}\u0000${g.uygulamaSurumu ? `s:${g.uygulamaSurumu}` : gunAnahtari(g.zaman)}\u0000${g.surum ?? ''}`;
     (gruplar.get(a) ?? gruplar.set(a, []).get(a))?.push(g);
     if (g.durum === 'basarili' && ((g.deneme ?? 0) > 0 || g.tekrarKosusu)) kanit.set(g.senaryo, true);
   }
@@ -157,7 +161,8 @@ export function sorunlariHesapla(gozlemler, donem, s = {}) {
     sorunlar.push({
       imza, bilgi: x.bilgi, durum, n, nOnceki, maruz, maruzOnceki, oran, oranOnceki,
       senaryolar: [...new Set(kalanD.map((g) => g.senaryo))], ilk: x.kalanlar[0].zaman, son: x.kalanlar[x.kalanlar.length - 1].zaman,
-      seri, oncekiSeri, acikGun: n ? Math.max(1, Math.ceil((bitMs - acikBas) / GUN_MS)) : 0, tekrarRozeti, kararsizPay, gecis
+      seri, oncekiSeri, acikGun: n ? Math.max(1, Math.ceil((bitMs - acikBas) / GUN_MS)) : 0, tekrarRozeti, kararsizPay, gecis,
+      ilkSurum: x.kalanlar[0].uygulamaSurumu ?? null
     });
   }
   const sira = (/** @type {string} */ d) => SORUN_DURUMLARI.indexOf(d);

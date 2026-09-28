@@ -6,8 +6,8 @@
 // maskeleme + kaçış). Sayfa JS'siz, dış kaynaksız.
 import { kacis } from '../html-rapor.mjs';
 import {
-  aksiyonTablosu, durumEtiketi, fark, kart, oranKivilcimi, ortakMeta, puanEtiketi, renkOran, rozetHap, sinifDagilimiTablosu, sonHap, sorunTablosu, sure,
-  sureDagilimi, sureGrafigi, sy, tarihSaat, tekBakista, trendGrafigi, yontemKutusu, yz
+  KRITIK_HAP, aksiyonTablosu, durumEtiketi, esikTablosu, fark, kart, kritikKarti, oranKivilcimi, ortakMeta, puanEtiketi, renkOran, rozetHap, sinifDagilimiTablosu, sonHap,
+  sorunTablosu, sure, sureDagilimi, sureGrafigi, surumBolumu, sy, tarihSaat, tekBakista, trendGrafigi, yontemKutusu, yz
 } from './bilesenler.mjs';
 import { SERVIS_HATA_TURLERI } from '../sorun-modeli.mjs';
 
@@ -89,6 +89,8 @@ export function cokluRapor(v, y) {
       kart('Hatasız öğe', `${sy(oe.hatasizOge + os.hatasizOge)} / ${sy(oe.ogeSayisi + os.ogeSayisi)}`, '<span class="notr">dönemde hiç kalmayan ekran / servis</span>')
     ];
   }
+  // A4: kapsamda kritik işaretli öğe / akış varsa "Kritik akış" kartı.
+  if (v.kritik) kartlar.push(kritikKarti(v.kritik, e));
   let govde = tekBakista({ no: ++no, rozet: v.rozet, kartlar, maddeler: v.maddeler, m });
   if (!v.kosuVar) govde += `<p class="not">Bu dönemde seçilen öğelerde koşu yok${v.ortam ? ` (ortam: ${e(v.ortam.ad)})` : ''}. Sayılar boştur; dönemi genişletin ya da koşuyu başlatın.</p>`;
   if (sec.eksik) govde += `<p class="not">Seçimdeki ${sec.eksik} öğe artık projede yok; rapor kalan öğelerle üretildi.</p>`;
@@ -131,15 +133,21 @@ ${satir('Açık sorun', sy(os.acikSorun))}${satir('Yavaşlayan metot', sy(os.yav
     govde += trendGrafigi({ kovalar: st.egilim.kovalar, oncekiOrt: st.egilim.oncekiOrt, esikler: esik, karsilastir: v.karsilastir, adetEtiketi: 'Servis çağrısı',
       baslik: `${karma ? 'Servis çağrıları — ' : ''}${kirilim.toLocaleLowerCase('tr')} başarı ve çağrı sayısı (${st.ozet.ogeSayisi} servis)`.replace(/^./, (h) => h.toLocaleUpperCase('tr')) });
     if (!karma && st.sureEgilimi.p95.some((/** @type {number | null} */ p) => p !== null)) {
-      govde += sureGrafigi({ etiketler: v.donem.kovaEtiketleri, p50: st.sureEgilimi.p50, p95: st.sureEgilimi.p95, oncekiP95: k ? null : st.sureEgilimi.oncekiP95, baslik: 'Yanıt süresi (seçilen servislerin tüm metotları; p50 / p95)' });
+      govde += sureGrafigi({ etiketler: v.donem.kovaEtiketleri, p50: st.sureEgilimi.p50, p95: st.sureEgilimi.p95, oncekiP95: k ? null : st.sureEgilimi.oncekiP95, baslik: 'Yanıt süresi (seçilen servislerin tüm metotları; p50 / p95)',
+        ...(v.esikAsimlari ? { esikNotu: 'Süre eşikleri servis / metot başına: “Süre eşiği aşımları” tablosuna bakın.' } : {}) });
     }
   }
+
+  // ---- A4: uygulama sürümüne göre başarı (koşular sürüm etiketliyse).
+  govde += surumBolumu(v.surumler, { e, esik, h2 });
 
   // ---- Kapsamdaki öğeler: sağlık sıralaması + karşılaştırma.
   govde += h2('Kapsamdaki öğeler — sağlık sıralaması');
   if (et) govde += `${karma ? '<h3>Ekranlar</h3>' : ''}${ekranKiyasTablosu(et.ogeler, { e, k, esik })}`;
   if (st) govde += `${karma ? '<h3>Servisler</h3>' : ''}${servisKiyasTablosu(st.ogeler, { e, k, esik })}`;
   govde += '<div class="lejant"><span>Sıra: önce durum (✗ Kritik → ◆ Dikkat → ✓ Sağlıklı; öğe başına dönem başarısı ve P1 aksiyonuyla), sonra düşük başarı, P1, kötüleşen sorun. Dönemde koşusu olmayan öğe sondadır.</span><span>Eğilim: kova başına başarı oranı, kesikli çizgi = yeşil eşik.</span></div>';
+  // A4: süre eşiği aşımları (çoklu servis raporunda yavaşlayan metotların yanında).
+  if (v.tur !== 'coklu-servis') govde += esikTablosu(v.esikAsimlari, { e, k });
 
   // ---- Türe özgü bölümler.
   if (v.tur === 'coklu-ekran') {
@@ -153,6 +161,7 @@ ${satir('Açık sorun', sy(os.acikSorun))}${satir('Yavaşlayan metot', sy(os.yav
       govde += `<h3>Yavaşlayan metotlar (p95 ≥ %20 artış)</h3>${st.yavaslayanlar.length ? `<table><thead><tr><th scope="col">Servis › metot</th><th scope="col" class="s">Önceki p95</th><th scope="col" class="s">Bu dönem p95</th><th scope="col" class="s">Değişim</th><th scope="col" class="s">Ölçüm</th></tr></thead><tbody>
 ${st.yavaslayanlar.map((/** @type {any} */ x) => `<tr><td><span class="kucuk">${e(x.servis)} ›</span> <span class="mono" style="color:#1c2430">${e(x.metot)}</span></td><td class="s">${kacis(sure(x.oncekiP95))}</td><td class="s kotu"><b>${kacis(sure(x.p95))}</b></td><td class="s kotu">${x.oncekiP95 ? `▲ %${sy(((x.p95 - x.oncekiP95) / x.oncekiP95) * 100)}` : '—'}</td><td class="s">${sy(x.n)}</td></tr>`).join('')}
 </tbody></table>` : '<p class="bos">Yavaşlayan metot yok.</p>'}`;
+      govde += esikTablosu(v.esikAsimlari, { e, k });
       govde += `<h3>Süre dağılımı (p50 / p95 / p99)</h3>${sureDagilimi(st.metotlar.map((/** @type {any} */ x) => ({ ...x, ad: `${x.servis} › ${x.ad}` })), e)}`;
     }
     govde += h2(karma ? 'Hata türleri ve sınıflar' : 'Hata türleri ve sınıflar');
@@ -170,7 +179,7 @@ ${st.yavaslayanlar.map((/** @type {any} */ x) => `<tr><td><span class="kucuk">${
     ] : []),
     ...(st ? [/** @type {[string, string]} */ (['Süre', 'Servis süresi = isteğin gönderilmesinden yanıtın tamamlanmasına kadar. p50 / p95 / p99: en yakın sıra yöntemi; “hata” (yanıt yok) süreye girmez; p99 yalnız 20+ ölçümde.'])] : []),
     ...(et ? [/** @type {[string, string]} */ (['Tekil koşular', 'Tek ▷ ve “Seçilenleri çalıştır” koşuları sorunlara girer, başarı oranına girmez.'])] : [])
-  ]);
+  ], v.raporVerileri);
   return { baslik, alt, meta, govde };
 }
 
@@ -178,7 +187,7 @@ ${st.yavaslayanlar.map((/** @type {any} */ x) => `<tr><td><span class="kucuk">${
 export function ekranKiyasTablosu(ogeler, y) {
   const { e, k, esik } = y;
   return `<table><thead><tr><th scope="col" class="c">Sıra</th><th scope="col">Ekran</th><th scope="col">Durum</th><th scope="col" class="s">Senaryo</th><th scope="col" class="s">Test</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col" class="s">Önceki</th><th scope="col">Fark</th>'}<th scope="col">Eğilim</th><th scope="col" class="s">Açık sorun</th><th scope="col">Son koşu</th></tr></thead><tbody>
-${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><td><b>${e(o.ad)}</b>${o.ortakAkis ? ' <span class="kucuk">(ortak akış)</span>' : ''}</td><td>${rozetHap(o.rozet.durum)}</td><td class="s">${o.senaryo}</td><td class="s">${sy(o.test)}</td><td class="s ${renkOran(o.basari, esik)}"><b>${yz(o.basari)}</b></td>${k ? '' : `<td class="s notr">${yz(o.oncekiBasari)}</td><td>${o.test ? fark(o.basari, o.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td>${oranKivilcimi(o.oranSeri, esik)}</td><td class="s">${o.acikSorun}${o.kotulesen ? ` <span class="kucuk kotu">(${o.kotulesen} kötüleşen)</span>` : ''}${o.p1 ? `<br><span class="kucuk kotu">${o.p1} P1</span>` : ''}</td><td>${sonHap(o.son)}</td></tr>`).join('')}
+${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><td><b>${e(o.ad)}</b>${o.ortakAkis ? ' <span class="kucuk">(ortak akış)</span>' : ''}${o.kritik ? ` ${KRITIK_HAP}` : ''}${o.esik?.asti ? `<br><span class="kucuk kotu">süre eşiği ${kacis(sure(o.esik.esik))} aşıldı (p95 ${kacis(sure(o.esik.p95))})</span>` : ''}</td><td>${rozetHap(o.rozet.durum)}</td><td class="s">${o.senaryo}</td><td class="s">${sy(o.test)}</td><td class="s ${renkOran(o.basari, esik)}"><b>${yz(o.basari)}</b></td>${k ? '' : `<td class="s notr">${yz(o.oncekiBasari)}</td><td>${o.test ? fark(o.basari, o.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td>${oranKivilcimi(o.oranSeri, esik)}</td><td class="s">${o.acikSorun}${o.kotulesen ? ` <span class="kucuk kotu">(${o.kotulesen} kötüleşen)</span>` : ''}${o.p1 ? `<br><span class="kucuk kotu">${o.p1} P1</span>` : ''}</td><td>${sonHap(o.son)}</td></tr>`).join('')}
 </tbody></table>`;
 }
 
@@ -186,7 +195,7 @@ ${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><
 export function servisKiyasTablosu(ogeler, y) {
   const { e, k, esik } = y;
   return `<table><thead><tr><th scope="col" class="c">Sıra</th><th scope="col">Servis</th><th scope="col">Durum</th><th scope="col" class="s">Metot</th><th scope="col" class="s">Çağrı</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col">Fark</th>'}<th scope="col" class="s">En yüksek p95</th>${k ? '' : '<th scope="col">p95 farkı</th>'}<th scope="col">Eğilim</th><th scope="col" class="s">Açık sorun</th><th scope="col">Son</th></tr></thead><tbody>
-${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><td><b>${e(o.ad)}</b>${o.tur ? ` <span class="kucuk">(${kacis(String(o.tur).toUpperCase())})</span>` : ''}</td><td>${rozetHap(o.rozet.durum)}</td><td class="s">${o.metot}</td><td class="s">${sy(o.cagri)}</td><td class="s ${renkOran(o.basari, esik)}"><b>${yz(o.basari)}</b></td>${k ? '' : `<td>${o.cagri ? fark(o.basari, o.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${o.yavaslayan ? '<b class="kotu">' : ''}${kacis(sure(o.p95))}${o.yavaslayan ? '</b>' : ''}</td>${k ? '' : `<td>${o.cagri ? fark(o.p95, o.oncekiP95, { yon: 'asagi-iyi', birim: 'ms' }) : ''}</td>`}<td>${oranKivilcimi(o.oranSeri, esik)}</td><td class="s">${o.acikSorun}${o.kotulesen ? ` <span class="kucuk kotu">(${o.kotulesen} kötüleşen)</span>` : ''}${o.p1 ? `<br><span class="kucuk kotu">${o.p1} P1</span>` : ''}</td><td>${sonHap(o.son)}</td></tr>`).join('')}
+${ogeler.map((o) => `<tr><td class="c"><span class="sira">${o.sira}</span></td><td><b>${e(o.ad)}</b>${o.tur ? ` <span class="kucuk">(${kacis(String(o.tur).toUpperCase())})</span>` : ''}${o.kritik ? ` ${KRITIK_HAP}` : ''}${o.esikAsan ? `<br><span class="kucuk kotu">${o.esikAsan} metot süre eşiğini aştı</span>` : ''}</td><td>${rozetHap(o.rozet.durum)}</td><td class="s">${o.metot}</td><td class="s">${sy(o.cagri)}</td><td class="s ${renkOran(o.basari, esik)}"><b>${yz(o.basari)}</b></td>${k ? '' : `<td>${o.cagri ? fark(o.basari, o.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${o.yavaslayan ? '<b class="kotu">' : ''}${kacis(sure(o.p95))}${o.yavaslayan ? '</b>' : ''}</td>${k ? '' : `<td>${o.cagri ? fark(o.p95, o.oncekiP95, { yon: 'asagi-iyi', birim: 'ms' }) : ''}</td>`}<td>${oranKivilcimi(o.oranSeri, esik)}</td><td class="s">${o.acikSorun}${o.kotulesen ? ` <span class="kucuk kotu">(${o.kotulesen} kötüleşen)</span>` : ''}${o.p1 ? `<br><span class="kucuk kotu">${o.p1} P1</span>` : ''}</td><td>${sonHap(o.son)}</td></tr>`).join('')}
 </tbody></table>`;
 }
 
@@ -209,7 +218,7 @@ function metotTablosu(metotlar, y) {
   const { e, k, esik } = y;
   if (!metotlar.length) return '<p class="bos">Seçilen servislerin senaryosu yok.</p>';
   return `<table><thead><tr><th scope="col">Servis</th><th scope="col">Metot</th><th scope="col" class="s">Senaryo</th><th scope="col" class="s">Çağrı</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col">Fark</th>'}<th scope="col" class="s">p50</th><th scope="col" class="s">p95</th>${k ? '' : '<th scope="col">p95 farkı</th>'}<th scope="col">Son</th></tr></thead><tbody>
-${metotlar.map((t) => `<tr><td class="kucuk">${e(t.servis)}</td><td><span class="mono" style="font-size:8pt;color:#1c2430">${e(t.ad)}</span></td><td class="s">${t.senaryo}</td><td class="s">${sy(t.cagri)}</td><td class="s ${renkOran(t.basari, esik)}"><b>${yz(t.basari)}</b></td>${k ? '' : `<td>${t.cagri ? fark(t.basari, t.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${kacis(sure(t.p50))}</td><td class="s">${t.yavas ? '<b class="kotu">' : ''}${kacis(sure(t.p95))}${t.yavas ? '</b>' : ''}</td>${k ? '' : `<td>${t.cagri ? fark(t.p95, t.oncekiP95, { yon: 'asagi-iyi', birim: 'ms' }) : ''}${t.yavas ? ' <span class="kucuk kotu">yavaşladı</span>' : ''}</td>`}<td>${sonHap(t.son)}</td></tr>`).join('')}
+${metotlar.map((t) => `<tr><td class="kucuk">${e(t.servis)}</td><td><span class="mono" style="font-size:8pt;color:#1c2430">${e(t.ad)}</span></td><td class="s">${t.senaryo}</td><td class="s">${sy(t.cagri)}</td><td class="s ${renkOran(t.basari, esik)}"><b>${yz(t.basari)}</b></td>${k ? '' : `<td>${t.cagri ? fark(t.basari, t.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${kacis(sure(t.p50))}</td><td class="s">${t.yavas || t.esik?.asti ? '<b class="kotu">' : ''}${kacis(sure(t.p95))}${t.yavas || t.esik?.asti ? '</b>' : ''}${t.esik?.asti ? ` <span class="kucuk kotu">eşik ${kacis(sure(t.esik.esik))} üstü</span>` : ''}</td>${k ? '' : `<td>${t.cagri ? fark(t.p95, t.oncekiP95, { yon: 'asagi-iyi', birim: 'ms' }) : ''}${t.yavas ? ' <span class="kucuk kotu">yavaşladı</span>' : ''}</td>`}<td>${sonHap(t.son)}</td></tr>`).join('')}
 </tbody></table><div class="lejant"><span>Başarı = başarılı ÷ (başarılı + başarısız + hata). “Yavaşladı”: p95 önceki döneme göre ≥ %20 arttı (≥ 20 ölçüm).</span></div>`;
 }
 
@@ -230,8 +239,10 @@ export function akisTablosu(akislar, y) {
   const { e, k, esik } = y;
   if (!akislar.length) return `<p class="bos">${kacis(y.bos ?? 'Seçilen servisleri kullanan servis akışı yok.')}</p>`;
   return `<table><thead><tr><th scope="col">Akış</th><th scope="col">Tür</th><th scope="col" class="s">Koşu</th><th scope="col" class="s">Başarı</th>${k ? '' : '<th scope="col">Fark</th>'}<th scope="col" class="s">Ort. süre</th><th scope="col">Son</th></tr></thead><tbody>
-${akislar.map((a) => `<tr><td><b>${e(a.ad)}</b><br><span class="kucuk">${a.adim} adım</span></td><td class="kucuk">${kacis(a.tur)}</td><td class="s">${a.kosu}</td><td class="s ${renkOran(a.basari, esik)}"><b>${yz(a.basari)}</b></td>${k ? '' : `<td>${a.kosu ? fark(a.basari, a.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${kacis(sure(a.ortSure))}</td><td>${sonHap(a.son)}</td></tr>`).join('')}
-</tbody></table><p class="kucuk">Akışlar yalnız gösterilir; durum rozetini etkilemez (kritik akış işareti henüz yok).</p>`;
+${akislar.map((a) => `<tr><td><b>${e(a.ad)}</b>${a.kritik ? ` ${KRITIK_HAP}` : ''}<br><span class="kucuk">${a.adim} adım</span></td><td class="kucuk">${kacis(a.tur)}</td><td class="s">${a.kosu}</td><td class="s ${renkOran(a.basari, esik)}"><b>${yz(a.basari)}</b></td>${k ? '' : `<td>${a.kosu ? fark(a.basari, a.oncekiBasari, { birim: 'puan', b: 1 }) : ''}</td>`}<td class="s">${kacis(sure(a.ortSure))}</td><td>${sonHap(a.son)}</td></tr>`).join('')}
+</tbody></table><p class="kucuk">${akislar.some((a) => a.kritik)
+    ? 'Kritik işaretli (★) akış son koşusunda kaldıysa durum rozeti Kritik olur; diğer akışlar yalnız gösterilir.'
+    : 'Akışlar yalnız gösterilir; durum rozetini etkilemez (kritik işaretli akış yok — Ayarlar > Raporlar).'}</p>`;
 }
 
 /**

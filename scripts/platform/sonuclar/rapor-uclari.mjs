@@ -10,13 +10,14 @@
 //   ve tumEkranlar / tumServisler (çoklu; "tümü" rapor anındaki tüm öğeler; genel: seçim yok, her zaman o anki tüm proje), donem: { tur: son7 | son14 | son30 | ozel, baslangic?, bitis? },
 //   karsilastir, ortamId | null, secenekler: { hatalar, adres, goruntuler } }. İzin: mevcut HTML rapor indirmesiyle aynı (oturum token'ı + açık kasa;
 //   dış istek yapılmaz, bu yüzden Ayarlar > İzinler'de ayrı izin yoktur). PDF yerel Chromium ile basılır; tüm ağ istekleri engellidir.
-import { DepoHatasi, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
-import { servisleriListele } from '../servisler/servis-deposu.mjs';
+import { DepoHatasi, ekranModeliGetir, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
+import { servisAkislariniListele, servisSenaryolariniListele, servisleriListele } from '../servisler/servis-deposu.mjs';
+import { ekipleriListele, ogeAnahtari, raporIsaretleriniListele } from '../ayarlar/rapor-verileri.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { adMaskeleyici, bilinenGizliDegerler, dosyaAdiParcasi, goruntuleriCoz, onizlemeSakla, raporGoruntuSiniriBayt, raporMaskeleyici } from './html-rapor.mjs';
 import { DONEM_TURLERI, DonemHatasi, donemiBuguneKaydir, gunAnahtari } from './donem.mjs';
-import { EN_COK_OGE, donemRaporuVerisi } from './donem-raporu.mjs';
+import { EN_COK_OGE, donemRaporuVerisi, servisMetodu } from './donem-raporu.mjs';
 import { pdfRaporHtml } from './pdf-rapor/sablon.mjs';
 import { htmldenPdf, pdfSayfaSayisi } from './pdf-rapor/pdf.mjs';
 import { eskiRaporlariSil, raporGetir, raporKaydet, raporPdfiniAl, raporSil, raporlariListele } from './rapor-arsivi.mjs';
@@ -225,6 +226,39 @@ export function raporSecenekleri(vt, q) {
     ekranlar, servisler: servisleriListele(vt, projeId).map((s) => ({ id: s.id, ad: s.ad, tur: s.tur })),
     ortamlar: ortamlariListele(vt, projeId).map((o) => ({ id: o.id, ad: o.ad })), kapsamlar: RAPOR_KAPSAMLARI
   };
+}
+
+/**
+ * GET /platform/rapor-verileri (Ayarlar > Raporlar; PDF rapor A4): ekip listesi, öğe listeleri (ekranlar — ortak akışlar işaretli —,
+ * servisler ve metotları, servis / oturum / uçtan uca akışlar) ve her öğenin işareti (kritik, ekip, süre eşiği, metot eşikleri).
+ * Metot adları rapordakiyle aynı kuraldan (servisMetodu) gelir; kasa açık olmalıdır.
+ * @param {Veritabani} vt @param {string} projeId
+ */
+export function raporVerileriEkrani(vt, projeId) {
+  kimlik(projeId, 'projeId');
+  if (!projeGetir(vt, projeId)) throw new DepoHatasi('Proje bulunamadı.');
+  const isaretler = new Map(raporIsaretleriniListele(vt, projeId).map((x) => [ogeAnahtari(x.ogeTuru, x.ogeId), x]));
+  const isaret = (/** @type {'ekran' | 'servis' | 'akis'} */ tur, /** @type {string} */ id) => {
+    const x = isaretler.get(ogeAnahtari(tur, id));
+    return { kritik: x?.kritik ?? false, ekipId: x?.ekipId ?? null, sureEsigiMs: x?.sureEsigiMs ?? null, metotEsikleri: x?.metotEsikleri ?? {} };
+  };
+  const ekranlar = vt.tumu("SELECT id, ad, durum FROM ekranlar WHERE proje_id = ? AND durum <> 'silindi' ORDER BY (sira IS NULL), sira, ad", [projeId]).map((e) => {
+    let ortakAkis = false;
+    try { ortakAkis = ekranModeliGetir(vt, String(e.id))?.model?.tur === 'ortakAkis'; } catch { ortakAkis = false; }
+    const x = isaret('ekran', String(e.id));
+    return { id: String(e.id), ad: String(e.ad), ortakAkis, devreDisi: e.durum === 'devre_disi', kritik: x.kritik, ekipId: x.ekipId, sureEsigiMs: x.sureEsigiMs };
+  });
+  const servisler = servisleriListele(vt, projeId).map((s) => {
+    const metotlar = [...new Set(servisSenaryolariniListele(vt, s.id).map((y) => servisMetodu(/** @type {any} */ (y.icerik))).filter((m) => !m.startsWith('(')))]
+      .sort((a, b) => a.localeCompare(b, 'tr'));
+    const x = isaret('servis', s.id);
+    return { id: s.id, ad: s.ad, tur: s.tur, metotlar, kritik: x.kritik, ekipId: x.ekipId, sureEsigiMs: x.sureEsigiMs, metotEsikleri: x.metotEsikleri };
+  });
+  const akislar = servisAkislariniListele(vt, projeId).map((a) => ({
+    id: a.id, ad: a.baslik, tur: /** @type {any} */ (a.icerik)?.uctanUca === true ? 'Uçtan uca akış' : a.tur === 'oturum' ? 'Oturum akışı' : 'Servis akışı',
+    kritik: isaret('akis', a.id).kritik
+  }));
+  return { ekipler: ekipleriListele(vt, projeId), ekranlar, servisler, akislar };
 }
 
 /** Günlük temizlik: Ayarlar > Yedekleme > Rapor saklama süresi. @param {Veritabani} vt @param {{ medyaKlasoru: string; simdi?: number }} s */

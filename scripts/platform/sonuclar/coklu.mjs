@@ -68,12 +68,13 @@ export const ROZET_SIRASI = Object.freeze({ kritik: 0, dikkat: 1, saglikli: 2 })
 /**
  * Sağlık sıralaması: en çok ilgi isteyen öğe başta. Sıra anahtarları: dönemde sonucu olan öğeler önce (sonucu olmayan sona) →
  * rozet (Kritik → Dikkat → Sağlıklı) → başarı (düşük önce) → P1 aksiyon (çok önce) → kötüleşen sorun → açık sorun → ad.
- * @template {{ ad: string; basari: number | null; p1: number; kotulesen: number; acikSorun: number }} T
+ * kritikKaldi: öğe kritik işaretli (Ayarlar > Raporlar) ve son koşusunda kaldı → öğenin rozeti Kritik (A4; yoksa önceki davranış).
+ * @template {{ ad: string; basari: number | null; p1: number; kotulesen: number; acikSorun: number; kritikKaldi?: boolean }} T
  * @param {ReadonlyArray<T>} ogeler @param {{ yesil: number; sari: number }} esikler
  * @returns {Array<T & { rozet: { durum: 'saglikli' | 'dikkat' | 'kritik'; gerekce: string }; sira: number }>}
  */
 export function saglikSiralamasi(ogeler, esikler) {
-  return ogeler.map((o) => ({ ...o, rozet: durumRozeti({ basari: o.basari, p1: o.p1, esikler, kritikKaldi: false }) }))
+  return ogeler.map((o) => ({ ...o, rozet: durumRozeti({ basari: o.basari, p1: o.p1, esikler, kritikKaldi: o.kritikKaldi === true }) }))
     .sort((a, b) => Number(a.basari === null) - Number(b.basari === null)
       || ROZET_SIRASI[a.rozet.durum] - ROZET_SIRASI[b.rozet.durum]
       || (a.basari ?? 0) - (b.basari ?? 0)
