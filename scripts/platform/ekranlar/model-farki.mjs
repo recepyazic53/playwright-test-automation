@@ -93,16 +93,42 @@ function senaryoAnahtarlari(alan) {
 export function kosuTanimiMetni(k) {
   if (!nesneMi(k)) return 'yok';
   const parcalar = [];
+  // Görünen her koşu alanı özette yer alır (yalnız bekleme süresi / uyarı / not değişince eski ve yeni satır aynı görünmesin).
   for (const a of Array.isArray(k.aksiyonlar) ? k.aksiyonlar : []) {
-    if (nesneMi(a)) parcalar.push(`${a.tur === 'bekle' ? 'bekle' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}`);
+    if (!nesneMi(a)) continue;
+    let m;
+    if (a.tur === 'ekranaDon') m = 'ekrana dön';
+    else if (a.tur === 'bekle' && a.sureSn !== undefined) m = `bekle ${a.sureSn} sn`;
+    else m = `${a.tur === 'bekle' ? 'bekle' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}${a.tur === 'bekle' && a.durum && a.durum !== 'gorunur' ? ` (${a.durum})` : ''}`;
+    if (a.zamanAsimiSn !== undefined) m += ` (en çok ${a.zamanAsimiSn} sn)`;
+    parcalar.push(m);
   }
   const bg = k.basariGostergesi;
   if (nesneMi(bg)) {
-    const tek = (/** @type {any} */ g) => `${g.tur} "${g.deger}"`;
+    const tek = (/** @type {any} */ g) => `${g.tur} "${g.deger}"${g.secici ? ` (${g.secici})` : ''}`;
     parcalar.push(`başarı: ${bg.tur === 'veya' && Array.isArray(bg.secenekler) ? bg.secenekler.filter(nesneMi).map(tek).join(' veya ') : tek(bg)}`);
   }
   if (nesneMi(k.hataGostergesi)) parcalar.push(`hata: ${k.hataGostergesi.secici}`);
+  const uyarilar = Array.isArray(k.uyarilar) ? k.uyarilar.filter((u) => nesneMi(u) && typeof u.metin === 'string') : [];
+  if (uyarilar.length) parcalar.push(`uyarı: ${uyarilar.map((u) => `"${u.metin}"`).join(', ')}`);
+  if (k.zamanAsimiSn !== undefined) parcalar.push(`bekleme ${k.zamanAsimiSn} sn`);
+  if (k.ekranGoruntusu === true) parcalar.push('ekran görüntüsü');
+  if (typeof k.not === 'string' && k.not) parcalar.push(`not: "${k.not}"`);
   return parcalar.join(' · ') || 'boş';
+}
+
+/**
+ * Eski ve yeni koşu tanımı özeti aynı görünüyorsa (özette yer almayan bir alan, ör. çerçeve, değişti) değişen anahtarları
+ * yeni satıra ekler. @param {any} eski @param {any} yeni @returns {{ eski: string; yeni: string }}
+ */
+function kosuTanimiMetinleri(eski, yeni) {
+  const e = kosuTanimiMetni(eski);
+  const y = kosuTanimiMetni(yeni);
+  if (e !== y) return { eski: e, yeni: y };
+  const a = nesneMi(eski) ? eski : {};
+  const b = nesneMi(yeni) ? yeni : {};
+  const degisen = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !esit(a[k] ?? null, b[k] ?? null));
+  return { eski: e, yeni: degisen.length ? `${y} (değişen: ${degisen.join(', ')})` : y };
 }
 
 /** Görünürlüğün kısa, insan-okur açıklaması. */
@@ -231,7 +257,7 @@ export function modelFarki(eski, yeni) {
     if (!ek || esit(ek.adim.kosu || null, ya.kosu || null)) continue;
     bulgular.push(bulguYap({
       tur: 'adimDegisikligi', altTur: 'kosuTanimi', hedef: id, adimId: id, baslik: `Adım koşu tanımı: ${ya.baslik || id}`, konum: `${ek.sira + 1}. adım`,
-      eski: kosuTanimiMetni(ek.adim.kosu), yeni: kosuTanimiMetni(ya.kosu), imzaDegeri: ya.kosu || null
+      ...kosuTanimiMetinleri(ek.adim.kosu, ya.kosu), imzaDegeri: ya.kosu || null
     }));
   }
   const ortakEski = [...e.adimlar.keys()].filter((id) => y.adimlar.has(id));

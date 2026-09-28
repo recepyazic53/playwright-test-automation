@@ -83,12 +83,30 @@ test.describe('Model şeması sürüm 2', () => {
     for (const a of eski.adimlar as Nesne[]) delete a.kosu;
     const bulgular = modelFarki(eski, yeni).filter((b) => b.altTur === 'kosuTanimi');
     expect(bulgular.map((b) => b.adimId)).toEqual(['hesaplama', 'onay']);
-    expect(bulgular[0]).toMatchObject({ eski: 'yok', yeni: 'tıkla #hesapla · başarı: metin "Toplam:" · hata: #uyari' });
+    expect(bulgular[0]).toMatchObject({ eski: 'yok', yeni: 'tıkla #hesapla · başarı: metin "Toplam:" (#sonuc) · hata: #uyari · bekleme 15 sn' });
     const r = bulgulariUygula(eski, yeni, [bulgular[0].id]);
     expect(r.model.semaSurumu).toBe(2);
     expect((r.model.adimlar as Nesne[])[1].kosu).toEqual((yeni.adimlar as Nesne[])[1].kosu);
     expect((r.model.adimlar as Nesne[])[2].kosu).toBeUndefined();
     expect(() => dogrula(r.model)).not.toThrow();
+  });
+
+  test('tekrar analiz: yalnız bekleme süresi / uyarı / not değişince eski ve yeni özet farklı görünür', () => {
+    const yeni = ornekBasvuruModeli();
+    const eski = kopya(yeni);
+    const kosu = (m: Nesne) => ((m.adimlar as Nesne[]).find((a) => a.id === 'hesaplama') as Nesne).kosu as Nesne;
+    kosu(eski).zamanAsimiSn = 30;
+    kosu(yeni).zamanAsimiSn = 60;
+    let b = modelFarki(eski, yeni).find((x) => x.altTur === 'kosuTanimi' && x.adimId === 'hesaplama');
+    expect(b).toMatchObject({ eski: expect.stringContaining('bekleme 30 sn'), yeni: expect.stringContaining('bekleme 60 sn') });
+    delete kosu(eski).zamanAsimiSn;
+    delete kosu(yeni).zamanAsimiSn;
+    kosu(yeni).uyarilar = [{ metin: 'Limit aşıldı' }];
+    kosu(yeni).not = 'kısa not';
+    b = modelFarki(eski, yeni).find((x) => x.altTur === 'kosuTanimi' && x.adimId === 'hesaplama');
+    expect(b?.yeni).toContain('uyarı: "Limit aşıldı"');
+    expect(b?.yeni).toContain('not: "kısa not"');
+    expect(b?.eski).not.toBe(b?.yeni);
   });
 });
 
