@@ -143,7 +143,7 @@ export function kopyalaDugmesi(metin, etiket = 'Kopyala', s = {}) {
 
 /**
  * İstek metni (yapay zekâ aracına verilecek): ekranda tam metin GÖSTERİLMEZ; tek "İstek metnini kopyala" düğmesi (kopyalandı
- * bildirimi) + varsayılan kapalı "Metni göster" açılır bölümü. Sayfa ekle, Ekranlar listesi ve istek dosyası diyalogları ortak kullanır.
+ * bildirimi) + varsayılan kapalı "Metni göster" açılır bölümü. Ekran ekle, Ekranlar listesi ve istek dosyası diyalogları ortak kullanır.
  * @param {string} metin @param {{ etiket?: string; birincil?: boolean; ek?: Node | null }} [s]
  */
 export function istekMetniKutusu(metin, s = {}) {

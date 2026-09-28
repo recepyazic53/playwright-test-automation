@@ -1800,7 +1800,7 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 .dosya-ilerleme-cubugu { display: block; height: 100%; background: linear-gradient(90deg, var(--vurgu), var(--vurgu-2)); transition: width .15s; }
 
 /* ---- Otomatik tarama ---- */
-/* "Ekranı otomatik tara": başlatma diyaloğu, Sayfa ekle'deki ikinci seçenek, ilerleme ekranı (tarama.js). */
+/* "Ekranı otomatik tara": başlatma diyaloğu, Ekran ekle'deki ikinci seçenek, ilerleme ekranı (tarama.js). */
 dialog.claude-diyalogu:has(.tarama-diyalogu) { width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; }
 .tarama-diyalogu { display: grid; gap: 10px; }
 .tarama-diyalogu .alan { margin-bottom: 0; }
@@ -3572,7 +3572,7 @@ tr.suzuldu { display: none; }
 .istek-metni { margin: 6px 0 0; max-height: 14rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 11.5px/1.55 var(--yazi-mono);
   padding: 8px 10px; border-radius: var(--yaricap-s); background: color-mix(in srgb, var(--panel-kati) 70%, transparent); color: var(--metin-2); }
 .kesif-seridi .kesif-cumlesi { justify-items: stretch; min-width: 0; }
-/* Sayfa ekle: yükleme alanı üstte tam genişlik; altında yan yana üç eşit kutu (dar ekranda alt alta). */
+/* Ekran ekle: yükleme alanı üstte tam genişlik; altında yan yana üç eşit kutu (dar ekranda alt alta). */
 .yukleme-duzeni.tek-sutun { grid-template-columns: minmax(0, 1fr); }
 .ekleme-secenekleri { display: grid; gap: 10px; min-width: 0; }
 .ekleme-secenekleri > .ara-baslik { margin: 4px 0 0; }

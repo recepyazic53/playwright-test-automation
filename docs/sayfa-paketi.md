@@ -2,11 +2,11 @@
 
 Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **sayfa paketi** ile yapılır:
 
-1. Kullanıcı Nöbetçi > **Ekranlar > Sayfa ekle > Yapay zekâ ile oluştur** kutusundaki **İstek metnini kopyala** ile istek
+1. Kullanıcı Nöbetçi > **Ekranlar > Ekran ekle > Yapay zekâ ile oluştur** kutusundaki **İstek metnini kopyala** ile istek
    metnini, **Paket biçimini indir** ile bu belgeyi (tek dosya: `sayfa-paketi-bicimi.md`) alır ve ikisini sayfanın bağlantısıyla
    birlikte yapay zekâ aracına (tarayıcıyı kullanabilen bir kodlama asistanı) verir. Araç belirli bir ürün olmak zorunda değildir.
 2. Araç sayfayı aşağıdaki **düğme gruplarına** göre inceler ve bu belgedeki biçimde bir JSON dosyası üretir.
-3. Kullanıcı dosyayı Nöbetçi > **Ekranlar > Sayfa ekle** (yeni ekran) ya da ekranın **Paket yükle**
+3. Kullanıcı dosyayı Nöbetçi > **Ekranlar > Ekran ekle** (yeni ekran) ya da ekranın **Paket yükle**
    düğmesiyle (tekrar analiz) yükler. Önizleyip kabul edene kadar hiçbir şey kaydedilmez.
 
 ### Düğme grupları (aracın incelemesi)
@@ -24,7 +24,7 @@ yalnızca okur (düğmelere hiç basmaz).
 
 ### Yapay zekâ aracına verilecek istek
 
-Ekranlar listesindeki ve **Sayfa ekle** sayfasındaki **İstek metnini kopyala** düğmesi bu metni kopyalar (metin ekranda
+Ekranlar listesindeki ve **Ekran ekle** sayfasındaki **İstek metnini kopyala** düğmesi bu metni kopyalar (metin ekranda
 varsayılan olarak gösterilmez; "Metni göster" ile açılır). Metnin TEK kaynağı `scripts/platform/ekranlar/paket-istekleri.mjs`'dir
 (`PAKET_OZU`, `INCELEME_KURALLARI`, `paketIstekCumlesi`): arayüz aynı dosyayı `/arayuz/paket-istekleri.mjs` olarak alır, sunucu
 "Tekrar analiz et" istek dosyasına aynı kuralları yazar. Metin depo dosyasına değil, istekle birlikte verilen biçim dosyasına
@@ -297,7 +297,7 @@ giden her istek iptal edilir ve test başarısız sayılır.
 
 ## Otomatik tarama
 
-Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Sayfa ekle** (yükleme alanının altındaki
+Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ekle** (yükleme alanının altındaki
 "Ya da: Ekranı otomatik tara") ve ekran sayfasındaki **Ekranı tara** düğmesi. Akış:
 
 1. **Seçim (her seferinde onaylanır):** ortam, bağlam profilleri (tekrar analiz diyaloğuyla aynı seçim; ekran için son
@@ -353,7 +353,7 @@ Uçlar ve protokol: `scripts/platform/tarama/yonetici.mjs` (`/platform/tarama/*`
 ### Akışı kaydet (kullanıcı yürütür)
 
 Alanları bir düğmeyle açılan ekranlarda (çok adımlı formlar) otomatik tarama sonraki adımları göremez. **Akışı kaydet**
-(Ekranlar > ekran > "Akışı kaydet", ya da "Sayfa ekle"deki seçenek) aynı iş altyapısını kullanır (`/platform/tarama/baslat`
+(Ekranlar > ekran > "Akışı kaydet", ya da "Ekran ekle"deki seçenek) aynı iş altyapısını kullanır (`/platform/tarama/baslat`
 `{ kip: "kayit", … }`), ama:
 
 1. **Görünür bir tarayıcı** açılır; giriş ve bağlam değiştirme tarifle otomatik yapılır, sonra başlangıç sayfası açılır.
@@ -532,7 +532,7 @@ göre tahmin eder. Biçim, mevcut tablo + alan bağlantısı modelinin paket kar
 | `baglantilar[]` | `alanId`: modelde senaryoda ayarlanan seçim / metin alanı (gizli bilgi alanı bağlanmaz); `tablo` + `sutun` pakette olmalı, gizli sütuna bağlanmaz; alan bir kez bağlanır. `etiket` (isteğe bağlı): aynı tablo ekranda iki kez gerekiyorsa. |
 | Senaryo önerileri | Tabloya bağlı alanda senaryo değeri **tablodaki değerdir**; öneriler tablolar modele uygulanarak doğrulanır. Kişi / kayıt değeri `${Tablo.Sütun}` başvurusudur (tablo ve sütun pakette ya da projede olmalı; seçim alanı gizli sütundan değer alamaz). |
 
-**Önizleme ve onay** (Sayfa ekle / Paket yükle / tarama ve kayıt sonucu): "Test verisine yazılacaklar" bölümü her tabloyu (sütun /
+**Önizleme ve onay** (Ekran ekle / Paket yükle / tarama ve kayıt sonucu): "Test verisine yazılacaklar" bölümü her tabloyu (sütun /
 satır sayısı, ilk satırlar, gizli sütunlar, bağlanacak alanlar) ve alan bağlantılarını (mevcut bağlantı değişiyorsa o da)
 gösterir. Kullanıcı tablo başına **yaz / atla** seçer; projede **aynı adlı tablo** varsa **Birleştir** (mevcut satır ve sütunlar
 değişmez; eksik sütunlar, tabloda olmayan satırlar ve eksik karşılıklar eklenir; tablonun **kaynağı** da değişmez — varsa korunur,

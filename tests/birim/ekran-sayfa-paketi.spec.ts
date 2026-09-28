@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — Ekranlar: sayfa paketi (biçim + gizli değer reddi), model fark motoru (tüm bulgu
-// türleri), kabul edilen alt kümenin uygulanması (yeni sürüm), etki hesabı ve ekran servisi (Sayfa ekle →
+// türleri), kabul edilen alt kümenin uygulanması (yeni sürüm), etki hesabı ve ekran servisi (Ekran ekle →
 // tekrar analiz → kabul/red → reddedilenlerin hatırlanması → toplu değer atama → Claude dosyası).
 // Paketler SAHTE değerlidir (tests/birim/fixtures/sayfa-paketi/). Tarayıcı açmaz, siteye bağlanmaz; servis
 // testleri kendi geçici klasöründe (geçici veritabanı + şifreli medya) çalışır.
@@ -264,7 +264,7 @@ test.describe('Model fark motoru', () => {
 // Ekran servisi (geçici veritabanı)
 // ---------------------------------------------------------------------------------------
 
-test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () => {
+test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () => {
   let vt: Veritabani;
   let klasor: { yol: string; temizle: () => void };
   let projeId: string;
@@ -301,7 +301,7 @@ test.describe('Ekran servisi — Sayfa ekle, tekrar analiz, kararlar, etki', () 
       expect(s?.kosuyaDahil).toBe(false);
       expect(s?.icerik).toMatchObject({ kaynak: { dosya: 'scenarios/ornek-rota/siparis.spec.ts' }, veri: { dosya: 'ornek-rota', yol: 'senaryolar' }, paket: { kaynak: 'sayfa-paketi' } });
     }
-    // Aynı anahtarla ikinci kez "Sayfa ekle" reddedilir.
+    // Aynı anahtarla ikinci kez "Ekran ekle" reddedilir.
     expect(paketOnizle(vt, projeId, V1).hatalar[0].mesaj).toContain('zaten var');
     // Kanıtlar şifreli: medya dosyalarında PNG imzası yok.
     const dosyalar = readdirSync(medya).filter((d) => d.endsWith('.medya'));

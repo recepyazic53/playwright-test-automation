@@ -1,6 +1,6 @@
 // EKRAN SERVİSİ (genel) — platform "Ekranlar" bölümünün veritabanı işlemleri:
 //   liste · ayrıntı (güncel model ağacı, sürüm geçmişi, sürümler arası fark) · sayfa paketi önizleme ·
-//   "Sayfa ekle" (ekran + model v1 + seçilen senaryo önerileri + şifreli kanıtlar) · tekrar analiz
+//   "Ekran ekle" (ekran + model v1 + seçilen senaryo önerileri + şifreli kanıtlar) · tekrar analiz
 //   (paket yükle → bulgular → kabul/red → yalnızca kabul edilenlerle yeni model sürümü; reddedilenler
 //   imzasıyla hatırlanır) · etki paneli (bulgu → etkilenen senaryolar, toplu değer atama) ·
 //   yapay zekâ aracı için analiz/istek dosyası (gizli değer içermez).
@@ -370,11 +370,11 @@ function bulguGorunumu(b) {
 }
 
 // ---------------------------------------------------------------------------------------
-// Sayfa paketi: önizleme ve "Sayfa ekle"
+// Sayfa paketi: önizleme ve "Ekran ekle"
 // ---------------------------------------------------------------------------------------
 
 /**
- * Paketin önizlemesi (doğrulama + arayüz özeti). mod: 'yeni' (Sayfa ekle; anahtar projede olmamalı,
+ * Paketin önizlemesi (doğrulama + arayüz özeti). mod: 'yeni' (Ekran ekle; anahtar projede olmamalı,
  * ya da modeli olmayan mevcut ekran seçilmişse o) | 'analiz' (mevcut ekran için tekrar analiz) | 'degistir' (mevcut ekranın
  * modeli paketle değiştirilir: yeni sürüm; senaryolar korunur, etki olarak listelenir).
  * @param {Veritabani} vt @param {string} projeId @param {unknown} paket
@@ -401,7 +401,7 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
       hatalar.push({ yer: 'meta.ekran.anahtar', mesaj: `Paket başka bir ekrana ait ("${ekranMeta.anahtar}"); bu ekranın anahtarı "${e.anahtar}".` });
     }
     if (mod === 'yeni' && hedef.modelVar) hatalar.push({ yer: 'meta.ekran.anahtar', mesaj: `"${e.ad}" ekranının zaten modeli var; değişiklikler için "Tekrar analiz et / Paket yükle" kullanın.` });
-    if ((mod === 'analiz' || mod === 'degistir') && !hedef.modelVar) hatalar.push({ yer: 'model', mesaj: `"${e.ad}" ekranının henüz modeli yok; paketi "Sayfa ekle" ile yükleyin.` });
+    if ((mod === 'analiz' || mod === 'degistir') && !hedef.modelVar) hatalar.push({ yer: 'model', mesaj: `"${e.ad}" ekranının henüz modeli yok; paketi "Ekran ekle" ile yükleyin.` });
   } else if (mod === 'degistir') {
     hatalar.push({ yer: 'ekranId', mesaj: 'Modeli değiştirilecek ekran seçilmedi.' });
   } else if (mod === 'yeni' && ayniAnahtar) {
@@ -652,7 +652,7 @@ function kanitSatirlariniEkle(vt, dosyalar, kaynak) {
 const paketKaynagi = (/** @type {Nesne} */ meta) => `${String(meta.olusturan ?? 'bilinmeyen')}, ${String(meta.olusturulma ?? '').slice(0, 10)}`;
 
 /**
- * "Sayfa ekle": ekran (yoksa) + model v1 + seçilen senaryo önerileri + şifreli kanıtlar. Senaryolar
+ * "Ekran ekle": ekran (yoksa) + model v1 + seçilen senaryo önerileri + şifreli kanıtlar. Senaryolar
  * Koşuda KAPALI başlar (test kodu henüz yok; öneriler gözden geçirilmeden koşuya girmez).
  * @param {Veritabani} vt @param {string} projeId @param {unknown} paket
  * testVerisi: önizlemede onaylanan test verisi seçimi (paket-test-verisi.mjs); verilmezse test verisine yazılmaz.

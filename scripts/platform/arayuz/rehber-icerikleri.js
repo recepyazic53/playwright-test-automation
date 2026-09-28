@@ -343,14 +343,14 @@ export const REHBERLER = {
       {
         baslik: 'Ekran eklemenin üç yolu',
         sira: ['Ekranı tara: Nöbetçi sayfayı seçtiğiniz ortamda kendisi açıp yalnızca okur.', 'Akışı kaydet: işlemi siz görünür bir tarayıcıda yaparken Nöbetçi adımları kaydeder.', 'Yapay zekâ ile oluştur: istek metnini kopyalayıp sayfanın bağlantısıyla yapay zekâ aracınıza verin, ürettiği paketi yükleyin.'],
-        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Üçü de "Sayfa ekle"de yan yana' }
+        cizim: { tur: 'maket', bolge: 'eylem', etiket: 'Üçü de "Ekran ekle"de yan yana' }
       },
       { baslik: 'Sol panel', hedef: '.alt-nav', metin: 'Ekranlar, alt modeller (ör. bir kart bloğu) ve ortak akışlar (birden çok ekranın kullandığı adımlar, ör. ödeme) burada. Devre dışı ekranlar varsayılan olarak gizlidir.' },
       { baslik: 'Ekran değişince', metin: 'Sayfa değiştiyse aynı ekrana yeni paket yükleyin ya da yeniden tarayın. Farklar "bulgular" olarak gelir; kabul ettikleriniz yeni model sürümü olur, eski senaryolar korunur.', cizim: { tur: 'akis', kutular: [{ baslik: 'Yeni tarama', ikon: 'yenile' }, { baslik: 'Bulgular', alt: 'farklar', ikon: 'uyari' }, { baslik: 'Kabul / ret', ikon: 'onay' }, { baslik: 'Yeni sürüm', ikon: 'katman' }] } }
     ]
   },
   'ekran-ekle': {
-    baslik: 'Sayfa ekle',
+    baslik: 'Ekran ekle',
     adimlar: [
       { baslik: 'Sayfa paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
       { baslik: 'Paketiniz yoksa: üç yol', hedef: '.ekleme-kutulari', sira: ['Ekranı tara: Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).', 'Yapay zekâ ile oluştur: "İstek metnini kopyala" ile metni alın, sayfanın bağlantısıyla (ve "Paket biçimini indir" dosyasıyla) yapay zekâ aracınıza verin; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.'] },

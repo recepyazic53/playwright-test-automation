@@ -46,7 +46,7 @@ export const MEVCUT_TABLO_KURALI = 'Dosyadaki testVerisi bölümü ekranın mevc
   + 'listeler (değer yok): paketinde bu tablo ve sütun adlarını AYNEN kullan; aynı listeyi başka adla yeni tablo olarak yazma.';
 
 /**
- * İstek metni ("İstek metnini kopyala": Ekranlar listesi ve Sayfa ekle > "Yapay zekâ ile oluştur" kopyalatır).
+ * İstek metni ("İstek metnini kopyala": Ekranlar listesi ve Ekran ekle > "Yapay zekâ ile oluştur" kopyalatır).
  * @param {string} [adres] sayfa bağlantısı (yoksa yer tutucu)
  */
 export function paketIstekCumlesi(adres = '') {
