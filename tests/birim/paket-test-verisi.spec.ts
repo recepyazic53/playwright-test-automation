@@ -579,11 +579,20 @@ test.describe('Arayüz: paket önizlemesinde test verisi', () => {
       });
       expect(await tasma()).toEqual({ sayfa: 0, neden: 0, testVerisi: 0 });
       const tvSatiri = nedenler.getByRole('listitem').filter({ hasText: 'Test verisi' });
+      // Vurgu sınıfı 2,4 sn sonra kendiliğinden kalkar: yük altında sonradan yoklamak yarışır. Sınıfın eklendiği an
+      // sayfada kaydedilir (vurgulanan tablo kutularının sayısı), doğrulama bu kayıttan yapılır.
+      await page.evaluate(() => {
+        const w = window as unknown as { __vurgulananTablolar: Set<Element> };
+        w.__vurgulananTablolar = new Set();
+        new MutationObserver((kayitlar) => {
+          for (const k of kayitlar) if (k.target instanceof Element && k.target.matches('.tv-tablo.dikkat-vurgusu')) w.__vurgulananTablolar.add(k.target);
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
+      });
       await tvSatiri.getByRole('button', { name: 'Bölüme git' }).click();
       const kapsamGrubu = page.getByRole('radiogroup', { name: 'Kapsam - Alternatif: aynı adlı tablo' });
       await expect(kapsamGrubu.getByRole('radio').first()).toBeFocused();
       await expect(kapsamGrubu).toBeInViewport();
-      await expect(page.locator('.tv-tablo.dikkat-vurgusu')).toHaveCount(1);
+      await expect.poll(() => page.evaluate(() => (window as unknown as { __vurgulananTablolar: Set<Element> }).__vurgulananTablolar.size)).toBe(1);
 
       // Senaryo nedeni: "Bölüme git" → "Hiçbiri"; seçim kalkınca bu neden gider.
       await nedenler.getByRole('listitem').filter({ hasText: 'projede ortam yok' }).getByRole('button', { name: 'Bölüme git' }).click();

@@ -64,7 +64,18 @@ async function kaydetVeKos(baslik: string, veri: Nesne, s: { ekran?: string; aki
   expect(y.basarili, `${baslik}: ${y.mesaj ?? ''}`).toBe(true);
   return (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
 }
-const alanlarHaritasi = (m: Serbest): Record<string, Serbest> => Object.fromEntries((m.adimlar as Serbest[]).flatMap((a) =>
+// "Zaman aşımını beklemeden düşer": koşucunun ölçtüğü DÜŞEN ADIMIN süresi adımın zaman aşımının altında olmalı (zaman aşımını
+// bekleseydi en az o kadar sürerdi). Duvar saati kullanılmaz: senaryo kaydı + koşu sürecinin ve tarayıcının açılışı + sunucu
+// işini de içerir; paralel tam takımda yük altında tek başına 20 sn'yi aşabiliyordu.
+const HESAPLAMA_ZAMAN_ASIMI_MS = 20_000; // fikstür: hesaplama adımı zamanAsimiSn 20
+const ONAY_ZAMAN_ASIMI_MS = 60_000; // fikstür: ortak akışın onay adımı zamanAsimiSn 60
+function dusenAdiminSuresi(sonuc: Nesne): number {
+  const dusen = ((sonuc.adimlar ?? []) as Nesne[]).filter((a) => a.durum === 'basarisiz');
+  expect(dusen.length, `tek adım düşmeli: ${JSON.stringify(sonuc.adimlar)}`).toBe(1);
+  expect(typeof dusen[0].sureMs, 'düşen adımın süresi ölçülmeli').toBe('number');
+  return Number(dusen[0].sureMs);
+}
+const alanlarHaritasi =(m: Serbest): Record<string, Serbest> => Object.fromEntries((m.adimlar as Serbest[]).flatMap((a) =>
   ((a.bolumler ?? []) as Serbest[]).flatMap((b) => (b.alanlar as Serbest[]).map((x) => [x.id, x]))));
 
 test.describe.configure({ mode: 'serial' });
@@ -220,12 +231,11 @@ test('iş kuralı: hata penceresindeki beklenen uyarı okunur (senaryo başarıl
   });
   expect(beklenen.durum, JSON.stringify(beklenen.hataMesaji)).toBe('basarili');
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ plan: '3' });
-  const bas = Date.now();
   const dusen = await kaydetVeKos('Plan 3 / başarı beklenir', { kategori: 'K1', urun: 'Ürün A', plan: '3' });
   expect(dusen.durum).toBe('basarisiz');
   expect(String(dusen.hataMesaji)).toContain(PLAN_UYARISI);
   expect(String(dusen.hataMesaji)).not.toContain('başarı göstergesi görünmedi');
-  expect(Date.now() - bas).toBeLessThan(20_000);
+  expect(dusenAdiminSuresi(dusen)).toBeLessThan(HESAPLAMA_ZAMAN_ASIMI_MS);
 });
 
 test('tarayıcı uyarısı (alert): akıştaki kabul edilen uyarı beklenirse başarılı; başarı beklenirken çıkarsa hemen düşer', async () => {
@@ -237,11 +247,10 @@ test('tarayıcı uyarısı (alert): akıştaki kabul edilen uyarı beklenirse ba
     kategori: 'K1', urun: 'Ürün A', ...kimliksiz, beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'hesaplama', mesaj: KIMLIK_UYARISI }
   });
   expect(beklenen.durum, JSON.stringify(beklenen.hataMesaji)).toBe('basarili');
-  const bas = Date.now();
   const dusen = await kaydetVeKos('Uyarı / kimlik yok (başarı beklenir)', { kategori: 'K1', urun: 'Ürün A', ...kimliksiz });
   expect(dusen.durum).toBe('basarisiz');
   expect(String(dusen.hataMesaji)).toContain(KIMLIK_UYARISI);
-  expect(Date.now() - bas).toBeLessThan(20_000);
+  expect(dusenAdiminSuresi(dusen)).toBeLessThan(HESAPLAMA_ZAMAN_ASIMI_MS);
   expect(uygulama.hesaplamalar.length).toBe(hesapOnce);
 });
 
@@ -257,11 +266,10 @@ test('VEYA başarı + kabul edilen uyarılar: görülen seçenek raporda; başar
   const sonuc = await kaydetVeKos('Veya / tutar', { kategori: 'K1', urun: 'Ürün A' }, { ekran });
   expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
   expect(JSON.stringify(sonuc)).toContain('Tutar hesaplanır (görülen: #tutar metni /[1-9]/ kalıbına uyar)');
-  const bas = Date.now();
   const dusen = await kaydetVeKos('Veya / başarı beklenir, uyarı çıkar', { kategori: 'K1', urun: 'Ürün A', plan: '3' }, { ekran });
   expect(dusen.durum).toBe('basarisiz');
   expect(String(dusen.hataMesaji)).toContain(PLAN_UYARISI);
-  expect(Date.now() - bas).toBeLessThan(20_000);
+  expect(dusenAdiminSuresi(dusen)).toBeLessThan(HESAPLAMA_ZAMAN_ASIMI_MS);
   const uyarili = await kaydetVeKos('Veya / uyarılardan biri', {
     kategori: 'K1', urun: 'Ürün A', plan: '3',
     beklenenSonuc: { tip: 'isKuraliHatasi', adim: 'hesaplama', mesaj: 'Hiç görünmeyen başka uyarı', mesajlar: ['Hiç görünmeyen başka uyarı', PLAN_UYARISI] }
@@ -305,11 +313,10 @@ test('ortak akış: "+ > Ortak akış" bloğuyla akışa eklenir; "dahil" senary
   expect(uygulama.onaylar).toHaveLength(1);
 
   // Ret penceresi: adım zaman aşımını (60 sn) beklemeden mesajıyla düşer.
-  const bas = Date.now();
   const red = await kaydetVeKos('Onay reddi', { ...veri, [String(dahil.id)]: true, onayKoduProfili: 'red' }, { akisId });
   expect(red.durum).toBe('basarisiz');
   expect(String(red.hataMesaji)).toContain(ONAY_RED);
-  expect(Date.now() - bas).toBeLessThan(40_000);
+  expect(dusenAdiminSuresi(red)).toBeLessThan(ONAY_ZAMAN_ASIMI_MS);
   expect(uygulama.onaylar).toHaveLength(1);
 
   // Canlı işaretli ortam: ortak akışın "yalnızca test" adımları atlanır.
