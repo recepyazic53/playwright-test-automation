@@ -3731,3 +3731,7 @@ dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywher
 .dogrulanan-dosya-listesi { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 6px; }
 .dogrulanan-dosya { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
 .dogrulanan-dosya .dosya-adi { overflow-wrap: anywhere; min-width: 0; }
+/* Karşılama ekranı: veri klasörü satırı kapalı "Ayrıntılar" içinde. */
+.veri-klasoru-ayrintilari { margin-top: 10px; min-width: 0; }
+.veri-klasoru-ayrintilari > summary { cursor: pointer; width: max-content; max-width: 100%; }
+.veri-klasoru-ayrintilari[open] > summary { margin-bottom: 6px; }
