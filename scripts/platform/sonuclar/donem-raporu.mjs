@@ -1,5 +1,7 @@
 // DÖNEM RAPORU VERİSİ (sunucu; kasa açık olmalı): PDF raporunun bölümlerinin verisi. Kapsamlar: tek ekran, tek servis (A1);
-// birden çok ekran, birden çok servis, ekran + servis (A2). Çoklu kapsamda her öğe TEK ÖĞE hesabıyla (ekranHesabi / servisHesabi)
+// birden çok ekran, birden çok servis, ekran + servis (A2); genel (A3: projenin tamamı — tüm ekranlar ve ortak akışlar, tüm
+// servisler, servis akışları ve uçtan uca akışlar, zamanlanmış koşular, kararsız testler, test verisi sağlığı, kapsam ve açıklar,
+// ortamlara göre; toplam ve sorun hesabı çoklu raporunkidir, genele özgü saf hesaplar genel.mjs'de). Çoklu kapsamda her öğe TEK ÖĞE hesabıyla (ekranHesabi / servisHesabi)
 // hesaplanır ve coklu.mjs ile toplanır (sayılar toplanır, oran toplamdan; sorunlar birleşir; bağlantılı sorunlar tek aksiyon).
 // Kaynaklar: kosular + kosu_sonuclari + adim_sonuclari + yakalanan_mesajlar (ekran), servis_kosulari (+ şifreli sonuç), servis
 // senaryoları (metot), servis akışları. Hesaplar saf modüllerdedir: donem.mjs (D / D′ / G, kovalar), sorun-modeli.mjs (imza,
@@ -11,7 +13,7 @@
 //   başlıklar, okunan değerler ve test verisi değerleri hiç okunmaz. Kontrol kalıbı yalnız kontrol türü + yol (değer yok).
 // - Tasarımın "yeni veri gerekir" dediği metrikler (uygulama sürümü, kritik akış işareti, ekip eşlemesi, süre eşiği) yoktur:
 //   kritiklik 0, sahip = sınıfın varsayılanı; uydurma değer üretilmez.
-import { DepoHatasi, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
+import { DepoHatasi, ekranModeliGetir, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
 import { veriKosusuTemizle } from '../veritabani/sonuc-deposu.mjs';
 import { servisAkislariniListele, servisGetir, servisKosusuGetir, servisSenaryolariniListele, servisleriListele } from '../servisler/servis-deposu.mjs';
 import { saglikEsikleriniOku } from '../ayarlar/saglik-esikleri.mjs';
@@ -24,12 +26,16 @@ import { yavasladiMi, yuzdelik, yuzdelikler } from './yuzdelik.mjs';
 import { ilkSatirlar } from './html-rapor.mjs';
 import { akisAdimSatirlari } from './servis-sonuclari.mjs';
 import { aksiyonlariBirlestir, birlesikOzet, kovalariBirlestir, saglikSiralamasi, sinifDagilimi, sorunSayimi } from './coklu.mjs';
+import { kararsizListesi, metotKapsami, ortamOranlari, pencereGuvenilirligi, toplamGuvenilirlik } from './genel.mjs';
+import { GECMIS_SINIRI, kurallariListele, ortamRiskliMi } from '../zamanlama/kurallar.mjs';
+import { veriSagligi } from '../tablolar/tablo-birlestirme.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
  * Kapsam: 'ekran' | 'servis' (tek öğe; id) · 'coklu-ekran' | 'coklu-servis' | 'karisik' (ekranIdleri / servisIdleri; tumEkranlar /
- * tumServisler: rapor üretildiği andaki TÜM ekranlar / servisler — "aynı seçimlerle yeniden oluştur" yeni öğeleri de kapsar).
- * @typedef {{ projeId: string; kapsam: 'ekran' | 'servis' | 'coklu-ekran' | 'coklu-servis' | 'karisik'; id: string; ekranIdleri?: string[];
+ * tumServisler: rapor üretildiği andaki TÜM ekranlar / servisler — "aynı seçimlerle yeniden oluştur" yeni öğeleri de kapsar) ·
+ * 'genel' (seçim yok: rapor her üretildiğinde o anki tüm öğeler).
+ * @typedef {{ projeId: string; kapsam: 'ekran' | 'servis' | 'coklu-ekran' | 'coklu-servis' | 'karisik' | 'genel'; id: string; ekranIdleri?: string[];
  *   servisIdleri?: string[]; tumEkranlar?: boolean; tumServisler?: boolean; donem: import('./donem.mjs').DonemSecimi; karsilastir: boolean;
  *   ortamId: string | null; secenekler: { hatalar: boolean; adres: boolean; goruntuler: boolean }; aksiyonSayisi?: number }} RaporGirdisi
  * @typedef {{ maskele: (m: unknown) => string; simdi?: Date; goruntuCoz?: (medya: Array<{ id: string; ad: string; icerikTuru: string; boyut: number }>) =>
@@ -52,6 +58,16 @@ const ms = (z) => { const t = Date.parse(String(z ?? '')); return Number.isNaN(t
 const iso = (t) => (t === null ? null : new Date(t).toISOString());
 /** @param {ReadonlyArray<number>} d */
 const ortalama = (d) => (d.length ? d.reduce((a, b) => a + b, 0) / d.length : null);
+/**
+ * Ortam başına durum sayıları (genel rapor > Ortamlara göre; ortamı olmayan kayıt sayılmaz).
+ * @param {ReadonlyArray<{ ortamId: string | null; durum: string }>} l @returns {Record<string, Record<string, number>>}
+ */
+function ortamSayilari(l) {
+  /** @type {Record<string, Record<string, number>>} */
+  const s = {};
+  for (const x of l) if (x.ortamId) { const o = (s[x.ortamId] ??= {}); o[x.durum] = (o[x.durum] ?? 0) + 1; }
+  return s;
+}
 
 /**
  * Sorun → rapor satırı (sınıf, puan, bant, aksiyon, sahip, başlık, "neden şimdi").
@@ -272,7 +288,7 @@ async function ekranHesabi(ic, ekranId, ayrinti) {
     return {
       anahtar: sen, ad: senaryoAdlari.get(sen) ?? sen, kosu: l.length, basari: basariYuzdesi(s), oncekiBasari: basariYuzdesi(so),
       hepAtlandi: l.length > 0 && s.atlanan === l.length, hicKosmadi: l.length === 0, ortSure: ortalama(sure), p95: yuzdelik(sure, 95),
-      kararlilik: k ? { durum: k.durum, oran: k.oran, kosu: k.kosu } : null
+      kararlilik: k ? { durum: k.durum, oran: k.oran, kosu: k.kosu, degisim: k.degisim } : null
     };
   }).sort((a, c) => (a.basari ?? 101) - (c.basari ?? 101) || a.ad.localeCompare(c.ad, 'tr'));
 
@@ -361,7 +377,8 @@ async function ekranHesabi(ic, ekranId, ayrinti) {
     // Çoklu rapor için toplanabilir ham değerler (rapora yazılmaz).
     ham: {
       sD, sO, oncekiVar: O.length > 0, kovalar: egilimKovalari, sureD: sureler(D), sureO: sureler(O),
-      tamKosuD: new Set(tamD.map((x) => x.kosuId)), tamKosuO: new Set(tamO.map((x) => x.kosuId)), ekAksiyonlar, son: sonDurum
+      tamKosuD: new Set(tamD.map((x) => x.kosuId)), tamKosuO: new Set(tamO.map((x) => x.kosuId)), ekAksiyonlar, son: sonDurum,
+      ortamSayilari: ortamSayilari(tamD)
     }
   };
 }
@@ -466,6 +483,7 @@ function servisHesabi(ic, servisId) {
   if (!servis || servis.projeId !== g.projeId) throw new DepoHatasi('Servis bulunamadı.');
   const senaryolar = servisSenaryolariniListele(vt, servisId);
   const senaryoMetotlari = new Map(senaryolar.map((s) => [s.id, servisMetodu(/** @type {any} */ (s.icerik))]));
+  const senaryoAdi = new Map(senaryolar.map((s) => [s.id, s.baslik]));
   // Akış adımı satırları proje başınadır: çoklu raporda bir kez okunur.
   const adimSatirlari = ic.adimSatirlari ?? (ic.adimSatirlari = akisAdimSatirlari(vt, g.projeId));
   const kosullar = ['proje_id = ?', 'servis_id = ?', "tur = 'kosu'", 'baslangic >= ?', 'baslangic < ?'];
@@ -594,19 +612,22 @@ function servisHesabi(ic, servisId) {
     // Çoklu rapor için toplanabilir ham değerler (rapora yazılmaz).
     ham: {
       sD, sO, oncekiVar: O.length > 0, kovalar: kovaListesi.map((l) => sayi(l)), kovaSureleri: kovaListesi.map((l) => sureListesi(l)),
-      sureO: sureListesi(O), son: sonCagri ? (sonCagri.durum === 'basarili' ? 'G' : 'K') : null
+      sureO: sureListesi(O), son: sonCagri ? (sonCagri.durum === 'basarili' ? 'G' : 'K') : null, ortamSayilari: ortamSayilari(D),
+      kararlilik: [...kararlilik.entries()].map(([sen, k]) => ({ ad: senaryoAdi.get(sen) ?? sen.replace(/^b:/, ''), ...k })),
+      metotKapsami: metotKapsami(servis.ayarlar?.operasyonlar, senaryolar.map((x) => ({ operasyon: x.icerik?.operasyon, metot: servisMetodu(/** @type {any} */ (x.icerik)) })))
     }
   };
 }
 
 /**
- * Seçilen servislerden en az birini kullanan servis akışları (koşu türü; dönem ve önceki dönem).
- * @param {Ic} ic @param {Set<string>} servisIdleri
+ * Seçilen servislerden en az birini kullanan servis akışları (koşu türü; dönem ve önceki dönem). servisIdleri null: projenin tüm
+ * servis akışları, oturum akışları ve uçtan uca akışları (genel rapor).
+ * @param {Ic} ic @param {Set<string> | null} servisIdleri
  */
 function akislariHesapla(ic, servisIdleri) {
   const { vt, g, donem } = ic;
   return servisAkislariniListele(vt, g.projeId)
-    .filter((a) => Array.isArray(a.icerik?.adimlar) && a.icerik.adimlar.some((/** @type {any} */ x) => x && servisIdleri.has(x.servisId)))
+    .filter((a) => Array.isArray(a.icerik?.adimlar) && (servisIdleri === null || a.icerik.adimlar.some((/** @type {any} */ x) => x && servisIdleri.has(x.servisId))))
     .map((a) => {
       const k = vt.tumu(`SELECT durum, baslangic, sure_ms FROM servis_akis_kosulari WHERE akis_id = ? AND tur = 'kosu' AND baslangic >= ? AND baslangic < ?${g.ortamId ? ' AND ortam_id = ?' : ''} ORDER BY baslangic`,
         [a.id, donem.onceki.bas.toISOString(), donem.bit.toISOString(), ...(g.ortamId ? [g.ortamId] : [])]);
@@ -614,8 +635,9 @@ function akislariHesapla(ic, servisIdleri) {
       const o = k.filter((x) => (ms(x.baslangic) ?? 0) < donem.bas.getTime());
       const son = d[d.length - 1];
       return {
-        ad: a.baslik, tur: a.tur === 'oturum' ? 'Oturum akışı' : 'Servis akışı', adim: a.icerik.adimlar.length, kosu: d.length,
-        basarili: d.filter((x) => x.durum === 'basarili').length,
+        id: a.id, ad: a.baslik, tur: /** @type {any} */ (a.icerik).uctanUca === true ? 'Uçtan uca akış' : a.tur === 'oturum' ? 'Oturum akışı' : 'Servis akışı',
+        adim: a.icerik.adimlar.length, kosu: d.length, basarili: d.filter((x) => x.durum === 'basarili').length,
+        oncekiKosu: o.length, oncekiBasarili: o.filter((x) => x.durum === 'basarili').length,
         basari: oranYuzde(d.filter((x) => x.durum === 'basarili').length, d.length), oncekiBasari: oranYuzde(o.filter((x) => x.durum === 'basarili').length, o.length),
         ortSure: ortalama(d.map((x) => Number(x.sure_ms) || 0)), son: son ? (son.durum === 'basarili' ? 'G' : 'K') : null
       };
@@ -628,6 +650,8 @@ function akislariHesapla(ic, servisIdleri) {
 
 /** Çoklu raporda en çok öğe (ekran + servis). */
 export const EN_COK_OGE = 100;
+/** Genel raporda en çok öğe (tüm ekranlar + tüm servisler; seçim yapılmadığından çoklu sınırından geniştir). */
+export const EN_COK_GENEL_OGE = 500;
 const EN_COK_ADIM = 6;
 
 /**
@@ -637,12 +661,13 @@ const EN_COK_ADIM = 6;
  */
 function secimiCoz(ic) {
   const { vt, g } = ic;
-  const ekranGerek = g.kapsam === 'coklu-ekran' || g.kapsam === 'karisik';
-  const servisGerek = g.kapsam === 'coklu-servis' || g.kapsam === 'karisik';
+  const genel = g.kapsam === 'genel';
+  const ekranGerek = genel || g.kapsam === 'coklu-ekran' || g.kapsam === 'karisik';
+  const servisGerek = genel || g.kapsam === 'coklu-servis' || g.kapsam === 'karisik';
   let eksik = 0;
   /** @template {{ id: string }} T @param {T[]} tum @param {boolean | undefined} hepsi @param {string[] | undefined} idler @returns {T[]} */
   const sec = (tum, hepsi, idler) => {
-    if (hepsi) return tum;
+    if (hepsi || genel) return tum;
     const istenen = new Set(idler ?? []);
     const bulunan = tum.filter((x) => istenen.has(x.id));
     eksik += istenen.size - bulunan.length;
@@ -650,11 +675,17 @@ function secimiCoz(ic) {
   };
   const tumEkranlar = ekranGerek
     ? vt.tumu('SELECT id, ad, durum FROM ekranlar WHERE proje_id = ? ORDER BY (sira IS NULL), sira, ad', [g.projeId])
-      .filter((e) => !g.tumEkranlar || e.durum !== 'silindi').map((e) => ({ id: String(e.id), ad: String(e.ad) }))
+      .filter((e) => !(g.tumEkranlar || genel) || e.durum !== 'silindi').map((e) => ({ id: String(e.id), ad: String(e.ad) }))
     : [];
   const tumServisler = servisGerek ? servisleriListele(vt, g.projeId).map((s) => ({ id: s.id, ad: s.ad, tur: s.tur })) : [];
   const ekranlar = ekranGerek ? sec(tumEkranlar, g.tumEkranlar, g.ekranIdleri) : [];
   const servisler = servisGerek ? sec(tumServisler, g.tumServisler, g.servisIdleri) : [];
+  if (genel) {
+    // Genel rapor: iki taraftan biri boş olabilir (yalnız ekranları ya da yalnız servisleri olan proje).
+    if (!ekranlar.length && !servisler.length) throw new DepoHatasi('Projede ekran ya da servis yok.');
+    if (ekranlar.length + servisler.length > EN_COK_GENEL_OGE) throw new DepoHatasi(`Genel rapor en çok ${EN_COK_GENEL_OGE} öğeli projede alınabilir.`);
+    return { ekranlar, servisler, eksik };
+  }
   if (ekranGerek && !ekranlar.length) throw new DepoHatasi(g.tumEkranlar ? 'Projede ekran yok.' : 'Seçilen ekranlar bulunamadı.');
   if (servisGerek && !servisler.length) throw new DepoHatasi(g.tumServisler ? 'Projede servis yok.' : 'Seçilen servisler bulunamadı.');
   if (ekranlar.length + servisler.length > EN_COK_OGE) throw new DepoHatasi(`Bir raporda en çok ${EN_COK_OGE} öğe olabilir.`);
@@ -788,28 +819,177 @@ async function cokluBolumler(ic) {
     son.maddeler.splice(oneriIndeksi < 0 ? son.maddeler.length : oneriIndeksi, 0, ...ek);
   }
   const acik = sorunlar.filter((s) => s.durum !== 'cozulen' && s.durum !== 'dogrulanamadi');
+  const genel = g.kapsam === 'genel';
   const ekranAdi = g.tumEkranlar ? 'Tüm ekranlar' : `Seçilen ${secim.ekranlar.length} ekran`;
   const servisAdi = g.tumServisler ? 'Tüm servisler' : `Seçilen ${secim.servisler.length} servis`;
-  const ad = g.kapsam === 'coklu-ekran' ? ekranAdi : g.kapsam === 'coklu-servis' ? servisAdi : `${ekranAdi} + ${servisAdi.toLocaleLowerCase('tr')}`;
-  const ozet = g.kapsam === 'karisik'
+  const ad = genel ? 'Tüm proje' : g.kapsam === 'coklu-ekran' ? ekranAdi : g.kapsam === 'coklu-servis' ? servisAdi : `${ekranAdi} + ${servisAdi.toLocaleLowerCase('tr')}`;
+  const ozet = g.kapsam === 'karisik' || genel
     ? { basari: esas.basari, oncekiBasari: esas.oncekiBasari, taraf, ekran: et?.ozet ?? null, servis: st?.ozet ?? null, acikSorun: acik.length, baglantili: ciftler.length }
     : esas;
   const kisa = (/** @type {RaporSorunu} */ s) => ({ imza: s.imza, baslik: s.baslik, nerede: s.nerede, durum: s.durum, n: s.n, puan: s.puan, bant: s.bant });
+  // Genel rapor: projenin tüm akışları (servis + oturum + uçtan uca) ve genele özgü bölümler (genelBolumler).
+  const akislar = genel ? akislariHesapla(ic, null) : st?.akislar ?? [];
+  const gb = genel ? genelBolumler(ic, { ekranListesi, servisListesi, et, sorunlar, akislar }) : null;
+  if (gb && et) for (const o of et.ogeler) Object.assign(o, { ortakAkis: gb.ortakAkislar.has(o.id) });
   return {
     oge: {
       id: '', ad, senaryoSayisi: (et?.ozet.senaryoSayisi ?? 0) + (st?.ozet.senaryoSayisi ?? 0), ...(st ? { metotSayisi: st.ozet.metotSayisi } : {})
     },
-    secilenler: { ekranlar: secim.ekranlar, servisler: secim.servisler, tumEkranlar: g.tumEkranlar === true, tumServisler: g.tumServisler === true, eksik: secim.eksik },
+    secilenler: {
+      ekranlar: secim.ekranlar, servisler: secim.servisler, tumEkranlar: genel || g.tumEkranlar === true, tumServisler: genel || g.tumServisler === true, eksik: secim.eksik
+    },
     kosuVar, ozet, sorunlar, ...son, egilim: (et ?? /** @type {NonNullable<typeof st>} */ (st)).egilim,
+    ...(gb ? { genel: gb.bolum } : {}),
     coklu: {
       ekranTarafi: et ? { ozet: et.ozet, egilim: et.egilim, ogeler: et.ogeler } : null,
       servisTarafi: st ? {
         ozet: st.ozet, egilim: st.egilim, ogeler: st.ogeler, metotlar: st.metotlar, yavaslayanlar: st.yavaslayanlar, hataMatrisi: st.hataMatrisi, sureEgilimi: st.sureEgilimi
       } : null,
-      akislar: st?.akislar ?? [],
+      akislar,
       sinifDagilimi: sinifDagilimi(sorunlar, tumOgeler.map((o) => ({ id: o.id, ad: o.ad, tur: /** @type {'ekran' | 'servis'} */ (o.tur) }))).filter((x) => x.toplam > 0),
       enCokAdim: (et?.sorunlar ?? []).filter((s) => s.n > 0 && s.durum !== 'cozulen').sort((a, b) => b.n - a.n).slice(0, EN_COK_ADIM).map(kisa),
       baglantili: ciftler.map((c) => ({ ekran: kisa(c.ekran), servis: kisa(c.servis), ortak: c.ortak, birlesim: c.birlesim, jaccard: c.jaccard, birlesti: birlesme.haric.has(c.ekran.imza) || birlesme.haric.has(c.servis.imza) }))
+    }
+  };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// GENEL RAPOR (A3): çoklu raporun toplamına ek bölümler
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const EN_COK_KARARSIZ = 12;
+const EN_COK_ACIK = 12;
+const EN_COK_KIRIK = 5;
+
+/**
+ * Genel rapora özgü bölümler: akış özeti, zamanlanmış koşular, kararsız testler, test verisi sağlığı, kapsam ve açıklar,
+ * ortamlara göre. Tasarımın "yeni veri" isteyen bölümleri (kritik akış, uygulama sürümü, ekip eşlemesi, süre eşiği, kalıcı
+ * tetikleme kaydı) yoktur; yöntem bölümünde not düşülür.
+ * @param {Ic} ic
+ * @param {{ ekranListesi: Array<Awaited<ReturnType<typeof ekranHesabi>>>; servisListesi: Array<ReturnType<typeof servisHesabi>>;
+ *   et: ReturnType<typeof ekranTarafi> | null; sorunlar: RaporSorunu[]; akislar: ReturnType<typeof akislariHesapla> }} x
+ */
+function genelBolumler(ic, x) {
+  const { vt, g, b, donem } = ic;
+  const simdi = (b.simdi ?? new Date()).getTime();
+
+  // Ortak akışlar (model türü "ortakAkis"): ekran tablosunda ayrı işaretlenir, senaryosuz ekran sayılmaz.
+  /** @type {Set<string>} */
+  const ortakAkislar = new Set();
+  for (const e of x.ekranListesi) {
+    try { if (ekranModeliGetir(vt, e.bolum.oge.id)?.model?.tur === 'ortakAkis') ortakAkislar.add(e.bolum.oge.id); } catch { /* model okunamadı: normal ekran */ }
+  }
+
+  // Akışlar (servis + oturum + uçtan uca): koşu türü.
+  const topla = (/** @type {(a: ReturnType<typeof akislariHesapla>[number]) => number} */ f) => x.akislar.reduce((t, a) => t + f(a), 0);
+  const akis = {
+    sayi: x.akislar.length, uctanUca: x.akislar.filter((a) => a.tur === 'Uçtan uca akış').length, kosu: topla((a) => a.kosu),
+    basari: oranYuzde(topla((a) => a.basarili), topla((a) => a.kosu)), oncekiKosu: topla((a) => a.oncekiKosu),
+    oncekiBasari: oranYuzde(topla((a) => a.oncekiBasarili), topla((a) => a.oncekiKosu))
+  };
+
+  // Zamanlanmış koşular (kural başına; seçili ortam varsa yalnız o ortamın kuralları).
+  /** @type {ReturnType<typeof kurallariListele>} */
+  let kurallar = [];
+  try { kurallar = kurallariListele(vt, g.projeId, { simdi: new Date(simdi) }); } catch { kurallar = []; }
+  if (g.ortamId) kurallar = kurallar.filter((k) => k.ortamId === g.ortamId);
+  const pencere = (/** @type {{ bas: Date; bit: Date }} */ p) => ({ bas: p.bas.getTime(), bit: p.bit.getTime(), simdi, gecmisSiniri: GECMIS_SINIRI });
+  const kurallarSatiri = kurallar.map((k) => {
+    const d = pencereGuvenilirligi(k, k.gecmis, pencere(donem));
+    const o = pencereGuvenilirligi(k, k.gecmis, pencere(donem.onceki));
+    const kapsam = [
+      k.kapsam.senaryolar === 'tum' ? 'tüm ekranlar' : k.kapsam.senaryolar === 'ekranlar' ? `${k.kapsam.ekranIdleri.length} ekran` : '',
+      k.kapsam.servisAkisIdleri.length ? `${k.kapsam.servisAkisIdleri.length} servis akışı` : '',
+      (k.kapsam.uctanUcaAkisIdleri ?? []).length ? `${(k.kapsam.uctanUcaAkisIdleri ?? []).length} uçtan uca akış` : ''
+    ].filter(Boolean).join(' + ');
+    return {
+      ad: k.ad, zaman: k.zamanMetni, ortam: k.ortamAdi, riskli: k.riskli, etkin: k.etkin, kapsam, ...d,
+      oncekiGuvenilirlik: o.guvenilirlik, oncekiBeklenen: o.beklenen, oncekiTamamlandi: o.tamamlandi
+    };
+  });
+  const zt = toplamGuvenilirlik(kurallarSatiri);
+  const zo = toplamGuvenilirlik(kurallarSatiri.map((k) => ({ beklenen: k.oncekiBeklenen, tamamlandi: k.oncekiTamamlandi })));
+  const zamanlanmis = {
+    kurallar: kurallarSatiri, ...zt, oncekiGuvenilirlik: zo.guvenilirlik, kisitli: kurallarSatiri.some((k) => k.kisitli),
+    atlandi: kurallarSatiri.reduce((t, k) => t + k.atlandi, 0), yarida: kurallarSatiri.reduce((t, k) => t + k.yarida, 0)
+  };
+
+  // Kararsız testler (ekran + servis senaryoları; dönem içi).
+  const adaylar = [
+    ...x.ekranListesi.flatMap((e) => e.bolum.ekran.senaryolar.filter((s) => s.kararlilik).map((s) => {
+      const k = /** @type {NonNullable<typeof s.kararlilik>} */ (s.kararlilik);
+      return { tur: /** @type {const} */ ('ekran'), ad: s.ad, oge: e.bolum.oge.ad, kosu: k.kosu, degisim: k.degisim, oran: k.oran, durum: k.durum };
+    })),
+    ...x.servisListesi.flatMap((s) => s.ham.kararlilik.map((k) => ({
+      tur: /** @type {const} */ ('servis'), ad: k.ad, oge: s.bolum.oge.ad, kosu: k.kosu, degisim: k.degisim, oran: k.oran, durum: k.durum
+    })))
+  ];
+  const kararsiz = {
+    liste: kararsizListesi(adaylar, EN_COK_KARARSIZ), kararsiz: adaylar.filter((a) => a.durum === 'kararsiz').length,
+    izlenir: adaylar.filter((a) => a.durum === 'izlenir').length
+  };
+
+  // Test verisi sağlığı (Test verisi ekranındaki denetimler; değer yok) + test verisi sınıflı başarısız sonuçlar.
+  let saglik = null;
+  try { saglik = veriSagligi(vt, g.projeId); } catch { saglik = null; }
+  const veriSorunlari = x.sorunlar.filter((s) => s.sinif === 'veri');
+  const testVerisi = {
+    hesaplandi: saglik !== null, kirik: saglik?.kirikBasvurular.length ?? 0,
+    kirikOrnekler: (saglik?.kirikBasvurular ?? []).slice(0, EN_COK_KIRIK).map((k) => ({ yer: k.yer, basvuru: k.basvuru, neden: k.neden })),
+    kullanilmayan: saglik?.kullanilmayan.length ?? 0, benzer: saglik ? saglik.benzer.filter((o) => o.puan >= saglik.benzerlikEsigi).length : 0,
+    bosSutun: saglik?.bosSutunlar.length ?? 0, kaynakliSonuc: veriSorunlari.reduce((t, s) => t + s.n, 0),
+    oncekiKaynakliSonuc: veriSorunlari.reduce((t, s) => t + s.nOnceki, 0)
+  };
+  const bulgu = testVerisi.kirik + testVerisi.kullanilmayan + testVerisi.benzer + testVerisi.bosSutun;
+
+  // Kapsam ve açıklar.
+  const ekranKapsami = x.ekranListesi.map((e) => e.bolum.ekran.kapsam);
+  const kosuyaDahil = ekranKapsami.reduce((t, k) => t + k.kosuyaDahil, 0);
+  const hicKosmayan = ekranKapsami.reduce((t, k) => t + k.hicKosmayan, 0);
+  const metotlar = x.servisListesi.map((s) => ({ servis: s.bolum.oge.ad, k: s.ham.metotKapsami })).filter((m) => m.k !== null);
+  const etkinKurallar = kurallar.filter((k) => k.etkin);
+  const tumEkranKurali = etkinKurallar.some((k) => k.kapsam.senaryolar === 'tum');
+  const kuralliEkran = new Set(etkinKurallar.filter((k) => k.kapsam.senaryolar === 'ekranlar').flatMap((k) => k.kapsam.ekranIdleri));
+  const kosulanEkranlar = x.ekranListesi.filter((e) => e.bolum.ekran.kapsam.kosuyaDahil > 0);
+  const kuralliAkis = new Set(etkinKurallar.flatMap((k) => [...k.kapsam.servisAkisIdleri, ...(k.kapsam.uctanUcaAkisIdleri ?? [])]));
+  const zamanlanabilirAkislar = x.akislar.filter((a) => a.tur !== 'Oturum akışı');
+  /** @type {Array<{ tur: string; yer: string; oneri: string }>} */
+  const aciklar = [
+    ...metotlar.flatMap((m) => (m.k?.eksik ?? []).map((ad) => ({ tur: 'Senaryosu olmayan metot', yer: `${m.servis} › ${ad}`, oneri: 'Sihirbazdan senaryo oluşturun.' }))),
+    ...x.ekranListesi.flatMap((e) => e.bolum.ekran.senaryolar.filter((s) => s.hicKosmadi).map((s) => ({
+      tur: 'Dönemde koşmayan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Koşuya dahil ama dönemde hiç koşmadı: zamanlanmış kurala ya da koşuya ekleyin.'
+    }))),
+    ...x.ekranListesi.flatMap((e) => e.bolum.ekran.senaryolar.filter((s) => s.hepAtlandi).map((s) => ({
+      tur: 'Her koşuda atlanan senaryo', yer: `${e.bolum.oge.ad} › ${s.ad}`, oneri: 'Atlanma nedenini (koşul, eksik test verisi) inceleyin.'
+    }))),
+    ...x.ekranListesi.filter((e) => e.bolum.oge.senaryoSayisi === 0 && !ortakAkislar.has(e.bolum.oge.id)).map((e) => ({
+      tur: 'Senaryosu olmayan ekran', yer: e.bolum.oge.ad, oneri: 'Senaryo önerileri ekranından senaryo ekleyin.'
+    }))
+  ];
+  const kapsam = {
+    kosuyaDahil, donemdeKosan: kosuyaDahil - hicKosmayan, hepAtlanan: ekranKapsami.reduce((t, k) => t + k.hepAtlanan, 0),
+    metot: metotlar.length ? { toplam: metotlar.reduce((t, m) => t + Number(m.k?.toplam), 0), senaryolu: metotlar.reduce((t, m) => t + Number(m.k?.senaryolu), 0), servis: metotlar.length } : null,
+    olculmeyenServis: x.servisListesi.length - metotlar.length,
+    kuralliEkran: tumEkranKurali ? kosulanEkranlar.length : kosulanEkranlar.filter((e) => kuralliEkran.has(e.bolum.oge.id)).length, kosulanEkran: kosulanEkranlar.length,
+    kuralliAkis: zamanlanabilirAkislar.filter((a) => kuralliAkis.has(a.id)).length, akis: zamanlanabilirAkislar.length,
+    aciklar: aciklar.slice(0, EN_COK_ACIK), acikSayisi: aciklar.length
+  };
+
+  // Ortamlara göre (yalnız "Tüm ortamlar" seçiliyse ve projede birden çok ortam varsa).
+  const projeOrtamlari = g.ortamId ? [] : ortamlariListele(vt, g.projeId);
+  const ortamlar = projeOrtamlari.length >= 2
+    ? ortamOranlari(projeOrtamlari.map((o) => ({ id: o.id, ad: o.ad, riskli: ortamRiskliMi(o) })),
+      x.ekranListesi.map((e) => e.ham.ortamSayilari), x.servisListesi.map((s) => s.ham.ortamSayilari))
+    : null;
+
+  return {
+    ortakAkislar,
+    bolum: {
+      ozet: {
+        ekranSayisi: x.ekranListesi.length - ortakAkislar.size, ortakAkisSayisi: ortakAkislar.size, servisSayisi: x.servisListesi.length,
+        akisSayisi: akis.sayi - akis.uctanUca, uctanUcaSayisi: akis.uctanUca, kuralSayisi: kurallar.length
+      },
+      akis, zamanlanmis, kararsiz, testVerisi: { ...testVerisi, bulgu }, kapsam, ortamlar
     }
   };
 }

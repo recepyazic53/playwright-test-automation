@@ -6,8 +6,8 @@
 //   GET  /platform/rapor/indir?projeId=&id=           kaydedilmiş PDF'in aynısı (kasadan çözülür)
 //   POST /platform/rapor/yeniden { projeId, id }      aynı seçimlerle, dönem bugüne kaydırılarak yeni rapor (yeni satır)
 //   POST /platform/rapor/sil { projeId, id, onay }    onay: true olmadan silinmez
-// girdi: { projeId, kapsam: 'ekran' | 'servis' | 'coklu-ekran' | 'coklu-servis' | 'karisik', id (tek öğe), ekranIdleri[] / servisIdleri[]
-//   ve tumEkranlar / tumServisler (çoklu; "tümü" rapor anındaki tüm öğeler), donem: { tur: son7 | son14 | son30 | ozel, baslangic?, bitis? },
+// girdi: { projeId, kapsam: 'ekran' | 'servis' | 'coklu-ekran' | 'coklu-servis' | 'karisik' | 'genel', id (tek öğe), ekranIdleri[] / servisIdleri[]
+//   ve tumEkranlar / tumServisler (çoklu; "tümü" rapor anındaki tüm öğeler; genel: seçim yok, her zaman o anki tüm proje), donem: { tur: son7 | son14 | son30 | ozel, baslangic?, bitis? },
 //   karsilastir, ortamId | null, secenekler: { hatalar, adres, goruntuler } }. İzin: mevcut HTML rapor indirmesiyle aynı (oturum token'ı + açık kasa;
 //   dış istek yapılmaz, bu yüzden Ayarlar > İzinler'de ayrı izin yoktur). PDF yerel Chromium ile basılır; tüm ağ istekleri engellidir.
 import { DepoHatasi, ortamlariListele, projeGetir } from '../veritabani/depo.mjs';
@@ -25,11 +25,11 @@ import { eskiRaporlariSil, raporGetir, raporKaydet, raporPdfiniAl, raporSil, rap
 /** @typedef {import('./donem-raporu.mjs').RaporGirdisi} RaporGirdisi */
 /** @typedef {{ medyaKlasoru: string; simdi?: Date }} UcBaglami */
 
-/** Bu aşamada desteklenen kapsamlar (Genel arayüzde "yakında"). */
-export const RAPOR_KAPSAMLARI = Object.freeze(['ekran', 'servis', 'coklu-ekran', 'coklu-servis', 'karisik']);
+/** Desteklenen kapsamlar (A1: tek öğe; A2: çoklu ve karma; A3: genel). */
+export const RAPOR_KAPSAMLARI = Object.freeze(['ekran', 'servis', 'coklu-ekran', 'coklu-servis', 'karisik', 'genel']);
 /** Kapsamların görünen adı (hata mesajı, arşiv). */
 export const KAPSAM_ADLARI = Object.freeze({
-  ekran: 'Tek ekran', servis: 'Tek servis', 'coklu-ekran': 'Birden çok ekran', 'coklu-servis': 'Birden çok servis', karisik: 'Ekran + servis'
+  ekran: 'Tek ekran', servis: 'Tek servis', 'coklu-ekran': 'Birden çok ekran', 'coklu-servis': 'Birden çok servis', karisik: 'Ekran + servis', genel: 'Genel'
 });
 
 /** @param {unknown} d @param {string} alan */
@@ -58,14 +58,15 @@ export function raporGirdisiDogrula(g) {
   if (!g || typeof g !== 'object') throw new DepoHatasi('Rapor seçimleri eksik.');
   const kapsam = g.kapsam;
   if (!RAPOR_KAPSAMLARI.includes(kapsam)) {
-    throw new DepoHatasi(`Bu aşamada yalnız ${Object.values(KAPSAM_ADLARI).map((a) => `"${a}"`).join(', ')} raporu alınabilir ("Genel" sonraki aşamada).`);
+    throw new DepoHatasi(`Kapsam yalnız ${Object.values(KAPSAM_ADLARI).map((a) => `"${a}"`).join(', ')} olabilir.`);
   }
   const tek = kapsam === 'ekran' || kapsam === 'servis';
-  const coklu = tek ? null : {
+  // Genel: seçim yok (gövdedeki kimlikler yok sayılır); rapor her üretildiğinde o anki tüm öğeleri kapsar.
+  const coklu = tek ? null : kapsam === 'genel' ? { ekranIdleri: [], servisIdleri: [], tumEkranlar: true, tumServisler: true } : {
     ekranIdleri: kapsam === 'coklu-servis' ? [] : kimlikListesi(g.ekranIdleri, 'ekran'), servisIdleri: kapsam === 'coklu-ekran' ? [] : kimlikListesi(g.servisIdleri, 'servis'),
     tumEkranlar: kapsam !== 'coklu-servis' && g.tumEkranlar === true, tumServisler: kapsam !== 'coklu-ekran' && g.tumServisler === true
   };
-  if (coklu) {
+  if (coklu && kapsam !== 'genel') {
     const enAz = kapsam === 'karisik' ? 1 : 2;
     if ((kapsam === 'coklu-ekran' || kapsam === 'karisik') && !coklu.tumEkranlar && coklu.ekranIdleri.length < enAz) {
       throw new DepoHatasi(enAz === 1 ? 'En az bir ekran seçin ya da "Tüm ekranlar"ı işaretleyin.' : 'En az iki ekran seçin ya da "Tüm ekranlar"ı işaretleyin.');
@@ -136,12 +137,15 @@ function ortamAdresleriniMaskele(vt, projeId, maskele) {
 function arsivMetasi(girdi, veri) {
   const tek = girdi.kapsam === 'ekran' || girdi.kapsam === 'servis';
   // Çoklu seçim: kimlikler ve "tümü" işaretleri ("aynı seçimlerle yeniden oluştur" için) + o günkü öğe adları (listede gösterim).
-  const secim = tek ? { id: girdi.id, ad: veri.oge.ad } : {
+  // Genel: seçim saklanmaz (yeniden oluşturma o anki tüm öğelerle çalışır); listede öğe sayıları gösterilir.
+  const secim = tek ? { id: girdi.id, ad: veri.oge.ad } : girdi.kapsam === 'genel' ? {
+    id: '', ad: veri.oge.ad, genel: true, ekranSayisi: veri.secilenler?.ekranlar.length ?? 0, servisSayisi: veri.secilenler?.servisler.length ?? 0
+  } : {
     id: '', ad: veri.oge.ad, ekranIdleri: girdi.ekranIdleri ?? [], servisIdleri: girdi.servisIdleri ?? [], tumEkranlar: girdi.tumEkranlar === true,
     tumServisler: girdi.tumServisler === true, ogeler: [...(veri.secilenler?.ekranlar ?? []), ...(veri.secilenler?.servisler ?? [])].map((/** @type {{ ad: string }} */ o) => o.ad)
   };
   const test = girdi.kapsam === 'ekran' || girdi.kapsam === 'coklu-ekran' ? veri.ozet.test
-    : girdi.kapsam === 'karisik' ? (veri.ozet.ekran?.test ?? 0) + (veri.ozet.servis?.cagri ?? 0) : veri.ozet.cagri;
+    : girdi.kapsam === 'karisik' || girdi.kapsam === 'genel' ? (veri.ozet.ekran?.test ?? 0) + (veri.ozet.servis?.cagri ?? 0) : veri.ozet.cagri;
   return {
     kapsam: girdi.kapsam, secim,
     donem: { ...girdi.donem, gun: veri.donem.gun, etiket: veri.donem.etiket }, karsilastir: girdi.karsilastir,
