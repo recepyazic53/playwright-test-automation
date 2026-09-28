@@ -52,7 +52,9 @@ test('varsayılanlar bugünkü değerler; aralıklar doğrulanır; gelişmiş ay
     gorunmeyenAlanBeklemeSn: 2, gorunmeyenAlan: 'atla', alanSonrasiKosulSn: 20, arkaPlanIstekSn: 8, adimGostergeSn: 30, onayPenceresi: 'iptal',
     oturumKontrolSn: 15, girisAlanBeklemeSn: 15, tabloSatirSecimi: 'ilk', sqlSatirSiniri: SQL_SORGU_SATIR_SINIRI,
     // Koşu tarayıcısı: Playwright "Desktop Chrome" (1280×720), dil ve saat dilimi verilmez; senaryolar sırayla.
-    kosuEkranGenisligi: 1280, kosuEkranYuksekligi: 720, kosuDili: 'varsayilan', saatDilimi: 'bilgisayar', eszamanliKosu: 'sirayla',
+    kosuEkranGenisligi: 1280, kosuEkranYuksekligi: 720, kosuDili: 'varsayilan', saatDilimi: 'bilgisayar',
+    // Koşu hızı: servis ve ekran senaryoları sırayla, beklemesiz (önceki davranış).
+    ekranEszamanli: 1, ekranBeklemeMs: 0, servisEszamanli: 1, servisIstekBeklemeMs: 0,
     // Tarama ve akış kaydı: 1366×900, tr-TR, 30 sn sayfa açılma, 8 seçenekli listeler keşfedilir.
     taramaEkranGenisligi: 1366, taramaEkranYuksekligi: 900, taramaDili: 'tr-TR', taramaSayfaAcilmaSn: 30, kesifSecenekSiniri: 8,
     // Zamanlanmış koşular: kaçan zaman ve koşu sürerken gelen zaman atlanır. HTML rapor görüntü sınırı 25 MB.
@@ -65,8 +67,11 @@ test('varsayılanlar bugünkü değerler; aralıklar doğrulanır; gelişmiş ay
   expect(bolumu('zamanliKacan')).toMatchObject({ bolum: 'zamanlama' });
   expect(bolumu('raporGoruntuSiniriMb')).toMatchObject({ bolum: 'arayuz', grup: 'Raporlar' });
   expect(bolumu('kesifSecenekSiniri')).toMatchObject({ grup: 'Tarama ve akış kaydı' });
-  // Paralellik: yalnız "sırayla" sunulur (paylaşılan giriş oturumu).
-  expect(bolumu('eszamanliKosu')?.secenekler).toEqual([['sirayla', 'Senaryolar sırayla (1)']]);
+  // Paralellik: eski tek seçenekli "Eşzamanlı senaryo" yerine sayısal koşu hızı ayarları (ekran 1–5, servis 1–10).
+  expect(bolumu('eszamanliKosu')).toBeUndefined();
+  expect(bolumu('ekranEszamanli')).toMatchObject({ grup: 'Ekran senaryoları', tur: 'sayi', enAz: 1, enCok: 5, varsayilan: 1 });
+  expect(bolumu('ekranBeklemeMs')).toMatchObject({ grup: 'Ekran senaryoları', tur: 'sayi', enAz: 0, enCok: 60_000, varsayilan: 0 });
+  expect(bolumu('servisEszamanli')).toMatchObject({ grup: 'Servis senaryoları' });
   // Her ayarın açıklaması var.
   for (const t of KOSU_AYAR_TANIMLARI) expect(t.aciklama.length, t.anahtar).toBeGreaterThan(10);
 
@@ -77,7 +82,9 @@ test('varsayılanlar bugünkü değerler; aralıklar doğrulanır; gelişmiş ay
     expect(kosuAyarlariniOku(vt)).toEqual(varsayilanKosuAyarlari());
     expect(() => kosuAyarlariniKaydet(vt, { gorunmeyenAlanBeklemeSn: 0 })).toThrow('1–60');
     expect(() => kosuAyarlariniKaydet(vt, { sqlSatirSiniri: 100_001 })).toThrow('1–100000');
-    expect(() => kosuAyarlariniKaydet(vt, { eszamanliKosu: 'dort' })).toThrow('geçersiz seçim');
+    expect(() => kosuAyarlariniKaydet(vt, { ekranEszamanli: 6 })).toThrow('1–5');
+    // Eski kayıttaki "eszamanliKosu: sirayla" yok sayılır (ekran eşzamanlılığı 1).
+    expect(kosuAyarlariniKaydet(vt, { eszamanliKosu: 'sirayla' }).ekranEszamanli).toBe(1);
     expect(() => kosuAyarlariniKaydet(vt, { onayPenceresi: 'belki' })).toThrow('geçersiz seçim');
     expect(() => kosuAyarlariniKaydet(vt, { kosuEkranGenisligi: 100 })).toThrow('320–3840');
     expect(() => kosuAyarlariniKaydet(vt, { raporGoruntuSiniriMb: 0 })).toThrow('1–200');

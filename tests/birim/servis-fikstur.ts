@@ -76,23 +76,42 @@ export const WSDL = `<?xml version="1.0"?><wsdl:definitions xmlns:wsdl="http://s
   <wsdl:operation name="Onayla"><soap:operation soapAction="Ornek/Onayla" style="document"/></wsdl:operation></wsdl:binding></wsdl:definitions>`;
 export const yanit = (durum: string, aciklama: string) => `<?xml version="1.0" encoding="utf-8"?><soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><SiparisResponse xmlns="Ornek"><Sonuc><Durum>${durum}</Durum><StatusDescription>${aciklama}</StatusDescription></Sonuc></SiparisResponse></soap:Body></soap:Envelope>`;
 
-export type SahteIstek = { yontem: string; yol: string; eylem: string; govde: string; basliklar: Record<string, string> };
+export type SahteIstek = { yontem: string; yol: string; eylem: string; govde: string; basliklar: Record<string, string>; geldi?: number; bitti?: number };
 
 /**
  * Sahte SOAP sunucusunu başlatır: GET ?wsdl → WSDL; POST → kimlik ${SAHTE_TC} ise <Durum>OK</Durum>, değilse HATA. Gövdede <Giris>
  * geçerse token yanıtı (<Token>tok-N</Token>, başlık x-oturum: oturum-N; N her girişte artar). <YetkiGerekli/> geçerse yalnız son
  * token kabul edilir (değilse 401).
+ * s.gecikmeMs: her POST yanıtı (giriş dahil) bu kadar gecikir. enCokEszamanli(): aynı anda işlenen en çok POST sayısı (sunucu tarafı sayaç).
  */
-export async function sahteSoapSunucusu(): Promise<{ adres: string; istekler: SahteIstek[]; kapat: () => Promise<void> }> {
+export async function sahteSoapSunucusu(s: { gecikmeMs?: number } = {}): Promise<{ adres: string; istekler: SahteIstek[]; kapat: () => Promise<void>; enCokEszamanli: () => number; sayaciSifirla: () => void }> {
   const istekler: SahteIstek[] = [];
   let girisSayisi = 0;
+  let aktif = 0;
+  let enCok = 0;
   const sunucu: Server = createServer((req, res) => {
+    const kayitGeldi = Date.now();
+    if (req.method === 'POST') {
+      aktif++;
+      enCok = Math.max(enCok, aktif);
+      let birakildi = false;
+      const birak = () => { if (!birakildi) { birakildi = true; aktif--; } };
+      res.on('finish', birak);
+      res.on('close', birak);
+    }
+    if (s.gecikmeMs && req.method === 'POST') {
+      const asil = res.end.bind(res);
+      // Yanıt gövdesi hazır olsa da gecikmeyle gönderilir (bağlantı kesildiyse gönderilmez).
+      res.end = ((...a: unknown[]) => { setTimeout(() => { if (!res.destroyed) (asil as (...b: unknown[]) => void)(...a); }, s.gecikmeMs); return res; }) as typeof res.end;
+    }
     let govde = '';
     req.setEncoding('utf8');
     req.on('data', (p) => { govde += p; });
     req.on('end', () => {
-      istekler.push({ yontem: req.method ?? '', yol: req.url ?? '', eylem: String(req.headers.soapaction ?? ''), govde,
-        basliklar: Object.fromEntries(Object.entries(req.headers).map(([a, v]) => [a, Array.isArray(v) ? v.join(', ') : String(v ?? '')])) });
+      const kayit: SahteIstek = { yontem: req.method ?? '', yol: req.url ?? '', eylem: String(req.headers.soapaction ?? ''), govde,
+        basliklar: Object.fromEntries(Object.entries(req.headers).map(([a, v]) => [a, Array.isArray(v) ? v.join(', ') : String(v ?? '')])), geldi: kayitGeldi };
+      istekler.push(kayit);
+      res.on('finish', () => { kayit.bitti = Date.now(); });
       if (req.method === 'GET' && /\/Servis\/ornek\.asmx\?wsdl$/i.test(req.url ?? '')) { res.writeHead(200, { 'Content-Type': 'text/xml' }); res.end(WSDL); return; }
       if (req.method === 'POST' && (req.url ?? '').startsWith('/Servis/ornek.asmx')) {
         if (govde.includes('<Giris')) {
@@ -117,6 +136,6 @@ export async function sahteSoapSunucusu(): Promise<{ adres: string; istekler: Sa
   });
   await new Promise<void>((r) => sunucu.listen(0, '127.0.0.1', () => r()));
   const adres = `http://127.0.0.1:${(sunucu.address() as AddressInfo).port}`;
-  return { adres, istekler, kapat: () => new Promise<void>((r) => sunucu.close(() => r())) };
+  return { adres, istekler, kapat: () => new Promise<void>((r) => { sunucu.closeAllConnections?.(); sunucu.close(() => r()); }), enCokEszamanli: () => enCok, sayaciSifirla: () => { enCok = aktif; } };
 }
 

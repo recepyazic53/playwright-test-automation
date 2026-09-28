@@ -33,7 +33,7 @@ import {
   platformCalismaAlanlariniHazirla, platformEtkinligiBildir, platformIsteginiIsle, platformKapanirken, platformKasaAcikMi, platformKosuSonucu,
   platformKosusunuKapat, platformKosucusunuAyarla, platformMedyaTemizligiZamanla, platformOtomatikYedekZamanla, platformSonucKaydiEtkinMi, platformZamanlanmisKosulariBaslat,
   platformKosuSureLimitiMs, platformSunucuBaglantisiniAyarla, platformTestOrtami, platformTumVeritabaniYollari, platformVeritabaniYolu,
-  platformArayuzKilitliMi, platformHataOzetiniMaskele
+  platformArayuzKilitliMi, platformHataOzetiniMaskele, platformKosuHizi
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
@@ -384,6 +384,8 @@ const ARAYUZ_DOSYALARI = new Map([
   // İzin tanımları (Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) ve riskli ortam tanımı: sunucuyla ORTAK tek kaynak.
   ['/arayuz/izin-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'izin-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ortam-riski.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'ortam-riski.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Koşu hızı (eşzamanlılık / bekleme; genel ayar + ortam ezmesi): sunucuyla ORTAK tek kaynak.
+  ['/arayuz/kosu-hizi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'kosu-hizi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/izinler.js', { dosya: 'izinler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/yedek-uyarisi.js', { dosya: 'yedek-uyarisi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -573,18 +575,52 @@ function calismaDurdur(kosuId) {
 // SIRAYA koyuyoruz (bir öncekinin süreci tamamen bitmeden ikincisi başlamıyor) — FARKLI
 // dosyalardaki koşular yine tam paralel çalışmaya devam eder, kullanıcının istediği
 // "seçilenleri aynı anda çalıştır" davranışı korunur.
-const dosyaKuyruklari = new Map();
+//
+// EŞZAMANLI EKRAN KOŞUSU (Ayarlar > Koşu > Ekran senaryoları; ortamın "Koşu hızı" ezer): aynı dosyada en çok N süreç
+// aynı anda çalışır (N = 1: eskisi gibi sırayla). Derleme yarışı yine önlenir: aynı dosyanın bir sonraki süreci, önceki
+// süreç testleri listeleyip koşmaya başlayana ("Running N test") ya da kapanana kadar (en çok 60 sn) başlatılmaz.
+// "Senaryolar arası bekleme": süreç bitince yuva bu kadar süre dolu tutulur (sıradaki senaryo sonra başlar).
+/** @type {Map<string, { aktif: number; sira: Array<{ n: number; coz: () => void }>; baslatma: Promise<void> }>} */
+const dosyaYuvalari = new Map();
+const DERLEME_BEKLEME_MS = 60_000;
 
-function dosyaSirasiIleCalistir(dosya, gorev) {
-  const kuyrukKuyruk = dosyaKuyruklari.get(dosya) ?? Promise.resolve();
-  const buGorev = kuyrukKuyruk.then(gorev, gorev);
-  // Kuyrukta bekleyen bir sonraki koşu, bu görev reddedilse bile devam edebilsin diye
-  // kuyruğa eklenen değer HER ZAMAN çözülen bir promise olmalı.
-  dosyaKuyruklari.set(
-    dosya,
-    buGorev.catch(() => {})
-  );
-  return buGorev;
+function dosyaYuvasi(dosya) {
+  let d = dosyaYuvalari.get(dosya);
+  if (!d) { d = { aktif: 0, sira: [], baslatma: Promise.resolve() }; dosyaYuvalari.set(dosya, d); }
+  return d;
+}
+function siradakileriBaslat(d) {
+  while (d.sira.length && d.aktif < Math.max(1, d.sira[0].n)) {
+    const x = d.sira.shift();
+    d.aktif++;
+    x.coz();
+  }
+}
+
+/**
+ * gorev(yuva): yuva.hazir() — süreç testleri koşmaya başladı (sıradaki süreç başlatılabilir); yuva.basladi — süreç gerçekten
+ * başlatıldı (başlamadan iptal edilen koşuda bekleme uygulanmaz).
+ * @param {string} dosya @param {(yuva: { hazir: () => void; basladi: boolean }) => Promise<any>} gorev
+ * @param {{ eszamanli?: number; beklemeMs?: number }} [s]
+ */
+async function dosyaSirasiIleCalistir(dosya, gorev, s = {}) {
+  const d = dosyaYuvasi(dosya);
+  await new Promise((coz) => { d.sira.push({ n: s.eszamanli ?? 1, coz }); siradakileriBaslat(d); });
+  const onceki = d.baslatma;
+  /** @type {() => void} */
+  let hazir = () => {};
+  const buBaslatma = new Promise((coz) => { hazir = coz; });
+  d.baslatma = onceki.then(() => buBaslatma);
+  await onceki;
+  const zaman = setTimeout(() => hazir(), DERLEME_BEKLEME_MS);
+  const yuva = { hazir: () => { clearTimeout(zaman); hazir(); }, basladi: false };
+  try {
+    return await gorev(yuva);
+  } finally {
+    yuva.hazir();
+    const birak = () => { d.aktif--; siradakileriBaslat(d); };
+    if (yuva.basladi && (s.beklemeMs ?? 0) > 0) setTimeout(birak, s.beklemeMs); else birak();
+  }
 }
 
 // ekOrtamDegiskenleri: koşu kimliği/türü ve (Senaryolar > "Dene"de) geçici
@@ -656,7 +692,10 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   // "Durdur" ile iptal edilirse yanıtı hemen dönebilsin.
   return new Promise((resolve) => {
     kuyruktaBekleyenler.set(kosuId, resolve);
-    dosyaSirasiIleCalistir(dosya, () => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri, genel, sonucBasliklari)).then((sonuc) => {
+    // Ekran koşu hızı: ortamın etkin değerleri (genel ayar + ortam ezmesi).
+    const hiz = platformKosuHizi(genel?.ortamId).degerler;
+    dosyaSirasiIleCalistir(dosya, (yuva) => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri, genel, sonucBasliklari, yuva),
+      { eszamanli: hiz.ekranEszamanli, beklemeMs: hiz.ekranBeklemeMs }).then((sonuc) => {
       // Eğer calismaDurdur bu koşuyu ZATEN erken çözdüyse (Map'ten silinmiş olur),
       // ikinci kez resolve çağırmıyoruz — Promise'lerde ikinci resolve zaten yok
       // sayılır ama netlik için burada da kontrol ediyoruz.
@@ -681,7 +720,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
 // ayrı süreçte) çalışan süreç sayısı — sonuncusu kapanınca koşu hâlâ "çalışıyor" görünüyorsa kapatılır.
 const aktifPlatformKosulari = new Map();
 
-async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}, genel = null, sonucBasliklari = null) {
+async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}, genel = null, sonucBasliklari = null, yuva = { hazir: () => {}, basladi: false }) {
   // Sonuçlar ve (şifreli) medya platform raporlayıcısı (scripts/platform/raporlayici.mjs) tarafından
   // veritabanına yazılır; panelin sonucu veritabanından okunur (JSON sonuç dosyası yazdırılmaz).
   const kosuKimligi = ekOrtamDegiskenleri.KOSU_KIMLIGI || `panel-${Date.now()}-${randomBytes(4).toString('hex')}`;
@@ -782,9 +821,13 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
     const ciktiyaEkle = (metin) => {
       ciktiKuyrugu = (ciktiKuyrugu + metin).slice(-CIKTI_KUYRUGU_MAKS);
     };
+    yuva.basladi = true;
     alt.stdout?.on('data', (parca) => {
       process.stdout.write(parca);
       ciktiyaEkle(parca.toString('utf-8'));
+      // Testler listelendi ve koşmaya başladı: aynı dosyanın sıradaki süreci artık başlatılabilir (derleme yarışı yok).
+      // (Renkli çıktıda sayının çevresinde ANSI kodları olur; önce ayıklanır.)
+      if (/Running \d+ tests? using/.test(ciktiKuyrugu.replace(/\x1b\[[0-9;]*m/g, ''))) yuva.hazir();
       logaYaz(parca.toString('utf-8').replace(/\n$/, ''));
     });
     alt.stderr?.on('data', (parca) => {

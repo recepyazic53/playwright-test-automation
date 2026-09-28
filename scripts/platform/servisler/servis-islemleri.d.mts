@@ -107,6 +107,7 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
   /** Yanıttan okunan AÇIK değerler ve maskelenen değerler: yalnız bellekte (akış motoru); kayda / dönüşe yazılmaz. */
   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+  /** İç kullanım: yenilemede isteğin kullandığı oturum sürümü. */ oturumSurumu?: number;
   /** İç kullanım: 401 / 403 sonrası tekrar. */
   yetkiTekrari?: { ilkDurumKodu: number; not: string };
   /** Akış motoru: token adımını yeniden çalıştırıp yeni değerleri verir (yalnız ayar açıksa). */
@@ -123,8 +124,8 @@ export declare function servisCalistirmalari(vt: Veritabani, projeId: string, s:
   hata: string | null; sinirAsildi: boolean;
   calistirmalar: Array<{ baslik: string; veriKosusu: { anahtar: string; ad: string; sabit: Record<string, string> } | null }>;
 };
-export type OturumSaglayici = (vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
-  Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>;
+export type OturumSaglayici = (vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal; gorulenSurum?: number }) =>
+  Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek'; surum?: number }>;
 export declare function oturumSaglayicisiAyarla(fn: OturumSaglayici | null): void;
 export type AkisSenaryoKancasi = { kos: (vt: Veritabani, projeId: string, girdi: unknown) => Promise<unknown>; gecenler: (vt: Veritabani, projeId: string, servisId: string) => unknown[];
   atlamaNedeni: (vt: Veritabani, senaryo: unknown, ortam: unknown) => string };

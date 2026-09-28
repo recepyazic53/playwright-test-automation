@@ -16,7 +16,7 @@
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, yerlestir, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, mesgulIken, rozet, yeniKimlik } from './ortak.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
-import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuOrtamiId, kosuSuruyorMu, onayIste, onerilenOrtam, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
+import { dinle, durdur, ekranKosuBicimi, kosuBaslat, kosuDurumu, kosuOnayi, kosuOrtamiId, kosuSuruyorMu, onayIste, onerilenOrtam, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { senaryoFormu } from './senaryo-formu.js';
 import { senaryoOnerileriEkrani } from './senaryo-onerileri.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
@@ -634,14 +634,15 @@ function listeGorunumu(icerik, s) {
     if (!ilgili.length) { bildir('Seçilen senaryolar hiçbir ortamda tanımlı değil.', 'hata'); return; }
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
-      baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), tur: 'tekil', esZamanli: true, veriKosusu: { projeId: proje.id },
+      baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), tur: 'tekil', esZamanli: false, ...(await ekranKosuBicimi()), veriKosusu: { projeId: proje.id },
       hesapla: (o) => {
         const k = calisabilir.filter((x) => ortamKaydi(x, o.id)?.tanimli);
         return { senaryolar: k, tanimsizSayisi: calisabilir.length - k.length, uyarilar: sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, k, o) };
       }
     });
     if (!y) return;
-    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: 'tekil', esZamanli: true, baslik: `${y.senaryolar.length} seçili senaryo`, veriKipi: y.veriKipi });
+    // Koşu hızı (Ayarlar > Koşu > Ekran senaryoları; ortam ezer): en çok N aynı anda, panel sırası buna göre.
+    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: 'tekil', esZamanli: false, baslik: `${y.senaryolar.length} seçili senaryo`, veriKipi: y.veriKipi });
   }
 
   async function kosuyuBaslat() {
@@ -651,7 +652,7 @@ function listeGorunumu(icerik, s) {
     const kapsam = ekran ? ekran.ad : 'Genel';
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
-      baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, veriKosusu: { projeId: proje.id },
+      baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, ...(await ekranKosuBicimi()), veriKosusu: { projeId: proje.id },
       // Koşuya o ortamda tanımlı ve o ortamda Koşuda açık senaryolar girer.
       hesapla: (o) => {
         const tanimli = gorunen.filter((x) => ortamKaydi(x, o.id)?.tanimli);

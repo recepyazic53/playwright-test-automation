@@ -1,5 +1,6 @@
 // SERVİS TESTLERİ — arka planda koşu işleri (canlı panel için). Arayüz işi başlatır, durumunu kısa aralıkla sorar, isterse
-// durdurur. Senaryolar sırayla koşar; her senaryonun adımları (hazırlık → gönderim → yanıt → kontroller), maskeli istek /
+// durdurur. Senaryolar sırayla koşar (Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu" > 1 ise en çok N'i aynı
+// anda; bir senaryonun kendi adımları yine sırayla — eszamanli.mjs); her senaryonun adımları (hazırlık → gönderim → yanıt → kontroller), maskeli istek /
 // yanıt ve sonucu işin durumunda tutulur. Sonuçlar her zamanki gibi servis koşuları tablosuna da yazılır (Raporlar).
 // İşler bellektedir (Nöbetçi yeniden başlarsa kaybolur); biten iş 30 dakika sonra silinir.
 import { randomUUID } from 'node:crypto';
@@ -7,6 +8,8 @@ import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { servisGetir, servisSenaryosuGetir } from './servis-deposu.mjs';
 import { akisSenaryoKancasiAl, ortamTuru, ortamdaTanimli, servisCalistirmalari, servisSenaryosuCalistir, tanimsizNedeni } from './servis-islemleri.mjs';
 import { servisTekrarPlani } from '../senaryolar/veri-kosusu-plani.mjs';
+import { etkinKosuHiziOku, sinirliKos } from './eszamanli.mjs';
+import { kosuHiziOzeti } from '../ayarlar/kosu-hizi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -15,11 +18,11 @@ import { servisTekrarPlani } from '../senaryolar/veri-kosusu-plani.mjs';
  *   olaylar: IsOlayi[]; istek: string | null; yanit: string | null; baslangic: number | null; bitis: number | null; sonuc: Record<string, unknown> | null; neden?: string;
  *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> } | null }} IsSatiri
  * @typedef {{ id: string; projeId: string; servisId: string; servisAd: string; ortam: string; ortamTuru: string; baslangic: number; bitis: number | null;
- *   bitti: boolean; durdur: boolean; satirlar: IsSatiri[] }} ServisIsi
+ *   bitti: boolean; durdur: boolean; satirlar: IsSatiri[]; eszamanli: number; istekBeklemeMs: number; kosuHizi: string }} ServisIsi
  */
 
 const SAKLAMA_MS = 30 * 60_000;
-/** @type {Map<string, ServisIsi & { aktif: { senaryoId: string; kontrol: AbortController } | null }>} */
+/** @type {Map<string, ServisIsi & { aktifler: Map<IsSatiri, { senaryoId: string; kontrol: AbortController }> }>} */
 const isler = new Map();
 
 function temizle() {
@@ -45,7 +48,8 @@ export function servisSenaryoAtlamaNedeni(vt, servis, s, ortam) {
 }
 
 /**
- * İşi başlatır (hemen döner; koşu arka planda sürer). Senaryolar sırayla; kapsamı ortama uymayan / servisin bu ortamda
+ * İşi başlatır (hemen döner; koşu arka planda sürer). Senaryolar sırayla (ayar N > 1 ise en çok N'i aynı anda; veri koşusu
+ * satırları da ayrı çalıştırma olarak aynı sınırla); kapsamı ortama uymayan / servisin bu ortamda
  * tanımlı olmadığı / CANLI'da çağrılmayan metodu kullanan senaryo "atlandi" olur (nedeniyle).
  * Taslak verilirse (düzenleyicideki "Dene"): kaydedilmemiş tek senaryo "dene" olarak koşar (CANLI ortamda onay HTTP ucunda).
  * VERİ KOŞULARI: tablodan çoklu satırla koşan senaryonun her satırı / kombinasyonu ayrı satır ("Senaryo [ad]"); tek senaryodaki üst
@@ -98,20 +102,28 @@ export function servisIsiBaslat(vt, projeId, girdi) {
     if (c.hata) return atla(c.hata);
     return c.calistirmalar.map((k) => sirada({ senaryoId: s.id, baslik: k.baslik, veriKosusu: k.veriKosusu }));
   }).flat());
+  // Ayarlar > Koşu > Servisler (ortamın "Koşu hızı" ezmesiyle): eşzamanlılık ve istekler arası bekleme.
+  const hiz = etkinKosuHiziOku(vt, ortam.id);
   const is = {
     id: randomUUID(), projeId, servisId: servis.id, servisAd: servis.ad, ortam: ortam.ad, ortamTuru: tur,
     baslangic: Date.now(), bitis: /** @type {number | null} */ (null), bitti: false, durdur: false, satirlar,
-    aktif: /** @type {{ senaryoId: string; kontrol: AbortController } | null} */ (null)
+    // Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu" (1 = sırayla; iş başlarken okunur).
+    eszamanli: taslak ? 1 : hiz.degerler.servisEszamanli,
+    // Servise giden her istekten sonra beklenen süre (ms; servis-islemleri.mjs uygular) ve etkin değerlerin özeti (panel).
+    istekBeklemeMs: hiz.degerler.servisIstekBeklemeMs,
+    kosuHizi: kosuHiziOzeti(hiz, 'servis'),
+    /** Çalışan satırlar ve durdurma denetleyicileri. @type {Map<IsSatiri, { senaryoId: string; kontrol: AbortController }>} */
+    aktifler: new Map()
   };
   isler.set(is.id, is);
   void (async () => {
-    for (const satir of is.satirlar) {
-      if (satir.durum !== 'sirada') continue;
-      if (is.durdur) { satir.durum = 'durduruldu'; continue; }
+    await sinirliKos(is.satirlar, is.eszamanli, async (satir) => {
+      if (satir.durum !== 'sirada') return;
+      if (is.durdur) { satir.durum = 'durduruldu'; return; }
       satir.durum = 'calisiyor';
       satir.baslangic = Date.now();
       const kontrol = new AbortController();
-      is.aktif = { senaryoId: satir.senaryoId, kontrol };
+      is.aktifler.set(satir, { senaryoId: satir.senaryoId, kontrol });
       try {
         const r = await servisSenaryosuCalistir(vt, projeId, {
           servisId: servis.id, ortamId: ortam.id, sinyal: kontrol.signal,
@@ -132,10 +144,11 @@ export function servisIsiBaslat(vt, projeId, girdi) {
         satir.olaylar.push({ adim: 'hazirlik', durum: 'hata', zaman: Date.now(), bilgi: { mesaj: /** @type {Error} */ (e).message } });
       }
       satir.bitis = Date.now();
-      is.aktif = null;
-    }
-    is.bitti = true;
-    is.bitis = Date.now();
+      is.aktifler.delete(satir);
+    }).finally(() => {
+      is.bitti = true;
+      is.bitis = Date.now();
+    });
   })();
   return servisIsiDurumu(projeId, is.id);
 }
@@ -144,8 +157,10 @@ export function servisIsiBaslat(vt, projeId, girdi) {
 export function servisIsiDurumu(projeId, id) {
   const is = isler.get(id);
   if (!is || is.projeId !== projeId) throw new DepoHatasi('Koşu bulunamadı (Nöbetçi yeniden başlatıldıysa bilgisi kaybolmuştur; sonuçlar Raporlar\'da).');
-  const { aktif, ...gorunum } = is;
-  return { ...gorunum, satirlar: is.satirlar.map((s) => ({ ...s, olaylar: [...s.olaylar] })), calisanSenaryo: aktif ? aktif.senaryoId : null };
+  const { aktifler, ...gorunum } = is;
+  const calisanlar = [...aktifler.values()].map((a) => a.senaryoId);
+  // calisanSenaryo: ilk çalışan (panel seçimi); calisanlar: aynı anda çalışanların tümü; eszamanli: en çok kaç tane (ayar).
+  return { ...gorunum, satirlar: is.satirlar.map((s) => ({ ...s, olaylar: [...s.olaylar] })), calisanSenaryo: calisanlar[0] ?? null, calisanlar };
 }
 
 /**
@@ -157,7 +172,8 @@ export function servisIsiDurdur(projeId, id, senaryoId) {
   if (!is || is.projeId !== projeId) throw new DepoHatasi('Koşu bulunamadı.');
   if (!senaryoId) is.durdur = true;
   for (const s of is.satirlar) if (s.durum === 'sirada' && (!senaryoId || s.senaryoId === senaryoId)) s.durum = 'durduruldu';
-  if (is.aktif && (!senaryoId || is.aktif.senaryoId === senaryoId)) is.aktif.kontrol.abort();
+  // Eşzamanlı koşuda çalışan her senaryonun kendi denetleyicisi var: tüm iş durdurulursa hepsi, senaryo verilirse yalnız onunkiler kesilir.
+  for (const a of is.aktifler.values()) if (!senaryoId || a.senaryoId === senaryoId) a.kontrol.abort();
   return { durduruldu: true };
 }
 

@@ -1,5 +1,6 @@
 // Servis testleri — canlı koşu paneli (ekran koşu paneliyle aynı görünüm: sağ altta, küçültülebilir).
-// Senaryolar arka planda sırayla koşar (POST /platform/servis/is/baslat); panel durumu kısa aralıkla sorar ve seçili senaryonun
+// Senaryolar arka planda sırayla koşar (Ayarlar > Koşu > Servisler > "Aynı anda en çok N" > 1 ise en çok N'i aynı anda;
+// POST /platform/servis/is/baslat); panel durumu kısa aralıkla sorar ve seçili senaryonun
 // adımlarını gösterir: Parametreler hazırlandı → İstek gönderiliyor (sarı) → gönderildi (yeşil) → Cevap bekleniyor → Cevap geldi →
 // Kontroller. İstek ve yanıt (gizli değerler maskeli) açılır kutularda. "Durdur" bekleyen isteği keser; "Tümünü durdur" işi durdurur.
 import { api, h, ikon, rozet, yerlestir } from './ortak.js';
@@ -106,6 +107,7 @@ function ciz() {
   const toplam = is.satirlar.length;
   const biten = is.satirlar.filter((x) => !['calisiyor', 'sirada'].includes(x.durum)).length;
   const say = (d) => is.satirlar.filter((x) => x.durum === d).length;
+  const enCok = Number(is.eszamanli) > 1 ? Number(is.eszamanli) : 1;
   if (!panelEl) {
     panelEl = h('section', { class: 'kosu-paneli servis-kosu-paneli', role: 'region', 'aria-label': 'Servis koşu paneli' });
     document.body.append(panelEl);
@@ -119,13 +121,17 @@ function ciz() {
       h('div', { class: 'dugmeler' },
         !is.bitti ? h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => durdur() }, h('span', { class: 'kare-simge', 'aria-hidden': 'true' }), 'Tümünü durdur') : null,
         kucult, is.bitti ? kapat : null)),
-    h('div', { class: 'alt' }, h('span', {}, is.servisAd), h('span', {}, `${is.ortam} · ${toplam} senaryo · sırayla`)),
+    h('div', { class: 'alt' }, h('span', {}, is.servisAd), h('span', {}, `${is.ortam} · ${toplam} senaryo · ${enCok > 1 ? `aynı anda en çok ${enCok}` : 'sırayla'}${is.istekBeklemeMs > 0 ? ` · istekler arası bekleme: ${is.istekBeklemeMs} ms` : ''}`)),
+    // Etkin koşu hızı ve kaynağı (genel ayar / ortam ayarı).
+    is.kosuHizi && !durum.kucuk ? h('p', { class: 'soluk kucuk kosu-hizi-ozeti' }, is.kosuHizi) : null,
     durum.kucuk ? null : h('div', { class: 'ilerleme-satiri' }, h('progress', { max: String(toplam), value: String(biten), 'aria-label': `İlerleme: ${biten} / ${toplam}` }),
       h('span', { class: 'yuzde' }, `%${toplam ? Math.round((biten / toplam) * 100) : 0}`)),
     durum.kucuk ? null : h('div', { class: 'kosu-sayaclari' },
       say('basarili') ? rozet(`${say('basarili')} başarılı`, 'basari') : null, say('basarisiz') ? rozet(`${say('basarisiz')} başarısız`, 'hata') : null,
       say('hata') ? rozet(`${say('hata')} çalıştırılamadı`, 'hata') : null, say('durduruldu') ? rozet(`${say('durduruldu')} durduruldu`, 'durdu') : null,
-      say('atlandi') ? rozet(`${say('atlandi')} atlandı`, 'atlanan') : null, say('calisiyor') ? rozet('1 çalışıyor', 'vurgu') : null,
+      say('atlandi') ? rozet(`${say('atlandi')} atlandı`, 'atlanan') : null,
+      // Eşzamanlı koşu (Ayarlar > Koşu > Servisler): "N senaryo aynı anda (en çok M)"; sırayla koşuda "1 çalışıyor".
+      say('calisiyor') ? rozet(enCok > 1 ? `${say('calisiyor')} senaryo aynı anda (en çok ${enCok})` : `${say('calisiyor')} çalışıyor`, 'vurgu') : null,
       say('sirada') ? rozet(`${say('sirada')} sırada`) : null));
   if (durum.kucuk) { yerlestir(panelEl, baslik); return; }
   const liste = h('ul', { class: 'kosu-listesi', 'aria-label': 'Koşudaki senaryolar' }, is.satirlar.map((x) => {

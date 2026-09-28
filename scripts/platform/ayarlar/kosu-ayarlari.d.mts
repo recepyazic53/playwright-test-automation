@@ -9,12 +9,14 @@ export interface KosuAyarTanimi {
 }
 export interface KosuAyarlari {
   video: string; videoBoyutu: 'kucuk' | 'ekran'; ekranGoruntusu: string; adimGoruntusu: 'her' | 'yalnizKalan' | 'secili' | 'kapali'; iz: string; indirilenDosya: 'kapali' | 'yalnizHata' | 'her'; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
-  zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; yetkiHatasinda: 'tekrarYok' | 'yenileVeTekrar'; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number;
+  zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; /** Servisler: aynı anda en çok N servis senaryosu (1 = sırayla). */ servisEszamanli: number; /** Servise giden her istekten sonra bekleme (ms). */ servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: 'tekrarYok' | 'yenileVeTekrar'; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number; senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number;
   taramaSayfaAcilmaSn: number; kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string;
   taramaGirisKipi: 'bastan' | 'saklananOturum'; taramaOturumKontrolSn: number; taramaGirisAlanBeklemeSn: number;
   gorunmeyenAlanBeklemeSn: number; gorunmeyenAlan: 'atla' | 'kaldir'; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number;
   onayPenceresi: 'iptal' | 'onayla'; oturumKontrolSn: number; girisAlanBeklemeSn: number; tabloSatirSecimi: 'ilk' | 'rastgele'; sqlSatirSiniri: number;
-  kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string; saatDilimi: string; eszamanliKosu: 'sirayla';
+  kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string; saatDilimi: string;
+  /** Ekran senaryoları: aynı anda en çok N (1 = sırayla; eski "Eşzamanlı senaryo: sırayla" 1 sayılır) ve senaryolar arası bekleme (ms). */
+  ekranEszamanli: number; ekranBeklemeMs: number;
   zamanliKacan: 'atla' | 'sonraKos'; zamanliCakisma: 'atla' | 'bitinceKos'; raporGoruntuSiniriMb: number; raporSaklamaGun: '30' | '90' | '180' | '0'; benzerlikEsigi: number;
   medyaInceltme: 'kapali' | 'basarili' | 'hatali' | 'ikisi'; medyaInceltmeGun: number; medyaInceltmeKoru: boolean;
   /** Ayarlar > Koşu > Tek senaryoda en çok veri koşusu (tablodan çoklu satır). */

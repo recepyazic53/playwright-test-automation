@@ -22,7 +22,9 @@ export default defineConfig({
   // Tek senaryo koşusu: Nöbetçi senaryonun etiketini "--grep" argümanı yerine bu ortam değişkeniyle verir.
   grep: process.env.TEST_SUNUCU_GREP_DESENI ? new RegExp(process.env.TEST_SUNUCU_GREP_DESENI) : undefined,
 
-  // Senaryolar sırayla koşar (Ayarlar > Koşu > Gelişmiş > Eşzamanlı senaryo: paylaşılan giriş oturumu nedeniyle yalnız 1).
+  // Nöbetçi her senaryoyu (veri koşusu satırlarıyla) AYRI süreçte başlatır; süreç içinde testler sırayla koşar. Eşzamanlılık
+  // (Ayarlar > Koşu > Ekran senaryoları > "Aynı anda en çok N"; ortam ezer) sunucunun dosya yuvasındadır (scripts/test-sunucu.mjs);
+  // paylaşılan giriş oturumu süreçler arası kilitle yenilenir (tests/support/oturum-kasasi.ts > oturumKilidiyle).
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: yenidenDenemeAyari(),

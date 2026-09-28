@@ -3,9 +3,10 @@
 // (parola, authenticator anahtarı, hassas test verisi) API'den yalnızca { dolu, maske } olarak
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
-  adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
+  adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlari, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
   kisaAciklama, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
+import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { veriKlasoruKarti, yedekKlasoruBolumu } from './veri-klasoru.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
@@ -137,9 +138,49 @@ async function gecmisGoster(varlikTuru, varlikId, baslik, baglam) {
 // Proje ve ortamlar
 // ---------------------------------------------------------------------------------------
 
+/** Giriş tarifli ortamda ekran eşzamanlılığı > 1 uyarısı (engellemez). @param {string[]} [ortamAdlari] */
+function girisliEszamanliUyarisi(ortamAdlari = []) {
+  return h('div', { class: 'not-kutusu uyari eszamanli-giris-uyarisi', role: 'note', hidden: true },
+    'Aynı kullanıcıyla eşzamanlı girişler birbirinin oturumunu düşürebilir; kendi uygulamanızda 1 önerilir.',
+    ortamAdlari.length ? ` Giriş tarifi olan ortam: ${ortamAdlari.join(', ')}.` : '');
+}
+
+/**
+ * Ortam formundaki "Koşu hızı": genel ayarı (Ayarlar > Koşu) bu ortam için ezen dört değer; boş = genel ayar. Giriş tarifli ortamda
+ * ekran eşzamanlılığı 1'den büyükse uyarı. deger(): kaydedilecek nesne (boşlar gönderilmez; sunucu doğrular).
+ * @param {any} ortam @param {Record<string, any>} genel
+ */
+function kosuHiziAlanlari(ortam, genel) {
+  const mevcut = (ortam && ortam.kosuHizi) || {};
+  /** @type {Map<string, HTMLInputElement>} */
+  const girdiler = new Map();
+  const uyari = girisliEszamanliUyarisi();
+  const satirlar = KOSU_HIZI_ALANLARI.map((t) => {
+    const birim = t.anahtar.endsWith('Ms') ? 'ms' : 'senaryo';
+    const g = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', 'data-kosu-hizi': t.anahtar,
+      value: mevcut[t.anahtar] !== undefined ? String(mevcut[t.anahtar]) : '', placeholder: `Genel: ${genel[t.anahtar] ?? t.varsayilan}` });
+    girdiler.set(t.anahtar, g);
+    return alan(`${t.etiket} (${birim})`, g, { yardim: `${t.enAz}–${t.enCok}; boş: genel ayar (${genel[t.anahtar] ?? t.varsayilan}${birim === 'ms' ? ' ms' : ''}).` });
+  });
+  const ekranN = /** @type {HTMLInputElement} */ (girdiler.get('ekranEszamanli'));
+  const guncelle = () => { uyari.hidden = !(ortam && ortam.girisTarifiVar && Number(ekranN.value || genel.ekranEszamanli || 1) > 1); };
+  ekranN.addEventListener('input', guncelle);
+  guncelle();
+  const bolum = h('fieldset', { class: 'kosu-hizi-alanlari' }, h('legend', {}, 'Koşu hızı'),
+    h('p', { class: 'soluk kucuk' }, 'Bu ortamda aynı anda kaç senaryo koşacağı ve beklemeler. Boş bırakılan değer Ayarlar > Koşu\'daki genel ayarı kullanır.'),
+    h('div', { class: 'alan-izgarasi' }, ...satirlar), uyari);
+  const deger = () => {
+    /** @type {Record<string, string>} */
+    const d = {};
+    for (const [a, g] of girdiler) if (g.value.trim() !== '') d[a] = g.value.trim();
+    return d;
+  };
+  return { bolum, deger, girdiler };
+}
+
 async function projeVeOrtamlar(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
-  const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`);
+  const [{ ortamlar }, genelAyarlar] = await Promise.all([api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`), kullaniciAyarlari()]);
 
   const projeSecimi = baglam.durum.projeler.length > 1
     ? alan('Etkin proje', h('select', { onchange: (o) => { baglam.projeSec(o.target.value); location.reload(); } },
@@ -187,10 +228,12 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
       ortam && oncekiRisk === null ? riskBelirtinNotu() : null);
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
+    const hiz = kosuHiziAlanlari(ortam, genelAyarlar);
     const form = formPaneli(ortam ? `Ortamı düzenle: ${ortam.ad}` : 'Yeni ortam', mesaj.kutu,
       alan('Ortam adı', oAd, { zorunlu: true }), alan('Adres (link)', oAdres, { zorunlu: true }),
       h('label', { class: 'secenek', for: oVarsayilan.id }, oVarsayilan, 'Varsayılan ortam (koşular bu ortamda başlar)'),
       riskAlani,
+      hiz.bolum,
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
     form.addEventListener('submit', async (o) => {
       o.preventDefault();
@@ -214,7 +257,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
       }
       try {
         await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ortam/kaydet', {
-          govde: { id: ortam ? ortam.id : undefined, projeId: proje.id, ad: oAd.value.trim(), tabanUrl: oAdres.value.trim(), varsayilan: oVarsayilan.checked, riskli, ...(onay ? { onay: true } : {}) }
+          govde: { id: ortam ? ortam.id : undefined, projeId: proje.id, ad: oAd.value.trim(), tabanUrl: oAdres.value.trim(), varsayilan: oVarsayilan.checked, riskli, kosuHizi: hiz.deger(), ...(onay ? { onay: true } : {}) }
         }));
         bildir('Ortam kaydedildi.');
         yenile();
@@ -717,7 +760,7 @@ async function kosuAyarlari(govde, baglam) {
   // Zamanlanmış koşu davranışı (kaçan zaman / koşu sürerken gelen zaman): tüm kurallar için; kartın içinde (proje yoksa ayrı kart).
   const zamanlamaFormu = () => ayarFormu('zamanlama', 'Zamanlanmış koşu davranışı', 'Zamanlanmış koşu davranışı kaydedildi.', { baslik: 'Tüm zamanlanmış koşular için' });
   const [form, kurallar, zamanli] = await Promise.all([
-    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.'), siniflandirmaKarti(),
+    ayarFormu('kosu', 'Koşu ayarları', 'Koşu ayarları kaydedildi; sonraki koşulardan itibaren geçerli.', proje ? { projeId: proje.id } : {}), siniflandirmaKarti(),
     proje ? zamanlanmisKosularKarti(proje, { davranisFormu: zamanlamaFormu }).catch((hata) => {
       if (hata && hata.durum === 423) throw hata;
       return h('div', { class: 'not-kutusu hata', role: 'alert' }, `Zamanlanmış koşular yüklenemedi: ${hata.message || hata}`);
@@ -765,8 +808,8 @@ async function siniflandirmaKarti() {
  * Kullanıcı kararları formu (tanımlar sunucudan: scripts/platform/ayarlar/kosu-ayarlari.mjs): bölümün ayarları gruplar hâlinde.
  * altBolum 'gelismis' tanımları açılır "Gelişmiş koşu davranışı" kısmındadır (varsayılan kapalı; her ayarın varsayılanı önceki davranış).
  * @param {'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
- * @param {{ baslik?: string; kaydedildi?: (ayarlar: Record<string, unknown>) => void }} [secenek] baslik: formun üstünde başlık (kart /
- *   diyalog içinde gömülü form); kaydedildi: kayıt başarılı olunca çağrılır
+ * @param {{ baslik?: string; kaydedildi?: (ayarlar: Record<string, unknown>) => void; projeId?: string }} [secenek] baslik: formun üstünde başlık (kart /
+ *   diyalog içinde gömülü form); kaydedildi: kayıt başarılı olunca çağrılır; projeId: giriş tarifli ortam uyarısı (ekran eşzamanlılığı) için
  */
 async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const { ayarlar, tanimlar: tumu } = await api('/platform/kosu-ayarlari');
@@ -839,6 +882,17 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       k.not.hidden = !pasif;
     };
     if (bagli) bagli.addEventListener('change', guncelle);
+    guncelle();
+  }
+  // "Aynı anda en çok N ekran senaryosu" > 1 ve projede (kendi değeri olmayan) giriş tarifli ortam varsa uyarı (engellemez).
+  const ekranN = girdiler.get('ekranEszamanli');
+  if (ekranN && secenek.projeId) {
+    const { ortamlar } = await api(`/platform/ortamlar?projeId=${encodeURIComponent(secenek.projeId)}`).catch(() => ({ ortamlar: [] }));
+    const girisli = ortamlar.filter((o) => o.girisTarifiVar && !(o.kosuHizi && o.kosuHizi.ekranEszamanli));
+    const uyari = girisliEszamanliUyarisi(girisli.map((o) => o.ad));
+    ekranN.closest('.alan')?.after(uyari);
+    const guncelle = () => { uyari.hidden = !(girisli.length && Number(ekranN.value) > 1); };
+    ekranN.addEventListener('input', guncelle);
     guncelle();
   }
   form.addEventListener('submit', async (o) => {
