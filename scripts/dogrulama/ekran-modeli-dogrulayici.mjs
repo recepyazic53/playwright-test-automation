@@ -16,8 +16,11 @@
 export const DESTEKLENEN_SEMA_SURUMU = 2;
 /** Kabul edilen şema sürümleri. */
 export const SEMA_SURUMLERI = Object.freeze([1, 2]);
-/** Adım koşu tanımındaki aksiyon türleri: tikla (düğme/bağlantı), bekle (öğe görünür/gizli olana kadar). */
-export const AKSIYON_TURLERI = Object.freeze(['tikla', 'bekle']);
+/**
+ * Adım koşu tanımındaki aksiyon türleri: tikla (düğme/bağlantı), bekle (öğe görünür/gizli olana kadar), ekranaDon (ekranın adresi
+ * yeniden açılır; ör. ortak akış başka sayfaya götürdükten sonra — seçicisiz, hangi ekrana eklenirse onun adresi).
+ */
+export const AKSIYON_TURLERI = Object.freeze(['tikla', 'bekle', 'ekranaDon']);
 /** Adımın başarı göstergesi türleri: metin (sayfada/öğede metin), eleman (öğe görünür), url (adres deseni), desen (öğenin/sayfanın metni düzenli ifadeye uyar). */
 export const BASARI_GOSTERGESI_TURLERI = Object.freeze(['metin', 'eleman', 'url', 'desen']);
 /** "veya" başarı göstergesinde en çok seçenek (herhangi biri görünürse adım başarılı). */
@@ -426,6 +429,8 @@ function kosuTanimiDogrula(h, yer, kosu) {
       if (a.sureSn !== undefined) {
         if (a.tur !== 'bekle' || !(Number.isInteger(a.sureSn) && a.sureSn >= 1 && a.sureSn <= 120)) h.ekle(aYer, '"sureSn" yalnızca "bekle" aksiyonunda, 1–120 arasında tam sayı olabilir');
         if (a.secici !== undefined) h.ekle(aYer, 'süreli beklemede "secici" olmaz');
+      } else if (a.tur === 'ekranaDon') {
+        if (a.secici !== undefined || a.metin !== undefined || a.durum !== undefined) h.ekle(aYer, '"ekranaDon" aksiyonunda "secici", "metin" ve "durum" olmaz');
       } else if (!metinMi(a.secici)) h.ekle(aYer, '"secici" zorunlu');
       if (a.metin !== undefined && !metinMi(a.metin)) h.ekle(aYer, '"metin" boş olmayan metin olmalı');
       if (a.durum !== undefined && (a.tur !== 'bekle' || !['gorunur', 'gizli', 'dolu'].includes(a.durum))) h.ekle(aYer, '"durum" yalnızca "bekle" aksiyonunda gorunur | gizli | dolu olabilir');

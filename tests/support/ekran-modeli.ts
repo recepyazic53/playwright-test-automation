@@ -186,8 +186,8 @@ export type Bolum = {
 /** Adım koşu tanımındaki aksiyon (sürüm 2). */
 export type AdimAksiyonu = {
   tur: (typeof AKSIYON_TURLERI)[number];
-  /** Playwright seçicisi (CSS, "text=…", "role=button[name=…]"). */
-  secici: string;
+  /** Playwright seçicisi (CSS, "text=…", "role=button[name=…]"); tikla / bekle'de zorunlu, ekranaDon'da yok. */
+  secici?: string;
   /** Birden çok öğe eşleşirse bu metni içeren öğe. */
   metin?: string;
   /** Yalnızca "bekle": öğe görünür (varsayılan) ya da gizli olana kadar. */

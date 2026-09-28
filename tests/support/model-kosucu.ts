@@ -592,8 +592,10 @@ async function gostergeVarMi(page: Page, g: PlanBasariGostergesi): Promise<boole
   return mesajIceriyorMu(metin, g.deger);
 }
 
-async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn: number): Promise<void> {
+async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn: number, ekranUrl: string): Promise<void> {
   for (const a of kosu?.aksiyonlar ?? []) {
+    // Ekrana dön: ekranın adresi yeniden açılır (ör. ortak akış kullanıcıyı değiştirip ana sayfaya götürdükten sonra).
+    if (a.tur === 'ekranaDon') { await page.goto(ekranUrl, { waitUntil: 'domcontentloaded' }); continue; }
     // Süreli bekleme (akış diyagramındaki "Bekleme süresi").
     if (a.tur === 'bekle' && a.sureSn && !a.secici) { await page.waitForTimeout(a.sureSn * 1000); continue; }
     if (!a.secici) continue;
@@ -961,7 +963,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
         }
-        await aksiyonlariUygula(page, adim.kosu, sureSn);
+        await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
         // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
         await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik, adim);
