@@ -8,6 +8,8 @@
 //            kosullar: { [alan]: { secim, degerler } | null } — alanın görünürlük koşulu ("<seçim> şu değerlerdeyken görünür";
 //            null: koşulsuz). Taslakta kayıt okumalarından otomatik bulunur (secimKosuluCikar); kullanıcı düzeltir. Listede
 //            olmayan alan için koşul otomatik çıkarılır. Koşuldaki seçim alanı akışta (bir alan grubunda) olmalı.
+//            sinirlar: { [alan]: { enAz?, enCok?, artis?, enAzUzunluk?, enCokUzunluk?, desen? } | null } — alanın değer kuralları
+//            (model alan.sinirlar; null: kaldır; verilmeyen alanın mevcut kuralı korunur). Ekranın akışını düzenlerken yazılır.
 //   aksiyon  { dugme: sıra, istegeBagli }           düğmeye basılır (isteğe bağlıysa senaryoda "… dahil" ile seçilir)
 //   mesaj    { mesaj: sıra | null, metin }          beklenen mesaj (aranacak metin; öğe seçildiyse onun içinde aranır)
 //   bekle    { saniye }                              süreli bekleme (1–120 sn): önceki düğmeden sonra (düğme yoksa alanlardan
@@ -208,6 +210,9 @@ export function akisPaleti(env, bloklar) {
   };
 }
 
+/** Alan grubundaki değer kurallarının (sinirlar) bilinen anahtarları. */
+const SINIR_ANAHTARLARI = ['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enCokUzunluk', 'desen'];
+
 /**
  * Arayüzden gelen blokları tek biçime getirir (bilinmeyen alanlar atılır; uzunluklar sınırlanır). Biçimi bozuk blok
  * hatadır. @param {unknown} ham
@@ -238,7 +243,26 @@ export function bloklariAyikla(ham) {
           }
         }
       }
-      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
+      // Alanın değer kuralları (model alan.sinirlar; null: kaldır). Yalnız bilinen anahtarlar, sayı / metin değerler; kurallar
+      // kaydederken ekran modeli doğrulayıcısıyla denetlenir (akis-servisi.mjs > akisKaydet).
+      /** @type {Record<string, Record<string, number | string> | null>} */
+      const sinirlar = {};
+      if (nesneMi(b.sinirlar)) {
+        for (const a of liste) {
+          if (!Object.prototype.hasOwnProperty.call(b.sinirlar, a)) continue;
+          const s = b.sinirlar[a];
+          if (!nesneMi(s)) { sinirlar[a] = null; continue; }
+          /** @type {Record<string, number | string>} */
+          const temiz = {};
+          for (const k of SINIR_ANAHTARLARI) {
+            const d = s[k];
+            if (typeof d === 'number' && Number.isFinite(d)) temiz[k] = d;
+            else if (typeof d === 'string' && d.trim()) temiz[k] = d.trim().slice(0, 200);
+          }
+          sinirlar[a] = Object.keys(temiz).length ? temiz : null;
+        }
+      }
+      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
     else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
     else if (b.tur === 'aksiyon') {

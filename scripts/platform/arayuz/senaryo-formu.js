@@ -21,7 +21,7 @@ import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
-import { gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
+import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
 import { degerBasvurusuYaz, grupAnahtari, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
@@ -34,6 +34,8 @@ const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36)
 let kimlikSayaci = 0;
 const yeniId = (on) => `sf-${on}-${++kimlikSayaci}`;
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
+/** "Bilerek boş bırak" işaretinin sunulduğu (tek değerli) form alanı tipleri. */
+const BILEREK_BOS_TIPLERI = ['secim', 'metin', 'sayi', 'tarih', 'dosya'];
 
 /**
  * @param {HTMLElement} icerik
@@ -136,6 +138,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (!ortamSecimi.size) ortamSecimi.add(s.ortam.id);
   let kosuyaDahil = s.taslak?.kosuyaDahil ?? (senaryo ? senaryo.kosuyaDahil : true);
   const mutlaka = new Set(s.taslak?.mutlaka ?? senaryo?.mutlakaGorunmeli ?? []);
+  // Bilerek boş bırakılan zorunlu alanlar (olumsuz senaryo; verideki bilerekBos listesi).
+  const bilerekBos = new Set(bilerekBosAnahtarlari(s.taslak?.veri || senaryo?.veri));
   // Giriş seçimi (senaryo-girisi.mjs): { kip: ortam | girissiz | temiz, profil }; null = ortamın girişiyle (varsayılan).
   let girisSecimi = s.taslak && 'giris' in s.taslak ? s.taslak.giris : senaryo?.giris ?? null;
   /** Adım ekran görüntüsü seçimi (null = Ayarlara uy; Ayarlar > Koşu > Kayıt). */
@@ -180,6 +184,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const gorunurlukHesapla = (taslak) => gorunurlukleriHesapla(taslak, dogrulamaBaglami);
   function hesapla() {
     const senaryoNesnesi = senaryoNesnesiOlustur(sema, { ...degerler, [sema.baslik]: baslikDegeri }, { gorunurlukHesapla, onceki });
+    if (bilerekBos.size) senaryoNesnesi[BILEREK_BOS_ANAHTARI] = [...bilerekBos];
+    else delete senaryoNesnesi[BILEREK_BOS_ANAHTARI];
     const gorunurluk = gorunurlukHesapla(senaryoNesnesi);
     const sonuc = senaryoyuDogrula(senaryoNesnesi, dogrulamaBaglami);
     sonDurum = { senaryo: senaryoNesnesi, gorunurluk, hatalar: sonuc.hatalar, uyarilar: sonuc.uyarilar };
@@ -410,6 +416,20 @@ function modelFormu(icerik, s, senaryo, baglam) {
           ust = alanUst(alan, id, tablodanDugmesi ? [tablodanDugmesi] : []);
           kontrolKaydet(alan.anahtar, [girdi], hata, uyari);
         }
+      }
+      // Zorunlu basit alan: "Bilerek boş bırak" (olumsuz senaryo; senaryo verisinde bilerekBos). Açıkken alan temizlenir ve kapalı
+      // görünür; doğrulayıcı boşluğu hata değil uyarı sayar, koşucu bu alana değer (varsayılanı da) yazmaz.
+      if (alan.zorunlu === true && BILEREK_BOS_TIPLERI.includes(alan.tip) && alan.anahtar !== sema.baslik) {
+        const acik = bilerekBos.has(alan.anahtar);
+        const kutu = h('input', { type: 'checkbox', checked: acik, 'aria-label': 'Bilerek boş bırak', 'aria-describedby': `${id}-uyari` });
+        kutu.addEventListener('change', () => {
+          if (kutu.checked) { bilerekBos.add(alan.anahtar); degerYaz(alan.anahtar, ''); } else { bilerekBos.delete(alan.anahtar); planla(); }
+          degisti = true;
+          kayit.ciz();
+        });
+        ust.el.querySelector('.sag')?.append(h('label', { class: 'bilerek-bos', title: 'Olumsuz senaryo: alan boş bırakılır; koşucu bu alana değer yazmaz.' }, kutu, h('span', {}, 'Bilerek boş bırak')));
+        kap.classList.toggle('bilerek-bos-acik', acik);
+        if (acik) for (const el of [govde, ...govde.querySelectorAll('input, select, textarea, button')]) if ('disabled' in el) el.disabled = true;
       }
       kayit.gorunurlukCipi = ust.cip;
       yerlestir(kap, ust.el, govde, hata, uyari);
@@ -1337,7 +1357,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     onclick: () => playwrightKodunaAktar({ projeId: s.proje.id, senaryo: { id: senaryo.id, baslik: senaryo.baslik }, ortamlar: s.ortamlar.filter((o) => senaryo.ortamlar.includes(o.id)) })
   }, ikon('indir'), 'Playwright koduna dışa aktar') : null;
   yerlestir(icerik,
-    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, disaAktarDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), 'Listeye dön')),
+    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, disaAktarDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), s.taslak?.oneri ? 'Önerilere dön' : 'Listeye dön')),
     h('div', { class: 'form-duzeni' },
       h('div', { class: 'form-sutunu' }, sekmeCubugu, formAlani, diyagramAlani),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıt' },
@@ -1352,7 +1372,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
   formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);
   beklenenCiz();
   guncelle();
-  if (s.taslak) {
+  if (s.taslak?.oneri) {
+    // Senaryo önerisinin önizlemesi (senaryo-onerileri.js): kaydedilmedi; oluşturmak kullanıcının kararı.
+    icerik.querySelector('.form-duzeni')?.before(h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' },
+      h('p', {}, h('b', {}, 'Öneri önizlemesi — kaydedilmedi. '), `Beklenen: ${s.taslak.oneri.beklenen}. İsterseniz düzenleyip "Senaryoyu oluştur" ile ekleyin; "Koşuda" kapalı gelir.`)));
+  } else if (s.taslak) {
     // Akış değişti: yeni akışta olmayan değerler kaldırıldı mı?
     degisti = true;
     const yeni = hesapla().senaryo;

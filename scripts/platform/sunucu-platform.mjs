@@ -54,7 +54,9 @@
 //   GET  /platform/senaryo?id=&ortamId=                 ayrıntı (verinin hassas alanları çözülmüş — düzenleme formu)
 //   GET  /platform/senaryo/form?projeId=&ekranId=&ortamId=&akisId=   seçilen akışın modeli (yoksa varsayılan) + akış listesi +
 //        alt modeller + profil seçenekleri (maskeli)
-//   GET  /platform/senaryo/gecmis?id=                   değişiklik geçmişi (değişen alan ADLARI; değer yok)
+//   GET  /platform/senaryo/oneri-baglami?projeId=&ekranId=&ortamId=&akisId=   senaryo tasarım yardımcısı: form bağlamı + ekranın o
+//        ortamda / akışta tanımlı senaryoları (veri, satır seçimleri, son durum); öneriyi tarayıcı üretir, hiçbir şey yazılmaz
+//   GET  /platform/senaryo/gecmis?id=                  değişiklik geçmişi (değişen alan ADLARI; değer yok)
 //   GET  /platform/senaryo/son-sonuc?id=&ortamId=       seçili ortamdaki son sonuç + adım sonuçları (akış diyagramı renkleri)
 //   POST /platform/senaryo/kaydet | kosuya-dahil | sil | kopyala
 //   POST /platform/senaryolar/calistir { projeId, ortamId, senaryoId, kosuId, kosuTuru?, kosuKimligi?, kosuKapsami? }
@@ -175,6 +177,7 @@ import {
   modelBaglami, senaryoDetayi, senaryoGecmisi, senaryoKaydet, senaryoKopyala, senaryolariCogalt, senaryoListesi, senaryoSonSonucu, senaryolariSil
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
+import { oneriBaglami } from './senaryolar/oneri-baglami.mjs';
 import { YASAK_ADRES_DEGISKENI, adresYasakliMi } from './senaryolar/model-kosusu.mjs';
 import { senaryoyuPlaywrightKodunaAktar } from './senaryolar/disa-aktarma-servisi.mjs';
 import { execFile } from 'node:child_process';
@@ -1228,6 +1231,12 @@ const GET_UCLARI = new Map([
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     const akisId = q.get('akisId');
     return formBaglami(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')),
+      akisId && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(akisId) ? akisId : null);
+  }],
+  ['/platform/senaryo/oneri-baglami', (db, q) => {
+    const projeId = kimlikAl(q.get('projeId'), 'projeId');
+    const akisId = q.get('akisId');
+    return oneriBaglami(db, projeId, kimlikAl(q.get('ekranId'), 'ekranId'), ortamSec(db, projeId, q.get('ortamId')),
       akisId && /^[A-Za-z][A-Za-z0-9]{0,99}$/.test(akisId) ? akisId : null);
   }],
   ['/platform/senaryo/son-sonuc', (db, q) => {

@@ -152,6 +152,19 @@ export type Alan = {
   excelSutunlari?: { deger: JsonDeger; not?: string };
   durum?: 'oneri';
   notlar?: string[];
+  /** Uygulamadaki değer kuralları (senaryo tasarım yardımcısının sınır değer önerileri yalnız bunlardan üretilir). */
+  sinirlar?: AlanSinirlari;
+};
+
+/** Sayıda enAz / enCok (+ artis), tarihte enAz / enCok ("bugun±N" ya da tarih), metinde uzunluk ve desen. */
+export type AlanSinirlari = {
+  enAz?: number | string;
+  enCok?: number | string;
+  artis?: number;
+  enAzUzunluk?: number;
+  enCokUzunluk?: number;
+  desen?: string;
+  not?: string;
 };
 
 export type Bolum = {

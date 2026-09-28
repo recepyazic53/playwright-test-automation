@@ -12,7 +12,7 @@
 //    beklenen sonuç ve bağlam profili modelden ve senaryo verisinden SAF olarak çıkarılır (birim testli).
 // NOT: import.meta KULLANILMAZ. Tipler: model-kosusu.d.mts.
 
-import { gorunurlukleriHesapla } from '../../dogrulama/senaryo-dogrulayici.mjs';
+import { bilerekBosAnahtarlari, gorunurlukleriHesapla } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { formDegerleriniKur, formSemasiOlustur, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul, tumFormAlanlari } from './model-formu.mjs';
 
 /** Model senaryolarını üreten spec dosyası (Playwright testDir'e göre göreli yol). */
@@ -333,16 +333,18 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
 
 /**
  * Senaryo verisi + boş bırakılan tek anahtarlı senaryo alanlarının varsayılan değerleri (dosya hariç: varsayılan dosya
- * Ayarlar > Dosyalar'dan gelir). @param {any} model @param {Record<string, unknown>} veri @returns {Record<string, unknown>}
+ * Ayarlar > Dosyalar'dan gelir). Senaryonun bilerek boş bıraktığı alanlar (olumsuz senaryo; bilerekBos) varsayılanı da almaz.
+ * @param {any} model @param {Record<string, unknown>} veri @returns {Record<string, unknown>}
  */
 function varsayilanlariUygula(model, veri) {
   const sonuc = { ...veri };
+  const bilerekBos = new Set(bilerekBosAnahtarlari(veri));
   for (const adim of Array.isArray(model.adimlar) ? model.adimlar : []) {
     for (const bolum of adim && Array.isArray(adim.bolumler) ? adim.bolumler : []) {
       for (const alan of bolum && Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
         if (!alan || alan.yapilandirma !== 'senaryo' || alan.tip === 'dosya' || alan.tip === 'kimlikProfili') continue;
         const anahtarlar = senaryoAnahtarlari(alan);
-        if (anahtarlar.length !== 1 || !bosMu(sonuc[anahtarlar[0]])) continue;
+        if (anahtarlar.length !== 1 || !bosMu(sonuc[anahtarlar[0]]) || bilerekBos.has(anahtarlar[0])) continue;
         if (nesneMi(alan.varsayilan) && !bosMu(alan.varsayilan.deger)) sonuc[anahtarlar[0]] = alan.varsayilan.deger;
       }
     }

@@ -33,8 +33,8 @@ export type AkisEnvanteri = {
 };
 export type AkisBlogu =
   /** zorunlu: alanlar'ın alt kümesi (senaryoda değer şart, koşuda görünmezse başarısız); diğerleri "görünürse doldur". */
-  /** ekranGoruntusu: "Ekran görüntüsü al" işareti (alan grubu / aksiyon; adımın kosu.ekranGoruntusu — "Seçili adımlarda" kaydında). */
-  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; ekranGoruntusu?: boolean }
+  /** ekranGoruntusu: "Ekran görüntüsü al" işareti (alan grubu / aksiyon; adımın kosu.ekranGoruntusu — "Seçili adımlarda" kaydında). sinirlar: alanın değer kuralları. */
+  | { tur: 'alanlar'; ad: string; alanlar: string[]; zorunlu: string[]; kosullar?: Record<string, AkisKosulu | null>; sinirlar?: Record<string, AkisSinirlari | null>; ekranGoruntusu?: boolean }
   /** Süreli bekleme (saniye). */
   | { tur: 'bekle'; saniye: number }
   /** zamanAsimiSn: düğmeden sonra sonucu (mesaj / sonraki alan) en çok bekleme süresi (1–600 sn; yoksa koşucunun varsayılanı). */
@@ -68,3 +68,5 @@ export declare function akisPaleti(env: AkisEnvanteri, bloklar: AkisBlogu[]): Ak
 export declare function bloklariAyikla(ham: unknown): { bloklar: AkisBlogu[]; hatalar: AkisHatasi[] };
 export declare function secenekGozlemleriniAyikla(ham: unknown): SecenekGozlemi[];
 export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[], s?: { satirSiniri?: number }): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };
+/** Alanın değer kuralları (model alan.sinirlar; null = kaldır). */
+export type AkisSinirlari = { enAz?: number | string; enCok?: number | string; artis?: number; enAzUzunluk?: number; enCokUzunluk?: number; desen?: string };

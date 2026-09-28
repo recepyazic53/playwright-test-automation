@@ -120,6 +120,13 @@ export const REHBERLER = {
         ipucu: 'Parola, TOTP, gizli ve kişisel değerler dosyaya yazılmaz: dosyanın başında listelenen NOBETCI_… ortam değişkenleriyle verilir. SQL kontrolü gibi Nöbetçi\'ye özgü adımlar yorum olarak kalır. Dosya Nöbetçi dışındadır; ekran modeli değişince yeniden dışa aktarın.'
       },
       {
+        baslik: 'Senaryo önerileri',
+        hedef: '.senaryo-onerileri-dugmesi',
+        metin: ['Bir ekran seçiliyken "Senaryo önerileri", ekranın modelinden ve mevcut senaryolardan öneri çıkarır: zorunlu alan boş, modeldeki kurallara göre sınır değerleri, koşullu alanların her dalı ve işaretlediğiniz 2–3 seçim alanının eksik kombinasyonları.',
+          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). Eklenenler "Koşuda" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.'],
+        ipucu: 'Kişisel / gizli alanlarda değer üretilmez; mevcut senaryodaki değer ya da bağlı tablo kullanılır.'
+      },
+      {
         baslik: 'Önerilen çalışma sırası',
         sira: ['Ekranlar\'dan ekranı ekleyin (sayfa paketi, tarama ya da akış kaydı).', 'Bu ekranda "Yeni senaryo" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
         cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Yeni senaryo" ve "Koşuyu başlat" sağ üstte' }
@@ -139,7 +146,7 @@ export const REHBERLER = {
         sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
       },
       { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinize göre koşacak adımları kutular hâlinde gösterir; seçili ortamdaki son koşu varsa adımlar yeşil / kırmızı boyanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Alanlar', ikon: 'duzenle' }, { baslik: 'Gönder', ikon: 'ok' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
-      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer. "Adım ekran görüntüleri" varsayılan olarak Ayarlar > Koşu > Kayıt\'a uyar; bu senaryo için her adımda, yalnız kalan adımda, seçili adımlarda ya da kapalı seçebilirsiniz.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
+      { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır; zorunlu bir alanı "Bilerek boş bırak" ile işaretlerseniz (olumsuz senaryo) koşucu o alana değer yazmaz. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer. "Adım ekran görüntüleri" varsayılan olarak Ayarlar > Koşu > Kayıt\'a uyar; bu senaryo için her adımda, yalnız kalan adımda, seçili adımlarda ya da kapalı seçebilirsiniz.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
     ]
   },
 

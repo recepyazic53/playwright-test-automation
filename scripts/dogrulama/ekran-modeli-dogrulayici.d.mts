@@ -34,5 +34,8 @@ export declare function ekranModeliniDogrula(
   altModelKaynagi: (dosyaAdi: string) => unknown
 ): { model: Record<string, unknown>; dosyaYolu: string; altModeller: Record<string, Record<string, unknown>> };
 
+/** Alan tipine göre "sinirlar" (değer kuralları) sorunları; geçerliyse boş dizi. */
+export declare function sinirHatalari(tip: unknown, sinirlar: unknown): string[];
+
 /** Doğrulama hatasının maddeleri (" - " satırları). */
 export declare function dogrulamaMaddeleri(hata: unknown): string[];
