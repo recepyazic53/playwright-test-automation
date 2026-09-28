@@ -6,7 +6,8 @@
 // ekranda açılır.
 // Adresler: #/sonuclar (Genel > Ekranlar), #/sonuclar/servisler (Genel > Servisler: servis-sonuclari.js),
 // #/sonuclar/u/<ürün>, #/sonuclar/kosu/<id>, #/sonuclar/sonuc/<id>, #/sonuclar/karsilastir/<A>/<B> (yan yana koşu
-// karşılaştırması: karsilastirma.js). Tarih aralığı: ortak süzgeç (tarih-araligi.js; oturumda).
+// karşılaştırması: karsilastirma.js), #/sonuclar/raporlar (kaydedilmiş PDF raporları: pdf-rapor.js). Tarih aralığı: ortak süzgeç
+// (tarih-araligi.js; oturumda).
 // Medya (ekran görüntüsü/video/iz) şifrelidir; sunucu /platform/medya/<id> ile kasa açıkken
 // çözerek akıtır. <img>/<video> başlık gönderemediği için oturum token'ı sorgu parametresidir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()/s(); innerHTML yok).
@@ -16,6 +17,7 @@ import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } fr
 import { hataKaydiDugmesi } from './entegrasyonlar.js';
 import { veriyiSirala } from './tablo-siralama.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
+import { pdfRaporDugmesi, raporlarGorunumu } from './pdf-rapor.js';
 import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
 import { onayIste } from './ekran-ortak.js';
 
@@ -104,7 +106,7 @@ const TREND_EN_COK = 60;
 function genelSekmeleri(secili) {
   return h('div', { class: 'segment sekme-cubugu sonuc-sekmeleri', role: 'tablist', 'aria-label': 'Genel rapor' },
     [['ekranlar', 'Ekranlar', '#/sonuclar', 'ekran'], ['servisler', 'Servisler', '#/sonuclar/servisler', 'ag'],
-      ['uctan', 'Uçtan uca akışlar', '#/sonuclar/uctan-uca', 'katman']].map(([a, etiket, adres, ikonAd]) => h('button', {
+      ['uctan', 'Uçtan uca akışlar', '#/sonuclar/uctan-uca', 'katman'], ['raporlar', 'Raporlar', '#/sonuclar/raporlar', 'dosya']].map(([a, etiket, adres, ikonAd]) => h('button', {
       type: 'button', role: 'tab', 'aria-selected': a === secili ? 'true' : 'false',
       onclick: () => { if (a !== secili) location.hash = adres; }
     }, ikon(ikonAd), etiket)));
@@ -130,7 +132,7 @@ export function sonuclarEkrani(main, parcalar, baglam) {
         saglikNotu),
       icerik));
   // "servisler": Genel'in Servisler sekmesi (Genel seçili kalır).
-  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && tur !== 'servisler' && tur !== 'uctan-uca' ? null : '';
+  const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : tur && tur !== 'servisler' && tur !== 'uctan-uca' && tur !== 'raporlar' ? null : '';
   const hata = (e) => { if (e && e.durum === 423) return; icerik.replaceChildren(hataKutusu(e)); };
   // Tarih aralığı (ortak süzgeç; oturumda saklanır): kartlar, trend ve koşu geçmişi sunucuda aralığa göre hesaplanır.
   const sorgu = araligiSorguyaEkle(new URLSearchParams({ projeId: proje.id }), kayitliAralik());
@@ -162,6 +164,8 @@ export function sonuclarEkrani(main, parcalar, baglam) {
       if (tur === 's' && seciliServis) {
         return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { servisId: seciliServis, gomulu: true }));
       }
+      // Genel > Raporlar: kaydedilmiş PDF raporları (pdf-rapor.js).
+      if (tur === 'raporlar') return raporlarGorunumu(icerik, proje, genelSekmeleri('raporlar'));
       // Genel > Uçtan uca akışlar: servis + ekran + SQL akışlarının koşuları (uctan-uca.js).
       if (tur === 'uctan-uca') {
         return import('./uctan-uca.js').then((m) => m.uctanUcaSonuclari(icerik, proje, { ust: genelSekmeleri('uctan'), kosuId: kimlik ? decodeURIComponent(kimlik) : null }));
@@ -279,6 +283,8 @@ function genelBakis(icerik, ozet, proje, urun, urunAdi, ekran, aralikDegisti) {
           basarisizSayisi ? rozet([ikon('uyari'), `${basarisizSayisi} başarısız`], 'hata') : kart ? rozet([ikon('onay'), 'hepsi geçti'], 'basari') : null),
         h('div', { class: 'meta' }, meta)),
       h('div', { class: 'eylemler' },
+        // Dönem raporu (PDF): ekran sayfasında kapsam ve seçim dolu gelir.
+        pdfRaporDugmesi(proje, urun && !urun.startsWith('ad:') ? { kapsam: 'ekran', id: urun } : {}),
         // Silinmiş / devre dışı ekranın koşusu başlatılamaz (sonuçları yalnızca görüntülenir).
         ekran && (ekran.ekranDurumu === 'silindi' || ekran.ekranDurumu === 'devre_disi') ? null
           : h('a', { class: 'dugme birincil', href: urun && !urun.startsWith('ad:') ? `#/senaryolar/u/${encodeURIComponent(urun)}` : '#/senaryolar', title: 'Senaryolar ekranında onayla başlatılır' }, ikon('oynat'), 'Koşuyu başlat'))),

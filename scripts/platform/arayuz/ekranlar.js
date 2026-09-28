@@ -13,6 +13,7 @@
 // Ekran keşfinin yolları: ekran paketi (kullanıcı istek metnini ve biçim dosyasını sayfa bağlantısıyla yapay zekâ aracına verir; araç sayfayı
 // düğme kurallarına göre — paket-istekleri.mjs > INCELEME_KURALLARI — inceleyip paketi üretir, paket burada yüklenir), "Ekranı tara", "Akışı kaydet".
 import { TOKEN, api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
+import { pdfRaporDugmesi } from './pdf-rapor.js';
 import {
   BULGU_TURLERI, bicimIndirBaglantisi, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz, paketAdiniGuncelle, tekrarAnalizDiyalogu
 } from './ekran-ortak.js';
@@ -310,7 +311,8 @@ async function ekranAyrintisi(icerik, s) {
           d.model && !EKRAN_DISI_TURLER.includes(d.modelTuru)
             ? h('span', {}, ikon('simsek'), h('a', { href: `#/senaryolar/oneriler/${encodeURIComponent(e.id)}`, class: 'senaryo-onerileri-baglantisi' }, 'Senaryo önerileri')) : null,
           d.gecmis[0] ? h('span', { title: tarihMetni(d.gecmis[0].olusturulma) }, ikon('saat'), `son sürüm ${goreliZaman(d.gecmis[0].olusturulma)}`) : null)),
-      h('div', { class: 'eylemler' }, modelMenusu, menu)),
+      // Dönem raporu (PDF) kısayolu: kapsam ve seçim dolu gelir (alt model ve ortak akışın kendi sonucu yoktur).
+      h('div', { class: 'eylemler' }, altModel || ortakAkis ? null : pdfRaporDugmesi(s.proje, { kapsam: 'ekran', id: e.id }), modelMenusu, menu)),
     devreDisi ? h('div', { class: 'not-kutusu uyari devre-disi-seridi', role: 'status' },
       h('span', {}, h('b', {}, 'Bu ekran devre dışı. '), 'Senaryoları Koşuyu başlat ile toplu koşuya girmez (tek başına ▷ ile çalıştırılabilir); geçmiş sonuçlar görünür kalır.'),
       h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => durumDegistir({ proje: s.proje, ekran: e }) }, ikon('oynat'), 'Etkinleştir')) : null,

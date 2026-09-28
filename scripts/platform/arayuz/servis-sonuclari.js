@@ -11,6 +11,7 @@ import { alan, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet
 import { dagilimCubugu, dogrulananDosyaIndir, dogrulananDosyalar, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
+import { pdfRaporDugmesi } from './pdf-rapor.js';
 import { ortamSecenekMetni } from './kosu-paneli.js';
 import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
 
@@ -169,6 +170,8 @@ function sayfaBasligi(veri, proje, secenek, ad) {
         son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} kalan`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
       h('div', { class: 'meta' }, meta)),
     h('div', { class: 'eylemler' },
+      // Dönem raporu (PDF): servis sayfasında kapsam ve seçim dolu gelir.
+      secenek.akisId ? null : pdfRaporDugmesi(proje, secenek.servisId ? { kapsam: 'servis', id: secenek.servisId } : { kapsam: 'servis' }),
       secenek.servisId ? h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(secenek.servisId)}/raporlar` }, ikon('liste'), 'Servisin çalıştırma listesi') : null,
       h('a', {
         class: 'dugme birincil', href: secenek.servisId ? `#/servisler/s/${q(secenek.servisId)}/senaryolar` : '#/servisler',
