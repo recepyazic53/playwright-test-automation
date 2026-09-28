@@ -1545,8 +1545,45 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
   let erisim = null;
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
-  const tabanDegerleri = () => Object.fromEntries(tabanlar.map((t) => [t.o.id, t.deger()]));
-  const adresDegisti = () => yol.value.trim() !== (s.ayarlar.yol || '') || tabanlar.some((t) => t.deger() !== t.ilk);
+  // Adlandırılmış taban adresi (Ayarlar > Proje ve ortamlar > Servis taban adresleri): seçilirse adresler oradan gelir
+  // (servise özel "bu ortamda yok" korunur); "Servise özel adres" seçilirse yukarıdaki ortam satırları kullanılır.
+  let tabanAdlari = [];
+  const tabanSecimi = h('select', { 'aria-label': 'Taban adresi' },
+    h('option', { value: '' }, '— Servise özel adres —'),
+    s.ayarlar.tabanGrubu ? h('option', { value: s.ayarlar.tabanGrubu, selected: true }, s.ayarlar.tabanGrubu) : null);
+  const tabanOzeti = h('div', { class: 'taban-baglanti-ozeti', 'aria-live': 'polite' });
+  const ozelSatirlar = h('div', {}, ...tabanlar.map((x) => x.el));
+  const seciliTaban = () => tabanAdlari.find((t) => t.ad === tabanSecimi.value) || null;
+  const tabandanDeger = (t, o) => {
+    const a = t.adresler[o.id] || '';
+    return a && !(s.ayarlar.tabanGrubu === t.ad && s.ayarlar.tabanlar?.[o.id] === '') ? a : '';
+  };
+  const tabanCiz = () => {
+    const t = seciliTaban();
+    ozelSatirlar.hidden = Boolean(tabanSecimi.value);
+    yerlestir(tabanOzeti, t ? [
+      h('p', { class: 'soluk kucuk' }, `Adresler "${t.ad}" taban adresinden gelir; değiştirmek için Ayarlar'da taban adresini düzenleyin.`),
+      h('ul', { class: 'taban-bagli-adresler' }, ortamlar.map((o) => h('li', {}, h('b', {}, `${o.ad}: `),
+        tabandanDeger(t, o) ? h('code', { class: 'duz' }, tabandanDeger(t, o)) : h('span', { class: 'soluk' }, 'bu ortamda yok (koşmaz)'))))
+    ] : null);
+  };
+  tabanSecimi.addEventListener('change', tabanCiz);
+  tabanCiz();
+  api(`/platform/servis-tabanlari?projeId=${encodeURIComponent(proje.id)}`).then((v) => {
+    tabanAdlari = v.tabanAdlari || [];
+    const secili = tabanSecimi.value;
+    yerlestir(tabanSecimi, h('option', { value: '' }, '— Servise özel adres —'),
+      tabanAdlari.map((t) => h('option', { value: t.ad, selected: t.ad === secili }, t.ad)));
+    tabanCiz();
+  }).catch(() => { /* liste gelmezse servise özel adres düzenlenir */ });
+  const tabanDegerleri = () => {
+    const t = seciliTaban();
+    return Object.fromEntries(tabanlar.map((x) => [x.o.id, t ? tabandanDeger(t, x.o) : x.deger()]));
+  };
+  const adresDegisti = () => {
+    const d = tabanDegerleri();
+    return yol.value.trim() !== (s.ayarlar.yol || '') || tabanlar.some((t) => d[t.o.id] !== t.ilk);
+  };
   const kontrol = erisimKontrolAlani(proje, ortamlar, () => ({ yol: yol.value.trim(), tlsDogrulama: tls.checked, tabanlar: tabanDegerleri() }), (e) => { erisim = e; });
   kaydet.addEventListener('click', async () => {
     mesaj.temizle();
@@ -1555,7 +1592,7 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
     try {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/kaydet', { govde: {
         projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: ad.value.trim(), yol: yol.value.trim(), soapSurumu: surum.value, tlsDogrulama: tls.checked,
-        durum: durum.checked ? 'etkin' : 'devre_disi', tabanlar: tabanDegerleri(),
+        durum: durum.checked ? 'etkin' : 'devre_disi', tabanlar: tabanDegerleri(), tabanGrubu: tabanSecimi.value || null,
         yalnizTestOperasyonlari: yalnizTest.filter(({ c }) => c.checked).map(({ op }) => op.ad), erisimKimligi: erisim?.erisimKimligi
       } }));
       bildir('Servis kaydedildi.');
@@ -1577,7 +1614,11 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
       alan('Servis adı', ad), s.tur === 'rest' ? null : alan('Yol', yol), s.tur === 'rest' ? null : alan('SOAP sürümü', surum),
       h('label', { class: 'secenek', for: tls.id }, tls, 'TLS sertifikasını doğrula'),
       h('label', { class: 'secenek', for: durum.id }, durum, 'Etkin (kapalıysa koşulara girmez)'),
-      h('fieldset', {}, h('legend', {}, 'Taban adresler (adresin başı)'), h('p', { class: 'soluk kucuk' }, 'Yol bu adresin arkasına eklenir. Yeni yazılan adres ortama kaydedilir. "Bu ortamda yok" seçilirse servis o ortamda koşmaz.'), ...tabanlar.map((x) => x.el)),
+      h('fieldset', {}, h('legend', {}, 'Taban adresler (adresin başı)'),
+        h('p', { class: 'soluk kucuk' }, 'Yol bu adresin arkasına eklenir. Adlandırılmış bir taban adresi seçilirse adresler oradan gelir; servise özel adreste yeni yazılan adres ortama kaydedilir. "Bu ortamda yok" seçilirse servis o ortamda koşmaz.'),
+        h('div', { class: 'satir-duzen taban-secim-satiri' }, alan('Taban adresi', tabanSecimi),
+          h('a', { href: '#/ayarlar/proje', class: 'taban-yonet' }, 'Ayarlar\'da yönet')),
+        tabanOzeti, ozelSatirlar),
       yalnizTest.length && s.tur !== 'rest' ? h('fieldset', {}, h('legend', {}, 'Yalnız TEST\'te koşan operasyonlar'),
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,

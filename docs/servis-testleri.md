@@ -90,12 +90,16 @@ Servis ekle > SoapUI dosyasından. Dosya yalnız okunur, istek atılmaz.
 - **Diğer özellikler** test verisinde eşlenmesi gereken parametre olarak listelenir; değerleri aktarılmaz.
 - **Desteklenmeyenler** uyarı olarak gösterilir: Property Transfer, Groovy doğrulaması, başka adım çalıştıran Groovy.
 
-## Taban adresleri toplu düzenleme
+## Taban adresleri
 
-Ayarlar > Proje ve ortamlar > Servis taban adresleri: satır = servis, sütun = ortam. Hücre: özel adres, ortamın adresi ya da "bu ortamda yok" (eski tam adres ayarı salt okunur gösterilir).
+Ayarlar > Proje ve ortamlar > Servis taban adresleri. Ana liste **adlandırılmış taban adresleridir** (her biri ortam başına adres; "Kullanan: N servis" açılınca servisler listelenir). "Servis bazında" görünüm ikincildir: satır = servis, sütun = ortam; hücre: özel adres, ortamın adresi ya da "bu ortamda yok" (eski tam adres ayarı salt okunur).
 
-- **Taban adres adı:** Aynı sunucuyu paylaşan servisler bir ada bağlanır (`ayarlar.tabanGrubu`). Addaki servislerin her ortamdaki adresi aynı olmalı; bir hücre değişince o ada bağlı tüm servisler birlikte değişir. Ayrı tablo yoktur, adresler servisin şifreli ayarlarında kalır; koşu değişmedi, göç gerekmedi.
-- **Toplu işlemler:** Bul-değiştir (ortam seçilebilir; seçili satırlarda, seçim yoksa tümünde), seçilenlere adres ata, seçilenleri bir ada bağla.
+- **Veri:** Taban adresi ortamın şifreli ayarında durur (`ortam.ayarlar.tabanAdlari = { <ad>: adres | '' }`; `''` = bu ortamda yok), servis bağı `servis.ayarlar.tabanGrubu`, servisin adresi yine `servis.ayarlar.tabanlar` (koşu yalnız bunu okur). Kaydı olmayan eski adlar bağlı servislerin adresinden türetilir; ilk değişiklikte kayda geçer. Göç gerekmez; adsız (servise özel) adresli servisler olduğu gibi kalır ve listede ayrıca gösterilir.
+- **Değiştir:** Kaydetmeden önce etki penceresi: etkilenen servisler, eski → yeni adres, senaryo / akış sayısı. Bağlı servisler birlikte değişir (servise özel "bu ortamda yok" korunur). Vazgeç → hiçbir şey yazılmaz (`POST /platform/servis-tabanlari/taban`, `islem: 'degistir'`; yalnız `onay: true` ile yazılır).
+- **Ortam adresini boş bırakmak / taban adresini silmek:** Onay penceresi adresi BOŞ kalacak servisleri listeler. Onaylanınca bağlı servislerin o ortam(lar)daki adresi boş olur (silmede bağ da kalkar); servis o ortamda koşmaz ve neden "Servis "…" ortamında tanımlı değil: taban adresi tanımlı değil" olarak görünür.
+- **Yeni taban adresi:** Ad + ortam adresleri, sonra "Hangi servisler bu adresi kullansın?": önce taban adresi boş olan servisler, sonra diğerleri şu anki adresleriyle; hiçbiri işaretli gelmez. İşaretlenenler bağlanır (adresleri değişen servisler etki penceresinde gösterilir).
+- **Servis sayfası (İşlemler):** "Taban adresi" seçimi (adlandırılmış tabanlar ya da "Servise özel adres") ve "Ayarlar'da yönet" bağlantısı. Bağlı serviste adresler tabandan gelir (`POST /platform/servis/kaydet`, `tabanGrubu`).
+- **Toplu işlemler (servis bazında):** Bul-değiştir (ortam seçilebilir; seçili satırlarda, seçim yoksa tümünde), seçilenlere adres ata; hücrede taban adres adı. Bağlı servis servis bazında değişirse kayıtlı taban adresi de güncellenir.
 - **Etki önizlemesi:** Hangi servisler, kaç senaryo ve akış etkilenir, eski → yeni adresler. Yalnız "Onayla ve kaydet" ile yazılır (`POST /platform/servis-tabanlari/uygula`, `onay: true`).
 - **Denetim:** Adres http(s) olmalı ve yasak adres kalıplarına (Ayarlar > Güvenlik) uymamalı. Erişim kontrolü yapılmaz (dış istek yok). Adresi değişen ortamın eski erişim kaydı silinir; düzenlenen hücrede eski tam adres ayarı kalkar.
 
@@ -132,7 +136,7 @@ REST koşusu: gövdedeki değerler içerik türüne göre kaçışlanır (JSON /
 | `scripts/platform/servisler/soapui-ice-aktarma.mjs` | SoapUI okuyucu |
 | `scripts/platform/servisler/postman-ice-aktarma.mjs` | Postman koleksiyonu okuyucu |
 | `scripts/platform/servisler/rest-istemcisi.mjs` | REST isteği |
-| `scripts/platform/servisler/taban-adresleri.mjs` | Taban adresleri toplu düzenleme (önizleme → onay) |
+| `scripts/platform/servisler/taban-adresleri.mjs` | Adlandırılmış taban adresleri (ekle / değiştir / sil) ve toplu düzenleme (önizleme → onay) |
 | `scripts/platform/servisler/servis-islemleri.mjs` | Erişim kontrolü, kayıt, parametre çözümü, Dene / koşu |
 | `scripts/platform/servisler/servis-uclari.mjs` | HTTP uçları |
 | `scripts/platform/arayuz/servisler.js` | Arayüz |

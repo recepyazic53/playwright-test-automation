@@ -224,7 +224,7 @@ test.describe('sihirbaz uçtan uca', () => {
     await basarili('/platform/servis/senaryo/kaydet', { projeId, servisId: s.id, baslik: 'İkisi', kapsam: 'ikisi', icerik: { operasyon: 'Siparis', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] } });
     const once = soap.istekler.length;
     const kos = await basarili('/platform/servis/kos', { projeId, servisId: s.id, ortamId: canli, canliOnay: true });
-    expect(kos.kosu).toMatchObject({ ortamTuru: 'canli', sonuclar: [], atlamaNedeni: 'Servis "CANLI" ortamında tanımlı değil (taban adres boş).' });
+    expect(kos.kosu).toMatchObject({ ortamTuru: 'canli', sonuclar: [], atlamaNedeni: 'Servis "CANLI" ortamında tanımlı değil: taban adresi tanımlı değil.' });
     expect(soap.istekler.length).toBe(once);
     const red = await api('/platform/servis/senaryo/dene', { projeId, servisId: s.id, ortamId: canli, baslik: 'x', icerik: { operasyon: 'Siparis', govde: '<a/>', kontroller: [{ tur: 'soapYaniti' }] } });
     expect(red.basarili).toBe(false);

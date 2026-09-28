@@ -8,7 +8,8 @@ import type { EtkiGuncellemesi, TabloEtkisi } from '../tablolar/tablo-etkisi.mjs
 export declare const ERISIM_GECERLILIK_MS: number;
 export declare function ortamTuru(ortam: { ayarlar: Record<string, unknown> }): 'test' | 'canli';
 export declare function adresBirlestir(taban: string, yol: string): string;
-export declare function servisAdresi(ayarlar: { yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string> }, ortam: { id: string; ad?: string; tabanUrl: string }): string;
+export declare function servisAdresi(ayarlar: { yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string>; tabanGrubu?: string }, ortam: { id: string; ad?: string; tabanUrl: string }): string;
+export declare function tanimsizNedeni(ayarlar: { tabanGrubu?: string }, ortamAd?: string): string;
 export declare function ortamdaTanimli(ayarlar: { tabanlar?: Record<string, string> }, ortamId: string): boolean;
 export declare function tarihKurallariniDogrula(kurallar: unknown): Record<string, string>;
 
@@ -28,7 +29,7 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: string }>>;
-  alanListeleri?: Record<string, Record<string, string>>; oturumAkisi?: string | null;
+  alanListeleri?: Record<string, Record<string, string>>; oturumAkisi?: string | null; tabanGrubu?: string | null;
   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
 }): string;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{

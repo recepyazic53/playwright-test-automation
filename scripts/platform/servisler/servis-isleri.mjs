@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { servisGetir, servisSenaryosuGetir } from './servis-deposu.mjs';
-import { akisSenaryoKancasiAl, ortamTuru, ortamdaTanimli, servisSenaryosuCalistir } from './servis-islemleri.mjs';
+import { akisSenaryoKancasiAl, ortamTuru, ortamdaTanimli, servisSenaryosuCalistir, tanimsizNedeni } from './servis-islemleri.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -36,7 +36,7 @@ export function servisSenaryoAtlamaNedeni(vt, servis, s, ortam) {
     const kanca = akisSenaryoKancasiAl();
     return kanca ? kanca.atlamaNedeni(vt, s, ortam) : 'Akış senaryoları bu sunucuda koşamaz.';
   }
-  if (!ortamdaTanimli(servis.ayarlar, ortam.id)) return `Servis "${ortam.ad}" ortamında tanımlı değil.`;
+  if (!ortamdaTanimli(servis.ayarlar, ortam.id)) return tanimsizNedeni(servis.ayarlar, ortam.ad);
   if (s.kapsam !== 'ikisi' && s.kapsam !== tur) return `Senaryo yalnız ${s.kapsam === 'test' ? 'TEST' : 'CANLI'} ortamda koşar.`;
   if (tur === 'canli' && (servis.ayarlar.yalnizTestOperasyonlari ?? []).includes(s.icerik?.operasyon)) return `"${s.icerik.operasyon}" CANLI'da çağrılmaz.`;
   return '';
@@ -62,7 +62,7 @@ export function servisIsiBaslat(vt, projeId, girdi) {
   const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
   const satirlar = taslak ? [/** @type {IsSatiri} */ ({
     senaryoId: 'taslak', baslik: taslak.baslik || 'Taslak', durum: tanimli ? 'sirada' : 'atlandi', olaylar: [], istek: null, yanit: null,
-    baslangic: null, bitis: null, sonuc: null, ...(tanimli ? {} : { neden: `Servis "${ortam.ad}" ortamında tanımlı değil.` })
+    baslangic: null, bitis: null, sonuc: null, ...(tanimli ? {} : { neden: tanimsizNedeni(servis.ayarlar, ortam.ad) })
   })] : (girdi.senaryoIdleri ?? []).map((id) => {
     const s = servisSenaryosuGetir(vt, id);
     // Akış senaryosu: akışı bu servisten geçiyorsa (başka serviste kayıtlı olsa da) koşar; atlama nedeni akışın adımlarından.
