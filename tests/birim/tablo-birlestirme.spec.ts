@@ -11,13 +11,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
-import { ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
+import { ayarGetir, ayarYaz, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
 import { tabloKaydet, tablolariListele } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
 import { ekranAlanBaglari } from '../../scripts/platform/tablolar/ekran-baglari.mjs';
 import { paketOnizle, sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { servisKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
 import { agirlikliBaslikBenzerligi, baslikAyirtEdiciligi, baslikBenzerligi, baslikNormal, birlestirmeOnerileri, benzerTablolar, sutunEslemesiOner, tabloTuru } from '../../scripts/platform/tablolar/tablo-benzerligi.mjs';
-import { metniYenidenYaz, secimleriYenidenYaz, tablolariBirlestir } from '../../scripts/platform/tablolar/tablo-birlestirme.mjs';
+import { birlestirmeGecmisi, birlestirmeyiGeriAl, kaynaklariSil, metniYenidenYaz, secimleriYenidenYaz, tablolariBirlestir } from '../../scripts/platform/tablolar/tablo-birlestirme.mjs';
 import { zarfMi } from '../../scripts/platform/kasa.mjs';
 import { akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
@@ -144,6 +144,112 @@ test('gizli + açık sütun eşleşmesi: engel değil, birleşik sütun GİZLİ;
   }
 });
 
+test.describe('birleştirme geçmişi: her birleştirme kayıt; bağımsızlar sırasız, aynı tabloyu etkileyenler yeniden eskiye geri alınır', () => {
+  type Vt = Awaited<ReturnType<typeof veritabaniniHazirla>>;
+  let klasor = '';
+  let vt: Vt;
+  let projeId = '';
+  test.beforeEach(async () => {
+    klasor = mkdtempSync(join(tmpdir(), 'birlestirme-gecmisi-'));
+    vt = await veritabaniniHazirla(join(klasor, 'p.db'));
+    await kasaOlustur(vt, `Gecici-Gecmis-${randomBytes(4).toString('hex')}`, { kdf: HIZLI_KDF });
+    projeId = projeKaydet(vt, { ad: 'P' });
+  });
+  test.afterEach(() => { vt.kapat(); rmSync(klasor, { recursive: true, force: true }); });
+
+  const tablo = (ad: string, satirlar: string[]) => tabloKaydet(vt, { projeId, ad, sutunlar: [{ ad: 'Kod' }, { ad: 'Ad' }], satirlar: satirlar.map((k) => ({ ad: k, degerler: { Kod: k, Ad: `ad-${k}` } })) });
+  const birlestir = (kalanId: string, kaynakIdler: string[], saat: number, yeniAd?: string) => {
+    const simdi = new Date(Date.UTC(2026, 8, 28, saat, 0));
+    const g = { kalanId, kaynakIdler, ...(yeniAd ? { yeniAd } : {}) };
+    const o = tablolariBirlestir(vt, projeId, g, { simdi }).onizleme;
+    expect(o.engeller).toEqual([]);
+    const r = tablolariBirlestir(vt, projeId, { ...g, kip: 'uygula', beklenenImza: o.imza, yedek: `otomatik-${saat}.tayedek` }, { simdi });
+    expect(r.uygulandi).toBe(true);
+    return String(r.birlestirmeId);
+  };
+  const satirSayisi = (id: string) => tablolariListele(vt, projeId).find((t) => t.id === id)?.satirlar.length;
+  const satir = (id: string) => birlestirmeGecmisi(vt, projeId).kayitlar.find((k) => k.id === id)!;
+
+  test('iki bağımsız birleştirme: ikisi de geçmişte; önce eskisi geri alınabilir, satır "geri alındı" olur', () => {
+    const [a1, b1, a2, b2] = [tablo('Kargo', ['k1']), tablo('Kargo eski', ['k2']), tablo('Ödeme', ['o1']), tablo('Ödeme eski', ['o2', 'o3'])];
+    const ilk = birlestir(a1, [b1], 9, 'Kargo firmaları');
+    const ikinci = birlestir(a2, [b2], 10);
+    const g = birlestirmeGecmisi(vt, projeId).kayitlar;
+    expect(g.map((k) => k.id)).toEqual([ikinci, ilk]); // yeniden eskiye
+    expect(g[1]).toMatchObject({ kalan: 'Kargo firmaları', eskiAd: 'Kargo', kaynaklar: ['Kargo eski'], eklenenSatir: 1, kaynaklarSilindi: false, yedek: 'otomatik-9.tayedek',
+      durum: 'etkin', geriAlinabilir: true, neden: '', kaynaklariSilinebilir: true });
+    expect(g[0]).toMatchObject({ eskiAd: null, eklenenSatir: 2, geriAlinabilir: true });
+    // Geçmiş satırı ham kayıt / değer içermez.
+    expect(JSON.stringify(g)).not.toContain('ad-k2');
+    expect(birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ilk, onay: true })).toMatchObject({ geriAlindi: true, kalan: 'Kargo firmaları' });
+    expect(satirSayisi(a1)).toBe(1);
+    expect(tablolariListele(vt, projeId).find((t) => t.id === a1)?.ad).toBe('Kargo');
+    expect(satir(ilk)).toMatchObject({ durum: 'geriAlindi', geriAlinabilir: false, kaynaklariSilinebilir: false });
+    expect(satir(ilk).geriAlinmaZamani).toBeTruthy();
+    expect(() => birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ilk, onay: true })).toThrow('zaten geri alındı');
+    expect(satir(ikinci).geriAlinabilir).toBe(true);
+    birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ikinci, onay: true });
+    expect(satirSayisi(a2)).toBe(1);
+    expect(birlestirmeGecmisi(vt, projeId).kayitlar.every((k) => k.durum === 'geriAlindi')).toBe(true);
+  });
+
+  test('aynı tabloyu etkileyen iki birleştirme: eskinin geri alması reddedilir; yenisi geri alınınca eskisi alınır', () => {
+    const [a, b, c] = [tablo('Müşteriler', ['m1']), tablo('Müşteriler eski', ['m2']), tablo('Müşteriler arşiv', ['m3'])];
+    const ilk = birlestir(a, [b], 9);
+    const ikinci = birlestir(a, [c], 10);
+    expect(satirSayisi(a)).toBe(3);
+    const s = satir(ilk);
+    expect(s.geriAlinabilir).toBe(false);
+    expect(s.engelleyen).toBe(ikinci);
+    expect(s.neden).toMatch(/^Sonraki birleştirme \(28\.09\.2026 \d\d:00, “Müşteriler”\) aynı tabloyu değiştirdi; önce onu geri alın\.$/);
+    const red = birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ilk, onay: true });
+    expect(red).toMatchObject({ geriAlinamaz: true, engelleyen: ikinci });
+    expect(String(red.neden)).toContain('önce onu geri alın');
+    expect(satirSayisi(a)).toBe(3);
+    // Kimliksiz istek en yeni etkin birleştirmeyi geri alır (eski "son birleştirmeyi geri al" davranışı).
+    expect(birlestirmeyiGeriAl(vt, projeId, { onay: true })).toMatchObject({ geriAlindi: true, id: ikinci });
+    expect(satirSayisi(a)).toBe(2);
+    expect(satir(ilk)).toMatchObject({ geriAlinabilir: true, neden: '' });
+    birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ilk, onay: true });
+    expect(satirSayisi(a)).toBe(1);
+    expect([satirSayisi(b), satirSayisi(c)]).toEqual([1, 1]);
+  });
+
+  test('kaynakları sil: satırdan (kimlikle); kaynak tabloyu sonraki birleştirme kullandıysa silinemez (neden)', () => {
+    const [a, b, d] = [tablo('Kuponlar', ['k1']), tablo('Kupon listesi', ['k2']), tablo('Kupon arşivi', ['k3'])];
+    const ilk = birlestir(a, [b], 9);
+    const ikinci = birlestir(d, [b], 10);
+    expect(satir(ilk)).toMatchObject({ kaynaklariSilinebilir: false });
+    expect(satir(ilk).kaynakNedeni).toContain('önce onu geri alın');
+    expect(kaynaklariSil(vt, projeId, { birlestirmeId: ilk, onay: true })).toMatchObject({ silinemez: true });
+    birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ikinci, onay: true });
+    expect(kaynaklariSil(vt, projeId, { birlestirmeId: ilk })).toMatchObject({ onizleme: { tablolar: [{ ad: 'Kupon listesi', satir: 1 }] } });
+    expect(kaynaklariSil(vt, projeId, { birlestirmeId: ilk, onay: true })).toMatchObject({ silindi: true });
+    expect(tablolariListele(vt, projeId).some((t) => t.id === b)).toBe(false);
+    expect(satir(ilk)).toMatchObject({ kaynaklarSilindi: true, kaynaklariSilinebilir: false, geriAlinabilir: true });
+    birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: ilk, onay: true });
+    expect([satirSayisi(a), satirSayisi(b)]).toEqual([1, 1]);
+  });
+
+  test('göç: eski tek kayıt (son birleştirme) geçmişe taşınır, eski anahtar boşalır; geri alınabilir', () => {
+    const [a, b] = [tablo('Adresler', ['a1']), tablo('Adres listesi', ['a2'])];
+    const id = birlestir(a, [b], 9);
+    const anahtar = `tabloBirlestirme.gecmis:${projeId}`;
+    const kayit = { ...((ayarGetir(vt, anahtar) as { kayitlar: Nesne[] }).kayitlar[0]) };
+    for (const alan of ['durum', 'eskiAd', 'ozet', 'geriAlinmaZamani']) delete kayit[alan];
+    ayarYaz(vt, `tabloBirlestirme.son:${projeId}`, kayit);
+    ayarYaz(vt, anahtar, null);
+    const g = birlestirmeGecmisi(vt, projeId).kayitlar;
+    expect(g).toHaveLength(1);
+    expect(g[0]).toMatchObject({ id, kalan: 'Adresler', kaynaklar: ['Adres listesi'], durum: 'etkin', eklenenSatir: null, geriAlinabilir: true });
+    expect(ayarGetir(vt, `tabloBirlestirme.son:${projeId}`)).toBeNull();
+    expect((ayarGetir(vt, anahtar) as { kayitlar: unknown[] }).kayitlar).toHaveLength(1);
+    expect(birlestirmeGecmisi(vt, projeId).kayitlar).toHaveLength(1); // ikinci okuma çoğaltmaz
+    birlestirmeyiGeriAl(vt, projeId, { birlestirmeId: id, onay: true });
+    expect(satirSayisi(a)).toBe(1);
+  });
+});
+
 test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', () => {
   test.describe.configure({ mode: 'serial' });
   const PAROLA = `Gecici-Birlestirme-${randomBytes(6).toString('hex')}`;
@@ -238,7 +344,7 @@ test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', 
     expect(s.bosSutunlar).toContainEqual({ tabloId: tablo.Bos, tablo: 'Kargo firmaları', sutun: 'Takip adresi' });
     expect(s.kirikBasvurular).toContainEqual(expect.objectContaining({ tur: 'ekran-senaryosu', yer: 'Ekran senaryosu: Kampanyalı', neden: '"Kampanyalar" adında tablo yok', git: `#/senaryolar/duzenle/${senaryo.S4}` }));
     expect(s.kullanim[tablo.Liste]).toMatchObject({ ekranBaglari: 1, servisBaglari: 1, satirSecimleri: 2, hesapKurallari: 1 });
-    expect(s.sonBirlestirme).toBeNull();
+    expect(s.birlestirmeGecmisi).toEqual({ toplam: 0, etkin: 0 });
   });
 
   test('önleme: aynı başlıklı tablo varsa "benzer tablo" döner', async () => {
@@ -326,13 +432,17 @@ test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', 
     const gecmis = (await api(`/platform/senaryo/gecmis?id=${senaryo.S1}`)).kayitlar as Nesne[];
     expect(gecmis.length).toBeGreaterThan(1);
     const s = await api(`/platform/tablolar/veri-sagligi?projeId=${projeId}`);
-    expect(s.sonBirlestirme).toMatchObject({ kalan: 'Müşteri kayıtları', kaynaklar: ['Müşteri listesi'], kaynaklarSilindi: false });
+    expect(s.birlestirmeGecmisi).toEqual({ toplam: 1, etkin: 1 });
+    const gs = (await api(`/platform/tablo/birlestirme/gecmis?projeId=${projeId}`)).kayitlar as Nesne[];
+    expect(gs).toEqual([expect.objectContaining({ kalan: 'Müşteri kayıtları', eskiAd: 'Müşteriler', kaynaklar: ['Müşteri listesi'], kaynaklarSilindi: false, durum: 'etkin', geriAlinabilir: true, eklenenSatir: 3 })]);
+    expect(String(gs[0].yedek)).toMatch(/^otomatik-/);
+    gizliYok(gs);
     expect((s.kullanilmayan as Nesne[]).map((x) => x.ad)).toContain('Müşteri listesi');
   });
 
   test('kaynak tablolar ayrı onayla silinir; geri al kaynakları ve önceki hâli getirir', async () => {
     const on = await basarili('/platform/tablo/birlestirme/kaynaklari-sil', { projeId });
-    expect(on.onizleme).toEqual({ tablolar: [{ ad: 'Müşteri listesi', satir: 4 }] });
+    expect(on.onizleme).toMatchObject({ tablolar: [{ ad: 'Müşteri listesi', satir: 4 }] });
     expect((await tablolar()).some((x) => x.id === tablo.Liste)).toBe(true);
     await basarili('/platform/tablo/birlestirme/kaynaklari-sil', { projeId, onay: true });
     expect((await tablolar()).some((x) => x.id === tablo.Liste)).toBe(false);
@@ -348,7 +458,8 @@ test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', 
     expect(s1.tabloSecimleri ?? {}).toEqual({});
     const baglar = (await api(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${ekranId}`)).baglar as Nesne;
     expect(baglar.musteriKodu).toEqual({ tablo: tablo.Liste, sutun: 'kod' });
-    expect((await api(`/platform/tablolar/veri-sagligi?projeId=${projeId}`)).sonBirlestirme).toBeNull();
+    expect((await api(`/platform/tablolar/veri-sagligi?projeId=${projeId}`)).birlestirmeGecmisi).toEqual({ toplam: 1, etkin: 0 });
+    expect(((await api(`/platform/tablo/birlestirme/gecmis?projeId=${projeId}`)).kayitlar as Nesne[])[0]).toMatchObject({ durum: 'geriAlindi', kaynaklarSilindi: true, geriAlinabilir: false });
   });
 
   test('birleştirmeden sonra değişen kayıt varsa geri alınmaz (yedek önerilir)', async () => {
@@ -359,6 +470,10 @@ test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', 
     const y = await basarili('/platform/tablo/birlestirme/geri-al', { projeId, onay: true });
     expect(y.geriAlinamaz).toBe(true);
     expect(y.degisenler).toContain('ekran senaryosu');
+    // Listede de uyarı: geri al kapalı, neden + değişenler.
+    const son = ((await api(`/platform/tablo/birlestirme/gecmis?projeId=${projeId}`)).kayitlar as Nesne[])[0];
+    expect(son).toMatchObject({ durum: 'etkin', geriAlinabilir: false, degisenler: expect.arrayContaining(['ekran senaryosu']) });
+    expect(String(son.neden)).toContain('Yedekten dönebilirsiniz');
     expect(existsSync(join(klasor, 'yedekler', String(y.yedek)))).toBe(true);
   });
 });

@@ -454,7 +454,7 @@ export const REHBERLER = {
           'Önizleme hiçbir şey yazmaz ve kuru doğrulama yapar: etkilenen her senaryo ve servis isteği her ortamda eski ve yeni hâliyle çözülür (hiçbir şey çalıştırılmaz). Bir değer değişecekse birleştirme yapılmaz, farklar listelenir. Onaylayınca önce otomatik yedek alınır, her şey tek işlemde yazılır ve değişiklik geçmişine düşer.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Kalacak tablo', ikon: 'veri' }, { baslik: 'Eşleme ve çakışmalar', ikon: 'esle' }, { baslik: 'Kuru doğrulama', ikon: 'kalkan' }, { baslik: 'Onay + yedek', ikon: 'onay' }] }
       },
-      { baslik: 'Birleştirme sırası', sira: ['Veri sağlığı > Birleştirilebilecek tablolar > "Birleştir…".', 'Kalacak tabloyu seçin (gerekirse yeni ad).', 'Sütun eşlemesini onaylayın; satır ve karşılık çakışmalarında seçim yapın.', 'Kuru doğrulama "aynı değerleri üretiyor" diyorsa "Birleştir" ile onaylayın.', 'Kaynak tabloları istediğinizde ayrı onayla silin; "Son birleştirmeyi geri al" onları da geri getirir.'],
+      { baslik: 'Birleştirme sırası', sira: ['Veri sağlığı > Birleştirilebilecek tablolar > "Birleştir…".', 'Kalacak tabloyu seçin (gerekirse yeni ad).', 'Sütun eşlemesini onaylayın; satır ve karşılık çakışmalarında seçim yapın.', 'Kuru doğrulama "aynı değerleri üretiyor" diyorsa "Birleştir" ile onaylayın.', 'Kaynak tabloları istediğinizde ayrı onayla silin; Veri sağlığı başlığındaki geçmiş düğmesinden (Birleştirme geçmişi) bir birleştirmeyi geri almak onları da geri getirir.'],
         ipucu: 'Yeni tablo oluştururken, Excel / CSV yüklerken, sayfa paketi ya da SoapUI / Postman aktarırken aynı başlıklı tablo varsa "Benzer tablo var: onu kullan / yine de yeni oluştur" sorulur.' },
       {
         baslik: 'Kişi alanlarını tabloya bağlama',

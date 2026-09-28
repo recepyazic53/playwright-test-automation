@@ -3655,9 +3655,13 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .saglik-listesi li > * { min-width: 0; overflow-wrap: anywhere; }
 .saglik-listesi code { overflow-wrap: anywhere; word-break: break-word; }
 .saglik-metni { flex: 1 1 14rem; }
-.saglik-son { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
-.saglik-son > span { min-width: 0; overflow-wrap: anywhere; }
-.saglik-son .dugmeler { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+/* Birleştirme geçmişi (başlıktaki düğme + diyalog). */
+.birlestirme-gecmisi-listesi { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.birlestirme-gecmisi-listesi > li { display: grid; gap: 4px; min-width: 0; padding: 8px 10px; border-radius: var(--yaricap-m); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 13px; }
+.birlestirme-gecmisi-listesi > li.geri-alindi { opacity: .75; }
+.birlestirme-gecmisi-listesi > li > * { min-width: 0; overflow-wrap: anywhere; }
+.birlestirme-gecmisi-listesi .gecmis-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.birlestirme-gecmisi-listesi .dugmeler { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; }
 .baglanti-dugmesi { background: none; border: 0; padding: 0; color: var(--vurgu, inherit); text-decoration: underline; cursor: pointer; font: inherit; text-align: left; overflow-wrap: anywhere; }
 .birlestirme-diyalogu .kalan-secenegi { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 8px; min-width: 0; }
 .birlestirme-diyalogu .kalan-secenegi > span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }

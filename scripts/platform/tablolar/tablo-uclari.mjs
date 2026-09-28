@@ -8,7 +8,7 @@ import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
 import { tabloKaydetEtkiyle } from './tablo-etkisi.mjs';
 import { servisSenaryosuKosuyorMu } from '../servisler/servis-isleri.mjs';
-import { kaynaklariSil, sonBirlestirmeyiGeriAl, tablolariBirlestir, veriSagligi } from './tablo-birlestirme.mjs';
+import { birlestirmeGecmisi, birlestirmeyiGeriAl, kaynaklariSil, tablolariBirlestir, veriSagligi } from './tablo-birlestirme.mjs';
 import { benzerTablolar } from './tablo-benzerligi.mjs';
 import { kisiAlanlariniBagla } from './kisi-baglama.mjs';
 import { otomatikYedekAl } from '../yedek.mjs';
@@ -27,6 +27,8 @@ function kimlik(d, alan = 'id') {
   if (typeof d !== 'string' || !/^[A-Za-z0-9_-]{1,200}$/.test(d)) throw new DepoHatasi(`"${alan}" geçersiz.`);
   return d;
 }
+/** @param {unknown} d @param {string} alan */
+const istegeBagliKimlik = (d, alan) => (d === undefined || d === null || d === '' ? undefined : kimlik(d, alan));
 
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const TABLO_GET_UCLARI = [
@@ -39,6 +41,8 @@ export const TABLO_GET_UCLARI = [
   }],
   // Test verisi ekranının üstündeki "Veri sağlığı" (benzer / kullanılmayan tablolar, boş sütunlar, kırık başvurular; değer dönmez).
   ['/platform/tablolar/veri-sagligi', (db, q) => veriSagligi(db, kimlik(q.get('projeId'), 'projeId'))],
+  // Birleştirme geçmişi (yeniden eskiye; değer ve ham kayıt içermez): durum, geri alınabilir mi / neden, kaynaklar silinebilir mi.
+  ['/platform/tablo/birlestirme/gecmis', (db, q) => birlestirmeGecmisi(db, kimlik(q.get('projeId'), 'projeId'))],
   // Ekranın "Test verisi" sekmesi: input'lar, ekranın KENDİ tablo bağlantıları, kullandığı ortak akışlardan gelen (varsayılan)
   // bağlar ve tablolar. ortakAkis: bu sayfa bir ortak akışın (bağları onu kullanan ekranlara geçer; senaryo dönüşümleri yok).
   ['/platform/ekran/alan-baglari', (db, q) => {
@@ -87,9 +91,10 @@ export const TABLO_POST_UCLARI = [
       kip: uygula ? 'uygula' : 'onizle', beklenenImza: g.beklenenImza, yedek: yedek ? basename(yedek.dosya) : null
     }, { kosuyorMu });
   }],
-  // Son birleştirmeyi geri al (kayıtlı ters işlem) / kaynak tabloları sil (ayrı onay). onay yoksa yalnız ne yapılacağı döner.
-  ['/platform/tablo/birlestirme/geri-al', (db, g) => sonBirlestirmeyiGeriAl(db, kimlik(g.projeId, 'projeId'), { onay: g.onay === true })],
-  ['/platform/tablo/birlestirme/kaynaklari-sil', (db, g) => kaynaklariSil(db, kimlik(g.projeId, 'projeId'), { onay: g.onay === true })],
+  // Geçmişteki bir birleştirmeyi geri al (kayıtlı ters işlem) / kaynak tabloları sil (ayrı onay). onay yoksa yalnız ne yapılacağı döner.
+  // birlestirmeId: geçmişteki kayıt (yoksa en yeni etkin birleştirme).
+  ['/platform/tablo/birlestirme/geri-al', (db, g) => birlestirmeyiGeriAl(db, kimlik(g.projeId, 'projeId'), { birlestirmeId: istegeBagliKimlik(g.birlestirmeId, 'birlestirmeId'), onay: g.onay === true })],
+  ['/platform/tablo/birlestirme/kaynaklari-sil', (db, g) => kaynaklariSil(db, kimlik(g.projeId, 'projeId'), { birlestirmeId: istegeBagliKimlik(g.birlestirmeId, 'birlestirmeId'), onay: g.onay === true })],
   // Önleme: yeni tablo oluşturulmadan önce aynı / çoğu aynı başlıklı tablolar ("Benzer tablo var: X — onu kullan / yine de yeni oluştur").
   ['/platform/tablo/benzer', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
