@@ -161,7 +161,8 @@ test('maskeleme: gizli değer, e-posta, uzun rakam, ortam adresi ve gövde rapor
 });
 
 test('girdi doğrulama ve dosya adı', () => {
-  expect(() => raporGirdisiDogrula({ ...raporGirdisi(f, 'ekran'), kapsam: 'genel' })).toThrow('yalnız "Tek ekran" ve "Tek servis"');
+  expect(() => raporGirdisiDogrula({ ...raporGirdisi(f, 'ekran'), kapsam: 'genel' })).toThrow('"Genel" sonraki aşamada');
+  expect(() => raporGirdisiDogrula({ ...raporGirdisi(f, 'ekran'), kapsam: 'bilinmeyen' })).toThrow('yalnız "Tek ekran", "Tek servis"');
   expect(() => raporGirdisiDogrula({ ...raporGirdisi(f, 'ekran'), donem: { tur: 'dun' } })).toThrow('Dönem');
   expect(() => raporGirdisiDogrula({ ...raporGirdisi(f, 'ekran'), id: '../x' })).toThrow('geçersiz');
   expect(raporGirdisiDogrula({ projeId: f.projeId, kapsam: 'servis', id: f.servisId })).toMatchObject({
