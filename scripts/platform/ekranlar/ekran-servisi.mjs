@@ -20,7 +20,7 @@ import {
 } from '../veritabani/depo.mjs';
 import { acikAnahtar, adliAlanlariDonustur, medyaAnahtariniHazirla, sifrele, zarflariCoz } from '../kasa.mjs';
 import { medyaSifrele } from '../medya.mjs';
-import { beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
+import { akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
@@ -28,7 +28,7 @@ import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 import { BICIM_ATFI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-istekleri.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { modelAlanlari, alanEtiketi as paketAlanEtiketi } from '../tablolar/paket-tablolari.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
@@ -205,6 +205,62 @@ function kullanilanOrtakAkislar(model) {
   return dosyalar;
 }
 
+/**
+ * Ortak akışın BAŞLANGIÇ EKRANI adayları ("Akışı kaydet" ve "Tekrar analiz et"; ortak akış kendi başına bir adreste açılmaz):
+ * projenin adresi olan normal ekranları (ortak akış / alt model değil), ortak akışı kullananlar önde (sonra ada göre).
+ * oncekiAdim: kullanan ekranın (varsayılan akış önce) ortak akış adımından hemen önceki adımın başlığı (ortak akış bu adımdan
+ * sonra başlar; ilk adımsa null). Kullanmayan ekranda kullanir: false, oncekiAdim: null.
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortakEkranId
+ * @returns {Array<{ id: string; ad: string; urlYolu: string; kullanir: boolean; oncekiAdim: string | null; girisGerekmez: boolean }>}
+ */
+export function ortakAkisBaslangicEkranlari(vt, projeId, ortakEkranId) {
+  const ortak = ekranlariListele(vt, projeId).find((e) => e.id === ortakEkranId);
+  if (!ortak) throw new DepoHatasi('Ekran bulunamadı.');
+  const dosya = `${ortak.anahtar}.model.json`;
+  /** @type {Array<{ id: string; ad: string; urlYolu: string; kullanir: boolean; oncekiAdim: string | null; girisGerekmez: boolean }>} */
+  const liste = [];
+  for (const e of ekranlariListele(vt, projeId)) {
+    if (e.id === ortakEkranId || e.durum === 'silindi') continue;
+    const m = ekranModeliGetir(vt, e.id);
+    const model = m && nesneMi(m.model) ? /** @type {Nesne} */ (m.model) : null;
+    if (!model || ['altModel', 'ortakAkis'].includes(String(model.tur)) || typeof model.ekranUrl !== 'string' || !model.ekranUrl) continue;
+    let kullanir = false;
+    /** @type {string | null} */
+    let oncekiAdim = null;
+    for (const a of akisListesi(model)) {
+      const adimlar = /** @type {Nesne[]} */ (akisModeli(model, a.id)?.adimlar ?? []);
+      const i = adimlar.findIndex((x) => nesneMi(x) && nesneMi(x.ortakAkis) && x.ortakAkis.dosya === dosya);
+      if (i < 0) continue;
+      kullanir = true;
+      oncekiAdim = i > 0 ? String(adimlar[i - 1].baslik || adimlar[i - 1].id) : null;
+      break;
+    }
+    liste.push({ id: e.id, ad: e.ad, urlYolu: model.ekranUrl, kullanir, oncekiAdim, girisGerekmez: model.girisGerekmez === true });
+  }
+  return liste.sort((a, b) => Number(b.kullanir) - Number(a.kullanir) || a.ad.localeCompare(b.ad, 'tr'));
+}
+
+/** Ortak akışın son seçilen başlangıç ekranı (ekran ayarları > tarama; yoksa null). @param {Veritabani} vt @param {string} ekranId */
+export function sonBaslangicEkrani(vt, ekranId) {
+  const t = (ekranAyarlariniGetir(vt, ekranId) ?? {}).tarama;
+  return nesneMi(t) && typeof t.baslangicEkranId === 'string' ? t.baslangicEkranId : null;
+}
+
+/**
+ * Ortak akışın istek dosyasındaki başlangıç ekranı: seçilen (adaylar içinde olmalı), yoksa son seçilen, yoksa ilk kullanan
+ * ekran; hiçbiri yoksa null. @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {unknown} secilen
+ */
+function ortakAkisBaslangici(vt, projeId, ekranId, secilen) {
+  const adaylar = ortakAkisBaslangicEkranlari(vt, projeId, ekranId);
+  if (secilen !== undefined && secilen !== null && secilen !== '') {
+    const b = adaylar.find((x) => x.id === secilen);
+    if (!b) throw new DepoHatasi('Başlangıç ekranı bulunamadı (adresi olan bir ekran seçin).');
+    return b;
+  }
+  const son = sonBaslangicEkrani(vt, ekranId);
+  return adaylar.find((x) => x.id === son) ?? adaylar.find((x) => x.kullanir) ?? null;
+}
+
 /** @param {Veritabani} vt @param {string} projeId */
 export function ekranListesi(vt, projeId) {
   acikAnahtar(vt);
@@ -272,6 +328,9 @@ export function ekranDetayi(vt, projeId, ekranId) {
     // Ekranın "Akış" sekmesi (akış diyagramı modelden çizilir; model değer içermez).
     model: model && model.tur !== 'altModel' ? model : null,
     altModel: model && model.tur === 'altModel' ? { ad: model.ad, aciklama: model.aciklama, kullananlar: model.kullananlar, agac: modelAgaci({ ...model, adimlar: [{ id: 'bolumler', sira: 1, baslik: String(model.ad), bolumler: model.bolumler }] }) } : null,
+    // Ortak akış: başlangıç ekranı adayları ("Akışı kaydet" / "Tekrar analiz et"; kullananlar önde) ve son seçim.
+    ortakAkis: model && model.tur === 'ortakAkis'
+      ? { baslangicEkranlari: ortakAkisBaslangicEkranlari(vt, projeId, ekranId), sonBaslangicEkranId: sonBaslangicEkrani(vt, ekranId) } : null,
     gecmis: gecmis.reverse(),
     senaryoSayisi,
     analiz: {
@@ -980,7 +1039,7 @@ function senaryoGizliDegersizOzet(s) {
  * özetleri (gizli değer yok), seçilen bağlam profillerinin ADLARI ve istek açıklaması.
  * tur 'tekrar-analiz' ise seçilen profiller ekran için "son seçim" olarak saklanır.
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId
- * @param {{ tur: unknown; baglamProfilleri?: unknown; klasor: string; projeKoku: string; bulguId?: unknown }} girdi
+ * @param {{ tur: unknown; baglamProfilleri?: unknown; klasor: string; projeKoku: string; bulguId?: unknown; baslangicEkranId?: unknown }} girdi ortak akışta baslangicEkranId: araç bu ekranın adresinden başlar
  */
 export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   acikAnahtar(vt);
@@ -997,9 +1056,22 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   const senaryolar = senaryoOzetleri(vt, ekranId, model);
   const etki = a && model && Array.isArray(a.bulgular) ? etkiHesapla(/** @type {Nesne[]} */ (a.bulgular), model, /** @type {Nesne} */ (a.model), senaryolar) : [];
   const proje = projeGetir(vt, projeId);
+  // Ortak akış kendi başına bir adreste açılmaz: araç BAŞLANGIÇ EKRANININ adresinden başlar (seçilen / son seçilen / ilk kullanan).
+  const ortakAkis = Boolean(model && model.tur === 'ortakAkis');
+  const baslangic = ortakAkis ? ortakAkisBaslangici(vt, projeId, ekranId, girdi.baslangicEkranId) : null;
+  const baslangicYeri = baslangic
+    ? (baslangic.oncekiAdim ? `“${baslangic.oncekiAdim}” adımından sonra başlar` : baslangic.kullanir ? 'ekran açılınca başlar' : 'ekranın gerekli adımları (ör. hesaplama) yapıldıktan sonra başlar')
+    : '';
+  const baslangicMetni = !ortakAkis ? ''
+    : baslangic
+      ? `"${ekran.ad}" bir ORTAK AKIŞTIR (kendi adresi yok): "${baslangic.ad}" ekranının adresini (${baslangic.urlYolu}) aç; ortak akış bu ekranda ${baslangicYeri}. Oraya kadar ilerle, yalnızca ortak akışın adımlarını incele. `
+      : `"${ekran.ad}" bir ORTAK AKIŞTIR (kendi adresi yok) ve henüz hiçbir ekranda kullanılmıyor: ortak akışın açıldığı ekranı bana sor. `;
+  const ortakPaketKurali = ortakAkis
+    ? 'Üreteceğin paketin model.tur değeri "ortakAkis" olmalı (semaSurumu 2; ekranUrl, specDosyasi, pageObject yazma; içine alt model ya da başka ortak akış koyma); meta.ekran.urlYolu verilmeyebilir, meta.ekran.anahtar ortak akışın anahtarıdır. '
+    : '';
   // Ekranın mevcut alan bağlantıları ve bağlı tabloların adları / sütunları (DEĞER YOK; gizli sütunun yalnız adı ve işareti):
   // Araç yeni pakette aynı tablo ve sütun adlarını kullansın.
-  const baglar = ekranAlanBaglari(vt, ekranId);
+  const baglar = etkinAlanBaglari(vt, ekranId);
   const tumTablolar = Object.keys(baglar).length ? tablolariListele(vt, projeId) : [];
   const alanHaritasi = model ? modelAlanlari(model) : new Map();
   const bagliTablolar = tumTablolar.filter((t) => Object.values(baglar).some((b) => b.tablo === t.id));
@@ -1021,12 +1093,19 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
     tur: 'nobetci-analiz-dosyasi', surum: 1, olusturulma: zaman.toISOString(),
     istek: { tur, aciklama: DOSYA_TURLERI[tur], baglamProfilleri: secilen ?? analiz.sonBaglamProfilleri },
     talimat: tur === 'tekrar-analiz'
-      ? `Sayfayı listelenen bağlam profilleriyle yeniden incele ve ${BICIM_ATFI} yeni bir sayfa paketi üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI} Paket gizli/kişisel veri içermemeli.`
+      ? `${baslangicMetni}Sayfayı listelenen bağlam profilleriyle yeniden incele ve ${BICIM_ATFI} yeni bir sayfa paketi üret. ${ortakPaketKurali}${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI} Paket gizli/kişisel veri içermemeli.`
       : tur === 'eksik-kombinasyon'
         ? `Modeldeki seçenek/koşul kombinasyonlarını mevcut senaryolarla karşılaştır; kapsanmayan anlamlı kombinasyonlar için ${BICIM_ATFI} (senaryoOnerileri bölümü) öneriler üret (yalnızca öneri; gizli değer yok).`
         : 'Bulguları ve etkilerini değerlendir: hangileri gerçek ekran değişikliği, hangileri inceleme hatası olabilir; kabul/red ve senaryo güncellemesi için öneri yaz.',
     proje: proje ? proje.ad : null,
     ekran: { anahtar: ekran.anahtar, ad: ekran.ad, urlYolu: model && typeof model.ekranUrl === 'string' ? model.ekranUrl : null, modelSurumu: mevcut ? mevcut.surum : null },
+    // Ortak akış: başlangıç ekranı (adres + ortak akışın hangi adımdan sonra başladığı) ve paket kuralı.
+    ...(ortakAkis ? {
+      ortakAkis: {
+        baslangicEkrani: baslangic ? { ad: baslangic.ad, urlYolu: baslangic.urlYolu, kullanir: baslangic.kullanir, oncekiAdim: baslangic.oncekiAdim } : null,
+        paketKurali: ortakPaketKurali.trim()
+      }
+    } : {}),
     model,
     analiz: a ? {
       durum: a.durum, zaman: a.zaman, paket: a.meta, bulgular: a.bulgular,
@@ -1044,10 +1123,12 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
   if (tur === 'tekrar-analiz' && secilen) analizYaz(vt, ekran, ayarlar, { ...analiz, sonBaglamProfilleri: secilen });
   const goreli = relative(girdi.projeKoku, yol);
   const gosterilen = goreli.startsWith('..') ? yol : goreli.split(sep).join('/');
-  const cumle = tur === 'tekrar-analiz'
+  const cumle = tur === 'tekrar-analiz' && ortakAkis
+    ? `${gosterilen} dosyasını oku; ${baslangicMetni}Şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ') || '—'}. ${BICIM_ATFI} yeni bir sayfa paketi JSON dosyası üret. ${ortakPaketKurali}${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
+    : tur === 'tekrar-analiz'
     ? `${gosterilen} dosyasını oku; "${ekran.ad}" sayfasını (${model && typeof model.ekranUrl === 'string' ? model.ekranUrl : 'yol dosyada'}) şu bağlam profilleriyle yeniden incele: ${(secilen ?? []).join(', ')}. ${BICIM_ATFI} yeni bir sayfa paketi JSON dosyası üret. ${INCELEME_KURALLARI} ${MEVCUT_TABLO_KURALI}`
     : tur === 'eksik-kombinasyon'
       ? `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının modelini ve mevcut senaryolarını karşılaştırıp eksik kombinasyonlar için ${BICIM_ATFI} senaryo önerileri üret.`
-      : `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının bulgularını, etkilerini ve senaryo özetlerini yorumla; kabul/red ve senaryo güncellemesi için önerilerini yaz.`;
+      : `${gosterilen} dosyasını oku; "${ekran.ad}" ekranının bulgularını, etkilerini ve senaryo özetlerini yorumla; kabul/red ve senaryo güncellemesi için önerilerini yaz.${ortakAkis ? ` ${baslangicMetni.trim()}` : ''}`;
   return { yol: gosterilen, tamYol: yol, cumle };
 }

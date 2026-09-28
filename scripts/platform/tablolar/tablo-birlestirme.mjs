@@ -29,7 +29,7 @@ import {
 } from '../servisler/servis-deposu.mjs';
 import { servisIstegiKuruCoz } from '../servisler/servis-islemleri.mjs';
 import { BAGLAM_ONEKI, EN_COK_SATIR, EN_COK_SUTUN, TABLO_ADI, tabloKaydet, tabloSil, tablolariListele } from './tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet, tabloEkranKullanimi } from './ekran-baglari.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, modelAlanBilgisi } from './ekran-basvurulari.mjs';
 import { basvuru, basvuruCoz, degerBasvurusu, grupAnahtari, secilenSatir, sutunBul } from './tablo-secimi.mjs';
 import { baslikNormal, birlestirmeOnerileri, sutunEslemesiOner, tabloTuru } from './tablo-benzerligi.mjs';
@@ -563,7 +563,7 @@ function yenidenEslemePlani(vt, projeId, p) {
     const baglarOnce = ekranAlanBaglari(vt, ekran.id);
     const { yeni: baglarSonra, n } = baglariEsle(baglarOnce);
     if (n) { ekranYazimlari.push({ ekranId: ekran.id, ad: ekran.ad, baglar: baglarSonra }); ozetSayilari.ekranBaglari += n; }
-    const ekranIlgili = Object.values(baglarOnce).some((b) => ilgiliIdler.has(b.tablo));
+    const ekranIlgili = Object.values(etkinAlanBaglari(vt, ekran.id)).some((b) => ilgiliIdler.has(b.tablo));
     /** @type {Map<string, ReturnType<typeof modelAlanBilgisi> | null>} */
     const bilgiler = new Map();
     for (const s of vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ?', [projeId, ekran.id])) {
@@ -723,7 +723,7 @@ function cozumler(vt, projeId, r, simdi) {
     const icerik = /** @type {Nesne} */ (JSON.parse(String(s.icerik_json)));
     const mb = modelBaglami(vt, d.ekranId, senaryoAkisi(icerik));
     const bilgi = mb ? modelAlanBilgisi(mb.model) : {};
-    const baglar = ekranAlanBaglari(vt, d.ekranId);
+    const baglar = etkinAlanBaglari(vt, d.ekranId);
     for (const [o, x] of Object.entries(/** @type {Record<string, Nesne>} */ (icerik.ortamlar ?? {}))) {
       if (!nesneMi(x) || !nesneMi(x.veri)) continue;
       const c = ekranBasvurulariniCoz(/** @type {Nesne} */ (zarflariCoz(vt, x.veri)), {

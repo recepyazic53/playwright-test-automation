@@ -738,3 +738,119 @@ test('mevcut ekranın kaydı: varsayılan akış güncellenebilir (paket geçerl
     await tarayici2.close();
   }
 });
+
+/** Ortak akış (başvurunun onay kısmı; ekran adresi yok): kaydın sonucu bu modelin yeni sürümü olur. */
+function ortakOnayPaketi(): Nesne {
+  const model = {
+    semaSurumu: 2, tur: 'ortakAkis', id: 'basvuru-onayi', ad: 'Başvuru onayı', aciklama: 'Onay kısmı (nötr fikstür).', yalnizTestOrtami: true, kosullar: {},
+    adimlar: [{
+      id: 'onayEski', sira: 1, baslik: 'Onay (eski)',
+      bolumler: [{ id: 'islemler', baslik: 'İşlemler', alanlar: [
+        { id: 'onayDugmesi', tip: 'buton', etiket: { ekran: 'Onayla' }, yapilandirma: 'aksiyon', konum: { secici: '#onayla', kirilganlik: 'orta' } },
+        { id: 'onaySonucu', tip: 'cikti', etiket: { ekran: 'Onay' }, yapilandirma: 'cikti', konum: { secici: '#onay-sonuc', kirilganlik: 'orta' } }
+      ] }],
+      kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#onayla', aciklama: 'Onayla' }], basariGostergesi: { tur: 'metin', deger: 'Başvuru onaylandı', secici: '#onay-sonuc' } }
+    }],
+    senaryoDuzeyi: { alanlar: [] }, urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
+  };
+  return {
+    tur: 'sayfa-paketi', surum: 1,
+    meta: { ekran: { anahtar: 'basvuru-onayi', ad: 'Başvuru onayı' }, olusturan: 'test', olusturulma: '2026-09-28T09:00:00Z', baglamProfilleri: [] },
+    model, senaryoOnerileri: [], gerekenAyarlar: { girisGerekli: true, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [] }, bilinmeyenler: []
+  };
+}
+
+test('ortak akışın kaydı: başlangıç ekranının adresinde başlar; başlangıç blokları silinir, sonuç ortak akışın yeni sürümü (tur korunur, ekran adresi yok); taramada red', async () => {
+  test.setTimeout(180_000);
+  await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: ortakOnayPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
+  const ortakId = String(((await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Nesne[]).find((e) => e.anahtar === 'basvuru-onayi')?.id);
+  // Başlangıç ekranı adayları: adresi olan normal ekranlar (ortak akış kendisi yok).
+  const sec = await api(`/platform/tarama/secenekler?projeId=${projeId}&ekranId=${ortakId}`);
+  const adaylar = (sec.ekran as Nesne).ortakAkis.baslangicEkranlari as Nesne[];
+  expect(adaylar.find((a) => a.id === kayitEkranId)).toMatchObject({ ad: 'Kayıtlı Başvuru', urlYolu: '/basvuru/', kullanir: false });
+  expect(adaylar.some((a) => a.id === ortakId)).toBe(false);
+  // Tarama kipinde ortak akış hâlâ reddedilir; kayıtta başlangıç ekranı şart (tarayıcı açılmadan).
+  expect(await api('/platform/tarama/baslat', { projeId, ortamId, ekranId: ortakId, hedef: '/basvuru/', baglamProfilleri: [], onay: true }))
+    .toMatchObject({ basarili: false, kod: 'ALT_MODEL' });
+  expect(await api('/platform/tarama/baslat', { kip: 'kayit', projeId, ortamId, ekranId: ortakId, baglamProfilleri: [], onay: true }))
+    .toMatchObject({ basarili: false, kod: 'BASLANGIC_EKRANI' });
+  const onayOnce = uygulama.onaylar.length;
+  const isId = String((await basarili('/platform/tarama/baslat', { kip: 'kayit', projeId, ortamId, ekranId: ortakId, baslangicEkranId: kayitEkranId, baglamProfilleri: ['Yetkili'], onay: true })).isId);
+  expect(await isDurumu(isId)).toMatchObject({ hedefYol: '/basvuru/', mod: 'analiz', ortakAkis: { baslangicEkrani: { id: kayitEkranId, ad: 'Kayıtlı Başvuru', urlYolu: '/basvuru/' } } });
+  const { tarayici, sayfa } = await kayitSayfasi(isId, '/basvuru/');
+  try {
+    const panel = sayfa.locator('#nobetci-kayit-paneli');
+    await expect(panel.getByText('Nöbetçi · Akış kaydı')).toBeVisible();
+    // Başlangıç ekranının kısmı (hesaplama), sonra ortak akışın kısmı (onay).
+    await sayfa.selectOption('#urun', 'A');
+    await sayfa.fill('#adSoyad', GIZLI_DEGER);
+    await sayfa.click('#hesapla');
+    await expect(sayfa.locator('#sonuc')).toContainText('Toplam:');
+    await sayfa.click('#onayla');
+    await expect(sayfa.locator('#onay-sonuc')).toContainText('Başvuru onaylandı');
+    await panel.getByRole('button', { name: 'Mesaj seç' }).click();
+    await sayfa.click('#onay-sonuc');
+    await expect(panel.getByText(/“Başvuru onaylandı\. No/)).toBeVisible();
+    await panel.getByRole('button', { name: 'Bitir', exact: true }).click();
+    await panel.getByRole('button', { name: 'Bitir ve Nöbetçi’ye gönder' }).click();
+  } finally {
+    await tarayici.close().catch(() => undefined);
+  }
+  expect(await kayitBitti(isId)).toMatchObject({ durum: 'tamam', tasarim: true, mod: 'analiz' });
+  expect(uygulama.onaylar.length).toBe(onayOnce + 1);
+  const akis = await api(`/platform/tarama/akis?id=${isId}`);
+  // Ortak akışın tek akışı: hedef seçimi (akış listesi) yok.
+  expect(akis.ekranAkislari).toBeNull();
+  expect(akis.ortakAkis).toMatchObject({ baslangicEkrani: { id: kayitEkranId } });
+  const b = akis.bloklar as Nesne[];
+  const palet = akis.palet as Nesne;
+  expect(b.map((x) => x.tur)).toEqual(['alanlar', 'aksiyon', 'aksiyon', 'mesaj', 'bitir']);
+  expect([b[1], b[2]].map((x) => palet.dugmeler[x.dugme].metin)).toEqual(['Hesapla', 'Onayla']);
+  // Sayfa paketi yolu ortak akışta yok (ekran adresli model üretmez).
+  expect(await api('/platform/tarama/akis', { id: isId, bloklar: b })).toMatchObject({ basarili: false, kod: 'ORTAK_AKIS' });
+  // Başlangıç ekranına ait bloklar (alanlar + Hesapla) silinir; yalnız ortak akışın kısmı kalır.
+  const tasarim = [{ tur: 'alanlar', ad: 'Başvuru onaylanır', alanlar: [], zorunlu: [], kosullar: {} }, b[2], b[3], b[4]];
+  const on = await basarili('/platform/tarama/akis', { id: isId, bloklar: tasarim, hedef: { tur: 'akis', ad: 'yok sayılır' } });
+  expect(on.etki).toMatchObject({ yeni: false, senaryolar: [], ekranlar: [] });
+  const y = await basarili('/platform/tarama/akis', { id: isId, bloklar: tasarim, hedef: { tur: 'akis' }, onay: true });
+  expect(y).toMatchObject({ akisId: 'ana', surum: 2 });
+  const d = await api(`/platform/ekran?projeId=${projeId}&id=${ortakId}`);
+  const model = d.model as Nesne;
+  expect(d.modelTuru).toBe('ortakAkis');
+  expect(model).toMatchObject({ tur: 'ortakAkis', id: 'basvuru-onayi', yalnizTestOrtami: true });
+  for (const k of ['ekranUrl', 'specDosyasi', 'pageObject', 'akislar']) expect(model[k], k).toBeUndefined();
+  expect((model.adimlar as Nesne[]).map((a) => a.baslik)).toEqual(['Başvuru onaylanır']);
+  const adim = (model.adimlar as Nesne[])[0];
+  expect(adim.kosu.aksiyonlar).toEqual([{ tur: 'tikla', secici: '#onayla', aciklama: 'Onayla' }]);
+  expect(adim.kosu.basariGostergesi).toMatchObject({ tur: 'metin', deger: 'Başvuru onaylandı. No', secici: '#onay-sonuc' });
+  // Başlangıç ekranının alanları ve düğmesi ortak akışa girmedi; eşleşen düğmenin kimliği korundu.
+  const alanlar = (adim.bolumler as Nesne[]).flatMap((x) => x.alanlar) as Nesne[];
+  const seciciler = alanlar.map((x) => x.konum?.secici);
+  expect(seciciler).not.toContain('#adSoyad');
+  expect(seciciler).not.toContain('#hesapla');
+  expect(alanlar.find((x) => x.konum?.secici === '#onayla')?.id).toBe('onayDugmesi');
+  // Başlangıç ekranının modeli değişmedi; seçim ortak akış için hatırlanır.
+  const baslangicModeli = (await api(`/platform/ekran?projeId=${projeId}&id=${kayitEkranId}`)).model as Nesne;
+  expect(baslangicModeli.ekranUrl).toBe('/basvuru/');
+  expect((d.ortakAkis as Nesne).sonBaslangicEkranId).toBe(kayitEkranId);
+  expect(JSON.stringify(model) + JSON.stringify(akis)).not.toContain(GIZLI_DEGER);
+  // Arayüz: kayıt diyagramında hedef seçimi yok; "Ortak akışı güncelle" onayla ortak akışın yeni sürümünü açar.
+  const tarayici2 = await korumaliTarayici();
+  try {
+    const page = await (await tarayici2.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1200 }, colorScheme: 'dark' })).newPage();
+    await page.goto(`/#/ekranlar/tarama/${encodeURIComponent(isId)}`);
+    await expect(page.getByRole('heading', { name: 'Akış diyagramı: Başvuru onayı' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Kayıt “Kayıtlı Başvuru” ekranından başladı.')).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: 'Kayıt nereye yazılsın?' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ortak akışı güncelle' }).click();
+    const onay = page.locator('dialog[open]');
+    await expect(onay.getByRole('heading', { name: '“Başvuru onayı” ortak akışı bu kayıtla güncellensin mi?' })).toBeVisible();
+    await expect(onay).toContainText('Bu ortak akışı kullanan ekran yok.');
+    await onay.getByRole('button', { name: 'Güncelle' }).click();
+    await expect(page).toHaveURL(new RegExp(`/ekranlar/e/${ortakId}/akis/ana$`));
+    await goruntu(page.locator('main'), '15-ortak-akis-kaydi.png');
+  } finally {
+    await tarayici2.close();
+  }
+  expect((await api(`/platform/ekran?projeId=${projeId}&id=${ortakId}`)).surum).toBe(3);
+});

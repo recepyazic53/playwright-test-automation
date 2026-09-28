@@ -43,4 +43,7 @@ export declare function analizUygula(vt: Veritabani, projeId: string, ekranId: s
 export declare function analizIptal(vt: Veritabani, projeId: string, ekranId: string, analizId: unknown): { iptal: true };
 export declare function reddedilenleriUnut(vt: Veritabani, projeId: string, ekranId: string): { unutulan: number };
 export declare function topluDegerAta(vt: Veritabani, projeId: string, ekranId: string, girdi: { anahtar: unknown; deger: unknown; senaryoIdler: unknown; yapan?: string }): { guncellenen: number };
-export declare function claudeDosyasiYaz(vt: Veritabani, projeId: string, ekranId: string, girdi: { tur: unknown; baglamProfilleri?: unknown; klasor: string; projeKoku: string; bulguId?: unknown }): { yol: string; tamYol: string; cumle: string };
+export declare function claudeDosyasiYaz(vt: Veritabani, projeId: string, ekranId: string, girdi: { tur: unknown; baglamProfilleri?: unknown; klasor: string; projeKoku: string; bulguId?: unknown; baslangicEkranId?: unknown }): { yol: string; tamYol: string; cumle: string };
+export type OrtakAkisBaslangicEkrani = { id: string; ad: string; urlYolu: string; kullanir: boolean; oncekiAdim: string | null; girisGerekmez: boolean };
+export declare function ortakAkisBaslangicEkranlari(vt: Veritabani, projeId: string, ortakEkranId: string): OrtakAkisBaslangicEkrani[];
+export declare function sonBaslangicEkrani(vt: Veritabani, ekranId: string): string | null;

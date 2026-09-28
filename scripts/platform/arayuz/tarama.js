@@ -13,7 +13,7 @@
 //                   önizle" ile paket oluşur, önizlemede "Diyagrama dön" ile düzenlemeye geri dönülebilir.
 // Aynı anda tek tarama çalışır. Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h()).
 import { alan, api, bildir, h, ikon, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
-import { baglamProfiliSecimi, diyalogAc } from './ekran-ortak.js';
+import { baglamProfiliSecimi, baslangicEkraniSecimi, diyalogAc } from './ekran-ortak.js';
 import { taranmisPaketAkisi } from './sayfa-paketi.js';
 import { akisTasarimi } from './akis-tasarimi.js';
 import { canliOnayEki, canliOnayIste } from './kosu-paneli.js';
@@ -204,9 +204,19 @@ export async function kayitDiyalogu(s) {
   const uygunlar = v.ortamlar.filter((o) => !o.canli);
   const ilkOrtam = uygunlar.find((o) => o.id === son.ortamId) || uygunlar.find((o) => o.varsayilan) || uygunlar[0] || v.ortamlar[0];
   const ortamSecimi = h('select', {}, v.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ilkOrtam.id, disabled: o.canli }, o.canli ? `${o.ad} (riskli — kayıt kapalı)` : o.ad)));
-  const hedef = h('input', { type: 'text', value: son.hedef || (v.ekran && v.ekran.urlYolu) || '', placeholder: '/satis/basvuru/', spellcheck: 'false', autocomplete: 'off' });
+  // Ortak akış: kendi adresi yok; kayıt seçilen BAŞLANGIÇ EKRANININ adresinde başlar (başlangıç sayfası o ekranın yolu olur).
+  const ortak = v.ekran && v.ekran.ortakAkis ? baslangicEkraniSecimi(v.ekran.ortakAkis.baslangicEkranlari, son.baslangicEkranId, 'kayit-baslangic-ekrani') : null;
+  const hedef = h('input', { type: 'text', value: ortak ? (ortak.secilen() || {}).urlYolu || '' : son.hedef || (v.ekran && v.ekran.urlYolu) || '', placeholder: '/satis/basvuru/', spellcheck: 'false', autocomplete: 'off' });
   const profilSecimi = h('select', {});
-  const girissiz = h('input', { type: 'checkbox', id: 'kayit-girissiz' });
+  const girissiz = h('input', { type: 'checkbox', id: 'kayit-girissiz', checked: Boolean(ortak && ortak.secilen() && ortak.secilen().girisGerekmez) });
+  if (ortak) {
+    ortak.secim.addEventListener('change', () => {
+      const b = ortak.secilen();
+      hedef.value = b ? b.urlYolu : '';
+      girissiz.checked = Boolean(b && b.girisGerekmez);
+      ortamCiz();
+    });
+  }
   const onay = h('input', { type: 'checkbox', id: 'kayit-onayi' });
   const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Sipariş formu', autocomplete: 'off' });
   const anahtar = h('input', { type: 'text', maxlength: '64', placeholder: 'siparis-formu', spellcheck: 'false', autocomplete: 'off' });
@@ -219,7 +229,7 @@ export async function kayitDiyalogu(s) {
   const secilenOrtam = () => v.ortamlar.find((o) => o.id === ortamSecimi.value);
   function guncelle() {
     const o = secilenOrtam();
-    const eksik = !o || o.canli || (o.tarif && !o.girisProfili && !girissiz.checked) || (!s.ekran && !ad.value.trim()) || !hedef.value.trim();
+    const eksik = !o || o.canli || (o.tarif && !o.girisProfili && !girissiz.checked) || (!s.ekran && !ad.value.trim()) || !hedef.value.trim() || (ortak && !ortak.secilen());
     baslat.disabled = !onay.checked || Boolean(eksik);
   }
   function ortamCiz() {
@@ -250,6 +260,13 @@ export async function kayitDiyalogu(s) {
   const govde = h('div', { class: 'tarama-diyalogu' },
     calisan,
     uygunlar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Bu projedeki tüm ortamlar riskli (ya da riskli olup olmadığı belirtilmemiş); akış kaydı yapılamaz (Ayarlar > Proje ve ortamlar).'),
+    ortak ? h('div', { class: 'not-kutusu bilgi ortak-akis-kaydi' },
+      h('b', {}, 'Ortak akış bir başlangıç ekranından kaydedilir.'),
+      h('ul', {},
+        h('li', {}, 'Kayıt seçtiğiniz ekranın adresinde başlar: o ekranda gerekli adımları (ör. hesaplama) yapın, sonra ortak akışın kısmını yürütün.'),
+        h('li', {}, 'Bitirdikten sonra diyagramda başlangıç ekranına ait blokları silin, yalnız ortak akışın kısmını bırakın.'),
+        h('li', {}, 'Kaydedince ortak akışın yeni model sürümü açılır; onu kullanan ekranlar sonraki koşularında yeni hâliyle koşar.'))) : null,
+    ortak ? ortak.alan : null,
     s.ekran ? null : h('div', { class: 'tarama-ikili' },
       alan('Yeni ekranın adı', ad, { zorunlu: true }),
       alan('Ekran anahtarı', anahtar, { yardim: 'Küçük harf, rakam ve "-" (boş bırakılırsa addan üretilir).' })),
@@ -271,7 +288,7 @@ export async function kayitDiyalogu(s) {
       h('label', { class: 'onay-satiri', for: 'kayit-onayi' }, onay, h('span', {}, 'Anladım; bastığım düğmeler siteye gerçek istek gönderecek.'))),
     hataKutusu,
     h('div', { class: 'diyalog-alt' }, h('span', { class: 'bosluk' }), h('button', { type: 'button', class: 'hayalet', onclick: () => diyalog.close() }, 'Vazgeç'), baslat));
-  const diyalog = diyalogAc(s.ekran ? `Akışı kaydet: ${s.ekran.ad}` : 'Yeni ekran: akışı kaydet',
+  const diyalog = diyalogAc(s.ekran ? `Akışı kaydet: ${s.ekran.ad}${ortak ? ' (ortak akış)' : ''}` : 'Yeni ekran: akışı kaydet',
     'Düğmeyle açılan adımları olan ekranlar için: akışı tarayıcıda siz yürütürsünüz, Nöbetçi adımları ve alanları kaydeder. Önizleyip kabul edene kadar hiçbir şey kaydedilmez.', govde, 'video');
   ortamCiz();
 
@@ -280,7 +297,8 @@ export async function kayitDiyalogu(s) {
     const govdeVerisi = {
       kip: 'kayit', projeId: s.proje.id, ekranId: s.ekran ? s.ekran.id : null, ekranAdi: s.ekran ? undefined : ad.value.trim(),
       ekranAnahtari: s.ekran ? undefined : anahtar.value.trim() || anahtarOner(ad.value), ortamId: ortamSecimi.value,
-      baglamProfilleri: profilSecimi.value ? [profilSecimi.value] : [], hedef: hedef.value.trim(), onay: onay.checked, girissiz: girissiz.checked
+      baglamProfilleri: profilSecimi.value ? [profilSecimi.value] : [], hedef: hedef.value.trim(), onay: onay.checked, girissiz: girissiz.checked,
+      ...(ortak ? { baslangicEkranId: ortak.secim.value } : {})
     };
     const o = secilenOrtam();
     if (o && !(await canliOnayIste(o, 'Akış kaydı'))) return;
@@ -395,9 +413,10 @@ export function taramaEkrani(icerik, s) {
           ekranAdresi ? [h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: ekranAdresi }, d.ekran.ad)] : null,
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, d.kip === 'kayit' ? 'Akış kaydı' : 'Otomatik tarama')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, `${d.kip === 'kayit' ? 'Akış kaydı' : 'Ekran taraması'}: ${d.ekran.ad}`), rozet(metin, tur),
-          d.mod === 'analiz' ? rozet('tekrar analiz', 'durdu') : rozet('yeni ekran', '')),
+          d.ortakAkis ? rozet('ortak akış', 'durdu') : d.mod === 'analiz' ? rozet('tekrar analiz', 'durdu') : rozet('yeni ekran', '')),
         h('div', { class: 'meta' },
           h('span', {}, ikon('ag'), `${d.ortam.ad}`), h('span', {}, ikon('isaret'), h('code', { class: 'duz' }, d.hedefYol)),
+          d.ortakAkis ? h('span', {}, ikon('ekran'), `başlangıç ekranı: ${d.ortakAkis.baslangicEkrani.ad}`) : null,
           d.kip === 'kayit' ? h('span', {}, ikon('hedef'), d.baglamProfili ? `bağlam: ${d.baglamProfili}` : 'bağlam profili yok')
             : h('span', {}, ikon('liste'), d.kesif ? 'seçim keşfi açık' : 'seçim keşfi kapalı'),
           h('span', { title: tarihMetni(d.baslangic) }, ikon('saat'), tarihMetni(d.baslangic)))),

@@ -18,6 +18,8 @@
 // ya da seçilen akışı güncelle (etki onayı → yeni model sürümü; POST /platform/tarama/akis { hedef: { tur: 'akis' } }). Bu yolda
 // kayıtta yakalanan seçenek listeleri onay penceresinde "Test verisine yazılacaklar" bölümüyle (sayfa-paketi.js > testVerisiSecimi)
 // gösterilir; yalnız seçilen tablolar / bağlantılar yazılır, aynı adlı tablo için seçim yapılmadan onaylanamaz.
+// Ortak akışın kaydında (başlangıç ekranından) hedef seçimi yoktur: başlangıç ekranına ait bloklar silinir, "Ortak akışı güncelle"
+// ortak akışı kullanan ekranları gösterip onayla ortak akışın tek akışına yazar (sayfa paketi yok).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
@@ -77,6 +79,8 @@ export async function akisTasarimi(icerik, s) {
   if (akisAdi) akisAdi.addEventListener('input', () => { degisiklik = true; });
   // Mevcut ekranın kaydı: nereye yazılsın?
   const ekranAkislari = !ekranKipi && veri.ekranAkislari && veri.ekranAkislari.duzenlenebilir ? veri.ekranAkislari.akislar : null;
+  // Ortak akışın kaydı (başlangıç ekranından): hedef seçimi yok; kayıt ortak akışın tek akışına yazılır (sayfa paketi yok).
+  const ortakKayit = !ekranKipi && veri.ortakAkis ? veri.ortakAkis : null;
   let hedefTuru = 'varsayilan';
   const hedefAdi = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Kurumsal sipariş', 'aria-label': 'Yeni akışın adı' });
   const hedefAkis = ekranAkislari ? h('select', { 'aria-label': 'Güncellenecek akış' }, ekranAkislari.map((a) => h('option', { value: a.id }, `${a.ad}${a.varsayilan ? ' (varsayılan)' : ''}`))) : null;
@@ -105,7 +109,7 @@ export async function akisTasarimi(icerik, s) {
   const alanBilgisi = new Map(palet.alanlar.map((a) => [a.anahtar, a]));
 
   const durumSatiri = h('span', { class: 'cok-soluk kucuk', 'aria-live': 'polite' });
-  const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), ekranKipi ? (veri.akis ? 'Değişiklikleri kaydet' : 'Akışı oluştur') : 'Kaydet ve önizle');
+  const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), ekranKipi ? (veri.akis ? 'Değişiklikleri kaydet' : 'Akışı oluştur') : ortakKayit ? 'Ortak akışı güncelle' : 'Kaydet ve önizle');
   const hataKutusu = h('div', {});
   const akis = h('ol', { class: 'tasarim-akisi', 'aria-label': 'Akış diyagramı' });
   const paletKap = h('div', { class: 'tasarim-paleti' });
@@ -691,22 +695,26 @@ export async function akisTasarimi(icerik, s) {
   kaydet.addEventListener('click', async () => {
     clearTimeout(saklaZamanlayici);
     try {
-      if (ekranAkislari && hedefTuru !== 'varsayilan') {
-        // Kaydı mevcut ekranın bir akışına yaz (yeni ya da seçilen): önce etki, onayla yeni model sürümü.
-        const secilen = hedefTuru === 'guncelle' ? ekranAkislari.find((a) => a.id === hedefAkis.value) : null;
-        const hedef = { tur: 'akis', akisId: secilen ? secilen.id : null, ad: secilen ? secilen.ad : hedefAdi.value.trim() };
+      if (ortakKayit || (ekranAkislari && hedefTuru !== 'varsayilan')) {
+        // Kaydı mevcut ekranın bir akışına yaz (yeni ya da seçilen; ortak akışta tek akışı — sunucu seçer): önce etki, onayla yeni model sürümü.
+        const secilen = !ortakKayit && hedefTuru === 'guncelle' ? ekranAkislari.find((a) => a.id === hedefAkis.value) : null;
+        const hedef = ortakKayit ? { tur: 'akis', akisId: null, ad: veri.ekran.ad } : { tur: 'akis', akisId: secilen ? secilen.id : null, ad: secilen ? secilen.ad : hedefAdi.value.trim() };
         if (!hedef.ad) { hatalar = new Map([[null, ['Yeni akışın adını yazın.']]]); ciz(); return; }
         const on = await mesgulIken(kaydet, 'Denetleniyor…', () => api('/platform/tarama/akis', { govde: { id: s.isId, bloklar, hedef } }));
         hatalar = new Map();
         ciz();
         const sen = on.etki.senaryolar;
+        // Ortak akış: onu kullanan ekranlar etkilenir.
+        const ekr = ortakKayit && Array.isArray(on.etki.ekranlar) ? on.etki.ekranlar : null;
         // Kayıtta yakalanan seçenek listeleri: paket önizlemesindeki gibi test verisine yazılacaklar (onaysız hiçbir şey yazılmaz).
         let tvYenile = () => {};
         const tv = on.testVerisi ? testVerisiSecimi(on.testVerisi, () => tvYenile()) : null;
         const onay = await onayIste({
-          baslik: on.etki.yeni ? `“${hedef.ad}” akışı eklensin mi?` : `“${hedef.ad}” akışı bu kayıtla güncellensin mi?`,
-          metin: `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`,
-          liste: sen.map((x) => x.baslik), dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: false, ikonAd: 'uyari',
+          baslik: ortakKayit ? `“${veri.ekran.ad}” ortak akışı bu kayıtla güncellensin mi?` : on.etki.yeni ? `“${hedef.ad}” akışı eklensin mi?` : `“${hedef.ad}” akışı bu kayıtla güncellensin mi?`,
+          metin: ekr
+            ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
+            : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`,
+          liste: ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik), dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: false, ikonAd: 'uyari',
           ek: tv ? tv.bolum : null, hazir: tv ? tv.hazir : null, baglan: (fn) => { tvYenile = fn; }
         });
         if (!onay) return;
@@ -799,14 +807,17 @@ export async function akisTasarimi(icerik, s) {
           ekranAdresi ? [h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: ekranAdresi }, veri.ekran.ad)] : null,
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, ekranKipi ? 'Akış' : 'Akış diyagramı')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, baslikMetni),
-          ekranKipi ? (veri.akis && veri.akis.varsayilan ? rozet('varsayılan', 'vurgu') : null) : veri.mod === 'analiz' ? rozet('tekrar analiz', 'durdu') : rozet('yeni ekran', ''))),
+          ekranKipi ? (veri.akis && veri.akis.varsayilan ? rozet('varsayılan', 'vurgu') : null) : ortakKayit ? rozet('ortak akış', 'durdu') : veri.mod === 'analiz' ? rozet('tekrar analiz', 'durdu') : rozet('yeni ekran', ''))),
       h('div', { class: 'eylemler' }, ekranKipi ? vazgec : ekranAdresi ? h('a', { class: 'dugme hayalet', href: ekranAdresi }, ikon('geri'), 'Ekrana dön') : null)),
     s.ust,
     h('div', { class: 'not-kutusu bilgi' },
       ekranKipi
         ? h('p', {}, 'Akış bu ekranın alanlarıyla kurulur (başka ekranın alanı gelmez). Ekranda henüz tanınmayan bir alan için önce “Akışı kaydet” ya da “Ekranı tara” ile ekranı tanıtın.')
         : h('p', {}, 'Kayıttan hazırlanan taslak: her düğme basışı bir aksiyon, aradaki alanlar bir alan grubu. Adımları adlandırın, gereksiz blokları silin, eksikleri “+” ile ekleyin.'),
-      h('p', { class: 'kucuk' }, 'Bu diyagram ekranın akışıdır; senaryolar değerleri ve isteğe bağlı aksiyonları senaryo formunda seçer.')),
+      ortakKayit
+        ? h('p', { class: 'ortak-akis-kaydi-notu' }, h('b', {}, `Kayıt “${ortakKayit.baslangicEkrani.ad}” ekranından başladı. `),
+          'Başlangıç ekranına ait blokları (ör. o ekranın alanları ve hesaplama düğmesi) silin; yalnız ortak akışın kısmını bırakın. Kaydedince ortak akışın yeni model sürümü açılır.')
+        : h('p', { class: 'kucuk' }, 'Bu diyagram ekranın akışıdır; senaryolar değerleri ve isteğe bağlı aksiyonları senaryo formunda seçer.')),
     h('div', { class: 'form-duzeni tasarim-duzeni' },
       h('section', { class: 'kart tasarim-karti', 'aria-label': 'Akış diyagramı' }, hataKutusu, akis),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıtta yakalananlar' },
@@ -816,7 +827,8 @@ export async function akisTasarimi(icerik, s) {
           ekranAkislari ? hedefSecimi() : null,
           h('p', { class: 'soluk kucuk' }, ekranKipi
             ? 'Diyagram doğrulanır; etkilenen senaryolar gösterilir ve onayınızla ekranın yeni model sürümü açılır.'
-            : 'Diyagram doğrulanır ve sayfa paketine çevrilir; ardından önizleyip kabul edersiniz.'),
+            : ortakKayit ? 'Diyagram doğrulanır; ortak akışı kullanan ekranlar gösterilir ve onayınızla ortak akışın yeni model sürümü açılır.'
+              : 'Diyagram doğrulanır ve sayfa paketine çevrilir; ardından önizleyip kabul edersiniz.'),
           kaydet, h('p', { class: 'kucuk', style: { margin: '8px 0 0' } }, durumSatiri)))));
   ciz();
   icerik.querySelector('h2')?.focus();

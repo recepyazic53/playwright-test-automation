@@ -138,6 +138,16 @@ Adımları ekran modeliyle aynı biçimdedir; ekran adresi, spec ya da page obje
 akış olmaz. Nasıl çalışır:
 - **Yükleme:** sayfa paketiyle yüklenir; `meta.ekran.urlYolu` verilmeyebilir. Ekranlar'da "Ortak akışlar" grubunda görünür;
   senaryo listelerinde ekran olarak görünmez, taranmaz.
+- **Modeli güncelle** (ortak akışın sayfası): Paket yükle, Akışı kaydet, Tekrar analiz et, Yapay zekâ ile yorumla ("Ekranı tara"
+  yok; alt modelde yalnız Paket yükle). Ortak akışın kendi adresi olmadığından önce **başlangıç ekranı** sorulur (ortak akışı
+  kullanan ekranlar önde, yoksa adresi olan tüm ekranlar):
+  - **Akışı kaydet:** kayıt başlangıç ekranının adresinde başlar. O ekranda gerekli adımlar (ör. hesaplama) yapılır, sonra ortak
+    akışın kısmı yürütülür. Bitir'den sonra diyagramda başlangıç ekranına ait bloklar silinir; "Ortak akışı güncelle" onayla
+    (kullanan ekranlar gösterilir) kayıt ortak akışın TEK akışına yazılır ve yeni model sürümü açılır. `tur`, `yalnizTestOrtami`,
+    `senaryoDuzeyi` ve koşullar korunur; `ekranUrl` / spec / page object yazılmaz. Sayfa paketi (önizleme) yolu yoktur.
+  - **Tekrar analiz et / Yapay zekâ ile yorumla:** istek metnine başlangıç ekranının adresi ve ortak akışın o ekranda hangi
+    adımdan sonra başladığı yazılır; üretilecek paketin `model.tur` değerinin `"ortakAkis"` olacağı ve `meta.ekran.urlYolu`nun
+    verilmeyebileceği belirtilir.
 - **Ekrana ekleme:** ekran akışında `{ "id", "sira", "baslik", "ortakAkis": { "dosya": "<anahtar>.model.json" }, "gorunurluk"? }`
   adımı olarak yer alır. Akış tasarımında **"+ > Ortak akış"** ile eklenir. "Her senaryoda koşulmaz" seçilirse senaryoda
   "“<ad>” dahil" ayarıyla seçilir.
@@ -150,6 +160,12 @@ akış olmaz. Nasıl çalışır:
 - **Düzenleme:** ortak akışın Akışlar sekmesinde "Düzenle" ile aynı diyagram düzenleyicisinde değiştirilir (tek akış;
   içine ortak akış eklenmez). Kaydederken onu kullanan ekranlar gösterilir. "Ekranlara ekle…" ortak akışı seçilen
   ekranların varsayılan akışının sonuna ekler (isteğe bağlı seçilirse senaryoda "“<ad>” dahil" ile koşar).
+- **Test verisi:** ortak akışın sayfasında "Test verisi" sekmesi vardır; alan → tablo sütunu bağı ortak akışta bir kez kurulur
+  (ortak akış paketinin `testVerisi.baglantilar`ı da ortak akışın ayarlarına yazılır) ve onu kullanan tüm ekranlara **varsayılan**
+  olarak geçer. Ekranın Test verisi sekmesinde bu bağ "Ortak akıştan: <ad>" işaretiyle görünür; ekran aynı alanı başka sütuna
+  bağlarsa o ekranda onunki geçerlidir (ekrana özel), "Ortak akışa dön" ekranın bağını siler. Etkin bağ (ekranınki, yoksa ortak
+  akışınki) senaryo formunda, koşuda, tablo etkisi / kullanımında, birleştirme denetiminde ve istek dosyasında kullanılır
+  (`tablolar/ekran-baglari.mjs > etkinAlanBaglari`). Ortak akışta senaryo dönüşümleri ("Değerleri / Kişi alanlarını tabloya bağla…") yoktur.
 - **Yalnızca test ortamı:** `"yalnizTestOrtami": true` ise adımları canlı işaretli ortamda koşulmaz, raporda
   "(canlı ortam: atlandı)" yazar.
 - **Kart:** kimlik bloğu gibi bir kayıt bloğudur (`kimlikProfili`, `kimlikTuru: "kart"`). Değer, "Kredi kartı" tablosunun

@@ -2187,6 +2187,8 @@ a.son-sonuc { text-decoration: none; }
 .ekran-baglari .alan-satiri { grid-template-columns: minmax(180px, 1fr) minmax(320px, 2fr); padding: 8px 10px; }
 .ekran-baglari .kaynak-secimi select { min-width: 260px; }
 .ekran-baglari .kaynak-hucresi .deger-cipleri { max-width: 100%; }
+/* Ortak akıştan gelen (varsayılan) bağ işareti / ekrana özel bağda "Ortak akışa dön". */
+.ekran-baglari .ortak-bag-isareti { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 @media (max-width: 760px) { .ekran-baglari .alan-satiri { grid-template-columns: minmax(0, 1fr); } .ekran-baglari .kaynak-secimi select { min-width: 0; } }
 /* Sonuçlar > Hata kalıpları: kalıba tıklanınca hatanın alındığı testler. */
 .kalip-satiri { cursor: pointer; }

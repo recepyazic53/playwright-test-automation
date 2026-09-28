@@ -20,7 +20,7 @@ import { modelBaglami, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import { formSemasiOlustur, tumFormAlanlari } from '../senaryolar/model-formu.mjs';
 import { tabloKaydet, tablolariListele, BAGLAM_ONEKI } from './tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet, tabloEkranKullanimi } from './ekran-baglari.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranTabloDonusumu } from './ekran-donusumu.mjs';
 import { modelAlanlari, alanEtiketi } from './paket-tablolari.mjs';
 import { degerBasvurusu } from './tablo-secimi.mjs';
@@ -142,7 +142,8 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
   const formAlanlari = tumFormAlanlari(sema);
   /** Bölüm kimliği → bölüm başlığı (kişi etiketi önerisi için). */
   const bolumAdi = new Map(sema.adimlar.flatMap((a) => a.bolumler.map((b) => [b.id, b.baslik || a.baslik])));
-  const baglar = ekranAlanBaglari(vt, ekran.id);
+  // Zaten bağlı mı: etkin bağ (ortak akıştan gelen dahil); yazılan ise ekranın kendi bağları + yeniler.
+  const baglar = etkinAlanBaglari(vt, ekran.id);
   const tablolar = tablolariListele(vt, projeId, { cozulsun: true }).filter((t) => !t.id.startsWith(BAGLAM_ONEKI));
   const ek = tabloEkranKullanimi(vt, projeId);
   const kayitTablolari = tablolar.filter((t) => tabloTuru(t, ek) === 'kayit');
@@ -272,7 +273,7 @@ export function kisiAlanlariniBagla(vt, projeId, girdi, secenekler = {}) {
   let sonuc = null;
   try {
     vt.islem(() => {
-      const yeniBaglar = { ...baglar };
+      const yeniBaglar = { ...ekranAlanBaglari(vt, ekran.id) };
       for (const a of eslenen) yeniBaglar[a.alanId] = { tablo: tablo.id, sutun: a.sutun, ...(a.kisiEtiketi ? { etiket: a.kisiEtiketi } : {}) };
       ekranAlanBaglariniKaydet(vt, projeId, ekran.id, yeniBaglar);
       if (yeniSatirlar.length) {
