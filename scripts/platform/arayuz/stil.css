@@ -1133,7 +1133,7 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 
 /* Model tabanlı form */
 .form-duzeni { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
-.form-sutunu { display: grid; gap: 14px; min-width: 0; }
+.form-sutunu { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
 .adim-akisi { display: grid; gap: 12px; position: relative; }
 .adim-karti { position: relative; padding: 0; margin: 0; overflow: visible; }
 .adim-karti > .adim-basligi { display: flex; align-items: center; gap: 12px; padding: 14px 18px; }
@@ -2936,8 +2936,8 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .tema-karti small { color: var(--metin-3); font-size: 12px; line-height: 1.4; }
 
 /* Sayfa paketi önizlemesi: test verisine yazılacaklar (tablolar + alan bağlantıları); Tablolar'da tablonun kaynağı. */
-.test-verisi-onizleme .tv-tablolar { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-.test-verisi-onizleme .tv-tablo { border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); padding: 10px 12px; display: grid; gap: 6px; }
+.test-verisi-onizleme .tv-tablolar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.test-verisi-onizleme .tv-tablo { border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .test-verisi-onizleme .tv-tablo-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .test-verisi-onizleme .tv-ornek { max-height: 180px; overflow: auto; }
 .test-verisi-onizleme .tv-ornek .ikon { width: 12px; height: 12px; margin-right: 4px; vertical-align: -1px; }
@@ -2947,6 +2947,17 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .test-verisi-onizleme .tv-baglar { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .test-verisi-onizleme .tv-baglar label { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .test-verisi-onizleme .tv-baglar li.soluk { color: var(--metin-3); }
+/* Dar ekranda uzun rozet (ör. gizli sütun notu) tablo kutusunu taşırmaz: sığmazsa satır kırar. */
+.test-verisi-onizleme .tv-tablo-ust .rozet { max-width: 100%; height: auto; min-height: 21px; padding-block: 4px; white-space: normal; line-height: 1.3; overflow-wrap: anywhere; }
+/* Kabul düğmesi kapalıyken nedenler (düğmenin hemen altında) ve "Bölüme git" ile gidilen yerin kısa vurgusu. */
+.form-eylemleri .kabul-nedenleri { grid-column: 1 / -1; min-width: 0; font-size: 12.5px; color: var(--metin-2); }
+.kabul-nedenleri ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.kabul-nedenleri li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.kabul-nedenleri li > span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.kabul-nedenleri li::before { content: "•"; color: var(--atlanan); }
+.dikkat-vurgusu { animation: dikkat-vurgusu 2.4s ease-out; }
+@keyframes dikkat-vurgusu { 0%, 60% { box-shadow: 0 0 0 2px var(--vurgu); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .dikkat-vurgusu { animation: none; box-shadow: 0 0 0 2px var(--vurgu); } }
 .tablo-listesi > button small.tablo-kaynagi { color: var(--metin-3); font-style: italic; }
 .tablo-duzenleyici .tablo-kaynagi { margin: 0 0 6px; }
 
