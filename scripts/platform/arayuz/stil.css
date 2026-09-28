@@ -3525,7 +3525,10 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .izin-uyarisi .diyalog-alt { flex-wrap: wrap; }
 @media (max-width: 520px) { .izin-uyarisi .diyalog-alt > button { flex: 1 1 100%; justify-content: center; } }
 /* === Servis taban adresleri: adlandırılmış taban adresleri (ana liste) ve pencereler === */
-.taban-gorunum-satiri { align-items: center; justify-content: flex-start; gap: var(--b2); margin: var(--b2) 0; }
+.taban-gorunum-satiri { align-items: center; justify-content: flex-start; gap: var(--b2); margin: var(--b2) 0; flex-wrap: wrap; }
+.taban-gorunum-ipucu { flex: 1 1 240px; min-width: 0; }
+.taban-aciklama p { margin: 0 0 4px; }
+.taban-aciklama code { overflow-wrap: anywhere; }
 .taban-adlari-tablosu th[scope="row"] { min-width: 140px; overflow-wrap: anywhere; }
 .taban-adlari-tablosu td code { overflow-wrap: anywhere; }
 .taban-satir-dugmeleri { margin: 0; flex-wrap: nowrap; }

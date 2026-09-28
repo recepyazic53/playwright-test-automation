@@ -232,7 +232,14 @@ test.describe('servis taban adresleri arayüzü', () => {
 
   test('servis bazında görünüm (seçim hatırlanır); 390px taşma yok', async ({}, testInfo) => {
     const { page, hatalar, kapat } = await sayfaAc();
+    // Açıklama örnekli; anahtarın her seçeneği ne gösterdiğini ipucunda ve seçilince yanında söyler.
+    const bolum = page.locator('section.taban-adresleri');
+    await expect(bolum.locator('.taban-aciklama')).toContainText('TEST: https://test.ornek.local');
+    await expect(bolum.locator('.taban-aciklama')).toContainText('servisler adresin geri kalanını (yolu) kendileri ekler');
+    await expect(page.getByRole('radio', { name: 'Servis bazında' })).toHaveAttribute('title', /Her servisin her ortamdaki adresi/);
+    await expect(bolum.locator('.taban-gorunum-ipucu')).toContainText('Her taban adresi ve onu kullanan servisler');
     await page.getByRole('radio', { name: 'Servis bazında' }).click();
+    await expect(bolum.locator('.taban-gorunum-ipucu')).toContainText('Her servisin her ortamdaki adresi tek tabloda');
     const t = page.getByRole('table', { name: 'Servis taban adresleri', exact: true });
     await expect(t.locator('tbody > tr')).toHaveCount(7);
     await expect(page.getByLabel('Sipariş: taban adres adı')).toHaveValue('Çekirdek');
