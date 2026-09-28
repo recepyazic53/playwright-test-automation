@@ -25,14 +25,14 @@ export declare function ekranDetayi(vt: Veritabani, projeId: string, ekranId: st
   analiz: { bekleyen: Nesne | null; son: Nesne | null; reddedilenSayisi: number; sonBaglamProfilleri: string[]; kanitlar: Array<{ medyaId: string; ad: string } & Nesne> };
 };
 export declare function surumAyrintisi(vt: Veritabani, projeId: string, ekranId: string, surum: number): Nesne & { bulgular: Array<Bulgu & Nesne>; oncekiSurum: number | null };
-export declare function paketOnizle(vt: Veritabani, projeId: string, paket: unknown, secenekler?: { ekranId?: string | null; mod?: 'yeni' | 'analiz' }): {
+export declare function paketOnizle(vt: Veritabani, projeId: string, paket: unknown, secenekler?: { ekranId?: string | null; mod?: 'yeni' | 'analiz' | 'degistir'; olusturulacak?: 'ekran' | 'ortakAkis' }): {
   gecerli: boolean; hatalar: Array<{ yer: string; mesaj: string }>; uyarilar: Array<{ yer: string; mesaj: string }>;
   hedef: { id: string; ad: string; anahtar: string; modelVar: boolean } | null;
-  onizleme: (Nesne & { senaryolar: Array<{ indeks: number; baslik: string; sorunlar: unknown[]; varsayilanSecili: boolean } & Nesne>; gerekenAyarlar: Array<{ anahtar: string; durum: string } & Nesne> }) | null;
+  onizleme: (Nesne & { modelTuru: 'ekran' | 'ortakAkis' | 'altModel'; senaryolar: Array<{ indeks: number; baslik: string; sorunlar: unknown[]; varsayilanSecili: boolean } & Nesne>; gerekenAyarlar: Array<{ anahtar: string; durum: string } & Nesne> }) | null;
 };
 /** Test verisi yazım sonucu (paket-test-verisi.mjs). */
 type TestVerisiYazimi = { tablolar: Array<{ ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number }>; baglanan: number };
-export declare function sayfaEkle(vt: Veritabani, projeId: string, paket: unknown, secenekler: { senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string; testVerisi?: unknown }): Promise<{ ekranId: string; surum: number; senaryoIdleri: string[]; kanitSayisi: number; testVerisi: TestVerisiYazimi }>;
+export declare function sayfaEkle(vt: Veritabani, projeId: string, paket: unknown, secenekler: { senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string; testVerisi?: unknown; olusturulacak?: 'ekran' | 'ortakAkis' }): Promise<{ ekranId: string; surum: number; senaryoIdleri: string[]; kanitSayisi: number; testVerisi: TestVerisiYazimi }>;
 export declare function modeliPaketleDegistir(vt: Veritabani, projeId: string, ekranId: string, paket: unknown, secenekler: { onay?: boolean; senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string; testVerisi?: unknown }): Promise<{ etki: { senaryolar: Array<{ id: string; baslik: string }>; korunanAkislar: string[]; mevcutSurum: number | null } | null } | { ekranId: string; surum: number; senaryoIdleri: string[]; kanitSayisi: number; testVerisi: TestVerisiYazimi }>;
 export declare function analizYukle(vt: Veritabani, projeId: string, ekranId: string, paket: unknown, secenekler: { medyaKlasoru: string; testVerisi?: unknown }): Promise<{ analizId: string | null; bulguSayisi: number; gizlenenSayisi: number; uyarilar: Array<{ yer: string; mesaj: string }>; testVerisi: TestVerisiYazimi & { bekleyenBaglanti: number } }>;
 export declare function analizGetir(vt: Veritabani, projeId: string, ekranId: string): Nesne & {

@@ -16,6 +16,8 @@ export type IsGorunumu = {
   id: string;
   durum: IsDurumu;
   mod: 'yeni' | 'analiz';
+  /** "Ne oluşturulsun?" (yalnız yeni): 'ortakAkis' ise paket ortak akış paketine çevrilir. */
+  olusturulacak: 'ekran' | 'ortakAkis';
   projeId: string;
   ekran: { id: string | null; ad: string; anahtar: string };
   ortam: { id: string; ad: string };
@@ -55,9 +57,9 @@ export type TaramaYoneticisi = {
   secenekler(vt: Veritabani, projeId: string, ekranId: string | null): Record<string, unknown>;
   baslat(vt: Veritabani, govde: Record<string, unknown>, s: { sunucuAdresi: string }): { isId: string };
   durum(id: string): IsGorunumu;
-  paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
+  paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
   akis(id: string): {
-    bloklar: import('./akis-tasarimi.mjs').AkisBlogu[]; palet: import('./akis-tasarimi.mjs').AkisPaleti; ekran: IsGorunumu['ekran']; mod: 'yeni' | 'analiz'; paketHazir: boolean;
+    bloklar: import('./akis-tasarimi.mjs').AkisBlogu[]; palet: import('./akis-tasarimi.mjs').AkisPaleti; ekran: IsGorunumu['ekran']; mod: 'yeni' | 'analiz'; olusturulacak: 'ekran' | 'ortakAkis'; paketHazir: boolean;
     projeId: string; akisaYazildi: { akisId: string; surum: number } | null; girissiz: boolean; ortakAkis: OrtakAkisKaydi | null;
   };
   akisaYaz(vt: Veritabani, id: string, govde: Record<string, unknown>): { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; ekranlar?: Array<Record<string, unknown>> }; akisId: string } | { akisId: string; surum: number };

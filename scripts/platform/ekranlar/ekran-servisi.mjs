@@ -23,7 +23,7 @@ import { medyaSifrele } from '../medya.mjs';
 import { akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
-import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
+import { kanitVerisiniCoz, ortakAkisPaketineCevir, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 import { BICIM_ATFI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-istekleri.mjs';
@@ -393,11 +393,17 @@ function bulguGorunumu(b) {
  * Paketin önizlemesi (doğrulama + arayüz özeti). mod: 'yeni' (Ekran ekle; anahtar projede olmamalı,
  * ya da modeli olmayan mevcut ekran seçilmişse o) | 'analiz' (mevcut ekran için tekrar analiz) | 'degistir' (mevcut ekranın
  * modeli paketle değiştirilir: yeni sürüm; senaryolar korunur, etki olarak listelenir).
- * @param {Veritabani} vt @param {string} projeId @param {unknown} paket
- * @param {{ ekranId?: string | null; mod?: 'yeni' | 'analiz' | 'degistir' }} [secenekler]
+ * olusturulacak: "Ne oluşturulsun?" (yalnız mod 'yeni', ekran seçilmeden): 'ortakAkis' ise paket önce ortak akış paketine
+ * çevrilir (sayfa-paketi.mjs > ortakAkisPaketineCevir); sonuç "Ortak akışlar" altına kaydedilir. Varsayılan 'ekran' (bugünkü davranış).
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} ham
+ * @param {{ ekranId?: string | null; mod?: 'yeni' | 'analiz' | 'degistir'; olusturulacak?: 'ekran' | 'ortakAkis' }} [secenekler]
  */
-export function paketOnizle(vt, projeId, paket, secenekler = {}) {
+export function paketOnizle(vt, projeId, ham, secenekler = {}) {
   acikAnahtar(vt);
+  if (secenekler.olusturulacak === 'ortakAkis' && ((secenekler.mod ?? 'yeni') !== 'yeni' || secenekler.ekranId)) {
+    throw new DepoHatasi('Ortak akış yalnız yeni oluştururken seçilir (Ekranlar > Ekran ekle).');
+  }
+  const paket = secenekler.olusturulacak === 'ortakAkis' ? ortakAkisPaketineCevir(ham) : ham;
   // Projenin tabloları (ad + sütun; değer yok): öneri değerlerindeki ${Tablo.Sütun} başvuruları ve "Gereken tablo" durumu için.
   const projeTablolari = tablolariListele(vt, projeId).map((t) => ({ ad: t.ad, sutunlar: t.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli })) }));
   const d = sayfaPaketiniDogrula(paket, { altModelKaynagi: altModelKaynagi(vt, projeId), tablolar: projeTablolari });
@@ -447,7 +453,9 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
     const ortakAkislar = ortakAkisModelleri(akisModel, altModelKaynagi(vt, projeId));
     sema = formSemasiOlustur(ortakAkislariAc(akisModel, ortakAkislar).model, { ...d.altModeller, ...ortakAkislar });
   } catch { sema = null; }
-  const oneriler = /** @type {Nesne[]} */ (Array.isArray(p.senaryoOnerileri) ? p.senaryoOnerileri : []);
+  // Ortak akışın senaryosu yoktur (onu kullanan ekranların senaryoları koşar): önerileri listelenmez, eklenmez.
+  const ortakAkis = model.tur === 'ortakAkis';
+  const oneriler = /** @type {Nesne[]} */ (!ortakAkis && Array.isArray(p.senaryoOnerileri) ? p.senaryoOnerileri : []);
   const mevcutBasliklar = new Set(vt.tumu('SELECT baslik FROM senaryolar WHERE proje_id = ? AND ekran_id = ?', [projeId, hedef ? hedef.id : '']).map((s) => String(s.baslik)));
   const senaryolar = oneriler.map((o, i) => {
     const sorunlar = d.senaryoSorunlari[i] ?? [];
@@ -521,8 +529,10 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
     gecerli: true, hatalar: [], uyarilar: d.uyarilar, hedef,
     ...(degistirmeEtkisi ? { etki: { senaryolar: degistirmeEtkisi.senaryolar, korunanAkislar: degistirmeEtkisi.korunanAkislar, mevcutSurum: degistirmeEtkisi.mevcutSurum } } : {}),
     onizleme: {
+      // Oluşacak kaydın türü: 'ortakAkis' ise arayüz senaryo / ortam seçimini göstermez, düğme "Ortak akışı oluştur" olur.
+      modelTuru: ortakAkis ? 'ortakAkis' : model.tur === 'altModel' ? 'altModel' : 'ekran',
       meta: {
-        ekran: { anahtar: ekranMeta.anahtar, ad: ekranMeta.ad, urlYolu: ekranMeta.urlYolu }, proje: meta.proje ?? null,
+        ekran: { anahtar: ekranMeta.anahtar, ad: ekranMeta.ad, urlYolu: ekranMeta.urlYolu ?? null }, proje: meta.proje ?? null,
         olusturan: meta.olusturan, olusturulma: meta.olusturulma, not: meta.not ?? null,
         baglamProfilleri: incelenen.map((ad) => ({ ad, projedeVar: baglamAdlari.has(ad) }))
       },
@@ -678,9 +688,12 @@ const paketKaynagi = (/** @type {Nesne} */ meta) => `${String(meta.olusturan ?? 
  * Koşuda KAPALI başlar (test kodu henüz yok; öneriler gözden geçirilmeden koşuya girmez).
  * @param {Veritabani} vt @param {string} projeId @param {unknown} paket
  * testVerisi: önizlemede onaylanan test verisi seçimi (paket-test-verisi.mjs); verilmezse test verisine yazılmaz.
- * @param {{ senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string; testVerisi?: unknown }} secenekler
+ * olusturulacak: 'ortakAkis' → paket ortak akış paketine çevrilip "Ortak akışlar" altına kaydedilir (senaryo önerisi eklenmez;
+ * ekranlara ekleme otomatik yapılmaz — "Ekranlara ekle…" ya da diyagramdaki "+ > Ortak akış").
+ * @param {{ senaryoIndeksleri?: unknown; ortamIdleri?: unknown; medyaKlasoru: string; yapan?: string; testVerisi?: unknown; olusturulacak?: 'ekran' | 'ortakAkis' }} secenekler
  */
-export async function sayfaEkle(vt, projeId, paket, secenekler) {
+export async function sayfaEkle(vt, projeId, ham, secenekler) {
+  const paket = secenekler.olusturulacak === 'ortakAkis' ? ortakAkisPaketineCevir(ham) : ham;
   const o = paketOnizle(vt, projeId, paket, { mod: 'yeni' });
   if (!o.gecerli || !o.onizleme) throw new EkranDogrulamaHatasi(`Paket geçersiz (${o.hatalar.length} sorun).`, o.hatalar);
   const p = /** @type {Nesne} */ (paket);
@@ -707,7 +720,7 @@ export async function sayfaEkle(vt, projeId, paket, secenekler) {
       projeId, anahtar: String(ekranMeta.anahtar), ad: String(ekranMeta.ad), aciklama: typeof model.aciklama === 'string' ? model.aciklama : null
     });
     const ekran = ekranGetir(vt, projeId, ekranId);
-    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: `Ekran paketiyle oluşturuldu (${kaynak})` });
+    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: `${model.tur === 'ortakAkis' ? 'Ortak akış olarak' : 'Ekran paketiyle'} oluşturuldu (${kaynak})` });
     const { ayarlar, analiz } = analizDurumu(vt, ekranId);
     analizYaz(vt, ekran, ayarlar, {
       ...analiz, sonBaglamProfilleri: Array.isArray(meta.baglamProfilleri) ? meta.baglamProfilleri : [],

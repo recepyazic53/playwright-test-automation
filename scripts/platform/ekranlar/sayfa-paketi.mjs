@@ -42,6 +42,33 @@ const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const metinMi = (d) => typeof d === 'string' && d.trim().length > 0;
 const metinDizisiMi = (d) => Array.isArray(d) && d.every((x) => typeof x === 'string');
 
+/** Oluşturma yollarında (Ekran ekle: paket yükle / Ekranı tara / Akışı kaydet) "Ne oluşturulsun?" seçimi. */
+export const OLUSTURMA_TURLERI = Object.freeze(['ekran', 'ortakAkis']);
+
+/**
+ * Ekran paketini ORTAK AKIŞ paketine çevirir ("Ne oluşturulsun? ○ Ortak akış"): model.tur "ortakAkis", semaSurumu 2; ekran
+ * adresi / spec / page object ve modelin diğer akışları çıkarılır (ortak akışın tek akışı vardır; eklendiği ekranın sayfasında
+ * koşar), meta.ekran.urlYolu yazılmaz, senaryo önerileri ve "Beklenen sonuç" (birleşim) alanı atılır (ortak akışın senaryosu
+ * yoktur; uyarılı adımlar onu kullanan ekranın beklenen sonucuna eklenir). Zaten ortak akış (ya da alt model) olan paket ve
+ * paket olmayan girdi olduğu gibi döner; alt model / ortak akış adımı içeren model doğrulamada anlaşılır hatayla reddedilir.
+ * @param {unknown} ham @returns {unknown}
+ */
+export function ortakAkisPaketineCevir(ham) {
+  if (!nesneMi(ham) || !nesneMi(ham.model) || ['ortakAkis', 'altModel'].includes(ham.model.tur)) return ham;
+  const p = JSON.parse(JSON.stringify(ham));
+  const m = p.model;
+  m.tur = 'ortakAkis';
+  m.semaSurumu = 2;
+  for (const k of ['ekranUrl', 'specDosyasi', 'pageObject', 'akislar']) delete m[k];
+  if (!metinMi(m.aciklama)) m.aciklama = `${metinMi(m.ad) ? m.ad : 'Ortak akış'} (ortak akış)`;
+  if (nesneMi(m.senaryoDuzeyi) && Array.isArray(m.senaryoDuzeyi.alanlar)) {
+    m.senaryoDuzeyi.alanlar = m.senaryoDuzeyi.alanlar.filter((a) => !(nesneMi(a) && a.tip === 'birlesim'));
+  }
+  if (nesneMi(p.meta) && nesneMi(p.meta.ekran)) delete p.meta.ekran.urlYolu;
+  p.senaryoOnerileri = [];
+  return p;
+}
+
 // ---- Gizli değer taraması -----------------------------------------------------------------
 
 // Anahtar adı gizli bilgi taşıdığını söylüyor mu (ör. parola, apiKey, totpGizli, guvenlikKodu): ortak çekirdek liste

@@ -624,8 +624,9 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
     }
   }
 
-  // Adımlar
-  if (!Array.isArray(ham.adimlar) || ham.adimlar.length === 0) {
+  // Adımlar. Ortak akış boş olabilir (Ekranlar > Ortak akış > "Boş başla": adımları sonra akış diyagramında eklenir; boşken
+  // ekranlara eklenmez — akis-servisi.mjs > ortakAkisEkranlaraEkle).
+  if (!Array.isArray(ham.adimlar) || (ham.adimlar.length === 0 && !ortakMi)) {
     h.ekle(yer, '"adimlar" boş olmayan dizi olmalı');
   } else {
     ham.adimlar.forEach((adim, i) => {
