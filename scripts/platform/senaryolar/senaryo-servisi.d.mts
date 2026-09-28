@@ -60,6 +60,8 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   akis: string | null;
   /** Giriş seçimi (null = ortamın girişiyle, varsayılan). */
   giris: import('./senaryo-girisi.mjs').SenaryoGirisi | null;
+  /** Adım ekran görüntüsü seçimi (null = Ayarlar > Koşu > Kayıt'a uyar, varsayılan). */
+  adimGoruntusu: import('../ayarlar/kayit-kurallari.mjs').AdimGoruntusuSecimi | null;
   /** Satır seçimleri: "<tabloId>|<etiket>" → { Sütun: değer } (yoksa null). */
   tabloSecimleri: Record<string, Record<string, string>> | null;
 };
@@ -122,7 +124,7 @@ export declare function calistirmaHedefiCoz(
 ): CalistirmaHedefi;
 export declare function denemePaketiOlustur(
   vt: Veritabani,
-  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; tabloSecimleri?: unknown },
+  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown },
   secenekler: { geciciEk: string }
 ): {
   model: true; genel: { projeId: string; ortamId: string }; spec: string; geciciBaslik: string;

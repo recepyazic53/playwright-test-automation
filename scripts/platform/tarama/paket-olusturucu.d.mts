@@ -115,6 +115,8 @@ export type KayitAdimi = {
   uyarilar?: KayitGostergesi[];
   /** İlerleme düğmesinden sonra sonucu en çok bekleme süresi (sn; kosu.zamanAsimiSn). */
   zamanAsimiSn?: number;
+  /** "Ekran görüntüsü al" işareti (akış tasarımı; kosu.ekranGoruntusu — adım görüntüleri "Seçili adımlarda" iken). */
+  ekranGoruntusu?: boolean;
   /** Ortak akış adımı (akış tasarımında "+ > Ortak akış"): alanı yoktur; istegeBagli ise senaryoda "“ad” dahil" ile seçilir. */
   ortakAkis?: { dosya: string; istegeBagli: boolean };
   /** SQL sorgusu adımı (akış tasarımında "+ > SQL sorgusu"): alanı yoktur; modelde adımın sqlKontrolu olur. */

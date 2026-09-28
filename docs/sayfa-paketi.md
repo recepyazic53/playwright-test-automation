@@ -172,6 +172,8 @@ kaydedince yeni model sürümü (`ekranlar/akis-servisi.mjs`, `/platform/ekran/a
 - **Kalıp göstergesi** ("Metin bir kalıp", `desen`).
 - **Uyarılar.**
 - **Sonucu bekleme süresi** (aksiyon bloğunda, `kosu.zamanAsimiSn`).
+- **Ekran görüntüsü al** işareti (alan grubunda / aksiyonda, `kosu.ekranGoruntusu`). Adım ekran görüntüleri "Seçili adımlarda"
+  iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır.
 - **Düğmesiz adımın görünürlük koşulu.** Alanların koşuluna taşınır.
 
 Alanlar mevcut tanımlarıyla (seçici ya da kimlik bloğu kimliği) eşleşir; bağımlı listeler, doldurucu parametreleri ve
@@ -201,6 +203,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 | `uyarilar` | Adımda kabul edilen iş kuralı uyarıları `[{ metin, secici? }]` (en çok 10): senaryo "iş kuralı hatası" beklerken bunlardan seçer; başarı beklenen senaryoda biri görünürse test hemen düşer. |
 | `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
+| `ekranGoruntusu` | `true`: "Ekran görüntüsü al" işareti. Adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır; diğer seçimlerde etkisizdir. |
 
 Sürüm 2'de `okluSecim` doldurucusu (ok düğmeleriyle değer değiştiren özel bileşen) değeri gösteren öğeyi
 (`konum.secici`) ve düğmeleri (`konum.yardimci.ileri` ve `konum.yardimci.geri`; eski adlarla `arttir`/`azalt`)

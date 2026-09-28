@@ -132,6 +132,8 @@ export type PlatformModelSenaryosu = {
   deneme?: boolean;
   /** Senaryonun giriş seçimi (senaryo-girisi.mjs); null/yok = ortamın girişiyle (varsayılan). */
   giris?: import('../../scripts/platform/senaryolar/senaryo-girisi.mjs').SenaryoGirisi | null;
+  /** Senaryonun adım ekran görüntüsü seçimi (senaryo formu); null/yok = Ayarlar > Koşu > Kayıt'a uyar (varsayılan). */
+  adimGoruntusu?: import('../../scripts/platform/ayarlar/kayit-kurallari.mjs').AdimGoruntusuSecimi | null;
 };
 
 export type PlatformModelVerisi = {

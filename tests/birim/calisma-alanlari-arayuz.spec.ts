@@ -164,9 +164,8 @@ test('aynı kasada yeni proje: sihirbaz (tanışma → proje → ortamlar → pr
   await menu.getByRole('menuitem', { name: 'Yeni proje' }).click();
   await expect(page.getByRole('heading', { name: 'Yeni proje', level: 1 })).toBeVisible();
   await expect(page.locator('.adimlar li')).toHaveText(['Tanışalım', 'Proje', 'Ortamlar', 'Tamam']);
-  // Tanışma: yalnız servisler + test ve canlı → canlı ortam satırı (riskli işaretli) hazır gelir.
+  // Tanışma: test ve canlı → canlı ortam satırı (riskli işaretli) hazır gelir.
   const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
-  await tanisma.getByRole('radio', { name: /Servisler/ }).check();
   await tanisma.getByRole('radio', { name: /Test ve canlı/ }).check();
   await tanisma.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Proje adı').fill('İkinci proje');
@@ -256,7 +255,8 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   // Tanışma soruları (varsayılan cevaplarla devam).
   const tanisma = page.getByRole('form', { name: 'Tanışma soruları' });
   await expect(tanisma.getByRole('heading', { name: 'Sizi tanıyalım' })).toBeVisible();
-  await expect(tanisma.getByRole('radio', { name: /İkisi de/ })).toBeChecked();
+  await expect(tanisma.getByRole('radio', { name: /Yalnızca test ortamı/ })).toBeChecked();
+  await expect(tanisma.getByRole('radio')).toHaveCount(2);
   await tanisma.getByRole('button', { name: 'Devam' }).click();
   await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
   await expect(page.locator('.odak-ust')).toContainText('İş');

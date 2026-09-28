@@ -238,11 +238,11 @@ export function bloklariAyikla(ham) {
           }
         }
       }
-      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar });
+      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
     else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
     else if (b.tur === 'aksiyon') {
-      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}) });
+      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
     }
     else if (b.tur === 'mesaj') bloklar.push({ tur: 'mesaj', mesaj: b.mesaj === null || b.mesaj === undefined ? null : sayi(b.mesaj), metin: metin(b.metin, METIN_EN_COK), ...(b.uyari === true ? { uyari: true } : {}), ...(b.desen === true ? { desen: true } : {}) });
     else if (b.tur === 'bitir') bloklar.push({ tur: 'bitir' });
@@ -325,6 +325,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         cur.parcalar.push(...hamlar.map(() => k));
         bekleyen = false;
       } else yeniAdim(b.ad || `${adimlar.length + 1}. adım`, hamlar);
+      // "Ekran görüntüsü al": grubun ait olduğu adım (isteğe bağlı düğmenin açtığı grupta da aynı adım).
+      if (b.ekranGoruntusu && cur) /** @type {(typeof adimlar)[number]} */ (cur).ekranGoruntusu = true;
       return;
     }
     if (b.tur === 'aksiyon') {
@@ -334,6 +336,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       const og = { secici: d.secici, metin: d.metin };
       if (!cur || kapali) yeniAdim(metin(d.metin, AD_EN_COK) || `${adimlar.length + 1}. adım`, []);
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
+      if (b.ekranGoruntusu) c.ekranGoruntusu = true;
       if (b.istegeBagli) {
         c.acicilar.push({ ...og, secimli: true, ...(sure ? { onceBekle: sure } : {}) });
         bekleyen = true;

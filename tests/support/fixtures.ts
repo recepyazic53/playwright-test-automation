@@ -11,14 +11,17 @@ import { test as base } from '@playwright/test';
 import { writeFileSync, renameSync } from 'node:fs';
 import { ekranGoruntusuAl } from './screenshots';
 import { mesajYakalayicisiKur, yakalananMesajlariEkle } from './mesaj-yakalayici';
-import { ekranGoruntusuAyari } from './kosu-ayarlari';
+import { kayitSecimleri } from './kosu-ayarlari';
+import { BASARILI_GORUNTU_ADI, HATA_GORUNTU_ADI } from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
 
 /**
  * Test sonu (tam sayfa) ekran görüntüsü alınsın mı? Kalan testte ve Nöbetçi'nin ▷ koşusunda (panelde gösterilir) alınır; Ayarlar >
- * Koşu > Ekran görüntüsü (test sonu) "Kapalı" ise hiç alınmaz (adım görüntüleri bundan bağımsızdır).
+ * Koşu > Ekran görüntüsü (test sonu) "Kapalı" ise hiç alınmaz, "Yalnız başarılı testlerde" ise kalan testte alınmaz (adım
+ * görüntüleri bundan bağımsızdır). secim: her | yalnizBasari | yalnizHata | kapali (ayarlar/kayit-kurallari.mjs).
  */
-export function testSonuGoruntusuAlinsinMi(basariliMi: boolean, gorunurKosuMu: boolean, ayar: 'on' | 'only-on-failure' | 'off' = ekranGoruntusuAyari()): boolean {
-  if (ayar === 'off') return false;
+export function testSonuGoruntusuAlinsinMi(basariliMi: boolean, gorunurKosuMu: boolean, secim: string = kayitSecimleri().ekranGoruntusu): boolean {
+  if (secim === 'kapali') return false;
+  if (secim === 'yalnizBasari') return basariliMi && gorunurKosuMu;
   return !basariliMi || gorunurKosuMu;
 }
 
@@ -69,7 +72,7 @@ export const test = base.extend<OrtakFixturelar>({
         const ekranGoruntusu = await page.screenshot({ fullPage: true }).catch(() => undefined);
         if (ekranGoruntusu) {
           await testInfo.attach(
-            basariliMi ? '✅ BAŞARILI - Son Ekran Görüntüsü' : '❌ HATA ANI - Ekran Görüntüsü',
+            basariliMi ? BASARILI_GORUNTU_ADI : HATA_GORUNTU_ADI,
             { body: ekranGoruntusu, contentType: 'image/png' }
           );
         }

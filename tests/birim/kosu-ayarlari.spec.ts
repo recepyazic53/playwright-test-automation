@@ -97,13 +97,13 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await page.goto('/#/ayarlar/proje');
     await page.getByRole('link', { name: 'Koşu' }).click();
     const form = page.getByRole('form', { name: 'Koşu ayarları' });
-    await expect(form.getByLabel('Video')).toHaveValue('her');
+    await expect(form.getByLabel('Video', { exact: true })).toHaveValue('her');
     await expect(form.getByLabel('Koşu süre limiti (dk)')).toHaveValue('10');
     await form.getByLabel('Yeniden deneme').fill('7');
     await form.getByRole('button', { name: 'Kaydet' }).click();
     await expect(form.getByText('0 ile 3 arasında bir tam sayı girin.')).toBeVisible();
     await form.getByLabel('Yeniden deneme').fill('1');
-    await form.getByLabel('Video').selectOption('yalnizHata');
+    await form.getByLabel('Video', { exact: true }).selectOption('yalnizHata');
     await form.getByLabel('Servis isteği zaman aşımı (sn)').fill('90');
     await form.getByRole('button', { name: 'Kaydet' }).click();
     await expect(form.getByText('Koşu ayarları kaydedildi')).toBeVisible();

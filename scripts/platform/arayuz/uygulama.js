@@ -322,8 +322,9 @@ const ILK_ADIMLAR = [
 ];
 const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa');
 let sihirbazModu = 'ilk';
-/** Tanışma cevapları (varsayılanlar: en yaygın kurulum). */
-const VARSAYILAN_CEVAPLAR = Object.freeze({ hedef: 'ikisi', ortam: 'test', giris: 'evet' });
+/** Tanışma cevabı (varsayılan: en yaygın kurulum). Yalnız ortam sorusu kalır (hazır CANLI satırını belirler); eski sürümlerin
+ * "ne test edeceksiniz" / "giriş var mı" soruları hiçbir şeyi etkilemediği için kaldırıldı, eski cevaplar yok sayılır. */
+const VARSAYILAN_CEVAPLAR = Object.freeze({ ortam: 'test' });
 const cevaplar = { ...VARSAYILAN_CEVAPLAR };
 const sihirbazAdimlari = () => (sihirbazModu === 'ek' ? EK_ADIMLAR : ILK_ADIMLAR);
 
@@ -385,24 +386,15 @@ function soruGrubu(soru, anahtar, secenekler) {
 let adSayaci = 0;
 const yeniKimlikAdi = (onEk) => `${onEk}-${++adSayaci}`;
 
-/** TANIŞMA: ne test edileceği, ortamlar ve girişin olup olmadığı. */
+/** TANIŞMA: testlerin hangi ortamlarda çalışacağı. */
 function sihirbazTanisma() {
   const devam = h('button', { type: 'submit', class: 'birincil' }, 'Devam', ikon('ok'));
   const form = h('form', { class: 'kart tanisma-karti', novalidate: true, 'aria-label': 'Tanışma soruları' },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sizi tanıyalım')),
-    h('p', { class: 'soluk' }, 'Birkaç soruyla kurulumu size göre hazırlayalım. Cevaplarınızı sonra Ayarlar\'dan istediğiniz gibi değiştirebilirsiniz.'),
-    soruGrubu('Ne test edeceksiniz?', 'hedef', [
-      ['web', 'Web ekranları', 'Tarayıcıda açılan sayfalar (form doldurma, akışlar).'],
-      ['servis', 'Servisler', 'SOAP / REST servisleri (tarayıcısız).'],
-      ['ikisi', 'İkisi de', 'Hem ekranlar hem servisler.']
-    ]),
+    h('p', { class: 'soluk' }, 'Kurulumu size göre hazırlayalım. Ortamları sonra Ayarlar\'dan istediğiniz gibi değiştirebilirsiniz.'),
     soruGrubu('Testler hangi ortamlarda çalışacak?', 'ortam', [
       ['test', 'Yalnızca test ortamı', 'Önerilen başlangıç.'],
       ['testCanli', 'Test ve canlı', 'Riskli ortamda kayıt oluşturan "yalnızca test ortamı" adımları atlanır.']
-    ]),
-    soruGrubu('Uygulamanıza giriş yaparak mı erişiliyor?', 'giris', [
-      ['evet', 'Evet', 'Kullanıcı adı ve parola ile giriş (Ayarlar > Giriş profilleri).'],
-      ['hayir', 'Hayır', 'Sayfalar girişsiz açılıyor.']
     ]),
     h('div', { class: 'dugmeler' }, devam, sihirbazModu === 'ilk' && kasaYok()
       ? h('button', { type: 'button', class: 'hayalet', onclick: () => hosgeldin() }, ikon('geri'), 'Geri')
@@ -411,7 +403,7 @@ function sihirbazTanisma() {
     olay.preventDefault();
     if (sihirbazModu === 'ilk' && kasaYok()) sihirbazKasa(); else sihirbazProje();
   });
-  sihirbazEkrani('tanisma', sihirbazBasligi(), 'Kurulumu size göre hazırlamak için birkaç soru.', form);
+  sihirbazEkrani('tanisma', sihirbazBasligi(), 'Kurulumu size göre hazırlamak için kısa bir soru.', form);
 }
 
 function sihirbazKasa() {

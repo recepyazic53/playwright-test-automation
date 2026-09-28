@@ -20,19 +20,28 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * env: alt sürece verilen ortam değişkeni (yoksa yalnız sunucuda kullanılır). carpan: ortam değişkenine yazılırken çarpan.
  * bolum 'zamanlama': Ayarlar > Koşu > Zamanlanmış koşular kartındaki form. altBolum 'gelismis': bölümün açılır "Gelişmiş koşu davranışı" kısmı.
  * Her ayarın varsayılanı, ayar eklenmeden önceki davranıştır.
- * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) kullanılır; arayüz aksi hâlde alanı pasif gösterir
+ * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) ya da şu değerlerden birindeyken (degerler) kullanılır; arayüz aksi hâlde alanı pasif gösterir
  * (pasifAciklama). Kaydedilen değer korunur.
- * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin';
- *   varsayilan: string | number; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
- *   etkinKosul?: { anahtar: string; deger: string; pasifAciklama: string } }>}
+ * tur 'onay': açık / kapalı (true / false; onay kutusu).
+ * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
+ *   varsayilan: string | number | boolean; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
+ *   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string } }>}
  */
 export const KOSU_AYAR_TANIMLARI = Object.freeze([
-  { anahtar: 'video', grup: 'Kayıt', etiket: 'Video', aciklama: 'Nöbetçi\'den başlatılan koşularda video kaydı.', tur: 'secim', varsayilan: 'her',
-    secenekler: [['her', 'Her koşuda'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_VIDEO' },
-  { anahtar: 'ekranGoruntusu', grup: 'Kayıt', etiket: 'Ekran görüntüsü (test sonu)', aciklama: 'Testin sonunda alınan ekran görüntüsü. Adım görüntüleri bundan bağımsızdır.',
-    tur: 'secim', varsayilan: 'yalnizHata', secenekler: [['her', 'Her testte'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_EKRAN_GORUNTUSU' },
-  { anahtar: 'iz', grup: 'Kayıt', etiket: 'İz (trace)', aciklama: 'Hata incelemesi için Playwright izi (ağ, DOM, adımlar).', tur: 'secim', varsayilan: 'yalnizHata',
-    secenekler: [['her', 'Her testte'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_IZ' },
+  // Kayıt: seçimlerin Playwright kiplerine eşlenmesi ve "yalnız başarılı" süzgeci ayarlar/kayit-kurallari.mjs'dedir.
+  { anahtar: 'video', grup: 'Kayıt', etiket: 'Video', aciklama: 'Nöbetçi\'den başlatılan koşularda video kaydı. "Yalnız başarılı testlerde": kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir.', tur: 'secim', varsayilan: 'her',
+    secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_VIDEO' },
+  { anahtar: 'videoBoyutu', grup: 'Kayıt', etiket: 'Video boyutu', aciklama: 'Küçük: video 800 piksele sığdırılır (Playwright varsayılanı; dosya küçük). Ekranla aynı: koşu ekran boyutunda (Gelişmiş > Tarayıcı > Koşu ekran genişliği / yüksekliği) kaydedilir; metin daha net okunur, dosya büyür.',
+    tur: 'secim', varsayilan: 'kucuk', secenekler: [['kucuk', 'Küçük'], ['ekran', 'Ekranla aynı']], env: 'NOBETCI_VIDEO_BOYUTU' },
+  { anahtar: 'ekranGoruntusu', grup: 'Kayıt', etiket: 'Ekran görüntüsü (test sonu)', aciklama: 'Testin sonunda alınan ekran görüntüsü. Adım görüntüleri bundan bağımsızdır (aşağıdaki "Adım ekran görüntüleri").',
+    tur: 'secim', varsayilan: 'yalnizHata', secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_EKRAN_GORUNTUSU' },
+  { anahtar: 'adimGoruntusu', grup: 'Kayıt', etiket: 'Adım ekran görüntüleri',
+    aciklama: 'Akış adımlarının ekran görüntüsü. Yalnız kalan adımda: yalnız testin kaldığı adımın görüntüsü alınır. Seçili adımlarda: yalnız ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar (giriş ve ekran açılışı görüntüsü alınmaz). Senaryo formunda senaryo başına değiştirilebilir. Görüntü alınamazsa koşu sürer; raporda "görüntü alınamadı" notu kalır.',
+    tur: 'secim', varsayilan: 'her', secenekler: [['her', 'Her adımda'], ['yalnizKalan', 'Yalnız kalan adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']], env: 'NOBETCI_ADIM_GORUNTUSU' },
+  { anahtar: 'iz', grup: 'Kayıt', etiket: 'İz (trace)',
+    aciklama: 'İz, testin adım adım kaydıdır: ağ istekleri, her adımdaki sayfa yapısı (DOM) ve ekran anları, konsol mesajları. Sonuç ayrıntısından indirilip Playwright iz görüntüleyicisiyle (npx playwright show-trace <dosya> ya da trace.playwright.dev) açılır. "Yalnız başarılı testlerde": iz her testte alınır, kalan testlerinki kaydedilmeden silinir.',
+    tur: 'secim', varsayilan: 'yalnizHata',
+    secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_IZ' },
   { anahtar: 'yenidenDeneme', grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Kalan test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
   { anahtar: 'kosuSureLimitiDk', grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',
     tur: 'sayi', varsayilan: 10, enAz: 1, enCok: 120, birim: 'dk', env: 'NOBETCI_KOSU_SURE_LIMITI_MS', carpan: 60_000 },
@@ -126,17 +135,30 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'otomatikYedekSayisi', bolum: 'yedekleme', grup: 'Otomatik yedek', etiket: 'Saklanacak otomatik yedek', aciklama: 'Günlük otomatik yedeklerden en yeni bu kadarı tutulur; eskiler silinir.',
     tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 365, birim: 'adet' },
   { anahtar: 'sonucSaklamaGun', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Koşu sonuçlarını sakla', aciklama: 'Bu süreden eski ekran ve servis koşu sonuçları (adımlar, ekran görüntüleri, videolar dahil) günlük temizlikte silinir. 0: süresiz (hiç silinmez).',
-    tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3650, birim: 'gün' }
+    tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3650, birim: 'gün' },
+  // Kademeli saklama: sonucun kendisi (durum, süre, hata, adımlar) kalır; yalnız ekran görüntüleri ve videolar silinir. Günlük
+  // temizlikte sıra: 1) sonuç saklama (bütün sonuç), 2) medya inceltme, 3) video saklama (Güvenlik), 4) sahipsiz dosyalar.
+  { anahtar: 'medyaInceltme', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Eski sonuçlarda medyayı incelt',
+    aciklama: 'Aşağıdaki günden eski sonuçların ekran görüntüleri ve videoları günlük temizlikte silinir; sonucun kendisi (durum, süre, hata metni, adımlar) ve izler kalır. Silinen medya sonuçta "saklama süresi doldu" olarak görünür. Sıra: önce "Koşu sonuçlarını sakla" (bütün sonucu siler), sonra bu inceltme, en son Güvenlik > Video saklama süresi (videolar hangisi önce dolarsa o zaman silinir).',
+    tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Kapalı'], ['basarili', 'Başarılı testlerin görüntü ve videolarını sil'], ['hatali', 'Kalan testlerin görüntü ve videolarını sil'], ['ikisi', 'İkisini de sil']] },
+  { anahtar: 'medyaInceltmeGun', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Medyayı incelt: şu günden eski', aciklama: 'Koşu başlangıcı bu kadar günden eski sonuçlar inceltilir.',
+    tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 3650, birim: 'gün',
+    etkinKosul: { anahtar: 'medyaInceltme', degerler: ['basarili', 'hatali', 'ikisi'], pasifAciklama: 'Yalnız medya inceltme açıkken kullanılır.' } },
+  { anahtar: 'medyaInceltmeKoru', bolum: 'yedekleme', grup: 'Sonuç saklama', etiket: 'Kalan testlerde kalan adımın görüntüsünü ve test sonu görüntüsünü koru',
+    aciklama: 'Kalan testlerin medyası silinirken hatanın görüldüğü iki görüntü kalır: kalan adımın görüntüsü (yoksa son adım görüntüsü) ve test sonu görüntüsü. Videolar yine silinir.',
+    tur: 'onay', varsayilan: true,
+    etkinKosul: { anahtar: 'medyaInceltme', degerler: ['hatali', 'ikisi'], pasifAciklama: 'Yalnız kalan testlerin medyası inceltilirken kullanılır.' } }
 ]);
 
-/** @typedef {{ video: string; ekranGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
+/** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
  *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
  *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
- *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number }} KosuAyarlari */
+ *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number;
+ *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */
 export const varsayilanKosuAyarlari = () => /** @type {KosuAyarlari} */ (Object.fromEntries(KOSU_AYAR_TANIMLARI.map((t) => [t.anahtar, t.varsayilan])));
@@ -146,6 +168,10 @@ export const varsayilanKosuAyarlari = () => /** @type {KosuAyarlari} */ (Object.
  * @param {(typeof KOSU_AYAR_TANIMLARI)[number]} t @param {unknown} v
  */
 function degerDogrula(t, v) {
+  if (t.tur === 'onay') {
+    if (typeof v !== 'boolean') throw new DepoHatasi(`"${t.etiket}" için açık / kapalı (true / false) verilmelidir.`);
+    return v;
+  }
   if (t.tur === 'secim') {
     if (!t.secenekler?.some(([d]) => d === v)) throw new DepoHatasi(`"${t.etiket}" için geçersiz seçim.`);
     return String(v);

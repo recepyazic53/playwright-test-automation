@@ -187,6 +187,8 @@ export type AdimKosuTanimi = {
   /** İş kuralı uyarısının göründüğü öğe. */
   hataGostergesi?: { secici: string };
   zamanAsimiSn?: number;
+  /** "Ekran görüntüsü al" işareti: adım görüntüleri "Seçili adımlarda" iken yalnız bu adımların görüntüsü alınır. */
+  ekranGoruntusu?: boolean;
   not?: string;
 };
 

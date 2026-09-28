@@ -73,7 +73,7 @@ const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDege
 const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'yenidenGiris', 'kosu']);
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
-const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'not']);
+const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'not']);
 const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklama', 'zamanAsimiSn', 'sureSn']);
 const BOLUM_ANAHTARLARI = new Set(['id', 'baslik', 'pomMetodu', 'gorunurluk', 'alanlar']);
 const EKRAN_ANAHTARLARI = new Set([
@@ -353,6 +353,8 @@ function kosuTanimiDogrula(h, yer, kosu) {
     if (d !== undefined && !(Number.isInteger(d) && d >= 1 && d <= 600)) h.ekle(sYer, '"zamanAsimiSn" 1–600 arasında tam sayı olmalı');
   };
   sure(kosu.zamanAsimiSn, yer);
+  // "Ekran görüntüsü al" işareti (adım görüntüleri "Seçili adımlarda" iken bu adımın görüntüsü alınır).
+  if (kosu.ekranGoruntusu !== undefined && typeof kosu.ekranGoruntusu !== 'boolean') h.ekle(yer, '"ekranGoruntusu" true ya da false olmalı');
   if (kosu.aksiyonlar !== undefined) {
     if (!Array.isArray(kosu.aksiyonlar)) h.ekle(yer, '"aksiyonlar" dizi olmalı');
     else kosu.aksiyonlar.forEach((a, i) => {

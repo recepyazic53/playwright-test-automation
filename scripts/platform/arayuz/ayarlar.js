@@ -671,6 +671,24 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const grupKabi = (g, tekGrup, ...cocuklar) => (gomulu && tekGrup ? h('div', { class: 'ayar-grubu' }, ...cocuklar) : h('fieldset', {}, h('legend', {}, g), ...cocuklar));
   const grupAlanlari = (liste) => [...new Set(liste.map((t) => t.grup))].map((g, _i, gruplar) => grupKabi(g, gruplar.length === 1, ...liste.filter((t) => t.grup === g).map((t) => {
       let girdi;
+      if (t.tur === 'onay') {
+        // Açık / kapalı ayar: onay kutusu (etiket kutunun yanında; yardım ve pasif açıklaması altında).
+        girdi = h('input', { type: 'checkbox', id: yeniKimlik('ayar'), checked: ayarlar[t.anahtar] === true });
+        girdiler.set(t.anahtar, girdi);
+        const yardimId = `${girdi.id}-yardim`;
+        girdi.setAttribute('aria-describedby', `${yardimId} ${girdi.id}-hata`);
+        const kutu = h('div', { class: 'alan onay-alani' },
+          h('label', { class: 'secenek', for: girdi.id }, girdi, t.etiket),
+          h('div', { class: 'yardim', id: yardimId }, `${t.aciklama} Varsayılan: ${t.varsayilan ? 'açık' : 'kapalı'}.`),
+          h('div', { class: 'alan-hatasi', id: `${girdi.id}-hata`, role: 'alert' }));
+        if (t.etkinKosul) {
+          const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);
+          girdi.setAttribute('aria-describedby', `${girdi.getAttribute('aria-describedby')} ${not.id}`);
+          kutu.insertBefore(not, kutu.querySelector('.yardim'));
+          kosulluAlanlar.push({ t, girdi, kutu, not });
+        }
+        return kutu;
+      }
       if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
       else if (t.tur === 'sayi') girdi = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', value: String(ayarlar[t.anahtar]) });
       else girdi = h('input', { type: 'text', value: String(ayarlar[t.anahtar]), spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi' });
@@ -702,7 +720,8 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   for (const k of kosulluAlanlar) {
     const bagli = girdiler.get(k.t.etkinKosul.anahtar);
     const guncelle = () => {
-      const pasif = !bagli || bagli.value !== k.t.etkinKosul.deger;
+      const etkinDegerler = k.t.etkinKosul.degerler || [k.t.etkinKosul.deger];
+      const pasif = !bagli || !etkinDegerler.includes(bagli.value);
       k.girdi.disabled = pasif;
       k.kutu.classList.toggle('pasif', pasif);
       k.not.hidden = !pasif;
@@ -718,6 +737,7 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
     const yeni = {};
     for (const t of tanimlar) {
       const g = girdiler.get(t.anahtar);
+      if (t.tur === 'onay') { yeni[t.anahtar] = g.checked; continue; }
       if (t.tur === 'sayi') {
         const n = Number(g.value);
         if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) {
@@ -793,7 +813,7 @@ async function guvenlik(govde, baglam) {
   const saklamaMesaj = mesajKutusu();
   const saklamaKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
   const saklamaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('video'), 'Video saklama süresi'),
-    h('p', { class: 'soluk' }, 'Koşu videoları şifreli olarak saklanır; bu süreden eski videolar günlük temizlikte silinir. Ekran görüntüleri, izler ve sonuçlar silinmez.'),
+    h('p', { class: 'soluk' }, 'Koşu videoları şifreli olarak saklanır; bu süreden eski videolar günlük temizlikte silinir. Ekran görüntüleri, izler ve sonuçlar burada silinmez. Sonuçların medyasını daha önce inceltmek (ör. başarılı testlerin videoları) ya da sonuçları silmek için: Ayarlar > Yedekleme > Sonuç saklama. Hangisinin süresi önce dolarsa video o zaman silinir.'),
     saklamaMesaj.kutu,
     alan('Süre (gün)', gun, { yardim: `1–365 gün; varsayılan ${ayar.videoSaklamaVarsayilan}.` }),
     h('div', { class: 'dugmeler' }, saklamaKaydet));
