@@ -11,7 +11,7 @@
 //   · Önizlemede değer GÖSTERİLMEZ (yalnız "eşleşti / yeni satır / atlandı: neden"); gizli sütuna yazılacak değer şifreli saklanır.
 //   · Onay → bağlar + yeni satırlar + senaryolar TEK işlemde; değişiklik geçmişine kayıt. kimlikProfili alanları (hazır profil / kimlik
 //     nesnesi) tablo başvurusu almadığından listelenir ama bağlanmaz.
-//   · Aynı türden ikinci kişi alanı (ör. ikinci telefon, "ettiren / ödeyen" ön ekli alanlar, ayrı bölümdeki kişiler) ayrı ETİKETLE
+//   · Aynı türden ikinci kişi alanı (ör. ikinci telefon, "alıcı / ödeyen" ön ekli alanlar, ayrı bölümdeki kişiler) ayrı ETİKETLE
 //     bağlanmak üzere önerilir (bağ etiketi: ${Tablo[etiket].Sütun}; her etiket kendi satırından gelir). Etiket alanın ya da bölümün
 //     adından türetilir (ör. "Ödeyen telefon" → "ödeyen"); kullanıcı değiştirebilir (etiketler). Tek kişilik ekranda etiket önerilmez.
 import { DepoHatasi, gecmisYaz, ortamlariListele, ekranlariListele, ortamGetir } from '../veritabani/depo.mjs';

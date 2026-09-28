@@ -34,7 +34,7 @@ test('kişi alanı kategorisi: kimlik / vergi / pasaport / doğum / telefon / e-
   expect(k('Kargo firması')).toBeNull();
 });
 
-test('kişi etiketi önerisi: tek kişide yok; ikinci telefon, "ettiren / ödeyen" ön ekleri ve bölüm adları ayrı etiket olur', () => {
+test('kişi etiketi önerisi: tek kişide yok; ikinci telefon, "alıcı / ödeyen" ön ekleri ve bölüm adları ayrı etiket olur', () => {
   expect(kisiEtiketiTuret('Ödeyen T.C. Kimlik No')).toBe('ödeyen');
   expect(kisiEtiketiTuret('Cep telefonu')).toBe('');
   expect(kisiEtiketiTuret('E-posta')).toBe('');
@@ -42,10 +42,10 @@ test('kişi etiketi önerisi: tek kişide yok; ikinci telefon, "ettiren / ödeye
   expect(oner([['a', 'Cep telefonu', 'telefon'], ['b', 'E-posta', 'eposta'], ['c', 'Ödeyen kurum', 'ad']])).toEqual({ a: '', b: '', c: '' });
   expect(oner([['a', 'Telefon', 'telefon'], ['b', 'İkinci telefon', 'telefon'], ['c', 'E-posta', 'eposta']])).toEqual({ a: '', b: 'ikinci', c: '' });
   expect(oner([['a', 'Telefon', 'telefon'], ['b', 'Telefon 2', 'telefon']])).toEqual({ a: '', b: 'kişi 2' });
-  expect(oner([['a', 'Ettiren adı', 'ad'], ['b', 'Ettiren telefon', 'telefon'], ['c', 'Ödeyen adı', 'ad'], ['d', 'Ödeyen telefon', 'telefon'], ['e', 'Cep telefonu', 'telefon']]))
-    .toEqual({ a: 'ettiren', b: 'ettiren', c: 'ödeyen', d: 'ödeyen', e: '' });
+  expect(oner([['a', 'Alıcı adı', 'ad'], ['b', 'Alıcı telefon', 'telefon'], ['c', 'Ödeyen adı', 'ad'], ['d', 'Ödeyen telefon', 'telefon'], ['e', 'Cep telefonu', 'telefon']]))
+    .toEqual({ a: 'alıcı', b: 'alıcı', c: 'ödeyen', d: 'ödeyen', e: '' });
   // Alt bölümlerdeki kişiler: alan adında ayırt edici söz yoksa bölüm adından.
-  expect(oner([['a', 'Telefon', 'telefon', 'Sigortalı bilgileri'], ['b', 'Telefon', 'telefon', 'Lehtar bilgileri']])).toEqual({ a: 'sigortalı', b: 'lehtar' });
+  expect(oner([['a', 'Telefon', 'telefon', 'Gönderen bilgileri'], ['b', 'Telefon', 'telefon', 'Alıcı bilgileri']])).toEqual({ a: 'gönderen', b: 'alıcı' });
 });
 
 test.describe('uçtan uca: kişi alanlarını bağla (127.0.0.1)', () => {
