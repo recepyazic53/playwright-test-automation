@@ -529,4 +529,91 @@ test.describe('Arayüz: paket önizlemesinde test verisi', () => {
       k.temizle();
     }
   });
+
+  test('kabul düğmesi kapalıyken nedenler yazar; "Bölüme git" karar bekleyen tabloya götürür; kararla düğme açılır; 390 px taşma yok', async () => {
+    test.setTimeout(120_000);
+    const k = geciciKlasor('paket-tv-neden');
+    const vtYolu = join(k.yol, 'platform.db');
+    const PAROLA = 'Paket-Neden-Kasa-Parolasi-7';
+    const vt = await veritabaniniHazirla(vtYolu);
+    await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
+    vt.kapat();
+    const nobetci = await nobetciBaslat(k.yol, vtYolu, {});
+    const tarayici = await chromium.launch();
+    try {
+      const api = (yol: string, govde?: Nesne) => nobetciApi(nobetci, yol, govde) as Promise<Nesne>;
+      expect((await api('/platform/kasa/ac', { parola: PAROLA })).basarili).toBe(true);
+      const projeId = String((await api('/platform/proje/kaydet', { ad: 'Neden projesi' })).proje.id);
+      // Pakettekilerle aynı adlı iki tablo: ikisi için de karar beklenir.
+      for (const [ad, sutun] of [['Kapsam - Alternatif', 'Kapsam'], ['Taksit', 'Taksit']]) {
+        const t = await api('/platform/tablo/kaydet', { projeId, ad, sutunlar: [{ ad: sutun }], satirlar: [{ degerler: { [sutun]: 'X' } }] });
+        expect(t.basarili, String(t.mesaj ?? '')).not.toBe(false);
+      }
+      const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+      const page = await baglam.newPage();
+      const hatalar: string[] = [];
+      page.on('pageerror', (e) => hatalar.push(String(e)));
+      await page.goto('/#/ekranlar/yeni');
+      await page.locator('#paket-dosyasi').setInputFiles({ name: 'paket.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(paketTV())) });
+      const dugme = page.getByRole('button', { name: 'Ekranı oluştur' });
+      const nedenler = page.locator('.kabul-nedenleri');
+      await expect(dugme).toBeDisabled();
+      // Birden çok neden: projede ortam yok (senaryolar seçili) + iki tabloda karar.
+      await expect(nedenler.getByRole('listitem')).toHaveCount(2);
+      await expect(nedenler).toContainText('projede ortam yok');
+      await expect(nedenler).toContainText('Test verisi: 2 tablo için karar bekleniyor');
+      await expect(dugme).toHaveAttribute('title', /Kapalı: .*Test verisi: 2 tablo için karar bekleniyor/);
+      await expect(dugme).toHaveAttribute('aria-describedby', String(await nedenler.getAttribute('id')));
+      await expect(dugme).toHaveAccessibleDescription(/Test verisi: 2 tablo için karar bekleniyor/);
+
+      // 390 px: ne sayfa ne neden alanı taşar; "Bölüme git" ilk kararsız tabloya kaydırır ve ilk seçeneği odaklar.
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      const tasma = () => page.evaluate(() => {
+        const kok = document.documentElement;
+        const n = document.querySelector('.kabul-nedenleri') as HTMLElement | null;
+        const r = n && !n.hidden ? n.getBoundingClientRect() : null;
+        // Test verisi bölümünün içi de taşmaz (tablo kutuları, uzun rozetler, karar seçenekleri).
+        const tv = document.querySelector('.test-verisi-onizleme') as HTMLElement;
+        return { sayfa: kok.scrollWidth - kok.clientWidth, neden: r ? Math.max(0, r.right - kok.clientWidth) + Math.max(0, -r.left) : 0, testVerisi: tv.scrollWidth - tv.clientWidth };
+      });
+      expect(await tasma()).toEqual({ sayfa: 0, neden: 0, testVerisi: 0 });
+      const tvSatiri = nedenler.getByRole('listitem').filter({ hasText: 'Test verisi' });
+      await tvSatiri.getByRole('button', { name: 'Bölüme git' }).click();
+      const kapsamGrubu = page.getByRole('radiogroup', { name: 'Kapsam - Alternatif: aynı adlı tablo' });
+      await expect(kapsamGrubu.getByRole('radio').first()).toBeFocused();
+      await expect(kapsamGrubu).toBeInViewport();
+      await expect(page.locator('.tv-tablo.dikkat-vurgusu')).toHaveCount(1);
+
+      // Senaryo nedeni: "Bölüme git" → "Hiçbiri"; seçim kalkınca bu neden gider.
+      await nedenler.getByRole('listitem').filter({ hasText: 'projede ortam yok' }).getByRole('button', { name: 'Bölüme git' }).click();
+      await expect(page.getByRole('button', { name: 'Hiçbiri' })).toBeFocused();
+      await page.getByRole('button', { name: 'Hiçbiri' }).click();
+      await expect(nedenler.getByRole('listitem')).toHaveCount(1);
+
+      // Bir karar: sayı düşer. Yeni ad boş: ayrı neden, "Bölüme git" ad girdisini odaklar.
+      await kapsamGrubu.getByLabel('Atla (yazma)').check();
+      await expect(nedenler).toContainText('Test verisi: 1 tablo için karar bekleniyor');
+      const taksitGrubu = page.getByRole('radiogroup', { name: 'Taksit: aynı adlı tablo' });
+      await taksitGrubu.getByLabel('Yeni adla yaz:').check();
+      await expect(dugme).toBeEnabled();
+      await expect(nedenler).toBeHidden();
+      await taksitGrubu.getByLabel('Taksit için yeni tablo adı').fill('');
+      await expect(dugme).toBeDisabled();
+      await expect(nedenler).toContainText('Test verisi: 1 tablo için yeni ad boş');
+      await nedenler.getByRole('button', { name: 'Bölüme git' }).click();
+      await expect(taksitGrubu.getByLabel('Taksit için yeni tablo adı')).toBeFocused();
+      await page.keyboard.type('Taksit yeni');
+      await expect(dugme).toBeEnabled();
+      await expect(nedenler).toBeHidden();
+      await expect(dugme).not.toHaveAttribute('title');
+      await expect(dugme).not.toHaveAttribute('aria-describedby');
+      expect(await tasma()).toEqual({ sayfa: 0, neden: 0, testVerisi: 0 });
+      expect(hatalar).toEqual([]);
+    } finally {
+      await tarayici.close();
+      nobetci.surec.kill('SIGTERM');
+      k.temizle();
+    }
+  });
 });
