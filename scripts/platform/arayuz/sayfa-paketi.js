@@ -90,14 +90,14 @@ function yuklemeAdimi(govde, s, onceki = null) {
   // Mevcut ekran: paket ya tekrar analize girer (bulgular tek tek onaylanır) ya da modeli değiştirir (yeni sürüm; seçici,
   // bağlı liste, koşu değişiklikleri dahil; senaryolar korunur).
   let yuklemeModu = s.mod === 'analiz' ? 'analiz' : s.mod;
-  const modSecimi = s.mod === 'analiz' ? h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': 'Paket ne yapsın?' },
+  const modSecimi = s.mod === 'analiz' ? h('fieldset', { class: 'paket-modu' }, h('legend', {}, 'Paket ne yapsın?'), h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': 'Paket ne yapsın?' },
     [['analiz', 'Tekrar analiz', 'Farklar bulgu olarak gelir, tek tek kabul / red edilir.'],
       ['degistir', 'Modeli değiştir', 'Paket yeni model sürümü olur (seçici, bağlı liste, koşu değişiklikleri dahil); senaryolar ve diğer akışlar korunur.']]
       .map(([deger, ad, aciklama]) => {
         const r = h('input', { type: 'radio', name: 'paket-modu', value: deger, checked: yuklemeModu === deger });
         r.addEventListener('change', () => { yuklemeModu = deger; });
         return h('label', {}, r, h('span', {}, h('b', {}, ad), ' — ', h('span', { class: 'soluk kucuk' }, aciklama)));
-      })) : null;
+      }))) : null;
   const isle = async (dosya) => {
     if (!dosya) return;
     if (dosya.size > PAKET_EN_BUYUK) { yerlestir(durumAlani, hataListesi('Dosya çok büyük', [{ yer: dosya.name, mesaj: 'Paket en fazla 16 MB olabilir.' }])); return; }
