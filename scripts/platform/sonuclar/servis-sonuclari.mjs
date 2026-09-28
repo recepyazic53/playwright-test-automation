@@ -69,7 +69,9 @@ function basliklariMaskele(b, ekler) {
 function hataMetni(sonuc) {
   if (sonuc.hata) return String(sonuc.hata);
   const kalan = Array.isArray(sonuc.kontroller) ? sonuc.kontroller.filter((k) => k && !k.gecti) : [];
-  if (kalan.length) return kalan.map((k) => `${k.ad}${k.aciklama ? ` — ${k.aciklama}` : ''}`).join('\n');
+  // Sözleşme uyumsuzlukları yol bazında (alt satırlar) eklenir.
+  const altlar = (/** @type {any} */ k) => (k.tur === 'sozlesme' && Array.isArray(k.alt) ? k.alt.map((/** @type {any} */ a) => `\n  ${a.ad}: ${a.aciklama ?? ''}`).join('') : '');
+  if (kalan.length) return kalan.map((k) => `${k.ad}${k.aciklama ? ` — ${k.aciklama}` : ''}${altlar(k)}`).join('\n');
   return sonuc.durumKodu ? `HTTP ${sonuc.durumKodu}` : '';
 }
 
@@ -131,7 +133,8 @@ function servisKosulariniGrupla(satirlar, servisAdlari, ortamAdlari) {
     const basMs = new Date(s.baslangic).getTime();
     const bitisMs = basMs + s.sureMs;
     let g = acik.get(anahtar);
-    const senaryoAnahtari = s.senaryoId ?? `baslik:${s.baslik}`;
+    // Veri koşuları (tablodan çoklu satır) aynı senaryonun farklı başlıklı ("Senaryo [satır]") çalıştırmalarıdır: aynı koşuda kalırlar.
+    const senaryoAnahtari = s.senaryoId ? `${s.senaryoId}\u0000${s.baslik}` : `baslik:${s.baslik}`;
     if (!g || basMs - g.bitisMs > ARDISIKLIK_MS || g.senaryolar.has(senaryoAnahtari)) {
       g = {
         k: {
@@ -353,7 +356,7 @@ export function servisSonucKosusu(vt, q) {
     const ekler = ekGizliAdlar(vt);
     const adimlar = (Array.isArray(a.sonuc.adimlar) ? a.sonuc.adimlar : []).map((/** @type {Record<string, any>} */ x) => ({
       no: Number(x.no) || 0, ad: String(x.ad ?? ''), servis: String(x.servis ?? ''), senaryo: String(x.senaryo ?? ''), durum: String(x.durum ?? ''),
-      sureMs: Number(x.sureMs) || 0, satirId: x.kosuId ? String(x.kosuId) : null, hata: x.neden ? String(x.neden) : '',
+      sureMs: Number(x.sureMs) || 0, satirId: x.kosuId ? String(x.kosuId) : null, hata: x.neden ? String(x.neden) : '', ...(x.not ? { not: String(x.not) } : {}),
       okunanlar: x.okunanlar && typeof x.okunanlar === 'object'
         ? Object.fromEntries(Object.entries(x.okunanlar).map(([ad, d]) => [ad, gizliAdMi(ad, ekler) ? MASKE : String(d)])) : undefined
     }));
@@ -374,9 +377,15 @@ export function servisSonucKosusu(vt, q) {
   const senaryolar = satirlar.map((sid) => servisKosusuGetir(vt, sid)).filter((r) => r !== undefined).map((r) => ({
     satirId: r.id, senaryoId: r.senaryoId, baslik: r.baslik, durum: r.durum, sureMs: r.sureMs, baslangic: r.baslangic,
     durumKodu: typeof r.sonuc.durumKodu === 'number' ? r.sonuc.durumKodu : null, hata: r.durum === 'basarili' ? '' : hataMetni(r.sonuc),
-    durduruldu: Boolean(r.sonuc.durduruldu)
+    durduruldu: Boolean(r.sonuc.durduruldu),
+    // Veri koşusu (tablodan çoklu satır): anahtar / ad; tekrar koşusunun kaynağı.
+    veriAnahtari: r.sonuc.veriKosusu && typeof r.sonuc.veriKosusu.anahtar === 'string' ? r.sonuc.veriKosusu.anahtar : null,
+    veriKosusu: r.sonuc.veriKosusu && typeof r.sonuc.veriKosusu.ad === 'string' ? r.sonuc.veriKosusu.ad : null,
+    tekrarKaynagi: typeof r.sonuc.tekrarKaynagi === 'string' ? r.sonuc.tekrarKaynagi : null
   }));
-  return { kosu: { ...ozet, id: kosu.id }, senaryolar, adimlar: [] };
+  // "Tekrar: <önceki koşu>" (başarısızları tekrar çalıştırmayla başlatıldıysa).
+  const tekrarKaynagi = senaryolar.map((x) => x.tekrarKaynagi).find(Boolean) ?? null;
+  return { kosu: { ...ozet, id: kosu.id, tekrarKaynagi }, senaryolar, adimlar: [] };
 }
 
 /**
@@ -404,9 +413,35 @@ export function servisSonucSenaryosu(vt, q) {
       okunanlar: s.okunanlar && typeof s.okunanlar === 'object'
         ? Object.fromEntries(Object.entries(s.okunanlar).map(([ad, d]) => [ad, gizliAdMi(ad, ekler) ? MASKE : String(d)])) : null,
       akis: s.akis && typeof s.akis === 'object' ? { akisId: s.akis.akisId ?? null, akisBaslik: String(s.akis.akisBaslik ?? ''), adimNo: Number(s.akis.adimNo) || null, adimAd: String(s.akis.adimAd ?? '') } : null,
-      oturum: s.oturum && typeof s.oturum === 'object' ? { akis: String(s.oturum.akis ?? ''), durum: String(s.oturum.durum ?? '') } : null
+      oturum: s.oturum && typeof s.oturum === 'object' ? { akis: String(s.oturum.akis ?? ''), durum: String(s.oturum.durum ?? '') } : null,
+      yetkiTekrari: s.yetkiTekrari && typeof s.yetkiTekrari === 'object' ? { not: String(s.yetkiTekrari.not ?? '') } : null,
+      // Doğrulanan dosyaların özeti (içerik dönmez; saklandıysa /platform/servis-sonuclari/dosya ile alınır).
+      dosyalar: Array.isArray(s.dosyalar) ? s.dosyalar.map((/** @type {any} */ d, /** @type {number} */ sira) => ({
+        sira, ad: String(d.ad ?? 'dosya'), bicim: String(d.bicim ?? ''), boyut: Number(d.boyut) || 0, gecti: d.gecti === true, saklandi: typeof d.icerikBase64 === 'string'
+      })) : []
     }
   };
+}
+
+/** Biçim → içerik türü (tarayıcıda indirilen dosyanın türü). @type {Record<string, string>} */
+const DOSYA_ICERIK_TURLERI = {
+  csv: 'text/csv', metin: 'text/plain', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+
+/**
+ * GET /platform/servis-sonuclari/dosya?projeId=&id=<servis koşusu satırı>&sira=<n>: saklanan doğrulanan dosya (Ayarlar > Koşu > Kayıt >
+ * "Doğrulanan dosya" izin verdiyse). Şifreli koşu kaydından çözülür ve yanıtta döner; sunucu diske YAZMAZ (tarayıcı indirir).
+ * Dosya ham hâliyle döner (gizli içerik maskelenmez; arayüz indirmeden önce onay ister).
+ * @param {Veritabani} vt @param {URLSearchParams} q
+ */
+export function servisSonucDosyasi(vt, q) {
+  const projeId = kimlik(q.get('projeId'), 'projeId');
+  const r = servisKosusuGetir(vt, kimlik(q.get('id')));
+  if (!r || r.projeId !== projeId) throw new DepoHatasi('Senaryo sonucu bulunamadı.');
+  const sira = Number(q.get('sira'));
+  const d = Array.isArray(r.sonuc.dosyalar) && Number.isInteger(sira) ? r.sonuc.dosyalar[sira] : undefined;
+  if (!d || typeof d.icerikBase64 !== 'string') throw new DepoHatasi('Bu sonuçta dosyanın kendisi saklanmadı (yalnız özet). Ayarlar > Koşu > Kayıt > "Doğrulanan dosya".');
+  return { dosya: { ad: String(d.ad ?? 'dosya'), icerikTuru: DOSYA_ICERIK_TURLERI[String(d.bicim)] ?? 'application/octet-stream', icerikBase64: d.icerikBase64 } };
 }
 
 /** sunucu-platform.mjs GET_UCLARI'na eklenir (yalnız okuma; kasa açık olmalı — sunucu denetler). */
@@ -414,5 +449,6 @@ export function servisSonucSenaryosu(vt, q) {
 export const SERVIS_SONUC_UCLARI = [
   ['/platform/servis-sonuclari', servisSonucOzeti],
   ['/platform/servis-sonuclari/kosu', servisSonucKosusu],
-  ['/platform/servis-sonuclari/senaryo', servisSonucSenaryosu]
+  ['/platform/servis-sonuclari/senaryo', servisSonucSenaryosu],
+  ['/platform/servis-sonuclari/dosya', servisSonucDosyasi]
 ];

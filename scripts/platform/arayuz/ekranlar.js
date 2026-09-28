@@ -26,6 +26,7 @@ import { ekranlarGrubu, navGrubu, servisleriAl, servislerBolumu, urunlerBasligi 
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
 import { girisAkislariniAl, girisBaglantisi, girisKarti } from './giris-akisi.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
+import { acilirMenu } from './calisma-alani.js';
 
 /** Otomatik tarama modülü isteğe bağlı yüklenir (yüklenemezse yalnızca tarama çalışmaz). */
 let taramaSozu = null;
@@ -120,7 +121,7 @@ function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
       : e.modelSurumu ? h('span', { class: 'adet', title: `model sürümü ${e.modelSurumu}` }, `v${e.modelSurumu}`) : null);
   yerlestir(nav,
     h('a', { href: '#/ekranlar', 'aria-current': secili === '' ? 'page' : null }, ikon('izgara'), 'Tüm ekranlar', h('span', { class: 'adet' }, String(tumu.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru)).length))),
-    h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('artiYalin'), 'Sayfa ekle'),
+    h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Sayfa ekle'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranModelli.map(baglanti)),
     navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: [...girisler.map(girisBaglantisi), ...ortakAkislar.map(baglanti)], bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }),
@@ -161,7 +162,7 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
           h('span', {}, ikon('uyari'), bekleyen.length ? `${bekleyen.length} ekranda karar bekleyen bulgu` : 'bekleyen bulgu yok'),
           h('span', {}, ikon('liste'), `${ekranlar.reduce((t, e) => t + e.senaryoSayisi, 0)} senaryo`),
           devreDisi ? h('span', {}, ikon('eksi'), `${devreDisi} devre dışı`) : null)),
-      h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('artiYalin'), 'Sayfa ekle'))),
+      h('div', { class: 'eylemler' }, h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Sayfa ekle'))),
     h('section', { class: 'kesif-seridi', 'aria-label': 'Yeni sayfa nasıl eklenir' },
       h('ol', { class: 'kesif-adimlari' },
         h('li', {}, h('b', {}, 'İstek metnini kopyalayın'), h('span', {}, 'Sayfanın bağlantısıyla birlikte yapay zekâ aracınıza (tarayıcıyı kullanabilen bir kodlama asistanı) verin.')),
@@ -170,7 +171,7 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
       h('div', { class: 'kesif-cumlesi' }, istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
-      : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('artiYalin'), 'Sayfa ekle') }),
+      : bosDurum('Henüz ekran yok.', 'İlk sayfanızı "Sayfa ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Sayfa ekle') }),
     ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }
@@ -263,14 +264,21 @@ async function ekranAyrintisi(icerik, s) {
   });
   const adres = `#/ekranlar/e/${encodeURIComponent(e.id)}`;
   const paketYukle = () => { location.hash = `${adres}/yukle`; };
-  const yorumla = h('button', { type: 'button', class: 'hayalet', title: 'Model, bulgular ve senaryo özetlerini yapay zekâ aracınız için dosyaya yazar' }, ikon('simsek'), 'Yapay zekâ ile yorumla');
-  yorumla.addEventListener('click', () => claudeDosyasiOlustur({ proje: s.proje, ekranId: e.id, tur: 'yorumla' }, yorumla));
-  const tekrar = h('button', { type: 'button' }, ikon('yenile'), 'Tekrar analiz et');
-  const tara = h('button', { type: 'button', title: 'Nöbetçi sayfayı seçilen ortamda yalnızca okuyarak tarar ve bir sayfa paketi üretir' }, ikon('ara'), 'Ekranı tara');
-  tara.addEventListener('click', () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }));
-  const kaydet = h('button', { type: 'button', title: 'Akışı tarayıcıda siz yürütürsünüz; Nöbetçi adımları ve alanların yapısını kaydeder (değerleri kaydetmez)' }, ikon('video'), 'Akışı kaydet');
-  kaydet.addEventListener('click', () => kayitBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }));
-  tekrar.addEventListener('click', () => tekrarAnalizDiyalogu({ proje: s.proje, ekran: e, baglamProfilleri: d.baglamProfilleri, sonSecim: d.analiz.sonBaglamProfilleri, paketYukle }));
+  // Model eylemleri tek menüde ("Modeli güncelle ▾"; modeli yoksa "Model ekle ▾"): her seçenekte bir satırlık "ne zaman kullanılır".
+  const modelVar = Boolean(d.surum);
+  const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
+  const modelMenusu = acilirMenu({
+    dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
+      { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği sayfa paketi elinizdeyse.', fn: paketYukle },
+      { ikon: 'ara', metin: 'Ekranı tara', aciklama: 'Sayfa değiştiyse: Nöbetçi yalnızca okuyarak tarar, yeni paket üretir.', fn: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
+      { ikon: 'video', metin: 'Akışı kaydet', aciklama: 'Çok adımlı / koşullu akışlarda: işlemi siz yaparsınız, Nöbetçi adımları kaydeder.', fn: () => kayitBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
+      modelVar ? 'ayrac' : null,
+      modelVar ? { ikon: 'yenile', metin: 'Tekrar analiz et', aciklama: 'Modeli yapay zekâ aracınızla yeniden inceletmek için istek metni (bağlam profilleriyle).',
+        fn: () => tekrarAnalizDiyalogu({ proje: s.proje, ekran: e, baglamProfilleri: d.baglamProfilleri, sonSecim: d.analiz.sonBaglamProfilleri, paketYukle }) } : null,
+      modelVar ? { ikon: 'simsek', metin: 'Yapay zekâ ile yorumla', aciklama: 'Model, bulgular ve senaryo özetlerini yorum için dosyaya yazar (gizli değer yok).',
+        fn: () => claudeDosyasiOlustur({ proje: s.proje, ekranId: e.id, tur: 'yorumla' }, null) } : null
+    ]
+  });
   const agac = d.agac || (d.altModel ? d.altModel.agac : null);
   const sekmeler = [
     ['model', 'Model', null], ['gecmis', 'Model geçmişi', d.gecmis.length], ['kanitlar', 'Kanıtlar', d.analiz.kanitlar.length],
@@ -290,11 +298,11 @@ async function ekranAyrintisi(icerik, s) {
           h('span', {}, ikon('isaret'), h('code', { class: 'duz' }, e.anahtar)),
           agac && agac.ekranUrl ? h('span', {}, ikon('ag'), h('code', { class: 'duz' }, agac.ekranUrl)) : null,
           h('span', {}, ikon('liste'), h('a', { href: `#/senaryolar/u/${encodeURIComponent(e.id)}` }, `${d.senaryoSayisi} senaryo`)),
+          // Senaryo tasarım yardımcısı (Senaryolar > ekran > "Senaryo önerileri"; öneri yalnızca öneridir).
+          d.model && !EKRAN_DISI_TURLER.includes(d.modelTuru)
+            ? h('span', {}, ikon('simsek'), h('a', { href: `#/senaryolar/oneriler/${encodeURIComponent(e.id)}`, class: 'senaryo-onerileri-baglantisi' }, 'Senaryo önerileri')) : null,
           d.gecmis[0] ? h('span', { title: tarihMetni(d.gecmis[0].olusturulma) }, ikon('saat'), `son sürüm ${goreliZaman(d.gecmis[0].olusturulma)}`) : null)),
-      h('div', { class: 'eylemler' }, d.surum && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? yorumla : null, d.surum && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? tekrar : null,
-        !EKRAN_DISI_TURLER.includes(d.modelTuru) ? tara : null, !EKRAN_DISI_TURLER.includes(d.modelTuru) ? kaydet : null,
-        !EKRAN_DISI_TURLER.includes(d.modelTuru) ? h('a', { class: 'dugme birincil', href: `${adres}/yukle` }, ikon('yukle'), d.surum ? 'Paket yükle' : 'Model ekle') : null,
-        menu)),
+      h('div', { class: 'eylemler' }, !EKRAN_DISI_TURLER.includes(d.modelTuru) ? modelMenusu : null, menu)),
     devreDisi ? h('div', { class: 'not-kutusu uyari devre-disi-seridi', role: 'status' },
       h('span', {}, h('b', {}, 'Bu ekran devre dışı. '), 'Senaryoları Koşuyu başlat ile toplu koşuya girmez (tek başına ▷ ile çalıştırılabilir); geçmiş sonuçlar görünür kalır.'),
       h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => durumDegistir({ proje: s.proje, ekran: e }) }, ikon('oynat'), 'Etkinleştir')) : null,
@@ -404,7 +412,7 @@ async function akisSekmesi(kap, s, d, icerik) {
   yerlestir(kap, h('div', { class: 'gecmis-duzeni' },
     h('section', { class: 'kart surum-listesi-karti akis-listesi-karti' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('pusula'), 'Akışlar'),
-        cokluAkis ? h('button', { type: 'button', class: 'kucuk-dugme sag', onclick: () => { yeniForm.hidden = false; yeniForm.querySelector('input')?.focus(); } }, ikon('artiYalin'), 'Yeni akış oluştur') : null),
+        cokluAkis ? h('button', { type: 'button', class: 'kucuk-dugme sag', onclick: () => { yeniForm.hidden = false; yeniForm.querySelector('input')?.focus(); } }, ikon('arti'), 'Akış ekle') : null),
       yeniForm,
       h('ol', { class: 'surum-listesi', 'aria-label': 'Akışlar' }, liste.akislar.map((a, i) => h('li', { class: a.id === secili.id ? 'secili' : null },
         h('a', { href: `${adres}/${encodeURIComponent(a.id)}`, 'aria-current': a.id === secili.id ? 'true' : null },
@@ -484,14 +492,15 @@ function modelOzetKarti(agac, d) {
     h('section', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('katman'), 'Model özeti'), h('span', { class: 'sag' }, d.surum ? rozet(`v${d.surum}`, 'vurgu') : null)),
       h('div', { class: 'mini-sayilar' },
-        [['Adım', sayilar.adim], ['Alan', sayilar.alan], ['Senaryoda', sayilar.senaryoAlani]].map(([e, v]) => h('div', {}, h('b', {}, String(v)), h('span', {}, e)))),
+        [['Adım', sayilar.adim, null], ['Alan', sayilar.alan, null], ['alan senaryodan', sayilar.senaryoAlani, 'Değeri senaryoda verilen alan sayısı']]
+          .map(([e, v, t]) => h('div', t ? { title: t } : {}, h('b', {}, String(v)), h('span', {}, e)))),
       h('dl', { class: 'ozet-satirlari' }, satir('Zorunlu alan', sayilar.zorunlu), satir('Koşullu alan', sayilar.kosullu), satir('Bölüm', sayilar.bolum))),
     agac.adimKapsami.length ? h('section', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('pusula'), 'İsteğe bağlı adımlar')),
       h('ul', { class: 'duz-liste kucuk' }, agac.adimKapsami.map((k) => h('li', {}, h('b', {}, k.etiket), ` → ${k.adimlar.join(', ')}`)))) : null,
     agac.profiller.length ? h('section', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('hedef'), 'İncelenen bağlam profilleri')),
-      h('div', { class: 'etiketler' }, agac.profiller.map((p) => rozet(p, ''))),
+      h('div', { class: 'etiketler' }, agac.profiller.map((p) => rozet(p, '', { kisalt: true }))),
       h('p', { class: 'kucuk cok-soluk ust-bosluk' }, 'Alanlardaki ✓ / – / ? çipleri gözlemdir: koşuda alan görünüyorsa doldurulur, görünmüyorsa atlanır ("mutlaka görünmeli" işaretli değilse).')) : null,
     agac.bilinmeyenler.length ? h('section', { class: 'kart bilinmeyen-karti' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('uyari'), 'Bilinmeyenler'), h('span', { class: 'sag' }, rozet(String(agac.bilinmeyenler.length), 'uyari'))),

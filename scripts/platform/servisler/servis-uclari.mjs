@@ -12,12 +12,30 @@ import {
   erisimKontrolu, eskiParametreleriDonustur, girisProfiliniTestVerisineTasi, semaYenile, servisiKaydet, servisParametreleri, servisSenaryolariniKos, servisSenaryosuCalistir, soapuiAktar, soapuiOnizle, postmanAktar, postmanOnizle
 } from './servis-islemleri.mjs';
 import { servisIsiBaslat, servisIsiDurdur, servisIsiDurumu, servisSenaryoAtlamaNedeni } from './servis-isleri.mjs';
-import { tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
+import { servisTekrarPlani } from '../senaryolar/veri-kosusu-plani.mjs';
+import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
+import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
+
+/**
+ * Tek istekli servis senaryosunun çalıştırma biçimi (icerik.veriKosulari; tablolar/veri-kosulari.mjs): projenin tablolarına göre denetlenir;
+ * boş / hepsi "Tek satır" ise içerikten kaldırılır (bugünkü davranış). @param {any} db @param {string} projeId @param {unknown} icerik
+ */
+function veriKosulariniDenetle(db, projeId, icerik) {
+  if (!icerik || typeof icerik !== 'object' || Array.isArray(icerik) || !('veriKosulari' in icerik)) return icerik;
+  const { veriKosulari, ...kalan } = /** @type {Record<string, unknown>} */ (icerik);
+  const v = veriKosulariniAyikla(veriKosulari, tablolariListele(db, projeId));
+  if (v.hatalar.length) throw new DepoHatasi(v.hatalar[0]);
+  return v.ayar ? { ...kalan, veriKosulari: v.ayar } : kalan;
+}
+import { raporMetniniMaskele } from '../sonuclar/servis-sonuclari.mjs';
+import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { servisTabanBaglantisi, tabanAdresiIslemi, tabanKararlariniDogrula, tabanlariUygula, tabanTablosu } from './taban-adresleri.mjs';
 import { restServisiKaydet, restUcuDene } from './rest-servisi.mjs';
 import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './servis-akislari.mjs';
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 import { tabloKosuDenetimi } from '../tablolar/tablo-uclari.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { sozlesmeBilgisi, sozlesmeKaydet, sozlesmeOnizle, sozlesmeSil } from './servis-sozlesmesi.mjs';
 
 /**
  * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
@@ -34,7 +52,8 @@ const etkiGirdisi = (g) => ({
 /** @typedef {Record<string, any>} Govde */
 
 /** SoapUI dosyası büyük olabilir: bu uçlar büyük gövde sınırıyla okunur. */
-export const SERVIS_BUYUK_GOVDE_UCLARI = Object.freeze(['/platform/servis/soapui/onizle', '/platform/servis/soapui/aktar', '/platform/servis/postman/onizle', '/platform/servis/postman/aktar']);
+export const SERVIS_BUYUK_GOVDE_UCLARI = Object.freeze(['/platform/servis/soapui/onizle', '/platform/servis/soapui/aktar', '/platform/servis/postman/onizle', '/platform/servis/postman/aktar',
+  '/platform/servis/sozlesme/onizle']);
 
 /** @param {unknown} d @param {string} alan */
 function kimlik(d, alan = 'id') {
@@ -83,6 +102,12 @@ function servisOzeti(vt, s) {
 
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const SERVIS_GET_UCLARI = [
+  // Servis koşusunda "Başarısızları tekrar çalıştır" önizlemesi (yalnız okuma): kalan çalıştırmalar ve o koşudan bu yana değişen satırlar.
+  ['/platform/servis-sonuclari/tekrar-plani', (db, q) => {
+    const p = servisTekrarPlani(db, kimlik(q.get('projeId'), 'projeId'), String(q.get('id') ?? ''));
+    const ekler = ekGizliAdlar(db);
+    return { plan: { ...p, testler: p.testler.map((t) => ({ satirId: t.satirId, senaryoId: t.senaryoId, baslik: raporMetniniMaskele(t.baslik, ekler) })) } };
+  }],
   ['/platform/servisler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     return { servisler: servisleriListele(db, projeId).map((s) => servisOzeti(db, s)) };
@@ -116,6 +141,11 @@ export const SERVIS_GET_UCLARI = [
       });
     }
     return { servis: servisOzeti(db, s), senaryolar: g.senaryolar, sonSonuclar: g.sonSonuclar };
+  }],
+  // Sözleşme sekmesi (operasyon / uç başına): sözleşme, geçmiş, kayıtlı WSDL yanıt şeması var mı, taslak için başarılı yanıtlar.
+  ['/platform/servis/sozlesme', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    return sozlesmeBilgisi(db, projeId, { servisId: servisAl(db, projeId, q.get('servisId')).id, operasyon: metin(q.get('operasyon')) });
   }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -172,11 +202,17 @@ export const SERVIS_POST_UCLARI = [
   })],
   ['/platform/servis/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
+    // Servis sayfasında adlandırılmış taban adresi seçildiyse adresler o tabandan gelir (null / '': servise özel adres).
+    // Aynı tabana bağlı kalınıyorsa formdaki adresler gönderilir: tabandan farklıysa kullanıcının kararı sorulur (tabanKararlari).
+    const grup = typeof g.tabanGrubu === 'string' && g.tabanGrubu.trim() ? g.tabanGrubu.trim() : g.tabanGrubu === null || g.tabanGrubu === '' ? null : undefined;
+    const onceki = secimli(g.id) ? servisGetir(db, String(g.id)) : undefined;
+    const bagli = grup && !(onceki?.ayarlar.tabanGrubu === grup && g.tabanlar !== undefined) ? servisTabanBaglantisi(db, projeId, secimli(g.id), grup) : null;
     const id = servisiKaydet(db, projeId, {
+      ...(grup !== undefined ? { tabanGrubu: grup } : {}),
       id: secimli(g.id), anahtar: metin(g.anahtar), ad: metin(g.ad), yol: metin(g.yol),
       ...(g.soapSurumu === '1.2' || g.soapSurumu === '1.1' ? { soapSurumu: g.soapSurumu } : {}),
       ...(g.adresler !== undefined ? { adresler: metinNesnesi(g.adresler) } : {}),
-      ...(g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
+      ...(bagli ? { tabanlar: bagli.tabanlar } : g.tabanlar !== undefined ? { tabanlar: metinNesnesi(g.tabanlar) } : {}),
       ...(Array.isArray(g.secilenOperasyonlar) ? { secilenOperasyonlar: g.secilenOperasyonlar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
       ...(typeof g.kimlikProfili === 'string' ? { kimlikProfili: g.kimlikProfili } : {}),
       ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
@@ -190,6 +226,7 @@ export const SERVIS_POST_UCLARI = [
       ...(g.alanListeleri !== undefined ? { alanListeleri: g.alanListeleri } : {}),
       ...(g.alanBaglari !== undefined ? { alanBaglari: g.alanBaglari } : {}),
       ...(g.oturumAkisi !== undefined ? { oturumAkisi: g.oturumAkisi === null || g.oturumAkisi === '' ? null : kimlik(g.oturumAkisi, 'oturumAkisi') } : {}),
+      tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari),
       erisimKimligi: typeof g.erisimKimligi === 'string' ? g.erisimKimligi : undefined
     });
     return { id };
@@ -198,6 +235,25 @@ export const SERVIS_POST_UCLARI = [
   ['/platform/servis/sema/yenile', async (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     return semaYenile(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, ortamId: kimlik(g.ortamId, 'ortamId') });
+  }],
+  // Servis sözleşmesi: kaynaktan önizleme (YAZMAZ, ağ isteği yok), kayıt (var olanı değiştirmek onayla), silme (onayla).
+  ['/platform/servis/sozlesme/onizle', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const metinler = Array.isArray(g.metinler) ? g.metinler.filter((/** @type {unknown} */ x) => typeof x === 'string') : undefined;
+    return sozlesmeOnizle(db, projeId, {
+      servisId: servisAl(db, projeId, g.servisId).id, operasyon: metin(g.operasyon), kaynak: metin(g.kaynak),
+      ...(typeof g.metin === 'string' ? { metin: g.metin } : {}), ...(metinler ? { metinler } : {}), ...(typeof g.dosyaAdi === 'string' ? { dosyaAdi: g.dosyaAdi } : {}),
+      ...(typeof g.openapiAnahtari === 'string' && g.openapiAnahtari ? { openapiAnahtari: g.openapiAnahtari } : {}),
+      ...(Array.isArray(g.kosuIdleri) ? { kosuIdleri: g.kosuIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'kosuId')) } : {})
+    });
+  }],
+  ['/platform/servis/sozlesme/kaydet', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return sozlesmeKaydet(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, operasyon: metin(g.operasyon), sozlesme: g.sozlesme, onay: g.onay === true });
+  }],
+  ['/platform/servis/sozlesme/sil', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return sozlesmeSil(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, operasyon: metin(g.operasyon), onay: g.onay === true });
   }],
   ['/platform/servis/sil', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
@@ -210,7 +266,7 @@ export const SERVIS_POST_UCLARI = [
     const s = servisAl(db, projeId, g.servisId);
     if (g.id) senaryoAl(db, projeId, g.id);
     const id = servisSenaryosuKaydet(db, {
-      id: secimli(g.id), projeId, servisId: s.id, baslik: metin(g.baslik), icerik: g.icerik,
+      id: secimli(g.id), projeId, servisId: s.id, baslik: metin(g.baslik), icerik: veriKosulariniDenetle(db, projeId, g.icerik),
       ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
       ...(typeof g.kosuyaDahil === 'boolean' ? { kosuyaDahil: g.kosuyaDahil } : {})
     });
@@ -269,6 +325,13 @@ export const SERVIS_POST_UCLARI = [
     const s = servisAl(db, projeId, g.servisId);
     if (g.taslak && typeof g.taslak === 'object') {
       return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), taslak: { baslik: metin(g.taslak.baslik) || 'Taslak', icerik: g.taslak.icerik } }) };
+    }
+    // Başarısızları tekrar çalıştır: { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — kalan çalıştırmalar sunucunun kaydından kurulur.
+    if (g.tekrar !== undefined && g.tekrar !== null) {
+      const t = /** @type {Record<string, unknown>} */ (g.tekrar && typeof g.tekrar === 'object' ? g.tekrar : {});
+      if (typeof t.kaynakKosuId !== 'string' || !/^s-[A-Za-z0-9_-]{1,100}$/.test(t.kaynakKosuId)) throw new DepoHatasi('"tekrar.kaynakKosuId" geçersiz.');
+      if (t.veri !== undefined && t.veri !== 'guncel' && t.veri !== 'kosudaki') throw new DepoHatasi('"tekrar.veri" "guncel" ya da "kosudaki" olmalıdır.');
+      return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), tekrar: { kaynakKosuId: t.kaynakKosuId, ...(t.veri ? { veri: String(t.veri) } : {}) } }) };
     }
     if (!Array.isArray(g.senaryoIdleri)) throw new DepoHatasi('"senaryoIdleri" bir dizi olmalıdır.');
     return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), senaryoIdleri: g.senaryoIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'senaryoId')) }) };
@@ -350,7 +413,8 @@ export const SERVIS_POST_UCLARI = [
       ...(g.alanZorunluluklari !== undefined ? { alanZorunluluklari: g.alanZorunluluklari } : {}),
       ...(g.tarihKurallari !== undefined ? { tarihKurallari: metinNesnesi(g.tarihKurallari) } : {}),
       senaryolar: Array.isArray(g.senaryolar) ? g.senaryolar.filter((/** @type {unknown} */ x) => typeof x === 'string') : [],
-      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {})
+      ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}),
+      tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari)
     });
   }],
   ['/platform/servis/rest/dene', async (db, g) => restUcuDene(db, kimlik(g.projeId, 'projeId'), {
@@ -358,10 +422,18 @@ export const SERVIS_POST_UCLARI = [
     ...(typeof g.tlsDogrulama === 'boolean' ? { tlsDogrulama: g.tlsDogrulama } : {})
   })],
   // Taban adresleri toplu düzenle: onay yoksa yalnız etki önizlemesi; onay: true ile yazılır. Ağ isteği yok.
+  // Adlandırılmış taban adresi ekle / değiştir / sil: onay yoksa etki önizlemesi (boş kalacak servisler dahil). Ağ isteği yok.
+  ['/platform/servis-tabanlari/taban', (db, g) => tabanAdresiIslemi(db, kimlik(g.projeId, 'projeId'), {
+    islem: /** @type {'ekle' | 'degistir' | 'sil'} */ (metin(g.islem)), ad: metin(g.ad),
+    ...(typeof g.yeniAd === 'string' ? { yeniAd: g.yeniAd } : {}),
+    ...(g.adresler !== undefined ? { adresler: metinNesnesi(g.adresler) } : {}),
+    ...(Array.isArray(g.baglanacaklar) ? { baglanacaklar: g.baglanacaklar.filter((/** @type {unknown} */ x) => typeof x === 'string') } : {}),
+    onay: g.onay === true
+  })],
   ['/platform/servis-tabanlari/uygula', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     if (!g.degisiklikler || typeof g.degisiklikler !== 'object' || Array.isArray(g.degisiklikler)) throw new DepoHatasi('"degisiklikler" bir nesne olmalıdır.');
-    return tabanlariUygula(db, projeId, { degisiklikler: g.degisiklikler, onay: g.onay === true });
+    return tabanlariUygula(db, projeId, { degisiklikler: g.degisiklikler, onay: g.onay === true, tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari) });
   }],
   // Postman koleksiyonu (REST): önizleme (gizli değişken DEĞERLERİ dönmez) ve kullanıcı seçimleriyle aktarım. Ağ isteği yok.
   ['/platform/servis/postman/onizle', (db, g) => {
@@ -384,7 +456,8 @@ export const SERVIS_POST_UCLARI = [
         klasorler: metinler(g.klasorler) ?? [], tabloAdi: metin(g.tabloAdi),
         gizliler: metinler(g.gizliler), sifreliKaydet: metinler(g.sifreliKaydet) ?? [], akisDegiskenleri: metinler(g.akisDegiskenleri) ?? [],
         degerOrtami: secimli(g.degerOrtami) ?? null, tabanOrtami: secimli(g.tabanOrtami) ?? null,
-        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}), ...etkiGirdisi(g)
+        ...(g.kapsam === 'test' || g.kapsam === 'canli' || g.kapsam === 'ikisi' ? { kapsam: g.kapsam } : {}), ...etkiGirdisi(g),
+        tabanKararlari: tabanKararlariniDogrula(g.tabanKararlari)
       }, tabloKosuDenetimi());
     } catch (e) {
       if (e instanceof DepoHatasi) throw e;

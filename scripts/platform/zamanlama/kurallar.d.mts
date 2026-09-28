@@ -4,8 +4,11 @@ import type { Zaman } from './takvim.mjs';
 
 export interface Kural {
   id: string; projeId: string; ad: string; ortamId: string;
-  /** senaryolar: 'tum' = tüm "Koşuda" senaryolar (tam koşu), 'ekranlar' = seçili ekranların "Koşuda" senaryoları, 'yok' = yalnız servis akışları. */
-  kapsam: { senaryolar: 'tum' | 'ekranlar' | 'yok'; ekranIdleri: string[]; servisAkisIdleri: string[] };
+  /**
+   * senaryolar: 'tum' = tüm "Koşuda" senaryolar (tam koşu), 'ekranlar' = seçili ekranların "Koşuda" senaryoları, 'yok' = yalnız akışlar.
+   * uctanUcaAkisIdleri: uçtan uca akışlar (bu alandan önce kaydedilen kurallarda yok = []).
+   */
+  kapsam: { senaryolar: 'tum' | 'ekranlar' | 'yok'; ekranIdleri: string[]; servisAkisIdleri: string[]; uctanUcaAkisIdleri?: string[] };
   zaman: Zaman; etkin: boolean; bildirimBaglantiId: string | null; canliOnay: boolean;
   /** Bu ana kadarki (dahil) zamanlar tetiklenmez: son tetiklenen zaman ya da kuralın kaydedildiği / etkinleştirildiği an. */
   tuketilen: string;
@@ -20,7 +23,8 @@ export interface Tetikleme {
   /** Ekran koşusunun kimliği ("zamanli-…"; Sonuçlar > koşu). Hiç senaryo koşmadıysa null. */
   kosuId: string | null;
   ozet: TetiklemeOzeti | null;
-  akisKosulari: Array<{ akisId: string; kosuId: string | null; durum: string }>;
+  /** uctanUca: uçtan uca akış koşusu (Sonuçlar > Uçtan uca akışlar); yoksa servis akışı. */
+  akisKosulari: Array<{ akisId: string; kosuId: string | null; durum: string; uctanUca?: boolean }>;
 }
 export interface KuralGorunumu extends Kural {
   zamanMetni: string; ortamAdi: string | null; riskli: boolean; bildirimAdi: string | null;

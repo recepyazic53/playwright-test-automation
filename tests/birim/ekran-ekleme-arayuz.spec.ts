@@ -272,7 +272,23 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
   await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
-  await page.getByRole('button', { name: 'Tekrar analiz et' }).click();
+  // Model eylemleri tek menüde: her seçenekte bir satırlık açıklama; klavyeyle gezilir.
+  const menuDugmesi = page.getByRole('button', { name: /^Modeli güncelle/ });
+  await menuDugmesi.click();
+  await expect(menuDugmesi).toHaveAttribute('aria-expanded', 'true');
+  const secenekler = page.getByRole('menuitem');
+  await expect(secenekler).toHaveText([/^Paket yükle/, /^Ekranı tara/, /^Akışı kaydet/, /^Tekrar analiz et/, /^Yapay zekâ ile yorumla/]);
+  await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toHaveAccessibleDescription(/Sayfa değiştiyse/);
+  await expect(page.getByRole('menuitem', { name: 'Paket yükle' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toBeFocused();
+  await page.keyboard.press('End');
+  await expect(page.getByRole('menuitem', { name: 'Yapay zekâ ile yorumla' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menuDugmesi).toBeFocused();
+  await expect(secenekler.first()).toBeHidden();
+  await menuDugmesi.click();
+  await page.getByRole('menuitem', { name: 'Tekrar analiz et' }).click();
   const d = page.locator('dialog[open]');
   await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();
   await expect(d.getByRole('button', { name: 'İstek metnini kopyala' })).toBeVisible();
@@ -312,7 +328,8 @@ test('istek metni diyalogları (tekrar analiz, yapay zekâ ile yorumla): "Metni 
       await page.setViewportSize({ width: genislik, height: 900 });
       await page.goto('/#/ekranlar');
       await page.locator('article.ekran-karti:not(.ortak-akis-karti)').filter({ hasText: 'Örnek Başvuru' }).getByRole('link', { name: 'Örnek Başvuru' }).click();
-      await page.getByRole('button', { name: dugme }).click();
+      await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+      await page.getByRole('menuitem', { name: dugme }).click();
       const d = page.locator('dialog[open]');
       if (olustur) await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();
       await expect(d.getByRole('button', { name: 'İstek metnini kopyala' })).toBeVisible();

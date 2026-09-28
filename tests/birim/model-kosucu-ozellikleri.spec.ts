@@ -436,7 +436,7 @@ test('ortak akış düzenleme: diyagramdan açılıp kaydedilir (gizli ayarlar k
     const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1200 } })).newPage();
     await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortakId)}/akis`);
     await expect(page.getByRole('list', { name: 'Kullanan ekranlar' })).toContainText('Ana akış, Onaylı akış');
-    await expect(page.getByRole('button', { name: 'Yeni akış oluştur' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Akış ekle' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Kopyala' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Ekranlara ekle…' }).click();
     const diyalog = page.locator('dialog.ekran-yonetim-diyalogu');

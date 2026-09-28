@@ -5,6 +5,7 @@ export declare const DESTEKLENEN_SEMA_SURUMU: number;
 export declare const SEMA_SURUMLERI: readonly number[];
 export declare const AKSIYON_TURLERI: readonly ['tikla', 'bekle'];
 export declare const SQL_BEKLENEN_TURLERI: readonly string[];
+export declare const DOSYA_BEKLENTI_TURLERI: readonly string[];
 export declare const BASARI_GOSTERGESI_TURLERI: readonly ['metin', 'eleman', 'url'];
 export declare const ALAN_TIPLERI: readonly [
   'secim', 'okluSecim', 'metin', 'sayi', 'tarih', 'telefon', 'onayKutusu', 'radyo', 'dosya',
@@ -33,6 +34,9 @@ export declare function ekranModeliniDogrula(
   ham: unknown,
   altModelKaynagi: (dosyaAdi: string) => unknown
 ): { model: Record<string, unknown>; dosyaYolu: string; altModeller: Record<string, Record<string, unknown>> };
+
+/** Alan tipine göre "sinirlar" (değer kuralları) sorunları; geçerliyse boş dizi. */
+export declare function sinirHatalari(tip: unknown, sinirlar: unknown): string[];
 
 /** Doğrulama hatasının maddeleri (" - " satırları). */
 export declare function dogrulamaMaddeleri(hata: unknown): string[];

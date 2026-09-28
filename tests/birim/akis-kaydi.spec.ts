@@ -268,7 +268,8 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (canlı ortam seçilemez, ona
     baglam.on('request', (r) => { istekler.push(r.url()); });
     const page = await baglam.newPage();
     await page.goto(`/#/ekranlar/e/${encodeURIComponent(kayitEkranId)}`);
-    await page.getByRole('button', { name: 'Akışı kaydet' }).first().click();
+    await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+    await page.getByRole('menuitem', { name: 'Akışı kaydet' }).click();
     const diyalog = page.locator('dialog[open]');
     await expect(diyalog.getByText('Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.')).toBeVisible();
     await expect(diyalog.locator('option', { hasText: 'Üretim (riskli — kayıt kapalı)' })).toBeDisabled();
@@ -572,7 +573,7 @@ test('çoklu akış: Akışlar sekmesinde kopyadan yeni akış; senaryo akışı
     await expect(liste.getByRole('listitem')).toHaveCount(1);
     await expect(liste).toContainText('Ana akış');
     // Yeni akış: ad + "Şu akıştan kopyala" → diyagram düzenleyicisi (yalnızca bu ekranın alanları).
-    await page.getByRole('button', { name: 'Yeni akış oluştur' }).click();
+    await page.getByRole('button', { name: 'Akış ekle' }).click();
     await page.getByRole('textbox', { name: 'Yeni akışın adı' }).fill('Kurumsal siparis');
     await page.getByText('Şu akıştan kopyala').click();
     await page.getByRole('button', { name: 'Oluştur', exact: true }).click();

@@ -2,18 +2,33 @@
 // servis / servis akışı süzgeci (son koşunun sağlık noktası); sağda tarih aralığı + ortam süzgeci, özet kartlar, koşu trendi
 // (sonuclar.js'teki grafik), sayfalı koşu geçmişi ve hata kalıpları. Koşu ayrıntısı (her senaryo / akış adımı: durum, süre,
 // hata) ve senaryo ayrıntısı (istek / yanıt — gizli alanlar maskeli) aynı ekranda açılır.
-// Adresler: #/servisler/sonuclar, …/s/<servisId>, …/a/<akisId>, …/kosu/<s-… | a-…>, …/senaryo/<satırId>,
-// …/karsilastir/<A>/<B> (yan yana koşu karşılaştırması: karsilastirma.js).
-// Sonuçlar > Genel > "Servisler" sekmesi aynı genel görünümü (servisGenelBakis) kullanır.
+// TEK YER: Sonuçlar > Servisler (Sonuçlar ekranının içinde, sol paneli Ürünler). Adresler: #/sonuclar/servisler (tümü),
+// #/sonuclar/s/<servisId> (servise süzülmüş), #/sonuclar/servisler/a/<akisId>, …/kosu/<s-… | a-…>, …/senaryo/<satırId>,
+// …/karsilastir/<A>/<B> (yan yana koşu karşılaştırması: karsilastirma.js). Eski #/servisler/sonuclar[/…] adresleri buraya
+// yönlenir (eskiServisSonucAdresi). Servisin kendi "Raporlar" sekmesi yalnız o servisin çalıştırma listesidir.
 // Veri: /platform/servis-sonuclari* (yalnız okuma). Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { alan, api, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
-import { dagilimCubugu, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
+import { alan, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { dagilimCubugu, dogrulananDosyaIndir, dogrulananDosyalar, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
+import { ortamSecenekMetni } from './kosu-paneli.js';
 import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
 
-export const TABAN = '#/servisler/sonuclar';
+export const TABAN = '#/sonuclar/servisler';
 const q = encodeURIComponent;
+/** Servise süzülmüş servis sonuçları (Sonuçlar ekranının sol panelinde servis seçili). @param {string} id */
+export const servisSonucAdresi = (id) => `#/sonuclar/s/${q(id)}`;
+/**
+ * Eski adres (#/servisler/sonuclar/…) → yeni (Sonuçlar > Servisler). Geriye uyum: yer imleri ve paylaşılmış bağlantılar çalışır.
+ * @param {string[]} parcalar #/servisler/sonuclar sonrası (ham, kodlanmış)
+ */
+export function eskiServisSonucAdresi(parcalar) {
+  const [tur, a, b] = parcalar;
+  if (tur === 's' && a) return `#/sonuclar/s/${a}`;
+  if ((tur === 'a' || tur === 'kosu' || tur === 'senaryo') && a) return `${TABAN}/${tur}/${a}`;
+  if (tur === 'karsilastir' && a && b) return `${TABAN}/karsilastir/${a}/${b}`;
+  return TABAN;
+}
 /** Koşu geçmişinde bir sayfadaki koşu (Ayarlar > Arayüz; kullanıcı kararı). */
 let SAYFA_BOYU = 15;
 const DURUM = {
@@ -34,40 +49,26 @@ const oran = (k) => { const p = (k.basarili || 0) + kalan(k); return p ? Math.ro
 const sayilar = (k) => ({ basarili: k.basarili, basarisiz: kalan(k), atlanan: k.atlanan, durduruldu: k.durduruldu });
 const saglikSinifi = (son) => (!son ? '' : kalan(son) ? 'hata' : son.basarili ? 'basari' : 'uyari');
 const kosuAdresi = (id) => `${TABAN}/kosu/${q(id)}`;
-const kaynakAdresi = (k) => (k.kaynakId ? `${TABAN}/${k.tur === 'akis' ? 'a' : 's'}/${q(k.kaynakId)}` : TABAN);
+const kaynakAdresi = (k) => (!k.kaynakId ? TABAN : k.tur === 'akis' ? `${TABAN}/a/${q(k.kaynakId)}` : servisSonucAdresi(k.kaynakId));
 
 /**
- * @param {HTMLElement} main
- * @param {string[]} parcalar #/servisler/sonuclar sonrası
- * @param {{ durum: { proje: { id: string; ad: string } } }} baglam
+ * Sonuçlar > Servisler'in alt görünümleri (Sonuçlar ekranının içeriğine çizilir; sol panel Sonuçlar'ınki):
+ * a/<akisId> (akışa süzülmüş), kosu/<id>, senaryo/<satırId>, karsilastir/<A>/<B>. Tanınmayan alt adres false döner.
+ * @param {HTMLElement} icerik @param {{ id: string; ad: string }} proje @param {string[]} parcalar #/sonuclar/servisler sonrası
+ * @returns {Promise<void> | false}
  */
-export function servisSonuclariEkrani(main, parcalar, baglam) {
-  const proje = baglam.durum.proje;
-  const [tur, kimlik] = parcalar;
+export function servisSonucAltGorunumu(icerik, proje, parcalar) {
+  const [tur, kimlik, ikinci] = parcalar;
   const id = kimlik ? decodeURIComponent(kimlik) : null;
-  const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('kartlar'), iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Servis sonuçları süzgeci' }, iskelet('liste'));
-  yerlestir(main, h('h1', { class: 'gorunmez' }, 'Servis sonuçları'),
-    h('div', { class: 'kabuk-duzen' },
-      h('aside', { class: 'yan-panel' }, nav,
-        h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}),
-          'Son koşu: yeşil hepsi geçti, kırmızı kalan senaryo var. Servis sonuçları ekran sonuçlarından ayrıdır.')),
-      icerik));
-  const secili = (tur === 's' || tur === 'a') && id ? `${tur}:${id}` : tur ? null : '';
-  const navCiz = (veri) => solListe(nav, veri, secili);
-  const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
-  if ((tur === 'kosu' || tur === 'senaryo') && id) {
-    ozetAl(proje, {}).then(navCiz).catch(() => yerlestir(nav));
-    (tur === 'kosu' ? kosuAyrintisi(icerik, proje, id) : senaryoAyrintisi(icerik, proje, id)).catch(hata);
-    return;
-  }
-  if (tur === 'karsilastir' && id && parcalar[2]) {
-    ozetAl(proje, {}).then(navCiz).catch(() => yerlestir(nav));
-    karsilastirmaEkrani(icerik, proje, { tur: 'servis', a: id, b: decodeURIComponent(parcalar[2]) })
+  if (!id) return false;
+  if (tur === 'kosu') return kosuAyrintisi(icerik, proje, id);
+  if (tur === 'senaryo') return senaryoAyrintisi(icerik, proje, id);
+  if (tur === 'a') return servisGenelBakis(icerik, proje, { akisId: id, gomulu: true });
+  if (tur === 'karsilastir' && ikinci) {
+    return karsilastirmaEkrani(icerik, proje, { tur: 'servis', a: id, b: decodeURIComponent(ikinci) })
       .catch((e) => { if (!(e && e.durum === 423)) karsilastirmaHatasi(icerik, e, TABAN); });
-    return;
   }
-  servisGenelBakis(icerik, proje, { ...(tur === 's' && id ? { servisId: id } : tur === 'a' && id ? { akisId: id } : {}), navCiz }).catch(hata);
+  return false;
 }
 
 /** @param {{ id: string }} proje @param {{ servisId?: string; akisId?: string }} secim */
@@ -81,21 +82,6 @@ function ozetAl(proje, secim) {
   return api(`/platform/servis-sonuclari?${sorgu}`);
 }
 
-function solListe(nav, veri, secili) {
-  const baglanti = (href, anahtar, ad, son, ikonAd) => h('a', { href, 'aria-current': secili === anahtar ? 'page' : null, title: ad },
-    ikonAd ? ikon(ikonAd) : h('span', { class: `saglik ${saglikSinifi(son)}`, 'aria-hidden': 'true' }),
-    h('span', { class: 'nav-metni' }, ad),
-    son && kalan(son) ? h('span', { class: 'adet' }, String(kalan(son))) : null,
-    son ? h('span', { class: 'gorunmez' }, ` — son koşu: ${kalan(son) ? `${kalan(son)} kalan` : 'hepsi geçti'}`) : null);
-  yerlestir(nav,
-    baglanti(TABAN, '', 'Tüm servisler', null, 'izgara'),
-    h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, 'Servisler'),
-    ...veri.servisler.map((s) => baglanti(`${TABAN}/s/${q(s.id)}`, `s:${s.id}`, s.ad, s.son)),
-    veri.akislar.length ? h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, 'Servis akışları') : null,
-    ...veri.akislar.map((a) => baglanti(`${TABAN}/a/${q(a.id)}`, `a:${a.id}`, a.baslik, a.son)),
-    h('a', { href: '#/servisler', class: 'ekle-baglantisi' }, ikon('geri'), 'Servislere dön'));
-}
-
 // ---------------------------------------------------------------------------------------
 // Genel bakış (tüm servisler / tek servis / tek akış)
 // ---------------------------------------------------------------------------------------
@@ -103,7 +89,7 @@ function solListe(nav, veri, secili) {
 /**
  * @param {HTMLElement} icerik
  * @param {{ id: string; ad: string }} proje
- * @param {{ servisId?: string; akisId?: string; navCiz?: (veri: object) => void; ust?: HTMLElement | null; gomulu?: boolean }} secenek
+ * @param {{ servisId?: string; akisId?: string; ust?: HTMLElement | null; gomulu?: boolean }} secenek
  *   ust: sayfanın üstüne konan öğe (Sonuçlar > Genel sekmeleri); gomulu: Sonuçlar ekranının içinde (kırıntı Sonuçlar'a döner).
  */
 export async function servisGenelBakis(icerik, proje, secenek = {}) {
@@ -116,7 +102,7 @@ export async function servisGenelBakis(icerik, proje, secenek = {}) {
   const govde = h('div', { class: 'servis-sonuc-govdesi' });
   const ortamSec = h('select', { id: yeniKimlik('ss-ortam') },
     h('option', { value: '' }, 'Tüm ortamlar'),
-    ...veri.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === oku(ORTAM_ANAHTARI) }, `${o.ad} (${o.canli ? 'CANLI' : 'TEST'})`)));
+    ...veri.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === oku(ORTAM_ANAHTARI) }, ortamSecenekMetni(o))));
   const deneme = h('input', { type: 'checkbox', id: yeniKimlik('ss-deneme'), checked: oku(DENEME_ANAHTARI) === '1' });
   const yenile = async () => {
     govde.setAttribute('aria-busy', 'true');
@@ -136,7 +122,6 @@ export async function servisGenelBakis(icerik, proje, secenek = {}) {
     h('div', { class: 'filtre-satiri' }, alan('Ortam', ortamSec),
       h('label', { class: 'secenek mini-secenek', for: deneme.id }, deneme, 'Denemeleri (Dene) de say')));
   const ciz = () => {
-    secenek.navCiz?.(veri);
     const ad = secenek.servisId ? (veri.servisler.find((s) => s.id === secenek.servisId) || {}).ad
       : secenek.akisId ? (veri.akislar.find((a) => a.id === secenek.akisId) || {}).baslik : 'Tüm servisler';
     yerlestir(baslikAlani, sayfaBasligi(veri, proje, secenek, ad || 'Servis'));
@@ -176,14 +161,15 @@ function sayfaBasligi(veri, proje, secenek, ad) {
   return h('div', { class: 'sayfa-basligi' },
     h('div', {},
       h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(),
-        secenek.gomulu ? h('a', { href: '#/sonuclar' }, 'Sonuçlar') : h('a', { href: TABAN }, 'Servis sonuçları'), ayrac(),
-        h('span', { class: 'simdiki' }, secenek.gomulu ? 'Servisler' : ad)),
+        h('a', { href: '#/sonuclar' }, 'Sonuçlar'), ayrac(),
+        secenek.servisId || secenek.akisId ? [h('a', { href: TABAN }, 'Servisler'), ayrac()] : null,
+        h('span', { class: 'simdiki' }, !secenek.servisId && !secenek.akisId ? 'Servisler' : ad)),
       h('div', { class: 'baslik-satiri' },
         h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Servis sonuçları — '), ad),
         son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} kalan`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
       h('div', { class: 'meta' }, meta)),
     h('div', { class: 'eylemler' },
-      secenek.gomulu ? h('a', { class: 'dugme hayalet', href: TABAN }, ikon('ag'), 'Servis sonuçları ekranı') : null,
+      secenek.servisId ? h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(secenek.servisId)}/raporlar` }, ikon('liste'), 'Servisin çalıştırma listesi') : null,
       h('a', {
         class: 'dugme birincil', href: secenek.servisId ? `#/servisler/s/${q(secenek.servisId)}/senaryolar` : '#/servisler',
         title: 'Servis sayfasında onayla başlatılır'
@@ -295,7 +281,7 @@ function kalipBolumu(veri, aralik) {
     });
     return h('div', { class: 'kalip-satiri k-diger', role: 'listitem' },
       h('span', { class: 'kalip-ikon', 'aria-hidden': 'true' }, ikon('uyari')),
-      h('div', { class: 'kalip-baslik' }, rozet(`${k.senaryoSayisi} senaryo`), ...k.kaynaklar.slice(0, 3).map((a) => rozet(a, 'vurgu')),
+      h('div', { class: 'kalip-baslik' }, rozet(`${k.senaryoSayisi} senaryo`), ...k.kaynaklar.slice(0, 3).map((a) => rozet(a, 'vurgu', { kisalt: true, title: a })),
         k.kaynaklar.length > 3 ? rozet(`+${k.kaynaklar.length - 3}`) : null,
         h('span', { class: 'cok-soluk' }, `ilk ${kisaTarih(k.ilk)} · son ${kisaTarih(k.son)}`)),
       h('div', { class: 'kalip-sayi' }, h('span', {}, String(k.sayi), h('small', {}, ' adet')), ac),
@@ -330,7 +316,7 @@ async function kosuAyrintisi(icerik, proje, id) {
         h('td', {}, a.ad, a.okunanlar && Object.keys(a.okunanlar).length
           ? h('div', { class: 'soluk kucuk servis-sonuc-okunan' }, `Okunan: ${Object.entries(a.okunanlar).map(([ad, d]) => `${ad} = ${d}`).join(', ')}`) : null),
         h('td', {}, a.servis, h('div', { class: 'soluk kucuk' }, a.senaryo)),
-        h('td', {}, durumRozeti(a.durum)), h('td', { class: 'sayi' }, sureMetni(a.sureMs)), hataHucresi(a.hata),
+        h('td', {}, durumRozeti(a.durum), a.not ? h('div', { class: 'soluk kucuk yetki-notu' }, a.not) : null), h('td', { class: 'sayi' }, sureMetni(a.sureMs)), hataHucresi(a.hata),
         h('td', {}, a.satirId ? h('a', { class: 'dugme kucuk-dugme hayalet', href: `${TABAN}/senaryo/${q(a.satirId)}`, 'aria-label': `Adım ayrıntısı: ${a.ad}` }, 'Ayrıntı') : null)))))
     : h('table', { class: 'ozet-tablosu' }, h('caption', { class: 'gorunmez' }, 'Senaryo sonuçları'),
       h('thead', {}, h('tr', {}, ...['Durum', 'Senaryo', 'HTTP', 'Süre', 'Hata'].map((b, i) => h('th', { scope: 'col', class: i === 2 || i === 3 ? 'sayi' : null }, b)))),
@@ -340,18 +326,26 @@ async function kosuAyrintisi(icerik, proje, id) {
         h('td', { class: 'sayi' }, x.durumKodu === null ? '—' : String(x.durumKodu)),
         h('td', { class: 'sayi' }, sureMetni(x.sureMs)), hataHucresi(x.hata)))));
   const satirSayisi = akis ? adimlar.length : senaryolar.length;
+  // Başarısızları tekrar çalıştır (servis koşusu): yalnız kalan çalıştırmalar (veri koşularında yalnız kalan satırlar), aynı ortam, o koşudaki satırlar.
+  const tekrarlanabilir = akis || kosu.calistirma === 'dene' ? 0 : senaryolar.filter((x) => (x.durum === 'basarisiz' || x.durum === 'hata') && x.senaryoId).length;
+  const tekrarDugmesi = tekrarlanabilir && kosu.ortamId
+    ? h('button', { type: 'button', class: 'dugme', onclick: () => servisBasarisizlariniTekrarla(kosu, proje) }, ikon('yenile'), `Başarısızları tekrar çalıştır (${tekrarlanabilir})`) : null;
+  const tekrarBagi = kosu.tekrarKaynagi ? h('span', { class: 'tekrar-bagi' }, ikon('yenile'), 'Tekrar: ',
+    h('a', { href: `${TABAN}/kosu/${q(kosu.tekrarKaynagi)}` }, 'önceki koşu'), ' · ',
+    h('a', { href: `${TABAN}/karsilastir/${q(kosu.tekrarKaynagi)}/${q(kosu.id)}` }, 'karşılaştır')) : null;
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
-        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: TABAN }, 'Servis sonuçları'), ayrac(),
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: '#/sonuclar' }, 'Sonuçlar'), ayrac(), h('a', { href: TABAN }, 'Servisler'), ayrac(),
           h('a', { href: kaynakAdresi(kosu) }, kosu.baslik), ayrac(), h('span', { class: 'simdiki' }, 'Koşu')),
         h('h2', { tabindex: '-1' }, `${kosu.baslik} — ${tarihMetni(kosu.baslangic)}`),
         h('div', { class: 'meta' },
           h('span', {}, rozet(akis ? 'akış koşusu' : 'servis koşusu', 'vurgu')),
           kosu.calistirma === 'dene' ? h('span', {}, rozet('deneme')) : null,
           h('span', {}, ikon('ag'), `ortam: ${kosu.ortam}`),
-          h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} · ${sureMetni(kosu.sureMs)}`)))),
-      h('div', { class: 'eylemler' }, karsilastirDugmesi({ tur: 'servis', projeId: proje.id, kosuId: kosu.id }), htmlRaporDugmesi({ tur: 'servis', projeId: proje.id, id: kosu.id }),
+          h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} · ${sureMetni(kosu.sureMs)}`)),
+          tekrarBagi)),
+      h('div', { class: 'eylemler' }, tekrarDugmesi, karsilastirDugmesi({ tur: 'servis', projeId: proje.id, kosuId: kosu.id }), htmlRaporDugmesi({ tur: 'servis', projeId: proje.id, id: kosu.id }),
         h('a', { class: 'dugme hayalet', href: kaynakAdresi(kosu) }, ikon('geri'), 'Servis sonuçları'))),
     h('div', { class: 'sonuc-kartlari mini' },
       ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Kalan', kalan(kosu), 'basarisiz'),
@@ -364,6 +358,49 @@ async function kosuAyrintisi(icerik, proje, id) {
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-kosu-basligi' }, ikon('liste'), `${akis ? 'Adımlar' : 'Senaryolar'} (${satirSayisi})`),
         h('span', { class: 'alt' }, akis ? 'Adımlar sırasıyla; ayrıntıda istek / yanıt' : 'Kalanlar önce; senaryoya tıklayınca istek / yanıt açılır')),
       satirSayisi ? h('div', { class: 'tablo-kaydirma' }, tablo) : h('p', { class: 'bos-liste' }, 'Bu koşuda sonuç yok.')));
+}
+
+/**
+ * Servis koşusunda "Başarısızları tekrar çalıştır": plan (kalan çalıştırmalar, o koşudan bu yana değişen tablo satırları) gösterilir;
+ * değişen satırlar için güncel / o koşudaki veri seçilir (o koşudaki değerler yalnız gizli sütunsuz tablolarda saklanır). Riskli ortamda
+ * açık onay istenir; izinler sunucuda denetlenir. Yeni çalıştırmalar "Tekrar:" bağı taşır.
+ */
+async function servisBasarisizlariniTekrarla(kosu, proje) {
+  try {
+    const [{ plan }, { ortamlar }, { onayIste, canliOnayIste }, { servisKosusuBaslat }] = await Promise.all([
+      api(`/platform/servis-sonuclari/tekrar-plani?projeId=${q(proje.id)}&id=${q(kosu.id)}`), api(`/platform/ortamlar?projeId=${q(proje.id)}`),
+      import('./kosu-paneli.js'), import('./servis-kosu-paneli.js')
+    ]);
+    const ortam = ortamlar.find((o) => o.id === kosu.ortamId);
+    if (!ortam) { bildir('Koşunun ortamı bulunamadı; başarısızlar yalnız o ortamda tekrar çalıştırılabilir.', 'hata'); return; }
+    if (!plan.testler.length) { bildir('Tekrar çalıştırılacak kalan senaryo yok.', 'hata'); return; }
+    let veri = 'guncel';
+    const kosudakiOlur = plan.satirDegisiklikleri.length > 0 && plan.satirDegisiklikleri.every((x) => x.kosudakiVeri);
+    const ad = yeniKimlik('servis-tekrar');
+    const ek = h('div', { class: 'tekrar-plani' },
+      h('ul', { 'aria-label': 'Tekrar çalıştırılacak senaryolar' }, plan.testler.slice(0, 30).map((t) => h('li', {}, t.baslik))),
+      plan.satirDegisiklikleri.length ? h('div', { class: 'not-kutusu', role: 'note' },
+        h('strong', {}, 'Tablo satırı o koşudan bu yana değişti: '),
+        plan.satirDegisiklikleri.map((x) => `${x.tablo} → ${x.satirAdi} (${x.durum === 'silindi' ? 'silindi' : 'verisi değişti'})`).join(', '), '. ',
+        kosudakiOlur
+          ? h('div', { class: 'radyo-grubu', role: 'radiogroup' }, [['guncel', 'Güncel veriyle'], ['kosudaki', 'O koşudaki veriyle']].map(([d, e]) => {
+            const r = h('input', { type: 'radio', name: ad, value: d, checked: d === veri });
+            r.addEventListener('change', () => { veri = d; });
+            return h('label', {}, r, e);
+          }))
+          : h('span', {}, 'O koşudaki değerler saklanmadığı için (gizli sütunlu tablo ya da silinmiş satır) güncel veriyle koşar.')) : null,
+      plan.atlananlar.length ? h('p', { class: 'soluk kucuk' }, `${plan.atlananlar.length} çalıştırma tekrar edilemez: ${plan.atlananlar.map((x) => `${x.baslik} (${x.neden})`).slice(0, 5).join(', ')}.`) : null);
+    const tamam = await onayIste({
+      baslik: 'Başarısızları tekrar çalıştır?', ikonAd: 'yenile', dugme: `${plan.sayi} çalıştırmayı başlat`, ek,
+      metin: `Yalnız kalan ${plan.sayi} çalıştırma ${ortam.ad} ortamında, o koşudaki tablo satırlarıyla, sırayla çalışır. Yeni çalıştırmalar "Tekrar: önceki koşu" bağıyla kaydedilir.`
+    });
+    if (!tamam) return;
+    if (!(await canliOnayIste(ortam, 'Tekrar koşusu'))) return;
+    await servisKosusuBaslat({ proje, servisId: plan.kosu.servisId, ortamId: ortam.id, tekrar: { kaynakKosuId: kosu.id, veri } });
+  } catch (e) {
+    if (e && e.durum === 423) return;
+    bildir(e.message, 'hata');
+  }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -388,7 +425,13 @@ async function senaryoAyrintisi(icerik, proje, id) {
     h('section', { class: 'kart', 'aria-labelledby': 'ss-kontrol-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-kontrol-basligi' }, ikon('hedef'), 'Kontroller'),
         h('span', { class: 'alt mono' }, `${r.kontroller.filter((k) => k.gecti).length} / ${r.kontroller.length} geçti`)),
-      r.kontroller.length ? kontrolListesi(r.kontroller) : h('p', { class: 'bos-liste' }, 'Kontrol sonucu yok (istek yanıt alınamadan bitti).')),
+      r.kontroller.length ? kontrolListesi(r.kontroller) : h('p', { class: 'bos-liste' }, 'Kontrol sonucu yok (istek yanıt alınamadan bitti).'),
+      // Yanıttaki dosya saklandıysa (Ayarlar > Koşu > Kayıt > "Doğrulanan dosya"): kasadan çözülür, tarayıcıda indirilir.
+      (r.dosyalar || []).some((d) => d.saklandi) ? dogrulananDosyalar(r.dosyalar.filter((d) => d.saklandi).map((d) => dogrulananDosyaIndir(d.ad, async () => {
+        const y = await api(`/platform/servis-sonuclari/dosya?projeId=${q(proje.id)}&id=${q(id)}&sira=${d.sira}`);
+        const ikili = Uint8Array.from(atob(y.dosya.icerikBase64), (c) => c.charCodeAt(0));
+        return new Blob([ikili], { type: y.dosya.icerikTuru || 'application/octet-stream' });
+      }))) : null),
     h('section', { class: 'kart', 'aria-labelledby': 'ss-istek-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-istek-basligi' }, ikon('ok'), 'İstek'), h('span', { class: 'alt' }, 'gizli değerler maskeli')),
       basliklar, r.istek ? kod(r.istek) : h('p', { class: 'bos-liste' }, 'İstek gövdesi kaydedilmedi.')),
@@ -401,13 +444,14 @@ async function senaryoAyrintisi(icerik, proje, id) {
     h('section', { class: 'kart', 'aria-labelledby': 'ss-ozet-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-ozet-basligi' }, ikon('liste'), 'Özet')),
       h('dl', { class: 'servis-sonuc-ozet' },
-        h('dt', {}, 'Servis'), h('dd', {}, h('a', { href: `${TABAN}/s/${q(r.servisId)}` }, r.servis)),
+        h('dt', {}, 'Servis'), h('dd', {}, h('a', { href: servisSonucAdresi(r.servisId) }, r.servis)),
         h('dt', {}, 'Ortam'), h('dd', {}, r.ortam),
         h('dt', {}, 'Zaman'), h('dd', { class: 'mono' }, tarihMetni(r.baslangic)),
         h('dt', {}, 'Süre'), h('dd', { class: 'mono' }, sureMetni(r.sureMs)),
         r.adres ? [h('dt', {}, 'Adres'), h('dd', { class: 'mono' }, r.adres)] : null,
         r.akis ? [h('dt', {}, 'Akış'), h('dd', {}, `${r.akis.akisBaslik}${r.akis.adimNo ? ` · ${r.akis.adimNo}. adım` : ''}${r.akis.adimAd ? ` (${r.akis.adimAd})` : ''}`)] : null,
-        r.oturum ? [h('dt', {}, 'Oturum'), h('dd', {}, `${r.oturum.akis} (${r.oturum.durum})`)] : null),
+        r.oturum ? [h('dt', {}, 'Oturum'), h('dd', {}, `${r.oturum.akis} (${r.oturum.durum})`)] : null,
+        r.yetkiTekrari ? [h('dt', {}, 'Yetki hatası'), h('dd', { class: 'yetki-notu' }, r.yetkiTekrari.not)] : null),
       r.ozet ? h('p', { class: 'servis-sonuc-yanit-ozeti' }, h('b', {}, 'Yanıt özeti: '), r.ozet) : null),
     r.okunanlar && Object.keys(r.okunanlar).length ? h('section', { class: 'kart', 'aria-labelledby': 'ss-okunan-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-okunan-basligi' }, ikon('anahtar'), 'Yanıttan okunan değerler')),
@@ -418,8 +462,8 @@ async function senaryoAyrintisi(icerik, proje, id) {
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
-        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: TABAN }, 'Servis sonuçları'), ayrac(),
-          h('a', { href: `${TABAN}/s/${q(r.servisId)}` }, r.servis), ayrac(), h('span', { class: 'simdiki' }, 'Senaryo')),
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: '#/sonuclar' }, 'Sonuçlar'), ayrac(), h('a', { href: TABAN }, 'Servisler'), ayrac(),
+          h('a', { href: servisSonucAdresi(r.servisId) }, r.servis), ayrac(), h('span', { class: 'simdiki' }, 'Senaryo')),
         h('h2', { tabindex: '-1' }, r.baslik),
         h('div', { class: 'meta' },
           h('span', {}, durumRozeti(r.durduruldu ? 'durduruldu' : r.durum)),

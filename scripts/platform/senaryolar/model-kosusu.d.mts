@@ -9,7 +9,8 @@ export declare const DOLDURULABILIR_TIPLER: readonly string[];
 export declare function modelSenaryosuMu(icerik: unknown): boolean;
 export declare function modelEtiketi(senaryoId: string): string;
 export declare function modelGrepDeseni(senaryoId: string): string;
-export declare function modelTestBasliklari(senaryolar: Array<{ id: string; baslik: string }>): Map<string, string>;
+export declare function modelTestBasliklari(senaryolar: Array<{ id: string; baslik: string; veriKosusu?: { anahtar: string | null; ad?: string | null } | null }>): Map<string, string>;
+export declare function modelTestAnahtari(s: { id: string; veriKosusu?: { anahtar: string | null } | null }): string;
 
 export type YasakDeseni = { kalip: string; desen: RegExp };
 export declare function yasakDesenleri(metin: string | undefined | null): YasakDeseni[];
@@ -52,6 +53,8 @@ export type PlanKosuTanimi = {
   /** Adımda kabul edilen iş kuralı uyarıları: başarı beklenirken biri görünürse test hemen başarısız. */
   uyarilar?: Array<{ metin: string; secici?: string }>;
   zamanAsimiSn?: number;
+  /** Ekran modelinde "Ekran görüntüsü al" işareti (adım görüntüleri "Seçili adımlarda" iken yalnız bu adımlarda alınır). */
+  ekranGoruntusu?: boolean;
   not?: string;
 };
 
@@ -62,6 +65,8 @@ export type PlanAdimi = {
   ortakAkisAdi?: string;
   /** SQL sorgusu adımı: koşucu veritabanı sorgusunu beklenenle karşılaştırır. */
   sql?: import('../sql/sql-adimi.mjs').SqlTanimi;
+  /** İndirilen dosyayı doğrulama adımı: tetikleyici düğmeye basılır, indirilen dosya beklentilerle doğrulanır. */
+  dosya?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi;
   /** Yeniden giriş adımı: oturum kapatılıp ortamın tarifiyle yeniden girilir (profil: giriş profilinin adı; null = ortamın varsayılanı). */
   yenidenGiris?: { profil: string | null };
   id: string;

@@ -19,4 +19,6 @@ export declare function medyaTamamenCoz(anaAnahtar: Buffer, yol: string): Promis
 export declare function medyaDosyasiniSil(klasor: string, dosya: string): boolean;
 /** İçeriği rastgele baytlarla ezip siler (en iyi çaba). */
 export declare function medyaDosyasiniGuvenliSil(klasor: string, dosya: string): boolean;
+/** Kademeli saklama: eski sonuçlarda seçime göre ekran görüntüleri ve videolar silinir (satır "silinme" ile kalır). */
+export declare function medyaInceltme(vt: Veritabani, klasor: string, secenekler: { secim: string; gun: number; koru: boolean; simdi?: number }): { silinenGoruntu: number; silinenVideo: number; sonuc: number };
 export declare function medyaSaklamaTemizligi(vt: Veritabani, klasor: string, secenekler: { videoGun: number; simdi?: number }): { silinenVideo: number; silinenSahipsiz: number };

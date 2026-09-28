@@ -13,12 +13,21 @@ const ADIN_GORUNURLUGU = 'Çalışma alanının adı şifrelenmez: kilit açılm
 
 const basHarf = (ad) => (String(ad || '?').trim()[0] || '?').toLocaleUpperCase('tr');
 
-/** Basit ⋯ / açılır menü (klavye: ok tuşları, Escape). ogeler: [{ ikon, metin, fn, tehlikeli?, devreDisi?, title? } | 'ayrac'] */
+/**
+ * Basit ⋯ / açılır menü (klavye: ok tuşları, Home / End, Escape). ogeler: [{ ikon, metin, fn, tehlikeli?, devreDisi?, title?, aciklama? } | 'ayrac']
+ * aciklama: seçeneğin altında bir satırlık "ne zaman kullanılır" (erişilebilir ad metin kalır; açıklama aria-describedby).
+ */
 export function acilirMenu({ dugme, ogeler, sinif = 'satir-menusu-kap', baslik = null }) {
-  const oge = (o) => h('button', {
-    type: 'button', role: 'menuitem', class: o.tehlikeli ? 'tehlikeli' : null, disabled: Boolean(o.devreDisi), title: o.title || null,
-    onclick: (olay) => { olay.stopPropagation(); kapat(); o.fn(); }
-  }, ikon(o.ikon), o.metin);
+  const oge = (o) => {
+    const aciklamaId = o.aciklama ? yeniKimlik('menu-aciklama') : null;
+    return h('button', {
+      type: 'button', role: 'menuitem', class: [o.tehlikeli ? 'tehlikeli' : '', o.aciklama ? 'aciklamali' : ''].join(' ').trim() || null,
+      disabled: Boolean(o.devreDisi), title: o.title || null, 'aria-describedby': aciklamaId,
+      onclick: (olay) => { olay.stopPropagation(); kapat(); o.fn(); }
+    }, ikon(o.ikon), o.aciklama
+      ? h('span', { class: 'menu-ogesi-metni' }, h('span', { class: 'menu-ogesi-adi' }, o.metin), h('span', { id: aciklamaId, class: 'menu-aciklamasi' }, o.aciklama))
+      : o.metin);
+  };
   const menu = h('div', { class: 'acilir-menu', role: 'menu', hidden: true },
     baslik ? h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, baslik) : null,
     ogeler.filter(Boolean).map((o) => (o === 'ayrac' ? h('hr', {}) : oge(o))));
@@ -41,6 +50,9 @@ export function acilirMenu({ dugme, ogeler, sinif = 'satir-menusu-kap', baslik =
     if (o.key === 'Escape') { kapat(); dugme.focus(); }
     else if (o.key === 'ArrowDown') { o.preventDefault(); liste[(j + 1) % liste.length]?.focus(); }
     else if (o.key === 'ArrowUp') { o.preventDefault(); liste[(j - 1 + liste.length) % liste.length]?.focus(); }
+    else if (o.key === 'Home') { o.preventDefault(); liste[0]?.focus(); }
+    else if (o.key === 'End') { o.preventDefault(); liste[liste.length - 1]?.focus(); }
+    else if (o.key === 'Tab') kapat();
   });
   return kap;
 }

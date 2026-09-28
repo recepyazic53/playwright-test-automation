@@ -9,6 +9,8 @@ export interface YurutmeBagimliliklari {
   senaryoCalistir(vt: Veritabani, govde: Record<string, unknown>): Promise<{ httpDurum?: number; govde: Record<string, unknown> }>;
   /** Servis akışını koşar (sunucuda: servisAkisiCalistir). */
   servisAkisiCalistir?(vt: Veritabani, projeId: string, girdi: { akisId: string; ortamId: string; tur: 'kosu' }): Promise<{ kosuId?: string | null; durum: string }>;
+  /** Uçtan uca akışı koşar (sunucuda: akislar/uctan-uca.mjs > uctanUcaCalistir; ön denetim sorunu hata fırlatır). */
+  uctanUcaCalistir?(vt: Veritabani, projeId: string, girdi: { akisId: string; ortamId: string }): Promise<{ kosuId?: string | null; durum: string }>;
   /** Koşu bitince seçilen bağlantıya bildirim (sunucuda: kosuBittiBildir(vt, kosuId, { baglantiIdleri })). */
   bildir?(vt: Veritabani, kosuId: string, baglantiIdleri: string[]): Promise<unknown>;
   /** false dönerse kalan senaryolar başlatılmaz (kasa kilitlendi / çalışma alanı değişti). */
@@ -19,7 +21,7 @@ export interface YurutmeSonucu {
   mesaj: string;
   kosuId: string | null;
   ozet: TetiklemeOzeti | null;
-  akisKosulari: Array<{ akisId: string; kosuId: string | null; durum: string }>;
+  akisKosulari: Array<{ akisId: string; kosuId: string | null; durum: string; uctanUca?: boolean }>;
 }
 export interface ZamanlayiciBagimliliklari {
   /** Kasa AÇIKSA etkin veritabanı; değilse null (zamanlayıcı hiçbir şey yapmaz). */

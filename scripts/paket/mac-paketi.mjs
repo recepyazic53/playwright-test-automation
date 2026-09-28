@@ -14,7 +14,7 @@
 // diğerleri 0644; sembolik bağlantılar (Chromium çerçevelerinde Versions/Current vb.) bağlantı olarak korunur.
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { TarYazici, tarGirdileri, yurutulebilirIcerikMi, zipGirdileri } from './arsiv.mjs';
+import { TarYazici, tarGirdileri, yurutulebilirIcerikMi, zipGirdileri } from '../platform/dosyalar/arsiv.mjs';
 import { uygulamaIcerigi } from './paket-ortak.mjs';
 
 export const UYGULAMA_ADI = 'Nöbetçi';

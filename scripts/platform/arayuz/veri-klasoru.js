@@ -1,6 +1,6 @@
 // VERİ KLASÖRÜ ve YEDEK KLASÖRÜ SEÇİMİ (arayüz). Sunucu: /platform/veri-klasoru* (kasa gerekmez), /platform/yedek/klasor* (kasada),
 // yeniden başlatma /platform/yeniden-baslat. Kurallar: scripts/platform/ayarlar/klasor-secimi.mjs.
-//   · veriKlasoruSatiri(): karşılama / başlangıç ekranında "Veri klasörü: <yol> [Değiştir…] [Var olan veri klasörünü aç…]".
+//   · veriKlasoruSatiri(): karşılama / başlangıç ekranında kapalı "Ayrıntılar" içinde "Veri klasörü: <yol> [Değiştir…] [Var olan veri klasörünü aç…]".
 //   · veriKlasoruKarti(): Ayarlar > Yedekleme > "Veri klasörü" kartı.
 //   · yedekKlasoruBolumu(bilgi, yenile): Ayarlar > Yedekleme > Otomatik yedekler içindeki "Yedek klasörü" satırı.
 // Tarayıcı bir klasör seçme penceresi açamaz: yol metin olarak yazılır, sunucu doğrular (mutlak yol, sistem / program klasörü
@@ -123,11 +123,13 @@ export function veriKlasoruDiyalogu(bilgi, s = {}) {
   return diyalog;
 }
 
-/** Karşılama / başlangıç ekranı satırı (seçim yapılamıyorsa yalnız bilgi). */
+/** Karşılama / başlangıç ekranı: kapalı "Ayrıntılar" bölümü içinde veri klasörü satırı (seçim yapılamıyorsa yalnız bilgi). */
 export function veriKlasoruSatiri() {
-  const kap = h('div', { class: 'veri-klasoru-satiri' });
+  const satir = h('div', { class: 'veri-klasoru-satiri' });
+  // Günlük işte gerekmeyen bilgi: varsayılan kapalı; içindeki Değiştir / Var olan veri klasörünü aç aynen.
+  const kap = h('details', { class: 'veri-klasoru-ayrintilari' }, h('summary', { class: 'kucuk soluk' }, 'Ayrıntılar'), satir);
   api('/platform/veri-klasoru', { kilitOlayiYok: true }).then(({ veriKlasoru: b }) => {
-    yerlestir(kap, h('span', { class: 'kucuk soluk' }, ikon('klasor'), ' Veri klasörü: '), h('code', { class: 'kucuk', title: b.etkin }, b.etkin),
+    yerlestir(satir, h('span', { class: 'kucuk soluk' }, ikon('klasor'), ' Veri klasörü: '), h('code', { class: 'kucuk', title: b.etkin }, b.etkin),
       b.secilebilir ? h('button', { type: 'button', class: 'bag-dugme', onclick: () => veriKlasoruDiyalogu(b, { ilkKip: 'bos' }) }, 'Değiştir…') : null,
       b.secilebilir ? h('button', { type: 'button', class: 'bag-dugme', onclick: () => veriKlasoruDiyalogu(b, { ilkKip: 'ac', baslik: 'Var olan veri klasörünü aç' }) }, 'Var olan veri klasörünü aç…') : null);
   }).catch(() => kap.remove());

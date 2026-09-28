@@ -152,6 +152,19 @@ export type Alan = {
   excelSutunlari?: { deger: JsonDeger; not?: string };
   durum?: 'oneri';
   notlar?: string[];
+  /** Uygulamadaki değer kuralları (senaryo tasarım yardımcısının sınır değer önerileri yalnız bunlardan üretilir). */
+  sinirlar?: AlanSinirlari;
+};
+
+/** Sayıda enAz / enCok (+ artis), tarihte enAz / enCok ("bugun±N" ya da tarih), metinde uzunluk ve desen. */
+export type AlanSinirlari = {
+  enAz?: number | string;
+  enCok?: number | string;
+  artis?: number;
+  enAzUzunluk?: number;
+  enCokUzunluk?: number;
+  desen?: string;
+  not?: string;
 };
 
 export type Bolum = {
@@ -187,6 +200,8 @@ export type AdimKosuTanimi = {
   /** İş kuralı uyarısının göründüğü öğe. */
   hataGostergesi?: { secici: string };
   zamanAsimiSn?: number;
+  /** "Ekran görüntüsü al" işareti: adım görüntüleri "Seçili adımlarda" iken yalnız bu adımların görüntüsü alınır. */
+  ekranGoruntusu?: boolean;
   not?: string;
 };
 
@@ -200,6 +215,8 @@ export type Adim = {
   altModel?: AltModelBasvurusu;
   /** SQL adımı (platform/sql/sql-adimi.mjs SqlTanimi): koşuda veritabanı sorgusu beklenenle karşılaştırılır. */
   sqlKontrolu?: Record<string, unknown>;
+  /** İndirilen dosyayı doğrulama adımı (platform/dosyalar/dosya-icerigi.mjs DosyaTanimi + tetikleyici düğme). */
+  dosyaKontrolu?: Record<string, unknown>;
   /** Sürüm 2: aksiyonlar ve başarı/hata göstergesi. */
   kosu?: AdimKosuTanimi;
 };

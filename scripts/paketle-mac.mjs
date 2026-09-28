@@ -17,8 +17,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { builtinModules } from 'node:module';
 import { MIMARILER, macPaketiYaz, paketAdi } from './paket/mac-paketi.mjs';
-import { PaketHatasi } from './paket/paket-ortak.mjs';
+import { PaketHatasi, iceAktarmaCozumlemesi, uygulamaIcerigi } from './paket/paket-ortak.mjs';
 
 const KOK = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(KOK, 'dist');
@@ -146,6 +147,13 @@ async function main() {
   /** @type {Array<import('./paket/mac-paketi.mjs').MacMimarisi>} */
   const mimariler = secim === 'hepsi' ? ['arm64', 'x64'] : secim === 'arm64' || secim === 'x64' ? [secim] : [];
   if (!mimariler.length) { console.error('Kullanım: npm run paketle:mac -- [arm64|x64|hepsi]'); process.exit(1); }
+  // Hafif, platformdan bağımsız denetim (macOS arşivi burada açılıp çalıştırılamaz): arşive girecek uygulama dosyalarının içe
+  // aktardığı tüm modüller arşivde var mı? İndirmeden ÖNCE yapılır; eksikse paketleme durur.
+  const icerik = [...uygulamaIcerigi(KOK)];
+  const kaynak = new Map(icerik.map((x) => [x.goreli, x.kaynak]));
+  const cozulmeyen = iceAktarmaCozumlemesi(icerik, (g) => readFileSync(/** @type {string} */ (kaynak.get(g)), 'utf8'), builtinModules);
+  if (cozulmeyen.length) { console.error(['İçe aktarılan modül arşivde yok:', ...cozulmeyen.map((x) => `  ${x}`)].join('\n')); process.exit(3); }
+  adim('İçe aktarma çözümlemesi: arşive girecek tüm modüller var.');
   mkdirSync(ONBELLEK, { recursive: true });
 
   for (const mimari of mimariler) {

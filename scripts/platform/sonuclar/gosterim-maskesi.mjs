@@ -29,6 +29,18 @@ export function gosterimMaskesi(vt, projeId) {
 const secimli = (f, d) => (d === null || d === undefined || d === '' ? d : f(d));
 
 /**
+ * Veri koşusu bilgisi (hangi tablo satırıyla koştu): satır / koşu adı ve açık sütun değerlerinde bilinen gizli değerler maskelenir
+ * (gizli sütunların değeri zaten hiç saklanmaz). @param {any} v @param {GosterimMaskesi} m
+ */
+const veriKosusunuMaskele = (v, m) => (v && typeof v === 'object' ? {
+  ...v, ad: secimli(m.ad, v.ad),
+  satirlar: Array.isArray(v.satirlar) ? v.satirlar.map((/** @type {Record<string, any>} */ s) => ({
+    ...s, satirAdi: m.ad(s.satirAdi),
+    degerler: Object.fromEntries(Object.entries(s.degerler ?? {}).map(([a, d]) => [a, secimli(m.ad, d)]))
+  })) : []
+} : v);
+
+/**
  * sonucDetayi çıktısı (test ayrıntısı, sağ panel, "Başarısız testler" kartı).
  * @template {Record<string, any>} T @param {T} s @param {GosterimMaskesi} m @returns {T}
  */
@@ -43,14 +55,16 @@ export function sonucDetayiniMaskele(s, m) {
     adimlar: Array.isArray(s.adimlar) ? s.adimlar.map((a) => ({ ...a, ad: m.ad(a.ad), hataMesaji: secimli(m.metin, a.hataMesaji) })) : s.adimlar,
     atlananAlanlar: Array.isArray(s.atlananAlanlar) ? s.atlananAlanlar.map((a) => ({ ...a, ...(a.neden ? { neden: m.metin(a.neden) } : {}) })) : s.atlananAlanlar,
     yakalananMesajlar: Array.isArray(s.yakalananMesajlar)
-      ? s.yakalananMesajlar.map((y) => ({ ...y, metin: m.metin(y.metin), kalip: m.metin(y.kalip), adim: secimli(m.ad, y.adim) })) : s.yakalananMesajlar
+      ? s.yakalananMesajlar.map((y) => ({ ...y, metin: m.metin(y.metin), kalip: m.metin(y.kalip), adim: secimli(m.ad, y.adim) })) : s.yakalananMesajlar,
+    ...(s.veriKosusu !== undefined ? { veriKosusu: veriKosusunuMaskele(s.veriKosusu, m) } : {})
   };
 }
 
 /** kosuDetayi çıktısı (koşu ayrıntısı; hata kalıbı sütunu). @template {Record<string, any>} T @param {T} d @param {GosterimMaskesi} m @returns {T} */
 export function kosuDetayiniMaskele(d, m) {
   if (!d) return d;
-  return { ...d, sonuclar: d.sonuclar.map((/** @type {Record<string, any>} */ x) => ({ ...x, senaryoBaslik: m.ad(x.senaryoBaslik), hataKalibi: secimli(m.metin, x.hataKalibi) })) };
+  return { ...d, sonuclar: d.sonuclar.map((/** @type {Record<string, any>} */ x) => ({ ...x, senaryoBaslik: m.ad(x.senaryoBaslik), hataKalibi: secimli(m.metin, x.hataKalibi),
+    ...(x.veriKosusu !== undefined ? { veriKosusu: veriKosusunuMaskele(x.veriKosusu, m) } : {}) })) };
 }
 
 /** hataKaliplari çıktısı (Sonuçlar > Hata kalıpları, iki görünüm). @template {Record<string, any>} T @param {T} v @param {GosterimMaskesi} m @returns {T} */

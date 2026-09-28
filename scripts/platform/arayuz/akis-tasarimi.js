@@ -22,8 +22,10 @@
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { sqlAdimiFormu, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
+import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { girisAyrintisi } from './senaryo-diyagrami.js';
 import { testVerisiBildir, testVerisiSecimi } from './sayfa-paketi.js';
+import { sinirHatalari } from './ekran-modeli-dogrulayici.mjs';
 
 const TURLER = {
   alanlar: { etiket: 'Alan grubu', ikonAd: 'liste' },
@@ -32,10 +34,28 @@ const TURLER = {
   bekle: { etiket: 'Bekleme süresi', ikonAd: 'saat' },
   ortak: { etiket: 'Ortak akış', ikonAd: 'pusula' },
   sql: { etiket: 'SQL sorgusu', ikonAd: 'veri' },
+  dosya: { etiket: 'İndirilen dosyayı doğrula', ikonAd: 'indir' },
   giris: { etiket: 'Yeniden giriş', ikonAd: 'kilit' },
   bitir: { etiket: 'Bitir', ikonAd: 'onay' }
 };
 const SURUKLEME_TURU = 'application/x-nobetci-alan';
+/** Sınır (alan.sinirlar) yazılabilen alan türleri: palet türü → model alan tipi. */
+const SINIR_TIPLERI = { number: 'sayi', date: 'tarih', text: 'metin' };
+/** Sınır düzenleyicisinin girdileri (tipe göre): [anahtar, etiket, girdi türü, ipucu]. */
+const SINIR_GIRDILERI = {
+  sayi: [['enAz', 'En az', 'number', ''], ['enCok', 'En çok', 'number', ''], ['artis', 'Artış', 'number', 'varsayılan 1']],
+  metin: [['enAzUzunluk', 'En az uzunluk', 'number', 'karakter'], ['enCokUzunluk', 'En çok uzunluk', 'number', 'karakter'], ['desen', 'Desen', 'text', 'düzenli ifade, ör. [A-Z]{4}']],
+  tarih: [['enAz', 'En erken', 'text', 'gg.aa.yyyy ya da bugun+1'], ['enCok', 'En geç', 'text', 'gg.aa.yyyy ya da bugun+30']]
+};
+/** "1–10", "3–10 karakter", "bugun+1 … bugun+30" (kural yoksa null). */
+function sinirOzeti(s, tip) {
+  if (!s || typeof s !== 'object') return null;
+  const [a, b] = tip === 'metin' ? [s.enAzUzunluk, s.enCokUzunluk] : [s.enAz, s.enCok];
+  const var_ = (x) => x !== undefined && x !== null && x !== '';
+  const aralik = var_(a) || var_(b) ? `${var_(a) ? a : '…'}–${var_(b) ? b : '…'}${tip === 'metin' ? ' karakter' : ''}` : '';
+  const parca = [aralik, tip === 'metin' && s.desen ? `/${s.desen}/` : ''].filter(Boolean).join(' ');
+  return parca || null;
+}
 /** Art arda beklenen mesajlardan (VEYA) en çok (sunucudaki MESAJ_GRUBU_EN_COK ile aynı). */
 const MESAJ_GRUBU_EN_COK = 5;
 
@@ -71,9 +91,11 @@ export async function akisTasarimi(icerik, s) {
   const girisProfilAdlari = girissiz ? [] : await api(`/platform/giris-profilleri?projeId=${encodeURIComponent(s.proje.id)}`)
     .then((v) => [...new Set((v.profiller || []).map((p) => p.ad))]).catch(() => []);
   /** @type {Array<Record<string, any>>} */
-  let bloklar = veri.bloklar.map((b) => ({ ...b, ...(b.tur === 'alanlar' ? { alanlar: [...b.alanlar], zorunlu: [...(b.zorunlu || [])], kosullar: { ...(b.kosullar || {}) } } : {}) }));
+  let bloklar = veri.bloklar.map((b) => ({ ...b, ...(b.tur === 'alanlar' ? { alanlar: [...b.alanlar], zorunlu: [...(b.zorunlu || [])], kosullar: { ...(b.kosullar || {}) }, sinirlar: { ...(b.sinirlar || {}) } } : {}) }));
   /** Koşulu düzenlenen alan: { blok, alan } */
   let kosulDuzenleme = null;
+  /** Sınırları (değer kuralları; model alan.sinirlar) düzenlenen alan: { blok, alan } — yalnız ekranın akışını düzenlerken. */
+  let sinirDuzenleme = null;
   let etkin = bloklar.findIndex((b) => b.tur === 'alanlar');
   /** @type {Map<number | null, string[]>} */
   let hatalar = new Map();
@@ -135,16 +157,20 @@ export async function akisTasarimi(icerik, s) {
     const baska = Boolean(kaynak);
     const kosulVar = Boolean(kaynak && kaynak.kosullar && Object.prototype.hasOwnProperty.call(kaynak.kosullar, anahtar));
     const kosul = kosulVar ? kaynak.kosullar[anahtar] : undefined;
+    const sinirVar = Boolean(kaynak && kaynak.sinirlar && Object.prototype.hasOwnProperty.call(kaynak.sinirlar, anahtar));
+    const sinir = sinirVar ? kaynak.sinirlar[anahtar] : undefined;
     for (const x of bloklar) {
       if (x.tur !== 'alanlar') continue;
       x.alanlar = x.alanlar.filter((a) => a !== anahtar);
       x.zorunlu = x.zorunlu.filter((a) => a !== anahtar);
       if (x.kosullar) delete x.kosullar[anahtar];
+      if (x.sinirlar) delete x.sinirlar[anahtar];
     }
     const yer = onune ? b.alanlar.indexOf(onune) : -1;
     if (yer >= 0) b.alanlar.splice(yer, 0, anahtar); else b.alanlar.push(anahtar);
     // Taşınan alan koşulunu da götürür.
     if (kosulVar) b.kosullar = { ...(b.kosullar || {}), [anahtar]: kosul };
+    if (sinirVar) b.sinirlar = { ...(b.sinirlar || {}), [anahtar]: sinir };
     // Taşınan alan ayarını korur; yeni eklenen, sayfanın zorunluluğuyla gelir.
     if (baska ? zorunluydu : alanBilgisi.get(anahtar)?.zorunlu) b.zorunlu.push(anahtar);
     etkin = hedef;
@@ -213,6 +239,7 @@ export async function akisTasarimi(icerik, s) {
           type: 'button', onclick: () => blokEkle(konum, { tur: 'ortak', dosya: ortakAkislar[0].dosya, ad: ortakAkislar[0].ad, istegeBagli: false })
         }, ikon('pusula'), 'Ortak akış') : null,
         h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'sql', ad: '', sql: yeniSqlTanimi(sqlKaynaklari) }) }, ikon('veri'), 'SQL sorgusu'),
+        h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'dosya', ad: '', dugme: -1, dosya: yeniDosyaTanimi() }) }, ikon('indir'), 'İndirilen dosyayı doğrula'),
         girissiz ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'giris', ad: '', profil: null }) }, ikon('kilit'), 'Yeniden giriş'),
         bitirVar ? null : h('button', { type: 'button', onclick: () => blokEkle(konum, { tur: 'bitir' }) }, ikon('onay'), 'Bitir')) : null);
   }
@@ -257,6 +284,16 @@ export async function akisTasarimi(icerik, s) {
       title: kosulYazisi ? `Görünür: ${kosulYazisi}. Değiştirmek için tıklayın.` : 'Her zaman görünür. Seçime bağlıysa koşul ekleyin.',
       onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; ciz(); }
     }, ikon('isaret'), kosulYazisi || 'Koşul'), cip.querySelector('.zorunluluk'));
+    // Sınırlar (sayı / metin / tarih alanı; ekranın akışında): senaryo tasarım yardımcısının sınır değer önerileri bundan üretilir.
+    const sinirTipi = ekranKipi && a ? SINIR_TIPLERI[a.tur] : null;
+    if (sinirTipi) {
+      const ozet = sinirOzeti(bloklar[i].sinirlar ? bloklar[i].sinirlar[anahtar] : null, sinirTipi);
+      cip.insertBefore(h('button', {
+        type: 'button', class: `sinir-dugmesi${ozet ? ' var' : ''}`, 'aria-label': `${etiket}: sınırlar`,
+        title: ozet ? `Sınırlar: ${ozet}. Değiştirmek için tıklayın.` : 'Sınır kuralı yok (isteğe bağlı). Sınır değer önerileri için ekleyin.',
+        onclick: () => { sinirDuzenleme = { blok: i, alan: anahtar }; kosulDuzenleme = null; ciz(); }
+      }, ikon('hedef'), ozet || 'Sınırlar'), cip.querySelector('.zorunluluk'));
+    }
     cip.addEventListener('dragstart', (o) => { o.dataTransfer.setData(SURUKLEME_TURU, anahtar); o.dataTransfer.effectAllowed = 'move'; });
     // Başka bir alanın üstüne bırakılan alan onun önüne yerleşir (grubun "sona ekle" bırakmasından önce yakalanır).
     cip.addEventListener('dragover', (o) => { if (o.dataTransfer.types.includes(SURUKLEME_TURU)) { o.preventDefault(); cip.classList.add('onune-birak'); } });
@@ -322,6 +359,68 @@ export async function akisTasarimi(icerik, s) {
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { kosulDuzenleme = null; ciz(); } }, 'Vazgeç')));
   }
 
+  /**
+   * "Ekran görüntüsü al" işareti (adımın sonunda; Ayarlar > Koşu > Kayıt > Adım ekran görüntüleri "Seçili adımlarda" iken — ya da
+   * senaryo bu seçimi yaptıysa — yalnız işaretli adımların görüntüsü alınır). Modelde adımın kosu.ekranGoruntusu alanı.
+   */
+  function goruntuIsareti(b) {
+    const kutu = h('input', { type: 'checkbox', checked: b.ekranGoruntusu === true });
+    kutu.addEventListener('change', () => { if (kutu.checked) b.ekranGoruntusu = true; else delete b.ekranGoruntusu; sakla(); });
+    return h('label', { class: 'onay-satiri kucuk goruntu-isareti', title: 'Adım ekran görüntüleri "Seçili adımlarda" iken bu adımın sonunda görüntü alınır (Ayarlar > Koşu > Kayıt ya da senaryo formu).' },
+      kutu, ikon('ekran'), 'Ekran görüntüsü al (seçili adımlarda)');
+  }
+
+  /**
+   * Alanın sınırları (isteğe bağlı değer kuralları; model alan.sinirlar): sayıda en az / en çok / artış, metinde uzunluk + desen,
+   * tarihte en erken / en geç (sabit tarih ya da bugün±N). Ekran modeli doğrulayıcısının kurallarıyla anında denetlenir.
+   */
+  function sinirDuzenleyici(b, anahtar) {
+    const a = alanBilgisi.get(anahtar);
+    const tip = SINIR_TIPLERI[a.tur];
+    const mevcut = (b.sinirlar && b.sinirlar[anahtar]) || {};
+    const girdiler = SINIR_GIRDILERI[tip].map(([k, etiket, tur, ipucu]) => ({
+      k, tur, el: h('input', { type: tur, step: tur === 'number' ? 'any' : null, value: mevcut[k] ?? '', placeholder: ipucu || null, 'aria-label': `${etiket}` }), etiket
+    }));
+    const hataEl = h('ul', { class: 'tasarim-hatalari', role: 'alert', 'aria-label': 'Sınır hataları' });
+    const oku = () => {
+      const s = {};
+      for (const g of girdiler) {
+        const v = g.el.value.trim();
+        if (!v) continue;
+        s[g.k] = g.tur === 'number' ? Number(v) : v;
+      }
+      return s;
+    };
+    const denetle = () => {
+      const s = oku();
+      const liste = Object.keys(s).length ? sinirHatalari(tip, s) : [];
+      yerlestir(hataEl, ...liste.map((m) => h('li', {}, m)));
+      return liste;
+    };
+    for (const g of girdiler) g.el.addEventListener('input', denetle);
+    return h('div', { class: 'kosul-duzenleyici sinir-duzenleyici', role: 'group', 'aria-label': `${a.etiket}: sınırlar` },
+      h('b', {}, `“${a.etiket}” sınırları`),
+      h('p', { class: 'soluk kucuk' }, tip === 'tarih'
+        ? 'İsteğe bağlı. Sabit tarih (gg.aa.yyyy) ya da bugüne göre (bugun, bugun+30, bugun-3). Senaryo tasarım yardımcısı sınır değer önerilerini bundan üretir.'
+        : 'İsteğe bağlı; boş bırakılabilir. Senaryo tasarım yardımcısı sınır değer önerilerini bundan üretir.'),
+      h('div', { class: 'sinir-girdileri' }, girdiler.map((g) => h('label', { class: 'tasarim-etiketi' }, h('span', {}, g.etiket), g.el))),
+      hataEl,
+      h('div', { class: 'dugmeler' },
+        h('button', {
+          type: 'button', class: 'kucuk-dugme birincil', onclick: () => {
+            if (denetle().length) return;
+            const s = oku();
+            b.sinirlar = { ...(b.sinirlar || {}), [anahtar]: Object.keys(s).length ? s : null };
+            sinirDuzenleme = null;
+            degisti();
+          }
+        }, 'Sınırları kaydet'),
+        mevcut && Object.keys(mevcut).length ? h('button', {
+          type: 'button', class: 'kucuk-dugme', onclick: () => { b.sinirlar = { ...(b.sinirlar || {}), [anahtar]: null }; sinirDuzenleme = null; degisti(); }
+        }, 'Sınırları kaldır') : null,
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { sinirDuzenleme = null; ciz(); } }, 'Vazgeç')));
+  }
+
   function blokGovdesi(b, i) {
     if (b.tur === 'alanlar') {
       const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Müşteri bilgileri', 'aria-label': 'Adım adı' });
@@ -329,9 +428,11 @@ export async function akisTasarimi(icerik, s) {
       ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); paletCiz(); });
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        goruntuIsareti(b),
         b.alanlar.length ? h('ul', { class: 'tasarim-alanlari', 'aria-label': 'Doldurulacak alanlar' }, b.alanlar.map((a) => alanCipi(a, i)))
           : h('p', { class: 'soluk kucuk' }, 'Alan yok. Sağdaki listeden alanları buraya sürükleyin ya da grubu seçip “Ekle”ye basın.'),
         kosulDuzenleme && kosulDuzenleme.blok === i && b.alanlar.includes(kosulDuzenleme.alan) ? kosulDuzenleyici(b, kosulDuzenleme.alan) : null,
+        sinirDuzenleme && sinirDuzenleme.blok === i && b.alanlar.includes(sinirDuzenleme.alan) ? sinirDuzenleyici(b, sinirDuzenleme.alan) : null,
         b.alanlar.length ? h('p', { class: 'soluk kucuk' }, 'Zorunlu: senaryoda değer şart, koşuda görünmezse test başarısız (koşullu alanda koşul sağlanınca). Görünürse doldur: boş bırakılabilir, görünmüyorsa atlanır.') : null
       ];
     }
@@ -360,6 +461,7 @@ export async function akisTasarimi(icerik, s) {
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Basılacak düğme'), secim),
         h('label', { class: 'onay-satiri kucuk' }, kutu, 'Her senaryoda basılmaz (senaryoda seçilir)'),
         b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Sonucu en çok bekleme (sn)'), sure),
+        b.istegeBagli ? null : goruntuIsareti(b),
         b.istegeBagli ? h('p', { class: 'soluk kucuk' }, 'Hemen ardından gelen alan grubu bu düğmeyle açılan alanlardır; senaryoda “dahil” işaretliyse doldurulur.') : null
       ];
     }
@@ -402,7 +504,7 @@ export async function akisTasarimi(icerik, s) {
           h('button', {
             type: 'button', class: 'kucuk-dugme', 'aria-label': 'Kabul edilen bir uyarı ekle',
             onclick: (o) => { o.stopPropagation(); blokEkle(i + 1, { tur: 'mesaj', mesaj: null, metin: '', uyari: true }); }
-          }, ikon('artiYalin'), 'Uyarı ekle'),
+          }, ikon('arti'), 'Uyarı ekle'),
           h('span', { class: 'soluk kucuk' }, grupBoyu > 1
             ? `Bu ${grupBoyu} başarı mesajından herhangi biri görünürse başarılı sayılır (en fazla ${MESAJ_GRUBU_EN_COK}).`
             : 'Başarıyı gösteren başka bir mesaj ya da kabul ettiğiniz bir uyarı varsa ekleyin.')) : null
@@ -455,6 +557,22 @@ export async function akisTasarimi(icerik, s) {
         h('p', { class: 'soluk kucuk' }, 'SQL’de senaryonun değerleri ${alanAnahtari}, önceki SQL adımlarında okunan değerler ${akis:Ad} ile yazılır. Bir aksiyondan sonra (ya da akışın başında) gelir; ekran adımı bittikten sonra koşar.')
       ];
     }
+    if (b.tur === 'dosya') {
+      // İndirilen dosyayı doğrula: düğmeye basılır, indirilen dosya (CSV / XLSX / PDF / metin) beklentilerle doğrulanır.
+      const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Sipariş raporu indirilir', 'aria-label': 'Dosya adımının adı' });
+      ad.addEventListener('input', () => { b.ad = ad.value; sakla(); });
+      ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); });
+      const dugme = h('select', { 'aria-label': 'İndirmeyi başlatan düğme' },
+        h('option', { value: '-1' }, 'Düğme seçin…'),
+        palet.dugmeler.map((d) => h('option', { value: String(d.sira), selected: d.sira === b.dugme }, `“${d.metin}”`)));
+      dugme.addEventListener('change', () => { b.dugme = Number(dugme.value); sakla(); });
+      return [
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'İndirmeyi başlatan düğme'), dugme),
+        dosyaKontroluFormu(b.dosya, { degisti: sakla, ekran: true }),
+        h('p', { class: 'soluk kucuk' }, 'Koşuda düğmeye basılır, indirilen dosya koşunun geçici klasörüne yazılır, doğrulanır ve silinir. Bir aksiyondan sonra (ya da akışın başında) gelir.')
+      ];
+    }
     return [h('p', { class: 'soluk kucuk' }, 'Akış burada biter; son beklenen mesaj (art arda birden çoksa herhangi biri) başarı sayılır.')];
   }
 
@@ -469,9 +587,10 @@ export async function akisTasarimi(icerik, s) {
       h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(tur.ikonAd)),
       h('h4', {}, tur.etiket),
       b.tur === 'aksiyon' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
-      b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu') : null,
+      b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu', { kisalt: true }) : null,
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
+      b.tur === 'dosya' ? rozet(dosyaOzeti(b.dosya), 'vurgu') : null,
       b.tur === 'ortak' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
       b.tur === 'ortak' && ortakAkislar.find((x) => x.dosya === b.dosya)?.yalnizTest ? rozet('yalnızca test', 'uyari') : null,
       b.tur === 'mesaj' && b.uyari ? rozet('uyarı', 'uyari') : null,

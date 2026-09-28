@@ -15,8 +15,10 @@
 //   4) adım ekran görüntüsü.
 // Planın kendisi (hangi adımlar, hangi alanlar, beklenen sonuç) saftır: scripts/platform/senaryolar/model-kosusu.mjs.
 import { expect, test, type Locator, type Page, type Request, type TestInfo } from '@playwright/test';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve, isAbsolute } from 'node:path';
+import { dosyayiDogrula, kalanlarMetni, type DosyaTanimi } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
 import { DOSYA_KLASORU_DEGISKENI } from '../../scripts/platform/dosyalar/gecici-dosyalar.mjs';
 import { referansCoz } from '../../scripts/platform/dosyalar/referans.mjs';
 import {
@@ -30,7 +32,8 @@ import { oturumuSifreliYaz } from './oturum-kasasi';
 import { etkinSenaryoGirisi } from '../../scripts/platform/senaryolar/senaryo-girisi.mjs';
 import type { PlatformModelSenaryosu, PlatformModelVerisi } from './platform-veri';
 import { attachStepScreenshot } from './screenshots';
-import { sayiAyari, secimAyari, sureAyari } from './kosu-ayarlari';
+import { adimGoruntusuAyari, indirilenDosyaAyari, sayiAyari, secimAyari, sureAyari } from './kosu-ayarlari';
+import { adimGoruntusuAlinsinMi } from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
 import { mesajYakalayicisi, mesajYakalayicisiKur } from './mesaj-yakalayici';
 import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
@@ -597,6 +600,62 @@ async function sqlAdiminiUygula(testInfo: TestInfo, adimBasligi: string, tanim: 
   for (const ad of r.gizliOkunanlar) { const v = r.okunanlar[ad]; if (v && !d.gizliler.includes(v)) d.gizliler.push(v); }
 }
 
+/**
+ * İndirilen dosyayı doğrulama adımı: tetikleyici düğmeye basılır, indirme (Playwright download olayı) beklenir; dosya koşunun geçici
+ * klasörüne (NOBETCI_DOSYA_KLASORU; yoksa işletim sisteminin geçici klasörü) yazılır, okunup doğrulanır ve HEMEN silinir.
+ * Beklentilerdeki başvurular: ${akis:Ad} → önceki SQL okumaları, ${Tablo.Sütun} → veri okuyucunun çözdüğü değerler, ${alan} → senaryo
+ * değeri. Özet (her beklenti: geçti / kaldı, Beklenen / Görülen; gizliler maskeli) her zaman rapora ek olarak yazılır; dosyanın kendisi
+ * yalnız Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (varsayılan: saklanmaz). Kalan beklenti → Beklenen / Görülen hatası.
+ */
+async function dosyaAdiminiUygula(page: Page, testInfo: TestInfo, adimBasligi: string, tanim: DosyaTanimi, s: PlatformModelSenaryosu, d: SqlDegerleri): Promise<void> {
+  const tetik = tanim.tetikleyici;
+  if (!tetik?.secici) throw new Error(`${adimBasligi}: indirmeyi başlatan düğme modelde yok (dosyaKontrolu.tetikleyici).`);
+  const sureMs = (tanim.zamanAsimiSn ?? adimSuresiSn()) * 1000;
+  const dugme = page.locator(tetik.secici).filter({ visible: true }).first();
+  const indirme = page.waitForEvent('download', { timeout: sureMs }).catch(() => null);
+  try {
+    await dugme.click({ timeout: sureMs });
+  } catch {
+    throw new Error(beklenenGorulenMetni(adimBasligi, `"${tetik.aciklama ?? tetik.secici}" düğmesine basılır`, `${Math.round(sureMs / 1000)} sn içinde tıklanamadı (görünmüyor ya da üstünü başka bir öğe kapatıyor)`));
+  }
+  const indirilen = await indirme;
+  if (!indirilen) throw new Error(beklenenGorulenMetni(adimBasligi, 'dosya indirilir', `${Math.round(sureMs / 1000)} sn içinde indirme başlamadı`));
+  const ad = indirilen.suggestedFilename();
+  const kok = process.env[DOSYA_KLASORU_DEGISKENI];
+  const klasor = mkdtempSync(join(kok && existsSync(kok) ? kok : tmpdir(), 'indirilen-'));
+  let veri: Buffer;
+  try {
+    const yol = join(klasor, 'dosya');
+    await indirilen.saveAs(yol);
+    veri = readFileSync(yol);
+  } catch (e) {
+    throw new Error(beklenenGorulenMetni(adimBasligi, 'dosya indirilir', `indirme tamamlanmadı (${indirilen.url().startsWith('blob:') ? 'sayfa içi dosya' : 'ağ'}: ${(await indirilen.failure().catch(() => null)) ?? (e as Error).message})`));
+  } finally {
+    rmSync(klasor, { recursive: true, force: true });
+    await indirilen.delete().catch(() => undefined);
+  }
+  const gizliler = [...d.gizliler, ...(s.tabloGizliDegerleri ?? [])];
+  const coz = (ifade: string): string | undefined => {
+    if (ifade.startsWith('akis:')) return d.degerler[ifade.slice(5).trim()];
+    if (s.dosyaBasvurulari && Object.prototype.hasOwnProperty.call(s.dosyaBasvurulari, ifade)) return s.dosyaBasvurulari[ifade];
+    const v = s.veri[ifade];
+    return typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : undefined;
+  };
+  const r = dosyayiDogrula({ ad, veri }, tanim, { coz, gizliler });
+  await testInfo.attach(`Dosya doğrulama - ${adimBasligi}`, { contentType: 'application/json', body: JSON.stringify(r, null, 2) });
+  const sakla = indirilenDosyaAyari();
+  if (sakla === 'her' || (sakla === 'yalnizHata' && !r.gecti)) {
+    await testInfo.attach(`İndirilen dosya - ${r.dosya.ad}`, { contentType: DOSYA_ICERIK_TURLERI[r.dosya.bicim] ?? 'application/octet-stream', body: veri });
+  }
+  veri.fill(0);
+  if (!r.gecti) throw new Error(kalanlarMetni(adimBasligi, r));
+}
+
+/** Rapora eklenen dosyanın içerik türü (ekin görüntülenmesi için; görüntü / video / iz türü değildir). */
+const DOSYA_ICERIK_TURLERI: Record<string, string> = {
+  csv: 'text/csv', metin: 'text/plain', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+
 export type ModelKosuOrtami = {
   veri: PlatformModelVerisi;
   tarif: () => GirisTarifi;
@@ -683,13 +742,23 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
 
   const atlanan: AtlananAlan[] = [];
   let sira = 1;
-  const ekranGoruntusu = (ad: string): Promise<void> => attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${ad}`);
+  // Adım ekran görüntüleri (Ayarlar > Koşu > Kayıt; senaryo ezebilir): her adımda (varsayılan, bugünkü davranış) · yalnız kalan
+  // adımda (başarılı adımda alınmaz; kalan adımın görüntüsü aşağıdaki catch'te) · seçili adımlarda (modelde kosu.ekranGoruntusu
+  // işaretli akış adımı; giriş / bağlam / ekran açılışı alınmaz) · kapalı.
+  const adimGoruntusu = adimGoruntusuAyari(s.adimGoruntusu ?? null);
+  /** Şu an koşan adımın başlığı (kalan adımın görüntüsü için). */
+  let simdikiAdim: string | null = null;
+  const ekranGoruntusu = async (ad: string, adim?: PlanAdimi): Promise<void> => {
+    if (!adimGoruntusuAlinsinMi(adimGoruntusu, { isaretli: adim?.kosu?.ekranGoruntusu === true })) return;
+    await attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${ad}`);
+  };
   /** Bağlam değiştirme (tarifte varsa; senaryonun bağlam profiliyle) — ilk girişten ve yeniden girişten sonra. */
   const baglamiUygula = async (t: GirisTarifi): Promise<void> => {
     if (!t.baglamDegistirme) return;
     const tur = t.baglamDegistirme.baglamTuru;
     const profil = plan.baglamProfili;
     await test.step(`Bağlam değiştirilir (${profil ?? '—'})`, async () => {
+      simdikiAdim = `Bağlam değiştirilir (${profil ?? '—'})`;
       adimAdiniBildir(page, `Bağlam değiştirilir (${profil ?? '—'})`);
       if (!profil) throw new Error(`Giriş tarifi "${tur}" bağlamını değiştiriyor ama senaryonun bağlam profili yok (modelde profil havuzlu alan ya da varsayılanı yok).`);
       const degerler = ortam.veri.baglamProfilleri[tur]?.[profil];
@@ -704,6 +773,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
     if (girissiz && s.giris?.kip === 'girissiz' && s.model.girisGerekmez !== true) await oturumuKapat(page);
     // Adım başlığı SABİT (akis-diyagrami.mjs > BASLANGIC_ADIMLARI ile eşleşir); profil / temiz oturum ekran görüntüsünün adında.
     if (tarif) await test.step('Sisteme giriş yapılır', async () => {
+      simdikiAdim = 'Sisteme giriş yapılır';
       adimAdiniBildir(page, 'Sisteme giriş yapılır');
       if (temizGiris) {
         // Kayıtlı oturum kullanılmaz: çerezler temizlenir, seçilen (ya da varsayılan) profille girilir. Varsayılan dışı profilin
@@ -722,6 +792,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
     if (tarif) await baglamiUygula(tarif);
 
     await test.step('Ekran açılır', async () => {
+      simdikiAdim = 'Ekran açılır';
       adimAdiniBildir(page, 'Ekran açılır');
       await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
       await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
@@ -743,9 +814,17 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         continue;
       }
       await test.step(adim.baslik, async () => {
+        simdikiAdim = adim.baslik;
         adimAdiniBildir(page, adim.baslik);
         // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
         if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
+        // İndirilen dosyayı doğrulama adımı: düğmeye basılır, indirilen dosya beklentilerle doğrulanır.
+        if (adim.dosya) {
+          tarayiciUyarilari.get(page)?.splice(0);
+          await dosyaAdiminiUygula(page, testInfo, adim.baslik, adim.dosya, s, sqlDegerleri);
+          await ekranGoruntusu(adim.baslik);
+          return;
+        }
         // Yeniden giriş: oturum kapatılır (çerezler/depolama temizlenir), ortamın tarifiyle (seçilen profille) yeniden girilir,
         // bağlam yeniden değiştirilir ve akış kaldığı sayfadan sürer. Paylaşılan oturum dosyasına yazılmaz.
         if (adim.yenidenGiris) {
@@ -753,7 +832,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           const donus = page.url();
           await oturumuKapat(page);
           await girisYap(page, t, ortam.kimlik(adim.yenidenGiris.profil), { izinliKokenler: girisKokenleri(ortam.veri.tabanUrl, t) });
-          await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`);
+          await ekranGoruntusu(`${adim.baslik}: yeniden giriş yapıldı${profilEki(adim.yenidenGiris.profil)}`, adim);
           await baglamiUygula(t);
           if (/^https?:/i.test(donus)) await page.goto(donus, { waitUntil: 'domcontentloaded' });
           return;
@@ -795,11 +874,17 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         await aksiyonlariUygula(page, adim.kosu, sureSn);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
         // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
-        await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik);
+        await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik, adim);
       });
+      simdikiAdim = null;
       if (adim.sonAdim) break;
     }
   } catch (hata) {
+    // "Yalnız kalan adımda": testin kaldığı adımın görüntüsü (ad: "NN - <adım> (kalan adım)"). Atlama (test.skip) kalan adım değildir.
+    // Alınamazsa not düşülür, hata olduğu gibi iletilir.
+    if (adimGoruntusu === 'yalnizKalan' && simdikiAdim && testInfo.expectedStatus !== 'skipped') {
+      await attachStepScreenshot(page, testInfo, `${String(sira++).padStart(2, '0')} - ${simdikiAdim}`, { kalanAdim: true }).catch(() => undefined);
+    }
     // Hata metninde (ör. seçenek bulunamadı) gizli tablo sütunundan gelen değer görünmesin.
     if (hata instanceof Error && tabloGizlileri.length) {
       hata.message = gizliDegerleriMaskele(hata.message, tabloGizlileri);

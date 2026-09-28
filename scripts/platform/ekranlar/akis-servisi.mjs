@@ -22,12 +22,15 @@ import { akisPaleti, akistanKayitEnvanteri, bloklariAyikla } from '../tarama/aki
 import { kayitPaketiOlustur, kimlikUret } from '../tarama/paket-olusturucu.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
+import { sinirHatalari } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Nesne */
 
 const AD_EN_COK = 80;
+/** Değer kuralı (alan.sinirlar) yazılabilen alan tipleri. */
+const SINIRLI_TIPLER = ['sayi', 'tarih', 'metin', 'telefon'];
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const kopya = (/** @type {any} */ d) => JSON.parse(JSON.stringify(d));
 const etiketi = (/** @type {Nesne} */ a) => (nesneMi(a.etiket) && (a.etiket.form || a.etiket.ekran)) || a.id;
@@ -102,7 +105,7 @@ function diyagramdaKaybolan(model, adimlar, i, env) {
   const g = kosu.basariGostergesi;
   const secenekler = !nesneMi(g) ? [] : g.tur === 'veya' && Array.isArray(g.secenekler) ? g.secenekler.filter(nesneMi) : [g];
   if (secenekler.some((s) => s.tur === 'url')) return 'adres (url) başarı göstergesi';
-  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu));
+  const sonAdim = i === adimlar.length - 1 || adimlar.slice(i + 1).every((x) => nesneMi(x.ortakAkis) || nesneMi(x.sqlKontrolu) || nesneMi(x.dosyaKontrolu));
   if (sonAdim && secenekler.some((s) => s.tur === 'eleman')) return 'öğe (eleman) başarı göstergesi';
   // Hata göstergesi (uyarısız da olsa) ve öğe "veya" göstergesi kaydederken adımın mevcut tanımından korunur (paket-olusturucu).
   // İsteğe bağlı adım: diyagramda yalnızca "her senaryoda basılmaz" düğmenin açtığı alanlar olarak (önceki adım o düğme).
@@ -207,6 +210,9 @@ export function modeldenAkisEnvanteri(model) {
     for (const x of Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar : []) {
       if (nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string') ekle(dugmeler, { secici: x.secici, metin: typeof x.aciklama === 'string' ? x.aciklama : null });
     }
+    // Dosya adımının indirmeyi başlatan düğmesi de sağ listede (diyagramdaki dosya bloğu onu seçer).
+    const t = nesneMi(adim.dosyaKontrolu) && nesneMi(adim.dosyaKontrolu.tetikleyici) ? adim.dosyaKontrolu.tetikleyici : null;
+    if (t && typeof t.secici === 'string') ekle(dugmeler, { secici: t.secici, metin: typeof t.aciklama === 'string' ? t.aciklama : null });
     for (const g of metinGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger });
     for (const g of desenGostergeleri(kosu.basariGostergesi)) ekle(mesajlar, { secici: typeof g.secici === 'string' ? g.secici : '', metin: g.deger });
     for (const u of uyariListesi(kosu)) ekle(mesajlar, { secici: typeof u.secici === 'string' ? u.secici : '', metin: u.metin });
@@ -264,6 +270,13 @@ export function adimlardanBloklar(model, adimlar, env) {
       bloklar.push({ tur: 'sql', ad: String(adim.baslik || adim.id), sql: kopya(adim.sqlKontrolu) });
       continue;
     }
+    // Dosya doğrulama adımı: tek blok (tetikleyici düğme sağ listedeki sırasıyla; tanım aynen).
+    if (nesneMi(adim.dosyaKontrolu)) {
+      const { tetikleyici, ...tanim } = kopya(adim.dosyaKontrolu);
+      const d = nesneMi(tetikleyici) ? env.dugmeler.findIndex((o) => o.secici === tetikleyici.secici && o.metin === (typeof tetikleyici.aciklama === 'string' ? tetikleyici.aciklama : null)) : -1;
+      bloklar.push({ tur: 'dosya', ad: String(adim.baslik || adim.id), dugme: d, dosya: tanim });
+      continue;
+    }
     // Yeniden giriş adımı: tek blok (profil: giriş profilinin adı; yoksa ortamın varsayılanı).
     if (nesneMi(adim.yenidenGiris)) {
       bloklar.push({ tur: 'giris', ad: String(adim.baslik || adim.id), profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil ? adim.yenidenGiris.profil : null });
@@ -276,12 +289,15 @@ export function adimlardanBloklar(model, adimlar, env) {
     const zorunlu = [];
     /** @type {Record<string, { secim: string; degerler: string[] } | null>} */
     const kosullar = {};
+    /** @type {Record<string, Nesne>} alanın değer kuralları (alan.sinirlar; diyagramdaki "Sınırlar" düzenleyicisi) */
+    const sinirlar = {};
     for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) {
       for (const a of Array.isArray(b.alanlar) ? b.alanlar : []) {
         if (!nesneMi(a) || ['buton', 'cikti'].includes(a.tip)) continue;
         const anahtar = envanterAnahtari(a);
         if (!env.alanlar.some((x) => x.alan.anahtar === anahtar)) continue;
         alanlar.push(anahtar);
+        if (nesneMi(a.sinirlar)) sinirlar[anahtar] = kopya(a.sinirlar);
         if (a.mutlakaGorunmeli === true) zorunlu.push(anahtar);
         const g = a.gorunurluk;
         const ifade = nesneMi(g) ? (typeof g.kosul === 'string' ? model.kosullar?.[g.kosul]?.ifade : g.ifade) : null;
@@ -295,7 +311,8 @@ export function adimlardanBloklar(model, adimlar, env) {
     const kosu = nesneMi(adim.kosu) ? adim.kosu : {};
     const aksiyonlar = Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar.filter(nesneMi) : [];
     const tikla = aksiyonlar.some((x) => x.tur === 'tikla');
-    if (alanlar.length || (!istegeBagli && tikla)) bloklar.push({ tur: 'alanlar', ad: String(adim.baslik || adim.id), alanlar, zorunlu, kosullar });
+    const ilkBlok = bloklar.length;
+    if (alanlar.length || (!istegeBagli && tikla)) bloklar.push({ tur: 'alanlar', ad: String(adim.baslik || adim.id), alanlar, zorunlu, kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}) });
     // İsteğe bağlı düğme adımı: aksiyon önce (grubundan sonra); açtığı alanlar ayrı adımdaysa yukarıda grup olarak geldi.
     for (const x of aksiyonlar) {
       if (x.tur === 'bekle' && Number.isInteger(x.sureSn)) bloklar.push({ tur: 'bekle', saniye: x.sureSn });
@@ -320,6 +337,11 @@ export function adimlardanBloklar(model, adimlar, env) {
     for (const u of uyariListesi(kosu)) {
       const m = env.mesajlar.findIndex((o) => o.metin === u.metin && o.secici === (typeof u.secici === 'string' ? u.secici : ''));
       bloklar.push({ tur: 'mesaj', mesaj: m >= 0 ? m : null, metin: u.metin, uyari: true });
+    }
+    // "Ekran görüntüsü al" (kosu.ekranGoruntusu): adımın alan grubunda, grup yoksa (isteğe bağlı olmayan) aksiyonunda gösterilir.
+    if (kosu.ekranGoruntusu === true) {
+      const hedef = bloklar.slice(ilkBlok).find((x) => x.tur === 'alanlar') ?? bloklar.slice(ilkBlok).find((x) => x.tur === 'aksiyon' && !x.istegeBagli);
+      if (hedef && (hedef.tur === 'alanlar' || hedef.tur === 'aksiyon')) hedef.ekranGoruntusu = true;
     }
   }
   bloklar.push({ tur: 'bitir' });
@@ -528,6 +550,21 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const ayik = bloklariAyikla(g.bloklar);
   hatalar.push(...ayik.hatalar);
   if (ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak') hatalar.push({ blok: i, mesaj: 'Ortak akışın içine ortak akış eklenemez.' }); });
+  // Alanların değer kuralları ("Sınırlar"): yalnız sayı / tarih / metin alanında; ekran modeli doğrulayıcısının kurallarıyla.
+  /** @type {Map<string, Nesne>} */
+  const modelAlanlari = new Map();
+  for (const adim of tumAdimlar(tam)) for (const b of Array.isArray(adim.bolumler) ? adim.bolumler : []) for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) if (nesneMi(a)) modelAlanlari.set(String(a.id), a);
+  /** @type {Map<string, Nesne | null>} */
+  const yeniSinirlar = new Map();
+  ayik.bloklar.forEach((b, i) => {
+    if (b.tur !== 'alanlar' || !b.sinirlar) return;
+    for (const [anahtar, s] of Object.entries(b.sinirlar)) {
+      const a = modelAlanlari.get(anahtar);
+      if (s && (!a || !SINIRLI_TIPLER.includes(a.tip))) { hatalar.push({ blok: i, mesaj: `“${a ? etiketi(a) : anahtar}” alanına sınır yazılamaz (yalnız sayı, tarih, metin ve telefon alanları).` }); continue; }
+      if (s) for (const m of sinirHatalari(/** @type {Nesne} */ (a).tip, s)) hatalar.push({ blok: i, mesaj: `“${etiketi(/** @type {Nesne} */ (a))}” sınırları: ${m}` });
+      yeniSinirlar.set(anahtar, s ?? null);
+    }
+  });
   const cevrim = ayik.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar, { satirSiniri: sqlSatirSiniriOku(vt) });
   hatalar.push(...cevrim.hatalar);
   if (hatalar.length || !cevrim.envanter) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, hatalar);
@@ -541,6 +578,16 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   }, cevrim.envanter);
   const parca = /** @type {Nesne} */ (paket.model);
   const akisAdimlari = /** @type {Nesne[]} */ (parca.adimlar);
+  // Diyagramda düzenlenen sınırlar (verilmeyen alanın mevcut kuralı eşleşen tanımdan korunur; null: kaldırılır).
+  for (const adim of akisAdimlari) {
+    for (const b of nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+      for (const a of nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []) {
+        if (!nesneMi(a) || !yeniSinirlar.has(String(a.id))) continue;
+        const s = yeniSinirlar.get(String(a.id));
+        if (s) a.sinirlar = kopya(s); else delete a.sinirlar;
+      }
+    }
+  }
 
   // Tam modele yaz: bu akışın adımları; yeni koşullar ve senaryo ayarları eklenir (diğer akışlarınkiler korunur).
   const yeni = kopya(tam);

@@ -239,7 +239,12 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       // İki aşamalı doğrulama ve ekran tanıtma yöntemi sihirbazda sorulmaz (ortamın giriş tarifinde / ekranı eklerken seçilir).
       await expect(tanisma.getByText('Girişte iki aşamalı doğrulama var mı?')).toHaveCount(0);
       await expect(tanisma.getByText(/nasıl tanıtmak istersiniz/)).toHaveCount(0);
-      await expect(tanisma.locator('fieldset.tanisma-sorusu')).toHaveCount(3);
+      // Etkisiz iki soru ("Ne test edeceksiniz?", "Giriş yaparak mı erişiliyor?") kaldırıldı; yalnız ortam sorusu kalır.
+      await expect(tanisma.getByText('Ne test edeceksiniz?')).toHaveCount(0);
+      await expect(tanisma.getByText(/giriş yaparak mı erişiliyor/i)).toHaveCount(0);
+      await expect(tanisma.locator('fieldset.tanisma-sorusu')).toHaveCount(1);
+      await expect(tanisma.locator('fieldset.tanisma-sorusu legend')).toHaveText('Testler hangi ortamlarda çalışacak?');
+      await expect(tanisma.getByRole('radio', { name: /Yalnızca test ortamı/ })).toBeChecked();
       await tanisma.getByRole('radio', { name: /Test ve canlı/ }).check();
       await kontrol('tanisma');
       await tanisma.getByRole('button', { name: 'Devam' }).click();
@@ -280,7 +285,8 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       const ozet = page.getByRole('region', { name: 'Proje özeti' });
       await expect(ozet.locator('.ozet-ortamlar li')).toHaveCount(2);
       await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'CANLI' }).locator('.rozet.hata')).toHaveText('Riskli');
-      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'TEST' })).toContainText('Riskli değil');
+      // Riskli olmayan ortamda rozet yok (yalnız riskliyse "Riskli").
+      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'TEST' }).locator('.rozet.hata, .rozet.uyari')).toHaveCount(0);
       await expect(page.getByText('Sizin için yapılacaklar')).toHaveCount(0);
       await expect(page.getByText('Sırada ne var?')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toHaveCount(0);

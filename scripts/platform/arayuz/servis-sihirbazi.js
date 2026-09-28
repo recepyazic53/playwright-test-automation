@@ -12,8 +12,9 @@
 import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc } from './rest-sihirbazi.js';
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
+import { onayIste, ortamRiskRozeti, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
+import { benzerTabloNotu } from './veri-sagligi.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 
@@ -98,7 +99,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     const sec = h('select', { 'aria-label': `${o.ad} taban adresi` },
       ...liste.map((a) => h('option', { value: a, selected: temizTaban(d.tabanlar[o.id] || '') === a }, a)),
       h('option', { value: '__yeni', selected: Boolean(d.tabanlar[o.id]) && !liste.includes(temizTaban(d.tabanlar[o.id])) }, 'Yeni adres yaz…'),
-      o.canli ? h('option', { value: '', selected: d.tabanlar[o.id] === '' }, '— Bu ortamda yok (yalnız TEST) —') : null);
+      o.canli ? h('option', { value: '', selected: d.tabanlar[o.id] === '' }, '— Bu ortamda yok —') : null);
     const yeni = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://ornek.com/', 'aria-label': `${o.ad} yeni taban adresi`,
       value: sec.value === '__yeni' ? d.tabanlar[o.id] : '', hidden: sec.value !== '__yeni' });
     sec.addEventListener('change', () => {
@@ -109,7 +110,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       durumGuncelle();
     });
     yeni.addEventListener('input', () => { d.tabanlar[o.id] = yeni.value.trim(); d.erisim = null; durumGuncelle(); });
-    return h('div', { class: 'taban-satiri' }, h('span', { class: 'taban-ortam' }, o.ad, ' ', rozet(o.canli ? 'CANLI' : 'TEST', o.canli ? 'hata' : '')), sec, yeni);
+    return h('div', { class: 'taban-satiri' }, h('span', { class: 'taban-ortam' }, o.ad, ortamRiskRozeti(o) ? [' ', ortamRiskRozeti(o)] : null), sec, yeni);
   };
 
   // --- Adım çizimleri --------------------------------------------------------------------------------------------------
@@ -481,7 +482,7 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
   };
 
   const tabloAdi = h('input', { type: 'text', autocomplete: 'off', value: o.varsayilanTabloAdi, maxlength: '60' });
-  const degerOrtami = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'), ortamlar.map((x) => h('option', { value: x.id }, `${x.ad}${x.canli ? ' (CANLI)' : ' (TEST)'}`)));
+  const degerOrtami = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'), ortamlar.map((x) => h('option', { value: x.id }, ortamSecenekMetni(x))));
   const kokenler = [...new Set(o.klasorler.flatMap((k) => k.kokenler))];
   const tabanOrtami = h('select', {}, h('option', { value: '' }, 'Hiçbiri (taban adresi sonra verilir)'), ortamlar.map((x) => h('option', { value: x.id }, x.ad)));
   const kapsam = h('select', {}, Object.entries(KAPSAMLAR).map(([k, m]) => h('option', { value: k }, m)));
@@ -496,6 +497,12 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
   const etkiBolumu = aktarimEtkisiBolumu(async (koru) => (!secili.size ? { degisiklikler: [], etkilenenler: [], karsiliklar: [] }
     : (await api('/platform/servis/postman/aktar', { govde: { ...govdeYap(), etki: 'onizle', ...(koru ? { mevcutDegerleriKoru: true } : {}) } })).etki));
   for (const g of [tabloAdi, degerOrtami, tabanOrtami, kapsam]) g.addEventListener(g === tabloAdi ? 'input' : 'change', () => etkiBolumu.yenile());
+  // Önleme: değişken tablosu yeni oluşturulacaksa ve başlıkları aynı tablo varsa "onu kullan / yine de yeni oluştur".
+  const benzer = benzerTabloNotu(proje, {
+    sutunlar: () => o.degiskenler.filter((v) => !akis.has(v.ad)).map((v) => v.ad), ad: () => tabloAdi.value.trim(),
+    kullan: (ad) => { tabloAdi.value = ad; etkiBolumu.yenile(); }
+  });
+  tabloAdi.addEventListener('input', () => benzer.yenile());
   aktar.addEventListener('click', async () => {
     mesaj.temizle();
     if (!secili.size) { mesaj.goster('En az bir klasör seçin.'); return; }
@@ -529,10 +536,12 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
     h('div', { class: 'satir-duzen' },
       alan('Değişken tablosu', tabloAdi, { yardim: 'Değişkenler bu test verisi tablosunun sütunları olur (varsa eksik sütunlar eklenir).' }),
       alan('Değerler hangi ortam için', degerOrtami)),
+    benzer.kok,
     h('div', { class: 'satir-duzen' },
       kokenler.length ? alan(`Koleksiyondaki adres (${kokenler.join(', ')}) taban adresi olsun`, tabanOrtami, { yardim: 'Seçilen ortamda servislerin taban adresi yapılır (ortamın adres listesine de eklenir).' }) : null,
       alan('Senaryoların kapsamı', kapsam)),
     etkiBolumu.kok,
     h('div', { class: 'dugmeler' }, aktar)));
   etkiBolumu.yenile(0);
+  benzer.yenile(0);
 }

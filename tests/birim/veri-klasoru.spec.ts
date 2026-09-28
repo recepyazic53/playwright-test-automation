@@ -277,7 +277,10 @@ test('sunucu: seçim → taşı (kopya + doğrulama, eski durur) → yeniden ba�
     // Karşılama ekranı (çalışma alanı kapalı): "Veri klasörü: … Değiştir… · Var olan veri klasörünü aç…".
     await istek(s, '/platform/calisma-alani/kapat', {});
     await page.goto('/');
+    // Kapalı "Ayrıntılar" bölümünde: önce görünmez, açınca aynı satır.
     const satir = page.locator('.veri-klasoru-satiri');
+    await expect(satir).toBeHidden();
+    await page.locator('.veri-klasoru-ayrintilari > summary').click();
     await expect(satir).toContainText(resolve(yeni));
     await expect(satir.getByRole('button', { name: 'Var olan veri klasörünü aç…' })).toBeVisible();
     for (const [g, ad] of [[1400, 'masaustu'], [390, '390']] as const) {

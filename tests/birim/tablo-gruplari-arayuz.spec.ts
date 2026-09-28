@@ -144,7 +144,7 @@ test('hiç tablo yokken: boş grup başlığı yok, tek boş durum mesajı', asy
   await expect(page.locator('#proje-rozeti')).toHaveText('Yeni boş proje');
   await page.evaluate(() => { location.hash = '#/ayarlar/test-verisi'; });
   const liste = page.getByRole('navigation', { name: 'Tablolar' });
-  await expect(liste.getByRole('button', { name: 'Yeni tablo' })).toBeVisible();
+  await expect(liste.getByRole('button', { name: 'Tablo ekle' })).toBeVisible();
   await expect(liste.locator('.tablo-grubu')).toHaveCount(0);
   await expect(liste.getByRole('searchbox')).toBeHidden();
   await expect(page.getByText('Henüz tablo yok.')).toHaveCount(1);

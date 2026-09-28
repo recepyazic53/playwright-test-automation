@@ -181,7 +181,7 @@ test.describe('test verisi tabloları', () => {
     expect(t.satirlar.map((x: Nesne) => x.degerler['Kullanıcı adı'])).toEqual(['10001009', '10002002', '10003001']);
     expect(t.satirlar[2].doluGizli).toEqual(['Parola']);
     // Yeni tablo: yapıştırılan ilk satır sütun adları olur.
-    await nav.getByRole('button', { name: 'Yeni tablo' }).click();
+    await nav.getByRole('button', { name: 'Tablo ekle' }).click();
     await duz.getByLabel('Tablo adı').fill('Ülke seçenekleri');
     await duz.getByText('Excel\'den yapıştır').click();
     await duz.getByLabel('Yapıştırılacak satırlar').fill('Kapsam\tAlternatif\tÜlke\nEKSPRES\tHIZLI TESLİMAT\tALMANYA\nSTANDART\tADRESE TESLİM\tİTALYA');

@@ -22,7 +22,7 @@ const baslik = (o) => `Giriş (${o.ortamAd})`;
 export function girisBaglantisi(o) {
   return h('a', { href: tarifFormuAdresi(o.ortamId), class: 'giris-akisi-baglantisi', title: `${baslik(o)} — Ayarlar > Giriş profilleri'nde düzenlenir` },
     ikon('anahtar'), h('span', { class: 'nav-metni' }, baslik(o)),
-    o.tarif ? null : h('span', { class: 'nav-etiketi' }, 'tanımsız'));
+    o.tarif ? null : h('span', { class: 'nav-etiketi' }, 'tanımlı değil'));
 }
 
 const IKINCI_ADIM = { totp: 'Authenticator kodu', sms: 'SMS kodu' };
@@ -57,5 +57,6 @@ export function girisKarti(o) {
     o.tarif ? h('p', { class: 'ortak-akis-kullanimi kucuk soluk' }, `${o.ortamAd} ortamındaki her koşuda kullanılır`) : null,
     o.hatalar && o.hatalar.length ? h('p', { class: 'kucuk hata-metni' }, `Tarif geçersiz: ${o.hatalar.join(' ')}`) : null,
     h('div', { class: 'ekran-karti-alt' },
-      h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: düzenle` }, ikon('duzenle'), o.tarif ? 'Düzenle' : 'Tanımla')));
+      (o.tarif ? h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: düzenle` }, ikon('duzenle'), 'Düzenle')
+        : h('a', { class: 'dugme kucuk-dugme', href: duzenle, 'aria-label': `${baslik(o)}: giriş akışı ekle` }, ikon('arti'), 'Giriş akışı ekle'))));
 }

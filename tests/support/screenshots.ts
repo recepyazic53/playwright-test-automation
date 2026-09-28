@@ -1,4 +1,5 @@
 import type { Page, TestInfo } from '@playwright/test';
+import { GORUNTU_ALINAMADI_EKI, KALAN_ADIM_EKI } from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
 
 // EKRAN GÖRÜNTÜLERİ — adım görüntüleri (attachStepScreenshot) ve canlı izleme (fixtures.ts > canliIzlemeYayini) aynı sayfada
 // SIRAYLA alınır: üst üste binen yakalamalar (özellikle tam sayfa yakalama görünüm alanını geçici değiştirirken) Chromium'da
@@ -42,22 +43,31 @@ export function ekranGoruntusuAl(page: Page, s: { fullPage: boolean; sureMs: num
   });
 }
 
+/**
+ * Adımın ekran görüntüsünü ekler (ad: "NN - <adım>"; kalan adımda alınan görüntü "… (kalan adım)" — saklama inceltmesi onu tanır).
+ * Alınamazsa koşu takılmaz: görüntü yerine adında nedeni yazan bir not eklenir ("… (ekran görüntüsü alınamadı: <neden>)"); Sonuçlar
+ * ekranı bunu "görüntü alınamadı: <neden>" olarak gösterir.
+ */
 export async function attachStepScreenshot(
   page: Page,
   testInfo: TestInfo,
-  stepName: string
+  stepName: string,
+  secenek: { kalanAdim?: boolean } = {}
 ): Promise<void> {
-  const screenshot = await ekranGoruntusuAl(page, { fullPage: true, sureMs: ADIM_GORUNTUSU_SURESI_MS });
+  const ad = secenek.kalanAdim ? `${stepName}${KALAN_ADIM_EKI}` : stepName;
+  const kapali = page.isClosed();
+  const screenshot = kapali ? null : await ekranGoruntusuAl(page, { fullPage: true, sureMs: ADIM_GORUNTUSU_SURESI_MS });
   if (!screenshot) {
+    const neden = kapali ? 'sayfa kapanmıştı' : `${Math.round(ADIM_GORUNTUSU_SURESI_MS / 1000)} sn süre sınırı doldu`;
     // Görüntü alınamadı: koşu takılmaz; raporda adımın görüntüsü yerine açıklama kalır.
-    await testInfo.attach(`${stepName} (ekran görüntüsü alınamadı)`, {
-      body: `Ekran görüntüsü ${Math.round(ADIM_GORUNTUSU_SURESI_MS / 1000)} sn içinde alınamadı; koşu devam etti.`,
+    await testInfo.attach(`${ad}${GORUNTU_ALINAMADI_EKI}: ${neden})`, {
+      body: `Ekran görüntüsü alınamadı (${neden}); koşu devam etti.`,
       contentType: 'text/plain'
     });
     return;
   }
 
-  await testInfo.attach(stepName, {
+  await testInfo.attach(ad, {
     body: screenshot,
     contentType: 'image/png'
   });

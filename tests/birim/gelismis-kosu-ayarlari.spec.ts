@@ -112,9 +112,12 @@ test('koşucu ayarları: ortam değişkeni > kasadaki kayıtlı ayar > önceki v
     Object.assign(process.env, { NOBETCI_YENIDEN_DENEME: '3', NOBETCI_EKRAN_GENISLIGI: '1600', NOBETCI_EKRAN_YUKSEKLIGI: '900', NOBETCI_TARAYICI_DILI: 'varsayilan' });
     expect(yenidenDenemeAyari()).toBe(3);
     // Test sonu ekran görüntüsü: "Kapalı" iken kalan testte de, ▷ koşusunda da alınmaz; diğerlerinde önceki davranış.
-    expect([testSonuGoruntusuAlinsinMi(false, false, 'only-on-failure'), testSonuGoruntusuAlinsinMi(true, true, 'only-on-failure'), testSonuGoruntusuAlinsinMi(true, false, 'on')])
+    expect([testSonuGoruntusuAlinsinMi(false, false, 'yalnizHata'), testSonuGoruntusuAlinsinMi(true, true, 'yalnizHata'), testSonuGoruntusuAlinsinMi(true, false, 'her')])
       .toEqual([true, true, false]);
-    expect([testSonuGoruntusuAlinsinMi(false, false, 'off'), testSonuGoruntusuAlinsinMi(true, true, 'off')]).toEqual([false, false]);
+    expect([testSonuGoruntusuAlinsinMi(false, false, 'kapali'), testSonuGoruntusuAlinsinMi(true, true, 'kapali')]).toEqual([false, false]);
+    // "Yalnız başarılı testlerde": kalan testte hiç alınmaz; başarılıda ▷ koşusunda (panel) alınır (Playwright'ın kendi 'on' kaydı ayrıca).
+    expect([testSonuGoruntusuAlinsinMi(false, true, 'yalnizBasari'), testSonuGoruntusuAlinsinMi(false, false, 'yalnizBasari'), testSonuGoruntusuAlinsinMi(true, true, 'yalnizBasari')])
+      .toEqual([false, false, true]);
     process.env.NOBETCI_EKRAN_GORUNTUSU = 'kapali';
     expect(testSonuGoruntusuAlinsinMi(false, true)).toBe(false);
     expect(kosuTarayiciAyarlari()).toEqual({ viewport: { width: 1600, height: 900 }, timezoneId: 'Europe/Berlin' });

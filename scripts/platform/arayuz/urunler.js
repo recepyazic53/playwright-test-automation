@@ -26,14 +26,15 @@ const SAGLIK = { basarili: 'basari', basarisiz: 'hata', hata: 'hata' };
 /**
  * "Servisler" grubu (açılır-kapanır; "+" servis ekler).
  * @param {Array<{ id: string; ad: string; durum: string; senaryoSayisi?: number; sonKosu?: { durum: string } | null }>} servisler
- * @param {{ seciliServis?: string | null; sekme?: string; saglik?: boolean }} [secenekler]
- *   sekme: servis bağlantısının açacağı sekme (ör. 'raporlar'); saglik: son çalıştırmanın durum noktası gösterilsin mi.
+ * @param {{ seciliServis?: string | null; sekme?: string; adres?: (id: string) => string; saglik?: boolean }} [secenekler]
+ *   sekme: servis bağlantısının açacağı servis sayfası sekmesi; adres: bağlantı adresi (verilirse sekme yerine; ör. Sonuçlar
+ *   ekranında servisin süzülmüş sonuç görünümü); saglik: son çalıştırmanın durum noktası gösterilsin mi.
  */
 export function servislerBolumu(servisler, secenekler = {}) {
   const baglanti = (s) => {
     const son = s.sonKosu ? SAGLIK[s.sonKosu.durum] ?? '' : '';
     const a = h('a', {
-      href: secenekler.sekme === 'raporlar' ? `#/servisler/sonuclar/s/${encodeURIComponent(s.id)}` : `#/servisler/s/${encodeURIComponent(s.id)}${secenekler.sekme ? `/${secenekler.sekme}` : ''}`,
+      href: secenekler.adres ? secenekler.adres(s.id) : `#/servisler/s/${encodeURIComponent(s.id)}${secenekler.sekme ? `/${secenekler.sekme}` : ''}`,
       'aria-current': secenekler.seciliServis === s.id ? 'page' : null,
       class: s.durum === 'devre_disi' ? 'devre-disi' : null
     },
@@ -48,6 +49,13 @@ export function servislerBolumu(servisler, secenekler = {}) {
     anahtar: 'servisler', baslik: 'Servisler', ogeler: servisler.map(baglanti), bosMetin: 'Henüz servis yok.',
     ekle: { etiket: 'Servis ekle', href: '#/servisler/yeni' }
   })];
+}
+
+/** "Uçtan uca akışlar" bağlantısı (servis + ekran + SQL adımlı akışlar; #/akislar). */
+export function uctanUcaBaglantisi() {
+  const secili = (location.hash || '').startsWith('#/akislar');
+  return h('a', { href: '#/akislar', class: 'uctan-uca-baglantisi', 'aria-current': secili ? 'page' : null },
+    ikon('katman'), h('span', { class: 'nav-metni' }, 'Uçtan uca akışlar'));
 }
 
 // ---------------------------------------------------------------------------------------

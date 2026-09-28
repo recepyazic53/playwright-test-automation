@@ -17,7 +17,7 @@ import { TOLERANS_MS, vadesiGelenZaman } from './takvim.mjs';
 import { ortamRiskliMi, tetiklemeYaz, tumGecmis, tumKurallar, tuketilenYaz } from './kurallar.mjs';
 import { izinAcikMi } from '../guvenlik/izinler.mjs';
 import { izinKapaliNotu, izinMesaji } from '../guvenlik/izin-tanimlari.mjs';
-import { kapaliIzinler } from '../guvenlik/uc-denetimi.mjs';
+import { UCTAN_UCA_KOS_UCU, kapaliIzinler } from '../guvenlik/uc-denetimi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./kurallar.d.mts').Kural} Kural */
@@ -32,7 +32,8 @@ export const ATLANDI_MESAJI = 'Atlandı: koşu sürüyordu.';
 const hataMetni = (hata) => String(/** @type {Error} */ (hata)?.message ?? hata).split('\n')[0].slice(0, 300);
 
 /**
- * Kuralın koşusunu yürütür (bekler): senaryolar sırayla, sonra seçili servis akışları; en sonda (seçildiyse) bildirim.
+ * Kuralın koşusunu yürütür (bekler): senaryolar sırayla, sonra seçili servis akışları, sonra seçili uçtan uca akışlar; en sonda
+ * (seçildiyse) bildirim. Uçtan uca akışta da kapalı izne tabi akış ATLANIR ve kayda "izin kapalı: X" olarak geçer.
  * @param {Veritabani} vt @param {Kural} kural @param {string} kosuKimligi @param {YurutmeBagimliliklari} bag
  * @returns {Promise<YurutmeSonucu>}
  */
@@ -46,9 +47,10 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   }
   if (ortamRiskliMi(ortam) && !kural.canliOnay) throw new DepoHatasi('Ortam riskli ama kuralda canlı ortam onayı yok; koşu başlatılmadı.');
   const { senaryolar: kapsam, ekranIdleri, servisAkisIdleri } = kural.kapsam;
+  const uctanUcaAkisIdleri = kural.kapsam.uctanUcaAkisIdleri ?? [];
   const secilen = kapsam === 'yok' ? [] : bag.senaryolar(vt, kural.projeId, kural.ortamId)
     .filter((s) => s.kosuyaDahil && s.ekranEtkin !== false && (kapsam === 'tum' || (s.ekranId !== null && ekranIdleri.includes(s.ekranId))));
-  if (!secilen.length && !servisAkisIdleri.length) throw new DepoHatasi('Kapsama uyan "Koşuda" senaryo yok.');
+  if (!secilen.length && !servisAkisIdleri.length && !uctanUcaAkisIdleri.length) throw new DepoHatasi('Kapsama uyan "Koşuda" senaryo yok.');
   const tam = kapsam === 'tum';
   const ozet = { toplam: 0, basarili: 0, basarisiz: 0, atlanan: 0, hata: 0 };
   /** @type {YurutmeSonucu['akisKosulari']} */
@@ -108,6 +110,26 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
     }
   }
 
+  for (const akisId of uctanUcaAkisIdleri) {
+    if (yarida || !devam()) { yarida = true; break; }
+    if (!bag.uctanUcaCalistir) break;
+    // Uçtan uca akışın gerektirdiği izinler (adımların birleşimi; riskli ortamda canlı ortam izni) — arayüzdeki "Koş" ile aynı denetim.
+    const eksik = kapali(UCTAN_UCA_KOS_UCU, { projeId: kural.projeId, ortamId: kural.ortamId, akisId });
+    if (eksik.length) {
+      akisKosulari.push({ akisId, kosuId: null, durum: 'atlandi', uctanUca: true });
+      izinleAtlananAkis++;
+      for (const a of eksik) izinNotlari.add(izinKapaliNotu(a));
+      continue;
+    }
+    try {
+      const r = await bag.uctanUcaCalistir(vt, kural.projeId, { akisId, ortamId: kural.ortamId });
+      akisKosulari.push({ akisId, kosuId: r.kosuId ?? null, durum: r.durum, uctanUca: true });
+    } catch (hata) {
+      akisKosulari.push({ akisId, kosuId: null, durum: 'hata', uctanUca: true });
+      ilkHata ||= `Uçtan uca akış: ${hataMetni(hata)}`;
+    }
+  }
+
   const senaryoKostu = ozet.toplam > 0;
   const kosanSenaryo = ozet.toplam - izinleAtlananSenaryo > 0;
   if (kural.bildirimBaglantiId && kosanSenaryo && bag.bildir && devam()) {
@@ -116,12 +138,17 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
     else { try { await bag.bildir(vt, kosuKimligi, [kural.bildirimBaglantiId]); } catch { /* bildirim hatası koşuyu etkilemez */ } }
   }
   const akisSorunu = akisKosulari.filter((a) => a.durum !== 'basarili').length;
+  const servisAkislari = akisKosulari.filter((a) => !a.uctanUca);
+  const uctanUcalar = akisKosulari.filter((a) => a.uctanUca);
+  /** "x/y … başarılı" parçası (izinle atlananlar dahil sayılır). @param {typeof akisKosulari} l @param {string} ad */
+  const akisParcasi = (l, ad) => (l.length ? `${l.filter((a) => a.durum === 'basarili').length}/${l.length} ${ad} başarılı` : null);
   const hepsiIzinle = izinleAtlananSenaryo + izinleAtlananAkis > 0 && izinleAtlananSenaryo === ozet.toplam && izinleAtlananAkis === akisKosulari.length && !yarida;
   const durum = hepsiIzinle ? 'atlandi' : yarida ? 'yarida' : ozet.basarisiz || ozet.hata || akisSorunu ? 'basarisiz' : 'tamamlandi';
   const parcalar = [
     hepsiIzinle ? 'Atlandı' : null,
     senaryoKostu && !hepsiIzinle ? `${ozet.basarili} başarılı, ${ozet.basarisiz} başarısız${ozet.atlanan ? `, ${ozet.atlanan} atlandı` : ''}${ozet.hata ? `, ${ozet.hata} çalıştırılamadı` : ''}` : null,
-    akisKosulari.length && !hepsiIzinle ? `${akisKosulari.length - akisSorunu}/${akisKosulari.length} servis akışı başarılı` : null,
+    hepsiIzinle ? null : akisParcasi(servisAkislari, 'servis akışı'),
+    hepsiIzinle ? null : akisParcasi(uctanUcalar, 'uçtan uca akış'),
     izinNotlari.size ? `${[...izinNotlari].join(', ')} (Ayarlar > İzinler)` : null,
     yarida ? 'yarıda kaldı (kasa kilitlendi ya da çalışma alanı değişti)' : null,
     ilkHata || null

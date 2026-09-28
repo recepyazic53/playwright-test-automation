@@ -9,3 +9,4 @@ export declare class PaketHatasi extends Error {
 }
 export declare function calismaZamaniModulleri(kok: string): { moduller: string[]; veritabaniSurucuLeri: string[] };
 export declare function uygulamaIcerigi(kok: string): Generator<{ goreli: string; kaynak: string; klasor: boolean }>;
+export declare function iceAktarmaCozumlemesi(girdiler: Iterable<{ goreli: string; klasor: boolean }>, oku: (goreli: string) => string, yerlesikler: readonly string[]): string[];

@@ -2,21 +2,18 @@
 // toleranslı mesaj eşleştirme, "Beklenen / Görülen" hata metni ve beklenen mesajı bekleme. Beklenen sonuç KURALLARI
 // modeldedir (bkz. scripts/platform/senaryolar/model-kosusu.mjs); burada ürün bilgisi yoktur.
 
+import { metniNormallestir } from '../../scripts/platform/dosyalar/dosya-icerigi.mjs';
+
 // ---- Toleranslı mesaj eşleştirme ----
 
 /**
  * Mesaj karşılaştırması için metni sadeleştirir: Türkçe'ye uygun küçük harf (İ→i, I→ı), ardından ı→i
  * (büyük harfli Latin sözcükler: ekrandaki "KDV" ile yazılan "kdv" eşleşir), kıvrık/açılı tırnaklar (“ ” ‘ ’ « » „ ‹ › ′ ″) → düz tırnak, tüm boşluklar (satır
- * sonu, NBSP dahil) tek boşluk, baş/son boşluk kırpılır.
+ * sonu, NBSP dahil) tek boşluk, baş/son boşluk kırpılır. Kural tek yerdedir (indirilen dosyanın doğrulaması da kullanır):
+ * scripts/platform/dosyalar/dosya-icerigi.mjs > metniNormallestir.
  */
 export function mesajiNormallestir(metin: string): string {
-  return String(metin ?? '')
-    .replace(/[“”„«»″]/g, '"')
-    .replace(/[‘’‚‹›′`´]/g, "'")
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLocaleLowerCase('tr-TR')
-    .replace(/ı/g, 'i');
+  return metniNormallestir(metin);
 }
 
 /** Görülen metin, beklenen mesajı (iki taraf da normalleştirilerek) İÇERİYOR mu? */

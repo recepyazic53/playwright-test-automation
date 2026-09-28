@@ -9,6 +9,7 @@ Nöbetçi'de ekran testlerinin yanında SOAP servis testleri. Servis kayıtları
 - Servis sayfasının sekmeleri:
   - **Senaryolar:** liste, Dene, düzenleyici.
   - **Akışlar:** sonraki aşama; ör. önce token al, sonra çağır.
+  - **Sözleşme:** operasyon / uç başına yanıt sözleşmesi (aşağıda).
   - **Parametreler**
   - **Raporlar:** servis koşuları.
   - **İşlemler:** ayarlar, silme.
@@ -90,12 +91,17 @@ Servis ekle > SoapUI dosyasından. Dosya yalnız okunur, istek atılmaz.
 - **Diğer özellikler** test verisinde eşlenmesi gereken parametre olarak listelenir; değerleri aktarılmaz.
 - **Desteklenmeyenler** uyarı olarak gösterilir: Property Transfer, Groovy doğrulaması, başka adım çalıştıran Groovy.
 
-## Taban adresleri toplu düzenleme
+## Taban adresleri
 
-Ayarlar > Proje ve ortamlar > Servis taban adresleri: satır = servis, sütun = ortam. Hücre: özel adres, ortamın adresi ya da "bu ortamda yok" (eski tam adres ayarı salt okunur gösterilir).
+Ayarlar > Proje ve ortamlar > Servis taban adresleri. Ana liste **adlandırılmış taban adresleridir** (her biri ortam başına adres; "Kullanan: N servis" açılınca servisler listelenir). "Servis bazında" görünüm ikincildir: satır = servis, sütun = ortam; hücre: özel adres, ortamın adresi ya da "bu ortamda yok" (eski tam adres ayarı salt okunur).
 
-- **Taban adres adı:** Aynı sunucuyu paylaşan servisler bir ada bağlanır (`ayarlar.tabanGrubu`). Addaki servislerin her ortamdaki adresi aynı olmalı; bir hücre değişince o ada bağlı tüm servisler birlikte değişir. Ayrı tablo yoktur, adresler servisin şifreli ayarlarında kalır; koşu değişmedi, göç gerekmedi.
-- **Toplu işlemler:** Bul-değiştir (ortam seçilebilir; seçili satırlarda, seçim yoksa tümünde), seçilenlere adres ata, seçilenleri bir ada bağla.
+- **Veri:** Taban adresi ortamın şifreli ayarında durur (`ortam.ayarlar.tabanAdlari = { <ad>: adres | '' }`; `''` = bu ortamda yok), servis bağı `servis.ayarlar.tabanGrubu`, servisin adresi yine `servis.ayarlar.tabanlar` (koşu yalnız bunu okur). Kaydı olmayan eski adlar bağlı servislerin adresinden türetilir; ilk değişiklikte kayda geçer. Göç gerekmez; adsız (servise özel) adresli servisler olduğu gibi kalır ve listede ayrıca gösterilir.
+- **Değiştir:** Kaydetmeden önce etki penceresi: etkilenen servisler, eski → yeni adres, senaryo / akış sayısı. Bağlı servisler birlikte değişir (servise özel "bu ortamda yok" korunur). Vazgeç → hiçbir şey yazılmaz (`POST /platform/servis-tabanlari/taban`, `islem: 'degistir'`; yalnız `onay: true` ile yazılır).
+- **Ortam adresini boş bırakmak / taban adresini silmek:** Onay penceresi adresi BOŞ kalacak servisleri listeler. Onaylanınca bağlı servislerin o ortam(lar)daki adresi boş olur (silmede bağ da kalkar); servis o ortamda koşmaz ve neden "Servis "…" ortamında tanımlı değil: taban adresi tanımlı değil" olarak görünür.
+- **Taban adresi ekle:** Ad + ortam adresleri, sonra "Hangi servisler bu adresi kullansın?": önce taban adresi boş olan servisler, sonra diğerleri şu anki adresleriyle; hiçbiri işaretli gelmez. İşaretlenenler bağlanır (adresleri değişen servisler etki penceresinde gösterilir).
+- **Servis sayfası (İşlemler):** "Taban adresi" seçimi (adlandırılmış tabanlar ya da "Servise özel adres") ve "Ayarlar'da yönet" bağlantısı. Başka bir tabana bağlanınca adresler oradan gelir; bağlı olduğu tabanda kalırken ortam satırları düzenlenebilir (`POST /platform/servis/kaydet`, `tabanGrubu`).
+- **Toplu işlemler (servis bazında):** Bul-değiştir (ortam seçilebilir; seçili satırlarda, seçim yoksa tümünde), seçilenlere adres ata; hücrede taban adres adı.
+- **Bağlı servisin adresi başka yoldan değişirse** (Postman içe aktarma, servis / REST sihirbazı, servis sayfasında adres düzenleme, "Servis bazında" görünüm): kaydetmeden ÖNCE pencere açılır — "'<servis>' '<taban>' taban adresine bağlı; yeni adres farklı (ortam: eski → yeni)". Seçenekler: **Servisi tabandan ayır** (yalnız bu servis yeni adresi kullanır, bağ kalkar), **Tabanın adresini güncelle** (bağlı TÜM servisler değişir; etki listesi pencerede) ya da **Vazgeç** (yeni adres kullanılmaz, servis tabandaki adreste kalır; içe aktarmada diğer içerik yine aktarılır). Sunucu kararsız isteği yazmaz: HTTP 409 `TABAN_KARARI` döner; arayüz aynı isteği `tabanKararlari: { <servisId>: 'ayir' | 'tabaniGuncelle' | 'vazgec' }` ile yineler. "Bu ortamda yok" servise özeldir, karar sorulmaz. SoapUI aktarımı servisin adresini değiştirmez (ana makine ortamdan gelir), bu yüzden orada pencere çıkmaz.
 - **Etki önizlemesi:** Hangi servisler, kaç senaryo ve akış etkilenir, eski → yeni adresler. Yalnız "Onayla ve kaydet" ile yazılır (`POST /platform/servis-tabanlari/uygula`, `onay: true`).
 - **Denetim:** Adres http(s) olmalı ve yasak adres kalıplarına (Ayarlar > Güvenlik) uymamalı. Erişim kontrolü yapılmaz (dış istek yok). Adresi değişen ortamın eski erişim kaydı silinir; düzenlenen hücrede eski tam adres ayarı kalkar.
 
@@ -123,6 +129,15 @@ Servis ekle > Postman koleksiyonu. Postman Collection v2.1 (v2.0 da olur) JSON; 
 
 REST koşusu: gövdedeki değerler içerik türüne göre kaçışlanır (JSON / form / XML), yoldaki değerler URL kodlanır; Content-Type içerik türünden yazılır. Yanıtta `jsonEsit` kontrolü (`yol: data.id`) ve akışta `json` okuması kullanılır. REST servisinde WSDL olmadığından erişim kontrolü istenmez.
 
+## Yanıttaki dosyayı doğrula
+
+Kontrol türü `dosya`: yanıt gövdesi (baytları) dosya olarak okunur. Ad `Content-Disposition`'dan ya da adresin son parçasından, biçim içerik türünden / imzadan bulunur (CSV, XLSX, PDF, düz metin; bkz. `scripts/platform/dosyalar/dosya-icerigi.mjs`).
+
+- Beklentiler: dosya adı deseni, en az boyut, metin içeriyor / içermiyor, sütun var, satır sayısı (= / ≥), hücre değeri (sütun + satır koşulu). Her beklenti sonuçta ayrı satırdır (Beklenen / Görülen; gizli değerler ve gizli tablo sütunları maskeli).
+- Metinlerde `${Parametre}`, `${Tablo.Sütun}`, `${akis:Ad}` çözülür. VEYA içinde kullanılmaz.
+- İkili yanıt raporda metin olarak saklanmaz (yalnız özet). Dosyanın kendisi Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (varsayılan: saklanmaz) koşu kaydına eklenir; senaryo sonucunda "Dosyayı indir" ile kasadan çözülüp tarayıcıda iner (sunucu diske yazmaz; dosya ham hâliyle, maskelenmeden iner — indirmeden önce "kişisel / gizli veri içerebilir" onayı). HTML raporda yoktur.
+- Ekranlarda karşılığı akış tasarımındaki "İndirilen dosyayı doğrula" bloğudur (düğmeye basılır, Playwright indirmesi koşunun geçici klasörüne yazılır, doğrulanır ve silinir).
+
 ## Kod
 
 | Dosya | İçerik |
@@ -132,9 +147,27 @@ REST koşusu: gövdedeki değerler içerik türüne göre kaçışlanır (JSON /
 | `scripts/platform/servisler/soapui-ice-aktarma.mjs` | SoapUI okuyucu |
 | `scripts/platform/servisler/postman-ice-aktarma.mjs` | Postman koleksiyonu okuyucu |
 | `scripts/platform/servisler/rest-istemcisi.mjs` | REST isteği |
-| `scripts/platform/servisler/taban-adresleri.mjs` | Taban adresleri toplu düzenleme (önizleme → onay) |
+| `scripts/platform/servisler/taban-adresleri.mjs` | Adlandırılmış taban adresleri (ekle / değiştir / sil) ve toplu düzenleme (önizleme → onay) |
 | `scripts/platform/servisler/servis-islemleri.mjs` | Erişim kontrolü, kayıt, parametre çözümü, Dene / koşu |
 | `scripts/platform/servisler/servis-uclari.mjs` | HTTP uçları |
 | `scripts/platform/arayuz/servisler.js` | Arayüz |
 
 Testler (sahte SOAP sunucusu, 127.0.0.1): `tests/birim/servis-testleri.spec.ts`, `tests/birim/servis-uclari.spec.ts`.
+
+## Yanıt sözleşmesi
+
+Servis sayfasının **Sözleşme** sekmesinde her operasyon (REST'te uç) için yanıtın beklenen yapısı tanımlanır. Hiçbir kaynak ağ isteği atmaz.
+
+- **Kaynaklar:** WSDL / XSD (kayıtlı WSDL'deki yanıt öğesi ya da yüklenen dosyalar), OpenAPI / Swagger (yerel JSON / YAML; yalnız başarılı yanıt şeması, belge içi `$ref` çözülür, dış `$ref` indirilmez), JSON Schema (dosya ya da yapıştırma), **başarılı yanıttan taslak** (seçilen kayıtlı başarılı yanıtlardan: zorunlu = tüm örneklerde var, null görüldüyse null izinli; tek örnekte zorunluluk kesin değildir uyarısı).
+- **Önizleme / taslak** alan alan düzenlenir (tür, zorunlu, null izinli, kaldır); "Onayla ve kaydet" ile servis ayarlarına (kasada şifreli) yazılır. Var olan sözleşmeyi değiştirmek ve silmek onay ister (fark gösterilir); değişiklikler geçmişe yazılır.
+- **Senaryo:** "Yanıt sözleşmeye uymalı" (varsayılan kapalı). Açıkken yanıt doğrulanır; uyumsuzluk senaryoyu kaldırır. Rapor: `Sözleşme: Kaldı — N uyumsuzluk` ve yol bazında liste — SOAP'ta XML yolları (`/SiparisResponse/Kalemler/Kalem[2]/Adet: zorunlu alan yok`), REST'te JSON yolları (`response.orderId: sayı bekleniyordu, metin geldi`). Mesajlar değer içermez; gizli değerler maskelenir.
+- Desteklenen alt küme: `type` (dizi ve `null` dahil), `required`, `properties`, `items`, `enum`, `nullable`, `format` (date, date-time, email), `anyOf` / `oneOf`, `allOf` (birleştirilir). Fazla alan uyumsuzluk sayılmaz.
+
+## Yetki hatasında (401 / 403)
+
+Oturum akışı ya da token adımı olan akışlarda "Yetki hatasında (401 / 403)" seçimi: **Tekrar deneme** ya da **Token'ı yenile, bir kez tekrar dene**. Akışta "Genel ayarı kullan" seçiliyse Ayarlar > Koşu'daki genel değer kullanılır (varsayılan: **Token'ı yenile, bir kez tekrar dene**). Akışta ayrıca seçim yapılmışsa o geçerlidir.
+
+- Açıkken istek 401 / 403 dönerse oturum akışı / akıştaki token adımı yeniden çalışır ve istek **bir kez** tekrarlanır. İlk deneme ayrı sonuç olarak kaydedilmez; raporda not görünür: "401 alındı, token yenilendi, tekrar denendi". İkinci deneme de 401 / 403 ise sonuç olduğu gibi değerlendirilir (not: "tekrar da 401 döndü").
+- Yalnız HTTP durum kodu dikkate alınır (SOAP Fault içeriği yetki hatası sayılmaz).
+- Tekrar da "Servis istekleri" iznine tabidir (aynı çalıştırmanın parçasıdır).
+- Bu ayardan önce kaydedilmiş oturum akışları o zamanki davranışı korur (bir kez yenileyip tekrar dener); düzenleyicide öyle görünür.

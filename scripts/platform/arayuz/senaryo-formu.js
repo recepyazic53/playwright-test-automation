@@ -21,18 +21,22 @@ import {
   beklenenHataOnerisi, formDegerleriniKur, formSemasiOlustur, hatalariDagit, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul,
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
-import { gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
+import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
 import { degerBasvurusuYaz, grupAnahtari, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { calistirmaBicimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
 import { akisDiyagramiCiz } from './senaryo-diyagrami.js';
+import { playwrightKodunaAktar } from './playwright-disa-aktarma.js';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const kimlikUret = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 let kimlikSayaci = 0;
 const yeniId = (on) => `sf-${on}-${++kimlikSayaci}`;
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
+/** "Bilerek boş bırak" işaretinin sunulduğu (tek değerli) form alanı tipleri. */
+const BILEREK_BOS_TIPLERI = ['secim', 'metin', 'sayi', 'tarih', 'dosya'];
 
 /**
  * @param {HTMLElement} icerik
@@ -135,11 +139,19 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (!ortamSecimi.size) ortamSecimi.add(s.ortam.id);
   let kosuyaDahil = s.taslak?.kosuyaDahil ?? (senaryo ? senaryo.kosuyaDahil : true);
   const mutlaka = new Set(s.taslak?.mutlaka ?? senaryo?.mutlakaGorunmeli ?? []);
+  // Bilerek boş bırakılan zorunlu alanlar (olumsuz senaryo; verideki bilerekBos listesi).
+  const bilerekBos = new Set(bilerekBosAnahtarlari(s.taslak?.veri || senaryo?.veri));
   // Giriş seçimi (senaryo-girisi.mjs): { kip: ortam | girissiz | temiz, profil }; null = ortamın girişiyle (varsayılan).
   let girisSecimi = s.taslak && 'giris' in s.taslak ? s.taslak.giris : senaryo?.giris ?? null;
+  /** Adım ekran görüntüsü seçimi (null = Ayarlara uy; Ayarlar > Koşu > Kayıt). */
+  let adimGoruntusuSecimi = s.taslak && 'adimGoruntusu' in s.taslak ? s.taslak.adimGoruntusu : senaryo?.adimGoruntusu ?? null;
   // Satır seçimleri: "<tabloId>|<etiket>" → { Sütun: değer } (çözümleyicinin okuduğu biçim; servis senaryosundakiyle aynı).
   // ${Tablo.Sütun} değerleri koşuda bu koşullarla (+ bağlı alanların düz değerleri ve ortam) uyan ilk satırdan gelir.
   const tabloSecimleri = JSON.parse(JSON.stringify(s.taslak?.tabloSecimleri ?? senaryo?.tabloSecimleri ?? {}));
+  // Çalıştırma biçimi (tablolar/veri-kosulari.mjs): grup → { kip: 'secili', satirlar } | { kip: 'tumu' }; listede olmayan grup "Tek satır"
+  // (bugünkü davranış). Birden çok grup çoklu ise birleşim: tüm kombinasyonlar ya da eşleştirerek (eslesmeler).
+  const veriKosulari = JSON.parse(JSON.stringify(s.taslak?.veriKosulari ?? senaryo?.veriKosulari ?? {}));
+  veriKosulari.gruplar ??= {};
   const modelGirissiz = baglam.model?.girisGerekmez === true;
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
@@ -177,6 +189,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const gorunurlukHesapla = (taslak) => gorunurlukleriHesapla(taslak, dogrulamaBaglami);
   function hesapla() {
     const senaryoNesnesi = senaryoNesnesiOlustur(sema, { ...degerler, [sema.baslik]: baslikDegeri }, { gorunurlukHesapla, onceki });
+    if (bilerekBos.size) senaryoNesnesi[BILEREK_BOS_ANAHTARI] = [...bilerekBos];
+    else delete senaryoNesnesi[BILEREK_BOS_ANAHTARI];
     const gorunurluk = gorunurlukHesapla(senaryoNesnesi);
     const sonuc = senaryoyuDogrula(senaryoNesnesi, dogrulamaBaglami);
     sonDurum = { senaryo: senaryoNesnesi, gorunurluk, hatalar: sonuc.hatalar, uyarilar: sonuc.uyarilar };
@@ -408,6 +422,20 @@ function modelFormu(icerik, s, senaryo, baglam) {
           kontrolKaydet(alan.anahtar, [girdi], hata, uyari);
         }
       }
+      // Zorunlu basit alan: "Bilerek boş bırak" (olumsuz senaryo; senaryo verisinde bilerekBos). Açıkken alan temizlenir ve kapalı
+      // görünür; doğrulayıcı boşluğu hata değil uyarı sayar, koşucu bu alana değer (varsayılanı da) yazmaz.
+      if (alan.zorunlu === true && BILEREK_BOS_TIPLERI.includes(alan.tip) && alan.anahtar !== sema.baslik) {
+        const acik = bilerekBos.has(alan.anahtar);
+        const kutu = h('input', { type: 'checkbox', checked: acik, 'aria-label': 'Bilerek boş bırak', 'aria-describedby': `${id}-uyari` });
+        kutu.addEventListener('change', () => {
+          if (kutu.checked) { bilerekBos.add(alan.anahtar); degerYaz(alan.anahtar, ''); } else { bilerekBos.delete(alan.anahtar); planla(); }
+          degisti = true;
+          kayit.ciz();
+        });
+        ust.el.querySelector('.sag')?.append(h('label', { class: 'bilerek-bos', title: 'Olumsuz senaryo: alan boş bırakılır; koşucu bu alana değer yazmaz.' }, kutu, h('span', {}, 'Bilerek boş bırak')));
+        kap.classList.toggle('bilerek-bos-acik', acik);
+        if (acik) for (const el of [govde, ...govde.querySelectorAll('input, select, textarea, button')]) if ('disabled' in el) el.disabled = true;
+      }
       kayit.gorunurlukCipi = ust.cip;
       yerlestir(kap, ust.el, govde, hata, uyari);
     };
@@ -633,7 +661,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   if (akisSecimi) {
     akisSecimi.addEventListener('change', () => {
       const d = hesapla();
-      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, tabloSecimleri, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
+      senaryoFormu(icerik, { ...s, akisId: akisSecimi.value, taslak: { veri: d.senaryo, baslik: baslikDegeri, oncekiAkis: baglam.akisId, ortamlar: [...ortamSecimi], kosuyaDahil, mutlaka: [...mutlaka], giris: girisSecimi, adimGoruntusu: adimGoruntusuSecimi, tabloSecimleri, veriKosulari, sekme: diyagramAlani.hidden ? 'form' : 'akis' } });
     });
   }
   // Giriş: ortamın girişiyle (varsayılan) / girişsiz / temiz oturumla yeniden giriş; birden çok giriş profili varsa profil. Ekran
@@ -670,6 +698,14 @@ function modelFormu(icerik, s, senaryo, baglam) {
   girisKipi.addEventListener('change', girisDegistir);
   girisProfili.addEventListener('change', girisDegistir);
   girisCiz();
+  // Adım ekran görüntüleri: "Ayarlara uy" (varsayılan; Ayarlar > Koşu > Kayıt) ya da bu senaryoya özel seçim.
+  const adimGoruntusuGirdisi = h('select', { id: yeniId('adimGoruntusu') },
+    [['ayar', 'Ayarlara uy (varsayılan)'], ['her', 'Her adımda'], ['yalnizKalan', 'Yalnız kalan adımda'], ['secili', 'Seçili adımlarda'], ['kapali', 'Kapalı']]
+      .map(([d, m]) => h('option', { value: d, selected: (adimGoruntusuSecimi ?? 'ayar') === d }, m)));
+  adimGoruntusuGirdisi.addEventListener('change', () => {
+    adimGoruntusuSecimi = adimGoruntusuGirdisi.value === 'ayar' ? null : adimGoruntusuGirdisi.value;
+    degisti = true;
+  });
   const senaryoKarti = h('section', { class: 'kart', 'aria-labelledby': 'senaryo-karti-baslik' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-karti-baslik' }, ikon('liste'), 'Senaryo'),
       h('span', { class: 'alt' }, 'Başlık, Playwright test adıdır; aynı ekranda tekil olmalıdır.')),
@@ -677,6 +713,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
       akisSecimi ? h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: akisSecimi.id }, 'Akış')), akisSecimi,
         h('div', { class: 'alan-notu' }, 'Senaryo bu akışın adımlarıyla koşar; form seçilen akışa göre değişir.')) : null,
       h('div', { class: 'model-alani genis giris-secimi' }, h('div', { class: 'alan-ust' }, h('label', { for: girisKipi.id }, 'Giriş')), girisKipi, girisProfilAlani, girisNotu),
+      h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: adimGoruntusuGirdisi.id }, 'Adım ekran görüntüleri')), adimGoruntusuGirdisi,
+        h('div', { class: 'alan-notu' }, 'Seçili adımlarda: ekranın akış tasarımında "Ekran görüntüsü al" işaretli adımlar. Test sonu görüntüsü, video ve iz Ayarlar > Koşu > Kayıt\'tadır.')),
       h('div', { class: 'model-alani genis' }, h('div', { class: 'alan-ust' }, h('label', { for: baslikId }, 'Başlık', h('span', { class: 'zorunlu-isareti', 'aria-hidden': 'true' }, '*'))), baslikGirdisi, baslikHata),
       sema.senaryoAlanlari.map(alanCiz)));
 
@@ -726,8 +764,22 @@ function modelFormu(icerik, s, senaryo, baglam) {
     yerlestir(satirSecimiKarti,
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'satir-secimi-baslik' }, ikon('veri'), 'Satır seçimi'),
         h('span', { class: 'alt' }, 'Tablodan alınan değerler koşuda bu satırdan gelir.')),
-      ...gruplar.map(satirGrubuCiz));
+      ...gruplar.map(satirGrubuCiz),
+      veriKosusuOzetiCiz(gruplar));
   }
+  /** Formda kullanılan grupların anahtarları (tablo kimliğiyle). */
+  const grupAnahtarlari = (gruplar) => gruplar.map((g) => { const t = tabloBul(tabloListesi || [], g.tablo); return t ? { anahtar: grupAnahtari(t.id, g.etiket), tablo: t, etiket: g.etiket } : null; }).filter(Boolean);
+  /** Kaydedilecek çalıştırma biçimi (veri-kosusu-secimi.js): kullanılan çoklu gruplar; hiçbiri yoksa null. Tablolar okunmadıysa undefined (mevcut korunur). */
+  const kaydedilecekVeriKosulari = () => {
+    if (!tabloListesi) return kullanilanGruplar().length ? undefined : null;
+    return veriKosulariniHazirla(veriKosulari, grupAnahtarlari(kullanilanGruplar()).map((g) => g.anahtar));
+  };
+  const veriKosusuDurumu = () => ({
+    veriKosulari, ortam: s.ortam, ortamAdi, tablolar: tabloListesi || [], tabloSecimleri,
+    degisti: () => { degisti = true; satirSecimiCiz(true); }
+  });
+  function calistirmaBicimiCiz(t, anahtar, secim) { return calistirmaBicimi(t, anahtar, secim, veriKosusuDurumu()); }
+  function veriKosusuOzetiCiz(gruplar) { return veriKosusuOzeti(grupAnahtarlari(gruplar), veriKosusuDurumu()); }
   function satirGrubuCiz(g) {
     const t = tabloBul(tabloListesi, g.tablo);
     const baslikEl = h('h4', {}, `${t ? t.ad : g.tablo}${g.etiket ? ` [${g.etiket}]` : ''}`, h('small', { class: 'soluk' }, ` · ${g.alanlar.join(', ')}`));
@@ -779,7 +831,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
     return h('div', { class: 'satir-secimi-grubu', 'data-tablo': t.ad },
       baslikEl, h('label', { class: 'gorunmez', for: id }, `${t.ad}${g.etiket ? ` [${g.etiket}]` : ''} satırı`), sel,
       h('div', { class: `alan-notu ${secimVar && !uyan.length ? 'alan-uyarisi' : ''}`.trim(), role: 'status' }, durum),
-      acik.length ? h('details', { open: secimVar && !secilenSatir }, h('summary', { class: 'kucuk' }, 'Koşullar'), h('div', { class: 'kosul-izgarasi' }, kosullar)) : null);
+      acik.length ? h('details', { open: secimVar && !secilenSatir }, h('summary', { class: 'kucuk' }, 'Koşullar'), h('div', { class: 'kosul-izgarasi' }, kosullar)) : null,
+      calistirmaBicimiCiz(t, anahtar, secim));
   }
 
   // --- Beklenen sonuç -----------------------------------------------------------------------
@@ -975,8 +1028,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
           ortamIdleri: [...ortamSecimi], kosuyaDahil, mutlakaGorunmeli: [...mutlaka],
           // Model girişsizse seçim yok sayılır (her zaman girişsiz); varsayılan seçim sunucuda içeriğe yazılmaz.
           giris: modelGirissiz ? null : girisSecimi,
+          // Adım ekran görüntüsü seçimi ('ayar' = Ayarlara uy; içeriğe yazılmaz).
+          adimGoruntusu: adimGoruntusuSecimi ?? 'ayar',
           // Satır seçimleri (yalnız formda kullanılan tablo grupları; boşsa kaldırılır).
-          tabloSecimleri: kaydedilecekSecimler()
+          tabloSecimleri: kaydedilecekSecimler(),
+          // Çalıştırma biçimi (tablodan çoklu satır; hepsi "Tek satır"sa kaldırılır). Tablolar okunamadıysa mevcut korunur.
+          ...(kaydedilecekVeriKosulari() !== undefined ? { veriKosulari: kaydedilecekVeriKosulari() } : {})
         }
       });
       degisti = false;
@@ -1016,7 +1073,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       const yanit = await api('/platform/senaryo/dene', {
         govde: {
           projeId: s.proje.id, ekranId: baglam.ekran.id, ortamId, veri: d.senaryo, kosuId, ...(senaryo ? { id: senaryo.id } : {}), ...canliOnayEki(ortamId),
-          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi,
+          ...(baglam.akisId ? { akisId: baglam.akisId } : {}), mutlakaGorunmeli: [...mutlaka], giris: modelGirissiz ? null : girisSecimi, adimGoruntusu: adimGoruntusuSecimi ?? 'ayar',
           tabloSecimleri: kaydedilecekSecimler()
         }
       });
@@ -1316,8 +1373,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
     h('span', {}, ikon('ag'), `doğrulama bağlamı: ${s.ortam.ad}`),
     senaryo ? h('span', { class: 'mono cok-soluk' }, senaryo.id) : null
   ];
-  yerlestir(icerik, 
-    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), 'Listeye dön')),
+  // Playwright koduna dışa aktar: KAYDEDİLMİŞ senaryodan (kaydedilmemiş değişiklikler dosyaya girmez); senaryonun kayıtlı ortamlarından biri.
+  const disaAktarDugmesi = senaryo ? h('button', {
+    type: 'button', class: 'hayalet', title: 'Kaydedilmiş senaryoyu seçilen ortam için çalıştırılabilir tek bir .spec.ts dosyası olarak indirir (gizli değerler ortam değişkeniyle)',
+    onclick: () => playwrightKodunaAktar({ projeId: s.proje.id, senaryo: { id: senaryo.id, baslik: senaryo.baslik }, ortamlar: s.ortamlar.filter((o) => senaryo.ortamlar.includes(o.id)) })
+  }, ikon('indir'), 'Playwright koduna dışa aktar') : null;
+  yerlestir(icerik,
+    sayfaBasligi(s, s.mod === 'yeni' ? 'Yeni senaryo' : senaryo.baslik, meta, disaAktarDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: () => vazgecDugmesi.click() }, ikon('geri'), s.taslak?.oneri ? 'Önerilere dön' : 'Listeye dön')),
     h('div', { class: 'form-duzeni' },
       h('div', { class: 'form-sutunu' }, sekmeCubugu, formAlani, diyagramAlani),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıt' },
@@ -1332,7 +1394,11 @@ function modelFormu(icerik, s, senaryo, baglam) {
   formAlani.append(senaryoKarti, adimAkisi, satirSecimiKarti, beklenenKarti);
   beklenenCiz();
   guncelle();
-  if (s.taslak) {
+  if (s.taslak?.oneri) {
+    // Senaryo önerisinin önizlemesi (senaryo-onerileri.js): kaydedilmedi; oluşturmak kullanıcının kararı.
+    icerik.querySelector('.form-duzeni')?.before(h('div', { class: 'not-kutusu bilgi oneri-onizleme-notu', role: 'note' },
+      h('p', {}, h('b', {}, 'Öneri önizlemesi — kaydedilmedi. '), `Beklenen: ${s.taslak.oneri.beklenen}. İsterseniz düzenleyip "Senaryoyu oluştur" ile ekleyin; "Koşuda" kapalı gelir.`)));
+  } else if (s.taslak) {
     // Akış değişti: yeni akışta olmayan değerler kaldırıldı mı?
     degisti = true;
     const yeni = hesapla().senaryo;

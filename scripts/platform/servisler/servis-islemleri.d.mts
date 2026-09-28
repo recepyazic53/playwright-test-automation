@@ -8,7 +8,8 @@ import type { EtkiGuncellemesi, TabloEtkisi } from '../tablolar/tablo-etkisi.mjs
 export declare const ERISIM_GECERLILIK_MS: number;
 export declare function ortamTuru(ortam: { ayarlar: Record<string, unknown> }): 'test' | 'canli';
 export declare function adresBirlestir(taban: string, yol: string): string;
-export declare function servisAdresi(ayarlar: { yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string> }, ortam: { id: string; ad?: string; tabanUrl: string }): string;
+export declare function servisAdresi(ayarlar: { yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string>; tabanGrubu?: string }, ortam: { id: string; ad?: string; tabanUrl: string }): string;
+export declare function tanimsizNedeni(ayarlar: { tabanGrubu?: string }, ortamAd?: string): string;
 export declare function ortamdaTanimli(ayarlar: { tabanlar?: Record<string, string> }, ortamId: string): boolean;
 export declare function tarihKurallariniDogrula(kurallar: unknown): Record<string, string>;
 
@@ -28,8 +29,9 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: string }>>;
-  alanListeleri?: Record<string, Record<string, string>>; oturumAkisi?: string | null;
+  alanListeleri?: Record<string, Record<string, string>>; oturumAkisi?: string | null; tabanGrubu?: string | null;
   alanBaglari?: Record<string, Record<string, { tablo: string; sutun: string; etiket?: string }>>;
+  tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari>;
 }): string;
 export declare function semaYenile(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string }): Promise<{
   adres: string; durumKodu: number; operasyonSayisi: number; alanliOperasyonlar: string[];
@@ -69,6 +71,7 @@ export interface PostmanAktarimGirdisi {
   koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: ServisKapsami;
   mevcutDegerleriKoru?: boolean; guncellenecekler?: unknown; beklenenImza?: string; yapan?: string;
+  tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari>;
 }
 export interface PostmanAktarimSonucu {
   etki: TabloEtkisi; guncelleme?: EtkiGuncellemesi;
@@ -90,6 +93,10 @@ export interface CalistirmaSonucu {
   durumKodu?: number; yanitSureMs?: number; kontroller?: KontrolSonucu[]; ozet?: string; yanit?: string; hata?: string; durduruldu?: boolean;
   istekBasliklari?: Record<string, string>; okunanlar?: Record<string, string>; akis?: Record<string, unknown>;
   oturum?: { akis: string; durum: 'alindi' | 'onbellek' | 'yenilendi' };
+  /** 401 / 403 sonrası token yenilenip bir kez tekrar denendiyse (ilk deneme ayrı kaydedilmez). */
+  yetkiTekrari?: { ilkDurumKodu: number; not: string; ikinciDurumKodu?: number };
+  /** "Yanıt sözleşmeye uymalı" açıkken doğrulama özeti. */
+  sozlesme?: { durum: 'gecti' | 'kaldi' | 'yok'; toplam: number; uyumsuzluklar: Array<{ yol: string; mesaj: string }> };
 }
 export interface AkisOkumasi { ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
 export declare function okumaGizliMi(o: AkisOkumasi, ekler?: ReadonlyArray<string>): boolean;
@@ -100,7 +107,22 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
   /** Yanıttan okunan AÇIK değerler ve maskelenen değerler: yalnız bellekte (akış motoru); kayda / dönüşe yazılmaz. */
   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+  /** İç kullanım: 401 / 403 sonrası tekrar. */
+  yetkiTekrari?: { ilkDurumKodu: number; not: string };
+  /** Akış motoru: token adımını yeniden çalıştırıp yeni değerleri verir (yalnız ayar açıksa). */
+  yetkiYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null>;
+  /** Veri koşusu (tablodan çoklu satır): bu çalıştırmanın satırları; başlık "Senaryo [ad]". */
+  veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> };
+  /** Başarısızları tekrar çalıştırmada önceki koşu ("Tekrar:" bağı). */
+  tekrarKaynagi?: string;
 }): Promise<CalistirmaSonucu>;
+export declare function servisVeriKosulari(vt: Veritabani, projeId: string, s: { icerik: unknown }, ortamId: string, kip?: string | null): {
+  kosular: Array<{ anahtar: string; ad: string; satirlar: Record<string, string> }>; hatalar: string[]; cokluGruplar: string[];
+};
+export declare function servisCalistirmalari(vt: Veritabani, projeId: string, s: { baslik: string; icerik: unknown }, ortamId: string): {
+  hata: string | null; sinirAsildi: boolean;
+  calistirmalar: Array<{ baslik: string; veriKosusu: { anahtar: string; ad: string; sabit: Record<string, string> } | null }>;
+};
 export type OturumSaglayici = (vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
   Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>;
 export declare function oturumSaglayicisiAyarla(fn: OturumSaglayici | null): void;
@@ -112,7 +134,7 @@ export declare function servisSenaryolariniKos(vt: Veritabani, projeId: string, 
   servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number;
 }): Promise<{
   ortam: string; ortamTuru: 'test' | 'canli'; atlanan: number; atlamaNedeni?: string;
-  sonuclar: { senaryoId: string; baslik: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; kosuId: string; ozet: string }[];
+  sonuclar: { senaryoId: string; baslik: string; durum: 'basarili' | 'basarisiz' | 'hata'; sureMs: number; kosuId: string | null; ozet: string }[];
   ozet: { basarili: number; basarisiz: number; hata: number };
 }>;
 

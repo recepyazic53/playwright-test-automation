@@ -115,10 +115,14 @@ export type KayitAdimi = {
   uyarilar?: KayitGostergesi[];
   /** İlerleme düğmesinden sonra sonucu en çok bekleme süresi (sn; kosu.zamanAsimiSn). */
   zamanAsimiSn?: number;
+  /** "Ekran görüntüsü al" işareti (akış tasarımı; kosu.ekranGoruntusu — adım görüntüleri "Seçili adımlarda" iken). */
+  ekranGoruntusu?: boolean;
   /** Ortak akış adımı (akış tasarımında "+ > Ortak akış"): alanı yoktur; istegeBagli ise senaryoda "“ad” dahil" ile seçilir. */
   ortakAkis?: { dosya: string; istegeBagli: boolean };
   /** SQL sorgusu adımı (akış tasarımında "+ > SQL sorgusu"): alanı yoktur; modelde adımın sqlKontrolu olur. */
   sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi;
+  /** İndirilen dosyayı doğrulama adımı (akış tasarımında "+ > Dosya doğrula"): alanı yoktur; modelde adımın dosyaKontrolu olur. */
+  dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi;
   /** Yeniden giriş adımı (akış tasarımında "+ > Yeniden giriş"): alanı yoktur; modelde adımın yenidenGiris'i olur. */
   yenidenGiris?: { profil?: string };
 };

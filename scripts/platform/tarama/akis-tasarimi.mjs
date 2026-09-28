@@ -8,6 +8,8 @@
 //            kosullar: { [alan]: { secim, degerler } | null } — alanın görünürlük koşulu ("<seçim> şu değerlerdeyken görünür";
 //            null: koşulsuz). Taslakta kayıt okumalarından otomatik bulunur (secimKosuluCikar); kullanıcı düzeltir. Listede
 //            olmayan alan için koşul otomatik çıkarılır. Koşuldaki seçim alanı akışta (bir alan grubunda) olmalı.
+//            sinirlar: { [alan]: { enAz?, enCok?, artis?, enAzUzunluk?, enCokUzunluk?, desen? } | null } — alanın değer kuralları
+//            (model alan.sinirlar; null: kaldır; verilmeyen alanın mevcut kuralı korunur). Ekranın akışını düzenlerken yazılır.
 //   aksiyon  { dugme: sıra, istegeBagli }           düğmeye basılır (isteğe bağlıysa senaryoda "… dahil" ile seçilir)
 //   mesaj    { mesaj: sıra | null, metin }          beklenen mesaj (aranacak metin; öğe seçildiyse onun içinde aranır)
 //   bekle    { saniye }                              süreli bekleme (1–120 sn): önceki düğmeden sonra (düğme yoksa alanlardan
@@ -15,6 +17,8 @@
 //   sql      { ad, sql: SqlTanimi }                 SQL sorgusu adımı (sql/sql-adimi.mjs): kendi adımıdır; koşuda seçilen
 //            veritabanı bağlantısında sorgu çalışır, sonuç beklenenle karşılaştırılır. Bir aksiyondan (ya da ortak akıştan)
 //            sonra ya da akışın başında gelir; ardındaki beklenen mesaj / bekleme önceki ekran adımına aittir.
+//   dosya    { ad, dugme: sıra, dosya: DosyaTanimi }  İndirilen dosyayı doğrula (dosyalar/dosya-icerigi.mjs): kendi adımıdır; koşuda
+//            düğmeye basılır, indirilen dosya (CSV / XLSX / PDF / metin) beklentilerle doğrulanır. SQL adımıyla aynı yerde durur.
 //   giris    { ad, profil }                         Yeniden giriş: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle
 //            (profil: giriş profilinin adı; boşsa ortamın varsayılanı) yeniden girilir; kendi adımıdır, aksiyondan sonra gelir.
 //   bitir    {}                                     akışın sonu (zorunlu, son blok)
@@ -35,6 +39,7 @@
 import { UYARI_EN_COK, VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { sabitGostergeMetni, secimKosuluCikar } from './paket-olusturucu.mjs';
 import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
+import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 
 export const BLOK_EN_COK = 200;
 export const BEKLEME_EN_COK_SN = 120;
@@ -191,7 +196,7 @@ export function akisPaleti(env, bloklar) {
   const mesajda = new Map();
   bloklar.forEach((b, i) => {
     if (b.tur === 'alanlar') for (const a of b.alanlar) if (!alanda.has(a)) alanda.set(a, i);
-    if (b.tur === 'aksiyon' && !dugmede.has(b.dugme)) dugmede.set(b.dugme, i);
+    if ((b.tur === 'aksiyon' || b.tur === 'dosya') && !dugmede.has(b.dugme)) dugmede.set(b.dugme, i);
     if (b.tur === 'mesaj' && b.mesaj !== null && !mesajda.has(b.mesaj)) mesajda.set(b.mesaj, i);
   });
   return {
@@ -207,6 +212,9 @@ export function akisPaleti(env, bloklar) {
     mesajlar: env.mesajlar.map((m, i) => ({ sira: i, metin: m.metin || '(metinsiz öğe)', oneri: sabitGostergeMetni(m.metin), blok: mesajda.get(i) ?? null }))
   };
 }
+
+/** Alan grubundaki değer kurallarının (sinirlar) bilinen anahtarları. */
+const SINIR_ANAHTARLARI = ['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enCokUzunluk', 'desen'];
 
 /**
  * Arayüzden gelen blokları tek biçime getirir (bilinmeyen alanlar atılır; uzunluklar sınırlanır). Biçimi bozuk blok
@@ -238,15 +246,35 @@ export function bloklariAyikla(ham) {
           }
         }
       }
-      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar });
+      // Alanın değer kuralları (model alan.sinirlar; null: kaldır). Yalnız bilinen anahtarlar, sayı / metin değerler; kurallar
+      // kaydederken ekran modeli doğrulayıcısıyla denetlenir (akis-servisi.mjs > akisKaydet).
+      /** @type {Record<string, Record<string, number | string> | null>} */
+      const sinirlar = {};
+      if (nesneMi(b.sinirlar)) {
+        for (const a of liste) {
+          if (!Object.prototype.hasOwnProperty.call(b.sinirlar, a)) continue;
+          const s = b.sinirlar[a];
+          if (!nesneMi(s)) { sinirlar[a] = null; continue; }
+          /** @type {Record<string, number | string>} */
+          const temiz = {};
+          for (const k of SINIR_ANAHTARLARI) {
+            const d = s[k];
+            if (typeof d === 'number' && Number.isFinite(d)) temiz[k] = d;
+            else if (typeof d === 'string' && d.trim()) temiz[k] = d.trim().slice(0, 200);
+          }
+          sinirlar[a] = Object.keys(temiz).length ? temiz : null;
+        }
+      }
+      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
     else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
     else if (b.tur === 'aksiyon') {
-      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}) });
+      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}) });
     }
     else if (b.tur === 'mesaj') bloklar.push({ tur: 'mesaj', mesaj: b.mesaj === null || b.mesaj === undefined ? null : sayi(b.mesaj), metin: metin(b.metin, METIN_EN_COK), ...(b.uyari === true ? { uyari: true } : {}), ...(b.desen === true ? { desen: true } : {}) });
     else if (b.tur === 'bitir') bloklar.push({ tur: 'bitir' });
     else if (b.tur === 'sql') bloklar.push({ tur: 'sql', ad: metin(b.ad, AD_EN_COK), sql: nesneMi(b.sql) ? b.sql : {} });
+    else if (b.tur === 'dosya') bloklar.push({ tur: 'dosya', ad: metin(b.ad, AD_EN_COK), dugme: sayi(b.dugme), dosya: nesneMi(b.dosya) ? b.dosya : {} });
     else if (b.tur === 'giris') bloklar.push({ tur: 'giris', ad: metin(b.ad, AD_EN_COK), profil: metin(b.profil, 120) || null });
     else hatalar.push({ blok: i, mesaj: 'Bilinmeyen blok türü.' });
   });
@@ -280,7 +308,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
   let kapali = false; // son adımın ilerleme düğmesi var (sonraki alan grubu yeni adım)
   let bekleyen = false; // isteğe bağlı aksiyon: sonraki alan grubu onun parçası
   let sure = 0; // düğmeden önce (alanlardan sonra) bekleme: sonraki düğmeye bağlanır, düğme yoksa adımın sonuna
-  let sqlSonrasi = false; // son blok(lar) SQL sorgusu: ardından bekleme / ara mesaj konmaz
+  /** Son blok(lar) SQL sorgusu ya da dosya doğrulama (yan adım): ardından bekleme / ara mesaj konmaz. @type {false | 'sql' | 'dosya'} */
+  let sqlSonrasi = false;
   /** @type {Map<string, number>} */
   const kullanilan = new Map();
   /** @type {Array<{ blok: number; alan: string; kosul: { secim: string; degerler: string[] } | null }>} */
@@ -325,6 +354,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         cur.parcalar.push(...hamlar.map(() => k));
         bekleyen = false;
       } else yeniAdim(b.ad || `${adimlar.length + 1}. adım`, hamlar);
+      // "Ekran görüntüsü al": grubun ait olduğu adım (isteğe bağlı düğmenin açtığı grupta da aynı adım).
+      if (b.ekranGoruntusu && cur) /** @type {(typeof adimlar)[number]} */ (cur).ekranGoruntusu = true;
       return;
     }
     if (b.tur === 'aksiyon') {
@@ -334,6 +365,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       const og = { secici: d.secici, metin: d.metin };
       if (!cur || kapali) yeniAdim(metin(d.metin, AD_EN_COK) || `${adimlar.length + 1}. adım`, []);
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
+      if (b.ekranGoruntusu) c.ekranGoruntusu = true;
       if (b.istegeBagli) {
         c.acicilar.push({ ...og, secimli: true, ...(sure ? { onceBekle: sure } : {}) });
         bekleyen = true;
@@ -372,7 +404,26 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       sureyiBirak();
       // Kendi adımıdır; önceki ekran adımı (cur) açık kalır: ardındaki son beklenen mesaj ona bağlanır.
       adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], sqlKontrolu: d.tanim });
-      sqlSonrasi = true;
+      sqlSonrasi = 'sql';
+      return;
+    }
+    if (b.tur === 'dosya') {
+      // İndirilen dosyayı doğrula: kendi adımıdır (düğmeye basılır, indirilen dosya beklentilerle doğrulanır); SQL adımı gibi önceki
+      // ekran adımı açık kalır (ardındaki son beklenen mesaj ona bağlanır).
+      const d = dosyaTanimiDogrula(b.dosya);
+      const dg = env.dugmeler[b.dugme];
+      if (!dg) hata(i, 'İndirmeyi başlatan düğmeyi seçin.');
+      if (d.hatalar.length) for (const m of d.hatalar) hata(i, m);
+      if (!dg || d.hatalar.length) return;
+      if (bekleyen) { hata(i, 'Dosya doğrulama isteğe bağlı bir aksiyondan hemen sonra gelemez.'); return; }
+      if (cur && !kapali) { hata(i, 'Dosya doğrulama bir aksiyondan (düğmeye basma) sonra gelmeli: önce alan grubunun ilerleme düğmesini koyun.'); return; }
+      const ad = b.ad || 'Dosya doğrulama';
+      if (adlar.has(ad)) { hata(i, `“${ad}” adı başka bir blokta da var; adlar tekil olmalı.`); return; }
+      adlar.add(ad);
+      sureyiBirak();
+      const tetikleyici = { secici: dg.secici, ...(dg.metin ? { aciklama: metin(dg.metin, 120) } : {}) };
+      adimlar.push({ ad, yol: '', baslik: metin(env.baslik, 200), alanlar: [], ilerleme: null, acicilar: [], parcalar: [], dosyaKontrolu: { ...d.tanim, tetikleyici } });
+      sqlSonrasi = 'dosya';
       return;
     }
     if (b.tur === 'giris') {
@@ -390,8 +441,15 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       sqlSonrasi = false;
       return;
     }
-    if (b.tur === 'bekle' && sqlSonrasi) { hata(i, 'SQL sorgusundan sonra bekleme konmaz; veri geç yazılıyorsa SQL adımındaki “yeniden dene” süresini kullanın.'); return; }
-    if (b.tur === 'mesaj' && sqlSonrasi && !etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql')) { hata(i, 'Beklenen mesaj SQL sorgusundan önce gelmeli (mesaj ekran adımının sonucudur).'); return; }
+    if (b.tur === 'bekle' && sqlSonrasi) {
+      hata(i, sqlSonrasi === 'sql' ? 'SQL sorgusundan sonra bekleme konmaz; veri geç yazılıyorsa SQL adımındaki “yeniden dene” süresini kullanın.'
+        : 'Dosya doğrulamadan sonra bekleme konmaz; indirme geç başlıyorsa adımdaki “indirmeyi bekleme” süresini kullanın.');
+      return;
+    }
+    if (b.tur === 'mesaj' && sqlSonrasi && !etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'dosya')) {
+      hata(i, `Beklenen mesaj ${sqlSonrasi === 'sql' ? 'SQL sorgusundan' : 'dosya doğrulamadan'} önce gelmeli (mesaj ekran adımının sonucudur).`);
+      return;
+    }
     if (b.tur !== 'mesaj') sqlSonrasi = false;
     if (b.tur === 'bekle') {
       if (!(Number.isInteger(b.saniye) && b.saniye >= 1 && b.saniye <= BEKLEME_EN_COK_SN)) { hata(i, `Bekleme süresi 1–${BEKLEME_EN_COK_SN} saniye arasında tam sayı olmalı.`); return; }
@@ -414,7 +472,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       }
       /** @type {import('./paket-olusturucu.d.mts').KayitGostergesi} */
       const g = { secici: m ? m.secici : null, metin: m ? m.metin : b.metin, ...(b.metin ? { aranan: b.metin } : {}), ...(b.desen ? { desen: true } : {}) };
-      const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql');
+      const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'dosya');
       if (!cur) { hata(i, 'Beklenen mesajdan önce bir alan grubu ya da aksiyon olmalı.'); return; }
       if (bekleyen) { hata(i, 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).'); return; }
       if (!sonMu && !kapali) { hata(i, 'Beklenen mesaj bir aksiyondan (düğmeye basma) sonra gelmeli.'); return; }

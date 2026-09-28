@@ -63,7 +63,7 @@ export async function veritabanlariBolumu(proje, ortamlar, baglantilar, yenile) 
   return h('section', { class: 'veritabanlari-bolumu', 'aria-labelledby': 'veritabanlari-basligi' },
     h('div', { class: 'bolum-basligi' },
       h('h3', { id: 'veritabanlari-basligi' }, 'Veritabanları', rozet(String(veritabanlari.length))),
-      h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'birincil', disabled: !ortamlar.length, onclick: () => duzenle(null) }, '+ Veritabanı ekle'))),
+      h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'birincil', disabled: !ortamlar.length, onclick: () => duzenle(null) }, ikon('arti'), 'Veritabanı ekle'))),
     h('p', { class: 'soluk kucuk' }, 'SQL adımları bir veritabanına bağlanır; koşu, seçilen ortamdaki bağlantıya gider (ör. TEST koşusu TEST bağlantısına). Boş hücre: bu ortamda kullanılmaz, adım sorgu atmadan hatayla kalır.'),
     formAlani,
     veritabanlari.length ? tablo

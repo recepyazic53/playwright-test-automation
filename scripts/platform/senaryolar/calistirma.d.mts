@@ -24,6 +24,11 @@ export interface KosuIstegi {
   kosuKimligi?: string | null;
   kosuKapsami?: string | null;
   senaryoId?: string;
+  /**
+   * Koşu sürecine eklenecek ortam değişkenleri: veri koşusu / tekrar (NOBETCI_VERI_KIPI, NOBETCI_TEKRAR_PLANI, NOBETCI_TEKRAR_KAYNAGI)
+   * ya da uçtan uca akışın ekran adımı (NOBETCI_AKIS_*; akislar/uctan-uca-cikti.mjs). Sunucu yalnız bu adları geçirir.
+   */
+  ekOrtam?: Record<string, string> | null;
 }
 export interface KosuYaniti {
   /** HTTP durum kodu (varsayılan 200). */
@@ -47,6 +52,7 @@ export interface Kosucu {
 export declare function calistirmaIsteginiHazirla(vt: Veritabani, govde: Record<string, unknown>, secenekler?: CalistirmaSecenekleri): {
   projeId: string; kosuId: string; kosuTuru: 'tam' | 'tekil' | null; kosuKimligi: string | null; kosuKapsami: string | null;
   hedef: CalistirmaHedefi;
+  ekOrtam: Record<string, string>;
 };
 export declare function senaryoCalistir(
   vt: Veritabani, govde: Record<string, unknown>, kosucu: Kosucu | null, secenekler?: CalistirmaSecenekleri

@@ -2,7 +2,7 @@
 // (A durumu | B durumu | değişim rozeti, süre farkı; "yalnız değişenler" süzgeci varsayılan AÇIK; sıralama tablo-siralama.js
 // ile veri üzerinde) ve açılan satırda adım adım fark (ekran: hata / Beklenen–Görülen farkı, iki tarafın ekran görüntüsü, koşuda
 // yakalanan mesajlar farkı; servis: istekler, HTTP kodu, kontrol sonuçları farkı — gövdeler gösterilmez).
-// Adresler (paylaşılabilir): #/sonuclar/karsilastir/<A>/<B> ve #/servisler/sonuclar/karsilastir/<A>/<B>. A = önceki koşu (tarihçe
+// Adresler (paylaşılabilir): #/sonuclar/karsilastir/<A>/<B> ve #/sonuclar/servisler/karsilastir/<A>/<B>. A = önceki koşu (tarihçe
 // sırasıyla seçilir), B = sonraki; "Yer değiştir" ile çevrilir. Seçim: koşu geçmişinde iki onay kutusu + "Karşılaştır" ya da koşu
 // ayrıntısında "Başka bir koşuyla karşılaştır…" (karsilastirmaSecimi; aynı proje, isteğe bağlı aynı ortam / kapsam).
 // Veri: /platform/sonuclar/karsilastir* (sonuclar/karsilastirma.mjs; metinler sunucuda maskeli). Ekran görüntüleri şifreli medya
@@ -46,7 +46,7 @@ function farkHapi(fark, artisIyi, bicim = (n) => String(n)) {
 }
 
 /** @param {'ekran' | 'servis'} tur @param {string} a @param {string} b */
-export const karsilastirmaAdresi = (tur, a, b) => `${tur === 'servis' ? '#/servisler/sonuclar' : '#/sonuclar'}/karsilastir/${q(a)}/${q(b)}`;
+export const karsilastirmaAdresi = (tur, a, b) => `${tur === 'servis' ? '#/sonuclar/servisler' : '#/sonuclar'}/karsilastir/${q(a)}/${q(b)}`;
 
 /**
  * Seçilen iki koşuyu tarihçe sırasına koyup (A = önceki) karşılaştırmayı açar.
@@ -204,7 +204,7 @@ let yalnizDegisenler = true;
 export async function karsilastirmaEkrani(icerik, proje, s) {
   yerlestir(icerik, iskelet('kartlar'), iskelet('sayfa'));
   const servis = s.tur === 'servis';
-  const taban = servis ? '#/servisler/sonuclar' : '#/sonuclar';
+  const taban = servis ? '#/sonuclar/servisler' : '#/sonuclar';
   const kosuAdresi = (id) => `${taban}/kosu/${q(id)}`;
   const v = await api(`/platform/sonuclar/karsilastir?${new URLSearchParams({ projeId: proje.id, tur: s.tur, a: s.a, b: s.b })}`);
   const tabloAlani = h('div', {});
@@ -453,8 +453,8 @@ function servisFarki(d, x) {
       h('h4', { class: 'bolum-etiketi' }, rozet(ad, `kars-${ad.toLowerCase()}`), ' ', durumRozeti(t.durum),
         typeof t.httpKodu === 'number' ? rozet(`HTTP ${t.httpKodu}`) : null, h('span', { class: 'mono' }, sureMetni(t.sureMs))),
       t.hata ? h('pre', { class: 'hata-mesaji kucuk kars-hata' }, t.hata) : h('p', { class: 'soluk kucuk' }, 'Hata yok.'),
-      /^a-/.test(t.id) ? h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/servisler/sonuclar/kosu/${q(t.id)}` }, 'Koşuyu aç', ikon('ok'))
-        : h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/servisler/sonuclar/senaryo/${q(t.id)}` }, 'Ayrıntı', ikon('ok'))
+      /^a-/.test(t.id) ? h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/sonuclar/servisler/kosu/${q(t.id)}` }, 'Koşuyu aç', ikon('ok'))
+        : h('a', { class: 'dugme kucuk-dugme hayalet', href: `#/sonuclar/servisler/senaryo/${q(t.id)}` }, 'Ayrıntı', ikon('ok'))
     ] : h('h4', { class: 'bolum-etiketi' }, rozet(ad, `kars-${ad.toLowerCase()}`), ' bu koşuda yok'));
   return h('div', { class: 'kars-detay' },
     h('div', { class: 'kars-ikili' }, taraf('A', d.a), taraf('B', d.b)),

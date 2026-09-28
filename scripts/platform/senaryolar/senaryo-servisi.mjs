@@ -17,6 +17,7 @@ import {
   ortamlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet, senaryoSil, testVerisiProfilleriniListele, testVerisiTurleriniListele
 } from '../veritabani/depo.mjs';
 import { senaryoGirisi, senaryoGirisiniAyikla } from './senaryo-girisi.mjs';
+import { senaryoAdimGoruntusuAyikla } from '../ayarlar/kayit-kurallari.mjs';
 import { acikAnahtar, adliAlanlariDonustur, sifrele, zarflariCoz } from '../kasa.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari } from './model-formu.mjs';
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
@@ -24,6 +25,7 @@ import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
+import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
 
 /**
  * Ekranın seçim listeleri: tablo sütununa bağlı alanlar tablodan (Test verisi > Tablolar; aynı tablodaki alanlar birbirini
@@ -152,10 +154,12 @@ export function senaryoAkisi(icerik) {
  * adından ".model.json" atılarak bulunan ekranların modelleri). Model yoksa null.
  * Çoklu akış: model, istenen akışın modelidir (akisModeli; akisId yoksa/bilinmiyorsa varsayılan akış); tamModel akışlarla
  * birlikte ham model; akislar ekranın akış listesi; akisId çözülen akış.
- * @param {Veritabani} vt @param {string} ekranId @param {string | null} [akisId]
+ * surum: tekrar koşusunda o koşudaki model sürümü (verilmezse en son sürüm; o sürüm yoksa null). Alt modeller ve ortak akışlar
+ * her zaman son sürümleriyle okunur.
+ * @param {Veritabani} vt @param {string} ekranId @param {string | null} [akisId] @param {{ listesiz?: boolean; surum?: number }} [secenekler]
  */
 export function modelBaglami(vt, ekranId, akisId = null, secenekler = {}) {
-  const kayit = ekranModeliGetir(vt, ekranId);
+  const kayit = ekranModeliGetir(vt, ekranId, secenekler.surum);
   if (!kayit || !nesneMi(kayit.model) || ['altModel', 'ortakAkis'].includes(kayit.model.tur) || !Array.isArray(kayit.model.adimlar)) return null;
   const tamModel = kayit.model;
   const akislar = akisListesi(tamModel);
@@ -223,6 +227,14 @@ function ortamVerisi(/** @type {Veritabani} */ vt, /** @type {Nesne} */ icerik, 
   const kimlik = ortamId && nesneMi(icerik.ortamlar[ortamId]) ? ortamId : ortamKimlikleri(icerik).find((o) => nesneMi(/** @type {Nesne} */ (icerik.ortamlar)[o]));
   const o = kimlik ? /** @type {Nesne} */ (/** @type {Nesne} */ (icerik.ortamlar)[kimlik]) : null;
   return o && nesneMi(o.veri) ? /** @type {Nesne} */ (zarflariCoz(vt, o.veri)) : null;
+}
+
+/**
+ * Senaryonun bu ortamdaki verisi (hassas alanlar çözülmüş; kasa açık olmalı). Senaryo o ortamda tanımlı değilse null.
+ * @param {Veritabani} vt @param {Nesne} icerik @param {string} ortamId
+ */
+export function senaryoOrtamVerisi(vt, icerik, ortamId) {
+  return nesneMi(icerik.ortamlar) && nesneMi(icerik.ortamlar[ortamId]) ? ortamVerisi(vt, icerik, ortamId) : null;
 }
 
 /** Bağlam profili alanı (model şemasında havuzu bağlam türü olan "profil" alanı). */
@@ -367,8 +379,12 @@ export function senaryoDetayi(vt, id, ortamId) {
     akis: senaryoAkisi(icerik),
     // Giriş seçimi (senaryo-girisi.mjs): null = ortamın girişiyle (varsayılan).
     giris: senaryoGirisi(icerik),
+    // Adım ekran görüntüsü seçimi (null = Ayarlar > Koşu > Kayıt'a uyar, varsayılan).
+    adimGoruntusu: senaryoAdimGoruntusuAyikla(icerik.adimGoruntusu).secim,
     // Satır seçimleri ({ "<tabloId>|<etiket>": { Sütun: değer } }; ${Tablo.Sütun} değerleri koşuda bu satırdan çözülür).
-    tabloSecimleri: nesneMi(icerik.tabloSecimleri) ? icerik.tabloSecimleri : null
+    tabloSecimleri: nesneMi(icerik.tabloSecimleri) ? icerik.tabloSecimleri : null,
+    // Çalıştırma biçimi (tablodan çoklu satır; yoksa null = her grup tek satır, bugünkü davranış).
+    veriKosulari: nesneMi(icerik.veriKosulari) ? icerik.veriKosulari : null
   };
 }
 
@@ -634,8 +650,10 @@ function sonrakiSira(/** @type {Veritabani} */ vt, /** @type {string} */ projeId
  * Çoklu akış: senaryo bir akışa bağlıdır (akisId; verilmezse mevcut akışı, yeni senaryoda varsayılan akış); veri o akışın
  * modeliyle doğrulanır, akış içerikte (icerik.akis) saklanır (tek, örtük akışta yazılmaz).
  * Giriş seçimi (giris: { kip, profil? }; senaryo-girisi.mjs): verilmezse mevcut korunur; varsayılan seçim içeriğe yazılmaz.
+ * Adım ekran görüntüsü seçimi (adimGoruntusu: her | yalnizKalan | secili | kapali; 'ayar' / null = Ayarlara uy): verilmezse mevcut korunur.
  * Satır seçimleri (tabloSecimleri; ekran-basvurulari.mjs): verilmezse mevcut korunur, null / {} kaldırır.
- * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; tabloSecimleri?: unknown; yapan?: string }} girdi
+ * Çalıştırma biçimi (veriKosulari; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null kaldırır.
+ * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yapan?: string }} girdi
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
  * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }> }}
  */
@@ -731,11 +749,25 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
     if (g.giris) icerik.giris = g.giris;
     else delete icerik.giris;
   }
+  // Adım ekran görüntüsü seçimi: verilmezse mevcut korunur; "Ayarlara uy" (null / 'ayar') içeriğe yazılmaz.
+  if (girdi.adimGoruntusu !== undefined) {
+    const a = senaryoAdimGoruntusuAyikla(girdi.adimGoruntusu);
+    if (a.hata) throw new SenaryoDogrulamaHatasi(a.hata, [{ alan: 'adimGoruntusu', mesaj: a.hata }]);
+    if (a.secim) icerik.adimGoruntusu = a.secim;
+    else delete icerik.adimGoruntusu;
+  }
   // Satır seçimleri (ekran-basvurulari.mjs): verilmezse mevcut korunur; null / {} kaldırır.
   if (girdi.tabloSecimleri !== undefined) {
     const t = tabloSecimleriDenetle(vt, girdi.projeId, girdi.tabloSecimleri);
     if (t) icerik.tabloSecimleri = t;
     else delete icerik.tabloSecimleri;
+  }
+  // Çalıştırma biçimi (tablolar/veri-kosulari.mjs): verilmezse mevcut korunur; null / boş (hepsi "Tek satır") kaldırır.
+  if (girdi.veriKosulari !== undefined) {
+    const v = veriKosulariniAyikla(girdi.veriKosulari, tablolariListele(vt, girdi.projeId));
+    if (v.hatalar.length) throw new SenaryoDogrulamaHatasi(v.hatalar[0], v.hatalar.map((mesaj) => ({ alan: 'veriKosulari', mesaj })));
+    if (v.ayar) icerik.veriKosulari = v.ayar;
+    else delete icerik.veriKosulari;
   }
   const id = depoSenaryoKaydet(vt, {
     ...(mevcut ? { id: mevcut.id } : {}), projeId: girdi.projeId, ekranId, baslik, icerik, kosuyaDahil: genelDahil, yapan: girdi.yapan
@@ -974,6 +1006,7 @@ export function senaryoGecmisi(vt, id) {
         if (alanlar.size) degisenler.push(`Değişen alanlar: ${[...alanlar].join(', ')}`);
         if (JSON.stringify(a.alanKurallari ?? null) !== JSON.stringify(b.alanKurallari ?? null)) degisenler.push('"Mutlaka görünmeli" alanları değişti');
         if (JSON.stringify(a.giris ?? null) !== JSON.stringify(b.giris ?? null)) degisenler.push('Giriş seçimi değişti');
+        if ((a.adimGoruntusu ?? null) !== (b.adimGoruntusu ?? null)) degisenler.push('Adım ekran görüntüsü seçimi değişti');
       }
     }
     return {
@@ -1021,7 +1054,7 @@ export function calistirmaHedefiCoz(vt, projeId, senaryoId, ortamId, secenekler 
  * Model senaryosunun "Dene" paketi: taslak (akışın modeliyle doğrulanmış) GEÇİCİ bir deneme senaryosu olarak döner; koşucu
  * bunu geçici bir dosyayla veri okuyucuya verir (TEST_SUNUCU_MODEL_DENEME_DOSYASI), model spec'i onu "@model-deneme-…"
  * etiketiyle tek test olarak üretir. Veritabanına senaryo YAZILMAZ (koşu sonucu, kodlu Dene gibi senaryosuz kaydedilir).
- * @param {Veritabani} vt @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; tabloSecimleri?: unknown }} girdi
+ * @param {Veritabani} vt @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown }} girdi
  * @param {NonNullable<ReturnType<typeof modelBaglami>>} mb @param {{ geciciEk: string }} secenekler
  */
 function modelDenemePaketi(vt, girdi, mb, secenekler) {
@@ -1038,6 +1071,7 @@ function modelDenemePaketi(vt, girdi, mb, secenekler) {
     spec: MODEL_SPEC_DOSYASI, geciciBaslik, etiket: modelEtiketi(denemeId), grepDeseni: modelGrepDeseni(denemeId), uyarilar: d.uyarilar,
     denemeSenaryosu: { id: denemeId, ekranId: girdi.ekranId, akisId: mb.akisId, ortamId: girdi.ortamId, baslik: geciciBaslik, veri: d.veri, mutlakaGorunmeli: mutlaka,
       giris: senaryoGirisiniAyikla(girdi.giris).giris,
+      adimGoruntusu: senaryoAdimGoruntusuAyikla(girdi.adimGoruntusu).secim,
       // Formdaki satır seçimleri (denetlenmiş; ${Tablo.Sütun} değerleri denemede de bu satırdan gelir).
       ...(girdi.tabloSecimleri !== undefined ? { tabloSecimleri: tabloSecimleriDenetle(vt, girdi.projeId, girdi.tabloSecimleri) ?? null } : {}) }
   };
@@ -1047,7 +1081,7 @@ function modelDenemePaketi(vt, girdi, mb, secenekler) {
  * "Dene" (deneme koşusu) paketi: taslak senaryo ekranın (akışın) modeliyle doğrulanır ve geçici bir deneme senaryosu
  * olarak döner (bkz. modelDenemePaketi). Veritabanına YAZILMAZ.
  * @param {Veritabani} vt
- * @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; tabloSecimleri?: unknown }} girdi
+ * @param {{ projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown }} girdi
  * @param {{ geciciEk: string }} secenekler geciciEk: geçici başlığın rastgele son eki
  */
 export function denemePaketiOlustur(vt, girdi, secenekler) {

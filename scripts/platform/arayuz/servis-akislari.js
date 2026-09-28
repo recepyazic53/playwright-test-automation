@@ -3,7 +3,7 @@
 //   #/servisler/s/<id>/akislar              → bu servisin oturum akışı seçimi + projenin akışları
 //   #/servisler/s/<id>/akislar/<akisId|yeni> → akış tasarımı: diyagram (servis-akis-diyagrami.js; adımlar, değer izi, Dene, koşu geçmişi)
 // Oturum akışı (tür "oturum"): servise atanır; senaryolardaki ${akis:Token} değeri oturumdan gelir (koşular arasında süresi
-// dolana kadar paylaşılır, 401'de yenilenir). Dene yalnız TEST; canlı koşu yalnız kullanıcı onayıyla. Açık token arayüze gelmez.
+// dolana kadar paylaşılır; 401 / 403 sonrası akışın "Yetki hatasında" seçimi). Dene yalnız TEST; canlı koşu yalnız kullanıcı onayıyla. Açık token arayüze gelmez.
 import { alan, api, bildir, bosDurum, h, ikon, rozet, tarihMetni, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { servisAkisTasarimi } from './servis-akis-diyagrami.js';
@@ -18,7 +18,8 @@ const durumRozeti = (d) => rozet(DURUM[d]?.[0] ?? d, DURUM[d]?.[1] ?? '');
  */
 export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile) {
   if (altKimlik) { await servisAkisTasarimi(kap, proje, s, ortamlar, altKimlik === 'yeni' ? null : altKimlik); return; }
-  const { akislar } = await api(`/platform/servis-akislari?projeId=${q(proje.id)}`);
+  // Uçtan uca akışlar (servis + ekran + SQL) kendi ekranında listelenir (#/akislar).
+  const akislar = (await api(`/platform/servis-akislari?projeId=${q(proje.id)}`)).akislar.filter((a) => !a.icerik?.uctanUca);
   const adres = `#/servisler/s/${q(s.id)}/akislar`;
 
   // --- Bu servisin oturum akışı --------------------------------------------------------------------------------------------
@@ -37,7 +38,7 @@ export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile)
   const oturumKarti = h('div', { class: 'kart form-paneli' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('anahtar'), 'Oturum akışı (token)'), h('span', { class: 'sag' }, durum)),
     h('p', { class: 'soluk kucuk' }, 'Bu servisin senaryolarında ', h('code', {}, '${akis:Token}'), ' gibi bir değer kullanılıyorsa (ör. başlıkta ',
-      h('code', {}, 'Authorization: Bearer ${akis:Token}'), ') değer seçilen oturum akışından gelir. Token koşular arasında süresi dolana kadar yeniden kullanılır; sunucu 401 dönerse bir kez yenilenir.'),
+      h('code', {}, 'Authorization: Bearer ${akis:Token}'), ') değer seçilen oturum akışından gelir. Token koşular arasında süresi dolana kadar yeniden kullanılır; sunucu 401 / 403 dönerse ne yapılacağı oturum akışının "Yetki hatasında" seçimindedir.'),
     oturumlar.length ? alan('Oturum akışı', sec) : h('p', { class: 'soluk' }, 'Henüz oturum akışı yok. Aşağıdan türü "Oturum" olan bir akış ekleyin (ör. tek adım: Giriş → Token oku).'));
 
   // --- Projenin akışları ----------------------------------------------------------------------------------------------------
@@ -53,13 +54,13 @@ export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile)
         ortamAd ? h('span', { class: 'soluk kucuk' }, ortamAd) : null);
     })() : h('span', { class: 'cok-soluk' }, '—')),
     h('td', { class: 'eylem' }, h('a', { class: 'dugme ikon-dugme', href: `${adres}/${q(a.id)}`, title: 'Düzenle', 'aria-label': `Düzenle: ${a.baslik}` }, ikon('duzenle')),
-      h('button', { type: 'button', class: 'ikon-dugme hayalet', title: 'Sil', 'aria-label': `Sil: ${a.baslik}`, onclick: async () => {
+      h('button', { type: 'button', class: 'kucuk-dugme tehlike', 'aria-label': `Sil: ${a.baslik}`, onclick: async () => {
         if (!(await onayIste({ baslik: `"${a.baslik}" silinsin mi?`, metin: 'Akış silinir; geçmiş koşu kayıtları kalır.', dugme: 'Sil', tehlikeli: true }))) return;
         try { await api('/platform/servis-akisi/sil', { govde: { projeId: proje.id, id: a.id } }); bildir('Akış silindi.'); yenile(); } catch (e) { bildir(e.message, 'hata'); }
-      } }, ikon('cop')))));
+      } }, ikon('cop'), 'Sil'))));
   yerlestir(kap, oturumKarti,
     h('div', { class: 'kart' },
-      h('div', { class: 'kart-basligi' }, h('h3', {}, 'Servis akışları'), h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: `${adres}/yeni` }, ikon('arti'), 'Yeni akış'))),
+      h('div', { class: 'kart-basligi' }, h('h3', {}, 'Servis akışları'), h('span', { class: 'sag' }, h('a', { class: 'dugme kucuk-dugme', href: `${adres}/yeni` }, ikon('arti'), 'Akış ekle'))),
       h('p', { class: 'soluk kucuk' }, 'Akış, kayıtlı senaryoları sırayla koşar (başka servislerin senaryoları da olabilir). Bir adımın yanıtından okunan değer sonraki adımlarda ',
         h('code', {}, '${akis:Ad}'), ' ile gövdede, başlıkta ve kontrollerde kullanılır.'),
       akislar.length

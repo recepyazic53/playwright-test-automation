@@ -1,4 +1,4 @@
-// scripts/paket/arsiv.mjs için tip bildirimi.
+// scripts/platform/dosyalar/arsiv.mjs için tip bildirimi.
 export interface ZipGirdisi {
   ad: string;
   tur: 'dosya' | 'klasor' | 'baglanti';

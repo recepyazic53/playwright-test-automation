@@ -19,6 +19,7 @@ import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:cr
 import { closeSync, createReadStream, existsSync, fsyncSync, lstatSync, openSync, readdirSync, rmSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { mkdir, open, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { inceltmedeSilinsinMi, medyaSinifi } from './ayarlar/kayit-kurallari.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -278,6 +279,61 @@ export function medyaDosyasiniGuvenliSil(klasor, dosya) {
   } catch {
     return false;
   }
+}
+
+/**
+ * KADEMELİ SAKLAMA (Ayarlar > Yedekleme > Sonuç saklama > "Eski sonuçlarda medyayı incelt"): koşu başlangıcı gun günden eski
+ * (bitmiş) koşuların sonuçlarında, seçime göre başarılı / kalan testlerin EKRAN GÖRÜNTÜLERİ ve VİDEOLARI silinir. Sonucun kendisi
+ * (durum, süre, hata metni, adımlar), izler ve diğer ekler kalır. Medya satırı "silinme" zamanıyla kalır (arayüz "saklama süresi
+ * doldu" der); önce satırlar tek işlemde işaretlenir, sonra şifreli dosyalar silinir (silinemeyen dosya sahipsiz kalır ve sahipsiz
+ * dosya temizliği onu siler — satır ile dosya tutarsız kalmaz). Kalan testte koru=true ise kalan adımın görüntüsü (yoksa son adım
+ * görüntüsü — hataya en yakın) ve test sonu görüntüsü korunur. Kural: ayarlar/kayit-kurallari.mjs > inceltmedeSilinsinMi.
+ * Günlük temizlikte sıra: sonuç saklama (bütün sonuç) → bu inceltme → video saklama (medyaSaklamaTemizligi) → sahipsiz dosyalar.
+ * @param {Veritabani} vt @param {string} klasor
+ * @param {{ secim: string; gun: number; koru: boolean; simdi?: number }} secenekler
+ * @returns {{ silinenGoruntu: number; silinenVideo: number; sonuc: number }}
+ */
+export function medyaInceltme(vt, klasor, secenekler) {
+  const bos = { silinenGoruntu: 0, silinenVideo: 0, sonuc: 0 };
+  if (!['basarili', 'hatali', 'ikisi'].includes(secenekler.secim) || !Number.isInteger(secenekler.gun) || secenekler.gun < 1) return bos;
+  const simdi = secenekler.simdi ?? Date.now();
+  const esik = new Date(simdi - secenekler.gun * GUN_MS).toISOString();
+  const satirlar = vt.tumu(
+    `SELECT m.id, m.dosya, m.tur, m.ad, m.icerik_turu, m.sira, r.id AS sonuc_id, r.durum
+       FROM medya m JOIN kosu_sonuclari r ON r.id = m.sonuc_id JOIN kosular k ON k.id = r.kosu_id
+      WHERE m.silinme IS NULL AND m.tur IN ('ekran_goruntusu', 'video') AND k.baslangic < ? AND k.durum != 'calisiyor'
+      ORDER BY r.id, m.sira`, [esik]
+  );
+  if (!satirlar.length) return bos;
+  /** @type {Map<string, Array<Record<string, unknown> & { sinif: ReturnType<typeof medyaSinifi> }>>} */
+  const sonuclar = new Map();
+  for (const s of satirlar) {
+    const liste = sonuclar.get(String(s.sonuc_id)) ?? sonuclar.set(String(s.sonuc_id), []).get(String(s.sonuc_id));
+    liste?.push({ ...s, sinif: medyaSinifi({ ad: String(s.ad), icerikTuru: String(s.icerik_turu ?? ''), tur: String(s.tur) }) });
+  }
+  /** @type {Array<{ id: unknown; dosya: string; tur: string }>} */
+  const silinecek = [];
+  const etkilenen = new Set();
+  for (const [sonucId, liste] of sonuclar) {
+    const sonucBasarili = String(liste[0].durum) === 'basarili';
+    // Korunan adım görüntüsü: kalan adımın görüntüsü yoksa son adım görüntüsü (hataya en yakın an).
+    const kalanAdimVar = liste.some((m) => m.sinif === 'kalanAdim');
+    const sonAdim = kalanAdimVar ? null : [...liste].reverse().find((m) => m.sinif === 'adim') ?? null;
+    for (const m of liste) {
+      if (!inceltmedeSilinsinMi({ secim: secenekler.secim, koru: secenekler.koru }, { sonucBasarili, sinif: m.sinif, korunanAdim: m === sonAdim })) continue;
+      silinecek.push({ id: m.id, dosya: String(m.dosya), tur: String(m.tur) });
+      etkilenen.add(sonucId);
+    }
+  }
+  if (!silinecek.length) return bos;
+  const zaman = new Date(simdi).toISOString();
+  vt.islem(() => { for (const m of silinecek) vt.calistir('UPDATE medya SET silinme = ? WHERE id = ?', [zaman, m.id]); });
+  for (const m of silinecek) medyaDosyasiniSil(klasor, m.dosya);
+  return {
+    silinenGoruntu: silinecek.filter((m) => m.tur === 'ekran_goruntusu').length,
+    silinenVideo: silinecek.filter((m) => m.tur === 'video').length,
+    sonuc: etkilenen.size
+  };
 }
 
 /**

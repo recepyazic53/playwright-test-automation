@@ -26,12 +26,14 @@ export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
 
 /**
  * Koşuyu başlatır ve paneli açar. bitti(): koşu bitince (tabloyu yenilemek için) çağrılır.
- * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; bitti?: () => void }} s
+ * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string }; bitti?: () => void }} s
  */
 export async function servisKosusuBaslat(s) {
   if (servisKosusuSuruyorMu()) throw new Error('Süren bir servis koşusu var; bitmesini bekleyin ya da durdurun.');
   // Riskli ortamda açık onay: koşu diyaloğunda onaylandıysa canliOnay: true gider (kosu-paneli.js > canliOnayEki).
-  const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...canliOnayEki(s.ortamId), ...(s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }) } });
+  // tekrar: başarısızları tekrar çalıştırma ({ kaynakKosuId, veri }); sunucu o koşuda kalan çalıştırmaları kendi kaydından kurar.
+  const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...canliOnayEki(s.ortamId),
+    ...(s.tekrar ? { tekrar: s.tekrar } : s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }) } });
   durum = { projeId: s.proje.id, is, secili: is.satirlar.find((x) => x.durum !== 'atlandi')?.senaryoId ?? is.satirlar[0]?.senaryoId, kucuk: false, bitti: s.bitti };
   acikKutular.clear();
   ciz();
@@ -83,6 +85,13 @@ function adimlar(satir) {
     ol.append(h('li', { class: son.durum === 'basladi' ? 'suruyor' : son.durum === 'hata' ? 'hata' : 'tamam' }, h('span', { class: 'nokta' }), metin));
   }
   return ol;
+}
+
+/** Kontrol sonuçları (VEYA ve sözleşme uyumsuzlukları iç içe). */
+function kontrolListesi(liste) {
+  return h('ul', { class: 'kontrol-listesi' }, liste.map((k) => h('li', { class: k.gecti ? 'gecti' : 'kaldi' },
+    h('div', {}, ikon(k.gecti ? 'onay' : 'carpi'), ` ${k.tur === 'veya' ? 'Şunlardan biri (VEYA)' : k.ad}${k.aciklama ? ' — ' : ''}`, h('span', { class: 'soluk' }, k.aciklama)),
+    Array.isArray(k.alt) && k.alt.length ? kontrolListesi(k.alt) : null)));
 }
 
 function kutu(anahtar, baslik, metin) {
@@ -141,8 +150,8 @@ function ciz() {
     h('div', { class: 'izleme-basligi' }, h('span', { title: satir.baslik }, satir.baslik),
       satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti', title: 'Koşu sürüyor' }, 'SÜRÜYOR') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)),
     satir.durum === 'atlandi' ? h('p', { class: 'soluk kucuk' }, satir.neden || 'Atlandı.') : adimlar(satir),
-    kontroller.length ? h('ul', { class: 'kontrol-listesi' }, kontroller.map((k) => h('li', { class: k.gecti ? 'gecti' : 'kaldi' },
-      h('div', {}, ikon(k.gecti ? 'onay' : 'carpi'), ` ${k.tur === 'veya' ? 'Şunlardan biri (VEYA)' : k.ad} — `, h('span', { class: 'soluk' }, k.aciklama))))) : null,
+    satir.sonuc && satir.sonuc.yetkiTekrari ? h('p', { class: 'not-kutusu bilgi yetki-notu' }, satir.sonuc.yetkiTekrari.not) : null,
+    kontroller.length ? kontrolListesi(kontroller) : null,
     satir.istek ? kutu(`${satir.senaryoId}:istek`, 'İstek (gizli değerler maskeli)', satir.istek) : null,
     satir.yanit ? kutu(`${satir.senaryoId}:yanit`, `Yanıt${satir.sonuc && satir.sonuc.durumKodu ? ` (HTTP ${satir.sonuc.durumKodu})` : ''}`, satir.yanit) : null,
     satir.sonuc && satir.sonuc.kosuId ? h('div', { class: 'panel-eylemleri' },

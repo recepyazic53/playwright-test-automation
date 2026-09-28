@@ -209,6 +209,32 @@ test('telefon genişliği: A / B alt alta, yatay taşma yok', async () => {
   await kapat();
 });
 
+for (const [genislik, yukseklik] of [[1440, 960], [390, 844]] as const) {
+  test(`Sonuçlar sol paneli: servis bağlantısı Sonuçlar içinde servise süzülmüş sonuçları açar (ekranlarla aynı; ${genislik}px)`, async () => {
+    const { page, hatalar, kapat } = await sayfaAc(genislik, yukseklik);
+    await git(page, '#/sonuclar');
+    const nav = page.getByRole('navigation', { name: 'Ürünler' });
+    const baglanti = nav.getByRole('link', { name: /Kayıt Servisi/ });
+    await expect(baglanti).toHaveAttribute('href', `#/sonuclar/s/${encodeURIComponent(f.servisId)}`);
+    // Telefonda yan panel daraltılmış olabilir: bağlantıya adresiyle gidilir (aynı rota).
+    if (await baglanti.isVisible()) await baglanti.click(); else await git(page, `#/sonuclar/s/${encodeURIComponent(f.servisId)}`);
+    await expect(page).toHaveURL(new RegExp(`#/sonuclar/s/${encodeURIComponent(f.servisId)}$`));
+    await expect(page.locator('main .iskelet')).toHaveCount(0, { timeout: 15_000 });
+    // Servisin Raporlar sekmesi değil: Servis sonuçları görünümü (koşu geçmişi), Sonuçlar ekranının sol paneliyle.
+    await expect(page.getByRole('heading', { name: /Kayıt Servisi/, level: 2 })).toBeVisible();
+    await expect(page.locator('main .kirinti')).toContainText('Sonuçlar');
+    await expect(page.getByRole('region', { name: 'Koşu geçmişi' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Ürünler' }).getByRole('link', { name: /Kayıt Servisi/ })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('tab', { name: 'Raporlar' })).toHaveCount(0);
+    const d = await denetle(page);
+    expect(d.tasma, `yatay taşma: ${d.tasanlar.join(', ')}`).toBeLessThanOrEqual(2);
+    expect(d.adsiz, d.adsiz.join('\n')).toEqual([]);
+    expect(d.yinelenenId).toEqual([]);
+    expect(hatalar, hatalar.join('\n')).toEqual([]);
+    await kapat();
+  });
+}
+
 test('servis karşılaştırması: geçmişte grup kilidi (servis ↔ akış), HTTP kodu ve kontrol farkı; gövde ve gizli değer yok', async () => {
   const { page, hatalar, kapat } = await sayfaAc();
   await git(page, '#/servisler/sonuclar');
@@ -245,6 +271,65 @@ test('servis karşılaştırması: geçmişte grup kilidi (servis ↔ akış), H
   const d = await denetle(page);
   expect(d.adsiz, d.adsiz.join('\n')).toEqual([]);
   expect(d.yinelenenId).toEqual([]);
+  expect(hatalar, hatalar.join('\n')).toEqual([]);
+  await kapat();
+});
+
+test('servis sonuçlarının tek yeri Sonuçlar > Servisler: eski adresler yönlenir; Servisler panelindeki "Sonuçlar" ve Raporlar sekmesi oraya bağlanır', async () => {
+  const { page, hatalar, kapat } = await sayfaAc();
+  const id = encodeURIComponent(f.servisId);
+  await git(page, '#/servisler/sonuclar');
+  await expect(page).toHaveURL(/#\/sonuclar\/servisler$/);
+  await expect(page.getByRole('tab', { name: 'Servisler' })).toHaveAttribute('aria-selected', 'true');
+  await git(page, `#/servisler/sonuclar/s/${id}`);
+  await expect(page).toHaveURL(new RegExp(`#/sonuclar/s/${id}$`));
+  await expect(page.getByRole('heading', { name: /Kayıt Servisi/, level: 2 })).toBeVisible();
+  await git(page, `#/servisler/sonuclar/kosu/${encodeURIComponent(f.servisKosuA)}`);
+  await expect(page).toHaveURL(new RegExp(`#/sonuclar/servisler/kosu/${encodeURIComponent(f.servisKosuA)}$`));
+  await expect(page.locator('main .kirinti')).toContainText('Sonuçlar');
+  await expect(page.getByRole('navigation', { name: 'Ürünler' })).toBeVisible();
+  // Servisler ekranı: sol paneldeki "Sonuçlar" ve servisin Raporlar sekmesi (yalnız o servisin çalıştırma listesi).
+  await git(page, `#/servisler/s/${id}/raporlar`);
+  await expect(page.locator('.servis-sonuc-girisi').getByRole('link', { name: 'Sonuçlar' })).toHaveAttribute('href', `#/sonuclar/s/${id}`);
+  await expect(page.getByRole('link', { name: 'Tüm servis sonuçları' })).toHaveAttribute('href', '#/sonuclar/servisler');
+  await expect(page.getByRole('link', { name: /Bu servisin özeti/ })).toHaveAttribute('href', `#/sonuclar/s/${id}`);
+  expect(hatalar, hatalar.join('\n')).toEqual([]);
+  await kapat();
+});
+
+test('sonuçlarda hızlı süzgeç: "Yalnız kalanlar" (koşu ayrıntısı ve koşu geçmişi); hata kalıbına tıklayınca yalnız o kalıptaki testler', async () => {
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/kosu/kars-b');
+  const tablo = page.getByRole('table', { name: 'Senaryo sonuçları' });
+  const gorunen = tablo.locator('tbody tr:visible');
+  await expect(gorunen).toHaveCount(4);
+  await page.getByLabel('Yalnız kalanlar (2)').check();
+  await expect(gorunen).toHaveCount(2);
+  await expect(gorunen).toContainText(['Kayıt', 'Yeni']);
+  await page.getByLabel('Yalnız kalanlar (2)').uncheck();
+  await expect(gorunen).toHaveCount(4);
+  // Hata kalıbı: tek tıkla yalnız o kalıptaki testler; çip ile kaldırılır.
+  await tablo.locator('tr', { hasText: 'Yeni' }).getByRole('button').click();
+  await expect(gorunen).toHaveCount(1);
+  await expect(gorunen).toContainText('Yeni');
+  await expect(page.locator('.suzgec-cipi')).toContainText('Hata kalıbı:');
+  await page.getByRole('button', { name: 'Hata kalıbı süzgecini kaldır' }).click();
+  await expect(gorunen).toHaveCount(4);
+  // Koşu geçmişi: yalnız kalan testi olan koşular.
+  await page.getByRole('link', { name: 'Sonuçlar' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Koşu geçmişi' })).toBeVisible();
+  const bolum = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Koşu geçmişi' }) });
+  const gecmis = bolum.locator('table');
+  await expect(gecmis.locator('tbody tr')).toHaveCount(3);
+  // Kullanıcı adı taşıyan rozetler kısaltılabilir: en çok genişlik + tam metin ipucu.
+  await expect(gecmis.locator('.rozet-kisalt').first()).toHaveAttribute('title', 'Genel');
+  expect(await gecmis.locator('.rozet-kisalt .rozet-metni').first().evaluate((e) => getComputedStyle(e).textOverflow)).toBe('ellipsis');
+  await bolum.getByLabel('Yalnız kalanlar').check();
+  await expect(gecmis.locator('tbody tr')).toHaveCount(2);
+  await expect(gecmis.locator('tbody')).not.toContainText('tekil');
+  await page.setViewportSize({ width: 390, height: 900 });
+  await git(page, '#/sonuclar/kosu/kars-b');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(2);
   expect(hatalar, hatalar.join('\n')).toEqual([]);
   await kapat();
 });

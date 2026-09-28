@@ -9,6 +9,8 @@
 //   (kasada; ör. USERNAME / PASSWORD / CHANNEL) ya da test verisi türü alanının "servis parametreleri" eşlemesi + servisin
 //   (senaryo ezebilir) o tür + rol için seçtiği profilden (veriProfilleri) gelir. Dönüşüm: soapui-aktarimi.mjs eskiParametreleriDonustur.
 // - Saklanan istek / yanıtta parola ve hassas test verisi değerleri maskelenir.
+// - "Yanıt sözleşmeye uymalı" (senaryo; varsayılan kapalı) açıksa yanıt servisin sözleşmesine göre doğrulanır (servis-sozlesmesi.mjs).
+// - 401 / 403: yalnız kullanıcı "Token'ı yenile, bir kez tekrar dene" seçtiyse oturum / token yenilenip istek bir kez tekrarlanır.
 import { randomUUID } from 'node:crypto';
 import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
@@ -19,20 +21,50 @@ import {
 } from './soap-istemcisi.mjs';
 import {
   senaryoIceriginiDogrula, servisAkisiGetir, servisGetir, servisKaydet, servisKimliginiCoz, servisKosusuKaydet,
-  servisKimlikOzeti, servisleriListele, servisOrtamdaKosuyaDahil, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet
+  servisKimlikOzeti, servisleriListele, servisOrtamdaKosuyaDahil, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet, yetkiTekrariAcik
 } from './servis-deposu.mjs';
+import { yanitSozlesmesiniDenetle } from './servis-sozlesmesi.mjs';
 import { adresBirlestirRest, govdeKacisi, restIstegi } from './rest-istemcisi.mjs';
 import { ortakYol, postmanCozumle, postmanOzeti, sablonCevir, sablonDegiskenleri } from './postman-ice-aktarma.mjs';
 import { KAYNAKLAR, alanSatirlari, govdeCoz, semaBirlestir } from './servis-govdesi.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
-import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, satirSecimiOlustur, servisDegeri } from '../tablolar/tablo-secimi.mjs';
+import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, grupAnahtari, satirSecimiOlustur, servisDegeri, tabloBul } from '../tablolar/tablo-secimi.mjs';
+import { satirOzeti, veriKosulariniAc } from '../tablolar/veri-kosulari.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
+import { tanimMetinleri, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
+// Döngüsel içe aktarma (taban-adresleri bu modülün taban doğrulamasını kullanır): yalnız çağrı anında kullanılan işlevler.
+import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
+
+/** Dosya kontrolünde rapora eklenecek (Ayarlar izin verirse) dosyanın en büyük boyutu; daha büyüğü yalnız özetle kalır. */
+const DOSYA_EKI_SINIRI = 5 * 1024 * 1024;
+
+/** Projedeki test verisi tablolarının gizli sütun değerleri (okunamazsa boş). @param {Veritabani} vt @param {string} projeId @returns {string[]} */
+function gizliTabloDegerleri(vt, projeId) {
+  try {
+    return tablolariListele(vt, projeId, { cozulsun: true }).flatMap((t) => {
+      const gizli = t.sutunlar.filter((s) => s.gizli).map((s) => s.ad);
+      return t.satirlar.flatMap((r) => gizli.map((ad) => r.degerler[ad]).filter((v) => typeof v === 'string' && v.length > 0));
+    });
+  } catch { return []; }
+}
+
+/**
+ * Yanıt ikili mi (metin olarak gösterilemez): NUL baytı, geçersiz UTF-8 ya da bilinen ikili imza (ZIP / PDF / eski Office).
+ * @param {Buffer} v
+ */
+function ikiliMi(v) {
+  const bas = v.subarray(0, 8);
+  if (bas.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) || bas.subarray(0, 4).toString('latin1') === '%PDF' || bas.subarray(0, 4).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0]))) return true;
+  if (v.subarray(0, 8192).includes(0)) return true;
+  // Windows-1254 metin de UTF-8 değildir: ham hâliyle bozuk görüneceğinden ikili gibi yalnız özetle kalır.
+  try { new TextDecoder('utf-8', { fatal: true }).decode(v.subarray(0, 65536), { stream: true }); return false; } catch { return true; }
+}
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./servis-deposu.mjs').Servis} Servis */
@@ -73,16 +105,23 @@ export const adresBirlestir = (taban, yol) => `${taban.replace(/\/+$/, '')}/${yo
  * - ayarlar.adresler[ortamId] (eski: servise özel TAM adres) varsa o;
  * - ayarlar.tabanlar[ortamId] tanımlıysa taban + yol; boş metinse servis bu ortamda TANIMLI DEĞİL (hata);
  * - yoksa ortamın taban adresi + yol.
- * @param {{ yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string> }} ayarlar @param {{ id: string; ad?: string; tabanUrl: string }} ortam
+ * @param {{ yol?: string; adresler?: Record<string, string>; tabanlar?: Record<string, string>; tabanGrubu?: string }} ayarlar @param {{ id: string; ad?: string; tabanUrl: string }} ortam
  */
 export function servisAdresi(ayarlar, ortam) {
   const ozel = ayarlar.adresler?.[ortam.id];
   if (ozel) return ozel;
   if (!ayarlar.yol) throw new DepoHatasi('Servisin yolu tanımlı değil (ör. /AppService/servis.asmx).');
   const taban = ayarlar.tabanlar?.[ortam.id];
-  if (taban === '') throw new DepoHatasi(`Servis ${ortam.ad ? `"${ortam.ad}"` : 'bu'} ortamında tanımlı değil (taban adres boş).`);
+  if (taban === '') throw new DepoHatasi(tanimsizNedeni(ayarlar, ortam.ad));
   return adresBirlestir(taban || ortam.tabanUrl, ayarlar.yol);
 }
+
+/**
+ * Servisin taban adresi bu ortamda boşken koşunun / atlamanın anlaşılır nedeni (bağlı olduğu adlandırılmış taban adresiyle).
+ * @param {{ tabanGrubu?: string }} ayarlar @param {string} [ortamAd]
+ */
+export const tanimsizNedeni = (ayarlar, ortamAd) => `Servis ${ortamAd ? `"${ortamAd}"` : 'bu'} ortamında tanımlı değil: taban adresi tanımlı değil${
+  ayarlar.tabanGrubu ? ` ("${ayarlar.tabanGrubu}" taban adresinin bu ortamda adresi yok)` : ''}.`;
 
 /** Servis bu ortamda tanımlı mı (taban adresi bilerek boş bırakılmadıysa). @param {{ tabanlar?: Record<string, string> }} ayarlar @param {string} ortamId */
 export const ortamdaTanimli = (ayarlar, ortamId) => ayarlar.tabanlar?.[ortamId] !== '';
@@ -359,14 +398,22 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
  *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown;
- *   oturumAkisi?: string | null }} girdi  oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
+ *   oturumAkisi?: string | null; tabanGrubu?: string | null; tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari> }} girdi
+ *   oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
+ *   tabanKararlari: bağlı olduğu taban adresinden farklı adres yazılıyorsa kullanıcının kararı (yoksa TabanKarariHatasi; taban-adresleri.mjs).
  */
 export function servisiKaydet(vt, projeId, girdi) {
   const mevcut = girdi.id ? servisGetir(vt, girdi.id) : undefined;
   if (girdi.id && (!mevcut || mevcut.projeId !== projeId)) throw new DepoHatasi('Servis bulunamadı.');
   const yol = yolDogrula(girdi.yol);
   const adresler = girdi.adresler === undefined && mevcut ? (mevcut.ayarlar.adresler ?? {}) : adresleriDogrula(girdi.adresler);
-  const tabanlar = girdi.tabanlar === undefined && mevcut ? (mevcut.ayarlar.tabanlar ?? {}) : tabanlariDogrula(girdi.tabanlar);
+  const verilen = girdi.tabanlar === undefined && mevcut ? (mevcut.ayarlar.tabanlar ?? {}) : tabanlariDogrula(girdi.tabanlar);
+  // Bağlı kaldığı tabandan farklı adres: kullanıcının kararı (bağ değişiyorsa — başka tabana bağlanma / ayrılma — sorulmaz).
+  const bagKalir = mevcut?.ayarlar.tabanGrubu && (girdi.tabanGrubu === undefined || girdi.tabanGrubu === mevcut.ayarlar.tabanGrubu);
+  const karar = bagKalir && girdi.tabanlar !== undefined
+    ? tabanKarari(vt, projeId, { servis: mevcut, tabanlar: verilen, kararlar: girdi.tabanKararlari })
+    : { tabanlar: verilen, ayir: false, guncelle: null };
+  const tabanlar = karar.tabanlar;
   const adresDegisti = !mevcut || mevcut.ayarlar.yol !== yol || JSON.stringify(mevcut.ayarlar.adresler ?? {}) !== JSON.stringify(adresler)
     || JSON.stringify(mevcut.ayarlar.tabanlar ?? {}) !== JSON.stringify(tabanlar);
   /** @type {ServisAyarlari} */
@@ -384,6 +431,12 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.alanBaglari !== undefined ? { alanBaglari: alanBaglariniDogrula(girdi.alanBaglari) } : {}),
     ...(girdi.oturumAkisi !== undefined ? { oturumAkisi: oturumAkisiDogrula(vt, projeId, girdi.oturumAkisi) } : {})
   };
+  // Adlandırılmış taban adres (null: servise özel adres). Adresleri çağıran taban adresinden verir (servis-uclari.mjs).
+  if (girdi.tabanGrubu !== undefined) {
+    if (girdi.tabanGrubu) ayarlar.tabanGrubu = girdi.tabanGrubu;
+    else delete ayarlar.tabanGrubu;
+  }
+  if (karar.ayir) delete ayarlar.tabanGrubu;
   kuralBaglariniDenetle(ayarlar);
   // REST servisinde WSDL yoktur: adres değişikliği erişim kontrolü (WSDL isteği) gerektirmez.
   if (adresDegisti && mevcut?.tur !== 'rest') {
@@ -398,6 +451,7 @@ export function servisiKaydet(vt, projeId, girdi) {
     if (Object.keys(semalar).length) ayarlar.operasyonSemalari = semalar;
   }
   return vt.islem(() => {
+    tabanKarariUygula(vt, projeId, karar, girdi.yapan);
     tabanlariOrtamlaraKaydet(vt, projeId, tabanlar);
     return servisKaydet(vt, { id: girdi.id, projeId, anahtar: girdi.anahtar, ad: girdi.ad, tur: mevcut?.tur ?? 'soap', durum: girdi.durum, ayarlar, yapan: girdi.yapan });
   });
@@ -487,9 +541,12 @@ export function servisParametreleri(vt, projeId, servisId) {
 
 /**
  * Bir gövdenin parametre değerlerini çözer (yalnız sunucu içinde). Bulunamayanlar yerTutuculariDoldur'da açıklamayla listelenir.
+ * sabit: veri koşusu / tekrar — grup → satır (ve istenirse o koşudaki değerler); verilmezse bugünkü kural (uyan ilk satır).
  * @param {Veritabani} vt @param {string} projeId @param {Servis} servis @param {ServisSenaryoIcerigi} icerik @param {string} ortamId
+ * @param {{ tablolar?: import('../tablolar/tablo-deposu.mjs').Tablo[]; satirSecimKipi?: string; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }} [ek]
+ *   kuru çözüm: hazır (çözülmüş) tablolar, satır seçimi kipi (verilmezse Ayarlar > Koşu); veri koşusu: sabit / veriler
  */
-function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
+function parametreDegerleri(vt, projeId, servis, icerik, ortamId, ek = {}) {
   const adlar = kullanilanParametreler(icerik.govde);
   const tarih = { ...(servis.ayarlar.tarihKurallari ?? {}) };
   const kimlikProfili = icerik.kimlikProfili || servis.ayarlar.kimlikProfili;
@@ -505,11 +562,14 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
   /** @type {Map<string, Record<string, unknown>>} */
   const profiller = new Map();
   /** @type {import('../tablolar/tablo-deposu.mjs').Tablo[] | null} */
-  let tablolar = null;
+  let tablolar = ek.tablolar ?? null;
   /** Kullanılan tablo satırları (raporda: hangi satırla koştu). @type {Array<{ tablo: string; etiket: string; satir: Record<string, string | null> }>} */
   const kullanilanSatirlar = [];
   // Birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi); bu çalıştırmada grubun değerleri aynı satırdan.
-  const satirSecimi = satirSecimiOlustur((() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })());
+  const satirSecimi = {
+    ...satirSecimiOlustur(ek.satirSecimKipi ?? (() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })()),
+    ...(ek.sabit ? { sabit: ek.sabit } : {}), ...(ek.veriler ? { veriler: ek.veriler } : {}), kullanilan: new Map()
+  };
   for (const ad of adlar) {
     if (tarih[ad]) continue;
     // ${Tablo.Sütun} / ${Tablo[etiket].Sütun}: senaryonun seçimleriyle (ve ortamla) uyan ilk satırdan.
@@ -549,7 +609,53 @@ function parametreDegerleri(vt, projeId, servis, icerik, ortamId) {
     degerler[ad] = String(d);
     if (e.hassas) gizliler.push(String(d));
   }
-  return { degerler, tarihKurallari: tarih, gizliler, eksikNedeni, kimlikProfili, kullanilanSatirlar };
+  // Veri koşusu / tekrar için: kullanılan satırların kimliği, adı, güncellenme zamanı ve açık sütunları (gizli sütunun yalnız adı).
+  const satirOzetleri = tablolar ? [...satirSecimi.kullanilan.entries()].map(([g, r]) => {
+    const t = /** @type {import('../tablolar/tablo-deposu.mjs').Tablo[]} */ (tablolar).find((x) => x.id === g.split('|')[0]);
+    return t ? satirOzeti(g, t, /** @type {any} */ (r)) : null;
+  }).filter((x) => x !== null) : [];
+  return { degerler, tarihKurallari: tarih, gizliler, eksikNedeni, kimlikProfili, kullanilanSatirlar, satirOzetleri };
+}
+
+/**
+ * VERİ KOŞULARI (tablolar/veri-kosulari.mjs): tek istekli servis senaryosunun bu ortamdaki veri koşuları — senaryonun gövde / başlık /
+ * yolundaki ${Tablo.Sütun} gruplarından ve içerikteki çalıştırma biçiminden (icerik.veriKosulari). Çoklu yoksa kosular boş (bugünkü
+ * gibi tek çalıştırma). Akış senaryosunda boş.
+ * @param {Veritabani} vt @param {string} projeId @param {{ icerik: any }} s @param {string} ortamId @param {string | null} [kip] koşu anı ezmesi
+ */
+export function servisVeriKosulari(vt, projeId, s, ortamId, kip = null) {
+  const icerik = s.icerik ?? {};
+  if (icerik.tur === 'akis') return { kosular: [], hatalar: [], cokluGruplar: [] };
+  const metin = [icerik.govde ?? '', ...Object.values(icerik.basliklar ?? {}), icerik.http?.yol ?? ''].join('\n');
+  const refler = kullanilanParametreler(metin).map((ad) => (/[.[]/.test(ad) ? basvuruCoz(ad) : null)).filter((b) => b !== null);
+  if (!refler.length) return { kosular: [], hatalar: [], cokluGruplar: [] };
+  const tablolar = tablolariListele(vt, projeId);
+  /** @type {Map<string, { anahtar: string; tablo: any; etiket: string }>} */
+  const gruplar = new Map();
+  for (const b of refler) {
+    const t = tabloBul(tablolar, b.tablo);
+    if (!t) continue;
+    const anahtar = grupAnahtari(t.id, b.etiket);
+    if (!gruplar.has(anahtar)) gruplar.set(anahtar, { anahtar, tablo: t, etiket: b.etiket });
+  }
+  return veriKosulariniAc(icerik.veriKosulari, { tablolar, gruplar: [...gruplar.values()], ortamId, kip, tabloSecimleri: icerik.tabloSecimleri ?? null });
+}
+
+/**
+ * Senaryonun bu ortamdaki çalıştırmaları: çoklu değilse tek (bugünkü), çoklu ise her veri koşusu ("Senaryo [ad]"). Bu ortamda
+ * koşulacak satır yoksa hata; tek senaryodaki üst sınır (Ayarlar > Koşu) aşılırsa sinirAsildi (koşu başlatılmaz).
+ * @param {Veritabani} vt @param {string} projeId @param {{ baslik: string; icerik: any }} s @param {string} ortamId
+ * @returns {{ hata: string | null; sinirAsildi: boolean; calistirmalar: Array<{ baslik: string; veriKosusu: { anahtar: string; ad: string; sabit: Record<string, string> } | null }> }}
+ */
+export function servisCalistirmalari(vt, projeId, s, ortamId) {
+  const r = servisVeriKosulari(vt, projeId, s, ortamId);
+  if (r.hatalar.length) return { hata: r.hatalar.join(' '), sinirAsildi: false, calistirmalar: [] };
+  const sinir = (() => { try { return kosuAyarlariniOku(vt).enCokVeriKosusu; } catch { return 50; } })();
+  if (r.kosular.length > sinir) {
+    return { hata: `"${s.baslik}" bu ortamda ${r.kosular.length} veri koşusu çıkarıyor; tek senaryoda en çok ${sinir} olabilir (Ayarlar > Koşu). Senaryonun satır seçimini daraltın.`, sinirAsildi: true, calistirmalar: [] };
+  }
+  if (!r.kosular.length) return { hata: null, sinirAsildi: false, calistirmalar: [{ baslik: s.baslik, veriKosusu: null }] };
+  return { hata: null, sinirAsildi: false, calistirmalar: r.kosular.map((k) => ({ baslik: `${s.baslik} [${k.ad}]`, veriKosusu: { anahtar: k.anahtar, ad: k.ad, sabit: k.satirlar } })) };
 }
 
 // ---------------------------------------------------------------------------------------
@@ -689,8 +795,11 @@ export function postmanOnizle(vt, projeId, girdi) {
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ koleksiyon: string; ortam?: string; klasorler: string[]; tabloAdi?: string; gizliler?: string[]; sifreliKaydet?: string[];
  *   akisDegiskenleri?: string[]; degerOrtami?: string | null; tabanOrtami?: string | null; kapsam?: 'test' | 'canli' | 'ikisi';
- *   mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; beklenenImza?: unknown; yapan?: string }} girdi
+ *   mevcutDegerleriKoru?: boolean; etki?: unknown; guncellenecekler?: unknown; beklenenImza?: unknown; yapan?: string;
+ *   tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari> }} girdi
  * - etki: 'onizle' → aktarım denenir ve geri alınır, yalnız etki döner; 'uygula' + beklenenImza: etki değiştiyse yazılmaz (farkli).
+ * - tabanKararlari: var olan servis bir taban adresine bağlıysa ve koleksiyondaki köken farklıysa kullanıcının kararı (yoksa
+ *   TabanKarariHatasi; hiçbir şey yazılmaz). Vazgeç: servisin adresi değişmez, istekler / senaryolar yine aktarılır.
  * - Tablo değer değişikliği (tablolar/tablo-etkisi.mjs): var olan satırın değeri değişiyorsa etki: 'denetle' iken etkilenen senaryo
  *   varsa HİÇBİR ŞEY yazılmaz, { onayGerekli, etki } döner; 'uygula' + guncellenecekler ile aktarım ve seçili senaryo güncellemeleri
  *   tek işlemde yazılır. mevcutDegerleriKoru: var olan satırda dolu hücrenin üzerine yazılmaz.
@@ -794,7 +903,14 @@ function postmanAktarimi(vt, projeId, girdi, yazici) {
         return y && !/^[/?]/.test(y) ? `/${y}` : y;
       };
       const koken = istekler.map((i) => i.koken).find(Boolean);
-      const tabanlar = { ...(mevcut?.ayarlar.tabanlar ?? {}), ...(girdi.tabanOrtami && koken ? { [girdi.tabanOrtami]: koken } : {}) };
+      // Taban adresine bağlı servisin adresi değişecekse kullanıcının kararı (Vazgeç: adres değişmez, diğer içerik yine aktarılır).
+      // Yalnız etki hesabında (onizle) sorulmaz; yeni adres yok sayılır.
+      const karar = tabanKarari(vt, projeId, {
+        servis: mevcut, tabanlar: { ...(mevcut?.ayarlar.tabanlar ?? {}), ...(girdi.tabanOrtami && koken ? { [girdi.tabanOrtami]: koken } : {}) },
+        kararlar: girdi.tabanKararlari, onizleme: girdi.etki === 'onizle'
+      });
+      tabanKarariUygula(vt, projeId, karar, girdi.yapan);
+      const tabanlar = karar.tabanlar;
       /** @type {import('./servis-deposu.mjs').ServisOperasyonu[]} */
       const operasyonlar = [...(mevcut?.ayarlar.operasyonlar ?? [])];
       for (const i of istekler) {
@@ -803,7 +919,8 @@ function postmanAktarimi(vt, projeId, girdi, yazici) {
       if (Object.keys(tabanlar).length) tabanlariOrtamlaraKaydet(vt, projeId, tabanlariDogrula(tabanlar));
       const servisId = servisKaydet(vt, {
         ...(mevcut ? { id: mevcut.id } : {}), projeId, anahtar: kl.anahtar, ad: mevcut?.ad ?? kl.ad, tur: 'rest', yapan: girdi.yapan,
-        ayarlar: { ...(mevcut?.ayarlar ?? {}), yol: yolDogrula(yol), adresler: mevcut?.ayarlar.adresler ?? {}, ...(Object.keys(tabanlar).length ? { tabanlar } : {}), operasyonlar }
+        ayarlar: { ...(mevcut?.ayarlar ?? {}), yol: yolDogrula(yol), adresler: mevcut?.ayarlar.adresler ?? {}, ...(Object.keys(tabanlar).length ? { tabanlar } : {}), operasyonlar,
+          ...(karar.ayir ? { tabanGrubu: undefined } : {}) }
       });
       const basliklar = new Set(servisSenaryolariniListele(vt, servisId).map((x) => x.baslik));
       let eklenen = 0;
@@ -864,8 +981,15 @@ export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
  *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
  *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
  *   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
- *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean }} girdi
+ *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+ *   yetkiTekrari?: { ilkDurumKodu: number; not: string };
+ *   yetkiYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null>;
+ *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }; tekrarKaynagi?: string }} girdi
+ *   veriKosusu: tablodan çoklu satırla koşuda bu çalıştırmanın satırları (başlık "Senaryo [ad]"); tekrarKaynagi: başarısızları tekrar
+ *   çalıştırmada önceki koşu (kayda "Tekrar:" bağı olarak yazılır).
  *   oturumYenile: oturum akışı önbelleği yok sayılıp yeniden koşulur (401 / 403 sonrası iç kullanım).
+ *   yetkiTekrari: bu çalıştırma 401 / 403 sonrası tekrardır (iç kullanım; raporda not). yetkiYenile: akıştaki token adımını yeniden
+ *   çalıştırıp yeni akış değerlerini veren geri çağırma (akış motoru, yalnız kullanıcı "Token'ı yenile, bir kez tekrar dene" seçtiyse verir).
  *   olay: canlı panel için adım bildirimi (istek / yanıt maskeli). sinyal: durdurma (bekleyen istek kesilir).
  *   Servis akışı: akisDegerleri (${akis:Ad} değerleri), ekGizliler (maskelenecek önceki değerler), okumalar (yanıttan okunacak
  *   değerler; açık değerler YALNIZ acikDegerler geri çağırmasıyla, bellekte; kayıtta ve dönüşte gizliler maskeli), akis (kayda
@@ -888,7 +1012,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   if (girdi.senaryoId && (!kayitli || kayitli.servisId !== servis.id)) throw new DepoHatasi('Senaryo bulunamadı.');
   if (!kayitli && !girdi.taslak) throw new DepoHatasi('"senaryoId" ya da "taslak" gerekli.');
   const icerik = kayitli ? kayitli.icerik : senaryoIceriginiDogrula(girdi.taslak?.icerik);
-  const baslik = kayitli?.baslik ?? girdi.taslak?.baslik ?? 'Taslak';
+  const temelBaslik = kayitli?.baslik ?? girdi.taslak?.baslik ?? 'Taslak';
+  const baslik = girdi.veriKosusu?.ad ? `${temelBaslik} [${girdi.veriKosusu.ad}]` : temelBaslik;
   const kapsam = kayitli?.kapsam ?? girdi.taslak?.kapsam ?? 'test';
   if (girdi.tur === 'dene' && tur !== 'test') throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır.');
   if (girdi.tur === 'kosu' && kapsam !== 'ikisi' && kapsam !== tur) throw new DepoHatasi(`Bu senaryo yalnızca ${kapsam === 'test' ? 'test' : 'canlı'} ortamda koşar.`);
@@ -913,7 +1038,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
   /** @type {Record<string, unknown>} */
-  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}) };
+  const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}), ...(girdi.yetkiTekrari ? { yetkiTekrari: girdi.yetkiTekrari } : {}),
+    ...(girdi.tekrarKaynagi ? { tekrarKaynagi: girdi.tekrarKaynagi } : {}) };
   /** @type {'basarili' | 'basarisiz' | 'hata'} */
   let durum = 'hata';
   /** @type {'hazirlik' | 'gonderim' | 'yanit' | 'kontroller'} */
@@ -941,10 +1067,15 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const hamMetin = [icerik.govde, ...Object.values(basliklarHam), http?.yol ?? ''].join('\n');
     const kurallar = servis.ayarlar.tarihKurallari ?? {};
     const kuralRefleri = kuralParametreleri(kullanilanParametreler(hamMetin).filter((a) => Object.hasOwn(kurallar, a)), kurallar).refler.map((r) => `\${${r}}`);
-    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortam.id);
+    // Dosya kontrollerinin beklentilerindeki ${Parametre} / ${Tablo.Sütun} başvuruları da aynı kurallarla çözülür.
+    const dosyaMetinleri = icerik.kontroller.flatMap((k) => (k.tur === 'dosya' ? tanimMetinleri(k.dosya) : []));
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri, ...dosyaMetinleri].join('\n') }, ortam.id,
+      girdi.veriKosusu?.sabit ? { sabit: girdi.veriKosusu.sabit, ...(girdi.veriKosusu.veriler ? { veriler: girdi.veriKosusu.veriler } : {}) } : {});
     gizliler = [...gizliler, ...p.gizliler];
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
+    // Veri koşusu (anahtar / ad) ve kullanılan satırların kimlikleri: sonuç ekranı ve başarısızları tekrar çalıştırma için.
+    if (p.satirOzetleri.length || girdi.veriKosusu?.anahtar) sonuc.veriKosusu = { anahtar: girdi.veriKosusu?.anahtar ?? null, ad: girdi.veriKosusu?.ad ?? null, satirlar: p.satirOzetleri };
     // Aynı "şimdi" ve önbellek gövde / yol / başlık doldurmalarında paylaşılır: zincirli kurallar aynı anı temel alır.
     const doldurma = {
       degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: girdi.simdi ?? baslangic, tarihOnbellegi: new Map(), gizliler, eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız',
@@ -972,9 +1103,24 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const yanit = http
       ? await restIstegi({ ...ortak, metot: http.metot, ...(http.icerikTuru ? { icerikTuru: http.icerikTuru } : {}) })
       : await soapIstegi({ ...ortak, eylem, soapSurumu: servis.ayarlar.soapSurumu });
-    // Oturum değeri (token) sunucuca reddedildiyse: oturum bir kez yenilenip senaryo yeniden denenir (bu deneme kaydedilmez).
-    if (oturumKullanildi && !girdi.oturumYenile && (yanit.durumKodu === 401 || yanit.durumKodu === 403)) {
-      return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true });
+    // Yetki hatası (YALNIZ HTTP 401 / 403): kullanıcının seçimi (akışın "Yetki hatasında" ayarı; seçilmediyse Ayarlar > Koşu) "Token'ı
+    // yenile, bir kez tekrar dene" ise oturum akışı / akıştaki token adımı yeniden çalışır ve istek BİR KEZ tekrarlanır. İlk deneme
+    // ayrı sonuç olarak kaydedilmez; tekrarın sonucunda not olarak görünür. İkinci deneme de reddedilirse sonuç olduğu gibi değerlendirilir.
+    const yetkiHatasi = yanit.durumKodu === 401 || yanit.durumKodu === 403;
+    if (yetkiHatasi && girdi.yetkiTekrari) {
+      sonuc.yetkiTekrari = { ...girdi.yetkiTekrari, ikinciDurumKodu: yanit.durumKodu, not: `${girdi.yetkiTekrari.not}; tekrar da ${yanit.durumKodu} döndü` };
+    }
+    if (yetkiHatasi && !girdi.yetkiTekrari) {
+      const not = `${yanit.durumKodu} alındı, token yenilendi, tekrar denendi`;
+      if (oturumKullanildi && servis.ayarlar.oturumAkisi && yetkiTekrariAcik(vt, servisAkisiGetir(vt, servis.ayarlar.oturumAkisi))) {
+        return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true, yetkiTekrari: { ilkDurumKodu: yanit.durumKodu, not } });
+      }
+      const yeni = girdi.yetkiYenile ? await girdi.yetkiYenile() : null;
+      if (yeni) {
+        return await servisSenaryosuCalistir(vt, projeId, {
+          ...girdi, akisDegerleri: yeni.akisDegerleri, ekGizliler: [...(girdi.ekGizliler ?? []), ...yeni.gizliler], yetkiTekrari: { ilkDurumKodu: yanit.durumKodu, not }
+        });
+      }
     }
     adim = 'kontroller';
     // Yanıttan okuma (akış): gizli değerler kayda / panele yazılmadan önce maskeleme listesine girer.
@@ -990,18 +1136,44 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       if (okumaGizliMi(o, ekAdlar)) gizliler.push(v);
       okumaSonuclari.push({ tur: 'okuma', ad: `Değer okundu: ${o.ad}`, gecti: true, aciklama: okumaGizliMi(o, ekAdlar) ? 'gizli (maskelendi)' : '' });
     }
-    olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(yanit.govde.slice(0, 20_000), gizliler) });
+    // Dosya kontrolü olan senaryoda ikili yanıt (XLSX / PDF…) metin olarak gösterilmez / saklanmaz (yalnız özet).
+    const dosyaVar = icerik.kontroller.some((k) => k.tur === 'dosya');
+    const ikiliYanit = dosyaVar && ikiliMi(yanit.ham ?? Buffer.from(yanit.govde, 'utf8'));
+    const gosterilecekYanit = ikiliYanit ? `(ikili dosya yanıtı: ${yanitDosyaAdi(yanit.basliklar, adres)}, ${(yanit.ham ?? Buffer.alloc(0)).length} bayt — içerik metin olarak saklanmaz)` : yanit.govde;
+    olay('yanit', 'tamam', { durumKodu: yanit.durumKodu, sureMs: yanit.sureMs, yanit: gizlileriMaskele(gosterilecekYanit.slice(0, 20_000), gizliler) });
     // Kontrol değerlerinde ${akis:Ad} (ör. yanıttaki SiparisNo = önceki adımda okunan) çözülür.
     const kontrolListesi = akisDegerleri ? akisKontrolleriniCoz(icerik.kontroller, akisDegerleri) : icerik.kontroller;
-    const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi), ...okumaSonuclari];
+    /** @type {Array<Record<string, unknown>>} */
+    const dosyaEkleri = [];
+    const indirilenDosya = kosu.indirilenDosya;
+    const kontroller = [...kontrolleriDegerlendir(yanit, kontrolListesi, dosyaVar ? {
+      // Dosya dış veridir: bu çalıştırmanın gizlileri + projedeki gizli tablo sütunlarının tüm değerleri kesitlerde maskelenir.
+      adres, gizliler: [...gizliler, ...gizliTabloDegerleri(vt, projeId)], ekGizliAdlar: ekAdlar,
+      // Beklentilerdeki başvurular: ${akis:Ad}, ${Parametre}, ${Tablo.Sütun}, ${tarih:…} — gövdeyle aynı kural; çözülemeyen → undefined.
+      coz: (ifade) => {
+        try { return yerTutuculariDoldur(`\${${ifade}}`, { ...doldurma, kacis: 'yok' }); } catch { return undefined; }
+      },
+      // Dosyanın kendisi yalnız Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (şifreli koşu kaydında) saklanır.
+      sonuc: (r, veri) => {
+        const ek = indirilenDosya === 'her' || (indirilenDosya === 'yalnizHata' && !r.gecti);
+        dosyaEkleri.push({ ...r.dosya, gecti: r.gecti, ...(ek && veri.length <= DOSYA_EKI_SINIRI ? { icerikBase64: veri.toString('base64') } : {}) });
+      }
+    } : {}), ...okumaSonuclari];
+    if (dosyaEkleri.length) sonuc.dosyalar = dosyaEkleri;
+    // "Yanıt sözleşmeye uymalı" (senaryo ayarı; varsayılan kapalı): uyumsuzluk senaryoyu kaldırır (servis-sozlesmesi.mjs).
+    if (icerik.sozlesmeDogrula === true) {
+      const sz = yanitSozlesmesiniDenetle(servis, icerik.operasyon, yanit, (m) => gizlileriMaskele(m, gizliler));
+      kontroller.push(sz.kontrol);
+      sonuc.sozlesme = sz.ozet;
+    }
     durum = kontroller.every((k) => k.gecti) ? 'basarili' : 'basarisiz';
     if (Object.keys(okunan).length) {
       sonuc.okunanlar = Object.fromEntries((girdi.okumalar ?? []).filter((o) => okunan[o.ad] !== undefined).map((o) => [o.ad, okumaGizliMi(o, ekAdlar) ? MASKE : okunan[o.ad]]));
     }
     olay('kontroller', durum === 'basarili' ? 'tamam' : 'hata', { gecen: kontroller.filter((k) => k.gecti).length, toplam: kontroller.length });
     Object.assign(sonuc, {
-      durumKodu: yanit.durumKodu, yanitSureMs: yanit.sureMs, kontroller, ozet: gizlileriMaskele(yanitOzeti(yanit.govde), gizliler),
-      yanit: gizlileriMaskele(yanit.govde.length > YANIT_SAKLAMA_SINIRI ? `${yanit.govde.slice(0, YANIT_SAKLAMA_SINIRI)}\n…(kırpıldı)` : yanit.govde, gizliler)
+      durumKodu: yanit.durumKodu, yanitSureMs: yanit.sureMs, kontroller, ozet: ikiliYanit ? '' : gizlileriMaskele(yanitOzeti(yanit.govde), gizliler),
+      yanit: gizlileriMaskele(gosterilecekYanit.length > YANIT_SAKLAMA_SINIRI ? `${gosterilecekYanit.slice(0, YANIT_SAKLAMA_SINIRI)}\n…(kırpıldı)` : gosterilecekYanit, gizliler)
     });
   } catch (e) {
     if (!(e instanceof ServisHatasi) && !(e instanceof DepoHatasi)) throw e;
@@ -1017,6 +1189,41 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   // Açık değerler yalnız çağıran akış motoruna (geri çağırma); dönüş / API yanıtı / kayıt maskeli kalır.
   girdi.acikDegerler?.({ okunan, gizliler });
   return { kosuId, durum, sureMs, baslik, ...sonuc };
+}
+
+/**
+ * KURU ÇÖZÜM (istek GÖNDERİLMEZ, oturum akışı koşulmaz, kayıt yazılmaz): senaryonun bir ortamdaki isteğinin (gövde, REST yolu,
+ * başlıklar) koşudakiyle aynı çözümleyicilerle (parametreDegerleri + yerTutuculariDoldur) doldurulmuş hâli. ${akis:…} değerleri
+ * yer tutucu olarak kalır; "şimdi" sabittir. Tablo birleştirmenin kuru doğrulaması eski / yeni hâli karşılaştırır. Dönen metin
+ * gizli değer içerebilir: YALNIZ bellekte karşılaştırma içindir, yanıta yazılmaz.
+ * @param {Veritabani} vt @param {string} projeId @param {Servis} servis @param {ServisSenaryoIcerigi} icerik @param {string} ortamId
+ * @param {{ simdi: Date; tablolar?: import('../tablolar/tablo-deposu.mjs').Tablo[] }} s
+ * @returns {{ metin: string } | { hata: string }}
+ */
+export function servisIstegiKuruCoz(vt, projeId, servis, icerik, ortamId, s) {
+  try {
+    const opTanimi = servis.ayarlar.operasyonlar?.find((o) => o.ad === icerik.operasyon);
+    const rest = servis.tur === 'rest';
+    const http = rest ? (icerik.http ?? (opTanimi?.metot ? { metot: opTanimi.metot, yol: opTanimi.yol ?? '' } : undefined)) : undefined;
+    if (rest && !http) return { hata: 'REST senaryosunda HTTP metodu / yolu tanımlı değil.' };
+    const basliklarHam = icerik.basliklar ?? {};
+    const hamMetin = [icerik.govde ?? '', ...Object.values(basliklarHam), http?.yol ?? ''].join('\n');
+    const kurallar = servis.ayarlar.tarihKurallari ?? {};
+    const kuralRefleri = kuralParametreleri(kullanilanParametreler(hamMetin).filter((a) => Object.hasOwn(kurallar, a)), kurallar).refler.map((r) => `\${${r}}`);
+    const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri].join('\n') }, ortamId, { tablolar: s.tablolar, satirSecimKipi: 'ilk' });
+    const akisDegerleri = Object.fromEntries(kullanilanAkisDegerleri(hamMetin).map((a) => [a, `\u0000akis:${a}\u0000`]));
+    const doldurma = {
+      degerler: p.degerler, tarihKurallari: p.tarihKurallari, simdi: s.simdi, tarihOnbellegi: new Map(), gizliler: p.gizliler,
+      eksikAciklamasi: (/** @type {string} */ ad) => p.eksikNedeni[ad] ?? 'tanımsız', akisDegerleri, varsayilanTarihBicimi: (() => { try { return kosuAyarlariniOku(vt).tarihBicimi; } catch { return undefined; } })()
+    };
+    const govde = yerTutuculariDoldur(icerik.govde ?? '', http ? { ...doldurma, kacis: govdeKacisi(http.icerikTuru) } : doldurma);
+    const yol = http ? yerTutuculariDoldur(http.yol, { ...doldurma, kacis: 'url' }) : '';
+    const basliklar = Object.entries(basliklarHam).map(([a, d]) => [a, yerTutuculariDoldur(d, { ...doldurma, kacis: /** @type {const} */ ('baslik') })]);
+    return { metin: JSON.stringify([govde, yol, basliklar]) };
+  } catch (e) {
+    if (e instanceof ServisHatasi || e instanceof DepoHatasi) return { hata: e.message };
+    throw e;
+  }
 }
 
 /**
@@ -1071,11 +1278,16 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
     : tanimli && (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))));
   const sonuclar = [];
   for (const s of kosulacak) {
-    const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs });
-    sonuclar.push({ senaryoId: s.id, baslik: s.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') });
+    // Veri koşuları (tablodan çoklu satır): her satır / kombinasyon ayrı çalıştırma; çoklu değilse tek (bugünkü).
+    const c = akisMi(s) ? { hata: null, calistirmalar: [{ baslik: s.baslik, veriKosusu: null }] } : servisCalistirmalari(vt, projeId, s, ortam.id);
+    if (c.hata) { sonuclar.push({ senaryoId: s.id, baslik: s.baslik, durum: 'hata', sureMs: 0, kosuId: null, ozet: c.hata }); continue; }
+    for (const k of c.calistirmalar) {
+      const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs, ...(k.veriKosusu ? { veriKosusu: k.veriKosusu } : {}) });
+      sonuclar.push({ senaryoId: s.id, baslik: k.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') });
+    }
   }
   return {
-    ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, ...(tanimli ? {} : { atlamaNedeni: `Servis "${ortam.ad}" ortamında tanımlı değil (taban adres boş).` }), sonuclar,
+    ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, ...(tanimli ? {} : { atlamaNedeni: tanimsizNedeni(servis.ayarlar, ortam.ad) }), sonuclar,
     ozet: { basarili: sonuclar.filter((x) => x.durum === 'basarili').length, basarisiz: sonuclar.filter((x) => x.durum === 'basarisiz').length, hata: sonuclar.filter((x) => x.durum === 'hata').length }
   };
 }

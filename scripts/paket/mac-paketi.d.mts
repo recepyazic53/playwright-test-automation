@@ -1,5 +1,5 @@
 // scripts/paket/mac-paketi.mjs için tip bildirimi.
-import type { TarKaydi } from './arsiv.mjs';
+import type { TarKaydi } from '../platform/dosyalar/arsiv.mjs';
 
 export type MacMimarisi = 'arm64' | 'x64';
 export declare const UYGULAMA_ADI: string;

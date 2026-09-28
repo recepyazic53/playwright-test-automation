@@ -322,8 +322,9 @@ const ILK_ADIMLAR = [
 ];
 const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa');
 let sihirbazModu = 'ilk';
-/** Tanışma cevapları (varsayılanlar: en yaygın kurulum). */
-const VARSAYILAN_CEVAPLAR = Object.freeze({ hedef: 'ikisi', ortam: 'test', giris: 'evet' });
+/** Tanışma cevabı (varsayılan: en yaygın kurulum). Yalnız ortam sorusu kalır (hazır CANLI satırını belirler); eski sürümlerin
+ * "ne test edeceksiniz" / "giriş var mı" soruları hiçbir şeyi etkilemediği için kaldırıldı, eski cevaplar yok sayılır. */
+const VARSAYILAN_CEVAPLAR = Object.freeze({ ortam: 'test' });
 const cevaplar = { ...VARSAYILAN_CEVAPLAR };
 const sihirbazAdimlari = () => (sihirbazModu === 'ek' ? EK_ADIMLAR : ILK_ADIMLAR);
 
@@ -385,24 +386,15 @@ function soruGrubu(soru, anahtar, secenekler) {
 let adSayaci = 0;
 const yeniKimlikAdi = (onEk) => `${onEk}-${++adSayaci}`;
 
-/** TANIŞMA: ne test edileceği, ortamlar ve girişin olup olmadığı. */
+/** TANIŞMA: testlerin hangi ortamlarda çalışacağı. */
 function sihirbazTanisma() {
   const devam = h('button', { type: 'submit', class: 'birincil' }, 'Devam', ikon('ok'));
   const form = h('form', { class: 'kart tanisma-karti', novalidate: true, 'aria-label': 'Tanışma soruları' },
     h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('pusula'), 'Sizi tanıyalım')),
-    h('p', { class: 'soluk' }, 'Birkaç soruyla kurulumu size göre hazırlayalım. Cevaplarınızı sonra Ayarlar\'dan istediğiniz gibi değiştirebilirsiniz.'),
-    soruGrubu('Ne test edeceksiniz?', 'hedef', [
-      ['web', 'Web ekranları', 'Tarayıcıda açılan sayfalar (form doldurma, akışlar).'],
-      ['servis', 'Servisler', 'SOAP / REST servisleri (tarayıcısız).'],
-      ['ikisi', 'İkisi de', 'Hem ekranlar hem servisler.']
-    ]),
+    h('p', { class: 'soluk' }, 'Kurulumu size göre hazırlayalım. Ortamları sonra Ayarlar\'dan istediğiniz gibi değiştirebilirsiniz.'),
     soruGrubu('Testler hangi ortamlarda çalışacak?', 'ortam', [
       ['test', 'Yalnızca test ortamı', 'Önerilen başlangıç.'],
       ['testCanli', 'Test ve canlı', 'Riskli ortamda kayıt oluşturan "yalnızca test ortamı" adımları atlanır.']
-    ]),
-    soruGrubu('Uygulamanıza giriş yaparak mı erişiliyor?', 'giris', [
-      ['evet', 'Evet', 'Kullanıcı adı ve parola ile giriş (Ayarlar > Giriş profilleri).'],
-      ['hayir', 'Hayır', 'Sayfalar girişsiz açılıyor.']
     ]),
     h('div', { class: 'dugmeler' }, devam, sihirbazModu === 'ilk' && kasaYok()
       ? h('button', { type: 'button', class: 'hayalet', onclick: () => hosgeldin() }, ikon('geri'), 'Geri')
@@ -411,7 +403,7 @@ function sihirbazTanisma() {
     olay.preventDefault();
     if (sihirbazModu === 'ilk' && kasaYok()) sihirbazKasa(); else sihirbazProje();
   });
-  sihirbazEkrani('tanisma', sihirbazBasligi(), 'Kurulumu size göre hazırlamak için birkaç soru.', form);
+  sihirbazEkrani('tanisma', sihirbazBasligi(), 'Kurulumu size göre hazırlamak için kısa bir soru.', form);
 }
 
 function sihirbazKasa() {
@@ -520,7 +512,7 @@ function sihirbazOrtamlar() {
   };
   ortamSatiri(true);
   if (cevaplar.ortam === 'testCanli') ortamSatiri(false, 'CANLI', true);
-  const ekleDugmesi = h('button', { type: 'button', onclick: () => ortamSatiri(false).ad.focus() }, '+ Ortam ekle');
+  const ekleDugmesi = h('button', { type: 'button', onclick: () => ortamSatiri(false).ad.focus() }, ikon('arti'), 'Ortam ekle');
   const mesaj = mesajKutusu();
   const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet ve devam', ikon('ok'));
   const form = h('form', { class: 'kart', novalidate: true },
@@ -598,7 +590,7 @@ function sihirbazTamam() {
       h('ul', { class: 'ozet-ortamlar' }, ortamlar.map((o) => h('li', {},
         h('strong', {}, o.ad),
         o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : '',
-        riskliSecimi(o) === true ? h('span', { class: 'rozet hata' }, 'Riskli') : h('span', { class: 'rozet basari' }, 'Riskli değil'),
+        riskliSecimi(o) === true ? h('span', { class: 'rozet hata' }, 'Riskli') : riskliSecimi(o) === null ? h('span', { class: 'rozet uyari' }, 'Riskli mi? belirtin') : null,
         h('span', { class: 'mono soluk' }, o.tabanUrl)))));
   }).catch((hata) => { ozet.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); });
 }
@@ -692,7 +684,7 @@ function kilitEkrani(beklemeSaniye) {
 
 function projeSecici() {
   const acik = () => menu.hidden === false;
-  const dugme = h('button', { type: 'button', class: 'proje-secici', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: 'Etkin proje' },
+  const dugme = h('button', { type: 'button', class: 'proje-secici', 'aria-haspopup': 'menu', 'aria-expanded': 'false', title: `Etkin proje: ${durum.proje.ad}` },
     h('span', { class: 'avatar', 'aria-hidden': 'true' }, basHarf(durum.proje.ad)),
     h('b', { id: 'proje-rozeti' }, durum.proje.ad),
     durum.proje.aciklama ? h('span', { class: 'aciklama' }, durum.proje.aciklama) : null,
@@ -712,7 +704,7 @@ function projeSecici() {
     h('div', { class: 'menu-baslik', 'aria-hidden': 'true' }, alan && !alan.sabit ? `Projeler · ${alan.ad}` : 'Projeler'),
     durum.projeler.map(satir),
     h('hr', {}),
-    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('tanisma', 'ek'); } }, ikon('artiYalin'), 'Yeni proje'),
+    h('button', { type: 'button', role: 'menuitem', class: 'yeni-proje', onclick: () => { kapat(); sihirbaz('tanisma', 'ek'); } }, ikon('arti'), 'Proje ekle'),
     h('button', { type: 'button', role: 'menuitem', onclick: () => { kapat(); location.hash = '#/ayarlar/proje'; } }, ikon('duzenle'), 'Projeyi düzenle'));
   dugme.addEventListener('click', () => {
     if (acik()) { kapat(); return; }
@@ -834,6 +826,13 @@ function anaDuzen() {
       sayfaBasligi('Servisler');
       servislerModulu().then((m) => m.servislerEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
         .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Servisler yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
+    } else if (bolum === 'akislar') {
+      // Uçtan uca akışlar (servis + ekran + SQL; uctan-uca.js): Senaryolar bölümünün sol panelinde.
+      navSenaryolar.setAttribute('aria-current', 'page');
+      main.className = 'ana-icerik';
+      sayfaBasligi('Uçtan uca akışlar');
+      import('./uctan-uca.js').then((m) => m.uctanUcaEkrani(main, alt ? [alt, ...kalan] : [], { durum }))
+        .catch((hata) => main.replaceChildren(h('div', { class: 'icerik-alani' }, mesajKutusuHata(`Uçtan uca akışlar yüklenemedi (${hata.message}). Sunucuyu yeniden başlatın (npm run baslat).`))));
     } else if (bolum === 'ekranlar') {
       navEkranlar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
@@ -855,7 +854,7 @@ function anaDuzen() {
     }
   };
   // Ekran rehberi: ilk girişte (tercih açıksa) kendiliğinden başlar; "?" her zaman yeniden açar.
-  const cizVeRehber = () => { ciz(); rehberOtomatikDene(rehberAnahtari(location.hash)); };
+  const cizVeRehber = () => { ciz(); etkinGezinmeyiGoster(); rehberOtomatikDene(rehberAnahtari(location.hash)); };
   window.addEventListener('hashchange', cizVeRehber);
   // Otomatik kilit: sunucu kasayı hareketsizlik sonrası kilitler; arayüz bunu periyodik durum
   // sorgusuyla (etkinlik SAYILMAZ) fark edip kilit ekranına döner. Aynı sorgu sunucu hapını da günceller.
@@ -901,6 +900,21 @@ function ayarlarEkrani(main, bolum, odak = null) {
         h('div', { class: 'yan-not' }, h('b', {}, 'Kasa'), h('br', {}), 'Parolalar, anahtarlar ve hassas test verileri şifreli saklanır; burada maskeli görünür.')),
       icerik));
   ayarlarBolumu(icerik, bolum, { durum, yonlendir, projeSec, projeleriYenile, odak });
+}
+
+/** Dar ekranda yatay kayan menülerde (ana menü, Ayarlar bölümleri) etkin öğe görünür alana kaydırılır (sayfa kaymaz). */
+function etkinGezinmeyiGoster() {
+  requestAnimationFrame(() => {
+    for (const nav of document.querySelectorAll('.ust-nav, .alt-nav')) {
+      if (nav.scrollWidth <= nav.clientWidth + 1) continue;
+      const etkin = nav.querySelector('[aria-current="page"]');
+      if (!etkin) continue;
+      const n = nav.getBoundingClientRect();
+      const e = etkin.getBoundingClientRect();
+      if (e.left < n.left) nav.scrollLeft -= n.left - e.left + 8;
+      else if (e.right > n.right) nav.scrollLeft += e.right - n.right + 8;
+    }
+  });
 }
 
 cikisKorumasiniKur();

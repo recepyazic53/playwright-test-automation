@@ -4,7 +4,7 @@
 // döner, açıkça "Kayıtlı değeri göster" istenmedikçe düz metin gelmez.
 import {
   adresGecerliMi, alan, alanHatasi, api, bildir, bosDurum, boyutMetni, geriSayim, h, ikon, iskelet, kullaniciAyarlariniTazele, mesajKutusu, mesgulIken,
-  onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
+  kisaAciklama, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { veriKlasoruKarti, yedekKlasoruBolumu } from './veri-klasoru.js';
@@ -21,7 +21,7 @@ import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, ris
 export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
-  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Tablolar: sütunlar alan, her satır birlikte geçerli değerler (kanal | kullanıcı | parola, kapsam | alternatif | ülke…). Ekran input\'ları ve servis alanları sütunlara bağlanır; senaryoda seçtikçe süzülür. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
+  { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi, ekran taraması / akış kaydı süreleri ve zamanlanmış koşular. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
@@ -50,7 +50,8 @@ export function ayarlarBolumu(kapsayici, bolum, baglam) {
     h('div', { class: 'kirinti' }, h('span', {}, baglam.durum.proje ? baglam.durum.proje.ad : ''), h('span', { 'aria-hidden': 'true' }, '/'),
       h('span', {}, 'Ayarlar'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, tanim.etiket)),
     h('h2', { id: 'bolum-basligi', tabindex: '-1' }, tanim.etiket),
-    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, tanim.aciklama)));
+    // En çok 1–2 cümle; ayrıntı "?" ipucunda ve rehberde (bilgi kaybolmaz).
+    h('p', { class: 'soluk kucuk bolum-aciklamasi' }, kisaAciklama(tanim.aciklama, tanim.etiket))));
   const govde = h('div', {}, iskelet('sayfa'));
   kapsayici.replaceChildren(baslik, govde);
   const yenile = () => ayarlarBolumu(kapsayici, bolum, baglam);
@@ -222,7 +223,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null,
       riskBelirtilmemisMi(o)
         ? [' ', h('button', { type: 'button', class: 'rozet uyari risk-belirtin-rozeti', title: 'Riskli olup olmadığı seçilmemiş; seçilene kadar riskli sayılır', onclick: () => ortamFormu(o) }, ikon('uyari'), 'Riskli mi? belirtin')]
-        : riskliOrtamMi(o) ? [' ', h('span', { class: 'rozet hata', title: 'Gerçek işlem oluşturabilir: her çalıştırmada onay; akış kaydı kapalı' }, 'Riskli')] : [' ', h('span', { class: 'rozet basari' }, 'Riskli değil')]],
+        : riskliOrtamMi(o) ? [' ', h('span', { class: 'rozet hata', title: 'Gerçek işlem oluşturabilir: her çalıştırmada onay; akış kaydı kapalı' }, 'Riskli')] : null],
     h('span', { class: 'mono' }, o.tabanUrl),
     [duzenleDugmesi(o.ad, () => ortamFormu(o)),
       gecmisDugmesi(`${o.ad} risk seçimi`, () => gecmisGoster('ortam_riski', o.id, `${o.ad} — riskli mi?`, baglam)),
@@ -232,7 +233,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
 
   yerlestir(govde,
     projeFormu,
-    bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, '+ Ortam ekle')),
+    bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, ikon('arti'), 'Ortam ekle')),
     formAlani,
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,
     kayitListesi(satirlar, 'Henüz ortam yok.', 'ag'),
@@ -376,7 +377,7 @@ async function girisProfilleri(govde, baglam, yenile) {
 
   const tarifAlani = h('section', { class: 'giris-tarifi-bolumu', 'aria-label': 'Giriş tarifi' }, iskelet('liste'));
   govde.replaceChildren(
-    bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, '+ Giriş profili ekle')),
+    bolumBasligi('Profiller', profiller.length, h('button', { type: 'button', class: 'birincil', onclick: () => profilFormu(null) }, ikon('arti'), 'Giriş profili ekle')),
     formAlani,
     kayitListesi(satirlar, 'Henüz giriş profili yok.', 'kullanici'),
     tarifAlani);
@@ -391,7 +392,13 @@ async function girisProfilleri(govde, baglam, yenile) {
 // ---------------------------------------------------------------------------------------
 
 async function testVerisi(govde, baglam) {
-  return tablolarBolumu(govde, baglam.durum.proje);
+  // Tablolar (kendi içinde yeniden çizilir) + altta "Test verisi ayarları" (Kullanıcı kararları; ör. birleştirme önerisi eşiği).
+  const tablolarKap = h('div', { class: 'test-verisi-tablolari' });
+  const ayarKap = h('section', { class: 'kart form-paneli test-verisi-ayarlari', 'aria-labelledby': 'test-verisi-ayarlari-basligi' },
+    h('h3', { id: 'test-verisi-ayarlari-basligi' }, ikon('ayar'), 'Test verisi ayarları'));
+  yerlestir(govde, tablolarKap, ayarKap);
+  const [, form] = await Promise.all([tablolarBolumu(tablolarKap, baglam.durum.proje), ayarFormu('testVerisi', 'Test verisi ayarları', 'Test verisi ayarları kaydedildi.', { baslik: 'Veri sağlığı önerileri' })]);
+  ayarKap.append(form);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -671,13 +678,32 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   const grupKabi = (g, tekGrup, ...cocuklar) => (gomulu && tekGrup ? h('div', { class: 'ayar-grubu' }, ...cocuklar) : h('fieldset', {}, h('legend', {}, g), ...cocuklar));
   const grupAlanlari = (liste) => [...new Set(liste.map((t) => t.grup))].map((g, _i, gruplar) => grupKabi(g, gruplar.length === 1, ...liste.filter((t) => t.grup === g).map((t) => {
       let girdi;
+      if (t.tur === 'onay') {
+        // Açık / kapalı ayar: onay kutusu (etiket kutunun yanında; yardım ve pasif açıklaması altında).
+        girdi = h('input', { type: 'checkbox', id: yeniKimlik('ayar'), checked: ayarlar[t.anahtar] === true });
+        girdiler.set(t.anahtar, girdi);
+        const yardimId = `${girdi.id}-yardim`;
+        girdi.setAttribute('aria-describedby', `${yardimId} ${girdi.id}-hata`);
+        const kutu = h('div', { class: 'alan onay-alani' },
+          h('label', { class: 'secenek', for: girdi.id }, girdi, t.etiket),
+          h('div', { class: 'yardim', id: yardimId }, kisaAciklama(t.aciklama, t.etiket), ` Varsayılan: ${t.varsayilan ? 'açık' : 'kapalı'}.`),
+          h('div', { class: 'alan-hatasi', id: `${girdi.id}-hata`, role: 'alert' }));
+        if (t.etkinKosul) {
+          const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);
+          girdi.setAttribute('aria-describedby', `${girdi.getAttribute('aria-describedby')} ${not.id}`);
+          kutu.insertBefore(not, kutu.querySelector('.yardim'));
+          kosulluAlanlar.push({ t, girdi, kutu, not });
+        }
+        return kutu;
+      }
       if (t.tur === 'secim') girdi = h('select', {}, t.secenekler.map(([d, e]) => h('option', { value: d, selected: ayarlar[t.anahtar] === d }, e)));
       else if (t.tur === 'sayi') girdi = h('input', { type: 'number', min: String(t.enAz), max: String(t.enCok), step: '1', inputmode: 'numeric', value: String(ayarlar[t.anahtar]) });
       else girdi = h('input', { type: 'text', value: String(ayarlar[t.anahtar]), spellcheck: 'false', autocomplete: 'off', class: 'kod-girdisi' });
       girdiler.set(t.anahtar, girdi);
       const varsayilan = t.tur === 'secim' ? (t.secenekler.find(([d]) => d === t.varsayilan) || [])[1] : `${t.varsayilan}${t.birim ? ` ${t.birim}` : ''}`;
       const sinir = t.tur === 'sayi' ? `${t.enAz}–${t.enCok}${t.birim ? ` ${t.birim}` : ''}; ` : '';
-      const kutu = alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: `${t.aciklama} ${sinir}Varsayılan: ${varsayilan}.` });
+      // Uzun açıklama: 1–2 cümle görünür, ayrıntı "?" ipucunda; sınırlar ve varsayılan her zaman görünür.
+      const kutu = alan(`${t.etiket}${t.birim ? ` (${t.birim})` : ''}`, girdi, { yardim: h('span', {}, kisaAciklama(t.aciklama, t.etiket), ` ${sinir}Varsayılan: ${varsayilan}.`) });
       if (t.etkinKosul) {
         // Bağlı ayar (etkinKosul) bu değerde değilken alan pasif; neden alanın altında yazar (değer korunur, kaydedilir).
         const not = h('div', { class: 'yardim pasif-aciklamasi', id: `${girdi.id}-pasif` }, t.etkinKosul.pasifAciklama);
@@ -702,7 +728,8 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
   for (const k of kosulluAlanlar) {
     const bagli = girdiler.get(k.t.etkinKosul.anahtar);
     const guncelle = () => {
-      const pasif = !bagli || bagli.value !== k.t.etkinKosul.deger;
+      const etkinDegerler = k.t.etkinKosul.degerler || [k.t.etkinKosul.deger];
+      const pasif = !bagli || !etkinDegerler.includes(bagli.value);
       k.girdi.disabled = pasif;
       k.kutu.classList.toggle('pasif', pasif);
       k.not.hidden = !pasif;
@@ -718,6 +745,7 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
     const yeni = {};
     for (const t of tanimlar) {
       const g = girdiler.get(t.anahtar);
+      if (t.tur === 'onay') { yeni[t.anahtar] = g.checked; continue; }
       if (t.tur === 'sayi') {
         const n = Number(g.value);
         if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) {
@@ -793,7 +821,7 @@ async function guvenlik(govde, baglam) {
   const saklamaMesaj = mesajKutusu();
   const saklamaKaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
   const saklamaForm = h('form', { class: 'kart', novalidate: true }, h('h3', {}, ikon('video'), 'Video saklama süresi'),
-    h('p', { class: 'soluk' }, 'Koşu videoları şifreli olarak saklanır; bu süreden eski videolar günlük temizlikte silinir. Ekran görüntüleri, izler ve sonuçlar silinmez.'),
+    h('p', { class: 'soluk' }, 'Koşu videoları şifreli olarak saklanır; bu süreden eski videolar günlük temizlikte silinir. Ekran görüntüleri, izler ve sonuçlar burada silinmez. Sonuçların medyasını daha önce inceltmek (ör. başarılı testlerin videoları) ya da sonuçları silmek için: Ayarlar > Yedekleme > Sonuç saklama. Hangisinin süresi önce dolarsa video o zaman silinir.'),
     saklamaMesaj.kutu,
     alan('Süre (gün)', gun, { yardim: `1–365 gün; varsayılan ${ayar.videoSaklamaVarsayilan}.` }),
     h('div', { class: 'dugmeler' }, saklamaKaydet));

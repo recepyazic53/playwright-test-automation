@@ -18,7 +18,15 @@ export declare function tabloDegerListeleri(baglar: Record<string, { tablo: stri
   id: string; ad: string; tur: 'liste'; kullanim: 'ekran'; hedef: { ekranId: string; alan: string }; baglanti: { tablo: string; sutun: string; etiket?: string }; kosullar: Array<{ alan: string; deger: string }>; degerler: Array<{ deger: string; ekranDegeri?: string }>;
 }>;
 export declare function servisDegeri(sutun: Sutun, deger: string): string;
-export interface SatirSecimi { kip?: string; rastgele?: () => number; onbellek?: Map<string, Satir | undefined> }
+export interface SatirSecimi {
+  kip?: string; rastgele?: () => number; onbellek?: Map<string, Satir | undefined>;
+  /** Grup anahtarı → satır kimliği (veri koşusu / tekrar koşusu: grubun satırı sabit). */
+  sabit?: Record<string, string>;
+  /** Grup anahtarı → satırın o koşudaki değerleri ("o koşudaki veriyle" tekrar; yalnız gizli sütunsuz tabloda uygulanır). */
+  veriler?: Record<string, Record<string, string | null>>;
+  /** Koşuda kullanılan satırlar (grup anahtarı → satır). */
+  kullanilan?: Map<string, Satir>;
+}
 export declare function satirSecimiOlustur(kip: unknown, rastgele?: () => number): SatirSecimi;
 export declare function secilenSatir<T extends Satir>(tablo: { id?: string; sutunlar: Sutun[]; satirlar: T[] }, secim: Record<string, string>, ortamId?: string | null,
   satirSecimi?: SatirSecimi, grup?: string): T | undefined;

@@ -12,7 +12,7 @@
 //     tanınmazsa anlaşılır hata. Dosya: değer (sayfa karşılığı) dosya ADIDIR; alanın uzantı kuralı (kabul) ve verilirse dosyaDenetle
 //     (izinli klasör / varlık; veri-oku.mjs) uygulanır; gizli sütundan dosya alınmaz.
 // Düz metin değerler aynen kalır (geriye uyum; senaryolar göç ettirilmez). Saf modül (vt yok).
-import { basvuruyuCoz, degerBasvurusu, grupAnahtari, sayfaDegeri, sutunBul } from './tablo-secimi.mjs';
+import { basvuruCoz, basvuruyuCoz, degerBasvurusu, grupAnahtari, sayfaDegeri, sutunBul } from './tablo-secimi.mjs';
 import { modelAlanlari } from './paket-tablolari.mjs';
 
 /** @typedef {import('./tablo-secimi.mjs').Tablo} Tablo */
@@ -109,22 +109,7 @@ export function ekranBasvurulariniCoz(veri, s) {
   let cozulen = 0;
   const basvurulu = Object.entries(veri).filter(([, v]) => degerBasvurusu(v));
   if (!basvurulu.length) return { veri: sonuc, gizliDegerler, hatalar, cozulen };
-  // Seçimler: içerikteki açık seçimler + bağlı alanların düz değerleri.
-  /** @type {Record<string, Record<string, string>>} */
-  const secimler = {};
-  for (const [k, v] of Object.entries(nesneMi(s.tabloSecimleri) ? /** @type {Record<string, Record<string, string>>} */ (s.tabloSecimleri) : {})) {
-    if (nesneMi(v)) secimler[k] = { ...v };
-  }
-  for (const [alanId, b] of Object.entries(s.baglar ?? {})) {
-    const anahtar = s.alanAnahtarlari?.[alanId];
-    const v = anahtar ? veri[anahtar] : undefined;
-    if (typeof v !== 'string' || !v.trim() || degerBasvurusu(v)) continue;
-    const t = s.tablolar.find((x) => x.id === b.tablo);
-    const sutun = t ? sutunBul(t, b.sutun) : undefined;
-    if (!t || !sutun || sutun.gizli) continue;
-    const g = (secimler[grupAnahtari(t.id, b.etiket || '')] ??= {});
-    if (g[sutun.ad] === undefined) g[sutun.ad] = v;
-  }
+  const secimler = senaryoSecimleri(veri, s);
   for (const [anahtar, ham] of basvurulu) {
     const b = /** @type {import('./tablo-secimi.mjs').Basvuru} */ (degerBasvurusu(ham));
     const c = basvuruyuCoz(s.tablolar, b, secimler, s.ortamId, s.satirSecimi);
@@ -146,6 +131,57 @@ export function ekranBasvurulariniCoz(veri, s) {
     if (c.sutun.gizli) gizliDegerler.push(...new Set([c.deger, ...(typeof e.deger === 'string' ? [e.deger] : [])]));
   }
   return { veri: sonuc, gizliDegerler, hatalar, cozulen };
+}
+
+/**
+ * Metinlerin İÇİNDEKİ ${Tablo.Sütun} / ${Tablo[etiket].Sütun} başvuruları (ör. indirilen dosyanın "metin içeriyor" beklentisi): senaryonun
+ * seçimleriyle ve ortamla uyan satırdan, TABLODAKİ değer (sayfa karşılığı değil). ${akis:…} ve tablo başvurusu olmayan ${…} atlanır
+ * (koşucu çözer). Döner: başvurunun içi → değer; gizli sütunun değerleri; çözülemeyenler (koşu tarayıcı açılmadan durur).
+ * @param {ReadonlyArray<string>} metinler @param {Record<string, unknown>} veri senaryonun bu ortamdaki verisi (seçimler için)
+ * @param {Parameters<typeof ekranBasvurulariniCoz>[1]} s
+ * @returns {{ degerler: Record<string, string>; gizliDegerler: string[]; hatalar: Array<{ alan: string; mesaj: string }> }}
+ */
+export function metinBasvurulariniCoz(metinler, veri, s) {
+  /** @type {Record<string, string>} */
+  const degerler = {};
+  /** @type {string[]} */
+  const gizliDegerler = [];
+  /** @type {Array<{ alan: string; mesaj: string }>} */
+  const hatalar = [];
+  const icler = [...new Set(metinler.flatMap((m) => [...String(m).matchAll(/\$\{\s*([^{}]+?)\s*\}/g)].map((x) => x[1])))]
+    .filter((ic) => !ic.startsWith('akis:') && basvuruCoz(ic));
+  if (!icler.length) return { degerler, gizliDegerler, hatalar };
+  const secimler = senaryoSecimleri(veri, s);
+  for (const ic of icler) {
+    const c = basvuruyuCoz(s.tablolar, /** @type {import('./tablo-secimi.mjs').Basvuru} */ (basvuruCoz(ic)), secimler, s.ortamId, s.satirSecimi);
+    if (!('deger' in c)) { hatalar.push({ alan: ic, mesaj: `İndirilen dosyanın beklentisindeki \${${ic}} test verisinden alınamadı: ${c.hata}.` }); continue; }
+    degerler[ic] = c.deger;
+    if (c.sutun.gizli) gizliDegerler.push(c.deger);
+  }
+  return { degerler, gizliDegerler, hatalar };
+}
+
+/**
+ * Senaryonun tablo seçimleri: içerikteki açık seçimler + tabloya bağlı alanların düz değerleri.
+ * @param {Record<string, unknown>} veri @param {Parameters<typeof ekranBasvurulariniCoz>[1]} s
+ */
+function senaryoSecimleri(veri, s) {
+  /** @type {Record<string, Record<string, string>>} */
+  const secimler = {};
+  for (const [k, v] of Object.entries(nesneMi(s.tabloSecimleri) ? /** @type {Record<string, Record<string, string>>} */ (s.tabloSecimleri) : {})) {
+    if (nesneMi(v)) secimler[k] = { ...v };
+  }
+  for (const [alanId, b] of Object.entries(s.baglar ?? {})) {
+    const anahtar = s.alanAnahtarlari?.[alanId];
+    const v = anahtar ? veri[anahtar] : undefined;
+    if (typeof v !== 'string' || !v.trim() || degerBasvurusu(v)) continue;
+    const t = s.tablolar.find((x) => x.id === b.tablo);
+    const sutun = t ? sutunBul(t, b.sutun) : undefined;
+    if (!t || !sutun || sutun.gizli) continue;
+    const g = (secimler[grupAnahtari(t.id, b.etiket || '')] ??= {});
+    if (g[sutun.ad] === undefined) g[sutun.ad] = v;
+  }
+  return secimler;
 }
 
 /**

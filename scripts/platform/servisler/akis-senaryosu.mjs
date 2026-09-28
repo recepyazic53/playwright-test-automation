@@ -65,7 +65,7 @@ export function akisSenaryoAtlamaNedeni(vt, s, ortam) {
     if (a.tur === 'sql') continue;
     const sv = servisGetir(vt, a.servisId);
     if (!sv) return `"${a.ad}" adımının servisi bulunamadı.`;
-    if (!ortamdaTanimli(sv.ayarlar, ortam.id)) return `"${sv.ad}" servisi "${ortam.ad}" ortamında tanımlı değil.`;
+    if (!ortamdaTanimli(sv.ayarlar, ortam.id)) return `"${sv.ad}" servisi "${ortam.ad}" ortamında tanımlı değil: taban adresi tanımlı değil${sv.ayarlar.tabanGrubu ? ` ("${sv.ayarlar.tabanGrubu}" taban adresinin bu ortamda adresi yok)` : ''}.`;
     const op = a.tur === 'operasyon' ? a.operasyon : servisSenaryosuGetir(vt, a.senaryoId)?.icerik.operasyon;
     if (tur === 'canli' && op && (sv.ayarlar.yalnizTestOperasyonlari ?? []).includes(op)) return `"${sv.ad} · ${op}" CANLI'da çağrılmaz.`;
   }
@@ -80,6 +80,7 @@ export function akisSenaryosuDenetle(vt, projeId, icerik) {
   const akis = servisAkisiGetir(vt, icerik.akisId);
   if (!akis || akis.projeId !== projeId) return ['Senaryonun akışı bulunamadı.'];
   if (akis.tur !== 'akis') return ['Oturum akışı senaryoda kullanılmaz; bir akış seçin.'];
+  if (akis.icerik.uctanUca) return ['Uçtan uca akış servis senaryosunda kullanılmaz; bir servis akışı seçin.'];
   /** @type {string[]} */
   const hatalar = [];
   const oplar = new Map(operasyonAdimlari(akis.icerik).map((a) => [a.id, a]));

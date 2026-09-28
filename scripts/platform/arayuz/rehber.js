@@ -15,17 +15,23 @@ export function rehberAnahtari(hash) {
   const [, bolum = 'sonuclar', alt = '', , dorduncu = ''] = String(hash || '#/sonuclar').split('/');
   const parca = alt ? decodeURIComponent(alt) : '';
   let anahtar = null;
-  if (bolum === 'sonuclar' || !bolum) anahtar = parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : parca === 'karsilastir' ? 'sonuclar-karsilastir' : 'sonuclar';
+  // Sonuçlar > Servisler (servis sonuçlarının tek yeri): #/sonuclar/servisler[/karsilastir|kosu|senaryo|a/…].
+  const servisAlti = parca === 'servisler' ? String(hash).split('/')[3] || '' : '';
+  if (bolum === 'sonuclar' || !bolum) {
+    anahtar = parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : parca === 'karsilastir' || servisAlti === 'karsilastir' ? 'sonuclar-karsilastir'
+      : parca === 's' || servisAlti ? 'servis-sonuclari' : 'sonuclar';
+  }
   else if (bolum === 'senaryolar') anahtar = parca === 'yeni' || parca === 'duzenle' ? 'senaryo-formu' : 'senaryolar';
   else if (bolum === 'servisler') {
     const sekme = String(hash).split('/')[4] || '';
-    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 'sonuclar' ? (String(hash).split('/')[3] === 'karsilastir' ? 'sonuclar-karsilastir' : 'servis-sonuclari') : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : 'servis') : 'servisler';
+    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 'sonuclar' ? (String(hash).split('/')[3] === 'karsilastir' ? 'sonuclar-karsilastir' : 'servis-sonuclari') : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : sekme === 'sozlesme' ? 'servis-sozlesmesi' : 'servis') : 'servisler';
   } else if (bolum === 'ekranlar') {
     if (parca === 'yeni') anahtar = 'ekran-ekle';
     else if (parca === 'tarama') anahtar = 'tarama';
     else if (parca === 'e') anahtar = dorduncu === 'akis' ? 'akis-tasarimi' : dorduncu === 'bulgular' ? 'bulgular' : dorduncu === 'yukle' ? 'ekran-ekle' : 'ekran';
     else anahtar = 'ekranlar';
-  } else if (bolum === 'ayarlar') anahtar = `ayarlar-${parca || 'proje'}`;
+  } else if (bolum === 'akislar') anahtar = 'uctan-uca-akis';
+  else if (bolum === 'ayarlar') anahtar = `ayarlar-${parca || 'proje'}`;
   return anahtar && REHBERLER[anahtar] ? anahtar : null;
 }
 
@@ -182,6 +188,9 @@ export function rehberBaslat(anahtar) {
   document.addEventListener('keydown', tus, true);
   window.addEventListener('resize', yeniden);
   window.addEventListener('scroll', yeniden, true);
+  // Sayfa geç yüklenen içerikle kayarsa (kart, liste) vurgu ve kart yeniden konumlanır.
+  const yerlesimGozcusu = typeof ResizeObserver === 'function' ? new ResizeObserver(yeniden) : null;
+  yerlesimGozcusu?.observe(document.body);
   const ekranDegisti = () => kapat(false);
   window.addEventListener('hashchange', ekranDegisti);
 
@@ -189,6 +198,7 @@ export function rehberBaslat(anahtar) {
     document.removeEventListener('keydown', tus, true);
     window.removeEventListener('resize', yeniden);
     window.removeEventListener('scroll', yeniden, true);
+    yerlesimGozcusu?.disconnect();
     window.removeEventListener('hashchange', ekranDegisti);
     kok.remove();
     if (acik && acik.kok === kok) acik = null;

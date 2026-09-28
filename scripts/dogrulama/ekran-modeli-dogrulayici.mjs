@@ -65,15 +65,59 @@ const ALAN_ANAHTARLARI = new Set([
   'benzersiz', 'varsayilan', 'yapilandirma', 'eslesme', 'konum', 'doldurucu', 'doldurucuParametreleri',
   'gorunurluk', 'form', 'dogrulama', 'altAlanlar', 'ekranAlanlari', 'altModel', 'varyantlar', 'akisPlani',
   'kimlikTuru', 'bicim', 'kabul', 'birim', 'hassas', 'ekrandaAlanDegil', 'sira', 'sonKontrol', 'kullanim',
-  'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger'
+  'excelSutunlari', 'durum', 'notlar', 'mutlakaGorunmeli', 'sabitDeger', 'sinirlar'
 ]);
+/**
+ * Alanın uygulamadaki değer kuralları (sınır değer önerileri yalnız bunlardan üretilir; senaryo verisini kısıtlamaz):
+ * sayıda enAz / enCok (sayı) ve artis (sınırın bir yanındaki değer farkı, varsayılan 1); tarihte enAz / enCok ("bugun",
+ * "bugun+7", "bugun-3" ya da alanın biçiminde / yyyy-aa-gg tarih); metinde enAzUzunluk / enCokUzunluk (tam sayı) ve desen
+ * (düzenli ifade; değerin tamamı uymalı).
+ */
+const SINIR_ANAHTARLARI = new Set(['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enCokUzunluk', 'desen', 'not']);
+const GORELI_TARIH = /^bugun(\s*[+-]\s*\d{1,5})?$/;
+const MUTLAK_TARIH = /^(\d{2}\.\d{2}\.\d{4}|\d{4}-\d{2}-\d{2})$/;
+
+/**
+ * Alan tipine göre "sinirlar" sorunları (Türkçe; yer öneki yok). Akış tasarımcısı da alan düzenleyicide aynı mesajları gösterir.
+ * @param {unknown} tip alan tipi @param {unknown} sinirlar @returns {string[]}
+ */
+export function sinirHatalari(tip, sinirlar) {
+  const t = hataToplayici();
+  sinirlarDogrula(t, '', { tip, sinirlar });
+  return t.hatalar.map((m) => m.replace(/^: /, ''));
+}
+
+function sinirlarDogrula(h, yer, alan) {
+  const s = alan.sinirlar;
+  if (!nesneMi(s)) { h.ekle(yer, '"sinirlar" nesne olmalı'); return; }
+  h.bilinmeyenAnahtarlar(yer, s, SINIR_ANAHTARLARI);
+  const sayiMi = (d) => typeof d === 'number' && Number.isFinite(d);
+  const tamSayiMi = (d) => Number.isInteger(d) && d >= 0;
+  for (const ad of ['enAz', 'enCok']) {
+    const d = s[ad];
+    if (d === undefined) continue;
+    if (alan.tip === 'tarih') {
+      if (typeof d !== 'string' || !(GORELI_TARIH.test(d.trim()) || MUTLAK_TARIH.test(d.trim()))) h.ekle(yer, `"${ad}" tarihte "bugun", "bugun+7" ya da gg.aa.yyyy / yyyy-aa-gg olmalı`);
+    } else if (!sayiMi(d)) h.ekle(yer, `"${ad}" sayı olmalı`);
+  }
+  if (sayiMi(s.enAz) && sayiMi(s.enCok) && s.enAz > s.enCok) h.ekle(yer, '"enAz" "enCok"tan büyük olamaz');
+  if (s.artis !== undefined && !(sayiMi(s.artis) && s.artis > 0)) h.ekle(yer, '"artis" pozitif sayı olmalı');
+  for (const ad of ['enAzUzunluk', 'enCokUzunluk']) if (s[ad] !== undefined && !tamSayiMi(s[ad])) h.ekle(yer, `"${ad}" 0 ya da pozitif tam sayı olmalı`);
+  if (tamSayiMi(s.enAzUzunluk) && tamSayiMi(s.enCokUzunluk) && s.enAzUzunluk > s.enCokUzunluk) h.ekle(yer, '"enAzUzunluk" "enCokUzunluk"tan büyük olamaz');
+  if (s.desen !== undefined) {
+    if (!metinMi(s.desen)) h.ekle(yer, '"desen" boş olmayan metin olmalı');
+    else { try { new RegExp(s.desen, 'u'); } catch { h.ekle(yer, '"desen" geçerli bir düzenli ifade değil'); } }
+  }
+}
 const ESLESME_ANAHTARLARI = new Set(['senaryo', 'urun', 'kayitAlani', 'kimlikAlani', 'profilHavuzu', 'harici', 'donusum', 'not']);
 const FORM_ANAHTARLARI = new Set(['id', 'kontrol', 'etiket', 'secenekler', 'yardimciKontroller', 'not']);
 const SECENEK_ANAHTARLARI = new Set(['deger', 'metin', 'formMetni', 'senaryoDegeri', 'ekranDegerleri', 'secici', 'kosul']);
-const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'yenidenGiris', 'kosu']);
+const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurluk', 'bolumler', 'altModel', 'ortakAkis', 'sqlKontrolu', 'dosyaKontrolu', 'yenidenGiris', 'kosu']);
+/** Dosya adımının beklenti türleri (platform/dosyalar/dosya-icerigi.mjs ile aynı; bu dosya modül içe aktarmaz). */
+export const DOSYA_BEKLENTI_TURLERI = Object.freeze(['adDeseni', 'enAzBoyut', 'icerir', 'icermez', 'sutunVar', 'satirSayisi', 'hucre']);
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
-const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'not']);
+const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'not']);
 const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklama', 'zamanAsimiSn', 'sureSn']);
 const BOLUM_ANAHTARLARI = new Set(['id', 'baslik', 'pomMetodu', 'gorunurluk', 'alanlar']);
 const EKRAN_ANAHTARLARI = new Set([
@@ -232,6 +276,7 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
   }
   // Akışta "zorunlu": koşuda ekranda görünmezse test başarısız (koşullu alanda koşul sağlandığında).
   if (alan.mutlakaGorunmeli !== undefined && typeof alan.mutlakaGorunmeli !== 'boolean') h.ekle(aYer, '"mutlakaGorunmeli" true ya da false olmalı');
+  if (alan.sinirlar !== undefined) sinirlarDogrula(h, `${aYer}.sinirlar`, alan);
   if (alan.yapilandirma !== undefined && !listedeMi(YAPILANDIRMA_TURLERI, alan.yapilandirma)) {
     h.ekle(aYer, `bilinmeyen yapilandirma "${String(alan.yapilandirma)}"`);
   }
@@ -353,6 +398,8 @@ function kosuTanimiDogrula(h, yer, kosu) {
     if (d !== undefined && !(Number.isInteger(d) && d >= 1 && d <= 600)) h.ekle(sYer, '"zamanAsimiSn" 1–600 arasında tam sayı olmalı');
   };
   sure(kosu.zamanAsimiSn, yer);
+  // "Ekran görüntüsü al" işareti (adım görüntüleri "Seçili adımlarda" iken bu adımın görüntüsü alınır).
+  if (kosu.ekranGoruntusu !== undefined && typeof kosu.ekranGoruntusu !== 'boolean') h.ekle(yer, '"ekranGoruntusu" true ya da false olmalı');
   if (kosu.aksiyonlar !== undefined) {
     if (!Array.isArray(kosu.aksiyonlar)) h.ekle(yer, '"aksiyonlar" dizi olmalı');
     else kosu.aksiyonlar.forEach((a, i) => {
@@ -555,8 +602,9 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
       const ortakVar = adim.ortakAkis !== undefined;
       const sqlVar = adim.sqlKontrolu !== undefined;
       const girisVar = adim.yenidenGiris !== undefined;
-      if ([bolumVar, altModelVar, ortakVar, sqlVar, girisVar].filter(Boolean).length !== 1) {
-        h.ekle(adYer, ortakVar || sqlVar || girisVar ? 'adımda "bolumler", "altModel", "ortakAkis", "sqlKontrolu" ve "yenidenGiris"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
+      const dosyaVar = adim.dosyaKontrolu !== undefined;
+      if ([bolumVar, altModelVar, ortakVar, sqlVar, girisVar, dosyaVar].filter(Boolean).length !== 1) {
+        h.ekle(adYer, ortakVar || sqlVar || girisVar || dosyaVar ? 'adımda "bolumler", "altModel", "ortakAkis", "sqlKontrolu", "dosyaKontrolu" ve "yenidenGiris"ten yalnızca biri olmalı' : 'adımda "bolumler" YA DA "altModel" olmalı (ikisi birden/hiçbiri değil)');
       }
       // YENİDEN GİRİŞ ADIMI: { profil? } — koşuda oturum kapatılır (çerezler temizlenir) ve ortamın giriş tarifiyle yeniden
       // girilir; profil = giriş profilinin adı (yoksa ortamın varsayılan profili). Girişsiz modelde olmaz.
@@ -589,6 +637,20 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
           if (q.okumalar !== undefined && !Array.isArray(q.okumalar)) h.ekle(qYer, '"okumalar" dizi olmalı');
         }
         if (adim.kosu !== undefined) h.ekle(adYer, 'SQL adımının koşu tanımı ("kosu") olmaz');
+      }
+      // DOSYA ADIMI: { tetikleyici: { secici, metin? }, bicim?, beklentiler: [{ tur, … }], … } — koşuda düğmeye basılır, indirilen
+      // dosya beklentilerle doğrulanır (ayrıntılı kurallar platform/dosyalar/dosya-icerigi.mjs; burada yapı).
+      if (dosyaVar) {
+        const d = adim.dosyaKontrolu;
+        const dYer = `${adYer}.dosyaKontrolu`;
+        if (!nesneMi(d)) h.ekle(dYer, '"dosyaKontrolu" bir nesne olmalı');
+        else {
+          if (!nesneMi(d.tetikleyici) || !metinMi(d.tetikleyici.secici)) h.ekle(dYer, '"tetikleyici.secici" (indirmeyi başlatan düğme) zorunlu');
+          if (!Array.isArray(d.beklentiler) || !d.beklentiler.length || !d.beklentiler.every((x) => nesneMi(x) && DOSYA_BEKLENTI_TURLERI.includes(x.tur))) {
+            h.ekle(dYer, `"beklentiler" boş olmayan dizi olmalı; türler: ${DOSYA_BEKLENTI_TURLERI.join(', ')}`);
+          }
+        }
+        if (adim.kosu !== undefined) h.ekle(adYer, 'dosya adımının koşu tanımı ("kosu") olmaz');
       }
       if (bolumVar) {
         if (!Array.isArray(adim.bolumler) || adim.bolumler.length === 0) h.ekle(adYer, '"bolumler" boş olmayan dizi olmalı');

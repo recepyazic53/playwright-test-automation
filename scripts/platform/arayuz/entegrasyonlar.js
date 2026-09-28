@@ -122,7 +122,7 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
   yerlestir(govde,
     h('div', { class: 'bolum-basligi' },
       h('h3', {}, 'Bağlantılar', rozet(String(baglantilar.length))),
-      h('div', { class: 'dugmeler' }, dbeaver, h('button', { type: 'button', class: 'birincil', onclick: () => sihirbaz(null) }, '+ Bağlantı ekle'))),
+      h('div', { class: 'dugmeler' }, dbeaver, h('button', { type: 'button', class: 'birincil', onclick: () => sihirbaz(null) }, ikon('arti'), 'Bağlantı ekle'))),
     formAlani,
     baglantilar.length ? h('ul', { class: 'kayit-listesi' }, satirlar)
       : bosDurum('Henüz bağlantı yok.', 'Bir uygulamayı bağlamak için "+ Bağlantı ekle"ye basın. Bağlantılar kasada şifreli saklanır; hiçbir istek siz denemeden ya da seçtiğiniz olay gerçekleşmeden gönderilmez.', { ikon: 'ag', rol: 'status' }),
@@ -131,7 +131,7 @@ export async function entegrasyonlarBolumu(govde, baglam, yenile) {
     h('ul', { class: 'entegrasyon-katalogu' }, turler.map((t) => h('li', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h4', {}, ikon(t.ikon), t.ad)),
       h('p', { class: 'soluk kucuk' }, t.aciklama),
-      h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => sihirbaz({ yeniTur: t.tur }) }, '+ Bu türden bağlantı')))));
+      h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => sihirbaz({ yeniTur: t.tur }) }, ikon('arti'), 'Bu türden bağlantı ekle')))));
 }
 
 // ---------------------------------------------------------------------------------------

@@ -162,7 +162,7 @@ tek, örtük "Ana akış" (`id: "ana"`) vardır. Alanlar, koşullar ve senaryo d
 (aynı kimlik) birden çok akışta olabilir. Her akış, `adimlar`ı o akışın adımlarıyla değiştirilmiş model olarak doğrulanır
 (`model-formu.mjs > akisModeli`: o akışta olmayan adımlara bağlı iş kuralları, alanlara bağlı bağlam görünürlükleri ve başka
 akışların isteğe bağlı adım ayarları/koşulları çıkarılır). Senaryo akışını içeriğinde tutar (`icerik.akis`; yoksa varsayılan).
-Ekranlar > ekran > **Akışlar** sekmesi (Model geçmişi düzeni): akış listesi (adım / senaryo sayısı), "Yeni akış oluştur" (ad; boş
+Ekranlar > ekran > **Akışlar** sekmesi (Model geçmişi düzeni): akış listesi (adım / senaryo sayısı), "Akış ekle" (ad; boş
 ya da bir akıştan kopya), seçilen akışın diyagramı; **Düzenle** / **Kopyala** / **Varsayılan yap** / **Sil** (senaryosu olan ya da
 varsayılan akış silinemez; varsayılan değişince akışı yazılı olmayan senaryolara eski varsayılan yazılır). Düzenleme diyagram
 düzenleyicisiyle yapılır (sağ liste YALNIZCA bu ekranın modelindeki alanlar); kaydetmeden önce etkilenen senaryolar gösterilir,
@@ -172,6 +172,8 @@ kaydedince yeni model sürümü (`ekranlar/akis-servisi.mjs`, `/platform/ekran/a
 - **Kalıp göstergesi** ("Metin bir kalıp", `desen`).
 - **Uyarılar.**
 - **Sonucu bekleme süresi** (aksiyon bloğunda, `kosu.zamanAsimiSn`).
+- **Ekran görüntüsü al** işareti (alan grubunda / aksiyonda, `kosu.ekranGoruntusu`). Adım ekran görüntüleri "Seçili adımlarda"
+  iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır.
 - **Düğmesiz adımın görünürlük koşulu.** Alanların koşuluna taşınır.
 
 Alanlar mevcut tanımlarıyla (seçici ya da kimlik bloğu kimliği) eşleşir; bağımlı listeler, doldurucu parametreleri ve
@@ -201,6 +203,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 | `uyarilar` | Adımda kabul edilen iş kuralı uyarıları `[{ metin, secici? }]` (en çok 10): senaryo "iş kuralı hatası" beklerken bunlardan seçer; başarı beklenen senaryoda biri görünürse test hemen düşer. |
 | `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
+| `ekranGoruntusu` | `true`: "Ekran görüntüsü al" işareti. Adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır; diğer seçimlerde etkisizdir. |
 
 Sürüm 2'de `okluSecim` doldurucusu (ok düğmeleriyle değer değiştiren özel bileşen) değeri gösteren öğeyi
 (`konum.secici`) ve düğmeleri (`konum.yardimci.ileri` ve `konum.yardimci.geri`; eski adlarla `arttir`/`azalt`)
@@ -211,7 +214,8 @@ Koşucunun diğer alan olanakları:
 | Olanak | Açıklama |
 |---|---|
 | `sabitDeger` | Senaryo alanı olmayan (`yapilandirma` `sabit`/`turetilmis`) alan her koşuda bu değerle doldurulur. Tarihte `bugun`, `bugun+7`, `bugun-3` (İstanbul günü, alanın `bicim`iyle). |
-| Varsayılan | Senaryoda boş bırakılan alan modelin `varsayilan.deger`ini alır; görünürlük koşulları da bu değerle hesaplanır (dosya hariç). |
+| Varsayılan | Senaryoda boş bırakılan alan modelin `varsayilan.deger`ini alır; görünürlük koşulları da bu değerle hesaplanır (dosya hariç). Senaryonun `bilerekBos` listesindeki alanlar (olumsuz senaryo: "zorunlu alan boşken uyarı çıkmalı") varsayılanı almaz ve doldurulmaz; doğrulayıcı bu alanların boşluğunu hata değil uyarı sayar. |
+| `sinirlar` | Alanın uygulamadaki değer kuralları — senaryo verisini kısıtlamaz, yalnızca senaryo tasarım yardımcısının sınır değer önerileri bundan üretilir (kural yoksa öneri yok). Sayı: `enAz`, `enCok` (sayı), `artis` (varsayılan 1). Tarih: `enAz`, `enCok` (`bugun`, `bugun+30`, `gg.aa.yyyy` ya da `yyyy-aa-gg`). Metin: `enAzUzunluk`, `enCokUzunluk` (tam sayı), `desen` (düzenli ifade; değerin tamamı uymalı). Ör. `"sinirlar": { "enAz": 1, "enCok": 10 }`. Paket yalnızca sayfada belli olan sınırları yazar (tahmin yok); kullanıcı ekranın Akışlar sekmesinde alanın "Sınırlar" düğmesiyle ekler / değiştirir / kaldırır (akışı yeniden kaydetmek mevcut kuralları ve alanın diğer anahtarlarını korur). Senaryo formunda zorunlu alanın "Bilerek boş bırak" işareti `bilerekBos` listesini yönetir. |
 | `kimlikProfili` | Senaryoya özel kimlik ya da seçilen (yoksa varsayılan) hazır kayıt (Ayarlar > Test verisi > Kişi ve kayıt verileri; havuz = aynı adlı tablo, kayıt = satır adı) `altAlanlar`a `sira` ile açılır; `eslesme.kimlikAlani` metin ya da kimlik türüne göre harita (türde karşılığı yoksa alt alan atlanır). |
 | `doldurucuParametreleri` | Alan doldurulduktan sonra: `tus` (ör. `Tab`), `tikla` (seçici; ör. kimlik sorgula), `bekle {secici, durum: dolu \| gorunur \| gizli, zamanAsimiSn, icermez?}` (`icermez`: dolu sayılmayan geçici metin, ör. sorgu sürerken "Aranıyor"), `gizle` (seçici: alan doldurulunca açık kalıp sonraki tıklamayı kapatan katman gizlenir, ör. takvim `#ui-datepicker-div`). Alan sonrası tıklama en çok 15 sn denenir, sonra açık hatayla düşer. `maske` (ör. `"(###) ### ## ##"`): değerin rakamları kalıba yerleştirilerek yazılır (maskeli alanlarda `degerJs` ile birlikte). Alan beklemesi sırasında adımın hata göstergesi (`kosu.hataGostergesi`) açılırsa adım hemen düşer (akışın kabul ettiği uyarılar hariç). Oklu seçimde `yanitBekle`: her tıklamadan sonra adresi bu metni içeren isteğin bitmesi beklenir (ör. seçim değişince yeniden yüklenen bağımlı liste). |
 | Doldurucular | `radyoZorla` / `onayKutusuZorla` (gizli çizimli girdiler; görünürlük yerine sayfada varlık), `secimGerekirse` (değer zaten seçiliyse dokunulmaz), `degerJs` (değer betikle yazılır + input/change; gizli alan ya da gizli <select> — sayfada varlık yeter; seçenek önce değerle, sonra metinle). Kapalı (disabled) alan doldurulmaz, "atlanan alanlar"a yazılır (mutlaka görünmeli ise hata). |

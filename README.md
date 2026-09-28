@@ -27,13 +27,23 @@ Chromium tarayıcısı ve `Nöbetçi.exe` başlatıcısı vardır. Klasörü (ya
 bu bilgisayarda zaten olan dosyalardan üretilir (hiçbir şey indirilmez); başlatıcı Windows'un .NET Framework derleyicisiyle
 derlenir ve imzasızdır (Windows ilk açılışta uyarı gösterebilir).
 
+Hedef klasör her paketlemede yeniden oluşturulur, ama önce denetlenir: o klasörden çalışan bir Nöbetçi varsa (`runtime\node.exe`
+/ `Nöbetçi.exe`) silme reddedilir ("önce kapatın"); içinde kullanıcı verisi (`uygulama\veri`) varsa uyarı verilip durulur.
+Veriyi de silmek bilinçli bir kararsa: `npm run paketle -- [hedef] --zorla` (çalışan Nöbetçi'yi `--zorla` da aşmaz).
+
+Paketin sonunda iki denetim yapılır: pakete giren modüllerin içe aktardığı her modül pakette var mı, ve **açılış denemesi**:
+paketin kendi `runtime\node.exe`'siyle sunucu geçici bir veri kökü ve boş bir portla başlatılır (tarayıcı açılmaz), ana sayfa ve
+tüm arayüz dosyaları 200 dönmeli; süreç kapatılır. Biri başarısızsa "Paket hazır" denmez ve komut hata koduyla biter.
+Açılış denemesini atlamak: `npm run paketle -- --acilis-denemesi-yok`. macOS arşivinde (`npm run paketle:mac`) arşiv burada
+açılamadığından yalnız içe aktarma çözümlemesi yapılır (indirmelerden önce).
+
 ## İlk açılış
 
 Karşılama ekranında iki seçenek vardır:
 
 1. **Yedek yükle** — başka bir bilgisayardan alınmış `.tayedek` dosyası (yedeğin parolası bu bilgisayarın kasa
    parolası olur).
-2. **Yeni proje başlat** — önce birkaç soru (ne test edeceksiniz, hangi ortamlar, giriş var mı), sonra kasa parolası, proje
+2. **Yeni proje başlat** — önce kısa bir soru (testler hangi ortamlarda çalışacak), sonra kasa parolası, proje
    ve ortamlar (Ortam adı | Adres | Riskli mi?). Son adımda kısa bir "Proje hazır" özeti (kaydedilen ortamlar) gösterilir.
    Giriş profilleri ve iki aşamalı doğrulama Ayarlar > Giriş profilleri'nden, ekranlar Ekranlar sayfasından eklenir.
 
@@ -61,6 +71,17 @@ Her ekranın bir **rehberi** vardır: ekranı ve işlerin hangi sırayla yapıla
 - **Ayarlar** — proje, ortamlar, giriş profilleri ve giriş tarifleri, bağlam profilleri, koşu ayarları,
   hata sınıflandırma kuralları, maskeleme, güvenlik (otomatik kilit, yasak adresler), yedekleme, entegrasyonlar
   (koşu bitti webhook bildirimi, iş takip sisteminde hata kaydı, veritabanı bağlantıları; gizliler kasada şifreli).
+
+### Kayıt ve saklama
+
+**Ayarlar > Koşu > Kayıt**: video, test sonu ekran görüntüsü ve iz (trace; ağ istekleri, sayfa yapısı ve adımların kaydı,
+Playwright iz görüntüleyicisiyle açılır) için her testte / yalnız başarılı testlerde / yalnız kalan testlerde / kapalı
+("yalnız başarılı"da kayıt her testte alınır, kalan testlerinki kaydedilmeden silinir). Adım ekran görüntüleri: her adımda
+(varsayılan) / yalnız kalan adımda / seçili adımlarda (akış tasarımında "Ekran görüntüsü al" işaretli adımlar) / kapalı;
+senaryo formunda senaryo başına değiştirilebilir. Video boyutu: Küçük (varsayılan, 800 px'e sığdırma) ya da Ekranla aynı.
+**Ayarlar > Yedekleme > Sonuç saklama**: sonuçları N gün sonra silme ve "medyayı incelt" (N günden eski sonuçlarda başarılı,
+kalan ya da tüm testlerin görüntü ve videoları silinir; sonucun kendisi kalır). Günlük temizlikte sıra: sonuç saklama →
+medya inceltme → Güvenlik > Video saklama süresi. Her yeni ayarın varsayılanı önceki davranıştır.
 
 ### Giriş
 

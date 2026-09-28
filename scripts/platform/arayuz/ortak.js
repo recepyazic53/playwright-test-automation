@@ -217,6 +217,19 @@ export async function api(yol, secenekler = {}) {
         return api(yol, { ...secenekler, izinDenemesi: deneme + 1 });
       }
     }
+    // Taban adresine bağlı servisin adresi farklılaşıyor (sunucu hiçbir şey yazmadı): karar penceresi (taban-adresler.js > tabanKarariSor);
+    // seçilen karar (tabanKararlari[servisId]) ile AYNI istek yeniden gönderilir. Pencere kapatılırsa hata olduğu gibi döner.
+    if (hata.kod === 'TABAN_KARARI' && veri && veri.karar && secenekler.govde) {
+      const deneme = secenekler.tabanDenemesi || 0;
+      if (deneme < 20) {
+        const { tabanKarariSor } = await import('./taban-adresler.js');
+        const karar = await tabanKarariSor(veri.karar);
+        if (karar) {
+          const govde = { ...secenekler.govde, tabanKararlari: { ...(secenekler.govde.tabanKararlari || {}), [veri.karar.servisId]: karar } };
+          return api(yol, { ...secenekler, govde, tabanDenemesi: deneme + 1 });
+        }
+      }
+    }
     // 401: sayfanın oturum token'ı sunucuyu tutmuyor → Nöbetçi yeniden başlatılmış (her başlatmada token değişir).
     if (yanit.status === 401) window.dispatchEvent(new CustomEvent('sunucu-yenilendi'));
     throw hata;
@@ -444,6 +457,39 @@ export function bildir(mesaj, tur = 'basari') {
 }
 
 /** Etiketli form alanı. input'a id verilir, yardım metni aria-describedby ile bağlanır. */
+/**
+ * Uzun açıklamayı kısa (en çok 1–2 cümle) + ayrıntıya ayırır: ilk cümle (kısaysa ilk iki) kısa kalır, gerisi ayrıntıdır.
+ * @param {string} metin @returns {{ kisa: string; ayrinti: string }}
+ */
+export function aciklamayiBol(metin) {
+  const cumleler = String(metin || '').split(/(?<=[.!?…])\s+(?=[A-ZÇĞİÖŞÜ"“'(0-9])/u);
+  if (cumleler.length <= 2 && String(metin || '').length <= 220) return { kisa: String(metin || ''), ayrinti: '' };
+  const n = cumleler[0].length < 70 && cumleler.length > 2 ? 2 : 1;
+  return { kisa: cumleler.slice(0, n).join(' '), ayrinti: cumleler.slice(n).join(' ') };
+}
+
+/**
+ * Kısa açıklama + "?" ipucu: ayrıntı (bilgi kaybolmaz) "?" düğmesiyle açılır / kapanır (Esc kapatır). Kısa metinse yalnız metin.
+ * @param {string} metin @param {string} [konu] "?" düğmesinin erişilebilir adı için (ör. alan etiketi)
+ */
+export function kisaAciklama(metin, konu = '') {
+  const { kisa, ayrinti } = aciklamayiBol(metin);
+  if (!ayrinti) return h('span', { class: 'kisa-aciklama' }, kisa);
+  const panelId = yeniKimlik('ayrinti');
+  const panel = h('span', { id: panelId, class: 'ayrinti-ipucu', hidden: true }, ayrinti);
+  const soru = h('button', {
+    type: 'button', class: 'ikon-dugme hayalet ayrinti-dugmesi', 'aria-expanded': 'false', 'aria-controls': panelId,
+    // Ad alanın etiketini içermez (etiketle arama alanın kendisini bulsun); konu ipucunda.
+    'aria-label': 'Ayrıntıyı göster', title: konu ? `Ayrıntı: ${konu}` : 'Ayrıntı'
+  }, ikon('soru'));
+  const ac = (/** @type {boolean} */ goster) => { panel.hidden = !goster; soru.setAttribute('aria-expanded', String(goster)); };
+  soru.addEventListener('click', () => ac(panel.hidden));
+  const esc = (/** @type {KeyboardEvent} */ o) => { if (o.key === 'Escape' && !panel.hidden) { o.preventDefault(); o.stopPropagation(); ac(false); soru.focus(); } };
+  soru.addEventListener('keydown', esc);
+  panel.addEventListener('keydown', esc);
+  return h('span', { class: 'kisa-aciklama' }, kisa, ' ', soru, panel);
+}
+
 export function alan(etiket, girdi, secenekler = {}) {
   const id = girdi.id || yeniKimlik('alan');
   girdi.id = id;
@@ -510,18 +556,20 @@ export function parolaAlani(etiket, secenekler = {}) {
 
 /** İki adımlı onay: ilk tıklama düğmeyi "…onayla" durumuna getirir, 5 sn içinde ikinci tıklama çalıştırır. */
 export function onayliDugme(metin, onayMetni, fn, secenekler = {}) {
-  const dugme = h('button', { type: 'button', class: `tehlike ${secenekler.kucuk ? 'kucuk-dugme' : ''}`, 'aria-label': secenekler.etiket || metin }, metin);
+  // Silme düğmeleri tek stil: çöp ikonu + metin (tehlike). Onay beklerken yalnız metin değişir.
+  const yazi = h('span', {}, metin);
+  const dugme = h('button', { type: 'button', class: `tehlike ${secenekler.kucuk ? 'kucuk-dugme' : ''}`, 'aria-label': secenekler.etiket || metin }, ikon('cop'), yazi);
   let zamanlayici = null;
   dugme.addEventListener('click', async () => {
     if (!dugme.classList.contains('onay-bekliyor')) {
       dugme.classList.add('onay-bekliyor');
-      dugme.textContent = onayMetni;
-      zamanlayici = setTimeout(() => { dugme.classList.remove('onay-bekliyor'); dugme.textContent = metin; }, 5000);
+      yazi.textContent = onayMetni;
+      zamanlayici = setTimeout(() => { dugme.classList.remove('onay-bekliyor'); yazi.textContent = metin; }, 5000);
       return;
     }
     clearTimeout(zamanlayici);
     dugme.disabled = true;
-    try { await fn(); } finally { dugme.disabled = false; dugme.classList.remove('onay-bekliyor'); dugme.textContent = metin; }
+    try { await fn(); } finally { dugme.disabled = false; dugme.classList.remove('onay-bekliyor'); yazi.textContent = metin; }
   });
   return dugme;
 }
@@ -603,7 +651,19 @@ export function iskelet(tur = 'liste') {
 }
 
 /** Rozet (etiket). tur: vurgu | basari | hata | atlanan | durdu | '' */
-export const rozet = (metin, tur = '', ek = {}) => h('span', { class: `rozet ${tur}`.trim(), ...ek }, metin);
+/**
+ * Rozet. ek.kisalt: kullanıcı adı taşıyan rozetlerde (ekran, servis, ortam, tablo adı) genel kısaltma — en çok genişlik (true:
+ * varsayılan 16em; metin: CSS genişliği) + "…" ve tam metin ipucu (title). Diğer ek özellikler öğeye geçer.
+ * @param {any} metin @param {string} [tur] @param {Record<string, any> & { kisalt?: boolean | string }} [ek]
+ */
+export const rozet = (metin, tur = '', ek = {}) => {
+  const { kisalt, ...diger } = ek;
+  if (!kisalt) return h('span', { class: `rozet ${tur}`.trim(), ...diger }, metin);
+  const tamMetin = typeof metin === 'string' ? metin : Array.isArray(metin) ? metin.filter((x) => typeof x === 'string').join('') : null;
+  return h('span', {
+    class: `rozet rozet-kisalt ${tur}`.trim(), title: tamMetin, ...(typeof kisalt === 'string' ? { style: `max-width: ${kisalt}` } : {}), ...diger
+  }, h('span', { class: 'rozet-metni' }, metin));
+};
 
 /** Kullanıcının koşu / arayüz ayarları (Ayarlar > Koşu, Arayüz; oturum boyunca önbellekte, kaydedince tazelenir). */
 let ayarSozu = null;
@@ -612,3 +672,21 @@ export function kullaniciAyarlari() {
   return ayarSozu;
 }
 export function kullaniciAyarlariniTazele() { ayarSozu = null; }
+
+// Satır "⋯" menüleri (.satir-menusu-kap > .acilir-menu; düğmenin sağına hizalı): dar ekranda ya da sol kenardaki düğmede menü
+// pencerenin dışına taşmasın diye açıldığında yatayda pencere içine kaydırılır (davranış aynı; yalnız konum).
+if (typeof document !== 'undefined') {
+  document.addEventListener('click', (o) => {
+    const dugme = o.target instanceof Element ? o.target.closest('.satir-menusu-kap > [aria-haspopup="menu"]') : null;
+    if (!dugme) return;
+    requestAnimationFrame(() => {
+      const menu = dugme.parentElement && dugme.parentElement.querySelector(':scope > .acilir-menu');
+      if (!menu || menu.hidden) return;
+      menu.style.removeProperty('transform');
+      const r = menu.getBoundingClientRect();
+      const pay = 8;
+      const kaydir = r.left < pay ? pay - r.left : r.right > innerWidth - pay ? Math.max(pay - r.left, innerWidth - pay - r.right) : 0;
+      if (kaydir) menu.style.transform = `translateX(${Math.round(kaydir)}px)`;
+    });
+  }, true); // yakalama evresi: bazı menü düğmeleri tıklamanın yayılmasını durdurur
+}

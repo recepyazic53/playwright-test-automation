@@ -12,7 +12,7 @@
 //    beklenen sonuç ve bağlam profili modelden ve senaryo verisinden SAF olarak çıkarılır (birim testli).
 // NOT: import.meta KULLANILMAZ. Tipler: model-kosusu.d.mts.
 
-import { gorunurlukleriHesapla } from '../../dogrulama/senaryo-dogrulayici.mjs';
+import { bilerekBosAnahtarlari, gorunurlukleriHesapla } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { formDegerleriniKur, formSemasiOlustur, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul, tumFormAlanlari } from './model-formu.mjs';
 
 /** Model senaryolarını üreten spec dosyası (Playwright testDir'e göre göreli yol). */
@@ -60,19 +60,35 @@ export function modelGrepDeseni(senaryoId) {
  * Model testlerinin başlıkları: senaryo başlığı; aynı başlık bir kez daha geçerse kimliğin ilk 8 karakteri
  * eklenir (Playwright aynı dosyada aynı başlığa izin vermez; sonuç anahtarı "<dosya>::<başlık>" tekil olmalı).
  * Sıra kimliğe göre sabittir: listeleme ve koşu süreçleri aynı başlıkları üretir.
- * @param {Array<{ id: string; baslik: string }>} senaryolar @returns {Map<string, string>} id → başlık
+ * VERİ KOŞULARI (tablodan çoklu satır): aynı senaryonun her veri koşusu ayrı testtir; başlığı "Senaryo [satır-adı]" (anahtar
+ * modelTestAnahtari: "<id>#<veri anahtarı>"). Tek satırlı koşuda anahtar senaryo kimliğidir (bugünkü başlık).
+ * @param {Array<{ id: string; baslik: string; veriKosusu?: { anahtar: string | null; ad?: string | null } | null }>} senaryolar
+ * @returns {Map<string, string>} modelTestAnahtari → başlık
  */
 export function modelTestBasliklari(senaryolar) {
   const sonuc = new Map();
   const kullanilan = new Set();
+  /** @type {Map<string, string>} senaryo kimliği → temel başlık */
+  const temeller = new Map();
   for (const s of senaryolar.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-    let baslik = String(s.baslik).trim() || s.id;
-    if (kullanilan.has(baslik)) baslik = `${baslik} (${s.id.slice(0, 8)})`;
-    kullanilan.add(baslik);
-    sonuc.set(s.id, baslik);
+    if (!temeller.has(s.id)) {
+      let baslik = String(s.baslik).trim() || s.id;
+      if (kullanilan.has(baslik)) baslik = `${baslik} (${s.id.slice(0, 8)})`;
+      kullanilan.add(baslik);
+      temeller.set(s.id, baslik);
+    }
+    const temel = /** @type {string} */ (temeller.get(s.id));
+    const ad = s.veriKosusu?.anahtar ? s.veriKosusu.ad : null;
+    sonuc.set(modelTestAnahtari(s), ad ? `${temel} [${ad}]` : temel);
   }
   return sonuc;
 }
+
+/**
+ * Model testinin anahtarı: veri koşusunda "<senaryo kimliği>#<veri anahtarı>", değilse senaryo kimliği.
+ * @param {{ id: string; veriKosusu?: { anahtar: string | null } | null }} s
+ */
+export const modelTestAnahtari = (s) => (s.veriKosusu?.anahtar ? `${s.id}#${s.veriKosusu.anahtar}` : s.id);
 
 // ---------------------------------------------------------------------------------------
 // Yasaklı adres koruması
@@ -285,6 +301,9 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       ...(typeof adim.ortakAkisAdi === 'string' ? { ortakAkisAdi: adim.ortakAkisAdi } : {}),
       // SQL sorgusu adımı (sql/sql-adimi.mjs): koşucu sorguyu çalıştırıp beklenenle karşılaştırır (alan / aksiyon yok).
       ...(nesneMi(adim.sqlKontrolu) ? { sql: adim.sqlKontrolu } : {}),
+      // İndirilen dosyayı doğrulama adımı (dosyalar/dosya-icerigi.mjs): tetikleyici düğmeye basılır, indirilen dosya beklentilerle
+      // doğrulanır (alan yok).
+      ...(nesneMi(adim.dosyaKontrolu) ? { dosya: adim.dosyaKontrolu } : {}),
       // Yeniden giriş adımı: oturum kapatılır (çerezler temizlenir), ortamın giriş tarifiyle (isteğe bağlı başka giriş
       // profiliyle) yeniden girilir; alan / aksiyon yok.
       ...(nesneMi(adim.yenidenGiris) ? { yenidenGiris: { profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil.trim() ? adim.yenidenGiris.profil.trim() : null } } : {})
@@ -333,16 +352,18 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
 
 /**
  * Senaryo verisi + boş bırakılan tek anahtarlı senaryo alanlarının varsayılan değerleri (dosya hariç: varsayılan dosya
- * Ayarlar > Dosyalar'dan gelir). @param {any} model @param {Record<string, unknown>} veri @returns {Record<string, unknown>}
+ * Ayarlar > Dosyalar'dan gelir). Senaryonun bilerek boş bıraktığı alanlar (olumsuz senaryo; bilerekBos) varsayılanı da almaz.
+ * @param {any} model @param {Record<string, unknown>} veri @returns {Record<string, unknown>}
  */
 function varsayilanlariUygula(model, veri) {
   const sonuc = { ...veri };
+  const bilerekBos = new Set(bilerekBosAnahtarlari(veri));
   for (const adim of Array.isArray(model.adimlar) ? model.adimlar : []) {
     for (const bolum of adim && Array.isArray(adim.bolumler) ? adim.bolumler : []) {
       for (const alan of bolum && Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
         if (!alan || alan.yapilandirma !== 'senaryo' || alan.tip === 'dosya' || alan.tip === 'kimlikProfili') continue;
         const anahtarlar = senaryoAnahtarlari(alan);
-        if (anahtarlar.length !== 1 || !bosMu(sonuc[anahtarlar[0]])) continue;
+        if (anahtarlar.length !== 1 || !bosMu(sonuc[anahtarlar[0]]) || bilerekBos.has(anahtarlar[0])) continue;
         if (nesneMi(alan.varsayilan) && !bosMu(alan.varsayilan.deger)) sonuc[anahtarlar[0]] = alan.varsayilan.deger;
       }
     }

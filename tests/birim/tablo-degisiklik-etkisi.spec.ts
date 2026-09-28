@@ -370,7 +370,7 @@ test.describe('arayüz: tablo kaydında onay penceresi', () => {
     const liste = page.getByRole('navigation', { name: 'Tablolar' });
     await liste.getByRole('button', { name: /^Ürünler/ }).click();
     await page.getByRole('textbox', { name: '1. satır Ürün', exact: true }).fill('Ürün X');
-    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await page.getByRole('region', { name: 'Tablo düzenleyici' }).getByRole('button', { name: 'Kaydet', exact: true }).click();
     const diyalog = page.getByRole('dialog', { name: 'Değişen değerler senaryolarda kullanılıyor' });
     await expect(diyalog).toBeVisible();
     await expect(diyalog).toContainText('"Ürün A" değeri 1 senaryoda kullanılıyor (Ekran Başvuru (akış): 1) — bunları da "Ürün X" yapayım mı?');
@@ -405,13 +405,13 @@ test.describe('arayüz: tablo kaydında onay penceresi', () => {
     // Etki yok: pencere çıkmaz, doğrudan kaydedilir.
     await liste.getByRole('button', { name: /^Kullanılmayan/ }).click();
     await page.getByRole('textbox', { name: '1. satır Değer', exact: true }).fill('z');
-    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await page.getByRole('region', { name: 'Tablo düzenleyici' }).getByRole('button', { name: 'Kaydet', exact: true }).click();
     await expect(page.locator('.bildirim').last()).toContainText('"Kullanılmayan" kaydedildi.');
     await expect(page.getByRole('dialog')).toHaveCount(0);
     // Silinen değer: yalnız uyarı; güncelleme düğmesi yok, "Yalnız tabloyu kaydet" / "Vazgeç".
     await liste.getByRole('button', { name: /^Planlar/ }).click();
     await page.getByRole('button', { name: '2. satırı sil' }).click();
-    await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
+    await page.getByRole('region', { name: 'Tablo düzenleyici' }).getByRole('button', { name: 'Kaydet', exact: true }).click();
     await expect(diyalog).toBeVisible();
     await expect(diyalog).toContainText('1 senaryo silinen değeri kullanıyor; koşuda hata verebilir');
     await expect(diyalog).toContainText('K2 ürün C');

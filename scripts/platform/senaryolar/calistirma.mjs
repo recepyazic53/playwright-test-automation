@@ -9,6 +9,8 @@
 import { randomBytes } from 'node:crypto';
 import { DepoHatasi, ekranlariListele } from '../veritabani/depo.mjs';
 import { calistirmaHedefiCoz, denemePaketiOlustur } from './senaryo-servisi.mjs';
+import { senaryoVeriKosusuTahmini, tekrarSenaryoPlani, veriKosusuSiniri } from './veri-kosusu-plani.mjs';
+import { KOSU_KIPLERI, TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI } from '../tablolar/veri-kosulari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./calistirma.d.mts').Kosucu} Kosucu */
@@ -71,7 +73,40 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
   }
   const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
   ekranEtkinOlmali(vt, hedef.senaryoId, null, { devreDisiIzinli: kosuTuru !== 'tam' && govde.tekBasina === true });
-  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef };
+  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef, ekOrtam: veriKosusuOrtami(vt, projeId, hedef, govde) };
+}
+
+/**
+ * VERİ KOŞULARI ve TEKRAR (tablolar/veri-kosulari.mjs): koşu sürecine verilecek ortam değişkenleri.
+ *  - veriKipi (koşu anı ezmesi): 'senaryo' (varsayılan; senaryonun ayarı) | 'tek' (hepsi tek satır) | 'tumu' (uyan tüm satırlar).
+ *  - Tahmini test sayısı Ayarlar > Koşu > "Tek senaryoda en çok veri koşusu"nu aşarsa koşu BAŞLATILMAZ.
+ *  - tekrar: { kaynakKosuId, model?: 'kosudaki' | 'guncel', veri?: 'guncel' | 'kosudaki' } — yalnız o koşuda kalan veri koşuları, o
+ *    koşudaki satırlar ve (varsayılan) o koşudaki model sürümüyle; plan sunucunun kaydından kurulur (istemci yalnız seçim gönderir).
+ * @param {Veritabani} vt @param {string} projeId @param {{ senaryoId: string; genel: { ortamId: string } }} hedef @param {Record<string, unknown>} govde
+ * @returns {Record<string, string>}
+ */
+function veriKosusuOrtami(vt, projeId, hedef, govde) {
+  const ortamId = hedef.genel.ortamId;
+  if (govde.tekrar !== undefined && govde.tekrar !== null) {
+    if (typeof govde.tekrar !== 'object' || Array.isArray(govde.tekrar)) throw new DepoHatasi('"tekrar" bir nesne olmalıdır.');
+    const t = /** @type {Record<string, unknown>} */ (govde.tekrar);
+    if (t.model !== undefined && t.model !== 'kosudaki' && t.model !== 'guncel') throw new DepoHatasi('"tekrar.model" "kosudaki" ya da "guncel" olmalıdır.');
+    if (t.veri !== undefined && t.veri !== 'kosudaki' && t.veri !== 'guncel') throw new DepoHatasi('"tekrar.veri" "kosudaki" ya da "guncel" olmalıdır.');
+    const plan = tekrarSenaryoPlani(vt, { kaynakKosuId: t.kaynakKosuId, senaryoId: hedef.senaryoId, ortamId, model: t.model, veri: t.veri });
+    return {
+      [TEKRAR_PLANI_DEGISKENI]: JSON.stringify({ senaryolar: { [hedef.senaryoId]: { modelSurumu: plan.modelSurumu, kosular: plan.kosular } } }),
+      [TEKRAR_KAYNAGI_DEGISKENI]: String(t.kaynakKosuId)
+    };
+  }
+  const kip = govde.veriKipi === undefined || govde.veriKipi === null ? 'senaryo' : govde.veriKipi;
+  if (!KOSU_KIPLERI.includes(/** @type {string} */ (kip))) throw new DepoHatasi('"veriKipi" "senaryo", "tek" ya da "tumu" olmalıdır.');
+  // Tahmin okunamazsa (ör. kasa kilitli) burada engellenmez: koşucu aynı sınırı veri okurken uygular (test açık hatayla kalır).
+  const tahmin = (() => { try { return senaryoVeriKosusuTahmini(vt, projeId, hedef.senaryoId, ortamId, /** @type {string} */ (kip)); } catch { return null; } })();
+  const sinir = veriKosusuSiniri(vt);
+  if (tahmin && tahmin.sayi > sinir) {
+    throw new DepoHatasi(`"${tahmin.baslik}" bu ortamda ${tahmin.sayi} veri koşusu çıkarıyor; tek senaryoda en çok ${sinir} olabilir (Ayarlar > Koşu). Senaryonun satır seçimini daraltın (senaryo formu > Satır seçimi) ya da koşuyu tek satırla başlatın.`);
+  }
+  return kip === 'tek' || kip === 'tumu' ? { [VERI_KIPI_DEGISKENI]: String(kip) } : {};
 }
 
 /**
@@ -85,7 +120,8 @@ export async function senaryoCalistir(vt, govde, kosucu, secenekler = {}) {
   const sonuc = await kosucu.calistir({
     ortam: GENEL_ORTAM_ETIKETI, dosya: h.hedef.dosya, ad: h.hedef.ad, kosuId: h.kosuId,
     kosuTuru: h.kosuTuru, kosuKimligi: h.kosuKimligi, kosuKapsami: h.kosuKapsami, senaryoId: h.hedef.senaryoId,
-    etiket: h.hedef.etiket, grepDeseni: h.hedef.grepDeseni, genel: h.hedef.genel
+    etiket: h.hedef.etiket, grepDeseni: h.hedef.grepDeseni, genel: h.hedef.genel,
+    ...(Object.keys(h.ekOrtam).length ? { ekOrtam: h.ekOrtam } : {})
   });
   return { httpDurum: sonuc.httpDurum ?? 200, govde: { ...sonuc.govde, senaryoId: h.hedef.senaryoId, baslik: h.hedef.baslik } };
 }
@@ -102,7 +138,7 @@ export async function senaryoDene(vt, govde, kosucu) {
     projeId, ekranId: kimlik(govde.ekranId, 'ekranId'), ortamId: kimlik(govde.ortamId, 'ortamId'), veri: govde.veri,
     id: typeof govde.id === 'string' && KIMLIK.test(govde.id) ? govde.id : null,
     akisId: typeof govde.akisId === 'string' && KIMLIK.test(govde.akisId) ? govde.akisId : null, mutlakaGorunmeli: govde.mutlakaGorunmeli,
-    giris: govde.giris, ...(govde.tabloSecimleri !== undefined ? { tabloSecimleri: govde.tabloSecimleri } : {})
+    giris: govde.giris, adimGoruntusu: govde.adimGoruntusu, ...(govde.tabloSecimleri !== undefined ? { tabloSecimleri: govde.tabloSecimleri } : {})
   }, { geciciEk: randomBytes(4).toString('hex') });
   if (!kosucu) throw new DepoHatasi('Test çalıştırıcısı bu sunucuda etkin değil.');
   const sonuc = await kosucu.modelDene({

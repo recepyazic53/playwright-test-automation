@@ -20,7 +20,8 @@ export declare function senaryoKaynakAnahtari(icerik: unknown): string | null;
 export declare function veriGudumluMu(icerik: unknown): boolean;
 export type AkisOzeti = { id: string; ad: string; varsayilan: boolean; adimSayisi: number };
 export declare function senaryoAkisi(icerik: unknown): string | null;
-export declare function modelBaglami(vt: Veritabani, ekranId: string, akisId?: string | null): {
+export declare function senaryoOrtamVerisi(vt: Veritabani, icerik: Record<string, unknown>, ortamId: string): Record<string, unknown> | null;
+export declare function modelBaglami(vt: Veritabani, ekranId: string, akisId?: string | null, secenekler?: { listesiz?: boolean; surum?: number }): {
   model: Record<string, unknown>; altModeller: Record<string, Record<string, unknown>>; surum: number;
   /** Akışlarla birlikte ham model. */ tamModel: Record<string, unknown>; akislar: AkisOzeti[]; akisId: string;
   /** Bulunamayan ortak akış dosyaları (açılamayan adımlar modelden düşer). */ eksikOrtakAkislar: string[];
@@ -60,8 +61,12 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   akis: string | null;
   /** Giriş seçimi (null = ortamın girişiyle, varsayılan). */
   giris: import('./senaryo-girisi.mjs').SenaryoGirisi | null;
+  /** Adım ekran görüntüsü seçimi (null = Ayarlar > Koşu > Kayıt'a uyar, varsayılan). */
+  adimGoruntusu: import('../ayarlar/kayit-kurallari.mjs').AdimGoruntusuSecimi | null;
   /** Satır seçimleri: "<tabloId>|<etiket>" → { Sütun: değer } (yoksa null). */
   tabloSecimleri: Record<string, Record<string, string>> | null;
+  /** Çalıştırma biçimi (tablodan çoklu satır; yoksa null = her grup tek satır). */
+  veriKosulari: import('../tablolar/veri-kosulari.mjs').VeriKosulari | null;
 };
 export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string, secenekler?: { tumTipler?: boolean }): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
 export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null): {
@@ -82,7 +87,7 @@ export declare function senaryoKaydet(
   vt: Veritabani,
   girdi: {
     id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown;
-    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; tabloSecimleri?: unknown; yapan?: string;
+    kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yapan?: string;
   },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
 ): { id: string; uyarilar: Bulgu[] };
@@ -122,7 +127,7 @@ export declare function calistirmaHedefiCoz(
 ): CalistirmaHedefi;
 export declare function denemePaketiOlustur(
   vt: Veritabani,
-  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; tabloSecimleri?: unknown },
+  girdi: { projeId: string; ekranId: string; ortamId: string; veri: unknown; id?: string | null; akisId?: string | null; mutlakaGorunmeli?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown },
   secenekler: { geciciEk: string }
 ): {
   model: true; genel: { projeId: string; ortamId: string }; spec: string; geciciBaslik: string;

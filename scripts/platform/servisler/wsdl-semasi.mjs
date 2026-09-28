@@ -2,6 +2,7 @@
 // Belge / literal "wrapped" SOAP servisleri (ör. .asmx) hedeflenir: binding operasyonu → portType girdisi → mesaj parçası
 // (element) → o öğenin karmaşık tipi. Desteklenen: element / complexType / sequence / all / choice / complexContent extension,
 // simpleType enumeration (seçenek listesi), minOccurs / maxOccurs / nillable. Özellikler (attribute) ve any yok sayılır.
+// Operasyonun YANIT öğesi de (portType çıktısı) aynı biçimde "yanit" olarak döner (servis sözleşmesi: servis-sozlesmesi.mjs).
 // Anlaşılmayan yapı hata vermez: o operasyon alansız ya da eksik alanla döner (arayüz XML görünümüne düşer).
 // İçe aktarılan belgeler (wsdl:import, xsd:import / include — ör. Java JAX-WS "?wsdl=1", "?xsd=1") erisimiDenetle tarafından
 // alınıp ana belgenin içine eklenir; burada tüm definitions ve schema bölümleri birlikte okunur.
@@ -164,10 +165,14 @@ export function wsdlSemalari(wsdl) {
   }
   /** @type {Map<string, string>} */
   const girdiler = new Map();
+  /** @type {Map<string, string>} */
+  const ciktilar = new Map();
   for (const pt of hepsi('portType')) {
     for (const op of cocuklar(pt, 'operation')) {
       const girdi = cocuklar(op, 'input')[0];
       if (op.oz.name && girdi?.oz.message && !girdiler.has(op.oz.name)) girdiler.set(op.oz.name, yerel(girdi.oz.message));
+      const cikti = cocuklar(op, 'output')[0];
+      if (op.oz.name && cikti?.oz.message && !ciktilar.has(op.oz.name)) ciktilar.set(op.oz.name, yerel(cikti.oz.message));
     }
   }
   /** @type {Record<string, OperasyonSemasi>} */
@@ -183,7 +188,12 @@ export function wsdlSemalari(wsdl) {
       const o = ogeler.get(ogeAdi);
       if (!o) continue;
       const alan = ogeAlani(o.oge, []);
-      sonuc[ad] = { ad, ...(eylem ? { eylem } : {}), kok: ogeAdi, ns: o.ns, alanlar: alan?.cocuklar ?? [] };
+      // Yanıt şeması (servis sözleşmesi, servis-sozlesmesi.mjs): portType çıktısı → mesaj parçası öğesi (yoksa "<ad>Response").
+      const yanitAdi = mesajOgesi.get(ciktilar.get(ad) ?? '') ?? `${ad}Response`;
+      const y = ogeler.get(yanitAdi);
+      const yanitAlani = y ? ogeAlani(y.oge, []) : null;
+      sonuc[ad] = { ad, ...(eylem ? { eylem } : {}), kok: ogeAdi, ns: o.ns, alanlar: alan?.cocuklar ?? [],
+        ...(y ? { yanit: { kok: yanitAdi, ns: y.ns, alanlar: yanitAlani?.cocuklar ?? [] } } : {}) };
     }
   }
   return sonuc;

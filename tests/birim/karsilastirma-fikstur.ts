@@ -14,7 +14,7 @@ export const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4
 
 export type KarsilastirmaFiksturu = {
   projeId: string; baskaProjeId: string; ortamId: string; kosuA: string; kosuB: string; tekilKosu: string;
-  senaryoId: string; servisKosuA: string; servisKosuB: string; akisKosuA: string; akisKosuB: string; sonucA1: string; sonucB1: string;
+  senaryoId: string; servisId: string; servisKosuA: string; servisKosuB: string; akisKosuA: string; akisKosuB: string; sonucA1: string; sonucB1: string;
 };
 
 /**
@@ -103,5 +103,5 @@ export async function karsilastirmaVerisiKur(vt: Veritabani, vtYolu: string): Pr
   };
   const akisKosuA = akisKosusu(22, 'basarili');
   const akisKosuB = akisKosusu(23, 'hata');
-  return { projeId, baskaProjeId, ortamId, kosuA: 'kars-a', kosuB: 'kars-b', tekilKosu: 'kars-tekil', senaryoId, servisKosuA, servisKosuB, akisKosuA, akisKosuB, sonucA1, sonucB1 };
+  return { projeId, baskaProjeId, ortamId, kosuA: 'kars-a', kosuB: 'kars-b', tekilKosu: 'kars-tekil', senaryoId, servisId, servisKosuA, servisKosuB, akisKosuA, akisKosuB, sonucA1, sonucB1 };
 }

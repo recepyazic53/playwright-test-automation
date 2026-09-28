@@ -66,7 +66,7 @@ test.describe('servis akışları arayüzü', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto(`/#/servisler/s/${servisId}/akislar`);
     await expect(page.getByText('Henüz akış yok.')).toBeVisible();
-    await page.getByRole('link', { name: 'Yeni akış' }).click();
+    await page.getByRole('link', { name: 'Akış ekle' }).click();
     await page.getByLabel('Başlık').fill('Giriş → Siparis');
     // Yeni adımın varsayılan türü "Operasyon"; bu test kayıtlı senaryo adımlarını (eski tür) kullanır.
     await page.getByLabel('1. adım türü').selectOption('senaryo');

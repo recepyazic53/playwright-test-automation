@@ -13,13 +13,15 @@ import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi } from './servis-govdesi.mjs';
 import { basvuru } from './tablo-secimi.mjs';
+import { dosyaKontroluFormu, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 
 const q = encodeURIComponent;
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
 const KAYNAK_ETIKETI = { sabit: 'Sabit değer', tablo: 'Tablodan', parametre: 'Hesaplama kuralı', akis: 'Akış değeri', bos: 'Boş gönder', nil: 'Boş (nil)', gonderme: 'Gönderme' };
 const KONTROL_TURLERI = [
   ['soapYaniti', 'Yanıt geçerli SOAP zarfı'], ['soapHatasiYok', 'SOAP hatası (Fault) yok'], ['soapHatasi', 'SOAP hatası (Fault) döner'],
-  ['icerir', 'Yanıtta geçer'], ['icermez', 'Yanıtta geçmez'], ['xpathEsit', 'XPath değeri eşit'], ['jsonEsit', 'JSON değeri eşit'], ['durumKodu', 'HTTP durum kodu']
+  ['icerir', 'Yanıtta geçer'], ['icermez', 'Yanıtta geçmez'], ['xpathEsit', 'XPath değeri eşit'], ['jsonEsit', 'JSON değeri eşit'], ['durumKodu', 'HTTP durum kodu'],
+  ['dosya', 'Yanıttaki dosyayı doğrula']
 ];
 const DEGERLI = new Set(['icerir', 'icermez', 'xpathEsit', 'jsonEsit', 'durumKodu']);
 
@@ -67,7 +69,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     api(`/platform/servis-akislari?projeId=${q(proje.id)}`),
     api(`/platform/tablolar?projeId=${q(proje.id)}`).catch(() => ({ tablolar: [] }))
   ]);
-  const uygun = akislar.filter((a) => a.tur === 'akis');
+  const uygun = akislar.filter((a) => a.tur === 'akis' && !a.icerik?.uctanUca);
   const gecen = (a) => (a.icerik?.adimlar ?? []).some((x) => x.servisId === s.id);
   let tumu = Boolean(baslangicAkisi && !uygun.some((a) => a.id === baslangicAkisi && gecen(a)));
   let akisId = baslangicAkisi || '';
@@ -227,7 +229,13 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
         ...d.kontroller.map((k, i) => {
           const tur = h('select', { 'aria-label': `${a.no}. adım ${i + 1}. kontrol türü` }, KONTROL_TURLERI.map(([t, m]) => h('option', { value: t, selected: k.tur === t }, m)),
             KONTROL_TURLERI.some(([t]) => t === k.tur) ? null : h('option', { value: k.tur, selected: true }, k.tur));
-          tur.addEventListener('change', () => { k.tur = tur.value; kontrolCiz(); });
+          tur.addEventListener('change', () => { k.tur = tur.value; if (k.tur === 'dosya') k.dosya ||= yeniDosyaTanimi(); else delete k.dosya; kontrolCiz(); });
+          // Dosya kontrolü: adımın yanıt gövdesi dosya olarak beklentilerle doğrulanır.
+          if (k.tur === 'dosya') {
+            return h('div', { class: 'akis-kontrol-satiri' }, tur,
+              h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${a.no}. adım ${i + 1}. kontrolü kaldır`, onclick: () => { d.kontroller.splice(i, 1); kontrolCiz(); } }, ikon('carpi')),
+              h('div', { class: 'kontrol-dosyasi' }, dosyaKontroluFormu(k.dosya ||= yeniDosyaTanimi(), { degisti: () => undefined, ad: `${a.no}. adım ${i + 1}. kontrol` })));
+          }
           const deger = h('input', { type: 'text', value: k.deger || '', autocomplete: 'off', spellcheck: 'false', placeholder: k.tur === 'durumKodu' ? '200 ya da 200-299' : 'Metin', 'aria-label': `${a.no}. adım ${i + 1}. kontrol değeri` });
           deger.addEventListener('input', () => { k.deger = deger.value; });
           const yol = h('input', { type: 'text', value: k.tur === 'jsonEsit' ? k.yol || '' : k.xpath || '', autocomplete: 'off', spellcheck: 'false', placeholder: k.tur === 'jsonEsit' ? 'data.id' : '//Durum', 'aria-label': `${a.no}. adım ${i + 1}. kontrol yolu` });

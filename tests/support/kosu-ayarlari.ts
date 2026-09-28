@@ -3,7 +3,12 @@
 // genel-veri.ts > kasaKosuAyarlariniYukle), o da yoksa önceki varsayılanlar kullanılır. Değerler ÇAĞRI anında okunur (kasadaki
 // ayarlar modüller yüklendikten sonra gelir).
 
-type Kayit = 'her' | 'yalnizHata' | 'kapali';
+// Kayıt seçimleri (video / iz / test sonu ekran görüntüsü / adım görüntüsü / video boyutu): seçimin Playwright kipine eşlenmesi ve
+// "yalnız başarılı" süzgeci scripts/platform/ayarlar/kayit-kurallari.mjs'de (raporlayıcıyla ortak TEK kural).
+import {
+  ADIM_GORUNTUSU_SECIMLERI, KAYIT_SECIMLERI, adimGoruntusuSecimi, ekranGoruntusuKipi, videoIzKipi,
+  type AdimGoruntusuSecimi, type KayitKurallari
+} from '../../scripts/platform/ayarlar/kayit-kurallari.mjs';
 
 /** Kasadaki kayıtlı ayarlar (ortam değişkeni adı → değer); yalnız kullanıcının kaydettikleri. */
 let kasaAyarlari: Record<string, string> = {};
@@ -21,28 +26,68 @@ export function ayarDegeri(ad: string): string | undefined {
   return k !== undefined && k !== '' ? k : undefined;
 }
 
-const kayit = (ad: string): Kayit | undefined => {
+const kayit = (ad: string): string | undefined => {
   const v = ayarDegeri(ad);
-  return v === 'her' || v === 'yalnizHata' || v === 'kapali' ? v : undefined;
+  return v !== undefined && (KAYIT_SECIMLERI as readonly string[]).includes(v) ? v : undefined;
 };
 
-/** Video: Nöbetçi koşusunda varsayılan her koşuda (panelde izlenir), diğerlerinde yalnız kalan testlerde. Kasadaki ayar okunmaz (ayar Nöbetçi koşuları içindir). */
-export function videoAyari(): 'on' | 'retain-on-failure' | 'off' {
+/**
+ * Kayıt seçimleri (her | yalnizBasari | yalnizHata | kapali). Video: Nöbetçi koşusunda varsayılan her testte (panelde izlenir),
+ * diğerlerinde yalnız kalan testlerde; kasadaki ayar okunmaz (ayar Nöbetçi koşuları içindir). Test sonu görüntüsü ve iz: ortam
+ * değişkeni > kasadaki kayıtlı ayar > yalnız kalan testlerde. Raporlayıcı da bu seçimleri alır (playwright.config.ts).
+ */
+export function kayitSecimleri(): KayitKurallari {
   const e = process.env.NOBETCI_VIDEO;
-  const v = e === 'her' || e === 'yalnizHata' || e === 'kapali' ? e : process.env.TEST_SUNUCU_GORUNUR ? 'her' : 'yalnizHata';
-  return v === 'her' ? 'on' : v === 'yalnizHata' ? 'retain-on-failure' : 'off';
+  return {
+    video: e !== undefined && (KAYIT_SECIMLERI as readonly string[]).includes(e) ? e : process.env.TEST_SUNUCU_GORUNUR ? 'her' : 'yalnizHata',
+    ekranGoruntusu: kayit('NOBETCI_EKRAN_GORUNTUSU') ?? 'yalnizHata',
+    iz: kayit('NOBETCI_IZ') ?? 'yalnizHata'
+  };
+}
+
+/** Video kaydının Playwright kipi ("yalnız başarılı": her testte kaydedilir, raporlayıcı kalan testlerinkini atar). */
+export function videoAyari(): 'on' | 'retain-on-failure' | 'off' {
+  return videoIzKipi(kayitSecimleri().video);
+}
+
+/**
+ * Video boyutu (Ayarlar > Koşu > Kayıt > Video boyutu): 'kucuk' (varsayılan) Playwright'ın kendi boyutu (800 px'e sığdırma; size
+ * verilmez — bugünkü davranış), 'ekran' koşu ekran boyutu (viewport).
+ */
+export function videoBoyutuAyari(): 'kucuk' | 'ekran' {
+  return secimAyari('NOBETCI_VIDEO_BOYUTU', ['kucuk', 'ekran'] as const, 'kucuk');
+}
+
+/** playwright.config.ts > use.video: kip + (Ekranla aynı seçiliyse) boyut. */
+export function videoKaydiAyari(): { mode: 'on' | 'retain-on-failure' | 'off'; size?: { width: number; height: number } } {
+  const mode = videoAyari();
+  return videoBoyutuAyari() === 'ekran' ? { mode, size: { ...kosuTarayiciAyarlari().viewport } } : { mode };
 }
 
 /** Test sonu ekran görüntüsü (varsayılan yalnız kalan testlerde). fixtures.ts > hataYakalayici de buna uyar. */
 export function ekranGoruntusuAyari(): 'on' | 'only-on-failure' | 'off' {
-  const v = kayit('NOBETCI_EKRAN_GORUNTUSU') ?? 'yalnizHata';
-  return v === 'her' ? 'on' : v === 'yalnizHata' ? 'only-on-failure' : 'off';
+  return ekranGoruntusuKipi(kayitSecimleri().ekranGoruntusu);
 }
 
 /** İz / trace (varsayılan yalnız kalan testlerde). */
 export function izAyari(): 'on' | 'retain-on-failure' | 'off' {
-  const v = kayit('NOBETCI_IZ') ?? 'yalnizHata';
-  return v === 'her' ? 'on' : v === 'yalnizHata' ? 'retain-on-failure' : 'off';
+  return videoIzKipi(kayitSecimleri().iz);
+}
+
+/**
+ * Adım ekran görüntüleri (Ayarlar > Koşu > Kayıt): senaryonun seçimi (senaryo formu; yoksa "Ayarlara uy") > ortam değişkeni >
+ * kasadaki kayıtlı ayar > her adımda (bugünkü davranış).
+ */
+export function adimGoruntusuAyari(senaryoSecimi?: string | null): AdimGoruntusuSecimi {
+  return adimGoruntusuSecimi(senaryoSecimi) ?? secimAyari('NOBETCI_ADIM_GORUNTUSU', ADIM_GORUNTUSU_SECIMLERI, 'her');
+}
+
+/**
+ * Doğrulanan (indirilen) dosya rapora ek olarak saklansın mı (Ayarlar > Koşu > Kayıt > Doğrulanan dosya): varsayılan saklanmaz
+ * (yalnız özet); 'yalnizHata' yalnız beklentisi kalan dosya; 'her' her zaman.
+ */
+export function indirilenDosyaAyari(): 'her' | 'yalnizHata' | 'kapali' {
+  return secimAyari('NOBETCI_INDIRILEN_DOSYA', ['her', 'yalnizHata', 'kapali'] as const, 'kapali');
 }
 
 /** Yeniden deneme sayısı (0–3): ortam değişkeni > kasadaki kayıtlı ayar > CI'da 2, diğerlerinde 0. */

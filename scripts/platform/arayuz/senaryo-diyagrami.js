@@ -193,10 +193,11 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
       disarida && a.neden ? h('p', { class: 'dugum-aciklamasi disarida-nedeni' }, ikon('eksi'), ' ', a.neden) : null,
       a.altAkis ? h('p', { class: 'dugum-aciklamasi' }, `Alt akış: ${a.altAkis}`) : null,
       a.sqlOzeti ? h('p', { class: 'dugum-aciklamasi' }, ikon('veri'), ' ', a.sqlOzeti) : null,
+      a.dosyaOzeti ? h('p', { class: 'dugum-aciklamasi' }, ikon('indir'), ' ', a.dosyaOzeti) : null,
       a.yenidenGiris ? h('p', { class: 'dugum-aciklamasi' }, ikon('kilit'), ' ', `Yeniden giriş: oturum kapatılır, ortamın giriş tarifiyle ${a.yenidenGiris.profil ? `“${a.yenidenGiris.profil}” profiliyle` : 'varsayılan profille'} girilir; akış aynı sayfadan sürer.`) : null,
       a.yenidenGiris ? girisAyrintisi(bilgi) : null,
       alanListesi(a.alanlar),
-      !a.alanlar.length && !a.altAkis && !a.sqlOzeti && !a.yenidenGiris ? h('p', { class: 'dugum-aciklamasi soluk' }, 'Bu adımda doldurulan alan yok.') : null,
+      !a.alanlar.length && !a.altAkis && !a.sqlOzeti && !a.dosyaOzeti && !a.yenidenGiris ?h('p', { class: 'dugum-aciklamasi soluk' }, 'Bu adımda doldurulan alan yok.') : null,
       disarida ? null : hataSatiri(a.sonuc));
     kutuTiklamasi(li, dz, dugumId);
     ogeler.push({ el: li, dugum: dugumId });

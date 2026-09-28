@@ -5,7 +5,7 @@
 // ve riski yazılıdır). Kilitle düğmeleri kasayiKilitleSecimli() ile iki seçenek sunar (A ya da B açıkken).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, parolaAlani, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './ekran-ortak.js';
-import { riskliOrtamMi } from './kosu-paneli.js';
+import { ortamRiskRozeti, riskliOrtamMi } from './kosu-paneli.js';
 
 const GUNLER = [[1, 'Pzt'], [2, 'Sal'], [3, 'Çar'], [4, 'Per'], [5, 'Cum'], [6, 'Cmt'], [7, 'Paz']];
 const ARALIKLAR = [1, 2, 3, 4, 6, 8, 12];
@@ -37,23 +37,25 @@ export async function zamanlanmisKosularKarti(proje, secenek = {}) {
       api(`/platform/entegrasyonlar?${q}`).catch(() => ({ turler: [], baglantilar: [] }))
     ]);
     const ekranlar = (ekranYaniti.ekranlar || []).filter((e) => e.modelTuru !== 'altModel');
-    const akislar = (akisYaniti.akislar || []).filter((a) => a.tur !== 'oturum');
+    // Servis akışları ve uçtan uca akışlar (servis, ekran, SQL adımları) ayrı listelerde seçilir.
+    const akislar = (akisYaniti.akislar || []).filter((a) => a.tur !== 'oturum' && !a.icerik?.uctanUca);
+    const uctanUcalar = (akisYaniti.akislar || []).filter((a) => a.tur === 'akis' && a.icerik?.uctanUca);
     const bildirimTurleri = new Set((entYaniti.turler || []).filter((t) => (t.olaylar || []).some((o) => o.ad === 'kosu-bitti')).map((t) => t.tur));
     const webhooklar = (entYaniti.baglantilar || []).filter((b) => bildirimTurleri.has(b.tur));
-    const secenekler = { proje, ortamlar, ekranlar, akislar, webhooklar };
+    const secenekler = { proje, ortamlar, ekranlar, akislar, uctanUcalar, webhooklar };
     const formAlani = h('div', { class: 'zamanlama-form-alani' });
     const formAc = (kural) => {
       yerlestir(formAlani, kuralFormu({ ...secenekler, kural, kapat: () => formAlani.replaceChildren(), kaydedildi: () => { void ciz(); } }));
       formAlani.scrollIntoView({ block: 'nearest' });
     };
-    const ekle = h('button', { type: 'button', class: 'birincil', onclick: () => formAc(null) }, '+ Zamanlanmış koşu ekle');
+    const ekle = h('button', { type: 'button', class: 'birincil', onclick: () => formAc(null) }, ikon('arti'), 'Zamanlanmış koşu ekle');
     yerlestir(kart,
       h('div', { class: 'bolum-basligi' }, h('h3', {}, ikon('tarih'), 'Zamanlanmış koşular', rozet(String(veri.kurallar.length))), ekle),
       h('p', { class: 'soluk' }, KILAVUZ),
       veri.suren ? h('div', { class: 'not-kutusu uyari', role: 'status' }, `Şu an zamanlanmış koşu sürüyor: "${veri.suren.ad}".`) : null,
       formAlani,
       veri.kurallar.length ? h('ul', { class: 'kayit-listesi zamanlama-listesi' }, veri.kurallar.map((k) => kuralSatiri(k, { ...secenekler, duzenle: formAc, yenile: ciz })))
-        : bosDurum('Zamanlanmış koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "+ Zamanlanmış koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
+        : bosDurum('Zamanlanmış koşu yok.', 'Nöbetçi\'nin belirli zamanlarda kendiliğinden koşu başlatması için "Zamanlanmış koşu ekle"ye basın.', { ikon: 'tarih', rol: 'status' }),
       secenek.davranisFormu ? h('div', { class: 'zamanlama-davranisi' }, h('h4', {}, 'Zamanlanmış koşu davranışı'), await secenek.davranisFormu()) : null,
       await arkaPlanBolumu().catch((hata) => {
         if (hata && hata.durum === 423) throw hata;
@@ -252,15 +254,25 @@ export function kilitBildirimi(secim) {
 
 function kapsamMetni(k, s) {
   const ekranAdi = (id) => (s.ekranlar.find((e) => e.id === id) || { ad: 'silinmiş ekran' }).ad;
-  const akisAdi = (id) => (s.akislar.find((a) => a.id === id) || { baslik: 'silinmiş akış' }).baslik;
+  const akisAdi = (id) => ([...s.akislar, ...s.uctanUcalar].find((a) => a.id === id) || { baslik: 'silinmiş akış' }).baslik;
   const parcalar = [];
   if (k.kapsam.senaryolar === 'tum') parcalar.push('Tüm "Koşuda" senaryolar');
   else if (k.kapsam.senaryolar === 'ekranlar') parcalar.push(`Ekranlar: ${k.kapsam.ekranIdleri.map(ekranAdi).join(', ')}`);
   if (k.kapsam.servisAkisIdleri.length) parcalar.push(`Servis akışları: ${k.kapsam.servisAkisIdleri.map(akisAdi).join(', ')}`);
+  const uctan = k.kapsam.uctanUcaAkisIdleri || [];
+  if (uctan.length) parcalar.push(`Uçtan uca akışlar: ${uctan.map(akisAdi).join(', ')}`);
   return parcalar.join(' · ');
 }
 
-const sonucBaglantisi = (t) => (t.kosuId ? h('a', { href: `#/sonuclar/kosu/${encodeURIComponent(t.kosuId)}` }, 'Sonuçları aç') : null);
+/** Tetiklemenin sonuç bağlantıları: ekran koşusu ve uçtan uca akış koşuları (Sonuçlar > Uçtan uca akışlar). */
+const sonucBaglantisi = (t) => {
+  const uctan = (t.akisKosulari || []).filter((a) => a.uctanUca && a.kosuId);
+  const b = [
+    t.kosuId ? h('a', { href: `#/sonuclar/kosu/${encodeURIComponent(t.kosuId)}` }, 'Sonuçları aç') : null,
+    ...uctan.map((a, n) => h('a', { href: `#/sonuclar/uctan-uca/${encodeURIComponent(a.kosuId)}` }, uctan.length > 1 ? `Uçtan uca sonucu ${n + 1}` : 'Uçtan uca sonucu'))
+  ].filter(Boolean);
+  return b.length ? h('span', { class: 'zamanlama-sonuclari' }, ...b.flatMap((x, n) => (n ? [' · ', x] : [x]))) : null;
+};
 
 function kuralSatiri(k, s) {
   const etkin = h('input', { type: 'checkbox', class: 'anahtar', checked: k.etkin, role: 'switch', 'aria-label': `${k.ad}: etkin` });
@@ -292,7 +304,7 @@ function kuralSatiri(k, s) {
   return h('li', { class: k.etkin ? null : 'pasif-kayit' },
     h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('tarih')),
     h('div', { class: 'kayit-ana' },
-      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Canlı / riskli ortam', 'hata') : null),
+      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Riskli', 'hata', { title: 'Riskli ortamda zamanlanmış koşu (kayıtta onaylandı)' }) : null),
       h('div', { class: 'kayit-meta' }, [k.zamanMetni, k.ortamAdi || 'silinmiş ortam', kapsamMetni(k, s), k.bildirimAdi ? `Bildirim: ${k.bildirimAdi}` : null].filter(Boolean).join(' · ')),
       h('div', { class: 'kayit-meta' }, k.etkin ? `Sonraki çalışma: ${tarihMetni(k.sonrakiCalisma)}` : 'Pasif: çalışmaz.'),
       son ? h('div', { class: 'kayit-meta zamanlama-son' }, `Son çalışma: ${tarihMetni(son.zaman)} `, durumRozeti(son.durum), son.mesaj ? ` ${son.mesaj} ` : ' ', sonucBaglantisi(son))
@@ -327,10 +339,11 @@ function kuralFormu(s) {
   const kapsamTuru = h('select', {},
     h('option', { value: 'tum' }, 'Tüm "Koşuda" senaryolar (tam koşu)'),
     h('option', { value: 'ekranlar' }, 'Seçili ekranların "Koşuda" senaryoları'),
-    h('option', { value: 'yok' }, 'Senaryo yok (yalnız servis akışları)'));
+    h('option', { value: 'yok' }, 'Senaryo yok (yalnız akışlar)'));
   kapsamTuru.value = k ? k.kapsam.senaryolar : 'tum';
   const ekranKutulari = kutuListesi(s.ekranlar.map((e) => [e.id, e.durum === 'devre_disi' ? `${e.ad} (devre dışı)` : e.ad]), k ? k.kapsam.ekranIdleri : [], 'Ekranlar');
   const akisKutulari = kutuListesi(s.akislar.map((a) => [a.id, a.baslik]), k ? k.kapsam.servisAkisIdleri : [], 'Servis akışları (isteğe bağlı)');
+  const uctanKutulari = kutuListesi(s.uctanUcalar.map((a) => [a.id, a.baslik]), k ? k.kapsam.uctanUcaAkisIdleri || [] : [], 'Uçtan uca akışlar (isteğe bağlı)');
   const kapsamGuncelle = () => { ekranKutulari.el.hidden = kapsamTuru.value !== 'ekranlar'; };
   kapsamTuru.addEventListener('change', kapsamGuncelle);
   kapsamGuncelle();
@@ -392,7 +405,9 @@ function kuralFormu(s) {
   const form = h('form', { class: 'kart form-paneli zamanlama-formu', novalidate: true, 'aria-label': k ? `${k.ad}: düzenle` : 'Yeni zamanlanmış koşu' },
     h('h3', {}, k ? `Düzenle: ${k.ad}` : 'Yeni zamanlanmış koşu'), mesaj.kutu,
     alan('Ad', ad, { zorunlu: true }), alan('Ortam', ortam, { zorunlu: true }), canliKutusu,
-    h('fieldset', {}, h('legend', {}, 'Ne koşulsun?'), alan('Senaryolar', kapsamTuru), ekranKutulari.el, s.akislar.length ? akisKutulari.el : null),
+    h('fieldset', {}, h('legend', {}, 'Ne koşulsun?'), alan('Senaryolar', kapsamTuru), ekranKutulari.el, s.akislar.length ? akisKutulari.el : null,
+      s.uctanUcalar.length ? uctanKutulari.el : null,
+      s.uctanUcalar.length ? h('p', { class: 'soluk kucuk' }, 'Uçtan uca akışlar arayüzdeki "Koş" ile aynı denetimle koşar: kapalı izne tabi akış atlanır ve geçmişe yazılır.') : null),
     h('fieldset', {}, h('legend', {}, 'Ne zaman?'), alan('Tekrar', zamanTuru), saatAlani, gunKutulari.el, aralikAlani, baslangicAlani, onizleme,
       h('p', { class: 'soluk kucuk' }, 'Kasa kilitliyken ya da Nöbetçi kapalıyken kaçan zamanlar varsayılan olarak koşulmaz; bir sonraki zaman beklenir (Zamanlanmış koşu davranışı > Kaçan zaman).')),
     bildirimAlani,
@@ -406,7 +421,8 @@ function kuralFormu(s) {
     if (!canliKutusu.hidden && !canliOnay.checked) { mesaj.goster('Canlı / riskli ortam: kaydetmek için "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusunu işaretleyin.'); canliOnay.focus(); return; }
     const kural = {
       ...(k ? { id: k.id } : {}), ad: ad.value.trim(), ortamId: ortam.value,
-      kapsam: { senaryolar: kapsamTuru.value, ekranIdleri: kapsamTuru.value === 'ekranlar' ? ekranKutulari.secilenler() : [], servisAkisIdleri: akisKutulari.secilenler() },
+      kapsam: { senaryolar: kapsamTuru.value, ekranIdleri: kapsamTuru.value === 'ekranlar' ? ekranKutulari.secilenler() : [], servisAkisIdleri: akisKutulari.secilenler(),
+        uctanUcaAkisIdleri: uctanKutulari.secilenler() },
       zaman: zamanOku(), etkin: etkin.checked, bildirimBaglantiId: bildirim.value || null, canliOnay: !canliKutusu.hidden && canliOnay.checked
     };
     try {
