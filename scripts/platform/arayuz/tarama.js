@@ -324,14 +324,14 @@ function profilSatiri(p) {
 }
 
 /** Elle doğrulama kodu formu (SMS "elle" kipi). */
-function kodFormu(isId, istek, gonderildi) {
+export function kodFormu(isId, istek, gonderildi) {
   const girdi = h('input', { type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', maxlength: '12', id: `tarama-kodu-${isId}`, spellcheck: 'false' });
   const gonder = h('button', { type: 'submit', class: 'birincil' }, 'Gönder');
   const hata = h('div', { class: 'alan-hatasi', role: 'alert' });
   const kalan = h('span', { class: 'kod-kalan sayi' }, `${istek.kalanSn} sn`);
   const form = h('form', { class: 'kod-istemi', 'aria-labelledby': `tarama-kodu-${isId}-baslik` },
     h('div', { class: 'kod-istemi-baslik' }, ikon('kilit'), h('strong', { id: `tarama-kodu-${isId}-baslik` }, 'Doğrulama kodu bekleniyor'), kalan),
-    h('p', { class: 'soluk kucuk' }, `${istek.mesaj}. Tarama bu kodu girmeniz için bekliyor; süre dolarsa giriş başarısız sayılır. Kod kaydedilmez.`),
+    h('p', { class: 'soluk kucuk' }, `${istek.mesaj}. Nöbetçi bu kodu girmeniz için bekliyor; süre dolarsa giriş başarısız sayılır. Kod kaydedilmez.`),
     h('div', { class: 'kod-istemi-satir' }, h('label', { class: 'gorunmez', for: girdi.id }, 'Doğrulama kodu'), girdi, gonder),
     hata);
   form.addEventListener('submit', async (o) => {
@@ -340,7 +340,7 @@ function kodFormu(isId, istek, gonderildi) {
     if (!/^[A-Za-z0-9]{3,12}$/.test(kod)) { hata.textContent = 'Kod yalnızca harf ve rakamdan oluşmalı (3–12 karakter).'; girdi.focus(); return; }
     try {
       await mesgulIken(gonder, 'Gönderiliyor…', () => api('/platform/tarama/kod', { govde: { id: isId, kod } }));
-      bildir('Doğrulama kodu taramaya iletildi.');
+      bildir('Doğrulama kodu iletildi.');
       gonderildi();
     } catch (e) {
       hata.textContent = e.message;

@@ -12,6 +12,7 @@
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { girisAdimlariOzeti } from './giris-ozeti.mjs';
+import { girisiDeneDugmesi } from './giris-denemesi.js';
 
 const IKINCI_ADIM_ETIKETI = { yok: 'Yok', totp: 'Authenticator (TOTP)', sms: 'SMS' };
 const KAYNAK_ROZETI = {
@@ -167,6 +168,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
           // Önerilen yol "Girişi kaydet" (tarif yoksa birincil); elle tanımlama gelişmiş seçenek olarak yanında durur.
           h('button', { type: 'button', class: o.tarif ? 'kucuk-dugme hayalet' : 'kucuk-dugme birincil', 'aria-label': `${o.ortamAd}: girişi kaydet`, onclick: () => girisiKaydet(o) },
             ikon('oynat'), o.tarif ? 'Yeniden kaydet' : 'Girişi kaydet'),
+          o.tarif ? girisiDeneDugmesi(o, proje.id) : null,
           (o.tarif ? h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: giriş tarifini düzenle`, onclick: () => tarifFormu(o) }, ikon('duzenle'), 'Düzenle')
             : h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${o.ortamAd}: giriş tarifi ekle`, onclick: () => tarifFormu(o) }, 'Elle tanımla'))));
     }));
