@@ -212,6 +212,15 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
   }
 
   const TUR_ETIKETI = { test: 'Test', canli: 'Canlı' };
+  /** Kalıntı sayıları { tablo: sayı } → okunur metin ("3 servis, 6 servis senaryosu"). */
+  const KALINTI_ETIKETLERI = {
+    projeler: 'proje kaydı', ortamlar: 'ortam', giris_profilleri: 'giriş profili', baglam_profilleri: 'bağlam profili',
+    test_verisi_turleri: 'test verisi tablosu', test_verisi_profilleri: 'test verisi satırı', ekranlar: 'ekran', senaryolar: 'senaryo',
+    servisler: 'servis', servis_senaryolari: 'servis senaryosu', servis_kimlikleri: 'servis giriş bilgisi',
+    servis_parametre_tanimlari: 'servis parametre tanımı', servis_akislari: 'servis akışı', kosular: 'koşu', servis_kosulari: 'servis koşusu',
+    servis_akis_kosulari: 'servis akışı koşusu'
+  };
+  const kalintiMetni = (k) => Object.entries(k).map(([t, n]) => `${n} ${KALINTI_ETIKETLERI[t] || t}`).join(', ');
   const ortamEtiketi = (o) => (o.tur ? `${o.ad} (${TUR_ETIKETI[o.tur]})` : o.ad);
 
   /** Yedekteki her proje için hedef seçimi ve (mevcut projeye aktarılırken) ortam eşlemesi; değişince önizleme yenilenir. */
@@ -270,7 +279,9 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       return h('div', { class: 'esleme-projesi', 'data-yedek-proje-kutusu': kp.id },
         alan(`Yedekteki proje: ${kp.ad}`, hedefSecimi, { yardim: 'Kayıtlarının yazılacağı proje.' }),
         ipucu, ortamlar,
-        ozet ? h('p', { class: 'esleme-ozeti' }, ozet.metin) : null);
+        ozet ? h('p', { class: 'esleme-ozeti' }, ozet.metin) : null,
+        ozet && ozet.kalinti ? h('p', { class: 'not-kutusu uyari kucuk esleme-kalintisi', role: 'note' },
+          `Bu bilgisayarda silinmiş "${kp.ad}" projesinden kalan kayıtlar var (${kalintiMetni(ozet.kalinti)}). Yedekte karşılığı olanlar seçilirse "${ozet.hedef.ad}" projesine taşınır; ikinci kopya oluşmaz.`) : null);
     });
     return h('section', { class: 'grup esleme-bolumu', 'aria-label': 'Hedef proje' },
       h('h3', {}, ikon('klasor'), 'Hedef proje'),
@@ -465,6 +476,12 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       sonuc.tamYukleme ? h('p', {}, 'Yedeğin tamamı bu bilgisayara yüklendi.') : null,
       sonuc.projeEslemesi && sonuc.projeEslemesi.ozet.length
         ? h('ul', { class: 'duz-liste esleme-sonucu' }, sonuc.projeEslemesi.ozet.map((o) => h('li', {}, o.metin)))
+        : null,
+      sonuc.kalintilar && Object.keys(sonuc.kalintilar).length
+        ? h('div', { class: 'not-kutusu uyari', role: 'note' }, Object.entries(sonuc.kalintilar).map(([p, k]) => {
+          const o = ((sonuc.projeEslemesi && sonuc.projeEslemesi.ozet) || []).find((x) => x.kaynak.id === p);
+          return h('p', {}, `Silinmiş "${o ? o.kaynak.ad : p}" projesinden kalan ve seçilmediği için taşınmayan kayıtlar duruyor (${kalintiMetni(k)}). Aynı yedeği yeniden içe aktarıp bu kayıtları seçerseniz "${o ? o.hedef.ad : ''}" projesine taşınır.`);
+        }))
         : null,
       varlikSatirlari.length ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
         h('caption', { class: 'gorunmez' }, 'Varlık türüne göre uygulanan değişiklikler'),
