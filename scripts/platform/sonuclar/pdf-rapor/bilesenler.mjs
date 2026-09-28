@@ -135,6 +135,12 @@ figure { margin: 4px 0; } figure img { max-width: 100%; max-height: 90mm; border
 .gizlilik { margin-top: 8px; border: 1px solid #d0d7de; border-left: 3px solid #57606a; padding: 6px 10px; font-size: 8pt; background: #f6f8fa; break-inside: avoid; }
 .ozet-sayilar { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 6px; }
 .ozet-sayilar .x { border: 1px solid #d8dde4; border-radius: 5px; padding: 2px 8px; font-size: 8.4pt; }
+.rozet-hap { display: inline-block; padding: 0 6px; border-radius: 9px; font-size: 7.8pt; font-weight: 700; white-space: nowrap; border: 1px solid; }
+.rh-saglikli { color: #1a7f37; background: #eefbf1; border-color: #1a7f37; } .rh-dikkat { color: #8a5d00; background: #fff8e1; border-color: #bf8700; } .rh-kritik { color: #b42318; background: #fff0ef; border-color: #cf222e; }
+.sira { display: inline-block; min-width: 18px; text-align: center; font-weight: 800; color: #24344d; background: #eef1f5; border-radius: 3px; font-size: 8pt; }
+.taraf { border: 1px solid #d8dde4; border-radius: 6px; padding: 6px 9px; break-inside: avoid; }
+.taraf h3 { margin-top: 0; }
+.baglanti-notu { color: #3b5b8c; }
 @media screen and (max-width: 640px) { .meta { grid-template-columns: 1fr 1fr; } .bakis, .iki { grid-template-columns: 1fr; } .kartlar { grid-template-columns: 1fr 1fr; } }
 `;
 
@@ -311,7 +317,7 @@ ${g.satirlar.map((r) => {
 
 /**
  * @typedef {{ baslik: string; nerede: string; sinif: string; durum: string; puan: number; bant: string; aksiyon: string; sahip: string; neden: string;
- *   dayanak?: string; tur?: string }} AksiyonSatiri
+ *   dayanak?: string; tur?: string; baglanti?: string }} AksiyonSatiri
  */
 
 /** @param {{ no: number; aksiyonlar: AksiyonSatiri[]; bantSayim: { P1: number; P2: number; P3: number }; e: Yazici; m: Yazici }} g */
@@ -320,16 +326,18 @@ export function aksiyonTablosu(g) {
 <p class="kucuk">Öncelik puanı sıralı (0–100). <b>P1</b> ≥ 60 bu hafta, <b>P2</b> 35–59 bu dönem, <b>P3</b> &lt; 35 izlenir. Toplam: ${g.bantSayim.P1} P1 · ${g.bantSayim.P2} P2 · ${g.bantSayim.P3} P3; aşağıda ilk ${g.aksiyonlar.length} aksiyon.</p>`;
   if (!g.aksiyonlar.length) return `${bas}<p class="bos">Ele alınması gereken açık sorun yok.</p>`;
   return `${bas}<table><thead><tr><th scope="col" style="width:52px">Öncelik</th><th scope="col">Ne / nerede</th><th scope="col" style="width:150px">Neden şimdi</th><th scope="col" style="width:170px">Önerilen aksiyon</th><th scope="col" style="width:96px">Sahip önerisi</th></tr></thead><tbody>
-${g.aksiyonlar.map((s) => `<tr><td>${puanEtiketi(s.bant, s.puan)}</td><td><b>${g.m(s.baslik)}</b><br><span class="kucuk">${g.m(s.nerede)}</span><br>${s.sinif === 'kararsiz' && s.durum === 'kararsiz' ? durumEtiketi(s.durum) : `${sinifEtiketi(s.sinif)} ${durumEtiketi(s.durum)}`}${s.dayanak ? `<br><span class="kucuk">Tahmin dayanağı: ${kacis(s.dayanak)}</span>` : ''}</td>
+${g.aksiyonlar.map((s) => `<tr><td>${puanEtiketi(s.bant, s.puan)}</td><td><b>${g.m(s.baslik)}</b><br><span class="kucuk">${g.m(s.nerede)}</span><br>${s.sinif === 'kararsiz' && s.durum === 'kararsiz' ? durumEtiketi(s.durum) : `${sinifEtiketi(s.sinif)} ${durumEtiketi(s.durum)}`}${s.dayanak ? `<br><span class="kucuk">Tahmin dayanağı: ${kacis(s.dayanak)}</span>` : ''}${s.baglanti ? `<br><span class="kucuk baglanti-notu">⇄ Bağlantılı sorunla birleştirildi: ${g.m(s.baglanti)}</span>` : ''}</td>
 <td class="kucuk">${kacis(s.neden)}</td><td class="kucuk">${kacis(s.aksiyon)}</td><td class="kucuk">${kacis(s.sahip)}</td></tr>`).join('')}
 </tbody></table>`;
 }
 
 /**
  * @param {{ no: number; sorunlar: Array<AksiyonSatiri & { kalip: string; n: number; nOnceki: number; senaryo: number; seri: number[]; oncekiSeri: number[];
- *   ilk: string | null; son: string | null; tekrarRozeti: boolean }>; hatalar: boolean; karsilastir: boolean; kosuVar: boolean; m: Yazici }} g
+ *   ilk: string | null; son: string | null; tekrarRozeti: boolean }>; hatalar: boolean; karsilastir: boolean; kosuVar: boolean; m: Yazici; turSutunu?: boolean }} g
+ *   turSutunu: ekran + servis raporunda sorunun kaynağı (Ekran / Servis) ayrı sütunda yazılır.
  */
 export function sorunTablosu(g) {
+  const turHucresi = (/** @type {{ tur?: string }} */ s) => (g.turSutunu ? `<td class="kucuk">${s.tur === 'servis' ? '⇄ Servis' : '▭ Ekran'}</td>` : '');
   const bas = `<h2><span class="no">${g.no}</span>Sorunlar ve eğilimleri</h2>`;
   if (!g.sorunlar.length) return `${bas}<p class="bos">${g.kosuVar ? 'Bu dönemde ve önceki dönemde başarısız sonuç yok.' : 'Bu dönemde koşu yok.'}</p>`;
   /** @type {Record<string, number>} */
@@ -342,9 +350,9 @@ export function sorunTablosu(g) {
     const grup = g.sorunlar.filter((s) => s.durum === d);
     if (!grup.length) continue;
     const x = /** @type {Record<string, { ad: string; simge: string; renk: string; aciklama: string }>} */ (DURUMLAR)[d];
-    govde += `<tr class="grup"><td colspan="5" style="color:${x.renk}">${x.simge} ${kacis(x.ad)} (${grup.length}) <span class="kucuk" style="font-weight:400">— ${kacis(x.aciklama)}</span></td></tr>`;
+    govde += `<tr class="grup"><td colspan="${g.turSutunu ? 6 : 5}" style="color:${x.renk}">${x.simge} ${kacis(x.ad)} (${grup.length}) <span class="kucuk" style="font-weight:400">— ${kacis(x.aciklama)}</span></td></tr>`;
     for (const s of grup) {
-      govde += `<tr><td><b>${g.m(s.baslik)}</b>${s.tekrarRozeti && s.durum !== 'tekrar' ? ` ${durumEtiketi('tekrar')}` : ''}${g.hatalar && s.kalip ? `<br><span class="mono">${g.m(s.kalip)}</span>` : ''}</td><td class="kucuk">${g.m(s.nerede)}<br>${sinifEtiketi(s.sinif)}</td>
+      govde += `<tr><td><b>${g.m(s.baslik)}</b>${s.tekrarRozeti && s.durum !== 'tekrar' ? ` ${durumEtiketi('tekrar')}` : ''}${g.hatalar && s.kalip ? `<br><span class="mono">${g.m(s.kalip)}</span>` : ''}</td>${turHucresi(s)}<td class="kucuk">${g.m(s.nerede)}<br>${sinifEtiketi(s.sinif)}</td>
 <td class="s">${g.karsilastir ? `<span class="notr">${s.nOnceki}</span> → ` : ''}<b>${s.n}</b><br><span class="kucuk">${s.senaryo} senaryo</span></td><td>${kivilcim(g.karsilastir ? s.oncekiSeri : [], s.seri, x.renk)}</td><td class="kucuk">${kisaTarih(s.ilk)}<br>${kisaTarih(s.son)}</td></tr>`;
     }
   }
@@ -352,7 +360,7 @@ export function sorunTablosu(g) {
     const x = /** @type {Record<string, { ad: string; simge: string; renk: string }>} */ (DURUMLAR)[d];
     return `<span class="x" style="border-color:${x.renk}"><b style="color:${x.renk}">${x.simge} ${sayim[d]}</b> ${kacis(x.ad.toLocaleLowerCase('tr'))}</span>`;
   }).join('')}<span class="x">Başarısız sonuç: <b>${g.karsilastir ? `${oncekiTop} → ` : ''}${simdiTop}</b> ${fark(simdiTop, oncekiTop, { yon: 'asagi-iyi', kapali: !g.karsilastir })}</span></div>
-<table><thead><tr><th scope="col">Sorun${g.hatalar ? ' (hata kalıbı)' : ''}</th><th scope="col" style="width:150px">Nerede · sınıf</th><th scope="col" class="s" style="width:62px">${g.karsilastir ? 'Önceki → bu' : 'Bu dönem'}</th><th scope="col" style="width:96px">Eğilim</th><th scope="col" style="width:66px">İlk / son</th></tr></thead>
+<table><thead><tr><th scope="col">Sorun${g.hatalar ? ' (hata kalıbı)' : ''}</th>${g.turSutunu ? '<th scope="col" style="width:52px">Tür</th>' : ''}<th scope="col" style="width:150px">Nerede · sınıf</th><th scope="col" class="s" style="width:62px">${g.karsilastir ? 'Önceki → bu' : 'Bu dönem'}</th><th scope="col" style="width:96px">Eğilim</th><th scope="col" style="width:66px">İlk / son</th></tr></thead>
 <tbody>${govde}</tbody></table>
 <div class="lejant"><span>Eğilim: ${g.karsilastir ? 'gri = önceki dönem, renkli = bu dönem, kesikli çizgi = dönem sınırı; ' : ''}kova başına başarısız sonuç adedi.</span></div>`;
 }
@@ -384,6 +392,102 @@ export function sureDagilimi(metotlar, e) {
   });
   return `<div class="blok"><svg width="100%" viewBox="0 0 ${en} ${boy}" role="img" aria-label="Metot başına yanıt süresi dağılımı">${s}</svg>
 <div class="lejant"><span>┃ p50 (kalın çizgi) · kutu p50–p95 · bıyık ucu p99 (20+ ölçümde)</span><span>◇ önceki dönem p95</span><span style="color:#b42318">kırmızı kutu = p95 ≥ %20 yavaşladı</span></div></div>`;
+}
+
+/** Öğe durum rozeti (küçük; simge + metin). @param {string} d */
+export const rozetHap = (d) => {
+  const x = /** @type {Record<string, string>} */ ({ saglikli: '✓ Sağlıklı', dikkat: '◆ Dikkat', kritik: '✗ Kritik' })[d] ?? '◆ Dikkat';
+  return `<span class="rozet-hap rh-${['saglikli', 'dikkat', 'kritik'].includes(d) ? d : 'dikkat'}">${kacis(x)}</span>`;
+};
+
+/**
+ * Oran kıvılcımı: kova başına başarı oranı (koşu olmayan kova boşluk), kesikli çizgi = yeşil eşik; son nokta simgesi banda göre
+ * (● yeşil · ◆ sarı · ▲ kırmızı).
+ * @param {Array<number | null>} seri @param {{ yesil: number; sari: number }} esikler
+ */
+export function oranKivilcimi(seri, esikler, en = 92, boy = 22) {
+  const olculen = seri.filter((v) => v !== null).map(Number);
+  if (!olculen.length) return '<span class="notr kucuk">koşu yok</span>';
+  const alt0 = Math.max(0, Math.floor((Math.min(...olculen, esikler.sari) - 5) / 10) * 10);
+  const n = Math.max(2, seri.length);
+  const x = (/** @type {number} */ i) => 2 + (i * (en - 6)) / (n - 1);
+  const y = (/** @type {number} */ v) => boy - 3 - ((v - alt0) / (100 - alt0 || 1)) * (boy - 6);
+  let yol = '';
+  let acik = false;
+  seri.forEach((v, i) => { if (v === null) { acik = false; return; } yol += `${acik ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `; acik = true; });
+  const sonI = seri.map((v, i) => (v === null ? -1 : i)).filter((i) => i >= 0).pop() ?? 0;
+  const son = Number(seri[sonI]);
+  const renk = son >= esikler.yesil ? '#1a7f37' : son >= esikler.sari ? '#bf8700' : '#b42318';
+  const cx = x(sonI).toFixed(1), cy = y(son).toFixed(1);
+  const nokta = son >= esikler.yesil ? `<circle cx="${cx}" cy="${cy}" r="2.2" fill="${renk}"/>`
+    : son >= esikler.sari ? `<rect x="${(x(sonI) - 2).toFixed(1)}" y="${(y(son) - 2).toFixed(1)}" width="4" height="4" transform="rotate(45 ${cx} ${cy})" fill="${renk}"/>`
+      : `<path d="M${(x(sonI) - 2.6).toFixed(1)},${(y(son) + 2.2).toFixed(1)} L${cx},${(y(son) - 2.6).toFixed(1)} L${(x(sonI) + 2.6).toFixed(1)},${(y(son) + 2.2).toFixed(1)} Z" fill="${renk}"/>`;
+  return `<svg width="${en}" height="${boy}" viewBox="0 0 ${en} ${boy}" role="img" aria-label="Kova başına başarı oranı; son ${yz(son)}">
+<line x1="2" x2="${en - 2}" y1="${y(esikler.yesil).toFixed(1)}" y2="${y(esikler.yesil).toFixed(1)}" stroke="#1a7f37" stroke-width=".6" stroke-dasharray="2 2"/>
+<path d="${yol.trim()}" fill="none" stroke="#1f4e8c" stroke-width="1.3"/>${nokta}</svg>`;
+}
+
+/** Sınıf renkleri (dağılım çubuğu; simge + sayı her parçada yazılır). */
+const SINIF_RENKLERI = Object.freeze({ uygulama: '#b42318', veri: '#bf8700', bakim: '#3b5b8c', ortam: '#8c959f', kararsiz: '#9db4d6' });
+
+/**
+ * Hata sınıfı dağılımı: öğe başına bu dönemdeki başarısız sonuçların sınıfa göre yığılmış çubuğu.
+ * @param {Array<{ ad: string; tur: string; sayilar: Record<string, number>; toplam: number }>} gruplar @param {Yazici} e @param {boolean} [turGoster]
+ */
+export function sinifDagilimiTablosu(gruplar, e, turGoster = false) {
+  if (!gruplar.length) return '<p class="bos">Bu dönemde başarısız sonuç yok.</p>';
+  const mx = Math.max(1, ...gruplar.map((g) => g.toplam));
+  const renk = /** @type {Record<string, string>} */ (SINIF_RENKLERI);
+  const sinif = /** @type {Record<string, { ad: string; simge: string }>} */ (SINIFLAR);
+  return `<table><thead><tr><th scope="col" style="width:150px">Öğe</th><th scope="col">Başarısız sonuçların sınıfa göre dağılımı</th><th scope="col" class="s">Toplam</th></tr></thead><tbody>
+${gruplar.map((g) => `<tr><td>${e(g.ad)}${turGoster ? ` <span class="kucuk">(${g.tur === 'servis' ? 'servis' : 'ekran'})</span>` : ''}</td><td><div style="display:flex;height:13px;width:${Math.max(4, (g.toplam / mx) * 100).toFixed(1)}%">${Object.entries(g.sayilar).filter(([, v]) => v > 0)
+    .map(([c, v]) => `<div style="flex:${v};background:${renk[c] ?? '#8c959f'};color:#fff;font-size:7pt;font-weight:700;text-align:center;line-height:13px;border-right:1px solid #fff;overflow:hidden">${kacis(sinif[c]?.simge ?? '')}${v}</div>`).join('')}</div></td><td class="s"><b>${sy(g.toplam)}</b></td></tr>`).join('')}
+</tbody></table><div class="lejant">${Object.entries(sinif).map(([c, x]) => `<span><span class="kutu-l" style="background:${renk[c]}"></span>${kacis(x.simge)} ${kacis(x.ad)}</span>`).join('')}<span>Sınıf bir tahmindir (dayanağı aksiyon satırında).</span></div>`;
+}
+
+/**
+ * Üst bilgi (meta) satırları: proje, kapsam, dönem, karşılaştırılan dönem, ortam (adres yalnız seçilirse, maskeli), seçilenler,
+ * oluşturulma, seçenekler. secilenler: çağıranda kaçışlanmış HTML.
+ * @param {any} v rapor verisi @param {Yazici} e @param {Yazici} m @param {string} kapsam @param {string} secilenler
+ * @returns {Array<[string, string]>}
+ */
+export function ortakMeta(v, e, m, kapsam, secilenler) {
+  const ortamMetni = v.ortam ? e(v.ortam.ad) : 'Tüm ortamlar';
+  const secenekler = [`Ekran görüntüsü: ${v.secenekler.goruntuler ? 'açık' : 'kapalı'}`, `Hata ayrıntısı: ${v.secenekler.hatalar ? 'açık' : 'kapalı'}`,
+    `Ortam adresi: ${v.secenekler.adres ? 'açık' : 'gizli'}`].join(' · ');
+  return [
+    ['Proje', e(v.proje.ad)], ['Kapsam', kacis(kapsam)], ['Dönem', `${kacis(v.donem.etiket)} (${v.donem.gun} gün)`],
+    ['Karşılaştırılan dönem', v.karsilastir ? kacis(v.donem.oncekiEtiket) : 'Kapalı'],
+    ['Ortam', `${ortamMetni}${v.secenekler.adres && v.ortam?.adres ? `<br><span class="mono">${m(v.ortam.adres)}</span>` : ''}`],
+    ['Seçilenler', secilenler], ['Oluşturulma', `${kacis(tarihSaat(v.olusturma))} · Nöbetçi`], ['Seçenekler', kacis(secenekler)]
+  ];
+}
+
+/**
+ * Rapor sayfası (üst bilgi + meta + gövde). Başlık ve meta değerleri çağıranda kaçışlanmış / maskelenmiş HTML'dir.
+ * @param {{ baslik: string; alt: string; meta: Array<[string, string]>; govde: string }} g
+ */
+export function sayfaHtml(g) {
+  return `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
+<meta name="referrer" content="no-referrer">
+<title>${g.baslik}</title>
+<style>${CSS}</style>
+</head>
+<body>
+<main>
+<div class="ust"><div><h1>${g.baslik}</h1><div class="alt">${kacis(g.alt)}</div></div><span class="etiket-nobetci">Nöbetçi raporu</span></div>
+<div class="meta">${g.meta.map(([a, b]) => `<div><b>${kacis(a)}</b>${b}</div>`).join('')}</div>
+${g.govde}
+</main>
+</body>
+</html>
+`;
 }
 
 /** @param {string} d */

@@ -1,14 +1,16 @@
-// PDF RAPORU — HTML şablonu (saf): rapor verisinden (sonuclar/donem-raporu.mjs) tek ekran ve tek servis raporunun HTML'i.
+// PDF RAPORU — HTML şablonu (saf): rapor verisinden (sonuclar/donem-raporu.mjs) tek ekran ve tek servis raporunun HTML'i; çoklu
+// ekran / çoklu servis / ekran + servis gövdesi sablon-coklu.mjs'dedir (aynı bileşenler, aynı maskeleme).
 // İskelet: Tek bakışta → Ele alınması gerekenler → Sorunlar ve eğilimleri → Eğilim → Kapsamdaki öğeler → türe özgü bölümler →
 // Yöntem + gizlilik. Sayfa JS'siz ve dış kaynaksızdır (satır içi CSS + SVG; CSP default-src 'none'); PDF'e pdf.mjs basar.
 // Tüm kullanıcı verisi kaçışlanır; ad alanları bilinen gizli değerlerle, serbest metinler tam maskeleyiciyle (html-rapor.mjs >
 // raporMaskeleyici — gizli değerler, adı gizli alanlar, e-posta, uzun rakam, sorgu dizesi, ortam adresi) maskelenir.
 import { kacis } from '../html-rapor.mjs';
 import {
-  CSS, aksiyonTablosu, fark, isiHaritasi, kart, renkOran, senaryoMatrisi, sonHap, sorunTablosu, sure, sureDagilimi, sureGrafigi, sy, tarihSaat, tekBakista,
+  aksiyonTablosu, fark, isiHaritasi, kart, ortakMeta, renkOran, sayfaHtml, senaryoMatrisi, sonHap, sorunTablosu, sure, sureDagilimi, sureGrafigi, sy, tarihSaat, tekBakista,
   trendGrafigi, yontemKutusu, yz
 } from './bilesenler.mjs';
 import { SERVIS_HATA_TURLERI } from '../sorun-modeli.mjs';
+import { cokluRapor } from './sablon-coklu.mjs';
 
 /** @typedef {import('../donem-raporu.mjs').DonemRaporuVerisi} Veri */
 
@@ -20,20 +22,17 @@ import { SERVIS_HATA_TURLERI } from '../sorun-modeli.mjs';
 export function pdfRaporHtml(v, s) {
   const e = (/** @type {unknown} */ x) => kacis(s.adMaskele(x));
   const m = (/** @type {unknown} */ x) => kacis(s.maskele(x));
+  if (v.tur !== 'ekran' && v.tur !== 'servis') {
+    const c = cokluRapor(v, { e, m });
+    return { html: sayfaHtml({ baslik: e(c.baslik), alt: c.alt, meta: c.meta, govde: c.govde }), baslik: c.baslik };
+  }
   const servis = v.tur === 'servis';
   const baslik = servis ? `Servis Raporu — ${v.oge.ad}${v.oge.servisTuru ? ` (${String(v.oge.servisTuru).toUpperCase()})` : ''}` : `Ekran Raporu — ${v.oge.ad}`;
   const alt = servis ? 'Tek servis: metot bazında başarı, yanıt süresi, hata türleri ve sorun eğilimleri'
     : 'Tek ekran: güncel durum, ele alınması gerekenler, sorunların eğilimi, senaryo ve adım ayrıntısı';
   const ortamMetni = v.ortam ? e(v.ortam.ad) : 'Tüm ortamlar';
-  const secenekler = [`Ekran görüntüsü: ${v.secenekler.goruntuler ? 'açık' : 'kapalı'}`, `Hata ayrıntısı: ${v.secenekler.hatalar ? 'açık' : 'kapalı'}`,
-    `Ortam adresi: ${v.secenekler.adres ? 'açık' : 'gizli'}`].join(' · ');
-  const meta = [
-    ['Proje', e(v.proje.ad)], ['Kapsam', servis ? 'Tek servis' : 'Tek ekran'], ['Dönem', `${kacis(v.donem.etiket)} (${v.donem.gun} gün)`],
-    ['Karşılaştırılan dönem', v.karsilastir ? kacis(v.donem.oncekiEtiket) : 'Kapalı'],
-    ['Ortam', `${ortamMetni}${v.secenekler.adres && v.ortam?.adres ? `<br><span class="mono">${m(v.ortam.adres)}</span>` : ''}`],
-    ['Seçilenler', servis ? `${e(v.oge.ad)} (${v.oge.metotSayisi} metot, ${v.oge.senaryoSayisi} senaryo)` : `${e(v.oge.ad)} (${v.oge.senaryoSayisi} senaryo)`],
-    ['Oluşturulma', `${kacis(tarihSaat(v.olusturma))} · Nöbetçi`], ['Seçenekler', kacis(secenekler)]
-  ];
+  const meta = ortakMeta(v, e, m, servis ? 'Tek servis' : 'Tek ekran',
+    servis ? `${e(v.oge.ad)} (${v.oge.metotSayisi} metot, ${v.oge.senaryoSayisi} senaryo)` : `${e(v.oge.ad)} (${v.oge.senaryoSayisi} senaryo)`);
   const k = !v.karsilastir;
   let no = 0;
   const h2 = (/** @type {string} */ metin, ek = '') => `<h2 class="${ek}"><span class="no">${++no}</span>${kacis(metin)}</h2>`;
@@ -72,27 +71,7 @@ export function pdfRaporHtml(v, s) {
     ['Adım ısı haritası', 'Her başarısız sonuç yalnız ilk başarısız adımına sayılır; tekrar denemesinde (retry) son deneme esas alınır.'],
     ['Tekil koşular', 'Tek ▷ ve “Seçilenleri çalıştır” koşuları sorunlara girer, başarı oranına girmez.']
   ]);
-  const html = `<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:">
-<meta name="referrer" content="no-referrer">
-<title>${e(baslik)}</title>
-<style>${CSS}</style>
-</head>
-<body>
-<main>
-<div class="ust"><div><h1>${e(baslik)}</h1><div class="alt">${kacis(alt)}</div></div><span class="etiket-nobetci">Nöbetçi raporu</span></div>
-<div class="meta">${meta.map(([a, b]) => `<div><b>${kacis(a)}</b>${b}</div>`).join('')}</div>
-${govde}
-</main>
-</body>
-</html>
-`;
-  return { html, baslik };
+  return { html: sayfaHtml({ baslik: e(baslik), alt, meta, govde }), baslik };
 }
 
 /** @typedef {{ e: (x: unknown) => string; m: (x: unknown) => string; h2: (metin: string, ek?: string) => string; k: boolean }} Yazim */
