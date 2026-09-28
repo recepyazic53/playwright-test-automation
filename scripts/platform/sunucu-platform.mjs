@@ -65,7 +65,7 @@
 //   POST /platform/senaryo/dene { projeId, ekranId, ortamId, veri, kosuId, id? } → taslak, geçici ek veriyle denenir.
 //   GET  /platform/senaryo/playwright-kodu?projeId=&id=&ortamId=   Playwright koduna dışa aktarma: { dosyaAdi, icerik,
 //        ortamDegiskenleri } (koşucunun planıyla; gizli değerler ortam değişkeni; dosya yazılmaz — senaryolar/disa-aktarma-servisi.mjs)
-// Ekranlar (genel; kasa açık olmalı — bkz. ekranlar/ekran-servisi.mjs, sayfa paketi biçimi: docs/sayfa-paketi.md):
+// Ekranlar (genel; kasa açık olmalı — bkz. ekranlar/ekran-servisi.mjs, ekran paketi biçimi: docs/sayfa-paketi.md):
 //   GET  /platform/ekranlar?projeId=                    ekran listesi (model sürümü, alan/senaryo sayısı, bekleyen analiz)
 //   GET  /platform/ekran?projeId=&id=                   ayrıntı: güncel model ağacı, sürüm geçmişi, analiz durumu, kanıtlar
 //   GET  /platform/ekran/surum?projeId=&id=&surum=      sürümün ağacı + bir önceki sürüme göre fark
@@ -232,7 +232,7 @@ import { sorgudanAralik } from './sonuclar/aralik.mjs';
 import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
-/** Sayfa paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
+/** Ekran paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
 const PAKET_UCLARI = new Set(['/platform/sayfa-paketi/onizle', '/platform/sayfa-paketi/ekle', '/platform/ekran/analiz/yukle', '/platform/ekran/model/degistir', '/platform/tablo/kaydet', ...SERVIS_BUYUK_GOVDE_UCLARI]);
 for (const u of ENTEGRASYON_BUYUK_GOVDE_UCLARI) PAKET_UCLARI.add(u);
 /** Raporlayıcının sonuç gövdesi (hata mesajları + adımlar) için daha geniş sınır. */
@@ -894,7 +894,7 @@ function calismaAlaniListesi() {
 function hataYaniti(hata) {
   // Kapalı izin (Ayarlar > İzinler): işlem yapılmadı; arayüz standart uyarıyı + "İzinlere git" düğmesini gösterir (ortak.js > api).
   if (hata instanceof IzinHatasi) return { durum: 403, govde: { basarili: false, kod: hata.kod, izin: hata.izin, etiket: hata.etiket, mesaj: hata.message } };
-  if (hata instanceof CanliOnayHatasi) return { durum: 409, govde: { basarili: false, kod: hata.kod, mesaj: hata.message } };
+  if (hata instanceof CanliOnayHatasi) return { durum: 409, govde: { basarili: false, kod: hata.kod, ortamAdi: hata.ortamAdi, mesaj: hata.message } };
   // Taban adresine bağlı servisin adresi farklılaşıyor: hiçbir şey yazılmadı; arayüz karar penceresini açar, isteği kararla yineler (ortak.js > api).
   if (hata instanceof TabanKarariHatasi) return { durum: 409, govde: { basarili: false, kod: hata.kod, mesaj: hata.message, karar: hata.karar } };
   if (hata instanceof KasaHatasi) {
@@ -1622,17 +1622,17 @@ const POST_UCLARI = new Map([
   ['/platform/ortam/kaydet', (db, g) => {
     const mevcutId = secimliKimlik(g.id);
     const mevcut = mevcutId ? ortamGetir(db, mevcutId) : undefined;
-    // "Bu ortam riskli mi? (gerçek işlem oluşturabilir)" — KULLANICI SEÇİMİ (guvenlik/ortam-riski.mjs): riskli true | false | null
-    // (belirtilmemiş = riskli sayılır). Eski istemcinin canli: true'su "Evet" demektir. Seçim gönderilmezse mevcut korunur; eski
-    // canli işareti kaydedilince riskli: true olarak yazılır (canli alanı kalkar).
+    // "Ortam türü: Test / Canlı" — KULLANICI SEÇİMİ (guvenlik/ortam-riski.mjs): riskli true (Canlı) | false (Test) | null
+    // (seçilmemiş = Canlı sayılır; arayüz formu yeni ortamda seçimi zorunlu tutar). Eski istemcinin canli: true'su Canlı demektir.
+    // Seçim gönderilmezse mevcut korunur; eski canli işareti kaydedilince riskli: true olarak yazılır (canli alanı kalkar).
     const onceki = mevcut ? riskliSecimi(mevcut) : null;
     const istenen = g.riskli === true || g.riskli === false ? g.riskli : g.riskli === null ? null : g.canli === true ? true : undefined;
     const yeni = istenen === undefined ? onceki : istenen;
     const ad = metinAl(g.ad);
     if (yeni === false && onceki !== false && g.onay !== true) {
-      // Evet → Hayır (ya da belirtilmemiş → Hayır) ve adı canlıyı çağrıştıran ortam: açık onay.
-      if (onceki === true) throw new DepoHatasi('Riskli bir ortamı "riskli değil" yapmak için onaylayın (koşular bu ortamda ek onaysız başlayabilir).');
-      if (adCanliyiCagristiriyorMu(ad)) throw new DepoHatasi('Bu ortamın adı canlıyı çağrıştırıyor; "riskli değil" seçimini onaylayın.');
+      // Canlı → Test (ya da seçilmemiş → Test) ve adı canlıyı çağrıştıran ortam: açık onay.
+      if (onceki === true) throw new DepoHatasi('Canlı bir ortamı Test yapmak için onaylayın (bu ortamdaki işlemler artık CANLI onayı sorulmadan başlar).');
+      if (adCanliyiCagristiriyorMu(ad)) throw new DepoHatasi('Bu ortamın adı canlıyı çağrıştırıyor; Test türünü onaylayın.');
     }
     const { canli: _eskiCanli, riskli: _eskiRiskli, ...kalanAyarlar } = /** @type {Record<string, unknown>} */ (mevcut?.ayarlar ?? {});
     const ayarlar = { ...kalanAyarlar, ...(yeni === null ? {} : { riskli: yeni }) };
@@ -1640,10 +1640,10 @@ const POST_UCLARI = new Map([
       id: mevcutId, projeId: kimlikAl(g.projeId, 'projeId'), ad, tabanUrl: metinAl(g.tabanUrl).trim(),
       varsayilan: g.varsayilan === true, ayarlar
     });
-    // Risk seçimi değişikliği geçmişe yazılır (kim / ne zaman / önce → sonra): GET /platform/gecmis?varlikTuru=ortam_riski&varlikId=<ortam>.
+    // Ortam türü değişikliği geçmişe yazılır (kim / ne zaman / önce → sonra): GET /platform/gecmis?varlikTuru=ortam_riski&varlikId=<ortam>.
     if (yeni !== onceki) {
-      const m = (/** @type {boolean | null} */ x) => (x === true ? 'Evet' : x === false ? 'Hayır' : 'belirtilmemiş');
-      gecmisYaz(db, { varlikTuru: 'ortam_riski', varlikId: id, islem: mevcut ? 'guncelle' : 'olustur', onceki: { riskli: onceki }, sonraki: { riskli: yeni }, aciklama: `Riskli mi: ${m(onceki)} → ${m(yeni)}` });
+      const m = (/** @type {boolean | null} */ x) => (x === true ? 'Canlı' : x === false ? 'Test' : 'seçilmemiş');
+      gecmisYaz(db, { varlikTuru: 'ortam_riski', varlikId: id, islem: mevcut ? 'guncelle' : 'olustur', onceki: { riskli: onceki }, sonraki: { riskli: yeni }, aciklama: `Ortam türü: ${m(onceki)} → ${m(yeni)}` });
     }
     return { ortam: ortamGorunumu(/** @type {import('./veritabani/depo.mjs').Ortam} */ (ortamGetir(db, id))) };
   }],
@@ -2195,7 +2195,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
     }
 
     // İzin denetimi (TEK MERKEZ: guvenlik/uc-denetimi.mjs; uç → izin eşlemesi izin-tanimlari.mjs'den). Kapalı izne tabi işlem
-    // hiç başlatılmaz: 403 IZIN_KAPALI. Riskli ortamda açık onay (canliOnay: true) yoksa 409 CANLI_ONAY_GEREKLI.
+    // hiç başlatılmaz: 403 IZIN_KAPALI. CANLI ortamda açık onay (canliOnay: true) yoksa 409 CANLI_ONAY_GEREKLI.
     if (IZIN_DENETIMLI_UCLAR.has(yol)) ucDenetle(await acikVeritabani(), yol, govde);
 
     const postIslemi = POST_UCLARI.get(yol);
@@ -2217,7 +2217,7 @@ export async function platformIsteginiIsle(req, res, baglam) {
         if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
         const yolHam = metin(govde.girisAdresi).trim() || '/';
         if (!yolHam.startsWith('/') && !/^https?:\/\//i.test(yolHam)) throw new DepoHatasi('Giriş adresi "/" ile başlayan bir yol ya da http(s) adresi olmalıdır.');
-        // Açık onay (arayüz sorar: "giriş sayfası tarayıcıda açılacak"); izin + riskli ortam onayı yukarıda (ucDenetle) denetlendi.
+        // Açık onay (arayüz sorar: "giriş sayfası tarayıcıda açılacak"); izin + CANLI ortam onayı yukarıda (ucDenetle) denetlendi.
         if (govde.onay !== true) throw new DepoHatasi('Giriş sayfası tarayıcıda açılacak: önce uyarıyı onaylayın.');
         const adres = new URL(yolHam, ortam.tabanUrl).toString();
         // Yasak adresler (Ayarlar > Güvenlik + ortam değişkeni): tarayıcı açılmadan reddedilir; sayfanın yasaklı host'a

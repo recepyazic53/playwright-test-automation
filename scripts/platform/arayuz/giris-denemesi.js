@@ -1,21 +1,20 @@
 // "Girişi dene" (genel): ortamın giriş tarifi ve giriş profiliyle YALNIZ giriş yapılır; ekran ya da senaryo gerekmez. Kayıtlı
-// oturum kullanılmaz ve saklanmaz. YALNIZCA kullanıcı onaylayınca başlar (siteye gerçek giriş isteği gider); riskli ortamda
-// yapılmaz (sunucu da reddeder). İsteğe bağlı olarak tarayıcı görünür açılır. Sonuç bir diyalogda: "Giriş başarılı" ya da
+// oturum kullanılmaz ve saklanmaz. YALNIZCA kullanıcı onaylayınca başlar (siteye gerçek giriş isteği gider); CANLI ortamda
+// ayrıca tek tip CANLI onayı sorulur (sunucu da canliOnay ister). İsteğe bağlı olarak tarayıcı görünür açılır. Sonuç bir diyalogda: "Giriş başarılı" ya da
 // hangi adımda neden takıldığı, takıldığı / girdiği sayfanın yolu, ekran görüntüsü (yalnız bellekte) ve adım günlüğü (değer yok).
-// SMS "elle" kipinde kod formu diyalogda açılır. Ayarlar > Giriş tarifi satırından ve Ekranlar > Ortak akışlar'daki giriş
-// kartından açılır. Sunucu: tarama/yonetici.mjs (kip 'girisDenemesi').
+// SMS "elle" kipinde kod formu diyalogda açılır. Ayarlar > Giriş profilleri > Giriş tarifi satırından
+// açılır. Sunucu: tarama/yonetici.mjs (kip 'girisDenemesi').
 import { api, bildir, h, ikon } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { kodFormu } from './tarama.js';
 
-const riskli = (o) => o.canli === true || o.riskli !== false;
 
-/** "Girişi dene" düğmesi (ortam satırı / giriş kartı). @param {any} o ortam satırı (giris-tarifleri) @param {string} projeId */
+/** "Girişi dene" düğmesi (Ayarlar > Giriş tarifi ortam satırı). @param {any} o ortam satırı (giris-tarifleri) @param {string} projeId */
 export function girisiDeneDugmesi(o, projeId) {
-  const kapali = !o.tarif || riskli(o);
+  const kapali = !o.tarif;
   return h('button', {
     type: 'button', class: 'kucuk-dugme', 'aria-label': `${o.ortamAd}: girişi dene`, disabled: kapali,
-    title: !o.tarif ? 'Önce giriş tarifini tanımlayın.' : riskli(o) ? 'Riskli ortamda giriş denemesi yapılmaz (Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").' : 'Yalnız girişi dener; kayıtlı oturum kullanılmaz.',
+    title: !o.tarif ? 'Önce giriş tarifini tanımlayın.' : 'Yalnız girişi dener; kayıtlı oturum kullanılmaz.',
     onclick: () => girisiDene(o, projeId)
   }, ikon('oynat'), 'Girişi dene');
 }

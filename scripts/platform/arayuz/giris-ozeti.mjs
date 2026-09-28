@@ -1,6 +1,6 @@
 // GİRİŞ TARİFİNİN OKUNUR ÖZETİ (saf; tarayıcı ve testler kullanır) — teknik seçici yerine "1. Kullanıcı adını yaz ·
-// 2. Parolayı yaz · 3. Giriş'e bas · 4. … seç" gibi adım cümleleri. Ekranlar > Ortak akışlar'daki "Giriş (<ortam>)"
-// kalemleri ve Ayarlar > Giriş profilleri > Giriş tarifi formu bu özeti gösterir. Gizli değer içermez (tarifte yoktur;
+// 2. Parolayı yaz · 3. Giriş'e bas · 4. … seç" gibi adım cümleleri. Ayarlar > Giriş
+// profilleri > Giriş tarifi formu bu özeti gösterir. Gizli değer içermez (tarifte yoktur;
 // "{ad}" yer tutucuları adıyla gösterilir). Eski tarif (girisAdimlari yok) = kullanıcı adı → parola → giriş düğmesi.
 
 /** Ayarlar > Giriş profilleri'nde ortamın tarif formunu doğrudan açan adres. @param {string} ortamId */

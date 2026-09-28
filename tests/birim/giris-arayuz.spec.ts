@@ -254,19 +254,20 @@ test('Ayarlar > Giriş tarifi: "Varsayılanları öner" yalnızca onayla ve yaln
   agKontrol(istekler);
 });
 
-test('Ekranlar > Ortak akışlar: her ortamın girişi tek satır özetle görünür (adım listesi yok); Düzenle ilgili tarif formunu açar', async () => {
+test('Giriş Ekranlar\'da listelenmez (ne sol menüde ne Ortak akışlar\'da); yalnız Ayarlar > Giriş profilleri > Giriş tarifi\'nden yönetilir', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
   await page.goto('/#/ekranlar');
-  const kart = page.locator('.giris-akisi-karti[data-ortam]').filter({ hasText: 'Giriş (TEST)' });
-  await expect(kart).toBeVisible();
-  await expect(kart.locator('.giris-ozet-adimlari')).toHaveCount(0);
-  await expect(kart.locator('.ortak-akis-ozeti')).toContainText('SMS kodu (elle)');
-  // Tarifi olmayan ortamın (CANLI önceki testte sıfırlandı) girişi ortak akışlarda listelenmez; tanımlı olan listelenir.
-  await expect(page.locator('.yan-panel a.giris-akisi-baglantisi').filter({ hasText: 'Giriş (TEST)' })).toBeVisible();
-  await expect(page.locator('.yan-panel a.giris-akisi-baglantisi').filter({ hasText: 'Giriş (CANLI)' })).toHaveCount(0);
-  await expect(page.locator('.giris-akisi-karti').filter({ hasText: 'Giriş (CANLI)' })).toHaveCount(0);
-  await kart.getByRole('link', { name: 'Giriş (TEST): düzenle' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Ekranlar' })).toBeVisible();
+  // TEST ortamının tarifi tanımlı olsa da Ekranlar'da giriş kartı/bağlantısı yoktur.
+  await expect(page.locator('.yan-panel .alt-nav')).not.toContainText('Giriş (');
+  await expect(page.locator('.sonuc-icerik')).not.toContainText('Giriş (');
+  await expect(page.locator('.giris-akisi-karti, .giris-akisi-baglantisi')).toHaveCount(0);
+  // Giriş Ayarlar > Giriş profilleri'nden erişilir: tarif listesi → TEST tarif formu.
+  await page.goto('/#/ayarlar/giris');
+  const bolum = page.locator('.giris-tarifi-bolumu');
+  await expect(bolum.locator('li[data-ortam]').filter({ hasText: 'TEST' })).toContainText('Kaydedilmiş');
+  await bolum.getByRole('button', { name: 'TEST: giriş tarifini düzenle' }).click();
   const form = page.locator('form.tarif-formu');
   await expect(form.getByRole('heading', { name: 'Giriş tarifi: TEST' })).toBeVisible();
   await expect(form.locator('.giris-ozet li')).toContainText(['Kullanıcı adını yaz', 'Parolayı yaz']);

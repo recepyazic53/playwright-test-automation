@@ -6,12 +6,13 @@
 //   #/servisler/sonuclar[/...]            → eski adres: Sonuçlar > Servisler'e yönlenir (servis-sonuclari.js > eskiServisSonucAdresi)
 //   #/servisler/s/<id>/senaryo/<sid|yeni> → senaryo düzenleyici (gövde + başlıklar + kontroller + Dene)
 //   #/servisler/s/<id>/akislar[/<akisId|yeni>] → servis akışları ve oturum akışı (servis-akislari.js)
-// Kurallar (sunucu da denetler): erişim kontrolü ve Dene YALNIZ test ortamında; yeni servis ancak başarılı erişim
-// kontrolünden sonra kaydedilir; her ağ isteğinden önce kullanıcıya hangi ortama / adrese gidileceği sorulur.
+// Kurallar (sunucu da denetler): erişim kontrolü, şema alma ve Dene seçilen ortamda (varsayılan: TEST); CANLI ortamda istek
+// yalnız tek tip "CANLI ortam" onayından sonra gider. Yeni servis ancak başarılı erişim kontrolünden sonra kaydedilir; her ağ
+// isteğinden önce kullanıcıya hangi ortama / adrese gidileceği sorulur.
 // Giriş bilgisi değerleri arayüze hiç gelmez; kullanıcı yazdığında sunucuya gider, kasada şifreli durur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
-import { kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { riskBelirtilmemisMi } from './ortam-riski.mjs';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
@@ -66,8 +67,24 @@ async function ortamlariAl(proje) {
 }
 // Test ortamı = riskli OLMAYAN ortam (tek tanım: ortam-riski.mjs; sunucunun servis ortam türüyle aynı).
 const testOrtamlari = (ortamlar) => ortamlar.filter((o) => !riskliOrtamMi(o));
-/** Ortam etiketi: kendi adı; yalnız riskliyse "(riskli)" (tek biçim: kosu-paneli.js > ortamSecenekMetni). */
+/** Ortam etiketi: kendi adı; yalnız Canlıysa "(Canlı)" (tek biçim: kosu-paneli.js > ortamSecenekMetni). */
 const ortamEtiketi = (o) => ortamSecenekMetni(o);
+/** İstek ortamı için önce gelen: varsayılan TEST, yoksa ilk TEST, yoksa varsayılan, yoksa ilk ortam. */
+const onerilenIstekOrtami = (ortamlar) => testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0] || ortamlar.find((o) => o.varsayilan) || ortamlar[0] || null;
+/**
+ * İstek ortamı seçimi (Dene, şema alma): tüm ortamlar; önce gelen TEST. { el, secilen() }.
+ * @param {any[]} ortamlar @param {string} etiket
+ */
+function istekOrtamiSecimi(ortamlar, etiket) {
+  const ilk = onerilenIstekOrtami(ortamlar);
+  const el = h('select', { 'aria-label': etiket, class: 'istek-ortami' }, ortamlar.map((o) => h('option', { value: o.id, selected: ilk && o.id === ilk.id }, ortamEtiketi(o))));
+  return { el, secilen: () => ortamlar.find((o) => o.id === el.value) || ilk };
+}
+/**
+ * İstek öncesi onay: TEST ortamında verilen pencere (s); CANLI ortamda YALNIZ tek tip "CANLI ortam" onayı (çift onay yok).
+ * @param {any} ortam @param {Parameters<typeof onayIste>[0]} s @returns {Promise<boolean>}
+ */
+const istekOnayi = (ortam, s) => (riskliOrtamMi(ortam) ? canliOnayIste(ortam) : onayIste(s));
 
 /**
  * @param {HTMLElement} main
@@ -94,7 +111,7 @@ export function servislerEkrani(main, parcalar, baglam) {
           h('a', { href: servisId ? `#/sonuclar/s/${q(servisId)}` : '#/sonuclar/servisler' }, ikon('grafik'), h('span', { class: 'nav-metni' }, 'Sonuçlar'))),
         nav,
         h('div', { class: 'yan-not' }, h('b', {}, 'Servis testleri'), h('br', {}),
-          'Servis senaryoları ve raporları ekranlardan ayrıdır. Deneme ve erişim kontrolü yalnız TEST ortamında yapılır.')),
+          'Servis senaryoları ve raporları ekranlardan ayrıdır. Deneme ve erişim kontrolü seçilen ortamda yapılır; CANLI ortamda önce onay sorulur.')),
       icerik));
   urunlerPaneli(nav, proje, { servisId: servisId ?? (tur === 'yeni' ? 'yeni' : null) }).catch(() => undefined);
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
@@ -122,15 +139,17 @@ async function servisEkleSayfasi(icerik, proje) {
     h('div', { class: 'sayfa-basligi' }, h('div', {},
       h('div', { class: 'kirinti' }, h('span', {}, proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('span', {}, 'Servisler'), h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, 'Yeni servis')),
       h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, 'Servis ekle')))),
-    testOrtamlari(ortamlar).length ? null : h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Projede TEST ortamı yok. Erişim kontrolü yalnız TEST ortamında yapılır; Ayarlar > Ortamlar bölümünden ekleyin.'),
+    ortamlar.length ? null : h('div', { class: 'not-kutusu uyari', role: 'status' }, 'Projede ortam yok. Erişim kontrolü için Ayarlar > Ortamlar bölümünden ekleyin.'),
     secim, alanKap);
   ciz('sihirbaz');
 }
 
-/** Erişim kontrolü bileşeni: TEST ortamı seçimi + onaylı istek + sonuç. sonuc(e) başarılı kontrolde çağrılır. */
+/** Erişim kontrolü bileşeni: ortam seçimi (önce TEST) + onaylı istek + sonuç. sonuc(e) başarılı kontrolde çağrılır. */
 function erisimKontrolAlani(proje, ortamlar, bilgiAl, sonuc) {
-  const testler = testOrtamlari(ortamlar);
-  const ortamSec = h('select', { 'aria-label': 'Erişim kontrolü ortamı' }, testler.map((o) => h('option', { value: o.id, selected: o.varsayilan }, ortamEtiketi(o))));
+  // TEST ortamları önce; CANLI ortam da seçilebilir (istekten önce tek tip CANLI onayı).
+  const testler = [...testOrtamlari(ortamlar), ...ortamlar.filter((o) => riskliOrtamMi(o))];
+  const ilk = onerilenIstekOrtami(ortamlar);
+  const ortamSec = h('select', { 'aria-label': 'Erişim kontrolü ortamı' }, testler.map((o) => h('option', { value: o.id, selected: ilk && o.id === ilk.id }, ortamEtiketi(o))));
   const durum = h('div', { 'aria-live': 'polite' });
   const dugme = h('button', { type: 'button', disabled: !testler.length }, ikon('ag'), 'Erişimi kontrol et');
   dugme.addEventListener('click', async () => {
@@ -140,12 +159,13 @@ function erisimKontrolAlani(proje, ortamlar, bilgiAl, sonuc) {
     const taban = String((bilgi.tabanlar && bilgi.tabanlar[ortam.id]) || ortam.tabanUrl || '').replace(/\/+$/, '');
     if (!taban) { yerlestir(durum, h('div', { class: 'not-kutusu hata', role: 'alert' }, `${ortam.ad} için taban adres yok; önce taban adresi seçin.`)); return; }
     const adres = `${taban}/${bilgi.yol.replace(/^\/+/, '')}?wsdl`;
-    const tamam = await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}. WSDL ayrı şema dosyalarını içe aktarıyorsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' });
+    const tamam = await istekOnayi(ortam, { baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}. WSDL ayrı şema dosyalarını içe aktarıyorsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' });
     if (!tamam) return;
+    const canliEki = canliOnayEki(ortam.id);
     sonuc(null);
     await mesgulIken(dugme, 'Kontrol ediliyor…', async () => {
       try {
-        const e = await api('/platform/servis/erisim', { govde: { projeId: proje.id, ortamId: ortamSec.value, yol: bilgi.yol, ...(bilgi.tabanlar ? { tabanlar: bilgi.tabanlar } : {}), ...(bilgi.tlsDogrulama === false ? { tlsDogrulama: false } : {}) } });
+        const e = await api('/platform/servis/erisim', { govde: { projeId: proje.id, ortamId: ortamSec.value, ...canliEki, yol: bilgi.yol, ...(bilgi.tabanlar ? { tabanlar: bilgi.tabanlar } : {}), ...(bilgi.tlsDogrulama === false ? { tlsDogrulama: false } : {}) } });
         if (e.erisilebilir) {
           yerlestir(durum, h('div', { class: 'not-kutusu basari', role: 'status' },
             `Erişildi (${e.durumKodu}, ${e.sureMs} ms). ${e.operasyonlar.length} operasyon: ${e.operasyonlar.map((o) => o.ad).join(', ')}`));
@@ -646,7 +666,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
         ikonAd: dahil ? 'onay' : 'eksi',
         secenekler: [
           { deger: '*', etiket: 'Tüm ortamlar', aciklama: 'Her senaryonun koştuğu tüm ortamlarda', ikonAd: 'ag' },
-          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (riskli ortam)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
+          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (Canlı ortam)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
         ]
       });
       if (secim === null) return;
@@ -835,8 +855,9 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
  * adımlar, istek / yanıt, kontroller, Durdur). Senaryo kaydedilmez; sonuç raporlara "deneme" olarak yazılır.
  */
 async function deneVeGoster(proje, s, ortam, istek, baslik, dugme) {
-  if (!ortam) { bildir('Projede TEST ortamı yok.', 'hata'); return; }
-  const tamam = await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `"${baslik}" ${ortam.ad} ortamında denenecek (${s.ayarlar.yol}).`, dugme: 'Dene', ikonAd: 'oynat' });
+  if (!ortam) { bildir('Projede ortam yok.', 'hata'); return; }
+  // CANLI ortamda yalnız tek tip CANLI onayı; onay servisKosusuBaslat'ta (canliOnayEki) isteğe eklenir.
+  const tamam = await istekOnayi(ortam, { baslik: 'TEST ortamına istek atılsın mı?', metin: `"${baslik}" ${ortam.ad} ortamında denenecek (${s.ayarlar.yol}).`, dugme: 'Dene', ikonAd: 'oynat' });
   if (!tamam) return;
   dugme.disabled = true;
   try {
@@ -1162,12 +1183,14 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   yalnizZorunlu.addEventListener('change', () => tabloCiz());
 
   const semaAl = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('ag'), 'Alan listesini WSDL\'den al');
+  const semaOrtami = istekOrtamiSecimi(ortamlar, 'WSDL ortamı');
   semaAl.addEventListener('click', async () => {
-    const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
-    if (!test) { bildir('Projede TEST ortamı yok.', 'hata'); return; }
-    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl. Ayrı şema dosyaları varsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    const test = semaOrtami.secilen();
+    if (!test) { bildir('Projede ortam yok.', 'hata'); return; }
+    if (!(await istekOnayi(test, { baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl. Ayrı şema dosyaları varsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    const canliEki = canliOnayEki(test.id);
     try {
-      const r = await mesgulIken(semaAl, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id } }));
+      const r = await mesgulIken(semaAl, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id, ...canliEki } }));
       bildir(`${r.alanliOperasyonlar.length} operasyonun alan listesi alındı.`);
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     } catch (e) { bildir(e.message, 'hata'); }
@@ -1186,7 +1209,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     }, e)));
     if (mod === 'alanlar' && sm) { yerlestir(govdeAlani, formCiz()); return; }
     yerlestir(govdeAlani,
-      sm || rest ? null : h('div', { class: 'not-kutusu', role: 'status' }, `"${operasyon.value}" operasyonunun alan listesi yok; gövde XML olarak düzenlenir. `, semaAl),
+      sm || rest ? null : h('div', { class: 'not-kutusu', role: 'status' }, `"${operasyon.value}" operasyonunun alan listesi yok; gövde XML olarak düzenlenir. `, ortamlar.length > 1 ? semaOrtami.el : null, ' ', semaAl),
       h('div', { class: 'govde-duzen' }, alan(rest ? `İstek gövdesi${i.http?.icerikTuru ? ` (${i.http.icerikTuru})` : ''}` : 'İstek gövdesi (SOAP zarfı)', govde, { yardim: rest
         ? 'GET / DELETE için boş bırakılabilir. Değerler ${Tablo.Sütun}, ${akis:Ad} ya da tarih kuralıyla yazılır; JSON gövdede değerler kaçışlanır.'
         : 'Parametreler adıyla yazılır: ${MUSTERI_TC}. Değerleri test verisi, giriş profili ve tarih kurallarından gelir.' }), parametrePaneli()));
@@ -1355,14 +1378,14 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       location.hash = `#/servisler/s/${q(s.id)}/senaryo/${q(r.id)}`;
     } catch (e) { mesaj.goster(e.message); }
   });
-  const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
-  const dene = h('button', { type: 'button', disabled: !test, title: 'Kaydedilmemiş hâliyle TEST ortamında dener; senaryo kaydedilmez' }, ikon('oynat'), 'Dene (TEST)');
+  const deneOrtami = istekOrtamiSecimi(ortamlar, 'Deneme ortamı');
+  const dene = h('button', { type: 'button', disabled: !ortamlar.length, title: 'Kaydedilmemiş hâliyle seçilen ortamda dener (CANLI ortamda önce onay sorulur); senaryo kaydedilmez' }, ikon('oynat'), 'Dene');
   dene.addEventListener('click', () => {
     const eksik = eksikParametre();
     if (eksik) { mesaj.goster(eksikMetni(eksik)); return; }
     let taslakIcerik;
     try { taslakIcerik = icerikAl(); } catch (e) { mesaj.goster(e.message); return; }
-    deneVeGoster(proje, s, test, { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik }, baslik.value.trim() || 'Taslak', dene);
+    deneVeGoster(proje, s, deneOrtami.secilen(), { baslik: baslik.value.trim() || 'Taslak', icerik: taslakIcerik }, baslik.value.trim() || 'Taslak', dene);
   });
   yerlestir(kap, h('div', { class: 'kart form-paneli' },
     h('h3', {}, senaryo ? 'Senaryoyu düzenle' : 'Yeni senaryo'), mesaj.kutu,
@@ -1377,7 +1400,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu,
       h('div', { class: 'sozlesme-secenegi' }, h('label', { class: 'secenek', for: sozlesmeKutusu.id }, sozlesmeKutusu, 'Yanıt sözleşmeye uymalı'), sozlesmeNotu)),
     veriBolumu,
-    h('div', { class: 'dugmeler' }, kaydet, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
+    h('div', { class: 'dugmeler' }, kaydet, ortamlar.length > 1 ? deneOrtami.el : null, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
   // Gövde / header / yol değişince çalıştırma biçimi grupları yeniden hesaplanır (yalnız gruplar değiştiyse çizilir).
   kap.addEventListener('input', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); });
   kap.addEventListener('change', (o) => { if (!veriKutusu.contains(/** @type {Node} */ (o.target))) veriCiz(); });
@@ -1743,18 +1766,20 @@ function semaKarti(proje, s, ortamlar) {
   const semalar = s.ayarlar.operasyonSemalari || {};
   const alanli = Object.values(semalar).filter((x) => x.alanlar.length);
   const yenile = h('button', { type: 'button' }, ikon('yenile'), 'WSDL\'den yeniden al');
+  const yenileOrtami = istekOrtamiSecimi(ortamlar, 'WSDL ortamı');
   yenile.addEventListener('click', async () => {
-    const test = testOrtamlari(ortamlar).find((o) => o.varsayilan) || testOrtamlari(ortamlar)[0];
-    if (!test) { bildir('Projede TEST ortamı yok.', 'hata'); return; }
-    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl. Ayrı şema dosyaları varsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    const test = yenileOrtami.secilen();
+    if (!test) { bildir('Projede ortam yok.', 'hata'); return; }
+    if (!(await istekOnayi(test, { baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i ${test.ad} ortamından alınacak (yalnız okuma): ${s.ayarlar.yol}?wsdl. Ayrı şema dosyaları varsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+    const canliEki = canliOnayEki(test.id);
     try {
-      const r = await mesgulIken(yenile, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id } }));
+      const r = await mesgulIken(yenile, 'Alınıyor…', () => api('/platform/servis/sema/yenile', { govde: { projeId: proje.id, servisId: s.id, ortamId: test.id, ...canliEki } }));
       bildir(`${r.operasyonSayisi} operasyon, ${r.alanliOperasyonlar.length} tanesinin alan listesi alındı.`);
       window.dispatchEvent(new HashChangeEvent('hashchange'));
     } catch (e) { bildir(e.message, 'hata'); }
   });
   const varsayilanSayisi = Object.values(s.ayarlar.alanVarsayilanlari || {}).reduce((n, x) => n + Object.keys(x).length, 0);
-  return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Operasyon alan listeleri'), h('span', { class: 'sag' }, yenile)),
+  return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Operasyon alan listeleri'), h('span', { class: 'sag' }, ortamlar.length > 1 ? yenileOrtami.el : null, ' ', yenile)),
     h('p', { class: 'soluk kucuk' }, 'Senaryo düzenleyicideki alan formu bu listelerden oluşur (WSDL şeması). Servis değiştiyse yeniden alın.'),
     alanli.length
       ? h('ul', { class: 'onay-listesi' }, alanli.map((x) => h('li', {}, h('code', { class: 'duz' }, x.ad), ` — ${alanSatirlari(x.alanlar).filter((a) => !a.grup).length} alan`)))

@@ -1,4 +1,4 @@
-// UÇTAN UCA (yerel) — TÜM EKRANLAR: nötr bir proje (ortam, giriş profili ve tarifi, bağlam kayıtları, sayfa paketinden ekran +
+// UÇTAN UCA (yerel) — TÜM EKRANLAR: nötr bir proje (ortam, giriş profili ve tarifi, bağlam kayıtları, ekran paketinden ekran +
 // senaryolar, gerçek bir koşu sonucu) kullanıcının yapacağı gibi Nöbetçi'nin uçlarıyla kurulur; ardından arayüzdeki her ekran
 // masaüstü ve telefon genişliğinde açılır. Her ekranda:
 //   - sayfa hatası (pageerror) ve konsol hatası yok,
@@ -212,7 +212,7 @@ test('açık tema: tüm ekranlar hatasız açılır', async () => {
   await baglam.close();
 });
 
-test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → ortamlar (TEST + riskli CANLI) → proje hazır; hatasız, erişilebilir, telefonda taşmasız', async () => {
+test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → ortamlar (TEST + Canlı türünde CANLI; tür zorunlu) → proje hazır; hatasız, erişilebilir, telefonda taşmasız', async () => {
   test.setTimeout(180_000);
   for (const [genislik, yukseklik, cihaz] of [[1440, 960, 'masaustu'], [390, 844, 'telefon']] as const) {
     // Her genişlik için ayrı, boş bir Nöbetçi (ilk kurulum baştan).
@@ -246,21 +246,24 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.getByRole('button', { name: 'Kasayı oluştur ve devam et' }).click();
       await page.getByLabel('Proje adı').fill('İlk kurulum projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
-      // Ortamlar: satır = × | Ortam adı | Adres | Riskli mi? (× yalnız ikon, TEST'te yok). CANLI "Ortam ekle" ile eklenir.
+      // Ortamlar: satır = × | Ortam adı | Adres | Ortam türü (Test / Canlı; × yalnız ikon, TEST'te yok). CANLI "Ortam ekle" ile eklenir.
       await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 4');
       await expect(page.getByLabel('Ortam adı')).toHaveCount(1);
       await page.getByRole('button', { name: 'Ortam ekle' }).click();
       await page.getByLabel('Ortam adı').nth(1).fill('CANLI');
-      await page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').nth(1).check();
-      await expect(page.getByLabel('Riskli ortam (gerçek işlem oluşturabilir)').first()).toBeDisabled();
+      // TEST satırının türü sabit Test; eklenen satırda tür önceden seçili gelmez (zorunlu seçim, aşağıda denetlenir).
+      await expect(page.locator('.ortam-satiri').first().getByRole('radio', { name: 'Test' })).toBeChecked();
+      await expect(page.locator('.ortam-satiri').first().getByRole('radio', { name: 'Canlı' })).toBeDisabled();
+      await expect(page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Test' })).not.toBeChecked();
+      await expect(page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' })).not.toBeChecked();
       await expect(page.getByRole('button', { name: 'Ortamı kaldır' })).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Ortamı kaldır' })).toHaveText('');
       await page.getByLabel('Adres (link)').first().fill('https://test.ornek.invalid');
       await page.getByLabel('Adres (link)').nth(1).fill('https://canli.ornek.invalid');
-      // Satır hizası: × satırın EN SOLUNDA (Ortam adı alanının solunda) ve ad girdisiyle aynı hizada; masaüstünde riskli kutusu
+      // Satır hizası: × satırın EN SOLUNDA (Ortam adı alanının solunda) ve ad girdisiyle aynı hizada; masaüstünde ortam türü seçimi
       // da girdiyle aynı satırda.
       const satir = page.locator('.ortam-satiri').nth(1);
-      const kutu = await satir.locator('.ortam-riski .secenek').boundingBox();
+      const kutu = await satir.locator('.ortam-riski .secenek').first().boundingBox();
       const kaldir = await satir.getByRole('button', { name: 'Ortamı kaldır' }).boundingBox();
       const adGirdisi = await satir.getByLabel('Ortam adı').boundingBox();
       const girdi = await satir.getByLabel('Adres (link)').boundingBox();
@@ -268,16 +271,25 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       if (kutu && kaldir && girdi && adGirdisi) {
         expect(kaldir.x + kaldir.width, '× ortam adının solunda').toBeLessThanOrEqual(adGirdisi.x + 1);
         expect(Math.abs((kaldir.y + kaldir.height / 2) - (adGirdisi.y + adGirdisi.height / 2)), '× ve ad girdisi aynı hizada').toBeLessThanOrEqual(4);
-        if (cihaz === 'masaustu') expect(Math.abs((girdi.y + girdi.height / 2) - (kutu.y + kutu.height / 2)), 'girdi ve riskli kutusu aynı satırda').toBeLessThanOrEqual(4);
+        if (cihaz === 'masaustu') expect(Math.abs((girdi.y + girdi.height / 2) - (kutu.y + kutu.height / 2)), 'girdi ve ortam türü seçimi aynı satırda').toBeLessThanOrEqual(4);
       }
       await kontrol('ortamlar');
+      // Ortam türü zorunlu: seçilmeden kaydedilmez (sunucuya istek gitmez).
+      let ortamKaydi = 0;
+      const sayac = (r: { url: () => string }) => { if (r.url().includes('/platform/ortam/kaydet')) ortamKaydi += 1; };
+      page.on('request', sayac);
+      await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+      await expect(page.locator('.ortam-satiri').nth(1).getByRole('group', { name: 'Ortam türü' }).getByRole('alert')).toHaveText('Ortam türünü seçin (Test / Canlı).');
+      expect(ortamKaydi).toBe(0);
+      page.off('request', sayac);
+      await page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' }).check();
       await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
       // Proje hazır: kısa özet (kaydedilen ortamlar) + "Ana sayfaya geç"; yapılacaklar / sıradaki kartlar yok.
       await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
       const ozet = page.getByRole('region', { name: 'Proje özeti' });
       await expect(ozet.locator('.ozet-ortamlar li')).toHaveCount(2);
-      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'CANLI' }).locator('.rozet.hata')).toHaveText('Riskli');
-      // Riskli olmayan ortamda rozet yok (yalnız riskliyse "Riskli").
+      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'CANLI' }).locator('.rozet.hata')).toHaveText('Canlı');
+      // Test ortamında rozet yok (yalnız Canlıysa "Canlı").
       await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'TEST' }).locator('.rozet.hata, .rozet.uyari')).toHaveCount(0);
       await expect(page.getByText('Sizin için yapılacaklar')).toHaveCount(0);
       await expect(page.getByText('Sırada ne var?')).toHaveCount(0);

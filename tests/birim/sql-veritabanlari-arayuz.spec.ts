@@ -104,7 +104,7 @@ test.describe('veritabanları arayüzü', () => {
     await form.getByRole('button', { name: 'Kaydet' }).click();
     const tablo = page.getByRole('table', { name: 'Veritabanları ve ortam eşlemeleri' });
     await expect(tablo).toBeVisible();
-    await expect(tablo.getByRole('columnheader', { name: /CANLI/ })).toContainText('riskli');
+    await expect(tablo.getByRole('columnheader', { name: /CANLI/ })).toContainText('Canlı');
     const satir = tablo.getByRole('row', { name: /Kayıt veritabanı/ });
     await expect(satir.locator('td[data-ortam="TEST"]')).toHaveText('kayit-TEST');
     await expect(satir.locator('td[data-ortam="CANLI"]')).toHaveText('kayit-CANLI');

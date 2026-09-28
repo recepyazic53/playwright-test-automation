@@ -282,7 +282,7 @@ export type EkranModeli = {
   baglam?: BaglamEkrani;
   isKurallari: IsKurali[];
   bilinmeyenler: string[];
-  /** Bağlam profiline göre alan görünürlüğü (gözlem; sayfa paketinden gelir). */
+  /** Bağlam profiline göre alan görünürlüğü (gözlem; ekran paketinden gelir). */
   baglamGorunurlugu?: BaglamGorunurlugu;
 };
 
@@ -320,7 +320,7 @@ export type YuklenmisEkranModeli = {
 /** Alt model kaynağı: alt model dosya adı → ham JSON (yoksa undefined). */
 type AltModelKaynagi = (dosyaAdi: string) => unknown;
 // ---- Doğrulama (TEK KAYNAK: scripts/dogrulama/ekran-modeli-dogrulayici.mjs) ----
-// Kurallar sunucuyla (sayfa paketi, model sürümleri) ORTAKTIR; burada yalnızca dosya okuma ve tipler var.
+// Kurallar sunucuyla (ekran paketi, model sürümleri) ORTAKTIR; burada yalnızca dosya okuma ve tipler var.
 
 // ---- Alt model ----
 

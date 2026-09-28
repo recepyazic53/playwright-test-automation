@@ -10,11 +10,11 @@
 //   ekranları göster"); silinmiş ekranlar (mezar taşı) "Tüm ekranlar"ın altında listelenir (geri yükle / temizle).
 // Adresler: #/ekranlar · #/ekranlar/yeni[/tara] · #/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /yukle | /bulgular] ·
 //   #/ekranlar/tarama/<iş kimliği> (otomatik taramanın ilerlemesi → önizleme/kabul)
-// Ekran keşfinin yolları: sayfa paketi (kullanıcı istek metnini ve biçim dosyasını sayfa bağlantısıyla yapay zekâ aracına verir; araç sayfayı
+// Ekran keşfinin yolları: ekran paketi (kullanıcı istek metnini ve biçim dosyasını sayfa bağlantısıyla yapay zekâ aracına verir; araç sayfayı
 // düğme kurallarına göre — paket-istekleri.mjs > INCELEME_KURALLARI — inceleyip paketi üretir, paket burada yüklenir), "Ekranı tara", "Akışı kaydet".
 import { TOKEN, api, bildir, bosDurum, h, ikon, iskelet, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
 import {
-  BULGU_TURLERI, bicimIndirBaglantisi, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz, tekrarAnalizDiyalogu
+  BULGU_TURLERI, bicimIndirBaglantisi, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz, paketAdiniGuncelle, tekrarAnalizDiyalogu
 } from './ekran-ortak.js';
 import { sayfaPaketiAkisi } from './sayfa-paketi.js';
 import { akisDiyagrami } from './akis-diyagrami.mjs';
@@ -25,7 +25,6 @@ import { bulgularEkrani } from './bulgular.js';
 import { ekranBaglariSekmesi } from './ekran-baglari.js';
 import { ekranlarGrubu, navGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
-import { girisAkislariniAl, girisBaglantisi, girisKarti } from './giris-akisi.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
 import { acilirMenu } from './calisma-alani.js';
 
@@ -60,16 +59,16 @@ export function ekranlarEkrani(main, parcalar, baglam) {
   yerlestir(main, h('h1', { class: 'gorunmez' }, 'Ekranlar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,
-        h('div', { class: 'yan-not' }, h('b', {}, 'Sayfa paketi'), h('br', {}),
+        h('div', { class: 'yan-not' }, h('b', {}, 'Ekran paketi'), h('br', {}),
           'Yeni ekranı "Ekran ekle"de ekleyin: Nöbetçi taratsın ("Ekranı tara"), akışı siz kaydedin ya da yapay zekâ aracınızın ürettiği paketi yükleyin. Aynı ekran için yeni paket = tekrar analiz.')),
       icerik));
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
 
   (async () => {
-    // Girişler (ortam başına giriş tarifi) "Ortak akışlar"da görünür; düzenleme Ayarlar > Giriş profilleri'nde.
-    const [liste, servisler, girisler] = await Promise.all([api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`), servisleriAl(proje), girisAkislariniAl(proje)]);
+    // Giriş (ortam başına giriş tarifi) Ekranlar'da listelenmez; yalnız Ayarlar > Giriş profilleri > Giriş tarifi'nden yönetilir.
+    const [liste, servisler] = await Promise.all([api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`), servisleriAl(proje)]);
     const secim = tur === 'e' ? kimlik : tur === 'yeni' ? '__yeni' : '';
-    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler, girisler);
+    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler);
     yanCiz();
     if (tur === 'yeni') {
       sayfaPaketiAkisi(icerik, { mod: 'yeni', proje, tara: () => taramaBaslat(proje, null), kaydet: () => kayitBaslat(proje, null), bitti: (id) => { location.hash = `#/ekranlar/e/${encodeURIComponent(id)}`; } });
@@ -99,14 +98,14 @@ export function ekranlarEkrani(main, parcalar, baglam) {
       await ekranAyrintisi(icerik, { proje, ekranId: kimlik, sekme: alt || 'model', surum: alt === 'gecmis' && altKimlik ? Number(altKimlik) : null, akisSecimi: alt === 'akis' ? altKimlik || null : null, listeKaydi: ekran, idler: gorunenSira(liste).idler });
       return;
     }
-    listeGorunumu(icerik, proje, liste, girisler);
+    listeGorunumu(icerik, proje, liste);
   })().catch(hata);
 }
 
 /** Ekran listesinde (ürün/ekran kartları) gösterilmeyen model türleri: yan listede kendi gruplarında. */
 const EKRAN_DISI_TURLER = ['altModel', 'ortakAkis'];
 
-function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
+function yanListe(nav, tumu, secili, yeniden, servisler = []) {
   // Devre dışı ekranlar varsayılan olarak gizli (seçili olan hariç); "Devre dışı ekranları göster" ile görünür.
   const devreDisiSayisi = tumu.filter((e) => e.durum === 'devre_disi').length;
   const ekranlar = devreDisiGoster() ? tumu : tumu.filter((e) => e.durum !== 'devre_disi' || e.id === secili);
@@ -125,8 +124,8 @@ function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
     h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Ekran ekle'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranModelli.map(baglanti)),
-    navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: [...girisler.map(girisBaglantisi), ...ortakAkislar.map(baglanti)], bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }),
-    altModeller.length ? navGrubu({ anahtar: 'alt-modeller', baslik: 'Alt modeller', ogeler: altModeller.map(baglanti), ekle: { etiket: 'Alt model ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }) : null,
+    navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: ortakAkislar.map(baglanti), bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (ekran paketiyle)', href: '#/ekranlar/yeni' } }),
+    altModeller.length ? navGrubu({ anahtar: 'alt-modeller', baslik: 'Alt modeller', ogeler: altModeller.map(baglanti), ekle: { etiket: 'Alt model ekle (ekran paketiyle)', href: '#/ekranlar/yeni' } }) : null,
     devreDisiAnahtari(devreDisiSayisi, () => yeniden()),
     ...servislerBolumu(servisler));
 }
@@ -146,7 +145,7 @@ function gorunenSira(liste) {
   return { sirali, idler: [...sirali.map((e) => e.id), ...liste.ekranlar.filter((e) => EKRAN_DISI_TURLER.includes(e.modelTuru)).map((e) => e.id)] };
 }
 
-function listeGorunumu(icerik, proje, liste, girisler = []) {
+function listeGorunumu(icerik, proje, liste) {
   const ekranlar = liste.ekranlar.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru));
   const { sirali, idler } = gorunenSira(liste);
   const devreDisi = ekranlar.filter((e) => e.durum === 'devre_disi').length;
@@ -167,27 +166,26 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
     h('section', { class: 'kesif-seridi', 'aria-label': 'Yeni sayfa nasıl eklenir' },
       h('ol', { class: 'kesif-adimlari' },
         h('li', {}, h('b', {}, 'İstek metnini kopyalayın'), h('span', {}, 'Sayfanın bağlantısıyla birlikte yapay zekâ aracınıza (tarayıcıyı kullanabilen bir kodlama asistanı) verin.')),
-        h('li', {}, h('b', {}, 'Sayfa paketi üretilir'), h('span', {}, 'Araç sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Model, senaryo önerileri, bilinmeyenler — gizli değer yok.')),
+        h('li', {}, h('b', {}, 'Ekran paketi üretilir'), h('span', {}, 'Araç sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Model, senaryo önerileri, bilinmeyenler — gizli değer yok.')),
         h('li', {}, h('b', {}, 'Paketi yükleyin'), h('span', {}, '"Ekran ekle"de önizleyin, seçin, kabul edin. Ekranı taratmak ya da akışı kaydetmek de oradadır.'))),
       h('div', { class: 'kesif-cumlesi' }, istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
       : bosDurum('Henüz ekran yok.', 'İlk ekranınızı "Ekran ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Ekran ekle') }),
-    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler, proje.id),
+    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis')),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }
 
 /**
- * Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. Her ortamın GİRİŞİ
- * de burada "Giriş (<ortam>)" kartıdır (tek satır özet; adımlar Düzenle → Ayarlar > Giriş profilleri > Giriş tarifi'nde).
- * Kartlar ekran kartlarıyla aynı düzende (ortakAkisKarti, giris-akisi.js > girisKarti).
+ * Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. Kartlar ekran kartlarıyla
+ * aynı düzende (ortakAkisKarti). Giriş burada listelenmez: yalnız Ayarlar > Giriş profilleri > Giriş tarifi'nden yönetilir.
  */
-function ortakAkisBolumu(liste, girisler = [], projeId = '') {
-  if (!liste.length && !girisler.length) return null;
+function ortakAkisBolumu(liste) {
+  if (!liste.length) return null;
   return h('section', { class: 'ortak-akis-bolumu', 'aria-labelledby': 'ortak-akislar-baslik' },
-    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length + girisler.length), 'vurgu')),
-      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar. Giriş her koşuda ortamın giriş tarifiyle yapılır.')),
-    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...girisler.map((o) => girisKarti(o, projeId)), ...liste.map(ortakAkisKarti)));
+    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length), 'vurgu')),
+      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar.')),
+    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...liste.map(ortakAkisKarti)));
 }
 
 /**
@@ -240,7 +238,7 @@ function ekranKarti(e, s) {
         ekranMenusu({ proje: s.proje, ekran: e, idler: s.idler }))),
     e.modelSurumu
       ? h('div', { class: 'ekran-sayilari' }, sayi(e.adimSayisi, 'adım'), sayi(e.alanSayisi, 'alan'), sayi(e.senaryoSayisi, 'senaryo'))
-      : h('p', { class: 'kucuk soluk' }, `${e.senaryoSayisi} senaryo · modeli yok — sayfa paketi yükleyerek model oluşturun.`),
+      : h('p', { class: 'kucuk soluk' }, `${e.senaryoSayisi} senaryo · modeli yok — ekran paketi yükleyerek model oluşturun.`),
     e.bekleyenAnaliz
       ? h('a', { class: 'bekleyen-bant', href: `${adres}/bulgular` }, ikon('uyari'), h('span', {}, h('b', {}, String(e.bekleyenAnaliz.bulguSayisi)), ' bulgu karar bekliyor'), ikon('ok'))
       : null,
@@ -274,7 +272,7 @@ async function ekranAyrintisi(icerik, s) {
   const modelDugmesi = h('button', { type: 'button', class: 'birincil model-menusu-dugmesi' }, ikon(modelVar ? 'yenile' : 'arti'), modelVar ? 'Modeli güncelle' : 'Model ekle', ikon('asagi'));
   const modelMenusu = acilirMenu({
     dugme: modelDugmesi, sinif: 'satir-menusu-kap model-menusu', ogeler: [
-      { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği sayfa paketi elinizdeyse.', fn: paketYukle },
+      { ikon: 'yukle', metin: 'Paket yükle', aciklama: 'Yapay zekâ aracınızın ürettiği ekran paketi elinizdeyse.', fn: paketYukle },
       altModel || ortakAkis ? null : { ikon: 'ara', metin: 'Ekranı tara', aciklama: 'Sayfa değiştiyse: Nöbetçi yalnızca okuyarak tarar, yeni paket üretir.', fn: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) },
       altModel ? null : {
         ikon: 'video', metin: 'Akışı kaydet',
@@ -334,9 +332,9 @@ async function ekranAyrintisi(icerik, s) {
   if (s.sekme === 'akis' && d.model) { await akisSekmesi(sekmeAlani, s, d, icerik); return; }
   if (s.sekme === 'veri' && d.model) { await ekranBaglariSekmesi(sekmeAlani, s, e); return; }
   if (!agac) {
-    yerlestir(sekmeAlani, bosDurum('Bu ekranın modeli yok.', 'Yapay zekâ aracınızın ürettiği bir sayfa paketini yükleyerek, ekranı tarayarak ya da akışı kaydederek model oluşturun. Mevcut senaryolar korunur.', {
+    yerlestir(sekmeAlani, bosDurum('Bu ekranın modeli yok.', 'Yapay zekâ aracınızın ürettiği bir ekran paketini yükleyerek, ekranı tarayarak ya da akışı kaydederek model oluşturun. Mevcut senaryolar korunur.', {
       ikon: 'katman', eylem: h('div', { class: 'dugmeler' },
-        h('a', { class: 'dugme birincil', href: `${adres}/yukle` }, ikon('yukle'), 'Sayfa paketi yükle'),
+        h('a', { class: 'dugme birincil', href: `${adres}/yukle` }, ikon('yukle'), 'Ekran paketi yükle'),
         h('button', { type: 'button', onclick: () => taramaBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) }, ikon('ara'), 'Ekranı tara'),
         h('button', { type: 'button', onclick: () => kayitBaslat(s.proje, { id: e.id, ad: e.ad, anahtar: e.anahtar }) }, ikon('video'), 'Akışı kaydet'))
     }));
@@ -530,7 +528,7 @@ async function gecmisSekmesi(alan, s, d) {
         h('a', { href: `${adres}/${g.surum}`, 'aria-current': g.surum === secili ? 'true' : null },
           h('span', { class: 'surum-no' }, `v${g.surum}`),
           h('span', { class: 'surum-bilgisi' },
-            h('b', {}, g.aciklama || (g.surum === 1 ? 'İlk sürüm' : 'Güncelleme')),
+            h('b', {}, paketAdiniGuncelle(g.aciklama) || (g.surum === 1 ? 'İlk sürüm' : 'Güncelleme')),
             h('small', {}, tarihMetni(g.olusturulma))),
           g.degisiklikSayisi !== null ? rozet(`${g.degisiklikSayisi} değişiklik`, g.degisiklikSayisi ? 'vurgu' : '') : rozet('ilk', 'basari')))))),
     farkAlani));
@@ -540,12 +538,12 @@ async function gecmisSekmesi(alan, s, d) {
       h('div', { class: 'kart-basligi' },
         h('h3', {}, ikon('katman'), f.oncekiSurum ? `v${f.oncekiSurum} → v${f.surum}` : `v${f.surum} (ilk sürüm)`),
         h('span', { class: 'sag' }, Object.entries(f.ozet.turler).map(([t, n]) => h('span', { class: 'tur-sayaci', title: BULGU_TURLERI[t]?.etiket || t }, bulguRozeti(t), h('b', {}, String(n)))))),
-      f.aciklama ? h('p', { class: 'kucuk soluk' }, f.aciklama) : null,
+      f.aciklama ? h('p', { class: 'kucuk soluk' }, paketAdiniGuncelle(f.aciklama)) : null,
       f.bulgular.length
         ? h('ul', { class: 'bulgu-listesi salt-okunur' }, f.bulgular.map((b) => h('li', { class: 'bulgu-satiri' },
           h('div', { class: 'bulgu-tur' }, bulguRozeti(b.tur)),
           h('div', { class: 'bulgu-ana' }, h('strong', {}, b.baslik), h('small', {}, b.konum), farkGosterimi(b)))))
-        : h('p', { class: 'soluk' }, f.oncekiSurum ? 'Bu sürümde alan/adım değişikliği yok.' : 'İlk sürüm: sayfa paketinden oluşturuldu.'),
+        : h('p', { class: 'soluk' }, f.oncekiSurum ? 'Bu sürümde alan/adım değişikliği yok.' : 'İlk sürüm: ekran paketinden oluşturuldu.'),
       f.agac ? h('details', { class: 'fark ust-bosluk' }, h('summary', {}, `v${f.surum} modelini göster`), modelAgaciCiz(f.agac, { kompakt: true, vurgulu: new Set(f.bulgular.map((b) => b.alanId).filter(Boolean)) })) : null));
   } catch (e) {
     if (e.durum !== 423) yerlestir(farkAlani, hataKutusu(e));
@@ -554,13 +552,13 @@ async function gecmisSekmesi(alan, s, d) {
 
 function kanitSekmesi(alan, d) {
   const k = d.analiz.kanitlar;
-  if (!k.length) { yerlestir(alan, bosDurum('Kanıt yok.', 'Sayfa paketlerindeki ekran görüntüleri burada şifreli saklanır.', { ikon: 'ekran' })); return; }
+  if (!k.length) { yerlestir(alan, bosDurum('Kanıt yok.', 'Ekran paketlerindeki ekran görüntüleri burada şifreli saklanır.', { ikon: 'ekran' })); return; }
   yerlestir(alan, h('section', { class: 'kart' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('ekran'), 'Paket ekran görüntüleri'), h('span', { class: 'sag cok-soluk kucuk' }, 'medya deposunda şifreli')),
     h('ul', { class: 'gorsel-izgarasi genis-gorseller' }, k.slice().reverse().map((m) => h('li', {},
       h('button', { type: 'button', class: 'gorsel-dugmesi', onclick: () => gorselDiyalogu(medyaUrl(m.medyaId), m.ad), 'aria-label': `${m.ad} — büyüt` },
         h('img', { src: medyaUrl(m.medyaId), alt: '', loading: 'lazy' })),
       h('div', { class: 'gorsel-adi' }, h('span', {}, m.ad)),
-      h('small', { class: 'cok-soluk kucuk' }, [m.kaynak, tarihMetni(m.zaman)].filter(Boolean).join(' · ')))))));
+      h('small', { class: 'cok-soluk kucuk' }, [paketAdiniGuncelle(m.kaynak), tarihMetni(m.zaman)].filter(Boolean).join(' · ')))))));
 }
 

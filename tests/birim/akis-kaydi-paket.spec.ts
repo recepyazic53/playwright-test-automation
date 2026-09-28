@@ -1,4 +1,4 @@
-// AKIŞ KAYDI → SAYFA PAKETİ — saf dönüşüm (tarayıcı YOK): kayıt envanterinden çok adımlı model (koşu tanımları, "İşlemler"
+// AKIŞ KAYDI → EKRAN PAKETİ — saf dönüşüm (tarayıcı YOK): kayıt envanterinden çok adımlı model (koşu tanımları, "İşlemler"
 // bölümü, bağlam profili alanı), değişken gösterge metninin sabitlenmesi ve MEVCUT modelle birleştirme (seçiciyle eşleşen
 // alanların kimliği/ek bilgileri korunur; artık var olmayan adımlara bağlı iş kuralları çıkarılır; paket geçerlidir ve
 // Bulgular'ın fark motorundan geçer). Tüm değerler SAHTEDİR.

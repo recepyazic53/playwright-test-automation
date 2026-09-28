@@ -9,7 +9,7 @@
 // Kayıt: POST /platform/servis/akis-senaryosu/kaydet (içerik: { tur: 'akis', akisId, adimlar: { <adımId>: tek istekli içerik } }).
 // Dene: kaydedilmemiş hâli TEST ortamında (onayla; canlı koşu paneli). Kullanıcı verisi DOM'a yalnız metin olarak yazılır.
 import { alan, alanHatasi, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
+import { canliOnayIste, onayIste, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { servisKosusuBaslat } from './servis-kosu-paneli.js';
 import { alanSatirlari, baslangicDegerleri, govdeCoz, govdeUret, sabitDegerUyarisi } from './servis-govdesi.mjs';
 import { basvuru } from './tablo-secimi.mjs';
@@ -143,7 +143,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     const engel = form?.canliEngeli ?? [];
     for (const o of kapsam.options) o.disabled = engel.length > 0 && o.value !== 'test';
     if (engel.length && kapsam.value !== 'test') kapsam.value = 'test';
-    kapsamNotu.textContent = engel.length ? `CANLI seçilemez: ${engel.join('; ')}.` : 'Hangi ortam türünde koşacağı. Dene her zaman TEST’te.';
+    kapsamNotu.textContent = engel.length ? `CANLI seçilemez: ${engel.join('; ')}.` : 'Hangi ortam türünde koşacağı. Dene seçilen ortamda (CANLI ortamda önce onay).';
   }
 
   /** Bir operasyon adımının bölümü: alanlar (kilitliler sorulmaz) + beklenen sonuç. */
@@ -289,15 +289,19 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
       location.hash = `#/servisler/s/${q(senaryo?.servisId ?? s.id)}/senaryo/${q(r.id)}`;
     } catch (e) { mesaj.goster(e.message); }
   });
-  const test = ortamlar.find((o) => !riskliOrtamMi(o));
-  const dene = h('button', { type: 'button', disabled: !test, title: 'Kaydedilmemiş hâliyle TEST ortamında dener; senaryo kaydedilmez' }, ikon('oynat'), 'Dene (TEST)');
+  // Dene ortamı: önce gelen TEST; CANLI da seçilebilir (istekten önce tek tip CANLI onayı; onay servisKosusuBaslat'ta isteğe eklenir).
+  const ilkDene = ortamlar.find((o) => !riskliOrtamMi(o) && o.varsayilan) || ortamlar.find((o) => !riskliOrtamMi(o)) || ortamlar[0];
+  const deneOrtami = h('select', { 'aria-label': 'Deneme ortamı', class: 'istek-ortami' }, ortamlar.map((o) => h('option', { value: o.id, selected: ilkDene && o.id === ilkDene.id }, ortamSecenekMetni(o))));
+  const dene = h('button', { type: 'button', disabled: !ortamlar.length, title: 'Kaydedilmemiş hâliyle seçilen ortamda dener (CANLI ortamda önce onay sorulur); senaryo kaydedilmez' }, ikon('oynat'), 'Dene');
   dene.addEventListener('click', async () => {
     mesaj.temizle();
+    const test = ortamlar.find((o) => o.id === deneOrtami.value) || ilkDene;
+    if (!test) return;
     if (!akisId) { mesaj.goster('Akış seçin.'); return; }
     let icerik;
     try { icerik = icerikAl(); } catch (e) { mesaj.goster(e.message); return; }
     const liste = durumlar.map((d) => `${d.adim.no}. ${d.adim.servis?.ad ?? '?'} · ${d.adim.operasyon}`);
-    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
+    if (!(riskliOrtamMi(test) ? await canliOnayIste(test) : await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
     dene.disabled = true;
     try {
       await servisKosusuBaslat({ proje, servisId: s.id, ortamId: test.id, taslak: { baslik: baslik.value.trim() || 'Taslak akış senaryosu', icerik }, bitti: () => {} });
@@ -316,6 +320,6 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     h('label', { class: 'secenek', for: dahil.id }, dahil, 'Koşuya dahil'),
     akisId ? h('p', { class: 'kucuk' }, h('a', { href: akisAdresi() }, 'Akışı aç'), h('span', { class: 'soluk' }, ' — sıra ve taşınan değerler orada düzenlenir.')) : null,
     adimKap,
-    h('div', { class: 'dugmeler' }, kaydet, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
+    h('div', { class: 'dugmeler' }, kaydet, ortamlar.length > 1 ? deneOrtami : null, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
   await adimlariYukle();
 }

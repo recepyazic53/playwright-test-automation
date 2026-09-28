@@ -168,6 +168,9 @@ label { font-weight: 560; display: block; margin-bottom: 6px; font-size: 13px; c
 .alan .yardim { font-size: 12.5px; color: var(--metin-2); margin-top: 5px; }
 .alan .alan-hatasi { font-size: 12.5px; color: var(--hata); margin-top: 5px; font-weight: 550; }
 .alan .alan-hatasi:empty { display: none; }
+.ortam-turu-secimi .alan-hatasi { font-size: 12.5px; color: var(--hata); margin: 5px 0 0; font-weight: 550; }
+.ortam-turu-secimi .zorunlu-isaret { color: var(--hata); font-weight: 700; }
+.canli-onay-penceresi strong { color: var(--hata); }
 /* Başka bir ayara bağlı, şu an kullanılmayan ayar (Ayarlar > Koşu; etkinKosul): pasif görünür, nedeni altında yazar. */
 .alan.pasif > label { color: var(--metin-2); }
 .alan .pasif-aciklamasi { color: var(--atlanan); font-weight: 550; }
@@ -1336,6 +1339,12 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .tasarim-alani .kosul-dugmesi .ikon, .tasarim-alani .sinir-dugmesi .ikon { width: 11px; height: 11px; }
 .tasarim-alani .kosul-dugmesi.var { color: var(--durdu); background: var(--durdu-zemin); }
 .tasarim-alani .sinir-dugmesi.var { color: var(--vurgu); background: var(--vurgu-zemin); }
+/* "Doldurduktan sonra" tuşu (Tab / Enter): alandan çıkınca çıkan uyarılar için. */
+.tasarim-alani .tus-secimi { display: inline-flex; align-items: center; gap: 4px; font: 600 10.5px var(--yazi-mono); color: var(--metin-3); }
+.tasarim-alani .tus-secimi select { min-height: 20px; height: 20px; padding: 0 4px; font: 600 10.5px var(--yazi-mono); width: auto; }
+.tasarim-alani .tus-secimi.var { color: var(--vurgu); }
+.alan-sonrasi-ipucu { display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 6px 8px; border-radius: 7px; font-size: 12px; color: var(--durdu); background: var(--durdu-zemin); }
+.alan-sonrasi-ipucu .ikon { width: 13px; height: 13px; flex: none; margin-top: 2px; }
 /* Korunan parçalar: diyagramda düzenlenemez, kaydederken modeldeki hâliyle aynen korunur (salt okunur; kilit simgeli). */
 .tasarim-blogu.tur-korunan { --serit: var(--cizgi-2); background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--metin-3) 5%, transparent) 10px 20px), var(--panel); }
 .korunan-notu { display: grid; gap: 4px; margin: 0; padding: 8px 10px; border-radius: 7px; font-size: 12px; color: var(--metin-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); }
@@ -1452,7 +1461,7 @@ body:has(.kosu-hapi) .bildirimler { bottom: 68px; }
 .tarif-formu { scroll-margin-top: calc(var(--ust-yukseklik) + 16px); }
 
 /* ---- 5.10 Ekranlar (ekranlar.js, ekran-ortak.js, sayfa-paketi.js, bulgular.js) ------------
-   Ekran kartları, model ağacı (adım › bölüm › alan satırları), sayfa paketi yükleme/önizleme, model
+   Ekran kartları, model ağacı (adım › bölüm › alan satırları), ekran paketi yükleme/önizleme, model
    geçmişi, Bulgular (metrikler, bulgu satırları, Kabul/Reddet, etki paneli). Yalnızca belirteçler;
    açık/koyu tema otomatik. */
 code.duz { background: none; border: 0; padding: 0; color: inherit; }
@@ -1689,7 +1698,7 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 .claude-diyalogu .diyalog-alt .bosluk { flex: 1; }
 .claude-diyalogu .diyalog-alt .secim-sayaci { align-self: center; }
 
-/* Sayfa paketi: yükleme */
+/* Ekran paketi: yükleme */
 .yukleme-duzeni { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
 .gorunmez-dosya { position: absolute; left: 0; top: 0; width: 1px; height: 1px; padding: 0; border: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); opacity: 0; pointer-events: none; }
 .yukleme-alani {
@@ -1711,7 +1720,7 @@ dialog.claude-diyalogu { width: min(38rem, calc(100vw - 2rem)); }
 .dogrulama-hatalari li code { font-size: 11px; color: var(--hata); background: none; border: 0; padding: 0; max-width: 22rem; }
 .dogrulama-hatalari p { margin: 0; }
 
-/* Sayfa paketi: önizleme */
+/* Ekran paketi: önizleme */
 .paket-meta { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 14px; margin: 0 0 8px; font-size: 13px; }
 .paket-meta dt { font: 600 10.5px var(--yazi-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--metin-3); padding-top: 2px; }
 .paket-meta dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -2620,7 +2629,7 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .secenek-karti b { font-size: 14px; }
 .secenek-karti small { color: var(--metin-3); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
 
-/* 5.y Giriş adımları, ek alanlar ve "Girişi kaydet" (giris-tarifi.js, ayarlar.js, giris-akisi.js) — dosya SONUNA eklendi. */
+/* 5.y Giriş adımları, ek alanlar ve "Girişi kaydet" (giris-tarifi.js, ayarlar.js) — dosya SONUNA eklendi. */
 .giris-adimi { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel); padding: 10px 12px; }
 .giris-ozel-not { margin: 0; grid-column: 1 / -1; }
 .giris-ozet { margin: 0 0 var(--b2); }
@@ -2641,8 +2650,6 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .giris-denemesi-goruntusu { display: block; max-width: 100%; max-height: 22rem; margin-top: var(--b2); border: 1px solid var(--cizgi, currentColor); border-radius: var(--r1, 6px); object-fit: contain; }
 .giris-denemesi-gunlugu { margin: var(--b2) 0 0; padding-left: 1.25rem; }
 .giris-denemesi-gunlugu:empty { display: none; }
-.giris-akisi-karti .giris-ozet-adimlari { font-size: 13px; }
-.giris-akisi-karti .dugmeler { margin-top: auto; }
 @media (max-width: 640px) {
   .ek-alan-satiri { grid-template-columns: 1fr 1fr; }
   .giris-kaydi-adimi { grid-template-columns: auto minmax(0, 1fr); }
@@ -2935,7 +2942,7 @@ pre.servis-sonuc-kod { max-height: 28rem; margin: 0; }
 .tema-karti b { font-size: 13.5px; }
 .tema-karti small { color: var(--metin-3); font-size: 12px; line-height: 1.4; }
 
-/* Sayfa paketi önizlemesi: test verisine yazılacaklar (tablolar + alan bağlantıları); Tablolar'da tablonun kaynağı. */
+/* Ekran paketi önizlemesi: test verisine yazılacaklar (tablolar + alan bağlantıları); Tablolar'da tablonun kaynağı. */
 .test-verisi-onizleme .tv-tablolar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .test-verisi-onizleme .tv-tablo { border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .test-verisi-onizleme .tv-tablo-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
@@ -3064,6 +3071,10 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .ortam-riski .alan-etiketi { display: block; font-size: 13px; font-weight: 560; margin-bottom: 6px; white-space: nowrap; }
 .ortam-riski .secenek { margin: 0; min-height: 40px; white-space: nowrap; }
 .ortam-satiri.zorunlu .ortam-riski .secenek { color: var(--metin-2); cursor: default; }
+.ortam-satiri > fieldset.ortam-turu-secimi { border: 0; padding: 0; margin: 0; min-width: 0; background: none; }
+.ortam-satiri > fieldset.ortam-turu-secimi > legend { float: left; width: 100%; padding: 0; line-height: inherit; }
+.ortam-satiri > fieldset.ortam-turu-secimi > .secenekler-satiri { clear: both; }
+.ortam-turu-secimi .secenekler-satiri { display: flex; flex-wrap: wrap; gap: var(--b3); }
 .ortam-kaldir { margin-top: 25px; width: 38px; height: 40px; min-height: 40px; padding: 0; display: grid; place-items: center; }
 .ortam-kaldir .ikon { margin: 0; }
 @media (max-width: 860px) {
@@ -3613,7 +3624,7 @@ tr.suzuldu { display: none; }
   .ekleme-kutulari { grid-template-columns: minmax(0, 1fr); }
   .ekleme-kutusu { min-height: 0; }
 }
-/* Ortak akış ve giriş kartları: ekran kartıyla aynı düzen (başlık + rozet, tek satır özet, kullanım, altta eylemler). */
+/* Ortak akış kartları: ekran kartıyla aynı düzen (başlık + rozet, tek satır özet, kullanım, altta eylemler). */
 .ekran-karti.ortak-akis-karti { display: flex; flex-direction: column; gap: 10px; text-decoration: none; }
 .ortak-akis-izgarasi { align-items: stretch; }
 .ortak-akis-ozeti { font-size: 13px; color: var(--metin-2); overflow-wrap: anywhere; }
@@ -3743,7 +3754,6 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .uctan-izin-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
 .uctan-izin-listesi li.acik > .ikon { color: var(--basari); }
 .uctan-izin-listesi li.kapali > .ikon { color: var(--atlanan); }
-.uctan-canli-onay { margin-top: 10px; }
 .uctan-izin-ozeti { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
 .uctan-izin-ozeti .rozet { white-space: normal; }
 dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }

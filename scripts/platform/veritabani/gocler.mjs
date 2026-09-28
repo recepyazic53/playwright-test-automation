@@ -580,7 +580,7 @@ export const GOCLER = [
     `
   },
   {
-    // Sürüm 15 — test verisi tablosunun KAYNAĞI (sayfa paketinden içe aktarılan tablolar): kaynak_json =
+    // Sürüm 15 — test verisi tablosunun KAYNAĞI (ekran paketinden içe aktarılan tablolar): kaynak_json =
     // { tur: 'paket' | 'tarama' | 'kayit', olusturan, olusturulma, ekran?, yazilma }. Değer içermez (düz metin).
     // NULL = elle oluşturulan tablo (mevcut tablolar aynen çalışır).
     surum: 15,

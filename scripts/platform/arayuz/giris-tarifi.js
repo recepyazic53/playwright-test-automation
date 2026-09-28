@@ -8,7 +8,7 @@
 // kullanıcı girişi kendisi yapar, yazılan değerler kaydedilmez. Ardından TEK onay ekranı: adımların rolü önerilmiş gelir,
 // yalnız gerekenler sorulur (kod kaynağı; başarı yazısı kayıttan çıkmadıysa), tarif doğrudan kaydedilir (tüm ayrıntılar
 // isteğe bağlı olarak formda). Kaydetme sunucuda doğrulanır (scripts/platform/giris/tarif.mjs).
-// #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (Ekranlar > Ortak akışlar > Giriş).
+// #/ayarlar/giris/tarif/<ortamId> ilgili ortamın tarif formunu doğrudan açar (giriş yalnız buradan yönetilir; Ekranlar'da listelenmez).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, oneriListesi, rozet, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { girisAdimlariOzeti } from './giris-ozeti.mjs';
@@ -467,7 +467,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       baslik: 'Giriş kaydedilsin mi?',
       metin: `Nöbetçi bu bilgisayarda görünür bir tarayıcıda ${adres} adresini GİRİŞ YAPMADAN açar. Girişi siz yaparsınız: bastığınız düğmeler siteye gerçek istek gönderir (dış siteye istek gider). Sayfadaki Nöbetçi paneli yalnızca alanları ve düğmeleri toplar; yazdığınız değerler (kullanıcı adı, parola, kod) kaydedilmez. Girişi bitirince paneldeki “Bitir”e basın.`,
       dugme: 'Tarayıcıyı aç', ikonAd: 'ag',
-      liste: ['Canlı olarak işaretli ortamda kayıt yapılamaz.', 'Süre sınırı: Ayarlar > Koşu > akış kaydı süresi.']
+      liste: ['CANLI ortamda ayrıca "CANLI ortam" onayı sorulur.', 'Süre sınırı: Ayarlar > Koşu > akış kaydı süresi.']
     });
     if (!tamam) return;
     const kutu = h('div', { class: 'kart form-paneli giris-kaydi', 'data-ortam': o.ortamId, role: 'region', 'aria-label': `Giriş kaydı: ${o.ortamAd}` });

@@ -37,7 +37,7 @@ export interface SenaryoSatiri {
   beklenenSonuc: { tur: 'basari' | 'hata'; metin: string; aciklama: string } | null;
   sonSonuc: { durum: string; zaman: string; sonucId: string; kosuId: string } | null;
   mutlakaGorunmeliSayisi: number;
-  /** Sayfa paketindeki bir öneriden eklendi mi (icerik.paket). */
+  /** Ekran paketindeki bir öneriden eklendi mi (icerik.paket). */
   paketten: boolean;
   /** Model koşucusuyla çalışır mı (bkz. model-kosusu.mjs). */
   modelKosusu: boolean;

@@ -1,7 +1,7 @@
 // "Servis ekle" sihirbazı (Servisler > Servis ekle > Adım adım). Adımlar:
 //   1 · Adresler   — servis adı; her ortam için taban adres (ortamın listesinden seç ya da yeni yaz; CANLI boş bırakılabilir).
 //                    Tam adres yapıştırılırsa taban + yol kendiliğinden ayrılır.
-//   2 · Metotlar   — yol + "Denetle" (TEST'e WSDL isteği, onayla) → metotlar; seçim + "CANLI'da çağrılmasın" işareti.
+//   2 · Metotlar   — yol + "Denetle" (seçilen ortama — varsayılan TEST — WSDL isteği, onayla; CANLI'da tek tip CANLI onayı) → metotlar; seçim + "CANLI'da çağrılmasın" işareti.
 //   3 · Alanlar    — seçilen metotların alanları; her alan bir test verisi tablosunun sütununa bağlanır (öneriler: başka
 //                    serviste aynı adlı alanın bağlantısı, yoksa adı aynı sütun). Giriş bilgisi de bir tablodur (Servis girişi).
 //   4 · Özet → Kaydet. Yeni yazılan taban adresler ortamlara kaydedilir (sonraki servislerde listede hazır olur).
@@ -12,7 +12,7 @@
 import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc } from './rest-sihirbazi.js';
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste, ortamRiskRozeti, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { benzerTabloNotu } from './veri-sagligi.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
@@ -51,7 +51,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
   const d = {
     adim: 0, ad: '', anahtar: '', anahtarElle: false, soapSurumu: '1.1', tls: true,
     tabanlar: Object.fromEntries(ortamlar.map((o) => [o.id, o.canli ? '' : o.tabanUrl])),
-    yol: '', kontrolOrtami: (testOrtamlari.find((o) => o.varsayilan) || testOrtamlari[0])?.id ?? '',
+    yol: '', kontrolOrtami: (testOrtamlari.find((o) => o.varsayilan) || testOrtamlari[0] || ortamlar[0])?.id ?? '',
     erisim: null, secilen: new Set(), yalnizTest: new Set(), varsayilanlar: {}, baglar: {}, zorunlu: {}, ekAlanlar: {},
     // REST: tür, uçlar, uç kimliğine göre alan bağları / zorunluluklar, başlangıç senaryosu istenen uçlar (kimlik).
     tur: 'soap', uclar: [yeniUc()], restBaglar: {}, restZorunlu: {}, senaryoIstenen: null, kapsam: 'test',
@@ -181,7 +181,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       d.tabanlar[o.id] ? h('code', { class: 'duz' }, birlestir(d.tabanlar[o.id], d.yol || '/…')) : h('span', { class: 'soluk' }, 'bu ortamda yok'))));
     yol.addEventListener('input', () => { d.yol = yol.value.trim(); d.erisim = null; onizle(); metotAlani(); durumGuncelle(); });
     onizle();
-    const kontrolSec = h('select', { 'aria-label': 'Denetleme ortamı' }, testOrtamlari.map((o) => h('option', { value: o.id, selected: d.kontrolOrtami === o.id }, o.ad)));
+    const kontrolSec = h('select', { 'aria-label': 'Denetleme ortamı' }, ortamlar.map((o) => h('option', { value: o.id, selected: d.kontrolOrtami === o.id }, ortamSecenekMetni(o))));
     kontrolSec.addEventListener('change', () => { d.kontrolOrtami = kontrolSec.value; d.erisim = null; metotAlani(); durumGuncelle(); });
     const denetle = h('button', { type: 'button' }, ikon('ag'), 'Denetle');
     const sonuc = h('div', { 'aria-live': 'polite' });
@@ -206,13 +206,16 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     denetle.addEventListener('click', async () => {
       mesaj.temizle();
       if (!/^\/\S*$/.test(d.yol)) { mesaj.goster('Yol "/" ile başlamalı (ör. /AppService/siparis.asmx).'); return; }
-      const o = testOrtamlari.find((x) => x.id === d.kontrolOrtami);
-      if (!o || !d.tabanlar[o.id]) { mesaj.goster('Denetleme için TEST ortamının taban adresi gerekli (1. adım).'); return; }
+      const o = ortamlar.find((x) => x.id === d.kontrolOrtami);
+      if (!o || !d.tabanlar[o.id]) { mesaj.goster(`Denetleme için ${o ? `${o.ad} ortamının` : 'ortamın'} taban adresi gerekli (1. adım).`); return; }
       const adres = `${birlestir(d.tabanlar[o.id], d.yol)}?wsdl`;
-      if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}. WSDL ayrı şema dosyalarını içe aktarıyorsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' }))) return;
+      // CANLI ortamda yalnız tek tip CANLI onayı (çift onay yok); TEST ortamında istek onayı.
+      const tamam = riskliOrtamMi(o) ? await canliOnayIste(o) : await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Servisin WSDL'i istenecek (yalnız okuma): ${adres}. WSDL ayrı şema dosyalarını içe aktarıyorsa onlar da aynı sunucudan istenir.`, dugme: 'İstek at', ikonAd: 'ag' });
+      if (!tamam) return;
+      const canliEki = canliOnayEki(o.id);
       await mesgulIken(denetle, 'Denetleniyor…', async () => {
         try {
-          const e = await api('/platform/servis/erisim', { govde: { projeId: proje.id, ortamId: o.id, yol: d.yol, tabanlar: { [o.id]: d.tabanlar[o.id] }, ...(d.tls ? {} : { tlsDogrulama: false }) } });
+          const e = await api('/platform/servis/erisim', { govde: { projeId: proje.id, ortamId: o.id, ...canliEki, yol: d.yol, tabanlar: { [o.id]: d.tabanlar[o.id] }, ...(d.tls ? {} : { tlsDogrulama: false }) } });
           if (!e.erisilebilir) { d.erisim = null; yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, `Erişilemedi: ${e.mesaj}`, h('br', {}), h('code', { class: 'duz' }, e.adres))); durumGuncelle(); return; }
           d.erisim = e;
           d.secilen = new Set(e.operasyonlar.map((x) => x.ad));
@@ -230,7 +233,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     return [
       alan('Yol', yol, { zorunlu: true, yardim: 'Taban adresin arkasına eklenir; tüm ortamlarda aynıdır.' }),
       h('div', {}, h('div', { class: 'alan-etiketi' }, 'Gidilecek adresler'), onizleme),
-      h('div', { class: 'satir-duzen' }, alan('Denetleme ortamı', kontrolSec, { yardim: 'Denetleme yalnız TEST ortamında yapılır.' }), denetle),
+      h('div', { class: 'satir-duzen' }, alan('Denetleme ortamı', kontrolSec, { yardim: 'Varsayılan TEST ortamı; CANLI ortamda istekten önce onay sorulur.' }), denetle),
       sonuc
     ];
   };
@@ -321,7 +324,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     if (d.adim === 0) {
       if (!d.ad.trim()) return 'Servis adını yazın.';
       if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(d.anahtar)) return 'Anahtar yalnız küçük harf, rakam ve "-" içerebilir.';
-      if (!testOrtamlari.some((o) => d.tabanlar[o.id])) return 'En az bir TEST ortamı için taban adres gerekli.';
+      if (!ortamlar.some((o) => d.tabanlar[o.id])) return 'En az bir ortam için taban adres gerekli.';
       for (const o of ortamlar) { const a = d.tabanlar[o.id]; if (a && !/^https?:\/\/\S+$/.test(a)) return `${o.ad} taban adresi http:// ya da https:// ile başlamalı.`; }
       if (servisler.some((s) => s.anahtar === d.anahtar)) return `"${d.anahtar}" anahtarlı servis zaten var.`;
     }

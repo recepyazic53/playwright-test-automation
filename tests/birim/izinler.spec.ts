@@ -18,6 +18,7 @@ import { yasakAdresleriKaydet } from '../../scripts/platform/guvenlik/yasak-adre
 import { girisTarifiKaydet } from '../../scripts/platform/giris/tarif-deposu.mjs';
 import { girisKokenleri } from '../../scripts/platform/giris/tarif.mjs';
 import { baglantiKaydet } from '../../scripts/platform/entegrasyonlar/depo.mjs';
+import { veritabaniKaydet } from '../../scripts/platform/sql/veritabanlari.mjs';
 import { httpIstegi } from '../../scripts/platform/servisler/soap-istemcisi.mjs';
 import { yasakDesenleri } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { zamanliKosuyuYurut } from '../../scripts/platform/zamanlama/zamanlayici.mjs';
@@ -118,6 +119,19 @@ test('koşullu izinler: riskli ortam + açık onay, giriş tarifi, yalnız okuma
     expect(gerekenIzinler(vt, '/platform/servis/kaydet', { projeId, tlsDogrulama: true }).izinler).toEqual([]);
     expect(kapaliIzinler(vt, '/platform/servis-akisi/kos', { projeId, ortamId: canli, icerik: { adimlar: [{ tur: 'sql' }] } }))
       .toEqual(['servis-istekleri', 'canli-ortam', 'veritabani-okuma']);
+    // CANLI ortamda eskiden kesin yasak olan istekler: artık canlı ortam izni + açık onay (tek mekanizma).
+    for (const yol of ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene', '/platform/servis/senaryo/dene', '/platform/servis-akisi/dene']) {
+      expect(gerekenIzinler(vt, yol, { projeId, ortamId: canli }), yol).toMatchObject({ canliOnayGerekli: true, ortamAdi: 'CANLI' });
+      expect(gerekenIzinler(vt, yol, { projeId, ortamId: canli }).izinler, yol).toContain('canli-ortam');
+      expect(gerekenIzinler(vt, yol, { projeId, ortamId: test_ }), yol).toMatchObject({ canliOnayGerekli: false });
+    }
+    // Veritabanı bağlantısını dene: bağlantı bir CANLI ortamın veritabanı eşlemesindeyse CANLI onayı gerekir.
+    const db = baglantiKaydet(vt, projeId, { tur: 'veritabani', ad: 'Canlı DB', alanlar: { surucu: 'postgres', sunucu: '127.0.0.1', veritabani: 'uyg', kullanici: 'okur', parola: 'x' } }) as { id: string };
+    const dbTest = baglantiKaydet(vt, projeId, { tur: 'veritabani', ad: 'Test DB', alanlar: { surucu: 'postgres', sunucu: '127.0.0.1', veritabani: 'uyg', kullanici: 'okur', parola: 'x' } }) as { id: string };
+    expect(gerekenIzinler(vt, '/platform/entegrasyon/dene', { projeId, id: db.id })).toMatchObject({ izinler: ['veritabani-okuma'], canliOnayGerekli: false });
+    veritabaniKaydet(vt, projeId, { ad: 'Uygulama', eslemeler: { [canli]: db.id, [test_]: dbTest.id } });
+    expect(gerekenIzinler(vt, '/platform/entegrasyon/dene', { projeId, id: db.id })).toMatchObject({ izinler: ['canli-ortam', 'veritabani-okuma'], canliOnayGerekli: true, ortamAdi: 'CANLI' });
+    expect(gerekenIzinler(vt, '/platform/entegrasyon/dene', { projeId, id: dbTest.id })).toMatchObject({ canliOnayGerekli: false });
     // Yeni bildirim bağlantısında olay aboneliği varsayılan KAPALI.
     const b = baglantiKaydet(vt, projeId, { tur: 'webhook', ad: 'Kanal', alanlar: { adres: 'http://127.0.0.1:9/kanca', bicim: 'sohbet' } }) as { olaylar: string[] };
     expect(b.olaylar).toEqual([]);
@@ -322,7 +336,7 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     expect((await ham('/platform/zamanlama/tercih', { ad: 'kilitliyken', acik: false })).durum).toBe(200);
   });
 
-  test('canlı / riskli ortam: izin + her çalıştırmada açık onay (canliOnay); "Varsayılanları öner" onay ve yasak adres ister', async () => {
+  test('CANLI ortam: izin + her işlemde açık onay (canliOnay) — koşu, tarama, öner, servis erişim / şema / REST Dene / Dene; "Varsayılanları öner" onay ve yasak adres ister', async () => {
     await ac('web-erisimi');
     // Test ortamında izin yeter (senaryo yoksa işleyici 400 "bulunamadı" — denetimden geçti).
     expect(await ham('/platform/senaryolar/calistir', { projeId, ortamId: test_, senaryoId: 'yok', kosuId: 'k3' })).toMatchObject({ durum: 400 });
@@ -335,10 +349,26 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     expect((await ham('/platform/giris-tarifi/oner', { projeId, ortamId: test_ })).y.mesaj).toMatch(/onaylayın/);
     expect((await ham('/platform/giris-tarifi/oner', { projeId, ortamId: test_, onay: true, girisAdresi: 'http://portal.yasak-ornek.invalid/giris' })).y.mesaj)
       .toMatch(/yasaklı adres kalıbına \("\*yasak-ornek\*"\)/);
-    expect(await ham('/platform/giris-tarifi/oner', { projeId, ortamId: canli, onay: true })).toMatchObject({ durum: 409, y: { kod: 'CANLI_ONAY_GEREKLI' } });
+    expect(await ham('/platform/giris-tarifi/oner', { projeId, ortamId: canli, onay: true })).toMatchObject({ durum: 409, y: { kod: 'CANLI_ONAY_GEREKLI', ortamAdi: 'CANLI' } });
+    // Servis istekleri (eskiden CANLI'da kesin yasak): artık onayla yapılabilir; onaysız 409 ve hedefe istek gitmez.
+    await ac('servis-istekleri');
+    const onceServis = hedef.istekler.length;
+    for (const [yol, g] of /** @type {Array<[string, Nesne]>} */ ([
+      ['/platform/servis/erisim', { projeId, ortamId: canli, yol: '/Servis' }],
+      ['/platform/servis/sema/yenile', { projeId, ortamId: canli, servisId: 'yok' }],
+      ['/platform/servis/rest/dene', { projeId, ortamId: canli, uc: { ad: 'a', metot: 'GET', yol: '/Servis' } }],
+      ['/platform/servis/senaryo/dene', { projeId, ortamId: canli, servisId: 'yok' }],
+      ['/platform/servis-akisi/dene', { projeId, ortamId: canli, icerik: { adimlar: [] } }]
+    ] as Array<[string, Nesne]>)) {
+      expect(await ham(yol, g), yol).toMatchObject({ durum: 409, y: { kod: 'CANLI_ONAY_GEREKLI' } });
+    }
+    expect(hedef.istekler.length, 'onaysız CANLI isteği hedefe gitmedi').toBe(onceServis);
+    // Onayla: erişim kontrolü CANLI ortamda yapılır (eskiden "yalnızca test ortamında" reddi).
+    expect(await ham('/platform/servis/erisim', { projeId, ortamId: canli, yol: '/Servis', canliOnay: true })).toMatchObject({ durum: 200 });
+    expect(hedef.istekler.length).toBe(onceServis + 1);
     // İzin değişiklikleri kayıtta (kim / ne zaman / hangi izin).
     const { degisiklikler } = await api('/platform/izinler');
-    expect((degisiklikler as Nesne[])[0]).toMatchObject({ izin: 'canli-ortam', acik: true, etiket: 'Canlı / riskli ortamda çalıştırma' });
+    expect((degisiklikler as Nesne[]).find((d) => d.izin === 'canli-ortam')).toMatchObject({ izin: 'canli-ortam', acik: true, etiket: 'Canlı ortamda çalıştırma' });
     expect((await ham('/platform/izin/degistir', { anahtar: 'giris-bilgisi', acik: true })).y.mesaj).toMatch(/onaylamalısınız/);
     expect(hedef.istekler.filter((x) => !['GET /Servis', 'POST /kanca'].includes(x))).toEqual([]);
   });
@@ -471,16 +501,20 @@ test.describe('sunucu: kapalı izin 403 IZIN_KAPALI, işlem yapılmaz; açılın
     expect(await sonuc()).toMatchObject({ ok: false, kod: 'IZIN_KAPALI' });
     expect(hedef.istekler.length).toBe(once3);
 
-    // 4) Riskli ortam: izin açılsa da canlı onayı atlanmaz (yeniden denemede 409 CANLI_ONAY_GEREKLI çağırana döner).
+    // 4) CANLI ortam: izin açılsa da canlı onayı atlanmaz — yeniden denemede 409 → tek tip "CANLI ortam" penceresi; Vazgeç → hata çağırana döner.
     await page.setViewportSize({ width: 390, height: 844 });
     await baslat('/platform/senaryolar/calistir', { projeId, ortamId: canli, senaryoId: 'yok', kosuId: 'k-izin-penceresi' });
-    await expect(pencere).toContainText('İzin açılsa da riskli ortamdaki her çalıştırma ayrıca onay ister.');
+    await expect(pencere).toContainText('İzin açılsa da CANLI ortama istek atan her işlem ayrıca onay ister.');
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(0);
     const altKutu = await pencere.locator('.diyalog-alt').boundingBox();
     for (const d of await pencere.locator('.diyalog-alt button').all()) { const k = await d.boundingBox(); expect(k && altKutu && k.x >= altKutu.x && k.x + k.width <= altKutu.x + altKutu.width + 1).toBe(true); }
     await page.waitForTimeout(400);
     await page.screenshot({ path: testInfo.outputPath('izin-penceresi-390.png') });
     await pencere.getByRole('button', { name: 'İzin ver ve devam et' }).click();
+    const canliPencere = page.getByRole('dialog', { name: 'CANLI ortam' });
+    await expect(canliPencere).toContainText('Bu işlem CANLI (CANLI) ortamında yapılacak; istekler gerçek sisteme gider. Emin misiniz?');
+    await expect(canliPencere.getByRole('button')).toHaveText(['Vazgeç', 'Evet, devam et']);
+    await canliPencere.getByRole('button', { name: 'Vazgeç' }).click();
     expect(await sonuc()).toMatchObject({ ok: false, kod: 'CANLI_ONAY_GEREKLI' });
     expect(((await api('/platform/izinler')).izinler as Record<string, boolean>)['canli-ortam']).toBe(true);
 

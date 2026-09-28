@@ -1,5 +1,5 @@
 // OTOMATİK TARAMA — saf yardımcılar (tarayıcı YOK): koruma kararları (hedef çözümü, yasaklı adres, istek kararı)
-// ve envanter → sayfa paketi dönüşümü (tip eşlemesi, görünürlük koşulları, bağlam gözlemi, gizli metin süzme,
+// ve envanter → ekran paketi dönüşümü (tip eşlemesi, görünürlük koşulları, bağlam gözlemi, gizli metin süzme,
 // mevcut modelle birleştirme). Tüm değerler SAHTEDİR.
 import { expect, test } from '@playwright/test';
 import { girisTarifiniDogrula } from '../../scripts/platform/giris/tarif.mjs';

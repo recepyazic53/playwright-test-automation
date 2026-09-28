@@ -5,13 +5,12 @@
 //   aynı ayarlarda (alanBaglari, alanZorunluluklari) ve Parametreler sekmesinde aynı bileşenle düzenlenir.
 // - Gizli adlı başlığa (Authorization, X-Api-Key, token…) düz değer yazılırsa değer "<servis> başlıkları" test verisi tablosunun GİZLİ
 //   sütununa şifreli yazılır; başlıkta yalnız başvuru (${Tablo.Sütun}; "Bearer " gibi şema korunur) kalır. Değer arayüze dönmez.
-// - Erişim denetimi (WSDL) yoktur; kayıt ağ isteği atmaz. "Dene" yalnız kullanıcı isteğiyle, yalnız TEST ortamında, yasak adres
+// - Erişim denetimi (WSDL) yoktur; kayıt ağ isteği atmaz. "Dene" yalnız kullanıcı isteğiyle (CANLI ortamda ayrıca onayla), yasak adres
 //   denetiminden geçen adrese bir istek atar.
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
-import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { adresYasakliMi } from '../senaryolar/model-kosusu.mjs';
 import { tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
@@ -188,7 +187,7 @@ export function restServisiKaydet(vt, projeId, girdi) {
 }
 
 /**
- * "Dene": bir ucu seçilen TEST ortamında gerçekten çağırır (yalnız kullanıcı onayıyla; arayüz yöntem + tam adresi sorar).
+ * "Dene": bir ucu seçilen ortamda gerçekten çağırır (yalnız kullanıcı onayıyla; arayüz yöntem + tam adresi sorar).
  * Yol yer tutucusu ({id}) ya da ${…} başvurusu kalmışsa istek atılmaz. Yanıt kırpılır; gizli başlık değerleri maskelenir.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ ortamId: string; taban?: string; uc: unknown; tlsDogrulama?: boolean; servisId?: string }} girdi
@@ -196,7 +195,6 @@ export function restServisiKaydet(vt, projeId, girdi) {
 export async function restUcuDene(vt, projeId, girdi) {
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
-  if (riskliOrtamMi(ortam)) throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır (seçilen ortam riskli; Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").');
   const u = restUcuDogrula(girdi.uc, 0);
   const taban = girdi.taban === undefined || girdi.taban === null ? ortam.tabanUrl : String(girdi.taban);
   if (!taban) throw new DepoHatasi('Bu ortam için taban adres yok.');

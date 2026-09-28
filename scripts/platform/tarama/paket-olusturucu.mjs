@@ -1,6 +1,6 @@
-// OTOMATİK TARAMA → SAYFA PAKETİ (genel, saf fonksiyonlar). Tarama işinin (tarama.spec.ts) sayfadan topladığı
+// OTOMATİK TARAMA → EKRAN PAKETİ (genel, saf fonksiyonlar). Tarama işinin (tarama.spec.ts) sayfadan topladığı
 // YAPISAL envanteri (alanlar, etiketler, seçenekler, bölümler, bağlam profiline göre görünürlük, seçim keşfi)
-// docs/sayfa-paketi.md biçiminde bir sayfa paketine (sürüm 1, model şema sürümü 1) çevirir.
+// docs/sayfa-paketi.md biçiminde bir ekran paketine (sürüm 1, model şema sürümü 1) çevirir.
 //
 //  - Alan DEĞERLERİ pakete hiçbir zaman yazılmaz (envanter de değer taşımaz); sayfadan gelen metinlerde gizli
 //    veri kalıbı (kart no, T.C. kimlik no, IBAN, JWT…) varsa metin atılır ve bilinmeyenlere yazılır.
@@ -23,7 +23,7 @@ import { VEYA_EN_COK } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 
 export const TARAMA_OLUSTURANI = 'Nöbetçi otomatik tarama';
 /** Her pakette bulunan bilinmeyen: tarama düğme/başarı göstergesi çıkarmaz. */
-export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (sayfa paketi) ya da akış kaydıyla tamamlayın.';
+export const AKSIYON_BILINMEYENI = 'Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (ekran paketi) ya da akış kaydıyla tamamlayın.';
 /** Keşfedilen açılır listelerin en fazla seçenek sayısı. */
 export const KESIF_SECENEK_SINIRI = 8;
 /** Mevcut modelde taramayla eşleştirilebilen alan tipleri. */
@@ -306,7 +306,7 @@ function alanDonusturucu(sayac) {
 }
 
 /**
- * Tarama envanterinden sayfa paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
+ * Tarama envanterinden ekran paketi. Paket sayfaPaketiniDogrula'dan geçmelidir (sunucu ayrıca doğrular).
  * @param {import('./paket-olusturucu.d.mts').PaketMetasi} meta
  * @param {import('./paket-olusturucu.d.mts').TaramaEnvanteri} envanter
  * @returns {import('./paket-olusturucu.d.mts').PaketSonucu}
@@ -633,7 +633,7 @@ export function taramaPaketiOlustur(meta, envanter) {
 }
 
 // ---------------------------------------------------------------------------------------
-// AKIŞ KAYDI → SAYFA PAKETİ ("Akışı kaydet")
+// AKIŞ KAYDI → EKRAN PAKETİ ("Akışı kaydet")
 // ---------------------------------------------------------------------------------------
 
 export const KAYIT_OLUSTURANI = 'Nöbetçi akış kaydı';
@@ -710,7 +710,7 @@ function korunanlariYaz(adim, k, bolumIdleri) {
 }
 
 /**
- * Akış kaydından sayfa paketi (model şema sürümü 2: adım koşu tanımlarıyla). Adımlar kullanıcının kaydettiği sırayla ve
+ * Akış kaydından ekran paketi (model şema sürümü 2: adım koşu tanımlarıyla). Adımlar kullanıcının kaydettiği sırayla ve
  * adlarıyla gelir; her adımın alanları kullanıcının seçtikleridir. Adımın koşu tanımı:
  *   aksiyonlar       ilerleme düğmesine tıkla (kaydedildiyse),
  *   basariGostergesi sonraki adımın ilk alanı (yoksa ilerleme düğmesi) görünür; son adımda kullanıcının seçtiği
@@ -780,6 +780,12 @@ export function kayitPaketiOlustur(meta, envanter) {
     // Akışta "zorunlu": senaryoda değer şart ve koşuda ekranda görünmezse test başarısız (koşullu alanda koşul sağlanınca).
     if (h.zorunlu) alan.mutlakaGorunmeli = true;
     else delete alan.mutlakaGorunmeli;
+    // Akışta "Doldurduktan sonra" tuşu (doldurucuParametreleri.tus): null kaldırır, verilmezse mevcut tanımınki korunur.
+    if (h.tus !== undefined && !(h.tur === 'kimlik' && h.anahtar.startsWith('kimlik:'))) {
+      const p = nesneMi(alan.doldurucuParametreleri) ? { ...alan.doldurucuParametreleri } : {};
+      if (h.tus) p.tus = h.tus; else delete p.tus;
+      if (Object.keys(p).length) alan.doldurucuParametreleri = p; else delete alan.doldurucuParametreleri;
+    }
     hamdanModel.set(h.anahtar, alan);
     return alan;
   };
@@ -918,7 +924,9 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (son.tikla) son.sonra = (son.sonra ?? 0) + k.onceBekle;
       else son.once = (son.once ?? 0) + k.onceBekle;
     }
-    if (!k.ilerleme && i < kayitlar.length - 1) {
+    // Düğmesiz adımın beklenen mesajı (akışta alan grubundan sonra; alandan çıkınca beklenir) adımın son parçasına bağlanır.
+    const alanSonrasiMesaj = !k.ilerleme && Boolean(k.gosterge || k.uyarilar?.length);
+    if (!k.ilerleme && i < kayitlar.length - 1 && !alanSonrasiMesaj) {
       bilinmeyenler.push(`"${ad}" adımının ilerleme düğmesi kaydedilmedi; model koşucusu bu adımdan sonrakine geçemez (modelde "kosu.aksiyonlar" ekleyin ya da akışı yeniden kaydedin).`);
     }
     // Korunan aksiyonlar: ilerleme parçasına (düğmesizse alanı / düğmesi olan son parçaya) — oradaki düğme ve beklemelerin yerine.
@@ -932,6 +940,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     const eklenen = dolu.length ? dolu : [parcalar[0]];
     // Kabul edilen uyarılar: ilerleme düğmesinin parçasına (düğme yoksa son parçaya).
     if (k.uyarilar?.length) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).uyarilar = k.uyarilar;
+    if (!k.ilerleme && k.gosterge) eklenen[eklenen.length - 1].gosterge = k.gosterge;
     // "Ekran görüntüsü al" (akış tasarımı): adımın sonu — ilerleme düğmesinin parçası (düğme yoksa son parça).
     if (k.ekranGoruntusu) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).ekranGoruntusu = true;
     altAdimlar.push(...eklenen);
@@ -1061,14 +1070,15 @@ export function kayitPaketiOlustur(meta, envanter) {
       const oge = (/** @type {{ secici: string; cerceve?: unknown }} */ h) => ({ tur: 'eleman', deger: h.secici, ...cerceveEki(h.cerceve) });
       if (hedefler.length > 1) kosu.basariGostergesi = { tur: 'veya', secenekler: hedefler.map((h) => oge(/** @type {{ secici: string }} */ (h))) };
       else if (hedefler.length) kosu.basariGostergesi = oge(/** @type {{ secici: string }} */ (hedefler[0]));
-      // Akış tasarımında düğmeden sonra beklenen mesaj verildiyse: o metin görünür.
-      const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
-        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
-        const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
-        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
-      }) : null;
-      if (ara) kosu.basariGostergesi = ara;
     }
+    // Akış tasarımında düğmeden (ya da düğmesiz adımda alanlardan) sonra beklenen mesaj verildiyse: o metin görünür. Düğmesiz
+    // adımda koşucu alanları doldurup (alanın "Doldurduktan sonra" tuşuna basıp) mesajı bekler.
+    const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
+      if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
+      const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
+      return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
+    }) : null;
+    if (ara) kosu.basariGostergesi = ara;
     const uyarilar = (p.uyarilar ?? []).map((x) => {
       const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
       return m ? { metin: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;

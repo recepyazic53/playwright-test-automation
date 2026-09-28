@@ -132,7 +132,7 @@ export declare function baglamProfiliSil(vt: Veritabani, id: string, yapan?: str
 
 export declare function testVerisiTuruKaydet(vt: Veritabani, girdi: {
   id?: string; projeId: string; ad: string; alanlar: ReadonlyArray<{ ad: string; etiket?: string; tip?: string; hassas?: boolean; gizli?: boolean; servisParametreleri?: ReadonlyArray<{ ad: string; rol?: string }> }>;
-  /** Tablonun kaynağı (sayfa paketinden içe aktarım); verilmezse korunur, null siler. */
+  /** Tablonun kaynağı (ekran paketinden içe aktarım); verilmezse korunur, null siler. */
   kaynak?: Record<string, string> | null;
 }): string;
 export declare function testVerisiTurleriniListele(vt: Veritabani, projeId: string): TestVerisiTuru[];

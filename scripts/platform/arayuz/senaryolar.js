@@ -465,7 +465,7 @@ function listeGorunumu(icerik, s) {
       // Dar ekranda Ekran sütunu gizlenir; ekran adı başlığın altında görünür (yalnız Genel listede).
       !ekran && x.ekranAdi ? h('span', { class: 'ekran-alt-bilgi' }, x.ekranAdi) : null,
       x.akis ? rozet(`akış: ${x.akis.ad}`, '', { kisalt: true, title: 'Senaryonun koştuğu akış (ekranın birden çok akışı var)' }) : null,
-      x.paketten ? rozet('paketten', 'vurgu', { title: 'Sayfa paketindeki öneriden eklendi' }) : null,
+      x.paketten ? rozet('paketten', 'vurgu', { title: 'Ekran paketindeki öneriden eklendi' }) : null,
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.ekranEtkin === false ? rozet('ekran devre dışı', 'atlanan', { title: 'Ekran devre dışı: senaryo toplu koşulara girmez; ▷ ile tek başına çalıştırılabilir (Ekranlar > ⋯ > Etkinleştir)' }) : null,
       x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null
@@ -636,7 +636,7 @@ function listeGorunumu(icerik, s) {
         ikonAd: dahil ? 'onay' : 'eksi',
         secenekler: [
           { deger: '*', etiket: 'Tüm ortamlar', aciklama: 'Her senaryonun tanımlı olduğu tüm ortamlarda', ikonAd: 'ag' },
-          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (riskli ortam)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
+          ...ilgili.map((o) => ({ deger: o.id, etiket: o.ad, aciklama: riskliOrtamMi(o) ? 'Yalnız bu ortamda (Canlı ortam)' : 'Yalnız bu ortamda', ikonAd: 'ag' }))
         ]
       });
       if (secim === null) return;

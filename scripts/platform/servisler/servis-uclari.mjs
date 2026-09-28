@@ -310,7 +310,7 @@ export const SERVIS_POST_UCLARI = [
     const projeId = kimlik(g.projeId, 'projeId');
     return { silindi: servisSenaryosuSil(db, senaryoAl(db, projeId, g.id).id) };
   }],
-  // Dene: kayıtlı senaryo ya da kaydedilmemiş taslak; YALNIZ test ortamında (servis-islemleri denetler).
+  // Dene: kayıtlı senaryo ya da kaydedilmemiş taslak; her ortamda (CANLI ortamda istekte canliOnay: true — uc-denetimi.mjs).
   ['/platform/servis/senaryo/dene', async (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     const s = servisAl(db, projeId, g.servisId);
@@ -379,7 +379,7 @@ export const SERVIS_POST_UCLARI = [
     oturumlariTemizle(a.id);
     return { silindi: servisAkisiSil(db, a.id) };
   }],
-  // Dene: kayıtlı ya da taslak akış; YALNIZ test ortamında. Koş: kapsam ortama uymalı (canlıyı yalnız kullanıcı, onayla başlatır).
+  // Dene: kayıtlı ya da taslak akış; her ortamda. Koş: kapsam ortama uymalı. CANLI ortamda ikisi de kullanıcı onayıyla (canliOnay).
   ['/platform/servis-akisi/dene', async (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     return { sonuc: await servisAkisiCalistir(db, projeId, {
@@ -402,7 +402,7 @@ export const SERVIS_POST_UCLARI = [
       throw new DepoHatasi(/** @type {Error} */ (e).message);
     }
   }],
-  // REST servisi (Adım adım > REST ve İşlemler): uçlarla kayıt (ağ isteği yok) ve isteğe bağlı "Dene" (yalnız TEST, kullanıcı onayıyla).
+  // REST servisi (Adım adım > REST ve İşlemler): uçlarla kayıt (ağ isteği yok) ve isteğe bağlı "Dene" (kullanıcı isteğiyle; CANLI ortamda ayrıca onayla).
   ['/platform/servis/rest/kaydet', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     return restServisiKaydet(db, projeId, {

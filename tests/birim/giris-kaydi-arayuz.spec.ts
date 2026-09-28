@@ -218,10 +218,53 @@ test('"Girişi dene": yalnız giriş yapılır (ekran/senaryo yok); başarı, ha
   expect(uygulama.olaylar.length).toBe(onceki);
   await sonuc.getByRole('button', { name: 'Kapat' }).click();
 
-  // Ortak akışlardaki giriş kartında da aynı düğme var.
+  // Giriş Ekranlar'da listelenmez: "Girişi dene" yalnız Ayarlar > Giriş profilleri > Giriş tarifi'ndedir.
   await page.goto('/#/ekranlar');
-  await expect(page.getByRole('article', { name: 'Giriş (Deneme)' }).getByRole('button', { name: 'Deneme: girişi dene' })).toBeEnabled();
+  await expect(page.getByRole('heading', { level: 2, name: 'Ekranlar' })).toBeVisible();
+  await expect(page.getByRole('article', { name: 'Giriş (Deneme)' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Deneme: girişi dene' })).toHaveCount(0);
   // Gizlilik: parola logda yok.
   expect(readFileSync(join(klasor, 'sunucu.log'), 'utf8')).not.toContain(ORNEK_PAROLA);
+  await baglam.close();
+});
+
+test('CANLI ortamda "Girişi dene": kesin yasak yok — onaysız 409 (siteye istek yok); arayüzde tek tip CANLI onayı: Vazgeç\'te istek yok, Evet\'te giriş yapılır', async () => {
+  test.setTimeout(180_000);
+  // 127.0.0.1'deki aynı örnek uygulama, türü "Canlı" olan ikinci ortam olarak.
+  const canliId = String(((await basarili('/platform/ortam/kaydet', { projeId, ad: 'Canlı kopya', tabanUrl: fikstur.adres, riskli: true })).ortam as Nesne).id);
+  const deneme = ((await api(`/platform/giris-tarifleri?projeId=${projeId}`)).ortamlar as Nesne[]).find((o) => o.ortamId === ortamId)?.tarif as Nesne;
+  await basarili('/platform/giris-tarifi/kaydet', { projeId, ortamId: canliId, tarif: { ...deneme, basariGostergesi: { tur: 'metin', deger: 'Hoş geldiniz' }, hataGostergeleri: [] } });
+  await basarili('/platform/giris-profili/kaydet', { projeId, ortamId: canliId, ad: 'Canlı kullanıcısı', kullaniciAdi: ORNEK_KULLANICI, parola: ORNEK_PAROLA, ikiAsamaliTur: 'totp', totpGizli: ORNEK_TOTP_ANAHTARI });
+  // Sunucu: onaysız → 409, siteye hiçbir istek gitmez.
+  const once = uygulama.olaylar.length;
+  expect(await api('/platform/tarama/baslat', { kip: 'girisDenemesi', projeId, ortamId: canliId, onay: true })).toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI', ortamAdi: 'Canlı kopya' });
+  expect(uygulama.olaylar.length).toBe(once);
+
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1360, height: 1000 } });
+  const page = await baglam.newPage();
+  const baslatmalar: string[] = [];
+  page.on('request', (r) => { if (r.url().includes('/platform/tarama/baslat')) baslatmalar.push(r.postData() || ''); });
+  const dene = async (): Promise<void> => {
+    await page.goto('/#/ayarlar/giris');
+    await page.locator('.giris-tarifi-bolumu li[data-ortam]').filter({ hasText: 'Canlı kopya' }).getByRole('button', { name: 'Canlı kopya: girişi dene' }).click();
+    await page.getByRole('dialog', { name: 'Canlı kopya: giriş denensin mi?' }).getByRole('button', { name: 'Girişi dene' }).click();
+  };
+  // Vazgeç: istek atılmaz.
+  await dene();
+  const canliPencere = page.getByRole('dialog', { name: 'CANLI ortam' });
+  await expect(canliPencere).toContainText('Bu işlem Canlı kopya (CANLI) ortamında yapılacak; istekler gerçek sisteme gider. Emin misiniz?');
+  await canliPencere.getByRole('button', { name: 'Vazgeç' }).click();
+  await expect(canliPencere).toHaveCount(0);
+  expect(baslatmalar).toEqual([]);
+  expect(uygulama.olaylar.length).toBe(once);
+  // Evet: istek canliOnay ile gider ve giriş yapılır.
+  await dene();
+  await page.getByRole('dialog', { name: 'CANLI ortam' }).getByRole('button', { name: 'Evet, devam et' }).click();
+  const sonuc = page.getByRole('dialog', { name: 'Giriş denemesi: Canlı kopya' });
+  await expect(sonuc.getByRole('status').filter({ hasText: 'Giriş başarılı' })).toBeVisible({ timeout: 60_000 });
+  expect(baslatmalar).toHaveLength(1);
+  expect(JSON.parse(baslatmalar[0])).toMatchObject({ kip: 'girisDenemesi', ortamId: canliId, canliOnay: true });
+  expect(uygulama.olaylar.slice(once)).toEqual(expect.arrayContaining(['POST /giris', 'POST /dogrulama']));
+  await sonuc.getByRole('button', { name: 'Kapat' }).click();
   await baglam.close();
 });

@@ -1,7 +1,7 @@
 // UÇTAN UCA (yerel) — GENEL YOL: elle oluşturulan (aktarımla gelmemiş, hiçbir adaptöre bağlı olmayan) bir projenin
 // test kodu olmayan senaryoları Nöbetçi'nin koşu ucundan (/platform/senaryolar/calistir) playwright.config.ts
 // ile, proje ve ortam KİMLİKLERİYLE koşar; sonuç, ekran görüntüsü ve video gerçek raporlayıcıyla GEÇİCİ veritabanına
-// ve şifreli medya deposuna yazılır. Proje, ortam, giriş profili, giriş tarifi, bağlam profilleri, sayfa paketi ve
+// ve şifreli medya deposuna yazılır. Proje, ortam, giriş profili, giriş tarifi, bağlam profilleri, ekran paketi ve
 // formdan yeni senaryo — hepsi kullanıcının yapacağı gibi sunucunun uçlarıyla kurulur.
 //
 // Güvenlik: şirket sitesine HİÇBİR istek gitmez. Ortamın adresi 127.0.0.1'deki örnek başvuru fikstürüdür
@@ -82,7 +82,7 @@ test.beforeAll(async () => {
   for (const [ad, subeKodu] of [['Merkez', 'S01'], ['Yetkili', 'S02']]) {
     await basarili('/platform/baglam-profili/kaydet', { projeId, tur: 'Şube', ad, alanlar: { subeKodu } });
   }
-  // Sayfa paketi → ekran + model v1 + iki senaryo (mutlu yol + iş kuralı).
+  // Ekran paketi → ekran + model v1 + iki senaryo (mutlu yol + iş kuralı).
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: ornekBasvuruPaketi(), senaryoIndeksleri: [0, 1], ortamIdleri: [ortamId] });
   const liste = await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`) as { ekranlar: Array<{ id: string; olusturulabilir: boolean }>; senaryolar: Array<{ id: string; baslik: string }> };
   for (const s of liste.senaryolar) senaryolar.set(s.baslik, s.id);

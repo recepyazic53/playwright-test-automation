@@ -1,4 +1,4 @@
-// "Bulgular" ekranı (tekrar analiz): yeni sayfa paketi ile güncel model arasındaki farklar.
+// "Bulgular" ekranı (tekrar analiz): yeni ekran paketi ile güncel model arasındaki farklar.
 //   Özet metrikler · tür filtreleri · bulgu satırları (tür rozeti, konum, eski → yeni, bağlam profiline göre
 //   görünürlük) · Kabul et / Reddet · toplu kabul/red · "Kararları uygula" (YALNIZCA kabul edilenlerle yeni
 //   model sürümü; reddedilenler hatırlanır, aynı değişiklik tekrar gösterilmez).
@@ -57,7 +57,7 @@ export async function bulgularEkrani(icerik, s, secimKorunsun = null) {
       h('a', { class: 'dugme', href: `${ekranAdresi}/yukle` }, ikon('yukle'), 'Yeni paket yükle'),
       h('a', { class: 'dugme hayalet', href: ekranAdresi }, ikon('geri'), 'Ekrana dön')));
   if (!v.analiz) {
-    yerlestir(icerik, baslik, bosDurum('Bu ekran için analiz yok.', 'Ekranın yeni bir sayfa paketini yükleyin: paket güncel modelle karşılaştırılır ve farklar burada bulgu olarak listelenir.', {
+    yerlestir(icerik, baslik, bosDurum('Bu ekran için analiz yok.', 'Ekranın yeni bir ekran paketini yükleyin: paket güncel modelle karşılaştırılır ve farklar burada bulgu olarak listelenir.', {
       ikon: 'yenile', eylem: h('a', { class: 'dugme birincil', href: `${ekranAdresi}/yukle` }, ikon('yukle'), 'Paket yükle')
     }));
     return;

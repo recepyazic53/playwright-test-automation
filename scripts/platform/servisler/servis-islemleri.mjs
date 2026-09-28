@@ -1,6 +1,7 @@
 // SERVİS TESTLERİ — iş kuralları: erişim kontrolü, servis ekleme, SoapUI aktarımı, parametre çözümü, deneme ve koşu.
 // Kurallar:
-// - Erişim kontrolü ve "Dene" YALNIZCA test ortamında (ortam ayarında "canli" işaretli olmayan) yapılır.
+// - Erişim kontrolü, şema yenileme ve "Dene" her ortamda yapılabilir; CANLI ortamda istek yalnız kullanıcı onaylayınca (istekte
+//   canliOnay: true; guvenlik/uc-denetimi.mjs) gider.
 // - Yeni servis (ya da adresi değişen servis) ancak başarılı bir erişim kontrolünden sonra kaydedilir.
 // - Senaryo kapsamı ('test' | 'canli' | 'ikisi') ortam türüyle uyuşmuyorsa koşulmaz; canlı ortamda "yalnız test"
 //   işaretli operasyonlar (ör. kayıt oluşturanlar) hiç koşulmaz.
@@ -84,7 +85,7 @@ export const ERISIM_GECERLILIK_MS = 30 * 60_000;
 const erisimler = new Map();
 
 /**
- * Ortam türü (servis kapsamı, Dene / erişim kontrolü yalnız test'te). TEK TANIM: guvenlik/ortam-riski.mjs > riskliOrtamMi — canlı
+ * Ortam türü (servis kapsamı, "yalnız test" metotları). TEK TANIM: guvenlik/ortam-riski.mjs > riskliOrtamMi — canlı
  * ortam — kullanıcının "Bu ortam riskli mi?" seçimi; belirtilmemiş = riskli — 'canli' sayılır (arayüz ve sunucu aynı kural).
  * @param {{ ayarlar: Record<string, unknown>; varsayilan?: boolean; ad?: string }} ortam
  */
@@ -328,14 +329,13 @@ export function alanBaglariniDogrula(v) {
 }
 
 /**
- * WSDL'i yeniden alıp operasyon listesini ve alan şemalarını günceller (yalnız test ortamı; adres değişmez).
+ * WSDL'i yeniden alıp operasyon listesini ve alan şemalarını günceller (adres değişmez; CANLI ortamda onay HTTP ucunda).
  * @param {Veritabani} vt @param {string} projeId @param {{ servisId: string; ortamId: string }} girdi
  */
 export async function semaYenile(vt, projeId, girdi) {
   const servis = servisGetir(vt, girdi.servisId);
   if (!servis || servis.projeId !== projeId) throw new DepoHatasi('Servis bulunamadı.');
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
-  if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('WSDL yalnızca test ortamından alınır.');
   const adres = servisAdresi(servis.ayarlar, ortam);
   let s;
   try { s = await erisimiDenetle({ adres, tlsDogrulama: servis.ayarlar.tlsDogrulama, yasakDesenleri: etkinYasakDesenleri(vt) }); } catch (e) {
@@ -357,14 +357,13 @@ function veriProfilleriniDogrula(secim) {
 }
 
 /**
- * Erişim kontrolü (yalnız test ortamı): WSDL istenir. Başarılıysa kısa süre geçerli bir "erisimKimligi" döner; yeni servis
+ * Erişim kontrolü: WSDL istenir (CANLI ortamda onay HTTP ucunda). Başarılıysa kısa süre geçerli bir "erisimKimligi" döner; yeni servis
  * bu kimlikle kaydedilir.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ ortamId: string; yol: string; adresler?: Record<string, string>; tabanlar?: Record<string, string>; tlsDogrulama?: boolean }} girdi
  */
 export async function erisimKontrolu(vt, projeId, girdi) {
   const ortam = ortamiAl(vt, projeId, girdi.ortamId);
-  if (ortamTuru(ortam) !== 'test') throw new DepoHatasi('Erişim kontrolü yalnızca test ortamında yapılır (seçilen ortam riskli; Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").');
   const adres = servisAdresi({ yol: yolDogrula(girdi.yol), adresler: adresleriDogrula(girdi.adresler), tabanlar: tabanlariDogrula(girdi.tabanlar) }, ortam);
   try {
     const s = await erisimiDenetle({ adres, tlsDogrulama: girdi.tlsDogrulama, yasakDesenleri: etkinYasakDesenleri(vt) });
@@ -975,7 +974,7 @@ export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
 
 /**
  * Tek bir senaryoyu (kayıtlı ya da taslak) bir ortamda çalıştırır ve sonucu servis koşuları tablosuna yazar.
- * tur 'dene': yalnız test ortamı; kapsam denetlenmez. tur 'kosu': kapsam ortam türüyle uyuşmalı.
+ * tur 'dene': her ortamda (CANLI'da onay HTTP ucunda); kapsam denetlenmez. tur 'kosu': kapsam ortam türüyle uyuşmalı.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ servisId: string; ortamId: string; tur: 'dene' | 'kosu'; senaryoId?: string; taslak?: { baslik?: string; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: unknown };
  *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
@@ -1015,7 +1014,6 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const temelBaslik = kayitli?.baslik ?? girdi.taslak?.baslik ?? 'Taslak';
   const baslik = girdi.veriKosusu?.ad ? `${temelBaslik} [${girdi.veriKosusu.ad}]` : temelBaslik;
   const kapsam = kayitli?.kapsam ?? girdi.taslak?.kapsam ?? 'test';
-  if (girdi.tur === 'dene' && tur !== 'test') throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır.');
   if (girdi.tur === 'kosu' && kapsam !== 'ikisi' && kapsam !== tur) throw new DepoHatasi(`Bu senaryo yalnızca ${kapsam === 'test' ? 'test' : 'canlı'} ortamda koşar.`);
   if (tur === 'canli' && (servis.ayarlar.yalnizTestOperasyonlari ?? []).includes(icerik.operasyon)) {
     throw new DepoHatasi(`"${icerik.operasyon}" operasyonu yalnız test ortamında koşar (servis ayarı).`);

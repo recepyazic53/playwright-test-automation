@@ -2,9 +2,9 @@
 //
 // AKIŞ KAYDI: aynı iş altyapısı; alt süreç GÖRÜNÜR tarayıcı açar, kullanıcı akışı kendisi yürütür, sayfadaki Nöbetçi paneli
 // alanları/düğmeleri/mesajları TOPLAR (kayit-motoru.ts). Başlatma kuralları: açık onay (bastığı düğmeler siteye gerçek istek
-// gönderir), ortam riskliyse ret (guvenlik/ortam-riski.mjs; kullanıcı seçimi), en fazla bir bağlam profili, süre sınırı varsayılan
+// gönderir), CANLI ortamda ayrıca canlı ortam onayı (canliOnay; guvenlik/uc-denetimi.mjs), en fazla bir bağlam profili, süre sınırı varsayılan
 // 30 dk (NOBETCI_KAYIT_ZAMAN_ASIMI_SN). Kayıt bitince iş "tasarım" bekler: taslak diyagram (akis-tasarimi.mjs > akisTaslagi)
-// Nöbetçi'de düzenlenir; kaydedilen diyagram kayıt envanterine çevrilip kayitPaketiOlustur ile aynı sayfa paketi akışına girer.
+// Nöbetçi'de düzenlenir; kaydedilen diyagram kayıt envanterine çevrilip kayitPaketiOlustur ile aynı ekran paketi akışına girer.
 // Tasarım bekleyen iş, son erişimden itibaren TASARIM_SAKLAMA_KATI kat daha uzun saklanır (bellekte; sunucu yeniden
 // başlarsa kayıt kaybolur).
 //
@@ -17,12 +17,12 @@
 //        YASAKLI_ADRES, tarayıcı açılmadan.
 //        ORTAK AKIŞ (model tur "ortakAkis"): taranmaz (ALT_MODEL); kaydedilir (kip 'kayit' + baslangicEkranId): kayıt başlangıç
 //        ekranının adresinde (model.ekranUrl) başlar, kullanıcı o ekranda gerekli adımları yapıp ortak akışın kısmını yürütür;
-//        diyagramda başlangıç ekranına ait bloklar silinir ve kayıt ortak akışın TEK akışına yazılır (akisaYaz; sayfa paketi
+//        diyagramda başlangıç ekranına ait bloklar silinir ve kayıt ortak akışın TEK akışına yazılır (akisaYaz; ekran paketi
 //        yok, tur/yalnizTestOrtami/senaryoDuzeyi/kosullar akis-servisi.mjs > akisKaydet ile korunur, ekran adresi yazılmaz).
 //   GET  /platform/tarama/durum?id=      adımlar, profil durumları, engellenen istekler, bekleyen SMS kodu isteği, hata
-//   GET  /platform/tarama/paket?id=      tamamlanan işin sayfa paketi (önizleme/kabul akışına girer)
+//   GET  /platform/tarama/paket?id=      tamamlanan işin ekran paketi (önizleme/kabul akışına girer)
 //   GET  /platform/tarama/akis?id=       akış kaydının diyagramı: bloklar + sağ liste (alan/düğme/mesaj; değer yok)
-//   POST /platform/tarama/akis { id, bloklar, taslak? }  taslak: yalnızca saklar; değilse doğrular → sayfa paketi
+//   POST /platform/tarama/akis { id, bloklar, taslak? }  taslak: yalnızca saklar; değilse doğrular → ekran paketi
 //        (hatalar: 400 AKIS_GECERSIZ + hatalar: [{ blok, mesaj }])
 //   POST /platform/tarama/akis { id, bloklar, hedef: { tur: 'akis', akisId?, ad }, onay? }  mevcut ekranda kaydı bir AKIŞA
 //        yazar (yeni akış ya da seçilen akışı güncelle; ekranlar/akis-servisi.mjs > akisKaydet, kaydın gerçek okumalarıyla):
@@ -90,7 +90,7 @@ export const IS_SAKLAMA_MS = 60 * 60 * 1000;
 /** Diyagramı kurulmayı bekleyen akış kaydı daha uzun saklanır (son erişimden itibaren). */
 export const TASARIM_SAKLAMA_KATI = 12;
 const SURE_SONRA_ZORLA_MS = 5000;
-const ADIM_ETIKETLERI = Object.freeze({ hazirlik: 'Güvenlik kontrolü', giris: 'Giriş', profiller: 'Bağlam profilleri ve tarama', kayit: 'Akış kaydı (tarayıcıda)', paket: 'Sayfa paketi' });
+const ADIM_ETIKETLERI = Object.freeze({ hazirlik: 'Güvenlik kontrolü', giris: 'Giriş', profiller: 'Bağlam profilleri ve tarama', kayit: 'Akış kaydı (tarayıcıda)', paket: 'Ekran paketi' });
 const IS_KIMLIGI = /^[a-f0-9]{24}$/;
 
 export class TaramaHatasi extends Error {
@@ -366,10 +366,8 @@ export function taramaYoneticisiOlustur(secenekler) {
     const ortamId = kimlikAl(g.ortamId, 'ortamId');
     const ortamKaydi = ortamlariListele(vt, projeId).find((o) => o.id === ortamId);
     if (!ortamKaydi) throw new DepoHatasi('Ortam bulunamadı.');
-    // Akış / giriş kaydında bastığınız düğmeler siteye gerçek istek gönderir: riskli ortamda (kullanıcı seçimi; belirtilmemiş = riskli) yapılamaz.
-    if ((kayit || girisDenemesi) && riskliOrtamMi(ortamKaydi)) {
-      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı riskli${riskliSecimi(ortamKaydi) === null ? ' (riskli olup olmadığı belirtilmemiş)' : ''}; ${girisDenemesi ? 'giriş denemesi' : girisKaydi ? 'giriş kaydı' : 'akış kaydı'} bu ortamda yapılamaz (Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").`);
-    }
+    // CANLI ortam: tarama, akış / giriş kaydı ve giriş denemesi yapılabilir; istek yalnız kullanıcı onaylayınca (canliOnay: true)
+    // gider — HTTP ucunda tarayıcı açılmadan denetlenir (guvenlik/uc-denetimi.mjs).
 
     // Ekran: mevcut (tekrar analiz ya da modelsiz ekrana ilk model) ya da yeni (ad + anahtar). Giriş kaydında ekran yoktur.
     const ekranlar = ekranlariListele(vt, projeId);
@@ -392,7 +390,7 @@ export function taramaYoneticisiOlustur(secenekler) {
           // Ortak akış taranmaz; KAYDEDİLEBİLİR: kayıt seçilen başlangıç ekranının adresinde başlar (ortak akışın kendi adresi yok).
           if (g.kip !== 'kayit') throw new TaramaHatasi('ALT_MODEL', 'Ortak akışlar taranamaz; ortak akışı kullanan ekranı tarayın ya da ortak akışın sayfasında "Akışı kaydet"i kullanın.');
           const d = akisDuzenlenebilirMi(/** @type {Nesne} */ (m.model));
-          if (!d.duzenlenebilir) throw new TaramaHatasi('AKIS_DUZENLENEMEZ', `Ortak akışın kaydı akışına yazılamaz: ${d.neden} Sayfa paketi yükleyin.`);
+          if (!d.duzenlenebilir) throw new TaramaHatasi('AKIS_DUZENLENEMEZ', `Ortak akışın kaydı akışına yazılamaz: ${d.neden} Ekran paketi yükleyin.`);
           const b = ortakAkisBaslangicEkranlari(vt, projeId, e.id).find((x) => x.id === g.baslangicEkranId);
           if (!b) throw new TaramaHatasi('BASLANGIC_EKRANI', 'Ortak akışın kaydı için başlangıç ekranını seçin (adresi olan bir ekran; kayıt o ekranın adresinde başlar).');
           ortakBaslangic = { id: b.id, ad: b.ad, urlYolu: b.urlYolu };
@@ -518,7 +516,7 @@ export function taramaYoneticisiOlustur(secenekler) {
         : { hazirlik: { durum: 'bekliyor' }, giris: { durum: tarif ? 'bekliyor' : 'atlandi' }, profiller: { durum: 'bekliyor' }, paket: { durum: 'bekliyor' } },
       profiller: kayit || girisDenemesi ? [] : profiller.map((p) => ({ ad: p.ad ?? 'Varsayılan bağlam', durum: 'bekliyor' })),
       baglamProfili: kayit ? profiller[0].ad : null,
-      // Ortak akışın kaydı: başlangıç ekranı; sonuç ortak akışın (tek) akışına yazılır (akisaYaz), sayfa paketi üretilmez.
+      // Ortak akışın kaydı: başlangıç ekranı; sonuç ortak akışın (tek) akışına yazılır (akisaYaz), ekran paketi üretilmez.
       ortakAkis: ortakBaslangic ? { baslangicEkrani: ortakBaslangic } : null,
       engellenenler: [], engellenenSayisi: 0, olaylar: [],
       girdi: {
@@ -674,7 +672,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     return { kaydedildi };
   }
 
-  /** Alt süreç: sonuç (envanter → sayfa paketi). @param {string} id @param {string} token @param {Nesne} s */
+  /** Alt süreç: sonuç (envanter → ekran paketi). @param {string} id @param {string} token @param {Nesne} s */
   function sonucAl(id, token, s) {
     const is = tokenliIs(id, token);
     if (is.durum !== 'suruyor') return { yoksayildi: true };
@@ -701,7 +699,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       const { paket, ozet } = taramaPaketiOlustur(is.meta, /** @type {any} */ (envanter));
       const d = sayfaPaketiniDogrula(paket, { altModelKaynagi: (dosya) => is.altModeller[dosya] });
       if (!d.gecerli) {
-        bitir(is, 'hata', { kod: 'PAKET', mesaj: `Tarama sonucu geçerli bir sayfa paketine çevrilemedi: ${d.hatalar.slice(0, 5).map((h) => `${h.yer}: ${h.mesaj}`).join(' · ')}` });
+        bitir(is, 'hata', { kod: 'PAKET', mesaj: `Tarama sonucu geçerli bir ekran paketine çevrilemedi: ${d.hatalar.slice(0, 5).map((h) => `${h.yer}: ${h.mesaj}`).join(' · ')}` });
         return { alindi: true };
       }
       is.paket = paket;
@@ -715,7 +713,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     return { alindi: true };
   }
 
-  /** Akış kaydı sonucu: topla biçimi → taslak diyagram (paket diyagram kaydedilince); eski adım biçimi → sayfa paketi. @param {Nesne} is @param {unknown} envanter */
+  /** Akış kaydı sonucu: topla biçimi → taslak diyagram (paket diyagram kaydedilince); eski adım biçimi → ekran paketi. @param {Nesne} is @param {unknown} envanter */
   function kayitSonucunuIsle(is, envanter) {
     if (akisEnvanteriMi(envanter)) {
       if (!envanter.alanlar.some((a) => a.secili) && !envanter.dugmeler.length) {
@@ -742,7 +740,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       const { paket, ozet } = kayitPaketiOlustur(is.meta, /** @type {any} */ (envanter));
       const d = sayfaPaketiniDogrula(paket, { altModelKaynagi: (dosya) => is.altModeller[dosya] });
       if (!d.gecerli) {
-        bitir(is, 'hata', { kod: 'PAKET', mesaj: `Kayıt geçerli bir sayfa paketine çevrilemedi: ${d.hatalar.slice(0, 5).map((h) => `${h.yer}: ${h.mesaj}`).join(' · ')}` });
+        bitir(is, 'hata', { kod: 'PAKET', mesaj: `Kayıt geçerli bir ekran paketine çevrilemedi: ${d.hatalar.slice(0, 5).map((h) => `${h.yer}: ${h.mesaj}`).join(' · ')}` });
         return { alindi: true };
       }
       is.paket = paket;
@@ -865,7 +863,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   }
 
   /**
-   * Diyagramı saklar (taslak) ya da doğrulayıp sayfa paketine çevirir. Paket yeniden üretilebilir (diyagrama dönüp
+   * Diyagramı saklar (taslak) ya da doğrulayıp ekran paketine çevirir. Paket yeniden üretilebilir (diyagrama dönüp
    * düzenleme). @param {string} id @param {Nesne} g
    */
   function akisKaydet(id, g) {
@@ -875,15 +873,15 @@ export function taramaYoneticisiOlustur(secenekler) {
       if (!bicim.length) is.akis.bloklar = bloklar;
       return { kaydedildi: !bicim.length, palet: akisPaleti(is.akis.envanter, is.akis.bloklar) };
     }
-    // Ortak akış sayfa paketiyle (ekran adresli model) önizlenmez: kayıt ortak akışın tek akışına yazılır.
-    if (is.ortakAkis) throw new TaramaHatasi('ORTAK_AKIS', 'Ortak akışın kaydı sayfa paketine çevrilmez; “Ortak akışı güncelle” ile ortak akışın akışına yazılır.', 409);
+    // Ortak akış ekran paketiyle (ekran adresli model) önizlenmez: kayıt ortak akışın tek akışına yazılır.
+    if (is.ortakAkis) throw new TaramaHatasi('ORTAK_AKIS', 'Ortak akışın kaydı ekran paketine çevrilmez; “Ortak akışı güncelle” ile ortak akışın akışına yazılır.', 409);
     const { envanter, hatalar } = bicim.length ? { envanter: null, hatalar: bicim } : akistanKayitEnvanteri(is.akis.envanter, bloklar, { satirSiniri: is.sqlSatirSiniri });
     if (!envanter) throw new TaramaHatasi('AKIS_GECERSIZ', `Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, 400, { hatalar });
     is.akis.bloklar = bloklar;
     const { paket, ozet } = kayitPaketiOlustur(is.meta, envanter);
     const d = sayfaPaketiniDogrula(paket, { altModelKaynagi: (dosya) => is.altModeller[dosya] });
     if (!d.gecerli) {
-      throw new TaramaHatasi('AKIS_GECERSIZ', 'Diyagram geçerli bir sayfa paketine çevrilemedi.', 400, {
+      throw new TaramaHatasi('AKIS_GECERSIZ', 'Diyagram geçerli bir ekran paketine çevrilemedi.', 400, {
         hatalar: d.hatalar.slice(0, 5).map((h) => ({ blok: null, mesaj: `${h.yer}: ${h.mesaj}` }))
       });
     }
@@ -992,7 +990,7 @@ export async function taramaIsteginiIsle(req, res, b) {
     if (govde.token !== b.token && !b.disTokenGecerli) { tokenYok(); return true; }
     if (yol === '/platform/tarama/baslat') {
       const db = await b.acikVeritabani();
-      // İzinler (web erişimi; giriş tarifi varsa giriş bilgisi; riskli ortamda canlı ortam + açık onay): tarayıcı AÇILMADAN
+      // İzinler (web erişimi; giriş tarifi varsa giriş bilgisi; CANLI ortamda canlı ortam izni + açık onay): tarayıcı AÇILMADAN
       // denetlenir (tek merkez: guvenlik/uc-denetimi.mjs). Kapalıysa IzinHatasi → sunucu 403 IZIN_KAPALI döner.
       ucDenetle(db, yol, govde);
       const port = req.socket.localPort;

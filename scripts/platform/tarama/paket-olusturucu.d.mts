@@ -48,6 +48,11 @@ export type HamAlan = {
   ozelBilesen?: boolean;
   /** Özel bileşenin görünen kabının seçicisi (aynı çerçevede; kayıt panelinde dokunma ve açılan liste eşleştirmesi için). */
   bilesen?: string | null;
+  /**
+   * Akış diyagramındaki "Doldurduktan sonra" tuşu (ör. "Tab"): modelde doldurucuParametreleri.tus olur; null kaldırır,
+   * verilmezse (undefined) eşleşen mevcut tanımınki korunur.
+   */
+  tus?: string | null;
 };
 
 /**

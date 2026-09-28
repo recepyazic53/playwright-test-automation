@@ -1,6 +1,6 @@
 // YEDEK YÜKLEME UYARISI PENCERESİ — yedekten yükleme izinleri (Ayarlar > İzinler) yedektekiyle değiştirdiyse, Nöbetçi açıldığında
-// (ana sayfa: ilk açılış / yeniden yükleme) bir kez gösterilir: açık izinler, kapalı olanlar ve ortamların riskli seçimleri.
-// Yedekteki izinler ve riskli seçimleri olduğu gibi geçerlidir; pencere yalnız bilgi verir. "Tamam" ya da "İzinlere git" bayrağı
+// (ana sayfa: ilk açılış / yeniden yükleme) bir kez gösterilir: açık izinler, kapalı olanlar ve ortamların türleri (Test / Canlı).
+// Yedekteki izinler ve ortam türleri olduğu gibi geçerlidir; pencere yalnız bilgi verir. "Tamam" ya da "İzinlere git" bayrağı
 // sunucuda siler (guvenlik/yedek-uyarisi.mjs): başka tarayıcıdan açan da görür, bir kez kapatılınca kimse için çıkmaz.
 // Esc ile kapanmaz (bilerek bir düğme seçilir). Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok).
 import { api, h, ikon } from './ortak.js';
@@ -17,8 +17,8 @@ export function izinCumlesi(izinler) {
 }
 
 /**
- * Riskli seçim özeti: "Riskli: CANLI; riskli değil: TEST; belirtilmemiş: …" (birden çok projede ortam adı "Proje / Ortam").
- * Belirtilmemiş ortam riskli sayılır (güvenli taraf; guvenlik/ortam-riski.mjs).
+ * Ortam türü özeti: "Canlı: CANLI; Test: TEST; türü seçilmemiş: …" (birden çok projede ortam adı "Proje / Ortam").
+ * Türü seçilmemiş ortam Canlı sayılır (güvenli taraf; guvenlik/ortam-riski.mjs).
  * @param {Array<{ projeId: string; proje: string; ad: string; riskli: boolean | null }>} ortamlar
  */
 export function riskCumlesi(ortamlar) {
@@ -26,7 +26,7 @@ export function riskCumlesi(ortamlar) {
   const cokProje = new Set(ortamlar.map((o) => o.projeId)).size > 1;
   const ad = (/** @type {{ proje: string; ad: string }} */ o) => (cokProje ? `${o.proje} / ${o.ad}` : o.ad);
   const grup = (/** @type {boolean | null} */ r) => ortamlar.filter((o) => o.riskli === r).map(ad);
-  const parcalar = [['Riskli', grup(true)], ['riskli değil', grup(false)], ['belirtilmemiş (riskli sayılır)', grup(null)]]
+  const parcalar = [['Canlı', grup(true)], ['Test', grup(false)], ['türü seçilmemiş (Canlı sayılır)', grup(null)]]
     .filter(([, l]) => l.length).map(([e, l]) => `${e}: ${/** @type {string[]} */ (l).join(', ')}`);
   const metin = parcalar.join('; ');
   return `${metin.charAt(0).toLocaleUpperCase('tr-TR')}${metin.slice(1)}.`;
@@ -48,7 +48,7 @@ export async function yedekUyarisiniGoster(s) {
       h('h2', { id: 'yedek-uyarisi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('uyari')), 'Yedek yüklendi'),
       h('p', { id: 'yedek-uyarisi-metni' }, 'Yedekteki izinler geçerli: ', h('b', { class: 'yedek-uyarisi-izinler' }, izinCumlesi(uyari.izinler)),
         ' Ayarlar > İzinler\'den gözden geçirin.'),
-      h('p', { class: 'soluk kucuk yedek-uyarisi-riskler' }, 'Ortamların riskli seçimleri de yedektekiyle geçerli. ', riskCumlesi(uyari.ortamlar))),
+      h('p', { class: 'soluk kucuk yedek-uyarisi-riskler' }, 'Ortamların türleri (Test / Canlı) de yedektekiyle geçerli. ', riskCumlesi(uyari.ortamlar))),
     h('div', { class: 'diyalog-alt' }, git, tamam));
   const kapat = async (/** @type {boolean} */ izinlere) => {
     tamam.disabled = true;

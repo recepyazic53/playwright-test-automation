@@ -353,7 +353,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     const form = page.getByRole('form', { name: 'Yeni zamanlanmış koşu' });
     await form.getByLabel('Ad').fill('Gece tam koşu');
     await form.getByRole('combobox', { name: /^Ortam/ }).selectOption({ label: 'Ana sistem' });
-    await expect(form.getByText('Seçilen ortam riskli', { exact: false })).toBeVisible();
+    await expect(form.getByText('Seçilen ortam Canlı', { exact: false })).toBeVisible();
     await form.getByRole('combobox', { name: 'Tekrar' }).selectOption('haftalik');
     await form.getByLabel('Saat', { exact: true }).fill('03:15');
     await expect(form.getByText('Sonraki çalışmalar:', { exact: false })).toBeVisible();
@@ -365,7 +365,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     await expect(form).toBeHidden();
     const satir = kart.getByRole('listitem').filter({ hasText: 'Gece tam koşu' });
     await expect(satir.getByText('Hafta içi her gün 03:15', { exact: false })).toBeVisible();
-    await expect(satir.locator('.rozet.hata')).toHaveText('Riskli');
+    await expect(satir.locator('.rozet.hata')).toHaveText('Canlı');
     await expect(satir.getByText('Pasif: çalışmaz.')).toBeVisible();
     await expect(satir.getByText('Henüz çalışmadı.')).toBeVisible();
     await expect(kart.getByRole('button', { name: /Şimdi koş/ })).toHaveCount(0);

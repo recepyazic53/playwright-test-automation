@@ -3,10 +3,10 @@
 //   #/akislar/<id|yeni>  → tasarım: servis akışı tasarımcısı (servis-akis-diyagrami.js) uçtan uca kipinde (ekran adımı + Koş…)
 //   Sonuçlar > "Uçtan uca akışlar" sekmesi (#/sonuclar/uctan-uca[/<koşu>]): uctanUcaSonuclari.
 // Koşu penceresi: ortam seçimi → ön denetim (seçilen ortamda eksik adımlar; hiçbir istek atılmaz) ve gereken izinler (toplu liste);
-// kapalı izin koşu başlarken standart izin penceresiyle ("İzin ver ve devam et") sorulur; riskli ortamda ayrıca açık onay.
+// kapalı izin koşu başlarken standart izin penceresiyle ("İzin ver ve devam et") sorulur; CANLI ortamda "Koş"a basınca tek tip CANLI onayı.
 // Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok). Taşınan değerler sunucudan maskeli gelir.
 import { TOKEN, alan, api, bildir, bosDurum, h, ikon, iskelet, rozet, tarihMetni, yerlestir } from './ortak.js';
-import { onayIste, onerilenOrtam, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
+import { canliOnayIste, onayIste, onerilenOrtam, ortamSecenekMetni } from './kosu-paneli.js';
 import { servisAkisTasarimi } from './servis-akis-diyagrami.js';
 import { urunlerPaneli } from './senaryolar.js';
 
@@ -98,26 +98,24 @@ async function listeSayfasi(icerik, proje, ortamlar) {
 }
 
 /**
- * Koşu penceresi: ortam seçimi, ön denetim (eksik adımlar, izinler), riskli ortamda açık onay; "Koş" koşuyu başlatır ve bitene kadar
+ * Koşu penceresi: ortam seçimi, ön denetim (eksik adımlar, izinler), CANLI ortamda "Koş"tan sonra tek tip CANLI onayı; "Koş" koşuyu başlatır ve bitene kadar
  * bekler. Sonuç (ya da vazgeçilirse null) döner.
  * @param {{ id: string }} proje @param {any[]} ortamlar @param {{ akisId?: string; icerik?: unknown; baslik?: string; kapsam?: string }} g
  */
 export function kosuPenceresi(proje, ortamlar, g) {
   return new Promise((coz) => {
     const taslak = g.icerik !== undefined;
-    const secilebilir = taslak ? ortamlar.filter((o) => !riskliOrtamMi(o)) : ortamlar;
+    const secilebilir = ortamlar;
     const ilk = onerilenOrtam(secilebilir);
     const ortamSec = h('select', { 'aria-label': 'Ortam' }, secilebilir.map((o) => h('option', { value: o.id, selected: o.id === ilk?.id }, ortamSecenekMetni(o))));
     const denetimKap = h('div', { class: 'uctan-denetim', 'aria-live': 'polite' });
-    const onay = h('input', { type: 'checkbox' });
-    const onayAlani = h('label', { class: 'secenek uctan-canli-onay', hidden: true }, onay, 'Bu ortam riskli: adımların gerçek işlem oluşturabileceğini biliyorum.');
     const mesaj = h('p', { class: 'alan-hatasi', role: 'alert' });
     const kos = h('button', { type: 'button', class: 'birincil', disabled: true }, ikon('oynat'), taslak ? 'Dene' : 'Koş');
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     let denetim = null;
     let sonuc = null;
     let kosuyor = false;
-    const dugmeyiGuncelle = () => { kos.disabled = kosuyor || !denetim || !denetim.kosulabilir || (denetim.canliOnayGerekli && !onay.checked); };
+    const dugmeyiGuncelle = () => { kos.disabled = kosuyor || !denetim || !denetim.kosulabilir; };
     const denetle = async () => {
       denetim = null;
       dugmeyiGuncelle();
@@ -126,7 +124,6 @@ export function kosuPenceresi(proje, ortamlar, g) {
         const y = await api('/platform/uctan-uca/on-denetim', { govde: { projeId: proje.id, ortamId: ortamSec.value, ...(g.akisId ? { akisId: g.akisId } : {}),
           ...(taslak ? { icerik: g.icerik, baslik: g.baslik, kapsam: g.kapsam } : {}) } });
         denetim = y.denetim;
-        onayAlani.hidden = !denetim.canliOnayGerekli;
         yerlestir(denetimKap,
           denetim.hatalar.length ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('b', {}, 'Akışta sorun var:'), h('ul', {}, denetim.hatalar.map((m) => h('li', {}, m)))) : null,
           denetim.uyarilar.length ? h('div', { class: 'not-kutusu uyari uctan-eksik', role: 'alert' },
@@ -142,20 +139,25 @@ export function kosuPenceresi(proje, ortamlar, g) {
       }
       dugmeyiGuncelle();
     };
-    ortamSec.addEventListener('change', () => { onay.checked = false; void denetle(); });
-    onay.addEventListener('change', dugmeyiGuncelle);
+    ortamSec.addEventListener('change', () => { void denetle(); });
     const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay uctan-kosu-diyalogu', 'aria-labelledby': 'uctan-kosu-basligi' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'uctan-kosu-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('oynat')), taslak ? 'Uçtan uca akışı dene' : 'Uçtan uca akışı koş'),
         h('p', { class: 'soluk' }, `"${g.baslik || 'Akış'}" adımları seçilen ortamda sırayla koşar: servis istekleri gönderilir, ekran senaryoları tarayıcıda koşar, SQL sorguları çalışır.`,
-          taslak ? ' Kaydedilmemiş hâl yalnız TEST ortamında denenir.' : ''),
+          ' CANLI ortamda başlatırken ayrıca onay sorulur.'),
         secilebilir.length ? alan('Ortam', ortamSec) : h('p', { class: 'not-kutusu uyari' }, 'Uygun ortam yok (Ayarlar > Proje ve ortamlar).'),
-        denetimKap, onayAlani, mesaj),
+        denetimKap, mesaj),
       h('div', { class: 'diyalog-alt' }, vazgec, kos));
     vazgec.addEventListener('click', () => { if (!kosuyor) diyalog.close(); });
     diyalog.addEventListener('cancel', (o) => { if (kosuyor) o.preventDefault(); });
     kos.addEventListener('click', async () => {
       mesaj.textContent = '';
+      // CANLI ortam: tek tip CANLI onayı (her koşuda sorulur; onay kutusu yok).
+      const canliOnay = Boolean(denetim?.canliOnayGerekli);
+      if (canliOnay) {
+        const o = ortamlar.find((x) => x.id === ortamSec.value) || { id: ortamSec.value, ad: denetim?.ortam?.ad ?? '', riskli: true };
+        if (!(await canliOnayIste(o))) return;
+      }
       kosuyor = true;
       dugmeyiGuncelle();
       vazgec.disabled = true;
@@ -165,7 +167,7 @@ export function kosuPenceresi(proje, ortamlar, g) {
       try {
         const y = await api('/platform/uctan-uca/kos', { govde: {
           projeId: proje.id, ortamId: ortamSec.value, ...(g.akisId ? { akisId: g.akisId } : {}),
-          ...(taslak ? { icerik: g.icerik, baslik: g.baslik, kapsam: g.kapsam } : {}), ...(denetim?.canliOnayGerekli && onay.checked ? { canliOnay: true } : {})
+          ...(taslak ? { icerik: g.icerik, baslik: g.baslik, kapsam: g.kapsam } : {}), ...(canliOnay ? { canliOnay: true } : {})
         } });
         sonuc = y.sonuc;
         bildir(sonuc.durum === 'basarili' ? 'Uçtan uca akış başarılı.' : `Uçtan uca akış: ${sonuc.ozet}`, sonuc.durum === 'basarili' ? 'basari' : 'hata');

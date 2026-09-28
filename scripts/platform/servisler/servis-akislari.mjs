@@ -311,7 +311,7 @@ async function akisiKos(vt, projeId, g) {
 }
 
 /**
- * Akışı (kayıtlı ya da taslak; ikisi birlikte verilirse taslak koşulur, kayıt akışa bağlanır) bir ortamda koşar ve sonucu kaydeder. tur 'dene': yalnız test ortamı. tur 'kosu': kapsam ortam
+ * Akışı (kayıtlı ya da taslak; ikisi birlikte verilirse taslak koşulur, kayıt akışa bağlanır) bir ortamda koşar ve sonucu kaydeder. tur 'dene': her ortamda (CANLI'da onay HTTP ucunda). tur 'kosu': kapsam ortam
  * türüne uymalı. Canlıda "yalnız test" operasyonu içeren akış hiç istek atmadan reddedilir.
  * @param {Veritabani} vt @param {string} projeId
  * @param {{ akisId?: string; taslak?: { baslik?: string; tur?: 'akis' | 'oturum'; kapsam?: 'test' | 'canli' | 'ikisi'; icerik: unknown };
@@ -332,7 +332,6 @@ export async function servisAkisiCalistir(vt, projeId, girdi) {
   const ortam = ortamGetir(vt, girdi.ortamId);
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
   const tur = ortamTuru(ortam);
-  if (girdi.tur === 'dene' && tur !== 'test') throw new DepoHatasi('"Dene" yalnızca test ortamında yapılır.');
   const kapsam = girdi.senaryo?.kapsam ?? akis.kapsam ?? 'test';
   if (girdi.tur === 'kosu' && kapsam !== 'ikisi' && kapsam !== tur) throw new DepoHatasi(`Bu ${girdi.senaryo ? 'senaryo' : 'akış'} yalnızca ${kapsam === 'test' ? 'test' : 'canlı'} ortamda koşar.`);
   // Uçtan uca akış yalnız kendi ucundan (ön denetim, adım başına izin) koşar; zamanlanmış / servis akışı uçları reddeder.

@@ -51,7 +51,7 @@ test.describe('REST servisi kaydı ve koşu (sahte sunucu)', () => {
   const gelen: Array<{ metot: string; url: string; basliklar: IncomingHttpHeaders; govde: string }> = [];
   test.afterAll(async () => { vt?.kapat(); klasor.temizle(); await new Promise((c) => sunucu?.close(c)); });
 
-  test('kayıt → gizli başlık tabloya → başlangıç senaryosu koşar; Dene yalnız TEST ve yer tutucusuz', async () => {
+  test('kayıt → gizli başlık tabloya → başlangıç senaryosu koşar; Dene her ortamda (CANLI onayı HTTP ucunda) ve yer tutucusuz', async () => {
     sunucu = createServer((q, r) => {
       let g = '';
       q.on('data', (p) => { g += p; });
@@ -93,13 +93,14 @@ test.describe('REST servisi kaydı ve koşu (sahte sunucu)', () => {
     expect(JSON.parse(g.govde)).toEqual({ kullanici: { ad: 'Ay"şe', parola: '' }, yas: 30, etiketler: [{ kod: 'A' }] });
     expect(JSON.stringify(k)).not.toContain('gizli-anahtar-1');
 
-    // Dene: TEST ortamında ister; CANLI reddedilir; yol yer tutucusu kalmışsa istek atılmaz.
+    // Dene: seçilen ortamda ister (CANLI ortamda kesin yasak yok — onay HTTP ucunda, bkz. izinler.spec.ts); yol yer tutucusu kalmışsa istek atılmaz.
     const once = gelen.length;
     const d = await restUcuDene(vt, projeId, { ortamId: testO, taban: adres, uc: { ...uc, metot: 'GET', basliklar: [] } });
     expect(d).toMatchObject({ basarili: true, durumKodu: 200, metot: 'GET' });
     expect(gelen.length).toBe(once + 1);
-    await expect(restUcuDene(vt, projeId, { ortamId: canli, taban: adres, uc })).rejects.toThrow(/test ortamında/);
+    expect(await restUcuDene(vt, projeId, { ortamId: canli, taban: adres, uc: { ...uc, metot: 'GET', basliklar: [] } })).toMatchObject({ basarili: true, durumKodu: 200 });
+    expect(gelen.length).toBe(once + 2);
     await expect(restUcuDene(vt, projeId, { ortamId: testO, taban: adres, uc: { ...uc, yol: '/k/{id}' } })).rejects.toThrow(/yer tutucu/);
-    expect(gelen.length).toBe(once + 1);
+    expect(gelen.length).toBe(once + 2);
   });
 });

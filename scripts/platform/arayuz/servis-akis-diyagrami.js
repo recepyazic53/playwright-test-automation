@@ -21,7 +21,7 @@
 //     ekran senaryosu, akıştan doldurulan alanlar = ezmeler, ekrandan okunan değerler). Kayıt /platform/uctan-uca/kaydet; "Dene" yerine
 //     "Koş…" (ortam seçimi, ön denetim ve izinler koşu penceresinde: secenek.kosuPenceresi).
 import { alan, api, bildir, degisiklikleriBirak, h, ikon, kayitIzi, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yerlestir } from './ortak.js';
-import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, onayIste, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
 import { sqlAkisDegerleri, sqlTanimiDogrula } from './sql-adimi.mjs';
 import { sqlAdimiFormu, sqlHedefAdi, sqlKaynaklariniAl, sqlOzeti, yeniSqlTanimi } from './sql-adimi-formu.js';
@@ -182,7 +182,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
         const etiket = IZIN_TANIMLARI.find((t) => t.anahtar === anahtar)?.etiket ?? anahtar;
         return rozet([acik === false ? ikon('kilit') : ikon('onay'), `${etiket} · ${adimlar.join(', ')}${acik === false ? ' (kapalı)' : ''}`], acik === false ? 'uyari' : '');
       }),
-      h('span', { class: 'soluk' }, ' Giriş bilgisi ve riskli ortam izni ortama göre koşu penceresinde denetlenir.'));
+      h('span', { class: 'soluk' }, ' Giriş bilgisi ve canlı ortam izni ortama göre koşu penceresinde denetlenir.'));
   };
   const ayrintiKap = h('div', {});
   const sonucKap = h('div', { 'aria-live': 'polite' });
@@ -822,9 +822,11 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
       location.hash = `${adres}/${q(r.id)}`;
     } catch (e2) { mesaj.goster(e2.message); }
   });
-  const test = ortamlar.find((o) => !riskliOrtamMi(o));
+  // Dene ortamı: önce gelen TEST (varsayılan, yoksa ilk); CANLI da seçilebilir (istekten önce tek tip CANLI onayı).
+  const ilkDene = ortamlar.find((o) => !riskliOrtamMi(o) && o.varsayilan) || ortamlar.find((o) => !riskliOrtamMi(o)) || ortamlar[0];
+  const deneOrtami = h('select', { 'aria-label': 'Deneme ortamı', class: 'istek-ortami' }, ortamlar.map((o) => h('option', { value: o.id, selected: ilkDene && o.id === ilkDene.id }, ortamSecenekMetni(o))));
   // Uçtan uca akış: "Koş…" — ortam seçimi, ön denetim (ortamda eksik adım) ve izinler koşu penceresinde; kaydedilmemiş değişiklik
-  // varsa taslak (yalnız TEST) koşar.
+  // varsa taslak ("Dene") koşar.
   const kos = uctan ? h('button', { type: 'button', class: 'uctan-kos' }, ikon('oynat'), 'Koş…') : null;
   kos?.addEventListener('click', async () => {
     mesaj.temizle();
@@ -840,19 +842,23 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
     ciz();
     if (akisId) kosulariCiz();
   });
-  const dene = h('button', { type: 'button', disabled: !test, title: 'Kaydedilmemiş hâliyle TEST ortamında dener' }, ikon('oynat'), 'Dene (TEST)');
+  const dene = h('button', { type: 'button', disabled: !ortamlar.length, title: 'Kaydedilmemiş hâliyle seçilen ortamda dener (CANLI ortamda önce onay sorulur)' }, ikon('oynat'), 'Dene');
   dene.addEventListener('click', async () => {
     mesaj.temizle();
+    const test = ortamlar.find((o) => o.id === deneOrtami.value) || ilkDene;
+    if (!test) return;
     const e = eksik((await kullaniciAyarlari()).sqlSatirSiniri);
     if (e) { mesaj.goster(e); return; }
     const liste = is.adimlar.map((x, n) => (x.tur === 'sql'
       ? `${n + 1}. SQL sorgusu › ${sqlHedefAdi(x.sql, sqlKaynaklari, test.id)}`
       : x.tur === 'operasyon' ? `${n + 1}. ${servisAdi(x.servisId)} · ${x.operasyon} (varsayılan değerlerle)`
         : `${n + 1}. ${servisAdi(x.servisId)} › ${senaryoBul(x)?.baslik ?? '?'}`));
-    if (!(await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
+    // CANLI ortamda yalnız tek tip CANLI onayı (çift onay yok).
+    if (!(riskliOrtamMi(test) ? await canliOnayIste(test) : await onayIste({ baslik: 'TEST ortamına istek atılsın mı?', metin: `Akışın adımları sırayla "${test.ad}" ortamında çalıştırılacak.`, liste, dugme: 'Dene', ikonAd: 'ag' }))) return;
+    const canliEki = canliOnayEki(test.id);
     try {
       const { sonuc } = await mesgulIken(dene, 'Deneniyor…', () => api('/platform/servis-akisi/dene', { govde: {
-        projeId: proje.id, ortamId: test.id, akisId: akisId || undefined, baslik: is.baslik.trim() || 'Taslak akış', tur: is.tur, icerik: icerikAl()
+        projeId: proje.id, ortamId: test.id, ...canliEki, akisId: akisId || undefined, baslik: is.baslik.trim() || 'Taslak akış', tur: is.tur, icerik: icerikAl()
       } }));
       yerlestir(sonucKap, sonucKarti(sonuc));
       gosterilen = { adimlar: sonuc.adimlar, kaynak: `Dene (${sonuc.ortam})`, durum: sonuc.durum, zaman: new Date().toISOString() };
@@ -919,7 +925,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
       h('h3', {}, uctan ? (akisId ? 'Uçtan uca akışı düzenle' : 'Yeni uçtan uca akış') : akisId ? 'Akışı düzenle' : 'Yeni akış'), mesaj.kutu,
       kayit?.hatalar?.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, h('b', {}, 'Akış şu an koşulamaz: '), kayit.hatalar.join(' ')) : null,
       alan('Başlık', baslik, { zorunlu: true }),
-      h('div', { class: 'satir-duzen' }, turAlani, alan('Kapsam', kapsam, { yardim: uctan ? 'Koşuda hangi ortam türünde koşacağı. Kaydedilmemiş hâl yalnız TEST\'te denenir.' : 'Koşuda hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' }), yenilemeAlani, omurAlani, yetkiAlani)),
+      h('div', { class: 'satir-duzen' }, turAlani, alan('Kapsam', kapsam, { yardim: uctan ? 'Koşuda hangi ortam türünde koşacağı. Kaydedilmemiş hâl seçilen ortamda denenir (CANLI ortamda önce onay).' : 'Koşuda hangi ortam türünde koşacağı. Dene seçilen ortamda (CANLI ortamda önce onay).' }), yenilemeAlani, omurAlani, yetkiAlani)),
     h('div', { class: 'form-duzeni tasarim-duzeni servis-akis-duzeni' },
       h('section', { class: 'kart tasarim-karti', 'aria-label': 'Akış diyagramı' },
         h('p', { class: 'soluk kucuk' }, 'Kutuya tıklayın ya da Enter’a basın: ayrıntısı sağda açılır. Sıralamak için sürükleyin, ↑ / ↓ düğmelerini ya da Alt + ↑ / ↓ tuşlarını kullanın. Oklarda sonraki adımlara taşınan ',
@@ -936,7 +942,7 @@ export async function servisAkisTasarimi(kap, proje, s0, ortamlar, akisId, secen
           h('p', { class: 'soluk kucuk' }, uctan
             ? 'Kaydederken akış sunucuda doğrulanır (servis / ekran senaryosu / veritabanı projede, her değer kullanılmadan önce okunuyor). Koşu penceresi seçilen ortamda eksik adımları ve gereken izinleri gösterir.'
             : 'Kaydederken akış sunucuda doğrulanır (servis / senaryo projede, her değer kullanılmadan önce okunuyor).'),
-          h('div', { class: 'dugmeler' }, kaydet, uctan ? kos : dene, h('a', { class: 'dugme hayalet', href: adres }, 'Vazgeç')),
+          h('div', { class: 'dugmeler' }, kaydet, uctan ? kos : [ortamlar.length > 1 ? deneOrtami : null, dene], h('a', { class: 'dugme hayalet', href: adres }, 'Vazgeç')),
           h('p', { class: 'kucuk' }, durumSatiri)),
         ayrintiKap)),
     sonucKap, kosuKap, akisSenaryolariKarti());

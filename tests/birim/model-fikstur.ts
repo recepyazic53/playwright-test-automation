@@ -326,7 +326,7 @@ export function ornekBasvuruModeli(): Record<string, unknown> {
 
 const ORTAK_VERI = { urun: 'A', adSoyad: 'Deneme Kişi', baslangic: '2026-10-01', kampanya: true };
 
-/** Sayfa paketi (sürüm 1) — model + beş senaryo önerisi. */
+/** Ekran paketi (sürüm 1) — model + beş senaryo önerisi. */
 export function ornekBasvuruPaketi(): Record<string, unknown> {
   const oneri = (baslik: string, veri: Record<string, unknown>, adimKapsami: string[], tur: 'basari' | 'hata', gerekce: string): Record<string, unknown> => ({
     baslik, veri: { baslik, ...veri, onayAdimiDahil: adimKapsami.includes('onay') }, adimKapsami, beklenenSonuc: { tur, aciklama: gerekce }, gerekce

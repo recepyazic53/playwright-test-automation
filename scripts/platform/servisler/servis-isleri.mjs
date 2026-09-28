@@ -47,7 +47,7 @@ export function servisSenaryoAtlamaNedeni(vt, servis, s, ortam) {
 /**
  * İşi başlatır (hemen döner; koşu arka planda sürer). Senaryolar sırayla; kapsamı ortama uymayan / servisin bu ortamda
  * tanımlı olmadığı / CANLI'da çağrılmayan metodu kullanan senaryo "atlandi" olur (nedeniyle).
- * Taslak verilirse (düzenleyicideki "Dene"): kaydedilmemiş tek senaryo, yalnız TEST ortamında, "dene" olarak koşar.
+ * Taslak verilirse (düzenleyicideki "Dene"): kaydedilmemiş tek senaryo "dene" olarak koşar (CANLI ortamda onay HTTP ucunda).
  * VERİ KOŞULARI: tablodan çoklu satırla koşan senaryonun her satırı / kombinasyonu ayrı satır ("Senaryo [ad]"); tek senaryodaki üst
  * sınır (Ayarlar > Koşu) aşılırsa iş başlatılmaz; bu ortamda koşulacak satır yoksa senaryo nedeniyle atlanır.
  * TEKRAR: tekrar = { kaynakKosuId: "s-…", veri?: 'guncel' | 'kosudaki' } — yalnız o koşuda kalan çalıştırmalar, o koşudaki satırlarla
@@ -65,7 +65,6 @@ export function servisIsiBaslat(vt, projeId, girdi) {
   const tekrar = !taslak && girdi.tekrar ? girdi.tekrar : null;
   if (!taslak && !tekrar && (!Array.isArray(girdi.senaryoIdleri) || !girdi.senaryoIdleri.length)) throw new DepoHatasi('En az bir senaryo seçin.');
   const tur = ortamTuru(ortam);
-  if (taslak && tur !== 'test') throw new DepoHatasi('Deneme yalnızca test ortamında yapılır.');
   const tanimli = ortamdaTanimli(servis.ayarlar, ortam.id);
   /** @param {{ senaryoId: string; baslik: string; veriKosusu?: IsSatiri['veriKosusu'] }} x @returns {IsSatiri} */
   const sirada = (x) => ({ senaryoId: x.senaryoId, baslik: x.baslik, durum: 'sirada', olaylar: [], istek: null, yanit: null, baslangic: null, bitis: null, sonuc: null,

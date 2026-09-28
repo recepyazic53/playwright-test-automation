@@ -22,7 +22,7 @@
   "tur": "ekran",
   "id": "ornek-rota",
   "ad": "Örnek Rota",
-  "aciklama": "Örnek rota başvurusu siparis ekranı: kapsam/alternatif, teslimatlar, sorgu tipi, başvuran ve kefil, toplam hesaplama ve isteğe bağlı ödeme adımı. (Sayfa paketi örneği — değerler sahtedir.)",
+  "aciklama": "Örnek rota başvurusu siparis ekranı: kapsam/alternatif, teslimatlar, sorgu tipi, başvuran ve kefil, toplam hesaplama ve isteğe bağlı ödeme adımı. (Ekran paketi örneği — değerler sahtedir.)",
   "ekranUrl": "/ornek/rota/",
   "specDosyasi": "tests/scenarios/ornek-rota/siparis.spec.ts",
   "pageObject": "tests/support/pages/ornek-rota.page.ts#OrnekRotaPage",

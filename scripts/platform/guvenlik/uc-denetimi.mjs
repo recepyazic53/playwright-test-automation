@@ -3,7 +3,13 @@
 // adımı, TLS doğrulaması, bağlantı türü, tercih) burada hesaplanır. Aynı fonksiyonu HTTP uçları (sunucu-platform.mjs), ekran
 // taraması (tarama/yonetici.mjs) ve zamanlayıcı (zamanlama/zamanlayici.mjs) kullanır.
 //   gerekenIzinler(vt, yol, g) → { izinler: string[]; canliOnayGerekli: boolean }
-//   ucDenetle(vt, yol, g)      kapalı izin → IzinHatasi (403); riskli ortam + canliOnay yok → CanliOnayHatasi (409)
+//   ucDenetle(vt, yol, g)      kapalı izin → IzinHatasi (403); CANLI ortam + canliOnay yok → CanliOnayHatasi (409)
+// CANLI ORTAM ONAYI — TEK KAYNAK: CANLI ortama (Ortam türü: Canlı; ortam-riski.mjs) istek atan, KULLANICININ başlattığı her uç
+// ("canli-ortam" izninin koşullu uçları: koşu, Dene, tarama, akış / giriş kaydı, giriş denemesi, giriş sayfası önerisi, servis
+// erişim kontrolü, şema yenileme, REST Dene, servis / servis akışı / uçtan uca koşu ve Dene, CANLI ortamın veritabanı eşlemesindeki
+// bağlantının denenmesi) istekte canliOnay: true ister; yoksa hiçbir şey yapılmadan 409 CANLI_ONAY_GEREKLI döner (arayüz standart
+// "CANLI ortam" penceresini açar). Onay hatırlanmaz: her istek kendi onayını taşır. Zamanlanmış koşu bu uçlardan geçmez; onayı
+// kuralın "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusudur (zamanlama/kurallar.mjs).
 //   kapaliIzinler(vt, yol, g)  zamanlayıcı için: kapalı izinlerin anahtarları (işlem atlanır, kayda "izin kapalı: X")
 // NOT: import.meta KULLANILMAZ.
 import { ortamGetir, senaryoGetir } from '../veritabani/depo.mjs';
@@ -15,18 +21,20 @@ import { etkinSenaryoGirisi, senaryoGirisi, senaryoGirisiniAyikla } from '../sen
 import { modeldekiSqlHedefleri } from '../sql/sorgu-bagdastirici.mjs';
 import { IZIN_TANIMLARI } from './izin-tanimlari.mjs';
 import { riskliOrtamMi } from './ortam-riski.mjs';
+import { tumVeritabanlari } from '../sql/veritabanlari.mjs';
 import { izinGerekli, izinleriOku } from './izinler.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, any>} Govde */
 
-/** Riskli ortamda açık onay (istekte canliOnay: true) yok. */
+/** CANLI ortamda açık onay (istekte canliOnay: true) yok. */
 export class CanliOnayHatasi extends Error {
   /** @param {string} ortamAdi */
   constructor(ortamAdi) {
-    super(`"${ortamAdi}" canlı / riskli bir ortam: bu çalıştırma için açık onay gerekir (koşu penceresinde onaylayın; komut satırında --canli-onay).`);
+    super(`Bu işlem "${ortamAdi}" (CANLI) ortamında yapılacak; istekler gerçek sisteme gider. Devam etmek için onaylayın (komut satırında --canli-onay).`);
     this.name = 'CanliOnayHatasi';
     this.kod = /** @type {const} */ ('CANLI_ONAY_GEREKLI');
+    this.ortamAdi = ortamAdi;
   }
 }
 
@@ -81,6 +89,25 @@ function ekranSenaryosu(vt, yol, g) {
   const s = guvenli(() => senaryoGetir(vt, metin(g.senaryoId)));
   if (!s || !s.ekranId) return { mb: null, giris: null };
   return { mb: guvenli(() => modelBaglami(vt, s.ekranId, senaryoAkisi(s.icerik))), giris: senaryoGirisi(s.icerik) };
+}
+
+/**
+ * Denenen veritabanı bağlantısını eşleyen CANLI ortamların adları (bağlantı kayıtlı değilse ya da veritabanı değilse boş).
+ * @param {Veritabani} vt @param {Govde} g @returns {string[]}
+ */
+function canliEslemeOrtamlari(vt, g) {
+  const projeId = metin(g.projeId);
+  const id = metin(g.id);
+  if (!projeId || !id) return [];
+  const b = guvenli(() => baglantiGetir(vt, id, projeId));
+  if (!b || b.tur !== 'veritabani') return [];
+  /** @type {Set<string>} */
+  const ortamIdleri = new Set();
+  for (const v of guvenli(() => tumVeritabanlari(vt)) ?? []) {
+    if (v.projeId !== projeId) continue;
+    for (const [ortamId, baglantiId] of Object.entries(v.eslemeler ?? {})) if (baglantiId === id) ortamIdleri.add(ortamId);
+  }
+  return [...ortamIdleri].map((oid) => guvenli(() => ortamGetir(vt, oid))).filter((o) => o && o.projeId === projeId && riskliOrtamMi(o)).map((o) => String(o.ad));
 }
 
 /** Modelde "Yeniden giriş" adımı var mı? @param {unknown} model */
@@ -156,10 +183,16 @@ export function gerekenIzinler(vt, yol, g) {
   let canliOnayGerekli = false;
   let ortamAdi = null;
 
-  // Canlı / riskli ortam (tek tanım: ortam-riski.mjs).
+  // CANLI ortam (tek tanım: ortam-riski.mjs).
   if (kosulluMu('canli-ortam', yol)) {
-    const o = ortamBul(vt, g);
-    if (o && riskliOrtamMi(o)) { izinler.add('canli-ortam'); canliOnayGerekli = true; ortamAdi = o.ad; }
+    if (yol === '/platform/entegrasyon/dene') {
+      // Veritabanı bağlantısını dene: bağlantı bir CANLI ortamın veritabanı eşlemesindeyse (SQL > Veritabanları) CANLI sayılır.
+      const adlar = canliEslemeOrtamlari(vt, g);
+      if (adlar.length) { izinler.add('canli-ortam'); canliOnayGerekli = true; ortamAdi = adlar.join(', '); }
+    } else {
+      const o = ortamBul(vt, g);
+      if (o && riskliOrtamMi(o)) { izinler.add('canli-ortam'); canliOnayGerekli = true; ortamAdi = o.ad; }
+    }
   }
 
   // Ekran koşusu / Dene: giriş bilgisi (tarif + girişli senaryo), SQL adımı.
@@ -234,7 +267,7 @@ export function gerekenIzinler(vt, yol, g) {
 }
 
 /**
- * HTTP uçlarının denetimi: kapalı izin → IzinHatasi (işlem YAPILMAZ); riskli ortamda canliOnay: true yoksa CanliOnayHatasi.
+ * HTTP uçlarının denetimi: kapalı izin → IzinHatasi (işlem YAPILMAZ); CANLI ortamda canliOnay: true yoksa CanliOnayHatasi.
  * @param {Veritabani} vt @param {string} yol @param {Govde} g
  */
 export function ucDenetle(vt, yol, g) {
