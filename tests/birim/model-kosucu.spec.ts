@@ -7,7 +7,7 @@
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
 import { ekranModeliniDogrula } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
-import { bulgulariUygula, modelFarki } from '../../scripts/platform/ekranlar/model-farki.mjs';
+import { bulgulariUygula, kosuTanimiFarki, modelFarki } from '../../scripts/platform/ekranlar/model-farki.mjs';
 import { sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
@@ -107,6 +107,53 @@ test.describe('Model şeması sürüm 2', () => {
     expect(b?.yeni).toContain('uyarı: "Limit aşıldı"');
     expect(b?.yeni).toContain('not: "kısa not"');
     expect(b?.eski).not.toBe(b?.yeni);
+  });
+
+  test('tekrar analiz: bulgu başlığı değişen koşu alanlarını kısa yazar ("bekleme: 60 sn → 90 sn"); imza aynı kalır', () => {
+    const yeni = ornekBasvuruModeli();
+    const eski = kopya(yeni);
+    const kosu = (m: Nesne) => ((m.adimlar as Nesne[]).find((a) => a.id === 'hesaplama') as Nesne).kosu as Nesne;
+    const bulgu = () => modelFarki(eski, yeni).find((x) => x.altTur === 'kosuTanimi' && x.adimId === 'hesaplama');
+    // Yalnız süre: başlıkta tek fark; eski/yeni özetleri de süreyi taşır.
+    kosu(eski).zamanAsimiSn = 60;
+    kosu(yeni).zamanAsimiSn = 90;
+    let b = bulgu();
+    expect(b?.baslik).toBe('Adım koşu tanımı: Toplam hesaplanır — bekleme: 60 sn → 90 sn');
+    expect(kosuTanimiFarki(kosu(eski), kosu(yeni))).toEqual(['bekleme: 60 sn → 90 sn']);
+    const imza = b?.imza;
+    // Süre kaldırıldı → varsayılan.
+    delete kosu(yeni).zamanAsimiSn;
+    expect(bulgu()?.baslik).toContain('bekleme: 60 sn → varsayılan');
+    kosu(yeni).zamanAsimiSn = 90;
+    expect(bulgu()?.imza).toBe(imza);
+    // Diğer alanlar: aksiyon süresi, başarı göstergesi, hata, uyarı, not, ekran görüntüsü; en çok üç fark + kalan sayısı.
+    kosu(eski).zamanAsimiSn = 90;
+    (kosu(yeni).aksiyonlar as Nesne[])[0].zamanAsimiSn = 20;
+    kosu(yeni).basariGostergesi = { tur: 'metin', deger: 'Tutar:', secici: '#sonuc' };
+    kosu(yeni).hataGostergesi = { secici: '#hata' };
+    kosu(yeni).uyarilar = [{ metin: 'Limit aşıldı' }];
+    kosu(yeni).not = 'kısa not';
+    kosu(yeni).ekranGoruntusu = true;
+    expect(kosuTanimiFarki(kosu(eski), kosu(yeni))).toEqual([
+      '1. aksiyon: tıkla #hesapla → tıkla #hesapla (en çok 20 sn)',
+      'başarı: metin "Toplam:" (#sonuc) → metin "Tutar:" (#sonuc)',
+      'hata: #uyari → #hata',
+      'uyarı: yok → "Limit aşıldı"',
+      'ekran görüntüsü: kapalı → açık',
+      'not: yok → "kısa not"'
+    ]);
+    b = bulgu();
+    expect(b?.baslik).toBe('Adım koşu tanımı: Toplam hesaplanır — 1. aksiyon: tıkla #hesapla → tıkla #hesapla (en çok 20 sn); başarı: metin "Toplam:" (#sonuc) → metin "Tutar:" (#sonuc); hata: #uyari → #hata; +3 değişiklik');
+    // Özette görünmeyen aksiyon alanı (açıklama) ve bilinmeyen alan: "değişen: …".
+    const e2 = kopya(eski);
+    const y2 = kopya(eski);
+    (kosu(y2).aksiyonlar as Nesne[])[0].aciklama = 'Yeniden hesapla';
+    kosu(y2).cerceve = '#ic';
+    expect(kosuTanimiFarki(kosu(e2), kosu(y2))).toEqual(['1. aksiyon: değişen aciklama', 'değişen: cerceve']);
+    // Koşu tanımı eklendi / kaldırıldı / aynı.
+    expect(kosuTanimiFarki(undefined, kosu(e2))).toEqual(['koşu tanımı eklendi']);
+    expect(kosuTanimiFarki(kosu(e2), null)).toEqual(['koşu tanımı kaldırıldı']);
+    expect(kosuTanimiFarki(kosu(e2), kopya(kosu(e2)))).toEqual([]);
   });
 });
 

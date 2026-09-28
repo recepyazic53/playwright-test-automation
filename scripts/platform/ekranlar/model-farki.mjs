@@ -89,32 +89,85 @@ function senaryoAnahtarlari(alan) {
   return Array.isArray(s) ? s : [s];
 }
 
+/** Tek aksiyonun kısa metni (ör. "tıkla #hesapla (en çok 10 sn)"). @param {any} a */
+function aksiyonMetni(a) {
+  let m;
+  if (a.tur === 'ekranaDon') m = 'ekrana dön';
+  else if (a.tur === 'bekle' && a.sureSn !== undefined) m = `bekle ${a.sureSn} sn`;
+  else m = `${a.tur === 'bekle' ? 'bekle' : a.kosul === 'gorunurse' ? 'görünürse tıkla' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}${a.tur === 'bekle' && a.durum && a.durum !== 'gorunur' ? ` (${a.durum})` : ''}`;
+  if (a.zamanAsimiSn !== undefined) m += ` (en çok ${a.zamanAsimiSn} sn)`;
+  return m;
+}
+/** Başarı göstergesinin kısa metni (veya: seçenekler). @param {any} bg */
+function basariMetni(bg) {
+  const tek = (/** @type {any} */ g) => `${g.tur} "${g.deger}"${g.secici ? ` (${g.secici})` : ''}`;
+  return bg.tur === 'veya' && Array.isArray(bg.secenekler) ? bg.secenekler.filter(nesneMi).map(tek).join(' veya ') : tek(bg);
+}
+/** @param {any} k */
+const aksiyonListesi = (k) => (nesneMi(k) && Array.isArray(k.aksiyonlar) ? k.aksiyonlar.filter(nesneMi) : []);
+/** @param {any} k */
+const uyariListesi = (k) => (nesneMi(k) && Array.isArray(k.uyarilar) ? k.uyarilar.filter((u) => nesneMi(u) && typeof u.metin === 'string') : []);
+
 /** Adımın koşu tanımının (sürüm 2: aksiyonlar, başarı/hata göstergesi) kısa, insan-okur özeti. */
 export function kosuTanimiMetni(k) {
   if (!nesneMi(k)) return 'yok';
   const parcalar = [];
   // Görünen her koşu alanı özette yer alır (yalnız bekleme süresi / uyarı / not değişince eski ve yeni satır aynı görünmesin).
-  for (const a of Array.isArray(k.aksiyonlar) ? k.aksiyonlar : []) {
-    if (!nesneMi(a)) continue;
-    let m;
-    if (a.tur === 'ekranaDon') m = 'ekrana dön';
-    else if (a.tur === 'bekle' && a.sureSn !== undefined) m = `bekle ${a.sureSn} sn`;
-    else m = `${a.tur === 'bekle' ? 'bekle' : a.kosul === 'gorunurse' ? 'görünürse tıkla' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}${a.tur === 'bekle' && a.durum && a.durum !== 'gorunur' ? ` (${a.durum})` : ''}`;
-    if (a.zamanAsimiSn !== undefined) m += ` (en çok ${a.zamanAsimiSn} sn)`;
-    parcalar.push(m);
-  }
-  const bg = k.basariGostergesi;
-  if (nesneMi(bg)) {
-    const tek = (/** @type {any} */ g) => `${g.tur} "${g.deger}"${g.secici ? ` (${g.secici})` : ''}`;
-    parcalar.push(`başarı: ${bg.tur === 'veya' && Array.isArray(bg.secenekler) ? bg.secenekler.filter(nesneMi).map(tek).join(' veya ') : tek(bg)}`);
-  }
+  for (const a of aksiyonListesi(k)) parcalar.push(aksiyonMetni(a));
+  if (nesneMi(k.basariGostergesi)) parcalar.push(`başarı: ${basariMetni(k.basariGostergesi)}`);
   if (nesneMi(k.hataGostergesi)) parcalar.push(`hata: ${k.hataGostergesi.secici}`);
-  const uyarilar = Array.isArray(k.uyarilar) ? k.uyarilar.filter((u) => nesneMi(u) && typeof u.metin === 'string') : [];
+  const uyarilar = uyariListesi(k);
   if (uyarilar.length) parcalar.push(`uyarı: ${uyarilar.map((u) => `"${u.metin}"`).join(', ')}`);
   if (k.zamanAsimiSn !== undefined) parcalar.push(`bekleme ${k.zamanAsimiSn} sn`);
   if (k.ekranGoruntusu === true) parcalar.push('ekran görüntüsü');
   if (typeof k.not === 'string' && k.not) parcalar.push(`not: "${k.not}"`);
   return parcalar.join(' · ') || 'boş';
+}
+
+/**
+ * İki koşu tanımı arasındaki farkların kısa listesi (ör. "bekleme: 60 sn → 90 sn", "2. aksiyon: tıkla #a → tıkla #b",
+ * "not: yok → \"kısa\""). Özette görünmeyen alanlar (ör. aksiyonun çerçevesi) "değişen: <alan>" olarak yazılır.
+ * @param {unknown} eski @param {unknown} yeni @returns {string[]}
+ */
+export function kosuTanimiFarki(eski, yeni) {
+  if (!nesneMi(eski) && !nesneMi(yeni)) return [];
+  if (!nesneMi(eski)) return ['koşu tanımı eklendi'];
+  if (!nesneMi(yeni)) return ['koşu tanımı kaldırıldı'];
+  const farklar = [];
+  const ok = (/** @type {string} */ ad, /** @type {string} */ e, /** @type {string} */ y) => farklar.push(`${ad}: ${e} → ${y}`);
+  const ea = aksiyonListesi(eski);
+  const ya = aksiyonListesi(yeni);
+  if (ea.length !== ya.length) ok('aksiyonlar', ea.map(aksiyonMetni).join(', ') || 'yok', ya.map(aksiyonMetni).join(', ') || 'yok');
+  else {
+    ea.forEach((a, i) => {
+      const b = ya[i];
+      if (esit(a, b)) return;
+      const am = aksiyonMetni(a);
+      const bm = aksiyonMetni(b);
+      if (am !== bm) ok(`${i + 1}. aksiyon`, am, bm);
+      else farklar.push(`${i + 1}. aksiyon: değişen ${[...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !esit(a[k] ?? null, b[k] ?? null)).join(', ')}`);
+    });
+  }
+  if (!esit(eski.basariGostergesi ?? null, yeni.basariGostergesi ?? null)) {
+    ok('başarı', nesneMi(eski.basariGostergesi) ? basariMetni(eski.basariGostergesi) : 'yok', nesneMi(yeni.basariGostergesi) ? basariMetni(yeni.basariGostergesi) : 'yok');
+  }
+  if (!esit(eski.hataGostergesi ?? null, yeni.hataGostergesi ?? null)) {
+    ok('hata', nesneMi(eski.hataGostergesi) ? String(eski.hataGostergesi.secici) : 'yok', nesneMi(yeni.hataGostergesi) ? String(yeni.hataGostergesi.secici) : 'yok');
+  }
+  if (!esit(eski.uyarilar ?? null, yeni.uyarilar ?? null)) {
+    const m = (/** @type {any} */ k) => uyariListesi(k).map((u) => `"${u.metin}"`).join(', ') || 'yok';
+    if (m(eski) !== m(yeni)) ok('uyarı', m(eski), m(yeni)); else farklar.push('değişen: uyarilar');
+  }
+  if (!esit(eski.zamanAsimiSn ?? null, yeni.zamanAsimiSn ?? null)) {
+    const m = (/** @type {unknown} */ v) => (v === undefined || v === null ? 'varsayılan' : `${v} sn`);
+    ok('bekleme', m(eski.zamanAsimiSn), m(yeni.zamanAsimiSn));
+  }
+  if ((eski.ekranGoruntusu === true) !== (yeni.ekranGoruntusu === true)) ok('ekran görüntüsü', eski.ekranGoruntusu === true ? 'açık' : 'kapalı', yeni.ekranGoruntusu === true ? 'açık' : 'kapalı');
+  if ((eski.not || '') !== (yeni.not || '')) ok('not', eski.not ? `"${eski.not}"` : 'yok', yeni.not ? `"${yeni.not}"` : 'yok');
+  const bilinen = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'not']);
+  const digerleri = [...new Set([...Object.keys(eski), ...Object.keys(yeni)])].filter((k) => !bilinen.has(k) && !esit(eski[k] ?? null, yeni[k] ?? null));
+  if (digerleri.length) farklar.push(`değişen: ${digerleri.join(', ')}`);
+  return farklar;
 }
 
 /**
@@ -129,6 +182,12 @@ function kosuTanimiMetinleri(eski, yeni) {
   const b = nesneMi(yeni) ? yeni : {};
   const degisen = [...new Set([...Object.keys(a), ...Object.keys(b)])].filter((k) => !esit(a[k] ?? null, b[k] ?? null));
   return { eski: e, yeni: degisen.length ? `${y} (değişen: ${degisen.join(', ')})` : y };
+}
+/** Bulgu başlığına eklenen kısa fark (en çok üç fark, kalanı "+N"): " — bekleme: 60 sn → 90 sn". @param {unknown} eski @param {unknown} yeni */
+function kosuFarki(eski, yeni) {
+  const f = kosuTanimiFarki(eski, yeni);
+  if (!f.length) return '';
+  return ` — ${f.slice(0, 3).join('; ')}${f.length > 3 ? `; +${f.length - 3} değişiklik` : ''}`;
 }
 
 /** Görünürlüğün kısa, insan-okur açıklaması. */
@@ -256,7 +315,7 @@ export function modelFarki(eski, yeni) {
     const ek = e.adimlar.get(id);
     if (!ek || esit(ek.adim.kosu || null, ya.kosu || null)) continue;
     bulgular.push(bulguYap({
-      tur: 'adimDegisikligi', altTur: 'kosuTanimi', hedef: id, adimId: id, baslik: `Adım koşu tanımı: ${ya.baslik || id}`, konum: `${ek.sira + 1}. adım`,
+      tur: 'adimDegisikligi', altTur: 'kosuTanimi', hedef: id, adimId: id, baslik: `Adım koşu tanımı: ${ya.baslik || id}${kosuFarki(ek.adim.kosu, ya.kosu)}`, konum: `${ek.sira + 1}. adım`,
       ...kosuTanimiMetinleri(ek.adim.kosu, ya.kosu), imzaDegeri: ya.kosu || null
     }));
   }
