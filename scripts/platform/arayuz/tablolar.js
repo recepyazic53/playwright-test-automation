@@ -573,7 +573,10 @@ export async function tablolarBolumu(govde, proje) {
     // Önleme: yeni tablo kaydedilmeden önce başlıkları aynı (esnek) tablo varsa "onu kullan / yine de yeni oluştur" sorulur.
     if (!is.id && !is.baglam) {
       let benzerler = [];
-      try { benzerler = (await api('/platform/tablo/benzer', { govde: { projeId: proje.id, sutunlar: adlar, ad: is.ad.trim() } })).benzerler; } catch { benzerler = []; }
+      // Tek sütunlu tabloda başlık az ayırt edicidir: satır değerleri de gönderilir (örtüşme sunucuda bakılır; değer geri dönmez).
+      const tekSutun = is.sutunlar.length === 1 ? is.sutunlar[0].ad : null;
+      const satirlar = tekSutun === null ? undefined : is.satirlar.slice(0, 500).map((r) => ({ [adlar[0]]: r.degerler[tekSutun] ?? null }));
+      try { benzerler = (await api('/platform/tablo/benzer', { govde: { projeId: proje.id, sutunlar: adlar, ad: is.ad.trim(), satirlar } })).benzerler; } catch { benzerler = []; }
       if (benzerler.length) {
         const secim = await secenekIste({
           baslik: 'Benzer tablo var', ikonAd: 'uyari',
