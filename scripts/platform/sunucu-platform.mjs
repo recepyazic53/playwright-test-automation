@@ -1492,11 +1492,13 @@ const POST_UCLARI = new Map([
       // Satır seçimleri (${Tablo.Sütun} değerlerinin koşuda kullanılacak satırı): verilmezse mevcut korunur.
       ...(g.tabloSecimleri !== undefined ? { tabloSecimleri: g.tabloSecimleri } : {}),
       // Çalıştırma biçimi (tablodan çoklu satır; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null / {} kaldırır.
-      ...(g.veriKosulari !== undefined ? { veriKosulari: g.veriKosulari } : {})
+      ...(g.veriKosulari !== undefined ? { veriKosulari: g.veriKosulari } : {}),
+      // Kayıt grubu "Yeni" + "tabloya da ekle": grubun değerleri tabloya yeni satır (senaryoyla tek işlemde; yanıtta değer yok).
+      ...(g.yeniTabloSatirlari !== undefined ? { yeniTabloSatirlari: g.yeniTabloSatirlari } : {})
     }, { kosuyorMu });
     // Formda yüklenen (henüz sahipsiz) şifreli dosyalar bu senaryoya bağlanır (sahipsiz temizliği silmesin).
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
-    return { id: sonuc.id, uyarilar: sonuc.uyarilar };
+    return { id: sonuc.id, uyarilar: sonuc.uyarilar, ...(sonuc.tabloSatirlari ? { tabloSatirlari: sonuc.tabloSatirlari } : {}) };
   }],
   // Koşu diyaloğu: tahmini test sayısı (tablodan çoklu satır; koşu anı ezmesiyle) ve üst sınırı aşanlar. Yalnız hesap.
   ['/platform/senaryolar/veri-kosusu-tahmini', (db, g) => veriKosusuTahminleri(db, kimlikAl(g.projeId, 'projeId'), { ortamId: g.ortamId, senaryoIdleri: g.senaryoIdleri, kip: g.kip })],

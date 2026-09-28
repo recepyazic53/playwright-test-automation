@@ -50,6 +50,17 @@ export const degerBasvurusuYaz = (tablo, sutun, etiket = '') => `\${${basvuru(ta
 /** @param {string} tablo @param {string} sutun @param {string} [etiket] @param {string} [bicim] tarih biçimi */
 export const basvuru = (tablo, sutun, etiket = '', bicim = '') => `${tablo}${etiket ? `[${etiket}]` : ''}.${sutun}${bicim ? `|${bicim}` : ''}`;
 
+/**
+ * Gizli sütun değerinin SATIR SEÇİMİ için kısmi maskesi: ilk ve son karakter açık, arası "•" (ör. "4•••••••••8"); 4 karakterden kısa
+ * değer tam maske ("•••"). YALNIZ sunucu üretir (satır seçimi ucu); tam değer arayüze gitmez. Rapor, hata metni ve Tablolar ekranı
+ * tam maskeyle kalır.
+ * @param {unknown} deger @returns {string}
+ */
+export function kismiMaske(deger) {
+  const k = Array.from(String(deger ?? ''));
+  return k.length < 4 ? '•••' : `${k[0]}${'•'.repeat(k.length - 2)}${k[k.length - 1]}`;
+}
+
 /** Seçim grubunun anahtarı. @param {string} tabloId @param {string} [etiket] */
 export const grupAnahtari = (tabloId, etiket = '') => `${tabloId}|${etiket}`;
 

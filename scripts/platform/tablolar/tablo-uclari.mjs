@@ -12,6 +12,7 @@ import { birlestirmeGecmisi, birlestirmeyiGeriAl, kaynaklariSil, tablolariBirles
 import { benzerTablolar } from './tablo-benzerligi.mjs';
 import { kisiAlanlariniBagla } from './kisi-baglama.mjs';
 import { otomatikYedekAl } from '../yedek.mjs';
+import { kismiMaske } from './tablo-secimi.mjs';
 
 /** O an koşan ekran senaryosu denetimi (sunucu-platform.mjs koşucuyu verince ayarlar; tablo değişikliğinde koşan senaryo atlanır). */
 let kosuyorMu = (/** @type {string} */ _dosya, /** @type {string} */ _ad) => false;
@@ -30,12 +31,40 @@ function kimlik(d, alan = 'id') {
 /** @param {unknown} d @param {string} alan */
 const istegeBagliKimlik = (d, alan) => (d === undefined || d === null || d === '' ? undefined : kimlik(d, alan));
 
+/**
+ * Satır seçimi için tablolar: gizli sütun değeri null, yanında yalnız kısmi maskesi (satır.gizliMaskeleri: sütun → "4•••••8").
+ * @param {Veritabani} db @param {string} projeId
+ */
+export function secimTablolari(db, projeId) {
+  return tablolariListele(db, projeId, { cozulsun: true }).map((t) => {
+    const gizliler = t.sutunlar.filter((c) => c.gizli).map((c) => c.ad);
+    if (!gizliler.length) return t;
+    return {
+      ...t,
+      satirlar: t.satirlar.map((r) => {
+        /** @type {Record<string, string>} */
+        const gizliMaskeleri = {};
+        const degerler = { ...r.degerler };
+        for (const ad of gizliler) {
+          const d = degerler[ad];
+          if (d !== null && d !== undefined && d !== '') gizliMaskeleri[ad] = kismiMaske(d);
+          degerler[ad] = null;
+        }
+        return { ...r, degerler, gizliMaskeleri };
+      })
+    };
+  });
+}
+
 /** @type {Array<[string, (db: Veritabani, q: URLSearchParams) => Record<string, unknown>]>} */
 export const TABLO_GET_UCLARI = [
   // baglam=1: bağlam profilleri de tablo olarak (Tablolar ekranı); diğer ekranlar yalnız test verisi tablolarını görür. Tablolar
   // ekranı için ayrıca ekran adları ve tabloların hangi ekranların alan bağlarında kullanıldığı (liste gruplaması; yalnız gösterim).
+  // secim=1 (senaryo formunun satır seçimi): gizli sütunların değeri null kalır; yalnız KISMİ maskesi (ilk + son karakter,
+  // kismiMaske) satırın gizliMaskeleri'nde döner. Tam gizli değer bu yanıtta da yoktur.
   ['/platform/tablolar', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
+    if (q.get('secim') === '1') return { tablolar: secimTablolari(db, projeId) };
     const baglamDahil = q.get('baglam') === '1';
     return { tablolar: tablolariListele(db, projeId, { baglamDahil }), ...(baglamDahil ? tabloEkranKullanimi(db, projeId) : {}) };
   }],

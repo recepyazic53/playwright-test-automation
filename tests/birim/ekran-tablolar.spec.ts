@@ -224,8 +224,10 @@ test.describe('ekran alanları tablolardan', () => {
     expect(JSON.stringify(f)).not.toContain(GIZLI);
     await page.goto(`/#/senaryolar/yeni/${bEkranId}`);
     const alan = page.locator(`[data-alan="${metin.id}"]`);
-    await alan.getByRole('button', { name: /Tablodan: Kart → CVV/ }).click();
-    await expect(alan.locator('input[type="text"]')).toHaveValue('${Kart.CVV}');
+    await alan.getByRole('button', { name: /Tablodan: Kart › CVV/ }).click();
+    // Ham ${…} yerine anlaşılır rozet.
+    await expect(alan.locator('.tablodan-deger')).toContainText('Tablodan: Kart › CVV');
+    await expect(alan.getByText('${Kart.CVV}')).toHaveCount(0);
     await expect(page.getByText(GIZLI)).toHaveCount(0);
     // Alan başlığındaki "Tablodan" / "Bilerek boş bırak" yandaki alanın etiketine binmez: başlık öğeleri kendi alan kutusunda
     // kalır (dar ızgarada alt satıra iner).
