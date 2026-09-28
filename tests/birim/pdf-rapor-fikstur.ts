@@ -19,6 +19,7 @@ import { kuralKaydet, tetiklemeYaz } from '../../scripts/platform/zamanlama/kura
 import { tabloKaydet } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
 import { kosuKaydet, kosuyuBitir, sonucKaydet } from '../../scripts/platform/veritabani/sonuc-deposu.mjs';
 import { servisAkisKosusuKaydet, servisAkisiKaydet, servisKaydet, servisKosusuKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
+import { ekipKaydet, raporIsaretiKaydet } from '../../scripts/platform/ayarlar/rapor-verileri.mjs';
 
 export const RAPOR_SIMDI = new Date(2026, 8, 28, 12, 0);
 export const GIZLI_PAROLA = 'Cok-Gizli-Parola-9';
@@ -307,3 +308,47 @@ export function genelVeriKur(vt: Veritabani, f: CokluFikstur): GenelFikstur {
 export const genelGirdi = (f: RaporFiksturu, ek: Record<string, unknown> = {}): Record<string, unknown> => ({
   projeId: f.projeId, kapsam: 'genel', donem: { tur: 'son14' }, karsilastir: true, ortamId: null, secenekler: { hatalar: true, adres: false, goruntuler: false }, ...ek
 });
+
+/** A4 fikstürünün uygulama sürümleri: bu dönemin ilk 7 günü ve son 7 günü. */
+export const SURUM_ILK = '2.3.0';
+export const SURUM_SON = '2.4.0';
+export type A4Fikstur = GenelFikstur & { kayitEkibi: string; altyapiEkibi: string };
+
+/**
+ * A4 (rapor verileri) eki — genel fikstürün üstüne kullanıcı kararlarını yazar (Ayarlar > Raporlar ile aynı depo işlevleri):
+ *   - Ekipler: "Kayıt ekibi", "Altyapı ekibi".
+ *   - Başvuru (ekran): kritik, Kayıt ekibi, test süresi eşiği 1.200 ms (tam koşu test süreleri 1.000–1.500 ms → p95 eşiği aşar).
+ *   - Kayıt Servisi: Altyapı ekibi, çağrı süresi eşiği 400 ms (POST /kayit 450 ms → aşar), GET metodu eşiği 500 ms (300 ms → içinde).
+ *   - Bildirim Servisi: kritik (son çağrısı geçti). Kayıt akışı (servis akışı): kritik (son koşusu 8. gün hata → kaldı).
+ * surumler: true ise bu dönemin koşularına uygulama sürümü etiketi yazılır (ilk 7 gün SURUM_ILK, son 7 gün SURUM_SON; önceki dönem
+ * ve geriye bakış etiketsiz) — koşu kaydındaki etiketin (kosular.ozet_json.uygulamaSurumu / servis_kosulari.uygulama_surumu) benzetimi.
+ */
+export function a4VeriKur(vt: Veritabani, f: GenelFikstur, s: { isaretler?: boolean; surumler?: boolean } = {}): A4Fikstur {
+  const { projeId } = f;
+  let kayitEkibi = '';
+  let altyapiEkibi = '';
+  if (s.isaretler !== false) {
+    kayitEkibi = ekipKaydet(vt, { projeId, ad: 'Kayıt ekibi' });
+    altyapiEkibi = ekipKaydet(vt, { projeId, ad: 'Altyapı ekibi' });
+    raporIsaretiKaydet(vt, { projeId, ogeTuru: 'ekran', ogeId: f.ekranId, kritik: true, ekipId: kayitEkibi, sureEsigiMs: 1200 });
+    raporIsaretiKaydet(vt, { projeId, ogeTuru: 'servis', ogeId: f.servisId, ekipId: altyapiEkibi, sureEsigiMs: 400, metotEsikleri: { 'GET /kayit/${id}': 500 } });
+    raporIsaretiKaydet(vt, { projeId, ogeTuru: 'servis', ogeId: f.servis2Id, kritik: true });
+    raporIsaretiKaydet(vt, { projeId, ogeTuru: 'akis', ogeId: f.akisId, kritik: true });
+  }
+  if (s.surumler !== false) {
+    const bas = new Date(2026, 8, 15).getTime();
+    const surum = (z: unknown): string | null => {
+      const gun = Math.floor((Date.parse(String(z)) - bas) / 86_400_000);
+      return gun < 0 ? null : gun < 7 ? SURUM_ILK : SURUM_SON;
+    };
+    for (const k of vt.tumu('SELECT id, baslangic, ozet_json FROM kosular WHERE proje_id = ?', [projeId])) {
+      const v = surum(k.baslangic);
+      if (v) vt.calistir('UPDATE kosular SET ozet_json = ? WHERE id = ?', [JSON.stringify({ ...JSON.parse(String(k.ozet_json || '{}')), uygulamaSurumu: v }), k.id]);
+    }
+    for (const k of vt.tumu('SELECT id, baslangic FROM servis_kosulari WHERE proje_id = ?', [projeId])) {
+      const v = surum(k.baslangic);
+      if (v) vt.calistir('UPDATE servis_kosulari SET uygulama_surumu = ? WHERE id = ?', [v, k.id]);
+    }
+  }
+  return { ...f, kayitEkibi, altyapiEkibi };
+}
