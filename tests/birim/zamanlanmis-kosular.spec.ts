@@ -16,6 +16,8 @@ import {
   GECMIS_SINIRI, kuralEtkinlestir, kuralKaydet, kuralSil, kurallariListele, tetiklemeYaz, tumGecmis, type Kural, type Tetikleme
 } from '../../scripts/platform/zamanlama/kurallar.mjs';
 import { ATLANDI_MESAJI, zamanlayiciOlustur, zamanliKosuyuYurut, type YurutmeBagimliliklari } from '../../scripts/platform/zamanlama/zamanlayici.mjs';
+import { servisAkisiKaydet, servisKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
+import { izinDegistir } from '../../scripts/platform/guvenlik/izinler.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, geciciKlasor, izinleriAc } from './platform-ortak';
 
@@ -255,6 +257,59 @@ test('yalnız servis akışı kapsamı: sahte akış koşucusu çağrılır, sen
   }
 });
 
+test('uçtan uca akışlar: kuralda seçilir (yalnız uçtan uca akış), koşuda sahte koşucuyla çağrılır; izin kapalıysa atlanır ve kayda geçer; riskli ortamda onay kural kaydında', async () => {
+  const klasor = geciciKlasor('zamanlama-uctan');
+  const vt: Veritabani = await veritabaniniHazirla(join(klasor.yol, 'platform.db'));
+  try {
+    await kasaOlustur(vt, 'Gecici-Zamanlama-3', { kdf: HIZLI_KDF });
+    izinleriAc(vt);
+    const projeId = projeKaydet(vt, { ad: 'Örnek proje' });
+    const ortamId = ortamKaydet(vt, { projeId, ad: 'Deneme', tabanUrl: 'https://test.ornek.invalid', varsayilan: true, ayarlar: { riskli: false } });
+    const riskliOrtam = ortamKaydet(vt, { projeId, ad: 'Ana sistem', tabanUrl: 'https://ana.ornek.invalid', ayarlar: { riskli: true } });
+    const servisId = servisKaydet(vt, { projeId, anahtar: 's', ad: 'S', ayarlar: { yol: '/s.asmx' } });
+    const senaryoId = servisSenaryosuKaydet(vt, { projeId, servisId, baslik: 'Op', icerik: { operasyon: 'Op', govde: '<x/>', kontroller: [] } });
+    const adimlar = [{ ad: 'Op', servisId, senaryoId }];
+    const uctan = servisAkisiKaydet(vt, { projeId, baslik: 'Uçtan uca', icerik: { adimlar, uctanUca: true } });
+    const servisAkisi = servisAkisiKaydet(vt, { projeId, baslik: 'Servis akışı', icerik: { adimlar } });
+    const temel = { ad: 'Gece uçtan uca', ortamId, kapsam: { senaryolar: 'yok', uctanUcaAkisIdleri: [uctan] }, zaman: { tur: 'gunluk', saat: '02:00' } };
+    // Yalnız uçtan uca akış seçilebilir; boş kapsam reddedilir; riskli ortamda canlı onayı kural kaydında istenir.
+    expect(() => kuralKaydet(vt, projeId, { ...temel, kapsam: { senaryolar: 'yok', uctanUcaAkisIdleri: [servisAkisi] } })).toThrow('uçtan uca akışlardan biri bulunamadı');
+    expect(() => kuralKaydet(vt, projeId, { ...temel, kapsam: { senaryolar: 'yok' } })).toThrow('en az bir uçtan uca akış');
+    expect(() => kuralKaydet(vt, projeId, { ...temel, ortamId: riskliOrtam })).toThrow('Canlı ortamda zamanlanmış koşuya izin veriyorum');
+    expect(kuralKaydet(vt, projeId, { ...temel, ad: 'Riskli', ortamId: riskliOrtam, canliOnay: true }).canliOnay).toBe(true);
+    const kural = kuralKaydet(vt, projeId, temel);
+    expect(kural.kapsam).toEqual({ senaryolar: 'yok', ekranIdleri: [], servisAkisIdleri: [], uctanUcaAkisIdleri: [uctan] });
+    expect(kurallariListele(vt, projeId).find((k) => k.id === kural.id)?.kapsam.uctanUcaAkisIdleri).toEqual([uctan]);
+
+    const s = sahteBagimliliklar([]);
+    const cagrilar: Array<unknown> = [];
+    const bag = { ...s.bag, uctanUcaCalistir: async (_vt: Veritabani, p: string, girdi: { akisId: string; ortamId: string }) => { cagrilar.push({ p, girdi }); return { kosuId: 'uu-kosu-1', durum: 'basarili' }; } };
+    const r = await zamanliKosuyuYurut(vt, kural, 'zamanli-uu', bag);
+    expect(r).toMatchObject({ durum: 'tamamlandi', kosuId: null, akisKosulari: [{ akisId: uctan, kosuId: 'uu-kosu-1', durum: 'basarili', uctanUca: true }] });
+    expect(r.mesaj).toBe('1/1 uçtan uca akış başarılı');
+    expect(cagrilar).toEqual([{ p: projeId, girdi: { akisId: uctan, ortamId } }]);
+    expect(s.akislar).toHaveLength(0);
+    // Ön denetim / koşu hatası: akış "hata" olarak kayda geçer.
+    const hatali = await zamanliKosuyuYurut(vt, kural, 'zamanli-uu-2', { ...s.bag, uctanUcaCalistir: async () => { throw new Error('Koşu başlamadı: 1. adım'); } });
+    expect(hatali).toMatchObject({ durum: 'basarisiz', akisKosulari: [{ akisId: uctan, durum: 'hata', uctanUca: true }] });
+    expect(hatali.mesaj).toContain('Uçtan uca akış: Koşu başlamadı');
+    // Arka planda izin kapalı (servis istekleri): akış koşmaz, atlanır ve "izin kapalı" kayda geçer.
+    izinDegistir(vt, 'servis-istekleri', false);
+    cagrilar.length = 0;
+    const atlanan = await zamanliKosuyuYurut(vt, kural, 'zamanli-uu-3', bag);
+    expect(atlanan).toMatchObject({ durum: 'atlandi', akisKosulari: [{ akisId: uctan, kosuId: null, durum: 'atlandi', uctanUca: true }] });
+    expect(atlanan.mesaj).toContain('izin kapalı');
+    expect(cagrilar).toHaveLength(0);
+    // Bu alandan önce kaydedilmiş kural (uctanUcaAkisIdleri yok) önceki gibi çalışır.
+    const eski: Kural = { ...kural, kapsam: { senaryolar: 'yok', ekranIdleri: [], servisAkisIdleri: ['a1'] } };
+    izinleriAc(vt);
+    expect((await zamanliKosuyuYurut(vt, eski, 'zamanli-uu-4', bag)).akisKosulari).toEqual([{ akisId: 'a1', kosuId: 'akis-kosu-1', durum: 'basarili' }]);
+  } finally {
+    vt.kapat();
+    klasor.temizle();
+  }
+});
+
 test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
   const PAROLA = `Gecici-ZamanliUI-${randomBytes(6).toString('hex')}`;
   let nobetci: Nobetci;
@@ -328,6 +383,33 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     await satir.getByRole('button', { name: 'Gece tam koşu: sil' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Sil' }).click();
     await expect(kart.getByText('Zamanlanmış koşu yok.')).toBeVisible();
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('uçtan uca akış seçimi: formda ayrı liste, kural satırında görünür; 390 px taşma yok', async () => {
+    const r = await nobetciApi(nobetci, '/platform/servis/rest/kaydet', { projeId, anahtar: 'stok', ad: 'Stok', tabanlar: {}, uclar: [{ ad: 'liste', metot: 'GET', yol: '/liste' }], senaryolar: [] }) as { id: string };
+    const kayit = await nobetciApi(nobetci, '/platform/uctan-uca/kaydet', { projeId, baslik: 'Stok uçtan uca', kapsam: 'ikisi',
+      icerik: { adimlar: [{ id: 'a1', ad: 'Liste', tur: 'operasyon', servisId: r.id, operasyon: 'liste' }] } }) as { id?: string; mesaj?: string };
+    expect(kayit.id, String(kayit.mesaj ?? '')).toBeTruthy();
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 390, height: 900 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto('/#/ayarlar/kosu');
+    const kart = page.getByRole('region', { name: 'Zamanlanmış koşular' });
+    await kart.getByRole('button', { name: '+ Zamanlanmış koşu ekle' }).click();
+    const form = page.getByRole('form', { name: 'Yeni zamanlanmış koşu' });
+    await form.getByLabel('Ad').fill('Gece uçtan uca');
+    await form.getByRole('combobox', { name: 'Senaryolar' }).selectOption('yok');
+    const liste = form.getByRole('group', { name: 'Uçtan uca akışlar (isteğe bağlı)' });
+    await liste.getByRole('checkbox', { name: 'Stok uçtan uca' }).check();
+    await form.getByRole('checkbox', { name: 'Etkin', exact: true }).uncheck();
+    const genislik = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(genislik).toBeLessThanOrEqual(390);
+    await form.getByRole('button', { name: 'Kaydet' }).click();
+    await expect(form).toBeHidden();
+    await expect(kart.getByRole('listitem').filter({ hasText: 'Gece uçtan uca' }).getByText('Uçtan uca akışlar: Stok uçtan uca', { exact: false })).toBeVisible();
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

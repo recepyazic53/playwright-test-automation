@@ -214,7 +214,7 @@ import { ekranTabloDonusumu } from './tablolar/ekran-donusumu.mjs';
 import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
 import { SQL_KULLANIM_GET_UCLARI, SQL_KULLANIM_POST_UCLARI } from './sql/sql-kullanimi.mjs';
 import { AKIS_SENARYO_GET_UCLARI, AKIS_SENARYO_POST_UCLARI } from './servisler/akis-senaryosu.mjs';
-import { UCTAN_UCA_GET_UCLARI, UCTAN_UCA_POST_UCLARI, uctanUcaKosucusuAyarla } from './akislar/uctan-uca.mjs';
+import { UCTAN_UCA_GET_UCLARI, UCTAN_UCA_POST_UCLARI, uctanUcaCalistir, uctanUcaKosucusuAyarla } from './akislar/uctan-uca.mjs';
 import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
 import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
 import { servisAkisiCalistir } from './servisler/servis-akislari.mjs';
@@ -443,6 +443,7 @@ const zamanlayici = zamanlayiciOlustur({
     senaryolar: (d, projeId, ortamId) => senaryoListesi(d, projeId, ortamId).senaryolar,
     senaryoCalistir: (d, govde) => senaryoCalistir(d, govde, kosucu, calistirmaSecenekleri(d)),
     servisAkisiCalistir: (d, projeId, girdi) => servisAkisiCalistir(d, projeId, girdi),
+    uctanUcaCalistir: (d, projeId, girdi) => uctanUcaCalistir(d, projeId, girdi),
     bildir: (d, kosuId, baglantiIdleri) => kosuBittiBildir(d, kosuId, { baglantiIdleri }),
     devamMi
   }),

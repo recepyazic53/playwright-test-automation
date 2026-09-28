@@ -153,7 +153,7 @@ test.describe('uçtan uca akış motoru', () => {
     expect(es.senaryolar).toHaveLength(1);
     expect(es.senaryolar[0]).toMatchObject({ id: ekranSenaryoId, ekranAd: 'Örnek Başvuru', ortamIdleri: expect.arrayContaining([TEST, CANLI]) });
     expect(es.senaryolar[0].alanlar.map((a: Nesne) => a.anahtar)).toEqual(expect.arrayContaining(['adSoyad', 'indirimOrani', 'urun']));
-    // Servis akışı uçları / zamanlanmış koşu uçtan uca akışı koşmaz; servis akış senaryosunda da seçilemez.
+    // Servis akışı uçları uçtan uca akışı koşmaz (zamanlanmış koşu uctanUcaCalistir ile koşar); servis akış senaryosunda da seçilemez.
     await expect(servisAkisiCalistir(vt, projeId, { akisId, ortamId: TEST, tur: 'kosu' })).rejects.toThrow('Uçtan uca akışlar ekranından koşulur');
     expect(soap.istekler.filter((x) => x.yontem === 'POST')).toHaveLength(0);
   });

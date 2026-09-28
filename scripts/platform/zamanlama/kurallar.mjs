@@ -55,7 +55,9 @@ const kimlikListesi = (d) => (Array.isArray(d) ? [...new Set(d.filter((x) => typ
 
 /**
  * Kuralı doğrular ve kaydeder (yeni ya da düzenleme). girdi: { id?, ad, ortamId, kapsam: { senaryolar: 'tum' | 'ekranlar' | 'yok',
- * ekranIdleri?, servisAkisIdleri? }, zaman, etkin?, bildirimBaglantiId?, canliOnay? }
+ * ekranIdleri?, servisAkisIdleri?, uctanUcaAkisIdleri? }, zaman, etkin?, bildirimBaglantiId?, canliOnay? }
+ * uctanUcaAkisIdleri: uçtan uca akışlar (servis, ekran ve SQL adımları; akislar/uctan-uca.mjs). Riskli ortamda canlı onayı kural
+ * kaydında alınır (diğer kapsamlarla aynı); koşuda izinler aynı biçimde denetlenir.
  * @param {Veritabani} vt @param {string} projeId @param {unknown} girdi @param {{ simdi?: Date }} [s]
  * @returns {Kural}
  */
@@ -93,7 +95,14 @@ export function kuralKaydet(vt, projeId, girdi, s = {}) {
     const a = servisAkisiGetir(vt, id);
     if (!a || a.projeId !== projeId || a.tur === 'oturum') throw new DepoHatasi('Seçilen servis akışlarından biri bulunamadı.');
   }
-  if (senaryolar === 'yok' && !servisAkisIdleri.length) throw new DepoHatasi('Koşulacak bir şey seçin: senaryolar ya da en az bir servis akışı.');
+  const uctanUcaAkisIdleri = kimlikListesi(k.uctanUcaAkisIdleri);
+  for (const id of uctanUcaAkisIdleri) {
+    const a = servisAkisiGetir(vt, id);
+    if (!a || a.projeId !== projeId || a.tur !== 'akis' || a.icerik.uctanUca !== true) throw new DepoHatasi('Seçilen uçtan uca akışlardan biri bulunamadı.');
+  }
+  if (senaryolar === 'yok' && !servisAkisIdleri.length && !uctanUcaAkisIdleri.length) {
+    throw new DepoHatasi('Koşulacak bir şey seçin: senaryolar, en az bir servis akışı ya da en az bir uçtan uca akış.');
+  }
 
   const zaman = zamanDogrula(g.zaman);
 
@@ -108,7 +117,7 @@ export function kuralKaydet(vt, projeId, girdi, s = {}) {
   /** @type {Kural} */
   const kural = {
     id: mevcut?.id ?? randomUUID(), projeId, ad, ortamId: ortam.id,
-    kapsam: { senaryolar, ekranIdleri, servisAkisIdleri }, zaman, etkin, bildirimBaglantiId, canliOnay: riskli && g.canliOnay === true,
+    kapsam: { senaryolar, ekranIdleri, servisAkisIdleri, uctanUcaAkisIdleri }, zaman, etkin, bildirimBaglantiId, canliOnay: riskli && g.canliOnay === true,
     tuketilen: simdi, olusturulma: mevcut?.olusturulma ?? simdi, guncellenme: simdi
   };
   kurallariYaz(vt, mevcut ? kurallar.map((x) => (x.id === kural.id ? kural : x)) : [...kurallar, kural]);
@@ -172,7 +181,8 @@ export function kurallariListele(vt, projeId, s = {}) {
     const liste = gecmis[k.id] ?? [];
     const sonraki = k.etkin ? sonrakiZaman(k.zaman, simdi) : null;
     return {
-      ...k, zamanMetni: zamanMetni(k.zaman), ortamAdi: ortam?.ad ?? null, riskli: ortam ? ortamRiskliMi(ortam) : false,
+      ...k, kapsam: { ...k.kapsam, uctanUcaAkisIdleri: k.kapsam.uctanUcaAkisIdleri ?? [] },
+      zamanMetni: zamanMetni(k.zaman), ortamAdi: ortam?.ad ?? null, riskli: ortam ? ortamRiskliMi(ortam) : false,
       bildirimAdi: k.bildirimBaglantiId ? baglantilar.get(k.bildirimBaglantiId)?.ad ?? null : null,
       sonrakiCalisma: sonraki ? sonraki.toISOString() : null, sonTetikleme: liste[0] ?? null, gecmis: liste
     };
