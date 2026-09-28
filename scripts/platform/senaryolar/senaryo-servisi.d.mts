@@ -92,9 +92,13 @@ export declare function senaryoKaydet(
   girdi: {
     id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown;
     kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yapan?: string;
+    /** Kayıt grubu "Yeni" + "tabloya da ekle": gruptaki alanların değerleri tabloya yeni satır (senaryoyla TEK işlemde). */
+    yeniTabloSatirlari?: unknown;
   },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean }
-): { id: string; uyarilar: Bulgu[] };
+): { id: string; uyarilar: Bulgu[]; tabloSatirlari?: TabloSatiriEklemesi[] };
+/** Senaryoyla birlikte tabloya eklenen (ya da aynı değerlerle zaten var olan) satır; değer içermez. */
+export type TabloSatiriEklemesi = { tablo: string; etiket: string; satirId: string; satirAdi: string; yeni: boolean };
 /** Mevcut senaryonun ortam başına verisini (+ satır seçimlerini) doğrulayıp yazar; diğer içerik değişmez (değişiklik geçmişine düşer). */
 export declare function senaryoOrtamVerileriniYaz(
   vt: Veritabani,

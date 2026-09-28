@@ -338,7 +338,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       parcalar.push(h('p', { class: 'alan-uyarisi kayit-karisik', role: 'status' },
         ikon('uyari'), 'Bu grupta bazı alanlar elle girilmiş (ya da boş), bazıları tablodan geliyor. Hazır ya da Yeni seçin; seçim gruptaki tüm alanlara uygulanır.'));
     } else if (g.kip === 'yeni') {
-      parcalar.push(h('p', { class: 'alan-notu' }, 'Alanlara değerleri elle girin.'));
+      parcalar.push(h('p', { class: 'alan-notu' }, 'Alanlara değerleri elle girin.'), tabloyaEkleSecimi(g, tabloAdi));
     } else if (!tabloListesi) {
       tablolariOku();
       parcalar.push(h('p', { class: 'alan-notu' }, 'Satırlar yükleniyor…'));
@@ -349,6 +349,44 @@ function modelFormu(icerik, s, senaryo, baglam) {
     }
     yerlestir(kap, ...parcalar);
     kap.dataset.kip = g.kip;
+  }
+  /** Gizli sütuna bağlı olmayan grup alanlarının ilk değerleri: satır adı önerisi (gizli değer öneriye girmez). */
+  function satirAdiOnerisi(g) {
+    return g.uyeler.filter((u) => !(baglam.kayitBaglari || {})[u.alan.id]?.gizli && !u.alan.hassas)
+      .map((u) => degerler[u.alan.anahtar]).filter((v) => (typeof v === 'string' && v.trim() && !v.trim().startsWith('${')) || typeof v === 'number')
+      .slice(0, 2).map((v) => String(v).trim()).join(' ').slice(0, 60);
+  }
+  /**
+   * Yeni (elle gir): "Bu kaydı “<tablo>” tablosuna da ekle". İşaretliyse kayıtta gruptaki değerler tabloya yeni satır olarak eklenir
+   * (senaryoyla tek işlemde; aynı değerlerle satır varsa o kullanılır) ve senaryo o satırı kullanır (grup Hazır'a geçer).
+   */
+  function tabloyaEkleSecimi(g, tabloAdi) {
+    const kutuId = yeniId('kayit-tabloya');
+    const kutu = h('input', { type: 'checkbox', id: kutuId, checked: Boolean(g.tabloyaEkle) });
+    const adId = yeniId('kayit-satir-adi');
+    const ad = h('input', { type: 'text', id: adId, maxlength: '120', value: g.satirAdi || '', autocomplete: 'off' });
+    const oneriYaz = () => { const o = satirAdiOnerisi(g); ad.placeholder = o ? `Boşsa: ${o}` : 'Boşsa tablo sıradan ad verir'; };
+    oneriYaz();
+    ad.addEventListener('focus', oneriYaz);
+    ad.addEventListener('input', () => { g.satirAdi = ad.value; degisti = true; });
+    const adSatiri = h('div', { class: 'kayit-satir-adi', hidden: !g.tabloyaEkle }, h('label', { for: adId }, 'Satır adı'), ad,
+      h('small', { class: 'soluk' }, 'Kaydedince senaryo bu satırı kullanır; aynı değerlerle satır varsa yenisi eklenmez.'));
+    kutu.addEventListener('change', () => {
+      g.tabloyaEkle = kutu.checked;
+      adSatiri.hidden = !kutu.checked;
+      degisti = true;
+      if (kutu.checked) { oneriYaz(); ad.focus(); }
+    });
+    return h('div', { class: 'kayit-tabloya-ekle' },
+      h('label', { class: 'onay-satiri', for: kutuId }, kutu, h('span', {}, `Bu kaydı “${tabloAdi}” tablosuna da ekle`)),
+      adSatiri);
+  }
+  /** Kaydedilecek tablo eklemeleri (Yeni + "tabloya da ekle" işaretli gruplar). */
+  function kaydedilecekTabloSatirlari() {
+    return [...kayitGruplari.values()].filter((g) => g.kip === 'yeni' && g.tabloyaEkle).map((g) => ({
+      tablo: g.tablo, etiket: g.etiket, satirAdi: String(g.satirAdi || '').trim() || satirAdiOnerisi(g),
+      alanlar: g.uyeler.map((u) => ({ anahtar: u.alan.anahtar, sutun: u.sutun, ...(u.bicim ? { bicim: u.bicim } : {}) }))
+    }));
   }
   /** Hazır: satır seçimi (+ bir satır daha → her satır ayrı test; "Koşula uyan tüm satırlar" → koşullar grubun içinde). */
   function hazirSatirSecimi(g, t, grupAdi) {
@@ -1345,11 +1383,17 @@ function modelFormu(icerik, s, senaryo, baglam) {
           // Satır seçimleri (yalnız formda kullanılan tablo grupları; boşsa kaldırılır).
           tabloSecimleri: kaydedilecekSecimler(),
           // Çalıştırma biçimi (tablodan çoklu satır; hepsi "Tek satır"sa kaldırılır). Tablolar okunamadıysa mevcut korunur.
-          ...(kaydedilecekVeriKosulari() !== undefined ? { veriKosulari: kaydedilecekVeriKosulari() } : {})
+          ...(kaydedilecekVeriKosulari() !== undefined ? { veriKosulari: kaydedilecekVeriKosulari() } : {}),
+          // Yeni + "tabloya da ekle": grubun değerleri tabloya yeni satır (senaryoyla tek işlemde); senaryo o satırı kullanır.
+          ...(kaydedilecekTabloSatirlari().length ? { yeniTabloSatirlari: kaydedilecekTabloSatirlari() } : {})
         }
       });
       degisti = false;
       bildir(s.mod === 'yeni' ? 'Senaryo oluşturuldu.' : 'Senaryo kaydedildi.');
+      for (const x of yanit.tabloSatirlari || []) {
+        bildir(x.yeni ? `“${x.satirAdi}” ${x.tablo} tablosuna eklendi; senaryo bu satırı kullanıyor.`
+          : `Aynı değerlerle “${x.satirAdi}” satırı ${x.tablo} tablosunda zaten vardı; yeni satır eklenmedi, senaryo bu satırı kullanıyor.`);
+      }
       if (yanit.uyarilar && yanit.uyarilar.length) bildir(`${yanit.uyarilar.length} uyarı: ${yanit.uyarilar[0].mesaj}`, 'hata');
       s.geri();
     } catch (e) {

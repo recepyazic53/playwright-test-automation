@@ -22,8 +22,8 @@ import { acikAnahtar, adliAlanlariDonustur, sifrele, zarflariCoz } from '../kasa
 import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari } from './model-formu.mjs';
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
 import { eskiyenTarihAlanlari } from './goreli-tarih.mjs';
-import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
+import { BAGLAM_ONEKI, tabloKaydet, tablolariListele } from '../tablolar/tablo-deposu.mjs';
+import { basvuru, grupAnahtari, sutunBul, tabloBul, tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
 import { etkinAlanBaglari, tabloEkranKullanimi } from '../tablolar/ekran-baglari.mjs';
 import { tabloTuru } from '../tablolar/tablo-benzerligi.mjs';
 import { tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
@@ -675,6 +675,94 @@ function sonrakiSira(/** @type {Veritabani} */ vt, /** @type {string} */ projeId
   return enBuyuk + 1;
 }
 
+/** @param {unknown} v */
+const kucukMetin = (v) => String(v ?? '').trim().toLocaleLowerCase('tr');
+
+/**
+ * Kayıt grubu "Yeni (elle gir)" + "Bu kaydı tabloya da ekle": gruptaki alanların (doğrulanmış, düz) değerleri tabloya YENİ SATIR
+ * olarak eklenir; senaryo o satıra başvurur (alanlar ${Tablo[etiket].Sütun|biçim}, tabloSecimleri = satırın açık değerleri).
+ * Çağıran işlemin (senaryoKaydet'in vt.islem'i) içinde çalışır: sonradan bir hata olursa tablo satırı da yazılmaz.
+ *  - Satırın ortamı: senaryonun ortamı tekse o ortam, birden çoksa tüm ortamlar (null).
+ *  - Aynı değerlerle (gruptaki tüm sütunlar, gizli dahil) senaryonun ortamlarında geçerli bir satır varsa yeni satır eklenmez, o
+ *    satır kullanılır (yeni: false).
+ *  - Açık değerleri aynı olup gizli değeri farklı bir satır varsa satır ayırt edilemez (koşu koşula uyan ilk satırı alır) → hata.
+ *  - Satır adı tabloda tekil olmalı (senaryolar satırı adıyla da seçer); boşsa tablo sıradan ad verir.
+ *  - Gizli sütun değeri tablo deposunda kasa zarfıyla yazılır; yanıtta ve hata metinlerinde yalnız tablo / satır adı vardır.
+ * @param {Veritabani} vt @param {string} projeId @param {unknown} istek @param {Nesne} veri doğrulanmış veri (yerinde başvuruya çevrilir)
+ * @param {string[]} ortamIdleri
+ * @returns {{ secimler: Record<string, Record<string, string>>; eklenenler: import('./senaryo-servisi.d.mts').TabloSatiriEklemesi[] }}
+ */
+function tabloSatirlariniEkle(vt, projeId, istek, veri, ortamIdleri) {
+  const hata = (/** @type {string} */ m) => new SenaryoDogrulamaHatasi(m, [{ alan: 'yeniTabloSatirlari', mesaj: m }]);
+  if (!Array.isArray(istek) || istek.length > 20) throw hata('"yeniTabloSatirlari" en çok 20 öğelik bir dizi olmalıdır.');
+  const hedefOrtam = ortamIdleri.length === 1 ? ortamIdleri[0] : null;
+  /** @type {Record<string, Record<string, string>>} */
+  const secimler = {};
+  /** @type {import('./senaryo-servisi.d.mts').TabloSatiriEklemesi[]} */
+  const eklenenler = [];
+  for (const x of istek) {
+    const o = /** @type {Nesne} */ (nesneMi(x) ? x : {});
+    const t = typeof o.tablo === 'string' ? tabloBul(tablolariListele(vt, projeId, { cozulsun: true }), o.tablo) : undefined;
+    if (!t || t.id.startsWith(BAGLAM_ONEKI)) throw hata(`"${String(o.tablo ?? '')}" adında tablo yok (Ayarlar > Test verisi).`);
+    const etiket = typeof o.etiket === 'string' ? o.etiket.trim() : '';
+    if (!/^[\p{L}\p{N} _-]{0,40}$/u.test(etiket)) throw hata('Satır etiketi geçersiz.');
+    const anahtar = grupAnahtari(t.id, etiket);
+    if (secimler[anahtar]) throw hata(`"${t.ad}" tablosuna aynı grup iki kez eklenemez.`);
+    const alanlar = Array.isArray(o.alanlar) ? o.alanlar : [];
+    if (!alanlar.length || alanlar.length > 40) throw hata(`"${t.ad}" tablosuna eklenecek alan yok.`);
+    /** @type {Record<string, string>} */
+    const degerler = {};
+    /** @type {Array<{ anahtar: string; sutun: string; bicim: string }>} */
+    const uyeler = [];
+    for (const a of alanlar) {
+      const u = /** @type {Nesne} */ (nesneMi(a) ? a : {});
+      const sutun = typeof u.sutun === 'string' ? sutunBul(t, u.sutun) : undefined;
+      if (typeof u.anahtar !== 'string' || !u.anahtar || !sutun) throw hata(`"${t.ad}" tablosunda "${String(u.sutun ?? '')}" sütunu yok.`);
+      const bicim = typeof u.bicim === 'string' ? u.bicim.trim().slice(0, 40) : '';
+      const v = veri[u.anahtar];
+      if (v === undefined || v === null || v === '' || v === false) { uyeler.push({ anahtar: u.anahtar, sutun: sutun.ad, bicim }); continue; }
+      if (!['string', 'number', 'boolean'].includes(typeof v) || (typeof v === 'string' && /^\s*\$\{/.test(v))) {
+        throw hata(`"${sutun.ad}" değeri tabloya yazılamaz (sabit bir değer girin).`);
+      }
+      if (String(v).trim().length > 500) throw hata(`"${sutun.ad}" değeri en çok 500 karakter olabilir.`);
+      degerler[sutun.ad] = String(v).trim();
+      uyeler.push({ anahtar: u.anahtar, sutun: sutun.ad, bicim });
+    }
+    if (!Object.keys(degerler).length) throw hata(`"${t.ad}" tablosuna eklenecek değer yok; alanları doldurun.`);
+    const acikKosul = Object.fromEntries(Object.entries(degerler).filter(([s]) => !sutunBul(t, s)?.gizli));
+    if (!Object.keys(acikKosul).length) throw hata(`"${t.ad}" satırı yalnız gizli değerlerle seçilemez; gizli olmayan en az bir alanı doldurun.`);
+    const gecerli = (/** @type {{ ortamId: string | null }} */ r) => !r.ortamId || (hedefOrtam !== null && r.ortamId === hedefOrtam);
+    // Aynı değerler: tüm sütunlar (gizli dahil) eşit; gruptaki boş alanın sütunu satırda da boş.
+    const ayni = (/** @type {Record<string, string | null>} */ d) => t.sutunlar.every((c) => String(d[c.ad] ?? '').trim() === (degerler[c.ad] ?? ''));
+    const kosulaUyar = (/** @type {Record<string, string | null>} */ d) => Object.entries(acikKosul).every(([s, v]) => String(d[s] ?? '').trim() === v);
+    let satir = t.satirlar.find((r) => gecerli(r) && ayni(r.degerler));
+    const yeni = !satir;
+    if (!satir) {
+      const cakisan = t.satirlar.find((r) => (!r.ortamId || ortamIdleri.includes(r.ortamId)) && kosulaUyar(r.degerler));
+      if (cakisan) {
+        throw hata(`"${t.ad}" tablosundaki "${cakisan.ad}" satırı aynı açık değerlere sahip (gizli değer farklı); satırlar ayırt edilemez. `
+          + `Hazır'dan o satırı seçin ya da bir değeri değiştirin.`);
+      }
+      const ad = typeof o.satirAdi === 'string' ? o.satirAdi.replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, 120) : '';
+      if (ad && t.satirlar.some((r) => kucukMetin(r.ad) === kucukMetin(ad))) throw hata(`"${t.ad}" tablosunda "${ad}" adında bir satır zaten var; başka bir satır adı yazın.`);
+      const onceki = new Set(t.satirlar.map((r) => r.id));
+      tabloKaydet(vt, {
+        projeId, id: t.id, ad: t.ad, sutunlar: t.sutunlar.map((c) => ({ ad: c.ad, eskiAd: c.ad, gizli: c.gizli })),
+        satirlar: [{ ...(ad ? { ad } : {}), ortamId: hedefOrtam, degerler }],
+        ortamVar: (id) => ortamIdleri.includes(id)
+      });
+      satir = tablolariListele(vt, projeId, { tabloId: t.id })[0]?.satirlar.find((r) => !onceki.has(r.id));
+      if (!satir) throw new DepoHatasi(`"${t.ad}" tablosuna satır eklenemedi.`);
+    }
+    for (const u of uyeler) veri[u.anahtar] = `\${${basvuru(t.ad, u.sutun, etiket, u.bicim)}}`;
+    // Satır seçimi: satırın açık değerleri (formun "Hazır" seçimiyle aynı biçim; gizli sütun koşula girmez).
+    const secilen = /** @type {NonNullable<typeof satir>} */ (satir);
+    secimler[anahtar] = Object.fromEntries(t.sutunlar.filter((c) => !c.gizli && String(secilen.degerler[c.ad] ?? '').trim() !== '').map((c) => [c.ad, String(secilen.degerler[c.ad])]));
+    eklenenler.push({ tablo: t.ad, etiket, satirId: secilen.id, satirAdi: secilen.ad, yeni });
+  }
+  return { secimler, eklenenler };
+}
+
 /**
  * Senaryoyu kaydeder (yeni ya da mevcut). Kurallar:
  *  - Model: veri seçilen her ortam için tek doğrulayıcıyla doğrulanır; kaynak.ad ve verideki başlık yeni başlıkla
@@ -688,11 +776,17 @@ function sonrakiSira(/** @type {Veritabani} */ vt, /** @type {string} */ projeId
  * Adım ekran görüntüsü seçimi (adimGoruntusu: her | yalnizKalan | secili | kapali; 'ayar' / null = Ayarlara uy): verilmezse mevcut korunur.
  * Satır seçimleri (tabloSecimleri; ekran-basvurulari.mjs): verilmezse mevcut korunur, null / {} kaldırır.
  * Çalıştırma biçimi (veriKosulari; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null kaldırır.
- * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yapan?: string }} girdi
+ * Kayıt grubunu tabloya da ekleme (yeniTabloSatirlari; tabloSatirlariniEkle): senaryo ve tablo satırı TEK işlemde yazılır.
+ * @param {{ id?: string | null; projeId: string; ekranId?: string | null; baslik: unknown; veri?: unknown; ortamIdleri?: unknown; kosuyaDahil?: unknown; mutlakaGorunmeli?: unknown; akisId?: unknown; giris?: unknown; adimGoruntusu?: unknown; tabloSecimleri?: unknown; veriKosulari?: unknown; yeniTabloSatirlari?: unknown; yapan?: string }} girdi
  * @param {{ kosuyorMu?: (dosya: string, ad: string) => boolean }} [secenekler]
- * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }> }}
+ * @returns {{ id: string; uyarilar: Array<{ alan: string; mesaj: string }>; tabloSatirlari?: import('./senaryo-servisi.d.mts').TabloSatiriEklemesi[] }}
  */
 export function senaryoKaydet(vt, girdi, secenekler = {}) {
+  return vt.islem(() => senaryoKaydetIslem(vt, girdi, secenekler));
+}
+
+/** @param {Veritabani} vt @param {Parameters<typeof senaryoKaydet>[1]} girdi @param {Parameters<typeof senaryoKaydet>[2]} secenekler @returns {ReturnType<typeof senaryoKaydet>} */
+function senaryoKaydetIslem(vt, girdi, secenekler = {}) {
   acikAnahtar(vt);
   const baslik = baslikKontrol(girdi.baslik);
   const mevcut = girdi.id ? senaryoGetir(vt, girdi.id) : undefined;
@@ -730,14 +824,21 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
   let uyarilar = [];
   /** @type {Record<string, Nesne>} ortamId → çözülmüş veri */
   const ortamVerileri = {};
+  /** @type {ReturnType<typeof tabloSatirlariniEkle> | null} */
+  let tabloEklemesi = null;
   if (girdi.veri !== undefined) {
     if (!mb) throw new DepoHatasi('Bu ekranın modeli yok; senaryo verisi yalnızca ekran modeliyle düzenlenebilir.');
     if (!nesneMi(girdi.veri)) throw new DepoHatasi('"veri" bir nesne olmalıdır.');
     const baslikAnahtari = formSemasiOlustur(mb.model, mb.altModeller).baslik;
     const d = veriyiDogrula(vt, girdi.projeId, mb, { ...girdi.veri, [baslikAnahtari]: baslik }, ortamIdleri, ortamAdlari);
     uyarilar = d.uyarilar;
+    // Kayıt grubu tabloya da eklenir (aynı işlemde; veri yerinde ${…} başvurusuna çevrilir).
+    if (girdi.yeniTabloSatirlari !== undefined && girdi.yeniTabloSatirlari !== null) {
+      tabloEklemesi = tabloSatirlariniEkle(vt, girdi.projeId, girdi.yeniTabloSatirlari, d.veri, ortamIdleri);
+    }
     for (const o of ortamIdleri) ortamVerileri[o] = d.veri;
   } else {
+    if (girdi.yeniTabloSatirlari !== undefined && girdi.yeniTabloSatirlari !== null) throw new DepoHatasi('Tabloya eklemek için senaryo verisi gerekir.');
     if (!mevcut) throw new DepoHatasi('Yeni senaryo için "veri" zorunludur.');
     // Veri değişmez: yalnızca başlık (ve verideki başlık alanı) güncellenir.
     for (const o of ortamIdleri) {
@@ -804,10 +905,19 @@ export function senaryoKaydet(vt, girdi, secenekler = {}) {
     if (v.ayar) icerik.veriKosulari = v.ayar;
     else delete icerik.veriKosulari;
   }
+  // Tabloya eklenen kayıt grubu: satır seçimi o satıra; grubun çoklu satır ayarı (varsa) kalkar (tek satır).
+  if (tabloEklemesi) {
+    icerik.tabloSecimleri = { ...(nesneMi(icerik.tabloSecimleri) ? icerik.tabloSecimleri : {}), ...tabloEklemesi.secimler };
+    const vk = nesneMi(icerik.veriKosulari) && nesneMi(icerik.veriKosulari.gruplar) ? /** @type {Nesne} */ (icerik.veriKosulari.gruplar) : null;
+    if (vk) {
+      for (const k of Object.keys(tabloEklemesi.secimler)) delete vk[k];
+      if (!Object.keys(vk).length) delete icerik.veriKosulari;
+    }
+  }
   const id = depoSenaryoKaydet(vt, {
     ...(mevcut ? { id: mevcut.id } : {}), projeId: girdi.projeId, ekranId, baslik, icerik, kosuyaDahil: genelDahil, yapan: girdi.yapan
   });
-  return { id, uyarilar };
+  return { id, uyarilar, ...(tabloEklemesi ? { tabloSatirlari: tabloEklemesi.eklenenler } : {}) };
 }
 
 /**

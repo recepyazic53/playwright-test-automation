@@ -3,10 +3,11 @@
 // yalnız sunucunun kısmi maskesi); "Bir kişi daha ekle" → her satır ayrı test (veriKosulari 'secili'); "Koşula uyan tüm satırlar" →
 // koşullar grubun içinde ('tumu'). Saklama eski biçimle aynı (${Tablo.Sütun} + tabloSecimleri + veriKosulari). Yeni: düz girdiler,
 // tarihte "Tablodan" yok. Eski biçimli ve karışık senaryolar doğru açılır; 3 sütunlu satırda tarih alanı komşusuna binmez, 390 px
-// taşma yok; kaydedilen senaryo 127.0.0.1'deki sahte sayfaya seçilen satırın değerlerini yazar. Ayrı Nöbetçi, geçici veritabanı;
+// taşma yok; kaydedilen senaryo 127.0.0.1'deki sahte sayfaya seçilen satırın değerlerini yazar. Yeni + "Bu kaydı tabloya da ekle":
+// senaryoyla tek işlemde tabloya satır (aynı değerlerle satır varsa o kullanılır; hata olursa hiçbiri yazılmaz). Ayrı Nöbetçi, geçici veritabanı;
 // dış istek yok. Değerler SAHTEDİR.
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
@@ -77,6 +78,7 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
   let fikstur: Awaited<ReturnType<typeof yerelSunucu>>;
   let tarayici: Browser;
   let klasor = '';
+  let vtYolu = '';
   let projeId = '';
   let ortamId = '';
   let ekranId = '';
@@ -118,7 +120,7 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
       if (i.yol === '/kaydet' && i.yontem === 'POST') { gelenler.push(JSON.parse(i.govde) as Nesne); return { tur: 'application/json', govde: '{}' }; }
       return { durum: 404, tur: 'text/plain', govde: 'yok' };
     });
-    const vtYolu = join(klasor, 'platform.db');
+    vtYolu = join(klasor, 'platform.db');
     const vt = await veritabaniniHazirla(vtYolu);
     await kasaOlustur(vt, PAROLA, { kdf: HIZLI_KDF });
     izinleriAc(vt);
@@ -350,5 +352,120 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     const sonuc = (await api(`/platform/sonuclar/sonuc?id=${String(y.sonucId)}`)).sonuc as Nesne;
     expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
     expect(gelenler.at(-1)).toEqual({ dogumTarihi: '03.04.1985', telefon: '5334445566', kimlikNo: KIMLIK_2 });
+  });
+
+  // --- Yeni (elle gir) + "Bu kaydı tabloya da ekle" ---------------------------------------------------------------------
+  const YENI_KIMLIK = '98765432109';
+  const kisiTablosu = async () => ((await api(`/platform/tablolar?projeId=${projeId}`)).tablolar as Nesne[]).find((x) => x.ad === 'Kişi') as Nesne;
+  const YENI_GRUP = [{ tablo: 'Kişi', etiket: '', alanlar: [{ anahtar: 'dogumTarihi', sutun: 'Doğum tarihi' }, { anahtar: 'telefon', sutun: 'Telefon' }, { anahtar: 'kimlikNo', sutun: 'Kimlik no' }] }];
+  const tabloyaEkle = (page: Page) => grup(page).getByRole('checkbox', { name: 'Bu kaydı “Kişi” tablosuna da ekle' });
+  const satirAdiKutusu = (page: Page) => grup(page).getByRole('textbox', { name: 'Satır adı' });
+
+  test('Yeni + "tabloya da ekle": satır adıyla kaydet → tabloda yeni satır (gizli şifreli), senaryo ${…} + satır seçimi; yeniden açılınca Hazır ve o satır; 390 px taşma yok', async () => {
+    test.setTimeout(150_000);
+    const satirSayisi = ((await kisiTablosu()).satirlar as Nesne[]).length;
+    let { page, hatalar } = await sayfaAc(`/#/senaryolar/yeni/${ekranId}`);
+    await expect(yeni(page)).toBeChecked();
+    await expect(tabloyaEkle(page)).toBeVisible();
+    await expect(tabloyaEkle(page)).not.toBeChecked();
+    await expect(satirAdiKutusu(page)).toBeHidden();
+    // Hazır'da kutu yok.
+    await hazir(page).check();
+    await expect(tabloyaEkle(page)).toHaveCount(0);
+    await yeni(page).check();
+    await alanKap(page, 'dogumTarihi').getByRole('textbox').fill('07.08.1995');
+    await alanKap(page, 'telefon').locator('input').fill('5557778899');
+    await alanKap(page, 'kimlikNo').locator('input[type="password"]').fill(YENI_KIMLIK);
+    await tabloyaEkle(page).check();
+    await expect(satirAdiKutusu(page)).toBeVisible();
+    await satirAdiKutusu(page).focus();
+    // Öneri gizli olmayan ilk değerlerden (gizli değer öneriye girmez).
+    await expect(satirAdiKutusu(page)).toHaveAttribute('placeholder', 'Boşsa: 07.08.1995 5557778899');
+    await satirAdiKutusu(page).fill('RECEP 2');
+    await page.setViewportSize({ width: 390, height: 900 });
+    await expect(satirAdiKutusu(page)).toBeVisible();
+    await tasmaYok(page);
+    expect(await grup(page).evaluate((e) => e.scrollWidth - e.clientWidth)).toBeLessThanOrEqual(0);
+    await grup(page).evaluate((e) => e.scrollIntoView({ block: 'center' }));
+    await page.waitForTimeout(300);
+    await page.screenshot({ path: test.info().outputPath('kayit-grubu-tabloya-ekle-telefon.png') });
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await page.getByRole('textbox', { name: 'Başlık', exact: true }).fill('Tabloya eklenen kişi');
+    await page.getByRole('button', { name: 'Senaryoyu oluştur' }).click();
+    await expect(page.locator('#bildirimler')).toContainText('“RECEP 2” Kişi tablosuna eklendi; senaryo bu satırı kullanıyor.', { timeout: 15_000 });
+    await expect(page.locator('#bildirimler')).not.toContainText(YENI_KIMLIK);
+    expect(hatalar).toEqual([]);
+    await page.context().close();
+    // Tabloda yeni satır: ortam = senaryonun tek ortamı; gizli sütun yanıtta yok, diskte düz yok.
+    const t = await kisiTablosu();
+    expect((t.satirlar as Nesne[]).length).toBe(satirSayisi + 1);
+    const r = (t.satirlar as Nesne[]).find((x) => x.ad === 'RECEP 2') as Nesne;
+    expect(r.degerler).toEqual({ 'Doğum tarihi': '07.08.1995', Telefon: '5557778899', 'Kimlik no': null });
+    expect(r.doluGizli).toEqual(['Kimlik no']);
+    expect(r.ortamId).toBe(ortamId);
+    satir['RECEP 2'] = String(r.id);
+    expect(readFileSync(vtYolu).includes(Buffer.from(YENI_KIMLIK))).toBe(false);
+    // Senaryo satıra başvurur.
+    const id = await senaryoIdBul('Tabloya eklenen kişi');
+    const s = await senaryoAl(id);
+    expect(s.veri).toMatchObject(REF);
+    expect(s.tabloSecimleri).toEqual({ [`${tabloId}|`]: { 'Doğum tarihi': '07.08.1995', Telefon: '5557778899' } });
+    for (const y of [s, await api(`/platform/tablolar?projeId=${projeId}&secim=1`), await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${ortamId}`)]) {
+      expect(JSON.stringify(y)).not.toContain(YENI_KIMLIK);
+    }
+    // Yeniden aç: Hazır, o satır seçili; gizli değer yalnız kısmi maske.
+    ({ page, hatalar } = await sayfaAc(`/#/senaryolar/duzenle/${id}`));
+    await expect(hazir(page)).toBeChecked();
+    await expect(ilkSatir(page)).toHaveValue(`s:${satir['RECEP 2']}`);
+    await expect(alanKap(page, 'kimlikNo').locator('output.kayit-ozeti')).toContainText('9•••••••••9 (gizli)');
+    await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('5557778899');
+    expect(await page.content()).not.toContain(YENI_KIMLIK);
+    expect(hatalar).toEqual([]);
+    await page.context().close();
+  });
+
+  test('aynı değerlerle tekrar: yeni satır eklenmez, mevcut satır kullanılır (bilgi); yanıtta gizli değer yok', async () => {
+    const once = ((await kisiTablosu()).satirlar as Nesne[]).length;
+    const y = await basarili('/platform/senaryo/kaydet', {
+      projeId, ekranId, baslik: 'Aynı kişi', ortamIdleri: [ortamId], kosuyaDahil: false,
+      veri: { baslik: 'Aynı kişi', dogumTarihi: '07.08.1995', telefon: '5557778899', kimlikNo: YENI_KIMLIK },
+      yeniTabloSatirlari: [{ ...YENI_GRUP[0], satirAdi: 'Başka ad' }]
+    });
+    expect(y.tabloSatirlari).toEqual([{ tablo: 'Kişi', etiket: '', satirId: satir['RECEP 2'], satirAdi: 'RECEP 2', yeni: false }]);
+    expect(JSON.stringify(y)).not.toContain(YENI_KIMLIK);
+    expect(((await kisiTablosu()).satirlar as Nesne[]).length).toBe(once);
+    const s = await senaryoAl(String(y.id));
+    expect(s.veri).toMatchObject(REF);
+    expect(s.tabloSecimleri).toEqual({ [`${tabloId}|`]: { 'Doğum tarihi': '07.08.1995', Telefon: '5557778899' } });
+  });
+
+  test('tek işlem: tablo eklemesi (aynı adlı satır / ayırt edilemeyen satır) ya da senaryo kaydı başarısızsa hiçbiri yazılmaz; hata metninde gizli değer yok', async () => {
+    const once = ((await kisiTablosu()).satirlar as Nesne[]).length;
+    const dene = (baslik: string, veri: Nesne, ek: Nesne) => api('/platform/senaryo/kaydet', {
+      projeId, ekranId, baslik, ortamIdleri: [ortamId], kosuyaDahil: false, veri: { baslik, ...veri }, ...ek
+    });
+    // 1) Aynı adlı satır (tablo kuralı) → senaryo da yazılmaz.
+    let y = await dene('Adı çakışan', { dogumTarihi: '09.09.1999', telefon: '5550009988', kimlikNo: '11122233344' }, { yeniTabloSatirlari: [{ ...YENI_GRUP[0], satirAdi: 'ayşe' }] });
+    expect(y.basarili).toBe(false);
+    expect(String(y.mesaj)).toContain('"ayşe" adında bir satır zaten var');
+    expect(JSON.stringify(y)).not.toContain('11122233344');
+    expect(await senaryoIdBul('Adı çakışan')).toBe('');
+    // 2) Açık değerleri Ayşe ile aynı, gizli değer farklı → ayırt edilemez; hiçbir şey yazılmaz.
+    y = await dene('Ayırt edilemeyen', { dogumTarihi: '01.02.1990', telefon: '5321112233', kimlikNo: '55566677788' }, { yeniTabloSatirlari: [{ ...YENI_GRUP[0], satirAdi: 'Ayşe 2' }] });
+    expect(y.basarili).toBe(false);
+    expect(String(y.mesaj)).toContain('ayırt edilemez');
+    expect(JSON.stringify(y)).not.toContain('55566677788');
+    expect(JSON.stringify(y)).not.toContain(KIMLIK_1);
+    expect(await senaryoIdBul('Ayırt edilemeyen')).toBe('');
+    // 3) Tablo satırı eklendikten SONRA senaryo kaydı hata verir (geçersiz satır seçimi) → tablo satırı da geri alınır.
+    y = await dene('Sonradan bozulan', { dogumTarihi: '10.10.2000', telefon: '5551112233', kimlikNo: '99988877766' }, {
+      yeniTabloSatirlari: [{ ...YENI_GRUP[0], satirAdi: 'Geri alınacak' }], tabloSecimleri: { [`${tabloId}|diger`]: { 'Olmayan sütun': 'x' } }
+    });
+    expect(y.basarili).toBe(false);
+    expect(await senaryoIdBul('Sonradan bozulan')).toBe('');
+    const t = await kisiTablosu();
+    expect((t.satirlar as Nesne[]).length).toBe(once);
+    expect((t.satirlar as Nesne[]).some((x) => x.ad === 'Geri alınacak')).toBe(false);
+    expect(readFileSync(vtYolu).includes(Buffer.from('99988877766'))).toBe(false);
   });
 });
