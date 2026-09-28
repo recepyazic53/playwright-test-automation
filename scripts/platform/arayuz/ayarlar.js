@@ -30,8 +30,6 @@ export const AYAR_BOLUMLERI = [
   { ad: 'arayuz', etiket: 'Arayüz', ikon: 'ekran', aciklama: 'Görünüm tercihleriniz: tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, ekran rehberlerinin ilk girişte kendiliğinden açılıp açılmayacağı ve listelerin sayfa boyları.' }
 ];
 
-const IKI_ASAMALI_ETIKET = { yok: 'Yok', totp: 'Authenticator', sms: 'SMS' };
-
 const ISLEM_ETIKETI = {
   olustur: 'Oluşturuldu', guncelle: 'Güncellendi', sil: 'Silindi',
   birlestirme_cakismasi: 'Birleştirme çakışması', ice_aktarma_uzerine_yazildi: 'Yedekten üzerine yazıldı'
@@ -250,12 +248,41 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
 // Giriş profilleri
 // ---------------------------------------------------------------------------------------
 
+/** Giriş tarifinin giriş adımlarındaki "{ad}" yer tutucusu (giris/tarif.mjs ile aynı desen). */
+const YER_TUTUCU = /\{([\p{L}\p{N}_.-]+)\}/gu;
+
+/**
+ * Profilin hangi alanlarının gerektiğini ortamın giriş tarifinden çıkarır (ortamId boş = tüm ortamların tarifleri).
+ * bilinmiyor: ilgili ortamda tarif yok (bu durumda koşullu alanlar "Gelişmiş" altında durur).
+ * kodlar: tarifin profilden istediği kod kaynağı ('totp' / 'sms'; SMS "elle" kipindeyse profilde kod gerekmez).
+ * ekAdlar: giriş adımlarındaki {ad} yer tutucuları (profilin ek alanlarından dolar).
+ * @param {Array<{ ortamId: string; tarif: any }>} tarifler @param {string} ortamId
+ */
+function tarifIhtiyaci(tarifler, ortamId) {
+  const ilgili = tarifler.filter((o) => o.tarif && (!ortamId || o.ortamId === ortamId)).map((o) => o.tarif);
+  const kodlar = new Set();
+  /** @type {string[]} */
+  const ekAdlar = [];
+  for (const t of ilgili) {
+    const ik = t.ikinciAdim || { tur: 'yok' };
+    if (ik.tur === 'totp') kodlar.add('totp');
+    if (ik.tur === 'sms' && ik.smsKipi !== 'elle') kodlar.add('sms');
+    for (const a of Array.isArray(t.girisAdimlari) ? t.girisAdimlari : []) {
+      for (const e of JSON.stringify(a).matchAll(YER_TUTUCU)) if (!ekAdlar.includes(e[1])) ekAdlar.push(e[1]);
+    }
+  }
+  return { bilinmiyor: ilgili.length === 0, kodlar, ekAdlar };
+}
+
 async function girisProfilleri(govde, baglam, yenile) {
   const proje = baglam.durum.proje;
-  const [{ profiller }, { ortamlar }] = await Promise.all([
+  const [{ profiller }, { ortamlar }, tarifVerisi] = await Promise.all([
     api(`/platform/giris-profilleri?projeId=${encodeURIComponent(proje.id)}`),
-    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`)
+    api(`/platform/ortamlar?projeId=${encodeURIComponent(proje.id)}`),
+    // Tarif yalnız formun düzenini belirler (hangi alan birincil); gelmezse tüm koşullu alanlar "Gelişmiş" altında durur.
+    api(`/platform/giris-tarifleri?projeId=${encodeURIComponent(proje.id)}`).catch((hata) => { if (hata && hata.durum === 423) throw hata; return null; })
   ]);
+  const tarifler = tarifVerisi && Array.isArray(tarifVerisi.ortamlar) ? tarifVerisi.ortamlar : [];
   const ortamAdi = (id) => (id ? (ortamlar.find((o) => o.id === id) || { ad: 'silinmiş ortam' }).ad : 'Tüm ortamlar');
   const formAlani = h('div', {});
 
@@ -278,7 +305,7 @@ async function girisProfilleri(govde, baglam, yenile) {
     const rSms = radyo('sms', 'SMS');
     const totp = parolaAlani('Authenticator gizli anahtarı', {
       kayitli: p ? p.totpGizli : null,
-      yardim: 'Authenticator kurulumunda gösterilen gizli anahtar (base32). Kodlar koşu sırasında bu anahtardan üretilir.',
+      yardim: kisaAciklama(`Kurulumda gösterilen base32 anahtar. Kodlar koşu sırasında bu anahtardan üretilir; anahtar kasada şifreli saklanır. Anahtarı bulmak için uygulamanın iki aşamalı doğrulama kurulumunda QR kodun altındaki "elle gir" / "kodu tarayamıyorum" bağlantısına bakın.${p && p.totpGizli && p.totpGizli.dolu ? ' Boş bırakırsanız kayıtlı değer korunur.' : ''}`, 'Authenticator gizli anahtarı'),
       gosterFn: p ? async () => (await api('/platform/giris-profili/goster', { govde: { id: p.id, alan: 'totpGizli' } })).deger : null
     });
     const smsYontem = p && p.sms && p.sms.yontem === 'elle' ? 'elle' : 'sabit';
@@ -299,12 +326,20 @@ async function girisProfilleri(govde, baglam, yenile) {
       smsAlani.hidden = !rSms.r.checked;
       smsKod.disabled = !smsSabit.checked;
     };
+    // Kullanıcı kod kaynağını kendisi seçtiyse ortam değişince tarifin istediği türe kendiliğinden geçilmez.
+    let turSecildi = false;
+    [rYok.r, rTotp.r, rSms.r].forEach((r) => r.addEventListener('change', () => { turSecildi = true; }));
     [rYok.r, rTotp.r, rSms.r, smsSabit, smsElle].forEach((r) => r.addEventListener('change', gorunurluk));
     gorunurluk();
+    const kodBolumu = h('fieldset', { class: 'giris-profili-kod' }, h('legend', {}, 'Doğrulama kodu'),
+      h('p', { class: 'yardim' }, kisaAciklama('Giriş tarifi ikinci adımda kod istiyorsa kodun kaynağı. Authenticator anahtarı ve sabit SMS test kodu kasada şifreli saklanır, maskeli gösterilir.', 'Doğrulama kodu')),
+      rYok.etiket, rTotp.etiket, totpAlani, rSms.etiket, smsAlani);
 
     // Ek alanlar: giriş tarifinin giriş adımlarındaki "{ad}" değerleri (ör. firma kodu, şube, PIN). Gizli işaretli olan
     // kasada şifreli saklanır ve maskeli gösterilir (boş bırakılırsa kayıtlı değer korunur).
     const ekSatirlari = [];
+    /** Ek alan listesi değişince tarifin istediği eksik adları yeniden çizer (aşağıda bağlanır). */
+    let ekDegisti = () => {};
     const ekKutusu = h('div', { class: 'ek-alan-listesi' });
     const ekAlanEkle = (e = { ad: '', gizli: false, deger: '' }) => {
       const adG = h('input', { type: 'text', class: 'mono', autocomplete: 'off', spellcheck: 'false', value: e.ad, placeholder: 'ör. firmaKodu', 'aria-label': 'Ek alan adı' });
@@ -318,35 +353,83 @@ async function girisProfilleri(govde, baglam, yenile) {
       const s = { adG, degerG, gizli, kayitliGizli, el: null };
       s.el = h('div', { class: 'ek-alan-satiri' }, adG, degerG,
         h('label', { class: 'secenek mini-secenek', for: gizli.id }, gizli, 'Gizli'),
-        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Bu ek alanı kaldır', onclick: () => { ekSatirlari.splice(ekSatirlari.indexOf(s), 1); s.el.remove(); } }, ikon('carpi')));
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Bu ek alanı kaldır', onclick: () => { ekSatirlari.splice(ekSatirlari.indexOf(s), 1); s.el.remove(); ekDegisti(); } }, ikon('carpi')));
+      adG.addEventListener('input', () => ekDegisti());
       ekSatirlari.push(s);
       ekKutusu.append(s.el);
+      ekDegisti();
     };
     (p && p.ekAlanlar ? p.ekAlanlar : []).forEach(ekAlanEkle);
-    const ekAlanlarBolumu = h('fieldset', {}, h('legend', {}, 'Ek alanlar (isteğe bağlı)'),
-      h('p', { class: 'yardim' }, 'Giriş formunda kullanıcı adı ve paroladan başka alan varsa (firma kodu, şube, PIN…) değerini burada tutun; giriş tarifinin adımında {ad} olarak kullanılır. Gizli işaretlenen değer kasada şifreli saklanır, maskeli gösterilir ve hata mesajlarına yazılmaz.'),
-      ekKutusu, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => ekAlanEkle() }, ikon('arti'), 'Ek alan ekle'));
+    // Tarifin istediği ama profilde olmayan {ad}'lar için tek tıkla satır ekleyen düğmeler.
+    const eksikEkAlanlar = h('div', { class: 'yer-tutucu-cipleri', 'aria-live': 'polite' });
+    const ekAlanlarBolumu = h('fieldset', { class: 'giris-profili-ek' }, h('legend', {}, 'Ek alanlar'),
+      h('p', { class: 'yardim' }, kisaAciklama('Kullanıcı adı ve paroladan başka giriş alanı (firma kodu, şube, PIN…) için değer. Giriş tarifinin adımında {ad} olarak kullanılır. Gizli işaretlenen değer kasada şifreli saklanır, maskeli gösterilir ve hata mesajlarına yazılmaz; boş bırakılırsa kayıtlı değer korunur.', 'Ek alanlar')),
+      eksikEkAlanlar, ekKutusu, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => ekAlanEkle() }, ikon('arti'), 'Ek alan ekle'));
+
+    // Birincil görünüm: ad, ortam, kullanıcı adı, parola; ortamın giriş tarifi kod / ek alan istiyorsa onlar da.
+    // Tarifin istemediği ama profilde dolu olan (ya da tarifi henüz olmayan ortamdaki) ayarlar "Gelişmiş" altındadır;
+    // tarif kod istemiyorsa ve profilde kod ayarı yoksa kod alanları hiç gösterilmez.
+    const birincilKosullu = h('div', { class: 'giris-profili-kosullu' });
+    const gelismisIcerik = h('div', {});
+    const gelismis = h('details', { class: 'gelismis-ayarlar giris-profili-gelismis' },
+      h('summary', {}, 'Gelişmiş'),
+      h('p', { class: 'soluk kucuk' }, 'Bu ortamın giriş tarifinin şu an istemediği ayarlar.'),
+      gelismisIcerik);
+    const eksikleriCiz = () => {
+      const adlar = new Set(ekSatirlari.map((s) => s.adG.value.trim()));
+      const eksikler = tarifIhtiyaci(tarifler, ortam.value).ekAdlar.filter((x) => !adlar.has(x));
+      eksikEkAlanlar.replaceChildren(...(eksikler.length
+        ? [h('span', { class: 'soluk kucuk' }, 'Giriş tarifinin istediği:'), ...eksikler.map((x) => h('button', {
+          type: 'button', class: 'kucuk-dugme', 'aria-label': `Ek alan ekle: ${x}`,
+          onclick: () => { ekAlanEkle({ ad: x, gizli: false, deger: '' }); ekSatirlari[ekSatirlari.length - 1].degerG.focus(); }
+        }, ikon('arti'), h('code', {}, `{${x}}`)))]
+        : []));
+    };
+    ekDegisti = eksikleriCiz;
+    /** Bölümü yerine taşır (zaten oradaysa dokunmaz: içindeki odak kaybolmaz). */
+    const yerlestirBolum = (bolum, hedef) => { if (bolum.parentElement !== hedef) hedef.append(bolum); };
+    const duzeniKur = () => {
+      const ihtiyac = tarifIhtiyaci(tarifler, ortam.value);
+      // Yeni profilde (kullanıcı seçmediyse) kod kaynağı tarifin istediği türle başlar; tarif istemiyorsa "Yok"a döner.
+      if (!p && !turSecildi) {
+        const tek = ihtiyac.kodlar.size === 1 ? [...ihtiyac.kodlar][0] : 'yok';
+        ({ yok: rYok, totp: rTotp, sms: rSms })[tek].r.checked = true;
+        gorunurluk();
+      }
+      if (ihtiyac.kodlar.size > 0) yerlestirBolum(kodBolumu, birincilKosullu);
+      else if (ihtiyac.bilinmiyor || !rYok.r.checked) yerlestirBolum(kodBolumu, gelismisIcerik);
+      else kodBolumu.remove();
+      yerlestirBolum(ekAlanlarBolumu, ihtiyac.ekAdlar.length ? birincilKosullu : gelismisIcerik);
+      // Sıra sabit: kod bölümü ek alanlardan önce.
+      for (const kap of [birincilKosullu, gelismisIcerik]) if (kap.contains(kodBolumu) && kap.firstElementChild !== kodBolumu) kap.prepend(kodBolumu);
+      gelismis.hidden = gelismisIcerik.childElementCount === 0;
+      eksikleriCiz();
+    };
+    ortam.addEventListener('change', duzeniKur);
+    duzeniKur();
 
     const mesaj = mesajKutusu();
     const kaydet = h('button', { type: 'submit', class: 'birincil' }, 'Kaydet');
     const form = formPaneli(p ? `Giriş profilini düzenle: ${p.ad}` : 'Yeni giriş profili', mesaj.kutu,
-      alan('Profil adı', ad, { zorunlu: true, yardim: 'Ör. "Yönetici kullanıcı" veya "Salt okunur kullanıcı".' }),
-      alan('Ortam', ortam),
+      alan('Profil adı', ad, { zorunlu: true, yardim: 'Ör. "Yönetici kullanıcı".' }),
+      alan('Ortam', ortam, { yardim: kisaAciklama('Profilin kullanılacağı ortam. "Tüm ortamlar" seçilirse ortama özel profili olmayan her ortamda kullanılır; gösterilen alanlar o ortamların giriş tarifine göre belirlenir.', 'Ortam') }),
       alan('Kullanıcı adı', kullanici, { zorunlu: true }),
       parola.kapsayici,
-      h('fieldset', {}, h('legend', {}, 'İki aşamalı doğrulama'), rYok.etiket, rTotp.etiket, totpAlani, rSms.etiket, smsAlani),
-      ekAlanlarBolumu,
+      birincilKosullu,
+      gelismis,
       h('div', { class: 'dugmeler' }, kaydet, h('button', { type: 'button', onclick: () => formAlani.replaceChildren() }, 'Vazgeç')));
+    /** Alan "Gelişmiş" içindeyse önce açar, sonra hatayı yazıp odaklar. */
+    const hataGoster = (girdi, metin) => { if (gelismis.contains(girdi)) gelismis.open = true; alanHatasi(girdi, metin); girdi.focus(); };
     form.addEventListener('submit', async (o) => {
       o.preventDefault();
       mesaj.temizle();
       [ad, kullanici, parola.girdi, totp.girdi, smsKod].forEach((g) => alanHatasi(g, ''));
-      if (!ad.value.trim()) { alanHatasi(ad, 'Kayıt adı boş olamaz.'); ad.focus(); return; }
-      if (!kullanici.value.trim()) { alanHatasi(kullanici, 'Kullanıcı adı boş olamaz.'); kullanici.focus(); return; }
-      if (!p && !parola.girdi.value) { alanHatasi(parola.girdi, 'Parola girin.'); parola.girdi.focus(); return; }
+      if (!ad.value.trim()) { hataGoster(ad, 'Profil adı boş olamaz.'); return; }
+      if (!kullanici.value.trim()) { hataGoster(kullanici, 'Kullanıcı adı boş olamaz.'); return; }
+      if (!p && !parola.girdi.value) { hataGoster(parola.girdi, 'Parola girin.'); return; }
       const secilenTur = rTotp.r.checked ? 'totp' : rSms.r.checked ? 'sms' : 'yok';
-      if (secilenTur === 'totp' && !totp.girdi.value && !(p && p.totpGizli.dolu)) { alanHatasi(totp.girdi, 'Gizli anahtarı girin.'); totp.girdi.focus(); return; }
-      if (secilenTur === 'sms' && smsSabit.checked && !smsKod.value.trim()) { alanHatasi(smsKod, 'Test kodunu girin veya "koşu sırasında elle girilir" seçin.'); smsKod.focus(); return; }
+      if (secilenTur === 'totp' && !totp.girdi.value && !(p && p.totpGizli.dolu)) { hataGoster(totp.girdi, 'Authenticator gizli anahtarını girin.'); return; }
+      if (secilenTur === 'sms' && smsSabit.checked && !smsKod.value.trim()) { hataGoster(smsKod, 'Test kodunu girin veya "koşu sırasında elle girilir" seçin.'); return; }
       const istek = {
         id: p ? p.id : undefined, projeId: proje.id, ad: ad.value.trim(), ortamId: ortam.value || null,
         kullaniciAdi: kullanici.value.trim(), ikiAsamaliTur: secilenTur,
@@ -355,8 +438,8 @@ async function girisProfilleri(govde, baglam, yenile) {
       const ekAdlar = new Set();
       for (const s of ekSatirlari) {
         const ekAd = s.adG.value.trim();
-        if (!/^[\p{L}\p{N}_.-]{1,60}$/u.test(ekAd)) { mesaj.goster(`Ek alan adı "${ekAd}" geçersiz: boşluksuz; harf, rakam, _ . - (ör. firmaKodu).`); s.adG.focus(); return; }
-        if (ekAdlar.has(ekAd)) { mesaj.goster(`"${ekAd}" ek alanı iki kez yazılmış.`); s.adG.focus(); return; }
+        if (!/^[\p{L}\p{N}_.-]{1,60}$/u.test(ekAd)) { mesaj.goster(`Ek alan adı "${ekAd}" geçersiz: boşluksuz; harf, rakam, _ . - (ör. firmaKodu).`); if (gelismis.contains(s.adG)) gelismis.open = true; s.adG.focus(); return; }
+        if (ekAdlar.has(ekAd)) { mesaj.goster(`"${ekAd}" ek alanı iki kez yazılmış.`); if (gelismis.contains(s.adG)) gelismis.open = true; s.adG.focus(); return; }
         ekAdlar.add(ekAd);
       }
       // Gizli alanda boş değer = kayıtlı değeri koru (sunucu); açık alanda yazılan değer olduğu gibi.
@@ -374,10 +457,10 @@ async function girisProfilleri(govde, baglam, yenile) {
     formuGoster(formAlani, form);
   };
 
+  // Satır sade: ad, ortam, kullanıcı adı (parola ve kod kaynağı gösterilmez; ayrıntı düzenleme formunda).
+  // "<ortam> · " ile başlayan meta, tarif formundaki "Profili aç" bağlantısının profil bulma biçimidir.
   const satirlar = profiller.map((p) => kayitSatiri(p.ad,
-    [`${ortamAdi(p.ortamId)} · ${p.kullaniciAdi} · Parola: ${p.parola.dolu ? `${p.parola.maske} kayıtlı` : 'yok'} · İki aşamalı: ${IKI_ASAMALI_ETIKET[p.ikiAsamaliTur] || p.ikiAsamaliTur}`,
-      p.ikiAsamaliTur === 'sms' ? (p.sms.yontem === 'elle' ? ' (elle girilir)' : ' (sabit test kodu)') : '',
-      p.ekAlanlar && p.ekAlanlar.length ? ` · Ek alanlar: ${p.ekAlanlar.map((e) => `${e.ad}${e.gizli ? ' (gizli)' : ''}`).join(', ')}` : ''],
+    `${ortamAdi(p.ortamId)} · ${p.kullaniciAdi}`,
     [duzenleDugmesi(p.ad, () => profilFormu(p)), gecmisDugmesi(p.ad, () => gecmisGoster('giris_profili', p.id, p.ad, baglam)),
       silDugmesi(p.ad, async () => { await api('/platform/giris-profili/sil', { govde: { id: p.id } }); bildir('Giriş profili silindi.'); yenile(); })], 'kullanici'));
 

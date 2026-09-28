@@ -136,7 +136,7 @@ test.describe('ayrıştırma ve çözüm (saf)', () => {
 test.describe('paket istek metinleri', () => {
   test('tek kaynak: arayüz ve sunucu paket-istekleri.mjs\'i kullanır, kopya yok; sunucu dosyayı arayüze sunar', () => {
     const oku = (y: string) => readFileSync(join(KOK, y), 'utf8');
-    const ayirici = 'Sayfayı yalnızca okuyarak incele';
+    const ayirici = 'Sayfayı benimle birlikte, adım adım incele';
     expect(oku('scripts/platform/ekranlar/paket-istekleri.mjs')).toContain(ayirici);
     for (const y of ['scripts/platform/arayuz/sayfa-paketi.js', 'scripts/platform/arayuz/ekranlar.js', 'scripts/platform/ekranlar/ekran-servisi.mjs']) {
       expect(oku(y), y).not.toContain(ayirici);
@@ -307,7 +307,7 @@ test.describe('uçtan uca: ${Tablo.Sütun} ile ekran senaryosu (127.0.0.1)', () 
     expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ urun: 'U11', plan: '2' });
   });
 
-  test('akış kaydının onay penceresinde test verisi bölümü: geniş pencere, telefonda taşma yok; aynı adlı tabloda seçim beklenir', async () => {
+  test('akış kaydının onay penceresinde test verisi bölümü: geniş pencere, telefonda taşma yok; aynı adlı tabloda seçim beklenir; kapalı düğmenin nedeni + "Bölüme git"', async () => {
     const tarayici = await chromium.launch();
     try {
       const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } })).newPage();
@@ -330,19 +330,44 @@ test.describe('uçtan uca: ${Tablo.Sütun} ile ekran senaryosu (127.0.0.1)', () 
         };
         let yenile = () => {};
         const tv = testVerisiSecimi(onizleme, () => yenile());
-        void onayIste({ baslik: '“Kayıttan akış” akışı eklensin mi?', metin: 'Kaydedince ekranın yeni model sürümü açılır.', dugme: 'Ekle', ikonAd: 'uyari', ek: tv.bolum, hazir: tv.hazir, baglan: (fn: () => void) => { yenile = fn; } });
+        // akis-tasarimi.js ile aynı çağrı: kapalı düğmenin nedenleri testVerisiSecimi().bekleyenler()'den.
+        void onayIste({
+          baslik: '“Kayıttan akış” akışı eklensin mi?', metin: 'Kaydedince ekranın yeni model sürümü açılır.', dugme: 'Ekle', ikonAd: 'uyari',
+          ek: tv.bolum, nedenler: () => (tv.hazir() ? [] : tv.bekleyenler()), baglan: (fn: () => void) => { yenile = fn; }
+        });
       });
       const pencere = page.locator('dialog[open]');
+      const ekle = pencere.getByRole('button', { name: 'Ekle' });
       await expect(pencere.getByRole('region', { name: 'Test verisine yazılacaklar' })).toBeVisible();
-      await expect(pencere.getByRole('button', { name: 'Ekle' })).toBeDisabled();
-      await pencere.getByText('Atla (yazma)').click();
-      await expect(pencere.getByRole('button', { name: 'Ekle' })).toBeEnabled();
-      await page.screenshot({ path: test.info().outputPath('akis-onay-test-verisi.png') });
+      await expect(ekle).toBeDisabled();
+      // Kapalı düğmenin nedeni düğmenin altında; düğme nedene bağlı (title + aria-describedby).
+      const nedenler = pencere.locator('.diyalog-alt .kabul-nedenleri');
+      await expect(nedenler).toBeVisible();
+      await expect(nedenler).toContainText('1 tablo için karar bekleniyor');
+      await expect(ekle).toHaveAttribute('title', /^Kapalı: Test verisi: 1 tablo için karar bekleniyor/);
+      await expect(ekle).toHaveAttribute('aria-describedby', String(await nedenler.getAttribute('id')));
+      // 390 px: pencere ve sayfa taşmaz; "Bölüme git" kararsız tabloya kaydırır, ilk seçeneği odaklar ve vurgular.
       await page.setViewportSize({ width: 390, height: 844 });
-      const tasma = await pencere.evaluate((d) => d.scrollWidth - d.clientWidth);
-      expect(tasma).toBeLessThanOrEqual(2);
+      expect(await pencere.evaluate((d) => d.scrollWidth - d.clientWidth)).toBeLessThanOrEqual(2);
+      expect(await nedenler.evaluate((n) => n.scrollWidth - n.clientWidth)).toBeLessThanOrEqual(2);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(2);
+      await page.screenshot({ path: test.info().outputPath('akis-onay-neden-telefon.png') });
+      await nedenler.getByRole('button', { name: 'Bölüme git' }).click();
+      const planGrubu = pencere.getByRole('radiogroup', { name: 'Plan seçimi: aynı adlı tablo' });
+      await expect(planGrubu.getByRole('radio').first()).toBeFocused();
+      await expect(pencere.locator('.tv-tablo.dikkat-vurgusu')).toContainText('Plan seçimi');
+      await expect(planGrubu).toBeInViewport();
+      // Karar: düğme açılır, neden ve bağlar kalkar.
+      await pencere.getByText('Atla (yazma)').click();
+      await expect(ekle).toBeEnabled();
+      await expect(nedenler).toBeHidden();
+      await expect(ekle).not.toHaveAttribute('title', /.*/);
+      await expect(ekle).not.toHaveAttribute('aria-describedby', /.*/);
+      expect(await pencere.evaluate((d) => d.scrollWidth - d.clientWidth)).toBeLessThanOrEqual(2);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(2);
       await page.screenshot({ path: test.info().outputPath('akis-onay-test-verisi-telefon.png') });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.screenshot({ path: test.info().outputPath('akis-onay-test-verisi.png') });
     } finally {
       await tarayici.close();
     }

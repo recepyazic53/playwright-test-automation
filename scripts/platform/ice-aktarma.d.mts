@@ -2,6 +2,7 @@
 import type { Veritabani } from './veritabani/baglanti.mjs';
 import type { ParolaDenemeSiniri } from './kasa.mjs';
 import type { IlerlemeFn, MedyaYerlestirmeSonucu, YedekKasaBilgisi, YedekManifesti } from './yedek.mjs';
+import type { Esleme, EslemeOzeti, KimlikDegisimi, ProjeEslemesiBilgisi } from './ice-aktarma-esleme.mjs';
 
 export type Satir = Record<string, unknown>;
 
@@ -35,6 +36,13 @@ export interface Onizleme {
   eklenecekler: Record<string, { dosyada: number; yeni: number }>;
   medya: MedyaOnizlemesi;
   toplam: { yeni: number; degisen: number; yalnizBurada: number; ayni: number };
+  /** Hedef proje / ortam eşlemesi (öneri; uygulanan eşleme ve özeti eslemeOnizlemesi'nden sonra dolu). */
+  projeEslemesi?: ProjeEslemesiOnizlemesi;
+}
+export interface ProjeEslemesiOnizlemesi extends ProjeEslemesiBilgisi {
+  uygulanan: Esleme | null;
+  ozet: EslemeOzeti[] | null;
+  kimlikDegisimleri: KimlikDegisimi[];
 }
 export interface MedyaTuruOnizlemesi {
   /** Yedekteki medya satırı (saklama süresi dolmuşlar hariç). */
@@ -69,6 +77,8 @@ export interface Hazirlik {
 export interface Secim {
   tumu?: boolean;
   secimler?: Record<string, readonly string[]>;
+  /** Hedef proje / ortam eşlemesi; verilmezse kayıtlar yedekteki kimlikleriyle yazılır. */
+  esleme?: Esleme | null;
 }
 export interface UygulamaSonucu {
   tamYukleme: boolean;
@@ -81,6 +91,7 @@ export interface UygulamaSonucu {
   /** Yalnızca yönetici (IceAktarmaYoneticisi.uygula) ya da iceAktarmaMedyasiniYaz sonrası. */
   medya?: MedyaYerlestirmeSonucu;
   medyaHatasi?: string;
+  projeEslemesi?: { ozet: EslemeOzeti[]; kimlikDegisimleri: KimlikDegisimi[] };
 }
 export type IsDurumu = 'hazirlaniyor' | 'hazir' | 'uygulaniyor' | 'uygulandi' | 'hata' | 'iptal';
 export interface IsGorunumu {
@@ -102,6 +113,7 @@ export declare function iceAktarmaHazirla(
 ): Promise<Hazirlik>;
 export declare function hazirligiAt(hazirlik: Hazirlik): void;
 export declare function iceAktarmaMedyasiniYaz(vt: Veritabani, hazirlik: Hazirlik, secenekler?: { ilerleme?: IlerlemeFn }): Promise<MedyaYerlestirmeSonucu>;
+export declare function eslemeOnizlemesi(vt: Veritabani | null, hazirlik: Hazirlik, esleme: unknown): Promise<Onizleme>;
 export declare function iceAktarmaUygula(vt: Veritabani, hazirlik: Hazirlik, secim: Secim, secenekler?: { yapan?: string }): UygulamaSonucu;
 
 export declare class IceAktarmaYoneticisi {
@@ -118,6 +130,7 @@ export declare class IceAktarmaYoneticisi {
   bekle(id: string): Promise<IsGorunumu | undefined>;
   durum(id: string): IsGorunumu | undefined;
   uygula(id: string, secim: Secim, secenekler?: { yapan?: string }): Promise<UygulamaSonucu>;
+  esleme(id: string, esleme: unknown): Promise<Onizleme>;
   iptal(id: string): boolean;
   hepsiniAt(): void;
 }

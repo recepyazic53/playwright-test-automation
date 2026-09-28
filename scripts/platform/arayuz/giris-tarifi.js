@@ -308,7 +308,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
         profilBaglantisi('Profili aç')),
       h('p', { class: 'soluk' }, 'Anahtarı bulmak için: uygulamanın iki aşamalı doğrulama kurulumunda QR kodun altındaki "elle gir" / "kodu tarayamıyorum" bağlantısının gösterdiği metin.'));
     const smsNotu = h('div', { class: 'not-kutusu bilgi kucuk ikinci-adim-notu', role: 'note' },
-      h('p', {}, h('strong', {}, 'SMS kodunun kaynağı giriş profilinde tanımlanır: '), 'Ayarlar > Giriş profilleri > profil > "İki aşamalı doğrulama: SMS" (sabit test kodu ya da koşu sırasında elle girilir). Aşağıdaki seçim bu ortam için profildeki ayarı geçersiz kılabilir. ',
+      h('p', {}, h('strong', {}, 'SMS kodunun kaynağı giriş profilinde tanımlanır: '), 'Ayarlar > Giriş profilleri > profil > "Doğrulama kodu: SMS" (sabit test kodu ya da koşu sırasında elle girilir). Aşağıdaki seçim bu ortam için profildeki ayarı geçersiz kılabilir. ',
         profilBaglantisi('Profili aç')));
     const ikinciGorunum = () => {
       kodAlanlari.hidden = rYok.r.checked;

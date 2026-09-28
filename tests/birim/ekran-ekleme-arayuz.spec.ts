@@ -135,7 +135,7 @@ test('Ekran ekle: yan yana üç eşit kutu, tek eylem; istek metni gösterilmez,
   expect(new Set(b.map((x) => Math.round(x.y))).size).toBe(1);
   // Uzun istek metni ekranda görünmez; "Metni göster" varsayılan kapalı.
   const metin = paketIstekCumlesi();
-  await expect(page.getByText('Sayfayı yalnızca okuyarak incele', { exact: false })).toBeHidden();
+  await expect(page.getByText('Sayfayı benimle birlikte, adım adım incele', { exact: false })).toBeHidden();
   await expect(page.locator('details.istek-metni-acilir')).not.toHaveAttribute('open', '');
   await kutu.nth(2).getByRole('button', { name: 'İstek metnini kopyala' }).click();
   await expect(page.getByText('İstek metni kopyalandı.')).toBeVisible();
