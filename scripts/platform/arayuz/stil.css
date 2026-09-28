@@ -1336,6 +1336,14 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .tasarim-alani .kosul-dugmesi .ikon, .tasarim-alani .sinir-dugmesi .ikon { width: 11px; height: 11px; }
 .tasarim-alani .kosul-dugmesi.var { color: var(--durdu); background: var(--durdu-zemin); }
 .tasarim-alani .sinir-dugmesi.var { color: var(--vurgu); background: var(--vurgu-zemin); }
+/* Korunan parçalar: diyagramda düzenlenemez, kaydederken modeldeki hâliyle aynen korunur (salt okunur; kilit simgeli). */
+.tasarim-blogu.tur-korunan { --serit: var(--cizgi-2); background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in srgb, var(--metin-3) 5%, transparent) 10px 20px), var(--panel); }
+.korunan-notu { display: grid; gap: 4px; margin: 0; padding: 8px 10px; border-radius: 7px; font-size: 12px; color: var(--metin-2); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi-2); }
+.korunan-notu > b { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+.korunan-notu .ikon { width: 13px; height: 13px; flex: none; }
+.korunan-notu ul { margin: 0; padding-left: 18px; }
+.korunan-notu li { overflow-wrap: anywhere; }
+.tasarim-alani .kosul-dugmesi.kilitli { cursor: not-allowed; color: var(--metin-2); background: var(--panel-kati); }
 .sinir-girdileri { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .sinir-girdileri input { width: 100%; min-width: 0; }
 .sinir-duzenleyici .tasarim-hatalari { margin: 0; padding-left: 1.1rem; }

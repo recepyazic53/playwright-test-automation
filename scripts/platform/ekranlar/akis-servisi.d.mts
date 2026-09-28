@@ -2,6 +2,7 @@
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 import type { AkisBlogu, AkisEnvanteri, AkisPaleti } from '../tarama/akis-tasarimi.mjs';
 import type { PaketTestVerisiOnizlemesi } from '../tablolar/paket-test-verisi.mjs';
+import type { KorunanParca } from '../tarama/paket-olusturucu.mjs';
 
 type AkisSatiri = { id: string; ad: string; varsayilan: boolean; adimSayisi: number; senaryoSayisi: number };
 export declare function akisDuzenlenebilirMi(model: Record<string, unknown>): { duzenlenebilir: boolean; neden: string | null };
@@ -9,7 +10,13 @@ export declare function modeldenAkisEnvanteri(model: Record<string, unknown>): A
 /** Projenin ortak akışı (akış tasarımında "+ > Ortak akış" listesi). */
 export type OrtakAkisOzeti = { dosya: string; ad: string; adimlar: string[]; yalnizTest: boolean };
 export declare function ortakAkislariListele(vt: Veritabani, projeId: string): OrtakAkisOzeti[];
-export declare function adimlardanBloklar(model: Record<string, unknown>, adimlar: Record<string, unknown>[], env: AkisEnvanteri): AkisBlogu[];
+export declare function adimlardanBloklar(model: Record<string, unknown>, adimlar: Record<string, unknown>[], env: AkisEnvanteri, akisId?: string): AkisBlogu[];
+/** Modelin tüm akışlarının diyagramda düzenlenemeyen (aynen korunan) parçaları: blok anahtarı → parça; özetler; alanların gösterilemeyen koşulları. */
+export declare function korunanParcalari(model: Record<string, unknown>): {
+  parcalar: Record<string, KorunanParca>;
+  ozetler: Record<string, { akis: string; baslik: string; ozet: string[] }>;
+  alanKosullari: Map<string, { anahtar: string; gorunurluk: Record<string, unknown>; aciklama: string; etiket: string }>;
+};
 /** Ortak akışı kullanan ekran (akış adları + senaryo sayısı). */
 export type OrtakAkisKullanani = { id: string; ad: string; akislar: string[]; senaryoSayisi: number };
 export declare function akislariListele(vt: Veritabani, projeId: string, ekranId: string): {
@@ -27,7 +34,7 @@ export declare function akisTasarimi(vt: Veritabani, projeId: string, ekranId: s
   akis: { id: string; ad: string; varsayilan: boolean } | null; kopyaKaynagi: string | null;
 };
 export declare function akisKaydet(vt: Veritabani, projeId: string, ekranId: string, g: { akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: AkisEnvanteri; testVerisi?: unknown }):
-  { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; ekranlar?: OrtakAkisKullanani[] }; akisId: string; testVerisi?: PaketTestVerisiOnizlemesi }
+  { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; korunanSilinen?: string[]; ekranlar?: OrtakAkisKullanani[] }; akisId: string; testVerisi?: PaketTestVerisiOnizlemesi }
   | { akisId: string; surum: number; testVerisi?: { tablolar: Array<{ ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number }>; baglanan: number } };
 export declare function akisVarsayilanYap(vt: Veritabani, projeId: string, ekranId: string, akisId: string, yapan?: string): { surum: number | null; tasinan: number };
 export declare function akisSil(vt: Veritabani, projeId: string, ekranId: string, akisId: string): { surum: number };

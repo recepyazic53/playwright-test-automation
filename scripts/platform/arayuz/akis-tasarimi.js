@@ -20,6 +20,10 @@
 // gösterilir; yalnız seçilen tablolar / bağlantılar yazılır, aynı adlı tablo için seçim yapılmadan onaylanamaz.
 // Ortak akışın kaydında (başlangıç ekranından) hedef seçimi yoktur: başlangıç ekranına ait bloklar silinir, "Ortak akışı güncelle"
 // ortak akışı kullanan ekranları gösterip onayla ortak akışın tek akışına yazar (sayfa paketi yok).
+// Ekranın akışında diyagramın gösteremediği parçalar (alt model adımı, görünürlük koşulu, kod yöntemi…) salt okunur "Korunan
+// adım / Korunan aksiyonlar" blokları, alan grubunda / aksiyonda kilitli not ve alanın yanında kilitli koşul olarak görünür;
+// kaydederken sunucu bunları modeldeki hâliyle aynen yazar. Korunan parçalı blok silinirken ve kaydetme onayında (artık
+// diyagramda olmayan korunan parçalar) ne kaybolacağı gösterilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
@@ -38,8 +42,11 @@ const TURLER = {
   sql: { etiket: 'SQL sorgusu', ikonAd: 'veri' },
   dosya: { etiket: 'İndirilen dosyayı doğrula', ikonAd: 'indir' },
   giris: { etiket: 'Yeniden giriş', ikonAd: 'kilit' },
+  korunan: { etiket: 'Korunan adım', ikonAd: 'kilit' },
   bitir: { etiket: 'Bitir', ikonAd: 'onay' }
 };
+/** Bloğun tür etiketi (korunan parçada kapsamına göre). */
+const turEtiketi = (b) => (b.tur === 'korunan' && b.kapsam === 'aksiyonlar' ? 'Korunan aksiyonlar' : TURLER[b.tur].etiket);
 const SURUKLEME_TURU = 'application/x-nobetci-alan';
 /** Sınır (alan.sinirlar) yazılabilen alan türleri: palet türü → model alan tipi. */
 const SINIR_TIPLERI = { number: 'sayi', date: 'tarih', text: 'metin' };
@@ -57,6 +64,17 @@ function sinirOzeti(s, tip) {
   const aralik = var_(a) || var_(b) ? `${var_(a) ? a : '…'}–${var_(b) ? b : '…'}${tip === 'metin' ? ' karakter' : ''}` : '';
   const parca = [aralik, tip === 'metin' && s.desen ? `/${s.desen}/` : ''].filter(Boolean).join(' ');
   return parca || null;
+}
+/**
+ * Kaydetme onayında: güncellenen akışın diyagramda artık olmayan korunan parçaları (sunucu etki.korunanSilinen; kaydedince
+ * modelden çıkarlar). Yoksa boş metin / liste.
+ */
+function korunanSilinen(etki) {
+  const l = Array.isArray(etki && etki.korunanSilinen) ? etki.korunanSilinen : [];
+  return {
+    metin: l.length ? `Diyagramda düzenlenemeyen ${l.length} korunan parça artık diyagramda yok; kaydedince modelden çıkar (listede “Çıkarılacak”). ` : '',
+    liste: l.map((x) => `Çıkarılacak: ${x}`)
+  };
 }
 /** Art arda beklenen mesajlardan (VEYA) en çok (sunucudaki MESAJ_GRUBU_EN_COK ile aynı). */
 const MESAJ_GRUBU_EN_COK = 5;
@@ -163,18 +181,22 @@ export async function akisTasarimi(icerik, s) {
     const kosul = kosulVar ? kaynak.kosullar[anahtar] : undefined;
     const sinirVar = Boolean(kaynak && kaynak.sinirlar && Object.prototype.hasOwnProperty.call(kaynak.sinirlar, anahtar));
     const sinir = sinirVar ? kaynak.sinirlar[anahtar] : undefined;
+    const korunanKosul = kaynak && kaynak.korunanKosullar ? kaynak.korunanKosullar[anahtar] : undefined;
     for (const x of bloklar) {
       if (x.tur !== 'alanlar') continue;
       x.alanlar = x.alanlar.filter((a) => a !== anahtar);
       x.zorunlu = x.zorunlu.filter((a) => a !== anahtar);
       if (x.kosullar) delete x.kosullar[anahtar];
       if (x.sinirlar) delete x.sinirlar[anahtar];
+      if (x.korunanKosullar) delete x.korunanKosullar[anahtar];
     }
     const yer = onune ? b.alanlar.indexOf(onune) : -1;
     if (yer >= 0) b.alanlar.splice(yer, 0, anahtar); else b.alanlar.push(anahtar);
     // Taşınan alan koşulunu da götürür.
     if (kosulVar) b.kosullar = { ...(b.kosullar || {}), [anahtar]: kosul };
     if (sinirVar) b.sinirlar = { ...(b.sinirlar || {}), [anahtar]: sinir };
+    // Diyagramda düzenlenemeyen koşul (alanın tanımıyla aynen korunur) de alanla gider.
+    if (korunanKosul) b.korunanKosullar = { ...(b.korunanKosullar || {}), [anahtar]: korunanKosul };
     // Taşınan alan ayarını korur; yeni eklenen, sayfanın zorunluluğuyla gelir.
     if (baska ? zorunluydu : alanBilgisi.get(anahtar)?.zorunlu) b.zorunlu.push(anahtar);
     etkin = hedef;
@@ -201,7 +223,15 @@ export async function akisTasarimi(icerik, s) {
     etkin = j;
     degisti();
   }
-  function sil(i) {
+  async function sil(i) {
+    const b = bloklar[i];
+    // Korunan parça (diyagramda düzenlenemez, aynen korunur) taşıyan blok: silmeden önce ne kaybolacağı sorulur.
+    const ozet = b.tur === 'korunan' ? b.ozet : b.korunan ? b.korunanOzet : null;
+    if (ozet && !(await onayIste({
+      baslik: 'Korunan parça silinsin mi?',
+      metin: `“${b.ad || turEtiketi(b)}” bloğu diyagramda düzenlenemeyen parçalar taşıyor; silip kaydederseniz bunlar modelden çıkar.`,
+      liste: ozet, dugme: 'Sil', tehlikeli: true, ikonAd: 'uyari'
+    }))) return;
     bloklar.splice(i, 1);
     etkin = Math.min(etkin, bloklar.length - 1);
     degisti();
@@ -283,7 +313,13 @@ export async function akisTasarimi(icerik, s) {
       }, ikon('carpi')));
     const kosul = bloklar[i].kosullar ? bloklar[i].kosullar[anahtar] : undefined;
     const kosulYazisi = kosulMetni(kosul);
-    cip.insertBefore(h('button', {
+    // Diyagramda gösterilemeyen koşul (ör. çok şartlı, çalışma anında): salt okunur, alanın tanımıyla aynen korunur.
+    const korunanKosul = bloklar[i].korunanKosullar ? bloklar[i].korunanKosullar[anahtar] : null;
+    if (korunanKosul) cip.insertBefore(h('span', {
+      class: 'kosul-dugmesi var kilitli', role: 'note', 'aria-label': `${etiket}: koşul (diyagramda düzenlenemez)`,
+      title: `Görünür: ${korunanKosul}. Bu koşul diyagramda düzenlenemez; kaydederken modeldeki hâliyle aynen korunur.`
+    }, ikon('kilit'), korunanKosul), cip.querySelector('.zorunluluk'));
+    else cip.insertBefore(h('button', {
       type: 'button', class: `kosul-dugmesi${kosulYazisi ? ' var' : ''}`, 'aria-label': `${etiket}: koşul`,
       title: kosulYazisi ? `Görünür: ${kosulYazisi}. Değiştirmek için tıklayın.` : 'Her zaman görünür. Seçime bağlıysa koşul ekleyin.',
       onclick: () => { kosulDuzenleme = { blok: i, alan: anahtar }; ciz(); }
@@ -425,13 +461,33 @@ export async function akisTasarimi(icerik, s) {
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { sinirDuzenleme = null; ciz(); } }, 'Vazgeç')));
   }
 
+  /** Bloğun diyagramda düzenlenemeyen (aynen korunan) parçaları: kilitli, salt okunur not. */
+  function korunanNotu(ozet, baslik) {
+    return h('div', { class: 'korunan-notu', role: 'note', 'aria-label': 'Diyagramda düzenlenemeyen parçalar' },
+      h('b', {}, ikon('kilit'), baslik),
+      ozet && ozet.length ? h('ul', {}, ozet.map((x) => h('li', {}, x))) : null);
+  }
+
   function blokGovdesi(b, i) {
+    if (b.tur === 'korunan') {
+      // Salt okunur: adımın tamamı ya da aksiyonları modeldeki hâliyle aynen kaydedilir; yalnız taşınır / silinir.
+      return [
+        h('p', { class: 'korunan-adi' }, h('span', { class: 'soluk kucuk' }, 'Adım: '), h('b', {}, b.ad || '')),
+        korunanNotu(b.ozet, 'Diyagramda düzenlenemez — kaydederken aynen korunur'),
+        h('p', { class: 'soluk kucuk' }, b.kapsam === 'aksiyonlar'
+          ? 'Bu adımın aksiyonları diyagramda gösterilemiyor (ör. yazısıyla seçilen düğme, öğeye bağlı bekleme); düğmesi adımın ilerlemesidir. Taşıyabilir ya da silebilirsiniz; değiştirmek için sayfa paketi yükleyin.'
+          : 'Bu adım diyagramda gösterilemiyor (ör. alt model adımı). Taşıyabilir ya da silebilirsiniz; değiştirmek için sayfa paketi yükleyin.')
+      ];
+    }
+    const korunanParca = b.korunan && Array.isArray(b.korunanOzet) && b.korunanOzet.length
+      ? korunanNotu(b.korunanOzet, 'Bu adımın diyagramda düzenlenemeyen parçaları (aynen korunur):') : null;
     if (b.tur === 'alanlar') {
       const ad = h('input', { type: 'text', value: b.ad, maxlength: '80', placeholder: 'ör. Müşteri bilgileri', 'aria-label': 'Adım adı' });
       ad.addEventListener('input', () => { b.ad = ad.value; sakla(); });
       ad.addEventListener('change', () => { b.ad = ad.value.trim(); sakla(); paletCiz(); });
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Adım adı'), ad),
+        korunanParca,
         goruntuIsareti(b),
         b.alanlar.length ? h('ul', { class: 'tasarim-alanlari', 'aria-label': 'Doldurulacak alanlar' }, b.alanlar.map((a) => alanCipi(a, i)))
           : h('p', { class: 'soluk kucuk' }, 'Alan yok. Sağdaki listeden alanları buraya sürükleyin ya da grubu seçip “Ekle”ye basın.'),
@@ -463,6 +519,7 @@ export async function akisTasarimi(icerik, s) {
       });
       return [
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Basılacak düğme'), secim),
+        korunanParca,
         h('label', { class: 'onay-satiri kucuk' }, kutu, 'Her senaryoda basılmaz (senaryoda seçilir)'),
         b.istegeBagli ? null : h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Sonucu en çok bekleme (sn)'), sure),
         b.istegeBagli ? null : goruntuIsareti(b),
@@ -585,11 +642,13 @@ export async function akisTasarimi(icerik, s) {
     const blokHatalari = hatalar.get(i) || [];
     const el = h('li', {
       class: ['diyagram-dugumu', 'tasarim-blogu', `tur-${b.tur}`, i === etkin ? 'etkin' : '', blokHatalari.length ? 'durum-hata' : '', b.tur === 'aksiyon' && b.istegeBagli ? 'istege-bagli' : '', b.tur === 'mesaj' && b.uyari ? 'uyari-mesaji' : ''].join(' ').replace(/\s+/g, ' ').trim(),
-      'data-blok': String(i), 'aria-label': `${i + 1}. blok: ${tur.etiket}${b.tur === 'alanlar' && b.ad ? ` (${b.ad})` : ''}`
+      'data-blok': String(i), 'aria-label': `${i + 1}. blok: ${turEtiketi(b)}${(b.tur === 'alanlar' || b.tur === 'korunan') && b.ad ? ` (${b.ad})` : ''}`
     },
     h('div', { class: 'dugum-basligi' },
       h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(tur.ikonAd)),
-      h('h4', {}, tur.etiket),
+      h('h4', {}, turEtiketi(b)),
+      b.tur === 'korunan' ? rozet('salt okunur', 'uyari', { title: 'Diyagramda düzenlenemez; kaydederken modeldeki hâliyle aynen korunur.' }) : null,
+      b.tur !== 'korunan' && b.korunan ? rozet('korunan parça', 'uyari', { title: 'Bu adımın bazı parçaları diyagramda düzenlenemez; kaydederken aynen korunur.' }) : null,
       b.tur === 'aksiyon' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
       b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu', { kisalt: true }) : null,
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
@@ -709,12 +768,13 @@ export async function akisTasarimi(icerik, s) {
         // Kayıtta yakalanan seçenek listeleri: paket önizlemesindeki gibi test verisine yazılacaklar (onaysız hiçbir şey yazılmaz).
         let tvYenile = () => {};
         const tv = on.testVerisi ? testVerisiSecimi(on.testVerisi, () => tvYenile()) : null;
+        const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: ortakKayit ? `“${veri.ekran.ad}” ortak akışı bu kayıtla güncellensin mi?` : on.etki.yeni ? `“${hedef.ad}” akışı eklensin mi?` : `“${hedef.ad}” akışı bu kayıtla güncellensin mi?`,
-          metin: ekr
+          metin: silinen.metin + (ekr
             ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
-            : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`,
-          liste: ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik), dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: false, ikonAd: 'uyari',
+            : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : ''}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
+          liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))], dugme: on.etki.yeni ? 'Ekle' : 'Güncelle', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari',
           ek: tv ? tv.bolum : null, hazir: tv ? tv.hazir : null, baglan: (fn) => { tvYenile = fn; }
         });
         if (!onay) return;
@@ -734,13 +794,14 @@ export async function akisTasarimi(icerik, s) {
         const ad = akisAdi.value.trim();
         // Ortak akış: onu kullanan ekranlar etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar).
         const ekr = Array.isArray(on.etki.ekranlar) ? on.etki.ekranlar : null;
+        const silinen = korunanSilinen(on.etki);
         const onay = await onayIste({
           baslik: on.etki.yeni ? `“${ad}” akışı oluşturulsun mu?` : `“${ad}” akışı kaydedilsin mi?`,
-          metin: ekr
+          metin: silinen.metin + (ekr
             ? `${ekr.length ? `Bu ortak akışı kullanan ${ekr.length} ekran etkilenir (senaryoları sonraki koşularında yeni hâliyle koşar). ` : 'Bu ortak akışı kullanan ekran yok. '}Kaydedince ortak akışın yeni model sürümü açılır.`
-            : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : on.etki.yeni ? '' : 'Bu akışı kullanan senaryo yok. '}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`,
-          liste: ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik),
-          dugme: on.etki.yeni ? 'Oluştur' : 'Kaydet', tehlikeli: false, ikonAd: 'uyari'
+            : `${sen.length ? `Bu akışı kullanan ${sen.length} senaryo etkilenir (sonraki koşularında yeni akışla koşarlar). ` : on.etki.yeni ? '' : 'Bu akışı kullanan senaryo yok. '}Kaydedince ekranın yeni model sürümü açılır (Model geçmişinde görünür).`),
+          liste: [...silinen.liste, ...(ekr ? ekr.map((x) => `${x.ad} · ${x.akislar.join(', ')} · ${x.senaryoSayisi} senaryo`) : sen.map((x) => x.baslik))],
+          dugme: on.etki.yeni ? 'Oluştur' : 'Kaydet', tehlikeli: silinen.liste.length > 0, ikonAd: 'uyari'
         });
         if (!onay) return;
         const y = await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/ekran/akis/kaydet', { govde: { ...govde, onay: true } }));

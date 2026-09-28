@@ -108,7 +108,21 @@ export type KayitOgesi = { secici: string; metin: string | null; cerceve?: strin
 export type KayitGostergesi = { secici: string | null; metin: string | null; aranan?: string | null; veya?: KayitGostergesi[]; desen?: boolean; cerceve?: string[] };
 /** Kullanıcının adlandırıp aldığı adım: seçtiği alanların YAPISI (değer yok) + ilerleme düğmesi. */
 /** Adımın içinde yeni alanlar açan düğme ("Ek adres ekle"); secimli: her senaryoda basılmaz, senaryoda seçilir. */
-export type KayitAcicisi = KayitOgesi & { secimli: boolean; onceBekle?: number; sonraBekle?: number };
+export type KayitAcicisi = KayitOgesi & { secimli: boolean; onceBekle?: number; sonraBekle?: number; korunan?: KorunanParca };
+/** Diyagramda gösterilemeyen alan (aynen korunur): bölümü ve adımdaki önceki alanın kimliği (yerine konur). */
+export type KorunanAlan = { alan: Record<string, unknown>; bolum: { id: string; baslik: string }; onceki: string | null };
+/**
+ * Akış diyagramında düzenlenemeyen, kaydederken modeldeki hâliyle AYNEN korunan parça (akis-servisi.mjs üretir):
+ *  - 'adim': adımın tamamı (ör. alt model adımı); alanAnahtarlari: adımın diyagram alan anahtarları (başka grupta olamaz).
+ *  - 'ek': düzenlenebilir adımın gösterilemeyen özellikleri — id (kaydedilen adım bu kimlikle yazılır), adimEk (gorunurluk,
+ *    pomMetodu), kosuEk (basariGostergesi, zamanAsimiSn, not), alanlar (gösterilemeyen alanlar), bolumEk (bölüm kimliği →
+ *    pomMetodu / gorunurluk).
+ *  - 'aksiyonlar': adımın koşu aksiyonları (ör. metinle süzülen tıklama, öğeye bağlı bekleme).
+ */
+export type KorunanParca =
+  | { tur: 'adim'; adim: Record<string, unknown> & { id: string }; alanAnahtarlari?: string[] }
+  | { tur: 'ek'; id: string; adimEk?: Record<string, unknown>; kosuEk?: Record<string, unknown>; alanlar?: KorunanAlan[]; bolumEk?: Record<string, Record<string, unknown>> }
+  | { tur: 'aksiyonlar'; aksiyonlar: Array<Record<string, unknown>> };
 export type KayitAdimi = {
   ad: string; yol: string; baslik: string; alanlar: HamAlan[]; ilerleme: KayitOgesi | null;
   /** Alan açan düğmeler (basılış sırasıyla). */
