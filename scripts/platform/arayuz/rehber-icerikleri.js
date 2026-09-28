@@ -60,13 +60,6 @@ export const REHBERLER = {
       { baslik: 'Sağlık noktası', hedef: '.yan-panel .yan-not', metin: 'Ekran adının yanındaki nokta, son tam koşunun başarı oranına göre yeşil, sarı ya da kırmızıdır. Eşikler proje başınadır; "Eşikleri değiştir" Ayarlar > Arayüz\'e götürür.' },
       { baslik: 'Rapor sekmeleri', hedef: '.sonuc-sekmeleri', metin: '"Genel" görünümde dört sekme vardır: Ekranlar (ekran senaryolarının koşuları), Servisler (servis senaryolarının sonuçları), Uçtan uca akışlar (servis + ekran + SQL adımlı akışlar) ve Raporlar (kaydedilen PDF dönem raporları). Sekmeler yalnız "Genel" seçiliyken görünür.' },
       {
-        baslik: 'Dönem raporu (PDF)',
-        metin: ['"Rapor al (PDF)" seçtiğiniz dönemin raporunu bu bilgisayarda üretir: durum rozeti (Sağlıklı / Dikkat / Kritik), önceki eşit döneme göre ▲▼ farklar, öncelikli aksiyonlar (P1 / P2 / P3), sorunların eğilimi ve kapsam.',
-          'Kapsam: tek ekran, tek servis, birden çok ekran, birden çok servis ya da ekran + servis. Çoklu kapsamda listeden birden çok öğe seçin ya da "Tüm ekranlar" / "Tüm servisler"i işaretleyin (tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar). Çoklu raporda öğeler sağlık sırasıyla karşılaştırılır; ekran + servis raporunda iki taraf ayrı özetlenir, aynı günlerde görülen ekran ve servis sorunları tek aksiyonda birleşir.',
-          '"Raporlar\'a kaydet" açıksa PDF şifreli saklanır; Raporlar sekmesinde indirilir, aynı seçimlerle (dönem bugüne kaydırılarak) yeniden oluşturulur ya da silinir.'],
-        ipucu: 'Gizli değerler, istek / yanıt gövdeleri ve test verisi değerleri rapora girmez; ortam adresi ve ekran görüntüleri yalnız siz seçerseniz eklenir.'
-      },
-      {
         baslik: 'Başlık ve "Koşuyu başlat"', hedef: '.sonuc-icerik > .sayfa-basligi',
         metin: ['Başlığın yanındaki rozet son tam koşuda kaç testin kaldığını ya da hepsinin geçtiğini söyler. Altında son tam koşunun zamanı, süresi, senaryo ve ekran sayısı (bir ekran seçiliyse koşunun kapsamı) yazar.',
           '"Koşuyu başlat" Senaryolar ekranına götürür; koşu orada onayla başlar. Devre dışı ya da silinmiş bir ekran seçiliyse düğme görünmez.']
@@ -101,6 +94,13 @@ export const REHBERLER = {
           '"Kalan testlerin hataları" kalan testleri, "Koşuda yakalanan mesajlar" ise geçen testlerde de ekranda görülen uyarı / hata mesajlarını kapsar. Üstteki çipler hata türlerine göre dağılımı gösterir; bir kalıpta "Örnek" bir sonucu yanda açar, "Testler" etkilenen testleri listeler.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Hata mesajları', ikon: 'uyari' }, { baslik: 'Kalıp', alt: 'sayılar #', ikon: 'liste' }, { baslik: 'Etkilenenler', alt: 'test sayısı', ikon: 'grafik' }] },
         ipucu: 'Önce en çok testi etkileyen kalıba bakın: tek bir düzeltme birçok testi geçirebilir.'
+      },
+      {
+        baslik: 'Dönem raporu (PDF)',
+        metin: ['"Rapor al (PDF)" seçtiğiniz dönemin raporunu bu bilgisayarda üretir: durum rozeti (Sağlıklı / Dikkat / Kritik), önceki eşit döneme göre ▲▼ farklar, öncelikli aksiyonlar (P1 / P2 / P3), sorunların eğilimi ve kapsam.',
+          'Kapsam: tek ekran, tek servis, birden çok ekran, birden çok servis ya da ekran + servis. Çoklu kapsamda listeden birden çok öğe seçin ya da "Tüm ekranlar" / "Tüm servisler"i işaretleyin (tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar). Çoklu raporda öğeler sağlık sırasıyla karşılaştırılır; ekran + servis raporunda iki taraf ayrı özetlenir, aynı günlerde görülen ekran ve servis sorunları tek aksiyonda birleşir.',
+          '"Raporlar\'a kaydet" açıksa PDF şifreli saklanır; Raporlar sekmesinde indirilir, aynı seçimlerle (dönem bugüne kaydırılarak) yeniden oluşturulur ya da silinir.'],
+        ipucu: 'Gizli değerler, istek / yanıt gövdeleri ve test verisi değerleri rapora girmez; ortam adresi ve ekran görüntüleri yalnız siz seçerseniz eklenir.'
       },
       {
         baslik: 'Kalan bir testi incelemek',
