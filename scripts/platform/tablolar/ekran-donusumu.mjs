@@ -19,7 +19,7 @@ import { modelAlanlari } from './paket-tablolari.mjs';
 import { formSemasiOlustur, tumFormAlanlari } from '../senaryolar/model-formu.mjs';
 import { senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { tablolariListele } from './tablo-deposu.mjs';
-import { ekranAlanBaglari } from './ekran-baglari.mjs';
+import { etkinAlanBaglari } from './ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, ekrandakiDeger, modelAlanBilgisi } from './ekran-basvurulari.mjs';
 import { degerBasvurusu, degerBasvurusuYaz, grupAnahtari, sutunBul } from './tablo-secimi.mjs';
 
@@ -97,7 +97,7 @@ export function ekranTabloDonusumu(vt, projeId, girdi, secenekler = {}) {
   /** @type {Array<{ senaryoId: string; ortamVerileri: Record<string, Nesne>; tabloSecimleri?: Secimler | null; alanlar: string[] }>} */
   const yazimlar = [];
   for (const ekran of ekranlar) {
-    const baglar = ekranAlanBaglari(vt, ekran.id);
+    const baglar = etkinAlanBaglari(vt, ekran.id);
     if (!Object.keys(baglar).length) continue;
     /** @type {Map<string, { mb: NonNullable<ReturnType<typeof modelBaglami>>; bilgi: ReturnType<typeof modelAlanBilgisi>; alanlar: Map<string, any> } | null>} */
     const modeller = new Map();

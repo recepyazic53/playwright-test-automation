@@ -160,6 +160,12 @@ akış olmaz. Nasıl çalışır:
 - **Düzenleme:** ortak akışın Akışlar sekmesinde "Düzenle" ile aynı diyagram düzenleyicisinde değiştirilir (tek akış;
   içine ortak akış eklenmez). Kaydederken onu kullanan ekranlar gösterilir. "Ekranlara ekle…" ortak akışı seçilen
   ekranların varsayılan akışının sonuna ekler (isteğe bağlı seçilirse senaryoda "“<ad>” dahil" ile koşar).
+- **Test verisi:** ortak akışın sayfasında "Test verisi" sekmesi vardır; alan → tablo sütunu bağı ortak akışta bir kez kurulur
+  (ortak akış paketinin `testVerisi.baglantilar`ı da ortak akışın ayarlarına yazılır) ve onu kullanan tüm ekranlara **varsayılan**
+  olarak geçer. Ekranın Test verisi sekmesinde bu bağ "Ortak akıştan: <ad>" işaretiyle görünür; ekran aynı alanı başka sütuna
+  bağlarsa o ekranda onunki geçerlidir (ekrana özel), "Ortak akışa dön" ekranın bağını siler. Etkin bağ (ekranınki, yoksa ortak
+  akışınki) senaryo formunda, koşuda, tablo etkisi / kullanımında, birleştirme denetiminde ve istek dosyasında kullanılır
+  (`tablolar/ekran-baglari.mjs > etkinAlanBaglari`). Ortak akışta senaryo dönüşümleri ("Değerleri / Kişi alanlarını tabloya bağla…") yoktur.
 - **Yalnızca test ortamı:** `"yalnizTestOrtami": true` ise adımları canlı işaretli ortamda koşulmaz, raporda
   "(canlı ortam: atlandı)" yazar.
 - **Kart:** kimlik bloğu gibi bir kayıt bloğudur (`kimlikProfili`, `kimlikTuru: "kart"`). Değer, "Kredi kartı" tablosunun

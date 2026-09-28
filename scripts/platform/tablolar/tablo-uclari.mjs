@@ -1,9 +1,9 @@
 // TEST VERİSİ TABLOLARI — HTTP uçları (sunucu-platform.mjs GET_UCLARI / POST_UCLARI'na eklenir). Belirteç, gövde ve kasa
 // kilidi sunucuda denetlenir. Gizli sütun değerleri hiçbir yanıtta dönmez.
 import { basename } from 'node:path';
-import { DepoHatasi } from '../veritabani/depo.mjs';
+import { DepoHatasi, ekranModeliGetir } from '../veritabani/depo.mjs';
 import { tabloSil, tablolariListele } from './tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet, tabloEkranKullanimi } from './ekran-baglari.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet, ortakAkisBaglari, tabloEkranKullanimi } from './ekran-baglari.mjs';
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
 import { karsiliklariEkrandanAl } from './karsiliklar.mjs';
 import { tabloKaydetEtkiyle } from './tablo-etkisi.mjs';
@@ -39,12 +39,17 @@ export const TABLO_GET_UCLARI = [
   }],
   // Test verisi ekranının üstündeki "Veri sağlığı" (benzer / kullanılmayan tablolar, boş sütunlar, kırık başvurular; değer dönmez).
   ['/platform/tablolar/veri-sagligi', (db, q) => veriSagligi(db, kimlik(q.get('projeId'), 'projeId'))],
-  // Ekranın "Test verisi" sekmesi: input'lar, tablo bağlantıları ve tablolar.
+  // Ekranın "Test verisi" sekmesi: input'lar, ekranın KENDİ tablo bağlantıları, kullandığı ortak akışlardan gelen (varsayılan)
+  // bağlar ve tablolar. ortakAkis: bu sayfa bir ortak akışın (bağları onu kullanan ekranlara geçer; senaryo dönüşümleri yok).
   ['/platform/ekran/alan-baglari', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
     const ekranId = kimlik(q.get('ekranId'), 'ekranId');
     const { girdiler } = ekranGirdileri(db, projeId, ekranId, { tumTipler: true });
-    return { baglar: ekranAlanBaglari(db, ekranId), girdiler: girdiler.map((g) => ({ id: g.id, etiket: g.etiket, tip: g.tip })), tablolar: tablolariListele(db, projeId) };
+    const model = ekranModeliGetir(db, ekranId);
+    return {
+      baglar: ekranAlanBaglari(db, ekranId), ortakBaglar: ortakAkisBaglari(db, ekranId), ortakAkis: Boolean(model && model.model && model.model.tur === 'ortakAkis'),
+      girdiler: girdiler.map((g) => ({ id: g.id, etiket: g.etiket, tip: g.tip })), tablolar: tablolariListele(db, projeId)
+    };
   }]
 ];
 

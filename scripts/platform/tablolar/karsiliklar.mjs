@@ -3,7 +3,7 @@
 // modelden kalksa da koşu doğru seçeneği seçer. Yalnız eksik olanlar eklenir; kullanıcının girdiği karşılık değişmez.
 // Gizli sütun ve tabloda olmayan değer atlanır.
 import { ekranGirdileri } from '../senaryolar/senaryo-servisi.mjs';
-import { ekranAlanBaglari } from './ekran-baglari.mjs';
+import { etkinAlanBaglari } from './ekran-baglari.mjs';
 import { tabloKaydet, tablolariListele } from './tablo-deposu.mjs';
 import { sutunBul } from './tablo-secimi.mjs';
 
@@ -14,7 +14,7 @@ import { sutunBul } from './tablo-secimi.mjs';
  * @returns {{ eklenen: number; tablolar: string[] }}
  */
 export function karsiliklariEkrandanAl(vt, projeId, ekranId) {
-  const baglar = ekranAlanBaglari(vt, ekranId);
+  const baglar = etkinAlanBaglari(vt, ekranId);
   if (!Object.keys(baglar).length) return { eklenen: 0, tablolar: [] };
   const { girdiler } = ekranGirdileri(vt, projeId, ekranId);
   const tablolar = tablolariListele(vt, projeId);

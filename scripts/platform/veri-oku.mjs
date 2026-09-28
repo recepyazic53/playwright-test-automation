@@ -36,7 +36,7 @@ import { riskliOrtamMi } from './guvenlik/ortam-riski.mjs';
 import { izinMesaji } from './guvenlik/izin-tanimlari.mjs';
 import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
 import { tablolariListele } from './tablolar/tablo-deposu.mjs';
-import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
+import { etkinAlanBaglari } from './tablolar/ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, metinBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
 import { tanimMetinleri } from './dosyalar/dosya-icerigi.mjs';
 import { satirSecimiOlustur } from './tablolar/tablo-secimi.mjs';
@@ -248,7 +248,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
   // çözülemeyen başvuru "veriHatalari" olur (koşucu tarayıcıyı açmadan açık hatayla durur).
   /** @type {import('./tablolar/tablo-deposu.mjs').Tablo[] | null} */
   let tablolar = null;
-  /** @type {Map<string, ReturnType<typeof ekranAlanBaglari>>} */
+  /** @type {Map<string, ReturnType<typeof etkinAlanBaglari>>} */
   const baglarOnbellegi = new Map();
   // Birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi); senaryo başına ayrı seçim (grubun değerleri aynı satırdan).
   const kosuAyarlari = (() => { try { return kosuAyarlariniOku(vt); } catch { return null; } })();
@@ -269,7 +269,7 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     const dosyadaBasvuru = dosyaMetinleri.some((m) => /\$\{\s*(?!akis:)[^{}]*\.[^{}]*\}/.test(m));
     if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru) return { veri, tabloGizliDegerleri: [], veriHatalari: [], dosyaBasvurulari: {}, satirlar: [] };
     tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
-    if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, ekranAlanBaglari(vt, ekranId));
+    if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, etkinAlanBaglari(vt, ekranId));
     const satirSecimi = { ...satirSecimiOlustur(satirSecimKipi), ...sabit, kullanilan: new Map() };
     const s = {
       tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId, dosyaDenetle: tablodanDosyaDenetle,

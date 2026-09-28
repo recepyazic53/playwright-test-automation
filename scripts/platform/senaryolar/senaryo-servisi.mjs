@@ -23,7 +23,7 @@ import { ANA_AKIS_ID, akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiO
 import { listeDegeri, modelSecimAlanlari, modeleListeleriUygula } from './deger-listesi-modeli.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
 import { tabloDegerListeleri } from '../tablolar/tablo-secimi.mjs';
-import { ekranAlanBaglari } from '../tablolar/ekran-baglari.mjs';
+import { etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { tabloBasvurusuVarMi, tabloSecimleriniAyikla } from '../tablolar/ekran-basvurulari.mjs';
 import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
 
@@ -34,7 +34,7 @@ import { veriKosulariniAyikla } from '../tablolar/veri-kosulari.mjs';
  * @param {Veritabani} vt @param {string} projeId @param {string} ekranId @param {string | null} [ortamId] @param {string[]} [sira] formdaki alan sırası
  */
 function ekranListeleri(vt, projeId, ekranId, ortamId = null, sira = undefined) {
-  const baglar = ekranAlanBaglari(vt, ekranId);
+  const baglar = etkinAlanBaglari(vt, ekranId);
   if (!Object.keys(baglar).length) return [];
   const tablolar = tablolariListele(vt, projeId).map((t) => (ortamId ? { ...t, satirlar: t.satirlar.filter((r) => !r.ortamId || r.ortamId === ortamId) } : t));
   return tabloDegerListeleri(baglar, tablolar, ekranId, sira);
@@ -482,7 +482,7 @@ export function formBaglami(vt, projeId, ekranId, ortamId, akisId = null) {
  * @returns {Record<string, { tablo: string; sutun: string; etiket?: string }>}
  */
 function gizliSutunBaglari(vt, projeId, ekranId) {
-  const baglar = ekranAlanBaglari(vt, ekranId);
+  const baglar = etkinAlanBaglari(vt, ekranId);
   if (!Object.keys(baglar).length) return {};
   const tablolar = tablolariListele(vt, projeId);
   /** @type {Record<string, { tablo: string; sutun: string; etiket?: string }>} */
@@ -504,7 +504,10 @@ function gizliSutunBaglari(vt, projeId, ekranId) {
 export function ekranGirdileri(vt, projeId, ekranId, secenekler = {}) {
   acikAnahtar(vt);
   ekranGetir(vt, projeId, ekranId);
-  const mb = modelBaglami(vt, ekranId, null);
+  // Ortak akış (kendi başına koşmaz): kendi modelinin alanları (Test verisi sekmesi; bağları onu kullanan ekranlara geçer).
+  const kayit = ekranModeliGetir(vt, ekranId);
+  const ortak = kayit && nesneMi(kayit.model) && kayit.model.tur === 'ortakAkis' && Array.isArray(kayit.model.adimlar) ? /** @type {Nesne} */ (kayit.model) : null;
+  const mb = ortak ? { model: ortak, altModeller: {} } : modelBaglami(vt, ekranId, null);
   if (!mb) return { girdiler: [] };
   const sema = formSemasiOlustur(mb.model, mb.altModeller);
   // Seçenekler sayfa değeri / metniyle (liste kaydında korunur; model seçeneği kaldırılsa da koşu doğru seçer).

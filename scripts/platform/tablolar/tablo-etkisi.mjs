@@ -27,7 +27,7 @@ import { modelSenaryosuMu } from '../senaryolar/model-kosusu.mjs';
 import { formSemasiOlustur, tumFormAlanlari } from '../senaryolar/model-formu.mjs';
 import { senaryoyuDogrula } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { BAGLAM_ONEKI, tabloKaydet, tablolariListele } from './tablo-deposu.mjs';
-import { ekranAlanBaglari } from './ekran-baglari.mjs';
+import { etkinAlanBaglari } from './ekran-baglari.mjs';
 import { modelAlanBilgisi } from './ekran-basvurulari.mjs';
 import { degerBasvurusu, sutunBul } from './tablo-secimi.mjs';
 import { servisleriListele, servisSenaryolariniListele, servisSenaryosuGetir, servisSenaryosuKaydet } from '../servisler/servis-deposu.mjs';
@@ -237,7 +237,7 @@ export function etkiPlani(vt, projeId, c, secenekler = {}) {
 
   // --- Ekran senaryoları -------------------------------------------------------------------------------------------------
   for (const ekran of ekranlariListele(vt, projeId)) {
-    const baglar = Object.entries(ekranAlanBaglari(vt, ekran.id)).filter(([, b]) => b && b.tablo === yeni.id);
+    const baglar = Object.entries(etkinAlanBaglari(vt, ekran.id)).filter(([, b]) => b && b.tablo === yeni.id);
     const senaryolar = vt.tumu('SELECT id, baslik, icerik_json FROM senaryolar WHERE proje_id = ? AND ekran_id = ? ORDER BY baslik', [projeId, ekran.id]);
     /** @type {Map<string, { mb: NonNullable<ReturnType<typeof modelBaglami>>; bilgi: ReturnType<typeof modelAlanBilgisi>; alanlar: Map<string, any> } | null>} */
     const modeller = new Map();

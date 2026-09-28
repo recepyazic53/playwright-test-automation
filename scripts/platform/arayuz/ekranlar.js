@@ -292,7 +292,8 @@ async function ekranAyrintisi(icerik, s) {
   const sekmeler = [
     ['model', 'Model', null], ['gecmis', 'Model geçmişi', d.gecmis.length], ['kanitlar', 'Kanıtlar', d.analiz.kanitlar.length],
     ...(d.model ? [['akis', 'Akışlar', Array.isArray(d.model.akislar) && d.model.akislar.length ? d.model.akislar.length : 1]] : []),
-    ...(d.model && !EKRAN_DISI_TURLER.includes(d.modelTuru) ? [['veri', 'Test verisi', null]] : [])
+    // Test verisi: ekranlarda ve ortak akışta (bağları onu kullanan ekranlara varsayılan olarak geçer); alt modelde yok.
+    ...(d.model && d.modelTuru !== 'altModel' ? [['veri', 'Test verisi', null]] : [])
   ];
   const sekmeAlani = h('div', {});
   yerlestir(icerik,

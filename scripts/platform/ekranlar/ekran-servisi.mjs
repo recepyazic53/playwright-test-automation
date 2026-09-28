@@ -28,7 +28,7 @@ import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 import { BICIM_ATFI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-istekleri.mjs';
 import { tablolariListele } from '../tablolar/tablo-deposu.mjs';
-import { ekranAlanBaglari, ekranAlanBaglariniKaydet } from '../tablolar/ekran-baglari.mjs';
+import { ekranAlanBaglari, ekranAlanBaglariniKaydet, etkinAlanBaglari } from '../tablolar/ekran-baglari.mjs';
 import { modelAlanlari, alanEtiketi as paketAlanEtiketi } from '../tablolar/paket-tablolari.mjs';
 import { BULGU_TUR_ETIKETLERI, bulguOzeti, bulgulariUygula, etkiHesapla, gorunurlukMetni, modelEnvanteri, modelFarki } from './model-farki.mjs';
 
@@ -1071,7 +1071,7 @@ export function claudeDosyasiYaz(vt, projeId, ekranId, girdi) {
     : '';
   // Ekranın mevcut alan bağlantıları ve bağlı tabloların adları / sütunları (DEĞER YOK; gizli sütunun yalnız adı ve işareti):
   // Araç yeni pakette aynı tablo ve sütun adlarını kullansın.
-  const baglar = ekranAlanBaglari(vt, ekranId);
+  const baglar = etkinAlanBaglari(vt, ekranId);
   const tumTablolar = Object.keys(baglar).length ? tablolariListele(vt, projeId) : [];
   const alanHaritasi = model ? modelAlanlari(model) : new Map();
   const bagliTablolar = tumTablolar.filter((t) => Object.values(baglar).some((b) => b.tablo === t.id));
