@@ -10,6 +10,7 @@ import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 
 const q = encodeURIComponent;
+const GORUNUR = 8;
 const GRUP = { birebir: 'birebir aynı', cogu: 'çoğu aynı', veriFarkli: 'başlıklar aynı, veri farklı' };
 const SECIM = { kalan: 'Kalanınki kalsın', kaynak: 'Kaynaktakini yaz', ikisi: 'İkisini de tut' };
 const ESLEME = { ekranBaglari: 'ekran alan bağı', servisBaglari: 'servis alan bağı', ekranSenaryolari: 'ekran senaryosu', servisSenaryolari: 'servis senaryosu',
@@ -36,6 +37,15 @@ export function veriSagligiKarti(proje, c) {
     if (!s) { kok.remove(); return; }
     const bolum = (baslik, sayi, icerik, acik = false) => h('details', { class: 'saglik-bolumu', open: acik && sayi > 0 },
       h('summary', {}, h('span', {}, baslik), rozet(String(sayi), sayi ? 'uyari' : '')), sayi ? icerik : h('p', { class: 'soluk kucuk' }, 'Sorun yok.'));
+    // Uzun listeler (gerçek projede onlarca öneri) kartı sayfanın tamamına yaymasın: ilk GORUNUR madde, gerisi tek tıkla.
+    const liste = (ogeler) => {
+      const ul = h('ul', { class: 'saglik-listesi' }, ogeler.slice(0, GORUNUR));
+      if (ogeler.length > GORUNUR) {
+        const devam = h('li', { class: 'saglik-devami' }, h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { devam.replaceWith(...ogeler.slice(GORUNUR)); } }, `${ogeler.length - GORUNUR} madde daha göster`));
+        ul.append(devam);
+      }
+      return ul;
+    };
     const tabloDugmesi = (id, metin) => h('button', { type: 'button', class: 'baglanti-dugmesi', onclick: () => c.secTablo(id) }, metin);
     const son = s.sonBirlestirme;
     const sonBolum = son ? h('div', { class: 'not-kutusu bilgi kucuk saglik-son' },
@@ -46,19 +56,19 @@ export function veriSagligiKarti(proje, c) {
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: (e) => geriAl(proje, e.currentTarget, c.yenile) }, ikon('geri'), 'Son birleştirmeyi geri al…'))) : null;
     const toplam = s.benzer.length + s.kullanilmayan.length + s.bosSutunlar.length + s.kirikBasvurular.length;
     yerlestir(kok,
-      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('onay'), 'Veri sağlığı'),
+      h('div', { class: 'kart-basligi' }, h('h3', {}, ikon(toplam ? 'uyari' : 'onay'), 'Veri sağlığı'),
         h('span', { class: 'sag kucuk soluk' }, toplam ? `${toplam} madde` : 'sorun yok')),
       sonBolum,
       h('div', { class: 'saglik-bolumleri' },
-        bolum('Birleştirilebilecek tablolar', s.benzer.length, h('ul', { class: 'saglik-listesi' }, s.benzer.map((o) => h('li', {},
+        bolum('Birleştirilebilecek tablolar', s.benzer.length, liste(s.benzer.map((o) => h('li', {},
           h('span', { class: 'saglik-metni' }, o.adlar.map((x) => `“${x}”`).join(' + ')),
           rozet(GRUP[o.grup] || o.grup, o.grup === 'birebir' ? 'basari' : ''), rozet(`%${o.puan}`, ''), o.eslemeGerekli ? rozet('sütun eşleme gerekir', 'uyari') : null,
           h('button', { type: 'button', class: 'kucuk-dugme', onclick: async () => { if (await birlestirmePenceresi(proje, o.tablolar, s.kullanim, c.tablolar())) c.yenile(); } }, ikon('esle'), 'Birleştir…')))), true),
-        bolum('Hiç kullanılmayan tablolar', s.kullanilmayan.length, h('ul', { class: 'saglik-listesi' }, s.kullanilmayan.map((t) => h('li', {}, tabloDugmesi(t.id, t.ad),
+        bolum('Hiç kullanılmayan tablolar', s.kullanilmayan.length, liste(s.kullanilmayan.map((t) => h('li', {}, tabloDugmesi(t.id, t.ad),
           h('span', { class: 'soluk kucuk' }, 'hiçbir ekran / servis bağında, senaryoda ya da kuralda geçmiyor'))))),
-        bolum('Boş sütunlar', s.bosSutunlar.length, h('ul', { class: 'saglik-listesi' }, s.bosSutunlar.map((b) => h('li', {}, tabloDugmesi(b.tabloId, `${b.tablo} · ${b.sutun}`),
+        bolum('Boş sütunlar', s.bosSutunlar.length, liste(s.bosSutunlar.map((b) => h('li', {}, tabloDugmesi(b.tabloId, `${b.tablo} · ${b.sutun}`),
           h('span', { class: 'soluk kucuk' }, 'hiçbir satırda değer yok'))))),
-        bolum('Kırık başvurular', s.kirikBasvurular.length, h('ul', { class: 'saglik-listesi' }, s.kirikBasvurular.map((k) => h('li', {},
+        bolum('Kırık başvurular', s.kirikBasvurular.length, liste(s.kirikBasvurular.map((k) => h('li', {},
           h('a', { href: k.git }, k.yer), h('code', { class: 'duz' }, k.basvuru), h('span', { class: 'soluk kucuk' }, k.neden)))), true)));
   })();
   return kok;
