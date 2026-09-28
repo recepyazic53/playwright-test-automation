@@ -372,7 +372,10 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-icerigi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'akis-senaryo-icerigi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-formu.js', { dosya: 'akis-senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],  ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Uçtan uca akış: ekran adımının saf kuralları (sunucuyla ORTAK) ve akış ekranı.
+  ['/arayuz/ekran-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'akislar', 'ekran-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/uctan-uca.js', { dosya: 'uctan-uca.js', tur: 'text/javascript; charset=utf-8' }],  ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veritabanlari.js', { dosya: 'veritabanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],

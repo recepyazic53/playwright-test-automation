@@ -228,6 +228,37 @@ export const REHBERLER = {
     ]
   },
 
+  'uctan-uca-akis': {
+    baslik: 'Uçtan uca akış',
+    adimlar: [
+      {
+        baslik: 'Uçtan uca akış nedir?',
+        metin: ['Bir iş akışını baştan sona tek koşuda sınar: adımlar servis isteği, ekran senaryosu ya da SQL sorgusu olabilir ve sırayla koşar.',
+          'Bir adımda okunan değer sonraki adımlarda ${akis:Ad} ile kullanılır. Örnek: servis sipariş oluşturur ve yanıttan sipariş numarası okunur, ekran adımı bu numarayla arama yapar ve ekrandaki durumu okur, SQL adımı veritabanındaki kaydı denetler.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Servis', alt: 'SiparisNo okunur', ikon: 'ag' }, { baslik: 'Ekran', alt: 'arama ← ${akis:SiparisNo}', ikon: 'ekran' }, { baslik: 'SQL', alt: 'durum denetlenir', ikon: 'veri' }, { baslik: 'Rapor', alt: 'tek koşu', ikon: 'grafik' }] }
+      },
+      {
+        baslik: 'Akış kurma sırası',
+        sira: ['"Yeni uçtan uca akış"ta "+" ile adım koyun: ekran senaryosu, bir servisin operasyonu (ya da kayıtlı senaryosu) veya SQL sorgusu.',
+          'Değer üreten adımda okumayı tanımlayın: serviste "Yanıttan oku", ekranda "Değer oku" (seçici + ad), SQL\'de sonuç sütunu. Gizli değerleri işaretleyin.',
+          'Sonraki adımda değeri kullanın: ekranda "Alan doldur" ile senaryonun bir alanına, serviste "Alan bağla" ile, SQL\'de sorgunun içinde ${akis:Ad}.',
+          'Kaydedin ve "Koş…" ile ortam seçip çalıştırın.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: '+ Adım', ikon: 'artiYalin' }, { baslik: 'Değer oku', ikon: 'hedef' }, { baslik: 'Alan doldur', ikon: 'ok' }, { baslik: 'Koş…', ikon: 'oynat' }] }
+      },
+      {
+        baslik: 'Koşu penceresi',
+        metin: ['Ortamı seçince Nöbetçi hiçbir istek atmadan akışı denetler: bir adım o ortamda tanımlı değilse (servisin taban adresi yok, ekran senaryosu o ortamda yok, veritabanı eşlemesi yok) koşu başlamaz ve hangi adım olduğu yazılır.',
+          'Gereken izinler (web erişimi, servis istekleri, veritabanı okuma, giriş bilgisi, riskli ortam) toplu listelenir; kapalı olan koşu başlarken sorulur. İzinler her adımdan önce yeniden denetlenir.'],
+        ipucu: 'Bir adım kalırsa sonraki adımlar atlanır; adımda "Bu adım kalırsa da sonraki adımlara devam et" işaretliyse akış sürer.'
+      },
+      {
+        baslik: 'Sonuç',
+        metin: 'Koşu tek kayıttır (Sonuçlar > Uçtan uca akışlar): her adımın durumu ve süresi, ekran adımının ekran görüntüleri, servis adımının istek / yanıtı, SQL adımının sonuç tablosu ve taşınan değerler — gizliler maskeli.',
+        cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Adım adım sonuç' }
+      }
+    ]
+  },
+
   ekranlar: {
     baslik: 'Ekranlar',
     adimlar: [

@@ -19,7 +19,7 @@ import { dinle, durdur, kosuBaslat, kosuDurumu, kosuOnayi, kosuOrtamiId, kosuSur
 import { senaryoFormu } from './senaryo-formu.js';
 import { sqlKosuDenetimiAl, sqlKosuUyarilari } from './sql-adimi-formu.js';
 import { devreDisiAnahtari, devreDisiGoster } from './ekran-yonetimi.js';
-import { ekranlarGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
+import { ekranlarGrubu, servisleriAl, servislerBolumu, uctanUcaBaglantisi, urunlerBasligi } from './urunler.js';
 import { veriyiSirala } from './tablo-siralama.js';
 
 /** Bir sayfadaki satır (Ayarlar > Arayüz > Senaryolar sayfa boyu; kullanıcı kararı). */
@@ -127,7 +127,8 @@ function ekranListesi(nav, veri, servisler, seciliServis, secili, formEkrani, de
       return a;
     })),
     devreDisiAnahtari(veri.ekranlar.filter((e) => pasif.has(e.id) && e.senaryoSayisi).length, degisti),
-    ...servislerBolumu(servisler, { seciliServis }));
+    ...servislerBolumu(servisler, { seciliServis }),
+    uctanUcaBaglantisi());
 }
 
 // ---------------------------------------------------------------------------------------

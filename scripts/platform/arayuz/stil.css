@@ -3503,3 +3503,27 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .claude-sonucu .not-kutusu, .claude-sonucu p { overflow-wrap: anywhere; }
 .claude-sonucu .dosya-yolu code { flex: 1 1 12rem; overflow-wrap: anywhere; word-break: break-all; }
 dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
+
+/* ---- Uçtan uca akışlar (uctan-uca.js; servis + ekran + SQL adımları) ---------------------------------------------------------- */
+.uctan-uca-baglantisi { margin-top: 6px; }
+.tur-sayisi { display: inline-flex; align-items: center; gap: 3px; }
+.rozet.tur-rozeti { gap: 4px; }
+.rozet.tur-ekran { color: var(--vurgu); background: var(--vurgu-zemin); border-color: color-mix(in srgb, var(--vurgu) 32%, transparent); }
+.uctan-sonucu .uctan-adimlari > li { min-width: 0; overflow-wrap: anywhere; }
+.uctan-adim-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.uctan-adim-ust .adim-adi { margin-right: 0; }
+.uctan-neden { color: var(--hata); white-space: pre-wrap; }
+.uctan-ekran { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 6px; }
+.uctan-goruntu img { display: block; max-width: min(260px, 100%); height: auto; border: 1px solid var(--cizgi-2); border-radius: var(--yaricap-m); }
+.uctan-sonucu .akis-degeri { overflow-wrap: anywhere; }
+.uctan-tasinan { margin-top: 16px; }
+.uctan-denetim { display: grid; gap: 10px; margin-top: 10px; }
+.uctan-denetim ul { margin: 6px 0 0; padding-left: 20px; }
+.uctan-denetim ul.uctan-izin-listesi { list-style: none; padding-left: 0; display: grid; gap: 4px; }
+.uctan-izin-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+.uctan-izin-listesi li.acik > .ikon { color: var(--basari); }
+.uctan-izin-listesi li.kapali > .ikon { color: var(--atlanan); }
+.uctan-canli-onay { margin-top: 10px; }
+.uctan-izin-ozeti { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
+.uctan-izin-ozeti .rozet { white-space: normal; }
+dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }

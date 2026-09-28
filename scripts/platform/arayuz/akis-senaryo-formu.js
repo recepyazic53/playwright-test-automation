@@ -67,7 +67,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
     api(`/platform/servis-akislari?projeId=${q(proje.id)}`),
     api(`/platform/tablolar?projeId=${q(proje.id)}`).catch(() => ({ tablolar: [] }))
   ]);
-  const uygun = akislar.filter((a) => a.tur === 'akis');
+  const uygun = akislar.filter((a) => a.tur === 'akis' && !a.icerik?.uctanUca);
   const gecen = (a) => (a.icerik?.adimlar ?? []).some((x) => x.servisId === s.id);
   let tumu = Boolean(baslangicAkisi && !uygun.some((a) => a.id === baslangicAkisi && gecen(a)));
   let akisId = baslangicAkisi || '';

@@ -25,7 +25,8 @@ export function rehberAnahtari(hash) {
     else if (parca === 'tarama') anahtar = 'tarama';
     else if (parca === 'e') anahtar = dorduncu === 'akis' ? 'akis-tasarimi' : dorduncu === 'bulgular' ? 'bulgular' : dorduncu === 'yukle' ? 'ekran-ekle' : 'ekran';
     else anahtar = 'ekranlar';
-  } else if (bolum === 'ayarlar') anahtar = `ayarlar-${parca || 'proje'}`;
+  } else if (bolum === 'akislar') anahtar = 'uctan-uca-akis';
+  else if (bolum === 'ayarlar') anahtar = `ayarlar-${parca || 'proje'}`;
   return anahtar && REHBERLER[anahtar] ? anahtar : null;
 }
 

@@ -50,6 +50,13 @@ export function servislerBolumu(servisler, secenekler = {}) {
   })];
 }
 
+/** "Uçtan uca akışlar" bağlantısı (servis + ekran + SQL adımlı akışlar; #/akislar). */
+export function uctanUcaBaglantisi() {
+  const secili = (location.hash || '').startsWith('#/akislar');
+  return h('a', { href: '#/akislar', class: 'uctan-uca-baglantisi', 'aria-current': secili ? 'page' : null },
+    ikon('katman'), h('span', { class: 'nav-metni' }, 'Uçtan uca akışlar'));
+}
+
 // ---------------------------------------------------------------------------------------
 // Açılır-kapanır gruplar (Ekranlar, Ortak akışlar, Alt modeller, Servisler)
 // ---------------------------------------------------------------------------------------

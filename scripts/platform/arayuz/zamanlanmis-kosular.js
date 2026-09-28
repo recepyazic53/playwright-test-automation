@@ -37,7 +37,8 @@ export async function zamanlanmisKosularKarti(proje, secenek = {}) {
       api(`/platform/entegrasyonlar?${q}`).catch(() => ({ turler: [], baglantilar: [] }))
     ]);
     const ekranlar = (ekranYaniti.ekranlar || []).filter((e) => e.modelTuru !== 'altModel');
-    const akislar = (akisYaniti.akislar || []).filter((a) => a.tur !== 'oturum');
+    // Uçtan uca akışlar zamanlanmış koşuya girmez (ekran adımları yalnız kullanıcı başlatınca koşar).
+    const akislar = (akisYaniti.akislar || []).filter((a) => a.tur !== 'oturum' && !a.icerik?.uctanUca);
     const bildirimTurleri = new Set((entYaniti.turler || []).filter((t) => (t.olaylar || []).some((o) => o.ad === 'kosu-bitti')).map((t) => t.tur));
     const webhooklar = (entYaniti.baglantilar || []).filter((b) => bildirimTurleri.has(b.tur));
     const secenekler = { proje, ortamlar, ekranlar, akislar, webhooklar };
