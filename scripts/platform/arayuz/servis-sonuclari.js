@@ -7,7 +7,7 @@
 // Sonuçlar > Genel > "Servisler" sekmesi aynı genel görünümü (servisGenelBakis) kullanır.
 // Veri: /platform/servis-sonuclari* (yalnız okuma). Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { alan, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
-import { dagilimCubugu, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
+import { dagilimCubugu, dogrulananDosyaIndir, dogrulananDosyalar, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
 import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
@@ -439,7 +439,13 @@ async function senaryoAyrintisi(icerik, proje, id) {
     h('section', { class: 'kart', 'aria-labelledby': 'ss-kontrol-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-kontrol-basligi' }, ikon('hedef'), 'Kontroller'),
         h('span', { class: 'alt mono' }, `${r.kontroller.filter((k) => k.gecti).length} / ${r.kontroller.length} geçti`)),
-      r.kontroller.length ? kontrolListesi(r.kontroller) : h('p', { class: 'bos-liste' }, 'Kontrol sonucu yok (istek yanıt alınamadan bitti).')),
+      r.kontroller.length ? kontrolListesi(r.kontroller) : h('p', { class: 'bos-liste' }, 'Kontrol sonucu yok (istek yanıt alınamadan bitti).'),
+      // Yanıttaki dosya saklandıysa (Ayarlar > Koşu > Kayıt > "Doğrulanan dosya"): kasadan çözülür, tarayıcıda indirilir.
+      (r.dosyalar || []).some((d) => d.saklandi) ? dogrulananDosyalar(r.dosyalar.filter((d) => d.saklandi).map((d) => dogrulananDosyaIndir(d.ad, async () => {
+        const y = await api(`/platform/servis-sonuclari/dosya?projeId=${q(proje.id)}&id=${q(id)}&sira=${d.sira}`);
+        const ikili = Uint8Array.from(atob(y.dosya.icerikBase64), (c) => c.charCodeAt(0));
+        return new Blob([ikili], { type: y.dosya.icerikTuru || 'application/octet-stream' });
+      }))) : null),
     h('section', { class: 'kart', 'aria-labelledby': 'ss-istek-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-istek-basligi' }, ikon('ok'), 'İstek'), h('span', { class: 'alt' }, 'gizli değerler maskeli')),
       basliklar, r.istek ? kod(r.istek) : h('p', { class: 'bos-liste' }, 'İstek gövdesi kaydedilmedi.')),

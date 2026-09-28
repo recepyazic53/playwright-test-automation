@@ -13,6 +13,7 @@ import { restServisiKaydet } from '../../scripts/platform/servisler/rest-servisi
 import { senaryoIceriginiDogrula } from '../../scripts/platform/servisler/servis-deposu.mjs';
 import { servisSenaryosuCalistir } from '../../scripts/platform/servisler/servis-islemleri.mjs';
 import { tabloKaydet } from '../../scripts/platform/tablolar/tablo-deposu.mjs';
+import { servisSonucDosyasi, servisSonucSenaryosu } from '../../scripts/platform/sonuclar/servis-sonuclari.mjs';
 import { kosuAyarlariniKaydet } from '../../scripts/platform/ayarlar/kosu-ayarlari.mjs';
 import { pdfUret, windows1254, xlsxUret } from './dosya-fikstur';
 import { geciciKlasor, HIZLI_KDF } from './platform-ortak';
@@ -95,6 +96,15 @@ test.describe('servis yanıtı dosya kontrolü (sahte sunucu)', () => {
     try {
       const k2 = await kos('/rapor/csv', kontroller);
       expect(Buffer.from(k2.dosyalar[0].icerikBase64, 'base64').equals(YANITLAR['/rapor/csv'].veri)).toBe(true);
+      // Sonuç ekranı: özette içerik yok; "Dosyayı indir" ucu şifreli kayıttan çözer (diske yazılmaz).
+      const sorgu = (x: Record<string, string>) => new URLSearchParams({ projeId, ...x });
+      const ozet = servisSonucSenaryosu(vt, sorgu({ id: String(k2.kosuId) })).sonuc;
+      expect(ozet.dosyalar).toEqual([{ sira: 0, ad: 'siparisler.csv', bicim: 'csv', boyut: YANITLAR['/rapor/csv'].veri.length, gecti: false, saklandi: true }]);
+      const indirilen = servisSonucDosyasi(vt, sorgu({ id: String(k2.kosuId), sira: '0' })).dosya;
+      expect(indirilen).toMatchObject({ ad: 'siparisler.csv', icerikTuru: 'text/csv' });
+      expect(Buffer.from(indirilen.icerikBase64, 'base64').equals(YANITLAR['/rapor/csv'].veri)).toBe(true);
+      expect(() => servisSonucDosyasi(vt, sorgu({ id: String(k.kosuId), sira: '0' }))).toThrow('saklanmadı');
+      expect(() => servisSonucDosyasi(vt, new URLSearchParams({ projeId: 'baska', id: String(k2.kosuId), sira: '0' }))).toThrow('bulunamadı');
       const k3 = await kos('/rapor/csv', [{ tur: 'dosya', dosya: { beklentiler: [{ tur: 'icerir', deger: 'Mavi' }] } }]);
       expect(k3.dosyalar[0]).not.toHaveProperty('icerikBase64');
     } finally { kosuAyarlariniKaydet(vt, { indirilenDosya: 'kapali' }); }

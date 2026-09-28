@@ -43,7 +43,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'secim', varsayilan: 'yalnizHata',
     secenekler: [['her', 'Her testte'], ['yalnizBasari', 'Yalnız başarılı testlerde'], ['yalnizHata', 'Yalnız kalan testlerde'], ['kapali', 'Kapalı']], env: 'NOBETCI_IZ' },
   { anahtar: 'indirilenDosya', grup: 'Kayıt', etiket: 'Doğrulanan dosya (ek)',
-    aciklama: 'İndirilen dosyayı doğrulama adımında (ekran) ve servis yanıtının dosya kontrolünde dosyanın kendisi rapora ek olarak (şifreli) saklansın mı. Saklanmazsa raporda yalnız özet durur: dosyanın adı, boyutu, biçimi ve her beklentinin sonucu. İndirilen dosya koşunun geçici klasörüne yazılır ve doğrulamadan sonra silinir.',
+    aciklama: 'İndirilen dosyayı doğrulama adımında (ekran) ve servis yanıtının dosya kontrolünde dosyanın kendisi rapora ek olarak (şifreli) saklansın mı. Saklanırsa sonuç ekranında "Dosyayı indir" ile (onayla, ham hâliyle) indirilir. Saklanmazsa raporda yalnız özet durur: dosyanın adı, boyutu, biçimi ve her beklentinin sonucu. İndirilen dosya koşunun geçici klasörüne yazılır ve doğrulamadan sonra silinir.',
     tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Saklanmaz (yalnız özet)'], ['yalnizHata', 'Yalnız kalan doğrulamalarda'], ['her', 'Her zaman']], env: 'NOBETCI_INDIRILEN_DOSYA' },
   { anahtar: 'yenidenDeneme', grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Kalan test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
   { anahtar: 'kosuSureLimitiDk', grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',

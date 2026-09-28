@@ -225,6 +225,61 @@ test.describe('gerçek koşu (sahte rapor ekranı)', () => {
     await basarili('/platform/kosu-ayarlari/kaydet', { ayarlar: { indirilenDosya: 'kapali' } });
   });
 
+  test('sonuç ekranlarında "Dosyayı indir": gizli veri onayı, kasadan çözülen dosya tarayıcıda iner (ekran test ayrıntısı + servis senaryo sonucu)', async ({}, testInfo) => {
+    test.setTimeout(240_000);
+    await basarili('/platform/kosu-ayarlari/kaydet', { ayarlar: { indirilenDosya: 'yalnizHata' } });
+    try {
+      const s = await kaydetVeKos(await ekranBul('Rapor'), 'Oyuncak raporu 3', { kategori: 'Oyuncak' });
+      expect(ekAdlari(s)).toContain('İndirilen dosya - siparisler-2026.csv');
+      // Servis: aynı sahte sunucudan CSV yanıtı; kalan beklentide dosya saklanır.
+      const servis = await basarili('/platform/servis/rest/kaydet', { projeId, anahtar: 'rapor-api', ad: 'Rapor API', tabanlar: { [ortamId]: adres },
+        uclar: [{ ad: 'csv', metot: 'GET', yol: '/dosya/csv' }], senaryolar: [] });
+      const dene = await basarili('/platform/servis/senaryo/dene', { projeId, servisId: servis.id, ortamId, baslik: 'CSV raporu',
+        icerik: { operasyon: 'csv', govde: '', http: { metot: 'GET', yol: '/dosya/csv' }, kontroller: [{ tur: 'dosya', dosya: { beklentiler: [{ tur: 'icerir', deger: 'Olmayan ürün' }] } }] } });
+      const servisKosuId = String(dene.sonuc.kosuId);
+      const ss = (await basarili(`/platform/servis-sonuclari/senaryo?projeId=${projeId}&id=${servisKosuId}`)).sonuc as Nesne;
+      expect(ss.dosyalar).toEqual([expect.objectContaining({ sira: 0, ad: 'siparisler-2026.csv', gecti: false, saklandi: true })]);
+      expect(JSON.stringify(ss)).not.toContain('icerikBase64');
+
+      const tarayici = await korumaliTarayici();
+      try {
+        const page = await (await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1440, height: 1000 }, acceptDownloads: true })).newPage();
+        const hatalar: string[] = [];
+        page.on('pageerror', (e) => hatalar.push(String(e)));
+        const indirVeDogrula = async () => {
+          const dugme = page.getByRole('button', { name: 'Dosyayı indir: siparisler-2026.csv' });
+          await expect(page.getByText('Dosya ham hâliyle iner; gizli içerik maskelenmez.')).toBeVisible();
+          // Vazgeç: indirme olmaz.
+          await dugme.click();
+          const pencere = page.getByRole('dialog', { name: 'Dosya indirilsin mi?' });
+          await expect(pencere).toContainText('kişisel / gizli veri içerebilir');
+          await pencere.getByRole('button', { name: 'Vazgeç' }).click();
+          await expect(pencere).toBeHidden();
+          await dugme.click();
+          const indirme = page.waitForEvent('download');
+          await page.getByRole('dialog', { name: 'Dosya indirilsin mi?' }).getByRole('button', { name: 'İndir' }).click();
+          const d = await indirme;
+          expect(d.suggestedFilename()).toBe('siparisler-2026.csv');
+          const { readFileSync } = await import('node:fs');
+          expect(readFileSync(await d.path()).equals(DOSYALAR['/dosya/csv'].veri)).toBe(true);
+        };
+        await page.goto(`/#/sonuclar/sonuc/${encodeURIComponent(String(s.id))}`);
+        await indirVeDogrula();
+        await page.screenshot({ path: testInfo.outputPath('dosya-indir-ekran.png'), fullPage: true });
+        await page.goto(`/#/servisler/sonuclar/senaryo/${encodeURIComponent(servisKosuId)}`);
+        await indirVeDogrula();
+        await page.setViewportSize({ width: 390, height: 900 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(0);
+        await page.screenshot({ path: testInfo.outputPath('dosya-indir-servis-390.png'), fullPage: true });
+        expect(hatalar).toEqual([]);
+      } finally {
+        await tarayici.close();
+      }
+    } finally {
+      await basarili('/platform/kosu-ayarlari/kaydet', { ayarlar: { indirilenDosya: 'kapali' } });
+    }
+  });
+
   test('şifreli PDF: "metin çıkarılamadı" açık hatası', async () => {
     test.setTimeout(180_000);
     const s = await kaydetVeKos(await ekranBul('Rapor (şifreli)'), 'Şifreli belge', { kategori: 'x' });

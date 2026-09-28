@@ -414,9 +414,34 @@ export function servisSonucSenaryosu(vt, q) {
         ? Object.fromEntries(Object.entries(s.okunanlar).map(([ad, d]) => [ad, gizliAdMi(ad, ekler) ? MASKE : String(d)])) : null,
       akis: s.akis && typeof s.akis === 'object' ? { akisId: s.akis.akisId ?? null, akisBaslik: String(s.akis.akisBaslik ?? ''), adimNo: Number(s.akis.adimNo) || null, adimAd: String(s.akis.adimAd ?? '') } : null,
       oturum: s.oturum && typeof s.oturum === 'object' ? { akis: String(s.oturum.akis ?? ''), durum: String(s.oturum.durum ?? '') } : null,
-      yetkiTekrari: s.yetkiTekrari && typeof s.yetkiTekrari === 'object' ? { not: String(s.yetkiTekrari.not ?? '') } : null
+      yetkiTekrari: s.yetkiTekrari && typeof s.yetkiTekrari === 'object' ? { not: String(s.yetkiTekrari.not ?? '') } : null,
+      // Doğrulanan dosyaların özeti (içerik dönmez; saklandıysa /platform/servis-sonuclari/dosya ile alınır).
+      dosyalar: Array.isArray(s.dosyalar) ? s.dosyalar.map((/** @type {any} */ d, /** @type {number} */ sira) => ({
+        sira, ad: String(d.ad ?? 'dosya'), bicim: String(d.bicim ?? ''), boyut: Number(d.boyut) || 0, gecti: d.gecti === true, saklandi: typeof d.icerikBase64 === 'string'
+      })) : []
     }
   };
+}
+
+/** Biçim → içerik türü (tarayıcıda indirilen dosyanın türü). @type {Record<string, string>} */
+const DOSYA_ICERIK_TURLERI = {
+  csv: 'text/csv', metin: 'text/plain', pdf: 'application/pdf', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+};
+
+/**
+ * GET /platform/servis-sonuclari/dosya?projeId=&id=<servis koşusu satırı>&sira=<n>: saklanan doğrulanan dosya (Ayarlar > Koşu > Kayıt >
+ * "Doğrulanan dosya" izin verdiyse). Şifreli koşu kaydından çözülür ve yanıtta döner; sunucu diske YAZMAZ (tarayıcı indirir).
+ * Dosya ham hâliyle döner (gizli içerik maskelenmez; arayüz indirmeden önce onay ister).
+ * @param {Veritabani} vt @param {URLSearchParams} q
+ */
+export function servisSonucDosyasi(vt, q) {
+  const projeId = kimlik(q.get('projeId'), 'projeId');
+  const r = servisKosusuGetir(vt, kimlik(q.get('id')));
+  if (!r || r.projeId !== projeId) throw new DepoHatasi('Senaryo sonucu bulunamadı.');
+  const sira = Number(q.get('sira'));
+  const d = Array.isArray(r.sonuc.dosyalar) && Number.isInteger(sira) ? r.sonuc.dosyalar[sira] : undefined;
+  if (!d || typeof d.icerikBase64 !== 'string') throw new DepoHatasi('Bu sonuçta dosyanın kendisi saklanmadı (yalnız özet). Ayarlar > Koşu > Kayıt > "Doğrulanan dosya".');
+  return { dosya: { ad: String(d.ad ?? 'dosya'), icerikTuru: DOSYA_ICERIK_TURLERI[String(d.bicim)] ?? 'application/octet-stream', icerikBase64: d.icerikBase64 } };
 }
 
 /** sunucu-platform.mjs GET_UCLARI'na eklenir (yalnız okuma; kasa açık olmalı — sunucu denetler). */
@@ -424,5 +449,6 @@ export function servisSonucSenaryosu(vt, q) {
 export const SERVIS_SONUC_UCLARI = [
   ['/platform/servis-sonuclari', servisSonucOzeti],
   ['/platform/servis-sonuclari/kosu', servisSonucKosusu],
-  ['/platform/servis-sonuclari/senaryo', servisSonucSenaryosu]
+  ['/platform/servis-sonuclari/senaryo', servisSonucSenaryosu],
+  ['/platform/servis-sonuclari/dosya', servisSonucDosyasi]
 ];

@@ -3707,3 +3707,10 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .uctan-izin-ozeti { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; }
 .uctan-izin-ozeti .rozet { white-space: normal; }
 dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
+
+/* Sonuç ekranlarında saklanan doğrulanan dosya ("Dosyayı indir"). */
+.dogrulanan-dosyalar { margin-top: 12px; }
+.dogrulanan-dosyalar h4 { margin: 0 0 6px; font-size: 13px; }
+.dogrulanan-dosya-listesi { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 6px; }
+.dogrulanan-dosya { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.dogrulanan-dosya .dosya-adi { overflow-wrap: anywhere; min-width: 0; }

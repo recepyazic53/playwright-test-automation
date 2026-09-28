@@ -135,7 +135,7 @@ Kontrol türü `dosya`: yanıt gövdesi (baytları) dosya olarak okunur. Ad `Con
 
 - Beklentiler: dosya adı deseni, en az boyut, metin içeriyor / içermiyor, sütun var, satır sayısı (= / ≥), hücre değeri (sütun + satır koşulu). Her beklenti sonuçta ayrı satırdır (Beklenen / Görülen; gizli değerler ve gizli tablo sütunları maskeli).
 - Metinlerde `${Parametre}`, `${Tablo.Sütun}`, `${akis:Ad}` çözülür. VEYA içinde kullanılmaz.
-- İkili yanıt raporda metin olarak saklanmaz (yalnız özet). Dosyanın kendisi Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (varsayılan: saklanmaz) koşu kaydına eklenir.
+- İkili yanıt raporda metin olarak saklanmaz (yalnız özet). Dosyanın kendisi Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse (varsayılan: saklanmaz) koşu kaydına eklenir; senaryo sonucunda "Dosyayı indir" ile kasadan çözülüp tarayıcıda iner (sunucu diske yazmaz; dosya ham hâliyle, maskelenmeden iner — indirmeden önce "kişisel / gizli veri içerebilir" onayı). HTML raporda yoktur.
 - Ekranlarda karşılığı akış tasarımındaki "İndirilen dosyayı doğrula" bloğudur (düğmeye basılır, Playwright indirmesi koşunun geçici klasörüne yazılır, doğrulanır ve silinir).
 
 ## Kod

@@ -17,6 +17,7 @@ import { hataKaydiDugmesi } from './entegrasyonlar.js';
 import { veriyiSirala } from './tablo-siralama.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
 import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
+import { onayIste } from './ekran-ortak.js';
 
 /** Koşu geçmişinde bir sayfadaki koşu (Ayarlar > Arayüz; kullanıcı kararı). */
 let SAYFA_BOYU = 15;
@@ -37,6 +38,40 @@ const DEGISIM = {
 
 const medyaUrl = (id, indir = false) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}${indir ? '&indir=1' : ''}`;
 const durumRozeti = (d) => rozet((DURUM[d] || { etiket: d }).etiket, (DURUM[d] || {}).sinif || '');
+/** Ekran koşusunda saklanan doğrulanan dosyanın ek adı öneki (tests/support/model-kosucu.ts > "İndirilen dosya - <ad>"). */
+const DOSYA_EKI_ONEKI = 'İndirilen dosya - ';
+
+/**
+ * "Dosyayı indir": Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" saklamaya izin verdiyse saklanan dosya (ekran test ayrıntısı ve servis
+ * senaryo sonucu; HTML raporda yok). Önce gizli veri onayı; dosya kasadan çözülür ve TARAYICIDA indirilir (sunucu diske yazmaz).
+ * Dosya ham hâliyle iner: raporlardaki gizli değer maskelemesi dosyanın içine uygulanmaz.
+ * @param {string} ad dosya adı @param {() => Promise<Blob>} getir
+ */
+export function dogrulananDosyaIndir(ad, getir) {
+  const dugme = h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `Dosyayı indir: ${ad}` }, ikon('indir'), 'Dosyayı indir');
+  dugme.addEventListener('click', async () => {
+    const tamam = await onayIste({
+      baslik: 'Dosya indirilsin mi?', ikonAd: 'indir', dugme: 'İndir',
+      metin: `"${ad}" ham hâliyle iner: raporlardaki gizli değer maskelemesi dosyanın içine uygulanmaz. Dosya kişisel / gizli veri içerebilir; indirdiğiniz kopyayı buna göre saklayın.`
+    });
+    if (!tamam) return;
+    dugme.disabled = true;
+    try {
+      const url = URL.createObjectURL(await getir());
+      const a = h('a', { href: url, download: ad, hidden: true });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) { bildir(e && e.message ? e.message : String(e), 'hata'); } finally { dugme.disabled = false; }
+  });
+  return h('li', { class: 'dogrulanan-dosya' }, h('span', { class: 'mono dosya-adi' }, ad), dugme);
+}
+
+/** Doğrulanan dosyalar listesi + maskeleme notu. @param {HTMLElement[]} satirlar */
+export const dogrulananDosyalar = (satirlar) => h('div', { class: 'dogrulanan-dosyalar' },
+  h('h4', {}, 'Doğrulanan dosyalar'), h('ul', { class: 'dogrulanan-dosya-listesi' }, satirlar),
+  h('p', { class: 'soluk kucuk', role: 'note' }, ikon('kalkan'), ' Dosya ham hâliyle iner; gizli içerik maskelenmez.'));
 export const sureMetni = (ms) => (ms === null || ms === undefined ? '—' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
 const toplam = (x) => (x ? x.basarili + x.basarisiz + x.atlanan + (x.durduruldu || 0) : 0);
 const oran = (x) => {
@@ -1155,7 +1190,10 @@ async function sonucDetayi(icerik, id, proje) {
   const gorseller = s2.medya.filter((m) => m.tur === 'ekran_goruntusu' && !m.silinme);
   const videolar = s2.medya.filter((m) => m.tur === 'video');
   const izler = s2.medya.filter((m) => m.tur === 'iz' && !m.silinme);
-  const digerleri = s2.medya.filter((m) => m.tur === 'diger' && !m.silinme && !alinamadiMi(m));
+  const tumDigerleri = s2.medya.filter((m) => m.tur === 'diger' && !m.silinme && !alinamadiMi(m));
+  // Saklanan doğrulanan dosyalar ayrı: "Dosyayı indir" (gizli veri onayıyla).
+  const dosyaEkleri = tumDigerleri.filter((m) => m.ad.startsWith(DOSYA_EKI_ONEKI) && !m.yedekDisi);
+  const digerleri = tumDigerleri.filter((m) => !dosyaEkleri.includes(m));
   const dg = gorselDiyalogu(gorseller.filter((m) => !m.yedekDisi));
   const gv = goruntuleyici(s2, gorseller, (m) => dg.ac(m));
 
@@ -1194,7 +1232,12 @@ async function sonucDetayi(icerik, id, proje) {
     izler.some((z) => !z.yedekDisi) ? h('div', { class: 'dugmeler' }, ...izler.filter((z) => !z.yedekDisi).map((z) => h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(z.id, true), download: '' }, '⬇ İzi (trace) indir')),
       h('span', { class: 'soluk kucuk' }, 'İz dosyası ', h('code', {}, 'npx playwright show-trace <dosya>'), ' ile açılır.')) : null,
     digerleri.filter((d) => d.yedekDisi).map(yedekDisiNotu),
-    digerleri.some((d) => !d.yedekDisi) ? h('div', { class: 'dugmeler' }, ...digerleri.filter((d) => !d.yedekDisi).map((d) => h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(d.id, true), download: '' }, `⬇ ${d.ad}`))) : null));
+    digerleri.some((d) => !d.yedekDisi) ? h('div', { class: 'dugmeler' }, ...digerleri.filter((d) => !d.yedekDisi).map((d) => h('a', { class: 'dugme kucuk-dugme', href: medyaUrl(d.id, true), download: '' }, `⬇ ${d.ad}`))) : null,
+    dosyaEkleri.length ? dogrulananDosyalar(dosyaEkleri.map((m) => dogrulananDosyaIndir(m.ad.slice(DOSYA_EKI_ONEKI.length), async () => {
+      const y = await fetch(medyaUrl(m.id, true), { cache: 'no-store' });
+      if (!y.ok) throw new Error(`Dosya alınamadı (${y.status}).`);
+      return y.blob();
+    }))) : null));
 
   if (s2.hataMesaji) {
     sol.push(h('section', { class: 'kart', 'aria-labelledby': 'hata-basligi' },

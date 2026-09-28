@@ -215,7 +215,7 @@ export const REHBERLER = {
       {
         baslik: 'Yanıt bir dosyaysa',
         metin: 'Servis rapor, liste ya da belge döndürüyorsa (CSV, XLSX, PDF, metin) kontrollere "Yanıttaki dosyayı doğrula"yı ekleyin. Dosya adı yanıt başlığından (Content-Disposition) ya da adresten, biçimi içerik türünden bulunur; beklentiler ekrandaki "İndirilen dosyayı doğrula" ile aynıdır ve her biri sonuçta ayrı satırdır. Beklentide ${Parametre}, ${Tablo.Sütun} ve ${akis:Ad} kullanılabilir.',
-        ipucu: 'İkili yanıt (XLSX / PDF) raporda metin olarak saklanmaz; yalnız özet durur. Dosyanın kendisi Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse saklanır.'
+        ipucu: 'İkili yanıt (XLSX / PDF) raporda metin olarak saklanmaz; yalnız özet durur. Dosyanın kendisi Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" izin verirse saklanır; senaryo sonucunda "Dosyayı indir" ile (onayla, ham hâliyle) indirilir.'
       },
       { baslik: 'Gizli bilgiler', metin: 'Yanıtlarda ve raporlarda gizli adlı alanlar maskelenir. Maskelenecek ek adları Ayarlar > Güvenlik > Maskeleme\'den ekleyebilirsiniz.' }
     ]
@@ -350,7 +350,7 @@ export const REHBERLER = {
           'Biçimler: CSV (ayraç ve kodlama otomatik bulunur: UTF-8, UTF-8-BOM, Windows-1254), Excel XLSX, PDF (metni olan PDF; şifreli ya da taranmış PDF açık bir hatayla kalır) ve düz metin. Beklentiler: dosya adı deseni (* ve ?), en az boyut, metin içeriyor / içermiyor, sütun var, satır sayısı (= ya da ≥; başlık hariç) ve "şu satırda şu sütun şu değer".',
           'Metinlerde ${Tablo.Sütun} (test verisi), ${akis:Ad} (önceki SQL adımında okunan) ve senaryo alanı yazılabilir. Karşılaştırma büyük / küçük harf farkını yok sayar.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Düğme', alt: 'indir', ikon: 'indir' }, { baslik: 'Dosya', alt: 'geçici klasör', ikon: 'dosya' }, { baslik: 'Beklentiler', alt: 'geçti / kaldı', ikon: 'onay' }, { baslik: 'Silinir', ikon: 'cop' }] },
-        ipucu: 'Sonuçta her beklenti için Beklenen / Görülen yazar; gizli değerler maskelenir. Dosyanın kendisi varsayılan olarak saklanmaz; Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" ile değiştirebilirsiniz.'
+        ipucu: 'Sonuçta her beklenti için Beklenen / Görülen yazar; gizli değerler maskelenir. Dosyanın kendisi varsayılan olarak saklanmaz; Ayarlar > Koşu > Kayıt > "Doğrulanan dosya" ile değiştirebilirsiniz. Saklanan dosya test ayrıntısında "Dosyayı indir" ile iner (ham hâliyle; indirmeden önce onay).'
       }
     ]
   },
