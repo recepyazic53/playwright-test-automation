@@ -438,13 +438,15 @@ async function akisSekmesi(kap, s, d, icerik) {
     yerlestir(diyagram, bosDurum('Bu ortak akışın henüz adımı yok.', '“Düzenle” ile diyagramı açın: alan grubu, aksiyon, beklenen mesaj ekleyin; alan ve düğmeleri sağdaki listede seçicisiyle elle tanımlayabilirsiniz. Ya da “Modeli güncelle > Akışı kaydet” ile bir başlangıç ekranından kaydedin.', {
       ikon: 'pusula', eylem: liste.duzenlenebilir ? h('button', { type: 'button', class: 'birincil', onclick: () => tasarimiAc({ akisId: secili.id }) }, ikon('duzenle'), 'Diyagramdan adım ekle') : null
     }));
-  } else try {
-    akisDiyagramiCiz(diyagram, akisDiyagrami(akisModeli(d.model, secili.id)), {
-      durum: 'ekran', ortamAdi: '', projeId: s.proje.id,
-      not: 'İsteğe bağlı adımlar senaryoda “dahil” işaretliyse, koşullu alanlar koşulu sağlandığında koşulur. Senaryoya göre görünüm için senaryoyu açıp “Akış diyagramı” sekmesine bakın.'
-    });
-  } catch (hataNesnesi) {
-    yerlestir(diyagram, h('div', { class: 'not-kutusu hata', role: 'alert' }, hataNesnesi.message));
+  } else {
+    try {
+      akisDiyagramiCiz(diyagram, akisDiyagrami(akisModeli(d.model, secili.id)), {
+        durum: 'ekran', ortamAdi: '', projeId: s.proje.id,
+        not: 'İsteğe bağlı adımlar senaryoda “dahil” işaretliyse, koşullu alanlar koşulu sağlandığında koşulur. Senaryoya göre görünüm için senaryoyu açıp “Akış diyagramı” sekmesine bakın.'
+      });
+    } catch (hataNesnesi) {
+      yerlestir(diyagram, h('div', { class: 'not-kutusu hata', role: 'alert' }, hataNesnesi.message));
+    }
   }
   yerlestir(kap, h('div', { class: 'gecmis-duzeni' },
     h('section', { class: 'kart surum-listesi-karti akis-listesi-karti' },
