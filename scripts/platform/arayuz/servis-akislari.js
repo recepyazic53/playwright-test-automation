@@ -3,7 +3,7 @@
 //   #/servisler/s/<id>/akislar              → bu servisin oturum akışı seçimi + projenin akışları
 //   #/servisler/s/<id>/akislar/<akisId|yeni> → akış tasarımı: diyagram (servis-akis-diyagrami.js; adımlar, değer izi, Dene, koşu geçmişi)
 // Oturum akışı (tür "oturum"): servise atanır; senaryolardaki ${akis:Token} değeri oturumdan gelir (koşular arasında süresi
-// dolana kadar paylaşılır; 401 / 403 sonrası akışın "Yetki hatasında" seçimi). Dene yalnız TEST; canlı koşu yalnız kullanıcı onayıyla. Açık token arayüze gelmez.
+// dolana kadar paylaşılır; 401 / 403 sonrası akışın "Yetki hatasında" seçimi). Dene ve koşu seçilen ortamda; CANLI ortamda yalnız kullanıcının tek tip CANLI onayıyla. Açık token arayüze gelmez.
 import { alan, api, bildir, bosDurum, h, ikon, rozet, tarihMetni, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { servisAkisTasarimi } from './servis-akis-diyagrami.js';

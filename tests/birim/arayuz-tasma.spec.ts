@@ -175,7 +175,7 @@ test.describe('tüm ekranlar taşmasız', () => {
     await expect(testSil).toHaveAttribute('title', /Varsayılan ortam silinemez/);
     await expect(page.getByRole('button', { name: 'CANLI: sil', exact: true })).toBeEnabled();
     for (const tur of ['düzenle', 'sil']) expect(await olcu(`TEST: ${tur}`), tur).toEqual(await olcu(`CANLI: ${tur}`));
-    expect(await olcu('TEST risk seçimi: değişiklik geçmişi')).toEqual(await olcu('CANLI risk seçimi: değişiklik geçmişi'));
+    expect(await olcu('TEST ortam türü: değişiklik geçmişi')).toEqual(await olcu('CANLI ortam türü: değişiklik geçmişi'));
     await baglam.close();
   });
 

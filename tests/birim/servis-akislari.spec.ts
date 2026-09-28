@@ -170,9 +170,11 @@ test.describe('servis akışları', () => {
     servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', oturumAkisi: null });
   });
 
-  test('canlı: Dene yapılamaz; "yalnız test" operasyonlu akış canlıda istek atmadan reddedilir', async () => {
+  test('canlı: Dene yapılabilir (onay HTTP ucunda); "yalnız test" operasyonlu akış canlıda istek atmadan reddedilir', async () => {
     const akisId = servisAkisiKaydet(vt, { projeId, baslik: 'Canlı deneme', kapsam: 'ikisi', icerik: { adimlar: [{ ad: 'Giriş', servisId, senaryoId: giris }] } });
-    await expect(servisAkisiCalistir(vt, projeId, { akisId, ortamId: canliOrtam, tur: 'dene' })).rejects.toThrow('yalnızca test ortamında');
+    const onceDene = soap.istekler.length;
+    expect((await servisAkisiCalistir(vt, projeId, { akisId, ortamId: canliOrtam, tur: 'dene' })).durum).toBe('basarili');
+    expect(soap.istekler.length).toBeGreaterThan(onceDene);
     servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', yalnizTestOperasyonlari: ['Siparis'] });
     const once = soap.istekler.length;
     await expect(servisAkisiCalistir(vt, projeId, { akisId, ortamId: canliOrtam, tur: 'kosu' })).rejects.toThrow('akış canlıda koşulamaz');

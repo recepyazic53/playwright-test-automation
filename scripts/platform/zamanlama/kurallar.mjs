@@ -80,7 +80,7 @@ export function kuralKaydet(vt, projeId, girdi, s = {}) {
   if (!ortam || ortam.projeId !== projeId) throw new DepoHatasi('Ortam bulunamadı.');
   const riskli = ortamRiskliMi(ortam);
   if (riskli && g.canliOnay !== true) {
-    throw new DepoHatasi(`"${ortam.ad}" riskli bir ortam (ya da riskli olup olmadığı belirtilmemiş). Kaydetmek için "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusunu işaretleyin.`);
+    throw new DepoHatasi(`"${ortam.ad}" bir Canlı ortam (ya da türü seçilmemiş). Kaydetmek için "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusunu işaretleyin.`);
   }
 
   const k = /** @type {Record<string, unknown>} */ (g.kapsam && typeof g.kapsam === 'object' ? g.kapsam : {});

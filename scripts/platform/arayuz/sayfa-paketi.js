@@ -148,10 +148,10 @@ function eklemeKutulari(s) {
   const kutular = [
     s.tara ? kutu('tara-kutusu', 'ara', 'Ekranı tara', h('p', {}, 'Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.'),
       h('button', { type: 'button', class: 'birincil', onclick: () => s.tara() }, ikon('ara'), 'Ekranı tara'),
-      '“Web uygulamasına erişim” izni gerekir; riskli ortamda ayrıca izin ve onay ister.') : null,
+      '“Web uygulamasına erişim” izni gerekir; CANLI ortamda ayrıca izin ve onay ister.') : null,
     s.kaydet ? kutu('kaydet-kutusu', 'video', 'Akışı kaydet', h('p', {}, 'Siz ekranda işlemi yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).'),
       h('button', { type: 'button', class: 'birincil', onclick: () => s.kaydet() }, ikon('video'), 'Akışı kaydet'),
-      'Erişim izni gerekir; riskli ortamda çalışmaz. Girdiğiniz değerler kaydedilmez.') : null,
+      'Erişim izni gerekir; CANLI ortamda ayrıca onay ister. Girdiğiniz değerler kaydedilmez.') : null,
     kutu('yapay-zeka-kutusu', 'simsek', 'Yapay zekâ ile oluştur',
       analiz
         ? h('p', {}, 'Ekran sayfasındaki "Tekrar analiz et" bağlam profillerini sorar ve istek metnini hazırlar; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.')

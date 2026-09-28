@@ -4,7 +4,7 @@
 // "CANLI'da çağrılmasın". Alanlar (yol / sorgu / gövde) SOAP'taki alan tablosuyla test verisi sütunlarına bağlanır.
 // "Dene" isteğe bağlıdır: seçilen TEST ortamında ucu GERÇEKTEN çağırır; önce yöntem + tam adres onaya sunulur.
 import { alan, alanHatasi, api, h, ikon, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, onayIste, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
 import { metotKutulari } from './servis-alanlari.js';
 import { gizliAdMi } from './gizli-adlar.mjs';
@@ -90,7 +90,9 @@ function anahtarDegerListesi(satirlar, s) {
  */
 export function restUclariFormu(uclar, s) {
   const kap = h('div', { class: 'rest-uclari' });
-  const testler = s.ortamlar.filter((o) => !riskliOrtamMi(o));
+  // Dene ortamları: TEST'ler önce, sonra CANLI (CANLI'da istekten önce tek tip CANLI onayı).
+  const testler = [...s.ortamlar.filter((o) => !riskliOrtamMi(o)), ...s.ortamlar.filter((o) => riskliOrtamMi(o))];
+  const ilkDene = testler.find((o) => !riskliOrtamMi(o) && o.varsayilan) || testler[0];
   const taban = (o) => {
     const t = s.tabanlar()[o.id];
     return t === '' ? '' : temizTaban(t || o.tabanUrl);
@@ -128,22 +130,23 @@ export function restUclariFormu(uclar, s) {
     yt.addEventListener('change', () => { u.yalnizTest = yt.checked; s.degisti(); });
     const baslik = h('span', {}, u.ad || `İstek ${i + 1}`);
     const kaldir = uclar.length > 1 ? h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': `${u.ad || `İstek ${i + 1}`} isteğini kaldır`, onclick: () => { uclar.splice(i, 1); ciz(); s.degisti(); } }, ikon('cop'), 'Kaldır') : null;
-    // Dene (isteğe bağlı): TEST ortamında gerçek istek; onay diyaloğu yöntem + tam adresi gösterir.
-    const deneOrtami = h('select', { 'aria-label': `${u.ad || `İstek ${i + 1}`} Dene ortamı` }, testler.map((o) => h('option', { value: o.id, selected: o.varsayilan }, o.ad)));
-    const dene = h('button', { type: 'button', disabled: !testler.length }, ikon('oynat'), 'Dene (TEST)');
+    // Dene (isteğe bağlı): seçilen ortamda gerçek istek; TEST'te onay diyaloğu yöntem + tam adresi gösterir, CANLI'da tek tip CANLI onayı.
+    const deneOrtami = h('select', { 'aria-label': `${u.ad || `İstek ${i + 1}`} Dene ortamı` }, testler.map((o) => h('option', { value: o.id, selected: ilkDene && o.id === ilkDene.id }, ortamSecenekMetni(o))));
+    const dene = h('button', { type: 'button', disabled: !testler.length }, ikon('oynat'), 'Dene');
     const deneSonucu = h('div', { 'aria-live': 'polite' });
     dene.addEventListener('click', async () => {
       const o = testler.find((x) => x.id === deneOrtami.value);
-      if (!o || !taban(o)) { yerlestir(deneSonucu, h('div', { class: 'not-kutusu hata', role: 'alert' }, 'Bu TEST ortamı için taban adres yok.')); return; }
+      if (!o || !taban(o)) { yerlestir(deneSonucu, h('div', { class: 'not-kutusu hata', role: 'alert' }, 'Bu ortam için taban adres yok.')); return; }
       const adres = tamAdres(taban(o), u);
-      const tamam = await onayIste({
+      const tamam = riskliOrtamMi(o) ? await canliOnayIste(o) : await onayIste({
         baslik: `${o.ad} ortamına istek atılsın mı?`, dugme: 'İstek at', ikonAd: 'ag', tehlikeli: u.metot !== 'GET',
         metin: `${u.metot} ${adres}${u.metot !== 'GET' ? ` — ${u.metot} isteği servis tarafında kayıt oluşturabilir ya da değiştirebilir.` : ''}`
       });
       if (!tamam) return;
+      const canliEki = canliOnayEki(o.id);
       dene.disabled = true;
       try {
-        const r = await api('/platform/servis/rest/dene', { govde: { projeId: s.proje.id, ortamId: o.id, taban: taban(o), uc: ucGovdesi(u), ...(s.tls && s.tls() === false ? { tlsDogrulama: false } : {}) } });
+        const r = await api('/platform/servis/rest/dene', { govde: { projeId: s.proje.id, ortamId: o.id, ...canliEki, taban: taban(o), uc: ucGovdesi(u), ...(s.tls && s.tls() === false ? { tlsDogrulama: false } : {}) } });
         yerlestir(deneSonucu, r.basarili
           ? h('div', { class: `not-kutusu ${r.durumKodu < 400 ? 'basari' : 'uyari'}`, role: 'status' }, `${r.metot} ${r.adres} → ${r.durumKodu} (${r.sureMs} ms)`,
             r.atlananBasliklar.length ? h('div', { class: 'kucuk' }, `Gönderilmeyen başlıklar (tablo değerine bağlı): ${r.atlananBasliklar.join(', ')}`) : null,

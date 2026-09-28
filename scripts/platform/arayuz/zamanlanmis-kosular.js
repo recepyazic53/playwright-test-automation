@@ -304,7 +304,7 @@ function kuralSatiri(k, s) {
   return h('li', { class: k.etkin ? null : 'pasif-kayit' },
     h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('tarih')),
     h('div', { class: 'kayit-ana' },
-      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Riskli', 'hata', { title: 'Riskli ortamda zamanlanmış koşu (kayıtta onaylandı)' }) : null),
+      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Canlı', 'hata', { title: 'Canlı ortamda zamanlanmış koşu (kayıtta onaylandı)' }) : null),
       h('div', { class: 'kayit-meta' }, [k.zamanMetni, k.ortamAdi || 'silinmiş ortam', kapsamMetni(k, s), k.bildirimAdi ? `Bildirim: ${k.bildirimAdi}` : null].filter(Boolean).join(' · ')),
       h('div', { class: 'kayit-meta' }, k.etkin ? `Sonraki çalışma: ${tarihMetni(k.sonrakiCalisma)}` : 'Pasif: çalışmaz.'),
       son ? h('div', { class: 'kayit-meta zamanlama-son' }, `Son çalışma: ${tarihMetni(son.zaman)} `, durumRozeti(son.durum), son.mesaj ? ` ${son.mesaj} ` : ' ', sonucBaglantisi(son))
@@ -394,7 +394,7 @@ function kuralFormu(s) {
   // Canlı ortam onayı
   const canliOnay = h('input', { type: 'checkbox', checked: k ? k.canliOnay : false, id: yeniKimlik('zk-canli') });
   const canliKutusu = h('div', { class: 'not-kutusu hata', role: 'alert' },
-    h('p', {}, h('strong', {}, 'Dikkat: '), 'Seçilen ortam riskli (ya da riskli olup olmadığı belirtilmemiş). Zamanlanmış koşu bu ortamda sizin başında olmadığınız bir anda gerçek işlemler yapabilir.'),
+    h('p', {}, h('strong', {}, 'Dikkat: '), 'Seçilen ortam Canlı (ya da türü seçilmemiş). Zamanlanmış koşu bu ortamda sizin başında olmadığınız bir anda gerçek işlemler yapabilir.'),
     h('label', { class: 'onay-satiri', for: canliOnay.id }, canliOnay, 'Canlı ortamda zamanlanmış koşuya izin veriyorum'));
   const riskGuncelle = () => { canliKutusu.hidden = !ortamRiskli(s.ortamlar.find((o) => o.id === ortam.value)); };
   ortam.addEventListener('change', riskGuncelle);
@@ -418,7 +418,7 @@ function kuralFormu(s) {
     mesaj.temizle();
     alanHatasi(ad, '');
     if (!ad.value.trim()) { alanHatasi(ad, 'Bir ad girin.'); ad.focus(); return; }
-    if (!canliKutusu.hidden && !canliOnay.checked) { mesaj.goster('Canlı / riskli ortam: kaydetmek için "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusunu işaretleyin.'); canliOnay.focus(); return; }
+    if (!canliKutusu.hidden && !canliOnay.checked) { mesaj.goster('Canlı ortam: kaydetmek için "Canlı ortamda zamanlanmış koşuya izin veriyorum" kutusunu işaretleyin.'); canliOnay.focus(); return; }
     const kural = {
       ...(k ? { id: k.id } : {}), ad: ad.value.trim(), ortamId: ortam.value,
       kapsam: { senaryolar: kapsamTuru.value, ekranIdleri: kapsamTuru.value === 'ekranlar' ? ekranKutulari.secilenler() : [], servisAkisIdleri: akisKutulari.secilenler(),

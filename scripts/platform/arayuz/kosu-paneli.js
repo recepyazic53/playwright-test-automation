@@ -10,7 +10,7 @@
 // - Elle doğrulama kodu (giriş tarifinde SMS "elle" kipi): çalışan satırlar için /kod-istegi yoklanır; kod
 //   bekleyen satır seçilir ve izleme alanında kod formu gösterilir, kod /kod-gonder ile koşuya iletilir.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { api, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
+import { api, canliOnayPenceresi, yerlestir, bildir, h, ikon, rozet, TOKEN } from './ortak.js';
 import { riskBelirtilmemisMi, riskliOrtamMi } from './ortam-riski.mjs';
 
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
@@ -31,51 +31,56 @@ export const KOSU_DURUMLARI = Object.freeze({
 
 const sureMetni = (ms) => (ms == null ? '' : ms < 1000 ? `${ms} ms` : ms < 60000 ? `${(ms / 1000).toFixed(1).replace('.', ',')} sn` : `${Math.floor(ms / 60000)} dk ${Math.round((ms % 60000) / 1000)} sn`);
 
-/** Ortam "gerçek işlem" riski taşıyor mu? TEK TANIM sunucuyla ortak: ortam-riski.mjs (kullanıcı seçimi; belirtilmemiş = riskli). */
+/** Ortam Canlı mı? TEK TANIM sunucuyla ortak: ortam-riski.mjs (Ortam türü seçimi; seçilmemiş = Canlı). */
 export { riskliOrtamMi };
 
 /**
- * Ortamın risk rozeti (her yerde aynı): ortam kendi adıyla gösterilir; YALNIZ riskliyse kırmızı "Riskli" rozeti, riskli olup olmadığı
- * belirtilmemişse "Riskli mi? belirtin". Riskli olmayan ortama rozet eklenmez ("CANLI / TEST" rozeti kullanılmaz).
+ * Ortamın tür rozeti (her yerde aynı): ortam kendi adıyla gösterilir; YALNIZ Canlıysa kırmızı "Canlı" rozeti, türü seçilmemişse
+ * "Türünü seçin". Test ortamına rozet eklenmez.
  * @param {{ ad: string } & Record<string, unknown>} o @returns {HTMLElement | null}
  */
 export function ortamRiskRozeti(o) {
   if (!riskliOrtamMi(o)) return null;
   return riskBelirtilmemisMi(o)
-    ? rozet('Riskli mi? belirtin', 'uyari', { title: 'Riskli olup olmadığı seçilmemiş; seçilene kadar riskli sayılır (Ayarlar > Proje ve ortamlar)' })
-    : rozet('Riskli', 'hata', { title: 'Gerçek işlem oluşturabilir' });
+    ? rozet('Türünü seçin', 'uyari', { title: 'Ortam türü seçilmemiş; seçilene kadar Canlı sayılır (Ayarlar > Proje ve ortamlar)' })
+    : rozet('Canlı', 'hata', { title: 'Canlı ortam: istek atan her işlemde onay sorulur' });
 }
 
-/** Seçim listelerinde ortam metni: adı; riskliyse "(riskli)" / belirtilmemişse "(riskli mi? belirtin)". @param {{ ad: string } & Record<string, unknown>} o */
-export const ortamSecenekMetni = (o) => (riskliOrtamMi(o) ? `${o.ad} (${riskBelirtilmemisMi(o) ? 'riskli mi? belirtin' : 'riskli'})` : o.ad);
+/** Seçim listelerinde ortam metni: adı; Canlıysa "(Canlı)" / türü seçilmemişse "(türünü seçin)". @param {{ ad: string } & Record<string, unknown>} o */
+export const ortamSecenekMetni = (o) => (riskliOrtamMi(o) ? `${o.ad} (${riskBelirtilmemisMi(o) ? 'türünü seçin' : 'Canlı'})` : o.ad);
 
 /**
- * "Riskli mi? belirtin" uyarısı: ortamın riskli olup olmadığı seçilmemiş (riskli sayılır) → Ayarlar > Proje ve ortamlar bağlantısı.
+ * "Ortam türünü seçin" uyarısı: ortamın türü seçilmemiş (Canlı sayılır) → Ayarlar > Proje ve ortamlar bağlantısı.
  * Koşu diyaloğu, servis sayfası ve ortam listesi kullanır.
  */
 export function riskBelirtinNotu() {
-  return h('div', { class: 'not-kutusu uyari risk-belirtin', role: 'note' }, h('strong', {}, 'Riskli mi? belirtin. '),
-    'Bu ortamın riskli olup olmadığı seçilmemiş; seçilene kadar riskli sayılır (her çalıştırmada onay, canlı ortam izni). ',
+  return h('div', { class: 'not-kutusu uyari risk-belirtin', role: 'note' }, h('strong', {}, 'Ortam türünü seçin. '),
+    'Bu ortamın türü (Test / Canlı) seçilmemiş; seçilene kadar Canlı sayılır (her işlemde onay, canlı ortam izni). ',
     h('a', { href: '#/ayarlar/proje', onclick: () => { for (const d of document.querySelectorAll('dialog[open]')) d.close(); } }, 'Ayarlar > Proje ve ortamlar'));
 }
 
 /**
- * Riskli ortam onayı: koşu diyaloğunda (kosuOnayi) ya da canliOnayIste ile ONAYLANAN riskli ortamın kimliği. Sunucu riskli ortamda
- * her çalıştırmada istekte açık onay (canliOnay: true) ister; onay yalnız bu diyaloglardan gelir (son onay geçerlidir).
+ * CANLI ortam onayı — TEK TİP pencere (ortak.js > canliOnayPenceresi): "CANLI ortam" / "Bu işlem <ortam> (CANLI) ortamında
+ * yapılacak; istekler gerçek sisteme gider. Emin misiniz?" / "Evet, devam et" · "Vazgeç". Sunucu CANLI ortama istek atan her
+ * işlemde istekte canliOnay: true ister (guvenlik/uc-denetimi.mjs). Onay HATIRLANMAZ: canliOnayIste / kosuOnayi'nda verilen onay
+ * yalnız o ortam için, TEK işlemde (ilk canliOnayEki çağrısında) kullanılır; sonraki işlem yeniden sorar.
  */
 let onayliRiskliOrtam = null;
-/** İsteğe eklenecek açık onay (ortam riskli ve diyalogda onaylandıysa). @param {string} ortamId */
-export const canliOnayEki = (ortamId) => (ortamId && ortamId === onayliRiskliOrtam ? { canliOnay: true } : {});
+/** İsteğe eklenecek açık onay (ortam Canlı ve az önce onaylandıysa; tek kullanımlık). @param {string} ortamId */
+export const canliOnayEki = (ortamId) => {
+  if (!ortamId || ortamId !== onayliRiskliOrtam) return {};
+  onayliRiskliOrtam = null;
+  return { canliOnay: true };
+};
 /**
- * Riskli ortam için (diyalogsuz akışlarda: Dene, tarama, öneri) açık onay ister; riskli değilse hemen true. Onaylanırsa canliOnayEki
- * o ortam için { canliOnay: true } verir. @param {{ id: string; ad: string; canli?: boolean; varsayilan?: boolean }} ortam @param {string} [ne]
+ * CANLI ortam için işlem başlamadan önce tek tip onay penceresini açar; Test ortamında hemen true. Onaylanırsa canliOnayEki o ortam
+ * için (bir kez) { canliOnay: true } verir. @param {{ id: string; ad: string; canli?: boolean; riskli?: boolean | null; varsayilan?: boolean }} ortam
+ * @param {string} [_ne] eski çağrılarla uyum (metin tek tiptir)
  */
-export async function canliOnayIste(ortam, ne = 'Bu işlem') {
+export async function canliOnayIste(ortam, _ne = 'Bu işlem') {
+  onayliRiskliOrtam = null;
   if (!riskliOrtamMi(ortam)) return true;
-  const tamam = await onayIste({
-    baslik: `${ortam.ad} ortamında çalıştırılsın mı?`, ikonAd: 'uyari', dugme: 'Onayla ve çalıştır',
-    metin: `${ne} riskli bir ortamda${riskBelirtilmemisMi(ortam) ? ' (riskli olup olmadığı belirtilmemiş; Ayarlar > Proje ve ortamlar)' : ''} çalışacak; gerçek işlem oluşturabilir.`
-  });
+  const tamam = await canliOnayPenceresi(ortam.ad);
   onayliRiskliOrtam = tamam ? ortam.id : null;
   return tamam;
 }
@@ -205,7 +210,7 @@ export function kosuOnayi(s) {
         h('p', { class: 'soluk kucuk' }, s.not || (s.tur === 'tam'
           ? 'Tam koşu olarak kaydedilir; bitince Sonuçlar kartları ve trendi güncellenir.'
           : 'Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez, koşu geçmişinde "tekil" görünür.')),
-        riskli ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('strong', {}, `Dikkat: ${ortam.ad} ortamı. `), 'Bu ortam riskli; testler gerçek işlem oluşturabilir.') : null,
+        riskli ? h('div', { class: 'not-kutusu hata', role: 'alert' }, h('strong', {}, `Dikkat: ${ortam.ad} ortamı. `), 'Bu bir CANLI ortam; başlatınca ayrıca onay sorulur, istekler gerçek sisteme gider.') : null,
         riskBelirtilmemisMi(ortam) ? riskBelirtinNotu() : null);
     };
     const diyalog = h('dialog', { class: 'onay-diyalogu', 'aria-labelledby': 'kosu-onay-basligi' },
@@ -221,10 +226,10 @@ export function kosuOnayi(s) {
     let sonuc = false;
     baslat.addEventListener('click', () => { sonuc = true; diyalog.close(); });
     vazgec.addEventListener('click', () => diyalog.close());
-    diyalog.addEventListener('close', () => {
+    diyalog.addEventListener('close', async () => {
       diyalog.remove();
-      // Riskli ortamda "Başlat" = açık canlı onayı (sunucuya canliOnay: true gider).
-      onayliRiskliOrtam = sonuc && ortam && riskliOrtamMi(ortam) ? ortam.id : null;
+      // CANLI ortamda "Başlat"tan sonra TEK TİP CANLI onay penceresi (onaylanırsa sunucuya bir kez canliOnay: true gider).
+      if (sonuc && ortam) sonuc = await canliOnayIste(ortam);
       coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar, veriKipi } : null) : sonuc);
     });
     document.body.append(diyalog);

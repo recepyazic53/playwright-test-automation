@@ -85,7 +85,7 @@ test.describe('servis akışları arayüzü', () => {
     await expect(page.getByRole('heading', { name: 'Akışı düzenle' })).toBeVisible();
     // Dene: önce onay.
     const once = soap.istekler.length;
-    await page.getByRole('button', { name: 'Dene (TEST)' }).click();
+    await page.getByRole('button', { name: 'Dene', exact: true }).click();
     const onay = page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' });
     await expect(onay).toContainText('1. Ornek › Giriş');
     await onay.getByRole('button', { name: 'Dene' }).click();

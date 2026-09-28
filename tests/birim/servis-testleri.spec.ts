@@ -131,9 +131,9 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     profilId = testVerisiProfiliKaydet(vt, { projeId, turId, ad: 'k1', degerler: { tcKimlikNo: SAHTE_TC, adi: 'Deneme' } });
   });
 
-  test('erişim kontrolü yalnız test ortamında; başarılı kontrol olmadan servis kaydedilmez', async () => {
+  test('erişim kontrolü her ortamda (CANLI onayı HTTP ucunda); başarılı kontrol olmadan servis kaydedilmez', async () => {
     expect(() => servisiKaydet(vt, projeId, { anahtar: 'ornek-service', ad: 'OrnekService', yol: '/Servis/ornek.asmx' })).toThrow(/Erişimi kontrol et/);
-    await expect(erisimKontrolu(vt, projeId, { ortamId: canliOrtam, yol: '/Servis/ornek.asmx' })).rejects.toThrow(/yalnızca test ortamında/);
+    expect(await erisimKontrolu(vt, projeId, { ortamId: canliOrtam, yol: '/Servis/ornek.asmx' })).toMatchObject({ erisilebilir: true, ortam: 'CANLI' });
     const yanlis = await erisimKontrolu(vt, projeId, { ortamId: testOrtami, yol: '/Yok/servis.asmx' });
     expect(yanlis).toMatchObject({ erisilebilir: false });
     const once = istekler.length;
@@ -214,9 +214,11 @@ test.describe('servis kayıtları, parametreler ve koşu', () => {
     expect(taslak.kontroller?.[0]).toMatchObject({ gecti: false });
   });
 
-  test('canlı ortam: Dene yok; kapsamı "test" olan senaryo koşmaz; "yalnız test" operasyonu hiç koşmaz', async () => {
+  test('canlı ortam: Dene yapılabilir (onay HTTP ucunda); kapsamı "test" olan senaryo koşmaz; "yalnız test" operasyonu hiç koşmaz', async () => {
     const [ilk] = servisSenaryolariniListele(vt, servisId);
-    await expect(servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: canliOrtam, tur: 'dene', senaryoId: ilk.id })).rejects.toThrow(/yalnızca test ortamında/);
+    const onceDene = istekler.length;
+    expect((await servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: canliOrtam, tur: 'dene', senaryoId: ilk.id })).ortamTuru).toBe('canli');
+    expect(istekler.length).toBe(onceDene + 1);
     await expect(servisSenaryosuCalistir(vt, projeId, { servisId, ortamId: canliOrtam, tur: 'kosu', senaryoId: ilk.id })).rejects.toThrow(/yalnızca test ortamda/);
     const once = istekler.length;
     const kos = await servisSenaryolariniKos(vt, projeId, { servisId, ortamId: canliOrtam });

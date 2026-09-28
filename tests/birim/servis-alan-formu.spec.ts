@@ -120,13 +120,14 @@ test.describe('alan formu uçtan uca', () => {
     if (klasor) rmSync(klasor, { recursive: true, force: true });
   });
 
-  test('erişim kontrolü operasyon şemalarını saklar; şema yenileme yalnız TEST; alan varsayılanı doğrulanır', async () => {
+  test('erişim kontrolü operasyon şemalarını saklar; şema yenileme CANLI ortamda yalnız açık onayla; alan varsayılanı doğrulanır', async () => {
     const e = await basarili('/platform/servis/erisim', { projeId, ortamId: testOrtami, yol: '/Servis/ornek.asmx' });
     servisId = String((await basarili('/platform/servis/kaydet', { projeId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', erisimKimligi: e.erisimKimligi })).id);
     const s = (await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`)).servis;
     expect(Object.keys(s.ayarlar.operasyonSemalari)).toEqual(['Siparis', 'Onayla']);
     const red = await api('/platform/servis/sema/yenile', { projeId, servisId, ortamId: canli });
-    expect(red.basarili).toBe(false);
+    expect(red).toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI' });
+    expect(await basarili('/platform/servis/sema/yenile', { projeId, servisId, ortamId: canli, canliOnay: true })).toMatchObject({ durumKodu: 200, operasyonSayisi: 2 });
     expect(await basarili('/platform/servis/sema/yenile', { projeId, servisId, ortamId: testOrtami })).toMatchObject({ durumKodu: 200, operasyonSayisi: 2, alanliOperasyonlar: ['Siparis', 'Onayla'] });
     const bozuk = await api('/platform/servis/kaydet', { projeId, id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', alanVarsayilanlari: { Siparis: { 'Input/A': { kaynak: 'uydurma' } } } });
     expect(bozuk.basarili).toBe(false);
@@ -326,7 +327,7 @@ test.describe('alan formu uçtan uca', () => {
     await baglam.close();
   });
 
-  test('arayüz: düzenleyicideki "Dene (TEST)" onaydan sonra aynı canlı paneli açar; taslak kaydedilmez', async () => {
+  test('arayüz: düzenleyicideki "Dene" (TEST ortamı) onaydan sonra aynı canlı paneli açar; taslak kaydedilmez', async () => {
     test.setTimeout(60_000);
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
@@ -336,7 +337,7 @@ test.describe('alan formu uçtan uca', () => {
     const once = await sayi();
     await page.goto(`/#/servisler/s/${servisId}/senaryo/yeni`);
     await page.getByLabel('Başlık').fill('Kaydedilmemiş deneme');
-    await page.getByRole('button', { name: 'Dene (TEST)' }).click();
+    await page.getByRole('button', { name: 'Dene', exact: true }).click();
     const onay = page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' });
     await onay.getByRole('button', { name: 'Dene' }).click();
     const panel = page.getByRole('region', { name: 'Servis koşu paneli' });
@@ -346,9 +347,28 @@ test.describe('alan formu uçtan uca', () => {
     await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
     await expect(panel.locator('.servis-adimlari')).toContainText('Cevap geldi (HTTP 200');
     expect(await sayi()).toBe(once);
-    // CANLI ortamda taslak koşusu reddedilir.
+    // CANLI ortamda taslak (Dene): onaysız 409; arayüzde CANLI seçilince yalnız tek tip CANLI onayı — Vazgeç'te istek yok, Evet'te canliOnay ile başlar.
     const red = await api('/platform/servis/is/baslat', { projeId, servisId, ortamId: canli, taslak: { baslik: 'x', icerik: { operasyon: 'Siparis', govde: '<a/>', kontroller: [] } } });
-    expect(red.basarili).toBe(false);
+    expect(red).toMatchObject({ basarili: false, kod: 'CANLI_ONAY_GEREKLI' });
+    const baslatmalar: string[] = [];
+    page.on('request', (r) => { if (r.url().includes('/platform/servis/is/baslat')) baslatmalar.push(r.postData() || ''); });
+    const soapOnce = soap.istekler.length;
+    await page.getByLabel('Deneme ortamı').selectOption({ label: 'CANLI (Canlı)' });
+    await page.getByRole('button', { name: 'Dene', exact: true }).click();
+    const canliPencere = page.getByRole('dialog', { name: 'CANLI ortam' });
+    await expect(canliPencere).toContainText('Bu işlem CANLI (CANLI) ortamında yapılacak');
+    await expect(page.getByRole('dialog', { name: 'TEST ortamına istek atılsın mı?' })).toHaveCount(0);
+    await canliPencere.getByRole('button', { name: 'Vazgeç' }).click();
+    expect(baslatmalar).toEqual([]);
+    expect(soap.istekler.length).toBe(soapOnce);
+    await page.getByRole('button', { name: 'Dene', exact: true }).click();
+    await page.getByRole('dialog', { name: 'CANLI ortam' }).getByRole('button', { name: 'Evet, devam et' }).click();
+    await expect.poll(() => baslatmalar.length).toBe(1);
+    expect(JSON.parse(baslatmalar[0])).toMatchObject({ ortamId: canli, canliOnay: true });
+    await expect(panel.locator('.kosu-listesi li')).toHaveCount(1);
+    await expect(panel).toContainText('Servis koşusu bitti', { timeout: 10_000 });
+    expect(soap.istekler.length).toBeGreaterThan(soapOnce);
+    expect(await sayi()).toBe(once);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });

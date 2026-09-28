@@ -2,7 +2,7 @@
 //   taramaDiyalogu  başlatma diyaloğu — ortam, bağlam profilleri (tekrar analiz diyaloğuyla ortak seçim; ekran için son
 //                   seçim işaretli gelir ama HER SEFERİNDE onay istenir), hedef yol, seçim keşfi, yeni ekranın adı/anahtarı
 //                   ve açık uyarı ("Bu işlem seçilen ortama bağlanır; hiçbir şey kaydedilmez/gönderilmez") + onay kutusu.
-//   kayitDiyalogu   "Akışı kaydet" başlatma diyaloğu — ortam (riskli ortamlar seçilemez), EN FAZLA BİR bağlam profili (her
+//   kayitDiyalogu   "Akışı kaydet" başlatma diyaloğu — ortam (CANLI ortamda başlatırken ayrıca onay), EN FAZLA BİR bağlam profili (her
 //                   seferinde sorulur), başlangıç sayfası, yeni ekranın adı/anahtarı ve açık uyarı ("bastığınız düğmeler siteye
 //                   gerçek istek gönderir; değerler kaydedilmez") + onay kutusu. Kayıt aynı iş ekranında izlenir.
 //   taramaEkrani    #/ekranlar/tarama/<iş kimliği>: adımlar (güvenlik kontrolü, giriş, bağlam profilleri, paket), profil
@@ -16,7 +16,7 @@ import { alan, api, bildir, h, ikon, mesgulIken, rozet, tarihMetni, yerlestir } 
 import { baglamProfiliSecimi, baslangicEkraniSecimi, diyalogAc } from './ekran-ortak.js';
 import { taranmisPaketAkisi } from './sayfa-paketi.js';
 import { akisTasarimi } from './akis-tasarimi.js';
-import { canliOnayEki, canliOnayIste } from './kosu-paneli.js';
+import { canliOnayEki, canliOnayIste, ortamSecenekMetni } from './kosu-paneli.js';
 
 const YOKLAMA_MS = 1000;
 const sonSecimAnahtari = (projeId) => `nobetci-tarama-son-${projeId}`;
@@ -169,7 +169,7 @@ export async function taramaDiyalogu(s) {
       ekranAnahtari: s.ekran ? undefined : anahtar.value.trim() || anahtarOner(ad.value), ortamId: ortamSecimi.value,
       baglamProfilleri: [...secili], hedef: hedef.value.trim(), kesif: kesif.checked, onay: onay.checked, girissiz: girissiz.checked
     };
-    // Riskli ortam: ayrıca açık onay (sunucu canliOnay: true ister; canlı ortam izni de gerekir).
+    // CANLI ortam: başlamadan önce tek tip onay (sunucu canliOnay: true ister; canlı ortam izni de gerekir).
     const o = secilenOrtam();
     if (o && !(await canliOnayIste(o, 'Tarama'))) return;
     Object.assign(govdeVerisi, canliOnayEki(govdeVerisi.ortamId));
@@ -201,9 +201,9 @@ export async function kayitDiyalogu(s) {
   }
   if (!v.ortamlar.length) { bildir('Projede ortam yok (Ayarlar > Ortamlar).', 'hata'); return; }
   const son = s.ekran ? v.son : (yerelOku(sonSecimAnahtari(s.proje.id)) || {});
-  const uygunlar = v.ortamlar.filter((o) => !o.canli);
-  const ilkOrtam = uygunlar.find((o) => o.id === son.ortamId) || uygunlar.find((o) => o.varsayilan) || uygunlar[0] || v.ortamlar[0];
-  const ortamSecimi = h('select', {}, v.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ilkOrtam.id, disabled: o.canli }, o.canli ? `${o.ad} (riskli — kayıt kapalı)` : o.ad)));
+  // CANLI ortam da seçilebilir (kayıt başlarken tek tip CANLI onayı sorulur); önce son seçim, yoksa varsayılan, yoksa ilk Test ortamı.
+  const ilkOrtam = v.ortamlar.find((o) => o.id === son.ortamId) || v.ortamlar.find((o) => o.varsayilan) || v.ortamlar.find((o) => !o.canli) || v.ortamlar[0];
+  const ortamSecimi = h('select', {}, v.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ilkOrtam.id }, ortamSecenekMetni(o))));
   // Ortak akış: kendi adresi yok; kayıt seçilen BAŞLANGIÇ EKRANININ adresinde başlar (başlangıç sayfası o ekranın yolu olur).
   const ortak = v.ekran && v.ekran.ortakAkis ? baslangicEkraniSecimi(v.ekran.ortakAkis.baslangicEkranlari, son.baslangicEkranId, 'kayit-baslangic-ekrani') : null;
   const hedef = h('input', { type: 'text', value: ortak ? (ortak.secilen() || {}).urlYolu || '' : son.hedef || (v.ekran && v.ekran.urlYolu) || '', placeholder: '/satis/basvuru/', spellcheck: 'false', autocomplete: 'off' });
@@ -229,7 +229,7 @@ export async function kayitDiyalogu(s) {
   const secilenOrtam = () => v.ortamlar.find((o) => o.id === ortamSecimi.value);
   function guncelle() {
     const o = secilenOrtam();
-    const eksik = !o || o.canli || (o.tarif && !o.girisProfili && !girissiz.checked) || (!s.ekran && !ad.value.trim()) || !hedef.value.trim() || (ortak && !ortak.secilen());
+    const eksik = !o || (o.tarif && !o.girisProfili && !girissiz.checked) || (!s.ekran && !ad.value.trim()) || !hedef.value.trim() || (ortak && !ortak.secilen());
     baslat.disabled = !onay.checked || Boolean(eksik);
   }
   function ortamCiz() {
@@ -259,7 +259,6 @@ export async function kayitDiyalogu(s) {
     h('a', { href: taramaAdresi(v.calisanIs.id), onclick: () => diyalog.close() }, 'İlerlemeyi göster')) : null;
   const govde = h('div', { class: 'tarama-diyalogu' },
     calisan,
-    uygunlar.length ? null : h('div', { class: 'not-kutusu uyari' }, 'Bu projedeki tüm ortamlar riskli (ya da riskli olup olmadığı belirtilmemiş); akış kaydı yapılamaz (Ayarlar > Proje ve ortamlar).'),
     ortak ? h('div', { class: 'not-kutusu bilgi ortak-akis-kaydi' },
       h('b', {}, 'Ortak akış bir başlangıç ekranından kaydedilir.'),
       h('ul', {},
@@ -280,7 +279,7 @@ export async function kayitDiyalogu(s) {
       h('b', {}, 'Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.'),
       h('ul', {},
         h('li', {}, 'Görünür bir tarayıcı açılır; giriş ve bağlam değiştirme giriş tarifiyle otomatik yapılır ("Giriş yapmadan aç" seçiliyse yapılmaz), sonra başlangıç sayfası açılır.'),
-        h('li', {}, 'Bu ortamda gerçek kayıtlar (sipariş, müşteri…) oluşabilir. Riskli ortamlarda kayıt yapılamaz.'),
+        h('li', {}, 'Bu ortamda gerçek kayıtlar (sipariş, müşteri…) oluşabilir. CANLI ortamda kayıt başlarken ayrıca onay sorulur.'),
         h('li', {}, 'Akışı sayfada normal yürütün: sayfanın köşesindeki Nöbetçi paneli gördüğü alanları ve bastığınız düğmeleri toplar. Yeni alanlar açılınca "Ekranı yeniden oku"ya basın, beklenen mesajı "Mesaj seç" ile seçin, bitince "Bitir".'),
         h('li', {}, 'Ardından Nöbetçi\'de kayıttan hazırlanan taslak akış diyagramını düzenleyip kaydedersiniz.'),
         h('li', {}, 'Girdiğiniz değerler ve ekran görüntüleri kaydedilmez; yalnızca alanların yapısı (etiket, tür, seçenekler) ve düğmeler kaydedilir.'),
