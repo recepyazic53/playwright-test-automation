@@ -212,9 +212,12 @@ test.describe('Rehber arayüzü', () => {
     await kart.getByRole('button', { name: /^Adım \d+: Karşılıklar$/ }).click();
     await expect(kart.getByRole('heading', { name: 'Karşılıklar' })).toBeVisible();
     await expect(kart).toContainText('EKSPRES → sayfa: 1, servis: EXP');
-    const vurgu = await page.locator('.rehber-vurgu').boundingBox();
-    const hedef = await dugme.boundingBox();
-    expect(vurgu && hedef && vurgu.x <= hedef.x && vurgu.y <= hedef.y && vurgu.x + vurgu.width >= hedef.x + hedef.width && vurgu.y + vurgu.height >= hedef.y + hedef.height).toBe(true);
+    // Vurgu, kaydırma / yerleşim bittikten sonra hedefi sarmalı (sayfa geç yüklenen kartlarla kayabilir).
+    await expect.poll(async () => {
+      const vurgu = await page.locator('.rehber-vurgu').boundingBox();
+      const hedef = await dugme.boundingBox();
+      return Boolean(vurgu && hedef && vurgu.x <= hedef.x && vurgu.y <= hedef.y && vurgu.x + vurgu.width >= hedef.x + hedef.width && vurgu.y + vurgu.height >= hedef.y + hedef.height);
+    }, { timeout: 5_000 }).toBe(true);
     await page.keyboard.press('Escape');
     await baglam.close();
   });

@@ -183,6 +183,9 @@ export function rehberBaslat(anahtar) {
   document.addEventListener('keydown', tus, true);
   window.addEventListener('resize', yeniden);
   window.addEventListener('scroll', yeniden, true);
+  // Sayfa geç yüklenen içerikle kayarsa (kart, liste) vurgu ve kart yeniden konumlanır.
+  const yerlesimGozcusu = typeof ResizeObserver === 'function' ? new ResizeObserver(yeniden) : null;
+  yerlesimGozcusu?.observe(document.body);
   const ekranDegisti = () => kapat(false);
   window.addEventListener('hashchange', ekranDegisti);
 
@@ -190,6 +193,7 @@ export function rehberBaslat(anahtar) {
     document.removeEventListener('keydown', tus, true);
     window.removeEventListener('resize', yeniden);
     window.removeEventListener('scroll', yeniden, true);
+    yerlesimGozcusu?.disconnect();
     window.removeEventListener('hashchange', ekranDegisti);
     kok.remove();
     if (acik && acik.kok === kok) acik = null;
