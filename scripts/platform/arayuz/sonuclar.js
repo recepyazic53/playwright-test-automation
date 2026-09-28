@@ -152,9 +152,11 @@ export function sonuclarEkrani(main, parcalar, baglam) {
         return karsilastirmaEkrani(icerik, proje, { tur: 'ekran', a: decodeURIComponent(kimlik), b: decodeURIComponent(parcalar[2]) })
           .catch((e) => { if (!(e && e.durum === 423)) karsilastirmaHatasi(icerik, e, '#/sonuclar'); });
       }
-      // Genel > Servisler: servis sonuçlarının genel görünümü (servis-sonuclari.js; ayrıntılar #/servisler/sonuclar altında).
+      // Genel > Servisler: servis sonuçlarının TEK yeri (servis-sonuclari.js). Alt görünümler: a/<akış>, kosu/<id>, senaryo/<id>,
+      // karsilastir/<A>/<B> (#/sonuclar/servisler/…).
       if (tur === 'servisler') {
-        return import('./servis-sonuclari.js').then((m) => m.servisGenelBakis(icerik, proje, { ust: genelSekmeleri('servisler'), gomulu: true }));
+        return import('./servis-sonuclari.js').then((m) => (parcalar.length > 1 && m.servisSonucAltGorunumu(icerik, proje, parcalar.slice(1)))
+          || m.servisGenelBakis(icerik, proje, { ust: genelSekmeleri('servisler'), gomulu: true }));
       }
       // Sol paneldeki servis: Servis sonuçlarının o servise süzülmüş görünümü, Sonuçlar ekranının içinde (ekranlarla aynı).
       if (tur === 's' && seciliServis) {

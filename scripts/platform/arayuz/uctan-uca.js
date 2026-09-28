@@ -223,7 +223,7 @@ export function uctanUcaSonucKarti(r) {
           x.ekran.ekranGoruntusuId ? h('a', { href: x.ekran.sonucId ? `#/sonuclar/sonuc/${q(x.ekran.sonucId)}` : medyaUrl(x.ekran.ekranGoruntusuId), class: 'uctan-goruntu' },
             h('img', { src: medyaUrl(x.ekran.ekranGoruntusuId), alt: `${x.ad}: ekran görüntüsü`, loading: 'lazy' })) : null,
           x.ekran.sonucId ? h('a', { class: 'kucuk', href: `#/sonuclar/sonuc/${q(x.ekran.sonucId)}` }, 'Ekran sonucu (adım adım görüntüler, video)') : null) : null,
-        tur === 'servis' && x.kosuId ? h('a', { class: 'kucuk', href: `#/servisler/sonuclar/senaryo/${q(x.kosuId)}` }, 'İstek / yanıt') : null,
+        tur === 'servis' && x.kosuId ? h('a', { class: 'kucuk', href: `#/sonuclar/servisler/senaryo/${q(x.kosuId)}` }, 'İstek / yanıt') : null,
         tur === 'SQL' && x.sql ? sqlTablosu(x.sql) : null);
     })),
     tasinan.length ? h('div', { class: 'uctan-tasinan' }, h('h4', { class: 'ayrinti-basligi' }, 'Taşınan değerler'),

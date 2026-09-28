@@ -15,7 +15,12 @@ export function rehberAnahtari(hash) {
   const [, bolum = 'sonuclar', alt = '', , dorduncu = ''] = String(hash || '#/sonuclar').split('/');
   const parca = alt ? decodeURIComponent(alt) : '';
   let anahtar = null;
-  if (bolum === 'sonuclar' || !bolum) anahtar = parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : parca === 'karsilastir' ? 'sonuclar-karsilastir' : parca === 's' ? 'servis-sonuclari' : 'sonuclar';
+  // Sonuçlar > Servisler (servis sonuçlarının tek yeri): #/sonuclar/servisler[/karsilastir|kosu|senaryo|a/…].
+  const servisAlti = parca === 'servisler' ? String(hash).split('/')[3] || '' : '';
+  if (bolum === 'sonuclar' || !bolum) {
+    anahtar = parca === 'kosu' ? 'sonuclar-kosu' : parca === 'sonuc' ? 'sonuclar-sonuc' : parca === 'karsilastir' || servisAlti === 'karsilastir' ? 'sonuclar-karsilastir'
+      : parca === 's' || servisAlti ? 'servis-sonuclari' : 'sonuclar';
+  }
   else if (bolum === 'senaryolar') anahtar = parca === 'yeni' || parca === 'duzenle' ? 'senaryo-formu' : 'senaryolar';
   else if (bolum === 'servisler') {
     const sekme = String(hash).split('/')[4] || '';

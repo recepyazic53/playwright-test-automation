@@ -3,7 +3,7 @@
 //   #/servisler/yeni                      → Servis ekle (elle ya da SoapUI dosyasından)
 //   #/servisler/s/<id>[/<sekme>]          → servis sayfası; sekmeler: senaryolar, akislar, sozlesme, parametreler, raporlar, islemler
 //   #/servisler/s/<id>/sozlesme[/<operasyon>] → yanıt sözleşmesi (servis-sozlesmesi.js)
-//   #/servisler/sonuclar[/...]            → Servis sonuçları ekranı (servis-sonuclari.js)
+//   #/servisler/sonuclar[/...]            → eski adres: Sonuçlar > Servisler'e yönlenir (servis-sonuclari.js > eskiServisSonucAdresi)
 //   #/servisler/s/<id>/senaryo/<sid|yeni> → senaryo düzenleyici (gövde + başlıklar + kontroller + Dene)
 //   #/servisler/s/<id>/akislar[/<akisId|yeni>] → servis akışları ve oturum akışı (servis-akislari.js)
 // Kurallar (sunucu da denetler): erişim kontrolü ve Dene YALNIZ test ortamında; yeni servis ancak başarılı erişim
@@ -77,9 +77,9 @@ const ortamEtiketi = (o) => ortamSecenekMetni(o);
 export function servislerEkrani(main, parcalar, baglam) {
   const proje = baglam.durum.proje;
   const [tur, kimlik, sekme, altKimlik] = parcalar;
-  // #/servisler/sonuclar[/...]: Servis sonuçları ekranı (servis-sonuclari.js; kendi sol süzgeciyle).
+  // Eski #/servisler/sonuclar[/...]: servis sonuçlarının tek yeri Sonuçlar > Servisler'e yönlenir (geriye uyum).
   if (tur === 'sonuclar') {
-    import('./servis-sonuclari.js').then((m) => m.servisSonuclariEkrani(main, parcalar.slice(1), baglam))
+    import('./servis-sonuclari.js').then((m) => { location.replace(m.eskiServisSonucAdresi(parcalar.slice(1))); })
       .catch((e) => yerlestir(main, hataKutusu(e)));
     return;
   }
@@ -90,7 +90,8 @@ export function servislerEkrani(main, parcalar, baglam) {
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' },
         h('nav', { class: 'alt-nav servis-sonuc-girisi', 'aria-label': 'Servis sonuçları' },
-          h('a', { href: '#/servisler/sonuclar' }, ikon('grafik'), h('span', { class: 'nav-metni' }, 'Sonuçlar'))),
+          // Servis sonuçlarının tek yeri Sonuçlar > Servisler (seçili servis varsa ona süzülmüş).
+          h('a', { href: servisId ? `#/sonuclar/s/${q(servisId)}` : '#/sonuclar/servisler' }, ikon('grafik'), h('span', { class: 'nav-metni' }, 'Sonuçlar'))),
         nav,
         h('div', { class: 'yan-not' }, h('b', {}, 'Servis testleri'), h('br', {}),
           'Servis senaryoları ve raporları ekranlardan ayrıdır. Deneme ve erişim kontrolü yalnız TEST ortamında yapılır.')),
@@ -1552,7 +1553,10 @@ async function raporlarSekmesi(kap, proje, s, ortamlar, senaryolar, seciliKosu) 
   const [{ kosular: tumKosular }, aralikModulu] = await Promise.all([
     api(`/platform/servis/kosular?projeId=${q(proje.id)}&servisId=${q(s.id)}&sinir=1000`), import('./tarih-araligi.js')
   ]);
-  const sonucBaglantisi = h('p', {}, h('a', { class: 'dugme hayalet kucuk-dugme', href: `#/servisler/sonuclar/s/${q(s.id)}` }, ikon('grafik'), 'Servis sonuçlarında aç (özet, trend, hata kalıpları)'));
+  // Bu sekme yalnız bu servisin çalıştırma listesidir; özet, trend ve hata kalıpları Sonuçlar > Servisler'de (tek yer).
+  const sonucBaglantisi = h('p', { class: 'dugmeler' },
+    h('a', { class: 'dugme hayalet kucuk-dugme', href: '#/sonuclar/servisler' }, ikon('grafik'), 'Tüm servis sonuçları'),
+    h('a', { class: 'dugme hayalet kucuk-dugme', href: `#/sonuclar/s/${q(s.id)}` }, ikon('ok'), 'Bu servisin özeti (trend, hata kalıpları)'));
   if (!tumKosular.length) { yerlestir(kap, sonucBaglantisi, bosDurum('Henüz koşu yok.', 'Senaryoları Dene ya da Koşuyu başlat ile çalıştırın.', { ikon: 'grafik' })); return; }
   const ayrinti = h('div', {});
   const listeAlani = h('div', {});

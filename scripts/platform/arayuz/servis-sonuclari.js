@@ -2,9 +2,10 @@
 // servis / servis akışı süzgeci (son koşunun sağlık noktası); sağda tarih aralığı + ortam süzgeci, özet kartlar, koşu trendi
 // (sonuclar.js'teki grafik), sayfalı koşu geçmişi ve hata kalıpları. Koşu ayrıntısı (her senaryo / akış adımı: durum, süre,
 // hata) ve senaryo ayrıntısı (istek / yanıt — gizli alanlar maskeli) aynı ekranda açılır.
-// Adresler: #/servisler/sonuclar, …/s/<servisId>, …/a/<akisId>, …/kosu/<s-… | a-…>, …/senaryo/<satırId>,
-// …/karsilastir/<A>/<B> (yan yana koşu karşılaştırması: karsilastirma.js).
-// Sonuçlar > Genel > "Servisler" sekmesi aynı genel görünümü (servisGenelBakis) kullanır.
+// TEK YER: Sonuçlar > Servisler (Sonuçlar ekranının içinde, sol paneli Ürünler). Adresler: #/sonuclar/servisler (tümü),
+// #/sonuclar/s/<servisId> (servise süzülmüş), #/sonuclar/servisler/a/<akisId>, …/kosu/<s-… | a-…>, …/senaryo/<satırId>,
+// …/karsilastir/<A>/<B> (yan yana koşu karşılaştırması: karsilastirma.js). Eski #/servisler/sonuclar[/…] adresleri buraya
+// yönlenir (eskiServisSonucAdresi). Servisin kendi "Raporlar" sekmesi yalnız o servisin çalıştırma listesidir.
 // Veri: /platform/servis-sonuclari* (yalnız okuma). Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { alan, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { dagilimCubugu, dogrulananDosyaIndir, dogrulananDosyalar, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
@@ -13,8 +14,21 @@ import { htmlRaporDugmesi } from './html-rapor.js';
 import { ortamSecenekMetni } from './kosu-paneli.js';
 import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
 
-export const TABAN = '#/servisler/sonuclar';
+export const TABAN = '#/sonuclar/servisler';
 const q = encodeURIComponent;
+/** Servise süzülmüş servis sonuçları (Sonuçlar ekranının sol panelinde servis seçili). @param {string} id */
+export const servisSonucAdresi = (id) => `#/sonuclar/s/${q(id)}`;
+/**
+ * Eski adres (#/servisler/sonuclar/…) → yeni (Sonuçlar > Servisler). Geriye uyum: yer imleri ve paylaşılmış bağlantılar çalışır.
+ * @param {string[]} parcalar #/servisler/sonuclar sonrası (ham, kodlanmış)
+ */
+export function eskiServisSonucAdresi(parcalar) {
+  const [tur, a, b] = parcalar;
+  if (tur === 's' && a) return `#/sonuclar/s/${a}`;
+  if ((tur === 'a' || tur === 'kosu' || tur === 'senaryo') && a) return `${TABAN}/${tur}/${a}`;
+  if (tur === 'karsilastir' && a && b) return `${TABAN}/karsilastir/${a}/${b}`;
+  return TABAN;
+}
 /** Koşu geçmişinde bir sayfadaki koşu (Ayarlar > Arayüz; kullanıcı kararı). */
 let SAYFA_BOYU = 15;
 const DURUM = {
@@ -35,40 +49,26 @@ const oran = (k) => { const p = (k.basarili || 0) + kalan(k); return p ? Math.ro
 const sayilar = (k) => ({ basarili: k.basarili, basarisiz: kalan(k), atlanan: k.atlanan, durduruldu: k.durduruldu });
 const saglikSinifi = (son) => (!son ? '' : kalan(son) ? 'hata' : son.basarili ? 'basari' : 'uyari');
 const kosuAdresi = (id) => `${TABAN}/kosu/${q(id)}`;
-const kaynakAdresi = (k) => (k.kaynakId ? `${TABAN}/${k.tur === 'akis' ? 'a' : 's'}/${q(k.kaynakId)}` : TABAN);
+const kaynakAdresi = (k) => (!k.kaynakId ? TABAN : k.tur === 'akis' ? `${TABAN}/a/${q(k.kaynakId)}` : servisSonucAdresi(k.kaynakId));
 
 /**
- * @param {HTMLElement} main
- * @param {string[]} parcalar #/servisler/sonuclar sonrası
- * @param {{ durum: { proje: { id: string; ad: string } } }} baglam
+ * Sonuçlar > Servisler'in alt görünümleri (Sonuçlar ekranının içeriğine çizilir; sol panel Sonuçlar'ınki):
+ * a/<akisId> (akışa süzülmüş), kosu/<id>, senaryo/<satırId>, karsilastir/<A>/<B>. Tanınmayan alt adres false döner.
+ * @param {HTMLElement} icerik @param {{ id: string; ad: string }} proje @param {string[]} parcalar #/sonuclar/servisler sonrası
+ * @returns {Promise<void> | false}
  */
-export function servisSonuclariEkrani(main, parcalar, baglam) {
-  const proje = baglam.durum.proje;
-  const [tur, kimlik] = parcalar;
+export function servisSonucAltGorunumu(icerik, proje, parcalar) {
+  const [tur, kimlik, ikinci] = parcalar;
   const id = kimlik ? decodeURIComponent(kimlik) : null;
-  const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('kartlar'), iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Servis sonuçları süzgeci' }, iskelet('liste'));
-  yerlestir(main, h('h1', { class: 'gorunmez' }, 'Servis sonuçları'),
-    h('div', { class: 'kabuk-duzen' },
-      h('aside', { class: 'yan-panel' }, nav,
-        h('div', { class: 'yan-not' }, h('b', {}, 'Sağlık noktası'), h('br', {}),
-          'Son koşu: yeşil hepsi geçti, kırmızı kalan senaryo var. Servis sonuçları ekran sonuçlarından ayrıdır.')),
-      icerik));
-  const secili = (tur === 's' || tur === 'a') && id ? `${tur}:${id}` : tur ? null : '';
-  const navCiz = (veri) => solListe(nav, veri, secili);
-  const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
-  if ((tur === 'kosu' || tur === 'senaryo') && id) {
-    ozetAl(proje, {}).then(navCiz).catch(() => yerlestir(nav));
-    (tur === 'kosu' ? kosuAyrintisi(icerik, proje, id) : senaryoAyrintisi(icerik, proje, id)).catch(hata);
-    return;
-  }
-  if (tur === 'karsilastir' && id && parcalar[2]) {
-    ozetAl(proje, {}).then(navCiz).catch(() => yerlestir(nav));
-    karsilastirmaEkrani(icerik, proje, { tur: 'servis', a: id, b: decodeURIComponent(parcalar[2]) })
+  if (!id) return false;
+  if (tur === 'kosu') return kosuAyrintisi(icerik, proje, id);
+  if (tur === 'senaryo') return senaryoAyrintisi(icerik, proje, id);
+  if (tur === 'a') return servisGenelBakis(icerik, proje, { akisId: id, gomulu: true });
+  if (tur === 'karsilastir' && ikinci) {
+    return karsilastirmaEkrani(icerik, proje, { tur: 'servis', a: id, b: decodeURIComponent(ikinci) })
       .catch((e) => { if (!(e && e.durum === 423)) karsilastirmaHatasi(icerik, e, TABAN); });
-    return;
   }
-  servisGenelBakis(icerik, proje, { ...(tur === 's' && id ? { servisId: id } : tur === 'a' && id ? { akisId: id } : {}), navCiz }).catch(hata);
+  return false;
 }
 
 /** @param {{ id: string }} proje @param {{ servisId?: string; akisId?: string }} secim */
@@ -82,21 +82,6 @@ function ozetAl(proje, secim) {
   return api(`/platform/servis-sonuclari?${sorgu}`);
 }
 
-function solListe(nav, veri, secili) {
-  const baglanti = (href, anahtar, ad, son, ikonAd) => h('a', { href, 'aria-current': secili === anahtar ? 'page' : null, title: ad },
-    ikonAd ? ikon(ikonAd) : h('span', { class: `saglik ${saglikSinifi(son)}`, 'aria-hidden': 'true' }),
-    h('span', { class: 'nav-metni' }, ad),
-    son && kalan(son) ? h('span', { class: 'adet' }, String(kalan(son))) : null,
-    son ? h('span', { class: 'gorunmez' }, ` — son koşu: ${kalan(son) ? `${kalan(son)} kalan` : 'hepsi geçti'}`) : null);
-  yerlestir(nav,
-    baglanti(TABAN, '', 'Tüm servisler', null, 'izgara'),
-    h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, 'Servisler'),
-    ...veri.servisler.map((s) => baglanti(`${TABAN}/s/${q(s.id)}`, `s:${s.id}`, s.ad, s.son)),
-    veri.akislar.length ? h('div', { class: 'alt-nav-alt-baslik', 'aria-hidden': 'true' }, 'Servis akışları') : null,
-    ...veri.akislar.map((a) => baglanti(`${TABAN}/a/${q(a.id)}`, `a:${a.id}`, a.baslik, a.son)),
-    h('a', { href: '#/servisler', class: 'ekle-baglantisi' }, ikon('geri'), 'Servislere dön'));
-}
-
 // ---------------------------------------------------------------------------------------
 // Genel bakış (tüm servisler / tek servis / tek akış)
 // ---------------------------------------------------------------------------------------
@@ -104,7 +89,7 @@ function solListe(nav, veri, secili) {
 /**
  * @param {HTMLElement} icerik
  * @param {{ id: string; ad: string }} proje
- * @param {{ servisId?: string; akisId?: string; navCiz?: (veri: object) => void; ust?: HTMLElement | null; gomulu?: boolean }} secenek
+ * @param {{ servisId?: string; akisId?: string; ust?: HTMLElement | null; gomulu?: boolean }} secenek
  *   ust: sayfanın üstüne konan öğe (Sonuçlar > Genel sekmeleri); gomulu: Sonuçlar ekranının içinde (kırıntı Sonuçlar'a döner).
  */
 export async function servisGenelBakis(icerik, proje, secenek = {}) {
@@ -137,7 +122,6 @@ export async function servisGenelBakis(icerik, proje, secenek = {}) {
     h('div', { class: 'filtre-satiri' }, alan('Ortam', ortamSec),
       h('label', { class: 'secenek mini-secenek', for: deneme.id }, deneme, 'Denemeleri (Dene) de say')));
   const ciz = () => {
-    secenek.navCiz?.(veri);
     const ad = secenek.servisId ? (veri.servisler.find((s) => s.id === secenek.servisId) || {}).ad
       : secenek.akisId ? (veri.akislar.find((a) => a.id === secenek.akisId) || {}).baslik : 'Tüm servisler';
     yerlestir(baslikAlani, sayfaBasligi(veri, proje, secenek, ad || 'Servis'));
@@ -177,14 +161,15 @@ function sayfaBasligi(veri, proje, secenek, ad) {
   return h('div', { class: 'sayfa-basligi' },
     h('div', {},
       h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(),
-        secenek.gomulu ? h('a', { href: '#/sonuclar' }, 'Sonuçlar') : h('a', { href: TABAN }, 'Servis sonuçları'), ayrac(),
-        h('span', { class: 'simdiki' }, secenek.gomulu && !secenek.servisId ? 'Servisler' : ad)),
+        h('a', { href: '#/sonuclar' }, 'Sonuçlar'), ayrac(),
+        secenek.servisId || secenek.akisId ? [h('a', { href: TABAN }, 'Servisler'), ayrac()] : null,
+        h('span', { class: 'simdiki' }, !secenek.servisId && !secenek.akisId ? 'Servisler' : ad)),
       h('div', { class: 'baslik-satiri' },
         h('h2', { tabindex: '-1' }, h('span', { class: 'gorunmez' }, 'Servis sonuçları — '), ad),
         son ? (kalan(son) ? rozet([ikon('uyari'), `${kalan(son)} kalan`], 'hata') : rozet([ikon('onay'), 'hepsi geçti'], 'basari')) : null),
       h('div', { class: 'meta' }, meta)),
     h('div', { class: 'eylemler' },
-      secenek.gomulu ? h('a', { class: 'dugme hayalet', href: secenek.servisId ? `${TABAN}/s/${q(secenek.servisId)}` : TABAN }, ikon('ag'), 'Servis sonuçları ekranı') : null,
+      secenek.servisId ? h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(secenek.servisId)}/raporlar` }, ikon('liste'), 'Servisin çalıştırma listesi') : null,
       h('a', {
         class: 'dugme birincil', href: secenek.servisId ? `#/servisler/s/${q(secenek.servisId)}/senaryolar` : '#/servisler',
         title: 'Servis sayfasında onayla başlatılır'
@@ -351,7 +336,7 @@ async function kosuAyrintisi(icerik, proje, id) {
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
-        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: TABAN }, 'Servis sonuçları'), ayrac(),
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: '#/sonuclar' }, 'Sonuçlar'), ayrac(), h('a', { href: TABAN }, 'Servisler'), ayrac(),
           h('a', { href: kaynakAdresi(kosu) }, kosu.baslik), ayrac(), h('span', { class: 'simdiki' }, 'Koşu')),
         h('h2', { tabindex: '-1' }, `${kosu.baslik} — ${tarihMetni(kosu.baslangic)}`),
         h('div', { class: 'meta' },
@@ -459,7 +444,7 @@ async function senaryoAyrintisi(icerik, proje, id) {
     h('section', { class: 'kart', 'aria-labelledby': 'ss-ozet-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-ozet-basligi' }, ikon('liste'), 'Özet')),
       h('dl', { class: 'servis-sonuc-ozet' },
-        h('dt', {}, 'Servis'), h('dd', {}, h('a', { href: `${TABAN}/s/${q(r.servisId)}` }, r.servis)),
+        h('dt', {}, 'Servis'), h('dd', {}, h('a', { href: servisSonucAdresi(r.servisId) }, r.servis)),
         h('dt', {}, 'Ortam'), h('dd', {}, r.ortam),
         h('dt', {}, 'Zaman'), h('dd', { class: 'mono' }, tarihMetni(r.baslangic)),
         h('dt', {}, 'Süre'), h('dd', { class: 'mono' }, sureMetni(r.sureMs)),
@@ -477,8 +462,8 @@ async function senaryoAyrintisi(icerik, proje, id) {
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
-        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: TABAN }, 'Servis sonuçları'), ayrac(),
-          h('a', { href: `${TABAN}/s/${q(r.servisId)}` }, r.servis), ayrac(), h('span', { class: 'simdiki' }, 'Senaryo')),
+        h('div', { class: 'kirinti' }, h('span', {}, proje.ad), ayrac(), h('a', { href: '#/sonuclar' }, 'Sonuçlar'), ayrac(), h('a', { href: TABAN }, 'Servisler'), ayrac(),
+          h('a', { href: servisSonucAdresi(r.servisId) }, r.servis), ayrac(), h('span', { class: 'simdiki' }, 'Senaryo')),
         h('h2', { tabindex: '-1' }, r.baslik),
         h('div', { class: 'meta' },
           h('span', {}, durumRozeti(r.durduruldu ? 'durduruldu' : r.durum)),

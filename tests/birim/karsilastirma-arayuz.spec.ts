@@ -274,3 +274,25 @@ test('servis karşılaştırması: geçmişte grup kilidi (servis ↔ akış), H
   expect(hatalar, hatalar.join('\n')).toEqual([]);
   await kapat();
 });
+
+test('servis sonuçlarının tek yeri Sonuçlar > Servisler: eski adresler yönlenir; Servisler panelindeki "Sonuçlar" ve Raporlar sekmesi oraya bağlanır', async () => {
+  const { page, hatalar, kapat } = await sayfaAc();
+  const id = encodeURIComponent(f.servisId);
+  await git(page, '#/servisler/sonuclar');
+  await expect(page).toHaveURL(/#\/sonuclar\/servisler$/);
+  await expect(page.getByRole('tab', { name: 'Servisler' })).toHaveAttribute('aria-selected', 'true');
+  await git(page, `#/servisler/sonuclar/s/${id}`);
+  await expect(page).toHaveURL(new RegExp(`#/sonuclar/s/${id}$`));
+  await expect(page.getByRole('heading', { name: /Kayıt Servisi/, level: 2 })).toBeVisible();
+  await git(page, `#/servisler/sonuclar/kosu/${encodeURIComponent(f.servisKosuA)}`);
+  await expect(page).toHaveURL(new RegExp(`#/sonuclar/servisler/kosu/${encodeURIComponent(f.servisKosuA)}$`));
+  await expect(page.locator('main .kirinti')).toContainText('Sonuçlar');
+  await expect(page.getByRole('navigation', { name: 'Ürünler' })).toBeVisible();
+  // Servisler ekranı: sol paneldeki "Sonuçlar" ve servisin Raporlar sekmesi (yalnız o servisin çalıştırma listesi).
+  await git(page, `#/servisler/s/${id}/raporlar`);
+  await expect(page.locator('.servis-sonuc-girisi').getByRole('link', { name: 'Sonuçlar' })).toHaveAttribute('href', `#/sonuclar/s/${id}`);
+  await expect(page.getByRole('link', { name: 'Tüm servis sonuçları' })).toHaveAttribute('href', '#/sonuclar/servisler');
+  await expect(page.getByRole('link', { name: /Bu servisin özeti/ })).toHaveAttribute('href', `#/sonuclar/s/${id}`);
+  expect(hatalar, hatalar.join('\n')).toEqual([]);
+  await kapat();
+});

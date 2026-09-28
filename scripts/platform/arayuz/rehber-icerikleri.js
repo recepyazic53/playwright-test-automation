@@ -242,7 +242,7 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Servis sonuçları',
-        metin: ['Servis koşularının özeti: başarı oranı, kalan ve atlanan senaryolar, süre ve zaman içindeki eğilim. Soldan tek bir servisi ya da akışı seçerek yalnızca onun sonuçlarına bakabilirsiniz.'],
+        metin: ['Servis sonuçlarının tek yeri Sonuçlar > Servisler: başarı oranı, kalan ve atlanan senaryolar, süre ve zaman içindeki eğilim. Soldan bir servisi seçerek yalnızca onun sonuçlarına bakabilirsiniz; Servisler ekranındaki "Sonuçlar" da buraya getirir.', 'Servis sayfasındaki "Raporlar" sekmesi yalnız o servisin çalıştırma listesidir; üstündeki "Tüm servis sonuçları" buraya döner.'],
         cizim: { tur: 'maket', bolge: 'kartlar', etiket: 'Kartlar, eğilim ve koşu geçmişi' }
       },
       { baslik: 'Tarih aralığı ve ortam', metin: 'Üstteki tarih aralığıyla (Son 1 saat, Bugün, Son 7 gün…) ve ortam seçimiyle süzün. "Denemeleri de say" açıkken "Dene" ile yapılan tek çalıştırmalar da hesaba girer.' },
