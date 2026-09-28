@@ -12,7 +12,7 @@
 import { adaGore, restAlanlari, restUclariFormu, ucGovdesi, uclarEksik, yeniUc } from './rest-sihirbazi.js';
 import { adresAyir, ucAdiOner } from './rest-semasi.mjs';
 import { alan, api, bildir, h, ikon, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
-import { onayIste, riskliOrtamMi } from './kosu-paneli.js';
+import { onayIste, ortamRiskRozeti, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { aktarimEtkisiBolumu, guncellemeMetni, onizlemeyleAktar } from './tablolar.js';
 import { benzerTabloNotu } from './veri-sagligi.js';
 import { alanSatirlari } from './servis-govdesi.mjs';
@@ -99,7 +99,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
     const sec = h('select', { 'aria-label': `${o.ad} taban adresi` },
       ...liste.map((a) => h('option', { value: a, selected: temizTaban(d.tabanlar[o.id] || '') === a }, a)),
       h('option', { value: '__yeni', selected: Boolean(d.tabanlar[o.id]) && !liste.includes(temizTaban(d.tabanlar[o.id])) }, 'Yeni adres yaz…'),
-      o.canli ? h('option', { value: '', selected: d.tabanlar[o.id] === '' }, '— Bu ortamda yok (yalnız TEST) —') : null);
+      o.canli ? h('option', { value: '', selected: d.tabanlar[o.id] === '' }, '— Bu ortamda yok —') : null);
     const yeni = h('input', { type: 'url', autocomplete: 'off', spellcheck: 'false', placeholder: 'https://ornek.com/', 'aria-label': `${o.ad} yeni taban adresi`,
       value: sec.value === '__yeni' ? d.tabanlar[o.id] : '', hidden: sec.value !== '__yeni' });
     sec.addEventListener('change', () => {
@@ -110,7 +110,7 @@ export async function servisSihirbazi(kap, proje, tumOrtamlar) {
       durumGuncelle();
     });
     yeni.addEventListener('input', () => { d.tabanlar[o.id] = yeni.value.trim(); d.erisim = null; durumGuncelle(); });
-    return h('div', { class: 'taban-satiri' }, h('span', { class: 'taban-ortam' }, o.ad, ' ', rozet(o.canli ? 'CANLI' : 'TEST', o.canli ? 'hata' : '')), sec, yeni);
+    return h('div', { class: 'taban-satiri' }, h('span', { class: 'taban-ortam' }, o.ad, ortamRiskRozeti(o) ? [' ', ortamRiskRozeti(o)] : null), sec, yeni);
   };
 
   // --- Adım çizimleri --------------------------------------------------------------------------------------------------
@@ -482,7 +482,7 @@ function postmanOnizlemesi(kap, proje, ortamlar, o, dosyalar) {
   };
 
   const tabloAdi = h('input', { type: 'text', autocomplete: 'off', value: o.varsayilanTabloAdi, maxlength: '60' });
-  const degerOrtami = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'), ortamlar.map((x) => h('option', { value: x.id }, `${x.ad}${x.canli ? ' (CANLI)' : ' (TEST)'}`)));
+  const degerOrtami = h('select', {}, h('option', { value: '' }, 'Tüm ortamlar'), ortamlar.map((x) => h('option', { value: x.id }, ortamSecenekMetni(x))));
   const kokenler = [...new Set(o.klasorler.flatMap((k) => k.kokenler))];
   const tabanOrtami = h('select', {}, h('option', { value: '' }, 'Hiçbiri (taban adresi sonra verilir)'), ortamlar.map((x) => h('option', { value: x.id }, x.ad)));
   const kapsam = h('select', {}, Object.entries(KAPSAMLAR).map(([k, m]) => h('option', { value: k }, m)));

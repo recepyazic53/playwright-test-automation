@@ -137,14 +137,16 @@ test.describe('ortam formu ve sunucu (127.0.0.1)', () => {
     await form.getByRole('radio', { name: 'Evet' }).check();
     await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
     await expect(page.locator('.kayit-listesi li', { hasText: 'Hazırlık' }).getByText('Riskli', { exact: true })).toBeVisible();
-    // Evet → Hayır: onay penceresi; vazgeçilince kaydedilmez, onaylanınca "Riskli değil".
+    // Evet → Hayır: onay penceresi; vazgeçilince kaydedilmez, onaylanınca risk rozeti kalkar ("Riskli değil" rozeti gösterilmez).
     await page.locator('.kayit-listesi li', { hasText: 'Hazırlık' }).getByRole('button', { name: 'Hazırlık: düzenle' }).click();
     await page.getByRole('group', { name: /Bu ortam riskli mi\?/ }).getByRole('radio', { name: 'Hayır' }).check();
     await page.getByRole('button', { name: 'Kaydet', exact: true }).click();
     const onay = page.getByRole('dialog', { name: 'Ortam "riskli değil" yapılsın mı?' });
     await expect(onay).toBeVisible();
     await onay.getByRole('button', { name: 'Evet, riskli değil' }).click();
-    await expect(page.locator('.kayit-listesi li', { hasText: 'Hazırlık' }).getByText('Riskli değil')).toBeVisible();
+    await expect(onay).toBeHidden();
+    await expect(page.locator('.kayit-listesi li', { hasText: 'Hazırlık' }).locator('.rozet.hata, .risk-belirtin-rozeti')).toHaveCount(0);
+    await expect(page.locator('.kayit-listesi li', { hasText: 'Hazırlık' })).not.toContainText('Riskli');
     // Belirtilmemiş ortam koşu diyaloğunda: ortam seçimi etiketi + uyarı.
     await api('/platform/ortam/kaydet', { projeId, ad: 'Belirsiz', tabanUrl: 'http://127.0.0.1:9' });
     const secenek = await page.evaluate(async () => {

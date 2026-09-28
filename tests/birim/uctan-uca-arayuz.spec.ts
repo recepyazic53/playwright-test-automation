@@ -171,13 +171,13 @@ test.describe('uçtan uca akış arayüzü ve koşusu', () => {
     const diyalog = page.getByRole('dialog', { name: 'Uçtan uca akışı koş' });
     await expect(diyalog).toBeVisible();
     const once = { soap: soap.istekler.length, uygulama: uygulama.olaylar.length };
-    await diyalog.getByLabel('Ortam', { exact: true }).selectOption({ label: 'HAZIRLIK (TEST)' });
+    await diyalog.getByLabel('Ortam', { exact: true }).selectOption({ label: 'HAZIRLIK' });
     await expect(diyalog.locator('.uctan-eksik')).toContainText('Bu ortamda koşamayan adım var (3)');
     await expect(diyalog.locator('.uctan-eksik')).toContainText('"Ornek" servisi "HAZIRLIK" ortamında tanımlı değil (taban adres yok).');
     await expect(diyalog.locator('.uctan-eksik')).toContainText('senaryosu "HAZIRLIK" ortamında tanımlı değil.');
     await expect(diyalog.getByRole('button', { name: 'Koş', exact: true })).toBeDisabled();
     expect([soap.istekler.length, uygulama.olaylar.length]).toEqual([once.soap, once.uygulama]);
-    await diyalog.getByLabel('Ortam', { exact: true }).selectOption({ label: 'TEST (TEST)' });
+    await diyalog.getByLabel('Ortam', { exact: true }).selectOption({ label: 'TEST' });
     const izinler = diyalog.getByRole('list', { name: 'Gereken izinler' });
     await expect(izinler).toContainText('Web uygulamasına erişim');
     await expect(izinler.locator('li.kapali')).toContainText('Web uygulamasına erişim');

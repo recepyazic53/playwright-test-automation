@@ -6,7 +6,7 @@
 // kapalı izin koşu başlarken standart izin penceresiyle ("İzin ver ve devam et") sorulur; riskli ortamda ayrıca açık onay.
 // Kullanıcı verisi DOM'a yalnız metin olarak yazılır (h(); innerHTML yok). Taşınan değerler sunucudan maskeli gelir.
 import { TOKEN, alan, api, bildir, bosDurum, h, ikon, iskelet, rozet, tarihMetni, yerlestir } from './ortak.js';
-import { onayIste, onerilenOrtam, riskliOrtamMi } from './kosu-paneli.js';
+import { onayIste, onerilenOrtam, ortamSecenekMetni, riskliOrtamMi } from './kosu-paneli.js';
 import { servisAkisTasarimi } from './servis-akis-diyagrami.js';
 import { urunlerPaneli } from './senaryolar.js';
 
@@ -107,7 +107,7 @@ export function kosuPenceresi(proje, ortamlar, g) {
     const taslak = g.icerik !== undefined;
     const secilebilir = taslak ? ortamlar.filter((o) => !riskliOrtamMi(o)) : ortamlar;
     const ilk = onerilenOrtam(secilebilir);
-    const ortamSec = h('select', { 'aria-label': 'Ortam' }, secilebilir.map((o) => h('option', { value: o.id, selected: o.id === ilk?.id }, `${o.ad} (${riskliOrtamMi(o) ? 'CANLI / riskli' : 'TEST'})`)));
+    const ortamSec = h('select', { 'aria-label': 'Ortam' }, secilebilir.map((o) => h('option', { value: o.id, selected: o.id === ilk?.id }, ortamSecenekMetni(o))));
     const denetimKap = h('div', { class: 'uctan-denetim', 'aria-live': 'polite' });
     const onay = h('input', { type: 'checkbox' });
     const onayAlani = h('label', { class: 'secenek uctan-canli-onay', hidden: true }, onay, 'Bu ortam riskli: adımların gerçek işlem oluşturabileceğini biliyorum.');

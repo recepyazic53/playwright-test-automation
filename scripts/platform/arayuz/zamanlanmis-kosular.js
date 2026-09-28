@@ -5,7 +5,7 @@
 // ve riski yazılıdır). Kilitle düğmeleri kasayiKilitleSecimli() ile iki seçenek sunar (A ya da B açıkken).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, mesajKutusu, mesgulIken, parolaAlani, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { onayIste } from './ekran-ortak.js';
-import { riskliOrtamMi } from './kosu-paneli.js';
+import { ortamRiskRozeti, riskliOrtamMi } from './kosu-paneli.js';
 
 const GUNLER = [[1, 'Pzt'], [2, 'Sal'], [3, 'Çar'], [4, 'Per'], [5, 'Cum'], [6, 'Cmt'], [7, 'Paz']];
 const ARALIKLAR = [1, 2, 3, 4, 6, 8, 12];
@@ -304,7 +304,7 @@ function kuralSatiri(k, s) {
   return h('li', { class: k.etkin ? null : 'pasif-kayit' },
     h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('tarih')),
     h('div', { class: 'kayit-ana' },
-      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Canlı / riskli ortam', 'hata') : null),
+      h('strong', {}, k.ad, k.etkin ? null : rozet('Pasif', 'durdu'), k.riskli ? rozet('Riskli', 'hata', { title: 'Riskli ortamda zamanlanmış koşu (kayıtta onaylandı)' }) : null),
       h('div', { class: 'kayit-meta' }, [k.zamanMetni, k.ortamAdi || 'silinmiş ortam', kapsamMetni(k, s), k.bildirimAdi ? `Bildirim: ${k.bildirimAdi}` : null].filter(Boolean).join(' · ')),
       h('div', { class: 'kayit-meta' }, k.etkin ? `Sonraki çalışma: ${tarihMetni(k.sonrakiCalisma)}` : 'Pasif: çalışmaz.'),
       son ? h('div', { class: 'kayit-meta zamanlama-son' }, `Son çalışma: ${tarihMetni(son.zaman)} `, durumRozeti(son.durum), son.mesaj ? ` ${son.mesaj} ` : ' ', sonucBaglantisi(son))

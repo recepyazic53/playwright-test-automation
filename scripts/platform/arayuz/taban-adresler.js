@@ -11,6 +11,7 @@
 //  - Servis bazında: satır = servis, sütun = ortam (toplu düzenleme, bul-değiştir; etki önizlemesi + onay).
 // Hiçbir servise istek atılmaz (adres yalnız biçim olarak denetlenir; erişim kontrolü servis sayfasından).
 import { adresGecerliMi, alan, api, bildir, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, yeniKimlik, yerlestir } from './ortak.js';
+import { ortamRiskRozeti } from './kosu-paneli.js';
 
 const MOD_ETIKETI = { ortam: 'Ortamın adresi', yok: 'Bu ortamda yok', servis: 'Özel adres' };
 const GORUNUM_ANAHTARI = 'nobetci-taban-adresleri-gorunum';
@@ -132,7 +133,7 @@ function tabanGorunumu(proje, veri, yenile) {
   const acik = new Set();
   const tabloKap = h('div', { class: 'tablo-kaydirma' });
   const adres = (a) => (a ? h('code', { class: 'duz' }, a) : h('span', { class: 'soluk kucuk' }, 'bu ortamda yok'));
-  const ortamBasligi = (o) => h('th', { scope: 'col' }, o.ad, ' ', rozet(o.canli ? 'CANLI' : 'TEST', o.canli ? 'hata' : ''));
+  const ortamBasligi = (o) => h('th', { scope: 'col' }, o.ad, ortamRiskRozeti(o) ? [' ', ortamRiskRozeti(o)] : null);
   const islem = (girdi) => api('/platform/servis-tabanlari/taban', { govde: { projeId: proje.id, ...girdi } });
 
   /** Etkiyi pencerede gösterir; "Onayla ve kaydet" yazar. geri: önceki adım. */
@@ -369,7 +370,7 @@ function servisGorunumu(proje, veri, yenile) {
 
   const hepsi = h('input', { type: 'checkbox', 'aria-label': 'Tüm servisleri seç' });
   hepsi.addEventListener('change', () => { for (const s of satirlar) if (hepsi.checked) secili.add(s.servisId); else secili.delete(s.servisId); ciz(); });
-  const ortamBasliklari = () => ortamlar.map((o) => h('th', { scope: 'col' }, o.ad, ' ', rozet(o.canli ? 'CANLI' : 'TEST', o.canli ? 'hata' : '')));
+  const ortamBasliklari = () => ortamlar.map((o) => h('th', { scope: 'col' }, o.ad, ortamRiskRozeti(o) ? [' ', ortamRiskRozeti(o)] : null));
 
   const servisTablosu = () => {
     const sirali = [...satirlar].sort((a, b) => (taslak.get(a.servisId).grup || '￿').localeCompare(taslak.get(b.servisId).grup || '￿', 'tr') || a.ad.localeCompare(b.ad, 'tr'));

@@ -11,7 +11,7 @@
 // Giriş bilgisi değerleri arayüze hiç gelmez; kullanıcı yazdığında sunucuya gider, kasada şifreli durur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
-import { kosuOnayi, onayIste, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
+import { kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { riskBelirtilmemisMi } from './ortam-riski.mjs';
 import { urunlerPaneli } from './senaryolar.js';
 import { postmanAktarimi, servisSihirbazi } from './servis-sihirbazi.js';
@@ -66,7 +66,8 @@ async function ortamlariAl(proje) {
 }
 // Test ortamı = riskli OLMAYAN ortam (tek tanım: ortam-riski.mjs; sunucunun servis ortam türüyle aynı).
 const testOrtamlari = (ortamlar) => ortamlar.filter((o) => !riskliOrtamMi(o));
-const ortamEtiketi = (o) => `${o.ad}${riskliOrtamMi(o) ? ' (CANLI)' : ' (TEST)'}`;
+/** Ortam etiketi: kendi adı; yalnız riskliyse "(riskli)" (tek biçim: kosu-paneli.js > ortamSecenekMetni). */
+const ortamEtiketi = (o) => ortamSecenekMetni(o);
 
 /**
  * @param {HTMLElement} main
@@ -1598,7 +1599,7 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
   const surum = h('select', {}, ['1.1', '1.2'].map((v) => h('option', { value: v, selected: (s.ayarlar.soapSurumu || '1.1') === v }, `SOAP ${v}`)));
   const tls = h('input', { type: 'checkbox', id: yeniKimlik('tls'), checked: s.ayarlar.tlsDogrulama !== false });
   const durum = h('input', { type: 'checkbox', id: yeniKimlik('durum'), checked: s.durum !== 'devre_disi' });
-  // Taban adresler (adresin başı): ortamın listesinden seç, yeni yaz ya da (CANLI) "bu ortamda yok".
+  // Taban adresler (adresin başı): ortamın listesinden seç, yeni yaz ya da "bu ortamda yok".
   const temiz = (a) => String(a || '').trim().replace(/\/+$/, '');
   const tabanlar = ortamlar.map((o) => {
     const liste = [...new Set((o.tabanAdresleri && o.tabanAdresleri.length ? o.tabanAdresleri : [o.tabanUrl]).map(temiz))];
@@ -1610,7 +1611,7 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
     sec.addEventListener('change', () => { g.hidden = sec.value !== '__yeni'; if (!g.hidden) g.focus(); });
     const deger = () => (sec.value === '__yeni' ? temiz(g.value) : sec.value);
     const ozel = (s.ayarlar.adresler || {})[o.id];
-    return { o, ilk, deger, el: h('div', { class: 'taban-satiri' }, h('span', { class: 'taban-ortam' }, ortamEtiketi(o)), sec, g,
+    return { o, ilk, deger, el: h('div', { class: 'taban-satiri' }, h('span', { class: 'taban-ortam' }, o.ad, ortamRiskRozeti(o) ? [' ', ortamRiskRozeti(o)] : null), sec, g,
       ozel ? h('span', { class: 'soluk kucuk' }, `Eski tam adres ayarı geçerli: ${ozel}`) : null) };
   });
   const yalnizTest = (s.ayarlar.operasyonlar || []).map((op) => {

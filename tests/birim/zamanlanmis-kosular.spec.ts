@@ -365,7 +365,7 @@ test.describe('Ayarlar > Koşu > Zamanlanmış koşular arayüzü', () => {
     await expect(form).toBeHidden();
     const satir = kart.getByRole('listitem').filter({ hasText: 'Gece tam koşu' });
     await expect(satir.getByText('Hafta içi her gün 03:15', { exact: false })).toBeVisible();
-    await expect(satir.getByText('Canlı / riskli ortam')).toBeVisible();
+    await expect(satir.locator('.rozet.hata')).toHaveText('Riskli');
     await expect(satir.getByText('Pasif: çalışmaz.')).toBeVisible();
     await expect(satir.getByText('Henüz çalışmadı.')).toBeVisible();
     await expect(kart.getByRole('button', { name: /Şimdi koş/ })).toHaveCount(0);

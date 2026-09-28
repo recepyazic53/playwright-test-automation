@@ -285,7 +285,8 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       const ozet = page.getByRole('region', { name: 'Proje özeti' });
       await expect(ozet.locator('.ozet-ortamlar li')).toHaveCount(2);
       await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'CANLI' }).locator('.rozet.hata')).toHaveText('Riskli');
-      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'TEST' })).toContainText('Riskli değil');
+      // Riskli olmayan ortamda rozet yok (yalnız riskliyse "Riskli").
+      await expect(ozet.locator('.ozet-ortamlar li').filter({ hasText: 'TEST' }).locator('.rozet.hata, .rozet.uyari')).toHaveCount(0);
       await expect(page.getByText('Sizin için yapılacaklar')).toHaveCount(0);
       await expect(page.getByText('Sırada ne var?')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Ekranı otomatik tara' })).toHaveCount(0);

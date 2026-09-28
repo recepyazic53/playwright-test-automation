@@ -590,7 +590,7 @@ function sihirbazTamam() {
       h('ul', { class: 'ozet-ortamlar' }, ortamlar.map((o) => h('li', {},
         h('strong', {}, o.ad),
         o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : '',
-        riskliSecimi(o) === true ? h('span', { class: 'rozet hata' }, 'Riskli') : h('span', { class: 'rozet basari' }, 'Riskli değil'),
+        riskliSecimi(o) === true ? h('span', { class: 'rozet hata' }, 'Riskli') : riskliSecimi(o) === null ? h('span', { class: 'rozet uyari' }, 'Riskli mi? belirtin') : null,
         h('span', { class: 'mono soluk' }, o.tabanUrl)))));
   }).catch((hata) => { ozet.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message)); });
 }

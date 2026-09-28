@@ -35,6 +35,21 @@ const sureMetni = (ms) => (ms == null ? '' : ms < 1000 ? `${ms} ms` : ms < 60000
 export { riskliOrtamMi };
 
 /**
+ * Ortamın risk rozeti (her yerde aynı): ortam kendi adıyla gösterilir; YALNIZ riskliyse kırmızı "Riskli" rozeti, riskli olup olmadığı
+ * belirtilmemişse "Riskli mi? belirtin". Riskli olmayan ortama rozet eklenmez ("CANLI / TEST" rozeti kullanılmaz).
+ * @param {{ ad: string } & Record<string, unknown>} o @returns {HTMLElement | null}
+ */
+export function ortamRiskRozeti(o) {
+  if (!riskliOrtamMi(o)) return null;
+  return riskBelirtilmemisMi(o)
+    ? rozet('Riskli mi? belirtin', 'uyari', { title: 'Riskli olup olmadığı seçilmemiş; seçilene kadar riskli sayılır (Ayarlar > Proje ve ortamlar)' })
+    : rozet('Riskli', 'hata', { title: 'Gerçek işlem oluşturabilir' });
+}
+
+/** Seçim listelerinde ortam metni: adı; riskliyse "(riskli)" / belirtilmemişse "(riskli mi? belirtin)". @param {{ ad: string } & Record<string, unknown>} o */
+export const ortamSecenekMetni = (o) => (riskliOrtamMi(o) ? `${o.ad} (${riskBelirtilmemisMi(o) ? 'riskli mi? belirtin' : 'riskli'})` : o.ad);
+
+/**
  * "Riskli mi? belirtin" uyarısı: ortamın riskli olup olmadığı seçilmemiş (riskli sayılır) → Ayarlar > Proje ve ortamlar bağlantısı.
  * Koşu diyaloğu, servis sayfası ve ortam listesi kullanır.
  */
@@ -122,7 +137,7 @@ export function kosuOnayi(s) {
     const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
     const turMetni = s.tur === 'tam' ? `Tam koşu · ${s.kapsam || 'Genel'}` : 'Kısmi (tekil)';
     const ortamSecimi = secimli ? h('select', { id: `kosu-ortami-${kimlikUret()}` },
-      s.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ortam.id }, riskliOrtamMi(o) ? `${o.ad} (${riskBelirtilmemisMi(o) ? 'riskli mi? belirtin' : 'riskli'})` : o.ad))) : null;
+      s.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ortam.id }, ortamSecenekMetni(o)))) : null;
     const degisken = h('div', {});
     // --- Veri koşusu (tablodan çoklu satır): koşu anı ezmesi + tahmini test sayısı (sunucu hesaplar; üst sınır Ayarlar > Koşu) ---
     let veriKipi = 'senaryo';

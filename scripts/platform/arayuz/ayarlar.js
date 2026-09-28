@@ -222,7 +222,7 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
     [o.ad, ' ', o.varsayilan ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null,
       riskBelirtilmemisMi(o)
         ? [' ', h('button', { type: 'button', class: 'rozet uyari risk-belirtin-rozeti', title: 'Riskli olup olmadığı seçilmemiş; seçilene kadar riskli sayılır', onclick: () => ortamFormu(o) }, ikon('uyari'), 'Riskli mi? belirtin')]
-        : riskliOrtamMi(o) ? [' ', h('span', { class: 'rozet hata', title: 'Gerçek işlem oluşturabilir: her çalıştırmada onay; akış kaydı kapalı' }, 'Riskli')] : [' ', h('span', { class: 'rozet basari' }, 'Riskli değil')]],
+        : riskliOrtamMi(o) ? [' ', h('span', { class: 'rozet hata', title: 'Gerçek işlem oluşturabilir: her çalıştırmada onay; akış kaydı kapalı' }, 'Riskli')] : null],
     h('span', { class: 'mono' }, o.tabanUrl),
     [duzenleDugmesi(o.ad, () => ortamFormu(o)),
       gecmisDugmesi(`${o.ad} risk seçimi`, () => gecmisGoster('ortam_riski', o.id, `${o.ad} — riskli mi?`, baglam)),

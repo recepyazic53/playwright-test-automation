@@ -10,6 +10,7 @@ import { alan, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet
 import { dagilimCubugu, dogrulananDosyaIndir, dogrulananDosyalar, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
+import { ortamSecenekMetni } from './kosu-paneli.js';
 import { karsilastirDugmesi, karsilastirmaEkrani, karsilastirmaHatasi, kosuSecici } from './karsilastirma.js';
 
 export const TABAN = '#/servisler/sonuclar';
@@ -116,7 +117,7 @@ export async function servisGenelBakis(icerik, proje, secenek = {}) {
   const govde = h('div', { class: 'servis-sonuc-govdesi' });
   const ortamSec = h('select', { id: yeniKimlik('ss-ortam') },
     h('option', { value: '' }, 'Tüm ortamlar'),
-    ...veri.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === oku(ORTAM_ANAHTARI) }, `${o.ad} (${o.canli ? 'CANLI' : 'TEST'})`)));
+    ...veri.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === oku(ORTAM_ANAHTARI) }, ortamSecenekMetni(o))));
   const deneme = h('input', { type: 'checkbox', id: yeniKimlik('ss-deneme'), checked: oku(DENEME_ANAHTARI) === '1' });
   const yenile = async () => {
     govde.setAttribute('aria-busy', 'true');
