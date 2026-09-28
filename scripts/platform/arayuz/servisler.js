@@ -32,7 +32,7 @@ import { senaryoSayfasi } from './akis-senaryo-formu.js';
 import { dosyaKontroluFormu, dosyaOzeti, yeniDosyaTanimi } from './dosya-kontrolu-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
-import { calistirmaBicimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
+import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 
 const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['sozlesme', 'Sözleşme'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
@@ -1323,8 +1323,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   };
   operasyon.addEventListener('change', sozlesmeNotuCiz);
   sozlesmeNotuCiz();
-  // --- Veri koşusu (tablodan çoklu satır; tablolar/veri-kosulari.mjs): gövde / header / yoldaki ${Tablo.Sütun} gruplarının çalıştırma
-  // biçimi. Varsayılan "Tek satır" (bugünkü davranış); tahmini çalıştırma sayısı varsayılan (yoksa ilk) ortam için gösterilir.
+  // --- Veri koşusu (tablodan çoklu satır; tablolar/veri-kosulari.mjs): gövde / header / yoldaki ${Tablo.Sütun} gruplarında sade çoklu
+  // çalıştırma ("Uyan her satır ayrı test"; kayıtlı "seçili satırlar" korunur). Varsayılan tek satır (bugünkü davranış); tahmini çalıştırma sayısı varsayılan (yoksa ilk) ortam için gösterilir.
   const veriKosulari = JSON.parse(JSON.stringify(i.veriKosulari || {}));
   veriKosulari.gruplar ??= {};
   const veriKutusu = h('div', { class: 'veri-kosusu-kutusu' });
@@ -1354,7 +1354,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
     const d = { veriKosulari, ortam: veriOrtami, ortamAdi: (id) => (ortamlar.find((o) => o.id === id) || {}).ad || 'başka ortam', tablolar, tabloSecimleri, degisti: () => veriCiz(true) };
     yerlestir(veriKutusu,
       gruplar.map((g) => h('div', { class: 'satir-secimi-grubu' }, h('h4', {}, `${g.tablo.ad}${g.etiket ? ` [${g.etiket}]` : ''}`),
-        calistirmaBicimi(g.tablo, g.anahtar, tabloSecimleri[g.anahtar] || {}, d))),
+        cokluCalistirmaSecimi(g.tablo, g.anahtar, tabloSecimleri[g.anahtar] || {}, d) || h('p', { class: 'soluk kucuk' }, 'Tabloda birden çok satır yok; her koşuda bir kez çalışır.'))),
       veriKosusuOzeti(gruplar, d));
   };
   const veriBolumu = h('fieldset', {}, h('legend', {}, 'Veri koşusu'), veriKutusu);

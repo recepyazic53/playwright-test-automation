@@ -1,5 +1,5 @@
-// VERİ KOŞUSU SEÇİMİ (arayüz; ekran ve servis senaryosu formu ortak) — tablo grubunun "Çalıştırma biçimi" (tek satır / seçili
-// satırların her biri / uyan tüm satırlar), satır işaretleri, birden çok çoklu grupta birleşim (tüm kombinasyonlar / eşleştirerek)
+// VERİ KOŞUSU SEÇİMİ (arayüz; ekran ve servis senaryosu formu ortak) — tablo grubunda çoklu çalıştırma ("Uyan her satır ayrı
+// test"; kayıtlı "seçili satırlar" korunur), satır işaretleri, birden çok çoklu grupta birleşim (tüm kombinasyonlar / eşleştirerek)
 // ve tahmini test sayısı. Kural ve sayım tablolar/veri-kosulari.mjs'dedir (sunucu ve koşucuyla aynı).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { h, ikon } from './ortak.js';
@@ -24,49 +24,64 @@ export function kaydedilecekVeriKosulari(veriKosulari, kullanilanAnahtarlar) {
   return { gruplar, birlesim, ...(birlesim === 'eslestir' ? { eslesmeler: (veriKosulari.eslesmeler || []).filter((e) => coklu.every((g) => e[g])) } : {}) };
 }
 
+/** Satır listesindeki metin: ad — ilk açık sütunlar [yalnız ortam]. */
+const satirMetni = (t, r, d) => {
+  const acik = t.sutunlar.filter((c) => !c.gizli);
+  return `${r.ad || 'Satır'}${acik.length ? ` — ${acik.slice(0, 3).map((c) => r.degerler[c.ad] ?? '—').join(' · ')}` : ''}${r.ortamId ? ` [yalnız ${d.ortamAdi(r.ortamId)}]` : ''}`;
+};
+
 /**
- * Grup başına "Çalıştırma biçimi" seçimi (+ seçili satırlarda satır işaretleri, tümünde bu ortamdaki sayı).
+ * Kayıtlı "seçili satırlar" biçiminin satır işaretleri (her işaretli satır ayrı test). Yeni senaryoda bu biçim sunulmaz; kayıtlı
+ * senaryoda değer korunur ve işaretler düzenlenebilir.
+ * @param {{ sutunlar: Array<{ ad: string; gizli?: boolean }>; satirlar: Array<{ id: string; ad?: string; ortamId: string | null; degerler: Record<string, string | null> }> }} t
+ * @param {string} anahtar grup anahtarı ("<tabloId>|<etiket>")
+ * @param {{ veriKosulari: { gruplar: Record<string, any> }; ortamAdi: (id: string) => string; degisti: () => void }} d
+ */
+export function satirIsaretleri(t, anahtar, d) {
+  const ayar = d.veriKosulari.gruplar[anahtar];
+  const secili = new Set(ayar && ayar.kip === 'secili' ? ayar.satirlar : []);
+  return h('fieldset', { class: 'satir-isaretleri', 'data-satir-isaretleri': anahtar }, h('legend', {}, 'Koşulacak satırlar (her biri ayrı test)'),
+    t.satirlar.map((r) => {
+      const kutu = h('input', { type: 'checkbox', value: r.id, checked: secili.has(r.id) });
+      kutu.addEventListener('change', () => {
+        const liste = new Set(d.veriKosulari.gruplar[anahtar]?.satirlar || []);
+        if (kutu.checked) liste.add(r.id); else liste.delete(r.id);
+        d.veriKosulari.gruplar[anahtar] = { kip: 'secili', satirlar: t.satirlar.map((x) => x.id).filter((x) => liste.has(x)) };
+        d.degisti();
+      });
+      return h('label', { class: 'satir-isareti' }, kutu, h('span', {}, satirMetni(t, r, d)));
+    }),
+    !secili.size ? h('div', { class: 'alan-uyarisi' }, 'En az bir satır işaretleyin.') : null);
+}
+
+/**
+ * Tek tablo grubunda çoklu çalıştırma (sade; eski üç seçenekli "Çalıştırma biçimi" listesinin yerine): "Uyan her satır ayrı test"
+ * onay kutusu (veriKosulari 'tumu'; işaretsiz = tek satır, bugünkü davranış). Kayıtlı 'secili' biçimi korunur (kutu işaretli, satır
+ * işaretleri düzenlenebilir). Tabloda birden az satır varsa ve çoklu biçim kayıtlı değilse çoklu çalıştırma anlamsızdır: null.
  * d: { veriKosulari, ortam: { id, ad }, ortamAdi(id), degisti() } — degisti yeniden çizimi tetikler.
  * @param {{ id: string; ad: string; sutunlar: Array<{ ad: string; gizli?: boolean }>; satirlar: Array<{ id: string; ad?: string; ortamId: string | null; degerler: Record<string, string | null> }> }} t
  * @param {string} anahtar grup anahtarı ("<tabloId>|<etiket>") @param {Record<string, string>} secim grubun satır seçimi (tabloSecimleri)
  * @param {{ veriKosulari: { gruplar: Record<string, any> }; ortam: { id: string; ad: string }; ortamAdi: (id: string) => string; degisti: () => void }} d
  */
-export function calistirmaBicimi(t, anahtar, secim, d) {
+export function cokluCalistirmaSecimi(t, anahtar, secim, d) {
   const ayar = d.veriKosulari.gruplar[anahtar] || null;
-  const kip = ayar ? ayar.kip : 'tek';
-  const id = yeniId('bicim');
-  const sel = h('select', { id, 'data-calistirma-bicimi': anahtar },
-    h('option', { value: 'tek', selected: kip === 'tek' }, 'Tek satır (varsayılan)'),
-    h('option', { value: 'secili', selected: kip === 'secili' }, 'Seçili satırların her biri için ayrı test'),
-    h('option', { value: 'tumu', selected: kip === 'tumu' }, 'Uyan tüm satırlar (her biri ayrı test)'));
-  sel.addEventListener('change', () => {
-    if (sel.value === 'tek') delete d.veriKosulari.gruplar[anahtar];
-    else if (sel.value === 'tumu') d.veriKosulari.gruplar[anahtar] = { kip: 'tumu' };
-    else d.veriKosulari.gruplar[anahtar] = { kip: 'secili', satirlar: (ayar && ayar.kip === 'secili' ? ayar.satirlar : []) };
+  const kip = ayar && (ayar.kip === 'tumu' || ayar.kip === 'secili') ? ayar.kip : 'tek';
+  if (kip === 'tek' && t.satirlar.length < 2) return null;
+  const id = yeniId('coklu');
+  const kutu = h('input', { type: 'checkbox', id, 'data-coklu-calistirma': anahtar, checked: kip !== 'tek' });
+  kutu.addEventListener('change', () => {
+    if (kutu.checked) d.veriKosulari.gruplar[anahtar] = { kip: 'tumu' };
+    else delete d.veriKosulari.gruplar[anahtar];
     d.degisti();
   });
-  const acik = t.sutunlar.filter((c) => !c.gizli);
-  const satirMetni = (r) => `${r.ad || 'Satır'}${acik.length ? ` — ${acik.slice(0, 3).map((c) => r.degerler[c.ad] ?? '—').join(' · ')}` : ''}${r.ortamId ? ` [yalnız ${d.ortamAdi(r.ortamId)}]` : ''}`;
   let ek = null;
-  if (kip === 'secili') {
-    const secili = new Set(ayar.satirlar);
-    ek = h('fieldset', { class: 'satir-isaretleri' }, h('legend', {}, 'Koşulacak satırlar'),
-      t.satirlar.map((r) => {
-        const kutu = h('input', { type: 'checkbox', value: r.id, checked: secili.has(r.id) });
-        kutu.addEventListener('change', () => {
-          const liste = new Set(d.veriKosulari.gruplar[anahtar]?.satirlar || []);
-          if (kutu.checked) liste.add(r.id); else liste.delete(r.id);
-          d.veriKosulari.gruplar[anahtar] = { kip: 'secili', satirlar: t.satirlar.map((x) => x.id).filter((x) => liste.has(x)) };
-          d.degisti();
-        });
-        return h('label', { class: 'satir-isareti' }, kutu, h('span', {}, satirMetni(r)));
-      }),
-      !secili.size ? h('div', { class: 'alan-uyarisi' }, 'En az bir satır işaretleyin.') : null);
-  } else if (kip === 'tumu') {
+  if (kip === 'secili') ek = satirIsaretleri(t, anahtar, d);
+  else if (kip === 'tumu') {
     const n = uyanSatirlar(t, secim, { ortamId: d.ortam.id }).length;
     ek = h('div', { class: 'alan-notu' }, `Seçimlerle uyan her satır ayrı test olarak koşar (${d.ortam.ad} ortamında ${n}). Ortama özel satır yalnız kendi ortamında koşar.`);
   }
-  return h('div', { class: 'calistirma-bicimi' }, h('label', { for: id }, 'Çalıştırma biçimi'), sel, ek);
+  return h('div', { class: 'calistirma-bicimi' },
+    h('label', { class: 'onay-satiri', for: id }, kutu, h('span', {}, kip === 'secili' ? 'İşaretli satırların her biri ayrı test' : 'Uyan her satır ayrı test')), ek);
 }
 
 /**

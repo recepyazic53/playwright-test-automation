@@ -23,7 +23,7 @@ import {
 } from './model-formu.mjs';
 import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
 import { basvuru, degerBasvurusuYaz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
-import { calistirmaBicimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
+import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
 import { birlesikDegerler, eslesenListeler } from './parametre-tanimlari.mjs';
@@ -1148,7 +1148,17 @@ function modelFormu(icerik, s, senaryo, baglam) {
     veriKosulari, ortam: s.ortam, ortamAdi, tablolar: tabloListesi || [], tabloSecimleri,
     degisti: () => { degisti = true; satirSecimiCiz(true); kayitGruplariniYenile(); }
   });
-  function calistirmaBicimiCiz(t, anahtar, secim) { return calistirmaBicimi(t, anahtar, secim, veriKosusuDurumu()); }
+  /**
+   * Grubu olmayan (tekil) tablo başvurusunda sade çoklu çalıştırma ("Uyan her satır ayrı test"; veri-kosusu-secimi.js). Açılırken
+   * tek bir satırdan gelen seçim tüm satırları o satıra daraltacağından kaldırılır; elle yazılan koşullar kalır.
+   */
+  function cokluCalistirmaCiz(t, anahtar, secim, secilenSatir) {
+    const d = veriKosusuDurumu();
+    return cokluCalistirmaSecimi(t, anahtar, secim, { ...d, degisti: () => {
+      if (secilenSatir && veriKosulari.gruplar[anahtar]?.kip === 'tumu') delete tabloSecimleri[anahtar];
+      d.degisti();
+    } });
+  }
   function veriKosusuOzetiCiz(gruplar) { return veriKosusuOzeti(grupAnahtarlari(gruplar), veriKosusuDurumu()); }
   function satirGrubuCiz(g) {
     const t = tabloBul(tabloListesi, g.tablo);
@@ -1176,13 +1186,15 @@ function modelFormu(icerik, s, senaryo, baglam) {
       if (!diyagramAlani.hidden) diyagramiCiz();
     });
     const uyan = uyanSatirlar(t, secim, { ortamId: s.ortam.id });
-    const durum = !secimVar ? 'Koşuda bağlı alanların değerleri ve ortamla uyan ilk satır kullanılır.'
+    // Çoklu çalıştırma açıkken durum notu onay kutusunun altında (uyan / işaretli satırların her biri ayrı test).
+    const cokluAcik = Boolean(veriKosulari.gruplar[anahtar]);
+    const durum = cokluAcik ? null : !secimVar ? 'Koşuda bağlı alanların değerleri ve ortamla uyan ilk satır kullanılır.'
       : uyan.length === 1 ? `✓ ${s.ortam.ad} ortamında tek satır uyuyor.` : uyan.length ? `${uyan.length} satır uyuyor (${s.ortam.ad}) · koşuda ilki.` : `${s.ortam.ad} ortamında uyan satır yok.`;
     return h('div', { class: 'satir-secimi-grubu', 'data-tablo': t.ad },
       baslikEl, h('label', { class: 'gorunmez', for: id }, `${t.ad}${g.etiket ? ` [${g.etiket}]` : ''} satırı`), sel,
-      h('div', { class: `alan-notu ${secimVar && !uyan.length ? 'alan-uyarisi' : ''}`.trim(), role: 'status' }, durum),
+      durum ? h('div', { class: `alan-notu ${secimVar && !uyan.length ? 'alan-uyarisi' : ''}`.trim(), role: 'status' }, durum) : null,
       kosulDuzenleyici(t, anahtar, secim, secimVar && !secilenSatir, () => { degisti = true; satirSecimiCiz(true); }),
-      calistirmaBicimiCiz(t, anahtar, secim));
+      cokluCalistirmaCiz(t, anahtar, secim, secilenSatir));
   }
 
   // --- Beklenen sonuç -----------------------------------------------------------------------
