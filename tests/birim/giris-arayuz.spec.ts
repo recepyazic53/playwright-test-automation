@@ -262,7 +262,10 @@ test('Ekranlar > Ortak akışlar: her ortamın girişi tek satır özetle görü
   await expect(kart).toBeVisible();
   await expect(kart.locator('.giris-ozet-adimlari')).toHaveCount(0);
   await expect(kart.locator('.ortak-akis-ozeti')).toContainText('SMS kodu (elle)');
-  await expect(page.locator('.yan-panel a.giris-akisi-baglantisi').filter({ hasText: 'Giriş (CANLI)' })).toBeVisible();
+  // Tarifi olmayan ortamın (CANLI önceki testte sıfırlandı) girişi ortak akışlarda listelenmez; tanımlı olan listelenir.
+  await expect(page.locator('.yan-panel a.giris-akisi-baglantisi').filter({ hasText: 'Giriş (TEST)' })).toBeVisible();
+  await expect(page.locator('.yan-panel a.giris-akisi-baglantisi').filter({ hasText: 'Giriş (CANLI)' })).toHaveCount(0);
+  await expect(page.locator('.giris-akisi-karti').filter({ hasText: 'Giriş (CANLI)' })).toHaveCount(0);
   await kart.getByRole('link', { name: 'Giriş (TEST): düzenle' }).click();
   const form = page.locator('form.tarif-formu');
   await expect(form.getByRole('heading', { name: 'Giriş tarifi: TEST' })).toBeVisible();
