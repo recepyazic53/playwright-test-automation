@@ -25,7 +25,6 @@ import { bulgularEkrani } from './bulgular.js';
 import { ekranBaglariSekmesi } from './ekran-baglari.js';
 import { ekranlarGrubu, navGrubu, servisleriAl, servislerBolumu, urunlerBasligi } from './urunler.js';
 import { devreDisiAnahtari, devreDisiGoster, devreDisiRozeti, durumDegistir, ekranMenusu, formDiyalogu, geriYukle, silDiyalogu, yenile } from './ekran-yonetimi.js';
-import { girisAkislariniAl, girisBaglantisi, girisKarti } from './giris-akisi.js';
 import { paketIstekCumlesi } from './paket-istekleri.mjs';
 import { acilirMenu } from './calisma-alani.js';
 
@@ -66,10 +65,10 @@ export function ekranlarEkrani(main, parcalar, baglam) {
   const hata = (e) => { if (e && e.durum === 423) return; yerlestir(icerik, hataKutusu(e)); };
 
   (async () => {
-    // Girişler (ortam başına giriş tarifi) "Ortak akışlar"da görünür; düzenleme Ayarlar > Giriş profilleri'nde.
-    const [liste, servisler, girisler] = await Promise.all([api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`), servisleriAl(proje), girisAkislariniAl(proje)]);
+    // Giriş (ortam başına giriş tarifi) Ekranlar'da listelenmez; yalnız Ayarlar > Giriş profilleri > Giriş tarifi'nden yönetilir.
+    const [liste, servisler] = await Promise.all([api(`/platform/ekranlar?projeId=${encodeURIComponent(proje.id)}`), servisleriAl(proje)]);
     const secim = tur === 'e' ? kimlik : tur === 'yeni' ? '__yeni' : '';
-    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler, girisler);
+    const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler);
     yanCiz();
     if (tur === 'yeni') {
       sayfaPaketiAkisi(icerik, { mod: 'yeni', proje, tara: () => taramaBaslat(proje, null), kaydet: () => kayitBaslat(proje, null), bitti: (id) => { location.hash = `#/ekranlar/e/${encodeURIComponent(id)}`; } });
@@ -99,14 +98,14 @@ export function ekranlarEkrani(main, parcalar, baglam) {
       await ekranAyrintisi(icerik, { proje, ekranId: kimlik, sekme: alt || 'model', surum: alt === 'gecmis' && altKimlik ? Number(altKimlik) : null, akisSecimi: alt === 'akis' ? altKimlik || null : null, listeKaydi: ekran, idler: gorunenSira(liste).idler });
       return;
     }
-    listeGorunumu(icerik, proje, liste, girisler);
+    listeGorunumu(icerik, proje, liste);
   })().catch(hata);
 }
 
 /** Ekran listesinde (ürün/ekran kartları) gösterilmeyen model türleri: yan listede kendi gruplarında. */
 const EKRAN_DISI_TURLER = ['altModel', 'ortakAkis'];
 
-function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
+function yanListe(nav, tumu, secili, yeniden, servisler = []) {
   // Devre dışı ekranlar varsayılan olarak gizli (seçili olan hariç); "Devre dışı ekranları göster" ile görünür.
   const devreDisiSayisi = tumu.filter((e) => e.durum === 'devre_disi').length;
   const ekranlar = devreDisiGoster() ? tumu : tumu.filter((e) => e.durum !== 'devre_disi' || e.id === secili);
@@ -125,7 +124,7 @@ function yanListe(nav, tumu, secili, yeniden, servisler = [], girisler = []) {
     h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Ekran ekle'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranModelli.map(baglanti)),
-    navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: [...girisler.map(girisBaglantisi), ...ortakAkislar.map(baglanti)], bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }),
+    navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: ortakAkislar.map(baglanti), bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }),
     altModeller.length ? navGrubu({ anahtar: 'alt-modeller', baslik: 'Alt modeller', ogeler: altModeller.map(baglanti), ekle: { etiket: 'Alt model ekle (sayfa paketiyle)', href: '#/ekranlar/yeni' } }) : null,
     devreDisiAnahtari(devreDisiSayisi, () => yeniden()),
     ...servislerBolumu(servisler));
@@ -146,7 +145,7 @@ function gorunenSira(liste) {
   return { sirali, idler: [...sirali.map((e) => e.id), ...liste.ekranlar.filter((e) => EKRAN_DISI_TURLER.includes(e.modelTuru)).map((e) => e.id)] };
 }
 
-function listeGorunumu(icerik, proje, liste, girisler = []) {
+function listeGorunumu(icerik, proje, liste) {
   const ekranlar = liste.ekranlar.filter((e) => !EKRAN_DISI_TURLER.includes(e.modelTuru));
   const { sirali, idler } = gorunenSira(liste);
   const devreDisi = ekranlar.filter((e) => e.durum === 'devre_disi').length;
@@ -173,21 +172,20 @@ function listeGorunumu(icerik, proje, liste, girisler = []) {
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
       : bosDurum('Henüz ekran yok.', 'İlk ekranınızı "Ekran ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Ekran ekle') }),
-    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis'), girisler, proje.id),
+    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis')),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }
 
 /**
- * Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. Her ortamın GİRİŞİ
- * de burada "Giriş (<ortam>)" kartıdır (tek satır özet; adımlar Düzenle → Ayarlar > Giriş profilleri > Giriş tarifi'nde).
- * Kartlar ekran kartlarıyla aynı düzende (ortakAkisKarti, giris-akisi.js > girisKarti).
+ * Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. Kartlar ekran kartlarıyla
+ * aynı düzende (ortakAkisKarti). Giriş burada listelenmez: yalnız Ayarlar > Giriş profilleri > Giriş tarifi'nden yönetilir.
  */
-function ortakAkisBolumu(liste, girisler = [], projeId = '') {
-  if (!liste.length && !girisler.length) return null;
+function ortakAkisBolumu(liste) {
+  if (!liste.length) return null;
   return h('section', { class: 'ortak-akis-bolumu', 'aria-labelledby': 'ortak-akislar-baslik' },
-    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length + girisler.length), 'vurgu')),
-      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar. Giriş her koşuda ortamın giriş tarifiyle yapılır.')),
-    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...girisler.map((o) => girisKarti(o, projeId)), ...liste.map(ortakAkisKarti)));
+    h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length), 'vurgu')),
+      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar.')),
+    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...liste.map(ortakAkisKarti)));
 }
 
 /**

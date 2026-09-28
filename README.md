@@ -85,8 +85,8 @@ medya inceltme → Güvenlik > Video saklama süresi. Her yeni ayarın varsayıl
 
 ### Giriş
 
-Her ortamın girişi **Ayarlar > Giriş profilleri > Giriş tarifi**'ndedir ve **Ekranlar > Ortak akışlar**'da "Giriş (ortam)"
-olarak adım adım okunur; **Düzenle** o ortamın tarif formunu açar. Kullanıcı adı, parola ve giriş düğmesinin önüne,
+Her ortamın girişi yalnızca **Ayarlar > Giriş profilleri > Giriş tarifi**'nden yönetilir (Ekranlar'da listelenmez);
+adımlar tarif formunda okunur özetle görünür. Kullanıcı adı, parola ve giriş düğmesinin önüne,
 arasına ya da arkasına adım eklenebilir (ek alan, seçim, "Devam" ile iki sayfalı giriş, çerez onayı); bu adımların
 değerleri giriş profilinde **Ek alanlar**'da durur, gizli işaretlenen (PIN gibi) kasada şifreli ve maskelidir.
 **Girişi kaydet** ile girişi görünür tarayıcıda kendiniz yaparsınız (yazdığınız değerler kaydedilmez); alanları

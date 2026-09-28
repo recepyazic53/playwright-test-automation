@@ -2615,7 +2615,7 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .secenek-karti b { font-size: 14px; }
 .secenek-karti small { color: var(--metin-3); font-size: 12.5px; line-height: 1.45; overflow-wrap: anywhere; }
 
-/* 5.y Giriş adımları, ek alanlar ve "Girişi kaydet" (giris-tarifi.js, ayarlar.js, giris-akisi.js) — dosya SONUNA eklendi. */
+/* 5.y Giriş adımları, ek alanlar ve "Girişi kaydet" (giris-tarifi.js, ayarlar.js) — dosya SONUNA eklendi. */
 .giris-adimi { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel); padding: 10px 12px; }
 .giris-ozel-not { margin: 0; grid-column: 1 / -1; }
 .giris-ozet { margin: 0 0 var(--b2); }
@@ -2636,8 +2636,6 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .giris-denemesi-goruntusu { display: block; max-width: 100%; max-height: 22rem; margin-top: var(--b2); border: 1px solid var(--cizgi, currentColor); border-radius: var(--r1, 6px); object-fit: contain; }
 .giris-denemesi-gunlugu { margin: var(--b2) 0 0; padding-left: 1.25rem; }
 .giris-denemesi-gunlugu:empty { display: none; }
-.giris-akisi-karti .giris-ozet-adimlari { font-size: 13px; }
-.giris-akisi-karti .dugmeler { margin-top: auto; }
 @media (max-width: 640px) {
   .ek-alan-satiri { grid-template-columns: 1fr 1fr; }
   .giris-kaydi-adimi { grid-template-columns: auto minmax(0, 1fr); }
@@ -3601,7 +3599,7 @@ tr.suzuldu { display: none; }
   .ekleme-kutulari { grid-template-columns: minmax(0, 1fr); }
   .ekleme-kutusu { min-height: 0; }
 }
-/* Ortak akış ve giriş kartları: ekran kartıyla aynı düzen (başlık + rozet, tek satır özet, kullanım, altta eylemler). */
+/* Ortak akış kartları: ekran kartıyla aynı düzen (başlık + rozet, tek satır özet, kullanım, altta eylemler). */
 .ekran-karti.ortak-akis-karti { display: flex; flex-direction: column; gap: 10px; text-decoration: none; }
 .ortak-akis-izgarasi { align-items: stretch; }
 .ortak-akis-ozeti { font-size: 13px; color: var(--metin-2); overflow-wrap: anywhere; }
