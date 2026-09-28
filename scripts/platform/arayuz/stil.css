@@ -1157,10 +1157,10 @@ dialog.cekmece .cekmece-ust .ikon-dugme { margin-left: auto; }
 .alan-izgarasi { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 12px 14px; align-items: start; }
 .alan-izgarasi > .genis { grid-column: 1 / -1; }
 .model-alani { margin: 0; min-width: 0; }
-.model-alani > .alan-ust { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-height: 18px; }
+.model-alani > .alan-ust { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 6px; min-height: 18px; min-width: 0; }
 .model-alani > .alan-ust label { margin: 0; }
 .model-alani > .alan-ust .zorunlu-isareti { color: var(--hata); font-weight: 700; margin-left: 2px; }
-.model-alani > .alan-ust .sag { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.model-alani > .alan-ust .sag { margin-left: auto; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px 6px; min-width: 0; }
 .kosullu-cip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 6px; border-radius: 5px; font: 600 10px var(--yazi-mono); letter-spacing: .02em; color: var(--durdu); background: var(--durdu-zemin); cursor: help; }
 .kosullu-cip .ikon { width: 11px; height: 11px; }
 .mutlaka-gorunmeli { display: inline-flex; align-items: center; gap: 5px; margin: 0; font: 500 11px var(--yazi); color: var(--metin-3); cursor: pointer; white-space: nowrap; }

@@ -256,6 +256,21 @@ function ayarKosulu(model, gorunurluk) {
   return nesneMi(ifade) && typeof ifade.senaryoAyari === 'string' && ifade.esit === true ? ifade.senaryoAyari : null;
 }
 
+/** Görünürlüğün ifadesi (adlandırılmış koşul çözülür). @param {any} model @param {any} gorunurluk */
+function gorunurlukIfadesi(model, gorunurluk) {
+  if (!nesneMi(gorunurluk)) return null;
+  if (typeof gorunurluk.kosul === 'string') return model.kosullar && model.kosullar[gorunurluk.kosul] ? model.kosullar[gorunurluk.kosul].ifade : null;
+  return gorunurluk.ifade ?? null;
+}
+
+/** İfadede geçen senaryo ayarları (ve / veya / değil içinde de). @param {any} ifade @returns {Set<string>} */
+function ayarlariTopla(ifade, sonuc = new Set()) {
+  if (!nesneMi(ifade)) return sonuc;
+  if (typeof ifade.senaryoAyari === 'string') sonuc.add(ifade.senaryoAyari);
+  for (const alt of [...(Array.isArray(ifade.ve) ? ifade.ve : []), ...(Array.isArray(ifade.veya) ? ifade.veya : []), ...(ifade.degil ? [ifade.degil] : [])]) ayarlariTopla(alt, sonuc);
+  return sonuc;
+}
+
 /** Kimlik parçasının (altAlan) senaryodaki alt anahtarı; kimlik türüne göre değişebilir. */
 function kimlikAlaniAdi(alt, tur) {
   const k = alt.eslesme && alt.eslesme.kimlikAlani;
@@ -398,6 +413,23 @@ export function formSemasiOlustur(model, altModeller = {}) {
     }
     return { id: adim.id, baslik: adim.baslik || adim.id, sira: adim.sira || 0, ayar: ayar && kapsamAyarlari.has(ayar) ? ayar : null, bolumler };
   });
+
+  // Adımları seçen senaryo ayarı (ör. "Ödeme şekli: kart / açık hesap"): formun başı yerine, o ayara bağlı İLK adımdan hemen
+  // önceki ve ayara bağlı OLMAYAN adımın başında gösterilir (seçim, kendi gizlediği adımın içinde kalmaz). Uygun adım yoksa
+  // senaryo kartında kalır. Kapsam anahtarları (Dahil) ve beklenen sonuç bunun dışındadır.
+  for (const alan of senaryoDuzeyi) {
+    if (!nesneMi(alan) || alan.yapilandirma !== 'senaryo' || kapsamAyarlari.has(alan.id) || alan.tip === 'birlesim' || yerlesen.has(alan.id)) continue;
+    const anahtar = senaryoAnahtarlari(alan)[0];
+    if (!anahtar) continue;
+    const bagli = (/** @type {any} */ adim) => ayarlariTopla(gorunurlukIfadesi(model, adim.gorunurluk)).has(anahtar);
+    const ilk = adimlarSirali.findIndex(bagli);
+    if (ilk <= 0 || bagli(adimlarSirali[ilk - 1])) continue;
+    const hedef = adimlar[ilk - 1];
+    const formAlani = alanCevir(alan, { adimId: hedef.id, bolumId: `${hedef.id}-ayar` }, altModeller);
+    if (!formAlani) continue;
+    hedef.bolumler = [{ id: `${hedef.id}-ayar`, baslik: hedef.baslik, gorunurlukVar: false, alanlar: [formAlani] }, ...hedef.bolumler];
+    yerlesen.add(alan.id);
+  }
 
   // Beklenen sonuç (birleşim) ve başlık
   const bsAlani = senaryoDuzeyi.find((a) => a.tip === 'birlesim' && a.yapilandirma === 'senaryo');
