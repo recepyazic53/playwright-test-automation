@@ -601,6 +601,16 @@ progress::-moz-progress-bar { border-radius: 999px; background: linear-gradient(
 .grup ul { list-style: none; padding: 0; margin: 8px 0 0; }
 .grup li { padding: 8px 0; border-top: 1px solid var(--cizgi); }
 .grup li:first-child { border-top: none; }
+/* Hedef proje / ortam eşlemesi (önizlemenin başında) */
+.esleme-bolumu::before { background: var(--vurgu); }
+.esleme-bolumu > h3 { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 6px; }
+.esleme-projesi { padding-top: 10px; margin-top: 10px; border-top: 1px solid var(--cizgi); min-width: 0; }
+.esleme-projesi:first-of-type { border-top: none; }
+.esleme-projesi select { max-width: 100%; min-width: 0; }
+.esleme-ortamlari h5 { margin: 8px 0 4px; font-size: 13px; overflow-wrap: anywhere; }
+.esleme-listesi .alan { margin: 0; }
+.esleme-ozeti { margin: 8px 0 0; font-weight: 560; overflow-wrap: anywhere; }
+.esleme-sonucu li { overflow-wrap: anywhere; }
 .oge-satiri { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .oge-satiri .secenek { margin: 0; flex: 1 1 14rem; }
 details.fark { margin: 6px 0 2px 28px; }
