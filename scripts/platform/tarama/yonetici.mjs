@@ -15,6 +15,10 @@
 //        hedef, kesif, onay: true, kip?: 'kayit', girissiz?: true } → { isId } (202). girissiz: sayfa GİRİŞ YAPILMADAN
 //        açılır (ortamın giriş tarifi ve bağlam profilleri kullanılmaz; model "girisGerekmez" olur). Aynı anda tek tarama (409 MESGUL). Yasaklı adres → 400
 //        YASAKLI_ADRES, tarayıcı açılmadan.
+//        ORTAK AKIŞ (model tur "ortakAkis"): taranmaz (ALT_MODEL); kaydedilir (kip 'kayit' + baslangicEkranId): kayıt başlangıç
+//        ekranının adresinde (model.ekranUrl) başlar, kullanıcı o ekranda gerekli adımları yapıp ortak akışın kısmını yürütür;
+//        diyagramda başlangıç ekranına ait bloklar silinir ve kayıt ortak akışın TEK akışına yazılır (akisaYaz; sayfa paketi
+//        yok, tur/yalnizTestOrtami/senaryoDuzeyi/kosullar akis-servisi.mjs > akisKaydet ile korunur, ekran adresi yazılmaz).
 //   GET  /platform/tarama/durum?id=      adımlar, profil durumları, engellenen istekler, bekleyen SMS kodu isteği, hata
 //   GET  /platform/tarama/paket?id=      tamamlanan işin sayfa paketi (önizleme/kabul akışına girer)
 //   GET  /platform/tarama/akis?id=       akış kaydının diyagramı: bloklar + sağ liste (alan/düğme/mesaj; değer yok)
@@ -69,7 +73,8 @@ import { EKRAN_ANAHTARI_DESENI, sayfaPaketiniDogrula } from '../ekranlar/sayfa-p
 import { HedefHatasi, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji } from './koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './paket-olusturucu.mjs';
 import { akisEnvanteriMi, akisPaleti, akisTaslagi, akistanKayitEnvanteri, bloklariAyikla } from './akis-tasarimi.mjs';
-import { akisKaydet as ekranAkisiKaydet, akislariListele } from '../ekranlar/akis-servisi.mjs';
+import { akisDuzenlenebilirMi, akisKaydet as ekranAkisiKaydet, akislariListele } from '../ekranlar/akis-servisi.mjs';
+import { ortakAkisBaslangicEkranlari } from '../ekranlar/ekran-servisi.mjs';
 import { ekAlanAdiOner, girisKaydiTaslagi, kayittanTarif } from '../giris/giris-kaydi.mjs';
 import {
   KAYIT_BASSIZ_DEGISKENI, KAYIT_ZAMAN_ASIMI_DEGISKENI, OLAY_GOVDE_SINIRI, OTURUM_GOVDE_SINIRI, SONUC_GOVDE_SINIRI, TARAMA_GIRIS_KIPLERI, TARAMA_ADRES_DEGISKENI, TARAMA_CIKTI_DEGISKENI,
@@ -277,6 +282,8 @@ export function taramaYoneticisiOlustur(secenekler) {
       tasarim: Boolean(is.akis),
       // Giriş kaydı: taslak işaretlenip tarif önizlenecek.
       girisTaslagi: Boolean(is.girisTaslagi),
+      // Ortak akışın kaydı: başlangıç ekranı (kayıt bu ekranın adresinde başladı).
+      ortakAkis: is.ortakAkis ?? null,
       // Giriş denemesi: sonuç (başarılı / hata, sayfanın yolu, ekran görüntüsü, adım günlüğü).
       deneme: is.deneme ?? null
     };
@@ -318,8 +325,14 @@ export function taramaYoneticisiOlustur(secenekler) {
       const ayarlar = ekranAyarlariniGetir(vt, e.id) ?? {};
       const t = nesneMi(ayarlar.tarama) ? ayarlar.tarama : {};
       const analiz = nesneMi(ayarlar.analiz) ? ayarlar.analiz : {};
-      ekran = { id: e.id, ad: e.ad, anahtar: e.anahtar, modelVar: Boolean(m), urlYolu: m && nesneMi(m.model) && typeof m.model.ekranUrl === 'string' ? m.model.ekranUrl : null };
+      ekran = {
+        id: e.id, ad: e.ad, anahtar: e.anahtar, modelVar: Boolean(m), urlYolu: m && nesneMi(m.model) && typeof m.model.ekranUrl === 'string' ? m.model.ekranUrl : null,
+        // Ortak akış: kayıt bir BAŞLANGIÇ EKRANININ adresinde başlar (adaylar; ortak akışı kullananlar önde).
+        ortakAkis: m && nesneMi(m.model) && m.model.tur === 'ortakAkis' ? { baslangicEkranlari: ortakAkisBaslangicEkranlari(vt, projeId, e.id) } : null
+      };
       son = {
+        // Ortak akışın son seçilen başlangıç ekranı (yalnız ortak akışta).
+        ...(ekran.ortakAkis ? { baslangicEkranId: typeof t.baslangicEkranId === 'string' ? t.baslangicEkranId : null } : {}),
         ortamId: typeof t.ortamId === 'string' ? t.ortamId : null, hedef: typeof t.hedef === 'string' ? t.hedef : null,
         kesif: typeof t.kesif === 'boolean' ? t.kesif : true,
         baglamProfilleri: Array.isArray(analiz.sonBaglamProfilleri) ? analiz.sonBaglamProfilleri.filter((x) => typeof x === 'string') : []
@@ -364,6 +377,8 @@ export function taramaYoneticisiOlustur(secenekler) {
     let ekran;
     /** @type {Nesne | null} */
     let mevcutModel = null;
+    /** Ortak akışın kaydı: başlangıç ekranı (kayıt bu ekranın adresinde başlar). @type {{ id: string; ad: string; urlYolu: string } | null} */
+    let ortakBaslangic = null;
     if (girisKaydi || girisDenemesi) {
       ekran = { id: null, ad: `Giriş (${ortamKaydi.ad})`, anahtar: '' };
     } else if (g.ekranId !== undefined && g.ekranId !== null && g.ekranId !== '') {
@@ -373,7 +388,15 @@ export function taramaYoneticisiOlustur(secenekler) {
       const m = ekranModeliGetir(vt, e.id);
       if (m && nesneMi(m.model)) {
         if (m.model.tur === 'altModel') throw new TaramaHatasi('ALT_MODEL', 'Alt modeller taranamaz; alt modeli kullanan ekranı tarayın.');
-        if (m.model.tur === 'ortakAkis') throw new TaramaHatasi('ALT_MODEL', 'Ortak akışlar taranamaz; ortak akışı kullanan ekranı tarayın.');
+        if (m.model.tur === 'ortakAkis') {
+          // Ortak akış taranmaz; KAYDEDİLEBİLİR: kayıt seçilen başlangıç ekranının adresinde başlar (ortak akışın kendi adresi yok).
+          if (g.kip !== 'kayit') throw new TaramaHatasi('ALT_MODEL', 'Ortak akışlar taranamaz; ortak akışı kullanan ekranı tarayın ya da ortak akışın sayfasında "Akışı kaydet"i kullanın.');
+          const d = akisDuzenlenebilirMi(/** @type {Nesne} */ (m.model));
+          if (!d.duzenlenebilir) throw new TaramaHatasi('AKIS_DUZENLENEMEZ', `Ortak akışın kaydı akışına yazılamaz: ${d.neden} Sayfa paketi yükleyin.`);
+          const b = ortakAkisBaslangicEkranlari(vt, projeId, e.id).find((x) => x.id === g.baslangicEkranId);
+          if (!b) throw new TaramaHatasi('BASLANGIC_EKRANI', 'Ortak akışın kaydı için başlangıç ekranını seçin (adresi olan bir ekran; kayıt o ekranın adresinde başlar).');
+          ortakBaslangic = { id: b.id, ad: b.ad, urlYolu: b.urlYolu };
+        }
         mevcutModel = /** @type {Nesne} */ (m.model);
       }
     } else {
@@ -392,7 +415,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     const mevcutGirisAdresi = girisKaydi || girisDenemesi ? (etkinGirisTarifi(vt, projeId, ortamId).tarif?.girisAdresi ?? '/') : null;
     let hedef;
     try {
-      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : girisKaydi || girisDenemesi ? mevcutGirisAdresi : mevcutModel?.ekranUrl);
+      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : girisKaydi || girisDenemesi ? mevcutGirisAdresi : ortakBaslangic ? ortakBaslangic.urlYolu : mevcutModel?.ekranUrl);
     } catch (e) {
       if (e instanceof HedefHatasi) throw new TaramaHatasi('HEDEF', e.message);
       throw e;
@@ -463,7 +486,10 @@ export function taramaYoneticisiOlustur(secenekler) {
         id: e.id, projeId, anahtar: e.anahtar, ad: e.ad, aciklama: e.aciklama,
         ayarlar: {
           ...ayarlar, analiz: { ...analiz, sonBaglamProfilleri: istenen },
-          tarama: { ...(nesneMi(ayarlar.tarama) ? ayarlar.tarama : {}), ortamId, hedef: typeof g.hedef === 'string' ? g.hedef.trim() : hedef.yol, ...(kayit ? {} : { kesif }) }
+          tarama: {
+            ...(nesneMi(ayarlar.tarama) ? ayarlar.tarama : {}), ortamId, hedef: typeof g.hedef === 'string' ? g.hedef.trim() : hedef.yol, ...(kayit ? {} : { kesif }),
+            ...(ortakBaslangic ? { baslangicEkranId: ortakBaslangic.id } : {})
+          }
         }
       });
     }
@@ -492,6 +518,8 @@ export function taramaYoneticisiOlustur(secenekler) {
         : { hazirlik: { durum: 'bekliyor' }, giris: { durum: tarif ? 'bekliyor' : 'atlandi' }, profiller: { durum: 'bekliyor' }, paket: { durum: 'bekliyor' } },
       profiller: kayit || girisDenemesi ? [] : profiller.map((p) => ({ ad: p.ad ?? 'Varsayılan bağlam', durum: 'bekliyor' })),
       baglamProfili: kayit ? profiller[0].ad : null,
+      // Ortak akışın kaydı: başlangıç ekranı; sonuç ortak akışın (tek) akışına yazılır (akisaYaz), sayfa paketi üretilmez.
+      ortakAkis: ortakBaslangic ? { baslangicEkrani: ortakBaslangic } : null,
       engellenenler: [], engellenenSayisi: 0, olaylar: [],
       girdi: {
         kip: girisDenemesi ? 'girisDenemesi' : kayit ? 'kayit' : 'tarama', tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
@@ -699,6 +727,10 @@ export function taramaYoneticisiOlustur(secenekler) {
       bitir(is, 'tamam');
       return { alindi: true };
     }
+    if (is.ortakAkis) {
+      bitir(is, 'hata', { kod: 'PAKET', mesaj: 'Ortak akışın kaydı okunamadı; kaydı yeniden başlatın.' });
+      return { alindi: true };
+    }
     try {
       if (!nesneMi(envanter) || envanter.kip !== 'kayit' || !Array.isArray(envanter.adimlar) || !Array.isArray(envanter.engellenenler) || !Array.isArray(envanter.notlar)) {
         throw new Error('kayıt envanteri biçimi geçersiz');
@@ -803,7 +835,9 @@ export function taramaYoneticisiOlustur(secenekler) {
       bloklar: is.akis.bloklar, palet: akisPaleti(is.akis.envanter, is.akis.bloklar), ekran: is.ekran, mod: is.mod, paketHazir: Boolean(is.paket),
       projeId: is.projeId, akisaYazildi: is.akisaYazildi ?? null,
       // Kayıt "Giriş yapmadan aç" ile yapıldıysa diyagramın başı "Girişsiz" olur.
-      girissiz: is.meta.girissiz === true
+      girissiz: is.meta.girissiz === true,
+      // Ortak akışın kaydı: diyagram ortak akışın tek akışına yazılır (başlangıç ekranına ait bloklar silinir).
+      ortakAkis: is.ortakAkis ?? null
     };
   }
 
@@ -819,8 +853,10 @@ export function taramaYoneticisiOlustur(secenekler) {
     const { bloklar, hatalar } = bloklariAyikla(g.bloklar);
     if (hatalar.length) throw new TaramaHatasi('AKIS_GECERSIZ', `Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, 400, { hatalar });
     is.akis.bloklar = bloklar;
+    // Ortak akışın tek akışı vardır: kayıt her zaman o akışı günceller (adı korunur; hedefte verilen kimlik/ad yok sayılır).
+    const tek = is.ortakAkis ? akislariListele(vt, is.projeId, is.ekran.id).akislar[0] : null;
     const sonuc = ekranAkisiKaydet(vt, is.projeId, is.ekran.id, {
-      akisId: typeof h.akisId === 'string' && h.akisId ? h.akisId : null, ad: h.ad, bloklar, onay: g.onay === true, kayitEnvanteri: is.akis.envanter,
+      akisId: tek ? tek.id : typeof h.akisId === 'string' && h.akisId ? h.akisId : null, ad: tek ? tek.ad : h.ad, bloklar, onay: g.onay === true, kayitEnvanteri: is.akis.envanter,
       // Yakalanan seçenek listeleri: yalnız kullanıcının önizlemede seçtikleri yazılır (seçim yoksa test verisine yazılmaz).
       testVerisi: g.testVerisi
     });
@@ -839,6 +875,8 @@ export function taramaYoneticisiOlustur(secenekler) {
       if (!bicim.length) is.akis.bloklar = bloklar;
       return { kaydedildi: !bicim.length, palet: akisPaleti(is.akis.envanter, is.akis.bloklar) };
     }
+    // Ortak akış sayfa paketiyle (ekran adresli model) önizlenmez: kayıt ortak akışın tek akışına yazılır.
+    if (is.ortakAkis) throw new TaramaHatasi('ORTAK_AKIS', 'Ortak akışın kaydı sayfa paketine çevrilmez; “Ortak akışı güncelle” ile ortak akışın akışına yazılır.', 409);
     const { envanter, hatalar } = bicim.length ? { envanter: null, hatalar: bicim } : akistanKayitEnvanteri(is.akis.envanter, bloklar, { satirSiniri: is.sqlSatirSiniri });
     if (!envanter) throw new TaramaHatasi('AKIS_GECERSIZ', `Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, 400, { hatalar });
     is.akis.bloklar = bloklar;
@@ -940,7 +978,8 @@ export async function taramaIsteginiIsle(req, res, b) {
       if (yol === '/platform/tarama/akis') {
         const v = y.akis(String(q.get('id') ?? ''));
         // Mevcut ekran: kayıt yeni akış olarak eklenebilir ya da bir akışı güncelleyebilir (akış listesi).
-        const ek = v.mod === 'analiz' && v.ekran.id ? akislariListele(await b.acikVeritabani(), v.projeId, v.ekran.id) : null;
+        // Ortak akışın kaydı: tek akış (hedef seçimi yok; kayıt o akışı günceller).
+        const ek = v.mod === 'analiz' && v.ekran.id && !v.ortakAkis ? akislariListele(await b.acikVeritabani(), v.projeId, v.ekran.id) : null;
         gonder(200, { basarili: true, ...v, ekranAkislari: ek });
         return true;
       }

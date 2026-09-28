@@ -5,7 +5,7 @@
 // Geçici veritabanı + AYRI Nöbetçi örneği (TEST_SUNUCU_KOSU_KAPALI=1); tüm istekler 127.0.0.1'dedir.
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { expect, test, type Browser, type Locator, type Page } from '@playwright/test';
 import { kasaOlustur } from '../../scripts/platform/kasa.mjs';
 import { ekranKaydet, ekranModeliEkle, ortamKaydet, projeKaydet, veritabaniniHazirla } from '../../scripts/platform/veritabani/depo.mjs';
@@ -59,6 +59,9 @@ test.beforeAll(async () => {
     const id = ekranKaydet(vt, { projeId, anahtar, ad });
     for (let i = 0; i < surum; i++) ekranModeliEkle(vt, { ekranId: id, model: { ...onayAkisPaketi().model, id: anahtar, ad } });
   }
+  // Alt model: sayfasında "Modeli güncelle" menüsünde yalnız Paket yükle.
+  const altId = ekranKaydet(vt, { projeId, anahtar: 'adres-alt', ad: 'Adres Alt Modeli' });
+  ekranModeliEkle(vt, { ekranId: altId, model: { semaSurumu: 2, tur: 'altModel', id: 'adres-alt', ad: 'Adres', bolumler: [] } });
   const uzunId = ekranKaydet(vt, { projeId, anahtar: 'kurumsal-basvuru-siparis-hazirlama', ad: UZUN_EKRAN_ADI });
   ekranModeliEkle(vt, { ekranId: uzunId, model: { ...ornekBasvuruModeli(), id: 'kurumsal-basvuru-siparis-hazirlama', ad: UZUN_EKRAN_ADI, ekranUrl: '/uzun-yol/ornek-kurumsal-musteri-basvurusu/siparis-hazirlama-ve-onay/' } });
   vt.kapat();
@@ -304,14 +307,35 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await page.close();
 });
 
-test('ortak akış sayfası: "Modeli güncelle" menüsü yalnız "Paket yükle" gösterir ve paket yükleme sayfasına götürür', async () => {
+test('ortak akış sayfası: "Modeli güncelle" menüsü Paket yükle / Akışı kaydet / Tekrar analiz et / Yapay zekâ ile yorumla (Ekranı tara yok); alt modelde yalnız Paket yükle', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
-  const ortak = ((await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>).find((e) => e.anahtar === ONAY_AKIS_ANAHTARI)!;
+  const ekranlar = (await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>;
+  const ortak = ekranlar.find((e) => e.anahtar === ONAY_AKIS_ANAHTARI)!;
+  const alt = ekranlar.find((e) => e.anahtar === 'adres-alt')!;
+  await page.goto(`/#/ekranlar/e/${encodeURIComponent(alt.id)}`);
+  await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+  await expect(page.getByRole('menuitem')).toHaveText([/^Paket yükle/]);
+  await page.keyboard.press('Escape');
   await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortak.id)}`);
   const menuDugmesi = page.getByRole('button', { name: /^Modeli güncelle/ });
   await menuDugmesi.click();
-  await expect(page.getByRole('menuitem')).toHaveText([/^Paket yükle/]);
+  await expect(page.getByRole('menuitem')).toHaveText([/^Paket yükle/, /^Akışı kaydet/, /^Tekrar analiz et/, /^Yapay zekâ ile yorumla/]);
+  await expect(page.getByRole('menuitem', { name: 'Ekranı tara' })).toHaveCount(0);
+  // "Akışı kaydet": başlangıç ekranı sorulur (ortak akışı kullanan ekran önde); başlangıç sayfası o ekranın adresi olur.
+  await page.getByRole('menuitem', { name: 'Akışı kaydet' }).click();
+  const kayit = page.locator('dialog[open]');
+  await expect(kayit.getByRole('heading', { name: 'Akışı kaydet: Onay (ortak) (ortak akış)' })).toBeVisible();
+  const baslangic = kayit.getByLabel('Başlangıç ekranı');
+  await expect(baslangic.locator('optgroup').first()).toHaveAttribute('label', 'Bu ortak akışı kullanan ekranlar');
+  await expect(baslangic.locator('option:checked')).toHaveText('Örnek Başvuru — /basvuru/');
+  await expect(kayit.getByText('Ortak akış bu ekranda “Başvuru onaylanır” adımından sonra başlar.')).toBeVisible();
+  await expect(kayit.getByLabel('Başlangıç sayfası')).toHaveValue('/basvuru/');
+  await baslangic.selectOption({ label: 'Müşteri Kaydı — /musteri/' });
+  await expect(kayit.getByLabel('Başlangıç sayfası')).toHaveValue('/musteri/');
+  await expect(kayit.getByText(/Bu ekran ortak akışı henüz kullanmıyor/)).toBeVisible();
+  await kayit.getByRole('button', { name: 'Vazgeç' }).click();
+  await menuDugmesi.click();
   await page.getByRole('menuitem', { name: 'Paket yükle' }).click();
   await expect(page).toHaveURL(new RegExp(`/ekranlar/e/${ortak.id}/yukle$`));
   await expect(page.locator('#paket-dosyasi')).toHaveCount(1);
@@ -321,6 +345,40 @@ test('ortak akış sayfası: "Modeli güncelle" menüsü yalnız "Paket yükle" 
   await page.locator('#paket-dosyasi').setInputFiles({ name: 'ortak.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(paket)) });
   await page.getByRole('button', { name: 'Bulguları hesapla' }).click();
   await expect(page).toHaveURL(/\/bulgular$/);
+  agKontrol(istekler);
+  await page.close();
+});
+
+test('ortak akış: "Tekrar analiz et" başlangıç ekranını sorar; istek metni başlangıç ekranının adresini, başladığı adımı ve ortakAkis paket kuralını içerir', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  const ortak = ((await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>).find((e) => e.anahtar === ONAY_AKIS_ANAHTARI)!;
+  await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortak.id)}`);
+  await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+  await page.getByRole('menuitem', { name: 'Tekrar analiz et' }).click();
+  const d = page.locator('dialog[open]');
+  const baslangic = d.getByLabel('Başlangıç ekranı');
+  await expect(baslangic.locator('option:checked')).toHaveText('Örnek Başvuru — /basvuru/');
+  await d.getByRole('button', { name: 'İstek dosyasını oluştur' }).click();
+  await d.getByRole('button', { name: 'İstek metnini kopyala' }).click();
+  const kopya = await page.evaluate(() => navigator.clipboard.readText());
+  expect(kopya).toContain('"Onay (ortak)" bir ORTAK AKIŞTIR');
+  expect(kopya).toContain('"Örnek Başvuru" ekranının adresini (/basvuru/) aç; ortak akış bu ekranda “Başvuru onaylanır” adımından sonra başlar.');
+  expect(kopya).toContain('model.tur değeri "ortakAkis" olmalı');
+  expect(kopya).toContain('meta.ekran.urlYolu verilmeyebilir');
+  await page.keyboard.press('Escape');
+  // Başka bir başlangıç ekranı seçilebilir (ortak akışı kullanmayan ekran: "gerekli adımlar yapıldıktan sonra").
+  const y = await api('/platform/ekran/claude-dosyasi', {
+    projeId, ekranId: ortak.id, tur: 'tekrar-analiz', baglamProfilleri: [],
+    baslangicEkranId: ((await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>).find((e) => e.anahtar === 'musteri-kaydi')!.id
+  });
+  expect(y.basarili, String(y.mesaj)).toBe(true);
+  expect(String(y.cumle)).toContain('"Müşteri Kaydı" ekranının adresini (/musteri/) aç; ortak akış bu ekranda ekranın gerekli adımları (ör. hesaplama) yapıldıktan sonra başlar.');
+  const dosya = JSON.parse(readFileSync(isAbsolute(String(y.yol)) ? String(y.yol) : join(KOK, String(y.yol)), 'utf8')) as { ortakAkis: Record<string, unknown> };
+  expect(dosya.ortakAkis).toMatchObject({ baslangicEkrani: { ad: 'Müşteri Kaydı', urlYolu: '/musteri/', kullanir: false, oncekiAdim: null } });
+  // "Yapay zekâ ile yorumla": başlangıç ekranı (varsayılan: kullanan ekran) istek metnine eklenir.
+  const yorum = await api('/platform/ekran/claude-dosyasi', { projeId, ekranId: ortak.id, tur: 'yorumla' });
+  expect(String(yorum.cumle)).toContain('"Örnek Başvuru" ekranının adresini (/basvuru/) aç');
   agKontrol(istekler);
   await page.close();
 });

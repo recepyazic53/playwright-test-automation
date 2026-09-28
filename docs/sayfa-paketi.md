@@ -138,6 +138,16 @@ Adımları ekran modeliyle aynı biçimdedir; ekran adresi, spec ya da page obje
 akış olmaz. Nasıl çalışır:
 - **Yükleme:** sayfa paketiyle yüklenir; `meta.ekran.urlYolu` verilmeyebilir. Ekranlar'da "Ortak akışlar" grubunda görünür;
   senaryo listelerinde ekran olarak görünmez, taranmaz.
+- **Modeli güncelle** (ortak akışın sayfası): Paket yükle, Akışı kaydet, Tekrar analiz et, Yapay zekâ ile yorumla ("Ekranı tara"
+  yok; alt modelde yalnız Paket yükle). Ortak akışın kendi adresi olmadığından önce **başlangıç ekranı** sorulur (ortak akışı
+  kullanan ekranlar önde, yoksa adresi olan tüm ekranlar):
+  - **Akışı kaydet:** kayıt başlangıç ekranının adresinde başlar. O ekranda gerekli adımlar (ör. hesaplama) yapılır, sonra ortak
+    akışın kısmı yürütülür. Bitir'den sonra diyagramda başlangıç ekranına ait bloklar silinir; "Ortak akışı güncelle" onayla
+    (kullanan ekranlar gösterilir) kayıt ortak akışın TEK akışına yazılır ve yeni model sürümü açılır. `tur`, `yalnizTestOrtami`,
+    `senaryoDuzeyi` ve koşullar korunur; `ekranUrl` / spec / page object yazılmaz. Sayfa paketi (önizleme) yolu yoktur.
+  - **Tekrar analiz et / Yapay zekâ ile yorumla:** istek metnine başlangıç ekranının adresi ve ortak akışın o ekranda hangi
+    adımdan sonra başladığı yazılır; üretilecek paketin `model.tur` değerinin `"ortakAkis"` olacağı ve `meta.ekran.urlYolu`nun
+    verilmeyebileceği belirtilir.
 - **Ekrana ekleme:** ekran akışında `{ "id", "sira", "baslik", "ortakAkis": { "dosya": "<anahtar>.model.json" }, "gorunurluk"? }`
   adımı olarak yer alır. Akış tasarımında **"+ > Ortak akış"** ile eklenir. "Her senaryoda koşulmaz" seçilirse senaryoda
   "“<ad>” dahil" ayarıyla seçilir.

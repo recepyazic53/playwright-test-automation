@@ -4,7 +4,7 @@
 // "Tekrar analiz et" — bağlam profili seçimi her seferinde sorulur), bağlam profili seçimi (tekrar analiz ve "Ekranı otomatik
 // tara" diyaloglarında ortak). Metinler belirli bir yapay zekâ aracına bağlı değildir.
 // Genel: projeye özgü hiçbir ad içermez. Kullanıcı verisi DOM'a yalnızca metin olarak yazılır.
-import { api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
+import { alan, api, bildir, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './paket-istekleri.mjs';
 
 export const TIP_ETIKETLERI = {
@@ -224,6 +224,36 @@ export function baglamProfiliSecimi(s) {
     })))));
 }
 
+/**
+ * Ortak akışın BAŞLANGIÇ EKRANI seçimi ("Akışı kaydet" ve "Tekrar analiz et"): ortak akışı kullanan ekranlar önde ("… adımından
+ * sonra başlar"), sonra adresi olan diğer ekranlar. Seçili gelen: son seçim, yoksa ilk aday.
+ * @param {Array<{ id: string; ad: string; urlYolu: string; kullanir: boolean; oncekiAdim: string | null }>} adaylar
+ * @param {string | null} sonId @param {string} kimlik
+ * @returns {{ alan: HTMLElement; secim: HTMLSelectElement; secilen: () => (typeof adaylar)[number] | undefined }}
+ */
+export function baslangicEkraniSecimi(adaylar, sonId, kimlik) {
+  const liste = Array.isArray(adaylar) ? adaylar : [];
+  const ilk = liste.find((x) => x.id === sonId) || liste[0];
+  const secenek = (x) => h('option', { value: x.id, selected: ilk && x.id === ilk.id }, `${x.ad} — ${x.urlYolu}`);
+  const kullanan = liste.filter((x) => x.kullanir);
+  const diger = liste.filter((x) => !x.kullanir);
+  const secim = /** @type {HTMLSelectElement} */ (h('select', { id: kimlik, disabled: !liste.length },
+    liste.length ? null : h('option', { value: '' }, 'Adresi olan ekran yok'),
+    kullanan.length ? h('optgroup', { label: 'Bu ortak akışı kullanan ekranlar' }, kullanan.map(secenek)) : null,
+    diger.length ? h('optgroup', { label: kullanan.length ? 'Diğer ekranlar' : 'Ekranlar' }, diger.map(secenek)) : null));
+  const bilgi = h('span', {});
+  const secilen = () => liste.find((x) => x.id === secim.value);
+  const yaz = () => {
+    const b = secilen();
+    bilgi.textContent = !b ? 'Projede adresi olan bir ekran yok; önce ortak akışı kullanan ekranı ekleyin.'
+      : b.kullanir ? `Ortak akış bu ekranda ${b.oncekiAdim ? `“${b.oncekiAdim}” adımından sonra` : 'ekran açılınca'} başlar.`
+        : 'Bu ekran ortak akışı henüz kullanmıyor: ekranda gerekli adımları (ör. hesaplama) yaptıktan sonra ortak akış başlar.';
+  };
+  secim.addEventListener('change', yaz);
+  yaz();
+  return { alan: alan('Başlangıç ekranı', secim, { zorunlu: true, yardim: bilgi }), secim, secilen };
+}
+
 export function tekrarAnalizDiyalogu(s) {
   const secili = new Set(s.sonSecim.filter((ad) => s.baglamProfilleri.some((b) => b.ad === ad)));
   const hataKutusu = h('div', { class: 'not-kutusu hata', role: 'alert', hidden: true });
@@ -232,8 +262,11 @@ export function tekrarAnalizDiyalogu(s) {
   const guncelle = () => { sayac.textContent = profilVar ? `${secili.size} profil seçili` : 'bağlam profili yok'; olustur.disabled = profilVar && !secili.size; };
   const olustur = h('button', { type: 'button', class: 'birincil' }, ikon('dosya'), 'İstek dosyasını oluştur');
   const liste = baglamProfiliSecimi({ baglamProfilleri: s.baglamProfilleri, secili, degisti: guncelle });
+  // Ortak akış: kendi adresi yok; araç seçilen BAŞLANGIÇ EKRANININ adresinden başlar (istek metnine adres ve başlangıç adımı yazılır).
+  const baslangic = s.ortakAkis ? baslangicEkraniSecimi(s.ortakAkis.baslangicEkranlari, s.ortakAkis.sonBaslangicEkranId, 'tekrar-analiz-baslangic') : null;
   const govde = h('div', {},
     h('p', { class: 'kucuk soluk' }, s.sonSecim.length ? 'Bu ekran için son seçiminiz işaretli geldi; değiştirebilirsiniz.' : 'Bu ekran için daha önce seçim yapılmadı.'),
+    baslangic ? baslangic.alan : null,
     liste, hataKutusu,
     h('div', { class: 'diyalog-alt' }, sayac, h('span', { class: 'bosluk' }), h('button', { type: 'button', class: 'hayalet', onclick: () => diyalog.close() }, 'Vazgeç'), olustur));
   const diyalog = diyalogAc(`Tekrar analiz: ${s.ekran.ad}`,
@@ -243,7 +276,7 @@ export function tekrarAnalizDiyalogu(s) {
     hataKutusu.hidden = true;
     try {
       const sonuc = await mesgulIken(olustur, 'Hazırlanıyor…', () => api('/platform/ekran/claude-dosyasi', {
-        govde: { projeId: s.proje.id, ekranId: s.ekran.id, tur: 'tekrar-analiz', baglamProfilleri: [...secili] }
+        govde: { projeId: s.proje.id, ekranId: s.ekran.id, tur: 'tekrar-analiz', baglamProfilleri: [...secili], ...(baslangic && baslangic.secim.value ? { baslangicEkranId: baslangic.secim.value } : {}) }
       }));
       const yukle = h('button', { type: 'button', class: 'birincil', onclick: () => { diyalog.close(); s.paketYukle(); } }, ikon('yukle'), 'Paketi yükle');
       yerlestir(govde, h('p', { class: 'kucuk soluk' }, 'Yapay zekâ aracınız sayfayı inceleyip (seçimleri değiştirir, ekran açan ve hesaplayan düğmelere basar; kayıt oluşturan düğmeden önce sorar) yeni bir sayfa paketi üretir; paketi yükleyince bulgular hesaplanır.'),

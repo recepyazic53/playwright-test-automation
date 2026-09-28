@@ -37,6 +37,8 @@ export type IsGorunumu = {
   tasarim: boolean;
   /** Giriş kaydı: taslak işaretlenip tarif önizlenecek. */
   girisTaslagi: boolean;
+  /** Ortak akışın kaydı: başlangıç ekranı (kayıt bu ekranın adresinde başladı; sonuç ortak akışın tek akışına yazılır). */
+  ortakAkis: OrtakAkisKaydi | null;
   /** Giriş denemesi sonucu ("Girişi dene"; ekran görüntüsü JPEG base64, yalnız bellekte). */
   deneme: { basarili: boolean; yol: string; hata: { kod: string; mesaj: string } | null; goruntu: string | null; gunluk: string[] } | null;
   /**
@@ -46,6 +48,8 @@ export type IsGorunumu = {
   giris: { kip: 'bastan' | 'saklananOturum'; yontem: 'saklananOturum' | 'bastanGiris' | null; oturumSaklandi: boolean | null; oturumGuncellendi: boolean } | null;
 };
 
+export type OrtakAkisKaydi = { baslangicEkrani: { id: string; ad: string; urlYolu: string } };
+
 export type TaramaYoneticisi = {
   isler: Map<string, Record<string, unknown>>;
   secenekler(vt: Veritabani, projeId: string, ekranId: string | null): Record<string, unknown>;
@@ -54,9 +58,9 @@ export type TaramaYoneticisi = {
   paket(id: string): { paket: Record<string, unknown>; mod: 'yeni' | 'analiz'; ekran: IsGorunumu['ekran']; ozet: IsGorunumu['ozet'] };
   akis(id: string): {
     bloklar: import('./akis-tasarimi.mjs').AkisBlogu[]; palet: import('./akis-tasarimi.mjs').AkisPaleti; ekran: IsGorunumu['ekran']; mod: 'yeni' | 'analiz'; paketHazir: boolean;
-    projeId: string; akisaYazildi: { akisId: string; surum: number } | null; girissiz: boolean;
+    projeId: string; akisaYazildi: { akisId: string; surum: number } | null; girissiz: boolean; ortakAkis: OrtakAkisKaydi | null;
   };
-  akisaYaz(vt: Veritabani, id: string, govde: Record<string, unknown>): { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }> }; akisId: string } | { akisId: string; surum: number };
+  akisaYaz(vt: Veritabani, id: string, govde: Record<string, unknown>): { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; ekranlar?: Array<Record<string, unknown>> }; akisId: string } | { akisId: string; surum: number };
   akisKaydet(id: string, govde: Record<string, unknown>): { kaydedildi: boolean; palet: import('./akis-tasarimi.mjs').AkisPaleti } | { ozet: IsGorunumu['ozet'] };
   girisTaslagi(id: string): {
     taslak: import('../giris/giris-kaydi.mjs').GirisTaslagi; ortam: IsGorunumu['ortam']; projeId: string; hedefYol: string; oneriler: Array<string | null>;

@@ -85,7 +85,8 @@
 //   POST /platform/ekran/analiz/iptal | /platform/ekran/reddedilenleri-unut | /platform/ekran/toplu-ata
 //   POST /platform/ekran/senaryolar/tablo-donusumu { projeId, ekranId?, onay?, secimler?: [{ senaryoId, alan }] }  tabloya bağlı
 //        alanların düz değerleri → ${Tablo.Sütun} (+ satır seçimi); onay yoksa yalnız plan, onayla yalnız seçilenler (tablolar/ekran-donusumu.mjs)
-//   POST /platform/ekran/claude-dosyasi { projeId, ekranId, tur, baglamProfilleri? } → <veritabanı klasörü>/analiz/*.json
+//   POST /platform/ekran/claude-dosyasi { projeId, ekranId, tur, baglamProfilleri?, baslangicEkranId? } → <veritabanı klasörü>/analiz/*.json
+//        (ortak akışta baslangicEkranId: istek metnine başlangıç ekranının adresi ve ortak akışın başladığı adım yazılır)
 //        (gizli değer içermez; Claude API KULLANILMAZ — dosya kullanıcı tarafından Claude Code'a verilir)
 // Ekran yönetimi (Ekranlar > ⋯; bkz. ekranlar/ekran-yonetimi.mjs; geçmiş: GET /platform/gecmis?varlikTuru=ekran&varlikId=):
 //   POST /platform/ekran/yeniden-adlandir { projeId, ekranId, ad, aciklama? }   görünen ad (anahtar değişmez)
@@ -1440,7 +1441,7 @@ const POST_UCLARI = new Map([
   ['/platform/ekran/toplu-ata', (db, g) => topluDegerAta(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { anahtar: g.anahtar, deger: g.deger, senaryoIdler: g.senaryoIdler })],
   ['/platform/ekran/claude-dosyasi', (db, g) => {
     const s = claudeDosyasiYaz(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
-      tur: g.tur, baglamProfilleri: g.baglamProfilleri, bulguId: g.bulguId, klasor: analizKlasoruYolu(), projeKoku: PROJE_KOKU
+      tur: g.tur, baglamProfilleri: g.baglamProfilleri, bulguId: g.bulguId, baslangicEkranId: g.baslangicEkranId, klasor: analizKlasoruYolu(), projeKoku: PROJE_KOKU
     });
     console.log(`[platform] Yapay zekâ aracı için analiz/istek dosyası yazıldı: ${s.yol}`);
     return { yol: s.yol, cumle: s.cumle };
