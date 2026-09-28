@@ -558,6 +558,20 @@ export const REHBERLER = {
       }
     ]
   },
+  'ayarlar-raporlar': {
+    baslik: 'Raporlar',
+    adimlar: [
+      {
+        baslik: 'Rapor verileri',
+        metin: ['PDF raporlarının kullandığı kararlarınız burada durur. Hepsi isteğe bağlıdır; boşken raporlar varsayılanlarla çalışır. Değişiklikler hemen kaydedilir ve yalnız raporları etkiler.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Ekip', alt: 'sahip önerisi', ikon: 'liste' }, { baslik: 'Kritik', alt: 'öncelik + rozet', ikon: 'uyari' }, { baslik: 'Süre eşiği', alt: 'p95 > eşik', ikon: 'saat' }, { baslik: 'PDF rapor', ikon: 'grafik' }] }
+      },
+      { baslik: 'Ekipler', metin: 'Ekip ekleyin, yeniden adlandırın ya da silin. Ekran ve servis satırındaki "Ekip" seçimi, raporda o öğenin aksiyonlarının "Sahip önerisi" olur; seçilmezse sınıfın varsayılan ekibi yazılır.' },
+      { baslik: 'Kritik işareti', metin: 'Ekran, ortak akış, servis ya da akış satırındaki "Kritik" anahtarı öncelik puanını artırır. Kritik işaretli bir öğe son koşusunda kaldıysa raporun durum rozeti Kritik olur ve "Kritik akış" kartında görünür.' },
+      { baslik: 'Süre eşikleri', metin: 'Ekran ve servis için milisaniye cinsinden eşik; servislerde metot başına ayrı eşik de verebilirsiniz (metodun eşiği yoksa servisinki geçer). Dönemdeki p95 süre eşiği aşarsa raporda "Süre eşiği aşımları"nda ve aksiyon listesinde görünür.' },
+      { baslik: 'Uygulama sürümü', metin: 'Sürüm bu bölümde değil, Proje ve ortamlar > ortam > "Uygulama sürümü"nde ya da koşu başlatılırken girilir. Raporlar sürüme göre başarıyı ve sorunun hangi sürümde başladığını gösterir.', ipucu: 'Nöbetçi sürümü hiçbir adrese sormaz; yalnız sizin girdiğiniz değer kullanılır.' }
+    ]
+  },
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
     adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı ve listelerin sayfa boyları. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
