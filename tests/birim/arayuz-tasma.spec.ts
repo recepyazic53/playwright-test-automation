@@ -161,6 +161,24 @@ test.describe('tüm ekranlar taşmasız', () => {
     await baglam.close();
   });
 
+  test('Ayarlar > Ortamlar: Düzenle / Geçmiş / Sil her satırda aynı boy ve biçimde; varsayılanın Sil düğmesi devre dışı + nedeni', async () => {
+    const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 900 } });
+    const page = await baglam.newPage();
+    await page.goto('/#/ayarlar/proje');
+    await bekle(page);
+    const olcu = async (ad: string) => page.getByRole('button', { name: ad, exact: true }).evaluate((b) => {
+      const r = b.getBoundingClientRect();
+      return { g: Math.round(r.width), y: Math.round(r.height), sinif: b.className, ikon: Boolean(b.querySelector('svg, .ikon')) };
+    });
+    const testSil = page.getByRole('button', { name: 'TEST: sil', exact: true });
+    await expect(testSil).toBeDisabled();
+    await expect(testSil).toHaveAttribute('title', /Varsayılan ortam silinemez/);
+    await expect(page.getByRole('button', { name: 'CANLI: sil', exact: true })).toBeEnabled();
+    for (const tur of ['düzenle', 'sil']) expect(await olcu(`TEST: ${tur}`), tur).toEqual(await olcu(`CANLI: ${tur}`));
+    expect(await olcu('TEST risk seçimi: değişiklik geçmişi')).toEqual(await olcu('CANLI risk seçimi: değişiklik geçmişi'));
+    await baglam.close();
+  });
+
   test('üst çubuk ara genişliklerde taşmaz (uzun proje adı)', async () => {
     const baglam = await tarayici.newContext({ baseURL: z.nobetci.adres, viewport: { width: 1440, height: 800 } });
     const page = await baglam.newPage();
