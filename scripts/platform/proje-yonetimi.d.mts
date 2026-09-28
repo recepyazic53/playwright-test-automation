@@ -15,6 +15,9 @@ export interface ProjeSilmeSayilari {
   servisSenaryosu: number;
   servisAkisi: number;
   servisKosusu: number;
+  /** Rapor verileri: ekip listesi ve öğe işaretleri (kritik, ekip, süre eşiği). */
+  ekip: number;
+  raporIsareti: number;
 }
 export declare function projeTablolari(vt: Veritabani): string[];
 export declare function projeKalintilari(vt: Veritabani, projeId: string): Record<string, number>;
