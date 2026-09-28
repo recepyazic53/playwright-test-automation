@@ -268,7 +268,8 @@ test('arayüz: ekranda "Akışı kaydet" diyaloğu (canlı ortam seçilemez, ona
     baglam.on('request', (r) => { istekler.push(r.url()); });
     const page = await baglam.newPage();
     await page.goto(`/#/ekranlar/e/${encodeURIComponent(kayitEkranId)}`);
-    await page.getByRole('button', { name: 'Akışı kaydet' }).first().click();
+    await page.getByRole('button', { name: /^Modeli güncelle/ }).click();
+    await page.getByRole('menuitem', { name: 'Akışı kaydet' }).click();
     const diyalog = page.locator('dialog[open]');
     await expect(diyalog.getByText('Akışı siz yürütürsünüz: bastığınız düğmeler siteye GERÇEK istek gönderir.')).toBeVisible();
     await expect(diyalog.locator('option', { hasText: 'Üretim (riskli — kayıt kapalı)' })).toBeDisabled();

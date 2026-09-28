@@ -1039,6 +1039,12 @@ a.son-sonuc:hover .etiket { text-decoration: underline; }
 .satir-menusu-kap { position: relative; display: inline-block; }
 .satir-menusu-kap .acilir-menu { left: auto; right: 0; min-width: 190px; }
 .acilir-menu button.tehlikeli { color: var(--hata); }
+/* Açıklamalı menü seçeneği ("Modeli güncelle ▾"): ad + bir satırlık "ne zaman kullanılır". */
+.acilir-menu button.aciklamali { align-items: flex-start; padding-top: 7px; padding-bottom: 7px; text-align: left; white-space: normal; }
+.menu-ogesi-metni { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.menu-ogesi-adi { font-weight: 600; }
+.menu-aciklamasi { font-size: 12px; font-weight: 400; color: var(--metin-2); line-height: 1.35; }
+.model-menusu .acilir-menu { min-width: min(340px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
 .senaryo-tablosu .bos-hucre { padding: 0; }
 .senaryo-tablosu .bos-hucre .bos-durum { margin: 16px; }
 .tablo-alti { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--cizgi); color: var(--metin-3); font: 12px var(--yazi-mono); }
