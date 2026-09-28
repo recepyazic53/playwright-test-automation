@@ -3735,3 +3735,7 @@ dialog.uctan-kosu-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywher
 .veri-klasoru-ayrintilari { margin-top: 10px; min-width: 0; }
 .veri-klasoru-ayrintilari > summary { cursor: pointer; width: max-content; max-width: 100%; }
 .veri-klasoru-ayrintilari[open] > summary { margin-bottom: 6px; }
+/* Senaryo önerileri: taban bir kez, satırlarda yalnız farklar. */
+.oneri-tabani { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 12px; overflow-wrap: anywhere; }
+.oneri-farklari { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; }
+.oneri-farklari li { overflow-wrap: anywhere; min-width: 0; }

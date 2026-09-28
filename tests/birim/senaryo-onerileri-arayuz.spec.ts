@@ -74,6 +74,10 @@ test('liste gruplu; önizleme formu doldurur ama kaydetmez; seçilenler "Koşuda
   await expect(page.getByRole('note').filter({ hasText: 'Öneriler yalnızca öneridir.' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Seçilen öneriler' })).toContainText('"Koşuda" KAPALI gelir');
   await expect(page.getByText('Taban: “Kitap siparişi”')).toBeVisible();
+  // Taban listenin üstünde bir kez; satırlarda yalnız fark.
+  await expect(page.locator('.oneri-tabani')).toHaveCount(1);
+  await expect(page.getByRole('list', { name: 'Zorunlu alan boş: Adet: farklar' })).toHaveText('Adet: boş');
+  await expect(grup(page, 'Zorunlu alanlar')).not.toContainText('senaryosundaki gibi');
 
   // Gruplar ve içerik: başlık önerisi, özet, beklenen sonuç rozetleri, mevcut.
   await expect(grup(page, 'Zorunlu alanlar').locator('li.oneri')).toHaveCount(5);

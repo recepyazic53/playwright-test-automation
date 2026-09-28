@@ -76,10 +76,12 @@ export async function senaryoOnerileriEkrani(icerik, s) {
     ? h('select', { 'aria-label': 'Akış', onchange: (o) => { durum.akisId = o.currentTarget.value; durum.secim = new Set(); senaryoOnerileriEkrani(icerik, s); } },
       baglam.akislar.map((a) => h('option', { value: a.id, selected: a.id === baglam.akisId }, a.ad)))
     : null;
-  const tabanMeta = h('span', {});
+  // Temel alınan senaryo listenin üstünde BİR KEZ; öneri satırlarında yalnız fark ("E-posta: boş", "Yaş: 17").
+  const tabanNotu = h('p', { class: 'oneri-tabani', role: 'note' });
 
   function tabanCiz() {
-    yerlestir(tabanMeta, ikon('katman'), sonuc.taban.kaynak === 'senaryo' ? `Taban: “${sonuc.taban.baslik}”` : 'Taban: modelin varsayılanları');
+    yerlestir(tabanNotu, ikon('katman'), h('span', {}, sonuc.taban.kaynak === 'senaryo' ? `Taban: “${sonuc.taban.baslik}”` : 'Taban: modelin varsayılanları'),
+      h('span', { class: 'kucuk soluk' }, ' — öneriler bu değerlerle başlar; satırlarda yalnız farklar yazılır.'));
   }
 
   /** Seçimi güncel önerilere indirger (mevcut / artık üretilmeyen öneriler seçimden çıkar). */
@@ -131,7 +133,12 @@ export async function senaryoOnerileriEkrani(icerik, s) {
           h('span', { class: 'oneri-rozetleri' }, beklenenRozet,
             o.mevcut ? rozet('mevcut', 'vurgu', { title: `Zaten var: “${o.mevcut.baslik}”` }) : null,
             o.eksikler.length ? rozet('değer eksik', 'atlanan', { title: `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')}` }) : null)),
-        h('p', { class: 'oneri-ozeti' }, o.ozet),
+        // Yalnız fark: değişen alanlar (boş / seçilen / sınır değeri). Koşullu ve sınır önerilerinde etkisi ayrıca kısa not.
+        (o.degisiklikler || []).length
+          ? h('ul', { class: 'oneri-farklari', 'aria-label': `${o.baslik}: farklar` }, o.degisiklikler.map((d) => h('li', {},
+            h('b', {}, `${d.etiket}: `), d.deger === '(boş)' ? 'boş' : d.deger)))
+          : h('p', { class: 'oneri-ozeti' }, o.ozet),
+        o.tur === 'kosullu' || o.tur === 'sinir' ? h('p', { class: 'oneri-ozeti kucuk soluk' }, o.ozet) : null,
         o.mevcut ? h('p', { class: 'kucuk cok-soluk' }, `Zaten var: “${o.mevcut.baslik}”`) : null,
         o.eksikler.length ? h('p', { class: 'kucuk cok-soluk' }, `Değeri olmayan zorunlu alanlar (önizlemede doldurun): ${o.eksikler.join(', ')}`) : null,
         o.beklenen.tur === 'belirsiz' ? h('p', { class: 'kucuk cok-soluk' }, o.beklenen.neden) : null),
@@ -216,11 +223,11 @@ export async function senaryoOnerileriEkrani(icerik, s) {
   });
 
   yerlestir(icerik,
-    baslik(s, [h('span', {}, ikon('ag'), `Ortam: ${s.ortam.ad}`), tabanMeta, akisSecimi ? h('label', { class: 'akis-secimi' }, 'Akış', akisSecimi) : null]),
+    baslik(s, [h('span', {}, ikon('ag'), `Ortam: ${s.ortam.ad}`), akisSecimi ? h('label', { class: 'akis-secimi' }, 'Akış', akisSecimi) : null]),
     h('div', { class: 'not-kutusu bilgi oneri-bilgisi', role: 'note' },
       h('p', {}, h('b', {}, 'Öneriler yalnızca öneridir. '), 'Siz işaretleyip "Senaryo olarak ekle" demeden hiçbir senaryo oluşmaz; eklenenler kurallardan geçer.'),
       h('p', { class: 'kucuk' }, 'Kişisel / gizli alanlarda değer üretilmez (mevcut senaryodaki değer ya da bağlı tablo kullanılır, maskeli gösterilir). Beklenen sonuç belli değilse "Beklenen sonucu siz seçin" yazar.')),
-    sonucAlani, govde, cubuk);
+    sonucAlani, tabanNotu, govde, cubuk);
   ciz();
 }
 
