@@ -113,7 +113,11 @@ test('"Girişi kaydet": tek onay ekranı, yalnız kod kaynağı sorulur, tarif f
     await sayfa.evaluate(() => document.querySelector('nav')?.insertAdjacentHTML('beforeend', ' · <a href="#">Çıkış</a>'));
     const panel = sayfa.locator('#nobetci-kayit-paneli');
     await panel.getByRole('button', { name: 'Bitir', exact: true }).click();
+    // Giriş kaydı diyagram açmaz: panel, Nöbetçi'deki onay ekranını anlatır.
+    await expect(panel.getByText(/girişin adımları onayınıza açılır/)).toBeVisible();
+    await expect(panel.getByText(/taslak diyagram|diyagramda elle/)).toHaveCount(0);
     await panel.getByRole('button', { name: 'Bitir ve Nöbetçi’ye gönder' }).click();
+    await expect(panel.getByText(/girişin adımlarını Nöbetçi’de onaylayın/)).toBeVisible();
   } finally {
     await kayit.close().catch(() => undefined);
   }

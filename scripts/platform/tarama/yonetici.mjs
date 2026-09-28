@@ -522,7 +522,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       ortakAkis: ortakBaslangic ? { baslangicEkrani: ortakBaslangic } : null,
       engellenenler: [], engellenenSayisi: 0, olaylar: [],
       girdi: {
-        kip: girisDenemesi ? 'girisDenemesi' : kayit ? 'kayit' : 'tarama', tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
+        kip: girisDenemesi ? 'girisDenemesi' : kayit ? 'kayit' : 'tarama', ...(girisKaydi ? { girisKaydi: true } : {}), tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
         yasakKaliplari: etkinYasakAdresler(vt, ortam), izinliKokenler: izinliKokenler.length ? izinliKokenler : null, zamanAsimiMs: sure,
         // Tarayıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
         tarayici: taramaTarayiciGirdisi(vt),

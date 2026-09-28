@@ -180,6 +180,7 @@ test('kullanıcı akışı yürütür, panel alanları/düğmeleri/mesajı topla
     await goruntu(panel.locator('.p'), '02-panel-toplandi.png');
     await panel.getByRole('button', { name: 'Bitir', exact: true }).click();
     await expect(panel.getByText(/Listede 6 alan, 2 düğme, 1 mesaj var/)).toBeVisible();
+    await expect(panel.getByText(/taslak diyagram açılır/)).toBeVisible();
     await goruntu(panel.locator('.p'), '03-panel-bitir.png');
     await panel.getByRole('button', { name: 'Bitir ve Nöbetçi’ye gönder' }).click();
   } finally {

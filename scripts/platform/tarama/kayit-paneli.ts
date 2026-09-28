@@ -36,7 +36,7 @@ export type PanelDurumu = {
 /** Sayfada eşzamanlı alınan ekran anlığı (kayıt motoru süzer). */
 export type EkranAnligi = { yol: string; baslik: string; alanlar: SayfaEnvanteri['alanlar']; dokunulan: string[]; secimler: Record<string, string> };
 
-export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string }): void {
+export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string; giris?: boolean }): void {
   // Olayların türleri (panel ile aynı kökenli çerçeveler arasında; olaylar başka pencereden gelebilir).
   type OlayTuru = 'input' | 'change' | 'click' | 'keyup' | 'keydown';
   type Merkez = { olay: (tur: OlayTuru, e: Event) => void };
@@ -276,18 +276,21 @@ export function kayitPaneliniKur(ayar: { kopru: string; kimlik: string }): void 
     return b;
   }
 
+  // Giriş kaydı (ayar.giris) diyagram açmaz: Nöbetçi'de girişin adımları onay ekranında doğrulanır; metinler buna göre.
   function bitirGorunumu(): void {
     const secili = durum.alanlar.filter((a) => a.secili).length;
     if (!secili && !durum.dugmeler.length) { hata = 'Önce akışı yürütün: listede en az bir alan ya da basılmış bir düğme olmalı.'; anaGorunum(); return; }
     gorunum = 'bitir';
     doldur(
       el('div', {}, el('b', {}, 'Kayıt bitirilsin mi?'),
-        el('div', { class: 'i' }, `Listede ${secili} alan, ${durum.dugmeler.length} düğme${durum.mesajlar.length ? `, ${durum.mesajlar.length} mesaj` : ''} var. Nöbetçi’de bunlardan hazırlanan taslak diyagram açılır; adımları orada adlandırıp düzenlersiniz.`)),
-      durum.mesajlar.length ? null : el('div', { class: 'v' }, 'Mesaj seçmediniz: beklenen mesajı diyagramda elle yazabilirsiniz.'),
+        el('div', { class: 'i' }, `Listede ${secili} alan, ${durum.dugmeler.length} düğme${durum.mesajlar.length ? `, ${durum.mesajlar.length} mesaj` : ''} var. ${ayar.giris
+          ?'Nöbetçi’de girişin adımları onayınıza açılır; her adımın ne olduğunu (kullanıcı adı, parola, giriş düğmesi…) orada doğrulayıp kaydedersiniz.'
+          : 'Nöbetçi’de bunlardan hazırlanan taslak diyagram açılır; adımları orada adlandırıp düzenlersiniz.'}`)),
+      durum.mesajlar.length || ayar.giris ? null : el('div', { class: 'v' }, 'Mesaj seçmediniz: beklenen mesajı diyagramda elle yazabilirsiniz.'),
       hata ? el('div', { class: 'h', role: 'alert' }, hata) : null,
       el('div', { class: 'r' },
         dugme('Bitir ve Nöbetçi’ye gönder', () => {
-          kopru({ tur: 'bitir' }).then(() => govde.replaceChildren(el('div', { class: 'i' }, 'Kayıt Nöbetçi’ye gönderildi. Bu pencere kapanacak; diyagrama Nöbetçi’den devam edin.')))
+          kopru({ tur: 'bitir' }).then(() => govde.replaceChildren(el('div', { class: 'i' }, `Kayıt Nöbetçi’ye gönderildi. Bu pencere kapanacak; ${ayar.giris ? 'girişin adımlarını Nöbetçi’de onaylayın' : 'diyagrama Nöbetçi’den devam edin'}.`)))
             .catch((e: unknown) => { hata = String(e instanceof Error ? e.message : e); bitirGorunumu(); });
         }, 'b'),
         dugme('Geri', anaGorunum)));

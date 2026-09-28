@@ -296,7 +296,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
         `window.__nobetciDokunulanlariBul = ${dokunulanlariBul.toString()};`,
         `window.__nobetciSecimDegerleri = ${secimDegerleri.toString()};`,
         `window.__nobetciAcikListe = ${acikListeSecenekleri.toString()};`,
-        `(${kayitPaneliniKur.toString()})(${JSON.stringify({ kopru: KAYIT_KOPRUSU, kimlik: KAYIT_PANELI_KIMLIGI })});`
+        `(${kayitPaneliniKur.toString()})(${JSON.stringify({ kopru: KAYIT_KOPRUSU, kimlik: KAYIT_PANELI_KIMLIGI, giris: g.girisKaydi === true })});`
       ].join('\n');
       await baglam.addInitScript({ content: betik });
     };
