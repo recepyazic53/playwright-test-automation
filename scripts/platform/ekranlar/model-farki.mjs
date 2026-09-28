@@ -1,5 +1,5 @@
 // EKRAN MODELİ FARK MOTORU (genel, saf fonksiyonlar) — iki model sürümünü (ya da mevcut model ile yeni
-// sayfa paketindeki modeli) karşılaştırıp "bulgu" listesi üretir, kullanıcının KABUL ettiği bulguları
+// ekran paketindeki modeli) karşılaştırıp "bulgu" listesi üretir, kullanıcının KABUL ettiği bulguları
 // mevcut modele uygulayarak yeni sürümü kurar ve bulguların senaryolara etkisini hesaplar.
 //
 // Bulgu türleri (tur):

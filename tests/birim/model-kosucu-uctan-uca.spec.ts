@@ -1,4 +1,4 @@
-// UÇTAN UCA (yerel) — model koşucusu: sayfa paketiyle eklenen, test kodu OLMAYAN senaryolar gerçek Nöbetçi
+// UÇTAN UCA (yerel) — model koşucusu: ekran paketiyle eklenen, test kodu OLMAYAN senaryolar gerçek Nöbetçi
 // sunucusunun koşu ucundan (/platform/senaryolar/calistir) model spec'iyle koşar; sonuçlar gerçek platform
 // raporlayıcısıyla GEÇİCİ veritabanına ve şifreli medya deposuna yazılır.
 //
@@ -149,7 +149,7 @@ test.beforeAll(async () => {
   for (const [ad, subeKodu] of [['Merkez', 'S01'], ['Yetkili', 'S02']]) {
     expect((await api('/platform/baglam-profili/kaydet', { projeId, tur: 'Şube', ad, alanlar: { subeKodu } })).basarili).toBe(true);
   }
-  // Sayfa paketi → ekran + model v1 + beş senaryo (TEST ve CANLI ortamlarında; Koşuda kapalı).
+  // Ekran paketi → ekran + model v1 + beş senaryo (TEST ve CANLI ortamlarında; Koşuda kapalı).
   const ek = await api('/platform/sayfa-paketi/ekle', { projeId, paket: ornekBasvuruPaketi(), senaryoIndeksleri: [0, 1, 2, 3, 4], ortamIdleri: [testOrtami, canliOrtami] });
   expect(ek.basarili, ek.mesaj).toBe(true);
   const liste = await api(`/platform/senaryolar?projeId=${projeId}&ortamId=${testOrtami}`) as { senaryolar: Array<{ id: string; baslik: string; ekranAdi: string | null; modelKosusu: boolean; paketten: boolean; kosuyaDahil: boolean; veriGudumlu: boolean }> };
@@ -331,7 +331,7 @@ test('arayüz: Senaryolar listesi (model rozeti yok; her senaryo model) ve bir f
     const tablo = page.locator('.senaryo-karti');
     await expect(tablo.locator('tbody tr')).toHaveCount(5, { timeout: 15_000 });
     await expect(tablo.locator('.rozet', { hasText: /^model$/ })).toHaveCount(0);
-    await expect(tablo.locator('.rozet', { hasText: /^paketten$/ })).toHaveCount(5); // beşi de sayfa paketinden
+    await expect(tablo.locator('.rozet', { hasText: /^paketten$/ })).toHaveCount(5); // beşi de ekran paketinden
     if (EKRAN_KLASORU) {
       mkdirSync(EKRAN_KLASORU, { recursive: true });
       for (const renk of ['dark', 'light'] as const) {

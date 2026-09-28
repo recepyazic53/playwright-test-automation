@@ -1,5 +1,5 @@
 // KORUMA TESTLERİ — Ayarlar > Güvenlik > Maskeleme: çekirdek gizli ad listesi (değiştirilemez) + kullanıcının ek adları
-// (kasada şifreli). Tek eşleşme kuralı: servis okumaları / başlıkları, eski tablo sütunları ve sayfa paketi taraması aynı
+// (kasada şifreli). Tek eşleşme kuralı: servis okumaları / başlıkları, eski tablo sütunları ve ekran paketi taraması aynı
 // listeyi kullanır. Arayüzde Güvenlik bölümünde kaydedilir.
 import { randomBytes } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';

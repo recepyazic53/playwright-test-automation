@@ -9,17 +9,17 @@
 //   sağda "Kayıtta yakalananlar": alanlar (sürükleyip bir alan grubuna bırakılır ya da "Ekle" ile etkin gruba eklenir; bir
 //   alan tek grupta olur, başka gruba bırakılınca taşınır), düğmeler ("Aksiyon ekle") ve mesajlar ("Mesaj ekle").
 // Her değişiklik taslak olarak sunucuda saklanır (POST /platform/tarama/akis { taslak: true }); "Kaydet ve önizle" diyagramı
-// doğrular ve sayfa paketine çevirir (hatalar blokların altında), ardından mevcut önizleme → kabul akışı açılır.
+// doğrular ve ekran paketine çevirir (hatalar blokların altında), ardından mevcut önizleme → kabul akışı açılır.
 // Diyagram EKRANIN akışıdır (tüm senaryolar); senaryolar değerleri ve isteğe bağlı aksiyonları senaryo formunda seçer.
-// İki kaynak: 'kayit' (kayıttan sonra; taslak saklanır, "Kaydet ve önizle" → sayfa paketi) ve 'ekran' (ekranın Akışlar
+// İki kaynak: 'kayit' (kayıttan sonra; taslak saklanır, "Kaydet ve önizle" → ekran paketi) ve 'ekran' (ekranın Akışlar
 // sekmesinden: bir akışı düzenle / kopyala / boş yeni akış; sağ liste YALNIZCA bu ekranın modelindeki alanlar; akışın adı
 // yazılır, kaydetmeden önce etkilenen senaryolar onaya gelir, kaydedince yeni model sürümü — /platform/ekran/akis/*).
-// Mevcut ekranın kaydında "Kayıt nereye yazılsın?": varsayılan akışı güncelle (sayfa paketi → Bulgular), yeni akış olarak ekle
+// Mevcut ekranın kaydında "Kayıt nereye yazılsın?": varsayılan akışı güncelle (ekran paketi → Bulgular), yeni akış olarak ekle
 // ya da seçilen akışı güncelle (etki onayı → yeni model sürümü; POST /platform/tarama/akis { hedef: { tur: 'akis' } }). Bu yolda
 // kayıtta yakalanan seçenek listeleri onay penceresinde "Test verisine yazılacaklar" bölümüyle (sayfa-paketi.js > testVerisiSecimi)
 // gösterilir; yalnız seçilen tablolar / bağlantılar yazılır, aynı adlı tablo için seçim yapılmadan onaylanamaz.
 // Ortak akışın kaydında (başlangıç ekranından) hedef seçimi yoktur: başlangıç ekranına ait bloklar silinir, "Ortak akışı güncelle"
-// ortak akışı kullanan ekranları gösterip onayla ortak akışın tek akışına yazar (sayfa paketi yok).
+// ortak akışı kullanan ekranları gösterip onayla ortak akışın tek akışına yazar (ekran paketi yok).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
@@ -79,7 +79,7 @@ export async function akisTasarimi(icerik, s) {
   if (akisAdi) akisAdi.addEventListener('input', () => { degisiklik = true; });
   // Mevcut ekranın kaydı: nereye yazılsın?
   const ekranAkislari = !ekranKipi && veri.ekranAkislari && veri.ekranAkislari.duzenlenebilir ? veri.ekranAkislari.akislar : null;
-  // Ortak akışın kaydı (başlangıç ekranından): hedef seçimi yok; kayıt ortak akışın tek akışına yazılır (sayfa paketi yok).
+  // Ortak akışın kaydı (başlangıç ekranından): hedef seçimi yok; kayıt ortak akışın tek akışına yazılır (ekran paketi yok).
   const ortakKayit = !ekranKipi && veri.ortakAkis ? veri.ortakAkis : null;
   let hedefTuru = 'varsayilan';
   const hedefAdi = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Kurumsal sipariş', 'aria-label': 'Yeni akışın adı' });
@@ -828,7 +828,7 @@ export async function akisTasarimi(icerik, s) {
           h('p', { class: 'soluk kucuk' }, ekranKipi
             ? 'Diyagram doğrulanır; etkilenen senaryolar gösterilir ve onayınızla ekranın yeni model sürümü açılır.'
             : ortakKayit ? 'Diyagram doğrulanır; ortak akışı kullanan ekranlar gösterilir ve onayınızla ortak akışın yeni model sürümü açılır.'
-              : 'Diyagram doğrulanır ve sayfa paketine çevrilir; ardından önizleyip kabul edersiniz.'),
+              : 'Diyagram doğrulanır ve ekran paketine çevrilir; ardından önizleyip kabul edersiniz.'),
           kaydet, h('p', { class: 'kucuk', style: { margin: '8px 0 0' } }, durumSatiri)))));
   ciz();
   icerik.querySelector('h2')?.focus();

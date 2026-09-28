@@ -1,4 +1,4 @@
-// SAYFA PAKETİ BİÇİM DOSYASI (sunucu) — arayüzdeki "Paket biçimini indir" ile verilen TEK dosya (BICIM_DOSYASI_ADI).
+// EKRAN PAKETİ BİÇİM DOSYASI (sunucu) — arayüzdeki "Paket biçimini indir" ile verilen TEK dosya (BICIM_DOSYASI_ADI).
 // Kullanıcı istek metnini ve bu dosyayı yapay zekâ aracına (tarayıcıyı kullanabilen bir kodlama asistanı) verir; araç depo
 // dosyalarını göremese de paketi bu dosyadaki biçimde üretir. İçerik depodaki kaynaklardan HER İSTEKTE birleştirilir (kopya yok):
 //   docs/sayfa-paketi.md (kurallar ve alanlar) + docs/sayfa-paketi.schema.json (paket zarfı) + tests/support/ekran-modeli.ts
@@ -15,7 +15,7 @@ export const BICIM_KAYNAKLARI = Object.freeze(['docs/sayfa-paketi.md', 'docs/say
 export function paketBicimiBelgesi(kok) {
   const [belge, sema, model] = BICIM_KAYNAKLARI.map((y) => readFileSync(join(kok, y), 'utf8').replace(/\r\n/g, '\n').trimEnd());
   return [
-    `<!-- ${BICIM_DOSYASI_ADI} — Nöbetçi sayfa paketi biçimi (sürüm 1). Bu dosyayı istek metniyle birlikte yapay zekâ aracınıza verin. -->`,
+    `<!-- ${BICIM_DOSYASI_ADI} — Nöbetçi ekran paketi biçimi (sürüm 1). Bu dosyayı istek metniyle birlikte yapay zekâ aracınıza verin. -->`,
     '',
     belge,
     '',

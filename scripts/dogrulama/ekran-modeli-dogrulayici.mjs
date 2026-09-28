@@ -1,5 +1,5 @@
 // EKRAN MODELİ YAPISAL DOĞRULAYICISI (genel, TEK KAYNAK) — testler (tests/support/ekran-modeli.ts),
-// platform sunucusu (sayfa paketi, model sürümleri) ve birim testleri aynı kuralları buradan kullanır.
+// platform sunucusu (ekran paketi, model sürümleri) ve birim testleri aynı kuralları buradan kullanır.
 // Kurallar ekran modelinin KENDİSİNİ denetler: bilinen anahtarlar/tipler, benzersiz alan/bölüm/adım
 // kimlikleri, koşul ifadelerinin biçimi, adım/koşul/alan/alt model başvurularının varlığı, bağlam
 // profili görünürlüğü gözlemleri. Senaryo verisinin modele uygunluğu senaryo-dogrulayici.mjs'dedir.

@@ -1,4 +1,4 @@
-// SAYFA PAKETİNDEN TEST VERİSİ — paketin "testVerisi" bölümü (paket-tablolari.mjs) Test verisi tablolarına ve ekranın alan
+// EKRAN PAKETİNDEN TEST VERİSİ — paketin "testVerisi" bölümü (paket-tablolari.mjs) Test verisi tablolarına ve ekranın alan
 // bağlantılarına YALNIZCA kullanıcının önizlemede onayladığı seçimle yazılır:
 //   paketTestVerisiOnizle   hangi tablolar (sütun / satır sayısı, örnek satırlar — gizli sütun değeri yok), aynı adlı mevcut
 //                           tablo (birleştirilirse eklenecek satır / sütun), hangi alanlar hangi sütuna bağlanacak (mevcut

@@ -119,7 +119,7 @@ export function yeniEkleDugmesi() {
       const secim = await secenekIste({
         baslik: 'Ne eklemek istiyorsunuz?', ikonAd: 'arti',
         secenekler: [
-          { deger: 'ekran', etiket: 'Ekran', aciklama: 'Test edilecek bir sayfa: sayfa paketi, tarama ya da akış kaydıyla. Ortak akışlar da buradan (paket) eklenir.', ikonAd: 'ekran' },
+          { deger: 'ekran', etiket: 'Ekran', aciklama: 'Test edilecek bir sayfa: ekran paketi, tarama ya da akış kaydıyla. Ortak akışlar da buradan (paket) eklenir.', ikonAd: 'ekran' },
           { deger: 'servis', etiket: 'Servis', aciklama: 'SOAP / REST servis: WSDL, SoapUI projesi, Postman koleksiyonu ya da elle.', ikonAd: 'ag' }
         ]
       });

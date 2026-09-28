@@ -90,7 +90,7 @@ export function akisSiparisModeli(): Nesne {
   return m;
 }
 
-/** Modelin sayfa paketi (girişsiz). */
+/** Modelin ekran paketi (girişsiz). */
 export function siparisPaketi(model: Nesne = siparisModeli()): Nesne {
   return {
     tur: 'sayfa-paketi', surum: 1,

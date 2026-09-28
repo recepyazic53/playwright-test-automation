@@ -1,4 +1,4 @@
-// Sayfa paketi yükleme akışı (genel):
+// Ekran paketi yükleme akışı (genel):
 //   mod 'yeni'   — "Ekran ekle": yükle → doğrulama hataları → önizleme (alanlar, adımlar, isteğe bağlı adımlar,
 //                  senaryo önerileri [seçmeli], gereken ayarlar [Ayarlar bağlantılı], test verisine yazılacaklar [tablo başına
 //                  yaz / birleştir / yeni ad / atla + alan bağlantıları], bilinmeyenler, kanıtlar) →
@@ -41,7 +41,7 @@ function akisCercevesi(icerik, s, kaynak = null) {
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, taramadan ? kaynakAdi : analiz ? 'Paket yükle' : 'Ekran ekle')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, baslik)),
         h('div', { class: 'meta' },
-          h('span', {}, ikon(kaynak === 'kayit' ? 'video' : taramadan ? 'ara' : 'dosya'), taramadan ? `${kaynakAdi.toLocaleLowerCase('tr-TR')} sonucu (sayfa paketi, sürüm 1)` : 'sayfa paketi (JSON, sürüm 1)'),
+          h('span', {}, ikon(kaynak === 'kayit' ? 'video' : taramadan ? 'ara' : 'dosya'), taramadan ? `${kaynakAdi.toLocaleLowerCase('tr-TR')} sonucu (ekran paketi, sürüm 1)` : 'ekran paketi (JSON, sürüm 1)'),
           h('span', {}, ikon('kalkan'), taramadan ? 'alan değerleri pakete yazılmadı' : 'gizli değer içeren paket reddedilir'))),
       h('div', { class: 'eylemler' }, h('a', { class: 'dugme hayalet', href: s.ekran ? `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` : '#/ekranlar' }, ikon('geri'), 'Vazgeç'))),
     govde);
@@ -83,7 +83,7 @@ function yuklemeAdimi(govde, s, onceki = null) {
   const girdi = h('input', { type: 'file', accept: '.json,application/json', id: 'paket-dosyasi', class: 'gorunmez-dosya' });
   const alan = h('label', { class: 'yukleme-alani', for: 'paket-dosyasi' },
     h('span', { class: 'bos-ikon' }, ikon('yukle')),
-    h('strong', {}, 'Sayfa paketini sürükleyip bırakın ya da seçin'),
+    h('strong', {}, 'Ekran paketini sürükleyip bırakın ya da seçin'),
     h('span', { class: 'soluk kucuk' }, '.json · en fazla 16 MB (ekran görüntüleri dahil)'),
     h('span', { class: 'dugme kucuk-dugme' }, ikon('klasor'), 'Dosya seç'));
   const durumAlani = h('div', { 'aria-live': 'polite' });
@@ -172,7 +172,7 @@ function eklemeKutulari(s) {
 // Aynı adlı tablo varken seçim yapılmadan kabul edilemez; onaylanmayan hiçbir şey yazılmaz.
 // ---------------------------------------------------------------------------------------
 
-const TV_KAYNAK = { paket: 'Sayfa paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
+const TV_KAYNAK = { paket: 'Ekran paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
 const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
 
 /**
@@ -250,7 +250,7 @@ export function testVerisiSecimi(t, degisti) {
   };
   const bolum = h('section', { class: 'kart test-verisi-onizleme', 'aria-label': 'Test verisine yazılacaklar' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('liste'), 'Test verisine yazılacaklar'),
-      h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Sayfa paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
+      h('span', { class: 'sag' }, rozet(TV_KAYNAK[t.kaynak] || 'Ekran paketi', 'vurgu'), rozet(`${t.tablolar.length} tablo`, ''))),
     h('p', { class: 'kucuk soluk' }, 'Tablolar Ayarlar > Test verisi\'ne Excel sayfası gibi yazılır (satır = birlikte geçerli değerler): seçim alanlarının seçenekleri "Ekran listeleri"ne ("<Ekran> — <Alan>"), kişi ve kayıt verileri "Kişi ve kayıt verileri"ne. Alanlar sütunlara bağlanır; senaryoda seçtikçe listeler satırlardan süzülür. Onaylamadığınız hiçbir şey yazılmaz.'),
     h('ul', { class: 'tv-tablolar' }, t.tablolar.map(tabloSatiri)),
     t.baglantilar.length ? [h('div', { class: 'ara-baslik' }, `Alan bağlantıları (${t.baglantilar.length})`), bagListesi] : null);

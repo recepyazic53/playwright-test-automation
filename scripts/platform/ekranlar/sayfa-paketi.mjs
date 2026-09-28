@@ -1,4 +1,4 @@
-// SAYFA PAKETİ (sürüm 1) DOĞRULAYICISI — genel. Kullanıcı bir sayfanın bağlantısını yapay zekâ aracına verir;
+// EKRAN PAKETİ (sürüm 1) DOĞRULAYICISI — genel. Kullanıcı bir sayfanın bağlantısını yapay zekâ aracına verir;
 // araç sayfayı YALNIZCA OKUYARAK inceler ve bu biçimde bir JSON dosyası üretir; kullanıcı dosyayı
 // Nöbetçi > Ekranlar > "Ekran ekle" (yeni ekran) ya da "Paket yükle" (tekrar analiz) ile yükler.
 // Biçim: docs/sayfa-paketi.md (+ docs/sayfa-paketi.schema.json).
@@ -73,7 +73,7 @@ export function gizliKalipBul(metin) {
   return null;
 }
 
-const GIZLI_HATA_SONU = 'Sayfa paketleri gizli ya da kişisel veri içeremez: kişi, kart ve giriş bilgileri için değer yerine ${Tablo.Sütun} tablo başvurusu ya da giriş profili ADI kullanın (değerler Ayarlar\'da, şifreli kasada durur).';
+const GIZLI_HATA_SONU = 'Ekran paketleri gizli ya da kişisel veri içeremez: kişi, kart ve giriş bilgileri için değer yerine ${Tablo.Sütun} tablo başvurusu ya da giriş profili ADI kullanın (değerler Ayarlar\'da, şifreli kasada durur).';
 
 /**
  * Değerin içindeki (iç içe) gizli görünen değerler. atla(yol) true dönen yollar taranmaz (kanıt verisi).
@@ -142,7 +142,7 @@ const pngMi = (b) => b.length > 8 && PNG_IMZASI.every((x, i) => b[i] === x);
 // ---- Ana doğrulama --------------------------------------------------------------------------
 
 /**
- * Sayfa paketini doğrular. Paket geçerliyse hatalar boştur; uyarılar yüklemeyi engellemez.
+ * Ekran paketini doğrular. Paket geçerliyse hatalar boştur; uyarılar yüklemeyi engellemez.
  * senaryoSorunlari[i]: i. önerinin tek doğrulayıcıdaki hataları (öneri yine gösterilir, varsayılan seçilmez).
  * @param {unknown} ham
  * tablolar: projenin tabloları (ad + sütunlar; değer yok) — senaryo önerilerindeki ${Tablo.Sütun} başvuruları paketin ve projenin
@@ -165,7 +165,7 @@ export function sayfaPaketiniDogrula(ham, secenekler = {}) {
     hata('', 'Paket bir JSON nesnesi olmalı.');
     return sonuc();
   }
-  if (ham.tur !== SAYFA_PAKETI_TURU) hata('tur', `"tur" "${SAYFA_PAKETI_TURU}" olmalı — bu dosya bir sayfa paketi değil.`);
+  if (ham.tur !== SAYFA_PAKETI_TURU) hata('tur', `"tur" "${SAYFA_PAKETI_TURU}" olmalı — bu dosya bir ekran paketi değil.`);
   if (ham.surum !== SAYFA_PAKETI_SURUMU) hata('surum', `Desteklenen paket sürümü ${SAYFA_PAKETI_SURUMU} (bulunan: ${String(ham.surum)}).`);
   for (const k of Object.keys(ham)) if (!UST_ANAHTARLAR.has(k)) hata(k, `bilinmeyen anahtar "${k}"`);
   if (hatalar.length) return sonuc();

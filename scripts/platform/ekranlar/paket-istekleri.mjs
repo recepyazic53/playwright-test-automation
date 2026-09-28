@@ -1,4 +1,4 @@
-// SAYFA PAKETİ İSTEK METİNLERİ (ORTAK, saf) — yapay zekâ aracına (tarayıcıyı kullanabilen bir kodlama asistanı) verilen inceleme
+// EKRAN PAKETİ İSTEK METİNLERİ (ORTAK, saf) — yapay zekâ aracına (tarayıcıyı kullanabilen bir kodlama asistanı) verilen inceleme
 // kuralları ve "İstek metnini kopyala" metni TEK kaynaktan gelir: sunucu (ekran-servisi.mjs > istek dosyası) bu modülü içe aktarır;
 // arayüz aynı dosyayı /arayuz/paket-istekleri.mjs olarak alır (ekranlar.js, sayfa-paketi.js). Metin belirli bir araca ya da depo
 // dosyasına bağlı değildir: paketin biçimi, arayüzdeki "Paket biçimini indir" ile verilen TEK dosyadadır (BICIM_DOSYASI_ADI; sunucu
@@ -50,5 +50,5 @@ export const MEVCUT_TABLO_KURALI = 'Dosyadaki testVerisi bölümü ekranın mevc
  * @param {string} [adres] sayfa bağlantısı (yoksa yer tutucu)
  */
 export function paketIstekCumlesi(adres = '') {
-  return `${adres || '<sayfa bağlantısı>'} sayfasını incele ve ${BICIM_ATFI} bir sayfa paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`;
+  return `${adres || '<sayfa bağlantısı>'} sayfasını incele ve ${BICIM_ATFI} bir ekran paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`;
 }

@@ -1,6 +1,6 @@
-# Sayfa paketi (sürüm 1)
+# Ekran paketi (sürüm 1)
 
-Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **sayfa paketi** ile yapılır:
+Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **ekran paketi** ile yapılır:
 
 1. Kullanıcı Nöbetçi > **Ekranlar > Ekran ekle > Yapay zekâ ile oluştur** kutusundaki **İstek metnini kopyala** ile istek
    metnini, **Paket biçimini indir** ile bu belgeyi (tek dosya: `sayfa-paketi-bicimi.md`) alır ve ikisini sayfanın bağlantısıyla
@@ -32,7 +32,7 @@ varsayılan olarak gösterilmez; "Metni göster" ile açılır). Metnin TEK kayn
 dosyasını Nöbetçi yerel olarak sunar (`GET /arayuz/sayfa-paketi-bicimi.md`, `scripts/platform/ekranlar/paket-bicimi.mjs`): bu
 belge + zarf şeması + ekran modelinin tip tanımı (`tests/support/ekran-modeli.ts`), her istekte kaynaklardan birleştirilir. Özeti:
 
-> `<sayfa bağlantısı>` sayfasını incele ve ekteki sayfa-paketi-bicimi.md dosyasındaki biçimde bir sayfa paketi JSON dosyası üret.
+> `<sayfa bağlantısı>` sayfasını incele ve ekteki sayfa-paketi-bicimi.md dosyasındaki biçimde bir ekran paketi JSON dosyası üret.
 > Paket tek bir JSON nesnesidir (`tur`, `surum`, `meta`, `model`, `senaryoOnerileri`, `gerekenAyarlar`, `bilinmeyenler` zorunlu;
 > `kanitlar`, `testVerisi` isteğe bağlı). Sayfayı yalnızca
 > okuyarak incele (düğme grupları yukarıda); kayıt oluşturan / gönderen / onaylayan / ödeme yapan düğmelere basma; kart, parola,
@@ -136,7 +136,7 @@ Doğrulayıcı mesajları kullanıcıya dönüktür: alanın etiketi yoksa iç a
 Tek yerde tanımlanıp ekran akışlarına **adım olarak** eklenen akış. Model `"tur": "ortakAkis"`, `"semaSurumu": 2` olur.
 Adımları ekran modeliyle aynı biçimdedir; ekran adresi, spec ya da page object içermez. İçinde alt model ya da başka ortak
 akış olmaz. Nasıl çalışır:
-- **Yükleme:** sayfa paketiyle yüklenir; `meta.ekran.urlYolu` verilmeyebilir. Ekranlar'da "Ortak akışlar" grubunda görünür;
+- **Yükleme:** ekran paketiyle yüklenir; `meta.ekran.urlYolu` verilmeyebilir. Ekranlar'da "Ortak akışlar" grubunda görünür;
   senaryo listelerinde ekran olarak görünmez, taranmaz.
 - **Modeli güncelle** (ortak akışın sayfası): Paket yükle, Akışı kaydet, Tekrar analiz et, Yapay zekâ ile yorumla ("Ekranı tara"
   yok; alt modelde yalnız Paket yükle). Ortak akışın kendi adresi olmadığından önce **başlangıç ekranı** sorulur (ortak akışı
@@ -144,7 +144,7 @@ akış olmaz. Nasıl çalışır:
   - **Akışı kaydet:** kayıt başlangıç ekranının adresinde başlar. O ekranda gerekli adımlar (ör. hesaplama) yapılır, sonra ortak
     akışın kısmı yürütülür. Bitir'den sonra diyagramda başlangıç ekranına ait bloklar silinir; "Ortak akışı güncelle" onayla
     (kullanan ekranlar gösterilir) kayıt ortak akışın TEK akışına yazılır ve yeni model sürümü açılır. `tur`, `yalnizTestOrtami`,
-    `senaryoDuzeyi` ve koşullar korunur; `ekranUrl` / spec / page object yazılmaz. Sayfa paketi (önizleme) yolu yoktur.
+    `senaryoDuzeyi` ve koşullar korunur; `ekranUrl` / spec / page object yazılmaz. Ekran paketi (önizleme) yolu yoktur.
   - **Tekrar analiz et / Yapay zekâ ile yorumla:** istek metnine başlangıç ekranının adresi ve ortak akışın o ekranda hangi
     adımdan sonra başladığı yazılır; üretilecek paketin `model.tur` değerinin `"ortakAkis"` olacağı ve `meta.ekran.urlYolu`nun
     verilmeyebileceği belirtilir.
@@ -297,7 +297,7 @@ giden her istek iptal edilir ve test başarısız sayılır.
 
 ## Otomatik tarama
 
-Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ekle** (yükleme alanının altındaki
+Ekran paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ekle** (yükleme alanının altındaki
 "Ya da: Ekranı otomatik tara") ve ekran sayfasındaki **Ekranı tara** düğmesi. Akış:
 
 1. **Seçim (her seferinde onaylanır):** ortam, bağlam profilleri (tekrar analiz diyaloğuyla aynı seçim; ekran için son
@@ -321,7 +321,7 @@ Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ek
    ve bağlam değiştirme adımları (tarif güdümlü) istek gönderebilir. **Yasak adresler** (Ayarlar > Güvenlik +
    `NOBETCI_YASAK_ADRESLER`): ortam adresi, hedef ya da tarifteki bir adres kalıba uyuyorsa tarama **tarayıcı
    açılmadan** reddedilir; tarama sırasında yasaklı host'a giden her istek iptal edilir.
-5. **Sonuç:** sayfa paketi (sürüm 1, model `semaSurumu: 1`), yüklenen paketle **aynı** önizleme → kabul (yeni ekran)
+5. **Sonuç:** ekran paketi (sürüm 1, model `semaSurumu: 1`), yüklenen paketle **aynı** önizleme → kabul (yeni ekran)
    ya da bulgular (mevcut ekran) akışına girer. İşler ~1 saat sonra sunucu belleğinden silinir; ekran görüntüleri
    kabul edilene kadar yalnızca bellekte durur.
 
@@ -339,7 +339,7 @@ Sayfa paketinin ikinci kaynağı Nöbetçi'nin kendisidir: **Ekranlar > Ekran ek
   korunur), etiket/zorunluluk/seçenek güncellenir, yeni alanlar en yakın eşleşen alanın bölümüne eklenir; taramada
   görülmeyen alanlar **kaldırılmaz** (başka adımda/koşulda olabilir) ve bilinmeyenlere yazılır.
 * `senaryoOnerileri: []`, `gerekenAyarlar` (giriş, iki aşamalı tür, bağlam türü), `bilinmeyenler` (her zaman
-  *"Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (sayfa paketi) ya da akış kaydıyla tamamlayın."* + gezinmeler,
+  *"Adım/aksiyon tanımları (düğmeler, başarı göstergeleri) otomatik çıkarılamadı — yapay zekâ aracınızla (ekran paketi) ya da akış kaydıyla tamamlayın."* + gezinmeler,
   engellenen yazma istekleri, keşfedilmeyen uzun listeler, etiketsiz alanlar, özel bileşenler/çerçeveler…),
   `kanitlar` (profil başına görünür alan ekran görüntüsü).
 * Alan **değerleri** pakete hiç yazılmaz; sayfadan gelen metinlerde gizli veri kalıbı varsa metin atılır.
@@ -395,7 +395,7 @@ Alanları bir düğmeyle açılan ekranlarda (çok adımlı formlar) otomatik ta
    `{ tur: "bekle", sureSn }`. Bekleme konmasa da koşucu sonraki alan / beklenen mesaj görünene kadar bekler. Sağda **Kayıtta yakalananlar**: alanlar (bir gruba sürüklenir ya da "Ekle" ile etkin gruba
    eklenir; alan tek grupta olur, başka gruba bırakılınca taşınır; listeye alınmamışlar isteğe bağlı gösterilir), düğmeler
    ("Aksiyon ekle"), mesajlar ("Mesaj ekle"). Değişiklikler taslak olarak saklanır (`POST /platform/tarama/akis
-   { taslak: true }`); **Kaydet ve önizle** doğrular (hatalar bloğun altında) ve sayfa paketine çevirir; önizlemede
+   { taslak: true }`); **Kaydet ve önizle** doğrular (hatalar bloğun altında) ve ekran paketine çevirir; önizlemede
    **Diyagrama dön** ile düzenlemeye dönülür. Tasarım bekleyen iş sunucu belleğinde 12 saat saklanır (sunucu yeniden
    başlarsa kayıt kaybolur).
    Kurallar: **Bitir** zorunlu ve sonda; alan grubunun adı tekil; alan tek grupta; boş alan grubu yalnızca ardından aksiyon
@@ -543,7 +543,7 @@ edilemez. Bağlantılar tek tek seçilir. **Onaylanmayan hiçbir şey yazılmaz*
 **Tekrar analizde** tablolar onayla hemen yazılır; alan **bağlantıları bulgu kararına tabidir**: bu analizde bulgusu olan ya da
 henüz modelde olmayan alanın bağlantısı bekleyen analizle saklanır ve Bulgular'da alanın bir bulgusu **kabul** edilince yazılır
 (reddedilen ya da karar verilmeyen alanın bağı yazılmaz; analiz iptal edilirse düşer). Bulgusu olmayan, modelde zaten var olan
-alanın bağlantısı hemen yazılır. Yeni tablonun **kaynağı** (sayfa paketi / otomatik tarama / akış kaydı, ekran, tarih, tablo türü)
+alanın bağlantısı hemen yazılır. Yeni tablonun **kaynağı** (ekran paketi / otomatik tarama / akış kaydı, ekran, tarih, tablo türü)
 Tablolar ekranında görünür. **Akış kaydında** mevcut ekranı doğrudan bir akışa yazan yol ("yeni akış olarak ekle" / "seçilen
 akışı güncelle") da kayıtta yakalanan seçenek listelerini aynı biçimde önerir: onay penceresinde "Test verisine yazılacaklar"
 bölümü görünür; yalnız seçilen tablolar / bağlantılar yeni model sürümüyle aynı işlemde yazılır, seçim yoksa test verisine hiçbir

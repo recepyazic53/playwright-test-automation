@@ -378,7 +378,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/veri-sagligi.js', { dosya: 'veri-sagligi.js', tur: 'text/javascript; charset=utf-8' }],
   // Veri koşuları (tablodan çoklu satır; çalıştırma biçimi, tahmini test sayısı): koşucu ve sunucuyla ORTAK.
   ['/arayuz/veri-kosulari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'veri-kosulari.mjs'), tur: 'text/javascript; charset=utf-8' }],
-  // Sayfa paketi istek metinleri (inceleme kuralları + "Paket nasıl üretilir?" cümlesi): sunucunun istek dosyasıyla ORTAK.
+  // Ekran paketi istek metinleri (inceleme kuralları + "Paket nasıl üretilir?" cümlesi): sunucunun istek dosyasıyla ORTAK.
   ['/arayuz/paket-istekleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ekranlar', 'paket-istekleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // İzin tanımları (Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) ve riskli ortam tanımı: sunucuyla ORTAK tek kaynak.
   ['/arayuz/izin-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'izin-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],

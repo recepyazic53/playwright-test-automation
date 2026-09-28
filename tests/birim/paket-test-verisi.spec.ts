@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — Sayfa paketinin TEST VERİSİ bölümü: biçim doğrulaması (gizli sütun, bağlantılar, senaryo önerileri
+// KORUMA TESTLERİ — Ekran paketinin TEST VERİSİ bölümü: biçim doğrulaması (gizli sütun, bağlantılar, senaryo önerileri
 // tablodaki değerle), seçenek gözlemlerinden tablo üretimi (bağımlı listelerde kombinasyon satırları), otomatik tarama ve
 // akış kaydı paketlerine aktarım, kayıt panelinin açılan liste okuması (yerel sahte sayfa; ağ yok) ve onaylanan seçimle
 // yazma (yeni / birleştir / yeni ad / atla; kaynak; alan bağlantıları). Tüm değerler SAHTEDİR.
@@ -44,7 +44,7 @@ const TEST_VERISI = {
 };
 const paketTV = (ek: Nesne = {}): Nesne => ({ ...kopya(V1), testVerisi: kopya(TEST_VERISI), ...ek });
 
-test.describe('Sayfa paketi — testVerisi doğrulaması', () => {
+test.describe('Ekran paketi — testVerisi doğrulaması', () => {
   test('geçerli bölüm: tekrar satır uyarı; görünen metnin sayfa değeri bağlı alanın modelinden karşılık olur', () => {
     const d = sayfaPaketiniDogrula(paketTV());
     expect(d.hatalar).toEqual([]);
@@ -467,9 +467,9 @@ test.describe('Arayüz: paket önizlemesinde test verisi', () => {
       await expect(page.getByText(/Test verisi: Kapsam - Alternatif \(4 satır\), Taksit \(3 satır\); 2 alan bağlandı/)).toBeVisible();
       await page.goto('/#/ayarlar/test-verisi');
       const nav = page.getByRole('navigation', { name: 'Tablolar' });
-      await expect(nav.getByRole('button', { name: /^Kapsam - Alternatif/ })).toContainText('kaynak: Sayfa paketi');
+      await expect(nav.getByRole('button', { name: /^Kapsam - Alternatif/ })).toContainText('kaynak: Ekran paketi');
       await nav.getByRole('button', { name: /^Kapsam - Alternatif/ }).click();
-      await expect(page.getByRole('region', { name: 'Tablo düzenleyici' })).toContainText('Kaynak: Sayfa paketi');
+      await expect(page.getByRole('region', { name: 'Tablo düzenleyici' })).toContainText('Kaynak: Ekran paketi');
       await expect(nav.getByRole('button', { name: /^Servis girişi/ })).toHaveCount(0);
       expect(hatalar).toEqual([]);
     } finally {

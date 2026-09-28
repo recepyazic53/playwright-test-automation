@@ -159,7 +159,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Önerilen çalışma sırası',
-        sira: ['Ekranlar\'dan ekranı ekleyin (sayfa paketi, tarama ya da akış kaydı).', 'Bu ekranda "Senaryo ekle" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
+        sira: ['Ekranlar\'dan ekranı ekleyin (ekran paketi, tarama ya da akış kaydı).', 'Bu ekranda "Senaryo ekle" ile senaryoyu yazın; önce "Dene" ile kaydetmeden deneyin.', 'Kaydedin ve "Koşuda" açık bırakın.', '"Koşuyu başlat" ile hepsini koşun; sonuçlar Sonuçlar ekranına düşer.'],
         cizim: { tur: 'maket', bolge: 'eylem', etiket: '"Senaryo ekle" ve "Koşuyu başlat" sağ üstte' }
       }
     ]
@@ -352,7 +352,7 @@ export const REHBERLER = {
   'ekran-ekle': {
     baslik: 'Ekran ekle',
     adimlar: [
-      { baslik: 'Sayfa paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
+      { baslik: 'Ekran paketi', metin: 'Paket, sayfanın alanlarını, adımlarını ve önerilen senaryoları içeren bir JSON dosyasıdır. Yükleyince önce önizleme gösterilir; hiçbir şey onayınız olmadan kaydedilmez.', cizim: { tur: 'akis', kutular: [{ baslik: 'Paket', alt: '.json', ikon: 'dosya' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: 'Seçim', alt: 'senaryolar', ikon: 'liste' }, { baslik: 'Ekle', ikon: 'onay' }] } },
       { baslik: 'Paketiniz yoksa: üç yol', hedef: '.ekleme-kutulari', sira: ['Ekranı tara: Nöbetçi sayfayı yalnızca okuyarak tarar; düğmelere basmaz, form göndermez.', 'Akışı kaydet: işlemi siz yaparsınız, Nöbetçi adımları ve alanları kaydeder (çok adımlı formlar için).', 'Yapay zekâ ile oluştur: "İstek metnini kopyala" ile metni alın, sayfanın bağlantısıyla (ve "Paket biçimini indir" dosyasıyla) yapay zekâ aracınıza verin; ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin.'] },
       { baslik: 'Adımlar', sira: ['Paketi yükleyin ya da aşağıdaki kutulardan birini seçin.', 'Önizlemede alanları ve uyarıları kontrol edin.', 'Eklenecek senaryo önerilerini ve ortamlarını seçin.', 'Test verisine yazılacakları seçin: tablo başına yaz / birleştir / yeni ad / atla ve bağlanacak alanlar (seçmediğiniz yazılmaz).', '"Ekle": ekran, model sürüm 1, seçilen senaryolar ve onayladığınız tablolar oluşur.'] },
       { baslik: 'Güvenlik', metin: 'Tarama sayfayı yalnızca okur; kayıt oluşturan düğmelere basmaz. Yasak adreslere (Ayarlar > Güvenlik) hiç gidilmez.' }
@@ -393,7 +393,7 @@ export const REHBERLER = {
   tarama: {
     baslik: 'Ekran taraması',
     adimlar: [
-      { baslik: 'Tarama', metin: 'Nöbetçi sayfayı seçili ortamda açar, alanları ve seçenekleri okur ve bir sayfa paketi üretir. İlerlemeyi burada izlersiniz; bitince paket önizlemesine geçilir.', cizim: { tur: 'maket', bolge: 'form', etiket: 'Alanlar tek tek okunur' } },
+      { baslik: 'Tarama', metin: 'Nöbetçi sayfayı seçili ortamda açar, alanları ve seçenekleri okur ve bir ekran paketi üretir. İlerlemeyi burada izlersiniz; bitince paket önizlemesine geçilir.', cizim: { tur: 'maket', bolge: 'form', etiket: 'Alanlar tek tek okunur' } },
       { baslik: 'Dikkat', metin: 'Tarama yalnızca okur ve bilgi amaçlı düğmelere basar (sekme, ok, sorgula). Kayıt oluşturan düğmelere basılmaz. Süre sınırı ve girişte saklanan oturumun kullanılıp kullanılmayacağı Ayarlar > Koşu\'dadır; Giriş adımında hangisinin yapıldığı (saklanan oturum / baştan giriş) yazar.' }
     ]
   },
@@ -455,7 +455,7 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Kalacak tablo', ikon: 'veri' }, { baslik: 'Eşleme ve çakışmalar', ikon: 'esle' }, { baslik: 'Kuru doğrulama', ikon: 'kalkan' }, { baslik: 'Onay + yedek', ikon: 'onay' }] }
       },
       { baslik: 'Birleştirme sırası', sira: ['Veri sağlığı > Birleştirilebilecek tablolar > "Birleştir…".', 'Kalacak tabloyu seçin (gerekirse yeni ad).', 'Sütun eşlemesini onaylayın; satır ve karşılık çakışmalarında seçim yapın.', 'Kuru doğrulama "aynı değerleri üretiyor" diyorsa "Birleştir" ile onaylayın.', 'Kaynak tabloları istediğinizde ayrı onayla silin; "Son birleştirmeyi geri al" onları da geri getirir.'],
-        ipucu: 'Yeni tablo oluştururken, Excel / CSV yüklerken, sayfa paketi ya da SoapUI / Postman aktarırken aynı başlıklı tablo varsa "Benzer tablo var: onu kullan / yine de yeni oluştur" sorulur.' },
+        ipucu: 'Yeni tablo oluştururken, Excel / CSV yüklerken, ekran paketi ya da SoapUI / Postman aktarırken aynı başlıklı tablo varsa "Benzer tablo var: onu kullan / yine de yeni oluştur" sorulur.' },
       {
         baslik: 'Kişi alanlarını tabloya bağlama',
         metin: ['Ekran > Test verisi sekmesindeki "Kişi alanlarını tabloya bağla…", ekrandaki kişi / kimlik alanlarını (kimlik no, vergi no, pasaport, doğum tarihi, telefon, e-posta, ad soyad) bir kişi / kayıt tablosunun sütunlarına bağlamayı önerir; eşlemeyi siz onaylarsınız.',

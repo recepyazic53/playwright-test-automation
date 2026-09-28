@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — Ekranlar: sayfa paketi (biçim + gizli değer reddi), model fark motoru (tüm bulgu
+// KORUMA TESTLERİ — Ekranlar: ekran paketi (biçim + gizli değer reddi), model fark motoru (tüm bulgu
 // türleri), kabul edilen alt kümenin uygulanması (yeni sürüm), etki hesabı ve ekran servisi (Ekran ekle →
 // tekrar analiz → kabul/red → reddedilenlerin hatırlanması → toplu değer atama → Claude dosyası).
 // Paketler SAHTE değerlidir (tests/birim/fixtures/sayfa-paketi/). Tarayıcı açmaz, siteye bağlanmaz; servis
@@ -52,7 +52,7 @@ const turler = (b: Bulgu[]) => b.map((x) => (x.altTur ? `${x.tur}:${x.altTur}` :
 // Paket biçimi
 // ---------------------------------------------------------------------------------------
 
-test.describe('Sayfa paketi — doğrulama', () => {
+test.describe('Ekran paketi — doğrulama', () => {
   test('örnek v1 ve v2 paketleri geçerli; modele uymayan öneri uyarı olur ve işaretlenir', () => {
     const d1 = sayfaPaketiniDogrula(V1);
     expect(d1.hatalar).toEqual([]);
@@ -111,7 +111,7 @@ test.describe('Sayfa paketi — doğrulama', () => {
       'senaryoOnerileri[4].veri.apiKey: "apiKey" adlı alanda değer', 'taksitSayisi).varsayilan.deger: gizli/hassas alanın varsayılan değeri dolu',
       'model.ekranUrl: tam adres değil YOL'
     ]) expect(metin).toContain(beklenen);
-    expect(metin).toContain('Sayfa paketleri gizli ya da kişisel veri içeremez');
+    expect(metin).toContain('Ekran paketleri gizli ya da kişisel veri içeremez');
   });
 
   test('gizli değer taraması yanlış alarm vermez (seçici, tarih, kısa kodlar, geçersiz numaralar)', () => {
