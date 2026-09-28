@@ -10,8 +10,13 @@
 //            olmayan alan için koşul otomatik çıkarılır. Koşuldaki seçim alanı akışta (bir alan grubunda) olmalı.
 //            sinirlar: { [alan]: { enAz?, enCok?, artis?, enAzUzunluk?, enCokUzunluk?, desen? } | null } — alanın değer kuralları
 //            (model alan.sinirlar; null: kaldır; verilmeyen alanın mevcut kuralı korunur). Ekranın akışını düzenlerken yazılır.
+//            tuslar: { [alan]: 'Tab' | 'Enter' | null } — "Doldurduktan sonra" basılacak tuş (model alan.doldurucuParametreleri.tus;
+//            null: kaldır; verilmeyen alanın mevcut ayarı korunur). Alandan çıkınca çıkan uyarılar için (ör. zorunlu alan uyarısı).
 //   aksiyon  { dugme: sıra, istegeBagli }           düğmeye basılır (isteğe bağlıysa senaryoda "… dahil" ile seçilir)
-//   mesaj    { mesaj: sıra | null, metin }          beklenen mesaj (aranacak metin; öğe seçildiyse onun içinde aranır)
+//   mesaj    { mesaj: sıra | null, metin }          beklenen mesaj (aranacak metin; öğe seçildiyse onun içinde aranır). Bir
+//            aksiyondan ya da bir ALAN GRUBUNDAN sonra gelir: alan grubundan sonraki mesaj, alanlar doldurulup (alanın
+//            "Doldurduktan sonra" tuşuna basılıp) alandan çıkınca beklenir — adımın düğmesi yoktur, adım orada kapanır (ardından
+//            gelen aksiyon yeni adımdır).
 //   bekle    { saniye }                              süreli bekleme (1–120 sn): önceki düğmeden sonra (düğme yoksa alanlardan
 //            sonra) bekler. Bekleme konmasa da koşucu sonraki alan / beklenen mesaj görünene kadar bekler.
 //   sql      { ad, sql: SqlTanimi }                 SQL sorgusu adımı (sql/sql-adimi.mjs): kendi adımıdır; koşuda seçilen
@@ -38,7 +43,8 @@
 // Kurallar: alan bir alan grubunda en fazla bir kez; boş alan grubu yalnızca ardından aksiyon gelirse olur (alansız adımı
 // adlandırmak için, ör. "Onay"); isteğe bağlı aksiyondan HEMEN sonraki alan grubu o aksiyonun
 // parçasıdır (düğme basılınca açılan alanlar; aynı koşula bağlı); zorunlu aksiyon önceki grubun ilerleme düğmesidir;
-// aksiyondan sonraki mesaj o düğmeden sonra beklenir, son mesaj akışın başarı göstergesidir.
+// aksiyondan sonraki mesaj o düğmeden sonra beklenir; alan grubundan sonraki (son olmayan) mesaj alanlar doldurulunca beklenir
+// ve adımı kapatır; son mesaj akışın başarı göstergesidir.
 // Alan DEĞERİ yoktur (yalnızca select/radyonun seçili SEÇENEĞİ, koşul çıkarımı için). NOT: import.meta KULLANILMAZ.
 // Tipler: akis-tasarimi.d.mts.
 
@@ -225,6 +231,8 @@ const korunanEki = (b) => (typeof b.korunan === 'string' && b.korunan && b.korun
 
 /** Alan grubundaki değer kurallarının (sinirlar) bilinen anahtarları. */
 const SINIR_ANAHTARLARI = ['enAz', 'enCok', 'artis', 'enAzUzunluk', 'enCokUzunluk', 'desen'];
+/** Alan doldurulduktan sonra basılabilecek tuşlar (diyagramdaki "Doldurduktan sonra" seçimi). */
+export const ALAN_TUSLARI = ['Tab', 'Enter'];
 
 /**
  * Arayüzden gelen blokları tek biçime getirir (bilinmeyen alanlar atılır; uzunluklar sınırlanır). Biçimi bozuk blok
@@ -275,7 +283,18 @@ export function bloklariAyikla(ham) {
           sinirlar[a] = Object.keys(temiz).length ? temiz : null;
         }
       }
-      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
+      // "Doldurduktan sonra" tuşu (model alan.doldurucuParametreleri.tus; null: kaldır). Bilinmeyen tuş atılır (mevcut ayar korunur).
+      /** @type {Record<string, string | null>} */
+      const tuslar = {};
+      if (nesneMi(b.tuslar)) {
+        for (const a of liste) {
+          if (!Object.prototype.hasOwnProperty.call(b.tuslar, a)) continue;
+          const t = b.tuslar[a];
+          if (t === null || t === '') tuslar[a] = null;
+          else if (typeof t === 'string' && ALAN_TUSLARI.includes(t)) tuslar[a] = t;
+        }
+      }
+      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(Object.keys(tuslar).length ? { tuslar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
     else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
     else if (b.tur === 'aksiyon') {
@@ -383,7 +402,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         if (!h) { hata(i, 'Kayıtta olmayan bir alan seçilmiş.'); continue; }
         if (kullanilan.has(a)) { hata(i, `“${alanEtiketi(h)}” alanı birden çok grupta; bir alan yalnızca bir grupta olabilir.`); continue; }
         kullanilan.set(a, i);
-        hamlar.push({ ...h, zorunlu: b.zorunlu.includes(a) });
+        const tus = b.tuslar && Object.prototype.hasOwnProperty.call(b.tuslar, a) ? { tus: b.tuslar[a] } : {};
+        hamlar.push({ ...h, zorunlu: b.zorunlu.includes(a), ...tus });
         if (b.kosullar && Object.prototype.hasOwnProperty.call(b.kosullar, a)) elleKosullar.push({ blok: i, alan: a, kosul: b.kosullar[a] });
       }
       // Korunan görünürlük koşulu olan adım (ör. seçime bağlı düğmeli adım) her zaman kendi adımıdır.
@@ -547,6 +567,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
       // İsteğe bağlı düğmeden hemen sonra: o düğmeye basıldıktan sonra (yalnızca düğme basılırsa) beklenir.
       if (bekleyen) { const a = c.acicilar[c.acicilar.length - 1]; a.sonraBekle = (a.sonraBekle ?? 0) + b.saniye; return; }
+      // Alan grubundan sonraki mesajla kapanan (düğmesiz) adım: bekleme alanlar doldurulduktan sonradır.
+      if (kapali && !c.ilerleme && !c.aksiyonlarAynen) { c.onceBekle = (c.onceBekle ?? 0) + b.saniye; return; }
       if (kapali) { c.sonraBekle = (c.sonraBekle ?? 0) + b.saniye; return; }
       sure += b.saniye;
       return;
@@ -572,8 +594,14 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         return;
       }
       if (bekleyen) { hata(i, 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).'); return; }
-      if (!sonMu && !kapali) { hata(i, 'Beklenen mesaj bir aksiyondan (düğmeye basma) sonra gelmeli.'); return; }
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
+      // Alan grubundan sonra (düğmesiz) gelen, son olmayan mesaj: alanlar doldurulup alandan çıkınca beklenir (ör. zorunlu alan
+      // uyarısı Tab'la çıkar). Adım burada kapanır: ardından gelen aksiyon / alan grubu yeni adımdır. Mesajdan önceki bekleme
+      // süresi alanlardan sonradır.
+      if (!sonMu && !kapali) {
+        sureyiBirak();
+        kapali = true;
+      }
       // Başarı göstergesi aynen korunan adıma (ör. adres göstergesi) başarı mesajı eklenemez: biri diğerini ezerdi.
       if (!b.uyari && gostergesiKorunan(c)) { hata(i, `“${c.ad}” adımının başarı göstergesi diyagramda düzenlenemez (aynen korunur); bu adıma beklenen mesaj eklenemez.`); return; }
       // Uyarı: o adımda kabul edilen iş kuralı uyarısı (başarı grubuna girmez; grubu da bölmez).

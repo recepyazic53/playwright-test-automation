@@ -6,6 +6,8 @@
 //   doldur" (boş bırakılabilir; görünmüyorsa atlanır) — alanın yanındaki düğmeyle değişir; varsayılan sayfanın zorunluluğu.
 //   Alanın koşulu ("Müşteri tipi = Bireysel ise") yanında yazar; "Koşul" ile seçim alanı + seçenekler seçilerek düzeltilir ya
 //   da kaldırılır (kayıttan otomatik bulunan taslakta gelir). Koşuldaki seçim alanı akışta olmalı (sunucu doğrular).
+//   Alanın "Doldurduktan sonra" seçimi — (yok) / Tab / Enter — modelde alan.doldurucuParametreleri.tus'tur. Beklenen mesaj bir
+//   alan grubundan sonra da gelebilir (alandan çıkınca çıkan uyarı); grubun son alanında tuş yoksa mesajda ipucu görünür.
 //   sağda "Kayıtta yakalananlar": alanlar (sürükleyip bir alan grubuna bırakılır ya da "Ekle" ile etkin gruba eklenir; bir
 //   alan tek grupta olur, başka gruba bırakılınca taşınır), düğmeler ("Aksiyon ekle") ve mesajlar ("Mesaj ekle").
 // Her değişiklik taslak olarak sunucuda saklanır (POST /platform/tarama/akis { taslak: true }); "Kaydet ve önizle" diyagramı
@@ -113,7 +115,7 @@ export async function akisTasarimi(icerik, s) {
   const girisProfilAdlari = girissiz ? [] : await api(`/platform/giris-profilleri?projeId=${encodeURIComponent(s.proje.id)}`)
     .then((v) => [...new Set((v.profiller || []).map((p) => p.ad))]).catch(() => []);
   /** @type {Array<Record<string, any>>} */
-  let bloklar = veri.bloklar.map((b) => ({ ...b, ...(b.tur === 'alanlar' ? { alanlar: [...b.alanlar], zorunlu: [...(b.zorunlu || [])], kosullar: { ...(b.kosullar || {}) }, sinirlar: { ...(b.sinirlar || {}) } } : {}) }));
+  let bloklar = veri.bloklar.map((b) => ({ ...b, ...(b.tur === 'alanlar' ? { alanlar: [...b.alanlar], zorunlu: [...(b.zorunlu || [])], kosullar: { ...(b.kosullar || {}) }, sinirlar: { ...(b.sinirlar || {}) }, tuslar: { ...(b.tuslar || {}) } } : {}) }));
   /** Koşulu düzenlenen alan: { blok, alan } */
   let kosulDuzenleme = null;
   /** Sınırları (değer kuralları; model alan.sinirlar) düzenlenen alan: { blok, alan } — yalnız ekranın akışını düzenlerken. */
@@ -182,12 +184,15 @@ export async function akisTasarimi(icerik, s) {
     const sinirVar = Boolean(kaynak && kaynak.sinirlar && Object.prototype.hasOwnProperty.call(kaynak.sinirlar, anahtar));
     const sinir = sinirVar ? kaynak.sinirlar[anahtar] : undefined;
     const korunanKosul = kaynak && kaynak.korunanKosullar ? kaynak.korunanKosullar[anahtar] : undefined;
+    const tusVar = Boolean(kaynak && kaynak.tuslar && Object.prototype.hasOwnProperty.call(kaynak.tuslar, anahtar));
+    const tus = tusVar ? kaynak.tuslar[anahtar] : undefined;
     for (const x of bloklar) {
       if (x.tur !== 'alanlar') continue;
       x.alanlar = x.alanlar.filter((a) => a !== anahtar);
       x.zorunlu = x.zorunlu.filter((a) => a !== anahtar);
       if (x.kosullar) delete x.kosullar[anahtar];
       if (x.sinirlar) delete x.sinirlar[anahtar];
+      if (x.tuslar) delete x.tuslar[anahtar];
       if (x.korunanKosullar) delete x.korunanKosullar[anahtar];
     }
     const yer = onune ? b.alanlar.indexOf(onune) : -1;
@@ -195,6 +200,7 @@ export async function akisTasarimi(icerik, s) {
     // Taşınan alan koşulunu da götürür.
     if (kosulVar) b.kosullar = { ...(b.kosullar || {}), [anahtar]: kosul };
     if (sinirVar) b.sinirlar = { ...(b.sinirlar || {}), [anahtar]: sinir };
+    if (tusVar) b.tuslar = { ...(b.tuslar || {}), [anahtar]: tus };
     // Diyagramda düzenlenemeyen koşul (alanın tanımıyla aynen korunur) de alanla gider.
     if (korunanKosul) b.korunanKosullar = { ...(b.korunanKosullar || {}), [anahtar]: korunanKosul };
     // Taşınan alan ayarını korur; yeni eklenen, sayfanın zorunluluğuyla gelir.
@@ -308,6 +314,7 @@ export async function akisTasarimi(icerik, s) {
           b.alanlar = b.alanlar.filter((x) => x !== anahtar);
           b.zorunlu = b.zorunlu.filter((x) => x !== anahtar);
           if (b.kosullar) delete b.kosullar[anahtar];
+          if (b.tuslar) delete b.tuslar[anahtar];
           degisti();
         }
       }, ikon('carpi')));
@@ -333,6 +340,21 @@ export async function akisTasarimi(icerik, s) {
         title: ozet ? `Sınırlar: ${ozet}. Değiştirmek için tıklayın.` : 'Sınır kuralı yok (isteğe bağlı). Sınır değer önerileri için ekleyin.',
         onclick: () => { sinirDuzenleme = { blok: i, alan: anahtar }; kosulDuzenleme = null; ciz(); }
       }, ikon('hedef'), ozet || 'Sınırlar'), cip.querySelector('.zorunluluk'));
+    }
+    // "Doldurduktan sonra" tuşu (model alan.doldurucuParametreleri.tus): alandan çıkınca çıkan uyarılar için (ör. Tab'la
+    // zorunlu alan uyarısı). Kimlik bloğunda yok (alt alanları vardır).
+    if (!a || a.tur !== 'kimlik') {
+      const tus = bloklar[i].tuslar ? bloklar[i].tuslar[anahtar] || '' : '';
+      const secim = h('select', { 'aria-label': `${etiket}: doldurduktan sonra` },
+        [['', '(yok)'], ['Tab', 'Tab'], ['Enter', 'Enter']].map(([d, m]) => h('option', { value: d, selected: d === tus }, m)));
+      secim.addEventListener('change', () => {
+        bloklar[i].tuslar = { ...(bloklar[i].tuslar || {}), [anahtar]: secim.value || null };
+        degisti();
+      });
+      cip.insertBefore(h('label', {
+        class: `tus-secimi${tus ? ' var' : ''}`,
+        title: 'Alan doldurulduktan sonra basılacak tuş. Alandan çıkınca çıkan uyarılar (ör. zorunlu alan uyarısı) için Tab ya da Enter seçin.'
+      }, 'Doldurduktan sonra:', secim), cip.querySelector('.zorunluluk'));
     }
     cip.addEventListener('dragstart', (o) => { o.dataTransfer.setData(SURUKLEME_TURU, anahtar); o.dataTransfer.effectAllowed = 'move'; });
     // Başka bir alanın üstüne bırakılan alan onun önüne yerleşir (grubun "sona ekle" bırakmasından önce yakalanır).
@@ -461,6 +483,23 @@ export async function akisTasarimi(icerik, s) {
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: () => { sinirDuzenleme = null; ciz(); } }, 'Vazgeç')));
   }
 
+  /**
+   * Beklenen mesaj bir alan grubundan sonra (aradaki beklemeler hariç, düğmesiz) geliyorsa ve grubun son alanında "Doldurduktan
+   * sonra" tuşu seçili değilse ipucu (engellemez): böyle mesajlar çoğunlukla alandan çıkınca (Tab / Enter) görünür.
+   */
+  function alanSonrasiIpucu(i) {
+    let j = i - 1;
+    while (j >= 0 && bloklar[j].tur === 'bekle') j--;
+    const g = bloklar[j];
+    if (!g || g.tur !== 'alanlar' || !g.alanlar.length) return null;
+    const son = g.alanlar[g.alanlar.length - 1];
+    if (g.tuslar && g.tuslar[son]) return null;
+    const a = alanBilgisi.get(son);
+    if (a && a.tur === 'kimlik') return null;
+    return h('p', { class: 'alan-sonrasi-ipucu', role: 'note', 'aria-label': 'Alan sonrası mesaj ipucu' }, ikon('uyari'),
+      `Bu mesaj “${g.ad || 'alan grubu'}” doldurulduktan sonra (düğmeye basılmadan) beklenir. Böyle uyarılar çoğunlukla alandan çıkınca görünür: son alanda (“${a ? a.etiket : son}”) “Doldurduktan sonra” için Tab ya da Enter seçin.`);
+  }
+
   /** Bloğun diyagramda düzenlenemeyen (aynen korunan) parçaları: kilitli, salt okunur not. */
   function korunanNotu(ozet, baslik) {
     return h('div', { class: 'korunan-notu', role: 'note', 'aria-label': 'Diyagramda düzenlenemeyen parçalar' },
@@ -527,7 +566,7 @@ export async function akisTasarimi(icerik, s) {
       ];
     }
     if (b.tur === 'mesaj') {
-      const [, son, basarilar] = mesajGrubu(i);
+      const [ilk, son, basarilar] = mesajGrubu(i);
       const grupBoyu = basarilar.length;
       const tur = h('div', { class: 'mesaj-turu', role: 'radiogroup', 'aria-label': 'Mesajın türü' },
         [[false, 'Başarı'], [true, 'Uyarı']].map(([uyari, ad]) => {
@@ -551,6 +590,7 @@ export async function akisTasarimi(icerik, s) {
       desenKutu.addEventListener('change', () => { if (desenKutu.checked) b.desen = true; else delete b.desen; degisti(); });
       return [
         tur,
+        i === ilk ? alanSonrasiIpucu(i) : null,
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, b.desen ? 'Kalıp (düzenli ifade)' : 'Aranacak metin'), metin),
         b.uyari ? null : h('label', { class: 'onay-satiri kucuk', title: 'Ör. [1-9]: mesajın yerindeki metinde sıfırdan farklı bir rakam (tutar hesaplandı).' }, desenKutu, 'Metin bir kalıp (düzenli ifade)'),
         h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Mesajın yeri'), secim),

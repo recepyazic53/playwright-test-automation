@@ -12,6 +12,8 @@
 //    (akisKorumasi → korunanParcalari → kayitPaketiOlustur; korunanDenetimi). Dayandığı alan akıştan çıkarılırsa kayıt anlaşılır
 //    hatayla reddedilir; korunan parça silinirse onayda listelenir (etki.korunanSilinen). Yalnız korunamayan durumda (kimliksiz
 //    ya da aynı kimlikli adım) akış görüntülenir, düzenlenmez (neden döner).
+//  - Alanın "Doldurduktan sonra" tuşu (doldurucuParametreleri.tus: Tab / Enter) alan grubunun tuslar'ında gelir ve kaydedilir;
+//    düğmesiz adımın göstergesi / uyarıları alan grubundan sonraki beklenen mesaj bloklarıdır (alandan çıkınca çıkan mesajlar).
 //  - Ortak akış (tur "ortakAkis"): tek akışı vardır; içeriği aynı diyagramla düzenlenir (içine ortak akış
 //    eklenmez). Kaydedince onu kullanan ekranlar etki olarak gösterilir (ekranlar ortak akışın hep son sürümüyle koşar).
 //    ortakAkisEkranlaraEkle: ortak akışı seçilen ekranların varsayılan akışının sonuna ekler (her ekran için yeni sürüm).
@@ -22,7 +24,7 @@
 import { DepoHatasi, ekranModeliEkle, ekranModeliGetir, senaryoGetir, senaryoKaydet as depoSenaryoKaydet } from '../veritabani/depo.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli } from '../senaryolar/model-formu.mjs';
 import { senaryoAkisi } from '../senaryolar/senaryo-servisi.mjs';
-import { akisPaleti, akistanKayitEnvanteri, bloklariAyikla } from '../tarama/akis-tasarimi.mjs';
+import { ALAN_TUSLARI, akisPaleti, akistanKayitEnvanteri, bloklariAyikla } from '../tarama/akis-tasarimi.mjs';
 import { kayitPaketiOlustur, kimlikUret } from '../tarama/paket-olusturucu.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
@@ -541,6 +543,8 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
     const kosullar = {};
     /** @type {Record<string, Nesne>} alanın değer kuralları (alan.sinirlar; diyagramdaki "Sınırlar" düzenleyicisi) */
     const sinirlar = {};
+    /** @type {Record<string, string>} "Doldurduktan sonra" tuşu (alan.doldurucuParametreleri.tus; yalnız diyagramın sunduğu tuşlar) */
+    const tuslar = {};
     /** @type {Record<string, string>} gösterilemeyen koşullar (salt okunur; alanın tanımıyla korunur) */
     const korunanKosullar = {};
     const ekAlanIdleri = new Set(an.ek.alanlar.map((x) => String(x.alan.id)));
@@ -551,6 +555,8 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
         if (!env.alanlar.some((x) => x.alan.anahtar === anahtar)) continue;
         alanlar.push(anahtar);
         if (nesneMi(a.sinirlar)) sinirlar[anahtar] = kopya(a.sinirlar);
+        const tus = nesneMi(a.doldurucuParametreleri) ? a.doldurucuParametreleri.tus : undefined;
+        if (typeof tus === 'string' && ALAN_TUSLARI.includes(tus)) tuslar[anahtar] = tus;
         if (a.mutlakaGorunmeli === true) zorunlu.push(anahtar);
         const g = a.gorunurluk;
         if (an.alanKosullari[anahtar]) { korunanKosullar[anahtar] = an.alanKosullari[anahtar].aciklama; continue; }
@@ -571,7 +577,7 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
     let ekAnahtari = ekVar ? korunanAnahtari('ek', String(akis), String(adim.id)) : null;
     if (alanlar.length || (!istegeBagli && (tikla || ekVar)) || an.aksiyonlar) {
       bloklar.push({
-        tur: 'alanlar', ad: String(adim.baslik || adim.id), alanlar, zorunlu, kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}),
+        tur: 'alanlar', ad: String(adim.baslik || adim.id), alanlar, zorunlu, kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(Object.keys(tuslar).length ? { tuslar } : {}),
         ...(ekAnahtari ? { korunan: ekAnahtari, korunanOzet: ekOzet } : {}), ...(Object.keys(korunanKosullar).length ? { korunanKosullar } : {})
       });
       ekAnahtari = null;
