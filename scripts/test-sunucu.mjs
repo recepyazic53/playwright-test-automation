@@ -397,6 +397,9 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/veritabanlari.js', { dosya: 'veritabanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Göreli tarih ("bugün+7", "ay sonu"): koşucu, formlar ve tablolar AYNI kuralı kullanır (saf modül).
+  ['/arayuz/goreli-tarih.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'goreli-tarih.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/goreli-tarih-girdisi.js', { dosya: 'goreli-tarih-girdisi.js', tur: 'text/javascript; charset=utf-8' }],
   // Senaryo tasarım yardımcısı: saf öneri fonksiyonu (Node testleriyle ORTAK) + öneriler ekranı.
   ['/arayuz/senaryo-onerileri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'senaryo-onerileri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-onerileri.js', { dosya: 'senaryo-onerileri.js', tur: 'text/javascript; charset=utf-8' }],

@@ -14,6 +14,7 @@
 
 import { bilerekBosAnahtarlari, gorunurlukleriHesapla } from '../../dogrulama/senaryo-dogrulayici.mjs';
 import { formDegerleriniKur, formSemasiOlustur, kimlikAnahtariBul, kimlikTuruBul, profilHavuzuBul, tumFormAlanlari } from './model-formu.mjs';
+import { VARSAYILAN_TARIH_BICIMI, goreliIfadeKanonik, goreliTarihCoz } from './goreli-tarih.mjs';
 
 /** Model senaryolarını üreten spec dosyası (Playwright testDir'e göre göreli yol). */
 export const MODEL_SPEC_DOSYASI = 'model-kosucu/model-senaryolari.spec.ts';
@@ -173,7 +174,8 @@ function senaryoAnahtarlari(alan) {
  * Plan kurulamazsa (ör. hata beklenen adım kapsamda değil) hatalar doludur.
  * @param {any} model @param {Record<string, unknown>} veriHam
  * Sabit / türetilmiş değerler: senaryo alanı olmayan ama modelde "sabitDeger" taşıyan alan her koşuda o değerle doldurulur;
- * tarih alanında "bugun", "bugun+7", "bugun-3" (Europe/Istanbul; alanın biçimiyle) koşu anında hesaplanır.
+ * Tarih alanında (sabit değer, senaryo değeri ya da tablodan gelen değer) göreli ifade — "bugün", "bugün+7", "bugun-3", "ay sonu",
+ * "ay başı+1" — koşu anında Europe/Istanbul gününe göre alanın biçimiyle hesaplanır (goreli-tarih.mjs); plan alanında goreliIfade kalır.
  * Kimlik alanları (kimlikProfili): senaryodaki serbest kimlik ya da seçilen (yoksa varsayılan) hazır profil — profil değerleri
  * secenekler.kimlikProfilleri[havuz][profil] — alt alanlara (doğum tarihi, telefon, T.C./VKN…) sırayla açılır; alt alanın
  * kimlik alanı kimlik türüne göre seçilir (türde karşılığı yoksa alt alan atlanır).
@@ -279,7 +281,8 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
         // Sabit / türetilmiş değer (senaryodan bağımsız; ör. "bugün + 7" tarih, her koşuda aynı seçim).
         if (alan.yapilandirma !== 'senaryo' && alan.sabitDeger !== undefined) {
           if (gorunurluk.alanlar[alan.id] === false) continue;
-          alanlar.push(planAlani(alan, sabitDegeriCoz(alan, secenekler.simdi)));
+          const t = tarihDegeri(alan, alan.sabitDeger, secenekler.simdi);
+          alanlar.push({ ...planAlani(alan, t.deger), ...(t.goreliIfade ? { goreliIfade: t.goreliIfade, tarihBicimi: t.bicim } : {}) });
           continue;
         }
         if (alan.yapilandirma !== 'senaryo') continue;
@@ -299,7 +302,9 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
           if (beklenen.tur === 'hata' && beklenen.adim === adim.id && typeof tus === 'string' && tus) alanlar.push({ ...planAlani(alan, null), yalnizTus: tus });
           continue;
         }
-        alanlar.push(planAlani(alan, deger));
+        // Tarih alanında göreli ifade (senaryo değeri ya da tablo hücresinden gelen "bugün+7") koşu anında tarihe çevrilir.
+        const t = tarihDegeri(alan, deger, secenekler.simdi);
+        alanlar.push({ ...planAlani(alan, t.deger), ...(t.goreliIfade ? { goreliIfade: t.goreliIfade, tarihBicimi: t.bicim } : {}) });
       }
     }
     if (dahil && typeof adim.eksikOrtakAkis === 'string') hatalar.push(`"${adim.baslik || adim.id}" adımının ortak akışı ("${adim.eksikOrtakAkis}") bu projede bulunamadı.`);
@@ -401,24 +406,24 @@ function secimDegeri(v) {
 }
 
 /**
- * "bugun", "bugun+7", "bugun-3" → biçimli tarih (Europe/Istanbul günü; biçim: gg, aa, yyyy parçaları; varsayılan
- * gg.aa.yyyy). Göreli ifade değilse null. @param {string} ifade @param {string} [bicim] @param {Date} [simdi]
+ * Göreli tarih ("bugün", "bugün+7", "bugun-3", "ay sonu", "ay başı+1"; yazım toleranslı) → alanın biçimiyle tarih (Europe/Istanbul
+ * günü; varsayılan gg.aa.yyyy). Göreli ifade değilse null. Tek kural: goreli-tarih.mjs.
+ * @param {string} ifade @param {string} [bicim] @param {Date} [simdi]
  */
-export function goreliTarih(ifade, bicim = 'gg.aa.yyyy', simdi = new Date()) {
-  const m = /^bugun(?:\s*([+-])\s*(\d{1,4}))?$/.exec(String(ifade).trim());
-  if (!m) return null;
-  const [y, a, g] = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit' })
-    .format(simdi).split('-').map(Number);
-  const t = new Date(Date.UTC(y, a - 1, g + (m[1] === '-' ? -1 : 1) * Number(m[2] ?? 0)));
-  const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
-  return bicim.replace('yyyy', String(t.getUTCFullYear())).replace('aa', iki(t.getUTCMonth() + 1)).replace('gg', iki(t.getUTCDate()));
+export function goreliTarih(ifade, bicim = VARSAYILAN_TARIH_BICIMI, simdi = new Date()) {
+  return goreliTarihCoz(ifade, bicim, simdi);
 }
 
-/** Alanın sabit değeri (tarihte göreli ifade koşu anında hesaplanır). @param {any} alan @param {Date} [simdi] */
-function sabitDegeriCoz(alan, simdi) {
-  const d = alan.sabitDeger;
-  if (alan.tip === 'tarih' && typeof d === 'string') return goreliTarih(d, typeof alan.bicim === 'string' ? alan.bicim : 'gg.aa.yyyy', simdi) ?? d;
-  return d;
+/**
+ * Tarih alanının değeri (modeldeki sabit değer, senaryo değeri ya da tablodan gelen değer): göreli ifadeyse koşu anındaki tarih +
+ * raporda gösterilecek ifade; değilse aynen. @param {any} alan @param {unknown} deger @param {Date} [simdi]
+ * @returns {{ deger: unknown; goreliIfade?: string; bicim?: string }}
+ */
+function tarihDegeri(alan, deger, simdi) {
+  if (alan.tip !== 'tarih' || typeof deger !== 'string') return { deger };
+  const bicim = typeof alan.bicim === 'string' && alan.bicim.trim() ? alan.bicim.trim() : VARSAYILAN_TARIH_BICIMI;
+  const cozulen = goreliTarihCoz(deger, bicim, simdi ?? new Date());
+  return cozulen === null ? { deger } : { deger: cozulen, goreliIfade: /** @type {string} */ (goreliIfadeKanonik(deger)), bicim };
 }
 
 /**

@@ -367,6 +367,47 @@ function listeGorunumu(icerik, s) {
     onizle();
   }
 
+  /**
+   * Eskimiş sabit tarihler → bugüne göre: önce önizleme (senaryo, ortam, alan, eski → yeni ifade ve bugünkü karşılığı), onayla yazılır.
+   * Yeni ifade tarihin senaryonun son kaydedildiği güne göre farkını korur (sunucu: senaryolar/tarih-donusumu.mjs).
+   */
+  async function tarihleriBugununGoreYap(secilenler) {
+    const govde = (onay) => ({ projeId: proje.id, senaryoIdleri: secilenler.map((x) => x.id), onay });
+    let plan;
+    try { ({ onizleme: plan } = await api('/platform/senaryolar/tarih-donusumu', { govde: govde(false) })); } catch (e) { bildir(e.message, 'hata'); return; }
+    const hata = h('p', { class: 'hata-metni', role: 'alert' });
+    const tamam = h('button', { type: 'button', class: 'birincil', disabled: !plan.satirlar.length }, ikon('onay'), `${plan.ozet.alan} tarihi bugüne göre yap`);
+    const vazgec = h('button', { type: 'button', class: 'hayalet' }, 'Vazgeç');
+    const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay', 'aria-labelledby': 'tarih-donusumu-basligi' },
+      h('div', { class: 'diyalog-govde' },
+        h('h2', { id: 'tarih-donusumu-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('takvim')), 'Tarihleri bugüne göre yap'),
+        h('p', { class: 'soluk' }, plan.aciklama, ' Koşuda her gün o günün tarihi yazılır; tarih geçince senaryo kırılmaz.'),
+        h('div', { class: 'tarih-donusum-kap' }, h('table', { class: 'tarih-donusum-tablosu', 'aria-label': 'Tarih dönüşümü önizlemesi' },
+          h('thead', {}, h('tr', {}, h('th', { scope: 'col' }, 'Senaryo'), h('th', { scope: 'col' }, 'Alan'), h('th', { scope: 'col' }, 'Eski'), h('th', { scope: 'col' }, 'Yeni'))),
+          h('tbody', {}, plan.satirlar.map((r) => h('tr', {},
+            h('td', {}, r.senaryo, ortamlar.length > 1 ? h('small', { class: 'soluk' }, ` · ${r.ortam}`) : null),
+            h('td', {}, r.alanEtiketi),
+            h('td', { class: 'mono', title: r.mesaj }, r.eski),
+            h('td', { class: 'mono' }, r.yeni, h('small', { class: 'soluk' }, ` → bugün ${r.yeniTarih}`))))))),
+        plan.atlananlar.length ? h('p', { class: 'kucuk soluk' }, 'Değişmeyecek: ', plan.atlananlar.map((a) => `${a.senaryo} (${a.neden})`).join(', ')) : null,
+        hata),
+      h('div', { class: 'diyalog-alt' }, vazgec, tamam));
+    tamam.addEventListener('click', async () => {
+      try {
+        const y = await mesgulIken(tamam, 'Yazılıyor…', () => api('/platform/senaryolar/tarih-donusumu', { govde: govde(true) }));
+        diyalog.close();
+        bildir(`${y.guncellenenSenaryo} senaryoda ${y.donusturulenAlan} tarih bugüne göre yapıldı.`);
+        liste.secim.clear();
+        yenile();
+      } catch (e) { hata.textContent = e.message; }
+    });
+    vazgec.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => diyalog.remove());
+    document.body.append(diyalog);
+    diyalog.showModal();
+    tamam.focus();
+  }
+
   function topluCubukCiz(gorunen) {
     const gorunenIdler = new Set(gorunen.map((x) => x.id));
     const secilenler = gorunen.filter((x) => liste.secim.has(x.id));
@@ -380,6 +421,11 @@ function listeGorunumu(icerik, s) {
       h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => tanimliOrtamlar(x, ortamlar).some((o) => !ortamdaDahil(x, o.id))), onclick: () => kosuyaDahilEt(secilenler, true) }, ikon('onay'), 'Koşuya ekle'),
       h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => x.kosuyaDahil), onclick: () => kosuyaDahilEt(secilenler, false) }, ikon('eksi'), 'Koşudan çıkar'),
       h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.length, onclick: () => cogalt(secilenler) }, ikon('kopya'), 'Çoğalt…'),
+      h('button', {
+        type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => x.eskiyenTarihler?.length),
+        title: secilenler.some((x) => x.eskiyenTarihler?.length) ? 'Tarihi geçmiş sabit tarihleri "bugün+N" yapar (önce önizleme)' : 'Seçili senaryolarda eskimiş sabit tarih yok',
+        onclick: () => tarihleriBugununGoreYap(secilenler.filter((x) => x.eskiyenTarihler?.length))
+      }, ikon('takvim'), 'Tarihleri bugüne göre yap…'),
       h('button', {
         type: 'button', class: 'kucuk-dugme tehlike', disabled: !secilenler.length,
         onclick: () => sil(secilenler)
@@ -468,7 +514,11 @@ function listeGorunumu(icerik, s) {
       x.paketten ? rozet('paketten', 'vurgu', { title: 'Ekran paketindeki öneriden eklendi' }) : null,
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.ekranEtkin === false ? rozet('ekran devre dışı', 'atlanan', { title: 'Ekran devre dışı: senaryo toplu koşulara girmez; ▷ ile tek başına çalıştırılabilir (Ekranlar > ⋯ > Etkinleştir)' }) : null,
-      x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null
+      x.mutlakaGorunmeliSayisi ? rozet(`${x.mutlakaGorunmeliSayisi} zorunlu görünür`, 'durdu', { title: '"Mutlaka görünmeli" işaretli alan sayısı' }) : null,
+      // Sabit tarihi geçmiş (ya da bugün koşulursa sınır dışında): seçip "Tarihleri bugüne göre yap…" ile düzeltilir.
+      x.eskiyenTarihler?.length ? rozet([ikon('takvim'), 'tarih eskidi'], 'atlanan', {
+        title: `${x.eskiyenTarihler.map((e) => `${e.etiket}: ${e.deger} — ${e.mesaj}`).join('\n')}\nSeçip "Tarihleri bugüne göre yap…" ile düzeltin.`
+      }) : null
     ].filter(Boolean);
     // Son sonuç: ORTAM BAŞINA nokta + kısa etiket ("TEST ✓ 27.09", "CANLI —"); çalışan ortamda "Çalışıyor / Sırada".
     const kosuOrtami = kosu ? kosuOrtamiId() : null;

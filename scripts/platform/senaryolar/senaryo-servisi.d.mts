@@ -41,6 +41,8 @@ export interface SenaryoSatiri {
   paketten: boolean;
   /** Model koşucusuyla çalışır mı (bkz. model-kosusu.mjs). */
   modelKosusu: boolean;
+  /** Tarihi geçmiş (ya da bugün koşulursa sınır dışı) sabit tarih değerleri ("tarih eskidi" rozeti). */
+  eskiyenTarihler: Array<{ anahtar: string; etiket: string; deger: string; mesaj: string }>;
   /** Birden çok akışlı ekranda senaryonun akışı (tek akışta null). */
   akis: { id: string; ad: string } | null;
   /** Ekranı devre dışıysa false: senaryo hiçbir koşuya girmez. */

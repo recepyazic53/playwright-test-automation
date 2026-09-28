@@ -23,6 +23,8 @@ export declare function sayfaPaketiniDogrula(ham: unknown, secenekler?: {
   altModelKaynagi?: (dosyaAdi: string) => unknown;
   /** Projenin tabloları (ad + sütunlar): öneri değerlerindeki ${Tablo.Sütun} başvuruları bunlara (ve paketin tablolarına) göre denetlenir. */
   tablolar?: Array<{ ad: string; sutunlar: Array<{ ad: string; gizli?: boolean }> }>;
+  /** Önerilerdeki geçmiş sabit tarih uyarısının "bugün"ü (verilmezse şimdi). */
+  simdi?: Date;
 }): {
   gecerli: boolean;
   hatalar: PaketSorunu[];

@@ -20,6 +20,7 @@ import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { paketListeleri, paketTablolari, testVerisiniDogrula } from '../tablolar/paket-tablolari.mjs';
 import { degerBasvurusu } from '../tablolar/tablo-secimi.mjs';
 import { modeleListeleriUygula } from '../senaryolar/deger-listesi-modeli.mjs';
+import { goreliIfadeAyristir, gunSirasi, istanbulGunu, sabitTarihAyristir } from '../senaryolar/goreli-tarih.mjs';
 
 export const SAYFA_PAKETI_TURU = 'sayfa-paketi';
 export const SAYFA_PAKETI_SURUMU = 1;
@@ -139,6 +140,29 @@ export function kanitVerisiniCoz(veri) {
 
 const pngMi = (b) => b.length > 8 && PNG_IMZASI.every((x, i) => b[i] === x);
 
+/**
+ * Modelin tek senaryo anahtarlı TARİH alanları (adımlar > bölümler > alanlar ve senaryo düzeyi).
+ * @param {Record<string, any>} model @returns {Array<{ anahtar: string; etiket: string; bicim: string | null }>}
+ */
+function modelTarihAlanlari(model) {
+  /** @type {Array<{ anahtar: string; etiket: string; bicim: string | null }>} */
+  const sonuc = [];
+  const alanlar = [
+    ...(Array.isArray(model.adimlar) ? model.adimlar : []).flatMap((a) => (nesneMi(a) && Array.isArray(a.bolumler) ? a.bolumler : [])
+      .flatMap((b) => (nesneMi(b) && Array.isArray(b.alanlar) ? b.alanlar : []))),
+    ...(nesneMi(model.senaryoDuzeyi) && Array.isArray(model.senaryoDuzeyi.alanlar) ? model.senaryoDuzeyi.alanlar : [])
+  ];
+  for (const a of alanlar) {
+    if (!nesneMi(a) || a.tip !== 'tarih' || a.yapilandirma !== 'senaryo' || !nesneMi(a.eslesme)) continue;
+    const s = a.eslesme.senaryo;
+    const anahtar = typeof s === 'string' ? s : Array.isArray(s) && s.length === 1 && typeof s[0] === 'string' ? s[0] : null;
+    if (!anahtar) continue;
+    const e = nesneMi(a.etiket) ? a.etiket.form || a.etiket.ekran : a.etiket;
+    sonuc.push({ anahtar, etiket: typeof e === 'string' && e ? e : anahtar, bicim: typeof a.bicim === 'string' ? a.bicim : null });
+  }
+  return sonuc;
+}
+
 // ---- Ana doğrulama --------------------------------------------------------------------------
 
 /**
@@ -147,7 +171,8 @@ const pngMi = (b) => b.length > 8 && PNG_IMZASI.every((x, i) => b[i] === x);
  * @param {unknown} ham
  * tablolar: projenin tabloları (ad + sütunlar; değer yok) — senaryo önerilerindeki ${Tablo.Sütun} başvuruları paketin ve projenin
  * tablolarına göre denetlenir (verilmezse tablo varlığı denetlenmez).
- * @param {{ altModelKaynagi?: (dosyaAdi: string) => unknown; tablolar?: Array<{ ad: string; sutunlar: Array<{ ad: string; gizli?: boolean }> }> }} [secenekler]
+ * simdi: geçmiş sabit tarih uyarısının "bugün"ü (testlerde sabitlenir; verilmezse şimdi).
+ * @param {{ altModelKaynagi?: (dosyaAdi: string) => unknown; tablolar?: Array<{ ad: string; sutunlar: Array<{ ad: string; gizli?: boolean }> }>; simdi?: Date }} [secenekler]
  */
 export function sayfaPaketiniDogrula(ham, secenekler = {}) {
   /** @type {Array<{ yer: string; mesaj: string }>} */
@@ -276,6 +301,15 @@ export function sayfaPaketiniDogrula(ham, secenekler = {}) {
           if (d.hatalar.length) uyari(yer, `"${o.baslik}" önerisi modele göre ${d.hatalar.length} sorun içeriyor (varsayılan olarak seçilmez): ${d.hatalar.slice(0, 3).map((x) => `${x.alan || '—'}: ${x.mesaj}`).join(' · ')}`);
         } catch (e) {
           senaryoSorunlari[i] = [{ alan: '', mesaj: e instanceof Error ? e.message : String(e) }];
+        }
+        // Tarih alanında geçmişte kalmış SABİT tarih: öneri eklendiği gün kırılır — "bugün" / "bugün+N" önerilir (uyarı; engellemez).
+        for (const t of modelTarihAlanlari(model)) {
+          const d = o.veri[t.anahtar];
+          if (typeof d !== 'string' || goreliIfadeAyristir(d)) continue;
+          const gun = sabitTarihAyristir(d, t.bicim);
+          if (gun && gunSirasi(gun) < gunSirasi(istanbulGunu(secenekler.simdi ?? new Date()))) {
+            uyari(`${yer}.veri.${t.anahtar}`, `"${o.baslik}" önerisinde "${t.etiket}" geçmiş bir sabit tarih (${d}); öneri eklenince koşu kırılır. Tarih alanında "bugün" ya da "bugün+N" (ör. bugün+7) kullanın.`);
+          }
         }
       }
     });

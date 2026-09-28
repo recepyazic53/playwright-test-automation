@@ -27,6 +27,8 @@ export interface BasitAlan extends OrtakFormAlani {
   bicim?: string;
   kabul?: string;
   varsayilan?: unknown;
+  /** Yalnız tarih: modeldeki sınırlar (enAz / enCok; "bugun+1" gibi göreli olabilir). */
+  sinirlar?: { enAz?: unknown; enCok?: unknown };
 }
 export interface ProfilAlani extends OrtakFormAlani {
   tip: 'profil';

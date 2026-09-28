@@ -353,6 +353,9 @@ function alanCevir(alan, konum, altModeller) {
       return {
         ...ortak, tip, anahtar: anahtarlar[0],
         ...(alan.bicim ? { bicim: alan.bicim } : {}), ...(alan.kabul ? { kabul: alan.kabul } : {}),
+        // Tarih sınırları (enAz / enCok; göreli olabilir): formun "Bugüne göre" önizlemesi sınır dışını uyarır.
+        ...(alan.tip === 'tarih' && nesneMi(alan.sinirlar) && (alan.sinirlar.enAz !== undefined || alan.sinirlar.enCok !== undefined)
+          ? { sinirlar: { ...(alan.sinirlar.enAz !== undefined ? { enAz: alan.sinirlar.enAz } : {}), ...(alan.sinirlar.enCok !== undefined ? { enCok: alan.sinirlar.enCok } : {}) } } : {}),
         ...(alan.varsayilan && alan.varsayilan.deger !== undefined && alan.varsayilan.deger !== null ? { varsayilan: kopya(alan.varsayilan.deger) } : {})
       };
     }

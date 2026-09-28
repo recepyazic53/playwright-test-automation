@@ -107,12 +107,14 @@ test('sınır değerleri yalnız modeldeki kurallardan: sayı / metin uzunluğu 
   expect(urun[1].veri.urunAdi).toBe('Rom');
 
   const tarih = sinir.filter((o) => o.kimlik.startsWith('sinir:teslimatTarihi:'));
-  expect(tarih.map((o) => o.veri.teslimatTarihi)).toEqual(['28.09.2026', '29.09.2026', '30.09.2026', '27.10.2026', '28.10.2026', '29.10.2026']);
+  // Sınır bugüne göre olduğundan öneri de bugüne göre yazılır (eskimez); açıklamada bugünkü karşılığı.
+  expect(tarih.map((o) => o.veri.teslimatTarihi)).toEqual(['bugün', 'bugün+1', 'bugün+2', 'bugün+29', 'bugün+30', 'bugün+31']);
+  expect(tarih[1].ozet).toContain('= bugün+1 → 29.09.2026');
   // Geçersiz sınır: hata alanın adımında beklenir (teslimat), mesajı kullanıcı yazar.
   expect(tarih.map((o) => o.beklenen.tur)).toEqual(['hata', 'basari', 'basari', 'basari', 'basari', 'hata']);
   expect(tarih[0].beklenen).toMatchObject({ adim: 'teslimat', mesaj: '', mesajEksik: true });
   expect(adet[0].beklenen).toMatchObject({ mesajEksik: true });
-  expect(tarih[1].ozet).toContain('bugüne göre hesaplandı');
+  expect(tarih[1].ozet).toContain('bugüne göre yazıldı');
 
   // Kural yok: sipariş notu için öneri yok, kuralı eklemeyi öneren not var. Yalnız desen: değer üretilmez.
   expect(sinir.some((o) => o.kimlik.includes('siparisNotu') || o.kimlik.includes('kuponKodu') || o.kimlik.includes('hediyeNotu'))).toBe(false);

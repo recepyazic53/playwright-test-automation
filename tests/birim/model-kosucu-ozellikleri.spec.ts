@@ -489,7 +489,10 @@ test('ekrana dön: akışın başındaki ortak akış başka sayfaya gidip "Ekra
   const hesapOnce = uygulama.hesaplamalar.length;
   const sonuc = await kaydetVeKos('Dönüşlü / tutar', veri, { ekran, akisId: donuslu });
   expect(sonuc.durum, JSON.stringify(sonuc.hataMesaji)).toBe('basarili');
-  expect((sonuc.adimlar as Nesne[]).map((a) => a.ad).slice(0, 3)).toEqual(['Ekran açılır', 'Başka sayfaya gidilir', 'Ekrana dönülür']);
+  // Göreli tarihli alanlar (başlangıç bugün, bitiş bugün+7) raporda ayrı satırda: ifade → bu koşunun tarihi.
+  const adlar = (sonuc.adimlar as Nesne[]).map((a) => String(a.ad));
+  expect(adlar.filter((a) => !a.startsWith('Göreli tarihler — ')).slice(0, 3)).toEqual(['Ekran açılır', 'Başka sayfaya gidilir', 'Ekrana dönülür']);
+  expect(adlar.find((a) => a.startsWith('Göreli tarihler — '))).toMatch(/bugün → \d{2}\.\d{2}\.\d{4}.*bugün\+7 → \d{2}\.\d{2}\.\d{4}/);
   expect(uygulama.hesaplamalar).toHaveLength(hesapOnce + 1);
   expect(uygulama.hesaplamalar.at(-1)).toMatchObject({ kategori: 'K1', urun: 'U12', kimlikNo: K1.kimlikNo });
 
