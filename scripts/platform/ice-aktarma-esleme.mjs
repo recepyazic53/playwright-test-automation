@@ -20,7 +20,11 @@
 //   2) Hedef projede aynı ADLI kayıt tek ise (ör. aynı anahtarlı servis/ekran, aynı adlı tablo) → o kayda eşlenir (değişen/aynı).
 //   3) Aynı kimlik yerelde BAŞKA projede var → kararlı yeni kimlik üretilir (hedef proje + tablo + eski kimlikten; aynı yedek
 //      yeniden aktarılınca aynı kimlik çıkar) ve ona başvuran her yer eşlenir.
-//   4) Hiçbiri değilse kimlik korunur (yeni kayıt).
+//   4) Aynı kimlik yerelde, bu bilgisayarda proje kaydı OLMAYAN kaynak projeye bağlı (silinmiş projeden kalan öksüz kayıt) →
+//      aynı kayıt sayılır, kimlik korunur; seçilirse hedef projeye taşınır (ikinci kopya üretilmez).
+//   5) Hiçbiri değilse kimlik korunur (yeni kayıt).
+// DENETİM: kimliği değişen bir yedek projesinin kimliği eşlenmiş tablolarda HİÇBİR satırda (proje_id / projeler) kalmamalı;
+// kalırsa YedekHatasi('VERI'). Uygulama ayrıca transaction sonunda veritabanını denetler (ice-aktarma.mjs).
 // Eşleme verilmezse (null) hiçbir şey değişmez: bugünkü davranış.
 // Bu modül import.meta KULLANMAZ (birim testleri CommonJS'e çevirerek yükler).
 
@@ -29,6 +33,7 @@ import { TABLOLAR } from './veritabani/gocler.mjs';
 import { zarfCoz, zarfSifrele } from './kasa.mjs';
 import { YedekHatasi } from './yedek.mjs';
 import { riskliSecimi } from './guvenlik/ortam-riski.mjs';
+import { projeKalintilari } from './proje-yonetimi.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {Record<string, unknown>} Satir */
@@ -60,7 +65,7 @@ export const PROJE_TABLOLARI = Object.freeze({
 });
 /** Proje kaydı olmayan (genel) ve geçmiş/koşu tabloları (ice-aktarma.mjs > EKLEME_TABLOLARI): yalnızca içerikleri eşlenir. */
 const GENEL_TABLOLAR = new Set(['makineler', 'ayarlar', 'projeler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari', 'adim_sonuclari',
-  'yakalanan_mesajlar', 'medya', 'servis_kosulari', 'servis_akis_kosulari']);
+  'yakalanan_mesajlar', 'medya', 'servis_kosulari', 'servis_akis_kosulari', 'raporlar']);
 for (const t of TABLOLAR) {
   if (!(t.ad in PROJE_TABLOLARI) && !GENEL_TABLOLAR.has(t.ad)) {
     throw new Error(`İçe aktarma eşlemesi: "${t.ad}" tablosu için davranış tanımlı değil (PROJE_TABLOLARI).`);
@@ -286,6 +291,13 @@ export function eslemeyiUygula(vt, tablolar, anahtar, hamEsleme) {
     }
   }
 
+  // KALINTI: mevcut projeye aktarılan yedek projesi bu bilgisayarda proje olarak YOK ama ona bağlı (proje_id = kaynak) kayıtlar
+  // var — silinmiş bir projeden kalan öksüz kayıtlar. Yedekte aynı kimlikli karşılığı olan kalıntı "aynı kayıt" sayılır (kararlı
+  // yeni kimlik ÜRETİLMEZ): seçilirse hedef projeye taşınır. Böylece ikinci bir kopya oluşmaz ve kaynak proje kimliği yaşamaz.
+  /** @type {Set<string>} */
+  const kalintiProjeler = new Set([...mevcutHedefli].filter((p) => hedefProjesi.get(p) !== p && !yerelProjeVar(p)));
+  const kalintiMi = (/** @type {string} */ p, /** @type {Satir | undefined} */ yerelSatir) => Boolean(yerelSatir) && kalintiProjeler.has(p) && String(yerelSatir?.proje_id) === p;
+
   // Ortamlar: eşlenen → yerel ortamın kimliği (satır eklenmez); yeni → kimlik korunur (yerelde varsa türetilir).
   /** @type {Set<string>} mevcut projeye yeni eklenen ortamlar: "varsayılan" işareti taşımaz (projenin varsayılanı değişmez) */
   const mevcutProjeyeYeniOrtam = new Set();
@@ -305,7 +317,8 @@ export function eslemeyiUygula(vt, tablolar, anahtar, hamEsleme) {
       continue;
     }
     let sonId = id;
-    if (vt?.tek('SELECT 1 AS var FROM ortamlar WHERE id = ?', [id])) {
+    const yerelOrtam = vt?.tek('SELECT proje_id FROM ortamlar WHERE id = ?', [id]);
+    if (yerelOrtam && !kalintiMi(p, yerelOrtam)) {
       sonId = turetilmisKimlik(hedef, 'ortamlar', id);
       harita.set(id, sonId);
       degisimler.push({ tablo: 'ortamlar', eski: id, yeni: sonId, neden: 'kimlik_cakismasi' });
@@ -359,6 +372,7 @@ export function eslemeyiUygula(vt, tablolar, anahtar, hamEsleme) {
           continue;
         }
       }
+      if (kalintiMi(p, yerel)) { sahiplenilen.add(id); continue; } // silinmiş kaynak projeden kalan aynı kayıt: hedefe taşınır
       if (yerel) {
         const yeni = turetilmisKimlik(hedef, tablo, id);
         harita.set(id, yeni);
@@ -384,6 +398,37 @@ export function eslemeyiUygula(vt, tablolar, anahtar, hamEsleme) {
     yeniTablolar.ayarlar = (yeniTablolar.ayarlar ?? []).map((s) => ayarBirlestir(vt, anahtar, s));
   }
 
+  // DENETİM: başka projeye eşlenen kaynak projeye başvuran HİÇBİR kayıt (önizlemeye girmeyen koşu / sonuç / geçmiş dahil) kaynak
+  // kimliğini taşımamalı; taşırsa uygulama kaynak projeyi sessizce yeniden oluşturabilirdi → açık hata (hiçbir şey yazılmaz).
+  /** @type {Set<string>} kimliği değişen yedek projeleri (mevcut projeye aktarılan ya da yeni kimlikle eklenen) */
+  const kaynakProjeler = new Set(Object.keys(esleme.projeler).filter((p) => hedefProjesi.get(p) !== p));
+  if (kaynakProjeler.size) {
+    /** @type {Map<string, Map<string, number>>} kaynak proje → tablo → sayı */
+    const kalan = new Map();
+    for (const [tablo, satirlar] of Object.entries(yeniTablolar)) {
+      for (const s of satirlar) {
+        const p = tablo === 'projeler' ? String(s.id) : s.proje_id == null ? null : String(s.proje_id);
+        if (!p || !kaynakProjeler.has(p)) continue;
+        const m = kalan.get(p) ?? new Map();
+        m.set(tablo, (m.get(tablo) ?? 0) + 1);
+        kalan.set(p, m);
+      }
+    }
+    if (kalan.size) {
+      const ad = (/** @type {string} */ p) => bilgi.yedekProjeleri.find((x) => x.id === p)?.ad ?? p;
+      const metin = [...kalan].map(([p, m]) => `"${ad(p)}": ${[...m].map(([t, n]) => `${t} ${n}`).join(', ')}`).join('; ');
+      throw new YedekHatasi('VERI', `Eşleme uygulanamadı: başka projeye aktarılan yedek projesine başvuran kayıtlar eşlenemedi (${metin}). Hiçbir şey yazılmadı.`);
+    }
+  }
+  /** @type {Record<string, Record<string, number>>} kalıntısı olan kaynak projeler → { tablo: sayı } (önizleme ve sonuç uyarısı) */
+  const kalintilar = {};
+  if (vt) {
+    for (const p of kalintiProjeler) {
+      const k = projeKalintilari(vt, p);
+      if (Object.keys(k).length) kalintilar[p] = k;
+    }
+  }
+
   const yerel = new Map(bilgi.yerelProjeler.map((p) => [p.id, p]));
   const ozet = Object.entries(esleme.projeler).map(([p, e]) => {
     const kaynak = /** @type {(typeof bilgi.yedekProjeleri)[number]} */ (bilgi.yedekProjeleri.find((x) => x.id === p));
@@ -395,6 +440,7 @@ export function eslemeyiUygula(vt, tablolar, anahtar, hamEsleme) {
       hedef: { id: hedef, ad: hedefProje ? hedefProje.ad : kaynak.ad, yeni: !hedefProje },
       sayilar: kaynak.sayilar,
       metin: ozetMetni(kaynak.ad, hedefProje ? hedefProje.ad : `${kaynak.ad} (yeni proje)`, kaynak.sayilar),
+      kalinti: kalintilar[p] ?? null,
       ortamlar: kaynak.ortamlar.map((o) => {
         const s = e.hedef === YENI ? YENI : e.ortamlar?.[o.id] ?? YENI;
         const h = s === YENI ? null : hedefOrtamlar.get(s) ?? null;
@@ -402,7 +448,7 @@ export function eslemeyiUygula(vt, tablolar, anahtar, hamEsleme) {
       })
     };
   });
-  return { esleme, tablolar: yeniTablolar, ozet, kimlikDegisimleri: degisimler };
+  return { esleme, tablolar: yeniTablolar, ozet, kimlikDegisimleri: degisimler, kaynakProjeler: [...kaynakProjeler], kalintiProjeler: [...kalintiProjeler] };
 }
 
 /**

@@ -34,11 +34,12 @@ export async function silDiyalogu(s) {
   const onay = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', id: yeniKimlik('proje-onay') });
   const d = formDiyalogu({
     baslik: `Projeyi kalıcı sil: ${o.proje.ad}`, ikonAd: 'cop', dugme: 'Kalıcı olarak sil', tehlikeli: true,
-    aciklama: 'Projenin ortamları, giriş/bağlam profilleri, test verisi, ekranları, senaryoları, koşu sonuçları ve şifreli medyası bu çalışma alanından silinir. Bu işlem geri alınamaz.',
+    aciklama: 'Projenin ortamları, giriş/bağlam profilleri, test verisi, ekranları, senaryoları, servisleri (senaryoları, akışları, koşuları dahil), koşu sonuçları ve şifreli medyası bu çalışma alanından silinir. Bu işlem geri alınamaz.',
     govde: [
       h('dl', { class: 'onay-ozeti dortlu' },
         sayi('Ekran', n.ekran), sayi('Senaryo', n.senaryo), sayi('Koşu', n.kosu), sayi('Sonuç', n.sonuc),
-        sayi('Medya', n.medya), sayi('Ortam', n.ortam), sayi('Profil', n.girisProfili + n.baglamProfili), sayi('Test verisi', n.testVerisi)),
+        sayi('Medya', n.medya), sayi('Ortam', n.ortam), sayi('Profil', n.girisProfili + n.baglamProfili), sayi('Test verisi', n.testVerisi),
+        sayi('Servis', n.servis), sayi('Servis senaryosu', n.servisSenaryosu), sayi('Servis akışı', n.servisAkisi), sayi('Servis koşusu', n.servisKosusu)),
       h('div', { class: 'not-kutusu bilgi kucuk', role: 'note' },
         'Silmeden önce bu çalışma alanının yedekler klasörüne otomatik bir yedek alınır; mevcut yedekler silinmez. Geri almak için Ayarlar > Yedekleme > İçe aktar.'),
       o.sonProje ? h('p', { class: 'kucuk soluk' }, 'Bu, çalışma alanındaki son proje: silindikten sonra yeni proje sihirbazı açılır.') : null,

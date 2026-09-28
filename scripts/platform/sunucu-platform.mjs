@@ -42,6 +42,9 @@
 //        (tek dosya, maskeli; görüntüler kasada çözülüp data: URI olarak gömülür — sonuclar/html-rapor.mjs); &b=<koşu B>: karşılaştırma raporu
 //   GET  /platform/sonuclar/karsilastir?projeId=&tur=ekran|servis&a=&b=   iki koşunun yan yana karşılaştırması (+ /senaryo, /adaylar)
 //   GET  /platform/sonuclar/html-rapor/onizleme/<id>?token=   son üretilen raporun tek kullanımlık önizlemesi (kendi CSP'si)
+//   PDF raporu (dönem raporu; sonuclar/rapor-uclari.mjs): GET /platform/rapor/secenekler?projeId= · POST /platform/rapor/onizle (HTML) ·
+//        POST /platform/rapor/pdf (application/pdf; kaydet: true → Sonuçlar > Raporlar) · GET /platform/raporlar?projeId= ·
+//        GET /platform/rapor/indir?projeId=&id= (kaydedilen PDF'in aynısı) · POST /platform/rapor/yeniden | /platform/rapor/sil (onay)
 //   GET  /platform/servis-sonuclari?projeId=&servisId=&akisId=&ortamId=&denemeler=1   servis / akış koşuları, kalıplar
 //   GET  /platform/servis-sonuclari/kosu?projeId=&id=   koşu ayrıntısı · /senaryo?projeId=&id=   istek / yanıt (maskeli)
 //   GET  /platform/medya/<id>[?indir=1]               şifreli medyayı ÇÖZEREK akıtır (Range destekli;
@@ -235,6 +238,20 @@ import {
 } from './sonuclar/gosterim-maskesi.mjs';
 import { sorgudanAralik } from './sonuclar/aralik.mjs';
 import { ONIZLEME_BASLIKLARI, htmlRaporuOlustur, onizlemeAl, onizlemeSakla } from './sonuclar/html-rapor.mjs';
+import { raporIndir, raporListesi, raporOnizle, raporPdf, raporSaklamaTemizligi, raporSecenekleri, raporSilUc, raporYenidenOlustur } from './sonuclar/rapor-uclari.mjs';
+
+/**
+ * PDF yanıtı (indirme; önbelleğe alınmaz). Dosya adı güvenli karakterlerden oluşur (rapor-uclari.mjs > pdfDosyaAdi).
+ * @param {import('node:http').ServerResponse} res @param {Buffer} pdf @param {string} dosyaAdi @param {Record<string, string>} [ek]
+ */
+function pdfGonder(res, pdf, dosyaAdi, ek = {}) {
+  const ad = /^[A-Za-z0-9._-]{1,200}$/.test(dosyaAdi) ? dosyaAdi : 'nobetci-rapor.pdf';
+  res.writeHead(200, {
+    'Content-Type': 'application/pdf', 'Content-Length': pdf.length, 'Content-Disposition': `attachment; filename="${ad}"`,
+    'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Dosya-Adi': ad, ...ek
+  });
+  res.end(pdf);
+}
 
 export const JSON_GOVDE_SINIRI = 64 * 1024;
 /** Ekran paketi uçlarının gövde sınırı (paket, base64 ekran görüntüleri içerebilir). */
@@ -643,6 +660,9 @@ export function platformMedyaTemizligiZamanla() {
       if (kasaAcikMi(db)) {
         const d = sahipsizSenaryoDosyalariniTemizle(db, medyaKlasoruYolu());
         if (d.silinen) console.log(`[platform] Kullanılmayan ${d.silinen} senaryo dosyası (şifreli) silindi.`);
+        // Kaydedilmiş PDF raporları (Ayarlar > Yedekleme > Rapor saklama süresi) + raporu silinmiş rapor medyası.
+        const r = raporSaklamaTemizligi(db, { medyaKlasoru: medyaKlasoruYolu() });
+        if (r.rapor || r.sahipsiz) console.log(`[platform] Rapor saklama: ${r.rapor} eski rapor, ${r.sahipsiz} sahipsiz rapor dosyası silindi.`);
       }
     } catch (hata) {
       console.error(`[platform] Medya temizliği yapılamadı: ${/** @type {Error} */ (hata)?.message ?? hata}`);
@@ -1426,10 +1446,17 @@ for (const [yol, islem] of SERVIS_SONUC_UCLARI) {
 }
 // Yan yana koşu karşılaştırması (yalnız okuma): sonuclar/karsilastirma.mjs.
 for (const [yol, islem] of KARSILASTIRMA_UCLARI) GET_UCLARI.set(yol, islem);
+// PDF raporu (sonuclar/rapor-uclari.mjs): diyalog listeleri ve kaydedilmiş raporlar (Sonuçlar > Raporlar).
+GET_UCLARI.set('/platform/rapor/secenekler', raporSecenekleri);
+GET_UCLARI.set('/platform/raporlar', raporListesi);
 
 /** @type {Map<string, (db: Veritabani, g: Record<string, unknown>) => Record<string, unknown> | Promise<Record<string, unknown>>>} */
 const POST_UCLARI = new Map([
-  ['/platform/sayfa-paketi/onizle', (db, g) => paketOnizle(db, kimlikAl(g.projeId, 'projeId'), g.paket, {
+  // PDF raporu: önizleme (HTML; saklanmaz), aynı seçimlerle yeniden oluşturma (yeni kayıt), kaydedilmiş raporu silme (onay: true).
+  ['/platform/rapor/onizle', (db, g) => raporOnizle(db, g, { medyaKlasoru: medyaKlasoruYolu() })],
+  ['/platform/rapor/yeniden', (db, g) => raporYenidenOlustur(db, g, { medyaKlasoru: medyaKlasoruYolu() })],
+  ['/platform/rapor/sil', (db, g) => raporSilUc(db, g, { medyaKlasoru: medyaKlasoruYolu() })],
+  ['/platform/sayfa-paketi/onizle',(db, g) => paketOnizle(db, kimlikAl(g.projeId, 'projeId'), g.paket, {
     ekranId: secimliKimlik(g.ekranId) ?? null, mod: g.mod === 'analiz' ? 'analiz' : g.mod === 'degistir' ? 'degistir' : 'yeni'
   })],
   ['/platform/ekran/model/degistir', (db, g) => modeliPaketleDegistir(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.paket, {
@@ -2063,6 +2090,14 @@ export async function platformIsteginiIsle(req, res, baglam) {
       jsonGonder(res, 200, { basarili: true, ...rapor, onizlemeId: onizlemeSakla(rapor.html) });
       return true;
     }
+    // --- GET /platform/rapor/indir — kaydedilmiş PDF raporunun aynısı (kasadan çözülür; diske yazılmaz) ---
+    if (req.method === 'GET' && yol === '/platform/rapor/indir') {
+      if (!disTokenGecerli) { tokenYok(); return true; }
+      const db = await acikVeritabani();
+      const r = await raporIndir(db, url.searchParams, { medyaKlasoru: medyaKlasoruYolu() });
+      pdfGonder(res, r.pdf, r.dosyaAdi);
+      return true;
+    }
     // Önizleme: tek kullanımlık, kendi CSP'siyle (betik yok); arayüzde iframe sandbox="" içinde açılır.
     const raporOnizleme = /^\/platform\/sonuclar\/html-rapor\/onizleme\/([a-f0-9]{32})$/.exec(yol);
     if (req.method === 'GET' && raporOnizleme) {
@@ -2230,6 +2265,14 @@ export async function platformIsteginiIsle(req, res, baglam) {
     // İzin denetimi (TEK MERKEZ: guvenlik/uc-denetimi.mjs; uç → izin eşlemesi izin-tanimlari.mjs'den). Kapalı izne tabi işlem
     // hiç başlatılmaz: 403 IZIN_KAPALI. CANLI ortamda açık onay (canliOnay: true) yoksa 409 CANLI_ONAY_GEREKLI.
     if (IZIN_DENETIMLI_UCLAR.has(yol)) ucDenetle(await acikVeritabani(), yol, govde);
+
+    // --- POST /platform/rapor/pdf — PDF raporu (yerel Chromium; ağ istekleri engelli); kaydet: true ise Sonuçlar > Raporlar'a ---
+    if (yol === '/platform/rapor/pdf') {
+      const db = await acikVeritabani();
+      const r = await raporPdf(db, govde, { medyaKlasoru: medyaKlasoruYolu() });
+      pdfGonder(res, r.pdf, r.dosyaAdi, { 'X-Rapor-Id': r.raporId ?? '', 'X-Rapor-Sayfa': String(r.sayfa) });
+      return true;
+    }
 
     const postIslemi = POST_UCLARI.get(yol);
     if (postIslemi) {

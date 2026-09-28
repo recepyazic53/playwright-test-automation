@@ -26,6 +26,8 @@ export interface EslemeOzeti {
   sayilar: Record<string, number>;
   /** Ör. "Kaynak → Hedef: 23 servis, 7 ekran". */
   metin: string;
+  /** Bu bilgisayarda silinmiş kaynak projeden kalan (öksüz) kayıtlar: { tablo: sayı }; yoksa null. */
+  kalinti: Record<string, number> | null;
   ortamlar: Array<{ kaynak: OrtamOzeti; hedef: OrtamOzeti | null; yeni: boolean }>;
 }
 export interface KimlikDegisimi {
@@ -43,5 +45,9 @@ export declare function eslemeyiUygula(vt: Veritabani | null, tablolar: Record<s
   tablolar: Record<string, Satir[]>;
   ozet: EslemeOzeti[];
   kimlikDegisimleri: KimlikDegisimi[];
+  /** Kimliği değişen (başka projeye aktarılan / yeni kimlikle eklenen) yedek projeleri. */
+  kaynakProjeler: string[];
+  /** Mevcut projeye aktarılan ve bu bilgisayarda proje kaydı olmayan (kalıntısı olabilecek) yedek projeleri. */
+  kalintiProjeler: string[];
 };
 export declare function ozetMetni(kaynak: string, hedef: string, sayilar: Record<string, number>): string;

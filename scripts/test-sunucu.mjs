@@ -335,6 +335,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servis-sonuclari.js', { dosya: 'servis-sonuclari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/html-rapor.js', { dosya: 'html-rapor.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/karsilastirma.js', { dosya: 'karsilastirma.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/pdf-rapor.js', { dosya: 'pdf-rapor.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tarih-araligi.js', { dosya: 'tarih-araligi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veri-klasoru.js', { dosya: 'veri-klasoru.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/entegrasyonlar.js', { dosya: 'entegrasyonlar.js', tur: 'text/javascript; charset=utf-8' }],

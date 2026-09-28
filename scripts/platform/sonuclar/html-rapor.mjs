@@ -86,13 +86,21 @@ function tarihMetni(iso) {
 }
 
 /**
+ * Dosya adı parçası: küçük harf, Türkçe karakter sadeleştirilmiş, yalnız a-z, 0-9 ve "-" (en çok 40 karakter). PDF raporu da kullanır.
+ * @param {unknown} s
+ */
+export function dosyaAdiParcasi(s) {
+  const tr = /** @type {Record<string, string>} */ ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', â: 'a', î: 'i', û: 'u' });
+  return String(s ?? '').toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, (c) => tr[c] ?? c)
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+}
+
+/**
  * İndirme dosya adı: nobetci-rapor-<proje>-<ortam>-<tarih>.html (yalnız a-z, 0-9, "-").
  * @param {string} proje @param {string | null} ortam @param {Date} [tarih]
  */
 export function raporDosyaAdi(proje, ortam, tarih = new Date()) {
-  const tr = /** @type {Record<string, string>} */ ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', â: 'a', î: 'i', û: 'u' });
-  const temiz = (/** @type {string} */ s) => String(s ?? '').toLocaleLowerCase('tr').replace(/[çğıöşüâîû]/g, (c) => tr[c] ?? c)
-    .normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '');
+  const temiz = dosyaAdiParcasi;
   const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
   const t = `${tarih.getFullYear()}-${iki(tarih.getMonth() + 1)}-${iki(tarih.getDate())}-${iki(tarih.getHours())}${iki(tarih.getMinutes())}`;
   return `nobetci-rapor-${[temiz(proje) || 'proje', temiz(ortam ?? '') || 'ortam', t].join('-')}.html`;

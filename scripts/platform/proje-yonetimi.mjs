@@ -1,13 +1,15 @@
 // PROJE YÖNETİMİ (genel) — üst çubuktaki proje seçicinin ⋯ menüsü: varsayılan proje, proje silme (önce kuru çalıştırma).
 // Bir çalışma alanında birden çok proje olabilir; tüm listeler/uçlar projeId ile kapsamlanır.
-// Silme: projenin ortamları, profilleri, test verisi, ekranları (+ model sürümleri), senaryoları, kaynak eşlemeleri
-// (FK CASCADE) ve KOŞULARI + sonuçları + şifreli medyası (koşular FK'de SET NULL olduğundan açıkça) silinir; şifreli
+// Silme: projenin ortamları, profilleri, test verisi, ekranları (+ model sürümleri), senaryoları, servisleri (+ senaryoları,
+// giriş bilgileri, parametre tanımları, akışları, koşuları) — proje_id taşıyan HER tablo, FK CASCADE'e ek olarak açıkça —
+// ve KOŞULARI + sonuçları + şifreli medyası silinir; sonunda projeye bağlı kayıt kalmadığı denetlenir (kalırsa geri alınır); şifreli
 // medya dosyaları işlem bittikten sonra güvenle (ezilerek) silinir. Değişiklik geçmişi korunur. Yedeklere dokunulmaz
 // (sunucu silmeden önce ayrıca yeni bir yedek alır).
 // NOT: import.meta KULLANILMAZ (birim testleri CommonJS'e çevirerek yükler).
 import { ayarGetir, ayarYaz, DepoHatasi, ekranAyarlariniGetir, gecmisYaz, projeGetir } from './veritabani/depo.mjs';
 import { medyaDosyasiniGuvenliSil } from './medya.mjs';
 import { referanslariBul } from './dosyalar/senaryo-dosyalari.mjs';
+import { TABLOLAR } from './veritabani/gocler.mjs';
 
 /** @typedef {import('./veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -32,6 +34,30 @@ export function varsayilanProjeAyarla(vt, id) {
   const ayar = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(vt, PROJE_AYAR_ANAHTARI));
   ayarYaz(vt, PROJE_AYAR_ANAHTARI, { ...(ayar ?? {}), varsayilanId: id });
   return id;
+}
+
+/**
+ * proje_id sütunu taşıyan tablolar (TABLOLAR sırasıyla: üst kayıtlar önce). Şemadan okunur: yeni bir proje tablosu
+ * eklendiğinde silme ve içe aktarma denetimi onu kendiliğinden kapsar.
+ * @param {Veritabani} vt @returns {string[]}
+ */
+export function projeTablolari(vt) {
+  return TABLOLAR.map((t) => t.ad).filter((t) => vt.tumu(`PRAGMA table_info(${t})`).some((s) => s.name === 'proje_id'));
+}
+
+/**
+ * Verilen proje kimliğine bağlı kalan kayıtlar: { tablo: sayı } (proje kaydının kendisi "projeler" olarak). Boş = hiç yok.
+ * @param {Veritabani} vt @param {string} projeId @returns {Record<string, number>}
+ */
+export function projeKalintilari(vt, projeId) {
+  /** @type {Record<string, number>} */
+  const sonuc = {};
+  if (vt.tek('SELECT 1 AS var FROM projeler WHERE id = ?', [projeId])) sonuc.projeler = 1;
+  for (const t of projeTablolari(vt)) {
+    const n = Number(vt.tek(`SELECT COUNT(*) AS n FROM ${t} WHERE proje_id = ?`, [projeId])?.n ?? 0);
+    if (n) sonuc[t] = n;
+  }
+  return sonuc;
 }
 
 /**
@@ -61,6 +87,8 @@ function projeKayitlari(vt, projeId) {
   };
   sahipli('ekran', ekranIdleri);
   sahipli('senaryo', senaryoIdleri);
+  // Rapor arşivindeki PDF'ler (Sonuçlar > Raporlar; sonuclar/rapor-arsivi.mjs: sahip_turu 'rapor').
+  sahipli('rapor', vt.tumu('SELECT id FROM raporlar WHERE proje_id = ?', [projeId]).map((x) => String(x.id)));
   // Ekran ayarlarındaki kanıt görüntüleri ve dosya referansları (başka projede kullanılmıyorsa).
   /** @type {Set<string>} */
   const referanslar = new Set();
@@ -89,7 +117,11 @@ function projeKayitlari(vt, projeId) {
       testVerisi: say('SELECT COUNT(*) AS n FROM test_verisi_profilleri WHERE proje_id = ?') + say('SELECT COUNT(*) AS n FROM test_verisi_turleri WHERE proje_id = ?'),
       kosu: kosuIdleri.length,
       sonuc,
-      medya: medya.size
+      medya: medya.size,
+      servis: say('SELECT COUNT(*) AS n FROM servisler WHERE proje_id = ?'),
+      servisSenaryosu: say('SELECT COUNT(*) AS n FROM servis_senaryolari WHERE proje_id = ?'),
+      servisAkisi: say('SELECT COUNT(*) AS n FROM servis_akislari WHERE proje_id = ?'),
+      servisKosusu: say('SELECT COUNT(*) AS n FROM servis_kosulari WHERE proje_id = ?') + say('SELECT COUNT(*) AS n FROM servis_akis_kosulari WHERE proje_id = ?')
     }
   };
 }
@@ -120,10 +152,21 @@ export function projeyiSil(vt, projeId, secenekler) {
       const parca = medyaIdleri.slice(i, i + 500);
       vt.calistir(`DELETE FROM medya WHERE id IN (${yer(parca)})`, parca);
     }
-    // Koşular (FK: SET NULL) açıkça silinir → sonuçlar, adımlar ve sonuç medyası CASCADE.
-    vt.calistir('DELETE FROM kosular WHERE proje_id = ?', [projeId]);
-    // Proje → ortamlar, profiller, test verisi, ekranlar (+ modeller), senaryolar, kaynak eşlemeleri (CASCADE).
+    // Koşular (FK: SET NULL) açıkça silinir → sonuçlar, adımlar ve sonuç medyası. Proje kaydına bağlı her tablo da FK CASCADE'e
+    // güvenmeden AÇIKÇA silinir (alttan üste): FK'si eksik / kapalı bir veritabanında öksüz kayıt (ör. servisler) kalmasın —
+    // öksüz kayıtlar aynı yedek yeniden içe aktarılınca ikinci kopyalara ve silinen projenin geri gelmesine yol açar.
+    const sonuclar = 'SELECT r.id FROM kosu_sonuclari r JOIN kosular k ON k.id = r.kosu_id WHERE k.proje_id = ?';
+    vt.calistir(`DELETE FROM adim_sonuclari WHERE sonuc_id IN (${sonuclar})`, [projeId]);
+    vt.calistir(`DELETE FROM yakalanan_mesajlar WHERE sonuc_id IN (${sonuclar})`, [projeId]);
+    vt.calistir(`DELETE FROM medya WHERE sonuc_id IN (${sonuclar})`, [projeId]);
+    vt.calistir('DELETE FROM kosu_sonuclari WHERE kosu_id IN (SELECT id FROM kosular WHERE proje_id = ?)', [projeId]);
+    vt.calistir('DELETE FROM ekran_modelleri WHERE ekran_id IN (SELECT id FROM ekranlar WHERE proje_id = ?)', [projeId]);
+    for (const t of [...projeTablolari(vt)].reverse()) vt.calistir(`DELETE FROM ${t} WHERE proje_id = ?`, [projeId]);
     vt.calistir('DELETE FROM projeler WHERE id = ?', [projeId]);
+    const kalan = projeKalintilari(vt, projeId);
+    if (Object.keys(kalan).length) {
+      throw new DepoHatasi(`Proje silinemedi (hiçbir şey silinmedi): şu kayıtlar projeye bağlı kaldı — ${Object.entries(kalan).map(([t, n]) => `${t}: ${n}`).join(', ')}.`);
+    }
     const ayar = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(vt, PROJE_AYAR_ANAHTARI));
     if (ayar?.varsayilanId === projeId) ayarYaz(vt, PROJE_AYAR_ANAHTARI, { ...ayar, varsayilanId: null });
     gecmisYaz(vt, {
