@@ -6,6 +6,7 @@
 import { test } from '@playwright/test';
 import { TARAMA_ADRES_DEGISKENI, TARAMA_TOKEN_BASLIGI, TARAMA_TOKEN_DEGISKENI, type TaramaGirdisi, type TaramaOlayi, type TaramaSonucu } from './protokol.mjs';
 import { akisiKaydet } from './kayit-motoru';
+import { girisiDene } from './giris-denemesi';
 import { hataBilgisi, taramayiYurut } from './tarama-motoru';
 
 const ADRES = process.env[TARAMA_ADRES_DEGISKENI] ?? '';
@@ -30,7 +31,8 @@ test('Nöbetçi otomatik ekran taraması', async ({ browser }) => {
   const oturumGonder = async (durum: unknown): Promise<void> => { await istek('/oturum', durum); };
   let sonuc: TaramaSonucu;
   try {
-    sonuc = { basarili: true, envanter: girdi.kip === 'kayit' ? await akisiKaydet(browser, girdi, olay, oturumGonder) : await taramayiYurut(browser, girdi, olay, oturumGonder) };
+    sonuc = { basarili: true, envanter: girdi.kip === 'kayit' ? await akisiKaydet(browser, girdi, olay, oturumGonder)
+      : girdi.kip === 'girisDenemesi' ? await girisiDene(browser, girdi, olay) : await taramayiYurut(browser, girdi, olay, oturumGonder) };
   } catch (hata) {
     sonuc = { basarili: false, hata: hataBilgisi(hata) };
   }

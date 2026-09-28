@@ -2638,6 +2638,10 @@ dialog.onay-diyalogu.genis-onay { width: min(52rem, calc(100vw - 2rem)); }
 .giris-kaydi-adimi { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(12rem, auto); gap: var(--b2) var(--b3); align-items: center;
   border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); background: var(--panel); padding: 8px 12px; }
 .giris-kaydi-ek { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: var(--b2) var(--b3); align-items: end; }
+/* "Girişi dene" sonucu: sayfanın görüntüsü (taşmaz) ve adım günlüğü. */
+.giris-denemesi-goruntusu { display: block; max-width: 100%; max-height: 22rem; margin-top: var(--b2); border: 1px solid var(--cizgi, currentColor); border-radius: var(--r1, 6px); object-fit: contain; }
+.giris-denemesi-gunlugu { margin: var(--b2) 0 0; padding-left: 1.25rem; }
+.giris-denemesi-gunlugu:empty { display: none; }
 .giris-akisi-karti .giris-ozet-adimlari { font-size: 13px; }
 .giris-akisi-karti .dugmeler { margin-top: auto; }
 @media (max-width: 640px) {

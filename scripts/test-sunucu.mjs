@@ -322,6 +322,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/giris-tarifi.js', { dosya: 'giris-tarifi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-ozeti.mjs', { dosya: 'giris-ozeti.mjs', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/giris-akisi.js', { dosya: 'giris-akisi.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/giris-denemesi.js', { dosya: 'giris-denemesi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/sonuclar.js', { dosya: 'sonuclar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryolar.js', { dosya: 'senaryolar.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],

@@ -276,7 +276,9 @@ export function taramaYoneticisiOlustur(secenekler) {
       // Akış kaydı: diyagramı kurulacak (topla → tasarla).
       tasarim: Boolean(is.akis),
       // Giriş kaydı: taslak işaretlenip tarif önizlenecek.
-      girisTaslagi: Boolean(is.girisTaslagi)
+      girisTaslagi: Boolean(is.girisTaslagi),
+      // Giriş denemesi: sonuç (başarılı / hata, sayfanın yolu, ekran görüntüsü, adım günlüğü).
+      deneme: is.deneme ?? null
     };
   }
 
@@ -334,12 +336,14 @@ export function taramaYoneticisiOlustur(secenekler) {
   function baslat(vt, g, s) {
     temizle();
     const c = calisan();
-    if (c) throw new TaramaHatasi('MESGUL', `Başka bir ${c.kip === 'kayit' ? 'akış kaydı' : c.kip === 'girisKaydi' ? 'giriş kaydı' : 'tarama'} sürüyor (${c.ekran.ad}); bitmesini bekleyin ya da iptal edin.`, 409, { isId: c.id });
+    if (c) throw new TaramaHatasi('MESGUL', `Başka bir ${c.kip === 'kayit' ? 'akış kaydı' : c.kip === 'girisKaydi' ? 'giriş kaydı' : c.kip === 'girisDenemesi' ? 'giriş denemesi' : 'tarama'} sürüyor (${c.ekran.ad}); bitmesini bekleyin ya da iptal edin.`, 409, { isId: c.id });
     // "Girişi kaydet": akış kaydıyla aynı altyapı; ekran yok, giriş YAPILMADAN giriş sayfası açılır, kullanıcı girişi kendisi yapar.
     const girisKaydi = g.kip === 'girisKaydi';
+    // "Girişi dene": yalnız ortamın giriş tarifiyle giriş (kayıtlı oturum kullanılmaz); ekran yok, tarif şart.
+    const girisDenemesi = g.kip === 'girisDenemesi';
     const kayit = g.kip === 'kayit' || girisKaydi;
     if (g.onay !== true) {
-      throw new TaramaHatasi('ONAY_GEREKLI', kayit
+      throw new TaramaHatasi('ONAY_GEREKLI', girisDenemesi ? 'Giriş denemesi siteye gerçek giriş isteği gönderir: başlatmadan önce uyarıyı onaylayın.' : kayit
         ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydında bastığınız düğmeler siteye gerçek istek gönderir: başlatmadan önce uyarıyı onaylayın.`
         : 'Tarama seçilen ortama bağlanır: başlatmadan önce uyarıyı onaylayın.');
     }
@@ -350,8 +354,8 @@ export function taramaYoneticisiOlustur(secenekler) {
     const ortamKaydi = ortamlariListele(vt, projeId).find((o) => o.id === ortamId);
     if (!ortamKaydi) throw new DepoHatasi('Ortam bulunamadı.');
     // Akış / giriş kaydında bastığınız düğmeler siteye gerçek istek gönderir: riskli ortamda (kullanıcı seçimi; belirtilmemiş = riskli) yapılamaz.
-    if (kayit && riskliOrtamMi(ortamKaydi)) {
-      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı riskli${riskliSecimi(ortamKaydi) === null ? ' (riskli olup olmadığı belirtilmemiş)' : ''}; ${girisKaydi ? 'giriş' : 'akış'} kaydı bu ortamda yapılamaz (Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").`);
+    if ((kayit || girisDenemesi) && riskliOrtamMi(ortamKaydi)) {
+      throw new TaramaHatasi('CANLI_ORTAM', `"${ortamKaydi.ad}" ortamı riskli${riskliSecimi(ortamKaydi) === null ? ' (riskli olup olmadığı belirtilmemiş)' : ''}; ${girisDenemesi ? 'giriş denemesi' : girisKaydi ? 'giriş kaydı' : 'akış kaydı'} bu ortamda yapılamaz (Ayarlar > Proje ve ortamlar > "Bu ortam riskli mi?").`);
     }
 
     // Ekran: mevcut (tekrar analiz ya da modelsiz ekrana ilk model) ya da yeni (ad + anahtar). Giriş kaydında ekran yoktur.
@@ -360,7 +364,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     let ekran;
     /** @type {Nesne | null} */
     let mevcutModel = null;
-    if (girisKaydi) {
+    if (girisKaydi || girisDenemesi) {
       ekran = { id: null, ad: `Giriş (${ortamKaydi.ad})`, anahtar: '' };
     } else if (g.ekranId !== undefined && g.ekranId !== null && g.ekranId !== '') {
       const e = ekranlar.find((x) => x.id === kimlikAl(g.ekranId, 'ekranId'));
@@ -385,10 +389,10 @@ export function taramaYoneticisiOlustur(secenekler) {
     }
 
     // Hedef (ortamın kökeninde bir yol). Giriş kaydında: verilen yol, yoksa kayıtlı tarifin giriş adresi, yoksa "/".
-    const mevcutGirisAdresi = girisKaydi ? (etkinGirisTarifi(vt, projeId, ortamId).tarif?.girisAdresi ?? '/') : null;
+    const mevcutGirisAdresi = girisKaydi || girisDenemesi ? (etkinGirisTarifi(vt, projeId, ortamId).tarif?.girisAdresi ?? '/') : null;
     let hedef;
     try {
-      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : girisKaydi ? mevcutGirisAdresi : mevcutModel?.ekranUrl);
+      hedef = hedefCoz(ortamKaydi.tabanUrl, typeof g.hedef === 'string' && g.hedef.trim() ? g.hedef : girisKaydi || girisDenemesi ? mevcutGirisAdresi : mevcutModel?.ekranUrl);
     } catch (e) {
       if (e instanceof HedefHatasi) throw new TaramaHatasi('HEDEF', e.message);
       throw e;
@@ -399,6 +403,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     const tarifSonucu = girissiz ? { tarif: null, hatalar: [] } : etkinGirisTarifi(vt, projeId, ortamId);
     if (tarifSonucu.hatalar.length) throw new TaramaHatasi('TARIF_GECERSIZ', `Bu ortamın giriş tarifi geçersiz: ${tarifSonucu.hatalar.join(' ')} (Ayarlar > Giriş profilleri > Giriş tarifi).`);
     const tarif = tarifSonucu.tarif;
+    if (girisDenemesi && !tarif) throw new TaramaHatasi('TARIF_YOK', `"${ortamKaydi.ad}" ortamında giriş tarifi yok; önce girişi kaydedin ya da tarif tanımlayın.`);
     /** @type {import('./protokol.d.mts').TaramaKimligi | null} */
     let kimlik = null;
     /** @type {string | null} */
@@ -422,6 +427,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     const istenen = Array.isArray(g.baglamProfilleri) ? [...new Set(g.baglamProfilleri.filter((x) => typeof x === 'string' && x.trim()))] : [];
     if (girissiz && istenen.length) throw new TaramaHatasi('PROFIL', 'Giriş yapmadan açılan sayfada bağlam profili uygulanamaz; profil seçmeyin.');
     if (istenen.length > 12) throw new TaramaHatasi('PROFIL', 'En fazla 12 bağlam profili seçilebilir.');
+    if (girisDenemesi && istenen.length) throw new TaramaHatasi('PROFIL', 'Giriş denemesi bağlam profili olmadan yapılır.');
     if (kayit && istenen.length > 1) throw new TaramaHatasi('PROFIL', 'Akış kaydı en fazla bir bağlam profiliyle yapılır.');
     /** @type {Array<{ ad: string | null; degerler: Record<string, unknown> | null }>} */
     let profiller = [{ ad: null, degerler: null }];
@@ -448,7 +454,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     if (!existsSync(cli)) throw new TaramaHatasi('KURULUM', `"${cli}" bulunamadı (npm install çalıştırılmamış olabilir).`, 500);
 
     // Seçimi hatırla (ekran varsa): bağlam profilleri tekrar analiz diyaloğuyla ortak, ortam/yol/keşif taramaya özel.
-    const kesif = kayit ? false : g.kesif !== false;
+    const kesif = kayit || girisDenemesi ? false : g.kesif !== false;
     if (ekran.id) {
       const e = /** @type {NonNullable<ReturnType<typeof ekranlariListele>[number]>} */ (ekranlar.find((x) => x.id === ekran.id));
       const ayarlar = ekranAyarlariniGetir(vt, e.id) ?? {};
@@ -470,23 +476,25 @@ export function taramaYoneticisiOlustur(secenekler) {
     const sure = kayit ? kayitZamanAsimiMs(vt) : zamanAsimiMs(vt);
     // Giriş kipi (Ayarlar > Koşu > Tarama ve akış kaydı): "Koşunun saklanan oturumunu kullan" YALNIZ giriş yapılan işte (tarif var,
     // "Giriş yapmadan aç" değil) uygulanır; girişsiz iş saklanan oturumu hiç okumaz ve güncellemez.
-    const girisKipi = tarif ? taramaGirisKipi(vt) : null;
+    const girisKipi = tarif && !girisDenemesi ? taramaGirisKipi(vt) : null;
     const saklanan = tarif && girisProfiliId && girisKipi === 'saklananOturum'
       ? saklananOturumHazirla(vt, ortamId, girisProfiliId, ortamKaydi.tabanUrl, tarif) : null;
     /** @type {Nesne} */
     const is = {
-      id, token, kip: girisKaydi ? 'girisKaydi' : kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
+      id, token, kip: girisDenemesi ? 'girisDenemesi' : girisKaydi ? 'girisKaydi' : kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
       durum: 'suruyor', hata: null, baslangic: simdi(), bitis: null,
-      adimlar: girisKaydi
+      adimlar: girisDenemesi
+        ? { hazirlik: { durum: 'bekliyor' }, giris: { durum: 'bekliyor' } }
+        : girisKaydi
         ? { hazirlik: { durum: 'bekliyor' }, kayit: { durum: 'bekliyor' } }
         : kayit
         ? { hazirlik: { durum: 'bekliyor' }, giris: { durum: tarif ? 'bekliyor' : 'atlandi' }, kayit: { durum: 'bekliyor' }, paket: { durum: 'bekliyor' } }
         : { hazirlik: { durum: 'bekliyor' }, giris: { durum: tarif ? 'bekliyor' : 'atlandi' }, profiller: { durum: 'bekliyor' }, paket: { durum: 'bekliyor' } },
-      profiller: kayit ? [] : profiller.map((p) => ({ ad: p.ad ?? 'Varsayılan bağlam', durum: 'bekliyor' })),
+      profiller: kayit || girisDenemesi ? [] : profiller.map((p) => ({ ad: p.ad ?? 'Varsayılan bağlam', durum: 'bekliyor' })),
       baglamProfili: kayit ? profiller[0].ad : null,
       engellenenler: [], engellenenSayisi: 0, olaylar: [],
       girdi: {
-        kip: kayit ? 'kayit' : 'tarama', tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
+        kip: girisDenemesi ? 'girisDenemesi' : kayit ? 'kayit' : 'tarama', tabanUrl: ortamKaydi.tabanUrl, hedefAdres: hedef.adres, hedefYol: hedef.yol, tarif, kimlik, profiller, kesif,
         yasakKaliplari: etkinYasakAdresler(vt, ortam), izinliKokenler: izinliKokenler.length ? izinliKokenler : null, zamanAsimiMs: sure,
         // Tarayıcı kararları (Ayarlar > Koşu > Tarama ve akış kaydı; saat dilimi Gelişmiş > Tarayıcı).
         tarayici: taramaTarayiciGirdisi(vt),
@@ -526,7 +534,8 @@ export function taramaYoneticisiOlustur(secenekler) {
       [TARAMA_TEST_SURESI_DEGISKENI]: String(sure + 60_000),
       ...(izinliKokenler.length ? { [TARAMA_DNS_KAPALI_DEGISKENI]: '1' } : {}),
       // Akış kaydı görünür tarayıcıda (testlerde NOBETCI_KAYIT_BASSIZ=1 ile başsız).
-      ...(kayit && ortam[KAYIT_BASSIZ_DEGISKENI] !== '1' ? { [TARAMA_GORUNUR_DEGISKENI]: '1' } : {})
+      // Giriş denemesi yalnız kullanıcı "Tarayıcıyı göster"i seçtiyse görünür.
+      ...((kayit || (girisDenemesi && g.gorunur === true)) && ortam[KAYIT_BASSIZ_DEGISKENI] !== '1' ? { [TARAMA_GORUNUR_DEGISKENI]: '1' } : {})
     });
     const surec = spawn(process.execPath, [cli, 'test', '--config', yapilandirma], {
       cwd: secenekler.projeKoku, env, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32', shell: false
@@ -549,7 +558,7 @@ export function taramaYoneticisiOlustur(secenekler) {
     is.zamanlayici = setTimeout(() => {
       bitir(is, 'hata', {
         kod: 'ZAMAN_ASIMI',
-        mesaj: kayit ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydı ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; kaydı yeniden başlatın.` : `Tarama ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu (sayfa çok yavaş olabilir).`
+        mesaj: kayit ? `${girisKaydi ? 'Giriş' : 'Akış'} kaydı ${Math.round(sure / 60000)} dk süre sınırını aştı ve durduruldu; kaydı yeniden başlatın.` : girisDenemesi ? `Giriş denemesi ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu.` : `Tarama ${Math.round(sure / 1000)} sn süre sınırını aştı ve durduruldu (sayfa çok yavaş olabilir).`
       });
       sureciKapat(is);
     }, sure);
@@ -560,7 +569,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   /** @param {string} id */
   function iptal(id) {
     const is = isGetir(id);
-    const ad = is.kip === 'kayit' ? 'Akış kaydı' : is.kip === 'girisKaydi' ? 'Giriş kaydı' : 'Tarama';
+    const ad = is.kip === 'kayit' ? 'Akış kaydı' : is.kip === 'girisKaydi' ? 'Giriş kaydı' : is.kip === 'girisDenemesi' ? 'Giriş denemesi' : 'Tarama';
     if (is.durum !== 'suruyor') throw new TaramaHatasi('BITTI', `${ad} zaten bitti.`, 409);
     bitir(is, 'iptal', { kod: 'IPTAL', mesaj: `${ad} kullanıcı tarafından iptal edildi.` });
     sureciKapat(is);
@@ -648,6 +657,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       return { alindi: true };
     }
     if (is.kip === 'girisKaydi') return girisKaydiSonucunuIsle(is, s.envanter);
+    if (is.kip === 'girisDenemesi') return girisDenemesiSonucunuIsle(is, s.envanter);
     is.adimlar.paket = { durum: 'suruyor' };
     if (is.kip === 'kayit') return kayitSonucunuIsle(is, s.envanter);
     try {
@@ -728,6 +738,27 @@ export function taramaYoneticisiOlustur(secenekler) {
       return { alindi: true };
     }
     is.girisTaslagi = taslak;
+    bitir(is, 'tamam');
+    return { alindi: true };
+  }
+
+  /**
+   * "Girişi dene" sonucu: başarılı mı, değilse açık hata; ekran görüntüsü yalnız bellekte (iş silinince gider). İş her durumda
+   * "tamam" biter (girişin başarısızlığı işin değil, denemenin sonucudur). @param {Nesne} is @param {unknown} e
+   */
+  function girisDenemesiSonucunuIsle(is, e) {
+    if (!nesneMi(e) || e.kip !== 'girisDenemesi' || typeof e.basarili !== 'boolean') {
+      bitir(is, 'hata', { kod: 'BEKLENMEYEN', mesaj: 'Giriş denemesinin sonucu okunamadı.' });
+      return { alindi: true };
+    }
+    const metin = (/** @type {unknown} */ d, /** @type {number} */ n) => (typeof d === 'string' ? d.slice(0, n) : '');
+    const h = nesneMi(e.hata) ? { kod: metin(e.hata.kod, 40) || 'BEKLENMEYEN', mesaj: metin(e.hata.mesaj, 1000) } : null;
+    is.deneme = {
+      basarili: e.basarili === true && !h, yol: metin(e.yol, 300), hata: h,
+      goruntu: typeof e.goruntu === 'string' && e.goruntu.length < 8_000_000 ? e.goruntu : null,
+      gunluk: Array.isArray(e.gunluk) ? e.gunluk.filter((x) => typeof x === 'string').slice(0, 50).map((x) => x.slice(0, 300)) : []
+    };
+    console.log(`[platform] Giriş denemesi (${is.id}, ${is.ortam.ad}): ${is.deneme.basarili ? 'başarılı' : `başarısız (${h?.kod ?? '—'})`}.`);
     bitir(is, 'tamam');
     return { alindi: true };
   }
@@ -927,7 +958,7 @@ export async function taramaIsteginiIsle(req, res, b) {
       ucDenetle(db, yol, govde);
       const port = req.socket.localPort;
       const sonuc = y.baslat(db, govde, { sunucuAdresi: `http://127.0.0.1:${port}` });
-      console.log(`[platform] ${govde.kip === 'kayit' ? 'Akış kaydı' : 'Ekran taraması'} başlatıldı (${sonuc.isId}).`);
+      console.log(`[platform] ${govde.kip === 'kayit' ? 'Akış kaydı' : govde.kip === 'girisKaydi' ? 'Giriş kaydı' : govde.kip === 'girisDenemesi' ? 'Giriş denemesi' : 'Ekran taraması'} başlatıldı (${sonuc.isId}).`);
       gonder(202, { basarili: true, ...sonuc });
       return true;
     }
