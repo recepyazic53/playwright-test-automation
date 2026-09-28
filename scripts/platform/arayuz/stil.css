@@ -3531,3 +3531,33 @@ dialog.taban-diyalogu { width: min(40rem, calc(100vw - 2rem)); max-height: calc(
 .claude-sonucu .not-kutusu, .claude-sonucu p { overflow-wrap: anywhere; }
 .claude-sonucu .dosya-yolu code { flex: 1 1 12rem; overflow-wrap: anywhere; word-break: break-all; }
 dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
+
+/* Test verisi > Veri sağlığı (veri-sagligi.js): benzer / kullanılmayan tablolar, boş sütunlar, kırık başvurular, son birleştirme. */
+.veri-sagligi { display: grid; gap: 8px; min-width: 0; margin-bottom: 12px; }
+.veri-sagligi .kart-basligi h3 { overflow-wrap: anywhere; }
+.saglik-bolumleri { display: grid; gap: 6px; min-width: 0; }
+.saglik-bolumu { min-width: 0; border-radius: var(--yaricap-m); box-shadow: inset 0 0 0 1px var(--cizgi); padding: 6px 10px; }
+.saglik-bolumu > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.saglik-listesi { list-style: none; margin: 8px 0 2px; padding: 0; display: grid; gap: 6px; min-width: 0; }
+.saglik-listesi li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; font-size: 13px; }
+.saglik-listesi li > * { min-width: 0; overflow-wrap: anywhere; }
+.saglik-listesi code { overflow-wrap: anywhere; word-break: break-word; }
+.saglik-metni { flex: 1 1 14rem; }
+.saglik-son { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.saglik-son > span { min-width: 0; overflow-wrap: anywhere; }
+.saglik-son .dugmeler { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.baglanti-dugmesi { background: none; border: 0; padding: 0; color: var(--vurgu, inherit); text-decoration: underline; cursor: pointer; font: inherit; text-align: left; overflow-wrap: anywhere; }
+.birlestirme-diyalogu .kalan-secenegi { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 8px; min-width: 0; }
+.birlestirme-diyalogu .kalan-secenegi > span { flex: 1 1 12rem; min-width: 0; overflow-wrap: anywhere; }
+.birlestirme-diyalogu .neden { display: block; font-size: 11.5px; color: var(--metin-3); }
+.birlestirme-diyalogu .alan-etiketi { display: grid; gap: 4px; margin-top: 8px; font-size: 13px; }
+.birlestirme-diyalogu .alan-etiketi input { width: 100%; max-width: 100%; min-width: 0; }
+.birlestirme-diyalogu select { max-width: 100%; min-width: 0; }
+.benzer-tablo-notu { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.benzer-tablo-notu > * { min-width: 0; overflow-wrap: anywhere; }
+/* Ekran > Test verisi > "Kişi alanlarını tabloya bağla…" (ekran-baglari.js). */
+.kisi-baglama-diyalogu .neden { display: block; font-size: 11.5px; color: var(--metin-3); }
+.kisi-baglama-diyalogu select, .kisi-baglama-diyalogu input[type="text"] { max-width: 100%; min-width: 0; }
+.kisi-tablo-secimi { display: grid; gap: 4px; margin-top: 8px; font-size: 13px; }
+.kisi-yeni-satir { display: grid; gap: 4px; min-width: 0; }
+.kisi-yeni-satir input[type="text"] { width: 100%; }

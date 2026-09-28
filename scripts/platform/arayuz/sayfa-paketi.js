@@ -181,8 +181,8 @@ const TV_TUR = { liste: 'Ekran listesi', kayit: 'Kişi ve kayıt verisi' };
  */
 export function testVerisiSecimi(t, degisti) {
   if (!t || !t.tablolar.length) return { bolum: null, ozet: () => null, hazir: () => true, govde: () => undefined };
-  /** @type {Map<string, { islem: string | null; yeniAd: string }>} */
-  const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? null : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60) }]));
+  /** @type {Map<string, { islem: string | null; yeniAd: string; hedefId?: string }>} */
+  const durum = new Map(t.tablolar.map((x) => [x.ad, { islem: x.mevcut ? null : 'yeni', yeniAd: `${x.ad} 2`.slice(0, 60), hedefId: '' }]));
   const baglar = new Set(t.baglantilar.map((b) => b.alanId));
   const yazilir = (ad) => { const d = durum.get(ad); return Boolean(d && d.islem && d.islem !== 'atla'); };
   const bagListesi = h('ul', { class: 'tv-baglar' });
@@ -200,7 +200,21 @@ export function testVerisiSecimi(t, degisti) {
     const d = durum.get(x.ad);
     const gizliVar = x.sutunlar.some((s) => s.gizli);
     let secim;
-    if (!x.mevcut) {
+    if (!x.mevcut && x.benzer && x.benzer.length) {
+      // Önleme: başlıkları aynı (esnek) tablo var — onu kullan (birleştir) ya da yine de yeni oluştur. Varsayılan: yeni.
+      const ad = `tv-${Math.random().toString(36).slice(2, 9)}`;
+      const secenek = (deger, hedefId, etiket) => {
+        const r = h('input', { type: 'radio', name: ad, value: deger, checked: d.islem === deger && (d.hedefId || '') === (hedefId || '') });
+        r.addEventListener('change', () => { d.islem = deger; d.hedefId = hedefId || ''; bagCiz(); degisti(); });
+        return h('label', {}, r, h('span', {}, etiket));
+      };
+      secim = h('div', { class: 'tv-cakisma' },
+        h('div', { class: 'not-kutusu bilgi kucuk' }, `Benzer tablo var: ${x.benzer.map((b) => `“${b.ad}”`).join(', ')} (sütun başlıkları aynı). Aynı veriyi iki tabloda tutmamak için onu kullanabilirsiniz.`),
+        h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': `${x.ad}: benzer tablo` },
+          ...x.benzer.map((b) => secenek('birlestir', b.id, `Onu kullan: “${b.ad}” — ${b.eklenecekSatir} yeni satır eklenir; mevcut satırlar değişmez`)),
+          secenek('yeni', '', 'Yine de yeni tablo oluştur'),
+          secenek('atla', '', 'Atla (yazma)')));
+    } else if (!x.mevcut) {
       const k = h('input', { type: 'checkbox', checked: d.islem === 'yeni', 'aria-label': `${x.ad} tablosunu yaz` });
       k.addEventListener('change', () => { d.islem = k.checked ? 'yeni' : 'atla'; bagCiz(); degisti(); });
       secim = h('label', { class: 'tv-yaz' }, k, h('span', {}, 'Yeni tablo olarak yaz'));
@@ -251,7 +265,7 @@ export function testVerisiSecimi(t, degisti) {
       return `${n ? `${n} tablo yazılır${b ? `, ${b} alan bağlanır` : ''}` : 'yazılmaz'}${bekleyen ? ' — aynı adlı tablo için seçim bekleniyor' : ''}`;
     },
     govde: () => ({
-      tablolar: Object.fromEntries([...durum].map(([ad, d]) => [ad, { islem: d.islem || 'atla', ...(d.islem === 'yeniAd' ? { yeniAd: d.yeniAd.trim() } : {}) }])),
+      tablolar: Object.fromEntries([...durum].map(([ad, d]) => [ad, { islem: d.islem || 'atla', ...(d.islem === 'yeniAd' ? { yeniAd: d.yeniAd.trim() } : {}), ...(d.islem === 'birlestir' && d.hedefId ? { hedefId: d.hedefId } : {}) }])),
       baglantilar: t.baglantilar.filter((x) => yazilir(x.tablo) && baglar.has(x.alanId)).map((x) => x.alanId)
     })
   };

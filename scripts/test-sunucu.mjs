@@ -362,6 +362,9 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/hesap-kurali-formu.js', { dosya: 'hesap-kurali-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rest-semasi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'rest-semasi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
+  ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/veri-sagligi.js', { dosya: 'veri-sagligi.js', tur: 'text/javascript; charset=utf-8' }],
   // Sayfa paketi istek metinleri (inceleme kuralları + "Paket nasıl üretilir?" cümlesi): sunucunun istek dosyasıyla ORTAK.
   ['/arayuz/paket-istekleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ekranlar', 'paket-istekleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // İzin tanımları (Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) ve riskli ortam tanımı: sunucuyla ORTAK tek kaynak.
