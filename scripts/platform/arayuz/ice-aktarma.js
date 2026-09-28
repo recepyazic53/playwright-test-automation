@@ -279,46 +279,79 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
   }
 
   // --- 3) Önizleme ve seçim ------------------------------------------------------------
+  // Her varlık türü ve içindeki her grup (Yeni / Değişen / Yalnızca bu bilgisayarda) açılır-kapanır ve varsayılan kapalıdır:
+  // başlıkta sayılar ve üç durumlu (tümü / hiçbiri / kısmi) seçim kutusu. Seçim kayıt kimliğiyle tutulur; satırlar grup ilk
+  // açıldığında çizilir (SAYFA_BOYU kadar, kalanı "Daha fazla göster" ile).
+  const SAYFA_BOYU = 200;
+  const GRUP_TANIMLARI = [
+    { anahtar: 'yeni', sinif: 'yeni', ad: 'Yeni', kisa: 'yeni', ikon: 'artiYalin', secilebilir: true },
+    { anahtar: 'degisen', sinif: 'degisen', ad: 'Değişen', kisa: 'değişen', ikon: 'duzenle', secilebilir: true,
+      not: 'Seçilirse yedekteki sürüm bu bilgisayardakinin yerine geçer; bu bilgisayardaki sürüm değişiklik geçmişinde saklanır.' },
+    { anahtar: 'yalnizBurada', sinif: 'yalniz-burada', ad: 'Yalnızca bu bilgisayarda', kisa: 'yalnızca bu bilgisayarda', ikon: 'bilgisayar', secilebilir: false,
+      not: 'Bilgi amaçlıdır: içe aktarma bu kayıtları silmez veya değiştirmez.' }
+  ];
+
   function onizlemeEkrani(onizleme, odak) {
     /** @type {Map<string, Set<string>>} */
     const secilen = new Map();
-    /** @type {Array<{ tablo: string; id: string; kutu: HTMLInputElement }>} */
-    const tumKutular = [];
-    const grupGuncelleyiciler = [];
+    let secilebilirSayisi = 0;
+    /** Çizilmiş satır kutuları (gruplar açıldıkça eklenir). @type {Array<{ tablo: string; id: string; kutu: HTMLInputElement }>} */
+    const cizilenKutular = [];
+    /** @type {Array<{ tablo: string; id: string }>} */
+    const tumOgeler = [];
+    const guncelleyiciler = [];
     const secimSayaci = h('p', { 'aria-live': 'polite', class: 'secim-sayaci' });
-    const secimiGuncelle = () => {
-      let toplam = 0;
-      for (const s of secilen.values()) toplam += s.size;
-      secimSayaci.textContent = `Seçili: ${toplam} / ${tumKutular.length} kayıt`;
-      for (const g of grupGuncelleyiciler) g();
-    };
+    const seciliMi = (tablo, id) => Boolean(secilen.get(tablo)?.has(id));
     const secimAyarla = (tablo, id, secili) => {
       if (!secilen.has(tablo)) secilen.set(tablo, new Set());
       if (secili) secilen.get(tablo).add(id); else secilen.get(tablo).delete(id);
     };
-
-    const ogeKutusu = (tablo, oge, grupAdi) => {
-      const kutu = h('input', { type: 'checkbox', checked: true, id: yeniKimlik('sec') });
-      secimAyarla(tablo, oge.id, true);
-      kutu.addEventListener('change', () => { secimAyarla(tablo, oge.id, kutu.checked); secimiGuncelle(); });
-      tumKutular.push({ tablo, id: oge.id, kutu });
-      return h('label', { class: 'secenek', for: kutu.id }, kutu,
-        h('span', {}, oge.baslik, h('span', { class: 'gorunmez' }, ` (${grupAdi})`)));
+    const secimiGuncelle = () => {
+      let toplam = 0;
+      for (const s of secilen.values()) toplam += s.size;
+      secimSayaci.textContent = `Seçili: ${toplam} / ${secilebilirSayisi} kayıt`;
+      for (const k of cizilenKutular) k.kutu.checked = seciliMi(k.tablo, k.id);
+      for (const g of guncelleyiciler) g();
     };
+    const seciliSay = (ogeler) => ogeler.reduce((n, o) => n + (seciliMi(o.tablo, o.id) ? 1 : 0), 0);
 
-    const grupSecimi = (baslik, kutular) => {
-      const hepsi = h('input', { type: 'checkbox', id: yeniKimlik('grup') });
-      const guncelle = () => {
-        const secili = kutular.filter((k) => k.kutu.checked).length;
-        hepsi.checked = secili === kutular.length;
-        hepsi.indeterminate = secili > 0 && secili < kutular.length;
-      };
-      hepsi.addEventListener('change', () => {
-        for (const k of kutular) { k.kutu.checked = hepsi.checked; secimAyarla(k.tablo, k.id, hepsi.checked); }
+    /** Grup / tür başlığındaki üç durumlu kutu: tümü seçiliyse işaretli, hiçbiri değilse boş, arada "kısmi" (indeterminate + aria-checked="mixed"). */
+    const ucDurumluKutu = (etiket, ogeler) => {
+      const kutu = h('input', { type: 'checkbox', class: 'uc-durumlu', 'aria-label': etiket });
+      guncelleyiciler.push(() => {
+        const n = seciliSay(ogeler);
+        kutu.checked = n > 0 && n === ogeler.length;
+        kutu.indeterminate = n > 0 && n < ogeler.length;
+        if (kutu.indeterminate) kutu.setAttribute('aria-checked', 'mixed'); else kutu.removeAttribute('aria-checked');
+      });
+      kutu.addEventListener('change', () => {
+        for (const o of ogeler) secimAyarla(o.tablo, o.id, kutu.checked);
         secimiGuncelle();
       });
-      grupGuncelleyiciler.push(guncelle);
-      return h('label', { class: 'secenek kucuk', for: hepsi.id }, hepsi, `Tümünü seç (${baslik})`);
+      return kutu;
+    };
+
+    /** Açılır-kapanır bölüm: başlıkta (isteğe bağlı) seçim kutusu + aria-expanded düğmesi; içerik ilk açılışta çizilir. */
+    const acilir = (baslikEtiketi, kutu, dugmeIcerigi, icerikCiz) => {
+      const govde = h('div', { class: 'acilir-govde', id: yeniKimlik('acilir'), hidden: true });
+      const dugme = h('button', { type: 'button', class: 'acilir-dugme', 'aria-expanded': 'false', 'aria-controls': govde.id },
+        h('span', { class: 'acilir-ok', 'aria-hidden': 'true' }), ...dugmeIcerigi);
+      let cizildi = false;
+      dugme.addEventListener('click', () => {
+        const ac = dugme.getAttribute('aria-expanded') !== 'true';
+        if (ac && !cizildi) { govde.append(...icerikCiz()); cizildi = true; secimiGuncelle(); }
+        dugme.setAttribute('aria-expanded', String(ac));
+        govde.hidden = !ac;
+      });
+      return { baslik: h('div', { class: 'acilir-baslik' }, kutu, h(baslikEtiketi, {}, dugme)), govde };
+    };
+
+    const ogeKutusu = (tablo, oge, grupAdi) => {
+      const kutu = h('input', { type: 'checkbox', checked: seciliMi(tablo, oge.id), id: yeniKimlik('sec') });
+      kutu.addEventListener('change', () => { secimAyarla(tablo, oge.id, kutu.checked); secimiGuncelle(); });
+      cizilenKutular.push({ tablo, id: oge.id, kutu });
+      return h('label', { class: 'secenek', for: kutu.id }, kutu,
+        h('span', {}, oge.baslik, h('span', { class: 'gorunmez' }, ` (${grupAdi})`)));
     };
 
     const farkTablosu = (oge) => {
@@ -347,42 +380,88 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
       h('td', {}, degerMetni(yerel), maskeli && degerMetni(yerel) === MASKE ? h('span', { class: 'soluk' }, ' (gizli)') : null),
       h('td', {}, degerMetni(dosya), maskeli && degerMetni(dosya) === MASKE ? h('span', { class: 'soluk' }, ' (gizli)') : null));
 
+    const SATIR_CIZICILERI = {
+      yeni: (tablo, o) => h('li', {}, h('div', { class: 'oge-satiri' }, ogeKutusu(tablo, o, 'yeni'),
+        o.uygulanamaz ? h('span', { class: 'rozet uyari' }, o.uygulanamaz) : null)),
+      degisen: (tablo, o) => h('li', {},
+        h('div', { class: 'oge-satiri' }, ogeKutusu(tablo, o, 'değişen'), h('span', { class: 'rozet uyari' }, `${o.farklar.length} alan farklı`)),
+        h('details', { class: 'fark' }, h('summary', {}, 'Farkları göster'), farkTablosu(o))),
+      yalnizBurada: (_tablo, o) => h('li', {}, o.baslik)
+    };
+
+    /** Satırları SAYFA_BOYU'lık parçalarla çizen liste; kalan varsa "Daha fazla göster". */
+    const sayfaliListe = (ogeler, satirCiz) => {
+      const liste = h('ul', {});
+      const dahaFazla = h('button', { type: 'button', class: 'kucuk-dugme daha-fazla' });
+      let cizilen = 0;
+      const ciz = () => {
+        const son = Math.min(ogeler.length, cizilen + SAYFA_BOYU);
+        liste.append(...ogeler.slice(cizilen, son).map(satirCiz));
+        cizilen = son;
+        const kalan = ogeler.length - cizilen;
+        dahaFazla.hidden = kalan === 0;
+        dahaFazla.textContent = `Daha fazla göster (${Math.min(kalan, SAYFA_BOYU)} kayıt daha, kalan ${kalan})`;
+      };
+      dahaFazla.addEventListener('click', () => {
+        const ilk = cizilen;
+        ciz();
+        secimiGuncelle();
+        // Odak yeni çizilen ilk satıra geçer (düğme son parçada gizlenir).
+        const ilkSatir = /** @type {HTMLElement | undefined} */ (liste.children[ilk]);
+        const odakKutusu = ilkSatir?.querySelector('input');
+        if (odakKutusu) odakKutusu.focus();
+        else if (ilkSatir) { ilkSatir.tabIndex = -1; ilkSatir.focus(); }
+      });
+      ciz();
+      return [liste, dahaFazla];
+    };
+
     const bolumler = [];
     for (const [tablo, v] of Object.entries(onizleme.varliklar)) {
       if (!v.yeni.length && !v.degisen.length && !v.yalnizBurada.length) {
         if (v.ayniSayisi) bolumler.push(h('p', { class: 'soluk kucuk' }, `${v.etiket}: ${v.ayniSayisi} kayıt iki tarafta da aynı.`));
         continue;
       }
+      /** @type {Array<{ tablo: string; id: string }>} */
+      const turOgeleri = [];
       const gruplar = [];
-      if (v.yeni.length) {
-        const baslangic = tumKutular.length;
-        const ogeler = v.yeni.map((o) => h('li', {}, h('div', { class: 'oge-satiri' }, ogeKutusu(tablo, o, 'yeni'),
-          o.uygulanamaz ? h('span', { class: 'rozet uyari' }, o.uygulanamaz) : null)));
-        const kutular = tumKutular.slice(baslangic);
-        gruplar.push(h('section', { class: 'grup yeni', 'aria-label': `${v.etiket} — Yeni` },
-          h('div', { class: 'grup-basligi' }, h('h4', {}, ikon('artiYalin'), `Yeni (${v.yeni.length})`), grupSecimi(`${v.etiket}, yeni`, kutular)),
-          h('ul', {}, ogeler)));
+      const ozetParcalari = [];
+      for (const g of GRUP_TANIMLARI) {
+        const liste = v[g.anahtar];
+        if (!liste.length) continue;
+        ozetParcalari.push(`${liste.length} ${g.kisa}`);
+        let kutu = null;
+        let seciliMetni = null;
+        if (g.secilebilir) {
+          const ogeler = liste.map((o) => ({ tablo, id: o.id }));
+          for (const o of ogeler) secimAyarla(tablo, o.id, true);
+          secilebilirSayisi += ogeler.length;
+          turOgeleri.push(...ogeler);
+          tumOgeler.push(...ogeler);
+          kutu = ucDurumluKutu(`Tümünü seç (${v.etiket}, ${g.kisa})`, ogeler);
+          seciliMetni = h('span', { class: 'acilir-secili' });
+          const s = seciliMetni;
+          guncelleyiciler.push(() => { s.textContent = ` · ${seciliSay(ogeler)} seçili`; });
+        }
+        const { baslik, govde } = acilir('h4', kutu,
+          [ikon(g.ikon), h('span', { class: 'acilir-ad' }, g.ad), h('span', { class: 'acilir-sayi' }, ` · ${liste.length} kayıt`), seciliMetni],
+          () => [g.not ? h('p', { class: 'soluk kucuk' }, g.not) : null, ...sayfaliListe(liste, (o) => SATIR_CIZICILERI[g.anahtar](tablo, o))].filter(Boolean));
+        gruplar.push(h('section', { class: `grup ${g.sinif}`, 'aria-label': `${v.etiket} — ${g.ad}` }, baslik, govde));
       }
-      if (v.degisen.length) {
-        const baslangic = tumKutular.length;
-        const ogeler = v.degisen.map((o) => h('li', {},
-          h('div', { class: 'oge-satiri' }, ogeKutusu(tablo, o, 'değişen'),
-            h('span', { class: 'rozet uyari' }, `${o.farklar.length} alan farklı`)),
-          h('details', { class: 'fark' }, h('summary', {}, 'Farkları göster'), farkTablosu(o))));
-        const kutular = tumKutular.slice(baslangic);
-        gruplar.push(h('section', { class: 'grup degisen', 'aria-label': `${v.etiket} — Değişen` },
-          h('div', { class: 'grup-basligi' }, h('h4', {}, ikon('duzenle'), `Değişen (${v.degisen.length})`), grupSecimi(`${v.etiket}, değişen`, kutular)),
-          h('p', { class: 'soluk kucuk' }, 'Seçilirse yedekteki sürüm bu bilgisayardakinin yerine geçer; bu bilgisayardaki sürüm değişiklik geçmişinde saklanır.'),
-          h('ul', {}, ogeler)));
+      let turKutusu = null;
+      let turSecili = null;
+      if (turOgeleri.length) {
+        turKutusu = ucDurumluKutu(`Tümünü seç (${v.etiket})`, turOgeleri);
+        turSecili = h('span', { class: 'acilir-secili' });
+        const s = turSecili;
+        guncelleyiciler.push(() => { s.textContent = ` · ${seciliSay(turOgeleri)} seçili`; });
       }
-      if (v.yalnizBurada.length) {
-        gruplar.push(h('section', { class: 'grup yalniz-burada', 'aria-label': `${v.etiket} — Yalnızca bu bilgisayarda` },
-          h('div', { class: 'grup-basligi' }, h('h4', {}, ikon('bilgisayar'), `Yalnızca bu bilgisayarda (${v.yalnizBurada.length})`)),
-          h('p', { class: 'soluk kucuk' }, 'Bilgi amaçlıdır: içe aktarma bu kayıtları silmez veya değiştirmez.'),
-          h('ul', {}, v.yalnizBurada.map((o) => h('li', {}, o.baslik)))));
-      }
-      bolumler.push(h('section', { class: 'varlik-bolumu', 'data-tablo': tablo },
-        h('h3', {}, v.etiket, v.ayniSayisi ? rozet(`${v.ayniSayisi} aynı`) : null), gruplar));
+      const { baslik, govde } = acilir('h3', turKutusu,
+        [h('span', { class: 'acilir-ad' }, v.etiket), h('span', { class: 'acilir-sayi' }, ` — ${ozetParcalari.join(', ')}`), turSecili,
+          v.ayniSayisi ? rozet(`${v.ayniSayisi} aynı`) : null].filter(Boolean),
+        () => []);
+      govde.append(...gruplar); // grup başlıkları hafiftir; satırlar grup açılınca çizilir
+      bolumler.push(h('section', { class: 'varlik-bolumu', 'data-tablo': tablo, 'aria-label': v.etiket }, baslik, govde));
     }
 
     const eklenecekSatirlari = Object.entries(onizleme.eklenecekler).filter(([, e]) => e.dosyada > 0)
@@ -390,7 +469,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
         h('span', { class: 'soluk' }, ` (dosyada ${e.dosyada}; bu bilgisayarda olanlar atlanır)`)));
 
     const tumunuSec = (secili) => {
-      for (const k of tumKutular) { k.kutu.checked = secili; secimAyarla(k.tablo, k.id, secili); }
+      for (const o of tumOgeler) secimAyarla(o.tablo, o.id, secili);
       secimiGuncelle();
     };
     const mesaj = mesajKutusu();
