@@ -17,7 +17,13 @@ export interface TabanEtkisi {
   servisler: Array<{ servisId: string; ad: string; tur: 'soap' | 'rest'; grup: { eski: string | null; yeni: string | null };
     adresler: Array<{ ortamId: string; ortam: string; eski: TabanHucresi; yeni: TabanHucresi }>; senaryoSayisi: number; akislar: string[] }>;
   toplam: { servis: number; senaryo: number; akis: number };
+  /** Değişen adreslerde sorgu dizisi / parça uyarıları (kaydı engellemez). */
+  uyarilar: TabanAdresUyarisi[];
 }
+export interface TabanAdresUyarisi { ortamId: string; ortam: string; adres: string; mesaj: string }
+export declare const TABAN_SORGU_UYARISI: string;
+/** Taban adresinde sorgu dizisi (?…) ya da parça (#…) varsa uyarı metni; yoksa null. Engellemez. */
+export declare function tabanAdresiUyarisi(adres: string): string | null;
 export declare function tabanlariUygula(vt: Veritabani, projeId: string, girdi: {
   degisiklikler: Record<string, { tabanlar?: Record<string, string | null>; grup?: string | null }>; onay?: boolean; yapan?: string;
   tabanKararlari?: Record<string, TabanKarari>; tabanDegisikligi?: boolean;
