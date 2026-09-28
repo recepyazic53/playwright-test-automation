@@ -17,7 +17,8 @@ import { ekranAlanBaglari } from '../../scripts/platform/tablolar/ekran-baglari.
 import { paketOnizle, sayfaEkle } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
 import { servisKaydet, servisSenaryosuKaydet } from '../../scripts/platform/servisler/servis-deposu.mjs';
 import { baslikNormal, birlestirmeOnerileri, benzerTablolar, sutunEslemesiOner, tabloTuru } from '../../scripts/platform/tablolar/tablo-benzerligi.mjs';
-import { metniYenidenYaz, secimleriYenidenYaz } from '../../scripts/platform/tablolar/tablo-birlestirme.mjs';
+import { metniYenidenYaz, secimleriYenidenYaz, tablolariBirlestir } from '../../scripts/platform/tablolar/tablo-birlestirme.mjs';
+import { zarfMi } from '../../scripts/platform/kasa.mjs';
 import { akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF, izinleriAc } from './platform-ortak';
@@ -72,6 +73,44 @@ test.describe('tablo benzerliği (saf)', () => {
     expect(secimleriYenidenYaz({ 'kaynak|': { kod: 'K-1' }, 'baska|x': { A: '1' } }, idEslem)).toEqual({ secimler: { 'baska|x': { A: '1' }, 'kalan|': { Kod: 'K-1' } }, degisti: true, cakisma: '' });
     expect(secimleriYenidenYaz({ 'kalan|': { Kod: 'K-2' }, 'kaynak|': { kod: 'K-1' } }, idEslem).cakisma).toContain('iki farklı değer');
   });
+});
+
+test('gizli + açık sütun eşleşmesi: engel değil, birleşik sütun GİZLİ; önizlemede not ve maske; değerler şifreli yazılır', async () => {
+  const klasor = mkdtempSync(join(tmpdir(), 'birlestir-gizli-'));
+  const vt = await veritabaniniHazirla(join(klasor, 'p.db'));
+  try {
+    await kasaOlustur(vt, 'Gecici-Birlestir-1', { kdf: HIZLI_KDF });
+    const projeId = projeKaydet(vt, { ad: 'P' });
+    const kalan = tabloKaydet(vt, { projeId, ad: 'Kuponlar', sutunlar: [{ ad: 'Kod' }, { ad: 'Seri', gizli: false }], satirlar: [
+      { ad: 'k1', degerler: { Kod: 'A-1', Seri: 'pin-acik-11' } }] });
+    const kaynak = tabloKaydet(vt, { projeId, ad: 'Kupon listesi', sutunlar: [{ ad: 'kod' }, { ad: 'SERI', gizli: true }, { ad: 'Not' }, { ad: 'Etiket', gizli: true }], satirlar: [
+      { ad: 'k2', degerler: { kod: 'B-2', SERI: 'pin-gizli-22', Not: 'x', Etiket: 'an-1' } }] });
+    const ucuncu = tabloKaydet(vt, { projeId, ad: 'Kupon arşivi', sutunlar: [{ ad: 'KOD' }, { ad: 'Etiket' }], satirlar: [{ ad: 'k3', degerler: { KOD: 'C-3', Etiket: 'an-acik-3' } }] });
+    const girdi: { kalanId: string; kaynakIdler: string[]; sutunEslemeleri: Record<string, Record<string, string>> } = { kalanId: kalan, kaynakIdler: [kaynak, ucuncu], sutunEslemeleri: { [kaynak]: { kod: 'Kod', SERI: 'Seri', Not: '', Etiket: '' }, [ucuncu]: { KOD: 'Kod', Etiket: '' } } };
+    const o = tablolariBirlestir(vt, projeId, girdi).onizleme as Nesne;
+    expect(o.engeller).toEqual([]);
+    const not = 'Bu sütun gizli olacak (kaynakta gizliydi)';
+    expect(o.sutunlar).toEqual(expect.arrayContaining([
+      { ad: 'Seri', gizli: true, yeni: false, not }, { ad: 'Etiket', gizli: true, yeni: true, not }, { ad: 'Not', gizli: false, yeni: true }]));
+    expect(o.dogrulandi).toBe(true);
+    const metin = JSON.stringify(o);
+    for (const g of ['pin-acik-11', 'pin-gizli-22', 'an-1', 'an-acik-3']) expect(metin.includes(g), g).toBe(false);
+    const r = tablolariBirlestir(vt, projeId, { ...girdi, kip: 'uygula', beklenenImza: o.imza }) as Nesne;
+    expect(r.yapilmadi).toBeUndefined();
+    const t = tablolariListele(vt, projeId, { cozulsun: true }).find((x) => x.id === kalan)!;
+    expect(t.sutunlar.filter((s) => s.gizli).map((s) => s.ad).sort()).toEqual(['Etiket', 'Seri']);
+    const deger = (ad: string, sutun: string) => t.satirlar.find((x) => x.ad === ad)?.degerler[sutun];
+    expect([deger('k1', 'Seri'), deger('k2', 'Seri'), deger('k2', 'Etiket'), deger('k3', 'Etiket')]).toEqual(['pin-acik-11', 'pin-gizli-22', 'an-1', 'an-acik-3']);
+    // Diskte şifreli; şifresiz listede gizli değer dönmez.
+    for (const x of vt.tumu('SELECT degerler_json FROM test_verisi_profilleri WHERE tur_id = ?', [kalan])) {
+      const d = JSON.parse(String(x.degerler_json)) as Record<string, unknown>;
+      for (const s of ['Seri', 'Etiket']) if (d[s] !== undefined && d[s] !== null) expect(zarfMi(d[s]), s).toBe(true);
+    }
+    expect(tablolariListele(vt, projeId).find((x) => x.id === kalan)!.satirlar.every((x) => x.degerler.Seri === null)).toBe(true);
+  } finally {
+    vt.kapat();
+    rmSync(klasor, { recursive: true, force: true });
+  }
 });
 
 test.describe('uçtan uca: birleştirme, kuru doğrulama, geri al (127.0.0.1)', () => {

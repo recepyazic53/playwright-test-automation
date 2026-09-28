@@ -30,7 +30,8 @@ export interface BirlestirmeOnizlemesi {
   kalan: { id: string; ad: string; yeniAd: string };
   tablolar: Array<{ id: string; ad: string; sutunSayisi: number; satirSayisi: number; kullanim: Kullanim | null }>;
   onerilenKalan: string;
-  sutunlar: Array<{ ad: string; gizli: boolean; yeni: boolean }>;
+  /** not: biri gizli biri açık iki sütun eşleşti — birleşik sütun gizli ("Bu sütun gizli olacak (kaynakta gizliydi)"). */
+  sutunlar: Array<{ ad: string; gizli: boolean; yeni: boolean; not?: string }>;
   eslemeler: Array<{ kaynakId: string; kaynakTablo: string; kaynak: string; hedef: string | null; kesin: boolean; onerilen: string | null; gizli: boolean }>;
   onayBekleyenEslemeler: Array<{ kaynakId: string; kaynak: string }>;
   satirlar: { kalan: number; eklenecek: number; ayni: number; cakisan: number; toplam: number; ortamaOzel: number };

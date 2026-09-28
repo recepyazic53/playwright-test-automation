@@ -324,6 +324,12 @@ function planla(vt, projeId, girdi) {
   const eslemeler = [];
   /** @type {Map<string, Map<string, string>>} kaynakId → kaynak sütun (küçük) → birleşik sütun adı */
   const sutunEslemi = new Map();
+  // Biri gizli biri açık iki sütun eşleşirse birleşik sütun GİZLİ olur (engel değil); önizlemede not. Değerler şifreli yazılır,
+  // satır çakışmalarında ve önizlemede maskelenir; kuru doğrulama yeni (gizli) hâle göre çözer.
+  /** @type {Map<string, string>} birleşik sütun adı → not */
+  const gizliNotlari = new Map();
+  /** @param {BSutun} b */
+  const gizliYap = (b) => { b.gizli = true; b.karsiliklar = {}; gizliNotlari.set(b.ad, 'Bu sütun gizli olacak (kaynakta gizliydi)'); };
   for (const k of kaynaklar) {
     const oneri = sutunEslemesiOner(k.sutunlar, kalan.sutunlar);
     const secim = nesneMi(girdi.sutunEslemeleri?.[k.id]) ? /** @type {Record<string, string>} */ (girdi.sutunEslemeleri?.[k.id]) : {};
@@ -339,7 +345,7 @@ function planla(vt, projeId, girdi) {
       if (hedefAd !== null && !hedef) throw new DepoHatasi(`"${k.ad}" tablosunun "${o.kaynak}" sütunu için seçilen "${hedefAd}" sütunu kalan tabloda yok.`);
       if (hedef && kullanilan.has(hedef.ad)) engeller.push(`"${k.ad}" tablosunun iki sütunu aynı "${hedef.ad}" sütununa eşlenmiş.`);
       if (hedef) kullanilan.add(hedef.ad);
-      if (hedef && hedef.gizli !== s.gizli) engeller.push(`"${k.ad}.${s.ad}" ile "${kalan.ad}.${hedef.ad}" sütunlarının gizlilik ayarı farklı; önce Tablolar'da aynı yapın.`);
+      if (hedef && hedef.gizli !== s.gizli) gizliYap(/** @type {BSutun} */ (sutunlar.find((x) => x.ad === hedef.ad)));
       /** @type {string} */
       let son;
       if (hedef) son = hedef.ad;
@@ -347,7 +353,7 @@ function planla(vt, projeId, girdi) {
         const var_ = sutunlar.find((x) => kucuk(x.ad) === kucuk(s.ad));
         if (var_ && kalan.sutunlar.some((x) => x.ad === var_.ad)) engeller.push(`"${k.ad}.${s.ad}" yeni sütun olarak eklenemez: kalan tabloda aynı adda sütun var (eşleyin).`);
         if (!var_) sutunlar.push({ ad: s.ad, gizli: s.gizli, tip: s.tip, karsiliklar: {} });
-        else if (var_.gizli !== s.gizli) engeller.push(`"${s.ad}" sütunu tablolarda farklı gizlilikte.`);
+        else if (var_.gizli !== s.gizli) gizliYap(var_);
         son = var_ ? var_.ad : s.ad;
       }
       m.set(kucuk(s.ad), son);
@@ -442,6 +448,12 @@ function planla(vt, projeId, girdi) {
     }
   }
   if (satirlar.length > EN_COK_SATIR) engeller.push(`Birleşik tabloda en çok ${EN_COK_SATIR} satır olabilir (${satirlar.length}).`);
+  // Kalan tablonun açık sütunu gizli olduysa: o sütunda değeri olan kalan satırlar yeniden yazılır (değer şifreli saklansın).
+  const gizlilesen = kalan.sutunlar.filter((s) => !s.gizli && gizliNotlari.has(s.ad)).map((s) => s.ad);
+  for (const r of satirlar) {
+    if (!r.id || guncellenecek.has(r.id) || !gizlilesen.some((a) => dolu(r.degerler[a]))) continue;
+    guncellenecek.set(r.id, { id: r.id, degerler: r.degerler });
+  }
   /** @type {BTablo} */
   const birlesik = { id: kalan.id, ad: yeniAd, sutunlar, satirlar };
 
@@ -458,7 +470,7 @@ function planla(vt, projeId, girdi) {
   }
   return {
     tumu, kalan, kaynaklar, yeniAd, birlesik, eslemeler, onayBekleyen, engeller, karsilikCakismalari, satirCakismalari, guncellenecek,
-    satirKarsiligi, adEslem, idEslem, gizliSutunlar, ayniSatir, eklenecek, ek
+    satirKarsiligi, adEslem, idEslem, gizliSutunlar, ayniSatir, eklenecek, ek, gizliNotlari
   };
 }
 
@@ -916,7 +928,8 @@ function onizlemeOzeti(p, r, kullanim) {
     kalan: { id: p.kalan.id, ad: p.kalan.ad, yeniAd: p.yeniAd },
     tablolar: tablolar.map((t) => ({ id: t.id, ad: t.ad, sutunSayisi: t.sutunlar.length, satirSayisi: t.satirlar.length, kullanim: kullanim[t.id] ?? null })),
     onerilenKalan: enCok.id,
-    sutunlar: p.birlesik.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli, yeni: !p.kalan.sutunlar.some((x) => x.ad === s.ad) })),
+    sutunlar: p.birlesik.sutunlar.map((s) => ({ ad: s.ad, gizli: s.gizli, yeni: !p.kalan.sutunlar.some((x) => x.ad === s.ad),
+      ...(p.gizliNotlari.has(s.ad) ? { not: p.gizliNotlari.get(s.ad) } : {}) })),
     eslemeler: p.eslemeler,
     onayBekleyenEslemeler: p.onayBekleyen.map((e) => ({ kaynakId: e.kaynakId, kaynak: e.kaynak })),
     satirlar: { kalan: p.kalan.satirlar.length, eklenecek: p.eklenecek, ayni: p.ayniSatir, cakisan: p.satirCakismalari.length, toplam: p.birlesik.satirlar.length,

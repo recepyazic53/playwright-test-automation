@@ -185,6 +185,12 @@ export function birlestirmePenceresi(proje, tabloIdleri, kullanim, tablolar) {
           h('td', { 'data-baslik': `→ ${hedefler ? hedefler.ad : ''}` }, sec, e.kesin ? null : h('span', { class: 'neden' }, e.onerilen ? `öneri: ${e.onerilen} (emin değil; onaylayın)` : 'eşleşen sütun yok')));
       });
       const bekleyen = !is.eslemeOnayli && o.onayBekleyenEslemeler.length;
+      // Biri gizli biri açık eşleşen sütunlar: birleşik sütun gizli olur (değerler maskelenir, şifreli saklanır).
+      const gizlilesen = o.sutunlar.filter((s) => s.not);
+      if (gizlilesen.length) {
+        sonuc.push(h('ul', { class: 'not-kutusu bilgi kucuk gizlilesen-sutunlar', 'aria-label': 'Gizli olacak sütunlar' },
+          gizlilesen.map((s) => h('li', {}, ikon('kilit'), ' ', h('b', {}, `${s.ad}: `), s.not))));
+      }
       sonuc.push(h('details', { class: 'saglik-bolumu', open: Boolean(bekleyen) || o.eslemeler.some((e) => !e.kesin) },
         h('summary', {}, h('span', {}, 'Sütun eşleme'), bekleyen ? rozet(`${o.onayBekleyenEslemeler.length} onay bekliyor`, 'uyari') : rozet('onaylı', 'basari')),
         h('div', { class: 'donusum-tablosu-kap' }, h('table', { class: 'donusum-tablosu', 'aria-label': 'Sütun eşleme' },
