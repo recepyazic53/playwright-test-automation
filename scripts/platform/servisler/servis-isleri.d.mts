@@ -15,7 +15,7 @@ export interface ServisIsiGorunumu {
   /** Etkin değerlerin özeti ("TEST ortamı: …, 500 ms istekler arası bekleme (ortam ayarı)"). */ kosuHizi: string;
 }
 export declare function servisIsiBaslat(vt: Veritabani, projeId: string, girdi: { servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown };
-  tekrar?: { kaynakKosuId: string; veri?: string } }): ServisIsiGorunumu;
+  tekrar?: { kaynakKosuId: string; veri?: string }; uygulamaSurumu?: string | null }): ServisIsiGorunumu;
 export declare function servisSenaryoAtlamaNedeni(vt: Veritabani, servis: any, s: any, ortam: any): string;
 export declare function servisIsiDurumu(projeId: string, id: string): ServisIsiGorunumu;
 export declare function servisIsiDurdur(projeId: string, id: string, senaryoId?: string): { durduruldu: true };

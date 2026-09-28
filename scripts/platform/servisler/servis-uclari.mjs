@@ -334,7 +334,9 @@ export const SERVIS_POST_UCLARI = [
       return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), tekrar: { kaynakKosuId: t.kaynakKosuId, ...(t.veri ? { veri: String(t.veri) } : {}) } }) };
     }
     if (!Array.isArray(g.senaryoIdleri)) throw new DepoHatasi('"senaryoIdleri" bir dizi olmalıdır.');
-    return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), senaryoIdleri: g.senaryoIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'senaryoId')) }) };
+    // uygulamaSurumu (isteğe bağlı): koşu diyaloğunda girilen uygulama sürümü; boşsa ortam ayarındaki (PDF rapor A4).
+    return { is: servisIsiBaslat(db, projeId, { servisId: s.id, ortamId: kimlik(g.ortamId, 'ortamId'), senaryoIdleri: g.senaryoIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'senaryoId')),
+      ...(typeof g.uygulamaSurumu === 'string' ? { uygulamaSurumu: g.uygulamaSurumu } : {}) }) };
   }],
   ['/platform/servis/is/durdur', (db, g) => servisIsiDurdur(kimlik(g.projeId, 'projeId'), kimlik(g.id), g.senaryoId ? kimlik(g.senaryoId, 'senaryoId') : undefined)],
   ['/platform/servis/kos', async (db, g) => {

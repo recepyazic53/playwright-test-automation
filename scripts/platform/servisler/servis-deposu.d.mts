@@ -79,6 +79,8 @@ export declare function servisKimliginiCoz(vt: Veritabani, projeId: string, ad: 
 export declare function servisKosusuKaydet(vt: Veritabani, girdi: {
   projeId: string; servisId: string; senaryoId?: string | null; ortamId?: string | null; tur: 'dene' | 'kosu';
   durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown>;
+  /** Test edilen uygulamanın sürümü (PDF rapor A4; isteğe bağlı). */
+  uygulamaSurumu?: string | null;
 }): string;
 export declare function servisKosulariniListele(vt: Veritabani, filtre: { servisId: string; senaryoId?: string; sinir?: number }): ServisKosusu[];
 export declare function servisKosusuGetir(vt: Veritabani, id: string): ServisKosusu | undefined;

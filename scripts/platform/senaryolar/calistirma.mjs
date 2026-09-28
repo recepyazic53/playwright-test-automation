@@ -7,7 +7,8 @@
 // NOT: import.meta KULLANILMAZ. Tipler: calistirma.d.mts.
 
 import { randomBytes } from 'node:crypto';
-import { DepoHatasi, ekranlariListele } from '../veritabani/depo.mjs';
+import { DepoHatasi, ekranlariListele, ortamGetir } from '../veritabani/depo.mjs';
+import { UYGULAMA_SURUMU_DEGISKENI, kosuUygulamaSurumu } from '../ayarlar/rapor-verileri.mjs';
 import { calistirmaHedefiCoz, denemePaketiOlustur } from './senaryo-servisi.mjs';
 import { senaryoVeriKosusuTahmini, tekrarSenaryoPlani, veriKosusuSiniri } from './veri-kosusu-plani.mjs';
 import { KOSU_KIPLERI, TEKRAR_KAYNAGI_DEGISKENI, TEKRAR_PLANI_DEGISKENI, VERI_KIPI_DEGISKENI } from '../tablolar/veri-kosulari.mjs';
@@ -73,7 +74,20 @@ export function calistirmaIsteginiHazirla(vt, govde, secenekler = {}) {
   }
   const hedef = calistirmaHedefiCoz(vt, projeId, govde.senaryoId, govde.ortamId, secenekler);
   ekranEtkinOlmali(vt, hedef.senaryoId, null, { devreDisiIzinli: kosuTuru !== 'tam' && govde.tekBasina === true });
-  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef, ekOrtam: veriKosusuOrtami(vt, projeId, hedef, govde) };
+  return { projeId, kosuId, kosuTuru, kosuKimligi, kosuKapsami, hedef, ekOrtam: { ...veriKosusuOrtami(vt, projeId, hedef, govde), ...surumOrtami(vt, hedef, govde) } };
+}
+
+/**
+ * UYGULAMA SÜRÜMÜ (PDF rapor A4): koşu kaydına etiket olarak yazılacak test edilen uygulama sürümü — gövdedeki "uygulamaSurumu"
+ * (koşu başlatılırken girilen; isteğe bağlı), yoksa ortam ayarındaki. Sürüm hiçbir adrese sorulmaz. Ortam okunamazsa (ör. kasa
+ * kilitli) sürümsüz koşar.
+ * @param {Veritabani} vt @param {{ genel: { ortamId: string } }} hedef @param {Record<string, unknown>} govde @returns {Record<string, string>}
+ */
+function surumOrtami(vt, hedef, govde) {
+  let ortam = null;
+  try { ortam = ortamGetir(vt, hedef.genel.ortamId) ?? null; } catch { ortam = null; }
+  const surum = kosuUygulamaSurumu(govde.uygulamaSurumu, ortam);
+  return surum ? { [UYGULAMA_SURUMU_DEGISKENI]: surum } : {};
 }
 
 /**
