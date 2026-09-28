@@ -427,18 +427,30 @@ test.describe('alan formu uçtan uca', () => {
     await expect(satir('Onay senaryosu')).toBeVisible();
     await page.getByRole('button', { name: 'Filtreleri temizle' }).first().click();
     // Adresle arama.
-    // Arama 120 ms gecikmeyle uygulanır ve tabloyu yeniden çizer: uygulandığı ("Filtreleri temizle" görünür / gizlenir)
-    // beklenmezse geç gelen çizim, hemen ardından açılan ⋯ menüsünü satırla birlikte siler (Kopyala tıklanamaz).
     const aramaTemizle = page.locator('.filtre-temizle');
     await page.getByLabel('Senaryo ara').fill('ornek.asmx');
     await expect(aramaTemizle).toBeVisible();
     await expect(satir('Hızlı')).toBeVisible();
     await page.getByLabel('Senaryo ara').fill('');
     await expect(aramaTemizle).toBeHidden();
-    // ⋯ → Kopyala.
-    await satir('Onay senaryosu').getByRole('button', { name: 'Diğer işlemler: Onay senaryosu' }).click();
+    // ⋯ menüsü aramanın geç gelen yeniden çiziminden sonra açık kalır: arama 120 ms gecikmeyle tabloyu yeniden çizer; menü o
+    // arada açılırsa (sıralama kesin olsun diye yazma ve tıklama aynı görevde) çizim menüyü silmemeli, aynı satırda açık tutmalı.
+    const menuDugmesi = satir('Onay senaryosu').getByRole('button', { name: 'Diğer işlemler: Onay senaryosu' });
+    await menuDugmesi.evaluate((dugme) => {
+      const arama = document.querySelector<HTMLInputElement>('input[aria-label="Senaryo ara"]');
+      if (!arama) throw new Error('arama kutusu yok');
+      arama.value = 'Onay';
+      arama.dispatchEvent(new Event('input', { bubbles: true }));
+      (dugme as HTMLButtonElement).click();
+    });
+    await expect(aramaTemizle).toBeVisible();
+    await expect(page.locator('.servis-senaryo-tablosu tbody tr')).toHaveCount(1);
+    await expect(page.getByRole('menu')).toBeVisible();
+    await expect(satir('Onay senaryosu').getByRole('button', { name: 'Diğer işlemler: Onay senaryosu' })).toHaveAttribute('aria-expanded', 'true');
+    // Menü öğesi çalışır: Kopyala.
     await page.getByRole('menuitem', { name: 'Kopyala' }).click();
     await expect(satir('Onay senaryosu (kopya)')).toBeVisible();
+    await expect(page.getByRole('menu')).toBeHidden();
     const d = await basarili(`/platform/servis?projeId=${projeId}&id=${servisId}`);
     const kopya = d.senaryolar.find((x: Nesne) => x.baslik === 'Onay senaryosu (kopya)');
     expect(kopya).toMatchObject({ kosuyaDahil: false, icerik: { operasyon: 'Onayla', govde: '<a/>' } });
