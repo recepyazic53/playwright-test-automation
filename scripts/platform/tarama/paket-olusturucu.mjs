@@ -833,7 +833,7 @@ export function kayitPaketiOlustur(meta, envanter) {
   // Korunan parçalar (akış diyagramında düzenlenemeyen; akis-servisi.mjs): korunanAdim adımın tamamı aynen, korunan ('ek')
   // parçanın gösterilemeyen özellikleri aynen geri yazılır (kimliğiyle), aksiyonlarAynen koşu aksiyonlarının yerine geçer.
   // korunanKosul: parçanın korunan görünürlüğü (sonraki adımın göstergesi seçilirken atlanabilir adım sayılır).
-  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; ekranGoruntusu?: boolean; once?: number; sonra?: number; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string }; korunanAdim?: Record<string, any>; korunan?: Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>; aksiyonlarAynen?: Array<Record<string, unknown>>; korunanKosul?: string | null }} AltAdim */
+  /** @typedef {{ ad: string; alanlar: import('./paket-olusturucu.d.mts').HamAlan[]; tikla: import('./paket-olusturucu.d.mts').KayitOgesi | null; kosul: string | null; gosterge?: import('./paket-olusturucu.d.mts').KayitGostergesi | null; uyarilar?: import('./paket-olusturucu.d.mts').KayitGostergesi[]; zamanAsimiSn?: number; ekranGoruntusu?: boolean; once?: number; sonra?: number; gorunurse?: import('./paket-olusturucu.d.mts').KayitAdimi['gorunurseTiklar']; ortakAkis?: string; sqlKontrolu?: import('../sql/sql-adimi.mjs').SqlTanimi; dosyaKontrolu?: import('../dosyalar/dosya-icerigi.mjs').DosyaTanimi; yenidenGiris?: { profil?: string }; korunanAdim?: Record<string, any>; korunan?: Extract<import('./paket-olusturucu.d.mts').KorunanParca, { tur: 'ek' }>; aksiyonlarAynen?: Array<Record<string, unknown>>; korunanKosul?: string | null }} AltAdim */
   /** Korunan parçanın görünürlüğü (karşılaştırma anahtarı) ya da null. @param {unknown} p */
   const korunanKosulu = (p) => {
     const g = nesneMi(p) && nesneMi(p.adimEk) ? p.adimEk.gorunurluk : undefined;
@@ -915,7 +915,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (k.ilerleme) {
       const son = parcalar[parcalar.length - 1];
       // İlerleme, isteğe bağlı olmayan son parçaya eklenir; isteğe bağlıysa (atlanabilir) ayrı bir adım olur.
-      const sure = k.zamanAsimiSn ? { zamanAsimiSn: k.zamanAsimiSn } : {};
+      // "Yalnız görünürse bas" düğmeleri ilerleme düğmesinin ardından (aynı parçada).
+      const sure = { ...(k.zamanAsimiSn ? { zamanAsimiSn: k.zamanAsimiSn } : {}), ...(k.gorunurseTiklar?.length ? { gorunurse: k.gorunurseTiklar } : {}) };
       if (!son.tikla && !son.kosul && (son.alanlar.length || parcalar.length === 1)) Object.assign(son, { tikla: k.ilerleme, gosterge: k.gosterge ?? null, once: k.onceBekle, sonra: k.sonraBekle, ...sure });
       else parcalar.push({ ad: `${ad}: ${temizMetin(k.ilerleme.metin, sayac, 80) || 'ilerle'}`, alanlar: [], tikla: k.ilerleme, kosul: null, gosterge: k.gosterge ?? null, once: k.onceBekle, sonra: k.sonraBekle, ...sure });
     } else if (k.onceBekle) {
@@ -991,7 +992,7 @@ export function kayitPaketiOlustur(meta, envanter) {
         }
       }
       const t = (nesneMi(x.korunanAdim.kosu) && Array.isArray(x.korunanAdim.kosu.aksiyonlar) ? x.korunanAdim.kosu.aksiyonlar : [])
-        .find((/** @type {unknown} */ y) => nesneMi(y) && y.tur === 'tikla' && typeof y.secici === 'string' && y.secici);
+        .find((/** @type {unknown} */ y) => nesneMi(y) && y.tur === 'tikla' && y.kosul !== 'gorunurse' && typeof y.secici === 'string' && y.secici);
       return t ? { secici: String(t.secici), ...cerceveEki(t.cerceve) } : null;
     }
     const t = x.dosyaKontrolu?.tetikleyici?.secici;
@@ -1035,6 +1036,10 @@ export function kayitPaketiOlustur(meta, envanter) {
       const m = temizMetin(p.tikla.metin, sayac, 120);
       islemler.push({ id: islemKimligi('buton', p.tikla.secici, kimlikUret(m ?? '', 'dugme')), tip: 'buton', yapilandirma: 'aksiyon', etiket: { ekran: m }, konum: { secici: p.tikla.secici, kirilganlik: 'orta', ...cerceveEki(p.tikla.cerceve) } });
     }
+    for (const t of p.gorunurse ?? []) {
+      const m = temizMetin(t.metin, sayac, 120);
+      islemler.push({ id: islemKimligi('buton', t.secici, kimlikUret(m ?? '', 'dugme')), tip: 'buton', yapilandirma: 'aksiyon', etiket: { ekran: m }, konum: { secici: t.secici, kirilganlik: 'orta', ...cerceveEki(t.cerceve) } });
+    }
     if (sonAdimMi && g && g.secici) {
       const eskiCikti = mevcutAlanlar.find((a) => a.tip === 'cikti' && nesneMi(a.konum) && a.konum.secici === g.secici);
       const ciktiEtiketi = eskiCikti && nesneMi(eskiCikti.etiket) ? eskiCikti.etiket : { ekran: g.desen ? 'Sonuç' : gostergeMetni };
@@ -1052,6 +1057,12 @@ export function kayitPaketiOlustur(meta, envanter) {
       aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}), ...cerceveEki(p.tikla.cerceve) });
     }
     if (p.sonra) aksiyonlar.push({ tur: 'bekle', sureSn: p.sonra });
+    // Yalnız görünürse basılan düğmeler (ör. bazı ekranlarda çıkan ara pencere): kısa sürede görünmezse atlanır.
+    for (const t of p.gorunurse ?? []) {
+      const aciklama = temizMetin(t.metin, sayac, 120);
+      aksiyonlar.push({ tur: 'tikla', secici: t.secici, kosul: 'gorunurse', ...(aciklama ? { aciklama } : {}), ...(t.zamanAsimiSn ? { zamanAsimiSn: t.zamanAsimiSn } : {}), ...cerceveEki(t.cerceve) });
+      if (t.sonraBekle) aksiyonlar.push({ tur: 'bekle', sureSn: t.sonraBekle });
+    }
     if (aksiyonlar.length) kosu.aksiyonlar = aksiyonlar;
     if (p.tikla) {
       // Başarı: sonraki (atlanmayacak) adımın ilk alanı ya da düğmesi görünür.

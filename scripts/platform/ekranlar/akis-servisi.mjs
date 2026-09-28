@@ -103,7 +103,23 @@ const TIKLA_ANAHTARLARI = ['tur', 'secici', 'aciklama', 'cerceve'];
 /** Aksiyon diyagramın aksiyon / bekleme bloğuyla gösterilebilir mi (seçicili düz tıklama, süreli bekleme)? @param {unknown} a */
 const aksiyonTemsilEdilir = (a) => nesneMi(a) && (
   (a.tur === 'tikla' && typeof a.secici === 'string' && a.secici !== '' && Object.keys(a).every((k) => TIKLA_ANAHTARLARI.includes(k)))
+  || (gorunurseMi(a) && typeof a.secici === 'string' && a.secici !== '' && (a.zamanAsimiSn === undefined || Number.isInteger(a.zamanAsimiSn))
+    && Object.keys(a).every((k) => TIKLA_ANAHTARLARI.includes(k) || k === 'kosul' || k === 'zamanAsimiSn'))
   || (a.tur === 'bekle' && Number.isInteger(a.sureSn) && Object.keys(a).every((k) => k === 'tur' || k === 'sureSn')));
+/** "Yalnız görünürse bas" tıklaması mı? @param {unknown} a */
+const gorunurseMi = (a) => nesneMi(a) && a.tur === 'tikla' && a.kosul === 'gorunurse';
+/**
+ * Adımın aksiyonları diyagramda gösterilebilir mi: her biri tek tek gösterilebilir ve "görünürse" tıklamalar adımın (her
+ * senaryoda basılan) ilerleme düğmesinden SONRA gelir (ardından düz tıklama yok); görünürlük koşullu adımda görünürse tıklama
+ * gösterilmez (aynen korunur). @param {Nesne} adim @param {unknown[]} aksiyonlar
+ */
+const aksiyonlarTemsilEdilir = (adim, aksiyonlar) => {
+  if (!aksiyonlar.every(aksiyonTemsilEdilir)) return false;
+  const ilkGorunurse = aksiyonlar.findIndex(gorunurseMi);
+  if (ilkGorunurse < 0) return true;
+  const duzler = aksiyonlar.map((x, i) => (nesneMi(x) && x.tur === 'tikla' && !gorunurseMi(x) ? i : -1)).filter((i) => i >= 0);
+  return !nesneMi(adim.gorunurluk) && duzler.length > 0 && duzler.every((i) => i < ilkGorunurse);
+};
 /** Başarı göstergesi diyagramın mesaj bloklarıyla (ya da sonraki adımdan) yeniden kurulabilir mi? @param {unknown} g @param {boolean} sonAdim */
 const gostergeTemsilEdilir = (g, sonAdim) => {
   if (g === undefined || g === null) return true;
@@ -224,7 +240,7 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
   }
   const kosu = nesneMi(adim.kosu) ? adim.kosu : {};
   const aksiyonlar = Array.isArray(kosu.aksiyonlar) ? kosu.aksiyonlar : [];
-  if (!aksiyonlar.every(aksiyonTemsilEdilir)) sonuc.aksiyonlar = kopya(aksiyonlar);
+  if (!aksiyonlarTemsilEdilir(adim, aksiyonlar)) sonuc.aksiyonlar = kopya(aksiyonlar);
   const tikla = aksiyonlar.some((x) => nesneMi(x) && x.tur === 'tikla');
   const kosulGosterilir = (/** @type {{ secim: string; degerler: string[] } | null} */ k) => Boolean(k) && !korunanAlanlar.has(/** @type {{ secim: string }} */ (k).secim) && kosulTemsilEdilir(env, /** @type {{ secim: string; degerler: string[] }} */ (k));
   // Adım özellikleri: kod yöntemi vb. (diyagramın kurmadığı her adım anahtarı).
@@ -591,6 +607,11 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
         if (x.tur === 'bekle' && Number.isInteger(x.sureSn)) bloklar.push({ tur: 'bekle', saniye: x.sureSn });
         else if (x.tur === 'tikla') {
           const d = env.dugmeler.findIndex((o) => o.secici === x.secici && o.metin === (typeof x.aciklama === 'string' ? x.aciklama : null));
+          if (gorunurseMi(x)) {
+            // "Yalnız görünürse bas": kendi kısa bekleme süresiyle (adımın sonucu bekleme süresi ilerleme düğmesinde).
+            if (d >= 0) bloklar.push({ tur: 'aksiyon', dugme: d, istegeBagli: false, gorunurse: true, ...(Number.isInteger(x.zamanAsimiSn) ? { zamanAsimiSn: x.zamanAsimiSn } : {}) });
+            continue;
+          }
           // Adımın sonucu bekleme süresi (kosu.zamanAsimiSn) ilerleme düğmesinde taşınır.
           const sure = !istegeBagli && Number.isInteger(kosu.zamanAsimiSn) ? { zamanAsimiSn: kosu.zamanAsimiSn } : {};
           if (d >= 0) {

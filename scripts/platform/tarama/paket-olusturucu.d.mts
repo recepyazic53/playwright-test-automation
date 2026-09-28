@@ -143,6 +143,12 @@ export type KayitAdimi = {
   /** Süreli beklemeler (akış tasarımı, saniye): ilerleme düğmesinden önce (düğme yoksa alanlardan sonra) / sonra. */
   onceBekle?: number;
   sonraBekle?: number;
+  /**
+   * İlerleme düğmesinden sonra YALNIZ GÖRÜNÜRSE basılan düğmeler (akış tasarımında "Yalnız görünürse bas"; ör. bazı ekranlarda
+   * çıkan ara pencere): modelde kosu.aksiyonlar'da { tur: 'tikla', kosul: 'gorunurse' }. zamanAsimiSn: görünmesi için kısa
+   * bekleme; sonraBekle: bastıktan (ya da atladıktan) sonra süreli bekleme.
+   */
+  gorunurseTiklar?: Array<KayitOgesi & { zamanAsimiSn?: number; sonraBekle?: number }>;
   /** Akış tasarımında elle belirlenen görünürlük koşulları (alan anahtarı → seçim + değerler; null: koşulsuz). */
   kosullar?: Record<string, { secim: string; degerler: string[] } | null>;
   /** Adımın ilerleme düğmesine basıldıktan sonra beklenen mesaj (akış tasarımı; yoksa sonraki adımın ilk alanı görünür). */

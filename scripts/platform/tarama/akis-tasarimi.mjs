@@ -12,7 +12,8 @@
 //            (model alan.sinirlar; null: kaldır; verilmeyen alanın mevcut kuralı korunur). Ekranın akışını düzenlerken yazılır.
 //            tuslar: { [alan]: 'Tab' | 'Enter' | null } — "Doldurduktan sonra" basılacak tuş (model alan.doldurucuParametreleri.tus;
 //            null: kaldır; verilmeyen alanın mevcut ayarı korunur). Alandan çıkınca çıkan uyarılar için (ör. zorunlu alan uyarısı).
-//   aksiyon  { dugme: sıra, istegeBagli }           düğmeye basılır (isteğe bağlıysa senaryoda "… dahil" ile seçilir)
+//   aksiyon  { dugme: sıra, istegeBagli, gorunurse? } düğmeye basılır (isteğe bağlıysa senaryoda "… dahil" ile seçilir;
+//            gorunurse: "Yalnız görünürse bas" — ilerleme düğmesinden sonra, kısa sürede görünmezse atlanır; adımı kapatmaz)
 //   mesaj    { mesaj: sıra | null, metin }          beklenen mesaj (aranacak metin; öğe seçildiyse onun içinde aranır). Bir
 //            aksiyondan ya da bir ALAN GRUBUNDAN sonra gelir: alan grubundan sonraki mesaj, alanlar doldurulup (alanın
 //            "Doldurduktan sonra" tuşuna basılıp) alandan çıkınca beklenir — adımın düğmesi yoktur, adım orada kapanır (ardından
@@ -298,7 +299,7 @@ export function bloklariAyikla(ham) {
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
     else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
     else if (b.tur === 'aksiyon') {
-      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
+      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.gorunurse === true ? { gorunurse: true } : {}), ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'korunan') {
       // Salt okunur korunan parça: yalnız anahtarı (ve gösterilen adı) alınır; içeriği sunucudaki modelden gelir.
       if (typeof b.korunan !== 'string' || !b.korunan || b.korunan.length > KORUNAN_ANAHTAR_EN_COK) { hatalar.push({ blok: i, mesaj: 'Korunan parça okunamadı; diyagramı yeniden açın.' }); return; }
@@ -428,6 +429,17 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       if (b.zamanAsimiSn !== undefined && !(Number.isInteger(b.zamanAsimiSn) && b.zamanAsimiSn >= 1 && b.zamanAsimiSn <= 600)) { hata(i, 'Sonucu bekleme süresi 1–600 saniye arasında tam sayı olmalı.'); return; }
       // Düğme bir çerçevedeyse (iframe) çerçeve zinciri de taşınır: koşucu o çerçevede tıklar.
       const og = { secici: d.secici, metin: d.metin, ...(Array.isArray(d.cerceve) && d.cerceve.length ? { cerceve: d.cerceve } : {}) };
+      if (b.gorunurse) {
+        // "Yalnız görünürse bas" (ör. bazı ekranlarda çıkan ara pencere düğmesi): adımın ilerleme düğmesinden sonra; kısa sürede
+        // görünmezse atlanır. Adım kapanmaz (ardından gelen beklemeler / mesajlar aynı adımın).
+        if (b.istegeBagli) { hata(i, '“Yalnız görünürse bas” ile “Her senaryoda basılmaz” birlikte seçilemez.'); return; }
+        const c0 = /** @type {(typeof adimlar)[number] | null} */ (cur);
+        if (!c0 || !kapali || !c0.ilerleme || c0.aksiyonlarAynen || bekleyen) { hata(i, '“Yalnız görünürse bas” düğmesi adımın ilerleme düğmesinden (her senaryoda basılan aksiyon) hemen sonra gelir; ör. onaydan sonra bazen açılan ara penceredeki düğme.'); return; }
+        if (b.korunan) { hata(i, 'Bu aksiyonun korunan parçaları “Yalnız görünürse bas” düğmesinde tutulamaz.'); return; }
+        if (b.ekranGoruntusu) c0.ekranGoruntusu = true;
+        (c0.gorunurseTiklar ??= []).push({ ...og, ...(b.zamanAsimiSn !== undefined ? { zamanAsimiSn: b.zamanAsimiSn } : {}) });
+        return;
+      }
       if (!cur || kapali) yeniAdim(metin(d.metin, AD_EN_COK) || `${adimlar.length + 1}. adım`, []);
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
       if (b.ekranGoruntusu) c.ekranGoruntusu = true;
@@ -539,7 +551,7 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         const c = /** @type {(typeof adimlar)[number]} */ (cur);
         if (c.aksiyonlarAynen) { hata(i, 'Bir adımda yalnız bir korunan aksiyon bloğu olabilir.'); return; }
         c.aksiyonlarAynen = JSON.parse(JSON.stringify(k.aksiyonlar));
-        const t = k.aksiyonlar.find((x) => nesneMi(x) && x.tur === 'tikla' && typeof x.secici === 'string' && x.secici);
+        const t = k.aksiyonlar.find((x) => nesneMi(x) && x.tur === 'tikla' && x.kosul !== 'gorunurse' && typeof x.secici === 'string' && x.secici);
         if (t) {
           c.ilerleme = { secici: String(t.secici), metin: typeof t.aciklama === 'string' ? t.aciklama : null, ...(Array.isArray(t.cerceve) && t.cerceve.length ? { cerceve: t.cerceve.map(String) } : {}) };
           if (sure) c.onceBekle = (c.onceBekle ?? 0) + sure;
@@ -569,6 +581,9 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       if (bekleyen) { const a = c.acicilar[c.acicilar.length - 1]; a.sonraBekle = (a.sonraBekle ?? 0) + b.saniye; return; }
       // Alan grubundan sonraki mesajla kapanan (düğmesiz) adım: bekleme alanlar doldurulduktan sonradır.
       if (kapali && !c.ilerleme && !c.aksiyonlarAynen) { c.onceBekle = (c.onceBekle ?? 0) + b.saniye; return; }
+      // "Yalnız görünürse bas" düğmesinden sonra: o düğmeden (basılsın ya da atlansın) sonra beklenir.
+      const gt = c.gorunurseTiklar?.[c.gorunurseTiklar.length - 1];
+      if (kapali && gt) { gt.sonraBekle = (gt.sonraBekle ?? 0) + b.saniye; return; }
       if (kapali) { c.sonraBekle = (c.sonraBekle ?? 0) + b.saniye; return; }
       sure += b.saniye;
       return;

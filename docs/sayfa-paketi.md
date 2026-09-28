@@ -161,6 +161,12 @@ akış olmaz. Nasıl çalışır:
   - Başvuru adımının koşulu her açılan adıma eklenir.
   - Ortak akışın koşulları `<ortak id>_<ad>` olarak taşınır.
   - Ortak akış projede yoksa koşu açık bir hatayla durur.
+- **Ekrana göre değişen ara pencere:** ortak akış bazı ekranlarda onay düğmesinden sonra bir ara pencere (ör. ödeme tipi
+  seçimi, "Kart ile" düğmesi) açıyor, bazılarında doğrudan sonraki pencereye (ör. kart formu) geçiyorsa tek model ikisini de
+  karşılar: ara pencere düğmesi `{ "tur": "tikla", "secici": "…", "kosul": "gorunurse" }` olarak onay düğmesinin ardına
+  yazılır (kısa süre — varsayılan 5 sn, `zamanAsimiSn` ile — beklenir; görünmezse atlanır, raporda "atlandı (görünmedi)"
+  notu), adımın başarı göstergesi sonraki pencerenin öğesidir (gerekirse `veya`). Akış diyagramında düğme bloğunda
+  **"Yalnız görünürse bas"**.
 - **Düzenleme:** ortak akışın Akışlar sekmesinde "Düzenle" ile aynı diyagram düzenleyicisinde değiştirilir (tek akış;
   içine ortak akış eklenmez). Kaydederken onu kullanan ekranlar gösterilir. "Ekranlara ekle…" ortak akışı seçilen
   ekranların varsayılan akışının sonuna ekler (isteğe bağlı seçilirse senaryoda "“<ad>” dahil" ile koşar).
@@ -221,7 +227,7 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 | Alan | Açıklama |
 |---|---|
 | `cerceve` | Aksiyonda, başarı göstergesinde (`eleman` ya da seçicili `metin` / `desen`), `uyarilar[]`'da ve `hataGostergesi`'nde: öğe bir iframe içindeyse çerçeve seçicileri (dıştan içe, 1–2 öğe; ör. `["iframe#pencere"]`). Seçici o çerçevenin belgesine göredir; koşucu `page.frameLocator(...)` ile orada arar. |
-| `aksiyonlar[]` | `tur`: `tikla` (düğme/bağlantı), `ekranaDon` (seçicisiz: ekranın adresi yeniden açılır — ör. ortak akış kullanıcı değiştirip ana sayfaya götürdükten sonra; ortak akış hangi ekrana eklendiyse onun adresi) ya da `bekle` (`durum`: `gorunur` varsayılan \| `gizli` \| `dolu` — öğenin metni/değeri boş değil; `secici` yoksa `sureSn` kadar beklenir); `secici` zorunlu; `metin` (birden çok öğe eşleşirse bu metni içeren), `aciklama`, `zamanAsimiSn` isteğe bağlı. **Kaydet/öde/onayla** gibi kalıcı işlem yapan düğmeler yalnızca test ortamında koşulacak adımlara yazılır. |
+| `aksiyonlar[]` | `tur`: `tikla` (düğme/bağlantı), `ekranaDon` (seçicisiz: ekranın adresi yeniden açılır — ör. ortak akış kullanıcı değiştirip ana sayfaya götürdükten sonra; ortak akış hangi ekrana eklendiyse onun adresi) ya da `bekle` (`durum`: `gorunur` varsayılan \| `gizli` \| `dolu` — öğenin metni/değeri boş değil; `secici` yoksa `sureSn` kadar beklenir); `secici` zorunlu; `metin` (birden çok öğe eşleşirse bu metni içeren), `aciklama`, `zamanAsimiSn` isteğe bağlı. `tikla`da `kosul: "gorunurse"`: öğe kısa süre (varsayılan 5 sn; `zamanAsimiSn` bu süredir, adımınkinden bağımsız) beklenir, görünürse tıklanır, görünmezse atlanır (hata değil; raporda not) — `ekranaDon`da geçersiz. **Kaydet/öde/onayla** gibi kalıcı işlem yapan düğmeler yalnızca test ortamında koşulacak adımlara yazılır. |
 | `basariGostergesi` | `tur`: `metin` (sayfada ya da `secici` öğesinde toleranslı içerir), `eleman` (`deger` seçicisi görünür), `url` (`deger` düzenli ifadesi), `desen` (sayfanın ya da `secici` öğesinin metni `deger` düzenli ifadesine uyar; ör. toplam sıfırdan farklı: `[1-9]`), `veya` (`secenekler`: 2–5 gösterge; herhangi biri görünürse başarılı). |
 | `uyarilar` | Adımda kabul edilen iş kuralı uyarıları `[{ metin, secici? }]` (en çok 10): senaryo "iş kuralı hatası" beklerken bunlardan seçer; başarı beklenen senaryoda biri görünürse test hemen düşer. |
 | `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |

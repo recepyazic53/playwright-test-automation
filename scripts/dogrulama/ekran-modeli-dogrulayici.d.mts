@@ -3,7 +3,11 @@
 
 export declare const DESTEKLENEN_SEMA_SURUMU: number;
 export declare const SEMA_SURUMLERI: readonly number[];
-export declare const AKSIYON_TURLERI: readonly ['tikla', 'bekle'];
+export declare const AKSIYON_TURLERI: readonly ['tikla', 'bekle', 'ekranaDon'];
+/** Tıklama koşulları (gorunurse: öğe kısa sürede görünmezse tıklama atlanır). */
+export declare const AKSIYON_KOSULLARI: readonly ['gorunurse'];
+/** "gorunurse" tıklamasında varsayılan kısa bekleme (sn). */
+export declare const GORUNURSE_BEKLEME_SN: number;
 export declare const SQL_BEKLENEN_TURLERI: readonly string[];
 export declare const DOSYA_BEKLENTI_TURLERI: readonly string[];
 export declare const BASARI_GOSTERGESI_TURLERI: readonly ['metin', 'eleman', 'url'];

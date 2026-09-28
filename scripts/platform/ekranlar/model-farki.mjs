@@ -99,7 +99,7 @@ export function kosuTanimiMetni(k) {
     let m;
     if (a.tur === 'ekranaDon') m = 'ekrana dön';
     else if (a.tur === 'bekle' && a.sureSn !== undefined) m = `bekle ${a.sureSn} sn`;
-    else m = `${a.tur === 'bekle' ? 'bekle' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}${a.tur === 'bekle' && a.durum && a.durum !== 'gorunur' ? ` (${a.durum})` : ''}`;
+    else m = `${a.tur === 'bekle' ? 'bekle' : a.kosul === 'gorunurse' ? 'görünürse tıkla' : 'tıkla'} ${a.secici}${a.metin ? ` "${a.metin}"` : ''}${a.tur === 'bekle' && a.durum && a.durum !== 'gorunur' ? ` (${a.durum})` : ''}`;
     if (a.zamanAsimiSn !== undefined) m += ` (en çok ${a.zamanAsimiSn} sn)`;
     parcalar.push(m);
   }

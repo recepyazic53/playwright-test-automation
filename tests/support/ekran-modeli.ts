@@ -191,7 +191,12 @@ export type AdimAksiyonu = {
   /** Birden çok öğe eşleşirse bu metni içeren öğe. */
   metin?: string;
   /** Yalnızca "bekle": öğe görünür (varsayılan) ya da gizli olana kadar. */
-  durum?: 'gorunur' | 'gizli';
+  durum?: 'gorunur' | 'gizli' | 'dolu';
+  /**
+   * Yalnızca "tikla": gorunurse → öğe kısa bir süre (varsayılan 5 sn; zamanAsimiSn ile ayarlanır, adımın süresinden bağımsız)
+   * beklenir; görünürse tıklanır, görünmezse atlanır (raporda "atlandı (görünmedi)" notu). Ör. bazı ekranlarda çıkan ara pencere.
+   */
+  kosul?: 'gorunurse';
   aciklama?: string;
   zamanAsimiSn?: number;
   /** Öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri. */

@@ -9,7 +9,7 @@
 //   1) senaryoda değeri olan alanlar: ekranda GÖRÜNÜYORSA tipine/doldurucusuna göre doldurulur; görünmüyorsa
 //      atlanır ve "atlanan alanlar"a yazılır (raporlayıcı sonuçta listeler) — alan "mutlaka görünmeli"
 //      işaretliyse test Beklenen/Görülen hatasıyla başarısız olur,
-//   2) adımın aksiyonları (tıkla / bekle),
+//   2) adımın aksiyonları (tıkla / bekle; "görünürse" tıklama kısa sürede görünmezse atlanır, raporda not),
 //   3) beklenen hata adımıysa hata göstergesinde beklenen mesaj (toleranslı eşleşme), değilse başarı
 //      göstergesi (hata göstergesinde beklenmeyen bir uyarı çıkarsa Beklenen/Görülen hatası),
 //   4) adım ekran görüntüsü.
@@ -43,6 +43,7 @@ import { gizliAdMi } from '../../scripts/platform/ayarlar/gizli-adlar.mjs';
 import { sqlAdiminiKos, type SqlTanimi } from '../../scripts/platform/sql/sql-adimi.mjs';
 import { ayarlaSorgula, kosuSqlAyari } from '../../scripts/platform/sql/sorgu-bagdastirici.mjs';
 import { ozelBilesenIsaretle } from '../../scripts/platform/tarama/sayfa-envanteri';
+import { GORUNURSE_BEKLEME_SN } from '../../scripts/dogrulama/ekran-modeli-dogrulayici.mjs';
 
 const PROJE_KOKU = resolve(__dirname, '..', '..');
 // Kullanıcı kararları (Ayarlar > Koşu > Gelişmiş koşu davranışı; kosu-ayarlari.ts): ÇAĞRI anında okunur. Varsayılanlar önceki sabitlerdir.
@@ -592,7 +593,11 @@ async function gostergeVarMi(page: Page, g: PlanBasariGostergesi): Promise<boole
   return mesajIceriyorMu(metin, g.deger);
 }
 
-async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn: number, ekranUrl: string): Promise<void> {
+/**
+ * Adımın aksiyonları sırayla. "Görünürse" tıklama (kosul: 'gorunurse'): öğe kısa bir süre (varsayılan GORUNURSE_BEKLEME_SN;
+ * aksiyonun zamanAsimiSn'i, adımın süresinden bağımsız) beklenir; görünmezse atlanır ve "atlandı (görünmedi)" notu düşer.
+ */
+async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn: number, ekranUrl: string, atlanan: AtlananAlan[]): Promise<void> {
   for (const a of kosu?.aksiyonlar ?? []) {
     // Ekrana dön: ekranın adresi yeniden açılır (ör. ortak akış kullanıcıyı değiştirip ana sayfaya götürdükten sonra).
     if (a.tur === 'ekranaDon') { await page.goto(ekranUrl, { waitUntil: 'domcontentloaded' }); continue; }
@@ -603,6 +608,13 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
     const k = kapsam(page, a.cerceve);
     let l = k.locator(a.secici);
     if (a.metin) l = l.filter({ hasText: a.metin });
+    if (a.tur === 'tikla' && a.kosul === 'gorunurse') {
+      const oge = l.filter({ visible: true }).first();
+      const gorundu = await oge.waitFor({ state: 'visible', timeout: (a.zamanAsimiSn ?? GORUNURSE_BEKLEME_SN) * 1000 }).then(() => true, () => false);
+      if (gorundu) await oge.click({ timeout: sureSn * 1000 });
+      else atlanan.push({ alan: `“${a.aciklama || a.metin || a.secici}” düğmesi`, neden: 'atlandı (görünmedi)' });
+      continue;
+    }
     const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
     if (a.tur === 'tikla') await l.filter({ visible: true }).first().click({ timeout: zaman });
     else if (a.durum === 'dolu') await doluBekle(page, a.secici, zaman, 'Aksiyon', undefined, null, k);
@@ -985,7 +997,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
         }
-        await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl);
+        await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl, atlanan);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
         // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
         await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik, adim);

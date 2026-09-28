@@ -21,6 +21,14 @@ export const SEMA_SURUMLERI = Object.freeze([1, 2]);
  * yeniden açılır; ör. ortak akış başka sayfaya götürdükten sonra — seçicisiz, hangi ekrana eklenirse onun adresi).
  */
 export const AKSIYON_TURLERI = Object.freeze(['tikla', 'bekle', 'ekranaDon']);
+/**
+ * Tıklama koşulları: gorunurse → öğe kısa bir süre (varsayılan GORUNURSE_BEKLEME_SN; aksiyonun zamanAsimiSn'i ile ayarlanır,
+ * adımın süresinden bağımsız) beklenir; görünürse tıklanır, görünmezse atlanır (hata değil; raporda not). Ör. bazı ekranlarda
+ * çıkan, bazılarında çıkmayan ara pencere düğmesi.
+ */
+export const AKSIYON_KOSULLARI = Object.freeze(['gorunurse']);
+/** "gorunurse" tıklamasında öğenin görünmesi için varsayılan kısa bekleme (sn). */
+export const GORUNURSE_BEKLEME_SN = 5;
 /** Adımın başarı göstergesi türleri: metin (sayfada/öğede metin), eleman (öğe görünür), url (adres deseni), desen (öğenin/sayfanın metni düzenli ifadeye uyar). */
 export const BASARI_GOSTERGESI_TURLERI = Object.freeze(['metin', 'eleman', 'url', 'desen']);
 /** "veya" başarı göstergesinde en çok seçenek (herhangi biri görünürse adım başarılı). */
@@ -123,7 +131,7 @@ export const DOSYA_BEKLENTI_TURLERI = Object.freeze(['adDeseni', 'enAzBoyut', 'i
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
 const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'not']);
-const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve']);
+const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'kosul', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve']);
 
 /**
  * "cerceve": öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri, dıştan içe — 1–CERCEVE_EN_DERIN boş olmayan metinden
@@ -409,7 +417,7 @@ function yeniBasvurular(semaSurumu = 1) {
  * Adımın koşu tanımı (sürüm 2) — model koşucusu (tests/support/model-kosucu.ts) adımın alanlarını
  * doldurduktan sonra aksiyonları sırayla uygular, sonra başarı göstergesini bekler; hata göstergesi
  * iş kuralı uyarısının göründüğü öğedir (beklenen/beklenmeyen hata mesajı buradan okunur).
- *   { aksiyonlar?: [{ tur: tikla|bekle, secici, metin?, durum?: gorunur|gizli, aciklama?, zamanAsimiSn? }],
+ *   { aksiyonlar?: [{ tur: tikla|bekle|ekranaDon, secici, metin?, durum?: gorunur|gizli|dolu, kosul?: gorunurse (yalnız tikla), aciklama?, zamanAsimiSn? }],
  *     basariGostergesi?: { tur: metin|eleman|url|desen, deger, secici? } | { tur: veya, secenekler: [...] }, hataGostergesi?: { secici }, zamanAsimiSn?, not? }
  */
 function kosuTanimiDogrula(h, yer, kosu) {
@@ -436,9 +444,11 @@ function kosuTanimiDogrula(h, yer, kosu) {
         if (a.tur !== 'bekle' || !(Number.isInteger(a.sureSn) && a.sureSn >= 1 && a.sureSn <= 120)) h.ekle(aYer, '"sureSn" yalnızca "bekle" aksiyonunda, 1–120 arasında tam sayı olabilir');
         if (a.secici !== undefined) h.ekle(aYer, 'süreli beklemede "secici" olmaz');
       } else if (a.tur === 'ekranaDon') {
-        if (a.secici !== undefined || a.metin !== undefined || a.durum !== undefined) h.ekle(aYer, '"ekranaDon" aksiyonunda "secici", "metin" ve "durum" olmaz');
+        if (a.secici !== undefined || a.metin !== undefined || a.durum !== undefined || a.kosul !== undefined) h.ekle(aYer, '"ekranaDon" aksiyonunda "secici", "metin", "durum" ve "kosul" olmaz');
       } else if (!metinMi(a.secici)) h.ekle(aYer, '"secici" zorunlu');
       if (a.metin !== undefined && !metinMi(a.metin)) h.ekle(aYer, '"metin" boş olmayan metin olmalı');
+      // Koşullu tıklama (yalnız "tikla"): öğe kısa sürede görünmezse atlanır. ekranaDon'da yukarıda ayrıca reddedilir.
+      if (a.kosul !== undefined && a.tur !== 'ekranaDon' && (a.tur !== 'tikla' || !listedeMi(AKSIYON_KOSULLARI, a.kosul))) h.ekle(aYer, `"kosul" yalnızca "tikla" aksiyonunda ${AKSIYON_KOSULLARI.join(' | ')} olabilir`);
       if (a.durum !== undefined && (a.tur !== 'bekle' || !['gorunur', 'gizli', 'dolu'].includes(a.durum))) h.ekle(aYer, '"durum" yalnızca "bekle" aksiyonunda gorunur | gizli | dolu olabilir');
       if (a.aciklama !== undefined && typeof a.aciklama !== 'string') h.ekle(aYer, '"aciklama" metin olmalı');
       if (a.cerceve !== undefined && a.secici === undefined) h.ekle(aYer, '"cerceve" yalnızca seçicili aksiyonda olur');

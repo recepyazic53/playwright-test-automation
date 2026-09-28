@@ -21,6 +21,7 @@ import { referansCoz } from '../dosyalar/referans.mjs';
 import { secenekBul } from './model-kosusu.mjs';
 import { goreliIfadeAyristir } from './goreli-tarih.mjs';
 import { beklentiAdi } from '../dosyalar/dosya-icerigi.mjs';
+import { GORUNURSE_BEKLEME_SN } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 
 /** Üretilen dosyanın ortam değişkenlerinin öneki. */
 export const DISA_AKTARMA_ON_EKI = 'NOBETCI_';
@@ -738,6 +739,14 @@ export function playwrightKoduUret(g) {
       // Öğe bir çerçevedeyse (iframe) o çerçevede aranır.
       const l = `${kapsamIfadesi(a.cerceve)}.locator(${s(a.secici)})${a.metin ? `.filter({ hasText: ${s(a.metin)} })` : ''}`;
       if (a.cerceve?.length && a.durum === 'dolu') satirlar.push(`${ic}// TODO: öğe bir çerçevede (${yorum(a.cerceve.join(' › '))}); doluBekle ana sayfada arar.`);
+      // Görünürse bas (ör. her ekranda çıkmayan ara pencere düğmesi): kısa bekleme, görünmezse atlanır.
+      if (a.tur === 'tikla' && a.kosul === 'gorunurse') {
+        const kisa = (a.zamanAsimiSn ?? GORUNURSE_BEKLEME_SN) * 1000;
+        satirlar.push(`${ic}{`, `${ic}  const oge = ${l}.filter({ visible: true }).first();`,
+          `${ic}  await oge.waitFor({ state: 'visible', timeout: ${kisa} }).catch(() => undefined);`,
+          `${ic}  if (await oge.isVisible()) await oge.click({ timeout: ${sureSn * 1000} });`, `${ic}}`);
+        continue;
+      }
       const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
       if (a.tur === 'tikla') satirlar.push(`${ic}await ${l}.filter({ visible: true }).first().click({ timeout: ${zaman} });`);
       else if (a.durum === 'dolu') { yardimcilar.add('doluBekle'); satirlar.push(`${ic}await doluBekle(page, ${s(a.secici)}, ${zaman});`); }

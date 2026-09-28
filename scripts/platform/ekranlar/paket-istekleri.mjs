@@ -34,6 +34,7 @@ export const INCELEME_KURALLARI = 'Sayfayı benimle birlikte, adım adım incele
   + 'Sayfanın adresi verdiğim ortamdan başka bir ortama (ör. test yerine canlı) geçerse dur, hiçbir şeye dokunma ve bana sor. '
   + 'Bir düğmenin ne yaptığından emin değilsen basma, bana sor. '
   + 'İş kuralı uyarısının göründüğü öğeyi adımın kosu.hataGostergesi\'ne, uyarı metinlerini kosu.uyarilar\'a yaz. '
+  + 'Bazı ekranlarda çıkan, bazılarında çıkmayan ara pencere düğmesi için kosu.aksiyonlar\'da kosul: \'gorunurse\' kullan. '
   + 'Alan bir iframe (çerçeve) içindeyse alanın konum.cerceve\'sine iframe seçicisini yaz (dıştan içe dizi, en çok 2; ör. ["iframe#pencere"]); '
   + 'o iframe\'deki düğme ve göstergelerde de (kosu.aksiyonlar, basariGostergesi, hataGostergesi, uyarilar) cerceve\'yi yaz. '
   + 'Gerçek <select>\'i gizli olan özel açılır listelerde (aramalı kutu) konum.secici\'ye gerçek <select>\'in seçicisini, doldurucu\'ya "ozelSecim" yaz. '
