@@ -4,7 +4,7 @@
 //
 // Biçimler (bicim "otomatik" ise addan, içerik türünden ve ilk baytlardan bulunur):
 //   csv   : ayraç (otomatik ya da , ; sekme |), tırnaklı hücreler (RFC 4180), başlık satırı; kodlama UTF-8 / UTF-8-BOM / Windows-1254
-//   xlsx  : ZIP + çalışma kitabı XML'i (scripts/paket/arsiv.mjs zip okuyucusu); ortak metinler, satır içi metin, sayı, mantıksal.
+//   xlsx  : ZIP + çalışma kitabı XML'i (arsiv.mjs zip okuyucusu); ortak metinler, satır içi metin, sayı, mantıksal.
 //           Tarih hücreleri Excel seri sayısı olarak okunur (biçimlenmez). Şifreli XLSX ve eski .xls okunmaz (açık hata).
 //   pdf   : sıkıştırılmamış ve FlateDecode içerik akışlarındaki Tj / TJ / ' / " metinleri (sayfa sırasıyla; yazı tipinin ToUnicode
 //           eşlemesi varsa o kullanılır). Şifreli PDF ve metni olmayan (taranmış görüntü) PDF → "metin çıkarılamadı" açık hatası.
@@ -20,7 +20,7 @@
 // sütunların (gizli-adlar.mjs) hücreleri maskelenir (•••).
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir). Tipler: dosya-icerigi.d.mts.
 import { inflateSync, constants as zlibSabitleri } from 'node:zlib';
-import { zipGirdileri } from '../../paket/arsiv.mjs';
+import { zipGirdileri } from './arsiv.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 
 export const DOSYA_BICIMLERI = Object.freeze(['otomatik', 'csv', 'xlsx', 'pdf', 'metin']);
@@ -375,7 +375,7 @@ export function sutunHarfi(i) {
  * @param {Buffer} v @param {string} [sayfa] @returns {{ sayfa: string; satirlar: string[][] }}
  */
 export function xlsxOku(v, sayfa) {
-  /** @type {import('../../paket/arsiv.d.mts').ZipGirdisi[]} */
+  /** @type {import('./arsiv.d.mts').ZipGirdisi[]} */
   let girdiler;
   try { girdiler = zipGirdileri(v); } catch (e) { throw new DosyaIcerikHatasi(`XLSX okunamadı: ${/** @type {Error} */ (e).message}`); }
   const bul = (/** @type {string} */ ad) => girdiler.find((g) => g.tur === 'dosya' && g.ad.replace(/^\/+/, '').toLowerCase() === ad.toLowerCase());

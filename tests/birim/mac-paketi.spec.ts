@@ -1,4 +1,4 @@
-// KORUMA TESTLERİ — macOS paketi (scripts/paket/mac-paketi.mjs, arsiv.mjs): AĞ YOK; küçük SAHTE kaynak arşivlerle (Node tar.gz,
+// KORUMA TESTLERİ — macOS paketi (scripts/paket/mac-paketi.mjs, scripts/platform/dosyalar/arsiv.mjs): AĞ YOK; küçük SAHTE kaynak arşivlerle (Node tar.gz,
 // Unix modlu / sembolik bağlantılı ZIP, Unix modu olmayan ZIP) ve sahte bir proje köküyle paket üretilir; arşiv yapısı, izinler
 // (yürütülebilirler 0755, diğerleri 0644), sembolik bağlantı korunumu, OKUBENI, Info.plist, başlatıcı betiği (shebang, LF) ve
 // kullanıcı verisinin (veri/, .env) pakete girmediği denetlenir. Sistemde "tar" varsa arşiv bağımsız olarak onunla da listelenir.
@@ -7,7 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { crc32, deflateRawSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
-import { TarYazici, tarGirdileri, zipGirdileri, type TarGirdisi } from '../../scripts/paket/arsiv.mjs';
+import { TarYazici, tarGirdileri, zipGirdileri, type TarGirdisi } from '../../scripts/platform/dosyalar/arsiv.mjs';
 import { MAC_VERI_KLASORU, baslaticiBetigi, infoPlist, macPaketiYaz, type MacMimarisi } from '../../scripts/paket/mac-paketi.mjs';
 import { uygulamaIcerigi } from '../../scripts/paket/paket-ortak.mjs';
 import { geciciKlasor } from './platform-ortak';
