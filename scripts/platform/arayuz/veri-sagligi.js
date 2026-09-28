@@ -25,13 +25,15 @@ export function kullanimMetni(k) {
 
 /**
  * Veri sağlığı kartı. secTablo(id): Tablolar listesinde o tabloyu açar; yenile(): bölümü yeniden yükler (birleştirme / geri alma sonrası).
- * @param {{ id: string }} proje @param {{ secTablo: (id: string) => void; yenile: () => void; tablolar: () => Array<{ id: string; ad: string }> }} c
+ * @param {{ id: string }} proje @param {{ secTablo: (id: string) => void; yenile: () => void; tablolar: () => Array<{ id: string; ad: string }>; veri?: Promise<any> }} c
  */
 export function veriSagligiKarti(proje, c) {
   const kok = h('section', { class: 'kart veri-sagligi', 'aria-label': 'Veri sağlığı' }, h('p', { class: 'soluk kucuk' }, 'Veri sağlığı denetleniyor…'));
   (async () => {
     let s;
-    try { s = await api(`/platform/tablolar/veri-sagligi?projeId=${q(proje.id)}`); } catch (e) { yerlestir(kok, h('p', { class: 'soluk kucuk' }, `Veri sağlığı okunamadı: ${e.message}`)); return; }
+    // Önceden yüklendiyse (Test verisi bölümü tablolarla birlikte ister) kart hemen çizilir: sayfa sonradan kaymaz.
+    try { s = c.veri ? await c.veri : await api(`/platform/tablolar/veri-sagligi?projeId=${q(proje.id)}`); } catch (e) { yerlestir(kok, h('p', { class: 'soluk kucuk' }, `Veri sağlığı okunamadı: ${e.message}`)); return; }
+    if (!s) { kok.remove(); return; }
     const bolum = (baslik, sayi, icerik, acik = false) => h('details', { class: 'saglik-bolumu', open: acik && sayi > 0 },
       h('summary', {}, h('span', {}, baslik), rozet(String(sayi), sayi ? 'uyari' : '')), sayi ? icerik : h('p', { class: 'soluk kucuk' }, 'Sorun yok.'));
     const tabloDugmesi = (id, metin) => h('button', { type: 'button', class: 'baglanti-dugmesi', onclick: () => c.secTablo(id) }, metin);

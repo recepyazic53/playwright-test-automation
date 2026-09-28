@@ -415,9 +415,10 @@ export function guncellemeMetni(r) {
  */
 export async function tablolarBolumu(govde, proje) {
   yerlestir(govde, iskelet('liste'));
-  const [{ tablolar, ekranAdlari, ekranKullanimi }, { ortamlar }] = await Promise.all([
+  const [{ tablolar, ekranAdlari, ekranKullanimi }, { ortamlar }, saglikVerisi] = await Promise.all([
     api(`/platform/tablolar?projeId=${q(proje.id)}&baglam=1`),
-    api(`/platform/ortamlar?projeId=${q(proje.id)}`)
+    api(`/platform/ortamlar?projeId=${q(proje.id)}`),
+    api(`/platform/tablolar/veri-sagligi?projeId=${q(proje.id)}`).catch(() => null)
   ]);
   let liste = tablolar;
   const grupBilgisi = { ekranAdlari: ekranAdlari || [], ekranKullanimi: ekranKullanimi || {} };
@@ -430,6 +431,7 @@ export async function tablolarBolumu(govde, proje) {
   const sagKap = h('div', {});
   // Veri sağlığı (benzer / kullanılmayan tablolar, boş sütunlar, kırık başvurular; birleştirme ve geri alma): veri-sagligi.js.
   const saglik = veriSagligiKarti(proje, {
+    veri: Promise.resolve(saglikVerisi),
     tablolar: () => liste,
     yenile: () => { tablolarBolumu(govde, proje); },
     secTablo: async (id) => {
