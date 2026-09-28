@@ -1,4 +1,4 @@
-// Ekranlar > Ortak akışlar'da her ortamın GİRİŞİ ("Giriş (<ortam>)"): giriş bir ortak akıştır ama tarifi ortam başına
+// Ekranlar > Ortak akışlar'da giriş tarifi TANIMLI her ortamın GİRİŞİ ("Giriş (<ortam>)"): giriş bir ortak akıştır ama tarifi ortam başına
 // Ayarlar > Giriş profilleri > Giriş tarifi'nde durur. Kartta tek satır özet (adım sayısı, iki aşamalı doğrulama, bağlam seçimi)
 // görünür; adımların okunur listesi (giris-ozeti.mjs) tarif formundadır;
 // "Düzenle" ilgili ortamın tarif formunu doğrudan açar (#/ayarlar/giris/tarif/<ortamId>). Gizli değer yoktur.
@@ -6,11 +6,15 @@ import { api, h, ikon, rozet } from './ortak.js';
 import { girisAdimlariOzeti, tarifFormuAdresi } from './giris-ozeti.mjs';
 import { girisiDeneDugmesi } from './giris-denemesi.js';
 
-/** Ortam başına giriş tarifleri (yüklenemezse boş liste; Ekranlar sayfası yine açılır). @param {{ id: string }} proje */
+/**
+ * Ortam başına TANIMLI giriş tarifleri (yüklenemezse boş liste; Ekranlar sayfası yine açılır). Tarifi olmayan ortam ortak akışlarda
+ * listelenmez (kullanıcının oluşturmadığı boş bir kalem olurdu); "tanımlı değil" durumu Ayarlar > Giriş'te görünür.
+ * @param {{ id: string }} proje
+ */
 export async function girisAkislariniAl(proje) {
   try {
     const v = await api(`/platform/giris-tarifleri?projeId=${encodeURIComponent(proje.id)}`);
-    return Array.isArray(v.ortamlar) ? v.ortamlar : [];
+    return Array.isArray(v.ortamlar) ? v.ortamlar.filter((o) => o && o.tarif) : [];
   } catch (hata) {
     if (hata && hata.durum === 423) throw hata;
     return [];
