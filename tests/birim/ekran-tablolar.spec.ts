@@ -227,6 +227,20 @@ test.describe('ekran alanları tablolardan', () => {
     await alan.getByRole('button', { name: /Tablodan: Kart → CVV/ }).click();
     await expect(alan.locator('input[type="text"]')).toHaveValue('${Kart.CVV}');
     await expect(page.getByText(GIZLI)).toHaveCount(0);
+    // Alan başlığındaki "Tablodan" / "Bilerek boş bırak" yandaki alanın etiketine binmez: başlık öğeleri kendi alan kutusunda
+    // kalır (dar ızgarada alt satıra iner).
+    for (let genislik = 700; genislik <= 1500; genislik += 40) {
+      await page.setViewportSize({ width: genislik, height: 1000 });
+      const tasanlar = await page.locator('.model-alani').evaluateAll((alanlar) => alanlar.flatMap((a) => {
+        const k = a.getBoundingClientRect();
+        if (!k.width) return [];
+        return [...a.querySelectorAll('.alan-ust *')].filter((e) => {
+          const r = e.getBoundingClientRect();
+          return r.width > 0 && (r.left < k.left - 1 || r.right > k.right + 1);
+        }).map((e) => `${a.getAttribute('data-alan')}: ${(e.textContent || '').trim().slice(0, 30)}`);
+      }));
+      expect(tasanlar, `${genislik}px`).toEqual([]);
+    }
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
