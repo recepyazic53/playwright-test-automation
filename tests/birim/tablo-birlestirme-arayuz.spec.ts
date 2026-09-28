@@ -70,6 +70,8 @@ test('veri sağlığı özeti, birleştirme penceresi, onaylı birleştirme ve g
     const kart = page.getByRole('region', { name: 'Veri sağlığı' });
     await expect(kart.getByText('Birleştirilebilecek tablolar')).toBeVisible();
     await expect(kart).toContainText('“Kargo firmaları” + “Kargo şirketleri (eski)”');
+    // Geçmiş boş (ilk tur, henüz birleştirme yok): düğme kapalı.
+    if (genislik === 1280) await expect(kart.getByRole('button', { name: 'Birleştirme geçmişi' })).toBeDisabled();
     await kart.getByText('Hiç kullanılmayan tablolar').click();
     await expect(kart.getByRole('button', { name: 'Ödeme türleri' })).toBeVisible();
     await kart.getByRole('button', { name: 'Birleştir…' }).click();
@@ -99,16 +101,27 @@ test('veri sağlığı özeti, birleştirme penceresi, onaylı birleştirme ve g
     await d.getByRole('button', { name: 'Birleştir', exact: true }).click();
     await page.getByRole('dialog', { name: 'Tablolar birleştirilsin mi?' }).getByRole('button', { name: 'Birleştir' }).click();
     await expect(page.getByText('Tablolar birleştirildi')).toBeVisible();
-    await expect(kart).toContainText('Son birleştirme');
-    await expect(kart).toContainText('“Kargo şirketleri (eski)” → “Kargo firmaları”');
+    // Eski uzun "Son birleştirme" satırı yok; başlıktaki geçmiş düğmesi açılır.
+    await expect(kart).not.toContainText('Son birleştirme');
+    const gecmisDugmesi = kart.getByRole('button', { name: 'Birleştirme geçmişi' });
+    await expect(gecmisDugmesi).toBeEnabled();
     const r = await nobetciApi(nobetci, `/platform/tablolar?projeId=${projeId}`);
     const a = (r.tablolar as Array<{ id: string; satirlar: Array<{ ad: string }> }>).find((t) => t.id === tablo.A);
     expect(a?.satirlar.map((x) => x.ad)).toEqual(['k1', 'k2', 'k3']);
-    // Geri al (onaylı).
-    await kart.getByRole('button', { name: 'Son birleştirmeyi geri al…' }).click();
-    await page.getByRole('dialog', { name: 'Son birleştirme geri alınsın mı?' }).getByRole('button', { name: 'Geri al' }).click();
+    // Geçmiş diyaloğu: satırdan geri al (onaylı); satır "geri alındı" olur.
+    await gecmisDugmesi.click();
+    const g = page.getByRole('dialog', { name: 'Birleştirme geçmişi' });
+    const satir = g.getByRole('listitem').first();
+    await expect(satir).toContainText('“Kargo şirketleri (eski)” → “Kargo firmaları”');
+    await expect(satir).toContainText('1 satır eklendi');
+    await expect(satir).toContainText('önce alınan yedek: otomatik-');
+    await satir.getByRole('button', { name: 'Geri al…' }).click();
+    await page.getByRole('dialog', { name: 'Birleştirme geri alınsın mı?' }).getByRole('button', { name: 'Geri al' }).click();
     await expect(page.getByText('Birleştirme geri alındı.')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Veri sağlığı' })).not.toContainText('Son birleştirme');
+    await expect(g.getByRole('listitem').first()).toContainText('geri alındı');
+    await expect(g.getByRole('listitem').first().getByRole('button', { name: 'Geri al…' })).toHaveCount(0);
+    await g.getByRole('button', { name: 'Kapat' }).click();
+    await expect(g).toHaveCount(0);
     expect(hatalar).toEqual([]);
     await baglam.close();
   }
@@ -154,15 +167,42 @@ test('veri sağlığı: öneriler puana göre; eşik altı (genel sütun adları
   await expect(kart).not.toContainText('“Durum kodları”');
   await kart.getByRole('button', { name: 'Düşük benzerlikleri de göster (1)' }).click();
   await expect(kart).toContainText('“Durum kodları” + “Hata kodları”');
-  // Eşik Ayarlar > Test verisi'nde (sayfanın altındaki form).
-  const form = page.getByRole('form', { name: 'Test verisi ayarları' });
+  // Eşik: Veri sağlığı başlığındaki ayarlar (dişli) düğmesi → "Test verisi ayarları" diyaloğu; sayfada ayrı ayar kartı yok.
+  await expect(page.getByRole('form', { name: 'Test verisi ayarları' })).toHaveCount(0);
+  await kart.getByRole('button', { name: 'Test verisi ayarları' }).click();
+  const d = page.getByRole('dialog', { name: 'Test verisi ayarları' });
+  const form = d.getByRole('form', { name: 'Test verisi ayarları' });
+  // Açıklama (kısa; uzunsa ayrıntı "?" ipucunda) ve varsayılan diyalogda korunur.
+  await expect(form).toContainText('Benzerlik puanı bunun altındaki');
+  await expect(form).toContainText('Varsayılan: 50');
   await form.getByLabel(/Birleştirme önerisi eşiği/).fill('10');
   await form.getByRole('button', { name: 'Kaydet' }).click();
-  await expect(page.getByText('Test verisi ayarları kaydedildi.')).toBeVisible();
+  await expect(d.getByText('Test verisi ayarları kaydedildi.')).toBeVisible();
+  await d.getByRole('button', { name: 'Kapat' }).click();
+  // Kapatınca Veri sağlığı yeni eşikle yeniden okunur (sayfa yenilenmeden).
+  await expect(kart).toContainText('“Durum kodları” + “Hata kodları”');
+  await expect(kart.getByRole('button', { name: /Düşük benzerlikleri de göster/ })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('region', { name: 'Veri sağlığı' })).toContainText('“Durum kodları” + “Hata kodları”');
-  await expect(page.getByRole('button', { name: /Düşük benzerlikleri de göster/ })).toHaveCount(0);
   await nobetciApi(nobetci, '/platform/kosu-ayarlari/kaydet', { ayarlar: { benzerlikEsigi: 50 } });
+  await baglam.close();
+});
+
+test('Test verisi ayarları diyaloğu 390px: dişli düğmesi görünür, diyalog taşmaz; "Eşiği değiştir" de diyaloğu açar', async () => {
+  const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 390, height: 844 } });
+  const page = await baglam.newPage();
+  await page.goto('/#/ayarlar/test-verisi');
+  const kart = page.getByRole('region', { name: 'Veri sağlığı' });
+  await expect(kart.getByRole('button', { name: 'Test verisi ayarları' })).toBeVisible();
+  await expect(kart.getByRole('button', { name: 'Birleştirme geçmişi' })).toBeVisible();
+  await kart.getByRole('button', { name: 'Eşiği değiştir' }).click();
+  const d = page.getByRole('dialog', { name: 'Test verisi ayarları' });
+  await expect(d.getByLabel(/Birleştirme önerisi eşiği/)).toHaveValue('50');
+  const o = await tasma(page);
+  expect(o.sayfa, '390px sayfa').toBeLessThanOrEqual(2);
+  expect(o.diyalog, '390px diyalog').toBeLessThanOrEqual(2);
+  await d.getByRole('button', { name: 'Kapat' }).click();
+  await expect(d).toHaveCount(0);
   await baglam.close();
 });
 
@@ -211,4 +251,52 @@ test('yeni tek sütunlu tablo: ayırt edici başlık + örtüşen satırlar → 
   await expect(duz.getByRole('textbox', { name: 'Tablo adı' })).toHaveValue('İade formu — Müşteri tipi');
   await expect(duz.getByText('kaydedilmemiş değişiklik')).toBeVisible();
   await baglam.close();
+});
+
+test('birleştirme geçmişi: aynı tabloyu etkileyen sonraki birleştirme varsa eskinin "Geri al"ı kapalı ve nedeni yazar; yenisi geri alınınca açılır; 390px taşma yok', async () => {
+  test.setTimeout(90_000);
+  const y = await nobetciApi(nobetci, '/platform/tablo/kaydet', { projeId, ad: 'Kargo arşivi', sutunlar: [{ ad: 'Firma' }, { ad: 'Takip kodu' }, { ad: 'Anahtar', gizli: true }],
+    satirlar: [{ ad: 'k9', degerler: { Firma: 'Uzak Kargo', 'Takip kodu': 'UK' } }] });
+  expect(y.basarili, String(y.mesaj ?? '')).not.toBe(false);
+  const arsiv = String((y.tablo as { id: string }).id);
+  const birlestir = async (kaynakId: string) => {
+    const g = { projeId, kalanId: tablo.A, kaynakIdler: [kaynakId] };
+    const o = (await nobetciApi(nobetci, '/platform/tablo/birlestir', g)).onizleme as { imza?: string; engeller: string[]; dogrulandi: boolean };
+    expect(o.engeller).toEqual([]);
+    expect(o.dogrulandi).toBe(true);
+    expect((await nobetciApi(nobetci, '/platform/tablo/birlestir', { ...g, kip: 'uygula', beklenenImza: o.imza })).uygulandi).toBe(true);
+  };
+  await birlestir(tablo.B);
+  await birlestir(arsiv);
+  // Önce 390px (yalnız görünüm + taşma), sonra masaüstünde yenisini geri alma.
+  for (const [genislik, yukseklik] of [[390, 844], [1280, 900]] as const) {
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: genislik, height: yukseklik } });
+    const page = await baglam.newPage();
+    await page.goto('/#/ayarlar/test-verisi');
+    await page.getByRole('region', { name: 'Veri sağlığı' }).getByRole('button', { name: 'Birleştirme geçmişi' }).click();
+    const g = page.getByRole('dialog', { name: 'Birleştirme geçmişi' });
+    const satirlar = g.getByRole('listitem');
+    await expect(satirlar).toHaveCount(3);
+    await expect(satirlar.nth(0)).toContainText('“Kargo arşivi” → “Kargo firmaları”');
+    await expect(satirlar.nth(0).getByRole('button', { name: 'Geri al…' })).toBeEnabled();
+    const eski = satirlar.nth(1);
+    await expect(eski).toContainText('“Kargo şirketleri (eski)” → “Kargo firmaları”');
+    await expect(eski.getByRole('button', { name: 'Geri al…' })).toBeDisabled();
+    await expect(eski).toContainText('aynı tabloyu değiştirdi; önce onu geri alın');
+    await expect(satirlar.nth(2)).toContainText('geri alındı');
+    const o = await tasma(page);
+    expect(o.sayfa, `${genislik}px sayfa`).toBeLessThanOrEqual(2);
+    expect(o.diyalog, `${genislik}px diyalog`).toBeLessThanOrEqual(2);
+    if (genislik === 390) { await baglam.close(); continue; }
+    await satirlar.nth(0).getByRole('button', { name: 'Geri al…' }).click();
+    await page.getByRole('dialog', { name: 'Birleştirme geri alınsın mı?' }).getByRole('button', { name: 'Geri al' }).click();
+    await expect(page.getByText('Birleştirme geri alındı.')).toBeVisible();
+    await expect(satirlar.nth(0)).toContainText('geri alındı');
+    await expect(satirlar.nth(1).getByRole('button', { name: 'Geri al…' })).toBeEnabled();
+    await expect(satirlar.nth(1)).not.toContainText('önce onu geri alın');
+    await g.getByRole('button', { name: 'Kapat' }).click();
+    await baglam.close();
+  }
+  // Durumu temizle: kalan etkin birleştirme (en yeni etkin; kimliksiz istek).
+  for (let i = 0; i < 1; i++) expect((await nobetciApi(nobetci, '/platform/tablo/birlestirme/geri-al', { projeId, onay: true })).geriAlindi).toBe(true);
 });

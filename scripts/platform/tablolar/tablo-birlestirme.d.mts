@@ -20,7 +20,8 @@ export interface VeriSagligi {
   bosSutunlar: Array<{ tabloId: string; tablo: string; sutun: string }>;
   kirikBasvurular: KirikBasvuru[];
   kullanim: Record<string, Kullanim>;
-  sonBirlestirme: { id: string; zaman: string; kalan: string; kaynaklar: string[]; kaynaklarSilindi: boolean; yedek: string | null } | null;
+  /** Birleştirme geçmişi sayıları (liste: birlestirmeGecmisi). */
+  birlestirmeGecmisi: { toplam: number; etkin: number };
 }
 export declare function veriSagligi(vt: Veritabani, projeId: string): VeriSagligi;
 export interface BirlestirmeGirdisi {
@@ -47,6 +48,13 @@ export interface BirlestirmeOnizlemesi {
 export declare function tablolariBirlestir(vt: Veritabani, projeId: string, girdi: BirlestirmeGirdisi & { kip?: unknown; beklenenImza?: unknown; yapan?: string; yedek?: string | null },
   secenekler?: { kosuyorMu?: (dosya: string, ad: string) => boolean; simdi?: Date }):
   { onizleme: BirlestirmeOnizlemesi; uygulandi?: true; yapilmadi?: true; onayGerekli?: true; farkli?: true; birlestirmeId?: string };
-export declare function sonBirlestirme(vt: Veritabani, projeId: string): { id: string; zaman: string; kalanId: string; kalanAd: string; kaynaklar: Array<{ id: string; ad: string }>; kaynaklarSilindi: boolean; yedek?: string | null } | null;
-export declare function sonBirlestirmeyiGeriAl(vt: Veritabani, projeId: string, girdi: { onay?: boolean; yapan?: string }): Record<string, unknown>;
-export declare function kaynaklariSil(vt: Veritabani, projeId: string, girdi: { onay?: boolean; yapan?: string }): Record<string, unknown>;
+export interface BirlestirmeGecmisiSatiri {
+  id: string; zaman: string; kalan: string; eskiAd: string | null; kaynaklar: string[];
+  eklenenSatir: number | null; bag: number | null; senaryo: number | null;
+  kaynaklarSilindi: boolean; yedek: string | null; durum: 'etkin' | 'geriAlindi'; geriAlinmaZamani: string | null;
+  geriAlinabilir: boolean; neden: string; engelleyen: string | null; degisenler: string[];
+  kaynaklariSilinebilir: boolean; kaynakNedeni: string;
+}
+export declare function birlestirmeGecmisi(vt: Veritabani, projeId: string): { kayitlar: BirlestirmeGecmisiSatiri[] };
+export declare function birlestirmeyiGeriAl(vt: Veritabani, projeId: string, girdi: { birlestirmeId?: unknown; onay?: boolean; yapan?: string }): Record<string, unknown>;
+export declare function kaynaklariSil(vt: Veritabani, projeId: string, girdi: { birlestirmeId?: unknown; onay?: boolean; yapan?: string }): Record<string, unknown>;

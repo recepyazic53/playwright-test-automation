@@ -412,8 +412,10 @@ export function guncellemeMetni(r) {
 
 /**
  * @param {HTMLElement} govde @param {{ id: string }} proje
+ * @param {{ ayarlarFormu?: (kaydedildi: () => void) => Promise<HTMLElement> }} [secenek] ayarlarFormu: Veri sağlığı başlığındaki
+ *   ayarlar (dişli) düğmesinin açtığı "Test verisi ayarları" formu (ayarlar.js)
  */
-export async function tablolarBolumu(govde, proje) {
+export async function tablolarBolumu(govde, proje, secenek = {}) {
   yerlestir(govde, iskelet('liste'));
   const [{ tablolar, ekranAdlari, ekranKullanimi }, { ortamlar }, saglikVerisi] = await Promise.all([
     api(`/platform/tablolar?projeId=${q(proje.id)}&baglam=1`),
@@ -433,7 +435,8 @@ export async function tablolarBolumu(govde, proje) {
   const saglik = veriSagligiKarti(proje, {
     veri: Promise.resolve(saglikVerisi),
     tablolar: () => liste,
-    yenile: () => { tablolarBolumu(govde, proje); },
+    yenile: () => { tablolarBolumu(govde, proje, secenek); },
+    ayarlarFormu: secenek.ayarlarFormu,
     secTablo: async (id) => {
       const t = liste.find((x) => x.id === id);
       if (!t || (t.id === seciliId && is?.id)) { sagKap.scrollIntoView({ block: 'start' }); return; }

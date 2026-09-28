@@ -23,7 +23,7 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) ya da şu değerlerden birindeyken (degerler) kullanılır; arayüz aksi hâlde alanı pasif gösterir
  * (pasifAciklama). Kaydedilen değer korunur.
  * tur 'onay': açık / kapalı (true / false; onay kutusu).
- * bolum 'testVerisi': Ayarlar > Test verisi sayfasının altındaki "Test verisi ayarları" formu.
+ * bolum 'testVerisi': Ayarlar > Test verisi > Veri sağlığı başlığındaki ayarlar (dişli) düğmesinin açtığı "Test verisi ayarları" diyaloğu.
  * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
  *   varsayilan: string | number | boolean; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
  *   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string } }>}

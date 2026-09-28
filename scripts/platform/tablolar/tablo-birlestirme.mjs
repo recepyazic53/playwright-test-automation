@@ -15,9 +15,12 @@
 //   · KURU DOĞRULAMA: etkilenen her ekran senaryosu ve servis isteği, hiçbir şey çalıştırılmadan koşucunun / servisin kendi
 //     çözümleyicileriyle (ekranBasvurulariniCoz, servisIstegiKuruCoz) eski ve yeni hâlde, HER ORTAMDA çözülür; bir değer farklıysa ya
 //     da çözülemez hâle geliyorsa birleştirme YAPILMAZ, fark listesi döner (değer gösterilmez).
-//   · Onay → tek işlem (vt.islem); değişiklik geçmişine kayıt; önce otomatik yedek (uç). "Son birleştirmeyi geri al": birleştirmenin
-//     dokunduğu kayıtların önceki ham hâli (kasa zarfları olduğu gibi) şifreli ayarda saklanır; kayıtlar birleştirmeden sonra
-//     değişmediyse ters işlemle geri yazılır (değiştiyse geri alınmaz, yedekten dönüş önerilir).
+//   · Onay → tek işlem (vt.islem); değişiklik geçmişine kayıt; önce otomatik yedek (uç). BİRLEŞTİRME GEÇMİŞİ: her birleştirme
+//     şifreli ayarda (tabloBirlestirme.gecmis:<projeId>) bir kayıt olarak saklanır: dokunduğu kayıtların önceki ham hâli (kasa
+//     zarfları olduğu gibi), özet sayılar, yedek adı, durum (etkin / geri alındı). Eski tek kayıt (tabloBirlestirme.son:) ilk okumada
+//     geçmişe taşınır. Herhangi bir kayıt geri alınabilir; ancak ondan SONRA yapılmış, hâlâ etkin ve aynı tabloları (kalan / kaynak)
+//     ya da aynı kayıtları etkilemiş bir birleştirme varsa önce o geri alınmalıdır. Kayıtlar birleştirmeden sonra elle değiştiyse
+//     geri alınmaz (yedekten dönüş önerilir).
 //   · Kaynak tablolar birleştirmede SİLİNMEZ; ayrı onayla (kaynaklariSil) silinir — yalnız artık hiçbir yerde kullanılmıyorlarsa.
 import { createHash, randomUUID } from 'node:crypto';
 import { DepoHatasi, ayarGetir, ayarYaz, ekranlariListele, gecmisYaz, ortamGetir, ortamlariListele } from '../veritabani/depo.mjs';
@@ -46,7 +49,11 @@ import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
 
 export const MASKE = '•••';
 const GERI_AL = Symbol('geri-al');
-const AYAR_ONEKI = 'tabloBirlestirme.son:';
+/** Eski (tek kayıt) anahtar: ilk okumada geçmişe taşınır. */
+const ESKI_AYAR_ONEKI = 'tabloBirlestirme.son:';
+const GECMIS_ONEKI = 'tabloBirlestirme.gecmis:';
+/** Geçmişte en çok bu kadar kayıt tutulur (önce geri alınmış, sonra en eski kayıtlar düşer). */
+const EN_COK_GECMIS = 50;
 const kucuk = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
 const nesneMi = (/** @type {unknown} */ d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 const dolu = (/** @type {unknown} */ v) => v !== null && v !== undefined && v !== '';
@@ -265,7 +272,7 @@ export function veriSagligi(vt, projeId) {
   const { kullanim, kirik } = tabloKullanimlari(vt, projeId);
   const oneriler = birlestirmeOnerileri(tablolar.map((t) => ({ id: t.id, ad: t.ad, sutunlar: t.sutunlar, kaynak: t.kaynak ?? null, satirImzalari: t.satirlar.map((r) => satirImzasi(r, t.sutunlar)) })), ek);
   const ad = new Map(tablolar.map((t) => [t.id, t.ad]));
-  const son = sonBirlestirme(vt, projeId);
+  const gecmis = gecmisOku(vt, projeId);
   // Eşik altı öneriler arayüzde varsayılan gizli ("Düşük benzerlikleri de göster"); karar Ayarlar > Test verisi'nde.
   let benzerlikEsigi = 50;
   try { benzerlikEsigi = kosuAyarlariniOku(vt).benzerlikEsigi; } catch { /* varsayılan */ }
@@ -277,7 +284,7 @@ export function veriSagligi(vt, projeId) {
       .map((s) => ({ tabloId: t.id, tablo: t.ad, sutun: s.ad }))),
     kirikBasvurular: kirik,
     kullanim,
-    sonBirlestirme: son ? { id: son.id, zaman: son.zaman, kalan: son.kalanAd, kaynaklar: son.kaynaklar.map((k) => k.ad), kaynaklarSilindi: son.kaynaklarSilindi, yedek: son.yedek ?? null } : null
+    birlestirmeGecmisi: { toplam: gecmis.length, etkin: gecmis.filter((k) => k.durum !== 'geriAlindi').length }
   };
 }
 
@@ -792,7 +799,8 @@ const HAM_TABLOLAR = /** @type {const} */ (['test_verisi_turleri', 'test_verisi_
 /** @typedef {{ tablo: HamTablo; id: string; onceki: Nesne | null; sonraOzeti: string | null }} HamKayit */
 /**
  * @typedef {{ id: string; zaman: string; projeId: string; kalanId: string; kalanAd: string; kaynaklar: Array<{ id: string; ad: string }>;
- *   kayitlar: HamKayit[]; kaynaklarSilindi: boolean; yedek?: string | null }} BirlestirmeKaydi
+ *   kayitlar: HamKayit[]; kaynaklarSilindi: boolean; yedek?: string | null; eskiAd?: string; durum?: 'etkin' | 'geriAlindi';
+ *   geriAlinmaZamani?: string | null; ozet?: { eklenenSatir: number; bag: number; senaryo: number } }} BirlestirmeKaydi
  */
 
 /** @param {Veritabani} vt @param {HamTablo} tablo @param {string} id @returns {Nesne | null} */
@@ -809,15 +817,112 @@ function hamYaz(vt, tablo, id, satir) {
   } else vt.calistir(`INSERT INTO ${tablo} (${sutunlar.join(', ')}) VALUES (${sutunlar.map(() => '?').join(', ')})`, sutunlar.map((s) => satir[s]));
 }
 
-/** @param {Veritabani} vt @param {string} projeId @returns {BirlestirmeKaydi | null} */
-export function sonBirlestirme(vt, projeId) {
-  const k = ayarGetir(vt, `${AYAR_ONEKI}${projeId}`);
-  return k && typeof k === 'object' && Array.isArray(/** @type {any} */ (k).kayitlar) ? /** @type {BirlestirmeKaydi} */ (k) : null;
+/** @param {unknown} k @returns {k is BirlestirmeKaydi} */
+const kayitMi = (k) => nesneMi(k) && typeof /** @type {Nesne} */ (k).id === 'string' && Array.isArray(/** @type {Nesne} */ (k).kayitlar);
+
+/**
+ * Birleştirme geçmişi (eskiden yeniye). Eski tek kayıt (tabloBirlestirme.son:) varsa geçmişe taşınır ve eski anahtar boşaltılır.
+ * @param {Veritabani} vt @param {string} projeId @returns {BirlestirmeKaydi[]}
+ */
+function gecmisOku(vt, projeId) {
+  const ham = /** @type {Nesne | null | undefined} */ (ayarGetir(vt, `${GECMIS_ONEKI}${projeId}`));
+  const liste = (Array.isArray(ham?.kayitlar) ? ham.kayitlar : []).filter(kayitMi);
+  const eski = ayarGetir(vt, `${ESKI_AYAR_ONEKI}${projeId}`);
+  if (kayitMi(eski)) {
+    if (!liste.some((k) => k.id === eski.id)) liste.push({ ...eski, durum: 'etkin', geriAlinmaZamani: null });
+    liste.sort((a, b) => (a.zaman < b.zaman ? -1 : a.zaman > b.zaman ? 1 : 0));
+    vt.islem(() => {
+      gecmisiKaydet(vt, projeId, liste);
+      ayarYaz(vt, `${ESKI_AYAR_ONEKI}${projeId}`, null);
+    });
+  }
+  return liste;
+}
+
+/** @param {Veritabani} vt @param {string} projeId @param {BirlestirmeKaydi[]} liste */
+function gecmisiKaydet(vt, projeId, liste) {
+  const l = [...liste];
+  while (l.length > EN_COK_GECMIS) {
+    const i = l.findIndex((k) => k.durum === 'geriAlindi');
+    l.splice(i >= 0 ? i : 0, 1);
+  }
+  ayarYaz(vt, `${GECMIS_ONEKI}${projeId}`, { kayitlar: l });
 }
 
 /** Kaydın dokunduğu satırlar birleştirmeden (ya da kaynak silmeden) sonra değişti mi. @param {Veritabani} vt @param {BirlestirmeKaydi} k */
 function degisenKayitlar(vt, k) {
   return k.kayitlar.filter((x) => { const s = hamOku(vt, x.tablo, x.id); return (s ? ozet(s) : null) !== x.sonraOzeti; });
+}
+
+const HAM_ADLARI = { test_verisi_turleri: 'tablo', test_verisi_profilleri: 'tablo satırı', ekranlar: 'ekran', senaryolar: 'ekran senaryosu', servisler: 'servis', servis_senaryolari: 'servis senaryosu', servis_akislari: 'servis akışı' };
+
+/** "28.09.2026 14:05" (sunucunun yerel saati). @param {string} iso */
+function tarihMetni(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const iki = (/** @type {number} */ n) => String(n).padStart(2, '0');
+  return `${iki(d.getDate())}.${iki(d.getMonth() + 1)}.${d.getFullYear()} ${iki(d.getHours())}:${iki(d.getMinutes())}`;
+}
+
+/** Birleştirmenin tabloları (kalan + kaynaklar). @param {BirlestirmeKaydi} k */
+const kayitTablolari = (k) => new Set([k.kalanId, ...k.kaynaklar.map((x) => x.id)]);
+
+/**
+ * Kaydı (liste[i]) geri almayı engelleyen SONRAKİ etkin birleştirme: aynı tabloyu (kalan / kaynak) ya da aynı kaydı (senaryo, bağ …)
+ * değiştirmişse. Engel varsa anlaşılır neden döner.
+ * @param {BirlestirmeKaydi[]} liste @param {number} i @param {'geriAl' | 'kaynakSil'} [amac]
+ */
+function sonrakiEngel(liste, i, amac = 'geriAl') {
+  const k = liste[i];
+  const tablolar = amac === 'kaynakSil' ? new Set(k.kaynaklar.map((x) => x.id)) : kayitTablolari(k);
+  const hamlar = new Set(k.kayitlar.map((x) => `${x.tablo}|${x.id}`));
+  for (let j = liste.length - 1; j > i; j--) {
+    const s = liste[j];
+    if (s.durum === 'geriAlindi') continue;
+    const ortakTablo = [...kayitTablolari(s)].some((id) => tablolar.has(id));
+    const ortakKayit = amac === 'geriAl' && s.kayitlar.some((x) => hamlar.has(`${x.tablo}|${x.id}`));
+    if (ortakTablo || ortakKayit) {
+      return { id: s.id, neden: `Sonraki birleştirme (${tarihMetni(s.zaman)}, “${s.kalanAd}”) aynı ${ortakTablo ? 'tabloyu' : 'kayıtları'} değiştirdi; önce onu geri alın.` };
+    }
+  }
+  return null;
+}
+
+/** Geçmiş satırı (değer ve ham kayıt içermez). @param {Veritabani} vt @param {BirlestirmeKaydi[]} liste @param {number} i */
+function gecmisSatiri(vt, liste, i) {
+  const k = liste[i];
+  const etkin = k.durum !== 'geriAlindi';
+  const engel = etkin ? sonrakiEngel(liste, i) : null;
+  const degisen = etkin && !engel ? degisenKayitlar(vt, k) : [];
+  const kaynakEngeli = etkin && !k.kaynaklarSilindi ? sonrakiEngel(liste, i, 'kaynakSil') : null;
+  return {
+    id: k.id, zaman: k.zaman, kalan: k.kalanAd, eskiAd: k.eskiAd && k.eskiAd !== k.kalanAd ? k.eskiAd : null, kaynaklar: k.kaynaklar.map((x) => x.ad),
+    eklenenSatir: k.ozet?.eklenenSatir ?? null, bag: k.ozet?.bag ?? null, senaryo: k.ozet?.senaryo ?? null,
+    kaynaklarSilindi: Boolean(k.kaynaklarSilindi), yedek: k.yedek ?? null, durum: etkin ? 'etkin' : 'geriAlindi', geriAlinmaZamani: k.geriAlinmaZamani ?? null,
+    geriAlinabilir: etkin && !engel && !degisen.length,
+    neden: engel ? engel.neden : degisen.length ? 'Birleştirmeden sonra bu kayıtlar değişti; ters işlem onları ezerdi. Yedekten dönebilirsiniz.' : '',
+    engelleyen: engel ? engel.id : null,
+    degisenler: [...new Set(degisen.map((x) => HAM_ADLARI[x.tablo]))],
+    kaynaklariSilinebilir: etkin && !k.kaynaklarSilindi && !kaynakEngeli,
+    kaynakNedeni: kaynakEngeli ? kaynakEngeli.neden : ''
+  };
+}
+
+/**
+ * Birleştirme geçmişi (yeniden eskiye): her satırda özet, durum, geri alınabilir mi (değilse neden), kaynaklar silinebilir mi.
+ * @param {Veritabani} vt @param {string} projeId
+ */
+export function birlestirmeGecmisi(vt, projeId) {
+  acikAnahtar(vt);
+  const liste = gecmisOku(vt, projeId);
+  return { kayitlar: liste.map((_, i) => gecmisSatiri(vt, liste, i)).reverse() };
+}
+
+/** İstenen kayıt (id yoksa en yeni etkin kayıt). @param {BirlestirmeKaydi[]} liste @param {unknown} id */
+function kayitBul(liste, id) {
+  if (typeof id === 'string' && id) return liste.findIndex((k) => k.id === id);
+  for (let i = liste.length - 1; i >= 0; i--) if (liste[i].durum !== 'geriAlindi') return i;
+  return -1;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -882,9 +987,10 @@ export function tablolariBirlestir(vt, projeId, girdi, secenekler = {}) {
       /** @type {BirlestirmeKaydi} */
       const kayit = {
         id: randomUUID(), zaman: simdi.toISOString(), projeId, kalanId: p.kalan.id, kalanAd: p.yeniAd, kaynaklar: p.kaynaklar.map((k) => ({ id: k.id, ad: k.ad })),
-        kayitlar, kaynaklarSilindi: false, yedek: girdi.yedek ?? null
+        kayitlar, kaynaklarSilindi: false, yedek: girdi.yedek ?? null, eskiAd: p.kalan.ad, durum: 'etkin', geriAlinmaZamani: null,
+        ozet: { eklenenSatir: p.eklenecek, bag: r.ozet.ekranBaglari + r.ozet.servisBaglari, senaryo: r.ozet.ekranSenaryolari + r.ozet.servisSenaryolari }
       };
-      ayarYaz(vt, `${AYAR_ONEKI}${projeId}`, kayit);
+      gecmisiKaydet(vt, projeId, [...gecmisOku(vt, projeId), kayit]);
       gecmisYaz(vt, {
         varlikTuru: 'tablo_birlestirme', varlikId: p.kalan.id, islem: 'guncelle', yapan: girdi.yapan,
         aciklama: `Tablolar birleştirildi: ${p.kaynaklar.map((k) => `"${k.ad}"`).join(', ')} → "${p.yeniAd}" (${p.eklenecek} satır eklendi; ${r.ozet.ekranSenaryolari + r.ozet.servisSenaryolari} senaryo, ${r.ozet.ekranBaglari + r.ozet.servisBaglari} bağ yeniden eşlendi).`,
@@ -950,26 +1056,34 @@ function onizlemeOzeti(p, r, kullanim) {
 }
 
 /**
- * Son birleştirmeyi geri alır (kayıtlı ters işlem): birleştirmenin (ve varsa kaynak silmenin) dokunduğu kayıtların önceki ham hâli geri
- * yazılır. Kayıtlardan biri sonradan değiştiyse geri alınmaz (liste + yedek önerisi). onay yoksa yalnız ne yapılacağı döner.
- * @param {Veritabani} vt @param {string} projeId @param {{ onay?: boolean; yapan?: string }} girdi
+ * Geçmişteki bir birleştirmeyi geri alır (kayıtlı ters işlem; birlestirmeId yoksa en yeni etkin kayıt): birleştirmenin (ve varsa
+ * kaynak silmenin) dokunduğu kayıtların önceki ham hâli geri yazılır. Sonraki etkin bir birleştirme aynı tabloyu / kaydı
+ * değiştirdiyse ya da kayıtlardan biri sonradan elle değiştiyse geri alınmaz (neden + yedek önerisi). onay yoksa yalnız ne
+ * yapılacağı döner.
+ * @param {Veritabani} vt @param {string} projeId @param {{ birlestirmeId?: unknown; onay?: boolean; yapan?: string }} girdi
  */
-export function sonBirlestirmeyiGeriAl(vt, projeId, girdi) {
+export function birlestirmeyiGeriAl(vt, projeId, girdi) {
   acikAnahtar(vt);
-  const k = sonBirlestirme(vt, projeId);
-  if (!k) throw new DepoHatasi('Geri alınacak birleştirme yok.');
+  const liste = gecmisOku(vt, projeId);
+  const i = kayitBul(liste, girdi.birlestirmeId);
+  if (i < 0) throw new DepoHatasi(typeof girdi.birlestirmeId === 'string' && girdi.birlestirmeId ? 'Birleştirme geçmişte bulunamadı.' : 'Geri alınacak birleştirme yok.');
+  const k = liste[i];
+  if (k.durum === 'geriAlindi') throw new DepoHatasi('Bu birleştirme zaten geri alındı.');
+  const bilgi = { id: k.id, kalan: k.kalanAd, kaynaklar: k.kaynaklar.map((x) => x.ad), zaman: k.zaman, kayit: k.kayitlar.length, yedek: k.yedek ?? null };
+  const engel = sonrakiEngel(liste, i);
+  if (engel) return { geriAlinamaz: true, ...bilgi, engelleyen: engel.id, degisenler: [], neden: engel.neden };
   const degisen = degisenKayitlar(vt, k);
-  const bilgi = { kalan: k.kalanAd, kaynaklar: k.kaynaklar.map((x) => x.ad), zaman: k.zaman, kayit: k.kayitlar.length, yedek: k.yedek ?? null };
   if (degisen.length) {
-    const ad = { test_verisi_turleri: 'tablo', test_verisi_profilleri: 'tablo satırı', ekranlar: 'ekran', senaryolar: 'ekran senaryosu', servisler: 'servis', servis_senaryolari: 'servis senaryosu', servis_akislari: 'servis akışı' };
-    return { geriAlinamaz: true, ...bilgi, degisenler: [...new Set(degisen.map((x) => ad[x.tablo]))], neden: 'Birleştirmeden sonra bu kayıtlar değişti; ters işlem onları ezerdi. Yedekten dönebilirsiniz.' };
+    return { geriAlinamaz: true, ...bilgi, degisenler: [...new Set(degisen.map((x) => HAM_ADLARI[x.tablo]))], neden: 'Birleştirmeden sonra bu kayıtlar değişti; ters işlem onları ezerdi. Yedekten dönebilirsiniz.' };
   }
   if (!girdi.onay) return { onizleme: bilgi };
   vt.islem(() => {
     const sira = (/** @type {HamKayit} */ x) => (x.tablo === 'test_verisi_turleri' ? 0 : x.tablo === 'test_verisi_profilleri' ? 1 : 2);
     for (const x of [...k.kayitlar].sort((a, b) => sira(a) - sira(b))) if (x.onceki) hamYaz(vt, x.tablo, x.id, x.onceki);
     for (const x of k.kayitlar) if (!x.onceki) hamYaz(vt, x.tablo, x.id, null);
-    ayarYaz(vt, `${AYAR_ONEKI}${projeId}`, null);
+    // Geri alınan kaydın ham verisi artık gerekmez; satır geçmişte "geri alındı" olarak kalır.
+    liste[i] = { ...k, kayitlar: [], durum: 'geriAlindi', geriAlinmaZamani: new Date().toISOString() };
+    gecmisiKaydet(vt, projeId, liste);
     gecmisYaz(vt, { varlikTuru: 'tablo_birlestirme', varlikId: k.kalanId, islem: 'guncelle', yapan: girdi.yapan,
       aciklama: `Birleştirme geri alındı: "${k.kalanAd}" ← ${k.kaynaklar.map((x) => `"${x.ad}"`).join(', ')}.` });
   });
@@ -977,19 +1091,24 @@ export function sonBirlestirmeyiGeriAl(vt, projeId, girdi) {
 }
 
 /**
- * Son birleştirmenin kaynak tablolarını siler (ayrı onay). Artık hiçbir yerde kullanılmıyor olmalılar. Silinen satırlar geri alma
- * kaydına eklenir (geri al kaynakları da geri getirir). onay yoksa yalnız ne silineceği döner.
- * @param {Veritabani} vt @param {string} projeId @param {{ onay?: boolean; yapan?: string }} girdi
+ * Bir birleştirmenin kaynak tablolarını siler (ayrı onay; birlestirmeId yoksa en yeni etkin kayıt). Artık hiçbir yerde
+ * kullanılmıyor olmalılar ve sonraki etkin bir birleştirme bu tabloları kullanmamış olmalı. Silinen satırlar o birleştirmenin geri
+ * alma kaydına eklenir (geri al kaynakları da geri getirir). onay yoksa yalnız ne silineceği döner.
+ * @param {Veritabani} vt @param {string} projeId @param {{ birlestirmeId?: unknown; onay?: boolean; yapan?: string }} girdi
  */
 export function kaynaklariSil(vt, projeId, girdi) {
   acikAnahtar(vt);
-  const k = sonBirlestirme(vt, projeId);
-  if (!k || k.kaynaklarSilindi) throw new DepoHatasi('Silinecek kaynak tablo yok (son birleştirmenin kaynakları zaten silinmiş ya da birleştirme yok).');
+  const liste = gecmisOku(vt, projeId);
+  const i = kayitBul(liste, girdi.birlestirmeId);
+  const k = i < 0 ? null : liste[i];
+  if (!k || k.durum === 'geriAlindi' || k.kaynaklarSilindi) throw new DepoHatasi('Silinecek kaynak tablo yok (birleştirmenin kaynakları zaten silinmiş, birleştirme geri alınmış ya da birleştirme yok).');
   const tablolar = tablolariListele(vt, projeId);
   const kaynaklar = k.kaynaklar.map((x) => tablolar.find((t) => t.id === x.id)).filter((t) => t !== undefined);
+  const bilgi = { id: k.id, tablolar: kaynaklar.map((t) => ({ ad: t.ad, satir: t.satirlar.length })) };
+  const engel = sonrakiEngel(liste, i, 'kaynakSil');
+  if (engel) return { silinemez: true, ...bilgi, neden: engel.neden };
   const { kullanim } = tabloKullanimlari(vt, projeId);
   const kullanilan = kaynaklar.filter((t) => kullanim[t.id]?.toplam);
-  const bilgi = { tablolar: kaynaklar.map((t) => ({ ad: t.ad, satir: t.satirlar.length })) };
   if (kullanilan.length) return { silinemez: true, ...bilgi, neden: `${kullanilan.map((t) => `"${t.ad}"`).join(', ')} hâlâ kullanılıyor (Veri sağlığı > kullanım); önce başvuruları kaldırın.` };
   if (!girdi.onay) return { onizleme: bilgi };
   vt.islem(() => {
@@ -1001,7 +1120,8 @@ export function kaynaklariSil(vt, projeId, girdi) {
       tabloSil(vt, projeId, t.id);
     }
     const eslesen = new Set(ek.map((x) => `${x.tablo}|${x.id}`));
-    ayarYaz(vt, `${AYAR_ONEKI}${projeId}`, { ...k, kaynaklarSilindi: true, kayitlar: [...k.kayitlar.filter((x) => !eslesen.has(`${x.tablo}|${x.id}`)), ...ek] });
+    liste[i] = { ...k, kaynaklarSilindi: true, kayitlar: [...k.kayitlar.filter((x) => !eslesen.has(`${x.tablo}|${x.id}`)), ...ek] };
+    gecmisiKaydet(vt, projeId, liste);
     gecmisYaz(vt, { varlikTuru: 'tablo_birlestirme', varlikId: k.kalanId, islem: 'sil', yapan: girdi.yapan, aciklama: `Birleştirilen kaynak tablolar silindi: ${kaynaklar.map((t) => `"${t.ad}"`).join(', ')}.` });
   });
   return { silindi: true, ...bilgi };

@@ -1,7 +1,7 @@
 // VERİ SAĞLIĞI ve TABLO BİRLEŞTİRME (Ayarlar > Test verisi; sunucu: tablolar/tablo-birlestirme.mjs).
 //   · veriSagligiKarti: Test verisi ekranının üstünde özet — birleştirilebilecek tablolar, hiç kullanılmayan tablolar, boş sütunlar,
-//     kırık başvurular (silinmiş tabloyu / sütunu gösteren senaryo / bağ) ve son birleştirme (geri al / kaynakları sil). Her madde
-//     tıklanınca ilgili ekrana ya da düzeltmeye gider.
+//     kırık başvurular (silinmiş tabloyu / sütunu gösteren senaryo / bağ). Her madde tıklanınca ilgili ekrana ya da düzeltmeye gider.
+//     Başlıktaki geçmiş düğmesi birleştirme geçmişini açar (birlestirmeGecmisiPenceresi: satırdan geri al / kaynakları sil).
 //   · birlestirmePenceresi: kalacak tablo (kullanım sayılarıyla; en çok kullanılan önerilir), yeni ad, sütun eşleme (emin olunamayanlar
 //     onaylanır), satır ve karşılık çakışmaları (gizli değerler •••), yeniden eşlenecekler, kuru doğrulama sonucu. Önizleme sunucuda
 //     denenir ve geri alınır; "Birleştir" yalnız kuru doğrulama farksızken ve ayrı onayla. Kaynak tabloları silmek ayrı onaydır.
@@ -25,15 +25,19 @@ export function kullanimMetni(k) {
 }
 
 /**
- * Veri sağlığı kartı. secTablo(id): Tablolar listesinde o tabloyu açar; yenile(): bölümü yeniden yükler (birleştirme / geri alma sonrası).
- * @param {{ id: string }} proje @param {{ secTablo: (id: string) => void; yenile: () => void; tablolar: () => Array<{ id: string; ad: string }>; veri?: Promise<any> }} c
+ * Veri sağlığı kartı. secTablo(id): Tablolar listesinde o tabloyu açar; yenile(): bölümü yeniden yükler (birleştirme / geri alma sonrası);
+ * ayarlarFormu(kaydedildi): başlıktaki ayarlar (dişli) düğmesinin diyalogda açtığı "Test verisi ayarları" formu (verilmezse düğme yok).
+ * @param {{ id: string }} proje @param {{ secTablo: (id: string) => void; yenile: () => void; tablolar: () => Array<{ id: string; ad: string }>; veri?: Promise<any>;
+ *   ayarlarFormu?: (kaydedildi: () => void) => Promise<HTMLElement> }} c
  */
 export function veriSagligiKarti(proje, c) {
   const kok = h('section', { class: 'kart veri-sagligi', 'aria-label': 'Veri sağlığı' }, h('p', { class: 'soluk kucuk' }, 'Veri sağlığı denetleniyor…'));
-  (async () => {
+  // Ayarlar kaydedilince yalnız bu kart yeniden okunur (tablo düzenleyicideki kaydedilmemiş değişiklikler korunur).
+  const ayarlariAc = async () => { if (c.ayarlarFormu && (await testVerisiAyarlariPenceresi(c.ayarlarFormu))) ciz(null); };
+  const ciz = async (/** @type {Promise<any> | null | undefined} */ veri) => {
     let s;
     // Önceden yüklendiyse (Test verisi bölümü tablolarla birlikte ister) kart hemen çizilir: sayfa sonradan kaymaz.
-    try { s = c.veri ? await c.veri : await api(`/platform/tablolar/veri-sagligi?projeId=${q(proje.id)}`); } catch (e) { yerlestir(kok, h('p', { class: 'soluk kucuk' }, `Veri sağlığı okunamadı: ${e.message}`)); return; }
+    try { s = veri ? await veri : await api(`/platform/tablolar/veri-sagligi?projeId=${q(proje.id)}`); } catch (e) { yerlestir(kok, h('p', { class: 'soluk kucuk' }, `Veri sağlığı okunamadı: ${e.message}`)); return; }
     if (!s) { kok.remove(); return; }
     const bolum = (baslik, sayi, icerik, acik = false) => h('details', { class: 'saglik-bolumu', open: acik && sayi > 0 },
       h('summary', {}, h('span', {}, baslik), rozet(String(sayi), sayi ? 'uyari' : '')), sayi ? icerik : h('p', { class: 'soluk kucuk' }, 'Sorun yok.'));
@@ -47,14 +51,15 @@ export function veriSagligiKarti(proje, c) {
       return ul;
     };
     const tabloDugmesi = (id, metin) => h('button', { type: 'button', class: 'baglanti-dugmesi', onclick: () => c.secTablo(id) }, metin);
-    const son = s.sonBirlestirme;
-    const sonBolum = son ? h('div', { class: 'not-kutusu bilgi kucuk saglik-son' },
-      h('span', {}, h('b', {}, 'Son birleştirme: '), `${son.kaynaklar.map((x) => `“${x}”`).join(', ')} → “${son.kalan}”`, son.kaynaklarSilindi ? ' (kaynaklar silindi)' : ' (kaynak tablolar duruyor)',
-        son.yedek ? ` · önce alınan yedek: ${son.yedek}` : ''),
-      h('span', { class: 'dugmeler' },
-        son.kaynaklarSilindi ? null : h('button', { type: 'button', class: 'kucuk-dugme', onclick: (e) => kaynaklariSil(proje, e.currentTarget, c.yenile) }, ikon('cop'), 'Kaynak tabloları sil…'),
-        h('button', { type: 'button', class: 'kucuk-dugme', onclick: (e) => geriAl(proje, e.currentTarget, c.yenile) }, ikon('geri'), 'Son birleştirmeyi geri al…'))) : null;
-    // Öneriler puana göre sıralı gelir; eşik altı olanlar (Ayarlar > Test verisi) varsayılan gizli.
+    // Birleştirme geçmişi: başlıktaki düğme (geçmiş boşsa kapalı); liste, geri alma ve kaynak silme diyalogda.
+    const gs = s.birlestirmeGecmisi || { toplam: 0, etkin: 0 };
+    const gecmisDugmesi = h('button', {
+      type: 'button', class: 'ikon-dugme gecmis-dugmesi', 'aria-label': 'Birleştirme geçmişi', disabled: !gs.toplam,
+      title: gs.toplam ? `Birleştirme geçmişi (${gs.toplam})` : 'Henüz birleştirme yok',
+      onclick: async () => { if (await birlestirmeGecmisiPenceresi(proje)) c.yenile(); }
+    }, ikon('tarih'));
+    const ayarDugmesi = c.ayarlarFormu ? h('button', { type: 'button', class: 'ikon-dugme ayar-dugmesi', 'aria-label': 'Test verisi ayarları', title: 'Test verisi ayarları', onclick: ayarlariAc }, ikon('ayar')) : null;
+    // Öneriler puana göre sıralı gelir; eşik altı olanlar (Test verisi ayarları) varsayılan gizli.
     const esik = typeof s.benzerlikEsigi === 'number' ? s.benzerlikEsigi : 50;
     const yuksek = s.benzer.filter((o) => o.puan >= esik);
     const dusuk = s.benzer.filter((o) => o.puan < esik);
@@ -67,15 +72,14 @@ export function veriSagligiKarti(proje, c) {
       if (dusuk.length) {
         const goster = h('button', { type: 'button', class: 'kucuk-dugme hayalet dusuk-benzerlik-dugmesi', 'aria-expanded': 'false' }, `Düşük benzerlikleri de göster (${dusuk.length})`);
         goster.addEventListener('click', () => { goster.replaceWith(h('p', { class: 'soluk kucuk' }, `Eşik (%${esik}) altındaki öneriler:`), liste(dusuk.map(oneriSatiri))); });
-        kap.append(h('p', { class: 'dugmeler' }, goster, h('a', { class: 'kucuk', href: '#/ayarlar/test-verisi' }, 'Eşiği değiştir')));
+        kap.append(h('p', { class: 'dugmeler' }, goster, c.ayarlarFormu ? h('button', { type: 'button', class: 'kucuk-dugme hayalet', onclick: ayarlariAc }, 'Eşiği değiştir') : null));
       }
       return kap;
     };
     const toplam = yuksek.length + s.kullanilmayan.length + s.bosSutunlar.length + s.kirikBasvurular.length;
     yerlestir(kok,
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon(toplam ? 'uyari' : 'onay'), 'Veri sağlığı'),
-        h('span', { class: 'sag kucuk soluk' }, toplam ? `${toplam} madde` : 'sorun yok')),
-      sonBolum,
+        h('span', { class: 'sag kucuk soluk' }, toplam ? `${toplam} madde` : 'sorun yok', gecmisDugmesi, ayarDugmesi)),
       h('div', { class: 'saglik-bolumleri' },
         yuksek.length || !dusuk.length ? bolum('Birleştirilebilecek tablolar', yuksek.length, oneriIcerigi(), true)
           : h('details', { class: 'saglik-bolumu' }, h('summary', {}, h('span', {}, 'Birleştirilebilecek tablolar'), rozet('0', '')), oneriIcerigi()),
@@ -85,34 +89,122 @@ export function veriSagligiKarti(proje, c) {
           h('span', { class: 'soluk kucuk' }, 'hiçbir satırda değer yok'))))),
         bolum('Kırık başvurular', s.kirikBasvurular.length, liste(s.kirikBasvurular.map((k) => h('li', {},
           h('a', { href: k.git }, k.yer), h('code', { class: 'duz' }, k.basvuru), h('span', { class: 'soluk kucuk' }, k.neden)))), true)));
-  })();
+  };
+  ciz(c.veri);
   return kok;
 }
 
-async function geriAl(proje, dugme, yenile) {
+/**
+ * "Test verisi ayarları" diyaloğu (Veri sağlığı başlığındaki dişli): form ayarlar.js'ten gelir (açıklamalar ve "?" ipuçları formda).
+ * @param {(kaydedildi: () => void) => Promise<HTMLElement>} formu @returns {Promise<boolean>} kaydedildiyse true
+ */
+function testVerisiAyarlariPenceresi(formu) {
+  return new Promise((coz) => {
+    let kaydedildi = false;
+    const govde = h('div', { class: 'diyalog-govde' },
+      h('h2', { id: 'test-verisi-ayarlari-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('ayar')), 'Test verisi ayarları'),
+      h('p', { class: 'soluk kucuk' }, 'Ayarlar yükleniyor…'));
+    const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+    const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay test-verisi-ayarlari-diyalogu', 'aria-labelledby': 'test-verisi-ayarlari-basligi' },
+      govde, h('div', { class: 'diyalog-alt' }, kapat));
+    kapat.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(kaydedildi); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    formu(() => { kaydedildi = true; })
+      .then((form) => { govde.lastChild?.replaceWith(form); })
+      .catch((e) => { govde.lastChild?.replaceWith(h('div', { class: 'not-kutusu hata kucuk', role: 'alert' }, `Ayarlar okunamadı: ${e.message}`)); });
+  });
+}
+
+/** "28.09.2026 14:05" (tarayıcının yerel saati). @param {string} iso */
+function tarihMetni(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso || '';
+  const iki = (n) => String(n).padStart(2, '0');
+  return `${iki(d.getDate())}.${iki(d.getMonth() + 1)}.${d.getFullYear()} ${iki(d.getHours())}:${iki(d.getMinutes())}`;
+}
+
+/**
+ * Birleştirme geçmişi diyaloğu: her birleştirme bir satır (tarih, kaynak → kalan, sayılar, yedek, durum); satırdan onaylı "Geri al"
+ * ve "Kaynak tabloları sil". Geri alınamayan satırda düğme kapalı ve nedeni yazılı.
+ * @param {{ id: string }} proje @returns {Promise<boolean>} bir şey değiştiyse true
+ */
+export function birlestirmeGecmisiPenceresi(proje) {
+  return new Promise((coz) => {
+    let degisti = false;
+    const govde = h('div', { class: 'diyalog-govde' });
+    const kapat = h('button', { type: 'button', class: 'hayalet' }, 'Kapat');
+    const diyalog = h('dialog', { class: 'onay-diyalogu genis-onay etki-diyalogu birlestirme-gecmisi-diyalogu', 'aria-labelledby': 'birlestirme-gecmisi-basligi' },
+      govde, h('div', { class: 'diyalog-alt' }, kapat));
+    const liste = h('div', { 'aria-live': 'polite' }, h('p', { class: 'soluk kucuk' }, 'Geçmiş yükleniyor…'));
+    yerlestir(govde, [
+      h('h2', { id: 'birlestirme-gecmisi-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('tarih')), 'Birleştirme geçmişi'),
+      h('p', { class: 'soluk kucuk' }, 'Yapılan tablo birleştirmeleri (en yenisi üstte). Bir birleştirme, ondan sonra aynı tabloyu değiştiren birleştirmeler geri alınmadan geri alınamaz; birbirinden bağımsız olanlar istenen sırayla geri alınabilir.'),
+      liste
+    ]);
+    const yukle = async () => {
+      try {
+        const r = await api(`/platform/tablo/birlestirme/gecmis?projeId=${q(proje.id)}`);
+        yerlestir(liste, r.kayitlar.length ? h('ul', { class: 'birlestirme-gecmisi-listesi', 'aria-label': 'Birleştirmeler' }, r.kayitlar.map(satir))
+          : h('p', { class: 'soluk kucuk' }, 'Henüz birleştirme yok.'));
+      } catch (e) { yerlestir(liste, h('div', { class: 'not-kutusu hata kucuk', role: 'alert' }, `Geçmiş okunamadı: ${e.message}`)); }
+    };
+    const sonra = () => { degisti = true; return yukle(); };
+    function satir(k) {
+      const etkin = k.durum === 'etkin';
+      const nedenId = `gecmis-neden-${k.id}`;
+      const sayilar = [k.eklenenSatir !== null ? `${k.eklenenSatir} satır eklendi` : '', k.bag ? `${k.bag} bağ` : '', k.senaryo ? `${k.senaryo} senaryo` : '']
+        .filter(Boolean).join(' · ');
+      const neden = etkin && !k.geriAlinabilir && k.neden ? k.neden : '';
+      return h('li', { class: etkin ? '' : 'geri-alindi', 'aria-label': `${tarihMetni(k.zaman)} birleştirmesi` },
+        h('div', { class: 'gecmis-ust' }, h('b', {}, tarihMetni(k.zaman)),
+          etkin ? null : rozet(`geri alındı${k.geriAlinmaZamani ? ` (${tarihMetni(k.geriAlinmaZamani)})` : ''}`, 'soluk-rozet'),
+          k.kaynaklarSilindi ? rozet('kaynaklar silindi', '') : null),
+        h('div', {}, `${k.kaynaklar.map((x) => `“${x}”`).join(', ')} → “${k.kalan}”`, k.eskiAd ? h('span', { class: 'soluk' }, ` (ad: “${k.eskiAd}” → “${k.kalan}”)`) : null),
+        sayilar || k.yedek ? h('div', { class: 'soluk kucuk' }, [sayilar, k.yedek ? `önce alınan yedek: ${k.yedek}` : ''].filter(Boolean).join(' · ')) : null,
+        neden ? h('div', { class: 'not-kutusu uyari kucuk', id: nedenId }, neden, k.degisenler.length ? ` Değişen: ${k.degisenler.join(', ')}.` : '') : null,
+        etkin && !k.kaynaklarSilindi && !k.kaynaklariSilinebilir && k.kaynakNedeni ? h('div', { class: 'soluk kucuk' }, `Kaynaklar silinemez: ${k.kaynakNedeni}`) : null,
+        etkin ? h('div', { class: 'dugmeler' },
+          h('button', { type: 'button', class: 'kucuk-dugme', disabled: !k.geriAlinabilir, ...(neden ? { 'aria-describedby': nedenId } : {}),
+            onclick: (e) => geriAl(proje, k.id, e.currentTarget, sonra) }, ikon('geri'), 'Geri al…'),
+          k.kaynaklarSilindi ? null : h('button', { type: 'button', class: 'kucuk-dugme', disabled: !k.kaynaklariSilinebilir,
+            onclick: (e) => kaynaklariSil(proje, k.id, e.currentTarget, sonra) }, ikon('cop'), 'Kaynak tabloları sil…')) : null);
+    }
+    kapat.addEventListener('click', () => diyalog.close());
+    diyalog.addEventListener('close', () => { diyalog.remove(); coz(degisti); });
+    document.body.append(diyalog);
+    diyalog.showModal();
+    yukle();
+  });
+}
+
+/** Geçmişteki bir birleştirmeyi onayla geri alır. */
+async function geriAl(proje, birlestirmeId, dugme, yenile) {
   try {
-    const on = await mesgulIken(dugme, 'Denetleniyor…', () => api('/platform/tablo/birlestirme/geri-al', { govde: { projeId: proje.id } }));
+    const on = await mesgulIken(dugme, 'Denetleniyor…', () => api('/platform/tablo/birlestirme/geri-al', { govde: { projeId: proje.id, birlestirmeId } }));
     if (on.geriAlinamaz) {
       await onayIste({ baslik: 'Birleştirme geri alınamaz', metin: `${on.neden}${on.yedek ? ` Birleştirmeden önce alınan yedek: ${on.yedek} (Ayarlar > Yedekleme).` : ''}`, liste: on.degisenler.map((x) => `Değişen: ${x}`), dugme: 'Tamam', ikonAd: 'uyari' });
+      await yenile();
       return;
     }
     const o = on.onizleme;
-    if (!(await onayIste({ baslik: 'Son birleştirme geri alınsın mı?', metin: `“${o.kalan}” tablosu ve yeniden eşlenen ${o.kayit} kayıt birleştirmeden önceki hâline döner${o.kaynaklar.length ? `; ${o.kaynaklar.map((x) => `“${x}”`).join(', ')} geri gelir` : ''}.`, dugme: 'Geri al', ikonAd: 'geri' }))) return;
-    await mesgulIken(dugme, 'Geri alınıyor…', () => api('/platform/tablo/birlestirme/geri-al', { govde: { projeId: proje.id, onay: true } }));
+    if (!(await onayIste({ baslik: 'Birleştirme geri alınsın mı?', metin: `“${o.kalan}” tablosu ve yeniden eşlenen ${o.kayit} kayıt birleştirmeden önceki hâline döner${o.kaynaklar.length ? `; ${o.kaynaklar.map((x) => `“${x}”`).join(', ')} geri gelir` : ''}.`, dugme: 'Geri al', ikonAd: 'geri' }))) return;
+    await mesgulIken(dugme, 'Geri alınıyor…', () => api('/platform/tablo/birlestirme/geri-al', { govde: { projeId: proje.id, birlestirmeId, onay: true } }));
     bildir('Birleştirme geri alındı.');
-    yenile();
+    await yenile();
   } catch (e) { bildir(e.message, 'hata'); }
 }
 
-/** Son birleştirmenin kaynak tablolarını ayrı onayla siler (kullanılıyorlarsa silinmez). */
-async function kaynaklariSil(proje, dugme, yenile) {
+/** Bir birleştirmenin kaynak tablolarını ayrı onayla siler (kullanılıyorlarsa silinmez). */
+async function kaynaklariSil(proje, birlestirmeId, dugme, yenile) {
   try {
-    const on = await api('/platform/tablo/birlestirme/kaynaklari-sil', { govde: { projeId: proje.id } });
+    const on = await api('/platform/tablo/birlestirme/kaynaklari-sil', { govde: { projeId: proje.id, birlestirmeId } });
     if (on.silinemez) { bildir(on.neden, 'hata'); return; }
-    if (!(await onayIste({ baslik: 'Kaynak tablolar silinsin mi?', metin: 'Birleştirilen tablolar artık hiçbir yerde kullanılmıyor. Silinince “Son birleştirmeyi geri al” onları da geri getirir.', liste: on.onizleme.tablolar.map((t) => `${t.ad} (${t.satir} satır)`), dugme: 'Sil', tehlikeli: true }))) return;
-    await mesgulIken(dugme || document.createElement('button'), 'Siliniyor…', () => api('/platform/tablo/birlestirme/kaynaklari-sil', { govde: { projeId: proje.id, onay: true } }));
+    if (!(await onayIste({ baslik: 'Kaynak tablolar silinsin mi?', metin: 'Birleştirilen tablolar artık hiçbir yerde kullanılmıyor. Silinince birleştirmeyi geri almak (Birleştirme geçmişi) onları da geri getirir.', liste: on.onizleme.tablolar.map((t) => `${t.ad} (${t.satir} satır)`), dugme: 'Sil', tehlikeli: true }))) return;
+    await mesgulIken(dugme || document.createElement('button'), 'Siliniyor…', () => api('/platform/tablo/birlestirme/kaynaklari-sil', { govde: { projeId: proje.id, birlestirmeId, onay: true } }));
     bildir('Kaynak tablolar silindi.');
-    yenile();
+    await yenile();
   } catch (e) { bildir(e.message, 'hata'); }
 }
 
@@ -264,7 +356,7 @@ export function birlestirmePenceresi(proje, tabloIdleri, kullanim, tablolar) {
       }
       const sil = h('input', { type: 'checkbox', checked: is.silKaynak, id: 'birlestirme-kaynak-sil' });
       sil.addEventListener('change', () => { is.silKaynak = sil.checked; });
-      sonuc.push(h('p', { class: 'soluk kucuk' }, `Birleştirmeden hemen önce otomatik yedek alınır; “Son birleştirmeyi geri al” ile geri dönebilirsiniz. Kaynak tablolar (${o.kaynaklarSilinmez.map((x) => `“${x}”`).join(', ')}) silinmez.`),
+      sonuc.push(h('p', { class: 'soluk kucuk' }, `Birleştirmeden hemen önce otomatik yedek alınır; Veri sağlığı > Birleştirme geçmişi'nden geri alabilirsiniz. Kaynak tablolar (${o.kaynaklarSilinmez.map((x) => `“${x}”`).join(', ')}) silinmez.`),
         h('label', { class: 'secenek', for: sil.id }, sil, 'Birleştirmeden sonra kaynak tabloları da sil (ayrıca onay istenir)'));
       return sonuc;
     }
@@ -289,7 +381,7 @@ export function birlestirmePenceresi(proje, tabloIdleri, kullanim, tablolar) {
         degisti = true;
         bildir(`Tablolar birleştirildi: “${o.kalan.yeniAd}”.`);
         diyalog.close();
-        if (is.silKaynak) await kaynaklariSil(proje, null, () => undefined);
+        if (is.silKaynak) await kaynaklariSil(proje, r.birlestirmeId, null, () => undefined);
       } catch (e) { bildir(e.message, 'hata'); }
     });
     vazgec.addEventListener('click', () => diyalog.close());
