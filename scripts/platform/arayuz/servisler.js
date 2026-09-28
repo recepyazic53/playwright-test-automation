@@ -509,7 +509,7 @@ async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
   if (!ortamlar.length) { bildir('Projede ortam yok (Ayarlar > Ortamlar).', 'hata'); return; }
   const denetim = await sqlKosuDenetimiAl(proje.id);
   const y = await kosuOnayi({
-    baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', esZamanli: false, ...(await servisKosuBicimi()),
+    baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', esZamanli: false, ...(await servisKosuBicimi()), surumAlani: true,
     hesapla: (o) => ({
       senaryolar: senaryolar.filter((x) => ortamdaDahil(s, x, o)),
       // Akış senaryolarının SQL adımı: veritabanı bu ortamda eşli değilse uyarı (koşu engellenmez).
@@ -521,7 +521,7 @@ async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
   if (!y) return;
   ortamiHatirla(y.ortam);
   try {
-    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: y.ortam.id, senaryoIdleri: y.senaryolar.map((x) => x.id), bitti });
+    await servisKosusuBaslat({ proje, servisId: s.id, ortamId: y.ortam.id, senaryoIdleri: y.senaryolar.map((x) => x.id), bitti, uygulamaSurumu: y.uygulamaSurumu });
   } catch (e) { bildir(e.message, 'hata'); }
 }
 

@@ -151,6 +151,10 @@ export function pdfRaporDiyalogu(proje, on = {}) {
       karsilastir.satir,
       h('fieldset', { class: 'html-rapor-secenekleri' }, h('legend', {}, 'İsteğe bağlı bölümler'), goruntu.satir, hatalar.satir, adres.satir),
       kaydet.satir,
+      // A4: raporun kullandığı kullanıcı kararları (kritik işareti, ekip, süre eşiği) ve uygulama sürümünün nereden girildiği.
+      h('p', { class: 'soluk kucuk pdf-rapor-veri-notu' }, 'Kritik işaretleri, ekipler (sahip önerisi) ve süre eşikleri: ',
+        h('a', { href: '#/ayarlar/raporlar', onclick: () => diyalog.close() }, 'Ayarlar > Raporlar'),
+        '. Uygulama sürümü: ortam ayarı ya da koşu başlatılırken.'),
       bilgi,
       onizleme,
       h('div', { class: 'dugmeler' }, pdfDugmesi, onizleDugmesi, h('button', { type: 'button', class: 'hayalet', onclick: () => diyalog.close() }, 'Vazgeç'))));

@@ -27,14 +27,17 @@ export const servisKosusuSuruyorMu = () => Boolean(durum && !durum.is.bitti);
 
 /**
  * Koşuyu başlatır ve paneli açar. bitti(): koşu bitince (tabloyu yenilemek için) çağrılır.
- * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string }; bitti?: () => void }} s
+ * @param {{ proje: { id: string }; servisId: string; ortamId: string; senaryoIdleri?: string[]; taslak?: { baslik: string; icerik: unknown }; tekrar?: { kaynakKosuId: string; veri?: string }; bitti?: () => void;
+ *   uygulamaSurumu?: string }} s
  */
 export async function servisKosusuBaslat(s) {
   if (servisKosusuSuruyorMu()) throw new Error('Süren bir servis koşusu var; bitmesini bekleyin ya da durdurun.');
   // Riskli ortamda açık onay: koşu diyaloğunda onaylandıysa canliOnay: true gider (kosu-paneli.js > canliOnayEki).
   // tekrar: başarısızları tekrar çalıştırma ({ kaynakKosuId, veri }); sunucu o koşuda kalan çalıştırmaları kendi kaydından kurar.
+  // uygulamaSurumu: koşu diyaloğunda girilen uygulama sürümü (boşsa sunucu ortam ayarındakini kullanır; PDF rapor A4).
   const { is } = await api('/platform/servis/is/baslat', { govde: { projeId: s.proje.id, servisId: s.servisId, ortamId: s.ortamId, ...canliOnayEki(s.ortamId),
-    ...(s.tekrar ? { tekrar: s.tekrar } : s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }) } });
+    ...(s.tekrar ? { tekrar: s.tekrar } : s.taslak ? { taslak: s.taslak } : { senaryoIdleri: s.senaryoIdleri }),
+    ...(s.uygulamaSurumu && !s.tekrar && !s.taslak ? { uygulamaSurumu: s.uygulamaSurumu } : {}) } });
   durum = { projeId: s.proje.id, is, secili: is.satirlar.find((x) => x.durum !== 'atlandi')?.senaryoId ?? is.satirlar[0]?.senaryoId, kucuk: false, bitti: s.bitti };
   acikKutular.clear();
   ciz();
