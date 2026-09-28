@@ -5,7 +5,8 @@ Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **ek
 1. Kullanıcı Nöbetçi > **Ekranlar > Ekran ekle > Yapay zekâ ile oluştur** kutusundaki **İstek metnini kopyala** ile istek
    metnini, **Paket biçimini indir** ile bu belgeyi (tek dosya: `sayfa-paketi-bicimi.md`) alır ve ikisini sayfanın bağlantısıyla
    birlikte yapay zekâ aracına (tarayıcıyı kullanabilen bir kodlama asistanı) verir. Araç belirli bir ürün olmak zorunda değildir.
-2. Araç sayfayı aşağıdaki **düğme gruplarına** göre inceler ve bu belgedeki biçimde bir JSON dosyası üretir.
+2. Araç sayfayı kullanıcıyla **birlikte, adım adım** inceler (aşağıdaki **düğme grupları**): veri gereken her dalda durur ve
+   kullanıcıdan girmesini ister, girilince açılan alanları okur; analizi tek seferde bitirir ve bu belgedeki biçimde bir JSON dosyası üretir.
 3. Kullanıcı dosyayı Nöbetçi > **Ekranlar > Ekran ekle** (yeni ekran) ya da ekranın **Paket yükle**
    düğmesiyle (tekrar analiz) yükler. Önizleyip kabul edene kadar hiçbir şey kaydedilmez.
 
@@ -14,11 +15,13 @@ Nöbetçi'de yeni bir ekranın keşfi ve mevcut bir ekranın tekrar analizi **ek
 | Grup | Örnek | Kural |
 |---|---|---|
 | Açan / ilerleten (kayıt yok) | Devam, Ek adres ekle, sekmeler, oklar, seçim değiştirme | Serbestçe basılır; koşullu alanlar, bağımlı listeler ve sonraki ekranın alanları böyle çıkarılır. |
-| Hesaplayan / sorgulayan | Tutar hesapla, Kimlik sorgula | Basılır; sonuç alanları ve uyarılar (tarayıcı uyarıları — alert — dahil) toplanır. Kimlik sorgusunda yalnızca kullanıcının verdiği test kaydı kullanılır. |
-| Kayıt oluşturan / gönderen / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | **Basılmaz.** Araç orada durur; o noktadan sonrası pakete "bilinmiyor" olarak yazılır. |
+| Hesaplayan / sorgulayan | Tutar hesapla, Kimlik sorgula | **Her seferinde kullanıcının onayıyla** basılır; sonuç alanları ve uyarılar (tarayıcı uyarıları — alert — dahil) toplanır. Hata dalları da (ör. zorunlu alan boşken) onayla denenir. Sorguya girilecek kimlik / kayıt numarasını kullanıcı girer. |
+| Kayıt oluşturan / gönderen / onaylayan / ödeme yapan | Kaydet, Gönder, Onayla, Ödemeyi tamamla | **Araç basmaz.** Gerekiyorsa kullanıcıya bastırır ve açılan ekranı (ör. ödeme penceresi) yalnızca okur. |
 
-Ne yaptığından emin olunamayan düğme üçüncü gruptan sayılır (basılmaz, kullanıcıya sorulur). Kart, parola, kimlik no gibi
-bilgiler hiçbir zaman girilmez; ödeme ekranında alanlar yalnızca okunur. Kayıt oluşturan adımlardan sonraki ekranlar için
+Ne yaptığından emin olunamayan düğme üçüncü gruptan sayılır (basılmaz, kullanıcıya sorulur). Kart, CVV, parola, kimlik / vergi no
+gibi bilgileri araç hiçbir zaman girmez (kullanıcı onaylasa da); gerekince kullanıcıdan girmesini ister. Hassas olmayan ve önceden
+verilmiş test verisini (ör. adres kodu) araç girebilir. Sayfa verilen ortamdan başka bir ortama (ör. test yerine canlı) geçerse
+araç durur ve sorar; ödeme ekranında alanlar yalnızca okunur. Kayıt oluşturan adımlardan sonraki ekranlar için
 **Akışı kaydet** (düğmelere kullanıcı basar, panel toplar) kullanılır. Nöbetçi'nin kendi "Ekranı otomatik tara" özelliği
 yalnızca okur (düğmelere hiç basmaz).
 
@@ -34,13 +37,14 @@ belge + zarf şeması + ekran modelinin tip tanımı (`tests/support/ekran-model
 
 > `<sayfa bağlantısı>` sayfasını incele ve ekteki sayfa-paketi-bicimi.md dosyasındaki biçimde bir ekran paketi JSON dosyası üret.
 > Paket tek bir JSON nesnesidir (`tur`, `surum`, `meta`, `model`, `senaryoOnerileri`, `gerekenAyarlar`, `bilinmeyenler` zorunlu;
-> `kanitlar`, `testVerisi` isteğe bağlı). Sayfayı yalnızca
-> okuyarak incele (düğme grupları yukarıda); kayıt oluşturan / gönderen / onaylayan / ödeme yapan düğmelere basma; kart, parola,
-> kimlik no girme; iş kuralı uyarısının öğesini `kosu.hataGostergesi`'ne, metinlerini `kosu.uyarilar`'a yaz. Alan bir iframe
+> `kanitlar`, `testVerisi` isteğe bağlı). Sayfayı benimle
+> birlikte, adım adım incele (düğme grupları yukarıda): veri gereken her dalda dur ve bana girdir; hesaplayan / sorgulayan
+> düğmelere her seferinde onayımla bas; kayıt oluşturan / gönderen / onaylayan / ödeme yapan düğmelere basma (gerekirse bana bastır);
+> kart, parola, kimlik no girme; ortam değişirse dur ve sor; iş kuralı uyarısının öğesini `kosu.hataGostergesi`'ne, metinlerini `kosu.uyarilar`'a yaz. Alan bir iframe
 > içindeyse `konum.cerceve`'ye iframe seçicisini (o iframe'deki düğme / göstergelerde de `cerceve`), gerçek `<select>`'i gizli
 > özel açılır listelerde gerçek `<select>`'in seçicisini ve `"doldurucu": "ozelSecim"`'i yaz. Test verisini
 > `testVerisi.tablolar`'a tablo olarak yaz: **(1) Ekran listeleri** — seçim alanlarının seçenekleri `"tur": "liste"` olan,
-> **"<Ekran adı> — <Alan>"** adlı tablolara (bağımlı listelerde tek tablo "<Ekran adı> — <Üst alan> - <Alt alan>", satır = geçerli
+> **"<Ekran adı> — <Alan>"** adlı tablolara (ekranlar arası ortak kavramlar — ör. müşteri tipi — ekran adı olmadan) (bağımlı listelerde tek tablo "<Ekran adı> — <Üst alan> - <Alt alan>", satır = geçerli
 > kombinasyon; en çok 60 karakter); hücrede görünen metin, sayfadaki value farklıysa `karsiliklar`; alanlar
 > `testVerisi.baglantilar` ile sütunlara bağlanır, öneride bu alanlara tablodaki değer yazılır. **(2) Kişi ve kayıt verileri** —
 > `"tur": "kayit"` olan tablolarda her satır bir kayıt; öneride değer `${Tablo.Sütun}` ya da `${Tablo[etiket].Sütun}` başvurusuyla

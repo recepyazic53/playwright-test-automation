@@ -136,7 +136,7 @@ test.describe('ayrıştırma ve çözüm (saf)', () => {
 test.describe('paket istek metinleri', () => {
   test('tek kaynak: arayüz ve sunucu paket-istekleri.mjs\'i kullanır, kopya yok; sunucu dosyayı arayüze sunar', () => {
     const oku = (y: string) => readFileSync(join(KOK, y), 'utf8');
-    const ayirici = 'Sayfayı yalnızca okuyarak incele';
+    const ayirici = 'Sayfayı benimle birlikte, adım adım incele';
     expect(oku('scripts/platform/ekranlar/paket-istekleri.mjs')).toContain(ayirici);
     for (const y of ['scripts/platform/arayuz/sayfa-paketi.js', 'scripts/platform/arayuz/ekranlar.js', 'scripts/platform/ekranlar/ekran-servisi.mjs']) {
       expect(oku(y), y).not.toContain(ayirici);
