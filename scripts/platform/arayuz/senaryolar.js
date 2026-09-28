@@ -464,7 +464,7 @@ function listeGorunumu(icerik, s) {
     const altBilgi = [
       // Dar ekranda Ekran sütunu gizlenir; ekran adı başlığın altında görünür (yalnız Genel listede).
       !ekran && x.ekranAdi ? h('span', { class: 'ekran-alt-bilgi' }, x.ekranAdi) : null,
-      x.akis ? rozet(`akış: ${x.akis.ad}`, '', { title: 'Senaryonun koştuğu akış (ekranın birden çok akışı var)' }) : null,
+      x.akis ? rozet(`akış: ${x.akis.ad}`, '', { kisalt: true, title: 'Senaryonun koştuğu akış (ekranın birden çok akışı var)' }) : null,
       x.paketten ? rozet('paketten', 'vurgu', { title: 'Sayfa paketindeki öneriden eklendi' }) : null,
       !x.kosuyaDahil ? rozet('hariç', 'atlanan', { title: 'Hiçbir ortamda koşu listesinde değil — Koşuyu başlat bu senaryoyu koşmaz' }) : null,
       x.ekranEtkin === false ? rozet('ekran devre dışı', 'atlanan', { title: 'Ekran devre dışı: senaryo toplu koşulara girmez; ▷ ile tek başına çalıştırılabilir (Ekranlar > ⋯ > Etkinleştir)' }) : null,

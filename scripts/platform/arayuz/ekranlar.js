@@ -500,7 +500,7 @@ function modelOzetKarti(agac, d) {
       h('ul', { class: 'duz-liste kucuk' }, agac.adimKapsami.map((k) => h('li', {}, h('b', {}, k.etiket), ` → ${k.adimlar.join(', ')}`)))) : null,
     agac.profiller.length ? h('section', { class: 'kart' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('hedef'), 'İncelenen bağlam profilleri')),
-      h('div', { class: 'etiketler' }, agac.profiller.map((p) => rozet(p, ''))),
+      h('div', { class: 'etiketler' }, agac.profiller.map((p) => rozet(p, '', { kisalt: true }))),
       h('p', { class: 'kucuk cok-soluk ust-bosluk' }, 'Alanlardaki ✓ / – / ? çipleri gözlemdir: koşuda alan görünüyorsa doldurulur, görünmüyorsa atlanır ("mutlaka görünmeli" işaretli değilse).')) : null,
     agac.bilinmeyenler.length ? h('section', { class: 'kart bilinmeyen-karti' },
       h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('uyari'), 'Bilinmeyenler'), h('span', { class: 'sag' }, rozet(String(agac.bilinmeyenler.length), 'uyari'))),

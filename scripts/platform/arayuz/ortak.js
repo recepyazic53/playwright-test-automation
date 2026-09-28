@@ -618,7 +618,19 @@ export function iskelet(tur = 'liste') {
 }
 
 /** Rozet (etiket). tur: vurgu | basari | hata | atlanan | durdu | '' */
-export const rozet = (metin, tur = '', ek = {}) => h('span', { class: `rozet ${tur}`.trim(), ...ek }, metin);
+/**
+ * Rozet. ek.kisalt: kullanıcı adı taşıyan rozetlerde (ekran, servis, ortam, tablo adı) genel kısaltma — en çok genişlik (true:
+ * varsayılan 16em; metin: CSS genişliği) + "…" ve tam metin ipucu (title). Diğer ek özellikler öğeye geçer.
+ * @param {any} metin @param {string} [tur] @param {Record<string, any> & { kisalt?: boolean | string }} [ek]
+ */
+export const rozet = (metin, tur = '', ek = {}) => {
+  const { kisalt, ...diger } = ek;
+  if (!kisalt) return h('span', { class: `rozet ${tur}`.trim(), ...diger }, metin);
+  const tamMetin = typeof metin === 'string' ? metin : Array.isArray(metin) ? metin.filter((x) => typeof x === 'string').join('') : null;
+  return h('span', {
+    class: `rozet rozet-kisalt ${tur}`.trim(), title: tamMetin, ...(typeof kisalt === 'string' ? { style: `max-width: ${kisalt}` } : {}), ...diger
+  }, h('span', { class: 'rozet-metni' }, metin));
+};
 
 /** Kullanıcının koşu / arayüz ayarları (Ayarlar > Koşu, Arayüz; oturum boyunca önbellekte, kaydedince tazelenir). */
 let ayarSozu = null;

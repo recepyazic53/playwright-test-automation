@@ -253,7 +253,7 @@ export function kisiAlanlariniBagla(proje, ekran, dugme) {
             h('tbody', {}, o.senaryolar.map((x) => {
               const yeni = x.durum === 'yeniSatir' || (x.durum === 'atlandi' && is.yeniSatirlar[x.anahtar] && is.yeniSatirlar[x.anahtar].ekle === false);
               return h('tr', { class: x.durum === 'atlandi' ? 'atlandi' : '' },
-                h('td', { 'data-baslik': 'Senaryo' }, x.senaryo, x.kisiEtiketi ? rozet(x.kisiEtiketi, 'vurgu') : null, h('span', { class: 'neden' }, x.ortamlar.join(', '))),
+                h('td', { 'data-baslik': 'Senaryo' }, x.senaryo, x.kisiEtiketi ? rozet(x.kisiEtiketi, 'vurgu', { kisalt: true }) : null, h('span', { class: 'neden' }, x.ortamlar.join(', '))),
                 h('td', { 'data-baslik': 'Durum' }, KISI_DURUMU[x.durum] || x.durum, x.neden ? h('span', { class: 'neden' }, x.neden) : null),
                 h('td', { 'data-baslik': 'Satır' }, yeni ? yeniSatirHucresi(x) : x.satir ? x.satir : h('span', { class: 'soluk' }, '—')));
             })))) : h('p', { class: 'soluk kucuk' }, 'Senaryolarda bu alanların düz değeri yok.'));

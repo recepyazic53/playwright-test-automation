@@ -321,6 +321,9 @@ test('sonuçlarda hızlı süzgeç: "Yalnız kalanlar" (koşu ayrıntısı ve ko
   const bolum = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Koşu geçmişi' }) });
   const gecmis = bolum.locator('table');
   await expect(gecmis.locator('tbody tr')).toHaveCount(3);
+  // Kullanıcı adı taşıyan rozetler kısaltılabilir: en çok genişlik + tam metin ipucu.
+  await expect(gecmis.locator('.rozet-kisalt').first()).toHaveAttribute('title', 'Genel');
+  expect(await gecmis.locator('.rozet-kisalt .rozet-metni').first().evaluate((e) => getComputedStyle(e).textOverflow)).toBe('ellipsis');
   await bolum.getByLabel('Yalnız kalanlar').check();
   await expect(gecmis.locator('tbody tr')).toHaveCount(2);
   await expect(gecmis.locator('tbody')).not.toContainText('tekil');

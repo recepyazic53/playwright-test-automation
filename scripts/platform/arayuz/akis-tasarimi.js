@@ -587,7 +587,7 @@ export async function akisTasarimi(icerik, s) {
       h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(tur.ikonAd)),
       h('h4', {}, tur.etiket),
       b.tur === 'aksiyon' && b.istegeBagli ? rozet('isteğe bağlı', 'vurgu') : null,
-      b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu') : null,
+      b.tur === 'ortak' ? rozet(b.ad || 'ortak akış', 'vurgu', { kisalt: true }) : null,
       b.tur === 'giris' ? rozet(b.profil || 'varsayılan profil', 'vurgu') : null,
       b.tur === 'sql' ? rozet(sqlOzeti(b.sql).beklenen, 'vurgu', { title: sqlOzeti(b.sql).sqlSatiri || null }) : null,
       b.tur === 'dosya' ? rozet(dosyaOzeti(b.dosya), 'vurgu') : null,

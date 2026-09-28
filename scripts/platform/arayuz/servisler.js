@@ -795,7 +795,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
         h('strong', {}, h('a', { class: 'satir-baglantisi', href: senaryoAdresi }, x.baslik)),
         h('small', {}, altBilgi))),
       h('td', { class: 'istek-hucresi' },
-        akisMi(x) ? rozet(`akış: ${x.akisAdi || '?'}`, 'vurgu', { title: `Akış senaryosu: ${Object.keys(x.icerik.adimlar || {}).length} adımın değerleri` }) : rozet(x.icerik.operasyon, 'vurgu', { title: 'Metot (operasyon)' }),
+        akisMi(x) ? rozet(`akış: ${x.akisAdi || '?'}`, 'vurgu', { kisalt: true, title: `Akış senaryosu: ${Object.keys(x.icerik.adimlar || {}).length} adımın değerleri` }) : rozet(x.icerik.operasyon, 'vurgu', { title: 'Metot (operasyon)' }),
         !akisMi(x) && gosterilenAdres ? h('code', { class: 'duz istek-adresi', title: adresBasligi }, gosterilenAdres) : null),
       h('td', { class: 'beklenen-hucresi' }, beklenen === '—' ? h('span', { class: 'cok-soluk' }, '—')
         : rozet(beklenen, '', { title: kontrolleri(x).map((k) => k.deger || k.tur).join(' · ') })),

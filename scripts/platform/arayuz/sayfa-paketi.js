@@ -429,7 +429,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
           h('dt', {}, 'Yol'), h('dd', {}, h('code', {}, p.meta.ekran.urlYolu)),
           h('dt', {}, 'Oluşturan'), h('dd', {}, `${p.meta.olusturan} · ${new Date(p.meta.olusturulma).toLocaleString('tr-TR')}`),
           h('dt', {}, 'Bağlam'), h('dd', {}, p.meta.baglamProfilleri.length
-            ? h('span', { class: 'etiketler' }, p.meta.baglamProfilleri.map((b) => rozet(b.ad, b.projedeVar ? 'basari' : 'uyari', { title: b.projedeVar ? 'Projede bu adla bağlam profili var' : 'Projede bu adla bağlam profili YOK' })))
+            ? h('span', { class: 'etiketler' }, p.meta.baglamProfilleri.map((b) => rozet(b.ad, b.projedeVar ? 'basari' : 'uyari', { kisalt: true, title: b.projedeVar ? 'Projede bu adla bağlam profili var' : 'Projede bu adla bağlam profili YOK' })))
             : h('span', { class: 'cok-soluk' }, 'belirtilmemiş'))),
         p.meta.not ? h('p', { class: 'kucuk soluk' }, p.meta.not) : null,
         o.hedef && !analiz ? h('div', { class: 'not-kutusu bilgi' }, `Bu anahtarla modeli olmayan "${o.hedef.ad}" ekranı var: paket o ekrana ilk model olarak eklenecek (mevcut senaryolar korunur).`) : null),
