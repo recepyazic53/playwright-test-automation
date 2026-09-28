@@ -183,8 +183,11 @@ export class ApiHatasi extends Error {
 export const kayitIzi = { kirli: false };
 /** Kaydedildi / bilerek vazgeçildi: sayfadan çıkarken uyarı sorulmaz. */
 export const degisiklikleriBirak = () => { kayitIzi.kirli = false; };
-/** Başarılı olunca veriyi saklayan uçlar (önizleme, deneme, denetim gibi uçlar izi temizlemez). */
-const KAYIT_UCU = /(?:\/|-)(kaydet|sil|uygula|ekle|olustur|degistir|duzenle|tasi|aktar|kosuya-dahil|varsayilan|yeniden-adlandir|sirala|toplu-ata|tasarim|geri-yukle|kopyala|modellerden|sifirla|unut|kaldir|test-verisine-tasi)(?:$|[/?])/;
+/**
+ * Başarılı olunca veriyi saklayan uçlar (önizleme, deneme, denetim gibi uçlar izi temizlemez). "yukle": tekrar analizde paketin
+ * bulguları ve test verisi seçimleri sunucuda saklanır (ekran/analiz/yukle), ardından Bulgular'a geçilir.
+ */
+const KAYIT_UCU = /(?:\/|-)(kaydet|sil|uygula|ekle|olustur|degistir|duzenle|tasi|aktar|kosuya-dahil|varsayilan|yeniden-adlandir|sirala|toplu-ata|tasarim|yukle|kopyala|modellerden|sifirla|unut|kaldir|test-verisine-tasi)(?:$|[/?])/;
 
 /**
  * JSON API çağrısı (aynı köken). govde verilirse POST. 423 (kasa kilitli) olursa
