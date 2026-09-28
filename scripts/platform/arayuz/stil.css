@@ -3527,3 +3527,9 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .birlestirme-diyalogu select { max-width: 100%; min-width: 0; }
 .benzer-tablo-notu { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .benzer-tablo-notu > * { min-width: 0; overflow-wrap: anywhere; }
+/* Ekran > Test verisi > "Kişi alanlarını tabloya bağla…" (ekran-baglari.js). */
+.kisi-baglama-diyalogu .neden { display: block; font-size: 11.5px; color: var(--metin-3); }
+.kisi-baglama-diyalogu select, .kisi-baglama-diyalogu input[type="text"] { max-width: 100%; min-width: 0; }
+.kisi-tablo-secimi { display: grid; gap: 4px; margin-top: 8px; font-size: 13px; }
+.kisi-yeni-satir { display: grid; gap: 4px; min-width: 0; }
+.kisi-yeni-satir input[type="text"] { width: 100%; }

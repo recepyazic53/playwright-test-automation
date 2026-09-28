@@ -10,6 +10,7 @@ import { tabloKaydetEtkiyle } from './tablo-etkisi.mjs';
 import { servisSenaryosuKosuyorMu } from '../servisler/servis-isleri.mjs';
 import { kaynaklariSil, sonBirlestirmeyiGeriAl, tablolariBirlestir, veriSagligi } from './tablo-birlestirme.mjs';
 import { benzerTablolar } from './tablo-benzerligi.mjs';
+import { kisiAlanlariniBagla } from './kisi-baglama.mjs';
 import { otomatikYedekAl } from '../yedek.mjs';
 
 /** O an koşan ekran senaryosu denetimi (sunucu-platform.mjs koşucuyu verince ayarlar; tablo değişikliğinde koşan senaryo atlanır). */
@@ -93,5 +94,13 @@ export const TABLO_POST_UCLARI = [
     // adVar: yazılacak ad zaten bir tablonun adı (o tabloya yazılacak; uyarı gerekmez).
     return { benzerler: benzerTablolar(sutunlar, tablolar, { ad, haricId: typeof g.haricId === 'string' ? g.haricId : '' }), adVar: Boolean(ad) && tablolar.some((t) => t.ad.toLocaleLowerCase('tr') === ad) };
   }],
+  // Kişi alanlarını tabloya bağlama (kisi-baglama.mjs): onay yoksa yalnız plan (değer gösterilmez); onayla bağlar + yeni satırlar +
+  // senaryo dönüşümü tek işlemde.
+  ['/platform/ekran/kisi-baglama', (db, g) => kisiAlanlariniBagla(db, kimlik(g.projeId, 'projeId'), {
+    ekranId: kimlik(g.ekranId, 'ekranId'), tabloId: typeof g.tabloId === 'string' && g.tabloId ? kimlik(g.tabloId, 'tabloId') : null,
+    eslemeler: g.eslemeler && typeof g.eslemeler === 'object' && !Array.isArray(g.eslemeler) ? g.eslemeler : undefined,
+    yeniSatirlar: g.yeniSatirlar && typeof g.yeniSatirlar === 'object' && !Array.isArray(g.yeniSatirlar) ? g.yeniSatirlar : undefined,
+    onay: g.onay === true, secimler: g.secimler
+  }, { kosuyorMu })],
   ['/platform/tablo/sil', (db, g) => ({ silindi: tabloSil(db, kimlik(g.projeId, 'projeId'), kimlik(g.id)) })]
 ];

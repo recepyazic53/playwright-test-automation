@@ -333,7 +333,13 @@ export const REHBERLER = {
         cizim: { tur: 'akis', kutular: [{ baslik: 'Kalacak tablo', ikon: 'veri' }, { baslik: 'Eşleme ve çakışmalar', ikon: 'esle' }, { baslik: 'Kuru doğrulama', ikon: 'kalkan' }, { baslik: 'Onay + yedek', ikon: 'onay' }] }
       },
       { baslik: 'Birleştirme sırası', sira: ['Veri sağlığı > Birleştirilebilecek tablolar > "Birleştir…".', 'Kalacak tabloyu seçin (gerekirse yeni ad).', 'Sütun eşlemesini onaylayın; satır ve karşılık çakışmalarında seçim yapın.', 'Kuru doğrulama "aynı değerleri üretiyor" diyorsa "Birleştir" ile onaylayın.', 'Kaynak tabloları istediğinizde ayrı onayla silin; "Son birleştirmeyi geri al" onları da geri getirir.'],
-        ipucu: 'Yeni tablo oluştururken, Excel / CSV yüklerken, sayfa paketi ya da SoapUI / Postman aktarırken aynı başlıklı tablo varsa "Benzer tablo var: onu kullan / yine de yeni oluştur" sorulur.' }
+        ipucu: 'Yeni tablo oluştururken, Excel / CSV yüklerken, sayfa paketi ya da SoapUI / Postman aktarırken aynı başlıklı tablo varsa "Benzer tablo var: onu kullan / yine de yeni oluştur" sorulur.' },
+      {
+        baslik: 'Kişi alanlarını tabloya bağlama',
+        metin: ['Ekran > Test verisi sekmesindeki "Kişi alanlarını tabloya bağla…", ekrandaki kişi / kimlik alanlarını (kimlik no, vergi no, pasaport, doğum tarihi, telefon, e-posta, ad soyad) bir kişi / kayıt tablosunun sütunlarına bağlamayı önerir; eşlemeyi siz onaylarsınız.',
+          'Her senaryo için sonuç gösterilir (değer gösterilmez): "eşleşti" (kişinin değerleri tablodaki bir satırla aynı), "yeni satır" (tabloda yok: satır adı önerilir, ortama özel olup olmayacağını seçersiniz) ya da "atlandı" ve nedeni (ör. kişinin alanları tabloda farklı satırlarda). Bir kişinin alanları hep aynı satırdan gelir. Koşuda ekrana giden değer değişecek alan çevrilmez. Onaylayınca bağlar, yeni satırlar ve senaryolar tek işlemde yazılır.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Kişi alanları', ikon: 'kullanici' }, { baslik: 'Sütun eşleme', alt: 'öneri + onay', ikon: 'esle' }, { baslik: 'Satır', alt: 'eşleşti / yeni', ikon: 'veri' }, { baslik: 'Senaryo', alt: '${Tablo.Sütun}', ikon: 'onay' }] }
+      }
     ]
   },
   'ayarlar-kosu': {
