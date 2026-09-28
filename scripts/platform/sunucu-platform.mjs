@@ -205,6 +205,7 @@ import { ekranTabloDonusumu } from './tablolar/ekran-donusumu.mjs';
 import { SQL_GET_UCLARI } from './sql/sorgu-bagdastirici.mjs';
 import { SQL_KULLANIM_GET_UCLARI, SQL_KULLANIM_POST_UCLARI } from './sql/sql-kullanimi.mjs';
 import { AKIS_SENARYO_GET_UCLARI, AKIS_SENARYO_POST_UCLARI } from './servisler/akis-senaryosu.mjs';
+import { UCTAN_UCA_GET_UCLARI, UCTAN_UCA_POST_UCLARI, uctanUcaKosucusuAyarla } from './akislar/uctan-uca.mjs';
 import { ENTEGRASYON_BUYUK_GOVDE_UCLARI, ENTEGRASYON_GET_UCLARI, entegrasyonPostUclari } from './entegrasyonlar/uclar.mjs';
 import { kosuBittiBildir } from './entegrasyonlar/servis.mjs';
 import { servisAkisiCalistir } from './servisler/servis-akislari.mjs';
@@ -413,6 +414,8 @@ export function platformKosucusunuAyarla(yeni) {
 }
 /** @param {string} dosya @param {string} ad */
 const kosuyorMu = (dosya, ad) => Boolean(kosucu?.kosuyorMu?.(dosya, ad));
+// Uçtan uca akışların ekran adımları aynı koşucuyla (ekran senaryosunun mevcut koşu yolu) koşar.
+uctanUcaKosucusuAyarla({ kosucu: () => kosucu, secenekler: (db) => calistirmaSecenekleri(db) });
 // Tablo değeri değişince senaryo güncellemesinde koşan senaryolar atlanır (tablolar/tablo-etkisi.mjs).
 tabloKosuDenetimiAyarla(kosuyorMu);
 
@@ -1310,6 +1313,8 @@ for (const [yol, islem] of SQL_GET_UCLARI) GET_UCLARI.set(yol, islem);
 for (const [yol, islem] of SQL_KULLANIM_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Akış senaryoları (servis senaryosu türü "Akış"; servisler/akis-senaryosu.mjs).
 for (const [yol, islem] of AKIS_SENARYO_GET_UCLARI) GET_UCLARI.set(yol, islem);
+// Uçtan uca akışlar (servis + ekran + SQL; akislar/uctan-uca.mjs).
+for (const [yol, islem] of UCTAN_UCA_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).
 for (const [yol, islem] of ENTEGRASYON_GET_UCLARI) GET_UCLARI.set(yol, islem);
 // Ayarlar > Koşu > Zamanlanmış koşular (zamanlama/uclar.mjs).
@@ -1655,6 +1660,7 @@ const POST_UCLARI = new Map([
 // Servis testleri (servisler/servis-uclari.mjs): ekran uçlarından ayrı; aynı belirteç / kasa kuralları.
 for (const [yol, islem] of SERVIS_POST_UCLARI) POST_UCLARI.set(yol, islem);
 for (const [yol, islem] of AKIS_SENARYO_POST_UCLARI) POST_UCLARI.set(yol, islem);
+for (const [yol, islem] of UCTAN_UCA_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Test verisi tabloları (tablolar/tablo-uclari.mjs).
 for (const [yol, islem] of TABLO_POST_UCLARI) POST_UCLARI.set(yol, islem);
 // Ayarlar > Entegrasyonlar (entegrasyonlar/uclar.mjs).

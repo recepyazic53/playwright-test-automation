@@ -26,6 +26,8 @@ import { RISKLI_ORTAM_TANIMI } from './ortam-riski.mjs';
  */
 
 const EKRAN_KOSU_UCLARI = Object.freeze(['/platform/senaryolar/calistir', '/platform/senaryo/dene']);
+/** Uçtan uca akış koşusu (servis + ekran + SQL adımları; akislar/uctan-uca.mjs): izinler adımlara göre koşullu. */
+const UCTAN_UCA_UCLARI = Object.freeze(['/platform/uctan-uca/kos']);
 const SERVIS_KOSU_UCLARI = Object.freeze([
   '/platform/servis/senaryo/dene', '/platform/servis/is/baslat', '/platform/servis/kos', '/platform/servis-akisi/dene', '/platform/servis-akisi/kos'
 ]);
@@ -45,6 +47,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     yerler: [
       'Senaryolar > Koşuyu başlat, ▷ Çalıştır, Seçilenleri çalıştır',
       'Senaryolar > Senaryo formu > Dene',
+      'Uçtan uca akışlar > Koş (ekran adımı)',
       'Sonuçlar > Başarısızları tekrar çalıştır',
       'Ekranlar > Ekranı tara, Akışı kaydet',
       'Ayarlar > Giriş profilleri > Giriş tarifi > Varsayılanları öner, Girişi kaydet',
@@ -55,6 +58,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Ekran senaryosu denemesi (Dene)', uclar: ['/platform/senaryo/dene'] },
       { ad: 'Ekran taraması, akış kaydı ve giriş kaydı', uclar: ['/platform/tarama/baslat'] },
       { ad: 'Giriş sayfası önerisi (Varsayılanları öner)', uclar: ['/platform/giris-tarifi/oner'] },
+      { ad: 'Uçtan uca akışta ekran adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta ekran adımı varsa' },
       { ad: 'Zamanlanmış koşudaki ekran senaryoları', uclar: [] }
     ],
     risk: 'Koşu uygulamada gerçek kayıt oluşturabilir, form gönderebilir; yanlış ortamda veri değişebilir.',
@@ -75,6 +79,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       'Servisler > Servis > Şemayı yenile',
       'Servisler > REST sihirbazı > Dene',
       'Servisler > Akışlar > Dene, Koş',
+      'Uçtan uca akışlar > Koş (servis adımı)',
       'Zamanlanmış koşudaki servis akışları'
     ],
     islemler: [
@@ -84,6 +89,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Servis senaryolarını koşma', uclar: ['/platform/servis/is/baslat', '/platform/servis/kos'] },
       { ad: 'REST sihirbazında Dene', uclar: ['/platform/servis/rest/dene'] },
       { ad: 'Servis akışı Dene / Koş', uclar: ['/platform/servis-akisi/dene', '/platform/servis-akisi/kos'] },
+      { ad: 'Uçtan uca akışta servis adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta servis adımı varsa' },
       { ad: 'Zamanlanmış koşudaki servis akışları', uclar: [] }
     ],
     risk: 'İstekler servislerde gerçek işlem başlatabilir (kayıt oluşturma, güncelleme); yanıtlar kişisel veri içerebilir.',
@@ -100,12 +106,14 @@ export const IZIN_TANIMLARI = Object.freeze([
     yerler: [
       'Ayarlar > Entegrasyonlar > Veritabanı bağlantısı > Bağlantıyı dene',
       'Senaryolardaki SQL adımları (koşu ve Dene sırasında)',
-      'Servisler > Akışlar > SQL adımı'
+      'Servisler > Akışlar > SQL adımı',
+      'Uçtan uca akışlar > SQL adımı'
     ],
     islemler: [
       { ad: 'Veritabanı bağlantısını dene', uclar: ['/platform/entegrasyon/dene'], kosul: 'veritabanı bağlantısı denenirken' },
       { ad: 'Ekran koşusunda / Dene\'de SQL adımı', uclar: EKRAN_KOSU_UCLARI, kosul: 'senaryonun modelinde SQL adımı varsa' },
-      { ad: 'Servis akışında SQL adımı', uclar: ['/platform/servis-akisi/dene', '/platform/servis-akisi/kos'], kosul: 'akışta SQL adımı varsa' }
+      { ad: 'Servis akışında SQL adımı', uclar: ['/platform/servis-akisi/dene', '/platform/servis-akisi/kos'], kosul: 'akışta SQL adımı varsa' },
+      { ad: 'Uçtan uca akışta SQL adımı', uclar: UCTAN_UCA_UCLARI, kosul: 'akışta SQL adımı ya da modelinde SQL adımı olan ekran adımı varsa' }
     ],
     risk: 'Sorgular veritabanındaki kişisel ya da gizli verileri okuyabilir; ağır sorgular veritabanını yavaşlatabilir.',
     kapaliyken: 'Hiçbir veritabanına bağlanılmaz: SQL adımı sorgu atmadan hatayla kalır, bağlantı denenmez.'
@@ -124,7 +132,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     ],
     islemler: [
       { ad: 'Bağlantıda "Yalnız okuma"yı kapatma', uclar: ['/platform/entegrasyon/kaydet'], kosul: '"Yalnız okuma" kapatılırken' },
-      { ad: 'SQL adımında yazma sorgusu', uclar: [...EKRAN_KOSU_UCLARI, '/platform/servis-akisi/dene', '/platform/servis-akisi/kos'], kosul: '"Yalnız okuma" kapalı bağlantıda yazma sorgusu çalışırken' }
+      { ad: 'SQL adımında yazma sorgusu', uclar: [...EKRAN_KOSU_UCLARI, '/platform/servis-akisi/dene', '/platform/servis-akisi/kos', ...UCTAN_UCA_UCLARI], kosul: '"Yalnız okuma" kapalı bağlantıda yazma sorgusu çalışırken' }
     ],
     risk: 'Veriler kalıcı olarak değişebilir ya da silinebilir; geri alınamayabilir.',
     kapaliyken: 'Yazma sorgusu çalıştırılmaz ve "Yalnız okuma" kapatılamaz; okuma sorguları (izni açıksa) çalışır.'
@@ -141,6 +149,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     yerler: [
       'Senaryolar > Koşuyu başlat (riskli ortam seçiliyken)',
       'Servisler > Koş (riskli ortam seçiliyken)',
+      'Uçtan uca akışlar > Koş (riskli ortam seçiliyken)',
       'Ekranlar > Ekranı tara (riskli ortam seçiliyken)',
       'Ayarlar > Koşu > Zamanlanmış koşular (riskli ortam kuralı)'
     ],
@@ -150,6 +159,7 @@ export const IZIN_TANIMLARI = Object.freeze([
       { ad: 'Riskli ortamda giriş sayfası önerisi', uclar: ['/platform/giris-tarifi/oner'], kosul: 'ortam riskliyse' },
       // Servis Dene / erişim kontrolü / şema zaten YALNIZ test ortamında yapılır (riskli ortamda reddedilir).
       { ad: 'Riskli ortamda servis ve servis akışı koşusu', uclar: ['/platform/servis/is/baslat', '/platform/servis/kos', '/platform/servis-akisi/kos'], kosul: 'ortam riskliyse' },
+      { ad: 'Riskli ortamda uçtan uca akış koşusu', uclar: UCTAN_UCA_UCLARI, kosul: 'ortam riskliyse' },
       { ad: 'Riskli ortamda zamanlanmış koşu', uclar: [] }
     ],
     risk: 'Gerçek kullanıcıların verisi ve gerçek işlemler etkilenebilir. İzin açıkken de her çalıştırmada ayrıca onay sorulur.',
@@ -172,6 +182,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     islemler: [
       { ad: 'Koşu ve Dene sırasında giriş yapma', uclar: EKRAN_KOSU_UCLARI, kosul: 'ortamın giriş tarifi varsa ve senaryo girişsiz değilse' },
       { ad: 'Tarama ve akış kaydında giriş yapma', uclar: ['/platform/tarama/baslat'], kosul: 'ortamın giriş tarifi varsa ve "Giriş yapmadan aç" seçilmemişse (saklanan oturumla girişi atlamak da dahil)' },
+      { ad: 'Uçtan uca akışın ekran adımında giriş yapma', uclar: UCTAN_UCA_UCLARI, kosul: 'ortamın giriş tarifi varsa ve ekran adımının senaryosu girişsiz değilse' },
       { ad: '"Yeniden giriş" adımı', uclar: [] }
     ],
     risk: 'Parola yanlış siteye yazılırsa ele geçebilir. Doldurma yalnız ortamın taban adresinin ya da giriş tarifindeki giriş adresinin kökenine yapılır.',
@@ -253,7 +264,7 @@ export const IZIN_TANIMLARI = Object.freeze([
     ],
     islemler: [
       { ad: 'TLS doğrulamasını kapatma', uclar: ['/platform/servis/kaydet', '/platform/servis/rest/kaydet'], kosul: 'TLS doğrulaması kapatılırken' },
-      { ad: 'TLS doğrulaması kapalı istek', uclar: ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene', ...SERVIS_KOSU_UCLARI], kosul: 'servisin TLS doğrulaması kapalıysa' }
+      { ad: 'TLS doğrulaması kapalı istek', uclar: ['/platform/servis/erisim', '/platform/servis/sema/yenile', '/platform/servis/rest/dene', ...SERVIS_KOSU_UCLARI, ...UCTAN_UCA_UCLARI], kosul: 'servisin TLS doğrulaması kapalıysa' }
     ],
     risk: 'Sahte sertifikalı bir sunucu araya girip istekleri ve yanıtları (kimlik bilgileri dahil) okuyabilir.',
     kapaliyken: 'TLS doğrulaması kapatılamaz; doğrulaması kapalı servislere istek gönderilmez.'

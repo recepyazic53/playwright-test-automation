@@ -24,6 +24,8 @@ export interface KosuIstegi {
   kosuKimligi?: string | null;
   kosuKapsami?: string | null;
   senaryoId?: string;
+  /** Uçtan uca akışın ekran adımı: koşu sürecine verilen NOBETCI_AKIS_* değişkenleri (akislar/uctan-uca-cikti.mjs). */
+  ekOrtam?: Record<string, string> | null;
 }
 export interface KosuYaniti {
   /** HTTP durum kodu (varsayılan 200). */

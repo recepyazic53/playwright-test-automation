@@ -80,6 +80,7 @@ export function akisSenaryosuDenetle(vt, projeId, icerik) {
   const akis = servisAkisiGetir(vt, icerik.akisId);
   if (!akis || akis.projeId !== projeId) return ['Senaryonun akışı bulunamadı.'];
   if (akis.tur !== 'akis') return ['Oturum akışı senaryoda kullanılmaz; bir akış seçin.'];
+  if (akis.icerik.uctanUca) return ['Uçtan uca akış servis senaryosunda kullanılmaz; bir servis akışı seçin.'];
   /** @type {string[]} */
   const hatalar = [];
   const oplar = new Map(operasyonAdimlari(akis.icerik).map((a) => [a.id, a]));

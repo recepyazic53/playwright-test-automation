@@ -117,6 +117,34 @@ function tlsKapaliServisVar(vt, servisIdleri, gorulen = new Set()) {
   return false;
 }
 
+/** Uçtan uca akışın koşu ucu (akislar/uctan-uca.mjs). */
+export const UCTAN_UCA_KOS_UCU = '/platform/uctan-uca/kos';
+
+/**
+ * Bir akış adımının gerektirdiği izinler (riskli ortam izni hariç: o, ortama bağlıdır). Uçtan uca akışta koşu ucunda TOPLU,
+ * koşu sırasında ADIM BAŞINA denetlenir. Ekran adımı: web erişimi; ortamın giriş tarifi varsa ve senaryo girişsiz değilse giriş
+ * bilgisi; modelde SQL adımı varsa veritabanı okuma. SQL adımı: veritabanı okuma. Servis adımı: servis istekleri (TLS doğrulaması
+ * kapalıysa güvenlik gevşetme).
+ * @param {Veritabani} vt @param {string} projeId @param {string} ortamId @param {any} a @returns {string[]}
+ */
+export function adimIzinleri(vt, projeId, ortamId, a) {
+  if (!a || typeof a !== 'object') return [];
+  if (a.tur === 'sql') return ['veritabani-okuma'];
+  if (a.tur === 'ekran') {
+    const izinler = ['web-erisimi'];
+    const s = guvenli(() => senaryoGetir(vt, metin(a.senaryoId)));
+    const mb = s && s.ekranId ? guvenli(() => modelBaglami(vt, s.ekranId, senaryoAkisi(s.icerik))) : null;
+    const tarif = projeId && ortamId ? guvenli(() => etkinGirisTarifi(vt, projeId, ortamId).tarif) : null;
+    if (tarif && (etkinSenaryoGirisi(s ? senaryoGirisi(s.icerik) : null, mb?.model).kip !== 'girissiz' || yenidenGirisVar(mb?.model))) izinler.push('giris-bilgisi');
+    if (mb) {
+      const h = modeldekiSqlHedefleri([mb.model, mb.altModeller]);
+      if (h.baglantiIdleri.size || h.veritabaniIdleri.size) izinler.push('veritabani-okuma');
+    }
+    return izinler;
+  }
+  return tlsKapaliServisVar(vt, [String(a.servisId ?? '')]) ? ['servis-istekleri', 'guvenlik-gevsetme'] : ['servis-istekleri'];
+}
+
 /**
  * İsteğin gerektirdiği izinler (açık / kapalı fark etmeksizin) ve açık canlı onayı gerekip gerekmediği.
  * @param {Veritabani} vt @param {string} yol @param {Govde} g
@@ -179,6 +207,11 @@ export function gerekenIzinler(vt, yol, g) {
   // Servis akışları: SQL adımı → veritabanı okuma.
   if (yol === '/platform/servis-akisi/dene' || yol === '/platform/servis-akisi/kos') {
     if (akisAdimlari(vt, g).some((a) => a && a.tur === 'sql')) izinler.add('veritabani-okuma');
+  }
+
+  // Uçtan uca akış: adımların izinlerinin birleşimi (ekran / servis / SQL; bkz. adimIzinleri). Riskli ortam yukarıda.
+  if (yol === UCTAN_UCA_KOS_UCU) {
+    for (const a of akisAdimlari(vt, g)) for (const x of adimIzinleri(vt, metin(g.projeId), metin(g.ortamId), a)) izinler.add(x);
   }
 
   // TLS doğrulamasını kapatmak (kayıt) ve doğrulaması kapalı istek.

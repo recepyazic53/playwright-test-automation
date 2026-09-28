@@ -37,6 +37,7 @@ import {
 } from './platform/sunucu-platform.mjs';
 import { KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduYanitla } from './platform/giris/elle-kod.mjs';
 import { taramalariKapat } from './platform/tarama/yonetici.mjs';
+import { akisOrtamDegiskenleri } from './platform/akislar/uctan-uca-cikti.mjs';
 import { paketBicimiBelgesi } from './platform/ekranlar/paket-bicimi.mjs';
 import { BICIM_ADRESI, BICIM_DOSYASI_ADI } from './platform/ekranlar/paket-istekleri.mjs';
 import {
@@ -371,8 +372,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-icerigi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'akis-senaryo-icerigi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-formu.js', { dosya: 'akis-senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
-  ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/sql-adimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'sql', 'sql-adimi.mjs'), tur: 'text/javascript; charset=utf-8' }],  ['/arayuz/sql-adimi-formu.js', { dosya: 'sql-adimi-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veritabanlari.js', { dosya: 'veritabanlari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/parametre-tanimlari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'parametre-tanimlari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/model-formu.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'senaryolar', 'model-formu.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -895,7 +895,9 @@ const EK_SENARYO_DOSYA_ON_EKI = 'test-sunucu-ek-senaryo-';
 // Platform "Senaryolar" (/platform/senaryolar/calistir; senaryo UUID'si sunucuda güncel başlık +
 // dosyaya çözülür) bu yolu kullanır: --list beyaz listesi (istemcinin gönderdiği ada güvenilmez),
 // dosya sırası, süre limiti, durdurma, canlı görüntü, platform raporlayıcısı. Dönen { httpDurum, govde }.
-async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null }) {
+// ekOrtam: uçtan uca akışın ekran adımı (platform/akislar/uctan-uca.mjs) — yalnız NOBETCI_AKIS_* değişkenleri geçer (akış değerleri
+// ve şifreli çıktı dosyası; bkz. platform/akislar/uctan-uca-cikti.mjs).
+async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null, ekOrtam = null }) {
   let tumSenaryolar;
   try {
     tumSenaryolar = await tumSenaryolariGetir(ortam, genel);
@@ -920,9 +922,12 @@ async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, ko
     }
     const calistirmaSonucu = await testiCalistirVeBekle(
       ortam, modelEslesenler[0].ad, dosya, tumSenaryolar, kosuId,
-      kosuTuru && kosuKimligi
-        ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
-        : {},
+      {
+        ...(kosuTuru && kosuKimligi
+          ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
+          : {}),
+        ...akisOrtamDegiskenleri(ekOrtam)
+      },
       grepDeseni,
       genel
     );
@@ -998,7 +1003,7 @@ platformKosucusunuAyarla({
   calistir: (istek) => senaryoyuCalistirVeYanitla({
     ortam: istek.ortam, senaryoAdi: istek.ad, dosya: istek.dosya, kosuId: istek.kosuId, kosuTuru: istek.kosuTuru ?? null,
     kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel',
-    etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null, genel: istek.genel ?? null
+    etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null, genel: istek.genel ?? null, ekOrtam: istek.ekOrtam ?? null
   }),
   // Model senaryosu "Dene": deneme senaryosu geçici dosyayla (TEST_SUNUCU_MODEL_DENEME_DOSYASI) veri okuyucuya verilir; model
   // spec'i onu etiketle tek test olarak üretir; listeleme ve koşu aynı dosyayla yapılır, dosya sonra silinir.
