@@ -11,6 +11,9 @@
 //   Seçenek gözlemleri (arka planda): her okumada seçim alanlarının (select/radyo) SEÇENEKLERİ ve o andaki diğer seçimler;
 //   kullanıcı bir alana tıklayınca açılan listbox / combobox listesinin seçenekleri. Yalnız seçenek etiketi / değeri —
 //   kullanıcının yazdığı metin kaydedilmez. Paketin test verisi tablolarına (bağımlı listelerde kombinasyonlar) çevrilir.
+// Çerçeveler (iframe): aynı kökenli çerçevelerin alanları ekran okumasına girer (alanın "cerceve"si), çerçevedeki dokunuşlar /
+// düğmeler / açılan listeler panele iletilir (kayit-paneli.ts); başka kökenli çerçevelerin içi okunamaz (notlara yazılır).
+// Gizli <select>'e bağlı özel açılır listeler (aramalı liste) görülen alan olarak listelenir (sayfa-envanteri.ts).
 // Sonuç akış envanteridir (AkisEnvanteri); diyagram Nöbetçi'de taslaktan kurulur (akis-tasarimi.mjs) ve sayfa paketine
 // çevrilir.
 //
@@ -41,12 +44,16 @@ function yolu(adres: string): string {
   try { const u = new URL(adres); return `${u.pathname}${u.search}`; } catch { return '?'; }
 }
 const metin = (d: unknown, n: number): string | null => (typeof d === 'string' && d.trim() ? d.replace(/\s+/g, ' ').trim().slice(0, n) : null);
-/** Panelden gelen öğe (seçici zorunlu; metin düğmenin/öğenin görünen yazısı). */
+/** Panelden gelen öğe (seçici zorunlu; metin düğmenin/öğenin görünen yazısı; cerceve: çerçevedeyse çerçeve seçicileri). */
 function oge(veri: Record<string, unknown>): KayitOgesi {
   const secici = metin(veri.secici, 500);
   if (!secici) throw new Error('Öğenin seçicisi çıkarılamadı; başka bir öğe seçin.');
-  return { secici, metin: metin(veri.metin, 120) };
+  const cerceve = Array.isArray(veri.cerceve) && veri.cerceve.length >= 1 && veri.cerceve.length <= 2 && veri.cerceve.every((c) => typeof c === 'string' && c.trim())
+    ? veri.cerceve.map((c) => String(c).slice(0, 300)) : null;
+  return { secici, metin: metin(veri.metin, 120), ...(cerceve ? { cerceve } : {}) };
 }
+const ayniOge = (x: KayitOgesi, y: KayitOgesi): boolean => x.secici === y.secici && x.metin === y.metin && JSON.stringify(x.cerceve ?? []) === JSON.stringify(y.cerceve ?? []);
+const CERCEVE_NOTU = 'Sayfada içi okunamayan çerçeve (iframe) var (başka kökenden — cross-origin — ya da 2 düzeyden derin): içindeki alanlar ve düğmeler kaydedilemez.';
 
 /** Akışı kaydeder ve kayıt envanterini döner. Hata/iptal durumunda TaramaHatasi/GirisHatasi fırlatır. */
 export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: OlayGonderici, oturumGonder?: OturumGonderici): Promise<AkisEnvanteri> {
@@ -123,7 +130,8 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
 
   const panelDurumu = (): PanelDurumu => ({
     alanlar: [...alanlar.values()].map(({ alan, secili, dokunuldu }) => ({
-      anahtar: alan.anahtar, etiket: alan.etiket ?? alan.ad ?? '', tur: alan.tur, secili, dokunuldu,
+      anahtar: alan.anahtar, etiket: alan.etiket ?? alan.ad ?? '', tur: alan.ozelBilesen ? 'özel liste' : alan.tur, secili, dokunuldu,
+      ...(alan.cerceve?.length ? { cercevede: true } : {}),
       gorunuyor: sonGorunen.has(alan.anahtar), yeni: sonGorunen.has(alan.anahtar) && oncekiGorunen.size > 0 && !oncekiGorunen.has(alan.anahtar)
     })),
     dugmeler: dugmeler.map((d) => d.metin ?? d.secici),
@@ -143,6 +151,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
       && typeof (x as HamAlan).tur === 'string' && Array.isArray((x as HamAlan).adaySeciciler) && typeof (x as HamAlan).bolum === 'object');
     const dokunulan = new Set(Array.isArray(a.dokunulan) ? a.dokunulan.filter((x): x is string => typeof x === 'string') : []);
     if (!ilkBaslik) ilkBaslik = metin(a.baslik, 200) ?? '';
+    if (typeof a.okunamayanCerceve === 'number' && a.okunamayanCerceve > 0 && !notlar.includes(CERCEVE_NOTU)) notlar.push(CERCEVE_NOTU);
     for (const alan of gecerli) {
       const k = alanlar.get(alan.anahtar);
       if (!k) alanlar.set(alan.anahtar, { alan, secili: dokunulan.has(alan.anahtar), elle: false, dokunuldu: dokunulan.has(alan.anahtar) });
@@ -201,7 +210,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
           case 'tik': {
             const d = oge(veri);
             const oncesi = anligiIsle(veri.anlik) ?? { yol: '', gorunen: [], dokunulan: [], secimler: {} };
-            let i = dugmeler.findIndex((x) => x.secici === d.secici && x.metin === d.metin);
+            let i = dugmeler.findIndex((x) => ayniOge(x, d));
             if (i < 0) i = dugmeler.push(d) - 1;
             olaylar.push({ tur: 'tik', dugme: i, oncesi });
             bildir({ tur: 'bilgi', mesaj: `Düğmeye basıldı: ${d.metin ?? d.secici}` });
@@ -209,7 +218,7 @@ export async function akisiKaydet(browser: Browser, g: TaramaGirdisi, olay: Olay
           }
           case 'mesaj': {
             const m = oge(veri);
-            let i = mesajlar.findIndex((x) => x.secici === m.secici && x.metin === m.metin);
+            let i = mesajlar.findIndex((x) => ayniOge(x, m));
             if (i < 0) i = mesajlar.push(m) - 1;
             olaylar.push({ tur: 'mesaj', mesaj: i });
             bildir({ tur: 'bilgi', mesaj: `Mesaj seçildi: ${m.metin ?? m.secici}` });

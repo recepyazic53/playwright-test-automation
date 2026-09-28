@@ -113,8 +113,11 @@ async function arkaPlanBekle(page: Page, baslangic: number): Promise<void> {
  * alanda test düşer. zorla: gizli (özel çizimli) girdi; görünürlük yerine sayfada varlığı yeter.
  */
 async function alan(page: Page, secici: string, etiket: string, doldur: ((l: Locator) => Promise<void>) | null,
-  s: { zorunlu?: boolean; zorla?: boolean } = {}): Promise<void> {
-  const l = s.zorla ? page.locator(secici).first() : page.locator(secici).filter({ visible: true }).first();
+  s: { zorunlu?: boolean; zorla?: boolean; cerceve?: string[] } = {}): Promise<void> {
+  // cerceve: alan bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe).
+  let k: Page | FrameLocator = page;
+  for (const c of s.cerceve ?? []) k = k.frameLocator(c);
+  const l = s.zorla ? k.locator(secici).first() : k.locator(secici).filter({ visible: true }).first();
   const var_ = await l.waitFor({ state: s.zorla ? 'attached' : 'visible', timeout: GORUNURLUK_MS }).then(() => true, () => false);
   if (!var_) {
     if (s.zorunlu) throw new Error(\`\${etiket} alanı ekranda görünmüyor (mutlaka görünmeli).\`);
@@ -599,8 +602,11 @@ export function playwrightKoduUret(g) {
     const secimli = a.tip === 'secim' || a.tip === 'okluSecim' || a.tip === 'radyo';
     const sb = secimli ? secenekBul(a.secenekler, d) : null;
     const gizli = gizliNedeni(a);
-    if (a.doldurucu === 'degerJs') {
+    if (a.doldurucu === 'degerJs' || a.doldurucu === 'ozelSecim') {
       yardimcilar.add('degerJs');
+      // Özel açılır liste (gizli <select> + görünen aramalı kutu): dışa aktarılan kod gizli listeye değer yazar (input/change);
+      // Nöbetçi koşucusu önce görünen kutudan aramayla seçer.
+      if (a.doldurucu === 'ozelSecim') satirlar.push(`${i2}// Özel açılır liste: değer gizli listeye yazılır (sayfa değişikliği görmüyorsa kutuya tıklayıp seçeneği seçin).`);
       if (gizli) { const v = degerIfadesi(a).ifade; satirlar.push(`${i2}await degerJsIleYaz(l, ${v}, ${v});`); }
       else {
         const v = sb ? { deger: sb.deger, metin: sb.metin } : { deger: String(degerIfadesiDuz(a)), metin: String(degerIfadesiDuz(a)) };
@@ -698,6 +704,8 @@ export function playwrightKoduUret(g) {
     return maske ? maskeUygula(maske, a.deger) : a.deger;
   }
 
+  /** Çerçeve (iframe) zinciri → Playwright kapsam ifadesi ("page" ya da "page.frameLocator(…)…"). @param {string[] | undefined | null} c */
+  const kapsamIfadesi = (c) => `page${(c ?? []).map((x) => `.frameLocator(${s(x)})`).join('')}`;
   /** @param {any} kosu @param {number} sureSn */
   const aksiyonSatirlari = (kosu, sureSn) => {
     /** @type {string[]} */
@@ -706,7 +714,9 @@ export function playwrightKoduUret(g) {
       if (a.aciklama) satirlar.push(`${ic}// ${yorum(a.aciklama)}`);
       if (a.tur === 'bekle' && a.sureSn && !a.secici) { satirlar.push(`${ic}await page.waitForTimeout(${Number(a.sureSn) * 1000});`); continue; }
       if (!a.secici) continue;
-      const l = `page.locator(${s(a.secici)})${a.metin ? `.filter({ hasText: ${s(a.metin)} })` : ''}`;
+      // Öğe bir çerçevedeyse (iframe) o çerçevede aranır.
+      const l = `${kapsamIfadesi(a.cerceve)}.locator(${s(a.secici)})${a.metin ? `.filter({ hasText: ${s(a.metin)} })` : ''}`;
+      if (a.cerceve?.length && a.durum === 'dolu') satirlar.push(`${ic}// TODO: öğe bir çerçevede (${yorum(a.cerceve.join(' › '))}); doluBekle ana sayfada arar.`);
       const zaman = (a.zamanAsimiSn ?? sureSn) * 1000;
       if (a.tur === 'tikla') satirlar.push(`${ic}await ${l}.filter({ visible: true }).first().click({ timeout: ${zaman} });`);
       else if (a.durum === 'dolu') { yardimcilar.add('doluBekle'); satirlar.push(`${ic}await doluBekle(page, ${s(a.secici)}, ${zaman});`); }
@@ -742,11 +752,14 @@ export function playwrightKoduUret(g) {
     if (secenekler.length === 1 && !kosu.hataGostergesi && !uyarilar.length && (secenekler[0].tur === 'eleman' || secenekler[0].tur === 'url')) {
       const x = secenekler[0];
       satirlar.push(x.tur === 'eleman'
-        ? `${ic}await expect(page.locator(${s(x.deger)}).filter({ visible: true }).first()).toBeVisible({ timeout: ${sureMs} });`
+        ? `${ic}await expect(${kapsamIfadesi(x.cerceve)}.locator(${s(x.deger)}).filter({ visible: true }).first()).toBeVisible({ timeout: ${sureMs} });`
         : `${ic}await expect(page).toHaveURL(new RegExp(${s(x.deger)}), { timeout: ${sureMs} });`);
       return satirlar;
     }
     yardimcilar.add('gosterge');
+    if ([...secenekler, ...uyarilar, ...(kosu.hataGostergesi ? [kosu.hataGostergesi] : [])].some((x) => /** @type {{ cerceve?: string[] }} */ (x).cerceve?.length)) {
+      satirlar.push(`${ic}// TODO: göstergelerden biri bir çerçevede (iframe); aşağıdaki denetim ana sayfada arar.`);
+    }
     const g2 = secenekler.map((x) => `{ tur: '${x.tur}', deger: ${s(x.deger)}${x.secici ? `, secici: ${s(x.secici)}` : ''} }`);
     const u2 = uyarilar.map((u) => `{ metin: ${s(u.metin)}${u.secici ? `, secici: ${s(u.secici)}` : ''} }`);
     satirlar.push(`${ic}await basariBekle(page, { adim: ${s(adim.baslik)}, basari: [${g2.join(', ')}], hataSecici: ${hataSecici}, uyarilar: [${u2.join(', ')}], sureMs: ${sureMs} });`);
@@ -835,8 +848,8 @@ export function playwrightKoduUret(g) {
         else govde.push(`${ic}// Atlanan alan: ${yorum(a.etiket)} — ${yorum(a.atla)}`);
         continue;
       }
-      const zorla = a.doldurucu === 'radyoZorla' || a.doldurucu === 'onayKutusuZorla' || a.doldurucu === 'degerJs';
-      const sec = [a.mutlakaGorunmeli ? 'zorunlu: true' : '', zorla ? 'zorla: true' : ''].filter(Boolean);
+      const zorla = a.doldurucu === 'radyoZorla' || a.doldurucu === 'onayKutusuZorla' || a.doldurucu === 'degerJs' || a.doldurucu === 'ozelSecim';
+      const sec = [a.mutlakaGorunmeli ? 'zorunlu: true' : '', zorla ? 'zorla: true' : '', a.cerceve?.length ? `cerceve: [${a.cerceve.map(s).join(', ')}]` : ''].filter(Boolean);
       const ek = sec.length ? `, { ${sec.join(', ')} }` : '';
       if (a.yalnizGorunurluk) { govde.push(`${ic}// ${yorum(a.etiket)}: yalnızca görünürlüğü denetlenir (mutlaka görünmeli).`, `${ic}await alan(page, ${s(a.secici)}, ${etiket}, null${ek});`); continue; }
       const gizli = gizliNedeni(a);
@@ -882,7 +895,7 @@ export function playwrightKoduUret(g) {
     '// Çalıştırma: npx playwright test <bu dosya>'
   ];
   const importlar = [
-    "import { test, expect, type Locator, type Page, type Request } from '@playwright/test';",
+    "import { test, expect, type FrameLocator, type Locator, type Page, type Request } from '@playwright/test';",
     ...(totpGerekli ? ["import { createHmac } from 'node:crypto';"] : []),
     ...(dosyaDegiskeni ? ["import { join } from 'node:path';"] : [])
   ];

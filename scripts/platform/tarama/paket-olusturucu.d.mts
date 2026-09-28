@@ -36,9 +36,25 @@ export type HamAlan = {
   /** Aynı adı paylaşan onay kutusu grubu. */
   grup?: string | null;
   bolum: { anahtar: string; baslik: string };
+  /**
+   * Alan bir çerçevenin (iframe) içindeyse çerçeve seçicileri, dıştan içe (en çok 2 düzey; ör. ["iframe#pencere"]).
+   * Seçiciler (secici, adaySeciciler, bilesen) o çerçevenin belgesine göredir. Yoksa alan ana sayfadadır.
+   */
+  cerceve?: string[];
+  /**
+   * Gizli bir <select>'e bağlı GÖRÜNÜR özel açılır liste bileşeni (aramalı liste): alan görünür sayılır, secici gerçek
+   * <select>'indir, seçenekler ondan okunur; modelde doldurucu "ozelSecim" önerilir.
+   */
+  ozelBilesen?: boolean;
+  /** Özel bileşenin görünen kabının seçicisi (aynı çerçevede; kayıt panelinde dokunma ve açılan liste eşleştirmesi için). */
+  bilesen?: string | null;
 };
 
-export type SayfaEnvanteri = { alanlar: HamAlan[]; baslik: string; ozelBilesenSayisi: number; cerceveSayisi: number };
+/**
+ * cerceveSayisi: görünür çerçeve (iframe) sayısı (iç içe olanlar dahil); okunamayanCerceveSayisi: içi okunamayan çerçeveler
+ * (başka kökenden — cross-origin — ya da 2 düzeyden derin). alanlar okunabilen çerçevelerin alanlarını da içerir.
+ */
+export type SayfaEnvanteri = { alanlar: HamAlan[]; baslik: string; ozelBilesenSayisi: number; cerceveSayisi: number; okunamayanCerceveSayisi?: number };
 
 export type KesifDegeri = {
   deger: string;
@@ -81,14 +97,15 @@ export type TaramaEnvanteri = {
 };
 
 /** Akış kaydında bir öğe: adımın ilerleme düğmesi ya da başarı göstergesi (seçici + ekrandaki metni; değer değil). */
-export type KayitOgesi = { secici: string; metin: string | null };
+/** cerceve: öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe; HamAlan.cerceve ile aynı). */
+export type KayitOgesi = { secici: string; metin: string | null; cerceve?: string[] };
 /**
  * Başarı göstergesi: aranan metni kullanıcı belirler (undefined: öneri — metnin sabit kısmı; null: yalnızca öğe görünür).
  * secici null: öğe seçilmedi, metin sayfanın tamamında aranır (akış tasarımında elle yazılan beklenen mesaj).
  */
 /** veya: art arda seçilen diğer beklenen mesajlar (herhangi biri görünürse başarılı). */
 /** desen: aranan bir düzenli ifadedir (öğenin / sayfanın metni ona uymalı). */
-export type KayitGostergesi = { secici: string | null; metin: string | null; aranan?: string | null; veya?: KayitGostergesi[]; desen?: boolean };
+export type KayitGostergesi = { secici: string | null; metin: string | null; aranan?: string | null; veya?: KayitGostergesi[]; desen?: boolean; cerceve?: string[] };
 /** Kullanıcının adlandırıp aldığı adım: seçtiği alanların YAPISI (değer yok) + ilerleme düğmesi. */
 /** Adımın içinde yeni alanlar açan düğme ("Ek adres ekle"); secimli: her senaryoda basılmaz, senaryoda seçilir. */
 export type KayitAcicisi = KayitOgesi & { secimli: boolean; onceBekle?: number; sonraBekle?: number };

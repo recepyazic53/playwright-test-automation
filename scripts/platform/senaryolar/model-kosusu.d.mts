@@ -29,6 +29,8 @@ export type PlanAlani = {
   deger: unknown;
   secici: string | null;
   yardimci: Record<string, string>;
+  /** Alan bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe; modelde konum.cerceve); yoksa null. */
+  cerceve?: string[] | null;
   secenekler: PlanSecenegi[];
   parametreler: Record<string, unknown>;
   mutlakaGorunmeli: boolean;
@@ -40,18 +42,19 @@ export type PlanAlani = {
 
 /** secici yoksa ve sureSn varsa süreli bekleme (koşucu sureSn saniye bekler). */
 /** durum 'dolu': öğenin metni / değeri boş olmayana kadar (ör. kimlik sorgusunun ad-soyadı). */
-export type PlanAksiyonu = { tur: 'tikla' | 'bekle'; secici?: string; metin?: string; durum?: 'gorunur' | 'gizli' | 'dolu'; aciklama?: string; zamanAsimiSn?: number; sureSn?: number };
+/** cerceve: öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri (dıştan içe). */
+export type PlanAksiyonu = { tur: 'tikla' | 'bekle'; secici?: string; metin?: string; durum?: 'gorunur' | 'gizli' | 'dolu'; aciklama?: string; zamanAsimiSn?: number; sureSn?: number; cerceve?: string[] };
 
-export type PlanBasariGostergesi = { tur: 'metin' | 'eleman' | 'url' | 'desen'; deger: string; secici?: string };
+export type PlanBasariGostergesi = { tur: 'metin' | 'eleman' | 'url' | 'desen'; deger: string; secici?: string; cerceve?: string[] };
 
 export type PlanKosuTanimi = {
   aksiyonlar?: PlanAksiyonu[];
   /** desen: öğenin (yoksa sayfanın) metni bu düzenli ifadeye uyar (ör. "[1-9]" — sıfırdan farklı toplam). */
   /** veya: seçeneklerden herhangi biri görünürse başarılı. */
   basariGostergesi?: PlanBasariGostergesi | { tur: 'veya'; secenekler: PlanBasariGostergesi[] };
-  hataGostergesi?: { secici: string };
+  hataGostergesi?: { secici: string; cerceve?: string[] };
   /** Adımda kabul edilen iş kuralı uyarıları: başarı beklenirken biri görünürse test hemen başarısız. */
-  uyarilar?: Array<{ metin: string; secici?: string }>;
+  uyarilar?: Array<{ metin: string; secici?: string; cerceve?: string[] }>;
   zamanAsimiSn?: number;
   /** Ekran modelinde "Ekran görüntüsü al" işareti (adım görüntüleri "Seçili adımlarda" iken yalnız bu adımlarda alınır). */
   ekranGoruntusu?: boolean;

@@ -36,7 +36,9 @@ belge + zarf şeması + ekran modelinin tip tanımı (`tests/support/ekran-model
 > Paket tek bir JSON nesnesidir (`tur`, `surum`, `meta`, `model`, `senaryoOnerileri`, `gerekenAyarlar`, `bilinmeyenler` zorunlu;
 > `kanitlar`, `testVerisi` isteğe bağlı). Sayfayı yalnızca
 > okuyarak incele (düğme grupları yukarıda); kayıt oluşturan / gönderen / onaylayan / ödeme yapan düğmelere basma; kart, parola,
-> kimlik no girme; iş kuralı uyarısının öğesini `kosu.hataGostergesi`'ne, metinlerini `kosu.uyarilar`'a yaz. Test verisini
+> kimlik no girme; iş kuralı uyarısının öğesini `kosu.hataGostergesi`'ne, metinlerini `kosu.uyarilar`'a yaz. Alan bir iframe
+> içindeyse `konum.cerceve`'ye iframe seçicisini (o iframe'deki düğme / göstergelerde de `cerceve`), gerçek `<select>`'i gizli
+> özel açılır listelerde gerçek `<select>`'in seçicisini ve `"doldurucu": "ozelSecim"`'i yaz. Test verisini
 > `testVerisi.tablolar`'a tablo olarak yaz: **(1) Ekran listeleri** — seçim alanlarının seçenekleri `"tur": "liste"` olan,
 > **"<Ekran adı> — <Alan>"** adlı tablolara (bağımlı listelerde tek tablo "<Ekran adı> — <Üst alan> - <Alt alan>", satır = geçerli
 > kombinasyon; en çok 60 karakter); hücrede görünen metin, sayfadaki value farklıysa `karsiliklar`; alanlar
@@ -198,12 +200,32 @@ aksiyonları sırayla uygular, sonra başarı göstergesini bekler:
 
 | Alan | Açıklama |
 |---|---|
+| `cerceve` | Aksiyonda, başarı göstergesinde (`eleman` ya da seçicili `metin` / `desen`), `uyarilar[]`'da ve `hataGostergesi`'nde: öğe bir iframe içindeyse çerçeve seçicileri (dıştan içe, 1–2 öğe; ör. `["iframe#pencere"]`). Seçici o çerçevenin belgesine göredir; koşucu `page.frameLocator(...)` ile orada arar. |
 | `aksiyonlar[]` | `tur`: `tikla` (düğme/bağlantı) ya da `bekle` (`durum`: `gorunur` varsayılan \| `gizli` \| `dolu` — öğenin metni/değeri boş değil; `secici` yoksa `sureSn` kadar beklenir); `secici` zorunlu; `metin` (birden çok öğe eşleşirse bu metni içeren), `aciklama`, `zamanAsimiSn` isteğe bağlı. **Kaydet/öde/onayla** gibi kalıcı işlem yapan düğmeler yalnızca test ortamında koşulacak adımlara yazılır. |
 | `basariGostergesi` | `tur`: `metin` (sayfada ya da `secici` öğesinde toleranslı içerir), `eleman` (`deger` seçicisi görünür), `url` (`deger` düzenli ifadesi), `desen` (sayfanın ya da `secici` öğesinin metni `deger` düzenli ifadesine uyar; ör. toplam sıfırdan farklı: `[1-9]`), `veya` (`secenekler`: 2–5 gösterge; herhangi biri görünürse başarılı). |
 | `uyarilar` | Adımda kabul edilen iş kuralı uyarıları `[{ metin, secici? }]` (en çok 10): senaryo "iş kuralı hatası" beklerken bunlardan seçer; başarı beklenen senaryoda biri görünürse test hemen düşer. |
 | `hataGostergesi` | İş kuralı uyarısının göründüğü öğe (`secici`). Beklenen iş kuralı hatası buradan okunur; beklenmeyen bir uyarı çıkarsa test "Beklenen/Görülen" hatasıyla düşer. |
 | `zamanAsimiSn` | Göstergeleri bekleme süresi (1–600, varsayılan 30). |
 | `ekranGoruntusu` | `true`: "Ekran görüntüsü al" işareti. Adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu) yalnız işaretli adımların sonunda görüntü alınır; diğer seçimlerde etkisizdir. |
+
+### Çerçeve (iframe) içindeki alanlar
+
+Alan bir iframe'in içindeyse (ör. iframe'de açılan "kullanıcı seç" penceresi) `konum.cerceve`'ye iframe seçicileri dıştan içe
+yazılır (en çok 2 düzey): `"konum": { "secici": "#kullanici", "kirilganlik": "dusuk", "cerceve": ["iframe#pencere"] }`. `secici` ve
+`konum.yardimci` seçicileri o çerçevenin belgesine göredir; alan sonrası parametrelerinin (`tikla`, `bekle`, `gizle`) seçicileri de
+aynı çerçevede aranır. Otomatik tarama ve akış kaydı aynı kökenli iframe'lerin içini okur, alanlara `cerceve`'yi kendisi yazar
+(iframe seçicisi: kimlik → ad → `src` deseni → başlık → CSS yolu); başka kökenli (cross-origin) iframe'lerin içi okunamaz, notlara
+"okunamadı" diye yazılır. Öğesiz metin göstergeleri (`secici` yok) sayfanın ve çerçevelerin metninde aranır.
+
+### Özel açılır liste (`ozelSecim`)
+
+Gerçek `<select>` gizli (`display:none` ya da erişilebilir gizleme), yanında görünen bir aramalı kutu varsa (select2, chosen,
+bootstrap-select ve benzeri bileşenler; `role="combobox"`, `aria-controls` / `aria-owns`, `<select id>_chosen` /
+`select2-<id>-container` gibi genel desenler) alan `secim` tipindedir, `konum.secici` gerçek `<select>`'in seçicisidir, seçenekler
+ondan okunur ve `"doldurucu": "ozelSecim"` yazılır. Koşucu: değer zaten seçiliyse dokunmaz; görünen kutuya tıklar, açılan arama
+kutusu varsa seçeneğin metnini yazar ve görünen seçeneğe tıklar; liste değeri değişmediyse gizli listeye değeri yazıp
+`input` / `change` gönderir; sonunda `select.value`'yu doğrular (tutmazsa Beklenen / Görülen hatası). Tarama ve akış kaydı bu alanları
+kendisi tanır (akış kaydı panelinde tür "özel liste").
 
 Sürüm 2'de `okluSecim` doldurucusu (ok düğmeleriyle değer değiştiren özel bileşen) değeri gösteren öğeyi
 (`konum.secici`) ve düğmeleri (`konum.yardimci.ileri` ve `konum.yardimci.geri`; eski adlarla `arttir`/`azalt`)
@@ -218,7 +240,7 @@ Koşucunun diğer alan olanakları:
 | `sinirlar` | Alanın uygulamadaki değer kuralları — senaryo verisini kısıtlamaz, yalnızca senaryo tasarım yardımcısının sınır değer önerileri bundan üretilir (kural yoksa öneri yok). Sayı: `enAz`, `enCok` (sayı), `artis` (varsayılan 1). Tarih: `enAz`, `enCok` (`bugun`, `bugun+30`, `gg.aa.yyyy` ya da `yyyy-aa-gg`). Metin: `enAzUzunluk`, `enCokUzunluk` (tam sayı), `desen` (düzenli ifade; değerin tamamı uymalı). Ör. `"sinirlar": { "enAz": 1, "enCok": 10 }`. Paket yalnızca sayfada belli olan sınırları yazar (tahmin yok); kullanıcı ekranın Akışlar sekmesinde alanın "Sınırlar" düğmesiyle ekler / değiştirir / kaldırır (akışı yeniden kaydetmek mevcut kuralları ve alanın diğer anahtarlarını korur). Senaryo formunda zorunlu alanın "Bilerek boş bırak" işareti `bilerekBos` listesini yönetir. |
 | `kimlikProfili` | Senaryoya özel kimlik ya da seçilen (yoksa varsayılan) hazır kayıt (Ayarlar > Test verisi > Kişi ve kayıt verileri; havuz = aynı adlı tablo, kayıt = satır adı) `altAlanlar`a `sira` ile açılır; `eslesme.kimlikAlani` metin ya da kimlik türüne göre harita (türde karşılığı yoksa alt alan atlanır). |
 | `doldurucuParametreleri` | Alan doldurulduktan sonra: `tus` (ör. `Tab`), `tikla` (seçici; ör. kimlik sorgula), `bekle {secici, durum: dolu \| gorunur \| gizli, zamanAsimiSn, icermez?}` (`icermez`: dolu sayılmayan geçici metin, ör. sorgu sürerken "Aranıyor"), `gizle` (seçici: alan doldurulunca açık kalıp sonraki tıklamayı kapatan katman gizlenir, ör. takvim `#ui-datepicker-div`). Alan sonrası tıklama en çok 15 sn denenir, sonra açık hatayla düşer. `maske` (ör. `"(###) ### ## ##"`): değerin rakamları kalıba yerleştirilerek yazılır (maskeli alanlarda `degerJs` ile birlikte). Alan beklemesi sırasında adımın hata göstergesi (`kosu.hataGostergesi`) açılırsa adım hemen düşer (akışın kabul ettiği uyarılar hariç). Oklu seçimde `yanitBekle`: her tıklamadan sonra adresi bu metni içeren isteğin bitmesi beklenir (ör. seçim değişince yeniden yüklenen bağımlı liste). |
-| Doldurucular | `radyoZorla` / `onayKutusuZorla` (gizli çizimli girdiler; görünürlük yerine sayfada varlık), `secimGerekirse` (değer zaten seçiliyse dokunulmaz), `degerJs` (değer betikle yazılır + input/change; gizli alan ya da gizli <select> — sayfada varlık yeter; seçenek önce değerle, sonra metinle). Kapalı (disabled) alan doldurulmaz, "atlanan alanlar"a yazılır (mutlaka görünmeli ise hata). |
+| Doldurucular | `radyoZorla` / `onayKutusuZorla` (gizli çizimli girdiler; görünürlük yerine sayfada varlık), `secimGerekirse` (değer zaten seçiliyse dokunulmaz), `ozelSecim` (gizli `<select>` + görünen aramalı kutu; yukarıya bakın), `degerJs` (değer betikle yazılır + input/change; gizli alan ya da gizli <select> — sayfada varlık yeter; seçenek önce değerle, sonra metinle). Kapalı (disabled) alan doldurulmaz, "atlanan alanlar"a yazılır (mutlaka görünmeli ise hata). |
 | Kimlik alanı dilimi | Alt alanda `eslesme.kimlikAlani: { "ad": "cepTelefonu", "dilim": [0, 3] }` (ya da türe göre `{ "ozel": { ad, dilim } }`): profildeki değerin parçası yazılır (boşluklar yok sayılır). |
 
 Tekrar analizde koşu tanımı değişikliği **"Adım koşu tanımı"** bulgusu olur; sürüm 1 bir model bu bulgu kabul
@@ -327,7 +349,10 @@ Alanları bir düğmeyle açılan ekranlarda (çok adımlı formlar) otomatik ta
    - **Görülen alanlar:** ekranda görülen form alanlarının YAPISI (etiket, tür; değer yok). Ekran kendiliğinden okunur
      (açılışta, seçim / onay kutusu değişince, düğmeye basılmadan hemen önce ve basıldıktan sonra); yeni alanlar açılınca
      kullanıcı **Ekranı yeniden oku**ya basar. Kullanıcının **dokunduğu** alanlar listede işaretli gelir; kullanıcı
-     işaretleri değiştirebilir ("şu an görünmüyor" / "yeni" işaretleri görünür).
+     işaretleri değiştirebilir ("şu an görünmüyor" / "yeni" işaretleri görünür). Aynı kökenli **iframe**'lerin içindeki alanlar,
+     dokunuşlar ve düğmeler de kaydedilir (listede "çerçevede" işareti; alanın `konum.cerceve`'si); başka kökenli iframe'lerin içi
+     okunamaz (kayıt notlarına yazılır). Gerçek `<select>`'i gizli **özel açılır listeler** (aramalı kutu) tür "özel liste" olarak
+     görünür; kutuya / seçeneğe tıklamak alana dokunmaktır (model: `doldurucu: "ozelSecim"`).
    - **Basılan düğmeler** (seçici + görünen metni) kendiliğinden listeye girer.
    - **Mesaj seç:** sayfada beklenen mesajın yazdığı yere tıklanır (bu tıklama siteye gitmez).
    - **Bitir** (özet + "Bitir ve Nöbetçi’ye gönder"), **Sıfırla** (iki adımlı onay; toplananlar silinir), **İptal**.

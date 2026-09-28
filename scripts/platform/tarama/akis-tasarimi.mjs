@@ -362,7 +362,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       const d = env.dugmeler[b.dugme];
       if (!d) { hata(i, 'Aksiyonun düğmesini seçin.'); return; }
       if (b.zamanAsimiSn !== undefined && !(Number.isInteger(b.zamanAsimiSn) && b.zamanAsimiSn >= 1 && b.zamanAsimiSn <= 600)) { hata(i, 'Sonucu bekleme süresi 1–600 saniye arasında tam sayı olmalı.'); return; }
-      const og = { secici: d.secici, metin: d.metin };
+      // Düğme bir çerçevedeyse (iframe) çerçeve zinciri de taşınır: koşucu o çerçevede tıklar.
+      const og = { secici: d.secici, metin: d.metin, ...(Array.isArray(d.cerceve) && d.cerceve.length ? { cerceve: d.cerceve } : {}) };
       if (!cur || kapali) yeniAdim(metin(d.metin, AD_EN_COK) || `${adimlar.length + 1}. adım`, []);
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
       if (b.ekranGoruntusu) c.ekranGoruntusu = true;
@@ -471,7 +472,10 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         try { new RegExp(b.metin); } catch { hata(i, 'Kalıp geçerli bir düzenli ifade değil.'); return; }
       }
       /** @type {import('./paket-olusturucu.d.mts').KayitGostergesi} */
-      const g = { secici: m ? m.secici : null, metin: m ? m.metin : b.metin, ...(b.metin ? { aranan: b.metin } : {}), ...(b.desen ? { desen: true } : {}) };
+      const g = {
+        secici: m ? m.secici : null, metin: m ? m.metin : b.metin, ...(b.metin ? { aranan: b.metin } : {}), ...(b.desen ? { desen: true } : {}),
+        ...(m && Array.isArray(m.cerceve) && m.cerceve.length ? { cerceve: m.cerceve } : {})
+      };
       const sonMu = etkin.slice(i).every((x) => x.tur === 'mesaj' || x.tur === 'sql' || x.tur === 'dosya');
       if (!cur) { hata(i, 'Beklenen mesajdan önce bir alan grubu ya da aksiyon olmalı.'); return; }
       if (bekleyen) { hata(i, 'Beklenen mesaj isteğe bağlı bir aksiyondan hemen sonra gelemez (her senaryoda görünmez).'); return; }

@@ -90,10 +90,18 @@ export type Eslesme = {
   not?: string;
 };
 
+/**
+ * Çerçeve (iframe) seçicileri, dıştan içe (1–2 öğe; ör. ["iframe#pencere"]). Verilirse öğenin seçicisi o çerçevenin belgesine
+ * göredir ve model koşucusu page.frameLocator(...) ile o çerçevede çalışır. Yoksa öğe ana sayfadadır.
+ */
+export type Cerceve = string[];
+
 export type Konum = {
   secici: string;
   yardimci?: Record<string, string>;
   kirilganlik: Kirilganlik;
+  /** Alan bir çerçevenin (iframe) içindeyse çerçeve seçicileri (yardimci seçicileri de aynı çerçevededir). */
+  cerceve?: Cerceve;
   not?: string;
 };
 
@@ -186,10 +194,13 @@ export type AdimAksiyonu = {
   durum?: 'gorunur' | 'gizli';
   aciklama?: string;
   zamanAsimiSn?: number;
+  /** Öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri. */
+  cerceve?: Cerceve;
 };
 
 /** Adımın başarı göstergesi (sürüm 2): metin (secici verilirse o öğede), eleman (görünür), url (desen). */
-export type TekBasariGostergesi = { tur: (typeof BASARI_GOSTERGESI_TURLERI)[number]; deger: string; secici?: string };
+/** cerceve: gösterge öğesi (eleman / secici) bir çerçevenin (iframe) içindeyse çerçeve seçicileri. */
+export type TekBasariGostergesi = { tur: (typeof BASARI_GOSTERGESI_TURLERI)[number]; deger: string; secici?: string; cerceve?: Cerceve };
 /** "veya": seçeneklerden herhangi biri görünürse adım başarılı (2–5 seçenek). */
 export type BasariGostergesi = TekBasariGostergesi | { tur: 'veya'; secenekler: TekBasariGostergesi[] };
 
@@ -198,7 +209,9 @@ export type AdimKosuTanimi = {
   aksiyonlar?: AdimAksiyonu[];
   basariGostergesi?: BasariGostergesi;
   /** İş kuralı uyarısının göründüğü öğe. */
-  hataGostergesi?: { secici: string };
+  hataGostergesi?: { secici: string; cerceve?: Cerceve };
+  /** Adımda kabul edilen iş kuralı uyarıları (secici verilirse o öğede; cerceve: öğe bir çerçevedeyse). */
+  uyarilar?: Array<{ metin: string; secici?: string; cerceve?: Cerceve }>;
   zamanAsimiSn?: number;
   /** "Ekran görüntüsü al" işareti: adım görüntüleri "Seçili adımlarda" iken yalnız bu adımların görüntüsü alınır. */
   ekranGoruntusu?: boolean;

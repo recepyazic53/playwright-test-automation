@@ -6,11 +6,15 @@
 // etkisiz) → sakinleşme → görünür alan envanteri → ekran görüntüsü → isteğe bağlı seçim keşfi (≤ 8 seçenekli her
 // açılır listede her seçenek denenir, beliren/kaybolan alanlar kaydedilir, ilk değer geri yüklenir).
 //
+// Çerçeveler (iframe): aynı kökenli çerçevelerin alanları da okunur (sayfa-envanteri.ts; en çok 2 düzey, alanın "cerceve"si);
+// başka kökenli çerçeveler notlara "okunamadı" diye yazılır. Gizli <select>'e bağlı özel açılır listeler alan olarak okunur.
+//
 // GÜVENLİK: düğme/bağlantıya TIKLANMAZ, form GÖNDERİLMEZ, alanlara YAZILMAZ, Enter'a basılmaz. Tarama aşamasında GET/HEAD
-// dışındaki HER istek ağ katmanında iptal edilir ve kaydedilir (giriş ve bağlam değiştirme tarif güdümlüdür).
+// dışındaki HER istek ağ katmanında iptal edilir ve kaydedilir (giriş ve bağlam değiştirme tarif güdümlüdür). Engel bağlam (context)
+// düzeyindedir: çerçevelerin (iframe) istekleri de aynı kurala tabidir; form gönderim koruması (init betiği) çerçevelerde de çalışır.
 // Yasaklı host'a giden her istek her aşamada iptal edilir. Oturum alt süreçte diske yazılmaz ("Koşunun saklanan oturumunu
 // kullan" seçiliyse sunucu koşunun şifreli oturum dosyasını okur / günceller; bkz. tarama-girisi.ts).
-import type { Browser, BrowserContext, Page } from '@playwright/test';
+import type { Browser, BrowserContext, FrameLocator, Page } from '@playwright/test';
 import { GirisHatasi, baglamiDegistir } from '../../../tests/support/giris-motoru';
 import { captchaAlgila } from '../giris/algilama.mjs';
 import { agHatasiMi } from '../giris/tarif.mjs';
@@ -20,6 +24,23 @@ import { type EngellenenIstek, type HamAlan, type HamSecenek, type Kesif, type K
 import { taramaTarayiciAyarlari, type TaramaGirdisi, type TaramaGirisYontemi, type TaramaHataKodu, type TaramaOlayi } from './protokol.mjs';
 import { girisYontemiMesaji, oturumBaglamSecenegi, taramaGirisiYap, type OturumGonderici } from './tarama-girisi';
 import { formGonderimKorumasi, sayfadakiAlanlar } from './sayfa-envanteri';
+
+/** Sayfa envanteri okuyucusunu her belgeye (çerçeveler dahil) veren init betiği: çerçevelerin içi kendi penceresinde okunur. */
+export const ENVANTER_BETIGI = `window.__nobetciSayfadakiAlanlar = ${sayfadakiAlanlar.toString()};`;
+
+/** Ekranın envanteri (aynı kökenli çerçeveler dahil). Init betiği yoksa (ör. betik yüklenmeden) doğrudan ana belgede okunur. */
+export async function envanterOku(sayfa: Page): Promise<SayfaEnvanteri> {
+  const hazir = await sayfa.evaluate(() => typeof (window as unknown as { __nobetciSayfadakiAlanlar?: unknown }).__nobetciSayfadakiAlanlar === 'function');
+  if (hazir) return sayfa.evaluate(() => (window as unknown as { __nobetciSayfadakiAlanlar: (d: number) => SayfaEnvanteri }).__nobetciSayfadakiAlanlar(0));
+  return sayfa.evaluate(sayfadakiAlanlar, 0);
+}
+
+/** Alanın kapsamı: çerçevesi varsa o çerçeve (iç içe), yoksa sayfa. */
+export function alanKapsami(sayfa: Page, cerceve: string[] | null | undefined): Page | FrameLocator {
+  let k: Page | FrameLocator = sayfa;
+  for (const c of cerceve ?? []) k = k.frameLocator(c);
+  return k;
+}
 
 export class TaramaHatasi extends Error {
   readonly kod: TaramaHataKodu;
@@ -165,6 +186,7 @@ export async function taramayiYurut(browser: Browser, g: TaramaGirdisi, olay: Ol
       const sayfa = await baglam.newPage();
       const notlar: string[] = [];
       await sayfa.addInitScript(formGonderimKorumasi);
+      await sayfa.addInitScript({ content: ENVANTER_BETIGI });
       sayfa.on('dialog', (d) => { notlar.push(`Sayfa bir iletişim kutusu açtı (${d.type()}); kapatıldı.`); void d.dismiss().catch(() => undefined); });
       sayfa.on('popup', (y) => { notlar.push('Sayfa yeni bir pencere açmaya çalıştı; kapatıldı.'); void y.close().catch(() => undefined); });
       try {
@@ -217,9 +239,13 @@ async function profilTara(
   }
   const acilan = yolu(sayfa.url());
   if (acilan !== g.hedefYol) notlar.push(`Hedef ${g.hedefYol} yerine ${acilan} açıldı (yönlendirme).`);
-  const envanter = await sayfa.evaluate(sayfadakiAlanlar);
+  const envanter = await envanterOku(sayfa);
   if (envanter.ozelBilesenSayisi) notlar.push(`${envanter.ozelBilesenSayisi} özel bileşen (role=combobox/listbox/textbox, contenteditable) alan olarak çıkarılamadı.`);
-  if (envanter.cerceveSayisi) notlar.push(`Sayfada ${envanter.cerceveSayisi} çerçeve (iframe) var; içlerindeki alanlar taranmadı.`);
+  const cercevedeki = envanter.alanlar.filter((a) => a.cerceve?.length).length;
+  if (cercevedeki) notlar.push(`${cercevedeki} alan çerçeve (iframe) içinde okundu; modelde alanın konum.cerceve'si olur.`);
+  if (envanter.okunamayanCerceveSayisi) {
+    notlar.push(`Sayfada ${envanter.okunamayanCerceveSayisi} çerçevenin (iframe) içi okunamadı (başka kökenden — cross-origin — ya da 2 düzeyden derin); içlerindeki alanlar taranmadı.`);
+  }
   let ekranGoruntusu: string | null = null;
   try {
     ekranGoruntusu = (await sayfa.screenshot({ type: 'png', timeout: 15_000 })).toString('base64');
@@ -247,10 +273,12 @@ async function secimleriKesfet(
   const kesifler: Kesif[] = [];
   const adaylar = temel.alanlar.filter((a) => a.tur === 'select' && !a.coklu && !a.devreDisi && !a.saltOkunur
     && (a.secenekler?.length ?? 0) >= 2 && (a.secenekler?.length ?? 0) <= sinir);
-  const anahtarlar = async (): Promise<SayfaEnvanteri> => sayfa.evaluate(sayfadakiAlanlar);
+  const anahtarlar = async (): Promise<SayfaEnvanteri> => envanterOku(sayfa);
   const adresAyni = (a: string, b: string): boolean => kokVeYol(a) === kokVeYol(b);
   for (const s of adaylar) {
-    const l = sayfa.locator(s.secici).first();
+    const l = alanKapsami(sayfa, s.cerceve).locator(s.secici).first();
+    // Özel açılır listenin gerçek <select>'i gizlidir: seçim görünürlük beklenmeden yapılır (olaylar yine gönderilir).
+    const zorla = s.ozelBilesen === true;
     let ilk: string;
     try {
       ilk = await l.inputValue({ timeout: 3_000 });
@@ -268,7 +296,7 @@ async function secimleriKesfet(
       if (o.deger === ilk) continue;
       const onceki = sayfa.url();
       try {
-        await l.selectOption({ value: o.deger }, { timeout: 3_000 });
+        await l.selectOption({ value: o.deger }, { timeout: 3_000, force: zorla });
       } catch (hata) {
         degerler.push({ deger: o.deger, metin: o.metin, gorunenler: [], kaybolanlar: [], gezinme: null, hata: `seçilemedi: ${adreslerGizli(ilkSatir(hata)).slice(0, 120)}` });
         continue;
@@ -304,7 +332,7 @@ async function secimleriKesfet(
     let geriAlindi = false;
     try {
       if ((await l.inputValue({ timeout: 2_000 })) !== ilk) {
-        await l.selectOption({ value: ilk }, { timeout: 3_000 });
+        await l.selectOption({ value: ilk }, { timeout: 3_000, force: zorla });
         await sakinles(sayfa, SECIM_BEKLEME_MS);
       }
       geriAlindi = (await l.inputValue({ timeout: 2_000 })) === ilk;

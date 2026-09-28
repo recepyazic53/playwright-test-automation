@@ -34,8 +34,10 @@ export const YAPILANDIRMA_TURLERI = Object.freeze([
 ]);
 export const DOLDURUCULAR = Object.freeze([
   'secimGerekirse', 'secim', 'okluSecim', 'metinDoldur', 'tuslayarakYaz', 'tarihJs', 'telefonTuslama',
-  'onayKutusuZorla', 'radyoZorla', 'dosyaYukle', 'tcSorgulu', 'musteriSorgula', 'degerJs'
+  'onayKutusuZorla', 'radyoZorla', 'dosyaYukle', 'tcSorgulu', 'musteriSorgula', 'degerJs', 'ozelSecim'
 ]);
+/** Çerçeve (iframe) zincirinin en çok derinliği (konum / aksiyon / gösterge "cerceve"si). */
+export const CERCEVE_EN_DERIN = 2;
 export const FORM_KONTROLLERI = Object.freeze(['select', 'text', 'number', 'checkbox', 'radio', 'file', 'password', 'textarea']);
 export const SECENEK_DURUMLARI = Object.freeze(['tam', 'kismi', 'bilinmiyor', 'dinamik']);
 export const KIRILGANLIK_DUZEYLERI = Object.freeze(['dusuk', 'orta', 'yuksek']);
@@ -118,7 +120,18 @@ export const DOSYA_BEKLENTI_TURLERI = Object.freeze(['adDeseni', 'enAzBoyut', 'i
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
 const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'not']);
-const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklama', 'zamanAsimiSn', 'sureSn']);
+const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve']);
+
+/**
+ * "cerceve": öğe bir çerçevenin (iframe) içindeyse çerçeve seçicileri, dıştan içe — 1–CERCEVE_EN_DERIN boş olmayan metinden
+ * oluşan dizi (koşucu page.frameLocator ile o çerçevede çalışır).
+ */
+function cerceveDogrula(h, yer, c) {
+  if (c === undefined) return;
+  if (!Array.isArray(c) || c.length < 1 || c.length > CERCEVE_EN_DERIN || !c.every(metinMi)) {
+    h.ekle(yer, `"cerceve" 1–${CERCEVE_EN_DERIN} çerçeve seçicisinden (dıştan içe, ör. ["iframe#pencere"]) oluşan bir dizi olmalı`);
+  }
+}
 const BOLUM_ANAHTARLARI = new Set(['id', 'baslik', 'pomMetodu', 'gorunurluk', 'alanlar']);
 const EKRAN_ANAHTARLARI = new Set([
   'semaSurumu', 'tur', 'id', 'ad', 'aciklama', 'ekranUrl', 'specDosyasi', 'pageObject', 'veriKaynaklari',
@@ -307,8 +320,10 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
   if (alan.konum !== undefined) {
     if (!nesneMi(alan.konum) || !metinMi(alan.konum.secici) || !listedeMi(KIRILGANLIK_DUZEYLERI, alan.konum.kirilganlik)) {
       h.ekle(aYer, '"konum" { secici, kirilganlik: dusuk|orta|yuksek } içermeli');
-    }
+    } else cerceveDogrula(h, `${aYer}.konum`, alan.konum.cerceve);
   }
+  // ozelSecim: gizli <select>'e bağlı görünür aramalı liste — yalnız seçim alanında (konum.secici gerçek <select>'in seçicisi).
+  if (alan.doldurucu === 'ozelSecim' && alan.tip !== 'secim') h.ekle(aYer, 'ozelSecim doldurucusu yalnızca "secim" tipindeki alanda kullanılır');
   // Sürüm 2: okluSecim doldurucusu (ok düğmeleriyle değer değiştiren özel bileşen) değeri gösteren öğeyi
   // (konum.secici) ve ileri/geri düğmelerini (konum.yardimci.ileri|arttir ve geri|azalt) bildirmeli.
   if (b.semaSurumu >= 2 && alan.doldurucu === 'okluSecim' && alan.yapilandirma === 'senaryo') {
@@ -415,6 +430,8 @@ function kosuTanimiDogrula(h, yer, kosu) {
       if (a.metin !== undefined && !metinMi(a.metin)) h.ekle(aYer, '"metin" boş olmayan metin olmalı');
       if (a.durum !== undefined && (a.tur !== 'bekle' || !['gorunur', 'gizli', 'dolu'].includes(a.durum))) h.ekle(aYer, '"durum" yalnızca "bekle" aksiyonunda gorunur | gizli | dolu olabilir');
       if (a.aciklama !== undefined && typeof a.aciklama !== 'string') h.ekle(aYer, '"aciklama" metin olmalı');
+      if (a.cerceve !== undefined && a.secici === undefined) h.ekle(aYer, '"cerceve" yalnızca seçicili aksiyonda olur');
+      cerceveDogrula(h, aYer, a.cerceve);
       sure(a.zamanAsimiSn, aYer);
     });
   }
@@ -425,14 +442,17 @@ function kosuTanimiDogrula(h, yer, kosu) {
     if (!Array.isArray(kosu.uyarilar) || kosu.uyarilar.length > UYARI_EN_COK) h.ekle(`${yer}.uyarilar`, `"uyarilar" en çok ${UYARI_EN_COK} öğeli bir dizi olmalı`);
     else kosu.uyarilar.forEach((u, i) => {
       const uYer = `${yer}.uyarilar[${i}]`;
-      if (!nesneMi(u) || !metinMi(u.metin)) { h.ekle(uYer, '{ metin, secici? } olmalı'); return; }
-      h.bilinmeyenAnahtarlar(uYer, u, new Set(['metin', 'secici']));
+      if (!nesneMi(u) || !metinMi(u.metin)) { h.ekle(uYer, '{ metin, secici?, cerceve? } olmalı'); return; }
+      h.bilinmeyenAnahtarlar(uYer, u, new Set(['metin', 'secici', 'cerceve']));
       if (u.secici !== undefined && !metinMi(u.secici)) h.ekle(uYer, '"secici" boş olmayan metin olmalı');
+      if (u.cerceve !== undefined && u.secici === undefined) h.ekle(uYer, '"cerceve" yalnızca seçicili uyarıda olur');
+      cerceveDogrula(h, uYer, u.cerceve);
     });
   }
   if (kosu.hataGostergesi !== undefined) {
     const g = kosu.hataGostergesi;
-    if (!nesneMi(g) || !metinMi(g.secici) || Object.keys(g).some((k) => k !== 'secici')) h.ekle(`${yer}.hataGostergesi`, '{ secici } olmalı');
+    if (!nesneMi(g) || !metinMi(g.secici) || Object.keys(g).some((k) => k !== 'secici' && k !== 'cerceve')) h.ekle(`${yer}.hataGostergesi`, '{ secici } olmalı (isteğe bağlı: cerceve)');
+    else cerceveDogrula(h, `${yer}.hataGostergesi`, g.cerceve);
   }
   if (kosu.not !== undefined && typeof kosu.not !== 'string') h.ekle(yer, '"not" metin olmalı');
 }
@@ -453,8 +473,11 @@ function basariGostergesiDogrula(h, gYer, g, veyaOlabilir) {
     h.ekle(gYer, `{ tur: ${BASARI_GOSTERGESI_TURLERI.join(' | ')}, deger, secici? }${veyaOlabilir ? ' ya da { tur: veya, secenekler }' : ''} olmalı`);
     return;
   }
-  h.bilinmeyenAnahtarlar(gYer, g, new Set(['tur', 'deger', 'secici']));
+  h.bilinmeyenAnahtarlar(gYer, g, new Set(['tur', 'deger', 'secici', 'cerceve']));
   if (g.secici !== undefined && (!metinMi(g.secici) || (g.tur !== 'metin' && g.tur !== 'desen'))) h.ekle(gYer, '"secici" yalnızca "metin" ve "desen" türünde (metnin arandığı öğe) kullanılır');
+  // cerceve: öğe (eleman göstergesinde deger, metin / desen göstergesinde secici) bir çerçevede.
+  if (g.cerceve !== undefined && g.tur !== 'eleman' && g.secici === undefined) h.ekle(gYer, '"cerceve" yalnızca "eleman" göstergesinde ya da seçicili metin / desen göstergesinde olur');
+  cerceveDogrula(h, gYer, g.cerceve);
   if (g.tur === 'url' || g.tur === 'desen') {
     try { new RegExp(g.deger); } catch { h.ekle(gYer, '"deger" geçerli bir düzenli ifade değil'); }
   }

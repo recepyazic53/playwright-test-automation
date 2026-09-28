@@ -14,8 +14,10 @@ export declare const ALAN_TIPLERI: readonly [
 export declare const YAPILANDIRMA_TURLERI: readonly ['senaryo', 'urun', 'turetilmis', 'sabit', 'cikti', 'aksiyon', 'dokunulmuyor', 'harici'];
 export declare const DOLDURUCULAR: readonly [
   'secimGerekirse', 'secim', 'okluSecim', 'metinDoldur', 'tuslayarakYaz', 'tarihJs', 'telefonTuslama',
-  'onayKutusuZorla', 'radyoZorla', 'dosyaYukle', 'tcSorgulu', 'musteriSorgula'
+  'onayKutusuZorla', 'radyoZorla', 'dosyaYukle', 'tcSorgulu', 'musteriSorgula', 'degerJs', 'ozelSecim'
 ];
+/** Çerçeve (iframe) zincirinin en çok derinliği (konum / aksiyon / gösterge "cerceve"si). */
+export declare const CERCEVE_EN_DERIN: number;
 export declare const FORM_KONTROLLERI: readonly ['select', 'text', 'number', 'checkbox', 'radio', 'file', 'password', 'textarea'];
 export declare const SECENEK_DURUMLARI: readonly ['tam', 'kismi', 'bilinmiyor', 'dinamik'];
 export declare const KIRILGANLIK_DUZEYLERI: readonly ['dusuk', 'orta', 'yuksek'];

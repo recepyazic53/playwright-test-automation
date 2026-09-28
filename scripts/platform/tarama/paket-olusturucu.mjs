@@ -32,6 +32,12 @@ const TARANABILIR_TIPLER = new Set(['secim', 'metin', 'sayi', 'tarih', 'telefon'
 const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
 /** @template T @param {T} d @returns {T} */
 const kopya = (d) => JSON.parse(JSON.stringify(d));
+/** Çerçeve (iframe) seçicileri varsa { cerceve } (modelde konum.cerceve / aksiyon / gösterge). @param {unknown} c */
+const cerceveEki = (c) => (Array.isArray(c) && c.length ? { cerceve: c.map(String) } : {});
+/** İki çerçeve zinciri aynı mı (yoksa ana sayfa). @param {unknown} a @param {unknown} b */
+const cerceveAyni = (a, b) => JSON.stringify(Array.isArray(a) ? a : []) === JSON.stringify(Array.isArray(b) ? b : []);
+/** Gizli <select>'e bağlı özel açılır liste için önerilen doldurucu. */
+const OZEL_SECIM_DOLDURUCUSU = 'ozelSecim';
 
 const TR_ASCII = /** @type {Record<string, string>} */ ({ ç: 'c', ğ: 'g', ı: 'i', ö: 'o', ş: 's', ü: 'u', Ç: 'C', Ğ: 'G', İ: 'I', Ö: 'O', Ş: 'S', Ü: 'U' });
 /** @param {string} m */
@@ -278,7 +284,13 @@ function alanDonusturucu(sayac) {
       alan.yapilandirma = 'senaryo';
       alan.eslesme = { senaryo: id };
     }
-    alan.konum = { secici: a.secici, kirilganlik: a.kirilganlik };
+    alan.konum = { secici: a.secici, kirilganlik: a.kirilganlik, ...cerceveEki(a.cerceve) };
+    // Gizli <select> + görünen aramalı kutu: koşucu kutuya tıklayıp aramayla seçer, olmazsa gizli listeye yazar (ozelSecim).
+    if (a.ozelBilesen && tip === 'secim') {
+      alan.doldurucu = OZEL_SECIM_DOLDURUCUSU;
+      alanNotlari.push('Özel açılır liste (gerçek liste gizli, görünen aramalı kutu): doldurucu "ozelSecim".');
+    }
+    if (a.cerceve?.length) alanNotlari.push(`Çerçeve (iframe) içinde: ${a.cerceve.join(' › ')}.`);
     if (tip === 'tarih') alan.bicim = 'YYYY-AA-GG';
     if (tip === 'dosya') {
       const kabul = kabulUzantisi(a.kabul);
@@ -416,7 +428,7 @@ export function taramaPaketiOlustur(meta, envanter) {
         for (const alan of Array.isArray(bolum.alanlar) ? bolum.alanlar : []) {
           if (!nesneMi(alan) || !TARANABILIR_TIPLER.has(alan.tip) || !nesneMi(alan.konum) || typeof alan.konum.secici !== 'string') continue;
           const hedef = seciciNormal(alan.konum.secici);
-          const bulunan = [...hamlar.values()].find((h) => !eslesen.has(h.anahtar) && [h.secici, ...h.adaySeciciler].some((s) => seciciNormal(s) === hedef));
+          const bulunan = [...hamlar.values()].find((h) => !eslesen.has(h.anahtar) && cerceveAyni(h.cerceve, alan.konum.cerceve) && [h.secici, ...h.adaySeciciler].some((s) => seciciNormal(s) === hedef));
           if (bulunan) eslesen.set(bulunan.anahtar, { alan, bolum });
           else eslesmeyenler.push(String((nesneMi(alan.etiket) && (alan.etiket.ekran || alan.etiket.form)) || alan.id));
         }
@@ -749,7 +761,8 @@ export function kayitPaketiOlustur(meta, envanter) {
       if (e) { eslesenMevcut.add(e); eslesenSayisi++; kullanilanIdler.add(String(e.id)); return { ...e }; }
     }
     const adaylar = new Set([h.secici, ...h.adaySeciciler].map(seciciNormal));
-    const e = mevcutAlanlar.find((a) => !eslesenMevcut.has(a) && (TARANABILIR_TIPLER.has(a.tip) || a.tip === 'okluSecim') && nesneMi(a.konum) && typeof a.konum.secici === 'string' && adaylar.has(seciciNormal(a.konum.secici)));
+    const e = mevcutAlanlar.find((a) => !eslesenMevcut.has(a) && (TARANABILIR_TIPLER.has(a.tip) || a.tip === 'okluSecim') && nesneMi(a.konum) && typeof a.konum.secici === 'string'
+      && cerceveAyni(a.konum.cerceve, h.cerceve) && adaylar.has(seciciNormal(a.konum.secici)));
     if (e) {
       eslesenMevcut.add(e);
       eslesenSayisi++;
@@ -762,6 +775,8 @@ export function kayitPaketiOlustur(meta, envanter) {
       const sonuc = { ...e, ...(etiketGuncelle ? { etiket: { ...(nesneMi(e.etiket) ? e.etiket : {}), ekran: yeniEtiket } } : {}) };
       // Senaryoda zorunluluk mevcut tanımdan (modelden gelen akışta sayfa "required" bilgisi yok); senaryo alanında yoksa sayfanınki.
       if (typeof e.zorunlu !== 'boolean' && e.yapilandirma === 'senaryo') sonuc.zorunlu = t.zorunlu;
+      // Özel açılır liste: mevcut tanımda doldurucu yoksa önerilen doldurucu eklenir (kullanıcının seçtiği doldurucu korunur).
+      if (h.ozelBilesen && e.tip === 'secim' && e.doldurucu === undefined) sonuc.doldurucu = OZEL_SECIM_DOLDURUCUSU;
       return sonuc;
     }
     yeniAlanSayisi++;
@@ -897,12 +912,16 @@ export function kayitPaketiOlustur(meta, envanter) {
    */
   const ilkSecici = (x) => {
     for (const h of x.alanlar) {
-      if (!(h.tur === 'kimlik' && h.anahtar.startsWith('kimlik:'))) return h.secici;
+      // Özel açılır listenin gerçek <select>'i gizlidir (görünür beklenemez): sonraki alan aranır.
+      if (h.ozelBilesen) continue;
+      if (!(h.tur === 'kimlik' && h.anahtar.startsWith('kimlik:'))) return { secici: h.secici, ...cerceveEki(h.cerceve) };
       const e = mevcutAlanlar.find((a) => a.tip === 'kimlikProfili' && `kimlik:${a.id}` === h.anahtar);
       const alt = e && Array.isArray(e.altAlanlar) ? e.altAlanlar.find((/** @type {any} */ y) => nesneMi(y) && nesneMi(y.konum) && typeof y.konum.secici === 'string' && y.konum.secici) : undefined;
-      if (alt) return String(alt.konum.secici);
+      if (alt) return { secici: String(alt.konum.secici), ...cerceveEki(alt.konum.cerceve) };
     }
-    return x.tikla?.secici ?? x.dosyaKontrolu?.tetikleyici?.secici ?? null;
+    if (x.tikla) return { secici: x.tikla.secici, ...cerceveEki(x.tikla.cerceve) };
+    const t = x.dosyaKontrolu?.tetikleyici?.secici;
+    return t ? { secici: t } : null;
   };
   /** @type {Array<Record<string, any>>} */
   const adimlar = altAdimlar.map((p, i) => {
@@ -932,12 +951,12 @@ export function kayitPaketiOlustur(meta, envanter) {
     const islemler = [];
     if (p.tikla) {
       const m = temizMetin(p.tikla.metin, sayac, 120);
-      islemler.push({ id: islemKimligi('buton', p.tikla.secici, kimlikUret(m ?? '', 'dugme')), tip: 'buton', yapilandirma: 'aksiyon', etiket: { ekran: m }, konum: { secici: p.tikla.secici, kirilganlik: 'orta' } });
+      islemler.push({ id: islemKimligi('buton', p.tikla.secici, kimlikUret(m ?? '', 'dugme')), tip: 'buton', yapilandirma: 'aksiyon', etiket: { ekran: m }, konum: { secici: p.tikla.secici, kirilganlik: 'orta', ...cerceveEki(p.tikla.cerceve) } });
     }
     if (sonAdimMi && g && g.secici) {
       const eskiCikti = mevcutAlanlar.find((a) => a.tip === 'cikti' && nesneMi(a.konum) && a.konum.secici === g.secici);
       const ciktiEtiketi = eskiCikti && nesneMi(eskiCikti.etiket) ? eskiCikti.etiket : { ekran: g.desen ? 'Sonuç' : gostergeMetni };
-      islemler.push({ id: islemKimligi('cikti', g.secici, 'sonucMesaji'), tip: 'cikti', yapilandirma: 'cikti', etiket: ciktiEtiketi, konum: { secici: g.secici, kirilganlik: 'orta' } });
+      islemler.push({ id: islemKimligi('cikti', g.secici, 'sonucMesaji'), tip: 'cikti', yapilandirma: 'cikti', etiket: ciktiEtiketi, konum: { secici: g.secici, kirilganlik: 'orta', ...cerceveEki(g.cerceve) } });
     }
     if (islemler.length) bolumler.set('\u0000islemler', { baslik: 'İşlemler', alanlar: islemler });
     /** @type {Record<string, unknown>} */
@@ -948,7 +967,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (p.once) aksiyonlar.push({ tur: 'bekle', sureSn: p.once });
     if (p.tikla) {
       const aciklama = temizMetin(p.tikla.metin, sayac, 120);
-      aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}) });
+      aksiyonlar.push({ tur: 'tikla', secici: p.tikla.secici, ...(aciklama ? { aciklama } : {}), ...cerceveEki(p.tikla.cerceve) });
     }
     if (p.sonra) aksiyonlar.push({ tur: 'bekle', sureSn: p.sonra });
     if (aksiyonlar.length) kosu.aksiyonlar = aksiyonlar;
@@ -957,24 +976,24 @@ export function kayitPaketiOlustur(meta, envanter) {
       // Dosya adımının düğmesi sonraki ekran öğesidir (indirme aynı sayfada başlar); SQL adımı sayfaya dokunmaz, atlanır.
       const sonraki = altAdimlar.slice(i + 1).find((x) => !x.sqlKontrolu && (x.kosul === null || x.kosul === p.kosul));
       const hedef = sonraki ? ilkSecici(sonraki) : null;
-      if (hedef) kosu.basariGostergesi = { tur: 'eleman', deger: hedef };
+      if (hedef) kosu.basariGostergesi = { tur: 'eleman', deger: hedef.secici, ...cerceveEki(hedef.cerceve) };
       // Akış tasarımında düğmeden sonra beklenen mesaj verildiyse: o metin görünür.
       const ara = p.gosterge ? basariTanimi(p.gosterge, (x) => {
-        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici } : {}) } : null;
+        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
         const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
-        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici } : {}) } : null;
+        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
       }) : null;
       if (ara) kosu.basariGostergesi = ara;
     }
     const uyarilar = (p.uyarilar ?? []).map((x) => {
       const m = temizMetin(x.aranan ?? x.metin, sayac, 200);
-      return m ? { metin: m, ...(x.secici ? { secici: x.secici } : {}) } : null;
+      return m ? { metin: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
     }).filter((x) => x !== null);
     if (uyarilar.length) {
       kosu.uyarilar = uyarilar;
       // Uyarının göründüğü öğe (ilk seçicili uyarı): beklenen / beklenmeyen uyarı metni buradan da okunur.
       const secicili = uyarilar.find((u) => u.secici);
-      if (secicili) kosu.hataGostergesi = { secici: secicili.secici };
+      if (secicili) kosu.hataGostergesi = { secici: secicili.secici, ...cerceveEki(/** @type {any} */ (secicili).cerceve) };
     }
     if (p.zamanAsimiSn) kosu.zamanAsimiSn = p.zamanAsimiSn;
     if (p.ekranGoruntusu) kosu.ekranGoruntusu = true;
@@ -1001,9 +1020,9 @@ export function kayitPaketiOlustur(meta, envanter) {
     }
     if (sonAdimMi && g) {
       const son = basariTanimi(g, (x) => {
-        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici } : {}) } : null;
+        if (x.desen) return x.aranan ? { tur: 'desen', deger: x.aranan, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : null;
         const m = sonMetni(x);
-        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici } : {}) } : x.secici ? { tur: 'eleman', deger: x.secici } : null;
+        return m ? { tur: 'metin', deger: m, ...(x.secici ? { secici: x.secici, ...cerceveEki(x.cerceve) } : {}) } : x.secici ? { tur: 'eleman', deger: x.secici, ...cerceveEki(x.cerceve) } : null;
       });
       if (son) kosu.basariGostergesi = son;
     }
