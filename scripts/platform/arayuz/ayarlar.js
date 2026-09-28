@@ -16,10 +16,11 @@ import { entegrasyonlarBolumu } from './entegrasyonlar.js';
 import { kasayiKilitleSecimli, kilitBildirimi, zamanlanmisKosularKarti } from './zamanlanmis-kosular.js';
 import { izinlerBolumu } from './izinler.js';
 import { onayIste, riskBelirtinNotu } from './kosu-paneli.js';
+import { projeIslemleri } from './proje-islemleri.js';
 import { RISKLI_ORTAM_TANIMI, adCanliyiCagristiriyorMu, riskBelirtilmemisMi, riskliOrtamMi, riskliSecimi } from './ortam-riski.mjs';
 
 export const AYAR_BOLUMLERI = [
-  { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
+  { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projeler (yeniden adlandır, varsayılan yap, sil), projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
   { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi, ekran taraması / akış kaydı süreleri ve zamanlanmış koşular. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
@@ -235,8 +236,21 @@ async function projeVeOrtamlar(govde, baglam, yenile) {
         ? h('button', { type: 'button', class: 'tehlike kucuk-dugme', 'aria-label': `${o.ad}: sil`, disabled: true, title: 'Varsayılan ortam silinemez; önce başka bir ortamı varsayılan yapın.' }, ikon('cop'), h('span', {}, 'Sil'))
         : silDugmesi(o.ad, async () => { await api('/platform/ortam/sil', { govde: { id: o.id } }); bildir('Ortam silindi.'); yenile(); })], 'ag'));
 
+  // Projeler: her satırda Yeniden adlandır · Varsayılan yap · Sil (üst çubuktaki ⋯ ile aynı işlemler ve diyaloglar:
+  // proje-islemleri.js; Sil = kuru çalıştırma + adı birebir yazarak onay + otomatik yedek). Düğmeler Ortamlar satırlarıyla aynı boy/biçim.
+  const projeSatirlari = baglam.durum.projeler.map((p) => kayitSatiri(
+    [p.ad, ' ', p.id === baglam.durum.varsayilanProjeId ? h('span', { class: 'rozet vurgu' }, 'Varsayılan') : null,
+      p.id === proje.id ? [' ', h('span', { class: 'rozet' }, 'Açık')] : null],
+    p.aciklama ? h('span', {}, p.aciklama) : null,
+    projeIslemleri({ proje: p, durum: baglam.durum, sonra: () => { baglam.yonlendir(); }, silinceAdres: '#/ayarlar/proje' }).map((o) => h('button', {
+      type: 'button', class: o.tehlikeli ? 'tehlike kucuk-dugme' : 'kucuk-dugme', 'aria-label': `${p.ad}: ${o.kisaMetin.toLocaleLowerCase('tr')}`,
+      disabled: Boolean(o.devreDisi), title: o.title || null, 'data-islem': o.ad, onclick: o.fn
+    }, ikon(o.ikon), h('span', {}, o.kisaMetin))), 'katman'));
+
   yerlestir(govde,
     projeFormu,
+    bolumBasligi('Projeler', baglam.durum.projeler.length),
+    h('ul', { class: 'kayit-listesi proje-listesi' }, projeSatirlari),
     bolumBasligi('Ortamlar', ortamlar.length, h('button', { type: 'button', class: 'birincil', onclick: () => ortamFormu(null) }, ikon('arti'), 'Ortam ekle')),
     formAlani,
     ortamlar.some((o) => riskBelirtilmemisMi(o)) ? riskBelirtinNotu() : null,

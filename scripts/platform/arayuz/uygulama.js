@@ -659,9 +659,13 @@ function projeSecici() {
     h('b', { id: 'proje-rozeti' }, durum.proje.ad),
     durum.proje.aciklama ? h('span', { class: 'aciklama' }, durum.proje.aciklama) : null,
     ikon('asagi'));
-  const kapat = () => { menu.hidden = true; dugme.setAttribute('aria-expanded', 'false'); };
+  const kapat = () => {
+    menu.hidden = true; dugme.setAttribute('aria-expanded', 'false');
+    for (const k of menu.querySelectorAll('.proje-islem-kap')) k.dispatchEvent(new CustomEvent('proje-islem-kapat'));
+  };
   const alan = durum.sunucu && durum.sunucu.calismaAlani;
-  // Her projenin satırı: seç (radyo) + ⋯ (Yeniden adlandır · Varsayılan yap · Sil). "+ Yeni proje" aynı kasada sihirbazı açar.
+  // Her projenin satırı: seç (radyo) + ⋯ (satırın altına açılan işlem satırı: Yeniden adlandır · Varsayılan yap · Sil; aynı işlemler
+  // Ayarlar > Proje ve ortamlar > Projeler'de de var). "+ Yeni proje" aynı kasada sihirbazı açar.
   const satir = (p) => h('div', { class: 'proje-satiri' },
     h('button', {
       type: 'button', role: 'menuitemradio', class: 'proje-sec', 'aria-checked': p.id === durum.proje.id ? 'true' : 'false',
@@ -681,13 +685,16 @@ function projeSecici() {
     menu.hidden = false; dugme.setAttribute('aria-expanded', 'true');
     menu.querySelector('button')?.focus();
   });
+  // Ok tuşları: listedeki görünür ve etkin tüm düğmeler (proje satırları, ⋯, açık işlem satırının düğmeleri, alttakiler) DOM sırasıyla.
+  // Esc: açık işlem satırını proje-islemleri.js kapatır (olay buraya gelmez); değilse liste kapanır, odak seçici düğmesine döner.
   menu.addEventListener('keydown', (o) => {
-    if (o.target.closest('.satir-menusu-kap .acilir-menu')) return;
-    const ogeler = [...menu.querySelectorAll(':scope > button, :scope > .proje-satiri > button, :scope > .proje-satiri > .satir-menusu-kap > button')];
+    const ogeler = [...menu.querySelectorAll('button:not(:disabled)')].filter((b) => !b.closest('[hidden]'));
     const i = ogeler.indexOf(/** @type {HTMLButtonElement} */ (document.activeElement));
     if (o.key === 'Escape') { kapat(); dugme.focus(); }
     else if (o.key === 'ArrowDown') { o.preventDefault(); ogeler[(i + 1) % ogeler.length].focus(); }
     else if (o.key === 'ArrowUp') { o.preventDefault(); ogeler[(i - 1 + ogeler.length) % ogeler.length].focus(); }
+    else if (o.key === 'Home') { o.preventDefault(); ogeler[0].focus(); }
+    else if (o.key === 'End') { o.preventDefault(); ogeler[ogeler.length - 1].focus(); }
   });
   document.addEventListener('click', (o) => {
     if (acik() && !kap.contains(/** @type {Node} */ (o.target)) && !document.querySelector('dialog[open]')) kapat();

@@ -184,6 +184,153 @@ test('aynı kasada yeni proje: sihirbaz (proje → ortamlar → proje hazır öz
   await expect(page.locator('.kayit-listesi').filter({ hasText: 'ikinci.ornek.invalid' }).first()).toBeVisible();
 });
 
+type Kutu = { x: number; y: number; width: number; height: number };
+const kesisir = (a: Kutu, b: Kutu): boolean =>
+  a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
+async function kutu(l: Locator): Promise<Kutu> {
+  const k = await l.boundingBox();
+  expect(k, 'öğe görünür olmalı').not.toBeNull();
+  return k as Kutu;
+}
+/** Öğenin ortasındaki en üstteki öğe kendisi (ya da içindeki bir öğe) mi: başka bir katman tarafından örtülmüyor mu? */
+const ortulmuyor = (l: Locator): Promise<boolean> => l.evaluate((e) => {
+  const r = e.getBoundingClientRect();
+  const ust = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+  return Boolean(ust && (ust === e || e.contains(ust)));
+});
+/** Sayfa yatayda taşmıyor. */
+const yatayTasmaYok = (): Promise<boolean> => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+
+test('proje seçici: ⋯ işlem satırı hiçbir satırı örtmez, 2 projede kaydırma yok, yan panel düğmesi avatarı örtmez; klavye', async () => {
+  const menu = await projeMenusu();
+  await expect(menu.getByRole('menuitemradio')).toHaveCount(2);
+  // 2 projede gereksiz dikey kaydırma yok.
+  const kaydirma = async (): Promise<{ s: number; c: number }> => menu.evaluate((m) => ({ s: m.scrollHeight, c: m.clientHeight }));
+  let o = await kaydirma();
+  expect(o.s).toBeLessThanOrEqual(o.c);
+  // Yan panelin "‹" düğmesi ilk projenin avatarını örtmez (liste üstte).
+  const ilkAvatar = menu.locator('.proje-satiri .avatar').first();
+  expect(await ortulmuyor(ilkAvatar)).toBe(true);
+  const yanDugme = page.locator('.yan-panel-dugmesi');
+  if (await yanDugme.isVisible()) {
+    const y = await kutu(yanDugme);
+    const ustte = await page.evaluate(({ x, yy }) => Boolean(document.elementFromPoint(x, yy)?.closest('.proje-menusu')), { x: y.x + y.width / 2, yy: y.y + y.height / 2 });
+    if (kesisir(y, await kutu(menu))) expect(ustte, '"‹" düğmesi açık listenin altında kalmalı').toBe(true);
+    expect(kesisir(y, await kutu(ilkAvatar)) && !ustte).toBe(false);
+  }
+
+  // İlk projenin ⋯: işlem satırı satırın altına açılır; ikinci proje, "Proje ekle" ve "Projeyi düzenle" görünür, örtülmez.
+  const ilkDugme = menu.getByRole('button', { name: `Proje işlemleri: ${ornekProjeAdi}` });
+  await ilkDugme.click();
+  await expect(ilkDugme).toHaveAttribute('aria-expanded', 'true');
+  const islem = menu.locator('.proje-islemleri:not([hidden])');
+  await expect(islem).toHaveCount(1);
+  await expect(islem.getByRole('menuitem')).toHaveCount(3);
+  await expect(islem.getByRole('menuitem', { name: 'Sil (kalıcı)…' })).toBeVisible();
+  await expect(islem.getByRole('menuitem', { name: 'Yeniden adlandır' })).toBeFocused();
+  const islemKutusu = await kutu(islem);
+  const digerleri = [
+    menu.getByRole('menuitemradio', { name: 'İkinci proje' }),
+    menu.getByRole('button', { name: 'Proje işlemleri: İkinci proje' }),
+    menu.getByRole('menuitem', { name: 'Proje ekle' }),
+    menu.getByRole('menuitem', { name: 'Projeyi düzenle' })
+  ];
+  for (const d of digerleri) {
+    await expect(d).toBeVisible();
+    expect(kesisir(islemKutusu, await kutu(d))).toBe(false);
+    expect(await ortulmuyor(d)).toBe(true);
+  }
+  for (const b of await islem.getByRole('menuitem').all()) expect(await ortulmuyor(b)).toBe(true);
+  o = await kaydirma();
+  expect(o.s).toBeLessThanOrEqual(o.c);
+  await goruntu('06a-proje-islem-satiri', undefined, { x: 0, y: 0, width: 760, height: 360 });
+
+  // Klavye: ok tuşları açık işlem satırında gezer; Esc işlem satırını kapatır ve odak ⋯'e döner; ikinci Esc listeyi kapatır.
+  await page.keyboard.press('ArrowDown');
+  await expect(islem.locator('button:focus')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(menu.locator('.proje-islemleri:not([hidden])')).toHaveCount(0);
+  await expect(ilkDugme).toBeFocused();
+  await expect(ilkDugme).toHaveAttribute('aria-expanded', 'false');
+  await expect(menu).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('menuitemradio', { name: 'İkinci proje' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(page.locator('.proje-secici')).toBeFocused();
+
+  // 390 px: liste ve işlem satırı ekrana sığar, sayfa yatayda taşmaz.
+  await page.setViewportSize({ width: 390, height: 844 });
+  try {
+    const dar = await projeMenusu();
+    await dar.getByRole('button', { name: 'Proje işlemleri: İkinci proje' }).click();
+    const darIslem = dar.locator('.proje-islemleri:not([hidden])');
+    await expect(darIslem.getByRole('menuitem')).toHaveCount(3);
+    const m = await kutu(dar);
+    expect(m.x).toBeGreaterThanOrEqual(0);
+    expect(m.x + m.width).toBeLessThanOrEqual(390);
+    for (const b of await darIslem.getByRole('menuitem').all()) {
+      const k = await kutu(b);
+      expect(k.x).toBeGreaterThanOrEqual(m.x);
+      expect(k.x + k.width).toBeLessThanOrEqual(m.x + m.width + 0.5);
+    }
+    await expect(dar.getByRole('menuitem', { name: 'Proje ekle' })).toBeVisible();
+    expect(kesisir(await kutu(darIslem), await kutu(dar.getByRole('menuitem', { name: 'Proje ekle' })))).toBe(false);
+    expect(await yatayTasmaYok()).toBe(true);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await expect(dar).toBeHidden();
+  } finally {
+    await page.setViewportSize({ width: 1360, height: 960 });
+  }
+});
+
+test('Ayarlar > Proje ve ortamlar > Projeler: satır düğmeleri (Ortamlar ile aynı biçim), Sil diyaloğu açılır ve iptal edilir; 390 px taşma yok', async () => {
+  await page.evaluate(() => { location.hash = '#/ayarlar/proje'; });
+  await expect(page.locator('.bolum-basligi h3').filter({ hasText: 'Projeler' })).toContainText('2');
+  const liste = page.locator('.proje-listesi');
+  await expect(liste.locator('li')).toHaveCount(2);
+  for (const ad of [ornekProjeAdi, 'İkinci proje']) {
+    const satir = liste.locator('li').filter({ hasText: ad });
+    await expect(satir.getByRole('button', { name: `${ad}: yeniden adlandır` })).toBeVisible();
+    await expect(satir.getByRole('button', { name: `${ad}: varsayılan yap` })).toBeVisible();
+    await expect(satir.getByRole('button', { name: `${ad}: sil` })).toBeVisible();
+  }
+  // Varsayılan projede "Varsayılan yap" devre dışı ve nedeni ipucunda.
+  const varsayilanSatir = liste.locator('li').filter({ has: page.locator('.rozet.vurgu') });
+  if (await varsayilanSatir.count()) {
+    const d = varsayilanSatir.locator('button[data-islem="varsayilan"]');
+    await expect(d).toBeDisabled();
+    await expect(d).toHaveAttribute('title', /zaten varsayılan/);
+  }
+  // Ortamlar satırındaki düğmelerle aynı boy ve biçim.
+  const ortamDuzenle = page.locator('.kayit-listesi:not(.proje-listesi) li').first().getByRole('button', { name: /: düzenle$/ });
+  const projeSil = liste.getByRole('button', { name: 'İkinci proje: sil' });
+  expect(Math.round((await kutu(projeSil)).height)).toBe(Math.round((await kutu(ortamDuzenle)).height));
+  await expect(projeSil).toHaveClass(/kucuk-dugme/);
+  await expect(projeSil).toHaveClass(/tehlike/);
+  await goruntu('06b-ayarlar-projeler', page.locator('.proje-listesi'));
+
+  // Sil: aynı diyalog (kuru çalıştırma sayıları + adı yazarak onay), Vazgeç ile iptal; proje silinmez.
+  await projeSil.click();
+  const d = diyalog();
+  await expect(d.getByRole('heading')).toContainText('Projeyi kalıcı sil: İkinci proje');
+  await expect(d.locator('.onay-ozeti dt')).toContainText(['Ekran', 'Senaryo', 'Koşu', 'Sonuç']);
+  await expect(d.getByRole('button', { name: 'Kalıcı olarak sil' })).toBeDisabled();
+  await d.getByRole('button', { name: 'Vazgeç' }).click();
+  await expect(diyalog()).toHaveCount(0);
+  await expect(liste.locator('li')).toHaveCount(2);
+
+  // 390 px: Ayarlar sayfası yatayda taşmaz; düğmeler görünür.
+  await page.setViewportSize({ width: 390, height: 844 });
+  try {
+    await expect(liste.getByRole('button', { name: 'İkinci proje: sil' })).toBeVisible();
+    expect(await yatayTasmaYok()).toBe(true);
+  } finally {
+    await page.setViewportSize({ width: 1360, height: 960 });
+  }
+});
+
 test('projeler arası geçiş, yeniden adlandır, varsayılan yap ve sil (adı yazarak; önce yedek)', async () => {
   let menu = await projeMenusu();
   await menu.getByRole('menuitemradio', { name: ornekProjeAdi }).click();
