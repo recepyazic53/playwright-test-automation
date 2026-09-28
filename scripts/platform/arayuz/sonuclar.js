@@ -577,6 +577,8 @@ function kosuGecmisi(kosular, urun) {
   const sayfalama = h('div', { class: 'sayfalama' });
   let sayfa = 0;
   let filtre = 'tumu';
+  // "Yalnız kalanlar": yalnız başarısız testi olan koşular (hızlı süzgeç).
+  let yalnizKalan = false;
   // Sıralama VERİDE (sayfalı tablo; tablo-siralama.js 'tablo-sirala' olayı → { anahtar, yon }).
   /** @type {{ anahtar: string | null; yon: 'artan' | 'azalan' | null }} */
   let siralama = { anahtar: null, yon: null };
@@ -593,7 +595,7 @@ function kosuGecmisi(kosular, urun) {
   basliklar.unshift(secici.baslik());
   const sayiHucresi = (v, ek = '') => h('td', { class: `sayi ${v ? ek : 'sifir'}`.trim() }, String(v));
   const ciz = () => {
-    const suzulen = filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre);
+    const suzulen = (filtre === 'tumu' ? kosular : kosular.filter((k) => k.tur === filtre)).filter((k) => !yalnizKalan || (k.basarisiz || 0) > 0);
     const secilen = siralama.anahtar ? veriyiSirala(suzulen, SIRALAMA_ALANLARI[siralama.anahtar], siralama.yon) : suzulen;
     for (const th of basliklar) {
       const a = th.getAttribute('data-sirala-anahtar');
@@ -622,6 +624,9 @@ function kosuGecmisi(kosular, urun) {
   };
   ciz();
   const filtreSegmenti = segment([['tumu', 'Tümü'], ['tam', 'Tam'], ['tekil', 'Tekil']], filtre, (d) => { filtre = d; sayfa = 0; ciz(); }, 'Koşu türü');
+  const kalanKutusu = h('input', { type: 'checkbox', id: 'gecmis-yalniz-kalan' });
+  kalanKutusu.addEventListener('change', () => { yalnizKalan = kalanKutusu.checked; sayfa = 0; ciz(); });
+  const kalanSuzgeci = h('label', { class: 'secenek mini-secenek', for: kalanKutusu.id, 'data-kayit-disi': '' }, kalanKutusu, 'Yalnız kalanlar');
   const tablo = h('table', { class: 'ozet-tablosu gecmis-tablosu', 'data-siralama': 'veri' },
     h('caption', { class: 'gorunmez' }, 'Koşu geçmişi'),
     h('thead', {}, h('tr', {}, basliklar)),
@@ -635,7 +640,7 @@ function kosuGecmisi(kosular, urun) {
   return h('section', { class: 'kart', 'aria-labelledby': 'gecmis-basligi' },
     h('div', { class: 'kart-basligi' }, h('h3', { id: 'gecmis-basligi' }, ikon('liste'), 'Koşu geçmişi'),
       h('span', { class: 'alt' }, urun ? 'Bu ürünü içeren tüm koşular; sayılar yalnızca bu ürün için' : 'Tam ve tekil koşular; bir koşuya tıklayınca senaryo sonuçları açılır'),
-      kosular.length ? h('div', { class: 'sag' }, filtreSegmenti, kosular.length > 1 ? secici.dugme : null) : null),
+      kosular.length ? h('div', { class: 'sag' }, kalanSuzgeci, filtreSegmenti, kosular.length > 1 ? secici.dugme : null) : null),
     kosular.length
       ? [h('div', { class: 'tablo-kaydirma' }, tablo), sayfalama]
       : h('p', { class: 'bos-liste' }, 'Henüz koşu yok.'));
@@ -1025,12 +1030,20 @@ async function kosuDetayi(icerik, id, proje) {
   ]);
   const ortamKaydi = kosu.ortamId ? ortamlar.find((o) => o.id === kosu.ortamId) || null : null;
   const ortam = ortamKaydi ? ortamKaydi.ad : null;
-  const satir = (x, alt = false) => h('tr', { class: alt ? 'veri-kosusu-alt' : null, hidden: alt ? true : null },
+  // Hızlı süzgeçler: "Yalnız kalanlar" ve hata kalıbı (kalıba tıklayınca yalnız o kalıptaki testler; çip ile kaldırılır).
+  const suzgec = { kalan: false, kalip: /** @type {string | null} */ (null) };
+  let suzgecUygula = () => {};
+  const kalipDugmesi = (kalip) => h('button', { type: 'button', class: 'baglanti-dugmesi kalip-suzgec-dugmesi', title: 'Yalnız bu hata kalıbındaki testleri göster',
+    onclick: () => { suzgec.kalip = kalip; suzgecUygula(); } }, kalip);
+  const satir = (x, alt = false) => h('tr', {
+    class: [alt ? 'veri-kosusu-alt' : '', x.durum === 'basarisiz' ? 'kalan-satir' : ''].join(' ').trim() || null, hidden: alt ? true : null,
+    'data-kalip': x.hataKalibi || null
+  },
     h('td', {}, durumRozeti(x.durum)),
     h('td', {}, x.urun, x.ekranDurumu === 'silindi' || x.ekranDurumu === 'devre_disi' ? [' ', ekranDurumRozeti(x.ekranDurumu)] : null),
     h('td', {}, h('a', { href: `#/sonuclar/sonuc/${encodeURIComponent(x.id)}` }, alt && x.veriKosusu && x.veriKosusu.ad ? x.veriKosusu.ad : x.senaryoBaslik)),
     h('td', { class: 'sayi' }, sureMetni(x.sureMs)),
-    h('td', { class: 'kalip' }, x.hataKalibi || ''),
+    h('td', { class: 'kalip' }, x.hataKalibi ? kalipDugmesi(x.hataKalibi) : ''),
     h('td', {}, h('span', { class: 'etiketler' },
       x.ekranGoruntusuSayisi ? rozet([ikon('ekran'), `${x.ekranGoruntusuSayisi} görsel`], '', { title: 'Ekran görüntüsü' }) : null, ' ',
       x.videoSayisi ? rozet([ikon('video'), 'video'], '', { title: 'Video' }) : null)));
@@ -1055,7 +1068,7 @@ async function kosuDetayi(icerik, id, proje) {
       ac.setAttribute('aria-expanded', String(acik));
       for (const a of altlar) a.hidden = !acik;
     });
-    const ust = h('tr', { class: 'veri-kosusu-grubu', 'data-senaryo': ilk.senaryoId },
+    const ust = h('tr', { class: `veri-kosusu-grubu${kalan ? ' kalan-satir' : ''}`, 'data-senaryo': ilk.senaryoId, 'data-kaliplar': JSON.stringify([...new Set(liste.map((x) => x.hataKalibi).filter(Boolean))]) },
       h('td', {}, durumRozeti(durum)), h('td', {}, ilk.urun), h('td', {}, ac),
       h('td', { class: 'sayi' }, sureMetni(liste.reduce((t, x) => t + (x.sureMs || 0), 0))),
       h('td', { class: 'kalip' }, kalan ? `${kalan} / ${liste.length} satır kaldı` : `${liste.length} satırın hepsi geçti`),
@@ -1081,6 +1094,30 @@ async function kosuDetayi(icerik, id, proje) {
     kosu.tekrarKaynagi.var ? [' · ', h('a', { href: `#/sonuclar/karsilastir/${encodeURIComponent(kosu.tekrarKaynagi.id)}/${encodeURIComponent(kosu.id)}` }, 'karşılaştır')] : null) : null;
   const tekrarlar = (kosu.tekrarlar || []).length ? h('span', { class: 'tekrar-bagi' }, `Tekrarları (${kosu.tekrarlar.length}): `,
     kosu.tekrarlar.slice(0, 3).map((t, i) => [i ? ', ' : '', h('a', { href: `#/sonuclar/kosu/${encodeURIComponent(t.id)}` }, kisaTarih(t.bitis || t.baslangic))])) : null;
+  // Süzgeç: satırlar gizlenir (veri koşusu alt satırlarının açık / kapalı durumu korunur: data-suzuldu ile ayrı tutulur).
+  const kalanSayisi = sonuclar.filter((x) => x.durum === 'basarisiz').length;
+  const kalanKutusu = h('input', { type: 'checkbox', id: `kosu-yalniz-kalan-${kosu.id}`.replace(/[^A-Za-z0-9_-]/g, '-') });
+  const suzgecCipi = h('span', { class: 'suzgec-cipi', hidden: true });
+  const bosSuzgec = h('p', { class: 'bos-liste', hidden: true }, 'Süzgece uyan test yok.');
+  suzgecUygula = () => {
+    kalanKutusu.checked = suzgec.kalan;
+    let gorunen = 0;
+    for (const tr of tabloSatirlari) {
+      const kaliplar = tr.dataset.kalip ? [tr.dataset.kalip] : tr.dataset.kaliplar ? JSON.parse(tr.dataset.kaliplar) : [];
+      const uyar = (!suzgec.kalan || tr.classList.contains('kalan-satir')) && (!suzgec.kalip || kaliplar.includes(suzgec.kalip));
+      tr.classList.toggle('suzuldu', !uyar);
+      if (uyar && !tr.hidden) gorunen++;
+    }
+    bosSuzgec.hidden = gorunen > 0;
+    suzgecCipi.hidden = !suzgec.kalip;
+    if (suzgec.kalip) {
+      yerlestir(suzgecCipi, h('span', {}, 'Hata kalıbı: ', h('code', {}, suzgec.kalip)),
+        h('button', { type: 'button', class: 'ikon-dugme hayalet', 'aria-label': 'Hata kalıbı süzgecini kaldır', onclick: () => { suzgec.kalip = null; suzgecUygula(); } }, ikon('carpi')));
+    }
+  };
+  kalanKutusu.addEventListener('change', () => { suzgec.kalan = kalanKutusu.checked; suzgecUygula(); });
+  const hizliSuzgec = sonuclar.length ? h('div', { class: 'hizli-suzgec', 'data-kayit-disi': '' },
+    h('label', { class: 'secenek mini-secenek', for: kalanKutusu.id }, kalanKutusu, `Yalnız kalanlar (${kalanSayisi})`), suzgecCipi) : null;
   const sure = kosu.bitis ? new Date(kosu.bitis).getTime() - new Date(kosu.baslangic).getTime() : null;
   const o = oran(kosu);
   const ozetKarti = (etiket, deger, sinif) => h('div', { class: `sonuc-karti ${sinif}` },
@@ -1109,7 +1146,9 @@ async function kosuDetayi(icerik, id, proje) {
     h('p', { class: 'kart-kaynak' }, `${kosu.basarili} başarılı, ${kosu.basarisiz} başarısız, ${kosu.atlanan} atlanan, ${kosu.durduruldu} durduruldu`),
     h('section', { class: 'kart', 'aria-labelledby': 'senaryo-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'senaryo-basligi' }, ikon('liste'), `Senaryolar (${sonuclar.length})`),
-        h('span', { class: 'alt' }, 'Başarısızlar önce; bir senaryoya tıklayınca test ayrıntısı açılır')),
+        h('span', { class: 'alt' }, 'Başarısızlar önce; bir senaryoya tıklayınca test ayrıntısı açılır; hata kalıbına tıklayınca yalnız o kalıptaki testler'),
+        hizliSuzgec),
+      bosSuzgec,
       sonuclar.length
         ? h('div', { class: 'tablo-kaydirma' }, h('table', { class: 'ozet-tablosu' },
           h('caption', { class: 'gorunmez' }, 'Senaryo sonuçları'),

@@ -296,3 +296,37 @@ test('servis sonuçlarının tek yeri Sonuçlar > Servisler: eski adresler yönl
   expect(hatalar, hatalar.join('\n')).toEqual([]);
   await kapat();
 });
+
+test('sonuçlarda hızlı süzgeç: "Yalnız kalanlar" (koşu ayrıntısı ve koşu geçmişi); hata kalıbına tıklayınca yalnız o kalıptaki testler', async () => {
+  const { page, hatalar, kapat } = await sayfaAc();
+  await git(page, '#/sonuclar/kosu/kars-b');
+  const tablo = page.getByRole('table', { name: 'Senaryo sonuçları' });
+  const gorunen = tablo.locator('tbody tr:visible');
+  await expect(gorunen).toHaveCount(4);
+  await page.getByLabel('Yalnız kalanlar (2)').check();
+  await expect(gorunen).toHaveCount(2);
+  await expect(gorunen).toContainText(['Kayıt', 'Yeni']);
+  await page.getByLabel('Yalnız kalanlar (2)').uncheck();
+  await expect(gorunen).toHaveCount(4);
+  // Hata kalıbı: tek tıkla yalnız o kalıptaki testler; çip ile kaldırılır.
+  await tablo.locator('tr', { hasText: 'Yeni' }).getByRole('button').click();
+  await expect(gorunen).toHaveCount(1);
+  await expect(gorunen).toContainText('Yeni');
+  await expect(page.locator('.suzgec-cipi')).toContainText('Hata kalıbı:');
+  await page.getByRole('button', { name: 'Hata kalıbı süzgecini kaldır' }).click();
+  await expect(gorunen).toHaveCount(4);
+  // Koşu geçmişi: yalnız kalan testi olan koşular.
+  await page.getByRole('link', { name: 'Sonuçlar' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Koşu geçmişi' })).toBeVisible();
+  const bolum = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Koşu geçmişi' }) });
+  const gecmis = bolum.locator('table');
+  await expect(gecmis.locator('tbody tr')).toHaveCount(3);
+  await bolum.getByLabel('Yalnız kalanlar').check();
+  await expect(gecmis.locator('tbody tr')).toHaveCount(2);
+  await expect(gecmis.locator('tbody')).not.toContainText('tekil');
+  await page.setViewportSize({ width: 390, height: 900 });
+  await git(page, '#/sonuclar/kosu/kars-b');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(2);
+  expect(hatalar, hatalar.join('\n')).toEqual([]);
+  await kapat();
+});
