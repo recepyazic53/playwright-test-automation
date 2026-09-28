@@ -125,10 +125,11 @@ export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) ||
  *  - ORTAM SEÇİMLİ (s.ortamlar + s.hesapla): ortam diyalogda seçilir; her seçimde hesapla(ortam) koşacak senaryoları
  *    (ve o ortamda Koşuda kapalı / tanımsız olanların sayısını; istenirse atlananları nedenleriyle) verir. Promise<{ ortam, senaryolar } | null>.
  *  - turEtiketi: "Kapsam" özet kutusunda tam / kısmi yerine gösterilecek metin (ör. servis koşusu).
+ *  - kosuBicimi: "sırayla" / "aynı anda" yerine yazılacak metin (ör. servis koşusu: "en çok 3 tanesi aynı anda").
  *  - veriKosusu: { projeId } — ekran senaryolarında VERİ KOŞULARI (tablodan çoklu satır): senaryolardan biri tablo kullanıyorsa
  *    "Veri koşusu" seçimi (senaryodaki biçim / hepsi tek satır / uyan tüm satırlar; koşu anı ezmesi) ve TAHMİNİ TEST SAYISI
  *    gösterilir; üst sınırı (Ayarlar > Koşu) aşan senaryo varsa Başlat kapalıdır. Sonuç { ortam, senaryolar, veriKipi }.
- * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; not?: string; haricSayisi?: number; dugme?: string; uyarilar?: Array<{ baslik: string; neden: string }>;
+ * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; kosuBicimi?: string; not?: string; haricSayisi?: number; dugme?: string; uyarilar?: Array<{ baslik: string; neden: string }>;
  *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; turEtiketi?: string; veriKosusu?: { projeId: string };
  *   hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }>; uyarilar?: Array<{ baslik: string; neden: string }> } }} s
  */
@@ -187,7 +188,7 @@ export function kosuOnayi(s) {
       baslat.disabled = adet === 0 || Boolean(tahmin && tahmin.asanlar.length);
       yerlestir(degisken,
         h('p', { class: 'soluk' }, adet
-          ? `${adet} senaryo ${ortam.ad} ortamında ${s.esZamanli ? 'aynı anda' : 'sırayla'} çalıştırılacak.`
+          ? `${adet} senaryo ${ortam.ad} ortamında ${s.kosuBicimi || (s.esZamanli ? 'aynı anda' : 'sırayla')} çalıştırılacak.`
           : `${ortam.ad} ortamında çalıştırılacak senaryo yok.`),
         h('dl', { class: 'onay-ozeti' },
           h('div', {}, h('dt', {}, 'Senaryo'), h('dd', {}, String(adet))),

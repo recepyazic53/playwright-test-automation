@@ -57,6 +57,9 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'zorlaIsaretlemeSn', grup: 'Bekleme süreleri', etiket: 'Zorla işaretlenecek seçenek', aciklama: 'Gizli radyo / onay kutusunun sayfada belirmesi için en çok bekleme.',
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn', env: 'NOBETCI_ZORLA_BEKLEME_MS', carpan: 1000 },
   { anahtar: 'servisZamanAsimiSn', grup: 'Servisler', etiket: 'Servis isteği zaman aşımı', aciklama: 'Servis yanıtı bu sürede gelmezse istek kesilir.', tur: 'sayi', varsayilan: 60, enAz: 5, enCok: 600, birim: 'sn' },
+  { anahtar: 'servisEszamanli', grup: 'Servisler', etiket: 'Aynı anda en çok servis senaryosu',
+    aciklama: '1: sırayla. Daha büyük değer testleri hızlandırır ama hedef servise aynı anda daha çok istek gider. Bir senaryonun kendi adımları (akış adımları, oturum / token) her zaman sırayla koşar; ekran senaryoları etkilenmez.',
+    tur: 'sayi', varsayilan: 1, enAz: 1, enCok: 10, birim: 'senaryo' },
   { anahtar: 'tarihBicimi', grup: 'Servisler', etiket: 'Varsayılan tarih biçimi', aciklama: 'Biçim verilmemiş tarih kurallarında ve ${tarih:…} ifadelerinde kullanılır. yyyy yıl, MM ay, dd gün, HH saat, mm dakika, ss saniye; sabitler tek tırnakta.',
     tur: 'metin', varsayilan: "yyyy-MM-dd'T'HH:mm:ss" },
   { anahtar: 'yetkiHatasinda', grup: 'Servisler', etiket: 'Yetki hatasında (401 / 403)',
@@ -164,7 +167,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 ]);
 
 /** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
- *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
+ *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
  *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;

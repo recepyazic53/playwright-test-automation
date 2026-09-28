@@ -11,7 +11,7 @@
 // isteğinden önce kullanıcıya hangi ortama / adrese gidileceği sorulur.
 // Giriş bilgisi değerleri arayüze hiç gelmez; kullanıcı yazdığında sunucuya gider, kasada şifreli durur.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, alanHatasi, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, mesajKutusu, mesgulIken, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { canliOnayEki, canliOnayIste, kosuOnayi, onayIste, ortamRiskRozeti, ortamSecenekMetni, riskBelirtinNotu, riskliOrtamMi, secenekIste } from './kosu-paneli.js';
 import { riskBelirtilmemisMi } from './ortam-riski.mjs';
 import { urunlerPaneli } from './senaryolar.js';
@@ -485,7 +485,16 @@ const restOpYolu = (op) => {
 const kapsamEtiketi = (liste) => (liste.length ? liste.map((o) => o.ad).join(' + ') : 'Hiçbir ortam');
 const DURUM_SIMGESI = { basarili: '✓', basarisiz: '✗', hata: '!' };
 const gunAy = (d) => { const t = new Date(d); return Number.isNaN(t.getTime()) ? '' : `${iki(t.getDate())}.${iki(t.getMonth() + 1)}`; };
-const SERVIS_KOSU_NOTU = 'Seçilen ortamdaki servis adresine istekler sırayla gönderilir; sonuçlar Raporlar sekmesine yazılır.';
+/**
+ * Servis koşusu diyaloğunun "nasıl" bilgisi (Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu"): N = 1 sırayla,
+ * N > 1 en çok N senaryo aynı anda (bir senaryonun kendi adımları yine sırayla).
+ */
+async function servisKosuBicimi() {
+  const n = Number((await kullaniciAyarlari()).servisEszamanli) || 1;
+  return n > 1
+    ? { kosuBicimi: `en çok ${n} tanesi aynı anda`, not: `Seçilen ortamdaki servis adresine en çok ${n} senaryonun istekleri aynı anda gönderilir (Ayarlar > Koşu > Servisler); sonuçlar Raporlar sekmesine yazılır.` }
+    : { kosuBicimi: 'sırayla', not: 'Seçilen ortamdaki servis adresine istekler sırayla gönderilir; sonuçlar Raporlar sekmesine yazılır.' };
+}
 
 /**
  * "Koşuyu başlat": ortam DİYALOGDA seçilir (başlıkta ortam segmenti yok). O ortamda koşan ve o ortamda Koşuda açık senaryolar
@@ -495,15 +504,14 @@ async function kosuDiyalogu(proje, s, ortamlar, senaryolar, bitti) {
   if (!ortamlar.length) { bildir('Projede ortam yok (Ayarlar > Ortamlar).', 'hata'); return; }
   const denetim = await sqlKosuDenetimiAl(proje.id);
   const y = await kosuOnayi({
-    baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', esZamanli: false,
+    baslik: `${s.ad} — koşuyu başlat?`, ortamlar, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu', esZamanli: false, ...(await servisKosuBicimi()),
     hesapla: (o) => ({
       senaryolar: senaryolar.filter((x) => ortamdaDahil(s, x, o)),
       // Akış senaryolarının SQL adımı: veritabanı bu ortamda eşli değilse uyarı (koşu engellenmez).
       uyarilar: sqlKosuUyarilari(denetim, denetim?.servisSenaryolari, senaryolar.filter((x) => ortamdaDahil(s, x, o)), o),
       haricSayisi: senaryolar.filter((x) => ortamdaKosar(s, x, o) && !ortamdaDahil(s, x, o)).length,
       atlananlar: senaryolar.filter((x) => x.kosuyaDahil && !ortamdaKosar(s, x, o)).map((x) => ({ baslik: x.baslik, neden: atlamaNedeni(s, x, o) }))
-    }),
-    not: SERVIS_KOSU_NOTU
+    })
   });
   if (!y) return;
   ortamiHatirla(y.ortam);
@@ -608,7 +616,7 @@ function senaryolarSekmesi(kap, proje, s, senaryolar, sonSonuclar, yenile, ortam
       const denetim = await sqlKosuDenetimiAl(proje.id);
       const y = await kosuOnayi({
         baslik: tekil ? 'Senaryoyu çalıştır?' : 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: sonOrtam(ortamlar), tur: 'tekil', turEtiketi: 'Servis koşusu',
-        esZamanli: false, ...(tekil ? { dugme: 'Çalıştır' } : {}), not: SERVIS_KOSU_NOTU,
+        esZamanli: false, ...(tekil ? { dugme: 'Çalıştır' } : {}), ...(await servisKosuBicimi()),
         hesapla: (o) => ({
           senaryolar: secilenler.filter((x) => ortamdaKosar(s, x, o)),
           uyarilar: sqlKosuUyarilari(denetim, denetim?.servisSenaryolari, secilenler.filter((x) => ortamdaKosar(s, x, o)), o),

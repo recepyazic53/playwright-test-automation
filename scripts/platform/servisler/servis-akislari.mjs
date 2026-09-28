@@ -107,10 +107,17 @@ export function servisAkisiDenetle(vt, projeId, icerik, adimIcerikleri) {
 }
 
 /** Oturum değerleri: "<akisId>|<ortamId>" → { degerler, gizliler, gecerlilikSonu, baslik }. Yalnız bellekte (veritabanına yazılmaz). */
-/** @type {Map<string, { degerler: Record<string, string>; gizliler: string[]; gecerlilikSonu: number; baslik: string }>} */
+/** @type {Map<string, { degerler: Record<string, string>; gizliler: string[]; gecerlilikSonu: number; baslik: string; surum: number }>} */
 const oturumlar = new Map();
-/** Aynı oturum için eş zamanlı istekler tek girişte buluşur. @type {Map<string, Promise<any>>} */
+/**
+ * Aynı oturum için eş zamanlı istekler (eşzamanlı servis koşusu) tek girişte buluşur: oturum akışı BİR KEZ koşar, diğerleri onu
+ * bekler. Ortak girişin kendi durdurma denetleyicisi vardır: bekleyenlerden biri durdurulursa yalnız o vazgeçer; bekleyen
+ * kalmayınca giriş kesilir. @type {Map<string, OrtakOturum>}
+ * @typedef {{ soz: Promise<any>; kontrol: AbortController; bekleyen: number; anahtar: string }} OrtakOturum
+ */
 const bekleyenOturumlar = new Map();
+/** Her alınan oturumun sürümü: 401 / 403 sonrası yenilemede başka senaryo zaten yenilediyse yeniden alınmaz. */
+let oturumSurumu = 0;
 
 /** Oturum önbelleğini boşaltır (akış silinince / değişince; testler). @param {string} [akisId] */
 export function oturumlariTemizle(akisId) {
@@ -125,22 +132,57 @@ export async function oturumDegerleriniAl(vt, projeId, akisId, ortamId, s = {}) 
   const anahtar = `${akisId}|${ortamId}`;
   const o = oturumlar.get(anahtar);
   const herIstekte = servisAkisiGetir(vt, akisId)?.icerik.tokenYenileme === 'herIstekte';
-  if (o && !s.yenile && !herIstekte && o.gecerlilikSonu > Date.now()) return { degerler: o.degerler, gizliler: o.gizliler, baslik: o.baslik, durum: 'onbellek' };
-  const bekleyen = bekleyenOturumlar.get(anahtar);
-  if (bekleyen) return bekleyen;
-  const is = (async () => {
-    const akis = servisAkisiGetir(vt, akisId);
-    if (!akis || akis.projeId !== projeId || akis.tur !== 'oturum') throw new ServisHatasi('Servisin oturum akışı bulunamadı.');
-    const ortam = ortamGetir(vt, ortamId);
-    if (!ortam) throw new ServisHatasi('Ortam bulunamadı.');
-    const r = await akisiKos(vt, projeId, { akis, ortamId, tur: ortamTuru(ortam) === 'canli' ? 'kosu' : 'dene', sinyal: s.sinyal, oturumIcinde: true });
-    if (r.durum !== 'basarili') throw new ServisHatasi(`Oturum akışı "${akis.baslik}" başarısız: ${r.ozet}`);
-    const kayit = { degerler: r.acik.degerler, gizliler: r.acik.gizliler, baslik: akis.baslik, gecerlilikSonu: Date.now() + (akis.icerik.omurSaniye ?? 3600) * 1000 };
-    oturumlar.set(anahtar, kayit);
-    return { degerler: kayit.degerler, gizliler: kayit.gizliler, baslik: kayit.baslik, durum: /** @type {const} */ ('alindi') };
-  })();
-  bekleyenOturumlar.set(anahtar, is);
-  try { return await is; } finally { bekleyenOturumlar.delete(anahtar); }
+  const gecerli = o && o.gecerlilikSonu > Date.now();
+  if (o && gecerli && !s.yenile && !herIstekte) return { degerler: o.degerler, gizliler: o.gizliler, baslik: o.baslik, durum: 'onbellek', surum: o.surum };
+  // 401 / 403 sonrası yenileme: istek eski oturumla gittiyse ve o arada başka (eşzamanlı) senaryo oturumu zaten yenilediyse yenisi kullanılır.
+  if (o && gecerli && s.yenile && !herIstekte && s.gorulenSurum !== undefined && o.surum !== s.gorulenSurum) {
+    return { degerler: o.degerler, gizliler: o.gizliler, baslik: o.baslik, durum: 'onbellek', surum: o.surum };
+  }
+  let ortak = bekleyenOturumlar.get(anahtar);
+  if (!ortak) {
+    const kontrol = new AbortController();
+    const soz = (async () => {
+      const akis = servisAkisiGetir(vt, akisId);
+      if (!akis || akis.projeId !== projeId || akis.tur !== 'oturum') throw new ServisHatasi('Servisin oturum akışı bulunamadı.');
+      const ortam = ortamGetir(vt, ortamId);
+      if (!ortam) throw new ServisHatasi('Ortam bulunamadı.');
+      const r = await akisiKos(vt, projeId, { akis, ortamId, tur: ortamTuru(ortam) === 'canli' ? 'kosu' : 'dene', sinyal: kontrol.signal, oturumIcinde: true });
+      if (r.durum !== 'basarili') throw new ServisHatasi(`Oturum akışı "${akis.baslik}" başarısız: ${r.ozet}`);
+      const kayit = { degerler: r.acik.degerler, gizliler: r.acik.gizliler, baslik: akis.baslik, gecerlilikSonu: Date.now() + (akis.icerik.omurSaniye ?? 3600) * 1000, surum: ++oturumSurumu };
+      oturumlar.set(anahtar, kayit);
+      return { degerler: kayit.degerler, gizliler: kayit.gizliler, baslik: kayit.baslik, durum: /** @type {const} */ ('alindi'), surum: kayit.surum };
+    })().finally(() => { if (bekleyenOturumlar.get(anahtar) === ortak) bekleyenOturumlar.delete(anahtar); });
+    soz.catch(() => undefined);
+    ortak = { soz, kontrol, bekleyen: 0, anahtar };
+    bekleyenOturumlar.set(anahtar, ortak);
+  }
+  return ortakOturumuBekle(ortak, s.sinyal);
+}
+
+/**
+ * Ortak oturum girişini bekler; çağıranın sinyali kesilirse yalnız o vazgeçer ("Kullanıcı durdurdu."), bekleyen kalmazsa giriş kesilir.
+ * @param {OrtakOturum} ortak @param {AbortSignal | undefined} sinyal
+ */
+async function ortakOturumuBekle(ortak, sinyal) {
+  ortak.bekleyen++;
+  /** @type {(() => void) | undefined} */
+  let vazgec;
+  const vazgecildi = new Promise((_, red) => {
+    if (!sinyal) return;
+    vazgec = () => red(new ServisHatasi('Kullanıcı durdurdu.'));
+    if (sinyal.aborted) vazgec();
+    else sinyal.addEventListener('abort', vazgec, { once: true });
+  });
+  try {
+    return await Promise.race([ortak.soz, vazgecildi]);
+  } finally {
+    if (vazgec) sinyal?.removeEventListener('abort', vazgec);
+    if (--ortak.bekleyen === 0) {
+      ortak.kontrol.abort();
+      // Kesilen giriş yeni gelenlere verilmez (bitmişse zaten silinmiştir).
+      if (bekleyenOturumlar.get(ortak.anahtar) === ortak) bekleyenOturumlar.delete(ortak.anahtar);
+    }
+  }
 }
 oturumSaglayicisiAyarla(oturumDegerleriniAl);
 

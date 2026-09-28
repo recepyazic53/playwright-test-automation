@@ -33,6 +33,7 @@ import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, grupAnahtari, satirSecimiOlustur, servisDegeri, tabloBul } from '../tablolar/tablo-secimi.mjs';
 import { satirOzeti, veriKosulariniAc } from '../tablolar/veri-kosulari.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { servisEszamanliOku, sinirliKos } from './eszamanli.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
@@ -950,9 +951,10 @@ function postmanAktarimi(vt, projeId, girdi, yazici) {
 
 /**
  * Oturum sağlayıcı (servis-akislari.mjs kaydeder): servise atanan oturum akışının değerleri (token). Önbellekte geçerliyse
- * yeniden kullanılır (durum "onbellek"), yoksa ya da yenile ile oturum akışı koşulur (durum "alindi").
- * @typedef {(vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal }) =>
- *   Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek' }>} OturumSaglayici
+ * yeniden kullanılır (durum "onbellek"), yoksa ya da yenile ile oturum akışı koşulur (durum "alindi"). Eşzamanlı istekler tek
+ * oturum alımında buluşur; gorulenSurum: yenilemede, isteğin kullandığı oturum sürümü (başka senaryo zaten yenilediyse yenisi döner).
+ * @typedef {(vt: Veritabani, projeId: string, akisId: string, ortamId: string, s: { yenile?: boolean; sinyal?: AbortSignal; gorulenSurum?: number }) =>
+ *   Promise<{ degerler: Record<string, string>; gizliler: string[]; baslik: string; durum: 'alindi' | 'onbellek'; surum?: number }>} OturumSaglayici
  */
 /** @type {OturumSaglayici | null} */
 let oturumSaglayici = null;
@@ -980,7 +982,7 @@ export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
  *   zamanAsimiMs?: number; simdi?: Date; sinyal?: AbortSignal;
  *   olay?: (adim: 'hazirlik' | 'gonderim' | 'yanit' | 'kontroller', durum: 'basladi' | 'tamam' | 'hata', bilgi?: Record<string, unknown>) => void;
  *   akisDegerleri?: Record<string, string>; ekGizliler?: string[]; okumalar?: AkisOkumasi[]; akis?: Record<string, unknown>;
- *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean;
+ *   acikDegerler?: (d: { okunan: Record<string, string>; gizliler: string[] }) => void; oturumYenile?: boolean; oturumSurumu?: number;
  *   yetkiTekrari?: { ilkDurumKodu: number; not: string };
  *   yetkiYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null>;
  *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }; tekrarKaynagi?: string }} girdi
@@ -1033,6 +1035,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   /** Kullanıcının ek gizli adları (Ayarlar > Güvenlik > Maskeleme). */
   const ekAdlar = ekGizliAdlar(vt);
   let oturumKullanildi = false;
+  /** Kullanılan oturumun sürümü (401 / 403 sonrası yenilemede eşzamanlı senaryolar oturumu bir kez yeniler). @type {number | undefined} */
+  let kullanilanOturumSurumu;
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
   /** @type {Record<string, unknown>} */
@@ -1055,7 +1059,9 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const gereken = kullanilanAkisDegerleri([icerik.govde, ...Object.values(basliklarHam), JSON.stringify(icerik.kontroller), http?.yol ?? ''].join('\n'))
       .filter((a) => akisDegerleri?.[a] === undefined);
     if (gereken.length && servis.ayarlar.oturumAkisi && oturumSaglayici) {
-      const o = await oturumSaglayici(vt, projeId, servis.ayarlar.oturumAkisi, ortam.id, { yenile: girdi.oturumYenile === true, sinyal: girdi.sinyal });
+      const o = await oturumSaglayici(vt, projeId, servis.ayarlar.oturumAkisi, ortam.id, { yenile: girdi.oturumYenile === true, sinyal: girdi.sinyal,
+        ...(girdi.oturumSurumu !== undefined ? { gorulenSurum: girdi.oturumSurumu } : {}) });
+      kullanilanOturumSurumu = o.surum;
       akisDegerleri = { ...o.degerler, ...(akisDegerleri ?? {}) };
       gizliler = [...gizliler, ...o.gizliler];
       sonuc.oturum = { akis: o.baslik, durum: girdi.oturumYenile ? 'yenilendi' : o.durum };
@@ -1111,7 +1117,8 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     if (yetkiHatasi && !girdi.yetkiTekrari) {
       const not = `${yanit.durumKodu} alındı, token yenilendi, tekrar denendi`;
       if (oturumKullanildi && servis.ayarlar.oturumAkisi && yetkiTekrariAcik(vt, servisAkisiGetir(vt, servis.ayarlar.oturumAkisi))) {
-        return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true, yetkiTekrari: { ilkDurumKodu: yanit.durumKodu, not } });
+        return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true, ...(kullanilanOturumSurumu !== undefined ? { oturumSurumu: kullanilanOturumSurumu } : {}),
+          yetkiTekrari: { ilkDurumKodu: yanit.durumKodu, not } });
       }
       const yeni = girdi.yetkiYenile ? await girdi.yetkiYenile() : null;
       if (yeni) {
@@ -1257,7 +1264,8 @@ function akisKontrolleriniCoz(kontroller, degerler) {
 }
 
 /**
- * Servisin koşuya dahil ve kapsamı ortama uyan senaryolarını sırayla koşar (verilirse yalnız senaryoIdleri).
+ * Servisin koşuya dahil ve kapsamı ortama uyan senaryolarını sırayla koşar (verilirse yalnız senaryoIdleri); Ayarlar > Koşu >
+ * Servisler > "Aynı anda en çok N servis senaryosu" > 1 ise en çok N'i aynı anda (sonuçlar yine senaryo sırasıyla).
  * @param {Veritabani} vt @param {string} projeId @param {{ servisId: string; ortamId: string; senaryoIdleri?: string[]; zamanAsimiMs?: number }} girdi
  */
 export async function servisSenaryolariniKos(vt, projeId, girdi) {
@@ -1274,16 +1282,21 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
   const akisMi = (/** @type {any} */ s) => s.icerik?.tur === 'akis';
   const kosulacak = liste.filter((s) => (akisMi(s) ? Boolean(akisSenaryoKancasi) && !akisSenaryoKancasi?.atlamaNedeni(vt, s, ortam)
     : tanimli && (s.kapsam === 'ikisi' || s.kapsam === tur) && !(tur === 'canli' && yalnizTest.has(s.icerik.operasyon))));
-  const sonuclar = [];
+  /** @type {Array<{ senaryoId: string; baslik: string; hata?: string; veriKosusu?: any }>} Çalıştırmalar (sonuç sırası bu sıradır). */
+  const plan = [];
   for (const s of kosulacak) {
     // Veri koşuları (tablodan çoklu satır): her satır / kombinasyon ayrı çalıştırma; çoklu değilse tek (bugünkü).
     const c = akisMi(s) ? { hata: null, calistirmalar: [{ baslik: s.baslik, veriKosusu: null }] } : servisCalistirmalari(vt, projeId, s, ortam.id);
-    if (c.hata) { sonuclar.push({ senaryoId: s.id, baslik: s.baslik, durum: 'hata', sureMs: 0, kosuId: null, ozet: c.hata }); continue; }
-    for (const k of c.calistirmalar) {
-      const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: s.id, zamanAsimiMs: girdi.zamanAsimiMs, ...(k.veriKosusu ? { veriKosusu: k.veriKosusu } : {}) });
-      sonuclar.push({ senaryoId: s.id, baslik: k.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') });
-    }
+    if (c.hata) { plan.push({ senaryoId: s.id, baslik: s.baslik, hata: c.hata }); continue; }
+    for (const k of c.calistirmalar) plan.push({ senaryoId: s.id, baslik: k.baslik, ...(k.veriKosusu ? { veriKosusu: k.veriKosusu } : {}) });
   }
+  // Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu" (1 = sırayla); sonuçlar plan sırasıyla.
+  const sonuclar = /** @type {Array<{ senaryoId: string; baslik: string; durum: string; sureMs: number; kosuId: string | null; ozet: string }>} */ (
+    await sinirliKos(plan, servisEszamanliOku(vt), async (p) => {
+      if (p.hata) return { senaryoId: p.senaryoId, baslik: p.baslik, durum: 'hata', sureMs: 0, kosuId: null, ozet: p.hata };
+      const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: p.senaryoId, zamanAsimiMs: girdi.zamanAsimiMs, ...(p.veriKosusu ? { veriKosusu: p.veriKosusu } : {}) });
+      return { senaryoId: p.senaryoId, baslik: p.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') };
+    }));
   return {
     ortam: ortam.ad, ortamTuru: tur, atlanan: liste.length - kosulacak.length, ...(tanimli ? {} : { atlamaNedeni: tanimsizNedeni(servis.ayarlar, ortam.ad) }), sonuclar,
     ozet: { basarili: sonuclar.filter((x) => x.durum === 'basarili').length, basarisiz: sonuclar.filter((x) => x.durum === 'basarisiz').length, hata: sonuclar.filter((x) => x.durum === 'hata').length }

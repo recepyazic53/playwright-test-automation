@@ -18,6 +18,7 @@ import { ortamRiskliMi, tetiklemeYaz, tumGecmis, tumKurallar, tuketilenYaz } fro
 import { izinAcikMi } from '../guvenlik/izinler.mjs';
 import { izinKapaliNotu, izinMesaji } from '../guvenlik/izin-tanimlari.mjs';
 import { UCTAN_UCA_KOS_UCU, kapaliIzinler } from '../guvenlik/uc-denetimi.mjs';
+import { servisEszamanliOku, sinirliKos } from '../servisler/eszamanli.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /** @typedef {import('./kurallar.d.mts').Kural} Kural */
@@ -91,22 +92,29 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
     }
   }
 
-  for (const akisId of servisAkisIdleri) {
-    if (yarida || !devam()) { yarida = true; break; }
-    if (!bag.servisAkisiCalistir) break;
-    const eksik = kapali('/platform/servis-akisi/kos', { projeId: kural.projeId, ortamId: kural.ortamId, akisId });
-    if (eksik.length) {
-      akisKosulari.push({ akisId, kosuId: null, durum: 'atlandi' });
-      izinleAtlananAkis++;
-      for (const a of eksik) izinNotlari.add(izinKapaliNotu(a));
-      continue;
-    }
-    try {
-      const r = await bag.servisAkisiCalistir(vt, kural.projeId, { akisId, ortamId: kural.ortamId, tur: 'kosu' });
-      akisKosulari.push({ akisId, kosuId: r.kosuId ?? null, durum: r.durum });
-    } catch (hata) {
-      akisKosulari.push({ akisId, kosuId: null, durum: 'hata' });
-      ilkHata ||= `Servis akışı: ${hataMetni(hata)}`;
+  // Servis akışları: Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu" (1 = sırayla; akışın adımları her zaman
+  // sırayla). Kayıtlar akış sırasıyla; kasa kilitlenirse yeni akış başlatılmaz.
+  const servisAkisiCalistir = bag.servisAkisiCalistir;
+  if (servisAkisiCalistir && servisAkisIdleri.length && !yarida) {
+    /** @type {Array<{ kayit: YurutmeSonucu['akisKosulari'][number]; hata?: string } | undefined>} */
+    const akisSonuclari = await sinirliKos(servisAkisIdleri, servisEszamanliOku(vt), async (akisId) => {
+      const eksik = kapali('/platform/servis-akisi/kos', { projeId: kural.projeId, ortamId: kural.ortamId, akisId });
+      if (eksik.length) {
+        izinleAtlananAkis++;
+        for (const a of eksik) izinNotlari.add(izinKapaliNotu(a));
+        return { kayit: { akisId, kosuId: null, durum: 'atlandi' } };
+      }
+      try {
+        const r = await servisAkisiCalistir(vt, kural.projeId, { akisId, ortamId: kural.ortamId, tur: 'kosu' });
+        return { kayit: { akisId, kosuId: r.kosuId ?? null, durum: r.durum } };
+      } catch (hata) {
+        return { kayit: { akisId, kosuId: null, durum: 'hata' }, hata: `Servis akışı: ${hataMetni(hata)}` };
+      }
+    }, devam);
+    for (const x of akisSonuclari) {
+      if (!x) { yarida = true; break; }
+      akisKosulari.push(x.kayit);
+      if (x.hata) ilkHata ||= x.hata;
     }
   }
 
