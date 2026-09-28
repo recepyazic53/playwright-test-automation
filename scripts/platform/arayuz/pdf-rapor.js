@@ -1,6 +1,6 @@
 // "Rapor al (PDF)": dönem raporu (sonuclar/rapor-uclari.mjs). Diyalog: kapsam (Tek ekran / Tek servis / Birden çok ekran / Birden çok
-// servis / Ekran + servis; "Genel" görünür ama "yakında"), seçim (tek öğede açılır liste; çoklu kapsamda ekran ve / veya servis onay
-// kutusu listesi + "Tüm ekranlar" / "Tüm servisler" — tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar), dönem (son 7 / 14 /
+// servis / Ekran + servis / Genel — genel raporda öğe seçilmez: rapor her üretildiğinde o anki tüm projeyi kapsar), seçim (tek öğede
+// açılır liste; çoklu kapsamda ekran ve / veya servis onay kutusu listesi + "Tüm ekranlar" / "Tüm servisler" — tümü, rapor her üretildiğinde o anki tüm öğeleri kapsar), dönem (son 7 / 14 /
 // 30 gün / özel aralık) + önceki eşit dönemle karşılaştırma (varsayılan açık), ortam
 // (tümü ya da seçili), isteğe bağlı bölümler (ekran görüntüleri kapalı, hata ayrıntısı açık, ortam adresi kapalı), "Raporlar'a
 // kaydet" (varsayılan açık). Önizleme betiksiz, korumalı bir iframe'dedir (sandbox=""; sunucunun tek kullanımlık önizleme adresi —
@@ -13,13 +13,14 @@ import { onayIste } from './ekran-ortak.js';
 /** Kapsam türleri: [değer, etiket, bu aşamada etkin mi]. */
 const KAPSAMLAR = [
   ['ekran', 'Tek ekran', true], ['servis', 'Tek servis', true], ['coklu-ekran', 'Birden çok ekran', true],
-  ['coklu-servis', 'Birden çok servis', true], ['karisik', 'Ekran + servis', true], ['genel', 'Genel', false]
+  ['coklu-servis', 'Birden çok servis', true], ['karisik', 'Ekran + servis', true], ['genel', 'Genel', true]
 ];
 const DONEMLER = [['son7', 'Son 7 gün'], ['son14', 'Son 14 gün'], ['son30', 'Son 30 gün'], ['ozel', 'Özel tarih aralığı']];
 const ROZETLER = { saglikli: ['Sağlıklı', 'basari'], dikkat: ['Dikkat', 'atlanan'], kritik: ['Kritik', 'hata'] };
-const KAPSAM_ETIKETI = { ekran: 'Tek ekran', servis: 'Tek servis', 'coklu-ekran': 'Birden çok ekran', 'coklu-servis': 'Birden çok servis', karisik: 'Ekran + servis' };
-/** Kapsam çoklu mu; hangi listeler gerekir. @param {string} k */
+const KAPSAM_ETIKETI = { ekran: 'Tek ekran', servis: 'Tek servis', 'coklu-ekran': 'Birden çok ekran', 'coklu-servis': 'Birden çok servis', karisik: 'Ekran + servis', genel: 'Genel' };
+/** Kapsam çoklu mu; hangi listeler gerekir (genel: seçim yok). @param {string} k */
 const cokluMu = (k) => k === 'coklu-ekran' || k === 'coklu-servis' || k === 'karisik';
+const genelMi = (k) => k === 'genel';
 const ekranGerekir = (k) => k === 'coklu-ekran' || k === 'karisik';
 const servisGerekir = (k) => k === 'coklu-servis' || k === 'karisik';
 
@@ -130,6 +131,8 @@ export function pdfRaporDiyalogu(proje, on = {}) {
   const adres = kutu('Ortam adresi', false, 'Kapalıyken hata metinlerindeki ortam adresi de gizlenir.');
   const kaydet = kutu('Raporlar\'a kaydet', true, 'PDF, Sonuçlar > Raporlar\'da şifreli saklanır (saklama süresi: Ayarlar > Yedekleme).');
   const bilgi = h('p', { class: 'soluk kucuk pdf-rapor-bilgi', role: 'status', 'aria-live': 'polite' }, '');
+  const genelNotu = h('p', { class: 'soluk kucuk pdf-rapor-genel-notu', hidden: true },
+    'Genel rapor projenin tamamını kapsar: tüm ekranlar ve ortak akışlar, tüm servisler, servis ve uçtan uca akışlar, zamanlanmış koşular, test verisi sağlığı ve kapsam. Öğe seçilmez; rapor her üretildiğinde (yeniden oluşturmada da) o anki tüm öğeleri kapsar.');
   const onizleme = h('iframe', { class: 'html-rapor-onizleme pdf-rapor-onizleme', title: 'Rapor önizlemesi', sandbox: '', referrerpolicy: 'no-referrer', hidden: true });
   const onizleDugmesi = h('button', { type: 'button' }, ikon('gorunum'), 'Önizle');
   const pdfDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon('indir'), 'PDF indir');
@@ -143,6 +146,7 @@ export function pdfRaporDiyalogu(proje, on = {}) {
       h('div', { class: 'pdf-rapor-alanlar' },
         alan('Seçim', secim), alan('Dönem', donem), alan('Ortam', ortam)),
       ozelAlan,
+      genelNotu,
       h('div', { class: 'pdf-rapor-coklu-alanlar' }, ekranListesi.kutu, servisListesi.kutu),
       karsilastir.satir,
       h('fieldset', { class: 'html-rapor-secenekleri' }, h('legend', {}, 'İsteğe bağlı bölümler'), goruntu.satir, hatalar.satir, adres.satir),
@@ -159,11 +163,13 @@ export function pdfRaporDiyalogu(proje, on = {}) {
     if (!secenekler) return;
     const kapsam = kapsamDegeri();
     const coklu = cokluMu(kapsam);
-    // Tek öğe: açılır liste; çoklu: ekran ve / veya servis onay kutusu listeleri.
-    secim.closest('.alan').hidden = coklu;
+    const genel = genelMi(kapsam);
+    // Tek öğe: açılır liste; çoklu: ekran ve / veya servis onay kutusu listeleri; genel: seçim yok (yalnız açıklama).
+    secim.closest('.alan').hidden = coklu || genel;
+    genelNotu.hidden = !genel;
     ekranListesi.kutu.hidden = !ekranGerekir(kapsam);
     servisListesi.kutu.hidden = !servisGerekir(kapsam);
-    if (coklu) return;
+    if (coklu || genel) return;
     const liste = kapsam === 'servis' ? secenekler.servisler : secenekler.ekranlar;
     if (!liste.some((x) => x.id === seciliId)) seciliId = liste[0] ? liste[0].id : '';
     secim.replaceChildren(...(liste.length ? liste.map((x) => h('option', { value: x.id, selected: x.id === seciliId }, x.ad)) : [h('option', { value: '' }, kapsam === 'servis' ? 'Servis yok' : 'Ekran yok')]));
@@ -176,6 +182,7 @@ export function pdfRaporDiyalogu(proje, on = {}) {
       karsilastir: karsilastir.girdi.checked, ortamId: ortam.value || null,
       secenekler: { goruntuler: goruntu.girdi.checked, hatalar: hatalar.girdi.checked, adres: adres.girdi.checked }
     };
+    if (genelMi(kapsam)) return ortak;
     if (!cokluMu(kapsam)) return { ...ortak, id: secim.value };
     return {
       ...ortak,
@@ -193,7 +200,7 @@ export function pdfRaporDiyalogu(proje, on = {}) {
       if (servisGerekir(kapsam) && !servisListesi.tumu() && servisListesi.secilenler().length < enAz) {
         return enAz === 1 ? 'En az bir servis seçin ya da "Tüm servisler"i işaretleyin.' : 'En az iki servis seçin ya da "Tüm servisler"i işaretleyin.';
       }
-    } else if (!secim.value) return 'Önce bir ekran ya da servis seçin.';
+    } else if (!genelMi(kapsam) && !secim.value) return 'Önce bir ekran ya da servis seçin.';
     if (donem.value === 'ozel' && (!baslangic.value || !bitis.value)) return 'Özel aralık için başlangıç ve bitiş seçin.';
     if (donem.value === 'ozel' && bitis.value < baslangic.value) return 'Bitiş, başlangıçtan önce olamaz.';
     return '';
@@ -283,7 +290,7 @@ export async function raporlarGorunumu(icerik, proje, ust = null) {
   };
   const ciz = (raporlar) => {
     if (!raporlar.length) {
-      yerlestir(liste, bosDurum('Henüz kaydedilmiş rapor yok.', '"Rapor al (PDF)" ile bir ya da birden çok ekranın / servisin dönem raporunu alın; "Raporlar\'a kaydet" açıksa burada listelenir.',
+      yerlestir(liste, bosDurum('Henüz kaydedilmiş rapor yok.', '"Rapor al (PDF)" ile bir ya da birden çok ekranın / servisin ya da projenin tamamının dönem raporunu alın; "Raporlar\'a kaydet" açıksa burada listelenir.',
         { ikon: 'dosya', eylem: pdfRaporDugmesi(proje, {}, 'dugme birincil') }));
       return;
     }
@@ -299,6 +306,8 @@ export async function raporlarGorunumu(icerik, proje, ust = null) {
     const yeniden = h('button', { type: 'button', class: 'kucuk-dugme' }, ikon('yenile'), 'Aynı seçimlerle yeniden oluştur');
     const sil = h('button', { type: 'button', class: 'kucuk-dugme tehlike-metin' }, ikon('cop'), 'Sil');
     const secimAdi = m.secim && m.secim.ad ? m.secim.ad : '—';
+    // Genel: o günkü öğe sayıları (seçim saklanmaz; yeniden oluşturma o anki tüm öğelerle çalışır).
+    const genelSayilari = m.secim && m.secim.genel ? `${Number(m.secim.ekranSayisi) || 0} ekran · ${Number(m.secim.servisSayisi) || 0} servis` : '';
     indirDugmesi.addEventListener('click', async () => {
       indirDugmesi.disabled = true;
       try {
@@ -325,7 +334,7 @@ export async function raporlarGorunumu(icerik, proje, ust = null) {
     });
     // Çoklu seçim: o günkü öğe adları (ilk 4 + "ve N diğer"); tamamı ipucunda.
     const ogeler = m.secim && Array.isArray(m.secim.ogeler) ? m.secim.ogeler.map(String) : [];
-    const ogeMetni = ogeler.length ? `${ogeler.slice(0, 4).join(', ')}${ogeler.length > 4 ? ` ve ${ogeler.length - 4} diğer` : ''}` : '';
+    const ogeMetni = genelSayilari || (ogeler.length ? `${ogeler.slice(0, 4).join(', ')}${ogeler.length > 4 ? ` ve ${ogeler.length - 4} diğer` : ''}` : '');
     return h('tr', {},
       h('td', { class: 'mono' }, tarihMetni(r.olusturulma)),
       h('td', { title: ogeler.length ? ogeler.join(', ') : null }, h('b', {}, KAPSAM_ETIKETI[m.kapsam] || m.kapsam || '—'), ' · ', secimAdi,
