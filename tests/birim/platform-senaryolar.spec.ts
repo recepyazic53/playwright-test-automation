@@ -284,13 +284,13 @@ test.describe('Model tabanlı form — şema', () => {
       kosullar: { kart: { ifade: { alan: 'odemeSekli', esit: 'kart' } }, acik: { ifade: { alan: 'odemeSekli', esit: 'acik' } } },
       adimlar: [
         { id: 'kartla', sira: 1, baslik: 'Kartla öde', gorunurluk: { kosul: 'kart' }, bolumler: [] },
-        { id: 'acikHesap', sira: 2, baslik: 'Açık hesap olarak poliçeleştirilir', gorunurluk: { kosul: 'acik' }, bolumler: [] }
+        { id: 'acikHesap', sira: 2, baslik: 'Açık hesapla tamamlanır', gorunurluk: { kosul: 'acik' }, bolumler: [] }
       ]
     };
     const ortakSema = formSemasiOlustur(ortakAkislariAc(ekran, { 'odeme.json': odeme }).model);
     expect(beklenenSonucEtiketi(ortakSema, { odemeDahil: false, odemeSekli: 'acik' })).toMatchObject({ metin: 'Giriş' });
     expect(beklenenSonucEtiketi(ortakSema, { odemeDahil: true, odemeSekli: 'kart' })).toMatchObject({ metin: 'Kartla öde' });
-    expect(beklenenSonucEtiketi(ortakSema, { odemeDahil: true, odemeSekli: 'acik' })).toMatchObject({ metin: 'Açık hesap olarak poliçeleştirilir' });
+    expect(beklenenSonucEtiketi(ortakSema, { odemeDahil: true, odemeSekli: 'acik' })).toMatchObject({ metin: 'Açık hesapla tamamlanır' });
     expect(beklenenHataOnerisi({ hataMesaji: 'Tutar hesaplama adımında beklenen sonuç doğrulanamadı. Beklenen: x — Görülen: "Limit aşıldı"', basarisizAdim: 'Tutar hesaplanır ve sonuç gösterilir' }, sema))
       .toEqual({ mesaj: 'Limit aşıldı', adim: 'hesaplama' });
     expect(beklenenHataOnerisi({ hataMesaji: 'Error: "Onay" adımından sonra beklenmeyen bir hata pop-up\'ı görüntülendi, senaryo burada durduruldu: Kart reddedildi Tamam', basarisizAdim: 'Talep onaylanır ve kart bilgileri girilir' }, sema))

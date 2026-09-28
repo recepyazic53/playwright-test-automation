@@ -152,7 +152,7 @@ test.describe('tüm ekranlar taşmasız', () => {
     const rozet = page.locator('.senaryo-tablosu td.beklenen-hucresi .rozet').first();
     await expect(rozet).toBeVisible();
     const olcum = await rozet.evaluate((r) => {
-      r.textContent = 'Ödeme: Açık hesap olarak poliçeleştirilir ve belge üretilir';
+      r.textContent = 'Ödeme: Açık hesapla tamamlanır ve belge üretilir';
       return { yukseklik: r.getBoundingClientRect().height, tasmaY: r.scrollHeight - r.clientHeight, tasmaX: r.scrollWidth - r.clientWidth };
     });
     expect(olcum.yukseklik, 'uzun metin birden çok satıra kayar').toBeGreaterThan(24);
