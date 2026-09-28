@@ -8,6 +8,8 @@ import { onayIste } from './kosu-paneli.js';
 const q = encodeURIComponent;
 const TIP = { secim: 'seçim', metin: 'metin', sayi: 'sayı', tarih: 'tarih', telefon: 'telefon', onayKutusu: 'onay kutusu', dosya: 'dosya' };
 const kucuk = (x) => String(x ?? '').trim().toLocaleLowerCase('tr');
+/** Seçenekleri tablodan listelenen alan tipleri: gizli sütuna bağlanamaz. */
+const SECIM_TIPLERI = ['secim', 'okluSecim', 'radyo'];
 
 /** @param {HTMLElement} kap @param {{ proje: { id: string } }} s @param {{ id: string; ad: string }} ekran */
 export async function ekranBaglariSekmesi(kap, s, ekran) {
@@ -46,10 +48,13 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       const b = baglar[g.id];
       const tablo = b ? tablolar.find((t) => t.id === b.tablo) : null;
       const sutun = tablo ? tablo.sutunlar.find((c) => c.ad === b.sutun) : null;
+      // Gizli sütun (ör. CVV, parola) yalnız seçim olmayan alanlara bağlanır: değer koşuda şifreli sütundan gelir, raporlarda
+      // maskelenir. Seçim alanının seçenekleri tablodan listelendiği için gizli sütun ona sunulmaz.
+      const gizliOlur = !SECIM_TIPLERI.includes(g.tip);
       const sec = h('select', { 'aria-label': `${g.etiket} tablo sütunu` }, h('option', { value: '' }, '— bağlı değil —'),
-        tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => !c.gizli).map((c) => h('option', {
+        tablolar.map((t) => h('optgroup', { label: t.ad }, t.sutunlar.filter((c) => gizliOlur || !c.gizli).map((c) => h('option', {
           value: `${t.id}\u0001${c.ad}`, selected: Boolean(b && b.tablo === t.id && b.sutun === c.ad)
-        }, `${t.ad} → ${c.ad}`)))),
+        }, `${t.ad} → ${c.ad}${c.gizli ? ' (gizli)' : ''}`)))),
         b && !sutun ? h('option', { value: '__yok', selected: true }, 'Bulunamadı (tablo ya da sütun silinmiş)') : null);
       sec.addEventListener('change', () => {
         if (sec.value === '__yok') return;
@@ -62,7 +67,9 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         title: 'Aynı tablo bu ekranda iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.' }) : null;
       etiket?.addEventListener('change', () => { const e = etiket.value.trim(); if (e) b.etiket = e; else delete b.etiket; degisti(); });
       let alt = null;
-      if (sutun) {
+      if (sutun && sutun.gizli) {
+        alt = h('span', { class: 'soluk kucuk' }, ikon('kilit'), ' gizli sütun: değer şifreli, koşuda kullanılır, gösterilmez');
+      } else if (sutun) {
         const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
         alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
       }

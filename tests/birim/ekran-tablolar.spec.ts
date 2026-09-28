@@ -12,6 +12,7 @@ import { birlesikDegerler, eslesenListeler, type ParametreTanimi } from '../../s
 import { tabloDegerListeleri } from '../../scripts/platform/tablolar/tablo-secimi.mjs';
 import { nobetciApi, nobetciBaslat, type Nobetci } from './nobetci-sunucusu';
 import { HIZLI_KDF } from './platform-ortak';
+import { ornekBasvuruModeli } from './model-fikstur';
 
 type Nesne = Record<string, any>;
 
@@ -184,6 +185,48 @@ test.describe('ekran alanları tablolardan', () => {
     await expect.poll(() => degerler('ulke')).toEqual([U[0], U[1]]);
     await secim('kapsam').selectOption(K[1]);
     await expect.poll(() => degerler('alternatif')).toEqual([A[2]]);
+    expect(hatalar).toEqual([]);
+    await baglam.close();
+  });
+
+  test('arayüz: gizli sütun (ör. CVV) metin alanına bağlanır (seçim alanına sunulmaz, değer gösterilmez); senaryo formunda "Tablodan" başvuru yazar', async () => {
+    test.setTimeout(60_000);
+    const GIZLI = 'GIZLI-DEGER-9173';
+    const kartId = (await basarili('/platform/tablo/kaydet', { projeId, ad: 'Kart', sutunlar: [{ ad: 'Kart adı' }, { ad: 'CVV', gizli: true }],
+      satirlar: [{ ad: 'test', degerler: { 'Kart adı': 'Deneme', CVV: GIZLI } }] })).tablo.id;
+    // Metin alanlı örnek ekran (rota modelinde metin alanı yok).
+    const model = ornekBasvuruModeli() as unknown as Nesne;
+    const bEkranId = String((await basarili('/platform/sayfa-paketi/ekle', { projeId, senaryoIndeksleri: [], ortamIdleri: [ortamId], paket: {
+      tur: 'sayfa-paketi', surum: 1, meta: { ekran: { anahtar: String(model.id), ad: String(model.ad), urlYolu: String(model.ekranUrl) }, olusturan: 'test', olusturulma: new Date().toISOString(), baglamProfilleri: [] },
+      model, senaryoOnerileri: [], gerekenAyarlar: { girisGerekli: true, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [] }, bilinmeyenler: []
+    } })).ekranId);
+    const tumGirdiler = (await basarili(`/platform/ekran/alan-baglari?projeId=${projeId}&ekranId=${bEkranId}`)).girdiler as Nesne[];
+    const metin = tumGirdiler.find((g) => g.tip === 'metin') as Nesne;
+    const secimAlani = tumGirdiler.find((g) => g.tip === 'secim') as Nesne;
+    expect(metin, 'rota modelinde metin alanı').toBeTruthy();
+    const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
+    const page = await baglam.newPage();
+    const hatalar: string[] = [];
+    page.on('pageerror', (e) => hatalar.push(String(e)));
+    await page.goto(`/#/ekranlar/e/${bEkranId}/veri`);
+    const bolum = page.getByRole('region', { name: 'Ekranın test verisi bağlantıları' });
+    const sec = (g: Nesne) => bolum.getByLabel(`${g.etiket} tablo sütunu`);
+    // Seçim alanı gizli sütunu listelemez; metin alanı "(gizli)" etiketiyle listeler.
+    await expect(sec(secimAlani).locator(`option[value="${kartId}\u0001CVV"]`)).toHaveCount(0);
+    await expect(sec(metin).locator(`option[value="${kartId}\u0001CVV"]`)).toHaveText('Kart → CVV (gizli)');
+    await sec(metin).selectOption(`${kartId}\u0001CVV`);
+    await expect(bolum.getByText('✓ Kaydedildi')).toBeVisible();
+    await expect(bolum.getByText('gizli sütun: değer şifreli')).toBeVisible();
+    await expect(bolum.getByText(GIZLI)).toHaveCount(0);
+    // Senaryo formu: gizli bağ değer listesinde yok, "Tablodan" yalnız başvuruyu yazar.
+    const f = await basarili(`/platform/senaryo/form?projeId=${projeId}&ekranId=${bEkranId}&ortamId=${ortamId}`);
+    expect(f.gizliBaglar).toEqual({ [metin.id]: { tablo: 'Kart', sutun: 'CVV' } });
+    expect(JSON.stringify(f)).not.toContain(GIZLI);
+    await page.goto(`/#/senaryolar/yeni/${bEkranId}`);
+    const alan = page.locator(`[data-alan="${metin.id}"]`);
+    await alan.getByRole('button', { name: /Tablodan: Kart → CVV/ }).click();
+    await expect(alan.locator('input[type="text"]')).toHaveValue('${Kart.CVV}');
+    await expect(page.getByText(GIZLI)).toHaveCount(0);
     expect(hatalar).toEqual([]);
     await baglam.close();
   });
