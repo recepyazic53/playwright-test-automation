@@ -291,8 +291,13 @@ test('arayüz: önizlemede hedef proje + ortam eşlemesi ve özet; uygulanınca 
 
     // "Yeni ortam olarak ekle" seçilince önizlemede yeni ortam görünür; geri alınınca kaybolur.
     await canliSecimi.selectOption('yeni');
-    await expect(p.locator('[data-tablo="ortamlar"] .grup.yeni').getByText('CANLI')).toBeVisible();
     await expect(bolum.getByLabel('CANLI (Canlı) (yedekte)')).toBeFocused();
+    // Tür ve grup varsayılan kapalı: açınca yeni ortam satırı görünür.
+    const ortamBolumu = p.locator('[data-tablo="ortamlar"]');
+    await expect(ortamBolumu.locator(':scope > .acilir-baslik .acilir-dugme')).toHaveAttribute('aria-expanded', 'false');
+    await ortamBolumu.locator(':scope > .acilir-baslik .acilir-dugme').click();
+    await ortamBolumu.locator('.grup.yeni .acilir-dugme').click();
+    await expect(ortamBolumu.locator('.grup.yeni').getByText('CANLI')).toBeVisible();
     await bolum.getByLabel('CANLI (Canlı) (yedekte)').selectOption(b.canli);
     await expect(p.locator('[data-tablo="ortamlar"] .grup.yeni')).toHaveCount(0);
     // Aynı ortama iki eşleme: açık hata, önizleme değişmez.
