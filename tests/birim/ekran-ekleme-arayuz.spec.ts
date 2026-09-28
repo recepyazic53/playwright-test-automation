@@ -304,6 +304,27 @@ test('Tekrar analiz diyaloğu: istek metni kopyala düğmesiyle (tam metin kapal
   await page.close();
 });
 
+test('ortak akış sayfası: "Modeli güncelle" menüsü yalnız "Paket yükle" gösterir ve paket yükleme sayfasına götürür', async () => {
+  test.setTimeout(60_000);
+  const { page, istekler } = await arayuz();
+  const ortak = ((await api(`/platform/ekranlar?projeId=${projeId}`)).ekranlar as Array<{ id: string; anahtar: string }>).find((e) => e.anahtar === ONAY_AKIS_ANAHTARI)!;
+  await page.goto(`/#/ekranlar/e/${encodeURIComponent(ortak.id)}`);
+  const menuDugmesi = page.getByRole('button', { name: /^Modeli güncelle/ });
+  await menuDugmesi.click();
+  await expect(page.getByRole('menuitem')).toHaveText([/^Paket yükle/]);
+  await page.getByRole('menuitem', { name: 'Paket yükle' }).click();
+  await expect(page).toHaveURL(new RegExp(`/ekranlar/e/${ortak.id}/yukle$`));
+  await expect(page.locator('#paket-dosyasi')).toHaveCount(1);
+  // Ortak akışın yeni sürümü (adım başlığı değişti) tekrar analizle bulgu olur.
+  const paket = onayAkisPaketi();
+  (paket.model.adimlar as Array<Record<string, unknown>>)[0].baslik = 'Onay formu açılır (yeni)';
+  await page.locator('#paket-dosyasi').setInputFiles({ name: 'ortak.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(paket)) });
+  await page.getByRole('button', { name: 'Bulguları hesapla' }).click();
+  await expect(page).toHaveURL(/\/bulgular$/);
+  agKontrol(istekler);
+  await page.close();
+});
+
 test('Paket yükle (tekrar analiz): "Bulguları hesapla" Bulgular\'a geçer; "kaydedilmemiş değişiklik" sorusu çıkmaz', async () => {
   test.setTimeout(60_000);
   const { page, istekler } = await arayuz();
