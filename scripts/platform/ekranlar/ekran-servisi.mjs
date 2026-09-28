@@ -20,7 +20,7 @@ import {
 } from '../veritabani/depo.mjs';
 import { acikAnahtar, adliAlanlariDonustur, medyaAnahtariniHazirla, sifrele, zarflariCoz } from '../kasa.mjs';
 import { medyaSifrele } from '../medya.mjs';
-import { akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
+import { akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
@@ -95,6 +95,22 @@ function altModelKaynagi(/** @type {Veritabani} */ vt, /** @type {string} */ pro
     const m = e ? ekranModeliGetir(vt, String(e.id)) : undefined;
     return m && nesneMi(m.model) ? m.model : undefined;
   };
+}
+
+/**
+ * Modelin ortak akış adımlarının başvurduğu ortak akış modelleri (dosya → model; projede bulunamayan atlanır — açılınca
+ * yer tutucu adım kalır). @param {Nesne} model @param {(dosya: string) => unknown} kaynak
+ * @returns {Record<string, Nesne>}
+ */
+function ortakAkisModelleri(model, kaynak) {
+  /** @type {Record<string, Nesne>} */
+  const sonuc = {};
+  for (const a of Array.isArray(model.adimlar) ? /** @type {unknown[]} */ (model.adimlar) : []) {
+    if (!nesneMi(a) || !nesneMi(a.ortakAkis) || typeof a.ortakAkis.dosya !== 'string' || a.ortakAkis.dosya in sonuc) continue;
+    const m = kaynak(a.ortakAkis.dosya);
+    if (nesneMi(m)) sonuc[a.ortakAkis.dosya] = /** @type {Nesne} */ (m);
+  }
+  return sonuc;
 }
 
 /** Modeli ortak doğrulayıcıdan geçirir; hatalıysa EkranDogrulamaHatasi. */
@@ -424,7 +440,13 @@ export function paketOnizle(vt, projeId, paket, secenekler = {}) {
   const agac = modelAgaci(model, d.altModeller);
   /** @type {ReturnType<typeof formSemasiOlustur> | null} */
   let sema = null;
-  try { sema = formSemasiOlustur(model, d.altModeller); } catch { sema = null; }
+  // "Beklenen" rozeti Senaryolar listesiyle aynı kuralla (senaryo-servisi.mjs > modelBaglami): varsayılan akış, ortak akış
+  // adımları projedeki ortak akış modelleriyle AÇILMIŞ halde (ortak akışın son adımı / koşulu sağlanmayan adım sayılmaz).
+  try {
+    const akisModel = /** @type {Nesne} */ (akisModeli(model, null));
+    const ortakAkislar = ortakAkisModelleri(akisModel, altModelKaynagi(vt, projeId));
+    sema = formSemasiOlustur(ortakAkislariAc(akisModel, ortakAkislar).model, { ...d.altModeller, ...ortakAkislar });
+  } catch { sema = null; }
   const oneriler = /** @type {Nesne[]} */ (Array.isArray(p.senaryoOnerileri) ? p.senaryoOnerileri : []);
   const mevcutBasliklar = new Set(vt.tumu('SELECT baslik FROM senaryolar WHERE proje_id = ? AND ekran_id = ?', [projeId, hedef ? hedef.id : '']).map((s) => String(s.baslik)));
   const senaryolar = oneriler.map((o, i) => {

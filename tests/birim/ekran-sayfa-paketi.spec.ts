@@ -18,6 +18,7 @@ import {
   EkranDogrulamaHatasi, analizGetir, analizUygula, analizYukle, claudeDosyasiYaz, ekranDetayi, ekranListesi, paketOnizle, sayfaEkle,
   surumAyrintisi, topluDegerAta
 } from '../../scripts/platform/ekranlar/ekran-servisi.mjs';
+import { senaryoListesi } from '../../scripts/platform/senaryolar/senaryo-servisi.mjs';
 import { ekranModeliniKur } from '../support/ekran-modeli';
 import { HIZLI_KDF, geciciKlasor } from './platform-ortak';
 
@@ -394,5 +395,70 @@ test.describe('Ekran servisi — Ekran ekle, tekrar analiz, kararlar, etki', () 
     expect((hata as EkranDogrulamaHatasi).hatalar.some((h) => h.mesaj.includes('başvurulan alan "sorguTipi" modelde yok'))).toBe(true);
     expect(analizGetir(vt, projeId, ek.ekranId).analiz?.durum).toBe('bekliyor');
     expect(ekranModeliGetir(vt, ek.ekranId)?.surum).toBe(1);
+  });
+
+  test('önizlemedeki "Beklenen" rozeti ortak akış açılmış modelle: Senaryolar listesiyle aynı etiket', async () => {
+    const medya = join(klasor.yol, 'medya');
+    const meta = (anahtar: string, ad: string, urlYolu?: string) => ({
+      ekran: { anahtar, ad, ...(urlYolu ? { urlYolu } : {}) }, olusturan: 'test', olusturulma: '2026-09-28T09:00:00Z', baglamProfilleri: []
+    });
+    const ayarlar = { girisGerekli: false, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [] };
+    const secimAlani = (id: string, etiket: string, degerler: string[]) => ({
+      id, tip: 'secim', etiket: { ekran: etiket }, yapilandirma: 'senaryo', eslesme: { senaryo: id }, secenekler: degerler.map((d) => ({ deger: d, metin: d }))
+    });
+    const bolum = (id: string) => [{ id: `${id}Bolumu`, baslik: id, alanlar: [{
+      id: `${id}Notu`, tip: 'metin', etiket: { ekran: `${id} notu` }, yapilandirma: 'senaryo', eslesme: { senaryo: `${id}Notu` }, konum: { secici: `#${id}`, kirilganlik: 'dusuk' }
+    }] }];
+    // Ortak akış: ödeme şekline göre iki koşullu adım (kartla / açık hesapla).
+    const ortak = {
+      tur: 'sayfa-paketi', surum: 1, meta: meta('odeme-ortak', 'Ödeme (ortak)'),
+      model: {
+        semaSurumu: 2, tur: 'ortakAkis', id: 'odeme-ortak', ad: 'Ödeme (ortak)', aciklama: 'Ödeme kısmı (nötr fikstür).',
+        kosullar: { kart: { ifade: { alan: 'odemeSekli', esit: 'kart' } }, acik: { ifade: { alan: 'odemeSekli', esit: 'acik' } } },
+        adimlar: [
+          { id: 'kartla', sira: 1, baslik: 'Kartla öde', gorunurluk: { kosul: 'kart' }, bolumler: bolum('kart') },
+          { id: 'acikHesap', sira: 2, baslik: 'Açık hesapla tamamlanır', gorunurluk: { kosul: 'acik' }, bolumler: bolum('acik') }
+        ],
+        senaryoDuzeyi: { alanlar: [secimAlani('odemeSekli', 'Ödeme şekli', ['kart', 'acik'])] }, urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
+      },
+      senaryoOnerileri: [], gerekenAyarlar: ayarlar, bilinmeyenler: []
+    };
+    expect(paketOnizle(vt, projeId, ortak).hatalar).toEqual([]);
+    await sayfaEkle(vt, projeId, ortak, { senaryoIndeksleri: [], ortamIdleri: [], medyaKlasoru: medya });
+    const oneri = (baslik: string, veri: Nesne) => ({ baslik, veri, beklenenSonuc: { tur: 'basari', aciklama: 'akış tamamlanır' }, gerekce: 'kapsam' });
+    const ekran = {
+      tur: 'sayfa-paketi', surum: 1, meta: meta('ortakli-ekran', 'Ortaklı ekran', '/ortakli/'),
+      model: {
+        semaSurumu: 2, tur: 'ekran', id: 'ortakli-ekran', ad: 'Ortaklı ekran', aciklama: 'Ortak akışı kullanan ekran (nötr fikstür).', ekranUrl: '/ortakli/',
+        specDosyasi: 'tests/scenarios/ortakli-ekran/ortakli-ekran.spec.ts', pageObject: 'yok (model koşucusu)',
+        kosullar: { odemeDahil: { ifade: { senaryoAyari: 'odemeDahil', esit: true } } },
+        adimlar: [
+          { id: 'giris', sira: 1, baslik: 'Giriş bilgileri', bolumler: bolum('giris') },
+          { id: 'odeme', sira: 2, baslik: 'Ödeme', ortakAkis: { dosya: 'odeme-ortak.model.json' }, gorunurluk: { kosul: 'odemeDahil' } }
+        ],
+        senaryoDuzeyi: { alanlar: [
+          { id: 'baslik', tip: 'metin', zorunlu: true, benzersiz: true, yapilandirma: 'senaryo', eslesme: { senaryo: 'baslik' } },
+          { id: 'odemeDahil', tip: 'onayKutusu', etiket: { ekran: 'Ödeme dahil' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'odemeDahil' } },
+          { id: 'beklenenSonuc', tip: 'birlesim', etiket: { ekran: 'Beklenen sonuç' }, yapilandirma: 'senaryo', eslesme: { senaryo: 'beklenenSonuc' }, varyantlar: [{ tip: 'basarili' }] }
+        ] },
+        urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
+      },
+      senaryoOnerileri: [
+        oneri('Ödeme dahil, kartla', { odemeDahil: true, odemeSekli: 'kart', beklenenSonuc: { tip: 'basarili' } }),
+        oneri('Ödeme dahil, açık hesap', { odemeDahil: true, odemeSekli: 'acik', beklenenSonuc: { tip: 'basarili' } }),
+        oneri('Ödeme dahil değil', { odemeDahil: false, odemeSekli: 'kart', beklenenSonuc: { tip: 'basarili' } })
+      ],
+      gerekenAyarlar: ayarlar, bilinmeyenler: []
+    };
+    const o = paketOnizle(vt, projeId, ekran);
+    expect(o.hatalar).toEqual([]);
+    const rozetMetni = (s: Nesne) => (s.rozet as { metin?: string } | null)?.metin;
+    const rozetler = (o.onizleme?.senaryolar ?? []).map(rozetMetni);
+    // "Dahil": ortak akışın (koşulu sağlanan) son adımı; "dahil değil": ekranın son adımı (başvuru adımı "Ödeme" değil).
+    expect(rozetler).toEqual(['Kartla öde', 'Açık hesapla tamamlanır', 'Giriş bilgileri']);
+    const ek = await sayfaEkle(vt, projeId, ekran, { senaryoIndeksleri: [0, 1, 2], ortamIdleri: [ortamId], medyaKlasoru: medya });
+    const liste = senaryoListesi(vt, projeId, null).senaryolar.filter((s) => s.ekranId === ek.ekranId);
+    const listeRozeti = Object.fromEntries(liste.map((s) => [s.baslik, (s.beklenenSonuc as { metin?: string } | null)?.metin]));
+    (o.onizleme?.senaryolar ?? []).forEach((s) => expect(listeRozeti[s.baslik], s.baslik).toBe(rozetMetni(s)));
   });
 });
