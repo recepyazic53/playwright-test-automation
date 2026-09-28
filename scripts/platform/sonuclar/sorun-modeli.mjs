@@ -12,7 +12,8 @@
 //   (n > 0, n′ = 0, G'de görülmüş ama arada çözülmemiş sorun da süregelendir.)
 //   D içinde ≥ 3 ardışık geçişten sonra yeniden kalan imza ayrıca "tekrar eden" rozeti alır.
 // Kararlılık (senaryo): aynı senaryo + ortam + gün + model sürümü (uygulama sürümü verisi henüz yok) içindeki geçti↔kaldı değişimi;
-//   oran = değişim ÷ (koşu − 1). Kararsız: oran ≥ %20 ve koşu ≥ 5; izlenir: %5–20 ya da ek kanıt (tekrar denemesinde /
+//   oran = Σ değişim ÷ Σ (koşu − 1); "koşu" yalnız karşılaştırılabilir koşulardır (grubunda en az iki koşu olan).
+//   Kararsız: oran ≥ %20 ve koşu ≥ 5; izlenir: %5–20 ya da ek kanıt (tekrar denemesinde /
 //   "Başarısızları tekrar çalıştır" koşusunda geçmiş). Atlanan ve durdurulan sonuçlar diziye girmez.
 import { createHash } from 'node:crypto';
 import { GUN_MS, donemParcasi, gunAnahtari, kovaIndeksi } from './donem.mjs';
@@ -69,6 +70,8 @@ export function kararlilikHesapla(gozlemler, e = ESIKLER) {
     liste.sort((a, b) => a.zaman - b.zaman);
     const t = toplam.get(liste[0].senaryo) ?? { kosu: 0, degisim: 0, payda: 0 };
     toplam.set(liste[0].senaryo, t);
+    // Yalnız karşılaştırılabilir koşular (aynı grupta en az iki koşu) sayılır: farklı günlerdeki tek koşular kararsızlık kanıtı değildir.
+    if (liste.length < 2) continue;
     t.kosu += liste.length;
     t.payda += liste.length - 1;
     for (let i = 1; i < liste.length; i++) if (kalanMi(liste[i].durum) !== kalanMi(liste[i - 1].durum)) t.degisim++;

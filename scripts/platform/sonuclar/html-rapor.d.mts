@@ -17,6 +17,7 @@ export type RaporSecenekleri = {
 export declare const EN_COK_GORUNTU_BAYT: number;
 export declare function raporGoruntuSiniriBayt(vt: unknown): number;
 export declare function kacis(v: unknown): string;
+export declare function dosyaAdiParcasi(s: unknown): string;
 export declare function raporDosyaAdi(proje: string, ortam: string | null, tarih?: Date): string;
 export declare function htmlRaporuUret(v: RaporVerisi, secenekler?: RaporSecenekleri): string;
 export declare function htmlRaporuOlustur(vt: unknown, q: URLSearchParams, ortamlar: { medyaKlasoru: string }): Promise<{
