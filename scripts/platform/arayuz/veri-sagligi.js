@@ -161,27 +161,36 @@ export function birlestirmePenceresi(proje, tabloIdleri, kullanim, tablolar) {
       }, gecikme);
     };
 
+    // Başlık ve ad kutusu bir kez kurulur: önizleme her yeniden hesaplandığında yalnız kalan-tablo seçimi ve alt bölümler
+    // yeniden çizilir; ad kutusu yerinde kaldığı için yazarken odak ve imleç kaybolmaz.
+    const kalanKap = h('div');
+    const altKap = h('div');
+    const adG = h('input', { type: 'text', maxlength: '60', value: is.yeniAd, placeholder: ad(is.kalanId), 'aria-label': 'Kalan tablonun adı' });
+    adG.addEventListener('input', () => { is.yeniAd = adG.value; hesapla(400); });
+    yerlestir(govde, [
+      h('h2', { id: 'birlestirme-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('esle')), 'Tabloları birleştir'),
+      h('p', { class: 'soluk kucuk' }, 'Kalacak tabloyu seçin: diğerlerinin farklı satırları ona eklenir ve onları kullanan her şey (ekran / servis bağları, senaryolar, satır seçimleri, kurallar) ona yeniden eşlenir. Önce önizleme ve kuru doğrulama yapılır; onaylamadan hiçbir şey yazılmaz.'),
+      h('h3', { class: 'kucuk-baslik' }, 'Kalacak tablo'), kalanKap,
+      h('label', { class: 'alan-etiketi' }, h('span', {}, 'Kalan tablonun adı (boş: değişmez)'), adG),
+      altKap
+    ]);
+
     function ciz() {
       const o = is.onizleme;
-      const kalanSecimi = h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': 'Kalacak tablo' }, tabloIdleri.map((id) => {
+      yerlestir(kalanKap, [h('div', { class: 'radyo-grubu dikey', role: 'radiogroup', 'aria-label': 'Kalacak tablo' }, tabloIdleri.map((id) => {
         const r = h('input', { type: 'radio', name: 'kalan-tablo', value: id, checked: id === is.kalanId });
         r.addEventListener('change', () => { is.kalanId = id; is.eslemeler = {}; is.eslemeOnayli = false; is.satirSecimleri = {}; is.karsilikSecimleri = {}; hesapla(); });
         const t = o && o.tablolar.find((x) => x.id === id);
         return h('label', { class: 'kalan-secenegi' }, r, h('span', {}, h('b', {}, ad(id)), t ? ` — ${t.sutunSayisi} sütun, ${t.satirSayisi} satır` : '',
-          h('span', { class: 'neden' }, kullanimMetni(kullanim[id]))), o && o.onerilenKalan === id ? rozet('en çok kullanılan (önerilen)', 'basari') : null);
-      }));
-      const adG = h('input', { type: 'text', maxlength: '60', value: is.yeniAd, placeholder: ad(is.kalanId), 'aria-label': 'Kalan tablonun adı' });
-      adG.addEventListener('input', () => { is.yeniAd = adG.value; hesapla(400); });
-      const bolumler = [
-        h('h2', { id: 'birlestirme-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('esle')), 'Tabloları birleştir'),
-        h('p', { class: 'soluk kucuk' }, 'Kalacak tabloyu seçin: diğerlerinin farklı satırları ona eklenir ve onları kullanan her şey (ekran / servis bağları, senaryolar, satır seçimleri, kurallar) ona yeniden eşlenir. Önce önizleme ve kuru doğrulama yapılır; onaylamadan hiçbir şey yazılmaz.'),
-        h('h3', { class: 'kucuk-baslik' }, 'Kalacak tablo'), kalanSecimi,
-        h('label', { class: 'alan-etiketi' }, h('span', {}, 'Kalan tablonun adı (boş: değişmez)'), adG)
-      ];
+          o && o.onerilenKalan === id ? h('span', { class: 'onerilen' }, rozet('en çok kullanılan (önerilen)', 'basari')) : null,
+          h('span', { class: 'neden' }, kullanimMetni(kullanim[id]))));
+      }))]);
+      adG.placeholder = ad(is.kalanId);
+      const bolumler = [];
       if (is.hata) bolumler.push(h('div', { class: 'not-kutusu hata', role: 'alert' }, is.hata));
       if (is.hesaplaniyor) bolumler.push(h('p', { class: 'soluk kucuk', 'aria-live': 'polite' }, 'Önizleme hesaplanıyor…'));
       if (o) bolumler.push(...onizlemeBolumleri(o));
-      yerlestir(govde, bolumler);
+      yerlestir(altKap, bolumler);
       birlestir.disabled = !o || is.hesaplaniyor || !o.dogrulandi || !o.imza || o.engeller.length > 0;
     }
 
