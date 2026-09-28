@@ -18,6 +18,7 @@ import { oturumlariTemizle, servisAkisiCalistir, servisAkisiDenetle } from './se
 import { servisSenaryoGorunumu } from './akis-senaryosu.mjs';
 import { tabloKosuDenetimi } from '../tablolar/tablo-uclari.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { sozlesmeBilgisi, sozlesmeKaydet, sozlesmeOnizle, sozlesmeSil } from './servis-sozlesmesi.mjs';
 
 /**
  * Tablo değer değişikliği onayı (tablolar/tablo-etkisi.mjs): etki kipi ('onizle' = önizleme ekranı, yazmaz), güncellenecek senaryolar,
@@ -34,7 +35,8 @@ const etkiGirdisi = (g) => ({
 /** @typedef {Record<string, any>} Govde */
 
 /** SoapUI dosyası büyük olabilir: bu uçlar büyük gövde sınırıyla okunur. */
-export const SERVIS_BUYUK_GOVDE_UCLARI = Object.freeze(['/platform/servis/soapui/onizle', '/platform/servis/soapui/aktar', '/platform/servis/postman/onizle', '/platform/servis/postman/aktar']);
+export const SERVIS_BUYUK_GOVDE_UCLARI = Object.freeze(['/platform/servis/soapui/onizle', '/platform/servis/soapui/aktar', '/platform/servis/postman/onizle', '/platform/servis/postman/aktar',
+  '/platform/servis/sozlesme/onizle']);
 
 /** @param {unknown} d @param {string} alan */
 function kimlik(d, alan = 'id') {
@@ -116,6 +118,11 @@ export const SERVIS_GET_UCLARI = [
       });
     }
     return { servis: servisOzeti(db, s), senaryolar: g.senaryolar, sonSonuclar: g.sonSonuclar };
+  }],
+  // Sözleşme sekmesi (operasyon / uç başına): sözleşme, geçmiş, kayıtlı WSDL yanıt şeması var mı, taslak için başarılı yanıtlar.
+  ['/platform/servis/sozlesme', (db, q) => {
+    const projeId = kimlik(q.get('projeId'), 'projeId');
+    return sozlesmeBilgisi(db, projeId, { servisId: servisAl(db, projeId, q.get('servisId')).id, operasyon: metin(q.get('operasyon')) });
   }],
   ['/platform/servis/parametreler', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -202,6 +209,25 @@ export const SERVIS_POST_UCLARI = [
   ['/platform/servis/sema/yenile', async (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');
     return semaYenile(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, ortamId: kimlik(g.ortamId, 'ortamId') });
+  }],
+  // Servis sözleşmesi: kaynaktan önizleme (YAZMAZ, ağ isteği yok), kayıt (var olanı değiştirmek onayla), silme (onayla).
+  ['/platform/servis/sozlesme/onizle', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    const metinler = Array.isArray(g.metinler) ? g.metinler.filter((/** @type {unknown} */ x) => typeof x === 'string') : undefined;
+    return sozlesmeOnizle(db, projeId, {
+      servisId: servisAl(db, projeId, g.servisId).id, operasyon: metin(g.operasyon), kaynak: metin(g.kaynak),
+      ...(typeof g.metin === 'string' ? { metin: g.metin } : {}), ...(metinler ? { metinler } : {}), ...(typeof g.dosyaAdi === 'string' ? { dosyaAdi: g.dosyaAdi } : {}),
+      ...(typeof g.openapiAnahtari === 'string' && g.openapiAnahtari ? { openapiAnahtari: g.openapiAnahtari } : {}),
+      ...(Array.isArray(g.kosuIdleri) ? { kosuIdleri: g.kosuIdleri.map((/** @type {unknown} */ x) => kimlik(x, 'kosuId')) } : {})
+    });
+  }],
+  ['/platform/servis/sozlesme/kaydet', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return sozlesmeKaydet(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, operasyon: metin(g.operasyon), sozlesme: g.sozlesme, onay: g.onay === true });
+  }],
+  ['/platform/servis/sozlesme/sil', (db, g) => {
+    const projeId = kimlik(g.projeId, 'projeId');
+    return sozlesmeSil(db, projeId, { servisId: servisAl(db, projeId, g.servisId).id, operasyon: metin(g.operasyon), onay: g.onay === true });
   }],
   ['/platform/servis/sil', (db, g) => {
     const projeId = kimlik(g.projeId, 'projeId');

@@ -1,7 +1,8 @@
 // "Servisler" (ÜRÜNLER > 2 · Servisler): SOAP servis testleri. Ekranlardan ve ekran sonuçlarından AYRIDIR.
 // Adresler:
 //   #/servisler/yeni                      → Servis ekle (elle ya da SoapUI dosyasından)
-//   #/servisler/s/<id>[/<sekme>]          → servis sayfası; sekmeler: senaryolar, akislar, parametreler, raporlar, islemler
+//   #/servisler/s/<id>[/<sekme>]          → servis sayfası; sekmeler: senaryolar, akislar, sozlesme, parametreler, raporlar, islemler
+//   #/servisler/s/<id>/sozlesme[/<operasyon>] → yanıt sözleşmesi (servis-sozlesmesi.js)
 //   #/servisler/sonuclar[/...]            → Servis sonuçları ekranı (servis-sonuclari.js)
 //   #/servisler/s/<id>/senaryo/<sid|yeni> → senaryo düzenleyici (gövde + başlıklar + kontroller + Dene)
 //   #/servisler/s/<id>/akislar[/<akisId|yeni>] → servis akışları ve oturum akışı (servis-akislari.js)
@@ -28,7 +29,7 @@ import { senaryoSayfasi } from './akis-senaryo-formu.js';
 import { aramaEslesiyorMu } from './model-formu.mjs';
 import { basvuru, basvuruCoz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 
-const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
+const SEKMELER = [['senaryolar', 'Senaryolar'], ['akislar', 'Akışlar'], ['sozlesme', 'Sözleşme'], ['parametreler', 'Parametreler'], ['raporlar', 'Raporlar'], ['islemler', 'İşlemler']];
 const KAPSAM = { test: 'TEST', canli: 'CANLI', ikisi: 'TEST + CANLI' };
 const DURUM = { basarili: ['Başarılı', 'basari'], basarisiz: ['Başarısız', 'hata'], hata: ['Hata', 'hata'] };
 const KONTROL_TURLERI = [
@@ -424,6 +425,7 @@ async function servisSayfasi(icerik, proje, servisId, sekme, altKimlik) {
     return;
   }
   if (sekme === 'akislar') { await akislarSekmesi(sekmeAlani, proje, s, ortamlar, altKimlik, yenile); return; }
+  if (sekme === 'sozlesme') { await (await import('./servis-sozlesmesi.js')).sozlesmeSekmesi(sekmeAlani, proje, s, altKimlik); return; }
   if (sekme === 'parametreler') { await parametrelerSekmesi(sekmeAlani, proje, s, ortamlar, yenile); return; }
   if (sekme === 'raporlar') { await raporlarSekmesi(sekmeAlani, proje, s, ortamlar, d.senaryolar, altKimlik); return; }
   if (sekme === 'islemler') { islemlerSekmesi(sekmeAlani, proje, s, ortamlar); return; }
@@ -850,6 +852,7 @@ function sonucGovdesi(r) {
   return [
     h('div', { class: 'baslik-satiri' }, rozet(etiket, sinif), r.durumKodu ? rozet(`HTTP ${r.durumKodu}`) : null, h('span', { class: 'soluk kucuk' }, `${r.sureMs} ms · ${r.ortam || ''}`)),
     r.hata ? h('div', { class: 'not-kutusu hata', role: 'alert' }, r.hata) : null,
+    r.yetkiTekrari ? h('p', { class: 'not-kutusu bilgi yetki-notu' }, ikon('yenile'), ' ', r.yetkiTekrari.not) : null,
     r.ozet ? h('p', {}, h('b', {}, 'Yanıt: '), r.ozet) : null,
     r.kontroller && r.kontroller.length ? kontrolSonuclari(r.kontroller) : null,
     r.istek ? h('details', {}, h('summary', {}, 'İstek (gizli değerler maskeli)'), h('pre', { class: 'hata-mesaji kod-blogu' }, r.istek)) : null,
@@ -1263,6 +1266,17 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       h('div', { class: 'kontrol-listesi-duzen' }, ...satirlar, ekle));
   };
   kontrolCiz();
+  // Yanıt sözleşmesi (servis > Sözleşme sekmesi): senaryo başına, varsayılan KAPALI (bugünkü davranış).
+  const sozlesmeKutusu = h('input', { type: 'checkbox', id: yeniKimlik('sozlesme'), checked: i.sozlesmeDogrula === true });
+  const sozlesmeNotu = h('span', { class: 'soluk kucuk sozlesme-notu' });
+  const sozlesmeNotuCiz = () => {
+    const var_ = Boolean((s.ayarlar.sozlesmeler || {})[operasyon.value]);
+    yerlestir(sozlesmeNotu, var_ ? 'Açıkken yanıt bu metodun sözleşmesine göre doğrulanır; uyumsuzluk senaryoyu kaldırır. '
+      : 'Bu metodun sözleşmesi yok (açıksa senaryo "Sözleşme: tanımlı değil" ile kalır). ',
+    h('a', { href: `#/servisler/s/${q(s.id)}/sozlesme/${q(operasyon.value)}` }, var_ ? 'Sözleşmeyi gör' : 'Sözleşme tanımla'));
+  };
+  operasyon.addEventListener('change', sozlesmeNotuCiz);
+  sozlesmeNotuCiz();
   const mesaj = mesajKutusu();
   /** Boş seçimler atılır (yalnız seçilmiş sütunlar saklanır). */
   const tabloSecimleriAl = () => {
@@ -1272,6 +1286,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
   const icerikAl = () => ({
     ...i, tabloSecimleri: tabloSecimleriAl(), operasyon: operasyon.value, govde: mod === 'alanlar' && sema() ? govdeUretFormdan() : govde.value, basliklar: basliklarAl(),
     ...(rest ? { http: { ...(i.http || {}), metot: httpMetot.value, yol: httpYol.value.trim() } } : {}),
+    sozlesmeDogrula: sozlesmeKutusu.checked,
     kontroller: kontrolYapisi().map(function temiz(k) {
       const t = Object.fromEntries(Object.entries(k).filter(([a, v]) => a !== 'alt' && v !== '' && v !== false && v !== undefined));
       return k.tur === 'veya' ? { ...t, alt: (k.alt || []).map(temiz) } : t;
@@ -1312,7 +1327,8 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
       rest ? h('div', { class: 'satir-duzen' }, alan('HTTP metodu', httpMetot), alan('Yol', httpYol, { yardim: `Servis adresine (${s.ayarlar.yol || '/'}) eklenir; sorgu dahil. Değerler URL kodlanır.` })) : null,
       rest ? null : sekmeKap, uyari, govdeAlani,
       alan('HTTP header', basliklar, { yardim: 'İsteğe eklenecek header satırları, her satırda "Ad: değer". Servis akışında okunan değer ${akis:Ad} ile kullanılır (ör. Authorization: Bearer ${akis:Token}); değer servisin oturum akışından da gelebilir.' })),
-    h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu),
+    h('fieldset', {}, h('legend', {}, 'Kontroller'), kontrolKutusu,
+      h('div', { class: 'sozlesme-secenegi' }, h('label', { class: 'secenek', for: sozlesmeKutusu.id }, sozlesmeKutusu, 'Yanıt sözleşmeye uymalı'), sozlesmeNotu)),
     h('div', { class: 'dugmeler' }, kaydet, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));
 }
 

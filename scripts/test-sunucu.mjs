@@ -361,6 +361,9 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/hesap-kurallari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'hesap-kurallari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/hesap-kurali-formu.js', { dosya: 'hesap-kurali-formu.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rest-semasi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'rest-semasi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Servis sözleşmesi: yanıt doğrulayıcı / taslak düzenleme (saf modül) sunucuyla ORTAK; sekme arayüzü.
+  ['/arayuz/sozlesme-dogrulayici.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'sozlesme-dogrulayici.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/servis-sozlesmesi.js', { dosya: 'servis-sozlesmesi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/tablo-secimi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-secimi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
   ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],

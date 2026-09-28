@@ -1,7 +1,7 @@
 // KORUMA TESTLERİ — servis akışları (kayıt + koşu + oturum): adımlar kayıtlı senaryolara başvurur; bir adımın yanıtından okunan
 // değer (token) sonraki adımda ${akis:Token} ile başlıkta / gövdede kullanılır; kalan adımdan sonrakiler atlanır (istek atılmaz);
 // ${akis:X} önceki adımda okunmuyorsa akış reddedilir; gizli değer akış ve servis kayıtlarında maskelidir. Oturum akışı servise
-// atanınca token koşular arasında süresi dolana kadar bir kez alınır, 401'de bir kez yenilenir. Canlıda "yalnız test" adımı olan
+// atanınca token koşular arasında süresi dolana kadar bir kez alınır, 401'de ("Token'ı yenile, bir kez tekrar dene" seçiliyse) bir kez yenilenir. Canlıda "yalnız test" adımı olan
 // akış istek atmadan reddedilir. Yalnız yerel sahte SOAP sunucusu.
 import { join } from 'node:path';
 import { expect, test } from '@playwright/test';
@@ -133,7 +133,7 @@ test.describe('servis akışları', () => {
   test('oturum akışı: servise atanır; token koşular arasında bir kez alınır; 401 gelince bir kez yenilenir', async () => {
     oturumlariTemizle();
     const oturum = servisAkisiKaydet(vt, { projeId, baslik: 'Giriş oturumu', tur: 'oturum', icerik: { adimlar: [
-      { ad: 'Giriş', servisId, senaryoId: giris, okumalar: [{ ad: 'Token', yol: '//Sonuc/Token' }] }], omurSaniye: 600 } });
+      { ad: 'Giriş', servisId, senaryoId: giris, okumalar: [{ ad: 'Token', yol: '//Sonuc/Token' }] }], omurSaniye: 600, yetkiHatasinda: 'yenileVeTekrar' } });
     const normal = servisAkisiKaydet(vt, { projeId, baslik: 'Normal', icerik: { adimlar: [{ ad: 'Giriş', servisId, senaryoId: giris }] } });
     expect(() => servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', oturumAkisi: normal })).toThrow('oturum akışı değil');
     servisiKaydet(vt, projeId, { id: servisId, anahtar: 'ornek', ad: 'Ornek', yol: '/Servis/ornek.asmx', oturumAkisi: oturum });
@@ -150,6 +150,7 @@ test.describe('servis akışları', () => {
     const r4 = await kos();
     expect(r4.durum).toBe('basarili');
     expect(r4.oturum?.durum).toBe('yenilendi');
+    expect(r4.yetkiTekrari?.not).toBe('401 alındı, token yenilendi, tekrar denendi');
     expect(servisKosulariniListele(vt, { servisId }).filter((k) => k.baslik === 'Yetkili siparis').length).toBe(4);   // 401 denemesi kaydedilmez
     expect(JSON.stringify(servisKosusuGetir(vt, r4.kosuId))).not.toMatch(/tok-\d/);
     // Akış adımında da oturum değeri kullanılır (akış Token okumadan).

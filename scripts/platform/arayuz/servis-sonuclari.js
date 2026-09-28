@@ -330,7 +330,7 @@ async function kosuAyrintisi(icerik, proje, id) {
         h('td', {}, a.ad, a.okunanlar && Object.keys(a.okunanlar).length
           ? h('div', { class: 'soluk kucuk servis-sonuc-okunan' }, `Okunan: ${Object.entries(a.okunanlar).map(([ad, d]) => `${ad} = ${d}`).join(', ')}`) : null),
         h('td', {}, a.servis, h('div', { class: 'soluk kucuk' }, a.senaryo)),
-        h('td', {}, durumRozeti(a.durum)), h('td', { class: 'sayi' }, sureMetni(a.sureMs)), hataHucresi(a.hata),
+        h('td', {}, durumRozeti(a.durum), a.not ? h('div', { class: 'soluk kucuk yetki-notu' }, a.not) : null), h('td', { class: 'sayi' }, sureMetni(a.sureMs)), hataHucresi(a.hata),
         h('td', {}, a.satirId ? h('a', { class: 'dugme kucuk-dugme hayalet', href: `${TABAN}/senaryo/${q(a.satirId)}`, 'aria-label': `Adım ayrıntısı: ${a.ad}` }, 'Ayrıntı') : null)))))
     : h('table', { class: 'ozet-tablosu' }, h('caption', { class: 'gorunmez' }, 'Senaryo sonuçları'),
       h('thead', {}, h('tr', {}, ...['Durum', 'Senaryo', 'HTTP', 'Süre', 'Hata'].map((b, i) => h('th', { scope: 'col', class: i === 2 || i === 3 ? 'sayi' : null }, b)))),
@@ -407,7 +407,8 @@ async function senaryoAyrintisi(icerik, proje, id) {
         h('dt', {}, 'Süre'), h('dd', { class: 'mono' }, sureMetni(r.sureMs)),
         r.adres ? [h('dt', {}, 'Adres'), h('dd', { class: 'mono' }, r.adres)] : null,
         r.akis ? [h('dt', {}, 'Akış'), h('dd', {}, `${r.akis.akisBaslik}${r.akis.adimNo ? ` · ${r.akis.adimNo}. adım` : ''}${r.akis.adimAd ? ` (${r.akis.adimAd})` : ''}`)] : null,
-        r.oturum ? [h('dt', {}, 'Oturum'), h('dd', {}, `${r.oturum.akis} (${r.oturum.durum})`)] : null),
+        r.oturum ? [h('dt', {}, 'Oturum'), h('dd', {}, `${r.oturum.akis} (${r.oturum.durum})`)] : null,
+        r.yetkiTekrari ? [h('dt', {}, 'Yetki hatası'), h('dd', { class: 'yetki-notu' }, r.yetkiTekrari.not)] : null),
       r.ozet ? h('p', { class: 'servis-sonuc-yanit-ozeti' }, h('b', {}, 'Yanıt özeti: '), r.ozet) : null),
     r.okunanlar && Object.keys(r.okunanlar).length ? h('section', { class: 'kart', 'aria-labelledby': 'ss-okunan-basligi' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-okunan-basligi' }, ikon('anahtar'), 'Yanıttan okunan değerler')),

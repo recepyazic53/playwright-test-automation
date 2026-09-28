@@ -3,7 +3,7 @@
 //   #/servisler/s/<id>/akislar              → bu servisin oturum akışı seçimi + projenin akışları
 //   #/servisler/s/<id>/akislar/<akisId|yeni> → akış tasarımı: diyagram (servis-akis-diyagrami.js; adımlar, değer izi, Dene, koşu geçmişi)
 // Oturum akışı (tür "oturum"): servise atanır; senaryolardaki ${akis:Token} değeri oturumdan gelir (koşular arasında süresi
-// dolana kadar paylaşılır, 401'de yenilenir). Dene yalnız TEST; canlı koşu yalnız kullanıcı onayıyla. Açık token arayüze gelmez.
+// dolana kadar paylaşılır; 401 / 403 sonrası akışın "Yetki hatasında" seçimi). Dene yalnız TEST; canlı koşu yalnız kullanıcı onayıyla. Açık token arayüze gelmez.
 import { alan, api, bildir, bosDurum, h, ikon, rozet, tarihMetni, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
 import { servisAkisTasarimi } from './servis-akis-diyagrami.js';
@@ -37,7 +37,7 @@ export async function akislarSekmesi(kap, proje, s, ortamlar, altKimlik, yenile)
   const oturumKarti = h('div', { class: 'kart form-paneli' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('anahtar'), 'Oturum akışı (token)'), h('span', { class: 'sag' }, durum)),
     h('p', { class: 'soluk kucuk' }, 'Bu servisin senaryolarında ', h('code', {}, '${akis:Token}'), ' gibi bir değer kullanılıyorsa (ör. başlıkta ',
-      h('code', {}, 'Authorization: Bearer ${akis:Token}'), ') değer seçilen oturum akışından gelir. Token koşular arasında süresi dolana kadar yeniden kullanılır; sunucu 401 dönerse bir kez yenilenir.'),
+      h('code', {}, 'Authorization: Bearer ${akis:Token}'), ') değer seçilen oturum akışından gelir. Token koşular arasında süresi dolana kadar yeniden kullanılır; sunucu 401 / 403 dönerse ne yapılacağı oturum akışının "Yetki hatasında" seçimindedir.'),
     oturumlar.length ? alan('Oturum akışı', sec) : h('p', { class: 'soluk' }, 'Henüz oturum akışı yok. Aşağıdan türü "Oturum" olan bir akış ekleyin (ör. tek adım: Giriş → Token oku).'));
 
   // --- Projenin akışları ----------------------------------------------------------------------------------------------------

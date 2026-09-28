@@ -3561,3 +3561,14 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .kisi-tablo-secimi { display: grid; gap: 4px; margin-top: 8px; font-size: 13px; }
 .kisi-yeni-satir { display: grid; gap: 4px; min-width: 0; }
 .kisi-yeni-satir input[type="text"] { width: 100%; }
+/* Servis sözleşmesi (servis > Sözleşme sekmesi; servis-sozlesmesi.js) ve yetki hatası tekrar notu */
+.sozlesme-kaynaklari { display: flex; flex-wrap: wrap; max-width: 100%; margin-bottom: 10px; }
+.sozlesme-kaynaklari button { height: auto; min-height: 26px; white-space: normal; text-align: start; }
+.sozlesme-alanlari td { vertical-align: middle; }
+.sozlesme-alanlari code { display: inline-block; overflow-wrap: anywhere; }
+.sozlesme-alanlari select { min-width: 8.5rem; }
+.sozlesme-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sozlesme-ornekleri .secenek { overflow-wrap: anywhere; }
+.sozlesme-secenegi { display: grid; gap: 2px; margin-top: 10px; }
+.sozlesme-notu, .yetki-notu { overflow-wrap: anywhere; }
+.kontrol-listesi li > div { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }

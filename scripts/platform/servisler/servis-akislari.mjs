@@ -7,7 +7,9 @@
 //   yalnız bu süreçte, bellekte.
 // OTURUM AKIŞI (tur "oturum"): servise atanır (ayarlar.oturumAkisi). Senaryoda ${akis:Token} verilmemişse değer oturumdan gelir;
 // oturum koşular arasında süresi (omurSaniye) dolana kadar bellekte paylaşılır (tokenYenileme "herIstekte" ise her senaryo
-// çalıştırmasında yeniden alınır); 401 / 403 gelirse bir kez yenilenir.
+// çalıştırmasında yeniden alınır). YETKİ HATASI (HTTP 401 / 403): akışın "Yetki hatasında" seçimi (yoksa Ayarlar > Koşu; varsayılan
+// "Tekrar deneme") "Token'ı yenile, bir kez tekrar dene" ise oturum akışı / akıştaki token adımı (isteğin kullandığı ${akis:…}
+// değerini okuyan önceki adım) yeniden çalışır ve istek BİR KEZ tekrarlanır; adım sonucunda not görünür.
 // SQL ADIMI (tur "sql"; sql/sql-adimi.mjs): seçilen veritabanı bağlantısında (Ayarlar > Entegrasyonlar) sorgu çalışır, sonuç
 // beklenenle karşılaştırılır (Geçti / Kaldı; Beklenen / Görülen). SQL'deki ${akis:Ad} sürücü parametresi olarak bağlanır; sorgudan
 // okunan değerler (sql.okumalar) sonraki adımlara taşınır. Sonuç tablosu (en çok 20 satır, gizliler maskeli) adım sonucunda.
@@ -19,7 +21,7 @@
 import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { ServisHatasi, kullanilanAkisDegerleri } from './soap-istemcisi.mjs';
 import {
-  akisIceriginiDogrula, servisAkisiGetir, servisAkisKosusuKaydet, servisGetir, servisSenaryosuGetir
+  akisIceriginiDogrula, servisAkisiGetir, servisAkisKosusuKaydet, servisGetir, servisSenaryosuGetir, yetkiTekrariAcik
 } from './servis-deposu.mjs';
 import { ortamTuru, oturumSaglayicisiAyarla, servisSenaryosuCalistir } from './servis-islemleri.mjs';
 import { sqlAdiminiKos, sqlAkisDegerleri } from '../sql/sql-adimi.mjs';
@@ -120,7 +122,7 @@ oturumSaglayicisiAyarla(oturumDegerleriniAl);
 
 /**
  * @typedef {{ no: number; ad: string; servis: string; senaryo: string; durum: 'basarili' | 'basarisiz' | 'hata' | 'atlandi' | 'durduruldu';
- *   sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; tur?: 'sql'; sqlHedefi?: { baglanti: string; veritabani?: string };
+ *   sureMs: number; kosuId?: string; okunanlar?: Record<string, string>; neden?: string; not?: string; tur?: 'sql' | 'operasyon'; sqlHedefi?: { baglanti: string; veritabani?: string };
  *   sql?: { sutunlar: string[]; satirlar: string[][]; toplamSatir: number; kesildi: boolean; beklenen?: string; gorulen?: string; deneme: number } }} AkisAdimSonucu
  */
 
@@ -166,7 +168,12 @@ async function akisiKos(vt, projeId, g) {
   /** @type {AkisAdimSonucu[]} */
   const adimlar = [];
   let dur = false;
-  for (const [n, a] of g.akis.icerik.adimlar.entries()) {
+  const tumAdimlar = g.akis.icerik.adimlar;
+  // Yetki hatasında (401 / 403) "Token'ı yenile, bir kez tekrar dene" (akışın seçimi; yoksa Ayarlar > Koşu): adımın kullandığı
+  // ${akis:…} değerlerini okuyan ÖNCEKİ adımlar (token adımı) yeniden çalışır, istek bir kez tekrarlanır.
+  const yetkiAcik = yetkiTekrariAcik(vt, g.akis);
+  const okudugu = (/** @type {any} */ b) => (b.tur === 'sql' ? (b.sql?.okumalar ?? []) : (b.okumalar ?? [])).map((/** @type {any} */ o) => o.ad);
+  for (const [n, a] of tumAdimlar.entries()) {
     const sqlMi = a.tur === 'sql';
     const opMi = a.tur === 'operasyon';
     const servis = sqlMi ? undefined : servisGetir(vt, a.servisId);
@@ -180,6 +187,46 @@ async function akisiKos(vt, projeId, g) {
     g.olay?.(s, 'basladi');
     /** @type {{ okunan: Record<string, string>; gizliler: string[] }} */
     let acik = { okunan: {}, gizliler: [] };
+    /**
+     * Token adımlarını yeniden çalıştırır (yalnız ayar açıksa verilir). Adımın kullandığı değerleri okuyan önceki adım yoksa ya
+     * da yeniden çalışan adım başarısızsa null (tekrar yok).
+     * @param {string} icerikMetni adımın isteğinde / kontrollerinde geçen metin
+     */
+    const yetkiYenileyici = (icerikMetni) => async () => {
+      const gereken = new Set(kullanilanAkisDegerleri(icerikMetni));
+      const tokenAdimlari = tumAdimlar.slice(0, n).map((b, k) => ({ b, k })).filter(({ b }) => okudugu(b).some((/** @type {string} */ x) => gereken.has(x)));
+      if (!tokenAdimlari.length) return null;
+      for (const { b, k } of tokenAdimlari) {
+        /** @type {{ okunan: Record<string, string>; gizliler: string[] }} */
+        let yeniAcik = { okunan: {}, gizliler: [] };
+        let basarili = false;
+        try {
+          if (b.tur === 'sql') {
+            const r = await sqlAdimiKos(vt, projeId, g.ortamId, b, degerler, gizliler, g.sinyal);
+            basarili = r.sonuc.durum === 'basarili';
+            yeniAcik = r.acik;
+          } else {
+            const bs = servisGetir(vt, b.servisId);
+            if (!bs) return null;
+            const tsl = b.tur === 'operasyon' ? { baslik: `${g.akis.baslik} · ${b.ad}`, kapsam: 'ikisi', icerik: operasyonIcerigi(bs, b, g.adimIcerikleri?.[b.id]) } : null;
+            const r = await servisSenaryosuCalistir(vt, projeId, {
+              servisId: bs.id, ortamId: g.ortamId, tur: g.tur, ...(tsl ? { taslak: /** @type {any} */ (tsl) } : { senaryoId: b.senaryoId }), sinyal: g.sinyal,
+              akisDegerleri: { ...degerler }, ekGizliler: [...gizliler], okumalar: b.okumalar,
+              akis: { akisId: g.akis.id ?? null, akisBaslik: g.akis.baslik, adimNo: k + 1, adimAd: b.ad, yetkiYenileme: true, ...(g.oturumIcinde ? { oturum: true } : {}) },
+              acikDegerler: (d) => { yeniAcik = d; }
+            });
+            basarili = r.durum === 'basarili';
+          }
+        } catch (e) {
+          if (!(e instanceof DepoHatasi) && !(e instanceof ServisHatasi)) throw e;
+          return null;
+        }
+        if (!basarili) return null;
+        Object.assign(degerler, yeniAcik.okunan);
+        for (const x of yeniAcik.gizliler) if (!gizliler.includes(x)) gizliler.push(x);
+      }
+      return { akisDegerleri: { ...degerler }, gizliler: [...gizliler] };
+    };
     try {
       if (sqlMi) {
         const r = await sqlAdimiKos(vt, projeId, g.ortamId, a, degerler, gizliler, g.sinyal);
@@ -194,13 +241,16 @@ async function akisiKos(vt, projeId, g) {
       if (opMi) {
         try { taslak = { baslik: `${g.akis.baslik} · ${a.ad}`, kapsam: 'ikisi', icerik: operasyonIcerigi(servis, a, g.adimIcerikleri?.[a.id]) }; } catch (e) { throw new DepoHatasi(/** @type {Error} */ (e).message); }
       }
+      const ic = opMi ? taslak.icerik : /** @type {any} */ (senaryo).icerik;
       const r = await servisSenaryosuCalistir(vt, projeId, {
         servisId: servis.id, ortamId: g.ortamId, tur: g.tur, ...(opMi ? { taslak } : { senaryoId: /** @type {any} */ (senaryo).id }), sinyal: g.sinyal,
         akisDegerleri: { ...degerler }, ekGizliler: [...gizliler], okumalar: a.okumalar,
         akis: { akisId: g.akis.id ?? null, akisBaslik: g.akis.baslik, adimNo: n + 1, adimAd: a.ad, ...(g.oturumIcinde ? { oturum: true } : {}) },
-        acikDegerler: (d) => { acik = d; }
+        acikDegerler: (d) => { acik = d; },
+        ...(yetkiAcik ? { yetkiYenile: yetkiYenileyici([ic?.govde ?? '', ...Object.values(ic?.basliklar ?? {}), JSON.stringify(ic?.kontroller ?? []), ic?.http?.yol ?? ''].join('\n')) } : {})
       });
       s.durum = r.durum; s.sureMs = r.sureMs; s.kosuId = r.kosuId;
+      if (r.yetkiTekrari) s.not = String(/** @type {any} */ (r.yetkiTekrari).not);
       if (r.okunanlar) s.okunanlar = /** @type {Record<string, string>} */ (r.okunanlar);
       if (r.hata) s.neden = String(r.hata);
       else if (r.durum !== 'basarili') s.neden = (r.kontroller ?? []).filter((k) => !k.gecti).map((k) => k.ad).join('; ');

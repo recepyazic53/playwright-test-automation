@@ -19,7 +19,7 @@ export function rehberAnahtari(hash) {
   else if (bolum === 'senaryolar') anahtar = parca === 'yeni' || parca === 'duzenle' ? 'senaryo-formu' : 'senaryolar';
   else if (bolum === 'servisler') {
     const sekme = String(hash).split('/')[4] || '';
-    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 'sonuclar' ? (String(hash).split('/')[3] === 'karsilastir' ? 'sonuclar-karsilastir' : 'servis-sonuclari') : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : 'servis') : 'servisler';
+    anahtar = parca === 'yeni' ? 'servis-ekle' : parca === 'sonuclar' ? (String(hash).split('/')[3] === 'karsilastir' ? 'sonuclar-karsilastir' : 'servis-sonuclari') : parca === 's' ? (sekme === 'akislar' ? 'servis-akislari' : sekme === 'sozlesme' ? 'servis-sozlesmesi' : 'servis') : 'servisler';
   } else if (bolum === 'ekranlar') {
     if (parca === 'yeni') anahtar = 'ekran-ekle';
     else if (parca === 'tarama') anahtar = 'tarama';

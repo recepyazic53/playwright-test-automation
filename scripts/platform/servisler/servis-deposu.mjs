@@ -6,7 +6,7 @@ import { acikAnahtar, coz, sifrele, zarfMi } from '../kasa.mjs';
 import { DepoHatasi, gecmisYaz, jsonMetni, testVerisiTurleriniListele } from '../veritabani/depo.mjs';
 import { TANIM_TURLERI } from './parametre-tanimlari.mjs';
 import { sqlTanimiDogrula } from '../sql/sql-adimi.mjs';
-import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { kosuAyarlariniOku, sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './akis-senaryo-icerigi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
@@ -98,7 +98,9 @@ function sil(vt, tablo, id, secenekler = {}) {
  *   ekAlanlar?: Record<string, Array<{ yol: string; tip?: import('./servis-govdesi.mjs').AlanTipi }>>;
  *   alanListeleri?: Record<string, Record<string, string>>;
  *   alanBaglari?: Record<string, Record<string, { tablo?: string; sutun?: string; etiket?: string; bicim?: string; kural?: string }>>;
- *   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string; tabanGrubu?: string }} ServisAyarlari  tabanGrubu: adlandırılmış taban adres (taban-adresleri.mjs)
+ *   erisim?: { ortamId: string; zaman: string; durumKodu: number }; oturumAkisi?: string; tabanGrubu?: string;
+ *   sozlesmeler?: Record<string, import('./servis-sozlesmesi.mjs').Sozlesme>; sozlesmeGecmisi?: Record<string, import('./servis-sozlesmesi.mjs').SozlesmeGecmisi[]> }} ServisAyarlari
+ *   tabanGrubu: adlandırılmış taban adres (taban-adresleri.mjs). sozlesmeler: operasyon / uç başına yanıt sözleşmesi (servis-sozlesmesi.mjs).
  * @typedef {{ id: string; projeId: string; anahtar: string; ad: string; tur: 'soap' | 'rest'; durum: 'etkin' | 'devre_disi';
  *   sira: number | null; ayarlar: ServisAyarlari; olusturulma: string; guncellenme: string }} Servis
  */
@@ -176,7 +178,8 @@ export function servisSil(vt, id, yapan) {
  *   deger?: string; xpath?: string; yol?: string; buyukKucukDuyarsiz?: boolean; duzenliIfade?: boolean; ad?: string; alt?: ServisKontrolu[] }} ServisKontrolu
  * @typedef {{ operasyon: string; govde: string; kontroller: ServisKontrolu[]; kimlikProfili?: string; veriProfilleri?: Record<string, string>;
  *   tabloSecimleri?: Record<string, Record<string, string>>; aciklama?: string; kaynak?: Record<string, unknown>;
- *   basliklar?: Record<string, string>; http?: ServisHttpTanimi }} ServisSenaryoIcerigi
+ *   basliklar?: Record<string, string>; http?: ServisHttpTanimi; sozlesmeDogrula?: boolean }} ServisSenaryoIcerigi
+ * sozlesmeDogrula: "Yanıt sözleşmeye uymalı" (varsayılan kapalı; açıkken yanıt servisin sözleşmesine göre doğrulanır).
  * REST isteği (servis türü rest): metot, servis yoluna göre göreli yol (sorgu dahil; ${…} parametreleri olabilir), gövdenin içerik türü.
  * @typedef {{ metot: string; yol: string; icerikTuru?: string }} ServisHttpTanimi
  * @typedef {{ id: string; projeId: string; servisId: string; baslik: string; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
@@ -222,8 +225,11 @@ export function senaryoIceriginiDogrula(icerik) {
   const kontroller = i.kontroller.map((k, n) => kontrolDogrula(k, `${n + 1}.`, false));
   const tabloSecimleri = tabloSecimleriniDogrula(i.tabloSecimleri);
   const basliklar = basliklariDogrula(i.basliklar);
-  const { tabloSecimleri: _eski, basliklar: _b, http: _h, ...kalan } = i;
-  return { ...kalan, operasyon, govde, kontroller, ...(tabloSecimleri ? { tabloSecimleri } : {}), ...(basliklar ? { basliklar } : {}), ...(http ? { http } : {}) };
+  if (i.sozlesmeDogrula !== undefined && i.sozlesmeDogrula !== null && typeof i.sozlesmeDogrula !== 'boolean') throw new DepoHatasi('"sozlesmeDogrula" true ya da false olmalıdır.');
+  const { tabloSecimleri: _eski, basliklar: _b, http: _h, sozlesmeDogrula: _sd, ...kalan } = i;
+  // "Yanıt sözleşmeye uymalı" yalnız açıkken yazılır (kapalı = bugünkü davranış; eski kayıtlar değişmez).
+  return { ...kalan, operasyon, govde, kontroller, ...(tabloSecimleri ? { tabloSecimleri } : {}), ...(basliklar ? { basliklar } : {}), ...(http ? { http } : {}),
+    ...(i.sozlesmeDogrula === true ? { sozlesmeDogrula: true } : {}) };
 }
 
 export const HTTP_METOTLARI = /** @type {const} */ (['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
@@ -517,15 +523,45 @@ export const EN_COK_AKIS_ADIMI = 30;
 /** Oturum akışının değerleri (token) varsayılan olarak 1 saat geçerli. */
 export const VARSAYILAN_OTURUM_OMRU_SN = 3600;
 export const TOKEN_YENILEME = /** @type {const} */ (['suresiDolunca', 'herIstekte']);
+/**
+ * Yetki hatasında (HTTP 401 / 403) davranış — akışın seçimi; "genel": Ayarlar > Koşu > "Yetki hatasında (401 / 403)".
+ * tekrarYok: istek tekrarlanmaz · yenileVeTekrar: oturum / token adımı yeniden çalışır, istek BİR KEZ tekrarlanır.
+ */
+export const YETKI_HATASI_SECENEKLERI = /** @type {const} */ (['genel', 'tekrarYok', 'yenileVeTekrar']);
+
+/**
+ * Akışın yetki hatası seçimi. Alanı hiç olmayan OTURUM akışı bu ayardan önce kaydedilmiştir: o zamanki davranış (token bir kez
+ * yenilenip tekrar denenirdi) korunur. Yeni kayıtlarda alan her zaman yazılır (akisIceriginiDogrula).
+ * @param {{ tur: 'akis' | 'oturum'; icerik: { yetkiHatasinda?: string } } | undefined | null} akis
+ * @returns {'genel' | 'tekrarYok' | 'yenileVeTekrar'}
+ */
+export function yetkiHatasiSecimi(akis) {
+  const v = akis?.icerik?.yetkiHatasinda;
+  if (v === 'genel' || v === 'tekrarYok' || v === 'yenileVeTekrar') return v;
+  return akis?.tur === 'oturum' ? 'yenileVeTekrar' : 'genel';
+}
+
+/**
+ * 401 / 403 sonrası token yenilenip bir kez tekrar denensin mi: akışın seçimi, "genel" ise Ayarlar > Koşu (varsayılan: Tekrar deneme).
+ * @param {Veritabani} vt @param {Parameters<typeof yetkiHatasiSecimi>[0]} akis
+ */
+export function yetkiTekrariAcik(vt, akis) {
+  if (!akis) return false;
+  const s = yetkiHatasiSecimi(akis);
+  if (s !== 'genel') return s === 'yenileVeTekrar';
+  try { return kosuAyarlariniOku(vt).yetkiHatasinda === 'yenileVeTekrar'; } catch { return false; }
+}
 
 /**
  * @typedef {{ ad: string; kaynak: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }} AkisOkumaTanimi
  * @typedef {{ id: string; ad: string; servisId: string; senaryoId: string; okumalar: AkisOkumaTanimi[]; hataOlursaDevam?: boolean; tur?: 'sql' | 'operasyon'; sql?: any;
  *   operasyon?: string; baglar?: Record<string, string> }} AkisAdimi
  *   tur 'sql': SQL sorgusu adımı (servisId / senaryoId yok; sql: sql-adimi.mjs SqlTanimi).
- * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string }} ServisAkisIcerigi
+ * @typedef {{ adimlar: AkisAdimi[]; omurSaniye?: number; tokenYenileme?: 'suresiDolunca' | 'herIstekte'; aciklama?: string;
+ *   yetkiHatasinda?: 'genel' | 'tekrarYok' | 'yenileVeTekrar' }} ServisAkisIcerigi
  *   tokenYenileme (oturum akışı): süresiDolunca (varsayılan: değer ömür boyunca koşular arasında yeniden kullanılır) ·
  *   herIstekte (her senaryo çalıştırmasında oturum akışı yeniden koşulur).
+ *   yetkiHatasinda: 401 / 403 sonrası davranış (YETKI_HATASI_SECENEKLERI; yetkiHatasiSecimi).
  * @typedef {{ id: string; projeId: string; baslik: string; tur: 'akis' | 'oturum'; kapsam: 'test' | 'canli' | 'ikisi'; kosuyaDahil: boolean;
  *   sira: number | null; icerik: ServisAkisIcerigi; olusturulma: string; guncellenme: string }} ServisAkisi
  */
@@ -575,8 +611,11 @@ export function akisIceriginiDogrula(icerik, tur, s = {}) {
   const omur = i.omurSaniye === undefined || i.omurSaniye === null || i.omurSaniye === '' ? undefined : Number(i.omurSaniye);
   if (omur !== undefined && (!Number.isInteger(omur) || omur < 30 || omur > 86_400)) throw new DepoHatasi('"omurSaniye" 30 ile 86400 arasında tam sayı olmalıdır.');
   if (tur === 'oturum' && !adimlar.some((a) => a.okumalar.length || a.sql?.okumalar?.length)) throw new DepoHatasi('Oturum akışı en az bir değer okumalıdır (ör. Token).');
+  const yetki = secenek(i.yetkiHatasinda ?? 'genel', YETKI_HATASI_SECENEKLERI, 'yetkiHatasinda');
   return {
     adimlar, ...(tur === 'oturum' ? { omurSaniye: omur ?? VARSAYILAN_OTURUM_OMRU_SN, tokenYenileme: secenek(i.tokenYenileme ?? 'suresiDolunca', TOKEN_YENILEME, 'tokenYenileme') } : {}),
+    // Oturum akışında her zaman yazılır (alanı olmayan eski kayıt = eski davranış; bkz. yetkiHatasiSecimi); akışta yalnız "genel" değilse.
+    ...(tur === 'oturum' || yetki !== 'genel' ? { yetkiHatasinda: yetki } : {}),
     ...(typeof i.aciklama === 'string' && i.aciklama.trim() ? { aciklama: i.aciklama.trim().slice(0, 2000) } : {})
   };
 }
@@ -599,12 +638,16 @@ export function servisAkisiKaydet(vt, girdi) {
     const mevcut = girdi.id ? vt.tek('SELECT * FROM servis_akislari WHERE id = ?', [girdi.id]) : undefined;
     if (girdi.id && mevcut && mevcut.proje_id !== girdi.projeId) throw new DepoHatasi('Akış bulunamadı.');
     const tur = secenek(girdi.tur ?? mevcut?.tur ?? 'akis', AKIS_TURLERI, 'tur');
+    // Yetki hatası seçimi verilmediyse kayıtlıdaki (eski oturum kaydında o zamanki davranış) korunur.
+    const ham = girdi.icerik && typeof girdi.icerik === 'object' && !Array.isArray(girdi.icerik) ? /** @type {Record<string, unknown>} */ (girdi.icerik) : null;
+    const icerik = ham && ham.yetkiHatasinda === undefined && mevcut
+      ? { ...ham, yetkiHatasinda: yetkiHatasiSecimi(akisCevir(vt, mevcut)) } : girdi.icerik;
     return kaydet(vt, 'servis_akislari', {
       proje_id: kimlik(girdi.projeId, 'projeId'), baslik: zorunluMetin(girdi.baslik, 'baslik').slice(0, 200), tur,
       kapsam: secenek(girdi.kapsam ?? mevcut?.kapsam ?? 'test', SENARYO_KAPSAMLARI, 'kapsam'),
       kosuya_dahil: (girdi.kosuyaDahil ?? (mevcut ? mevcut.kosuya_dahil === 1 : true)) ? 1 : 0,
       sira: girdi.sira === undefined ? (mevcut?.sira ?? null) : girdi.sira,
-      icerik_json: sifreliJson(vt, akisIceriginiDogrula(girdi.icerik, tur, { satirSiniri: sqlSatirSiniriOku(vt) }), 'icerik')
+      icerik_json: sifreliJson(vt, akisIceriginiDogrula(icerik, tur, { satirSiniri: sqlSatirSiniriOku(vt) }), 'icerik')
     }, { id: girdi.id, gecmisTuru: 'servis_akisi', yapan: girdi.yapan });
   });
 }

@@ -119,6 +119,8 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   /** Düzenleme kopyası (kayıtlı akış aynen açılır; kimliği olmayan adıma kimlik verilir). */
   const is = {
     baslik: a.baslik, tur: a.tur, kapsam: a.kapsam, omur: a.icerik.omurSaniye ?? 3600, yenileme: a.icerik.tokenYenileme ?? 'suresiDolunca',
+    // Yetki hatası seçimi; alanı olmayan kayıtlı OTURUM akışı bu ayardan önce kaydedilmiştir: o zamanki davranış (bir kez yenile) gösterilir.
+    yetki: a.icerik.yetkiHatasinda ?? (akisId && a.tur === 'oturum' ? 'yenileVeTekrar' : 'genel'),
     adimlar: JSON.parse(JSON.stringify(a.icerik.adimlar)).map((x) => ({ ...x, id: x.id || yeniAdimKimligi(), okumalar: x.okumalar ?? [] }))
   };
   await Promise.all([...new Set(is.adimlar.map((x) => x.servisId))].map(senaryolariAl));
@@ -164,8 +166,17 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   const yenileme = h('select', {},
     h('option', { value: 'suresiDolunca', selected: is.yenileme === 'suresiDolunca' }, 'Süresi dolunca yeniden al (koşular arasında paylaşılır)'),
     h('option', { value: 'herIstekte', selected: is.yenileme === 'herIstekte' }, 'Her istekte yeniden al'));
-  const yenilemeAlani = alan('Token', yenileme, { yardim: 'Sunucu 401 / 403 dönerse token her iki seçenekte de bir kez yenilenir.' });
-  const oturumAlanlariniGoster = () => { yenilemeAlani.hidden = is.tur !== 'oturum'; omurAlani.hidden = is.tur !== 'oturum' || is.yenileme === 'herIstekte'; };
+  const yenilemeAlani = alan('Token', yenileme, { yardim: 'Token ne zaman yeniden alınsın. 401 / 403 sonrası davranış "Yetki hatasında" seçimindedir.' });
+  // Yetki hatası (HTTP 401 / 403): kullanıcının seçimi; "Genel ayar" = Ayarlar > Koşu > Yetki hatasında (varsayılan: Tekrar deneme).
+  const yetki = h('select', {},
+    h('option', { value: 'genel', selected: is.yetki === 'genel' }, 'Genel ayarı kullan (Ayarlar > Koşu)'),
+    h('option', { value: 'tekrarYok', selected: is.yetki === 'tekrarYok' }, 'Tekrar deneme'),
+    h('option', { value: 'yenileVeTekrar', selected: is.yetki === 'yenileVeTekrar' }, 'Token\'ı yenile, bir kez tekrar dene'));
+  const yetkiAlani = alan('Yetki hatasında (401 / 403)', yetki, { yardim: 'Token\'ı yenile: oturum / token adımı yeniden çalışır, istek bir kez tekrarlanır (raporda not). Yalnız HTTP durum kodu dikkate alınır.' });
+  yetki.addEventListener('change', () => { is.yetki = yetki.value; degisti(); });
+  // Oturum akışında ve değer okuyan (token adımı olabilecek) akışlarda gösterilir.
+  const yetkiGorunur = () => is.tur === 'oturum' || is.adimlar.some((x) => adimOkumalari(x).length > 0) || is.yetki !== 'genel';
+  const oturumAlanlariniGoster = () => { yenilemeAlani.hidden = is.tur !== 'oturum'; omurAlani.hidden = is.tur !== 'oturum' || is.yenileme === 'herIstekte'; yetkiAlani.hidden = !yetkiGorunur(); };
   yenileme.addEventListener('change', () => { is.yenileme = yenileme.value; oturumAlanlariniGoster(); ciz(); });
   tur.addEventListener('change', () => { is.tur = tur.value; oturumAlanlariniGoster(); ciz(); });
   oturumAlanlariniGoster();
@@ -353,6 +364,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   }
 
   function ciz() {
+    oturumAlanlariniGoster();
     const t = iz();
     // Oturum kutusu: adımların oturumdan aldığı değerler (akış başına).
     /** @type {Map<string, { baslik: string; adlar: Set<string>; servisler: Set<string> }>} */
@@ -379,7 +391,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
             h('a', { href: `${adres}/${q(id)}`, class: 'kucuk' }, o.baslik),
             h('span', { class: 'soluk kucuk' }, ` · ${[...o.servisler].join(', ')}`),
             h('div', { class: 'akis-degerleri ciktilar' }, h('span', { class: 'baslik' }, 'Çıktılar'), [...o.adlar].map((ad) => degerCipi(ad, { sinif: 'oturum', gizli: gizliMi(ad) }))))),
-          h('p', { class: 'dugum-aciklamasi soluk' }, 'Değerler koşular arasında süresi dolana kadar paylaşılır; 401 / 403 gelirse bir kez yenilenir.')));
+          h('p', { class: 'dugum-aciklamasi soluk' }, 'Değerler koşular arasında süresi dolana kadar paylaşılır; 401 / 403 sonrası davranış oturum akışının "Yetki hatasında" seçimindedir.')));
     }
     is.adimlar.forEach((x, n) => {
       const nokta = ekleNoktasi(n, t);
@@ -607,7 +619,8 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
   // ---- Kaydet / Dene --------------------------------------------------------------------------------------------------------
   const icerikAl = () => ({
     adimlar: is.adimlar.map((x) => ({ ...x, okumalar: x.okumalar.filter((o) => o.ad || o.yol) })),
-    ...(is.tur === 'oturum' ? { omurSaniye: is.omur, tokenYenileme: is.yenileme } : {})
+    ...(is.tur === 'oturum' ? { omurSaniye: is.omur, tokenYenileme: is.yenileme } : {}),
+    yetkiHatasinda: is.yetki
   });
   /** @param {number | undefined} satirSiniri SQL satır sınırı (Ayarlar > Koşu > Gelişmiş; sunucuyla aynı kural) */
   const eksik = (satirSiniri) => {
@@ -677,6 +690,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
         h('span', { class: 'adim-adi' }, `${x.ad} — ${x.servis} › ${x.senaryo}`), durumRozeti(x.durum),
         x.sureMs ? h('span', { class: 'soluk kucuk' }, ` ${x.sureMs} ms`) : null,
         x.neden ? h('div', { class: 'soluk kucuk' }, x.neden) : null,
+        x.not ? h('div', { class: 'kucuk yetki-notu' }, ikon('yenile'), ' ', x.not) : null,
         x.sql ? sqlSonucTablosu(x.sql) : null,
         x.okunanlar ? h('div', { class: 'kucuk' }, 'Okunan: ', ...Object.entries(x.okunanlar).map(([k, v]) => h('code', { class: 'akis-degeri' }, `${k} = ${v}`))) : null,
         x.kosuId ? h('a', { class: 'kucuk', href: `#/servisler/s/${q(servisler.find((sv) => sv.ad === x.servis)?.id ?? s.id)}/raporlar/${q(x.kosuId)}` }, 'İstek / yanıt') : null))));
@@ -723,7 +737,7 @@ export async function servisAkisTasarimi(kap, proje, s, ortamlar, akisId) {
       h('h3', {}, akisId ? 'Akışı düzenle' : 'Yeni akış'), mesaj.kutu,
       kayit?.hatalar?.length ? h('div', { class: 'not-kutusu uyari', role: 'status' }, h('b', {}, 'Akış şu an koşulamaz: '), kayit.hatalar.join(' ')) : null,
       alan('Başlık', baslik, { zorunlu: true }),
-      h('div', { class: 'satir-duzen' }, alan('Tür', tur), alan('Kapsam', kapsam, { yardim: 'Koşuda hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' }), yenilemeAlani, omurAlani)),
+      h('div', { class: 'satir-duzen' }, alan('Tür', tur), alan('Kapsam', kapsam, { yardim: 'Koşuda hangi ortam türünde koşacağı. Dene her zaman TEST\'te.' }), yenilemeAlani, omurAlani, yetkiAlani)),
     h('div', { class: 'form-duzeni tasarim-duzeni servis-akis-duzeni' },
       h('section', { class: 'kart tasarim-karti', 'aria-label': 'Akış diyagramı' },
         h('p', { class: 'soluk kucuk' }, 'Kutuya tıklayın ya da Enter’a basın: ayrıntısı sağda açılır. Sıralamak için sürükleyin, ↑ / ↓ düğmelerini ya da Alt + ↑ / ↓ tuşlarını kullanın. Oklarda sonraki adımlara taşınan ',

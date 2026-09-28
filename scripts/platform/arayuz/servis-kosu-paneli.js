@@ -85,6 +85,13 @@ function adimlar(satir) {
   return ol;
 }
 
+/** Kontrol sonuçları (VEYA ve sözleşme uyumsuzlukları iç içe). */
+function kontrolListesi(liste) {
+  return h('ul', { class: 'kontrol-listesi' }, liste.map((k) => h('li', { class: k.gecti ? 'gecti' : 'kaldi' },
+    h('div', {}, ikon(k.gecti ? 'onay' : 'carpi'), ` ${k.tur === 'veya' ? 'Şunlardan biri (VEYA)' : k.ad}${k.aciklama ? ' — ' : ''}`, h('span', { class: 'soluk' }, k.aciklama)),
+    Array.isArray(k.alt) && k.alt.length ? kontrolListesi(k.alt) : null)));
+}
+
 function kutu(anahtar, baslik, metin) {
   const d = h('details', { open: acikKutular.has(anahtar) }, h('summary', {}, baslik), h('pre', { class: 'hata-mesaji kod-blogu' }, metin));
   d.addEventListener('toggle', () => { d.open ? acikKutular.add(anahtar) : acikKutular.delete(anahtar); });
@@ -141,8 +148,8 @@ function ciz() {
     h('div', { class: 'izleme-basligi' }, h('span', { title: satir.baslik }, satir.baslik),
       satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti', title: 'Koşu sürüyor' }, 'SÜRÜYOR') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)),
     satir.durum === 'atlandi' ? h('p', { class: 'soluk kucuk' }, satir.neden || 'Atlandı.') : adimlar(satir),
-    kontroller.length ? h('ul', { class: 'kontrol-listesi' }, kontroller.map((k) => h('li', { class: k.gecti ? 'gecti' : 'kaldi' },
-      h('div', {}, ikon(k.gecti ? 'onay' : 'carpi'), ` ${k.tur === 'veya' ? 'Şunlardan biri (VEYA)' : k.ad} — `, h('span', { class: 'soluk' }, k.aciklama))))) : null,
+    satir.sonuc && satir.sonuc.yetkiTekrari ? h('p', { class: 'not-kutusu bilgi yetki-notu' }, satir.sonuc.yetkiTekrari.not) : null,
+    kontroller.length ? kontrolListesi(kontroller) : null,
     satir.istek ? kutu(`${satir.senaryoId}:istek`, 'İstek (gizli değerler maskeli)', satir.istek) : null,
     satir.yanit ? kutu(`${satir.senaryoId}:yanit`, `Yanıt${satir.sonuc && satir.sonuc.durumKodu ? ` (HTTP ${satir.sonuc.durumKodu})` : ''}`, satir.yanit) : null,
     satir.sonuc && satir.sonuc.kosuId ? h('div', { class: 'panel-eylemleri' },
