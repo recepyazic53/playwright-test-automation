@@ -299,6 +299,12 @@ function alanDogrula(h, yer, alan, kimlikler, b) {
   if (alan.doldurucu !== undefined && !listedeMi(DOLDURUCULAR, alan.doldurucu)) {
     h.ekle(aYer, `bilinmeyen doldurucu "${String(alan.doldurucu)}"`);
   }
+  // Alan doldurulduktan sonra basılacak tuş (doldurucuParametreleri.tus; ör. "Tab" — alandan çıkınca çıkan uyarı için; akış
+  // diyagramında "Doldurduktan sonra"). Koşucu Playwright tuş adıyla basar (locator.press).
+  if (nesneMi(alan.doldurucuParametreleri) && alan.doldurucuParametreleri.tus !== undefined) {
+    const t = alan.doldurucuParametreleri.tus;
+    if (!metinMi(t) || t.length > 40 || !/^[A-Za-z0-9+]+$/.test(t)) h.ekle(`${aYer}.doldurucuParametreleri.tus`, '"tus" bir tuş adı olmalı (ör. "Tab", "Enter")');
+  }
   if (alan.seceneklerDurumu !== undefined && !listedeMi(SECENEK_DURUMLARI, alan.seceneklerDurumu)) {
     h.ekle(aYer, `bilinmeyen seceneklerDurumu "${String(alan.seceneklerDurumu)}"`);
   }

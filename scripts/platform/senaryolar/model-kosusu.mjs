@@ -291,7 +291,14 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
         const anahtarlar = senaryoAnahtarlari(alan);
         if (anahtarlar.length !== 1) continue;
         const deger = veri[anahtarlar[0]];
-        if (bosMu(deger) || gorunurluk.alanlar[alan.id] === false) continue;
+        if (gorunurluk.alanlar[alan.id] === false) continue;
+        if (bosMu(deger)) {
+          // Boş bırakılan alan atlanır; ancak senaryo BU adımda iş kuralı uyarısı bekliyorsa ve alanın "Doldurduktan sonra" tuşu
+          // varsa (ör. Tab) alana girilip tuşa basılır: alan boşken çıkınca çıkan uyarı (ör. "zorunludur") denetlenebilsin.
+          const tus = nesneMi(alan.doldurucuParametreleri) ? alan.doldurucuParametreleri.tus : undefined;
+          if (beklenen.tur === 'hata' && beklenen.adim === adim.id && typeof tus === 'string' && tus) alanlar.push({ ...planAlani(alan, null), yalnizTus: tus });
+          continue;
+        }
         alanlar.push(planAlani(alan, deger));
       }
     }

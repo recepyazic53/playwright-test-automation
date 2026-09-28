@@ -38,6 +38,11 @@ export type PlanAlani = {
   atla: string | null;
   /** Değeri olmayan "mutlaka görünmeli" alanı: yalnızca görünürlüğü denetlenir. */
   yalnizGorunurluk?: boolean;
+  /**
+   * Boş bırakılan alan, senaryo bu adımda iş kuralı uyarısı beklerken: doldurulmaz, alana girilip bu tuşa basılır
+   * (doldurucuParametreleri.tus; alandan çıkınca çıkan uyarı için). Alan görünmüyorsa sessizce atlanır.
+   */
+  yalnizTus?: string;
 };
 
 /** secici yoksa ve sureSn varsa süreli bekleme (koşucu sureSn saniye bekler). */
