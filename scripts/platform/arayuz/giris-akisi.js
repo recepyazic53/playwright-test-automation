@@ -22,7 +22,7 @@ const baslik = (o) => `Giriş (${o.ortamAd})`;
 export function girisBaglantisi(o) {
   return h('a', { href: tarifFormuAdresi(o.ortamId), class: 'giris-akisi-baglantisi', title: `${baslik(o)} — Ayarlar > Giriş profilleri'nde düzenlenir` },
     ikon('anahtar'), h('span', { class: 'nav-metni' }, baslik(o)),
-    o.tarif ? null : h('span', { class: 'nav-etiketi' }, 'tanımsız'));
+    o.tarif ? null : h('span', { class: 'nav-etiketi' }, 'tanımlı değil'));
 }
 
 const IKINCI_ADIM = { totp: 'Authenticator kodu', sms: 'SMS kodu' };
