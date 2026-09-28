@@ -2,7 +2,9 @@
 // (tests/support/model-kosucu.ts).
 //
 //  - Başlık: senaryo başlığı (aynı başlık tekrar ederse kimliğin ilk 8 karakteri eklenir).
-//  - Etiket: "@model-<senaryo UUID>" — Nöbetçi tek senaryo koşusunu bu etiketle daraltır (grep).
+//  - Veri koşusu: senaryo tablodan birden çok satırla koşuyorsa (senaryonun "Çalıştırma biçimi" ya da koşu anı seçimi) her satır /
+//    kombinasyon ayrı testtir: "Senaryo [satır-adı]"; hangi satırla koştuğu "veriKosusu" annotation'ıyla sonuca yazılır.
+//  - Etiket: "@model-<senaryo UUID>" — Nöbetçi tek senaryo koşusunu bu etiketle daraltır (grep; veri koşularının hepsi aynı etiketi taşır).
 //  - Koşuda kapalı senaryolar toplu koşuda üretilmez; Nöbetçi'nin listesi (TEST_SUNUCU_TUM_LISTE=1) ve tek senaryo
 //    koşusu (TEST_SUNUCU_GREP_DESENI) hepsini görür.
 //  - Veri: genel-veri.ts (proje ve ortam kimlikleriyle, NOBETCI_PROJE_ID + NOBETCI_ORTAM_ID; bkz. playwright.config.ts).
@@ -11,7 +13,7 @@ import { genelGirisKimligi, genelGirisTarifi, genelOturumDosyasi, genelVeri } fr
 import { modelSenaryosunuKos, type ModelKosuOrtami } from '../support/model-kosucu';
 import { modelTestSuresiMs } from '../support/kosu-ayarlari';
 import type { PlatformModelVerisi } from '../support/platform-veri';
-import { modelEtiketi, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
+import { modelEtiketi, modelTestAnahtari, modelTestBasliklari } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { beklenenSonucEtiketi, formSemasiOlustur } from '../../scripts/platform/senaryolar/model-formu.mjs';
 
 const modelVerisi = genelVeri().model;
@@ -34,13 +36,16 @@ function beklenenSonucRozeti(model: Record<string, unknown> | null, veri: Record
 
 for (const senaryo of senaryolar) {
   const rozet = beklenenSonucRozeti(senaryo.model, senaryo.veri);
-  test(basliklar.get(senaryo.id) ?? senaryo.baslik, {
+  // Veri koşusu (tablodan çoklu satır): her satır / kombinasyon ayrı test, başlık "Senaryo [satır-adı]"; etiket senaryonunkiyle aynı.
+  test(basliklar.get(modelTestAnahtari(senaryo)) ?? senaryo.baslik, {
     tag: modelEtiketi(senaryo.id),
     annotation: [
       // "Dene" senaryosu veritabanında yok: sonucu senaryosuz kaydedilir (kodlu Dene gibi).
       ...(senaryo.deneme ? [] : [{ type: 'senaryoId', description: senaryo.id }]),
       { type: 'kosucu', description: 'model' },
-      ...(rozet ? [{ type: 'beklenenSonuc', description: rozet }] : [])
+      ...(rozet ? [{ type: 'beklenenSonuc', description: rozet }] : []),
+      // Sonuç deposu: hangi satırla / hangi model sürümüyle koştu (başarısızları tekrar çalıştırma aynısını kullanır).
+      ...(senaryo.deneme ? [] : [{ type: 'veriKosusu', description: JSON.stringify({ ...(senaryo.veriKosusu ?? { anahtar: null, ad: null, satirlar: [] }), modelSurumu: senaryo.modelSurumu }) }])
     ]
   }, async ({ page }, testInfo) => {
     // Test süresi: Ayarlar > Koşu > Koşu süre limiti biliniyorsa limitten 30 sn önce dolar (limiti aşmaz; limit büyükse kullanılabilir);

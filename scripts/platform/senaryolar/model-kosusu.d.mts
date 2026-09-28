@@ -9,7 +9,8 @@ export declare const DOLDURULABILIR_TIPLER: readonly string[];
 export declare function modelSenaryosuMu(icerik: unknown): boolean;
 export declare function modelEtiketi(senaryoId: string): string;
 export declare function modelGrepDeseni(senaryoId: string): string;
-export declare function modelTestBasliklari(senaryolar: Array<{ id: string; baslik: string }>): Map<string, string>;
+export declare function modelTestBasliklari(senaryolar: Array<{ id: string; baslik: string; veriKosusu?: { anahtar: string | null; ad?: string | null } | null }>): Map<string, string>;
+export declare function modelTestAnahtari(s: { id: string; veriKosusu?: { anahtar: string | null } | null }): string;
 
 export type YasakDeseni = { kalip: string; desen: RegExp };
 export declare function yasakDesenleri(metin: string | undefined | null): YasakDeseni[];

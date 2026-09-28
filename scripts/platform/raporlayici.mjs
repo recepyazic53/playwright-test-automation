@@ -34,6 +34,17 @@ import { medyaDosyasiniSil, medyaKlasoru, medyaSaklamaTemizligi, medyaSifrele } 
 import { adimGurultuMu, ansiTemizle, playwrightDurumuEsle } from './sonuclar/siniflandirma.mjs';
 import { yakalananMesajlariAyristir } from './sonuclar/yakalanan-mesajlar.mjs';
 import { ekAtilsinMi, kayitSecimi, ortamKayitKurallari } from './ayarlar/kayit-kurallari.mjs';
+import { TEKRAR_KAYNAGI_DEGISKENI } from './tablolar/veri-kosulari.mjs';
+
+/** "veriKosusu" annotation'ı (JSON) → nesne; bozuksa undefined. @param {string | undefined} metin @returns {Record<string, unknown> | undefined} */
+function veriKosusuAyristir(metin) {
+  try {
+    const v = JSON.parse(String(metin ?? ''));
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const KIMLIK = /^[A-Za-z0-9_-]{1,100}$/;
 
@@ -391,7 +402,9 @@ export default class PlatformRaporlayici {
     const kapsam = aciklama.get('kosuKapsami') ?? (dashboardKosusu ? process.env.TEST_SUNUCU_KOSU_KAPSAMI : undefined) ?? 'Genel';
     await baglam.yazici.kosuKaydet({
       id: kosuId, projeId: baglam.projeId, ortamId: baglam.ortamId, tur: tur === 'tekil' ? 'tekil' : 'tam', kapsam,
-      baslangic: new Date(this.baslangicMs).toISOString()
+      baslangic: new Date(this.baslangicMs).toISOString(),
+      // Başarısızları tekrar çalıştırma: "Tekrar: <önceki koşu>" bağı.
+      ...(process.env[TEKRAR_KAYNAGI_DEGISKENI] ? { tekrarKaynagi: process.env[TEKRAR_KAYNAGI_DEGISKENI] } : {})
     });
     return kosuId;
   }
@@ -461,6 +474,8 @@ export default class PlatformRaporlayici {
         atlananAlanlar: atlanan, deneme: result.retry,
         // Koşuda yakalanan mesajlar (tests/support/mesaj-yakalayici.ts; maskeli): geçen testlerde de.
         yakalananMesajlar: yakalananMesajlariAyristir(aciklama.get('yakalananMesajlar') ?? '[]'),
+        // Veri koşusu (hangi tablo satırıyla / model sürümüyle koştu; sonuc-deposu.mjs doğrular ve kırpar).
+        ...(aciklama.has('veriKosusu') ? { veriKosusu: veriKosusuAyristir(aciklama.get('veriKosusu')) } : {}),
         baslangic: baslangic.toISOString(), bitis: new Date(baslangic.getTime() + Math.max(0, result.duration)).toISOString(), adimlar, medya
       });
     } catch (hata) {

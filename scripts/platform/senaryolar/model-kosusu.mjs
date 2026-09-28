@@ -60,19 +60,35 @@ export function modelGrepDeseni(senaryoId) {
  * Model testlerinin başlıkları: senaryo başlığı; aynı başlık bir kez daha geçerse kimliğin ilk 8 karakteri
  * eklenir (Playwright aynı dosyada aynı başlığa izin vermez; sonuç anahtarı "<dosya>::<başlık>" tekil olmalı).
  * Sıra kimliğe göre sabittir: listeleme ve koşu süreçleri aynı başlıkları üretir.
- * @param {Array<{ id: string; baslik: string }>} senaryolar @returns {Map<string, string>} id → başlık
+ * VERİ KOŞULARI (tablodan çoklu satır): aynı senaryonun her veri koşusu ayrı testtir; başlığı "Senaryo [satır-adı]" (anahtar
+ * modelTestAnahtari: "<id>#<veri anahtarı>"). Tek satırlı koşuda anahtar senaryo kimliğidir (bugünkü başlık).
+ * @param {Array<{ id: string; baslik: string; veriKosusu?: { anahtar: string | null; ad?: string | null } | null }>} senaryolar
+ * @returns {Map<string, string>} modelTestAnahtari → başlık
  */
 export function modelTestBasliklari(senaryolar) {
   const sonuc = new Map();
   const kullanilan = new Set();
+  /** @type {Map<string, string>} senaryo kimliği → temel başlık */
+  const temeller = new Map();
   for (const s of senaryolar.slice().sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-    let baslik = String(s.baslik).trim() || s.id;
-    if (kullanilan.has(baslik)) baslik = `${baslik} (${s.id.slice(0, 8)})`;
-    kullanilan.add(baslik);
-    sonuc.set(s.id, baslik);
+    if (!temeller.has(s.id)) {
+      let baslik = String(s.baslik).trim() || s.id;
+      if (kullanilan.has(baslik)) baslik = `${baslik} (${s.id.slice(0, 8)})`;
+      kullanilan.add(baslik);
+      temeller.set(s.id, baslik);
+    }
+    const temel = /** @type {string} */ (temeller.get(s.id));
+    const ad = s.veriKosusu?.anahtar ? s.veriKosusu.ad : null;
+    sonuc.set(modelTestAnahtari(s), ad ? `${temel} [${ad}]` : temel);
   }
   return sonuc;
 }
+
+/**
+ * Model testinin anahtarı: veri koşusunda "<senaryo kimliği>#<veri anahtarı>", değilse senaryo kimliği.
+ * @param {{ id: string; veriKosusu?: { anahtar: string | null } | null }} s
+ */
+export const modelTestAnahtari = (s) => (s.veriKosusu?.anahtar ? `${s.id}#${s.veriKosusu.anahtar}` : s.id);
 
 // ---------------------------------------------------------------------------------------
 // Yasaklı adres koruması

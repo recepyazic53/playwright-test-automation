@@ -6,7 +6,7 @@
 // …/karsilastir/<A>/<B> (yan yana koşu karşılaştırması: karsilastirma.js).
 // Sonuçlar > Genel > "Servisler" sekmesi aynı genel görünümü (servisGenelBakis) kullanır.
 // Veri: /platform/servis-sonuclari* (yalnız okuma). Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
-import { alan, api, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
+import { alan, api, bildir, bosDurum, h, ikon, iskelet, kullaniciAyarlari, rozet, tarihMetni, yeniKimlik, yerlestir } from './ortak.js';
 import { dagilimCubugu, farkHapi, kalipMetni, kisaTarih, kivilcim, segment, sureMetni, trendKarti } from './sonuclar.js';
 import { aralikMetni, araligiSorguyaEkle, kayitliAralik, tarihAraligiSecici } from './tarih-araligi.js';
 import { htmlRaporDugmesi } from './html-rapor.js';
@@ -340,6 +340,13 @@ async function kosuAyrintisi(icerik, proje, id) {
         h('td', { class: 'sayi' }, x.durumKodu === null ? '—' : String(x.durumKodu)),
         h('td', { class: 'sayi' }, sureMetni(x.sureMs)), hataHucresi(x.hata)))));
   const satirSayisi = akis ? adimlar.length : senaryolar.length;
+  // Başarısızları tekrar çalıştır (servis koşusu): yalnız kalan çalıştırmalar (veri koşularında yalnız kalan satırlar), aynı ortam, o koşudaki satırlar.
+  const tekrarlanabilir = akis || kosu.calistirma === 'dene' ? 0 : senaryolar.filter((x) => (x.durum === 'basarisiz' || x.durum === 'hata') && x.senaryoId).length;
+  const tekrarDugmesi = tekrarlanabilir && kosu.ortamId
+    ? h('button', { type: 'button', class: 'dugme', onclick: () => servisBasarisizlariniTekrarla(kosu, proje) }, ikon('yenile'), `Başarısızları tekrar çalıştır (${tekrarlanabilir})`) : null;
+  const tekrarBagi = kosu.tekrarKaynagi ? h('span', { class: 'tekrar-bagi' }, ikon('yenile'), 'Tekrar: ',
+    h('a', { href: `${TABAN}/kosu/${q(kosu.tekrarKaynagi)}` }, 'önceki koşu'), ' · ',
+    h('a', { href: `${TABAN}/karsilastir/${q(kosu.tekrarKaynagi)}/${q(kosu.id)}` }, 'karşılaştır')) : null;
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
@@ -350,8 +357,9 @@ async function kosuAyrintisi(icerik, proje, id) {
           h('span', {}, rozet(akis ? 'akış koşusu' : 'servis koşusu', 'vurgu')),
           kosu.calistirma === 'dene' ? h('span', {}, rozet('deneme')) : null,
           h('span', {}, ikon('ag'), `ortam: ${kosu.ortam}`),
-          h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} · ${sureMetni(kosu.sureMs)}`)))),
-      h('div', { class: 'eylemler' }, karsilastirDugmesi({ tur: 'servis', projeId: proje.id, kosuId: kosu.id }), htmlRaporDugmesi({ tur: 'servis', projeId: proje.id, id: kosu.id }),
+          h('span', {}, ikon('saat'), h('span', { class: 'mono' }, `${kisaTarih(kosu.baslangic)} · ${sureMetni(kosu.sureMs)}`)),
+          tekrarBagi)),
+      h('div', { class: 'eylemler' }, tekrarDugmesi, karsilastirDugmesi({ tur: 'servis', projeId: proje.id, kosuId: kosu.id }), htmlRaporDugmesi({ tur: 'servis', projeId: proje.id, id: kosu.id }),
         h('a', { class: 'dugme hayalet', href: kaynakAdresi(kosu) }, ikon('geri'), 'Servis sonuçları'))),
     h('div', { class: 'sonuc-kartlari mini' },
       ozetKarti('Başarılı', kosu.basarili, 'basarili'), ozetKarti('Kalan', kalan(kosu), 'basarisiz'),
@@ -364,6 +372,49 @@ async function kosuAyrintisi(icerik, proje, id) {
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'ss-kosu-basligi' }, ikon('liste'), `${akis ? 'Adımlar' : 'Senaryolar'} (${satirSayisi})`),
         h('span', { class: 'alt' }, akis ? 'Adımlar sırasıyla; ayrıntıda istek / yanıt' : 'Kalanlar önce; senaryoya tıklayınca istek / yanıt açılır')),
       satirSayisi ? h('div', { class: 'tablo-kaydirma' }, tablo) : h('p', { class: 'bos-liste' }, 'Bu koşuda sonuç yok.')));
+}
+
+/**
+ * Servis koşusunda "Başarısızları tekrar çalıştır": plan (kalan çalıştırmalar, o koşudan bu yana değişen tablo satırları) gösterilir;
+ * değişen satırlar için güncel / o koşudaki veri seçilir (o koşudaki değerler yalnız gizli sütunsuz tablolarda saklanır). Riskli ortamda
+ * açık onay istenir; izinler sunucuda denetlenir. Yeni çalıştırmalar "Tekrar:" bağı taşır.
+ */
+async function servisBasarisizlariniTekrarla(kosu, proje) {
+  try {
+    const [{ plan }, { ortamlar }, { onayIste, canliOnayIste }, { servisKosusuBaslat }] = await Promise.all([
+      api(`/platform/servis-sonuclari/tekrar-plani?projeId=${q(proje.id)}&id=${q(kosu.id)}`), api(`/platform/ortamlar?projeId=${q(proje.id)}`),
+      import('./kosu-paneli.js'), import('./servis-kosu-paneli.js')
+    ]);
+    const ortam = ortamlar.find((o) => o.id === kosu.ortamId);
+    if (!ortam) { bildir('Koşunun ortamı bulunamadı; başarısızlar yalnız o ortamda tekrar çalıştırılabilir.', 'hata'); return; }
+    if (!plan.testler.length) { bildir('Tekrar çalıştırılacak kalan senaryo yok.', 'hata'); return; }
+    let veri = 'guncel';
+    const kosudakiOlur = plan.satirDegisiklikleri.length > 0 && plan.satirDegisiklikleri.every((x) => x.kosudakiVeri);
+    const ad = yeniKimlik('servis-tekrar');
+    const ek = h('div', { class: 'tekrar-plani' },
+      h('ul', { 'aria-label': 'Tekrar çalıştırılacak senaryolar' }, plan.testler.slice(0, 30).map((t) => h('li', {}, t.baslik))),
+      plan.satirDegisiklikleri.length ? h('div', { class: 'not-kutusu', role: 'note' },
+        h('strong', {}, 'Tablo satırı o koşudan bu yana değişti: '),
+        plan.satirDegisiklikleri.map((x) => `${x.tablo} → ${x.satirAdi} (${x.durum === 'silindi' ? 'silindi' : 'verisi değişti'})`).join(', '), '. ',
+        kosudakiOlur
+          ? h('div', { class: 'radyo-grubu', role: 'radiogroup' }, [['guncel', 'Güncel veriyle'], ['kosudaki', 'O koşudaki veriyle']].map(([d, e]) => {
+            const r = h('input', { type: 'radio', name: ad, value: d, checked: d === veri });
+            r.addEventListener('change', () => { veri = d; });
+            return h('label', {}, r, e);
+          }))
+          : h('span', {}, 'O koşudaki değerler saklanmadığı için (gizli sütunlu tablo ya da silinmiş satır) güncel veriyle koşar.')) : null,
+      plan.atlananlar.length ? h('p', { class: 'soluk kucuk' }, `${plan.atlananlar.length} çalıştırma tekrar edilemez: ${plan.atlananlar.map((x) => `${x.baslik} (${x.neden})`).slice(0, 5).join(', ')}.`) : null);
+    const tamam = await onayIste({
+      baslik: 'Başarısızları tekrar çalıştır?', ikonAd: 'yenile', dugme: `${plan.sayi} çalıştırmayı başlat`, ek,
+      metin: `Yalnız kalan ${plan.sayi} çalıştırma ${ortam.ad} ortamında, o koşudaki tablo satırlarıyla, sırayla çalışır. Yeni çalıştırmalar "Tekrar: önceki koşu" bağıyla kaydedilir.`
+    });
+    if (!tamam) return;
+    if (!(await canliOnayIste(ortam, 'Tekrar koşusu'))) return;
+    await servisKosusuBaslat({ proje, servisId: plan.kosu.servisId, ortamId: ortam.id, tekrar: { kaynakKosuId: kosu.id, veri } });
+  } catch (e) {
+    if (e && e.durum === 423) return;
+    bildir(e.message, 'hata');
+  }
 }
 
 // ---------------------------------------------------------------------------------------

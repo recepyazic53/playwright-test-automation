@@ -105,8 +105,11 @@ export const onerilenOrtam = (ortamlar) => ortamlar.find((o) => o.varsayilan) ||
  *  - ORTAM SEÇİMLİ (s.ortamlar + s.hesapla): ortam diyalogda seçilir; her seçimde hesapla(ortam) koşacak senaryoları
  *    (ve o ortamda Koşuda kapalı / tanımsız olanların sayısını; istenirse atlananları nedenleriyle) verir. Promise<{ ortam, senaryolar } | null>.
  *  - turEtiketi: "Kapsam" özet kutusunda tam / kısmi yerine gösterilecek metin (ör. servis koşusu).
+ *  - veriKosusu: { projeId } — ekran senaryolarında VERİ KOŞULARI (tablodan çoklu satır): senaryolardan biri tablo kullanıyorsa
+ *    "Veri koşusu" seçimi (senaryodaki biçim / hepsi tek satır / uyan tüm satırlar; koşu anı ezmesi) ve TAHMİNİ TEST SAYISI
+ *    gösterilir; üst sınırı (Ayarlar > Koşu) aşan senaryo varsa Başlat kapalıdır. Sonuç { ortam, senaryolar, veriKipi }.
  * @param {{ baslik: string; senaryolar?: Array<{ baslik: string }>; ortam?: { id?: string; ad: string; varsayilan?: boolean }; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli?: boolean; not?: string; haricSayisi?: number; dugme?: string; uyarilar?: Array<{ baslik: string; neden: string }>;
- *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; turEtiketi?: string;
+ *   ortamlar?: Array<{ id: string; ad: string; varsayilan?: boolean }>; turEtiketi?: string; veriKosusu?: { projeId: string };
  *   hesapla?: (ortam: any) => { senaryolar: Array<{ baslik: string }>; haricSayisi?: number; tanimsizSayisi?: number; atlananlar?: Array<{ baslik: string; neden: string }>; uyarilar?: Array<{ baslik: string; neden: string }> } }} s
  */
 export function kosuOnayi(s) {
@@ -121,12 +124,47 @@ export function kosuOnayi(s) {
     const ortamSecimi = secimli ? h('select', { id: `kosu-ortami-${kimlikUret()}` },
       s.ortamlar.map((o) => h('option', { value: o.id, selected: o.id === ortam.id }, riskliOrtamMi(o) ? `${o.ad} (${riskBelirtilmemisMi(o) ? 'riskli mi? belirtin' : 'riskli'})` : o.ad))) : null;
     const degisken = h('div', {});
+    // --- Veri koşusu (tablodan çoklu satır): koşu anı ezmesi + tahmini test sayısı (sunucu hesaplar; üst sınır Ayarlar > Koşu) ---
+    let veriKipi = 'senaryo';
+    /** @type {{ toplam: number; sinir: number; gruplu: boolean; coklu: number; asanlar: Array<{ baslik: string; sayi: number }>; senaryolar: Array<{ hatalar: string[]; baslik: string }> } | null} */
+    let tahmin = null;
+    let tahminSirasi = 0;
+    const veriKipiSecimi = s.veriKosusu ? h('select', { id: `veri-kipi-${kimlikUret()}` },
+      h('option', { value: 'senaryo' }, 'Senaryodaki çalıştırma biçimiyle'),
+      h('option', { value: 'tek' }, 'Hepsi tek satırla'),
+      h('option', { value: 'tumu' }, 'Uyan tüm satırlarla (her satır ayrı test)')) : null;
+    const veriBolumu = h('div', { class: 'veri-kosusu-bolumu', hidden: true });
+    const veriCiz = () => {
+      if (!veriKipiSecimi) return;
+      veriBolumu.hidden = !tahmin || !tahmin.gruplu;
+      if (!tahmin) return;
+      const hatali = tahmin.senaryolar.filter((x) => x.hatalar && x.hatalar.length);
+      yerlestir(veriBolumu,
+        h('div', { class: 'alan' }, h('label', { for: veriKipiSecimi.id }, 'Veri koşusu'), veriKipiSecimi),
+        h('p', { class: 'veri-kosusu-tahmini', role: 'status' }, 'Tahmini test sayısı: ', h('strong', {}, String(tahmin.toplam)),
+          tahmin.coklu ? ` (${tahmin.coklu} senaryo tablodan birden çok satırla)` : ''),
+        hatali.length ? h('p', { class: 'soluk kucuk' }, `${hatali.length} senaryo bu ortamda çoklu koşamıyor: ${hatali[0].baslik} — ${hatali[0].hatalar[0]}`) : null,
+        tahmin.asanlar.length ? h('div', { class: 'not-kutusu hata', role: 'alert' },
+          h('strong', {}, `Tek senaryoda en çok ${tahmin.sinir} veri koşusu olabilir. `),
+          `${tahmin.asanlar.map((x) => `${x.baslik} (${x.sayi})`).slice(0, 5).join(', ')} bu sınırı aşıyor. Senaryonun satır seçimini daraltın, "Hepsi tek satırla" seçin ya da sınırı Ayarlar > Koşu'dan değiştirin.`) : null);
+      baslat.disabled = hesap.senaryolar.length === 0 || tahmin.asanlar.length > 0;
+    };
+    const tahminAl = () => {
+      if (!s.veriKosusu || !ortam) return;
+      const sira = ++tahminSirasi;
+      const idler = hesap.senaryolar.map((x) => x.id).filter(Boolean);
+      if (!idler.length) { tahmin = null; veriCiz(); return; }
+      api('/platform/senaryolar/veri-kosusu-tahmini', { govde: { projeId: s.veriKosusu.projeId, ortamId: ortam.id, senaryoIdleri: idler, kip: veriKipi } })
+        .then((y) => { if (sira === tahminSirasi) { tahmin = y; veriCiz(); } })
+        .catch(() => { if (sira === tahminSirasi) { tahmin = null; veriCiz(); } });
+    };
+    veriKipiSecimi?.addEventListener('change', () => { veriKipi = veriKipiSecimi.value; tahminAl(); });
     const ciz = () => {
       if (secimli) hesap = s.hesapla(ortam);
       const riskli = riskliOrtamMi(ortam);
       const adet = hesap.senaryolar.length;
       yerlestir(baslat, ikon('oynat'), s.dugme || `${adet} senaryoyu başlat`);
-      baslat.disabled = adet === 0;
+      baslat.disabled = adet === 0 || Boolean(tahmin && tahmin.asanlar.length);
       yerlestir(degisken,
         h('p', { class: 'soluk' }, adet
           ? `${adet} senaryo ${ortam.ad} ortamında ${s.esZamanli ? 'aynı anda' : 'sırayla'} çalıştırılacak.`
@@ -159,10 +197,12 @@ export function kosuOnayi(s) {
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'kosu-onay-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('oynat')), s.baslik),
         ortamSecimi ? h('div', { class: 'alan kosu-ortam-secimi' }, h('label', { for: ortamSecimi.id }, 'Ortam'), ortamSecimi) : null,
+        veriKipiSecimi ? veriBolumu : null,
         degisken),
       h('div', { class: 'diyalog-alt' }, vazgec, baslat));
-    ortamSecimi?.addEventListener('change', () => { ortam = s.ortamlar.find((o) => o.id === ortamSecimi.value) || ortam; ciz(); });
+    ortamSecimi?.addEventListener('change', () => { ortam = s.ortamlar.find((o) => o.id === ortamSecimi.value) || ortam; tahmin = null; ciz(); veriCiz(); tahminAl(); });
     ciz();
+    tahminAl();
     let sonuc = false;
     baslat.addEventListener('click', () => { sonuc = true; diyalog.close(); });
     vazgec.addEventListener('click', () => diyalog.close());
@@ -170,7 +210,7 @@ export function kosuOnayi(s) {
       diyalog.remove();
       // Riskli ortamda "Başlat" = açık canlı onayı (sunucuya canliOnay: true gider).
       onayliRiskliOrtam = sonuc && ortam && riskliOrtamMi(ortam) ? ortam.id : null;
-      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar } : null) : sonuc);
+      coz(secimli ? (sonuc ? { ortam, senaryolar: hesap.senaryolar, veriKipi } : null) : sonuc);
     });
     document.body.append(diyalog);
     diyalog.showModal();
@@ -249,12 +289,16 @@ export function secenekIste(s) {
  * Sürmekte olan bir toplu koşu varken yeni bir TOPLU koşu başlatılmaz; tek senaryo (▷) ise mevcut
  * panele eklenip hemen çalışır.
  * tekBasina: tek senaryo (▷) çalıştırması (devre dışı ekranın senaryosu yalnızca böyle çalışır).
- * @param {{ projeId: string; ortam: { id: string; ad: string }; senaryolar: Array<{ id: string; baslik: string; ekranAdi?: string | null }>; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli: boolean; baslik: string; tekBasina?: boolean }} s
+ * veriKipi: koşu anı ezmesi ('tek' | 'tumu'; 'senaryo' / yok = senaryodaki çalıştırma biçimi). tekrar: başarısızları tekrar
+ * çalıştırma ({ kaynakKosuId, model: 'kosudaki' | 'guncel', veri: 'guncel' | 'kosudaki' }; sunucu o koşudaki satırları kurar).
+ * @param {{ projeId: string; ortam: { id: string; ad: string }; senaryolar: Array<{ id: string; baslik: string; ekranAdi?: string | null }>; tur: 'tam' | 'tekil'; kapsam?: string; esZamanli: boolean; baslik: string; tekBasina?: boolean;
+ *   veriKipi?: string; tekrar?: { kaynakKosuId: string; model?: string; veri?: string } }} s
  */
 export function kosuBaslat(s) {
   const yeniler = s.senaryolar.filter((x) => !kosuDurumu(x.id));
   if (!yeniler.length) { bildir('Seçilen senaryolar zaten çalışıyor.', 'hata'); return false; }
   const tekMi = yeniler.length === 1 && s.esZamanli && s.tur === 'tekil';
+  const veriEki = { ...(s.veriKipi && s.veriKipi !== 'senaryo' ? { veriKipi: s.veriKipi } : {}), ...(s.tekrar ? { tekrar: s.tekrar } : {}) };
   if (kosuSuruyorMu()) {
     if (!tekMi || durum.oturum.ortam.id !== s.ortam.id) { bildir('Önce sürmekte olan koşunun bitmesini bekleyin (ya da durdurun).', 'hata'); return false; }
     const satir = satirOlustur(yeniler[0]);
@@ -262,7 +306,7 @@ export function kosuBaslat(s) {
     durum.oturum.bitti = false;
     durum.secili = satir.senaryoId;
     durum.kucuk = false;
-    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}`, ...(s.tekBasina ? { tekBasina: true } : {}), ...canliOnayEki(s.ortam.id) }).then(() => oturumuBitirGerekirse(durum.oturum));
+    birTaneCalistir(durum.oturum, satir, { kosuTuru: 'tekil', kosuKimligi: `platform-${kimlikUret()}`, ...(s.tekBasina ? { tekBasina: true } : {}), ...canliOnayEki(s.ortam.id), ...veriEki }).then(() => oturumuBitirGerekirse(durum.oturum));
     yay();
     return true;
   }
@@ -274,7 +318,7 @@ export function kosuBaslat(s) {
   durum.oturum = oturum;
   durum.secili = oturum.satirlar[0].senaryoId;
   durum.kucuk = false;
-  const ek = { kosuTuru: s.tur, kosuKimligi: oturum.kosuKimligi, ...(s.tur === 'tam' ? { kosuKapsami: oturum.kapsam } : {}), ...(tekMi && s.tekBasina ? { tekBasina: true } : {}) };
+  const ek = { kosuTuru: s.tur, kosuKimligi: oturum.kosuKimligi, ...(s.tur === 'tam' ? { kosuKapsami: oturum.kapsam } : {}), ...(tekMi && s.tekBasina ? { tekBasina: true } : {}), ...veriEki };
   yay('basladi');
   if (s.esZamanli) {
     Promise.all(oturum.satirlar.map((x) => birTaneCalistir(oturum, x, ek))).then(() => oturumuBitirGerekirse(oturum), () => oturumuBitirGerekirse(oturum));
@@ -389,6 +433,14 @@ function durumSimgesi(d) {
   return h('span', { class: `durum-simgesi ${g.sinif}`, role: 'img', 'aria-label': g.etiket }, ikon(g.ikon));
 }
 
+/** Veri koşuları (aynı senaryonun her satırı ayrı test): "3 veri koşusu, 1 kalan". @param {any} sonuc */
+function veriKosusuOzeti(sonuc) {
+  const v = sonuc && Array.isArray(sonuc.veriKosulari) ? sonuc.veriKosulari : null;
+  if (!v || v.length < 2) return '';
+  const kalan = v.filter((x) => x.durum === 'basarisiz').length;
+  return `${v.length} veri koşusu${kalan ? `, ${kalan} kalan` : ''}`;
+}
+
 function paneliCiz() {
   const oturum = durum.oturum;
   if (!oturum) {
@@ -425,7 +477,7 @@ function paneliCiz() {
       const sure = x.baslangic ? sureMetni((x.bitis || Date.now()) - x.baslangic) : '';
       const li = h('li', { class: secili ? 'secili' : null, tabindex: '0', 'aria-current': secili ? 'true' : null, 'data-senaryo': x.senaryoId },
         durumSimgesi(x.durum),
-        h('span', { class: 'ad' }, h('span', { title: x.baslik }, x.baslik), h('small', {}, [x.ekranAdi, (KOSU_DURUMLARI[x.durum] || {}).etiket].filter(Boolean).join(' · '),
+        h('span', { class: 'ad' }, h('span', { title: x.baslik }, x.baslik), h('small', {}, [x.ekranAdi, (KOSU_DURUMLARI[x.durum] || {}).etiket, veriKosusuOzeti(x.sonuc)].filter(Boolean).join(' · '),
           x.durum === 'calisiyor' && x.kodIstegi ? [' ', rozet('Kod bekleniyor', 'uyari')] : null)),
         h('span', { class: 'sag' }, x.durum === 'calisiyor' && x.sonuc === null ? sure : x.sonuc && x.sonuc.sureMs != null ? sureMetni(x.sonuc.sureMs) : '',
           x.durum === 'calisiyor' || x.durum === 'sirada'

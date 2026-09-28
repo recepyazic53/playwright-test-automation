@@ -42,24 +42,71 @@ const isoZaman = (d) => {
   return Number.isNaN(t.getTime()) ? null : t.toISOString();
 };
 
+/** @param {unknown} d */
+const nesneMi = (d) => typeof d === 'object' && d !== null && !Array.isArray(d);
+/** Koşunun özetindeki "Tekrar: <önceki koşu>" bağı (ozet_json.tekrarKaynagi; şema göçü yok). @param {unknown} ozetJson @returns {string | null} */
+const tekrarKaynagiOku = (ozetJson) => {
+  try {
+    const o = JSON.parse(String(ozetJson ?? '{}'));
+    return nesneMi(o) && typeof o.tekrarKaynagi === 'string' && KIMLIK.test(o.tekrarKaynagi) ? o.tekrarKaynagi : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Sonucun veri koşusu bilgisi (raporlayıcı "veriKosusu" annotation'ı): hangi tablo satırlarıyla (açık sütunlar; gizli sütunun yalnız
+ * adı) ve hangi model sürümüyle koştu; veri koşusunun anahtarı / adı. ekler_json'a yazılır (şema göçü yok). Geçersizse null.
+ * @param {unknown} v
+ */
+export function veriKosusuTemizle(v) {
+  if (!nesneMi(v)) return null;
+  const o = /** @type {Record<string, unknown>} */ (v);
+  const kisa = (/** @type {unknown} */ x, /** @type {number} */ n) => (typeof x === 'string' && x ? x.slice(0, n) : null);
+  const satirlar = (Array.isArray(o.satirlar) ? o.satirlar : []).filter(nesneMi).slice(0, 50).map((s) => {
+    const x = /** @type {Record<string, unknown>} */ (s);
+    const degerler = nesneMi(x.degerler) ? Object.fromEntries(Object.entries(/** @type {Record<string, unknown>} */ (x.degerler)).slice(0, 40)
+      .map(([a, d]) => [a.slice(0, 60), d === null || d === undefined ? null : String(d).slice(0, 500)])) : {};
+    return {
+      grup: kisa(x.grup, 150) ?? '', tablo: kisa(x.tablo, 60) ?? '', ...(kisa(x.etiket, 40) ? { etiket: kisa(x.etiket, 40) } : {}),
+      satirId: typeof x.satirId === 'string' && KIMLIK.test(x.satirId) ? x.satirId : '', satirAdi: kisa(x.satirAdi, 120) ?? '',
+      ...(kisa(x.guncellenme, 40) ? { guncellenme: kisa(x.guncellenme, 40) } : {}), degerler,
+      gizliSutunlar: (Array.isArray(x.gizliSutunlar) ? x.gizliSutunlar : []).filter((g) => typeof g === 'string').slice(0, 40).map((g) => g.slice(0, 60))
+    };
+  }).filter((s) => s.satirId && s.grup);
+  const surum = typeof o.modelSurumu === 'number' && Number.isInteger(o.modelSurumu) && o.modelSurumu > 0 ? o.modelSurumu : null;
+  return { anahtar: kisa(o.anahtar, 2000), ad: kisa(o.ad, 500), modelSurumu: surum, satirlar };
+}
+/** @param {unknown} eklerJson */
+const veriKosusuOku = (eklerJson) => {
+  try {
+    const e = JSON.parse(String(eklerJson ?? '{}'));
+    return nesneMi(e) ? veriKosusuTemizle(e.veriKosusu) : null;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * Koşuyu oluşturur ya da (aynı kimlikle; ör. platformun her senaryoyu ayrı süreçte koştuğu tam
  * koşu) günceller: tür 'tam' baskındır, başlangıç en erken, kapsam ilk verilen.
+ * tekrarKaynagi: başarısızları tekrar çalıştırmada önceki koşunun kimliği ("Tekrar: <önceki koşu>" bağı; özet JSON'unda saklanır).
  * @param {Veritabani} vt
- * @param {{ id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string }} girdi
+ * @param {{ id: string; projeId: string; ortamId?: string | null; tur: 'tam' | 'tekil'; kapsam?: string | null; baslangic?: string; kaynak?: string; tekrarKaynagi?: string | null }} girdi
  */
 export function kosuKaydet(vt, girdi) {
   const id = kimlik(girdi.id, 'kosuId');
   const tur = girdi.tur === 'tam' ? 'tam' : 'tekil';
   const baslangic = isoZaman(girdi.baslangic) ?? new Date().toISOString();
+  const tekrarKaynagi = typeof girdi.tekrarKaynagi === 'string' && KIMLIK.test(girdi.tekrarKaynagi) && girdi.tekrarKaynagi !== id ? girdi.tekrarKaynagi : null;
   return vt.islem(() => {
     const mevcut = vt.tek('SELECT id, tur, baslangic, kapsam FROM kosular WHERE id = ?', [id]);
     if (!mevcut) {
       const makine = yerelMakine(vt);
       vt.calistir(
         `INSERT INTO kosular (id, proje_id, ortam_id, makine_id, tur, durum, baslangic, ozet_json, kapsam, kaynak)
-         VALUES (?, ?, ?, ?, ?, 'calisiyor', ?, '{}', ?, ?)`,
-        [id, kimlik(girdi.projeId, 'projeId'), girdi.ortamId ?? null, makine.id, tur, baslangic,
+         VALUES (?, ?, ?, ?, ?, 'calisiyor', ?, ?, ?, ?)`,
+        [id, kimlik(girdi.projeId, 'projeId'), girdi.ortamId ?? null, makine.id, tur, baslangic, tekrarKaynagi ? JSON.stringify({ tekrarKaynagi }) : '{}',
           tur === 'tam' ? metin(girdi.kapsam, 200) ?? 'Genel' : null, girdi.kaynak ?? 'raporlayici']
       );
       return id;
@@ -81,11 +128,12 @@ export function kosuyuBitir(vt, id, girdi) {
   if (!KOSU_DURUMLARI.includes(girdi.durum)) throw new DepoHatasi('Geçersiz koşu durumu.');
   const bitis = isoZaman(girdi.bitis) ?? new Date().toISOString();
   vt.islem(() => {
-    const mevcut = vt.tek('SELECT bitis FROM kosular WHERE id = ?', [id]);
+    const mevcut = vt.tek('SELECT bitis, ozet_json FROM kosular WHERE id = ?', [id]);
     if (!mevcut) return;
     const yeniBitis = mevcut.bitis && String(mevcut.bitis) > bitis ? mevcut.bitis : bitis;
+    const tekrarKaynagi = tekrarKaynagiOku(mevcut.ozet_json);
     vt.calistir('UPDATE kosular SET durum = ?, bitis = ?, ozet_json = ? WHERE id = ?', [
-      girdi.durum, yeniBitis, JSON.stringify(kosuOzetiHesapla(vt, id)), id
+      girdi.durum, yeniBitis, JSON.stringify({ ...kosuOzetiHesapla(vt, id), ...(tekrarKaynagi ? { tekrarKaynagi } : {}) }), id
     ]);
   });
 }
@@ -108,6 +156,7 @@ function kosuOzetiHesapla(vt, kosuId) {
  *   adimlar?: Array<{ ad: string; durum: string; sureMs?: number | null; hataMesaji?: string | null }>;
  *   medya?: Array<{ id?: string; tur: string; ad: string; icerikTuru: string; boyut: number; dosya: string; olusturulma?: string }>;
  *   yakalananMesajlar?: Array<{ kaynak: string; metin: string; adim?: string | null; sayi?: number; ilk?: string; son?: string; beklenen?: boolean }>;
+ *   veriKosusu?: unknown;
  * }} SonucGirdisi
  */
 
@@ -145,6 +194,7 @@ export function sonucKaydet(vt, g) {
     }
     const hata = metin(g.hataMesaji);
     const basarisiz = g.durum === 'basarisiz';
+    const veriKosusu = veriKosusuTemizle(g.veriKosusu);
     const atlanan = Array.isArray(g.atlananAlanlar)
       ? g.atlananAlanlar.filter((a) => a && typeof a.alan === 'string' && a.alan).slice(0, 500)
         .map((a) => ({ alan: a.alan.slice(0, 300), ...(typeof a.neden === 'string' && a.neden ? { neden: a.neden.slice(0, 1000) } : {}) }))
@@ -152,8 +202,9 @@ export function sonucKaydet(vt, g) {
     vt.calistir(
       `INSERT INTO kosu_sonuclari (id, kosu_id, senaryo_id, senaryo_baslik, durum, sure_ms, hata_mesaji, ekler_json, baslangic, bitis,
          test_kimligi, senaryo_anahtari, ekran_id, urun_adi, ham_durum, hata_kategorisi, hata_kalibi, beklenen_sonuc, atlanan_alanlar_json, deneme)
-       VALUES (?, ?, ?, ?, ?, ?, ?, '{}', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, kosuId, senaryoId, baslik, g.durum, tamSayi(g.sureMs), hata, isoZaman(g.baslangic), isoZaman(g.bitis) ?? new Date().toISOString(),
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, kosuId, senaryoId, baslik, g.durum, tamSayi(g.sureMs), hata, veriKosusu ? JSON.stringify({ veriKosusu }) : '{}',
+        isoZaman(g.baslangic), isoZaman(g.bitis) ?? new Date().toISOString(),
         testKimligi, anahtar, ekranId, urunAdi, metin(g.hamDurum, 40), basarisiz ? kategoriBul(hata ?? '', siniflandirmaKurallari(vt)) : null,
         basarisiz ? kalipCikar(hata ?? '') : null, metin(g.beklenenSonuc, 2000), JSON.stringify(atlanan), tamSayi(g.deneme) ?? 0]
     );
@@ -278,11 +329,11 @@ export function sonucOzeti(vt, projeId, secim = {}) {
 
 /** @param {Veritabani} vt @param {string} kosuId */
 export function kosuDetayi(vt, kosuId) {
-  const k = vt.tek('SELECT id, proje_id, ortam_id, tur, kapsam, durum, baslangic, bitis, kaynak FROM kosular WHERE id = ?', [kosuId]);
+  const k = vt.tek('SELECT id, proje_id, ortam_id, tur, kapsam, durum, baslangic, bitis, kaynak, ozet_json FROM kosular WHERE id = ?', [kosuId]);
   if (!k) return null;
   const sonuclar = vt.tumu(
     `SELECT r.id, r.senaryo_id, r.senaryo_baslik, r.senaryo_anahtari, r.durum, r.ham_durum, r.sure_ms, r.hata_kategorisi, r.hata_kalibi,
-            r.ekran_id, r.urun_adi, e.ad AS ekran_adi, e.durum AS ekran_durumu, r.baslangic, r.bitis, r.deneme,
+            r.ekran_id, r.urun_adi, e.ad AS ekran_adi, e.durum AS ekran_durumu, r.baslangic, r.bitis, r.deneme, r.ekler_json,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'ekran_goruntusu' AND m.silinme IS NULL) AS ekran_goruntusu_sayisi,
             (SELECT COUNT(*) FROM medya m WHERE m.sonuc_id = r.id AND m.tur = 'video' AND m.silinme IS NULL) AS video_sayisi
        FROM kosu_sonuclari r LEFT JOIN ekranlar e ON e.id = r.ekran_id WHERE r.kosu_id = ? ORDER BY r.rowid`, [kosuId]
@@ -294,17 +345,28 @@ export function kosuDetayi(vt, kosuId) {
     urun: s.ekran_adi != null ? String(s.ekran_adi) : s.urun_adi != null ? String(s.urun_adi) : 'Diğer', urunAnahtari: urunAnahtari(s),
     ekranDurumu: s.ekran_durumu == null ? null : String(s.ekran_durumu),
     baslangic: s.baslangic == null ? null : String(s.baslangic), bitis: s.bitis == null ? null : String(s.bitis), deneme: Number(s.deneme ?? 0),
-    ekranGoruntusuSayisi: Number(s.ekran_goruntusu_sayisi), videoSayisi: Number(s.video_sayisi)
+    ekranGoruntusuSayisi: Number(s.ekran_goruntusu_sayisi), videoSayisi: Number(s.video_sayisi),
+    // Veri koşusu (tablodan çoklu satır): anahtar / ad ve kullanılan satırlar; tek satırlı koşuda anahtar null.
+    veriKosusu: veriKosusuOku(s.ekler_json)
   }));
   const sira = { basarisiz: 0, durduruldu: 1, atlanan: 2, basarili: 3 };
   sonuclar.sort((a, b) => (sira[/** @type {keyof typeof sira} */ (a.durum)] ?? 9) - (sira[/** @type {keyof typeof sira} */ (b.durum)] ?? 9)
     || a.urun.localeCompare(b.urun, 'tr') || a.senaryoBaslik.localeCompare(b.senaryoBaslik, 'tr'));
+  const tekrarKaynagi = tekrarKaynagiOku(k.ozet_json);
+  const kaynak = tekrarKaynagi ? vt.tek('SELECT id, baslangic, bitis FROM kosular WHERE id = ?', [tekrarKaynagi]) : null;
+  // Bu koşunun tekrarları (başarısızları tekrar çalıştırmayla başlatılan koşular; en yeni önce).
+  const tekrarlar = vt.tumu('SELECT id, baslangic, bitis, durum, ozet_json FROM kosular WHERE proje_id = ? AND ozet_json LIKE ? ORDER BY baslangic DESC', [k.proje_id, `%"tekrarKaynagi":"${kosuId}"%`])
+    .filter((x) => tekrarKaynagiOku(x.ozet_json) === kosuId)
+    .map((x) => ({ id: String(x.id), baslangic: String(x.baslangic), bitis: x.bitis == null ? null : String(x.bitis), durum: String(x.durum) }));
   return {
     kosu: {
       id: String(k.id), projeId: k.proje_id == null ? null : String(k.proje_id), ortamId: k.ortam_id == null ? null : String(k.ortam_id),
       tur: String(k.tur), kapsam: k.kapsam == null ? null : String(k.kapsam), durum: String(k.durum), baslangic: String(k.baslangic),
       bitis: k.bitis == null ? null : String(k.bitis), kaynak: String(k.kaynak ?? 'raporlayici'),
-      ...sayilariTopla([kosuOzetiHesapla(vt, kosuId)])
+      ...sayilariTopla([kosuOzetiHesapla(vt, kosuId)]),
+      // "Tekrar: <önceki koşu>" (kaynak koşu silinmişse yalnız kimlik) ve bu koşunun tekrarları.
+      tekrarKaynagi: tekrarKaynagi ? { id: tekrarKaynagi, baslangic: kaynak ? String(kaynak.baslangic) : null, bitis: kaynak?.bitis == null ? null : String(kaynak.bitis), var: Boolean(kaynak) } : null,
+      tekrarlar
     },
     sonuclar
   };
@@ -344,7 +406,9 @@ export function sonucDetayi(vt, sonucId) {
       ad: String(a.ad), durum: String(a.durum), sureMs: a.sure_ms == null ? null : Number(a.sure_ms), hataMesaji: a.hata_mesaji == null ? null : String(a.hata_mesaji)
     })),
     medya: vt.tumu('SELECT * FROM medya WHERE sonuc_id = ? ORDER BY sira, rowid', [sonucId]).map(medyaGorunumu),
-    yakalananMesajlar: yakalananMesajlariOku(vt, sonucId)
+    yakalananMesajlar: yakalananMesajlariOku(vt, sonucId),
+    // Hangi tablo satırıyla koştu (açık sütunlar; gizli sütunun yalnız adı — değeri hiç saklanmaz).
+    veriKosusu: veriKosusuOku(s.ekler_json)
   };
 }
 

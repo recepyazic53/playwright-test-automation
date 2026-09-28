@@ -40,6 +40,9 @@ import { ekranAlanBaglari } from './tablolar/ekran-baglari.mjs';
 import { ekranBasvurulariniCoz, metinBasvurulariniCoz, modelAlanBilgisi, tabloBasvurusuVarMi } from './tablolar/ekran-basvurulari.mjs';
 import { tanimMetinleri } from './dosyalar/dosya-icerigi.mjs';
 import { satirSecimiOlustur } from './tablolar/tablo-secimi.mjs';
+import {
+  TEKRAR_PLANI_DEGISKENI, VARSAYILAN_VERI_KOSUSU_SINIRI, VERI_KIPI_DEGISKENI, basvuruGruplari, satirOzeti, tekrarPlaniniAyristir, veriKosulariniAc
+} from './tablolar/veri-kosulari.mjs';
 import { kayitliKosuOrtamDegiskenleri, kosuAyarlariniOku } from './ayarlar/kosu-ayarlari.mjs';
 import { YUKLEME_KLASORU_DEGISKENI, yuklemeDosyasiYolu } from './senaryolar/model-kosusu.mjs';
 
@@ -248,25 +251,43 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
   /** @type {Map<string, ReturnType<typeof ekranAlanBaglari>>} */
   const baglarOnbellegi = new Map();
   // Birden çok satır uyduğunda seçim (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi); senaryo başına ayrı seçim (grubun değerleri aynı satırdan).
-  const satirSecimKipi = (() => { try { return kosuAyarlariniOku(vt).tabloSatirSecimi; } catch { return 'ilk'; } })();
+  const kosuAyarlari = (() => { try { return kosuAyarlariniOku(vt); } catch { return null; } })();
+  const satirSecimKipi = kosuAyarlari?.tabloSatirSecimi ?? 'ilk';
+  // VERİ KOŞULARI (tablolar/veri-kosulari.mjs): senaryonun çoklu satır ayarı (icerik.veriKosulari), koşu anı ezmesi
+  // (NOBETCI_VERI_KIPI: 'tek' | 'tumu') ve başarısızları tekrar çalıştırma planı (NOBETCI_TEKRAR_PLANI: senaryo → satırlar + model sürümü).
+  const veriKipi = process.env[VERI_KIPI_DEGISKENI] === 'tek' || process.env[VERI_KIPI_DEGISKENI] === 'tumu' ? process.env[VERI_KIPI_DEGISKENI] : null;
+  const tekrarPlani = tekrarPlaniniAyristir(process.env[TEKRAR_PLANI_DEGISKENI]);
+  const veriKosusuSiniri = kosuAyarlari?.enCokVeriKosusu ?? VARSAYILAN_VERI_KOSUSU_SINIRI;
   /**
    * @param {Record<string, unknown>} veri @param {string} ekranId @param {ReturnType<typeof modelBaglami>} mb @param {unknown} tabloSecimleri
+   * @param {{ sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }} [sabit] veri koşusunun satırları
    */
-  const basvurulariCoz = (veri, ekranId, mb, tabloSecimleri) => {
-    // İndirilen dosya adımlarının beklentilerindeki ${Tablo.Sütun} başvuruları (metnin içinde) da aynı seçimlerle çözülür.
+  const basvurulariCoz = (veri, ekranId, mb, tabloSecimleri, sabit = {}) => {
+    // İndirilen dosya adımlarının beklentilerindeki ${Tablo.Sütun} başvuruları (metnin içinde) da aynı seçimlerle (veri koşusunda
+    // aynı sabit satırlarla) çözülür.
     const dosyaMetinleri = mb ? dosyaBeklentiMetinleri(mb.model) : [];
     const dosyadaBasvuru = dosyaMetinleri.some((m) => /\$\{\s*(?!akis:)[^{}]*\.[^{}]*\}/.test(m));
-    if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru) return { veri, tabloGizliDegerleri: [], veriHatalari: [], dosyaBasvurulari: {} };
+    if (!tabloBasvurusuVarMi(veri) && !dosyadaBasvuru) return { veri, tabloGizliDegerleri: [], veriHatalari: [], dosyaBasvurulari: {}, satirlar: [] };
     tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
     if (!baglarOnbellegi.has(ekranId)) baglarOnbellegi.set(ekranId, ekranAlanBaglari(vt, ekranId));
+    const satirSecimi = { ...satirSecimiOlustur(satirSecimKipi), ...sabit, kullanilan: new Map() };
     const s = {
       tablolar, baglar: baglarOnbellegi.get(ekranId), ...(mb ? modelAlanBilgisi(mb.model) : {}), ortamId, dosyaDenetle: tablodanDosyaDenetle,
-      satirSecimi: satirSecimiOlustur(satirSecimKipi),
+      satirSecimi,
       ...(tabloSecimleri && typeof tabloSecimleri === 'object' ? { tabloSecimleri: /** @type {Record<string, Record<string, string>>} */ (tabloSecimleri) } : {})
     };
     const r = ekranBasvurulariniCoz(veri, s);
     const d = dosyadaBasvuru ? metinBasvurulariniCoz(dosyaMetinleri, veri, s) : { degerler: {}, gizliDegerler: [], hatalar: [] };
-    return { veri: r.veri, tabloGizliDegerleri: [...r.gizliDegerler, ...d.gizliDegerler], veriHatalari: [...r.hatalar, ...d.hatalar], dosyaBasvurulari: d.degerler };
+    // Raporda "hangi satırla koştu" (açık sütunlar; gizli sütunun yalnız adı) ve tekrar koşusunda aynı satır için.
+    const t = /** @type {import('./tablolar/tablo-deposu.mjs').Tablo[]} */ (tablolar);
+    const satirlar = [...satirSecimi.kullanilan.entries()].map(([g, satir]) => {
+      const tablo = t.find((x) => x.id === g.split('|')[0]);
+      return tablo ? satirOzeti(g, tablo, /** @type {any} */ (satir)) : null;
+    }).filter((x) => x !== null);
+    return {
+      veri: r.veri, tabloGizliDegerleri: [...r.gizliDegerler, ...d.gizliDegerler], veriHatalari: [...r.hatalar, ...d.hatalar],
+      dosyaBasvurulari: d.degerler, satirlar
+    };
   };
   const senaryolar = [];
   for (const s of vt.tumu('SELECT id, ekran_id, baslik, icerik_json, kosuya_dahil FROM senaryolar WHERE proje_id = ? ORDER BY rowid', [projeId])) {
@@ -275,30 +296,68 @@ function ortamModelSenaryolari(vt, projeId, ortamId) {
     const buOrtam = icerik.ortamlar && typeof icerik.ortamlar === 'object' ? icerik.ortamlar[ortamId] : undefined;
     if (!buOrtam || typeof buOrtam !== 'object' || s.ekran_id == null) continue;
     const ekranId = String(s.ekran_id);
-    // Çoklu akış: senaryonun akışının modeli (ekran + akış başına önbellek).
+    const plan = tekrarPlani[String(s.id)];
+    // Çoklu akış: senaryonun akışının modeli (ekran + akış başına önbellek). Tekrar koşusu o koşudaki model sürümüyle.
     const akis = senaryoAkisi(icerik);
-    const modelAnahtari = `${ekranId}\u0000${akis ?? ''}`;
-    if (!modeller.has(modelAnahtari)) modeller.set(modelAnahtari, modelBaglami(vt, ekranId, akis));
+    const surum = plan?.modelSurumu ?? null;
+    const modelAnahtari = `${ekranId}\u0000${akis ?? ''}\u0000${surum ?? ''}`;
+    if (!modeller.has(modelAnahtari)) modeller.set(modelAnahtari, modelBaglami(vt, ekranId, akis, surum ? { surum } : {}));
     const mb = modeller.get(modelAnahtari);
     const ekran = ekranlar.get(ekranId);
     const kurallar = icerik.alanKurallari && Array.isArray(icerik.alanKurallari.mutlakaGorunmeli) ? icerik.alanKurallari.mutlakaGorunmeli.filter((x) => typeof x === 'string') : [];
-    const cozum = basvurulariCoz('veri' in buOrtam ? /** @type {Record<string, unknown>} */ (zarflariCoz(vt, buOrtam.veri)) : {}, ekranId, mb, icerik.tabloSecimleri);
-    senaryolar.push({
+    const hamVeri = 'veri' in buOrtam ? /** @type {Record<string, unknown>} */ (zarflariCoz(vt, buOrtam.veri)) : {};
+    const ortak = {
       // Koşuda ORTAM BAŞINA (senaryo-servisi.mjs > ortamdaKosuyaDahil).
       id: String(s.id), baslik: String(s.baslik), kosuyaDahil: ortamdaKosuyaDahil(icerik, s.kosuya_dahil === 1, ortamId),
       // Devre dışı ekranın senaryosu koşuya girmez (model spec'i süzer; Nöbetçi'nin tam listesi yine görür).
       ekranEtkin: ekran ? ekran.durum === 'etkin' : false,
       ekran: ekran ? { id: ekran.id, anahtar: ekran.anahtar, ad: ekran.ad } : { id: ekranId, anahtar: '', ad: '' },
       model: mb ? mb.model : null, modelSurumu: mb ? mb.surum : null, altModeller: mb ? mb.altModeller : {},
-      veri: cozum.veri, mutlakaGorunmeli: kurallar,
-      ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
-      ...(cozum.veriHatalari.length ? { veriHatalari: cozum.veriHatalari } : {}),
-      ...(Object.keys(cozum.dosyaBasvurulari).length ? { dosyaBasvurulari: cozum.dosyaBasvurulari } : {}),
+      mutlakaGorunmeli: kurallar,
       // Senaryonun giriş seçimi (senaryo-girisi.mjs; null = ortamın girişiyle, bugünkü davranış).
       giris: senaryoGirisi(icerik),
       // Senaryonun adım ekran görüntüsü seçimi (null = Ayarlar > Koşu > Kayıt'a uyar; bugünkü davranış).
       adimGoruntusu: senaryoAdimGoruntusuAyikla(icerik.adimGoruntusu).secim
-    });
+    };
+    /** @param {ReturnType<typeof basvurulariCoz>} cozum @param {{ anahtar: string | null; ad: string | null }} vk @param {Array<{ alan: string; mesaj: string }>} [ekHatalar] */
+    const ekle = (cozum, vk, ekHatalar = []) => {
+      const hatalar = [...ekHatalar, ...cozum.veriHatalari];
+      senaryolar.push({
+        ...ortak, veri: cozum.veri,
+        ...(cozum.tabloGizliDegerleri.length ? { tabloGizliDegerleri: cozum.tabloGizliDegerleri } : {}),
+        ...(hatalar.length ? { veriHatalari: hatalar } : {}),
+        ...(Object.keys(cozum.dosyaBasvurulari).length ? { dosyaBasvurulari: cozum.dosyaBasvurulari } : {}),
+        veriKosusu: { anahtar: vk.anahtar, ad: vk.ad, satirlar: cozum.satirlar }
+      });
+    };
+    if (plan && tabloBasvurusuVarMi(hamVeri) && plan.kosular.length) {
+      // Tekrar: o koşudaki satırlarla (yalnız kalan veri koşuları; tek satırlı koşuda o koşunun satırı).
+      for (const k of plan.kosular) {
+        ekle(basvurulariCoz(hamVeri, ekranId, mb, icerik.tabloSecimleri, { sabit: k.satirlar, ...(k.veriler ? { veriler: k.veriler } : {}) }), { anahtar: k.anahtar, ad: k.ad });
+      }
+      continue;
+    }
+    const acilim = tabloBasvurusuVarMi(hamVeri)
+      ? (() => {
+        tablolar ??= tablolariListele(vt, projeId, { cozulsun: true });
+        return veriKosulariniAc(icerik.veriKosulari, {
+          tablolar, gruplar: basvuruGruplari(hamVeri, tablolar), ortamId, kip: veriKipi,
+          tabloSecimleri: icerik.tabloSecimleri && typeof icerik.tabloSecimleri === 'object' ? icerik.tabloSecimleri : null
+        });
+      })()
+      : { kosular: [], hatalar: [], cokluGruplar: [] };
+    if (acilim.hatalar.length || acilim.kosular.length > veriKosusuSiniri) {
+      // Açılamayan / üst sınırı aşan çoklu koşu: tek test, tarayıcı açılmadan açık hatayla kalır.
+      const mesaj = acilim.hatalar.length ? acilim.hatalar.join(' ')
+        : `Bu senaryodan ${acilim.kosular.length} veri koşusu çıkıyor; tek senaryoda en çok ${veriKosusuSiniri} olabilir (Ayarlar > Koşu). Senaryonun satır seçimini daraltın.`;
+      ekle(basvurulariCoz(hamVeri, ekranId, mb, icerik.tabloSecimleri), { anahtar: null, ad: null }, [{ alan: 'veriKosulari', mesaj }]);
+      continue;
+    }
+    if (!acilim.kosular.length) {
+      ekle(basvurulariCoz(hamVeri, ekranId, mb, icerik.tabloSecimleri), { anahtar: null, ad: null });
+      continue;
+    }
+    for (const k of acilim.kosular) ekle(basvurulariCoz(hamVeri, ekranId, mb, icerik.tabloSecimleri, { sabit: k.satirlar }), { anahtar: k.anahtar, ad: k.ad });
   }
   // Model senaryosu "Dene": taslak, geçici dosyadan (veritabanında yok) tek deneme senaryosu olarak eklenir.
   const deneme = modelDenemeSenaryosu(ortamId);

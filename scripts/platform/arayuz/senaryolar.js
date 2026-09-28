@@ -556,13 +556,24 @@ function listeGorunumu(icerik, s) {
     let ortam = secenek[0];
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const sqlUyarilari = (o) => sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, [x], o);
-    // Tek, riskli olmayan ortamda tanımlıysa (ve SQL uyarısı yoksa) sormadan çalışır; aksi halde ortam diyalogda seçilir.
-    if (secenek.length > 1 || riskliOrtamMi(ortam) || sqlUyarilari(ortam).length) {
-      const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hesapla: (o) => ({ senaryolar: [x], uyarilar: sqlUyarilari(o) }), tur: 'tekil', esZamanli: true, dugme: 'Çalıştır' });
+    // Tek, riskli olmayan ortamda tanımlıysa (ve SQL uyarısı yoksa, senaryo tablodan veri almıyorsa) sormadan çalışır; aksi halde
+    // ortam (ve tablodan veri alan senaryoda veri koşusu biçimi, tahmini test sayısı) diyalogda seçilir.
+    let veriKipi = 'senaryo';
+    if (secenek.length > 1 || riskliOrtamMi(ortam) || sqlUyarilari(ortam).length || await veriGrupluMu(x, ortam)) {
+      const y = await kosuOnayi({ baslik: 'Senaryoyu çalıştır?', ortamlar: secenek, ortam: surenOrtam(), hesapla: (o) => ({ senaryolar: [x], uyarilar: sqlUyarilari(o) }), tur: 'tekil', esZamanli: true, dugme: 'Çalıştır', veriKosusu: { projeId: proje.id } });
       if (!y) return;
       ortam = y.ortam;
+      veriKipi = y.veriKipi;
     }
-    kosuBaslat({ projeId: proje.id, ortam, senaryolar: [x], tur: 'tekil', esZamanli: true, baslik: x.baslik, tekBasina: true });
+    kosuBaslat({ projeId: proje.id, ortam, senaryolar: [x], tur: 'tekil', esZamanli: true, baslik: x.baslik, tekBasina: true, veriKipi });
+  }
+
+  /** Senaryo bu ortamda tablodan veri alıyor mu (koşu diyaloğunda veri koşusu seçimi gösterilsin)? Hesaplanamazsa hayır. */
+  async function veriGrupluMu(x, ortam) {
+    try {
+      const y = await api('/platform/senaryolar/veri-kosusu-tahmini', { govde: { projeId: proje.id, ortamId: ortam.id, senaryoIdleri: [x.id] } });
+      return Boolean(y.gruplu);
+    } catch { return false; }
   }
 
   async function seciliCalistir(secilenler) {
@@ -572,14 +583,14 @@ function listeGorunumu(icerik, s) {
     if (!ilgili.length) { bildir('Seçilen senaryolar hiçbir ortamda tanımlı değil.', 'hata'); return; }
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
-      baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), tur: 'tekil', esZamanli: true,
+      baslik: 'Seçilenleri çalıştır?', ortamlar: ilgili, ortam: surenOrtam(), tur: 'tekil', esZamanli: true, veriKosusu: { projeId: proje.id },
       hesapla: (o) => {
         const k = calisabilir.filter((x) => ortamKaydi(x, o.id)?.tanimli);
         return { senaryolar: k, tanimsizSayisi: calisabilir.length - k.length, uyarilar: sqlKosuUyarilari(denetim, denetim?.ekranSenaryolari, k, o) };
       }
     });
     if (!y) return;
-    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: 'tekil', esZamanli: true, baslik: `${y.senaryolar.length} seçili senaryo` });
+    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: 'tekil', esZamanli: true, baslik: `${y.senaryolar.length} seçili senaryo`, veriKipi: y.veriKipi });
   }
 
   async function kosuyuBaslat() {
@@ -589,7 +600,7 @@ function listeGorunumu(icerik, s) {
     const kapsam = ekran ? ekran.ad : 'Genel';
     const denetim = await sqlKosuDenetimiAl(proje.id);
     const y = await kosuOnayi({
-      baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false,
+      baslik: tam ? 'Koşuyu başlat?' : 'Kısmi koşuyu başlat?', ortamlar, ortam: surenOrtam(), tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, veriKosusu: { projeId: proje.id },
       // Koşuya o ortamda tanımlı ve o ortamda Koşuda açık senaryolar girer.
       hesapla: (o) => {
         const tanimli = gorunen.filter((x) => ortamKaydi(x, o.id)?.tanimli);
@@ -609,7 +620,7 @@ function listeGorunumu(icerik, s) {
         : 'Arama ya da filtre etkin: yalnızca listelenenler koşar. Kısmi koşu olarak kaydedilir; kartları ve trendi değiştirmez.'
     });
     if (!y) return;
-    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, baslik: tam ? `${kapsam} koşusu` : `${kapsam} (kısmi)` });
+    kosuBaslat({ projeId: proje.id, ortam: y.ortam, senaryolar: y.senaryolar, tur: tam ? 'tam' : 'tekil', kapsam, esZamanli: false, baslik: tam ? `${kapsam} koşusu` : `${kapsam} (kısmi)`, veriKipi: y.veriKipi });
   }
 
   /** Toplu Koşuya ekle / çıkar: birden çok ortam varsa hangi ortamda (ya da tüm tanımlı ortamlarda) olduğu sorulur. */

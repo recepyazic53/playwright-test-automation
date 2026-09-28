@@ -78,6 +78,8 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Koşu ayrıntısı', metin: ['Bu koşudaki tüm testler, durumları ve süreleri. Kalan bir testi açarak hatasını, adımlarını ve kayıtlarını inceleyin.'], cizim: { tur: 'maket', bolge: 'tablo', etiket: 'Koşudaki testler' } },
       { baslik: 'Önceki koşuyla karşılaştırma', metin: 'Tam koşularda "yeni kalan" ve "düzelen" testler ayrıca işaretlenir; böylece yalnızca değişene odaklanırsınız.', ipucu: 'Bir test bir koşuda kalıp sonrakinde geçiyorsa ortamdan kaynaklı (kararsız) olabilir.' },
+      { baslik: 'Veri koşuları', metin: 'Tablodan birden çok satırla koşan bir senaryonun her satırı (ya da kombinasyonu) ayrı testtir: "Senaryo [satır adı]". Bu testler tek senaryo satırında toplanır; satıra tıklayınca satır satır sonuçlar açılır. Testin ayrıntısında hangi tablo satırıyla koştuğu görünür; gizli sütunların değeri hiç saklanmaz, yalnız adıyla "•••" gösterilir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Senaryo', alt: '3 veri koşusu', ikon: 'liste' }, { baslik: '[satır-1]', alt: 'geçti', ikon: 'onay' }, { baslik: '[satır-2]', alt: 'kaldı', ikon: 'uyari' }] } },
+      { baslik: 'Başarısızları tekrar çalıştırmak', metin: '"Başarısızları tekrar çalıştır (N)" yalnız kalan testleri (veri koşularında yalnız kalan satırları) aynı ortamda, o koşudaki tablo satırı ve (varsayılan) o koşudaki model sürümüyle yeniden koşar. Başlamadan satırın verisi ya da ekran modeli o koşudan bu yana değiştiyse bildirilir ve siz seçersiniz: o koşudaki değerler yalnız gizli sütunu olmayan tablolarda saklandığı için, diğerleri güncel veriyle koşar. Yeni koşu "Tekrar: önceki koşu" bağıyla kaydedilir ve iki koşu karşılaştırılabilir.', ipucu: 'İzinler ve riskli ortam onayı normal koşudaki gibi uygulanır.' },
       { baslik: 'Raporu paylaşmak', metin: '"Raporu indir (HTML)" tek dosyalık, internet gerektirmeyen bir rapor üretir; e-postayla gönderebilir ya da yazdırabilirsiniz. Gizli bilgiler her zaman maskelenir; ekran görüntüleri ve ortam adresi yalnızca siz seçerseniz eklenir.', cizim: { tur: 'akis', kutular: [{ baslik: 'Seçenekler', ikon: 'ayar' }, { baslik: 'Önizleme', ikon: 'goz' }, { baslik: '.html', alt: 'tek dosya', ikon: 'indir' }] } }
     ]
   },
@@ -143,9 +145,15 @@ export const REHBERLER = {
       },
       {
         baslik: 'Doldurma sırası',
-        sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
+        sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.', 'Senaryo birden çok satırla koşacaksa "Çalıştırma biçimi"ni seçin: tek satır (varsayılan), seçili satırların her biri ya da uyan tüm satırlar; her satır ayrı test olur.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
       },
       { baslik: 'Akış diyagramı', metin: '"Akış diyagramı" sekmesi, seçimlerinize göre koşacak adımları kutular hâlinde gösterir; seçili ortamdaki son koşu varsa adımlar yeşil / kırmızı boyanır.', cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Alanlar', ikon: 'duzenle' }, { baslik: 'Gönder', ikon: 'ok' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
+      {
+        baslik: 'Birden çok satırla çalıştırma',
+        metin: 'Satır seçimi kartındaki "Çalıştırma biçimi" her tablo grubu için ayrıdır. "Seçili satırların her biri" işaretlediğiniz satırları, "Uyan tüm satırlar" seçimlerle uyan tüm satırları ayrı test olarak koşar. İki ya da daha çok tablo çoklu ise satırları "Eşleştirerek" (çift çift) ya da "Tüm kombinasyonlar" olarak birleştirirsiniz. Tahmini test sayısı kartın altında görünür; tek senaryodaki üst sınır Ayarlar > Koşu\'dadır. Ortama özel satır yalnız kendi ortamında koşar.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Tablo', alt: 'satırlar', ikon: 'veri' }, { baslik: 'Çalıştırma biçimi', alt: 'seçili / tümü', ikon: 'liste' }, { baslik: 'Her satır', alt: 'ayrı test', ikon: 'oynat' }] },
+        ipucu: 'Koşu diyaloğunda "Veri koşusu" ile bu biçimi o koşu için değiştirebilirsiniz (ör. hepsi tek satırla). Dene her zaman tek satırla koşar.'
+      },
       { baslik: 'Bilmekte fayda var', metin: 'Boş bıraktığınız alan modelin varsayılanını alır; zorunlu bir alanı "Bilerek boş bırak" ile işaretlerseniz (olumsuz senaryo) koşucu o alana değer yazmaz. "Mutlaka görünmeli" işaretli bir alan ekranda görünmezse test bilerek düşer. "Adım ekran görüntüleri" varsayılan olarak Ayarlar > Koşu > Kayıt\'a uyar; bu senaryo için her adımda, yalnız kalan adımda, seçili adımlarda ya da kapalı seçebilirsiniz.', ipucu: 'Dene sonucu senaryoya kaydedilmez; Sonuçlar\'da "deneme" olarak görünür.' }
     ]
   },
@@ -194,7 +202,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Tek istek senaryosu',
-        sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, hesaplama kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'],
+        sira: ['Metodu seçin.', 'Alanları doldurun: sabit değer, test verisi tablosu sütunu, hesaplama kuralı ya da akış değeri.', 'Kontrolleri ekleyin.', 'Tablodan değer alıyorsa "Veri koşusu" bölümünde çalıştırma biçimini seçin: tek satır (varsayılan), seçili satırların her biri ya da uyan tüm satırlar; her satır ayrı çalıştırma olur ("Senaryo [satır adı]").', '"Dene" ile seçili ortamda deneyin, sonra kaydedin.'],
         cizim: { tur: 'form', alanlar: ['Metot', 'Alanlar', 'Kontroller'], dugme: 'Dene' }
       },
       {
@@ -240,7 +248,7 @@ export const REHBERLER = {
       { baslik: 'Tarih aralığı ve ortam', metin: 'Üstteki tarih aralığıyla (Son 1 saat, Bugün, Son 7 gün…) ve ortam seçimiyle süzün. "Denemeleri de say" açıkken "Dene" ile yapılan tek çalıştırmalar da hesaba girer.' },
       {
         baslik: 'Kalan bir senaryoyu incelemek',
-        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan senaryoya tıklayın: kontroller, istek ve yanıt (gizli alanlar maskeli), HTTP kodu ve süre açılır.', 'Aynı hata başka senaryolarda da var mı, "Hata kalıpları"na bakın.'],
+        sira: ['Koşu geçmişinden koşuyu açın.', 'Kalan senaryoya tıklayın: kontroller, istek ve yanıt (gizli alanlar maskeli), HTTP kodu ve süre açılır.', 'Aynı hata başka senaryolarda da var mı, "Hata kalıpları"na bakın.', 'Düzelttikten sonra koşu ayrıntısında "Başarısızları tekrar çalıştır": yalnız kalan çalıştırmalar aynı ortamda, o koşudaki tablo satırlarıyla koşar; yeni koşu "Tekrar: önceki koşu" bağı taşır.'],
         cizim: { tur: 'istek', sol: 'Nöbetçi', sag: 'Servis', gidis: 'istek', donus: 'yanıt', kontroller: ['Kontroller', 'Maskeli yanıt'] }
       }
     ]

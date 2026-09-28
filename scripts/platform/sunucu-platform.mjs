@@ -178,6 +178,7 @@ import {
 } from './senaryolar/senaryo-servisi.mjs';
 import { senaryoCalistir, senaryoDene } from './senaryolar/calistirma.mjs';
 import { oneriBaglami } from './senaryolar/oneri-baglami.mjs';
+import { tekrarPlani, veriKosusuTahminleri } from './senaryolar/veri-kosusu-plani.mjs';
 import { YASAK_ADRES_DEGISKENI, adresYasakliMi } from './senaryolar/model-kosusu.mjs';
 import { senaryoyuPlaywrightKodunaAktar } from './senaryolar/disa-aktarma-servisi.mjs';
 import { execFile } from 'node:child_process';
@@ -543,11 +544,24 @@ export async function platformKasaAcikMi() {
 
 /**
  * Canlı panel için: koşudaki senaryonun sonucu (durum, hata, son ekran görüntüsü + video medya kimliği).
- * @param {string} kosuId @param {string} senaryoAnahtari
+ * VERİ KOŞULARI: birden çok anahtar verilirse (aynı senaryonun her satırı ayrı test) sonuç toplanır: durum en kötüsü (kalan >
+ * durdurulan > atlanan > geçen), süre toplam, ayrıntı (hata, görüntü) ilk kalan testin; veriKosulari her testin durumunu taşır.
+ * @param {string} kosuId @param {string | string[]} senaryoAnahtari
  */
 export async function platformKosuSonucu(kosuId, senaryoAnahtari) {
   const db = await platformVeritabani();
   if (!db) return null;
+  if (Array.isArray(senaryoAnahtari)) {
+    const tekiller = await Promise.all(senaryoAnahtari.map((a) => platformKosuSonucu(kosuId, a)));
+    const bulunan = tekiller.filter((x) => x !== null);
+    if (!bulunan.length) return null;
+    const sira = ['basarisiz', 'durduruldu', 'atlanan', 'basarili'];
+    const enKotu = bulunan.slice().sort((a, b) => sira.indexOf(String(a.platformDurumu)) - sira.indexOf(String(b.platformDurumu)))[0];
+    return {
+      ...enKotu, sureMs: bulunan.reduce((t, x) => t + (Number(x.sureMs) || 0), 0),
+      veriKosulari: senaryoAnahtari.map((a, i) => ({ baslik: a.slice(a.indexOf('::') + 2), durum: tekiller[i]?.platformDurumu ?? null, sonucId: tekiller[i]?.sonucId ?? null }))
+    };
+  }
   const bulunan = kosudakiSonucuBul(db, kosuId, { senaryoAnahtari });
   if (!bulunan) return null;
   // Gösterim maskesi (bilinen gizli değerler, adı gizli alanlar …): saklanan sonuç değişmez.
@@ -1335,6 +1349,20 @@ const GET_UCLARI = new Map([
     if (!d) throw new DepoHatasi('Sonuç bulunamadı.');
     return { sonuc: sonucDetayiniMaskele(d, gosterimMaskesi(db, d.projeId)) };
   }],
+  // "Başarısızları tekrar çalıştır" önizlemesi (yalnız okuma): kalan testler, satır / model değişiklikleri (senaryolar/veri-kosusu-plani.mjs).
+  ['/platform/sonuclar/tekrar-plani', (db, q) => {
+    const plan = tekrarPlani(db, kimlikAl(q.get('kosuId'), 'kosuId'), secimliKimlik(q.get('projeId')) ?? null);
+    const m = gosterimMaskesi(db, plan.kosu.projeId);
+    return {
+      plan: {
+        ...plan, atlananlar: plan.atlananlar.map((x) => ({ ...x, baslik: m.ad(x.baslik) })),
+        senaryolar: plan.senaryolar.map((s) => ({
+          ...s, baslik: m.ad(s.baslik), testler: s.testler.map((t) => ({ ...t, baslik: m.ad(t.baslik), veriKosusu: t.veriKosusu === null ? null : m.ad(t.veriKosusu) })),
+          satirDegisiklikleri: s.satirDegisiklikleri.map((x) => ({ ...x, satirAdi: m.ad(x.satirAdi) }))
+        }))
+      }
+    };
+  }],
   ['/platform/sonuclar/kaliplar', (db, q) => {
     const projeId = kimlikAl(q.get('projeId'), 'projeId');
     return hataKaliplariniMaskele(hataKaliplari(db, projeId, { urun: urunSecimi(q.get('urun')), ...sorgudanAralik(q) }), gosterimMaskesi(db, projeId));
@@ -1447,12 +1475,16 @@ const POST_UCLARI = new Map([
       // Adım ekran görüntüsü seçimi (senaryo formu; 'ayar' = Ayarlara uy): verilmezse mevcut korunur.
       ...(g.adimGoruntusu !== undefined ? { adimGoruntusu: g.adimGoruntusu } : {}),
       // Satır seçimleri (${Tablo.Sütun} değerlerinin koşuda kullanılacak satırı): verilmezse mevcut korunur.
-      ...(g.tabloSecimleri !== undefined ? { tabloSecimleri: g.tabloSecimleri } : {})
+      ...(g.tabloSecimleri !== undefined ? { tabloSecimleri: g.tabloSecimleri } : {}),
+      // Çalıştırma biçimi (tablodan çoklu satır; tablolar/veri-kosulari.mjs): verilmezse mevcut korunur, null / {} kaldırır.
+      ...(g.veriKosulari !== undefined ? { veriKosulari: g.veriKosulari } : {})
     }, { kosuyorMu });
     // Formda yüklenen (henüz sahipsiz) şifreli dosyalar bu senaryoya bağlanır (sahipsiz temizliği silmesin).
     if (g.veri !== undefined) dosyaSahipleriniBagla(db, 'senaryo', sonuc.id, g.veri);
     return { id: sonuc.id, uyarilar: sonuc.uyarilar };
   }],
+  // Koşu diyaloğu: tahmini test sayısı (tablodan çoklu satır; koşu anı ezmesiyle) ve üst sınırı aşanlar. Yalnız hesap.
+  ['/platform/senaryolar/veri-kosusu-tahmini', (db, g) => veriKosusuTahminleri(db, kimlikAl(g.projeId, 'projeId'), { ortamId: g.ortamId, senaryoIdleri: g.senaryoIdleri, kip: g.kip })],
   // Senaryoların değişiklik geçmişini siler (geri alınamaz; onay: true olmadan yalnızca sayar).
   ['/platform/senaryo/gecmis/sil', (db, g) => senaryoGecmisiniSil(db, kimlikAl(g.projeId, 'projeId'), g.idler, { onay: g.onay === true })],
   // ortamId verilirse yalnız o ortamda; verilmezse senaryonun tanımlı olduğu tüm ortamlarda.

@@ -230,16 +230,21 @@ function senaryolariListele(ortam, ekstraArgumanlar = [], grepDeseni = undefined
               const specDosya = spec.file ?? buDosya;
               if (spec.title) {
                 // Testin "beklenenSonuc" annotation'ı "--list" çıktısında da gelir. Yoksa alan hiç eklenmez.
-                const beklenenSonuc = (spec.tests ?? [])
-                  .flatMap((t) => t.annotations ?? [])
-                  .find((a) => a?.type === 'beklenenSonuc' && typeof a.description === 'string')?.description;
+                const aciklamalar = (spec.tests ?? []).flatMap((t) => t.annotations ?? []);
+                const beklenenSonuc = aciklamalar.find((a) => a?.type === 'beklenenSonuc' && typeof a.description === 'string')?.description;
+                // Veri koşusu (tablodan çoklu satır): aynı senaryonun her satırı ayrı test; anahtarı ayırt eder (yoksa null).
+                const veriAnahtari = (() => {
+                  const d = aciklamalar.find((a) => a?.type === 'veriKosusu' && typeof a.description === 'string')?.description;
+                  try { const v = d ? JSON.parse(d) : null; return v && typeof v.anahtar === 'string' && v.anahtar ? v.anahtar : null; } catch { return null; }
+                })();
                 liste.push({
                   ad: spec.title,
                   dosya: specDosya,
                   satir: spec.line,
                   // Etiketler (ör. model koşucusunun "@model-<UUID>" etiketi — model senaryosu etiketle bulunur).
                   etiketler: Array.isArray(spec.tags) ? spec.tags.map((t) => (String(t).startsWith('@') ? String(t) : `@${t}`)) : [],
-                  ...(beklenenSonuc ? { beklenenSonuc } : {})
+                  ...(beklenenSonuc ? { beklenenSonuc } : {}),
+                  ...(veriAnahtari ? { veriAnahtari } : {})
                 });
               }
             }
@@ -340,6 +345,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/cikis-korumasi.js', { dosya: 'cikis-korumasi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/urunler.js', { dosya: 'urunler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-formu.js', { dosya: 'senaryo-formu.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/veri-kosusu-secimi.js', { dosya: 'veri-kosusu-secimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/senaryo-diyagrami.js', { dosya: 'senaryo-diyagrami.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/kosu-paneli.js', { dosya: 'kosu-paneli.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/ekranlar.js', { dosya: 'ekranlar.js', tur: 'text/javascript; charset=utf-8' }],
@@ -368,6 +374,8 @@ const ARAYUZ_DOSYALARI = new Map([
   // Esnek başlık karşılaştırması (tablo birleştirme / "Benzer tablo var" önleme): sunucuyla ORTAK.
   ['/arayuz/tablo-benzerligi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'tablo-benzerligi.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/veri-sagligi.js', { dosya: 'veri-sagligi.js', tur: 'text/javascript; charset=utf-8' }],
+  // Veri koşuları (tablodan çoklu satır; çalıştırma biçimi, tahmini test sayısı): koşucu ve sunucuyla ORTAK.
+  ['/arayuz/veri-kosulari.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'tablolar', 'veri-kosulari.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Sayfa paketi istek metinleri (inceleme kuralları + "Paket nasıl üretilir?" cümlesi): sunucunun istek dosyasıyla ORTAK.
   ['/arayuz/paket-istekleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ekranlar', 'paket-istekleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // İzin tanımları (Ayarlar > İzinler, "?" açıklamaları, kapalı izin uyarısı, rehber) ve riskli ortam tanımı: sunucuyla ORTAK tek kaynak.
@@ -573,7 +581,7 @@ function dosyaSirasiIleCalistir(dosya, gorev) {
 // ekOrtamDegiskenleri: koşu kimliği/türü ve (Senaryolar > "Dene"de) geçici
 // ek veri dosyasının yolu; tekil koşularda boştur.
 // genel: elle oluşturulan proje/ortamın model senaryosu (bkz. genelKosuAyarlari).
-async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}, grepDeseni = null, genel = null) {
+async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kosuId, ekOrtamDegiskenleri = {}, grepDeseni = null, genel = null, sonucBasliklari = null) {
   if (KOSU_KAPALI) {
     return { calistiMi: false, mesaj: 'Bu sunucu örneğinde test koşuları kapalı (TEST_SUNUCU_KOSU_KAPALI=1).' };
   }
@@ -639,7 +647,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
   // "Durdur" ile iptal edilirse yanıtı hemen dönebilsin.
   return new Promise((resolve) => {
     kuyruktaBekleyenler.set(kosuId, resolve);
-    dosyaSirasiIleCalistir(dosya, () => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri, genel)).then((sonuc) => {
+    dosyaSirasiIleCalistir(dosya, () => gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri, genel, sonucBasliklari)).then((sonuc) => {
       // Eğer calismaDurdur bu koşuyu ZATEN erken çözdüyse (Map'ten silinmiş olur),
       // ikinci kez resolve çağırmıyoruz — Promise'lerde ikinci resolve zaten yok
       // sayılır ama netlik için burada da kontrol ediyoruz.
@@ -664,7 +672,7 @@ async function testiCalistirVeBekle(ortam, senaryoAdi, dosya, tumSenaryolar, kos
 // ayrı süreçte) çalışan süreç sayısı — sonuncusu kapanınca koşu hâlâ "çalışıyor" görünüyorsa kapatılır.
 const aktifPlatformKosulari = new Map();
 
-async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}, genel = null) {
+async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrtamDegiskenleri = {}, genel = null, sonucBasliklari = null) {
   // Sonuçlar ve (şifreli) medya platform raporlayıcısı (scripts/platform/raporlayici.mjs) tarafından
   // veritabanına yazılır; panelin sonucu veritabanından okunur (JSON sonuç dosyası yazdırılmaz).
   const kosuKimligi = ekOrtamDegiskenleri.KOSU_KIMLIGI || `panel-${Date.now()}-${randomBytes(4).toString('hex')}`;
@@ -851,11 +859,15 @@ async function gercektenCalistir(ortam, senaryoAdi, dosya, desen, kosuId, ekOrta
 
       let sonuc = null;
       try {
-        const p = await platformKosuSonucu(kosuKimligi, kosuAnahtari(dosya, senaryoAdi));
+        // Veri koşuları (aynı senaryonun birden çok testi): sonuç toplanır (biri kalırsa senaryo kalır; kalanın ayrıntısı gösterilir).
+        const p = sonucBasliklari && sonucBasliklari.length > 1
+          ? await platformKosuSonucu(kosuKimligi, sonucBasliklari.map((b) => kosuAnahtari(dosya, b)))
+          : await platformKosuSonucu(kosuKimligi, kosuAnahtari(dosya, senaryoAdi));
         if (p) {
           sonuc = {
             durum: p.durum, sureMs: p.sureMs, hataMesaji: p.hataMesaji, basarisizAdim: p.basarisizAdim,
-            ekranGoruntusuId: p.ekranGoruntusuId, videoId: p.videoId, sonucId: p.sonucId
+            ekranGoruntusuId: p.ekranGoruntusuId, videoId: p.videoId, sonucId: p.sonucId,
+            ...(p.veriKosulari ? { veriKosulari: p.veriKosulari } : {})
           };
         }
       } catch (okumaHatasi) {
@@ -908,19 +920,25 @@ const EK_SENARYO_DOSYA_ON_EKI = 'test-sunucu-ek-senaryo-';
 // Platform "Senaryolar" (/platform/senaryolar/calistir; senaryo UUID'si sunucuda güncel başlık +
 // dosyaya çözülür) bu yolu kullanır: --list beyaz listesi (istemcinin gönderdiği ada güvenilmez),
 // dosya sırası, süre limiti, durdurma, canlı görüntü, platform raporlayıcısı. Dönen { httpDurum, govde }.
-async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null }) {
+async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, kosuTuru, kosuKimligi, kosuKapsami, etiket = null, grepDeseni = null, genel = null, ekOrtam = {} }) {
   let tumSenaryolar;
   try {
-    tumSenaryolar = await tumSenaryolariGetir(ortam, genel);
+    // Veri koşusu ezmesi / tekrar planı test listesini değiştirir: liste bu koşunun ortam değişkenleriyle (paylaşımsız) alınır.
+    tumSenaryolar = Object.keys(ekOrtam).length ? await senaryolariListele(ortam, [], undefined, ekOrtam, genel) : await tumSenaryolariGetir(ortam, genel);
   } catch (hata) {
     return { httpDurum: 500, govde: { basarili: false, mesaj: `Senaryo listesi alınamadı (npx playwright test --list başarısız oldu): ${hata.message}` } };
   }
 
   // Model senaryosu (test kodu yok; model spec'i senaryoyu "@model-<UUID>" etiketiyle üretir): test, listede
-  // model dosyası + etiketle TEK olarak bulunmalı; başlığı listedekinden alınır, koşu etiketle daraltılır.
+  // model dosyası + etiketle TEK olarak bulunmalı; başlığı listedekinden alınır, koşu etiketle daraltılır. VERİ KOŞULARI: senaryo
+  // tablodan çoklu satırla koşuyorsa aynı etiketli birden çok test olur; hepsinin veri koşusu anahtarı ve başlığı farklı olmalıdır.
   if (etiket) {
     const modelEslesenler = tumSenaryolar.filter((s) => s.dosya === dosya && Array.isArray(s.etiketler) && s.etiketler.includes(etiket));
-    if (modelEslesenler.length !== 1) {
+    const veriKosulari = modelEslesenler.length > 1
+      && modelEslesenler.every((s) => s.veriAnahtari)
+      && new Set(modelEslesenler.map((s) => s.veriAnahtari)).size === modelEslesenler.length
+      && new Set(modelEslesenler.map((s) => s.ad)).size === modelEslesenler.length;
+    if (modelEslesenler.length !== 1 && !veriKosulari) {
       return {
         httpDurum: modelEslesenler.length ? 409 : 403,
         govde: {
@@ -933,11 +951,15 @@ async function senaryoyuCalistirVeYanitla({ ortam, senaryoAdi, dosya, kosuId, ko
     }
     const calistirmaSonucu = await testiCalistirVeBekle(
       ortam, modelEslesenler[0].ad, dosya, tumSenaryolar, kosuId,
-      kosuTuru && kosuKimligi
-        ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
-        : {},
+      {
+        ...(kosuTuru && kosuKimligi
+          ? { KOSU_KIMLIGI: kosuKimligi, TEST_SUNUCU_KOSU_TURU: kosuTuru, ...(kosuTuru === 'tam' ? { TEST_SUNUCU_KOSU_KAPSAMI: kosuKapsami || 'Genel' } : {}) }
+          : {}),
+        ...ekOrtam
+      },
       grepDeseni,
-      genel
+      genel,
+      veriKosulari ? modelEslesenler.map((s) => s.ad) : null
     );
     return calistirmaYaniti(calistirmaSonucu, 'Test');
   }
@@ -1000,7 +1022,9 @@ function calistirmaYaniti(calistirmaSonucu, ad) {
       sonucId: calistirmaSonucu.sonuc.sonucId ?? null,
       // Platform arayüzü medyayı kendi (aynı köken) /platform/medya/<id> adresinden gösterir.
       ekranGoruntusuId: calistirmaSonucu.sonuc.ekranGoruntusuId ?? null,
-      videoId: calistirmaSonucu.sonuc.videoId ?? null
+      videoId: calistirmaSonucu.sonuc.videoId ?? null,
+      // Veri koşuları: her satırın durumu (canlı panel satır satır gösterir).
+      ...(calistirmaSonucu.sonuc.veriKosulari ? { veriKosulari: calistirmaSonucu.sonuc.veriKosulari } : {})
     }
   };
 }
@@ -1011,7 +1035,7 @@ platformKosucusunuAyarla({
   calistir: (istek) => senaryoyuCalistirVeYanitla({
     ortam: istek.ortam, senaryoAdi: istek.ad, dosya: istek.dosya, kosuId: istek.kosuId, kosuTuru: istek.kosuTuru ?? null,
     kosuKimligi: istek.kosuKimligi ?? null, kosuKapsami: istek.kosuKapsami ?? 'Genel',
-    etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null, genel: istek.genel ?? null
+    etiket: istek.etiket ?? null, grepDeseni: istek.grepDeseni ?? null, genel: istek.genel ?? null, ekOrtam: istek.ekOrtam ?? {}
   }),
   // Model senaryosu "Dene": deneme senaryosu geçici dosyayla (TEST_SUNUCU_MODEL_DENEME_DOSYASI) veri okuyucuya verilir; model
   // spec'i onu etiketle tek test olarak üretir; listeleme ve koşu aynı dosyayla yapılır, dosya sonra silinir.

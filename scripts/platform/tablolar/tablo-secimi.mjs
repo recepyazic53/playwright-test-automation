@@ -96,7 +96,12 @@ export const servisDegeri = (sutun, deger) => sutun.karsiliklar?.[deger]?.servis
  * Satır seçimi (Ayarlar > Koşu > Gelişmiş > Tablodan satır seçimi): 'ilk' (varsayılan) uyan ilk satır; 'rastgele' uyanlardan biri.
  * onbellek: aynı koşuda aynı grup + seçim + ortam için seçilen satır — grubun tüm değerleri AYNI satırdan gelir. rastgele: [0, 1)
  * üreteci (testlerde tohumlu; verilmezse Math.random).
- * @typedef {{ kip?: string; rastgele?: () => number; onbellek?: Map<string, Satir | undefined> }} SatirSecimi
+ * sabit: VERİ KOŞUSU / TEKRAR — grup anahtarı ("<tabloId>|<etiket>") → satır kimliği: o grubun değerleri seçimlere bakılmadan bu satırdan
+ * gelir (satır yoksa ya da başka ortamınsa açık hata). veriler: "o koşudaki veriyle" tekrar — grup → satırın o koşudaki değerleri
+ * (yalnız gizli sütunu olmayan tabloda; satır silinmiş olsa da bu değerler kullanılır). kullanilan: koşuda kullanılan satırlar
+ * (grup → satır; rapor "hangi satırla koştu" ve tekrar koşusu için doldurulur).
+ * @typedef {{ kip?: string; rastgele?: () => number; onbellek?: Map<string, Satir | undefined>; sabit?: Record<string, string>;
+ *   veriler?: Record<string, Record<string, string | null>>; kullanilan?: Map<string, Satir> }} SatirSecimi
  */
 
 /** Satır seçimi (ayar değerinden; tanınmayan değer 'ilk'). @param {unknown} kip @param {() => number} [rastgele] @returns {SatirSecimi} */
@@ -135,10 +140,25 @@ export function basvuruyuCoz(tablolar, b, tabloSecimleri, ortamId, satirSecimi) 
   if (!t) return { hata: `"${b.tablo}" adında tablo yok`, tabloYok: true };
   const sutun = sutunBul(t, b.sutun);
   if (!sutun) return { hata: `"${t.ad}" tablosunda "${b.sutun}" sütunu yok` };
-  const secim = tabloSecimleri?.[grupAnahtari(t.id, b.etiket)] ?? {};
-  const satir = secilenSatir(t, secim, ortamId, satirSecimi, b.etiket);
+  const gk = grupAnahtari(t.id, b.etiket);
+  const secim = tabloSecimleri?.[gk] ?? {};
   const grup = `"${t.ad}${b.etiket ? ` (${b.etiket})` : ''}"`;
+  const sabitId = satirSecimi?.sabit?.[gk];
+  /** @type {Satir | undefined} */
+  let satir;
+  if (sabitId) {
+    // Veri koşusu / tekrar: grubun satırı sabit (seçimlere bakılmaz). Ortama özel satır yalnız kendi ortamında.
+    const bulunan = t.satirlar.find((r) => r.id === sabitId && (!r.ortamId || !ortamId || r.ortamId === ortamId));
+    const eski = satirSecimi?.veriler?.[gk];
+    satir = eski && !t.sutunlar.some((x) => x.gizli)
+      ? { ...(bulunan ?? { id: sabitId, ortamId: null }), degerler: { ...(bulunan?.degerler ?? {}), ...eski } }
+      : bulunan;
+    if (!satir) return { hata: `${grup} tablosunda koşunun satırı artık yok ya da bu ortamda geçerli değil` };
+  } else {
+    satir = secilenSatir(t, secim, ortamId, satirSecimi, b.etiket);
+  }
   if (!satir) return { hata: Object.keys(secim).length ? `${grup} tablosunda seçimlerle uyan satır yok` : `${grup} tablosunda bu ortamda satır yok` };
+  if (satirSecimi?.kullanilan && !satirSecimi.kullanilan.has(gk)) satirSecimi.kullanilan.set(gk, satir);
   const d = satir.degerler[sutun.ad];
   if (d === null || d === undefined || d === '') return { hata: `${grup} tablosunun seçilen satırında "${sutun.ad}" boş` };
   return { tablo: t, sutun, satir, deger: String(d) };

@@ -48,6 +48,9 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'yenidenDeneme', grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Kalan test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
   { anahtar: 'kosuSureLimitiDk', grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',
     tur: 'sayi', varsayilan: 10, enAz: 1, enCok: 120, birim: 'dk', env: 'NOBETCI_KOSU_SURE_LIMITI_MS', carpan: 60_000 },
+  { anahtar: 'enCokVeriKosusu', grup: 'Koşu', etiket: 'Tek senaryoda en çok veri koşusu',
+    aciklama: 'Senaryo tablodan birden çok satırla (seçili satırlar, uyan tüm satırlar ya da kombinasyonlar) koşarken bir senaryodan çıkabilecek en çok test. Aşılırsa koşu başlatılmaz; senaryonun satır seçimini daraltın.',
+    tur: 'sayi', varsayilan: 50, enAz: 1, enCok: 1000, birim: 'test' },
   { anahtar: 'alanBeklemeSn', grup: 'Bekleme süreleri', etiket: 'Alan işlemi', aciklama: 'Alan doldurulduktan sonraki tıklama / sorgu (ör. kimlik sorgula) en çok bu kadar beklenir.',
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn', env: 'NOBETCI_ALAN_BEKLEME_MS', carpan: 1000 },
   { anahtar: 'zorlaIsaretlemeSn', grup: 'Bekleme süreleri', etiket: 'Zorla işaretlenecek seçenek', aciklama: 'Gizli radyo / onay kutusunun sayfada belirmesi için en çok bekleme.',
@@ -164,7 +167,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
  *   saatDilimi: string; eszamanliKosu: string; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number;
- *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean }} KosuAyarlari */
+ *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */
 export const varsayilanKosuAyarlari = () => /** @type {KosuAyarlari} */ (Object.fromEntries(KOSU_AYAR_TANIMLARI.map((t) => [t.anahtar, t.varsayilan])));
