@@ -28,6 +28,7 @@ import {
   akisIceriginiDogrula, servisAkisiGetir, servisAkisKosusuKaydet, servisGetir, servisSenaryosuGetir, yetkiTekrariAcik
 } from './servis-deposu.mjs';
 import { ortamTuru, oturumSaglayicisiAyarla, servisSenaryosuCalistir } from './servis-islemleri.mjs';
+import { servisIstekBeklemeOku } from './eszamanli.mjs';
 import { sqlAdiminiKos, sqlAkisDegerleri } from '../sql/sql-adimi.mjs';
 import { sqlHedefi, sqlTanimDenetle, sqlTanimiylaSorgula } from '../sql/sorgu-bagdastirici.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
@@ -393,7 +394,9 @@ export async function servisAkisiCalistir(vt, projeId, girdi) {
   const r = await akisiKos(vt, projeId, { akis, ortamId: ortam.id, tur: girdi.tur, sinyal: girdi.sinyal, olay: girdi.olay, adimIcerikleri: girdi.adimIcerikleri,
     ...(girdi.adimDenetimi ? { adimDenetimi: girdi.adimDenetimi } : {}) });
   const sureMs = Date.now() - bas;
-  const sonuc = { ortam: ortam.ad, ortamTuru: tur, adimlar: r.adimlar, ozet: r.ozet, ...(girdi.sinyal?.aborted ? { durduruldu: true } : {}),
+  // İstekler arası bekleme (Ayarlar > Koşu > Servisler; ortamda ezilebilir) kullanıldıysa raporda görünür.
+  const istekBeklemeMs = servisIstekBeklemeOku(vt, ortam.id);
+  const sonuc = { ortam: ortam.ad, ortamTuru: tur, adimlar: r.adimlar, ozet: r.ozet, ...(girdi.sinyal?.aborted ? { durduruldu: true } : {}), ...(istekBeklemeMs > 0 ? { istekBeklemeMs } : {}),
     ...(girdi.senaryo ? { senaryo: { id: girdi.senaryo.id, baslik: girdi.senaryo.baslik }, akisBaslik: akis.baslik } : {}),
     ...(akis.icerik.uctanUca ? { uctanUca: true } : {}), ...(girdi.sonucEki ? girdi.sonucEki(r.adimlar) : {}) };
   // Akış senaryosu koşusu senaryonun başlığıyla kaydedilir (Servis sonuçları ekranında senaryo adıyla görünür).

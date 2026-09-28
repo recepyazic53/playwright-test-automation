@@ -41,10 +41,14 @@ test('sinirliKos: en çok n iş aynı anda; öğeler sırayla başlar; sonuçlar
   expect(await sinirliKos([1, 2, 3, 4], 1, is, () => izin-- > 0)).toEqual([10, 20, undefined, undefined]);
 });
 
-test('ayar: "Aynı anda en çok servis senaryosu" 1–10, varsayılan 1, Servisler grubunda; açıklama ağ uyarısını içerir', async () => {
+test('ayarlar: "Aynı anda en çok servis senaryosu" 1–10 (varsayılan 1) ve "İstekler arası bekleme" 0–60000 ms (varsayılan 0), Servisler grubunda', async () => {
   const t = KOSU_AYAR_TANIMLARI.find((x) => x.anahtar === 'servisEszamanli');
   expect(t).toMatchObject({ grup: 'Servisler', tur: 'sayi', varsayilan: 1, enAz: 1, enCok: 10 });
   expect(t?.aciklama).toContain('1: sırayla.');
+  expect(t?.aciklama).toContain('1\'de bırakın');
+  const b = KOSU_AYAR_TANIMLARI.find((x) => x.anahtar === 'servisIstekBeklemeMs');
+  expect(b).toMatchObject({ grup: 'Servisler', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 60_000, birim: 'ms' });
+  expect(b?.aciklama).toContain('Servise giden her istekten sonra bu kadar beklenir');
 });
 
 test.describe('eşzamanlı servis koşusu', () => {
@@ -178,5 +182,41 @@ test.describe('eşzamanlı servis koşusu', () => {
       for (const i of adimlar[n]) expect(Number(i.geldi)).toBeGreaterThanOrEqual(oncekiIlkBiten);
     }
     kosuAyarlariniKaydet(vt, { servisEszamanli: 1 });
+  });
+
+  test('istekler arası bekleme: N = 1 + 300 ms → ardışık istekler arası ≥ 300 ms (akış adımları dahil); 0 → beklenmez; raporda bilgi', async () => {
+    const ara = (l: SahteIstek[]) => l.slice(1).map((x, i) => Number(x.geldi) - Number(l[i].bitti));
+    kosuAyarlariniKaydet(vt, { servisEszamanli: 1, servisIstekBeklemeMs: 300 });
+    let once = soap.istekler.length;
+    const { son } = await kos(senaryolar.slice(0, 3));
+    expect(son).toMatchObject({ istekBeklemeMs: 300, kosuHizi: 'TEST ortamı: senaryolar sırayla (1 senaryo aynı anda), 300 ms istekler arası bekleme (genel ayar)' });
+    for (const x of ara(soap.istekler.slice(once))) expect(x).toBeGreaterThanOrEqual(290);
+    expect(servisKosulariniListele(vt, { servisId }).find((k) => k.id === son.satirlar[0].sonuc?.kosuId)).toBeTruthy();
+    // Akış adımları arasında da.
+    once = soap.istekler.length;
+    const r = await servisAkisiCalistir(vt, projeId, { taslak: { baslik: 'Üç adım', icerik: { adimlar: senaryolar.slice(0, 3).map((id, i) => ({ ad: `A${i + 1}`, servisId, senaryoId: id })) } }, ortamId, tur: 'dene' });
+    expect(r).toMatchObject({ durum: 'basarili', istekBeklemeMs: 300 });
+    const akisAralari = ara(soap.istekler.slice(once));
+    expect(akisAralari.length).toBe(2);
+    for (const x of akisAralari) expect(x).toBeGreaterThanOrEqual(290);
+    // 0: eski davranış (beklenmez).
+    kosuAyarlariniKaydet(vt, { servisIstekBeklemeMs: 0 });
+    once = soap.istekler.length;
+    const { son: son0 } = await kos(senaryolar.slice(0, 3));
+    expect(son0.istekBeklemeMs).toBe(0);
+    for (const x of ara(soap.istekler.slice(once))) expect(x).toBeLessThan(200);
+  });
+
+  test('istekler arası bekleme: durdurma bekleme sırasında hemen keser', async () => {
+    kosuAyarlariniKaydet(vt, { servisEszamanli: 1, servisIstekBeklemeMs: 10_000 });
+    const is = servisIsiBaslat(vt, projeId, { servisId, ortamId, senaryoIdleri: senaryolar.slice(0, 2) });
+    // İlk senaryonun isteği bitti (kontroller değerlendirildi), yuva beklemede.
+    await expect.poll(() => servisIsiDurumu(projeId, is.id).satirlar[0].olaylar.some((o) => o.adim === 'kontroller'), { timeout: 5_000 }).toBe(true);
+    const dur = Date.now();
+    servisIsiDurdur(projeId, is.id);
+    const son = await bitene(is.id);
+    expect(Date.now() - dur).toBeLessThan(2_000);
+    expect(son.satirlar.map((s) => s.durum)).toEqual(['basarili', 'durduruldu']);
+    kosuAyarlariniKaydet(vt, { servisIstekBeklemeMs: 0 });
   });
 });

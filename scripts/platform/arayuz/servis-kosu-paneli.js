@@ -121,7 +121,9 @@ function ciz() {
       h('div', { class: 'dugmeler' },
         !is.bitti ? h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => durdur() }, h('span', { class: 'kare-simge', 'aria-hidden': 'true' }), 'Tümünü durdur') : null,
         kucult, is.bitti ? kapat : null)),
-    h('div', { class: 'alt' }, h('span', {}, is.servisAd), h('span', {}, `${is.ortam} · ${toplam} senaryo · ${enCok > 1 ? `aynı anda en çok ${enCok}` : 'sırayla'}`)),
+    h('div', { class: 'alt' }, h('span', {}, is.servisAd), h('span', {}, `${is.ortam} · ${toplam} senaryo · ${enCok > 1 ? `aynı anda en çok ${enCok}` : 'sırayla'}${is.istekBeklemeMs > 0 ? ` · istekler arası bekleme: ${is.istekBeklemeMs} ms` : ''}`)),
+    // Etkin koşu hızı ve kaynağı (genel ayar / ortam ayarı).
+    is.kosuHizi && !durum.kucuk ? h('p', { class: 'soluk kucuk kosu-hizi-ozeti' }, is.kosuHizi) : null,
     durum.kucuk ? null : h('div', { class: 'ilerleme-satiri' }, h('progress', { max: String(toplam), value: String(biten), 'aria-label': `İlerleme: ${biten} / ${toplam}` }),
       h('span', { class: 'yuzde' }, `%${toplam ? Math.round((biten / toplam) * 100) : 0}`)),
     durum.kucuk ? null : h('div', { class: 'kosu-sayaclari' },

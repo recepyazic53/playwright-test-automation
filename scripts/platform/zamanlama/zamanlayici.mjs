@@ -97,7 +97,7 @@ export async function zamanliKosuyuYurut(vt, kural, kosuKimligi, bag) {
   const servisAkisiCalistir = bag.servisAkisiCalistir;
   if (servisAkisiCalistir && servisAkisIdleri.length && !yarida) {
     /** @type {Array<{ kayit: YurutmeSonucu['akisKosulari'][number]; hata?: string } | undefined>} */
-    const akisSonuclari = await sinirliKos(servisAkisIdleri, servisEszamanliOku(vt), async (akisId) => {
+    const akisSonuclari = await sinirliKos(servisAkisIdleri, servisEszamanliOku(vt, kural.ortamId), async (akisId) => {
       const eksik = kapali('/platform/servis-akisi/kos', { projeId: kural.projeId, ortamId: kural.ortamId, akisId });
       if (eksik.length) {
         izinleAtlananAkis++;

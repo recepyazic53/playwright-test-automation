@@ -33,7 +33,7 @@ import { etkiDenetimiyle } from '../tablolar/tablo-etkisi.mjs';
 import { BICIM_KALIBI, basvuru, basvuruCoz, basvuruyuCoz, grupAnahtari, satirSecimiOlustur, servisDegeri, tabloBul } from '../tablolar/tablo-secimi.mjs';
 import { satirOzeti, veriKosulariniAc } from '../tablolar/veri-kosulari.mjs';
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
-import { servisEszamanliOku, sinirliKos } from './eszamanli.mjs';
+import { kesilebilirBekle, servisEszamanliOku, servisIstekBeklemeOku, sinirliKos } from './eszamanli.mjs';
 import { etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { riskliOrtamMi } from '../guvenlik/ortam-riski.mjs';
 import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.mjs';
@@ -1032,6 +1032,9 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   let akisDegerleri = girdi.akisDegerleri;
   /** Kullanıcının koşu ayarları (servis zaman aşımı, varsayılan tarih biçimi). */
   const kosu = kosuAyarlariniOku(vt);
+  /** İstekler arası bekleme (ms; ortamın "Koşu hızı" ezmesiyle). */
+  const istekBeklemeMs = servisIstekBeklemeOku(vt, ortam.id);
+  let istekDenendi = false;
   /** Kullanıcının ek gizli adları (Ayarlar > Güvenlik > Maskeleme). */
   const ekAdlar = ekGizliAdlar(vt);
   let oturumKullanildi = false;
@@ -1041,7 +1044,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   const okunan = {};
   /** @type {Record<string, unknown>} */
   const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}), ...(girdi.yetkiTekrari ? { yetkiTekrari: girdi.yetkiTekrari } : {}),
-    ...(girdi.tekrarKaynagi ? { tekrarKaynagi: girdi.tekrarKaynagi } : {}) };
+    ...(girdi.tekrarKaynagi ? { tekrarKaynagi: girdi.tekrarKaynagi } : {}), ...(istekBeklemeMs > 0 ? { istekBeklemeMs } : {}) };
   /** @type {'basarili' | 'basarisiz' | 'hata'} */
   let durum = 'hata';
   /** @type {'hazirlik' | 'gonderim' | 'yanit' | 'kontroller'} */
@@ -1104,6 +1107,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
       yasakDesenleri: etkinYasakDesenleri(vt),
       ekBasliklar, gonderildi: () => { olay('gonderim', 'tamam'); adim = 'yanit'; olay('yanit', 'basladi'); }
     };
+    istekDenendi = true;
     const yanit = http
       ? await restIstegi({ ...ortak, metot: http.metot, ...(http.icerikTuru ? { icerikTuru: http.icerikTuru } : {}) })
       : await soapIstegi({ ...ortak, eylem, soapSurumu: servis.ayarlar.soapSurumu });
@@ -1117,9 +1121,11 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     if (yetkiHatasi && !girdi.yetkiTekrari) {
       const not = `${yanit.durumKodu} alındı, token yenilendi, tekrar denendi`;
       if (oturumKullanildi && servis.ayarlar.oturumAkisi && yetkiTekrariAcik(vt, servisAkisiGetir(vt, servis.ayarlar.oturumAkisi))) {
+        await kesilebilirBekle(istekBeklemeMs, girdi.sinyal);
         return await servisSenaryosuCalistir(vt, projeId, { ...girdi, oturumYenile: true, ...(kullanilanOturumSurumu !== undefined ? { oturumSurumu: kullanilanOturumSurumu } : {}),
           yetkiTekrari: { ilkDurumKodu: yanit.durumKodu, not } });
       }
+      if (girdi.yetkiYenile) await kesilebilirBekle(istekBeklemeMs, girdi.sinyal);
       const yeni = girdi.yetkiYenile ? await girdi.yetkiYenile() : null;
       if (yeni) {
         return await servisSenaryosuCalistir(vt, projeId, {
@@ -1193,6 +1199,10 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   });
   // Açık değerler yalnız çağıran akış motoruna (geri çağırma); dönüş / API yanıtı / kayıt maskeli kalır.
   girdi.acikDegerler?.({ okunan, gizliler });
+  // "İstekler arası bekleme" (Ayarlar > Koşu > Servisler; ortamda ezilebilir): istek gönderildiyse (yanıt ya da hata) bu yuvadaki
+  // sıradaki istek bu kadar bekler — akış adımları, oturum / token isteği ve 401 sonrası tekrar da buradan geçer. Kayıttaki süreye
+  // girmez; durdurulunca bekleme hemen biter.
+  if (istekDenendi) await kesilebilirBekle(istekBeklemeMs, girdi.sinyal);
   return { kosuId, durum, sureMs, baslik, ...sonuc };
 }
 
@@ -1292,7 +1302,7 @@ export async function servisSenaryolariniKos(vt, projeId, girdi) {
   }
   // Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu" (1 = sırayla); sonuçlar plan sırasıyla.
   const sonuclar = /** @type {Array<{ senaryoId: string; baslik: string; durum: string; sureMs: number; kosuId: string | null; ozet: string }>} */ (
-    await sinirliKos(plan, servisEszamanliOku(vt), async (p) => {
+    await sinirliKos(plan, servisEszamanliOku(vt, ortam.id), async (p) => {
       if (p.hata) return { senaryoId: p.senaryoId, baslik: p.baslik, durum: 'hata', sureMs: 0, kosuId: null, ozet: p.hata };
       const r = await servisSenaryosuCalistir(vt, projeId, { servisId: girdi.servisId, ortamId: girdi.ortamId, tur: 'kosu', senaryoId: p.senaryoId, zamanAsimiMs: girdi.zamanAsimiMs, ...(p.veriKosusu ? { veriKosusu: p.veriKosusu } : {}) });
       return { senaryoId: p.senaryoId, baslik: p.baslik, durum: r.durum, sureMs: r.sureMs, kosuId: r.kosuId, ozet: String(r.hata ?? r.ozet ?? '') };

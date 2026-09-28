@@ -3,6 +3,13 @@
 // ortam değişkeni olarak verir (kosuOrtamDegiskenleri); playwright.config.ts ve model koşucusu
 // bu değişkenleri okur (yoksa aynı varsayılanlar). Servis ayarları (zaman aşımı, varsayılan tarih biçimi) sunucuda kullanılır.
 import { DepoHatasi, ayarGetir, ayarYaz } from '../veritabani/depo.mjs';
+import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
+
+/** Koşu hızı ayarının varsayılanı ve sınırları (tek tanım: kosu-hizi.mjs). @param {string} a */
+function hizAlani(a) {
+  const t = /** @type {(typeof KOSU_HIZI_ALANLARI)[number]} */ (KOSU_HIZI_ALANLARI.find((x) => x.anahtar === a));
+  return { varsayilan: t.varsayilan, enAz: t.enAz, enCok: t.enCok };
+}
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
@@ -57,9 +64,13 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'zorlaIsaretlemeSn', grup: 'Bekleme süreleri', etiket: 'Zorla işaretlenecek seçenek', aciklama: 'Gizli radyo / onay kutusunun sayfada belirmesi için en çok bekleme.',
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn', env: 'NOBETCI_ZORLA_BEKLEME_MS', carpan: 1000 },
   { anahtar: 'servisZamanAsimiSn', grup: 'Servisler', etiket: 'Servis isteği zaman aşımı', aciklama: 'Servis yanıtı bu sürede gelmezse istek kesilir.', tur: 'sayi', varsayilan: 60, enAz: 5, enCok: 600, birim: 'sn' },
+  // Koşu hızı (servis / ekran): sınırlar ayarlar/kosu-hizi.mjs'de; ortam formundaki "Koşu hızı" bu dört değeri ortam bazında ezer.
   { anahtar: 'servisEszamanli', grup: 'Servisler', etiket: 'Aynı anda en çok servis senaryosu',
-    aciklama: '1: sırayla. Daha büyük değer testleri hızlandırır ama hedef servise aynı anda daha çok istek gider. Bir senaryonun kendi adımları (akış adımları, oturum / token) her zaman sırayla koşar; ekran senaryoları etkilenmez.',
-    tur: 'sayi', varsayilan: 1, enAz: 1, enCok: 10, birim: 'senaryo' },
+    aciklama: '1: sırayla. Daha büyük değer testleri hızlandırır ama hedef servise aynı anda daha çok istek gider; ağınız ya da hedef sistem bunu sınırlıyorsa 1\'de bırakın. Bir senaryonun kendi adımları (akış adımları, oturum / token) her zaman sırayla koşar. Ortam bazında Ayarlar > Ortamlar > Koşu hızı\'ndan değiştirilebilir.',
+    tur: 'sayi', ...hizAlani('servisEszamanli'), birim: 'senaryo' },
+  { anahtar: 'servisIstekBeklemeMs', grup: 'Servisler', etiket: 'İstekler arası bekleme',
+    aciklama: 'Servise giden her istekten sonra bu kadar beklenir (akış adımları ve oturum / token isteği dahil). Ağ ya da hedef sistem yoğun istekte uyarı veriyorsa artırın; eşzamanlılığı 1\'de tutmak da yükü azaltır.',
+    tur: 'sayi', ...hizAlani('servisIstekBeklemeMs'), birim: 'ms' },
   { anahtar: 'tarihBicimi', grup: 'Servisler', etiket: 'Varsayılan tarih biçimi', aciklama: 'Biçim verilmemiş tarih kurallarında ve ${tarih:…} ifadelerinde kullanılır. yyyy yıl, MM ay, dd gün, HH saat, mm dakika, ss saniye; sabitler tek tırnakta.',
     tur: 'metin', varsayilan: "yyyy-MM-dd'T'HH:mm:ss" },
   { anahtar: 'yetkiHatasinda', grup: 'Servisler', etiket: 'Yetki hatasında (401 / 403)',
@@ -167,7 +178,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
 ]);
 
 /** @typedef {{ video: string; videoBoyutu: string; ekranGoruntusu: string; adimGoruntusu: string; iz: string; indirilenDosya: string; yenidenDeneme: number; kosuSureLimitiDk: number; alanBeklemeSn: number;
- *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
+ *   zorlaIsaretlemeSn: number; servisZamanAsimiSn: number; servisEszamanli: number; servisIstekBeklemeMs: number; tarihBicimi: string; yetkiHatasinda: string; taramaZamanAsimiDk: number; kayitZamanAsimiDk: number;
  *   senaryoSayfaBoyu: number; kosuGecmisiSayfaBoyu: number; otomatikYedekSayisi: number; sonucSaklamaGun: number; taramaSayfaAcilmaSn: number;
  *   kesifSecenekSiniri: number; taramaEkranGenisligi: number; taramaEkranYuksekligi: number; taramaDili: string; taramaGirisKipi: string; taramaOturumKontrolSn: number;
  *   taramaGirisAlanBeklemeSn: number; gorunmeyenAlanBeklemeSn: number;

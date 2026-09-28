@@ -1,15 +1,45 @@
-// SERVİS KOŞULARINDA EŞZAMANLILIK — "Aynı anda en çok N servis senaryosu" (Ayarlar > Koşu > Servisler). Basit havuz: en çok N iş
-// aynı anda; biten işin yerine sıradaki başlar. N = 1: bugünkü gibi sırayla. Bir senaryonun kendi adımları (akış adımları, oturum /
-// token → istek) senaryonun içinde sırayla kalır; paralellik yalnız bağımsız senaryolar (ve veri koşusu satırları) arasındadır.
+// KOŞU HIZI (sunucu) — eşzamanlılık ve bekleme. Genel değerler Ayarlar > Koşu'da, ortam bazında ezilebilir (ayarlar/kosu-hizi.mjs).
+// Servis: "Aynı anda en çok N servis senaryosu" — basit havuz: en çok N iş aynı anda; biten işin yerine sıradaki başlar (N = 1:
+// sırayla). Bir senaryonun kendi adımları (akış adımları, oturum / token → istek) senaryonun içinde sırayla kalır; paralellik yalnız
+// bağımsız senaryolar (ve veri koşusu satırları) arasındadır. "İstekler arası bekleme": servise giden her istekten sonra o
+// eşzamanlılık yuvasında bu kadar beklenir (durdurulunca hemen kesilir).
 import { kosuAyarlariniOku } from '../ayarlar/kosu-ayarlari.mjs';
+import { etkinKosuHizi } from '../ayarlar/kosu-hizi.mjs';
+import { ortamGetir } from '../veritabani/depo.mjs';
 
-export const EN_COK_ESZAMANLI = 10;
+/** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 
-/** Ayarlar > Koşu > "Aynı anda en çok N servis senaryosu" (1–10; okunamazsa 1 = sırayla). @param {import('../veritabani/baglanti.mjs').Veritabani} vt */
-export function servisEszamanliOku(vt) {
-  let n = 1;
-  try { n = Number(kosuAyarlariniOku(vt).servisEszamanli); } catch { n = 1; }
-  return Number.isInteger(n) ? Math.min(EN_COK_ESZAMANLI, Math.max(1, n)) : 1;
+/**
+ * Etkin koşu hızı (genel ayar + ortamın "Koşu hızı" ezmesi). Okunamazsa varsayılanlar (1, 0 ms).
+ * @param {Veritabani} vt @param {string | null} [ortamId] @returns {import('../ayarlar/kosu-hizi.mjs').EtkinKosuHizi}
+ */
+export function etkinKosuHiziOku(vt, ortamId) {
+  /** @type {Record<string, unknown> | null} */
+  let genel = null;
+  try { genel = /** @type {any} */ (kosuAyarlariniOku(vt)); } catch { genel = null; }
+  /** @type {any} */
+  let ortam = null;
+  try { ortam = ortamId ? ortamGetir(vt, ortamId) ?? null : null; } catch { ortam = null; }
+  return etkinKosuHizi(genel, ortam);
+}
+
+/** "Aynı anda en çok N servis senaryosu" (ortamda ezildiyse o). @param {Veritabani} vt @param {string | null} [ortamId] */
+export const servisEszamanliOku = (vt, ortamId) => etkinKosuHiziOku(vt, ortamId).degerler.servisEszamanli;
+
+/** "İstekler arası bekleme (ms)" (ortamda ezildiyse o). @param {Veritabani} vt @param {string | null} [ortamId] */
+export const servisIstekBeklemeOku = (vt, ortamId) => etkinKosuHiziOku(vt, ortamId).degerler.servisIstekBeklemeMs;
+
+/**
+ * ms kadar bekler; sinyal kesilirse hemen döner (hata vermez). ms <= 0 ise beklemez.
+ * @param {number} ms @param {AbortSignal} [sinyal] @returns {Promise<void>}
+ */
+export function kesilebilirBekle(ms, sinyal) {
+  if (!(ms > 0) || sinyal?.aborted) return Promise.resolve();
+  return new Promise((coz) => {
+    const bitir = () => { clearTimeout(z); sinyal?.removeEventListener('abort', bitir); coz(); };
+    const z = setTimeout(bitir, ms);
+    sinyal?.addEventListener('abort', bitir, { once: true });
+  });
 }
 
 /**

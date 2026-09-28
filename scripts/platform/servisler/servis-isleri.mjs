@@ -8,7 +8,8 @@ import { DepoHatasi, ortamGetir } from '../veritabani/depo.mjs';
 import { servisGetir, servisSenaryosuGetir } from './servis-deposu.mjs';
 import { akisSenaryoKancasiAl, ortamTuru, ortamdaTanimli, servisCalistirmalari, servisSenaryosuCalistir, tanimsizNedeni } from './servis-islemleri.mjs';
 import { servisTekrarPlani } from '../senaryolar/veri-kosusu-plani.mjs';
-import { servisEszamanliOku, sinirliKos } from './eszamanli.mjs';
+import { etkinKosuHiziOku, sinirliKos } from './eszamanli.mjs';
+import { kosuHiziOzeti } from '../ayarlar/kosu-hizi.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -17,7 +18,7 @@ import { servisEszamanliOku, sinirliKos } from './eszamanli.mjs';
  *   olaylar: IsOlayi[]; istek: string | null; yanit: string | null; baslangic: number | null; bitis: number | null; sonuc: Record<string, unknown> | null; neden?: string;
  *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> } | null }} IsSatiri
  * @typedef {{ id: string; projeId: string; servisId: string; servisAd: string; ortam: string; ortamTuru: string; baslangic: number; bitis: number | null;
- *   bitti: boolean; durdur: boolean; satirlar: IsSatiri[]; eszamanli: number }} ServisIsi
+ *   bitti: boolean; durdur: boolean; satirlar: IsSatiri[]; eszamanli: number; istekBeklemeMs: number; kosuHizi: string }} ServisIsi
  */
 
 const SAKLAMA_MS = 30 * 60_000;
@@ -101,11 +102,16 @@ export function servisIsiBaslat(vt, projeId, girdi) {
     if (c.hata) return atla(c.hata);
     return c.calistirmalar.map((k) => sirada({ senaryoId: s.id, baslik: k.baslik, veriKosusu: k.veriKosusu }));
   }).flat());
+  // Ayarlar > Koşu > Servisler (ortamın "Koşu hızı" ezmesiyle): eşzamanlılık ve istekler arası bekleme.
+  const hiz = etkinKosuHiziOku(vt, ortam.id);
   const is = {
     id: randomUUID(), projeId, servisId: servis.id, servisAd: servis.ad, ortam: ortam.ad, ortamTuru: tur,
     baslangic: Date.now(), bitis: /** @type {number | null} */ (null), bitti: false, durdur: false, satirlar,
     // Ayarlar > Koşu > Servisler > "Aynı anda en çok N servis senaryosu" (1 = sırayla; iş başlarken okunur).
-    eszamanli: taslak ? 1 : servisEszamanliOku(vt),
+    eszamanli: taslak ? 1 : hiz.degerler.servisEszamanli,
+    // Servise giden her istekten sonra beklenen süre (ms; servis-islemleri.mjs uygular) ve etkin değerlerin özeti (panel).
+    istekBeklemeMs: hiz.degerler.servisIstekBeklemeMs,
+    kosuHizi: kosuHiziOzeti(hiz, 'servis'),
     /** Çalışan satırlar ve durdurma denetleyicileri. @type {Map<IsSatiri, { senaryoId: string; kontrol: AbortController }>} */
     aktifler: new Map()
   };
