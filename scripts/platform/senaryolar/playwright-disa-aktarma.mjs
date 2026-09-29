@@ -805,10 +805,22 @@ export function playwrightKoduUret(g) {
   } else {
     govde.push('  // Giriş yapılmaz (senaryonun giriş seçimi "Girişsiz" ya da ekran giriş gerektirmiyor).');
   }
-  govde.push(`  await test.step('Ekran açılır', async () => {`, `    await page.goto(${s(plan.ekranUrl)}, { waitUntil: 'domcontentloaded' });`, '  });');
+  // Akışın başındaki ortak akışlar (plan: ekranAcilmadan) ekran açılmadan önce koşar (model-kosucu.ts ile aynı sıra).
+  let ekranAcildi = false;
+  const ekraniAc = () => {
+    if (ekranAcildi) return;
+    ekranAcildi = true;
+    govde.push(`  await test.step('Ekran açılır', async () => {`, `    await page.goto(${s(plan.ekranUrl)}, { waitUntil: 'domcontentloaded' });`, '  });');
+  };
+  if (plan.adimlar.some((a) => a.dahil && a.ekranAcilmadan)) {
+    govde.push(girisAcik ? '  // Baştaki ortak akışlar ekran açılmadan önce, girişten sonra açılan sayfada koşar.'
+      : '  // Baştaki ortak akışlar ekran açılmadan önce, ortamın taban adresinde koşar.');
+    if (!girisAcik) govde.push("  await page.goto(TABAN_ADRES, { waitUntil: 'domcontentloaded' });");
+  } else ekraniAc();
 
   for (const adim of plan.adimlar) {
     if (!adim.dahil) continue;
+    if (!adim.ekranAcilmadan) ekraniAc();
     if ((adim.yalnizTest || canlidaDurdu) && g.canli === true) {
       const beklenenSira = beklenen.tur === 'hata' ? plan.adimlar.findIndex((x) => x.id === /** @type {{ adim: string }} */ (beklenen).adim) : -1;
       govde.push(`  // ${yorum(adim.baslik)}: yalnızca test ortamında koşar (bu ortam riskli / canlı) — atlandı.`);

@@ -29,6 +29,9 @@
 // Ekranın / ortak akışın akışını düzenlerken sağ listede "Listede olmayan alanı / düğmeyi elle ekle" (etiket + tür / yazı + seçici):
 // kayıtta ya da modelde olmayan öğe (ör. boş başlayan ortak akışa sıfırdan adım) sağ listeye eklenir, kaydederken "elleOgeler"
 // olarak gider ve modele yazılır.
+// Ekranın akışında Giriş ile bloklar arasında salt görünüm "Ekran açılır" düğümü vardır (blok değildir; taşınmaz, silinmez): üstündeki
+// ortak akış blokları (ör. kullanıcı değiştirme) girişten sonra açılan sayfada, ekran açılmadan önce koşar; ortak akış bloğu ↑/↓ ile
+// düğümün üstüne / altına geçer ya da düğümdeki "Baştaki ortak akışlar" seçimiyle hepsi birden taşınır (kayıt: ekranAcilisSirasi).
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
@@ -123,6 +126,14 @@ export async function akisTasarimi(icerik, s) {
   let kosulDuzenleme = null;
   /** Sınırları (değer kuralları; model alan.sinirlar) düzenlenen alan: { blok, alan } — yalnız ekranın akışını düzenlerken. */
   let sinirDuzenleme = null;
+  /**
+   * "Ekran açılır" düğümünün yeri (yalnız ekranın akışını düzenlerken; ortak akışta null): üstündeki blok sayısı. Düğüm salt
+   * görünümdür (blok değildir; taşınmaz, silinmez): üstündeki ortak akış blokları girişten sonra açılan sayfada, ekran açılmadan
+   * önce koşar. Ortak akış bloğu ↑/↓ ile düğümün üstüne / altına geçer; kaydederken sunucuya "ekranAcilisSirasi" olarak gider.
+   */
+  let ekranAcilis = ekranKipi && typeof veri.ekranAcilisSirasi === 'number' ? veri.ekranAcilisSirasi : null;
+  /** Akışın başındaki ortak akış bloklarının sayısı ("Ekran açılır"ın yerinden bağımsız). */
+  const bastakiOrtakSayisi = () => { let n = 0; while (n < bloklar.length && bloklar[n].tur === 'ortak') n++; return n; };
   let etkin = bloklar.findIndex((b) => b.tur === 'alanlar');
   /** @type {Map<number | null, string[]>} */
   let hatalar = new Map();
@@ -228,6 +239,8 @@ export async function akisTasarimi(icerik, s) {
   }
   function blokEkle(konum, blok) {
     bloklar.splice(konum, 0, blok);
+    // "Ekran açılır"ın üstüne eklenen blok üstte kalır.
+    if (ekranAcilis !== null && konum < ekranAcilis) ekranAcilis++;
     etkin = konum;
     acikMenu = -1;
     degisti();
@@ -237,10 +250,27 @@ export async function akisTasarimi(icerik, s) {
   /** Etkin bloktan sonra (Bitir'den önce) eklenecek konum. */
   const eklemeKonumu = () => {
     const bitir = bloklar.findIndex((b) => b.tur === 'bitir');
-    const sonra = etkin >= 0 ? etkin + 1 : bloklar.length;
+    // Sağ listeden eklenen (aksiyon / mesaj) blok ekran adımıdır: "Ekran açılır"ın altına.
+    const sonra = Math.max(etkin >= 0 ? etkin + 1 : bloklar.length, ekranAcilis ?? 0);
     return bitir >= 0 ? Math.min(sonra, bitir) : sonra;
   };
+  /** Blok ↑ ile "Ekran açılır"ın üstüne geçebilir mi (yalnız ortak akış ya da korunan blok; ekran adımı ekran açılmadan koşamaz)? */
+  const ustuneGecebilir = (b) => b.tur === 'ortak' || b.tur === 'korunan';
   function tasi(i, yon) {
+    // "Ekran açılır" sınırında blok yer değiştirmez; düğümün üstüne / altına geçer.
+    if (ekranAcilis !== null && yon < 0 && i === ekranAcilis) {
+      if (!ustuneGecebilir(bloklar[i])) return;
+      ekranAcilis++;
+      etkin = i;
+      degisti();
+      return;
+    }
+    if (ekranAcilis !== null && yon > 0 && i === ekranAcilis - 1) {
+      ekranAcilis--;
+      etkin = i;
+      degisti();
+      return;
+    }
     const j = i + yon;
     if (j < 0 || j >= bloklar.length) return;
     [bloklar[i], bloklar[j]] = [bloklar[j], bloklar[i]];
@@ -257,6 +287,7 @@ export async function akisTasarimi(icerik, s) {
       liste: ozet, dugme: 'Sil', tehlikeli: true, ikonAd: 'uyari'
     }))) return;
     bloklar.splice(i, 1);
+    if (ekranAcilis !== null && i < ekranAcilis) ekranAcilis--;
     etkin = Math.min(etkin, bloklar.length - 1);
     degisti();
   }
@@ -274,6 +305,27 @@ export async function akisTasarimi(icerik, s) {
     const basarilar = [];
     for (let x = ilk; x <= son; x++) if (!bloklar[x].uyari) basarilar.push(x);
     return [ilk, son, basarilar];
+  }
+
+  /**
+   * "Ekran açılır" düğümü (salt görünüm; taşınmaz, silinmez). Baştaki ortak akış varsa "Baştaki ortak akışlar" seçimi: ekran
+   * açılmadan önce (varsayılan; bloklar düğümün üstünde) ya da ekran açıldıktan sonra (bloklar altında; eski davranış).
+   */
+  function ekranAcilisDugumu() {
+    const bastaki = bastakiOrtakSayisi();
+    const secim = bastaki ? h('select', { 'aria-label': 'Baştaki ortak akışlar' },
+      h('option', { value: 'once', selected: ekranAcilis > 0 }, 'Ekran açılmadan önce (varsayılan)'),
+      h('option', { value: 'sonra', selected: ekranAcilis === 0 }, 'Ekran açıldıktan sonra')) : null;
+    if (secim) secim.addEventListener('change', () => { ekranAcilis = secim.value === 'sonra' ? 0 : bastaki; degisti(); });
+    return h('li', { class: 'diyagram-dugumu ekran-acilisi', 'aria-label': 'Ekran açılır' },
+      h('div', { class: 'dugum-basligi' },
+        h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon('oynat')),
+        h('h4', {}, 'Ekran açılır'),
+        rozet('salt görünüm', 'vurgu', { title: 'Ekranın sayfası burada açılır. Taşınmaz, silinmez; ortak akış bloklarını ↑/↓ ile üstüne ya da altına taşıyın.' })),
+      h('p', { class: 'dugum-aciklamasi' }, ekranAcilis > 0
+        ? 'Üstündeki ortak akışlar girişten sonra açılan sayfada, ekran açılmadan önce koşar; ekran adımları buradan sonra başlar.'
+        : 'Ekranın sayfası açılır; akışın adımları buradan sonra koşar. Ortak akış bloğunu ↑ ile buranın üstüne taşırsanız ekran açılmadan önce koşar.'),
+      secim ? h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Baştaki ortak akışlar'), secim) : null);
   }
 
   function ekleNoktasi(konum) {
@@ -743,7 +795,7 @@ export async function akisTasarimi(icerik, s) {
       b.tur === 'mesaj' && b.uyari ? rozet('uyarı', 'uyari') : null,
       b.tur === 'mesaj' && !b.uyari && mesajGrubu(i)[2].length > 1 ? rozet(`veya ${mesajGrubu(i)[2].indexOf(i) + 1}/${mesajGrubu(i)[2].length}`, 'vurgu') : null,
       h('span', { class: 'tasarim-denetimleri' },
-        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Yukarı taşı', disabled: i === 0, onclick: (o) => { o.stopPropagation(); tasi(i, -1); } }, '↑'),
+        h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Yukarı taşı', disabled: ekranAcilis !== null && i === ekranAcilis ? !ustuneGecebilir(b) : i === 0, onclick: (o) => { o.stopPropagation(); tasi(i, -1); } }, '↑'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet', 'aria-label': 'Aşağı taşı', disabled: i === bloklar.length - 1, onclick: (o) => { o.stopPropagation(); tasi(i, 1); } }, '↓'),
         h('button', { type: 'button', class: 'kucuk-dugme hayalet tehlike', 'aria-label': 'Bloğu sil', onclick: (o) => { o.stopPropagation(); sil(i); } }, ikon('cop')))),
     ...blokGovdesi(b, i),
@@ -888,9 +940,16 @@ export async function akisTasarimi(icerik, s) {
   function ciz() {
     const ogeler = [h('li', { class: 'diyagram-dugumu uc baslangic' },
       h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon(girissiz ? 'oynat' : 'kilit')), h('h4', {}, girissiz ? 'Girişsiz' : 'Giriş (ortam tarifi)')),
-      h('p', { class: 'dugum-aciklamasi' }, girissiz ? 'Ekran giriş yapılmadan açılır.' : 'Önce ortamın giriş tarifiyle giriş yapılır (bağlam, senaryonun bağlam profiliyle), sonra ekran açılır. Senaryo “Girişsiz” ya da “Temiz oturum” seçebilir.'),
+      h('p', { class: 'dugum-aciklamasi' }, ekranAcilis !== null
+        ? (girissiz ? 'Giriş yapılmaz. Ekran aşağıdaki “Ekran açılır” adımında açılır; üstündeki ortak akışlar ortamın taban adresinde koşar.'
+          : 'Önce ortamın giriş tarifiyle giriş yapılır (bağlam, senaryonun bağlam profiliyle). Ekran aşağıdaki “Ekran açılır” adımında açılır; üstündeki ortak akışlar (ör. kullanıcı değiştirme) girişten sonra açılan sayfada koşar. Senaryo “Girişsiz” ya da “Temiz oturum” seçebilir.')
+        : girissiz ? 'Ekran giriş yapılmadan açılır.' : 'Önce ortamın giriş tarifiyle giriş yapılır (bağlam, senaryonun bağlam profiliyle), sonra ekran açılır. Senaryo “Girişsiz” ya da “Temiz oturum” seçebilir.'),
       girissiz ? null : girisAyrintisi({ projeId: s.proje.id }))];
-    bloklar.forEach((b, i) => { ogeler.push(ekleNoktasi(i), blokCiz(b, i)); });
+    bloklar.forEach((b, i) => {
+      if (i === ekranAcilis) ogeler.push(ekranAcilisDugumu());
+      ogeler.push(ekleNoktasi(i), blokCiz(b, i));
+    });
+    if (ekranAcilis !== null && ekranAcilis >= bloklar.length) ogeler.push(ekranAcilisDugumu());
     if (!bloklar.length || bloklar[bloklar.length - 1].tur !== 'bitir') ogeler.push(ekleNoktasi(bloklar.length));
     yerlestir(akis, ...ogeler);
     const genel = hatalar.get(null) || [];
@@ -937,7 +996,8 @@ export async function akisTasarimi(icerik, s) {
       }
       if (ekranKipi) {
         // Önce doğrula + etki (kaydetmeden), onaylanınca yeni model sürümü.
-        const govde = { projeId: s.proje.id, ekranId: s.ekranId, akisId: veri.akis ? veri.akis.id : null, ad: akisAdi.value, bloklar, ...(elle.alanlar.length || elle.dugmeler.length ? { elleOgeler: elle } : {}) };
+        const govde = { projeId: s.proje.id, ekranId: s.ekranId, akisId: veri.akis ? veri.akis.id : null, ad: akisAdi.value, bloklar, ...(elle.alanlar.length || elle.dugmeler.length ? { elleOgeler: elle } : {}),
+          ...(ekranAcilis !== null ? { ekranAcilisSirasi: ekranAcilis } : {}) };
         const on = await mesgulIken(kaydet, 'Denetleniyor…', () => api('/platform/ekran/akis/kaydet', { govde }));
         hatalar = new Map();
         ciz();

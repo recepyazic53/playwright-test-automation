@@ -171,6 +171,8 @@ function senaryoAnahtarlari(alan) {
  *    alanlar "atla" nedeniyle işaretlenir (koşuda atlanan alan olarak kaydedilir).
  *  - beklenen: { tur: 'basari' } | { tur: 'hata', adim, mesaj }.
  *  - baglamProfili: senaryonun bağlam profili adı (profil havuzlu alanın değeri ya da varsayılanı) | null.
+ *  - ekranAcilmadan (adımda): akışın başındaki ortak akış bloklarının adımları; koşucu bunları girişten sonra açılan sayfada, ekran
+ *    açılmadan önce koşar (model "bastakiOrtakAkislar": "sonra" ise işaretlenmez).
  * Plan kurulamazsa (ör. hata beklenen adım kapsamda değil) hatalar doludur.
  * @param {any} model @param {Record<string, unknown>} veriHam
  * Sabit / türetilmiş değerler: senaryo alanı olmayan ama modelde "sabitDeger" taşıyan alan her koşuda o değerle doldurulur;
@@ -323,6 +325,15 @@ export function modelKosuPlani(model, veriHam, secenekler = {}) {
       ...(nesneMi(adim.yenidenGiris) ? { yenidenGiris: { profil: typeof adim.yenidenGiris.profil === 'string' && adim.yenidenGiris.profil.trim() ? adim.yenidenGiris.profil.trim() : null } } : {})
     };
   });
+
+  // Baştaki ortak akış blokları (ilk ekran adımından önce gelen, ortak akıştan açılan adımlar): girişten sonra açılan sayfada
+  // EKRAN AÇILMADAN önce koşar; model (akış) "bastakiOrtakAkislar": "sonra" ise ekran açıldıktan sonra (eski davranış).
+  if (model.bastakiOrtakAkislar !== 'sonra') {
+    for (const [i, adim] of sirali.entries()) {
+      if (typeof adim.ortakAkisAdi !== 'string') break;
+      Object.assign(adimlar[i], { ekranAcilmadan: true });
+    }
+  }
 
   let son;
   if (beklenen.tur === 'hata') {

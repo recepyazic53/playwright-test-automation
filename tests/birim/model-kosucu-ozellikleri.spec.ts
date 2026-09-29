@@ -472,7 +472,7 @@ test('doğrulayıcı: "ekranaDon" aksiyonu seçicisiz geçer; seçici / metin / 
   }
 });
 
-test('ekrana dön: akışın başındaki ortak akış başka sayfaya gidip "Ekrana dön" ile döner, ekran adımları yürür; dönmeyen akış ekranı bulamaz', async () => {
+test('ekrana dön ("Baştaki ortak akışlar: ekran açıldıktan sonra"): akışın başındaki ortak akış ekrandan başka sayfaya gidip "Ekrana dön" ile döner, ekran adımları yürür; dönmeyen akış ekranı bulamaz', async () => {
   test.setTimeout(180_000);
   const DONMEDEN_ANAHTARI = 'donmeden-ortak-akis';
   await basarili('/platform/sayfa-paketi/ekle', { projeId, paket: donusAkisPaketi(), senaryoIndeksleri: [], ortamIdleri: [] });
@@ -482,11 +482,14 @@ test('ekrana dön: akışın başındaki ortak akış başka sayfaya gidip "Ekra
   const ekran = await ekranBul('Başvuru (dönüş)');
   const tasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekran}&kopya=ana`) as Nesne & { bloklar: Nesne[] };
   expect(tasarim.basarili, String(tasarim.mesaj ?? '')).toBe(true);
-  // Ortak akış akışın EN BAŞINDA (isteğe bağlı değil: her senaryoda koşar).
+  // Ortak akış akışın EN BAŞINDA (isteğe bağlı değil: her senaryoda koşar). Blok ekranın bağlantısını kullanır: "Ekran açılır"ın
+  // ALTINDA (ekranAcilisSirasi 0 → "bastakiOrtakAkislar": "sonra"; ekran önce açılır — eski davranış).
   const akisKaydet = async (ad: string, anahtar: string): Promise<string> => String((await basarili('/platform/ekran/akis/kaydet', {
-    projeId, ekranId: ekran, ad, onay: true, bloklar: [{ tur: 'ortak', dosya: `${anahtar}.model.json`, ad: 'Başka sayfa', istegeBagli: false }, ...tasarim.bloklar]
+    projeId, ekranId: ekran, ad, onay: true, ekranAcilisSirasi: 0, bloklar: [{ tur: 'ortak', dosya: `${anahtar}.model.json`, ad: 'Başka sayfa', istegeBagli: false }, ...tasarim.bloklar]
   })).akisId);
   const donuslu = await akisKaydet('Dönüşlü akış', DONUS_AKIS_ANAHTARI);
+  const donusluTasarim = await api(`/platform/ekran/akis/tasarim?projeId=${projeId}&ekranId=${ekran}&akisId=${donuslu}`) as Nesne;
+  expect(donusluTasarim.ekranAcilisSirasi).toBe(0);
   const form = await api(`/platform/senaryo/form?projeId=${projeId}&ekranId=${ekran}&ortamId=${ortamId}&akisId=${donuslu}`) as Nesne & { model: Serbest };
   expect((form.model.adimlar as Serbest[]).slice(0, 2).map((a) => a.kosu.aksiyonlar)).toEqual([
     [{ tur: 'tikla', secici: '#baskaSayfa', aciklama: 'Başka sayfaya git' }], [{ tur: 'ekranaDon', aciklama: 'Ekrana dön' }]

@@ -29,10 +29,14 @@ export interface DiyagramAdimi {
   gosterge: string | null;
   hedef: 'basari' | 'hata' | null;
   sonuc: DiyagramAdimSonucu | null;
+  /** Akışın başındaki ortak akış adımı: ekran açılmadan önce koşar (yalnız öyleyse true). */
+  ekranAcilmadan?: true;
 }
 export interface AkisDiyagrami {
   /** kip: etkin giriş (ortam | girissiz | temiz); profil: senaryonun seçtiği giriş profili. */
   baslangic: { girisVar: boolean; kip: 'ortam' | 'girissiz' | 'temiz'; profil: string | null; metin: string; sonuc: DiyagramAdimSonucu | null };
+  /** Baştaki ortak akışlar bu senaryoda koşuyorsa, onlardan sonra ekranın açılışı (düğüm); değilse null (ekran girişle açılır). */
+  ekranAcilisi: { metin: string; sonuc: DiyagramAdimSonucu | null } | null;
   adimlar: DiyagramAdimi[];
   bitis: { tur: 'basari' | 'hata'; metin: string; durum: string | null };
   eslesmeyenler: string[];

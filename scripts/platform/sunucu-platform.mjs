@@ -83,8 +83,9 @@
 //   GET  /platform/ekran/analiz?projeId=&id=            bekleyen (yoksa son) analiz: bulgular + etki paneli
 //   GET  /platform/ekran/akislar?projeId=&ekranId=       ekranın akışları (+ senaryo sayıları, düzenlenebilir mi) — ekranlar/akis-servisi.mjs
 //   GET  /platform/ekran/akis/tasarim?projeId=&ekranId=&akisId=|kopya=   akış diyagramı (bloklar + sağ liste; boş: yeni akış)
-//   POST /platform/ekran/akis/kaydet { projeId, ekranId, akisId?, ad, bloklar, elleOgeler?, onay }  onay yoksa etki (etkilenen
-//        senaryolar; elleOgeler: diyagramda elle tanımlanan alan / düğmeler),
+//   POST /platform/ekran/akis/kaydet { projeId, ekranId, akisId?, ad, bloklar, elleOgeler?, ekranAcilisSirasi?, onay }  onay yoksa
+//        etki (etkilenen senaryolar; elleOgeler: diyagramda elle tanımlanan alan / düğmeler; ekranAcilisSirasi: "Ekran açılır"ın
+//        üstündeki blok sayısı — baştaki ortak akışlar ekran açılmadan önce mi sonra mı),
 //        varsa yeni model sürümü · POST /platform/ekran/akis/varsayilan | sil { projeId, ekranId, akisId }
 //   GET  /platform/ortak-akis/ekranlar?projeId=&ekranId=  ortak akışın eklenebileceği ekranlar (ekranId: ortak akış)
 //   POST /platform/ortak-akis/ekle { projeId, ekranId, ekranIdleri, istegeBagli, onay }  ortak akışı seçilen ekranların
@@ -1512,7 +1513,8 @@ const POST_UCLARI = new Map([
   ['/platform/ekran/analiz/uygula', (db, g) => analizUygula(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), { analizId: g.analizId, kabul: g.kabul, red: g.red })],
   ['/platform/ekran/analiz/iptal', (db, g) => analizIptal(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), g.analizId)],
   ['/platform/ekran/akis/kaydet', (db, g) => akisKaydet(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), {
-    akisId: typeof g.akisId === 'string' && g.akisId ? g.akisId : null, ad: g.ad, bloklar: g.bloklar, onay: g.onay === true, elleOgeler: g.elleOgeler
+    akisId: typeof g.akisId === 'string' && g.akisId ? g.akisId : null, ad: g.ad, bloklar: g.bloklar, onay: g.onay === true, elleOgeler: g.elleOgeler,
+    ekranAcilisSirasi: g.ekranAcilisSirasi
   })],
   ['/platform/ekran/akis/varsayilan', (db, g) => akisVarsayilanYap(db, kimlikAl(g.projeId, 'projeId'), kimlikAl(g.ekranId, 'ekranId'), String(g.akisId ?? ''))],
   ['/platform/ortak-akis/olustur', (db, g) => bosOrtakAkisOlustur(db, kimlikAl(g.projeId, 'projeId'), { ad: g.ad, anahtar: g.anahtar })],

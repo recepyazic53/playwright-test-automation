@@ -32,8 +32,14 @@ export declare function ortakAkisEkranlaraEkle(vt: Veritabani, projeId: string, 
 export declare function akisTasarimi(vt: Veritabani, projeId: string, ekranId: string, s: { akisId?: string | null; kopya?: string | null }): {
   ekran: { id: string; anahtar: string; ad: string }; bloklar: AkisBlogu[]; palet: AkisPaleti; ortakAkislar: OrtakAkisOzeti[]; ortakAkis: boolean; kullananlar?: OrtakAkisKullanani[];
   akis: { id: string; ad: string; varsayilan: boolean } | null; kopyaKaynagi: string | null;
+  /** Diyagramdaki "Ekran açılır" düğümünün üstündeki blok sayısı (baştaki ortak akışlar ekran açılmadan önce); ortak akışta null. */
+  ekranAcilisSirasi: number | null;
 };
-export declare function akisKaydet(vt: Veritabani, projeId: string, ekranId: string, g: { akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: AkisEnvanteri; testVerisi?: unknown; elleOgeler?: unknown }):
+/**
+ * ekranAcilisSirasi: "Ekran açılır"ın üstündeki blok sayısı (yalnız ortak akış blokları olabilir). Baştaki ortak akışların hepsi
+ * üstündeyse "once" (varsayılan), hiçbiri değilse "sonra" yazılır; verilmezse akışın mevcut ayarı korunur.
+ */
+export declare function akisKaydet(vt: Veritabani, projeId: string, ekranId: string, g: { akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: AkisEnvanteri; testVerisi?: unknown; elleOgeler?: unknown; ekranAcilisSirasi?: unknown }):
   { etki: { yeni: boolean; senaryolar: Array<{ id: string; baslik: string }>; korunanSilinen?: string[]; ekranlar?: OrtakAkisKullanani[] }; akisId: string; testVerisi?: PaketTestVerisiOnizlemesi }
   | { akisId: string; surum: number; testVerisi?: { tablolar: Array<{ ad: string; id: string; islem: string; eklenenSatir: number; eklenenSutun: number }>; baglanan: number } };
 export declare function akisVarsayilanYap(vt: Veritabani, projeId: string, ekranId: string, akisId: string, yapan?: string): { surum: number | null; tasinan: number };

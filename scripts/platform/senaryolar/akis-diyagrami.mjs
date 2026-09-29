@@ -185,6 +185,18 @@ export function akisDiyagrami(model, s = {}) {
     };
   });
 
+  // Akışın başındaki ortak akış blokları (ilk ekran adımından önce; model-kosusu.mjs > modelKosuPlani ile AYNI kural): girişten
+  // sonra açılan sayfada EKRAN AÇILMADAN önce koşar — diyagramda "Ekran açılır" bu adımlardan sonra gelir. Model (akış)
+  // "bastakiOrtakAkislar": "sonra" ise ekran önce açılır (başlangıç düğümünde). Açılmamış modelde (ekranın Akışlar sekmesi)
+  // ortak akış başvurusu ({ ortakAkis: { dosya } }) tek adımdır.
+  if (model.bastakiOrtakAkislar !== 'sonra') {
+    for (const [i, adim] of sirali.entries()) {
+      if (typeof adim.ortakAkisAdi !== 'string' && !nesneMi(adim.ortakAkis)) break;
+      adimlar[i].ekranAcilmadan = true;
+    }
+  }
+  const bastakiVar = adimlar.some((a) => a.ekranAcilmadan === true && a.kosulur !== false);
+
   // Hedef adım: beklenen hata adımı ya da koşulan son adım.
   const kosulanlar = adimlar.filter((a) => a.kosulur !== false);
   const hedef = hataAdimi && hataSirasi >= 0 ? adimlar[hataSirasi] : kosulanlar[kosulanlar.length - 1] || null;
@@ -200,8 +212,14 @@ export function akisDiyagrami(model, s = {}) {
   const ozet = (x) => ({ durum: String(x.durum), sureMs: typeof x.sureMs === 'number' ? x.sureMs : null, hataMesaji: typeof x.hataMesaji === 'string' ? x.hataMesaji : null });
 
   const baslangicSonuclari = [];
+  /** Baştaki ortak akışlardan sonra açılan ekranın sonucu ("Ekran açılır" ayrı düğümde). */
+  let ekranAcilisSonucu = null;
   if (sonuc) {
-    for (const ad of BASLANGIC_ADIMLARI) { const x = al((a) => a === ad); if (x) baslangicSonuclari.push(x); }
+    for (const ad of BASLANGIC_ADIMLARI) {
+      const x = al((a) => a === ad);
+      if (x && bastakiVar && ad === 'Ekran açılır') ekranAcilisSonucu = ozet(x);
+      else if (x) baslangicSonuclari.push(x);
+    }
     for (let x = al((a) => a.startsWith(BAGLAM_ADIMI_ONEKI)); x; x = al((a) => a.startsWith(BAGLAM_ADIMI_ONEKI))) baslangicSonuclari.push(x);
   }
   if (sonuc) {
@@ -227,10 +245,16 @@ export function akisDiyagrami(model, s = {}) {
   return {
     baslangic: {
       girisVar, kip, profil: girisProfili,
-      metin: girisVar ? `Giriş (ortam tarifi${girisNotu ? `; ${girisNotu}` : ''}), ekran açılır`
-        : model.girisGerekmez === true ? 'Girişsiz: ekran açılır (ekran giriş gerektirmez)' : 'Girişsiz: ekran açılır (senaryo girişsiz)',
+      // Baştaki ortak akışlar varsa ekran onlardan sonra açılır ("ekranAcilisi" düğümü); başlangıç yalnız giriştir.
+      metin: bastakiVar
+        ? (girisVar ? `Giriş (ortam tarifi${girisNotu ? `; ${girisNotu}` : ''})`
+          : model.girisGerekmez === true ? 'Girişsiz: ortamın taban adresi açılır (ekran giriş gerektirmez)' : 'Girişsiz: ortamın taban adresi açılır (senaryo girişsiz)')
+        : girisVar ? `Giriş (ortam tarifi${girisNotu ? `; ${girisNotu}` : ''}), ekran açılır`
+          : model.girisGerekmez === true ? 'Girişsiz: ekran açılır (ekran giriş gerektirmez)' : 'Girişsiz: ekran açılır (senaryo girişsiz)',
       sonuc: baslangicDurumu ? { durum: baslangicDurumu, sureMs: null, hataMesaji: baslangicHatasi && typeof baslangicHatasi.hataMesaji === 'string' ? baslangicHatasi.hataMesaji : null } : null
     },
+    // Baştaki ortak akışlardan sonra ekranın açılışı (yalnız baştaki ortak akış bu senaryoda koşuyorsa; yoksa null).
+    ekranAcilisi: bastakiVar ? { metin: 'Ekran açılır', sonuc: sonuc ? ekranAcilisSonucu ?? { durum: 'kosulmadi', sureMs: null, hataMesaji: null } : null } : null,
     adimlar,
     bitis: {
       tur: hataAdimi && hataSirasi >= 0 ? 'hata' : 'basari',

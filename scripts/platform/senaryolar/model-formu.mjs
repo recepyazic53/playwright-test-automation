@@ -182,6 +182,9 @@ export function akisModeli(model, akisId) {
   const akis = (akisId && akislar.find((a) => a.id === akisId)) || akislar.find((a) => a.varsayilan === true) || akislar[0];
   const kopyaModel = { ...model };
   delete kopyaModel.akislar;
+  // Baştaki ortak akışların sırası ("once" varsayılan / "sonra") akışın ayarıdır.
+  delete kopyaModel.bastakiOrtakAkislar;
+  if (akis && typeof akis.bastakiOrtakAkislar === 'string') kopyaModel.bastakiOrtakAkislar = akis.bastakiOrtakAkislar;
   const adimlar = Array.isArray(akis && akis.adimlar) ? akis.adimlar : [];
   const adimIdleri = new Set(adimlar.map((a) => nesneMi(a) ? a.id : null));
   const alanIdleri = new Set();

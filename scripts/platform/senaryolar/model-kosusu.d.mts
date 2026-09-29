@@ -76,6 +76,11 @@ export type PlanKosuTanimi = {
 export type PlanAdimi = {
   /** Ortak akıştan açılan adım yalnızca test ortamında koşar (canlıda atlanır). */
   yalnizTest?: boolean;
+  /**
+   * Akışın başındaki (ilk ekran adımından önceki) ortak akış bloğunun adımı: girişten sonra açılan sayfada, EKRAN AÇILMADAN
+   * önce koşar (model "bastakiOrtakAkislar": "sonra" ise işaretlenmez; eski davranış).
+   */
+  ekranAcilmadan?: boolean;
   /** Ortak akıştan açılan adımın ortak akış adı. */
   ortakAkisAdi?: string;
   /** SQL sorgusu adımı: koşucu veritabanı sorgusunu beklenenle karşılaştırır. */

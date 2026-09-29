@@ -161,6 +161,13 @@ akış olmaz. Nasıl çalışır:
   - Başvuru adımının koşulu her açılan adıma eklenir.
   - Ortak akışın koşulları `<ortak id>_<ad>` olarak taşınır.
   - Ortak akış projede yoksa koşu açık bir hatayla durur.
+- **Akışın başındaki ortak akış (koşu sırası):** ilk ekran adımından önce gelen ortak akış blokları (ör. ana sayfada kullanıcı
+  değiştirme) girişten sonra açılan sayfada — girişsiz senaryoda ortamın taban adresinde — **ekran açılmadan önce** koşar;
+  sonra "Ekran açılır", ardından ekran adımları. Blok `ekranaDon` ile bitiyorsa o dönüş ekranı açar, ekran ikinci kez
+  istenmez. Model (ve `akislar[]` öğesi) `"bastakiOrtakAkislar": "sonra"` ise ekran önce açılır (eski davranış); varsayılan
+  `"once"` yazılmaz. Akış diyagramında Giriş ile bloklar arasındaki salt görünüm **"Ekran açılır"** düğümünün üstündeki
+  bloklar ekran açılmadan önce koşar (↑/↓ ya da düğümdeki "Baştaki ortak akışlar" seçimi). Akışın ortasındaki ortak akışlar
+  değişmez.
 - **Ekrana göre değişen ara pencere:** ortak akış bazı ekranlarda onay düğmesinden sonra bir ara pencere (ör. ödeme tipi
   seçimi, "Kart ile" düğmesi) açıyor, bazılarında doğrudan sonraki pencereye (ör. kart formu) geçiyorsa tek model ikisini de
   karşılar: ara pencere düğmesi `{ "tur": "tikla", "secici": "…", "kosul": "gorunurse" }` olarak onay düğmesinin ardına
@@ -186,7 +193,8 @@ akış olmaz. Nasıl çalışır:
 
 ### Akışlar (bir ekranda birden çok akış)
 
-`akislar` (isteğe bağlı): `[{ id, ad, varsayilan?: true, adimlar }]`. Varsayılan akışın `adimlar`ı modelin `adimlar`ıyla
+`akislar` (isteğe bağlı): `[{ id, ad, varsayilan?: true, adimlar, bastakiOrtakAkislar?: "sonra" }]` (`bastakiOrtakAkislar`:
+yukarıdaki "Akışın başındaki ortak akış"; varsayılan akışınki modelin kökündekiyle aynıdır). Varsayılan akışın `adimlar`ı modelin `adimlar`ıyla
 AYNIDIR (yazılırken eşitlenir; akış bilmeyen okuyucular — eski modeller — `adimlar`ı okur). `akislar` yoksa
 tek, örtük "Ana akış" (`id: "ana"`) vardır. Alanlar, koşullar ve senaryo düzeyi ayarlar ekranın ORTAK havuzundadır; aynı alan
 (aynı kimlik) birden çok akışta olabilir. Her akış, `adimlar`ı o akışın adımlarıyla değiştirilmiş model olarak doğrulanır
