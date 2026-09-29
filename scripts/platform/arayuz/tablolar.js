@@ -51,9 +51,14 @@ function kopya(t) {
     sutunlar: t ? t.sutunlar.map((s) => ({ ad: s.ad, eskiAd: s.ad, gizli: s.gizli, tip: s.tip, karsiliklar: { ...(s.karsiliklar || {}) } }))
       : [{ ad: 'Değer', eskiAd: null, gizli: false, tip: 'metin', karsiliklar: {} }],
     satirlar: t ? t.satirlar.map((r) => ({ id: r.id, ad: r.ad || '', ortamId: r.ortamId, degerler: { ...r.degerler }, doluGizli: new Set(r.doluGizli), degisti: false })) : [],
-    silinen: new Set(), degisti: !t, baglam: Boolean(t && t.baglam)
+    silinen: new Set(), degisti: !t, baglam: Boolean(t && t.baglam),
+    // Kullanıcının seçtiği tablo türü ('kayit' | 'liste'); null: seçilmedi (görünen tür sezgiden / kayıtlı türden).
+    tur: null
   };
 }
+
+/** İçe alınan başlık "Satır adı" mı (SATIR ADI, satir adi, Satır Adı…): o sütun satırın adına gider, veri sütunu olmaz. */
+export const satirAdiBasligiMi = (/** @type {unknown} */ x) => /^sat[ıi]r\s*ad[ıi]\s*\*?$/u.test(String(x ?? '').trim().toLocaleLowerCase('tr'));
 
 /** Ekran paketinden içe aktarılan tablonun kaynağı: "Akış kaydı · “Ekran” · 27.09.2026 10:30". */
 const KAYNAK_TURU = { paket: 'Ekran paketi', tarama: 'Otomatik tarama', kayit: 'Akış kaydı' };
@@ -472,6 +477,18 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
     h('div', { class: 'tablo-duzeni' }, solKap, sagKap));
 
   const degistiMi = () => Boolean(is && (is.degisti || is.silinen.size || is.satirlar.some((r) => r.degisti)));
+  /**
+   * Düzenlenen tablonun görünen türü: kullanıcının seçtiği; yoksa var olan tabloda listedeki grubu (kayıtlı tür ya da sezgi —
+   * tablolariGrupla), yeni tabloda öneri (tek sütun: liste tablosu; birden çok sütun: kayıt tablosu).
+   * @returns {'kayit' | 'liste'}
+   */
+  function gorunenTur() {
+    if (is.tur) return is.tur;
+    const t = is.id ? liste.find((x) => x.id === is.id) : null;
+    if (t) return tablolariGrupla([t], grupBilgisi).kayitlar.length ? 'kayit' : 'liste';
+    if (is.sutunlar.length === 1) return 'liste';
+    return tablolariGrupla([{ ad: is.ad, sutunlar: is.sutunlar, kaynak: null }], grupBilgisi).kayitlar.length ? 'kayit' : 'liste';
+  }
   const gecebilirMi = async () => !degistiMi() || onayIste({
     baslik: 'Değişiklikleriniz kaydedilmeyecek', metin: 'Bu tabloda kaydedilmemiş değişiklikler var.', dugme: 'Kaydetmeden geç', tehlikeli: false, ikonAd: 'uyari'
   });
@@ -547,14 +564,17 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
     const ilk = dolu[0];
     const mevcutAdlar = is.sutunlar.map((s) => kucuk(s.ad));
     const bosTablo = !is.satirlar.length && is.sutunlar.length === 1 && is.sutunlar[0].ad === 'Değer' && !is.id;
-    const baslikMi = bosTablo || ilk.some((x) => mevcutAdlar.includes(kucuk(x)));
-    /** @type {number[]} dosya sütunu → tablo sütunu */
+    const baslikMi = bosTablo || ilk.some((x) => mevcutAdlar.includes(kucuk(x)) || satirAdiBasligiMi(x));
+    /** @type {number[]} dosya sütunu → tablo sütunu (SATIR_ADI: satırın adı) */
     let eslem;
     let veri = dolu;
+    const SATIR_ADI = -2;
     if (baslikMi) {
       veri = dolu.slice(1);
       if (bosTablo) is.sutunlar = [];
       eslem = ilk.map((b, i) => {
+        // "Satır adı" başlıklı sütun (ilki) satırın adına gider; veri sütunu olmaz.
+        if (satirAdiBasligiMi(b) && ilk.findIndex(satirAdiBasligiMi) === i) return SATIR_ADI;
         const ad = b || `Sütun ${i + 1}`;
         let k = is.sutunlar.findIndex((s) => kucuk(s.ad) === kucuk(ad));
         if (k < 0) { is.sutunlar.push({ ad, eskiAd: null, gizli: false }); k = is.sutunlar.length - 1; is.degisti = true; }
@@ -567,10 +587,13 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
     for (const r of veri) {
       /** @type {Record<string, string>} */
       const degerler = {};
-      eslem.forEach((k, i) => { if (k >= 0 && is.sutunlar[k]) degerler[is.sutunlar[k].ad] = r[i] ?? ''; });
-      is.satirlar.push({ id: undefined, ad: '', ortamId: null, degerler, doluGizli: new Set(), degisti: true });
+      let ad = '';
+      eslem.forEach((k, i) => { if (k === SATIR_ADI) ad = String(r[i] ?? '').slice(0, 120); else if (k >= 0 && is.sutunlar[k]) degerler[is.sutunlar[k].ad] = r[i] ?? ''; });
+      is.satirlar.push({ id: undefined, ad, ortamId: null, degerler, doluGizli: new Set(), degisti: true });
     }
-    bildir(`${veri.length} satır eklendi${baslikMi ? ' (ilk satır sütun adı sayıldı)' : ''}. Kaydetmeyi unutmayın.`);
+    // Yalnız "Satır adı" başlığı olan boş tabloda veri sütunu kalmazsa varsayılan tek sütun geri gelir (tabloda en az bir sütun olmalı).
+    if (!is.sutunlar.length) is.sutunlar = [{ ad: 'Değer', eskiAd: null, gizli: false, tip: 'metin', karsiliklar: {} }];
+    bildir(`${veri.length} satır eklendi${baslikMi ? ` (ilk satır sütun adı sayıldı${eslem.includes(SATIR_ADI) ? '; "Satır adı" sütunu satır adlarına alındı' : ''})` : ''}. Kaydetmeyi unutmayın.`);
     ciz();
   }
 
@@ -590,7 +613,9 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
           return [s.ad.trim(), gizliler.has(s.ad) && (v === null || v === undefined || v === '') ? null : (v ?? '')];
         }))
       })),
-      silinenSatirlar: [...is.silinen]
+      silinenSatirlar: [...is.silinen],
+      // Tablo türü: yeni tabloda görünen tür (seçilen ya da önerilen) her zaman yazılır; var olan tabloda yalnız kullanıcı değiştirdiyse.
+      ...(is.baglam ? {} : is.tur ? { tur: is.tur } : !is.id ? { tur: gorunenTur() } : {})
     };
     // Var olan tabloda önce etki denetlenir: değişen değeri düz metin olarak kullanan senaryo varsa sunucu hiçbir şey yazmaz ve
     // onay ister (tablo-etkisi.mjs); yoksa doğrudan kaydeder.
@@ -683,7 +708,13 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
   // --- Izgara ---------------------------------------------------------------------------------------------------------------
   function sagCiz() {
     const adG = h('input', { type: 'text', value: is.ad, maxlength: '60', placeholder: 'ör. Servis girişi', 'aria-label': 'Tablo adı', class: 'tablo-adi-girdisi' });
-    adG.addEventListener('input', () => { is.ad = adG.value; is.degisti = true; durumCiz(); });
+    /** @type {HTMLElement | null} */
+    let turKutusu = null;
+    adG.addEventListener('input', () => {
+      is.ad = adG.value; is.degisti = true; durumCiz();
+      // Yeni tabloda önerilen tür addan da çıkar ("<Ekran> — <Alan>"): kullanıcı seçmediyse öneri yenilenir.
+      if (!is.tur && !is.id && turKutusu) { const y = turSecimi(); if (y) { turKutusu.replaceWith(y); turKutusu = y; } }
+    });
     const aramaG = h('input', { type: 'search', placeholder: 'Satırlarda ara…', value: ara, 'aria-label': 'Satırlarda ara' });
     let zaman = null;
     aramaG.addEventListener('input', () => { clearTimeout(zaman); zaman = setTimeout(() => { ara = aramaG.value; gorunur = GORUNUR_ADIM; govdeCiz(); }, 150); });
@@ -694,7 +725,7 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
       if (!f) return;
       try { iceAl(await tabloOku(f)); } catch (e) { bildir(e.message, 'hata'); }
     });
-    const yapistirG = h('textarea', { rows: '4', placeholder: 'Excel\'den satırları kopyalayıp buraya yapıştırın. İlk satır sütun adlarıysa başlık sayılır.', 'aria-label': 'Yapıştırılacak satırlar' });
+    const yapistirG = h('textarea', { rows: '4', placeholder: 'Excel\'den satırları kopyalayıp buraya yapıştırın. İlk satır sütun adlarıysa başlık sayılır; "Satır adı" başlıklı sütun satır adlarına alınır.', 'aria-label': 'Yapıştırılacak satırlar' });
     const yapistirKutusu = h('details', { class: 'yapistir-kutusu' }, h('summary', {}, 'Excel\'den yapıştır'), yapistirG,
       h('div', { class: 'dugmeler' }, h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => {
         iceAl(yapistirG.value.split(/\r?\n/).map((s) => s.split('\t')));
@@ -708,6 +739,28 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
       const d = degistiMi();
       yerlestir(durum, d ? h('span', { class: 'rozet uyari' }, 'kaydedilmemiş değişiklik') : is.id ? h('span', { class: 'soluk' }, 'kayıtlı') : null);
       geriAl.hidden = !d;
+    }
+
+    /**
+     * Tablo türü seçimi (yeni tabloda "bu tablo ne tutuyor?" sorusu; var olanda şu anki sınıflandırma açıkça): kayıt tablosu →
+     * "Kişi ve kayıt verileri", liste tablosu → "Ekran listeleri". Seçim Kaydet'le yazılır (kaynak.tabloTuru).
+     */
+    function turSecimi() {
+      if (is.baglam) return null;
+      const ad = `tablo-turu-${++grupSayaci}`;
+      const secili = gorunenTur();
+      const secenekler = [
+        ['kayit', 'Kayıt tablosu', 'Kişi, müşteri, kart gibi kayıtlar: bir satırın değerleri birlikte kullanılır (ör. Ad | Kimlik no | Telefon). Listede “Kişi ve kayıt verileri” altında.'],
+        ['liste', 'Liste tablosu', 'Ekrandaki bir seçim listesinin seçenekleri (ör. İl listesi, İl → İlçe). Listede “Ekran listeleri” altında.']
+      ];
+      return h('fieldset', { class: 'tablo-turu-secimi', 'data-tablo-turu': secili },
+        h('legend', {}, is.id ? 'Tablo türü' : 'Tablo türü — bu tablo ne tutuyor?'),
+        h('div', { class: 'tablo-turu-secenekleri' }, secenekler.map(([d, etiket, aciklama]) => {
+          const r = h('input', { type: 'radio', name: ad, value: d, checked: secili === d });
+          r.addEventListener('change', () => { if (!r.checked) return; is.tur = /** @type {'kayit' | 'liste'} */ (d); is.degisti = true; durumCiz(); });
+          return h('label', { class: 'tablo-turu-secenegi' }, r, h('span', {}, h('b', {}, etiket), h('small', { class: 'soluk' }, aciklama)));
+        })),
+        is.tur || is.id ? null : h('small', { class: 'soluk' }, 'Sütun sayısına ve tablo adına göre önerildi; değiştirebilirsiniz. Kaydedince tablo bu türle listelenir.'));
     }
 
     const tablo = h('table', { class: 'veri-tablosu' });
@@ -823,6 +876,7 @@ export async function tablolarBolumu(govde, proje, secenek = {}) {
         h('span', { class: 'sag' },
           is.id ? h('button', { type: 'button', class: 'kucuk-dugme tehlike', onclick: () => tabloyuSil() }, ikon('cop'), 'Tabloyu sil') : null)),
       (() => { const k = is.id ? liste.find((x) => x.id === is.id)?.kaynak : null; return k && k.tur ? h('p', { class: 'kucuk soluk tablo-kaynagi' }, h('b', {}, 'Kaynak: '), kaynakMetni(k), ' — ekran paketinden içe aktarıldı (seçim alanlarının seçenekleri).') : null; })(),
+      (turKutusu = turSecimi()),
       h('div', { class: 'tablo-arac-cubugu' },
         h('div', { class: 'arama-kutusu' }, ikon('ara'), aramaG),
         h('button', { type: 'button', class: 'kucuk-dugme', onclick: () => dosya.click() }, ikon('yukle'), 'Excel / CSV yükle'), dosya,

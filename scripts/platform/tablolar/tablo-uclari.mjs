@@ -95,6 +95,8 @@ export const TABLO_POST_UCLARI = [
     const projeId = kimlik(g.projeId, 'projeId');
     const s = tabloKaydetEtkiyle(db, {
       projeId, id: g.id ? kimlik(g.id) : undefined, ad: typeof g.ad === 'string' ? g.ad : '', sutunlar: g.sutunlar, satirlar: g.satirlar, silinenSatirlar: g.silinenSatirlar,
+      // Tablo türü ('kayit' | 'liste'; isteğe bağlı): kaynak.tabloTuru (tablo-deposu.mjs).
+      ...(g.tur === 'kayit' || g.tur === 'liste' ? { tur: g.tur } : {}),
       etki: g.etki, guncellenecekler: g.guncellenecekler
     }, { kosuyorMu, servisKosuyorMu: servisSenaryosuKosuyorMu });
     if (s.onayGerekli) return { onayGerekli: true, etki: s.etki };

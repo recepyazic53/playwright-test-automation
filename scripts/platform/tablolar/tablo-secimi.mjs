@@ -100,6 +100,53 @@ export function sutunSecenekleri(tablo, secim, sutun, ortamId) {
   return sonuc;
 }
 
+/**
+ * FORMDAKİ SEÇİMLE AYNI SÜTUN (senaryo formu, satır seçimi önizlemesi): formda düz bir değer seçilmiş alan (ör. Müşteri tipi =
+ * Bireysel) bu tablonun bir sütununa bağlıysa ya da tabloda alanın adıyla aynı adlı açık sütun varsa, "koşullara uyan satırlar"
+ * kullanıcının beklediği gibi o seçime göre süzülmez — satır seçiminin koşulları yalnız açıkça yazılanlardır. Bu işlev o sütunları ve
+ * formdaki değerin TABLODAKİ yazımını (değerin kendisi, sayfa karşılığı ya da büyük / küçük harf farkıyla eşit olan) bulur; arayüz
+ * kullanıcıya "koşula ekle" seçeneği sunar. Koşulda zaten olan sütun ve gizli sütun atlanır. tabloDegeri null: tabloda o değer yok.
+ * @param {{ sutunlar: Sutun[]; satirlar: Satir[] }} tablo @param {Record<string, string>} secim satır seçiminin koşulları
+ * @param {Array<{ etiket: string; deger: string; metin?: string; sutun?: string | null }>} alanlar formdaki düz seçimler (metin: seçeneğin
+ *   görünen adı — tabloda kod yerine ad yazılmışsa onunla eşlenir; sutun: bu tabloya bağlıysa sütun adı)
+ * @returns {Array<{ etiket: string; sutun: string; formDegeri: string; tabloDegeri: string | null }>}
+ */
+export function formSuzgecleri(tablo, secim, alanlar) {
+  /** @type {Array<{ etiket: string; sutun: string; formDegeri: string; tabloDegeri: string | null }>} */
+  const sonuc = [];
+  const kosulda = new Set(Object.entries(secim || {}).filter(([, d]) => d !== '' && d !== null && d !== undefined).map(([k]) => kucuk(k)));
+  for (const a of alanlar) {
+    const formDegeri = String(a.deger ?? '').trim();
+    if (!formDegeri) continue;
+    const s = (a.sutun ? sutunBul(/** @type {Tablo} */ (tablo), a.sutun) : undefined) ?? sutunBul(/** @type {Tablo} */ (tablo), a.etiket);
+    if (!s || s.gizli || kosulda.has(kucuk(s.ad)) || sonuc.some((x) => x.sutun === s.ad)) continue;
+    const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[s.ad]).filter((v) => v !== null && v !== undefined && v !== '').map(String))];
+    const adaylar = [formDegeri, ...(a.metin && a.metin.trim() ? [a.metin.trim()] : [])];
+    const tabloDegeri = degerler.find((v) => adaylar.includes(v)) ?? degerler.find((v) => adaylar.includes(sayfaDegeri(s, v)))
+      ?? degerler.find((v) => adaylar.some((x) => kucuk(v) === kucuk(x) || kucuk(sayfaDegeri(s, v)) === kucuk(x))) ?? null;
+    // formDegeri: formda GÖRÜNEN değer (seçeneğin metni; yoksa değer) — kullanıcıya gösterilir.
+    sonuc.push({ etiket: a.etiket, sutun: s.ad, formDegeri: adaylar[adaylar.length - 1], tabloDegeri });
+  }
+  return sonuc;
+}
+
+/**
+ * Satır neden uyuyor (satır seçimi önizlemesi): koşulların her biri ("Sütun = değer") ya da koşul yoksa "koşul yok"; formdaki seçimle
+ * çelişen sütunlar (formSuzgecleri) ayrıca döner — satır yine koşulur ama kullanıcı beklemiyor olabilir.
+ * @param {{ sutunlar: Sutun[] }} tablo @param {Satir} satir @param {Record<string, string>} secim
+ * @param {ReturnType<typeof formSuzgecleri>} [suzgecler]
+ * @returns {{ nedenler: string[]; celisenler: Array<{ etiket: string; sutun: string; formDegeri: string; satirDegeri: string }> }}
+ */
+export function satirUyumu(tablo, satir, secim, suzgecler = []) {
+  const nedenler = Object.entries(secim || {}).filter(([, d]) => d !== '' && d !== null && d !== undefined).map(([k, d]) => {
+    const s = tablo.sutunlar.find((x) => kucuk(x.ad) === kucuk(k));
+    return `${s ? s.ad : k} = ${d}`;
+  });
+  const celisenler = suzgecler.filter((f) => String(satir.degerler[f.sutun] ?? '') !== String(f.tabloDegeri ?? '\u0000'))
+    .map((f) => ({ etiket: f.etiket, sutun: f.sutun, formDegeri: f.formDegeri, satirDegeri: String(satir.degerler[f.sutun] ?? '') }));
+  return { nedenler, celisenler };
+}
+
 /** Değerin servis gövdesine yazılacak karşılığı (tanımsızsa değerin kendisi). @param {Sutun} sutun @param {string} deger */
 export const servisDegeri = (sutun, deger) => sutun.karsiliklar?.[deger]?.servis || deger;
 

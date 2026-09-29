@@ -199,7 +199,7 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     await hazir(page).check();
     await expect(ilkSatir(page)).toBeVisible();
     await expect(ilkSatir(page)).toHaveValue('');
-    await expect(ilkSatir(page).locator('option', { hasText: 'Koşula uyan tüm satırlar' })).toHaveCount(1);
+    await expect(ilkSatir(page).locator('option', { hasText: 'Ayrı test: koşullara uyan her satır' })).toHaveCount(1);
     await ilkSatir(page).selectOption({ label: 'Ayşe — Kimlik no 1•••••••••6' });
     await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('5321112233');
     await expect(alanKap(page, 'dogumTarihi').locator('output.kayit-ozeti')).toContainText('01.02.1990');
@@ -229,11 +229,11 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     let { page, hatalar } = await sayfaAc(`/#/senaryolar/duzenle/${id}`);
     await expect(hazir(page)).toBeChecked();
     await expect(ilkSatir(page)).toHaveValue(`s:${satir['Ayşe']}`);
-    await grup(page).getByRole('button', { name: 'Bir kişi daha ekle' }).click();
+    await grup(page).getByRole('button', { name: 'Satır ekle', exact: true }).click();
     const ikinci = grup(page).locator('select[data-kayit-satiri="1"]');
     await expect(ikinci).toHaveValue(`s:${satir['Mehmet']}`);
     await expect(grup(page).getByRole('status')).toHaveAttribute('data-test-sayisi', '2');
-    await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('2 satırın her biri ayrı test');
+    await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('ayrı test: listedeki 2 satırın her biri');
     // Tahmini test sayısı alttaki kartta (birleşim / sayı).
     await expect(page.locator('.satir-secimi-karti [data-tahmini-test]')).toHaveAttribute('data-tahmini-test', '2');
     await page.setViewportSize({ width: 390, height: 900 });
@@ -259,10 +259,10 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     await ilkSatir(page).selectOption('tumu');
     await expect(grup(page).locator('details.kosul-duzenleyici')).toHaveAttribute('open', '');
     await expect(grup(page).getByRole('combobox', { name: 'Kişi → Telefon koşulu' })).toBeVisible();
-    await expect(grup(page).getByRole('status')).toContainText('Şu an 2 satır uyuyor');
-    await expect(grup(page).getByRole('button', { name: 'Bir kişi daha ekle' })).toHaveCount(0);
+    await expect(grup(page).getByRole('status')).toContainText('Şu an 2 satır koşullara uyuyor');
+    await expect(grup(page).getByRole('button', { name: 'Satır ekle', exact: true })).toHaveCount(0);
     await grup(page).getByRole('combobox', { name: 'Kişi → Telefon koşulu' }).selectOption('5334445566');
-    await expect(grup(page).getByRole('status')).toContainText('Şu an 1 satır uyuyor');
+    await expect(grup(page).getByRole('status')).toContainText('Şu an 1 satır koşullara uyuyor');
     await page.setViewportSize({ width: 390, height: 900 });
     await tasmaYok(page);
     await page.setViewportSize({ width: 1600, height: 1000 });
@@ -286,7 +286,7 @@ test.describe('kayıt grubu: Hazır / Yeni (127.0.0.1)', () => {
     await expect(hazir(page)).toBeChecked();
     await expect(ilkSatir(page)).toHaveValue('');
     await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('5321112233');
-    await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('koşuda uyan ilk satır');
+    await expect(alanKap(page, 'telefon').locator('output.kayit-ozeti')).toContainText('tek test: koşullara uyan ilk satır');
     // Yeni: alanlar düz girdi (değerler temizlenir), tarihte Tablodan yok.
     await yeni(page).check();
     await expect(alanKap(page, 'telefon').locator('input')).toHaveValue('');

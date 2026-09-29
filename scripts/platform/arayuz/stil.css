@@ -4321,6 +4321,37 @@ dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: ca
 .ekleme-kutulari.tekli { grid-template-columns: minmax(0, 1fr); }
 .ekleme-kutulari.tekli .ekleme-kutusu { min-height: 0; }
 @media (max-width: 900px) { .ekleme-kutulari.ikili { grid-template-columns: minmax(0, 1fr); } }
+/* ===== v1.4 ku14-veri-senaryo: test verisi tablosu (yatay kaydırma, sabit ekle düğmeleri, tablo türü), satır önizlemesi, radyo kaynağı ===== */
+/* Tablo düzenleyici: tablo kabın genişliğini aşınca yatay kayar; "+ Sütun / + Satır" (başlık) ve satır silme (gövde) sağa yapışık, kesilmez. */
+.tablo-duzenleyici .veri-tablosu-kap { overflow-x: auto; max-width: 100%; }
+.tablo-duzenleyici .veri-tablosu { width: max-content; min-width: 100%; }
+.tablo-duzenleyici .veri-tablosu thead th.ekle-sutunu,
+.tablo-duzenleyici .veri-tablosu tbody td.eylem { position: sticky; right: 0; background: var(--panel-kati); box-shadow: -1px 0 0 var(--cizgi); }
+.tablo-duzenleyici .veri-tablosu thead th.ekle-sutunu { z-index: 2; }
+.tablo-duzenleyici .veri-tablosu tbody td.eylem { z-index: 1; }
+/* Tablo türü seçimi (kayıt tablosu / liste tablosu). */
+.tablo-turu-secimi { border: 1px solid var(--cizgi); border-radius: var(--yaricap-m); padding: 8px 12px 10px; margin: 0 0 10px; min-width: 0; }
+.tablo-turu-secimi > legend { font-weight: 600; font-size: 13px; padding: 0 4px; }
+.tablo-turu-secenekleri { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tablo-turu-secenegi { display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: var(--yaricap-m); cursor: pointer; }
+.tablo-turu-secenegi:has(input:checked) { background: var(--vurgu-zemin); }
+.tablo-turu-secenegi > span { display: grid; gap: 2px; min-width: 0; }
+.tablo-turu-secenegi small { font-size: 12px; line-height: 1.35; }
+@media (max-width: 720px) { .tablo-turu-secenekleri { grid-template-columns: minmax(0, 1fr); } }
+/* Kayıt grubu: formdaki seçimle aynı sütun notu ve uyan satırların nedeni. */
+.form-suzgeci { display: grid; gap: 6px; margin-top: 6px; }
+.form-suzgeci p { margin: 0; }
+.form-suzgeci-satiri { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.uyan-satirlar { margin-top: 6px; min-width: 0; }
+.uyan-satirlar > summary { cursor: pointer; }
+.uyan-satirlar ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.uyan-satirlar li { display: grid; gap: 1px; padding: 4px 8px; border-left: 2px solid var(--cizgi); min-width: 0; overflow-wrap: anywhere; }
+.uyan-satirlar .uyan-satir-adi { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.uyan-satirlar .uyan-neden, .uyan-satirlar .uyan-celiski { font-size: 12px; }
+/* Radyo alanı: kaynak (Tablodan al) değerden ayrı, başlıkta düğme; tablodan alınınca seçenekler yerine kaynak kutusu. */
+.kaynak-dugmesi { border-style: dashed; }
+.tablodan-deger.kaynak-kutusu { border: 1px dashed var(--cizgi); border-radius: var(--yaricap-m); padding: 6px 10px; }
+
 
 /* ============================================================================================================================
    v1.4 KULLANILABILIRLIK — GIRIS VE GUVENLIK (ku14-giris-guvenlik): kurulum sihirbazi giris sorusu, karsilama kavram semasi,

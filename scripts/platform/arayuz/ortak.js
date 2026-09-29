@@ -592,7 +592,16 @@ export function bildir(mesaj, tur = 'basari') {
  * @param {string} metin @returns {{ kisa: string; ayrinti: string }}
  */
 export function aciklamayiBol(metin) {
-  const cumleler = String(metin || '').split(/(?<=[.!?…])\s+(?=[A-ZÇĞİÖŞÜ"“'(0-9])/u);
+  const parcalar = String(metin || '').split(/(?<=[.!?…])\s+(?=[A-ZÇĞİÖŞÜ"“'(0-9])/u);
+  // Kısaltmadan ("ör.", "vb.", "bkz.") ya da açık parantezin içinden bölünmez: "…kombinasyonudur (ör." diye yarıda kesilmesin.
+  /** @type {string[]} */
+  const cumleler = [];
+  for (const p of parcalar) {
+    const onceki = cumleler[cumleler.length - 1];
+    const acik = onceki !== undefined && (onceki.match(/\(/g)?.length ?? 0) > (onceki.match(/\)/g)?.length ?? 0);
+    if (onceki !== undefined && (acik || /(?:^|[\s(])(?:ör|örn|vb|vs|bkz|yak|yb|Dr|No|sn|dk)\.$/iu.test(onceki))) cumleler[cumleler.length - 1] = `${onceki} ${p}`;
+    else cumleler.push(p);
+  }
   if (cumleler.length <= 2 && String(metin || '').length <= 220) return { kisa: String(metin || ''), ayrinti: '' };
   const n = cumleler[0].length < 70 && cumleler.length > 2 ? 2 : 1;
   return { kisa: cumleler.slice(0, n).join(' '), ayrinti: cumleler.slice(n).join(' ') };

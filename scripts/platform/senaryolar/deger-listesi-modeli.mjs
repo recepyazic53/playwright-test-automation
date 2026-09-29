@@ -138,5 +138,44 @@ export function modeleListeleriUygula(model, listeler) {
       if (k) alan.varsayilan = { ...alan.varsayilan, deger: k.deger };
     }
   }
+  bagimlilikAnahtarlariniEsle(yeni, model);
   return yeni;
+}
+
+const kucukMetin = (/** @type {unknown} */ x) => String(x ?? '').trim().toLocaleLowerCase('tr');
+
+/**
+ * BAĞIMLI LİSTE ↔ TABLO: üst alan tabloya bağlanınca senaryoya tablodaki değer yazılır (ör. İl = "Ankara"), bağımlı alanın haritası
+ * ise sayfa değeriyle anahtarlıdır (ör. "06" → ilçeler). Üst alanın seçeneğinde senaryo değeri sayfa değerinden farklıysa (sütunun
+ * karşılığı: "Ankara" ↔ "06") haritaya senaryo değeri de aynı listeyle eklenir; form, doğrulayıcı, öneriler ve koşu aynı haritayı
+ * görür. Karşılık yoksa yedek: özgün modelde görünen metni tablodaki değere eşit seçeneğin sayfa değeri. Var olan anahtar değişmez.
+ * @param {Nesne} yeni listeler uygulanmış model (yerinde değişir) @param {Nesne} ozgun listeler uygulanmadan önceki model
+ */
+function bagimlilikAnahtarlariniEsle(yeni, ozgun) {
+  const alanlar = modelSecimAlanlari(yeni);
+  const ozgunAlanlar = modelSecimAlanlari(ozgun);
+  for (const alan of alanlar) {
+    const bag = nesneMi(alan.bagimlilik) && nesneMi(alan.bagimlilik.secenekHaritasi) && typeof alan.bagimlilik.alan === 'string' ? alan.bagimlilik : null;
+    if (!bag) continue;
+    const ust = alanlar.find((a) => a.id === bag.alan);
+    if (!ust) continue;
+    const harita = bag.secenekHaritasi;
+    const ustSecenekler = (/** @type {Nesne} */ a) => [...(Array.isArray(a.secenekler) ? a.secenekler : []),
+      ...(nesneMi(a.bagimlilik) && nesneMi(a.bagimlilik.secenekHaritasi) ? Object.values(a.bagimlilik.secenekHaritasi).flat() : [])].filter(nesneMi);
+    const ozgunUst = ozgunAlanlar.find((a) => a.id === ust.id);
+    const ozgunSecenekler = ozgunUst ? ustSecenekler(ozgunUst) : [];
+    for (const s of ustSecenekler(ust)) {
+      const senaryo = senaryoDegeri(s);
+      if (Object.prototype.hasOwnProperty.call(harita, senaryo)) continue;
+      // 1) Karşılık: seçeneğin sayfa değeri haritada anahtarsa.
+      let anahtar = String(s.deger) !== senaryo && Object.prototype.hasOwnProperty.call(harita, String(s.deger)) ? String(s.deger) : null;
+      // 2) Yedek: özgün modelde metni (görünen ad) tablodaki değere eşit seçeneğin sayfa / senaryo değeri.
+      if (!anahtar) {
+        const m = ozgunSecenekler.find((o) => [o.metin, o.formMetni].some((x) => x && kucukMetin(x) === kucukMetin(senaryo)));
+        const aday = m ? [String(m.deger), senaryoDegeri(m)].find((x) => Object.prototype.hasOwnProperty.call(harita, x)) : undefined;
+        anahtar = aday ?? null;
+      }
+      if (anahtar) harita[senaryo] = harita[anahtar].map((/** @type {unknown} */ x) => (nesneMi(x) ? { ...x } : x));
+    }
+  }
 }

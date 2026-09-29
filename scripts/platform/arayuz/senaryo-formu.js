@@ -22,7 +22,7 @@ import {
   secenekleriBul, senaryoNesnesiOlustur, tumFormAlanlari
 } from './model-formu.mjs';
 import { BILEREK_BOS_ANAHTARI, bilerekBosAnahtarlari, gorunurlukleriHesapla, senaryoyuDogrula, tabloBasvurusuCoz } from './senaryo-dogrulayici.mjs';
-import { basvuru, basvurununTekDegeri, degerBasvurusuYaz, grupAnahtari, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
+import { basvuru, basvurununTekDegeri, degerBasvurusuYaz, formSuzgecleri, grupAnahtari, satirUyumu, sutunBul, sutunSecenekleri, tabloBul, uyanSatirlar } from './tablo-secimi.mjs';
 import { cokluCalistirmaSecimi, kaydedilecekVeriKosulari as veriKosulariniHazirla, veriKosusuOzeti } from './veri-kosusu-secimi.js';
 import { canliOnayEki, canliOnayIste, onayIste } from './kosu-paneli.js';
 import { GIRIS_DUGUMU, SONUC_DUGUMU, adimDugumu, akisDiyagrami, hataDugumleri } from './akis-diyagrami.mjs';
@@ -174,7 +174,15 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const degerListeleri = baglam.degerListeleri || [];
   const alanDegeri = (id) => { const a = tumAlanlar.find((x) => x.id === id); return a ? String(degerler[a.anahtar] ?? '') : undefined; };
   const alanSecenekleri = (alan) => {
-    const model = secenekleriBul(alan, degerler, sema);
+    // Bağlı alanın değeri tablodan (${Tablo.Sütun}): seçilen satırdan tek değer çıkıyorsa onun (tablodaki değer / sayfa karşılığı)
+    // listesi; satıra göre değişiyorsa (ya da tablolar okunmadıysa) tüm listelerin birleşimi.
+    const model = secenekleriBul(alan, degerler, sema, (ham) => {
+      const b = tabloBasvurusuCoz(ham);
+      if (!b) return null;
+      if (!tabloListesi) { tablolariOku(); return null; }
+      const c = basvurununTekDegeri(tabloListesi, b, { tabloSecimleri, veriKosulari, ortamIdler: [...ortamSecimi] });
+      return c ? [c.deger, c.sayfa] : null;
+    });
     const eslesen = eslesenListeler(degerListeleri, (l) => l.hedef?.alan === alan.id && !l.senaryoAyari, alanDegeri);
     if (!eslesen.length) return model;
     const metinler = new Map([...(alan.secenekler || []), ...Object.values(alan.bagimlilik?.harita || {}).flat()].map((x) => [x.deger, x.metin]));
@@ -235,7 +243,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
     tabloIstegi ??= api(`/platform/tablolar?projeId=${encodeURIComponent(s.proje.id)}&secim=1`)
       .then((y) => { tabloListesi = y.tablolar || []; })
       .catch(() => { tabloListesi = []; })
-      .finally(() => { satirSecimiCiz(true); kayitGruplariniYenile(); planla(); });
+      .finally(() => { satirSecimiCiz(true); kayitGruplariniYenile(); tablodanBagliListeleriYenile(); planla(); });
     return tabloIstegi;
   }
   /** Satırın açık sütun değerleri (satır seçiminin koşulları; gizli sütun koşula girmez). */
@@ -291,7 +299,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
     if (!r) metin = '— (uyan satır yok)';
     else if (sutun.gizli) metin = `${(r.gizliMaskeleri || {})[sutun.ad] || '•••'} (gizli)`;
     else metin = r.degerler[sutun.ad] === null || r.degerler[sutun.ad] === undefined || r.degerler[sutun.ad] === '' ? '— (satırda boş)' : String(r.degerler[sutun.ad]);
-    const not = d.mod === 'coklu' ? ` · ${d.idler.length} satırın her biri ayrı test` : d.mod === 'tumu' ? ' · uyan her satır ayrı test' : d.mod === 'ilk' || d.mod === 'kosul' ? ' · koşuda uyan ilk satır' : '';
+    // Satır seçimi dili her yerde aynı: "tek test: koşullara uyan ilk satır" / "ayrı test: koşullara uyan her satır" / "ayrı test: listedeki her satır".
+    const not = d.mod === 'coklu' ? ` · ayrı test: listedeki ${d.idler.length} satırın her biri` : d.mod === 'tumu' ? ' · ayrı test: koşullara uyan her satır' : d.mod === 'ilk' || d.mod === 'kosul' ? ' · tek test: koşullara uyan ilk satır' : '';
     yerlestir(ozet, ikon(sutun.gizli ? 'kilit' : 'veri'), h('span', { class: 'kayit-ozeti-deger' }, metin), h('small', { class: 'soluk' }, `${kaynak.textContent}${not}`));
   }
   /** Bölümdeki alanların kayıt gruplarının başlık kapları (içerik kayitGruplariniYenile ile çizilir). */
@@ -400,17 +409,16 @@ function modelFormu(icerik, s, senaryo, baglam) {
       alanlar: g.uyeler.map((u) => ({ anahtar: u.alan.anahtar, sutun: u.sutun, ...(u.bicim ? { bicim: u.bicim } : {}) }))
     }));
   }
-  /** Hazır: satır seçimi (+ bir satır daha → her satır ayrı test; "Koşula uyan tüm satırlar" → koşullar grubun içinde). */
+  /** Hazır: satır seçimi (tek test: koşullara uyan ilk satır / bir satır; ayrı test: listedeki her satır ya da koşullara uyan her satır). */
   function hazirSatirSecimi(g, t, grupAdi) {
     const d = grupDurumu(g, t);
-    const tekil = t.ad.toLocaleLowerCase('tr');
     const satirSecenekleri = (seciliId, haric) => t.satirlar.filter((r) => r.id === seciliId || !haric.includes(r.id))
       .map((r) => h('option', { value: `s:${r.id}`, selected: r.id === seciliId }, satirEtiketi(t, r)));
     const ilkId = yeniId('kayit-satir');
     const ilk = h('select', { id: ilkId, 'data-kayit-satiri': '0' },
-      h('option', { value: '', selected: d.mod === 'ilk' }, 'Koşuda ilk uygun satır'),
-      h('optgroup', { label: 'Satır' }, satirSecenekleri(d.idler[0] ?? null, d.idler.slice(1))),
-      h('option', { value: 'tumu', selected: d.mod === 'tumu' }, 'Koşula uyan tüm satırlar (her biri ayrı test)'),
+      h('option', { value: '', selected: d.mod === 'ilk' }, 'Tek test: koşullara uyan ilk satır'),
+      h('optgroup', { label: 'Tek test: bu satır' }, satirSecenekleri(d.idler[0] ?? null, d.idler.slice(1))),
+      h('option', { value: 'tumu', selected: d.mod === 'tumu' }, 'Ayrı test: koşullara uyan her satır'),
       d.mod === 'kosul' ? h('option', { value: 'kosul', selected: true }, `Koşullar: ${Object.entries(d.secim).map(([k, v]) => `${k} = ${v}`).join(', ')}`) : null);
     ilk.addEventListener('change', () => {
       const v = ilk.value;
@@ -453,14 +461,14 @@ function modelFormu(icerik, s, senaryo, baglam) {
     });
     const parcalar = [h('div', { class: 'kayit-satirlari' }, satirlar)];
     if (d.mod === 'satir' || d.mod === 'coklu') {
-      const ekle = h('button', { type: 'button', class: 'kucuk-dugme', 'data-kayit-ekle': '' }, ikon('arti'), `Bir ${tekil} daha ekle`);
+      const ekle = h('button', { type: 'button', class: 'kucuk-dugme', 'data-kayit-ekle': '' }, ikon('arti'), 'Satır ekle');
       ekle.addEventListener('click', () => {
         const aday = t.satirlar.find((r) => !d.idler.includes(r.id) && ortamdaGecerli(r)) || t.satirlar.find((r) => !d.idler.includes(r.id));
         if (!aday) { bildir(`"${t.ad}" tablosunda eklenecek başka satır yok.`, 'hata'); return; }
         veriKosulari.gruplar[d.anahtar] = { kip: 'secili', satirlar: [...d.idler, aday.id] };
         kayitSecimiDegisti();
       });
-      parcalar.push(h('div', { class: 'kayit-ekle' }, ekle, h('small', { class: 'soluk' }, 'Her satır ayrı test olarak koşar.')));
+      parcalar.push(h('div', { class: 'kayit-ekle' }, ekle, h('small', { class: 'soluk' }, 'Listedeki her satır ayrı test olarak koşar.')));
     }
     // Durum + test sayısı (bu ortamda).
     const uyan = uyanSatirlar(t, d.secim, { ortamId: s.ortam.id });
@@ -469,10 +477,10 @@ function modelFormu(icerik, s, senaryo, baglam) {
     let uyari = false;
     if (d.mod === 'coklu') {
       sayi = t.satirlar.filter((r) => d.idler.includes(r.id) && ortamdaGecerli(r)).length;
-      durum = `${sayi} test — seçilen her ${tekil} ayrı test (${s.ortam.ad}${sayi < d.idler.length ? `; ${d.idler.length - sayi} satır bu ortamda geçerli değil` : ''}).`;
+      durum = `${sayi} test — listedeki her satır ayrı test (${s.ortam.ad}${sayi < d.idler.length ? `; ${d.idler.length - sayi} satır bu ortamda geçerli değil` : ''}).`;
     } else if (d.mod === 'tumu') {
       sayi = uyan.length;
-      durum = `Şu an ${uyan.length} satır uyuyor (${s.ortam.ad}) · her biri ayrı test.`;
+      durum = `Şu an ${uyan.length} satır koşullara uyuyor (${s.ortam.ad}) · her biri ayrı test.`;
       uyari = !uyan.length;
     } else if (d.mod === 'satir') {
       const r = t.satirlar.find((x) => x.id === d.idler[0]);
@@ -480,13 +488,59 @@ function modelFormu(icerik, s, senaryo, baglam) {
       durum = uyari ? `Bu satır ${s.ortam.ad} ortamında geçerli değil.` : '1 test.';
     } else {
       uyari = !uyan.length;
-      durum = uyan.length ? `1 test — koşuda ${s.ortam.ad} ortamında uyan ilk satır kullanılır${d.mod === 'kosul' ? ` (${uyan.length} satır uyuyor)` : ''}.` : `${s.ortam.ad} ortamında uyan satır yok.`;
+      durum = uyan.length ? `1 test — koşuda ${s.ortam.ad} ortamında koşullara uyan ilk satır kullanılır${d.mod === 'kosul' ? ` (${uyan.length} satır uyuyor)` : ''}.` : `${s.ortam.ad} ortamında uyan satır yok.`;
     }
     parcalar.push(h('div', { class: `alan-notu ${uyari ? 'alan-uyarisi' : ''}`.trim(), role: 'status', 'data-test-sayisi': String(sayi) }, durum));
     if (d.mod === 'ilk' || d.mod === 'tumu' || d.mod === 'kosul') {
+      const suzgecler = formSuzgecleri(t, d.secim, formdakiSecimler(g, t));
+      parcalar.push(formSuzgeciNotu(t, d, suzgecler), uyanSatirOnizlemesi(t, d, uyan, suzgecler));
       parcalar.push(kosulDuzenleyici(t, d.anahtar, d.secim, d.mod !== 'ilk', kayitSecimiDegisti));
     }
     return parcalar;
+  }
+  /**
+   * Formdaki düz seçimler (grubun dışındaki seçim / metin alanları; tablo başvurusu ve boş değer hariç): satırlar bunlara göre
+   * kendiliğinden süzülmez — önizleme aynı adlı / bağlı sütunu gösterir ve "koşula ekle" sunar (tablolar/tablo-secimi.mjs > formSuzgecleri).
+   */
+  function formdakiSecimler(g, t) {
+    const gorunurluk = sonDurum.gorunurluk;
+    return tumAlanlar.filter((a) => a.anahtar && ['secim', 'metin'].includes(a.tip) && !a.hassas && alanGrubu.get(a.id) !== g
+      && !(gorunurluk && gorunurluk.alanlar && gorunurluk.alanlar[a.id] === false))
+      .map((a) => {
+        const v = degerler[a.anahtar];
+        if (typeof v !== 'string' || !v.trim() || tabloBasvurusuCoz(v)) return null;
+        const bag = degerListeleri.find((l) => l.hedef?.alan === a.id && l.baglanti && kucukAd(l.baglanti.tablo) === kucukAd(t.ad) && (l.baglanti.etiket || '') === g.etiket);
+        const metin = a.tip === 'secim' ? alanSecenekleri(a).find((x) => x.deger === v)?.metin : undefined;
+        return { etiket: a.etiket, deger: v, ...(metin && metin !== v ? { metin } : {}), sutun: bag ? bag.baglanti.sutun : null };
+      }).filter(Boolean);
+  }
+  /** "Formda Müşteri tipi = Bireysel; tabloda aynı sütun var" notu + koşula ekleme düğmesi (açık seçim; kendiliğinden eklenmez). */
+  function formSuzgeciNotu(t, d, suzgecler) {
+    if (!suzgecler.length) return null;
+    return h('div', { class: 'not-kutusu bilgi kucuk form-suzgeci', 'data-form-suzgeci': '' },
+      h('p', {}, 'Formdaki seçimler satırları kendiliğinden süzmez; yalnız aşağıdaki koşullar süzer.'),
+      suzgecler.map((f) => f.tabloDegeri === null
+        ? h('p', { class: 'alan-uyarisi' }, `Formda ${f.etiket} = ${f.formDegeri}; “${t.ad}” tablosunun ${f.sutun} sütununda bu değer yok.`)
+        : h('div', { class: 'form-suzgeci-satiri' }, h('span', {}, `Formda ${f.etiket} = ${f.formDegeri}.`),
+          h('button', {
+            type: 'button', class: 'kucuk-dugme', 'data-form-suzgeci-ekle': f.sutun,
+            onclick: () => { tabloSecimleri[d.anahtar] = { ...d.secim, [f.sutun]: /** @type {string} */ (f.tabloDegeri) }; kayitSecimiDegisti(); }
+          }, ikon('arti'), `Koşula ekle: ${f.sutun} = ${f.tabloDegeri}`))));
+  }
+  /** Uyan satırlar ve her birinin neden uyduğu (koşullar; koşul yoksa "koşul yok") + formdaki seçimle çelişen sütunlar. */
+  function uyanSatirOnizlemesi(t, d, uyan, suzgecler) {
+    if (!uyan.length) return null;
+    const EN_COK = 20;
+    const tumu = d.mod === 'tumu';
+    return h('details', { class: 'uyan-satirlar', open: tumu || suzgecler.length > 0 },
+      h('summary', { class: 'kucuk' }, tumu ? `Koşulacak satırlar ve neden uydukları (${uyan.length})` : `Uyan satırlar ve neden uydukları (${uyan.length}; koşuda ilki)`),
+      h('ul', {}, uyan.slice(0, EN_COK).map((r, i) => {
+        const u = satirUyumu(t, r, d.secim, suzgecler);
+        return h('li', { 'data-uyan-satir': r.id || '' },
+          h('span', { class: 'uyan-satir-adi' }, satirEtiketi(t, r), !tumu && i === 0 ? h('span', { class: 'rozet vurgu' }, 'koşuda bu') : null),
+          h('small', { class: 'soluk uyan-neden' }, u.nedenler.length ? `Uyuyor: ${u.nedenler.join(', ')}` : 'Uyuyor: koşul yok, tablodaki her satır uyar'),
+          u.celisenler.map((c) => h('small', { class: 'alan-uyarisi uyan-celiski' }, `Formdaki ${c.etiket} (${c.formDegeri}) ile çelişiyor: satırda ${c.satirDegeri || 'boş'}`)));
+      }), uyan.length > EN_COK ? h('li', { class: 'soluk' }, `+${uyan.length - EN_COK} satır daha`) : null));
   }
   /**
    * Koşullar: açık sütun başına değer; bir sütunun seçenekleri kendinden önceki koşullarla uyan satırlardan (yukarıdan aşağı).
@@ -539,9 +593,12 @@ function modelFormu(icerik, s, senaryo, baglam) {
 
   let zamanlayici = null;
   const planla = () => { clearTimeout(zamanlayici); zamanlayici = setTimeout(guncelle, 90); };
+  /** Grup dışı bir alan değişti: kayıt gruplarının satır önizlemesi (formdaki seçimle aynı sütun) sonraki güncellemede yenilenir. */
+  let grupOnizlemesiEski = false;
   function degerYaz(anahtar, deger, secenekler = {}) {
     degerler[anahtar] = deger;
     degisti = true;
+    if (kayitGruplari.size && !tumAlanlar.some((a) => a.anahtar === anahtar && alanGrubu.has(a.id))) grupOnizlemesiEski = true;
     if (secenekler.dokun !== false) dokunulan.add(anahtar);
     bagimlilariYenile(anahtar);
     planla();
@@ -604,6 +661,8 @@ function modelFormu(icerik, s, senaryo, baglam) {
     genelHatalar.hidden = !(gonderildi && dagit.genel.length);
     ozetiCiz(d);
     satirSecimiCiz();
+    tablodanBagliListeleriYenile();
+    if (grupOnizlemesiEski) { grupOnizlemesiEski = false; if (tabloListesi) for (const g of kayitGruplari.values()) if (g.kip === 'hazir') for (const kap of g.kaplar) kayitGrubuCiz(g, kap); }
     beklenenAdimSecenekleriniGuncelle(g);
     if (!diyagramAlani.hidden) diyagramiCiz();
   }
@@ -624,6 +683,24 @@ function modelFormu(icerik, s, senaryo, baglam) {
         if (degerler[alan.anahtar] && !tabloBasvurusuCoz(degerler[alan.anahtar]) && !liste.some((x) => x.deger === degerler[alan.anahtar])) degerler[alan.anahtar] = '';
       }
       k.ciz();
+    }
+  }
+
+  /**
+   * Bağlı alanı tablodan (${Tablo.Sütun}) gelen bağımlı seçimler: seçenekler seçilen satıra göre değişir; tablolar okununca ya da satır
+   * seçimi değişince liste değiştiyse yeniden çizilir (değişmediyse dokunulmaz, odak kaybolmaz).
+   */
+  const tablodanListeImzasi = new Map();
+  function tablodanBagliListeleriYenile() {
+    for (const alan of tumAlanlar) {
+      if (alan.tip !== 'secim' || !alan.bagimlilik) continue;
+      const ust = tumAlanlar.find((a) => a.id === alan.bagimlilik.alan);
+      if (!ust || !tabloBasvurusuCoz(degerler[ust.anahtar])) { tablodanListeImzasi.delete(alan.id); continue; }
+      const imza = alanSecenekleri(alan).map((x) => x.deger).join('\u0001');
+      if (tablodanListeImzasi.get(alan.id) === imza) continue;
+      const ilk = !tablodanListeImzasi.has(alan.id);
+      tablodanListeImzasi.set(alan.id, imza);
+      if (!ilk || tabloListesi) alanlar.get(alan.id)?.ciz();
     }
   }
 
@@ -697,14 +774,30 @@ function modelFormu(icerik, s, senaryo, baglam) {
       switch (alan.tip) {
         case 'secim': {
           const tablodan = alan.hassas ? null : tabloSecenegi(alan);
-          const liste = alan.gorunum === 'radyo' && tablodan ? [...alanSecenekleri(alan), tablodan] : alanSecenekleri(alan);
+          const liste = alanSecenekleri(alan);
           if (alan.gorunum === 'radyo') {
+            // Radyo alanında KAYNAK değerden ayrı gösterilir: seçenekler yalnız değerlerdir; "Tablodan al" başlıktaki kaynak düğmesidir
+            // (onay kutusundaki gibi). Tablodan alınıyorsa seçenekler yerine "Tablodan: Tablo › Sütun" kutusu ve "Seçeneklerden seç".
+            const ref = tabloBasvurusuCoz(degerler[alan.anahtar]);
+            if (ref) {
+              const geri = h('button', { type: 'button', class: 'kucuk-dugme hayalet', id, 'aria-label': `${alan.etiket}: tablodan almayı kaldır` }, ikon('geri'), 'Seçeneklerden seç');
+              geri.addEventListener('click', () => { degerYaz(alan.anahtar, ''); kayit.ciz(); });
+              govde = h('div', { class: 'tablodan-deger kaynak-kutusu', 'data-kaynak': 'tablo' }, ikon('veri'),
+                h('span', {}, basvuruMetni(ref), h('small', { class: 'soluk' }, ' · değer koşuda seçilen satırdan gelir')), geri);
+              ust = alanUst(alan, id);
+              kontrolKaydet(alan.anahtar, [geri], hata, uyari);
+              break;
+            }
             const ad = yeniId(`${alan.id}-r`);
             const radyolar = liste.map((x) => h('input', { type: 'radio', name: ad, value: x.deger, checked: degerler[alan.anahtar] === x.deger }));
             radyolar.forEach((r) => r.addEventListener('change', () => degerYaz(alan.anahtar, r.value)));
             govde = h('div', { class: 'radyo-grubu', role: 'radiogroup', id, 'aria-labelledby': `${id}-etiket` },
               radyolar.map((r, i) => h('label', {}, r, liste[i].metin)));
-            ust = alanUst(alan, id);
+            const kaynakDugmesi = tablodan ? h('button', {
+              type: 'button', class: 'kucuk-dugme hayalet kaynak-dugmesi', title: `Değer kaynağı: ${tablodan.metin}`, 'aria-label': `${alan.etiket}: ${tablodan.metin}`,
+              onclick: () => { degerYaz(alan.anahtar, tablodan.deger); kayit.ciz(); }
+            }, ikon('veri'), 'Tablodan al') : null;
+            ust = alanUst(alan, id, kaynakDugmesi ? [kaynakDugmesi] : []);
             ust.el.querySelector('label').id = `${id}-etiket`;
             ust.el.querySelector('label').removeAttribute('for');
             kontrolKaydet(alan.anahtar, radyolar, hata, uyari);
