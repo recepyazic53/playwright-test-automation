@@ -38,3 +38,12 @@ export declare function degerBasvurusu(deger: unknown): Basvuru | null;
 export declare function degerBasvurusuYaz(tablo: string, sutun: string, etiket?: string): string;
 export declare function basvuruyuCoz<T extends Tablo>(tablolar: T[], b: Basvuru, tabloSecimleri: Record<string, Record<string, string>> | undefined, ortamId?: string | null, satirSecimi?: SatirSecimi):
   { tablo: T; sutun: Sutun; satir: T['satirlar'][number]; deger: string } | { hata: string; tabloYok?: boolean };
+/**
+ * Koşul değerlendirmesi için başvurunun TEK değeri (senaryo doğrulayıcısının tabloDegeri'si): seçimle / çalıştırma biçimiyle ve
+ * ortam(lar)la uyan satırların bu sütundaki değeri tek ise { deger, sayfa }, satıra göre değişiyorsa ya da bulunamıyorsa null.
+ */
+export declare function basvurununTekDegeri(tablolar: ReadonlyArray<Tablo>, b: Basvuru, s?: {
+  tabloSecimleri?: Record<string, Record<string, string>> | null;
+  veriKosulari?: { gruplar?: Record<string, { kip: string; satirlar?: string[] }> } | null;
+  ortamIdler?: ReadonlyArray<string | null>;
+}): { deger: string; sayfa: string } | null;

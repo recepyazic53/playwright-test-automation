@@ -107,6 +107,17 @@ export interface DogrulamaBaglami {
   kaynak?: 'kayit' | 'girdi';
   /** Değeri ${Tablo.Sütun} olan alanlarda tablo / sütun varlığı buna göre denetlenir (verilmezse yalnız alan tipi). */
   tablolar?: ReadonlyArray<{ ad: string; sutunlar: ReadonlyArray<{ ad: string; gizli?: boolean }> }>;
+  /**
+   * Koşul değerlendirmesinde ${Tablo.Sütun} değerinin seçilen satırdan TEK değeri (tablodaki değer + varsa sayfa karşılığı); değer
+   * satıra göre değişiyorsa null. Verilmezse tablodan gelen değere bağlı koşul bilinmiyor (null) kalır.
+   */
+  tabloDegeri?: (basvuru: { tablo: string; etiket: string; sutun: string; bicim: string }) => TabloTekDegeri | null;
+}
+
+/** Tablodan gelen değerin tek (satıra göre değişmeyen) değeri: tablodaki değer ve varsa sayfa karşılığı. */
+export interface TabloTekDegeri {
+  deger: string;
+  sayfa?: string;
 }
 
 export interface DogrulamaBulgusu {
@@ -187,6 +198,8 @@ export interface Gorunurlukler {
   alanlar: Record<string, UcDegerli>;
   /** "<alanId>.<altAlanId>" → bileşik alan parçasının görünürlüğü. */
   altAlanlar: Record<string, UcDegerli>;
+  /** Bilinmiyor (null) sonucu tablodan gelen, satıra göre değişen değerden çıkanlar (form "koşullu · satıra göre" gösterir). */
+  satiraGore: { adimlar: Record<string, true>; bolumler: Record<string, true>; alanlar: Record<string, true> };
 }
 export declare function gorunurlukleriHesapla(senaryo: unknown, baglam: DogrulamaBaglami): Gorunurlukler;
 export declare function beklenenSonucuCozumle(

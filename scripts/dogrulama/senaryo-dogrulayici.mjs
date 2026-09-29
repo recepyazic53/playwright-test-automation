@@ -397,6 +397,10 @@ function ic(baglam, senaryo) {
     alanlar,
     idAlan,
     alanDegeri: (id) => (idAnahtar[id] !== undefined ? senaryo[idAnahtar[id]] : undefined),
+    // ${Tablo.Sütun} değerinin seçilen satırdan TEK değeri (verilmezse tablodan gelen değere bağlı koşul bilinmiyor).
+    tabloDegeri: typeof baglam.tabloDegeri === 'function' ? baglam.tabloDegeri : null,
+    // Son değerlendirmede bilinmiyor sonucu tablodan gelen (satıra göre değişen) bir değerden mi çıktı.
+    satiraGore: false,
     baglamKodu: undefined
   };
   icBaglam.baglamKodu = baglamKodunuBul(icBaglam);
@@ -430,6 +434,34 @@ function baglamKodunuBul(b) {
 
 // ---- Koşul değerlendirme (üç değerli: true / false / null = bilinmiyor) ----
 
+/**
+ * Değerin seçim alanındaki seçeneği (değer listesi modeli > modelSecenegi ile aynı öncelik): önce senaryo değeri, sonra sayfa
+ * değeri (deger), en son görünen metin (metin / formMetni). Seçenek yoksa undefined.
+ */
+function secenekBul(alan, deger) {
+  if (!alan || typeof deger !== 'string') return undefined;
+  const bag = alan.bagimlilik;
+  const havuz = [...(Array.isArray(alan.secenekler) ? alan.secenekler : []),
+    ...(bag && nesneMi(bag.secenekHaritasi) ? Object.values(bag.secenekHaritasi).flat() : [])].filter(nesneMi);
+  if (!havuz.length) return undefined;
+  return havuz.find((s) => String(secenekDegeri(s)) === deger)
+    ?? havuz.find((s) => String(s.deger) === deger)
+    ?? havuz.find((s) => s.metin === deger || s.formMetni === deger);
+}
+
+/**
+ * Koşuldaki değer (esit / icinde) ile alanın değeri aynı mı? Birebir aynıysa evet; değilse ikisi seçim alanının AYNI seçeneğini
+ * gösteriyorsa evet (koşul metinle — "Çoklu" — yazılmış, değer kodla — "2" — gelmiş olabilir ya da tersi; tablodaki değerin
+ * sayfa karşılığı da seçeneğin sayfa değeridir).
+ */
+function ayniSecenekMi(alan, deger, hedef) {
+  if (deger === hedef) return true;
+  if (typeof deger !== 'string' || typeof hedef !== 'string') return false;
+  const a = secenekBul(alan, deger);
+  const h = secenekBul(alan, hedef);
+  return Boolean(a && h) && String(secenekDegeri(a)) === String(secenekDegeri(h));
+}
+
 function kosulIfadesiniDegerlendir(ifade, b, bilinenDurumlar) {
   if (!nesneMi(ifade)) return null;
   if (Array.isArray(ifade.ve)) {
@@ -448,10 +480,20 @@ function kosulIfadesiniDegerlendir(ifade, b, bilinenDurumlar) {
   }
   if (typeof ifade.alan === 'string') {
     const deger = b.alanDegeri(ifade.alan);
-    // Değeri tablodan (${Tablo.Sütun}) gelen alan: değer koşuda belli olur, koşul bilinmiyor.
-    if (tabloBasvurusuCoz(deger)) return null;
-    if (Array.isArray(ifade.icinde)) return ifade.icinde.includes(deger);
-    return deger === ifade.esit;
+    /** Alanın değerinin eşdeğer yazımları (düz değer; tablodan gelen değerde tablodaki değer + sayfa karşılığı). */
+    let adaylar = [deger];
+    // Değeri tablodan (${Tablo.Sütun}) gelen alan: seçilen satırdan değer TEK ise (baglam.tabloDegeri) o değerle değerlendirilir;
+    // çözücü yoksa ya da değer satıra göre değişiyorsa (çoklu satır, "uyan tüm satırlar", seçimsiz çok satırlı tablo) bilinmiyor.
+    const tb = tabloBasvurusuCoz(deger);
+    if (tb) {
+      const c = typeof b.tabloDegeri === 'function' ? b.tabloDegeri(tb) : null;
+      if (!c || typeof c.deger !== 'string') { b.satiraGore = true; return null; }
+      adaylar = [c.deger, ...(typeof c.sayfa === 'string' && c.sayfa !== c.deger ? [c.sayfa] : [])];
+    }
+    const alan = b.idAlan[ifade.alan];
+    const esit = (hedef) => adaylar.some((a) => ayniSecenekMi(alan, a, hedef));
+    if (Array.isArray(ifade.icinde)) return ifade.icinde.some(esit);
+    return esit(ifade.esit);
   }
   if (typeof ifade.senaryoAyari === 'string') return b.alanDegeri(ifade.senaryoAyari) === ifade.esit;
   if (ifade.calismaZamani === 'gorunurse') {
@@ -775,6 +817,8 @@ const BIRLIKTE_VERILENLER = [['cokluSorguDosyasi', 'cokluSorguKisiSayisi']];
  *  - baglam.simdi: tarih kontrolleri için "şimdi" (testlerde sabitlenir).
  *  - baglam.tablolar: [{ ad, sutunlar: [{ ad, gizli }] }] — değeri ${Tablo.Sütun} olan alanlarda tablo / sütun varlığı buna göre
  *    denetlenir (verilmezse yalnız alan tipi denetlenir).
+ *  - baglam.tabloDegeri: (başvuru) => { deger, sayfa? } | null — koşul değerlendirmesinde ${Tablo.Sütun} değerinin seçilen satırdan
+ *    TEK değeri (tablo-secimi.mjs > basvurununTekDegeri); verilmezse ya da null dönerse o koşul bilinmiyor.
  * hatalar: kaydı/koşuyu engeller. uyarilar: engellemez (ör. varsayılan kaydın süresi geçmiş,
  * ekranda görünmeyen alana değer verilmiş).
  */
@@ -878,15 +922,22 @@ export function senaryoyuDogrula(senaryo, baglam) {
 export function gorunurlukleriHesapla(senaryo, baglam) {
   if (!baglam || !nesneMi(baglam.model)) throw new Error('gorunurlukleriHesapla: baglam.model (ekran modeli) zorunludur.');
   const b = ic(baglam, nesneMi(senaryo) ? senaryo : {});
-  const sonuc = { adimlar: {}, bolumler: {}, alanlar: {}, altAlanlar: {} };
+  const sonuc = { adimlar: {}, bolumler: {}, alanlar: {}, altAlanlar: {}, satiraGore: { adimlar: {}, bolumler: {}, alanlar: {} } };
+  /** Değerlendirir; bilinmiyor sonucu tablodan gelen (satıra göre değişen) değerden çıktıysa satiraGore'ye yazar. */
+  const hesapla = (tur, id, f) => {
+    b.satiraGore = false;
+    const v = f();
+    if (v === null && b.satiraGore) sonuc.satiraGore[tur][id] = true;
+    return v;
+  };
   for (const adim of b.model.adimlar || []) {
-    sonuc.adimlar[adim.id] = gorunurlukDegerlendir(adim.gorunurluk, b);
+    sonuc.adimlar[adim.id] = hesapla('adimlar', adim.id, () => gorunurlukDegerlendir(adim.gorunurluk, b));
     for (const bolum of adim.bolumler || []) {
-      sonuc.bolumler[bolum.id] = gorunurlukleriBirlestir([adim.gorunurluk, bolum.gorunurluk].filter(Boolean), b);
+      sonuc.bolumler[bolum.id] = hesapla('bolumler', bolum.id, () => gorunurlukleriBirlestir([adim.gorunurluk, bolum.gorunurluk].filter(Boolean), b));
     }
   }
   for (const { alan, gorunurlukler } of b.alanlar) {
-    sonuc.alanlar[alan.id] = gorunurlukleriBirlestir(gorunurlukler, b);
+    sonuc.alanlar[alan.id] = hesapla('alanlar', alan.id, () => gorunurlukleriBirlestir(gorunurlukler, b));
     for (const alt of alan.altAlanlar || []) {
       if (alt.gorunurluk) sonuc.altAlanlar[`${alan.id}.${alt.id}`] = gorunurlukDegerlendir(alt.gorunurluk, b);
     }
