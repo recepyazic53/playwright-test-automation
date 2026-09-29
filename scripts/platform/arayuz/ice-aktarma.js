@@ -218,7 +218,7 @@ export function iceAktarmaAkisi(kapsayici, secenekler) {
     test_verisi_turleri: 'test verisi tablosu', test_verisi_profilleri: 'test verisi satırı', ekranlar: 'ekran', senaryolar: 'senaryo',
     servisler: 'servis', servis_senaryolari: 'servis senaryosu', servis_kimlikleri: 'servis giriş bilgisi',
     servis_parametre_tanimlari: 'servis parametre tanımı', servis_akislari: 'servis akışı', kosular: 'koşu', servis_kosulari: 'servis koşusu',
-    servis_akis_kosulari: 'servis akışı koşusu', ekipler: 'ekip', rapor_isaretleri: 'rapor işareti'
+    servis_akis_kosulari: 'servis akışı koşusu', ekipler: 'ekip', rapor_isaretleri: 'rapor işareti', kurtarma_kurallari: 'kurtarma kuralı'
   };
   const kalintiMetni = (k) => Object.entries(k).map(([t, n]) => `${n} ${KALINTI_ETIKETLERI[t] || t}`).join(', ');
   const ortamEtiketi = (o) => (o.tur ? `${o.ad} (${TUR_ETIKETI[o.tur]})` : o.ad);

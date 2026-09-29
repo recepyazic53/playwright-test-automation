@@ -124,7 +124,9 @@ function projeKayitlari(vt, projeId) {
       servisKosusu: say('SELECT COUNT(*) AS n FROM servis_kosulari WHERE proje_id = ?') + say('SELECT COUNT(*) AS n FROM servis_akis_kosulari WHERE proje_id = ?'),
       // Rapor verileri (Ayarlar > Raporlar; ayarlar/rapor-verileri.mjs): ekip listesi ve öğe işaretleri (kritik, ekip, süre eşiği).
       ekip: say('SELECT COUNT(*) AS n FROM ekipler WHERE proje_id = ?'),
-      raporIsareti: say('SELECT COUNT(*) AS n FROM rapor_isaretleri WHERE proje_id = ?')
+      raporIsareti: say('SELECT COUNT(*) AS n FROM rapor_isaretleri WHERE proje_id = ?'),
+      // Kurtarma kuralları (Ayarlar > Proje ve ortamlar; ayarlar/kurtarma-kurallari.mjs): kullanıcı kuralları + hazır kuralın açık / kapalı satırı.
+      kurtarmaKurali: say('SELECT COUNT(*) AS n FROM kurtarma_kurallari WHERE proje_id = ?')
     }
   };
 }

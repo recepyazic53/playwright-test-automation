@@ -129,7 +129,7 @@ async function ornekVeri(vt: Veritabani): Promise<{ proje: string; ortam: string
 
 test.describe('Genişletilmiş şifreleme (şema v2)', () => {
   test('SIFRELI_ALANLAR tek kaynak: beklenen sütunlar, gizli olanlar HASSAS_SUTUNLAR ile aynı', () => {
-    expect(GUNCEL_SEMA_SURUMU).toBe(17);
+    expect(GUNCEL_SEMA_SURUMU).toBe(18);
     expect(Object.fromEntries(Object.entries(SIFRELI_ALANLAR).map(([t, a]) => [t, Object.keys(a).sort()]))).toEqual({
       makineler: ['ad'],
       ayarlar: ['deger_json'],
@@ -145,7 +145,8 @@ test.describe('Genişletilmiş şifreleme (şema v2)', () => {
       servis_akislari: ['icerik_json'],
       servis_akis_kosulari: ['sonuc_json'],
       raporlar: ['meta_json'],
-      rapor_isaretleri: ['metot_esikleri_json']
+      rapor_isaretleri: ['metot_esikleri_json'],
+      kurtarma_kurallari: ['tanim_json']
     });
     // Servis giriş bilgileri (parola dahil) sır niteliğindedir: önizlemede / yanıtlarda hiç gösterilmez.
     expect(HASSAS_SUTUNLAR).toEqual({ giris_profilleri: ['parola', 'totp_gizli', 'ek_gizli_json'], servis_kimlikleri: ['degerler_json'] });
