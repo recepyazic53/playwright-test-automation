@@ -313,7 +313,7 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       // Ayarlar > Proje ve ortamlar: iki ortam listelenir, "null" metni yok.
       await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) (d as HTMLDialogElement).close(); location.hash = '#/ayarlar/proje'; });
       await expect(page.locator('.bolum-basligi h3').filter({ hasText: 'Ortamlar' })).toContainText('2');
-      await expect(page.locator('.kayit-listesi:not(.proje-listesi) li')).toHaveCount(2);
+      await expect(page.locator('.kayit-listesi:not(.proje-listesi):not(.kurtarma-listesi) li')).toHaveCount(2);
       await expect(page.locator('.proje-listesi li')).toHaveCount(1);
       expect(await page.locator('#ana').innerText()).not.toMatch(/\bnull\b|\bundefined\b/);
       expect(hatalar).toEqual([]);
