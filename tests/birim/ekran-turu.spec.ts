@@ -147,6 +147,7 @@ const EKRANLAR: EkranTanimi[] = [
   { ad: 'veri', adres: () => '#/veri' },
   { ad: 'planli-kosular', adres: () => '#/planli-kosular' },
   { ad: 'ayarlar-kosu', adres: () => '#/ayarlar/kosu' },
+  { ad: 'ayarlar-kurtarma', adres: () => '#/ayarlar/kurtarma' },
   { ad: 'ayarlar-yedekleme', adres: () => '#/ayarlar/yedekleme' },
   { ad: 'ayarlar-guvenlik', adres: () => '#/ayarlar/guvenlik' },
   { ad: 'ayarlar-entegrasyonlar', adres: () => '#/ayarlar/entegrasyonlar' },

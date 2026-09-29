@@ -20,6 +20,13 @@ import {
 const OTURUM_ADRESI_YARDIMI = 'Girişten sonra açılan bir sayfa (ör. /panel). Nöbetçi her testten önce bu sayfayı açar: başarı göstergesi '
   + 'görünürse önceki giriş hâlâ geçerlidir ve yeniden giriş yapılmaz. Giriş sayfasını yazmayın; orada gösterge görünmediği için '
   + 'her testte giriş beklenir. Boş bırakılırsa giriş adresi kullanılır.';
+/**
+ * Oturum kontrol adresinin yardımı + Koşu ayarındaki "Oturum kontrolü (sn)" ile ilişkisi (bağlantı ayarı açıp odaklar;
+ * karşı tarafta ayarın altında buraya bağlantı vardır: ayarlar/kosu-ayarlari.mjs > baglanti).
+ */
+const oturumAdresiYardimi = () => h('span', {}, OTURUM_ADRESI_YARDIMI,
+  ' Denetimin en çok ne kadar süreceği Koşu ayarındadır; adres yanlışsa her test bu süre kadar bekler: ',
+  h('a', { href: '#/ayarlar/kosu/oturumKontrolSn', class: 'oturum-suresi-baglantisi' }, 'Koşu › Gelişmiş › Oturum kontrolü (sn)'), '.');
 
 const IKINCI_ADIM_ETIKETI = { yok: 'Yok', totp: 'Authenticator (TOTP)', sms: 'SMS' };
 const KAYNAK_ROZETI = {
@@ -448,7 +455,7 @@ export async function girisTarifiBolumu(kapsayici, baglam) {
       h('fieldset', {}, h('legend', {}, 'Giriş sayfası'),
         h('div', { class: 'iki-sutun' },
           alan('Giriş adresi', girisAdresi, { yardim: 'Taban adrese göre yol (ör. / ya da /giris) veya tam http(s) adresi.' }),
-          alan('Oturum kontrol adresi', oturumAdresi, { yardim: OTURUM_ADRESI_YARDIMI })),
+          alan('Oturum kontrol adresi', oturumAdresi, { yardim: oturumAdresiYardimi() })),
         oturumUyarisi,
         h('div', { class: 'oneri-satiri' }, oner,
           h('span', { class: 'soluk kucuk' }, ikon('uyari'), ' Ortamın adresini bu bilgisayarda açar; yalnızca siz basınca çalışır.')),

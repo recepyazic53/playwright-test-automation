@@ -20,7 +20,7 @@ const ALAN_ETIKETLERI = {
   iki_asamali_tur: 'İki aşamalı doğrulama', totp_gizli: 'Authenticator gizli anahtarı', sms_ayari_json: 'SMS ayarı',
   tur: 'Tür', alanlar_json: 'Sütunlar', tur_id: 'Test verisi tablosu', degerler_json: 'Değerler', anahtar: 'Anahtar',
   ekran_id: 'Ekran', surum: 'Sürüm', model_json: 'Ekran tanımı', baslik: 'Başlık', icerik_json: 'İçerik',
-  kosuya_dahil: 'Koşuda', deger_json: 'Değer', servis_id: 'Servis', kapsam: 'Kapsam', sira: 'Sıra', durum: 'Durum'
+  kosuya_dahil: 'Toplu koşuya dahil', deger_json: 'Değer', servis_id: 'Servis', kapsam: 'Kapsam', sira: 'Sıra', durum: 'Durum'
 };
 // Koşu ve geçmiş kayıtları (her zaman eklenir): ham tablo adı kullanıcıya gösterilmez.
 const EKLEME_ETIKETLERI = {

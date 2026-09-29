@@ -23,7 +23,7 @@ import { medyaSifrele } from '../medya.mjs';
 import { akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
 import { anlasilirDogrulamaIletisi, bagsizKosulUyarilari, ekranModeliniDogrula, dogrulamaMaddeleri, semaSurumunuYukselt } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
-import { kanitVerisiniCoz, ortakAkisPaketineCevir, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
+import { kanitVerisiniCoz, kodAlanlariniTamamla, ortakAkisPaketineCevir, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 import { BICIM_ATFI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI } from './paket-istekleri.mjs';
@@ -554,7 +554,8 @@ export function paketOnizle(vt, projeId, ham, secenekler = {}) {
  * @param {Nesne} mevcut @param {Nesne} paketModeli @returns {Nesne}
  */
 function degistirilenModel(mevcut, paketModeli) {
-  const yeni = kopya(paketModeli);
+  // specDosyasi / pageObject paket yazmadıysa mevcut modelden korunur (yoksa Nöbetçi üretir).
+  const yeni = kopya(kodAlanlariniTamamla(paketModeli, String(paketModeli.id ?? ''), mevcut));
   // Varsayılan akışın "baştaki ortak akışlar" ayarı (diyagramda seçilir) paket yazmadıysa korunur.
   if (yeni.bastakiOrtakAkislar === undefined && mevcut.bastakiOrtakAkislar !== undefined && yeni.tur !== 'ortakAkis') yeni.bastakiOrtakAkislar = mevcut.bastakiOrtakAkislar;
   const digerleri = Array.isArray(mevcut.akislar) ? mevcut.akislar.filter((a) => nesneMi(a) && a.varsayilan !== true) : [];
@@ -707,7 +708,8 @@ export async function sayfaEkle(vt, projeId, ham, secenekler) {
   const p = /** @type {Nesne} */ (paket);
   const meta = /** @type {Nesne} */ (p.meta);
   const ekranMeta = /** @type {Nesne} */ (meta.ekran);
-  const model = /** @type {Nesne} */ (p.model);
+  // specDosyasi / pageObject pakette isteğe bağlı: yazılmadıysa Nöbetçi üretir.
+  const model = /** @type {Nesne} */ (kodAlanlariniTamamla(/** @type {Nesne} */ (p.model), String(ekranMeta.anahtar)));
   const ortamlar = ortamlariListele(vt, projeId);
   const ortamIdleri = Array.isArray(secenekler.ortamIdleri) ? [...new Set(secenekler.ortamIdleri.filter((x) => typeof x === 'string'))] : [];
   for (const id of ortamIdleri) if (!ortamlar.some((x) => x.id === id)) throw new DepoHatasi('Seçilen ortam bu projede yok.');

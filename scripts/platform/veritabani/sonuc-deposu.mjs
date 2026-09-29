@@ -11,7 +11,7 @@
 //   verdiği ürün adı ekran adıyla eşleştirilir; o da yoksa urun_adi düz metin olarak kalır.
 // NOT: import.meta KULLANILMAZ (birim testleri bu dosyayı CommonJS'e çevirir).
 import { randomUUID } from 'node:crypto';
-import { DepoHatasi, yerelMakine } from './depo.mjs';
+import { DepoHatasi, ekranModeliGetir, yerelMakine } from './depo.mjs';
 import { beklenenGorulenCikar, kalipCikar, kategoriBul } from '../sonuclar/siniflandirma.mjs';
 import { kartlariHesapla, sayilariTopla, trendHesapla } from '../sonuclar/hesaplama.mjs';
 import { siniflandirmaKurallari } from '../ayarlar/siniflandirma-kurallari.mjs';
@@ -332,6 +332,11 @@ export function kosulariHesapIcinOku(vt, projeId) {
   }));
 }
 
+/** Ekranın son modeli ortak akış mı? (okunamazsa false) @param {Veritabani} vt @param {string} ekranId */
+function ortakAkisMi(vt, ekranId) {
+  try { return /** @type {{ tur?: unknown } | undefined} */ (ekranModeliGetir(vt, ekranId)?.model)?.tur === 'ortakAkis'; } catch { return false; }
+}
+
 /**
  * Sonuçlar ekranının üst bölümü: ürün listesi, kartlar (Genel ya da ürün), trend, koşu geçmişi.
  * Tarih aralığı (baslangic / bitis, ISO) verilirse kartlar, trend ve koşu geçmişi yalnız aralıktaki koşulardan (bitiş zamanı;
@@ -354,13 +359,15 @@ export function sonucOzeti(vt, projeId, secim = {}) {
     anahtar: String(e.id), ad: String(e.ad), senaryoSayisi: Number(e.senaryo_sayisi),
     // 'devre_disi' / 'silindi' (mezar taşı): sonuçlar görünür kalır, arayüz rozet gösterir.
     ekranDurumu: /** @type {string | null} */ (e.durum == null ? null : String(e.durum)),
+    // Ortak akış ekranlardan ayrı gruplanır (sol menü; ekran sayısına girmez). Model okunamazsa normal ekran sayılır.
+    ortakAkis: ortakAkisMi(vt, String(e.id)),
     son: /** @type {import('../sonuclar/hesaplama.mjs').Sayilar | null} */ (null)
   }));
   // Ekranı olmayan sonuç ürünleri (ör. eşleşmeyen eski sonuçlar) de listede görünür.
   const bilinen = new Set(ekranlar.map((e) => e.anahtar));
   for (const k of tumKosular) {
     for (const a of Object.keys(k.urunler)) {
-      if (!bilinen.has(a)) { bilinen.add(a); ekranlar.push({ anahtar: a, ad: a.slice(3), senaryoSayisi: 0, ekranDurumu: null, son: null }); }
+      if (!bilinen.has(a)) { bilinen.add(a); ekranlar.push({ anahtar: a, ad: a.slice(3), senaryoSayisi: 0, ekranDurumu: null, ortakAkis: false, son: null }); }
     }
   }
   // Sol listedeki sağlık noktası için: her ürünün son tam koşusundaki sayılar (yoksa null).

@@ -208,12 +208,21 @@ export default defineConfig({
   }
 });
 
+/** İndirmeden önceki açıklamalı onay: ne indirileceği ve gizli değerlerin dosyaya yazılmadığı yazar; ortam seçilince indirilir. */
+async function onaylaVeIndir(page: Page, baslik: string): Promise<void> {
+  const d = page.getByRole('dialog', { name: `Playwright koduna dışa aktar: ${baslik}` });
+  await expect(d).toBeVisible();
+  await expect(d).toContainText('gizli değerler dosyaya yazılmaz');
+  await d.getByRole('button', { name: /TEST için indir/ }).click();
+}
+
 /** Satır ⋯ menüsünden indirir; indirilen dosyanın adı ve metni. */
 async function menudenIndir(page: Page, baslik: string): Promise<{ ad: string; metin: string }> {
   await page.getByRole('button', { name: `Diğer işlemler: ${baslik}` }).click();
   const oge = page.getByRole('menuitem', { name: 'Playwright koduna dışa aktar' });
   await expect(oge).toBeVisible();
-  const [indirme] = await Promise.all([page.waitForEvent('download'), oge.click()]);
+  await oge.click();
+  const [indirme] = await Promise.all([page.waitForEvent('download'), onaylaVeIndir(page, baslik)]);
   const yol = await indirme.path();
   return { ad: indirme.suggestedFilename(), metin: readFileSync(yol, 'utf8') };
 }
@@ -240,7 +249,8 @@ test('arayüz: satır ⋯ menüsü (masaüstü + 390 px) ve senaryo ayrıntısı
         await page.goto(`/#/senaryolar/duzenle/${encodeURIComponent(senaryolar.get(BASLIKLAR.isKurali) ?? '')}`);
         const dugme = page.getByRole('button', { name: 'Playwright koduna dışa aktar' });
         await expect(dugme).toBeVisible({ timeout: 15_000 });
-        const [indirme] = await Promise.all([page.waitForEvent('download'), dugme.click()]);
+        await dugme.click();
+        const [indirme] = await Promise.all([page.waitForEvent('download'), onaylaVeIndir(page, BASLIKLAR.isKurali)]);
         expect(indirme.suggestedFilename()).toBe('merkez-ekonomi-taksitli-is-kurali.spec.ts');
         expect(readFileSync(await indirme.path(), 'utf8')).toContain('await beklenenUyariyiBekle(page');
       }

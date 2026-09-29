@@ -18,7 +18,7 @@ import {
   degisiklikleriBirak, parolaAlani, rozet, s, temaDugmesi, yerlestir
 } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
-import { kurulumSonrasiTanitimIste, rehberAnahtari, rehberDugmesi, rehberOtomatikDene } from './rehber.js';
+import { kurulumSonrasiTanitimIste, rehberAnahtari, rehberBaglaminiAyarla, rehberDugmesi, rehberOtomatikDene, sayfaRehberiBaglantisiKur } from './rehber.js';
 import { yedekUyarisiniGoster } from './yedek-uyarisi.js';
 import { hizliAramaDugmesi, hizliAramaKisayolu } from './hizli-arama.js';
 import { olusturMenusu } from './olustur-menusu.js';
@@ -674,7 +674,7 @@ function sihirbazTamam() {
       h('div', { class: 'kart-basligi' }, h('h2', {}, ikon('katman'), durum.proje ? durum.proje.ad : 'Proje')),
       ozet,
       siradaki,
-      h('p', { class: 'soluk kucuk' }, 'Ana sayfadaki "Başlarken" listesi ilk koşuya kadar sıradaki adımı gösterir: giriş, ilk ekran (Tara / Akışı kaydet), ilk senaryo, Dene, Koşuyu başlat. Her ekranın rehberi ilk açılışta başlar, üst çubuktaki "?" ile yeniden açılır.'),
+      h('p', { class: 'soluk kucuk' }, 'Ana sayfadaki "Başlarken" listesi ilk koşuya kadar sıradaki adımı gösterir: giriş, ilk ekran (Tara / Akışı kaydet), ilk senaryo, Dene, Koşuyu başlat. Her sayfanın rehberi başlığın altındaki "Bu sayfanın rehberi" bağlantısıyla ya da üst çubuktaki "?" ile açılır.'),
       h('div', { class: 'dugmeler' }, anaSayfa)))));
   (giris === 'evet' ? girisBaglantisi : anaSayfa).focus({ preventScroll: true });
   if (!durum.proje) { ozet.replaceChildren(); return; }
@@ -911,6 +911,9 @@ function anaDuzen() {
     hizliAramaDugmesi(aramaBaglami), sunucu, rehberDugmesi(), temaDugmesi(), kilitle, hesap);
   hizliAramaKisayolu(aramaBaglami);
   ekran(ust, main);
+  // Sayfa rehberi bağlantısı (başlığın altında) ve boş durum rehberi için seçili proje.
+  rehberBaglaminiAyarla({ projeKimligi: () => (durum.proje ? durum.proje.id : null) });
+  sayfaRehberiBaglantisiKur(main);
 
   const ciz = () => {
     const hash = location.hash || '#/sonuclar';
@@ -969,7 +972,7 @@ function anaDuzen() {
       sonuclarEkrani(main, bolum === 'sonuclar' && alt ? [alt, ...kalan] : [], { durum });
     }
   };
-  // Ekran rehberi: ilk girişte (tercih açıksa) kendiliğinden başlar; "?" her zaman yeniden açar.
+  // Ekran rehberi: ilk girişte yalnız tercih açıksa kendiliğinden başlar (varsayılan kapalı); "?" ve sayfadaki bağlantı her zaman açar.
   const cizVeRehber = () => { ciz(); etkinGezinmeyiGoster(); rehberOtomatikDene(rehberAnahtari(location.hash)); };
   window.addEventListener('hashchange', cizVeRehber);
   // Otomatik kilit: sunucu kasayı hareketsizlik sonrası kilitler; arayüz bunu periyodik durum

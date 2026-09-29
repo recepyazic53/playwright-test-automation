@@ -337,7 +337,7 @@ async function akisSenaryoFormu(kap, proje, s, ortamlar, senaryo, baslangicAkisi
       alan('Akış', akisSec, { yardim: 'Akış operasyonların sırasını ve adımlar arasında taşınan değerleri tanımlar (Akışlar sekmesi).' }),
       alan('Kapsam', kapsam, { icerik: h('div', {}, kapsam, kapsamNotu) })),
     h('label', { class: 'secenek', for: tumuKutu.id }, tumuKutu, 'Tüm akışları göster (bu servisten geçmeyenler dahil)'),
-    h('label', { class: 'secenek', for: dahil.id }, dahil, 'Koşuya dahil'),
+    h('label', { class: 'secenek', for: dahil.id }, dahil, 'Toplu koşuya dahil'),
     akisId ? h('p', { class: 'kucuk' }, h('a', { href: akisAdresi() }, 'Akışı aç'), h('span', { class: 'soluk' }, ' — sıra ve taşınan değerler orada düzenlenir.')) : null,
     adimKap,
     h('div', { class: 'dugmeler' }, kaydet, ortamlar.length > 1 ? deneOrtami : null, dene, h('a', { class: 'dugme hayalet', href: `#/servisler/s/${q(s.id)}` }, 'Vazgeç'))));

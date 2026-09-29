@@ -6,4 +6,5 @@ export declare const BICIM_ATFI: string;
 export declare const PAKET_OZU: string;
 export declare const INCELEME_KURALLARI: string;
 export declare const MEVCUT_TABLO_KURALI: string;
+export declare const SADE_ACIKLAMA: string;
 export declare function paketIstekCumlesi(adres?: string): string;

@@ -98,7 +98,9 @@ test('kapsam paneli ve gerekçeli liste; reddet kaydedilir; önizleme kaydetmez;
   for (const g of await liste.locator('.oneri-gerekcesi').allTextContents()) expect(g.trim()).not.toBe('');
   await expect(liste.locator('li.oneri').first().locator('.oneri-gerekcesi')).toContainText(/dall?a?r?ı hiç denenmedi/);
   await expect(liste.locator('li.oneri').first()).toContainText('Kapsam boşluğu');
-  await expect(liste.locator('li.oneri').first().locator('.oneri-puani')).toHaveText(/^puan \d+$/);
+  // Sıralama puanı kullanıcıya gösterilmez (liste zaten önem sırasında); yalnız data-puan izi.
+  await expect(liste.locator('li.oneri').first().locator('.oneri-puani')).toHaveCount(0);
+  await expect(liste.locator('li.oneri').first()).toHaveAttribute('data-puan', /^\d+$/);
   await expect(page.getByText('5550001122')).toHaveCount(0);
 
   // Reddet: neden seçilir, karar kaydedilir, öneri listeden çıkar.
@@ -126,7 +128,7 @@ test('kapsam paneli ve gerekçeli liste; reddet kaydedilir; önizleme kaydetmez;
   await expect(page.locator('[data-alan="urunAdi"] input[type="text"]')).toHaveValue('Roman');
   await expect(page.locator('[data-alan="adet"] input[type="number"]')).toBeDisabled();
   await expect(page.locator('[data-alan="adet"]')).toContainText(MESAJLAR.bilerekBos('Adet'));
-  await expect(page.getByRole('switch', { name: 'Koşuda' })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Toplu koşuya dahil' })).not.toBeChecked();
   expect(await senaryolar()).toHaveLength(1);
   await page.getByRole('button', { name: 'Önerilere dön' }).click();
   await expect(page.getByRole('heading', { name: 'Senaryo önerileri', level: 2 })).toBeVisible();
@@ -140,7 +142,7 @@ test('kapsam paneli ve gerekçeli liste; reddet kaydedilir; önizleme kaydetmez;
   await expect(page.getByRole('region', { name: 'Seçilen öneriler' })).toContainText('3 öneri seçili');
   await page.getByRole('button', { name: 'Senaryo olarak ekle' }).click();
   const durum = page.locator('.not-kutusu[role="status"]');
-  await expect(durum).toContainText('2 senaryo eklendi; "Koşuda" kapalı');
+  await expect(durum).toContainText('2 senaryo eklendi; "Toplu koşuya dahil" kapalı');
   await expect(durum.getByRole('list', { name: 'Eklenmeyen öneriler' })).toContainText('Zorunlu alan boş: Teslimat tarihi: beklenen sonucu siz seçin');
   const kayitli = await senaryolar();
   expect(kayitli.map((x) => x.baslik).sort()).toEqual(['Kitap siparişi', 'Sınır: Adet = 10 (üst sınır)', 'Zorunlu alan boş: Adet']);

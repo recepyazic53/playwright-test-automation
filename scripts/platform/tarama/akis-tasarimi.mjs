@@ -101,6 +101,12 @@ export function akisEnvanteriMi(e) {
 /** Seçim alanının geçerli (boş olmayan) seçenek değerleri. @param {import('./paket-olusturucu.d.mts').HamAlan | undefined} h */
 const secenekKumesi = (h) => new Set([...(h?.secenekler ?? []).map((s) => s.deger), ...(h?.radyolar ?? []).map((r) => r.deger)].filter((x) => x !== ''));
 const secimMi = (/** @type {import('./paket-olusturucu.d.mts').HamAlan | undefined} */ h) => h?.tur === 'select' || h?.tur === 'radio';
+/**
+ * Elle koşulun dayanabileceği alan: seçim (açılır liste / radyo) ya da onay kutusu. Onay kutusunun "seçenekleri" durumlarıdır:
+ * "true" (işaretli) / "false" (işaretsiz); koşulda yalnız biri seçilir (modelde { alan, esit: true | false }).
+ */
+const kosulAlaniMi = (/** @type {import('./paket-olusturucu.d.mts').HamAlan | undefined} */ h) => secimMi(h) || h?.tur === 'checkbox';
+const ONAY_DURUMLARI = Object.freeze([{ deger: 'true', metin: 'İşaretli' }, { deger: 'false', metin: 'İşaretsiz' }]);
 
 /**
  * Bir alan grubunun (adımın) okumaları: alanlarının en az yarısının göründüğü okumalar (başka ekrandaki okumalar koşul
@@ -286,7 +292,8 @@ export function akisPaleti(env, bloklar) {
       secenekSayisi: (alan.secenekler?.length ?? 0) + (alan.radyolar?.length ?? 0), blok: alanda.get(alan.anahtar) ?? null,
       // Seçim alanlarının seçenekleri (koşul düzenleyicisi için; sayfanın seçenek metinleri, kullanıcı değeri değil).
       secenekler: secimMi(alan) ? [...(alan.secenekler ?? []), ...(alan.radyolar ?? []).map((r) => ({ deger: r.deger, metin: r.metin ?? r.deger }))]
-        .filter((s) => s.deger !== '').map((s) => ({ deger: s.deger, metin: s.metin || s.deger })) : null
+        .filter((s) => s.deger !== '').map((s) => ({ deger: s.deger, metin: s.metin || s.deger }))
+        : alan.tur === 'checkbox' ? ONAY_DURUMLARI.map((s) => ({ ...s })) : null
     })),
     dugmeler: env.dugmeler.map((d, i) => ({ sira: i, metin: d.metin || d.secici, blok: dugmede.get(i) ?? null })),
     mesajlar: env.mesajlar.map((m, i) => ({ sira: i, metin: m.metin || '(metinsiz öğe)', oneri: sabitGostergeMetni(m.metin), blok: mesajda.get(i) ?? null }))
@@ -726,8 +733,12 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
     const s = alanlar.get(kosul.secim);
     const ad = h ? alanEtiketi(h) : alan;
     if (!s || !kullanilan.has(kosul.secim)) hata(blok, `“${ad}” alanının koşulundaki seçim alanı akışta yok; seçim alanını bir gruba ekleyin ya da koşulu kaldırın.`);
-    else if (!secimMi(s) || kosul.secim === alan) hata(blok, `“${ad}” alanının koşulu bir seçim alanına (açılır liste / radyo) bağlanmalı.`);
-    else if (!kosul.degerler.length || kosul.degerler.some((d) => !secenekKumesi(s).has(d))) hata(blok, `“${ad}” alanının koşulunda “${alanEtiketi(s)}” için en az bir geçerli seçenek seçin.`);
+    else if (!kosulAlaniMi(s) || kosul.secim === alan) hata(blok, `“${ad}” alanının koşulu bir seçim alanına (açılır liste / radyo) ya da onay kutusuna bağlanmalı.`);
+    else if (s.tur === 'checkbox' ? kosul.degerler.length !== 1 || !['true', 'false'].includes(kosul.degerler[0])
+      : !kosul.degerler.length || kosul.degerler.some((d) => !secenekKumesi(s).has(d))) {
+      hata(blok, s.tur === 'checkbox' ? `“${ad}” alanının koşulunda “${alanEtiketi(s)}” için işaretli ya da işaretsiz durumlarından birini seçin.`
+        : `“${ad}” alanının koşulunda “${alanEtiketi(s)}” için en az bir geçerli seçenek seçin.`);
+    }
   }
   if (hatalar.length) return { envanter: null, hatalar };
   // Koşullar, alanın düştüğü adıma (isteğe bağlı parça dahil) taşınır.

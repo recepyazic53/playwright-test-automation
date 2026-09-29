@@ -192,7 +192,7 @@ test.describe('tüm ekranlar taşmasız', () => {
     await expect(kart).toBeVisible();
     // Ekrandaki bölüm → rehber adımı (her biri bu sayfada vurgulanır).
     const bolumler: Array<[string, string]> = [
-      ['Ürün / ekran seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Rapor sekmeleri', '.sonuc-sekmeleri'],
+      ['Ekran / servis seçimi', '.alt-nav'], ['Sağlık noktası', '.yan-panel .yan-not'], ['Rapor sekmeleri', '.sonuc-sekmeleri'],
       ['Başlık ve "Koşuyu başlat"', '.sonuc-icerik > .sayfa-basligi'], ['Tarih aralığı', '.sonuc-araligi'], ['Özet kartlar', '.sonuc-kartlari'],
       ['Koşu trendi', '.trend-kapsayici'], ['Başarısız testler', 'section[aria-labelledby="basarisiz-basligi"]'], ['Test paneli', '.test-paneli'],
       ['Koşu geçmişi', 'section[aria-labelledby="gecmis-basligi"]'], ['Hata kalıpları', 'section[aria-labelledby="kalip-basligi"]']

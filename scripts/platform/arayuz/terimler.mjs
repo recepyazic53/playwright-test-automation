@@ -18,5 +18,10 @@ export const TERIMLER = Object.freeze([
   { terim: 'İzin', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği bir işlem sınıfı (ör. servis isteği, arka plan çalışması); hepsi varsayılan olarak kapalıdır ve Ayarlar > İzinler\'den açılır.' },
   { terim: 'Planlı koşu', aciklama: 'Nöbetçi\'nin belirlediğiniz zamanlarda (her gün, seçili günler ya da her N saatte bir) kendiliğinden başlattığı koşu; üst menüde "Planlı koşular".' },
   { terim: 'Dene / Koşu', aciklama: 'Dene tek senaryoyu kaydetmeden seçili ortamda hemen dener (deneme olarak işaretlenir); Koşu kayıtlı senaryoları çalıştırır ve sonuçları Sonuçlar\'a yazar.' },
-  { terim: 'Başarısız', aciklama: 'Testin sonuç durumu: beklenen görülmedi ya da bir adım tamamlanamadı; sonuçlarda, raporlarda ve süzgeçlerde hep bu adla geçer.' }
+  { terim: 'Başarısız', aciklama: 'Testin sonuç durumu: beklenen görülmedi ya da bir adım tamamlanamadı; sonuçlarda, raporlarda ve süzgeçlerde hep bu adla geçer.' },
+  { terim: 'Ekranlar ve servisler', aciklama: 'Sol menüdeki bölüm: ekranlar, ortak akışlar ve servisler burada ayrı gruplar hâlinde listelenir; sayaçlarda ortak akış ekran sayılmaz.' },
+  { terim: 'Toplu koşuya dahil', aciklama: 'Senaryonun anahtarı: açıksa "Koşuyu başlat" ve planlı koşular senaryoyu koşar, kapalıysa senaryo yalnız tek başına (Dene ya da ▷) çalışır.' },
+  { terim: 'Korunan parça', aciklama: 'Akış diyagramının gösteremediği ayar (ör. seçime bağlı düğme, kod yöntemi); siz değiştirmeseniz de kaydederken olduğu gibi korunur.' },
+  { terim: 'Alan bağlantısı', aciklama: 'Ekrandaki bir alanın değerini hangi test verisi tablosunun hangi sütunundan alacağını söyleyen bağ (ör. İl → İller tablosu, Ad sütunu).' },
+  { terim: 'Kanıt', aciklama: 'İncelemede sayfanın o anki hâlini gösteren ekran görüntüsü; paketle gelir, şifreli saklanır ve modelin neye göre çıkarıldığını gösterir.' }
 ]);

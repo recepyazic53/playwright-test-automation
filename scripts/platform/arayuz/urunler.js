@@ -1,5 +1,5 @@
-// Sol panel "ÜRÜNLER" bölümü (Sonuçlar, Senaryolar, Ekranlar ve Servisler sayfalarında aynı düzen): açılır-kapanır gruplar
-//   ÜRÜNLER                 [+ Yeni]  → ekran mı servis mi, sorar
+// Sol panel "EKRANLAR VE SERVİSLER" bölümü (Sonuçlar, Senaryolar, Ekranlar ve Servisler sayfalarında aynı düzen): açılır-kapanır gruplar
+//   EKRANLAR VE SERVİSLER     [+ Yeni]  → ekran mı servis mi, sorar
 //   ▾ Ekranlar              [+]       → sayfanın kendi ekran listesi
 //   ▾ Ortak akışlar / Alt modeller     (yalnız Ekranlar sayfasında)
 //   ▾ Servisler             [+]       → servisler (bağlantının hedefi sayfaya göre)
@@ -11,9 +11,9 @@ export async function servisleriAl(proje) {
   try { return (await api(`/platform/servisler?projeId=${encodeURIComponent(proje.id)}`)).servisler; } catch { return []; }
 }
 
-/** "ÜRÜNLER" başlığı ve grupların dışındaki "+ Yeni". */
+/** "Ekranlar ve servisler" başlığı ve grupların dışındaki "+ Yeni". */
 export function urunlerBasligi() {
-  return [h('div', { class: 'alt-nav-ust' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ürünler'), yeniEkleDugmesi())];
+  return [h('div', { class: 'alt-nav-ust' }, h('div', { class: 'alt-nav-baslik', 'aria-hidden': 'true' }, 'Ekranlar ve servisler'), yeniEkleDugmesi())];
 }
 
 /** "Ekranlar" grubu. @param {Array<Node | null | false>} ogeler */

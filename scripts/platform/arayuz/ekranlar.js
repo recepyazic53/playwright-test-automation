@@ -20,7 +20,7 @@ import { pdfRaporDugmesi } from './pdf-rapor.js';
 import {
   BULGU_TURLERI, bicimIndirBaglantisi, bulguRozeti, claudeDosyasiOlustur, farkGosterimi, goreliZaman, gorselDiyalogu, istekMetniKutusu, modelAgaciCiz, paketAdiniGuncelle, tekrarAnalizDiyalogu
 } from './ekran-ortak.js';
-import { sayfaPaketiAkisi } from './sayfa-paketi.js';
+import { paketOzetiBaglantisi, sayfaPaketiAkisi } from './sayfa-paketi.js';
 import { akisDiyagrami } from './akis-diyagrami.mjs';
 import { akisModeli } from './model-formu.mjs';
 import { onayIste } from './kosu-paneli.js';
@@ -190,7 +190,7 @@ function listeGorunumu(icerik, proje, liste) {
         h('details', { class: 'ileri-duzey kesif-ileri' },
           h('summary', {}, ikon('simsek'), h('span', {}, 'İleri düzey: yapay zekâ ile paket'), ikon('asagi', 'ileri-duzey-ok')),
           h('div', { class: 'ileri-duzey-govdesi' },
-            h('p', { class: 'soluk kucuk paket-nedir' }, 'Ekran paketi, sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır. İstek metnini sayfanın bağlantısıyla yapay zekâ aracınıza verin; ürettiği paketi "Ekran ekle" > İleri düzey\'den yükleyin.'),
+            h('p', { class: 'soluk kucuk paket-nedir' }, 'Ekran paketi, sayfanın alanlarını, adımlarını ve önerilen senaryolarını taşıyan bir dosyadır. İstek metnini sayfanın bağlantısıyla yapay zekâ aracınıza verin; ürettiği paketi "Ekran ekle" > İleri düzey\'den yükleyin. ', paketOzetiBaglantisi()),
             istekMetniKutusu(cumle, { ek: bicimIndirBaglantisi() }))))),
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))

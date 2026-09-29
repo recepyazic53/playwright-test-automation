@@ -162,7 +162,7 @@ ${tv.kirikOrnekler.length ? `<p class="kucuk">Kırık başvurular: ${tv.kirikOrn
 function kapsamBolumu(kp, e) {
   const oran = (/** @type {number} */ a, /** @type {number} */ b) => (b ? `${sy(a)} / ${sy(b)} <span class="kucuk">(${yz((a / b) * 100)})</span>` : '—');
   const sol = `<table><thead><tr><th scope="col">Kapsam</th><th scope="col" class="s">Değer</th></tr></thead><tbody>
-<tr><td>Dönemde koşan senaryo (koşuya dahil)</td><td class="s">${oran(kp.donemdeKosan, kp.kosuyaDahil)}</td></tr>
+<tr><td>Dönemde koşan senaryo (toplu koşuya dahil)</td><td class="s">${oran(kp.donemdeKosan, kp.kosuyaDahil)}</td></tr>
 <tr><td>Her koşuda atlanan senaryo</td><td class="s ${kp.hepAtlanan ? 'kotu' : ''}">${sy(kp.hepAtlanan)}</td></tr>
 <tr><td>Senaryosu olan servis metodu${kp.metot ? ` <span class="kucuk">(${kp.metot.servis} servis)</span>` : ''}</td><td class="s">${kp.metot ? oran(kp.metot.senaryolu, kp.metot.toplam) : '—'}</td></tr>
 <tr><td>Planlı koşu kuralına bağlı ekran</td><td class="s">${oran(kp.kuralliEkran, kp.kosulanEkran)}</td></tr>
