@@ -19,6 +19,9 @@ export declare function izinDurumundanDenetle(durum: Record<string, unknown> | n
 export declare function izinDegistir(vt: Veritabani, anahtar: unknown, acik: unknown, s?: { onay?: unknown; yapan?: string; kaynak?: 'izin-penceresi' }): {
   izinler: Record<string, boolean>; degisti: boolean;
 };
+export declare function izinPaketiUygula(vt: Veritabani, s: { paket?: unknown; canli?: unknown; ozel?: unknown; onay?: unknown; yapan?: string }): {
+  izinler: Record<string, boolean>; acilanlar: string[]; degisti: boolean;
+};
 export declare function izinDegisiklikleri(vt: Veritabani, sinir?: number): Array<{
   id: string; zaman: string; izin: string; etiket: string; acik: boolean; yapan: string; makineId: string | null;
 }>;

@@ -3182,6 +3182,21 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .kalkan-simge svg { width: 14px; height: 14px; }
 .alan.guvenlik-kurali label .kalkan-simge { margin-right: 4px; vertical-align: -2px; }
 .saklama-ozeti { margin: var(--b2) 0 0; font-size: 13px; color: var(--metin-2); }
+/* İzin paketi ("Nöbetçi sizin adınıza neleri yapabilsin?"; sihirbaz ve Ayarlar > İzinler): açılacak izinler riskleriyle tek listede. */
+.izin-paketi .profil-secenekleri { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.izin-paketi-ozel .secenek { margin: 4px 0; }
+.izin-paketi-canli { margin: var(--b2) 0; }
+.izin-paketi > h4 { margin: var(--b3) 0 var(--b2); }
+.izin-paketi-listesi { list-style: none; margin: 0 0 var(--b3); padding: 0; display: grid; gap: 6px; }
+.izin-paketi-listesi li { display: flex; gap: 8px; align-items: flex-start; min-width: 0; font-size: 13.5px; }
+.izin-paketi-isaret { flex: none; display: inline-flex; color: var(--vurgu); margin-top: 2px; }
+.izin-paketi-isaret svg, .izin-paketi-disi svg { width: 14px; height: 14px; }
+.izin-paketi-metni { min-width: 0; overflow-wrap: anywhere; }
+.izin-paketi-metni .izin-risk { color: var(--metin-2); }
+.izin-paketi-satiri.canli b { color: var(--hata, inherit); }
+.izin-paketi-disi { color: var(--metin-2); align-items: center; }
+.tasinan-bolumler { margin-top: var(--b3); }
+.ust-sayfa { margin-inline: auto; width: 100%; }
 .zamanlama-davranisi { border-top: 1px solid var(--cizgi); padding-top: var(--b2); margin-top: var(--b2); min-width: 0; }
 .zamanlama-davranisi > h4 { margin: 0 0 4px; }
 .zamanlama-gecmisi table { margin-top: 6px; }

@@ -390,6 +390,8 @@ const ARAYUZ_DOSYALARI = new Map([
   // Koşu ayarlarının hazır profilleri (Kanıt düzeyi, Ortam hızı): profil → ayar eşlemesi testlerle ORTAK tek kaynak.
   ['/arayuz/kosu-profilleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'kosu-profilleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/izinler.js', { dosya: 'izinler.js', tur: 'text/javascript; charset=utf-8' }],
+  // İzin paketleri ("Nöbetçi sizin adınıza neleri yapabilsin?"; sihirbaz ve Ayarlar > İzinler): sunucuyla ORTAK tek kaynak.
+  ['/arayuz/izin-paketleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'izin-paketleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/yedek-uyarisi.js', { dosya: 'yedek-uyarisi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-icerigi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'akis-senaryo-icerigi.mjs'), tur: 'text/javascript; charset=utf-8' }],

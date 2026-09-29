@@ -541,6 +541,11 @@ export const REHBERLER = {
           'Tüm izinler varsayılan olarak KAPALIDIR. Kapalı bir izne bağlı işlem denenirse yapılmaz; ekranda "Bu işlem için Ayarlar > İzinler\'de … iznini açmalısınız." uyarısı ve "İzinlere git" düğmesi çıkar.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'İşlem', alt: 'ör. Koşuyu başlat', ikon: 'oynat' }, { baslik: 'İzin açık mı?', ikon: 'kalkan' }, { baslik: 'Yapılır', alt: 'mevcut onaylarla', ikon: 'onay' }] }
       },
+      {
+        baslik: 'İzin paketi', hedef: '.izin-paketi',
+        metin: ['"Nöbetçi sizin adınıza neleri yapabilsin?" sorusu ilk kurulumda ve burada sorulur: Hiçbiri (her işlemde sorulsun), Test ortamında ekran ve servis testi, Test + veritabanı okuma ya da Özel. Seçilen paketin açacağı izinler riskleriyle tek listede görünür; düğmeye basınca hepsi birlikte açılır ve her biri "Son değişiklikler"e yazılır. Paket hiçbir izni kapatmaz.',
+          '"Canlı ortamda da çalıştırabilsin" ayrı bir kutudur (varsayılan işaretsiz): işaretlenirse "Canlı ortamda çalıştırma" izni de açılır ve riski yanında yazar. Canlı ortamdaki her işlemden önce sorulan "CANLI ortam" onayı yine sorulur. Veritabanına yazma, sistem değişikliği ve güvenlik gevşetme hiçbir pakete girmez; bunları aşağıdaki listeden tek tek açarsınız.']
+      },
       { baslik: 'İzin listesi', hedef: '.izin-listesi', sira: IZIN_TANIMLARI.map((t) => `${t.etiket}: ${t.aciklama}`) },
       { baslik: 'Ne yapar, nerede kullanılır?', hedef: '.izin-soru', metin: 'Her iznin yanındaki "?" düğmesi o iznin neler yapabildiğini, hangi ekranlarda ve hangi işlemlerde kullanıldığını, riskini ve kapalıyken ne olduğunu açar. Klavyeyle de açılır; Esc kapatır.' },
       { baslik: 'Açmak ve kapatmak', hedef: '.izin-anahtari', metin: 'Açarken kısa bir onay penceresi iznin ne yaptığını ve riskini gösterir. Kapatmak her zaman serbesttir. İzin açıkken de işlem başına onaylar (ör. canlı ortam onayı) sorulmaya devam eder.', ipucu: 'Zamanlanmış koşularda kapalı izne bağlı işlem atlanır ve geçmişte "izin kapalı: …" olarak görünür.' },

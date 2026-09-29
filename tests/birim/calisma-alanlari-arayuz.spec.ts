@@ -409,6 +409,8 @@ test('yeni çalışma alanı: ad adımı (görünürlük uyarısı) → kasa →
   await page.getByRole('button', { name: 'Devam' }).click();
   await page.getByLabel('Adres (link)').fill('https://deneme.ornek.invalid');
   await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+  // İlk kurulumda izin paketi adımı (yeni çalışma alanı): Atla → hiçbir izin açılmaz.
+  await page.getByRole('button', { name: 'Atla' }).click();
   await page.getByRole('button', { name: 'Ana sayfaya geç' }).click();
   await expect(page.locator('#proje-rozeti')).toHaveText('Deneme');
   await expect(page.locator('.hesap-adi')).toHaveText('İş');

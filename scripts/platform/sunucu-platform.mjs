@@ -206,7 +206,7 @@ import { formSemasiOlustur, tumFormAlanlari } from './senaryolar/model-formu.mjs
 import { etkinGirisTarifi, girisTarifiKaydet, girisTarifiniSifirla } from './giris/tarif-deposu.mjs';
 import { ADIM_ETIKETLERI, ADIM_ISLEMLERI, GIRIS_ADIM_ISLEMLERI, girisTarifiniDogrula } from './giris/tarif.mjs';
 import { girisSayfasiniOner } from './giris/algilama.mjs';
-import { IzinHatasi, izinDegisiklikleri, izinDegistir, izinleriOku } from './guvenlik/izinler.mjs';
+import { IzinHatasi, izinDegisiklikleri, izinDegistir, izinleriOku, izinPaketiUygula } from './guvenlik/izinler.mjs';
 import { yedekUyarisi, yedekUyarisiniKapat } from './guvenlik/yedek-uyarisi.mjs';
 import { CanliOnayHatasi, denetlenenUclar, ucDenetle } from './guvenlik/uc-denetimi.mjs';
 import { TabanKarariHatasi } from './servisler/taban-adresleri.mjs';
@@ -1634,6 +1634,13 @@ const POST_UCLARI = new Map([
     const r = izinDegistir(db, g.anahtar, g.acik, { onay: g.onay, kaynak: g.kaynak === 'izin-penceresi' ? 'izin-penceresi' : undefined });
     if (r.degisti) console.log(`[platform] İzin ${g.acik === true ? 'açıldı' : 'kapatıldı'}: ${String(g.anahtar)}.`);
     return { izinler: r.izinler, degisiklikler: izinDegisiklikleri(db) };
+  }],
+  // İzin paketi (ilk kurulum sihirbazı ve Ayarlar > İzinler; guvenlik/izin-paketleri.mjs): { paket, canli?, ozel?, onay } — seçimin
+  // açacağı kapalı izinleri tek işlemde açar (hiçbirini kapatmaz); her açılan izin geçmişe yazılır. Riskli izinler pakete girmez.
+  ['/platform/izin/paket-uygula', (db, g) => {
+    const r = izinPaketiUygula(db, { paket: g.paket, canli: g.canli, ozel: g.ozel, onay: g.onay });
+    if (r.degisti) console.log(`[platform] İzin paketi (${String(g.paket)}): ${r.acilanlar.join(', ')} açıldı.`);
+    return { izinler: r.izinler, acilanlar: r.acilanlar, degisiklikler: izinDegisiklikleri(db) };
   }],
   ['/platform/guvenlik/kaydet', (db, g) => {
     /** @type {Record<string, unknown>} */

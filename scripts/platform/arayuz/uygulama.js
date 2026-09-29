@@ -318,9 +318,11 @@ const ILK_ADIMLAR = [
   { ad: 'kasa', etiket: 'Kasa parolası' },
   { ad: 'proje', etiket: 'Proje' },
   { ad: 'ortamlar', etiket: 'Ortamlar' },
+  { ad: 'izinler', etiket: 'İzinler' },
   { ad: 'tamam', etiket: 'Tamam' }
 ];
-const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa');
+// Aynı kasada yeni proje: kasa parolası ve izinler (kasa başına; zaten verilmiş kararlar) sorulmaz.
+const EK_ADIMLAR = ILK_ADIMLAR.filter((a) => a.ad !== 'kasa' && a.ad !== 'izinler');
 let sihirbazModu = 'ilk';
 const sihirbazAdimlari = () => (sihirbazModu === 'ek' ? EK_ADIMLAR : ILK_ADIMLAR);
 
@@ -361,6 +363,7 @@ export function sihirbaz(adim, mod) {
   if (adim === 'kasa') return kasaYok() ? sihirbazKasa() : sihirbazProje();
   if (adim === 'proje') return sihirbazProje();
   if (adim === 'ortamlar') return sihirbazOrtamlar();
+  if (adim === 'izinler' && sihirbazModu === 'ilk') return sihirbazIzinler();
   // Eski "giris" adımı kaldırıldı: bu adla gelen çağrı (eski yer imi / kayıtlı durum) hata vermeden özet sayfasına düşer.
   return sihirbazTamam();
 }
@@ -530,12 +533,32 @@ function sihirbazOrtamlar() {
         });
         if (eksik.length) throw new Error(`Şu ortamlar kaydedilemedi: ${eksik.map((s2) => s2.ad.value.trim()).join(', ')}. Tekrar "Kaydet ve devam" deneyin.`);
       });
-      sihirbazTamam();
+      if (sihirbazModu === 'ilk') sihirbazIzinler(); else sihirbazTamam();
     } catch (hata) {
       mesaj.goster(hata.message);
     }
   });
   sihirbazEkrani('ortamlar', sihirbazBasligi(), 'Testlerin çalışacağı adresleri tanımlayın.', form);
+}
+
+/**
+ * İZİNLER (yalnız ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — izin paketi (izinler.js > izinPaketiSecimi). Seçilen
+ * paketin açacağı izinler riskleriyle listelenir, tek onayla açılır; "Hiçbiri" ve "Atla" hiçbir izni açmaz (her işlemde sorulur).
+ */
+async function sihirbazIzinler() {
+  const kap = h('div', {}, iskelet('liste'));
+  const atla = h('button', { type: 'button', class: 'hayalet', onclick: () => sihirbazTamam() }, 'Atla');
+  sihirbazEkrani('izinler', sihirbazBasligi(), 'Nöbetçi\'nin sizin adınıza yapabileceklerini şimdi toplu seçebilir ya da her işlemde ayrı ayrı karar verebilirsiniz. Seçiminizi sonra Ayarlar > İzinler\'den değiştirebilirsiniz.', kap);
+  try {
+    const [{ izinPaketiSecimi }, { izinler }] = await Promise.all([import('./izinler.js'), api('/platform/izinler')]);
+    kap.replaceChildren(izinPaketiSecimi({
+      izinler, dugmeMetni: (n) => `Bu ${n} izni aç ve devam et`, bosDugmeMetni: 'Devam', ekDugmeler: [atla],
+      bitti: () => sihirbazTamam()
+    }));
+  } catch (hata) {
+    if (hata && hata.durum === 423) return;
+    kap.replaceChildren(h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata)), h('div', { class: 'dugmeler' }, atla));
+  }
 }
 
 /** PROJE HAZIR: kısa özet (proje + kaydedilen ortamlar, sunucudan okunur) ve ana sayfaya geçiş. */
