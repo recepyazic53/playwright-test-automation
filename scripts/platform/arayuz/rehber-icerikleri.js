@@ -210,7 +210,7 @@ export const REHBERLER = {
       },
       {
         baslik: 'Çalışma sırası',
-        sira: ['"Servis ekle" ile servisi tanımlayın: WSDL adresi, SoapUI projesi, Postman koleksiyonu ya da elle.', 'Metodu seçip senaryo oluşturun; alanları sabit değer ya da test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin.', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'],
+        sira: ['"Servis ekle" ile servisi tanımlayın: WSDL adresi, SoapUI projesi, Postman koleksiyonu, cURL komutu ya da elle.', 'Metodu seçip senaryo oluşturun; alanları sabit değer ya da test verisi tablolarına bağlayın.', 'Yanıt kontrollerini ekleyin.', 'Birbirine bağlı istekler için Akışlar sekmesini kullanın.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Servis', alt: 'ekle', ikon: 'ag' }, { baslik: 'Senaryo', alt: 'istek', ikon: 'duzenle' }, { baslik: 'Kontroller', ikon: 'onay' }, { baslik: 'Akış', alt: 'zincir', ikon: 'katman' }] }
       }
     ]
@@ -220,15 +220,20 @@ export const REHBERLER = {
     adimlar: [
       {
         baslik: 'Servis ekleme yolları',
-        metin: ['Servisi WSDL adresinden, bir SoapUI projesinden, bir Postman koleksiyonundan ya da elle ekleyebilirsiniz. Her yolda önce önizleme gösterilir; onayınız olmadan hiçbir şey kaydedilmez.'],
-        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / SoapUI / Postman', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'metotlar', ikon: 'goz' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Servis', ikon: 'ag' }] }
+        metin: ['Servisi WSDL adresinden, bir SoapUI projesinden, bir Postman koleksiyonundan, bir cURL komutundan ya da elle ekleyebilirsiniz. Her yolda önce önizleme gösterilir; onayınız olmadan hiçbir şey kaydedilmez.'],
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Kaynak', alt: 'WSDL / SoapUI / Postman / cURL', ikon: 'yukle' }, { baslik: 'Önizleme', alt: 'metotlar', ikon: 'goz' }, { baslik: 'Onay', ikon: 'onay' }, { baslik: 'Servis', ikon: 'ag' }] }
       },
       {
         baslik: 'Yalnız adresiniz varsa: REST',
         metin: ['"Adım adım" sekmesinde türü "REST (JSON)" seçin. Tam adresi yapıştırın (ör. xxx.com/api/v1/authenticate): sunucu kısmı taban adres olur, şema yazılmadıysa https:// varsayılır. İstekler adımında yolun devamını ve HTTP işlemini (GET / POST / PUT…) seçin; POST için örnek JSON gövde yapıştırabilirsiniz, alanları tablo sütunlarına bağlanır.'],
         cizim: { tur: 'form', alanlar: ['Taban adres', 'HTTP işlemi + yol', 'Gövde örneği'], dugme: 'Kaydet' }
       },
-      { baslik: 'Gizli değerler', metin: 'Parola, anahtar ya da token gibi gizli değerler kasaya şifreli yazılır ve ekranda maskeli görünür. Postman ortamındaki gizli değerler yalnızca siz onaylarsanız alınır.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'şifreli' }, { baslik: 'Servis giriş bilgisi', alt: 'maskeli gösterilir' }] } },
+      {
+        baslik: 'cURL komutunuz varsa',
+        metin: ['"cURL yapıştır" sekmesine bir ya da daha çok curl komutu yapıştırın (bash, Windows cmd ya da PowerShell\'deki curl.exe; tarayıcıdaki "Copy as cURL" dahil); her komut bir istek olur. Önizlemede taban adres, yol, metot, başlıklar, sorgu ve gövde alanları görünür; kayıtlı bir taban adresle eşleşirse ona bağlanması önerilir. "Devam" ile adım adım sihirbaz dolu açılır: alanları tablo sütunlarına bağlayıp kaydedersiniz.', 'Metin yalnız tarayıcıda okunur; önizlemede ve kayıtta hiçbir servise istek atılmaz. -F / --form ve dosyadan veri (@dosya) desteklenmez; tanınmayan seçenekler uyarıyla gösterilir. SOAP isteği gibi görünen komutta WSDL yolu önerilir.'],
+        cizim: { tur: 'form', alanlar: ['cURL komutları', 'Önizleme', 'Gizli değer onayı'], dugme: 'Devam' }
+      },
+      { baslik: 'Gizli değerler', metin: 'Parola, anahtar ya da token gibi gizli değerler kasaya şifreli yazılır ve ekranda maskeli görünür. Postman ortamındaki ve cURL komutundaki (Authorization, Cookie, -u, API anahtarı) gizli değerler yalnızca siz onaylarsanız alınır; onaylamazsanız hiç kaydedilmez, sütunu boş açılır.', cizim: { tur: 'katman', katmanlar: [{ baslik: 'Kasa', alt: 'şifreli' }, { baslik: 'Servis giriş bilgisi', alt: 'maskeli gösterilir' }] } },
       { baslik: 'Ekledikten sonra', sira: ['Servisin her ortamdaki adresini kontrol edin.', 'Giriş gerekiyorsa servis giriş bilgisini ekleyin.', 'Senaryolar sekmesinden ilk senaryoyu oluşturun.'] }
     ]
   },
