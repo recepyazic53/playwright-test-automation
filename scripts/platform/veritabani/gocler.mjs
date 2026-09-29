@@ -473,7 +473,7 @@ export const GOCLER = [
     `
   },
   {
-    // Sürüm 10 — servis parametre tanımları (Ayarlar > Test verisi > Servis parametreleri; bkz. servisler/parametre-tanimlari.mjs).
+    // Sürüm 10 — servis parametre tanımları (Veri > Servis parametreleri; bkz. servisler/parametre-tanimlari.mjs).
     // Bir alanın (ör. DeliveryType) alabileceği değerler ve hangi servislerde geçerli olduğu. ad = XML alan adı; aynı ad için
     // bir ortak (tüm servisler) ve servisleri çakışmayan servise özel tanımlar olabilir (depo denetler).
     // icerik_json (şifreli): { aciklama, tur, degerler: [{ deger, aciklama }], kaynak: { turId, alan }, varsayilan,
@@ -649,6 +649,30 @@ export const GOCLER = [
 
       ALTER TABLE servis_kosulari ADD COLUMN uygulama_surumu TEXT;
     `
+  },
+  {
+    // Sürüm 18 — KURTARMA KURALLARI (Ayarlar > Proje ve ortamlar > Kurtarma kuralları; bkz. ayarlar/kurtarma-kurallari.mjs). Proje
+    // kapsamlıdır (proje silinince CASCADE; proje silme ayrıca açıkça siler). ad düz metin (içe aktarmada doğal anahtar); tanim_json
+    // şifreli ('ozel'): tür, koşul, eylem, kapsam. Kodda hazır kural yoktur; yalnız bugünkü 401 / 403 davranışının açık / kapalı
+    // seçimi { hazir, acik } satırı olarak tutulur. kurtarma_json (servis_kosulari, kosu_sonuclari): kuralın çalıştığı sonuçta düz
+    // metin [{ kuralId, durum, deneme }] — yalnız sayaçlar için (değer / metin yok; not şifreli servis sonucunda ya da ekran sonucunda).
+    surum: 18,
+    ad: 'kurtarma_kurallari',
+    sql: `
+      CREATE TABLE kurtarma_kurallari (
+        id           TEXT PRIMARY KEY,
+        proje_id     TEXT NOT NULL REFERENCES projeler(id) ON DELETE CASCADE,
+        ad           TEXT NOT NULL,
+        sira         INTEGER NOT NULL DEFAULT 0,
+        tanim_json   TEXT NOT NULL DEFAULT '{}',
+        olusturulma  TEXT NOT NULL,
+        guncellenme  TEXT NOT NULL
+      );
+      CREATE INDEX ix_kurtarma_kurallari_proje ON kurtarma_kurallari(proje_id, sira);
+
+      ALTER TABLE servis_kosulari ADD COLUMN kurtarma_json TEXT;
+      ALTER TABLE kosu_sonuclari ADD COLUMN kurtarma_json TEXT;
+    `
   }
 ];
 
@@ -684,7 +708,8 @@ export const SIFRELI_ALANLAR = Object.freeze({
   servis_akislari: Object.freeze({ icerik_json: 'ozel' }),
   servis_akis_kosulari: Object.freeze({ sonuc_json: 'ozel' }),
   raporlar: Object.freeze({ meta_json: 'ozel' }),
-  rapor_isaretleri: Object.freeze({ metot_esikleri_json: 'ozel' })
+  rapor_isaretleri: Object.freeze({ metot_esikleri_json: 'ozel' }),
+  kurtarma_kurallari: Object.freeze({ tanim_json: 'ozel' })
 });
 
 /** @param {string} tablo @returns {string[]} */
@@ -721,12 +746,14 @@ export const TABLOLAR = [
   // Rapor verileri (Ayarlar > Raporlar): ekip listesi ve öğe başına kritik işareti / ekip / süre eşiği.
   { ad: 'ekipler', birincilAnahtar: 'id', json: [], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'rapor_isaretleri', birincilAnahtar: 'id', json: ['metot_esikleri_json'], guncellenme: true, baslikAlani: 'oge_turu' },
+  // Kurtarma kuralları (Ayarlar > Proje ve ortamlar): proje başına kullanıcı kuralları + hazır kuralın açık / kapalı seçimi.
+  { ad: 'kurtarma_kurallari', birincilAnahtar: 'id', json: ['tanim_json'], guncellenme: true, baslikAlani: 'ad' },
   { ad: 'degisiklik_gecmisi', birincilAnahtar: 'id', json: ['onceki_json', 'sonraki_json'], guncellenme: false },
   { ad: 'kosular', birincilAnahtar: 'id', json: ['ozet_json'], guncellenme: false },
-  { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json'], guncellenme: false },
+  { ad: 'kosu_sonuclari', birincilAnahtar: 'id', json: ['ekler_json', 'atlanan_alanlar_json', 'kurtarma_json'], guncellenme: false },
   { ad: 'adim_sonuclari', birincilAnahtar: 'id', json: [], guncellenme: false },
   { ad: 'yakalanan_mesajlar', birincilAnahtar: 'id', json: [], guncellenme: false },
-  { ad: 'servis_kosulari', birincilAnahtar: 'id', json: ['sonuc_json'], guncellenme: false },
+  { ad: 'servis_kosulari', birincilAnahtar: 'id', json: ['sonuc_json', 'kurtarma_json'], guncellenme: false },
   { ad: 'servis_akis_kosulari', birincilAnahtar: 'id', json: ['sonuc_json'], guncellenme: false },
   // Medya satırları yedeğe her zaman girer; şifreli dosyalar kullanıcının dışa aktarma seçimine
   // göre girer (yedek.mjs, biçim 2). Dahil edilmeyenler yedekte yedek_disi = 1 taşır.

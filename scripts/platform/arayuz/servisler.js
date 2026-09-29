@@ -989,6 +989,7 @@ function sonucGovdesi(r) {
     h('div', { class: 'baslik-satiri' }, rozet(etiket, sinif), r.durumKodu ? rozet(`HTTP ${r.durumKodu}`) : null, h('span', { class: 'soluk kucuk' }, `${r.sureMs} ms · ${r.ortam || ''}`)),
     r.hata ? h('div', { class: 'not-kutusu hata', role: 'alert' }, r.hata) : null,
     r.yetkiTekrari ? h('p', { class: 'not-kutusu bilgi yetki-notu' }, ikon('yenile'), ' ', r.yetkiTekrari.not) : null,
+    r.kurtarma ? h('p', { class: 'not-kutusu bilgi kurtarma-notu' }, ikon('yenile'), ' ', r.kurtarma.not) : null,
     r.ozet ? h('p', {}, h('b', {}, 'Yanıt: '), r.ozet) : null,
     r.kontroller && r.kontroller.length ? kontrolSonuclari(r.kontroller) : null,
     r.istek ? h('details', {}, h('summary', {}, 'İstek (gizli değerler maskeli)'), h('pre', { class: 'hata-mesaji kod-blogu' }, r.istek)) : null,
@@ -1116,7 +1117,7 @@ async function senaryoDuzenleyici(kap, proje, s, ortamlar, senaryo) {
         h('option', { value: '' }, v.deger ? `Bulunamadı: ${v.deger}` : '— tablo sütunu seçin —'),
         tablolar.map((x) => h('optgroup', { label: x.ad }, x.sutunlar.map((c) => h('option', { value: basvuru(x.ad, c.ad) }, `${x.ad} → ${c.ad}`)))));
       sec.addEventListener('change', () => { if (sec.value) { v.deger = sec.value; tabloCiz(); } });
-      return h('span', { class: 'tablo-degeri' }, sec, tablolar.length ? null : h('span', { class: 'soluk kucuk' }, 'Test verisinde tablo yok (Ayarlar > Test verisi > Tablolar).'));
+      return h('span', { class: 'tablo-degeri' }, sec, tablolar.length ? null : h('span', { class: 'soluk kucuk' }, 'Test verisinde tablo yok (Veri > Tablolar).'));
     }
     const secim = (tabloSecimleri[grupAnahtari(t.id, b.etiket)] ??= {});
     // Gruptaki sütunlar formdaki sırayla: bu alanın seçenekleri yalnız ÖNCEKİ alanların seçimlerine göre süzülür.
@@ -1626,9 +1627,9 @@ async function parametrelerSekmesi(kap, proje, s, ortamlar, yenile) {
 
   const metotKarti = h('div', { class: 'kart form-paneli' },
     h('div', { class: 'kart-basligi' }, h('h3', {}, 'Metot alanları'), h('span', { class: 'sag' }, kayitDurumu,
-      h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/ayarlar/test-verisi' }, 'Test verisi tabloları'))),
+      h('a', { class: 'dugme kucuk-dugme hayalet', href: '#/veri' }, 'Test verisi tabloları'))),
     metotlar.length ? h('p', { class: 'soluk kucuk' }, 'Metodu seçin. Her alanı bir test verisi tablosunun sütununa bağlayın (ör. Channel → Servis girişi → Kanal). Aynı tabloya bağlı alanlar senaryoda aynı satırdan dolar ve seçtikçe birbirini süzer. Aynı tablo iki kez gerekiyorsa (başvuran / kefil) etiket verin. Bağlı olmayan alan senaryoda elle yazılır ya da gönderilmez. Değişiklikler anında kaydedilir.') : null,
-    metotlar.length && !tablolar.length ? h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/ayarlar/test-verisi' }, 'Ayarlar > Test verisi > Tablolar'), ' bölümünden ekleyin.') : null,
+    metotlar.length && !tablolar.length ? h('div', { class: 'not-kutusu uyari' }, 'Henüz test verisi tablosu yok. ', h('a', { href: '#/veri' }, 'Veri > Tablolar'), ' bölümünden ekleyin.') : null,
     metotlar.length
       ? metotKutulari(metotlar.map((m) => ({
         ad: m.sm.ad, sema: m.sm, zorunlu: m.zorunlu, ekler: m.ekler, degisti, baglar: m.baglar, tablolar,
@@ -1688,7 +1689,7 @@ function eskiParametreKarti(proje, s, yenile) {
 
 /**
  * Eski servis giriş profili (kasadaki ayrı kayıt): servis hâlâ kullanıyorsa test verisine taşıma kartı. Taşıma önce ne
- * yapılacağını gösterir, onayla uygular (Ayarlar > Test verisi'nde "Servis girişi" türü + profil; servis o profile bağlanır).
+ * yapılacağını gösterir, onayla uygular (Veri'de "Servis girişi" türü + profil; servis o profile bağlanır).
  */
 function kimlikYonetimi(proje, s, yenile) {
   if (!s.ayarlar.kimlikProfili) return null;
@@ -1721,7 +1722,7 @@ function kimlikYonetimi(proje, s, yenile) {
     } catch (e) { yerlestir(sonuc, h('div', { class: 'not-kutusu hata', role: 'alert' }, e.message)); }
   });
   return h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('anahtar'), 'Eski giriş profili'), h('span', { class: 'sag' }, tasi)),
-    h('p', {}, `Bu servis giriş bilgilerini eski ayrı profilden ("${s.ayarlar.kimlikProfili}") alıyor. Giriş bilgileri artık Ayarlar > Test verisi'nde tutuluyor; taşıyınca kanal / kullanıcı / parola orada görünür ve senaryoda tablodan seçilebilir.`),
+    h('p', {}, `Bu servis giriş bilgilerini eski ayrı profilden ("${s.ayarlar.kimlikProfili}") alıyor. Giriş bilgileri artık Veri'de (test verisi) tutuluyor; taşıyınca kanal / kullanıcı / parola orada görünür ve senaryoda tablodan seçilebilir.`),
     sonuc);
 }
 
@@ -1811,6 +1812,8 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
     const c = h('input', { type: 'checkbox', id: yeniKimlik('op'), checked: (s.ayarlar.yalnizTestOperasyonlari || []).includes(op.ad) });
     return { op, c };
   });
+  // "Tekrar denenebilir" (kurtarma kuralları): kural yalnız işaretli metodun isteğini tekrar gönderir. Varsayılan işaretsiz.
+  const tekrarli = (s.ayarlar.operasyonlar || []).map((op) => ({ op, c: h('input', { type: 'checkbox', id: yeniKimlik('tekrar'), checked: (s.ayarlar.tekrarDenenebilirOperasyonlar || []).includes(op.ad) }) }));
   let erisim = null;
   const mesaj = mesajKutusu();
   const kaydet = h('button', { type: 'button', class: 'birincil' }, 'Kaydet');
@@ -1867,7 +1870,8 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
       await mesgulIken(kaydet, 'Kaydediliyor…', () => api('/platform/servis/kaydet', { govde: {
         projeId: proje.id, id: s.id, anahtar: s.anahtar, ad: ad.value.trim(), yol: yol.value.trim(), soapSurumu: surum.value, tlsDogrulama: tls.checked,
         durum: durum.checked ? 'etkin' : 'devre_disi', tabanlar: tabanDegerleri(), tabanGrubu: tabanSecimi.value || null,
-        yalnizTestOperasyonlari: yalnizTest.filter(({ c }) => c.checked).map(({ op }) => op.ad), erisimKimligi: erisim?.erisimKimligi
+        yalnizTestOperasyonlari: yalnizTest.filter(({ c }) => c.checked).map(({ op }) => op.ad), erisimKimligi: erisim?.erisimKimligi,
+        tekrarDenenebilirOperasyonlar: tekrarli.filter(({ c }) => c.checked).map(({ op }) => op.ad)
       } }));
       bildir('Servis kaydedildi.');
       window.dispatchEvent(new HashChangeEvent('hashchange'));
@@ -1896,6 +1900,9 @@ function islemlerSekmesi(kap, proje, s, ortamlar) {
       yalnizTest.length && s.tur !== 'rest' ? h('fieldset', {}, h('legend', {}, 'Yalnız TEST\'te koşan operasyonlar'),
         h('p', { class: 'soluk kucuk' }, 'Kayıt oluşturan / onaylayan operasyonları işaretleyin: CANLI ortamda hiç çağrılmazlar.'),
         ...yalnizTest.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
+      tekrarli.length ? h('fieldset', { class: 'tekrar-denenebilir' }, h('legend', {}, 'Tekrar denenebilir metotlar'),
+        h('p', { class: 'soluk kucuk' }, 'Kurtarma kuralı (Ayarlar > Proje ve ortamlar) yalnız işaretli metodun isteğini tekrar gönderir. Kayıt oluşturan / değiştiren metotları işaretlemeyin: tekrar, çift kayıt yaratabilir.'),
+        ...tekrarli.map(({ op, c }) => h('label', { class: 'secenek', for: c.id }, c, op.ad))) : null,
       s.tur === 'rest' ? null : kontrol, h('div', { class: 'dugmeler' }, kaydet)),
     s.tur === 'rest' ? restUclariKarti(proje, s, ortamlar) : semaKarti(proje, s, ortamlar),
     h('div', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('cop'), 'Tehlikeli bölge')), sil));

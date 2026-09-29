@@ -32,6 +32,7 @@ import { referansCoz, referanslariCoz } from './dosyalar/senaryo-dosyalari.mjs';
 import { DOSYA_KLASORU_DEGISKENI, kosuKlasoruDogrula } from './dosyalar/gecici-dosyalar.mjs';
 import { ayarlardakiYasakAdresler } from './guvenlik/yasak-adresler.mjs';
 import { izinleriOku } from './guvenlik/izinler.mjs';
+import { ekranKurallari } from './ayarlar/kurtarma-kurallari.mjs';
 import { riskliOrtamMi } from './guvenlik/ortam-riski.mjs';
 import { izinMesaji } from './guvenlik/izin-tanimlari.mjs';
 import { kosuSqlVerisi, modeldekiSqlHedefleri } from './sql/sorgu-bagdastirici.mjs';
@@ -134,6 +135,8 @@ async function genelKip() {
     const model = ortamModelSenaryolari(vt, projeId, ortamId);
     if (model) {
       model.izinler = izinler;
+      // Kurtarma kuralları (Ayarlar > Proje ve ortamlar): yalnız açık, türü ekran ve bu ortamı kapsayanlar; koşucu senaryonun ekranıyla süzer.
+      model.kurtarmaKurallari = ekranKurallari(vt, projeId, ortamId);
       if (!izinler['veritabani-okuma'] && model.sqlBaglantilari) {
         model.sqlBaglantilari = Object.fromEntries(Object.keys(model.sqlBaglantilari).map((id) => [id, { hata: izinMesaji('veritabani-okuma') }]));
       }

@@ -95,8 +95,10 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/ayarlar/proje');
-    await page.getByRole('link', { name: 'Koşu' }).click();
+    await page.getByRole('link', { name: 'Koşu', exact: true }).click();
     const form = page.getByRole('form', { name: 'Koşu ayarları' });
+    // Kayıt ve servis ayarları "Gelişmiş" altında (sayfada profiller + yeniden deneme / süre limiti).
+    await form.locator('details.gelismis-ayarlar > summary').click();
     await expect(form.getByLabel('Video', { exact: true })).toHaveValue('her');
     await expect(form.getByLabel('Koşu süre limiti (dk)')).toHaveValue('10');
     await form.getByLabel('Yeniden deneme').fill('7');
@@ -156,7 +158,10 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await form.getByLabel('Alanın görünmesi için bekleme (sn)').fill('4');
     await form.getByRole('button', { name: 'Kaydet' }).click();
     await expect(form.getByText('Koşu ayarları kaydedildi')).toBeVisible();
-    // Zamanlanmış koşu davranışı: Zamanlanmış koşular kartının içinde.
+    // Zamanlanmış koşu davranışı: Zamanlanmış koşular kartının içinde (kart üst menüdeki Planlı koşular sayfasında).
+    await expect(page.locator('.zamanlanmis-kosular')).toHaveCount(0);
+    await page.getByRole('link', { name: 'Planlı koşular' }).first().click();
+    await expect(page).toHaveURL(/#\/planli-kosular$/);
     const zamanli = page.getByRole('form', { name: 'Zamanlanmış koşu davranışı' });
     await expect(page.locator('.zamanlanmis-kosular').getByRole('form', { name: 'Zamanlanmış koşu davranışı' })).toBeVisible();
     // Tek başlık (dış h4; iç fieldset legend'i yok), çerçevesiz gömülü form; Kaydet kartın içinde; alt bölüm ayrı çizgiyle başlar.

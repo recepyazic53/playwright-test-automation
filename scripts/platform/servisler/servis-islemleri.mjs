@@ -12,6 +12,12 @@
 // - Saklanan istek / yanıtta parola ve hassas test verisi değerleri maskelenir.
 // - "Yanıt sözleşmeye uymalı" (senaryo; varsayılan kapalı) açıksa yanıt servisin sözleşmesine göre doğrulanır (servis-sozlesmesi.mjs).
 // - 401 / 403: yalnız kullanıcı "Token'ı yenile, bir kez tekrar dene" seçtiyse oturum / token yenilenip istek bir kez tekrarlanır.
+//   Bu davranış Ayarlar > Proje ve ortamlar > Kurtarma kuralları'nda hazır (silinemeyen, kapatılabilen) kural olarak görünür;
+//   kapatılırsa hiç uygulanmaz.
+// - Kurtarma kuralları (kullanıcının; ayarlar/kurtarma-kurallari.mjs): senaryo başarısız olunca (kontrol kaldı ya da bağlantı hatası)
+//   sırayla bakılır; koşulu (ve istek süzgeci) tutan ilk kural bekler / token'ı yeniler / isteği tekrar gönderir (en çok N deneme).
+//   Tekrar yalnız "tekrar denenebilir" işaretli operasyonda (servis.ayarlar.tekrarDenenebilirOperasyonlar); işaretsizse tekrarlanmaz ve
+//   sonuca "kayıt oluşturan adım tekrar denenmedi" notu düşer. Ara denemeler ayrı kaydedilmez; son sonucun notunda görünür.
 import { randomUUID } from 'node:crypto';
 import {
   DepoHatasi, ortamGetir, ortamKaydet, ortamlariListele, testVerisiProfiliGetir, testVerisiProfiliKaydet, testVerisiTuruKaydet, testVerisiTurleriniListele
@@ -41,6 +47,7 @@ import { hesapKurallariniDenetle, kuralParametreleri } from './hesap-kurallari.m
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { ekGizliAdlar } from '../ayarlar/maskeleme.mjs';
 import { tanimMetinleri, yanitDosyaAdi } from '../dosyalar/dosya-icerigi.mjs';
+import { HAZIR_YETKI, beklemeMs, hazirYetkiKuraliAcik, servisKosuluDegerlendir, servisKurallari, suzgecTutar } from '../ayarlar/kurtarma-kurallari.mjs';
 // Döngüsel içe aktarma (taban-adresleri bu modülün taban doğrulamasını kullanır): yalnız çağrı anında kullanılan işlevler.
 import { tabanKarari, tabanKarariUygula } from './taban-adresleri.mjs';
 
@@ -398,7 +405,7 @@ function erisimiDogrula(erisimKimligi, projeId, adresHesapla, vt) {
  *   secilenOperasyonlar?: string[];
  *   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
  *   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
- *   alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown;
+ *   tekrarDenenebilirOperasyonlar?: string[]; alanVarsayilanlari?: unknown; alanZorunluluklari?: unknown; ekAlanlar?: unknown; alanListeleri?: unknown; alanBaglari?: unknown;
  *   oturumAkisi?: string | null; tabanGrubu?: string | null; tabanKararlari?: Record<string, import('./taban-adresleri.mjs').TabanKarari> }} girdi
  *   oturumAkisi: senaryolardaki ${akis:…} değerlerini (ör. token) sağlayan oturum akışı (""/null: yok).
  *   tabanKararlari: bağlı olduğu taban adresinden farklı adres yazılıyorsa kullanıcının kararı (yoksa TabanKarariHatasi; taban-adresleri.mjs).
@@ -424,6 +431,8 @@ export function servisiKaydet(vt, projeId, girdi) {
     ...(girdi.tarihKurallari !== undefined ? { tarihKurallari: tarihKurallariniDogrula(girdi.tarihKurallari) } : {}),
     ...(girdi.veriProfilleri !== undefined ? { veriProfilleri: veriProfilleriniDogrula(girdi.veriProfilleri) } : {}),
     ...(girdi.yalnizTestOperasyonlari !== undefined ? { yalnizTestOperasyonlari: girdi.yalnizTestOperasyonlari.filter((x) => typeof x === 'string' && x) } : {}),
+    // Kurtarma kuralının tekrar gönderebileceği operasyonlar (kullanıcı işaretler; varsayılan hiçbiri — çift kayıt koruması).
+    ...(girdi.tekrarDenenebilirOperasyonlar !== undefined ? { tekrarDenenebilirOperasyonlar: [...new Set(girdi.tekrarDenenebilirOperasyonlar.filter((x) => typeof x === 'string' && x))] } : {}),
     ...(girdi.tlsDogrulama !== undefined ? { tlsDogrulama: girdi.tlsDogrulama } : {}),
     ...(girdi.alanVarsayilanlari !== undefined ? { alanVarsayilanlari: alanVarsayilanlariniDogrula(girdi.alanVarsayilanlari) } : {}),
     ...(girdi.alanZorunluluklari !== undefined ? { alanZorunluluklari: alanZorunluluklariniDogrula(girdi.alanZorunluluklari) } : {}),
@@ -987,7 +996,10 @@ export const akisSenaryoKancasiAl = () => akisSenaryoKancasi;
  *   yetkiTekrari?: { ilkDurumKodu: number; not: string };
  *   yetkiYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null>;
  *   veriKosusu?: { anahtar: string | null; ad: string | null; sabit?: Record<string, string>; veriler?: Record<string, Record<string, string | null>> }; tekrarKaynagi?: string;
- *   uygulamaSurumu?: string | null }} girdi
+ *   uygulamaSurumu?: string | null; kurtarma?: KurtarmaDurumu;
+ *   tokenYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null> }} girdi
+ *   kurtarma: kurtarma kuralının tekrar denemesi (iç kullanım; kural, ilk neden, deneme sayısı). tokenYenile: kuralın "token'ı yenile"
+ *   seçimi için akıştaki token adımlarını yeniden çalıştıran geri çağırma (akış motoru verir; oturum akışı atanmış serviste gerekmez).
  *   veriKosusu: tablodan çoklu satırla koşuda bu çalıştırmanın satırları (başlık "Senaryo [ad]"); tekrarKaynagi: başarısızları tekrar
  *   çalıştırmada önceki koşu (kayda "Tekrar:" bağı olarak yazılır). uygulamaSurumu: koşu başlatılırken girilen uygulama sürümü (boşsa
  *   ortam ayarındaki kullanılır; PDF rapor A4).
@@ -1045,6 +1057,9 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   let kullanilanOturumSurumu;
   /** @type {Record<string, string>} Yanıttan okunan açık değerler (kayda yazılmaz). */
   const okunan = {};
+  // Kurtarma kurallarının değerlendirmesi için (yalnız bellekte): son yanıt, gönderim hatası, çözülmüş istek.
+  /** @type {{ durumKodu: number | null; govde: string | null; hata: string | null; istek: string; degerler: Record<string, unknown> }} */
+  const cagri = { durumKodu: null, govde: null, hata: null, istek: '', degerler: {} };
   /** @type {Record<string, unknown>} */
   const sonuc = { operasyon: icerik.operasyon, ortam: ortam.ad, ortamTuru: tur, ...(girdi.akis ? { akis: girdi.akis } : {}), ...(girdi.yetkiTekrari ? { yetkiTekrari: girdi.yetkiTekrari } : {}),
     ...(girdi.tekrarKaynagi ? { tekrarKaynagi: girdi.tekrarKaynagi } : {}), ...(istekBeklemeMs > 0 ? { istekBeklemeMs } : {}) };
@@ -1082,6 +1097,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const p = parametreDegerleri(vt, projeId, servis, { ...icerik, govde: [hamMetin, ...kuralRefleri, ...dosyaMetinleri].join('\n') }, ortam.id,
       girdi.veriKosusu?.sabit ? { sabit: girdi.veriKosusu.sabit, ...(girdi.veriKosusu.veriler ? { veriler: girdi.veriKosusu.veriler } : {}) } : {});
     gizliler = [...gizliler, ...p.gizliler];
+    cagri.degerler = p.degerler;
     if (p.kimlikProfili) sonuc.kimlikProfili = p.kimlikProfili;
     if (p.kullanilanSatirlar.length) sonuc.tabloSatirlari = p.kullanilanSatirlar;
     // Veri koşusu (anahtar / ad) ve kullanılan satırların kimlikleri: sonuç ekranı ve başarısızları tekrar çalıştırma için.
@@ -1093,6 +1109,7 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     };
     // REST: gövde değerleri içerik türüne göre kaçışlanır (JSON / form / XML); yol değerleri URL kodlanır.
     const govde = yerTutuculariDoldur(icerik.govde, http ? { ...doldurma, kacis: govdeKacisi(http.icerikTuru) } : doldurma);
+    cagri.istek = govde;
     if (http) {
       adres = adresBirlestirRest(servisAdr, yerTutuculariDoldur(http.yol, { ...doldurma, kacis: 'url' }));
       sonuc.adres = gizlileriMaskele(adres, gizliler);
@@ -1114,14 +1131,17 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     const yanit = http
       ? await restIstegi({ ...ortak, metot: http.metot, ...(http.icerikTuru ? { icerikTuru: http.icerikTuru } : {}) })
       : await soapIstegi({ ...ortak, eylem, soapSurumu: servis.ayarlar.soapSurumu });
+    cagri.durumKodu = yanit.durumKodu;
+    cagri.govde = yanit.govde;
     // Yetki hatası (YALNIZ HTTP 401 / 403): kullanıcının seçimi (akışın "Yetki hatasında" ayarı; seçilmediyse Ayarlar > Koşu) "Token'ı
     // yenile, bir kez tekrar dene" ise oturum akışı / akıştaki token adımı yeniden çalışır ve istek BİR KEZ tekrarlanır. İlk deneme
     // ayrı sonuç olarak kaydedilmez; tekrarın sonucunda not olarak görünür. İkinci deneme de reddedilirse sonuç olduğu gibi değerlendirilir.
+    // Kurtarma kurallarındaki hazır kural ("Yetki hatasında token'ı yenile") kapatılmışsa bu davranış hiç uygulanmaz.
     const yetkiHatasi = yanit.durumKodu === 401 || yanit.durumKodu === 403;
     if (yetkiHatasi && girdi.yetkiTekrari) {
       sonuc.yetkiTekrari = { ...girdi.yetkiTekrari, ikinciDurumKodu: yanit.durumKodu, not: `${girdi.yetkiTekrari.not}; tekrar da ${yanit.durumKodu} döndü` };
     }
-    if (yetkiHatasi && !girdi.yetkiTekrari) {
+    if (yetkiHatasi && !girdi.yetkiTekrari && hazirYetkiKuraliAcik(vt, projeId)) {
       const not = `${yanit.durumKodu} alındı, token yenilendi, tekrar denendi`;
       if (oturumKullanildi && servis.ayarlar.oturumAkisi && yetkiTekrariAcik(vt, servisAkisiGetir(vt, servis.ayarlar.oturumAkisi))) {
         await kesilebilirBekle(istekBeklemeMs, girdi.sinyal);
@@ -1193,12 +1213,46 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
     if (!(e instanceof ServisHatasi) && !(e instanceof DepoHatasi)) throw e;
     sonuc.hata = e.message;
     if (girdi.sinyal?.aborted) sonuc.durduruldu = true;
+    else if (e instanceof ServisHatasi && istekDenendi && cagri.durumKodu === null) cagri.hata = e.message;
     olay(adim, 'hata', { mesaj: e.message });
+  }
+  // KURTARMA KURALLARI: başarısız çağrıda koşulu tutan ilk kural (ya da süren kuralın sonraki denemesi).
+  if (!girdi.sinyal?.aborted && (durum !== 'basarili' || girdi.kurtarma)) {
+    const karar = kurtarmaKarari(vt, projeId, { servis, operasyon: icerik.operasyon, ortamId: ortam.id, durum, cagri, durumu: girdi.kurtarma });
+    if (karar.tekrar) {
+      const t = karar.tekrar;
+      // Bekleme: kuralın beklemesi (artan beklemede katlanır) ile "İstekler arası bekleme"den büyüğü; durdurulunca hemen biter.
+      await kesilebilirBekle(Math.max(t.bekleMs, istekDenendi ? istekBeklemeMs : 0), girdi.sinyal);
+      /** @type {Record<string, unknown>} */
+      let tokenEki = {};
+      if (t.token && oturumKullanildi && servis.ayarlar.oturumAkisi) {
+        tokenEki = { oturumYenile: true, ...(kullanilanOturumSurumu !== undefined ? { oturumSurumu: kullanilanOturumSurumu } : {}) };
+      } else if (t.token && girdi.tokenYenile) {
+        const yeni = await girdi.tokenYenile();
+        if (yeni) tokenEki = { akisDegerleri: yeni.akisDegerleri, ekGizliler: [...(girdi.ekGizliler ?? []), ...yeni.gizliler] };
+      }
+      return await servisSenaryosuCalistir(vt, projeId, { ...girdi, ...tokenEki, kurtarma: t.durumu });
+    }
+    if (karar.beklet) {
+      // Tekrarsız kural: bekleme (ve varsa token yenileme) sonraki istekler içindir; bu çağrının sonucu değişmez.
+      if (karar.beklet.token && oturumKullanildi && servis.ayarlar.oturumAkisi && oturumSaglayici) {
+        await oturumSaglayici(vt, projeId, servis.ayarlar.oturumAkisi, ortam.id, { yenile: true, sinyal: girdi.sinyal }).catch(() => undefined);
+      } else if (karar.beklet.token && girdi.tokenYenile) await girdi.tokenYenile().catch(() => null);
+      await kesilebilirBekle(karar.beklet.ms, girdi.sinyal);
+    }
+    if (karar.olay) sonuc.kurtarma = karar.olay;
+  }
+  /** @type {Array<{ kuralId: string; durum: string; deneme: number }>} Sayaçlar için düz kayıt (metin yok). */
+  const kurtarmaOlaylari = [];
+  if (girdi.yetkiTekrari) kurtarmaOlaylari.push({ kuralId: HAZIR_YETKI, durum: durum === 'basarili' ? 'kurtarildi' : 'kaldi', deneme: 2 });
+  if (sonuc.kurtarma) {
+    const k = /** @type {{ kuralId: string; durum: string; deneme: number }} */ (sonuc.kurtarma);
+    kurtarmaOlaylari.push({ kuralId: k.kuralId, durum: k.durum, deneme: k.deneme });
   }
   const sureMs = Date.now() - bas;
   const kosuId = servisKosusuKaydet(vt, {
     projeId, servisId: servis.id, senaryoId: kayitli?.id ?? null, ortamId: ortam.id, tur: girdi.tur, durum,
-    baslangic: baslangic.toISOString(), sureMs, baslik, sonuc,
+    baslangic: baslangic.toISOString(), sureMs, baslik, sonuc, kurtarma: kurtarmaOlaylari,
     // Test edilen uygulamanın sürümü (yalnız koşularda; "Dene" etiketlenmez): koşu başlatılırken girilen, yoksa ortam ayarındaki.
     ...(girdi.tur === 'kosu' ? { uygulamaSurumu: kosuUygulamaSurumu(girdi.uygulamaSurumu, ortam) } : {})
   });
@@ -1209,6 +1263,54 @@ export async function servisSenaryosuCalistir(vt, projeId, girdi) {
   // girmez; durdurulunca bekleme hemen biter.
   if (istekDenendi) await kesilebilirBekle(istekBeklemeMs, girdi.sinyal);
   return { kosuId, durum, sureMs, baslik, ...sonuc };
+}
+
+/**
+ * Kurtarma kuralının tekrar denemesindeki durum: kural, ilk görülen neden ve şimdiye kadarki deneme sayısı (1 = ilk istek).
+ * @typedef {{ kuralId: string; kural: string; neden: string; deneme: number }} KurtarmaDurumu
+ * @typedef {{ kuralId: string; kural: string; durum: 'kurtarildi' | 'kaldi' | 'tekrarlanmadi' | 'denendi'; deneme: number; not: string }} KurtarmaNotu
+ */
+
+/**
+ * Başarısız (ya da kurtarma denemesi süren) servis çağrısında ne yapılacağı: tekrar (bekleme + token), tekrarsız bekleme ya da yalnız not.
+ * Tekrar YALNIZ "tekrar denenebilir" işaretli operasyonda; işaretsizde "kayıt oluşturan adım tekrar denenmedi" notu. Kuralı olmayan /
+ * koşulu tutmayan çağrıda boş karar.
+ * @param {Veritabani} vt @param {string} projeId
+ * @param {{ servis: Servis; operasyon: string; ortamId: string; durum: string; cagri: { durumKodu: number | null; govde: string | null; hata: string | null; istek: string; degerler: Record<string, unknown> };
+ *   durumu?: KurtarmaDurumu }} c
+ * @returns {{ tekrar?: { durumu: KurtarmaDurumu; bekleMs: number; token: boolean }; beklet?: { ms: number; token: boolean }; olay?: KurtarmaNotu }}
+ */
+function kurtarmaKarari(vt, projeId, c) {
+  const d = c.durumu;
+  if (d && c.durum === 'basarili') {
+    return { olay: { kuralId: d.kuralId, kural: d.kural, durum: 'kurtarildi', deneme: d.deneme, not: `kurtarıldı: ${d.neden} → ${d.deneme}. denemede başarılı` } };
+  }
+  if (c.cagri.durumKodu === null && !c.cagri.hata) {
+    // İstek gönderilemedi (hazırlık hatası: eksik parametre, adres…): kural uygulanmaz; süren denemede not düşer.
+    return d ? { olay: { kuralId: d.kuralId, kural: d.kural, durum: 'kaldi', deneme: d.deneme, not: `kurtarma denendi, yine kaldı: ${d.neden} → ${d.deneme}. denemede istek gönderilemedi` } } : {};
+  }
+  const kurallar = servisKurallari(vt, projeId, { ortamId: c.ortamId, servisId: c.servis.id, metot: c.operasyon ?? null })
+    .filter((k) => !d || k.id === d.kuralId);
+  for (const k of kurallar) {
+    if (!suzgecTutar(k.suzgec, { degerler: c.cagri.degerler, govde: c.cagri.istek })) continue;
+    const s = servisKosuluDegerlendir(k.kosul, c.cagri);
+    if (!s.tutar) continue;
+    const deneme = d?.deneme ?? 1;
+    const neden = d?.neden ?? s.neden;
+    const y = k.yapilacak;
+    const temel = { kuralId: k.id, kural: k.ad, deneme };
+    if (y.tekrarGonder) {
+      const isaretli = (c.servis.ayarlar.tekrarDenenebilirOperasyonlar ?? []).includes(c.operasyon);
+      if (!isaretli) {
+        return { olay: { ...temel, durum: 'tekrarlanmadi', not: `kayıt oluşturan adım tekrar denenmedi: ${neden} ("${c.operasyon}" tekrar denenebilir işaretli değil; kural: ${k.ad})` } };
+      }
+      if (deneme >= y.enCokDeneme) return { olay: { ...temel, durum: 'kaldi', not: `kurtarma denendi, yine kaldı: ${neden} → ${deneme} denemede de başarısız` } };
+      return { tekrar: { durumu: { kuralId: k.id, kural: k.ad, neden, deneme: deneme + 1 }, bekleMs: beklemeMs(y, deneme), token: y.tokenYenile } };
+    }
+    const yapilan = [y.tokenYenile ? 'token yenilendi' : '', y.bekleSn ? `${y.bekleSn} sn beklendi` : ''].filter(Boolean).join(', ');
+    return { beklet: { ms: y.bekleSn * 1000, token: y.tokenYenile }, olay: { ...temel, durum: 'denendi', not: `kurtarma: ${neden} → ${yapilan}; istek tekrar gönderilmedi` } };
+  }
+  return d ? { olay: { kuralId: d.kuralId, kural: d.kural, durum: 'kaldi', deneme: d.deneme, not: `kurtarma denendi, yine kaldı: ${d.neden} → ${d.deneme}. denemede başka bir nedenle başarısız` } } : {};
 }
 
 /**

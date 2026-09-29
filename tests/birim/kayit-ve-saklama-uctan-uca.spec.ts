@@ -209,6 +209,8 @@ test('arayüz: Ayarlar > Koşu (Kayıt) ve Yedekleme (Sonuç saklama) — seçen
   const { page, hatalar, kapat } = await sayfaAc();
   await page.goto('/#/ayarlar/kosu');
   const form = page.getByRole('form', { name: 'Koşu ayarları' });
+  // Kayıt ayarları "Gelişmiş" altında; "Kanıt düzeyi" profili bunları topluca seçer.
+  await form.locator('details.gelismis-ayarlar > summary').click();
   await expect(form.getByLabel('Video', { exact: true }).locator('option')).toHaveText(['Her testte', 'Yalnız başarılı testlerde', 'Yalnız kalan testlerde', 'Kapalı']);
   await expect(form.getByLabel('Adım ekran görüntüleri')).toHaveValue('her');
   await expect(form.getByLabel('Video boyutu')).toHaveValue('kucuk');

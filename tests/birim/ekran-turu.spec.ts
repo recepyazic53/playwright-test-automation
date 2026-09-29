@@ -144,7 +144,8 @@ const EKRANLAR: EkranTanimi[] = [
   { ad: 'ekran-gecmis', adres: () => `#/ekranlar/e/${encodeURIComponent(ekranId)}/gecmis` },
   { ad: 'ayarlar-proje', adres: () => '#/ayarlar/proje' },
   { ad: 'ayarlar-giris', adres: () => '#/ayarlar/giris' },
-  { ad: 'ayarlar-test-verisi', adres: () => '#/ayarlar/test-verisi' },
+  { ad: 'veri', adres: () => '#/veri' },
+  { ad: 'planli-kosular', adres: () => '#/planli-kosular' },
   { ad: 'ayarlar-kosu', adres: () => '#/ayarlar/kosu' },
   { ad: 'ayarlar-yedekleme', adres: () => '#/ayarlar/yedekleme' },
   { ad: 'ayarlar-guvenlik', adres: () => '#/ayarlar/guvenlik' },
@@ -238,8 +239,8 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       // "Sizi tanıyalım" adımı yok (ortamlar Ortamlar adımında / Ayarlar'da); giriş profili adımı da yok.
       await expect(page.getByRole('heading', { name: 'Kasa parolası belirleyin' })).toBeVisible();
       await expect(page.getByRole('form', { name: 'Tanışma soruları' })).toHaveCount(0);
-      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'Tamam']);
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 4');
+      await expect(page.locator('.adimlar li')).toHaveText([/^Kasa parolası/, 'Proje', 'Ortamlar', 'İzinler', 'Tamam']);
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 1 / 5');
       await kontrol('kasa');
       await page.getByRole('textbox', { name: 'Kasa parolası (zorunlu)', exact: true }).fill(PAROLA);
       await page.getByRole('textbox', { name: 'Kasa parolası (tekrar) (zorunlu)', exact: true }).fill(PAROLA);
@@ -248,7 +249,7 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       await page.getByLabel('Proje adı').fill('İlk kurulum projesi');
       await page.getByRole('button', { name: 'Devam' }).click();
       // Ortamlar: satır = × | Ortam adı | Adres | Ortam türü (Test / Canlı; × yalnız ikon, TEST'te yok). CANLI "Ortam ekle" ile eklenir.
-      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 4');
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 3 / 5');
       await expect(page.getByLabel('Ortam adı')).toHaveCount(1);
       await page.getByRole('button', { name: 'Ortam ekle' }).click();
       await page.getByLabel('Ortam adı').nth(1).fill('CANLI');
@@ -285,6 +286,13 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       page.off('request', sayac);
       await page.locator('.ortam-satiri').nth(1).getByRole('radio', { name: 'Canlı' }).check();
       await page.getByRole('button', { name: 'Kaydet ve devam' }).click();
+      // İzinler (ilk kurulum): "Nöbetçi sizin adınıza neleri yapabilsin?" — varsayılan Hiçbiri, canlı kutusu işaretsiz; Atla hiçbir izni açmaz.
+      await expect(page.locator('.sihirbaz-baslik .kirinti')).toContainText('Adım 4 / 5');
+      await expect(page.getByRole('heading', { name: 'Nöbetçi sizin adınıza neleri yapabilsin?' })).toBeVisible();
+      await expect(page.getByRole('radio', { name: /^Hiçbiri/ })).toBeChecked();
+      await expect(page.getByRole('checkbox', { name: 'Canlı ortamda da çalıştırabilsin' })).not.toBeChecked();
+      await kontrol('izinler');
+      await page.getByRole('button', { name: 'Atla' }).click();
       // Proje hazır: kısa özet (kaydedilen ortamlar) + "Ana sayfaya geç"; yapılacaklar / sıradaki kartlar yok.
       await expect(page.getByRole('heading', { name: 'Proje hazır' })).toBeVisible();
       const ozet = page.getByRole('region', { name: 'Proje özeti' });
@@ -305,7 +313,7 @@ test('ilk kurulum (kasa yok): karşılama → tanışma → kasa → proje → o
       // Ayarlar > Proje ve ortamlar: iki ortam listelenir, "null" metni yok.
       await page.evaluate(() => { for (const d of document.querySelectorAll('dialog[open]')) (d as HTMLDialogElement).close(); location.hash = '#/ayarlar/proje'; });
       await expect(page.locator('.bolum-basligi h3').filter({ hasText: 'Ortamlar' })).toContainText('2');
-      await expect(page.locator('.kayit-listesi:not(.proje-listesi) li')).toHaveCount(2);
+      await expect(page.locator('.kayit-listesi:not(.proje-listesi):not(.kurtarma-listesi) li')).toHaveCount(2);
       await expect(page.locator('.proje-listesi li')).toHaveCount(1);
       expect(await page.locator('#ana').innerText()).not.toMatch(/\bnull\b|\bundefined\b/);
       expect(hatalar).toEqual([]);

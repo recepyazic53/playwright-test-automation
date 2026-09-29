@@ -811,7 +811,7 @@ dialog.gorsel-diyalog { width: min(92rem, calc(100vw - 2rem)); padding: 14px 16p
 .medya-notlari li { display: flex; gap: 8px; align-items: flex-start; overflow-wrap: anywhere; }
 .medya-notlari .ikon { flex: none; margin-top: 2px; color: var(--atlanan); }
 /* Akış tasarımı: "Ekran görüntüsü al" işareti; Ayarlar: açık / kapalı ayarı. */
-.goruntu-isareti .ikon { color: var(--soluk, inherit); }
+.goruntu-isareti .ikon, .tekrar-isareti .ikon { color: var(--soluk, inherit); }
 .onay-alani .secenek { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; }
 .onay-alani .secenek input { margin-top: 3px; flex: none; }
 .goruntuleyici .medya-yedek-disi { margin: 14px; background: rgba(255, 255, 255, .04); color: #c7d0dc; border-color: rgba(148, 163, 184, .3); }
@@ -3143,7 +3143,7 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .pdf-raporlar-tablosu td { vertical-align: middle; }
 .pdf-rapor-eylemleri { display: flex; flex-wrap: wrap; gap: 4px; }
 
-/* Ayarlar > Koşu > Zamanlanmış koşular (zamanlanmis-kosular.js) */
+/* Planlı koşular > Zamanlanmış koşular (zamanlanmis-kosular.js) */
 .zamanlanmis-kosular .zamanlama-form-alani:not(:empty) { margin: 10px 0; }
 .zamanlama-kutulari { border: 1px solid var(--cizgi-2); border-radius: 8px; padding: 6px 12px 10px; margin: 8px 0; }
 .zamanlama-kutulari legend { padding: 0 4px; font-weight: 600; }
@@ -3156,6 +3156,47 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 .gelismis-ayarlar > summary::-webkit-details-marker { display: none; }
 .gelismis-ayarlar > summary::before { content: "▸"; transition: transform .15s; display: inline-block; }
 .gelismis-ayarlar[open] > summary::before { transform: rotate(90deg); }
+.gelismis-ayarlar > summary .degisen-sayaci { font-weight: 450; }
+.gelismis-alt-baslik { margin: var(--b4) 0 var(--b1); font-size: 13.5px; }
+/* Ayarlar > Koşu: hazır profiller (Kanıt düzeyi, Ortam hızı) — seçilebilir kartlar; dar ekranda alt alta. */
+.profil-secenekleri { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--b2); margin: 2px 0 var(--b2); }
+.profil-secenegi { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--yaricap-m); cursor: pointer; min-width: 0;
+  background: var(--panel); box-shadow: inset 0 0 0 1px var(--cizgi-2); font-size: 13.5px; }
+.profil-secenegi input { margin: 3px 0 0; min-height: 0; flex: none; }
+.profil-secenegi > span { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.profil-secenegi small { font-size: 12px; }
+.profil-secenegi:has(input:checked) { box-shadow: inset 0 0 0 2px var(--vurgu); background: var(--vurgu-zemin); }
+.profil-secenegi:has(input:focus-visible) { outline: 2px solid var(--vurgu); outline-offset: 2px; }
+.profil-aciklamasi { margin: 0 0 4px; }
+.esli-not { margin: 0 0 var(--b2); }
+/* Ayarlar > Yedekleme > Saklama: dört saklama kuralı tek kartta, "Ne zaman ne silinir?" zaman çizelgesi (dikey; dar ekranda da sığar). */
+.saklama-gorunumu { border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); padding: 12px 16px; margin: 0 0 var(--b4); min-width: 0; }
+.saklama-gorunumu > h4 { margin: 0 0 var(--b2); }
+.saklama-cizelgesi { list-style: none; margin: 0; padding: 0 0 0 14px; border-left: 2px solid var(--cizgi-2); display: grid; gap: 8px; }
+.saklama-cizelgesi li { position: relative; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; font-size: 13.5px; }
+.saklama-cizelgesi li::before { content: ""; position: absolute; left: -20px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--vurgu); }
+.saklama-cizelgesi li.suresiz::before { background: var(--panel); box-shadow: inset 0 0 0 2px var(--cizgi-2); }
+.saklama-cizelgesi .gun { font: 600 12px var(--yazi-mono); min-width: 5.5em; }
+.saklama-cizelgesi .olay { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.kalkan-simge { display: inline-flex; align-items: center; color: var(--vurgu); }
+.kalkan-simge svg { width: 14px; height: 14px; }
+.alan.guvenlik-kurali label .kalkan-simge { margin-right: 4px; vertical-align: -2px; }
+.saklama-ozeti { margin: var(--b2) 0 0; font-size: 13px; color: var(--metin-2); }
+/* İzin paketi ("Nöbetçi sizin adınıza neleri yapabilsin?"; sihirbaz ve Ayarlar > İzinler): açılacak izinler riskleriyle tek listede. */
+.izin-paketi .profil-secenekleri { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.izin-paketi-ozel .secenek { margin: 4px 0; }
+.izin-paketi-canli { margin: var(--b2) 0; }
+.izin-paketi > h4 { margin: var(--b3) 0 var(--b2); }
+.izin-paketi-listesi { list-style: none; margin: 0 0 var(--b3); padding: 0; display: grid; gap: 6px; }
+.izin-paketi-listesi li { display: flex; gap: 8px; align-items: flex-start; min-width: 0; font-size: 13.5px; }
+.izin-paketi-isaret { flex: none; display: inline-flex; color: var(--vurgu); margin-top: 2px; }
+.izin-paketi-isaret svg, .izin-paketi-disi svg { width: 14px; height: 14px; }
+.izin-paketi-metni { min-width: 0; overflow-wrap: anywhere; }
+.izin-paketi-metni .izin-risk { color: var(--metin-2); }
+.izin-paketi-satiri.canli b { color: var(--hata, inherit); }
+.izin-paketi-disi { color: var(--metin-2); align-items: center; }
+.tasinan-bolumler { margin-top: var(--b3); }
+.ust-sayfa { margin-inline: auto; width: 100%; }
 .zamanlama-davranisi { border-top: 1px solid var(--cizgi); padding-top: var(--b2); margin-top: var(--b2); min-width: 0; }
 .zamanlama-davranisi > h4 { margin: 0 0 4px; }
 .zamanlama-gecmisi table { margin-top: 6px; }
@@ -3202,6 +3243,9 @@ dialog.onay-diyalogu.html-rapor-diyalogu { width: min(60rem, calc(100vw - 2rem))
 @media (max-width: 1280px) { .hesap-menusu .hesap-adi { display: none; } }
 @media (max-width: 1360px) { .marka { min-width: 0; } .marka .marka-adi { display: none; } }
 @media (max-width: 1180px) { .olustur-dugmesi .dugme-metni { display: none; } }
+/* Üst menü 6 öğe (Veri ve Planlı koşular eklendi): orta genişlikte menü simgeleri gizlenir (metin kalır), daha dar ekranda menü
+   kendi satırına iner. */
+@media (max-width: 1500px) { .ust-nav a > svg { display: none; } .ust-nav a { padding-left: 10px; padding-right: 10px; } }
 @media (max-width: 1000px) {
   .ust-cubuk { flex-wrap: wrap; row-gap: 6px; padding-top: 8px; padding-bottom: 8px; }
   .ust-nav { order: 10; width: 100%; overflow-x: auto; margin: 0; padding-bottom: 2px; }
@@ -3655,7 +3699,7 @@ dialog.etki-diyalogu[open] { display: flex; flex-direction: column; max-height: 
 .ikinci-adim-notu[hidden] { display: none; }
 .ikinci-adim-notu p { margin: 0 0 4px; }
 .ikinci-adim-notu .bag-dugme { padding: 0 2px; min-height: 0; }
-/* Ayarlar > Koşu > Zamanlanmış koşular kartı: gömülü davranış formu (tek başlık, çerçevesiz) ve alt bölümler aynı düzende. */
+/* Planlı koşular > Zamanlanmış koşular kartı: gömülü davranış formu (tek başlık, çerçevesiz) ve alt bölümler aynı düzende. */
 .gomulu-ayar-formu { min-width: 0; }
 .gomulu-ayar-formu > .soluk.kucuk:first-child { margin: 0 0 var(--b2); }
 .gomulu-ayar-formu .ayar-grubu { display: grid; gap: 0; min-width: 0; }
@@ -4115,3 +4159,22 @@ a.ozet-kutusu:focus-visible { outline: 2px solid var(--odak); outline-offset: 2p
 .kapsam-ozeti .basari-metni { color: var(--basari); }
 .veri-tablosu td.sayi { text-align: right; font-variant-numeric: tabular-nums; }
 .kapsam-matrisi-tablosu td { overflow-wrap: anywhere; }
+
+/* ---- Ayarlar > Proje ve ortamlar > Kurtarma kuralları (kurtarma-kurallari.js) ------------------------------------------------- */
+.kurtarma-kurallari { margin-top: 18px; }
+.kurtarma-aciklama { max-width: 72ch; }
+.kurtarma-listesi li { min-width: 0; }
+.kurtarma-listesi .kayit-ana { min-width: 0; overflow-wrap: anywhere; }
+.kurtarma-ozeti { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.kurtarma-satiri.kapali .kayit-ana > strong { opacity: .7; }
+.kurtarma-sayaci { font-variant-numeric: tabular-nums; color: var(--soluk, inherit); }
+.kurtarma-acik { white-space: nowrap; }
+dialog.kurtarma-diyalogu { width: min(44rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; }
+.kurtarma-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
+.kurtarma-diyalogu fieldset { min-width: 0; margin: 10px 0; }
+.kurtarma-diyalogu .alan input, .kurtarma-diyalogu .alan select { width: 100%; max-width: 100%; box-sizing: border-box; }
+.kurtarma-diyalogu .alan-izgarasi { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }
+.kurtarma-secim-listesi { list-style: none; margin: 6px 0 0; padding: 0; max-height: 14rem; overflow: auto; }
+.kurtarma-secim-listesi li.alt { padding-left: 1.4rem; }
+.kurtarma-bekle { align-items: end; flex-wrap: wrap; }
+@media (max-width: 520px) { .kurtarma-diyalogu .diyalog-alt { flex-wrap: wrap; } .kurtarma-diyalogu .diyalog-alt > button { flex: 1 1 auto; justify-content: center; } }

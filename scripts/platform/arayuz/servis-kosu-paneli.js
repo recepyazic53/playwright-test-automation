@@ -161,6 +161,7 @@ function ciz() {
       satir.durum === 'calisiyor' ? h('span', { class: 'canli-rozeti', title: 'Koşu sürüyor' }, 'SÜRÜYOR') : rozet(g.etiket, g.sinif === 'sirada' ? '' : g.sinif)),
     satir.durum === 'atlandi' ? h('p', { class: 'soluk kucuk' }, satir.neden || 'Atlandı.') : adimlar(satir),
     satir.sonuc && satir.sonuc.yetkiTekrari ? h('p', { class: 'not-kutusu bilgi yetki-notu' }, satir.sonuc.yetkiTekrari.not) : null,
+    satir.sonuc && satir.sonuc.kurtarma ? h('p', { class: 'not-kutusu bilgi kurtarma-notu' }, satir.sonuc.kurtarma.not) : null,
     kontroller.length ? kontrolListesi(kontroller) : null,
     satir.istek ? kutu(`${satir.senaryoId}:istek`, 'İstek (gizli değerler maskeli)', satir.istek) : null,
     satir.yanit ? kutu(`${satir.senaryoId}:yanit`, `Yanıt${satir.sonuc && satir.sonuc.durumKodu ? ` (HTTP ${satir.sonuc.durumKodu})` : ''}`, satir.yanit) : null,

@@ -161,7 +161,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const modelGirissiz = baglam.model?.girisGerekmez === true;
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
-  // Koşullu değer listeleri (Ayarlar > Test verisi): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
+  // Koşullu değer listeleri (Veri > Tablolar): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
   // açıklama, yoksa modelin metni); tutan liste yoksa modelin kendi listesi.
   const degerListeleri = baglam.degerListeleri || [];
   const alanDegeri = (id) => { const a = tumAlanlar.find((x) => x.id === id); return a ? String(degerler[a.anahtar] ?? '') : undefined; };
@@ -346,7 +346,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
       tablolariOku();
       parcalar.push(h('p', { class: 'alan-notu' }, 'Satırlar yükleniyor…'));
     } else if (!t) {
-      parcalar.push(h('p', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Ayarlar > Test verisi).`));
+      parcalar.push(h('p', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Veri > Tablolar).`));
     } else {
       parcalar.push(...hazirSatirSecimi(g, t, grupAdi));
     }
@@ -1169,7 +1169,7 @@ function modelFormu(icerik, s, senaryo, baglam) {
   function satirGrubuCiz(g) {
     const t = tabloBul(tabloListesi, g.tablo);
     const baslikEl = h('h4', {}, `${t ? t.ad : g.tablo}${g.etiket ? ` [${g.etiket}]` : ''}`, h('small', { class: 'soluk' }, ` · ${g.alanlar.join(', ')}`));
-    if (!t) return h('div', { class: 'satir-secimi-grubu' }, baslikEl, h('div', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Ayarlar > Test verisi).`));
+    if (!t) return h('div', { class: 'satir-secimi-grubu' }, baslikEl, h('div', { class: 'alan-uyarisi' }, `"${g.tablo}" adında tablo yok (Veri > Tablolar).`));
     const anahtar = grupAnahtari(t.id, g.etiket);
     const secim = tabloSecimleri[anahtar] || {};
     const secimVar = Object.keys(secim).length > 0;

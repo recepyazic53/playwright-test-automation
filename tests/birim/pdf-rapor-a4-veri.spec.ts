@@ -70,9 +70,9 @@ test('göç 17: sürüm 16 veritabanına ekipler, rapor_isaretleri ve servis_kos
     vt.calistir('INSERT INTO projeler (id, ad, olusturulma, guncellenme) VALUES (?, ?, ?, ?)', ['p1', 'Eski', z, z]);
     vt.calistir(`INSERT INTO servisler (id, proje_id, anahtar, ad, tur, olusturulma, guncellenme) VALUES ('s1', 'p1', 'a', 'A', 'rest', ?, ?)`, [z, z]);
     vt.calistir(`INSERT INTO servis_kosulari (id, proje_id, servis_id, tur, durum, baslangic) VALUES ('k1', 'p1', 's1', 'kosu', 'basarili', ?)`, [z]);
-    const r = gocleriUygula(vt);
+    const r = gocleriUygula(vt, { hedefSurum: 17 });
     expect(r.uygulananlar).toEqual([17]);
-    expect(GUNCEL_SEMA_SURUMU).toBe(17);
+    expect(GUNCEL_SEMA_SURUMU).toBeGreaterThanOrEqual(17);
     expect(vt.tek('SELECT ad FROM sema_surumu WHERE surum = 17')?.ad).toBe('rapor_verileri');
     const tablolar = vt.tumu("SELECT name FROM sqlite_master WHERE type = 'table'").map((x) => String(x.name));
     expect(tablolar).toEqual(expect.arrayContaining(['ekipler', 'rapor_isaretleri']));

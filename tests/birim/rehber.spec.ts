@@ -44,7 +44,7 @@ test('rehber içerikleri: ürün/şirket adı içermez; her rehberin adımı ve 
   expect(yasakSozcukleriBul(metin)).toEqual([]);
   const anahtarlar = [...metin.matchAll(/^ {2}(?:'([a-z0-9-]+)'|([a-z0-9]+)): \{/gm)].map((m) => m[1] || m[2]);
   expect(anahtarlar).toEqual(expect.arrayContaining(['genel', 'sonuclar', 'senaryolar', 'senaryo-formu', 'servisler', 'servis-akislari', 'ekranlar', 'ekran',
-    'akis-tasarimi', 'ayarlar-proje', 'ayarlar-giris', 'ayarlar-test-verisi', 'ayarlar-kosu', 'ayarlar-arayuz']));
+    'akis-tasarimi', 'ayarlar-proje', 'ayarlar-giris', 'veri', 'planli-kosular', 'ayarlar-kosu', 'ayarlar-arayuz']));
 });
 
 test.describe('Rehber arayüzü', () => {
@@ -203,7 +203,7 @@ test.describe('Rehber arayüzü', () => {
       satirlar: [{ ad: '', ortamId: null, degerler: { Kapsam: 'EKSPRES' } }], silinenSatirlar: [] });
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1400, height: 1000 } });
     const page = await baglam.newPage();
-    await page.goto('/#/ayarlar/test-verisi');
+    await page.goto('/#/veri');
     await page.getByRole('navigation', { name: 'Tablolar' }).getByRole('button', { name: /^Rehber tablosu/ }).click();
     const dugme = page.getByRole('button', { name: '1. sütunun karşılıkları' });
     await expect(dugme).toBeVisible();

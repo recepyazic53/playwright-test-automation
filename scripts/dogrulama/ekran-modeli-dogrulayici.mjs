@@ -130,7 +130,7 @@ const ADIM_ANAHTARLARI = new Set(['id', 'sira', 'baslik', 'pomMetodu', 'gorunurl
 export const DOSYA_BEKLENTI_TURLERI = Object.freeze(['adDeseni', 'enAzBoyut', 'icerir', 'icermez', 'sutunVar', 'satirSayisi', 'hucre']);
 /** SQL adımının beklenen sonuç türleri (platform/sql/sql-adimi.mjs ile aynı; bu dosya modül içe aktarmaz). */
 export const SQL_BEKLENEN_TURLERI = Object.freeze(['satirSayisi', 'sutunDegeri', 'bosDegil', 'bos', 'tabloEsit']);
-const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'not']);
+const KOSU_ANAHTARLARI = new Set(['aksiyonlar', 'basariGostergesi', 'hataGostergesi', 'uyarilar', 'zamanAsimiSn', 'ekranGoruntusu', 'tekrarDenenebilir', 'not']);
 const AKSIYON_ANAHTARLARI = new Set(['tur', 'secici', 'metin', 'durum', 'kosul', 'aciklama', 'zamanAsimiSn', 'sureSn', 'cerceve']);
 
 /**
@@ -432,6 +432,8 @@ function kosuTanimiDogrula(h, yer, kosu) {
   sure(kosu.zamanAsimiSn, yer);
   // "Ekran görüntüsü al" işareti (adım görüntüleri "Seçili adımlarda" iken bu adımın görüntüsü alınır).
   if (kosu.ekranGoruntusu !== undefined && typeof kosu.ekranGoruntusu !== 'boolean') h.ekle(yer, '"ekranGoruntusu" true ya da false olmalı');
+  // "Tekrar denenebilir" işareti (kurtarma kuralı bu adımı tekrar deneyebilir; varsayılan işaretsiz).
+  if (kosu.tekrarDenenebilir !== undefined && typeof kosu.tekrarDenenebilir !== 'boolean') h.ekle(yer, '"tekrarDenenebilir" true ya da false olmalı');
   if (kosu.aksiyonlar !== undefined) {
     if (!Array.isArray(kosu.aksiyonlar)) h.ekle(yer, '"aksiyonlar" dizi olmalı');
     else kosu.aksiyonlar.forEach((a, i) => {

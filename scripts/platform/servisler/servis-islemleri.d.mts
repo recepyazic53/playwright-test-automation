@@ -26,6 +26,8 @@ export declare function servisiKaydet(vt: Veritabani, projeId: string, girdi: {
   secilenOperasyonlar?: string[];
   kimlikProfili?: string; tarihKurallari?: Record<string, string>; veriProfilleri?: Record<string, string>;
   yalnizTestOperasyonlari?: string[]; tlsDogrulama?: boolean; durum?: 'etkin' | 'devre_disi'; erisimKimligi?: string; yapan?: string;
+  /** Kurtarma kuralının tekrar gönderebileceği (tekrar denenebilir işaretli) operasyonlar. */
+  tekrarDenenebilirOperasyonlar?: string[];
   alanVarsayilanlari?: Record<string, Record<string, import('./servis-govdesi.mjs').AlanDegeri>>;
   alanZorunluluklari?: Record<string, string[]>;
   ekAlanlar?: Record<string, Array<{ yol: string; tip?: string }>>;
@@ -97,6 +99,8 @@ export interface CalistirmaSonucu {
   yetkiTekrari?: { ilkDurumKodu: number; not: string; ikinciDurumKodu?: number };
   /** "Yanıt sözleşmeye uymalı" açıkken doğrulama özeti. */
   sozlesme?: { durum: 'gecti' | 'kaldi' | 'yok'; toplam: number; uyumsuzluklar: Array<{ yol: string; mesaj: string }> };
+  /** Çalışan kurtarma kuralının notu (kurtarıldı / yine kaldı / tekrar denenmedi / denendi). */
+  kurtarma?: { kuralId: string; kural: string; durum: 'kurtarildi' | 'kaldi' | 'tekrarlanmadi' | 'denendi'; deneme: number; not: string };
 }
 export interface AkisOkumasi { ad: string; kaynak?: 'xml' | 'json' | 'baslik'; yol: string; gizli?: boolean }
 export declare function okumaGizliMi(o: AkisOkumasi, ekler?: ReadonlyArray<string>): boolean;
@@ -118,6 +122,10 @@ export declare function servisSenaryosuCalistir(vt: Veritabani, projeId: string,
   tekrarKaynagi?: string;
   /** Koşu başlatılırken girilen uygulama sürümü (boşsa ortam ayarındaki; PDF rapor A4). */
   uygulamaSurumu?: string | null;
+  /** İç kullanım: kurtarma kuralının tekrar denemesi. */
+  kurtarma?: { kuralId: string; kural: string; neden: string; deneme: number };
+  /** Akış motoru: kuralın "token'ı yenile" seçimi için token adımlarını yeniden çalıştırır. */
+  tokenYenile?: () => Promise<{ akisDegerleri: Record<string, string>; gizliler: string[] } | null>;
 }): Promise<CalistirmaSonucu>;
 export declare function servisVeriKosulari(vt: Veritabani, projeId: string, s: { icerik: unknown }, ortamId: string, kip?: string | null): {
   kosular: Array<{ anahtar: string; ad: string; satirlar: Record<string, string> }>; hatalar: string[]; cokluGruplar: string[];

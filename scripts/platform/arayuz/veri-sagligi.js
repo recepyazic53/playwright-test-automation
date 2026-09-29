@@ -1,4 +1,4 @@
-// VERİ SAĞLIĞI ve TABLO BİRLEŞTİRME (Ayarlar > Test verisi; sunucu: tablolar/tablo-birlestirme.mjs).
+// VERİ SAĞLIĞI ve TABLO BİRLEŞTİRME (Veri; sunucu: tablolar/tablo-birlestirme.mjs).
 //   · veriSagligiKarti: Test verisi ekranının üstünde özet — birleştirilebilecek tablolar, hiç kullanılmayan tablolar, boş sütunlar,
 //     kırık başvurular (silinmiş tabloyu / sütunu gösteren senaryo / bağ). Her madde tıklanınca ilgili ekrana ya da düzeltmeye gider.
 //     Başlıktaki geçmiş düğmesi birleştirme geçmişini açar (birlestirmeGecmisiPenceresi: satırdan geri al / kaynakları sil).

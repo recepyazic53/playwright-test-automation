@@ -72,6 +72,7 @@ export const ONIZLEME_TABLOLARI = Object.freeze({
   servis_akislari: 'Servis akışları',
   ekipler: 'Ekipler',
   rapor_isaretleri: 'Rapor işaretleri (kritik, ekip, süre eşiği)',
+  kurtarma_kurallari: 'Kurtarma kuralları',
   ayarlar: 'Ayarlar'
 });
 /** Her zaman eklenen (kimlik üzerinden tekilleştirilen) ve yalnızca sayılan tablolar. */

@@ -329,6 +329,7 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/servisler.js', { dosya: 'servisler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-sihirbazi.js', { dosya: 'servis-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/taban-adresler.js', { dosya: 'taban-adresler.js', tur: 'text/javascript; charset=utf-8' }],
+  ['/arayuz/kurtarma-kurallari.js', { dosya: 'kurtarma-kurallari.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/rest-sihirbazi.js', { dosya: 'rest-sihirbazi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/curl-aktarimi.js', { dosya: 'curl-aktarimi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/servis-alanlari.js', { dosya: 'servis-alanlari.js', tur: 'text/javascript; charset=utf-8' }],
@@ -395,7 +396,11 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ortam-riski.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'ortam-riski.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Koşu hızı (eşzamanlılık / bekleme; genel ayar + ortam ezmesi): sunucuyla ORTAK tek kaynak.
   ['/arayuz/kosu-hizi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'kosu-hizi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Koşu ayarlarının hazır profilleri (Kanıt düzeyi, Ortam hızı): profil → ayar eşlemesi testlerle ORTAK tek kaynak.
+  ['/arayuz/kosu-profilleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'kosu-profilleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/izinler.js', { dosya: 'izinler.js', tur: 'text/javascript; charset=utf-8' }],
+  // İzin paketleri ("Nöbetçi sizin adınıza neleri yapabilsin?"; sihirbaz ve Ayarlar > İzinler): sunucuyla ORTAK tek kaynak.
+  ['/arayuz/izin-paketleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'izin-paketleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/yedek-uyarisi.js', { dosya: 'yedek-uyarisi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/akis-senaryo-icerigi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'servisler', 'akis-senaryo-icerigi.mjs'), tur: 'text/javascript; charset=utf-8' }],
@@ -1405,7 +1410,7 @@ if (dogrudanCalistirildi) {
   // Platform veritabanı: kasa açıkken günde bir yerel otomatik yedek (veri/yedekler/, son 30).
   platformOtomatikYedekZamanla();
 
-  // Zamanlanmış koşular (Ayarlar > Koşu): kasa açıkken dakikada bir denetlenir; kilitliyken kaçan zamanlar koşulmaz.
+  // Zamanlanmış koşular (Planlı koşular): kasa açıkken dakikada bir denetlenir; kilitliyken kaçan zamanlar koşulmaz.
   platformZamanlanmisKosulariBaslat();
 
   // Dinleme hatası (ör. port zaten kullanımda) yukarıdaki uncaughtException dinleyicisine

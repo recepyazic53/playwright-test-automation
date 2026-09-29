@@ -68,6 +68,8 @@ export type PlanKosuTanimi = {
   zamanAsimiSn?: number;
   /** Ekran modelinde "Ekran görüntüsü al" işareti (adım görüntüleri "Seçili adımlarda" iken yalnız bu adımlarda alınır). */
   ekranGoruntusu?: boolean;
+  /** "Tekrar denenebilir": kurtarma kuralı bu adımı tekrar deneyebilir (varsayılan işaretsiz). */
+  tekrarDenenebilir?: boolean;
   not?: string;
 };
 

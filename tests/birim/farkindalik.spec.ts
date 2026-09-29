@@ -160,7 +160,7 @@ test('Bakım: geçmiş sabit tarih, koşmayan senaryolar (eşikli), bekleyen bul
   expect(kosmayan.find((m) => m.ad === 'Sipariş formu › Kitap siparişi')?.adres).toBe(`#/senaryolar/duzenle/${tarihliSenaryo}`);
   expect(kosmayan.find((m) => m.ad === 'Arşiv Servisi › Arşivle')?.adres).toMatch(new RegExp(`^#/servisler/s/${f.arsivServisId}/senaryo/`));
   expect(bul(k, 'bekleyen bulgu')).toEqual({ tur: 'bulgu', ad: 'Talep', ayrinti: '2 bekleyen bulgu', adres: `#/ekranlar/e/${f.ekran2Id}/bulgular` });
-  expect(bul(k, 'Kullanılmayan tablo')).toEqual({ tur: 'veri', ad: 'Kullanılmayan tablo', ayrinti: 'Test verisi sağlığı · 1', adres: '#/ayarlar/test-verisi' });
+  expect(bul(k, 'Kullanılmayan tablo')).toEqual({ tur: 'veri', ad: 'Kullanılmayan tablo', ayrinti: 'Test verisi sağlığı · 1', adres: '#/veri' });
   expect(bul(k, 'Kırık tablo başvurusu')?.ayrinti).toBe('Test verisi sağlığı · 1');
   // Koşmayan eşiği 365 gün: senaryolar (01.07.2026) o kadar eski değil → madde yok.
   kosuAyarlariniKaydet(vt, { ozetKosmayanGun: 365 });

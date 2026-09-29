@@ -11,6 +11,7 @@ import { akisSenaryoIceriginiDogrula, akisSenaryosuMu, baglariDogrula } from './
 import { dosyaTanimiDogrula } from '../dosyalar/dosya-icerigi.mjs';
 import { ekranAdimiDogrula } from '../akislar/ekran-adimi.mjs';
 import { uygulamaSurumuTemizle } from '../ayarlar/rapor-verileri.mjs';
+import { kurtarmaSutunuYaz } from '../ayarlar/kurtarma-kurallari.mjs';
 import { gizliAdMi } from '../ayarlar/gizli-adlar.mjs';
 import { icerikTalepleri, talepleriAyikla } from '../senaryolar/talepler.mjs';
 
@@ -549,17 +550,19 @@ export function servisKimliginiCoz(vt, projeId, ad, ortamId) {
 /**
  * @param {Veritabani} vt
  * @param {{ projeId: string; servisId: string; senaryoId?: string | null; ortamId?: string | null; tur: 'dene' | 'kosu';
- *   durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown>; uygulamaSurumu?: string | null }} girdi
+ *   durum: 'basarili' | 'basarisiz' | 'hata'; baslangic: string; sureMs: number; baslik?: string; sonuc: Record<string, unknown>; uygulamaSurumu?: string | null;
+ *   kurtarma?: Array<{ kuralId: string; durum: string; deneme?: number }> }} girdi
  *   uygulamaSurumu: test edilen uygulamanın sürümü (PDF rapor A4; koşu başlatılırken girilen ya da ortam ayarındaki; düz metin).
+ *   kurtarma: çalışan kurtarma kuralları (düz kurtarma_json; yalnız kural kimliği / durum / deneme — sayaçlar için; not şifreli sonuçta).
  */
 export function servisKosusuKaydet(vt, girdi) {
   acikAnahtar(vt);
   const id = randomUUID();
-  vt.calistir(`INSERT INTO servis_kosulari (id, proje_id, servis_id, senaryo_id, ortam_id, tur, durum, baslangic, sure_ms, baslik, sonuc_json, uygulama_surumu)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+  vt.calistir(`INSERT INTO servis_kosulari (id, proje_id, servis_id, senaryo_id, ortam_id, tur, durum, baslangic, sure_ms, baslik, sonuc_json, uygulama_surumu, kurtarma_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
     id, kimlik(girdi.projeId, 'projeId'), kimlik(girdi.servisId, 'servisId'), girdi.senaryoId ?? null, girdi.ortamId ?? null,
     secenek(girdi.tur, ['dene', 'kosu'], 'tur'), secenek(girdi.durum, KOSU_DURUMLARI, 'durum'), girdi.baslangic,
-    Math.max(0, Math.round(girdi.sureMs)), girdi.baslik ?? '', sifreliJson(vt, girdi.sonuc, 'sonuc'), uygulamaSurumuTemizle(girdi.uygulamaSurumu)
+    Math.max(0, Math.round(girdi.sureMs)), girdi.baslik ?? '', sifreliJson(vt, girdi.sonuc, 'sonuc'), uygulamaSurumuTemizle(girdi.uygulamaSurumu), kurtarmaSutunuYaz(girdi.kurtarma)
   ]);
   return id;
 }

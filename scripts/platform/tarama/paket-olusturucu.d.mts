@@ -159,6 +159,8 @@ export type KayitAdimi = {
   zamanAsimiSn?: number;
   /** "Ekran görüntüsü al" işareti (akış tasarımı; kosu.ekranGoruntusu — adım görüntüleri "Seçili adımlarda" iken). */
   ekranGoruntusu?: boolean;
+  /** "Tekrar denenebilir" işareti (akış tasarımı; kosu.tekrarDenenebilir — kurtarma kuralı adımı tekrar deneyebilir). */
+  tekrarDenenebilir?: boolean;
   /** Ortak akış adımı (akış tasarımında "+ > Ortak akış"): alanı yoktur; istegeBagli ise senaryoda "“ad” dahil" ile seçilir. */
   ortakAkis?: { dosya: string; istegeBagli: boolean };
   /** SQL sorgusu adımı (akış tasarımında "+ > SQL sorgusu"): alanı yoktur; modelde adımın sqlKontrolu olur. */

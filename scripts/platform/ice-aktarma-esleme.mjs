@@ -64,7 +64,9 @@ export const PROJE_TABLOLARI = Object.freeze({
   servis_akislari: ['tur', 'baslik'],
   // Rapor verileri (A4): ekip adına göre; öğe işareti öğe türü + (eşlenmiş) öğe kimliğine göre — öğe tabloları önce eşlenir.
   ekipler: ['ad'],
-  rapor_isaretleri: ['oge_turu', 'oge_id']
+  rapor_isaretleri: ['oge_turu', 'oge_id'],
+  // Kurtarma kuralları: kural adına göre (hazır kuralın açık / kapalı satırı da sabit adıyla eşlenir).
+  kurtarma_kurallari: ['ad']
 });
 /** Proje kaydı olmayan (genel) ve geçmiş/koşu tabloları (ice-aktarma.mjs > EKLEME_TABLOLARI): yalnızca içerikleri eşlenir. */
 const GENEL_TABLOLAR = new Set(['makineler', 'ayarlar', 'projeler', 'degisiklik_gecmisi', 'kosular', 'kosu_sonuclari', 'adim_sonuclari',
@@ -80,7 +82,7 @@ export const SAYI_ETIKETLERI = Object.freeze({
   servisler: 'servis', ekranlar: 'ekran', senaryolar: 'senaryo', servis_senaryolari: 'servis senaryosu', servis_akislari: 'servis akışı',
   ortamlar: 'ortam', giris_profilleri: 'giriş profili', baglam_profilleri: 'bağlam profili', test_verisi_turleri: 'test verisi tablosu',
   test_verisi_profilleri: 'test verisi satırı', ekran_modelleri: 'ekran modeli sürümü', servis_kimlikleri: 'servis giriş bilgisi',
-  servis_parametre_tanimlari: 'servis parametre tanımı', ekipler: 'ekip', rapor_isaretleri: 'rapor işareti'
+  servis_parametre_tanimlari: 'servis parametre tanımı', ekipler: 'ekip', rapor_isaretleri: 'rapor işareti', kurtarma_kurallari: 'kurtarma kuralı'
 });
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

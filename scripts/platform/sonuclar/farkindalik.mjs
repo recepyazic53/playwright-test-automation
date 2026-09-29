@@ -42,6 +42,7 @@ import { YAVASLAMA_EN_AZ } from './yuzdelik.mjs';
 import { akisAdimSatirlari } from './servis-sonuclari.mjs';
 import { donemRaporuVerisi, servisMetodu } from './donem-raporu.mjs';
 import { gosterimMaskesi } from './gosterim-maskesi.mjs';
+import { calisanKurallar } from '../ayarlar/kurtarma-kurallari.mjs';
 
 /** @typedef {import('../veritabani/baglanti.mjs').Veritabani} Veritabani */
 /**
@@ -334,6 +335,17 @@ async function hesapla(vt, projeId, x) {
     }
   }, undefined);
 
+  // 5) Çalışan kurtarma kuralları (Ayarlar > Proje ve ortamlar > Kurtarma kuralları): kurtarılan sonuç başarılı sayılır ama kuralın
+  //    ne kadar çalıştığı burada görünür kalır (sorun gizlenmez). Yalnız kural adı ve sayılar.
+  dene('Kurtarma kuralları', () => {
+    if (!donemBilgisi) return;
+    for (const k of calisanKurallar(vt, projeId, { bas: donemBilgisi.bas, bit: donemBilgisi.bit })) {
+      const parca = [`${k.toplam} kez çalıştı`, k.kurtarildi ? `${k.kurtarildi} kurtarıldı` : '', k.kaldi ? `${k.kaldi} yine kaldı` : '',
+        k.tekrarlanmadi ? `${k.tekrarlanmadi} tekrar denenmedi` : ''].filter(Boolean);
+      dikkat.push({ tur: 'kurtarma', ad: ad(k.ad), ayrinti: `Kurtarma kuralı · ${parca.join(' · ')}`, adres: '#/ayarlar/proje' });
+    }
+  }, undefined);
+
   // ================================ BAKIM ================================
   /** @type {Madde[]} */
   const bakim = [];
@@ -387,7 +399,7 @@ async function hesapla(vt, projeId, x) {
       ['Kırık tablo başvurusu', v.kirikBasvurular.length], ['Kullanılmayan tablo', v.kullanilmayan.length],
       ['Birleştirilebilecek tablolar', v.benzer.filter((o) => o.puan >= v.benzerlikEsigi).length], ['Boş sütun', v.bosSutunlar.length]
     ]);
-    for (const [baslik, n] of satirlar) if (n) bakim.push({ tur: 'veri', ad: baslik, ayrinti: `Test verisi sağlığı · ${n}`, adres: '#/ayarlar/test-verisi' });
+    for (const [baslik, n] of satirlar) if (n) bakim.push({ tur: 'veri', ad: baslik, ayrinti: `Test verisi sağlığı · ${n}`, adres: '#/veri' });
   }, undefined);
 
   // ================================ KAPSAM VE GÜVENLİK ================================

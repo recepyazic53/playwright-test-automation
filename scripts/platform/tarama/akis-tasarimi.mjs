@@ -362,11 +362,11 @@ export function bloklariAyikla(ham) {
           else if (typeof t === 'string' && ALAN_TUSLARI.includes(t)) tuslar[a] = t;
         }
       }
-      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(Object.keys(tuslar).length ? { tuslar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
+      bloklar.push({ tur: 'alanlar', ad: metin(b.ad, AD_EN_COK), alanlar: liste, zorunlu: [...new Set(zorunlu)], kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(Object.keys(tuslar).length ? { tuslar } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...(b.tekrarDenenebilir === true ? { tekrarDenenebilir: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'bekle') bloklar.push({ tur: 'bekle', saniye: sayi(b.saniye) });
     else if (b.tur === 'ortak') bloklar.push({ tur: 'ortak', dosya: metin(b.dosya, 200), ad: metin(b.ad, AD_EN_COK), istegeBagli: b.istegeBagli === true });
     else if (b.tur === 'aksiyon') {
-      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.gorunurse === true ? { gorunurse: true } : {}), ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...korunanEki(b) });
+      bloklar.push({ tur: 'aksiyon', dugme: sayi(b.dugme), istegeBagli: b.istegeBagli === true, ...(b.gorunurse === true ? { gorunurse: true } : {}), ...(b.zamanAsimiSn !== undefined && b.zamanAsimiSn !== null && b.zamanAsimiSn !== '' ? { zamanAsimiSn: sayi(b.zamanAsimiSn) } : {}), ...(b.ekranGoruntusu === true ? { ekranGoruntusu: true } : {}), ...(b.tekrarDenenebilir === true ? { tekrarDenenebilir: true } : {}), ...korunanEki(b) });
     } else if (b.tur === 'korunan') {
       // Salt okunur korunan parça: yalnız anahtarı (ve gösterilen adı) alınır; içeriği sunucudaki modelden gelir.
       if (typeof b.korunan !== 'string' || !b.korunan || b.korunan.length > KORUNAN_ANAHTAR_EN_COK) { hatalar.push({ blok: i, mesaj: 'Korunan parça okunamadı; diyagramı yeniden açın.' }); return; }
@@ -488,6 +488,8 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
       }
       // "Ekran görüntüsü al": grubun ait olduğu adım (isteğe bağlı düğmenin açtığı grupta da aynı adım).
       if (b.ekranGoruntusu && cur) /** @type {(typeof adimlar)[number]} */ (cur).ekranGoruntusu = true;
+      // "Tekrar denenebilir" (kurtarma kuralı): grubun ait olduğu adım.
+      if (b.tekrarDenenebilir && cur) /** @type {(typeof adimlar)[number]} */ (cur).tekrarDenenebilir = true;
       return;
     }
     if (b.tur === 'aksiyon') {
@@ -504,12 +506,14 @@ export function akistanKayitEnvanteri(env, bloklar, s = {}) {
         if (!c0 || !kapali || !c0.ilerleme || c0.aksiyonlarAynen || bekleyen) { hata(i, '“Yalnız görünürse bas” düğmesi adımın ilerleme düğmesinden (her senaryoda basılan aksiyon) hemen sonra gelir; ör. onaydan sonra bazen açılan ara penceredeki düğme.'); return; }
         if (b.korunan) { hata(i, 'Bu aksiyonun korunan parçaları “Yalnız görünürse bas” düğmesinde tutulamaz.'); return; }
         if (b.ekranGoruntusu) c0.ekranGoruntusu = true;
+        if (b.tekrarDenenebilir) c0.tekrarDenenebilir = true;
         (c0.gorunurseTiklar ??= []).push({ ...og, ...(b.zamanAsimiSn !== undefined ? { zamanAsimiSn: b.zamanAsimiSn } : {}) });
         return;
       }
       if (!cur || kapali) yeniAdim(metin(d.metin, AD_EN_COK) || `${adimlar.length + 1}. adım`, []);
       const c = /** @type {(typeof adimlar)[number]} */ (cur);
       if (b.ekranGoruntusu) c.ekranGoruntusu = true;
+      if (b.tekrarDenenebilir) c.tekrarDenenebilir = true;
       const korunan = korunanAl(b, i);
       if (korunan && korunan.tur !== 'ek') { hata(i, 'Bu korunan parça aksiyonda kullanılamaz.'); return; }
       if (b.istegeBagli) {

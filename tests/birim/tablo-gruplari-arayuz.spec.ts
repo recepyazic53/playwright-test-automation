@@ -66,7 +66,7 @@ test('gruplar, sayılar, arama ve hatırlanan açık / kapalı durumu; telefonda
   const page = await baglam.newPage();
   const hatalar: string[] = [];
   page.on('pageerror', (e) => hatalar.push(String(e)));
-  await page.goto('/#/ayarlar/test-verisi');
+  await page.goto('/#/veri');
   const liste = page.getByRole('navigation', { name: 'Tablolar' });
   const kayit = liste.getByRole('button', { name: /Kişi ve kayıt verileri/ });
   const ekran = liste.getByRole('button', { name: /^Ekran listeleri/ });
@@ -108,7 +108,7 @@ test('uzun adlar ve büyük tablo: liste paneli taşmaz (ad "…" + tam ad ipucu
   for (const [genislik, yukseklik] of [[1400, 900], [1024, 800], [390, 844]] as const) {
     const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: genislik, height: yukseklik } });
     const page = await baglam.newPage();
-    await page.goto('/#/ayarlar/test-verisi');
+    await page.goto('/#/veri');
     const liste = page.getByRole('navigation', { name: 'Tablolar' });
     const uzun = liste.locator('.tablo-ogesi').filter({ hasText: UZUN_AD });
     await expect(uzun.locator('.tablo-adi')).toHaveAttribute('title', UZUN_AD);
@@ -138,11 +138,11 @@ test('uzun adlar ve büyük tablo: liste paneli taşmaz (ad "…" + tam ad ipucu
 test('hiç tablo yokken: boş grup başlığı yok, tek boş durum mesajı', async () => {
   const baglam = await tarayici.newContext({ baseURL: nobetci.adres, viewport: { width: 1280, height: 900 } });
   const page = await baglam.newPage();
-  await page.goto('/#/ayarlar/test-verisi');
+  await page.goto('/#/veri');
   await page.locator('.proje-secici').click();
   await page.locator('.proje-menusu').getByRole('menuitemradio', { name: 'Yeni boş proje' }).click();
   await expect(page.locator('#proje-rozeti')).toHaveText('Yeni boş proje');
-  await page.evaluate(() => { location.hash = '#/ayarlar/test-verisi'; });
+  await page.evaluate(() => { location.hash = '#/veri'; });
   const liste = page.getByRole('navigation', { name: 'Tablolar' });
   await expect(liste.getByRole('button', { name: 'Tablo ekle' })).toBeVisible();
   await expect(liste.locator('.tablo-grubu')).toHaveCount(0);

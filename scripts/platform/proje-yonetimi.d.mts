@@ -18,6 +18,8 @@ export interface ProjeSilmeSayilari {
   /** Rapor verileri: ekip listesi ve öğe işaretleri (kritik, ekip, süre eşiği). */
   ekip: number;
   raporIsareti: number;
+  /** Kurtarma kuralları (kullanıcı kuralları + hazır kuralın açık / kapalı satırı). */
+  kurtarmaKurali: number;
 }
 export declare function projeTablolari(vt: Veritabani): string[];
 export declare function projeKalintilari(vt: Veritabani, projeId: string): Record<string, number>;

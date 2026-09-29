@@ -944,6 +944,8 @@ export function kayitPaketiOlustur(meta, envanter) {
     if (!k.ilerleme && k.gosterge) eklenen[eklenen.length - 1].gosterge = k.gosterge;
     // "Ekran görüntüsü al" (akış tasarımı): adımın sonu — ilerleme düğmesinin parçası (düğme yoksa son parça).
     if (k.ekranGoruntusu) (eklenen.find((p) => k.ilerleme && p.tikla === k.ilerleme) ?? eklenen[eklenen.length - 1]).ekranGoruntusu = true;
+    // "Tekrar denenebilir" (kurtarma kuralı): adımın bütün parçaları (hangisi kalırsa kalsın aynı karar).
+    if (k.tekrarDenenebilir) for (const p of eklenen) p.tekrarDenenebilir = true;
     altAdimlar.push(...eklenen);
   }
 
@@ -1102,6 +1104,7 @@ export function kayitPaketiOlustur(meta, envanter) {
     }
     if (p.zamanAsimiSn) kosu.zamanAsimiSn = p.zamanAsimiSn;
     if (p.ekranGoruntusu) kosu.ekranGoruntusu = true;
+    if (p.tekrarDenenebilir) kosu.tekrarDenenebilir = true;
     const id = p.korunan?.id ?? adimKimligi(p.ad);
     // Mevcut modeldeki aynı adımın diyagramda gösterilmeyen koşu ayarları korunur: hata penceresi (uyarısız) ve öğe
     // "veya" göstergesi (diyagramın yazdığı öğeyi içeriyorsa; ör. "kart seçeneği YA DA doğrudan kart formu açılır").
