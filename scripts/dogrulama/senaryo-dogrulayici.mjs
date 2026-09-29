@@ -453,7 +453,12 @@ function kosulIfadesiniDegerlendir(ifade, b, bilinenDurumlar) {
     if (Array.isArray(ifade.icinde)) return ifade.icinde.includes(deger);
     return deger === ifade.esit;
   }
-  if (typeof ifade.senaryoAyari === 'string') return b.alanDegeri(ifade.senaryoAyari) === ifade.esit;
+  if (typeof ifade.senaryoAyari === 'string') {
+    const deger = b.alanDegeri(ifade.senaryoAyari);
+    // Senaryo ayarı tablodan (${Tablo.Sütun}): kodu koşuda seçilen satırdan belli olur (her satır kendi dalına), koşul bilinmiyor.
+    if (tabloBasvurusuCoz(deger)) return null;
+    return deger === ifade.esit;
+  }
   if (ifade.calismaZamani === 'gorunurse') {
     // POM alanın ekranda görünüp görünmediğine çalışma anında bakıyor; doğrulayıcı, koşulun
     // bağlam profili bazında bilinen durumlarından (bilinenDurumlar > profilKodu) karar verir.

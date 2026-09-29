@@ -13,6 +13,13 @@ const TIP = { secim: 'seçim', metin: 'metin', sayi: 'sayı', tarih: 'tarih', te
 const kucuk = (x) => String(x ?? '').trim().toLocaleLowerCase('tr');
 /** Seçenekleri tablodan listelenen alan tipleri: gizli sütuna bağlanamaz. */
 const SECIM_TIPLERI = ['secim', 'okluSecim', 'radyo'];
+/**
+ * Senaryo ayarı (ekranda karşılığı olmayan, akışı dallandıran seçim; ör. "Teslim şekli: kargo / mağaza") rozeti. Tablodaki okunur
+ * değer koşuda seçeneğin koduna çevrilir: bağ kurulunca sütunun karşılıkları (sayfa değeri = kod) modelden dolar.
+ */
+const ayarRozeti = () => h('span', {
+  class: 'rozet vurgu ayar-rozeti', title: 'Ekranda karşılığı yok; akışın hangi dala gideceğini seçer. Tablodaki değer (ör. seçeneğin adı) koşuda seçeneğin koduna çevrilir (sütunun karşılıkları: sayfa değeri = kod).'
+}, 'Ekranda alan değil · senaryo ayarı');
 
 /** @param {HTMLElement} kap @param {{ proje: { id: string } }} s @param {{ id: string; ad: string }} ekran */
 export async function ekranBaglariSekmesi(kap, s, ekran) {
@@ -116,12 +123,13 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
       const etiket = kendi ? h('input', { type: 'text', value: b.etiket || '', maxlength: '40', placeholder: 'etiket', class: 'bag-etiketi', 'aria-label': `${g.etiket} etiketi`,
         title: 'Aynı tablo bu ekranda iki kez gerekiyorsa (ör. başvuran / kefil) farklı etiket verin; aynı etiketli alanlar aynı satırdan dolar.' }) : null;
       etiket?.addEventListener('change', () => { const e = etiket.value.trim(); if (e) kendi.etiket = e; else delete kendi.etiket; degisti(); });
-      let alt = null;
+      // Senaryo ayarı rozeti (bağlı değilken de): sütun seçiminin altında, değer çiplerinin üstünde.
+      let alt = g.senaryoAyari ? ayarRozeti() : null;
       if (sutun && sutun.gizli) {
         alt = h('span', { class: 'soluk kucuk' }, ikon('kilit'), ' gizli sütun: değer şifreli, koşuda kullanılır, gösterilmez');
       } else if (sutun) {
         const degerler = [...new Set(tablo.satirlar.map((r) => r.degerler[sutun.ad]).filter((x) => x !== null && x !== undefined && x !== ''))];
-        alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
+        alt = [alt, degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok')];
       }
       const satir = h('div', { class: `alan-satiri ${b ? '' : 'gonderilmez'}` },
         h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip)),

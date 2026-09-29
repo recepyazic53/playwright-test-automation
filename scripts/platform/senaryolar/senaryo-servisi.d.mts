@@ -74,7 +74,9 @@ export declare function senaryoDetayi(vt: Veritabani, id: string, ortamId: strin
   /** Talep numaraları (yoksa boş liste). */
   talepler: string[];
 };
-export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string, secenekler?: { tumTipler?: boolean }): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }> }> };
+export declare function ekranGirdileri(vt: Veritabani, projeId: string, ekranId: string, secenekler?: { tumTipler?: boolean }): { girdiler: Array<{ id: string; etiket: string; tip: string; secenekler: Array<{ deger: string; metin: string; ekranDegeri?: string; ekranMetni?: string }>;
+  /** Senaryo ayarı (ekranda karşılığı olmayan, akışı dallandıran seçim): tablodaki değer seçenek koduna çevrilir. */
+  senaryoAyari?: true }> };
 export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: string, ortamId: string, akisId?: string | null): {
   ekran: { id: string; anahtar: string; ad: string };
   ortamlar: Array<{ id: string; ad: string; varsayilan: boolean }>;
@@ -84,7 +86,8 @@ export declare function formBaglami(vt: Veritabani, projeId: string, ekranId: st
   profiller: Record<string, Array<{ ad: string; tur: 'baglam' | 'testVerisi'; kapsam: 'tum' | 'ortam'; alanlar: Array<{ etiket: string; deger?: string; dolu: boolean }> }>>;
   veriKaynagi: { spec: string; dosya: string; yol: string; model: boolean } | null;
   olusturulabilir: boolean;
-  degerListeleri?: import('../servisler/parametre-tanimlari.mjs').ParametreTanimi[];
+  /** senaryoAyari: senaryo ayarının listesi (seçenekleri değiştirmez; yalnız "Tablodan" başvurusu için). */
+  degerListeleri?: Array<import('../servisler/parametre-tanimlari.mjs').ParametreTanimi & { senaryoAyari?: true }>;
   /** Gizli sütuna bağlı alanlar (değer yok): alan kimliği → tablo / sütun adı. */
   gizliBaglar?: Record<string, { tablo: string; sutun: string; etiket?: string }>;
   akislar: AkisOzeti[];

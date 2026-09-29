@@ -72,7 +72,7 @@ export const TABLO_GET_UCLARI = [
   ['/platform/tablolar/veri-sagligi', (db, q) => veriSagligi(db, kimlik(q.get('projeId'), 'projeId'))],
   // Birleştirme geçmişi (yeniden eskiye; değer ve ham kayıt içermez): durum, geri alınabilir mi / neden, kaynaklar silinebilir mi.
   ['/platform/tablo/birlestirme/gecmis', (db, q) => birlestirmeGecmisi(db, kimlik(q.get('projeId'), 'projeId'))],
-  // Ekranın "Test verisi" sekmesi: input'lar, ekranın KENDİ tablo bağlantıları, kullandığı ortak akışlardan gelen (varsayılan)
+  // Ekranın "Test verisi" sekmesi: input'lar (senaryo ayarları dahil), ekranın KENDİ tablo bağlantıları, kullandığı ortak akışlardan gelen (varsayılan)
   // bağlar ve tablolar. ortakAkis: bu sayfa bir ortak akışın (bağları onu kullanan ekranlara geçer; senaryo dönüşümleri yok).
   ['/platform/ekran/alan-baglari', (db, q) => {
     const projeId = kimlik(q.get('projeId'), 'projeId');
@@ -81,7 +81,8 @@ export const TABLO_GET_UCLARI = [
     const model = ekranModeliGetir(db, ekranId);
     return {
       baglar: ekranAlanBaglari(db, ekranId), ortakBaglar: ortakAkisBaglari(db, ekranId), ortakAkis: Boolean(model && model.model && model.model.tur === 'ortakAkis'),
-      girdiler: girdiler.map((g) => ({ id: g.id, etiket: g.etiket, tip: g.tip })), tablolar: tablolariListele(db, projeId)
+      // senaryoAyari: ekranda karşılığı olmayan, akışı dallandıran seçim (rozetle gösterilir; tablodaki değer koda çevrilir).
+      girdiler: girdiler.map((g) => ({ id: g.id, etiket: g.etiket, tip: g.tip, ...(g.senaryoAyari ? { senaryoAyari: true } : {}) })), tablolar: tablolariListele(db, projeId)
     };
   }]
 ];

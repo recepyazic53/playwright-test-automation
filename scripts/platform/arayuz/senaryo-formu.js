@@ -162,12 +162,13 @@ function modelFormu(icerik, s, senaryo, baglam) {
   const dogrulamaBaglami = { model: baglam.model, altModeller: baglam.altModeller, kaynak: 'kayit' };
   const tumAlanlar = tumFormAlanlari(sema);
   // Koşullu değer listeleri (Veri > Tablolar): koşulları tutan liste seçim alanının seçeneklerini belirler (metin: listedeki
-  // açıklama, yoksa modelin metni); tutan liste yoksa modelin kendi listesi.
+  // açıklama, yoksa modelin metni); tutan liste yoksa modelin kendi listesi. Senaryo ayarının listesi (senaryoAyari; ekranda
+  // karşılığı olmayan, akışı dallandıran seçim) seçenekleri değiştirmez — kodlar modelden; yalnız "Tablodan" başvurusu için.
   const degerListeleri = baglam.degerListeleri || [];
   const alanDegeri = (id) => { const a = tumAlanlar.find((x) => x.id === id); return a ? String(degerler[a.anahtar] ?? '') : undefined; };
   const alanSecenekleri = (alan) => {
     const model = secenekleriBul(alan, degerler, sema);
-    const eslesen = eslesenListeler(degerListeleri, (l) => l.hedef?.alan === alan.id, alanDegeri);
+    const eslesen = eslesenListeler(degerListeleri, (l) => l.hedef?.alan === alan.id && !l.senaryoAyari, alanDegeri);
     if (!eslesen.length) return model;
     const metinler = new Map([...(alan.secenekler || []), ...Object.values(alan.bagimlilik?.harita || {}).flat()].map((x) => [x.deger, x.metin]));
     return birlesikDegerler(eslesen).map((x) => ({ deger: x.deger, metin: x.aciklama || metinler.get(x.deger) || x.deger }));
