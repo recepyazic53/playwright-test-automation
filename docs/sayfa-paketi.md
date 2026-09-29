@@ -172,7 +172,9 @@ akış olmaz. Nasıl çalışır:
   ekranların varsayılan akışının sonuna ekler (isteğe bağlı seçilirse senaryoda "“<ad>” dahil" ile koşar).
 - **Test verisi:** ortak akışın sayfasında "Test verisi" sekmesi vardır; alan → tablo sütunu bağı ortak akışta bir kez kurulur
   (ortak akış paketinin `testVerisi.baglantilar`ı da ortak akışın ayarlarına yazılır) ve onu kullanan tüm ekranlara **varsayılan**
-  olarak geçer. Ekranın Test verisi sekmesinde bu bağ "Ortak akıştan: <ad>" işaretiyle görünür; ekran aynı alanı başka sütuna
+  olarak geçer. Ekranın Test verisi sekmesinde bu alanlar ekranın kendi alanlarının altında, ortak akış başına ayrı
+  "Ortak akıştan: <ad> (n alan)" bölümünde görünür (başlıkta ortak akışın Test verisi sekmesine bağlantı; varsayılan kapalı,
+  alanlarından biri ekrana özel bağlıysa açık gelir); ekran aynı alanı başka sütuna
   bağlarsa o ekranda onunki geçerlidir (ekrana özel), "Ortak akışa dön" ekranın bağını siler. Etkin bağ (ekranınki, yoksa ortak
   akışınki) senaryo formunda, koşuda, tablo etkisi / kullanımında, birleştirme denetiminde ve istek dosyasında kullanılır
   (`tablolar/ekran-baglari.mjs > etkinAlanBaglari`). Ortak akışta senaryo dönüşümleri ("Değerleri / Kişi alanlarını tabloya bağla…") yoktur.
