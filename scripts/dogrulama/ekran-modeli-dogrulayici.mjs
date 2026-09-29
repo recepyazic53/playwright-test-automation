@@ -147,9 +147,14 @@ const BOLUM_ANAHTARLARI = new Set(['id', 'baslik', 'pomMetodu', 'gorunurluk', 'a
 const EKRAN_ANAHTARLARI = new Set([
   'semaSurumu', 'tur', 'id', 'ad', 'aciklama', 'ekranUrl', 'specDosyasi', 'pageObject', 'veriKaynaklari',
   'kosullar', 'adimlar', 'senaryoDuzeyi', 'urunDuzeyi', 'baglam', 'isKurallari', 'bilinmeyenler',
-  'baglamGorunurlugu', 'girisGerekmez', 'akislar', 'yalnizTestOrtami'
+  'baglamGorunurlugu', 'girisGerekmez', 'akislar', 'yalnizTestOrtami', 'bastakiOrtakAkislar'
 ]);
-const AKIS_ANAHTARLARI = new Set(['id', 'ad', 'varsayilan', 'adimlar']);
+const AKIS_ANAHTARLARI = new Set(['id', 'ad', 'varsayilan', 'adimlar', 'bastakiOrtakAkislar']);
+/**
+ * Akışın başındaki (ilk ekran adımından önceki) ortak akış blokları ne zaman çalışır: 'once' (varsayılan; girişten sonra açılan
+ * sayfada, ekran açılmadan önce) ya da 'sonra' (ekran açıldıktan sonra; eski davranış). Model kökünde (varsayılan akış) ve akışta.
+ */
+export const BASTAKI_ORTAK_AKIS_SECENEKLERI = Object.freeze(['once', 'sonra']);
 const ALT_MODEL_ANAHTARLARI = new Set([
   'semaSurumu', 'tur', 'id', 'ad', 'aciklama', 'pageObject', 'kullananlar', 'veriKaynaklari', 'bolumler',
   'ekranDisiAlanlar', 'bilinmeyenler'
@@ -603,6 +608,9 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
   if (ortakMi && ham.akislar !== undefined) h.ekle(yer, 'ortak akışın kendi akışları olmaz ("akislar")');
   // Ekran giriş yapılmadan açılır (model koşucusu giriş ve bağlam değiştirme adımlarını atlar).
   if (ham.girisGerekmez !== undefined && typeof ham.girisGerekmez !== 'boolean') h.ekle(yer, '"girisGerekmez" true/false olmalı');
+  if (ham.bastakiOrtakAkislar !== undefined && (ortakMi || !BASTAKI_ORTAK_AKIS_SECENEKLERI.includes(ham.bastakiOrtakAkislar))) {
+    h.ekle(yer, ortakMi ? 'ortak akışta "bastakiOrtakAkislar" olmaz' : '"bastakiOrtakAkislar" "once" ya da "sonra" olmalı');
+  }
 
   const b = yeniBasvurular(ham.semaSurumu);
   const kimlikler = [];
@@ -833,6 +841,9 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
 function akisAltModeli(ham, akis) {
   const sonuc = { ...ham, adimlar: akis.adimlar };
   delete sonuc.akislar;
+  // Baştaki ortak akışların sırası akışındır (yoksa varsayılan: ekran açılmadan önce).
+  delete sonuc.bastakiOrtakAkislar;
+  if (akis.bastakiOrtakAkislar !== undefined) sonuc.bastakiOrtakAkislar = akis.bastakiOrtakAkislar;
   const adimIdleri = new Set(akis.adimlar.map((a) => (nesneMi(a) ? a.id : null)));
   const alanIdleri = new Set();
   const topla = (liste) => { for (const a of Array.isArray(liste) ? liste : []) if (nesneMi(a) && typeof a.id === 'string') alanIdleri.add(a.id); };
@@ -891,9 +902,11 @@ function akislariDogrula(h, ham, dosyaYolu, altModelKaynagi) {
     else idler.add(akis.id);
     if (!metinMi(akis.ad)) h.ekle(yer, '"ad" zorunlu');
     if (akis.varsayilan !== undefined && akis.varsayilan !== true) h.ekle(yer, '"varsayilan" yalnızca true olabilir');
+    if (akis.bastakiOrtakAkislar !== undefined && !BASTAKI_ORTAK_AKIS_SECENEKLERI.includes(akis.bastakiOrtakAkislar)) h.ekle(yer, '"bastakiOrtakAkislar" "once" ya da "sonra" olmalı');
     if (akis.varsayilan === true) {
       varsayilan++;
       if (JSON.stringify(akis.adimlar) !== JSON.stringify(ham.adimlar)) h.ekle(yer, 'varsayılan akışın "adimlar"ı modelin "adimlar"ıyla aynı olmalı');
+      if ((akis.bastakiOrtakAkislar ?? 'once') !== (ham.bastakiOrtakAkislar ?? 'once')) h.ekle(yer, 'varsayılan akışın "bastakiOrtakAkislar"ı modelinkiyle aynı olmalı');
       return;
     }
     if (!Array.isArray(akis.adimlar) || !akis.adimlar.length) { h.ekle(yer, '"adimlar" boş olmayan dizi olmalı'); return; }

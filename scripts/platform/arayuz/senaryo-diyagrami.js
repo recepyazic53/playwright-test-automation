@@ -173,7 +173,20 @@ export function akisDiyagramiCiz(kap, d, bilgi) {
 
   let onceki = [];
   let oncekiKapali = false;
+  // Baştaki ortak akışlar koşuyorsa ekran onlardan SONRA açılır: "Ekran açılır" düğümü ilk ekran adımının önünde.
+  let ekranAcildi = !d.ekranAcilisi;
   for (const a of d.adimlar) {
+    if (!ekranAcildi && !a.ekranAcilmadan) {
+      ekranAcildi = true;
+      ogeler.push({ el: baglanti(onceki, oncekiKapali), dugum: null });
+      ogeler.push({ el: h('li', { class: dugumSinifi(d.ekranAcilisi.sonuc, 'ekran-acilisi') },
+        h('div', { class: 'dugum-basligi' }, h('span', { class: 'dugum-simgesi', 'aria-hidden': 'true' }, ikon('oynat')),
+          h('h4', {}, d.ekranAcilisi.metin), durumCipi(d.ekranAcilisi.sonuc)),
+        h('p', { class: 'dugum-aciklamasi' }, 'Baştaki ortak akışlardan sonra ekranın sayfası açılır; ekran adımları burada başlar.'),
+        hataSatiri(d.ekranAcilisi.sonuc)), dugum: null });
+      onceki = [];
+      oncekiKapali = false;
+    }
     const disarida = a.kosulur === false;
     ogeler.push({ el: baglanti(onceki, oncekiKapali || disarida), dugum: null });
     const dugumId = `adim:${a.id}`;

@@ -356,6 +356,12 @@ function adimKosulu(adim, model) {
 
 /** Akışın adımları sırayla. @param {Nesne[]} adimlar */
 const siraliAdimlar = (adimlar) => adimlar.filter(nesneMi).slice().sort((a, b) => (a.sira || 0) - (b.sira || 0));
+/** Akışın başındaki (ilk ekran adımından önceki) ortak akış adımlarının sayısı. @param {unknown} adimlar */
+const bastakiOrtakAdimSayisi = (adimlar) => {
+  let n = 0;
+  for (const a of siraliAdimlar(Array.isArray(adimlar) ? adimlar : [])) { if (!nesneMi(a.ortakAkis)) break; n++; }
+  return n;
+};
 /** Korunan parça anahtarı: tür + akış + adım kimliği. @param {string} tur @param {string} akisId @param {string} adimId */
 const korunanAnahtari = (tur, akisId, adimId) => `${tur}:${akisId}:${adimId}`;
 
@@ -785,8 +791,12 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
   const kaynakId = s.akisId || s.kopya || null;
   const kaynak = kaynakId ? liste.find((a) => a.id === kaynakId) : null;
   if (kaynakId && !kaynak) throw new DepoHatasi('Akış bulunamadı.');
-  const bloklar = kaynak ? adimlardanBloklar(model, /** @type {Nesne} */ (akisModeli(model, kaynak.id)).adimlar, env, kaynak.id) : [{ tur: /** @type {const} */ ('bitir') }];
+  const akm = kaynak ? /** @type {Nesne} */ (akisModeli(model, kaynak.id)) : null;
+  const bloklar = akm && kaynak ? adimlardanBloklar(model, akm.adimlar, env, kaynak.id) : [{ tur: /** @type {const} */ ('bitir') }];
   return {
+    // "Ekran açılır" düğümünün yeri (salt görünüm): üstündeki bloklar (baştaki ortak akışlar) ekran açılmadan önce koşar. Her
+    // ortak akış adımı tek bloktur; "sonra" ayarında düğüm girişin hemen altındadır. Ortak akışın kendi diyagramında yoktur.
+    ekranAcilisSirasi: ortakAkis ? null : !akm || akm.bastakiOrtakAkislar === 'sonra' ? 0 : bastakiOrtakAdimSayisi(akm.adimlar),
     ekran, bloklar, palet: akisPaleti(env, bloklar), ortakAkislar: ortakAkis ? [] : ortakAkislariListele(vt, projeId), ortakAkis,
     ...(ortakAkis ? { kullananlar: ortakAkisKullananlari(vt, projeId, ekranId) } : {}),
     akis: s.akisId && kaynak ? { id: kaynak.id, ad: kaynak.ad, varsayilan: kaynak.varsayilan } : null,
@@ -988,7 +998,10 @@ function silinenKorunanlar(tam, akisId, bloklar, korunan) {
  * hiçbir şey yazılmaz. Model sürümüyle aynı işlemde.
  * elleOgeler: diyagramda ELLE tanımlanan alanlar / düğmeler (tarama/akis-tasarimi.mjs > elleOgeleriEkle): envanterin sonuna
  * eklenir; kaydedilince modele yazılır (ör. boş başlayan ortak akışa sıfırdan adım). Ekran ve ortak akış için aynıdır.
- * @param {{ akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri; testVerisi?: unknown; elleOgeler?: unknown }} g
+ * ekranAcilisSirasi: diyagramdaki "Ekran açılır" düğümünün üstündeki blok sayısı (salt görünüm düğümü; blok değildir). Üstünde
+ * yalnız ortak akış blokları olabilir; baştaki ortak akışların hepsi üstündeyse akış "once" (varsayılan), hiçbiri değilse "sonra"
+ * (model / akış "bastakiOrtakAkislar") olur. Verilmezse akışın mevcut ayarı korunur.
+ * @param {{ akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri; testVerisi?: unknown; elleOgeler?: unknown; ekranAcilisSirasi?: unknown }} g
  */
 export function akisKaydet(vt, projeId, ekranId, g) {
   const { ekran, model: tam } = ekranModeli(vt, projeId, ekranId);
@@ -1027,6 +1040,22 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   });
   // Diyagramda düzenlenemeyen (aynen korunan) parçalar: blokların "korunan" anahtarları modeldeki karşılıklarına çözülür.
   const korunan = korunanParcalari(tam);
+  // "Ekran açılır" (diyagramda salt görünüm düğümü; g.ekranAcilisSirasi = üstündeki blok sayısı): üstündeki bloklar ekran açılmadan
+  // önce koşar — yalnız ortak akış blokları olabilir. Baştaki ortak akışların hepsi üstündeyse "once" (varsayılan), hiçbiri
+  // değilse "sonra" (ekran önce açılır; eski davranış). Verilmezse akışın mevcut ayarı korunur.
+  /** @type {'once' | 'sonra' | null} */
+  let bastakiAyar = null;
+  if (!ortakAkis && g.ekranAcilisSirasi !== undefined && g.ekranAcilisSirasi !== null) {
+    const k = Number(g.ekranAcilisSirasi);
+    const ortakBlokMu = (/** @type {import('../tarama/akis-tasarimi.d.mts').AkisBlogu} */ b) => b.tur === 'ortak'
+      || (b.tur === 'korunan' && b.kapsam === 'adim' && nesneMi(/** @type {Nesne | undefined} */ (korunan.parcalar[b.korunan])?.adim?.ortakAkis));
+    let bastakiSayi = 0;
+    while (bastakiSayi < ayik.bloklar.length && ortakBlokMu(ayik.bloklar[bastakiSayi])) bastakiSayi++;
+    if (!Number.isInteger(k) || k < 0 || k > ayik.bloklar.length) hatalar.push({ blok: null, mesaj: '“Ekran açılır”ın yeri okunamadı; diyagramı yeniden açın.' });
+    else if (k > bastakiSayi) hatalar.push({ blok: bastakiSayi, mesaj: '“Ekran açılır”ın üstünde yalnız ortak akış blokları olabilir (ekran açılmadan önce yalnız ortak akışlar koşar); bu bloğu “Ekran açılır”ın altına taşıyın.' });
+    else if (k > 0 && k < bastakiSayi) hatalar.push({ blok: k, mesaj: 'Baştaki ortak akışların hepsi “Ekran açılır”ın üstünde (ekran açılmadan önce) ya da hepsi altında (ekran açıldıktan sonra) olmalı.' });
+    else bastakiAyar = bastakiSayi > 0 && k === 0 ? 'sonra' : 'once';
+  }
   const cevrim = ayik.hatalar.length || elle.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar, { satirSiniri: sqlSatirSiniriOku(vt), korunanlar: korunan.parcalar });
   hatalar.push(...cevrim.hatalar);
   if (hatalar.length || !cevrim.envanter) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, hatalar);
@@ -1065,16 +1094,20 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   }
   yeni.senaryoDuzeyi = { ...(nesneMi(yeni.senaryoDuzeyi) ? yeni.senaryoDuzeyi : {}), alanlar: sd };
   const akislar = Array.isArray(yeni.akislar) && yeni.akislar.length ? yeni.akislar
-    : [{ id: ANA_AKIS_ID, ad: 'Ana akış', varsayilan: true, adimlar: yeni.adimlar }];
+    : [{ id: ANA_AKIS_ID, ad: 'Ana akış', varsayilan: true, adimlar: yeni.adimlar, ...(yeni.bastakiOrtakAkislar === 'sonra' ? { bastakiOrtakAkislar: 'sonra' } : {}) }];
+  // Baştaki ortak akışların sırası (akışın ayarı; yalnız "sonra" yazılır, varsayılan "once" yazılmaz).
+  const sonra = !ortakAkis && (bastakiAyar ?? (mevcutAkis ? /** @type {Nesne} */ (akisModeli(tam, mevcutAkis.id)).bastakiOrtakAkislar : null)) === 'sonra';
+  /** @param {Nesne} a */
+  const ayarla = (a) => { if (sonra) a.bastakiOrtakAkislar = 'sonra'; else delete a.bastakiOrtakAkislar; return a; };
   let akisId;
   if (mevcutAkis) {
     akisId = mevcutAkis.id;
     const i = akislar.findIndex((/** @type {Nesne} */ a) => a.id === akisId);
-    akislar[i] = { ...akislar[i], ad, adimlar: akisAdimlari };
-    if (akislar[i].varsayilan === true) yeni.adimlar = akisAdimlari;
+    akislar[i] = ayarla({ ...akislar[i], ad, adimlar: akisAdimlari });
+    if (akislar[i].varsayilan === true) { yeni.adimlar = akisAdimlari; ayarla(yeni); }
   } else {
     akisId = akisKimligi(ad, new Set(akislar.map((/** @type {Nesne} */ a) => a.id)));
-    akislar.push({ id: akisId, ad, adimlar: akisAdimlari });
+    akislar.push(ayarla({ id: akisId, ad, adimlar: akisAdimlari }));
   }
   yeni.akislar = akislar;
   // Ortak akış tek akışlıdır (örtük "Ana akış").
@@ -1117,7 +1150,10 @@ export function akisVarsayilanYap(vt, projeId, ekranId, akisId, yapan) {
     const { varsayilan, ...geri } = a;
     return a.id === akisId ? { ...geri, varsayilan: true } : geri;
   });
-  yeni.adimlar = yeni.akislar.find((/** @type {Nesne} */ a) => a.id === akisId).adimlar;
+  const yeniVarsayilan = yeni.akislar.find((/** @type {Nesne} */ a) => a.id === akisId);
+  yeni.adimlar = yeniVarsayilan.adimlar;
+  // Model kökündeki "baştaki ortak akışlar" ayarı varsayılan akışınkidir.
+  if (yeniVarsayilan.bastakiOrtakAkislar === 'sonra') yeni.bastakiOrtakAkislar = 'sonra'; else delete yeni.bastakiOrtakAkislar;
   modeliDogrula(vt, projeId, yeni, `${ekran.anahtar}.model.json`);
   return vt.islem(() => {
     let tasinan = 0;

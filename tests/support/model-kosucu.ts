@@ -737,13 +737,17 @@ async function gostergeVarMi(page: Page, g: PlanBasariGostergesi): Promise<boole
  * Adımın aksiyonları sırayla. "Görünürse" tıklama (kosul: 'gorunurse'): öğe kısa bir süre (varsayılan GORUNURSE_BEKLEME_SN;
  * aksiyonun zamanAsimiSn'i, adımın süresinden bağımsız) beklenir; görünmezse atlanır ve "atlandı (görünmedi)" notu düşer.
  */
-async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn: number, ekranUrl: string, atlanan: AtlananAlan[]): Promise<void> {
+async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn: number, ekranUrl: string, atlanan: AtlananAlan[]): Promise<boolean> {
+  /** Son uygulanan aksiyon "Ekrana dön" mü (baştaki ortak akış böyle bitince ekran ikinci kez açılmaz)? */
+  let ekranaDonuldu = false;
   for (const a of kosu?.aksiyonlar ?? []) {
     // Ekrana dön: ekranın adresi yeniden açılır (ör. ortak akış kullanıcıyı değiştirip ana sayfaya götürdükten sonra).
-    if (a.tur === 'ekranaDon') { await page.goto(ekranUrl, { waitUntil: 'domcontentloaded' }); continue; }
-    // Süreli bekleme (akış diyagramındaki "Bekleme süresi").
+    if (a.tur === 'ekranaDon') { await page.goto(ekranUrl, { waitUntil: 'domcontentloaded' }); ekranaDonuldu = true; continue; }
+    // Süreli bekleme (akış diyagramındaki "Bekleme süresi"; sayfayı değiştirmez).
     if (a.tur === 'bekle' && a.sureSn && !a.secici) { await page.waitForTimeout(a.sureSn * 1000); continue; }
     if (!a.secici) continue;
+    // Öğeye dokunan / bekleyen aksiyon: ekrandan sonra sayfa değişmiş olabilir.
+    if (a.tur === 'tikla') ekranaDonuldu = false;
     // Öğe bir çerçevede olabilir (aksiyonun cerceve'si).
     const k = kapsam(page, a.cerceve);
     let l = k.locator(a.secici);
@@ -768,6 +772,7 @@ async function aksiyonlariUygula(page: Page, kosu: PlanKosuTanimi | null, sureSn
     else if (a.durum === 'dolu') await doluBekle(page, a.secici, zaman, 'Aksiyon', undefined, null, k);
     else await l.first().waitFor({ state: a.durum === 'gizli' ? 'hidden' : 'visible', timeout: zaman });
   }
+  return ekranaDonuldu;
 }
 
 /**
@@ -1112,24 +1117,18 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
 
     if (tarif) await baglamiUygula(tarif);
 
-    await test.step('Ekran açılır', async () => {
-      simdikiAdim = 'Ekran açılır';
-      adimAdiniBildir(page, 'Ekran açılır');
-      await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
-      await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
-    });
-
-    // Göreli tarihler (senaryo / tablo / model değeri "bugün+7" …): raporda hem ifade hem bu koşuda yazılan tarih görünür.
-    const goreliler = plan.adimlar.filter((a) => a.dahil).flatMap((a) => a.alanlar).filter((a) => a.goreliIfade && !a.atla && !gizliAdMi(a.etiket) && !gizliAdMi(a.anahtar))
-      .map((a) => `${a.etiket}: ${a.goreliIfade} → ${String(a.deger)}`);
-    if (goreliler.length) {
-      testInfo.annotations.push({ type: 'goreliTarihler', description: goreliler.join(' · ') });
-      await test.step(`Göreli tarihler — ${goreliler.join(' · ')}`, async () => undefined);
-    }
+    // Akışın başındaki ortak akış blokları (plan: ekranAcilmadan; ör. ana sayfada kullanıcı değiştirme) girişten sonra açılan
+    // sayfada — girişsiz senaryoda ortamın taban adresinde — EKRAN AÇILMADAN önce koşar; bitince "Ekran açılır", sonra ekran
+    // adımları. Model "bastakiOrtakAkislar": "sonra" ise işaret yoktur: ekran önce açılır (eski davranış).
+    const bastakiler = plan.adimlar.filter((a) => a.ekranAcilmadan === true);
+    const ekranAdimlari = plan.adimlar.filter((a) => a.ekranAcilmadan !== true);
+    /** Son koşan adım "Ekrana dön" ile bitti mi (baştaki blok böyle bitince ekran ikinci kez açılmaz; o dönüş ekranı açmıştır). */
+    let ekranaDonuldu = false;
 
     const sqlDegerleri: SqlDegerleri = { degerler: {}, gizliler: [] };
     /** Adımın gövdesi (kurtarma kuralı adımı tekrar denerken yeniden çağrılır). */
     const adimGovdesi = async (adim: PlanAdimi): Promise<void> => {
+        ekranaDonuldu = false;
         // SQL sorgusu adımı: sayfaya dokunmaz; sorgu beklenenle karşılaştırılır.
         if (adim.sql) { await sqlAdiminiUygula(testInfo, adim.baslik, adim.sql, s, ortam, sqlDegerleri); return; }
         // İndirilen dosyayı doğrulama adımı: düğmeye basılır, indirilen dosya beklentilerle doğrulanır.
@@ -1197,7 +1196,7 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
           await alanSonrasi(page, alan, l, adim.baslik, adim.kosu ?? null, k);
           await arkaPlanIstekleriniBekle(page, baslangic);
         }
-        await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl, atlanan);
+        ekranaDonuldu = await aksiyonlariUygula(page, adim.kosu, sureSn, plan.ekranUrl, atlanan);
         const gorulen = await adimSonucunuDogrula(page, adim, plan);
         // "veya" grubunda hangi başarı mesajının göründüğü ekran görüntüsünün adında yazar.
         await ekranGoruntusu(gorulen ? `${adim.baslik} (görülen: ${gorulen})` : adim.baslik, adim);
@@ -1288,10 +1287,12 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
       }
     };
 
-    const adimlariKos = async (): Promise<void> => {
-      let canlidaDurdu = false;
+    /** Canlı ortamda "yalnızca test ortamı" adımı atlandı: sonraki adımlar da atlanır (ekran öncesi ve sonrası birlikte). */
+    let canlidaDurdu = false;
+    /** Adımları sırayla koşar; son adıma (sonAdim) varıldıysa true (senaryo orada biter). */
+    const adimlariKos = async (liste: PlanAdimi[]): Promise<boolean> => {
       tamamlanan.length = 0;
-      for (const adim of plan.adimlar) {
+      for (const adim of liste) {
         if (!adim.dahil) continue;
         if ((adim.yalnizTest || canlidaDurdu) && ortam.veri.canli === true) {
           // Ortak akışın "yalnızca test ortamı" adımı (ör. ödeme): canlı ortamda koşulmaz; ondan sonraki adımlar da (ona
@@ -1311,32 +1312,73 @@ export async function modelSenaryosunuKos(page: Page, testInfo: TestInfo, s: Pla
         });
         tamamlanan.push(adim);
         simdikiAdim = null;
-        if (adim.sonAdim) break;
+        if (adim.sonAdim) return true;
+      }
+      return false;
+    };
+
+    // "Senaryoyu baştan başlat" (kurtarma kuralı): bölümün başlangıç sayfası yeniden açılır ve bölümün adımları baştan koşar —
+    // senaryoda en çok bir kez. Bölümler: baştaki ortak akışlar (başlangıç sayfası: girişten sonra açılan sayfa) ve ekran adımları
+    // (başlangıç sayfası: ekran). Ekran adımlarında baştan başlatma baştaki ortak akışları yeniden koşmaz (etkileri oturumda kalır).
+    let bastan: BastanBaslat | null = null;
+    const bolumuKos = async (liste: PlanAdimi[], yenidenAc: () => Promise<void>): Promise<boolean> => {
+      const canliBaslangic = canlidaDurdu;
+      let buBolumde = false;
+      for (;;) {
+        try {
+          const bitti = await adimlariKos(liste);
+          if (buBolumde && bastan) olayEkle(bastan.kural, 'Senaryo', 'kurtarildi', 2, `kurtarıldı: ${bastan.neden} → ${bastan.eylemMetni} → senaryo baştan başlatıldı, 2. denemede başarılı`);
+          return bitti;
+        } catch (hata) {
+          if (!(hata instanceof BastanBaslat)) {
+            if (buBolumde && bastan) olayEkle(bastan.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${bastan.neden} → senaryo baştan başlatıldı, yine başarısız`);
+            throw hata;
+          }
+          if (bastan) {
+            olayEkle(hata.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${hata.neden} → senaryo bir kez baştan başlatıldı, yine başarısız`);
+            throw hata.asil;
+          }
+          bastan = hata;
+          buBolumde = true;
+          simdikiAdim = null;
+          canlidaDurdu = canliBaslangic;
+          await test.step('Senaryo baştan başlatılır (kurtarma kuralı)', yenidenAc);
+        }
       }
     };
 
-    // "Senaryoyu baştan başlat" (kurtarma kuralı): ekran yeniden açılır ve adımlar baştan koşar — en çok bir kez.
-    let bastan: BastanBaslat | null = null;
-    for (;;) {
-      try {
-        await adimlariKos();
-        if (bastan) olayEkle(bastan.kural, 'Senaryo', 'kurtarildi', 2, `kurtarıldı: ${bastan.neden} → ${bastan.eylemMetni} → senaryo baştan başlatıldı, 2. denemede başarılı`);
-        break;
-      } catch (hata) {
-        if (!(hata instanceof BastanBaslat)) {
-          if (bastan) olayEkle(bastan.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${bastan.neden} → senaryo baştan başlatıldı, yine başarısız`);
-          throw hata;
-        }
-        if (bastan) {
-          olayEkle(hata.kural, 'Senaryo', 'kaldi', 2, `kurtarma denendi, yine kaldı: ${hata.neden} → senaryo bir kez baştan başlatıldı, yine başarısız`);
-          throw hata.asil;
-        }
-        bastan = hata;
-        simdikiAdim = null;
-        await test.step('Senaryo baştan başlatılır (kurtarma kuralı)', async () => {
-          await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
-        });
+    // 1) Baştaki ortak akışlar: girişten sonra açılan sayfada (girişsiz senaryoda ortamın taban adresi açılır).
+    let senaryoBitti = false;
+    if (bastakiler.some((a) => a.dahil)) {
+      if (!tarif) await page.goto(ortam.veri.tabanUrl, { waitUntil: 'domcontentloaded' });
+      const baslangicAdresi = page.url();
+      senaryoBitti = await bolumuKos(bastakiler, async () => {
+        if (/^https?:/i.test(baslangicAdresi)) await page.goto(baslangicAdresi, { waitUntil: 'domcontentloaded' });
+      });
+    }
+
+    if (!senaryoBitti) {
+      // 2) Ekran açılır. Baştaki blok "Ekrana dön" ile bittiyse ekran zaten o dönüşle açıldı: ikinci kez istenmez.
+      await test.step('Ekran açılır', async () => {
+        simdikiAdim = 'Ekran açılır';
+        adimAdiniBildir(page, 'Ekran açılır');
+        if (!ekranaDonuldu) await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
+        await ekranGoruntusu(`Ekran açıldı (${s.ekran.ad || plan.ekranUrl})`);
+      });
+      simdikiAdim = null;
+
+      // Göreli tarihler (senaryo / tablo / model değeri "bugün+7" …): raporda hem ifade hem bu koşuda yazılan tarih görünür.
+      const goreliler = plan.adimlar.filter((a) => a.dahil).flatMap((a) => a.alanlar).filter((a) => a.goreliIfade && !a.atla && !gizliAdMi(a.etiket) && !gizliAdMi(a.anahtar))
+        .map((a) => `${a.etiket}: ${a.goreliIfade} → ${String(a.deger)}`);
+      if (goreliler.length) {
+        testInfo.annotations.push({ type: 'goreliTarihler', description: goreliler.join(' · ') });
+        await test.step(`Göreli tarihler — ${goreliler.join(' · ')}`, async () => undefined);
       }
+
+      // 3) Ekran adımları (akışın ortasındaki ortak akışlar dahil; bugünkü gibi).
+      await bolumuKos(ekranAdimlari, async () => {
+        await page.goto(plan.ekranUrl, { waitUntil: 'domcontentloaded' });
+      });
     }
   } catch (hata) {
     // "Yalnız kalan adımda": testin kaldığı adımın görüntüsü (ad: "NN - <adım> (kalan adım)"). Atlama (test.skip) kalan adım değildir.

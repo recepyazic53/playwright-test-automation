@@ -550,10 +550,13 @@ export function paketOnizle(vt, projeId, ham, secenekler = {}) {
  */
 function degistirilenModel(mevcut, paketModeli) {
   const yeni = kopya(paketModeli);
+  // Varsayılan akışın "baştaki ortak akışlar" ayarı (diyagramda seçilir) paket yazmadıysa korunur.
+  if (yeni.bastakiOrtakAkislar === undefined && mevcut.bastakiOrtakAkislar !== undefined && yeni.tur !== 'ortakAkis') yeni.bastakiOrtakAkislar = mevcut.bastakiOrtakAkislar;
   const digerleri = Array.isArray(mevcut.akislar) ? mevcut.akislar.filter((a) => nesneMi(a) && a.varsayilan !== true) : [];
   if (digerleri.length) {
     const eskiVarsayilan = mevcut.akislar.find((a) => nesneMi(a) && a.varsayilan === true);
-    yeni.akislar = [{ id: eskiVarsayilan ? eskiVarsayilan.id : 'ana', ad: eskiVarsayilan ? eskiVarsayilan.ad : 'Ana akış', varsayilan: true, adimlar: yeni.adimlar }, ...kopya(digerleri)];
+    yeni.akislar = [{ id: eskiVarsayilan ? eskiVarsayilan.id : 'ana', ad: eskiVarsayilan ? eskiVarsayilan.ad : 'Ana akış', varsayilan: true, adimlar: yeni.adimlar,
+      ...(yeni.bastakiOrtakAkislar !== undefined ? { bastakiOrtakAkislar: yeni.bastakiOrtakAkislar } : {}) }, ...kopya(digerleri)];
     // Korunan akışların kullandığı koşullar ve senaryo ayarları (ör. "“Ek adım” dahil") pakette yoksa eski modelden taşınır.
     const eskiKosullar = nesneMi(mevcut.kosullar) ? mevcut.kosullar : {};
     yeni.kosullar = nesneMi(yeni.kosullar) ? yeni.kosullar : {};

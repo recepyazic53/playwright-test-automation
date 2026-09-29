@@ -469,6 +469,11 @@ export const REHBERLER = {
     adimlar: [
       { baslik: 'Akış diyagramı', metin: 'Ekranın adımları kutular hâlinde, çalışma sırasıyla. Kutuları sürükleyerek sıralar, "+" ile koşullu adım ya da ortak akış eklersiniz.', cizim: { tur: 'akis', kutular: [{ baslik: 'Adım 1', ikon: 'duzenle' }, { baslik: 'Koşullu', alt: 'ör. Kurumsal ise', ikon: 'isaret' }, { baslik: 'Ortak akış', ikon: 'pusula' }, { baslik: 'Kontrol', ikon: 'onay' }] } },
       { baslik: 'Sıra', sira: ['Mevcut akışı kopyalayın ya da "Akış ekle" açın.', 'Adımları ekleyin / sıralayın; koşulları yazın (ör. "Müşteri tipi = Kurumsal ise").', '"+ > Ortak akış" ile ortak blokları ekleyin; isteğe bağlıysa senaryoda "dahil" seçilir.', 'Kaydedin: etkilenecek senaryolar önce gösterilir, onayınızla kaydedilir.'] },
+      {
+        baslik: 'Ekran açılır',
+        metin: 'Giriş ile ilk ekran adımı arasındaki "Ekran açılır" kutusu ekranın sayfasının açıldığı yerdir; taşınmaz, silinmez. Üstündeki ortak akışlar (ör. ana sayfada kullanıcı değiştirme) girişten sonra açılan sayfada — girişsiz senaryoda ortamın taban adresinde — ekran açılmadan önce koşar; ekran adımları altında başlar. Ortak akış bloğunu ↑/↓ ile kutunun üstüne ya da altına taşıyın ya da kutudaki "Baştaki ortak akışlar" seçimini değiştirin (varsayılan: ekran açılmadan önce). Blok "Ekrana dön" ile bitiyorsa ekran ikinci kez açılmaz.',
+        cizim: { tur: 'akis', kutular: [{ baslik: 'Giriş', ikon: 'anahtar' }, { baslik: 'Ortak akış', alt: 'ör. kullanıcı değiştir', ikon: 'pusula' }, { baslik: 'Ekran açılır', ikon: 'oynat' }, { baslik: 'Ekran adımları', ikon: 'duzenle' }] }
+      },
       { baslik: 'Elle alan ve düğme', metin: 'Sağdaki listede olmayan bir alanı ya da düğmeyi "Listede olmayan alanı / düğmeyi elle ekle" ile tanımlayın: etiket (ya da düğmenin yazısı), tür ve sayfadaki seçicisi (ör. #onayla). Böylece boş başlayan bir ortak akışa da sıfırdan adım eklenir; kaydedince modele yazılır. Ortak akışı kaydederken onu kullanan ekranlar gösterilir.' },
       { baslik: 'Ekran görüntüsü al', metin: 'Alan grubunda (ya da aksiyonda) "Ekran görüntüsü al" işaretli adımların sonunda görüntü alınır — adım ekran görüntüleri "Seçili adımlarda" iken (Ayarlar > Koşu > Kayıt ya da senaryo formu). Diğer seçimlerde işaret etkisizdir.' },
       {

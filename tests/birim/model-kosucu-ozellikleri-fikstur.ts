@@ -19,6 +19,9 @@ export const ONAY_SONUCU = 'Onay tamamlandı.';
 export const ONAY_AKIS_ANAHTARI = 'onay-ortak-akis';
 export const BASKA_SAYFA_YOLU = '/baska-sayfa';
 export const DONUS_AKIS_ANAHTARI = 'donus-ortak-akis';
+/** Ana sayfadaki profil formunun gönderildiği adres (AkisUygulamasi({ anaSayfa: true })). */
+export const PROFIL_YOLU = '/profil';
+export const PROFIL_AKIS_ANAHTARI = 'profil-ortak-akis';
 export const HAVUZLAR = { ozel: 'Kişi', tuzel: 'Kurum', onay: 'Onay kodu' } as const;
 
 const URUNLER: Record<string, Array<[string, string]>> = {
@@ -40,11 +43,28 @@ export class AkisUygulamasi {
   readonly sorgular: string[] = [];
   private no = 1000;
 
-  /** baskaSayfa: ekranda ikinci sayfaya (BASKA_SAYFA_YOLU) giden bağlantı gösterilir (varsayılan kapalı; tarayan testler etkilenmez). */
-  private readonly s: { baskaSayfa?: boolean };
-  constructor(s: { baskaSayfa?: boolean } = {}) { this.s = s; }
+  /** Gelen istekler sırayla ("GET /yol"; ekranın ne zaman / kaç kez açıldığını denetlemek için). */
+  readonly istekler: string[] = [];
+  /** Ana sayfadaki pencereden uygulanan profiller (kullanıcı değiştirme benzeri; sırayla). */
+  readonly profiller: string[] = [];
+  private etkinProfil = '';
+
+  /**
+   * baskaSayfa: ekranda ikinci sayfaya (BASKA_SAYFA_YOLU) giden bağlantı gösterilir (varsayılan kapalı; tarayan testler etkilenmez).
+   * anaSayfa: ortamın taban adresi ("/") ana sayfadır: bağlantıyla açılan pencerede profil formu (kullanıcı değiştirme benzeri).
+   */
+  private readonly s: { baskaSayfa?: boolean; anaSayfa?: boolean };
+  constructor(s: { baskaSayfa?: boolean; anaSayfa?: boolean } = {}) { this.s = s; }
 
   readonly isle: FiksturUygulamasi = (i: FiksturIstegi) => {
+    this.istekler.push(`${i.yontem} ${i.yol}`);
+    if (this.s.anaSayfa && i.yol === '/') return this.anaSayfa();
+    if (this.s.anaSayfa && i.yol === PROFIL_YOLU && i.yontem === 'POST') {
+      const g = JSON.parse(i.govde || '{}') as Nesne;
+      this.etkinProfil = String(g.profil ?? '');
+      this.profiller.push(this.etkinProfil);
+      return json({ profil: this.etkinProfil }, 150);
+    }
     if (i.yol === AKIS_YOLU || i.yol === AKIS_YOLU.slice(0, -1)) return this.sayfa();
     // Ekrandan bağımsız ikinci sayfa (ör. ortak akışın götürdüğü ana sayfa; "Ekrana dön" aksiyonu için).
     if (i.yol === BASKA_SAYFA_YOLU) return html(`<h1>Başka sayfa</h1><button id="baskaSayfaDugmesi" type="button">Başka sayfadaki düğme</button>`);
@@ -72,8 +92,29 @@ export class AkisUygulamasi {
     return { durum: 404, tur: 'text/plain', govde: 'yok' };
   };
 
+  /** Ana sayfa: "Profil değiştir" bağlantısı pencere açar; formdan profil uygulanır (sunucuya yazılır), sonuç sayfada görünür. */
+  private anaSayfa(): FiksturYaniti {
+    return html(`<h1>Ana sayfa</h1>
+      <p><a id="profilDegistir" href="#">Profil değiştir</a></p>
+      <p id="etkinProfil">${this.etkinProfil ? `Etkin profil: ${this.etkinProfil}` : ''}</p>
+      <div id="profilPenceresi" role="dialog" aria-label="Profil değiştir" hidden>
+        <label>Profil adı <input id="profilAdi"></label>
+        <button id="profilUygula" type="button">Uygula</button>
+      </div>
+      <script>
+        const $ = (id) => document.getElementById(id);
+        $('profilDegistir').onclick = (o) => { o.preventDefault(); setTimeout(() => { $('profilPenceresi').hidden = false; }, 150); };
+        $('profilUygula').onclick = async () => {
+          const r = await (await fetch('${PROFIL_YOLU}', { method: 'POST', body: JSON.stringify({ profil: $('profilAdi').value }) })).json();
+          $('profilPenceresi').hidden = true;
+          $('etkinProfil').textContent = 'Etkin profil: ' + r.profil;
+        };
+      </script>`);
+  }
+
   private sayfa(): FiksturYaniti {
     return html(`<h1>Başvuru (akış)</h1>
+      ${this.s.anaSayfa ? `<p id="ekranProfili">Profil: ${this.etkinProfil || '—'}</p>` : ''}
       <label>Kategori <select id="kategori"><option value="">Seçiniz</option><option value="K1">Bireysel</option><option value="K2">Kurumsal</option></select></label>
       <label>Ürün <select id="urun"><option value="">Seçiniz</option></select></label>
       <select id="gizliTur" style="display:none"><option value="">Seçiniz</option><option value="10">Standart</option><option value="20">Öncelikli</option></select>
@@ -300,6 +341,56 @@ export function onayAkisPaketi(): Nesne & { model: Nesne } {
     meta: { ekran: { anahtar: ONAY_AKIS_ANAHTARI, ad: 'Onay (ortak)' }, olusturan: 'test', olusturulma: '2026-09-27T09:00:00Z', baglamProfilleri: [], not: 'Ortak akış (nötr fikstür).' },
     model, senaryoOnerileri: [],
     gerekenAyarlar: { girisGerekli: false, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [HAVUZLAR.onay] },
+    bilinmeyenler: []
+  };
+}
+
+/**
+ * "Profil (ortak)" ortak akış paketi (kullanıcı değiştirme benzeri): ana sayfada "Profil değiştir" bağlantısı → pencere → profil adı
+ * (sabit değer) → "Uygula" → "Etkin profil: <ad>". ekranaDon: sonunda "Ekrana dön" adımı (ekranın adresini açar).
+ */
+export function profilAkisPaketi(s: { anahtar?: string; ad?: string; profil?: string; ekranaDon?: boolean } = {}): Nesne & { model: Nesne } {
+  const anahtar = s.anahtar ?? PROFIL_AKIS_ANAHTARI;
+  const ad = s.ad ?? 'Profil (ortak)';
+  const profil = s.profil ?? 'Profil 2';
+  const model = {
+    semaSurumu: 2, tur: 'ortakAkis', id: anahtar, ad, aciklama: 'Ana sayfada profil değiştirir (nötr fikstür).', kosullar: {},
+    adimlar: [
+      {
+        id: 'profilPenceresi', sira: 1, baslik: 'Profil penceresi açılır',
+        bolumler: [{ id: 'pencereIslemleri', baslik: 'İşlemler', alanlar: [
+          { id: 'profilBaglantisi', tip: 'buton', etiket: { ekran: 'Profil değiştir' }, yapilandirma: 'aksiyon', konum: { secici: '#profilDegistir', kirilganlik: 'orta' } }
+        ] }],
+        kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#profilDegistir', aciklama: 'Profil değiştir' }], basariGostergesi: { tur: 'eleman', deger: '#profilAdi' }, zamanAsimiSn: 10 }
+      },
+      {
+        id: 'profilUygulanir', sira: 2, baslik: 'Profil uygulanır',
+        bolumler: [
+          { id: 'profilFormu', baslik: 'Profil', alanlar: [
+            { ...alan('profilAdi', 'metin', 'Profil adı', '#profilAdi'), yapilandirma: 'turetilmis', sabitDeger: profil, eslesme: {} }
+          ] },
+          { id: 'profilIslemleri', baslik: 'İşlemler', alanlar: [
+            { id: 'profilUygulaDugmesi', tip: 'buton', etiket: { ekran: 'Uygula' }, yapilandirma: 'aksiyon', konum: { secici: '#profilUygula', kirilganlik: 'orta' } },
+            { id: 'etkinProfilMetni', tip: 'cikti', etiket: { ekran: 'Etkin profil' }, yapilandirma: 'cikti', konum: { secici: '#etkinProfil', kirilganlik: 'orta' } }
+          ] }
+        ],
+        kosu: { aksiyonlar: [{ tur: 'tikla', secici: '#profilUygula', aciklama: 'Uygula' }], basariGostergesi: { tur: 'metin', deger: `Etkin profil: ${profil}`, secici: '#etkinProfil' }, zamanAsimiSn: 10 }
+      },
+      ...(s.ekranaDon ? [{
+        id: 'ekranaDonulur', sira: 3, baslik: 'Ekrana dönülür',
+        bolumler: [{ id: 'donusSonucu', baslik: 'Ekran', alanlar: [
+          { id: 'ekranKategorisi', tip: 'cikti', etiket: { ekran: 'Kategori' }, yapilandirma: 'cikti', konum: { secici: '#kategori', kirilganlik: 'orta' } }
+        ] }],
+        kosu: { aksiyonlar: [{ tur: 'ekranaDon', aciklama: 'Ekrana dön' }], basariGostergesi: { tur: 'eleman', deger: '#kategori' }, zamanAsimiSn: 10 }
+      }] : [])
+    ],
+    senaryoDuzeyi: { alanlar: [] }, urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
+  };
+  return {
+    tur: 'sayfa-paketi', surum: 1,
+    meta: { ekran: { anahtar, ad }, olusturan: 'test', olusturulma: '2026-09-29T09:00:00Z', baglamProfilleri: [], not: 'Ortak akış (nötr fikstür).' },
+    model, senaryoOnerileri: [],
+    gerekenAyarlar: { girisGerekli: false, ikiAsamaliDogrulama: 'yok', captchaGoruldu: false, testVerisiTurleri: [] },
     bilinmeyenler: []
   };
 }
