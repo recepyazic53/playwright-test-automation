@@ -12,6 +12,13 @@ const TIP = { secim: 'seçim', metin: 'metin', sayi: 'sayı', tarih: 'tarih', te
 const kucuk = (x) => String(x ?? '').trim().toLocaleLowerCase('tr');
 /** Seçenekleri tablodan listelenen alan tipleri: gizli sütuna bağlanamaz. */
 const SECIM_TIPLERI = ['secim', 'okluSecim', 'radyo'];
+/**
+ * Senaryo ayarı (ekranda karşılığı olmayan, akışı dallandıran seçim; ör. "Teslim şekli: kargo / mağaza") rozeti. Tablodaki okunur
+ * değer koşuda seçeneğin koduna çevrilir: bağ kurulunca sütunun karşılıkları (sayfa değeri = kod) modelden dolar.
+ */
+const ayarRozeti = () => h('span', {
+  class: 'rozet vurgu ayar-rozeti', title: 'Ekranda karşılığı yok; akışın hangi dala gideceğini seçer. Tablodaki değer (ör. seçeneğin adı) koşuda seçeneğin koduna çevrilir (sütunun karşılıkları: sayfa değeri = kod).'
+}, 'Ekranda alan değil · senaryo ayarı');
 
 /** @param {HTMLElement} kap @param {{ proje: { id: string } }} s @param {{ id: string; ad: string }} ekran */
 export async function ekranBaglariSekmesi(kap, s, ekran) {
@@ -94,7 +101,7 @@ export async function ekranBaglariSekmesi(kap, s, ekran) {
         alt = degerler.length ? degerCipleri(degerler.map((deger) => ({ deger })), 5) : h('span', { class: 'soluk kucuk' }, 'sütunda değer yok');
       }
       return h('div', { class: `alan-satiri ${b ? '' : 'gonderilmez'}` },
-        h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip)),
+        h('span', { class: 'alan-adi', title: g.id }, g.etiket, h('span', { class: 'alan-tipi' }, TIP[g.tip] || g.tip), g.senaryoAyari ? ayarRozeti() : null),
         h('span', { class: 'kaynak-hucresi' }, h('span', { class: 'kaynak-secimi' }, sec, etiket), kaynak, alt));
     });
     const bagsiz = girdiler.filter((g) => !baglar[g.id] && !ortakBaglar[g.id] && oneri(g));
