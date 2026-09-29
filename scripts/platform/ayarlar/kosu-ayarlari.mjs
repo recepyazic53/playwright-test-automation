@@ -32,11 +32,12 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * tur 'onay': açık / kapalı (true / false; onay kutusu).
  * bolum 'testVerisi': Veri > Veri sağlığı başlığındaki ayarlar (dişli) düğmesinin açtığı "Test verisi ayarları" diyaloğu.
  * ana: Ayarlar > Koşu sayfasında hazır profillerin (kosu-profilleri.mjs) yanında görünür; bölümün diğer ayarları kapalı "Gelişmiş" kısmındadır.
+ * baglanti: ilişkili ayarın yeri (arayüzde alanın altında her zaman görünen bağlantı; ör. Oturum kontrolü → giriş tarifindeki adres).
  * esi: tarama / akış kaydı ayarının koşudaki eşi — "Tarama ve akış kaydında koşu ayarlarını kullan" (taramaKosuAyarlariniKullan)
  *   açıkken tarama ve akış kaydı bu ayar yerine eşini kullanır (taramaEtkinAyarlari); kapalıyken kendi değerini (kayıtlı değer korunur).
  * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; ana?: boolean; esi?: string; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
  *   varsayilan: string | number | boolean; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
- *   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string } }>}
+ *   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string }; baglanti?: { metin: string; etiket: string; adres: string } }>}
  */
 export const KOSU_AYAR_TANIMLARI = Object.freeze([
   // Kayıt: seçimlerin Playwright kiplerine eşlenmesi ve "yalnız başarılı" süzgeci ayarlar/kayit-kurallari.mjs'dedir.
@@ -138,7 +139,8 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     aciklama: 'Sayfanın açtığı onay (confirm) ve soru (prompt) pencerelerine verilecek yanıt. Onayla: prompt varsayılan değeriyle onaylanır. Bilgi pencereleri (alert) her durumda kapatılır; mesajları sonuca yazılır.',
     tur: 'secim', varsayilan: 'iptal', secenekler: [['iptal', 'İptal et'], ['onayla', 'Onayla']], env: 'NOBETCI_ONAY_PENCERESI' },
   { anahtar: 'oturumKontrolSn', altBolum: 'gelismis', grup: 'Giriş', etiket: 'Oturum kontrolü',
-    aciklama: 'Kayıtlı oturumun hâlâ geçerli olup olmadığı en çok bu kadar denetlenir; süre dolarsa yeniden giriş yapılır.',
+    aciklama: 'Kayıtlı oturumun hâlâ geçerli olup olmadığı en çok bu kadar denetlenir; süre dolarsa yeniden giriş yapılır. Denetim giriş tarifindeki "Oturum kontrol adresi" sayfasında yapılır: adres giriş sayfasıysa ya da orada başarı göstergesi görünmüyorsa her test bu süre kadar bekleyip yeniden giriş yapar.',
+    baglanti: { metin: 'Denetlenen sayfa:', etiket: 'Giriş profilleri › giriş tarifi › Oturum kontrol adresi', adres: '#/ayarlar/giris' },
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn', env: 'NOBETCI_OTURUM_KONTROL_MS', carpan: 1000 },
   { anahtar: 'girisAlanBeklemeSn', altBolum: 'gelismis', grup: 'Giriş', etiket: 'Giriş alanı beklemesi',
     aciklama: 'Giriş sayfasındaki alanların (kullanıcı adı, parola, doğrulama kodu) görünmesi için en çok bekleme. Senaryo alanlarındaki "Alan işlemi" beklemesinden ayrıdır.',
@@ -183,7 +185,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     aciklama: 'Servis metodunun p95 süresi önceki eşit döneme göre en az bu kadar arttıysa (bu dönemde en az 20 ölçümle) Sonuçlar > Özet > Dikkat kartında görünür.',
     tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 500, birim: '%' },
   { anahtar: 'ozetKosmayanGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Koşmayan senaryo',
-    aciklama: 'Koşuya dahil bir ekran ya da servis senaryosu bu kadar gündür hiç koşmadıysa Sonuçlar > Özet > Bakım kartında görünür.',
+    aciklama: 'Toplu koşuya dahil bir ekran ya da servis senaryosu bu kadar gündür hiç koşmadıysa Sonuçlar > Özet > Bakım kartında görünür.',
     tur: 'sayi', varsayilan: 30, enAz: 1, enCok: 365, birim: 'gün' },
   { anahtar: 'ozetYedekGun', bolum: 'arayuz', grup: 'Sonuçlar özeti', etiket: 'Eski yedek',
     aciklama: 'Son yedek bu kadar günden eskiyse (ya da hiç yedek yoksa) Sonuçlar > Özet > Kapsam ve güvenlik kartında görünür.',

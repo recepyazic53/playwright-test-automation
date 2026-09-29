@@ -69,6 +69,30 @@ export function ortakAkisPaketineCevir(ham) {
   return p;
 }
 
+/** Paketin yazmadığı kod dosyası bilgilerinin Nöbetçi'nin ürettiği değerleri (model koşucusu bu alanları kullanmaz). */
+export const PAGE_OBJECT_VARSAYILANI = 'yok (model koşucusu)';
+/** @param {string} anahtar ekran anahtarı */
+export const specDosyasiVarsayilani = (anahtar) => `tests/scenarios/${anahtar}/${anahtar}.spec.ts`;
+
+/**
+ * Ekran modelinde "specDosyasi" / "pageObject" isteğe bağlıdır: yazılmamışsa kaydederken (Ekran ekle, Modeli değiştir) önce
+ * mevcut modeldeki değer, yoksa Nöbetçi'nin varsayılanı yazılır — eski paketlerle ve modeli okuyan yerlerle uyum sürer.
+ * Ortak akış ve alt modelde (bu alanları taşımaz) model aynen döner. Girdi değiştirilmez.
+ * @param {Record<string, any>} model @param {string} anahtar ekran anahtarı @param {Record<string, any> | null} [mevcut]
+ * @returns {Record<string, any>}
+ */
+export function kodAlanlariniTamamla(model, anahtar, mevcut = null) {
+  if (!nesneMi(model) || ['ortakAkis', 'altModel'].includes(model.tur)) return model;
+  const eksik = (k) => !metinMi(model[k]);
+  if (!eksik('specDosyasi') && !eksik('pageObject')) return model;
+  const onceki = (k) => (nesneMi(mevcut) && metinMi(mevcut[k]) ? mevcut[k] : null);
+  return {
+    ...model,
+    ...(eksik('specDosyasi') ? { specDosyasi: onceki('specDosyasi') ?? specDosyasiVarsayilani(anahtar) } : {}),
+    ...(eksik('pageObject') ? { pageObject: onceki('pageObject') ?? PAGE_OBJECT_VARSAYILANI } : {})
+  };
+}
+
 // ---- Gizli değer taraması -----------------------------------------------------------------
 
 // Anahtar adı gizli bilgi taşıdığını söylüyor mu (ör. parola, apiKey, totpGizli, guvenlikKodu): ortak çekirdek liste

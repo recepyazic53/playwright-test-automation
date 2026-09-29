@@ -35,8 +35,10 @@
     "model": {
       "type": "object",
       "description": "Ekran modeli (tests/support/ekran-modeli.ts > EkranModeli). Kendi kendine yetmeli ya da projede var olan alt modellere başvurmalı. İsteğe bağlı baglamGorunurlugu: { profiller: [ad], alanlar: { alanId: { profil: true | false | null } } }.",
-      "required": ["semaSurumu", "tur", "id", "ad", "aciklama", "ekranUrl", "specDosyasi", "pageObject", "veriKaynaklari", "kosullar", "adimlar", "senaryoDuzeyi", "urunDuzeyi", "isKurallari", "bilinmeyenler"],
+      "required": ["semaSurumu", "tur", "id", "ad", "aciklama", "ekranUrl", "veriKaynaklari", "kosullar", "adimlar", "senaryoDuzeyi", "urunDuzeyi", "isKurallari", "bilinmeyenler"],
       "properties": {
+        "specDosyasi": { "type": "string", "minLength": 1, "description": "İsteğe bağlı (model koşucusu kullanmaz). Yazılmazsa Nöbetçi \"tests/scenarios/<anahtar>/<anahtar>.spec.ts\" yazar." },
+        "pageObject": { "type": "string", "minLength": 1, "description": "İsteğe bağlı (model koşucusu kullanmaz). Yazılmazsa Nöbetçi \"yok (model koşucusu)\" yazar." },
         "semaSurumu": { "enum": [1, 2], "description": "2: adımlarda koşu tanımı (kosu: aksiyonlar, basariGostergesi, hataGostergesi, zamanAsimiSn) — model koşucusu. Alan / aksiyon / gösterge bir iframe içindeyse cerceve (konum.cerceve: dıştan içe iframe seçicileri); gizli <select>'li özel açılır listede doldurucu ozelSecim." },
         "tur": { "const": "ekran" },
         "baglam": {

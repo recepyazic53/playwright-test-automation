@@ -601,8 +601,12 @@ export function ekranModeliniDogrula(dosyaYolu, ham, altModelKaynagi) {
   const ortakMi = ham.tur === 'ortakAkis';
   semaSurumunuDogrula(h, yer, ham, ortakMi ? 'ortakAkis' : 'ekran');
   if (ortakMi && ham.semaSurumu !== 2) h.ekle(yer, 'ortak akış "semaSurumu": 2 olmalı');
-  for (const anahtar of ortakMi ? ['ad', 'aciklama'] : ['ad', 'aciklama', 'ekranUrl', 'specDosyasi', 'pageObject']) {
+  for (const anahtar of ortakMi ? ['ad', 'aciklama'] : ['ad', 'aciklama', 'ekranUrl']) {
     if (!metinMi(ham[anahtar])) h.ekle(yer, `"${anahtar}" zorunlu`);
+  }
+  // Kod dosyası bilgileri isteğe bağlı (model koşucusu kullanmaz; yoksa paket yüklenirken Nöbetçi üretir): varsa metin olmalı.
+  for (const anahtar of ortakMi ? [] : ['specDosyasi', 'pageObject']) {
+    if (ham[anahtar] !== undefined && !metinMi(ham[anahtar])) h.ekle(yer, `"${anahtar}" verilirse boş olmayan metin olmalı (isteğe bağlı; yazmayabilirsiniz)`);
   }
   if (ham.yalnizTestOrtami !== undefined && (typeof ham.yalnizTestOrtami !== 'boolean' || !ortakMi)) h.ekle(yer, '"yalnizTestOrtami" yalnızca ortak akışta true/false olabilir');
   if (ortakMi && ham.akislar !== undefined) h.ekle(yer, 'ortak akışın kendi akışları olmaz ("akislar")');

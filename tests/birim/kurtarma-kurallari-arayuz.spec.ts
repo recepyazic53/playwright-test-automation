@@ -49,8 +49,9 @@ test.describe('kurtarma kuralları arayüzü', () => {
     const page = await baglam.newPage();
     const hatalar: string[] = [];
     page.on('pageerror', (e) => hatalar.push(String(e)));
-    await page.goto('/#/ayarlar/proje');
-    await expect(page.getByRole('heading', { name: /Kurtarma kuralları/ })).toBeVisible();
+    await page.goto('/#/ayarlar/kurtarma');
+    await expect(page.getByRole('heading', { level: 2, name: 'Kurtarma kuralları' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Kurtarma kuralları' })).toBeVisible();
     return { page, hatalar, kapat: () => baglam.close() };
   };
 
@@ -78,6 +79,29 @@ test.describe('kurtarma kuralları arayüzü', () => {
     await tarayici?.close();
     nobetci?.surec.kill('SIGTERM');
     if (klasor) rmSync(klasor, { recursive: true, force: true });
+  });
+
+  test('Ayarlar menüsünde ayrı bölüm; eski yerde (Proje ve ortamlar) "taşındı" bağlantısı; eski adres ve "yeni" adresi', async () => {
+    const { page, hatalar, kapat } = await sayfaAc(1440);
+    const bolumler = page.getByRole('navigation', { name: 'Ayarlar bölümleri' });
+    await expect(bolumler.getByRole('link', { name: 'Kurtarma kuralları' })).toHaveAttribute('aria-current', 'page');
+    // Eski yer: liste yok, kısa "taşındı" notu bağlantıyla yeni bölüme götürür.
+    await page.goto('/#/ayarlar/proje');
+    await expect(page.getByRole('heading', { level: 2, name: 'Proje ve ortamlar' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Kurtarma kuralları' })).toHaveCount(0);
+    await page.locator('.kurtarma-tasindi').getByRole('link', { name: 'Kurtarma kuralları' }).click();
+    await expect(page).toHaveURL(/#\/ayarlar\/kurtarma$/);
+    await expect(page.getByRole('list', { name: 'Kurtarma kuralları' })).toBeVisible();
+    // Eski biçimli adres yönlenir; #/ayarlar/kurtarma/yeni "Kural ekle" penceresini açar (hızlı arama, Oluştur menüsü).
+    await page.goto('/#/ayarlar/kurtarma-kurallari');
+    await expect(page).toHaveURL(/#\/ayarlar\/kurtarma$/);
+    await page.goto('/#/ayarlar/kurtarma/yeni');
+    const d = page.getByRole('dialog', { name: 'Yeni kurtarma kuralı' });
+    await expect(d).toBeVisible();
+    await d.getByRole('button', { name: 'Vazgeç' }).click();
+    await expect(d).toBeHidden();
+    expect(hatalar).toEqual([]);
+    await kapat();
   });
 
   test('hazır 401 / 403 kuralı: listede, silinemez, kapatılabilir; sayaç görünür', async () => {

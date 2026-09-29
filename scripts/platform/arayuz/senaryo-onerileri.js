@@ -86,7 +86,7 @@ export async function senaryoOnerileriEkrani(icerik, s) {
   const sonucAlani = h('div', { 'aria-live': 'polite' });
   const cubuk = h('div', { class: 'oneri-eylem-cubugu', role: 'region', 'aria-label': 'Seçilen öneriler' },
     h('div', { class: 'oneri-cubuk-metni' }, secimSayisi,
-      h('span', { class: 'kucuk soluk' }, ikon('isaret'), 'Eklenenler "Koşuda" KAPALI gelir; gözden geçirip açın.')),
+      h('span', { class: 'kucuk soluk' }, ikon('isaret'), 'Eklenenler "Toplu koşuya dahil" KAPALI gelir; gözden geçirip açın.')),
     ekleDugmesi);
 
   const akisSecimi = (baglam.akislar || []).length > 1
@@ -109,7 +109,8 @@ export async function senaryoOnerileriEkrani(icerik, s) {
     const acik = OLCULER.find(([ad]) => ad === durum.acikOlcu);
     const olcuDugmesi = ([ad, etiket, aciklama]) => {
       const o = k[ad];
-      const oran = o.toplam ? Math.round((o.kapsanan / o.toplam) * 100) : 100;
+      // Verisiz ölçüde ('—') çubuk boş kalır; genişlik CSS değişkeniyle (CSP: satır içi style özniteliği yok).
+      const oran = o.toplam ? Math.round((o.kapsanan / o.toplam) * 100) : 0;
       return h('button', {
         type: 'button', class: `kapsam-olcusu${durum.acikOlcu === ad ? ' acik' : ''}`, 'aria-expanded': String(durum.acikOlcu === ad),
         'aria-controls': 'kapsam-eksikleri', title: aciklama, 'data-olcu': ad,
@@ -117,7 +118,7 @@ export async function senaryoOnerileriEkrani(icerik, s) {
       },
       h('span', { class: 'kapsam-adi' }, etiket),
       h('b', { class: 'kapsam-degeri' }, o.toplam ? `${o.kapsanan} / ${o.toplam}` : '—'),
-      h('span', { class: 'kapsam-cubugu', 'aria-hidden': 'true' }, h('span', { style: `width: ${oran}%` })));
+      h('span', { class: `kapsam-cubugu${o.toplam ? '' : ' bos'}`, 'aria-hidden': 'true' }, h('span', { style: { '--oran': `${oran}%` } })));
     };
     return h('section', { class: 'kart kapsam-paneli', 'aria-labelledby': 'kapsam-baslik' },
       h('div', { class: 'kart-basligi' }, h('h3', { id: 'kapsam-baslik' }, ikon('hedef'), 'Kapsam'),
@@ -191,15 +192,15 @@ export async function senaryoOnerileriEkrani(icerik, s) {
     const [nedenEtiketi, nedenTuru] = NEDEN_ETIKETLERI[o.neden] || [o.neden, ''];
     const beklenenRozet = rozet(o.beklenenMetni, o.beklenen.tur === 'basari' ? 'basari' : o.beklenen.tur === 'hata' ? 'hata' : 'atlanan',
       o.beklenen.tur === 'belirsiz' ? { title: o.beklenen.neden } : {});
-    return h('li', { class: `oneri${o.reddedildi ? ' reddedildi' : ''}`, 'data-oneri': o.kimlik, 'data-neden': o.neden },
+    return h('li', { class: `oneri${o.reddedildi ? ' reddedildi' : ''}`, 'data-oneri': o.kimlik, 'data-puan': String(o.puan), 'data-neden': o.neden },
       kutu,
       h('div', { class: 'oneri-icerigi' },
         h('p', { class: 'oneri-gerekcesi' }, o.gerekce),
         h('div', { class: 'oneri-ust' }, h('span', { class: 'oneri-basligi' }, o.baslik),
           h('span', { class: 'oneri-rozetleri' }, rozet(TUR_ETIKETLERI[o.tur] || o.tur, 'tur-rozeti'), rozet(nedenEtiketi, nedenTuru), beklenenRozet,
             o.eksikler.length ? rozet('değer eksik', 'atlanan', { title: `Değeri olmayan zorunlu alanlar: ${o.eksikler.join(', ')}` }) : null,
-            o.reddedildi ? rozet('reddedildi', 'atlanan') : null),
-          h('small', { class: 'oneri-puani cok-soluk', title: 'Sıralama puanı (neden + önem; kabul / red kararlarınızla değişir)' }, `puan ${o.puan}`)),
+            o.reddedildi ? rozet('reddedildi', 'atlanan') : null)),
+        // Sıralama puanı kullanıcıya gösterilmez (anlamsız sayı); liste zaten önem sırasındadır (data-puan yalnız iz için).
         // Yalnız fark: değişen alanlar (boş / seçilen / sınır değeri).
         (o.degisiklikler || []).length
           ? h('ul', { class: 'oneri-farklari', 'aria-label': `${o.baslik}: farklar` }, o.degisiklikler.map((d) => h('li', {},
@@ -300,7 +301,7 @@ export async function senaryoOnerileriEkrani(icerik, s) {
         }
       }
     });
-    if (eklenen.length) bildir(`${eklenen.length} senaryo eklendi ("Koşuda" kapalı).`);
+    if (eklenen.length) bildir(`${eklenen.length} senaryo eklendi ("Toplu koşuya dahil" kapalı).`);
     // Liste yeniden okunur: eklenenler artık kapsamda (öneri olarak çıkmaz).
     try {
       const yeni = await api(baglamAdresi(baglam.akisId));
@@ -308,7 +309,7 @@ export async function senaryoOnerileriEkrani(icerik, s) {
     } catch { /* liste eski kalır */ }
     yenidenUret();
     yerlestir(sonucAlani, h('div', { class: `not-kutusu ${atlanan.length ? 'uyari' : 'basari'}`, role: 'status' },
-      h('p', {}, eklenen.length ? `${eklenen.length} senaryo eklendi; "Koşuda" kapalı — Senaryolar listesinden gözden geçirip açın.` : 'Hiç senaryo eklenmedi.'),
+      h('p', {}, eklenen.length ? `${eklenen.length} senaryo eklendi; "Toplu koşuya dahil" kapalı — Senaryolar listesinden gözden geçirip açın.` : 'Hiç senaryo eklenmedi.'),
       atlanan.length ? h('ul', { 'aria-label': 'Eklenmeyen öneriler' }, atlanan.map(([b, neden]) => h('li', {}, h('b', {}, b), `: ${neden}`))) : null));
   });
 

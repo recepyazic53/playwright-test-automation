@@ -69,7 +69,7 @@ export function senaryolarEkrani(main, parcalar, baglam) {
   const [tur, kimlik] = parcalar;
   const secili = tur === 'u' && kimlik ? decodeURIComponent(kimlik) : '';
   const icerik = h('section', { class: 'icerik-alani sonuc-icerik' }, iskelet('sayfa'));
-  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ürünler' }, iskelet('liste'));
+  const nav = h('nav', { class: 'alt-nav', 'aria-label': 'Ekranlar ve servisler' }, iskelet('liste'));
   yerlestir(main, h('h1', { class: 'gorunmez' }, 'Senaryolar'),
     h('div', { class: 'kabuk-duzen' },
       h('aside', { class: 'yan-panel' }, nav,
@@ -113,7 +113,7 @@ export function senaryolarEkrani(main, parcalar, baglam) {
 }
 
 /**
- * Sol panel "ÜRÜNLER" (Servisler sayfası da kullanır): açılır-kapanır Ekranlar ve Servisler grupları.
+ * Sol panel "Ekranlar ve servisler" (Servisler sayfası da kullanır): açılır-kapanır Ekranlar ve Servisler grupları.
  * @param {HTMLElement} nav @param {{ id: string }} proje @param {{ servisId?: string | null }} secim
  */
 export async function urunlerPaneli(nav, proje, secim) {
@@ -191,8 +191,8 @@ function listeGorunumu(icerik, s) {
     return { kap, sel };
   };
   const ekranSecimi = ekran ? null : secimKutusu('Ekran', 'ekran', [['', 'Tümü'], ...veri.ekranlar.filter((e) => e.senaryoSayisi).map((e) => [e.id, e.ad])]);
-  const kosudaSecimi = secimKutusu('Koşuda', 'kosuda', [['', 'Tümü'], ['evet', 'Koşuda'], ['hayir', 'Hariç']]);
-  kosudaSecimi.sel.title = 'Koşuda: en az bir ortamda koşuda · Hariç: hiçbir ortamda koşuda değil';
+  const kosudaSecimi = secimKutusu('Toplu koşuya dahil', 'kosuda', [['', 'Tümü'], ['evet', 'Dahil'], ['hayir', 'Hariç']]);
+  kosudaSecimi.sel.title = 'Dahil: en az bir ortamda toplu koşuya dahil · Hariç: hiçbir ortamda dahil değil';
   // Kapsam: veride bulunan ortam kombinasyonları (liste yenilenince ciz() seçenekleri günceller).
   const kapsamSecenekleri = () => [...new Set(veri.senaryolar.map(kapsamOf))].sort((a, b) => a.localeCompare(b, 'tr'));
   const kapsamSecimi = secimKutusu('Kapsam', 'kapsam', [['', 'Tümü'], ...kapsamSecenekleri().map((k) => [k, k])]);
@@ -325,8 +325,8 @@ function listeGorunumu(icerik, s) {
     const dahil = kapsam.filter((x) => x.kosuyaDahil && x.ekranEtkin !== false).length;
     yerlestir(baslikRozeti, rozet(`${kapsam.length} senaryo`, 'vurgu'));
     yerlestir(metaAlani,
-      h('span', { title: 'En az bir ortamda Koşuda açık olan senaryolar' }, ikon('liste'), `${dahil} / ${kapsam.length} koşuda`),
-      ekran ? h('span', {}, ikon(ekran.modelVar ? 'katman' : 'ekran'), ekran.modelVar ? 'ekran modeli var' : 'ekran modeli yok') : h('span', {}, ikon('ekran'), `${veri.ekranlar.filter((e) => e.senaryoSayisi).length} ürün / ekran`));
+      h('span', { title: 'En az bir ortamda toplu koşuya dahil olan senaryolar' }, ikon('liste'), `${dahil} / ${kapsam.length} toplu koşuya dahil`),
+      ekran ? h('span', {}, ikon(ekran.modelVar ? 'katman' : 'ekran'), ekran.modelVar ? 'ekran modeli var' : 'ekran modeli yok') : h('span', {}, ikon('ekran'), `${veri.ekranlar.filter((e) => e.senaryoSayisi).length} ekran`));
     yerlestir(ozetAlani, liste2.length !== kapsam.length ? h('span', {}, h('b', {}, String(liste2.length)), ` / ${kapsam.length} gösteriliyor`) : '');
     temizle.hidden = !filtreliMi();
     kosuDugmesi.disabled = kosuSuruyorMu() || !liste2.some((x) => x.kosuyaDahil && x.ekranEtkin !== false && !kosuDurumu(x.id));
@@ -336,8 +336,8 @@ function listeGorunumu(icerik, s) {
       && tanimliOrtamlar(x, ortamlar).some((o) => ortamdaDahil(x, o.id)) && tanimliOrtamlar(x, ortamlar).filter((o) => ortamdaDahil(x, o.id)).every((o) => calistirilamazMi(x, o.id))).length;
     kosuDugmesi.title = kosuSuruyorMu() ? 'Sürmekte olan bir koşu var; bitmesini bekleyin ya da durdurun.'
       : ekran && ekran.durum === 'devre_disi' ? 'Ekran devre dışı: senaryoları koşulara girmez (Ekranlar > ⋯ > Etkinleştir)'
-        : kosuDugmesi.disabled ? 'Koşuda açık senaryo yok: tablodaki "Koşuda" anahtarını açın ya da senaryoları seçip "Koşuya ekle"yi kullanın.'
-          : `Koşuda açık senaryoları sırayla koşar (ortam sorulur)${calistirilamayan ? `; ${calistirilamayan} senaryo çalıştırılamaz, nedenleri koşu penceresinde yazar` : ''}.`;
+        : kosuDugmesi.disabled ? 'Toplu koşuya dahil senaryo yok: tablodaki "Toplu koşuya dahil" anahtarını açın ya da senaryoları seçip "Toplu koşuya ekle"yi kullanın.'
+          : `Toplu koşuya dahil senaryoları sırayla koşar (ortam sorulur)${calistirilamayan ? `; ${calistirilamayan} senaryo çalıştırılamaz, nedenleri koşu penceresinde yazar` : ''}.`;
     topluCubukCiz(liste2);
     tabloCiz(liste2);
   }
@@ -353,7 +353,7 @@ function listeGorunumu(icerik, s) {
     const diyalog = h('dialog', { class: 'onay-diyalogu genis', 'aria-labelledby': 'cogalt-basligi' },
       h('div', { class: 'diyalog-govde' },
         h('h2', { id: 'cogalt-basligi' }, h('span', { class: 'diyalog-ikon', 'aria-hidden': 'true' }, ikon('kopya')), `${secilenler.length} senaryoyu çoğalt`),
-        h('p', { class: 'soluk' }, 'Her seçili senaryodan istediğiniz sayıda kopya oluşur; kopyalar "Koşuda" kapalı gelir. Değerlerini sonra satırdan ya da toplu değer atamayla değiştirebilirsiniz.'),
+        h('p', { class: 'soluk' }, 'Her seçili senaryodan istediğiniz sayıda kopya oluşur; kopyalar "Toplu koşuya dahil" kapalı gelir. Değerlerini sonra satırdan ya da toplu değer atamayla değiştirebilirsiniz.'),
         h('div', { class: 'satir-duzen' },
           h('div', { class: 'alan' }, h('label', { for: adet.id }, 'Her senaryodan kopya'), adet),
           h('div', { class: 'alan' }, h('label', { for: sablon.id }, 'Başlık şablonu'), sablon, h('small', { class: 'yardim' }, '{baslik} = asıl başlık, {n} = kopya numarası'))),
@@ -380,7 +380,7 @@ function listeGorunumu(icerik, s) {
       try {
         const y = await mesgulIken(tamam, 'Oluşturuluyor…', () => api('/platform/senaryolar/cogalt', { govde: govde(true) }));
         diyalog.close();
-        bildir(`${y.olusanlar.length} kopya oluşturuldu ("Koşuda" kapalı).`);
+        bildir(`${y.olusanlar.length} kopya oluşturuldu ("Toplu koşuya dahil" kapalı).`);
         liste.secim.clear();
         yenile();
       } catch (e) { hata.textContent = e.message; }
@@ -444,8 +444,8 @@ function listeGorunumu(icerik, s) {
         gizliSecili ? h('span', { class: 'soluk kucuk' }, `(+${gizliSecili} filtre dışında; işlemlere dahil edilmez)`) : null),
       h('button', { type: 'button', class: 'kucuk-dugme birincil', disabled: !secilenler.length, onclick: () => seciliCalistir(secilenler) }, ikon('oynat'), 'Seçilenleri çalıştır'),
       h('span', { class: 'ayrac', 'aria-hidden': 'true' }),
-      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => tanimliOrtamlar(x, ortamlar).some((o) => !ortamdaDahil(x, o.id))), onclick: () => kosuyaDahilEt(secilenler, true) }, ikon('onay'), 'Koşuya ekle'),
-      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => x.kosuyaDahil), onclick: () => kosuyaDahilEt(secilenler, false) }, ikon('eksi'), 'Koşudan çıkar'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => tanimliOrtamlar(x, ortamlar).some((o) => !ortamdaDahil(x, o.id))), onclick: () => kosuyaDahilEt(secilenler, true) }, ikon('onay'), 'Toplu koşuya ekle'),
+      h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => x.kosuyaDahil), onclick: () => kosuyaDahilEt(secilenler, false) }, ikon('eksi'), 'Toplu koşudan çıkar'),
       h('button', { type: 'button', class: 'kucuk-dugme', disabled: !secilenler.length, onclick: () => cogalt(secilenler) }, ikon('kopya'), 'Çoğalt…'),
       h('button', {
         type: 'button', class: 'kucuk-dugme', disabled: !secilenler.some((x) => x.eskiyenTarihler?.length),
@@ -492,7 +492,7 @@ function listeGorunumu(icerik, s) {
         sth('beklenen', 'Beklenen', 'beklenen-sutunu'),
         sth('kapsam', 'Kapsam', 'kapsam-sutunu'),
         sth('son', 'Son sonuç', 'son-sutunu'),
-        sth('kosuda', 'Koşuda', 'kosuda'),
+        sth('kosuda', 'Toplu koşuya dahil', 'kosuda'),
         h('th', { scope: 'col', class: 'eylemler' }, h('span', { class: 'gorunmez' }, 'Eylemler')))),
       h('tbody', {}, dilim.map((x) => satir(x))));
     yerlestir(tabloAlani, h('section', { class: 'kart senaryo-karti' },
@@ -512,7 +512,7 @@ function listeGorunumu(icerik, s) {
     const kapsamMetni = kapsamOf(x);
     // Koşuda: ORTAM BAŞINA ayrı anahtar (ortam adıyla etiketli).
     const kosudaHucresi = tanimli.length ? h('div', { class: 'ortam-anahtarlari' }, tanimli.map((o) => {
-      const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: ortamdaDahil(x, o.id), 'aria-label': `Koşuda (${o.ad}): ${x.baslik}` });
+      const kutu = h('input', { type: 'checkbox', class: 'anahtar', role: 'switch', checked: ortamdaDahil(x, o.id), 'aria-label': `Toplu koşuya dahil (${o.ad}): ${x.baslik}` });
       kutu.addEventListener('change', async () => {
         const yeni = kutu.checked;
         kutu.disabled = true;
@@ -521,7 +521,7 @@ function listeGorunumu(icerik, s) {
           const kayit = ortamKaydi(x, o.id);
           if (kayit) kayit.kosuyaDahil = yeni;
           x.kosuyaDahil = (x.ortamlar || []).some((k) => k.kosuyaDahil);
-          bildir(yeni ? `Senaryo ${o.ad} ortamında koşuya eklendi.` : `Senaryo ${o.ad} ortamında koşudan çıkarıldı.`);
+          bildir(yeni ? `Senaryo ${o.ad} ortamında toplu koşuya eklendi.` : `Senaryo ${o.ad} ortamında toplu koşudan çıkarıldı.`);
         } catch (e) {
           kutu.checked = !yeni;
           bildir(`Koşu listesi güncellenemedi: ${e.message}`, 'hata');
@@ -530,7 +530,7 @@ function listeGorunumu(icerik, s) {
           ciz();
         }
       });
-      return h('label', { class: 'ortam-anahtari', title: `${o.ad} ortamında koşuda` }, kutu, h('span', { class: 'ortam-adi', 'aria-hidden': 'true' }, o.ad));
+      return h('label', { class: 'ortam-anahtari', title: `${o.ad} ortamında toplu koşuya dahil` }, kutu, h('span', { class: 'ortam-adi', 'aria-hidden': 'true' }, o.ad));
     })) : h('span', { class: 'cok-soluk', title: 'Senaryo hiçbir ortamda tanımlı değil' }, '—');
     const bs = x.beklenenSonuc;
     const altBilgi = [
@@ -724,7 +724,7 @@ function listeGorunumu(icerik, s) {
     let ortamId = null;
     if (ilgili.length > 1) {
       const secim = await secenekIste({
-        baslik: dahil ? 'Hangi ortamda koşuya eklensin?' : 'Hangi ortamda koşudan çıkarılsın?',
+        baslik: dahil ? 'Hangi ortamda toplu koşuya eklensin?' : 'Hangi ortamda toplu koşudan çıkarılsın?',
         metin: `${secilenler.length} seçili senaryo. Senaryo seçilen ortamda tanımlı değilse atlanır.`,
         ikonAd: dahil ? 'onay' : 'eksi',
         secenekler: [
@@ -738,7 +738,7 @@ function listeGorunumu(icerik, s) {
     const ortamAdi = ortamId ? ilgili.find((o) => o.id === ortamId)?.ad : null;
     try {
       const { degisen } = await api('/platform/senaryo/kosuya-dahil', { govde: { projeId: proje.id, idler: secilenler.map((x) => x.id), dahil, ...(ortamId ? { ortamId } : {}) } });
-      bildir(`${degisen} senaryo ${ortamAdi ? `${ortamAdi} ortamında ` : ''}${dahil ? 'koşuya eklendi' : 'koşudan çıkarıldı'}.`);
+      bildir(`${degisen} senaryo ${ortamAdi ? `${ortamAdi} ortamında ` : ''}${dahil ? 'toplu koşuya eklendi' : 'toplu koşudan çıkarıldı'}.`);
       await yenile();
     } catch (e) { bildir(e.message, 'hata'); }
   }
@@ -761,7 +761,7 @@ function listeGorunumu(icerik, s) {
   async function kopyala(x) {
     try {
       const k = await api('/platform/senaryo/kopyala', { govde: { projeId: proje.id, id: x.id } });
-      bildir(`Kopya oluşturuldu: "${k.baslik}" (Koşuda kapalı).`);
+      bildir(`Kopya oluşturuldu: "${k.baslik}" ("Toplu koşuya dahil" kapalı).`);
       await yenile();
       const tr = tabloAlani.querySelector(`tr[data-senaryo="${CSS.escape(k.id)}"]`);
       tr?.scrollIntoView({ block: 'center', behavior: 'smooth' });

@@ -274,7 +274,7 @@ export function kosuOnayi(s) {
       yerlestir(baslat, ikon('oynat'), adet ? s.dugme || `${adet} senaryoyu başlat` : 'Başlat');
       baslat.disabled = adet === 0 || Boolean(tahmin && tahmin.asanlar.length);
       const nedenler = [
-        hesap.haricSayisi ? `${hesap.haricSayisi} senaryo Koşuda kapalı` : '',
+        hesap.haricSayisi ? `${hesap.haricSayisi} senaryo toplu koşuya dahil değil` : '',
         hesap.tanimsizSayisi ? `${hesap.tanimsizSayisi} senaryo bu ortamda tanımlı değil` : '',
         hesap.atlananlar && hesap.atlananlar.length ? `${hesap.atlananlar.length} senaryo bu ortamda atlanıyor` : ''
       ].filter(Boolean);
@@ -288,7 +288,7 @@ export function kosuOnayi(s) {
           : h('div', { class: 'not-kutusu kosu-bos-nedeni', id: bosNedenId, role: 'status' },
             h('strong', {}, 'Başlatılamaz: '), `${ortam.ad} ortamında çalıştırılacak senaryo yok`,
             nedenler.length ? ` (${nedenler.join(', ')}).` : '.',
-            ' Önce senaryo ekleyin ya da Senaryolar tablosundaki "Koşuda" anahtarını açın; başka bir ortam da seçebilirsiniz.'),
+            ' Önce senaryo ekleyin ya da Senaryolar tablosundaki "Toplu koşuya dahil" anahtarını açın; başka bir ortam da seçebilirsiniz.'),
         // Etkin koşu hızı ve kaynağı ("TEST ortamı: en çok 2 senaryo aynı anda, 500 ms bekleme (ortam ayarı)").
         adet && typeof s.hizOzeti === 'function' ? h('p', { class: 'soluk kucuk kosu-hizi-ozeti' }, s.hizOzeti(ortam)) : null,
         h('dl', { class: 'onay-ozeti' },
@@ -299,7 +299,7 @@ export function kosuOnayi(s) {
           hesap.senaryolar.slice(0, 40).map((x) => h('li', {}, x.baslik)),
           adet > 40 ? h('li', {}, `… ve ${adet - 40} senaryo daha`) : null) : null,
         hazirlikBolumu(),
-        hesap.haricSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.haricSayisi} senaryo ${secimli ? `${ortam.ad} ortamında ` : ''}koşu listesinde olmadığı (Koşuda kapalı) için dahil edilmedi.`) : null,
+        hesap.haricSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.haricSayisi} senaryo ${secimli ? `${ortam.ad} ortamında ` : ''}koşu listesinde olmadığı (toplu koşuya dahil değil) için dahil edilmedi.`) : null,
         hesap.tanimsizSayisi ? h('p', { class: 'soluk kucuk' }, `${hesap.tanimsizSayisi} senaryo ${ortam.ad} ortamında tanımlı olmadığı için dahil edilmedi.`) : null,
         hesap.atlananlar && hesap.atlananlar.length ? h('details', { class: 'atlananlar-listesi' },
           h('summary', {}, `${hesap.atlananlar.length} senaryo ${ortam.ad} ortamında atlanır`),

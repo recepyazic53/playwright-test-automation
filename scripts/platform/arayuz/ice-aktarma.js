@@ -20,7 +20,7 @@ const ALAN_ETIKETLERI = {
   iki_asamali_tur: 'İki aşamalı doğrulama', totp_gizli: 'Authenticator gizli anahtarı', sms_ayari_json: 'SMS ayarı',
   tur: 'Tür', alanlar_json: 'Alanlar', tur_id: 'Test verisi türü', degerler_json: 'Değerler', anahtar: 'Anahtar',
   ekran_id: 'Ekran', surum: 'Sürüm', model_json: 'Model', baslik: 'Başlık', icerik_json: 'İçerik',
-  kosuya_dahil: 'Koşuya dahil', deger_json: 'Değer'
+  kosuya_dahil: 'Toplu koşuya dahil', deger_json: 'Değer'
 };
 const EKLEME_ETIKETLERI = {
   kosular: 'Koşular', kosu_sonuclari: 'Koşu sonuçları', degisiklik_gecmisi: 'Değişiklik geçmişi kayıtları', makineler: 'Bilgisayar kayıtları',

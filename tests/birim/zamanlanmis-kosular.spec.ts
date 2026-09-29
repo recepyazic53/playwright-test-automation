@@ -250,7 +250,7 @@ test('yalnız servis akışı kapsamı: sahte akış koşucusu çağrılır, sen
     expect(r2).toMatchObject({ durum: 'tamamlandi', kosuId: 'zamanli-deneme-2' });
     expect(s.cagrilar).toEqual([expect.objectContaining({ senaryoId: 's1', kosuTuru: 'tekil', kosuKimligi: 'zamanli-deneme-2' })]);
     expect(s.cagrilar[0]).not.toHaveProperty('kosuKapsami');
-    await expect(zamanliKosuyuYurut(vt, { ...kural, kapsam: { senaryolar: 'ekranlar', ekranIdleri: ['yok'], servisAkisIdleri: [] } }, 'zamanli-3', s.bag)).rejects.toThrow('Koşuda');
+    await expect(zamanliKosuyuYurut(vt, { ...kural, kapsam: { senaryolar: 'ekranlar', ekranIdleri: ['yok'], servisAkisIdleri: [] } }, 'zamanli-3', s.bag)).rejects.toThrow('toplu koşuya dahil');
   } finally {
     vt.kapat();
     klasor.temizle();

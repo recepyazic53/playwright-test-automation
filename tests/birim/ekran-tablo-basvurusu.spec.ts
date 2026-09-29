@@ -15,7 +15,7 @@ import { ekranBasvurulariniCoz, modelAlanBilgisi } from '../../scripts/platform/
 import { MESAJLAR, senaryoyuDogrula, tabloBasvurusuCoz } from '../../scripts/dogrulama/senaryo-dogrulayici.mjs';
 import { gizliDegerleriMaskele, veriHatalariMetni } from '../../scripts/platform/senaryolar/model-kosusu.mjs';
 import { sayfaPaketiniDogrula } from '../../scripts/platform/ekranlar/sayfa-paketi.mjs';
-import { BICIM_ATFI, BICIM_DOSYASI_ADI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI, PAKET_OZU, paketIstekCumlesi } from '../../scripts/platform/ekranlar/paket-istekleri.mjs';
+import { BICIM_ATFI, BICIM_DOSYASI_ADI, INCELEME_KURALLARI, MEVCUT_TABLO_KURALI, PAKET_OZU, SADE_ACIKLAMA, paketIstekCumlesi } from '../../scripts/platform/ekranlar/paket-istekleri.mjs';
 import { paketBicimiBelgesi } from '../../scripts/platform/ekranlar/paket-bicimi.mjs';
 import { korumaliTarayici, yerelSunucu } from './giris-fikstur';
 import { AkisUygulamasi, HAVUZLAR, akisModeli, akisPaketi } from './model-kosucu-ozellikleri-fikstur';
@@ -147,7 +147,11 @@ test.describe('paket istek metinleri', () => {
     for (const parca of ['"<Ekran adı> — <Alan>"', '"tur": "liste"', '"tur": "kayit"', '${Tablo.Sütun}', '${Tablo[etiket].Sütun}', 'gerekenAyarlar.testVerisiTurleri', '"gizli": true']) {
       expect(INCELEME_KURALLARI, parca).toContain(parca);
     }
-    expect(paketIstekCumlesi('https://ornek.invalid/sayfa')).toBe(`https://ornek.invalid/sayfa sayfasını incele ve ${BICIM_ATFI} bir ekran paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`);
+    // Önce sade açıklama (JSON anahtarı yok), altında teknik istek.
+    expect(paketIstekCumlesi('https://ornek.invalid/sayfa')).toBe(`${SADE_ACIKLAMA}\n\nhttps://ornek.invalid/sayfa sayfasını incele ve ${BICIM_ATFI} bir ekran paketi JSON dosyası üret. ${PAKET_OZU} ${INCELEME_KURALLARI}`);
+    // Sade açıklamada JSON anahtarı (camelCase, "a.b" yolu) geçmez; JSON anahtarları altta kalır.
+    expect(SADE_ACIKLAMA).not.toMatch(/\p{Ll}\p{Lu}|\w\.\w|JSON|"tur"/u);
+    expect(paketIstekCumlesi().indexOf(SADE_ACIKLAMA)).toBe(0);
     // Metin depo dosyasına değil, istekle verilen biçim dosyasına atıf yapar; zarfın zorunlu anahtarları metnin içindedir.
     expect(BICIM_ATFI).toContain(BICIM_DOSYASI_ADI);
     for (const anahtar of ['"tur": "sayfa-paketi"', '"surum": 1', 'meta', 'model', 'senaryoOnerileri', 'gerekenAyarlar', 'bilinmeyenler']) expect(PAKET_OZU, anahtar).toContain(anahtar);
