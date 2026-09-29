@@ -204,7 +204,8 @@ export const REHBERLER = {
         baslik: 'Senaryo önerileri',
         hedef: '.senaryo-onerileri-dugmesi',
         metin: ['Bir ekran seçiliyken "Senaryo önerileri", ekranın modelinden, mevcut senaryolardan ve koşu geçmişinden AZ SAYIDA, gerekçeli öneri çıkarır. Sıra: risk (son dönemde hata veren değerler, test edilmemiş iş kuralı uyarıları) › hiç denenmemiş koşul dalları › eksik ikili kombinasyonlar (pairwise) › modeldeki kurallara göre sınır değerleri › zorunlu alan boş. Mevcut senaryoların zaten denediği şey önerilmez; sayfanın başındaki "Kapsam" ölçülerine tıklayınca eksikler listelenir.',
-          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). "Reddet" (neden isteğe bağlı) öneriyi gizler; kabul ve redleriniz benzer önerilerin sırasını değiştirir. Eklenenler "Koşuda" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.'],
+          'Öneri yalnızca öneridir: işaretleyip "Senaryo olarak ekle" demeden senaryo oluşmaz. "Önizle" öneriyi formda doldurulmuş açar (kaydetmez). "Reddet" (neden isteğe bağlı) öneriyi gizler; kabul ve redleriniz benzer önerilerin sırasını değiştirir. Eklenenler "Koşuda" kapalı gelir; beklenen sonucu belli olmayanlarda "Beklenen sonucu siz seçin" yazar.',
+          'Servis senaryolarının önerileri de aynı düzende ayrı bir sayfadadır: servis sayfasının başlığındaki "Senaryo önerileri" düğmesiyle açılır.'],
         ipucu: 'Kişisel / gizli alanlarda değer üretilmez; mevcut senaryodaki değer ya da bağlı tablo kullanılır.'
       },
       {
@@ -316,11 +317,11 @@ export const REHBERLER = {
       },
       {
         baslik: 'Senaryo önerileri',
-        hedef: '.servis-onerileri-dugmesi',
-        metin: ['Senaryolar sekmesinin altındaki "Senaryo önerileri"ni açın. Öneriler kural tabanlıdır (yapay zekâ yok), metot bazındadır ve her birinin gerekçesi yazar; mevcut senaryoların zaten denediği şey önerilmez. Varsayılan olarak en iyi 10 öneri görünür.',
+        hedef: '.senaryo-onerileri-dugmesi',
+        metin: ['Başlıkta, "Senaryo ekle"nin yanındaki "Senaryo önerileri" ayrı bir sayfa açar (Senaryolar sekmesinin altındaki "Senaryo önerileri →" bağlantısı da aynı sayfaya gider); üstte metot ve ortamı seçersiniz, "Senaryolara dön" ya da kırıntıdaki servis adı servise geri götürür. Öneriler kural tabanlıdır (yapay zekâ yok), metot bazındadır ve her birinin gerekçesi yazar; mevcut senaryoların zaten denediği şey önerilmez. Varsayılan olarak en iyi 10 öneri görünür.',
           'Türler: senaryosu olmayan metoda başarılı akış; şemadan (WSDL / XSD ya da Sözleşme sekmesinden yüklenen OpenAPI) zorunlu alan eksik, sınır (alt / üst) ve negatif (sınır dışı, uzunluk + 1, liste dışı, desene uymayan, yanlış tip — alan başına yalnız en anlamlısı); liste alanlarının (şemadaki liste, evet / hayır, tablo listesi) eksik ikilileri (pairwise) ve hiç denenmemiş değerleri; geçmişten risk (son 14 günde kalan senaryoların değerleri öne alınır, son 90 günde görülen ve beklenen olarak test edilmemiş hata mesajı).',
           'Negatif önerilerde beklenen "Hata beklenir"dir (SOAP Fault ya da HTTP 4xx / 5xx) ve mesaj boş gelir: mesajı siz yazın ya da ilk koşudan sonra "Son yanıttan kontrol öner" ile alın. Görülen mesaj önerisinde beklenen o mesajdır; mesajda maskelenmiş parça varsa önizlemede düzeltirsiniz. Hassas alanlarda (gizli adlar, gizli sütunlar) sınır / negatif değer ve kombinasyon üretilmez.',
-          'Öneri yalnız taslaktır: panel hiçbir istek atmaz. "Ekle" senaryoyu "Koşuda" kapalı kaydeder; "Önizle" düzenleyicide doldurulmuş açar (kaydetmez); "Reddet" (neden isteğe bağlı) öneriyi gizler. Kabul ve redleriniz benzer önerilerin sırasını değiştirir.'],
+          'Öneri yalnız taslaktır: sayfa hiçbir istek atmaz. "Ekle" senaryoyu "Koşuda" kapalı kaydeder; "Önizle" düzenleyicide doldurulmuş açar (kaydetmez); "Reddet" (neden isteğe bağlı) öneriyi gizler. Kabul ve redleriniz benzer önerilerin sırasını değiştirir.'],
         cizim: { tur: 'akis', kutular: [{ baslik: 'Şema + senaryolar', alt: 'kısıtlar, kapsam', ikon: 'katman' }, { baslik: 'Öneri', alt: 'gerekçeli', ikon: 'yildiz' }, { baslik: 'Ekle', alt: 'Koşuda kapalı', ikon: 'arti' }, { baslik: 'Koşu', alt: 'siz başlatınca', ikon: 'oynat' }] }
       },
       {

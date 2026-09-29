@@ -4039,11 +4039,10 @@ dialog.claude-diyalogu .diyalog-govde { min-width: 0; overflow-wrap: anywhere; }
 .oneri-notlari-kutusu { margin-top: 12px; font-size: 12.5px; }
 .oneri-notlari-kutusu summary { cursor: pointer; color: var(--metin-2); }
 .oneri-notlari-kutusu .oneri-notlari { margin-top: 8px; }
-/* Servis senaryo önerileri (servis-onerileri.js): satırda seçim kutusu yok (Ekle / Önizle / Reddet satırda). */
-.servis-onerileri { margin-top: var(--b4); }
-.servis-onerileri .kart-basligi > .servis-onerileri-dugmesi { margin-left: auto; }
-.servis-oneri-govdesi:not(:empty) { margin-top: 10px; }
-.servis-oneri-araclari { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
+/* Servis senaryo önerileri sayfası (servis-onerileri.js): satırda seçim kutusu yok (Ekle / Önizle / Reddet satırda). */
+.servis-onerileri-baglantisi { margin: var(--b4) 0 0; }
+.servis-oneri-araclari { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: var(--b4); }
+.servis-oneri-araclari:empty { display: none; }
 .servis-oneri-araclari .filtre-secimi { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
 .servis-oneri-araclari select { max-width: 100%; min-width: 0; }
 .oneri.servis-oneri { grid-template-columns: minmax(0, 1fr) auto; }
