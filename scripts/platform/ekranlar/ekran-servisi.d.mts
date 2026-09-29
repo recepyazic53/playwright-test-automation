@@ -6,8 +6,9 @@ import type { Bulgu, EtkiKaydi } from './model-farki.mjs';
 type Nesne = Record<string, unknown>;
 
 export declare class EkranDogrulamaHatasi extends DepoHatasi {
-  constructor(mesaj: string, hatalar: Array<{ yer: string; mesaj: string }>);
-  hatalar: Array<{ yer: string; mesaj: string }>;
+  constructor(mesaj: string, hatalar: Array<{ yer: string; mesaj: string; ayrinti?: string }>);
+  /** mesaj: kullanıcıya gösterilen ileti; ayrinti: doğrulayıcının teknik iletisi (model doğrulamasında). */
+  hatalar: Array<{ yer: string; mesaj: string; ayrinti?: string }>;
 }
 
 export declare function modelAgaci(model: Nesne, altModeller?: Record<string, Nesne>): Nesne & { sayilar: Record<string, number>; profiller: string[] };
