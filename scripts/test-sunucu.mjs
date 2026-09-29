@@ -387,6 +387,8 @@ const ARAYUZ_DOSYALARI = new Map([
   ['/arayuz/ortam-riski.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'guvenlik', 'ortam-riski.mjs'), tur: 'text/javascript; charset=utf-8' }],
   // Koşu hızı (eşzamanlılık / bekleme; genel ayar + ortam ezmesi): sunucuyla ORTAK tek kaynak.
   ['/arayuz/kosu-hizi.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'kosu-hizi.mjs'), tur: 'text/javascript; charset=utf-8' }],
+  // Koşu ayarlarının hazır profilleri (Kanıt düzeyi, Ortam hızı): profil → ayar eşlemesi testlerle ORTAK tek kaynak.
+  ['/arayuz/kosu-profilleri.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'kosu-profilleri.mjs'), tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/izinler.js', { dosya: 'izinler.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/yedek-uyarisi.js', { dosya: 'yedek-uyarisi.js', tur: 'text/javascript; charset=utf-8' }],
   ['/arayuz/gizli-adlar.mjs', { yol: join(buDosyaninKlasoru, 'platform', 'ayarlar', 'gizli-adlar.mjs'), tur: 'text/javascript; charset=utf-8' }],

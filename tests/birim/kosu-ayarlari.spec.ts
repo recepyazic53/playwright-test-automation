@@ -97,6 +97,8 @@ test.describe('Ayarlar > Koşu arayüzü', () => {
     await page.goto('/#/ayarlar/proje');
     await page.getByRole('link', { name: 'Koşu' }).click();
     const form = page.getByRole('form', { name: 'Koşu ayarları' });
+    // Kayıt ve servis ayarları "Gelişmiş" altında (sayfada profiller + yeniden deneme / süre limiti).
+    await form.locator('details.gelismis-ayarlar > summary').click();
     await expect(form.getByLabel('Video', { exact: true })).toHaveValue('her');
     await expect(form.getByLabel('Koşu süre limiti (dk)')).toHaveValue('10');
     await form.getByLabel('Yeniden deneme').fill('7');

@@ -224,6 +224,7 @@ test('Ayarlar açıklamaları kısa (1–2 cümle), ayrıntı "?" ipucunda; Test
   // Uzun alan açıklamaları da kısalır; varsayılan değer her zaman görünür.
   await page.goto('/#/ayarlar/kosu');
   const form = page.getByRole('form', { name: 'Koşu ayarları' });
+  await form.locator('details.gelismis-ayarlar > summary').click();
   await expect(form.getByText(/Varsayılan: Token'ı yenile, bir kez tekrar dene\./)).toBeVisible();
   await expect(form.getByRole('button', { name: 'Ayrıntıyı göster' }).first()).toBeVisible();
   await baglam.close();

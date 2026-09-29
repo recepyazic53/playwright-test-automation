@@ -82,6 +82,7 @@ test.describe('koşu hızı arayüzü', () => {
     page.on('pageerror', (e) => hatalar.push(String(e)));
     await page.goto('/#/ayarlar/kosu');
     const form = page.getByRole('form', { name: 'Koşu ayarları' });
+    await form.locator('details.gelismis-ayarlar > summary').click();
     const servisGrubu = form.locator('fieldset').filter({ has: page.locator('legend', { hasText: /^Servis senaryoları$/ }) });
     const ekranGrubu = form.locator('fieldset').filter({ has: page.locator('legend', { hasText: /^Ekran senaryoları$/ }) });
     await expect(servisGrubu.getByLabel('Aynı anda en çok servis senaryosu (senaryo)')).toHaveValue('1');

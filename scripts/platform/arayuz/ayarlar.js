@@ -7,6 +7,7 @@ import {
   kisaAciklama, onayliDugme, parolaAlani, rozet, tarihMetni, TOKEN, yeniKimlik, yerlestir, kayitliStil, STILLER, stilUygula } from './ortak.js';
 import { iceAktarmaAkisi } from './ice-aktarma.js';
 import { KOSU_HIZI_ALANLARI } from './kosu-hizi.mjs';
+import { HIZ_ALANLARI, HIZ_PROFILLERI, KANIT_ALANLARI, KANIT_PROFILLERI, hizDegerleri, hizProfili, kanitDegerleri, kanitProfili } from './kosu-profilleri.mjs';
 import { girisTarifiBolumu } from './giris-tarifi.js';
 import { veriKlasoruKarti, yedekKlasoruBolumu } from './veri-klasoru.js';
 import { dosyaOnDenetimi, dosyaYukle } from './dosya-yukleme.js';
@@ -24,7 +25,7 @@ export const AYAR_BOLUMLERI = [
   { ad: 'proje', etiket: 'Proje ve ortamlar', ikon: 'katman', aciklama: 'Projeler (yeniden adlandır, varsayılan yap, sil), projenin adı ve testlerin çalışacağı ortamlar. Ortam adları ve adresleri kasada şifreli saklanır.' },
   { ad: 'giris', etiket: 'Giriş profilleri', ikon: 'kullanici', aciklama: 'Testlerin sisteme giriş yaparken kullanacağı hesaplar ve ortam başına giriş tarifi (giriş sayfasının alanları, iki aşamalı doğrulama, bağlam seçimi). Parolalar ve anahtarlar kasada şifreli saklanır ve burada gösterilmez.' },
   { ad: 'test-verisi', etiket: 'Test verisi', ikon: 'veri', aciklama: 'Her tablo bir Excel sayfası gibidir: sütunlar alan, her satır birlikte geçerli bir değer kombinasyonudur (ör. Kanal | Kullanıcı | Parola). Ekran input\'larını ve servis parametrelerini sütunlara bağladığınızda senaryoda seçtikçe diğer listeler satırlardan süzülür; koşul tanımlamazsınız. Tek sütunlu tablo düz bir değer listesidir. Bağlam tabloları (ör. şube) senaryoda satır adıyla seçilir.' },
-  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: video / ekran görüntüsü / iz kaydı, yeniden deneme, süre limiti, bekleme süreleri, servis zaman aşımı, varsayılan tarih biçimi, ekran taraması / akış kaydı süreleri ve zamanlanmış koşular. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
+  { ad: 'kosu', etiket: 'Koşu', ikon: 'oynat', aciklama: 'Koşuların davranışı: kanıt düzeyi ve ortam hızı profilleri, yeniden deneme ve süre limiti; tüm ayrıntılar (video / ekran görüntüsü / iz kaydı, bekleme süreleri, servis zaman aşımı, tarih biçimi, tarama / akış kaydı) Gelişmiş\'te. Kararlar sizindir; değişiklik sonraki koşulardan itibaren geçerlidir.' },
   { ad: 'yedekleme', etiket: 'Yedekleme', ikon: 'arsiv', aciklama: 'Şifreli .tayedek dosyası olarak dışa aktarın, başka bir bilgisayarın yedeğini içe aktarın; yerel otomatik yedekler burada listelenir. Kaç otomatik yedeğin tutulacağını ve koşu sonuçlarının ne kadar saklanacağını siz belirlersiniz.' },
   { ad: 'guvenlik', etiket: 'Güvenlik', ikon: 'kalkan', aciklama: 'Kasa kilidi, otomatik kilit süresi, video saklama süresi, yasak adresler, maskelenecek gizli adlar ve kasa parolası.' },
   { ad: 'izinler', etiket: 'İzinler', ikon: 'kilit', aciklama: 'Nöbetçi\'nin sizin adınıza yapabileceği işlemler (tarayıcıyla erişim, servis istekleri, veritabanı, canlı ortam, giriş bilgisi, dış gönderim, arka plan, sistem değişikliği, güvenlik gevşetme). Hepsi varsayılan olarak kapalıdır; açtığınız izinler kasada saklanır.' },
@@ -810,6 +811,80 @@ async function siniflandirmaKarti() {
 }
 
 /**
+ * Ayarlar > Koşu'nun hazır profilleri (kosu-profilleri.mjs): "Kanıt düzeyi" (6 kayıt ayarı) ve "Ortam hızı" (15 zaman aşımı /
+ * bekleme süresi). Profil saklanmaz: seçim formdaki ilgili alanları topluca doldurur (Kaydet'e basınca yazılır); gösterilen profil
+ * formdaki değerlerden türetilir — değerler hiçbir profile uymuyorsa "Özel".
+ * @param {Array<Record<string, any>>} tanimlar tüm ayar tanımları (varsayılan ve sınırlar için)
+ */
+function kosuProfilSecimleri(tanimlar) {
+  /** @type {Array<{ girdi: HTMLInputElement; ad: string }>} */
+  const kanitRadyolari = [];
+  /** @type {Array<{ girdi: HTMLInputElement; ad: string }>} */
+  const hizRadyolari = [];
+  const kanitAciklamasi = h('p', { class: 'yardim profil-aciklamasi', 'aria-live': 'polite' });
+  const secimGrubu = (baslik, yardim, secenekler, radyolar, aciklama) => {
+    const ad = yeniKimlik('profil');
+    return h('fieldset', { class: 'profil-secimi' }, h('legend', {}, baslik),
+      h('div', { class: 'profil-secenekleri' }, secenekler.map((p) => {
+        const girdi = /** @type {HTMLInputElement} */ (h('input', { type: 'radio', name: ad, value: p.ad, id: `${ad}-${p.ad}` }));
+        radyolar.push({ girdi, ad: p.ad });
+        return h('label', { class: 'profil-secenegi', for: girdi.id }, girdi, h('span', {}, h('b', {}, p.etiket), h('small', { class: 'soluk' }, p.ozet)));
+      })),
+      aciklama, h('p', { class: 'yardim' }, yardim));
+  };
+  const ozel = { ad: 'ozel', etiket: 'Özel…', ozet: 'alanları tek tek seçin' };
+  const alanlar = [
+    secimGrubu('Kanıt düzeyi', 'Video, video boyutu, test sonu ve adım görüntüleri, iz ve doğrulanan dosya ayarlarını topluca seçer. "Özel…" bu altı ayarı Gelişmiş > Kayıt\'ta açar.',
+      [...KANIT_PROFILLERI, ozel], kanitRadyolari, kanitAciklamasi),
+    secimGrubu('Ortam hızı', `Seçim ${HIZ_ALANLARI.length} zaman aşımı ve bekleme süresini varsayılanın bu katına ayarlar (Kaydet'e basınca yazılır; aradaki beklemeler ve ortam bazındaki koşu hızı değişmez). Bir süreyi Gelişmiş'te elle değiştirirseniz "Özel" görünür.`,
+      [...HIZ_PROFILLERI, { ...ozel, ozet: 'süreleri tek tek girin' }], hizRadyolari, null)
+  ];
+  /** @param {Record<string, unknown>} d */
+  const goster = (d) => {
+    const k = kanitProfili(d);
+    const hz = hizProfili(d, tanimlar);
+    for (const r of kanitRadyolari) r.girdi.checked = r.ad === k;
+    for (const r of hizRadyolari) r.girdi.checked = r.ad === hz;
+    const p = KANIT_PROFILLERI.find((x) => x.ad === k);
+    kanitAciklamasi.textContent = p ? `${p.etiket}: ${p.aciklama}` : 'Özel: kayıt ayarları Gelişmiş > Kayıt\'taki seçimlerinizdir.';
+  };
+  /** @param {{ girdiler: Map<string, HTMLElement>; form: HTMLFormElement; guncelle: () => void }} b */
+  const bagla = ({ girdiler, form, guncelle }) => {
+    const doldur = (/** @type {Record<string, string | number> | null} */ degerler) => {
+      for (const [a, v] of Object.entries(degerler || {})) {
+        const g = /** @type {HTMLInputElement | undefined} */ (girdiler.get(a));
+        if (g) g.value = String(v);
+      }
+    };
+    const gelismisiAc = (/** @type {string} */ anahtar) => {
+      const g = girdiler.get(anahtar);
+      const acilir = g && g.closest('details');
+      if (acilir) acilir.open = true;
+      if (g) { g.scrollIntoView({ block: 'center' }); g.focus(); }
+    };
+    for (const r of kanitRadyolari) {
+      r.girdi.addEventListener('change', () => {
+        if (r.ad === 'ozel') { gelismisiAc(KANIT_ALANLARI[0]); return; }
+        doldur(kanitDegerleri(r.ad));
+        guncelle();
+      });
+    }
+    for (const r of hizRadyolari) {
+      r.girdi.addEventListener('change', () => {
+        if (r.ad === 'ozel') { gelismisiAc(HIZ_ALANLARI.find((a) => girdiler.has(a) && !girdiler.get(a)?.closest('[hidden]')) || HIZ_ALANLARI[0]); return; }
+        doldur(hizDegerleri(tanimlar, r.ad));
+        guncelle();
+      });
+    }
+    // Alanlar elle değişince profil yeniden türetilir (radyoların kendi olayları hariç).
+    const alanDegisti = (/** @type {Event} */ o) => { if (!(o.target instanceof HTMLInputElement && o.target.type === 'radio')) guncelle(); };
+    form.addEventListener('input', alanDegisti);
+    form.addEventListener('change', alanDegisti);
+  };
+  return { alanlar, goster, bagla };
+}
+
+/**
  * Kullanıcı kararları formu (tanımlar sunucudan: scripts/platform/ayarlar/kosu-ayarlari.mjs): bölümün ayarları gruplar hâlinde.
  * altBolum 'gelismis' tanımları açılır "Gelişmiş koşu davranışı" kısmındadır (varsayılan kapalı; her ayarın varsayılanı önceki davranış).
  * @param {'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'} bolum @param {string} ad formun erişilebilir adı @param {string} basariMetni
@@ -867,16 +942,56 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
     })));
   /** @type {Array<{ t: Record<string, any>; girdi: HTMLElement; kutu: HTMLElement; not: HTMLElement }>} */
   const kosulluAlanlar = [];
-  const temel = tanimlar.filter((t) => t.altBolum !== 'gelismis');
+  // Ayarlar > Koşu: sayfada hazır profiller (Kanıt düzeyi, Ortam hızı) ve "ana" ayarlar; bölümün diğer tüm ayarları tek bir kapalı
+  // "Gelişmiş" kısmında (bugünkü alanların birebir aynısı). Diğer bölümlerde düzen değişmez.
+  const profilli = bolum === 'kosu';
+  const temel = profilli ? tanimlar.filter((t) => t.ana) : tanimlar.filter((t) => t.altBolum !== 'gelismis');
+  const gelismisOnu = profilli ? tanimlar.filter((t) => !t.ana && t.altBolum !== 'gelismis') : [];
   const gelismis = tanimlar.filter((t) => t.altBolum === 'gelismis');
+  const profiller = profilli ? kosuProfilSecimleri(tumu) : null;
+  const gelismisSayisi = gelismisOnu.length + gelismis.length;
+  const degisenRozeti = h('span', { class: 'degisen-sayaci soluk kucuk' });
   const form = h('form', { class: gomulu ? 'gomulu-ayar-formu kosu-ayarlari' : 'kart form-paneli kosu-ayarlari', novalidate: true, 'aria-label': ad },
     secenek.baslik ? h('p', { class: 'soluk kucuk' }, secenek.baslik) : null, mesaj.kutu,
+    ...(profiller ? profiller.alanlar : []),
     ...grupAlanlari(temel),
-    gelismis.length ? h('details', { class: 'gelismis-ayarlar' },
-      h('summary', {}, 'Gelişmiş koşu davranışı'),
+    gelismisSayisi ? h('details', { class: 'gelismis-ayarlar' },
+      profilli ? h('summary', {}, `Gelişmiş (${gelismisSayisi} ayar)`, degisenRozeti) : h('summary', {}, 'Gelişmiş koşu davranışı'),
+      profilli ? h('p', { class: 'soluk kucuk' }, 'Bugünkü ayarların tamamı burada; profiller bunları topluca doldurur, burada tek tek değiştirebilirsiniz. Değiştirdiğiniz bir ayar ilgili profili "Özel" yapar.') : null,
+      ...grupAlanlari(gelismisOnu),
+      profilli && gelismis.length ? h('h4', { class: 'gelismis-alt-baslik' }, 'Gelişmiş koşu davranışı') : null,
       h('p', { class: 'soluk kucuk' }, `Koşucunun bekleme süreleri ve kararları. Her ayarın varsayılanı Nöbetçi'nin bugüne kadarki davranışıdır; değiştirmediğiniz sürece koşular aynı çalışır.`),
       ...grupAlanlari(gelismis)) : null,
     h('div', { class: 'dugmeler' }, kaydet));
+  if (profiller) {
+    // Formdaki anlık değerler (profil türetme ve "değişen" sayısı için; kaydedilmemiş olabilir).
+    const formDegerleri = () => Object.fromEntries(tanimlar.filter((t) => girdiler.has(t.anahtar)).map((t) => {
+      const g = /** @type {any} */ (girdiler.get(t.anahtar));
+      return [t.anahtar, t.tur === 'onay' ? g.checked : t.tur === 'sayi' ? Number(g.value) : g.value];
+    }));
+    const guncelle = () => {
+      const d = formDegerleri();
+      profiller.goster(d);
+      const degisen = [...gelismisOnu, ...gelismis].filter((t) => String(d[t.anahtar]) !== String(t.varsayilan)).length;
+      degisenRozeti.textContent = degisen ? ` · değişen: ${degisen}` : ' · hepsi varsayılan';
+    };
+    profiller.bagla({ girdiler, form, guncelle });
+    // "Tarama ve akış kaydında koşu ayarlarını kullan": açıkken taramanın ayrı değerleri (ekran boyutu, dil, oturum kontrolü, giriş
+    // alanı beklemesi) gizlenir ve koşudaki eşleri kullanılır; kayıtlı ayrı değerler silinmez (kapatınca geri gelir).
+    const birlesik = /** @type {HTMLInputElement | undefined} */ (girdiler.get('taramaKosuAyarlariniKullan'));
+    const esliKutular = tanimlar.filter((t) => t.esi && girdiler.has(t.anahtar)).map((t) => girdiler.get(t.anahtar)?.closest('.alan')).filter(Boolean);
+    if (birlesik && esliKutular.length) {
+      const not = h('p', { class: 'yardim esli-not' }, 'Tarayıcı ekran boyutu, dili, girişte oturum kontrolü ve giriş alanı beklemesi koşu ayarlarından alınır (Tarayıcı ve Giriş grupları). Ayrı değer için sayfanın üstündeki "Tarama ve akış kaydında koşu ayarlarını kullan" seçimini kaldırın.');
+      esliKutular[0].before(not);
+      const esGuncelle = () => {
+        for (const k of esliKutular) k.hidden = birlesik.checked;
+        not.hidden = !birlesik.checked;
+      };
+      birlesik.addEventListener('change', esGuncelle);
+      esGuncelle();
+    }
+    guncelle();
+  }
   for (const k of kosulluAlanlar) {
     const bagli = girdiler.get(k.t.etkinKosul.anahtar);
     const guncelle = () => {
@@ -912,8 +1027,8 @@ async function ayarFormu(bolum, ad, basariMetni, secenek = {}) {
       if (t.tur === 'sayi') {
         const n = Number(g.value);
         if (!Number.isInteger(n) || n < t.enAz || n > t.enCok) {
-          // Pasif (kullanılmayan) alan: geçersiz değer gönderilmez; kayıtlı değer korunur.
-          if (g.disabled) continue;
+          // Pasif (kullanılmayan) ya da gizli alan: geçersiz değer gönderilmez; kayıtlı değer korunur.
+          if (g.disabled || g.closest('[hidden]')) continue;
           alanHatasi(g, `${t.enAz} ile ${t.enCok} arasında bir tam sayı girin.`);
           const acilir = g.closest('details');
           if (acilir) acilir.open = true;

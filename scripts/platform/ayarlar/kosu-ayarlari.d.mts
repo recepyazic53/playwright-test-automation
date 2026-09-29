@@ -2,7 +2,10 @@
 import type { Veritabani } from '../veritabani/baglanti.mjs';
 
 export interface KosuAyarTanimi {
-  anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay'; varsayilan: string | number | boolean;
+  anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis';
+  /** Ayarlar > Koşu sayfasında profillerin yanında görünür (bölümün diğer ayarları "Gelişmiş" altında). */ ana?: boolean;
+  /** Tarama / akış kaydı ayarının koşudaki eşi ("Tarama ve akış kaydında koşu ayarlarını kullan" açıkken eşi kullanılır). */ esi?: string;
+  grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay'; varsayilan: string | number | boolean;
   secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
   /** Ayar yalnız başka bir ayar bu değerdeyken (deger) ya da bu değerlerden birindeyken (degerler) kullanılır (arayüzde aksi hâlde pasif + açıklama). */
   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string };
@@ -21,7 +24,12 @@ export interface KosuAyarlari {
   medyaInceltme: 'kapali' | 'basarili' | 'hatali' | 'ikisi'; medyaInceltmeGun: number; medyaInceltmeKoru: boolean;
   /** Ayarlar > Koşu > Tek senaryoda en çok veri koşusu (tablodan çoklu satır). */
   enCokVeriKosusu: number;
+  /** Tarama ve akış kaydında koşunun ekran boyutu, dili, oturum kontrolü ve giriş alanı beklemesi kullanılsın (kayıtsızsa eşlerden türetilir). */
+  taramaKosuAyarlariniKullan: boolean;
 }
+export interface TaramaEtkinAyarlari { kaynak: 'kosu' | 'ayri'; genislik: number; yukseklik: number; dil: string | null; oturumKontrolSn: number; girisAlanBeklemeSn: number }
+export declare const TARAMA_ESLERI: ReadonlyArray<[string, string]>;
+export declare function taramaEtkinAyarlari(a: KosuAyarlari): TaramaEtkinAyarlari;
 export declare const KOSU_AYAR_ANAHTARI: string;
 export declare const KOSU_AYAR_TANIMLARI: ReadonlyArray<KosuAyarTanimi>;
 export declare function varsayilanKosuAyarlari(): KosuAyarlari;

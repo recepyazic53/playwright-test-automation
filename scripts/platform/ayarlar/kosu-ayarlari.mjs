@@ -30,8 +30,11 @@ const SAAT_DILIMI_SECENEKLERI = [['bilgisayar', 'Bilgisayarın saat dilimi'], ['
  * etkinKosul: ayar yalnız başka bir ayar (anahtar) şu değerdeyken (deger) ya da şu değerlerden birindeyken (degerler) kullanılır; arayüz aksi hâlde alanı pasif gösterir
  * (pasifAciklama). Kaydedilen değer korunur.
  * tur 'onay': açık / kapalı (true / false; onay kutusu).
- * bolum 'testVerisi': Ayarlar > Test verisi > Veri sağlığı başlığındaki ayarlar (dişli) düğmesinin açtığı "Test verisi ayarları" diyaloğu.
- * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
+ * bolum 'testVerisi': Veri > Veri sağlığı başlığındaki ayarlar (dişli) düğmesinin açtığı "Test verisi ayarları" diyaloğu.
+ * ana: Ayarlar > Koşu sayfasında hazır profillerin (kosu-profilleri.mjs) yanında görünür; bölümün diğer ayarları kapalı "Gelişmiş" kısmındadır.
+ * esi: tarama / akış kaydı ayarının koşudaki eşi — "Tarama ve akış kaydında koşu ayarlarını kullan" (taramaKosuAyarlariniKullan)
+ *   açıkken tarama ve akış kaydı bu ayar yerine eşini kullanır (taramaEtkinAyarlari); kapalıyken kendi değerini (kayıtlı değer korunur).
+ * @type {ReadonlyArray<{ anahtar: string; bolum?: 'kosu' | 'yedekleme' | 'arayuz' | 'zamanlama' | 'testVerisi'; altBolum?: 'gelismis'; ana?: boolean; esi?: string; grup: string; etiket: string; aciklama: string; tur: 'secim' | 'sayi' | 'metin' | 'onay';
  *   varsayilan: string | number | boolean; secenekler?: ReadonlyArray<[string, string]>; enAz?: number; enCok?: number; birim?: string; env?: string; carpan?: number;
  *   etkinKosul?: { anahtar: string; deger?: string; degerler?: string[]; pasifAciklama: string } }>}
  */
@@ -53,8 +56,8 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
   { anahtar: 'indirilenDosya', grup: 'Kayıt', etiket: 'Doğrulanan dosya (ek)',
     aciklama: 'İndirilen dosyayı doğrulama adımında (ekran) ve servis yanıtının dosya kontrolünde dosyanın kendisi rapora ek olarak (şifreli) saklansın mı. Saklanırsa sonuç ekranında "Dosyayı indir" ile (onayla, ham hâliyle) indirilir. Saklanmazsa raporda yalnız özet durur: dosyanın adı, boyutu, biçimi ve her beklentinin sonucu. İndirilen dosya koşunun geçici klasörüne yazılır ve doğrulamadan sonra silinir.',
     tur: 'secim', varsayilan: 'kapali', secenekler: [['kapali', 'Saklanmaz (yalnız özet)'], ['yalnizHata', 'Yalnız kalan doğrulamalarda'], ['her', 'Her zaman']], env: 'NOBETCI_INDIRILEN_DOSYA' },
-  { anahtar: 'yenidenDeneme', grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Kalan test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
-  { anahtar: 'kosuSureLimitiDk', grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',
+  { anahtar: 'yenidenDeneme', ana: true, grup: 'Koşu', etiket: 'Yeniden deneme', aciklama: 'Kalan test kaç kez yeniden denensin (0: denenmez).', tur: 'sayi', varsayilan: 0, enAz: 0, enCok: 3, env: 'NOBETCI_YENIDEN_DENEME' },
+  { anahtar: 'kosuSureLimitiDk', ana: true, grup: 'Koşu', etiket: 'Koşu süre limiti', aciklama: 'Tek bir koşu bu süreyi aşarsa durdurulur. Testin kendi süre sınırı da buna göre ayarlanır (limitten 30 sn önce dolar; hata kaydı ve görüntüler alınabilsin diye).',
     tur: 'sayi', varsayilan: 10, enAz: 1, enCok: 120, birim: 'dk', env: 'NOBETCI_KOSU_SURE_LIMITI_MS', carpan: 60_000 },
   { anahtar: 'enCokVeriKosusu', grup: 'Koşu', etiket: 'Tek senaryoda en çok veri koşusu',
     aciklama: 'Senaryo tablodan birden çok satırla (seçili satırlar, uyan tüm satırlar ya da kombinasyonlar) koşarken bir senaryodan çıkabilecek en çok test. Aşılırsa koşu başlatılmaz; senaryonun satır seçimini daraltın.',
@@ -91,22 +94,29 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
     tur: 'sayi', varsayilan: 30, enAz: 5, enCok: 300, birim: 'sn' },
   { anahtar: 'kesifSecenekSiniri', grup: 'Tarama ve akış kaydı', etiket: 'Açılır liste keşif sınırı', aciklama: 'Taramada seçenekleri tek tek denenen açılır listelerin en çok seçenek sayısı; daha uzun listeler denenmez (raporda belirtilir).',
     tur: 'sayi', varsayilan: 8, enAz: 2, enCok: 50, birim: 'seçenek' },
-  { anahtar: 'taramaEkranGenisligi', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı ekran genişliği', aciklama: 'Tarama ve akış kaydındaki tarayıcı penceresinin genişliği.',
+  // Tarama ve akış kaydındaki 4 çift ayar (ekran boyutu, dil, oturum kontrolü, giriş alanı beklemesi) koşudaki eşleriyle tek
+  // onayda birleşir. Varsayılanı KAPALI: tarama ve koşunun varsayılanları farklıdır (1366×900 / tr-TR ↔ 1280×720 / tarayıcı
+  // varsayılanı); açmak taramanın davranışını değiştirir, bu yüzden kararı kullanıcı verir. Kayıtsız kurulumda değer kayıtlı
+  // eşlerden türetilir (kosuAyarlariniOku): dört çiftin etkin değerleri zaten aynıysa açık, değilse kapalı — davranış değişmez.
+  { anahtar: 'taramaKosuAyarlariniKullan', ana: true, grup: 'Tarama ve akış kaydı', etiket: 'Tarama ve akış kaydında koşu ayarlarını kullan',
+    aciklama: 'Açıkken tarama ve akış kaydı koşunun tarayıcı ekran boyutunu, dilini, oturum kontrolünü ve giriş alanı beklemesini kullanır (Gelişmiş > Tarayıcı ve Giriş); bu dört ayar tek yerden ayarlanır. Kapalıyken Gelişmiş > Tarama ve akış kaydı altındaki ayrı değerler kullanılır (varsayılanlar: 1366 × 900 px, Türkçe, 15 sn, 15 sn).',
+    tur: 'onay', varsayilan: false },
+  { anahtar: 'taramaEkranGenisligi', esi: 'kosuEkranGenisligi', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı ekran genişliği', aciklama: 'Tarama ve akış kaydındaki tarayıcı penceresinin genişliği.',
     tur: 'sayi', varsayilan: 1366, enAz: 320, enCok: 3840, birim: 'px' },
-  { anahtar: 'taramaEkranYuksekligi', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı ekran yüksekliği', aciklama: 'Tarama ve akış kaydındaki tarayıcı penceresinin yüksekliği.',
+  { anahtar: 'taramaEkranYuksekligi', esi: 'kosuEkranYuksekligi', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı ekran yüksekliği', aciklama: 'Tarama ve akış kaydındaki tarayıcı penceresinin yüksekliği.',
     tur: 'sayi', varsayilan: 900, enAz: 240, enCok: 2160, birim: 'px' },
-  { anahtar: 'taramaDili', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı dili', aciklama: 'Tarama ve akış kaydında tarayıcının dili (sayfanın dil algılaması, tarih / sayı biçimi).',
+  { anahtar: 'taramaDili', esi: 'kosuDili', grup: 'Tarama ve akış kaydı', etiket: 'Tarayıcı dili', aciklama: 'Tarama ve akış kaydında tarayıcının dili (sayfanın dil algılaması, tarih / sayı biçimi).',
     tur: 'secim', varsayilan: 'tr-TR', secenekler: DIL_SECENEKLERI },
   { anahtar: 'taramaGirisKipi', grup: 'Tarama ve akış kaydı', etiket: 'Tarama ve akış kaydında giriş',
     aciklama: 'Her seferinde baştan giriş yap: tarama ve akış kaydı boş tarayıcıyla açılır ve giriş yapar; oturum saklanmaz. Koşunun saklanan oturumunu kullan: koşunun bu ortam ve giriş profili için şifreli sakladığı oturum yüklenir; geçerliyse giriş atlanır, değilse baştan giriş yapılır ve başarılı girişin oturumu aynı şifreli dosyaya yazılır (koşu da kullanır). Yalnız aynı ortam ve giriş profilinin oturumu kullanılır; "Giriş yapmadan aç" ile başlatılan iş saklanan oturumu kullanmaz ve güncellemez. Kasa anahtarı yoksa oturum okunmaz, yazılmaz.',
     tur: 'secim', varsayilan: 'bastan', secenekler: [['bastan', 'Her seferinde baştan giriş yap'], ['saklananOturum', 'Koşunun saklanan oturumunu kullan']] },
-  { anahtar: 'taramaOturumKontrolSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte oturum kontrolü',
-    aciklama: 'Saklanan oturum yüklendiğinde geçerli olup olmadığı en çok bu kadar denetlenir; süre dolarsa baştan giriş yapılır. Koşudaki "Oturum kontrolü"nden (Gelişmiş koşu davranışı) ayrıdır.',
+  { anahtar: 'taramaOturumKontrolSn', esi: 'oturumKontrolSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte oturum kontrolü',
+    aciklama: 'Saklanan oturum yüklendiğinde geçerli olup olmadığı en çok bu kadar denetlenir; süre dolarsa baştan giriş yapılır. "Tarama ve akış kaydında koşu ayarlarını kullan" açıksa bunun yerine koşudaki "Oturum kontrolü" kullanılır.',
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn',
     // Arayüz: bağlı ayar bu değerde değilken alan pasif ve bu açıklama gösterilir (değer korunur).
     etkinKosul: { anahtar: 'taramaGirisKipi', deger: 'saklananOturum', pasifAciklama: 'Yalnız "Koşunun saklanan oturumunu kullan" seçiliyken kullanılır.' } },
-  { anahtar: 'taramaGirisAlanBeklemeSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte giriş alanı beklemesi',
-    aciklama: 'Tarama ve akış kaydındaki girişte giriş sayfasının alanlarının (kullanıcı adı, parola, giriş düğmesi, doğrulama kodu düğmesi) görünmesi için en çok bekleme. Giriş tarifindeki adımda süre verilmişse o kullanılır. Koşudaki "Giriş alanı beklemesi"nden ayrıdır.',
+  { anahtar: 'taramaGirisAlanBeklemeSn', esi: 'girisAlanBeklemeSn', grup: 'Tarama ve akış kaydı', etiket: 'Girişte giriş alanı beklemesi',
+    aciklama: 'Tarama ve akış kaydındaki girişte giriş sayfasının alanlarının (kullanıcı adı, parola, giriş düğmesi, doğrulama kodu düğmesi) görünmesi için en çok bekleme. Giriş tarifindeki adımda süre verilmişse o kullanılır. "Tarama ve akış kaydında koşu ayarlarını kullan" açıksa bunun yerine koşudaki "Giriş alanı beklemesi" kullanılır.',
     tur: 'sayi', varsayilan: 15, enAz: 1, enCok: 300, birim: 'sn' },
   // ---- Gelişmiş koşu davranışı (Ayarlar > Koşu altında ayrı, açılır bölüm) ----
   { anahtar: 'gorunmeyenAlanBeklemeSn', altBolum: 'gelismis', grup: 'Alanlar', etiket: 'Alanın görünmesi için bekleme',
@@ -193,7 +203,7 @@ export const KOSU_AYAR_TANIMLARI = Object.freeze([
  *   gorunmeyenAlan: string; alanSonrasiKosulSn: number; arkaPlanIstekSn: number; adimGostergeSn: number; onayPenceresi: string; oturumKontrolSn: number;
  *   girisAlanBeklemeSn: number; tabloSatirSecimi: string; sqlSatirSiniri: number; kosuEkranGenisligi: number; kosuEkranYuksekligi: number; kosuDili: string;
  *   saatDilimi: string; ekranEszamanli: number; ekranBeklemeMs: number; zamanliKacan: string; zamanliCakisma: string; raporGoruntuSiniriMb: number; raporSaklamaGun: string; benzerlikEsigi: number;
- *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number }} KosuAyarlari */
+ *   medyaInceltme: string; medyaInceltmeGun: number; medyaInceltmeKoru: boolean; enCokVeriKosusu: number; taramaKosuAyarlariniKullan: boolean }} KosuAyarlari */
 
 /** @returns {KosuAyarlari} */
 export const varsayilanKosuAyarlari = () => /** @type {KosuAyarlari} */ (Object.fromEntries(KOSU_AYAR_TANIMLARI.map((t) => [t.anahtar, t.varsayilan])));
@@ -223,16 +233,52 @@ function degerDogrula(t, v) {
   return m;
 }
 
-/** Kayıtlı ayarlar + varsayılanlar (kasa açık olmalı; okunamazsa varsayılanlar). @param {Veritabani} vt @returns {KosuAyarlari} */
+/** Tarama / akış kaydı ayarı ile koşudaki eşi (tanımdaki "esi"). @type {ReadonlyArray<[string, string]>} */
+export const TARAMA_ESLERI = Object.freeze(KOSU_AYAR_TANIMLARI.filter((t) => t.esi).map((t) => /** @type {[string, string]} */ ([t.anahtar, String(t.esi)])));
+
+/**
+ * Dört çiftin (ekran boyutu, dil, oturum kontrolü, giriş alanı beklemesi) ETKİN değerleri aynı mı. Dil: taramada dil her zaman
+ * verilir; koşudaki "Tarayıcı varsayılanı" (dil verilmez) hiçbir tarama diline eşit sayılmaz.
+ * @param {Record<string, unknown>} a
+ */
+const esDegerlerAyniMi = (a) => TARAMA_ESLERI.every(([tarama, kosu]) => String(a[tarama]) === String(a[kosu]));
+
+/**
+ * Kayıtlı ayarlar + varsayılanlar (kasa açık olmalı; okunamazsa varsayılanlar). Okurken dönüştürme (göç): "Tarama ve akış
+ * kaydında koşu ayarlarını kullan" hiç kaydedilmemişse kayıtlı eşlerden türetilir — dört çiftin etkin değerleri aynıysa açık,
+ * değilse kapalı (ayrı değerler). Eski kayıtlı değerler kaybolmaz, hiçbir kurulumun davranışı değişmez (kayıt yazılmaz; ilk
+ * "Kaydet"te yeni anahtar da yazılır).
+ * @param {Veritabani} vt @returns {KosuAyarlari}
+ */
 export function kosuAyarlariniOku(vt) {
   const sonuc = varsayilanKosuAyarlari();
   let kayit;
   try { kayit = /** @type {Record<string, unknown> | undefined} */ (ayarGetir(vt, KOSU_AYAR_ANAHTARI)); } catch { kayit = undefined; }
+  let birlesikKayitli = false;
   for (const t of KOSU_AYAR_TANIMLARI) {
     if (kayit?.[t.anahtar] === undefined) continue;
-    try { /** @type {any} */ (sonuc)[t.anahtar] = degerDogrula(t, kayit[t.anahtar]); } catch { /* varsayılan kalır */ }
+    try {
+      /** @type {any} */ (sonuc)[t.anahtar] = degerDogrula(t, kayit[t.anahtar]);
+      if (t.anahtar === 'taramaKosuAyarlariniKullan') birlesikKayitli = true;
+    } catch { /* varsayılan kalır */ }
   }
+  if (!birlesikKayitli) sonuc.taramaKosuAyarlariniKullan = esDegerlerAyniMi(/** @type {any} */ (sonuc));
   return sonuc;
+}
+
+/**
+ * Tarama ve akış kaydının ETKİN tarayıcı / giriş değerleri: "Tarama ve akış kaydında koşu ayarlarını kullan" açıksa koşudaki
+ * eşleri, kapalıysa taramanın kendi ayarları. dil: null = tarayıcı varsayılanı (koşudaki "Tarayıcı varsayılanı" seçimi).
+ * @param {KosuAyarlari} a
+ * @returns {{ kaynak: 'kosu' | 'ayri'; genislik: number; yukseklik: number; dil: string | null; oturumKontrolSn: number; girisAlanBeklemeSn: number }}
+ */
+export function taramaEtkinAyarlari(a) {
+  if (a.taramaKosuAyarlariniKullan) {
+    return { kaynak: 'kosu', genislik: a.kosuEkranGenisligi, yukseklik: a.kosuEkranYuksekligi, dil: a.kosuDili === 'varsayilan' ? null : a.kosuDili,
+      oturumKontrolSn: a.oturumKontrolSn, girisAlanBeklemeSn: a.girisAlanBeklemeSn };
+  }
+  return { kaynak: 'ayri', genislik: a.taramaEkranGenisligi, yukseklik: a.taramaEkranYuksekligi, dil: a.taramaDili,
+    oturumKontrolSn: a.taramaOturumKontrolSn, girisAlanBeklemeSn: a.taramaGirisAlanBeklemeSn };
 }
 
 /** Verilen ayarları doğrulayıp kaydeder (verilmeyenler korunur). @param {Veritabani} vt @param {unknown} girdi @returns {KosuAyarlari} */
