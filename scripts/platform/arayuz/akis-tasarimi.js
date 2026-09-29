@@ -26,6 +26,9 @@
 // adım / Korunan aksiyonlar" blokları, alan grubunda / aksiyonda kilitli not ve alanın yanında kilitli koşul olarak görünür;
 // kaydederken sunucu bunları modeldeki hâliyle aynen yazar. Korunan parçalı blok silinirken ve kaydetme onayında (artık
 // diyagramda olmayan korunan parçalar) ne kaybolacağı gösterilir.
+// Ekranın / ortak akışın akışını düzenlerken sağ listede "Listede olmayan alanı / düğmeyi elle ekle" (etiket + tür / yazı + seçici):
+// kayıtta ya da modelde olmayan öğe (ör. boş başlayan ortak akışa sıfırdan adım) sağ listeye eklenir, kaydederken "elleOgeler"
+// olarak gider ve modele yazılır.
 // Kullanıcı verisi DOM'a yalnızca metin olarak yazılır (h(); innerHTML yok).
 import { api, bildir, degisiklikleriBirak, h, ikon, mesgulIken, rozet, yerlestir } from './ortak.js';
 import { onayIste } from './kosu-paneli.js';
@@ -127,12 +130,23 @@ export async function akisTasarimi(icerik, s) {
   let tumunuGoster = false;
   let acikMenu = -1;
   const alanBilgisi = new Map(palet.alanlar.map((a) => [a.anahtar, a]));
+  /**
+   * Elle tanımlanan alan / düğmeler (yalnız ekranın ya da ortak akışın akışını düzenlerken): kayıtta / modelde olmayan öğe
+   * (ör. boş başlayan ortak akışa sıfırdan adım). Sağ listeye eklenir; kaydederken sunucuya "elleOgeler" olarak gider
+   * (tarama/akis-tasarimi.mjs > elleOgeleriEkle), düğmelerin sırası listedeki sırasıdır.
+   * @type {{ alanlar: Array<{ anahtar: string; etiket: string; tur: string; secici: string }>; dugmeler: Array<{ metin: string; secici: string }> }}
+   */
+  const elle = { alanlar: [], dugmeler: [] };
+  /** Elle öğe formları (bir kez kurulur; sağ liste yeniden çizilince aynen yerleştirilir). @type {{ alan: HTMLElement | null; dugme: HTMLElement | null }} */
+  const elleDugumleri = { alan: null, dugme: null };
 
   const durumSatiri = h('span', { class: 'cok-soluk kucuk', 'aria-live': 'polite' });
   const kaydet = h('button', { type: 'button', class: 'birincil' }, ikon('onay'), ekranKipi ? (veri.akis ? 'Değişiklikleri kaydet' : 'Akışı oluştur') : ortakKayit ? 'Ortak akışı güncelle' : 'Kaydet ve önizle');
   const hataKutusu = h('div', {});
   const akis = h('ol', { class: 'tasarim-akisi', 'aria-label': 'Akış diyagramı' });
   const paletKap = h('div', { class: 'tasarim-paleti' });
+  /** Elle öğe formunun yeri: sağ listeden AYRI (liste her değişiklikte yeniden çizilir; form yalnız sekme değişince değişir). */
+  const elleKap = h('div', { class: 'elle-oge-kabi' });
 
   // ---- Taslağı saklama (sessiz; kayıt kaybolmasın) ------------------------------------------
   let saklaZamanlayici = null;
@@ -731,6 +745,67 @@ export async function akisTasarimi(icerik, s) {
     return el;
   }
 
+  /**
+   * Elle öğe formu (details): başlık, girdiler, ekle düğmesi. Düğüm BİR KEZ kurulur ve sağ liste her çizildiğinde aynen yeniden
+   * yerleştirilir (açık / kapalı durumu ve yazılanlar kaybolmaz). ekle() hata metni döner ya da null (başarı: form temizlenir, kapanır).
+   */
+  function elleFormu(baslik, girdiler, dugmeMetni, ekle) {
+    const hata = h('p', { class: 'hata-metni kucuk', role: 'alert', hidden: true });
+    const form = h('form', { class: 'elle-oge-formu' }, ...girdiler.map(([etiket, girdi]) => h('label', { class: 'tasarim-etiketi' }, h('span', {}, etiket), girdi)), hata,
+      h('button', { type: 'submit', class: 'kucuk-dugme' }, ikon('artiYalin'), dugmeMetni));
+    const d = h('details', { class: 'elle-oge' }, h('summary', {}, baslik), form);
+    form.addEventListener('submit', (o) => {
+      o.preventDefault();
+      hata.hidden = true;
+      const m = ekle();
+      if (m) { hata.textContent = m; hata.hidden = false; return; }
+      form.reset();
+      d.open = false;
+    });
+    return d;
+  }
+  const seciciUyarisi = (s) => (!s ? 'Seçiciyi yazın (ör. #onayla ya da [name="not"]).' : /[\r\n]/.test(s) || s.length > 300 ? 'Seçici tek satır ve en fazla 300 karakter olmalı.' : /^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? 'Adres değil, sayfadaki öğenin seçicisini yazın.' : null);
+  /** "Listede olmayan alanı elle ekle": etiket, tür, seçici → sağ listeye (etkin alan grubu varsa ona da) eklenir. */
+  function elleAlanFormu() {
+    const etiket = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Açıklama', 'aria-label': 'Elle alan etiketi' });
+    const tur = h('select', { 'aria-label': 'Elle alan türü' }, [['text', 'Metin'], ['number', 'Sayı'], ['date', 'Tarih'], ['tel', 'Telefon'], ['email', 'E-posta'], ['textarea', 'Uzun metin'], ['checkbox', 'Onay kutusu']]
+      .map(([d, m]) => h('option', { value: d }, m)));
+    const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#aciklama', spellcheck: 'false', 'aria-label': 'Elle alan seçicisi' });
+    return elleFormu('Listede olmayan alanı elle ekle', [['Etiket', etiket], ['Tür', tur], ['Seçici (CSS)', secici]], 'Alanı ekle', () => {
+      const e = etiket.value.trim();
+      const sc = secici.value.trim();
+      if (!e) return 'Alanın etiketini yazın.';
+      const u = seciciUyarisi(sc);
+      if (u) return u;
+      let n = elle.alanlar.length + 1;
+      while (alanBilgisi.has(`elle-${n}`)) n++;
+      const anahtar = `elle-${n}`;
+      elle.alanlar.push({ anahtar, etiket: e, tur: tur.value, secici: sc });
+      const oge = { anahtar, etiket: e, tur: tur.value, bolum: null, secili: true, zorunlu: false, not: 'elle eklendi', secenekSayisi: 0, blok: null, secenekler: null };
+      palet.alanlar.push(oge);
+      alanBilgisi.set(anahtar, oge);
+      if (bloklar[etkin] && bloklar[etkin].tur === 'alanlar') alanEkle(anahtar, etkin); else { degisti(); }
+      return null;
+    });
+  }
+  /** "Listede olmayan düğmeyi elle ekle": yazı, seçici → sağ listenin sonuna eklenir ve aksiyon bloğu olarak konur. */
+  function elleDugmeFormu() {
+    const metin = h('input', { type: 'text', maxlength: '80', placeholder: 'ör. Onayla', 'aria-label': 'Elle düğme yazısı' });
+    const secici = h('input', { type: 'text', maxlength: '300', placeholder: '#onayla', spellcheck: 'false', 'aria-label': 'Elle düğme seçicisi' });
+    return elleFormu('Listede olmayan düğmeyi elle ekle', [['Düğmenin yazısı', metin], ['Seçici (CSS)', secici]], 'Düğmeyi ekle', () => {
+      const m = metin.value.trim();
+      const sc = secici.value.trim();
+      if (!m) return 'Düğmenin yazısını girin.';
+      const u = seciciUyarisi(sc);
+      if (u) return u;
+      elle.dugmeler.push({ metin: m, secici: sc });
+      const sira = palet.dugmeler.length;
+      palet.dugmeler.push({ sira, metin: m, blok: null });
+      blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: sira, istegeBagli: false });
+      return null;
+    });
+  }
+
   function paletCiz() {
     const kullanim = (blok) => (blok >= 0 && bloklar[blok]
       ? rozet(`${blok + 1}. blokta`, 'basari', { title: bloklar[blok].tur === 'alanlar' && bloklar[blok].ad ? `Kullanıldığı grup: ${bloklar[blok].ad}` : null }) : null);
@@ -756,15 +831,16 @@ export async function akisTasarimi(icerik, s) {
           oge.addEventListener('dragstart', (o) => { o.dataTransfer.setData(SURUKLEME_TURU, a.anahtar); o.dataTransfer.effectAllowed = 'move'; });
           return oge;
         })),
-        palet.alanlar.some((a) => !a.secili) ? h('label', { class: 'onay-satiri kucuk' }, goster, `Kayıtta listeye alınmamış alanları da göster${gizli ? ` (${gizli})` : ''}`) : null
+        palet.alanlar.some((a) => !a.secili) ? h('label', { class: 'onay-satiri kucuk' }, goster, `Kayıtta listeye alınmamış alanları da göster${gizli ? ` (${gizli})` : ''}`) : null,
+        !palet.alanlar.length && ekranKipi ? h('p', { class: 'soluk kucuk' }, 'Modelde alan yok. Aşağıdan seçicisiyle elle ekleyin.') : null
       ];
     } else if (paletSekmesi === 'dugmeler') {
-      icerikEl = palet.dugmeler.length ? h('ul', { class: 'palet-listesi' }, palet.dugmeler.map((d) => {
+      icerikEl = [palet.dugmeler.length ? h('ul', { class: 'palet-listesi' }, palet.dugmeler.map((d) => {
         const blok = bloklar.findIndex((b) => b.tur === 'aksiyon' && b.dugme === d.sira);
         return h('li', { class: `palet-ogesi${blok >= 0 ? ' kullanildi' : ''}` },
           h('div', { class: 'palet-metni' }, h('span', { class: 'ad' }, `“${d.metin}”`)), kullanim(blok),
           h('button', { type: 'button', class: 'kucuk-dugme', 'aria-label': `“${d.metin}”: aksiyon ekle`, onclick: () => blokEkle(eklemeKonumu(), { tur: 'aksiyon', dugme: d.sira, istegeBagli: false }) }, ikon('artiYalin'), 'Aksiyon ekle'));
-      })) : h('p', { class: 'soluk kucuk' }, 'Kayıtta düğmeye basılmadı.');
+      })) : h('p', { class: 'soluk kucuk' }, ekranKipi ? 'Modelde düğme yok. Aşağıdan seçicisiyle elle ekleyin.' : 'Kayıtta düğmeye basılmadı.')];
     } else {
       icerikEl = palet.mesajlar.length ? h('ul', { class: 'palet-listesi' }, palet.mesajlar.map((m) => {
         const blok = bloklar.findIndex((b) => b.tur === 'mesaj' && b.mesaj === m.sira);
@@ -780,6 +856,10 @@ export async function akisTasarimi(icerik, s) {
       h('div', { class: 'segment sekme-cubugu', role: 'tablist', 'aria-label': 'Kayıtta yakalananlar' },
         sekme('alanlar', 'Alanlar', palet.alanlar.filter((a) => a.secili).length), sekme('dugmeler', 'Düğmeler', palet.dugmeler.length), sekme('mesajlar', 'Mesajlar', palet.mesajlar.length)),
       icerikEl);
+    if (ekranKipi) {
+      const d = paletSekmesi === 'alanlar' ? (elleDugumleri.alan ??= elleAlanFormu()) : paletSekmesi === 'dugmeler' ? (elleDugumleri.dugme ??= elleDugmeFormu()) : null;
+      if (elleKap.firstChild !== d) yerlestir(elleKap, d);
+    }
   }
 
   function ciz() {
@@ -834,7 +914,7 @@ export async function akisTasarimi(icerik, s) {
       }
       if (ekranKipi) {
         // Önce doğrula + etki (kaydetmeden), onaylanınca yeni model sürümü.
-        const govde = { projeId: s.proje.id, ekranId: s.ekranId, akisId: veri.akis ? veri.akis.id : null, ad: akisAdi.value, bloklar };
+        const govde = { projeId: s.proje.id, ekranId: s.ekranId, akisId: veri.akis ? veri.akis.id : null, ad: akisAdi.value, bloklar, ...(elle.alanlar.length || elle.dugmeler.length ? { elleOgeler: elle } : {}) };
         const on = await mesgulIken(kaydet, 'Denetleniyor…', () => api('/platform/ekran/akis/kaydet', { govde }));
         hatalar = new Map();
         ciz();
@@ -916,26 +996,31 @@ export async function akisTasarimi(icerik, s) {
           ekranAdresi ? [h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: ekranAdresi }, veri.ekran.ad)] : null,
           h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, ekranKipi ? 'Akış' : 'Akış diyagramı')),
         h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, baslikMetni),
-          ekranKipi ? (veri.akis && veri.akis.varsayilan ? rozet('varsayılan', 'vurgu') : null) : ortakKayit ? rozet('ortak akış', 'durdu') : veri.mod === 'analiz' ? rozet('tekrar analiz', 'durdu') : rozet('yeni ekran', ''))),
+          ekranKipi ? (veri.akis && veri.akis.varsayilan ? rozet('varsayılan', 'vurgu') : null) : ortakKayit ? rozet('ortak akış', 'durdu') : veri.mod === 'analiz' ? rozet('tekrar analiz', 'durdu') : veri.olusturulacak === 'ortakAkis' ? rozet('yeni ortak akış', 'durdu') : rozet('yeni ekran', ''))),
       h('div', { class: 'eylemler' }, ekranKipi ? vazgec : ekranAdresi ? h('a', { class: 'dugme hayalet', href: ekranAdresi }, ikon('geri'), 'Ekrana dön') : null)),
     s.ust,
     h('div', { class: 'not-kutusu bilgi' },
       ekranKipi
-        ? h('p', {}, 'Akış bu ekranın alanlarıyla kurulur (başka ekranın alanı gelmez). Ekranda henüz tanınmayan bir alan için önce “Akışı kaydet” ya da “Ekranı tara” ile ekranı tanıtın.')
+        ? h('p', {}, `Akış bu ${veri.ortakAkis ? 'ortak akışın' : 'ekranın'} alanlarıyla kurulur (başka ekranın alanı gelmez). Listede olmayan bir alanı ya da düğmeyi sağdaki listeden seçicisiyle elle ekleyin${veri.ortakAkis ? ' ya da “Akışı kaydet” ile bir başlangıç ekranından kaydedin.' : ' ya da önce “Akışı kaydet” / “Ekranı tara” ile ekranı tanıtın.'}`)
         : h('p', {}, 'Kayıttan hazırlanan taslak: her düğme basışı bir aksiyon, aradaki alanlar bir alan grubu. Adımları adlandırın, gereksiz blokları silin, eksikleri “+” ile ekleyin.'),
       ortakKayit
         ? h('p', { class: 'ortak-akis-kaydi-notu' }, h('b', {}, `Kayıt “${ortakKayit.baslangicEkrani.ad}” ekranından başladı. `),
           'Başlangıç ekranına ait blokları (ör. o ekranın alanları ve hesaplama düğmesi) silin; yalnız ortak akışın kısmını bırakın. Kaydedince ortak akışın yeni model sürümü açılır.')
-        : h('p', { class: 'kucuk' }, 'Bu diyagram ekranın akışıdır; senaryolar değerleri ve isteğe bağlı aksiyonları senaryo formunda seçer.')),
+        : ekranKipi && veri.ortakAkis
+          ? h('p', { class: 'kucuk' }, 'Bu diyagram ortak akışın akışıdır: onu kullanan ekranlarda “+ > Ortak akış” bloğunun yerinde koşar (ortak akışın senaryosu yoktur).')
+          : !ekranKipi && veri.olusturulacak === 'ortakAkis'
+            ? h('p', { class: 'kucuk' }, 'Bu diyagram yeni ortak akışın akışıdır; kaydedip önizledikten sonra “Ortak akışlar” altına kaydedilir.')
+            : h('p', { class: 'kucuk' }, 'Bu diyagram ekranın akışıdır; senaryolar değerleri ve isteğe bağlı aksiyonları senaryo formunda seçer.')),
     h('div', { class: 'form-duzeni tasarim-duzeni' },
       h('section', { class: 'kart tasarim-karti', 'aria-label': 'Akış diyagramı' }, hataKutusu, akis),
       h('aside', { class: 'ozet-sutunu', 'aria-label': 'Kayıtta yakalananlar' },
-        h('section', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('katman'), ekranKipi ? 'Ekranın alanları' : 'Kayıtta yakalananlar')), paletKap),
+        h('section', { class: 'kart' }, h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('katman'), ekranKipi ? (veri.ortakAkis ? 'Ortak akışın alanları' : 'Ekranın alanları') : 'Kayıtta yakalananlar')), paletKap, elleKap),
         h('section', { class: 'kart form-paneli' }, h('h3', {}, 'Kaydet'),
           akisAdi ? h('label', { class: 'tasarim-etiketi' }, h('span', {}, 'Akış adı'), akisAdi) : null,
           ekranAkislari ? hedefSecimi() : null,
           h('p', { class: 'soluk kucuk' }, ekranKipi
-            ? 'Diyagram doğrulanır; etkilenen senaryolar gösterilir ve onayınızla ekranın yeni model sürümü açılır.'
+            ? veri.ortakAkis ? 'Diyagram doğrulanır; ortak akışı kullanan ekranlar gösterilir ve onayınızla ortak akışın yeni model sürümü açılır.'
+              : 'Diyagram doğrulanır; etkilenen senaryolar gösterilir ve onayınızla ekranın yeni model sürümü açılır.'
             : ortakKayit ? 'Diyagram doğrulanır; ortak akışı kullanan ekranlar gösterilir ve onayınızla ortak akışın yeni model sürümü açılır.'
               : 'Diyagram doğrulanır ve ekran paketine çevrilir; ardından önizleyip kabul edersiniz.'),
           kaydet, h('p', { class: 'kucuk', style: { margin: '8px 0 0' } }, durumSatiri)))));

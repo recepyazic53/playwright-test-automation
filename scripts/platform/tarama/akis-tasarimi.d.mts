@@ -81,3 +81,14 @@ export declare function secenekGozlemleriniAyikla(ham: unknown): SecenekGozlemi[
 export declare function akistanKayitEnvanteri(env: AkisEnvanteri, bloklar: AkisBlogu[], s?: { satirSiniri?: number; korunanlar?: Record<string, KorunanParca> }): { envanter: KayitEnvanteri | null; hatalar: AkisHatasi[] };
 /** Alanın değer kuralları (model alan.sinirlar; null = kaldır). */
 export type AkisSinirlari = { enAz?: number | string; enCok?: number | string; artis?: number; enAzUzunluk?: number; enCokUzunluk?: number; desen?: string };
+
+/** Diyagramda elle tanımlanan alan (kayıtta / modelde olmayan): anahtar "elle-…", tür sayfa envanteri türü, seçici sayfadaki öğenin seçicisi. */
+export type ElleAlan = { anahtar: string; etiket: string; tur: string; secici: string };
+/** Diyagramda elle tanımlanan düğme: yazısı ve seçicisi (düğme listesinin sonuna eklenir). */
+export type ElleDugme = { metin: string; secici: string };
+export type ElleOgeler = { alanlar?: ElleAlan[]; dugmeler?: ElleDugme[] };
+export declare const ELLE_OGE_EN_COK: number;
+export declare const ELLE_ALAN_TURLERI: readonly string[];
+export declare const ELLE_ALAN_ANAHTARI: RegExp;
+/** Elle tanımlanan alan / düğmeleri envantere ekler (hata varsa envanter değişmez). */
+export declare function elleOgeleriEkle(env: AkisEnvanteri, ham: unknown): { envanter: AkisEnvanteri; hatalar: AkisHatasi[] };

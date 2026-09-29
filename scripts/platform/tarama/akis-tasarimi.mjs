@@ -195,6 +195,73 @@ export function akisTaslagi(env) {
   return bloklar.slice(-BLOK_EN_COK);
 }
 
+/** Diyagramda elle tanımlanabilecek alan / düğme sayısı sınırı (her biri için). */
+export const ELLE_OGE_EN_COK = 50;
+/** Elle tanımlanan alanın türleri (sayfa envanteri türü; model tipi paket-olusturucu.mjs > modelTipi ile). */
+export const ELLE_ALAN_TURLERI = Object.freeze(['text', 'number', 'date', 'tel', 'email', 'textarea', 'checkbox']);
+/** Elle tanımlanan alanın anahtarı ("elle-" + küçük harf / rakam / "-"; kayıttaki anahtarlarla çakışmaz). */
+export const ELLE_ALAN_ANAHTARI = /^elle-[a-z0-9-]{1,40}$/;
+const SECICI_EN_COK = 300;
+
+/**
+ * Diyagramda ELLE tanımlanan alanlar ve düğmeler (kayıtta / modelde olmayan öğe; ör. boş başlayan bir ortak akışa sıfırdan adım
+ * eklemek): { alanlar: [{ anahtar: "elle-…", etiket, tur, secici }], dugmeler: [{ metin, secici }] }. Envantere eklenir: alanlar
+ * sağ listenin sonuna (anahtarlarıyla), düğmeler düğme listesinin SONUNA — sırası mevcut düğme sayısı + i (arayüz aynı sırayla
+ * verir, aksiyon blokları bu sırayla başvurur). Seçici sayfadaki öğenin CSS / Playwright seçicisidir (tam adres değil); alan DEĞERİ
+ * yoktur. Kaydedilince alanlar ve düğmeler kayıttan gelmiş gibi modele yazılır (kayitPaketiOlustur); sonra modelin parçasıdır.
+ * @param {import('./akis-tasarimi.d.mts').AkisEnvanteri} env @param {unknown} ham
+ * @returns {{ envanter: import('./akis-tasarimi.d.mts').AkisEnvanteri; hatalar: import('./akis-tasarimi.d.mts').AkisHatasi[] }}
+ */
+export function elleOgeleriEkle(env, ham) {
+  /** @type {import('./akis-tasarimi.d.mts').AkisHatasi[]} */
+  const hatalar = [];
+  if (ham === undefined || ham === null) return { envanter: env, hatalar };
+  if (!nesneMi(ham)) return { envanter: env, hatalar: [{ blok: null, mesaj: 'Elle eklenen alan ve düğmeler okunamadı.' }] };
+  const alanlar = Array.isArray(ham.alanlar) ? ham.alanlar : [];
+  const dugmeler = Array.isArray(ham.dugmeler) ? ham.dugmeler : [];
+  if (alanlar.length > ELLE_OGE_EN_COK || dugmeler.length > ELLE_OGE_EN_COK) return { envanter: env, hatalar: [{ blok: null, mesaj: `Elle en fazla ${ELLE_OGE_EN_COK} alan ve ${ELLE_OGE_EN_COK} düğme eklenebilir.` }] };
+  /** Seçici: boş olmayan, tek satır, sınırlı uzunlukta; tam adres değil. @param {unknown} s */
+  const seciciHatasi = (s) => (typeof s !== 'string' || !s.trim() ? 'seçiciyi yazın (ör. #onayla ya da [name="not"])'
+    : s.length > SECICI_EN_COK || /[\r\n]/.test(s) ? `seçici tek satır ve en fazla ${SECICI_EN_COK} karakter olmalı`
+      : /^[a-z][a-z0-9+.-]*:\/\//i.test(s.trim()) ? 'seçici bir adres değil, sayfadaki öğenin seçicisi olmalı' : null);
+  const anahtarlar = new Set(env.alanlar.map((a) => a.alan.anahtar));
+  /** @type {import('./akis-tasarimi.d.mts').AkisAlani[]} */
+  const yeniAlanlar = [];
+  alanlar.forEach((a, i) => {
+    const etiket = nesneMi(a) ? metin(a.etiket, AD_EN_COK) : '';
+    const ad = `Elle eklenen ${etiket ? `“${etiket}”` : `${i + 1}.`} alan`;
+    if (!nesneMi(a)) { hatalar.push({ blok: null, mesaj: `${ad} okunamadı.` }); return; }
+    if (typeof a.anahtar !== 'string' || !ELLE_ALAN_ANAHTARI.test(a.anahtar) || anahtarlar.has(a.anahtar)) { hatalar.push({ blok: null, mesaj: `${ad}: anahtarı geçersiz ya da tekrarlı.` }); return; }
+    if (!etiket) { hatalar.push({ blok: null, mesaj: `${ad}: etiketini yazın.` }); return; }
+    if (typeof a.tur !== 'string' || !ELLE_ALAN_TURLERI.includes(a.tur)) { hatalar.push({ blok: null, mesaj: `${ad}: türü ${ELLE_ALAN_TURLERI.join(', ')} olmalı.` }); return; }
+    const sh = seciciHatasi(a.secici);
+    if (sh) { hatalar.push({ blok: null, mesaj: `${ad}: ${sh}.` }); return; }
+    const secici = String(a.secici).trim();
+    anahtarlar.add(a.anahtar);
+    yeniAlanlar.push({
+      alan: {
+        anahtar: a.anahtar, tur: a.tur, etiket, etiketKaynagi: null, kimlik: null, ad: null, secici, kirilganlik: 'orta', adaySeciciler: [secici],
+        zorunlu: false, devreDisi: false, saltOkunur: false, coklu: false, not: 'elle eklendi', bolum: { anahtar: 'elle', baslik: '' }
+      },
+      secili: true
+    });
+  });
+  /** @type {import('./paket-olusturucu.d.mts').KayitOgesi[]} */
+  const yeniDugmeler = [];
+  dugmeler.forEach((d, i) => {
+    const m = nesneMi(d) ? metin(d.metin, AD_EN_COK) : '';
+    const ad = `Elle eklenen ${m ? `“${m}”` : `${i + 1}.`} düğme`;
+    if (!nesneMi(d)) { hatalar.push({ blok: null, mesaj: `${ad} okunamadı.` }); return; }
+    if (!m) { hatalar.push({ blok: null, mesaj: `${ad}: düğmenin yazısını girin.` }); return; }
+    const sh = seciciHatasi(d.secici);
+    if (sh) { hatalar.push({ blok: null, mesaj: `${ad}: ${sh}.` }); return; }
+    yeniDugmeler.push({ secici: String(d.secici).trim(), metin: m });
+  });
+  // Bir hata varsa envanter değişmez (düğme sıraları arayüzdekiyle kaymasın).
+  if (hatalar.length) return { envanter: env, hatalar };
+  return { envanter: { ...env, alanlar: [...env.alanlar, ...yeniAlanlar], dugmeler: [...env.dugmeler, ...yeniDugmeler] }, hatalar };
+}
+
 /**
  * Tasarım sayfasının sağ listesi: alanlar (işaretli olanlar önce değil — kayıt sırasıyla), düğmeler ve mesajlar; her
  * birinin kullanıldığı blok sırası (yoksa null). Seçici gönderilmez (arayüzün ihtiyacı yok).

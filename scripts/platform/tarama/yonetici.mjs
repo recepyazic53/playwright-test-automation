@@ -14,7 +14,8 @@
 //   POST /platform/tarama/baslat { projeId, ekranId?, ekranAdi?, ekranAnahtari?, ortamId, baglamProfilleri: [ad],
 //        hedef, kesif, onay: true, kip?: 'kayit', girissiz?: true } → { isId } (202). girissiz: sayfa GİRİŞ YAPILMADAN
 //        açılır (ortamın giriş tarifi ve bağlam profilleri kullanılmaz; model "girisGerekmez" olur). Aynı anda tek tarama (409 MESGUL). Yasaklı adres → 400
-//        YASAKLI_ADRES, tarayıcı açılmadan.
+//        YASAKLI_ADRES, tarayıcı açılmadan. olusturulacak?: 'ortakAkis' ("Ne oluşturulsun?"; yalnız YENİ kayıt / tarama): paket
+//        ucu sonucu ortak akış paketine çevirir (sayfa-paketi.mjs > ortakAkisPaketineCevir; ekran adresi yazılmaz).
 //        ORTAK AKIŞ (model tur "ortakAkis"): taranmaz (ALT_MODEL); kaydedilir (kip 'kayit' + baslangicEkranId): kayıt başlangıç
 //        ekranının adresinde (model.ekranUrl) başlar, kullanıcı o ekranda gerekli adımları yapıp ortak akışın kısmını yürütür;
 //        diyagramda başlangıç ekranına ait bloklar silinir ve kayıt ortak akışın TEK akışına yazılır (akisaYaz; ekran paketi
@@ -69,7 +70,7 @@ import { KOD_DESENI, KOD_YOLU_DEGISKENI, kodIstegiOku, kodIsteginiTemizle, koduY
 import { etkinYasakAdresler, etkinYasakDesenleri } from '../guvenlik/yasak-adresler.mjs';
 import { ucDenetle } from '../guvenlik/uc-denetimi.mjs';
 import { riskliOrtamMi, riskliSecimi } from '../guvenlik/ortam-riski.mjs';
-import { EKRAN_ANAHTARI_DESENI, sayfaPaketiniDogrula } from '../ekranlar/sayfa-paketi.mjs';
+import { EKRAN_ANAHTARI_DESENI, ortakAkisPaketineCevir, sayfaPaketiniDogrula } from '../ekranlar/sayfa-paketi.mjs';
 import { HedefHatasi, hedefCoz, taramaAdresleri, yasakliAdresBul, yasakliTaramaMesaji } from './koruma.mjs';
 import { ekranAnahtariOner, kayitPaketiOlustur, taramaPaketiOlustur } from './paket-olusturucu.mjs';
 import { akisEnvanteriMi, akisPaleti, akisTaslagi, akistanKayitEnvanteri, bloklariAyikla } from './akis-tasarimi.mjs';
@@ -270,7 +271,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   /** İşin arayüze giden görünümü (gizli değer yok). @param {Nesne} is */
   function gorunum(is) {
     return {
-      id: is.id, kip: is.kip, durum: is.durum, mod: is.mod, baglamProfili: is.baglamProfili ?? null, projeId: is.projeId, ekran: is.ekran, ortam: is.ortam, hedefYol: is.hedefYol, kesif: is.kesif,
+      id: is.id, kip: is.kip, durum: is.durum, mod: is.mod, olusturulacak: is.olusturulacak ?? 'ekran', baglamProfili: is.baglamProfili ?? null, projeId: is.projeId, ekran: is.ekran, ortam: is.ortam, hedefYol: is.hedefYol, kesif: is.kesif,
       adimlar: Object.entries(is.adimlar).map(([anahtar, a]) => ({ anahtar, etiket: /** @type {Record<string, string>} */ (ADIM_ETIKETLERI)[anahtar] ?? anahtar, durum: a.durum, mesaj: a.mesaj ?? null })),
       profiller: is.profiller.map((/** @type {Nesne} */ p) => ({ ad: p.ad, durum: p.durum, adim: p.adim ?? null, alanSayisi: p.alanSayisi ?? null, mesaj: p.mesaj ?? null })),
       engellenenSayisi: is.engellenenSayisi, engellenenler: is.engellenenler.slice(-50), olaylar: is.olaylar.slice(-30),
@@ -408,6 +409,12 @@ export function taramaYoneticisiOlustur(secenekler) {
       }
       ekran = ayni ? { id: ayni.id, ad: ayni.ad, anahtar } : { id: null, ad, anahtar };
     }
+    // "Ne oluşturulsun?" (Ekranlar > Ekran ekle): ortak akış yalnız YENİ oluştururken seçilir; sonuç paketi ortak akış paketine
+    // çevrilir (paket ucu; ekran adresi yazılmaz) ve "Ortak akışlar" altına kaydedilir. Varsayılan ekran (bugünkü davranış).
+    const olusturulacak = g.olusturulacak === 'ortakAkis' ? 'ortakAkis' : 'ekran';
+    if (olusturulacak === 'ortakAkis' && (girisKaydi || girisDenemesi || mevcutModel || (g.ekranId !== undefined && g.ekranId !== null && g.ekranId !== ''))) {
+      throw new TaramaHatasi('OLUSTURMA', 'Ortak akış yalnız yeni oluştururken seçilir (Ekranlar > Ekran ekle).');
+    }
 
     // Hedef (ortamın kökeninde bir yol). Giriş kaydında: verilen yol, yoksa kayıtlı tarifin giriş adresi, yoksa "/".
     const mevcutGirisAdresi = girisKaydi || girisDenemesi ? (etkinGirisTarifi(vt, projeId, ortamId).tarif?.girisAdresi ?? '/') : null;
@@ -505,7 +512,7 @@ export function taramaYoneticisiOlustur(secenekler) {
       ? saklananOturumHazirla(vt, ortamId, girisProfiliId, ortamKaydi.tabanUrl, tarif) : null;
     /** @type {Nesne} */
     const is = {
-      id, token, kip: girisDenemesi ? 'girisDenemesi' : girisKaydi ? 'girisKaydi' : kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
+      id, token, kip: girisDenemesi ? 'girisDenemesi' : girisKaydi ? 'girisKaydi' : kayit ? 'kayit' : 'tarama', projeId, ekran, mod: mevcutModel ? 'analiz' : 'yeni', olusturulacak, ortam: { id: ortamKaydi.id, ad: ortamKaydi.ad }, hedefYol: hedef.yol, kesif,
       durum: 'suruyor', hata: null, baslangic: simdi(), bitis: null,
       adimlar: girisDenemesi
         ? { hazirlik: { durum: 'bekliyor' }, giris: { durum: 'bekliyor' } }
@@ -830,7 +837,7 @@ export function taramaYoneticisiOlustur(secenekler) {
   function akisGetir(id) {
     const is = akisIsi(id);
     return {
-      bloklar: is.akis.bloklar, palet: akisPaleti(is.akis.envanter, is.akis.bloklar), ekran: is.ekran, mod: is.mod, paketHazir: Boolean(is.paket),
+      bloklar: is.akis.bloklar, palet: akisPaleti(is.akis.envanter, is.akis.bloklar), ekran: is.ekran, mod: is.mod, olusturulacak: is.olusturulacak ?? 'ekran', paketHazir: Boolean(is.paket),
       projeId: is.projeId, akisaYazildi: is.akisaYazildi ?? null,
       // Kayıt "Giriş yapmadan aç" ile yapıldıysa diyagramın başı "Girişsiz" olur.
       girissiz: is.meta.girissiz === true,
@@ -905,7 +912,9 @@ export function taramaYoneticisiOlustur(secenekler) {
     paket: (/** @type {string} */ id) => {
       const is = isGetir(id);
       if (!is.paket) throw new TaramaHatasi('PAKET_YOK', 'Bu taramanın paketi yok (tarama bitmedi ya da başarısız oldu).', 409);
-      return { paket: is.paket, mod: is.mod, ekran: is.ekran, ozet: is.ozet };
+      // "Ne oluşturulsun? ○ Ortak akış": paket ortak akış paketine çevrilmiş verilir (önizleme / kabul "Ortak akışlar" altına yazar).
+      const ortak = is.olusturulacak === 'ortakAkis';
+      return { paket: ortak ? ortakAkisPaketineCevir(is.paket) : is.paket, mod: is.mod, olusturulacak: ortak ? 'ortakAkis' : 'ekran', ekran: is.ekran, ozet: is.ozet };
     },
     aktif: () => { temizle(); const c = calisan(); return c ? { id: c.id, ekran: c.ekran, projeId: c.projeId } : null; },
     iptal,

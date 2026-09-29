@@ -7,6 +7,10 @@
 // Paketin kaynakları: yüklenen JSON dosyası (yapay zekâ aracınızın ürettiği) ya da "Ekranı tara" / "Akışı kaydet" (tarama.js;
 // yükleme alanının altında yan yana üç kutu: tara, kaydet, yapay zekâ ile oluştur — eklemeKutulari). Tarama/kayıt bitince paket
 // taranmisPaketAkisi ile AYNI önizleme adımına girer.
+// "Ne oluşturulsun? ◉ Ekran ○ Ortak akış" (yalnız yeni ekleme): varsayılan Ekran (bugünkü davranış). Ortak akış seçilince aynı
+// yollar (paket yükle / tara / kaydet) çalışır, sonuç ortak akış olarak "Ortak akışlar" altına kaydedilir (sunucu paketi çevirir:
+// sayfa-paketi.mjs > ortakAkisPaketineCevir); ayrıca dördüncü kutu "Boş başla": adımsız ortak akış, adımları Akışlar sekmesinde
+// diyagramdan eklenir. Ortak akışın senaryosu yoktur (önizlemede senaryo / ortam seçimi yok); ekranlara ekleme otomatik yapılmaz.
 // Dosya tarayıcıda okunur ve sunucuya JSON olarak gönderilir; kanıt görüntüleri önizlemede yerel veriden
 // (data: URL) gösterilir, kabul edilince sunucuda ŞİFRELİ saklanır. Paketler gizli değer taşımaz (sunucu reddeder).
 import { api, bildir, h, ikon, kapaliDugmeNedenleri, mesgulIken, rozet, yerlestir } from './ortak.js';
@@ -19,9 +23,16 @@ const PAKET_EN_BUYUK = 16 * 1024 * 1024;
 const CUMLE = paketIstekCumlesi();
 
 /**
+ * olusturulacak: "Ne oluşturulsun?" ('ekran' varsayılan; 'ortakAkis' yalnız yeni eklemede). secimDegisti verilirse (Ekran ekle)
+ * seçim gösterilir ve değişince sayfa seçilen türle yeniden çizilir.
  * @typedef {{ mod: 'yeni' | 'analiz'; proje: { id: string; ad: string }; ekran?: { id: string; ad: string; anahtar: string } | null;
- *   bitti: (ekranId: string, analiz?: boolean) => void; tara?: () => void; kaydet?: () => void }} AkisSecenekleri
+ *   bitti: (ekranId: string, analiz?: boolean) => void; tara?: () => void; kaydet?: () => void;
+ *   olusturulacak?: 'ekran' | 'ortakAkis'; secimDegisti?: (tur: 'ekran' | 'ortakAkis') => void }} AkisSecenekleri
  */
+/** Ortak akış mı oluşturuluyor? @param {AkisSecenekleri} s */
+const ortakMi = (s) => s.olusturulacak === 'ortakAkis' && s.mod !== 'analiz' && !s.ekran;
+/** Ortak akış oluşturulduktan sonraki yol (ekranlara ekleme otomatik yapılmaz). */
+export const EKRANLARA_EKLEME_NOTU = 'Ekranlara eklemek için Akışlar sekmesindeki “Ekranlara ekle…” düğmesini ya da ekranın akış diyagramındaki “+ > Ortak akış”ı kullanın.';
 
 /**
  * Sayfa başlığı + gövde alanı. kaynak: 'tarama' (otomatik tarama) | 'kayit' (akış kaydı) | null (yüklenen paket).
@@ -31,15 +42,16 @@ function akisCercevesi(icerik, s, kaynak = null) {
   const taramadan = Boolean(kaynak);
   const kaynakAdi = kaynak === 'kayit' ? 'Akış kaydı' : 'Otomatik tarama';
   const analiz = s.mod === 'analiz';
-  const baslik = analiz ? `Tekrar analiz: ${s.ekran.ad}` : s.ekran ? `Model ekle: ${s.ekran.ad}` : 'Ekran ekle';
+  const ortak = ortakMi(s);
+  const baslik = analiz ? `Tekrar analiz: ${s.ekran.ad}` : s.ekran ? `Model ekle: ${s.ekran.ad}` : ortak ? 'Ortak akış ekle' : 'Ekran ekle';
   const govde = h('div', {});
   yerlestir(icerik,
     h('div', { class: 'sayfa-basligi' },
       h('div', {},
         h('div', { class: 'kirinti' }, h('span', {}, s.proje.ad), h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: '#/ekranlar' }, 'Ekranlar'),
           s.ekran ? [h('span', { 'aria-hidden': 'true' }, '/'), h('a', { href: `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` }, s.ekran.ad)] : null,
-          h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, taramadan ? kaynakAdi : analiz ? 'Paket yükle' : 'Ekran ekle')),
-        h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, baslik)),
+          h('span', { 'aria-hidden': 'true' }, '/'), h('span', { class: 'simdiki' }, taramadan ? kaynakAdi : analiz ? 'Paket yükle' : ortak ? 'Ortak akış ekle' : 'Ekran ekle')),
+        h('div', { class: 'baslik-satiri' }, h('h2', { tabindex: '-1' }, baslik), ortak ? rozet('ortak akış', 'durdu') : null),
         h('div', { class: 'meta' },
           h('span', {}, ikon(kaynak === 'kayit' ? 'video' : taramadan ? 'ara' : 'dosya'), taramadan ? `${kaynakAdi.toLocaleLowerCase('tr-TR')} sonucu (ekran paketi, sürüm 1)` : 'ekran paketi (JSON, sürüm 1)'),
           h('span', {}, ikon('kalkan'), taramadan ? 'alan değerleri pakete yazılmadı' : 'gizli değer içeren paket reddedilir'))),
@@ -63,7 +75,7 @@ export async function taranmisPaketAkisi(icerik, s, paket, ek = {}) {
   const yer = ek.kayit ? 'akış kaydı' : 'otomatik tarama';
   yerlestir(govde, h('div', { class: 'ilerleme' }, h('div', { class: 'ilerleme-ust' }, h('span', { class: 'donen', 'aria-hidden': 'true' }), `${ad} sonucu doğrulanıyor…`)));
   try {
-    const o = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: s.mod } });
+    const o = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: s.mod, olusturulacak: ortakMi(s) ? 'ortakAkis' : 'ekran' } });
     if (!o.gecerli) {
       yerlestir(govde, ek.ust || null, hataListesi(`${ad} sonucu kabul edilemiyor — ${o.hatalar.length} sorun`, o.hatalar, yer));
       return;
@@ -110,7 +122,7 @@ function yuklemeAdimi(govde, s, onceki = null) {
       return;
     }
     try {
-      const o = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: yuklemeModu } });
+      const o = await api('/platform/sayfa-paketi/onizle', { govde: { projeId: s.proje.id, paket, ekranId: s.ekran ? s.ekran.id : null, mod: yuklemeModu, olusturulacak: ortakMi(s) ? 'ortakAkis' : 'ekran' } });
       if (!o.gecerli) {
         yerlestir(durumAlani, hataListesi(`Paket geçersiz — ${o.hatalar.length} sorun`, o.hatalar, dosya.name));
         return;
@@ -126,8 +138,30 @@ function yuklemeAdimi(govde, s, onceki = null) {
   alan.addEventListener('dragleave', () => alan.classList.remove('surukleniyor'));
   alan.addEventListener('drop', (o) => { o.preventDefault(); alan.classList.remove('surukleniyor'); isle(o.dataTransfer && o.dataTransfer.files[0]); });
   yerlestir(govde, h('div', { class: 'yukleme-duzeni tek-sutun' },
-    h('section', { class: 'kart' }, modSecimi, girdi, alan, durumAlani, onceki),
+    h('section', { class: 'kart' }, olusturmaSecimi(s), modSecimi, girdi, alan, durumAlani, onceki),
     eklemeKutulari(s)));
+}
+
+/**
+ * "Ne oluşturulsun? ◉ Ekran ○ Ortak akış" — yalnız yeni eklemede (Ekran ekle; s.secimDegisti verilince). Seçim yükleme alanına
+ * ve alttaki bütün kutulara (tara / kaydet / yapay zekâ / boş başla) uygulanır; değişince sayfa seçilen türle yeniden çizilir.
+ * @param {AkisSecenekleri} s
+ */
+function olusturmaSecimi(s) {
+  if (s.mod === 'analiz' || s.ekran || !s.secimDegisti) return null;
+  const secili = ortakMi(s) ? 'ortakAkis' : 'ekran';
+  return h('fieldset', { class: 'paket-modu olusturma-secimi' }, h('legend', {}, 'Ne oluşturulsun?'),
+    h('div', { class: 'radyo-grubu', role: 'radiogroup', 'aria-label': 'Ne oluşturulsun?' },
+      [['ekran', 'Ekran', 'Test edilen bir sayfa: kendi adresi ve senaryoları olur.'],
+        ['ortakAkis', 'Ortak akış', 'Birden çok ekranın kullandığı adımlar (ör. ödeme): senaryosu yoktur, ekranların akışına eklenir.']]
+        .map(([deger, ad, aciklama]) => {
+          const r = h('input', { type: 'radio', name: 'olusturma-turu', value: deger, checked: secili === deger });
+          r.addEventListener('change', () => { if (r.checked) s.secimDegisti(/** @type {'ekran' | 'ortakAkis'} */ (deger)); });
+          return h('label', { title: aciklama }, r, h('span', {}, ad));
+        })),
+    h('p', { class: 'kucuk soluk olusturma-aciklamasi' }, secili === 'ortakAkis'
+      ? 'Aşağıdaki yollardan biriyle oluşturulan model “Ortak akışlar” altına kaydedilir; senaryosu yoktur. Ekranlara eklemek sonra sizin kararınızdır (“Ekranlara ekle…” ya da diyagramda “+ > Ortak akış”).'
+      : 'Aşağıdaki yollardan biriyle oluşturulan model yeni bir ekran olur.'));
 }
 
 /**
@@ -160,11 +194,41 @@ function eklemeKutulari(s) {
           h('li', {}, 'Yapay zekâ aracınıza sayfanın bağlantısıyla verin'),
           h('li', {}, 'Ürettiği paketi yukarıdaki "Dosya seç" ile yükleyin')),
       analiz ? h('a', { class: 'dugme birincil', href: `#/ekranlar/e/${encodeURIComponent(s.ekran.id)}` }, ikon('yenile'), 'Ekrana dön') : istekMetniKutusu(CUMLE, { birincil: true, ek: bicimIndirBaglantisi() }),
-      'Araç: tarayıcıyı kullanabilen bir kodlama asistanı. Gizli değer içeren paket reddedilir.')
+      'Araç: tarayıcıyı kullanabilen bir kodlama asistanı. Gizli değer içeren paket reddedilir.'),
+    ortakMi(s) ? bosBaslaKutusu(s, kutu) : null
   ].filter(Boolean);
   return h('section', { class: 'ekleme-secenekleri', 'aria-labelledby': 'ekleme-secenekleri-baslik' },
     h('h3', { id: 'ekleme-secenekleri-baslik', class: 'ara-baslik' }, 'Paketiniz yoksa'),
-    h('div', { class: 'ekleme-kutulari' }, kutular));
+    h('div', { class: `ekleme-kutulari${kutular.length > 3 ? ' dortlu' : ''}` }, kutular));
+}
+
+/**
+ * "Boş başla" (yalnız Ortak akış seçiliyken): adı (ve isteğe bağlı anahtarı) verilen, adımı olmayan ortak akış oluşturulur; ardından
+ * Akışlar sekmesinde "Düzenle" ile diyagramdan adım eklenir (elle alan / düğme, beklenen mesaj, SQL…). Ekranlara ekleme otomatik yok.
+ * @param {AkisSecenekleri} s @param {(sinif: string, ikonAd: string, baslik: string, aciklama: Node, eylem: Node, not: string) => HTMLElement} kutu
+ */
+function bosBaslaKutusu(s, kutu) {
+  const ad = h('input', { type: 'text', maxlength: '120', placeholder: 'ör. Ödeme adımları', 'aria-label': 'Ortak akışın adı', autocomplete: 'off' });
+  const hata = h('p', { class: 'hata-metni kucuk', role: 'alert', hidden: true });
+  const olustur = h('button', { type: 'submit', class: 'birincil' }, ikon('arti'), 'Boş ortak akış oluştur');
+  const form = h('form', { class: 'bos-baslat-formu', 'aria-label': 'Boş ortak akış' }, ad, hata, olustur);
+  form.addEventListener('submit', async (o) => {
+    o.preventDefault();
+    hata.hidden = true;
+    if (!ad.value.trim()) { hata.textContent = 'Ortak akışın adını yazın.'; hata.hidden = false; ad.focus(); return; }
+    try {
+      const r = await mesgulIken(olustur, 'Oluşturuluyor…', () => api('/platform/ortak-akis/olustur', { govde: { projeId: s.proje.id, ad: ad.value.trim() } }));
+      bildir(`“${ad.value.trim()}” ortak akışı oluşturuldu (boş). Adımlarını “Düzenle” ile diyagramdan ekleyin. ${EKRANLARA_EKLEME_NOTU}`);
+      location.hash = `#/ekranlar/e/${encodeURIComponent(r.ekranId)}/akis`;
+    } catch (e) {
+      if (e.durum === 423) return;
+      hata.textContent = e.message;
+      hata.hidden = false;
+    }
+  });
+  return kutu('bos-basla-kutusu', 'pusula', 'Boş başla',
+    h('p', {}, 'Adımsız bir ortak akış oluşturulur; adımlarını Akışlar sekmesinde diyagramdan eklersiniz (alan, düğme, beklenen mesaj…).'),
+    form, 'Siteye bağlanılmaz. Alan ve düğmeleri diyagramda seçicisiyle elle tanımlarsınız ya da sonra “Akışı kaydet” ile kaydedersiniz.');
 }
 
 // ---------------------------------------------------------------------------------------
@@ -318,8 +382,10 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
   const ozetAlani = h('div', {});
   const kanitlar = Array.isArray(paket.kanitlar) ? paket.kanitlar : [];
   const degistir = s.mod === 'degistir';
+  // Ortak akış (seçimle ya da ortak akış paketi): senaryosu yoktur — senaryo önerileri ve ortam seçimi gösterilmez.
+  const ortak = !analiz && !degistir && p.modelTuru === 'ortakAkis';
   const kabulDugmesi = h('button', { type: 'button', class: 'birincil' }, ikon(analiz ? 'yenile' : 'onay'),
-    analiz ? 'Bulguları hesapla' : degistir ? 'Modeli değiştir' : o.hedef ? 'Modeli ekle' : 'Ekranı oluştur');
+    analiz ? 'Bulguları hesapla' : degistir ? 'Modeli değiştir' : ortak ? 'Ortak akışı oluştur' : o.hedef ? 'Modeli ekle' : 'Ekranı oluştur');
   const hataAlani = h('div', {});
   const kabulNedenleri = kapaliDugmeNedenleri(kabulDugmesi);
   const nedenAlani = kabulNedenleri.alan;
@@ -331,8 +397,8 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
     yerlestir(ozetAlani,
       h('div', { class: 'mini-sayilar' }, [['Adım', a.adim], ['Alan', a.alan], ['Öneri', p.senaryolar.length]].map(([e, v]) => h('div', {}, h('b', {}, String(v)), h('span', {}, e)))),
       h('dl', { class: 'ozet-satirlari' },
-        analiz ? null : [h('dt', {}, 'Ekran'), h('dd', {}, o.hedef ? `mevcut: ${o.hedef.ad}` : `yeni: ${p.meta.ekran.ad}`),
-          h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`),
+        analiz ? null : [h('dt', {}, ortak ? 'Ortak akış' : 'Ekran'), h('dd', {}, o.hedef ? `mevcut: ${o.hedef.ad}` : `yeni: ${p.meta.ekran.ad}`),
+          ortak ? null : [h('dt', {}, 'Senaryo'), h('dd', {}, `${secim.size} seçili (Koşuda kapalı eklenir; model koşucusuyla çalışır, koşuya siz alırsınız)`)],
           h('dt', {}, 'Kanıt'), h('dd', {}, `${kanitlar.length} ekran görüntüsü (şifreli saklanır)`)],
         tvOzet ? [h('dt', {}, 'Test verisi'), h('dd', {}, tvOzet)] : null));
     // Düğme kapalıyken neden hemen altında yazar; her nedende ilgili bölüme götüren "Bölüme git" (ortak.js).
@@ -439,8 +505,18 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         return;
       }
       const r = await mesgulIken(kabulDugmesi, 'Ekleniyor…', () => api('/platform/sayfa-paketi/ekle', {
-        govde: { projeId: s.proje.id, paket, senaryoIndeksleri: [...secim].sort((a, b) => a - b), ortamIdleri: [...ortamSecimi], testVerisi: tv.govde() }
+        govde: {
+          projeId: s.proje.id, paket, senaryoIndeksleri: ortak ? [] : [...secim].sort((a, b) => a - b), ortamIdleri: ortak ? [] : [...ortamSecimi], testVerisi: tv.govde(),
+          olusturulacak: ortakMi(s) ? 'ortakAkis' : 'ekran'
+        }
       }));
+      if (ortak) {
+        // Ortak akış: "Ortak akışlar" altına kaydedildi; ekranlara ekleme otomatik yapılmaz (yol bildirimde). Akışlar sekmesine gidilir.
+        bildir(`“${p.meta.ekran.ad}” ortak akışı oluşturuldu: model v${r.surum}${r.kanitSayisi ? `, ${r.kanitSayisi} kanıt` : ''}. ${EKRANLARA_EKLEME_NOTU}`);
+        testVerisiBildir(r.testVerisi);
+        location.hash = `#/ekranlar/e/${encodeURIComponent(r.ekranId)}/akis`;
+        return;
+      }
       bildir(`${p.meta.ekran.ad} eklendi: model v${r.surum}, ${r.senaryoIdleri.length} senaryo (Koşuda kapalı)${r.kanitSayisi ? `, ${r.kanitSayisi} kanıt` : ''}.`);
       testVerisiBildir(r.testVerisi);
       s.bitti(r.ekranId, false);
@@ -461,7 +537,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         h('div', { class: 'kart-basligi' }, h('h3', {}, ikon('dosya'), 'Paket'), h('span', { class: 'sag' }, rozet('geçerli', 'basari'), h('code', { class: 'duz kucuk' }, dosyaAdi))),
         h('dl', { class: 'paket-meta' },
           h('dt', {}, 'Ekran'), h('dd', {}, h('b', {}, p.meta.ekran.ad), ' ', h('code', {}, p.meta.ekran.anahtar)),
-          h('dt', {}, 'Yol'), h('dd', {}, h('code', {}, p.meta.ekran.urlYolu)),
+          h('dt', {}, 'Yol'), h('dd', {}, p.meta.ekran.urlYolu ? h('code', {}, p.meta.ekran.urlYolu) : h('span', { class: 'cok-soluk' }, ortak ? 'yok (eklendiği ekranın sayfasında koşar)' : '—')),
           h('dt', {}, 'Oluşturan'), h('dd', {}, `${p.meta.olusturan} · ${new Date(p.meta.olusturulma).toLocaleString('tr-TR')}`),
           h('dt', {}, 'Bağlam'), h('dd', {}, p.meta.baglamProfilleri.length
             ? h('span', { class: 'etiketler' }, p.meta.baglamProfilleri.map((b) => rozet(b.ad, b.projedeVar ? 'basari' : 'uyari', { kisalt: true, title: b.projedeVar ? 'Projede bu adla bağlam profili var' : 'Projede bu adla bağlam profili YOK' })))
@@ -470,7 +546,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         o.hedef && !analiz ? h('div', { class: 'not-kutusu bilgi' }, `Bu anahtarla modeli olmayan "${o.hedef.ad}" ekranı var: paket o ekrana ilk model olarak eklenecek (mevcut senaryolar korunur).`) : null),
       o.uyarilar.length ? h('div', { class: 'not-kutusu uyari' }, h('b', {}, `${o.uyarilar.length} uyarı`),
         h('ul', {}, o.uyarilar.map((u) => h('li', {}, u.mesaj)))) : null,
-      analiz ? null : [
+      analiz ? null : ortak ? h('div', { class: 'not-kutusu bilgi ortak-akis-onizleme-notu' }, 'Ortak akış olarak oluşturulur: senaryosu yoktur (onu kullanan ekranların senaryoları koşar); paketteki senaryo önerileri eklenmez.') : [
         senaryoBasligi,
         p.senaryolar.length ? h('ul', { class: 'oneri-listesi kart' }, p.senaryolar.map(senaryoSatiri)) : h('div', { class: 'bos-liste' }, 'Pakette senaryo önerisi yok.')
       ],
@@ -499,6 +575,7 @@ function onizlemeAdimi(govde, s, paket, o, dosyaAdi, ust = null) {
         h('h3', {}, analiz ? 'Tekrar analiz' : 'Onay'),
         ozetAlani,
         analiz ? h('p', { class: 'kucuk soluk' }, 'Paket mevcut modelle karşılaştırılır; her değişiklik bir bulgu olur ve siz kabul edene kadar model değişmez. Daha önce reddettiğiniz aynı değişiklikler gösterilmez.')
+          : ortak ? h('p', { class: 'kucuk soluk' }, `Ortak akış “Ortak akışlar” altına kaydedilir; ekranlara eklenmez. ${EKRANLARA_EKLEME_NOTU}`)
           : [h('div', { class: 'ara-baslik' }, 'Senaryoların ortamları'), ortamSecimleri,
             h('p', { class: 'kucuk soluk' }, 'Senaryolar "Koşuda" KAPALI eklenir: siz gözden geçirip açana kadar toplu koşuya girmez.')],
         hataAlani,

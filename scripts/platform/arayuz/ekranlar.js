@@ -8,7 +8,10 @@
 //   Kartta ve ayrıntı başlığında ⋯ menüsü (ekran-yonetimi.js): yeniden adlandır, düzenle (URL yolu), yukarı/aşağı taşı,
 //   devre dışı bırak / etkinleştir, kalıcı sil. Devre dışı ekranlar sol listede varsayılan olarak gizlidir ("Devre dışı
 //   ekranları göster"); silinmiş ekranlar (mezar taşı) "Tüm ekranlar"ın altında listelenir (geri yükle / temizle).
-// Adresler: #/ekranlar · #/ekranlar/yeni[/tara] · #/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /yukle | /bulgular] ·
+// "Ekran ekle"de "Ne oluşturulsun? ◉ Ekran ○ Ortak akış" (sayfa-paketi.js): ortak akış da aynı yollarla (paket yükle / tara / kaydet /
+// boş başla) oluşturulur; sayfası ekranla aynıdır (model, geçmiş, kanıtlar, Akışlar diyagramı, Test verisi), senaryosu yoktur,
+// "Kullanan ekranlar" ve "Ekranlara ekle…" vardır.
+// Adresler: #/ekranlar · #/ekranlar/yeni[/tara | /ortak-akis] ·#/ekranlar/e/<id>[/gecmis[/<sürüm>] | /kanitlar | /yukle | /bulgular] ·
 //   #/ekranlar/tarama/<iş kimliği> (otomatik taramanın ilerlemesi → önizleme/kabul)
 // Ekran keşfinin yolları: ekran paketi (kullanıcı istek metnini ve biçim dosyasını sayfa bağlantısıyla yapay zekâ aracına verir; araç sayfayı
 // düğme kurallarına göre — paket-istekleri.mjs > INCELEME_KURALLARI — inceleyip paketi üretir, paket burada yüklenir), "Ekranı tara", "Akışı kaydet".
@@ -34,13 +37,16 @@ let taramaSozu = null;
 let akisTasarimiSozu = null;
 const akisTasarimiModulu = () => (akisTasarimiSozu ??= import('./akis-tasarimi.js').catch((e) => { akisTasarimiSozu = null; throw e; }));
 const taramaModulu = () => (taramaSozu ??= import('./tarama.js').catch((e) => { taramaSozu = null; throw e; }));
-/** "Ekranı otomatik tara" diyaloğu (ekran: mevcut ekran; null = yeni ekran). */
-function taramaBaslat(proje, ekran) {
-  taramaModulu().then((m) => m.taramaDiyalogu({ proje, ekran })).catch((e) => bildir(`Tarama ekranı yüklenemedi (${e.message}). Sunucuyu yeniden başlatın.`, 'hata'));
+/**
+ * "Ekranı otomatik tara" diyaloğu (ekran: mevcut ekran; null = yeni). olusturulacak: yeni eklemede "Ne oluşturulsun?" seçimi
+ * ('ortakAkis': sonuç ortak akış olur).
+ */
+function taramaBaslat(proje, ekran, olusturulacak = 'ekran') {
+  taramaModulu().then((m) => m.taramaDiyalogu({ proje, ekran, olusturulacak })).catch((e) => bildir(`Tarama ekranı yüklenemedi (${e.message}). Sunucuyu yeniden başlatın.`, 'hata'));
 }
-/** "Akışı kaydet" diyaloğu (ekran: mevcut ekran; null = yeni ekran). */
-function kayitBaslat(proje, ekran) {
-  taramaModulu().then((m) => m.kayitDiyalogu({ proje, ekran })).catch((e) => bildir(`Kayıt ekranı yüklenemedi (${e.message}). Sunucuyu yeniden başlatın.`, 'hata'));
+/** "Akışı kaydet" diyaloğu (ekran: mevcut ekran; null = yeni; olusturulacak: yeni eklemede "Ne oluşturulsun?" seçimi). */
+function kayitBaslat(proje, ekran, olusturulacak = 'ekran') {
+  taramaModulu().then((m) => m.kayitDiyalogu({ proje, ekran, olusturulacak })).catch((e) => bildir(`Kayıt ekranı yüklenemedi (${e.message}). Sunucuyu yeniden başlatın.`, 'hata'));
 }
 const medyaUrl = (id) => `/platform/medya/${encodeURIComponent(id)}?token=${encodeURIComponent(TOKEN)}`;
 const hataKutusu = (hata) => h('div', { class: 'not-kutusu hata', role: 'alert' }, hata.message || String(hata));
@@ -72,7 +78,15 @@ export function ekranlarEkrani(main, parcalar, baglam) {
     const yanCiz = () => yanListe(nav, liste.ekranlar, secim, yanCiz, servisler);
     yanCiz();
     if (tur === 'yeni') {
-      sayfaPaketiAkisi(icerik, { mod: 'yeni', proje, tara: () => taramaBaslat(proje, null), kaydet: () => kayitBaslat(proje, null), bitti: (id) => { location.hash = `#/ekranlar/e/${encodeURIComponent(id)}`; } });
+      // "Ne oluşturulsun? ◉ Ekran ○ Ortak akış": varsayılan Ekran; #/ekranlar/yeni/ortak-akis Ortak akış seçili açar. Seçim
+      // değişince adres (geçmişe eklemeden) ve sayfa güncellenir; tara / kaydet / paket yükle seçilen türle çalışır.
+      const ciz = (/** @type {'ekran' | 'ortakAkis'} */ olusturulacak) => sayfaPaketiAkisi(icerik, {
+        mod: 'yeni', proje, olusturulacak,
+        secimDegisti: (t) => { history.replaceState(null, '', t === 'ortakAkis' ? '#/ekranlar/yeni/ortak-akis' : '#/ekranlar/yeni'); ciz(t); },
+        tara: () => taramaBaslat(proje, null, olusturulacak), kaydet: () => kayitBaslat(proje, null, olusturulacak),
+        bitti: (id) => { location.hash = `#/ekranlar/e/${encodeURIComponent(id)}`; }
+      });
+      ciz(kimlik === 'ortak-akis' ? 'ortakAkis' : 'ekran');
       // #/ekranlar/yeni/tara (yeni proje sihirbazının "Ekranı otomatik tara" adımı): tarama diyaloğu hemen açılır.
       if (kimlik === 'tara') { history.replaceState(null, '', '#/ekranlar/yeni'); taramaBaslat(proje, null); }
       return;
@@ -125,7 +139,7 @@ function yanListe(nav, tumu, secili, yeniden, servisler = []) {
     h('a', { href: '#/ekranlar/yeni', 'aria-current': secili === '__yeni' ? 'page' : null }, ikon('arti'), 'Ekran ekle'),
     ...urunlerBasligi(),
     ekranlarGrubu(ekranModelli.map(baglanti)),
-    navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: ortakAkislar.map(baglanti), bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle (ekran paketiyle)', href: '#/ekranlar/yeni' } }),
+    navGrubu({ anahtar: 'ortak-akislar', baslik: 'Ortak akışlar', ogeler: ortakAkislar.map(baglanti), bosMetin: 'Henüz ortak akış yok.', ekle: { etiket: 'Ortak akış ekle', href: '#/ekranlar/yeni/ortak-akis' } }),
     altModeller.length ? navGrubu({ anahtar: 'alt-modeller', baslik: 'Alt modeller', ogeler: altModeller.map(baglanti), ekle: { etiket: 'Alt model ekle (ekran paketiyle)', href: '#/ekranlar/yeni' } }) : null,
     devreDisiAnahtari(devreDisiSayisi, () => yeniden()),
     ...servislerBolumu(servisler));
@@ -173,7 +187,7 @@ function listeGorunumu(icerik, proje, liste) {
     ekranlar.length
       ? h('div', { class: 'ekran-izgarasi' }, sirali.map((e) => ekranKarti(e, { proje, idler })))
       : bosDurum('Henüz ekran yok.', 'İlk ekranınızı "Ekran ekle" ile ekleyin.', { ikon: 'ekran', eylem: h('a', { class: 'dugme birincil', href: '#/ekranlar/yeni' }, ikon('arti'), 'Ekran ekle') }),
-    ortakAkisBolumu(liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis')),
+    ortakAkisBolumu(proje, liste.ekranlar.filter((e) => e.modelTuru === 'ortakAkis')),
     silinmisEkranlar(proje, liste.silinmisEkranlar || []));
 }
 
@@ -181,26 +195,29 @@ function listeGorunumu(icerik, proje, liste) {
  * Ortak akışlar (ör. ödeme): ekran kartlarından ayrı; ekranların akışına "+ > Ortak akış" ile eklenir. Kartlar ekran kartlarıyla
  * aynı düzende (ortakAkisKarti). Giriş burada listelenmez: yalnız Ayarlar > Giriş profilleri > Giriş tarifi'nden yönetilir.
  */
-function ortakAkisBolumu(liste) {
+function ortakAkisBolumu(proje, liste) {
   if (!liste.length) return null;
   return h('section', { class: 'ortak-akis-bolumu', 'aria-labelledby': 'ortak-akislar-baslik' },
     h('div', { class: 'bolum-basligi' }, h('h3', { id: 'ortak-akislar-baslik' }, ikon('pusula'), 'Ortak akışlar', rozet(String(liste.length), 'vurgu')),
-      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar.')),
-    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...liste.map(ortakAkisKarti)));
+      h('span', { class: 'kucuk cok-soluk' }, 'Ekranların akışına “+ > Ortak akış” ile eklenir; hep son sürümüyle koşar.'),
+      h('a', { class: 'dugme kucuk-dugme sag', href: '#/ekranlar/yeni/ortak-akis' }, ikon('arti'), 'Ortak akış ekle')),
+    h('div', { class: 'ekran-izgarasi ortak-akis-izgarasi' }, ...liste.map((e) => ortakAkisKarti(e, proje))));
 }
 
 /**
- * Ortak akış kartı: ekran kartıyla AYNI düzen — başlık + tür rozeti üstte, tek satır özet, kullanım, altta hizalı eylemler.
+ * Ortak akış kartı: ekran kartıyla AYNI düzen — başlık + tür rozeti üstte, tek satır özet, kullanım, altta hizalı eylemler; ⋯
+ * menüsü ekran kartındakiyle aynı (yeniden adlandır, devre dışı, sil; URL yolu yok, taşıma yok).
  * Adım listesi ana ekranda gösterilmez (Aç / Düzenle'de görünür); iç anahtar küçük soluk ikincil metindir.
  */
-function ortakAkisKarti(e) {
+function ortakAkisKarti(e, proje) {
   const adres = `#/ekranlar/e/${encodeURIComponent(e.id)}`;
   const kullanan = typeof e.kullananSayisi === 'number' ? e.kullananSayisi : null;
   return h('article', { class: 'ekran-karti ortak-akis-karti', 'data-ekran': e.id, 'aria-label': e.ad },
     h('div', { class: 'ekran-karti-ust' },
       h('span', { class: 'kayit-ikon', 'aria-hidden': 'true' }, ikon('pusula')),
       h('div', { class: 'ekran-karti-ad' }, h('h3', {}, h('a', { href: adres, title: e.ad }, e.ad)), h('code', { title: e.anahtar }, e.anahtar)),
-      h('div', { class: 'ekran-karti-rozetler' }, rozet('ortak akış', 'durdu'), e.modelSurumu ? rozet(`model v${e.modelSurumu}`, 'vurgu') : rozet('model yok', ''))),
+      h('div', { class: 'ekran-karti-rozetler' }, rozet('ortak akış', 'durdu'), e.modelSurumu ? rozet(`model v${e.modelSurumu}`, 'vurgu') : rozet('model yok', ''),
+        ekranMenusu({ proje, ekran: e }))),
     h('p', { class: 'ortak-akis-ozeti' }, `${e.adimSayisi ?? 0} adım · ${e.alanSayisi ?? 0} alan`),
     kullanan !== null ? h('p', { class: 'ortak-akis-kullanimi kucuk soluk' }, kullanan ? `${kullanan} ekranda kullanılıyor` : 'Henüz hiçbir ekranda kullanılmıyor') : null,
     h('div', { class: 'ekran-karti-alt' },
@@ -306,7 +323,11 @@ async function ekranAyrintisi(icerik, s) {
         h('div', { class: 'meta' },
           h('span', {}, ikon('isaret'), h('code', { class: 'duz' }, e.anahtar)),
           agac && agac.ekranUrl ? h('span', {}, ikon('ag'), h('code', { class: 'duz' }, agac.ekranUrl)) : null,
-          h('span', {}, ikon('liste'), h('a', { href: `#/senaryolar/u/${encodeURIComponent(e.id)}` }, `${d.senaryoSayisi} senaryo`)),
+          // Ortak akışın senaryosu yoktur: yerine onu kullanan ekran sayısı (Akışlar sekmesinde liste + "Ekranlara ekle…").
+          ortakAkis
+            ? h('span', {}, ikon('pusula'), h('a', { href: `${adres}/akis`, class: 'ortak-akis-kullanimi-baglantisi' },
+              typeof s.listeKaydi?.kullananSayisi === 'number' && s.listeKaydi.kullananSayisi ? `${s.listeKaydi.kullananSayisi} ekranda kullanılıyor` : 'henüz hiçbir ekranda kullanılmıyor'))
+            : h('span', {}, ikon('liste'), h('a', { href: `#/senaryolar/u/${encodeURIComponent(e.id)}` }, `${d.senaryoSayisi} senaryo`)),
           // Senaryo tasarım yardımcısı (Senaryolar > ekran > "Senaryo önerileri"; öneri yalnızca öneridir).
           d.model && !EKRAN_DISI_TURLER.includes(d.modelTuru)
             ? h('span', {}, ikon('simsek'), h('a', { href: `#/senaryolar/oneriler/${encodeURIComponent(e.id)}`, class: 'senaryo-onerileri-baglantisi' }, 'Senaryo önerileri')) : null,
@@ -410,14 +431,22 @@ async function akisSekmesi(kap, s, d, icerik) {
     } catch (hataNesnesi) { if (hataNesnesi.durum !== 423) bildir(hataNesnesi.message, 'hata'); }
   });
 
-  const diyagram = h('section', { class: 'kart akis-diyagrami', 'aria-label': 'Ekranın akışı' });
-  try {
-    akisDiyagramiCiz(diyagram, akisDiyagrami(akisModeli(d.model, secili.id)), {
-      durum: 'ekran', ortamAdi: '', projeId: s.proje.id,
-      not: 'İsteğe bağlı adımlar senaryoda “dahil” işaretliyse, koşullu alanlar koşulu sağlandığında koşulur. Senaryoya göre görünüm için senaryoyu açıp “Akış diyagramı” sekmesine bakın.'
-    });
-  } catch (hataNesnesi) {
-    yerlestir(diyagram, h('div', { class: 'not-kutusu hata', role: 'alert' }, hataNesnesi.message));
+  // Boş başlatılmış ortak akış (henüz adımı yok): diyagram yerine yol gösterilir; "Ekranlara ekle…" adım eklenince açılır.
+  const bosOrtak = liste.ortakAkis && !secili.adimSayisi;
+  const diyagram = h('section', { class: 'kart akis-diyagrami', 'aria-label': liste.ortakAkis ? 'Ortak akışın akışı' : 'Ekranın akışı' });
+  if (bosOrtak) {
+    yerlestir(diyagram, bosDurum('Bu ortak akışın henüz adımı yok.', '“Düzenle” ile diyagramı açın: alan grubu, aksiyon, beklenen mesaj ekleyin; alan ve düğmeleri sağdaki listede seçicisiyle elle tanımlayabilirsiniz. Ya da “Modeli güncelle > Akışı kaydet” ile bir başlangıç ekranından kaydedin.', {
+      ikon: 'pusula', eylem: liste.duzenlenebilir ? h('button', { type: 'button', class: 'birincil', onclick: () => tasarimiAc({ akisId: secili.id }) }, ikon('duzenle'), 'Diyagramdan adım ekle') : null
+    }));
+  } else {
+    try {
+      akisDiyagramiCiz(diyagram, akisDiyagrami(akisModeli(d.model, secili.id)), {
+        durum: 'ekran', ortamAdi: '', projeId: s.proje.id,
+        not: 'İsteğe bağlı adımlar senaryoda “dahil” işaretliyse, koşullu alanlar koşulu sağlandığında koşulur. Senaryoya göre görünüm için senaryoyu açıp “Akış diyagramı” sekmesine bakın.'
+      });
+    } catch (hataNesnesi) {
+      yerlestir(diyagram, h('div', { class: 'not-kutusu hata', role: 'alert' }, hataNesnesi.message));
+    }
   }
   yerlestir(kap, h('div', { class: 'gecmis-duzeni' },
     h('section', { class: 'kart surum-listesi-karti akis-listesi-karti' },
@@ -436,7 +465,9 @@ async function akisSekmesi(kap, s, d, icerik) {
         h('h3', {}, secili.ad, secili.varsayilan ? rozet('varsayılan', 'vurgu') : null),
         liste.duzenlenebilir ? h('div', { class: 'dugmeler' },
           h('button', { type: 'button', class: 'birincil', onclick: () => tasarimiAc({ akisId: secili.id }) }, ikon('duzenle'), 'Düzenle'),
-          liste.ortakAkis ? h('button', { type: 'button', onclick: () => ortakAkisiEkranlaraEkle(s.proje, e, yeniden) }, ikon('artiYalin'), 'Ekranlara ekle…') : null,
+          liste.ortakAkis ? h('button', {
+            type: 'button', disabled: bosOrtak, title: bosOrtak ? 'Önce ortak akışa adım ekleyin (Düzenle).' : null, onclick: () => ortakAkisiEkranlaraEkle(s.proje, e, yeniden)
+          }, ikon('artiYalin'), 'Ekranlara ekle…') : null,
           liste.ortakAkis ? null : h('button', { type: 'button', onclick: () => tasarimiAc({ kopya: secili.id }) }, ikon('kopya'), 'Kopyala'),
           secili.varsayilan || liste.ortakAkis ? null : varsayilanYap,
           secili.varsayilan || liste.ortakAkis ? null : sil) : null),

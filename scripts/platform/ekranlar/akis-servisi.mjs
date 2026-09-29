@@ -16,18 +16,22 @@
 //    düğmesiz adımın göstergesi / uyarıları alan grubundan sonraki beklenen mesaj bloklarıdır (alandan çıkınca çıkan mesajlar).
 //  - Ortak akış (tur "ortakAkis"): tek akışı vardır; içeriği aynı diyagramla düzenlenir (içine ortak akış
 //    eklenmez). Kaydedince onu kullanan ekranlar etki olarak gösterilir (ekranlar ortak akışın hep son sürümüyle koşar).
-//    ortakAkisEkranlaraEkle: ortak akışı seçilen ekranların varsayılan akışının sonuna ekler (her ekran için yeni sürüm).
+//    ortakAkisEkranlaraEkle: ortak akışı seçilen ekranların varsayılan akışının sonuna ekler (her ekran için yeni sürüm; boş
+//    ortak akış eklenmez). bosOrtakAkisOlustur: "Boş başla" — adımı olmayan ortak akış; adımları bu diyagramdan eklenir.
+//  - Elle öğeler: kayıtta / modelde olmayan alan ve düğmeler diyagramda elle tanımlanabilir (etiket / yazı + seçici; akisKaydet >
+//    elleOgeler → tarama/akis-tasarimi.mjs > elleOgeleriEkle); kaydedilince modele yazılır. Ekran ve ortak akış için aynıdır.
 //  - Varsayılan akış model.adimlar'dır; varsayılan değişince akışı yazılı olmayan senaryolara eski varsayılan yazılır (akışları
 //    değişmesin). Senaryosu olan ya da varsayılan akış silinemez.
 // NOT: import.meta KULLANILMAZ. Tipler: akis-servisi.d.mts.
 
-import { DepoHatasi, ekranModeliEkle, ekranModeliGetir, senaryoGetir, senaryoKaydet as depoSenaryoKaydet } from '../veritabani/depo.mjs';
+import { DepoHatasi, ekranKaydet, ekranModeliEkle, ekranModeliGetir, ekranlariListele, senaryoGetir, senaryoKaydet as depoSenaryoKaydet } from '../veritabani/depo.mjs';
 import { ANA_AKIS_ID, akisListesi, akisModeli } from '../senaryolar/model-formu.mjs';
 import { senaryoAkisi } from '../senaryolar/senaryo-servisi.mjs';
-import { ALAN_TUSLARI, akisPaleti, akistanKayitEnvanteri, bloklariAyikla } from '../tarama/akis-tasarimi.mjs';
-import { kayitPaketiOlustur, kimlikUret } from '../tarama/paket-olusturucu.mjs';
+import { ALAN_TUSLARI, akisPaleti, akistanKayitEnvanteri, bloklariAyikla, elleOgeleriEkle } from '../tarama/akis-tasarimi.mjs';
+import { ekranAnahtariOner, kayitPaketiOlustur, kimlikUret } from '../tarama/paket-olusturucu.mjs';
 import { sqlSatirSiniriOku } from '../ayarlar/kosu-ayarlari.mjs';
 import { EkranDogrulamaHatasi, modeliDogrula } from './ekran-servisi.mjs';
+import { EKRAN_ANAHTARI_DESENI } from './sayfa-paketi.mjs';
 import { sinirHatalari } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
 
@@ -729,6 +733,10 @@ export function ortakAkisAdaylari(vt, projeId, ortakEkranId) {
  */
 export function ortakAkisEkranlaraEkle(vt, projeId, ortakEkranId, g) {
   const { ortakAkis, ekranlar } = ortakAkisAdaylari(vt, projeId, ortakEkranId);
+  // Boş başlatılmış (henüz adımı olmayan) ortak akış ekranlara eklenmez: önce akışı diyagramda oluşturulur.
+  if (!ekranModeli(vt, projeId, ortakEkranId).model.adimlar.length) {
+    throw new DepoHatasi(`“${ortakAkis.ad}” ortak akışının henüz adımı yok; önce Akışlar sekmesinde “Düzenle” ile akışını oluşturun.`);
+  }
   const idler = Array.isArray(g.ekranIdleri) ? [...new Set(g.ekranIdleri.filter((x) => typeof x === 'string'))] : [];
   if (!idler.length) throw new DepoHatasi('En az bir ekran seçin.');
   const secilen = idler.map((id) => {
@@ -781,6 +789,32 @@ export function akisTasarimi(vt, projeId, ekranId, s) {
     // Ekran girişsiz açılıyorsa diyagramın başı "Girişsiz" olur ve "Yeniden giriş" bloğu sunulmaz.
     girissiz: model.girisGerekmez === true
   };
+}
+
+/**
+ * "Boş başla" (Ekranlar > Ekran ekle > Ne oluşturulsun? ○ Ortak akış): adımı olmayan bir ortak akış (model v1) oluşturur; adımları
+ * ortak akışın Akışlar sekmesinde "Düzenle" ile diyagramdan eklenir (elle alan / düğme ya da başlangıç ekranından "Akışı kaydet").
+ * Ekranlara ekleme otomatik yapılmaz. anahtar verilmezse addan üretilir; projede aynı anahtarlı (silinmemiş) kayıt olmamalı.
+ * @param {Veritabani} vt @param {string} projeId @param {{ ad: unknown; anahtar?: unknown }} g
+ */
+export function bosOrtakAkisOlustur(vt, projeId, g) {
+  const ad = typeof g.ad === 'string' ? g.ad.replace(/\s+/g, ' ').trim() : '';
+  if (!ad || ad.length > 120) throw new DepoHatasi('Ortak akışın adını yazın (en fazla 120 karakter).');
+  const anahtar = typeof g.anahtar === 'string' && g.anahtar.trim() ? g.anahtar.trim() : ekranAnahtariOner(ad);
+  if (!EKRAN_ANAHTARI_DESENI.test(anahtar)) throw new DepoHatasi('Anahtar küçük harf, rakam ve "-" içermeli (ör. odeme-adimlari).');
+  const ayni = ekranlariListele(vt, projeId).find((e) => e.anahtar === anahtar);
+  if (ayni) throw new DepoHatasi(`“${ayni.ad}” bu anahtarla (${anahtar}) zaten var; başka bir ad ya da anahtar verin.`);
+  const aciklama = `${ad} (ortak akış; adımları akış diyagramında eklenir)`;
+  const model = {
+    semaSurumu: 2, tur: 'ortakAkis', id: anahtar, ad, aciklama, kosullar: {}, adimlar: [],
+    senaryoDuzeyi: { alanlar: [] }, urunDuzeyi: {}, isKurallari: [], bilinmeyenler: []
+  };
+  modeliDogrula(vt, projeId, model, `${anahtar}.model.json`);
+  return vt.islem(() => {
+    const ekranId = ekranKaydet(vt, { projeId, anahtar, ad, aciklama });
+    const { surum } = ekranModeliEkle(vt, { ekranId, model, aciklama: 'Boş ortak akış oluşturuldu' });
+    return { ekranId, surum, akisId: ANA_AKIS_ID };
+  });
 }
 
 /**
@@ -947,7 +981,9 @@ function silinenKorunanlar(tam, akisId, bloklar, korunan) {
  * "testVerisi" önizlemesini de döner (paketTestVerisiOnizle; tablo "<Ekran> — <Alan>", tür "liste"); onaylı çağrıda yalnız
  * g.testVerisi seçimi (tablo başına yeni / birleştir / yeni ad / atla + bağlanacak alanlar) yazılır — seçim yoksa test verisine
  * hiçbir şey yazılmaz. Model sürümüyle aynı işlemde.
- * @param {{ akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri; testVerisi?: unknown }} g
+ * elleOgeler: diyagramda ELLE tanımlanan alanlar / düğmeler (tarama/akis-tasarimi.mjs > elleOgeleriEkle): envanterin sonuna
+ * eklenir; kaydedilince modele yazılır (ör. boş başlayan ortak akışa sıfırdan adım). Ekran ve ortak akış için aynıdır.
+ * @param {{ akisId?: string | null; ad: unknown; bloklar: unknown; onay?: boolean; kayitEnvanteri?: import('../tarama/akis-tasarimi.d.mts').AkisEnvanteri; testVerisi?: unknown; elleOgeler?: unknown }} g
  */
 export function akisKaydet(vt, projeId, ekranId, g) {
   const { ekran, model: tam } = ekranModeli(vt, projeId, ekranId);
@@ -963,7 +999,9 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   const hatalar = [];
   if (!ad) hatalar.push({ blok: null, mesaj: 'Akışın adını yazın.' });
   else if (liste.some((a) => a.ad.toLocaleLowerCase('tr-TR') === ad.toLocaleLowerCase('tr-TR') && a.id !== mevcutAkis?.id)) hatalar.push({ blok: null, mesaj: `“${ad}” adında bir akış zaten var.` });
-  const env = g.kayitEnvanteri ?? modeldenAkisEnvanteri(tam);
+  const elle = elleOgeleriEkle(g.kayitEnvanteri ?? modeldenAkisEnvanteri(tam), g.elleOgeler);
+  hatalar.push(...elle.hatalar);
+  const env = elle.envanter;
   const ayik = bloklariAyikla(g.bloklar);
   hatalar.push(...ayik.hatalar);
   if (ortakAkis) ayik.bloklar.forEach((b, i) => { if (b.tur === 'ortak') hatalar.push({ blok: i, mesaj: 'Ortak akışın içine ortak akış eklenemez.' }); });
@@ -984,7 +1022,7 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   });
   // Diyagramda düzenlenemeyen (aynen korunan) parçalar: blokların "korunan" anahtarları modeldeki karşılıklarına çözülür.
   const korunan = korunanParcalari(tam);
-  const cevrim = ayik.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar, { satirSiniri: sqlSatirSiniriOku(vt), korunanlar: korunan.parcalar });
+  const cevrim = ayik.hatalar.length || elle.hatalar.length ? { envanter: null, hatalar: [] } : akistanKayitEnvanteri(env, ayik.bloklar, { satirSiniri: sqlSatirSiniriOku(vt), korunanlar: korunan.parcalar });
   hatalar.push(...cevrim.hatalar);
   if (hatalar.length || !cevrim.envanter) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${hatalar.length} sorun var.`, hatalar);
 
