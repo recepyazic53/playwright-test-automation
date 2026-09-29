@@ -22,7 +22,7 @@ import { acikAnahtar, adliAlanlariDonustur, medyaAnahtariniHazirla, sifrele, zar
 import { medyaSifrele } from '../medya.mjs';
 import { akisListesi, akisModeli, beklenenSonucEtiketi, formSemasiOlustur, ortakAkislariAc, tumFormAlanlari, akislariEsitle } from '../senaryolar/model-formu.mjs';
 import { modelBaglami, senaryoKaynagi, veriGudumluMu } from '../senaryolar/senaryo-servisi.mjs';
-import { ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
+import { bagsizKosulUyarilari, ekranModeliniDogrula, dogrulamaMaddeleri } from '../../dogrulama/ekran-modeli-dogrulayici.mjs';
 import { kanitVerisiniCoz, ortakAkisPaketineCevir, sayfaPaketiniDogrula } from './sayfa-paketi.mjs';
 import { mezarTasiOku } from './mezar-tasi.mjs';
 import { paketTestVerisiOnizle, paketTestVerisiniYaz } from '../tablolar/paket-test-verisi.mjs';
@@ -343,6 +343,8 @@ export function ekranDetayi(vt, projeId, ekranId) {
     agac: model && model.tur !== 'altModel' ? modelAgaci(model, mb ? mb.altModeller : {}) : null,
     // Ekranın "Akış" sekmesi (akış diyagramı modelden çizilir; model değer içermez).
     model: model && model.tur !== 'altModel' ? model : null,
+    // Model uyarıları (yalnız bilgi; model değişmez): ör. hiçbir yere bağlı olmayan koşullar (Model sekmesinde listelenir).
+    uyarilar: model && model.tur !== 'altModel' ? bagsizKosulUyarilari(model) : [],
     altModel: model && model.tur === 'altModel' ? { ad: model.ad, aciklama: model.aciklama, kullananlar: model.kullananlar, agac: modelAgaci({ ...model, adimlar: [{ id: 'bolumler', sira: 1, baslik: String(model.ad), bolumler: model.bolumler }] }) } : null,
     // Ortak akış: başlangıç ekranı adayları ("Akışı kaydet" / "Tekrar analiz et"; kullananlar önde) ve son seçim.
     ortakAkis: model && model.tur === 'ortakAkis'

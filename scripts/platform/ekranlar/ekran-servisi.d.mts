@@ -21,6 +21,8 @@ export declare function ekranListesi(vt: Veritabani, projeId: string): {
 export declare function modeliDogrula(vt: Veritabani, projeId: string, model: unknown, ad: string): unknown;
 export declare function ekranDetayi(vt: Veritabani, projeId: string, ekranId: string): Nesne & {
   surum: number | null;
+  /** Model uyarıları (ör. hiçbir yere bağlı olmayan koşullar); modeli değiştirmez. */
+  uyarilar: Array<{ yer: string; mesaj: string }>;
   gecmis: Array<{ surum: number; aciklama: string | null; olusturulma: string; degisiklikSayisi: number | null }>;
   analiz: { bekleyen: Nesne | null; son: Nesne | null; reddedilenSayisi: number; sonBaglamProfilleri: string[]; kanitlar: Array<{ medyaId: string; ad: string } & Nesne> };
 };

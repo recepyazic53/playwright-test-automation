@@ -165,6 +165,18 @@ function gorunurlukOzeti(model, g, etiketler) {
   if (nesneMi(k) && typeof k.aciklama === 'string' && k.aciklama) return k.aciklama;
   return ifadeOzeti(gorunurlukIfadesi(model, g), etiketler) || (typeof g.kosul === 'string' ? g.kosul : 'özel koşul');
 }
+/**
+ * Bölümün diyagramda düzenlenmeyen özelliklerinin (id / baslik / alanlar dışındaki her anahtar) okunur özeti; yoksa null.
+ * kosullu: bölüm görünürlük koşullu mu. @param {Nesne} model @param {Nesne} b @param {Map<string, string>} etiketler
+ * @returns {{ kosullu: boolean; ozet: string } | null}
+ */
+function bolumOzeti(model, b, etiketler) {
+  const anahtarlar = Object.keys(b).filter((k) => !['id', 'baslik', 'alanlar'].includes(k) && b[k] !== undefined && b[k] !== null);
+  if (!anahtarlar.length) return null;
+  const parcalar = anahtarlar.map((k) => (k === 'gorunurluk' ? `görünürlük koşulu: ${gorunurlukOzeti(model, b.gorunurluk, etiketler)}`
+    : k === 'pomMetodu' ? `kod yöntemi (${String(b.pomMetodu)})` : `“${k}” özelliği`));
+  return { kosullu: nesneMi(b.gorunurluk), ozet: `“${String(b.baslik || b.id)}” bölümü — ${parcalar.join('; ')}` };
+}
 /** Başarı göstergesinin okunur özeti. @param {unknown} g @returns {string} */
 function gostergeOzeti(g) {
   if (!nesneMi(g)) return '';
@@ -191,8 +203,10 @@ function aksiyonOzeti(a) {
  *  - tam: adımın diyagramda düzenlenecek içeriği yok (alt model adımı, yalnız öğe beklemesi / gösterilemeyen alanlar…) →
  *    adımın tamamı salt okunur "korunan adım" bloğu olur, aynen korunur.
  *  - ek: düzenlenebilir adımın gösterilemeyen özellikleri (görünürlük koşulu — ör. düğmeli adımın seçime bağlı görünürlüğü,
- *    alanlı + düğmeli isteğe bağlı adım —, kod yöntemi, adres / son adımda öğe başarı göstergesi, gösterilemeyen alanlar, bölüm
- *    özellikleri…) → adımın alan grubunda (yoksa aksiyonunda) rozet; kaydedince aynı kimlikli adıma aynen yazılır.
+ *    alanlı + düğmeli isteğe bağlı adım —, kod yöntemi, adres / son adımda öğe başarı göstergesi, gösterilemeyen alanlar…) →
+ *    adımın alan grubunda (yoksa aksiyonunda) rozet; kaydedince aynı kimlikli adıma aynen yazılır.
+ *  - bolumNotlari: alanın bölümünün özellikleri (görünürlük koşulu, kod yöntemi…) → alanın yanında salt okunur not. Adıma değil
+ *    bölüme bağlıdır: kaydederken bölümle birlikte taşınır (paket-olusturucu.mjs > bolumOzellikleriniTasi; korunanDenetimi).
  *  - aksiyonlar: gösterilemeyen koşu aksiyonu (metinle süzülen / kendi süreli tıklama, öğeye bağlı bekleme, ekrana dön) →
  *    adımın aksiyonları salt okunur "korunan aksiyonlar" bloğu olur (düğmesi adımın ilerlemesidir).
  *  - alanKosullari: düzenlenebilir alanın gösterilemeyen görünürlük koşulu (çok şartlı, çalışma anında, korunan alana bağlı…)
@@ -228,12 +242,13 @@ function akisKorumasi(model, sirali, env) {
  */
 function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler) {
   const adim = adimlar[i];
-  /** @type {{ adimEk: Nesne; kosuEk: Nesne; alanlar: Array<{ alan: Nesne; bolum: { id: string; baslik: string }; onceki: string | null }>; bolumEk: Record<string, Nesne> }} */
-  const ek = { adimEk: {}, kosuEk: {}, alanlar: [], bolumEk: {} };
+  /** @type {{ adimEk: Nesne; kosuEk: Nesne; alanlar: Array<{ alan: Nesne; bolum: { id: string; baslik: string }; onceki: string | null }> }} */
+  const ek = { adimEk: {}, kosuEk: {}, alanlar: [] };
   const sonuc = {
     tam: false, ozel: false, ek, gorunurlukKorunur: false, gostergeKorunur: false,
     /** @type {Nesne[] | null} */ aksiyonlar: null,
     /** @type {Record<string, { id: string; gorunurluk: Nesne; aciklama: string }>} diyagram anahtarı → korunan koşul */ alanKosullari: {},
+    /** @type {Record<string, { kosullu: boolean; ozet: string }>} diyagram anahtarı → alanın bölümünün özellikleri (salt okunur; bölümle korunur) */ bolumNotlari: {},
     /** @type {string[]} */ ozet: []
   };
   if (ozelAdimMi(adim)) { sonuc.ozel = true; return sonuc; }
@@ -287,8 +302,9 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
   let gosterilen = 0;
   for (const b of adim.bolumler) {
     if (!nesneMi(b)) continue;
-    const bEk = Object.fromEntries(Object.entries(b).filter(([k]) => !['id', 'baslik', 'alanlar'].includes(k)));
-    if (Object.keys(bEk).length) { ek.bolumEk[String(b.id)] = kopya(bEk); sonuc.ozet.push(`“${String(b.baslik || b.id)}” bölümünün ${Object.keys(bEk).map((k) => (k === 'gorunurluk' ? 'görünürlük koşulu' : k === 'pomMetodu' ? 'kod yöntemi' : k)).join(', ')}`); }
+    // Bölüm özellikleri (görünürlük koşulu, kod yöntemi…) diyagramda düzenlenmez; bölümle birlikte aynen korunur
+    // (paket-olusturucu.mjs > bolumOzellikleriniTasi). Alanlarının yanında salt okunur not olarak gösterilir.
+    const bolumNotu = bolumOzeti(model, b, etiketler);
     for (const a of Array.isArray(b.alanlar) ? b.alanlar : []) {
       if (!nesneMi(a)) continue;
       const korunur = !temsilEdilir(a)
@@ -299,6 +315,7 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
         if (!['buton', 'cikti'].includes(a.tip)) sonuc.ozet.push(`alan “${etiketi(a)}” (diyagramda gösterilemiyor)`);
       } else if (!['buton', 'cikti'].includes(a.tip)) {
         gosterilen++;
+        if (bolumNotu) sonuc.bolumNotlari[envanterAnahtari(a)] = bolumNotu;
         if (nesneMi(a.gorunurluk) && !kosulGosterilir(secimKosulu(gorunurlukIfadesi(model, a.gorunurluk)))) {
           sonuc.alanKosullari[envanterAnahtari(a)] = { id: String(a.id), gorunurluk: kopya(a.gorunurluk), aciklama: gorunurlukOzeti(model, a.gorunurluk, etiketler) };
         }
@@ -308,7 +325,7 @@ function adimKorumasi(model, adimlar, i, env, korunanAlanlar, onceki, etiketler)
   }
   if (sonuc.aksiyonlar) sonuc.ozet.push(...sonuc.aksiyonlar.map(aksiyonOzeti).map((x) => `aksiyon: ${x}`));
   // Diyagramda taşıyıcısı (alan grubu ya da düğme) olmayan, korunacak parçası olan adım: tamamı korunur.
-  const korunacak = Object.keys(ek.adimEk).length || Object.keys(ek.kosuEk).length || ek.alanlar.length || Object.keys(ek.bolumEk).length || sonuc.aksiyonlar;
+  const korunacak = Object.keys(ek.adimEk).length || Object.keys(ek.kosuEk).length || ek.alanlar.length || sonuc.aksiyonlar;
   if (korunacak && !gosterilen && !tikla) {
     sonuc.tam = true;
     sonuc.ozet = tamAdimOzeti(model, adim, etiketler);
@@ -395,11 +412,11 @@ export function korunanParcalari(model) {
       }
       if (an.ozel) continue;
       const e = an.ek;
-      if (Object.keys(e.adimEk).length || Object.keys(e.kosuEk).length || e.alanlar.length || Object.keys(e.bolumEk).length) {
+      if (Object.keys(e.adimEk).length || Object.keys(e.kosuEk).length || e.alanlar.length) {
         const k = korunanAnahtari('ek', akis.id, adim.id);
         parcalar[k] = {
           tur: 'ek', id: String(adim.id), ...(Object.keys(e.adimEk).length ? { adimEk: e.adimEk } : {}), ...(Object.keys(e.kosuEk).length ? { kosuEk: e.kosuEk } : {}),
-          ...(e.alanlar.length ? { alanlar: e.alanlar } : {}), ...(Object.keys(e.bolumEk).length ? { bolumEk: e.bolumEk } : {})
+          ...(e.alanlar.length ? { alanlar: e.alanlar } : {})
         };
         ozetler[k] = { akis: akis.id, baslik, ozet: an.ozet.filter((x) => !x.startsWith('aksiyon: ')) };
       }
@@ -597,14 +614,17 @@ export function adimlardanBloklar(model, adimlar, env, akisId) {
     const tikla = aksiyonlar.some((x) => x.tur === 'tikla');
     const ilkBlok = bloklar.length;
     const e = an.ek;
-    const ekVar = Object.keys(e.adimEk).length || Object.keys(e.kosuEk).length || e.alanlar.length || Object.keys(e.bolumEk).length;
+    const ekVar = Object.keys(e.adimEk).length || Object.keys(e.kosuEk).length || e.alanlar.length;
+    /** Gruptaki alanların bölüm notları (salt okunur gösterim). @type {Record<string, { kosullu: boolean; ozet: string }>} */
+    const bolumNotlari = Object.fromEntries(alanlar.filter((x) => an.bolumNotlari[x]).map((x) => [x, an.bolumNotlari[x]]));
     const ekOzet = an.ozet.filter((x) => !x.startsWith('aksiyon: '));
     /** Adımın korunan özellikleri: ilk bloğunda (alan grubu, yoksa ilk aksiyon). */
     let ekAnahtari = ekVar ? korunanAnahtari('ek', String(akis), String(adim.id)) : null;
     if (alanlar.length || (!istegeBagli && (tikla || ekVar)) || an.aksiyonlar) {
       bloklar.push({
         tur: 'alanlar', ad: String(adim.baslik || adim.id), alanlar, zorunlu, kosullar, ...(Object.keys(sinirlar).length ? { sinirlar } : {}), ...(Object.keys(tuslar).length ? { tuslar } : {}),
-        ...(ekAnahtari ? { korunan: ekAnahtari, korunanOzet: ekOzet } : {}), ...(Object.keys(korunanKosullar).length ? { korunanKosullar } : {})
+        ...(ekAnahtari ? { korunan: ekAnahtari, korunanOzet: ekOzet } : {}), ...(Object.keys(korunanKosullar).length ? { korunanKosullar } : {}),
+        ...(Object.keys(bolumNotlari).length ? { bolumNotlari } : {})
       });
       ekAnahtari = null;
     }
@@ -887,9 +907,11 @@ const ardisikParcaMi = (buyuk, kucuk) => {
  * aldığını denetler. Yer almıyorsa (ör. korunan görünürlük koşulunun dayandığı alan akıştan çıkarıldı) bloğun hatası döner:
  * kayıt reddedilir, sessiz kayıp olmaz.
  * @param {Nesne} tam @param {Nesne} yeni @param {Nesne[]} akisAdimlari @param {import('../tarama/akis-tasarimi.d.mts').AkisBlogu[]} bloklar
- * @param {ReturnType<typeof korunanParcalari>} korunan @returns {Array<{ blok: number | null; mesaj: string }>}
+ * @param {ReturnType<typeof korunanParcalari>} korunan
+ * @param {Nesne[]} oncekiAdimlar güncellenen akışın kaydetmeden önceki adımları (bölüm özellikleri denetimi; yeni akışta boş)
+ * @returns {Array<{ blok: number | null; mesaj: string }>}
  */
-function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan) {
+function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan, oncekiAdimlar) {
   /** @type {Array<{ blok: number | null; mesaj: string }>} */
   const hatalar = [];
   const etiketler = alanEtiketleri(tam);
@@ -945,11 +967,6 @@ function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan) {
         const a = sonAlanlar.find((/** @type {unknown} */ x) => nesneMi(x) && x.id === ka.alan.id);
         if (!a || !esitMi(a, ka.alan) || eksikDayanaklar(ka.alan).length) sorunlar.push(`“${etiketi(ka.alan)}” alanı ${neden(ka.alan)}`);
       }
-      for (const [bid, v] of Object.entries(k.bolumEk ?? {})) {
-        const bb = son && Array.isArray(son.bolumler) ? son.bolumler.find((/** @type {unknown} */ x) => nesneMi(x) && x.id === bid) : undefined;
-        if (!bb) sorunlar.push(`“${bid}” bölümünün özellikleri korunamaz: bölümün alanları başka bölüme taşınmış ya da çıkarılmış (alanları bölümlerine geri koyun)`);
-        else if (Object.entries(v).some(([x, y]) => !esitMi(bb[x], y)) || eksikDayanaklar({ gorunurluk: v.gorunurluk }).length) sorunlar.push(`“${String(bb.baslik || bid)}” bölümünün özellikleri ${neden({ gorunurluk: v.gorunurluk })}`);
-      }
       for (const s of sorunlar) hatalar.push({ blok: i, mesaj: `“${baslik}” adımında diyagramda düzenlenemeyen ${s}.` });
       return;
     }
@@ -970,6 +987,25 @@ function korunanDenetimi(tam, yeni, akisAdimlari, bloklar, korunan) {
         const grup = kk ? gruplar.get(kk.anahtar) : undefined;
         if (!kk || !grup || grup.elle || (esitMi(a.gorunurluk, kk.gorunurluk) && !eksikDayanaklar({ gorunurluk: kk.gorunurluk }).length)) continue;
         hatalar.push({ blok: grup.blok, mesaj: `“${kk.etiket}” alanının diyagramda düzenlenemeyen görünürlük koşulu (${kk.aciklama}) ${neden({ gorunurluk: kk.gorunurluk })}.` });
+      }
+    }
+  }
+  // Bölüm özellikleri (görünürlük koşulu, kod yöntemi…; bölümle taşınır): alanlarından biri akışta kalan bölüm bu özelliklerle
+  // kalmalı. Dayandığı alan akıştan çıkarıldıysa anlaşılır hata; bölümün bütün alanları çıkarıldıysa bölüm (doğal olarak) kalkar.
+  const yeniBolumler = akisAdimlari.flatMap((a) => (nesneMi(a) && Array.isArray(a.bolumler) ? a.bolumler : [])).filter((b) => nesneMi(b) && Array.isArray(b.alanlar));
+  for (const adim of oncekiAdimlar) {
+    for (const eb of nesneMi(adim) && Array.isArray(adim.bolumler) ? adim.bolumler : []) {
+      if (!nesneMi(eb)) continue;
+      const ozellik = Object.fromEntries(Object.entries(eb).filter(([x]) => !['id', 'baslik', 'alanlar'].includes(x)));
+      if (!Object.keys(ozellik).length) continue;
+      const idler = new Set((Array.isArray(eb.alanlar) ? eb.alanlar : []).filter(nesneMi).map((a) => String(a.id)));
+      for (const nb of yeniBolumler) {
+        const alan = nb.alanlar.find((/** @type {unknown} */ a) => nesneMi(a) && idler.has(String(a.id)));
+        if (!alan) continue;
+        if (Object.entries(ozellik).every(([x, v]) => esitMi(nb[x], v)) && !eksikDayanaklar({ gorunurluk: ozellik.gorunurluk }).length) continue;
+        const ozet = bolumOzeti(tam, eb, etiketler)?.ozet ?? String(eb.baslik || eb.id);
+        hatalar.push({ blok: gruplar.get(envanterAnahtari(alan))?.blok ?? null, mesaj: `${ozet}: diyagramda düzenlenemeyen bu bölüm özellikleri ${neden({ gorunurluk: ozellik.gorunurluk })}.` });
+        break;
       }
     }
   }
@@ -1113,7 +1149,9 @@ export function akisKaydet(vt, projeId, ekranId, g) {
   // Ortak akış tek akışlıdır (örtük "Ana akış").
   if (ortakAkis) delete yeni.akislar;
   // Korunan parçalar aynen yazıldı mı (dayandığı alan silindiyse anlaşılır hatayla reddedilir; sessiz kayıp olmaz)?
-  const korunmayan = korunanDenetimi(tam, yeni, akisAdimlari, ayik.bloklar, korunan);
+  // Bölüm özellikleri yalnız diyagramdan kaydederken denetlenir (akış kaydında bölümler sayfanın bölümleridir).
+  const oncekiAdimlar = mevcutAkis && !g.kayitEnvanteri ? /** @type {Nesne[]} */ (/** @type {Nesne} */ (akisModeli(tam, mevcutAkis.id)).adimlar ?? []) : [];
+  const korunmayan = korunanDenetimi(tam, yeni, akisAdimlari, ayik.bloklar, korunan, oncekiAdimlar);
   if (korunmayan.length) throw new EkranDogrulamaHatasi(`Diyagramda düzeltilmesi gereken ${korunmayan.length} sorun var.`, korunmayan);
   modeliDogrula(vt, projeId, yeni, `${ekran.anahtar}.model.json`);
 

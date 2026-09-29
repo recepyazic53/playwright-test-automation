@@ -46,3 +46,6 @@ export declare function sinirHatalari(tip: unknown, sinirlar: unknown): string[]
 
 /** Doğrulama hatasının maddeleri (" - " satırları). */
 export declare function dogrulamaMaddeleri(hata: unknown): string[];
+
+/** "kosullar"da tanımlı olup hiçbir yerde adıyla kullanılmayan koşulların uyarıları (modeli değiştirmez). */
+export declare function bagsizKosulUyarilari(model: unknown): Array<{ yer: string; mesaj: string }>;
