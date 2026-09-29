@@ -95,6 +95,32 @@ export function gizliAlanDegerleriniDogrula(v) {
 }
 
 /**
+ * Uç yolu değişince senaryonun yeni yolu: senaryo yolu (sorgu hariç) ucun eski yoluna uyuyorsa ({ad} yer tutucusu yerinde herhangi
+ * bir parça ya da ${…} olabilir) yeni yol; yeni yoldaki {ad} yerine eski yolda aynı adla yakalanan değer (yoksa ${ad}), senaryonun
+ * sorgu kısmı aynen. Uymuyorsa null (senaryo bilerek farklı yazılmış; dokunulmaz).
+ * @param {string} senaryoYolu @param {string} eskiYol @param {string} yeniYol @returns {string | null}
+ */
+export function izleyenYol(senaryoYolu, eskiYol, yeniYol) {
+  const s = String(senaryoYolu ?? '');
+  const k = s.indexOf('?');
+  const yolKismi = k < 0 ? s : s.slice(0, k);
+  const sorgu = k < 0 ? '' : s.slice(k);
+  /** @type {string[]} */
+  const adlar = [];
+  const desen = String(eskiYol).split(/(\{[^}]+\})/).map((p) => {
+    const m = /^\{([^}]+)\}$/.exec(p);
+    if (m) { adlar.push(m[1]); return '(\\$\\{[^}]+\\}|[^/?]*)'; }
+    return p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }).join('');
+  const eslesme = new RegExp(`^${desen}$`).exec(yolKismi);
+  if (!eslesme) return null;
+  /** @type {Record<string, string>} */
+  const degerler = {};
+  adlar.forEach((ad, i) => { degerler[ad] = eslesme[i + 1]; });
+  return `${String(yeniYol).replace(/\{([^}]+)\}/g, (_m, ad) => degerler[ad] ?? `\${${ad}}`)}${sorgu}`;
+}
+
+/**
  * REST servisi ekler / günceller (uçlar, taban adresler, alan bağları, zorunluluklar) ve istenen uçlar için başlangıç senaryosu
  * oluşturur. Ağ isteği atılmaz.
  * @param {Veritabani} vt @param {string} projeId
@@ -224,12 +250,30 @@ export function restServisiKaydet(vt, projeId, girdi) {
         alanBaglari: sadece(baglar), alanZorunluluklari: sadece(zorunlu), tarihKurallari: kurallar
       }
     });
-    // Adı değişen uçların senaryoları yeni ada geçer.
+    // Adı değişen uçların senaryoları yeni ada geçer. Metodu değişen ucun senaryolarından metodu ucun ESKİ metoduyla aynı olanlar
+    // (ucu izleyenler) yeni metoda geçer; bilerek başka metotla yazılmış senaryo (ör. aynı uca DELETE) dokunulmaz. Eskiden senaryo
+    // eski metotta kalıyordu: uç GET'e çevrilse de listede, formda ve Dene'de POST görünüyor ve POST gidiyordu.
     const mevcutSenaryolar = servisSenaryolariniListele(vt, servisId);
+    const eskiOplar = new Map((mevcut?.ayarlar.operasyonlar ?? []).map((o) => [o.ad, o]));
+    // Yol da aynı kuralla izlenir: senaryonun yolu (sorgu hariç) ucun ESKİ yoluna uyuyorsa ({ad} yerinde senaryonun değeri olabilir)
+    // yeni yola geçer; aynı adlı yer tutucunun değeri ve senaryonun sorgu kısmı korunur. Uymayan (bilerek farklı yazılmış) yol dokunulmaz.
     for (const u of uclar) {
-      if (!u.eskiAd || u.eskiAd === u.ad) continue;
-      for (const x of mevcutSenaryolar.filter((y) => y.icerik.operasyon === u.eskiAd)) {
-        servisSenaryosuKaydet(vt, { id: x.id, projeId, servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: x.kosuyaDahil, icerik: { ...x.icerik, operasyon: u.ad } });
+      const eskiAd = u.eskiAd || u.ad;
+      const eskiOp = eskiOplar.get(eskiAd);
+      const eskiMetot = eskiOp?.metot;
+      const eskiYol = eskiOp?.yol;
+      const adDegisti = eskiAd !== u.ad;
+      const metotDegisti = typeof eskiMetot === 'string' && eskiMetot !== u.metot;
+      const yolDegisti = typeof eskiYol === 'string' && eskiYol !== u.yol;
+      if (!adDegisti && !metotDegisti && !yolDegisti) continue;
+      for (const x of mevcutSenaryolar.filter((y) => y.icerik.operasyon === eskiAd)) {
+        const http = x.icerik.http;
+        const metotIzler = metotDegisti && Boolean(http) && http?.metot === eskiMetot;
+        const yeniYol = yolDegisti && http && typeof eskiYol === 'string' ? izleyenYol(http.yol, eskiYol, u.yol) : null;
+        if (!adDegisti && !metotIzler && yeniYol === null) continue;
+        const yeniHttp = http && (metotIzler || yeniYol !== null) ? { ...http, ...(metotIzler ? { metot: u.metot } : {}), ...(yeniYol !== null ? { yol: yeniYol } : {}) } : null;
+        servisSenaryosuKaydet(vt, { id: x.id, projeId, servisId, baslik: x.baslik, kapsam: x.kapsam, kosuyaDahil: x.kosuyaDahil,
+          icerik: { ...x.icerik, operasyon: u.ad, ...(yeniHttp ? { http: yeniHttp } : {}) } });
       }
     }
     // Başlangıç senaryoları: alanlar tablo sütunlarına bağlıysa şablonda başvuru; gizli alanın örnek değeri yazılmaz.

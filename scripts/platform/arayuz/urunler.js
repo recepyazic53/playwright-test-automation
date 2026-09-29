@@ -120,7 +120,7 @@ export function yeniEkleDugmesi() {
         baslik: 'Ne eklemek istiyorsunuz?', ikonAd: 'arti',
         secenekler: [
           { deger: 'ekran', etiket: 'Ekran', aciklama: 'Test edilecek bir sayfa: ekran paketi, tarama ya da akış kaydıyla. Ortak akışlar da buradan (paket) eklenir.', ikonAd: 'ekran' },
-          { deger: 'servis', etiket: 'Servis', aciklama: 'SOAP / REST servis: WSDL, SoapUI projesi, Postman koleksiyonu, cURL ya da elle.', ikonAd: 'ag' }
+          { deger: 'servis', etiket: 'Servis', aciklama: 'SOAP / REST servis: WSDL (adresinden kendiliğinden okunur), SoapUI projesi, Postman koleksiyonu, cURL ya da elle.', ikonAd: 'ag' }
         ]
       });
       if (secim === 'ekran') location.hash = '#/ekranlar/yeni';

@@ -7,6 +7,7 @@ export interface RestUcu {
 }
 export declare function restUcuDogrula(x: unknown, i: number): RestUcu;
 export declare function gizliAlanDegerleriniDogrula(v: unknown): Record<string, Record<string, string | null>>;
+export declare function izleyenYol(senaryoYolu: string, eskiYol: string, yeniYol: string): string | null;
 export declare function restServisiKaydet(vt: Veritabani, projeId: string, girdi: {
   id?: string; anahtar: string; ad: string; tabanlar?: Record<string, string>; tlsDogrulama?: boolean; uclar: unknown[];
   alanBaglari?: unknown; alanZorunluluklari?: unknown; tarihKurallari?: unknown; senaryolar?: string[]; kapsam?: 'test' | 'canli' | 'ikisi'; yapan?: string;

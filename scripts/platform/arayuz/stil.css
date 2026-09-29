@@ -4388,6 +4388,30 @@ fieldset.giris-sorusu { border: 0; padding: 0; margin: 0 0 var(--b3); display: g
 .sabit-deger.gizli-sabit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .gizli-tasi { white-space: normal; text-align: left; }
 
+/* ---- v1.4 servis sayfaları (ku14-servis) ------------------------------------------------------------------------------- */
+/* Üst menü: Senaryolar bölümünün alt kısmı açıkken (Servisler, Uçtan uca akışlar) "Senaryolar › Servisler". */
+.ust-nav .nav-alt-bolum { margin-left: -2px; font-size: 12.5px; font-weight: 500; color: var(--metin-3); }
+.ust-nav a[aria-current="page"] .nav-alt-bolum { color: var(--vurgu); }
+@media (max-width: 1439px) { .ust-nav .nav-alt-bolum { display: none; } }
+/* Servis senaryo listesi: HTTP metodu rozeti ve tam istek adresi (ortası kısaltılmış; tamamı ipucunda). */
+.servis-senaryo-tablosu .istek-hucresi .rozet.http-metodu { margin-left: 4px; font-family: var(--yazi-mono); font-size: 10.5px; letter-spacing: .03em; }
+/* Servis senaryo formu: doğrulama özeti Kaydet'in üstünde (ekran senaryo formundaki özetle aynı görünüm). */
+.servis-dogrulama-ozeti { margin: 12px 0 0; flex-wrap: wrap; }
+.servis-dogrulama-ozeti .rozet { font-size: 11px; }
+/* Servis koşu paneli (sağ altta sabit) açıkken sayfanın sonu panelin altında kalmasın: son satırlar panelin üstüne kaydırılabilir. */
+body:has(.servis-kosu-paneli) .ana-icerik { padding-bottom: 180px; }
+/* Klavyeyle gezinme ve kaydırarak getirme (odak, scrollIntoView) öğeyi sağ alttaki küçük koşu panelinin üstünde bırakır. */
+html:has(.servis-kosu-paneli.kucuk) { scroll-padding-bottom: 120px; }
+/* Servis ekle: WSDL'in nereden geldiği notu. */
+.wsdl-notu { margin: 0 0 12px; }
+/* Servis akışı: sayfanın üstünde akışın senaryolarının yeri ve sayısı. */
+.akis-senaryo-baglantisi { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--yaricap-m); background: var(--panel-2); box-shadow: inset 0 0 0 1px var(--cizgi); font-size: 12.5px; min-width: 0; }
+.akis-senaryo-baglantisi > span:first-child { flex: 1 1 280px; min-width: 0; overflow-wrap: anywhere; }
+.akis-senaryo-baglantisi .dugmeler { margin: 0; gap: 6px; flex-wrap: wrap; }
+.akis-senaryolari-karti h3:focus { outline: none; }
+.akis-senaryolari-karti h3:focus-visible { outline: 2px solid var(--vurgu); outline-offset: 2px; }
+/* Servis sözleşmesi alan tablosu: yol girintisi (--girinti arayüzden CSS değişkeni olarak verilir; satır içi style yok). */
+code.duz.sozlesme-girinti { padding-inline-start: calc(var(--girinti, 0) * 0.9rem); }
 /* ---- v1.4 kullanılabilirlik: paket, terimler ve görsel düzeltmeler (ku14) ---------------------------------------------------- */
 /* Akış diyagramı: "Başarı / Uyarı" radyoları etiketlerine binmez. */
 .mesaj-turu label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }

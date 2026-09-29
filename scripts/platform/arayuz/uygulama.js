@@ -876,7 +876,10 @@ new MutationObserver(() => { if (document.querySelector('.kabuk-duzen:not([data-
 function anaDuzen() {
   const main = anaAlan('ana-icerik');
   const navSonuclar = h('a', { href: '#/sonuclar/ozet' }, ikon('grafik'), 'Sonuçlar');
-  const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar');
+  // Senaryolar bölümünün alt kısmı (Servisler, Uçtan uca akışlar) açıkken üst menüde yanında adı yazar: 'Senaryolar › Servisler'.
+  // Ek yalnız görseldir (aria-hidden; bağlantının adı değişmez); ekran okuyucu için yer bilgisi sayfanın başlık izindedir.
+  const navAltBolum = h('span', { class: 'nav-alt-bolum', 'aria-hidden': 'true', hidden: true });
+  const navSenaryolar = h('a', { href: '#/senaryolar' }, ikon('liste'), 'Senaryolar', navAltBolum);
   const navEkranlar = h('a', { href: '#/ekranlar' }, ikon('ekran'), 'Ekranlar');
   // Günlük iş nesneleri (Ayarlar'dan taşındı): Test verisi ve Planlı koşular.
   const ustSayfaBaglantisi = (s) => h('a', { href: `#/${s.ad}` }, ikon(s.ikon), s.menu);
@@ -927,6 +930,10 @@ function anaDuzen() {
     // Sayfa değişince önceki sayfanın açık pencereleri (ör. geri düğmesiyle çıkılan rapor penceresi) kapanır.
     for (const d of document.querySelectorAll('dialog[open]')) d.close();
     for (const n of [navSonuclar, navSenaryolar, navEkranlar, navVeri, navPlanli, navAyarlar]) n.removeAttribute('aria-current');
+    const altBolum = bolum === 'servisler' ? 'Servisler' : bolum === 'akislar' ? 'Uçtan uca' : '';
+    navAltBolum.textContent = altBolum ? `› ${altBolum}` : '';
+    navAltBolum.hidden = !altBolum;
+    if (altBolum) navSenaryolar.title = `Senaryolar › ${altBolum}`; else navSenaryolar.removeAttribute('title');
     if (bolum === 'senaryolar') {
       navSenaryolar.setAttribute('aria-current', 'page');
       main.className = 'ana-icerik';
