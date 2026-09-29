@@ -231,7 +231,8 @@ export const REHBERLER = {
       },
       {
         baslik: 'Doldurma sırası',
-        sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.', 'Senaryo birden çok satırla koşacaksa: kayıt grubunda satır listesinden "Koşula uyan tüm satırlar"ı seçin ya da satır ekleyin; tek tablo alanında "Uyan her satır ayrı test" kutusunu işaretleyin. Her satır ayrı test olur.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.']
+        sira: ['Başlığı yazın: senaryonun neyi sınadığını anlatsın.', 'Ekranın birden çok akışı varsa akışı seçin.', 'Alanları yukarıdan aşağı doldurun; bağımlı listeler üstteki seçime göre süzülür.', 'Kişi / kart / adres gibi veriler için değeri tablodan alın: alanın listesinde "Tablodan" (${Tablo.Sütun}; koşuda seçilen satırdan gelir; onay kutusu evet / hayır, dosya alanı dosya adı olarak) ya da kimlik alanında kayıt adı.', 'Tablodan alınan değerler için "Satır seçimi" kartında satırı seçin: Otomatik (bağlı alanlar ve ortam) ya da bir satır / koşullar.', 'Senaryo birden çok satırla koşacaksa: kayıt grubunda satır listesinden "Koşula uyan tüm satırlar"ı seçin ya da satır ekleyin; tek tablo alanında "Uyan her satır ayrı test" kutusunu işaretleyin. Her satır ayrı test olur.','Beklenen sonucu seçin: başarı ya da beklenen hata mesajı.', '"Dene" ile kaydetmeden deneyin; sonra Kaydet.'],
+        ipucu: 'Uzun listelerde yazarak arayın: listeye tıklayın ya da odaklanıp yazmaya başlayın; ↑ / ↓ ile gezip Enter ile seçin.'
       },
       {
         baslik: 'Tarih alanları: sabit ya da bugüne göre',
@@ -685,7 +686,7 @@ export const REHBERLER = {
   },
   'ayarlar-arayuz': {
     baslik: 'Arayüz',
-    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı ve listelerin sayfa boyları. "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
+    adimlar: [{ baslik: 'Görünüm ve rehberler', metin: 'Tema (Komuta merkezi, Kurumsal, Canlı), Nöbetçi\'nin kendi penceresinde mi tarayıcıda mı açılacağı, rehberlerin her ekranın ilk açılışında kendiliğinden başlayıp başlamayacağı, listelerin sayfa boyları ve kaç seçenekten uzun açılır listelerin yazarak aranacağı (Aranabilir liste eşiği; varsayılan 15). "Tüm rehberleri yeniden göster" hepsini görülmemiş yapar; "?" düğmesi her zaman çalışır.', cizim: { tur: 'maket', bolge: 'soru', etiket: '"?" her ekranda sağ üstte' } },
       { baslik: 'Raporlar ve sağlık noktası', metin: 'HTML rapora gömülen ekran görüntülerinin toplam sınırı (varsayılan 25 MB) ve Sonuçlar ekranındaki sağlık noktasının renk eşikleri (proje başına; varsayılan yeşil ≥ %90, sarı ≥ %75).' },
       { baslik: 'Sonuçlar özeti', metin: 'Sonuçlar > Özet kartlarının eşikleri: kaç gündür kırmızı olan öğe Dikkat\'e girer (varsayılan 3 gün), servis metodunun p95 süresi yüzde kaç artınca "yavaşladı" sayılır (varsayılan %30), kaç gündür koşmayan senaryo Bakım\'a girer (varsayılan 30 gün) ve son yedek kaç günden eskiyse uyarılır (varsayılan 7 gün).' }]
   }
